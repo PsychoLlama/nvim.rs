@@ -112,7 +112,6 @@ static char *cmdline_orig = NULL;
 
 extern int rs_magic_isset(void);
 
-
 extern int rs_sort_func_compare(const void *s1, const void *s2);
 extern int rs_cmdline_compl_use_pum(int need_wildmenu);
 extern int rs_map_wildopts_to_ewflags(int options);
@@ -141,34 +140,12 @@ extern const char *rs_set_context_by_cmdname(const char *cmd, int cmdidx, expand
 extern const char *rs_set_one_cmd_context(expand_T *xp, const char *buff);
 
 // C accessor for Rust FFI
-unsigned nvim_get_wop_flags(void)
-{
-  return wop_flags;
-}
-
-/// C accessor for compl_match_array != NULL check.
-int nvim_get_compl_match_array_not_null(void)
-{
-  return compl_match_array != NULL;
-}
-
-/// C accessor for may_expand_pattern (used by Rust rs_set_context_by_cmdname).
-int nvim_cmdexpand_get_may_expand_pattern(void)
-{
-  return may_expand_pattern ? 1 : 0;
-}
-
-// =============================================================================
+unsigned nvim_get_wop_flags(void) { return wop_flags; }
+int nvim_get_compl_match_array_not_null(void) { return compl_match_array != NULL; }
+int nvim_cmdexpand_get_may_expand_pattern(void) { return may_expand_pattern ? 1 : 0; }
 // C accessors for expand_T fields (Rust FFI)
-// =============================================================================
 
-/// Get the expansion context type.
-int nvim_expand_get_context(const expand_T *xp)
-{
-  return xp ? xp->xp_context : EXPAND_NOTHING;
-}
-
-/// Set the expansion context type.
+int nvim_expand_get_context(const expand_T *xp) { return xp ? xp->xp_context : EXPAND_NOTHING; }
 void nvim_expand_set_context(expand_T *xp, int context)
 {
   if (xp) {
@@ -176,44 +153,13 @@ void nvim_expand_set_context(expand_T *xp, int context)
   }
 }
 
-/// Check if cmdline_win is NULL (for Rust FFI).
-int nvim_get_cmdline_win_is_null(void)
-{
-  return cmdline_win == NULL;
-}
+int nvim_get_cmdline_win_is_null(void) { return cmdline_win == NULL; }
+int nvim_get_pum_want_active(void) { return pum_want.active; }
+int nvim_get_pum_want_item(void) { return pum_want.item; }
+void nvim_set_pum_want_active(int val) { pum_want.active = (val != 0); }
 
-/// Get pum_want.active (for Rust FFI).
-int nvim_get_pum_want_active(void)
-{
-  return pum_want.active;
-}
-
-/// Get pum_want.item (for Rust FFI).
-int nvim_get_pum_want_item(void)
-{
-  return pum_want.item;
-}
-
-/// Set pum_want.active (for Rust FFI).
-void nvim_set_pum_want_active(int val)
-{
-  pum_want.active = (val != 0);
-}
-
-
-/// Check if backslash should be removed (for Rust FFI).
-int nvim_cmdexpand_rem_backslash(const char *p)
-{
-  return rem_backslash(p);
-}
-
-/// Get the byte length for multibyte pointer advance (for Rust FFI).
-int nvim_cmdexpand_mb_ptr_adv_len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
-
-/// Zero the entire expand_T struct (for Rust FFI).
+int nvim_cmdexpand_rem_backslash(const char *p) { return rem_backslash(p); }
+int nvim_cmdexpand_mb_ptr_adv_len(const char *p) { return utfc_ptr2len(p); }
 void nvim_expand_clear(expand_T *xp)
 {
   if (xp) {
@@ -221,8 +167,6 @@ void nvim_expand_clear(expand_T *xp)
   }
 }
 
-
-/// Free wild matches via FreeWild (for Rust FFI).
 void nvim_expand_free_wild(expand_T *xp)
 {
   if (xp) {
@@ -230,7 +174,6 @@ void nvim_expand_free_wild(expand_T *xp)
   }
 }
 
-/// Free and NULL xp_orig (for Rust FFI).
 void nvim_expand_clear_orig(expand_T *xp)
 {
   if (xp) {
@@ -238,65 +181,32 @@ void nvim_expand_clear_orig(expand_T *xp)
   }
 }
 
-/// Free and NULL the static cmdline_orig (for Rust FFI).
-void nvim_clear_cmdline_orig(void)
-{
-  XFREE_CLEAR(cmdline_orig);
-}
-
-/// Get compl_selected (for Rust FFI).
-int nvim_get_compl_selected(void)
-{
-  return compl_selected;
-}
-
-/// Set compl_selected (for Rust FFI).
-void nvim_set_compl_selected(int val)
-{
-  compl_selected = val;
-}
-
-/// Get cmd_showtail (for Rust FFI).
-int nvim_get_cmd_showtail(void)
-{
-  return cmd_showtail;
-}
-
-/// Wrapper for cmdline_pum_display (for Rust FFI).
-void nvim_cmdexpand_pum_display(int changed_array)
-{
-  cmdline_pum_display(changed_array != 0);
-}
-
-/// Wrapper for cmdline_pum_create (Rust) for navigation (for Rust FFI).
-/// Creates PUM with xp->xp_files/xp_numfiles and given showtail/noselect flags.
+void nvim_clear_cmdline_orig(void) { XFREE_CLEAR(cmdline_orig); }
+int nvim_get_compl_selected(void) { return compl_selected; }
+void nvim_set_compl_selected(int val) { compl_selected = val; }
+int nvim_get_cmd_showtail(void) { return cmd_showtail; }
+void nvim_cmdexpand_pum_display(int changed_array) { cmdline_pum_display(changed_array != 0); }
 void nvim_cmdexpand_pum_create_for_nav(expand_T *xp, int showtail, int noselect)
 {
   cmdline_pum_create(get_cmdline_info(), xp, xp->xp_files, xp->xp_numfiles,
                      showtail != 0, noselect != 0);
 }
 
-/// Wrapper for redraw_wildmenu (Rust) (for Rust FFI).
 void nvim_cmdexpand_redraw_wildmenu(expand_T *xp, int num_matches, int findex, int showtail)
 {
   redraw_wildmenu(xp, num_matches, xp->xp_files, findex, showtail != 0);
 }
 
-/// Wrapper for ExpandFromContext (for Rust FFI).
-/// Calls ExpandFromContext and stores results into xp->xp_files/xp_numfiles.
-/// Returns FAIL (0) or OK (1).
 int nvim_cmdexpand_expand_from_context(expand_T *xp, const char *pat, int options)
 {
   return ExpandFromContext(xp, (char *)pat, &xp->xp_files, &xp->xp_numfiles, options);
 }
 
-/// Wrapper for ExpandEscape (for Rust FFI).
 void nvim_cmdexpand_expand_escape(expand_T *xp, const char *str, int options)
 {
   rs_expand_escape(xp, (char *)str, xp->xp_numfiles, xp->xp_files, options);
 }
 
-/// Wrapper for match_suffix on xp->xp_files[i] (for Rust FFI).
 int nvim_cmdexpand_match_suffix(expand_T *xp, int i)
 {
   if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
@@ -305,18 +215,8 @@ int nvim_cmdexpand_match_suffix(expand_T *xp, int i)
   return match_suffix(xp->xp_files[i]);
 }
 
-/// Wrapper for semsg(e_nomatch2, str) (for Rust FFI).
-void nvim_cmdexpand_semsg_nomatch(const char *str)
-{
-  semsg(_(e_nomatch2), str);
-}
-
-/// Wrapper for emsg(e_toomany) (for Rust FFI).
-void nvim_cmdexpand_emsg_toomany(void)
-{
-  emsg(_(e_toomany));
-}
-
+void nvim_cmdexpand_semsg_nomatch(const char *str) { semsg(_(e_nomatch2), str); }
+void nvim_cmdexpand_emsg_toomany(void) { emsg(_(e_toomany)); }
 // Static assert for kOptBoFlagWildmode used in rs_find_longest_match
 _Static_assert(kOptBoFlagWildmode == 0x80000, "kOptBoFlagWildmode mismatch");
 
@@ -343,8 +243,6 @@ _Static_assert(offsetof(expand_T, xp_pre_incsearch_pos) == 380, "xp_pre_incsearc
 _Static_assert(offsetof(expand_T, xp_shell) == 76, "xp_shell offset mismatch");
 #endif
 
-/// Free old wild matches, set numfiles=-1, clear orig, remove PUM if needed.
-/// Used in ExpandOne before starting a new expansion.
 void nvim_expand_free_old_matches(expand_T *xp)
 {
   if (!xp) {
@@ -363,13 +261,8 @@ void nvim_expand_free_old_matches(expand_T *xp)
 
 // nvim_get_got_int already exists in ex_eval.c
 
-
 /// xstpcpy wrapper (for Rust FFI): copies src to dst, returns pointer past NUL.
-char *nvim_cmdexpand_xstpcpy(char *dst, const char *src)
-{
-  return xstpcpy(dst, src);
-}
-
+char *nvim_cmdexpand_xstpcpy(char *dst, const char *src) { return xstpcpy(dst, src); }
 static enum {
   EXP_FILETYPECMD_ALL,     ///< expand all :filetype values
   EXP_FILETYPECMD_PLUGIN,  ///< expand plugin on off
@@ -389,7 +282,6 @@ static enum {
   EXP_PROFDEL,      ///< expand ":profdel" sub-commands
 } breakpt_expand_what;
 
-/// Set xp->xp_pattern (for Rust FFI).
 void nvim_expand_set_pattern(expand_T *xp, char *pattern)
 {
   if (xp) {
@@ -397,90 +289,25 @@ void nvim_expand_set_pattern(expand_T *xp, char *pattern)
   }
 }
 
-
-/// Get xp->xp_pattern (for Rust FFI).
-char *nvim_cmdexpand_get_xp_pattern(expand_T *xp)
-{
-  return xp ? xp->xp_pattern : NULL;
-}
-
-/// Wrapper for ascii_iswhite (for Rust FFI).
-int nvim_cmdexpand_ascii_iswhite(int c)
-{
-  return ascii_iswhite(c);
-}
-
-/// Wrapper for vim_isfilec_or_wc (for Rust FFI).
-int nvim_cmdexpand_vim_isfilec_or_wc(int c)
-{
-  return vim_isfilec_or_wc(c);
-}
-
-/// Wrapper for vim_isIDc (for Rust FFI).
-int nvim_cmdexpand_vim_isIDc(int c)
-{
-  return vim_isIDc((uint8_t)c);
-}
-
-/// Get ccline->cmdpos (for Rust FFI).
-int nvim_cmdexpand_get_cmdpos(void)
-{
-  return get_cmdline_info()->cmdpos;
-}
-
-/// Get ccline->cmdbuff (for Rust FFI).
-char *nvim_cmdexpand_get_cmdbuff(void)
-{
-  return get_cmdline_info()->cmdbuff;
-}
-
-/// Wrapper for parse_pattern_and_range (for Rust FFI).
-/// Returns OK(1)/FAIL(0). Writes skiplen and patlen via out pointers.
+char *nvim_cmdexpand_get_xp_pattern(expand_T *xp) { return xp ? xp->xp_pattern : NULL; }
+int nvim_cmdexpand_ascii_iswhite(int c) { return ascii_iswhite(c); }
+int nvim_cmdexpand_vim_isfilec_or_wc(int c) { return vim_isfilec_or_wc(c); }
+int nvim_cmdexpand_vim_isIDc(int c) { return vim_isIDc((uint8_t)c); }
+int nvim_cmdexpand_get_cmdpos(void) { return get_cmdline_info()->cmdpos; }
+char *nvim_cmdexpand_get_cmdbuff(void) { return get_cmdline_info()->cmdbuff; }
 int nvim_cmdexpand_parse_pattern_and_range(int *skiplen, int *patlen)
 {
   int dummy;
   return parse_pattern_and_range(&pre_incsearch_pos, &dummy, skiplen, patlen);
 }
 
-/// Increment emsg_off (for Rust FFI).
-void nvim_cmdexpand_emsg_off_inc(void)
-{
-  emsg_off++;
-}
+void nvim_cmdexpand_emsg_off_inc(void) { emsg_off++; }
+void nvim_cmdexpand_emsg_off_dec(void) { emsg_off--; }
+void nvim_cmdexpand_set_breakpt_expand_what(int val) { breakpt_expand_what = val; }
+void nvim_cmdexpand_set_filetype_expand_what(int val) { filetype_expand_what = val; }
+int nvim_cmdexpand_get_breakpt_expand_what(void) { return (int)breakpt_expand_what; }
+int nvim_cmdexpand_get_filetype_expand_what(void) { return (int)filetype_expand_what; }
 
-/// Decrement emsg_off (for Rust FFI).
-void nvim_cmdexpand_emsg_off_dec(void)
-{
-  emsg_off--;
-}
-
-/// Set the static breakpt_expand_what variable (for Rust FFI).
-void nvim_cmdexpand_set_breakpt_expand_what(int val)
-{
-  breakpt_expand_what = val;
-}
-
-/// Set the static filetype_expand_what variable (for Rust FFI).
-void nvim_cmdexpand_set_filetype_expand_what(int val)
-{
-  filetype_expand_what = val;
-}
-
-/// Get the static breakpt_expand_what variable (for Rust FFI).
-int nvim_cmdexpand_get_breakpt_expand_what(void)
-{
-  return (int)breakpt_expand_what;
-}
-
-/// Get the static filetype_expand_what variable (for Rust FFI).
-int nvim_cmdexpand_get_filetype_expand_what(void)
-{
-  return (int)filetype_expand_what;
-}
-
-
-/// Wrapper for searchit(NULL, curbuf, ...) for Rust FFI.
-/// Returns FAIL or OK.
 int nvim_cmdexpand_searchit(pos_T *pos, pos_T *end_pos, int dir, char *pat,
                             size_t patlen, int options)
 {
@@ -488,50 +315,18 @@ int nvim_cmdexpand_searchit(pos_T *pos, pos_T *end_pos, int dir, char *pat,
                   1L, options, RE_LAST, NULL);
 }
 
-/// Get curbuf->b_ml.ml_line_count (for Rust FFI).
-int nvim_cmdexpand_curbuf_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
-
-/// Wrapper for char_avail() (for Rust FFI).
-int nvim_cmdexpand_char_avail(void)
-{
-  return char_avail();
-}
-
-/// Wrapper for vpeekc() (for Rust FFI).
-int nvim_cmdexpand_vpeekc(void)
-{
-  return vpeekc();
-}
-
-/// Get search_first_line (for Rust FFI).
-int nvim_cmdexpand_get_search_first_line(void)
-{
-  return search_first_line;
-}
-
-/// Get search_last_line (for Rust FFI).
-int nvim_cmdexpand_get_search_last_line(void)
-{
-  return search_last_line;
-}
-
-/// Get pre_incsearch_pos (for Rust FFI).
-pos_T nvim_cmdexpand_get_pre_incsearch_pos(void)
-{
-  return pre_incsearch_pos;
-}
-
-/// Run pum_display with the current compl_* statics (for Rust FFI).
+int nvim_cmdexpand_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
+int nvim_cmdexpand_char_avail(void) { return char_avail(); }
+int nvim_cmdexpand_vpeekc(void) { return vpeekc(); }
+int nvim_cmdexpand_get_search_first_line(void) { return search_first_line; }
+int nvim_cmdexpand_get_search_last_line(void) { return search_last_line; }
+pos_T nvim_cmdexpand_get_pre_incsearch_pos(void) { return pre_incsearch_pos; }
 void nvim_cmdexpand_do_pum_display(int changed_array)
 {
   pum_display(compl_match_array, compl_match_arraysize, compl_selected,
               changed_array != 0, compl_startcol);
 }
 
-/// Run pum_undisplay + free compl_match_array + reset arraysize (for Rust FFI).
 void nvim_cmdexpand_do_pum_remove(int defer_redraw)
 {
   pum_undisplay(defer_redraw == 0);
@@ -539,45 +334,22 @@ void nvim_cmdexpand_do_pum_remove(int defer_redraw)
   compl_match_arraysize = 0;
 }
 
-/// Run cmdline_pum_remove(false) + wildmenu_cleanup(get_cmdline_info()) (for Rust FFI).
 void nvim_cmdexpand_do_pum_cleanup(void)
 {
   cmdline_pum_remove(false);
   wildmenu_cleanup(get_cmdline_info());
 }
 
-/// Get compl_startcol (for Rust FFI).
-int nvim_cmdexpand_get_compl_startcol(void)
-{
-  return compl_startcol;
-}
-
-/// Set compl_startcol (for Rust FFI).
-void nvim_cmdexpand_set_compl_startcol(int val)
-{
-  compl_startcol = val;
-}
-
-/// Get compl_match_arraysize (for Rust FFI).
-int nvim_cmdexpand_get_compl_match_arraysize(void)
-{
-  return compl_match_arraysize;
-}
-
-/// Set compl_match_arraysize (for Rust FFI).
-void nvim_cmdexpand_set_compl_match_arraysize(int val)
-{
-  compl_match_arraysize = val;
-}
-
-/// Alloc compl_match_array with numMatches entries and return it (for Rust FFI).
+int nvim_cmdexpand_get_compl_startcol(void) { return compl_startcol; }
+void nvim_cmdexpand_set_compl_startcol(int val) { compl_startcol = val; }
+int nvim_cmdexpand_get_compl_match_arraysize(void) { return compl_match_arraysize; }
+void nvim_cmdexpand_set_compl_match_arraysize(int val) { compl_match_arraysize = val; }
 void *nvim_cmdexpand_alloc_compl_match_array(int numMatches)
 {
   compl_match_array = xmalloc(sizeof(pumitem_T) * (size_t)numMatches);
   return compl_match_array;
 }
 
-/// Set compl_match_array[i].pum_text (for Rust FFI).
 void nvim_cmdexpand_set_pum_text(int i, char *text)
 {
   compl_match_array[i].pum_text = text;
@@ -588,106 +360,33 @@ void nvim_cmdexpand_set_pum_text(int i, char *text)
   compl_match_array[i].pum_user_kind_hlattr = -1;
 }
 
-/// Get pointer to msg_grid_adj GridView (for Rust FFI).
-void *nvim_cmdexpand_get_msg_grid_adj_ptr(void)
-{
-  return &msg_grid_adj;
-}
-
-/// Get pointer to default_gridview GridView (for Rust FFI).
-void *nvim_cmdexpand_get_default_gridview_ptr(void)
-{
-  return &default_gridview;
-}
-
-/// Return get_cmdline_info()->xpc->xp_orig or NULL if xpc is NULL (for Rust FFI).
+void *nvim_cmdexpand_get_msg_grid_adj_ptr(void) { return &msg_grid_adj; }
+void *nvim_cmdexpand_get_default_gridview_ptr(void) { return &default_gridview; }
 char *nvim_cmdexpand_get_compl_pattern(void)
 {
   expand_T *xp = get_cmdline_info()->xpc;
   return xp == NULL ? NULL : xp->xp_orig;
 }
 
-/// Return get_cmdline_info()->xpc if non-null and context supports fuzzy, else 0.
 int nvim_cmdexpand_ccline_xpc_supports_fuzzy(void)
 {
   expand_T *xp = get_cmdline_info()->xpc;
   return xp != NULL && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
 }
 
-/// Return the xpc pointer from get_cmdline_info() (for Rust FFI).
-expand_T *nvim_cmdexpand_get_ccline_xpc(void)
-{
-  return get_cmdline_info()->xpc;
-}
+expand_T *nvim_cmdexpand_get_ccline_xpc(void) { return get_cmdline_info()->xpc; }
+int nvim_cmdexpand_get_cmdfirstc(void) { return get_cmdline_info()->cmdfirstc; }
+int nvim_cmdexpand_get_input_fn(void) { return get_cmdline_info()->input_fn ? 1 : 0; }
+int nvim_cmdexpand_get_cmdlen(void) { return get_cmdline_info()->cmdlen; }
+int nvim_cmdexpand_get_p_wc(void) { return (int)p_wc; }
+void nvim_cmdexpand_set_search_first_line(int val) { search_first_line = val; }
+int nvim_cmdexpand_get_key_left(void) { return K_LEFT; }
+int nvim_cmdexpand_get_key_right(void) { return K_RIGHT; }
+int nvim_cmdexpand_get_key_down(void) { return K_DOWN; }
+int nvim_cmdexpand_get_key_up(void) { return K_UP; }
+int nvim_cmdexpand_get_key_kenter(void) { return K_KENTER; }
 
-/// Get cmdfirstc from get_cmdline_info() (for Rust FFI).
-int nvim_cmdexpand_get_cmdfirstc(void)
-{
-  return get_cmdline_info()->cmdfirstc;
-}
-
-/// Get input_fn from get_cmdline_info() (for Rust FFI).
-int nvim_cmdexpand_get_input_fn(void)
-{
-  return get_cmdline_info()->input_fn ? 1 : 0;
-}
-
-/// Get cmdlen from get_cmdline_info() (for Rust FFI).
-int nvim_cmdexpand_get_cmdlen(void)
-{
-  return get_cmdline_info()->cmdlen;
-}
-
-/// Get p_wc wildchar option value (for Rust FFI).
-int nvim_cmdexpand_get_p_wc(void)
-{
-  return (int)p_wc;
-}
-
-/// Set search_first_line (for Rust FFI).
-void nvim_cmdexpand_set_search_first_line(int val)
-{
-  search_first_line = val;
-}
-
-/// Get K_LEFT key code (for Rust FFI).
-int nvim_cmdexpand_get_key_left(void)
-{
-  return K_LEFT;
-}
-
-/// Get K_RIGHT key code (for Rust FFI).
-int nvim_cmdexpand_get_key_right(void)
-{
-  return K_RIGHT;
-}
-
-/// Get K_DOWN key code (for Rust FFI).
-int nvim_cmdexpand_get_key_down(void)
-{
-  return K_DOWN;
-}
-
-/// Get K_UP key code (for Rust FFI).
-int nvim_cmdexpand_get_key_up(void)
-{
-  return K_UP;
-}
-
-/// Get K_KENTER key code (for Rust FFI).
-int nvim_cmdexpand_get_key_kenter(void)
-{
-  return K_KENTER;
-}
-
-
-/// Check SCRIPT_ID_VALID(idx+1) (for Rust FFI).
-int nvim_cmdexpand_script_id_valid(int idx)
-{
-  return SCRIPT_ID_VALID(idx + 1) ? 1 : 0;
-}
-
-/// Get home_replace()-processed script name into NameBuff and return it (for Rust FFI).
+int nvim_cmdexpand_script_id_valid(int idx) { return SCRIPT_ID_VALID(idx + 1) ? 1 : 0; }
 char *nvim_cmdexpand_get_script_name(int idx)
 {
   scriptitem_T *si = SCRIPT_ITEM(idx + 1);
@@ -695,109 +394,27 @@ char *nvim_cmdexpand_get_script_name(int idx)
   return NameBuff;
 }
 
-/// Get p_wic wildchar-if-count option (for Rust FFI).
-int nvim_cmdexpand_get_p_wic(void)
-{
-  return (int)p_wic;
-}
-
-/// Get xp_context from ccline (for Rust FFI).
-int nvim_cmdexpand_get_ccline_xp_context(void)
-{
-  return get_cmdline_info()->xp_context;
-}
-
-/// Get xp_arg from ccline (for Rust FFI).
-char *nvim_cmdexpand_get_ccline_xp_arg(void)
-{
-  return get_cmdline_info()->xp_arg;
-}
-
-/// Wrapper for set_context_for_expression (for Rust FFI).
+int nvim_cmdexpand_get_p_wic(void) { return (int)p_wic; }
+int nvim_cmdexpand_get_ccline_xp_context(void) { return get_cmdline_info()->xp_context; }
+char *nvim_cmdexpand_get_ccline_xp_arg(void) { return get_cmdline_info()->xp_arg; }
 void nvim_cmdexpand_set_context_for_expression(expand_T *xp, char *str, int cmdidx)
 {
   set_context_for_expression(xp, str, (cmdidx_T)cmdidx);
 }
 
-/// Wrapper for cmdline_del on the real ccline (for Rust FFI).
-void nvim_cmdexpand_cmdline_del(int from)
-{
-  cmdline_del(get_cmdline_info(), from);
-}
-
-/// Set KeyTyped global (for Rust FFI).
-void nvim_cmdexpand_set_key_typed(int val)
-{
-  KeyTyped = (bool)val;
-}
-
-/// Get KeyTyped global (for Rust FFI).
-int nvim_cmdexpand_get_key_typed(void)
-{
-  return (int)KeyTyped;
-}
-
-/// Wrapper for put_on_cmdline (for Rust FFI).
-void nvim_cmdexpand_put_on_cmdline(const char *str, int len, int redraw)
-{
-  put_on_cmdline(str, len, (bool)redraw);
-}
-
-/// Wrapper for utf_head_off (for Rust FFI).
-int nvim_cmdexpand_utf_head_off(const char *base, const char *p)
-{
-  return utf_head_off(base, p);
-}
-
-/// Get RedrawingDisabled (for Rust FFI).
-int nvim_cmdexpand_get_redrawing_disabled(void)
-{
-  return RedrawingDisabled;
-}
-
-/// Set RedrawingDisabled (for Rust FFI).
-void nvim_cmdexpand_set_redrawing_disabled(int val)
-{
-  RedrawingDisabled = val;
-}
-
-/// Wrapper for set_no_hlsearch (for Rust FFI).
-void nvim_cmdexpand_set_no_hlsearch(int val)
-{
-  set_no_hlsearch((bool)val);
-}
-
-/// Get WM_SCROLLED constant (for Rust FFI).
-int nvim_cmdexpand_get_wm_scrolled(void)
-{
-  return WM_SCROLLED;
-}
-
-/// Decrement cmdline_row (for Rust FFI).
-void nvim_cmdexpand_dec_cmdline_row(void)
-{
-  cmdline_row--;
-}
-
-/// Wrapper for win_redraw_last_status(topframe) (for Rust FFI).
-void nvim_cmdexpand_win_redraw_last_status(void)
-{
-  win_redraw_last_status(topframe);
-}
-
-/// Wrapper for redraw_statuslines (for Rust FFI).
-void nvim_cmdexpand_redraw_statuslines(void)
-{
-  redraw_statuslines();
-}
-
-/// Get PATHSEP character (for Rust FFI).
-int nvim_cmdexpand_get_pathsep(void)
-{
-  return PATHSEP;
-}
-
-/// Wrapper for ExpandGeneric (for Rust FFI).
+void nvim_cmdexpand_cmdline_del(int from) { cmdline_del(get_cmdline_info(), from); }
+void nvim_cmdexpand_set_key_typed(int val) { KeyTyped = (bool)val; }
+int nvim_cmdexpand_get_key_typed(void) { return (int)KeyTyped; }
+void nvim_cmdexpand_put_on_cmdline(const char *str, int len, int redraw) { put_on_cmdline(str, len, (bool)redraw); }
+int nvim_cmdexpand_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
+int nvim_cmdexpand_get_redrawing_disabled(void) { return RedrawingDisabled; }
+void nvim_cmdexpand_set_redrawing_disabled(int val) { RedrawingDisabled = val; }
+void nvim_cmdexpand_set_no_hlsearch(int val) { set_no_hlsearch((bool)val); }
+int nvim_cmdexpand_get_wm_scrolled(void) { return WM_SCROLLED; }
+void nvim_cmdexpand_dec_cmdline_row(void) { cmdline_row--; }
+void nvim_cmdexpand_win_redraw_last_status(void) { win_redraw_last_status(topframe); }
+void nvim_cmdexpand_redraw_statuslines(void) { redraw_statuslines(); }
+int nvim_cmdexpand_get_pathsep(void) { return PATHSEP; }
 void nvim_cmdexpand_expand_generic(const char *pat, expand_T *xp, regmatch_T *regmatch,
                                    char ***matches, int *numMatches,
                                    CompleteListItemGetter func, int escaped)
@@ -805,20 +422,13 @@ void nvim_cmdexpand_expand_generic(const char *pat, expand_T *xp, regmatch_T *re
   ExpandGeneric(pat, xp, regmatch, matches, numMatches, func, (bool)escaped);
 }
 
-/// Set regmatch.rm_ic (for Rust FFI).
-void nvim_cmdexpand_regmatch_set_rm_ic(regmatch_T *rmp, int val)
-{
-  rmp->rm_ic = (bool)val;
-}
-
-/// Set regmatch.regprog (for Rust FFI).
+void nvim_cmdexpand_regmatch_set_rm_ic(regmatch_T *rmp, int val) { rmp->rm_ic = (bool)val; }
 void nvim_cmdexpand_regmatch_set_regprog(regmatch_T *rmp, void *prog)
 {
   rmp->rm_ic = false;
   rmp->regprog = (regprog_T *)prog;
 }
 
-/// Wrapper for find_help_tags (for Rust FFI). Returns OK or FAIL.
 int nvim_cmdexpand_find_help_tags(const char *pat, int *numMatches, char ***matches)
 {
   if (find_help_tags(*pat == NUL ? "help" : pat, numMatches, matches, false) == OK) {
@@ -828,98 +438,69 @@ int nvim_cmdexpand_find_help_tags(const char *pat, int *numMatches, char ***matc
   return 0;
 }
 
-/// Wrapper for expand_shellcmd (for Rust FFI).
 void nvim_cmdexpand_expand_shellcmd(char *filepat, char ***matches, int *numMatches, int flags)
 {
   expand_shellcmd(filepat, matches, numMatches, flags);
 }
 
-/// Wrapper for ExpandOldSetting (for Rust FFI).
 int nvim_cmdexpand_expand_old_setting(int *numMatches, char ***matches)
 {
   return ExpandOldSetting(numMatches, matches);
 }
 
-/// Wrapper for ExpandBufnames (for Rust FFI).
 int nvim_cmdexpand_expand_bufnames(const char *pat, int *numMatches, char ***matches, int options)
 {
   return ExpandBufnames(pat, numMatches, matches, options);
 }
 
-/// Wrapper for ExpandRTDir with NULL-terminated directories array.
-/// dirs_count must match the number of dirs.
 int nvim_cmdexpand_expand_rtdir(const char *pat, int flags, int *numMatches, char ***matches,
                                 char **directories)
 {
   return ExpandRTDir(pat, flags, numMatches, matches, directories);
 }
 
-/// Wrapper for ExpandPackAddDir (for Rust FFI).
 int nvim_cmdexpand_expand_pack_add_dir(const char *pat, int *numMatches, char ***matches)
 {
   return ExpandPackAddDir(pat, numMatches, matches);
 }
 
-/// Wrapper for expand_runtime_cmd (for Rust FFI).
 int nvim_cmdexpand_expand_runtime_cmd(const char *pat, int *numMatches, char ***matches)
 {
   return expand_runtime_cmd(pat, numMatches, matches);
 }
 
-/// Wrapper for ExpandSettings (for Rust FFI).
 int nvim_cmdexpand_expand_settings(expand_T *xp, regmatch_T *regmatch, const char *pat,
                                    int *numMatches, char ***matches, int fuzzy)
 {
   return ExpandSettings(xp, regmatch, pat, numMatches, matches, (bool)fuzzy);
 }
 
-/// Wrapper for ExpandStringSetting (for Rust FFI).
 int nvim_cmdexpand_expand_string_setting(expand_T *xp, regmatch_T *regmatch,
                                           int *numMatches, char ***matches)
 {
   return ExpandStringSetting(xp, regmatch, numMatches, matches);
 }
 
-/// Wrapper for ExpandMappings (for Rust FFI).
 int nvim_cmdexpand_expand_mappings(const char *pat, regmatch_T *regmatch,
                                    int *numMatches, char ***matches)
 {
   return ExpandMappings(pat, regmatch, numMatches, matches);
 }
 
-/// Wrapper for expand_argopt (for Rust FFI).
 int nvim_cmdexpand_expand_argopt(const char *pat, expand_T *xp, regmatch_T *regmatch,
                                   char ***matches, int *numMatches)
 {
   return expand_argopt(pat, xp, regmatch, matches, numMatches);
 }
 
-/// Wrapper for nlua_expand_get_matches (for Rust FFI).
 int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
 {
   return nlua_expand_get_matches(numMatches, matches);
 }
 
-/// Get DIP_START + DIP_OPT flags (for Rust FFI).
-int nvim_cmdexpand_get_dip_start_opt(void)
-{
-  return DIP_START + DIP_OPT;
-}
-
-/// Get RE_MAGIC constant (for Rust FFI).
-int nvim_cmdexpand_get_re_magic(void)
-{
-  return RE_MAGIC;
-}
-
-/// Wrapper for rs_magic_isset() (already declared, but needs int return for Rust FFI).
-int nvim_cmdexpand_magic_isset(void)
-{
-  return rs_magic_isset();
-}
-
-/// Wrapper for xmalloc(n) then snprintf pattern for EXPAND_USER_FUNC s: prefix.
-/// Returns allocated string "^<SNR>\\d\\+_<suffix>" or NULL.
+int nvim_cmdexpand_get_dip_start_opt(void) { return DIP_START + DIP_OPT; }
+int nvim_cmdexpand_get_re_magic(void) { return RE_MAGIC; }
+int nvim_cmdexpand_magic_isset(void) { return rs_magic_isset(); }
 char *nvim_cmdexpand_make_snr_pattern(const char *suffix)
 {
   const size_t len = strlen(suffix) + 20;
@@ -928,137 +509,36 @@ char *nvim_cmdexpand_make_snr_pattern(const char *suffix)
   return tofree;
 }
 
-/// Function pointer accessors for ExpandOther dispatch table (for Rust FFI).
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_command_name(void)
-{
-  return get_command_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_history_arg(void)
-{
-  return get_history_arg;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_commands(void)
-{
-  return get_user_commands;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_addr_type(void)
-{
-  return get_user_cmd_addr_type;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_flags(void)
-{
-  return get_user_cmd_flags;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_nargs(void)
-{
-  return get_user_cmd_nargs;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_complete(void)
-{
-  return get_user_cmd_complete;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_var_name(void)
-{
-  return get_user_var_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_function_name(void)
-{
-  return get_function_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_func_name(void)
-{
-  return get_user_func_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_expr_name(void)
-{
-  return get_expr_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_name(void)
-{
-  return get_menu_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_names(void)
-{
-  return get_menu_names;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntax_name(void)
-{
-  return get_syntax_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntime_arg(void)
-{
-  return get_syntime_arg;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_highlight_name(void)
-{
-  return get_highlight_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_event_name(void)
-{
-  return expand_get_event_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_augroup_name(void)
-{
-  return expand_get_augroup_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_sign_name(void)
-{
-  return get_sign_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_profile_name(void)
-{
-  return get_profile_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_lang_arg(void)
-{
-  return get_lang_arg;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_locales(void)
-{
-  return get_locales;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_env_name(void)
-{
-  return get_env_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_users(void)
-{
-  return get_users;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_arglist_name(void)
-{
-  return get_arglist_name;
-}
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void)
-{
-  return get_healthcheck_names;
-}
-
-/// Wrapper for xstrnsave (for Rust FFI).
-char *nvim_cmdexpand_xstrnsave(const char *s, size_t n)
-{
-  return xstrnsave(s, n);
-}
-
-/// Set cmd_showtail (for Rust FFI).
-void nvim_cmdexpand_set_cmd_showtail(int val)
-{
-  cmd_showtail = (bool)val;
-}
-
-/// Set may_expand_pattern (for Rust FFI).
-void nvim_cmdexpand_set_may_expand_pattern(int val)
-{
-  may_expand_pattern = (bool)val;
-}
-
-/// Copy pre_incsearch_pos from xp->xp_pre_incsearch_pos (for Rust FFI).
-void nvim_cmdexpand_copy_pre_incsearch_pos(expand_T *xp)
-{
-  pre_incsearch_pos = xp->xp_pre_incsearch_pos;
-}
-
-/// Save cmdline_orig from current ccline->cmdbuff (for Rust FFI).
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_command_name(void) { return get_command_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_history_arg(void) { return get_history_arg; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_commands(void) { return get_user_commands; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_addr_type(void) { return get_user_cmd_addr_type; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_flags(void) { return get_user_cmd_flags; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_nargs(void) { return get_user_cmd_nargs; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_complete(void) { return get_user_cmd_complete; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_var_name(void) { return get_user_var_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_function_name(void) { return get_function_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_func_name(void) { return get_user_func_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_expr_name(void) { return get_expr_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_name(void) { return get_menu_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_names(void) { return get_menu_names; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntax_name(void) { return get_syntax_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntime_arg(void) { return get_syntime_arg; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_highlight_name(void) { return get_highlight_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_event_name(void) { return expand_get_event_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_augroup_name(void) { return expand_get_augroup_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_sign_name(void) { return get_sign_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_profile_name(void) { return get_profile_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_lang_arg(void) { return get_lang_arg; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_locales(void) { return get_locales; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_env_name(void) { return get_env_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_users(void) { return get_users; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_arglist_name(void) { return get_arglist_name; }
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void) { return get_healthcheck_names; }
+char *nvim_cmdexpand_xstrnsave(const char *s, size_t n) { return xstrnsave(s, n); }
+void nvim_cmdexpand_set_cmd_showtail(int val) { cmd_showtail = (bool)val; }
+void nvim_cmdexpand_set_may_expand_pattern(int val) { may_expand_pattern = (bool)val; }
+void nvim_cmdexpand_copy_pre_incsearch_pos(expand_T *xp) { pre_incsearch_pos = xp->xp_pre_incsearch_pos; }
 void nvim_cmdexpand_save_cmdline_orig(void)
 {
   CmdlineInfo *ccline = get_cmdline_info();
@@ -1066,11 +546,6 @@ void nvim_cmdexpand_save_cmdline_orig(void)
   cmdline_orig = xstrnsave(ccline->cmdbuff, (size_t)ccline->cmdlen);
 }
 
-/// Apply expansion result into ccline->cmdbuff (for Rust FFI).
-/// @param xp         expand context, xp_pattern_len is used
-/// @param i          offset of pattern start in cmdbuff
-/// @param p          expansion result string (caller retains ownership)
-/// @param plen       length of p
 void nvim_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen)
 {
   CmdlineInfo *ccline = get_cmdline_info();
@@ -1088,43 +563,12 @@ void nvim_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen
   ccline->cmdpos += difflen;
 }
 
-/// Wrapper for nlua_expand_pat (for Rust FFI).
-void nvim_cmdexpand_nlua_expand_pat(expand_T *xp)
-{
-  nlua_expand_pat(xp);
-}
-
-/// Wrapper for msg_putchar (for Rust FFI).
-void nvim_cmdexpand_msg_putchar(int c)
-{
-  msg_putchar(c);
-}
-
-/// Wrapper for msg_ext_set_kind (for Rust FFI).
-void nvim_cmdexpand_msg_ext_set_kind(const char *kind)
-{
-  msg_ext_set_kind(kind);
-}
-
-/// Free wild matches via FreeWild (for Rust FFI).
-void nvim_cmdexpand_free_wild(int count, char **files)
-{
-  FreeWild(count, files);
-}
-
-/// Wrapper for pum_clear (for Rust FFI).
-void nvim_cmdexpand_pum_clear(void)
-{
-  pum_clear();
-}
-
-/// Set compl_selected (for Rust FFI).
-void nvim_cmdexpand_set_compl_selected(int val)
-{
-  compl_selected = val;
-}
-
-/// Create PUM from explicit matches array (for Rust FFI).
+void nvim_cmdexpand_nlua_expand_pat(expand_T *xp) { nlua_expand_pat(xp); }
+void nvim_cmdexpand_msg_putchar(int c) { msg_putchar(c); }
+void nvim_cmdexpand_msg_ext_set_kind(const char *kind) { msg_ext_set_kind(kind); }
+void nvim_cmdexpand_free_wild(int count, char **files) { FreeWild(count, files); }
+void nvim_cmdexpand_pum_clear(void) { pum_clear(); }
+void nvim_cmdexpand_set_compl_selected(int val) { compl_selected = val; }
 void nvim_cmdexpand_pum_create_from_matches(expand_T *xp, char **matches, int num_matches,
                                             int showtail, int noselect)
 {
@@ -1132,90 +576,33 @@ void nvim_cmdexpand_pum_create_from_matches(expand_T *xp, char **matches, int nu
                      showtail != 0, noselect != 0);
 }
 
-/// Wrapper for redraw_wildmenu (Rust) with explicit matches (for Rust FFI).
 void nvim_cmdexpand_redraw_wildmenu_ex(expand_T *xp, int num_matches, char **matches,
                                        int findex, int showtail)
 {
   redraw_wildmenu(xp, num_matches, matches, findex, showtail != 0);
 }
 
-/// Wrapper for msg_clr_eos (for Rust FFI).
-void nvim_cmdexpand_msg_clr_eos(void)
-{
-  msg_clr_eos();
-}
-
-/// Wrapper for msg_outtrans (for Rust FFI). Returns column after output.
-int nvim_cmdexpand_msg_outtrans(const char *str, int attr, int maxcol)
-{
-  return msg_outtrans(str, attr, (bool)maxcol);
-}
-
-/// Wrapper for msg_outtrans_long (for Rust FFI).
-void nvim_cmdexpand_msg_outtrans_long(const char *str, int attr)
-{
-  msg_outtrans_long(str, attr);
-}
-
-/// Wrapper for msg_advance (for Rust FFI).
-void nvim_cmdexpand_msg_advance(int col)
-{
-  msg_advance(col);
-}
-
-/// Replace $HOME with ~ in matches[i] for display.
-/// Returns pointer into NameBuff static buffer.
+void nvim_cmdexpand_msg_clr_eos(void) { msg_clr_eos(); }
+int nvim_cmdexpand_msg_outtrans(const char *str, int attr, int maxcol) { return msg_outtrans(str, attr, (bool)maxcol); }
+void nvim_cmdexpand_msg_outtrans_long(const char *str, int attr) { msg_outtrans_long(str, attr); }
+void nvim_cmdexpand_msg_advance(int col) { msg_advance(col); }
 char *nvim_cmdexpand_home_replace_match(const char *s)
 {
   home_replace(NULL, s, NameBuff, MAXPATHL, true);
   return NameBuff;
 }
 
-/// Wrapper for expand_env_save_opt (for Rust FFI).
-char *nvim_cmdexpand_expand_env_save_opt(const char *str)
-{
-  return expand_env_save_opt((char *)str, true);
-}
-
-/// Wrapper for backslash_halve_save (for Rust FFI).
-char *nvim_cmdexpand_backslash_halve_save(const char *str)
-{
-  return backslash_halve_save((char *)str);
-}
-
-/// Wrapper for os_isdir (for Rust FFI).
-int nvim_cmdexpand_os_isdir(const char *str)
-{
-  return os_isdir(str);
-}
-
-/// Wrapper for vim_strsize (for Rust FFI).
-int nvim_cmdexpand_vim_strsize(const char *str)
-{
-  return vim_strsize(str);
-}
-
-/// Wrapper for msg_puts_hl (for Rust FFI).
-void nvim_cmdexpand_msg_puts_hl(const char *str, int attr, int maxcol)
-{
-  msg_puts_hl(str, attr, (bool)maxcol);
-}
-
-/// Wrapper for rs_showmatches_gettail via SHOW_MATCH macro (for Rust FFI).
-/// Returns either gettail result (if showtail) or matches[m] directly.
+char *nvim_cmdexpand_expand_env_save_opt(const char *str) { return expand_env_save_opt((char *)str, true); }
+char *nvim_cmdexpand_backslash_halve_save(const char *str) { return backslash_halve_save((char *)str); }
+int nvim_cmdexpand_os_isdir(const char *str) { return os_isdir(str); }
+int nvim_cmdexpand_vim_strsize(const char *str) { return vim_strsize(str); }
+void nvim_cmdexpand_msg_puts_hl(const char *str, int attr, int maxcol) { msg_puts_hl(str, attr, (bool)maxcol); }
 char *nvim_cmdexpand_show_match(char **matches, int m, int showtail)
 {
   return showtail ? rs_showmatches_gettail(matches[m], false) : matches[m];
 }
 
-/// Wrapper for rs_cmdline_compl_use_pum (for Rust FFI).
-int nvim_cmdexpand_compl_use_pum(int need_wildmenu)
-{
-  return rs_cmdline_compl_use_pum(need_wildmenu);
-}
-
-
-
+int nvim_cmdexpand_compl_use_pum(int need_wildmenu) { return rs_cmdline_compl_use_pum(need_wildmenu); }
 
 /// Do wildcard expansion on the string "str".
 /// Chars that should not be expanded must be preceded with a backslash.
@@ -1387,9 +774,6 @@ static const char *set_cmd_index(const char *cmd, exarg_T *eap, expand_T *xp, in
   return p;
 }
 
-/// C accessor for Rust: wraps set_cmd_index and returns cmdidx via out-param.
-///
-/// Allows Rust to call set_cmd_index without needing a repr(C) exarg_T layout.
 const char *nvim_cmdexpand_set_cmd_index(const char *cmd, expand_T *xp, int *complp,
                                          int *cmdidx_out)
 {
@@ -1399,25 +783,9 @@ const char *nvim_cmdexpand_set_cmd_index(const char *cmd, expand_T *xp, int *com
   return p;
 }
 
-/// Get the type of typval_T[idx] from an argvars array (for Rust FFI).
-int nvim_cmdexpand_tv_get_type(typval_T *argvars, int idx)
-{
-  return (int)argvars[idx].v_type;
-}
-
-/// Check that argvars[idx] is a string (emits error if not). Returns FAIL on error.
-int nvim_cmdexpand_tv_check_for_string_arg(typval_T *argvars, int idx)
-{
-  return tv_check_for_string_arg(argvars, idx);
-}
-
-/// Get string value from argvars[idx]. Returns "" on missing/invalid.
-const char *nvim_cmdexpand_tv_get_string(typval_T *argvars, int idx)
-{
-  return tv_get_string(&argvars[idx]);
-}
-
-/// Get number from argvars[idx] with error check. Sets *errorp to 1 on error.
+int nvim_cmdexpand_tv_get_type(typval_T *argvars, int idx) { return (int)argvars[idx].v_type; }
+int nvim_cmdexpand_tv_check_for_string_arg(typval_T *argvars, int idx) { return tv_check_for_string_arg(argvars, idx); }
+const char *nvim_cmdexpand_tv_get_string(typval_T *argvars, int idx) { return tv_get_string(&argvars[idx]); }
 int64_t nvim_cmdexpand_tv_get_number_chk(typval_T *argvars, int idx, int *errorp)
 {
   bool err = false;
@@ -1440,8 +808,6 @@ void nvim_cmdexpand_tv_list_append_string(typval_T *rettv, const char *str, int6
   tv_list_append_string(rettv->vval.v_list, str, len);
 }
 
-/// Set rettv to type VAR_STRING with the given string value (for Rust FFI).
-/// Passes ownership of str to the typval.
 void nvim_cmdexpand_tv_set_string(typval_T *rettv, char *str)
 {
   rettv->v_type = VAR_STRING;
@@ -1449,11 +815,7 @@ void nvim_cmdexpand_tv_set_string(typval_T *rettv, char *str)
 }
 
 /// Allocate a dict and set rettv to it (for Rust FFI).
-void nvim_cmdexpand_tv_dict_alloc_ret(typval_T *rettv)
-{
-  tv_dict_alloc_ret(rettv);
-}
-
+void nvim_cmdexpand_tv_dict_alloc_ret(typval_T *rettv) { tv_dict_alloc_ret(rettv); }
 /// Add string to dict (for Rust FFI). Returns OK or FAIL.
 int nvim_cmdexpand_tv_dict_add_str(typval_T *rettv, const char *key, size_t klen, const char *val)
 {
@@ -1480,13 +842,7 @@ void nvim_cmdexpand_list_append_string(list_T *li, const char *str, int64_t len)
   tv_list_append_string(li, str, len);
 }
 
-/// Get pum_visible() return value (for Rust FFI).
-int nvim_cmdexpand_pum_visible(void)
-{
-  return pum_visible();
-}
-
-/// Get xp_selected from ccline->xpc (for Rust FFI).
+int nvim_cmdexpand_pum_visible(void) { return pum_visible(); }
 int nvim_cmdexpand_get_ccline_xp_selected(void)
 {
   CmdlineInfo *ccline = get_cmdline_info();
@@ -1496,7 +852,6 @@ int nvim_cmdexpand_get_ccline_xp_selected(void)
   return ccline->xpc->xp_selected;
 }
 
-/// Get xp_numfiles from ccline->xpc (for Rust FFI). Returns -1 if no xpc.
 int nvim_cmdexpand_get_ccline_xp_numfiles(void)
 {
   CmdlineInfo *ccline = get_cmdline_info();
@@ -1506,7 +861,6 @@ int nvim_cmdexpand_get_ccline_xp_numfiles(void)
   return ccline->xpc->xp_numfiles;
 }
 
-/// Get xp_files[idx] from ccline->xpc (for Rust FFI). Returns NULL if out of range.
 const char *nvim_cmdexpand_get_ccline_xp_file(int idx)
 {
   CmdlineInfo *ccline = get_cmdline_info();
@@ -1519,31 +873,15 @@ const char *nvim_cmdexpand_get_ccline_xp_file(int idx)
   return ccline->xpc->xp_files[idx];
 }
 
-/// Check ccline->xpc->xp_files is not NULL (for Rust FFI).
 int nvim_cmdexpand_ccline_has_xp_files(void)
 {
   CmdlineInfo *ccline = get_cmdline_info();
   return ccline != NULL && ccline->xpc != NULL && ccline->xpc->xp_files != NULL;
 }
 
-/// Convert completion type string to context integer (for Rust FFI).
-int nvim_cmdexpand_cmdcomplete_str_to_type(const char *type)
-{
-  return cmdcomplete_str_to_type(type);
-}
-
-/// Convert completion context integer (+ arg) to string (for Rust FFI). Returns xstrdup.
-char *nvim_cmdexpand_cmdcomplete_type_to_str(int ctx, const char *arg)
-{
-  return cmdcomplete_type_to_str(ctx, arg);
-}
-
-/// Get the cmdline_orig static (for Rust FFI).
-const char *nvim_cmdexpand_get_cmdline_orig(void)
-{
-  return cmdline_orig;
-}
-
+int nvim_cmdexpand_cmdcomplete_str_to_type(const char *type) { return cmdcomplete_str_to_type(type); }
+char *nvim_cmdexpand_cmdcomplete_type_to_str(int ctx, const char *arg) { return cmdcomplete_type_to_str(ctx, arg); }
+const char *nvim_cmdexpand_get_cmdline_orig(void) { return cmdline_orig; }
 /// set_context_in_menu_cmd wrapper (for Rust FFI).
 void nvim_cmdexpand_set_context_in_menu_cmd(expand_T *xp, const char *cmd, char *arg, bool delim_optional)
 {
@@ -1551,59 +889,23 @@ void nvim_cmdexpand_set_context_in_menu_cmd(expand_T *xp, const char *cmd, char 
 }
 
 /// set_context_in_sign_cmd wrapper (for Rust FFI).
-void nvim_cmdexpand_set_context_in_sign_cmd(expand_T *xp, char *arg)
-{
-  set_context_in_sign_cmd(xp, arg);
-}
-
+void nvim_cmdexpand_set_context_in_sign_cmd(expand_T *xp, char *arg) { set_context_in_sign_cmd(xp, arg); }
 /// set_context_in_runtime_cmd wrapper (for Rust FFI).
-void nvim_cmdexpand_set_context_in_runtime_cmd(expand_T *xp, char *arg)
-{
-  set_context_in_runtime_cmd(xp, arg);
-}
-
+void nvim_cmdexpand_set_context_in_runtime_cmd(expand_T *xp, char *arg) { set_context_in_runtime_cmd(xp, arg); }
 /// VAR_UNKNOWN constant (for Rust FFI).
-int nvim_cmdexpand_get_var_unknown(void)
-{
-  return VAR_UNKNOWN;
-}
-
+int nvim_cmdexpand_get_var_unknown(void) { return VAR_UNKNOWN; }
 /// filetype_expand_what = EXP_FILETYPECMD_ALL (for Rust FFI).
-void nvim_cmdexpand_set_filetype_expand_all(void)
-{
-  filetype_expand_what = EXP_FILETYPECMD_ALL;
-}
-
+void nvim_cmdexpand_set_filetype_expand_all(void) { filetype_expand_what = EXP_FILETYPECMD_ALL; }
 /// emsg(_(e_invarg)) wrapper (for Rust FFI).
-void nvim_cmdexpand_emsg_invarg(void)
-{
-  emsg(_(e_invarg));
-}
-
+void nvim_cmdexpand_emsg_invarg(void) { emsg(_(e_invarg)); }
 /// semsg(_(e_invarg2), type) wrapper (for Rust FFI).
-void nvim_cmdexpand_semsg_invarg2(const char *type)
-{
-  semsg(_(e_invarg2), type);
-}
-
+void nvim_cmdexpand_semsg_invarg2(const char *type) { semsg(_(e_invarg2), type); }
 /// xmemdupz wrapper (for Rust FFI).
-char *nvim_cmdexpand_xmemdupz(const char *s, size_t len)
-{
-  return xmemdupz(s, len);
-}
-
+char *nvim_cmdexpand_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
 /// call_user_expand_func with call_func_retlist (for Rust FFI).
-list_T *nvim_cmdexpand_call_user_expand_retlist(expand_T *xp)
-{
-  return call_user_expand_func(call_func_retlist, xp);
-}
-
+list_T *nvim_cmdexpand_call_user_expand_retlist(expand_T *xp) { return call_user_expand_func(call_func_retlist, xp); }
 /// call_user_expand_func with call_func_retstr (for Rust FFI).
-char *nvim_cmdexpand_call_user_expand_retstr(expand_T *xp)
-{
-  return call_user_expand_func(call_func_retstr, xp);
-}
-
+char *nvim_cmdexpand_call_user_expand_retstr(expand_T *xp) { return call_user_expand_func(call_func_retstr, xp); }
 /// nlua_call_user_expand_func wrapper (for Rust FFI).
 /// Caller must tv_clear rettv when done.
 int nvim_cmdexpand_nlua_call_user_expand(expand_T *xp)
@@ -1637,8 +939,6 @@ list_T *nvim_cmdexpand_nlua_call_user_expand_retlist(expand_T *xp)
   return li;
 }
 
-/// Convert list_T to a newly-allocated char ** array (for Rust FFI).
-/// Skips non-string items.  Unrefs the list.
 void nvim_cmdexpand_list_to_string_matches(list_T *list, char ***matches, int *numMatches)
 {
   garray_T ga;
