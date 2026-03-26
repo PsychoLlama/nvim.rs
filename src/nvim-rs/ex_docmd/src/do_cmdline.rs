@@ -177,7 +177,7 @@ extern "C" {
     fn nvim_docmd_func_line_end(cookie: *mut c_void);
 
     // runtime/source helpers
-    fn nvim_docmd_c_source_finished(fgetline: LineGetter, cookie: *mut c_void) -> c_int;
+    fn nvim_docmd_source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn nvim_docmd_source_breakpoint(cookie: *mut c_void) -> *mut LinenrT;
     fn nvim_docmd_source_dbg_tick(cookie: *mut c_void) -> *mut c_int;
     fn nvim_docmd_source_level(cookie: *mut c_void) -> c_int;
@@ -647,7 +647,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             }
 
             // Check if a sourced file hit a ":finish" command.
-            if unsafe { nvim_docmd_c_source_finished(fgetline, cookie) } != 0 {
+            if unsafe { nvim_docmd_source_finished(fgetline, cookie) } {
                 retval = FAIL;
                 break;
             }
@@ -1001,7 +1001,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             && !unsafe { did_throw }
             && !unsafe { aborting() }
             && ((unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) }
-                && unsafe { nvim_docmd_c_source_finished(fgetline, cookie) } == 0)
+                && !unsafe { nvim_docmd_source_finished(fgetline, cookie) })
                 || (unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) }
                     && unsafe { nvim_docmd_func_has_ended(real_cookie) } == 0))
         {
