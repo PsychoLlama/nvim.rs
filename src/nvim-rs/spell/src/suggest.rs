@@ -3206,6 +3206,1524 @@ pub unsafe extern "C" fn rs_score_combine_lists(su: *mut std::ffi::c_void) {
 }
 
 // =============================================================================
+// Phase 2: suggest_trie_walk
+// =============================================================================
+
+// Word flags used inside suggest_trie_walk
+const WF_NOSUGGEST: c_int = 0x0800;
+const WF_BANNED: c_int = 0x10;
+const WF_NEEDCOMP: c_int = 0x1000;
+const WF_REGION: c_int = 0x01;
+const WF_RARE: c_int = 0x08;
+const WF_KEEPCAP: c_int = 0x80;
+const WF_ALLCAP: c_int = 0x04;
+const WF_ONECAP: c_int = 0x02;
+const WF_MIXCAP: c_int = 0x20;
+
+extern "C" {
+    fn nvim_spellsug_get_timeout() -> c_int;
+    fn profile_setlimit(msec: i64) -> u64;
+    fn profile_passed_limit(tm: u64) -> bool;
+    fn os_breakcheck();
+    fn utf_iscomposing_legacy(c: c_int) -> bool;
+    fn mb_charlen(s: *const c_char) -> c_int;
+    fn utf_char2len(c: c_int) -> c_int;
+    fn nvim_add_sound_suggest(
+        su: *mut std::ffi::c_void,
+        goodword: *mut c_char,
+        score: c_int,
+        lp: *const crate::LangpT,
+    );
+    #[link_name = "skiptowhite"]
+    fn trie_skiptowhite(p: *const c_char) -> *mut c_char;
+    #[link_name = "skipwhite"]
+    fn trie_skipwhite(p: *const c_char) -> *mut c_char;
+    // hash_find: already in suggest.rs extern (suggest module has its own block)
+    #[link_name = "hash_find"]
+    fn trie_hash_find(ht: *const crate::HashtabRaw, key: *const c_char) -> *mut crate::HashitemRaw;
+}
+
+/// C fromto_T struct (two char* pointers).
+#[repr(C)]
+struct FromtoC {
+    ft_from: *mut c_char,
+    ft_to: *mut c_char,
+}
+
+/// True if a hashitem is empty for the trie walk.
+#[inline]
+unsafe fn trie_hi_empty(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq(
+            (*hi).hi_key,
+            std::ptr::addr_of!(suggest_hash_removed).cast_mut(),
+        )
+}
+
+/// WAS_BANNED: check if `word` is in su->su_banned.
+#[inline]
+unsafe fn was_banned(su: *mut std::ffi::c_void, word: *const c_char) -> bool {
+    let ht = nvim_suginfo_get_banned(su);
+    let hi = trie_hash_find(ht, word);
+    !trie_hi_empty(hi)
+}
+
+/// TRY_DEEPER: check depth and score limits.
+#[inline]
+fn try_deeper(depth: usize, stack: &[TryState], add: c_int, su_maxscore: c_int) -> bool {
+    depth < MAXWLEN - 1 && stack[depth].score + add < su_maxscore
+}
+
+/// STRMOVE(dst, src): memmove to shift a C string left (overlapping).
+/// dst and src may overlap; copies until NUL.
+#[inline]
+unsafe fn strmove(dst: *mut c_char, src: *const c_char) {
+    let mut len = 0usize;
+    while *src.add(len) != 0 {
+        len += 1;
+    }
+    // +1 to include the NUL terminator
+    std::ptr::copy(src, dst, len + 1);
+}
+
+/// strcat: append src to end of dst (like C strcat).
+#[inline]
+unsafe fn c_strcat(dst: *mut c_char, src: *const c_char) {
+    let mut end = dst;
+    while *end != 0 {
+        end = end.add(1);
+    }
+    let mut s = src;
+    while *s != 0 {
+        *end = *s;
+        end = end.add(1);
+        s = s.add(1);
+    }
+    *end = 0;
+}
+
+/// strlen for raw C char pointer.
+#[inline]
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut n = 0usize;
+    while *s.add(n) != 0 {
+        n += 1;
+    }
+    n
+}
+
+/// ASCII iswhite check.
+#[inline]
+unsafe fn c_ascii_iswhite(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// MB_BYTE2LEN: Length of multibyte character from first byte.
+/// For UTF-8: 1-byte (0x00-0x7F), 2-byte (0xC0-0xDF), etc.
+#[inline]
+fn mb_byte2len(c: u8) -> usize {
+    if c < 0x80 {
+        1
+    } else if c < 0xC0 {
+        // continuation byte - shouldn't happen for first byte
+        1
+    } else if c < 0xE0 {
+        2
+    } else if c < 0xF0 {
+        3
+    } else {
+        4
+    }
+}
+
+/// STRCPY (unsafe raw C string copy).
+#[inline]
+unsafe fn c_strcpy(dst: *mut c_char, src: *const c_char) {
+    let len = c_strlen(src);
+    std::ptr::copy_nonoverlapping(src, dst, len + 1);
+}
+
+/// strncmp: compare n bytes, return true if equal.
+#[inline]
+unsafe fn c_strncmp(a: *const c_char, b: *const c_char, n: usize) -> bool {
+    std::slice::from_raw_parts(a.cast::<u8>(), n) == std::slice::from_raw_parts(b.cast::<u8>(), n)
+}
+
+/// go_deeper: copy stack[depth] to stack[depth+1], init new frame.
+#[inline]
+unsafe fn go_deeper_inline(stack: *mut TryState, depth: usize, score_add: c_int) {
+    std::ptr::copy_nonoverlapping(stack.add(depth), stack.add(depth + 1), 1);
+    let next = &mut *stack.add(depth + 1);
+    next.state = TrieWalkState::Start;
+    next.score += score_add;
+    next.curi = 1;
+    next.flags = 0;
+}
+
+/// Rust implementation of C `suggest_trie_walk`.
+///
+/// The main trie walk state machine for generating suggestions by trying
+/// insert/delete/swap/replace operations on the bad word.
+///
+/// # Safety
+/// All pointers must be valid. `su` is an opaque suginfo_T.
+/// `lp` is a valid LangpT. `fword` is a mutable MAXWLEN-sized buffer.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::used_underscore_binding)]
+pub unsafe extern "C" fn rs_suggest_trie_walk(
+    su: *mut std::ffi::c_void,
+    lp: *const crate::LangpT,
+    fword: *mut c_char,
+    soundfold: bool,
+) {
+    let mut tword = [0u8; MAXWLEN];
+    let mut stack: Vec<TryState> = vec![TryState::default(); MAXWLEN];
+    let mut preword = [0u8; MAXWLEN * 3];
+    let mut compflags = [0u8; MAXWLEN];
+
+    let slang_ptr = (*lp).lp_slang;
+    let slang = SlangHandle(slang_ptr);
+
+    let (fbyts_ptr, fidxs_ptr, pbyts_ptr, pidxs_ptr): (*mut u8, *mut c_int, *mut u8, *mut c_int) =
+        if soundfold {
+            (
+                (*slang_ptr).sl_sbyts,
+                (*slang_ptr).sl_sidxs,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        } else {
+            (
+                (*slang_ptr).sl_fbyts,
+                (*slang_ptr).sl_fidxs,
+                (*slang_ptr).sl_pbyts,
+                (*slang_ptr).sl_pidxs,
+            )
+        };
+
+    // byts/idxs: current active tree (can switch between prefix tree and fbyts)
+    let mut byts: *mut u8 = if soundfold || pbyts_ptr.is_null() {
+        fbyts_ptr
+    } else {
+        pbyts_ptr
+    };
+    let mut idxs: *mut c_int = if soundfold || pidxs_ptr.is_null() {
+        fidxs_ptr
+    } else {
+        pidxs_ptr
+    };
+
+    let mut depth: isize = 0;
+    {
+        let sp = &mut stack[0];
+        sp.curi = 1;
+        sp.score = 0;
+        sp.arridx = 0;
+        sp.fidx = 0;
+        sp.fidxtry = 0;
+        sp.twordlen = 0;
+        sp.flags = 0;
+        sp.tcharlen = 0;
+        sp.tcharidx = 0;
+        sp.isdiff = DiffType::None;
+        sp.fcharstart = 0;
+        sp.prewordlen = 0;
+        sp.splitoff = 0;
+        sp.splitfidx = 0;
+        sp.complen = 0;
+        sp.compsplit = 0;
+        sp.save_badflags = 0;
+        sp.delidx = 0;
+        sp.prefixdepth = if soundfold || pbyts_ptr.is_null() {
+            prefix_depth::PFD_NOPREFIX
+        } else {
+            prefix_depth::PFD_PREFIXTREE
+        };
+        sp.state = if soundfold || pbyts_ptr.is_null() {
+            TrieWalkState::Start
+        } else {
+            TrieWalkState::NoPrefix
+        };
+    }
+
+    // Time limit setup
+    let timeout = nvim_spellsug_get_timeout();
+    let time_limit: u64 = if timeout > 0 {
+        profile_setlimit(i64::from(timeout))
+    } else {
+        0
+    };
+
+    let mut repextra: c_int = 0;
+    let mut breakcheckcount: c_int = 1000;
+
+    // Cache frequently-used suginfo fields at start of loop to reduce overhead.
+    // These are re-fetched from accessors when they might change.
+    let su_badptr = nvim_suginfo_get_badptr(su);
+    let su_badlen = nvim_suginfo_get_badlen(su);
+
+    while depth >= 0 && !crate::got_int {
+        let d = depth as usize;
+        // We take a raw pointer to stack[d] so we can mutate it while also
+        // calling helper functions. All helpers that modify sp go through this pointer.
+        let sp_raw = stack.as_mut_ptr().add(d);
+
+        macro_rules! sp {
+            () => {
+                &*sp_raw
+            };
+        }
+        macro_rules! sp_mut {
+            () => {
+                &mut *sp_raw
+            };
+        }
+
+        let su_maxscore = nvim_suginfo_get_maxscore(su);
+
+        match (*sp_raw).state {
+            TrieWalkState::Start | TrieWalkState::NoPrefix => {
+                let arridx = sp!().arridx as usize;
+                let len = *byts.add(arridx) as usize;
+                let arridx_cur = arridx + sp!().curi as usize;
+
+                if sp!().prefixdepth == prefix_depth::PFD_PREFIXTREE {
+                    // Skip over NUL bytes.
+                    let mut n = 0usize;
+                    while n < len && *byts.add(arridx_cur + n) == 0 {
+                        n += 1;
+                    }
+                    sp_mut!().curi = (sp!().curi + n as i16).max(sp!().curi);
+                    // Actually: sp->ts_curi += n (we already computed sp!().curi above)
+                    // but the original code does sp->ts_curi = sp->ts_curi + n; let me redo
+                    {
+                        let old_curi = (*sp_raw).curi;
+                        (*sp_raw).curi = old_curi + n as i16;
+                    }
+
+                    let n_state = (*sp_raw).state as c_int;
+                    (*sp_raw).state = TrieWalkState::EndNul;
+                    (*sp_raw).save_badflags = nvim_suginfo_get_badflags(su) as u8;
+
+                    if depth < (MAXWLEN - 1) as isize
+                        && (*byts.add(arridx_cur + n) == 0
+                            || n_state == TrieWalkState::NoPrefix as c_int)
+                    {
+                        let fidx = (*sp_raw).fidx as usize;
+                        let n_nofold = crate::rs_nofold_len(fword, fidx as c_int, su_badptr);
+                        let flags_pref =
+                            rs_badword_captype(su_badptr, su_badptr.add(n_nofold as usize));
+                        let new_badflags = rs_badword_captype(
+                            su_badptr.add(n_nofold as usize),
+                            su_badptr.add(su_badlen as usize),
+                        );
+                        nvim_suginfo_set_badflags(su, new_badflags);
+                        go_deeper_inline(stack.as_mut_ptr(), d, 0);
+                        depth += 1;
+                        let d2 = depth as usize;
+                        let sp2 = &mut stack[d2];
+                        sp2.prefixdepth = d as u8;
+                        byts = fbyts_ptr;
+                        idxs = fidxs_ptr;
+                        sp2.arridx = 0;
+
+                        // Move prefix to preword with right case.
+                        tword[sp2.twordlen as usize] = 0;
+                        crate::rs_make_case_word(
+                            tword.as_ptr().add(sp2.splitoff as usize).cast::<c_char>(),
+                            preword
+                                .as_mut_ptr()
+                                .add(sp2.prewordlen as usize)
+                                .cast::<c_char>(),
+                            flags_pref,
+                        );
+                        let plen = c_strlen(preword.as_ptr().cast::<c_char>());
+                        sp2.prewordlen = plen as u8;
+                        sp2.splitoff = sp2.twordlen;
+                    }
+                    // 'break' in C switch → continue outer loop
+                    continue;
+                }
+
+                if (*sp_raw).curi as usize > len || *byts.add(arridx_cur) != 0 {
+                    (*sp_raw).state = TrieWalkState::EndNul;
+                    (*sp_raw).save_badflags = nvim_suginfo_get_badflags(su) as u8;
+                    continue;
+                }
+
+                // End of word in tree.
+                (*sp_raw).curi += 1;
+
+                let flags = *idxs.add(arridx_cur);
+
+                if flags & WF_NOSUGGEST != 0 {
+                    continue;
+                }
+
+                let fidx = (*sp_raw).fidx as usize;
+                let fword_ends = *fword.add(fidx) == 0
+                    || if soundfold {
+                        c_ascii_iswhite(*fword.add(fidx) as u8)
+                    } else {
+                        !crate::rs_spell_iswordp(fword.add(fidx), stp_sal_curwin)
+                    };
+
+                tword[(*sp_raw).twordlen as usize] = 0;
+
+                // Check prefix validity.
+                if (*sp_raw).prefixdepth <= prefix_depth::PFD_NOTSPECIAL
+                    && ((*sp_raw).flags & try_state_flags::TSF_PREFIXOK) == 0
+                    && !pbyts_ptr.is_null()
+                {
+                    let n_idx = stack[(*sp_raw).prefixdepth as usize].arridx as usize;
+                    let plen = *pbyts_ptr.add(n_idx) as usize;
+                    let mut c = 0usize;
+                    while c < plen && *pbyts_ptr.add(n_idx + 1 + c) == 0 {
+                        c += 1;
+                    }
+                    if c > 0 {
+                        let vc = crate::check::rs_valid_word_prefix(
+                            c as c_int,
+                            (n_idx + 1) as c_int,
+                            flags,
+                            tword
+                                .as_mut_ptr()
+                                .add((*sp_raw).splitoff as usize)
+                                .cast::<c_char>(),
+                            slang.0,
+                            false,
+                        );
+                        if vc == 0 {
+                            continue;
+                        }
+                        (*sp_raw).flags |= try_state_flags::TSF_PREFIXOK;
+                    }
+                }
+
+                // Check NEEDCOMPOUND.
+                let goodword_ends_base = !((*sp_raw).complen == (*sp_raw).compsplit
+                    && fword_ends
+                    && (flags & WF_NEEDCOMP) != 0);
+
+                let mut goodword_ends = goodword_ends_base;
+                let mut p_compound: *const c_char = std::ptr::null();
+                let mut compound_ok = true;
+
+                if (*sp_raw).complen > (*sp_raw).compsplit {
+                    if (*slang_ptr).sl_nobreak {
+                        // NOBREAK: check if the previous word was correct and add it.
+                        let split_fidx = (*sp_raw).splitfidx as usize;
+                        let split_off = (*sp_raw).splitoff as usize;
+                        let flen_diff = fidx - split_fidx;
+                        let tlen_diff = (*sp_raw).twordlen as usize - split_off;
+                        if flen_diff == tlen_diff
+                            && c_strncmp(
+                                fword.add(split_fidx),
+                                tword.as_ptr().add(split_off).cast::<c_char>(),
+                                flen_diff,
+                            )
+                        {
+                            preword[(*sp_raw).prewordlen as usize] = 0;
+                            let newscore = rs_score_wordcount_adj(
+                                slang,
+                                (*sp_raw).score,
+                                preword
+                                    .as_ptr()
+                                    .add((*sp_raw).prewordlen as usize)
+                                    .cast::<c_char>(),
+                                (*sp_raw).prewordlen > 0,
+                            );
+                            if newscore <= su_maxscore {
+                                rs_add_suggestion(
+                                    su,
+                                    nvim_suginfo_get_ga(su),
+                                    preword.as_ptr().cast::<c_char>(),
+                                    c_int::from((*sp_raw).splitfidx) - repextra,
+                                    newscore,
+                                    0,
+                                    false,
+                                    (*lp).lp_sallang.cast(),
+                                    false,
+                                );
+                            }
+                        }
+                        continue;
+                    }
+                    // Compound word check.
+                    if (flags >> 24 == 0)
+                        || ((*sp_raw).twordlen as usize - (*sp_raw).splitoff as usize)
+                            < (*slang_ptr).sl_compminlen as usize
+                    {
+                        continue;
+                    }
+                    if (*slang_ptr).sl_compminlen > 0
+                        && mb_charlen(
+                            tword
+                                .as_ptr()
+                                .add((*sp_raw).splitoff as usize)
+                                .cast::<c_char>(),
+                        ) < (*slang_ptr).sl_compminlen
+                    {
+                        continue;
+                    }
+
+                    let complen_idx = (*sp_raw).complen as usize;
+                    compflags[complen_idx] = (flags as u32 >> 24) as u8;
+                    compflags[complen_idx + 1] = 0;
+
+                    let prelen = (*sp_raw).prewordlen as usize;
+                    let twlen = (*sp_raw).twordlen as usize;
+                    let spoff = (*sp_raw).splitoff as usize;
+                    let copy_n = twlen - spoff;
+                    // xmemcpyz: copy with NUL terminator
+                    std::ptr::copy_nonoverlapping(
+                        tword.as_ptr().add(spoff),
+                        preword.as_mut_ptr().add(prelen),
+                        copy_n,
+                    );
+                    preword[prelen + copy_n] = 0;
+
+                    // Check CHECKCOMPOUNDPATTERN rules.
+                    if crate::check::rs_match_checkcompoundpattern(
+                        preword.as_ptr().cast::<c_char>(),
+                        prelen as c_int,
+                        std::ptr::addr_of!((*slang_ptr).sl_comppat),
+                    ) {
+                        compound_ok = false;
+                    }
+
+                    if compound_ok {
+                        // Find last word in preword.
+                        let mut pp = preword.as_ptr().cast::<c_char>();
+                        loop {
+                            let next = trie_skiptowhite(pp);
+                            if *next == 0 {
+                                break;
+                            }
+                            pp = trie_skipwhite(next);
+                        }
+                        p_compound = pp;
+                        if fword_ends
+                            && !crate::check::rs_can_compound_c_compat(
+                                slang_ptr,
+                                p_compound,
+                                compflags.as_ptr().add((*sp_raw).compsplit as usize),
+                            )
+                        {
+                            compound_ok = false;
+                        }
+                    }
+
+                    // Get pointer to last char of previous word.
+                    if compound_ok {
+                        let mut pp = preword
+                            .as_ptr()
+                            .add((*sp_raw).prewordlen as usize)
+                            .cast::<c_char>();
+                        pp = mb_ptr_back(preword.as_ptr().cast::<c_char>(), pp);
+                        p_compound = pp;
+                    }
+                }
+
+                // Form the word with proper case in preword.
+                let prelen = (*sp_raw).prewordlen as usize;
+                let sp_off = (*sp_raw).splitoff as usize;
+                if soundfold {
+                    c_strcpy(
+                        preword.as_mut_ptr().add(prelen).cast::<c_char>(),
+                        tword.as_ptr().add(sp_off).cast::<c_char>(),
+                    );
+                } else if flags & WF_KEEPCAP != 0 {
+                    rs_find_keepcap_word(
+                        slang,
+                        tword.as_mut_ptr().add(sp_off).cast::<c_char>(),
+                        preword.as_mut_ptr().add(prelen).cast::<c_char>(),
+                    );
+                } else {
+                    let mut c = nvim_suginfo_get_badflags(su);
+                    if (c & WF_ALLCAP) != 0 && su_badlen == crate::utfc_ptr2len(su_badptr) {
+                        c = WF_ONECAP;
+                    }
+                    c |= flags;
+                    // When appending compound after word char, no onecap.
+                    if !p_compound.is_null()
+                        && crate::rs_spell_iswordp_nmw(p_compound, stp_sal_curwin)
+                    {
+                        c &= !WF_ONECAP;
+                    }
+                    crate::rs_make_case_word(
+                        tword.as_ptr().add(sp_off).cast::<c_char>(),
+                        preword.as_mut_ptr().add(prelen).cast::<c_char>(),
+                        c,
+                    );
+                }
+
+                if !soundfold {
+                    // Don't use banned word.
+                    if flags & WF_BANNED != 0 {
+                        rs_add_banned(su, preword.as_mut_ptr().add(prelen).cast::<c_char>());
+                        continue;
+                    }
+                    let prelen2 = prelen;
+                    if ((*sp_raw).complen == (*sp_raw).compsplit
+                        && was_banned(su, preword.as_ptr().add(prelen2).cast::<c_char>()))
+                        || was_banned(su, preword.as_ptr().cast::<c_char>())
+                    {
+                        if (*slang_ptr).sl_compprog.is_null() {
+                            continue;
+                        }
+                        goodword_ends = false;
+                    }
+                }
+
+                let mut newscore: c_int = 0;
+                if !soundfold {
+                    if (flags & WF_REGION) != 0
+                        && ((flags as u32 >> 16) as c_int & (*lp).lp_region) == 0
+                    {
+                        newscore += SCORES.region;
+                    }
+                    if (flags & WF_RARE) != 0 {
+                        newscore += SCORES.rare;
+                    }
+                    if !crate::spell_valid_case_impl(
+                        nvim_suginfo_get_badflags(su),
+                        crate::rs_captype(
+                            preword.as_ptr().add(prelen).cast::<c_char>(),
+                            std::ptr::null(),
+                        ),
+                    ) {
+                        newscore += SCORES.icase;
+                    }
+                }
+
+                // Add suggestion if words match.
+                if fword_ends && goodword_ends && (*sp_raw).fidx >= (*sp_raw).fidxtry && compound_ok
+                {
+                    if soundfold {
+                        nvim_add_sound_suggest(
+                            su,
+                            preword.as_mut_ptr().cast::<c_char>(),
+                            (*sp_raw).score,
+                            lp,
+                        );
+                    } else if (*sp_raw).fidx > 0 {
+                        // Penalty for non-word char to word char transition.
+                        let fidx_cur = (*sp_raw).fidx as usize;
+                        let mut pp = fword.add(fidx_cur);
+                        pp = mb_ptr_back(fword, pp).cast_mut();
+                        if !crate::rs_spell_iswordp(pp, stp_sal_curwin) && preword[0] != 0 {
+                            let preword_end_ptr = preword
+                                .as_ptr()
+                                .add(c_strlen(preword.as_ptr().cast::<c_char>()));
+                            let mut pp2 = preword_end_ptr as *const c_char;
+                            pp2 = mb_ptr_back(preword.as_ptr().cast::<c_char>(), pp2);
+                            if crate::rs_spell_iswordp(pp2, stp_sal_curwin) {
+                                newscore += SCORES.nonword;
+                            }
+                        }
+
+                        let score = rs_score_wordcount_adj(
+                            slang,
+                            (*sp_raw).score + newscore,
+                            preword.as_ptr().add(prelen).cast::<c_char>(),
+                            prelen > 0,
+                        );
+
+                        if score <= su_maxscore {
+                            rs_add_suggestion(
+                                su,
+                                nvim_suginfo_get_ga(su),
+                                preword.as_ptr().cast::<c_char>(),
+                                c_int::from((*sp_raw).fidx) - repextra,
+                                score,
+                                0,
+                                false,
+                                (*lp).lp_sallang.cast(),
+                                false,
+                            );
+
+                            if nvim_suginfo_get_badflags(su) & WF_MIXCAP != 0 {
+                                let c = crate::rs_captype(
+                                    preword.as_ptr().cast::<c_char>(),
+                                    std::ptr::null(),
+                                );
+                                if c == 0 || c == WF_ALLCAP {
+                                    crate::rs_make_case_word(
+                                        tword.as_ptr().add(sp_off).cast::<c_char>(),
+                                        preword.as_mut_ptr().add(prelen).cast::<c_char>(),
+                                        if c == 0 { WF_ALLCAP } else { 0 },
+                                    );
+                                    rs_add_suggestion(
+                                        su,
+                                        nvim_suginfo_get_ga(su),
+                                        preword.as_ptr().cast::<c_char>(),
+                                        c_int::from((*sp_raw).fidx) - repextra,
+                                        score + SCORES.icase,
+                                        0,
+                                        false,
+                                        (*lp).lp_sallang.cast(),
+                                        false,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Try word split and/or compounding.
+                if ((*sp_raw).fidx >= (*sp_raw).fidxtry || fword_ends) && (*sp_raw).tcharlen == 0 {
+                    let try_split =
+                        c_int::from((*sp_raw).fidx) - repextra < su_badlen && !soundfold;
+
+                    let mut try_compound = false;
+                    if !soundfold
+                        && !(*slang_ptr).sl_nocompoundsugs
+                        && !(*slang_ptr).sl_compprog.is_null()
+                        && (flags >> 24 != 0)
+                        && ((*sp_raw).twordlen as usize - (*sp_raw).splitoff as usize)
+                            >= (*slang_ptr).sl_compminlen as usize
+                        && ((*slang_ptr).sl_compminlen == 0
+                            || mb_charlen(
+                                tword
+                                    .as_ptr()
+                                    .add((*sp_raw).splitoff as usize)
+                                    .cast::<c_char>(),
+                            ) >= (*slang_ptr).sl_compminlen)
+                        && ((*slang_ptr).sl_compsylmax < MAXWLEN as c_int
+                            || (c_int::from((*sp_raw).complen) + 1
+                                - c_int::from((*sp_raw).compsplit))
+                                < (*slang_ptr).sl_compmax)
+                        && rs_can_be_compound(sp_raw, slang, compflags.as_mut_ptr(), flags >> 24)
+                    {
+                        try_compound = true;
+                        compflags[(*sp_raw).complen as usize] = (flags as u32 >> 24) as u8;
+                        compflags[(*sp_raw).complen as usize + 1] = 0;
+                    }
+
+                    if (*slang_ptr).sl_nobreak && !(*slang_ptr).sl_nocompoundsugs {
+                        try_compound = true;
+                    } else if !fword_ends
+                        && try_compound
+                        && ((*sp_raw).flags & try_state_flags::TSF_DIDSPLIT) == 0
+                    {
+                        try_compound = false;
+                        (*sp_raw).flags |= try_state_flags::TSF_DIDSPLIT;
+                        (*sp_raw).curi -= 1;
+                        compflags[(*sp_raw).complen as usize] = 0;
+                    } else {
+                        (*sp_raw).flags &= !try_state_flags::TSF_DIDSPLIT;
+                    }
+
+                    if try_split || try_compound {
+                        let mut newscore2 = newscore;
+                        if !try_compound && (!fword_ends || !goodword_ends) {
+                            if (*sp_raw).complen == (*sp_raw).compsplit
+                                && (flags & WF_NEEDCOMP) != 0
+                            {
+                                continue;
+                            }
+                            let mut pp = preword.as_ptr().cast::<c_char>();
+                            loop {
+                                let next = trie_skiptowhite(pp);
+                                if *next == 0 {
+                                    break;
+                                }
+                                pp = trie_skipwhite(next);
+                            }
+                            if (*sp_raw).complen > (*sp_raw).compsplit
+                                && !crate::check::rs_can_compound_c_compat(
+                                    slang_ptr,
+                                    pp,
+                                    compflags.as_ptr().add((*sp_raw).compsplit as usize),
+                                )
+                            {
+                                continue;
+                            }
+
+                            if (*slang_ptr).sl_nosplitsugs {
+                                newscore2 += SCORES.split_no;
+                            } else {
+                                newscore2 += SCORES.split;
+                            }
+
+                            newscore2 = rs_score_wordcount_adj(
+                                slang,
+                                newscore2,
+                                preword
+                                    .as_ptr()
+                                    .add((*sp_raw).prewordlen as usize)
+                                    .cast::<c_char>(),
+                                true,
+                            );
+                        }
+
+                        if try_deeper(d, &stack, newscore2, su_maxscore) {
+                            go_deeper_inline(stack.as_mut_ptr(), d, newscore2);
+                            stack[d].save_badflags = nvim_suginfo_get_badflags(su) as u8;
+                            stack[d].state = TrieWalkState::SplitUndo;
+
+                            depth += 1;
+                            let d2 = depth as usize;
+
+                            if !try_compound && !fword_ends {
+                                c_strcat(preword.as_mut_ptr().cast::<c_char>(), c" ".as_ptr());
+                            }
+                            let plen2 = c_strlen(preword.as_ptr().cast::<c_char>());
+                            stack[d2].prewordlen = plen2 as u8;
+                            stack[d2].splitoff = stack[d2].twordlen;
+                            stack[d2].splitfidx = stack[d2].fidx;
+
+                            // Skip non-word char at split.
+                            if ((!try_compound
+                                && !crate::rs_spell_iswordp_nmw(
+                                    fword.add(stack[d2].fidx as usize),
+                                    stp_sal_curwin,
+                                ))
+                                || fword_ends)
+                                && *fword.add(stack[d2].fidx as usize) != 0
+                                && goodword_ends
+                            {
+                                let l = crate::utfc_ptr2len(fword.add(stack[d2].fidx as usize))
+                                    as usize;
+                                if fword_ends {
+                                    let fidx2 = stack[d2].fidx as usize;
+                                    std::ptr::copy_nonoverlapping(
+                                        fword.add(fidx2).cast::<u8>(),
+                                        preword.as_mut_ptr().add(plen2),
+                                        l,
+                                    );
+                                    let new_plen = plen2 + l;
+                                    stack[d2].prewordlen = new_plen as u8;
+                                    preword[new_plen] = 0;
+                                } else {
+                                    stack[d2].score -= SCORES.split - SCORES.subst;
+                                }
+                                stack[d2].fidx = (stack[d2].fidx as usize + l) as u8;
+                            }
+
+                            if try_compound {
+                                stack[d2].complen += 1;
+                            } else {
+                                stack[d2].compsplit = stack[d2].complen;
+                            }
+                            stack[d2].prefixdepth = prefix_depth::PFD_NOPREFIX;
+
+                            // Set su_badflags.
+                            let n2 =
+                                crate::rs_nofold_len(fword, c_int::from(stack[d2].fidx), su_badptr);
+                            let new_bflags = rs_badword_captype(
+                                su_badptr.add(n2 as usize),
+                                su_badptr.add(su_badlen as usize),
+                            );
+                            nvim_suginfo_set_badflags(su, new_bflags);
+
+                            stack[d2].arridx = 0;
+
+                            if !pbyts_ptr.is_null() {
+                                byts = pbyts_ptr;
+                                idxs = pidxs_ptr;
+                                stack[d2].prefixdepth = prefix_depth::PFD_PREFIXTREE;
+                                stack[d2].state = TrieWalkState::NoPrefix;
+                            }
+                        }
+                    }
+                }
+            } // end STATE_START / STATE_NOPREFIX
+
+            TrieWalkState::SplitUndo => {
+                nvim_suginfo_set_badflags(su, c_int::from((*sp_raw).save_badflags));
+                (*sp_raw).state = TrieWalkState::Start;
+                byts = fbyts_ptr;
+                idxs = fidxs_ptr;
+            }
+
+            TrieWalkState::EndNul => {
+                nvim_suginfo_set_badflags(su, c_int::from((*sp_raw).save_badflags));
+                let fidx = (*sp_raw).fidx as usize;
+                if *fword.add(fidx) == 0 && (*sp_raw).tcharlen == 0 {
+                    (*sp_raw).state = TrieWalkState::Del;
+                    continue;
+                }
+                (*sp_raw).state = TrieWalkState::Plain;
+                // FALLTHROUGH to STATE_PLAIN
+                let arridx = (*sp_raw).arridx as usize;
+                if (*sp_raw).curi as usize > *byts.add(arridx) as usize {
+                    (*sp_raw).state = if (*sp_raw).fidx >= (*sp_raw).fidxtry {
+                        TrieWalkState::Del
+                    } else {
+                        TrieWalkState::Final
+                    };
+                } else {
+                    let arridx_cur = arridx + (*sp_raw).curi as usize;
+                    (*sp_raw).curi += 1;
+                    let c = *byts.add(arridx_cur);
+
+                    let newscore = if c == *fword.add((*sp_raw).fidx as usize) as u8
+                        || ((*sp_raw).tcharlen > 0 && (*sp_raw).isdiff != DiffType::None)
+                    {
+                        0
+                    } else {
+                        SCORES.subst
+                    };
+
+                    if (newscore == 0
+                        || ((*sp_raw).fidx >= (*sp_raw).fidxtry
+                            && (((*sp_raw).flags & try_state_flags::TSF_DIDDEL) == 0
+                                || c != *fword.add((*sp_raw).delidx as usize) as u8)))
+                        && try_deeper(d, &stack, newscore, su_maxscore)
+                    {
+                        go_deeper_inline(stack.as_mut_ptr(), d, newscore);
+                        depth += 1;
+                        let d2 = depth as usize;
+                        let sp2 = &mut stack[d2];
+                        if *fword.add(sp2.fidx as usize) != 0 {
+                            sp2.fidx += 1;
+                        }
+                        tword[sp2.twordlen as usize] = c as char as u8;
+                        sp2.twordlen += 1;
+                        sp2.arridx = *idxs.add(arridx_cur) as u32;
+                        if newscore == SCORES.subst {
+                            sp2.isdiff = DiffType::Yes;
+                        }
+                        if sp2.tcharlen == 0 {
+                            sp2.tcharidx = 0;
+                            sp2.tcharlen = mb_byte2len(c) as u8;
+                            sp2.fcharstart = sp2.fidx - 1;
+                            sp2.isdiff = if newscore != 0 {
+                                DiffType::Yes
+                            } else {
+                                DiffType::None
+                            };
+                        } else if sp2.isdiff == DiffType::Insert && sp2.fidx > 0 {
+                            sp2.fidx -= 1;
+                        }
+                        sp2.tcharidx += 1;
+                        if sp2.tcharidx == sp2.tcharlen {
+                            if sp2.isdiff == DiffType::Yes {
+                                sp2.fidx = sp2.fcharstart
+                                    + crate::utfc_ptr2len(fword.add(sp2.fcharstart as usize)) as u8;
+                                let tc = utf_ptr2char(
+                                    tword
+                                        .as_ptr()
+                                        .add(sp2.twordlen as usize - sp2.tcharlen as usize)
+                                        .cast::<c_char>(),
+                                );
+                                let fc = utf_ptr2char(fword.add(sp2.fcharstart as usize));
+                                if utf_iscomposing_legacy(tc) && utf_iscomposing_legacy(fc) {
+                                    sp2.score -= SCORES.subst - SCORES.subcomp;
+                                } else if !soundfold
+                                    && (*slang_ptr).sl_has_map
+                                    && similar_chars(
+                                        slang,
+                                        utf_ptr2char(
+                                            tword
+                                                .as_ptr()
+                                                .add(sp2.twordlen as usize - sp2.tcharlen as usize)
+                                                .cast::<c_char>(),
+                                        ),
+                                        utf_ptr2char(fword.add(sp2.fcharstart as usize)),
+                                    )
+                                {
+                                    sp2.score -= SCORES.subst - SCORES.similar;
+                                }
+                            } else if sp2.isdiff == DiffType::Insert && sp2.twordlen > sp2.tcharlen
+                            {
+                                let pp = tword
+                                    .as_ptr()
+                                    .add(sp2.twordlen as usize - sp2.tcharlen as usize);
+                                let ci = utf_ptr2char(pp.cast::<c_char>());
+                                if utf_iscomposing_legacy(ci) {
+                                    sp2.score -= SCORES.ins - SCORES.inscomp;
+                                } else {
+                                    let pp2 = mb_ptr_back(
+                                        tword.as_ptr().cast::<c_char>(),
+                                        pp.cast::<c_char>(),
+                                    );
+                                    if ci == utf_ptr2char(pp2) {
+                                        sp2.score -= SCORES.ins - SCORES.insdup;
+                                    }
+                                }
+                            }
+                            sp2.tcharlen = 0;
+                        }
+                    }
+                }
+            }
+
+            TrieWalkState::Plain => {
+                let arridx = (*sp_raw).arridx as usize;
+                if (*sp_raw).curi as usize > *byts.add(arridx) as usize {
+                    (*sp_raw).state = if (*sp_raw).fidx >= (*sp_raw).fidxtry {
+                        TrieWalkState::Del
+                    } else {
+                        TrieWalkState::Final
+                    };
+                } else {
+                    let arridx_cur = arridx + (*sp_raw).curi as usize;
+                    (*sp_raw).curi += 1;
+                    let c = *byts.add(arridx_cur);
+
+                    let newscore = if c == *fword.add((*sp_raw).fidx as usize) as u8
+                        || ((*sp_raw).tcharlen > 0 && (*sp_raw).isdiff != DiffType::None)
+                    {
+                        0
+                    } else {
+                        SCORES.subst
+                    };
+
+                    if (newscore == 0
+                        || ((*sp_raw).fidx >= (*sp_raw).fidxtry
+                            && (((*sp_raw).flags & try_state_flags::TSF_DIDDEL) == 0
+                                || c != *fword.add((*sp_raw).delidx as usize) as u8)))
+                        && try_deeper(d, &stack, newscore, su_maxscore)
+                    {
+                        go_deeper_inline(stack.as_mut_ptr(), d, newscore);
+                        depth += 1;
+                        let d2 = depth as usize;
+                        let sp2 = &mut stack[d2];
+                        if *fword.add(sp2.fidx as usize) != 0 {
+                            sp2.fidx += 1;
+                        }
+                        tword[sp2.twordlen as usize] = c as char as u8;
+                        sp2.twordlen += 1;
+                        sp2.arridx = *idxs.add(arridx_cur) as u32;
+                        if newscore == SCORES.subst {
+                            sp2.isdiff = DiffType::Yes;
+                        }
+                        if sp2.tcharlen == 0 {
+                            sp2.tcharidx = 0;
+                            sp2.tcharlen = mb_byte2len(c) as u8;
+                            sp2.fcharstart = sp2.fidx - 1;
+                            sp2.isdiff = if newscore != 0 {
+                                DiffType::Yes
+                            } else {
+                                DiffType::None
+                            };
+                        } else if sp2.isdiff == DiffType::Insert && sp2.fidx > 0 {
+                            sp2.fidx -= 1;
+                        }
+                        sp2.tcharidx += 1;
+                        if sp2.tcharidx == sp2.tcharlen {
+                            if sp2.isdiff == DiffType::Yes {
+                                sp2.fidx = sp2.fcharstart
+                                    + crate::utfc_ptr2len(fword.add(sp2.fcharstart as usize)) as u8;
+                                let tc = utf_ptr2char(
+                                    tword
+                                        .as_ptr()
+                                        .add(sp2.twordlen as usize - sp2.tcharlen as usize)
+                                        .cast::<c_char>(),
+                                );
+                                let fc = utf_ptr2char(fword.add(sp2.fcharstart as usize));
+                                if utf_iscomposing_legacy(tc) && utf_iscomposing_legacy(fc) {
+                                    sp2.score -= SCORES.subst - SCORES.subcomp;
+                                } else if !soundfold
+                                    && (*slang_ptr).sl_has_map
+                                    && similar_chars(
+                                        slang,
+                                        utf_ptr2char(
+                                            tword
+                                                .as_ptr()
+                                                .add(sp2.twordlen as usize - sp2.tcharlen as usize)
+                                                .cast::<c_char>(),
+                                        ),
+                                        utf_ptr2char(fword.add(sp2.fcharstart as usize)),
+                                    )
+                                {
+                                    sp2.score -= SCORES.subst - SCORES.similar;
+                                }
+                            } else if sp2.isdiff == DiffType::Insert && sp2.twordlen > sp2.tcharlen
+                            {
+                                let pp = tword
+                                    .as_ptr()
+                                    .add(sp2.twordlen as usize - sp2.tcharlen as usize);
+                                let ci = utf_ptr2char(pp.cast::<c_char>());
+                                if utf_iscomposing_legacy(ci) {
+                                    sp2.score -= SCORES.ins - SCORES.inscomp;
+                                } else {
+                                    let pp2 = mb_ptr_back(
+                                        tword.as_ptr().cast::<c_char>(),
+                                        pp.cast::<c_char>(),
+                                    );
+                                    if ci == utf_ptr2char(pp2) {
+                                        sp2.score -= SCORES.ins - SCORES.insdup;
+                                    }
+                                }
+                            }
+                            sp2.tcharlen = 0;
+                        }
+                    }
+                }
+            }
+
+            TrieWalkState::Del => {
+                if (*sp_raw).tcharlen > 0 {
+                    (*sp_raw).state = TrieWalkState::Final;
+                    continue;
+                }
+                (*sp_raw).state = TrieWalkState::InsPrep;
+                (*sp_raw).curi = 1;
+
+                let fidx = (*sp_raw).fidx as usize;
+                let newscore = if soundfold && fidx == 0 && *fword.add(fidx) == b'*' as c_char {
+                    2 * SCORES.del / 3
+                } else {
+                    SCORES.del
+                };
+
+                if *fword.add(fidx) != 0 && try_deeper(d, &stack, newscore, su_maxscore) {
+                    go_deeper_inline(stack.as_mut_ptr(), d, newscore);
+                    depth += 1;
+                    let d2 = depth as usize;
+                    stack[d2].flags |= try_state_flags::TSF_DIDDEL;
+                    stack[d2].delidx = (*sp_raw).fidx;
+
+                    let c = utf_ptr2char(fword.add(fidx));
+                    let adv = crate::utfc_ptr2len(fword.add(fidx)) as u8;
+                    stack[d2].fidx = stack[d2].fidx.wrapping_add(adv);
+                    let new_fidx = stack[d2].fidx as usize;
+                    if utf_iscomposing_legacy(c) {
+                        stack[d2].score -= SCORES.del - SCORES.delcomp;
+                    } else if c == utf_ptr2char(fword.add(new_fidx)) {
+                        stack[d2].score -= SCORES.del - SCORES.deldup;
+                    }
+                }
+            }
+
+            TrieWalkState::InsPrep => {
+                if (*sp_raw).flags & try_state_flags::TSF_DIDDEL != 0 {
+                    (*sp_raw).state = TrieWalkState::Swap;
+                    continue;
+                }
+                let n = (*sp_raw).arridx as usize;
+                loop {
+                    if (*sp_raw).curi as usize > *byts.add(n) as usize {
+                        (*sp_raw).state = TrieWalkState::Swap;
+                        break;
+                    }
+                    if *byts.add(n + (*sp_raw).curi as usize) != 0 {
+                        (*sp_raw).state = TrieWalkState::Ins;
+                        break;
+                    }
+                    (*sp_raw).curi += 1;
+                }
+            }
+
+            TrieWalkState::Ins => {
+                let n = (*sp_raw).arridx as usize;
+                if (*sp_raw).curi as usize > *byts.add(n) as usize {
+                    (*sp_raw).state = TrieWalkState::Swap;
+                    continue;
+                }
+                let arridx_cur = n + (*sp_raw).curi as usize;
+                (*sp_raw).curi += 1;
+
+                // Bounds check
+                if byts == fbyts_ptr && arridx_cur >= (*slang_ptr).sl_fbyts_len as usize {
+                    crate::got_int = true;
+                    continue;
+                }
+
+                let c = *byts.add(arridx_cur);
+                let newscore = if soundfold && (*sp_raw).twordlen == 0 && c == b'*' {
+                    2 * SCORES.ins / 3
+                } else {
+                    SCORES.ins
+                };
+
+                if c != *fword.add((*sp_raw).fidx as usize) as u8
+                    && try_deeper(d, &stack, newscore, su_maxscore)
+                {
+                    go_deeper_inline(stack.as_mut_ptr(), d, newscore);
+                    depth += 1;
+                    let d2 = depth as usize;
+                    let sp2 = &mut stack[d2];
+                    tword[sp2.twordlen as usize] = c;
+                    sp2.twordlen += 1;
+                    sp2.arridx = *idxs.add(arridx_cur) as u32;
+                    let fl = mb_byte2len(c);
+                    if fl > 1 {
+                        sp2.tcharlen = fl as u8;
+                        sp2.tcharidx = 1;
+                        sp2.isdiff = DiffType::Insert;
+                    }
+                    if fl == 1 && sp2.twordlen >= 2 && tword[sp2.twordlen as usize - 2] == c {
+                        sp2.score -= SCORES.ins - SCORES.insdup;
+                    }
+                }
+            }
+
+            TrieWalkState::Swap => {
+                let fidx = (*sp_raw).fidx as usize;
+                let pp = fword.add(fidx);
+                let c = *pp as u8;
+                if c == 0 {
+                    (*sp_raw).state = TrieWalkState::Final;
+                    continue;
+                }
+                if !soundfold && !crate::rs_spell_iswordp(pp, stp_sal_curwin) {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                    continue;
+                }
+                let n = utf_ptr2len(pp) as usize;
+                let c = utf_ptr2char(pp);
+                let c2 = if *pp.add(n) == 0 {
+                    0
+                } else if !soundfold && !crate::rs_spell_iswordp(pp.add(n), stp_sal_curwin) {
+                    c // don't swap non-word char
+                } else {
+                    utf_ptr2char(pp.add(n))
+                };
+
+                if c2 == 0 {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                    continue;
+                }
+                if c == c2 {
+                    (*sp_raw).state = TrieWalkState::Swap3;
+                    // FALLTHROUGH to Swap3 -- handled by next loop iteration
+                    continue;
+                }
+                if try_deeper(d, &stack, SCORES.swap, su_maxscore) {
+                    go_deeper_inline(stack.as_mut_ptr(), d, SCORES.swap);
+                    (*sp_raw).state = TrieWalkState::Unswap;
+                    depth += 1;
+                    let fl = utf_char2len(c2) as usize;
+                    // Swap: move c2 to start, put c after
+                    std::ptr::copy(pp.add(n), pp, fl);
+                    utf_char2bytes(c, pp.add(fl));
+                    stack[depth as usize].fidxtry = (fidx + n + fl) as u8;
+                } else {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                }
+            }
+
+            TrieWalkState::Unswap => {
+                let fidx = (*sp_raw).fidx as usize;
+                let pp = fword.add(fidx);
+                let n = crate::utfc_ptr2len(pp) as usize;
+                let c = utf_ptr2char(pp.add(n));
+                let pp_tail = pp.add(n);
+                let tail_len = crate::utfc_ptr2len(pp_tail) as usize;
+                std::ptr::copy(pp, pp.add(tail_len), n);
+                utf_char2bytes(c, pp);
+                // FALLTHROUGH to Swap3
+                (*sp_raw).state = TrieWalkState::Swap3;
+                // Swap3 logic inline:
+                let fidx2 = (*sp_raw).fidx as usize;
+                let pp2 = fword.add(fidx2);
+                let n2 = utf_ptr2len(pp2) as usize;
+                let c2b = utf_ptr2char(pp2);
+                let fl2 = utf_ptr2len(pp2.add(n2)) as usize;
+                let c2c = utf_ptr2char(pp2.add(n2));
+                let c3b =
+                    if !soundfold && !crate::rs_spell_iswordp(pp2.add(n2 + fl2), stp_sal_curwin) {
+                        c2b
+                    } else {
+                        utf_ptr2char(pp2.add(n2 + fl2))
+                    };
+                if c2b == c3b || c3b == 0 {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                    continue;
+                }
+                if try_deeper(d, &stack, SCORES.swap3, su_maxscore) {
+                    go_deeper_inline(stack.as_mut_ptr(), d, SCORES.swap3);
+                    (*sp_raw).state = TrieWalkState::Unswap3;
+                    depth += 1;
+                    let tl2 = utf_char2len(c3b) as usize;
+                    std::ptr::copy(pp2.add(n2 + fl2), pp2, tl2);
+                    utf_char2bytes(c2c, pp2.add(tl2));
+                    utf_char2bytes(c2b, pp2.add(fl2 + tl2));
+                    stack[depth as usize].fidxtry = (fidx2 + n2 + fl2 + tl2) as u8;
+                } else {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                }
+            }
+
+            TrieWalkState::Swap3 => {
+                let fidx = (*sp_raw).fidx as usize;
+                let pp = fword.add(fidx);
+                let n = utf_ptr2len(pp) as usize;
+                let c = utf_ptr2char(pp);
+                let fl = utf_ptr2len(pp.add(n)) as usize;
+                let c2 = utf_ptr2char(pp.add(n));
+                let c3 = if !soundfold && !crate::rs_spell_iswordp(pp.add(n + fl), stp_sal_curwin) {
+                    c
+                } else {
+                    utf_ptr2char(pp.add(n + fl))
+                };
+                if c == c3 || c3 == 0 {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                    continue;
+                }
+                if try_deeper(d, &stack, SCORES.swap3, su_maxscore) {
+                    go_deeper_inline(stack.as_mut_ptr(), d, SCORES.swap3);
+                    (*sp_raw).state = TrieWalkState::Unswap3;
+                    depth += 1;
+                    let tl = utf_char2len(c3) as usize;
+                    std::ptr::copy(pp.add(n + fl), pp, tl);
+                    utf_char2bytes(c2, pp.add(tl));
+                    utf_char2bytes(c, pp.add(fl + tl));
+                    stack[depth as usize].fidxtry = (fidx + n + fl + tl) as u8;
+                } else {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                }
+            }
+
+            TrieWalkState::Unswap3 => {
+                // Undo STATE_SWAP3: "321" -> "123"
+                let fidx = (*sp_raw).fidx as usize;
+                let pp = fword.add(fidx);
+                let n = crate::utfc_ptr2len(pp) as usize;
+                let c2 = utf_ptr2char(pp.add(n));
+                let fl = crate::utfc_ptr2len(pp.add(n)) as usize;
+                let c = utf_ptr2char(pp.add(n + fl));
+                let tl = crate::utfc_ptr2len(pp.add(n + fl)) as usize;
+                std::ptr::copy(pp, pp.add(fl + tl), n);
+                utf_char2bytes(c, pp);
+                utf_char2bytes(c2, pp.add(tl));
+                let pp_mid = pp.add(tl);
+
+                if !soundfold && !crate::rs_spell_iswordp(pp_mid, stp_sal_curwin) {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                    continue;
+                }
+
+                // Rotate three characters left: "123" -> "231"
+                if try_deeper(d, &stack, SCORES.swap3, su_maxscore) {
+                    go_deeper_inline(stack.as_mut_ptr(), d, SCORES.swap3);
+                    (*sp_raw).state = TrieWalkState::Unrot3L;
+                    depth += 1;
+                    let pp3 = fword.add(fidx);
+                    let n3 = utf_ptr2len(pp3) as usize;
+                    let c3 = utf_ptr2char(pp3);
+                    let fl3 = utf_ptr2len(pp3.add(n3)) as usize;
+                    let fl3b = utf_ptr2len(pp3.add(n3 + fl3)) as usize;
+                    let total_fl = fl3 + fl3b;
+                    std::ptr::copy(pp3.add(n3), pp3, total_fl);
+                    utf_char2bytes(c3, pp3.add(total_fl));
+                    stack[depth as usize].fidxtry = (fidx + n3 + total_fl) as u8;
+                } else {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                }
+            }
+
+            TrieWalkState::Unrot3L => {
+                // Undo ROT3L: "231" -> "123"
+                let fidx = (*sp_raw).fidx as usize;
+                let pp = fword.add(fidx);
+                let n1 = crate::utfc_ptr2len(pp) as usize;
+                let n2 = crate::utfc_ptr2len(pp.add(n1)) as usize;
+                let n = n1 + n2;
+                let c = utf_ptr2char(pp.add(n));
+                let tl = crate::utfc_ptr2len(pp.add(n)) as usize;
+                std::ptr::copy(pp, pp.add(tl), n);
+                utf_char2bytes(c, pp);
+
+                // Rotate three bytes right: "123" -> "312"
+                if try_deeper(d, &stack, SCORES.swap3, su_maxscore) {
+                    go_deeper_inline(stack.as_mut_ptr(), d, SCORES.swap3);
+                    (*sp_raw).state = TrieWalkState::Unrot3R;
+                    depth += 1;
+                    let pp2 = fword.add(fidx);
+                    let na = utf_ptr2len(pp2) as usize;
+                    let nb = utf_ptr2len(pp2.add(na)) as usize;
+                    let nc = na + nb;
+                    let c2 = utf_ptr2char(pp2.add(nc));
+                    let tl2 = utf_ptr2len(pp2.add(nc)) as usize;
+                    std::ptr::copy(pp2.add(tl2), pp2, nc);
+                    utf_char2bytes(c2, pp2.add(nc));
+                    stack[depth as usize].fidxtry = (fidx + nc + tl2) as u8;
+                } else {
+                    (*sp_raw).state = TrieWalkState::RepIni;
+                }
+            }
+
+            TrieWalkState::Unrot3R => {
+                // Undo ROT3R: "312" -> "123"
+                let fidx = (*sp_raw).fidx as usize;
+                let pp = fword.add(fidx);
+                let c = utf_ptr2char(pp);
+                let tl = crate::utfc_ptr2len(pp) as usize;
+                let n1 = crate::utfc_ptr2len(pp.add(tl)) as usize;
+                let n2 = crate::utfc_ptr2len(pp.add(tl + n1)) as usize;
+                let n = n1 + n2;
+                std::ptr::copy(pp.add(tl), pp, n);
+                utf_char2bytes(c, pp.add(n));
+                // FALLTHROUGH to RepIni
+                (*sp_raw).state = TrieWalkState::RepIni;
+                // RepIni logic inline:
+                if ((*lp).lp_replang.is_null() && !soundfold)
+                    || (*sp_raw).score + SCORES.rep >= su_maxscore
+                    || (*sp_raw).fidx < (*sp_raw).fidxtry
+                {
+                    (*sp_raw).state = TrieWalkState::Final;
+                    continue;
+                }
+                let fchar = *fword.add((*sp_raw).fidx as usize) as u8;
+                (*sp_raw).curi = if soundfold {
+                    (*slang_ptr).sl_repsal_first[fchar as usize]
+                } else {
+                    (*(*lp).lp_replang).sl_rep_first[fchar as usize]
+                };
+                if (*sp_raw).curi < 0 {
+                    (*sp_raw).state = TrieWalkState::Final;
+                    continue;
+                }
+                (*sp_raw).state = TrieWalkState::Rep;
+                // FALLTHROUGH to Rep -- will be handled next iteration
+            }
+
+            TrieWalkState::RepIni => {
+                if ((*lp).lp_replang.is_null() && !soundfold)
+                    || (*sp_raw).score + SCORES.rep >= su_maxscore
+                    || (*sp_raw).fidx < (*sp_raw).fidxtry
+                {
+                    (*sp_raw).state = TrieWalkState::Final;
+                    continue;
+                }
+                let fchar = *fword.add((*sp_raw).fidx as usize) as u8;
+                (*sp_raw).curi = if soundfold {
+                    (*slang_ptr).sl_repsal_first[fchar as usize]
+                } else {
+                    (*(*lp).lp_replang).sl_rep_first[fchar as usize]
+                };
+                if (*sp_raw).curi < 0 {
+                    (*sp_raw).state = TrieWalkState::Final;
+                    continue;
+                }
+                (*sp_raw).state = TrieWalkState::Rep;
+                // FALLTHROUGH
+                let gap_ptr = if soundfold {
+                    std::ptr::addr_of!((*slang_ptr).sl_repsal)
+                } else {
+                    std::ptr::addr_of!((*(*lp).lp_replang).sl_rep)
+                };
+                let gap_len = (*gap_ptr).ga_len as i16;
+                let p_fword = fword.add((*sp_raw).fidx as usize);
+                let ftp_base = (*gap_ptr).ga_data.cast::<FromtoC>();
+                while (*sp_raw).curi < gap_len {
+                    let ftp = ftp_base.add((*sp_raw).curi as usize);
+                    (*sp_raw).curi += 1;
+                    if *(*ftp).ft_from != *p_fword {
+                        (*sp_raw).curi = gap_len;
+                        break;
+                    }
+                    let from_len = c_strlen((*ftp).ft_from);
+                    if c_strncmp((*ftp).ft_from, p_fword, from_len)
+                        && try_deeper(d, &stack, SCORES.rep, su_maxscore)
+                    {
+                        go_deeper_inline(stack.as_mut_ptr(), d, SCORES.rep);
+                        (*sp_raw).state = TrieWalkState::RepUndo;
+                        depth += 1;
+                        let fl = from_len;
+                        let to_len = c_strlen((*ftp).ft_to);
+                        let tl = to_len;
+                        if fl != tl {
+                            strmove(p_fword.add(tl), p_fword.add(fl));
+                            repextra += tl as c_int - fl as c_int;
+                        }
+                        std::ptr::copy_nonoverlapping((*ftp).ft_to, p_fword, tl);
+                        stack[depth as usize].fidxtry = ((*sp_raw).fidx as usize + tl) as u8;
+                        stack[depth as usize].tcharlen = 0;
+                        break;
+                    }
+                }
+                if (*sp_raw).curi >= gap_len && (*sp_raw).state == TrieWalkState::Rep {
+                    (*sp_raw).state = TrieWalkState::Final;
+                }
+            }
+
+            TrieWalkState::Rep => {
+                let gap_ptr = if soundfold {
+                    std::ptr::addr_of!((*slang_ptr).sl_repsal)
+                } else {
+                    std::ptr::addr_of!((*(*lp).lp_replang).sl_rep)
+                };
+                let gap_len = (*gap_ptr).ga_len as i16;
+                let p_fword = fword.add((*sp_raw).fidx as usize);
+                let ftp_base = (*gap_ptr).ga_data.cast::<FromtoC>();
+                while (*sp_raw).curi < gap_len {
+                    let ftp = ftp_base.add((*sp_raw).curi as usize);
+                    (*sp_raw).curi += 1;
+                    if *(*ftp).ft_from != *p_fword {
+                        (*sp_raw).curi = gap_len;
+                        break;
+                    }
+                    let from_len = c_strlen((*ftp).ft_from);
+                    if c_strncmp((*ftp).ft_from, p_fword, from_len)
+                        && try_deeper(d, &stack, SCORES.rep, su_maxscore)
+                    {
+                        go_deeper_inline(stack.as_mut_ptr(), d, SCORES.rep);
+                        (*sp_raw).state = TrieWalkState::RepUndo;
+                        depth += 1;
+                        let fl = from_len;
+                        let to_len = c_strlen((*ftp).ft_to);
+                        let tl = to_len;
+                        if fl != tl {
+                            strmove(p_fword.add(tl), p_fword.add(fl));
+                            repextra += tl as c_int - fl as c_int;
+                        }
+                        std::ptr::copy_nonoverlapping((*ftp).ft_to, p_fword, tl);
+                        stack[depth as usize].fidxtry = ((*sp_raw).fidx as usize + tl) as u8;
+                        stack[depth as usize].tcharlen = 0;
+                        break;
+                    }
+                }
+                if (*sp_raw).curi >= gap_len && (*sp_raw).state == TrieWalkState::Rep {
+                    (*sp_raw).state = TrieWalkState::Final;
+                }
+            }
+
+            TrieWalkState::RepUndo => {
+                let gap_ptr = if soundfold {
+                    std::ptr::addr_of!((*slang_ptr).sl_repsal)
+                } else {
+                    std::ptr::addr_of!((*(*lp).lp_replang).sl_rep)
+                };
+                let ftp = (*gap_ptr)
+                    .ga_data
+                    .cast::<FromtoC>()
+                    .add((*sp_raw).curi as usize - 1);
+                let fl = c_strlen((*ftp).ft_from);
+                let tl = c_strlen((*ftp).ft_to);
+                let p_fword = fword.add((*sp_raw).fidx as usize);
+                if fl != tl {
+                    strmove(p_fword.add(fl), p_fword.add(tl));
+                    repextra -= tl as c_int - fl as c_int;
+                }
+                std::ptr::copy_nonoverlapping((*ftp).ft_from, p_fword, fl);
+                (*sp_raw).state = TrieWalkState::Rep;
+            }
+
+            TrieWalkState::Final => {
+                // Did all states at this level, go up one level.
+                depth -= 1;
+
+                if depth >= 0 && stack[depth as usize].prefixdepth == prefix_depth::PFD_PREFIXTREE {
+                    byts = pbyts_ptr;
+                    idxs = pidxs_ptr;
+                }
+
+                breakcheckcount -= 1;
+                if breakcheckcount == 0 {
+                    os_breakcheck();
+                    breakcheckcount = 1000;
+                    if timeout > 0 && profile_passed_limit(time_limit) {
+                        crate::got_int = true;
+                    }
+                }
+            }
+        } // end match
+    } // end while
+}
+
+// Wrappers needed by rs_suggest_trie_walk to call Rust-exported functions
+// without going through the C ABI (direct calls within the same crate).
+
+// =============================================================================
 // Phase 1: add_suggestion, add_banned, rescore_one, rescore_suggestions
 // =============================================================================
 
