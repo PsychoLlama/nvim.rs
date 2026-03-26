@@ -182,7 +182,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     // Always sync block 0 to disk so findswapname() can check the file name.
     // Don't do this for help files or spell buffers.
     mf_put(mfp, hp0, true, false);
-    if nvim_buf_get_b_help(buf) == 0 && nvim_buf_get_b_spell(buf) == 0 {
+    if nvim_buf_get_help(buf) == 0 && nvim_buf_get_b_spell(buf) == 0 {
         mf_sync(mfp, 0);
     }
 
@@ -1576,7 +1576,7 @@ extern "C" {
     fn nvim_buf_get_b_flags(buf: *mut BufHandle) -> c_int;
 
     /// Get buf->b_help
-    fn nvim_buf_get_b_help(buf: *mut BufHandle) -> c_int;
+    fn nvim_buf_get_help(buf: *mut BufHandle) -> c_int;
 
     /// Get buf->b_fname as const char*
     fn nvim_buf_get_b_fname(buf: *mut BufHandle) -> *const c_char;
@@ -1930,7 +1930,7 @@ pub unsafe extern "C" fn rs_findswapname(
             // viewing a help file, or when the path of the file is different.
             if nvim_get_recoverymode() == 0
                 && !buf_fname.is_null()
-                && nvim_buf_get_b_help(buf) == 0
+                && nvim_buf_get_help(buf) == 0
                 && (nvim_buf_get_b_flags(buf) & BF_DUMMY) == 0
             {
                 let mut differ = false;

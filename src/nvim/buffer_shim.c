@@ -429,8 +429,6 @@ int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 :
 /// Sets buf->b_p_initialized.
 void nvim_buf_set_b_p_initialized(buf_T *buf, int val) { buf->b_p_initialized = val != 0; }
 
-/// Returns buf->b_help.
-int nvim_buf_get_b_help(buf_T *buf) { return buf->b_help ? 1 : 0; }
 /// Sets buf->b_help.
 void nvim_buf_set_b_help(buf_T *buf, int val) { buf->b_help = val != 0; }
 

@@ -75,7 +75,7 @@ extern "C" {
     fn nvim_u_sync(force: bool);
 
     // State accessors
-    fn nvim_buf_get_b_help(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
     fn nvim_ses_win_get_height(wp: WinHandle) -> c_int;
     // Buffer accessors
     fn nvim_buf_get_p_swf(buf: BufHandle) -> c_int;
@@ -273,7 +273,7 @@ fn is_one_window() -> bool {
 /// Check if current buffer is help buffer.
 #[inline]
 fn is_curbuf_help() -> bool {
-    unsafe { nvim_buf_get_b_help(curbuf) != 0 }
+    unsafe { nvim_buf_get_help(curbuf) != 0 }
 }
 
 /// Get current window height.

@@ -80,7 +80,7 @@ extern "C" {
 
     fn nvim_buf_get_b_p_initialized(buf: *mut core::ffi::c_void) -> c_int;
     fn nvim_buf_set_b_p_initialized(buf: *mut core::ffi::c_void, val: c_int);
-    fn nvim_buf_get_b_help(buf: *mut core::ffi::c_void) -> c_int;
+    fn nvim_buf_get_help(buf: *mut core::ffi::c_void) -> c_int;
     fn nvim_buf_set_b_help(buf: *mut core::ffi::c_void, val: c_int);
     fn nvim_buf_clear_b_p_script_ctx(buf: *mut core::ffi::c_void);
     fn nvim_buf_save_and_clear_b_p_isk(buf: *mut core::ffi::c_void) -> *mut c_char;
@@ -583,7 +583,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
         // given or the options were initialized already (jumping back to a help
         // file with CTRL-T or CTRL-O).
         let dont_do_help =
-            ((flags & bco_nohelp) != 0 && nvim_buf_get_b_help(buf) != 0) || initialized;
+            ((flags & bco_nohelp) != 0 && nvim_buf_get_help(buf) != 0) || initialized;
 
         // If dont_do_help, save b_p_isk before free_buf_options
         let save_p_isk: *mut c_char = if dont_do_help {
@@ -639,7 +639,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
     // For the dont_do_help path, b_help is unchanged, so re-evaluation matches original.
     let did_copy = should_copy || (flags & bco_always) != 0;
     let dont_do_help_recomputed =
-        ((flags & bco_nohelp) != 0 && nvim_buf_get_b_help(buf) != 0) || initialized;
+        ((flags & bco_nohelp) != 0 && nvim_buf_get_help(buf) != 0) || initialized;
     let did_isk = did_copy && !dont_do_help_recomputed;
 
     if did_isk {

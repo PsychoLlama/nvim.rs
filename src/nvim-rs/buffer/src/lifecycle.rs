@@ -43,7 +43,7 @@ extern "C" {
     fn nvim_buf_get_changed(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut c_void;
     fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_help(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
     fn nvim_buf_has_memfile(buf: BufHandle) -> c_int;
 
     // Jump list accessors (implemented in mark.c)
@@ -612,7 +612,7 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
                 continue;
             }
             // Prefer same help-buffer type, listed, non-quickfix
-            if nvim_buf_get_b_help(buf) == nvim_buf_get_b_help(curbuf)
+            if nvim_buf_get_help(buf) == nvim_buf_get_help(curbuf)
                 && nvim_buf_get_b_p_bl(buf) != 0
                 && !rs_bt_quickfix(buf)
             {
@@ -750,7 +750,7 @@ unsafe fn find_and_validate_buffer(
         }
     } else {
         // Navigate count steps forward/backward through listed buffers.
-        let help_only = (flags & DOBUF_SKIPHELP) != 0 && nvim_buf_get_b_help(buf) != 0;
+        let help_only = (flags & DOBUF_SKIPHELP) != 0 && nvim_buf_get_help(buf) != 0;
         let mut bp = null;
         let mut remaining = count;
         // Mirrors the C while-loop in do_buffer_ext.
@@ -758,7 +758,7 @@ unsafe fn find_and_validate_buffer(
             || (bp != buf
                 && !unload
                 && !(if help_only {
-                    nvim_buf_get_b_help(buf) != 0
+                    nvim_buf_get_help(buf) != 0
                 } else {
                     nvim_buf_get_b_p_bl(buf) != 0
                 }))
@@ -769,10 +769,10 @@ unsafe fn find_and_validate_buffer(
             buf = nav_step(buf, dir);
             if unload
                 || (if help_only {
-                    nvim_buf_get_b_help(buf) != 0
+                    nvim_buf_get_help(buf) != 0
                 } else {
                     nvim_buf_get_b_p_bl(buf) != 0
-                        && ((flags & DOBUF_SKIPHELP) == 0 || nvim_buf_get_b_help(buf) == 0)
+                        && ((flags & DOBUF_SKIPHELP) == 0 || nvim_buf_get_help(buf) == 0)
                 })
             {
                 remaining -= 1;
