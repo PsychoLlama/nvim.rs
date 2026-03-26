@@ -275,25 +275,15 @@ void *nvim_regexp_get_visual_area(int32_t *top_lnum, int32_t *top_col,
 int nvim_regexp_get_p_sel_char(void) { return *p_sel; }
 
 // Wrapper: calls getvvcol with a constructed pos_T, returns start and end.
-void nvim_regexp_call_getvvcol(void *wp, int32_t lnum, int32_t col,
-                               int32_t *start_out, int32_t *end_out)
+void nvim_regexp_call_getvvcol(void *wp, int32_t lnum, int32_t col, int32_t *start_out, int32_t *end_out)
 {
-  pos_T pos;
-  pos.lnum = (linenr_T)lnum;
-  pos.col = (colnr_T)col;
-  pos.coladd = 0;
+  pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col, .coladd = 0 };
   colnr_T s, e;
   getvvcol((win_T *)wp, &pos, &s, NULL, &e);
-  *start_out = (int32_t)s;
-  *end_out = (int32_t)e;
+  *start_out = (int32_t)s; *end_out = (int32_t)e;
 }
 
-// Wrapper: calls win_linetabsize
-int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum,
-                                         const char *line, int32_t col)
-{
-  return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col);
-}
+int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum, const char *line, int32_t col) { return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col); }
 
 
 // reg_getline_common accessors for Rust FFI
@@ -475,49 +465,21 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
 int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
 int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
 int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
-int32_t nvim_regexp_get_curwin_vcol(void)
-{
-  colnr_T vcol = 0;
-  getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol);
-  return (int32_t)(++vcol);
-}
+int32_t nvim_regexp_get_curwin_vcol(void) { colnr_T vcol = 0; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int32_t)(++vcol); }
 
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
 // maxmempattern option
 int64_t nvim_regexp_get_p_mmp(void) { return p_mmp; }
 
-// External match
-uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) {
-  if (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) {
-    return re_extmatch_in->matches[no];
-  }
-  return NULL;
-}
+uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) { return (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) ? re_extmatch_in->matches[no] : NULL; }
 
-// Mark support
-void *nvim_regexp_call_mark_get(int mark) {
-  return (void *)mark_get(REX_PTR->reg_buf, curwin, NULL, kMarkBufLocal, mark);
-}
-// Window/cursor support
-void *nvim_regexp_get_rex_reg_win_or_curwin(void) {
-  return (void *)(REX_PTR->reg_win == NULL ? curwin : REX_PTR->reg_win);
-}
-int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) {
-  return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.lnum : 0;
-}
-int32_t nvim_regexp_get_rex_reg_win_cursor_col(void) {
-  return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.col : 0;
-}
-// Error/utility
-int nvim_regexp_call_profile_passed_limit(const void *tm) {
-  return profile_passed_limit(*(const proftime_T *)tm) ? 1 : 0;
-}
-
-// mb_get_class_tab accessor
-int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
-  return mb_get_class_tab((char *)p, REX_PTR->reg_buf->b_chartab);
-}
+void *nvim_regexp_call_mark_get(int mark) { return (void *)mark_get(REX_PTR->reg_buf, curwin, NULL, kMarkBufLocal, mark); }
+void *nvim_regexp_get_rex_reg_win_or_curwin(void) { return (void *)(REX_PTR->reg_win == NULL ? curwin : REX_PTR->reg_win); }
+int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) { return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.lnum : 0; }
+int32_t nvim_regexp_get_rex_reg_win_cursor_col(void) { return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.col : 0; }
+int nvim_regexp_call_profile_passed_limit(const void *tm) { return profile_passed_limit(*(const proftime_T *)tm) ? 1 : 0; }
+int nvim_regexp_call_mb_get_class_tab(uint8_t *p) { return mb_get_class_tab((char *)p, REX_PTR->reg_buf->b_chartab); }
 
 
 
@@ -546,13 +508,8 @@ void nvim_regexp_set_p_re(int32_t v) { p_re = (long)v; }
 // reg_do_extmatch setter
 void nvim_regexp_set_reg_do_extmatch(int v) { reg_do_extmatch = v; }
 
-// vim_regcomp/vim_regfree calls (for NFA_TOO_EXPENSIVE recompile)
-void *nvim_regexp_call_vim_regcomp(const char *pat, int re_flags) {
-  return vim_regcomp(pat, re_flags);
-}
-void nvim_regexp_call_vim_regfree(void *prog) {
-  vim_regfree((regprog_T *)prog);
-}
+void *nvim_regexp_call_vim_regcomp(const char *pat, int re_flags) { return vim_regcomp(pat, re_flags); }
+void nvim_regexp_call_vim_regfree(void *prog) { vim_regfree((regprog_T *)prog); }
 
 // p_verbose option
 int64_t nvim_regexp_get_p_verbose(void) { return p_verbose; }
@@ -560,24 +517,11 @@ int64_t nvim_regexp_get_p_verbose(void) { return p_verbose; }
 // regmatch_T size for Rust stack allocation
 size_t nvim_regexp_get_regmatch_size(void) { return sizeof(regmatch_T); }
 
-// Initialize a regmatch_T buffer with prog and rm_ic
-void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) {
-  regmatch_T *rmp = (regmatch_T *)buf;
-  memset(rmp, 0, sizeof(regmatch_T));
-  rmp->regprog = (regprog_T *)prog;
-  rmp->rm_ic = (bool)rm_ic;
-}
+void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) { regmatch_T *rmp = (regmatch_T *)buf; memset(rmp, 0, sizeof(regmatch_T)); rmp->regprog = (regprog_T *)prog; rmp->rm_ic = (bool)rm_ic; }
 // REX_PTR->reg_buf = curbuf
 void nvim_regexp_set_rex_reg_buf_curbuf(void) { REX_PTR->reg_buf = curbuf; }
 
 // called_emsg counter
 int nvim_regexp_get_called_emsg(void) { return called_emsg; }
 
-// bt_regcomp accessors
-
-// Allocate bt_regprog_T with flexible array member for program bytes
-void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
-  bt_regprog_T *r = xmalloc(offsetof(bt_regprog_T, program) + (size_t)regsize_val);
-  r->re_in_use = false;
-  return r;
-}
+void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) { bt_regprog_T *r = xmalloc(offsetof(bt_regprog_T, program) + (size_t)regsize_val); r->re_in_use = false; return r; }
