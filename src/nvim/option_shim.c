@@ -438,20 +438,14 @@ char *nvim_optset_get_errbuf(const void *args) { return ((const optset_T *)args)
 // Return os_errbuflen for listflag error formatting
 size_t nvim_optset_get_errbuflen(const void *args) { return ((const optset_T *)args)->os_errbuflen; }
 // Wrappers for side-effect functions
-int nvim_call_briopt_check_win(const char *val, win_T *win)
-{
-  return briopt_check(val, win) == OK ? 1 : 0;
-}
+int nvim_call_briopt_check_win(const char *val, win_T *win) { return briopt_check(val, win) == OK ? 1 : 0; }
 // Return address of win->w_p_briopt for varp comparison
 const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
 // Return varp from optset_T (as void*)
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
 
 // Return os_newval.string.data from optset_T
-const char *nvim_optset_get_newval_str(const void *args)
-{
-  return ((const optset_T *)args)->os_newval.string.data;
-}
+const char *nvim_optset_get_newval_str(const void *args) { return ((const optset_T *)args)->os_newval.string.data; }
 // Buffer-local bkc accessors
 unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
 void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; }
@@ -657,15 +651,9 @@ const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx]
 
 /// Get the address of p_kp (keywordprg global), as void*.
 /// Used by Rust stropt_get_newval to detect keywordprg option.
-void *nvim_option_get_p_kp_ptr(void)
-{
-  return (void *)&p_kp;
-}
+void *nvim_option_get_p_kp_ptr(void) { return (void *)&p_kp; }
 
-void check_redraw(uint32_t flags)
-{
-  check_redraw_for(curbuf, curwin, flags);
-}
+void check_redraw(uint32_t flags) { check_redraw_for(curbuf, curwin, flags); }
 
 /// Direct hash-based option lookup for use by Rust (avoids circular delegation).
 ///
@@ -683,10 +671,7 @@ OptIndex nvim_find_option_len_hash(const char *name, size_t len)
 ///
 /// @return Option value stored in varp.
 OptVal optval_from_varp(OptIndex opt_idx, void *varp)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  return rs_optval_from_varp(opt_idx, varp);
-}
+  FUNC_ATTR_NONNULL_ARG(2) { return rs_optval_from_varp(opt_idx, varp); }
 
 /// Convert an OptVal to an API Object.
 Object optval_as_object(OptVal o)
@@ -879,10 +864,7 @@ void ui_refresh_options(void)
 /// Get pointer to option variable, depending on local or global scope.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-void *get_varp_scope(vimoption_T *p, int opt_flags)
-{
-  return get_varp_scope_from(p, opt_flags, curbuf, curwin);
-}
+void *get_varp_scope(vimoption_T *p, int opt_flags) { return get_varp_scope_from(p, opt_flags, curbuf, curwin); }
 
 /// Get pointer to option variable at 'opt_idx', depending on local or global
 /// scope.
@@ -891,18 +873,13 @@ void *get_option_varp_scope_from(OptIndex opt_idx, int opt_flags, buf_T *buf, wi
   return get_varp_scope_from(&(options[opt_idx]), opt_flags, buf, win);
 }
 
-/// Get option index from option pointer
 static inline OptIndex get_opt_idx(vimoption_T *opt)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
   return (OptIndex)(opt - options);
 }
 
-/// Get pointer to option variable.
-static inline void *get_varp(vimoption_T *p)
-{
-  return get_varp_from(p, curbuf, curwin);
-}
+static inline void *get_varp(vimoption_T *p) { return get_varp_from(p, curbuf, curwin); }
 
 /// Copy options from one window to another.
 /// Used when splitting a window.
@@ -925,7 +902,6 @@ void nvim_xp_set_prefix(expand_T *xp, int val) { xp->xp_prefix = (xp_prefix_T)va
 char *nvim_xp_get_line(expand_T *xp) { return xp->xp_line; }
 int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
-/// Return xp->xp_buf (fixed-size buffer, EXPAND_BUF_LEN bytes).
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 
 // options[opt_idx] field accessors for set_context logic
@@ -1011,7 +987,6 @@ int option_set_callback_func(char *optval, Callback *optcb)
   return OK;
 }
 
-/// Get window or buffer local options
 dict_T *get_winbuf_options(const int bufopt)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -1114,30 +1089,15 @@ void nvim_apply_syntax_autocmd(buf_T *buf, bool force)
   apply_autocmds(EVENT_SYNTAX, buf->b_p_syn, buf->b_fname, force, buf);
 }
 
-/// Get win->w_s->b_p_spl (spelllang option for this window's wordlist).
-const char *nvim_win_get_b_p_spl(win_T *win)
-{
-  return (win && win->w_s) ? win->w_s->b_p_spl : NULL;
-}
+const char *nvim_win_get_b_p_spl(win_T *win) { return (win && win->w_s) ? win->w_s->b_p_spl : NULL; }
 
-/// Get first character of buf->b_p_ff as an unsigned char.
-int nvim_buf_get_b_p_ff_first(const buf_T *buf)
-{
-  return (buf && buf->b_p_ff) ? (unsigned char)(*buf->b_p_ff) : 0;
-}
+int nvim_buf_get_b_p_ff_first(const buf_T *buf) { return (buf && buf->b_p_ff) ? (unsigned char)(*buf->b_p_ff) : 0; }
 
-/// Get the varp for an option by index (using get_varp for the current/global value).
-void *nvim_get_varp_by_idx(OptIndex opt_idx)
-{
-  return get_varp(&options[opt_idx]);
-}
+void *nvim_get_varp_by_idx(OptIndex opt_idx) { return get_varp(&options[opt_idx]); }
 
 /// Check if varp points to curbuf->b_changed.
 /// Used by showoneopt to detect the 'modified' pseudo-boolean option.
-int nvim_varp_is_curbuf_b_changed(const void *varp)
-{
-  return (const int *)varp == &curbuf->b_changed ? 1 : 0;
-}
+int nvim_varp_is_curbuf_b_changed(const void *varp) { return (const int *)varp == &curbuf->b_changed ? 1 : 0; }
 
 extern char *rs_escape_option_str_cmdline(const char *var);
 
@@ -1169,31 +1129,14 @@ int nvim_option_invoke_expand_cb(OptIndex opt_idx, int opt_flags,
   return result;
 }
 
-/// Get the shortname of an option by index.
-const char *nvim_option_get_shortname(OptIndex opt_idx)
-{
-  return options[opt_idx].shortname;
-}
+const char *nvim_option_get_shortname(OptIndex opt_idx) { return options[opt_idx].shortname; }
 
-/// Get rm_ic field from a regmatch_T pointer (opaque).
-int nvim_regmatch_get_rm_ic(const void *regmatch)
-{
-  return ((const regmatch_T *)regmatch)->rm_ic;
-}
+int nvim_regmatch_get_rm_ic(const void *regmatch) { return ((const regmatch_T *)regmatch)->rm_ic; }
 
-/// Set rm_ic field on a regmatch_T pointer (opaque).
-void nvim_regmatch_set_rm_ic(void *regmatch, int val)
-{
-  ((regmatch_T *)regmatch)->rm_ic = val;
-}
+void nvim_regmatch_set_rm_ic(void *regmatch, int val) { ((regmatch_T *)regmatch)->rm_ic = val; }
 
-/// Get fuzmatch_str_T size.
-size_t nvim_option_get_fuzmatch_size(void)
-{
-  return sizeof(fuzmatch_str_T);
-}
+size_t nvim_option_get_fuzmatch_size(void) { return sizeof(fuzmatch_str_T); }
 
-/// Set a fuzmatch_str_T entry at index in an opaque array.
 void nvim_option_fuzmatch_set(void *fuzmatch, int idx, const char *str, int score)
 {
   fuzmatch_str_T *fm = (fuzmatch_str_T *)fuzmatch;
@@ -1244,14 +1187,9 @@ void nvim_set_option_sctx_from_sid(OptIndex opt_idx, int opt_flags, int set_sid)
   set_option_sctx(opt_idx, opt_flags, script_ctx);
 }
 
-/// Returns 1 if opt->opt_did_set_cb is non-NULL for opt_idx.
 int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_did_set_cb != NULL ? 1 : 0; }
 
-/// Return pointer to options[opt_idx] (vimoption_T *).
-vimoption_T *nvim_get_option_ptr_by_idx(OptIndex opt_idx)
-{
-  return &options[opt_idx];
-}
+vimoption_T *nvim_get_option_ptr_by_idx(OptIndex opt_idx) { return &options[opt_idx]; }
 
 /// Apply the OptionSet autocommand: called from rs_set_option_impl in Rust.
 /// Keeps VimL type system interactions (optval_as_tv, set_vim_var_tv, etc.) in C.
@@ -1364,13 +1302,8 @@ size_t nvim_option_get_values_len(const vimoption_T *opt) { return opt->values_l
 const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : NULL; }
 
 // Regex match accessors
-/// Get p_fic (fileignorecase) option value.
-bool nvim_get_p_fic(void)
-{
-  return p_fic;
-}
+bool nvim_get_p_fic(void) { return p_fic; }
 
-/// Check if a regmatch handle has a valid regprog (not NULL).
 bool nvim_regmatch_has_regprog(const void *handle)
 {
   if (handle == NULL) { return false; }
@@ -1385,10 +1318,7 @@ bool nvim_regmatch_exec(void *handle, const char *name)
 }
 
 /// Call do_set(s, flags).  Returns OK (0) or FAIL (-1).
-int nvim_do_set(char *s, int flags)
-{
-  return do_set(s, flags);
-}
+int nvim_do_set(char *s, int flags) { return do_set(s, flags); }
 
 /// Save current_sctx on the heap, set it to SID_MODELINE/lnum context.
 /// Caller must pass the returned pointer to nvim_modeline_sctx_restore().
