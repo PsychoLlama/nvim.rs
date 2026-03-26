@@ -1219,23 +1219,6 @@ void nvim_ins_ctrl_hat(void)
   status_redraw_curbuf();
 }
 
-int nvim_ins_ctrl_g_get_key(void)
-{
-  setcursor();
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  switch (c) {
-  case K_UP: case Ctrl_K: case 'k': return 1;
-  case K_DOWN: case Ctrl_J: case 'j': return 2;
-  case 'u': return 3;
-  case 'U': return 4;
-  case ESC: return 5;
-  default: return 0;
-  }
-}
 
 void nvim_init_Insstart(int startln)
 {
@@ -1284,16 +1267,6 @@ int nvim_insert_check_scroll(int mincol, linenr_T old_topline, int old_topfill,
     }
   }
   return new_mincol;
-}
-
-int nvim_plain_vgetc_no_mapping(void)
-{
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  return c;
 }
 
 int nvim_ins_copychar(linenr_T lnum)

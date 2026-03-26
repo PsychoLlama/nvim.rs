@@ -94,9 +94,14 @@ extern "C" {
     fn nvim_ins_ctrl_hat();
     fn nvim_edit_ins_ctrl_(revins_on: c_int);
     fn nvim_ins_start_select(c: c_int) -> c_int;
-    fn nvim_ins_ctrl_g_get_key() -> c_int;
     fn nvim_edit_ins_shift(c: c_int, lastc: c_int);
     fn nvim_edit_ins_del();
+
+    // -- for inlining nvim_ins_ctrl_g_get_key --
+    fn setcursor();
+    fn plain_vgetc() -> c_int;
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
 
     // State
 
@@ -138,6 +143,17 @@ const CTRL_G_U_SYNC: c_int = 3;
 const CTRL_G_NO_SYNC: c_int = 4;
 const CTRL_G_ESC: c_int = 5;
 const CTRL_G_UNKNOWN: c_int = 0;
+
+// Keys needed for ins_ctrl_g_get_key
+const K_UP: c_int = -30059; // TERMCAP2KEY('k', 'u')
+const K_DOWN: c_int = -25707; // TERMCAP2KEY('k', 'd')
+const CTRL_K: c_int = 11;
+const CTRL_J: c_int = 10;
+const ESC: c_int = 0x1b;
+const KU_: c_int = b'u' as c_int;
+const KL_U: c_int = b'U' as c_int;
+const KK_: c_int = b'k' as c_int;
+const KJ_: c_int = b'j' as c_int;
 
 // ============================================================================
 // ins_left
@@ -513,9 +529,28 @@ pub unsafe extern "C" fn rs_ins_start_select(c: c_int) -> c_int {
 // ins_ctrl_g (Phase 4b)
 // ============================================================================
 
+/// Get the Ctrl-G subcommand key (inlined from `nvim_ins_ctrl_g_get_key`).
+#[inline]
+unsafe fn ins_ctrl_g_get_key() -> c_int {
+    setcursor();
+    no_mapping += 1;
+    allow_keys += 1;
+    let c = plain_vgetc();
+    no_mapping -= 1;
+    allow_keys -= 1;
+    match c {
+        K_UP | CTRL_K | KK_ => CTRL_G_UP,
+        K_DOWN | CTRL_J | KJ_ => CTRL_G_DOWN,
+        KU_ => CTRL_G_U_SYNC,
+        KL_U => CTRL_G_NO_SYNC,
+        ESC => CTRL_G_ESC,
+        _ => CTRL_G_UNKNOWN,
+    }
+}
+
 /// Handle Ctrl-G in Insert mode.
 unsafe fn ins_ctrl_g_impl() {
-    let key = nvim_ins_ctrl_g_get_key();
+    let key = ins_ctrl_g_get_key();
     match key {
         CTRL_G_UP => ins_up_impl(true),
         CTRL_G_DOWN => ins_down_impl(true),

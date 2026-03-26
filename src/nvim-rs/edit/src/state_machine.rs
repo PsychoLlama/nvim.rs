@@ -463,7 +463,14 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
     // CTRL-\ CTRL-N/O/G: normal mode or CTRL-O without cursor move
     if unsafe { (*s).c } == CTRL_BSL {
         unsafe { ins_redraw_false() };
-        let c2 = unsafe { nvim_plain_vgetc_no_mapping() };
+        let c2 = unsafe {
+            no_mapping += 1;
+            allow_keys += 1;
+            let c = plain_vgetc();
+            no_mapping -= 1;
+            allow_keys -= 1;
+            c
+        };
         if c2 != CTRL_N && c2 != CTRL_G && c2 != CTRL_O {
             unsafe { vungetc(c2) };
             unsafe { (*s).c = CTRL_BSL };
@@ -552,10 +559,12 @@ extern "C" {
     fn nvim_cursor_col_ge_compl_col() -> c_int;
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_set_ins_at_eol(val: bool);
-    fn nvim_plain_vgetc_no_mapping() -> c_int;
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
     fn nvim_utf_ptr2len(p: *const std::ffi::c_char) -> c_int;
     fn rs_ctrl_x_mode_line_or_eval() -> c_int;
+    fn plain_vgetc() -> c_int;
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
 }
 
 // Key constants used in insert_execute
