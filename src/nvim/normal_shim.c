@@ -604,11 +604,6 @@ void nvim_find_pattern_in_path_call(char *ptr, size_t len, int count0, int nchar
 /// pos_to_mark(curbuf, NULL, curwin->w_cursor) -- returns fmark_T*.
 fmark_T *nvim_pos_to_mark_cursor(void) { return pos_to_mark(curbuf, NULL, curwin->w_cursor); }
 
-/// getnextmark wrapper: advance fm by one step in dir.
-fmark_T *nvim_getnextmark_call(fmark_T *fm, int dir, int begin_line) {
-  return getnextmark(&fm->mark, dir, begin_line);
-}
-
 /// spell_move_to wrapper for bracket [s/]s/[r/]r/[S/]S commands.
 
 // =============================================================================

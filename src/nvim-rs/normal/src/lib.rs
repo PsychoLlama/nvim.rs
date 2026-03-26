@@ -3334,7 +3334,8 @@ extern "C" {
         from_rbracket: bool,
     );
     fn nvim_pos_to_mark_cursor() -> FmarkHandle;
-    fn nvim_getnextmark_call(fm: FmarkHandle, dir: c_int, begin_line: c_int) -> FmarkHandle;
+    fn getnextmark(startpos: *mut crate::types::PosT, dir: c_int, begin_line: c_int)
+        -> FmarkHandle;
     fn do_mouse(oap: OapHandle, nchar: c_int, dir: c_int, count1: c_int, fixindent: bool);
     fn spell_move_to(
         wp: WinHandle,
@@ -3729,7 +3730,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         let mut prev_fm = fm;
         for _ in 0..count1 {
             prev_fm = fm;
-            let next = nvim_getnextmark_call(fm, dir, begin_line);
+            let next = getnextmark(fm.cast::<crate::types::PosT>(), dir, begin_line);
             if next.is_null() {
                 break;
             }
