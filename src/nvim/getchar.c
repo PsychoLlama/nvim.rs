@@ -2085,10 +2085,6 @@ void nvim_set_mouse_col(int val)
   mouse_col = val;
 }
 
-int nvim_can_get_old_char(void)
-{
-  return (old_char != -1 && (old_KeyStuffed || stuff_empty())) ? 1 : 0;
-}
 
 /// Check if a character is available (accessor for Rust crates that need c_int return).
 int nvim_char_avail(void)
@@ -2142,15 +2138,6 @@ void nvim_on_key_buf_process(const uint8_t *buf, size_t buflen)
   }
 }
 
-int nvim_get_debug_did_msg(void)
-{
-  return debug_did_msg ? 1 : 0;
-}
-
-void nvim_set_debug_did_msg(int val)
-{
-  debug_did_msg = val != 0;
-}
 
 /// Push a NUL byte onto on_key_buf.
 void nvim_on_key_buf_push_nul(void)
@@ -2176,17 +2163,6 @@ void nvim_on_key_buf_shrink(size_t len)
   }
 }
 
-/// Set vgetc_mod_mask global.
-void nvim_set_vgetc_mod_mask(int val)
-{
-  vgetc_mod_mask = val;
-}
-
-/// Set vgetc_char global.
-void nvim_set_vgetc_char(int val)
-{
-  vgetc_char = val;
-}
 
 /// Wrapper for MB_BYTE2LEN_CHECK macro (used by Rust vgetc).
 int nvim_mb_byte2len_check(int b)

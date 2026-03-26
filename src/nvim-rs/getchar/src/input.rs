@@ -56,7 +56,6 @@ extern "C" {
     fn nvim_set_old_char(val: c_int);
     fn nvim_get_old_mod_mask() -> c_int;
     fn nvim_set_old_mod_mask(val: c_int);
-    #[allow(dead_code)]
     fn nvim_get_old_keystuffed() -> c_int;
     fn nvim_set_old_keystuffed(val: c_int);
 
@@ -73,12 +72,8 @@ extern "C" {
     // Keystuffed state
     fn nvim_get_keystuffed() -> c_int;
 
-    // Stuff buffer check (used for can_get_old_char logic, but wrapped in C)
-    #[allow(dead_code)]
+    // Stuff buffer check (for can_get_old_char logic)
     fn rs_stuff_empty() -> c_int;
-
-    // Can get old char wrapper
-    fn nvim_can_get_old_char() -> c_int;
 
     // For ins_char_typebuf
     fn nvim_get_keynoremap() -> c_int;
@@ -394,8 +389,9 @@ pub const fn translate_home_end_key(c: c_int, mod_mask: c_int) -> (c_int, bool) 
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
-    // Use the C wrapper which checks the full condition
-    nvim_can_get_old_char()
+    c_int::from(
+        nvim_get_old_char() != -1 && (nvim_get_old_keystuffed() != 0 || rs_stuff_empty() != 0),
+    )
 }
 
 /// Unget one character (can only be done once!).

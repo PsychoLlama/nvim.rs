@@ -53,13 +53,13 @@ extern "C" {
     /// Set mod_mask global
     fn nvim_set_mod_mask(val: c_int);
 
-    /// Set vgetc_mod_mask global
-    fn nvim_set_vgetc_mod_mask(val: c_int);
+    /// vgetc_mod_mask global (direct access)
+    static mut vgetc_mod_mask: c_int;
 
     /// Get vgetc_char global
     fn nvim_get_vgetc_char() -> c_int;
-    /// Set vgetc_char global
-    fn nvim_set_vgetc_char(val: c_int);
+    /// vgetc_char global (direct access)
+    static mut vgetc_char: c_int;
 
     /// Get KeyTyped global
     fn nvim_get_keytyped() -> c_int;
@@ -563,8 +563,8 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
         nvim_set_last_recorded_len(last_recorded.saturating_sub(LAST_VGETC_RECORDED_LEN));
 
         nvim_set_mod_mask(0);
-        nvim_set_vgetc_mod_mask(0);
-        nvim_set_vgetc_char(0);
+        vgetc_mod_mask = 0;
+        vgetc_char = 0;
 
         let result = vgetc_inner_loop();
         c = result;
@@ -688,8 +688,8 @@ unsafe fn vgetc_inner_loop() -> c_int {
         }
 
         if nvim_get_vgetc_char() == 0 {
-            nvim_set_vgetc_mod_mask(nvim_get_mod_mask());
-            nvim_set_vgetc_char(c);
+            vgetc_mod_mask = nvim_get_mod_mask();
+            vgetc_char = c;
         }
 
         // A keypad or special function key was not mapped, use it like

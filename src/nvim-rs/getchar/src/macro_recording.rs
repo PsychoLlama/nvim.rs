@@ -267,10 +267,8 @@ extern "C" {
     fn nvim_call_updatescript(c: c_int);
     /// Append bytes to on_key_buf, subtracting on_key_ignore_len
     fn nvim_on_key_buf_process(buf: *const u8, buflen: usize);
-    /// Get debug_did_msg
-    fn nvim_get_debug_did_msg() -> c_int;
-    /// Set debug_did_msg
-    fn nvim_set_debug_did_msg(val: c_int);
+    /// debug_did_msg global (direct access)
+    static mut debug_did_msg: bool;
     /// Increment maptick
     fn nvim_inc_maptick();
 }
@@ -313,7 +311,7 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
     crate::rs_may_sync_undo();
 
     // output "debug mode" message next time in debug mode
-    nvim_set_debug_did_msg(0);
+    debug_did_msg = false;
 
     // Since characters have been typed, consider the following to be in
     // another mapping. Search string will be kept in history.
