@@ -276,18 +276,21 @@ impl TerminalHandle {
 }
 
 // =============================================================================
-// Retained C functions (non-trivial: require C global state or vterm calls)
+// FFI for vterm state focus and global state
 // =============================================================================
 
+/// `MODE_TERMINAL` constant from `state_defs.h`.
+const MODE_TERMINAL: c_int = 0x80;
+
 extern "C" {
-    /// Notify the terminal of focus change (calls `vterm_state_focus_in/out`).
-    pub fn nvim_terminal_set_focus(term: TerminalHandle, focus: c_int);
-
-    /// Get the current mode constant for terminal mode (`MODE_TERMINAL`).
-    pub fn nvim_get_mode_terminal() -> c_int;
-
-    /// Check if we're currently in terminal mode (`State & MODE_TERMINAL`).
-    pub fn nvim_is_terminal_mode() -> c_int;
+    /// Obtain the `VTermState` pointer from a `VTerm`.
+    fn vterm_obtain_state(vt: *mut c_void) -> *mut c_void;
+    /// Signal focus gained to the `VTerm` state machine.
+    fn vterm_state_focus_in(state: *mut c_void);
+    /// Signal focus lost to the `VTerm` state machine.
+    fn vterm_state_focus_out(state: *mut c_void);
+    /// Get the current Neovim `State` global.
+    fn nvim_get_state() -> c_int;
 }
 
 // =============================================================================
@@ -873,11 +876,24 @@ pub extern "C" fn rs_terminal_sync_sb_deleted(term: TerminalHandle) {
 // Mode Integration Functions
 // =============================================================================
 
-/// Set terminal focus state (calls `vterm_state_focus_in/out` via C).
+/// Set terminal focus state (calls `vterm_state_focus_in/out`).
 #[no_mangle]
 pub extern "C" fn rs_terminal_set_focus(term: TerminalHandle, focus: c_int) {
-    if !term.is_null() {
-        unsafe { nvim_terminal_set_focus(term, focus) }
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if t.vt.is_null() {
+        return;
+    }
+    let state = unsafe { vterm_obtain_state(t.vt) };
+    if state.is_null() {
+        return;
+    }
+    if focus != 0 {
+        unsafe { vterm_state_focus_in(state) };
+    } else {
+        unsafe { vterm_state_focus_out(state) };
     }
 }
 
@@ -896,13 +912,13 @@ pub extern "C" fn rs_terminal_should_close(term: TerminalHandle) -> c_int {
 /// Get the `MODE_TERMINAL` constant.
 #[no_mangle]
 pub extern "C" fn rs_get_mode_terminal() -> c_int {
-    unsafe { nvim_get_mode_terminal() }
+    MODE_TERMINAL
 }
 
 /// Check if currently in terminal mode.
 #[no_mangle]
 pub extern "C" fn rs_is_terminal_mode() -> c_int {
-    unsafe { nvim_is_terminal_mode() }
+    c_int::from((unsafe { nvim_get_state() } & MODE_TERMINAL) != 0)
 }
 
 /// Convenience function to handle terminal focus gain.
@@ -911,18 +927,14 @@ pub extern "C" fn rs_terminal_focus_gain(term: TerminalHandle) {
     if term.is_null() {
         return;
     }
-    unsafe {
-        nvim_terminal_set_focus(term, 1);
-        term.as_mut().pending.cursor = true;
-    }
+    rs_terminal_set_focus(term, 1);
+    unsafe { term.as_mut().pending.cursor = true };
 }
 
 /// Convenience function to handle terminal focus loss.
 #[no_mangle]
 pub extern "C" fn rs_terminal_focus_lose(term: TerminalHandle) {
-    if !term.is_null() {
-        unsafe { nvim_terminal_set_focus(term, 0) }
-    }
+    rs_terminal_set_focus(term, 0);
 }
 
 // =============================================================================
