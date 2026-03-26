@@ -570,30 +570,6 @@ static dict_T *ins_compl_dict_alloc(compl_T *match)
 
 /// Trigger the CompleteChanged autocmd event. Invoked each time the Insert mode
 /// completion menu is changed.
-static void trigger_complete_changed_event(int cur)
-{
-  static bool recursive = false;
-  save_v_event_T save_v_event;
-
-  if (recursive) {
-    return;
-  }
-
-  dict_T *item = cur < 0 ? tv_dict_alloc() : ins_compl_dict_alloc(compl_curr_match);
-  dict_T *v_event = get_v_event(&save_v_event);
-  tv_dict_add_dict(v_event, S_LEN("completed_item"), item);
-  pum_set_event_info(v_event);
-  tv_dict_set_keys_readonly(v_event);
-
-  recursive = true;
-  textlock++;
-  apply_autocmds(EVENT_COMPLETECHANGED, NULL, NULL, false, curbuf);
-  textlock--;
-  recursive = false;
-
-  restore_v_event(v_event, &save_v_event);
-}
-
 // Helper functions for nvim_mergesort_compl_list_raw() -- C function pointer
 // callbacks required by mergesort_list(); sort logic lives in rs_sort_compl_match_list.
 
@@ -913,13 +889,6 @@ static Callback *get_insert_callback(int type)
   return (*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb;
 }
 
-static inline int get_user_highlight_attr(const char *hlname)
-{
-  if (hlname != NULL && *hlname != NUL) {
-    return syn_name2attr(hlname);
-  }
-  return -1;
-}
 
 void nvim_save_orig_extmarks_impl(void) {
   extmark_splice_delete(curbuf, curwin->w_cursor.lnum - 1, compl_col, curwin->w_cursor.lnum - 1,
@@ -1116,7 +1085,23 @@ char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstr
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
-void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
+void nvim_trigger_complete_changed(int cur)
+{
+  static bool recursive = false;
+  if (recursive) { return; }
+  save_v_event_T save_v_event;
+  dict_T *item = cur < 0 ? tv_dict_alloc() : ins_compl_dict_alloc(compl_curr_match);
+  dict_T *v_event = get_v_event(&save_v_event);
+  tv_dict_add_dict(v_event, S_LEN("completed_item"), item);
+  pum_set_event_info(v_event);
+  tv_dict_set_keys_readonly(v_event);
+  recursive = true;
+  textlock++;
+  apply_autocmds(EVENT_COMPLETECHANGED, NULL, NULL, false, curbuf);
+  textlock--;
+  recursive = false;
+  restore_v_event(v_event, &save_v_event);
+}
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
@@ -1321,10 +1306,10 @@ int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
     cptext[CPT_INFO] = tv_dict_get_string(tv->vval.v_dict, "info", true);
 
     user_abbr_hlname = tv_dict_get_string(tv->vval.v_dict, "abbr_hlgroup", false);
-    user_hl[0] = get_user_highlight_attr(user_abbr_hlname);
+    user_hl[0] = (user_abbr_hlname != NULL && *user_abbr_hlname != NUL) ? syn_name2attr(user_abbr_hlname) : -1;
 
     user_kind_hlname = tv_dict_get_string(tv->vval.v_dict, "kind_hlgroup", false);
-    user_hl[1] = get_user_highlight_attr(user_kind_hlname);
+    user_hl[1] = (user_kind_hlname != NULL && *user_kind_hlname != NUL) ? syn_name2attr(user_kind_hlname) : -1;
 
     tv_dict_get_tv(tv->vval.v_dict, "user_data", &user_data);
 
