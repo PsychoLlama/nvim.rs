@@ -218,12 +218,6 @@ linenr_T nvim_get_sourcing_lnum_direct(void)
   return SOURCING_LNUM;
 }
 
-/// Duplicate a string using xstrdup.
-char *nvim_runtime_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
-
 /// Format a stack entry with line number: "type_name name[lnum]dots"
 /// Returns the number of bytes written.
 int nvim_estack_format_entry(char *buf, size_t buflen,
@@ -792,18 +786,6 @@ bool nvim_rt_vim_ispathsep(int c)
   return vim_ispathsep(c);
 }
 
-/// xmemcpyz wrapper.
-void nvim_rt_xmemcpyz(void *dst, const void *src, size_t len)
-{
-  xmemcpyz(dst, src, len);
-}
-
-/// Get IOSIZE constant (already exists as nvim_rt_iosize, but alias for clarity).
-size_t nvim_rt_get_iosize(void)
-{
-  return (size_t)IOSIZE;
-}
-
 _Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
 _Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
 
@@ -898,12 +880,6 @@ int nvim_rt_path_fnamencmp(const char *a, const char *b, size_t n)
 char *nvim_rt_concat_fnames(const char *fname1, const char *fname2, bool sep)
 {
   return concat_fnames((char *)fname1, fname2, sep);
-}
-
-/// try_malloc: malloc that returns NULL on failure.
-void *nvim_rt_try_malloc(size_t n)
-{
-  return try_malloc(n);
 }
 
 /// Set the 'runtimepath' option to a new value.

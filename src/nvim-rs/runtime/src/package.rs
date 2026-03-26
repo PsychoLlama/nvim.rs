@@ -58,7 +58,7 @@ extern "C" {
         fname2: *const c_char,
         sep: bool,
     ) -> *mut c_char;
-    fn nvim_rt_try_malloc(n: usize) -> *mut c_void;
+    fn try_malloc(n: usize) -> *mut c_void;
     fn nvim_rt_set_runtimepath(new_rtp: *const c_char);
     fn nvim_rt_get_past_head(path: *const c_char) -> *mut c_char;
     fn nvim_rt_fix_fname(fname: *const c_char) -> *mut c_char;
@@ -386,7 +386,7 @@ pub unsafe extern "C" fn rs_add_pack_dir_to_rtp(fname: *mut c_char, is_pack: boo
     let oldlen = strlen(p_rtp);
     let addlen = strlen(fname) + 1; // +1 for comma
     let new_rtp_capacity = oldlen + addlen + afterlen + 1; // +1 for NUL
-    let new_rtp = nvim_rt_try_malloc(new_rtp_capacity).cast::<c_char>();
+    let new_rtp = try_malloc(new_rtp_capacity).cast::<c_char>();
     if new_rtp.is_null() {
         xfree(fixed_fname.cast());
         xfree(afterdir.cast());

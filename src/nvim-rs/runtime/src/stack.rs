@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_memory::xstrdup;
+
 use crate::{EstackArgT, EstackHandle, EtypeT, LinenrT, ScidT};
 
 // =============================================================================
@@ -87,7 +89,6 @@ extern "C" {
 
     // estack_sfile helpers
     fn nvim_get_sourcing_lnum_direct() -> LinenrT;
-    fn nvim_runtime_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_estack_format_entry(
         buf: *mut c_char,
         buflen: usize,
@@ -204,7 +205,7 @@ pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
             if name.is_null() {
                 return std::ptr::null_mut();
             }
-            return nvim_runtime_xstrdup(name);
+            return xstrdup(name);
         }
     }
 
@@ -225,7 +226,7 @@ pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
                 if name.is_null() {
                     return std::ptr::null_mut();
                 }
-                return nvim_runtime_xstrdup(name);
+                return xstrdup(name);
             }
         }
         return std::ptr::null_mut();

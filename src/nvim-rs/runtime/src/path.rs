@@ -6,6 +6,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use nvim_memory::xstrdup;
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -44,7 +46,6 @@ const OK: c_int = 1;
 extern "C" {
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
-    fn nvim_runtime_xstrdup(s: *const c_char) -> *mut c_char;
 
     // Phase 3 accessors from runtime_ffi.c
     fn nvim_rt_vim_env_iter(
@@ -69,8 +70,8 @@ extern "C" {
     fn nvim_rt_vim_get_prefix_from_exepath(buf: *mut c_char);
     fn nvim_rt_append_path(path: *mut c_char, to_append: *const c_char, max_len: usize) -> c_int;
     fn nvim_rt_vim_ispathsep(c: c_int) -> bool;
-    fn nvim_rt_xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize);
-    fn nvim_rt_get_iosize() -> usize;
+    fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize);
+    fn nvim_rt_iosize() -> c_int;
 
     // Phase 3 accessors from runtime.c (ga_loaded)
     fn nvim_rt_ga_loaded_len() -> c_int;
@@ -440,13 +441,13 @@ unsafe fn add_dir(
         }
         let appname = nvim_rt_get_appname();
         let appname_len = libc::strlen(appname);
-        let iosize = nvim_rt_get_iosize();
+        let iosize = nvim_rt_iosize() as usize;
         assert!(appname_len < iosize - 5); // sizeof("-data")
         let iobuff = nvim_rt_get_iobuff();
-        nvim_rt_xmemcpyz(iobuff.cast(), appname.cast(), appname_len);
+        xmemcpyz(iobuff.cast(), appname.cast(), appname_len);
         // On MSWIN, "-data" would be appended for kXDGDataHome/kXDGStateHome.
         // Not applicable on Linux.
-        nvim_rt_xmemcpyz(dest.cast(), iobuff.cast(), appname_len);
+        xmemcpyz(dest.cast(), iobuff.cast(), appname_len);
         dest = dest.add(appname_len);
         if !suf1.is_null() {
             *dest = PATHSEP as c_char;
@@ -497,7 +498,7 @@ pub unsafe extern "C" fn rs_path_is_after(buf: *const c_char, buflen: usize) -> 
 pub unsafe extern "C" fn rs_get_lib_dir() -> *mut c_char {
     let default_lib = nvim_rt_get_default_lib_dir();
     if !default_lib.is_null() && libc::strlen(default_lib) != 0 && nvim_rt_os_isdir(default_lib) {
-        return nvim_runtime_xstrdup(default_lib);
+        return xstrdup(default_lib);
     }
 
     let maxpathl = nvim_rt_maxpathl() as usize;
@@ -757,7 +758,7 @@ pub unsafe extern "C" fn rs_script_autoload(
         // Remember the name if it wasn't loaded already.
         if i == ga_len {
             // Duplicate scriptname since ga_loaded takes ownership
-            let owned = nvim_runtime_xstrdup(scriptname);
+            let owned = xstrdup(scriptname);
             nvim_rt_ga_loaded_append(owned);
         }
 
