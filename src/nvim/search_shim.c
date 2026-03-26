@@ -1015,22 +1015,7 @@ void nvim_inc_emsg_off(void) { emsg_off++; }
 void nvim_dec_emsg_off(void) { emsg_off--; }
 // rs_searchit accessor functions
 
-// Constant verification
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
-_Static_assert(CPO_SEARCH == 'c', "CPO_SEARCH mismatch");
-_Static_assert(SHM_SEARCH == 's', "SHM_SEARCH mismatch");
-_Static_assert(SHM_SEARCHCOUNT == 'S', "SHM_SEARCHCOUNT mismatch");
-_Static_assert(SEARCH_HIS == 0x20, "SEARCH_HIS mismatch");
-_Static_assert(SEARCH_KEEP == 0x400, "SEARCH_KEEP mismatch");
-_Static_assert(SEARCH_MSG == 0x0c, "SEARCH_MSG mismatch");
-_Static_assert(SEARCH_COL == 0x1000, "SEARCH_COL mismatch");
-_Static_assert(SEARCH_END == 0x40, "SEARCH_END mismatch");
-_Static_assert(SEARCH_START == 0x100, "SEARCH_START mismatch");
-_Static_assert(SEARCH_NOOF == 0x80, "SEARCH_NOOF mismatch");
-_Static_assert(SEARCH_PEEK == 0x800, "SEARCH_PEEK mismatch");
-_Static_assert(FORWARD == 1, "FORWARD mismatch");
-_Static_assert(BACKWARD == -1, "BACKWARD mismatch");
-_Static_assert(FAIL == 0, "FAIL mismatch");
+
 
 /// Compile search pattern for rs_searchit.
 /// Returns FAIL (0) or OK (1). regmatch is an opaque handle.
@@ -1101,41 +1086,11 @@ void *nvim_regmmatch_alloc(void)
 void nvim_regmmatch_free(void *rm) { xfree(rm); }
 // rs_do_search accessor functions
 
-_Static_assert(SEARCH_REV == 0x01, "SEARCH_REV mismatch");
-_Static_assert(SEARCH_ECHO == 0x02, "SEARCH_ECHO mismatch");
-_Static_assert(SEARCH_OPT == 0x10, "SEARCH_OPT mismatch");
-_Static_assert(SEARCH_NOOF == 0x80, "SEARCH_NOOF mismatch");
-_Static_assert(SEARCH_MARK == 0x200, "SEARCH_MARK mismatch");
-_Static_assert(RE_SEARCH == 0, "RE_SEARCH mismatch");
-_Static_assert(RE_SUBST == 1, "RE_SUBST mismatch");
-_Static_assert(RE_LAST == 2, "RE_LAST mismatch");
-
 /// Check if Rust-owned spats[0].off.line is set and CPO_LINEOFF is in p_cpo.
 int nvim_do_search_check_lineoff(void)
 {
   extern int rs_get_search_offset_line(int idx);
   return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0;
-}
-
-/// Clear Rust-owned spats[0].off.line and off if CPO_LINEOFF applies.
-void nvim_do_search_clear_lineoff(void)
-{
-  extern void rs_set_search_offset_line_end_off(int line, int end, int64_t off);
-  extern int rs_get_search_offset_end(int idx);
-  rs_set_search_offset_line_end_off(0, rs_get_search_offset_end(0), 0);
-}
-
-int nvim_do_search_get_dirc(void)
-{
-  extern char rs_search_get_dir(void);
-  return (uint8_t)rs_search_get_dir();
-}
-
-/// Set Rust-owned spats[0].off.dir and update vv:searchforward.
-void nvim_do_search_set_dirc(int dirc)
-{
-  extern void rs_search_set_dir(int dir);
-  rs_search_set_dir(dirc);
 }
 
 /// Handle fold adjustment for do_search position.
@@ -1169,26 +1124,6 @@ void nvim_do_search_hlsearch_on(int options)
   }
 }
 
-/// Get previous search pattern (Rust-owned SPATS[RE_SEARCH].pat).
-char *nvim_do_search_get_search_pat(void)
-{
-  extern const char *rs_get_search_pattern(void);
-  return (char *)rs_get_search_pattern();
-}
-
-/// Get previous subst pattern (Rust-owned SPATS[RE_SUBST].pat).
-char *nvim_do_search_get_subst_pat(void)
-{
-  extern const char *rs_get_subst_pattern(void);
-  return (char *)rs_get_subst_pattern();
-}
-
-size_t nvim_do_search_get_subst_patlen(void)
-{
-  extern size_t rs_get_subst_pattern_len(void);
-  return rs_get_subst_pattern_len();
-}
-
 /// Call skip_regexp_ex for do_search pattern parsing.
 /// Returns: pointer to end of regexp.  Sets *newp if copy was made.
 char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
@@ -1198,34 +1133,6 @@ char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
 
 void nvim_do_search_set_searchcmdlen(int val) { searchcmdlen = val; }
 int nvim_do_search_get_searchcmdlen(void) { return searchcmdlen; }
-/// Set Rust-owned SPATS[0].off fields.
-void nvim_do_search_set_off(int off_line, int off_end, int64_t off_off)
-{
-  extern void rs_set_search_offset_line_end_off(int line, int end, int64_t off);
-  rs_set_search_offset_line_end_off(off_line, off_end, off_off);
-}
-
-/// Get Rust-owned SPATS[0].off.end for the SEARCH_END computation.
-int nvim_do_search_get_off_end(void)
-{
-  extern int rs_get_search_offset_end(int idx);
-  return rs_get_search_offset_end(0);
-}
-
-/// Get Rust-owned SPATS[0].off.line.
-int nvim_do_search_get_off_line(void)
-{
-  extern int rs_get_search_offset_line(int idx);
-  return rs_get_search_offset_line(0);
-}
-
-/// Get Rust-owned SPATS[0].off.off.
-int64_t nvim_do_search_get_off_off(void)
-{
-  extern int64_t rs_get_search_offset_off(int idx);
-  return rs_get_search_offset_off(0);
-}
-
 /// Batch helper: handle echo/display section of do_search.
 /// Returns: msgbuf (allocated), sets *msgbuflen_out, sets *show_search_stats.
 /// Caller must xfree() the returned buffer (or NULL).
@@ -1354,8 +1261,6 @@ DoSearchEchoResult nvim_do_search_echo(int dirc, int options,
   return result;
 }
 
-/// Free the echo result.
-void nvim_do_search_echo_free(char *msgbuf) { xfree(msgbuf); }
 /// Pre-searchit character offset subtraction.
 /// This handles the "?pat?e+2" / "/pat/s-2" case.
 DoSearchPos nvim_do_search_pre_offset(linenr_T lnum, colnr_T col)
@@ -1502,42 +1407,9 @@ void nvim_do_search_finish(int options, linenr_T lnum, colnr_T col)
   curwin->w_set_curswant = true;
 }
 
-/// Save Rust-owned spats[0].off, returns opaque data via struct.
-SavedSearchOff nvim_do_search_save_off(void)
-{
-  extern char rs_search_get_dir(void);
-  extern int rs_get_search_offset_line(int idx);
-  extern int rs_get_search_offset_end(int idx);
-  extern int64_t rs_get_search_offset_off(int idx);
-  return (SavedSearchOff){
-    rs_search_get_dir(),
-    rs_get_search_offset_line(0),
-    rs_get_search_offset_end(0),
-    rs_get_search_offset_off(0)
-  };
-}
-
-/// Restore Rust-owned spats[0].off from saved data.
-void nvim_do_search_restore_off(SavedSearchOff saved)
-{
-  // set_search_direction is the export_name for rs_set_search_direction_raw (no vv_searchforward update)
-  extern void set_search_direction(int dir);
-  extern void rs_set_search_offset_line_end_off(int line, int end, int64_t off);
-  // restore dir without calling set_vv_searchforward (matching original behavior)
-  set_search_direction(saved.dir);
-  rs_set_search_offset_line_end_off(saved.line, saved.end, saved.off);
-}
-
 /// Get cursor position for do_search start.
 DoSearchPos nvim_do_search_get_cursor(void) { return (DoSearchPos){ curwin->w_cursor.lnum, curwin->w_cursor.col }; }
 // findmatchlimit accessor functions
-
-_Static_assert(FM_BACKWARD == 0x01, "FM_BACKWARD mismatch");
-_Static_assert(FM_FORWARD == 0x02, "FM_FORWARD mismatch");
-_Static_assert(FM_BLOCKSTOP == 0x04, "FM_BLOCKSTOP mismatch");
-_Static_assert(CPO_MATCH == '%', "CPO_MATCH mismatch");
-_Static_assert(CPO_MATCHBSL == 'M', "CPO_MATCHBSL mismatch");
-_Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
 
 /// Get ml_get(lnum) for curbuf.
 char *nvim_search_ml_get(linenr_T lnum) { return ml_get(lnum); }
@@ -1715,16 +1587,6 @@ int nvim_showmatch_find_and_check(int *out_lnum, int *out_col, int *out_coladd)
 void nvim_showmatch_beep(void) { vim_beep(kOptBoFlagShowmatch); }
 // f_searchcount accessors
 
-// find_pattern_in_path constants
-_Static_assert(FIND_ANY == 1, "FIND_ANY mismatch");
-_Static_assert(FIND_DEFINE == 2, "FIND_DEFINE mismatch");
-_Static_assert(CHECK_PATH == 3, "CHECK_PATH mismatch");
-_Static_assert(ACTION_SHOW == 1, "ACTION_SHOW mismatch");
-_Static_assert(ACTION_GOTO == 2, "ACTION_GOTO mismatch");
-_Static_assert(ACTION_SPLIT == 3, "ACTION_SPLIT mismatch");
-_Static_assert(ACTION_SHOW_ALL == 4, "ACTION_SHOW_ALL mismatch");
-_Static_assert(ACTION_EXPAND == 5, "ACTION_EXPAND mismatch");
-
 // current_search accessors
 
 /// Get curwin->w_cursor.coladd.
@@ -1761,8 +1623,6 @@ int nvim_search_current_searchit(int dir, int flags, int count,
                                  int *pos_lnum, int *pos_col, int *pos_coladd,
                                  int *end_lnum, int *end_col, int *end_coladd)
 {
-  _Static_assert(kOptFdoFlagSearch == 0x40,
-                 "kOptFdoFlagSearch changed - update K_OPT_FDO_FLAG_SEARCH in search/src/commands.rs");
   // Read pat/patlen from Rust-owned state
   extern const char *rs_get_last_used_pattern(void);
   extern size_t rs_get_last_used_pattern_len(void);

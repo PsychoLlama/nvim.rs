@@ -11,8 +11,11 @@
 
 use std::ffi::{c_char, c_int, c_longlong, c_void};
 
+use crate::direction;
 use crate::helpers::options;
+use crate::pattern;
 use crate::searchit::{self, SearchitResult};
+use crate::state;
 
 // =============================================================================
 // Constants (verified with _Static_assert in search.c)
@@ -59,12 +62,12 @@ struct DoSearchPostOffset {
     has_offset: c_int,
 }
 
-#[repr(C)]
+// Saved offset state (now Rust-native, no longer crossing FFI boundary)
 #[derive(Clone, Copy)]
 struct SavedSearchOff {
     dir: c_char,
-    line: c_int,
-    end: c_int,
+    line: bool,
+    end: bool,
     off: c_longlong,
 }
 
@@ -73,16 +76,10 @@ struct SavedSearchOff {
 // =============================================================================
 
 extern "C" {
-    // do_search-specific helpers
+    // do_search-specific helpers (non-round-trip)
     fn nvim_do_search_check_lineoff() -> c_int;
-    fn nvim_do_search_clear_lineoff();
-    fn nvim_do_search_get_dirc() -> c_int;
-    fn nvim_do_search_set_dirc(dirc: c_int);
     fn nvim_do_search_fold_adjust(dirc: c_int, lnum: LinenrT, col: ColnrT) -> DoSearchPos;
     fn nvim_do_search_hlsearch_on(options: c_int);
-    fn nvim_do_search_get_search_pat() -> *mut c_char;
-    fn nvim_do_search_get_subst_pat() -> *mut c_char;
-    fn nvim_do_search_get_subst_patlen() -> usize;
     fn nvim_do_search_skip_regexp(
         pat: *mut c_char,
         delim: c_int,
@@ -90,17 +87,12 @@ extern "C" {
     ) -> *mut c_char;
     fn nvim_do_search_set_searchcmdlen(val: c_int);
     fn nvim_do_search_get_searchcmdlen() -> c_int;
-    fn nvim_do_search_set_off(off_line: c_int, off_end: c_int, off_off: c_longlong);
-    fn nvim_do_search_get_off_end() -> c_int;
-    fn nvim_do_search_get_off_line() -> c_int;
-    fn nvim_do_search_get_off_off() -> c_longlong;
     fn nvim_do_search_echo(
         dirc: c_int,
         options: c_int,
         searchstr: *const c_char,
         searchstrlen: usize,
     ) -> DoSearchEchoResult;
-    fn nvim_do_search_echo_free(msgbuf: *mut c_char);
     fn nvim_do_search_pre_offset(lnum: LinenrT, col: ColnrT) -> DoSearchPos;
     fn nvim_do_search_post_offset(
         lnum: LinenrT,
@@ -124,8 +116,6 @@ extern "C" {
     fn nvim_do_search_emsg_e386();
     fn nvim_do_search_emsg_noprevre();
     fn nvim_do_search_finish(options: c_int, lnum: LinenrT, col: ColnrT);
-    fn nvim_do_search_save_off() -> SavedSearchOff;
-    fn nvim_do_search_restore_off(saved: SavedSearchOff);
     fn nvim_do_search_get_cursor() -> DoSearchPos;
 
     // Existing accessors
@@ -194,11 +184,21 @@ pub unsafe extern "C" fn rs_do_search(
 
     // A line offset is not remembered (vi compatible)
     if nvim_do_search_check_lineoff() != 0 {
-        nvim_do_search_clear_lineoff();
+        // Clear line offset but preserve end flag
+        direction::rs_set_search_offset_line_end_off(
+            0,
+            c_int::from(state::get_spat_off_end(state::RE_SEARCH)),
+            0,
+        );
     }
 
-    // Save the offset for SEARCH_KEEP
-    let saved_off = nvim_do_search_save_off();
+    // Save the offset for SEARCH_KEEP (now Rust-native)
+    let saved_off = SavedSearchOff {
+        dir: direction::get_search_direction(),
+        line: state::get_spat_off_line(state::RE_SEARCH),
+        end: state::get_spat_off_end(state::RE_SEARCH),
+        off: state::get_spat_off_off(state::RE_SEARCH),
+    };
 
     // Start position = cursor
     let cursor = nvim_do_search_get_cursor();
@@ -207,9 +207,9 @@ pub unsafe extern "C" fn rs_do_search(
 
     // Find out search direction
     let mut dirc = if dirc_in == 0 {
-        nvim_do_search_get_dirc()
+        direction::get_search_direction() as u8 as c_int
     } else {
-        nvim_do_search_set_dirc(dirc_in);
+        direction::set_search_direction(dirc_in as c_char);
         dirc_in
     };
 
@@ -245,14 +245,14 @@ pub unsafe extern "C" fn rs_do_search(
 
         // Use previous pattern if current is empty
         if pat.is_null() || *pat == NUL || *pat == search_delim_cur as c_char {
-            if nvim_do_search_get_search_pat().is_null() {
-                if nvim_do_search_get_subst_pat().is_null() {
+            if pattern::get_search_pattern().is_null() {
+                if pattern::get_subst_pattern().is_null() {
                     nvim_do_search_emsg_noprevre();
                     retval = 0;
                     break;
                 }
-                searchstr = nvim_do_search_get_subst_pat();
-                searchstrlen = nvim_do_search_get_subst_patlen();
+                searchstr = pattern::get_subst_pattern() as *mut c_char;
+                searchstrlen = pattern::get_subst_pattern_len();
             } else {
                 // make search_regcomp() use spats[RE_SEARCH].pat
                 searchstr = c"".as_ptr() as *mut c_char;
@@ -283,20 +283,20 @@ pub unsafe extern "C" fn rs_do_search(
             }
 
             // Reset offsets
-            nvim_do_search_set_off(0, 0, 0);
+            direction::rs_set_search_offset_line_end_off(0, 0, 0);
 
             // Check for line offset or character offset
             let pc = *p_cur as u8;
             if pc == b'+' || pc == b'-' || ascii_isdigit(pc) {
-                nvim_do_search_set_off(1, 0, 0); // line offset
+                direction::rs_set_search_offset_line_end_off(1, 0, 0); // line offset
             } else if (search_options & options::SEARCH_OPT) != 0
                 && (pc == b'e' || pc == b's' || pc == b'b')
             {
                 if pc == b'e' {
-                    nvim_do_search_set_off(
-                        nvim_do_search_get_off_line(),
+                    direction::rs_set_search_offset_line_end_off(
+                        c_int::from(state::get_spat_off_line(state::RE_SEARCH)),
                         1,
-                        nvim_do_search_get_off_off(),
+                        state::get_spat_off_off(state::RE_SEARCH),
                     );
                 }
                 p_cur = p_cur.add(1);
@@ -311,9 +311,9 @@ pub unsafe extern "C" fn rs_do_search(
                 } else {
                     1i64
                 };
-                nvim_do_search_set_off(
-                    nvim_do_search_get_off_line(),
-                    nvim_do_search_get_off_end(),
+                direction::rs_set_search_offset_line_end_off(
+                    c_int::from(state::get_spat_off_line(state::RE_SEARCH)),
+                    c_int::from(state::get_spat_off_end(state::RE_SEARCH)),
                     off_val,
                 );
                 p_cur = p_cur.add(1);
@@ -339,7 +339,8 @@ pub unsafe extern "C" fn rs_do_search(
         pos_col = pre_off.col;
 
         // Build searchit options
-        let searchit_opts = nvim_do_search_get_off_end() * options::SEARCH_END
+        let searchit_opts = c_int::from(state::get_spat_off_end(state::RE_SEARCH))
+            * options::SEARCH_END
             + (search_options
                 & (options::SEARCH_KEEP
                     | options::SEARCH_PEEK
@@ -421,7 +422,7 @@ pub unsafe extern "C" fn rs_do_search(
             retval = 0;
             // Cleanup echo
             if !echo_result.msgbuf.is_null() {
-                nvim_do_search_echo_free(echo_result.msgbuf);
+                xfree(echo_result.msgbuf as *mut c_void);
             }
             break;
         }
@@ -467,7 +468,7 @@ pub unsafe extern "C" fn rs_do_search(
 
         // Free echo buffer
         if !echo_result.msgbuf.is_null() {
-            nvim_do_search_echo_free(echo_result.msgbuf);
+            xfree(echo_result.msgbuf as *mut c_void);
         }
 
         // Check for chained search (;)
@@ -492,9 +493,15 @@ pub unsafe extern "C" fn rs_do_search(
         nvim_do_search_finish(search_options, pos_lnum, pos_col);
     }
 
-    // Restore spats offset if SEARCH_KEEP
+    // Restore spats offset if SEARCH_KEEP (Rust-native, no C round-trip)
     if (search_options & options::SEARCH_KEEP) != 0 {
-        nvim_do_search_restore_off(saved_off);
+        // restore dir without calling set_vv_searchforward (matching original behavior)
+        direction::set_search_direction_raw(saved_off.dir);
+        direction::rs_set_search_offset_line_end_off(
+            c_int::from(saved_off.line),
+            c_int::from(saved_off.end),
+            saved_off.off,
+        );
     }
 
     // Free strcopy

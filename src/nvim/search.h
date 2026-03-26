@@ -128,14 +128,6 @@ typedef struct {
   int has_offset;   ///< whether offset actually moved pos
 } DoSearchPostOffset;
 
-/// Saved search offset for save/restore across do_search.
-typedef struct {
-  char dir;
-  int line;
-  int end;
-  int64_t off;
-} SavedSearchOff;
-
 /// Result type for find_pattern_in_path batch init helper.
 typedef struct {
   void *handle;  ///< Opaque handle to FpipState (NULL on failure).
