@@ -166,7 +166,7 @@ extern "C" {
     ) -> DiffBlockHandle;
     fn nvim_set_need_diff_redraw(val: bool);
     fn nvim_diff_get_linematch_lines() -> c_int;
-    fn nvim_diff_get_diff_flags() -> c_int;
+    fn nvim_get_diff_flags() -> c_int;
     #[link_name = "diff_redraw"]
     fn rs_diff_redraw(dofold: bool);
     fn nvim_diff_semsg_e96();
@@ -1053,7 +1053,7 @@ pub unsafe extern "C" fn rs_diff_equal_char(
         return false;
     }
 
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
 
     #[allow(clippy::cast_sign_loss)]
     if l > 1 {
@@ -1146,7 +1146,7 @@ pub unsafe extern "C" fn rs_diff_linematch(dp: DiffBlockHandle) -> bool {
         return false;
     }
 
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     if diff_flags & DIFF_LINEMATCH == 0 {
         return false;
     }
@@ -1279,7 +1279,7 @@ pub unsafe extern "C" fn rs_diff_mode_buf(buf: BufHandle) -> bool {
 /// Wrapper for diff_internal() check.
 #[inline]
 unsafe fn diff_internal() -> bool {
-    nvim_diff_get_diff_flags() & DIFF_INTERNAL != 0
+    nvim_get_diff_flags() & DIFF_INTERNAL != 0
 }
 
 /// Called by mark_adjust(): update line numbers in all tabs for "buf".
@@ -1684,7 +1684,7 @@ pub unsafe extern "C" fn rs_diffopt_changed() -> c_int {
     }
 
     // If flags or algorithm changed, invalidate all tabs
-    let old_flags = nvim_diff_get_diff_flags();
+    let old_flags = nvim_get_diff_flags();
     let old_algorithm = nvim_diff_get_algorithm();
     if old_flags != parsed.diff_flags || old_algorithm != parsed.diff_algorithm {
         let mut tp = nvim_get_first_tabpage();
@@ -1714,7 +1714,7 @@ pub unsafe extern "C" fn rs_diffopt_changed() -> c_int {
 pub unsafe extern "C" fn rs_diffanchors_changed(buflocal: bool) -> c_int {
     let curbuf = nvim_get_curbuf();
     let result = rs_parse_diffanchors(true, curbuf, std::ptr::null_mut(), std::ptr::null_mut());
-    if result == OK && (nvim_diff_get_diff_flags() & DIFF_ANCHOR != 0) {
+    if result == OK && (nvim_get_diff_flags() & DIFF_ANCHOR != 0) {
         let mut tp = nvim_get_first_tabpage();
         while !tp.is_null() {
             if buflocal {
@@ -1811,9 +1811,7 @@ extern "C" {
     fn nvim_diff_buf_check_timestamp(buf: BufHandle);
     fn nvim_diff_buf_is_loaded(buf: BufHandle) -> bool;
     fn nvim_diff_curtab_set_first_diff(dp: DiffBlockHandle);
-    fn nvim_diff_curtab_get_first_diff() -> DiffBlockHandle;
     fn nvim_eap_forceit(eap: ExargHandle) -> bool;
-    fn nvim_diff_curtab_diffbuf(idx: c_int) -> BufHandle;
     fn nvim_diff_invalidate_cursor();
     fn nvim_diff_fire_diffupdated();
     fn nvim_is_diffexpr_empty() -> bool;
@@ -2106,7 +2104,7 @@ pub unsafe extern "C" fn rs_process_hunk(
 
         if off > 0 {
             for i in idx_orig..idx_new {
-                if !nvim_diff_curtab_diffbuf(i).is_null() {
+                if !nvim_get_curtab_diffbuf(i).is_null() {
                     let lnum = nvim_diffblock_get_lnum(dp, i);
                     let count = nvim_diffblock_get_count(dp, i);
                     nvim_diffblock_set_lnum(dp, i, lnum - off);
@@ -2151,7 +2149,7 @@ pub unsafe extern "C" fn rs_process_hunk(
         }
 
         for i in idx_orig..idx_new {
-            if !nvim_diff_curtab_diffbuf(i).is_null() {
+            if !nvim_get_curtab_diffbuf(i).is_null() {
                 let dpl_l = nvim_diffblock_get_lnum(dpl, i);
                 let dpl_c = nvim_diffblock_get_count(dpl, i);
                 let dp_l = nvim_diffblock_get_lnum(dp, i);
@@ -2180,7 +2178,7 @@ pub unsafe extern "C" fn rs_process_hunk(
 
         // Set values for other buffers
         for i in (idx_orig + 1)..idx_new {
-            if !nvim_diff_curtab_diffbuf(i).is_null() {
+            if !nvim_get_curtab_diffbuf(i).is_null() {
                 crate::rs_diff_copy_entry(dprev.as_ptr(), dp.as_ptr(), idx_orig, i);
             }
         }
@@ -2199,7 +2197,7 @@ pub unsafe extern "C" fn rs_diff_read(idx_orig: c_int, idx_new: c_int, dio: Diff
     let is_internal = nvim_diffio_is_internal(dio);
     let mut line_hunk_idx: c_int = 0;
     let mut dprev = DiffBlockHandle::null();
-    let mut dp = nvim_diff_curtab_get_first_diff();
+    let mut dp = nvim_get_diff_first_block();
     let mut notset = true;
     let mut diffstyle = DiffStyle::None;
 
@@ -2287,7 +2285,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
     // :diffupdate! — check timestamps
     if nvim_eap_forceit(eap) {
         for idx_new in idx_orig..DB_COUNT {
-            let buf = nvim_diff_curtab_diffbuf(idx_new);
+            let buf = nvim_get_curtab_diffbuf(idx_new);
             if nvim_diff_buf_valid(buf) {
                 nvim_diff_buf_check_timestamp(buf);
             }
@@ -2295,13 +2293,13 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
     }
 
     // Parse and sort diff anchors if enabled
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let mut num_anchors: c_int = i32::MAX;
     let mut anchors = [[0 as LinenrT; MAX_DIFF_ANCHORS_RUST]; DB_COUNT as usize];
 
     if (diff_flags & DIFF_ANCHOR) != 0 {
         for idx in 0..DB_COUNT {
-            let buf = nvim_diff_curtab_diffbuf(idx);
+            let buf = nvim_get_curtab_diffbuf(idx);
             if buf.is_null() {
                 continue;
             }
@@ -2334,7 +2332,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
     for anchor_i in 0..=num_anchors {
         let mut orig_diff = DiffBlockHandle::null();
         if anchor_i != 0 {
-            orig_diff = nvim_diff_curtab_get_first_diff();
+            orig_diff = nvim_get_diff_first_block();
             nvim_diff_curtab_set_first_diff(DiffBlockHandle::null());
         }
 
@@ -2350,7 +2348,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
         };
 
         // Write the first buffer
-        let buf = nvim_diff_curtab_diffbuf(idx_orig);
+        let buf = nvim_get_curtab_diffbuf(idx_orig);
         if nvim_diffio_write_orig(dio, buf, lnum_start, lnum_end) == FAIL {
             if !orig_diff.is_null() {
                 nvim_diff_curtab_set_first_diff(orig_diff);
@@ -2362,7 +2360,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
 
         // Compare with every other buffer
         for idx_new in (idx_orig + 1)..DB_COUNT {
-            let buf = nvim_diff_curtab_diffbuf(idx_new);
+            let buf = nvim_get_curtab_diffbuf(idx_new);
             if buf.is_null() || !nvim_diff_buf_is_loaded(buf) {
                 continue;
             }
@@ -2394,7 +2392,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
 
         if anchor_i != 0 {
             // Combine new diff blocks with existing ones
-            let mut dp = nvim_diff_curtab_get_first_diff();
+            let mut dp = nvim_get_diff_first_block();
             while !dp.is_null() {
                 for idx in 0..DB_COUNT {
                     if anchors[idx as usize][(anchor_i - 1) as usize] > 0 {
@@ -2419,7 +2417,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
                     }
                     last_diff = next;
                 }
-                let cur_first = nvim_diff_curtab_get_first_diff();
+                let cur_first = nvim_get_diff_first_block();
                 nvim_diff_set_next(last_diff, cur_first);
                 nvim_diff_curtab_set_first_diff(orig_diff);
             }
@@ -2444,7 +2442,7 @@ unsafe fn find_top_diff_block(
     let mut localtopdiff = DiffBlockHandle::null();
     let mut topdiffchange = true;
 
-    let mut dp = nvim_diff_curtab_get_first_diff();
+    let mut dp = nvim_get_diff_first_block();
     while !dp.is_null() {
         if localtopdiff.is_null() || topdiffchange {
             localtopdiff = dp;
@@ -2538,7 +2536,7 @@ unsafe fn calculate_topfill_and_topline(
         dp = nvim_diffblock_get_next(dp);
     }
 
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let topfill = if diff_flags & DIFF_FILLER != 0 {
         max_virt_lines - virtual_lines_passed
     } else {
@@ -2611,7 +2609,7 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
     }
 
     // Count filler lines from adjacent blocks
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let mut num_fill: c_int = 0;
     while lnum == nvim_diffblock_get_lnum(dp, idx) + nvim_diffblock_get_count(dp, idx) {
         if diff_flags & DIFF_FILLER != 0 {
@@ -2679,7 +2677,7 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
 /// Check filler lines for "lnum" in window "wp".
 #[no_mangle]
 pub unsafe extern "C" fn rs_diff_check_fill(wp: WinHandle, lnum: LinenrT) -> c_int {
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     if diff_flags & DIFF_FILLER == 0 {
         return 0;
     }
@@ -3035,7 +3033,7 @@ struct DifflineChangeRepr {
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_diff_update_line(lnum: LinenrT) {
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     if (diff_flags & ALL_INLINE_DIFF) == 0 {
         // Only care if doing inline-diff where we cache results
         return;
@@ -3148,7 +3146,7 @@ pub unsafe extern "C" fn rs_diff_find_change_simple(
         return false;
     }
 
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let buf = nvim_win_get_w_buffer(wp);
 
     // Get the original line
@@ -3311,7 +3309,7 @@ pub unsafe extern "C" fn rs_diff_find_change(
     }
 
     let off = lnum - nvim_diffblock_get_lnum(dp, idx);
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
 
     if (diff_flags & ALL_INLINE_DIFF) == 0 {
         // Simple algorithm
@@ -3459,7 +3457,7 @@ pub unsafe extern "C" fn rs_diff_ex_diffupdate(eap: ExargHandle) {
         if idx_new < DB_COUNT {
             // Only use the internal method if it did not fail for one of the buffers.
             let use_internal =
-                (nvim_diff_get_diff_flags() & DIFF_INTERNAL) != 0 && nvim_is_diffexpr_empty();
+                (nvim_get_diff_flags() & DIFF_INTERNAL) != 0 && nvim_is_diffexpr_empty();
             let dio = nvim_diffio_new(use_internal);
 
             rs_diff_try_update(dio, idx_orig, eap);
@@ -3495,7 +3493,7 @@ extern "C" {
     fn nvim_diff_emsg_invrange();
     fn nvim_diff_semsg_too_many_anchors(max: c_int);
     fn nvim_diff_get_firstwin() -> WinHandle;
-    fn nvim_win_get_w_p_diff_bool(wp: WinHandle) -> bool;
+    fn nvim_win_get_w_p_diff(wp: WinHandle) -> bool;
     fn nvim_diff_emsg(msg: *const c_char);
 }
 
@@ -3553,7 +3551,7 @@ pub unsafe extern "C" fn rs_parse_diffanchors(
         let mut w = nvim_diff_get_firstwin();
         let mut found = WinHandle::null();
         while !w.is_null() {
-            if nvim_win_get_w_buffer(w) == buf && nvim_win_get_w_p_diff_bool(w) {
+            if nvim_win_get_w_buffer(w) == buf && nvim_win_get_w_p_diff(w) {
                 found = w;
                 break;
             }

@@ -93,7 +93,7 @@ extern "C" {
 
     // Global diff state
     fn nvim_get_curtab() -> TabpageHandle;
-    fn nvim_diff_get_diff_flags() -> c_int;
+    fn nvim_get_diff_flags() -> c_int;
     fn nvim_diff_get_need_update() -> bool;
     fn nvim_diff_set_need_update(val: bool);
     fn nvim_tabpage_set_diff_invalid(tp: TabpageHandle, val: c_int);
@@ -177,7 +177,7 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
     nvim_win_set_w_p_crb(wp, true);
 
     // wrap (only when not DIFF_FOLLOWWRAP)
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     if diff_flags & DIFF_FOLLOWWRAP == 0 {
         if not_yet_in_diff {
             nvim_win_set_w_p_wrap_save(wp, nvim_win_get_w_p_wrap(wp));
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
                     nvim_win_set_w_p_crb(wp, nvim_win_get_w_p_crb_save(wp));
                 }
                 // Restore wrap
-                let diff_flags = nvim_diff_get_diff_flags();
+                let diff_flags = nvim_get_diff_flags();
                 if diff_flags & DIFF_FOLLOWWRAP == 0
                     && !nvim_win_get_w_p_wrap(wp)
                     && nvim_win_get_w_p_wrap_save(wp)
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
     // don't use a new tab page, each tab page has its own diffs
     nvim_diff_set_cmdmod_tab_zero();
 
-    let split_flags = if nvim_diff_get_diff_flags() & DIFF_VERTICAL != 0 {
+    let split_flags = if nvim_get_diff_flags() & DIFF_VERTICAL != 0 {
         WSP_VERT
     } else {
         0

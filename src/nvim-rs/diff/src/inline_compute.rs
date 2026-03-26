@@ -52,7 +52,7 @@ struct LinemapEntry {
 // ============================================================================
 
 extern "C" {
-    fn nvim_diff_get_diff_flags() -> c_int;
+    fn nvim_get_diff_flags() -> c_int;
     fn nvim_diff_get_algorithm() -> c_int;
     fn nvim_diff_set_options(
         flags: c_int,
@@ -65,9 +65,9 @@ extern "C" {
     fn nvim_diff_get_linematch_lines() -> c_int;
     fn nvim_diff_get_foldcolumn() -> c_int;
 
-    fn nvim_diff_curtab_get_first_diff() -> DiffBlockHandle;
+    fn nvim_get_diff_first_block() -> DiffBlockHandle;
     fn nvim_diff_curtab_set_first_diff(dp: DiffBlockHandle);
-    fn nvim_diff_curtab_diffbuf(idx: c_int) -> BufHandle;
+    fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
     fn nvim_curtab_set_diffbuf(idx: c_int, buf: BufHandle);
 
     fn nvim_diff_buf_is_loaded(buf: BufHandle) -> bool;
@@ -447,7 +447,7 @@ unsafe fn refine_pass(
 unsafe fn write_changes(dp: DiffBlockHandle, linemaps: &[Vec<LinemapEntry>]) {
     nvim_diffblock_reset_changes_len(dp);
 
-    let mut cur_diff = nvim_diff_curtab_get_first_diff();
+    let mut cur_diff = nvim_get_diff_first_block();
     while !cur_diff.is_null() {
         let mut dc_start = [0i32; DB_COUNT as usize];
         let mut dc_end = [0i32; DB_COUNT as usize];
@@ -518,7 +518,7 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
         return;
     }
 
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let save_algorithm = nvim_diff_get_algorithm();
     let save_context = nvim_diff_get_context();
     let save_linematch = nvim_diff_get_linematch_lines();
@@ -534,11 +534,11 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
     );
 
     // Save curtab scratch state (tp_first_diff and tp_diffbuf)
-    let orig_first_diff = nvim_diff_curtab_get_first_diff();
+    let orig_first_diff = nvim_get_diff_first_block();
     nvim_diff_curtab_set_first_diff(DiffBlockHandle::null());
     let mut orig_diffbuf = [BufHandle::null(); DB_COUNT as usize];
     for i in 0..DB_COUNT {
-        orig_diffbuf[i as usize] = nvim_diff_curtab_diffbuf(i);
+        orig_diffbuf[i as usize] = nvim_get_curtab_diffbuf(i);
     }
 
     let dio = nvim_diffio_new(true);
@@ -550,7 +550,7 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
     let mut failed = false;
 
     for i in 0..DB_COUNT {
-        let buf = nvim_diff_curtab_diffbuf(i);
+        let buf = nvim_get_curtab_diffbuf(i);
         if buf.is_null() || !nvim_diff_buf_is_loaded(buf) {
             continue;
         }
@@ -587,7 +587,7 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
     }
 
     // Refinement for char mode
-    let new_diff = nvim_diff_curtab_get_first_diff();
+    let new_diff = nvim_get_diff_first_block();
     if (diff_flags & DIFF_INLINE_CHAR) != 0 && file1_idx != -1 && !new_diff.is_null() {
         refine_inline_char_highlight(new_diff, &linemaps, file1_idx);
     }

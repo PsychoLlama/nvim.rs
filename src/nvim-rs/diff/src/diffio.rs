@@ -156,7 +156,7 @@ extern "C" {
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 
     // Diff flags and algorithm accessors
-    fn nvim_diff_get_diff_flags() -> c_int;
+    fn nvim_get_diff_flags() -> c_int;
     fn nvim_diff_get_algorithm() -> c_int;
 
     // Diffio mmfile accessors (from diff_shim.c)
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn rs_diff_write_buffer(
 /// `dio` must be a valid, non-null diffio handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_diff_file_internal(dio: DiffioHandle) -> c_int {
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let diff_algorithm = nvim_diff_get_algorithm();
 
     let mut param = XpParam::default();
@@ -477,7 +477,7 @@ pub unsafe extern "C" fn rs_diff_run_external_shell(dio: DiffioHandle) -> c_int 
     nvim_diff_env_clear_diff_options();
 
     // Build the diff command string
-    let diff_flags = nvim_diff_get_diff_flags();
+    let diff_flags = nvim_get_diff_flags();
     let a_works = nvim_diff_get_a_works();
 
     let a_flag = if a_works == K_FALSE_A { "" } else { "-a " };

@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_diff_emsg_prev_dir();
 
     // Window / ex command
-    fn nvim_diff_get_diff_flags() -> c_int;
+    fn nvim_get_diff_flags() -> c_int;
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_diff_get_curwin() -> WinHandle;
     fn nvim_diff_set_cmdmod_tab_zero();
@@ -235,7 +235,7 @@ unsafe fn ex_diffpatch_body(
     // Don't use a new tab page; each tab page has its own diffs.
     nvim_diff_set_cmdmod_tab_zero();
 
-    let split_flags = if nvim_diff_get_diff_flags() & DIFF_VERTICAL != 0 {
+    let split_flags = if nvim_get_diff_flags() & DIFF_VERTICAL != 0 {
         WSP_VERT
     } else {
         0

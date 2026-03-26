@@ -179,7 +179,6 @@ void nvim_diffblock_clear_and_free(diff_T *dp) { if (dp != NULL) { ga_clear(&dp-
 void nvim_diffblock_init_new(diff_T *dp) { if (dp != NULL) { dp->is_linematched = false; dp->has_changes = false; ga_init(&dp->df_changes, sizeof(diffline_change_T), 20); } }
 void nvim_set_need_diff_redraw(bool val) { need_diff_redraw = val; }
 int nvim_diff_get_linematch_lines(void) { return linematch_lines; }
-int nvim_diff_get_diff_flags(void) { return diff_flags; }
 void nvim_diff_semsg_e96(void) { semsg(_("E96: Cannot diff more than %" PRId64 " buffers"), (int64_t)DB_COUNT); }
 void nvim_redraw_later_win(win_T *wp, int type) { if (wp != NULL) { redraw_later(wp, type); } }
 win_T *nvim_tabpage_first_win(tabpage_T *tp) { if (tp == NULL) { return NULL; } if (tp == curtab) { return firstwin; } return tp->tp_firstwin; }
@@ -223,9 +222,7 @@ bool nvim_diff_buf_valid(buf_T *buf) { return buf_valid(buf); }
 void nvim_diff_buf_check_timestamp(buf_T *buf) { if (buf != NULL) { buf_check_timestamp(buf); } }
 bool nvim_diff_buf_is_loaded(buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
 void nvim_diff_curtab_set_first_diff(diff_T *dp) { curtab->tp_first_diff = dp; }
-diff_T *nvim_diff_curtab_get_first_diff(void) { return curtab->tp_first_diff; }
 bool nvim_eap_forceit(const exarg_T *eap) { return eap != NULL && eap->forceit; }
-buf_T *nvim_diff_curtab_diffbuf(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
 void nvim_diff_invalidate_cursor(void) { curwin->w_valid_cursor.lnum = 0; }
 void nvim_diff_fire_diffupdated(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }
 bool nvim_diff_get_need_update(void) { return diff_need_update; }
@@ -373,9 +370,7 @@ int nvim_diff_get_CMD_diffput(void) { return (int)CMD_diffput; }
 linenr_T nvim_diff_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 bool nvim_diff_curtab_first_diff_is_null(void) { return curtab->tp_first_diff == NULL; }
 bool nvim_diff_win_get_w_p_fdm_starts_d(win_T *wp) { return wp->w_p_fdm[0] == 'd'; }
-buf_T *nvim_diff_get_curtab_diffbuf_idx(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
 bool nvim_diff_curbuf_is_curtab_diffbuf(int idx_to) { if (idx_to < 0 || idx_to >= DB_COUNT) { return false; } return rs_diff_buf_idx_tp(curbuf, curtab) == idx_to; }
-void nvim_diff_fire_diffupdated_curbuf(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }
 const char *nvim_diff_get_buf_dia(buf_T *buf) { return buf->b_p_dia; }
 const char *nvim_diff_get_p_dia(void) { return p_dia; }
 void nvim_diff_set_curwin_curbuf(win_T *wp) { curwin = wp; curbuf = wp->w_buffer; }
@@ -385,7 +380,6 @@ void nvim_diff_emsg_hidden_diff_anchors(void) { emsg(_(e_diff_anchors_with_hidde
 void nvim_diff_emsg_invrange(void) { emsg(_(e_invrange)); }
 void nvim_diff_semsg_too_many_anchors(int max) { semsg(_(e_cannot_have_more_than_nr_diff_anchors), max); }
 win_T *nvim_diff_get_firstwin(void) { return firstwin; }
-bool nvim_win_get_w_p_diff_bool(win_T *wp) { return wp->w_p_diff; }
 void nvim_diff_emsg(const char *msg) { emsg(msg); }
 char *nvim_diff_vim_tempname(void) { return vim_tempname(); }
 int nvim_diff_buf_write_curbuf(const char *fname) { return buf_write(curbuf, (char *)fname, NULL, 1, curbuf->b_ml.ml_line_count, NULL, false, false, false, true); }

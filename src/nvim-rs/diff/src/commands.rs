@@ -86,7 +86,6 @@ extern "C" {
     fn nvim_diff_ml_get_buf_diffbuf(idx: c_int, nr: LinenrT) -> *const c_char;
     fn nvim_diff_diffbuf_ml_line_count(idx: c_int) -> LinenrT;
     fn nvim_diff_maxlnum() -> LinenrT;
-    fn nvim_diff_curtab_get_first_diff() -> DiffBlockHandle;
     fn nvim_diffblock_set_count(dp: DiffBlockHandle, idx: c_int, count: LinenrT);
     fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
     fn nvim_diff_xstrdup(s: *const c_char) -> *mut c_char;
@@ -96,9 +95,8 @@ extern "C" {
     fn nvim_diff_curbuf_ml_line_count() -> LinenrT;
     fn nvim_diff_curtab_first_diff_is_null() -> bool;
     fn nvim_diff_win_get_w_p_fdm_starts_d(wp: WinHandle) -> bool;
-    fn nvim_diff_get_curtab_diffbuf_idx(idx: c_int) -> BufHandle;
     fn nvim_diff_curbuf_is_curtab_diffbuf(idx_to: c_int) -> bool;
-    fn nvim_diff_fire_diffupdated_curbuf();
+    fn nvim_diff_fire_diffupdated();
     fn nvim_diff_set_busy(val: bool);
     fn nvim_diff_get_need_update() -> bool;
     fn nvim_diff_set_need_update(val: bool);
@@ -662,7 +660,7 @@ unsafe fn diffgetput_resolve_auto(
     let mut found = DB_COUNT;
     let mut o = 0;
     while o < DB_COUNT {
-        let diffbuf = nvim_diff_get_curtab_diffbuf_idx(o);
+        let diffbuf = nvim_get_curtab_diffbuf(o);
         if !diffbuf.is_null() && diffbuf != curbuf {
             if cmdidx != cmd_diffput || nvim_diff_buf_is_modifiable(diffbuf) {
                 found = o;
@@ -685,7 +683,7 @@ unsafe fn diffgetput_resolve_auto(
     // Check that there isn't a third qualifying buffer in the list.
     let mut i = found + 1;
     while i < DB_COUNT {
-        let diffbuf = nvim_diff_get_curtab_diffbuf_idx(i);
+        let diffbuf = nvim_get_curtab_diffbuf(i);
         if !diffbuf.is_null()
             && diffbuf != curbuf
             && (cmdidx != cmd_diffput || nvim_diff_buf_is_modifiable(diffbuf))
@@ -851,7 +849,7 @@ unsafe fn diffgetput_cleanup() {
     } else {
         // Also need to redraw the other buffers.
         rs_diff_redraw(false);
-        nvim_diff_fire_diffupdated_curbuf();
+        nvim_diff_fire_diffupdated();
     }
 }
 
@@ -886,7 +884,7 @@ pub unsafe extern "C" fn rs_diffgetput(
 
     let mut off: LinenrT = 0;
     let mut dprev = DiffBlockHandle::null();
-    let mut dp = nvim_diff_curtab_get_first_diff();
+    let mut dp = nvim_get_diff_first_block();
 
     while !dp.is_null() {
         if addr_count == 0 {
