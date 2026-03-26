@@ -1,9 +1,3 @@
-/// change_ffi.c: C accessor wrappers for the Rust change crate (nvim-change).
-///
-/// These thin wrappers provide a stable C ABI for Rust code to call into
-/// Neovim's C internals.  Each function is called from one or more Rust
-/// modules in src/nvim-rs/change/.
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -59,10 +53,6 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
-// =============================================================================
-// Buffer field accessors
-// =============================================================================
-
 bool nvim_buf_get_b_changed_invalid(buf_T *buf) { return buf->b_changed_invalid; }
 void nvim_buf_set_b_changed(buf_T *buf, bool val) { buf->b_changed = val; }
 void nvim_buf_set_b_changed_invalid(buf_T *buf, bool val) { buf->b_changed_invalid = val; }
@@ -74,7 +64,6 @@ int nvim_buf_get_b_flags(buf_T *buf) { return buf->b_flags; }
 void nvim_buf_set_b_flags(buf_T *buf, int val) { buf->b_flags = val; }
 linenr_T nvim_buf_get_b_ml_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
-// Modification tracking fields
 bool nvim_buf_get_b_mod_set(buf_T *buf) { return buf->b_mod_set; }
 void nvim_buf_set_b_mod_set(buf_T *buf, bool val) { buf->b_mod_set = val; }
 linenr_T nvim_buf_get_b_mod_top(buf_T *buf) { return buf->b_mod_top; }
@@ -84,7 +73,6 @@ void nvim_buf_set_b_mod_bot(buf_T *buf, linenr_T val) { buf->b_mod_bot = val; }
 linenr_T nvim_buf_get_b_mod_xlines(buf_T *buf) { return buf->b_mod_xlines; }
 void nvim_buf_set_b_mod_xlines(buf_T *buf, linenr_T val) { buf->b_mod_xlines = val; }
 
-// File format fields
 char nvim_buf_get_b_start_ffc(buf_T *buf) { return (char)buf->b_start_ffc; }
 void nvim_buf_set_b_start_ffc(buf_T *buf, char val) { buf->b_start_ffc = (unsigned char)val; }
 bool nvim_buf_get_b_start_eof(buf_T *buf) { return buf->b_start_eof; }
@@ -104,13 +92,8 @@ bool nvim_buf_get_b_p_fixeol(buf_T *buf) { return buf->b_p_fixeol; }
 const char *nvim_buf_get_b_p_fenc(buf_T *buf) { return buf->b_p_fenc; }
 bool nvim_buf_get_ml_empty(buf_T *buf) { return buf->b_ml.ml_flags & ML_EMPTY; }
 
-// Marktree accessors
 int nvim_buf_marktree_n_keys(buf_T *buf) { return (int)buf->b_marktree->n_keys; }
 int nvim_buf_meta_total(buf_T *buf, int meta_type) { return (int)buf_meta_total(buf, meta_type); }
-
-// =============================================================================
-// Global state accessors
-// =============================================================================
 
 bool nvim_get_autocmd_busy(void) { return autocmd_busy; }
 int nvim_get_highlight_match(void) { return highlight_match; }
@@ -118,32 +101,15 @@ int nvim_curbufIsChanged(void) { return curbufIsChanged(); }
 int nvim_msg_silent(void) { return msg_silent; }
 bool nvim_silent_mode(void) { return silent_mode; }
 bool nvim_in_assert_fails(void) { return in_assert_fails; }
-// nvim_get_msg_row exists in message.c
-
-// =============================================================================
-// Message functions
-// =============================================================================
 
 void nvim_msg_source(int attr) { msg_source(attr); }
 void nvim_msg_ext_set_kind(const char *kind) { msg_ext_set_kind(kind); }
 void nvim_msg_puts_hl(const char *msg, int attr, bool right) { msg_puts_hl(msg, attr, right); }
 void nvim_msg_clr_eos(void) { msg_clr_eos(); }
 
-// =============================================================================
-// Eval/variable functions
-// =============================================================================
-
 void nvim_set_vim_var_string(int idx, const char *val, int len) { set_vim_var_string(idx, val, len); }
 
-// =============================================================================
-// Redraw functions
-// =============================================================================
-
 void nvim_redraw_buf_status_later(buf_T *buf) { redraw_buf_status_later(buf); }
-
-// =============================================================================
-// Memline functions
-// =============================================================================
 
 void nvim_ml_setflags(buf_T *buf) { ml_setflags(buf); }
 void nvim_ml_open_file(buf_T *buf) { ml_open_file(buf); }
@@ -156,35 +122,18 @@ int nvim_ml_append(linenr_T lnum, const char *line, colnr_T len, bool newfile)
 }
 void nvim_ml_add_deleted_len(char *ptr, colnr_T len) { ml_add_deleted_len(ptr, len); }
 
-// =============================================================================
-// Buffer changedtick
-// =============================================================================
-
 void nvim_buf_inc_changedtick(buf_T *buf) { buf_inc_changedtick(buf); }
-
-// =============================================================================
-// Autocmd wrappers
-// =============================================================================
 
 void nvim_apply_autocmds_filechangedro(buf_T *buf)
 {
   apply_autocmds(EVENT_FILECHANGEDRO, NULL, NULL, false, buf);
 }
 
-// =============================================================================
-// UI / timing
-// =============================================================================
-
 void nvim_ui_flush(void) { ui_flush(); }
 void nvim_os_delay(long ms, bool allow_input) { os_delay((uint64_t)ms, allow_input); }
 void nvim_wait_return(bool redraw) { wait_return(redraw); }
 
-// =============================================================================
-// String utilities
-// =============================================================================
-
 int nvim_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
-// nvim_xmalloc exists in register.c
 char *nvim_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
 void nvim_xmemcpyz(char *dest, const char *src, size_t len) { xmemcpyz(dest, src, len); }
 size_t nvim_strlen(const char *s) { return strlen(s); }
@@ -193,10 +142,6 @@ int nvim_strncmp(const char *s1, const char *s2, size_t n) { return strncmp(s1, 
 void nvim_strmove(char *dest, const char *src) { STRMOVE(dest, src); }
 char *nvim_concat_str(const char *s1, const char *s2) { return concat_str(s1, s2); }
 const char *nvim_gettext(const char *s) { return _(s); }
-
-// =============================================================================
-// Multibyte / charset functions
-// =============================================================================
 
 int nvim_utfc_ptr2len_len(const char *ptr, int maxlen) { return utfc_ptr2len_len(ptr, maxlen); }
 int nvim_utf_char2bytes(int c, char *buf) { return utf_char2bytes(c, buf); }
@@ -208,18 +153,10 @@ bool nvim_utf_composinglike(const char *p0, const char *p1, uint64_t *state)
 int nvim_ptr2cells(const char *p) { return ptr2cells(p); }
 int nvim_vim_strnsize(const char *s, int len) { return vim_strnsize(s, len); }
 
-// =============================================================================
-// Cursor / window state
-// =============================================================================
-
-// nvim_get_cursor_pos_ptr exists in edit.c
 char *nvim_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
-
-// nvim_mb_adjust_cursor exists in mbyte.c
 void nvim_check_cursor_lnum(win_T *win) { check_cursor_lnum(win); }
 
 // Curwin cursor accessors (used by open_line.rs)
-// Returns pos_T by value (the existing nvim_get_curwin_cursor in undo.c uses out-params)
 pos_T nvim_change_get_curwin_cursor(void) { return curwin->w_cursor; }
 void nvim_set_curwin_cursor(pos_T pos) { curwin->w_cursor = pos; }
 void nvim_set_curwin_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
@@ -227,17 +164,9 @@ colnr_T nvim_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 void nvim_set_curwin_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 void nvim_set_curwin_cursor_coladd(colnr_T coladd) { curwin->w_cursor.coladd = coladd; }
 
-// =============================================================================
-// Insert/Replace mode functions
-// =============================================================================
-
 void nvim_replace_push(const char *ptr, size_t len) { replace_push(ptr, len); }
 void nvim_replace_push_nul(void) { replace_push_nul(); }
 void nvim_showmatch(int c) { showmatch(c); }
-
-// =============================================================================
-// Option / global getters
-// =============================================================================
 
 bool nvim_p_sm(void) { return p_sm; }
 bool nvim_p_ri(void) { return p_ri; }
@@ -245,13 +174,8 @@ bool nvim_p_deco(void) { return p_deco; }
 bool nvim_p_paste(void) { return p_paste; }
 bool nvim_p_sr(void) { return p_sr; }
 
-// nvim_get_state exists in cursor_shape.c
 void nvim_set_state(int state) { State = state; }
 int nvim_change_get_ve_flags(win_T *win) { return get_ve_flags(win); }
-
-// =============================================================================
-// Win chartabsize
-// =============================================================================
 
 colnr_T nvim_win_chartabsize(win_T *wp, const char *ptr, colnr_T vcol)
 {
@@ -263,10 +187,6 @@ bool nvim_vim_strchr_cpo_dollar(void) { return vim_strchr(p_cpo, CPO_DOLLAR) != 
 
 void nvim_siemsg(const char *s, int64_t arg) { siemsg(s, arg); }
 void nvim_siemsg_str(const char *s, const char *arg) { siemsg(s, arg); }
-
-// =============================================================================
-// Curbuf field accessors (no buf_T* parameter)
-// =============================================================================
 
 int nvim_curbuf_get_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 colnr_T nvim_curbuf_get_ml_line_len(void) { return curbuf->b_ml.ml_line_len; }
@@ -283,22 +203,6 @@ int64_t nvim_curbuf_get_b_p_sw(void) { return curbuf->b_p_sw; }
 const colnr_T *nvim_curbuf_get_b_p_vts_array(void) { return curbuf->b_p_vts_array; }
 const char *nvim_curbuf_get_b_p_inde_ptr(void) { return curbuf->b_p_inde; }
 char *nvim_curbuf_get_b_p_com(void) { return curbuf->b_p_com; }
-
-// =============================================================================
-// Diff functions
-// =============================================================================
-
-
-// =============================================================================
-// Spell
-// =============================================================================
-
-// nvim_spell_check_window exists in undo.c
-// nvim_redrawWinline exists in undo.c
-
-// =============================================================================
-// Tab/window iteration
-// =============================================================================
 
 /// Iterator for FOR_ALL_TAB_WINDOWS - returns an opaque handle.
 /// Usage: start → next (until NULL) → end.
@@ -349,21 +253,12 @@ void nvim_for_all_tab_windows_end(void *handle)
   xfree(handle);
 }
 
-// Curtab iteration (windows within current tab)
-// nvim_get_curtab exists in window.c
 win_T *nvim_curtab_first_win(void) { return firstwin; }
 win_T *nvim_win_get_next_in_tab(win_T *wp) { return wp->w_next; }
-// nvim_win_get_p_diff exists in window.c
-
-// =============================================================================
-// Window invalidation helpers
-// =============================================================================
 
 void nvim_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_approximate_botline_win(win_T *wp) { approximate_botline_win(wp); }
-// nvim_changed_cline_bef_curs exists in move.c
 
-// Window w_lines[] array accessors
 bool nvim_win_get_lines_wl_valid(win_T *wp, int idx) { return wp->w_lines[idx].wl_valid; }
 void nvim_win_set_lines_wl_valid(win_T *wp, int idx, bool val) { wp->w_lines[idx].wl_valid = val; }
 linenr_T nvim_win_get_lines_wl_lnum(win_T *wp, int idx) { return wp->w_lines[idx].wl_lnum; }
@@ -372,10 +267,6 @@ linenr_T nvim_win_get_lines_wl_foldend(win_T *wp, int idx) { return wp->w_lines[
 void nvim_win_set_lines_wl_foldend(win_T *wp, int idx, linenr_T val) { wp->w_lines[idx].wl_foldend = val; }
 linenr_T nvim_win_get_lines_wl_lastlnum(win_T *wp, int idx) { return wp->w_lines[idx].wl_lastlnum; }
 void nvim_win_set_lines_wl_lastlnum(win_T *wp, int idx, linenr_T val) { wp->w_lines[idx].wl_lastlnum = val; }
-
-// =============================================================================
-// Extmark / mark functions
-// =============================================================================
 
 void nvim_extmark_splice_cols(buf_T *buf, int start_row, colnr_T start_col,
                               colnr_T old_col, colnr_T new_col, int undo)
@@ -409,17 +300,9 @@ void nvim_mark_col_adjust(linenr_T lnum, colnr_T col,
   mark_col_adjust(lnum, col, amount_lnum, amount_col, spaces_removed);
 }
 
-// =============================================================================
-// Undo functions
-// =============================================================================
-
 void nvim_u_clearline(void) { u_clearline(curbuf); }
 int nvim_u_save_cursor(void) { return u_save_cursor(); }
 int nvim_u_savedel(linenr_T lnum, linenr_T count) { return u_savedel(lnum, count); }
-
-// =============================================================================
-// open_line support: smartindent / autoindent globals
-// =============================================================================
 
 bool nvim_may_do_si(void) { return may_do_si(); }
 bool nvim_get_did_si(void) { return did_si; }
@@ -442,16 +325,9 @@ void nvim_set_vr_lines_changed(int val) { vr_lines_changed = val; }
 int nvim_get_inhibit_delete_count(void) { return inhibit_delete_count; }
 void nvim_set_inhibit_delete_count(int val) { inhibit_delete_count = val; }
 
-// Cmdmod
-// nvim_get_cmdmod_cmod_flags exists in buffer.c
 void nvim_set_cmdmod_cmod_flags(int val) { cmdmod.cmod_flags = val; }
 
-// =============================================================================
-// Indent / format helpers
-// =============================================================================
-
 bool nvim_has_format_option(int opt) { return has_format_option(opt); }
-// nvim_in_cinkeys exists in indent_c.c
 bool nvim_cin_is_cinword(const char *line) { return cin_is_cinword(line); }
 pos_T *nvim_findmatch(char *initc, char ch) { return findmatch((oparg_T *)initc, ch); }
 int nvim_indent_size_ts(const char *ptr, colnr_T ts, const colnr_T *vts_array)
@@ -461,9 +337,7 @@ int nvim_indent_size_ts(const char *ptr, colnr_T ts, const colnr_T *vts_array)
 int nvim_get_indent(void) { return get_indent(); }
 bool nvim_set_indent(int size, int flags) { return set_indent(size, flags); }
 bool nvim_copy_indent(int size, const char *src) { return copy_indent(size, (char *)src); }
-// nvim_get_sw_value exists in fold.c (takes buf_T*) - we add a curbuf wrapper
 int nvim_change_get_sw_value(void) { return get_sw_value(curbuf); }
-// nvim_getwhitecols_curline exists in buffer.c
 bool nvim_linewhite(linenr_T lnum) { return linewhite(lnum); }
 void nvim_truncate_spaces(char *line, size_t col) { truncate_spaces(line, col); }
 int nvim_get_leader_len(const char *line, char **flags, bool backward, bool include_space)
@@ -476,19 +350,9 @@ size_t nvim_change_copy_option_part(char **option, char *buf, int maxlen, const 
   return copy_option_part(option, buf, maxlen, (char *)sep);
 }
 
-// =============================================================================
-// String / character helpers for open_line
-// =============================================================================
-
-/// Skip whitespace at the beginning of a string (wrapper for skipwhite).
 char *nvim_skipwhite(const char *s) { return skipwhite(s); }
 bool nvim_change_ascii_iswhite(int c) { return ascii_iswhite(c); }
-/// Find a character in a string (wrapper for vim_strchr).
 char *nvim_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
-
-// =============================================================================
-// Indent expression / lisp
-// =============================================================================
 
 bool nvim_use_indentexpr_for_lisp(void) { return use_indentexpr_for_lisp(); }
 void nvim_fixthisline(const void *get_indent_fn)
@@ -498,71 +362,38 @@ void nvim_fixthisline(const void *get_indent_fn)
 int nvim_get_lisp_indent(void) { return get_lisp_indent(); }
 void nvim_do_c_expr_indent(void) { do_c_expr_indent(); }
 
-// =============================================================================
-// Prompt
-// =============================================================================
-
 const char *nvim_prompt_text(void) { return prompt_text(); }
-// nvim_bt_prompt exists in undo.c (takes buf_T*) - we add a curbuf wrapper
 bool nvim_change_bt_prompt(void) { return bt_prompt(curbuf); }
 linenr_T nvim_get_curbuf_b_prompt_start_mark_lnum(void)
 {
   return curbuf->b_prompt_start.mark.lnum;
 }
 
-// =============================================================================
-// Misc open_line wrappers
-// =============================================================================
-
-// nvim_get_cursor_line_len exists in normal.c
-// nvim_coladvance_force exists in cursor.c (returns int)
-// nvim_getviscol exists in undo.c
 bool nvim_change_virtual_active(win_T *win) { return virtual_active(win); }
-// nvim_win_get_cursor_coladd exists in window.c
-// nvim_win_set_cursor_coladd exists in editing.rs extern declarations (using window.c version)
-// nvim_utf_iscomposing_first exists in digraph.c
 
-// changed_bytes/ins_bytes wrappers for open_line.rs
 void nvim_changed_bytes(linenr_T lnum, colnr_T col) { changed_bytes(lnum, col); }
 void nvim_ins_bytes(const char *p) { ins_bytes((char *)p); }
 
-// =============================================================================
-// Shared accessors relocated from fold_shim.c
-// =============================================================================
-
-/// Get a line from a buffer (wrapper for ml_get_buf).
 char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
 
-/// Wrapper for changed_lines for Rust.
 void nvim_changed_lines(buf_T *buf, linenr_T first, int col, linenr_T last, linenr_T xtra,
                         bool add_undo)
 {
   changed_lines(buf, first, col, last, xtra, add_undo);
 }
 
-/// Wrapper for buf_updates_send_changes for Rust.
 void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_added,
                                    int64_t num_removed)
 {
   buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
 }
 
-/// Call changed_window_setting for a window.
 void nvim_changed_window_setting(win_T *wp) { changed_window_setting(wp); }
-
-/// Redraw buffer later.
 void nvim_redraw_buf_later(buf_T *buf, int redraw_type) { redraw_buf_later(buf, redraw_type); }
-
-/// Redraw the current buffer later.
 void nvim_redraw_curbuf_later(int redraw_type) { redraw_curbuf_later(redraw_type); }
-
-/// Call line_breakcheck.
 void nvim_line_breakcheck(void) { line_breakcheck(); }
-
-/// Get the number of screen lines for a physical line (no fold consideration).
 int nvim_plines_win_nofold(win_T *wp, linenr_T lnum) { return plines_win_nofold(wp, lnum); }
 
-/// Get offset of last comment leader in line (returns -1 if none).
 int nvim_get_last_leader_offset(const char *line, char **flags)
 {
   return get_last_leader_offset((char *)line, flags);
