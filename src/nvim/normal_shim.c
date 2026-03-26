@@ -770,7 +770,6 @@ int nvim_get_curwin_ml_line_count(void) { return curwin->w_buffer->b_ml.ml_line_
 static char *nvim_mps_save = NULL;
 void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_mps = "(:),{:},[:],<:>"; }
 void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
-bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar) { return current_quote(oap, count, include, (char)quotechar); }
 
 void nvim_u_clearline_curbuf(void) { u_clearline(curbuf); }
 void nvim_changed_lines_call(int lnum, int col, int lnum_end, bool do_concealed) { changed_lines(curbuf, (linenr_T)lnum, (colnr_T)col, (linenr_T)lnum_end, 0, do_concealed); }

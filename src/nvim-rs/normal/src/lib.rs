@@ -3286,11 +3286,11 @@ extern "C" {
     fn nvim_save_and_set_mps();
     fn nvim_restore_mps();
     fn current_tagblock(oap: OapHandle, count: c_int, include: bool) -> bool;
-    fn nvim_current_quote_call(
+    fn current_quote(
         oap: OapHandle,
         count: c_int,
         include: bool,
-        quotechar: c_int,
+        quotechar: std::ffi::c_char,
     ) -> bool;
 
     // Text object functions (now exported directly from textobject crate)
@@ -3398,7 +3398,10 @@ pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
         n if n == c_int::from(b'p') => rs_current_par(oap, count1, include, c_int::from(b'p')) != 0,
         n if n == c_int::from(b's') => rs_current_sent(oap, count1, include) != 0,
         n if n == c_int::from(b'"') || n == c_int::from(b'\'') || n == c_int::from(b'`') => {
-            nvim_current_quote_call(oap, count1, include, nchar)
+            // SAFETY: nchar is a quote char ('"', '\'', '`'), fits in c_char.
+            #[allow(clippy::cast_possible_truncation)]
+            let quotechar = nchar as std::ffi::c_char;
+            current_quote(oap, count1, include, quotechar)
         }
         _ => false,
     };
