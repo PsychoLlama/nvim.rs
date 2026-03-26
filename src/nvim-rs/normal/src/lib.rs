@@ -3324,7 +3324,7 @@ extern "C" {
     );
     fn nvim_pos_to_mark_cursor() -> FmarkHandle;
     fn nvim_getnextmark_call(fm: FmarkHandle, dir: c_int, begin_line: c_int) -> FmarkHandle;
-    fn do_mouse(oap: OapHandle, nchar: c_int, dir: c_int, count1: i64);
+    fn do_mouse(oap: OapHandle, nchar: c_int, dir: c_int, count1: c_int, fixindent: bool);
     fn spell_move_to(
         wp: WinHandle,
         dir: c_int,
@@ -3740,7 +3740,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         } else {
             BACKWARD
         };
-        do_mouse(oap, nchar, dir, nvim_cap_get_count1(cap) as i64);
+        do_mouse(oap, nchar, dir, nvim_cap_get_count1(cap), false);
     } else if nchar == b'z' as c_int {
         // "[z" and "]z": move to start or end of open fold
         let dir = if cmdchar == c_int::from(b']') {
@@ -5563,7 +5563,6 @@ extern "C" {
     fn cursor_up(count: c_int, upd_topline: bool) -> c_int;
     fn cursor_pos_info(dict: *mut std::ffi::c_void);
     static mut mod_mask: c_int;
-    fn nvim_do_mouse_g(oap: OapHandle, nchar: c_int, count1: c_int);
     fn rs_goto_byte(count: c_int);
     fn undo_time(count: c_int, sec: bool, file: bool, absolute: bool);
     fn show_sb_text();
@@ -6451,7 +6450,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
             || n == K_X2RELEASE =>
         {
             mod_mask = MOD_MASK_CTRL;
-            nvim_do_mouse_g(oap, nchar, nvim_cap_get_count1(cap));
+            do_mouse(oap, nchar, BACKWARD, nvim_cap_get_count1(cap), false);
         }
 
         n if n == K_IGNORE => {}

@@ -760,7 +760,6 @@ void nvim_sync_fen_in_diff_windows(void)
 // =============================================================================
 
 // g-command C accessors for Rust FFI
-void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
 // nv_screengo C accessors for Rust FFI
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
@@ -1102,8 +1101,6 @@ char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 /// Set w_redr_status for curwin (showcmdloc=statusline, clear path).
 void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
 
-/// Redraw statusline for curwin and restore cursor (showcmdloc=statusline, non-clear path).
-void nvim_showcmd_win_redr_status(void) { win_redr_status(curwin); setcursor(); }
 
 /// Redraw all status lines.
 void nvim_redraw_statuslines_call(void) { redraw_statuslines(); }
@@ -1125,8 +1122,6 @@ void nvim_showcmd_ui_msg_showcmd(const char *buf, bool is_clear)
   ui_call_msg_showcmd(content);
 }
 
-/// Returns p_ch option value.
-int nvim_showcmd_get_p_ch(void) { return (int)p_ch; }
 
 /// Render the showcmd area on the grid last line.
 /// buf is the current showcmd text (NULL or empty means clear).
@@ -1201,8 +1196,6 @@ void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 /// Set did_syncbind global.
 void nvim_set_did_syncbind(bool val) { did_syncbind = val; }
 
-/// Check curwin pointer equality with a saved handle.
-bool nvim_curwin_eq(win_T *wp) { return curwin == wp; }
 
 /// Check curwin->w_buffer pointer equality with a saved buffer handle.
 bool nvim_curwin_buf_eq(buf_T *buf) { return curwin->w_buffer == buf; }

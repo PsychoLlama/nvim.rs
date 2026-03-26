@@ -23,7 +23,6 @@ extern "C" {
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_curbuf() -> BufHandle;
-    fn nvim_curwin_eq(wp: WinHandle) -> bool;
     fn nvim_curwin_buf_eq(buf: BufHandle) -> bool;
     fn nvim_curwin_get_w_p_diff() -> bool;
     fn nvim_get_curwin_w_leftcol() -> c_int;
@@ -61,7 +60,7 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
         if did_syncbind {
             // ":syncbind" was just used: reset values, don't scroll.
             nvim_set_did_syncbind(false);
-        } else if nvim_curwin_eq(old_curwin) {
+        } else if nvim_get_curwin() == old_curwin {
             // Same window: sync if buffer or diff matches and position changed.
             if (nvim_curwin_buf_eq(old_buf) || nvim_curwin_get_w_p_diff())
                 && (vtopline != old_vtopline || nvim_get_curwin_w_leftcol() != old_leftcol)

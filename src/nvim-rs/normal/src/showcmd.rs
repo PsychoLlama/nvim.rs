@@ -125,8 +125,10 @@ extern "C" {
 
     // Phase 2: display_showcmd accessors
     static p_sloc: *const std::ffi::c_char;
+    fn nvim_get_curwin() -> crate::WinHandle;
     fn nvim_showcmd_set_w_redr_status();
-    fn nvim_showcmd_win_redr_status();
+    fn win_redr_status(wp: crate::WinHandle);
+    fn setcursor();
     static mut redraw_tabline: bool;
     fn draw_tabline();
     fn nvim_showcmd_ui_msg_showcmd(buf: *const std::ffi::c_char, is_clear: bool);
@@ -512,7 +514,8 @@ pub unsafe extern "C" fn rs_display_showcmd() {
         if is_clear {
             nvim_showcmd_set_w_redr_status();
         } else {
-            nvim_showcmd_win_redr_status();
+            win_redr_status(nvim_get_curwin());
+            setcursor();
         }
         return;
     }
