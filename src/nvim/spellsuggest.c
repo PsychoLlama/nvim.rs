@@ -245,55 +245,19 @@ enum {
 static int sps_flags = SPS_BEST;  ///< flags from 'spellsuggest'
 static int sps_limit = 9999;      ///< max nr of suggestions given
 
+// C accessors for sps_flags and sps_limit (used by Rust via FFI).
+void nvim_spellsug_set_sps_flags(int f) { sps_flags = f; }
+void nvim_spellsug_set_sps_limit(int l) { sps_limit = l; }
+int nvim_spellsug_get_sps_flags(void) { return sps_flags; }
+int nvim_spellsug_get_sps_limit(void) { return sps_limit; }
+
+extern int rs_spell_check_sps_full(const char *p_sps_val);
+
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
 int spell_check_sps(void)
 {
-  char buf[MAXPATHL];
-
-  sps_flags = 0;
-  sps_limit = 9999;
-
-  for (char *p = p_sps; *p != NUL;) {
-    copy_option_part(&p, buf, MAXPATHL, ",");
-
-    int f = 0;
-    if (ascii_isdigit(*buf)) {
-      char *s = buf;
-      sps_limit = getdigits_int(&s, true, 0);
-      if (*s != NUL && !ascii_isdigit(*s)) {
-        f = -1;
-      }
-      // Note: Keep this in sync with opt_sps_values.
-    } else if (strcmp(buf, "best") == 0) {
-      f = SPS_BEST;
-    } else if (strcmp(buf, "fast") == 0) {
-      f = SPS_FAST;
-    } else if (strcmp(buf, "double") == 0) {
-      f = SPS_DOUBLE;
-    } else if (strncmp(buf, "expr:", 5) != 0
-               && strncmp(buf, "file:", 5) != 0
-               && (strncmp(buf, "timeout:", 8) != 0
-                   || (!ascii_isdigit(buf[8])
-                       && !(buf[8] == '-' && ascii_isdigit(buf[9]))))) {
-      f = -1;
-    }
-
-    if (f == -1 || (sps_flags != 0 && f != 0)) {
-      sps_flags = SPS_BEST;
-      sps_limit = 9999;
-      return FAIL;
-    }
-    if (f != 0) {
-      sps_flags = f;
-    }
-  }
-
-  if (sps_flags == 0) {
-    sps_flags = SPS_BEST;
-  }
-
-  return OK;
+  return rs_spell_check_sps_full(p_sps);
 }
 
 /// "z=": Find badly spelled word under or after the cursor.

@@ -631,9 +631,10 @@ pub unsafe extern "C" fn rs_did_set_langmap(args: *mut c_void) -> CallbackResult
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_spellsuggest(_args: *mut c_void) -> CallbackResult {
     extern "C" {
-        fn spell_check_sps() -> c_int;
+        fn rs_spell_check_sps_full(p_sps_val: *const std::ffi::c_char) -> c_int;
+        static mut p_sps: *mut std::ffi::c_char;
     }
-    if spell_check_sps() == FAIL {
+    if rs_spell_check_sps_full(p_sps) == FAIL {
         return E_INVARG;
     }
     callback_ok()

@@ -2617,6 +2617,47 @@ pub unsafe extern "C" fn rs_spell_check_sps(option: *const u8, option_len: usize
     }
 }
 
+extern "C" {
+    fn nvim_spellsug_set_sps_flags(f: c_int);
+    fn nvim_spellsug_set_sps_limit(l: c_int);
+}
+
+/// Full replacement for C spell_check_sps():
+/// parses p_sps, sets sps_flags and sps_limit globals, returns OK/FAIL.
+///
+/// # Safety
+/// `p_sps_val` must be a valid null-terminated C string (may be empty).
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_check_sps_full(p_sps_val: *const c_char) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = -1;
+
+    if p_sps_val.is_null() {
+        nvim_spellsug_set_sps_flags(SPS_BEST);
+        nvim_spellsug_set_sps_limit(SPS_LIMIT_DEFAULT);
+        return FAIL;
+    }
+
+    let len = {
+        let mut p = p_sps_val;
+        while *p != 0 {
+            p = p.add(1);
+        }
+        p.offset_from(p_sps_val) as usize
+    };
+    let option_slice = std::slice::from_raw_parts(p_sps_val.cast::<u8>(), len);
+
+    if let Ok(flags) = parse_spellsuggest(option_slice) {
+        nvim_spellsug_set_sps_flags(flags.flags);
+        nvim_spellsug_set_sps_limit(flags.limit);
+        OK
+    } else {
+        nvim_spellsug_set_sps_flags(SPS_BEST);
+        nvim_spellsug_set_sps_limit(SPS_LIMIT_DEFAULT);
+        FAIL
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

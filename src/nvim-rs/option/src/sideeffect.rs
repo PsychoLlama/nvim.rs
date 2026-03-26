@@ -447,7 +447,7 @@ extern "C" {
     fn init_chartab();
     fn didset_string_options();
     fn spell_check_msm() -> c_int;
-    fn spell_check_sps() -> c_int;
+    fn rs_spell_check_sps_full(p_sps_val: *const std::ffi::c_char) -> c_int;
     fn nvim_compile_cap_prog_win(win: crate::WinHandle) -> *const std::ffi::c_char;
     fn did_set_spell_option() -> *const std::ffi::c_char;
     fn did_set_cedit(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
@@ -467,6 +467,7 @@ extern "C" {
     ) -> *const std::ffi::c_char;
     fn nvim_call_curbuf_tabstop_set_vsts();
     fn nvim_call_curbuf_tabstop_set_vts();
+    static mut p_sps: *mut std::ffi::c_char;
 }
 
 /// After setting various option values: recompute variables that depend on option values.
@@ -479,7 +480,7 @@ pub unsafe extern "C" fn rs_didset_options() {
     init_chartab();
     didset_string_options();
     spell_check_msm();
-    spell_check_sps();
+    rs_spell_check_sps_full(p_sps);
     nvim_compile_cap_prog_win(curwin);
     did_set_spell_option();
     did_set_cedit(std::ptr::null_mut());
