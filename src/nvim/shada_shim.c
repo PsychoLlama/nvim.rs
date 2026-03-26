@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -12,7 +11,6 @@
 #include "mpack/mpack_core.h"
 #include "nvim/api/keysets_defs.h"
 #include "nvim/api/private/defs.h"
-#include "nvim/api/private/dispatch.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer.h"
@@ -20,12 +18,10 @@
 #include "nvim/cmdhist.h"
 #include "nvim/eval.h"
 #include "nvim/eval/decode.h"
-#include "nvim/eval/encode.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds.h"
-#include "nvim/ex_cmds_defs.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/hashtab.h"
@@ -47,146 +43,50 @@
 #include "nvim/os/fs.h"
 #include "nvim/os/fs_defs.h"
 #include "nvim/os/os.h"
-#include "nvim/os/os_defs.h"
 #include "nvim/os/time_defs.h"
 #include "nvim/path.h"
 #include "nvim/pos_defs.h"
 #include "nvim/regexp.h"
 #include "nvim/register.h"
 #include "nvim/search.h"
-#include "nvim/shada.h"
-#include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-// Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_magic_isset(void);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern var_flavour_T rs_var_flavour(const char *varname);
-// Rust-owned old_sub accessors (from src/nvim-rs/ex_cmds/src/substitute.rs)
 extern void rs_sub_get_replacement(void *ret_sub);
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
 
-/// Generic semsg wrapper: one string argument.
 void nvim_shada_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
-
-/// Generic semsg wrapper: two string arguments.
 void nvim_shada_semsg_2s(const char *fmt, const char *a, const char *b) { semsg(fmt, a, b); }
-
-/// Generic semsg wrapper: one uint64 argument (cast to unsigned long long for portability).
 void nvim_shada_semsg_u64(const char *fmt, uint64_t val) { semsg(fmt, (unsigned long long)val); }
-
-/// Generic semsg wrapper: two strings + uint64 + string (for readerr pattern).
-void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b)
-{
-  semsg(fmt, a, (unsigned long long)val, b);
-}
-
-/// Generic smsg wrapper: one string argument (for verbose writing message).
+void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b) { semsg(fmt, a, (unsigned long long)val, b); }
 void nvim_shada_smsg_1s(const char *fmt, const char *arg) { smsg(0, fmt, arg); }
-
-/// Generic siemsg wrapper: one string argument.
 void nvim_shada_siemsg_1s(const char *fmt, const char *arg) { siemsg(fmt, arg); }
 
-/// Possible ShaDa entry types
-///
-/// @warning Enum values are part of the API and must not be altered.
-///
-/// All values that are not in enum are ignored.
+// ShaDa entry types. Enum values are part of the API and must not be altered.
 typedef enum {
-  kSDItemUnknown = -1,       ///< Unknown item.
-  kSDItemMissing = 0,        ///< Missing value. Should never appear in a file.
-  kSDItemHeader = 1,         ///< Header. Present for debugging purposes.
-  kSDItemSearchPattern = 2,  ///< Last search pattern (*not* history item).
-                             ///< Comes from user searches (e.g. when typing
-                             ///< "/pat") or :substitute command calls.
-  kSDItemSubString = 3,      ///< Last substitute replacement string.
-  kSDItemHistoryEntry = 4,   ///< History item.
-  kSDItemRegister = 5,       ///< Register.
-  kSDItemVariable = 6,       ///< Global variable.
-  kSDItemGlobalMark = 7,     ///< Global mark definition.
-  kSDItemJump = 8,           ///< Item from jump list.
-  kSDItemBufferList = 9,     ///< Buffer list.
-  kSDItemLocalMark = 10,     ///< Buffer-local mark.
-  kSDItemChange = 11,        ///< Item from buffer change list.
+  kSDItemUnknown = -1,
+  kSDItemMissing = 0,
+  kSDItemHeader = 1,
+  kSDItemSearchPattern = 2,
+  kSDItemSubString = 3,
+  kSDItemHistoryEntry = 4,
+  kSDItemRegister = 5,
+  kSDItemVariable = 6,
+  kSDItemGlobalMark = 7,
+  kSDItemJump = 8,
+  kSDItemBufferList = 9,
+  kSDItemLocalMark = 10,
+  kSDItemChange = 11,
 } ShadaEntryType;
-#define SHADA_LAST_ENTRY ((uint64_t)kSDItemChange)
 
-/// Possible results when reading ShaDa file
-typedef enum {
-  kSDReadStatusSuccess,    ///< Reading was successful.
-  kSDReadStatusFinished,   ///< Nothing more to read.
-  kSDReadStatusReadError,  ///< Failed to read from file.
-  kSDReadStatusNotShaDa,   ///< Input is most likely not a ShaDa file.
-  kSDReadStatusMalformed,  ///< Error in the currently read item.
-} ShaDaReadResult;
-
-/// Possible results of shada_write function.
-typedef enum {
-  kSDWriteSuccessful,    ///< Writing was successful.
-  kSDWriteReadNotShada,  ///< Writing was successful, but when reading it
-                         ///< attempted to read file that did not look like
-                         ///< a ShaDa file.
-  kSDWriteFailed,        ///< Writing was not successful (e.g. because there
-                         ///< was no space left on device).
-  kSDWriteIgnError,      ///< Writing resulted in a error which can be ignored
-                         ///< (e.g. when trying to dump a function reference or
-                         ///< self-referencing container in a variable).
-} ShaDaWriteResult;
-
-/// Flags for shada_read_next_item
-enum SRNIFlags {
-  kSDReadHeader = (1 << kSDItemHeader),  ///< Determines whether header should
-                                         ///< be read (it is usually ignored).
-  kSDReadUndisableableData = (
-                              (1 << kSDItemSearchPattern)
-                              | (1 << kSDItemSubString)
-                              | (1 << kSDItemJump)),  ///< Data reading which cannot be disabled by
-                                                      ///< &shada or other options except for disabling
-                                                      ///< reading ShaDa as a whole.
-  kSDReadRegisters = (1 << kSDItemRegister),  ///< Determines whether registers
-                                              ///< should be read (may only be
-                                              ///< disabled when writing, but
-                                              ///< not when reading).
-  kSDReadHistory = (1 << kSDItemHistoryEntry),  ///< Determines whether history
-                                                ///< should be read (can only be
-                                                ///< disabled by &history).
-  kSDReadVariables = (1 << kSDItemVariable),  ///< Determines whether variables
-                                              ///< should be read (disabled by
-                                              ///< removing ! from &shada).
-  kSDReadBufferList = (1 << kSDItemBufferList),  ///< Determines whether buffer
-                                                 ///< list should be read
-                                                 ///< (disabled by removing
-                                                 ///< % entry from &shada).
-  kSDReadUnknown = (1 << (SHADA_LAST_ENTRY + 1)),  ///< Determines whether
-                                                   ///< unknown items should be
-                                                   ///< read (usually disabled).
-  kSDReadGlobalMarks = (1 << kSDItemGlobalMark),  ///< Determines whether global
-                                                  ///< marks should be read. Can
-                                                  ///< only be disabled by
-                                                  ///< having f0 in &shada when
-                                                  ///< writing.
-  kSDReadLocalMarks = (1 << kSDItemLocalMark),  ///< Determines whether local
-                                                ///< marks should be read. Can
-                                                ///< only be disabled by
-                                                ///< disabling &shada or putting
-                                                ///< '0 there. Is also used for
-                                                ///< v:oldfiles.
-  kSDReadChanges = (1 << kSDItemChange),  ///< Determines whether change list
-                                          ///< should be read. Can only be
-                                          ///< disabled by disabling &shada or
-                                          ///< putting '0 there.
-};
-// Note: SRNIFlags enum name was created only to make it possible to reference
-// it. This name is not actually used anywhere outside of the documentation.
-
-/// Convert a Rust-layout position (int64_t lnum) to pos_T (int32_t lnum).
-/// Used when extracting mark/pos fields from ShadaEntry to pass to Neovim APIs.
+// Convert a Rust-layout position (int64_t lnum) to pos_T (int32_t lnum).
 #define RS_POS_TO_POST(p) \
   ((pos_T){ .lnum = (linenr_T)(p).lnum, .col = (colnr_T)(p).col, \
             .coladd = (colnr_T)(p).coladd })
 
-/// Structure defining a single ShaDa file entry
 typedef struct ShadaEntry {
   ShadaEntryType type;
   // If the entry was read from file, string data will be allocated and needs to be freed.
@@ -246,26 +146,21 @@ typedef struct ShadaEntry {
   AdditionalData *additional_data;
 } ShadaEntry;
 
-/// One entry in sized linked list
 typedef struct hm_llist_entry {
-  ShadaEntry data;              ///< Entry data.
-  struct hm_llist_entry *next;  ///< Pointer to next entry or NULL.
-  struct hm_llist_entry *prev;  ///< Pointer to previous entry or NULL.
+  ShadaEntry data;
+  struct hm_llist_entry *next;
+  struct hm_llist_entry *prev;
 } HMLListEntry;
 
-/// Sized linked list structure for history merger
 typedef struct {
-  HMLListEntry *entries;  ///< Pointer to the start of the allocated array of
-                          ///< entries.
-  HMLListEntry *first;    ///< First entry in the list (is not necessary start
-                          ///< of the array) or NULL.
-  HMLListEntry *last;     ///< Last entry in the list or NULL.
-  HMLListEntry *free_entry;  ///< Last free entry removed by hmll_remove.
-  HMLListEntry *last_free_entry;  ///< Last unused element in entries array.
-  size_t size;            ///< Number of allocated entries.
-  size_t num_entries;     ///< Number of entries already used.
-  PMap(cstr_t) contained_entries;  ///< Map all history entry strings to
-                                   ///< corresponding entry pointers.
+  HMLListEntry *entries;
+  HMLListEntry *first;
+  HMLListEntry *last;
+  HMLListEntry *free_entry;
+  HMLListEntry *last_free_entry;
+  size_t size;
+  size_t num_entries;
+  PMap(cstr_t) contained_entries;
 } HMLList;
 
 typedef struct {
@@ -277,41 +172,31 @@ typedef struct {
   uint8_t history_type;
 } HistoryMergerState;
 
-/// Structure that holds one file marks.
 typedef struct {
-  ShadaEntry marks[NLOCALMARKS];  ///< All file marks.
-  ShadaEntry changes[JUMPLISTSIZE];  ///< All file changes.
-  size_t changes_size;  ///< Number of changes occupied.
-  ShadaEntry *additional_marks;  ///< All marks with unknown names.
-  size_t additional_marks_size;  ///< Size of the additional_marks array.
-  Timestamp greatest_timestamp;  ///< Greatest timestamp among marks.
+  ShadaEntry marks[NLOCALMARKS];
+  ShadaEntry changes[JUMPLISTSIZE];
+  size_t changes_size;
+  ShadaEntry *additional_marks;
+  size_t additional_marks_size;
+  Timestamp greatest_timestamp;
 } FileMarks;
 
-/// State structure used by shada_write
-///
-/// Before actually writing most of the data is read to this structure.
 typedef struct {
-  HistoryMergerState hms[HIST_COUNT];  ///< Structures for history merging.
-  ShadaEntry global_marks[NMARKS];  ///< Named global marks.
-  ShadaEntry numbered_marks[EXTRA_MARKS];  ///< Numbered marks.
-  ShadaEntry registers[NUM_SAVED_REGISTERS];  ///< All registers.
-  ShadaEntry jumps[JUMPLISTSIZE];  ///< All dumped jumps.
-  size_t jumps_size;  ///< Number of jumps occupied.
-  ShadaEntry search_pattern;  ///< Last search pattern.
-  ShadaEntry sub_search_pattern;  ///< Last s/ search pattern.
-  ShadaEntry replacement;  ///< Last s// replacement string.
-  Set(cstr_t) dumped_variables;  ///< Names of already dumped variables.
-  PMap(cstr_t) file_marks;  ///< All file marks.
+  HistoryMergerState hms[HIST_COUNT];
+  ShadaEntry global_marks[NMARKS];
+  ShadaEntry numbered_marks[EXTRA_MARKS];
+  ShadaEntry registers[NUM_SAVED_REGISTERS];
+  ShadaEntry jumps[JUMPLISTSIZE];
+  size_t jumps_size;
+  ShadaEntry search_pattern;
+  ShadaEntry sub_search_pattern;
+  ShadaEntry replacement;
+  Set(cstr_t) dumped_variables;
+  PMap(cstr_t) file_marks;
 } WriteMergerState;
 
 #include "shada_shim.c.generated.h"
 
-/// Find buffer for given buffer name (cached).
-///
-/// @param[in,out]  fname_bufs_handle  Opaque PMap(cstr_t) handle.
-/// @param[in]      fname              File name to find.
-///
-/// @return Pointer to the buffer or NULL.
 buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const fname)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
@@ -339,7 +224,6 @@ buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const f
 
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
-/// Decode a msgpack binary string to a typval_T at dst.
 void nvim_shada_decode_string_into(const char *s, size_t len, bool force_blob, void *dst)
 {
   typval_T tv = decode_string(s, len, force_blob, false);
@@ -527,19 +411,14 @@ const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
   return ret;
 }
 
-/// Free a Header ShadaEntry's dict (api_free_dict wrapper for Header entries).
-/// Called from Rust rs_shada_free_entry_contents when entry_type == Header.
 void nvim_shada_free_header_entry(ShadaEntry *entry) { api_free_dict(entry->data.header); }
 
-/// Free the value portion of a global_var entry.
-/// Takes a pointer to the typval_T within the ShadaEntry union.
 void nvim_shada_free_variable(ShadaEntry *entry)
 {
   xfree(entry->data.global_var.name);
   tv_clear(&entry->data.global_var.value);
 }
 
-/// Non-variadic smsg wrapper for "Reading ShaDa file" verbose message
 void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
                              int get_oldfiles, int failed)
 {
@@ -551,8 +430,6 @@ void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
        failed ? _(" FAILED") : "");
 }
 
-/// Wrapper for stdpaths_user_state_subpath + concat_fnames_realloc
-/// to build the default shada file path.
 char *nvim_shada_build_default_path(void)
 {
   char *shada_dir = stdpaths_user_state_subpath("shada", 0, false);
@@ -578,20 +455,12 @@ void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
   he->additional_data = additional_data;
 }
 
-/// Return the byte offset from fname to path_tail_with_sep(fname).
-/// Used by rs_shada_write_file to find the directory portion.
 size_t nvim_shada_path_tail_with_sep_offset(const char *fname)
 {
   const char *tail = path_tail_with_sep((char *)fname);
   return (size_t)(tail - fname);
 }
 
-/// Get stat fields (mode, uid, gid) for a file via os_fileinfo.
-/// Returns 1 if file exists and is not a directory, 0 otherwise.
-/// @param fname      File path.
-/// @param out_mode   Output: st_mode (or 0 on failure).
-/// @param out_uid    Output: st_uid as uint64_t.
-/// @param out_gid    Output: st_gid as uint64_t.
 int nvim_shada_os_fileinfo(const char *fname, uint64_t *out_mode,
                            uint64_t *out_uid, uint64_t *out_gid)
 {
@@ -611,18 +480,12 @@ int nvim_shada_os_fileinfo(const char *fname, uint64_t *out_mode,
   return 1;
 }
 
-/// Wrapper for os_fchown on an open FileDescriptor.
-/// @param sd_writer   FileDescriptor pointer (passed by Rust as void*).
-/// @param uid         New owner uid.
-/// @param gid         New owner gid.
-/// @return Return value of os_fchown (0 on success, errno on failure).
 int nvim_shada_os_fchown(void *sd_writer, uint64_t uid, uint64_t gid)
 {
   return os_fchown(file_fd((FileDescriptor *)sd_writer),
                    (uv_uid_t)uid, (uv_gid_t)gid);
 }
 
-/// Allocate and initialize a PMap(cstr_t) for fname_bufs caching.
 void *nvim_shada_fname_bufs_new(void)
 {
   PMap(cstr_t) *m = xcalloc(1, sizeof(PMap(cstr_t)));
@@ -630,7 +493,6 @@ void *nvim_shada_fname_bufs_new(void)
   return m;
 }
 
-/// Destroy a PMap(cstr_t) and free all keys and the struct.
 void nvim_shada_fname_bufs_destroy(void *handle)
 {
   PMap(cstr_t) *m = (PMap(cstr_t) *)handle;
@@ -640,7 +502,6 @@ void nvim_shada_fname_bufs_destroy(void *handle)
   xfree(m);
 }
 
-/// Allocate and initialize a Set(cstr_t) for oldfiles dedup.
 void *nvim_shada_oldfiles_set_new(void)
 {
   Set(cstr_t) *s = xcalloc(1, sizeof(Set(cstr_t)));
@@ -648,7 +509,6 @@ void *nvim_shada_oldfiles_set_new(void)
   return s;
 }
 
-/// Destroy a Set(cstr_t) and free the struct.
 void nvim_shada_oldfiles_set_destroy(void *handle)
 {
   Set(cstr_t) *s = (Set(cstr_t) *)handle;
@@ -658,8 +518,6 @@ void nvim_shada_oldfiles_set_destroy(void *handle)
 
 int nvim_shada_argcount(void) { return ARGCOUNT; }
 
-/// Update w_changelistidx for all windows that have buffers in cl_bufs.
-/// Called after shada_read completes.
 void nvim_shada_for_all_tab_windows_update_changelist(void *cl_bufs_handle)
 {
   Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
@@ -680,7 +538,6 @@ uint32_t nvim_shada_additional_data_len(const void *ad_ptr)
   return ad ? ad->nitems : 0;
 }
 
-/// Write additional data raw bytes to a packer buffer.
 void nvim_shada_dump_additional_data(const void *ad_ptr, PackerBuffer *sbuf)
 {
   const AdditionalData *ad = (const AdditionalData *)ad_ptr;
@@ -696,9 +553,6 @@ int nvim_shada_entry_is_blob_var(const ShadaEntry *entry)
 
 void *nvim_shada_entry_var_value_ptr(ShadaEntry *entry) { return entry ? &entry->data.global_var.value : NULL; }
 
-/// Pack a header entry's Dict into a packer buffer (compound replacement for 7 individual
-/// header field accessors). Writes a msgpack map with all header key-value pairs.
-/// Called from Rust rs_shada_pack_entry for ShadaEntryType::Header.
 void nvim_shada_pack_header_dict(const ShadaEntry *entry, PackerBuffer *sbuf)
 {
   if (!entry) {
@@ -722,11 +576,6 @@ void nvim_shada_pack_header_dict(const ShadaEntry *entry, PackerBuffer *sbuf)
   }
 }
 
-// Global variable iteration accessor (inlines var_shada_iter).
-// flavour is a bitmask of VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA.
-// On each call: *out_name set to variable name (static, do not free); *out_tv set to a
-// freshly xmalloc'd typval_T copy (caller must pass to nvim_shada_build_gvar_entry which frees it).
-// Returns the next iter pointer (NULL when exhausted).
 const void *nvim_shada_var_shada_iter(const void *iter, const char **out_name, void **out_tv,
                                       unsigned flavour)
 {
@@ -763,13 +612,8 @@ const void *nvim_shada_var_shada_iter(const void *iter, const char **out_name, v
   return NULL;
 }
 
-// Get the v_type field of a typval_T pointer.
 int nvim_shada_tv_get_type(const void *tv) { return tv ? ((const typval_T *)tv)->v_type : 0; }
 
-// Build a ShadaEntry for a global variable into *out (C layout: inline typval_T).
-// Copies tv into out->data.global_var.value, clears and frees tv (which was xmalloc'd
-// by nvim_shada_var_shada_iter). Caller must call nvim_shada_clear_gvar_entry_value
-// after rs_shada_pack_entry to release the copied typval.
 void nvim_shada_build_gvar_entry(const char *name, void *tv, Timestamp ts, ShadaEntry *out)
 {
   typval_T tgttv;
@@ -789,8 +633,6 @@ void nvim_shada_build_gvar_entry(const char *name, void *tv, Timestamp ts, Shada
   };
 }
 
-// Clear the inline typval_T of a global variable ShadaEntry built by nvim_shada_build_gvar_entry.
-// Must be called after rs_shada_pack_entry to release the copied typval.
 void nvim_shada_clear_gvar_entry_value(ShadaEntry *entry) { tv_clear(&entry->data.global_var.value); }
 
 void nvim_shada_set_all_last_cursors(void)
@@ -800,16 +642,6 @@ void nvim_shada_set_all_last_cursors(void)
   }
 }
 
-/// Iterate over global marks.
-/// @param iter       Previous iterator or NULL to start.
-/// @param out_name   Output: mark name character.
-/// @param out_lnum   Output: mark line number.
-/// @param out_col    Output: mark column.
-/// @param out_fnum   Output: file number (0 if fname-based).
-/// @param out_ts     Output: timestamp.
-/// @param out_fname  Output: file name (used when fnum == 0, may be NULL).
-/// @param out_additional Output: additional data pointer (may be NULL).
-/// @return Next iterator value, or NULL when done.
 const void *nvim_shada_mark_global_iter(const void *iter,
                                         char *out_name,
                                         int64_t *out_lnum,
@@ -841,15 +673,6 @@ uint64_t nvim_shada_named_mark_timestamp(int idx)
   return namedfm[idx].fmark.timestamp;
 }
 
-/// Iterate over buffer-local marks.
-/// @param iter         Previous iterator or NULL to start.
-/// @param buf          Buffer to iterate.
-/// @param out_name     Output: mark name character.
-/// @param out_lnum     Output: mark line number.
-/// @param out_col      Output: mark column.
-/// @param out_ts       Output: timestamp.
-/// @param out_additional Output: additional data pointer (may be NULL).
-/// @return Next iterator value, or NULL when done.
 const void *nvim_shada_mark_buffer_iter(const void *iter,
                                         const void *buf,
                                         char *out_name,
@@ -878,13 +701,6 @@ int nvim_shada_buf_changelist_len(const void *buf)
   return ((const buf_T *)buf)->b_changelistlen;
 }
 
-/// Get a changelist entry from a buffer.
-/// @param buf          Buffer handle.
-/// @param idx          Index into changelist.
-/// @param out_lnum     Output: line number.
-/// @param out_col      Output: column.
-/// @param out_ts       Output: timestamp.
-/// @param out_additional Output: additional data pointer.
 void nvim_shada_buf_changelist_entry(const void *buf, int idx,
                                      int64_t *out_lnum, int32_t *out_col,
                                      uint64_t *out_ts, void **out_additional)
@@ -900,10 +716,6 @@ void nvim_shada_buf_changelist_entry(const void *buf, int idx,
   *out_additional = fm.additional_data;
 }
 
-/// Get the current substitute replacement string, its timestamp, and additional data.
-/// @param out_sub      Output: replacement string (may be NULL if not set).
-/// @param out_ts       Output: timestamp.
-/// @param out_additional Output: additional data pointer (may be NULL).
 void nvim_shada_sub_get_replacement(const char **out_sub, uint64_t *out_ts,
                                     void **out_additional)
 {
@@ -917,22 +729,12 @@ void nvim_shada_sub_get_replacement(const char **out_sub, uint64_t *out_ts,
 
 int64_t nvim_shada_curwin_lnum(void) { return (int64_t)curwin->w_cursor.lnum; }
 
-/// Get curwin->w_cursor as a Position.
-/// @param out_lnum Output: line number.
-/// @param out_col  Output: column.
 void nvim_shada_curwin_cursor(int64_t *out_lnum, int32_t *out_col)
 {
   *out_lnum = (int64_t)curwin->w_cursor.lnum;
   *out_col = (int32_t)curwin->w_cursor.col;
 }
 
-/// Put a file-marks entry into the WriteMergerState's file_marks PMap.
-/// If the key is new, xstrdup's the fname. Returns pointer to the FileMarks*.
-/// @param wms    WriteMergerState pointer (as void*).
-/// @param fname  File name to use as key.
-/// @param is_new Output: true if this is a new entry.
-/// @param out_key Output: pointer to the key in the map (for ownership transfer).
-/// @return pointer to the ptr_t value slot in the PMap.
 void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
                                          bool *is_new, const char **out_key)
 {
@@ -944,9 +746,6 @@ void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
   return (void **)val;
 }
 
-/// Collect all FileMarks from the PMap, sort by greatest_timestamp (descending),
-/// and return as an allocated array of void* pointers.
-/// Caller must xfree the returned array.
 void **nvim_shada_wms_file_marks_get_sorted(const void *wms_opaque, size_t *out_size)
 {
   const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
@@ -969,8 +768,6 @@ void **nvim_shada_wms_file_marks_get_sorted(const void *wms_opaque, size_t *out_
   return arr;
 }
 
-/// Destroy the file_marks PMap in the WriteMergerState.
-/// Frees all keys and FileMarks values.
 void nvim_shada_wms_file_marks_destroy(void *wms_opaque)
 {
   WriteMergerState *wms = (WriteMergerState *)wms_opaque;
@@ -995,7 +792,6 @@ bool nvim_shada_wms_dumped_vars_has(const void *wms_opaque, const char *name)
   return set_has(cstr_t, (Set(cstr_t) *)&wms->dumped_variables, name);
 }
 
-/// Add a variable name to the dumped_variables set.
 void nvim_shada_wms_dumped_vars_put(void *wms_opaque, const char *name)
 {
   WriteMergerState *wms = (WriteMergerState *)wms_opaque;
@@ -1005,7 +801,6 @@ void nvim_shada_wms_dumped_vars_put(void *wms_opaque, const char *name)
   set_put(cstr_t, &wms->dumped_variables, name);
 }
 
-/// Destroy the dumped_variables set in the WriteMergerState.
 void nvim_shada_wms_dumped_vars_destroy(void *wms_opaque)
 {
   WriteMergerState *wms = (WriteMergerState *)wms_opaque;
@@ -1014,7 +809,6 @@ void nvim_shada_wms_dumped_vars_destroy(void *wms_opaque)
   }
 }
 
-/// Get the (lnum, col) of the mark returned by mark_get for a local mark.
 int nvim_shada_mark_get_cmp(const void *buf, const void *win, int name, uint64_t entry_ts)
 {
   if (!buf) {
@@ -1029,9 +823,6 @@ int nvim_shada_mark_get_cmp(const void *buf, const void *win, int name, uint64_t
   return (fm->timestamp >= entry_ts) ? 1 : 0;
 }
 
-/// Flush the packer buffer.
-
-/// Internal flush callback for file-backed PackerBuffers.
 static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
 {
   FileDescriptor *fd = buffer->anydata;
@@ -1040,9 +831,6 @@ static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
   buffer->ptr = fd->write_pos;
 }
 
-/// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
-/// @param fd     FileDescriptor to write to.
-/// @param out    Output: initialized PackerBuffer.
 void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
 {
   FileDescriptor *file = (FileDescriptor *)fd;
@@ -1059,11 +847,6 @@ void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
   };
 }
 
-/// Get refcheck info from a typval for circular-reference detection.
-/// @param tv           xmalloc'd typval_T pointer.
-/// @param out_vtype    Output: v_type of the typval.
-/// @param out_container Output: for VAR_DICT: &dv_hashtab; for VAR_LIST: v_list; else NULL.
-/// @param out_copy_id  Output: dv_copyID or lv_copyID (0 if container is NULL).
 void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype,
                                      void **out_container, int *out_copy_id)
 {
@@ -1108,9 +891,6 @@ uint64_t nvim_shada_get_search_pattern_timestamp(int is_substitute)
   return pat.pat != NULL ? (uint64_t)pat.timestamp : 0;
 }
 
-/// Build SearchPattern from entry fields and call set_search_pattern or
-/// set_substitute_pattern depending on is_substitute.
-/// Memory ownership: entry's pat.data and additional_data are consumed.
 void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitute)
 {
   SearchPattern spat = (SearchPattern) {
@@ -1142,8 +922,6 @@ uint64_t nvim_shada_get_sub_replacement_timestamp(void)
   return sub.sub != NULL ? sub.timestamp : 0;
 }
 
-/// Build SubReplacementString from entry and call rs_sub_set_replacement + regtilde.
-/// Memory ownership: entry's sub_string.sub and additional_data are consumed.
 void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
 {
   rs_sub_set_replacement(entry->data.sub_string.sub, (uint64_t)entry->timestamp,
@@ -1164,7 +942,6 @@ uint64_t nvim_shada_op_reg_get_timestamp(char name)
   return reg != NULL ? (uint64_t)reg->timestamp : 0;
 }
 
-/// Build yankreg_T from entry fields and call op_reg_set.
 int nvim_shada_op_reg_set_from_entry(ShadaEntry *entry)
 {
   // entry->data.reg.contents is char** (Rust thin-pointer layout): one char* per line.
@@ -1206,18 +983,12 @@ int nvim_shada_op_reg_set_from_entry(ShadaEntry *entry)
   return 1;
 }
 
-/// Call var_set_global with entry's name and value, then clear the typval.
-/// After this call, the entry's value field is zeroed (VAR_UNKNOWN).
 void nvim_shada_var_set_global_from_entry(ShadaEntry *entry)
 {
   var_set_global(entry->data.global_var.name, &entry->data.global_var.value);
   entry->data.global_var.value.v_type = VAR_UNKNOWN;
 }
 
-/// Build xfmark_T from entry fields and call mark_set_global.
-/// Handles buf lookup, XFREE_CLEAR of fname when buf found.
-/// @param no_overwrite  Pass !force to mark_set_global.
-/// @return 1 if mark was set (memory consumed), 0 if not set.
 int nvim_shada_mark_set_global_from_entry(ShadaEntry *entry, void *fname_bufs_handle,
                                           int no_overwrite)
 {
@@ -1252,9 +1023,6 @@ void nvim_shada_jumplist_get_entry(int idx, uint64_t *out_ts, int64_t *out_lnum,
   *out_fname = jl->fname;
 }
 
-/// Insert a jumplist entry at position i from a ShadaEntry.
-/// Frees curwin->w_jumplist[0] if needed (when i > 0 && jl_len == JUMPLISTSIZE),
-/// builds and assigns xfmark_T from entry, then updates len and idx.
 void nvim_shada_jumplist_insert_entry(int i, ShadaEntry *entry,
                                       void *fname_bufs_handle, int jl_len)
 {
@@ -1284,11 +1052,6 @@ void nvim_shada_jumplist_insert_entry(int i, ShadaEntry *entry,
   }
 }
 
-/// Set buffer cursor position and additional data from a buffer list entry.
-/// Combines RESET_FMARK, buflist_setfpos, and additional_data ownership transfer.
-/// @param buf_handle  buf_T* (non-NULL).
-/// @param entry       ShadaEntry* containing buffer_list.
-/// @param i           Index into entry->data.buffer_list.buffers.
 void nvim_shada_buf_set_cursor_and_data(void *buf_handle, ShadaEntry *entry, size_t i)
 {
   buf_T *const buf = (buf_T *)buf_handle;
@@ -1302,10 +1065,6 @@ void nvim_shada_buf_set_cursor_and_data(void *buf_handle, ShadaEntry *entry, siz
   entry->data.buffer_list.buffers[i].additional_data = NULL;
 }
 
-/// Handle oldfiles set/list update for a filemark entry.
-/// Adds fname to oldfiles_set and oldfiles_list if get_old_files is true and fname not yet seen.
-/// If want_marks is false, takes ownership of fname (sets entry->data.filemark.fname = NULL).
-/// If want_marks is true, duplicates fname for the set; the entry retains its fname.
 void nvim_shada_oldfiles_add(void *oldfiles_set_handle, void *oldfiles_list,
                              ShadaEntry *entry, int want_marks)
 {
@@ -1328,9 +1087,6 @@ int nvim_shada_oldfiles_has(void *oldfiles_set_handle, const ShadaEntry *entry)
   return set_has(cstr_t, oldfiles_set, entry->data.filemark.fname) ? 1 : 0;
 }
 
-/// Build fmark_T from entry and call mark_set_local.
-/// @param no_overwrite  Pass !force.
-/// @return 1 if mark was set (memory consumed), 0 if not set.
 int nvim_shada_mark_set_local_from_entry(ShadaEntry *entry, void *buf_handle, int no_overwrite)
 {
   buf_T *buf = (buf_T *)buf_handle;
@@ -1344,7 +1100,6 @@ int nvim_shada_mark_set_local_from_entry(ShadaEntry *entry, void *buf_handle, in
   return mark_set_local(entry->data.filemark.name, buf, fm, (bool)no_overwrite) ? 1 : 0;
 }
 
-/// call set_put(ptr_t, cl_bufs, buf).
 void nvim_shada_cl_bufs_set_put(void *cl_bufs_handle, void *buf_handle)
 {
   Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
@@ -1363,9 +1118,6 @@ void nvim_shada_changelist_get_entry(const void *buf_handle, int idx,
   *out_col = (int32_t)fm->mark.col;
 }
 
-/// Insert a changelist entry at position i from a ShadaEntry.
-/// Frees buf->b_changelist[0] if needed (when i > 0 && cl_len == JUMPLISTSIZE),
-/// builds and assigns fmark_T from entry, then updates b_changelistlen.
 void nvim_shada_changelist_insert_entry(void *buf_handle, int i,
                                         ShadaEntry *entry, int cl_len)
 {
@@ -1393,14 +1145,12 @@ void nvim_shada_fm_xfree_fname(ShadaEntry *entry)
 
 int nvim_shada_buf_get_fnum(const void *buf_handle) { return ((const buf_T *)buf_handle)->b_fnum; }
 
-/// Call rs_marklist_insert on curwin->w_jumplist.
 int nvim_shada_jumplist_marklist_insert(int i)
 {
   return rs_marklist_insert(curwin->w_jumplist, sizeof(*curwin->w_jumplist),
                             curwin->w_jumplistlen, i);
 }
 
-/// Call rs_marklist_insert on buf->b_changelist.
 int nvim_shada_changelist_marklist_insert(void *buf_handle, int i)
 {
   buf_T *buf = (buf_T *)buf_handle;
@@ -1408,7 +1158,6 @@ int nvim_shada_changelist_marklist_insert(void *buf_handle, int i)
                             buf->b_changelistlen, i);
 }
 
-/// Thin wrapper for file_try_read_buffered.
 char *nvim_shada_file_try_read_buffered(void *fd, size_t len)
 {
   return file_try_read_buffered((FileDescriptor *)fd, len);
