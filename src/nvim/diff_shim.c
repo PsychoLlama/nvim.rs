@@ -172,7 +172,6 @@ void nvim_diff_set_need_scrollbind(bool val) { diff_need_scrollbind = val; }
 linenr_T nvim_diff_maxlnum(void) { return MAXLNUM; }
 int nvim_diff_get_algorithm(void) { return diff_algorithm; }
 void nvim_diff_set_options(int flags, int context, int linematch, int foldcol, int algorithm) { diff_flags = flags; diff_context = context; linematch_lines = linematch; diff_foldcolumn = foldcol; diff_algorithm = algorithm; }
-void nvim_diff_check_scrollbind(void) { check_scrollbind(0, 0); }
 int nvim_diff_parse_diffanchors(void) { return rs_parse_diffanchors(true, curbuf, NULL, NULL); }
 const char *nvim_diff_get_p_dip(void) { return p_dip; }
 void *nvim_diffio_new(bool use_internal) { diffio_T *dio = xcalloc(1, sizeof(diffio_T)); dio->dio_internal = use_internal ? 1 : 0; return dio; }
@@ -217,10 +216,7 @@ int nvim_diff_get_context(void) { return diff_context; }
 bool nvim_diff_hasFolding(win_T *wp, linenr_T lnum) { return hasFolding(wp, lnum, NULL, NULL); }
 bool nvim_diff_hasFolding_topline(win_T *wp, linenr_T lnum, linenr_T *topline) { return hasFolding(wp, lnum, topline, NULL); }
 bool nvim_diff_decor_conceal_line(win_T *wp, linenr_T lnum) { return decor_conceal_line(wp, lnum - 1, false); }
-void nvim_diff_invalidate_botline_win(win_T *wp) { invalidate_botline(wp); }
-void nvim_diff_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
-void nvim_diff_setpcmark(void) { setpcmark(); }
 bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
 void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }
 void nvim_diffblock_reset_changes_len(diff_T *dp) { if (dp != NULL) { dp->df_changes.ga_len = 0; } }
@@ -292,12 +288,9 @@ const char *nvim_win_get_w_p_fdm_save(win_T *wp) { return wp->w_p_fdm_save; }
 const char *nvim_win_get_w_p_fdc_save(win_T *wp) { return wp->w_p_fdc_save; }
 int nvim_diff_get_foldcolumn(void) { return diff_foldcolumn; }
 void nvim_diff_set_fdm_to_diff(win_T *wp) { set_option_direct_for(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("diff"), OPT_LOCAL, 0, kOptScopeWin, wp); }
-void nvim_diff_changed_window_setting(win_T *wp) { changed_window_setting(wp); }
 bool nvim_diff_sbo_has_hor(void) { return vim_strchr(p_sbo, 'h') != NULL; }
-void nvim_diff_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 bool nvim_diff_is_curwin(win_T *wp) { return wp == curwin; }
 void nvim_diff_changed_window_foldlevel_reset(win_T *wp) { win_T *old_curwin = curwin; curwin = wp; rs_newFoldLevel(); curwin = old_curwin; }
-void nvim_diff_validate_cursor_curwin(void) { validate_cursor(curwin); }
 void nvim_diff_set_cmdmod_tab_zero(void) { cmdmod.cmod_tab = 0; }
 void nvim_diff_do_exedit_with_old_curwin(exarg_T *eap, win_T *old_curwin) { do_exedit(eap, old_curwin); }
 void nvim_diff_set_curwin_w_p_diff(bool val) { curwin->w_p_diff = val; }
@@ -328,9 +321,6 @@ bool nvim_diff_curbuf_changed(void) { return curbuf->b_changed; }
 bool nvim_diff_key_typed(void) { return KeyTyped; }
 void nvim_diff_u_sync(void) { u_sync(false); }
 void nvim_diff_check_cursor_curwin(void) { check_cursor(curwin); }
-void nvim_diff_changed_line_abv_curs(void) { changed_line_abv_curs(); }
-int nvim_diff_u_save(linenr_T top, linenr_T bot) { return u_save(top, bot); }
-int nvim_diff_ml_delete(linenr_T lnum) { return ml_delete(lnum); }
 int nvim_diff_ml_append(linenr_T lnum, const char *line, int len, bool newfile) { return ml_append(lnum, (char *)line, len, newfile); }
 bool nvim_diff_buf_is_empty_curbuf(void) { return buf_is_empty(curbuf); }
 void nvim_diff_mark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after) { mark_adjust(line1, line2, amount, amount_after, kExtmarkNOOP); }

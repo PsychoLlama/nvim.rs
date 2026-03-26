@@ -63,10 +63,10 @@ extern "C" {
     fn nvim_diff_key_typed() -> bool;
     fn nvim_diff_u_sync();
     fn nvim_diff_check_cursor_curwin();
-    fn nvim_diff_changed_line_abv_curs();
+    fn changed_line_abv_curs();
     // Phase 4 (diffgetput) accessors
-    fn nvim_diff_u_save(top: LinenrT, bot: LinenrT) -> c_int;
-    fn nvim_diff_ml_delete(lnum: LinenrT) -> c_int;
+    fn u_save(top: LinenrT, bot: LinenrT) -> c_int;
+    fn ml_delete(lnum: LinenrT) -> c_int;
     fn nvim_diff_ml_append(lnum: LinenrT, line: *const c_char, len: c_int, newfile: bool) -> c_int;
     fn nvim_diff_buf_is_empty_curbuf() -> bool;
     fn nvim_diff_mark_adjust(
@@ -824,7 +824,7 @@ unsafe fn diffgetput_cleanup() {
 
     // Check that the cursor is on a valid character and update its position.
     nvim_diff_check_cursor_curwin();
-    nvim_diff_changed_line_abv_curs();
+    changed_line_abv_curs();
 
     // If all diffs are gone, update folds in all diff windows.
     if nvim_get_diff_first_block().is_null() {
@@ -915,8 +915,8 @@ pub unsafe extern "C" fn rs_diffgetput(
         let mut count = nvim_diffblock_get_count(dp, idx_to);
         let count_cur = nvim_diffblock_get_count(dp, idx_cur);
 
-        let did_enter_block = (lnum_cur + count_cur > line1 + off)
-            && (nvim_diff_u_save(lnum - 1, lnum + count) != FAIL);
+        let did_enter_block =
+            (lnum_cur + count_cur > line1 + off) && (u_save(lnum - 1, lnum + count) != FAIL);
 
         // did_free / dfree / new_count are only meaningful when did_enter_block.
         let mut did_free = false;
@@ -971,7 +971,7 @@ pub unsafe extern "C" fn rs_diffgetput(
             for _i in 0..count {
                 // Remember deleting the last line of the buffer.
                 buf_empty = nvim_diff_curbuf_ml_line_count() == 1;
-                if nvim_diff_ml_delete(lnum) == OK {
+                if ml_delete(lnum) == OK {
                     added -= 1;
                 }
             }
@@ -997,7 +997,7 @@ pub unsafe extern "C" fn rs_diffgetput(
                 if buf_empty && nvim_diff_curbuf_ml_line_count() == 2 {
                     // Added the first line into an empty buffer; delete dummy line.
                     buf_empty = false;
-                    nvim_diff_ml_delete(2);
+                    ml_delete(2);
                 }
             }
 

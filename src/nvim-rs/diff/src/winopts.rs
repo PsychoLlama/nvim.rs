@@ -87,9 +87,9 @@ extern "C" {
     // Diff-mode compound operations
     fn nvim_diff_get_foldcolumn() -> c_int;
     fn nvim_diff_set_fdm_to_diff(wp: WinHandle);
-    fn nvim_diff_changed_window_setting(wp: WinHandle);
+    fn changed_window_setting(wp: WinHandle);
     fn nvim_diff_sbo_has_hor() -> bool;
-    fn nvim_diff_do_cmdline_cmd(cmd: *const c_char);
+    fn do_cmdline_cmd(cmd: *const c_char);
 
     // Global diff state
     fn nvim_get_curtab() -> TabpageHandle;
@@ -210,11 +210,11 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
     rs_foldUpdateAll(wp);
 
     // make sure topline is not halfway through a fold
-    nvim_diff_changed_window_setting(wp);
+    changed_window_setting(wp);
 
     // add 'hor' to 'sbo' if not present
     if !nvim_diff_sbo_has_hor() {
-        nvim_diff_do_cmdline_cmd(c"set sbo+=hor".as_ptr());
+        do_cmdline_cmd(c"set sbo+=hor".as_ptr());
     }
 
     // mark options as saved
@@ -308,7 +308,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
             nvim_win_set_topfill(wp, 0);
 
             // make sure topline is not halfway a fold and cursor is invalidated
-            nvim_diff_changed_window_setting(wp);
+            changed_window_setting(wp);
 
             // Note: 'sbo' is not restored, it's a global option.
             rs_diff_buf_adjust(wp);
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
 
     // Remove "hor" from 'scrollopt' if there are no diff windows left.
     if !diffwin && nvim_diff_sbo_has_hor() {
-        nvim_diff_do_cmdline_cmd(c"set sbo-=hor".as_ptr());
+        do_cmdline_cmd(c"set sbo-=hor".as_ptr());
     }
 }
 
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
     nvim_diff_bufref_set_to_curbuf(old_curbuf_ref);
 
     // Need to compute w_fraction when no redraw happened yet.
-    nvim_diff_validate_cursor_curwin();
+    validate_cursor(nvim_diff_get_curwin());
     rs_set_fraction(old_curwin);
 
     // don't use a new tab page, each tab page has its own diffs
@@ -412,7 +412,7 @@ extern "C" {
     fn nvim_diff_changed_window_foldlevel_reset(wp: WinHandle);
 
     // Phase 2: ex_diffsplit accessors
-    fn nvim_diff_validate_cursor_curwin();
+    fn validate_cursor(wp: WinHandle);
     fn nvim_diff_set_cmdmod_tab_zero();
     fn rs_win_split(size: c_int, flags: c_int) -> c_int; // in window_shim.c
     fn nvim_diff_do_exedit_with_old_curwin(eap: *mut std::ffi::c_void, old_curwin: WinHandle);

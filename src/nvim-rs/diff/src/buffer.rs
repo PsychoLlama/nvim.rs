@@ -205,7 +205,7 @@ extern "C" {
         foldcol: c_int,
         algorithm: c_int,
     );
-    fn nvim_diff_check_scrollbind();
+    fn check_scrollbind(vtopline_diff: c_int, leftcol_diff: c_int);
     fn nvim_diff_parse_diffanchors() -> c_int;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_diff_get_p_dip() -> *const c_char;
@@ -1700,7 +1700,7 @@ pub unsafe extern "C" fn rs_diffopt_changed() -> c_int {
     );
 
     rs_diff_redraw(true);
-    nvim_diff_check_scrollbind();
+    check_scrollbind(0, 0);
     OK
 }
 
@@ -1857,10 +1857,10 @@ extern "C" {
     fn nvim_diff_hasFolding(wp: WinHandle, lnum: LinenrT) -> bool;
     fn nvim_diff_hasFolding_topline(wp: WinHandle, lnum: LinenrT, topline: *mut LinenrT) -> bool;
     fn nvim_diff_decor_conceal_line(wp: WinHandle, lnum: LinenrT) -> bool;
-    fn nvim_diff_invalidate_botline_win(wp: WinHandle);
-    fn nvim_diff_changed_line_abv_curs_win(wp: WinHandle);
+    fn invalidate_botline(wp: WinHandle);
+    fn changed_line_abv_curs_win(wp: WinHandle);
     fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
-    fn nvim_diff_setpcmark();
+    fn setpcmark();
     #[link_name = "rs_run_linematch"]
     fn nvim_diff_run_linematch(dp: DiffBlockHandle);
 }
@@ -2751,8 +2751,8 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
         nvim_win_set_topfill(towin, 0);
     }
 
-    nvim_diff_invalidate_botline_win(towin);
-    nvim_diff_changed_line_abv_curs_win(towin);
+    invalidate_botline(towin);
+    changed_line_abv_curs_win(towin);
     nvim_diff_check_topfill(towin, false);
 
     let mut new_topline = nvim_win_get_topline(towin);
@@ -2866,7 +2866,7 @@ pub unsafe extern "C" fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int {
         return FAIL;
     }
 
-    nvim_diff_setpcmark();
+    setpcmark();
     nvim_win_set_cursor_lnum(curwin, lnum);
     nvim_win_set_cursor_col(curwin, 0);
 

@@ -84,7 +84,7 @@ extern "C" {
     fn rs_diff_win_options(wp: WinHandle, addbuf: bool);
     fn nvim_diff_ex_file(eap: *mut std::ffi::c_void);
     fn nvim_diff_augroup_exists_filetypedetect() -> bool;
-    fn nvim_diff_do_cmdline_cmd(cmd: *const c_char);
+    fn do_cmdline_cmd(cmd: *const c_char);
 }
 
 // =============================================================================
@@ -263,7 +263,7 @@ unsafe fn ex_diffpatch_body(
 
                 // Do filetype detection with the new name.
                 if nvim_diff_augroup_exists_filetypedetect() {
-                    nvim_diff_do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr());
+                    do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr());
                 }
             }
         }
