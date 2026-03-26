@@ -18,6 +18,7 @@
 #include "nvim/cursor.h"
 #include "nvim/decoration.h"
 #include "nvim/diff.h"
+#include "nvim/drawline.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/errors.h"
@@ -2398,4 +2399,99 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 
 // Update w_grid_alloc.blending based on current w_p_winbl value.
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
+
+// =============================================================================
+// Phase 2 (win_line migration): additional FFI accessor functions
+// =============================================================================
+
+/// did_emsg global getter/setter (used by win_line syntax/spell checking).
+int nvim_get_did_emsg(void) { return did_emsg ? 1 : 0; }
+void nvim_set_did_emsg(int val) { did_emsg = (bool)val; }
+
+/// screen_search_hl global pointer accessor.
+/// Returns a pointer to the file-static match_T used for 'hlsearch' in the screen.
+void *nvim_get_screen_search_hl(void) { return &screen_search_hl; }
+
+/// w_redr_statuscol getter (setter already in window struct accessors).
+int nvim_win_get_redr_statuscol(win_T *wp) { return wp->w_redr_statuscol ? 1 : 0; }
+
+// nvim_win_get_p_cole already exported from Rust (window crate).
+
+/// ltoreq macro: returns true if pos_a <= pos_b.
+/// Positions are passed as [lnum, col, coladd] int arrays (matching pos_T layout).
+bool nvim_ltoreq_pos(const int *pos_a, const int *pos_b)
+{
+  pos_T a = { .lnum = pos_a[0], .col = pos_a[1], .coladd = pos_a[2] };
+  pos_T b = { .lnum = pos_b[0], .col = pos_b[1], .coladd = pos_b[2] };
+  return ltoreq(a, b);
+}
+
+/// FOLD_TEXT_LEN constant accessor.
+int nvim_get_FOLD_TEXT_LEN(void) { return FOLD_TEXT_LEN; }
+
+/// spellvars_T field accessors (opaque pointer pattern).
+int nvim_spv_get_has_spell(const void *spv) { return ((const spellvars_T *)spv)->spv_has_spell ? 1 : 0; }
+int nvim_spv_get_unchanged(const void *spv) { return ((const spellvars_T *)spv)->spv_unchanged ? 1 : 0; }
+int nvim_spv_get_checked_col(const void *spv) { return ((const spellvars_T *)spv)->spv_checked_col; }
+int nvim_spv_get_checked_lnum(const void *spv) { return (int)((const spellvars_T *)spv)->spv_checked_lnum; }
+int nvim_spv_get_cap_col(const void *spv) { return ((const spellvars_T *)spv)->spv_cap_col; }
+int nvim_spv_get_capcol_lnum(const void *spv) { return (int)((const spellvars_T *)spv)->spv_capcol_lnum; }
+void nvim_spv_set_checked_lnum(void *spv, int val) { ((spellvars_T *)spv)->spv_checked_lnum = (linenr_T)val; }
+void nvim_spv_set_cap_col(void *spv, int val) { ((spellvars_T *)spv)->spv_cap_col = val; }
+void nvim_spv_set_capcol_lnum(void *spv, int val) { ((spellvars_T *)spv)->spv_capcol_lnum = (linenr_T)val; }
+
+/// gchar_pos wrapper taking position as [lnum, col, coladd] int array.
+int nvim_gchar_pos_byval(const int *pos)
+{
+  pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
+  return gchar_pos(&p);
+}
+
+/// cursor_is_block_during_visual wrapper.
+extern bool cursor_is_block_during_visual(bool exclusive);
+int nvim_cursor_is_block_during_visual(int exclusive) { return cursor_is_block_during_visual(exclusive != 0) ? 1 : 0; }
+
+/// w_old_cursor_fcol / w_old_cursor_lcol getters (block visual selection columns).
+int nvim_win_get_old_cursor_fcol(win_T *wp) { return (int)wp->w_old_cursor_fcol; }
+int nvim_win_get_old_cursor_lcol(win_T *wp) { return (int)wp->w_old_cursor_lcol; }
+
+/// getvvcol wrapper taking position as [lnum, col, coladd] int array.
+void nvim_getvvcol_byval(win_T *wp, const int *pos, int *scol, int *ccol, int *ecol)
+{
+  pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
+  colnr_T sc = 0, cc = 0, ec = 0;
+  getvvcol(wp, &p, scol ? (colnr_T *)scol : &sc, ccol ? (colnr_T *)ccol : &cc,
+           ecol ? (colnr_T *)ecol : &ec);
+}
+
+/// getvcol wrapper taking position as [lnum, col, coladd] int array.
+void nvim_getvcol_byval3(win_T *wp, const int *pos, int *scol, int *ccol, int *ecol)
+{
+  pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
+  colnr_T sc = 0, cc = 0, ec = 0;
+  getvcol(wp, &p, scol ? (colnr_T *)scol : &sc, ccol ? (colnr_T *)ccol : &cc,
+          ecol ? (colnr_T *)ecol : &ec);
+}
+
+/// conceal_cursor_line wrapper (returns int for FFI).
+int nvim_conceal_cursor_line(const win_T *wp) { return conceal_cursor_line(wp) ? 1 : 0; }
+
+// nvim_win_get_botfill already defined above (line ~698).
+
+/// ml_get_buf wrapper for drawline (returns char* for given buf/lnum).
+const char *nvim_buf_ml_get(buf_T *buf, int lnum) { return ml_get_buf(buf, (linenr_T)lnum); }
+
+// nvim_win_get_buf_ptr(wp) already defined at line ~968.
+
+/// buf_T terminal pointer (non-null iff terminal buffer).
+void *nvim_buf_get_terminal_ptr(buf_T *buf) { return buf->terminal; }
+
+/// Terminal line attributes (wrapped to avoid exposing Terminal type in Rust).
+void nvim_buf_terminal_get_line_attributes(void *terminal, win_T *wp, int lnum, int *term_attrs)
+{
+  terminal_get_line_attributes((Terminal *)terminal, wp, (linenr_T)lnum, term_attrs);
+}
+
+/// kMTMetaInline constant (value 2).
+int nvim_get_kMTMetaInline(void) { return (int)kMTMetaInline; }
 

@@ -400,6 +400,212 @@ extern "C" {
     );
     fn validate_virtcol(wp: WinHandle);
     fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int;
+
+    // Phase 2 (win_line migration): additional FFI declarations
+
+    // Syntax highlighting
+    fn syntax_start(wp: WinHandle, lnum: LinenrT);
+    fn get_syntax_attr(col: ColnrT, can_spell: *mut bool, keep_state: bool) -> c_int;
+    fn get_syntax_info(seqnrp: *mut c_int) -> c_int;
+    fn syn_get_sub_char() -> c_int;
+
+    // Spell checking
+    fn spell_move_to(
+        wp: WinHandle,
+        dir: c_int,
+        behaviour: c_int,
+        curline: bool,
+        attrp: *mut c_int,
+    ) -> usize;
+    fn spell_to_word_end(start: *const c_char, win: WinHandle) -> *const c_char;
+    fn spell_check(
+        wp: WinHandle,
+        ptr: *mut c_char,
+        attrp: *mut c_int,
+        capcol: *mut c_int,
+        docount: bool,
+    ) -> usize;
+    fn spell_cat_line(buf: *mut c_char, line: *const c_char, maxlen: c_int);
+    fn check_need_cap(wp: WinHandle, lnum: LinenrT, col: ColnrT) -> bool;
+
+    // Search highlighting (match_T passed as opaque *mut c_void)
+    fn prepare_search_hl_line(
+        wp: WinHandle,
+        lnum: LinenrT,
+        mincol: ColnrT,
+        line: *mut *const c_char,
+        search_hl: *mut c_void,
+        search_attr: *mut c_int,
+        search_attr_from_match: *mut bool,
+    ) -> bool;
+    fn update_search_hl(
+        wp: WinHandle,
+        lnum: LinenrT,
+        col: ColnrT,
+        line: *mut *const c_char,
+        search_hl: *mut c_void,
+        has_match_conc: *mut c_int,
+        match_conc: *mut c_int,
+        n_skip: c_int,
+    ) -> c_int;
+    fn get_prevcol_hl_flag(wp: WinHandle, search_hl: *mut c_void, curcol: ColnrT) -> bool;
+    fn get_search_match_hl(
+        wp: WinHandle,
+        search_hl: *mut c_void,
+        col: ColnrT,
+        char_attr: *mut c_int,
+    );
+
+    // Decoration
+    fn decor_redraw_line(wp: WinHandle, row: c_int, state: *mut c_void);
+    fn decor_redraw_col_impl(
+        wp: WinHandle,
+        col: ColnrT,
+        win_col: c_int,
+        hidden: bool,
+        state: *mut c_void,
+    ) -> c_int;
+    fn decor_redraw_eol(
+        wp: WinHandle,
+        state: *mut c_void,
+        eol_attr: *mut c_int,
+        eol_col: c_int,
+    ) -> bool;
+    fn decor_has_more_decorations(state: *mut c_void, row: c_int) -> bool;
+    fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: *mut c_void);
+    fn decor_virt_lines(
+        wp: WinHandle,
+        start_row: c_int,
+        end_row: c_int,
+        num_below: *mut c_int,
+        lines: *mut c_void,
+        apply_folds: bool,
+    ) -> c_int;
+
+    // Grid
+    fn win_draw_end(
+        wp: WinHandle,
+        c1: ScharT,
+        draw_margin: bool,
+        startrow: c_int,
+        endrow: c_int,
+        hl: c_int,
+    );
+    fn set_empty_rows(wp: WinHandle, used: c_int);
+    fn win_bg_attr(wp: WinHandle) -> c_int;
+
+    // Terminal
+    fn nvim_buf_terminal_get_line_attributes(
+        terminal: *mut c_void,
+        wp: WinHandle,
+        lnum: c_int,
+        term_attrs: *mut c_int,
+    );
+
+    // Multibyte / charset
+    fn transchar_buf(buf: *mut c_void, c: c_int) -> *mut c_char;
+    fn transchar_hex(buf: *mut c_char, c: c_int) -> usize;
+    fn rl_mirror_ascii(str: *mut c_char, end: *mut c_char);
+    fn byte2cells(b: c_int) -> c_int;
+    fn clear_virttext(text: *mut c_void);
+    fn skipwhite(p: *const c_char) -> *const c_char;
+    fn plines_win(wp: WinHandle, lnum: LinenrT, limit_winheight: bool) -> c_int;
+    fn utf_ptr2CharInfo_impl(p: *const u8, len: usize) -> i32;
+    // utfc_next_impl is implemented in Rust (mbyte crate) - call via utfc_ptr2schar wrappers
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn mb_ptr2char_adv(pp: *mut *const c_char) -> c_int;
+    fn schar_get_adv(buf_out: *mut *mut c_char, sc: ScharT) -> usize;
+    fn schar_len(sc: ScharT) -> usize;
+    fn schar_cells(sc: ScharT) -> c_int;
+    fn schar_get_first_codepoint(sc: ScharT) -> c_int;
+    fn ml_get_buf(buf: *mut c_void, lnum: LinenrT) -> *const c_char;
+
+    // Globals accessors (Phase 2 additions)
+    fn nvim_get_did_emsg() -> c_int;
+    fn nvim_set_did_emsg(val: c_int);
+    fn nvim_get_screen_search_hl() -> *mut c_void;
+    fn nvim_win_get_redr_statuscol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
+    fn nvim_ltoreq_pos(pos_a: *const c_int, pos_b: *const c_int) -> bool;
+    fn nvim_get_FOLD_TEXT_LEN() -> c_int;
+    fn nvim_spv_get_has_spell(spv: *const c_void) -> c_int;
+    fn nvim_spv_get_unchanged(spv: *const c_void) -> c_int;
+    fn nvim_spv_get_checked_col(spv: *const c_void) -> c_int;
+    fn nvim_spv_get_checked_lnum(spv: *const c_void) -> c_int;
+    fn nvim_spv_get_cap_col(spv: *const c_void) -> c_int;
+    fn nvim_spv_get_capcol_lnum(spv: *const c_void) -> c_int;
+    fn nvim_spv_set_checked_lnum(spv: *mut c_void, val: c_int);
+    fn nvim_spv_set_cap_col(spv: *mut c_void, val: c_int);
+    fn nvim_spv_set_capcol_lnum(spv: *mut c_void, val: c_int);
+    fn nvim_gchar_pos_byval(pos: *const c_int) -> c_int;
+    fn nvim_cursor_is_block_during_visual(exclusive: c_int) -> c_int;
+    fn nvim_win_get_old_cursor_fcol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_old_cursor_lcol(wp: WinHandle) -> c_int;
+    fn nvim_getvvcol_byval(
+        wp: WinHandle,
+        pos: *const c_int,
+        scol: *mut c_int,
+        ccol: *mut c_int,
+        ecol: *mut c_int,
+    );
+    fn nvim_getvcol_byval3(
+        wp: WinHandle,
+        pos: *const c_int,
+        scol: *mut c_int,
+        ccol: *mut c_int,
+        ecol: *mut c_int,
+    );
+    fn nvim_conceal_cursor_line(wp: WinHandle) -> c_int;
+    fn nvim_buf_ml_get(buf: *mut c_void, lnum: c_int) -> *const c_char;
+    fn nvim_buf_get_terminal_ptr(buf: *mut c_void) -> *mut c_void;
+    fn nvim_get_kMTMetaInline() -> c_int;
+    fn nvim_get_search_match_lines() -> c_int;
+    fn nvim_get_search_match_endcol() -> c_int;
+    fn nvim_get_highlight_match() -> c_int;
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_get_VIsual_mode() -> c_int;
+    fn nvim_get_VIsual_pos_fields(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
+    fn nvim_get_state() -> c_int;
+    fn nvim_virtual_active_win(wp: WinHandle) -> bool;
+    fn nvim_win_buf_meta_total_inline(wp: WinHandle) -> c_int;
+    fn nvim_win_get_cc_cols(wp: WinHandle) -> *mut c_int;
+    fn nvim_win_get_syn_error(wp: WinHandle) -> c_int;
+    fn nvim_win_set_syn_error(wp: WinHandle, val: c_int);
+    fn nvim_win_get_syn_slow(wp: WinHandle) -> c_int;
+    fn nvim_win_p_fdt_empty(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_is_terminal(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_line_count_direct(wp: WinHandle) -> LinenrT;
+    fn nvim_win_bt_quickfix(wp: WinHandle) -> c_int;
+    fn nvim_win_get_wrap_val(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_cuc_val(wp: WinHandle) -> c_int;
+    fn nvim_virt_lines_size(vl: *mut c_void) -> c_int;
+    fn nvim_virt_lines_flags(vl: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_virt_lines_line(vl: *mut c_void, idx: c_int) -> *mut c_void;
+    fn nvim_virt_lines_destroy(vl: *mut c_void);
+    fn nvim_init_charsize_arg_wrap(
+        csarg: *mut c_void,
+        wp: WinHandle,
+        lnum: LinenrT,
+        line: *const c_char,
+    ) -> c_int;
+    fn nvim_win_charsize_wrap(
+        cstype: bool,
+        vcol: c_int,
+        ptr: *const c_char,
+        chr: i32,
+        csarg: *mut c_void,
+        out_width: *mut c_int,
+        out_head: *mut c_int,
+    );
+    fn nvim_charsize_arg_size() -> c_int;
+    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_curwin_cursor_lnum() -> LinenrT;
+    fn nvim_curwin_cursor_col() -> ColnrT;
+    fn nvim_get_p_sel() -> *const c_char;
+    fn nvim_get_cmdwin_win() -> WinHandle;
+    fn nvim_get_cmdwin_type() -> c_int;
+    fn nvim_win_syntax_present(wp: WinHandle) -> c_int;
+    fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -942,7 +1148,6 @@ extern "C" {
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
 
     // State and quickfix functions for apply_cursorline_highlight
-    fn nvim_get_state() -> c_int;
     fn rs_bt_quickfix(buf: BufHandle) -> bool;
     #[link_name = "qf_current_entry"]
     fn nvim_qf_current_entry(wp: WinHandle) -> LinenrT;
@@ -3189,7 +3394,6 @@ extern "C" {
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
 
     // Window comparison
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
 
     // Syntax state
     fn syntax_present(wp: WinHandle) -> bool;
