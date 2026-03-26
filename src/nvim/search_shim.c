@@ -76,12 +76,6 @@ static const char e_search_hit_bottom_without_match_for_str[]
 extern int rs_magic_isset(void);
 extern int rs_is_search_forward(void);
 
-// Rust FFI declaration for find_pattern_in_path
-extern void rs_find_pattern_in_path(const char *ptr, int dir, size_t len,
-                                    int whole, int skip_comments,
-                                    int type, int count, int action,
-                                    linenr_T start_lnum, linenr_T end_lnum,
-                                    int forceit, int silent);
 
 // Rust FFI declarations for pattern utilities
 extern int rs_compl_status_adding(void);
@@ -298,11 +292,19 @@ void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool
                           int type, int count, int action, linenr_T start_lnum, linenr_T end_lnum,
                           bool forceit, bool silent)
 {
-  rs_find_pattern_in_path(ptr, dir, len,
-                          whole ? 1 : 0, skip_comments ? 1 : 0,
-                          type, count, action,
-                          start_lnum, end_lnum,
-                          forceit ? 1 : 0, silent ? 1 : 0);
+  FpipInitResult init = nvim_fpip_init(ptr, dir, len,
+                                       whole ? 1 : 0, skip_comments ? 1 : 0,
+                                       type, count, action,
+                                       start_lnum, end_lnum,
+                                       forceit ? 1 : 0, silent ? 1 : 0);
+  if (!init.ok || init.handle == NULL) {
+    if (init.handle != NULL) {
+      nvim_fpip_cleanup(init.handle);
+    }
+    return;
+  }
+  nvim_fpip_run(init.handle);
+  nvim_fpip_cleanup(init.handle);
 }
 
 // find_pattern_in_path batch helpers
@@ -1145,10 +1147,6 @@ char *nvim_search_get_curbuf_b_p_mps(void) { return curbuf->b_p_mps; }
 int nvim_search_get_curbuf_b_p_lisp(void) { return curbuf->b_p_lisp ? 1 : 0; }
 /// Get curwin->w_p_rl.
 int nvim_search_get_curwin_w_p_rl(void) { return curwin->w_p_rl ? 1 : 0; }
-/// Get curwin->w_cursor.lnum.
-linenr_T nvim_search_get_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
-/// Get curwin->w_cursor.col.
-colnr_T nvim_search_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 /// Wrap check_linecomment().
 int nvim_search_check_linecomment(const char *line) { return check_linecomment(line); }
 /// Set oap->motion_type.
@@ -1208,8 +1206,6 @@ void nvim_cmdline_stat_display(const char *msgbuf)
 
 // Integration function accessors
 
-/// Check if curbuf has lisp mode enabled.
-int nvim_curbuf_is_lisp(void) { return curbuf->b_p_lisp ? 1 : 0; }
 int nvim_is_pos_in_string(const char *line, int col) { return is_pos_in_string(line, (colnr_T)col); }
 /// Call search_regcomp for is_zero_width.
 int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch)

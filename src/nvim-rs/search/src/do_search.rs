@@ -108,8 +108,8 @@ extern "C" {
     fn nvim_do_search_hasFolding_bwd(lnum: *mut LinenrT) -> c_int;
 
     // cursor read/write
-    fn nvim_search_get_curwin_cursor_lnum() -> LinenrT;
-    fn nvim_search_get_curwin_cursor_col() -> ColnrT;
+    fn nvim_get_curwin_cursor_lnum() -> LinenrT;
+    fn nvim_get_curwin_cursor_col() -> ColnrT;
     fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
     fn nvim_set_curwin_cursor_col(col: ColnrT);
     fn nvim_set_curwin_cursor_coladd(coladd: ColnrT);
@@ -214,8 +214,8 @@ unsafe fn do_search_fold_adjust(dirc: c_int, lnum: LinenrT, col: ColnrT) -> DoSe
 /// Get cursor position for do_search start.
 unsafe fn do_search_get_cursor() -> DoSearchPos {
     DoSearchPos {
-        lnum: nvim_search_get_curwin_cursor_lnum(),
-        col: nvim_search_get_curwin_cursor_col(),
+        lnum: nvim_get_curwin_cursor_lnum(),
+        col: nvim_get_curwin_cursor_col(),
     }
 }
 
@@ -252,8 +252,8 @@ unsafe fn do_search_show_top_bot(dirc: c_int, pos_lnum: LinenrT, pos_col: ColnrT
     if shortmess(b's' as c_int) {
         return 0;
     }
-    let cur_lnum = nvim_search_get_curwin_cursor_lnum();
-    let cur_col = nvim_search_get_curwin_cursor_col();
+    let cur_lnum = nvim_get_curwin_cursor_lnum();
+    let cur_col = nvim_get_curwin_cursor_col();
     // lt(pos, cursor): pos < cursor
     let pos_lt_cursor = pos_lnum < cur_lnum || (pos_lnum == cur_lnum && pos_col < cur_col);
     // lt(cursor, pos): cursor < pos

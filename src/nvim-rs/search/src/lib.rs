@@ -14,7 +14,6 @@ pub mod do_search;
 pub mod helpers;
 pub mod incsearch;
 pub mod matchparen;
-pub mod path_search;
 pub mod pattern;
 pub mod search_state;
 pub mod searchit;

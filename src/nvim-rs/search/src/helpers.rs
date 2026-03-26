@@ -736,7 +736,7 @@ pub unsafe extern "C" fn linewhite_export(lnum: i32) -> bool {
 // =============================================================================
 
 extern "C" {
-    fn nvim_curbuf_is_lisp() -> c_int;
+    fn nvim_search_get_curbuf_b_p_lisp() -> c_int;
     fn nvim_is_pos_in_string(line: *const c_char, col: c_int) -> c_int;
 }
 
@@ -760,7 +760,7 @@ pub unsafe extern "C" fn rs_check_linecomment(line: *const c_char) -> c_int {
 
     let bytes = line as *const u8;
 
-    if nvim_curbuf_is_lisp() != 0 {
+    if nvim_search_get_curbuf_b_p_lisp() != 0 {
         // Lisp mode: scan for ';' outside of strings
         // First check if there's a ';' at all
         let mut has_semicolon = false;

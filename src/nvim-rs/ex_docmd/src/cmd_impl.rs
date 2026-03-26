@@ -138,8 +138,8 @@ extern "C" {
     fn nvim_docmd_prepare_preview_window();
     fn nvim_docmd_back_to_current_window(curwin_save: WinHandle);
 
-    // find_pattern_in_path (via rs_find_pattern_in_path)
-    #[link_name = "rs_find_pattern_in_path"]
+    // find_pattern_in_path (C function in search_shim.c)
+    #[link_name = "find_pattern_in_path"]
     fn nvim_cmd_find_pattern_in_path(
         ptr: *const c_char,
         dir: c_int,

@@ -40,8 +40,7 @@ extern "C" {
     fn nvim_set_VIsual_mode(val: c_int);
     fn nvim_set_p_ws(val: c_int);
     fn nvim_get_p_sel_first() -> c_char;
-    fn nvim_search_get_curwin_cursor_lnum() -> c_int;
-    fn nvim_search_get_curwin_cursor_col() -> c_int;
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_search_get_curwin_cursor_coladd() -> c_int;
     fn nvim_set_curwin_cursor_lnum(lnum: c_int);
     fn nvim_set_curwin_cursor_coladd(coladd: c_int);
@@ -776,8 +775,8 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
         let vis_lnum = nvim_get_VIsual_lnum();
         let vis_col = nvim_get_VIsual_col();
         let vis_coladd = nvim_get_VIsual_coladd();
-        let cur_lnum = nvim_search_get_curwin_cursor_lnum();
-        let cur_col = nvim_search_get_curwin_cursor_col();
+        let cur_lnum = nvim_get_curwin_cursor_lnum();
+        let cur_col = nvim_get_curwin_cursor_col();
         let cur_coladd = nvim_search_get_curwin_cursor_coladd();
         // lt(VIsual, curwin->w_cursor)
         if lt_pos(vis_lnum, vis_col, vis_coladd, cur_lnum, cur_col, cur_coladd) {
@@ -789,8 +788,8 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
     // but also re-read cursor in case it changed.
     let visual_active = VIsual_active;
 
-    let cur_lnum = nvim_search_get_curwin_cursor_lnum();
-    let cur_col = nvim_search_get_curwin_cursor_col();
+    let cur_lnum = nvim_get_curwin_cursor_lnum();
+    let cur_col = nvim_get_curwin_cursor_col();
     let cur_coladd = nvim_search_get_curwin_cursor_coladd();
 
     // When searching forward and cursor is at start of Visual area, skip
@@ -935,8 +934,8 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
             nvim_dec_cursor();
         }
     } else {
-        let cur_lnum2 = nvim_search_get_curwin_cursor_lnum();
-        let cur_col2 = nvim_search_get_curwin_cursor_col();
+        let cur_lnum2 = nvim_get_curwin_cursor_lnum();
+        let cur_col2 = nvim_get_curwin_cursor_col();
         let cur_coladd2 = nvim_search_get_curwin_cursor_coladd();
         if visual_active
             && lt_pos(
@@ -959,8 +958,8 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
     nvim_set_VIsual_mode(b'v' as c_int);
 
     if nvim_get_p_sel_first() == b'e' as c_char {
-        let cur_lnum3 = nvim_search_get_curwin_cursor_lnum();
-        let cur_col3 = nvim_search_get_curwin_cursor_col();
+        let cur_lnum3 = nvim_get_curwin_cursor_lnum();
+        let cur_col3 = nvim_get_curwin_cursor_col();
         let cur_coladd3 = nvim_search_get_curwin_cursor_coladd();
         let vis_lnum2 = nvim_get_VIsual_lnum();
         let vis_col2 = nvim_get_VIsual_col();

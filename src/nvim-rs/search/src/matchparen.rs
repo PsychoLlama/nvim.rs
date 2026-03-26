@@ -102,8 +102,8 @@ extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
     // Cursor and buffer
-    fn nvim_search_get_curwin_cursor_lnum() -> LinenrT;
-    fn nvim_search_get_curwin_cursor_col() -> ColnrT;
+    fn nvim_get_curwin_cursor_lnum() -> LinenrT;
+    fn nvim_get_curwin_cursor_col() -> ColnrT;
 
     // Interrupt check
     fn line_breakcheck();
@@ -259,8 +259,8 @@ pub unsafe extern "C" fn rs_findmatchlimit(
     flags: c_int,
     maxtravel: i64,
 ) -> FindMatchResult {
-    let mut pos_lnum = nvim_search_get_curwin_cursor_lnum();
-    let mut pos_col = nvim_search_get_curwin_cursor_col();
+    let mut pos_lnum = nvim_get_curwin_cursor_lnum();
+    let mut pos_col = nvim_get_curwin_cursor_col();
 
     let mut linep = nvim_search_ml_get(pos_lnum);
 
@@ -558,12 +558,12 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                         let end_lnum = if count > 0 {
                             match_pos_lnum
                         } else {
-                            nvim_search_get_curwin_cursor_lnum()
+                            nvim_get_curwin_cursor_lnum()
                         };
                         let end_col = if count > 0 {
                             match_pos_col
                         } else {
-                            nvim_search_get_curwin_cursor_col()
+                            nvim_get_curwin_cursor_col()
                         };
                         if !find_rawstring_end(linep, pos_lnum, pos_col, end_lnum, end_col) {
                             count += 1;
