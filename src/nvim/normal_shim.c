@@ -676,7 +676,6 @@ void nvim_hasFolding_cursor_set_lnum_up(void) { hasFolding(curwin, curwin->w_cur
 void nvim_hasFolding_cursor_set_lnum_down(void) { hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum); }
 void nvim_set_curbuf_b_last_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
 bool nvim_u_save_for_opencmd(bool backward) { return u_save(curwin->w_cursor.lnum - (backward ? 1 : 0), curwin->w_cursor.lnum + (backward ? 0 : 1)) != 0; }
-bool nvim_open_line_for_opencmd(bool backward, bool do_com) { return open_line(backward ? BACKWARD : FORWARD, do_com ? OPENLINE_DO_COM : 0, 0, NULL) != false; }
 void nvim_clear_curwin_w_valid_crow(void) { curwin->w_valid &= ~VALID_CROW; }
 /// mark_mb_adjustpos for cursor: adjusts curwin->w_cursor via curbuf,
 /// returns new col.

@@ -5581,7 +5581,12 @@ extern "C" {
     fn nvim_hasFolding_cursor_set_lnum_down();
     fn nvim_set_curbuf_b_last_changedtick_i();
     fn nvim_u_save_for_opencmd(backward: bool) -> bool;
-    fn nvim_open_line_for_opencmd(backward: bool, do_com: bool) -> bool;
+    fn open_line(
+        dir: c_int,
+        flags: c_int,
+        second_line_indent: c_int,
+        did_do_comment: *mut bool,
+    ) -> bool;
     fn has_format_option(c: c_int) -> bool;
     fn nvim_clear_curwin_w_valid_crow();
     fn nvim_mark_mb_adjustpos_cursor_new() -> c_int;
@@ -5964,7 +5969,9 @@ pub unsafe extern "C" fn rs_n_opencmd(cap: CapHandle) {
 
     if nvim_u_save_for_opencmd(backward) {
         let do_com = has_format_option(c_int::from(b'o')); // FO_OPEN_COMS
-        if nvim_open_line_for_opencmd(backward, do_com) {
+        let dir = if backward { BACKWARD } else { FORWARD };
+        let flags = if do_com { 0x02 } else { 0 }; // 0x02 = OPENLINE_DO_COM
+        if open_line(dir, flags, 0, std::ptr::null_mut()) {
             if win_cursorline_standout(nvim_get_curwin()) {
                 // force redraw of cursorline
                 nvim_clear_curwin_w_valid_crow();
