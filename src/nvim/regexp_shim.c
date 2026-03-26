@@ -10,14 +10,9 @@
 //   - Thin wrappers for public API functions that need C type casts
 
 #include <assert.h>
-#include <ctype.h>
-#include <inttypes.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdlib.h>
 #include <string.h>
-#include <uv.h>
 
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
@@ -26,29 +21,22 @@
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/userfunc.h"
-#include "nvim/garray.h"
-#include "nvim/garray_defs.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
 #include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/input.h"
 #include "nvim/plines.h"
 #include "nvim/pos_defs.h"
 #include "nvim/profile.h"
 #include "nvim/regexp.h"
 #include "nvim/regexp_defs.h"
 #include "nvim/strings.h"
-#include "nvim/types_defs.h"
-#include "nvim/vim_defs.h"
 
 extern char *rs_partial_name(partial_T *pt);
 
