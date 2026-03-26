@@ -23,8 +23,9 @@
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::types::{
-    BlockNr, BufHandle, InfoPtrHandle, B0_VERSION_SIZE, DATA_BLOCK_HEADER_SIZE, DATA_ID, HLF_E,
-    MIN_SWAP_PAGE_SIZE, PTR_ID, UPD_NOT_VALID,
+    BlockNr, BufHandle, InfoPtrHandle, B0_FF_MASK, B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC,
+    B0_VERSION_SIZE, DATA_BLOCK_HEADER_SIZE, DATA_ID, HLF_E, MIN_SWAP_PAGE_SIZE, PTR_ID,
+    UPD_NOT_VALID,
 };
 
 // =============================================================================
@@ -164,11 +165,8 @@ extern "C" {
     fn nvim_mf_get_fname(mfp: *mut c_void) -> *mut c_char;
     fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
     fn nvim_bhdr_set_bh_data(hp: *mut c_void, data: *mut c_void);
-    fn nvim_b0_get_ff(b0p: *const c_void) -> c_int;
-    fn nvim_b0_extract_fenc(b0p: *const c_void) -> *mut c_char;
     fn nvim_b0_get_page_size_ptr(b0p: *const c_void) -> *const c_char;
     fn nvim_b0_set_fname0_nul(b0p: *mut c_void);
-    fn nvim_b0_is_vim3(b0p: *const c_void) -> c_int;
     fn nvim_pp_get_id(pp: *const c_void) -> u16;
     fn nvim_pp_get_count(pp: *const c_void) -> u16;
     fn nvim_pp_get_count_max(pp: *const c_void) -> u16;
@@ -383,7 +381,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         let mut b0p = nvim_bhdr_get_bh_data(hp);
 
         // VIM 3.0 swap file?
-        if nvim_b0_is_vim3(b0p) != 0 {
+        if b0_is_vim3_native(b0p) {
             nvim_recover_msg(
                 RECOVER_MSG_VIM3,
                 nvim_mf_get_fname(mfp),
@@ -466,8 +464,8 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         }
 
         // Extract fileformat and encoding from block 0 before releasing it
-        let b0_ff = nvim_b0_get_ff(b0p);
-        b0_fenc = nvim_b0_extract_fenc(b0p);
+        let b0_ff = b0_get_ff_native(b0p);
+        b0_fenc = b0_extract_fenc_native(b0p);
         let mtime_b0 = rs_char_to_long(nvim_b0_get_mtime(b0p).cast_const()) as c_int;
 
         // Display swap file and original file names
@@ -1559,6 +1557,9 @@ extern "C" {
     /// Get pointer to b0_fname field (B0_FNAME_SIZE_ORG bytes)
     fn nvim_b0_get_fname_ptr(b0: *const c_void) -> *const c_char;
 
+    /// Get b0_flags byte from ZeroBlock
+    fn nvim_b0_get_flags_byte(b0: *const c_void) -> u8;
+
     /// Get file inode number, or 0 if file doesn't exist
     fn nvim_get_file_inode(fname: *const c_char) -> u64;
 
@@ -1798,6 +1799,54 @@ pub unsafe extern "C" fn rs_long_to_char(n: i64, s: *mut c_char) {
     *s.add(1) = ((n >> 8) & 0xFF) as c_char;
     *s.add(2) = ((n >> 16) & 0xFF) as c_char;
     *s.add(3) = ((n >> 24) & 0xFF) as c_char;
+}
+
+// =============================================================================
+// Phase 5 migrated helpers (formerly C functions in memline_shim.c)
+// =============================================================================
+
+/// Get the fileformat flags from block 0 (b0_flags & B0_FF_MASK).
+///
+/// # Safety
+/// - `b0p` must be a valid pointer to a ZeroBlock
+unsafe fn b0_get_ff_native(b0p: *const c_void) -> c_int {
+    c_int::from(nvim_b0_get_flags_byte(b0p) & B0_FF_MASK)
+}
+
+/// Check if block 0 is from VIM 3.0 (version string starts with "VIM 3.0").
+///
+/// # Safety
+/// - `b0p` must be a valid pointer to a ZeroBlock
+unsafe fn b0_is_vim3_native(b0p: *const c_void) -> bool {
+    let version = nvim_b0_get_version_ptr(b0p).cast::<u8>();
+    let vim3 = b"VIM 3.0";
+    for (i, &byte) in vim3.iter().enumerate() {
+        if *version.add(i) != byte {
+            return false;
+        }
+    }
+    true
+}
+
+/// Extract the fileencoding from block 0 b0_fname area (B0_HAS_FENC flag).
+///
+/// Returns a newly-allocated C string with the encoding, or NULL if not present.
+///
+/// # Safety
+/// - `b0p` must be a valid pointer to a ZeroBlock
+unsafe fn b0_extract_fenc_native(b0p: *const c_void) -> *mut c_char {
+    if nvim_b0_get_flags_byte(b0p) & B0_HAS_FENC == 0 {
+        return std::ptr::null_mut();
+    }
+    let fname = nvim_b0_get_fname_ptr(b0p);
+    let fnsize = B0_FNAME_SIZE_NOCRYPT;
+    // Search backwards from end of fname area for the start of fenc string
+    let mut p = fname.add(fnsize);
+    while p > fname && *p.sub(1) != 0 {
+        p = p.sub(1);
+    }
+    let len = fname.add(fnsize) as usize - p as usize;
+    nvim_xstrnsave(p, len)
 }
 
 /// Convert a 4-byte array from swap file storage to a long integer.

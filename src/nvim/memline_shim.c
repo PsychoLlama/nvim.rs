@@ -1050,27 +1050,7 @@ int nvim_recover_check_proc_and_print(const char *fname_used)
   return 0;
 }
 
-int nvim_b0_is_vim3(const void *b0p)
-{
-  return strncmp(((const ZeroBlock *)b0p)->b0_version, "VIM 3.0", 7) == 0 ? 1 : 0;
-}
-
 void nvim_ml_delete_first_curbuf(void) { ml_delete(1); }
-
-char *nvim_b0_extract_fenc(const ZeroBlock *b0p)
-{
-  if (!(b0p->b0_flags & B0_HAS_FENC)) {
-    return NULL;
-  }
-  int fnsize = B0_FNAME_SIZE_NOCRYPT;
-  const char *p = b0p->b0_fname + fnsize;
-  while (p > b0p->b0_fname && p[-1] != NUL) {
-    p--;
-  }
-  return xstrnsave((char *)p, (size_t)(b0p->b0_fname + fnsize - p));
-}
-
-int nvim_b0_get_ff(const ZeroBlock *b0p) { return b0p->b0_flags & B0_FF_MASK; }
 
 int64_t nvim_mf_get_file_size(memfile_T *mfp)
 {
