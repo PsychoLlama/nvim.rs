@@ -231,7 +231,6 @@ int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, 
 
 void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
-void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
 void nvim_regexp_set_re_extmatch_out_match(int i, uint8_t *v) { re_extmatch_out->matches[i] = v; }
 
 // reg_match_visual accessors for Rust FFI

@@ -14449,7 +14449,6 @@ extern "C" {
     // iemsg null error
 
     fn nvim_regexp_get_buf_ml_line_count(buf: *mut c_void) -> i32;
-    fn nvim_regexp_get_re_extmatch_out() -> *mut c_void;
     fn nvim_regexp_set_re_extmatch_out_match(i: c_int, v: *mut u8);
 }
 
