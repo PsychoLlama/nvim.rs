@@ -761,7 +761,7 @@ const OK: c_int = 1;
 ///
 /// # Safety
 /// Accesses global curwin.
-#[export_name = "nvim_docmd_update_topline_cursor_impl"]
+#[export_name = "update_topline_cursor"]
 pub unsafe extern "C" fn rs_update_topline_cursor_impl() {
     nvim_docmd_check_cursor();
     nvim_docmd_update_topline();
@@ -775,7 +775,7 @@ pub unsafe extern "C" fn rs_update_topline_cursor_impl() {
 ///
 /// # Safety
 /// `name` must be a valid null-terminated C string.
-#[export_name = "nvim_docmd_vim_mkdir_emsg_impl"]
+#[export_name = "vim_mkdir_emsg"]
 pub unsafe extern "C" fn rs_vim_mkdir_emsg_impl(name: *const c_char, prot: c_int) -> c_int {
     let ret = nvim_docmd_os_mkdir(name, prot);
     if ret != 0 {
@@ -789,7 +789,7 @@ pub unsafe extern "C" fn rs_vim_mkdir_emsg_impl(name: *const c_char, prot: c_int
 ///
 /// # Safety
 /// `fname`, `mode` must be valid null-terminated C strings.
-#[export_name = "nvim_docmd_open_exfile_impl"]
+#[export_name = "open_exfile"]
 pub unsafe extern "C" fn rs_open_exfile_impl(
     fname: *mut c_char,
     forceit: c_int,
@@ -1045,7 +1045,7 @@ extern "C" {
 ///
 /// # Safety
 /// `sst` must be a valid save_state_T pointer.
-#[export_name = "nvim_docmd_save_current_state_impl"]
+#[export_name = "save_current_state"]
 pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     nvim_docmd_sst_set_msg_scroll(sst, msg_scroll);
     nvim_docmd_sst_set_restart_edit(sst, nvim_get_restart_edit());
@@ -1067,7 +1067,7 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
 ///
 /// # Safety
 /// `sst` must be a valid save_state_T pointer.
-#[export_name = "nvim_docmd_restore_current_state_impl"]
+#[export_name = "restore_current_state"]
 pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
     nvim_docmd_sst_restore_typeahead(sst);
 
@@ -1190,7 +1190,7 @@ pub unsafe extern "C" fn rs_ex_find(eap: ExArgHandle) {
 ///
 /// # Safety
 /// Must be called with valid global state.
-#[export_name = "nvim_docmd_exec_normal_impl"]
+#[export_name = "exec_normal"]
 pub unsafe extern "C" fn rs_exec_normal_impl(was_typed: bool, use_vpeekc: bool) {
     let mut oa = OpargT::default();
     nvim_set_finish_op(false);
@@ -1228,7 +1228,7 @@ pub unsafe extern "C" fn rs_exec_normal_impl(was_typed: bool, use_vpeekc: bool) 
 ///
 /// # Safety
 /// `cmd` must be a valid null-terminated string.
-#[export_name = "nvim_docmd_exec_normal_cmd_impl"]
+#[export_name = "exec_normal_cmd"]
 pub unsafe extern "C" fn rs_exec_normal_cmd_impl(cmd: *mut c_char, remap: c_int, silent: bool) {
     nvim_docmd_ins_typebuf(cmd, remap, 0, true, silent);
     rs_exec_normal_impl(false, false);
@@ -1927,7 +1927,7 @@ pub unsafe extern "C" fn rs_post_chdir_impl(scope: c_int, trigger_dirchanged: bo
 ///
 /// # Safety
 /// `cmod` must be a valid cmdmod_T pointer.
-#[export_name = "nvim_docmd_apply_cmdmod_impl"]
+#[export_name = "apply_cmdmod"]
 pub unsafe extern "C" fn rs_apply_cmdmod_impl(cmod: CmodHandle) {
     let flags = nvim_cmod_get_flags(cmod);
 
@@ -1976,7 +1976,7 @@ pub unsafe extern "C" fn rs_apply_cmdmod_impl(cmod: CmodHandle) {
 ///
 /// # Safety
 /// `cmod` must be a valid cmdmod_T pointer.
-#[export_name = "nvim_docmd_undo_cmdmod_impl"]
+#[export_name = "undo_cmdmod"]
 pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
     // Restore verbose.
     let verbose_save = nvim_cmod_get_verbose_save(cmod);

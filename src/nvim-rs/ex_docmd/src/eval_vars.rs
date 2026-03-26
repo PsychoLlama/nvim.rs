@@ -148,7 +148,7 @@ extern "C" {
 /// # Safety
 ///
 /// All pointer arguments must be valid as described in the original C documentation.
-#[export_name = "nvim_docmd_eval_vars_impl"]
+#[export_name = "eval_vars"]
 pub unsafe extern "C" fn rs_eval_vars_impl(
     src: *mut c_char,
     srcstart: *const c_char,

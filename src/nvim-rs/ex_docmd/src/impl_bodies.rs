@@ -680,7 +680,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_connect_impl(eap: ExArgHandle) {
 ///
 /// # Safety
 /// Accesses expand_T fields and calls ExpandGeneric.
-#[no_mangle]
+#[export_name = "expand_argopt"]
 pub unsafe extern "C" fn nvim_docmd_expand_argopt_impl(
     pat: *const c_char,
     xp: *mut c_void,

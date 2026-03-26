@@ -215,7 +215,7 @@ extern "C" {
     fn nvim_hasFolding_line2(lnum: i32, line2_out: *mut i32);
 
     // makeprg replacement
-    fn nvim_docmd_replace_makeprg_impl(
+    fn replace_makeprg(
         eap: ExArgHandle,
         arg: *mut c_char,
         cmdlinep: *mut *mut c_char,
@@ -840,7 +840,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Replace makeprg/grepprg.
     let cmdlinep_val = nvim_eap_get_cmdlinep(eap);
-    p = nvim_docmd_replace_makeprg_impl(eap, p, cmdlinep_val);
+    p = replace_makeprg(eap, p, cmdlinep_val);
     if p.is_null() {
         do_one_cmd_doend(
             eap,

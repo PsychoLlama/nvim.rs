@@ -113,3 +113,17 @@ uint32_t excmd_get_argt(cmdidx_T idx);
 // Phase 5 (ex_docmd plan): getline_equal, getline_cookie implemented in Rust.
 bool getline_equal(LineGetter fgetline, void *cookie, LineGetter func);
 void *getline_cookie(LineGetter fgetline, void *cookie);
+// Phase 3 (cleanup plan): C wrappers deleted; Rust exports these names directly via #[export_name].
+void exec_normal(bool was_typed, bool use_vpeekc);
+void exec_normal_cmd(char *cmd, int remap, bool silent);
+void update_topline_cursor(void);
+int vim_mkdir_emsg(const char *name, int prot);
+void apply_cmdmod(cmdmod_T *cmod);
+void undo_cmdmod(cmdmod_T *cmod);
+char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep);
+int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches);
+FILE *open_exfile(char *fname, int forceit, char *mode);
+bool save_current_state(save_state_T *sst);
+void restore_current_state(save_state_T *sst);
+char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
+                const char **errormsg, int *escaped, bool empty_is_error);

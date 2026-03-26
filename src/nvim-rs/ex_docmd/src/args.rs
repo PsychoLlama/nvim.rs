@@ -911,7 +911,7 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
 ///
 /// # Safety
 /// `eap`, `arg`, `cmdlinep` must be valid. `arg` must be a valid C string.
-#[export_name = "nvim_docmd_replace_makeprg_impl"]
+#[export_name = "replace_makeprg"]
 pub unsafe extern "C" fn rs_replace_makeprg(
     eap: ExArgHandle,
     arg: *mut c_char,
