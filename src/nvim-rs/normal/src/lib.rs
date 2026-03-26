@@ -1346,14 +1346,14 @@ extern "C" {
     fn nvim_get_b_prompt_start_lnum_put() -> c_int;
     fn nvim_set_cursor_col_to_prompt_text_len();
     fn nvim_set_w_p_fen(val: bool);
-    fn nvim_check_vd_condition(regname: c_int) -> bool;
+
     fn nvim_inc_msg_silent();
     fn nvim_curbuf_ml_empty() -> bool;
     fn nvim_get_cursor_col_vs_b_op_start_col() -> c_int;
     fn nvim_get_cursor_lnum_vs_b_op_start_lnum() -> c_int;
     fn nvim_set_b_visual_from_op();
     fn nvim_inc_b_visual_vi_end();
-    fn nvim_last_line_is_empty() -> bool;
+
     fn nvim_ml_delete_last_line();
     // Phase 1 new lower-level accessors for replace helpers
     fn coladvance_force(col: c_int);
@@ -2122,7 +2122,10 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
 
         // Inlined nvim_put_visual_delete: delete visual selection before put
         nvim_set_w_p_fen(false);
-        if nvim_check_vd_condition(regname) {
+        if !VIsual_active
+            || nvim_get_VIsual_mode() == c_int::from(b'V')
+            || regname != c_int::from(b'.')
+        {
             (*cap.cast::<CmdargT>()).cmdchar = b'd' as c_int;
             (*cap.cast::<CmdargT>()).nchar = NUL_CHAR;
             let underscore = if keep_registers {
@@ -2180,7 +2183,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
     }
 
     // Inlined nvim_put_delete_empty_line: delete trailing empty line after put
-    if empty && nvim_last_line_is_empty() {
+    if empty && *ml_get(nvim_get_line_count()).cast::<u8>() == 0 {
         nvim_ml_delete_last_line();
         if nvim_get_cursor_lnum() > nvim_get_curwin_ml_line_count() as c_int {
             nvim_set_cursor_lnum(nvim_get_curwin_ml_line_count() as c_int);
@@ -3157,7 +3160,7 @@ pub unsafe extern "C" fn rs_nv_optrans(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_tilde(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     if !p_to && !VIsual_active && nvim_oap_get_op_type_ptr(oap) != OP_TILDE {
-        if nvim_replace_check_prompt() != 0 {
+        if nvim_bt_prompt_curbuf() && !prompt_curpos_editable() {
             rs_clearopbeep(oap);
             return;
         }
@@ -4173,7 +4176,7 @@ extern "C" {
     fn nvim_stuffcharReadbuff(c: c_int);
 
     // nv_replace C wrappers (lower-level after Phase 1 inlining)
-    fn nvim_replace_check_prompt() -> c_int;
+
     fn u_save_cursor() -> c_int;
     fn rs_foldUpdateAfterInsert();
 }
@@ -4198,7 +4201,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
     if rs_checkclearop(oap) {
         return;
     }
-    if nvim_replace_check_prompt() != 0 {
+    if nvim_bt_prompt_curbuf() && !prompt_curpos_editable() {
         rs_clearopbeep(oap);
         return;
     }

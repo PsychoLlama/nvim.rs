@@ -361,9 +361,6 @@ void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_registe
 int nvim_get_b_prompt_start_lnum_put(void) { return curbuf->b_prompt_start.mark.lnum; }
 void nvim_set_cursor_col_to_prompt_text_len(void) { curwin->w_cursor.col = (int)strlen(prompt_text()); }
 void nvim_set_w_p_fen(bool val) { curwin->w_p_fen = val; }
-bool nvim_check_vd_condition(int regname) {
-  return !VIsual_active || VIsual_mode == 'V' || regname != '.';
-}
 void nvim_inc_msg_silent(void) { msg_silent++; }
 bool nvim_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
 int nvim_get_cursor_col_vs_b_op_start_col(void) { return curwin->w_cursor.col - curbuf->b_op_start.col; }
@@ -373,9 +370,6 @@ void nvim_set_b_visual_from_op(void) {
   curbuf->b_visual.vi_end = curbuf->b_op_end;
 }
 void nvim_inc_b_visual_vi_end(void) { inc(&curbuf->b_visual.vi_end); }
-bool nvim_last_line_is_empty(void) {
-  return *ml_get(curbuf->b_ml.ml_line_count) == NUL;
-}
 void nvim_ml_delete_last_line(void) {
   ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
   deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
@@ -641,10 +635,6 @@ int nvim_getvcol_visual_coladd_after_adj(void) {
 
 // nv_replace C wrappers
 
-/// Check if buffer is a prompt buffer and cursor is not in editable area.
-int nvim_replace_check_prompt(void) {
-  return (bt_prompt(curbuf) && !prompt_curpos_editable()) ? 1 : 0;
-}
 
 // =============================================================================
 // Scroll and screen handler accessors for Rust FFI
@@ -1409,10 +1399,6 @@ void nvim_getvvcol_oap_end_both(oparg_T *oap, int *start_out, int *end_out) {
   getvvcol(curwin, &oap->end, &s, NULL, &e);
   if (start_out) *start_out = s;
   if (end_out) *end_out = e;
-}
-/// getvvcol on cursor for oap->end_vcol.
-void nvim_getvvcol_cursor_oap_end(oparg_T *oap) {
-  if (oap) getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &oap->end_vcol);
 }
 /// coladvance to oap->end_vcol, then set oap->end = cursor.
 void nvim_coladvance_set_oap_end(oparg_T *oap) {
