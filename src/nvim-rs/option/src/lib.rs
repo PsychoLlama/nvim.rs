@@ -18,6 +18,7 @@ pub mod buf_opt_index;
 pub mod bufcopy;
 pub mod callbacks;
 pub mod completion;
+pub mod contextswitch;
 pub mod copy;
 pub mod defaults;
 pub mod expand;

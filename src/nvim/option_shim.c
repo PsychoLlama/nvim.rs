@@ -397,133 +397,48 @@ Object optval_as_object(OptVal o) { return rs_optval_as_object(o); }
 /// Convert an API Object to an OptVal.
 OptVal object_as_optval(Object o, bool *error) { return rs_object_as_optval(o, error); }
 
-/// Switch current context to get/set option value for window/buffer.
-///
-/// @param[out]  ctx        Current context. switchwin_T for window and aco_save_T for buffer.
-/// @param       scope      Option scope. See OptScope in option.h.
-/// @param[in]   from       Target buffer/window.
-/// @param[out]  err        Error message, if any.
-///
-/// @return  true if context was switched, false otherwise.
-static bool switch_option_context(void *const ctx, OptScope scope, void *const from, Error *err)
-{
-  switch (scope) {
-  case kOptScopeGlobal:
-    return false;
-  case kOptScopeWin: {
-    win_T *const win = (win_T *)from;
-    switchwin_T *const switchwin = (switchwin_T *)ctx;
-
-    if (win == curwin) {
-      return false;
-    }
-
-    if (switch_win_noblock(switchwin, win, rs_win_find_tabpage(win), true)
-        == FAIL) {
-      restore_win_noblock(switchwin, true);
-
-      if (ERROR_SET(err)) {
-        return false;
-      }
-      api_set_error(err, kErrorTypeException, "Problem while switching windows");
-      return false;
-    }
-    return true;
-  }
-  case kOptScopeBuf: {
-    buf_T *const buf = (buf_T *)from;
-    aco_save_T *const aco = (aco_save_T *)ctx;
-
-    if (buf == curbuf) {
-      return false;
-    }
-    aucmd_prepbuf(aco, buf);
-    return true;
-  }
-  }
-  UNREACHABLE;
+// Context-switch helpers called by Rust (Phase 6).
+// Rust uses MaybeUninit<[u8; N]> for switchwin_T and aco_save_T.
+_Static_assert(sizeof(switchwin_T) == 24,
+               "sizeof(switchwin_T) changed - update SWITCHWIN_SIZE in option/src/contextswitch.rs");
+_Static_assert(sizeof(aco_save_T) == 64,
+               "sizeof(aco_save_T) changed - update ACO_SAVE_SIZE in option/src/contextswitch.rs");
+int nvim_option_switch_win_noblock(void *switchwin, void *win, void *tabpage) {
+  return switch_win_noblock((switchwin_T *)switchwin, (win_T *)win, (tabpage_T *)tabpage, true);
+}
+void nvim_option_restore_win_noblock(void *switchwin) {
+  restore_win_noblock((switchwin_T *)switchwin, true);
+}
+void nvim_option_aucmd_prepbuf(void *aco, void *buf) {
+  aucmd_prepbuf((aco_save_T *)aco, (buf_T *)buf);
+}
+void nvim_option_aucmd_restbuf(void *aco) {
+  aucmd_restbuf((aco_save_T *)aco);
+}
+OptVal nvim_option_get_option_value(OptIndex opt_idx, int opt_flags) {
+  return get_option_value(opt_idx, opt_flags);
+}
+const char *nvim_option_set_value_handle_tty(const char *name, OptIndex opt_idx,
+                                             OptVal value, int opt_flags) {
+  return set_option_value_handle_tty(name, opt_idx, value, opt_flags);
 }
 
-/// Restore context after getting/setting option for window/buffer. See switch_option_context() for
-/// params.
-static void restore_option_context(void *const ctx, OptScope scope)
-{
-  switch (scope) {
-  case kOptScopeGlobal:
-    break;
-  case kOptScopeWin:
-    restore_win_noblock((switchwin_T *)ctx, true);
-    break;
-  case kOptScopeBuf:
-    aucmd_restbuf((aco_save_T *)ctx);
-    break;
-  }
-}
+extern OptVal rs_get_option_value_for(OptIndex opt_idx, int opt_flags, int scope,
+                                      void *from, Error *err);
+extern void rs_set_option_value_for(const char *name, OptIndex opt_idx, OptVal value,
+                                    int opt_flags, int scope, void *from, Error *err);
 
-/// Get option value for buffer / window.
-///
-/// @param       opt_idx    Option index in options[] table.
-/// @param[out]  flagsp     Set to the option flags (see OptFlags) (if not NULL).
-/// @param[in]   scope      Option scope (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// @param[out]  hidden     Whether option is hidden.
-/// @param       scope      Option scope. See OptScope in option.h.
-/// @param[in]   from       Target buffer/window.
-/// @param[out]  err        Error message, if any.
-///
-/// @return  Option value. Must be freed by caller.
 OptVal get_option_value_for(OptIndex opt_idx, int opt_flags, const OptScope scope, void *const from,
                             Error *err)
 {
-  switchwin_T switchwin;
-  aco_save_T aco;
-  void *ctx = scope == kOptScopeWin ? (void *)&switchwin
-                                    : (scope == kOptScopeBuf ? (void *)&aco : NULL);
-
-  bool switched = switch_option_context(ctx, scope, from, err);
-  if (ERROR_SET(err)) {
-    return NIL_OPTVAL;
-  }
-
-  OptVal retv = get_option_value(opt_idx, opt_flags);
-
-  if (switched) {
-    restore_option_context(ctx, scope);
-  }
-
-  return retv;
+  return rs_get_option_value_for(opt_idx, opt_flags, (int)scope, (void *)from, err);
 }
 
-/// Set option value for buffer / window.
-///
-/// @param       name        Option name.
-/// @param       opt_idx     Option index in options[] table.
-/// @param[in]   value       Option value.
-/// @param[in]   opt_flags   Flags: OPT_LOCAL, OPT_GLOBAL, or 0 (both).
-/// @param       scope       Option scope. See OptScope in option.h.
-/// @param[in]   from        Target buffer/window.
-/// @param[out]  err         Error message, if any.
 void set_option_value_for(const char *name, OptIndex opt_idx, OptVal value, const int opt_flags,
                           const OptScope scope, void *const from, Error *err)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  switchwin_T switchwin;
-  aco_save_T aco;
-  void *ctx = scope == kOptScopeWin ? (void *)&switchwin
-                                    : (scope == kOptScopeBuf ? (void *)&aco : NULL);
-
-  bool switched = switch_option_context(ctx, scope, from, err);
-  if (ERROR_SET(err)) {
-    return;
-  }
-
-  const char *const errmsg = set_option_value_handle_tty(name, opt_idx, value, opt_flags);
-  if (errmsg) {
-    api_set_error(err, kErrorTypeException, "%s", errmsg);
-  }
-
-  if (switched) {
-    restore_option_context(ctx, scope);
-  }
+  rs_set_option_value_for(name, opt_idx, value, opt_flags, (int)scope, (void *)from, err);
 }
 
 /// Send update to UIs with values of UI relevant options
