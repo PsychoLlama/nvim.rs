@@ -45,7 +45,7 @@ extern "C" {
     fn nvim_tv_list_append_string(l: *mut c_void, str: *const c_char, len: isize);
     #[link_name = "tv_list_unref"]
     fn nvim_tv_list_unref(l: *mut c_void);
-    fn nvim_eval_list_ref(l: *mut c_void);
+    fn nvim_tv_list_ref(l: *mut c_void);
 
     // ----- provider caller scope save/restore -----
     fn nvim_save_provider_caller_scope() -> *mut c_void;
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     unsafe { provider_call_nesting += 1 };
 
     // Ref the arguments list for the call
-    unsafe { nvim_eval_list_ref(arguments) };
+    unsafe { nvim_tv_list_ref(arguments) };
 
     // Build argvars[3]: [VAR_STRING method, VAR_LIST arguments, VAR_UNKNOWN]
     // typval_T is 16 bytes: v_type(4) + v_lock(4) + vval(8)

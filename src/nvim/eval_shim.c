@@ -1,12 +1,7 @@
 // eval.c: Expression evaluation.
 
 #include <assert.h>
-#include <ctype.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <uv.h>
 
 #include "auto/config.h"
 #include "nvim/api/private/converter.h"
@@ -19,9 +14,7 @@
 #include "nvim/change.h"
 #include "nvim/channel.h"
 #include "nvim/charset.h"
-#include "nvim/cmdexpand_defs.h"
 #include "nvim/cursor.h"
-#include "nvim/edit.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/encode.h"
@@ -34,9 +27,7 @@
 #include "nvim/event/multiqueue.h"
 #include "nvim/event/proc.h"
 #include "nvim/event/time.h"
-#include "nvim/ex_cmds.h"
 #include "nvim/ex_docmd.h"
-#include "nvim/ex_eval.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
@@ -44,7 +35,6 @@
 #include "nvim/hashtab.h"
 #include "nvim/highlight_group.h"
 #include "nvim/insexpand.h"
-#include "nvim/keycodes.h"
 #include "nvim/lib/queue_defs.h"
 #include "nvim/lua/executor.h"
 #include "nvim/macros_defs.h"
@@ -67,17 +57,14 @@
 #include "nvim/os/os.h"
 #include "nvim/os/os_defs.h"
 #include "nvim/os/shell.h"
-#include "nvim/path.h"
 #include "nvim/pos_defs.h"
 #include "nvim/profile.h"
-#include "nvim/quickfix.h"
 #include "nvim/regexp.h"
 #include "nvim/regexp_defs.h"
 #include "nvim/register.h"
 #include "nvim/runtime.h"
 #include "nvim/runtime_defs.h"
 #include "nvim/strings.h"
-#include "nvim/tag.h"
 #include "nvim/types_defs.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
@@ -252,8 +239,6 @@ void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
   }
   free_string_option(save_cpo);
 }
-
-#define loop_get_events(l) rs_loop_get_events(l)
 
 /// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
@@ -505,8 +490,6 @@ typval_T *nvim_di_get_tv(dictitem_T *di) { return &di->di_tv; }
 
 evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
 
-// nvim_semsg_invarg2 is in match.c (not in eval_shim.c).
-
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob) { return blob->bv_lock; }
 
 /// Get value_check_lock condition for set_var_lval - composite accessor for Rust.
@@ -523,8 +506,6 @@ bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
 }
 
 const char *nvim_di_get_key(const dictitem_T *di) { return di->di_key; }
-
-// nvim_value_check_lock moved to typval.c (3-param version)
 
 bool nvim_di_check_ro(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_CSTRING); }
 
@@ -645,7 +626,6 @@ char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 /// may_call_simple_func wrapper - accessor for Rust eval_top.
 int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv) { return may_call_simple_func(arg, rettv); }
 
-// NvimCursorVisualState typedef is in eval.h.
 _Static_assert(sizeof(NvimCursorVisualState) == 40,
                "NvimCursorVisualState size mismatch: expected 40 bytes");
 
@@ -778,9 +758,6 @@ void *nvim_eap_get_cookie(const exarg_T *eap) { return eap->cookie; }
 /// Allocate exactly sizeof(typval_T) bytes for a heap typval - accessor for Rust.
 typval_T *nvim_alloc_typval(void) { return xmalloc(sizeof(typval_T)); }
 
-/// Decrement pt->pt_refcount and return true if it drops to <= 0.
-bool nvim_partial_decref_and_check(partial_T *pt) { return --pt->pt_refcount <= 0; }
-
 void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv) { set_var(name, name_len, tv, false); }
 
 void nvim_set_vim_var_argv_list(list_T *list) { set_vim_var_list(VV_ARGV, list); }
@@ -911,22 +888,12 @@ void nvim_restore_provider_caller_scope(void *saved)
 /// tv_list_alloc with explicit count (for provider args list).
 list_T *nvim_eval_list_alloc_n(int n) { return tv_list_alloc((ptrdiff_t)n); }
 
-/// tv_list_ref wrapper for provider list argument.
-void nvim_eval_list_ref(list_T *l) { tv_list_ref(l); }
-
 /// Allocate and zero-initialize a timer_T.
 timer_T *nvim_timer_alloc(void) { return xcalloc(1, sizeof(timer_T)); }
 
 void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
-// nvim_timer_get_id, nvim_timer_set_id, nvim_timer_get_repeat_count, nvim_timer_set_repeat_count,
-// nvim_timer_get_refcount, nvim_timer_set_refcount, nvim_timer_get_emsg_count,
-// nvim_timer_set_emsg_count, nvim_timer_get_timeout, nvim_timer_get_stopped,
-// nvim_timer_set_stopped, nvim_timer_get_paused:
-// deleted -- replaced by nvim_timer_read_fields / nvim_timer_write_fields.
-
-// NvimTimerFields typedef is in eval.h.
-// Verify field offsets match expected layout.
+// Verify NvimTimerFields field offsets match expected layout.
 _Static_assert(offsetof(NvimTimerFields, timer_id) == 0, "NvimTimerFields.timer_id offset");
 _Static_assert(offsetof(NvimTimerFields, repeat_count) == 4, "NvimTimerFields.repeat_count offset");
 _Static_assert(offsetof(NvimTimerFields, refcount) == 8, "NvimTimerFields.refcount offset");
@@ -976,7 +943,7 @@ void nvim_timer_tw_close(timer_T *timer) { time_watcher_close(&timer->tw, rs_tim
 
 void nvim_timer_tw_set_events_child(timer_T *timer)
 {
-  timer->tw.events = multiqueue_new_child(loop_get_events(&main_loop));
+  timer->tw.events = multiqueue_new_child(rs_loop_get_events(&main_loop));
 }
 
 void nvim_timer_tw_set_blockable(timer_T *timer, int blockable) { timer->tw.blockable = blockable != 0; }
