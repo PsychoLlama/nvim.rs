@@ -294,7 +294,6 @@ void nvim_diff_invalidate_botline_win(win_T *wp) { invalidate_botline(wp); }
 void nvim_diff_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
 void nvim_diff_setpcmark(void) { setpcmark(); }
-// nvim_diff_run_linematch deleted: Rust buffer.rs now uses #[link_name = "rs_run_linematch"].
 bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
 void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }
 void nvim_diffblock_reset_changes_len(diff_T *dp) { if (dp != NULL) { dp->df_changes.ga_len = 0; } }
@@ -305,14 +304,14 @@ colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx) { if (chan
 colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_end[idx]; }
 bool nvim_diff_is_simple_change(diffline_change_T *change) { return change == &simple_diffline_change; }
 const char *nvim_diff_skipwhite(const char *p) { return skipwhite(p); }
-// Phase 2 (diff_file_internal) accessors
+// diff_file_internal accessors
 char *nvim_diffio_get_orig_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_mmfile.ptr : NULL; }
 int nvim_diffio_get_orig_size(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_mmfile.size : 0; }
 char *nvim_diffio_get_new_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_mmfile.ptr : NULL; }
 int nvim_diffio_get_new_size(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_mmfile.size : 0; }
 void *nvim_diffio_get_dout(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? &dio->dio_diff : NULL; }
 void nvim_diff_emsg_e960(void) { emsg(_("E960: Problem creating the internal diff")); }
-// Phase 3 (diff_file, diff_write) accessors
+// diff_file, diff_write accessors
 const char *nvim_diffio_get_orig_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_fname : NULL; }
 const char *nvim_diffio_get_new_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_fname : NULL; }
 const char *nvim_diffio_get_diff_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_diff.dout_fname : NULL; }
@@ -320,27 +319,26 @@ int nvim_diff_write_to_file(buf_T *buf, const char *fname, linenr_T start, linen
 int nvim_diff_get_a_works(void) { return (int)diff_a_works; }
 void nvim_diff_set_a_works(int val) { diff_a_works = (TriState)val; }
 void nvim_diff_eval_diff(const char *orig, const char *new_f, const char *diff) { eval_diff((char *)orig, (char *)new_f, (char *)diff); }
-// nvim_diff_run_external_shell deleted: dead code (never called from C or Rust).
 const char *nvim_diff_get_p_srr(void) { return p_srr; }
 void nvim_diff_env_clear_diff_options(void) { if (os_env_exists("DIFF_OPTIONS", true)) { os_unsetenv("DIFF_OPTIONS"); } }
 void nvim_diff_call_shell_diff(const char *cmd) { block_autocmds(); call_shell((char *)cmd, kShellOptFilter | kShellOptSilent | kShellOptDoOut, NULL); unblock_autocmds(); }
-// Phase 4 (check_external_diff) accessors
+// check_external_diff accessors
 void *nvim_diff_fopen_write(const char *fname) { return os_fopen(fname, "w"); }
 bool nvim_diff_fwrite_line(void *fd, const char *data, size_t len) { return fwrite(data, len, 1, (FILE *)fd) == 1; }
 void *nvim_diff_fopen_read(const char *fname) { return os_fopen(fname, "r"); }
 void nvim_diff_emsg_e810(void) { emsg(_("E810: Cannot read or write temp files")); }
 void nvim_diff_emsg_e97(void) { emsg(_("E97: Cannot create diffs")); }
-// Phase 5 (inline_compute) accessors
+// inline_compute accessors
 int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *new_data, int new_size, void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } dio->dio_orig.din_mmfile.ptr = (char *)orig_data; dio->dio_orig.din_mmfile.size = orig_size; dio->dio_new.din_mmfile.ptr = (char *)new_data; dio->dio_new.din_mmfile.size = new_size; return rs_diff_file_internal(dio); }
 uint64_t *nvim_diffbuf_get_chartab(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return curtab->tp_diffbuf[idx]->b_chartab; }
 void nvim_diffblock_append_change(diff_T *dp, const int *dc_start, const int *dc_end, const int *dc_start_lnum_off, const int *dc_end_lnum_off) { if (dp == NULL) { return; } diffline_change_T change = { 0 }; for (int i = 0; i < DB_COUNT; i++) { change.dc_start[i] = dc_start[i]; change.dc_end[i] = dc_end[i]; change.dc_start_lnum_off[i] = dc_start_lnum_off[i]; change.dc_end_lnum_off[i] = dc_end_lnum_off[i]; } GA_APPEND(diffline_change_T, &dp->df_changes, change); }
-// Phase 1 accessors: f_diff_filler
+// f_diff_filler accessors
 void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, linenr_T lnum_new, int count_new) { diffout_T *d = (diffout_T *)dout; if (d == NULL) { return; } GA_APPEND(diffhunk_T, &(d->dout_ga), ((diffhunk_T){ .lnum_orig = lnum_orig, .count_orig = count_orig, .lnum_new = lnum_new, .count_new = count_new, })); }
 linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
-// Phase 2 accessors: nv_diffgetput and ex_diffthis
+// nv_diffgetput and ex_diffthis accessors
 void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
 void nvim_diff_call_nv_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
-// Phase 3 (diff_win_options / ex_diffoff) accessors
+// diff_win_options / ex_diffoff accessors
 bool nvim_win_get_w_p_diff_saved(win_T *wp) { return wp->w_p_diff_saved != 0; }
 void nvim_win_set_w_p_diff_saved(win_T *wp, bool val) { wp->w_p_diff_saved = val ? 1 : 0; }
 bool nvim_win_get_w_p_scb(win_T *wp) { return wp->w_p_scb != 0; }
@@ -381,7 +379,7 @@ void nvim_diff_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 bool nvim_diff_is_curwin(win_T *wp) { return wp == curwin; }
 void nvim_diff_changed_window_foldlevel_reset(win_T *wp) { win_T *old_curwin = curwin; curwin = wp; rs_newFoldLevel(); curwin = old_curwin; }
 int nvim_upd_not_valid(void) { return UPD_NOT_VALID; }
-// Phase 4 (ex_diffsplit) accessors
+// ex_diffsplit accessors
 void nvim_diff_validate_cursor_curwin(void) { validate_cursor(curwin); }
 void nvim_diff_set_cmdmod_tab_zero(void) { cmdmod.cmod_tab = 0; }
 void nvim_diff_do_exedit_with_old_curwin(exarg_T *eap, win_T *old_curwin) { do_exedit(eap, old_curwin); }
@@ -394,7 +392,7 @@ bool nvim_diff_bufref_valid(const void *r) { return bufref_valid((bufref_T *)r);
 buf_T *nvim_diff_bufref_get_buf(const void *r) { return ((bufref_T *)r)->br_buf; }
 void *nvim_diff_bufref_alloc(void) { return &diff_split_bufref; }
 void nvim_diff_bufref_free(void *r) { (void)r; /* static storage, no-op */ }
-// Phase 5 (ex_diffgetput) accessors
+// ex_diffgetput accessors
 void nvim_diff_emsg_e99(void) { emsg(_("E99: Current buffer is not in diff mode")); }
 void nvim_diff_emsg_e793(void) { emsg(_("E793: No other buffer in diff mode is modifiable")); }
 void nvim_diff_emsg_e100(void) { emsg(_("E100: No other buffer in diff mode")); }
@@ -415,7 +413,7 @@ bool nvim_diff_key_typed(void) { return KeyTyped; }
 void nvim_diff_u_sync(void) { u_sync(false); }
 void nvim_diff_check_cursor_curwin(void) { check_cursor(curwin); }
 void nvim_diff_changed_line_abv_curs(void) { changed_line_abv_curs(); }
-// Phase 4 (diffgetput) accessors
+// diffgetput accessors
 int nvim_diff_u_save(linenr_T top, linenr_T bot) { return u_save(top, bot); }
 int nvim_diff_ml_delete(linenr_T lnum) { return ml_delete(lnum); }
 int nvim_diff_ml_append(linenr_T lnum, const char *line, int len, bool newfile) { return ml_append(lnum, (char *)line, len, newfile); }
@@ -434,7 +432,7 @@ bool nvim_diff_win_get_w_p_fdm_starts_d(win_T *wp) { return wp->w_p_fdm[0] == 'd
 buf_T *nvim_diff_get_curtab_diffbuf_idx(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
 bool nvim_diff_curbuf_is_curtab_diffbuf(int idx_to) { if (idx_to < 0 || idx_to >= DB_COUNT) { return false; } return rs_diff_buf_idx_tp(curbuf, curtab) == idx_to; }
 void nvim_diff_fire_diffupdated_curbuf(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }
-// Phase 6 (parse_diffanchors) accessors
+// parse_diffanchors accessors
 const char *nvim_diff_get_buf_dia(buf_T *buf) { return buf->b_p_dia; }
 const char *nvim_diff_get_p_dia(void) { return p_dia; }
 void nvim_diff_set_curwin_curbuf(win_T *wp) { curwin = wp; curbuf = wp->w_buffer; }
@@ -446,7 +444,7 @@ void nvim_diff_semsg_too_many_anchors(int max) { semsg(_(e_cannot_have_more_than
 win_T *nvim_diff_get_firstwin(void) { return firstwin; }
 bool nvim_win_get_w_p_diff_bool(win_T *wp) { return wp->w_p_diff; }
 void nvim_diff_emsg(const char *msg) { emsg(msg); }
-// Phase 7 (ex_diffpatch) accessors
+// ex_diffpatch accessors
 char *nvim_diff_vim_tempname(void) { return vim_tempname(); }
 int nvim_diff_buf_write_curbuf(const char *fname) { return buf_write(curbuf, (char *)fname, NULL, 1, curbuf->b_ml.ml_line_count, NULL, false, false, false, true); }
 char *nvim_diff_FullName_save(const char *fname) { return FullName_save((char *)fname, false); }
@@ -470,7 +468,7 @@ void nvim_diff_emsg_e816(void) { emsg(_("E816: Cannot read patch output")); }
 void nvim_diff_emsg_prev_dir(void) { emsg(_(e_prev_dir)); }
 void nvim_diff_ex_file(exarg_T *eap) { ex_file(eap); }
 bool nvim_diff_augroup_exists_filetypedetect(void) { return augroup_exists("filetypedetect"); }
-// Phase 3 accessors: f_diff_hlID
+// f_diff_hlID accessors
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }
 int nvim_diff_hlf_add(void) { return (int)HLF_ADD; }
