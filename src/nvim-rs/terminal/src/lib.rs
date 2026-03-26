@@ -2834,6 +2834,14 @@ extern "C" {
     fn nvim_term_sb_destroy(sb: *mut c_void);
     fn nvim_vterm_free(vt: *mut c_void);
     fn nvim_multiqueue_free(q: *mut c_void);
+    // Phase 11: terminal_get_line_attributes helpers
+    fn nvim_fetch_cell(term: *mut c_void, row: c_int, col: c_int, cell: *mut c_void) -> c_int;
+    fn nvim_get_rgb(state: *mut c_void, color: nvim_vterm::VTermColor) -> c_int;
+    fn hl_get_term_attr(attrs: *const HlAttrsLocal) -> c_int;
+    fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
+    /// linenr -> row conversion (from buffer.rs)
+    #[link_name = "rs_terminal_linenr_to_row_term"]
+    fn rs_terminal_linenr_to_row_term_ffi(term: *mut c_void, linenr: c_int) -> c_int;
 }
 
 /// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.
@@ -2891,6 +2899,21 @@ pub unsafe extern "C" fn rs_terminal_do_send(term: TerminalHandle, data: *const 
         return;
     }
     unsafe { nvim_terminal_write_cb(term.as_ptr(), data, size) };
+}
+
+/// `HlAttrs` layout (matches `highlight_defs.h`). Local copy to avoid cross-crate dependency.
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+struct HlAttrsLocal {
+    rgb_ae_attr: i16,
+    cterm_ae_attr: i16,
+    rgb_fg_color: i32,
+    rgb_bg_color: i32,
+    rgb_sp_color: i32,
+    cterm_fg_color: i16,
+    cterm_bg_color: i16,
+    hl_blend: i32,
+    url: i32,
 }
 
 /// Nvim API `String` type (matches C `typedef struct { char *data; size_t size; } String`).
@@ -3014,6 +3037,139 @@ pub unsafe extern "C" fn rs_terminal_destroy(termpp: *mut *mut c_void) {
         unsafe { nvim_multiqueue_free(t.pending.events) };
         unsafe { xfree(term_ptr) };
         unsafe { *termpp = std::ptr::null_mut() };
+    }
+}
+
+/// Maximum number of terminal columns for `terminal_get_line_attributes`.
+const TERM_ATTRS_MAX: usize = 1024;
+
+/// Compute highlight attributes for each cell in a terminal line.
+///
+/// Replaces `terminal_get_line_attributes` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term`, `wp` (unused), and `term_attrs` must all be valid. `term_attrs` must point to
+/// at least `TERM_ATTRS_MAX` ints.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_get_line_attributes(
+    term: TerminalHandle,
+    _wp: *mut c_void,
+    linenr: c_int,
+    term_attrs: *mut c_int,
+) {
+    // HL_* attribute bit constants (from highlight_defs.h)
+    const HL_INVERSE: i16 = 0x01;
+    const HL_BOLD: i16 = 0x02;
+    const HL_ITALIC: i16 = 0x04;
+    const HL_STRIKETHROUGH: i16 = 0x0080;
+    const HL_FG_INDEXED: i16 = 0x1000;
+    const HL_BG_INDEXED: i16 = 0x0800;
+    use nvim_vterm::VTermScreenCell;
+    let t = unsafe { term.as_ref() };
+    let size = unsafe { rs_vterm_get_size(t.vt) };
+    let height = size.rows;
+    let width = size.cols;
+    let state = unsafe { vterm_obtain_state(t.vt) };
+
+    if linenr == 0 {
+        return;
+    }
+    let row = unsafe { rs_terminal_linenr_to_row_term_ffi(term.as_ptr(), linenr) };
+    if row >= height {
+        // Terminal height decreased but not yet reflected in buffer
+        return;
+    }
+
+    let col_limit = width.min(c_int::try_from(TERM_ATTRS_MAX).unwrap_or(c_int::MAX));
+
+    for col in 0..col_limit {
+        let mut cell = VTermScreenCell::default();
+        let color_valid =
+            unsafe { nvim_fetch_cell(term.as_ptr(), row, col, (&raw mut cell).cast()) } != 0;
+
+        let fg_default = !color_valid || cell.fg.is_default_fg();
+        let bg_default = !color_valid || cell.bg.is_default_bg();
+
+        let foreground_color = if fg_default {
+            -1
+        } else {
+            unsafe { nvim_get_rgb(state, cell.fg) }
+        };
+        let background_color = if bg_default {
+            -1
+        } else {
+            unsafe { nvim_get_rgb(state, cell.bg) }
+        };
+
+        let fg_indexed = cell.fg.is_indexed();
+        let bg_indexed = cell.bg.is_indexed();
+
+        // +1: nvim uses 1-based color indices (0 = no color)
+        let fg_idx: i16 = if !fg_default && fg_indexed {
+            i16::from(unsafe { cell.fg.indexed.idx }) + 1
+        } else {
+            0
+        };
+        let bg_idx: i16 = if !bg_default && bg_indexed {
+            i16::from(unsafe { cell.bg.indexed.idx }) + 1
+        } else {
+            0
+        };
+
+        #[allow(clippy::cast_sign_loss)]
+        let fg_set = fg_idx > 0 && fg_idx <= 16 && t.color_set[(fg_idx - 1) as usize];
+        #[allow(clippy::cast_sign_loss)]
+        let bg_set = bg_idx > 0 && bg_idx <= 16 && t.color_set[(bg_idx - 1) as usize];
+
+        #[allow(clippy::cast_possible_truncation)]
+        let underline_flag = rs_terminal_underline_hl_flag(cell.attrs) as i16;
+        let hl_attrs: i16 = if cell.attrs.bold() { HL_BOLD } else { 0 }
+            | if cell.attrs.italic() { HL_ITALIC } else { 0 }
+            | if cell.attrs.reverse() { HL_INVERSE } else { 0 }
+            | underline_flag
+            | if cell.attrs.strike() {
+                HL_STRIKETHROUGH
+            } else {
+                0
+            }
+            | if fg_indexed && !fg_set {
+                HL_FG_INDEXED
+            } else {
+                0
+            }
+            | if bg_indexed && !bg_set {
+                HL_BG_INDEXED
+            } else {
+                0
+            };
+
+        let attr_id: c_int = if hl_attrs != 0 || !fg_default || !bg_default {
+            let attrs = HlAttrsLocal {
+                rgb_ae_attr: hl_attrs,
+                cterm_ae_attr: hl_attrs,
+                rgb_fg_color: foreground_color,
+                rgb_bg_color: background_color,
+                rgb_sp_color: -1,
+                cterm_fg_color: fg_idx,
+                cterm_bg_color: bg_idx,
+                hl_blend: -1,
+                url: -1,
+            };
+            unsafe { hl_get_term_attr(&raw const attrs) }
+        } else {
+            0
+        };
+
+        let attr_id = if cell.uri > 0 {
+            unsafe { hl_combine_attr(attr_id, cell.uri) }
+        } else {
+            attr_id
+        };
+
+        #[allow(clippy::cast_sign_loss)]
+        unsafe {
+            *term_attrs.add(col as usize) = attr_id;
+        };
     }
 }
 
