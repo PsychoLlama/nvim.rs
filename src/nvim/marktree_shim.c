@@ -53,44 +53,11 @@
 #include "nvim/pos_defs.h"
 
 // Rust marktree FFI declarations
-// Position comparison and manipulation functions
-
-// Mark key property functions
-extern bool rs_mt_right(MTKey key);
-extern bool rs_mt_invalid(MTKey key);
-
-// Lookup ID functions
-extern uint64_t rs_mt_lookup_key(MTKey key);
-
-// Key comparison and flag functions
 
 // Extended iterator functions (used by nvim_marktree_itr_get_ext_simple)
 extern bool rs_marktree_itr_get_ext_full(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last,
                                          bool gravity, MTPos *oldbase,
                                          MetaFilter meta_filter);
-
-// Filter functions
-
-// Memory management operations
-
-// Intersection operations
-
-// Meta description and pseudo-index operations
-extern void rs_meta_describe_key(MTKey k, uint32_t *meta_out);
-extern uint64_t rs_pseudo_index(MTNode *x, int i);
-
-// Binary search
-
-// Intersection pair
-
-// Insertion operations
-extern void rs_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right);
-
-// Test helper operations
-
-// Splice
-
-// Test helper
 
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
