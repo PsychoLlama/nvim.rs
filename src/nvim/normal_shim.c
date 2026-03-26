@@ -507,9 +507,6 @@ _Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
 _Static_assert(kMTCharWise == 0, "kMTCharWise mismatch");
 
-int nvim_get_cursor_line_byte_at_col(int col) { char *ptr = get_cursor_line_ptr(); return (uint8_t)ptr[col]; }
-
-bool nvim_cursor_line_col_is_white(int col) { char *ptr = get_cursor_line_ptr(); return ascii_iswhite(ptr[col]); }
 
 bool nvim_stuff_empty(void) { return stuff_empty(); }
 

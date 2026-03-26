@@ -252,8 +252,6 @@ extern "C" {
     fn nvim_oap_get_motion_force(oap: OapHandle) -> c_int;
 
     // Wave 2 Phase 4: Selection/g-cmd accessors
-    fn nvim_get_cursor_line_byte_at_col(col: c_int) -> c_int;
-    fn nvim_cursor_line_col_is_white(col: c_int) -> bool;
     fn nvim_stuff_empty() -> bool;
     fn typebuf_typed() -> bool;
     static p_slm: *const c_char;
@@ -6911,13 +6909,18 @@ pub unsafe extern "C" fn rs_nv_g_underscore_cmd(cap: CapHandle) {
     let mut col = nvim_get_cursor_col();
 
     // In Visual mode we may end up after the line.
-    if col > 0 && nvim_get_cursor_line_byte_at_col(col) == 0 {
+    let line_ptr = nvim_get_cursor_line_ptr();
+    if col > 0 && *line_ptr.add(usize::try_from(col).unwrap_or(0)) == 0 {
         col -= 1;
         nvim_set_cursor_col(col);
     }
 
     // Decrease the cursor column until it's on a non-blank.
-    while col > 0 && nvim_cursor_line_col_is_white(col) {
+    while col > 0
+        && rs_ascii_iswhite(c_int::from(
+            *line_ptr.add(usize::try_from(col).unwrap_or(0)),
+        )) != 0
+    {
         col -= 1;
         nvim_set_cursor_col(col);
     }
