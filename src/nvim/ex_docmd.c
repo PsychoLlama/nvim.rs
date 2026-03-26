@@ -117,7 +117,6 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern int rs_get_copyID(void);
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 extern void rs_listdigraphs(int use_headers);
-// Forward declarations for Phase 3 Rust exports (wrappers replaced by Rust)
 int ends_excmd(int c);
 char *find_nextcmd(const char *p);
 char *check_nextcmd(char *p);
@@ -135,10 +134,8 @@ int getargopt(exarg_T *eap);
 char *skip_cmd_arg(char *p, bool rembs);
 int get_tabpage_arg(exarg_T *eap);
 bool changedir_func(char *new_dir, CdScope scope);
-// Forward declarations for Phase 1 (ex_docmd plan): static functions replaced by Rust exports
 int check_more(bool message, bool forceit);
 char *ex_range_without_command(exarg_T *eap);
-// Forward declarations for Phase 2 Rust exports (static functions replaced by Rust)
 bool is_other_file(int fnum, char *ffname);
 void msg_verbose_cmd(linenr_T lnum, char *cmd);
 char *skip_colon_white(const char *p, bool skipleadingwhite);
@@ -153,10 +150,8 @@ void append_command(const char *cmd);
 void get_flags(exarg_T *eap);
 void correct_range(exarg_T *eap);
 char *skip_grep_pat(exarg_T *eap);
-// Phase 3 normal-mode Rust exports used by ex_docmd
 extern void rs_set_cursor_for_append_to_line(void);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
-// Phase 4 Rust exports: do_one_cmd and ex_errmsg implemented in do_one_cmd.rs
 extern char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter fgetline,
                         void *cookie);
 extern char *ex_errmsg(const char *const msg, const char *const arg);
@@ -213,7 +208,6 @@ struct loop_cookie {
   void *cookie;
 };
 
-// Phase 5 (do_cmdline plan): struct dbg_stuff, save_dbg_stuff,
 // restore_dbg_stuff, get_loop_line, store_loop_line are all now in Rust
 // (do_cmdline.rs). struct loop_cookie and wcmd_T remain here to support the
 // C accessor wrappers nvim_docmd_loop_cookie_get_* and
@@ -292,7 +286,6 @@ extern void ex_nohlsearch(exarg_T *eap);
 extern void ex_folddo(exarg_T *eap);
 extern void ex_nogui(exarg_T *eap);
 extern void ex_popup(exarg_T *eap);
-// Phase 3 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_ni(exarg_T *eap);
 extern void ex_script_ni(exarg_T *eap);
 extern void not_exiting(void);
@@ -301,24 +294,17 @@ extern void ex_fclose(exarg_T *eap);
 extern void ex_stop(exarg_T *eap);
 extern void ex_submagic(exarg_T *eap);
 extern int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
-// Phase 4 (ex_docmd plan): C implementations replaced by Rust exports.
 extern ssize_t find_cmdline_var(const char *src, size_t *usedlen);
-// Phase 5 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_fold(exarg_T *eap);
 extern void ex_foldopen(exarg_T *eap);
 extern void ex_digraphs(exarg_T *eap);
 extern void ex_mode(exarg_T *eap);
 extern void ex_swapname(exarg_T *eap);
-// Phase 6 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_tabnext(exarg_T *eap);
-// Phase 7 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_undo(exarg_T *eap);
-// Phase 8 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_sleep(exarg_T *eap);
 extern void do_sleep(int64_t msec, bool hide_cursor);
-// Phase 10 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_operators(exarg_T *eap);
-// Wave 2, Phase 2: Public utility functions migrated to Rust.
 extern void do_exedit(exarg_T *eap, win_T *old_curwin);
 extern void ex_splitview(exarg_T *eap);
 extern void ex_find(exarg_T *eap);
@@ -328,7 +314,6 @@ extern void tabpage_close(int forceit);
 extern void tabpage_close_other(tabpage_T *tp, int forceit);
 extern void tabpage_new(void);
 extern void handle_did_throw(void);
-// Wave 2, Phase 1: Static command functions migrated to Rust.
 extern void ex_goto(exarg_T *eap);
 extern void ex_tag(exarg_T *eap);
 extern void ex_ptag(exarg_T *eap);
@@ -364,7 +349,6 @@ extern void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc);
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
 
-// Rust FFI declarations (typval functions migrated to Rust)
 extern const char *tv_list_find_str(list_T *l, int n);
 
 // Rust FFI declarations (memline crate)
@@ -422,9 +406,6 @@ static void do_cmdline_end(void)
   end_batch_changes();
 }
 
-// do_cmdline is implemented in Rust (do_cmdline.rs, Phase 4).
-
-
 /// Helper function to apply an offset for buffer commands, i.e. ":bdelete",
 /// ":bwipeout", etc.
 ///
@@ -463,13 +444,10 @@ static int current_tab_nr(tabpage_T *tab)
 #define CURRENT_TAB_NR current_tab_nr(curtab)
 #define LAST_TAB_NR current_tab_nr(NULL)
 
-
 /// The "+" string used in place of an empty command in Ex mode.
 /// This string is used in pointer comparison.
 static char exmode_plus[] = "+";
 
-// excmd_get_argt is implemented in Rust (do_one_cmd.rs), declared in ex_docmd.h.
-// nvim_docmd_get_bad_name is implemented in Rust (completion.rs).
 extern char *nvim_docmd_get_bad_name(expand_T *xp, int idx);
 
 /// callback function for 'findfunc'
@@ -547,49 +525,13 @@ const char *nvim_docmd_e_no_more_file_str_found_in_path(void)
   return _(e_no_more_file_str_found_in_path);
 }
 
-// expand_findfunc is implemented in Rust (findfunc.rs).
 extern int expand_findfunc(char *pat, char ***files, int *numMatches);
 
-// nvim_docmd_findfunc_find_file is implemented in Rust (findfunc.rs).
 extern char *nvim_docmd_findfunc_find_file(char *arg, size_t len, int count);
 
-// nvim_docmd_did_set_findfunc_impl is implemented in Rust (impl_bodies.rs).
-
-// nvim_docmd_free_findfunc_option_impl is implemented in Rust (findfunc.rs).
 extern void nvim_docmd_free_findfunc_option_impl(void);
 
-// nvim_docmd_set_ref_in_findfunc_impl is implemented in Rust (findfunc.rs).
 extern bool nvim_docmd_set_ref_in_findfunc_impl(int copyID);
-
-/// :sview [+command] file       split window with new file, read-only
-/// :split [[+command] file]     split window with current or new file
-/// :vsplit [[+command] file]    split window vertically with current or new file
-/// :new [[+command] file]       split window with no or new file
-/// :vnew [[+command] file]      split vertically window with no or new file
-/// :sfind [+command] file       split window with file in 'path'
-///
-/// :tabedit                     open new Tab page with empty window
-/// :tabedit [+command] file     open new Tab page and edit "file"
-/// :tabnew [[+command] file]    just like :tabedit
-/// :tabfind [+command] file     open new Tab page and find "file"
-// Body migrated to Rust (Phase N+16). Forward decl at top of file.
-
-// nvim_docmd_tabpage_new_impl is implemented in Rust (impl_bodies.rs).
-
-
-
-// nvim_docmd_ex_detach_impl is implemented in Rust (impl_bodies.rs).
-
-// nvim_docmd_ex_connect_impl is implemented in Rust (impl_bodies.rs).
-
-/// ":edit", ":badd", ":balt", ":visual".
-/// ":edit <file>" command and alike.
-///
-/// @param old_curwin  curwin before doing a split or NULL
-// Body migrated to Rust (Phase N+17). Forward decl at top of file.
-
-
-// nvim_docmd_ex_read_impl is implemented in Rust (impl_bodies.rs).
 
 static char *prev_dir = NULL;
 
@@ -602,18 +544,7 @@ void free_cd_dir(void)
 
 #endif
 
-// nvim_docmd_post_chdir_impl is implemented in Rust (cmd_impl.rs).
 extern void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged);
-
-
-
-// nvim_docmd_close_redir_impl is implemented in Rust (commands.rs).
-
-
-
-/// Save the current State and go to Normal mode.
-///
-/// @return  true if the typeahead could be saved.
 
 /// Open the preview window or popup and make it the current window.
 /// Called by Rust ex_pedit / ex_pbuffer.
@@ -635,13 +566,9 @@ void nvim_docmd_back_to_current_window(win_T *curwin_save)
   g_do_tagpreview = 0;
 }
 
-
-// nvim_docmd_eval_vars_impl is implemented in Rust (eval_vars.rs).
 extern char *nvim_docmd_eval_vars_impl(char *src, const char *srcstart, size_t *usedlen,
                                        linenr_T *lnump, const char **errormsg, int *escaped,
                                        bool empty_is_error);
-
-
 
 static TriState filetype_detect = kNone;
 static TriState filetype_plugin = kNone;
@@ -658,10 +585,6 @@ static TriState filetype_indent = kNone;
 /// autocommands. We do this separately from filetype.vim so that these
 /// autocommands will always fire first (and thus can be overridden) while still
 /// allowing general filetype detection to be disabled in the user's init file.
-// filetype_plugin_enable / filetype_maybe_enable: implemented in Rust (Phase 6).
-// Accessor functions already exist below (nvim_docmd_get_filetype_* / set_filetype_*).
-
-
 
 // C accessor for Rust to read ex_pressedreturn
 int nvim_get_ex_pressedreturn(void)
@@ -760,7 +683,6 @@ int nvim_get_exestack_len(void)
   return exestack.ga_len;
 }
 
-// Phase 5 accessors for ex_mode, ex_swapname, ex_digraphs, ex_fold migrations
 void nvim_docmd_set_must_redraw(int val) { must_redraw = val; }
 const char *nvim_docmd_get_e_screenmode(void) { return _(e_screenmode); }
 const char *nvim_docmd_get_curbuf_swapname(void)
@@ -772,7 +694,6 @@ const char *nvim_docmd_get_curbuf_swapname(void)
 }
 const char *nvim_docmd_no_swap_file_msg(void) { return _("No swap file"); }
 
-// Phase 6 accessor for ex_tabnext: parse tabprevious/tabNext count argument.
 // Returns the parsed count, or 0 on error (sets *errmsg_set = 1).
 int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
 {
@@ -789,7 +710,6 @@ int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
   return tab_number;
 }
 
-// Phase 7 accessors for ex_undo migration
 const char *nvim_docmd_get_e_undobang(void)
 {
   return _(e_undobang_cannot_redo_or_move_branch);
@@ -807,18 +727,12 @@ int nvim_docmd_undo_count_steps(linenr_T step, int *found)
   return count;
 }
 
-// Phase 8 accessors for ex_sleep / do_sleep migration
 int nvim_docmd_cursor_valid_curwin(void) { return cursor_valid(curwin) ? 1 : 0; }
 void nvim_docmd_setcursor_mayforce_curwin(void) { setcursor_mayforce(curwin, true); }
 void nvim_docmd_loop_sleep(int64_t msec)
 {
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int);
 }
-
-// nvim_docmd_ex_checkhealth_impl is implemented in Rust (impl_bodies.rs).
-
-// nvim_docmd_ex_terminal_impl is implemented in Rust (impl_bodies.rs).
-
 
 /// Check if a command is a :map/:abbrev command.
 bool is_map_cmd(cmdidx_T cmdidx)
@@ -842,7 +756,6 @@ bool is_map_cmd(cmdidx_T cmdidx)
 /// Get the E319 "not available" error message string.
 const char *nvim_docmd_e319_msg(void) { return _("E319: The command is not available in this version"); }
 
-
 /// Get a pointer to IObuff.
 char *nvim_docmd_get_iobuff(void)
 {
@@ -854,7 +767,6 @@ int nvim_docmd_get_iosize(void)
 {
   return IOSIZE;
 }
-
 
 /// Concatenate to IObuff with size limit.
 void nvim_docmd_xstrlcat_iobuff(const char *src)
@@ -904,7 +816,6 @@ int nvim_eap_get_addr_type(const exarg_T *eap) { return (int)eap->addr_type; }
 int nvim_eap_get_addr_count(const exarg_T *eap) { return eap->addr_count; }
 void nvim_eap_set_addr_count(exarg_T *eap, int count) { eap->addr_count = count; }
 
-
 /// Check if a command function is "not implemented" (ex_ni or ex_script_ni).
 int nvim_docmd_cmdnames_func_is_ni(int cmdidx)
 {
@@ -935,7 +846,6 @@ linenr_T nvim_docmd_get_curbuf_line_count(void)
 char *nvim_eap_get_cmd(const exarg_T *eap) { return eap->cmd; }
 /// Set eap->cmdidx.
 void nvim_eap_set_cmdidx(exarg_T *eap, int idx) { eap->cmdidx = (cmdidx_T)idx; }
-
 
 /// Get command_count (total commands in table).
 int nvim_docmd_get_command_count(void) { return command_count; }
@@ -1017,7 +927,6 @@ char *nvim_docmd_get_user_command_name(int useridx, int cmdidx)
 }
 
 // =========================================================================
-// Phase 4 accessor functions for Rust FFI
 // =========================================================================
 
 // eap field accessors
@@ -1035,7 +944,6 @@ void nvim_eap_set_mkdir_p(exarg_T *eap, int v) { eap->mkdir_p = v; }
 char *nvim_eap_get_nextcmd(const exarg_T *eap) { return eap->nextcmd; }
 void nvim_eap_set_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
 int nvim_eap_get_skip(const exarg_T *eap) { return eap->skip; }
-
 
 // Helper function wrappers
 int nvim_docmd_valid_yank_reg(int regname, int writing)
@@ -1103,7 +1011,6 @@ const char *nvim_docmd_get_e_zerocount(void)
   return _(e_zerocount);
 }
 
-
 /// Advance eap->arg to end of string (skip to NUL).
 void nvim_docmd_arg_skip_to_end(exarg_T *eap)
 {
@@ -1118,7 +1025,6 @@ int nvim_docmd_count_buf_check(exarg_T *eap)
 }
 
 // =========================================================================
-// Phase 5 accessor functions for Rust FFI
 // =========================================================================
 
 // eap field accessors for Phase 5
@@ -1126,7 +1032,6 @@ void nvim_eap_set_addr_type(exarg_T *eap, int t) { eap->addr_type = (cmd_addr_T)
 char *nvim_eap_get_errmsg(const exarg_T *eap) { return eap->errmsg; }
 void nvim_eap_set_errmsg(exarg_T *eap, char *msg) { eap->errmsg = msg; }
 char **nvim_eap_get_cmdlinep(const exarg_T *eap) { return eap->cmdlinep; }
-
 
 // cmdnames table accessor
 int nvim_docmd_cmdnames_addr_type(int idx)
@@ -1261,9 +1166,7 @@ char *nvim_docmd_ex_errmsg_invarg2(const char *arg)
   return (char *)ex_errmsg(e_invarg2, arg);
 }
 
-
 // =========================================================================
-// Phase 6 accessor functions for Rust FFI
 // parse_command_modifiers, get_address, parse_cmd_address
 // =========================================================================
 
@@ -1377,7 +1280,6 @@ void nvim_docmd_set_curwin_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = 
 /// Set curwin->w_cursor.col.
 void nvim_docmd_set_curwin_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 
-
 /// Get curwin->w_cursor.col.
 colnr_T nvim_docmd_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 
@@ -1444,7 +1346,6 @@ linenr_T nvim_docmd_hasFolding(linenr_T lnum)
   return lnum;
 }
 
-
 /// Wrap getdigits_int32 for Rust.
 int nvim_docmd_getdigits_int32(char **pp)
 {
@@ -1466,7 +1367,6 @@ char *nvim_docmd_get_e_backslash(void) { return _(e_backslash); }
 /// Get _(e_line_number_out_of_range).
 char *nvim_docmd_get_e_line_number_out_of_range(void) { return _(e_line_number_out_of_range); }
 
-
 // --- Accessors for parse_cmd_address ---
 
 /// Wrap mark_get_visual for Rust.
@@ -1485,13 +1385,11 @@ void nvim_docmd_check_cursor_col(void) { check_cursor_col(curwin); }
 int nvim_docmd_is_user_cmdidx(const exarg_T *eap) { return IS_USER_CMDIDX(eap->cmdidx); }
 
 // =========================================================================
-// Phase 1 accessor functions for Rust FFI
 // (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
 //  ex_quit, msg_verbose_cmd, is_other_file)
 // =========================================================================
 
 // eap accessors
-// Note: nvim_eap_get_forceit already exists in indent_ffi.c
 
 // Wrapper for static close_redir
 void nvim_docmd_close_redir(void) { nvim_docmd_close_redir_impl(); }
@@ -1523,8 +1421,6 @@ void nvim_docmd_set_exiting(int val) { exiting = (bool)val; }
 // autowriteall option
 int nvim_docmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 
-// nvim_docmd_check_more is implemented in Rust (impl_bodies.rs).
-
 // ONE_WINDOW || eap->addr_count == 0 check for ex_quit
 int nvim_docmd_one_window_p(int addr_count)
 {
@@ -1555,17 +1451,13 @@ const char *nvim_docmd_get_curbuf_sfname(void) { return curbuf->b_sfname; }
 // e_invarg2 accessor (already in ex_docmd.c at line ~6369, named nvim_get_e_invarg2)
 // e_secure accessor (in option_shim.c as nvim_get_e_secure)
 
-// Phase 6 accessor: run do_cmdline with getexline callback, no flags (for do_exmode).
 void nvim_docmd_do_cmdline_getexline_noflags(void) { do_cmdline(NULL, getexline, NULL, 0); }
 
-// Phase 6 accessor: get curbuf changedtick as int64 for do_exmode.
 int64_t nvim_docmd_curbuf_changedtick(void) { return (int64_t)buf_get_changedtick(curbuf); }
 
-// Phase 6 accessor: get msg_scroll_flush.
 void nvim_docmd_msg_scroll_flush(void) { msg_scroll_flush(); }
 
 // =============================================================================
-// Phase 2 accessor functions for Rust FFI (commands.rs / execute.rs)
 // =============================================================================
 
 // eap args/arglens/argc accessors
@@ -1600,12 +1492,9 @@ cstack_T *nvim_cstack_alloc(void)
 }
 void nvim_cstack_free(cstack_T *cs) { xfree(cs); }
 void nvim_eap_set_cstack(exarg_T *eap, cstack_T *cstack) { eap->cstack = cstack; }
-// nvim_curbuf_modifiable already exists in normal_shim.c (returns bool)
 int nvim_curbuf_is_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
 const char *nvim_get_e_command_too_recursive(void) { return _(e_command_too_recursive); }
 const char *nvim_get_e_modifiable(void) { return _(e_modifiable); }
-// nvim_get_e_cmdwin already exists in ex_getln.c
-// nvim_get_global_busy already exists in undo.c (returns bool)
 int nvim_get_eap_addr_type_lines(const exarg_T *eap) { return eap->addr_type == ADDR_LINES ? 1 : 0; }
 void nvim_hasFolding_line1(linenr_T lnum, linenr_T *line1_out)
 {
@@ -1648,7 +1537,6 @@ void nvim_eap_init(exarg_T *eap, char *cmdline_val, char **cmdlinep)
     .cookie = NULL,
   };
 }
-// nvim_get_ex_pressedreturn already exists above (returns int)
 void nvim_set_ex_pressedreturn(bool val) { ex_pressedreturn = val; }
 void nvim_save_cursor(pos_T *save) { *save = curwin->w_cursor; }
 void nvim_restore_cursor(const pos_T *save) { curwin->w_cursor = *save; }
@@ -1702,7 +1590,6 @@ bool nvim_eap_cmd_is_nul_or_comment(const exarg_T *eap)
 }
 size_t nvim_iosize(void) { return IOSIZE; }
 void nvim_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n); }
-// nvim_get_iobuff already exists in option_shim.c
 
 const char *nvim_get_e_not_an_editor_command(void) { return _(e_not_an_editor_command); }
 void nvim_save_last_search_pattern(void) { save_last_search_pattern(); }
@@ -1731,7 +1618,6 @@ char *nvim_docmd_errmsg_trailing_arg(const char *arg) { return ex_errmsg(e_trail
 
 /// For ex_find_impl: returns true if 'findfunc' option is non-empty.
 bool nvim_docmd_get_findfunc_nonempty(void) { return *get_findfunc() != NUL; }
-// nvim_docmd_findfunc_find_file is implemented in Rust (findfunc.rs).
 /// For ex_find_impl: returns curbuf->b_ffname.
 const char *nvim_docmd_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 
@@ -1759,22 +1645,17 @@ void nvim_docmd_home_replace(buf_T *buf, const char *src)
 {
   home_replace(buf, src, IObuff, IOSIZE, true);
 }
-// nvim_docmd_get_iobuff already defined in option_shim.c as nvim_get_iobuff
 void nvim_undo_cmdmod_p(CmdParseInfo *cmdinfo) { nvim_docmd_undo_cmdmod_impl(&cmdinfo->cmdmod); }
 
 // e_nobang and e_norange error strings
 const char *nvim_get_e_nobang(void) { return _(e_nobang); }
-// nvim_get_e_norange already exists above
 
 // ascii_iswhite wrapper (the inline version can't be called from Rust)
 int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
 
-
-
 // Wrappers for static Phase 2 helpers called from Rust
 int nvim_do_cmdline_start(void) { return do_cmdline_start(); }
 void nvim_do_cmdline_end(void) { do_cmdline_end(); }
-// Phase 3 C accessor wrappers
 
 // changedir_func helpers
 bool nvim_allbuf_locked(void) { return allbuf_locked(); }
@@ -1833,8 +1714,6 @@ void nvim_post_chdir(int scope, bool dir_differs)
 }
 
 const char *nvim_get_e_failed(void) { return _(e_failed); }
-
-// Phase 3: expand_filename / repl_cmdline helpers
 
 // eap->do_ecmd_cmd accessor
 char *nvim_eap_get_do_ecmd_cmd(const exarg_T *eap) { return eap->do_ecmd_cmd; }
@@ -1909,7 +1788,6 @@ bool nvim_is_expand_char(int c)
 // nvim_path_has_wildcard is defined in tag_shim.c
 
 // =============================================================================
-// Phase 1 (batch plan) accessor functions for Rust FFI
 // =============================================================================
 
 /// Set eap->errmsg from a const string (for Rust FFI const safety).
@@ -1939,7 +1817,6 @@ const char *nvim_docmd_get_e_nogvim(void) { return _("E25: Nvim does not have a 
 
 /// Get _(e_invcmd).
 const char *nvim_docmd_get_e_invcmd(void) { return _(e_invcmd); }
-
 
 /// Wrapper for goto_buffer(eap, DOBUF_MOD, FORWARD, eap->line2) + do_cmdline_cmd.
 void nvim_docmd_goto_buffer_mod(exarg_T *eap)
@@ -1986,7 +1863,6 @@ void nvim_docmd_goto_buffer_last(exarg_T *eap)
   }
 }
 
-
 /// Wrapper for do_bang().
 void nvim_docmd_do_bang(int addr_count, exarg_T *eap, bool forceit)
 {
@@ -2021,9 +1897,6 @@ void nvim_docmd_rundo(const char *arg)
   u_read_undo((char *)arg, hash, NULL);
 }
 
-/// Wrapper for get_tabpage_arg(eap).
-
-
 /// Wrapper for find_pattern_in_path for :checkpath.
 void nvim_docmd_checkpath(bool forceit)
 {
@@ -2035,12 +1908,10 @@ void nvim_docmd_checkpath(bool forceit)
 /// Wrapper for redraw_all_later(UPD_SOME_VALID).
 void nvim_docmd_redraw_all_later_some_valid(void) { redraw_all_later(UPD_SOME_VALID); }
 
-
 /// Set ex_pressedreturn (direct implementation for Rust FFI).
 void nvim_docmd_set_pressedreturn(bool val) { ex_pressedreturn = val; }
 
 // =============================================================================
-// Phase 2 (batch plan) accessor functions for Rust FFI
 // =============================================================================
 
 /// Wrapper for do_bufdel (buffer unload/delete/wipe).
@@ -2065,9 +1936,6 @@ const char *nvim_docmd_get_e_curdir(void) { return _(e_curdir); }
 /// Wrapper for check_nomodeline.
 int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1 : 0; }
 
-
-// Phase 20 accessors for Rust FFI
-
 /// Get curbuf->b_did_filetype.
 bool nvim_docmd_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
 
@@ -2085,8 +1953,6 @@ int nvim_docmd_setfname_curbuf(const char *arg)
 {
   return setfname(curbuf, (char *)arg, NULL, true);
 }
-
-// Phase 21 accessors for Rust FFI
 
 /// Get eval_to_string for colorscheme query.
 char *nvim_docmd_eval_to_string_g_colors_name(void)
@@ -2154,22 +2020,12 @@ void nvim_docmd_win_goto(win_T *wp) { win_goto(wp); }
 /// close_others wrapper.
 void nvim_docmd_close_others(bool message, bool forceit) { close_others(message, forceit); }
 
-
-// Phase 3 C wrappers (direct implementations for Rust FFI)
-
-/// ex_edit logic (direct implementation for Rust FFI).
-// Phase 23 accessors for ex_edit
-
 bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
 {
   return check_can_set_curbuf_forceit(forceit);
 }
 bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 
-// nvim_docmd_get_argopt_name is implemented in Rust (completion.rs).
-
-
-// Phase 23 accessors for ex_at
 int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
 bool nvim_docmd_p_cpo_has_execbuf(void) { return vim_strchr(p_cpo, CPO_EXECBUF) != NULL; }
 void nvim_docmd_do_cmdline_getexline(void)
@@ -2177,12 +2033,7 @@ void nvim_docmd_do_cmdline_getexline(void)
   do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE);
 }
 
-
-
-
-
 // =============================================================================
-// Phase 10 accessor functions for Rust FFI
 // =============================================================================
 
 /// Get VIsual_active as int.
@@ -2195,13 +2046,11 @@ void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
 void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val; }
 
 // =============================================================================
-// Phase 17 accessor functions for Rust FFI (ex_tabclose, ex_hide, ex_wincmd,
 //   ex_copymove)
 // =============================================================================
 
 /// Check if there is only one tab page.
 int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1 : 0; }
-
 
 /// Check if a tabpage handle equals curtab.
 int nvim_docmd_tabpage_is_current(void *tp) { return tp == curtab ? 1 : 0; }
@@ -2234,18 +2083,14 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
   return get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, errormsg);
 }
 
-// Phase 18 accessors
-
 /// Check if curwin->w_buffer should be hidden (for ex_exit).
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
 
-// Accessor for update_topline_cursor_impl (migrated to Rust).
 int nvim_docmd_curwin_p_wrap(void) { return curwin->w_p_wrap ? 1 : 0; }
 void nvim_docmd_update_topline(void) { update_topline(curwin); }
 void nvim_docmd_validate_cursor(void) { validate_cursor(curwin); }
 void nvim_docmd_update_curswant(void) { update_curswant(); }
 
-// Helpers for vim_mkdir_emsg_impl and open_exfile_impl (migrated to Rust).
 void nvim_docmd_semsg_mkdir_err(const char *name, int errcode) {
   semsg(_(e_mkdir), name, os_strerror(errcode));
 }
@@ -2310,7 +2155,6 @@ void nvim_docmd_do_autocmd_dirchanged_manual_post(const char *cwd, int scope)
   do_autocmd_dirchanged(cwd, (CdScope)scope, kCdCauseManual, false);
 }
 
-// Phase 4 C forwarding wrappers.
 void exec_normal_cmd(char *cmd, int remap, bool silent) { nvim_docmd_exec_normal_cmd_impl(cmd, remap, silent); }
 void exec_normal(bool was_typed, bool use_vpeekc) { nvim_docmd_exec_normal_impl(was_typed, use_vpeekc); }
 void update_topline_cursor(void) { nvim_docmd_update_topline_cursor_impl(); }
@@ -2326,9 +2170,6 @@ void ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 // set_ref_in_findfunc: only called from Rust directly as nvim_docmd_set_ref_in_findfunc_impl
 // free_findfunc_option: only called from option_shim.c as nvim_docmd_free_findfunc_option_impl
 // did_set_findfunc: only called from option_shim.c as nvim_docmd_did_set_findfunc_impl
-
-// Phase 3 C forwarding wrappers (original names forward to renamed impl bodies).
-// These maintain ABI compatibility while Rust takes ownership via #[export_name].
 
 // apply_cmdmod / undo_cmdmod - thin C wrappers calling Rust _impl bodies.
 void apply_cmdmod(cmdmod_T *cmod) { nvim_docmd_apply_cmdmod_impl(cmod); }
@@ -2425,7 +2266,6 @@ int nvim_docmd_buf_hide_buf(buf_T *buf) { return buf_hide(buf) ? 1 : 0; }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
 // nvim_docmd_do_exedit_handle_exmode, nvim_docmd_do_exedit_split_fail_cleanup,
-// and nvim_docmd_do_exedit_split_fallback are implemented in Rust (impl_bodies.rs).
 
 char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
                 const char **errormsg, int *escaped, bool empty_is_error)
@@ -2435,7 +2275,6 @@ char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnum
 }
 
 // =============================================================================
-// Phase 3 eval_vars.rs C accessor functions
 // =============================================================================
 
 char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
@@ -2534,7 +2373,6 @@ const char *nvim_docmd_eval_get_e_empty_string(void)
 }
 
 // =============================================================================
-// Phase 1 impl_bodies.rs C accessor functions
 // =============================================================================
 
 // --- check_more helpers ---
@@ -2772,13 +2610,10 @@ void nvim_docmd_optset_varp_set(optset_T *args, char *name)
 size_t nvim_xp_get_pattern_len(expand_T *xp) { return xp->xp_pattern_len; }
 
 // =============================================================================
-// Phase 4 (ex_docmd plan) accessor functions for do_one_cmd Rust port
 // =============================================================================
 
-// nvim_docmd_get_quitmore already defined above.
 /// Decrement quitmore.
 void nvim_docmd_dec_quitmore(void) { quitmore--; }
-// nvim_docmd_get_exiting already defined above (returns int 0/1).
 /// Get ex_nesting_level global.
 int nvim_docmd_get_ex_nesting_level(void) { return ex_nesting_level; }
 /// Increment ex_nesting_level.
@@ -2840,7 +2675,6 @@ bool nvim_getline_equal_getnextac(LineGetter fgetline, void *cookie)
 {
   return getline_equal(fgetline, cookie, getnextac);
 }
-// nvim_docmd_cmdnames_name already defined at line 2217 (returns char*).
 /// Set eap->cmd to *cmdlinep (used to init ea.cmd = *cmdlinep in do_one_cmd).
 void nvim_eap_set_cmd_from_cmdlinep(exarg_T *eap) { eap->cmd = *eap->cmdlinep; }
 /// Get *eap->cmdlinep[0] first char (for "#!" check in do_one_cmd).
@@ -2926,12 +2760,6 @@ void nvim_eap_advance_arg(exarg_T *eap) { eap->arg++; }
 void nvim_eap_advance_arg2(exarg_T *eap) { eap->arg += 2; }
 /// skipwhite(eap->arg) -> eap->arg.
 void nvim_eap_skipwhite_arg(exarg_T *eap) { eap->arg = skipwhite(eap->arg); }
-/// getargopt wrapper (already public Rust export, add C wrapper for do_one_cmd).
-
-/// get_flags wrapper (already public Rust export).
-
-/// skip_cmd wrapper (already public Rust export).
-
 
 /// Emit error and do_errthrow cleanup for do_one_cmd doend.
 void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
@@ -3016,7 +2844,6 @@ const char *nvim_docmd_get_e_trailing_arg(void) { return e_trailing_arg; }
 const char *nvim_docmd_get_e_argreq(void) { return _(e_argreq); }
 /// e_invarg getter.
 const char *nvim_docmd_get_e_invarg(void) { return _(e_invarg); }
-// nvim_docmd_get_e_norange already defined above (returns char* version).
 /// e_nobang getter (already have nvim_get_e_nobang).
 /// nvim_get_reg_executing (already defined in autocmd.c).
 /// nvim_get_pending_end_reg_executing (already defined in getchar.c).
@@ -3040,7 +2867,6 @@ int nvim_docmd_parse_argopt(exarg_T *eap, bool ni)
 }
 
 // =============================================================================
-// Phase 4 additional accessors for do_one_cmd.rs
 // =============================================================================
 
 /// CMD_put constant.
@@ -3108,7 +2934,6 @@ void *nvim_docmd_loop_cookie_get_cookie(void *lc)
 }
 
 // =============================================================================
-// Phase 1 (do_cmdline plan): C accessor functions for do_cmdline Rust port
 // =============================================================================
 
 /// Return function pointer to getsourceline (for getline_equal comparison).
