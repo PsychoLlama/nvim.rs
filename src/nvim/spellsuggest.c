@@ -290,6 +290,11 @@ extern void rs_add_banned(void *su, char *word);
 extern void rs_rescore_one(void *su, suggest_T *stp);
 extern void rs_rescore_suggestions(void *su);
 extern void rs_suggest_trie_walk(void *su, langp_T *lp, char *fword, bool soundfold);
+extern void rs_suggest_try_special(void *su);
+extern void rs_suggest_try_change(void *su);
+extern void rs_suggest_try_soundalike_prep(void);
+extern void rs_suggest_try_soundalike(void *su);
+extern void rs_suggest_try_soundalike_finish(void);
 extern void rs_add_sound_suggest(void *su, char *goodword, int score, langp_T *lp);
 extern void rs_score_comp_sal(void *su);
 
@@ -844,58 +849,13 @@ static void spell_find_cleanup(suginfo_T *su)
 /// Try finding suggestions by recognizing specific situations.
 static void suggest_try_special(suginfo_T *su)
 {
-  char word[MAXWLEN];
-
-  // Recognize a word that is repeated: "the the".
-  char *p = skiptowhite(su->su_fbadword);
-  size_t len = (size_t)(p - su->su_fbadword);
-  p = skipwhite(p);
-  if (strlen(p) == len && strncmp(su->su_fbadword, p, len) == 0) {
-    // Include badflags: if the badword is onecap or allcap
-    // use that for the goodword too: "The the" -> "The".
-    char c = su->su_fbadword[len];
-    su->su_fbadword[len] = NUL;
-    make_case_word(su->su_fbadword, word, su->su_badflags);
-    su->su_fbadword[len] = c;
-
-    // Give a soundalike score of 0, compute the score as if deleting one
-    // character.
-    add_suggestion(su, &su->su_ga, word, su->su_badlen,
-                   RESCORE(SCORE_REP, 0), 0, true, su->su_sallang, false);
-  }
+  rs_suggest_try_special(su);
 }
 
 /// Try finding suggestions by adding/removing/swapping letters.
 static void suggest_try_change(suginfo_T *su)
 {
-  char fword[MAXWLEN];            // copy of the bad word, case-folded
-
-  // We make a copy of the case-folded bad word, so that we can modify it
-  // to find matches (esp. REP items).  Append some more text, changing
-  // chars after the bad word may help.
-  STRCPY(fword, su->su_fbadword);
-  int n = (int)strlen(fword);
-  char *p = su->su_badptr + su->su_badlen;
-  spell_casefold(curwin, p, (int)strlen(p), fword + n, MAXWLEN - n);
-
-  // Make sure the resulting text is not longer than the original text.
-  n = (int)strlen(su->su_badptr);
-  if (n < MAXWLEN) {
-    fword[n] = NUL;
-  }
-
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len; lpi++) {
-    langp_T *lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-
-    // If reloading a spell file fails it's still in the list but
-    // everything has been cleared.
-    if (lp->lp_slang->sl_fbyts == NULL) {
-      continue;
-    }
-
-    // Try it for this language.  Will add possible suggestions.
-    suggest_trie_walk(su, lp, fword, false);
-  }
+  rs_suggest_try_change(su);
 }
 
 // Check the maximum score, if we go over it we won't try this change.
@@ -966,64 +926,20 @@ static sftword_T dumsft;
 /// Prepare for calling suggest_try_soundalike().
 static void suggest_try_soundalike_prep(void)
 {
-  // Do this for all languages that support sound folding and for which a
-  // .sug file has been loaded.
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len; lpi++) {
-    langp_T *lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-    slang_T *slang = lp->lp_slang;
-    if (!GA_EMPTY(&slang->sl_sal) && slang->sl_sbyts != NULL) {
-      // prepare the hashtable used by add_sound_suggest()
-      hash_init(&slang->sl_sounddone);
-    }
-  }
+  rs_suggest_try_soundalike_prep();
 }
 
 /// Find suggestions by comparing the word in a sound-a-like form.
 /// Note: This doesn't support postponed prefixes.
 static void suggest_try_soundalike(suginfo_T *su)
 {
-  char salword[MAXWLEN];
-
-  // Do this for all languages that support sound folding and for which a
-  // .sug file has been loaded.
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len; lpi++) {
-    langp_T *lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-    slang_T *slang = lp->lp_slang;
-    if (!GA_EMPTY(&slang->sl_sal) && slang->sl_sbyts != NULL) {
-      // soundfold the bad word
-      spell_soundfold(slang, su->su_fbadword, true, salword);
-
-      // try all kinds of inserts/deletes/swaps/etc.
-      // TODO(vim): also soundfold the next words, so that we can try joining
-      // and splitting
-      suggest_trie_walk(su, lp, salword, true);
-    }
-  }
+  rs_suggest_try_soundalike(su);
 }
 
 /// Finish up after calling suggest_try_soundalike().
 static void suggest_try_soundalike_finish(void)
 {
-  // Do this for all languages that support sound folding and for which a
-  // .sug file has been loaded.
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len; lpi++) {
-    langp_T *lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-    slang_T *slang = lp->lp_slang;
-    if (!GA_EMPTY(&slang->sl_sal) && slang->sl_sbyts != NULL) {
-      // Free the info about handled words.
-      int todo = (int)slang->sl_sounddone.ht_used;
-      for (hashitem_T *hi = slang->sl_sounddone.ht_array; todo > 0; hi++) {
-        if (!HASHITEM_EMPTY(hi)) {
-          xfree(HI2SFT(hi));
-          todo--;
-        }
-      }
-
-      // Clear the hashtable, it may also be used by another region.
-      hash_clear(&slang->sl_sounddone);
-      hash_init(&slang->sl_sounddone);
-    }
-  }
+  rs_suggest_try_soundalike_finish();
 }
 
 /// A match with a soundfolded word is found.  Add the good word(s) that

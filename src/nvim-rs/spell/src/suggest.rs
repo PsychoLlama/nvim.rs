@@ -5417,6 +5417,185 @@ pub unsafe extern "C" fn rs_score_comp_sal(su: *mut std::ffi::c_void) {
 }
 
 // =============================================================================
+// Phase 4: soundalike helpers and suggest_try_change/special
+// =============================================================================
+
+extern "C" {
+    #[link_name = "hash_init"]
+    fn sound_hash_init(ht: *mut crate::HashtabRaw);
+    #[link_name = "hash_clear"]
+    fn sound_hash_clear(ht: *mut crate::HashtabRaw);
+    #[link_name = "xfree"]
+    fn sound_xfree(ptr: *mut std::ffi::c_void);
+}
+
+/// Rust implementation of C `suggest_try_special`.
+///
+/// Handles the "the the" repeated word case.
+///
+/// # Safety
+/// `su` must be a valid suginfo_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggest_try_special(su: *mut std::ffi::c_void) {
+    let fbadword = nvim_suginfo_get_fbadword(su).cast_mut();
+    // Find the end of the first word.
+    let p = trie_skiptowhite(fbadword);
+    let len = p.offset_from(fbadword) as usize;
+    let p2 = trie_skipwhite(p);
+    // Check if the two halves are equal.
+    if c_strlen(p2) == len && c_strncmp(fbadword, p2, len) {
+        let mut word = [0u8; MAXWLEN];
+        // Temporarily NUL-terminate after first word.
+        let saved = *fbadword.add(len);
+        *fbadword.add(len) = 0;
+        let badflags = nvim_suginfo_get_badflags(su);
+        crate::rs_make_case_word(fbadword, word.as_mut_ptr().cast::<c_char>(), badflags);
+        *fbadword.add(len) = saved;
+
+        let su_ga = nvim_suginfo_get_ga(su);
+        let su_badlen = nvim_suginfo_get_badlen(su);
+        let su_sallang = nvim_suginfo_get_sallang(su);
+        // RESCORE(SCORE_REP, 0) = (3*SCORE_REP + 0) / 4
+        let score = (3 * crate::SCORE_REP) / 4;
+        rs_add_suggestion(
+            su,
+            su_ga,
+            word.as_ptr().cast::<c_char>(),
+            su_badlen,
+            score,
+            0,
+            true,
+            su_sallang.cast::<std::ffi::c_void>(),
+            false,
+        );
+    }
+}
+
+/// Rust implementation of C `suggest_try_change`.
+///
+/// Iterates languages and calls suggest_trie_walk for each.
+///
+/// # Safety
+/// `su` must be a valid suginfo_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggest_try_change(su: *mut std::ffi::c_void) {
+    let mut fword = [0u8; MAXWLEN];
+
+    // Copy the case-folded bad word.
+    let fbadword = nvim_suginfo_get_fbadword(su);
+    c_strcpy(fword.as_mut_ptr().cast::<c_char>(), fbadword);
+
+    let n = c_strlen(fword.as_ptr().cast::<c_char>());
+    let badptr = nvim_suginfo_get_badptr(su);
+    let badlen = nvim_suginfo_get_badlen(su);
+    let p = badptr.add(badlen as usize);
+    let plen = c_strlen(p);
+    // Append casefold of text after bad word.
+    crate::check::rs_spell_casefold_c_compat(
+        stp_sal_curwin,
+        p,
+        plen as c_int,
+        fword.as_mut_ptr().add(n).cast::<c_char>(),
+        (MAXWLEN - n) as c_int,
+    );
+
+    // Make sure result is no longer than original bad word area.
+    let orig_len = c_strlen(badptr);
+    if orig_len < MAXWLEN {
+        fword[orig_len] = 0;
+    }
+
+    let langp_ga = nvim_win_get_b_langp(stp_sal_curwin);
+    let langp_len = (*langp_ga).ga_len;
+    for lpi in 0..langp_len as usize {
+        let lp = (*langp_ga).ga_data.cast::<crate::LangpT>().add(lpi);
+        if (*(*lp).lp_slang).sl_fbyts.is_null() {
+            continue;
+        }
+        rs_suggest_trie_walk(su, lp, fword.as_mut_ptr().cast::<c_char>(), false);
+    }
+}
+
+/// Rust implementation of C `suggest_try_soundalike_prep`.
+///
+/// Initializes sl_sounddone hash tables for languages with sound folding.
+///
+/// # Safety
+/// No pointers required; uses global curwin.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggest_try_soundalike_prep() {
+    let langp_ga = nvim_win_get_b_langp(stp_sal_curwin);
+    let langp_len = (*langp_ga).ga_len;
+    for lpi in 0..langp_len as usize {
+        let lp = (*langp_ga).ga_data.cast::<crate::LangpT>().add(lpi);
+        let slang_ptr = (*lp).lp_slang;
+        if (*slang_ptr).sl_sal.ga_len > 0 && !(*slang_ptr).sl_sbyts.is_null() {
+            sound_hash_init(std::ptr::addr_of_mut!((*slang_ptr).sl_sounddone));
+        }
+    }
+}
+
+/// Rust implementation of C `suggest_try_soundalike`.
+///
+/// Soundfolds the bad word and calls suggest_trie_walk with soundfold=true.
+///
+/// # Safety
+/// `su` must be a valid suginfo_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggest_try_soundalike(su: *mut std::ffi::c_void) {
+    let mut salword = [0u8; MAXWLEN];
+    let fbadword = nvim_suginfo_get_fbadword(su);
+
+    let langp_ga = nvim_win_get_b_langp(stp_sal_curwin);
+    let langp_len = (*langp_ga).ga_len;
+    for lpi in 0..langp_len as usize {
+        let lp = (*langp_ga).ga_data.cast::<crate::LangpT>().add(lpi);
+        let slang_ptr = (*lp).lp_slang;
+        if (*slang_ptr).sl_sal.ga_len > 0 && !(*slang_ptr).sl_sbyts.is_null() {
+            // Soundfold the bad word.
+            crate::rs_spell_soundfold(
+                slang_ptr,
+                fbadword.cast_mut(),
+                true,
+                salword.as_mut_ptr().cast::<c_char>(),
+            );
+            rs_suggest_trie_walk(su, lp, salword.as_mut_ptr().cast::<c_char>(), true);
+        }
+    }
+}
+
+/// Rust implementation of C `suggest_try_soundalike_finish`.
+///
+/// Frees sl_sounddone entries and clears the hash tables.
+///
+/// # Safety
+/// No pointers required; uses global curwin.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggest_try_soundalike_finish() {
+    let langp_ga = nvim_win_get_b_langp(stp_sal_curwin);
+    let langp_len = (*langp_ga).ga_len;
+    for lpi in 0..langp_len as usize {
+        let lp = (*langp_ga).ga_data.cast::<crate::LangpT>().add(lpi);
+        let slang_ptr = (*lp).lp_slang;
+        if (*slang_ptr).sl_sal.ga_len > 0 && !(*slang_ptr).sl_sbyts.is_null() {
+            // Free all sftword_T entries.
+            let ht = std::ptr::addr_of_mut!((*slang_ptr).sl_sounddone);
+            let mut todo = (*ht).ht_used as c_int;
+            let mut hi = (*ht).ht_array;
+            while todo > 0 {
+                if !sound_hi_empty(hi) {
+                    sound_xfree(hi_key_to_sft((*hi).hi_key).cast::<std::ffi::c_void>());
+                    todo -= 1;
+                }
+                hi = hi.add(1);
+            }
+            sound_hash_clear(ht);
+            sound_hash_init(ht);
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
