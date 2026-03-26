@@ -304,25 +304,17 @@ static void schedule_termrequest(Terminal *term)
 
 extern int rs_on_osc(int command, const char *str, size_t len, int initial, int is_final,
                      void *user);
-static int on_osc(int command, VTermStringFragment frag, void *user)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_on_osc(command, frag.str, frag.len, (int)frag.initial, (int)frag.final, user);
-}
+static int on_osc(int command, VTermStringFragment frag, void *user) FUNC_ATTR_NONNULL_ALL
+  { return rs_on_osc(command, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
 
 extern int rs_on_dcs(const char *command, size_t commandlen, const char *str, size_t len,
                      int initial, int is_final, void *user);
 static int on_dcs(const char *command, size_t commandlen, VTermStringFragment frag, void *user)
-{
-  return rs_on_dcs(command, commandlen, frag.str, frag.len, (int)frag.initial,
-                   (int)frag.final, user);
-}
+  { return rs_on_dcs(command, commandlen, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
 
 extern int rs_on_apc(const char *str, size_t len, int initial, int is_final, void *user);
 static int on_apc(VTermStringFragment frag, void *user)
-{
-  return rs_on_apc(frag.str, frag.len, (int)frag.initial, (int)frag.final, user);
-}
+  { return rs_on_apc(frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
 
 static VTermStateFallbacks vterm_fallbacks = {
   .control = NULL,
@@ -985,9 +977,7 @@ void terminal_destroy(Terminal **termpp)
 
 extern void rs_terminal_do_send(void *term, const char *data, size_t size);
 static void terminal_send(Terminal *term, const char *data, size_t size)
-{
-  rs_terminal_do_send(term, data, size);
-}
+  { rs_terminal_do_send(term, data, size); }
 
 void terminal_paste(int count, String *y_array, size_t y_size)
 {
@@ -1032,15 +1022,11 @@ void terminal_paste(int count, String *y_array, size_t y_size)
 }
 
 static void terminal_send_key(Terminal *term, int c)
-{
-  rs_terminal_send_key_impl(term, c);
-}
+  { rs_terminal_send_key_impl(term, c); }
 
 extern void rs_terminal_receive_impl(void *term, const char *data, size_t len);
 void terminal_receive(Terminal *term, const char *data, size_t len)
-{
-  rs_terminal_receive_impl(term, data, len);
-}
+  { rs_terminal_receive_impl(term, data, len); }
 
 static int get_rgb(VTermState *state, VTermColor color)
 {
@@ -1115,10 +1101,7 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
 }
 
 void terminal_notify_theme(Terminal *term, bool dark)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_terminal_notify_theme_impl(term, (int)dark);
-}
+  { rs_terminal_notify_theme_impl(term, (int)dark); }
 
 // }}}
 // libvterm callbacks {{{
@@ -1140,9 +1123,7 @@ static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
 
 extern int rs_term_settermprop(VTermProp prop, VTermValue *val, void *data);
 static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
-{
-  return rs_term_settermprop(prop, val, data);
-}
+  { return rs_term_settermprop(prop, val, data); }
 
 
 static void term_clipboard_set(void **argv)
@@ -1370,18 +1351,15 @@ static bool fetch_cell(Terminal *term, int row, int col, VTermScreenCell *cell)
   return true;
 }
 
-extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
 // queue a terminal instance for refresh
+extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
 static void invalidate_terminal(Terminal *term, int start_row, int end_row)
 {
   rs_invalidate_terminal(term, start_row, end_row);
 }
 
 extern void rs_refresh_terminal(void *term);
-static void refresh_terminal(Terminal *term)
-{
-  rs_refresh_terminal(term);
-}
+static void refresh_terminal(Terminal *term) { rs_refresh_terminal(term); }
 
 extern void rs_refresh_cursor(void *term, bool *cursor_visible);
 static void refresh_cursor(Terminal *term, bool *cursor_visible)
@@ -1398,21 +1376,11 @@ static void refresh_timer_cb(TimeWatcher *watcher, void *data)
 }
 
 extern void rs_on_scrollback_option_changed(void *term);
-void on_scrollback_option_changed(Terminal *term)
-{
-  rs_on_scrollback_option_changed(term);
-}
+void on_scrollback_option_changed(Terminal *term) { rs_on_scrollback_option_changed(term); }
 
-// adjust_scrollback is now implemented in Rust as rs_adjust_scrollback
-
-// refresh_scrollback is now implemented in Rust as rs_refresh_scrollback
-
-// refresh_screen is now implemented in Rust as rs_refresh_screen
+// refresh_screen, adjust_scrollback, refresh_scrollback are implemented in Rust
 extern void rs_refresh_screen_pub(Terminal *term, buf_T *buf);
-static void refresh_screen(Terminal *term, buf_T *buf)
-{
-  rs_refresh_screen_pub(term, buf);
-}
+static void refresh_screen(Terminal *term, buf_T *buf) { rs_refresh_screen_pub(term, buf); }
 
 static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
 {
@@ -1475,152 +1443,46 @@ char nvim_get_bg_char(void) { return *p_bg; }
 
 // C accessor functions for Rust callbacks (Phase 1)
 
-/// Accessor: queue a terminal for refresh (wraps `invalidate_terminal`).
-/// Called from Rust vterm callbacks.
+// Accessor functions for Rust callbacks
 void nvim_terminal_invalidate(void *term, int start_row, int end_row)
-{
-  invalidate_terminal((Terminal *)term, start_row, end_row);
-}
-
-/// Accessor: send data to a terminal process (wraps `terminal_send`).
-/// Called from Rust output callback.
+  { invalidate_terminal((Terminal *)term, start_row, end_row); }
 void nvim_terminal_send(void *term, const char *data, size_t size)
-{
-  terminal_send((Terminal *)term, data, size);
-}
-
-/// Accessor: add terminal to invalidated set (without starting timer).
-/// Used by Rust scrollback callbacks.
+  { terminal_send((Terminal *)term, data, size); }
 void nvim_terminal_set_put(void *term)
-{
-  set_put(ptr_t, &invalidated_terminals, (Terminal *)term);
-}
+  { set_put(ptr_t, &invalidated_terminals, (Terminal *)term); }
 
-/// Accessor: concat data into a StringBuilder (wraps `kv_concat_len`).
-/// `sb` is a `StringBuilder *` pointer.
+// StringBuilder (kv_*) accessors for Rust
 void nvim_term_sb_concat_len(void *sb, const char *data, size_t len)
-{
-  kv_concat_len(*(StringBuilder *)sb, data, len);
-}
+  { kv_concat_len(*(StringBuilder *)sb, data, len); }
+size_t nvim_term_sb_size(const void *sb) { return kv_size(*(const StringBuilder *)sb); }
+char *nvim_term_sb_items(void *sb) { return ((StringBuilder *)sb)->items; }
+void nvim_term_sb_reset(void *sb) { ((StringBuilder *)sb)->size = 0; }
+void nvim_term_sb_push_char(void *sb, char c) { kv_push(*(StringBuilder *)sb, c); }
 
-/// Accessor: get size of a StringBuilder (wraps `kv_size`).
-/// `sb` is a `StringBuilder *` pointer.
-size_t nvim_term_sb_size(const void *sb)
-{
-  return kv_size(*(const StringBuilder *)sb);
-}
-
-/// Accessor: get items pointer from a StringBuilder.
-/// `sb` is a `StringBuilder *` pointer.
-char *nvim_term_sb_items(void *sb)
-{
-  return ((StringBuilder *)sb)->items;
-}
-
-/// Accessor: reset size of a StringBuilder to 0 (wraps `kv_size(v) = 0`).
-/// `sb` is a `StringBuilder *` pointer.
-void nvim_term_sb_reset(void *sb)
-{
-  ((StringBuilder *)sb)->size = 0;
-}
-
-/// Accessor: push a char onto a StringBuilder (wraps `kv_push`).
-/// `sb` is a `StringBuilder *` pointer.
-void nvim_term_sb_push_char(void *sb, char c)
-{
-  kv_push(*(StringBuilder *)sb, c);
-}
-
-/// Return the size of a ScrollbackLine with `cols` cells.
-/// Used by Rust to allocate scrollback rows.
+// ScrollbackLine accessors for Rust
 size_t nvim_scrollback_line_size(size_t cols)
-{
-  return sizeof(ScrollbackLine) + cols * sizeof(VTermScreenCell);
-}
-
-/// Get cols from a ScrollbackLine (the first field).
-size_t nvim_scrollback_line_cols(const void *sbrow)
-{
-  return ((const ScrollbackLine *)sbrow)->cols;
-}
-
-/// Get the cells pointer from a ScrollbackLine.
-const void *nvim_scrollback_line_cells(const void *sbrow)
-{
-  return ((const ScrollbackLine *)sbrow)->cells;
-}
-
-/// Get mutable cells pointer from a ScrollbackLine.
-void *nvim_scrollback_line_cells_mut(void *sbrow)
-{
-  return ((ScrollbackLine *)sbrow)->cells;
-}
-
-/// Return the size of a single VTermScreenCell (for Rust allocations).
-size_t nvim_vterm_screen_cell_size(void)
-{
-  return sizeof(VTermScreenCell);
-}
-
-/// Zero-fill a single VTermScreenCell at the given pointer.
-/// Used by term_sb_pop to fill cells beyond the scrollback row width.
+  { return sizeof(ScrollbackLine) + cols * sizeof(VTermScreenCell); }
+size_t nvim_scrollback_line_cols(const void *sbrow) { return ((const ScrollbackLine *)sbrow)->cols; }
+const void *nvim_scrollback_line_cells(const void *sbrow) { return ((const ScrollbackLine *)sbrow)->cells; }
+void *nvim_scrollback_line_cells_mut(void *sbrow) { return ((ScrollbackLine *)sbrow)->cells; }
+size_t nvim_vterm_screen_cell_size(void) { return sizeof(VTermScreenCell); }
 void nvim_vterm_cell_zero(void *cell_ptr)
-{
-  VTermScreenCell *c = (VTermScreenCell *)cell_ptr;
-  c->schar = 0;
-  c->width = 1;
-}
+  { VTermScreenCell *c = (VTermScreenCell *)cell_ptr; c->schar = 0; c->width = 1; }
 
-// Phase 5 accessor functions
-
-/// Start the refresh timer (wraps time_watcher_start for refresh_timer_cb).
+// Timer / refresh_pending accessors
 void nvim_terminal_timer_start(void)
-{
-  time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0);
-}
+  { time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0); }
+int nvim_terminal_get_refresh_pending(void) { return (int)refresh_pending; }
+void nvim_terminal_set_refresh_pending(int v) { refresh_pending = (bool)v; }
 
-/// Get the current value of refresh_pending.
-int nvim_terminal_get_refresh_pending(void)
-{
-  return (int)refresh_pending;
-}
-
-/// Set refresh_pending to v (0 or 1).
-void nvim_terminal_set_refresh_pending(int v)
-{
-  refresh_pending = (bool)v;
-}
-
-/// Get a buf_T* from a buffer handle (wraps handle_get_buffer macro).
-void *nvim_terminal_handle_get_buffer(int buf_handle)
-{
-  return handle_get_buffer(buf_handle);
-}
-
-/// Set terminal title on buffer b: variable (wraps buf_set_term_title).
+// Buffer / title accessors
+void *nvim_terminal_handle_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
-{
-  buf_set_term_title((buf_T *)buf, title, len);
-}
-
-/// Realloc wrapper for Rust terminal title buffer.
-void *nvim_term_xrealloc(void *ptr, size_t size)
-{
-  return xrealloc(ptr, size);
-}
-
-/// Call write_cb on a terminal (sends data to PTY).
+  { buf_set_term_title((buf_T *)buf, title, len); }
+void *nvim_term_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
 void nvim_terminal_write_cb(void *term, const char *data, size_t size)
-{
-  Terminal *t = (Terminal *)term;
-  t->opts.write_cb(data, size, t->opts.data);
-}
-
-/// Get pending.send StringBuilder pointer (NULL if not pending).
-void *nvim_terminal_get_pending_send(void *term)
-{
-  return ((Terminal *)term)->pending.send;
-}
+  { Terminal *t = (Terminal *)term; t->opts.write_cb(data, size, t->opts.data); }
+void *nvim_terminal_get_pending_send(void *term) { return ((Terminal *)term)->pending.send; }
 
 // VTermValue accessors for term_settermprop
 int nvim_vterm_value_boolean(const void *val) { return ((const VTermValue *)val)->boolean; }
@@ -1630,80 +1492,41 @@ size_t nvim_vterm_frag_len(const void *val) { return ((const VTermValue *)val)->
 int nvim_vterm_frag_initial(const void *val) { return (int)((const VTermValue *)val)->string.initial; }
 int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)val)->string.final; }
 
-// Phase 7: Buffer manipulation accessors for refresh pipeline
+// Buffer / memline accessors for Rust refresh pipeline
 int nvim_term_buf_line_count(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
 int64_t nvim_buf_get_scrollback(const void *buf) { return ((const buf_T *)buf)->b_p_scbk; }
 void nvim_buf_set_scrollback(void *buf, int64_t val) { ((buf_T *)buf)->b_p_scbk = val; }
 int nvim_rs_buf_valid(void *buf) { return rs_buf_valid((buf_T *)buf); }
-void *nvim_terminal_get_buffer(int buf_handle)
-{
-  return handle_get_buffer(buf_handle);
-}
-
-// ml_append_buf/ml_replace_buf/ml_delete_buf wrappers
+void *nvim_terminal_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile)
-{
-  return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile);
-}
+  { return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile); }
 int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy)
-{
-  return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false);
-}
+  { return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false); }
 int nvim_ml_delete_buf_term(void *buf, int lnum)
-{
-  return ml_delete_buf((buf_T *)buf, (linenr_T)lnum, false);
-}
+  { return ml_delete_buf((buf_T *)buf, (linenr_T)lnum, false); }
 void nvim_mark_adjust_buf_term(void *buf, int line1, int line2, int amount, int amount_after)
 {
   mark_adjust_buf((buf_T *)buf, (linenr_T)line1, (linenr_T)line2, (linenr_T)amount,
                   (linenr_T)amount_after, true, kMarkAdjustTerm, kExtmarkUndo);
 }
 void nvim_appended_lines_buf_term(void *buf, int lnum, int count)
-{
-  appended_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count);
-}
+  { appended_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count); }
 void nvim_deleted_lines_buf_term(void *buf, int lnum, int count)
-{
-  deleted_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count);
-}
+  { deleted_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count); }
 void nvim_changed_lines_term(void *buf, int first, int last, int added)
-{
-  changed_lines((buf_T *)buf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)added, true);
-}
+  { changed_lines((buf_T *)buf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)added, true); }
 void nvim_multiqueue_move_events_term(void *term)
-{
-  Terminal *t = (Terminal *)term;
-  multiqueue_move_events(loop_get_events(&main_loop), t->pending.events);
-}
-// Get term->sb_buffer[idx] (the idx-th ScrollbackLine *)
-void *nvim_terminal_sb_get(void *term, size_t idx)
-{
-  return ((Terminal *)term)->sb_buffer[idx];
-}
-// Set term->sb_buffer[idx]
+  { Terminal *t = (Terminal *)term; multiqueue_move_events(loop_get_events(&main_loop), t->pending.events); }
+void *nvim_terminal_sb_get(void *term, size_t idx) { return ((Terminal *)term)->sb_buffer[idx]; }
 void nvim_terminal_sb_set(void *term, size_t idx, void *sbrow)
-{
-  ((Terminal *)term)->sb_buffer[idx] = (ScrollbackLine *)sbrow;
-}
-// Resize sb_buffer array
+  { ((Terminal *)term)->sb_buffer[idx] = (ScrollbackLine *)sbrow; }
 void nvim_terminal_sb_buffer_resize(void *term, size_t new_size)
-{
-  Terminal *t = (Terminal *)term;
-  t->sb_buffer = xrealloc(t->sb_buffer, sizeof(ScrollbackLine *) * new_size);
-  t->sb_size = new_size;
-}
+  { Terminal *t = (Terminal *)term; t->sb_buffer = xrealloc(t->sb_buffer, sizeof(ScrollbackLine *) * new_size); t->sb_size = new_size; }
+void nvim_fetch_row(void *term, int row, int end_col) { fetch_row((Terminal *)term, row, end_col); }
 
-// fetch_row accessor (static function, needed by Rust refresh functions)
-void nvim_fetch_row(void *term, int row, int end_col)
-{
-  fetch_row((Terminal *)term, row, end_col);
-}
-
-// refresh_cursor accessors
+// Cursor / UI accessors
 int nvim_terminal_is_active(void *term)
-{
-  return (State & MODE_TERMINAL) && curbuf->terminal == (Terminal *)term;
-}
+  { return (State & MODE_TERMINAL) && curbuf->terminal == (Terminal *)term; }
 void nvim_ui_busy_start(void) { ui_busy_start(); }
 void nvim_ui_busy_stop(void) { ui_busy_stop(); }
 void nvim_term_ui_mode_info_set(void) { ui_mode_info_set(); }
@@ -1720,54 +1543,33 @@ void nvim_shape_table_set_cursor(int blink, int shape, int percentage)
   shape_table[SHAPE_IDX_TERM].percentage = percentage;
 }
 
-// refresh_timer_cb accessors
+// Invalidated-terminals set + exiting
 void nvim_terminal_foreach_invalidated(void (*fn)(void *term, void *ctx), void *ctx)
 {
   Terminal *term;
   void *stub; (void)(stub);
   block_autocmds();
-  set_foreach(&invalidated_terminals, term, {
-    fn(term, ctx);
-  });
+  set_foreach(&invalidated_terminals, term, { fn(term, ctx); });
   set_clear(ptr_t, &invalidated_terminals);
   unblock_autocmds();
 }
 int nvim_is_exiting(void) { return exiting; }
 
-// C wrapper for adjust_topline_cursor (uses FOR_ALL_TAB_WINDOWS macro, can't call from Rust)
+// FOR_ALL_TAB_WINDOWS wrapper (macro not callable from Rust)
 void rs_adjust_topline_cursor(void *term, void *buf, int added)
-{
-  adjust_topline_cursor((Terminal *)term, (buf_T *)buf, added);
-}
+  { adjust_topline_cursor((Terminal *)term, (buf_T *)buf, added); }
 
-// Phase 6: termrequest buffer printf wrappers (kv_printf is a macro, can't call from Rust)
+// kv_printf wrappers (macro not callable from Rust)
 void nvim_term_treqbuf_printf_osc(void *term, int command)
-{
-  kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b]%d;", command);
-}
+  { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b]%d;", command); }
 void nvim_term_treqbuf_printf_dcs(void *term, const char *command, int cmdlen)
-{
-  kv_printf(((Terminal *)term)->termrequest_buffer, "\x1bP%*s", cmdlen, command);
-}
+  { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1bP%*s", cmdlen, command); }
 void nvim_term_treqbuf_printf_apc(void *term)
-{
-  kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b_");
-}
-// Check if the TermRequest event is registered
+  { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b_"); }
 int nvim_terminal_has_termrequest_event(void) { return (int)has_event(EVENT_TERMREQUEST); }
-// Schedule a termrequest event from a Rust fallback callback
-void nvim_terminal_schedule_termrequest(void *term)
-{
-  schedule_termrequest((Terminal *)term);
-}
-// Get a pointer to term->termrequest_buffer (a StringBuilder *)
-void *nvim_terminal_treqbuf_ptr(void *term)
-{
-  return &((Terminal *)term)->termrequest_buffer;
-}
-// Get a pointer to term->vt for vterm_obtain_state
+void nvim_terminal_schedule_termrequest(void *term) { schedule_termrequest((Terminal *)term); }
+void *nvim_terminal_treqbuf_ptr(void *term) { return &((Terminal *)term)->termrequest_buffer; }
 void *nvim_terminal_get_vt(void *term) { return ((Terminal *)term)->vt; }
-// Set OSC8 URI attribute on vterm state
 void nvim_term_set_osc8_attr(void *vt, int attr)
 {
   VTermState *state = vterm_obtain_state((VTerm *)vt);
