@@ -52,6 +52,7 @@ extern "C" {
 
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // re_mult_next accessors
     fn nvim_regexp_set_rc_did_emsg(v: c_int);
@@ -1927,7 +1928,7 @@ pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
 // --- reg_submatch_list ---
 
 extern "C" {
-    fn nvim_regexp_tv_list_alloc(len: i64) -> *mut c_void;
+    fn tv_list_alloc(len: isize) -> *mut c_void;
     fn nvim_tv_list_ref(list: *mut c_void);
     #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(list: *mut c_void, s: *const c_char, len: isize);
@@ -1956,7 +1957,7 @@ pub unsafe extern "C" fn reg_submatch_list(no: c_int) -> *mut c_void {
         let scol = rsm_sm_mmatch_startpos_col(no as usize);
         let ecol = rsm_sm_mmatch_endpos_col(no as usize);
 
-        list = nvim_regexp_tv_list_alloc((elnum - slnum + 1) as i64);
+        list = tv_list_alloc((elnum - slnum + 1) as isize);
 
         let s = reg_getline_submatch(slnum);
         let s = s.add(scol as usize);
@@ -1981,7 +1982,7 @@ pub unsafe extern "C" fn reg_submatch_list(no: c_int) -> *mut c_void {
             return core::ptr::null_mut();
         }
         let span = e.offset_from(s) as isize;
-        list = nvim_regexp_tv_list_alloc(1);
+        list = tv_list_alloc(1);
         nvim_tv_list_append_string(list, s, span);
     }
 
@@ -10707,9 +10708,6 @@ pub unsafe extern "C" fn rs_nfa_get_match_text(start: NfaStateHandle) -> *mut u8
 // ---------------------------------------------------------------------------
 
 // ---- Phase 7 C accessors ----
-extern "C" {
-    fn nvim_regexp_xstrdup(s: *const c_char) -> *mut c_char;
-}
 
 /// Compile a regular expression into internal code for the NFA matcher.
 /// Returns the program in allocated space.  Returns NULL for an error.
@@ -10789,7 +10787,7 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
 
     // Remember whether this pattern has any \z specials in it.
     (*prog.cast::<NfaRegprogT>()).reghasz = RE_HAS_Z;
-    (*prog.cast::<NfaRegprogT>()).pattern = nvim_regexp_xstrdup(expr.cast());
+    (*prog.cast::<NfaRegprogT>()).pattern = xstrdup(expr.cast());
 
     // Clean up
     let post_start = POST_START;
@@ -12049,7 +12047,7 @@ unsafe fn addstate_here_t(
                 newl.offset((listidx + count) as isize),
                 ((*l).n - count - listidx - 1) as usize,
             );
-            nvim_regexp_xfree((*l).t.cast::<c_void>());
+            xfree((*l).t.cast::<c_void>());
             (*l).t = newl;
         } else {
             // make space for new states, then move them
@@ -12510,7 +12508,7 @@ unsafe fn recursive_regmatch_t(
         // values and clear them.
         let nstate = (*prog.cast::<NfaRegprogT>()).nstate;
         if (*listids).is_null() || *listids_len < nstate {
-            nvim_regexp_xfree((*listids).cast::<c_void>());
+            xfree((*listids).cast::<c_void>());
             *listids = xmalloc(core::mem::size_of::<c_int>() * nstate as usize).cast::<c_int>();
             *listids_len = nstate;
         }
@@ -12603,9 +12601,6 @@ extern "C" {
     fn nvim_regexp_fmark_get_col(fm: *mut c_void) -> i32;
 
     // List thread count setter
-
-    // Memory free wrapper
-    fn nvim_regexp_xfree(p: *mut c_void);
 }
 
 /// Main NFA matching routine.
@@ -12735,7 +12730,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             xfree(l1.cast::<c_void>());
         }
         if !listids.is_null() {
-            nvim_regexp_xfree(listids.cast::<c_void>());
+            xfree(listids.cast::<c_void>());
         }
         return MATCH_FOUND;
     }
@@ -14429,7 +14424,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         xfree(l1.cast::<c_void>());
     }
     if !listids.is_null() {
-        nvim_regexp_xfree(listids.cast::<c_void>());
+        xfree(listids.cast::<c_void>());
     }
 
     MATCH_FOUND
@@ -15227,7 +15222,7 @@ unsafe fn handle_nfa_fallback_nl(rmp: *mut c_void, line: *const u8, col: i32, nl
     let prog = (*rmp.cast::<RegmatchT>()).regprog.cast::<c_void>();
     let save_p_re = nvim_regexp_get_p_re();
     let re_flags = (*prog.cast::<RegprogT>()).re_flags as c_int;
-    let pat = nvim_regexp_xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
+    let pat = xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     nvim_regexp_call_vim_regfree(prog);
@@ -15266,7 +15261,7 @@ unsafe fn handle_nfa_fallback_multi(
     let prog = (*rmp.cast::<RegmmatchT>()).regprog.cast::<c_void>();
     let save_p_re = nvim_regexp_get_p_re();
     let re_flags = (*prog.cast::<RegprogT>()).re_flags as c_int;
-    let pat = nvim_regexp_xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
+    let pat = xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     let prev_prog = prog;
@@ -15562,7 +15557,7 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
     flags = 0;
     if rs_reg(REG_NOPAREN, &mut flags).is_null() || REG_TOOLONG != 0 {
         let was_toolong = REG_TOOLONG != 0;
-        nvim_regexp_xfree(r);
+        xfree(r);
         if was_toolong {
             errors::call_emsg_e339();
         }

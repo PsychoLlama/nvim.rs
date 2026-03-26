@@ -234,9 +234,6 @@ void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch
 void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
 void nvim_regexp_set_re_extmatch_out_match(int i, uint8_t *v) { re_extmatch_out->matches[i] = v; }
 
-// Allocate a VimL list with a length hint (wrapper for tv_list_alloc with ptrdiff_t)
-list_T *nvim_regexp_tv_list_alloc(int64_t len) { return tv_list_alloc((ptrdiff_t)len); }
-
 // reg_match_visual accessors for Rust FFI
 
 // Returns 0 if quick-reject (REX_PTR->reg_buf != curbuf || VIsual.lnum == 0 || !REG_MULTI), 1 otherwise
@@ -539,8 +536,6 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
 
 
 
-char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
-
 // win_T and buffer accessors for VCOL/MARK cases
 void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
 int64_t nvim_regexp_get_win_b_p_ts(void *wp) { return (int64_t)((win_T *)wp)->w_buffer->b_p_ts; }
@@ -551,8 +546,6 @@ void *nvim_regexp_call_mark_get_for_nfa(void *buf, void *win, int mark_val) { re
 int nvim_regexp_fmark_is_set(void *fm) { return fm != NULL && ((fmark_T *)fm)->mark.lnum > 0; }
 int32_t nvim_regexp_fmark_get_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
 int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
-
-void nvim_regexp_xfree(void *p) { xfree(p); }
 
 // curbuf and buf_T accessors
 void *nvim_regexp_get_curbuf(void) { return (void *)curbuf; }
