@@ -1072,161 +1072,7 @@ static void f_expandcmd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 /// "function()" function
 /// "funcref()" function
-static void common_function(typval_T *argvars, typval_T *rettv, bool is_funcref)
-{
-  char *s;
-  char *name;
-  bool use_string = false;
-  partial_T *arg_pt = NULL;
-  char *trans_name = NULL;
 
-  if (argvars[0].v_type == VAR_FUNC) {
-    // function(MyFunc, [arg], dict)
-    s = argvars[0].vval.v_string;
-  } else if (argvars[0].v_type == VAR_PARTIAL
-             && argvars[0].vval.v_partial != NULL) {
-    // function(dict.MyFunc, [arg])
-    arg_pt = argvars[0].vval.v_partial;
-    s = rs_partial_name(arg_pt);
-    // TODO(bfredl): do the entire nlua_is_table_from_lua dance
-  } else {
-    // function('MyFunc', [arg], dict)
-    s = (char *)tv_get_string(&argvars[0]);
-    use_string = true;
-  }
-
-  if ((use_string && vim_strchr(s, AUTOLOAD_CHAR) == NULL) || is_funcref) {
-    name = s;
-    trans_name = save_function_name(&name, false,
-                                    TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD | TFN_NO_DEREF, NULL);
-    if (*name != NUL) {
-      s = NULL;
-    }
-  }
-  if (s == NULL || *s == NUL || (use_string && ascii_isdigit(*s))
-      || (is_funcref && trans_name == NULL)) {
-    semsg(_(e_invarg2), (use_string ? tv_get_string(&argvars[0]) : s));
-    // Don't check an autoload name for existence here.
-  } else if (trans_name != NULL
-             && (is_funcref
-                 ? find_func(trans_name) == NULL
-                 : !translated_function_exists(trans_name))) {
-    semsg(_("E700: Unknown function: %s"), s);
-  } else {
-    int dict_idx = 0;
-    int arg_idx = 0;
-    list_T *list = NULL;
-    if (strncmp(s, "s:", 2) == 0 || strncmp(s, "<SID>", 5) == 0) {
-      // Expand s: and <SID> into <SNR>nr_, so that the function can
-      // also be called from another script. Using trans_function_name()
-      // would also work, but some plugins depend on the name being
-      // printable text.
-      name = get_scriptlocal_funcname(s);
-    } else {
-      name = xstrdup(s);
-    }
-
-    if (argvars[1].v_type != VAR_UNKNOWN) {
-      if (argvars[2].v_type != VAR_UNKNOWN) {
-        // function(name, [args], dict)
-        arg_idx = 1;
-        dict_idx = 2;
-      } else if (argvars[1].v_type == VAR_DICT) {
-        // function(name, dict)
-        dict_idx = 1;
-      } else {
-        // function(name, [args])
-        arg_idx = 1;
-      }
-      if (dict_idx > 0) {
-        if (tv_check_for_dict_arg(argvars, dict_idx) == FAIL) {
-          xfree(name);
-          goto theend;
-        }
-        if (argvars[dict_idx].vval.v_dict == NULL) {
-          dict_idx = 0;
-        }
-      }
-      if (arg_idx > 0) {
-        if (argvars[arg_idx].v_type != VAR_LIST) {
-          emsg(_("E923: Second argument of function() must be "
-                 "a list or a dict"));
-          xfree(name);
-          goto theend;
-        }
-        list = argvars[arg_idx].vval.v_list;
-        if (tv_list_len(list) == 0) {
-          arg_idx = 0;
-        } else if (tv_list_len(list) > MAX_FUNC_ARGS) {
-          emsg_funcname(e_toomanyarg, s);
-          xfree(name);
-          goto theend;
-        }
-      }
-    }
-    if (dict_idx > 0 || arg_idx > 0 || arg_pt != NULL || is_funcref) {
-      partial_T *const pt = xcalloc(1, sizeof(*pt));
-
-      // result is a VAR_PARTIAL
-      if (arg_idx > 0 || (arg_pt != NULL && arg_pt->pt_argc > 0)) {
-        const int arg_len = (arg_pt == NULL ? 0 : arg_pt->pt_argc);
-        const int lv_len = tv_list_len(list);
-
-        pt->pt_argc = arg_len + lv_len;
-        pt->pt_argv = xmalloc(sizeof(pt->pt_argv[0]) * (size_t)pt->pt_argc);
-        int i = 0;
-        for (; i < arg_len; i++) {
-          tv_copy(&arg_pt->pt_argv[i], &pt->pt_argv[i]);
-        }
-        if (lv_len > 0) {
-          TV_LIST_ITER(list, li, {
-            tv_copy(TV_LIST_ITEM_TV(li), &pt->pt_argv[i++]);
-          });
-        }
-      }
-
-      // For "function(dict.func, [], dict)" and "func" is a partial
-      // use "dict". That is backwards compatible.
-      if (dict_idx > 0) {
-        // The dict is bound explicitly, pt_auto is false
-        pt->pt_dict = argvars[dict_idx].vval.v_dict;
-        (pt->pt_dict->dv_refcount)++;
-      } else if (arg_pt != NULL) {
-        // If the dict was bound automatically the result is also
-        // bound automatically.
-        pt->pt_dict = arg_pt->pt_dict;
-        pt->pt_auto = arg_pt->pt_auto;
-        if (pt->pt_dict != NULL) {
-          (pt->pt_dict->dv_refcount)++;
-        }
-      }
-
-      pt->pt_refcount = 1;
-      if (arg_pt != NULL && arg_pt->pt_func != NULL) {
-        pt->pt_func = arg_pt->pt_func;
-        func_ptr_ref(pt->pt_func);
-        xfree(name);
-      } else if (is_funcref) {
-        pt->pt_func = find_func(trans_name);
-        func_ptr_ref(pt->pt_func);
-        xfree(name);
-      } else {
-        pt->pt_name = name;
-        func_ref(name);
-      }
-
-      rettv->v_type = VAR_PARTIAL;
-      rettv->vval.v_partial = pt;
-    } else {
-      // result is a VAR_FUNC
-      rettv->v_type = VAR_FUNC;
-      rettv->vval.v_string = name;
-      func_ref(name);
-    }
-  }
-theend:
-  xfree(trans_name);
-}
 
 /// "garbagecollect()" function
 
@@ -2545,214 +2391,6 @@ static void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = lnum;
 }
 
-
-static void find_some_match(typval_T *const argvars, typval_T *const rettv,
-                            const SomeMatchType type)
-{
-  char *str = NULL;
-  int64_t len = 0;
-  char *expr = NULL;
-  regmatch_T regmatch;
-  int64_t start = 0;
-  int64_t nth = 1;
-  colnr_T startcol = 0;
-  bool match = false;
-  list_T *l = NULL;
-  int idx = 0;
-  char *tofree = NULL;
-
-  // Make 'cpoptions' empty, the 'l' flag should not be used here.
-  char *save_cpo = p_cpo;
-  p_cpo = empty_string_option;
-
-  rettv->vval.v_number = -1;
-  switch (type) {
-  // matchlist(): return empty list when there are no matches.
-  case kSomeMatchList:
-    tv_list_alloc_ret(rettv, kListLenMayKnow);
-    break;
-  // matchstrpos(): return ["", -1, -1, -1]
-  case kSomeMatchStrPos:
-    tv_list_alloc_ret(rettv, 4);
-    tv_list_append_string(rettv->vval.v_list, "", 0);
-    tv_list_append_number(rettv->vval.v_list, -1);
-    tv_list_append_number(rettv->vval.v_list, -1);
-    tv_list_append_number(rettv->vval.v_list, -1);
-    break;
-  case kSomeMatchStr:
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = NULL;
-    break;
-  case kSomeMatch:
-  case kSomeMatchEnd:
-    // Do nothing: zero is default.
-    break;
-  }
-
-  listitem_T *li = NULL;
-  if (argvars[0].v_type == VAR_LIST) {
-    if ((l = argvars[0].vval.v_list) == NULL) {
-      goto theend;
-    }
-    li = tv_list_first(l);
-  } else {
-    expr = str = (char *)tv_get_string(&argvars[0]);
-    len = (int64_t)strlen(str);
-  }
-
-  char patbuf[NUMBUFLEN];
-  const char *const pat = tv_get_string_buf_chk(&argvars[1], patbuf);
-  if (pat == NULL) {
-    goto theend;
-  }
-
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    bool error = false;
-
-    start = tv_get_number_chk(&argvars[2], &error);
-    if (error) {
-      goto theend;
-    }
-    if (l != NULL) {
-      idx = tv_list_uidx(l, (int)start);
-      if (idx == -1) {
-        goto theend;
-      }
-      li = tv_list_find(l, idx);
-    } else {
-      if (start < 0) {
-        start = 0;
-      }
-      if (start > len) {
-        goto theend;
-      }
-      // When "count" argument is there ignore matches before "start",
-      // otherwise skip part of the string.  Differs when pattern is "^"
-      // or "\<".
-      if (argvars[3].v_type != VAR_UNKNOWN) {
-        startcol = (colnr_T)start;
-      } else {
-        str += start;
-        len -= start;
-      }
-    }
-
-    if (argvars[3].v_type != VAR_UNKNOWN) {
-      nth = tv_get_number_chk(&argvars[3], &error);
-    }
-    if (error) {
-      goto theend;
-    }
-  }
-
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-  if (regmatch.regprog != NULL) {
-    regmatch.rm_ic = p_ic;
-
-    while (true) {
-      if (l != NULL) {
-        if (li == NULL) {
-          match = false;
-          break;
-        }
-        xfree(tofree);
-        tofree = expr = str = encode_tv2echo(TV_LIST_ITEM_TV(li), NULL);
-        if (str == NULL) {
-          break;
-        }
-      }
-
-      match = vim_regexec_nl(&regmatch, str, startcol);
-
-      if (match && --nth <= 0) {
-        break;
-      }
-      if (l == NULL && !match) {
-        break;
-      }
-
-      // Advance to just after the match.
-      if (l != NULL) {
-        li = TV_LIST_ITEM_NEXT(l, li);
-        idx++;
-      } else {
-        startcol = (colnr_T)(regmatch.startp[0]
-                             + utfc_ptr2len(regmatch.startp[0]) - str);
-        if (startcol > (colnr_T)len || str + startcol <= regmatch.startp[0]) {
-          match = false;
-          break;
-        }
-      }
-    }
-
-    if (match) {
-      switch (type) {
-      case kSomeMatchStrPos: {
-        list_T *const ret_l = rettv->vval.v_list;
-        listitem_T *li1 = tv_list_first(ret_l);
-        listitem_T *li2 = TV_LIST_ITEM_NEXT(ret_l, li1);
-        listitem_T *li3 = TV_LIST_ITEM_NEXT(ret_l, li2);
-        listitem_T *li4 = TV_LIST_ITEM_NEXT(ret_l, li3);
-        xfree(TV_LIST_ITEM_TV(li1)->vval.v_string);
-
-        const size_t rd = (size_t)(regmatch.endp[0] - regmatch.startp[0]);
-        TV_LIST_ITEM_TV(li1)->vval.v_string = xmemdupz(regmatch.startp[0], rd);
-        TV_LIST_ITEM_TV(li3)->vval.v_number = (varnumber_T)(regmatch.startp[0] - expr);
-        TV_LIST_ITEM_TV(li4)->vval.v_number = (varnumber_T)(regmatch.endp[0] - expr);
-        if (l != NULL) {
-          TV_LIST_ITEM_TV(li2)->vval.v_number = (varnumber_T)idx;
-        }
-        break;
-      }
-      case kSomeMatchList:
-        // Return list with matched string and submatches.
-        for (int i = 0; i < NSUBEXP; i++) {
-          if (regmatch.endp[i] == NULL) {
-            tv_list_append_string(rettv->vval.v_list, NULL, 0);
-          } else {
-            tv_list_append_string(rettv->vval.v_list, regmatch.startp[i],
-                                  (regmatch.endp[i] - regmatch.startp[i]));
-          }
-        }
-        break;
-      case kSomeMatchStr:
-        // Return matched string.
-        if (l != NULL) {
-          tv_copy(TV_LIST_ITEM_TV(li), rettv);
-        } else {
-          rettv->vval.v_string = xmemdupz(regmatch.startp[0],
-                                          (size_t)(regmatch.endp[0] -
-                                                   regmatch.startp[0]));
-        }
-        break;
-      case kSomeMatch:
-      case kSomeMatchEnd:
-        if (l != NULL) {
-          rettv->vval.v_number = idx;
-        } else {
-          if (type == kSomeMatch) {
-            rettv->vval.v_number = (varnumber_T)(regmatch.startp[0] - str);
-          } else {
-            rettv->vval.v_number = (varnumber_T)(regmatch.endp[0] - str);
-          }
-          rettv->vval.v_number += (varnumber_T)(str - expr);
-        }
-        break;
-      }
-    }
-    vim_regfree(regmatch.regprog);
-  }
-
-theend:
-  if (type == kSomeMatchStrPos && l == NULL && rettv->vval.v_list != NULL) {
-    // matchstrpos() without a list: drop the second item
-    list_T *const ret_l = rettv->vval.v_list;
-    tv_list_item_remove(ret_l, TV_LIST_ITEM_NEXT(ret_l, tv_list_first(ret_l)));
-  }
-
-  xfree(tofree);
-  p_cpo = save_cpo;
-}
 
 /// Return all the matches in string "str" for pattern "rmp".
 /// The matches are returned in the List "mlist".
@@ -4471,7 +4109,211 @@ const char *nvim_eval_get_windows_version(void) { return windowsVersion; }
 // Delegation wrappers for static helpers
 void nvim_eval_find_some_match(typval_T *argvars, typval_T *rettv, int kind)
 {
-  find_some_match(argvars, rettv, (SomeMatchType)kind);
+  const SomeMatchType type = (SomeMatchType)kind;
+
+  char *str = NULL;
+  int64_t len = 0;
+  char *expr = NULL;
+  regmatch_T regmatch;
+  int64_t start = 0;
+  int64_t nth = 1;
+  colnr_T startcol = 0;
+  bool match = false;
+  list_T *l = NULL;
+  int idx = 0;
+  char *tofree = NULL;
+
+  // Make 'cpoptions' empty, the 'l' flag should not be used here.
+  char *save_cpo = p_cpo;
+  p_cpo = empty_string_option;
+
+  rettv->vval.v_number = -1;
+  switch (type) {
+  // matchlist(): return empty list when there are no matches.
+  case kSomeMatchList:
+    tv_list_alloc_ret(rettv, kListLenMayKnow);
+    break;
+  // matchstrpos(): return ["", -1, -1, -1]
+  case kSomeMatchStrPos:
+    tv_list_alloc_ret(rettv, 4);
+    tv_list_append_string(rettv->vval.v_list, "", 0);
+    tv_list_append_number(rettv->vval.v_list, -1);
+    tv_list_append_number(rettv->vval.v_list, -1);
+    tv_list_append_number(rettv->vval.v_list, -1);
+    break;
+  case kSomeMatchStr:
+    rettv->v_type = VAR_STRING;
+    rettv->vval.v_string = NULL;
+    break;
+  case kSomeMatch:
+  case kSomeMatchEnd:
+    // Do nothing: zero is default.
+    break;
+  }
+
+  listitem_T *li = NULL;
+  if (argvars[0].v_type == VAR_LIST) {
+    if ((l = argvars[0].vval.v_list) == NULL) {
+      goto theend;
+    }
+    li = tv_list_first(l);
+  } else {
+    expr = str = (char *)tv_get_string(&argvars[0]);
+    len = (int64_t)strlen(str);
+  }
+
+  char patbuf[NUMBUFLEN];
+  const char *const pat = tv_get_string_buf_chk(&argvars[1], patbuf);
+  if (pat == NULL) {
+    goto theend;
+  }
+
+  if (argvars[2].v_type != VAR_UNKNOWN) {
+    bool error = false;
+
+    start = tv_get_number_chk(&argvars[2], &error);
+    if (error) {
+      goto theend;
+    }
+    if (l != NULL) {
+      idx = tv_list_uidx(l, (int)start);
+      if (idx == -1) {
+        goto theend;
+      }
+      li = tv_list_find(l, idx);
+    } else {
+      if (start < 0) {
+        start = 0;
+      }
+      if (start > len) {
+        goto theend;
+      }
+      // When "count" argument is there ignore matches before "start",
+      // otherwise skip part of the string.  Differs when pattern is "^"
+      // or "\<".
+      if (argvars[3].v_type != VAR_UNKNOWN) {
+        startcol = (colnr_T)start;
+      } else {
+        str += start;
+        len -= start;
+      }
+    }
+
+    if (argvars[3].v_type != VAR_UNKNOWN) {
+      nth = tv_get_number_chk(&argvars[3], &error);
+    }
+    if (error) {
+      goto theend;
+    }
+  }
+
+  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
+  if (regmatch.regprog != NULL) {
+    regmatch.rm_ic = p_ic;
+
+    while (true) {
+      if (l != NULL) {
+        if (li == NULL) {
+          match = false;
+          break;
+        }
+        xfree(tofree);
+        tofree = expr = str = encode_tv2echo(TV_LIST_ITEM_TV(li), NULL);
+        if (str == NULL) {
+          break;
+        }
+      }
+
+      match = vim_regexec_nl(&regmatch, str, startcol);
+
+      if (match && --nth <= 0) {
+        break;
+      }
+      if (l == NULL && !match) {
+        break;
+      }
+
+      // Advance to just after the match.
+      if (l != NULL) {
+        li = TV_LIST_ITEM_NEXT(l, li);
+        idx++;
+      } else {
+        startcol = (colnr_T)(regmatch.startp[0]
+                             + utfc_ptr2len(regmatch.startp[0]) - str);
+        if (startcol > (colnr_T)len || str + startcol <= regmatch.startp[0]) {
+          match = false;
+          break;
+        }
+      }
+    }
+
+    if (match) {
+      switch (type) {
+      case kSomeMatchStrPos: {
+        list_T *const ret_l = rettv->vval.v_list;
+        listitem_T *li1 = tv_list_first(ret_l);
+        listitem_T *li2 = TV_LIST_ITEM_NEXT(ret_l, li1);
+        listitem_T *li3 = TV_LIST_ITEM_NEXT(ret_l, li2);
+        listitem_T *li4 = TV_LIST_ITEM_NEXT(ret_l, li3);
+        xfree(TV_LIST_ITEM_TV(li1)->vval.v_string);
+
+        const size_t rd = (size_t)(regmatch.endp[0] - regmatch.startp[0]);
+        TV_LIST_ITEM_TV(li1)->vval.v_string = xmemdupz(regmatch.startp[0], rd);
+        TV_LIST_ITEM_TV(li3)->vval.v_number = (varnumber_T)(regmatch.startp[0] - expr);
+        TV_LIST_ITEM_TV(li4)->vval.v_number = (varnumber_T)(regmatch.endp[0] - expr);
+        if (l != NULL) {
+          TV_LIST_ITEM_TV(li2)->vval.v_number = (varnumber_T)idx;
+        }
+        break;
+      }
+      case kSomeMatchList:
+        // Return list with matched string and submatches.
+        for (int i = 0; i < NSUBEXP; i++) {
+          if (regmatch.endp[i] == NULL) {
+            tv_list_append_string(rettv->vval.v_list, NULL, 0);
+          } else {
+            tv_list_append_string(rettv->vval.v_list, regmatch.startp[i],
+                                  (regmatch.endp[i] - regmatch.startp[i]));
+          }
+        }
+        break;
+      case kSomeMatchStr:
+        // Return matched string.
+        if (l != NULL) {
+          tv_copy(TV_LIST_ITEM_TV(li), rettv);
+        } else {
+          rettv->vval.v_string = xmemdupz(regmatch.startp[0],
+                                          (size_t)(regmatch.endp[0] -
+                                                   regmatch.startp[0]));
+        }
+        break;
+      case kSomeMatch:
+      case kSomeMatchEnd:
+        if (l != NULL) {
+          rettv->vval.v_number = idx;
+        } else {
+          if (type == kSomeMatch) {
+            rettv->vval.v_number = (varnumber_T)(regmatch.startp[0] - str);
+          } else {
+            rettv->vval.v_number = (varnumber_T)(regmatch.endp[0] - str);
+          }
+          rettv->vval.v_number += (varnumber_T)(str - expr);
+        }
+        break;
+      }
+    }
+    vim_regfree(regmatch.regprog);
+  }
+
+theend:
+  if (type == kSomeMatchStrPos && l == NULL && rettv->vval.v_list != NULL) {
+    // matchstrpos() without a list: drop the second item
+    list_T *const ret_l = rettv->vval.v_list;
+    tv_list_item_remove(ret_l, TV_LIST_ITEM_NEXT(ret_l, tv_list_first(ret_l)));
+  }
+
+  xfree(tofree);
+  p_cpo = save_cpo;
 }
 void nvim_eval_max_min(typval_T *argvars, typval_T *rettv, bool domax)
 {
@@ -4836,7 +4678,158 @@ void nvim_eval_flatten(typval_T *argvars, typval_T *rettv, bool make_copy)
 
 void nvim_eval_common_function(typval_T *argvars, typval_T *rettv, bool is_funcref)
 {
-  common_function(argvars, rettv, is_funcref);
+  char *s;
+  char *name;
+  bool use_string = false;
+  partial_T *arg_pt = NULL;
+  char *trans_name = NULL;
+
+  if (argvars[0].v_type == VAR_FUNC) {
+    // function(MyFunc, [arg], dict)
+    s = argvars[0].vval.v_string;
+  } else if (argvars[0].v_type == VAR_PARTIAL
+             && argvars[0].vval.v_partial != NULL) {
+    // function(dict.MyFunc, [arg])
+    arg_pt = argvars[0].vval.v_partial;
+    s = rs_partial_name(arg_pt);
+    // TODO(bfredl): do the entire nlua_is_table_from_lua dance
+  } else {
+    // function('MyFunc', [arg], dict)
+    s = (char *)tv_get_string(&argvars[0]);
+    use_string = true;
+  }
+
+  if ((use_string && vim_strchr(s, AUTOLOAD_CHAR) == NULL) || is_funcref) {
+    name = s;
+    trans_name = save_function_name(&name, false,
+                                    TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD | TFN_NO_DEREF, NULL);
+    if (*name != NUL) {
+      s = NULL;
+    }
+  }
+  if (s == NULL || *s == NUL || (use_string && ascii_isdigit(*s))
+      || (is_funcref && trans_name == NULL)) {
+    semsg(_(e_invarg2), (use_string ? tv_get_string(&argvars[0]) : s));
+    // Don't check an autoload name for existence here.
+  } else if (trans_name != NULL
+             && (is_funcref
+                 ? find_func(trans_name) == NULL
+                 : !translated_function_exists(trans_name))) {
+    semsg(_("E700: Unknown function: %s"), s);
+  } else {
+    int dict_idx = 0;
+    int arg_idx = 0;
+    list_T *list = NULL;
+    if (strncmp(s, "s:", 2) == 0 || strncmp(s, "<SID>", 5) == 0) {
+      // Expand s: and <SID> into <SNR>nr_, so that the function can
+      // also be called from another script. Using trans_function_name()
+      // would also work, but some plugins depend on the name being
+      // printable text.
+      name = get_scriptlocal_funcname(s);
+    } else {
+      name = xstrdup(s);
+    }
+
+    if (argvars[1].v_type != VAR_UNKNOWN) {
+      if (argvars[2].v_type != VAR_UNKNOWN) {
+        // function(name, [args], dict)
+        arg_idx = 1;
+        dict_idx = 2;
+      } else if (argvars[1].v_type == VAR_DICT) {
+        // function(name, dict)
+        dict_idx = 1;
+      } else {
+        // function(name, [args])
+        arg_idx = 1;
+      }
+      if (dict_idx > 0) {
+        if (tv_check_for_dict_arg(argvars, dict_idx) == FAIL) {
+          xfree(name);
+          goto theend;
+        }
+        if (argvars[dict_idx].vval.v_dict == NULL) {
+          dict_idx = 0;
+        }
+      }
+      if (arg_idx > 0) {
+        if (argvars[arg_idx].v_type != VAR_LIST) {
+          emsg(_("E923: Second argument of function() must be "
+                 "a list or a dict"));
+          xfree(name);
+          goto theend;
+        }
+        list = argvars[arg_idx].vval.v_list;
+        if (tv_list_len(list) == 0) {
+          arg_idx = 0;
+        } else if (tv_list_len(list) > MAX_FUNC_ARGS) {
+          emsg_funcname(e_toomanyarg, s);
+          xfree(name);
+          goto theend;
+        }
+      }
+    }
+    if (dict_idx > 0 || arg_idx > 0 || arg_pt != NULL || is_funcref) {
+      partial_T *const pt = xcalloc(1, sizeof(*pt));
+
+      // result is a VAR_PARTIAL
+      if (arg_idx > 0 || (arg_pt != NULL && arg_pt->pt_argc > 0)) {
+        const int arg_len = (arg_pt == NULL ? 0 : arg_pt->pt_argc);
+        const int lv_len = tv_list_len(list);
+
+        pt->pt_argc = arg_len + lv_len;
+        pt->pt_argv = xmalloc(sizeof(pt->pt_argv[0]) * (size_t)pt->pt_argc);
+        int i = 0;
+        for (; i < arg_len; i++) {
+          tv_copy(&arg_pt->pt_argv[i], &pt->pt_argv[i]);
+        }
+        if (lv_len > 0) {
+          TV_LIST_ITER(list, li, {
+            tv_copy(TV_LIST_ITEM_TV(li), &pt->pt_argv[i++]);
+          });
+        }
+      }
+
+      // For "function(dict.func, [], dict)" and "func" is a partial
+      // use "dict". That is backwards compatible.
+      if (dict_idx > 0) {
+        // The dict is bound explicitly, pt_auto is false
+        pt->pt_dict = argvars[dict_idx].vval.v_dict;
+        (pt->pt_dict->dv_refcount)++;
+      } else if (arg_pt != NULL) {
+        // If the dict was bound automatically the result is also
+        // bound automatically.
+        pt->pt_dict = arg_pt->pt_dict;
+        pt->pt_auto = arg_pt->pt_auto;
+        if (pt->pt_dict != NULL) {
+          (pt->pt_dict->dv_refcount)++;
+        }
+      }
+
+      pt->pt_refcount = 1;
+      if (arg_pt != NULL && arg_pt->pt_func != NULL) {
+        pt->pt_func = arg_pt->pt_func;
+        func_ptr_ref(pt->pt_func);
+        xfree(name);
+      } else if (is_funcref) {
+        pt->pt_func = find_func(trans_name);
+        func_ptr_ref(pt->pt_func);
+        xfree(name);
+      } else {
+        pt->pt_name = name;
+        func_ref(name);
+      }
+
+      rettv->v_type = VAR_PARTIAL;
+      rettv->vval.v_partial = pt;
+    } else {
+      // result is a VAR_FUNC
+      rettv->v_type = VAR_FUNC;
+      rettv->vval.v_string = name;
+      func_ref(name);
+    }
+  }
+theend:
+  xfree(trans_name);
 }
 
 void nvim_eval_hlID(typval_T *argvars, typval_T *rettv)
