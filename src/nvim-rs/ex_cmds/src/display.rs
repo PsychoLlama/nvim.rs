@@ -790,12 +790,10 @@ const HLF_N_PLUS_1: c_int = 13;
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int, list: c_int) {
-    use crate::{
-        ml_get, msg_prt_line, msg_puts_hl, nvim_curwin_get_w_p_nu, nvim_number_width_curwin,
-    };
+    use crate::{ml_get, msg_prt_line, msg_puts_hl, number_width, nvim_curwin_get_w_p_nu};
 
     if nvim_curwin_get_w_p_nu() != 0 || use_number != 0 {
-        let width = nvim_number_width_curwin();
+        let width = number_width(crate::nvim_get_curwin());
         let mut numbuf = [0u8; 30];
         use std::io::Write;
         let mut cursor = std::io::Cursor::new(&mut numbuf[..]);
@@ -867,7 +865,12 @@ extern "C" {
     fn msg_putchar(c: c_int);
     fn os_breakcheck();
     fn nvim_excmds_cmdmod_has_browse() -> c_int;
-    fn nvim_excmds_prompt_for_input() -> c_int;
+    fn prompt_for_input(
+        prompt: *const std::ffi::c_char,
+        hl_id: c_int,
+        one_key: bool,
+        mouse_used: *mut bool,
+    ) -> c_int;
     fn msg_starthere();
     fn expand_env_save(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn nvim_excmds_do_exedit_edit(eap: *mut ExArgHandle, arg: *mut std::ffi::c_char);
@@ -918,7 +921,7 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     // File selection prompt on ":browse oldfiles"
     if nvim_excmds_cmdmod_has_browse() != 0 {
         crate::quit_more = false;
-        let selected = nvim_excmds_prompt_for_input();
+        let selected = prompt_for_input(std::ptr::null(), 0, false, std::ptr::null_mut());
         msg_starthere();
         let list_len = nvim_excmds_oldfiles_count();
         if selected > 0 && selected <= list_len {

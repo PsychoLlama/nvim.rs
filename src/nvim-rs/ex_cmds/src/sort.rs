@@ -481,9 +481,8 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
         nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg, nvim_excmds_emsg_noprevre,
         nvim_excmds_extmark_splice, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
         nvim_excmds_regfree, nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic,
-        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_excmds_skip_regexp_err,
-        nvim_excmds_str2nr, nvim_get_curbuf, skiptobin, skiptodigit, skiptohex, u_save,
-        vim_regexec,
+        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_excmds_str2nr,
+        nvim_get_curbuf, skip_regexp_err, skiptobin, skiptodigit, skiptohex, u_save, vim_regexec,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -549,7 +548,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
             nvim_exarg_set_nextcmd(eap, check_nextcmd(p));
             break;
         } else if !((c as u8).is_ascii_alphabetic()) && regmatch.is_null() {
-            let s = nvim_excmds_skip_regexp_err(p.add(1), c as c_int);
+            let s = skip_regexp_err(p.add(1), c as c_int, 1);
             if s.is_null() {
                 return; // goto sortend equivalent -- but nothing to clean up yet
             }
@@ -891,8 +890,8 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
         nvim_exarg_is_nextcmd_null, nvim_exarg_set_nextcmd, nvim_excmds_emsg_interr,
         nvim_excmds_emsg_noprevre, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
         nvim_excmds_regfree, nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic,
-        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_excmds_skip_regexp_err,
-        nvim_get_curbuf, u_save, vim_regexec,
+        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_get_curbuf, skip_regexp_err,
+        u_save, vim_regexec,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -944,7 +943,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
             nvim_exarg_set_nextcmd(eap, check_nextcmd(p));
             break;
         } else if !((c as u8).is_ascii_alphabetic()) && regmatch.is_null() {
-            let s = nvim_excmds_skip_regexp_err(p.add(1), c as c_int);
+            let s = skip_regexp_err(p.add(1), c as c_int, 1);
             if s.is_null() {
                 return;
             }

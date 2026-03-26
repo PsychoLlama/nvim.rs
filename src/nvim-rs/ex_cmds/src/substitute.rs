@@ -1182,7 +1182,7 @@ extern "C" {
     fn nvim_u_savedel2(lnum: c_int, count: c_int) -> c_int;
     fn nvim_u_save_cursor() -> c_int;
     fn nvim_do_check_cursorbind_wrapper();
-    fn nvim_do_sub_getdigits_int(pp: *mut *mut c_char) -> c_int;
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
     static mut p_rdt: i64;
     fn nvim_do_sub_skip_regexp_ex(
         cmd: *mut c_char,
@@ -1190,7 +1190,7 @@ extern "C" {
         arg_ptr: *mut *mut c_char,
     ) -> *mut c_char;
     fn check_nextcmd(cmd: *const c_char) -> *mut c_char;
-    fn nvim_do_sub_changed_window_setting();
+    fn changed_window_setting(wp: *mut crate::WinHandle);
     fn nvim_curwin_get_cursor_col() -> c_int;
     static mut p_cwh: i64;
     fn setpcmark();
@@ -1202,11 +1202,16 @@ extern "C" {
         ec_out: *mut c_int,
     );
     fn nvim_do_sub_getcmdline_prompt(prompt_str: *const c_char) -> c_int;
-    fn nvim_do_sub_prompt_for_input(str_: *const c_char) -> c_int;
+    fn prompt_for_input(
+        prompt: *const c_char,
+        hl_id: c_int,
+        one_key: bool,
+        mouse_used: *mut bool,
+    ) -> c_int;
     fn nvim_do_sub_update_screen_for_confirm();
     fn nvim_al_gotocmdline(clr: c_int);
-    fn nvim_number_width_curwin() -> c_int;
-    fn nvim_excmds_syn_check_sub_group() -> c_int;
+    fn number_width(wp: *mut crate::WinHandle) -> c_int;
+    fn syn_check_group(name: *const c_char, len: usize) -> c_int;
     fn nvim_excmds_disable_inccommand();
     static p_icm: *const std::ffi::c_char;
     fn nvim_do_sub_set_op_start_end(start_lnum: c_int, end_lnum: c_int);
@@ -1612,7 +1617,7 @@ pub unsafe extern "C" fn rs_do_sub(
     // Parse trailing count
     cmd = skipwhite(cmd) as *mut c_char;
     if sub_ascii_isdigit(*cmd as u8) {
-        let i = nvim_do_sub_getdigits_int(&mut cmd);
+        let i = getdigits_int(&mut cmd, true, c_int::MAX);
         if i <= 0 && nvim_exarg_get_skip(eap) == 0 && subflags_local.do_error {
             nvim_excmds_emsg_by_id(7); // e_zerocount
             xfree(sub as *mut std::ffi::c_void);
@@ -2176,7 +2181,7 @@ pub unsafe extern "C" fn rs_do_sub(
     }
 
     if subflags_local.do_ask && rs_hasAnyFolding(nvim_get_curwin()) != 0 {
-        nvim_do_sub_changed_window_setting();
+        changed_window_setting(crate::nvim_get_curwin());
     }
 
     nvim_excmds_vim_regfree_multi(regmatch as *mut std::ffi::c_void);
@@ -2198,7 +2203,7 @@ pub unsafe extern "C" fn rs_do_sub(
         } else if !p_icm.is_null() && *p_icm != 0 && !pat.is_null() {
             let mut hl_id = PRE_HL_ID.load(std::sync::atomic::Ordering::Relaxed);
             if hl_id == 0 {
-                hl_id = nvim_excmds_syn_check_sub_group();
+                hl_id = syn_check_group(c"Substitute".as_ptr(), 10);
                 PRE_HL_ID.store(hl_id, std::sync::atomic::Ordering::Relaxed);
             }
             // Call rs_show_sub with the preview_lines
@@ -2285,7 +2290,7 @@ unsafe fn handle_do_ask(
 
             if subflags.do_number || nvim_curwin_get_w_p_nu() != 0 {
                 // We can't easily get w_p_nu in isolation - use nvim_curwin_get_w_p_nu from lib
-                let numw = nvim_number_width_curwin() + 1;
+                let numw = number_width(crate::nvim_get_curwin()) + 1;
                 sc += numw;
                 ec += numw;
             }
@@ -2346,7 +2351,7 @@ unsafe fn handle_do_ask(
             nvim_curwin_set_w_p_fen(save_p_fen);
 
             let prompt_str = nvim_do_sub_format_confirm_prompt(sub);
-            typed = nvim_do_sub_prompt_for_input(prompt_str);
+            typed = prompt_for_input(prompt_str, 18, true, std::ptr::null_mut());
             nvim_set_highlight_match(0);
             xfree(prompt_str as *mut std::ffi::c_void);
 

@@ -719,8 +719,8 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         nvim_curbuf_get_b_ml_ml_line_count, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
         nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes, nvim_excmds_emsg_e134,
         nvim_excmds_extmark_move_region, nvim_excmds_fold_move_range_all_wins,
-        nvim_excmds_mark_adjust_nofold, nvim_excmds_ml_find_line_or_offset,
-        nvim_excmds_smsg_lines_moved, nvim_get_curbuf, u_save, xfree, xstrnsave,
+        nvim_excmds_mark_adjust_nofold, nvim_excmds_smsg_lines_moved, nvim_get_curbuf,
+        rs_ml_find_line_or_offset, u_save, xfree, xstrnsave,
     };
 
     if dest >= line1 && dest < line2 {
@@ -739,10 +739,11 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         return OK;
     }
 
-    let start_byte = nvim_excmds_ml_find_line_or_offset(line1);
-    let end_byte = nvim_excmds_ml_find_line_or_offset(line2 + 1);
+    let curbuf = nvim_get_curbuf();
+    let start_byte = rs_ml_find_line_or_offset(curbuf, line1, std::ptr::null_mut(), 1) as i64;
+    let end_byte = rs_ml_find_line_or_offset(curbuf, line2 + 1, std::ptr::null_mut(), 1) as i64;
     let extent_byte = end_byte - start_byte;
-    let dest_byte = nvim_excmds_ml_find_line_or_offset(dest + 1);
+    let dest_byte = rs_ml_find_line_or_offset(curbuf, dest + 1, std::ptr::null_mut(), 1) as i64;
 
     let num_lines = line2 - line1 + 1;
 

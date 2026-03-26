@@ -635,7 +635,7 @@ extern "C" {
     /// Get curwin->w_p_nu
     pub fn nvim_curwin_get_w_p_nu() -> c_int;
     /// Get number_width(curwin)
-    pub fn nvim_number_width_curwin() -> c_int;
+    pub fn number_width(wp: *mut WinHandle) -> c_int;
     /// silent_mode global (bool in C)
     pub static mut silent_mode: bool;
     /// info_message global (bool in C)
@@ -808,9 +808,9 @@ extern "C" {
     /// Set rm_ic (ignore case) on regex handle.
     pub fn nvim_excmds_regmatch_set_ic(rm: *mut RegmatchHandle, ic: c_int);
 
-    // Search/skip (direct declarations -- wrappers deleted in Phase 1)
-    /// skip_regexp_err wrapper.
-    pub fn nvim_excmds_skip_regexp_err(p: *const c_char, delim: c_int) -> *mut c_char;
+    // Search/skip (direct declarations)
+    /// skip_regexp_err: skip regexp and check for delimiter mismatch.
+    pub fn skip_regexp_err(p: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 
     // Number parsing
     /// Parse a number string with given flags, store result in *result.
@@ -901,8 +901,13 @@ extern "C" {
         amount_after: c_int,
         etype: c_int,
     );
-    /// ml_find_line_or_offset wrapper (on curbuf).
-    pub fn nvim_excmds_ml_find_line_or_offset(lnum: c_int) -> i64;
+    /// ml_find_line_or_offset (on curbuf, no offset, with ff).
+    pub fn rs_ml_find_line_or_offset(
+        buf: *mut BufHandle,
+        lnum: c_int,
+        offp: *mut c_int,
+        no_ff: c_int,
+    ) -> c_int;
     /// ml_delete_flags wrapper.
     pub fn nvim_excmds_ml_delete_flags(lnum: c_int, flags: c_int) -> c_int;
     /// extmark_move_region wrapper (on curbuf).

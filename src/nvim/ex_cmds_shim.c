@@ -105,6 +105,10 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+// Constant assertions for values inlined into Rust (Phase 3)
+_Static_assert(VV_SWAPCOMMAND == 49, "VV_SWAPCOMMAND mismatch with Rust constant");
+_Static_assert(HLF_R == 18, "HLF_R mismatch with Rust constant");
+
 // Rust FFI declarations (typval functions migrated to Rust)
 extern const char *tv_list_find_str(list_T *l, int n);
 
@@ -198,7 +202,6 @@ void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist
 
 // print_line accessors
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
-int nvim_number_width_curwin(void) { return number_width(curwin); }
 // --- Sort/uniq accessor functions for Rust FFI ---
 
 // Regex accessors (opaque regmatch_T handle)
@@ -224,8 +227,6 @@ void nvim_excmds_regfree(void *rm)
 const char *nvim_excmds_regmatch_startp0(const void *rm) { return ((const regmatch_T *)rm)->startp[0]; }
 const char *nvim_excmds_regmatch_endp0(const void *rm) { return ((const regmatch_T *)rm)->endp[0]; }
 void nvim_excmds_regmatch_set_ic(void *rm, int ic) { ((regmatch_T *)rm)->rm_ic = ic; }
-// Search/skip accessors
-char *nvim_excmds_skip_regexp_err(const char *p, int delim) { return skip_regexp_err((char *)p, delim, true); }
 // Number parsing wrapper
 void nvim_excmds_str2nr(const char *s, int what, int64_t *result)
 {
@@ -270,7 +271,6 @@ void nvim_excmds_mark_adjust_nofold(linenr_T line1, linenr_T line2,
   mark_adjust_nofold(line1, line2, (long)amount, (long)amount_after, (ExtmarkOp)etype);
 }
 
-int64_t nvim_excmds_ml_find_line_or_offset(linenr_T lnum) { return (int64_t)rs_ml_find_line_or_offset(curbuf, lnum, NULL, true); }
 void nvim_excmds_extmark_move_region(int start_row, int start_col, int64_t start_byte,
                                       int extent_row, int extent_col, int64_t extent_byte,
                                       int new_row, int new_col, int64_t new_byte, int etype)
@@ -505,7 +505,6 @@ const char *nvim_excmds_oldfiles_find_str(int idx)
 }
 
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
-int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 {
   char *saved_arg = eap->arg;
@@ -672,8 +671,6 @@ void nvim_excmds_emsg_with_arg(int id, const char *arg)
   }
 }
 
-/// Wrap syn_check_group("Substitute"). Returns hl_id.
-int nvim_excmds_syn_check_sub_group(void) { return syn_check_group(S_LEN("Substitute")); }
 /// Disable inccommand option.
 void nvim_excmds_disable_inccommand(void) { set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL(""), 0, SID_NONE); }
 /// Get curwin->w_cursor.lnum for nested global handling.
@@ -920,10 +917,6 @@ int nvim_excmds_curbuf_get_b_fnum(void) { return curbuf->b_fnum; }
 int nvim_excmds_curbuf_get_b_nwindows(void) { return curbuf->b_nwindows; }
 
 
-/// For set_swapcommand: get_vim_var_str(VV_SWAPCOMMAND). Returns the string (not owned).
-const char *nvim_excmds_get_vim_var_str_swapcommand(void) { return get_vim_var_str(VV_SWAPCOMMAND); }
-/// For set_swapcommand: set_vim_var_string(VV_SWAPCOMMAND, p, -1).
-void nvim_excmds_set_vim_var_string_swapcommand(const char *p) { set_vim_var_string(VV_SWAPCOMMAND, (char *)p, -1); }
 // CMD_xall and CMD_wqall constants -- validated so Rust can use them directly.
 _Static_assert(CMD_xall == 537, "CMD_xall mismatch -- update the Rust constant in write.rs");
 _Static_assert(CMD_wqall == 532, "CMD_wqall mismatch -- update the Rust constant in write.rs");
@@ -1188,16 +1181,11 @@ void nvim_curwin_set_w_p_fen(int val) { curwin->w_p_fen = (bool)val; }
 /// Set curbuf->deleted_bytes2.
 void nvim_curbuf_set_deleted_bytes2(int val) { curbuf->deleted_bytes2 = (bcount_t)val; }
 
-/// Wrap getdigits_int(&pp, true, INT_MAX). Returns int and advances *pp.
-int nvim_do_sub_getdigits_int(char **pp) { return getdigits_int(pp, true, INT_MAX); }
 /// Wrap skip_regexp_ex for do_sub. Updates *arg_ptr in place.
 char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
 {
   return skip_regexp_ex(cmd, (char)delim, rs_magic_isset(), arg_ptr, NULL, NULL);
 }
-
-/// Wrap changed_window_setting(curwin).
-void nvim_do_sub_changed_window_setting(void) { changed_window_setting(curwin); }
 
 /// Wrap getvcol for both start and end columns.
 void nvim_do_sub_getvcol_start_end(int lnum, int start_col, int end_col,
@@ -1228,8 +1216,6 @@ int nvim_do_sub_getcmdline_prompt(const char *prompt_str)
   return typed;
 }
 
-/// Wrap prompt_for_input(str, HLF_R, true, NULL). Returns typed character.
-int nvim_do_sub_prompt_for_input(const char *str) { return prompt_for_input((char *)str, HLF_R, true, NULL); }
 /// Call update_topline, validate_cursor, redraw and update_screen for confirm.
 void nvim_do_sub_update_screen_for_confirm(void)
 {
@@ -1634,8 +1620,7 @@ void nvim_ecmd_fold_update_all_curbuf_wins(void)
 
 /// Get eap->do_ecmd_cmd (the command to run after loading, e.g. for +cmd)
 const char *nvim_ecmd_eap_get_do_ecmd_cmd(exarg_T *eap) { return eap != NULL ? eap->do_ecmd_cmd : NULL; }
-/// Call set_vim_var_string(VV_SWAPCOMMAND, NULL, -1) to clear swapcommand
-void nvim_ecmd_clear_swapcommand(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
+
 
 /// Emit emsg(_(e_cannot_switch_to_a_closing_buffer))
 void nvim_ecmd_emsg_closing_buffer(void) { emsg(_(e_cannot_switch_to_a_closing_buffer)); }
