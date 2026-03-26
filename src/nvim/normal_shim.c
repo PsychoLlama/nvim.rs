@@ -1053,8 +1053,6 @@ void nvim_showcmd_grid_render(const char *buf, bool is_clear)
   grid_line_flush();
 }
 
-/// transchar(c) wrapper -- result is a static buffer valid until next call.
-const char *nvim_transchar_wrapper(int c) { return transchar(c); }
 
 /// getvcols with p_sbr/w_p_sbr save-restore for block-Visual showcmd.
 /// Saves p_sbr and curwin->w_p_sbr, sets them to empty, calls

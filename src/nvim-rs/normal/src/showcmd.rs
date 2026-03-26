@@ -158,7 +158,7 @@ extern "C" {
     fn nvim_p_sel_is_exclusive() -> bool;
 
     // Phase 5: add_to_showcmd / del_from_showcmd
-    fn nvim_transchar_wrapper(c: c_int) -> *const std::ffi::c_char;
+    fn transchar(c: c_int) -> *const std::ffi::c_char;
     fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
     fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
     fn vim_isprintc(c: c_int) -> bool;
@@ -407,7 +407,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
     {
         if c <= 0x7f || !vim_isprintc(c) {
             // Use transchar for ASCII/non-printable chars; result is a static buf.
-            let tc: *const u8 = nvim_transchar_wrapper(c).cast();
+            let tc: *const u8 = transchar(c).cast();
             if *tc == b' ' {
                 // transchar returned a space: show literal "<20>"
                 mbyte_buf[0] = b'<';
