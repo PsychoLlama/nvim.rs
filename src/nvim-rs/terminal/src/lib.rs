@@ -2883,6 +2883,8 @@ extern "C" {
     fn nvim_terminal_write_cb(term: *mut c_void, data: *const i8, size: usize);
     fn nvim_terminal_get_pending_send(term: *mut c_void) -> *mut c_void;
     fn nvim_term_sb_concat_len(sb: *mut c_void, data: *const i8, len: usize);
+    fn nvim_term_sb_size(sb: *const c_void) -> usize;
+    fn nvim_term_sb_items(sb: *mut c_void) -> *mut i8;
     fn nvim_term_sb_reset(sb: *mut c_void);
     fn nvim_term_sb_push_char(sb: *mut c_void, c: i8);
     fn nvim_vterm_value_boolean(val: *const c_void) -> c_int;
@@ -2899,6 +2901,37 @@ extern "C" {
     fn nvim_terminal_schedule_termrequest(term: *mut c_void);
     fn nvim_terminal_get_vt(term: *mut c_void) -> *mut c_void;
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
+    // Phase 15: emit_termrequest / schedule_termrequest migration
+    fn nvim_terminal_set_vim_var_termrequest(seq: *const i8, seqlen: usize);
+    fn nvim_terminal_apply_termrequest_autocmd(
+        buf: *mut c_void,
+        row: i64,
+        col: i64,
+        seq: *const i8,
+        seqlen: usize,
+    );
+    fn nvim_terminal_pending_put_termrequest(
+        term: *mut c_void,
+        fn_ptr: unsafe extern "C" fn(*mut *mut c_void),
+        sequence: *mut i8,
+        seqlen: usize,
+        pending_send: *mut c_void,
+        row: isize,
+        col: isize,
+        sb_deleted: isize,
+    );
+    fn nvim_terminal_main_put_termrequest(
+        fn_ptr: unsafe extern "C" fn(*mut *mut c_void),
+        term: *mut c_void,
+        sequence: *mut i8,
+        seqlen: usize,
+        pending_send: *mut c_void,
+        row: isize,
+        col: isize,
+        sb_deleted: isize,
+    );
+    fn nvim_term_sb_alloc_init() -> *mut c_void;
+    fn xmemdup(src: *const c_void, len: usize) -> *mut c_void;
     // Phase 7: refresh pipeline
     fn nvim_term_buf_line_count(buf: *const c_void) -> c_int;
     fn nvim_buf_get_scrollback(buf: *const c_void) -> i64;
@@ -3542,6 +3575,111 @@ pub unsafe extern "C" fn rs_on_apc(
         unsafe { nvim_terminal_schedule_termrequest(user) };
     }
     1
+}
+
+// =============================================================================
+// Phase 15: Migrate emit_termrequest / schedule_termrequest
+// =============================================================================
+
+/// Process a `TermRequest` autocmd event.
+///
+/// Replaces `emit_termrequest` in `terminal_shim.c`.
+/// This is called as a `void **argv` callback via `multiqueue_put`.
+///
+/// # Safety
+/// `argv` must be a valid pointer to at least 7 elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emit_termrequest(argv: *mut *mut c_void) {
+    let term_ptr = unsafe { *argv };
+    let sequence = unsafe { (*argv.add(1)).cast::<i8>() };
+    let sequence_length = unsafe { *argv.add(2) } as usize;
+    let pending_send = unsafe { *argv.add(3) };
+    let row = unsafe { *argv.add(4) } as isize;
+    let col = unsafe { *argv.add(5) } as isize;
+    let sb_deleted = unsafe { *argv.add(6) } as usize;
+
+    let term = unsafe { TerminalHandle::from_ptr(term_ptr) };
+    let t = unsafe { term.as_mut() };
+
+    if t.sb_pending > 0 {
+        // Pending scrollback: re-queue onto pending.events.
+        #[allow(clippy::cast_possible_wrap)]
+        unsafe {
+            nvim_terminal_pending_put_termrequest(
+                term_ptr,
+                rs_emit_termrequest,
+                sequence,
+                sequence_length,
+                pending_send,
+                row,
+                col,
+                sb_deleted as isize,
+            );
+        }
+        return;
+    }
+
+    unsafe { nvim_terminal_set_vim_var_termrequest(sequence, sequence_length) };
+
+    let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
+    #[allow(clippy::cast_possible_wrap)]
+    let row_adj = row - (t.sb_deleted as isize - sb_deleted as isize);
+    unsafe {
+        nvim_terminal_apply_termrequest_autocmd(
+            buf,
+            row_adj as i64,
+            col as i64,
+            sequence,
+            sequence_length,
+        );
+    }
+    unsafe { xfree(sequence.cast::<c_void>()) };
+
+    let term_pending_send = t.pending.send;
+    t.pending.send = std::ptr::null_mut();
+    let sb_size = unsafe { nvim_term_sb_size(pending_send) };
+    if sb_size > 0 {
+        let sb_items = unsafe { nvim_term_sb_items(pending_send) };
+        unsafe { rs_terminal_do_send(term, sb_items, sb_size) };
+        unsafe { nvim_term_sb_destroy(pending_send) };
+    }
+    if term_pending_send != pending_send {
+        t.pending.send = term_pending_send;
+    }
+    unsafe { xfree(pending_send) };
+}
+
+/// Schedule a `TermRequest` event to be emitted after the next terminal refresh.
+///
+/// Replaces `schedule_termrequest` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_schedule_termrequest(term_ptr: *mut c_void) {
+    let term = unsafe { TerminalHandle::from_ptr(term_ptr) };
+    let t = unsafe { term.as_mut() };
+
+    t.pending.send = unsafe { nvim_term_sb_alloc_init() }.cast();
+
+    let line = rs_terminal_row_to_linenr(t.cursor.row, t.sb_current);
+    let seq_data = t.termrequest_buffer.items;
+    let seq_len = unsafe { nvim_term_sb_size((&raw mut t.termrequest_buffer).cast()) };
+    let sequence = unsafe { xmemdup(seq_data.cast::<c_void>(), seq_len) }.cast::<i8>();
+
+    #[allow(clippy::cast_possible_wrap)]
+    unsafe {
+        nvim_terminal_main_put_termrequest(
+            rs_emit_termrequest,
+            term_ptr,
+            sequence,
+            seq_len,
+            t.pending.send.cast(),
+            line as isize,
+            t.cursor.col as isize,
+            t.sb_deleted as isize,
+        );
+    }
 }
 
 // =============================================================================

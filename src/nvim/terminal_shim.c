@@ -239,67 +239,8 @@ static VTermSelectionCallbacks vterm_selection_callbacks = {
 
 static Set(ptr_t) invalidated_terminals = SET_INIT;
 
-static void emit_termrequest(void **argv)
-{
-  Terminal *term = argv[0];
-  char *sequence = argv[1];
-  size_t sequence_length = (size_t)argv[2];
-  StringBuilder *pending_send = argv[3];
-  int row = (int)(intptr_t)argv[4];
-  int col = (int)(intptr_t)argv[5];
-  size_t sb_deleted = (size_t)(intptr_t)argv[6];
-
-  if (term->sb_pending > 0) {
-    // Don't emit the event while there is pending scrollback because we need
-    // the buffer contents to be fully updated. If this is the case, schedule
-    // the event onto the pending queue where it will be executed after the
-    // terminal is refreshed and the pending scrollback is cleared.
-    multiqueue_put(term->pending.events, emit_termrequest, term, sequence, (void *)sequence_length,
-                   pending_send, (void *)(intptr_t)row, (void *)(intptr_t)col,
-                   (void *)(intptr_t)sb_deleted);
-    return;
-  }
-
-  set_vim_var_string(VV_TERMREQUEST, sequence, (ptrdiff_t)sequence_length);
-
-  MAXSIZE_TEMP_ARRAY(cursor, 2);
-  ADD_C(cursor, INTEGER_OBJ(row - (int64_t)(term->sb_deleted - sb_deleted)));
-  ADD_C(cursor, INTEGER_OBJ(col));
-
-  MAXSIZE_TEMP_DICT(data, 2);
-  String termrequest = { .data = sequence, .size = sequence_length };
-  PUT_C(data, "sequence", STRING_OBJ(termrequest));
-  PUT_C(data, "cursor", ARRAY_OBJ(cursor));
-
-  buf_T *buf = handle_get_buffer(term->buf_handle);
-  apply_autocmds_group(EVENT_TERMREQUEST, NULL, NULL, true, AUGROUP_ALL, buf, NULL,
-                       &DICT_OBJ(data));
-  xfree(sequence);
-
-  StringBuilder *term_pending_send = term->pending.send;
-  term->pending.send = NULL;
-  if (kv_size(*pending_send)) {
-    terminal_send(term, pending_send->items, pending_send->size);
-    kv_destroy(*pending_send);
-  }
-  if (term_pending_send != pending_send) {
-    term->pending.send = term_pending_send;
-  }
-  xfree(pending_send);
-}
-
-static void schedule_termrequest(Terminal *term)
-{
-  term->pending.send = xmalloc(sizeof(StringBuilder));
-  kv_init(*term->pending.send);
-
-  int line = rs_terminal_row_to_linenr_term(term, term->cursor.row);
-  multiqueue_put(loop_get_events(&main_loop), emit_termrequest, term,
-                 xmemdup(term->termrequest_buffer.items, term->termrequest_buffer.size),
-                 (void *)(intptr_t)term->termrequest_buffer.size, term->pending.send,
-                 (void *)(intptr_t)line, (void *)(intptr_t)term->cursor.col,
-                 (void *)(intptr_t)term->sb_deleted);
-}
+extern void rs_emit_termrequest(void **argv);
+extern void rs_schedule_termrequest(void *term);
 
 
 extern int rs_on_osc(int command, const char *str, size_t len, int initial, int is_final,
@@ -574,29 +515,6 @@ static void terminal_check_cursor(void)
   coladvance(curwin, MAX(0, term->cursor.col + off));
 }
 
-static bool terminal_check_focus(TerminalState *const s)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (curbuf->terminal == NULL) {
-    return false;
-  }
-
-  if (s->save_curwin_handle != curwin->handle) {
-    // Terminal window changed, update window options.
-    unset_terminal_winopts(s);
-    set_terminal_winopts(s);
-  }
-  if (s->term != curbuf->terminal) {
-    // Active terminal buffer changed, flush terminal's cursor state to the UI.
-    rs_terminal_focus_lose(s->term);
-
-    s->term = curbuf->terminal;
-    s->term->pending.cursor = true;
-    invalidate_terminal(s->term, -1, -1);
-    rs_terminal_focus_gain(s->term);
-  }
-  return true;
-}
 
 /// Function executed before each iteration of terminal mode.
 ///
@@ -610,14 +528,8 @@ static int terminal_check(VimState *state) { return rs_terminal_check(state); }
 extern int rs_terminal_execute(void *state, int key);
 static int terminal_execute(VimState *state, int key) { return rs_terminal_execute(state, key); }
 
-/// Frees the given Terminal structure and sets the caller storage to NULL (in the spirit of
-/// XFREE_CLEAR).
 extern void rs_terminal_destroy(Terminal **termpp);
-void terminal_destroy(Terminal **termpp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_terminal_destroy((Terminal **)termpp);
-}
+void terminal_destroy(Terminal **termpp) FUNC_ATTR_NONNULL_ALL { rs_terminal_destroy(termpp); }
 
 extern void rs_terminal_do_send(void *term, const char *data, size_t size);
 static void terminal_send(Terminal *term, const char *data, size_t size)
@@ -625,9 +537,7 @@ static void terminal_send(Terminal *term, const char *data, size_t size)
 
 extern void rs_terminal_paste(int count, const String *y_array, size_t y_size);
 void terminal_paste(int count, String *y_array, size_t y_size)
-{
-  rs_terminal_paste(count, y_array, y_size);
-}
+  { rs_terminal_paste(count, y_array, y_size); }
 
 static void terminal_send_key(Terminal *term, int c)
   { rs_terminal_send_key_impl(term, c); }
@@ -645,9 +555,7 @@ static int get_rgb(VTermState *state, VTermColor color)
 
 extern void rs_terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs);
 void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs)
-{
-  rs_terminal_get_line_attributes(term, wp, linenr, term_attrs);
-}
+  { rs_terminal_get_line_attributes(term, wp, linenr, term_attrs); }
 
 void terminal_notify_theme(Terminal *term, bool dark)
   { rs_terminal_notify_theme_impl(term, (int)dark); }
@@ -900,29 +808,19 @@ static bool fetch_cell(Terminal *term, int row, int col, VTermScreenCell *cell)
   return true;
 }
 
-// queue a terminal instance for refresh
 extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
 static void invalidate_terminal(Terminal *term, int start_row, int end_row)
-{
-  rs_invalidate_terminal(term, start_row, end_row);
-}
+  { rs_invalidate_terminal(term, start_row, end_row); }
 
 extern void rs_refresh_terminal(void *term);
 static void refresh_terminal(Terminal *term) { rs_refresh_terminal(term); }
 
 extern void rs_refresh_cursor(void *term, bool *cursor_visible);
-static void refresh_cursor(Terminal *term, bool *cursor_visible)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_refresh_cursor(term, cursor_visible);
-}
+static void refresh_cursor(Terminal *term, bool *cursor_visible) FUNC_ATTR_NONNULL_ALL
+  { rs_refresh_cursor(term, cursor_visible); }
 
 extern void rs_refresh_timer_cb(void *watcher, void *data);
-/// Calls refresh_terminal() on all invalidated_terminals.
-static void refresh_timer_cb(TimeWatcher *watcher, void *data)
-{
-  rs_refresh_timer_cb(watcher, data);
-}
+static void refresh_timer_cb(TimeWatcher *watcher, void *data) { rs_refresh_timer_cb(watcher, data); }
 
 extern void rs_on_scrollback_option_changed(void *term);
 void on_scrollback_option_changed(Terminal *term) { rs_on_scrollback_option_changed(term); }
@@ -1186,7 +1084,7 @@ void nvim_term_treqbuf_printf_dcs(void *term, const char *command, int cmdlen)
 void nvim_term_treqbuf_printf_apc(void *term)
   { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b_"); }
 int nvim_terminal_has_termrequest_event(void) { return (int)has_event(EVENT_TERMREQUEST); }
-void nvim_terminal_schedule_termrequest(void *term) { schedule_termrequest((Terminal *)term); }
+void nvim_terminal_schedule_termrequest(void *term) { rs_schedule_termrequest(term); }
 void *nvim_terminal_treqbuf_ptr(void *term) { return &((Terminal *)term)->termrequest_buffer; }
 void *nvim_terminal_get_vt(void *term) { return ((Terminal *)term)->vt; }
 void nvim_term_set_osc8_attr(void *vt, int attr)
@@ -1263,5 +1161,45 @@ int nvim_buf_get_changedtick_curbuf(void) { return (int)buf_get_changedtick(curb
 // buffer wipe
 void nvim_do_buffer_wipe(int buf_handle)
   { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
+
+// emit_termrequest helpers (Phase 15)
+void nvim_terminal_set_vim_var_termrequest(const char *seq, size_t seqlen)
+  { set_vim_var_string(VV_TERMREQUEST, seq, (ptrdiff_t)seqlen); }
+void nvim_terminal_apply_termrequest_autocmd(void *buf, int64_t row, int64_t col,
+                                             const char *seq, size_t seqlen)
+{
+  MAXSIZE_TEMP_ARRAY(cursor, 2);
+  ADD_C(cursor, INTEGER_OBJ(row));
+  ADD_C(cursor, INTEGER_OBJ(col));
+  MAXSIZE_TEMP_DICT(data, 2);
+  String termrequest = { .data = (char *)seq, .size = seqlen };
+  PUT_C(data, "sequence", STRING_OBJ(termrequest));
+  PUT_C(data, "cursor", ARRAY_OBJ(cursor));
+  apply_autocmds_group(EVENT_TERMREQUEST, NULL, NULL, true, AUGROUP_ALL, (buf_T *)buf, NULL,
+                       &DICT_OBJ(data));
+}
+typedef void (*emit_termrequest_fn_t)(void **);
+void nvim_terminal_pending_put_termrequest(void *term, emit_termrequest_fn_t fn,
+                                           char *sequence, size_t seqlen,
+                                           void *pending_send, intptr_t row, intptr_t col,
+                                           intptr_t sb_deleted)
+{
+  multiqueue_put(((Terminal *)term)->pending.events, fn, term, sequence, (void *)seqlen,
+                 pending_send, (void *)row, (void *)col, (void *)sb_deleted);
+}
+void nvim_terminal_main_put_termrequest(emit_termrequest_fn_t fn, void *term,
+                                        char *sequence, size_t seqlen,
+                                        void *pending_send, intptr_t row, intptr_t col,
+                                        intptr_t sb_deleted)
+{
+  multiqueue_put(loop_get_events(&main_loop), fn, term, sequence, (void *)seqlen,
+                 pending_send, (void *)row, (void *)col, (void *)sb_deleted);
+}
+void *nvim_term_sb_alloc_init(void)
+{
+  StringBuilder *sb = xmalloc(sizeof(StringBuilder));
+  kv_init(*sb);
+  return sb;
+}
 
 // vim: foldmethod=marker
