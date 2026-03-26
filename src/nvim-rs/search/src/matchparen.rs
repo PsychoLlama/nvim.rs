@@ -115,7 +115,7 @@ extern "C" {
     fn nvim_search_set_oap_motion_type(oap: OapHandle, motion_type: c_int);
 
     // Memory
-    fn xmalloc(size: usize) -> *mut c_char;
+    fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
 
     // find_rawstring_end needs ml_get for lines
@@ -163,7 +163,7 @@ unsafe fn find_rawstring_end(
     let delim_len = p.offset_from(delim_start) as usize;
 
     // Allocate a copy of the delimiter
-    let delim_copy = xmalloc(delim_len + 1);
+    let delim_copy = xmalloc(delim_len + 1) as *mut c_char;
     std::ptr::copy_nonoverlapping(delim_start, delim_copy, delim_len);
     *delim_copy.add(delim_len) = NUL;
 

@@ -47,8 +47,8 @@ extern "C" {
     fn nvim_set_curwin_cursor_coladd(coladd: c_int);
     fn nvim_inc_cursor() -> c_int;
     fn nvim_dec_cursor() -> c_int;
-    fn nvim_search_incl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int);
-    fn nvim_search_decl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int);
+    fn nvim_search_incl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int) -> c_int;
+    fn nvim_search_decl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int) -> c_int;
     fn nvim_search_get_line_count() -> c_int;
     fn nvim_search_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_search_current_searchit(

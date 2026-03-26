@@ -1093,27 +1093,10 @@ int nvim_do_search_check_lineoff(void)
   return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0;
 }
 
-/// Handle fold adjustment for do_search position.
-/// For forward: adjusts to end of fold. For backward: adjusts to start of fold.
-/// Returns the adjusted pos (lnum, col).
-DoSearchPos nvim_do_search_fold_adjust(int dirc, linenr_T lnum, colnr_T col)
-{
-  pos_T pos;
-  pos.lnum = lnum;
-  pos.col = col;
-  pos.coladd = 0;
-
-  if (dirc == '/') {
-    if (hasFolding(curwin, pos.lnum, NULL, &pos.lnum)) {
-      pos.col = MAXCOL - 2;
-    }
-  } else {
-    if (hasFolding(curwin, pos.lnum, &pos.lnum, NULL)) {
-      pos.col = 0;
-    }
-  }
-  return (DoSearchPos){ pos.lnum, pos.col };
-}
+/// hasFolding forward: find end of fold at *lnum, update *lnum. Returns 1 if folded.
+int nvim_do_search_hasFolding_fwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, NULL, lnum) ? 1 : 0; }
+/// hasFolding backward: find start of fold at *lnum, update *lnum. Returns 1 if folded.
+int nvim_do_search_hasFolding_bwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, lnum, NULL) ? 1 : 0; }
 
 /// Turn hlsearch back on if needed.
 void nvim_do_search_hlsearch_on(int options)
@@ -1133,249 +1116,6 @@ char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
 
 void nvim_do_search_set_searchcmdlen(int val) { searchcmdlen = val; }
 int nvim_do_search_get_searchcmdlen(void) { return searchcmdlen; }
-/// Batch helper: handle echo/display section of do_search.
-/// Returns: msgbuf (allocated), sets *msgbuflen_out, sets *show_search_stats.
-/// Caller must xfree() the returned buffer (or NULL).
-DoSearchEchoResult nvim_do_search_echo(int dirc, int options,
-                                       const char *searchstr, size_t searchstrlen)
-{
-  DoSearchEchoResult result = { NULL, 0, 0 };
-
-  if (!((options & SEARCH_ECHO) && messaging() && !msg_silent
-        && (!cmd_silent || !shortmess(SHM_SEARCHCOUNT)))) {
-    return result;
-  }
-
-  char off_buf[40];
-  size_t off_len = 0;
-
-  msg_start();
-  msg_ext_set_kind("search_cmd");
-
-  // Read search offset fields from Rust-owned state
-  extern int rs_get_search_offset_end(int idx);
-  extern int rs_get_search_offset_line(int idx);
-  extern int64_t rs_get_search_offset_off(int idx);
-  int off_end = rs_get_search_offset_end(0);
-  int off_line = rs_get_search_offset_line(0);
-  int64_t off_off = rs_get_search_offset_off(0);
-
-  if (!cmd_silent && (off_line || off_end || off_off)) {
-    off_buf[off_len++] = (char)dirc;
-    if (off_end) {
-      off_buf[off_len++] = 'e';
-    } else if (!off_line) {
-      off_buf[off_len++] = 's';
-    }
-    off_buf[off_len] = NUL;
-    if (off_off != 0 || off_line) {
-      off_len += (size_t)snprintf(off_buf + off_len, sizeof(off_buf) - off_len,
-                                  "%+" PRId64, off_off);
-    }
-  }
-
-  // Read search pattern from Rust-owned state
-  extern const char *rs_get_search_pattern(void);
-  extern size_t rs_get_search_pattern_len(void);
-  const char *p;
-  size_t plen;
-  if (*searchstr == NUL) {
-    p = rs_get_search_pattern();
-    plen = rs_get_search_pattern_len();
-  } else {
-    p = searchstr;
-    plen = searchstrlen;
-  }
-
-  size_t msgbufsize;
-  if (!shortmess(SHM_SEARCHCOUNT) || cmd_silent) {
-    if (ui_has(kUIMessages)) {
-      msgbufsize = 0;
-    } else if (msg_scrolled != 0 && !cmd_silent) {
-      msgbufsize = (size_t)((Rows - msg_row) * Columns - 1);
-    } else {
-      msgbufsize = (size_t)((Rows - msg_row - 1) * Columns + sc_col - 1);
-    }
-    if (msgbufsize < plen + off_len + SEARCH_STAT_BUF_LEN + 3) {
-      msgbufsize = plen + off_len + SEARCH_STAT_BUF_LEN + 3;
-    }
-  } else {
-    msgbufsize = plen + off_len + 3;
-  }
-
-  char *msgbuf = xmalloc(msgbufsize);
-  memset(msgbuf, ' ', msgbufsize);
-  size_t msgbuflen = msgbufsize - 1;
-  msgbuf[msgbuflen] = NUL;
-
-  if (!cmd_silent) {
-    ui_busy_start();
-    msgbuf[0] = (char)dirc;
-    if (utf_iscomposing_first(utf_ptr2char(p))) {
-      msgbuf[1] = ' ';
-      memmove(msgbuf + 2, p, plen);
-    } else {
-      memmove(msgbuf + 1, p, plen);
-    }
-    if (off_len > 0) {
-      memmove(msgbuf + plen + 1, off_buf, off_len);
-    }
-
-    char *trunc = msg_strtrunc(msgbuf, true);
-    if (trunc != NULL) {
-      xfree(msgbuf);
-      msgbuf = trunc;
-      msgbuflen = strlen(msgbuf);
-    }
-
-    if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
-      char *r = reverse_text(msgbuf);
-      xfree(msgbuf);
-      msgbuf = r;
-      msgbuflen = strlen(msgbuf);
-      while (*r == ' ') {
-        r++;
-      }
-      size_t pat_len = (size_t)(msgbuf + msgbuflen - r);
-      memmove(msgbuf, r, pat_len);
-      if ((size_t)(r - msgbuf) >= pat_len) {
-        memset(r, ' ', pat_len);
-      } else {
-        memset(msgbuf + pat_len, ' ', (size_t)(r - msgbuf));
-      }
-    }
-    msg_outtrans(msgbuf, 0, false);
-    msg_clr_eos();
-    msg_check();
-
-    gotocmdline(false);
-    ui_flush();
-    ui_busy_stop();
-    msg_nowait = true;
-  }
-
-  result.msgbuf = msgbuf;
-  result.msgbuflen = msgbuflen;
-  result.show_search_stats = !shortmess(SHM_SEARCHCOUNT) ? 1 : 0;
-
-  return result;
-}
-
-/// Pre-searchit character offset subtraction.
-/// This handles the "?pat?e+2" / "/pat/s-2" case.
-DoSearchPos nvim_do_search_pre_offset(linenr_T lnum, colnr_T col)
-{
-  extern int rs_get_search_offset_line(int idx);
-  extern int64_t rs_get_search_offset_off(int idx);
-  pos_T pos = { .lnum = lnum, .col = col, .coladd = 0 };
-  int64_t off = rs_get_search_offset_off(0);
-
-  if (!rs_get_search_offset_line(0) && off && pos.col < MAXCOL - 2) {
-    if (off > 0) {
-      int64_t c;
-      for (c = off; c; c--) {
-        if (decl(&pos) == -1) {
-          break;
-        }
-      }
-      if (c) {
-        pos.lnum = 0;
-        pos.col = MAXCOL;
-      }
-    } else {
-      int64_t c;
-      for (c = off; c; c++) {
-        if (incl(&pos) == -1) {
-          break;
-        }
-      }
-      if (c) {
-        pos.lnum = curbuf->b_ml.ml_line_count + 1;
-        pos.col = 0;
-      }
-    }
-  }
-
-  return (DoSearchPos){ pos.lnum, pos.col };
-}
-
-/// Post-searchit line/char offset addition.
-DoSearchPostOffset nvim_do_search_post_offset(linenr_T lnum, colnr_T col, int options,
-                                              int pat_has_semicolon)
-{
-  DoSearchPostOffset result = { lnum, col, 1, 0 };
-  pos_T pos = { .lnum = lnum, .col = col, .coladd = 0 };
-  pos_T org_pos = pos;
-
-  extern int rs_get_search_offset_line(int idx);
-  extern int64_t rs_get_search_offset_off(int idx);
-  int off_line = rs_get_search_offset_line(0);
-  int64_t off_off = rs_get_search_offset_off(0);
-
-  if (!(options & SEARCH_NOOF) || pat_has_semicolon) {
-    if (off_line) {
-      int64_t c = pos.lnum + off_off;
-      if (c < 1) {
-        pos.lnum = 1;
-      } else if (c > curbuf->b_ml.ml_line_count) {
-        pos.lnum = curbuf->b_ml.ml_line_count;
-      } else {
-        pos.lnum = (linenr_T)c;
-      }
-      pos.col = 0;
-      result.retval = 2;
-    } else if (pos.col < MAXCOL - 2) {
-      int64_t c = off_off;
-      if (c > 0) {
-        while (c-- > 0) {
-          if (incl(&pos) == -1) {
-            break;
-          }
-        }
-      } else {
-        while (c++ < 0) {
-          if (decl(&pos) == -1) {
-            break;
-          }
-        }
-      }
-    }
-    if (!equalpos(pos, org_pos)) {
-      result.has_offset = 1;
-    }
-  }
-
-  result.lnum = pos.lnum;
-  result.col = pos.col;
-  return result;
-}
-
-/// Check if search wrapped (show top/bot msg).
-int nvim_do_search_show_top_bot(int dirc, linenr_T pos_lnum, colnr_T pos_col)
-{
-  if (shortmess(SHM_SEARCH)) {
-    return 0;
-  }
-  pos_T pos = { .lnum = pos_lnum, .col = pos_col, .coladd = 0 };
-  if ((dirc == '/' && lt(pos, curwin->w_cursor))
-      || (dirc == '?' && lt(curwin->w_cursor, pos))) {
-    return 1;
-  }
-  return 0;
-}
-
-/// Set oap->inclusive if needed.
-void nvim_do_search_set_oap_inclusive(void *oap)
-{
-  // Read spats[0].off.end from Rust-owned state
-  extern int rs_get_search_offset_end(int idx);
-  if (oap != NULL && rs_get_search_offset_end(0)) {
-    ((oparg_T *)oap)->inclusive = true;
-  }
-}
-
-/// Fire EVENT_SEARCHWRAPPED autocmd.
-void nvim_do_search_autocmd_wrapped(void) { apply_autocmds(EVENT_SEARCHWRAPPED, NULL, NULL, false, NULL); }
 /// Show search stats (cmdline_search_stat).
 void nvim_do_search_show_stats(int dirc, linenr_T pos_lnum, colnr_T pos_col,
                                int show_top_bot, char *msgbuf, size_t msgbuflen,
@@ -1391,24 +1131,6 @@ void nvim_do_search_show_stats(int dirc, linenr_T pos_lnum, colnr_T pos_col,
                       SEARCH_STAT_DEF_TIMEOUT);
 }
 
-/// Emit E386 error.
-void nvim_do_search_emsg_e386(void) { emsg(_("E386: Expected '?' or '/'  after ';'")); }
-/// Emit e_noprevre error.
-void nvim_do_search_emsg_noprevre(void) { emsg(_(e_noprevre)); }
-/// Set pcmark and cursor for search result.
-void nvim_do_search_finish(int options, linenr_T lnum, colnr_T col)
-{
-  if (options & SEARCH_MARK) {
-    setpcmark();
-  }
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = col;
-  curwin->w_cursor.coladd = 0;
-  curwin->w_set_curswant = true;
-}
-
-/// Get cursor position for do_search start.
-DoSearchPos nvim_do_search_get_cursor(void) { return (DoSearchPos){ curwin->w_cursor.lnum, curwin->w_cursor.col }; }
 // findmatchlimit accessor functions
 
 /// Get ml_get(lnum) for curbuf.
@@ -1593,24 +1315,26 @@ void nvim_showmatch_beep(void) { vim_beep(kOptBoFlagShowmatch); }
 colnr_T nvim_search_get_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 /// incl() on a position passed by components.
 /// Updates *lnum, *col, *coladd in place.
-void nvim_search_incl_pos(int *lnum, int *col, int *coladd)
+int nvim_search_incl_pos(int *lnum, int *col, int *coladd)
 {
   pos_T pos = { *lnum, *col, *coladd };
-  incl(&pos);
+  int ret = incl(&pos);
   *lnum = pos.lnum;
   *col = pos.col;
   *coladd = pos.coladd;
+  return ret;
 }
 
 /// decl() on a position passed by components.
 /// Updates *lnum, *col, *coladd in place.
-void nvim_search_decl_pos(int *lnum, int *col, int *coladd)
+int nvim_search_decl_pos(int *lnum, int *col, int *coladd)
 {
   pos_T pos = { *lnum, *col, *coladd };
-  decl(&pos);
+  int ret = decl(&pos);
   *lnum = pos.lnum;
   *col = pos.col;
   *coladd = pos.coladd;
+  return ret;
 }
 
 /// Call searchit for current_search.
