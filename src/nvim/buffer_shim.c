@@ -32,10 +32,8 @@
 #include "nvim/extmark_defs.h"
 #include "nvim/file_search.h"
 #include "nvim/fileio.h"
-#include "nvim/fuzzy.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/indent.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/memline.h"
@@ -44,9 +42,7 @@
 #include "nvim/os/fs.h"
 #include "nvim/os/os.h"
 #include "nvim/path.h"
-#include "nvim/quickfix.h"
 #include "nvim/regexp.h"
-#include "nvim/runtime.h"
 #include "nvim/spell.h"
 #include "nvim/strings.h"
 #include "nvim/terminal.h"
@@ -54,18 +50,13 @@
 #include "nvim/syntax.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
-#include "nvim/cursor.h"
-#include "nvim/digraph.h"
-#include "nvim/drawscreen.h"
-#include "nvim/move.h"
 #include "nvim/normal.h"
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_eval.h"
-#include "nvim/getchar.h"
+#include "nvim/indent.h"
 #include "nvim/memory.h"
-#include "nvim/os/input.h"
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
@@ -105,9 +96,7 @@ int nvim_buf_get_bin(buf_T *buf) { return buf->b_p_bin; }
 buf_T *nvim_get_lastbuf(void) { return lastbuf; }
 buf_T *nvim_buf_get_prev(buf_T *buf) { return buf->b_prev; }
 buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
-/// Get the total sign HL metadata count for a buffer.
 uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0; }
-/// Get the total sign text metadata count for a buffer.
 uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignText) : 0; }
 int nvim_bufref_get_fnum(bufref_T *bufref) { return bufref->br_fnum; }
 int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_free_count; }
@@ -142,17 +131,12 @@ OptInt nvim_buf_get_p_sts(buf_T *buf) { return buf ? buf->b_p_sts : 0; }
 const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
 int nvim_buf_get_ml_mfp_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
 
-// Rust uses a 16-byte buffer to hold FileID; assert this is sufficient.
 _Static_assert(sizeof(FileID) <= 16, "FileID size exceeds Rust FILE_ID_SIZE");
-
 int nvim_buf_file_id_valid(buf_T *buf) { return buf->file_id_valid; }
 void nvim_buf_get_file_id(buf_T *buf, void *out) { *(FileID *)out = buf->file_id; }
-
 void nvim_buf_set_file_id_data(buf_T *buf, const void *file_id, bool valid)
 { if (valid) { buf->file_id = *(const FileID *)file_id; } buf->file_id_valid = valid; }
 
-/// Perform the body of buf_set_name: free old names, set new ffname, expand paths.
-/// Rust calls rs_buflist_findnr + this to implement buf_set_name.
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
   if (buf->b_sfname != buf->b_ffname) {
@@ -207,8 +191,7 @@ int nvim_try_getdigits(const char *s, int64_t *vers)
   return (int)(p - s);
 }
 
-// Regex accessor helpers
-
+// Regex helpers
 void *nvim_blfp_regex_compile(const char *pat, int magic)
 { regmatch_T *rmp = xmalloc(sizeof(regmatch_T)); rmp->regprog = vim_regcomp((char *)pat, magic); return rmp; }
 
@@ -221,32 +204,16 @@ void *nvim_bufname_regex_compile(char *pat)
 }
 
 int nvim_bufname_regex_valid(void *handle)
-{
-  if (handle == NULL) { return 0; }
-  return ((regmatch_T *)handle)->regprog != NULL ? 1 : 0;
-}
-
+{ return handle != NULL && ((regmatch_T *)handle)->regprog != NULL ? 1 : 0; }
 void nvim_bufname_regex_free(void *handle)
-{
-  if (handle == NULL) { return; }
-  regmatch_T *rmp = handle;
-  vim_regfree(rmp->regprog);
-  xfree(rmp);
-}
+{ if (handle == NULL) { return; } vim_regfree(((regmatch_T *)handle)->regprog); xfree(handle); }
 
 int nvim_curwin_get_p_diff(void) { return curwin->w_p_diff ? 1 : 0; }
-
-// Accessors for cmdwin migration
 int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
-
 bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }
 bool nvim_curbuf_has_b_p_fex(void) { return *curbuf->b_p_fex != NUL; }
 
-// buf_T option field offset table
-
-// Fill offset table for buf_T option fields indexed by OptIndex.
-// Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
-// Unhandled indices receive -1 (sentinel). len must equal kOptCount.
+// buf_T option field offset table (indexed by OptIndex, -1 = unhandled)
 void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
 {
   // Initialize all to -1 (unhandled)
@@ -348,82 +315,44 @@ void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
 }
 
 // buf_copy_options accessors
-
-/// Returns buf->b_p_initialized.
 int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
-/// Sets buf->b_p_initialized.
 void nvim_buf_set_b_p_initialized(buf_T *buf, int val) { buf->b_p_initialized = val != 0; }
-
-/// Sets buf->b_help.
 void nvim_buf_set_b_help(buf_T *buf, int val) { buf->b_help = val != 0; }
-
-/// CLEAR_FIELD(buf->b_p_script_ctx) -- zeroes the script_ctx array for the buffer.
 void nvim_buf_clear_b_p_script_ctx(buf_T *buf) { CLEAR_FIELD(buf->b_p_script_ctx); }
-
-/// Returns 1 if buf->b_p_bt[0] == 'h' (help buftype), else 0.
 int nvim_buf_get_b_p_bt_is_help(buf_T *buf) { return (buf->b_p_bt && buf->b_p_bt[0] == 'h') ? 1 : 0; }
-
 char *nvim_buf_save_and_clear_b_p_isk(buf_T *buf)
 { char *saved = buf->b_p_isk; buf->b_p_isk = NULL; return saved; }
-
-/// Restores b_p_isk from a previously saved pointer.
 void nvim_buf_restore_b_p_isk(buf_T *buf, char *saved) { buf->b_p_isk = saved; }
-
-/// buf->b_p_ro = false
 void nvim_buf_clear_b_p_ro(buf_T *buf) { buf->b_p_ro = false; }
-
-/// compile_cap_prog(&buf->b_s)
 void nvim_call_compile_cap_prog_buf(buf_T *buf) { compile_cap_prog(&buf->b_s); }
-
-/// tabstop_set(str, &buf->b_p_vsts_array)
 void nvim_call_tabstop_set_vsts(buf_T *buf, const char *str) { tabstop_set(str, &buf->b_p_vsts_array); }
-/// tabstop_set(str, &buf->b_p_vts_array)
 void nvim_call_tabstop_set_vts(buf_T *buf, const char *str) { tabstop_set(str, &buf->b_p_vts_array); }
-
-/// Returns buf->b_p_vts_array (for null check)
 int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array == NULL ? 1 : 0; }
-
-/// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 
-// Generic helpers for offset-based buf_T field writes (used by bufcopy.rs):
-
+// Generic helpers for offset-based buf_T field writes (used by bufcopy.rs)
 void nvim_buf_set_string_field(buf_T *buf, ptrdiff_t offset, const char *s)
 { *(char **)(((char *)buf) + offset) = xstrdup(s); }
-
 void nvim_buf_empty_string_field(buf_T *buf, ptrdiff_t offset)
 { *(char **)(((char *)buf) + offset) = empty_string_option; }
-
-/// Generic buf_T bool field setter: writes 0 or 1 via byte offset.
 void nvim_buf_set_bool_field(buf_T *buf, ptrdiff_t offset, int val) { *(int *)(((char *)buf) + offset) = val != 0; }
-
-/// Generic buf_T OptInt field setter: writes OptInt value via byte offset.
 void nvim_buf_set_optint_field(buf_T *buf, ptrdiff_t offset, OptInt val) { *(OptInt *)(((char *)buf) + offset) = val; }
-
-/// Generic buf_T OptInt field getter: reads OptInt value via byte offset.
 OptInt nvim_buf_get_optint_field(buf_T *buf, ptrdiff_t offset) { return *(OptInt *)(((char *)buf) + offset); }
-/// Generic buf_T bool field getter: reads bool field via byte offset (returns 0 or 1).
 int nvim_buf_get_bool_field(buf_T *buf, ptrdiff_t offset) { return (int)(*(bool *)(((char *)buf) + offset)); }
-/// Sets buf->b_p_fenc = xstrdup(p_fenc).
 void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
-
-/// Sets buf->b_p_bh = empty_string_option.
 void nvim_buf_set_b_p_bh_empty(buf_T *buf) { buf->b_p_bh = empty_string_option; }
-/// Sets buf->b_p_bt = empty_string_option.
 void nvim_buf_set_b_p_bt_empty(buf_T *buf) { buf->b_p_bt = empty_string_option; }
-
-// Setters for global-local fields that default to "no local value":
+// Setters for global-local fields that default to "no local value"
 void nvim_buf_set_b_p_ac_minus1(buf_T *buf) { buf->b_p_ac = -1; }
 void nvim_buf_set_b_p_ar_minus1(buf_T *buf) { buf->b_p_ar = -1; }
 void nvim_buf_set_b_p_ul_no_local(buf_T *buf) { buf->b_p_ul = NO_LOCAL_UNDOLEVEL; }
-// These also zero flag fields, so they cannot be replaced by the generic helper:
+// These also zero flag fields, so they cannot be replaced by the generic helper
 void nvim_buf_set_b_p_bkc_empty(buf_T *buf) { buf->b_p_bkc = empty_string_option; buf->b_bkc_flags = 0; }
 void nvim_buf_set_b_p_tc_empty(buf_T *buf) { buf->b_p_tc = empty_string_option; buf->b_tc_flags = 0; }
 void nvim_buf_set_b_p_cot_empty(buf_T *buf) { buf->b_p_cot = empty_string_option; buf->b_cot_flags = 0; }
-/// Sets buf->b_s.b_syn_isk = empty_string_option.
 void nvim_buf_set_b_s_syn_isk_empty(buf_T *buf) { buf->b_s.b_syn_isk = empty_string_option; }
 
-// Scalar field setters for nopaste/nobin variants:
+// Nopaste/nobin field setters
 void nvim_buf_set_b_p_ai_nopaste(buf_T *buf, int v) { buf->b_p_ai_nopaste = v != 0; }
 void nvim_buf_set_b_p_tw_nopaste(buf_T *buf, OptInt v) { buf->b_p_tw_nopaste = v; }
 void nvim_buf_set_b_p_tw_nobin(buf_T *buf, OptInt v) { buf->b_p_tw_nobin = v; }
@@ -433,7 +362,7 @@ void nvim_buf_set_b_p_et_nobin(buf_T *buf, int v) { buf->b_p_et_nobin = v != 0; 
 void nvim_buf_set_b_p_et_nopaste(buf_T *buf, int v) { buf->b_p_et_nopaste = v != 0; }
 void nvim_buf_set_b_p_ml_nobin(buf_T *buf, int v) { buf->b_p_ml_nobin = v != 0; }
 void nvim_buf_set_b_p_sts_nopaste(buf_T *buf, OptInt v) { buf->b_p_sts_nopaste = v; }
-// Per-buffer nopaste/nobin field getters (for paste restore in Rust)
+// Nopaste/nobin field getters
 int nvim_buf_get_b_p_ai_nopaste(buf_T *buf) { return (int)buf->b_p_ai_nopaste; }
 OptInt nvim_buf_get_b_p_tw_nopaste(buf_T *buf) { return buf->b_p_tw_nopaste; }
 OptInt nvim_buf_get_b_p_wm_nopaste(buf_T *buf) { return buf->b_p_wm_nopaste; }
@@ -445,32 +374,23 @@ void nvim_buf_set_b_p_vsts_raw(buf_T *buf, char *val) { buf->b_p_vsts = val; }
 int *volatile *nvim_buf_get_b_p_vsts_array_ptr(buf_T *buf) { return (int *volatile *)&buf->b_p_vsts_array; }
 void nvim_buf_set_b_p_ma(buf_T *buf, int v) { buf->b_p_ma = v != 0; }
 
-// String field setters using xstrdup (b_s substructure fields):
+// String field setters using xstrdup (b_s substructure fields)
 void nvim_buf_set_b_p_vsts_nopaste_dup(buf_T *buf, const char *s) { buf->b_p_vsts_nopaste = s ? xstrdup(s) : NULL; }
 void nvim_buf_set_b_s_spc_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spc = xstrdup(s); }
 void nvim_buf_set_b_s_spf_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spf = xstrdup(s); }
 void nvim_buf_set_b_s_spl_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spl = xstrdup(s); }
 void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xstrdup(s); }
-
-/// Set b_s.b_p_spo_flags from global spo_flags.
 void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags = spo_flags; }
 
-// lasttitle/lasticon statics and accessors
-
+// lasttitle/lasticon statics
 static char *lasttitle = NULL;
 static char *lasticon = NULL;
-
-/// Get lasttitle static variable.
 const char *nvim_buf_get_lasttitle(void) { return lasttitle; }
-/// Set lasttitle static variable (caller transfers ownership of s).
 void nvim_buf_set_lasttitle(char *s) { lasttitle = s; }
-/// Get lasticon static variable.
 const char *nvim_buf_get_lasticon(void) { return lasticon; }
-/// Set lasticon static variable (caller transfers ownership of s).
 void nvim_buf_set_lasticon(char *s) { lasticon = s; }
 
 // Extmark Accessor Functions
-
 MarkTree *nvim_buf_get_marktree(buf_T *buf) { return buf->b_marktree; }
 bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf) { return buf->deleted_bytes2; }
 void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val) { buf->deleted_bytes2 = val; }
@@ -479,8 +399,7 @@ void nvim_buf_set_prev_line_count(buf_T *buf, int val) { buf->b_prev_line_count 
 bool nvim_buf_signcols_get_autom(buf_T *buf) { return buf->b_signcols.autom; }
 void nvim_buf_signcols_clear(buf_T *buf) { buf->b_signcols.max = 0; CLEAR_FIELD(buf->b_signcols.count); }
 
-// WinInfo FFI accessor helpers (for Rust wininfo.rs)
-
+// WinInfo FFI accessor helpers
 size_t nvim_buf_wininfo_count(buf_T *buf) { return kv_size(buf->b_wininfo); }
 WinInfo *nvim_buf_wininfo_get(buf_T *buf, size_t i) { return kv_A(buf->b_wininfo, i); }
 win_T *nvim_wininfo_get_win(WinInfo *wip) { return wip->wi_win; }
@@ -489,23 +408,8 @@ bool nvim_wininfo_get_wo_diff(WinInfo *wip) { return wip->wi_opt.wo_diff; }
 int nvim_wininfo_get_changelistidx(WinInfo *wip) { return wip->wi_changelistidx; }
 fmark_T *nvim_wininfo_get_mark_ptr(WinInfo *wip) { return &wip->wi_mark; }
 bool nvim_wininfo_get_fold_manual(WinInfo *wip) { return wip->wi_fold_manual; }
-
-/// Returns true if wip->wi_win is a window in the current tab page.
 bool nvim_wininfo_win_in_curtab(WinInfo *wip)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wip->wi_win == wp) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Find and detach a WinInfo entry for win from buf->b_wininfo.
-/// If found: shifts the entry out of the vector and returns it
-///   (if copy_options && wi_optset: clears wi_opt and folds first).
-/// If not found: allocates a new WinInfo with wi_win=win and lnum forced to 1 if lnum==0.
-/// Returns non-NULL always.
+{ FOR_ALL_WINDOWS_IN_TAB(wp, curtab) { if (wip->wi_win == wp) { return true; } } return false; }
 WinInfo *nvim_buf_wininfo_find_and_detach(buf_T *buf, win_T *win, bool copy_options,
                                           linenr_T *lnum_inout)
 {
@@ -540,10 +444,6 @@ void nvim_wininfo_copy_from_win(WinInfo *wip, win_T *win)
 { copy_winopt(&win->w_onebuf_opt, &wip->wi_opt); wip->wi_fold_manual = win->w_fold_manual;
   rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds); wip->wi_optset = true; }
 
-/// get_winopts: apply WinInfo wip to curwin (copy opts + folds), or copy from win.
-/// Returns 0 if no matching wip (fall back to allbuf_opt),
-///         1 if copied from wip->wi_win (other window with same buffer),
-///         2 if copied from wip->wi_opt (saved options).
 int nvim_get_winopts_apply(WinInfo *wip, buf_T *buf)
 {
   if (wip == NULL) {
@@ -610,19 +510,9 @@ void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T chang
   }
 }
 
-/// Return true if "buf" is displayed in any window across all tabs.
 bool nvim_buf_is_in_any_window(buf_T *buf)
-{
-  FOR_ALL_TAB_WINDOWS(tab, win) {
-    if (win->w_buffer == buf) {
-      return true;
-    }
-  }
-  return false;
-}
+{ FOR_ALL_TAB_WINDOWS(tab, win) { if (win->w_buffer == buf) { return true; } } return false; }
 
-/// Free and clear b_sfname and b_ffname for "buf" (the "removing the name" branch).
-/// Accessor for Rust setfname.
 void nvim_buf_remove_fnames(buf_T *buf)
 {
   if (buf->b_sfname != buf->b_ffname) {
@@ -634,9 +524,6 @@ void nvim_buf_remove_fnames(buf_T *buf)
   buf->b_fname = buf->b_sfname;
 }
 
-/// Set b_ffname/b_sfname/b_fname for "buf", freeing any previous names.
-/// "sfname" is xstrdup'd (path_fix_case applied on case-insensitive systems).
-/// Accessor for Rust setfname.
 void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
 {
   char *sfname_copy = xstrdup(sfname);
@@ -658,16 +545,9 @@ void nvim_set_buf_opts_scratch(void)
   set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
   RESET_BINDING(curwin); }
 
-// Buffer navigation accessors
-
-/// Returns non-zero if 'switchbuf' has the "newtab" flag.
+// Buffer navigation and contents accessors
 int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; }
-
-/// Returns non-zero if the current buffer is empty.
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
-
-
-// buf_contents_changed accessors
 
 void *nvim_buf_prep_exarg_alloc(buf_T *buf)
 { exarg_T *ea = xcalloc(1, sizeof(exarg_T)); prep_exarg(ea, buf); return ea; }
