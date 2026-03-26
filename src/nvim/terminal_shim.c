@@ -70,25 +70,6 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 #include "nvim/vterm/vterm_keycodes_defs.h"
 #include "nvim/window.h"
 
-typedef struct {
-  VimState state;
-  Terminal *term;
-  int save_rd;          ///< saved value of RedrawingDisabled
-  bool close;
-  bool got_bsl;         ///< if the last input was <C-\>
-  bool got_bsl_o;       ///< if left terminal mode with <c-\><c-o>
-  bool cursor_visible;  ///< cursor's current visibility; ensures matched busy_start/stop UI events
-
-  // These fields remember the prior values of window options before entering terminal mode.
-  // Valid only when save_curwin_handle != 0.
-  handle_T save_curwin_handle;
-  bool save_w_p_cul;
-  char *save_w_p_culopt;
-  uint8_t save_w_p_culopt_flags;
-  int save_w_p_cuc;
-  OptInt save_w_p_so;
-  OptInt save_w_p_siso;
-} TerminalState;
 
 #include "terminal_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
@@ -181,7 +162,6 @@ struct terminal {
     int row, col;
     int shape;
     bool visible;  ///< Terminal wants to show cursor.
-                   ///< `TerminalState.cursor_visible` indicates whether it is actually shown.
     bool blink;
   } cursor;
 
@@ -447,18 +427,6 @@ static void terminal_check_cursor(void)
 }
 
 
-/// Function executed before each iteration of terminal mode.
-///
-/// @return:
-///           1 if the iteration should continue normally
-///           0 if the main loop must exit
-extern int rs_terminal_check(void *state);
-static int terminal_check(VimState *state) { return rs_terminal_check(state); }
-
-/// Processes one char of terminal-mode input.
-extern int rs_terminal_execute(void *state, int key);
-static int terminal_execute(VimState *state, int key) { return rs_terminal_execute(state, key); }
-
 extern void rs_terminal_destroy(Terminal **termpp);
 void terminal_destroy(Terminal **termpp) FUNC_ATTR_NONNULL_ALL { rs_terminal_destroy(termpp); }
 
@@ -469,9 +437,6 @@ static void terminal_send(Terminal *term, const char *data, size_t size)
 extern void rs_terminal_paste(int count, const String *y_array, size_t y_size);
 void terminal_paste(int count, String *y_array, size_t y_size)
   { rs_terminal_paste(count, y_array, y_size); }
-
-static void terminal_send_key(Terminal *term, int c)
-  { rs_terminal_send_key_impl(term, c); }
 
 extern void rs_terminal_receive_impl(void *term, const char *data, size_t len);
 void terminal_receive(Terminal *term, const char *data, size_t len)
