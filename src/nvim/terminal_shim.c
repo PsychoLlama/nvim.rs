@@ -241,13 +241,21 @@ struct terminal {
   size_t refcount;                  // reference count
 };
 
+// Rust vterm callback implementations (Phase 1)
+extern int rs_term_damage(VTermRect rect, void *data);
+extern int rs_term_moverect(VTermRect dest, VTermRect src, void *data);
+extern int rs_term_movecursor(VTermPos new_pos, VTermPos old_pos, int visible, void *data);
+extern int rs_term_bell_cb(void *user);
+extern int rs_term_theme_cb(bool *dark, void *user);
+extern void rs_term_output_callback(const char *s, size_t len, void *user_data);
+
 static VTermScreenCallbacks vterm_screen_callbacks = {
-  .damage = term_damage,
-  .moverect = term_moverect,
-  .movecursor = term_movecursor,
+  .damage = rs_term_damage,
+  .moverect = rs_term_moverect,
+  .movecursor = rs_term_movecursor,
   .settermprop = term_settermprop,
-  .bell = term_bell,
-  .theme = term_theme,
+  .bell = rs_term_bell_cb,
+  .theme = rs_term_theme_cb,
   .sb_pushline = term_sb_push,  // Called before a line goes offscreen.
   .sb_popline = term_sb_pop,
 };
@@ -431,11 +439,6 @@ void terminal_teardown(void)
   invalidated_terminals = (Set(ptr_t)) SET_INIT;
 }
 
-static void term_output_callback(const char *s, size_t len, void *user_data)
-{
-  terminal_send((Terminal *)user_data, s, len);
-}
-
 // public API {{{
 
 /// Initializes terminal properties, and triggers TermOpen.
@@ -469,7 +472,7 @@ void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   vterm_screen_set_unrecognised_fallbacks(term->vts, &vterm_fallbacks, term);
   vterm_screen_set_damage_merge(term->vts, VTERM_DAMAGE_SCROLL);
   vterm_screen_reset(term->vts, 1);
-  vterm_output_set_callback(term->vt, term_output_callback, term);
+  vterm_output_set_callback(term->vt, rs_term_output_callback, term);
 
   term->selection_buffer = xcalloc(SELECTIONBUF_SIZE, 1);
   vterm_state_set_selection_callbacks(state, &vterm_selection_callbacks, term,
@@ -1250,28 +1253,6 @@ void terminal_notify_theme(Terminal *term, bool dark)
 // }}}
 // libvterm callbacks {{{
 
-static int term_damage(VTermRect rect, void *data)
-{
-  invalidate_terminal(data, rect.start_row, rect.end_row);
-  return 1;
-}
-
-static int term_moverect(VTermRect dest, VTermRect src, void *data)
-{
-  invalidate_terminal(data, MIN(dest.start_row, src.start_row),
-                      MAX(dest.end_row, src.end_row));
-  return 1;
-}
-
-static int term_movecursor(VTermPos new_pos, VTermPos old_pos, int visible, void *data)
-{
-  Terminal *term = data;
-  term->cursor.row = new_pos.row;
-  term->cursor.col = new_pos.col;
-  invalidate_terminal(term, -1, -1);
-  return 1;
-}
-
 static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -1355,11 +1336,6 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
 
   return 1;
 }
-
-static int term_bell(void *data) { return rs_terminal_bell(); }
-static int term_theme(bool *dark, void *data)
-  FUNC_ATTR_NONNULL_ALL
-{ return rs_terminal_theme_query(dark); }
 
 /// Scrollback push handler: called just before a line goes offscreen (and libvterm will forget it),
 /// giving us a chance to store it.
@@ -1985,5 +1961,21 @@ static char *get_config_string(char *key)
 
 void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 char nvim_get_bg_char(void) { return *p_bg; }
+
+// C accessor functions for Rust callbacks (Phase 1)
+
+/// Accessor: queue a terminal for refresh (wraps `invalidate_terminal`).
+/// Called from Rust vterm callbacks.
+void nvim_terminal_invalidate(void *term, int start_row, int end_row)
+{
+  invalidate_terminal((Terminal *)term, start_row, end_row);
+}
+
+/// Accessor: send data to a terminal process (wraps `terminal_send`).
+/// Called from Rust output callback.
+void nvim_terminal_send(void *term, const char *data, size_t size)
+{
+  terminal_send((Terminal *)term, data, size);
+}
 
 // vim: foldmethod=marker

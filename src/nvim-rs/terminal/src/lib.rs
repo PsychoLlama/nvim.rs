@@ -2370,6 +2370,109 @@ pub extern "C" fn rs_terminal_should_filter_char(c: c_int, tpf_flags: c_int) -> 
     c_int::from((tpf_flags & flag) != 0)
 }
 
+// =============================================================================
+// Phase 1: VTerm Callback Implementations (migrated from terminal_shim.c)
+// =============================================================================
+
+extern "C" {
+    /// Wrapper: queue terminal for refresh (implemented in `terminal_shim.c`).
+    fn nvim_terminal_invalidate(term: *mut c_void, start_row: c_int, end_row: c_int);
+    /// Wrapper: send data to terminal process (implemented in `terminal_shim.c`).
+    fn nvim_terminal_send(term: *mut c_void, data: *const i8, size: usize);
+}
+
+/// `VTerm` damage callback -- invalidate the damaged rows.
+///
+/// Replaces `term_damage` in `terminal_shim.c`.
+///
+/// # Safety
+/// `data` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_damage(rect: VTermRect, data: *mut c_void) -> c_int {
+    unsafe { nvim_terminal_invalidate(data, rect.start_row, rect.end_row) };
+    1
+}
+
+/// `VTerm` moverect callback -- invalidate the union of source and dest rows.
+///
+/// Replaces `term_moverect` in `terminal_shim.c`.
+///
+/// # Safety
+/// `data` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_moverect(
+    dest: VTermRect,
+    src: VTermRect,
+    data: *mut c_void,
+) -> c_int {
+    let start = dest.start_row.min(src.start_row);
+    let end = dest.end_row.max(src.end_row);
+    unsafe { nvim_terminal_invalidate(data, start, end) };
+    1
+}
+
+/// `VTerm` movecursor callback -- update cursor pos and invalidate.
+///
+/// Replaces `term_movecursor` in `terminal_shim.c`.
+///
+/// # Safety
+/// `data` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_movecursor(
+    new_pos: VTermPos,
+    _old_pos: VTermPos,
+    _visible: c_int,
+    data: *mut c_void,
+) -> c_int {
+    let term = unsafe { TerminalHandle::from_ptr(data) };
+    if !term.is_null() {
+        let t = unsafe { term.as_mut() };
+        t.cursor.row = new_pos.row;
+        t.cursor.col = new_pos.col;
+    }
+    unsafe { nvim_terminal_invalidate(data, -1, -1) };
+    1
+}
+
+/// `VTerm` bell callback -- matches `int (*bell)(void *user)` signature.
+///
+/// Replaces the `term_bell` thin wrapper in `terminal_shim.c`.
+/// The `_user` parameter is ignored (bell doesn't need terminal context).
+#[no_mangle]
+pub extern "C" fn rs_term_bell_cb(_user: *mut c_void) -> c_int {
+    unsafe { nvim_vim_beep_term() };
+    1
+}
+
+/// `VTerm` theme callback -- matches `int (*theme)(bool *dark, void *user)` signature.
+///
+/// Replaces the `term_theme` thin wrapper in `terminal_shim.c`.
+/// The `_user` parameter is ignored.
+///
+/// # Safety
+/// `dark` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_theme_cb(dark: *mut bool, _user: *mut c_void) -> c_int {
+    if dark.is_null() {
+        return 0;
+    }
+    let bg = unsafe { nvim_get_bg_char() };
+    unsafe { *dark = bg == 0x64 }; // 0x64 == b'd' (dark)
+    1
+}
+
+/// `VTerm` output callback -- send output data to the terminal process.
+///
+/// Replaces `term_output_callback` in `terminal_shim.c`.
+///
+/// # Safety
+/// `user_data` must be a valid `Terminal *` pointer.
+/// `s` must be a valid pointer to `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_output_callback(s: *const i8, len: usize, user_data: *mut c_void) {
+    unsafe { nvim_terminal_send(user_data, s, len) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
