@@ -2828,6 +2828,12 @@ extern "C" {
     fn nvim_term_utf_ptr2char(s: *const i8) -> c_int;
     fn nvim_terminal_get_tpf_flags() -> c_int;
     fn nvim_curbuf_terminal() -> *mut c_void;
+    // Phase 10: terminal_destroy helpers
+    fn nvim_terminal_invalidated_check_del(term: *mut c_void) -> c_int;
+    fn nvim_buf_set_terminal(buf: *mut c_void, term: *mut c_void);
+    fn nvim_term_sb_destroy(sb: *mut c_void);
+    fn nvim_vterm_free(vt: *mut c_void);
+    fn nvim_multiqueue_free(q: *mut c_void);
 }
 
 /// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.
@@ -2960,6 +2966,55 @@ pub unsafe extern "C" fn rs_terminal_paste(count: c_int, y_array: *const NvimStr
     }
 
     unsafe { rs_vterm_keyboard_end_paste(vt) };
+}
+
+/// Destroy a Terminal instance, freeing all associated memory.
+///
+/// Replaces `terminal_destroy` in `terminal_shim.c`.
+///
+/// # Safety
+/// `termpp` must be a valid `Terminal **`. After return, `*termpp` is NULL if freed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_destroy(termpp: *mut *mut c_void) {
+    if termpp.is_null() {
+        return;
+    }
+    let term_ptr = unsafe { *termpp };
+    if term_ptr.is_null() {
+        return;
+    }
+    let term = unsafe { TerminalHandle::from_ptr(term_ptr) };
+    let t = unsafe { term.as_mut() };
+
+    let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
+    if !buf.is_null() {
+        t.buf_handle = 0;
+        unsafe { nvim_buf_set_terminal(buf, std::ptr::null_mut()) };
+    }
+
+    if t.refcount == 0 {
+        // Flush pending changes if this terminal was in the invalidated set.
+        unsafe { nvim_terminal_invalidated_check_del(term_ptr) };
+
+        // Free scrollback lines
+        for i in 0..t.sb_current {
+            let sbrow = unsafe { nvim_terminal_sb_get(term_ptr, i) };
+            unsafe { xfree(sbrow) };
+        }
+        unsafe { xfree(t.sb_buffer.cast::<c_void>()) };
+        unsafe { xfree(t.title.cast::<c_void>()) };
+        unsafe { xfree(t.selection_buffer.cast::<c_void>()) };
+        unsafe {
+            nvim_term_sb_destroy((&raw mut t.selection).cast::<c_void>());
+        };
+        unsafe {
+            nvim_term_sb_destroy((&raw mut t.termrequest_buffer).cast::<c_void>());
+        };
+        unsafe { nvim_vterm_free(t.vt) };
+        unsafe { nvim_multiqueue_free(t.pending.events) };
+        unsafe { xfree(term_ptr) };
+        unsafe { *termpp = std::ptr::null_mut() };
+    }
 }
 
 /// Queue a terminal instance for refresh (starts the refresh timer if needed).

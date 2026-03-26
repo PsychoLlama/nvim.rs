@@ -942,37 +942,11 @@ static int terminal_execute(VimState *state, int key)
 
 /// Frees the given Terminal structure and sets the caller storage to NULL (in the spirit of
 /// XFREE_CLEAR).
+extern void rs_terminal_destroy(Terminal **termpp);
 void terminal_destroy(Terminal **termpp)
   FUNC_ATTR_NONNULL_ALL
 {
-  Terminal *term = *termpp;
-  buf_T *buf = handle_get_buffer(term->buf_handle);
-  if (buf) {
-    term->buf_handle = 0;
-    buf->terminal = NULL;
-  }
-
-  if (!term->refcount) {
-    if (set_has(ptr_t, &invalidated_terminals, term)) {
-      // flush any pending changes to the buffer
-      block_autocmds();
-      refresh_terminal(term);
-      unblock_autocmds();
-      set_del(ptr_t, &invalidated_terminals, term);
-    }
-    for (size_t i = 0; i < term->sb_current; i++) {
-      xfree(term->sb_buffer[i]);
-    }
-    xfree(term->sb_buffer);
-    xfree(term->title);
-    xfree(term->selection_buffer);
-    kv_destroy(term->selection);
-    kv_destroy(term->termrequest_buffer);
-    vterm_free(term->vt);
-    multiqueue_free(term->pending.events);
-    xfree(term);
-    *termpp = NULL;  // coverity[dead-store]
-  }
+  rs_terminal_destroy((Terminal **)termpp);
 }
 
 extern void rs_terminal_do_send(void *term, const char *data, size_t size);
@@ -1432,6 +1406,23 @@ void *nvim_scrollback_line_cells_mut(void *sbrow) { return ((ScrollbackLine *)sb
 size_t nvim_vterm_screen_cell_size(void) { return sizeof(VTermScreenCell); }
 void nvim_vterm_cell_zero(void *cell_ptr)
   { VTermScreenCell *c = (VTermScreenCell *)cell_ptr; c->schar = 0; c->width = 1; }
+
+// terminal_destroy helpers
+int nvim_terminal_invalidated_check_del(void *term)
+{
+  if (set_has(ptr_t, &invalidated_terminals, (Terminal *)term)) {
+    block_autocmds();
+    refresh_terminal((Terminal *)term);
+    unblock_autocmds();
+    set_del(ptr_t, &invalidated_terminals, (Terminal *)term);
+    return 1;
+  }
+  return 0;
+}
+void nvim_buf_set_terminal(void *buf, void *term) { ((buf_T *)buf)->terminal = (Terminal *)term; }
+void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
+void nvim_vterm_free(void *vt) { vterm_free((VTerm *)vt); }
+void nvim_multiqueue_free(void *q) { multiqueue_free((MultiQueue *)q); }
 
 // terminal_get_line_attributes helpers
 int nvim_fetch_cell(void *term, int row, int col, void *cell)
