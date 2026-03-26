@@ -1,19 +1,19 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "nvim/ascii_defs.h"
+#include "nvim/charset.h"
+#include "nvim/indent.h"
+#include "nvim/plines.h"
 #include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/buffer_updates.h"
 #include "nvim/change.h"
-#include "nvim/charset.h"
 #include "nvim/cursor.h"
 #include "nvim/diff.h"
-#include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds_defs.h"
@@ -22,8 +22,6 @@
 #include "nvim/fold.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/indent.h"
-#include "nvim/indent_c.h"
 #include "nvim/insexpand.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
@@ -38,12 +36,8 @@
 #include "nvim/move.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/input.h"
-#include "nvim/os/time.h"
-#include "nvim/plines.h"
 #include "nvim/pos_defs.h"
 #include "nvim/search.h"
-#include "nvim/spell.h"
 #include "nvim/state.h"
 #include "nvim/state_defs.h"
 #include "nvim/strings.h"
@@ -115,7 +109,6 @@ int nvim_ml_append(linenr_T lnum, const char *line, colnr_T len, bool newfile)
 }
 
 void nvim_buf_inc_changedtick(buf_T *buf) { buf_inc_changedtick(buf); }
-
 
 char *nvim_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
 char *nvim_concat_str(const char *s1, const char *s2) { return concat_str(s1, s2); }
