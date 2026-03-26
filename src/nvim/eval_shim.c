@@ -3,14 +3,11 @@
 #include <assert.h>
 #include <string.h>
 
-#include "auto/config.h"
 #include "nvim/api/private/converter.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
-#include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
-#include "nvim/buffer_defs.h"
 #include "nvim/change.h"
 #include "nvim/channel.h"
 #include "nvim/charset.h"
@@ -29,25 +26,18 @@
 #include "nvim/event/time.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/garray.h"
-#include "nvim/garray_defs.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/hashtab.h"
 #include "nvim/highlight_group.h"
 #include "nvim/insexpand.h"
-#include "nvim/lib/queue_defs.h"
 #include "nvim/lua/executor.h"
-#include "nvim/macros_defs.h"
 #include "nvim/main.h"
-#include "nvim/map_defs.h"
 #include "nvim/mark.h"
-#include "nvim/mark_defs.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
-#include "nvim/msgpack_rpc/channel_defs.h"
 #include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
@@ -55,24 +45,18 @@
 #include "nvim/os/fs.h"
 #include "nvim/os/lang.h"
 #include "nvim/os/os.h"
-#include "nvim/os/os_defs.h"
 #include "nvim/os/shell.h"
-#include "nvim/pos_defs.h"
 #include "nvim/profile.h"
 #include "nvim/register.h"
 #include "nvim/runtime.h"
-#include "nvim/runtime_defs.h"
 #include "nvim/strings.h"
-#include "nvim/types_defs.h"
 #include "nvim/undo.h"
-#include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Rust FFI declarations (typval functions migrated to Rust)
+// Rust FFI declarations
 extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
 extern const char *tv_list_find_str(list_T *l, int n);
 extern bool tv2bool(const typval_T *tv);
-
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
@@ -85,6 +69,9 @@ extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len
 extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
+extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
+                              void *selfdict, typval_T *basetv, const char *lua_funcname);
+extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
 // Hashtab iteration: iterate over entries and call rs_set_ref_in_item for each
 bool nvim_eval_ht_foreach_di_tv(hashtab_T *ht, int copyID, ht_stack_T **ht_stack,
@@ -125,14 +112,11 @@ void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T 
 
 // C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
-
 int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 // C accessors for p_cpo save/restore (used by Rust pattern_match)
 static char *saved_eval_p_cpo;
-
 void nvim_eval_save_set_cpo(void) { saved_eval_p_cpo = p_cpo; p_cpo = empty_string_option; }
-
 void nvim_eval_restore_cpo(void) { p_cpo = saved_eval_p_cpo; }
 
 /// Restore p_cpo via set_option_value_give_err when the expression changed it
@@ -205,10 +189,6 @@ void eval_clear(void)
 }
 
 #endif
-
-extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
-                              void *selfdict, typval_T *basetv, const char *lua_funcname);
-extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
 char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return eval_one_expr_in_str(p, gap, evaluate); }
 
