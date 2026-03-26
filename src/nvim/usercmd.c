@@ -49,103 +49,49 @@ garray_T ucmds = { 0, 0, sizeof(ucmd_T), 4, NULL };
 
 
 // C accessor functions called by Rust (Phase 2)
-void nvim_uc_emsg(const char *msg)
-{
-  emsg(_(msg));
-}
+void nvim_uc_emsg(const char *msg) { emsg(_(msg)); }
 
-void nvim_uc_semsg_1(const char *fmt, const char *arg)
-{
-  semsg(_(fmt), arg);
-}
+void nvim_uc_semsg_1(const char *fmt, const char *arg) { semsg(_(fmt), arg); }
 
 
 
 // C accessor functions called by Rust (Phase 3)
-int nvim_uc_cmod_get_split(const void *cmod)
-{
-  return ((const cmdmod_T *)cmod)->cmod_split;
-}
+int nvim_uc_cmod_get_split(const void *cmod) { return ((const cmdmod_T *)cmod)->cmod_split; }
 
-int nvim_uc_cmod_get_flags(const void *cmod)
-{
-  return ((const cmdmod_T *)cmod)->cmod_flags;
-}
+int nvim_uc_cmod_get_flags(const void *cmod) { return ((const cmdmod_T *)cmod)->cmod_flags; }
 
-int nvim_uc_cmod_get_tab(const void *cmod)
-{
-  return ((const cmdmod_T *)cmod)->cmod_tab;
-}
+int nvim_uc_cmod_get_tab(const void *cmod) { return ((const cmdmod_T *)cmod)->cmod_tab; }
 
-int nvim_uc_cmod_get_verbose(const void *cmod)
-{
-  return ((const cmdmod_T *)cmod)->cmod_verbose;
-}
+int nvim_uc_cmod_get_verbose(const void *cmod) { return ((const cmdmod_T *)cmod)->cmod_verbose; }
 
 
 
 // C accessor functions called by Rust (Phase 4)
-const char *nvim_uc_eap_get_arg(const void *eap)
-{
-  return ((const exarg_T *)eap)->arg;
-}
+const char *nvim_uc_eap_get_arg(const void *eap) { return ((const exarg_T *)eap)->arg; }
 
-uint32_t nvim_uc_eap_get_argt(const void *eap)
-{
-  return ((const exarg_T *)eap)->argt;
-}
+uint32_t nvim_uc_eap_get_argt(const void *eap) { return ((const exarg_T *)eap)->argt; }
 
-int nvim_uc_eap_get_forceit(const void *eap)
-{
-  return ((const exarg_T *)eap)->forceit ? 1 : 0;
-}
+int nvim_uc_eap_get_forceit(const void *eap) { return ((const exarg_T *)eap)->forceit ? 1 : 0; }
 
-int nvim_uc_eap_get_line1(const void *eap)
-{
-  return (int)((const exarg_T *)eap)->line1;
-}
+int nvim_uc_eap_get_line1(const void *eap) { return (int)((const exarg_T *)eap)->line1; }
 
-int nvim_uc_eap_get_line2(const void *eap)
-{
-  return (int)((const exarg_T *)eap)->line2;
-}
+int nvim_uc_eap_get_line2(const void *eap) { return (int)((const exarg_T *)eap)->line2; }
 
-int nvim_uc_eap_get_addr_count(const void *eap)
-{
-  return ((const exarg_T *)eap)->addr_count;
-}
+int nvim_uc_eap_get_addr_count(const void *eap) { return ((const exarg_T *)eap)->addr_count; }
 
-int nvim_uc_eap_get_regname(const void *eap)
-{
-  return ((const exarg_T *)eap)->regname;
-}
+int nvim_uc_eap_get_regname(const void *eap) { return ((const exarg_T *)eap)->regname; }
 
-char **nvim_uc_eap_get_args(const void *eap)
-{
-  return ((const exarg_T *)eap)->args;
-}
+char **nvim_uc_eap_get_args(const void *eap) { return ((const exarg_T *)eap)->args; }
 
-size_t *nvim_uc_eap_get_arglens(const void *eap)
-{
-  return ((const exarg_T *)eap)->arglens;
-}
+size_t *nvim_uc_eap_get_arglens(const void *eap) { return ((const exarg_T *)eap)->arglens; }
 
-size_t nvim_uc_eap_get_argc(const void *eap)
-{
-  return ((const exarg_T *)eap)->argc;
-}
+size_t nvim_uc_eap_get_argc(const void *eap) { return ((const exarg_T *)eap)->argc; }
 
-const void *nvim_uc_get_cmdmod(void)
-{
-  return &cmdmod;
-}
+const void *nvim_uc_get_cmdmod(void) { return &cmdmod; }
 
 
 // C accessor functions called by Rust (Phase 5)
-void *nvim_uc_get_curbuf_ucmds(void)
-{
-  return &curbuf->b_ucmds;
-}
+void *nvim_uc_get_curbuf_ucmds(void) { return &curbuf->b_ucmds; }
 
 void nvim_uc_cmd_set_script_ctx(ucmd_T *cmd)
 {
@@ -166,15 +112,9 @@ char *nvim_uc_replace_termcodes(const char *rep, size_t replen)
 
 // C accessor functions called by Rust (Phase 6)
 
-int nvim_uc_ends_excmd(int c)
-{
-  return ends_excmd(c) ? 1 : 0;
-}
+int nvim_uc_ends_excmd(int c) { return ends_excmd(c) ? 1 : 0; }
 
-int nvim_uc_curbuf_is_null(void)
-{
-  return curbuf == NULL ? 1 : 0;
-}
+int nvim_uc_curbuf_is_null(void) { return curbuf == NULL ? 1 : 0; }
 
 
 /// List of names of address types.  Must be alphabetical for completion.
@@ -199,20 +139,11 @@ static struct {
 
 
 // C accessor functions called by Rust (Phase 7)
-int nvim_uc_eap_get_cmdidx(const void *eap)
-{
-  return (int)((const exarg_T *)eap)->cmdidx;
-}
+int nvim_uc_eap_get_cmdidx(const void *eap) { return (int)((const exarg_T *)eap)->cmdidx; }
 
-int nvim_uc_eap_get_useridx(const void *eap)
-{
-  return ((const exarg_T *)eap)->useridx;
-}
+int nvim_uc_eap_get_useridx(const void *eap) { return ((const exarg_T *)eap)->useridx; }
 
-ucmd_T *nvim_uc_prevwin_curwin_buf_ucmd(int idx)
-{
-  return USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, idx);
-}
+ucmd_T *nvim_uc_prevwin_curwin_buf_ucmd(int idx) { return USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, idx); }
 
 int nvim_uc_nlua_do_ucmd(ucmd_T *cmd, void *eap, int preview)
 {
@@ -240,57 +171,27 @@ void nvim_uc_do_cmdline_with_sctx(char *buf, void *eap, uint32_t argt, int sc_si
 
 // --- find_ucmd accessors ---
 
-void *nvim_uc_prevwin_curwin_buf_ucmds(void)
-{
-  return &prevwin_curwin()->w_buffer->b_ucmds;
-}
+void *nvim_uc_prevwin_curwin_buf_ucmds(void) { return &prevwin_curwin()->w_buffer->b_ucmds; }
 
-void nvim_uc_eap_set_cmdidx(void *eap, int cmdidx)
-{
-  ((exarg_T *)eap)->cmdidx = (cmdidx_T)cmdidx;
-}
+void nvim_uc_eap_set_cmdidx(void *eap, int cmdidx) { ((exarg_T *)eap)->cmdidx = (cmdidx_T)cmdidx; }
 
-void nvim_uc_eap_set_argt(void *eap, uint32_t argt)
-{
-  ((exarg_T *)eap)->argt = argt;
-}
+void nvim_uc_eap_set_argt(void *eap, uint32_t argt) { ((exarg_T *)eap)->argt = argt; }
 
-void nvim_uc_eap_set_useridx(void *eap, int useridx)
-{
-  ((exarg_T *)eap)->useridx = useridx;
-}
+void nvim_uc_eap_set_useridx(void *eap, int useridx) { ((exarg_T *)eap)->useridx = useridx; }
 
-void nvim_uc_eap_set_addr_type(void *eap, int addr_type)
-{
-  ((exarg_T *)eap)->addr_type = (cmd_addr_T)addr_type;
-}
+void nvim_uc_eap_set_addr_type(void *eap, int addr_type) { ((exarg_T *)eap)->addr_type = (cmd_addr_T)addr_type; }
 
-const char *nvim_uc_eap_get_cmd(const void *eap)
-{
-  return ((const exarg_T *)eap)->cmd;
-}
+const char *nvim_uc_eap_get_cmd(const void *eap) { return ((const exarg_T *)eap)->cmd; }
 
-int nvim_uc_ascii_isdigit(int c)
-{
-  return ascii_isdigit(c) ? 1 : 0;
-}
+int nvim_uc_ascii_isdigit(int c) { return ascii_isdigit(c) ? 1 : 0; }
 
 // --- expand_T (xp) accessors ---
 
-void nvim_uc_xp_set_context(void *xp, int context)
-{
-  ((expand_T *)xp)->xp_context = context;
-}
+void nvim_uc_xp_set_context(void *xp, int context) { ((expand_T *)xp)->xp_context = context; }
 
-void nvim_uc_xp_set_luaref(void *xp, int luaref)
-{
-  ((expand_T *)xp)->xp_luaref = luaref;
-}
+void nvim_uc_xp_set_luaref(void *xp, int luaref) { ((expand_T *)xp)->xp_luaref = luaref; }
 
-void nvim_uc_xp_set_arg(void *xp, char *arg)
-{
-  ((expand_T *)xp)->xp_arg = arg;
-}
+void nvim_uc_xp_set_arg(void *xp, char *arg) { ((expand_T *)xp)->xp_arg = arg; }
 
 void nvim_uc_xp_set_script_ctx(void *xp, const void *cmd)
 {
@@ -298,62 +199,32 @@ void nvim_uc_xp_set_script_ctx(void *xp, const void *cmd)
   ((expand_T *)xp)->xp_script_ctx.sc_lnum += SOURCING_LNUM;
 }
 
-void nvim_uc_xp_set_pattern(void *xp, char *pattern)
-{
-  ((expand_T *)xp)->xp_pattern = pattern;
-}
+void nvim_uc_xp_set_pattern(void *xp, char *pattern) { ((expand_T *)xp)->xp_pattern = pattern; }
 
 // --- uc_list accessors ---
 
 
-void nvim_uc_msg_puts_title(const char *s)
-{
-  msg_puts_title(_(s));
-}
+void nvim_uc_msg_puts_title(const char *s) { msg_puts_title(_(s)); }
 
 
-void nvim_uc_msg_puts(const char *s)
-{
-  msg_puts(s);
-}
+void nvim_uc_msg_puts(const char *s) { msg_puts(s); }
 
 
-void nvim_uc_msg(const char *s, int attr)
-{
-  msg(_(s), attr);
-}
+void nvim_uc_msg(const char *s, int attr) { msg(_(s), attr); }
 
-int nvim_uc_got_int(void)
-{
-  return got_int;
-}
+int nvim_uc_got_int(void) { return got_int; }
 
 
 
-int nvim_uc_get_p_verbose(void)
-{
-  return p_verbose;
-}
+int nvim_uc_get_p_verbose(void) { return p_verbose; }
 
-int nvim_uc_get_Columns(void)
-{
-  return Columns;
-}
+int nvim_uc_get_Columns(void) { return Columns; }
 
-char *nvim_uc_get_IObuff(void)
-{
-  return IObuff;
-}
+char *nvim_uc_get_IObuff(void) { return IObuff; }
 
-size_t nvim_uc_get_IOSIZE(void)
-{
-  return IOSIZE;
-}
+size_t nvim_uc_get_IOSIZE(void) { return IOSIZE; }
 
-char *nvim_uc_nlua_funcref_str(int luaref)
-{
-  return nlua_funcref_str(luaref, NULL);
-}
+char *nvim_uc_nlua_funcref_str(int luaref) { return nlua_funcref_str(luaref, NULL); }
 
 // --- set_context_in_user_cmdarg accessors ---
 
@@ -368,22 +239,13 @@ const char *nvim_uc_set_context_in_map_cmd(void *xp, char *arg, int forceit)
                                 CMD_map);
 }
 
-void nvim_uc_MB_PTR_ADV(const char **pp)
-{
-  MB_PTR_ADV(*pp);
-}
+void nvim_uc_MB_PTR_ADV(const char **pp) { MB_PTR_ADV(*pp); }
 
 // --- get_user_commands / get_user_command_name accessors ---
 
-int nvim_uc_prevwin_curwin_buf_ucmds_len(void)
-{
-  return prevwin_curwin()->w_buffer->b_ucmds.ga_len;
-}
+int nvim_uc_prevwin_curwin_buf_ucmds_len(void) { return prevwin_curwin()->w_buffer->b_ucmds.ga_len; }
 
-ucmd_T *nvim_uc_prevwin_curwin_buf_ucmd_ga(int i)
-{
-  return USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, i);
-}
+ucmd_T *nvim_uc_prevwin_curwin_buf_ucmd_ga(int i) { return USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, i); }
 
 
 /// Gets a map of maps describing user-commands defined for buffer `buf` or

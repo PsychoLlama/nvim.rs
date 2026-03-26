@@ -195,105 +195,55 @@ static void close_cb(uv_handle_t *handle)
   }
 }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Check if a Stream is closed (accessor for Rust).
-int nvim_stream_is_closed(Stream *stream)
-{
-  return stream->closed ? 1 : 0;
-}
+int nvim_stream_is_closed(Stream *stream) { return stream->closed ? 1 : 0; }
 
 /// Get the pending requests count from a Stream (accessor for Rust).
-size_t nvim_stream_pending_reqs(Stream *stream)
-{
-  return stream->pending_reqs;
-}
+size_t nvim_stream_pending_reqs(Stream *stream) { return stream->pending_reqs; }
 
 /// Get the file descriptor from a Stream (accessor for Rust).
-int nvim_stream_get_fd(Stream *stream)
-{
-  return stream->fd;
-}
+int nvim_stream_get_fd(Stream *stream) { return stream->fd; }
 
 /// Get the current memory usage from a Stream (accessor for Rust).
-size_t nvim_stream_get_curmem(Stream *stream)
-{
-  return stream->curmem;
-}
+size_t nvim_stream_get_curmem(Stream *stream) { return stream->curmem; }
 
 /// Get the maximum memory limit from a Stream (accessor for Rust).
-size_t nvim_stream_get_maxmem(Stream *stream)
-{
-  return stream->maxmem;
-}
+size_t nvim_stream_get_maxmem(Stream *stream) { return stream->maxmem; }
 
 /// Get the events queue from a Stream (accessor for Rust).
-MultiQueue *nvim_stream_get_events(Stream *stream)
-{
-  return stream->events;
-}
+MultiQueue *nvim_stream_get_events(Stream *stream) { return stream->events; }
 
 /// Increment pending requests count for a Stream (accessor for Rust).
-void nvim_stream_pending_reqs_inc(Stream *stream)
-{
-  stream->pending_reqs++;
-}
+void nvim_stream_pending_reqs_inc(Stream *stream) { stream->pending_reqs++; }
 
 /// Decrement pending requests count for a Stream (accessor for Rust).
-void nvim_stream_pending_reqs_dec(Stream *stream)
-{
-  stream->pending_reqs--;
-}
+void nvim_stream_pending_reqs_dec(Stream *stream) { stream->pending_reqs--; }
 
 /// Set the closed flag for a Stream (accessor for Rust).
-void nvim_stream_set_closed(Stream *stream, int closed)
-{
-  stream->closed = closed != 0;
-}
+void nvim_stream_set_closed(Stream *stream, int closed) { stream->closed = closed != 0; }
 
 /// Get the pending requests count for a Stream (accessor for Rust).
-size_t nvim_stream_get_pending_reqs(Stream *stream)
-{
-  return stream->pending_reqs;
-}
+size_t nvim_stream_get_pending_reqs(Stream *stream) { return stream->pending_reqs; }
 
 /// Set the maxmem field for a Stream (accessor for Rust).
-void nvim_stream_set_maxmem(Stream *stream, size_t maxmem)
-{
-  stream->maxmem = maxmem;
-}
+void nvim_stream_set_maxmem(Stream *stream, size_t maxmem) { stream->maxmem = maxmem; }
 
 /// Set the curmem field for a Stream (accessor for Rust).
-void nvim_stream_set_curmem(Stream *stream, size_t curmem)
-{
-  stream->curmem = curmem;
-}
+void nvim_stream_set_curmem(Stream *stream, size_t curmem) { stream->curmem = curmem; }
 
 /// Add to the curmem field for a Stream (accessor for Rust).
-void nvim_stream_curmem_add(Stream *stream, size_t amount)
-{
-  stream->curmem += amount;
-}
+void nvim_stream_curmem_add(Stream *stream, size_t amount) { stream->curmem += amount; }
 
 /// Subtract from the curmem field for a Stream (accessor for Rust).
-void nvim_stream_curmem_sub(Stream *stream, size_t amount)
-{
-  stream->curmem -= amount;
-}
+void nvim_stream_curmem_sub(Stream *stream, size_t amount) { stream->curmem -= amount; }
 
 /// Get the write callback from a Stream (accessor for Rust).
-void *nvim_stream_get_write_cb(Stream *stream)
-{
-  return (void *)stream->write_cb;
-}
+void *nvim_stream_get_write_cb(Stream *stream) { return (void *)stream->write_cb; }
 
 /// Set the write callback for a Stream (accessor for Rust).
-void nvim_stream_set_write_cb(Stream *stream, void *cb)
-{
-  stream->write_cb = (stream_write_cb)cb;
-}
+void nvim_stream_set_write_cb(Stream *stream, void *cb) { stream->write_cb = (stream_write_cb)cb; }
 
 /// Call the write callback if set (accessor for Rust).
 void nvim_stream_call_write_cb(Stream *stream, void *data, int status)
@@ -304,82 +254,43 @@ void nvim_stream_call_write_cb(Stream *stream, void *data, int status)
 }
 
 /// Get the cb_data from a Stream (accessor for Rust).
-void *nvim_stream_get_cb_data(Stream *stream)
-{
-  return stream->cb_data;
-}
+void *nvim_stream_get_cb_data(Stream *stream) { return stream->cb_data; }
 
 /// Set the cb_data for a Stream (accessor for Rust).
-void nvim_stream_set_cb_data(Stream *stream, void *data)
-{
-  stream->cb_data = data;
-}
+void nvim_stream_set_cb_data(Stream *stream, void *data) { stream->cb_data = data; }
 
 /// Get the fpos from a Stream (accessor for Rust).
-int64_t nvim_stream_get_fpos(Stream *stream)
-{
-  return stream->fpos;
-}
+int64_t nvim_stream_get_fpos(Stream *stream) { return stream->fpos; }
 
 /// Set the fpos for a Stream (accessor for Rust).
-void nvim_stream_set_fpos(Stream *stream, int64_t fpos)
-{
-  stream->fpos = fpos;
-}
+void nvim_stream_set_fpos(Stream *stream, int64_t fpos) { stream->fpos = fpos; }
 
 /// Add to the fpos for a Stream (accessor for Rust).
-void nvim_stream_fpos_add(Stream *stream, int64_t amount)
-{
-  stream->fpos += amount;
-}
+void nvim_stream_fpos_add(Stream *stream, int64_t amount) { stream->fpos += amount; }
 
 /// Get the close_cb from a Stream (accessor for Rust).
-void *nvim_stream_get_close_cb(Stream *stream)
-{
-  return (void *)stream->close_cb;
-}
+void *nvim_stream_get_close_cb(Stream *stream) { return (void *)stream->close_cb; }
 
 /// Set the close_cb for a Stream (accessor for Rust).
-void nvim_stream_set_close_cb(Stream *stream, void *cb)
-{
-  stream->close_cb = (stream_close_cb)cb;
-}
+void nvim_stream_set_close_cb(Stream *stream, void *cb) { stream->close_cb = (stream_close_cb)cb; }
 
 /// Get the close_cb_data from a Stream (accessor for Rust).
-void *nvim_stream_get_close_cb_data(Stream *stream)
-{
-  return stream->close_cb_data;
-}
+void *nvim_stream_get_close_cb_data(Stream *stream) { return stream->close_cb_data; }
 
 /// Set the close_cb_data for a Stream (accessor for Rust).
-void nvim_stream_set_close_cb_data(Stream *stream, void *data)
-{
-  stream->close_cb_data = data;
-}
+void nvim_stream_set_close_cb_data(Stream *stream, void *data) { stream->close_cb_data = data; }
 
 /// Get the internal_data from a Stream (accessor for Rust).
-void *nvim_stream_get_internal_data(Stream *stream)
-{
-  return stream->internal_data;
-}
+void *nvim_stream_get_internal_data(Stream *stream) { return stream->internal_data; }
 
 /// Set the internal_data for a Stream (accessor for Rust).
-void nvim_stream_set_internal_data(Stream *stream, void *data)
-{
-  stream->internal_data = data;
-}
+void nvim_stream_set_internal_data(Stream *stream, void *data) { stream->internal_data = data; }
 
 /// Get the internal_close_cb from a Stream (accessor for Rust).
-void *nvim_stream_get_internal_close_cb(Stream *stream)
-{
-  return (void *)stream->internal_close_cb;
-}
+void *nvim_stream_get_internal_close_cb(Stream *stream) { return (void *)stream->internal_close_cb; }
 
 /// Set the internal_close_cb for a Stream (accessor for Rust).
-void nvim_stream_set_internal_close_cb(Stream *stream, void *cb)
-{
-  stream->internal_close_cb = (stream_close_cb)cb;
-}
+void nvim_stream_set_internal_close_cb(Stream *stream, void *cb) { stream->internal_close_cb = (stream_close_cb)cb; }
 
 /// Call the close_cb if set (accessor for Rust).
 void nvim_stream_call_close_cb(Stream *stream)
@@ -398,13 +309,7 @@ void nvim_stream_call_internal_close_cb(Stream *stream)
 }
 
 /// Set the pending_reqs for a Stream (accessor for Rust).
-void nvim_stream_set_pending_reqs(Stream *stream, size_t pending_reqs)
-{
-  stream->pending_reqs = pending_reqs;
-}
+void nvim_stream_set_pending_reqs(Stream *stream, size_t pending_reqs) { stream->pending_reqs = pending_reqs; }
 
 /// Set the events queue for a Stream (accessor for Rust).
-void nvim_stream_set_events(Stream *stream, MultiQueue *events)
-{
-  stream->events = events;
-}
+void nvim_stream_set_events(Stream *stream, MultiQueue *events) { stream->events = events; }

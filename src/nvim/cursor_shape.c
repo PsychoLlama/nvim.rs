@@ -106,138 +106,60 @@ int cursor_mode_str2int(const char *mode)
 
 // Rust FFI accessor functions for shape_table
 
-int nvim_get_shape_table_shape(int idx)
-{
-  return (int)shape_table[idx].shape;
-}
+int nvim_get_shape_table_shape(int idx) { return (int)shape_table[idx].shape; }
 
-int nvim_get_shape_table_blinkon(int idx)
-{
-  return shape_table[idx].blinkon;
-}
+int nvim_get_shape_table_blinkon(int idx) { return shape_table[idx].blinkon; }
 
-int nvim_get_shape_table_id(int idx)
-{
-  return shape_table[idx].id;
-}
+int nvim_get_shape_table_id(int idx) { return shape_table[idx].id; }
 
-int nvim_get_shape_table_id_lm(int idx)
-{
-  return shape_table[idx].id_lm;
-}
+int nvim_get_shape_table_id_lm(int idx) { return shape_table[idx].id_lm; }
 
-int nvim_is_guicursor_empty(void)
-{
-  return *p_guicursor == NUL ? 1 : 0;
-}
+int nvim_is_guicursor_empty(void) { return *p_guicursor == NUL ? 1 : 0; }
 
 // Additional accessors for cursor_get_mode_idx
 
-int nvim_get_state(void)
-{
-  return State;
-}
+int nvim_get_state(void) { return State; }
 
-int nvim_get_finish_op(void)
-{
-  return finish_op ? 1 : 0;
-}
+int nvim_get_finish_op(void) { return finish_op ? 1 : 0; }
 
-int nvim_get_visual_active(void)
-{
-  return VIsual_active ? 1 : 0;
-}
+int nvim_get_visual_active(void) { return VIsual_active ? 1 : 0; }
 
-int nvim_get_visual_select(void)
-{
-  return VIsual_select ? 1 : 0;
-}
+int nvim_get_visual_select(void) { return VIsual_select ? 1 : 0; }
 
-char nvim_get_p_sel_first(void)
-{
-  return *p_sel;
-}
+char nvim_get_p_sel_first(void) { return *p_sel; }
 
-const char *nvim_get_shape_table_name(int idx)
-{
-  return shape_table[idx].full_name;
-}
+const char *nvim_get_shape_table_name(int idx) { return shape_table[idx].full_name; }
 
-const char *nvim_get_shape_table_short_name(int idx)
-{
-  return shape_table[idx].name;
-}
+const char *nvim_get_shape_table_short_name(int idx) { return shape_table[idx].name; }
 
-int nvim_get_shape_table_percentage(int idx)
-{
-  return shape_table[idx].percentage;
-}
+int nvim_get_shape_table_percentage(int idx) { return shape_table[idx].percentage; }
 
-int nvim_get_shape_table_blinkwait(int idx)
-{
-  return shape_table[idx].blinkwait;
-}
+int nvim_get_shape_table_blinkwait(int idx) { return shape_table[idx].blinkwait; }
 
-int nvim_get_shape_table_blinkoff(int idx)
-{
-  return shape_table[idx].blinkoff;
-}
+int nvim_get_shape_table_blinkoff(int idx) { return shape_table[idx].blinkoff; }
 
-int nvim_get_shape_table_used_for(int idx)
-{
-  return shape_table[idx].used_for;
-}
+int nvim_get_shape_table_used_for(int idx) { return shape_table[idx].used_for; }
 
 // Setter accessors for Rust FFI
 
-void nvim_set_shape_table_shape(int idx, int shape)
-{
-  shape_table[idx].shape = (CursorShape)shape;
-}
+void nvim_set_shape_table_shape(int idx, int shape) { shape_table[idx].shape = (CursorShape)shape; }
 
-void nvim_set_shape_table_percentage(int idx, int pct)
-{
-  shape_table[idx].percentage = pct;
-}
+void nvim_set_shape_table_percentage(int idx, int pct) { shape_table[idx].percentage = pct; }
 
-void nvim_set_shape_table_blinkwait(int idx, int val)
-{
-  shape_table[idx].blinkwait = val;
-}
+void nvim_set_shape_table_blinkwait(int idx, int val) { shape_table[idx].blinkwait = val; }
 
-void nvim_set_shape_table_blinkon(int idx, int val)
-{
-  shape_table[idx].blinkon = val;
-}
+void nvim_set_shape_table_blinkon(int idx, int val) { shape_table[idx].blinkon = val; }
 
-void nvim_set_shape_table_blinkoff(int idx, int val)
-{
-  shape_table[idx].blinkoff = val;
-}
+void nvim_set_shape_table_blinkoff(int idx, int val) { shape_table[idx].blinkoff = val; }
 
-void nvim_set_shape_table_id(int idx, int id)
-{
-  shape_table[idx].id = id;
-}
+void nvim_set_shape_table_id(int idx, int id) { shape_table[idx].id = id; }
 
-void nvim_set_shape_table_id_lm(int idx, int id)
-{
-  shape_table[idx].id_lm = id;
-}
+void nvim_set_shape_table_id_lm(int idx, int id) { shape_table[idx].id_lm = id; }
 
 // Additional accessors for parse_shape_opt
 
-const char *nvim_get_p_guicursor(void)
-{
-  return p_guicursor;
-}
+const char *nvim_get_p_guicursor(void) { return p_guicursor; }
 
-int nvim_syn_check_group(const char *name, size_t len)
-{
-  return syn_check_group(name, len);
-}
+int nvim_syn_check_group(const char *name, size_t len) { return syn_check_group(name, len); }
 
-void nvim_ui_mode_info_set(void)
-{
-  ui_mode_info_set();
-}
+void nvim_ui_mode_info_set(void) { ui_mode_info_set(); }

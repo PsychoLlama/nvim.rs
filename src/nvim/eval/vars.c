@@ -411,15 +411,9 @@ void evalvars_clear(void)
 }
 #endif
 
-int garbage_collect_globvars(int copyID)
-{
-  return rs_set_ref_in_ht(&globvarht, copyID, NULL);
-}
+int garbage_collect_globvars(int copyID) { return rs_set_ref_in_ht(&globvarht, copyID, NULL); }
 
-bool garbage_collect_vimvars(int copyID)
-{
-  return rs_set_ref_in_ht(&vimvarht, copyID, NULL);
-}
+bool garbage_collect_vimvars(int copyID) { return rs_set_ref_in_ht(&vimvarht, copyID, NULL); }
 
 bool garbage_collect_scriptvars(int copyID)
 {
@@ -578,10 +572,7 @@ list_T *eval_spell_expr(char *badword, char *expr)
 ///                        -1.
 ///
 /// @return -1 in case of error, score otherwise.
-int get_spellword(list_T *const list, const char **ret_word)
-{
-  return rs_get_spellword(list, ret_word);
-}
+int get_spellword(list_T *const list, const char **ret_word) { return rs_get_spellword(list, ret_word); }
 
 /// Prepare v: variable "idx" to be used.
 /// Save the current typeval in "save_tv" and clear it.
@@ -614,10 +605,7 @@ void restore_vimvar(int idx, typval_T *save_tv)
 }
 
 /// List Vim variables.
-static void list_vim_vars(int *first)
-{
-  list_hashtable_vars(&vimvarht, "v:", false, first);
-}
+static void list_vim_vars(int *first) { list_hashtable_vars(&vimvarht, "v:", false, first); }
 
 /// List script-local variables, if there is a script.
 static void list_script_vars(int *first)
@@ -631,19 +619,13 @@ static void list_script_vars(int *first)
 /// resulting string to "gap".  "p" points to the opening "{".
 /// When "evaluate" is false only skip over the expression.
 /// Return a pointer to the character after "}", NULL for an error.
-char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
-{
-  return rs_eval_one_expr_in_str(p, gap, evaluate);
-}
+char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return rs_eval_one_expr_in_str(p, gap, evaluate); }
 
 /// Evaluate all the Vim expressions {expr} in "str" and return the resulting
 /// string in allocated memory.  "{{" is reduced to "{" and "}}" to "}".
 /// Used for a heredoc assignment.
 /// Returns NULL for an error.
-static char *eval_all_expr_in_str(char *str)
-{
-  return rs_eval_all_expr_in_str(str);
-}
+static char *eval_all_expr_in_str(char *str) { return rs_eval_all_expr_in_str(str); }
 
 /// Get a list of lines from a HERE document. The here document is a list of
 /// lines surrounded by a marker.
@@ -1078,28 +1060,16 @@ void list_hashtable_vars(hashtab_T *ht, const char *prefix, int empty, int *firs
 }
 
 /// List global variables.
-static void list_glob_vars(int *first)
-{
-  list_hashtable_vars(&globvarht, "", true, first);
-}
+static void list_glob_vars(int *first) { list_hashtable_vars(&globvarht, "", true, first); }
 
 /// List buffer variables.
-static void list_buf_vars(int *first)
-{
-  list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, first);
-}
+static void list_buf_vars(int *first) { list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, first); }
 
 /// List window variables.
-static void list_win_vars(int *first)
-{
-  list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, first);
-}
+static void list_win_vars(int *first) { list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, first); }
 
 /// List tab page variables.
-static void list_tab_vars(int *first)
-{
-  list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first);
-}
+static void list_tab_vars(int *first) { list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first); }
 
 /// List variables in "arg".
 static const char *list_arg_vars(exarg_T *eap, const char *arg, int *first)
@@ -1356,10 +1326,7 @@ static char *ex_let_one(char *arg, typval_T *const tv, const bool copy, const bo
 }
 
 /// ":unlet[!] var1 ... " command.
-void ex_unlet(exarg_T *eap)
-{
-  ex_unletlock(eap, eap->arg, 0, eap->forceit ? GLV_QUIET : 0, do_unlet_var);
-}
+void ex_unlet(exarg_T *eap) { ex_unletlock(eap, eap->arg, 0, eap->forceit ? GLV_QUIET : 0, do_unlet_var); }
 
 /// ":lockvar" and ":unlockvar" commands
 void ex_lockvar(exarg_T *eap)
@@ -1686,10 +1653,7 @@ dict_T *get_globvar_dict(void)
 }
 
 /// @return  global variable hash table
-hashtab_T *get_globvar_ht(void)
-{
-  return &globvarht;
-}
+hashtab_T *get_globvar_ht(void) { return &globvarht; }
 
 /// @return  v: variable dictionary
 dict_T *get_vimvar_dict(void)
@@ -1716,10 +1680,7 @@ char *get_vim_var_name(const VimVarIndex idx)
 }
 
 /// Get typval_T v: variable value.
-typval_T *get_vim_var_tv(const VimVarIndex idx)
-{
-  return &vimvars[idx].vv_tv;
-}
+typval_T *get_vim_var_tv(const VimVarIndex idx) { return &vimvars[idx].vv_tv; }
 
 /// Get number v: variable value.
 varnumber_T get_vim_var_nr(const VimVarIndex idx) FUNC_ATTR_PURE
@@ -2459,10 +2420,7 @@ void unref_var_dict(dict_T *dict)
 /// Clean up a list of internal variables.
 /// Frees all allocated variables and the value they contain.
 /// Clears hashtab "ht", does not free it.
-void vars_clear(hashtab_T *ht)
-{
-  vars_clear_ext(ht, true);
-}
+void vars_clear(hashtab_T *ht) { vars_clear_ext(ht, true); }
 
 /// Like vars_clear(), but only free the value if "free_val" is true.
 void vars_clear_ext(hashtab_T *ht, bool free_val)
@@ -3359,16 +3317,10 @@ void f_gettabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "gettabwinvar()" function
-void f_gettabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getwinvar(argvars, rettv, 1);
-}
+void f_gettabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getwinvar(argvars, rettv, 1); }
 
 /// "getwinvar()" function
-void f_getwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getwinvar(argvars, rettv, 0);
-}
+void f_getwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getwinvar(argvars, rettv, 0); }
 
 /// "getbufvar()" function
 void f_getbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3415,16 +3367,10 @@ void f_settabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "settabwinvar()" function
-void f_settabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  setwinvar(argvars, 1);
-}
+void f_settabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { setwinvar(argvars, 1); }
 
 /// "setwinvar()" function
-void f_setwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  setwinvar(argvars, 0);
-}
+void f_setwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { setwinvar(argvars, 0); }
 
 /// "setbufvar()" function
 void f_setbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3464,27 +3410,16 @@ void f_setbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-// =============================================================================
 // Rust FFI Accessor Functions
-// =============================================================================
 
 /// Get the current buffer's variables dictionary.
-dict_T *nvim_curbuf_get_vars(void)
-{
-  return curbuf->b_vars;
-}
+dict_T *nvim_curbuf_get_vars(void) { return curbuf->b_vars; }
 
 /// Get the current window's variables dictionary.
-dict_T *nvim_curwin_get_vars(void)
-{
-  return curwin->w_vars;
-}
+dict_T *nvim_curwin_get_vars(void) { return curwin->w_vars; }
 
 /// Get the current tab's variables dictionary.
-dict_T *nvim_curtab_get_vars(void)
-{
-  return curtab->tp_vars;
-}
+dict_T *nvim_curtab_get_vars(void) { return curtab->tp_vars; }
 
 /// Get the hashtab from a dictionary.
 hashtab_T *nvim_dict_get_hashtab(dict_T *dict)
@@ -3496,22 +3431,13 @@ hashtab_T *nvim_dict_get_hashtab(dict_T *dict)
 }
 
 /// Check if a hashitem is empty.
-int nvim_hashitem_empty(hashitem_T *hi)
-{
-  return HASHITEM_EMPTY(hi);
-}
+int nvim_hashitem_empty(hashitem_T *hi) { return HASHITEM_EMPTY(hi); }
 
 /// Convert hashitem to dictitem.
-dictitem_T *nvim_hi2dictitem(hashitem_T *hi)
-{
-  return TV_DICT_HI2DI(hi);
-}
+dictitem_T *nvim_hi2dictitem(hashitem_T *hi) { return TV_DICT_HI2DI(hi); }
 
 /// Get the compat hashtab (for variables accessible without v: prefix).
-hashtab_T *nvim_get_compat_hashtab(void)
-{
-  return &compat_hashtab;
-}
+hashtab_T *nvim_get_compat_hashtab(void) { return &compat_hashtab; }
 
 /// Get script variables dictionary by script ID.
 dict_T *nvim_get_script_vars_dict(int sid)
@@ -3524,10 +3450,7 @@ dict_T *nvim_get_script_vars_dict(int sid)
 }
 
 /// Get current script context SID.
-int nvim_get_current_sctx_sid(void)
-{
-  return current_sctx.sc_sid;
-}
+int nvim_get_current_sctx_sid(void) { return current_sctx.sc_sid; }
 
 /// Get typval from dictitem.
 typval_T *nvim_dictitem_get_tv(dictitem_T *di)

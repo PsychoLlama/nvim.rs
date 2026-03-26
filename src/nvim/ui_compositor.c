@@ -95,34 +95,19 @@ void ui_comp_detach(RemoteUI *ui)
 }
 
 /// C accessor for composed_uis static.
-int nvim_get_composed_uis(void)
-{
-  return composed_uis;
-}
+int nvim_get_composed_uis(void) { return composed_uis; }
 
 /// C accessor for valid_screen static.
-int nvim_get_valid_screen(void)
-{
-  return valid_screen;
-}
+int nvim_get_valid_screen(void) { return valid_screen; }
 
 /// C setter for valid_screen static.
-void nvim_set_valid_screen(bool valid)
-{
-  valid_screen = valid;
-}
+void nvim_set_valid_screen(bool valid) { valid_screen = valid; }
 
 /// C accessor for 'writedelay' option.
-int64_t nvim_get_p_wd(void)
-{
-  return p_wd;
-}
+int64_t nvim_get_p_wd(void) { return p_wd; }
 
 // Layer stack accessors for Rust compositor crate
-size_t nvim_layers_size(void)
-{
-  return kv_size(layers);
-}
+size_t nvim_layers_size(void) { return kv_size(layers); }
 
 ScreenGrid *nvim_layers_get(size_t i)
 {
@@ -139,10 +124,7 @@ void nvim_layers_set(size_t i, ScreenGrid *grid)
   }
 }
 
-void nvim_layers_push(ScreenGrid *grid)
-{
-  kv_push(layers, grid);
-}
+void nvim_layers_push(ScreenGrid *grid) { kv_push(layers, grid); }
 
 void nvim_layers_pop(void)
 {
@@ -152,20 +134,11 @@ void nvim_layers_pop(void)
 }
 
 // Compositor buffer accessors
-schar_T *nvim_comp_get_linebuf_char(void)
-{
-  return linebuf;
-}
+schar_T *nvim_comp_get_linebuf_char(void) { return linebuf; }
 
-sattr_T *nvim_comp_get_linebuf_attr(void)
-{
-  return attrbuf;
-}
+sattr_T *nvim_comp_get_linebuf_attr(void) { return attrbuf; }
 
-size_t nvim_comp_get_linebuf_size(void)
-{
-  return bufsize;
-}
+size_t nvim_comp_get_linebuf_size(void) { return bufsize; }
 
 /// Resize the compositor line buffer.
 ///
@@ -190,66 +163,30 @@ void nvim_comp_set_chk_dimensions(int width, int height)
 #endif
 
 // Compositor state accessors
-ScreenGrid *nvim_get_curgrid(void)
-{
-  return curgrid;
-}
+ScreenGrid *nvim_get_curgrid(void) { return curgrid; }
 
-void nvim_set_curgrid(ScreenGrid *grid)
-{
-  curgrid = grid;
-}
+void nvim_set_curgrid(ScreenGrid *grid) { curgrid = grid; }
 
-int nvim_get_msg_sep_row(void)
-{
-  return msg_sep_row;
-}
+int nvim_get_msg_sep_row(void) { return msg_sep_row; }
 
-void nvim_set_msg_sep_row(int row)
-{
-  msg_sep_row = row;
-}
+void nvim_set_msg_sep_row(int row) { msg_sep_row = row; }
 
-schar_T nvim_get_msg_sep_char(void)
-{
-  return msg_sep_char;
-}
+schar_T nvim_get_msg_sep_char(void) { return msg_sep_char; }
 
-void nvim_set_msg_sep_char(schar_T c)
-{
-  msg_sep_char = c;
-}
+void nvim_set_msg_sep_char(schar_T c) { msg_sep_char = c; }
 
-int nvim_get_msg_current_row(void)
-{
-  return msg_current_row;
-}
+int nvim_get_msg_current_row(void) { return msg_current_row; }
 
-void nvim_set_msg_current_row(int row)
-{
-  msg_current_row = row;
-}
+void nvim_set_msg_current_row(int row) { msg_current_row = row; }
 
-bool nvim_get_msg_was_scrolled(void)
-{
-  return msg_was_scrolled;
-}
+bool nvim_get_msg_was_scrolled(void) { return msg_was_scrolled; }
 
-void nvim_set_msg_was_scrolled(bool scrolled)
-{
-  msg_was_scrolled = scrolled;
-}
+void nvim_set_msg_was_scrolled(bool scrolled) { msg_was_scrolled = scrolled; }
 
-ScreenGrid *nvim_get_msg_grid(void)
-{
-  return &msg_grid;
-}
+ScreenGrid *nvim_get_msg_grid(void) { return &msg_grid; }
 
 /// Check if curgrid is the default grid
-bool nvim_curgrid_is_default(void)
-{
-  return curgrid == &default_grid;
-}
+bool nvim_curgrid_is_default(void) { return curgrid == &default_grid; }
 
 // Grid position-based accessors for compositor (different from grid.c array accessors)
 
@@ -298,29 +235,13 @@ int nvim_hl_blend_attrs(int back_attr, int front_attr, bool *through)
 
 // Debug highlight accessors
 
-/// Get dbghl_normal
-int nvim_comp_get_dbghl_normal(void)
-{
-  return dbghl_normal;
-}
+int nvim_comp_get_dbghl_normal(void) { return dbghl_normal; }
 
-/// Get dbghl_clear
-int nvim_comp_get_dbghl_clear(void)
-{
-  return dbghl_clear;
-}
+int nvim_comp_get_dbghl_clear(void) { return dbghl_clear; }
 
-/// Get dbghl_composed
-int nvim_comp_get_dbghl_composed(void)
-{
-  return dbghl_composed;
-}
+int nvim_comp_get_dbghl_composed(void) { return dbghl_composed; }
 
-/// Get dbghl_recompose
-int nvim_comp_get_dbghl_recompose(void)
-{
-  return dbghl_recompose;
-}
+int nvim_comp_get_dbghl_recompose(void) { return dbghl_recompose; }
 
 /// C wrapper for ui_composed_call_grid_cursor_goto (generated function)
 void nvim_ui_composed_call_grid_cursor_goto(int grid_handle, int row, int col)

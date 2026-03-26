@@ -106,16 +106,10 @@ static const char e_missing_heredoc_end_marker_str[]
 static const char e_cannot_use_partial_with_dictionary_for_defer[]
   = N_("E1300: Cannot use a partial with dictionary for :defer");
 
-void func_init(void)
-{
-  hash_init(&func_hashtab);
-}
+void func_init(void) { hash_init(&func_hashtab); }
 
 /// Return the function hash table
-hashtab_T *func_tbl_get(void)
-{
-  return &func_hashtab;
-}
+hashtab_T *func_tbl_get(void) { return &func_hashtab; }
 
 /// Get one function argument.
 /// Return a pointer to after the type.
@@ -1381,10 +1375,7 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
 /// For the first we only count the name stored in func_hashtab as a reference,
 /// using function() does not count as a reference, because the function is
 /// looked up by name.
-static bool func_name_refcount(const char *name)
-{
-  return isdigit((uint8_t)(*name)) || *name == '<';
-}
+static bool func_name_refcount(const char *name) { return isdigit((uint8_t)(*name)) || *name == '<'; }
 
 /// Check the argument count for user function "fp".
 /// @return  FCERR_UNKNOWN if OK, FCERR_TOOFEW or FCERR_TOOMANY otherwise.
@@ -1450,15 +1441,9 @@ void restore_funccal(void)
   }
 }
 
-funccall_T *get_current_funccal(void)
-{
-  return current_funccal;
-}
+funccall_T *get_current_funccal(void) { return current_funccal; }
 
-void set_current_funccal(funccall_T *fc)
-{
-  current_funccal = fc;
-}
+void set_current_funccal(funccall_T *fc) { current_funccal = fc; }
 
 #if defined(EXITFREE)
 void free_all_functions(void)
@@ -1883,10 +1868,7 @@ int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
   return ret;
 }
 
-char *printable_func_name(ufunc_T *fp)
-{
-  return fp->uf_name_exp != NULL ? fp->uf_name_exp : fp->uf_name;
-}
+char *printable_func_name(ufunc_T *fp) { return fp->uf_name_exp != NULL ? fp->uf_name_exp : fp->uf_name; }
 
 /// When "prev_ht_changed" does not equal "ht_changed" give an error and return
 /// true.  Otherwise return false.
@@ -3783,10 +3765,7 @@ int func_has_ended(void *cookie)
 }
 
 /// @return  true if cookie indicates a function which "abort"s on errors.
-int func_has_abort(void *cookie)
-{
-  return ((funccall_T *)cookie)->fc_func->uf_flags & FC_ABORT;
-}
+int func_has_abort(void *cookie) { return ((funccall_T *)cookie)->fc_func->uf_flags & FC_ABORT; }
 
 /// Turn "dict.Func" into a partial for "Func" bound to "dict".
 /// Changes "rettv" in-place.
@@ -3848,28 +3827,16 @@ void make_partial(dict_T *const selfdict, typval_T *const rettv)
 }
 
 /// @return  the name of the executed function.
-char *func_name(void *cookie)
-{
-  return ((funccall_T *)cookie)->fc_func->uf_name;
-}
+char *func_name(void *cookie) { return ((funccall_T *)cookie)->fc_func->uf_name; }
 
 /// @return  the address holding the next breakpoint line for a funccall cookie.
-linenr_T *func_breakpoint(void *cookie)
-{
-  return &((funccall_T *)cookie)->fc_breakpoint;
-}
+linenr_T *func_breakpoint(void *cookie) { return &((funccall_T *)cookie)->fc_breakpoint; }
 
 /// @return  the address holding the debug tick for a funccall cookie.
-int *func_dbg_tick(void *cookie)
-{
-  return &((funccall_T *)cookie)->fc_dbg_tick;
-}
+int *func_dbg_tick(void *cookie) { return &((funccall_T *)cookie)->fc_dbg_tick; }
 
 /// @return  the nesting level for a funccall cookie.
-int func_level(void *cookie)
-{
-  return ((funccall_T *)cookie)->fc_level;
-}
+int func_level(void *cookie) { return ((funccall_T *)cookie)->fc_level; }
 
 // C accessor for current_funccal->fc_returned (used by Rust)
 int nvim_get_current_funccal_fc_returned(void) { return current_funccal->fc_returned; }
@@ -4190,15 +4157,9 @@ char *register_luafunc(LuaRef ref)
   return fp->uf_name;
 }
 
-// =============================================================================
 // Rust FFI Accessor Functions
-// =============================================================================
 
-/// Get ufunc flags.
-int nvim_ufunc_get_flags(const ufunc_T *fp)
-{
-  return fp ? fp->uf_flags : 0;
-}
+int nvim_ufunc_get_flags(const ufunc_T *fp) { return fp ? fp->uf_flags : 0; }
 
 /// Get minimum number of arguments for ufunc.
 int nvim_ufunc_get_min_args(const ufunc_T *fp)
@@ -4223,46 +4184,21 @@ int nvim_ufunc_get_max_args(const ufunc_T *fp)
 }
 
 /// Get function from partial.
-ufunc_T *nvim_partial_get_func(const partial_T *pt)
-{
-  return pt ? pt->pt_func : NULL;
-}
+ufunc_T *nvim_partial_get_func(const partial_T *pt) { return pt ? pt->pt_func : NULL; }
 
 /// Get argument count from partial.
-int nvim_partial_get_argc(const partial_T *pt)
-{
-  return pt ? pt->pt_argc : 0;
-}
+int nvim_partial_get_argc(const partial_T *pt) { return pt ? pt->pt_argc : 0; }
 
-/// Get dict from partial.
-dict_T *nvim_partial_get_dict(const partial_T *pt)
-{
-  return pt ? pt->pt_dict : NULL;
-}
+dict_T *nvim_partial_get_dict(const partial_T *pt) { return pt ? pt->pt_dict : NULL; }
 
 /// Check if partial was auto-created.
-int nvim_partial_is_auto(const partial_T *pt)
-{
-  return pt && pt->pt_auto;
-}
+int nvim_partial_is_auto(const partial_T *pt) { return pt && pt->pt_auto; }
 
-/// Get partial from funcexe.
-partial_T *nvim_funcexe_get_partial(const funcexe_T *fe)
-{
-  return fe ? fe->fe_partial : NULL;
-}
+partial_T *nvim_funcexe_get_partial(const funcexe_T *fe) { return fe ? fe->fe_partial : NULL; }
 
-/// Get selfdict from funcexe.
-dict_T *nvim_funcexe_get_selfdict(const funcexe_T *fe)
-{
-  return fe ? fe->fe_selfdict : NULL;
-}
+dict_T *nvim_funcexe_get_selfdict(const funcexe_T *fe) { return fe ? fe->fe_selfdict : NULL; }
 
-/// Get evaluate flag from funcexe.
-int nvim_funcexe_get_evaluate(const funcexe_T *fe)
-{
-  return fe ? fe->fe_evaluate : 0;
-}
+int nvim_funcexe_get_evaluate(const funcexe_T *fe) { return fe ? fe->fe_evaluate : 0; }
 
 /// Apply FuncUndefined autocmd and return result.
 int apply_autocmds_for_funcundefined(const char *name)
@@ -4271,202 +4207,86 @@ int apply_autocmds_for_funcundefined(const char *name)
 }
 
 /// Check if name is a builtin function (wrapper for static function).
-int nvim_is_builtin_function(const char *name, int len)
-{
-  return builtin_function(name, len);
-}
+int nvim_is_builtin_function(const char *name, int len) { return builtin_function(name, len); }
 
-// =============================================================================
 // Profile FFI Accessor Functions
-// =============================================================================
 
-ufunc_T *nvim_fc_get_func(const funccall_T *fc)
-{
-  return fc->fc_func;
-}
+ufunc_T *nvim_fc_get_func(const funccall_T *fc) { return fc->fc_func; }
 
-int nvim_ufunc_get_profiling(const ufunc_T *fp)
-{
-  return fp->uf_profiling;
-}
+int nvim_ufunc_get_profiling(const ufunc_T *fp) { return fp->uf_profiling; }
 
-void nvim_ufunc_set_profiling(ufunc_T *fp, int val)
-{
-  fp->uf_profiling = val;
-}
+void nvim_ufunc_set_profiling(ufunc_T *fp, int val) { fp->uf_profiling = val; }
 
-int nvim_ufunc_get_prof_initialized(const ufunc_T *fp)
-{
-  return fp->uf_prof_initialized;
-}
+int nvim_ufunc_get_prof_initialized(const ufunc_T *fp) { return fp->uf_prof_initialized; }
 
-void nvim_ufunc_set_prof_initialized(ufunc_T *fp, int val)
-{
-  fp->uf_prof_initialized = val;
-}
+void nvim_ufunc_set_prof_initialized(ufunc_T *fp, int val) { fp->uf_prof_initialized = val; }
 
-int nvim_ufunc_get_lines_len(const ufunc_T *fp)
-{
-  return fp->uf_lines.ga_len;
-}
+int nvim_ufunc_get_lines_len(const ufunc_T *fp) { return fp->uf_lines.ga_len; }
 
-int nvim_ufunc_get_tml_idx(const ufunc_T *fp)
-{
-  return fp->uf_tml_idx;
-}
+int nvim_ufunc_get_tml_idx(const ufunc_T *fp) { return fp->uf_tml_idx; }
 
-void nvim_ufunc_set_tml_idx(ufunc_T *fp, int val)
-{
-  fp->uf_tml_idx = val;
-}
+void nvim_ufunc_set_tml_idx(ufunc_T *fp, int val) { fp->uf_tml_idx = val; }
 
-int nvim_ufunc_get_tml_execed(const ufunc_T *fp)
-{
-  return fp->uf_tml_execed;
-}
+int nvim_ufunc_get_tml_execed(const ufunc_T *fp) { return fp->uf_tml_execed; }
 
-void nvim_ufunc_set_tml_execed(ufunc_T *fp, int val)
-{
-  fp->uf_tml_execed = val;
-}
+void nvim_ufunc_set_tml_execed(ufunc_T *fp, int val) { fp->uf_tml_execed = val; }
 
-proftime_T nvim_ufunc_get_tml_start(const ufunc_T *fp)
-{
-  return fp->uf_tml_start;
-}
+proftime_T nvim_ufunc_get_tml_start(const ufunc_T *fp) { return fp->uf_tml_start; }
 
-void nvim_ufunc_set_tml_start(ufunc_T *fp, proftime_T val)
-{
-  fp->uf_tml_start = val;
-}
+void nvim_ufunc_set_tml_start(ufunc_T *fp, proftime_T val) { fp->uf_tml_start = val; }
 
-proftime_T nvim_ufunc_get_tml_children(const ufunc_T *fp)
-{
-  return fp->uf_tml_children;
-}
+proftime_T nvim_ufunc_get_tml_children(const ufunc_T *fp) { return fp->uf_tml_children; }
 
-void nvim_ufunc_set_tml_children(ufunc_T *fp, proftime_T val)
-{
-  fp->uf_tml_children = val;
-}
+void nvim_ufunc_set_tml_children(ufunc_T *fp, proftime_T val) { fp->uf_tml_children = val; }
 
-proftime_T nvim_ufunc_get_tml_wait(const ufunc_T *fp)
-{
-  return fp->uf_tml_wait;
-}
+proftime_T nvim_ufunc_get_tml_wait(const ufunc_T *fp) { return fp->uf_tml_wait; }
 
-void nvim_ufunc_set_tml_wait(ufunc_T *fp, proftime_T val)
-{
-  fp->uf_tml_wait = val;
-}
+void nvim_ufunc_set_tml_wait(ufunc_T *fp, proftime_T val) { fp->uf_tml_wait = val; }
 
-void nvim_ufunc_set_tm_count(ufunc_T *fp, int val)
-{
-  fp->uf_tm_count = val;
-}
+void nvim_ufunc_set_tm_count(ufunc_T *fp, int val) { fp->uf_tm_count = val; }
 
-void nvim_ufunc_set_tm_total(ufunc_T *fp, proftime_T val)
-{
-  fp->uf_tm_total = val;
-}
+void nvim_ufunc_set_tm_total(ufunc_T *fp, proftime_T val) { fp->uf_tm_total = val; }
 
-void nvim_ufunc_set_tm_self(ufunc_T *fp, proftime_T val)
-{
-  fp->uf_tm_self = val;
-}
+void nvim_ufunc_set_tm_self(ufunc_T *fp, proftime_T val) { fp->uf_tm_self = val; }
 
 // Array element accessors for per-line profiling arrays
 
-int nvim_ufunc_get_tml_count_i(const ufunc_T *fp, int i)
-{
-  return fp->uf_tml_count[i];
-}
+int nvim_ufunc_get_tml_count_i(const ufunc_T *fp, int i) { return fp->uf_tml_count[i]; }
 
-void nvim_ufunc_set_tml_count_i(ufunc_T *fp, int i, int val)
-{
-  fp->uf_tml_count[i] = val;
-}
+void nvim_ufunc_set_tml_count_i(ufunc_T *fp, int i, int val) { fp->uf_tml_count[i] = val; }
 
-proftime_T nvim_ufunc_get_tml_total_i(const ufunc_T *fp, int i)
-{
-  return fp->uf_tml_total[i];
-}
+proftime_T nvim_ufunc_get_tml_total_i(const ufunc_T *fp, int i) { return fp->uf_tml_total[i]; }
 
-void nvim_ufunc_set_tml_total_i(ufunc_T *fp, int i, proftime_T val)
-{
-  fp->uf_tml_total[i] = val;
-}
+void nvim_ufunc_set_tml_total_i(ufunc_T *fp, int i, proftime_T val) { fp->uf_tml_total[i] = val; }
 
-proftime_T nvim_ufunc_get_tml_self_i(const ufunc_T *fp, int i)
-{
-  return fp->uf_tml_self[i];
-}
+proftime_T nvim_ufunc_get_tml_self_i(const ufunc_T *fp, int i) { return fp->uf_tml_self[i]; }
 
-void nvim_ufunc_set_tml_self_i(ufunc_T *fp, int i, proftime_T val)
-{
-  fp->uf_tml_self[i] = val;
-}
+void nvim_ufunc_set_tml_self_i(ufunc_T *fp, int i, proftime_T val) { fp->uf_tml_self[i] = val; }
 
 // Null checks for profiling arrays
-int nvim_ufunc_tml_count_is_null(const ufunc_T *fp)
-{
-  return fp->uf_tml_count == NULL;
-}
+int nvim_ufunc_tml_count_is_null(const ufunc_T *fp) { return fp->uf_tml_count == NULL; }
 
-int nvim_ufunc_tml_total_is_null(const ufunc_T *fp)
-{
-  return fp->uf_tml_total == NULL;
-}
+int nvim_ufunc_tml_total_is_null(const ufunc_T *fp) { return fp->uf_tml_total == NULL; }
 
-int nvim_ufunc_tml_self_is_null(const ufunc_T *fp)
-{
-  return fp->uf_tml_self == NULL;
-}
+int nvim_ufunc_tml_self_is_null(const ufunc_T *fp) { return fp->uf_tml_self == NULL; }
 
 // Array allocation
-void nvim_ufunc_alloc_tml_count(ufunc_T *fp, int len)
-{
-  fp->uf_tml_count = xcalloc((size_t)len, sizeof(int));
-}
+void nvim_ufunc_alloc_tml_count(ufunc_T *fp, int len) { fp->uf_tml_count = xcalloc((size_t)len, sizeof(int)); }
 
-void nvim_ufunc_alloc_tml_total(ufunc_T *fp, int len)
-{
-  fp->uf_tml_total = xcalloc((size_t)len, sizeof(proftime_T));
-}
+void nvim_ufunc_alloc_tml_total(ufunc_T *fp, int len) { fp->uf_tml_total = xcalloc((size_t)len, sizeof(proftime_T)); }
 
-void nvim_ufunc_alloc_tml_self(ufunc_T *fp, int len)
-{
-  fp->uf_tml_self = xcalloc((size_t)len, sizeof(proftime_T));
-}
+void nvim_ufunc_alloc_tml_self(ufunc_T *fp, int len) { fp->uf_tml_self = xcalloc((size_t)len, sizeof(proftime_T)); }
 
 // FUNCLINE null check
-int nvim_ufunc_funcline_is_null(const ufunc_T *fp, int idx)
-{
-  return FUNCLINE(fp, idx) == NULL;
-}
+int nvim_ufunc_funcline_is_null(const ufunc_T *fp, int idx) { return FUNCLINE(fp, idx) == NULL; }
 
 // Phase 5: child profiling accessors
-funccall_T *nvim_get_current_funccal(void)
-{
-  return get_current_funccal();
-}
+funccall_T *nvim_get_current_funccal(void) { return get_current_funccal(); }
 
-proftime_T nvim_fc_get_prof_child(const funccall_T *fc)
-{
-  return fc->fc_prof_child;
-}
+proftime_T nvim_fc_get_prof_child(const funccall_T *fc) { return fc->fc_prof_child; }
 
-void nvim_fc_set_prof_child(funccall_T *fc, proftime_T val)
-{
-  fc->fc_prof_child = val;
-}
+void nvim_fc_set_prof_child(funccall_T *fc, proftime_T val) { fc->fc_prof_child = val; }
 
-proftime_T nvim_ufunc_get_tm_children(const ufunc_T *fp)
-{
-  return fp->uf_tm_children;
-}
+proftime_T nvim_ufunc_get_tm_children(const ufunc_T *fp) { return fp->uf_tm_children; }
 
-void nvim_ufunc_set_tm_children(ufunc_T *fp, proftime_T val)
-{
-  fp->uf_tm_children = val;
-}
+void nvim_ufunc_set_tm_children(ufunc_T *fp, proftime_T val) { fp->uf_tm_children = val; }

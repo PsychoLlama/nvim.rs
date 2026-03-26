@@ -1041,16 +1041,10 @@ void f_maplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "maparg()" function
-void f_maparg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_maparg(argvars, rettv, true);
-}
+void f_maparg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_maparg(argvars, rettv, true); }
 
 /// "mapcheck()" function
-void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_maparg(argvars, rettv, false);
-}
+void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_maparg(argvars, rettv, false); }
 
 /// Add a mapping. Unlike @ref do_map this copies the string arguments, so
 /// static or read-only strings can be used.
@@ -1102,10 +1096,7 @@ free_rhs:
 }
 
 /// ":abbreviate" and friends.
-void ex_abbreviate(exarg_T *eap)
-{
-  do_exmap(eap, true);          // almost the same as mapping
-}
+void ex_abbreviate(exarg_T *eap) { do_exmap(eap, true); }  // almost the same as mapping
 
 /// ":map" and friends.
 void ex_map(exarg_T *eap)
@@ -1120,22 +1111,13 @@ void ex_map(exarg_T *eap)
 }
 
 /// ":unmap" and friends.
-void ex_unmap(exarg_T *eap)
-{
-  do_exmap(eap, false);
-}
+void ex_unmap(exarg_T *eap) { do_exmap(eap, false); }
 
 /// ":mapclear" and friends.
-void ex_mapclear(exarg_T *eap)
-{
-  rs_do_mapclear(eap->cmd, eap->arg, eap->forceit, false);
-}
+void ex_mapclear(exarg_T *eap) { rs_do_mapclear(eap->cmd, eap->arg, eap->forceit, false); }
 
 /// ":abclear" and friends.
-void ex_abclear(exarg_T *eap)
-{
-  rs_do_mapclear(eap->cmd, eap->arg, true, true);
-}
+void ex_abclear(exarg_T *eap) { rs_do_mapclear(eap->cmd, eap->arg, true, true); }
 
 /// Set, tweak, or remove a mapping in a mode. Acts as the implementation for
 /// functions like @ref nvim_buf_set_keymap.
@@ -1326,9 +1308,7 @@ ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena)
   return arena_take_arraybuilder(arena, &mappings);
 }
 
-// =============================================================================
 // Rust FFI accessor functions
-// =============================================================================
 
 // Hash table accessors (mapblock_T fields now accessed directly via Rust #[repr(C)])
 
@@ -1340,10 +1320,7 @@ mapblock_T *nvim_get_maphash_entry(int index)
   return maphash[index];
 }
 
-mapblock_T *nvim_get_first_abbr(void)
-{
-  return first_abbr;
-}
+mapblock_T *nvim_get_first_abbr(void) { return first_abbr; }
 
 mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index)
 {
@@ -1353,16 +1330,10 @@ mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index)
   return buf->b_maphash[index];
 }
 
-mapblock_T *nvim_buf_get_first_abbr(buf_T *buf)
-{
-  return buf ? buf->b_first_abbr : NULL;
-}
+mapblock_T *nvim_buf_get_first_abbr(buf_T *buf) { return buf ? buf->b_first_abbr : NULL; }
 
 // p_cpo accessor for Rust
-const char *nvim_mapping_get_p_cpo(void)
-{
-  return p_cpo;
-}
+const char *nvim_mapping_get_p_cpo(void) { return p_cpo; }
 
 // Static assertions for MapArguments struct layout (Rust #[repr(C)] must match)
 _Static_assert(sizeof(MapArguments) == 184,
@@ -1431,22 +1402,13 @@ void nvim_langmap_mapchar_set(int index, uint8_t value)
   }
 }
 
-int nvim_mapping_utf_ptr2char(const char *p)
-{
-  return utf_ptr2char(p);
-}
+int nvim_mapping_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 
-int nvim_mapping_utfc_ptr2len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
+int nvim_mapping_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
 
 // Write accessors for Rust mutation primitives (Phase 5)
 
-void nvim_mapping_emsg_invarg(void)
-{
-  emsg(_(e_invarg));
-}
+void nvim_mapping_emsg_invarg(void) { emsg(_(e_invarg)); }
 
 void nvim_set_maphash_entry(int index, mapblock_T *mp)
 {
@@ -1455,10 +1417,7 @@ void nvim_set_maphash_entry(int index, mapblock_T *mp)
   }
 }
 
-void nvim_set_first_abbr(mapblock_T *mp)
-{
-  first_abbr = mp;
-}
+void nvim_set_first_abbr(mapblock_T *mp) { first_abbr = mp; }
 
 void nvim_buf_set_maphash_entry(buf_T *buf, int index, mapblock_T *mp)
 {
@@ -1474,15 +1433,10 @@ void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp)
   }
 }
 
-// =========================================================================
 // Remaining C accessors for buf_do_map / do_map Rust migration
-// =========================================================================
 
 /// Wrapper for showmap() callable from Rust.
-void nvim_showmap(mapblock_T *mp, int local)
-{
-  showmap(mp, local != 0);
-}
+void nvim_showmap(mapblock_T *mp, int local) { showmap(mp, local != 0); }
 
 /// Wrapper for map_add() callable from Rust.
 /// @param is_buf_local  if true, uses buf->b_maphash / buf->b_first_abbr;
@@ -1535,16 +1489,10 @@ void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
 // nvim_msg_start already defined in other files — reuse those.
 
 /// Set the global no_abbr flag.
-void nvim_mapping_set_no_abbr(int val)
-{
-  no_abbr = val != 0;
-}
+void nvim_mapping_set_no_abbr(int val) { no_abbr = val != 0; }
 
 /// Get the buffer-local b_mapped_ctrl_c.
-int nvim_mapping_buf_get_mapped_ctrl_c(buf_T *buf)
-{
-  return buf ? buf->b_mapped_ctrl_c : 0;
-}
+int nvim_mapping_buf_get_mapped_ctrl_c(buf_T *buf) { return buf ? buf->b_mapped_ctrl_c : 0; }
 
 /// Set the buffer-local b_mapped_ctrl_c.
 void nvim_mapping_buf_set_mapped_ctrl_c(buf_T *buf, int val)
@@ -1555,10 +1503,7 @@ void nvim_mapping_buf_set_mapped_ctrl_c(buf_T *buf, int val)
 }
 
 /// Call msg_ext_set_kind("list_cmd") from Rust.
-void nvim_mapping_msg_ext_set_kind_list_cmd(void)
-{
-  msg_ext_set_kind("list_cmd");
-}
+void nvim_mapping_msg_ext_set_kind_list_cmd(void) { msg_ext_set_kind("list_cmd"); }
 
 /// Display "No mapping found" or "No abbreviation found" message.
 void nvim_mapping_msg_no_mapping(int is_abbr)
@@ -1571,10 +1516,7 @@ void nvim_mapping_msg_no_mapping(int is_abbr)
 }
 
 /// Wrapper for vim_iswordp().
-int nvim_vim_iswordp(const char *p)
-{
-  return vim_iswordp(p);
-}
+int nvim_vim_iswordp(const char *p) { return vim_iswordp(p); }
 
 /// Format a langmap error message into the provided buffer.
 /// msgid: 357 = E357 (matching missing), 358 = E358 (extra chars)
@@ -1589,18 +1531,10 @@ void nvim_langmap_format_error(char *buf, size_t buflen, int msgid, const char *
   }
 }
 
-// =============================================================================
 // Phase 8 C accessor functions for ex commands + abbreviation search
-// =============================================================================
 
 /// Unescape K_SPECIAL sequences in a string (for abbreviation matching).
-void nvim_mapping_vim_unescape_ks(char *s)
-{
-  vim_unescape_ks(s);
-}
+void nvim_mapping_vim_unescape_ks(char *s) { vim_unescape_ks(s); }
 
 /// Get the current editor State for abbreviation mode matching.
-int nvim_mapping_get_state(void)
-{
-  return State;
-}
+int nvim_mapping_get_state(void) { return State; }

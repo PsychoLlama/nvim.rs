@@ -34,109 +34,58 @@ extern const char *rs_skip_to_option_part(const char *p);
 extern bool cin_iscase(const char *s, bool strict);
 
 /// C accessor for p_paste global option.
-int nvim_get_p_paste(void)
-{
-  return p_paste;
-}
+int nvim_get_p_paste(void) { return p_paste; }
 
 /// C accessor for curbuf->b_p_cin (cindent option).
-int nvim_curbuf_get_p_cin(void)
-{
-  return curbuf->b_p_cin;
-}
+int nvim_curbuf_get_p_cin(void) { return curbuf->b_p_cin; }
 
 /// C accessor for whether curbuf->b_p_inde is non-empty.
-int nvim_curbuf_get_inde_nonempty(void)
-{
-  return *curbuf->b_p_inde != NUL;
-}
+int nvim_curbuf_get_inde_nonempty(void) { return *curbuf->b_p_inde != NUL; }
 
 /// C accessor for curbuf->b_p_si (smartindent option).
-int nvim_curbuf_get_p_si(void)
-{
-  return curbuf->b_p_si;
-}
+int nvim_curbuf_get_p_si(void) { return curbuf->b_p_si; }
 
 /// C accessor for curbuf->b_ind_hash_comment (# comment indentation).
-int nvim_curbuf_get_ind_hash_comment(void)
-{
-  return curbuf->b_ind_hash_comment;
-}
+int nvim_curbuf_get_ind_hash_comment(void) { return curbuf->b_ind_hash_comment; }
 
 /// C accessor for curbuf->b_p_lisp (lisp option).
-int nvim_curbuf_get_p_lisp(void)
-{
-  return curbuf->b_p_lisp;
-}
+int nvim_curbuf_get_p_lisp(void) { return curbuf->b_p_lisp; }
 
 /// C accessor for curbuf->b_p_inde (indentexpr) as pointer.
-const char *nvim_curbuf_get_inde_ptr(void)
-{
-  return curbuf->b_p_inde;
-}
+const char *nvim_curbuf_get_inde_ptr(void) { return curbuf->b_p_inde; }
 
 /// C accessor for curbuf->b_p_lop (lispoptions).
-const char *nvim_curbuf_get_p_lop(void)
-{
-  return curbuf->b_p_lop;
-}
+const char *nvim_curbuf_get_p_lop(void) { return curbuf->b_p_lop; }
 
 /// C accessor for curbuf->b_p_lw (lispwords local).
-const char *nvim_curbuf_get_p_lw(void)
-{
-  return curbuf->b_p_lw;
-}
+const char *nvim_curbuf_get_p_lw(void) { return curbuf->b_p_lw; }
 
 /// C accessor for global p_lispwords.
-const char *nvim_get_p_lispwords(void)
-{
-  return p_lispwords;
-}
+const char *nvim_get_p_lispwords(void) { return p_lispwords; }
 
 /// C accessor for in_cinkeys function (for Rust FFI).
-bool nvim_in_cinkeys(int keytyped, int when, bool line_is_empty)
-{
-  return in_cinkeys(keytyped, when, line_is_empty);
-}
+bool nvim_in_cinkeys(int keytyped, int when, bool line_is_empty) { return in_cinkeys(keytyped, when, line_is_empty); }
 
 // Phase 2 C accessors
 /// C accessor for curwin->w_cursor.lnum.
-int nvim_cindent_curwin_get_cursor_lnum(void)
-{
-  return curwin->w_cursor.lnum;
-}
+int nvim_cindent_curwin_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
 /// C accessor for curbuf->b_ind_maxparen.
-int nvim_cindent_curbuf_get_ind_maxparen(void)
-{
-  return curbuf->b_ind_maxparen;
-}
+int nvim_cindent_curbuf_get_ind_maxparen(void) { return curbuf->b_ind_maxparen; }
 
 /// C accessor for curbuf->b_p_cinw (cinwords option).
-const char *nvim_cindent_curbuf_get_cinw(void)
-{
-  return curbuf->b_p_cinw;
-}
+const char *nvim_cindent_curbuf_get_cinw(void) { return curbuf->b_p_cinw; }
 
 /// C accessor for ml_get(lnum).
-const char *nvim_cindent_ml_get(int lnum)
-{
-  return ml_get(lnum);
-}
+const char *nvim_cindent_ml_get(int lnum) { return ml_get(lnum); }
 
 /// C accessor for get_indent_lnum(lnum).
-int nvim_cindent_get_indent_lnum(int lnum)
-{
-  return get_indent_lnum(lnum);
-}
+int nvim_cindent_get_indent_lnum(int lnum) { return get_indent_lnum(lnum); }
 
 extern void rs_parse_cino(const char *cino, int sw, CindentOptions *opts);
 
 /// C accessor for curbuf->b_p_cinsd (cinscopedecls option).
-const char *nvim_cindent_curbuf_get_cinsd(void)
-{
-  return curbuf->b_p_cinsd;
-}
+const char *nvim_cindent_curbuf_get_cinsd(void) { return curbuf->b_p_cinsd; }
 
 // Phase 3 C accessors
 
@@ -154,10 +103,7 @@ FindMatchResult nvim_cindent_findmatchlimit(int what, int flags, int64_t maxtrav
 }
 
 /// C accessor for ml_get_pos: get string at (lnum, col) and return pointer offset by col.
-const char *nvim_cindent_ml_get_pos_lnum_col(int lnum, int col)
-{
-  return ml_get(lnum) + col;
-}
+const char *nvim_cindent_ml_get_pos_lnum_col(int lnum, int col) { return ml_get(lnum) + col; }
 
 /// C accessor for getvcol.
 int nvim_cindent_getvcol(int lnum, int col)
@@ -171,10 +117,7 @@ int nvim_cindent_getvcol(int lnum, int col)
 }
 
 /// C accessor for curwin->w_cursor.col.
-int nvim_cindent_curwin_get_cursor_col(void)
-{
-  return curwin->w_cursor.col;
-}
+int nvim_cindent_curwin_get_cursor_col(void) { return curwin->w_cursor.col; }
 
 /// C accessor to set curwin->w_cursor.
 void nvim_cindent_curwin_set_cursor(int lnum, int col)
@@ -184,34 +127,19 @@ void nvim_cindent_curwin_set_cursor(int lnum, int col)
 }
 
 /// C accessor for curbuf->b_ind_maxcomment.
-int nvim_cindent_curbuf_get_ind_maxcomment(void)
-{
-  return curbuf->b_ind_maxcomment;
-}
+int nvim_cindent_curbuf_get_ind_maxcomment(void) { return curbuf->b_ind_maxcomment; }
 
 /// C accessor for curbuf->b_ml.ml_line_count.
-int nvim_cindent_curbuf_get_ml_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
+int nvim_cindent_curbuf_get_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
 /// C accessor for curbuf->b_ind_cpp_baseclass.
-int nvim_cindent_curbuf_get_ind_cpp_baseclass(void)
-{
-  return curbuf->b_ind_cpp_baseclass;
-}
+int nvim_cindent_curbuf_get_ind_cpp_baseclass(void) { return curbuf->b_ind_cpp_baseclass; }
 
 /// C accessor for get_indent().
-int nvim_cindent_get_indent(void)
-{
-  return get_indent();
-}
+int nvim_cindent_get_indent(void) { return get_indent(); }
 
 /// C accessor for get_cursor_line_ptr().
-const char *nvim_cindent_get_cursor_line_ptr(void)
-{
-  return get_cursor_line_ptr();
-}
+const char *nvim_cindent_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
 
 extern FindMatchResult rs_find_start_comment(int ind_maxcomment);
 extern bool cin_isscopedecl(const char *p);

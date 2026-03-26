@@ -200,22 +200,13 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 
 
 /// Set v:lnum variable.
-void nvim_stl_set_vv_lnum(int64_t lnum)
-{
-  set_vim_var_nr(VV_LNUM, lnum);
-}
+void nvim_stl_set_vv_lnum(int64_t lnum) { set_vim_var_nr(VV_LNUM, lnum); }
 
 /// Set v:relnum variable.
-void nvim_stl_set_vv_relnum(int64_t relnum)
-{
-  set_vim_var_nr(VV_RELNUM, relnum);
-}
+void nvim_stl_set_vv_relnum(int64_t relnum) { set_vim_var_nr(VV_RELNUM, relnum); }
 
 /// Get wp->w_p_stc (statuscolumn option).
-const char *nvim_stl_win_get_p_stc(win_T *wp)
-{
-  return wp->w_p_stc;
-}
+const char *nvim_stl_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 
 /// Call build_stl_str_hl for statuscolumn rendering.
 /// Returns width.
@@ -232,40 +223,22 @@ int nvim_stl_build_stl_str_hl(win_T *wp, char *buf, int buflen, const char *stc,
 }
 
 /// Get window statuscol click defs pointer.
-StlClickDefinition *nvim_stl_win_get_statuscol_click_defs(win_T *wp)
-{
-  return wp->w_statuscol_click_defs;
-}
+StlClickDefinition *nvim_stl_win_get_statuscol_click_defs(win_T *wp) { return wp->w_statuscol_click_defs; }
 
 /// Get window statuscol click defs size.
-size_t nvim_stl_win_get_statuscol_click_defs_size(win_T *wp)
-{
-  return wp->w_statuscol_click_defs_size;
-}
+size_t nvim_stl_win_get_statuscol_click_defs_size(win_T *wp) { return wp->w_statuscol_click_defs_size; }
 
 /// Set window statuscol click defs.
-void nvim_stl_win_set_statuscol_click_defs(win_T *wp, StlClickDefinition *defs)
-{
-  wp->w_statuscol_click_defs = defs;
-}
+void nvim_stl_win_set_statuscol_click_defs(win_T *wp, StlClickDefinition *defs) { wp->w_statuscol_click_defs = defs; }
 
 /// Set window statuscol click defs size.
-void nvim_stl_win_set_statuscol_click_defs_size(win_T *wp, size_t size)
-{
-  wp->w_statuscol_click_defs_size = size;
-}
+void nvim_stl_win_set_statuscol_click_defs_size(win_T *wp, size_t size) { wp->w_statuscol_click_defs_size = size; }
 
 /// Get stcp->width.
-int nvim_stl_stcp_get_width(statuscol_T *stcp)
-{
-  return stcp->width;
-}
+int nvim_stl_stcp_get_width(statuscol_T *stcp) { return stcp->width; }
 
 /// Get stcp->hlrec pointer address (for passing to build_stl_str_hl).
-stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp)
-{
-  return &stcp->hlrec;
-}
+stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp) { return &stcp->hlrec; }
 
 
 
@@ -326,10 +299,7 @@ int nvim_stl_was_set_insecurely(win_T *wp, int opt_idx, int opt_scope)
 }
 
 /// Get buf_spname result, or NULL.
-const char *nvim_stl_buf_spname(buf_T *buf)
-{
-  return buf_spname(buf);
-}
+const char *nvim_stl_buf_spname(buf_T *buf) { return buf_spname(buf); }
 
 /// Call home_replace + trans_characters to fill the provided buffer.
 void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dstlen)
@@ -370,34 +340,18 @@ void nvim_stl_clamp_cursor(win_T *wp)
 }
 
 /// Get global state: updating_screen flag.
-int nvim_stl_get_updating_screen(void)
-{
-  return updating_screen ? 1 : 0;
-}
+int nvim_stl_get_updating_screen(void) { return updating_screen ? 1 : 0; }
 
 /// Set global state: redraw_not_allowed flag.
-void nvim_stl_set_redraw_not_allowed(int val)
-{
-  redraw_not_allowed = val ? true : false;
-}
+void nvim_stl_set_redraw_not_allowed(int val) { redraw_not_allowed = val ? true : false; }
 
 /// Get global state: redraw_not_allowed flag.
-int nvim_stl_get_redraw_not_allowed(void)
-{
-  return redraw_not_allowed ? 1 : 0;
-}
+int nvim_stl_get_redraw_not_allowed(void) { return redraw_not_allowed ? 1 : 0; }
 
 /// Save and get KeyTyped value.
-int nvim_stl_get_KeyTyped(void)
-{
-  return KeyTyped ? 1 : 0;
-}
+int nvim_stl_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
 
-/// Set KeyTyped value.
-void nvim_stl_set_KeyTyped(int val)
-{
-  KeyTyped = val ? true : false;
-}
+void nvim_stl_set_KeyTyped(int val) { KeyTyped = val ? true : false; }
 
 
 /// Set an option to empty string on error (SID_ERROR).
@@ -408,10 +362,7 @@ void nvim_stl_set_option_empty(int opt_idx, int opt_scope)
 
 
 /// Get the ML_EMPTY flag for a buffer.
-int nvim_stl_buf_ml_empty(buf_T *buf)
-{
-  return (buf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
-}
+int nvim_stl_buf_ml_empty(buf_T *buf) { return (buf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0; }
 
 /// Get window cursor lnum (clamped to line count).
 int nvim_stl_win_get_clamped_lnum(win_T *wp)
@@ -449,23 +400,13 @@ int nvim_stl_showcmd_matches_opt(int opt_idx)
 }
 
 /// Get showcmd_buf contents.
-const char *nvim_stl_get_showcmd_buf(void)
-{
-  return showcmd_buf;
-}
+const char *nvim_stl_get_showcmd_buf(void) { return showcmd_buf; }
 
-/// Get vim_var_nr value.
-int64_t nvim_stl_get_vim_var_nr(int vv_idx)
-{
-  return get_vim_var_nr(vv_idx);
-}
+int64_t nvim_stl_get_vim_var_nr(int vv_idx) { return get_vim_var_nr(vv_idx); }
 
 
 /// Get wp->w_maxscwidth (sign column setting).
-int nvim_stl_win_get_maxscwidth(win_T *wp)
-{
-  return (int)wp->w_maxscwidth;
-}
+int nvim_stl_win_get_maxscwidth(win_T *wp) { return (int)wp->w_maxscwidth; }
 
 /// Get stcp->sattrs[0].text[0] != 0 (has sign text).
 int nvim_stl_stcp_has_sign_text(statuscol_T *stcp)
@@ -475,10 +416,7 @@ int nvim_stl_stcp_has_sign_text(statuscol_T *stcp)
 }
 
 /// Compute fold column width.
-int nvim_stl_compute_foldcolumn(win_T *wp)
-{
-  return compute_foldcolumn(wp, 0);
-}
+int nvim_stl_compute_foldcolumn(win_T *wp) { return compute_foldcolumn(wp, 0); }
 
 /// Fill fold column into buf. Returns bytes written.
 int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, char *buf, int buflen)
@@ -497,16 +435,10 @@ int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, ch
 }
 
 /// Check use_cursor_line_highlight for a line.
-int nvim_stl_use_cursor_line_hl(win_T *wp, int lnum)
-{
-  return use_cursor_line_highlight(wp, (linenr_T)lnum) ? 1 : 0;
-}
+int nvim_stl_use_cursor_line_hl(win_T *wp, int lnum) { return use_cursor_line_highlight(wp, (linenr_T)lnum) ? 1 : 0; }
 
 /// Describe sign text into a buffer. Returns bytes written.
-int nvim_stl_describe_sign_text(char *buf, schar_T *text)
-{
-  return (int)describe_sign_text(buf, text);
-}
+int nvim_stl_describe_sign_text(char *buf, schar_T *text) { return (int)describe_sign_text(buf, text); }
 
 /// Get stcp->sign_cul_id.
 int nvim_stl_stcp_get_sign_cul_id(statuscol_T *stcp)
@@ -558,28 +490,16 @@ _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 
 /// Check if wildmenu is showing and UI does not have kUIWildmenu.
 /// Returns true if statusline redraw should be blocked.
-int nvim_stl_wildmenu_blocking(void)
-{
-  return wild_menu_showing != 0 && !ui_has(kUIWildmenu);
-}
+int nvim_stl_wildmenu_blocking(void) { return wild_menu_showing != 0 && !ui_has(kUIWildmenu); }
 
 /// Get global p_wbr (winbar) option string.
-const char *nvim_stl_get_p_wbr(void)
-{
-  return p_wbr;
-}
+const char *nvim_stl_get_p_wbr(void) { return p_wbr; }
 
 /// Get wp->w_p_stl (window-local statusline option).
-const char *nvim_stl_win_get_p_stl(win_T *wp)
-{
-  return wp->w_p_stl;
-}
+const char *nvim_stl_win_get_p_stl(win_T *wp) { return wp->w_p_stl; }
 
 /// Get global p_stl (statusline option).
-const char *nvim_stl_get_p_stl(void)
-{
-  return p_stl;
-}
+const char *nvim_stl_get_p_stl(void) { return p_stl; }
 
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 _Static_assert(HLF_C == 21, "HLF_C must be 21");
@@ -714,23 +634,14 @@ int nvim_stl_getvvcol_cursor(win_T *wp)
 }
 
 /// Get first char of cursor line in buffer (0 if empty).
-int nvim_stl_ml_get_buf_first_char(win_T *wp)
-{
-  return (int)(uint8_t)(*ml_get_buf(wp->w_buffer, wp->w_cursor.lnum));
-}
+int nvim_stl_ml_get_buf_first_char(win_T *wp) { return (int)(uint8_t)(*ml_get_buf(wp->w_buffer, wp->w_cursor.lnum)); }
 
 
 /// Check if cursor lnum > line count (invalid position).
-int nvim_stl_win_cursor_invalid(win_T *wp)
-{
-  return wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count ? 1 : 0;
-}
+int nvim_stl_win_cursor_invalid(win_T *wp) { return wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count ? 1 : 0; }
 
 /// Start grid line on msg_grid_adj at given row.
-void nvim_stl_msg_grid_line_start(int row)
-{
-  grid_line_start(&msg_grid_adj, row);
-}
+void nvim_stl_msg_grid_line_start(int row) { grid_line_start(&msg_grid_adj, row); }
 
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY must be 0x01");
 _Static_assert(kUIMessages == 4, "kUIMessages must be 4");
@@ -743,10 +654,7 @@ void nvim_stl_set_redraw_tabline(int val) { redraw_tabline = val ? true : false;
 
 
 /// Start grid line on default_gridview at given row.
-void nvim_stl_default_grid_line_start(int row)
-{
-  grid_line_start(&default_gridview, row);
-}
+void nvim_stl_default_grid_line_start(int row) { grid_line_start(&default_gridview, row); }
 
 
 /// Get tab_page_click_defs_size.

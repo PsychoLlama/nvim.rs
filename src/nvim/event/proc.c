@@ -577,231 +577,118 @@ static void on_proc_stream_close(Stream *stream, void *data)
   decref(proc);
 }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Get the status field from a Proc (accessor for Rust).
-int nvim_proc_get_status(Proc *proc)
-{
-  return proc->status;
-}
+int nvim_proc_get_status(Proc *proc) { return proc->status; }
 
 /// Get the stopped_time field from a Proc (accessor for Rust).
-uint64_t nvim_proc_get_stopped_time(Proc *proc)
-{
-  return proc->stopped_time;
-}
+uint64_t nvim_proc_get_stopped_time(Proc *proc) { return proc->stopped_time; }
 
 /// Get the pid field from a Proc (accessor for Rust).
-int nvim_proc_get_pid(Proc *proc)
-{
-  return proc->pid;
-}
+int nvim_proc_get_pid(Proc *proc) { return proc->pid; }
 
 /// Set the pid field of a Proc (accessor for Rust).
-void nvim_proc_set_pid(Proc *proc, int pid)
-{
-  proc->pid = pid;
-}
+void nvim_proc_set_pid(Proc *proc, int pid) { proc->pid = pid; }
 
 /// Get the refcount field from a Proc (accessor for Rust).
-int nvim_proc_get_refcount(Proc *proc)
-{
-  return proc->refcount;
-}
+int nvim_proc_get_refcount(Proc *proc) { return proc->refcount; }
 
 /// Check if a Proc is closed (accessor for Rust).
-int nvim_proc_is_closed(Proc *proc)
-{
-  return proc->closed ? 1 : 0;
-}
+int nvim_proc_is_closed(Proc *proc) { return proc->closed ? 1 : 0; }
 
 /// Set the status field of a Proc (accessor for Rust).
-void nvim_proc_set_status(Proc *proc, int status)
-{
-  proc->status = status;
-}
+void nvim_proc_set_status(Proc *proc, int status) { proc->status = status; }
 
 /// Get the loop field from a Proc (accessor for Rust).
-Loop *nvim_proc_get_loop(Proc *proc)
-{
-  return proc->loop;
-}
+Loop *nvim_proc_get_loop(Proc *proc) { return proc->loop; }
 
 /// Get the type field from a Proc (accessor for Rust).
-int nvim_proc_get_type(Proc *proc)
-{
-  return (int)proc->type;
-}
+int nvim_proc_get_type(Proc *proc) { return (int)proc->type; }
 
 /// Get the detach field from a Proc (accessor for Rust).
-int nvim_proc_get_detach(Proc *proc)
-{
-  return proc->detach ? 1 : 0;
-}
+int nvim_proc_get_detach(Proc *proc) { return proc->detach ? 1 : 0; }
 
 /// Set the detach field of a Proc (accessor for Rust).
-void nvim_proc_set_detach(Proc *proc, int detach)
-{
-  proc->detach = detach != 0;
-}
+void nvim_proc_set_detach(Proc *proc, int detach) { proc->detach = detach != 0; }
 
 /// Get the events queue from a Proc (accessor for Rust).
-MultiQueue *nvim_proc_get_events(Proc *proc)
-{
-  return proc->events;
-}
+MultiQueue *nvim_proc_get_events(Proc *proc) { return proc->events; }
 
 /// Set the events queue of a Proc (accessor for Rust).
-void nvim_proc_set_events(Proc *proc, MultiQueue *events)
-{
-  proc->events = events;
-}
+void nvim_proc_set_events(Proc *proc, MultiQueue *events) { proc->events = events; }
 
 /// Set the closed field of a Proc (accessor for Rust).
-void nvim_proc_set_closed(Proc *proc, int closed)
-{
-  proc->closed = closed != 0;
-}
+void nvim_proc_set_closed(Proc *proc, int closed) { proc->closed = closed != 0; }
 
 /// Increment the refcount of a Proc (accessor for Rust).
-void nvim_proc_incref(Proc *proc)
-{
-  proc->refcount++;
-}
+void nvim_proc_incref(Proc *proc) { proc->refcount++; }
 
 /// Decrement the refcount of a Proc and return the new value (accessor for Rust).
-int nvim_proc_decref(Proc *proc)
-{
-  return --proc->refcount;
-}
+int nvim_proc_decref(Proc *proc) { return --proc->refcount; }
 
 /// Get the argv field from a Proc (accessor for Rust).
-char **nvim_proc_get_argv(Proc *proc)
-{
-  return proc->argv;
-}
+char **nvim_proc_get_argv(Proc *proc) { return proc->argv; }
 
 /// Set the argv field of a Proc (accessor for Rust).
-void nvim_proc_set_argv(Proc *proc, char **argv)
-{
-  proc->argv = argv;
-}
+void nvim_proc_set_argv(Proc *proc, char **argv) { proc->argv = argv; }
 
 /// Get the exepath field from a Proc (accessor for Rust).
-const char *nvim_proc_get_exepath(Proc *proc)
-{
-  return proc->exepath;
-}
+const char *nvim_proc_get_exepath(Proc *proc) { return proc->exepath; }
 
 /// Set the exepath field of a Proc (accessor for Rust).
-void nvim_proc_set_exepath(Proc *proc, const char *exepath)
-{
-  proc->exepath = exepath;
-}
+void nvim_proc_set_exepath(Proc *proc, const char *exepath) { proc->exepath = exepath; }
 
 /// Get the cwd field from a Proc (accessor for Rust).
-const char *nvim_proc_get_cwd(Proc *proc)
-{
-  return proc->cwd;
-}
+const char *nvim_proc_get_cwd(Proc *proc) { return proc->cwd; }
 
 /// Set the cwd field of a Proc (accessor for Rust).
-void nvim_proc_set_cwd(Proc *proc, const char *cwd)
-{
-  proc->cwd = cwd;
-}
+void nvim_proc_set_cwd(Proc *proc, const char *cwd) { proc->cwd = cwd; }
 
 /// Get the env field from a Proc (accessor for Rust).
-dict_T *nvim_proc_get_env(Proc *proc)
-{
-  return proc->env;
-}
+dict_T *nvim_proc_get_env(Proc *proc) { return proc->env; }
 
 /// Set the env field of a Proc (accessor for Rust).
-void nvim_proc_set_env(Proc *proc, dict_T *env)
-{
-  proc->env = env;
-}
+void nvim_proc_set_env(Proc *proc, dict_T *env) { proc->env = env; }
 
 /// Set the stopped_time field of a Proc (accessor for Rust).
-void nvim_proc_set_stopped_time(Proc *proc, uint64_t stopped_time)
-{
-  proc->stopped_time = stopped_time;
-}
+void nvim_proc_set_stopped_time(Proc *proc, uint64_t stopped_time) { proc->stopped_time = stopped_time; }
 
 /// Get the exit_signal field from a Proc (accessor for Rust).
-uint8_t nvim_proc_get_exit_signal(Proc *proc)
-{
-  return proc->exit_signal;
-}
+uint8_t nvim_proc_get_exit_signal(Proc *proc) { return proc->exit_signal; }
 
 /// Set the exit_signal field of a Proc (accessor for Rust).
-void nvim_proc_set_exit_signal(Proc *proc, uint8_t exit_signal)
-{
-  proc->exit_signal = exit_signal;
-}
+void nvim_proc_set_exit_signal(Proc *proc, uint8_t exit_signal) { proc->exit_signal = exit_signal; }
 
 /// Get the fwd_err field from a Proc (accessor for Rust).
-int nvim_proc_get_fwd_err(Proc *proc)
-{
-  return proc->fwd_err ? 1 : 0;
-}
+int nvim_proc_get_fwd_err(Proc *proc) { return proc->fwd_err ? 1 : 0; }
 
 /// Set the fwd_err field of a Proc (accessor for Rust).
-void nvim_proc_set_fwd_err(Proc *proc, int fwd_err)
-{
-  proc->fwd_err = fwd_err != 0;
-}
+void nvim_proc_set_fwd_err(Proc *proc, int fwd_err) { proc->fwd_err = fwd_err != 0; }
 
 /// Get the overlapped field from a Proc (accessor for Rust).
-int nvim_proc_get_overlapped(Proc *proc)
-{
-  return proc->overlapped ? 1 : 0;
-}
+int nvim_proc_get_overlapped(Proc *proc) { return proc->overlapped ? 1 : 0; }
 
 /// Set the overlapped field of a Proc (accessor for Rust).
-void nvim_proc_set_overlapped(Proc *proc, int overlapped)
-{
-  proc->overlapped = overlapped != 0;
-}
+void nvim_proc_set_overlapped(Proc *proc, int overlapped) { proc->overlapped = overlapped != 0; }
 
 /// Get the cb (exit callback) field of a Proc (accessor for Rust).
-proc_exit_cb nvim_proc_get_cb(Proc *proc)
-{
-  return proc->cb;
-}
+proc_exit_cb nvim_proc_get_cb(Proc *proc) { return proc->cb; }
 
 /// Set the cb (exit callback) field of a Proc (accessor for Rust).
-void nvim_proc_set_cb(Proc *proc, proc_exit_cb cb)
-{
-  proc->cb = cb;
-}
+void nvim_proc_set_cb(Proc *proc, proc_exit_cb cb) { proc->cb = cb; }
 
 /// Get the internal_exit_cb field of a Proc (accessor for Rust).
-internal_proc_cb nvim_proc_get_internal_exit_cb(Proc *proc)
-{
-  return proc->internal_exit_cb;
-}
+internal_proc_cb nvim_proc_get_internal_exit_cb(Proc *proc) { return proc->internal_exit_cb; }
 
 /// Set the internal_exit_cb field of a Proc (accessor for Rust).
-void nvim_proc_set_internal_exit_cb(Proc *proc, internal_proc_cb cb)
-{
-  proc->internal_exit_cb = cb;
-}
+void nvim_proc_set_internal_exit_cb(Proc *proc, internal_proc_cb cb) { proc->internal_exit_cb = cb; }
 
 /// Get the internal_close_cb field of a Proc (accessor for Rust).
-internal_proc_cb nvim_proc_get_internal_close_cb(Proc *proc)
-{
-  return proc->internal_close_cb;
-}
+internal_proc_cb nvim_proc_get_internal_close_cb(Proc *proc) { return proc->internal_close_cb; }
 
 /// Set the internal_close_cb field of a Proc (accessor for Rust).
-void nvim_proc_set_internal_close_cb(Proc *proc, internal_proc_cb cb)
-{
-  proc->internal_close_cb = cb;
-}
+void nvim_proc_set_internal_close_cb(Proc *proc, internal_proc_cb cb) { proc->internal_close_cb = cb; }
 
 /// Call proc->cb if set (accessor for Rust).
 void nvim_proc_call_cb(Proc *proc, int status, void *data)
