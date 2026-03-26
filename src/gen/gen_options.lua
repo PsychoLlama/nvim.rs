@@ -497,6 +497,37 @@ local function gen_options(output_file)
     fd:write('\n')
   end
 
+  -- Collect unique rs_did_set_* callback names and their enable_if guards.
+  -- Map from cb_name -> enable_if (string or nil).
+  --- @type table<string, string|false>
+  local cb_map = {}
+  for _, o in ipairs(options_meta) do
+    local cb = o.cb
+    if cb and type(cb) == 'string' then
+      if cb_map[cb] == nil then
+        -- Store enable_if guard if present, otherwise false (no guard).
+        cb_map[cb] = o.enable_if or false
+      end
+    end
+  end
+
+  -- Emit extern declarations for all unique rs_did_set_* callbacks.
+  -- Sort for deterministic output.
+  --- @type string[]
+  local cb_names = vim.tbl_keys(cb_map)
+  table.sort(cb_names)
+  for _, cb in ipairs(cb_names) do
+    local guard = cb_map[cb]
+    if guard then
+      write(('#ifdef %s'):format(guard))
+    end
+    write(('extern const char *%s(optset_T *args);'):format(cb))
+    if guard then
+      write('#endif')
+    end
+  end
+  write('')
+
   -- Generate options[] array.
   write([[
   #include "nvim/ex_docmd.h"
