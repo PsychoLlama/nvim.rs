@@ -123,11 +123,11 @@ extern "C" {
     fn ga_append(gap: *mut GarrayT, c: u8);
     fn ga_clear(gap: *mut GarrayT);
 
-    // Phase 2: error message wrappers for getcmdkeycmd
-    fn nvim_emsg_cmd_mapping_must_end_with_cr();
-    fn nvim_emsg_cmd_mapping_before_second_cmd();
+    // Error message and translation
+    fn emsg(s: *const std::ffi::c_char);
+    fn gettext(msgid: *const std::ffi::c_char) -> *const std::ffi::c_char;
 
-    // Phase 2: got_int global
+    // got_int global
     static mut got_int: bool;
 
     // Phase 4: on_key_buf wrappers
@@ -227,6 +227,17 @@ const fn to_special_key(a: c_int, b: c_int) -> c_int {
         termcap2key(a, b)
     }
 }
+
+// =============================================================================
+// Error message strings (match C msgids exactly for gettext lookup)
+// =============================================================================
+
+/// E1255
+const E_CMD_MAPPING_MUST_END_WITH_CR: &std::ffi::CStr = c"E1255: <Cmd> mapping must end with <CR>";
+
+/// E1136: <Cmd> mapping must end with <CR> before second <Cmd>
+const E_CMD_MAPPING_BEFORE_SECOND_CMD: &std::ffi::CStr =
+    c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
 
 /// IS_SPECIAL(c): check if c is a special key (negative)
 const fn is_special(c: c_int) -> bool {
@@ -395,7 +406,7 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
 
         if vgetorpeek(false) == NUL {
             // incomplete <Cmd> is an error
-            nvim_emsg_cmd_mapping_must_end_with_cr();
+            emsg(gettext(E_CMD_MAPPING_MUST_END_WITH_CR.as_ptr()));
             aborted = true;
             break;
         }
@@ -422,7 +433,7 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
             aborted = true;
         } else if c1 == K_COMMAND {
             // give a nicer error message for this special case
-            nvim_emsg_cmd_mapping_before_second_cmd();
+            emsg(gettext(E_CMD_MAPPING_BEFORE_SECOND_CMD.as_ptr()));
             aborted = true;
         } else if c1 == K_SNR {
             ga_concat(ga_ptr, c"<SNR>".as_ptr().cast::<u8>());

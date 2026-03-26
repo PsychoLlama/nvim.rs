@@ -160,10 +160,6 @@ enum {
 #include "getchar.c.generated.h"
 
 static const char e_recursive_mapping[] = N_("E223: Recursive mapping");
-static const char e_cmd_mapping_must_end_with_cr[]
-  = N_("E1255: <Cmd> mapping must end with <CR>");
-static const char e_cmd_mapping_must_end_with_cr_before_second_cmd[]
-  = N_("E1136: <Cmd> mapping must end with <CR> before second <Cmd>");
 
 
 /// Initialize typebuf.tb_buf to point to typebuf_init.
@@ -2103,18 +2099,6 @@ int nvim_char_avail(void)
 void nvim_add_on_key_ignore_len(size_t val)
 {
   on_key_ignore_len += val;
-}
-
-/// Emit "E1255: <Cmd> mapping must end with <CR>" error message.
-void nvim_emsg_cmd_mapping_must_end_with_cr(void)
-{
-  emsg(_(e_cmd_mapping_must_end_with_cr));
-}
-
-/// Emit "E1136: <Cmd> mapping must end with <CR> before second <Cmd>" error message.
-void nvim_emsg_cmd_mapping_before_second_cmd(void)
-{
-  emsg(_(e_cmd_mapping_must_end_with_cr_before_second_cmd));
 }
 
 void nvim_set_reg_executing(int val)
