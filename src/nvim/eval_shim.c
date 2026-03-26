@@ -1036,3 +1036,9 @@ char *nvim_docmd_fmt_exception_not_caught(const char *value)
   vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value);
   return xstrdup(IObuff);
 }
+
+// msg_multiline wrapper for eval_exec crate.
+void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
+{
+  msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);
+}

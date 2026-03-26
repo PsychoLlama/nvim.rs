@@ -142,17 +142,6 @@ void nvim_transchar_nonprint_curbuf(char *buf, int c) { transchar_nonprint(curbu
 
 void nvim_curbuf_set_op_start(linenr_T lnum, colnr_T col) { curbuf->b_op_start.lnum = lnum; curbuf->b_op_start.col = col; }
 void nvim_curbuf_set_op_end(linenr_T lnum, colnr_T col) { curbuf->b_op_end.lnum = lnum; curbuf->b_op_end.col = col; }
-void nvim_curbuf_set_op_start_from_oap_start(void *oap_ptr) { oparg_T *oap = (oparg_T *)oap_ptr; curbuf->b_op_start = oap->start; }
-void nvim_curbuf_set_op_end_from_oap_start(void *oap_ptr) { oparg_T *oap = (oparg_T *)oap_ptr; curbuf->b_op_end = oap->start; }
-void nvim_curbuf_set_op_end_blockwise(void *oap_ptr) { oparg_T *oap = (oparg_T *)oap_ptr; curbuf->b_op_end.lnum = oap->end.lnum; curbuf->b_op_end.col = oap->start.col; }
-void nvim_curbuf_set_op_end_from_oap_end(void *oap_ptr) { oparg_T *oap = (oparg_T *)oap_ptr; curbuf->b_op_end = oap->end; }
-void nvim_curwin_set_cursor_from_oap_start(void *oap_ptr) { oparg_T *oap = (oparg_T *)oap_ptr; curwin->w_cursor = oap->start; }
-
-void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
-{
-  msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);
-}
-
 // print_line accessors
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
 
@@ -1477,9 +1466,3 @@ void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
   out->char_count = (int64_t)cc;
 }
 
-// General cpo/cmdmod/join accessors (migrated from edit.c)
-bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
-bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
-bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
-// Insert mode command/cmdline accessors (migrated from edit.c)
-void nvim_do_cmdline_getcmdkeycmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
