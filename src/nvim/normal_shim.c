@@ -5,7 +5,6 @@
 //
 
 #include <assert.h>
-#include <ctype.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -22,9 +21,7 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/change.h"
 #include "nvim/charset.h"
-#include "nvim/cmdhist.h"
 #include "nvim/cursor.h"
-#include "nvim/decoration.h"
 #include "nvim/diff.h"
 #include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
@@ -54,7 +51,6 @@
 #include "nvim/mapping.h"
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
-#include "nvim/math.h"
 #include "nvim/mbyte.h"
 #include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
@@ -71,19 +67,15 @@
 #include "nvim/os/time.h"
 #include "nvim/plines.h"
 #include "nvim/profile.h"
-#include "nvim/quickfix.h"
 #include "nvim/register.h"
 #include "nvim/search.h"
 #include "nvim/spell.h"
 #include "nvim/spell_defs.h"
-#include "nvim/spellfile.h"
-#include "nvim/spellsuggest.h"
 #include "nvim/state.h"
 #include "nvim/state_defs.h"
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
 #include "nvim/syntax.h"
-#include "nvim/tag.h"
 #include "nvim/textformat.h"
 #include "nvim/textobject.h"
 #include "nvim/types_defs.h"
@@ -505,12 +497,6 @@ int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 /// Call getcmdline for search and set cap->searchbuf. Returns the searchbuf (or NULL).
 char *nvim_getcmdline_for_search(cmdarg_T *cap) { cap->searchbuf = getcmdline(cap->cmdchar, cap->count1, 0, true); return cap->searchbuf; }
 
-// nv_ident C wrappers
-
-/// Initialize nv_ident: determine cmdchar/g_cmd, get visual text or ident under cursor.
-/// Returns 0 on success, -1 to return early (clearop done), -2 to return early (clearopq done).
-/// On success: *cmdchar_out, *g_cmd_out, *ptr_out, *n_out are set.
-
 /// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
 /// Returns 1 on success, 0 on failure.
 int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL); }
@@ -520,16 +506,8 @@ int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return
 // Accessors for operator Rust implementations
 bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 
-// Text object handler accessors for Rust FFI
-
-/// find_pattern_in_path wrapper for bracket [i/]i/[d/]d commands.
-/// Takes a copy of ptr (via xmemdupz) and frees it after the call,
-/// matching the original nvim_bracket_find_ident behavior.
-
 /// pos_to_mark(curbuf, NULL, curwin->w_cursor) -- returns fmark_T*.
 fmark_T *nvim_pos_to_mark_cursor(void) { return pos_to_mark(curbuf, NULL, curwin->w_cursor); }
-
-/// spell_move_to wrapper for bracket [s/]s/[r/]r/[S/]S commands.
 
 // g-command and n_opencmd accessors for Rust FFI
 
@@ -550,17 +528,6 @@ int nvim_getvcol_cursor_coladd_after_adj(void) { colnr_T cs, ce; getvcol(curwin,
 int nvim_mark_mb_adjustpos_visual_new(void) { mark_mb_adjustpos(curbuf, &VIsual); return VIsual.col; }
 /// getvcol for VIsual pos: returns coladd = ce - cs.
 int nvim_getvcol_visual_coladd_after_adj(void) { colnr_T cs, ce; getvcol(curwin, &VIsual, &cs, NULL, &ce); return (int)(ce - cs); }
-// Undo/Redo handler accessors for Rust FFI
-
-// Accessors for undo/redo Rust implementations
-
-// Insert mode entry handler accessors for Rust FFI
-
-// nv_replace C wrappers
-
-
-// Scroll and screen handler accessors for Rust FFI
-
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
 int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
 
@@ -578,8 +545,6 @@ void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, 
 void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
-/// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
-
 /// Wrapper for ml_get_pos(&curwin->w_cursor) for Rust FFI.
 char *nvim_ml_get_pos_cursor(void) { return ml_get_pos(&curwin->w_cursor); }
 
@@ -593,9 +558,6 @@ void nvim_sync_fen_in_diff_windows(void)
     }
   }
 }
-
-/// Get translated E352 error message.
-// Miscellaneous handler accessors for Rust FFI
 
 // g-command C accessors for Rust FFI
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
@@ -915,7 +877,6 @@ void nvim_showcmd_grid_render(const char *buf, bool is_clear)
   grid_line_flush();
 }
 
-
 /// getvcols with p_sbr/w_p_sbr save-restore for block-Visual showcmd.
 /// Saves p_sbr and curwin->w_p_sbr, sets them to empty, calls
 /// getvcols(curwin, &w_cursor, &VIsual, out_left, out_right), then restores.
@@ -1064,7 +1025,6 @@ int nvim_did_emsg_check(void) { return did_emsg; }
 
 // Search, gotofile, visual text, and mark movement accessors for Rust FFI
 
-
 /// Returns true if cursor moved and highlights need refresh.
 bool nvim_search_hls_needs_redraw(int prev_lnum, int prev_col, int prev_coladd) { pos_T prev = { .lnum = prev_lnum, .col = (colnr_T)prev_col, .coladd = (colnr_T)prev_coladd }; return !equalpos(curwin->w_cursor, prev) && p_hls && !no_hlsearch && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L); }
 
@@ -1110,9 +1070,7 @@ void nvim_curwin_set_old_visual_lnums(void) { curwin->w_old_cursor_lnum = curwin
 /// Return true if curbuf is a terminal buffer.
 bool nvim_get_curbuf_terminal(void) { return curbuf->terminal != NULL; }
 
-/// Show "quit" or "abandon" hint message via msg() for ESC/CTRL-C.
-
-// DPO (do_pending_operator) accessors for Rust FFI (Phase 1)
+// DPO (do_pending_operator) accessors for Rust FFI
 
 bool nvim_dpo_get_VIsual_active(void) { return VIsual_active; }
 bool nvim_dpo_get_finish_op(void) { return finish_op; }
@@ -1225,10 +1183,8 @@ bool nvim_get_p_fp_nonempty(void) { return *p_fp != NUL; }
 bool nvim_get_curbuf_b_p_fp_nonempty(void) { return *curbuf->b_p_fp != NUL; }
 /// Get *curbuf->b_p_inde != NUL.
 bool nvim_get_curbuf_b_p_inde_nonempty(void) { return *curbuf->b_p_inde != NUL; }
-/// Call use_indentexpr_for_lisp().
 /// Call has_format_option(FO_AUTO).
 bool nvim_has_format_option_fo_auto(void) { return has_format_option(FO_AUTO); }
-/// Call vim_beep(kOptBoFlagOperator).
 /// Check curwin->w_cursor.lnum + line_count - 1 > ml_line_count.
 bool nvim_dpo_join_would_overflow(int line_count) { return curwin->w_cursor.lnum + line_count - 1 > curbuf->b_ml.ml_line_count; }
 /// coladvance(curwin, curwin->w_curswant = old_col).
