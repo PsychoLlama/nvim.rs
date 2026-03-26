@@ -1577,17 +1577,14 @@ void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
 {
   if (!win) { return NULL; }
   switch (idx) {
-  // global-local numeric win options
   case kOptSidescrolloff: return &win->w_p_siso;
   case kOptScrolloff: return &win->w_p_so;
-  // global-local string win options
   case kOptShowbreak: return &win->w_p_sbr;
   case kOptStatusline: return &win->w_p_stl;
   case kOptWinbar: return &win->w_p_wbr;
   case kOptFillchars: return &win->w_p_fcs;
   case kOptListchars: return &win->w_p_lcs;
   case kOptVirtualedit: return &win->w_p_ve;
-  // win-local only options
   case kOptArabic: return &win->w_p_arab;
   case kOptList: return &win->w_p_list;
   case kOptSpell: return &win->w_p_spell;
@@ -1627,7 +1624,6 @@ void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
   case kOptCursorbind: return &win->w_p_crb;
   case kOptConcealcursor: return &win->w_p_cocu;
   case kOptConceallevel: return &win->w_p_cole;
-  // win->w_s (synblock) fields accessed via win
   case kOptSpellcapcheck: return &win->w_s->b_p_spc;
   case kOptSpellfile: return &win->w_s->b_p_spf;
   case kOptSpelllang: return &win->w_s->b_p_spl;
@@ -1647,23 +1643,19 @@ _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
 _Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
 _Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
 
-// winopt_T accessors (moved from option_shim.c)
-
-// Return pointer to the i-th string field of a winopt_T (for clear/check loops in Rust).
-// String fields in the order used by check_winopt / clear_winopt.
 char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
 {
   switch (idx) {
-  case 0:  return &wop->wo_fdc;
-  case 1:  return &wop->wo_fdc_save;
-  case 2:  return &wop->wo_fdi;
-  case 3:  return &wop->wo_fdm;
-  case 4:  return &wop->wo_fdm_save;
-  case 5:  return &wop->wo_fde;
-  case 6:  return &wop->wo_fdt;
-  case 7:  return &wop->wo_fmr;
-  case 8:  return &wop->wo_eiw;
-  case 9:  return &wop->wo_scl;
+  case 0: return &wop->wo_fdc;
+  case 1: return &wop->wo_fdc_save;
+  case 2: return &wop->wo_fdi;
+  case 3: return &wop->wo_fdm;
+  case 4: return &wop->wo_fdm_save;
+  case 5: return &wop->wo_fde;
+  case 6: return &wop->wo_fdt;
+  case 7: return &wop->wo_fmr;
+  case 8: return &wop->wo_eiw;
+  case 9: return &wop->wo_scl;
   case 10: return &wop->wo_rlc;
   case 11: return &wop->wo_sbr;
   case 12: return &wop->wo_stl;
@@ -1681,46 +1673,21 @@ char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
   }
 }
 
-// Copy all scalar (bool/int/flags) fields from one winopt_T to another.
-// Does NOT copy string fields or wo_script_ctx.
 void nvim_copy_winopt_scalars(winopt_T *from, winopt_T *to)
 {
-  to->wo_arab = from->wo_arab;
-  to->wo_list = from->wo_list;
-  to->wo_nu = from->wo_nu;
-  to->wo_rnu = from->wo_rnu;
-  to->wo_ve_flags = from->wo_ve_flags;
-  to->wo_nuw = from->wo_nuw;
-  to->wo_rl = from->wo_rl;
-  to->wo_wrap = from->wo_wrap;
-  to->wo_wrap_save = from->wo_wrap_save;
-  to->wo_lbr = from->wo_lbr;
-  to->wo_bri = from->wo_bri;
-  to->wo_scb = from->wo_scb;
-  to->wo_scb_save = from->wo_scb_save;
-  to->wo_sms = from->wo_sms;
-  to->wo_crb = from->wo_crb;
-  to->wo_crb_save = from->wo_crb_save;
-  to->wo_siso = from->wo_siso;
-  to->wo_so = from->wo_so;
-  to->wo_spell = from->wo_spell;
-  to->wo_cuc = from->wo_cuc;
-  to->wo_cul = from->wo_cul;
-  to->wo_diff = from->wo_diff;
-  to->wo_diff_saved = from->wo_diff_saved;
-  to->wo_cole = from->wo_cole;
-  to->wo_fen = from->wo_fen;
-  to->wo_fen_save = from->wo_fen_save;
-  to->wo_fml = from->wo_fml;
-  to->wo_fdl = from->wo_fdl;
-  to->wo_fdl_save = from->wo_fdl_save;
-  to->wo_fdn = from->wo_fdn;
-  to->wo_lhi = from->wo_lhi;
-  to->wo_winbl = from->wo_winbl;
-  to->wo_wrap_flags = from->wo_wrap_flags;
-  to->wo_stl_flags = from->wo_stl_flags;
-  to->wo_wbr_flags = from->wo_wbr_flags;
-  to->wo_fde_flags = from->wo_fde_flags;
+  to->wo_arab = from->wo_arab; to->wo_list = from->wo_list; to->wo_nu = from->wo_nu;
+  to->wo_rnu = from->wo_rnu; to->wo_ve_flags = from->wo_ve_flags; to->wo_nuw = from->wo_nuw;
+  to->wo_rl = from->wo_rl; to->wo_wrap = from->wo_wrap; to->wo_wrap_save = from->wo_wrap_save;
+  to->wo_lbr = from->wo_lbr; to->wo_bri = from->wo_bri; to->wo_scb = from->wo_scb;
+  to->wo_scb_save = from->wo_scb_save; to->wo_sms = from->wo_sms; to->wo_crb = from->wo_crb;
+  to->wo_crb_save = from->wo_crb_save; to->wo_siso = from->wo_siso; to->wo_so = from->wo_so;
+  to->wo_spell = from->wo_spell; to->wo_cuc = from->wo_cuc; to->wo_cul = from->wo_cul;
+  to->wo_diff = from->wo_diff; to->wo_diff_saved = from->wo_diff_saved; to->wo_cole = from->wo_cole;
+  to->wo_fen = from->wo_fen; to->wo_fen_save = from->wo_fen_save; to->wo_fml = from->wo_fml;
+  to->wo_fdl = from->wo_fdl; to->wo_fdl_save = from->wo_fdl_save; to->wo_fdn = from->wo_fdn;
+  to->wo_lhi = from->wo_lhi; to->wo_winbl = from->wo_winbl;
+  to->wo_wrap_flags = from->wo_wrap_flags; to->wo_stl_flags = from->wo_stl_flags;
+  to->wo_wbr_flags = from->wo_wbr_flags; to->wo_fde_flags = from->wo_fde_flags;
   to->wo_fdt_flags = from->wo_fdt_flags;
 }
 
