@@ -305,7 +305,6 @@ extern const char *rs_did_set_selection(optset_T *args);
 // OptVal helpers
 extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
-extern char *rs_optval_to_cstr(OptVal o);
 
 // Rust FFI declarations (window/layout module)
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
@@ -732,14 +731,6 @@ OptVal object_as_optval(Object o, bool *error)
   UNREACHABLE;
 }
 
-/// Check if option is global-local.
-static inline bool option_is_global_local(OptIndex opt_idx)
-{
-  return rs_option_is_global_local(opt_idx);
-}
-
-// Rust callers now use #[link_name] to call the rs_ functions directly.
-
 /// Switch current context to get/set option value for window/buffer.
 ///
 /// @param[out]  ctx        Current context. switchwin_T for window and aco_save_T for buffer.
@@ -1084,7 +1075,7 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
   PUT_C(dict, "scope", CSTR_AS_OBJ(scope));
 
   // welcome to the jungle
-  PUT_C(dict, "global_local", BOOLEAN_OBJ(option_is_global_local(opt_idx)));
+  PUT_C(dict, "global_local", BOOLEAN_OBJ(rs_option_is_global_local(opt_idx)));
   PUT_C(dict, "commalist", BOOLEAN_OBJ(opt->flags & kOptFlagComma));
   PUT_C(dict, "flaglist", BOOLEAN_OBJ(opt->flags & kOptFlagFlagList));
 
@@ -1348,7 +1339,6 @@ void nvim_call_bind_textdomain_codeset(void)
 #endif
 }
 
-extern void didset_string_options(void);  // defined in Rust optionstr crate
 /// xfree(curbuf->b_p_vsts_array) + tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array).
 void nvim_call_curbuf_tabstop_set_vsts(void)
 {
