@@ -45,8 +45,8 @@ extern "C" {
     fn nvim_get_state() -> c_int;
     /// Get `arrow_used` global
     fn nvim_get_arrow_used() -> c_int;
-    /// Call `u_sync(force)`
-    fn nvim_call_u_sync(force: c_int);
+    /// Sync undo
+    fn u_sync(force: bool);
 }
 
 /// Returns true if the stuff buffer is empty (both readbufs empty).
@@ -223,6 +223,6 @@ pub unsafe extern "C" fn rs_may_sync_undo() {
     let curscript = nvim_get_curscript();
 
     if (state & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used) && curscript < 0 {
-        nvim_call_u_sync(0);
+        u_sync(false);
     }
 }

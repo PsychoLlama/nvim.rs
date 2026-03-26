@@ -2117,21 +2117,6 @@ void nvim_emsg_cmd_mapping_before_second_cmd(void)
   emsg(_(e_cmd_mapping_must_end_with_cr_before_second_cmd));
 }
 
-void nvim_call_u_sync(int force)
-{
-  u_sync(force != 0);
-}
-
-void nvim_call_flush_buffers(int flush_type)
-{
-  flush_buffers((flush_buffers_T)flush_type);
-}
-
-void nvim_call_vim_beep(int flag)
-{
-  vim_beep((unsigned)flag);
-}
-
 void nvim_set_reg_executing(int val)
 {
   reg_executing = val;

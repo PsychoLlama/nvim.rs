@@ -196,10 +196,10 @@ extern "C" {
     fn nvim_set_typeahead_char(val: c_int);
     /// Get emsg_silent
     static mut emsg_silent: c_int;
-    /// Call flush_buffers(flush_type)
-    fn nvim_call_flush_buffers(flush_type: c_int);
-    /// Call vim_beep(flag)
-    fn nvim_call_vim_beep(flag: c_int);
+    /// flush_buffers(flush_type): flush map and typeahead buffers
+    fn flush_buffers(flush_type: c_int);
+    /// vim_beep(flag): emit a beep
+    fn vim_beep(flag: std::ffi::c_uint);
 }
 
 use crate::buffheader;
@@ -348,8 +348,8 @@ pub unsafe extern "C" fn rs_typeahead_noflush(c: c_int) {
 #[export_name = "beep_flush"]
 pub unsafe extern "C" fn rs_beep_flush() {
     if emsg_silent == 0 {
-        nvim_call_flush_buffers(FLUSH_MINIMAL);
-        nvim_call_vim_beep(K_OPT_BO_FLAG_ERROR);
+        flush_buffers(FLUSH_MINIMAL);
+        vim_beep(K_OPT_BO_FLAG_ERROR as std::ffi::c_uint);
     }
 }
 
