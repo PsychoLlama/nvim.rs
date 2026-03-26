@@ -3228,12 +3228,7 @@ extern "C" {
     fn utf_iscomposing_legacy(c: c_int) -> bool;
     fn mb_charlen(s: *const c_char) -> c_int;
     fn utf_char2len(c: c_int) -> c_int;
-    fn nvim_add_sound_suggest(
-        su: *mut std::ffi::c_void,
-        goodword: *mut c_char,
-        score: c_int,
-        lp: *const crate::LangpT,
-    );
+    // nvim_add_sound_suggest: removed; rs_add_sound_suggest called directly
     #[link_name = "skiptowhite"]
     fn trie_skiptowhite(p: *const c_char) -> *mut c_char;
     #[link_name = "skipwhite"]
@@ -3803,7 +3798,7 @@ pub unsafe extern "C" fn rs_suggest_trie_walk(
                 if fword_ends && goodword_ends && (*sp_raw).fidx >= (*sp_raw).fidxtry && compound_ok
                 {
                     if soundfold {
-                        nvim_add_sound_suggest(
+                        rs_add_sound_suggest(
                             su,
                             preword.as_mut_ptr().cast::<c_char>(),
                             (*sp_raw).score,
@@ -5051,6 +5046,373 @@ pub unsafe extern "C" fn rs_rescore_suggestions(su: *mut std::ffi::c_void) {
     let ga_data = (*ga).ga_data.cast::<CSuggestT>();
     for i in 0..ga_len {
         rs_rescore_one(su, ga_data.add(i));
+    }
+}
+
+// =============================================================================
+// Phase 3: add_sound_suggest, score_comp_sal
+// =============================================================================
+
+extern "C" {
+    fn nvim_spellsug_get_sps_flags() -> c_int;
+    fn internal_error(msg: *const c_char);
+    #[link_name = "ml_get_buf"]
+    fn sound_ml_get_buf(buf: *mut std::ffi::c_void, lnum: i32) -> *mut c_char;
+    #[link_name = "xstrdup"]
+    fn sound_xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// Offset of `sft_word` within `sftword_T`: 2 bytes (i16 sft_score).
+const SFTWORD_WORD_OFFSET: usize = 2;
+
+/// Given a pointer to `hi_key` (which points into `sft_word`), recover
+/// the pointer to the containing `sftword_T`.
+/// Safety: xmalloc returns at least 8-byte aligned memory, so the i16 field
+/// at offset 0 is always properly aligned.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn hi_key_to_sft(hi_key: *mut c_char) -> *mut SftWord {
+    hi_key
+        .cast::<u8>()
+        .sub(SFTWORD_WORD_OFFSET)
+        .cast::<SftWord>()
+}
+
+/// Rust equivalent of C `sftword_T`: layout-compatible struct for
+/// soundfold dedup hash entries. The `sft_word` field is a flexible
+/// array; we allocate extra bytes beyond `sft_score`.
+#[repr(C)]
+struct SftWord {
+    sft_score: i16,
+    // sft_word[] follows here in allocated memory
+}
+
+/// Check if a `hashitem_T` is empty (NULL key or removed).
+#[inline]
+unsafe fn sound_hi_empty(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq(
+            (*hi).hi_key,
+            std::ptr::addr_of!(suggest_hash_removed).cast_mut(),
+        )
+}
+
+/// Rust implementation of C `add_sound_suggest`.
+///
+/// Finds original words for a soundfolded match and adds them as suggestions.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_ptr_alignment)]
+pub unsafe extern "C" fn rs_add_sound_suggest(
+    su: *mut std::ffi::c_void,
+    goodword: *mut c_char,
+    score: c_int,
+    lp: *const crate::LangpT,
+) {
+    let slang_ptr = (*lp).lp_slang;
+    let slang = SlangHandle(slang_ptr);
+
+    // It's very well possible that the same soundfold word is found several
+    // times with different scores.  Only do words with a better score.
+    let hash = suggest_hash_hash(goodword);
+    let goodword_len = c_strlen(goodword);
+    let hi = suggest_hash_lookup(
+        std::ptr::addr_of!((*slang_ptr).sl_sounddone),
+        goodword,
+        goodword_len,
+        hash,
+    );
+
+    let sft: *mut SftWord;
+    if sound_hi_empty(hi) {
+        // New entry: allocate sftword_T + word bytes.
+        let alloc_size = SFTWORD_WORD_OFFSET + goodword_len + 1;
+        let mem = suggest_xmalloc(alloc_size).cast::<u8>();
+        sft = mem.cast::<SftWord>();
+        (*sft).sft_score = score as i16;
+        // Copy word into sft_word[]
+        std::ptr::copy_nonoverlapping(
+            goodword.cast::<u8>(),
+            mem.add(SFTWORD_WORD_OFFSET),
+            goodword_len + 1,
+        );
+        let word_ptr = mem.add(SFTWORD_WORD_OFFSET).cast::<c_char>();
+        suggest_hash_add_item(
+            std::ptr::addr_of_mut!((*slang_ptr).sl_sounddone),
+            hi,
+            word_ptr,
+            hash,
+        );
+    } else {
+        sft = hi_key_to_sft((*hi).hi_key);
+        if score >= c_int::from((*sft).sft_score) {
+            return;
+        }
+        (*sft).sft_score = score as i16;
+    }
+    let _ = sft; // used above
+
+    // Find the word nr in the soundfold tree.
+    let sfwordnr = rs_soundfold_find(SlangHandle(slang_ptr), goodword);
+    if sfwordnr < 0 {
+        internal_error(c"add_sound_suggest()".as_ptr());
+        return;
+    }
+
+    // Go over the list of good words that produce this soundfold word.
+    let nrline = sound_ml_get_buf((*slang_ptr).sl_sugbuf, sfwordnr + 1);
+    let mut nrline_ptr = nrline as *const u8;
+    let mut orgnr: c_int = 0;
+
+    while *nrline_ptr != 0 {
+        // Read word number offset (variable-length encoding).
+        orgnr += crate::rs_bytes2offset(std::ptr::addr_of_mut!(nrline_ptr));
+
+        let byts = (*slang_ptr).sl_fbyts;
+        let idxs = (*slang_ptr).sl_fidxs;
+
+        // Look up word "orgnr" in the trie.
+        let mut n: c_int = 0;
+        let mut wordcount: c_int = 0;
+        let mut wlen = 0usize;
+        let mut i: c_int = 1;
+        let mut theword = [0u8; MAXWLEN];
+        let mut found_badword = false;
+
+        'trie: while wlen < MAXWLEN - 3 {
+            i = 1;
+            if wordcount == orgnr && *byts.add(n as usize + 1) == 0 {
+                break; // found end of word
+            }
+            if *byts.add(n as usize + 1) == 0 {
+                wordcount += 1;
+            }
+
+            // Skip over NUL bytes.
+            while *byts.add(n as usize + i as usize) == 0 {
+                if i > c_int::from(*byts.add(n as usize)) {
+                    // Safety check: write "BAD" to theword.
+                    let blen = wlen.min(MAXWLEN - 4);
+                    theword[blen] = b'B';
+                    theword[blen + 1] = b'A';
+                    theword[blen + 2] = b'D';
+                    wlen = blen + 3;
+                    found_badword = true;
+                    break 'trie;
+                }
+                i += 1;
+            }
+
+            // Find the sibling with the word.
+            while i < c_int::from(*byts.add(n as usize)) {
+                let wc = *idxs.add(*idxs.add(n as usize + i as usize) as usize); // word count under this byte
+                if wordcount + wc > orgnr {
+                    break;
+                }
+                wordcount += wc;
+                i += 1;
+            }
+
+            theword[wlen] = *byts.add(n as usize + i as usize);
+            n = *idxs.add(n as usize + i as usize);
+            wlen += 1;
+        }
+
+        if !found_badword {
+            theword[wlen] = 0;
+        }
+
+        let theword_ptr = theword.as_ptr().cast::<c_char>();
+        let su_badflags = nvim_suginfo_get_badflags(su);
+        let su_badword = nvim_suginfo_get_badword(su);
+        let su_badlen = nvim_suginfo_get_badlen(su);
+        let su_maxscore = nvim_suginfo_get_maxscore(su);
+        let su_sfmaxscore = nvim_suginfo_get_sfmaxscore(su);
+        let sps_flags = nvim_spellsug_get_sps_flags();
+
+        // Go over the possible flags and regions.
+        while i <= c_int::from(*byts.add(n as usize)) && *byts.add(n as usize + i as usize) == 0 {
+            let mut cword = [0u8; MAXWLEN];
+            let flags = *idxs.add(n as usize + i as usize);
+            i += 1;
+
+            // Skip words with the NOSUGGEST flag.
+            if flags & WF_NOSUGGEST != 0 {
+                continue;
+            }
+
+            let p: *const c_char;
+            if flags & WF_KEEPCAP != 0 {
+                // Must find the word in the keep-case tree.
+                rs_find_keepcap_word(
+                    slang,
+                    theword_ptr.cast_mut(),
+                    cword.as_mut_ptr().cast::<c_char>(),
+                );
+                p = cword.as_ptr().cast::<c_char>();
+            } else {
+                let effective_flags = flags | su_badflags;
+                if (effective_flags & WF_CAPMASK) != 0 {
+                    crate::rs_make_case_word(
+                        theword_ptr,
+                        cword.as_mut_ptr().cast::<c_char>(),
+                        effective_flags,
+                    );
+                    p = cword.as_ptr().cast::<c_char>();
+                } else {
+                    p = theword_ptr;
+                }
+            }
+
+            // Add the suggestion.
+            if sps_flags & SPS_DOUBLE != 0 {
+                if score <= su_maxscore {
+                    rs_add_suggestion(
+                        su,
+                        nvim_suginfo_get_sga(su),
+                        p,
+                        su_badlen,
+                        score,
+                        0,
+                        false,
+                        (*lp).lp_sallang.cast(),
+                        false,
+                    );
+                }
+            } else {
+                // Penalty for words in another region.
+                let mut goodscore: c_int = if (flags & WF_REGION != 0)
+                    && (((flags as u32) >> 16) & ((*lp).lp_region as u32)) == 0
+                {
+                    crate::SCORE_REGION
+                } else {
+                    0
+                };
+
+                // Small penalty for changing case of first letter.
+                let gc = crate::utf_ptr2char(p);
+                if crate::spell_isupper(gc) {
+                    let bc = crate::utf_ptr2char(su_badword);
+                    if !crate::spell_isupper(bc) && spell_tofold(bc) != spell_tofold(gc) {
+                        goodscore += SCORES.icase / 2;
+                    }
+                }
+
+                // Compute edit score with limit.
+                let limit = maxscore_for_rs(su_sfmaxscore - goodscore, score);
+                if limit > SCORE_LIMITMAX {
+                    goodscore += rs_spell_edit_score(slang, su_badword, p);
+                } else {
+                    goodscore += rs_spell_edit_score_limit(slang, su_badword, p, limit);
+                }
+
+                if goodscore < SCORE_MAXMAX {
+                    goodscore = rs_score_wordcount_adj(slang, goodscore, p, false);
+                    goodscore = rescore_rs(goodscore, score);
+                    if goodscore <= su_sfmaxscore {
+                        rs_add_suggestion(
+                            su,
+                            nvim_suginfo_get_ga(su),
+                            p,
+                            su_badlen,
+                            goodscore,
+                            score,
+                            true,
+                            (*lp).lp_sallang.cast(),
+                            true,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// MAXSCORE(word_score, sound_score): max word score given max total score.
+/// MAXSCORE = su_sfmaxscore - goodscore, where sound score's weight is 1/4.
+/// C: #define MAXSCORE(wscore, sscore)  ((wscore) * 3 / 4 + (sscore) / 4)
+/// But in add_sound_suggest the formula is: limit = MAXSCORE(su_sfmaxscore - goodscore, score)
+/// which is: (sfmaxscore - goodscore) * 3 / 4 + score / 4
+#[inline]
+fn maxscore_for_rs(sfmax_minus_good: c_int, sound_score: c_int) -> c_int {
+    sfmax_minus_good * 3 / 4 + sound_score / 4
+}
+
+/// RESCORE(word_score, sound_score) = (3 * word_score + sound_score) / 4
+#[inline]
+fn rescore_rs(word_score: c_int, sound_score: c_int) -> c_int {
+    (3 * word_score + sound_score) / 4
+}
+
+/// WF_CAPMASK: any capitalization flags that require make_case_word.
+const WF_CAPMASK: c_int = WF_ONECAP | WF_ALLCAP | WF_KEEPCAP | WF_MIXCAP;
+
+/// Rust implementation of C `score_comp_sal`.
+///
+/// Computes sound-alike scores for suggestions in su_ga and adds to su_sga.
+///
+/// # Safety
+/// `su` must be a valid pointer to a suginfo_T.
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_score_comp_sal(su: *mut std::ffi::c_void) {
+    let mut badsound = [0u8; MAXWLEN];
+
+    let su_ga = nvim_suginfo_get_ga(su);
+    let su_sga = nvim_suginfo_get_sga(su);
+    let su_fbadword = nvim_suginfo_get_fbadword(su);
+    let su_badlen = nvim_suginfo_get_badlen(su);
+
+    ga_grow_suggest(su_sga, (*su_ga).ga_len);
+
+    let langp_ga = nvim_win_get_b_langp(stp_sal_curwin);
+    let langp_len = (*langp_ga).ga_len;
+
+    for lpi in 0..langp_len as usize {
+        let lp = (*langp_ga).ga_data.cast::<crate::LangpT>().add(lpi);
+        let slang_ptr = (*lp).lp_slang;
+        if (*slang_ptr).sl_sal.ga_len == 0 {
+            continue;
+        }
+
+        // Soundfold the bad word.
+        crate::rs_spell_soundfold(
+            slang_ptr,
+            su_fbadword.cast_mut(),
+            true,
+            badsound.as_mut_ptr().cast::<c_char>(),
+        );
+
+        let ga_len = (*su_ga).ga_len as usize;
+        let ga_data = (*su_ga).ga_data.cast::<CSuggestT>();
+
+        for i in 0..ga_len {
+            let stp = ga_data.add(i);
+            let score = rs_stp_sal_score(
+                stp,
+                su_fbadword,
+                su_badlen,
+                SlangHandle(slang_ptr),
+                badsound.as_ptr().cast(),
+            );
+            if score < SCORE_MAXMAX {
+                // Add to su_sga.
+                let sstp = (*su_sga)
+                    .ga_data
+                    .cast::<CSuggestT>()
+                    .add((*su_sga).ga_len as usize);
+                (*sstp).st_word = sound_xstrdup((*stp).st_word);
+                (*sstp).st_wordlen = (*stp).st_wordlen;
+                (*sstp).st_score = score;
+                (*sstp).st_altscore = 0;
+                (*sstp).st_orglen = (*stp).st_orglen;
+                (*su_sga).ga_len += 1;
+            }
+        }
+        break; // Only first language with sal
     }
 }
 

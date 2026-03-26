@@ -276,11 +276,6 @@ int nvim_suginfo_get_badflags(void *su) { return ((suginfo_T *)su)->su_badflags;
 void nvim_suginfo_set_badflags(void *su, int v) { ((suginfo_T *)su)->su_badflags = v; }
 // Phase 2 accessors
 int nvim_spellsug_get_timeout(void) { return spell_suggest_timeout; }
-// Forward declaration so add_sound_suggest can be called from Rust FFI
-static void add_sound_suggest(suginfo_T *su, char *goodword, int score, langp_T *lp);
-void nvim_add_sound_suggest(void *su, char *goodword, int score, langp_T *lp) {
-  add_sound_suggest((suginfo_T *)su, goodword, score, lp);
-}
 
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
@@ -295,6 +290,8 @@ extern void rs_add_banned(void *su, char *word);
 extern void rs_rescore_one(void *su, suggest_T *stp);
 extern void rs_rescore_suggestions(void *su);
 extern void rs_suggest_trie_walk(void *su, langp_T *lp, char *fword, bool soundfold);
+extern void rs_add_sound_suggest(void *su, char *goodword, int score, langp_T *lp);
+extern void rs_score_comp_sal(void *su);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -943,37 +940,7 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
 /// su->su_sga.
 static void score_comp_sal(suginfo_T *su)
 {
-  char badsound[MAXWLEN];
-
-  ga_grow(&su->su_sga, su->su_ga.ga_len);
-
-  // Use the sound-folding of the first language that supports it.
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len; lpi++) {
-    langp_T *lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-    if (!GA_EMPTY(&lp->lp_slang->sl_sal)) {
-      // soundfold the bad word
-      spell_soundfold(lp->lp_slang, su->su_fbadword, true, badsound);
-
-      for (int i = 0; i < su->su_ga.ga_len; i++) {
-        suggest_T *stp = &SUG(su->su_ga, i);
-
-        // Case-fold the suggested word, sound-fold it and compute the
-        // sound-a-like score.
-        int score = stp_sal_score(stp, su, lp->lp_slang, badsound);
-        if (score < SCORE_MAXMAX) {
-          // Add the suggestion.
-          suggest_T *sstp = &SUG(su->su_sga, su->su_sga.ga_len);
-          sstp->st_word = xstrdup(stp->st_word);
-          sstp->st_wordlen = stp->st_wordlen;
-          sstp->st_score = score;
-          sstp->st_altscore = 0;
-          sstp->st_orglen = stp->st_orglen;
-          su->su_sga.ga_len++;
-        }
-      }
-      break;
-    }
-  }
+  rs_score_comp_sal(su);
 }
 
 /// For the goodword in "stp" compute the soundalike score compared to the
@@ -1065,173 +1032,7 @@ static void suggest_try_soundalike_finish(void)
 /// @param score  soundfold score
 static void add_sound_suggest(suginfo_T *su, char *goodword, int score, langp_T *lp)
 {
-  slang_T *slang = lp->lp_slang;    // language for sound folding
-  char theword[MAXWLEN];
-  int i;
-  int wlen;
-  uint8_t *byts;
-  int wc;
-  int goodscore;
-  sftword_T *sft;
-
-  // It's very well possible that the same soundfold word is found several
-  // times with different scores.  Since the following is quite slow only do
-  // the words that have a better score than before.  Use a hashtable to
-  // remember the words that have been done.
-  hash_T hash = hash_hash(goodword);
-  const size_t goodword_len = strlen(goodword);
-  hashitem_T *hi = hash_lookup(&slang->sl_sounddone, goodword, goodword_len, hash);
-  if (HASHITEM_EMPTY(hi)) {
-    sft = xmalloc(offsetof(sftword_T, sft_word) + goodword_len + 1);
-    sft->sft_score = (int16_t)score;
-    memcpy(sft->sft_word, goodword, goodword_len + 1);
-    hash_add_item(&slang->sl_sounddone, hi, (char *)sft->sft_word, hash);
-  } else {
-    sft = HI2SFT(hi);
-    if (score >= sft->sft_score) {
-      return;
-    }
-    sft->sft_score = (int16_t)score;
-  }
-
-  // Find the word nr in the soundfold tree.
-  int sfwordnr = soundfold_find(slang, goodword);
-  if (sfwordnr < 0) {
-    internal_error("add_sound_suggest()");
-    return;
-  }
-
-  // Go over the list of good words that produce this soundfold word
-  char *nrline = ml_get_buf(slang->sl_sugbuf, (linenr_T)sfwordnr + 1);
-  int orgnr = 0;
-  while (*nrline != NUL) {
-    // The wordnr was stored in a minimal nr of bytes as an offset to the
-    // previous wordnr.
-    orgnr += rs_bytes2offset((const uint8_t **)&nrline);
-
-    byts = slang->sl_fbyts;
-    idx_T *idxs = slang->sl_fidxs;
-
-    // Lookup the word "orgnr" one of the two tries.
-    int n = 0;
-    int wordcount = 0;
-    for (wlen = 0; wlen < MAXWLEN - 3; wlen++) {
-      i = 1;
-      if (wordcount == orgnr && byts[n + 1] == NUL) {
-        break;          // found end of word
-      }
-      if (byts[n + 1] == NUL) {
-        wordcount++;
-      }
-
-      // skip over the NUL bytes
-      for (; byts[n + i] == NUL; i++) {
-        if (i > byts[n]) {              // safety check
-          STRCPY(theword + wlen, "BAD");
-          wlen += 3;
-          goto badword;
-        }
-      }
-
-      // One of the siblings must have the word.
-      for (; i < byts[n]; i++) {
-        wc = idxs[idxs[n + i]];         // nr of words under this byte
-        if (wordcount + wc > orgnr) {
-          break;
-        }
-        wordcount += wc;
-      }
-
-      theword[wlen] = (char)byts[n + i];
-      n = idxs[n + i];
-    }
-badword:
-    theword[wlen] = NUL;
-
-    // Go over the possible flags and regions.
-    for (; i <= byts[n] && byts[n + i] == NUL; i++) {
-      char cword[MAXWLEN];
-      char *p;
-      int flags = (int)idxs[n + i];
-
-      // Skip words with the NOSUGGEST flag
-      if (flags & WF_NOSUGGEST) {
-        continue;
-      }
-
-      if (flags & WF_KEEPCAP) {
-        // Must find the word in the keep-case tree.
-        find_keepcap_word(slang, theword, cword);
-        p = cword;
-      } else {
-        flags |= su->su_badflags;
-        if ((flags & WF_CAPMASK) != 0) {
-          // Need to fix case according to "flags".
-          make_case_word(theword, cword, flags);
-          p = cword;
-        } else {
-          p = theword;
-        }
-      }
-
-      // Add the suggestion.
-      if (sps_flags & SPS_DOUBLE) {
-        // Add the suggestion if the score isn't too bad.
-        if (score <= su->su_maxscore) {
-          add_suggestion(su, &su->su_sga, p, su->su_badlen,
-                         score, 0, false, slang, false);
-        }
-      } else {
-        // Add a penalty for words in another region.
-        if ((flags & WF_REGION)
-            && (((unsigned)flags >> 16) & (unsigned)lp->lp_region) == 0) {
-          goodscore = SCORE_REGION;
-        } else {
-          goodscore = 0;
-        }
-
-        // Add a small penalty for changing the first letter from
-        // lower to upper case.  Helps for "tath" -> "Kath", which is
-        // less common than "tath" -> "path".  Don't do it when the
-        // letter is the same, that has already been counted.
-        int gc = utf_ptr2char(p);
-        if (SPELL_ISUPPER(gc)) {
-          int bc = utf_ptr2char(su->su_badword);
-          if (!SPELL_ISUPPER(bc)
-              && SPELL_TOFOLD(bc) != SPELL_TOFOLD(gc)) {
-            goodscore += SCORE_ICASE / 2;
-          }
-        }
-
-        // Compute the score for the good word.  This only does letter
-        // insert/delete/swap/replace.  REP items are not considered,
-        // which may make the score a bit higher.
-        // Use a limit for the score to make it work faster.  Use
-        // MAXSCORE(), because RESCORE() will change the score.
-        // If the limit is very high then the iterative method is
-        // inefficient, using an array is quicker.
-        int limit = MAXSCORE(su->su_sfmaxscore - goodscore, score);
-        if (limit > SCORE_LIMITMAX) {
-          goodscore += rs_spell_edit_score(slang, su->su_badword, p);
-        } else {
-          goodscore += rs_spell_edit_score_limit(slang, su->su_badword, p, limit);
-        }
-
-        // When going over the limit don't bother to do the rest.
-        if (goodscore < SCORE_MAXMAX) {
-          // Give a bonus to words seen before.
-          goodscore = score_wordcount_adj(slang, goodscore, p, false);
-
-          // Add the suggestion if the score isn't too bad.
-          goodscore = RESCORE(goodscore, score);
-          if (goodscore <= su->su_sfmaxscore) {
-            add_suggestion(su, &su->su_ga, p, su->su_badlen,
-                           goodscore, score, true, slang, true);
-          }
-        }
-      }
-    }
-  }
+  rs_add_sound_suggest(su, goodword, score, lp);
 }
 
 /// Adds a suggestion to the list of suggestions.
