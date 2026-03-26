@@ -252,10 +252,14 @@ int nvim_spellsug_get_sps_flags(void) { return sps_flags; }
 int nvim_spellsug_get_sps_limit(void) { return sps_limit; }
 
 
+// Accessor for the HLF_COUNT sentinel value (used by rs_check_suggestions).
+int nvim_hlf_count(void) { return (int)HLF_COUNT; }
+
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
 extern int rs_stp_sal_score(suggest_T *stp, const char *su_badptr, int su_badlen,
                             slang_T *slang, const char *badsound);
+extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -2491,28 +2495,7 @@ static void add_suggestion(suginfo_T *su, garray_T *gap, const char *goodword, i
 /// @param gap  either su_ga or su_sga
 static void check_suggestions(suginfo_T *su, garray_T *gap)
 {
-  char longword[MAXWLEN + 1];
-
-  if (gap->ga_len == 0) {
-    return;
-  }
-  suggest_T *stp = &SUG(*gap, 0);
-  for (int i = gap->ga_len - 1; i >= 0; i--) {
-    // Need to append what follows to check for "the the".
-    xstrlcpy(longword, stp[i].st_word, MAXWLEN + 1);
-    int len = stp[i].st_wordlen;
-    xstrlcpy(longword + len, su->su_badptr + stp[i].st_orglen, MAXWLEN + 1 - (size_t)len);
-    hlf_T attr = HLF_COUNT;
-    spell_check(curwin, longword, &attr, NULL, false);
-    if (attr != HLF_COUNT) {
-      // Remove this entry.
-      xfree(stp[i].st_word);
-      gap->ga_len--;
-      if (i < gap->ga_len) {
-        memmove(stp + i, stp + i + 1, sizeof(suggest_T) * (size_t)(gap->ga_len - i));
-      }
-    }
-  }
+  rs_check_suggestions((suggest_T *)gap->ga_data, &gap->ga_len, su->su_badptr);
 }
 
 /// Add a word to be banned.

@@ -2623,6 +2623,15 @@ extern "C" {
     fn rs_ascii_iswhite(c: c_int) -> c_int;
     #[link_name = "curwin"]
     static stp_sal_curwin: *mut std::ffi::c_void;
+    /// spell_check: checks if `ptr` is misspelled; sets `*attrp` if so.
+    fn spell_check(
+        wp: *mut std::ffi::c_void,
+        ptr: *mut c_char,
+        attrp: *mut c_int,
+        capcol: *mut c_int,
+        docount: bool,
+    ) -> usize;
+    fn nvim_hlf_count() -> c_int;
 }
 
 /// Full replacement for C spell_check_sps():
@@ -2907,6 +2916,85 @@ pub unsafe extern "C" fn rs_stp_sal_score(
         &goodsound[..good_end],
         std::slice::from_raw_parts(pbad.cast::<u8>(), bad_end),
     )
+}
+
+// =============================================================================
+// Phase 4: check_suggestions
+// =============================================================================
+
+/// Rust replacement for C `check_suggestions`.
+///
+/// Removes suggestions from the array that spell_check considers misspelled
+/// (catches "the the" -> "thee the" cases by appending trailing bad text).
+///
+/// # Safety
+/// `data` must be a valid pointer to `*gap_len` `CSuggestT` items.
+/// `gap_len` must be a valid pointer to the current length.
+/// `su_badptr` must be a valid null-terminated C string.
+/// All `st_word` pointers must be C-heap-allocated (freed via xfree).
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_suggestions(
+    data: *mut CSuggestT,
+    gap_len: *mut c_int,
+    su_badptr: *const c_char,
+) {
+    let hlf_count = nvim_hlf_count();
+    let len = *gap_len as usize;
+    if len == 0 {
+        return;
+    }
+
+    let mut cur_len = len;
+    let mut i = cur_len;
+    loop {
+        if i == 0 {
+            break;
+        }
+        i -= 1;
+
+        let stp = &*data.add(i);
+        // Build longword = stp->st_word + (su_badptr + stp->st_orglen)
+        let mut longword = [0u8; MAXWLEN + 1];
+        let wlen = stp.st_wordlen as usize;
+        // Copy st_word bytes
+        let word_bytes = std::slice::from_raw_parts(stp.st_word.cast::<u8>(), wlen);
+        let copy_len = wlen.min(MAXWLEN);
+        longword[..copy_len].copy_from_slice(&word_bytes[..copy_len]);
+        // Append su_badptr + st_orglen
+        let tail_ptr = su_badptr.add(stp.st_orglen as usize).cast::<u8>();
+        let remaining = MAXWLEN + 1 - copy_len;
+        let mut j = 0usize;
+        while j < remaining {
+            let b = *tail_ptr.add(j);
+            longword[copy_len + j] = b;
+            if b == 0 {
+                break;
+            }
+            j += 1;
+        }
+        if copy_len + j <= MAXWLEN {
+            longword[copy_len + j] = 0;
+        }
+
+        let mut attr = hlf_count;
+        spell_check(
+            stp_sal_curwin,
+            longword.as_mut_ptr().cast::<c_char>(),
+            &raw mut attr,
+            std::ptr::null_mut(),
+            false,
+        );
+
+        if attr != hlf_count {
+            // Remove this entry.
+            xfree((*data.add(i)).st_word.cast::<std::ffi::c_void>());
+            cur_len -= 1;
+            if i < cur_len {
+                std::ptr::copy(data.add(i + 1), data.add(i), cur_len - i);
+            }
+        }
+    }
+    *gap_len = cur_len as c_int;
 }
 
 // =============================================================================
