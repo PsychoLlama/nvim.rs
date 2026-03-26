@@ -24,7 +24,7 @@ extern "C" {
     fn nvim_augroup_map_del_c(id: c_int, name: *const c_char);
     fn nvim_get_next_augroup_id() -> c_int;
     fn nvim_inc_next_augroup_id() -> c_int;
-    fn nvim_get_current_augroup() -> c_int;
+    fn nvim_autocmd_get_current_augroup() -> c_int;
     fn nvim_get_deleted_augroup() -> *const c_char;
 }
 
@@ -467,7 +467,7 @@ pub unsafe extern "C" fn rs_augroup_name(mut group: c_int) -> *const c_char {
     }
 
     if group == AUGROUP_ALL {
-        group = nvim_get_current_augroup();
+        group = nvim_autocmd_get_current_augroup();
     }
 
     let next_id = nvim_get_next_augroup_id();
