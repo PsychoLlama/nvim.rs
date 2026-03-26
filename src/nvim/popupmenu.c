@@ -244,10 +244,7 @@ PumKeyConstants nvim_pum_get_key_constants(void)
 
 
 /// Emit error message.
-void nvim_pum_emsg_menu_mode(void)
-{
-  emsg(_(e_menu_only_exists_in_another_mode));
-}
+void nvim_pum_emsg_menu_mode(void) { emsg(_(e_menu_only_exists_in_another_mode)); }
 
 /// Opaque border configuration for popup menu rendering.
 /// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.

@@ -38,15 +38,9 @@ ContextVec ctx_stack = KV_INITIAL_VALUE;
 // never needs to touch the OptVal struct.
 static OptVal saved_shada_opt;
 
-void nvim_ctx_save_shada_opt(void)
-{
-  saved_shada_opt = get_option_value(kOptShada, OPT_GLOBAL);
-}
+void nvim_ctx_save_shada_opt(void) { saved_shada_opt = get_option_value(kOptShada, OPT_GLOBAL); }
 
-void nvim_ctx_set_shada_restore(void)
-{
-  set_option_value(kOptShada, STATIC_CSTR_AS_OPTVAL("!,'100,%"), OPT_GLOBAL);
-}
+void nvim_ctx_set_shada_restore(void) { set_option_value(kOptShada, STATIC_CSTR_AS_OPTVAL("!,'100,%"), OPT_GLOBAL); }
 
 void nvim_ctx_restore_shada_opt(void)
 {

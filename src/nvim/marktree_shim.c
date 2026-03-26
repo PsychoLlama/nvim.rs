@@ -197,10 +197,7 @@ void nvim_mtnode_intersect_clear(MTNode *x)
   kvi_init(x->intersect);
 }
 
-void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
-{
-  kvi_push(x->intersect, id);
-}
+void nvim_mtnode_intersect_push(MTNode *x, uint64_t id) { kvi_push(x->intersect, id); }
 
 // B-tree Deletion Operations (for Rust FFI)
 

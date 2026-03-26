@@ -82,63 +82,34 @@ static void close_cb(uv_handle_t *handle)
   signal_watcher_call_close_cb(watcher);
 }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Get the signal number from a SignalWatcher (accessor for Rust).
-int nvim_signal_watcher_get_signum(SignalWatcher *watcher)
-{
-  return watcher->uv.signum;
-}
+int nvim_signal_watcher_get_signum(SignalWatcher *watcher) { return watcher->uv.signum; }
 
 /// Get the events queue from a SignalWatcher (accessor for Rust).
-MultiQueue *nvim_signal_watcher_get_events(SignalWatcher *watcher)
-{
-  return watcher->events;
-}
+MultiQueue *nvim_signal_watcher_get_events(SignalWatcher *watcher) { return watcher->events; }
 
 /// Get the user data from a SignalWatcher (accessor for Rust).
-void *nvim_signal_watcher_get_data(SignalWatcher *watcher)
-{
-  return watcher->data;
-}
+void *nvim_signal_watcher_get_data(SignalWatcher *watcher) { return watcher->data; }
 
 /// Set the user data for a SignalWatcher (accessor for Rust).
-void nvim_signal_watcher_set_data(SignalWatcher *watcher, void *data)
-{
-  watcher->data = data;
-}
+void nvim_signal_watcher_set_data(SignalWatcher *watcher, void *data) { watcher->data = data; }
 
 /// Set the events queue for a SignalWatcher (accessor for Rust).
-void nvim_signal_watcher_set_events(SignalWatcher *watcher, MultiQueue *events)
-{
-  watcher->events = events;
-}
+void nvim_signal_watcher_set_events(SignalWatcher *watcher, MultiQueue *events) { watcher->events = events; }
 
 /// Get the cb from a SignalWatcher (accessor for Rust).
-void *nvim_signal_watcher_get_cb(SignalWatcher *watcher)
-{
-  return (void *)watcher->cb;
-}
+void *nvim_signal_watcher_get_cb(SignalWatcher *watcher) { return (void *)watcher->cb; }
 
 /// Set the cb for a SignalWatcher (accessor for Rust).
-void nvim_signal_watcher_set_cb(SignalWatcher *watcher, void *cb)
-{
-  watcher->cb = (signal_cb)cb;
-}
+void nvim_signal_watcher_set_cb(SignalWatcher *watcher, void *cb) { watcher->cb = (signal_cb)cb; }
 
 /// Get the close_cb from a SignalWatcher (accessor for Rust).
-void *nvim_signal_watcher_get_close_cb(SignalWatcher *watcher)
-{
-  return (void *)watcher->close_cb;
-}
+void *nvim_signal_watcher_get_close_cb(SignalWatcher *watcher) { return (void *)watcher->close_cb; }
 
 /// Set the close_cb for a SignalWatcher (accessor for Rust).
-void nvim_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb)
-{
-  watcher->close_cb = (signal_close_cb)cb;
-}
+void nvim_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb) { watcher->close_cb = (signal_close_cb)cb; }
 
 /// Call the signal callback if set (accessor for Rust).
 void nvim_signal_watcher_call_cb(SignalWatcher *watcher)

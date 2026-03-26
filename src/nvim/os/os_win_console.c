@@ -27,10 +27,7 @@ int os_open_conin_fd(void)
   return conin_fd;
 }
 
-void os_clear_hwnd(void)
-{
-  hWnd = NULL;
-}
+void os_clear_hwnd(void) { hWnd = NULL; }
 
 void os_replace_stdin_to_conin(void)
 {
@@ -96,16 +93,10 @@ void os_icon_init(void)
 }
 
 /// Saves the original Windows console title.
-void os_title_save(void)
-{
-  GetConsoleTitle(origTitle, sizeof(origTitle));
-}
+void os_title_save(void) { GetConsoleTitle(origTitle, sizeof(origTitle)); }
 
 /// Resets the original Windows console title.
-void os_title_reset(void)
-{
-  SetConsoleTitle(origTitle);
-}
+void os_title_reset(void) { SetConsoleTitle(origTitle); }
 
 #if !defined(ENABLE_VIRTUAL_TERMINAL_PROCESSING)
 # define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004

@@ -59,9 +59,7 @@ extern void rs_tagstack_clear_entry(void *tg);
 // There are marks 'A - 'Z (set by user) and '0 to '9 (set when writing
 // shada).
 
-// =============================================================================
 // Static assertions for constants shared with Rust
-// =============================================================================
 _Static_assert(CMOD_KEEPJUMPS == 0x0400, "CMOD_KEEPJUMPS mismatch with Rust");
 _Static_assert(kOptJopFlagStack == 0x01, "kOptJopFlagStack mismatch with Rust");
 _Static_assert(JUMPLISTSIZE == 100, "JUMPLISTSIZE mismatch with Rust");
@@ -74,9 +72,7 @@ _Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP mismatch with Rust");
 _Static_assert(BUF_HAS_QF_ENTRY == 1, "BUF_HAS_QF_ENTRY mismatch with Rust");
 _Static_assert(BUF_HAS_LL_ENTRY == 2, "BUF_HAS_LL_ENTRY mismatch with Rust");
 
-// =============================================================================
 // Rust FFI declarations
-// =============================================================================
 
 // Mark index functions (already used inline)
 
@@ -703,10 +699,8 @@ void get_global_marks(list_T *l)
   }
 }
 
-// =============================================================================
 // Cross-function callbacks from Rust (Phase 3)
 // Placed at end of file after static function definitions
-// =============================================================================
 void nvim_mark_fname2fnum(xfmark_T *xfm) { fname2fnum(xfm); }
 char *nvim_mark_buflist_nr2name(int fnum, int listed, int unstripped) {
   return buflist_nr2name(fnum, listed, unstripped);

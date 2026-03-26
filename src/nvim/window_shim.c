@@ -395,8 +395,6 @@ void nvim_aucmd_win_clear(int idx) { aucmd_win[idx].auc_win = NULL; }
 void nvim_kv_destroy_aucmd_win_vec(void) { kv_destroy(aucmd_win_vec); }
 
 
-// =============================================================================
-// =============================================================================
 
 /// Allocate a raw tabpage_T (xcalloc only).
 tabpage_T *nvim_alloc_tabpage_raw(void) { return xcalloc(1, sizeof(tabpage_T)); }
@@ -488,8 +486,6 @@ static int last_win_id = LOWEST_WIN_ID - 1;
 
 int nvim_get_last_win_id(void) { return last_win_id; }
 
-// =============================================================================
-// =============================================================================
 
 /// Allocate raw win_T via xcalloc.
 win_T *nvim_alloc_win_raw(void) { return xcalloc(1, sizeof(win_T)); }
@@ -550,9 +546,7 @@ void nvim_free_wininfo_raw(WinInfo *wip, buf_T *bp)
   xfree(wip);
 }
 
-// =============================================================================
 // win_alloc: thin wrapper calling rs_win_alloc
-// =============================================================================
 
 
 /// pmap_del the window handle from window_handles.
@@ -911,9 +905,7 @@ void nvim_win_ui_call_win_external_pos(int grid_handle, int win_handle) { ui_cal
 void nvim_win_ui_check_cursor_grid(int grid_handle) { ui_check_cursor_grid(grid_handle); }
 
 
-// =============================================================================
 // C Accessors for leaving_window / entering_window / win_init_empty
-// =============================================================================
 
 /// Check if window's buffer is a prompt buffer.
 int nvim_win_bt_prompt(win_T *wp) { return (wp && wp->w_buffer) ? (bt_prompt(wp->w_buffer) ? 1 : 0) : 0; }
@@ -933,9 +925,7 @@ buf_T *nvim_win_get_buf_ptr(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 /// Sync w_s to point to the window's buffer's b_s.
 void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buffer->b_s; } }
 
-// =============================================================================
 // C Accessors for win_comp_scroll / win_new_screensize / etc.
-// =============================================================================
 
 
 
@@ -987,8 +977,6 @@ void nvim_win_clear_winbar_click_defs(win_T *wp)
   wp->w_winbar_click_defs = NULL;
 }
 
-// =============================================================================
-// =============================================================================
 
 /// Generic autocmd dispatcher: apply_autocmds(event, NULL, NULL, false, curbuf).
 /// Rust callers pass EVENT_* integer constants defined in auevents_enum.generated.h.
@@ -1001,8 +989,6 @@ _Static_assert(EVENT_WINLEAVE == 137, "EVENT_WINLEAVE value mismatch");
 _Static_assert(EVENT_WINNEW == 138, "EVENT_WINNEW value mismatch");
 void nvim_apply_autocmds_event(int event) { apply_autocmds((event_T)event, NULL, NULL, false, curbuf); }
 
-// =============================================================================
-// =============================================================================
 
 /// Get curwin->w_localdir (or NULL if not set).
 const char *nvim_curwin_get_localdir(void) { return curwin->w_localdir; }
@@ -1036,8 +1022,6 @@ int nvim_swb_has_useopen(void) { return (swb_flags & kOptSwbFlagUseopen) ? 1 : 0
 int nvim_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) ? 1 : 0; }
 // win_fix_current_dir, buf_jump_open_win, buf_jump_open_tab,
 
-// =============================================================================
-// =============================================================================
 
 /// Set p_ch directly (for restoring after e_noroom).
 void nvim_set_p_ch(int64_t val) { p_ch = val; }
@@ -1074,8 +1058,6 @@ void nvim_grid_clear_cmd_area(void)
 }
 
 
-// =============================================================================
-// =============================================================================
 
 /// Return 1 if curbuf is locked (prevents split/new).
 int nvim_curbuf_locked(void) { return curbuf_locked() ? 1 : 0; }
@@ -1178,8 +1160,6 @@ int nvim_get_cmdmod_tab(void) { return (int)cmdmod.cmod_tab; }
 /// Set cmdmod.cmod_tab.
 void nvim_set_cmdmod_tab(int val) { cmdmod.cmod_tab = val; }
 
-// =============================================================================
-// =============================================================================
 
 
 /// Call reset_dragwin().
@@ -1213,8 +1193,6 @@ void nvim_set_cmdheight_for_tabpage(int64_t new_ch)
 }
 
 
-// =============================================================================
-// =============================================================================
 
 /// Get w_changelistidx.
 int nvim_win_get_changelistidx(win_T *wp) { return wp ? wp->w_changelistidx : 0; }
@@ -1276,8 +1254,6 @@ void nvim_win_init_copy_compound(win_T *dst, win_T *src, int flags)
   rs_copyFoldingState(src, dst);
 }
 
-// =============================================================================
-// =============================================================================
 
 // Event ignored wrappers
 int nvim_event_ignored_winscrolled(win_T *wp) { return wp ? (event_ignored(EVENT_WINSCROLLED, wp->w_p_eiw) ? 1 : 0) : 1; }
@@ -1288,9 +1264,7 @@ int nvim_has_event_winresized(void) { return has_event(EVENT_WINRESIZED) ? 1 : 0
 
 /// Get buf handle (b_fnum / handle) for bufref validity check.
 int nvim_win_get_buf_fnum(win_T *wp) { return (wp && wp->w_buffer) ? (int)wp->w_buffer->handle : 0; }
-// =============================================================================
 // Typval compound operations for scroll/resize event building
-// =============================================================================
 
 /// Allocate a new dict with refcount=1.
 void *nvim_tv_dict_alloc_refcount1(void)
@@ -1357,9 +1331,7 @@ void nvim_tv_list_append_number(void *list, int nr)
   tv_list_append_owned_tv((list_T *)list, tv);
 }
 
-// =============================================================================
 // Compound autocmd/v:event fire operations
-// =============================================================================
 
 /// Fire WinResized autocmd.
 ///
@@ -1437,8 +1409,6 @@ void nvim_fire_winscrolled(void *dict, const char *winid_str,
   restore_v_event(v_event, &save_v_event);
 }
 
-// =============================================================================
-// =============================================================================
 
 /// Set wp->w_locked.
 
@@ -1465,8 +1435,6 @@ int nvim_close_buffer_for_win(win_T *win, int action, int abort_if_last)
   return 0;
 }
 
-// =============================================================================
-// =============================================================================
 
 /// Safe terminal check: 1 if win->w_buffer != NULL && w_buffer->terminal != NULL.
 int nvim_win_buf_has_terminal_safe(win_T *win) { return (win && win->w_buffer && win->w_buffer->terminal) ? 1 : 0; }
@@ -1488,8 +1456,6 @@ void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf)
   }
 }
 
-// =============================================================================
-// =============================================================================
 
 /// Generic error-message dispatcher.
 ///
@@ -1585,9 +1551,7 @@ int nvim_one_window_and_locked_split(void)
           && first_tabpage && first_tabpage->tp_next != NULL) ? 1 : 0;
 }
 
-// =============================================================================
 // Window/wline accessors (relocated from fold_shim.c)
-// =============================================================================
 
 /// Get a wline_T pointer at index in a window's w_lines array.
 /// Returns NULL if index is out of bounds.
@@ -1606,9 +1570,7 @@ bool nvim_wline_get_folded(wline_T *wl) { return wl->wl_folded; }
 uint16_t nvim_wline_get_size(wline_T *wl) { return wl->wl_size; }
 linenr_T nvim_wline_get_lastlnum(wline_T *wl) { return wl->wl_lastlnum; }
 
-// =============================================================================
 // Moved from drawscreen.c: window/buffer visual state accessors
-// =============================================================================
 
 
 int nvim_buf_get_mod_set(buf_T *buf) { return buf ? buf->b_mod_set : 0; }
@@ -1740,9 +1702,7 @@ void nvim_eval_tv_set_string(typval_T *tv, char *s) { tv->vval.v_string = s; }
 void nvim_eval_tv_set_type(typval_T *tv, int t) { tv->v_type = (VarType)t; }
 dict_T *nvim_win_get_vars(win_T *wp) { return wp->w_vars; }
 
-// ============================================================================
 // draw_statuscol accessors for Rust
-// ============================================================================
 
 int nvim_win_get_nrwidth(win_T *wp) { return wp->w_nrwidth; }
 
@@ -1773,9 +1733,7 @@ size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen
   return transstr_buf(s, slen, buf, buflen, true);
 }
 
-// ============================================================================
 // Global variable accessors
-// ============================================================================
 
 // nvim_get_VIsual_lnum, _col, _coladd already defined in plines.c.
 // nvim_get_VIsual_mode already defined in normal_shim.c.
@@ -1803,8 +1761,6 @@ linenr_T nvim_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 colnr_T nvim_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
-// ============================================================================
-// ============================================================================
 
 // nvim_win_get_p_lbr already defined in plines.c.
 
@@ -1892,8 +1848,6 @@ void nvim_win_charsize_wrap(bool cstype, int vcol, const char *ptr, int32_t chr,
 /// Size of CharsizeArg (for stack allocation in Rust)
 int nvim_charsize_arg_size(void) { return (int)sizeof(CharsizeArg); }
 
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 
 /// Return 1 if the cursor line in curwin starts with NUL (empty line, not insert mode).
 int nvim_curwin_cursor_line_is_nul(void) { return *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL ? 1 : 0; }
@@ -1975,9 +1929,7 @@ void nvim_curwin_clear_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WROW
 void nvim_curwin_cursor_lnum_add(linenr_T delta) { curwin->w_cursor.lnum += delta; }
 void nvim_set_Insstart_from_cursor(void) { Insstart = curwin->w_cursor; }
 
-// =============================================================================
 // win_T option field address table (moved from option_shim.c)
-// =============================================================================
 
 // Get the address of a win_T option field by OptIndex.
 // Returns NULL for unknown/unhandled indices.
@@ -2055,9 +2007,7 @@ _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
 _Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
 _Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
 
-// =============================================================================
 // winopt_T accessors (moved from option_shim.c)
-// =============================================================================
 
 // Return pointer to the i-th string field of a winopt_T (for clear/check loops in Rust).
 // String fields in the order used by check_winopt / clear_winopt.
@@ -2150,8 +2100,6 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 // Update w_grid_alloc.blending based on current w_p_winbl value.
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
-// =============================================================================
-// =============================================================================
 
 int nvim_get_did_emsg(void) { return did_emsg ? 1 : 0; }
 void nvim_set_did_emsg(int val) { did_emsg = (bool)val; }
@@ -2240,8 +2188,6 @@ void nvim_buf_terminal_get_line_attributes(void *terminal, win_T *wp, int lnum, 
 /// kMTMetaInline constant (value 2).
 int nvim_get_kMTMetaInline(void) { return (int)kMTMetaInline; }
 
-// ============================================================================
-// ============================================================================
 
 #include "nvim/quickfix.h"
 

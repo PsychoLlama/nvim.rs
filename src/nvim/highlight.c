@@ -38,9 +38,7 @@ _Static_assert(HLF_MSG == 63, "HLF_MSG changed - update Rust constants");
 extern bool rs_ns_hl_def(int ns_id, int hl_id, HlAttrs attrs, int link_id);
 extern HlAttrs rs_dict2hlattrs(Dict dict, bool use_rgb, int *link_id, Error *err);
 
-// ============================================================================
 // C accessor functions (callable from Rust via FFI)
-// ============================================================================
 
 // Namespace globals (ns_hl_global, ns_hl_win, ns_hl_fast, ns_hl_active,
 // need_highlight_changed, p_pb, must_redraw_pum) are now accessed directly
@@ -69,19 +67,14 @@ void nvim_call_highlight_changed(void) { highlight_changed(); }
 void nvim_call_screen_invalidate_highlights(void) { screen_invalidate_highlights(); }
 
 
-// ============================================================================
 // C callback wrappers (callable from Rust via FFI)
-// ============================================================================
 
 void nvim_ui_call_hl_attr_define(int id, HlAttrs attrs, Array inspect)
 {
   ui_call_hl_attr_define(id, attrs, attrs, inspect);
 }
 
-void nvim_highlight_emsg_overflow(void)
-{
-  emsg(_("E424: Too many different highlighting attributes in use"));
-}
+void nvim_highlight_emsg_overflow(void) { emsg(_("E424: Too many different highlighting attributes in use")); }
 
 void nvim_remote_ui_hl_attr_define(RemoteUI *ui, int id, HlAttrs attrs, Array inspect)
 {
@@ -126,9 +119,7 @@ NsGetHlLuaResult c_ns_get_hl_lua_call(int ns_id, int hl_id, bool link)
   return result;
 }
 
-// ============================================================================
 // Functions with non-trivial C logic (not pure wrappers)
-// ============================================================================
 
 void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) *dict)
 {

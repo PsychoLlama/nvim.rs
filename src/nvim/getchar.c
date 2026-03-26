@@ -498,22 +498,13 @@ static void getchar_common(typval_T *argvars, typval_T *rettv, bool allow_number
 }
 
 /// "getchar()" function
-void f_getchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getchar_common(argvars, rettv, true);
-}
+void f_getchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getchar_common(argvars, rettv, true); }
 
 /// "getcharstr()" function
-void f_getcharstr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getchar_common(argvars, rettv, false);
-}
+void f_getcharstr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getchar_common(argvars, rettv, false); }
 
 /// "getcharmod()" function
-void f_getcharmod(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = mod_mask;
-}
+void f_getcharmod(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rettv->vval.v_number = mod_mask; }
 
 typedef enum {
   map_result_fail,    // failed, break loop

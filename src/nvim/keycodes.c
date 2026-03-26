@@ -16,15 +16,10 @@
 #include "keycode_names.generated.h"
 #include "keycodes.c.generated.h"
 
-// =============================================================================
 // Accessor functions for key_names_table (for Rust FFI)
-// =============================================================================
 
 /// Get the length of the key_names_table array.
-int nvim_get_key_names_table_len(void)
-{
-  return (int)ARRAY_SIZE(key_names_table);
-}
+int nvim_get_key_names_table_len(void) { return (int)ARRAY_SIZE(key_names_table); }
 
 /// Get the key code at the specified index in key_names_table.
 int nvim_get_key_names_table_key(int idx)
@@ -65,10 +60,7 @@ size_t nvim_get_key_names_table_name_size(int idx)
 
 /// Lookup a special key code by name using the generated hash function.
 /// Returns the index in key_names_table, or -1 if not found.
-int nvim_get_special_key_code_hash(const char *name, size_t len)
-{
-  return get_special_key_code_hash(name, len);
-}
+int nvim_get_special_key_code_hash(const char *name, size_t len) { return get_special_key_code_hash(name, len); }
 
 // replace_termcodes is now exported directly from Rust
 // (src/nvim-rs/keycodes/src/lib.rs via #[unsafe(export_name = "replace_termcodes")]).

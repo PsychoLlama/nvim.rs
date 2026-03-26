@@ -204,9 +204,7 @@ _Static_assert(offsetof(winlinevars_T, virt_inline) > offsetof(winlinevars_T, sa
 _Static_assert(sizeof(winlinevars_T) == sizeof(winlinevars_T), "size check placeholder");
 
 
-// ============================================================================
 // win_extmark_arr accessor functions for Rust
-// ============================================================================
 
 /// Push a WinExtmark to win_extmark_arr.
 void nvim_win_extmark_push(uint64_t ns_id, uint64_t mark_id, int win_row, int win_col)

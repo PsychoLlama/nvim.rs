@@ -101,9 +101,7 @@ extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int co
                                           int unload);
 extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
 
-// ============================================================
 // Core buf_T field accessors
-// ============================================================
 
 int nvim_buf_get_handle(buf_T *buf) { return buf ? buf->b_fnum : 0; }
 char nvim_buf_get_buftype(buf_T *buf) { return buf->b_p_bt[0]; }
@@ -238,9 +236,7 @@ int nvim_try_getdigits(const char *s, int64_t *vers)
   return (int)(p - s);
 }
 
-// ============================================================
 // Regex accessor helpers
-// ============================================================
 
 /// Compile a regex for buflist_findpat, returning heap-allocated regmatch_T or NULL.
 void *nvim_blfp_regex_compile(const char *pat, int magic)
@@ -313,9 +309,7 @@ void nvim_cmdwin_set_filetype_vim(void)
 bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }
 bool nvim_curbuf_has_b_p_fex(void) { return *curbuf->b_p_fex != NUL; }
 
-// =============================================================================
 // buf_T option field offset table
-// =============================================================================
 
 // Fill offset table for buf_T option fields indexed by OptIndex.
 // Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
@@ -420,9 +414,7 @@ void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
   out[kOptKeymap]        = offsetof(buf_T, b_p_keymap);
 }
 
-// =============================================================================
 // buf_copy_options accessors
-// =============================================================================
 
 /// Returns buf->b_p_initialized.
 int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
@@ -436,10 +428,7 @@ void nvim_buf_set_b_help(buf_T *buf, int val) { buf->b_help = val != 0; }
 void nvim_buf_clear_b_p_script_ctx(buf_T *buf) { CLEAR_FIELD(buf->b_p_script_ctx); }
 
 /// Returns 1 if buf->b_p_bt[0] == 'h' (help buftype), else 0.
-int nvim_buf_get_b_p_bt_is_help(buf_T *buf)
-{
-  return (buf->b_p_bt && buf->b_p_bt[0] == 'h') ? 1 : 0;
-}
+int nvim_buf_get_b_p_bt_is_help(buf_T *buf) { return (buf->b_p_bt && buf->b_p_bt[0] == 'h') ? 1 : 0; }
 
 /// Saves b_p_isk pointer and NULLs the field.
 char *nvim_buf_save_and_clear_b_p_isk(buf_T *buf)
@@ -486,16 +475,10 @@ void nvim_buf_empty_string_field(buf_T *buf, ptrdiff_t offset)
 }
 
 /// Generic buf_T bool field setter: writes 0 or 1 via byte offset.
-void nvim_buf_set_bool_field(buf_T *buf, ptrdiff_t offset, int val)
-{
-  *(int *)(((char *)buf) + offset) = val != 0;
-}
+void nvim_buf_set_bool_field(buf_T *buf, ptrdiff_t offset, int val) { *(int *)(((char *)buf) + offset) = val != 0; }
 
 /// Generic buf_T OptInt field setter: writes OptInt value via byte offset.
-void nvim_buf_set_optint_field(buf_T *buf, ptrdiff_t offset, OptInt val)
-{
-  *(OptInt *)(((char *)buf) + offset) = val;
-}
+void nvim_buf_set_optint_field(buf_T *buf, ptrdiff_t offset, OptInt val) { *(OptInt *)(((char *)buf) + offset) = val; }
 
 /// Generic buf_T OptInt field getter: reads OptInt value via byte offset.
 OptInt nvim_buf_get_optint_field(buf_T *buf, ptrdiff_t offset) { return *(OptInt *)(((char *)buf) + offset); }
@@ -552,9 +535,7 @@ void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xs
 /// Set b_s.b_p_spo_flags from global spo_flags.
 void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags = spo_flags; }
 
-// ============================================================================
 // lasttitle/lasticon statics and accessors
-// ============================================================================
 
 static char *lasttitle = NULL;
 static char *lasticon = NULL;
@@ -568,9 +549,7 @@ const char *nvim_buf_get_lasticon(void) { return lasticon; }
 /// Set lasticon static variable (caller transfers ownership of s).
 void nvim_buf_set_lasticon(char *s) { lasticon = s; }
 
-// ============================================================================
 // Extmark Accessor Functions
-// ============================================================================
 
 MarkTree *nvim_buf_get_marktree(buf_T *buf) { return buf->b_marktree; }
 bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf) { return buf->deleted_bytes2; }
@@ -580,9 +559,7 @@ void nvim_buf_set_prev_line_count(buf_T *buf, int val) { buf->b_prev_line_count 
 bool nvim_buf_signcols_get_autom(buf_T *buf) { return buf->b_signcols.autom; }
 void nvim_buf_signcols_clear(buf_T *buf) { buf->b_signcols.max = 0; CLEAR_FIELD(buf->b_signcols.count); }
 
-// ============================================================
 // WinInfo FFI accessor helpers (for Rust wininfo.rs)
-// ============================================================
 
 size_t nvim_buf_wininfo_count(buf_T *buf) { return kv_size(buf->b_wininfo); }
 WinInfo *nvim_buf_wininfo_get(buf_T *buf, size_t i) { return kv_A(buf->b_wininfo, i); }
@@ -786,9 +763,7 @@ void nvim_set_buf_opts_scratch(void)
   RESET_BINDING(curwin);
 }
 
-// ============================================================
 // Buffer navigation accessors
-// ============================================================
 
 /// Returns non-zero if 'switchbuf' has the "newtab" flag.
 int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; }
@@ -798,9 +773,7 @@ int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 
 int nvim_swb_win_split_flags(void) { return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0; }
 
-// ============================================================
 // buf_contents_changed accessors
-// ============================================================
 
 /// Heap-allocate an exarg_T, fill it via prep_exarg(ea, buf), return pointer.
 void *nvim_buf_prep_exarg_alloc(buf_T *buf)
@@ -1301,9 +1274,7 @@ void enter_buffer(buf_T *buf)
   redraw_later(curwin, UPD_NOT_VALID);
 }
 
-// ============================================================
 // Buffer loading and command dispatch
-// ============================================================
 
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
 {
@@ -1501,9 +1472,7 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags)
   return OK;
 }
 
-// ============================================================
 // buf_freeall / close_buffer accessors
-// ============================================================
 
 void nvim_buf_lock(buf_T *buf) { buf->b_locked++; buf->b_locked_split++; }
 void nvim_buf_unlock(buf_T *buf) { buf->b_locked--; buf->b_locked_split--; }

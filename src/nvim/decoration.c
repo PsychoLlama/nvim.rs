@@ -181,10 +181,7 @@ void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
   }
 }
 
-DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next)
-{
-  return rs_decor_put_vt(&vt, next);
-}
+DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next) { return rs_decor_put_vt(&vt, next); }
 
 DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item)
 {
@@ -259,10 +256,7 @@ void decor_free(DecorInline decor)
 ///
 /// This should be called whenever a structural modification has been done to a
 /// marktree in a public API function (i e any change which adds or deletes marks).
-void decor_state_invalidate(buf_T *buf)
-{
-  rs_decor_state_invalidate(&decor_state, buf);
-}
+void decor_state_invalidate(buf_T *buf) { rs_decor_state_invalidate(&decor_state, buf); }
 
 void decor_check_to_be_deleted(void)
 {
@@ -484,16 +478,10 @@ int nvim_decor_conceal_line(win_T *wp, int row, int check_cursor)
 }
 
 /// @return whether a window may have folded or concealed lines
-bool win_lines_concealed(win_T *wp)
-{
-  return rs_hasAnyFolding(wp) || wp->w_p_cole >= 2;
-}
+bool win_lines_concealed(win_T *wp) { return rs_hasAnyFolding(wp) || wp->w_p_cole >= 2; }
 
 /// Wrapper for win_lines_concealed for Rust FFI.
-int nvim_win_lines_concealed(win_T *wp)
-{
-  return win_lines_concealed(wp) ? 1 : 0;
-}
+int nvim_win_lines_concealed(win_T *wp) { return win_lines_concealed(wp) ? 1 : 0; }
 
 int sign_item_cmp(const void *p1, const void *p2)
 {
@@ -575,10 +563,7 @@ void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], 
   }
 }
 
-DecorSignHighlight *decor_find_sign(DecorInline decor)
-{
-  return rs_decor_find_sign(decor.ext, decor.data.ext.sh_idx);
-}
+DecorSignHighlight *decor_find_sign(DecorInline decor) { return rs_decor_find_sign(decor.ext, decor.data.ext.sh_idx); }
 
 static const uint32_t signtext_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect };
 
@@ -1306,10 +1291,7 @@ void nvim_decor_redraw(buf_T *buf, int row_start, int row_end, int col_start,
 }
 
 /// Invalidate decor state for buffer.
-void nvim_decor_state_invalidate(buf_T *buf)
-{
-  decor_state_invalidate(buf);
-}
+void nvim_decor_state_invalidate(buf_T *buf) { decor_state_invalidate(buf); }
 
 /// Count sign columns in a range (wrapper for Rust FFI).
 void nvim_buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, int clear)
@@ -1318,28 +1300,16 @@ void nvim_buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, int 
 }
 
 /// Get sign name from DecorSignHighlight (for Rust sign crate).
-char *nvim_decor_sh_get_sign_name(DecorSignHighlight *sh)
-{
-  return sh ? sh->sign_name : NULL;
-}
+char *nvim_decor_sh_get_sign_name(DecorSignHighlight *sh) { return sh ? sh->sign_name : NULL; }
 
 /// Get highlight ID from DecorSignHighlight (for Rust sign crate).
-int nvim_decor_sh_get_hl_id(DecorSignHighlight *sh)
-{
-  return sh ? sh->hl_id : 0;
-}
+int nvim_decor_sh_get_hl_id(DecorSignHighlight *sh) { return sh ? sh->hl_id : 0; }
 
 /// Get priority from DecorSignHighlight (for Rust sign crate).
-int nvim_decor_sh_get_priority(DecorSignHighlight *sh)
-{
-  return sh ? sh->priority : 0;
-}
+int nvim_decor_sh_get_priority(DecorSignHighlight *sh) { return sh ? sh->priority : 0; }
 
 /// Get sign_add_id from DecorSignHighlight (for Rust sign crate).
-int nvim_decor_sh_get_sign_add_id(DecorSignHighlight *sh)
-{
-  return sh ? sh->sign_add_id : 0;
-}
+int nvim_decor_sh_get_sign_add_id(DecorSignHighlight *sh) { return sh ? sh->sign_add_id : 0; }
 
 /// Get type flags for decoration data (for Rust extmark FFI).
 uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)

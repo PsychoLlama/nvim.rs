@@ -1323,9 +1323,7 @@ void nvim_do_sub_set_replacement(const char *sub)
   });
 }
 
-// =============================================================================
 // regmmatch_T opaque handle accessors for do_sub
-// =============================================================================
 
 /// Get regmatch->startpos[0].lnum
 int nvim_regmmatch_startpos0_lnum(void *rm) { return (int)((regmmatch_T *)rm)->startpos[0].lnum; }
@@ -1374,10 +1372,8 @@ int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub,
                           (char *)sub, dest, destlen, flags);
 }
 
-// =============================================================================
 // do_ecmd accessor infrastructure
 // These accessors are used by rs_do_ecmd in src/nvim-rs/ex_cmds/src/edit.rs
-// =============================================================================
 
 // --- curbuf field accessors ---
 
@@ -1706,8 +1702,6 @@ void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
   }
 }
 
-// =============================================================================
-// =============================================================================
 
 /// Format and display the visual mode message.
 void nvim_cpi_format_visual_msg(int line_count_selected,

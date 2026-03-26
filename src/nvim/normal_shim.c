@@ -142,9 +142,7 @@ extern void del_from_showcmd(int len);
 
 static oparg_T *current_oap = NULL;
 
-// =============================================================================
 // Accessor functions for Rust FFI
-// =============================================================================
 
 /// Check if current_oap is NULL.
 int nvim_oap_is_null(void) { return current_oap == NULL; }
@@ -161,9 +159,7 @@ int nvim_get_opcount(void) { return opcount; }
 
 void nvim_set_opcount(int val) { opcount = val; }
 
-// =============================================================================
 // oparg_T pointer accessors for Rust FFI (takes explicit oap parameter)
-// =============================================================================
 
 int nvim_oap_get_op_type_ptr(oparg_T *oap) { return oap ? oap->op_type : OP_NOP; }
 
@@ -183,9 +179,7 @@ bool nvim_oap_get_inclusive(oparg_T *oap) { return oap ? oap->inclusive : false;
 
 void nvim_oap_set_inclusive(oparg_T *oap, bool val) { if (oap) oap->inclusive = val; }
 
-// =============================================================================
 // Additional oparg_T accessors for Rust ops crate
-// =============================================================================
 
 int nvim_oap_get_use_reg_one(oparg_T *oap) { return oap ? oap->use_reg_one : false; }
 
@@ -268,9 +262,7 @@ int nvim_gchar_cursor(void) { return utf_ptr2char(get_cursor_pos_ptr()); }
 
 void nvim_coladvance(colnr_T col) { coladvance(curwin, col); }
 
-// =============================================================================
 // cmdarg_T accessors for Rust FFI
-// =============================================================================
 
 oparg_T *nvim_cap_get_oap(cmdarg_T *cap) { return cap ? cap->oap : NULL; }
 
@@ -292,9 +284,7 @@ void nvim_cap_set_count1(cmdarg_T *cap, int val) { if (cap) cap->count1 = val; }
 
 int nvim_cap_get_arg(cmdarg_T *cap) { return cap ? cap->arg : 0; }
 
-// =============================================================================
 // Word motion accessors for Rust FFI
-// =============================================================================
 
 int nvim_fwd_word(int count, bool bigword, bool eol) { return fwd_word(count, bigword, eol); }
 
@@ -310,9 +300,7 @@ int nvim_dec_cursor(void) { return dec(&curwin->w_cursor); }
 
 unsigned int nvim_get_ve_flags(void) { return get_ve_flags(curwin); }
 
-// =============================================================================
 // Character search accessors for Rust FFI
-// =============================================================================
 
 int nvim_get_VIsual_mode(void) { return VIsual_mode; }
 
@@ -322,9 +310,7 @@ void nvim_set_cursor_coladd(int val) { curwin->w_cursor.coladd = val; }
 
 _Static_assert(TAB == 0x09, "TAB changed");
 
-// =============================================================================
 // Mark command accessors for Rust FFI
-// =============================================================================
 
 bool nvim_setmark(int name) { return setmark(name); }
 
@@ -340,9 +326,7 @@ int nvim_get_changelistlen(void) { return curbuf->b_changelistlen; }
 
 void nvim_emsg(const char *msg) { emsg(msg); }
 
-// =============================================================================
 // Register command accessors for Rust FFI
-// =============================================================================
 
 int nvim_get_expr_register(void) { return get_expr_register(); }
 
@@ -354,9 +338,7 @@ void *nvim_put_copy_register(int regname) { return copy_register(regname); }
 void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags) { do_put(regname, (yankreg_T *)savereg, dir, count, flags); }
 void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_register((yankreg_T *)savereg); xfree(savereg); } }
 
-// =============================================================================
 // Put/replace helper accessors for Rust FFI
-// =============================================================================
 
 int nvim_get_b_prompt_start_lnum_put(void) { return curbuf->b_prompt_start.mark.lnum; }
 void nvim_set_cursor_col_to_prompt_text_len(void) { curwin->w_cursor.col = (int)strlen(prompt_text()); }
@@ -379,9 +361,7 @@ bool nvim_curbuf_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_ins_char_call(int c) { ins_char(c); }
 void nvim_set_b_op_start_cursor(void) { curbuf->b_op_start = curwin->w_cursor; }
 
-// =============================================================================
 // Visual mode accessors for Rust FFI
-// =============================================================================
 
 void nvim_set_finish_op(bool val) { finish_op = val; }
 
@@ -413,9 +393,7 @@ int nvim_get_curswant(void) { return curwin->w_curswant; }
 
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL changed");
 
-// =============================================================================
 // Command handler accessors for Rust FFI
-// =============================================================================
 
 /// Clear b_syn_slow for all windows in current tab (for nv_clear).
 void nvim_clear_b_syn_slow_all_windows(void) {
@@ -441,15 +419,11 @@ void nvim_set_mode_displayed(bool val) { mode_displayed = val; }
 
 void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 
-// =============================================================================
 // Redo/count accessors for Rust FFI
-// =============================================================================
 
 int nvim_cap_get_nchar_len(cmdarg_T *cap) { return cap ? cap->nchar_len : 0; }
 
-// =============================================================================
 // Visual operator accessors for Rust FFI
-// =============================================================================
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
 _Static_assert(OP_DELETE == 1, "OP_DELETE mismatch");
 _Static_assert(OP_YANK == 2, "OP_YANK mismatch");
@@ -460,9 +434,7 @@ _Static_assert(K_DEL == TERMCAP2KEY('k', 'D'), "K_DEL mismatch");
 _Static_assert(K_KDEL == TERMCAP2KEY(KS_EXTRA, KE_KDEL), "K_KDEL mismatch");
 _Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
 
-// =============================================================================
 // Selection/g-cmd accessors for Rust FFI
-// =============================================================================
 _Static_assert(Ctrl_N == 14, "Ctrl_N mismatch");
 _Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
@@ -480,9 +452,7 @@ int nvim_get_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
 void nvim_set_cmdwin_result(int val) { cmdwin_result = val; }
 
-// =============================================================================
 // Visual complex function accessors for Rust FFI
-// =============================================================================
 
 // Guards: ensure Rust constants match C values
 _Static_assert(kOptFdoFlagPercent == 0x10,
@@ -546,9 +516,7 @@ int nvim_getvcol_pos_coladd(int lnum, int col, int coladd) {
 
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
-// =============================================================================
 // Search handler accessors for Rust FFI
-// =============================================================================
 
 /// Call getcmdline for search and set cap->searchbuf. Returns the searchbuf (or NULL).
 char *nvim_getcmdline_for_search(cmdarg_T *cap)
@@ -567,16 +535,12 @@ char *nvim_getcmdline_for_search(cmdarg_T *cap)
 /// Returns 1 on success, 0 on failure.
 int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL); }
 
-// =============================================================================
 // Operator handler accessors for Rust FFI
-// =============================================================================
 
 // Accessors for operator Rust implementations
 bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 
-// =============================================================================
 // Text object handler accessors for Rust FFI
-// =============================================================================
 
 /// find_pattern_in_path wrapper for bracket [i/]i/[d/]d commands.
 /// Takes a copy of ptr (via xmemdupz) and frees it after the call,
@@ -587,9 +551,7 @@ fmark_T *nvim_pos_to_mark_cursor(void) { return pos_to_mark(curbuf, NULL, curwin
 
 /// spell_move_to wrapper for bracket [s/]s/[r/]r/[S/]S commands.
 
-// =============================================================================
 // g-command and n_opencmd accessors for Rust FFI
-// =============================================================================
 
 int nvim_get_curwin_w_skipcol(void) { return (int)curwin->w_skipcol; }
 int nvim_get_curwin_w_topline(void) { return (int)curwin->w_topline; }
@@ -623,22 +585,16 @@ int nvim_getvcol_visual_coladd_after_adj(void) {
   getvcol(curwin, &VIsual, &cs, NULL, &ce);
   return (int)(ce - cs);
 }
-// =============================================================================
 // Undo/Redo handler accessors for Rust FFI
-// =============================================================================
 
 // Accessors for undo/redo Rust implementations
 
-// =============================================================================
 // Insert mode entry handler accessors for Rust FFI
-// =============================================================================
 
 // nv_replace C wrappers
 
 
-// =============================================================================
 // Scroll and screen handler accessors for Rust FFI
-// =============================================================================
 
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
 int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
@@ -674,9 +630,7 @@ void nvim_sync_fen_in_diff_windows(void)
 }
 
 /// Get translated E352 error message.
-// =============================================================================
 // Miscellaneous handler accessors for Rust FFI
-// =============================================================================
 
 // g-command C accessors for Rust FFI
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
@@ -694,9 +648,7 @@ void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnu
 void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
-// =============================================================================
 // find_ident_at_pos accessors for Rust FFI
-// =============================================================================
 
 /// Constants for find_ident_at_pos (verified with _Static_assert).
 _Static_assert(FIND_IDENT == 1, "FIND_IDENT changed");
@@ -729,9 +681,7 @@ void normal_enter(bool cmdwin, bool noexmode)
   current_oap = prev_oap;
 }
 
-// =============================================================================
 // normal_get_additional_char accessors for Rust FFI
-// =============================================================================
 
 _Static_assert(MODE_REPLACE == 0x110, "MODE_REPLACE changed");
 _Static_assert(MODE_LREPLACE == 0x120, "MODE_LREPLACE changed");
@@ -776,9 +726,7 @@ bool nvim_vim_strchr_p_cpo(int c) { return vim_strchr(p_cpo, c) != NULL; }
 /// Get MB_BYTE2LEN for a character.
 int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
 
-// =============================================================================
 // normal_finish_command accessors for Rust FFI
-// =============================================================================
 
 _Static_assert(K_IGNORE == -13821, "K_IGNORE changed");
 _Static_assert(K_MOUSEMOVE == -25853, "K_MOUSEMOVE changed");
@@ -787,9 +735,7 @@ _Static_assert(OP_NOP == 0, "OP_NOP changed");
 _Static_assert(OP_COLON == 10, "OP_COLON changed");
 _Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
 
-// =============================================================================
 // Layout guards for repr(C) struct mirrors in src/nvim-rs/normal/src/types.rs
-// =============================================================================
 
 _Static_assert(sizeof(pos_T) == 12, "pos_T size changed");
 _Static_assert(offsetof(pos_T, lnum) == 0, "pos_T.lnum offset changed");
@@ -885,9 +831,7 @@ void nvim_do_check_scrollbind_wrapper(bool flag) { do_check_scrollbind(flag); }
 /// do_check_cursorbind() wrapper.
 void nvim_do_check_cursorbind_wrapper(void) { do_check_cursorbind(); }
 
-// =============================================================================
 // normal_execute accessors for Rust FFI
-// =============================================================================
 
 _Static_assert(K_KENTER == -16715, "K_KENTER changed");
 _Static_assert(K_ZERO == -22783, "K_ZERO changed");
@@ -907,9 +851,7 @@ bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
 
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
 
-// =============================================================================
 // normal_check accessors for Rust FFI
-// =============================================================================
 
 /// Set quit_more global.
 void nvim_set_quit_more(bool val) { quit_more = val; }
@@ -932,9 +874,7 @@ void nvim_time_msg_first_screen_and_finish(void) { TIME_MSG("first screen update
 /// update_curswant() wrapper.
 void nvim_update_curswant_wrapper(void) { update_curswant(); }
 
-// =============================================================================
 // normal_check and normal_redraw accessors for Rust FFI
-// =============================================================================
 
 void nvim_set_did_check_timestamps(bool val) { did_check_timestamps = val; }
 bool nvim_get_need_check_timestamps(void) { return need_check_timestamps; }
@@ -953,16 +893,10 @@ void nvim_update_last_cursormoved(void)
 }
 
 /// Check if curbuf changedtick has changed since b_last_changedtick.
-bool nvim_curbuf_changedtick_changed(void)
-{
-  return curbuf->b_last_changedtick != buf_get_changedtick(curbuf);
-}
+bool nvim_curbuf_changedtick_changed(void) { return curbuf->b_last_changedtick != buf_get_changedtick(curbuf); }
 
 /// Update curbuf->b_last_changedtick to the current changedtick.
-void nvim_curbuf_update_last_changedtick(void)
-{
-  curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
-}
+void nvim_curbuf_update_last_changedtick(void) { curbuf->b_last_changedtick = buf_get_changedtick(curbuf); }
 
 /// Get curbuf->b_changed_invalid.
 bool nvim_curbuf_b_changed_invalid_get(void) { return curbuf->b_changed_invalid; }
@@ -972,9 +906,7 @@ void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = fal
 
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 
-// =============================================================================
 // showcmd accessors for Rust FFI
-// =============================================================================
 
 /// Constants for clear_showcmd (verified with _Static_assert).
 _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS changed");
@@ -1045,9 +977,7 @@ void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
 
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 
-// =============================================================================
 // Scrollbind C accessors for Rust FFI
-// =============================================================================
 
 /// Set did_syncbind global.
 void nvim_set_did_syncbind(bool val) { did_syncbind = val; }
@@ -1148,10 +1078,7 @@ void normal_cmd(oparg_T *oap, bool toplevel)
 // nv_ident build accessors
 
 /// Get the resolved keywordprg string (curbuf->b_p_kp or p_kp fallback).
-char *nvim_ident_get_kp(void)
-{
-  return *curbuf->b_p_kp == NUL ? p_kp : curbuf->b_p_kp;
-}
+char *nvim_ident_get_kp(void) { return *curbuf->b_p_kp == NUL ? p_kp : curbuf->b_p_kp; }
 
 /// Return true if curbuf is a help buffer.
 bool nvim_ident_curbuf_is_help(void) { return curbuf->b_help; }
@@ -1162,9 +1089,7 @@ char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
 /// Return mb_prevptr(line, p).
 char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 
-// =============================================================================
 // Dispatch table handler accessors (nv_addsub, nv_colon, nv_record, nv_paste, nv_event)
-// =============================================================================
 
 /// Return paste_repeat(count).
 void nvim_paste_repeat(int count) { paste_repeat(count); }
@@ -1182,9 +1107,7 @@ bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) {
 /// Return did_emsg.
 int nvim_did_emsg_check(void) { return did_emsg; }
 
-// =============================================================================
 // Search, gotofile, visual text, and mark movement accessors for Rust FFI
-// =============================================================================
 
 
 /// Returns true if cursor moved and highlights need refresh.
@@ -1216,9 +1139,7 @@ int nvim_do_ecmd_for_gotofile(char *ptr)
 /// Call ml_get_pos(&VIsual).
 char *nvim_ml_get_pos_visual(void) { return ml_get_pos(&VIsual); }
 
-// =============================================================================
 // Visual mode, cursor adjustment, and ident accessors for Rust FFI
-// =============================================================================
 
 /// Set mouse_dragging to val.
 void nvim_set_mouse_dragging(int val) { mouse_dragging = val; }
@@ -1246,18 +1167,14 @@ void nvim_curwin_set_old_visual_lnums(void)
   curwin->w_old_visual_lnum = curwin->w_cursor.lnum;
 }
 
-// =============================================================================
 // nv_z and operator implementation accessors for Rust FFI
-// =============================================================================
 
 /// Return true if curbuf is a terminal buffer.
 bool nvim_get_curbuf_terminal(void) { return curbuf->terminal != NULL; }
 
 /// Show "quit" or "abandon" hint message via msg() for ESC/CTRL-C.
 
-// =============================================================================
 // DPO (do_pending_operator) accessors for Rust FFI (Phase 1)
-// =============================================================================
 
 bool nvim_dpo_get_VIsual_active(void) { return VIsual_active; }
 bool nvim_dpo_get_finish_op(void) { return finish_op; }

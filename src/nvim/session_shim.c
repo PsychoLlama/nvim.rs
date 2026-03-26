@@ -57,9 +57,7 @@ extern var_flavour_T rs_var_flavour(const char *varname);
 /// Whether ":lcd" or ":tcd" was produced for a session.
 static int did_lcd;
 
-// =========================================================================
 // C accessor functions for Rust FFI
-// =========================================================================
 
 // --- Window accessors ---
 bool nvim_ses_win_get_floating(const win_T *wp) { return wp->w_floating; }

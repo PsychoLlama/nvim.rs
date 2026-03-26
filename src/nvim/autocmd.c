@@ -206,10 +206,7 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
 }
 
 // Called when buffer is freed, to remove/invalidate related buffer-local autocmds.
-void aubuflocal_remove(buf_T *buf)
-{
-  rs_aubuflocal_remove(buf->b_fnum);
-}
+void aubuflocal_remove(buf_T *buf) { rs_aubuflocal_remove(buf->b_fnum); }
 
 /// Delete the augroup that matches name.
 /// @param stupid_legacy_mode bool: This parameter determines whether to run the augroup
@@ -1579,9 +1576,7 @@ void do_filetype_autocmd(buf_T *buf, bool force)
   secure = secure_save;
 }
 
-// =============================================================================
 // Rust FFI accessor functions
-// =============================================================================
 
 int nvim_get_autocmd_blocked(void) { return autocmd_blocked; }
 int nvim_get_aucmd_win_count(void) { return AUCMD_WIN_COUNT; }
@@ -1651,10 +1646,7 @@ void nvim_augroup_put(const char *name, int id)
 }
 
 /// Delete group from both maps, freeing allocated strings (used by Rust FFI).
-void nvim_augroup_map_del_c(int id, const char *name)
-{
-  augroup_map_del(id, name);
-}
+void nvim_augroup_map_del_c(int id, const char *name) { augroup_map_del(id, name); }
 
 int nvim_get_next_augroup_id(void) { return next_augroup_id; }
 int nvim_inc_next_augroup_id(void) { return next_augroup_id++; }

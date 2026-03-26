@@ -28,9 +28,7 @@
 // Rust FFI declarations (tag module)
 extern void rs_tagstack_clear_entry(void *tg);
 
-// =============================================================================
 // C accessor functions called from Rust mark crate
-// =============================================================================
 
 // bt_prompt / buflist_findnr / findsent / extmark_adjust are static inline / internal; keep wrappers
 int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }

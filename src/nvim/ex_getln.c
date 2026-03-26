@@ -1177,15 +1177,9 @@ void unputcmdline(void)
 // put_on_cmdline, cmdline_paste_str, redrawcmdline, redrawcmd: implemented in Rust (cmdline crate).
 
 /// Get a pointer to the current command line info.
-CmdlineInfo *get_cmdline_info(void)
-{
-  return &ccline;
-}
+CmdlineInfo *get_cmdline_info(void) { return &ccline; }
 
-unsigned get_cmdline_last_prompt_id(void)
-{
-  return last_prompt_id;
-}
+unsigned get_cmdline_last_prompt_id(void) { return last_prompt_id; }
 
 /// Get pointer to the active command line info, or NULL if not in cmdline mode.
 /// When ccline is saved recursively, the previous value is in ccline.prev_ccline.
@@ -1203,10 +1197,7 @@ CmdlineInfo *nvim_get_ccline_ptr(void)
 }
 
 /// Public wrapper for do_autocmd_cmdlinechanged (for VimL functions in other files).
-void nvim_do_autocmd_cmdlinechanged(int firstc)
-{
-  do_autocmd_cmdlinechanged(firstc);
-}
+void nvim_do_autocmd_cmdlinechanged(int firstc) { do_autocmd_cmdlinechanged(firstc); }
 
 /// Get the current command-line type.
 /// Returns ':' or '/' or '?' or '@' or '>' or '-'
@@ -1228,10 +1219,7 @@ int nvim_get_cmdline_type(void)
 // C accessor for ccline.cmdfirstc (used by Rust)
 int nvim_get_ccline_cmdfirstc(void) { return ccline.cmdfirstc; }
 
-void cmdline_init(void)
-{
-  CLEAR_FIELD(ccline);
-}
+void cmdline_init(void) { CLEAR_FIELD(ccline); }
 
 /// Check value of 'cedit' and set cedit_key.
 /// Returns NULL if value is OK, error message otherwise.
@@ -1623,10 +1611,7 @@ void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val) { ((CommandL
 int nvim_cls_get_break_ctrl_c(void *s) { return ((CommandLineState *)s)->break_ctrl_c ? 1 : 0; }
 
 /// Get ccline.mouse_used pointer (may be NULL).
-int nvim_cls_get_ccline_mouse_used(void)
-{
-  return ccline.mouse_used != NULL ? 1 : 0;
-}
+int nvim_cls_get_ccline_mouse_used(void) { return ccline.mouse_used != NULL ? 1 : 0; }
 
 /// Set the value at ccline.mouse_used if non-NULL.
 void nvim_cls_set_ccline_mouse_used_val(int val)
@@ -1637,10 +1622,7 @@ void nvim_cls_set_ccline_mouse_used_val(int val)
 }
 
 /// Wrapper for cmdline_pum_cleanup(&ccline) (called from Rust).
-void nvim_cmdline_pum_cleanup(void)
-{
-  cmdline_pum_cleanup(&ccline);
-}
+void nvim_cmdline_pum_cleanup(void) { cmdline_pum_cleanup(&ccline); }
 
 /// Call showmatches for &s->xpc (called from Rust with opaque xp pointer).
 int nvim_showmatches(void *xp, bool display_wildmenu, bool display_list, bool noselect)
@@ -1655,16 +1637,10 @@ int nvim_nextwild(void *xp, int type, int options, bool escape)
 }
 
 /// Get getln_interrupted_highlight global.
-int nvim_get_getln_interrupted_highlight(void)
-{
-  return getln_interrupted_highlight ? 1 : 0;
-}
+int nvim_get_getln_interrupted_highlight(void) { return getln_interrupted_highlight ? 1 : 0; }
 
 /// Set getln_interrupted_highlight global.
-void nvim_set_getln_interrupted_highlight(int val)
-{
-  getln_interrupted_highlight = (val != 0);
-}
+void nvim_set_getln_interrupted_highlight(int val) { getln_interrupted_highlight = (val != 0); }
 
 /// Set ccline.cmdbuff[0] to NUL (for 'q' with mouse prompt).
 void nvim_ccline_cmdbuff_set_nul(void)
@@ -1681,16 +1657,10 @@ int nvim_may_add_char_to_search(int firstc, int *c, void *is_state)
 }
 
 /// Get cedit_key value (static variable, exposed for Rust).
-int nvim_get_cedit_key(void)
-{
-  return cedit_key;
-}
+int nvim_get_cedit_key(void) { return cedit_key; }
 
 /// Get s->lookfor field (may be NULL).
-char *nvim_cls_get_lookfor(void *s)
-{
-  return ((CommandLineState *)s)->lookfor;
-}
+char *nvim_cls_get_lookfor(void *s) { return ((CommandLineState *)s)->lookfor; }
 
 /// Free s->lookfor and set to NULL (XFREE_CLEAR equivalent).
 void nvim_cls_xfree_lookfor(void *s)
@@ -1741,10 +1711,7 @@ void nvim_cls_may_do_incsearch(void *s)
 }
 
 /// Get is_state.did_incsearch field.
-int nvim_cls_get_is_state_did_incsearch(void *s)
-{
-  return ((CommandLineState *)s)->is_state.did_incsearch ? 1 : 0;
-}
+int nvim_cls_get_is_state_did_incsearch(void *s) { return ((CommandLineState *)s)->is_state.did_incsearch ? 1 : 0; }
 
 /// Set v:char and trigger CmdlineLeavePre for the given state.
 void nvim_cls_trigger_cmdlineleavepre(void *s)
@@ -1755,8 +1722,5 @@ void nvim_cls_trigger_cmdlineleavepre(void *s)
 }
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
-void nvim_cmdline_do_cmdline_nowait(void)
-{
-  do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT);
-}
+void nvim_cmdline_do_cmdline_nowait(void) { do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT); }
 

@@ -80,10 +80,7 @@ void *nvim_help_find_help_win_in_tab(void)
   return NULL;
 }
 
-int nvim_help_win_nwindows(void *wp)
-{
-  return ((win_T *)wp)->w_buffer->b_nwindows;
-}
+int nvim_help_win_nwindows(void *wp) { return ((win_T *)wp)->w_buffer->b_nwindows; }
 
 // Wrappers for functions needing complex types
 int nvim_help_do_ecmd_help(void)
@@ -97,10 +94,7 @@ int nvim_help_buf_nwindows(buf_T *buf) { return buf->b_nwindows; }
 // C accessors for prepare_help_buffer
 void nvim_help_set_curbuf_b_help(bool val) { curbuf->b_help = val; }
 const char *nvim_help_get_curbuf_b_p_isk(void) { return curbuf->b_p_isk; }
-void nvim_help_set_buftype_help(void)
-{
-  set_option_direct(kOptBuftype, STATIC_CSTR_AS_OPTVAL("help"), OPT_LOCAL, 0);
-}
+void nvim_help_set_buftype_help(void) { set_option_direct(kOptBuftype, STATIC_CSTR_AS_OPTVAL("help"), OPT_LOCAL, 0); }
 void nvim_help_set_isk_help(const char *p)
 {
   set_option_direct(kOptIskeyword, CSTR_AS_OPTVAL(p), OPT_LOCAL, 0);

@@ -68,9 +68,7 @@ extern void nvim_win_update(win_T *wp);
 
 #include "drawscreen_shim.c.generated.h"
 
-// ---------------------------------------------------------------------------
 // showmode helpers
-// ---------------------------------------------------------------------------
 
 void nvim_drawscreen_msg_grid_validate(void) { msg_grid_validate(); }
 void nvim_drawscreen_msg_check_for_delay(void) { msg_check_for_delay(false); }
@@ -81,9 +79,7 @@ int nvim_drawscreen_get_keymap_str(void) { return get_keymap_str(curwin, " (%s)"
 const char *nvim_drawscreen_namebuff_ptr(void) { return NameBuff; }
 int nvim_win_get_w_p_arab(win_T *wp) { return wp ? (int)wp->w_p_arab : 0; }
 
-// ---------------------------------------------------------------------------
 // default_grid_alloc, screenclear, screen_resize batch helpers
-// ---------------------------------------------------------------------------
 
 int nvim_default_grid_get_rows(void) { return default_grid.rows; }
 int nvim_default_grid_get_cols(void) { return default_grid.cols; }
@@ -310,9 +306,7 @@ void nvim_screen_resize_impl(int width, int height)
   resizing_screen = false;
 }
 
-// ---------------------------------------------------------------------------
 // win_update visual region helper
-// ---------------------------------------------------------------------------
 
 /// Full implementation of the visual region update section of win_update().
 /// Called from rs_win_update_visual_region() in Rust.
@@ -466,9 +460,7 @@ void nvim_win_visual_region_impl(win_T *wp, buf_T *buf, int type,
   }
 }
 
-// ---------------------------------------------------------------------------
 // update_screen batch helper
-// ---------------------------------------------------------------------------
 
 /// Full implementation of update_screen(), called from rs_update_screen() in Rust.
 /// Manages the `still_may_intro` static locally.

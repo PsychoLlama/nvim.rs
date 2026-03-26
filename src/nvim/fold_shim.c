@@ -42,9 +42,7 @@
 
 #include "fold_shim.c.generated.h"
 
-// ============================================================================
 // VimL function accessors (for f_foldclosed, f_foldlevel, etc.)
-// ============================================================================
 
 linenr_T nvim_fold_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 void nvim_fold_rettv_set_number(typval_T *rettv, varnumber_T nr) { rettv->vval.v_number = nr; }
@@ -56,9 +54,7 @@ void nvim_fold_rettv_init_string(typval_T *rettv, char *s)
   rettv->vval.v_string = s;
 }
 
-// ============================================================================
 // Fold FFI accessors
-// ============================================================================
 
 void nvim_emsg_fold_cannot_create(void) { emsg(_("E350: Cannot create fold with current 'foldmethod'")); }
 void nvim_emsg_fold_cannot_delete(void) { emsg(_("E351: Cannot delete fold with current 'foldmethod'")); }
@@ -176,9 +172,7 @@ int nvim_get_disable_fold_update(void) { return disable_fold_update; }
 /// Get the need_diff_redraw flag.
 int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
 
-// ============================================================================
 // Accessors for f_foldtext Rust implementation
-// ============================================================================
 
 int64_t nvim_fold_get_vim_var_nr(int vv_idx) { return (int64_t)get_vim_var_nr(vv_idx); }
 void nvim_fold_set_vim_var_nr(int vv_idx, int64_t val) { set_vim_var_nr(vv_idx, (varnumber_T)val); }
@@ -187,9 +181,7 @@ const char *nvim_fold_ngettext_foldtext(int count) { return NGETTEXT("+-%s%3d li
 const char *nvim_fold_ngettext_default(int count) { return NGETTEXT("+--%3d line folded", "+--%3d lines folded ", count); }
 linenr_T nvim_fold_get_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
-// ============================================================================
 // Accessors for Rust fold level calculation
-// ============================================================================
 
 int nvim_syn_get_foldlevel(win_T *wp, linenr_T lnum) { return syn_get_foldlevel(wp, lnum); }
 int nvim_fold_eval_foldexpr(win_T *wp, int *out_char) { return eval_foldexpr(wp, out_char); }
@@ -215,9 +207,7 @@ int nvim_fold_get_keytyped(void) { return (int)KeyTyped; }
 void nvim_fold_set_keytyped(int val) { KeyTyped = (bool)val; }
 void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum) { set_vim_var_nr(VV_LNUM, (varnumber_T)lnum); }
 
-// ============================================================================
 // Accessors for get_foldtext Rust migration (display.rs)
-// ============================================================================
 
 /// Save current_sctx into *out_saved (sctx_T), then set current_sctx from
 /// wp->w_p_script_ctx[kWinOptFoldtext].

@@ -43,15 +43,10 @@
 
 #include "extmark.c.generated.h"
 
-// ============================================================================
 // Extmark Namespace Map Accessor Functions (for Rust FFI)
-// ============================================================================
 
 /// Get the size of the extmark namespace map.
-size_t nvim_extmark_ns_map_size(buf_T *buf)
-{
-  return map_size(buf->b_extmark_ns);
-}
+size_t nvim_extmark_ns_map_size(buf_T *buf) { return map_size(buf->b_extmark_ns); }
 
 /// Get a pointer to a namespace ID in the extmark namespace map.
 /// Returns NULL if not found. Used for incrementing the ID counter.
@@ -68,10 +63,7 @@ uint32_t *nvim_extmark_ns_put_ref(buf_T *buf, uint32_t ns_id)
 }
 
 /// Delete a namespace ID from the extmark namespace map.
-void nvim_extmark_ns_del(buf_T *buf, uint32_t ns_id)
-{
-  map_del(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL);
-}
+void nvim_extmark_ns_del(buf_T *buf, uint32_t ns_id) { map_del(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL); }
 
 /// Destroy and reinitialize the extmark namespace map.
 void nvim_extmark_ns_destroy(buf_T *buf)
@@ -80,15 +72,10 @@ void nvim_extmark_ns_destroy(buf_T *buf)
   *buf->b_extmark_ns = (Map(uint32_t, uint32_t)) MAP_INIT;
 }
 
-// ============================================================================
 // Extmark Undo Vector Accessor Functions (for Rust FFI)
-// ============================================================================
 
 /// Get the size of an extmark undo vector.
-size_t nvim_extmark_undo_vec_size(extmark_undo_vec_t *uvp)
-{
-  return uvp ? kv_size(*uvp) : 0;
-}
+size_t nvim_extmark_undo_vec_size(extmark_undo_vec_t *uvp) { return uvp ? kv_size(*uvp) : 0; }
 
 /// Push an undo object onto an extmark undo vector.
 void nvim_extmark_undo_vec_push(extmark_undo_vec_t *uvp, ExtmarkUndoObject obj)
@@ -107,15 +94,10 @@ ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
   return &kv_last(*uvp);
 }
 
-// ============================================================================
 // ExtmarkInfoArray Accessor Functions (for Rust FFI)
-// ============================================================================
 
 /// Get the size of an ExtmarkInfoArray.
-int64_t nvim_extmark_array_size(ExtmarkInfoArray *array)
-{
-  return array ? (int64_t)kv_size(*array) : 0;
-}
+int64_t nvim_extmark_array_size(ExtmarkInfoArray *array) { return array ? (int64_t)kv_size(*array) : 0; }
 
 /// Push an MTPair onto an ExtmarkInfoArray.
 void nvim_extmark_array_push(ExtmarkInfoArray *array, MTPair pair)
@@ -125,9 +107,7 @@ void nvim_extmark_array_push(ExtmarkInfoArray *array, MTPair pair)
   }
 }
 
-// ============================================================================
 // Namespace Accessor Functions (for Rust FFI)
-// ============================================================================
 
 /// Look up a namespace ID by name (wrapper for Rust FFI)
 int nvim_namespace_lookup(const char *name)

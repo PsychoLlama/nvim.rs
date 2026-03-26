@@ -978,9 +978,7 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
   }
 }
 
-// =============================================================================
 // Accessor wrappers for C globals still needed by Rust crates
-// =============================================================================
 
 /// Call iemsg() for the restore mismatch error.
 void nvim_call_iemsg_restore_mismatch(void)
