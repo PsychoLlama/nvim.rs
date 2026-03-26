@@ -1101,53 +1101,6 @@ int nvim_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int
   return rs_ml_append_flush(buf, lnum, line, len, flags);
 }
 
-/// Append a line after lnum (may be 0 to insert a line in front of the file).
-/// "line" does not need to be allocated, but can't be another line in a
-/// buffer, unlocking may make it invalid.
-///
-/// "newfile": true when starting to edit a new file, meaning that pe_old_lnum
-///              will be set for recovery
-/// Check: The caller of this function should probably also call
-/// appended_lines().
-///
-/// @param lnum  append after this line (can be 0)
-/// @param line  text of the new line
-/// @param len  length of new line, including NUL, or 0
-/// @param newfile  flag, see above
-///
-/// @return  FAIL for failure, OK otherwise
-int ml_append(linenr_T lnum, char *line, colnr_T len, bool newfile)
-{
-  return ml_append_flags(lnum, line, len, newfile ? ML_APPEND_NEW : 0);
-}
-
-
-/// Replace line "lnum", with buffering, in current buffer.
-int ml_replace(linenr_T lnum, char *line, bool copy)
-{
-  return ml_replace_buf(curbuf, lnum, line, copy, false);
-}
-
-/// Replace a line for the current buffer.  Like ml_replace() with:
-/// "len" is the length of the text, excluding NUL.
-int ml_replace_len(linenr_T lnum, char *line, size_t len, bool copy)
-{
-  return ml_replace_buf_len(curbuf, lnum, line, len, copy, false);
-}
-
-
-/// Delete line "lnum" in the current buffer.
-///
-/// @note The caller of this function should probably also call
-/// deleted_lines() after this.
-///
-/// @return  FAIL for failure, OK otherwise
-int ml_delete(linenr_T lnum)
-{
-  return ml_delete_flags(lnum, 0);
-}
-
-
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
 
 

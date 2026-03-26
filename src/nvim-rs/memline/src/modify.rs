@@ -76,12 +76,6 @@ extern "C" {
     // C Implementation Functions
     // -------------------------------------------------------------------------
 
-    /// Append a line (C implementation)
-    fn ml_append(lnum: LineNr, line: *mut c_char, len: ColNr, newfile: c_int) -> c_int;
-
-    /// Append a line with flags (C implementation)
-    fn ml_append_flags(lnum: LineNr, line: *mut c_char, len: ColNr, flags: c_int) -> c_int;
-
     /// Append a line to a specific buffer (C implementation)
     fn ml_append_buf(
         buf: *mut BufHandle,
@@ -91,12 +85,6 @@ extern "C" {
         newfile: c_int,
     ) -> c_int;
 
-    /// Replace a line (C implementation)
-    fn ml_replace(lnum: LineNr, line: *mut c_char, copy: c_int) -> c_int;
-
-    /// Replace a line with explicit length (C implementation)
-    fn ml_replace_len(lnum: LineNr, line: *mut c_char, len: usize, copy: c_int) -> c_int;
-
     /// Replace a line in a specific buffer (C implementation)
     fn ml_replace_buf(
         buf: *mut BufHandle,
@@ -105,12 +93,6 @@ extern "C" {
         copy: c_int,
         noalloc: c_int,
     ) -> c_int;
-
-    /// Delete a line (C implementation)
-    fn ml_delete(lnum: LineNr) -> c_int;
-
-    /// Delete a line with flags (C implementation)
-    fn ml_delete_flags(lnum: LineNr, flags: c_int) -> c_int;
 
     /// Delete a line from a specific buffer (C implementation)
     fn ml_delete_buf(buf: *mut BufHandle, lnum: LineNr, message: c_int) -> c_int;
@@ -433,7 +415,12 @@ pub unsafe extern "C" fn rs_ml_append(
     len: ColNr,
     newfile: c_int,
 ) -> c_int {
-    ml_append(lnum, line, len, newfile)
+    rs_ml_append_flags_impl(
+        lnum,
+        line,
+        len,
+        if newfile != 0 { ML_APPEND_NEW } else { 0 },
+    )
 }
 
 /// Append a new line with flags in the current buffer.
@@ -456,7 +443,7 @@ pub unsafe extern "C" fn rs_ml_append_flags(
     len: ColNr,
     flags: c_int,
 ) -> c_int {
-    ml_append_flags(lnum, line, len, flags)
+    rs_ml_append_flags_impl(lnum, line, len, flags)
 }
 
 /// Append a new line to a specific buffer.
@@ -509,7 +496,7 @@ pub unsafe extern "C" fn rs_ml_append_buf(
 /// - If `copy` is false, the caller must not use `line` after this call
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_replace(lnum: LineNr, line: *mut c_char, copy: c_int) -> c_int {
-    ml_replace(lnum, line, copy)
+    rs_ml_replace_buf_impl(nvim_get_curbuf(), lnum, line, copy, 0)
 }
 
 /// Replace a line with explicit length in the current buffer.
@@ -533,7 +520,7 @@ pub unsafe extern "C" fn rs_ml_replace_len(
     len: usize,
     copy: c_int,
 ) -> c_int {
-    ml_replace_len(lnum, line, len, copy)
+    rs_ml_replace_buf_len(nvim_get_curbuf(), lnum, line, len, copy, 0)
 }
 
 /// Replace a line in a specific buffer.
@@ -666,7 +653,7 @@ pub unsafe extern "C" fn rs_ml_replace_buf_len(
 /// Modifies buffer state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_delete(lnum: LineNr) -> c_int {
-    ml_delete(lnum)
+    rs_ml_delete_flags_impl(lnum, 0)
 }
 
 /// Delete a line from the current buffer with flags.
@@ -682,7 +669,7 @@ pub unsafe extern "C" fn rs_ml_delete(lnum: LineNr) -> c_int {
 /// Modifies buffer state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_delete_flags(lnum: LineNr, flags: c_int) -> c_int {
-    ml_delete_flags(lnum, flags)
+    rs_ml_delete_flags_impl(lnum, flags)
 }
 
 /// Delete a line from a specific buffer.
@@ -711,12 +698,69 @@ pub unsafe extern "C" fn rs_ml_delete_buf(
 }
 
 // =============================================================================
+// Rust-exported public API wrappers (previously thin C wrappers)
+// =============================================================================
+
+/// Append a line after lnum in the current buffer (may be 0 to insert at start).
+///
+/// # Safety
+/// Modifies buffer state. Only call from main Nvim thread.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_append"]
+pub unsafe extern "C" fn ml_append_rust(
+    lnum: LineNr,
+    line: *mut c_char,
+    len: ColNr,
+    newfile: c_int,
+) -> c_int {
+    rs_ml_append_flags_impl(
+        lnum,
+        line,
+        len,
+        if newfile != 0 { ML_APPEND_NEW } else { 0 },
+    )
+}
+
+/// Replace line `lnum` in the current buffer.
+///
+/// # Safety
+/// Modifies buffer state. Only call from main Nvim thread.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_replace"]
+pub unsafe extern "C" fn ml_replace_rust(lnum: LineNr, line: *mut c_char, copy: c_int) -> c_int {
+    rs_ml_replace_buf_impl(nvim_get_curbuf(), lnum, line, copy, 0)
+}
+
+/// Replace line `lnum` in the current buffer with an explicit length.
+///
+/// # Safety
+/// Modifies buffer state. Only call from main Nvim thread.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_replace_len"]
+pub unsafe extern "C" fn ml_replace_len_rust(
+    lnum: LineNr,
+    line: *mut c_char,
+    len: usize,
+    copy: c_int,
+) -> c_int {
+    rs_ml_replace_buf_len(nvim_get_curbuf(), lnum, line, len, copy, 0)
+}
+
+/// Delete line `lnum` in the current buffer.
+///
+/// # Safety
+/// Modifies buffer state. Only call from main Nvim thread.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_delete"]
+pub unsafe extern "C" fn ml_delete_rust(lnum: LineNr) -> c_int {
+    rs_ml_delete_flags_impl(lnum, 0)
+}
+
+// =============================================================================
 // Pass 4 Phase 2: Modification Dispatch _impl Functions
 //
 // These implement the guard/dispatch logic that was in the multi-line C
-// functions. The C public functions now become thin wrappers calling these.
-// The existing rs_ml_append / rs_ml_delete / rs_ml_replace wrappers continue
-// to call the C public functions unchanged — there are no circular calls.
+// functions.
 // =============================================================================
 
 /// Implement `ml_append_flags`: open buffer if needed, then call
