@@ -1369,10 +1369,9 @@ extern "C" {
     fn del_chars(count: c_int, fixpos: bool);
     fn nvim_ins_char_call(c: c_int);
     fn ins_copychar(lnum: c_int) -> c_int;
-    fn nvim_ins_char_bytes_from_cap(cap: CapHandle);
+    fn ins_char_bytes(buf: *const c_char, charlen: usize);
     fn set_last_insert(c: c_int);
     fn nvim_set_b_op_start_cursor();
-    fn nvim_AppendToRedobuff_composing(cap: CapHandle);
     fn do_pending_operator(cap: CapHandle, old_col: c_int, gui_yank: bool);
 
     // Phase 3: nv_visual_impl accessors (C functions already exist, add Rust declarations)
@@ -4241,9 +4240,10 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         nvim_set_b_op_start_cursor();
         let old_state = State;
 
-        let nchar_len = nvim_cap_get_nchar_len(cap);
+        let cap_typed = cap as *const crate::types::CmdargT;
+        let nchar_len = (*cap_typed).nchar_len;
         if nchar_len > 0 {
-            nvim_AppendToRedobuff_composing(cap);
+            AppendToRedobuff((*cap_typed).nchar_composing.as_ptr());
         } else {
             AppendCharToRedobuff(nchar);
         }
@@ -4261,7 +4261,10 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
                     nvim_ins_char_call(c);
                 }
             } else if nchar_len > 0 {
-                nvim_ins_char_bytes_from_cap(cap);
+                ins_char_bytes(
+                    (*cap_typed).nchar_composing.as_ptr(),
+                    usize::try_from(nchar_len).unwrap_or(0),
+                );
             } else {
                 nvim_ins_char_call(nchar);
             }

@@ -411,13 +411,7 @@ void nvim_ml_delete_last_line(void) {
 
 bool nvim_curbuf_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_ins_char_call(int c) { ins_char(c); }
-void nvim_ins_char_bytes_from_cap(cmdarg_T *cap) { if (cap && cap->nchar_len > 0) { ins_char_bytes((char *)cap->nchar_composing, (size_t)cap->nchar_len); } }
 void nvim_set_b_op_start_cursor(void) { curbuf->b_op_start = curwin->w_cursor; }
-void nvim_AppendToRedobuff_composing(cmdarg_T *cap) {
-  if (cap && cap->nchar_len > 0) {
-    AppendToRedobuff(cap->nchar_composing);
-  }
-}
 
 // =============================================================================
 // Visual mode accessors for Rust FFI
