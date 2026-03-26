@@ -7540,16 +7540,33 @@ const K_MARK_MOVED_FAILED: c_int = 0x10;
 // kOptFdoFlagSearch == 0x40 (from option_vars.generated.h)
 const K_OPT_FDO_FLAG_SEARCH: c_uint = 0x40;
 
+// Search option flags (from search.h)
+const SEARCH_ECHO: c_int = 0x02;
+const SEARCH_MSG: c_int = 0x0c;
+const SEARCH_OPT: c_int = 0x10;
+
+/// searchit_arg_T layout matching the C struct (see search.h).
+/// proftime_T* is opaque, represented as *mut c_void.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct SearchitArgT {
+    sa_stop_lnum: i32,
+    sa_tm: *mut c_void,
+    sa_timed_out: c_int,
+    sa_wrapped: c_int,
+}
+
 extern "C" {
     // Phase 2: normal_search accessors
-    fn nvim_do_search_call(
+    fn do_search(
         oap: OapHandle,
-        dir: c_int,
+        dirc: c_int,
+        search_delim: c_int,
         pat: *mut std::ffi::c_char,
         patlen: usize,
-        count1: c_int,
-        opt: c_int,
-        wrapped: *mut c_int,
+        count: c_int,
+        options: c_int,
+        sia: *mut SearchitArgT,
     ) -> c_int;
     fn nvim_search_hls_needs_redraw(prev_lnum: c_int, prev_col: c_int, prev_coladd: c_int) -> bool;
 
@@ -7596,7 +7613,27 @@ pub unsafe fn rs_normal_search(
     (*oap.cast::<OpargT>()).use_reg_one = true;
     nvim_curwin_set_curswant(true);
 
-    let i = nvim_do_search_call(oap, dir, pat, patlen, count1, opt, wrapped);
+    // Inline nvim_do_search_call: zero-init searchit_arg_T, call do_search,
+    // propagate sa_wrapped.
+    let mut sia = SearchitArgT {
+        sa_stop_lnum: 0,
+        sa_tm: std::ptr::null_mut(),
+        sa_timed_out: 0,
+        sa_wrapped: 0,
+    };
+    let i = do_search(
+        oap,
+        dir,
+        dir,
+        pat,
+        patlen,
+        count1,
+        opt | SEARCH_OPT | SEARCH_ECHO | SEARCH_MSG,
+        &raw mut sia,
+    );
+    if !wrapped.is_null() {
+        *wrapped = sia.sa_wrapped;
+    }
 
     if i == 0 {
         rs_clearop(oap);

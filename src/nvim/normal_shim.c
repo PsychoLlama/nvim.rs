@@ -1196,20 +1196,6 @@ int nvim_did_emsg_check(void) { return did_emsg; }
 // Search, gotofile, visual text, and mark movement accessors for Rust FFI
 // =============================================================================
 
-/// Wrapper for do_search(). Sets searchit fields and returns sa_wrapped.
-/// Returns the do_search() return value.
-int nvim_do_search_call(oparg_T *oap, int dir, char *pat, size_t patlen,
-                        int count1, int opt, int *wrapped)
-{
-  searchit_arg_T sia;
-  CLEAR_FIELD(sia);
-  int i = do_search(oap, dir, dir, pat, patlen, count1,
-                    opt | SEARCH_OPT | SEARCH_ECHO | SEARCH_MSG, &sia);
-  if (wrapped != NULL) {
-    *wrapped = sia.sa_wrapped;
-  }
-  return i;
-}
 
 /// Returns true if cursor moved and highlights need refresh.
 bool nvim_search_hls_needs_redraw(int prev_lnum, int prev_col, int prev_coladd)
