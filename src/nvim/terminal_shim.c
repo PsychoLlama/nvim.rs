@@ -557,42 +557,8 @@ void terminal_close(Terminal **termpp, int status)
   }
 }
 
-void terminal_check_size(Terminal *term)
-{
-  if (term->closed) {
-    return;
-  }
-
-  int curwidth, curheight;
-  vterm_get_size(term->vt, &curheight, &curwidth);
-  uint16_t width = 0;
-  uint16_t height = 0;
-
-  // Check if there is a window that displays the terminal and find the maximum width and height.
-  // Skip the autocommand window which isn't actually displayed.
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (is_aucmd_win(wp)) {
-      continue;
-    }
-    if (wp->w_buffer && wp->w_buffer->terminal == term) {
-      const uint16_t win_width =
-        (uint16_t)(MAX(0, wp->w_view_width - win_col_off(wp)));
-      width = MAX(width, win_width);
-      height = (uint16_t)MAX(height, wp->w_view_height);
-    }
-  }
-
-  // if no window displays the terminal, or such all windows are zero-height,
-  // don't resize the terminal.
-  if ((curheight == height && curwidth == width) || height == 0 || width == 0) {
-    return;
-  }
-
-  vterm_set_size(term->vt, height, width);
-  vterm_screen_flush_damage(term->vts);
-  term->pending.resize = true;
-  invalidate_terminal(term, -1, -1);
-}
+extern void rs_terminal_check_size(Terminal *term);
+void terminal_check_size(Terminal *term) { rs_terminal_check_size(term); }
 
 static void set_terminal_winopts(TerminalState *const s)
   FUNC_ATTR_NONNULL_ALL
@@ -1463,9 +1429,24 @@ void nvim_terminal_foreach_invalidated(void (*fn)(void *term, void *ctx), void *
 }
 int nvim_is_exiting(void) { return exiting; }
 
-// FOR_ALL_TAB_WINDOWS wrapper (macro not callable from Rust)
+// FOR_ALL_TAB_WINDOWS wrappers (macro not callable from Rust)
 void rs_adjust_topline_cursor(void *term, void *buf, int added)
   { adjust_topline_cursor((Terminal *)term, (buf_T *)buf, added); }
+void nvim_terminal_find_size(void *term, uint16_t *out_width, uint16_t *out_height)
+{
+  uint16_t width = 0;
+  uint16_t height = 0;
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (is_aucmd_win(wp)) { continue; }
+    if (wp->w_buffer && wp->w_buffer->terminal == (Terminal *)term) {
+      const uint16_t win_width = (uint16_t)(MAX(0, wp->w_view_width - win_col_off(wp)));
+      width = MAX(width, win_width);
+      height = (uint16_t)MAX(height, wp->w_view_height);
+    }
+  }
+  *out_width = width;
+  *out_height = height;
+}
 
 // kv_printf wrappers (macro not callable from Rust)
 void nvim_term_treqbuf_printf_osc(void *term, int command)

@@ -1167,6 +1167,9 @@ extern "C" {
 
     // VTerm size function (defined in vterm crate)
     fn rs_vterm_get_size(vt: *mut c_void) -> VTermSize;
+    fn rs_vterm_set_size(vt: *mut c_void, rows: c_int, cols: c_int) -> c_int;
+    // Phase 12: terminal_check_size helper
+    fn nvim_terminal_find_size(term: *mut c_void, out_width: *mut u16, out_height: *mut u16);
 }
 
 /// Write input data to a terminal's `VTerm` instance.
@@ -3714,6 +3717,49 @@ pub unsafe extern "C" fn rs_on_scrollback_option_changed(term: TerminalHandle) {
     if !t.sb_buffer.is_null() {
         unsafe { rs_refresh_terminal(term) };
     }
+}
+
+// Phase 12: Migrate terminal_check_size
+
+/// Resize the terminal to fit all windows that display it.
+///
+/// Replaces `terminal_check_size` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_check_size(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if t.closed {
+        return;
+    }
+
+    let cur_size = unsafe { rs_vterm_get_size(t.vt) };
+    let curheight = cur_size.rows;
+    let curwidth = cur_size.cols;
+
+    let mut width: u16 = 0;
+    let mut height: u16 = 0;
+    // Check all windows that display this terminal and find the max size.
+    // Skip the autocommand window which isn't actually displayed.
+    unsafe {
+        nvim_terminal_find_size(term.as_ptr(), &raw mut width, &raw mut height);
+    }
+
+    // If no window displays the terminal, or all are zero-height, don't resize.
+    #[allow(clippy::cast_lossless)]
+    if (curheight == height as c_int && curwidth == width as c_int) || height == 0 || width == 0 {
+        return;
+    }
+
+    let t = unsafe { term.as_mut() };
+    unsafe { rs_vterm_set_size(t.vt, c_int::from(height), c_int::from(width)) };
+    unsafe { rs_vterm_screen_flush_damage(t.vts) };
+    t.pending.resize = true;
+    unsafe { rs_invalidate_terminal(term, -1, -1) };
 }
 
 #[cfg(test)]
