@@ -3583,6 +3583,17 @@ pub unsafe extern "C" fn drawline_free_all_mem() {
     *guard = Vec::new();
 }
 
+/// Exported Rust wrapper for `get_extra_buf` (called from C `win_line`).
+///
+/// Returns a pointer to a scratch buffer of at least `size` bytes.
+///
+/// # Safety
+/// Caller must not use the pointer after the next call to this function from any thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_extra_buf(size: usize) -> *mut c_char {
+    get_extra_buf_impl(size)
+}
+
 // ============================================================================
 // Phase 2: decor_providers_setup and invoke_range_next migration
 // ============================================================================

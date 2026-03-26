@@ -182,6 +182,16 @@ typedef struct {
 extern FoldTextResult rs_get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume,
                                       int fi_level, char *buf, VirtText *vt_out);
 
+// Rust-exported scratch buffer (replaces get_extra_buf).
+extern char *rs_get_extra_buf(size_t size);
+
+// Rust-exported wrappers for draw_statuscol, decor_providers_setup, invoke_range_next.
+extern void rs_draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_rows,
+                              statuscol_T *stcp);
+extern int rs_decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
+                                    colnr_T col, win_T *wp);
+extern int rs_invoke_range_next(win_T *wp, int lnum, colnr_T begin_col, colnr_T col_off);
+
 
 // Layout verification: WinLineVars (Rust repr(C)) must match winlinevars_T (C).
 // If any of these fail, update src/nvim-rs/drawline/src/lib.rs accordingly.
@@ -204,59 +214,6 @@ void nvim_win_extmark_push(uint64_t ns_id, uint64_t mark_id, int win_row, int wi
   WinExtmark m = { (NS)ns_id, mark_id, win_row, win_col };
   kv_push(win_extmark_arr, m);
 }
-
-static char *extra_buf = NULL;
-static size_t extra_buf_size = 0;
-
-static char *get_extra_buf(size_t size)
-{
-  size = MAX(size, 64);
-  if (extra_buf_size < size) {
-    xfree(extra_buf);
-    extra_buf = xmalloc(size);
-    extra_buf_size = size;
-  }
-  return extra_buf;
-}
-
-// drawline_free_all_mem is now implemented in Rust (rs_draw_statuscol / Phase 1).
-// The Rust #[no_mangle] export provides this symbol unconditionally.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// draw_statuscol is now implemented in Rust.
-extern void rs_draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_rows,
-                              statuscol_T *stcp);
-
-/// Build and draw the 'statuscolumn' string for line "lnum" in window "wp".
-static void draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_rows,
-                           statuscol_T *stcp)
-{
-  rs_draw_statuscol(wp, wlv, virtnum, col_rows, stcp);
-}
-
-
-
-
-
-
-
-
-
-
 
 /// Display line "lnum" of window "wp" on the screen.
 /// wp->w_virtcol needs to be valid.
@@ -828,11 +785,11 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
 
   if (check_decor_providers) {
     int const col = (int)(ptr - line);
-    decor_provider_end_col = decor_providers_setup(endrow - startrow,
-                                                   start_vcol == 0,
-                                                   lnum,
-                                                   col,
-                                                   wp);
+    decor_provider_end_col = rs_decor_providers_setup(endrow - startrow,
+                                                      start_vcol == 0,
+                                                      lnum,
+                                                      col,
+                                                      wp);
     line = ml_get_buf(wp->w_buffer, lnum);
     ptr = line + col;
   }
@@ -900,7 +857,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
     // Get next chunk of extmark highlights if previous approximation was smaller than needed.
     if (check_decor_providers && (int)(ptr - line) >= decor_provider_end_col) {
       int const col = (int)(ptr - line);
-      decor_provider_end_col = invoke_range_next(wp, lnum, col, 100);
+      decor_provider_end_col = rs_invoke_range_next(wp, lnum, col, 100);
       line = ml_get_buf(wp->w_buffer, lnum);
       ptr = line + col;
       if (!has_decor && decor_has_more_decorations(&decor_state, lnum - 1)) {
@@ -938,7 +895,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
       } else if (statuscol.draw) {
         // Draw 'statuscolumn' if it is set.
         const int v = (int)(ptr - line);
-        draw_statuscol(wp, &wlv, wlv.row - startrow - wlv.filler_lines, col_rows, &statuscol);
+        rs_draw_statuscol(wp, &wlv, wlv.row - startrow - wlv.filler_lines, col_rows, &statuscol);
         if (wp->w_redr_statuscol) {
           break;
         }
@@ -1683,7 +1640,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
               }
               mb_schar = wp->w_p_lcs_chars.tab1;
               mb_c = schar_get_first_codepoint(mb_schar);
-              char *p = get_extra_buf(len + 1);
+              char *p = rs_get_extra_buf(len + 1);
               memset(p, ' ', len);
               p[len] = NUL;
               wlv.p_extra = p;
@@ -1793,7 +1750,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
           wlv.sc_final = NUL;
           if (wp->w_p_lbr) {
             mb_c = (uint8_t)(*wlv.p_extra);
-            char *p = get_extra_buf((size_t)wlv.n_extra + 1);
+            char *p = rs_get_extra_buf((size_t)wlv.n_extra + 1);
             memset(p, ' ', (size_t)wlv.n_extra);
             memcpy(p, wlv.p_extra + 1, strlen(wlv.p_extra) - 1);
             p[wlv.n_extra] = NUL;
@@ -2393,24 +2350,3 @@ end_check:
   return wlv.row;
 }
 
-/// Call grid_put_linebuf() using values from "wlv".
-/// Also takes care of putting "<<<" on the first line for 'smoothscroll'
-/// when 'showbreak' is not set.
-///
-
-// decor_providers_setup and invoke_range_next are now implemented in Rust.
-extern int rs_decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
-                                    colnr_T col, win_T *wp);
-extern int rs_invoke_range_next(win_T *wp, int lnum, colnr_T begin_col, colnr_T col_off);
-
-static int decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
-                                 colnr_T col, win_T *wp)
-{
-  return rs_decor_providers_setup(rows_to_draw, draw_from_line_start, lnum, col, wp);
-}
-
-/// @return New begin column, or INT_MAX.
-static int invoke_range_next(win_T *wp, int lnum, colnr_T begin_col, colnr_T col_off)
-{
-  return rs_invoke_range_next(wp, lnum, begin_col, col_off);
-}
