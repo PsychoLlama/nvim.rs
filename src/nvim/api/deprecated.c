@@ -590,10 +590,7 @@ Object vim_del_var(String name, Arena *arena, Error *err)
   return dict_set_var(get_globvar_dict(), name, NIL, true, true, arena, err);
 }
 
-static int64_t convert_index(int64_t index)
-{
-  return index < 0 ? index - 1 : index;
-}
+static int64_t convert_index(int64_t index) { return index < 0 ? index - 1 : index; }
 
 /// Gets the option information for one option
 ///

@@ -46,9 +46,7 @@ _Static_assert(VAR_LIST == 4, "VAR_LIST changed - update Rust");
 _Static_assert(VV_ERRMSG == 3, "VV_ERRMSG changed - update Rust");
 _Static_assert(FAIL == 0, "FAIL changed - update Rust");
 
-// =============================================================================
 // C accessor functions for Rust
-// =============================================================================
 
 /// Get the current sourcing line number for error messages.
 linenr_T nvim_testing_get_sourcing_lnum(void)
@@ -94,14 +92,9 @@ int nvim_testing_tv_get_bool_value(const typval_T *tv)
 }
 
 /// Check if a typval is a float type.
-int nvim_testing_tv_is_float(const typval_T *tv)
-{
-  return tv != NULL && tv->v_type == VAR_FLOAT;
-}
+int nvim_testing_tv_is_float(const typval_T *tv) { return tv != NULL && tv->v_type == VAR_FLOAT; }
 
-// =============================================================================
 // C accessor functions for f_assert_fails (Rust)
-// =============================================================================
 
 /// Get the list length from a typval that contains a list.
 int nvim_testing_tv_list_len(const typval_T *tv)

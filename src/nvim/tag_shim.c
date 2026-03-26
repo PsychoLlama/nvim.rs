@@ -800,10 +800,7 @@ int nvim_tag_buflist_getfile_with_result(int fnum, linenr_T lnum, int flags, int
 }
 
 /// give_warning wrapper for Rust.
-void nvim_tag_give_warning(const char *msg_str, bool ic)
-{
-  give_warning(msg_str, ic);
-}
+void nvim_tag_give_warning(const char *msg_str, bool ic) { give_warning(msg_str, ic); }
 
 /// Get the KeyTyped global (bool).
 bool nvim_tag_get_KeyTyped(void) { return KeyTyped; }

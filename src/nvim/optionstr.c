@@ -1154,10 +1154,7 @@ bool parse_border_opt(char *border_opt)
 // expand_set_winhighlight moved to Rust
 
 /// @return  OK if "p" is a valid fileformat name, FAIL otherwise.
-int check_ff_value(char *p)
-{
-  return rs_opt_strings_flags(p, opt_ff_values, false).ok ? OK : FAIL;
-}
+int check_ff_value(char *p) { return rs_opt_strings_flags(p, opt_ff_values, false).ok ? OK : FAIL; }
 
 static const char e_conflicts_with_value_of_listchars[]
   = N_("E834: Conflicts with value of 'listchars'");

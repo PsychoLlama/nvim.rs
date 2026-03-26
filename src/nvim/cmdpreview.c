@@ -100,10 +100,7 @@ extern void rs_win_size_restore(garray_T *gap);
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
 
-handle_T cmdpreview_get_bufnr(void)
-{
-  return cmdpreview_bufnr;
-}
+handle_T cmdpreview_get_bufnr(void) { return cmdpreview_bufnr; }
 
 // C accessor for cmdpreview_ns (used by Rust)
 int nvim_get_cmdpreview_ns(void) { return cmdpreview_ns; }

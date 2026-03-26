@@ -193,10 +193,7 @@ cleanup:
   return status;
 }
 
-const char *pty_proc_tty_name(PtyProc *ptyproc)
-{
-  return "?";
-}
+const char *pty_proc_tty_name(PtyProc *ptyproc) { return "?"; }
 
 void pty_proc_resize(PtyProc *ptyproc, uint16_t width, uint16_t height)
   FUNC_ATTR_NONNULL_ALL

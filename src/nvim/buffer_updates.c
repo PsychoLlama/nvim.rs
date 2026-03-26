@@ -25,16 +25,10 @@
 
 
 /// Get the size of the update_channels kvec for a buffer.
-size_t nvim_buf_get_update_channels_size(buf_T *buf)
-{
-  return kv_size(buf->update_channels);
-}
+size_t nvim_buf_get_update_channels_size(buf_T *buf) { return kv_size(buf->update_channels); }
 
 /// Get the size of the update_callbacks kvec for a buffer.
-size_t nvim_buf_get_update_callbacks_size(buf_T *buf)
-{
-  return kv_size(buf->update_callbacks);
-}
+size_t nvim_buf_get_update_callbacks_size(buf_T *buf) { return kv_size(buf->update_callbacks); }
 
 // Register a channel. Return True if the channel was added, or already added.
 // Return False if the channel couldn't be added because the buffer is
@@ -425,9 +419,7 @@ void buffer_update_callbacks_free(BufUpdateCallbacks cb)
   api_free_luaref(cb.on_detach);
 }
 
-// ============================================================================
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
-// ============================================================================
 
 /// Send splice event (wrapper for Rust FFI).
 void nvim_buf_updates_send_splice(buf_T *buf, int start_row, colnr_T start_col,

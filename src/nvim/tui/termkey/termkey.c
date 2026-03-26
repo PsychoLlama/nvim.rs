@@ -586,10 +586,7 @@ void termkey_set_flags(TermKey *tk, int newflags)
   }
 }
 
-int termkey_get_canonflags(TermKey *tk)
-{
-  return tk->canonflags;
-}
+int termkey_get_canonflags(TermKey *tk) { return tk->canonflags; }
 
 void termkey_set_canonflags(TermKey *tk, int flags)
 {
@@ -602,10 +599,7 @@ void termkey_set_canonflags(TermKey *tk, int flags)
   }
 }
 
-size_t termkey_get_buffer_size(TermKey *tk)
-{
-  return tk->buffsize;
-}
+size_t termkey_get_buffer_size(TermKey *tk) { return tk->buffsize; }
 
 int termkey_set_buffer_size(TermKey *tk, size_t size)
 {

@@ -298,10 +298,7 @@ void channel_create_event(Channel *chan, const char *ext_source)
   channel_info_changed(chan, true);
 }
 
-void channel_incref(Channel *chan)
-{
-  chan->refcount++;
-}
+void channel_incref(Channel *chan) { chan->refcount++; }
 
 void channel_decref(Channel *chan)
 {
@@ -364,10 +361,7 @@ static void channel_destroy_early(Channel *chan)
   multiqueue_put(loop_get_events(&main_loop), free_channel_event, chan);
 }
 
-static void close_cb(Stream *stream, void *data)
-{
-  channel_decref(data);
-}
+static void close_cb(Stream *stream, void *data) { channel_decref(data); }
 
 /// Starts a job and returns the associated channel
 ///

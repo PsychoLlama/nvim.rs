@@ -158,18 +158,12 @@ extern int rs_buf_effective_action(buf_T *buf, int action);
 static int buf_free_count = 0;
 
 /// Get the buf_free_count global (accessor for Rust).
-int nvim_get_buf_free_count(void)
-{
-  return buf_free_count;
-}
+int nvim_get_buf_free_count(void) { return buf_free_count; }
 
 static int top_file_num = 1;            ///< highest file number
 
 /// Get the top_file_num global (accessor for Rust).
-int nvim_get_top_file_num(void)
-{
-  return top_file_num;
-}
+int nvim_get_top_file_num(void) { return top_file_num; }
 
 
 // Static assertions for constants used in Rust (Phase 1).

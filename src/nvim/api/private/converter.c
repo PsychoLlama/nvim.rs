@@ -263,10 +263,7 @@ Object vim_to_object(typval_T *obj, Arena *arena, bool reuse_strdata)
 /// @param tv   Conversion result is placed here. On failure member v_type is
 ///             set to VAR_UNKNOWN (no allocation was made for this variable).
 /// @param err  Error object.
-void object_to_vim(Object obj, typval_T *tv, Error *err)
-{
-  object_to_vim_take_luaref(&obj, tv, false, err);
-}
+void object_to_vim(Object obj, typval_T *tv, Error *err) { object_to_vim_take_luaref(&obj, tv, false, err); }
 
 /// same as object_to_vim but consumes all luarefs (nested) in `obj`
 ///

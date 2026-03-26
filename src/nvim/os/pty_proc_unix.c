@@ -250,10 +250,7 @@ error:
   return status;
 }
 
-const char *pty_proc_tty_name(PtyProc *ptyproc)
-{
-  return ptsname(ptyproc->tty_fd);
-}
+const char *pty_proc_tty_name(PtyProc *ptyproc) { return ptsname(ptyproc->tty_fd); }
 
 void pty_proc_resize(PtyProc *ptyproc, uint16_t width, uint16_t height)
   FUNC_ATTR_NONNULL_ALL
@@ -278,10 +275,7 @@ void pty_proc_close_master(PtyProc *ptyproc) FUNC_ATTR_NONNULL_ALL
   }
 }
 
-void pty_proc_teardown(Loop *loop)
-{
-  uv_signal_stop(&loop->children_watcher);
-}
+void pty_proc_teardown(Loop *loop) { uv_signal_stop(&loop->children_watcher); }
 
 static void init_child(PtyProc *ptyproc)
   FUNC_ATTR_NONNULL_ALL

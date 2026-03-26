@@ -10,10 +10,7 @@
 
 #undef DEBUG_PARSER
 
-static bool is_intermed(uint8_t c)
-{
-  return c >= 0x20 && c <= 0x2f;
-}
+static bool is_intermed(uint8_t c) { return c >= 0x20 && c <= 0x2f; }
 
 static void do_control(VTerm *vt, uint8_t control)
 {

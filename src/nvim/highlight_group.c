@@ -149,10 +149,7 @@ extern const char *highlight_init_dark[];
 /// Lookup a highlight group by uppercase name.
 /// @param name_u Uppercase name to look up (must be null-terminated)
 /// @return The highlight group ID (1-based), or 0 if not found
-int nvim_highlight_name_lookup(const char *name_u)
-{
-  return map_get(cstr_t, int)(&highlight_unames, name_u);
-}
+int nvim_highlight_name_lookup(const char *name_u) { return map_get(cstr_t, int)(&highlight_unames, name_u); }
 
 
 static char *(color_names[28]) = {
@@ -925,10 +922,7 @@ int syn_name2id(const char *name)
 static int syn_add_group(const char *name, size_t len);
 
 // Exposed to Rust for creating new highlight groups
-int c_syn_add_group(const char *name, size_t len)
-{
-  return syn_add_group(name, len);
-}
+int c_syn_add_group(const char *name, size_t len) { return syn_add_group(name, len); }
 
 /// Add new highlight group and return its ID.
 ///

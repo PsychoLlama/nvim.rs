@@ -134,15 +134,9 @@ void signal_stop(void)
 #endif
 }
 
-void signal_reject_deadly(void)
-{
-  rejecting_deadly = true;
-}
+void signal_reject_deadly(void) { rejecting_deadly = true; }
 
-void signal_accept_deadly(void)
-{
-  rejecting_deadly = false;
-}
+void signal_accept_deadly(void) { rejecting_deadly = false; }
 
 static char *signal_name(int signum)
 {

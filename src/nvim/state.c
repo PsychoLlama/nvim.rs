@@ -275,10 +275,7 @@ void may_trigger_modechanged(void)
 static bool was_safe = false;
 
 /// C accessor for was_safe static.
-int nvim_get_was_safe(void)
-{
-  return was_safe;
-}
+int nvim_get_was_safe(void) { return was_safe; }
 
 /// Return whether currently it is safe, assuming it was safe before (high level
 /// state didn't change).

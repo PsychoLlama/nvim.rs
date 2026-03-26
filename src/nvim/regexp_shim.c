@@ -119,10 +119,7 @@ struct regengine {
 #include "regexp_shim.c.generated.h"
 
 /// Skip strings inside [ and ].
-char *skip_regexp(char *startp, int delim, int magic)
-{
-  return skip_regexp_ex(startp, delim, magic, NULL, NULL, NULL);
-}
+char *skip_regexp(char *startp, int delim, int magic) { return skip_regexp_ex(startp, delim, magic, NULL, NULL, NULL); }
 
 // vim_regexec and friends
 

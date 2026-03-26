@@ -97,10 +97,7 @@ static void version_msg_wrap(char *s, bool wrap)
   }
 }
 
-static void version_msg(char *s)
-{
-  version_msg_wrap(s, false);
-}
+static void version_msg(char *s) { version_msg_wrap(s, false); }
 
 /// List string items nicely aligned in columns.
 /// When "size" is < 0 then the last entry is marked with NULL.

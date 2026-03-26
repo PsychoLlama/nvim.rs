@@ -405,10 +405,7 @@ static WinSplit win_split_dir(win_T *win)
   return (WinSplit)rs_split_dir_from_layout(layout_is_col, has_next);
 }
 
-static int win_split_flags(WinSplit split, bool toplevel)
-{
-  return rs_win_split_flags((int)split, toplevel);
-}
+static int win_split_flags(WinSplit split, bool toplevel) { return rs_win_split_flags((int)split, toplevel); }
 
 /// Reconfigures the layout of a window.
 ///

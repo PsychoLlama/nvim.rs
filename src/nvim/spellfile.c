@@ -59,9 +59,7 @@
 #include "nvim/vim_defs.h"
 #include "nvim/undo.h"
 
-// =============================================================================
 // Rust FFI declarations
-// =============================================================================
 
 // Rust implementations (direct exports)
 extern int offset2bytes(int nr, uint8_t *buf);
@@ -1160,10 +1158,7 @@ void *getroom(spellinfo_T *spin, size_t len, bool align)
 // getroom_save: migrated to Rust (rs_getroom_save). Redirected via #define above.
 
 /// Thin wrapper: free sblock_T list delegated to Rust rs_free_blocks.
-void free_blocks(sblock_T *bl)
-{
-  rs_free_blocks(bl);
-}
+void free_blocks(sblock_T *bl) { rs_free_blocks(bl); }
 
 /// Write the Vim .spl file "fname".
 ///
@@ -1950,10 +1945,7 @@ static void init_spellfile(void)
 }
 
 /// C wrapper for SPELL_TOUPPER macro (used by Rust via FFI).
-int nvim_spell_toupper(int c)
-{
-  return SPELL_TOUPPER(c);
-}
+int nvim_spell_toupper(int c) { return SPELL_TOUPPER(c); }
 
 /// Set the spell character tables from strings in the .spl file.
 ///

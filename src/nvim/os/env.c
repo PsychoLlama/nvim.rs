@@ -222,10 +222,7 @@ static char *os_uv_homedir(void)
 
 #if defined(EXITFREE)
 
-void free_homedir(void)
-{
-  xfree(homedir);
-}
+void free_homedir(void) { xfree(homedir); }
 
 #endif
 

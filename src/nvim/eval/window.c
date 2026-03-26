@@ -54,10 +54,7 @@ bool win_has_winnr(win_T *wp, tabpage_T *tp)
 
 
 
-win_T *win_id2wp(int id)
-{
-  return win_id2wp_tp(id, NULL);
-}
+win_T *win_id2wp(int id) { return win_id2wp_tp(id, NULL); }
 
 /// Return the window and tab pointer of window "id".
 /// Returns NULL when not found.

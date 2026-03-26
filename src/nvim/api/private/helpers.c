@@ -462,10 +462,7 @@ Object api_metadata(void)
   return metadata;
 }
 
-String api_metadata_raw(void)
-{
-  return cbuf_as_string((char *)packed_api_metadata, sizeof(packed_api_metadata));
-}
+String api_metadata_raw(void) { return cbuf_as_string((char *)packed_api_metadata, sizeof(packed_api_metadata)); }
 
 // all the copy_[object] functions allow arena=NULL,
 // then global allocations are used, and the resulting object

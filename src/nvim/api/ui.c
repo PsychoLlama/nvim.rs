@@ -990,10 +990,7 @@ void remote_ui_ui_send(RemoteUI *ui, String content)
   push_call(ui, "ui_send", args);
 }
 
-void remote_ui_flush_pending_data(RemoteUI *ui)
-{
-  ui_flush_buf(ui, false);
-}
+void remote_ui_flush_pending_data(RemoteUI *ui) { ui_flush_buf(ui, false); }
 
 static Array translate_contents(RemoteUI *ui, Array contents, Arena *arena)
 {

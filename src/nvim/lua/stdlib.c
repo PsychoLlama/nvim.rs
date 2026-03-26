@@ -142,10 +142,7 @@ static int regex_match_line(lua_State *lstate)
   return nret;
 }
 
-static regprog_T **regex_check(lua_State *L)
-{
-  return luaL_checkudata(L, 1, "nvim_regex");
-}
+static regprog_T **regex_check(lua_State *L) { return luaL_checkudata(L, 1, "nvim_regex"); }
 
 static int regex_gc(lua_State *lstate)
 {

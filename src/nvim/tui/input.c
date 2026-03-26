@@ -166,10 +166,7 @@ void tinput_destroy(TermInput *input)
   input->loop = NULL;
 }
 
-void tinput_start(TermInput *input)
-{
-  rstream_start(&input->read_stream, tinput_read_cb, input);
-}
+void tinput_start(TermInput *input) { rstream_start(&input->read_stream, tinput_read_cb, input); }
 
 void tinput_stop(TermInput *input)
 {
