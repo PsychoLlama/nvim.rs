@@ -70,7 +70,6 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 #include "nvim/vterm/vterm_keycodes_defs.h"
 #include "nvim/window.h"
 
-
 #include "terminal_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
@@ -78,15 +77,12 @@ extern int rs_win_valid(win_T *win);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// Rust FFI declarations from nvim-vterm crate
 extern void rs_vterm_keyboard_key(void *vt, int key, int mods);
 extern void rs_vterm_keyboard_unichar(void *vt, unsigned int ch, int mods);
 extern void rs_vterm_keyboard_start_paste(void *vt);
 extern void rs_vterm_keyboard_end_paste(void *vt);
 extern void rs_vterm_mouse_move(void *vt, int row, int col, int mods);
 extern void rs_vterm_mouse_button(void *vt, int button, int pressed, int mods);
-
-// Rust FFI declarations from nvim-terminal crate
 extern int rs_terminal_is_filter_char_flags(int c, int flags);
 extern int rs_terminal_row_to_linenr_term(void *term, int row);
 extern int rs_terminal_linenr_to_row_term(void *term, int linenr);
@@ -102,10 +98,7 @@ typedef struct {
 } VTermKeyResult;
 extern VTermKeyResult rs_terminal_convert_key(int key, int nvim_mod_mask);
 
-// Delay for refreshing the terminal buffer after receiving updates from
-// libvterm. Improves performance when receiving large bursts of data.
-#define REFRESH_DELAY 10
-
+#define REFRESH_DELAY     10       // Refresh delay (ms) for burst performance
 #define TEXTBUF_SIZE      0x1fff
 #define SELECTIONBUF_SIZE 0x0400
 
@@ -184,20 +177,16 @@ struct terminal {
   size_t refcount;                  // reference count
 };
 
-// Rust vterm callback implementations (Phase 1)
 extern int rs_term_damage(VTermRect rect, void *data);
 extern int rs_term_moverect(VTermRect dest, VTermRect src, void *data);
 extern int rs_term_movecursor(VTermPos new_pos, VTermPos old_pos, int visible, void *data);
 extern int rs_term_bell_cb(void *user);
 extern int rs_term_theme_cb(bool *dark, void *user);
 extern void rs_term_output_callback(const char *s, size_t len, void *user_data);
-// Rust scrollback callback implementations (Phase 2)
 extern int rs_term_sb_push(int cols, const VTermScreenCell *cells, void *data);
 extern int rs_term_sb_pop(int cols, VTermScreenCell *cells, void *data);
-// Rust key/theme implementations (Phase 3)
 extern void rs_terminal_send_key_impl(void *term, int c);
 extern void rs_terminal_notify_theme_impl(void *term, int dark);
-// Rust refresh_size implementation (Phase 4)
 extern void rs_terminal_refresh_size(void *term, void *buf);
 
 static VTermScreenCallbacks vterm_screen_callbacks = {
@@ -221,7 +210,6 @@ static Set(ptr_t) invalidated_terminals = SET_INIT;
 
 extern void rs_emit_termrequest(void **argv);
 extern void rs_schedule_termrequest(void *term);
-
 
 extern int rs_on_osc(int command, const char *str, size_t len, int initial, int is_final,
                      void *user);
@@ -267,33 +255,19 @@ void terminal_teardown(void)
 
 // public API {{{
 
-/// Initializes terminal properties, and triggers TermOpen.
-///
-/// The PTY process (TerminalOptions.data) was already started by jobstart(),
-/// via ex_terminal() or the term:// BufReadCmd.
-///
-/// @param buf Buffer used for presentation of the terminal.
-/// @param opts PTY process channel, various terminal properties and callbacks.
 void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Create a new terminal instance and configure it
   Terminal *term = *termpp = xcalloc(1, sizeof(Terminal));
   term->opts = opts;
-
-  // Associate the terminal instance with the new buffer
   term->buf_handle = buf->handle;
   buf->terminal = term;
-  // Create VTerm
   term->vt = vterm_new(opts.height, opts.width);
   vterm_set_utf8(term->vt, 1);
-  // Setup state
   VTermState *state = vterm_obtain_state(term->vt);
-  // Set up screen
   term->vts = vterm_obtain_screen(term->vt);
   vterm_screen_enable_altscreen(term->vts, true);
   vterm_screen_enable_reflow(term->vts, true);
-  // delete empty lines at the end of the buffer
   vterm_screen_set_callbacks(term->vts, &vterm_screen_callbacks, term);
   vterm_screen_set_unrecognised_fallbacks(term->vts, &vterm_fallbacks, term);
   vterm_screen_set_damage_merge(term->vts, VTERM_DAMAGE_SCROLL);
@@ -331,28 +305,19 @@ void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   term->invalid_start = 0;
   term->invalid_end = opts.height;
 
-  // Create a separate queue for events which need to wait for a terminal
-  // refresh. We cannot reschedule events back onto the main queue because this
-  // can create an infinite loop (#32753).
-  // This queue is never processed directly: when the terminal is refreshed, all
-  // events from this queue are copied back onto the main event queue.
+  // Pending events queue: deferred until next terminal refresh (#32753).
   term->pending.events = multiqueue_new(NULL, NULL);
 
   aco_save_T aco;
   aucmd_prepbuf(&aco, buf);
-
   refresh_screen(term, buf);
   set_option_value(kOptBuftype, STATIC_CSTR_AS_OPTVAL("terminal"), OPT_LOCAL);
-
   if (buf->b_ffname != NULL) {
     buf_set_term_title(buf, buf->b_ffname, strlen(buf->b_ffname));
   }
   RESET_BINDING(curwin);
-  // Reset cursor in current window.
   curwin->w_cursor = (pos_T){ .lnum = 1, .col = 0, .coladd = 0 };
-  // Initialize to check if the scrollback buffer has been allocated in a TermOpen autocmd.
-  term->sb_buffer = NULL;
-  // Apply TermOpen autocmds _before_ configuring the scrollback buffer.
+  term->sb_buffer = NULL;  // check if TermOpen autocmd allocates it
   apply_autocmds(EVENT_TERMOPEN, NULL, NULL, false, buf);
 
   aucmd_restbuf(&aco);
@@ -362,20 +327,13 @@ void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   }
 
   if (term->sb_buffer == NULL) {
-    // Local 'scrollback' _after_ autocmds.
     if (buf->b_p_scbk < 1) {
       buf->b_p_scbk = SB_MAX;
     }
-    // Configure the scrollback buffer.
     term->sb_size = (size_t)buf->b_p_scbk;
     term->sb_buffer = xmalloc(sizeof(ScrollbackLine *) * term->sb_size);
   }
-
-  // Configure the color palette. Try to get the color from:
-  //
-  // - b:terminal_color_{NUM}
-  // - g:terminal_color_{NUM}
-  // - the VTerm instance
+  // Configure color palette from b:terminal_color_{N} / g:terminal_color_{N}.
   for (int i = 0; i < 16; i++) {
     char var[64];
     snprintf(var, sizeof(var), "terminal_color_%d", i);
@@ -397,9 +355,6 @@ void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   }
 }
 
-/// Closes the Terminal buffer.
-///
-/// May call terminal_destroy, which sets caller storage to NULL.
 extern void rs_terminal_close(Terminal **termpp, int status);
 void terminal_close(Terminal **termpp, int status)
   FUNC_ATTR_NONNULL_ALL { rs_terminal_close(termpp, status); }
@@ -407,7 +362,6 @@ void terminal_close(Terminal **termpp, int status)
 extern void rs_terminal_check_size(Terminal *term);
 void terminal_check_size(Terminal *term) { rs_terminal_check_size(term); }
 
-/// Implements MODE_TERMINAL state. :help Terminal-mode
 extern bool rs_terminal_enter(void);
 bool terminal_enter(void) { return rs_terminal_enter(); }
 
@@ -417,15 +371,12 @@ static void terminal_check_cursor(void)
   curwin->w_cursor.lnum = MIN(curbuf->b_ml.ml_line_count,
                               rs_terminal_row_to_linenr_term(term, term->cursor.row));
   const linenr_T topline = MAX(curbuf->b_ml.ml_line_count - curwin->w_view_height + 1, 1);
-  // Don't update topline if unchanged to avoid unnecessary redraws.
   if (topline != curwin->w_topline) {
     set_topline(curwin, topline);
   }
-  // Nudge cursor when returning to normal-mode.
   int off = (State & MODE_TERMINAL && curbuf->terminal == term) ? 0 : (curwin->w_p_rl ? 1 : -1);
   coladvance(curwin, MAX(0, term->cursor.col + off));
 }
-
 
 extern void rs_terminal_destroy(Terminal **termpp);
 void terminal_destroy(Terminal **termpp) FUNC_ATTR_NONNULL_ALL { rs_terminal_destroy(termpp); }
@@ -448,7 +399,6 @@ static int get_rgb(VTermState *state, VTermColor color)
   return RGB_(color.rgb.red, color.rgb.green, color.rgb.blue);
 }
 
-
 extern void rs_terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs);
 void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs)
   { rs_terminal_get_line_attributes(term, wp, linenr, term_attrs); }
@@ -459,7 +409,6 @@ void terminal_notify_theme(Terminal *term, bool dark)
 // }}}
 // libvterm callbacks {{{
 
-static void buf_set_term_title(buf_T *buf, const char *title, size_t len) FUNC_ATTR_NONNULL_ALL;
 static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
 {
   Error err = ERROR_INIT;
@@ -473,7 +422,6 @@ static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
 extern int rs_term_settermprop(VTermProp prop, VTermValue *val, void *data);
 static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
   { return rs_term_settermprop(prop, val, data); }
-
 
 extern void rs_term_clipboard_set(void **argv);
 static void term_clipboard_set(void **argv) { rs_term_clipboard_set(argv); }
@@ -994,7 +942,6 @@ int nvim_buf_get_changedtick_curbuf(void) { return (int)buf_get_changedtick(curb
 void nvim_do_buffer_wipe(int buf_handle)
   { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
 
-// term_selection_set / term_clipboard_set helpers (Phase 16)
 void nvim_terminal_clipboard_queue(long mask, char *data)
   { multiqueue_put(loop_get_events(&main_loop), term_clipboard_set, (void *)mask, data); }
 char *nvim_terminal_selection_dupz(void *term, size_t *out_len)
@@ -1004,7 +951,6 @@ char *nvim_terminal_selection_dupz(void *term, size_t *out_len)
   return xmemdupz(t->selection.items, *out_len);
 }
 
-// emit_termrequest helpers (Phase 15)
 void nvim_terminal_set_vim_var_termrequest(const char *seq, size_t seqlen)
   { set_vim_var_string(VV_TERMREQUEST, seq, (ptrdiff_t)seqlen); }
 void nvim_terminal_apply_termrequest_autocmd(void *buf, int64_t row, int64_t col,
