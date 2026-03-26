@@ -122,7 +122,6 @@ int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_fre
 int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
 char nvim_buf_get_bufhidden(buf_T *buf) { return buf->b_p_bh[0]; }
 const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
-const char *nvim_buf_get_b_p_syn(buf_T *buf) { return buf ? buf->b_p_syn : NULL; }
 const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
 const char *nvim_buf_get_b_sfname(buf_T *buf) { return buf->b_sfname; }
 const char *nvim_buf_get_b_p_efm(buf_T *buf) { return buf->b_p_efm; }
@@ -291,20 +290,6 @@ int nvim_curwin_get_p_diff(void) { return curwin->w_p_diff ? 1 : 0; }
 
 // Accessors for cmdwin migration
 int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
-void nvim_curbuf_set_p_ma(bool val) { curbuf->b_p_ma = val; }
-void nvim_curbuf_ro_locked_inc(void) { curbuf->b_ro_locked++; }
-void nvim_curbuf_ro_locked_dec(void) { curbuf->b_ro_locked--; }
-void nvim_curbuf_set_p_tw(int64_t val) { curbuf->b_p_tw = val; }
-/// Set current buffer's bufhidden to "wipe" (for cmdwin migration).
-void nvim_cmdwin_set_bufhidden_wipe(void)
-{
-  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL);
-}
-/// Set current buffer's filetype to "vim" (for cmdwin migration).
-void nvim_cmdwin_set_filetype_vim(void)
-{
-  set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("vim"), OPT_LOCAL);
-}
 
 bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }
 bool nvim_curbuf_has_b_p_fex(void) { return *curbuf->b_p_fex != NUL; }
@@ -569,9 +554,6 @@ bool nvim_wininfo_get_wo_diff(WinInfo *wip) { return wip->wi_opt.wo_diff; }
 int nvim_wininfo_get_changelistidx(WinInfo *wip) { return wip->wi_changelistidx; }
 fmark_T *nvim_wininfo_get_mark_ptr(WinInfo *wip) { return &wip->wi_mark; }
 bool nvim_wininfo_get_fold_manual(WinInfo *wip) { return wip->wi_fold_manual; }
-garray_T *nvim_wininfo_get_folds_ptr(WinInfo *wip) { return &wip->wi_folds; }
-garray_T *nvim_win_get_folds_ptr(win_T *wp) { return &wp->w_folds; }
-bool nvim_win_get_fold_manual(win_T *wp) { return wp->w_fold_manual; }
 
 /// Returns true if wip->wi_win is a window in the current tab page.
 bool nvim_wininfo_win_in_curtab(WinInfo *wip)
@@ -771,7 +753,6 @@ int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; 
 /// Returns non-zero if the current buffer is empty.
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 
-int nvim_swb_win_split_flags(void) { return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0; }
 
 // buf_contents_changed accessors
 
