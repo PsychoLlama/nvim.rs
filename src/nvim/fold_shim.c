@@ -42,8 +42,6 @@
 
 #include "fold_shim.c.generated.h"
 
-// rs_diff_lnum_win: now called directly from Rust via #[link_name]; C declaration removed.
-
 // ============================================================================
 // VimL function accessors (for f_foldclosed, f_foldlevel, etc.)
 // ============================================================================
@@ -358,8 +356,6 @@ win_T *nvim_get_first_win_in_tab(void)
 {
   return curtab->tp_firstwin;
 }
-
-// nvim_diff_lnum_win deleted: Rust fold/lib.rs and change/events.rs use #[link_name = "rs_diff_lnum_win"].
 
 /// Set the w_p_fdl (foldlevel) field in a window.
 void nvim_win_set_p_fdl(win_T *wp, int fdl)
