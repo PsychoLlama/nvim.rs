@@ -251,7 +251,9 @@ void nvim_spellsug_set_sps_limit(int l) { sps_limit = l; }
 int nvim_spellsug_get_sps_flags(void) { return sps_flags; }
 int nvim_spellsug_get_sps_limit(void) { return sps_limit; }
 
+
 extern int rs_spell_check_sps_full(const char *p_sps_val);
+extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -2604,23 +2606,6 @@ static void rescore_one(suginfo_T *su, suggest_T *stp)
   }
 }
 
-/// Function given to qsort() to sort the suggestions on st_score.
-/// First on "st_score", then "st_altscore" then alphabetically.
-static int sug_compare(const void *s1, const void *s2)
-{
-  suggest_T *p1 = (suggest_T *)s1;
-  suggest_T *p2 = (suggest_T *)s2;
-  int n = p1->st_score == p2->st_score ? 0 : p1->st_score > p2->st_score ? 1 : -1;
-
-  if (n == 0) {
-    n = p1->st_altscore == p2->st_altscore ? 0 : p1->st_altscore > p2->st_altscore ? 1 : -1;
-    if (n == 0) {
-      n = STRICMP(p1->st_word, p2->st_word);
-    }
-  }
-  return n;
-}
-
 /// Cleanup the suggestions:
 /// - Sort on score.
 /// - Remove words that won't be displayed.
@@ -2631,24 +2616,5 @@ static int sug_compare(const void *s1, const void *s2)
 static int cleanup_suggestions(garray_T *gap, int maxscore, int keep)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (gap->ga_len <= 0) {
-    return maxscore;
-  }
-
-  // Sort the list.
-  qsort(gap->ga_data, (size_t)gap->ga_len, sizeof(suggest_T), sug_compare);
-
-  // Truncate the list to the number of suggestions that will be displayed.
-  if (gap->ga_len > keep) {
-    suggest_T *const stp = &SUG(*gap, 0);
-
-    for (int i = keep; i < gap->ga_len; i++) {
-      xfree(stp[i].st_word);
-    }
-    gap->ga_len = keep;
-    if (keep >= 1) {
-      return stp[keep - 1].st_score;
-    }
-  }
-  return maxscore;
+  return rs_cleanup_suggestions((suggest_T *)gap->ga_data, &gap->ga_len, maxscore, keep);
 }

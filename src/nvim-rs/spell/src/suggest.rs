@@ -2659,6 +2659,123 @@ pub unsafe extern "C" fn rs_spell_check_sps_full(p_sps_val: *const c_char) -> c_
 }
 
 // =============================================================================
+// Phase 2: suggest_T mirror and cleanup_suggestions
+// =============================================================================
+
+/// Rust mirror of the C `suggest_T` struct.
+///
+/// SAFETY: Layout must exactly match the C struct. The C definition is:
+///   char *st_word;      // 8 bytes (pointer)
+///   int st_wordlen;     // 4 bytes
+///   int st_orglen;      // 4 bytes
+///   int st_score;       // 4 bytes
+///   int st_altscore;    // 4 bytes
+///   bool st_salscore;   // 1 byte
+///   bool st_had_bonus;  // 1 byte
+///   // 6 bytes padding (to align pointer)
+///   slang_T *st_slang;  // 8 bytes (pointer)
+/// Total: 40 bytes
+#[repr(C)]
+pub struct CSuggestT {
+    /// Suggested word, allocated C string
+    pub st_word: *mut c_char,
+    /// strlen(st_word)
+    pub st_wordlen: c_int,
+    /// length of replaced text
+    pub st_orglen: c_int,
+    /// lower is better
+    pub st_score: c_int,
+    /// used when st_score compares equal
+    pub st_altscore: c_int,
+    /// st_score is for soundalike
+    pub st_salscore: bool,
+    /// bonus already included in score
+    pub st_had_bonus: bool,
+    _pad: [u8; 6],
+    /// language used for sound folding (opaque pointer)
+    pub st_slang: *mut std::ffi::c_void,
+}
+
+extern "C" {
+    // Memory free (from nvim/memory.h)
+    fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+/// Compare two suggestions for sorting.
+/// Order: st_score asc, st_altscore asc, st_word case-insensitive asc.
+unsafe fn csuggst_cmp(a: &CSuggestT, b: &CSuggestT) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match a.st_score.cmp(&b.st_score) {
+        Ordering::Equal => {}
+        other => return other,
+    }
+    match a.st_altscore.cmp(&b.st_altscore) {
+        Ordering::Equal => {}
+        other => return other,
+    }
+    // case-insensitive strcmp using C locale (matches STRICMP)
+    let r = libc_strcasecmp(a.st_word, b.st_word);
+    r.cmp(&0)
+}
+
+/// ASCII case-insensitive strcmp (matches STRICMP / strcasecmp in C locale).
+unsafe fn libc_strcasecmp(a: *const c_char, b: *const c_char) -> c_int {
+    let mut pa = a;
+    let mut pb = b;
+    loop {
+        let ca = c_int::from((*pa as u8).to_ascii_lowercase());
+        let cb = c_int::from((*pb as u8).to_ascii_lowercase());
+        if ca != cb {
+            return ca - cb;
+        }
+        if ca == 0 {
+            return 0;
+        }
+        pa = pa.add(1);
+        pb = pb.add(1);
+    }
+}
+
+/// Rust replacement for C `cleanup_suggestions`.
+///
+/// Sorts the suggestion array by score then truncates to `keep` items,
+/// freeing discarded entries. Returns the max score.
+///
+/// # Safety
+/// `data` must be a valid pointer to at least `*gap_len` `CSuggestT` items.
+/// `gap_len` must be a valid pointer to the current length.
+/// All `st_word` pointers in the array must be C-allocated (freed via xfree).
+#[no_mangle]
+pub unsafe extern "C" fn rs_cleanup_suggestions(
+    data: *mut CSuggestT,
+    gap_len: *mut c_int,
+    maxscore: c_int,
+    keep: c_int,
+) -> c_int {
+    let len = *gap_len as usize;
+    if len == 0 {
+        return maxscore;
+    }
+
+    // Sort in place using Rust stable sort.
+    let slice = std::slice::from_raw_parts_mut(data, len);
+    slice.sort_by(|a, b| csuggst_cmp(a, b));
+
+    let keep_usize = keep as usize;
+    if len > keep_usize {
+        // Free the words we're discarding.
+        for item in &slice[keep_usize..len] {
+            xfree(item.st_word.cast::<std::ffi::c_void>());
+        }
+        *gap_len = keep;
+        if keep >= 1 {
+            return slice[keep_usize - 1].st_score;
+        }
+    }
+    maxscore
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
