@@ -39,7 +39,7 @@ extern VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
 extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
                             int priority2, uint32_t id2, uint32_t add_id2);
 
-// Additional Rust implementations for Phase 133
+// Additional Rust FFI declarations
 extern DecorSignHighlight rs_decor_sh_from_inline(uint16_t flags, uint16_t priority,
                                                    int hl_id, uint32_t conceal_char);
 extern int rs_decor_init_draw_col_value(int win_col, int hidden, int kind,
@@ -66,16 +66,16 @@ uint32_t decor_freelist = UINT32_MAX;
 DecorVirtText *to_free_virt = NULL;
 uint32_t to_free_sh = UINT32_MAX;
 
-// Rust implementations for Phase 1
+// Rust FFI declarations (decor state)
 extern void rs_decor_state_invalidate(void *state, buf_T *buf);
 
-// Rust implementations for Phase 2
+// Rust FFI declarations (memory management)
 extern void *rs_decor_put_vt(DecorVirtText *vt_data, DecorVirtText *next);
 extern void rs_decor_free(int ext, DecorVirtText *vt, uint32_t sh_idx);
 extern void rs_decor_check_to_be_deleted(void);
 
 
-// Rust implementations for Phase 4
+// Rust FFI declarations (range insertion)
 extern void rs_decor_range_add_from_inline(void *state, int start_row, int start_col,
                                            int end_row, int end_col, bool ext,
                                            void *vt, uint32_t sh_idx,
@@ -83,7 +83,7 @@ extern void rs_decor_range_add_from_inline(void *state, int start_row, int start
                                            int hl_hl_id, uint32_t hl_conceal_char,
                                            bool owned, uint32_t ns, uint32_t mark_id);
 
-// Rust implementations for Phase 5
+// Rust FFI declarations (redraw dispatch)
 extern void rs_decor_redraw(void *buf, int row1, int row2, int col1,
                             bool ext, void *vt, uint32_t sh_idx,
                             uint16_t hl_flags, uint16_t hl_priority,
@@ -95,7 +95,7 @@ extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
                                 int hl_hl_id, uint32_t hl_conceal_char,
                                 bool do_free);
 
-// Rust implementations for Phase 7
+// Rust FFI declarations (sign lookup)
 extern void *rs_decor_find_sign(bool ext, uint32_t sh_idx);
 
 // clear_virttext and clear_virtlines are declared in decoration.h
@@ -923,7 +923,7 @@ void nvim_decor_state_destroy_ranges_i(void *state_ptr)
 }
 
 // ============================================================================
-// Phase 2: Memory management accessors
+// Memory management accessors
 // ============================================================================
 
 /// Get decor_freelist global.
@@ -1095,7 +1095,7 @@ void nvim_decor_state_itr_get(void *state_ptr, void *buf_ptr, int row, int col)
 }
 
 // ============================================================================
-// Phase 4: Range Insertion and Creation helpers
+// Range Insertion and Creation helpers
 // ============================================================================
 
 /// Insert a virtual text range into DecorState.
@@ -1235,7 +1235,7 @@ void nvim_decor_range_add_from_inline_hl(void *state, int start_row, int start_c
 }
 
 // ============================================================================
-// Phase 5: Redraw Dispatch and Buffer Operations helpers
+// Redraw Dispatch and Buffer Operations helpers
 // ============================================================================
 
 /// Wrapper for redraw_buf_line_later for Rust FFI.
@@ -1666,7 +1666,7 @@ uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)
 }
 
 // ============================================================================
-// Phase 6: Core Column Rendering helpers
+// Core Column Rendering helpers
 // ============================================================================
 
 /// Advance the marktree iterator and promote future ranges to active.
