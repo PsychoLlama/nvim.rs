@@ -1,38 +1,3 @@
-// VT220/xterm-like terminal emulator.
-// Powered by libvterm http://www.leonerd.org.uk/code/libvterm
-//
-// libvterm is a pure C99 terminal emulation library with abstract input and
-// display. This means that the library needs to read data from the master fd
-// and feed VTerm instances, which will invoke user callbacks with screen
-// update instructions that must be mirrored to the real display.
-//
-// Keys are sent to VTerm instances by calling
-// vterm_keyboard_key/vterm_keyboard_unichar, which generates byte streams that
-// must be fed back to the master fd.
-//
-// Nvim buffers are used as the display mechanism for both the visible screen
-// and the scrollback buffer.
-//
-// When a line becomes invisible due to a decrease in screen height or because
-// a line was pushed up during normal terminal output, we store the line
-// information in the scrollback buffer, which is mirrored in the nvim buffer
-// by appending lines just above the visible part of the buffer.
-//
-// When the screen height increases, libvterm will ask for a row in the
-// scrollback buffer, which is mirrored in the nvim buffer displaying lines
-// that were previously invisible.
-//
-// The vterm->nvim synchronization is performed in intervals of 10 milliseconds,
-// to minimize screen updates when receiving large bursts of data.
-//
-// This module is decoupled from the processes that normally feed it data, so
-// it's possible to use it as a general purpose console buffer (possibly as a
-// log/display mechanism for nvim in the future)
-//
-// Inspired by: vimshell http://www.wana.at/vimshell
-//              Conque https://code.google.com/p/conque
-// Some code from pangoterm http://www.leonerd.org.uk/code/pangoterm
-
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -148,8 +113,6 @@ extern void rs_terminal_focus_gain(void *term);
 extern void rs_terminal_focus_lose(void *term);
 extern int rs_terminal_underline_hl_flag(VTermScreenCellAttrs attrs);
 extern int rs_terminal_parse_osc8(const char *str, int *attr);
-extern int rs_terminal_bell(void);
-extern int rs_terminal_theme_query(bool *dark);
 
 // Result of rs_terminal_convert_key: VTerm key code and modifier mask.
 typedef struct {
