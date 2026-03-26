@@ -224,8 +224,6 @@ extern int rs_get_fileformat(buf_T *buf);
 extern void rs_long_to_char(long n, char *s);
 extern long rs_char_to_long(const char *s);
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
-extern linenr_T rs_ml_get_lowest_marked(void);
-extern void rs_ml_set_lowest_marked(linenr_T lnum);
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
 extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
