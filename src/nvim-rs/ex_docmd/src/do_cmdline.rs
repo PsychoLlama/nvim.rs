@@ -20,6 +20,17 @@ pub type LinenrT = i32;
 // Rust types matching C structs (Phase 1)
 // =============================================================================
 
+/// Matches C `garray_T` layout (also matches collections::GArray).
+/// Used to access ga_len and ga_data from loop_cookie.
+#[repr(C)]
+pub struct GArrayRepr {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+
 /// Matches C `wcmd_T`: a command line stored for `:while`/`:for` loop replay.
 #[repr(C)]
 pub struct WcmdT {
@@ -30,7 +41,7 @@ pub struct WcmdT {
 /// Matches C `struct loop_cookie`.
 #[repr(C)]
 pub struct LoopCookie {
-    pub lines_gap: *mut c_void, // garray_T *
+    pub lines_gap: *mut GArrayRepr,
     pub current_line: c_int,
     pub repeating: c_int,
     pub lc_getline: LineGetter,
@@ -107,9 +118,9 @@ extern "C" {
 extern "C" {
     // Function pointer accessors
     fn nvim_docmd_get_loop_line_ptr() -> LineGetter;
-    fn nvim_docmd_get_getsourceline_ptr() -> *mut c_void;
-    fn nvim_docmd_get_getexline_ptr() -> *mut c_void;
-    fn nvim_docmd_get_func_line_ptr() -> *mut c_void;
+    fn nvim_docmd_get_getsourceline_ptr() -> LineGetter;
+    fn nvim_docmd_get_getexline_ptr() -> LineGetter;
+    fn nvim_docmd_get_func_line_ptr() -> LineGetter;
 
     // Loop cookie field accessors
     fn nvim_docmd_loop_cookie_get_lc_getline(lc: *mut c_void) -> LineGetter;
@@ -169,7 +180,7 @@ extern "C" {
 
     // Misc helpers
     fn nvim_docmd_line_breakcheck();
-    fn nvim_docmd_getcmdline_colon(indent: c_int, do_concat: bool) -> *mut c_char;
+    fn nvim_docmd_getcmdline_colon(firstc: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
     fn nvim_docmd_set_sourcing_lnum(lnum: LinenrT);
     fn nvim_get_sourcing_lnum_direct() -> LinenrT;
     fn nvim_get_sourcing_name() -> *const c_char;
@@ -185,6 +196,9 @@ extern "C" {
     // Memory
     fn xfree(ptr: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
+
+    // GArray helpers (ga_append_via_ptr already exported from collections crate)
+    fn ga_append_via_ptr(gap: *mut c_void, item_size: usize) -> *mut c_void;
 
     // Error messages
     fn gettext(s: *const c_char) -> *const c_char;
@@ -250,4 +264,73 @@ pub unsafe extern "C" fn getline_cookie(fgetline: LineGetter, cookie: *mut c_voi
         cp = new_cp;
     }
     cp
+}
+
+// =============================================================================
+// Phase 2: store_loop_line and get_loop_line
+// =============================================================================
+
+/// Store a line in `gap` so that a `:while` loop can execute it again.
+/// Exported as `store_loop_line` so the C `do_cmdline` body can call it (Phase 2/4).
+///
+/// # Safety
+///
+/// `gap` must be a valid `garray_T *`. `line` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn store_loop_line(gap: *mut GArrayRepr, line: *const c_char) {
+    // GA_APPEND_VIA_PTR(wcmd_T, gap)
+    let p = unsafe { ga_append_via_ptr(gap.cast(), std::mem::size_of::<WcmdT>()) as *mut WcmdT };
+    unsafe {
+        (*p).line = xstrdup(line);
+        (*p).lnum = nvim_get_sourcing_lnum_direct();
+    }
+}
+
+/// Obtain a line when inside a `:while` or `:for` loop.
+///
+/// Exported as `get_loop_line` so the C `getline_equal` comparisons work.
+///
+/// # Safety
+///
+/// `cookie` must be a valid `*mut LoopCookie`.
+#[export_name = "get_loop_line"]
+pub unsafe extern "C" fn rs_get_loop_line(
+    c: c_int,
+    cookie: *mut c_void,
+    indent: c_int,
+    do_concat: bool,
+) -> *mut c_char {
+    let cp = cookie as *mut LoopCookie;
+
+    // If we are at or past the last line in lines_gap, we need a new line.
+    if unsafe { (*cp).current_line + 1 >= (*(*cp).lines_gap).ga_len } {
+        if unsafe { (*cp).repeating } != 0 {
+            // Trying to read past ":endwhile"/":endfor"
+            return std::ptr::null_mut();
+        }
+
+        // First time inside the ":while"/":for": get line normally.
+        let line = if unsafe { (*cp).lc_getline }.is_none() {
+            unsafe { nvim_docmd_getcmdline_colon(c, indent, do_concat) }
+        } else {
+            let f = unsafe { (*cp).lc_getline.unwrap() };
+            unsafe { f(c, (*cp).cookie, indent, do_concat) }
+        };
+
+        if !line.is_null() {
+            unsafe { store_loop_line((*cp).lines_gap, line) };
+            unsafe { (*cp).current_line += 1 };
+        }
+
+        return line;
+    }
+
+    // Replaying: return stored line.
+    unsafe { KeyTyped = false };
+    unsafe { (*cp).current_line += 1 };
+    let wp = unsafe { ((*(*cp).lines_gap).ga_data as *mut WcmdT).add((*cp).current_line as usize) };
+    unsafe {
+        nvim_docmd_set_sourcing_lnum((*wp).lnum);
+        xstrdup((*wp).line)
+    }
 }

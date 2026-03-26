@@ -228,6 +228,11 @@ struct dbg_stuff {
   except_T *current_exception;
 };
 
+// Phase 2 (do_cmdline plan): Rust-exported loop line helpers.
+// Declared here (before do_cmdline body) so the C do_cmdline can call them.
+extern char *get_loop_line(int c, void *cookie, int indent, bool do_concat);
+extern void store_loop_line(garray_T *gap, char *line);
+
 #include "ex_docmd.c.generated.h"
 extern int rs_win_valid(win_T *win);
 extern int rs_only_one_window(void);
@@ -1043,45 +1048,8 @@ int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags)
   return retval;
 }
 
-/// Obtain a line when inside a ":while" or ":for" loop.
-static char *get_loop_line(int c, void *cookie, int indent, bool do_concat)
-{
-  struct loop_cookie *cp = (struct loop_cookie *)cookie;
-
-  if (cp->current_line + 1 >= cp->lines_gap->ga_len) {
-    if (cp->repeating) {
-      return NULL;              // trying to read past ":endwhile"/":endfor"
-    }
-    char *line;
-    // First time inside the ":while"/":for": get line normally.
-    if (cp->lc_getline == NULL) {
-      line = getcmdline(c, 0, indent, do_concat);
-    } else {
-      line = cp->lc_getline(c, cp->cookie, indent, do_concat);
-    }
-    if (line != NULL) {
-      store_loop_line(cp->lines_gap, line);
-      cp->current_line++;
-    }
-
-    return line;
-  }
-
-  KeyTyped = false;
-  cp->current_line++;
-  wcmd_T *wp = (wcmd_T *)(cp->lines_gap->ga_data) + cp->current_line;
-  SOURCING_LNUM = wp->lnum;
-  return xstrdup(wp->line);
-}
-
-/// Store a line in "gap" so that a ":while" loop can execute it again.
-static void store_loop_line(garray_T *gap, char *line)
-{
-  wcmd_T *p = GA_APPEND_VIA_PTR(wcmd_T, gap);
-  p->line = xstrdup(line);
-  p->lnum = SOURCING_LNUM;
-}
-
+// get_loop_line and store_loop_line are implemented in Rust (do_cmdline.rs, Phase 2).
+// Forward declarations are at the top of this file (before do_cmdline body).
 
 /// Helper function to apply an offset for buffer commands, i.e. ":bdelete",
 /// ":bwipeout", etc.
@@ -3522,8 +3490,7 @@ void nvim_docmd_restore_cmdmod(cmdmod_T *save)
 /// do_intthrow wrapper.
 bool nvim_docmd_do_intthrow(cstack_T *cstack) { return do_intthrow(cstack); }
 /// get_func_line function pointer value (for getline_equal comparison).
-/// Returns the function pointer as a void* for comparison.
-void *nvim_docmd_get_func_line_ptr(void) { return (void *)get_func_line; }
+LineGetter nvim_docmd_get_func_line_ptr(void) { return get_func_line; }
 /// getargcmd wrapper (already public, but needs C accessor for Rust FFI).
 char *nvim_docmd_getargcmd(char **argp) { return getargcmd(argp); }
 /// Set eap->do_ecmd_cmd via getargcmd.
@@ -3771,10 +3738,10 @@ void *nvim_docmd_loop_cookie_get_cookie(void *lc)
 // =============================================================================
 
 /// Return function pointer to getsourceline (for getline_equal comparison).
-void *nvim_docmd_get_getsourceline_ptr(void) { return (void *)getsourceline; }
+LineGetter nvim_docmd_get_getsourceline_ptr(void) { return getsourceline; }
 
 /// Return function pointer to getexline (for getline_equal comparison).
-void *nvim_docmd_get_getexline_ptr(void) { return (void *)getexline; }
+LineGetter nvim_docmd_get_getexline_ptr(void) { return getexline; }
 
 /// func_name wrapper (wraps func_name(cookie)).
 char *nvim_docmd_func_name(void *cookie) { return func_name(cookie); }
@@ -3884,10 +3851,10 @@ void nvim_docmd_script_line_end(void) { script_line_end(); }
 /// line_breakcheck wrapper.
 void nvim_docmd_line_breakcheck(void) { line_breakcheck(); }
 
-/// getcmdline(':') wrapper for get_loop_line fallback.
-char *nvim_docmd_getcmdline_colon(int indent, bool do_concat)
+/// getcmdline wrapper for get_loop_line fallback (passes firstc through).
+char *nvim_docmd_getcmdline_colon(int firstc, int indent, bool do_concat)
 {
-  return getcmdline(':', 0, indent, do_concat);
+  return getcmdline(firstc, 0, indent, do_concat);
 }
 
 /// Set SOURCING_LNUM (top of exestack).
