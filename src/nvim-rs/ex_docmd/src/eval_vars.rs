@@ -56,7 +56,7 @@ extern "C" {
 
     // memory helpers
     fn xfree(p: *mut c_void);
-    fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void;
+    fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
 
     // string helpers
     fn strlen(s: *const c_char) -> usize;
@@ -66,7 +66,7 @@ extern "C" {
     fn memmove(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
 
     // path helpers
-    fn nvim_docmd_path_tail(p: *const c_char) -> *const c_char;
+    fn path_tail(p: *const c_char) -> *const c_char;
     fn nvim_docmd_path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char;
 
     // modify_fname
@@ -103,7 +103,7 @@ extern "C" {
     fn nvim_docmd_get_autocmd_match() -> *const c_char;
 
     // estack_sfile
-    fn nvim_docmd_estack_sfile(which: c_int) -> *mut c_char;
+    fn estack_sfile(which: c_int) -> *mut c_char;
 
     // SOURCING_NAME / SOURCING_LNUM
     fn nvim_get_sourcing_name() -> *const c_char;
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_SFILE => {
             // file name for ":so" command
-            result = nvim_docmd_estack_sfile(ESTACK_SFILE);
+            result = estack_sfile(ESTACK_SFILE);
             if result.is_null() {
                 *errormsg = nvim_docmd_eval_get_e_no_sfile();
                 return ptr::null_mut();
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_STACK => {
             // call stack
-            result = nvim_docmd_estack_sfile(ESTACK_STACK);
+            result = estack_sfile(ESTACK_STACK);
             if result.is_null() {
                 *errormsg = nvim_docmd_eval_get_e_no_stack();
                 return ptr::null_mut();
@@ -372,7 +372,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_SCRIPT => {
             // script file name
-            result = nvim_docmd_estack_sfile(ESTACK_SCRIPT);
+            result = estack_sfile(ESTACK_SCRIPT);
             if result.is_null() {
                 *errormsg = nvim_docmd_eval_get_e_no_script();
                 return ptr::null_mut();
@@ -442,7 +442,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
     if *src.add(*usedlen) as u8 == b'<' {
         *usedlen += 1;
         let dot = strrchr(result, b'.' as c_int);
-        if !dot.is_null() && dot >= nvim_docmd_path_tail(result) as *mut c_char {
+        if !dot.is_null() && dot >= path_tail(result) as *mut c_char {
             resultlen = (dot as usize) - (result as usize);
         }
     } else if !skip_mod {
@@ -496,7 +496,7 @@ unsafe fn finish_result(
         xfree(resultbuf as *mut c_void);
         ptr::null_mut()
     } else {
-        let dup = xmemdupz(result as *const c_void, resultlen) as *mut c_char;
+        let dup = xmemdupz(result, resultlen);
         xfree(resultbuf as *mut c_void);
         dup
     }

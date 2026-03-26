@@ -86,7 +86,6 @@ extern "C" {
 
     // exarg_T allocation
     fn nvim_eap_alloc() -> ExArgHandle;
-    fn nvim_eap_free(eap: ExArgHandle);
 
     // exarg_T field accessors
     fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
@@ -157,7 +156,7 @@ extern "C" {
     fn dbg_check_breakpoint(eap: ExArgHandle);
 
     // do_intthrow
-    fn nvim_docmd_do_intthrow(cstack: CstackHandle) -> bool;
+    fn do_intthrow(cstack: CstackHandle) -> bool;
 
     // Address/range
     fn set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char);
@@ -171,10 +170,10 @@ extern "C" {
     fn ex_range_without_command(eap: ExArgHandle) -> *const c_char;
 
     // has_event / EVENT_CMDUNDEFINED
-    fn nvim_docmd_has_event(event: c_int) -> bool;
+    fn has_event(event: c_int) -> bool;
     fn nvim_docmd_apply_autocmds_cmdundefined(cmdname: *const c_char) -> bool;
     fn aborting() -> bool;
-    fn nvim_docmd_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
+    fn xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_docmd_ascii_isalnum(c: c_char) -> bool;
     fn xfree(p: *mut c_void);
 
@@ -265,9 +264,9 @@ extern "C" {
     // skip_cmd / execute_cmd0
 
     // post-execute: rethrow/finish/return
-    fn nvim_docmd_do_throw(cstack: CstackHandle);
+    fn do_throw(cstack: CstackHandle);
     fn nvim_docmd_do_finish(eap: ExArgHandle);
-    fn nvim_docmd_do_return(eap: ExArgHandle);
+    fn do_return(eap: ExArgHandle, reanimate: bool, is_cmd: bool, rettv: *mut c_void) -> bool;
     fn nvim_docmd_source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn current_func_returned() -> c_int;
     fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
@@ -490,7 +489,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
     if !nvim_eap_get_skip_bool(eap) && got_int {
         nvim_eap_set_skip(eap, true);
-        nvim_docmd_do_intthrow(cstack);
+        do_intthrow(cstack);
     }
 
     // 4. Parse range.
@@ -563,7 +562,7 @@ pub unsafe extern "C" fn do_one_cmd(
             let c = *nvim_eap_get_cmd(eap) as u8;
             c.is_ascii_uppercase()
         }
-        && nvim_docmd_has_event(nvim_docmd_get_event_cmdundefined())
+        && has_event(nvim_docmd_get_event_cmdundefined())
     {
         // Build cmdname as copy up to first non-alnum.
         let mut cmdname_end = nvim_eap_get_cmd(eap);
@@ -571,7 +570,7 @@ pub unsafe extern "C" fn do_one_cmd(
             cmdname_end = cmdname_end.add(1);
         }
         let cmdname_len = cmdname_end.offset_from(nvim_eap_get_cmd(eap)) as usize;
-        let cmdname = nvim_docmd_xmemdupz(nvim_eap_get_cmd(eap), cmdname_len);
+        let cmdname = xmemdupz(nvim_eap_get_cmd(eap), cmdname_len);
         let ret = nvim_docmd_apply_autocmds_cmdundefined(cmdname);
         xfree(cmdname as *mut c_void);
         // Retry if autocommand succeeded and didn't abort.
@@ -1062,12 +1061,12 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Post-execute: rethrow/return/finish.
     if nvim_docmd_get_need_rethrow() {
-        nvim_docmd_do_throw(cstack);
+        do_throw(cstack);
     } else if nvim_docmd_get_check_cstack() {
         if nvim_docmd_source_finished(fgetline, cookie) {
             nvim_docmd_do_finish(eap);
         } else if nvim_getline_equal_func_line(fgetline, cookie) && current_func_returned() != 0 {
-            nvim_docmd_do_return(eap);
+            do_return(eap, true, false, std::ptr::null_mut());
         }
     }
     nvim_docmd_set_need_rethrow(false);
@@ -1159,6 +1158,6 @@ unsafe fn ea_cleanup_and_return(eap: ExArgHandle, nextcmd: Option<*mut c_char>) 
         xfree(tofree as *mut c_void);
     }
 
-    nvim_eap_free(eap);
+    xfree(eap);
     result
 }

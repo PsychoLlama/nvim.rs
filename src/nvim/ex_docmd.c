@@ -1283,9 +1283,6 @@ int nvim_docmd_mark_fnum(const void *fm) { return ((const fmark_T *)fm)->fnum; }
 /// Get fmark_T->mark.lnum.
 linenr_T nvim_docmd_mark_lnum(const void *fm) { return ((const fmark_T *)fm)->mark.lnum; }
 
-/// Wrap mark_move_to for Rust.
-void nvim_docmd_mark_move_to(void *fm) { mark_move_to((fmark_T *)fm, 0); }
-
 /// Get curbuf->handle.
 int nvim_docmd_get_curbuf_handle(void) { return curbuf->handle; }
 
@@ -1328,12 +1325,6 @@ void *nvim_docmd_mark_get_visual(int ch)
 {
   return mark_get_visual(curbuf, (uint8_t)ch);
 }
-
-/// Wrap check_cursor(curwin).
-void nvim_docmd_check_cursor(void) { check_cursor(curwin); }
-
-/// Wrap check_cursor_col(curwin).
-void nvim_docmd_check_cursor_col(void) { check_cursor_col(curwin); }
 
 // =========================================================================
 // (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
@@ -1439,7 +1430,6 @@ cstack_T *nvim_cstack_alloc(void)
   cs->cs_idx = -1;
   return cs;
 }
-void nvim_cstack_free(cstack_T *cs) { xfree(cs); }
 void nvim_eap_set_cstack(exarg_T *eap, cstack_T *cstack) { eap->cstack = cstack; }
 int nvim_curbuf_is_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
 const char *nvim_get_e_command_too_recursive(void) { return _(e_command_too_recursive); }
@@ -1806,12 +1796,6 @@ void nvim_docmd_do_bang(int addr_count, exarg_T *eap, bool forceit)
   do_bang(addr_count, eap, forceit, true, true);
 }
 
-/// Wrapper for ml_preserve(curbuf, true, true).
-void nvim_docmd_ml_preserve(void) { ml_preserve(curbuf, true, true); }
-
-/// Wrapper for u_redo(1).
-void nvim_docmd_u_redo(void) { u_redo(1); }
-
 /// Wrapper for pum_make_popup(arg, forceit).
 void nvim_docmd_pum_make_popup(const char *arg, bool forceit)
 {
@@ -1899,14 +1883,8 @@ char *nvim_docmd_eval_to_string_g_colors_name(void)
   return p;
 }
 
-/// load_colors wrapper.
-int nvim_docmd_load_colors(const char *name) { return load_colors((char *)name); }
-
 /// Get curbuf ml_flags & ML_EMPTY.
 bool nvim_docmd_curbuf_ml_empty(void) { return curbuf->b_ml.ml_flags & ML_EMPTY; }
-
-/// Call os_breakcheck().
-void nvim_docmd_os_breakcheck(void) { os_breakcheck(); }
 
 /// Save curwin cursor position (lnum, col, coladd).
 void nvim_docmd_get_curwin_cursor_pos(int *lnum, int *col, int *coladd)
@@ -1932,12 +1910,6 @@ bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
 
 /// True if curtab has a local directory.
 bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
-
-/// win_goto wrapper.
-void nvim_docmd_win_goto(win_T *wp) { win_goto(wp); }
-
-/// close_others wrapper.
-void nvim_docmd_close_others(bool message, bool forceit) { close_others(message, forceit); }
 
 bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
 {
@@ -2006,9 +1978,6 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
 
 int nvim_docmd_curwin_p_wrap(void) { return curwin->w_p_wrap ? 1 : 0; }
-void nvim_docmd_update_topline(void) { update_topline(curwin); }
-void nvim_docmd_validate_cursor(void) { validate_cursor(curwin); }
-void nvim_docmd_update_curswant(void) { update_curswant(); }
 
 void nvim_docmd_semsg_mkdir_err(const char *name, int errcode) {
   semsg(_(e_mkdir), name, os_strerror(errcode));
@@ -2020,9 +1989,6 @@ void nvim_docmd_semsg_cant_open_write(const char *fname) {
   semsg(_("E190: Cannot open \"%s\" for writing"), fname);
 }
 void nvim_docmd_semsg_isadir2(const char *fname) { semsg(_(e_isadir2), fname); }
-int nvim_docmd_os_mkdir(const char *name, int prot) { return os_mkdir(name, prot); }
-int nvim_docmd_os_isdir(const char *fname) { return os_isdir(fname) ? 1 : 0; }
-int nvim_docmd_os_path_exists(const char *fname) { return os_path_exists(fname) ? 1 : 0; }
 FILE *nvim_docmd_os_fopen(const char *fname, const char *mode) { return os_fopen(fname, mode); }
 
 // Phase N: replace_makeprg_impl helpers for Rust FFI
@@ -2042,8 +2008,6 @@ bool nvim_docmd_dialog_changed_still_dirty(buf_T *buf)
   dialog_changed(buf, false);
   return bufref_valid(&bufref) && bufIsChanged(buf);
 }
-void nvim_docmd_no_write_message(void) { no_write_message(); }
-
 // Phase N: tabpage_close_impl / tabpage_close_other_impl helpers for Rust FFI
 int nvim_docmd_curwin_is_floating(void) { return curwin->w_floating ? 1 : 0; }
 int nvim_docmd_is_one_window(void) { return ONE_WINDOW ? 1 : 0; }
@@ -2151,7 +2115,6 @@ int nvim_docmd_get_CMD_balt(void) { return (int)CMD_balt; }
 int nvim_docmd_get_CMD_badd(void) { return (int)CMD_badd; }
 int nvim_docmd_get_readonlymode(void) { return readonlymode ? 1 : 0; }
 void nvim_docmd_set_readonlymode(int v) { readonlymode = (v != 0); }
-int nvim_docmd_buf_hide_buf(buf_T *buf) { return buf_hide(buf) ? 1 : 0; }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
 // nvim_docmd_do_exedit_handle_exmode, nvim_docmd_do_exedit_split_fail_cleanup,
@@ -2180,15 +2143,11 @@ void nvim_docmd_set_autocmd_fname(const char *new_fname)
 }
 const char *nvim_docmd_get_autocmd_match(void) { return autocmd_match; }
 
-char *nvim_docmd_estack_sfile(int which) { return estack_sfile((estack_arg_T)which); }
-
 int nvim_docmd_modify_fname(char *src, bool tilde_file, size_t *usedlen,
                              char **fnamep, char **bufp, size_t *fnamelen)
 {
   return modify_fname(src, tilde_file, usedlen, fnamep, bufp, fnamelen);
 }
-
-const char *nvim_docmd_path_tail(const char *p) { return path_tail(p); }
 
 char *nvim_docmd_path_try_shorten_fname(char *full_path)
 {
@@ -2286,7 +2245,6 @@ void nvim_docmd_tabpage_new_body(void)
 
 // --- do_exedit_handle_exmode helpers ---
 void nvim_docmd_set_exmode_active(int v) { exmode_active = (bool)v; }
-void nvim_docmd_stuffReadbuff_str(const char *s) { stuffReadbuff(s); }
 void nvim_docmd_set_pending_exmode_active(int v) { pending_exmode_active = (bool)v; }
 void nvim_docmd_normal_enter_false_true(void) { normal_enter(false, true); }
 
@@ -2438,8 +2396,6 @@ int nvim_docmd_remote_ui_connect(uint64_t id, const char *addr)
   return 1;
 }
 void nvim_docmd_set_exiting_true(void) { exiting = true; }
-void nvim_docmd_getout_zero(void) { getout(0); }
-
 // --- ex_checkhealth helpers ---
 int nvim_docmd_checkhealth_exec_lua(const char *mods, size_t mlen, const char *arg,
                                     char **err_msg_out)
@@ -2462,8 +2418,6 @@ void nvim_docmd_semsg_multiline_emsg(const char *msg)
 {
   semsg_multiline("emsg", (char *)msg);
 }
-void nvim_docmd_xfree_str(void *p) { xfree(p); }
-
 // --- did_set_findfunc helpers ---
 int nvim_docmd_findfunc_set_global(void)
 {
@@ -2517,8 +2471,6 @@ exarg_T *nvim_eap_alloc(void)
   eap->line2 = 1;
   return eap;
 }
-/// Free a heap-allocated exarg_T (does NOT free cmdline_tofree -- caller must).
-void nvim_eap_free(exarg_T *eap) { xfree(eap); }
 /// Set eap->skip.
 void nvim_eap_set_skip(exarg_T *eap, bool val) { eap->skip = val; }
 /// Set eap->ea_getline.
@@ -2527,10 +2479,6 @@ void nvim_eap_set_ea_getline(exarg_T *eap, LineGetter fn_ptr) { eap->ea_getline 
 void nvim_eap_set_cookie(exarg_T *eap, void *cookie) { eap->cookie = cookie; }
 /// Set eap->cmdlinep.
 void nvim_eap_set_cmdlinep(exarg_T *eap, char **cmdlinep) { eap->cmdlinep = cmdlinep; }
-/// do_throw wrapper.
-void nvim_docmd_do_throw(cstack_T *cstack) { do_throw(cstack); }
-/// do_return wrapper.
-void nvim_docmd_do_return(exarg_T *eap) { do_return(eap, true, false, NULL); }
 /// do_finish wrapper.
 void nvim_docmd_do_finish(exarg_T *eap) { do_finish(eap, true); }
 /// source_finished wrapper (for do_one_cmd).
@@ -2563,8 +2511,6 @@ void nvim_docmd_restore_cmdmod(cmdmod_T *save)
   cmdmod = *save;
   xfree(save);
 }
-/// do_intthrow wrapper.
-bool nvim_docmd_do_intthrow(cstack_T *cstack) { return do_intthrow(cstack); }
 /// get_func_line function pointer value (for getline_equal comparison).
 LineGetter nvim_docmd_get_func_line_ptr(void) { return get_func_line; }
 /// Set eap->do_ecmd_cmd via getargcmd.
@@ -2645,19 +2591,13 @@ void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
   }
   do_errthrow(cstack, (char *)cmd_name);
 }
-/// xfree wrapper for eap->cmdline_tofree in do_one_cmd cleanup.
-void nvim_docmd_xfree(void *p) { xfree(p); }
 /// get e_sandbox error string.
 const char *nvim_docmd_get_e_sandbox(void) { return _(e_sandbox); }
-/// has_event wrapper.
-bool nvim_docmd_has_event(int event) { return has_event((event_T)event); }
 /// apply_autocmds wrapper (for CmdUndefined event in do_one_cmd).
 bool nvim_docmd_apply_autocmds_cmdundefined(const char *cmdname)
 {
   return apply_autocmds(EVENT_CMDUNDEFINED, (char *)cmdname, (char *)cmdname, true, NULL);
 }
-/// xmemdupz wrapper for do_one_cmd cmdname copy.
-char *nvim_docmd_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
 /// ASCII_ISALNUM check for command name scanning.
 bool nvim_docmd_ascii_isalnum(char c) { return ASCII_ISALNUM(c); }
 /// IS_USER_CMDIDX check by integer index (as opposed to via exarg_T).
@@ -2834,12 +2774,6 @@ void nvim_docmd_ui_ext_cmdline_block_append(size_t indent, const char *s)
 /// ui_ext_cmdline_block_leave wrapper.
 void nvim_docmd_ui_ext_cmdline_block_leave(void) { ui_ext_cmdline_block_leave(); }
 
-/// msg_start wrapper.
-void nvim_docmd_msg_start(void) { msg_start(); }
-
-/// wait_return wrapper.
-void nvim_docmd_wait_return(int redraw) { wait_return(redraw ? true : false); }
-
 /// dbg_find_breakpoint wrapper.
 linenr_T nvim_docmd_dbg_find_breakpoint(bool file, char *fname, linenr_T after)
 {
@@ -2888,9 +2822,6 @@ void nvim_docmd_script_line_start(void) { script_line_start(); }
 /// script_line_end wrapper.
 void nvim_docmd_script_line_end(void) { script_line_end(); }
 
-/// line_breakcheck wrapper.
-void nvim_docmd_line_breakcheck(void) { line_breakcheck(); }
-
 /// getcmdline wrapper for get_loop_line fallback (passes firstc through).
 char *nvim_docmd_getcmdline_colon(int firstc, int indent, bool do_concat)
 {
@@ -2922,8 +2853,6 @@ void nvim_docmd_emsg_endwhile(void) { emsg(_(e_endwhile)); }
 void nvim_docmd_emsg_endfor(void) { emsg(_(e_endfor)); }
 /// emsg(_(e_endif))
 void nvim_docmd_emsg_endif(void) { emsg(_(e_endif)); }
-/// aborting() wrapper.
-int nvim_docmd_aborting(void) { return aborting() ? 1 : 0; }
 /// PROF_YES constant.
 int nvim_docmd_PROF_YES(void) { return PROF_YES; }
 /// _("End of sourced file") for do_debug.

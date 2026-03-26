@@ -345,7 +345,6 @@ extern "C" {
     fn nvim_hasFolding_line1(lnum: LinenrT, line1_out: *mut LinenrT);
     fn nvim_hasFolding_line2(lnum: LinenrT, line2_out: *mut LinenrT);
     fn nvim_cstack_alloc() -> CstackHandle;
-    fn nvim_cstack_free(cs: CstackHandle);
     fn nvim_curbuf_is_terminal() -> c_int;
     fn nvim_get_cmdinfo_cmdmod_ptr(cmdinfo: CmdParseInfoHandle) -> *mut c_void;
 
@@ -761,7 +760,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
     // Execute the command.
     rs_execute_cmd0(&mut retv, eap, &mut errormsg, preview);
 
-    nvim_cstack_free(cstack);
+    xfree(cstack);
     nvim_eap_set_cstack(eap, std::ptr::null_mut());
 
     // Emit error message if any.

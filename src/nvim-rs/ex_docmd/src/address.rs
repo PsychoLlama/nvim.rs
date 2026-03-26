@@ -653,7 +653,7 @@ extern "C" {
     fn nvim_docmd_mark_check(fm: *mut c_void, errormsg: *mut *const c_char) -> c_int;
     fn nvim_docmd_mark_fnum(fm: *const c_void) -> c_int;
     fn nvim_docmd_mark_lnum(fm: *const c_void) -> i32;
-    fn nvim_docmd_mark_move_to(fm: *mut c_void);
+    fn mark_move_to(fm: *mut c_void, flags: c_int) -> c_int;
 
     // Folding
     fn nvim_docmd_hasFolding(lnum: i32) -> i32;
@@ -679,8 +679,9 @@ extern "C" {
     // parse_cmd_address helpers
     fn nvim_eap_is_user_cmdidx(eap: ExArgHandle) -> bool;
     fn nvim_docmd_mark_get_visual(ch: c_int) -> *mut c_void;
-    fn nvim_docmd_check_cursor();
-    fn nvim_docmd_check_cursor_col();
+    fn check_cursor(win: *mut c_void);
+    fn check_cursor_col(win: *mut c_void);
+    fn nvim_get_curwin() -> *mut c_void;
 }
 
 /// Compute the buffer number reached by stepping `offset` buffers from the
@@ -891,7 +892,7 @@ pub unsafe fn get_address_impl(
                     let fm = nvim_docmd_mark_get(flag, *cmd as u8 as c_int);
                     cmd = cmd.add(1);
                     if !fm.is_null() && nvim_docmd_mark_fnum(fm) != nvim_docmd_get_curbuf_handle() {
-                        nvim_docmd_mark_move_to(fm);
+                        mark_move_to(fm, 0);
                         // Jumped to another file.
                         lnum = nvim_docmd_get_curwin_cursor_lnum();
                     } else {
@@ -1205,7 +1206,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
         if nvim_eap_get_cmd(eap).is_null() {
             // error detected
             if need_check_cursor {
-                nvim_docmd_check_cursor();
+                check_cursor(nvim_get_curwin());
             }
             return 0; // FAIL
         }
@@ -1243,7 +1244,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                             // ADDR_WINDOWS or ADDR_TABS
                             *errormsg = nvim_docmd_get_e_invrange();
                             if need_check_cursor {
-                                nvim_docmd_check_cursor();
+                                check_cursor(nvim_get_curwin());
                             }
                             return 0; // FAIL
                         }
@@ -1251,7 +1252,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     ADDR_TABS_RELATIVE | ADDR_UNSIGNED | ADDR_QUICKFIX => {
                         *errormsg = nvim_docmd_get_e_invrange();
                         if need_check_cursor {
-                            nvim_docmd_check_cursor();
+                            check_cursor(nvim_get_curwin());
                         }
                         return 0; // FAIL
                     }
@@ -1286,7 +1287,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                 if addr_type != ADDR_LINES {
                     *errormsg = nvim_docmd_get_e_invrange();
                     if need_check_cursor {
-                        nvim_docmd_check_cursor();
+                        check_cursor(nvim_get_curwin());
                     }
                     return 0; // FAIL
                 }
@@ -1296,7 +1297,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     let fm = nvim_docmd_mark_get_visual(b'<' as c_int);
                     if nvim_docmd_mark_check(fm, errormsg) == 0 {
                         if need_check_cursor {
-                            nvim_docmd_check_cursor();
+                            check_cursor(nvim_get_curwin());
                         }
                         return 0; // FAIL
                     }
@@ -1305,7 +1306,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     let fm = nvim_docmd_mark_get_visual(b'>' as c_int);
                     if nvim_docmd_mark_check(fm, errormsg) == 0 {
                         if need_check_cursor {
-                            nvim_docmd_check_cursor();
+                            check_cursor(nvim_get_curwin());
                         }
                         return 0; // FAIL
                     }
@@ -1329,9 +1330,9 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                 // Don't leave the cursor on an illegal line or column, but do
                 // accept zero as address, so 0;/PATTERN/ works correctly.
                 if nvim_eap_get_line2(eap) > 0 {
-                    nvim_docmd_check_cursor();
+                    check_cursor(nvim_get_curwin());
                 } else {
-                    nvim_docmd_check_cursor_col();
+                    check_cursor_col(nvim_get_curwin());
                 }
                 need_check_cursor = true;
             }
@@ -1351,7 +1352,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
     }
 
     if need_check_cursor {
-        nvim_docmd_check_cursor();
+        check_cursor(nvim_get_curwin());
     }
     OK
 }

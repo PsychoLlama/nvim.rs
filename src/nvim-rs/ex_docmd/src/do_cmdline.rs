@@ -194,8 +194,8 @@ extern "C" {
 
     // Message helpers
     fn msg_verbose_cmd(lnum: LinenrT, s: *const c_char);
-    fn nvim_docmd_msg_start();
-    fn nvim_docmd_wait_return(redraw: c_int);
+    fn msg_start();
+    fn wait_return(redraw: c_int);
 
     // Debug helpers
     fn nvim_docmd_dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
@@ -204,7 +204,7 @@ extern "C" {
 
     // Exception helpers
     fn nvim_docmd_c_do_errthrow(cstack: *mut c_void, cmdname: *const c_char);
-    fn nvim_docmd_do_intthrow(cstack: *mut c_void) -> bool;
+    fn do_intthrow(cstack: *mut c_void) -> bool;
     fn nvim_docmd_report_make_pending(pending: c_int, value: *mut c_void);
     fn nvim_docmd_cleanup_conditionals(
         cstack: *mut c_void,
@@ -219,7 +219,7 @@ extern "C" {
     );
 
     // Misc helpers
-    fn nvim_docmd_line_breakcheck();
+    fn line_breakcheck();
     fn nvim_docmd_getcmdline_colon(firstc: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
     fn nvim_docmd_set_sourcing_lnum(lnum: LinenrT);
     fn nvim_get_sourcing_lnum_direct() -> LinenrT;
@@ -247,7 +247,7 @@ extern "C" {
     fn nvim_docmd_emsg_endwhile();
     fn nvim_docmd_emsg_endfor();
     fn nvim_docmd_emsg_endif();
-    fn nvim_docmd_aborting() -> c_int;
+    fn aborting() -> bool;
     fn nvim_docmd_PROF_YES() -> c_int;
     fn nvim_docmd_end_of_sourced_file_msg() -> *const c_char;
     fn nvim_docmd_end_of_function_msg() -> *const c_char;
@@ -802,7 +802,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                 unsafe {
                     msg_didout_before_start = msg_didout;
                     msg_didany = false; // no output yet
-                    nvim_docmd_msg_start();
+                    msg_start();
                     msg_scroll = 1; // put messages below each other (true)
                     no_wait_return += 1; // don't wait for return until finished
                     RedrawingDisabled += 1;
@@ -891,7 +891,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     current_line = cstack.cs_line[cstack.cs_idx as usize];
                     // remember we jumped there
                     cstack.cs_lflags |= CSL_HAD_LOOP;
-                    unsafe { nvim_docmd_line_breakcheck() }; // check if CTRL-C typed
+                    unsafe { line_breakcheck() }; // check if CTRL-C typed
 
                     // Check for the next breakpoint at or after the ":while"/":for".
                     if !breakpoint.is_null() && lines_ga.ga_len > current_line {
@@ -970,7 +970,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
         // Convert an interrupt to an exception if appropriate.
         unsafe {
-            nvim_docmd_do_intthrow(std::ptr::addr_of_mut!(cstack).cast());
+            do_intthrow(std::ptr::addr_of_mut!(cstack).cast());
         }
 
         // Continue condition (C: do { ... } while (!(...)) )
@@ -1005,7 +1005,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         // report the unclosed conditional.
         if !unsafe { got_int }
             && !unsafe { did_throw }
-            && unsafe { nvim_docmd_aborting() } == 0
+            && !unsafe { aborting() }
             && ((unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) }
                 && unsafe { nvim_docmd_c_source_finished(fgetline, cookie) } == 0)
                 || (unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) }
@@ -1129,7 +1129,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         } else if unsafe { need_wait_return } {
             unsafe {
                 msg_didout |= msg_didout_before_start;
-                nvim_docmd_wait_return(0); // false
+                wait_return(0); // false
             }
         }
     }

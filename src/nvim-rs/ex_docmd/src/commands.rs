@@ -418,6 +418,8 @@ const CTRL_C: c_int = 3;
 const UPD_CLEAR: c_int = 50;
 /// UPD_NOT_VALID = 40
 const UPD_NOT_VALID: c_int = 40;
+/// UPD_SOME_VALID = 35
+const UPD_SOME_VALID: c_int = 35;
 /// UPD_INVERTED = 20
 const UPD_INVERTED: c_int = 20;
 
@@ -1681,14 +1683,13 @@ extern "C" {
     fn nvim_docmd_goto_buffer_last(eap: ExArgHandle);
     fn do_highlight(line: *const c_char, forceit: bool, init: bool);
     fn nvim_docmd_do_bang(addr_count: c_int, eap: ExArgHandle, forceit: bool);
-    fn nvim_docmd_ml_preserve();
-    fn nvim_docmd_u_redo();
+    fn ml_preserve(buf: *mut c_void, message: bool, do_fsync: bool);
+    fn u_redo(count: c_int);
     fn nvim_docmd_pum_make_popup(arg: *const c_char, forceit: bool);
     fn nvim_docmd_wundo(arg: *const c_char, forceit: bool);
     fn nvim_docmd_rundo(arg: *const c_char);
     fn tabpage_move(nr: c_int);
     fn nvim_docmd_checkpath(forceit: bool);
-    fn nvim_docmd_redraw_all_later_some_valid();
     fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_docmd_get_e_nogvim() -> *const c_char;
 }
@@ -1751,14 +1752,14 @@ pub unsafe extern "C" fn rs_not_restarting() {
 #[export_name = "ex_preserve"]
 pub unsafe extern "C" fn rs_ex_preserve(eap: ExArgHandle) {
     let _ = eap;
-    nvim_docmd_ml_preserve();
+    ml_preserve(nvim_get_curbuf(), true, true);
 }
 
 /// ":redo" -- call u_redo(1).
 #[export_name = "ex_redo"]
 pub unsafe extern "C" fn rs_ex_redo(eap: ExArgHandle) {
     let _ = eap;
-    nvim_docmd_u_redo();
+    u_redo(1);
 }
 
 /// ":!" -- call do_bang.
@@ -1827,7 +1828,7 @@ pub unsafe extern "C" fn rs_set_no_hlsearch(flag: bool) {
 pub unsafe extern "C" fn rs_ex_nohlsearch(eap: ExArgHandle) {
     let _ = eap;
     nvim_docmd_set_no_hlsearch(true);
-    nvim_docmd_redraw_all_later_some_valid();
+    redraw_all_later(UPD_SOME_VALID);
 }
 
 /// ":stopinsert" -- stop insert mode.
@@ -2109,7 +2110,7 @@ pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
         nvim_eap_set_forceit(eap, true);
     }
     nvim_docmd_set_curwin_cursor_lnum(line2);
-    nvim_docmd_check_cursor_col();
+    check_cursor_col(nvim_get_curwin());
     let regname = nvim_eap_get_regname(eap);
     let dir = if forceit { BACKWARD } else { FORWARD };
     do_put(
@@ -2133,7 +2134,7 @@ pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
         nvim_eap_set_forceit(eap, true);
     }
     nvim_docmd_set_curwin_cursor_lnum(line2);
-    nvim_docmd_check_cursor_col();
+    check_cursor_col(nvim_get_curwin());
     let regname = nvim_eap_get_regname(eap);
     let dir = if forceit { BACKWARD } else { FORWARD };
     do_put(
@@ -2189,17 +2190,17 @@ extern "C" {
 
     // Phase 21 helpers
     fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
-    fn nvim_docmd_load_colors(name: *const c_char) -> c_int;
+    fn load_colors(name: *mut c_char) -> c_int;
     fn nvim_docmd_curbuf_ml_empty() -> bool;
-    fn nvim_docmd_os_breakcheck();
+    fn os_breakcheck();
     fn nvim_docmd_get_curwin_cursor_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int);
     fn nvim_docmd_set_curwin_cursor_pos(lnum: c_int, col: c_int, coladd: c_int);
     fn nvim_docmd_get_last_chdir_reason() -> *const c_char;
     fn nvim_docmd_curwin_has_localdir() -> bool;
     fn nvim_docmd_curtab_has_localdir() -> bool;
     fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
-    fn nvim_docmd_win_goto(wp: WinHandle);
-    fn nvim_docmd_close_others(message: bool, forceit: bool);
+    fn win_goto(wp: WinHandle);
+    fn close_others(message: c_int, forceit: c_int);
     fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
     fn nvim_setmark(name: c_int) -> bool;
     fn rs_print_line(lnum: LinenrT, use_number: c_int, list: c_int, first: c_int);
@@ -2242,7 +2243,7 @@ pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
         } else {
             msg(c"default".as_ptr(), 0);
         }
-    } else if nvim_docmd_load_colors(arg as *const c_char) == 0 {
+    } else if load_colors(arg as *mut c_char) == 0 {
         // FAIL = 0
         semsg(
             c"E185: Cannot find color scheme '%s'".as_ptr(),
@@ -2294,7 +2295,7 @@ pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
                 (line == line1) as c_int,
             );
             line += 1;
-            nvim_docmd_os_breakcheck();
+            os_breakcheck();
         }
         setpcmark();
         nvim_docmd_set_curwin_cursor_lnum(line2);
@@ -2382,9 +2383,9 @@ pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
     };
     let curwin = nvim_get_curwin();
     if wp != curwin {
-        nvim_docmd_win_goto(wp);
+        win_goto(wp);
     }
-    nvim_docmd_close_others(true, nvim_eap_get_forceit(eap));
+    close_others(1, nvim_eap_get_forceit(eap) as c_int);
 }
 
 /// ":close".
@@ -2525,7 +2526,7 @@ extern "C" {
     fn do_put(regname: c_int, reg: *mut c_void, dir: c_int, count: c_int, flags: c_int);
     fn ex_lua(eap: ExArgHandle);
     fn find_nextcmd(p: *const c_char) -> *mut c_char;
-    fn nvim_docmd_check_cursor_col();
+    fn check_cursor_col(win: WinHandle);
 }
 
 /// do_put direction constants (from vim_defs.h).
@@ -2838,7 +2839,7 @@ pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     let prev_len = nvim_docmd_typebuf_tb_len();
 
     nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
-    nvim_docmd_check_cursor_col();
+    check_cursor_col(nvim_get_curwin());
 
     // Get the register name. No name means use the previous one.
     let arg = nvim_eap_get_arg(eap);

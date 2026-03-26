@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_docmd_set_exmode_active(v: c_int);
     fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_get_global_busy() -> bool;
-    fn nvim_docmd_stuffReadbuff_str(s: *const c_char);
+    fn stuffReadbuff(s: *const c_char);
     static mut RedrawingDisabled: c_int;
     static mut no_wait_return: c_int;
     static mut need_wait_return: bool;
@@ -96,7 +96,7 @@ extern "C" {
     // --- do_exedit_split_fail_cleanup helpers ---
     fn curbufIsChanged() -> bool;
     fn nvim_docmd_curbuf_b_nwindows() -> c_int;
-    fn buf_hide(buf: BufHandle) -> c_int;
+    fn buf_hide(buf: BufHandle) -> bool;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> *mut c_void;
     fn enter_cleanup(cs: *mut c_void);
@@ -178,7 +178,7 @@ extern "C" {
     fn nvim_docmd_ui_active_count() -> c_int;
     fn nvim_docmd_remote_ui_connect(id: u64, addr: *const c_char) -> c_int;
     fn nvim_docmd_set_exiting_true();
-    fn nvim_docmd_getout_zero();
+    fn getout(exitval: c_int);
 
     // --- ex_checkhealth helpers ---
     fn nvim_docmd_checkhealth_exec_lua(
@@ -190,7 +190,6 @@ extern "C" {
     fn nvim_docmd_get_vimruntime() -> *const c_char;
     fn nvim_docmd_get_p_rtp() -> *const c_char;
     fn nvim_docmd_semsg_multiline_emsg(msg: *const c_char);
-    fn nvim_docmd_xfree_str(p: *mut c_void);
     fn strstr(haystack: *const c_char, needle: *const c_char) -> *mut c_char;
 
     // --- expand_argopt helpers ---
@@ -301,7 +300,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
             if nvim_get_global_busy() {
                 let nextcmd = nvim_eap_get_nextcmd(eap);
                 if !nextcmd.is_null() {
-                    nvim_docmd_stuffReadbuff_str(nextcmd);
+                    stuffReadbuff(nextcmd);
                     nvim_eap_set_nextcmd(eap, ptr::null_mut());
                 }
                 let save_rd = RedrawingDisabled;
@@ -337,12 +336,12 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
 pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fail_cleanup() {
     let curbuf = nvim_get_curbuf();
     let need_hide = curbufIsChanged() && nvim_docmd_curbuf_b_nwindows() <= 1;
-    if !need_hide || buf_hide(curbuf) != 0 {
+    if !need_hide || buf_hide(curbuf) {
         // cleanup_T is an opaque C struct; 64 bytes is sufficient on all platforms.
         let mut cs = [0u8; 64];
         let cs_ptr = cs.as_mut_ptr() as *mut c_void;
         enter_cleanup(cs_ptr);
-        let free_buf = !need_hide && buf_hide(curbuf) == 0;
+        let free_buf = !need_hide && !buf_hide(curbuf);
         win_close(nvim_get_curwin(), free_buf, false);
         leave_cleanup(cs_ptr);
     }
@@ -479,7 +478,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_checkhealth_impl(eap: ExArgHandle) {
     }
     if !err_msg.is_null() {
         nvim_docmd_semsg_multiline_emsg(err_msg);
-        nvim_docmd_xfree_str(err_msg as *mut c_void);
+        xfree(err_msg as *mut c_void);
     }
 }
 
@@ -668,7 +667,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_connect_impl(eap: ExArgHandle) {
 
     if stop_server {
         nvim_docmd_set_exiting_true();
-        nvim_docmd_getout_zero();
+        getout(0);
     }
 }
 

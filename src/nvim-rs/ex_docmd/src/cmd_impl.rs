@@ -501,7 +501,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
         let label = nvim_docmd_tab_page_fmt(tabcount);
         nvim_docmd_msg_outtrans_attr(label, HLF_T);
         tabcount += 1;
-        nvim_docmd_os_breakcheck();
+        os_breakcheck();
 
         let mut wp = nvim_tabpage_get_firstwin(tp);
         while !wp.is_null() {
@@ -540,7 +540,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
             }
             let iobuff = nvim_docmd_get_iobuff();
             nvim_docmd_msg_outtrans_attr(iobuff, 0);
-            nvim_docmd_os_breakcheck();
+            os_breakcheck();
 
             wp = nvim_win_get_next(wp);
         }
@@ -763,12 +763,13 @@ const OK: c_int = 1;
 /// Accesses global curwin.
 #[export_name = "update_topline_cursor"]
 pub unsafe extern "C" fn rs_update_topline_cursor_impl() {
-    nvim_docmd_check_cursor();
-    nvim_docmd_update_topline();
+    let curwin = nvim_get_curwin();
+    check_cursor(curwin);
+    update_topline(curwin);
     if nvim_docmd_curwin_p_wrap() == 0 {
-        nvim_docmd_validate_cursor();
+        validate_cursor(curwin);
     }
-    nvim_docmd_update_curswant();
+    update_curswant();
 }
 
 /// `nvim_docmd_vim_mkdir_emsg_impl` - create directory, emit error on failure.
@@ -777,7 +778,7 @@ pub unsafe extern "C" fn rs_update_topline_cursor_impl() {
 /// `name` must be a valid null-terminated C string.
 #[export_name = "vim_mkdir_emsg"]
 pub unsafe extern "C" fn rs_vim_mkdir_emsg_impl(name: *const c_char, prot: c_int) -> c_int {
-    let ret = nvim_docmd_os_mkdir(name, prot);
+    let ret = os_mkdir(name, prot);
     if ret != 0 {
         nvim_docmd_semsg_mkdir_err(name, ret);
         return FAIL;
@@ -797,12 +798,12 @@ pub unsafe extern "C" fn rs_open_exfile_impl(
 ) -> *mut c_void {
     // On UNIX, check for directory.
     #[cfg(unix)]
-    if nvim_docmd_os_isdir(fname) != 0 {
+    if os_isdir(fname) {
         nvim_docmd_semsg_isadir2(fname);
         return std::ptr::null_mut();
     }
     // Check if file exists when not appending and not forcing.
-    if forceit == 0 && *mode != b'a' as c_char && nvim_docmd_os_path_exists(fname) != 0 {
+    if forceit == 0 && *mode != b'a' as c_char && os_path_exists(fname) {
         nvim_docmd_semsg_file_exists(fname);
         return std::ptr::null_mut();
     }
@@ -826,12 +827,11 @@ extern "C" {
     fn nvim_is_aucmd_win(wp: WinHandle) -> c_int;
     fn nvim_emsg_id(id: c_int);
     fn bufIsChanged(buf: BufHandle) -> c_int;
-    fn buf_hide(buf: BufHandle) -> c_int;
     fn nvim_get_p_confirm() -> c_int;
     fn nvim_get_cmdmod_confirm() -> c_int;
     fn nvim_get_p_write() -> c_int;
     fn nvim_docmd_dialog_changed_still_dirty(buf: BufHandle) -> bool;
-    fn nvim_docmd_no_write_message();
+    fn no_write_message();
     #[link_name = "win_close"]
     fn nvim_docmd_win_close(win: WinHandle, free_buf: bool, force: bool) -> c_int;
     #[link_name = "rs_win_close_othertab"]
@@ -875,7 +875,7 @@ extern "C" {
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     fn msg_putchar(c: c_int);
     fn nvim_docmd_get_got_int() -> c_int;
-    fn nvim_docmd_os_breakcheck();
+    fn os_breakcheck();
     fn nvim_iosize() -> usize;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
 
@@ -911,7 +911,7 @@ extern "C" {
     fn nvim_docmd_curwin_is_floating() -> c_int;
     fn nvim_docmd_is_one_window() -> c_int;
     fn nvim_docmd_ex_win_close_curwin(forceit: c_int);
-    fn nvim_docmd_close_others(message: bool, forceit: bool);
+    fn close_others(message: c_int, forceit: c_int);
     fn nvim_docmd_tabpage_get_lastwin(tp: *mut c_void) -> WinHandle;
     fn nvim_docmd_tabpage_lastwin_eq(tp: *mut c_void, wp: WinHandle) -> c_int;
     fn nvim_docmd_ex_win_close_in_tab(forceit: c_int, wp: WinHandle, tp: *mut c_void);
@@ -1320,7 +1320,7 @@ pub unsafe extern "C" fn rs_ex_win_close_impl(forceit: c_int, win: WinHandle, tp
     let need_hide = bufIsChanged(buf) != 0 && nvim_buf_get_nwindows(buf) <= 1;
     let mut need_hide = need_hide;
 
-    if need_hide && buf_hide(buf) == 0 && forceit == 0 {
+    if need_hide && !buf_hide(buf) && forceit == 0 {
         if (nvim_get_p_confirm() != 0 || nvim_get_cmdmod_confirm() != 0) && nvim_get_p_write() != 0
         {
             // Show dialog; if buffer still changed after, cancel close.
@@ -1329,13 +1329,13 @@ pub unsafe extern "C" fn rs_ex_win_close_impl(forceit: c_int, win: WinHandle, tp
             }
             need_hide = false;
         } else {
-            nvim_docmd_no_write_message();
+            no_write_message();
             return;
         }
     }
 
     // Free buffer when not hiding it or when it's a scratch buffer.
-    let free_buf = !need_hide && buf_hide(buf) == 0;
+    let free_buf = !need_hide && !buf_hide(buf);
     if tp.is_null() {
         nvim_docmd_win_close(win, free_buf, forceit != 0);
     } else {
@@ -1366,7 +1366,7 @@ pub unsafe extern "C" fn rs_tabpage_close_impl(forceit: c_int) {
     }
     // Close all other non-floating windows.
     if nvim_docmd_is_one_window() == 0 {
-        nvim_docmd_close_others(true, forceit != 0);
+        close_others(1, (forceit != 0) as c_int);
     }
     // If only one window left, close it too (which closes the tab).
     if nvim_docmd_is_one_window() != 0 {
@@ -1659,17 +1659,17 @@ extern "C" {
     fn nvim_docmd_semsg_file_exists(fname: *const c_char);
     fn nvim_docmd_semsg_cant_open_write(fname: *const c_char);
     fn nvim_docmd_semsg_isadir2(fname: *const c_char);
-    fn nvim_docmd_os_mkdir(name: *const c_char, prot: c_int) -> c_int;
-    fn nvim_docmd_os_isdir(fname: *const c_char) -> c_int;
-    fn nvim_docmd_os_path_exists(fname: *const c_char) -> c_int;
+    fn os_mkdir(name: *const c_char, prot: c_int) -> c_int;
+    fn os_isdir(fname: *const c_char) -> bool;
+    fn os_path_exists(fname: *const c_char) -> bool;
     fn nvim_docmd_os_fopen(fname: *const c_char, mode: *const c_char) -> *mut c_void;
 
     // Accessors for update_topline_cursor (migrated to Rust)
     fn nvim_docmd_curwin_p_wrap() -> c_int;
-    fn nvim_docmd_check_cursor();
-    fn nvim_docmd_update_topline();
-    fn nvim_docmd_validate_cursor();
-    fn nvim_docmd_update_curswant();
+    fn check_cursor(win: WinHandle);
+    fn update_topline(win: WinHandle);
+    fn validate_cursor(win: WinHandle);
+    fn update_curswant();
 
     // filetype constants
     fn nvim_docmd_get_ftplugin_file() -> *const c_char;
@@ -2217,7 +2217,7 @@ extern "C" {
     fn nvim_docmd_get_CMD_badd() -> c_int;
     fn nvim_docmd_get_readonlymode() -> c_int;
     fn nvim_docmd_set_readonlymode(v: c_int);
-    fn nvim_docmd_buf_hide_buf(buf: BufHandle) -> c_int;
+    fn buf_hide(buf: BufHandle) -> bool;
     fn nvim_docmd_set_curbuf_b_p_ro(v: c_int);
     fn nvim_docmd_eap_get_do_ecmd_lnum(eap: ExArgHandle) -> LinenrT;
     fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) -> c_int;
@@ -2294,11 +2294,8 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
             nvim_setpcmark();
         }
         let curbuf = nvim_get_curbuf();
-        let flags = (if nvim_docmd_buf_hide_buf(curbuf) != 0 {
-            ECMD_HIDE
-        } else {
-            0
-        }) + (if forceit { ECMD_FORCEIT } else { 0 })
+        let flags = (if buf_hide(curbuf) { ECMD_HIDE } else { 0 })
+            + (if forceit { ECMD_FORCEIT } else { 0 })
             + (if !old_curwin.is_null() {
                 ECMD_OLDBUF
             } else {
