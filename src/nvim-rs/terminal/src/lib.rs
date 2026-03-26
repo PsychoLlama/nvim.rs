@@ -1170,6 +1170,12 @@ extern "C" {
     fn rs_vterm_set_size(vt: *mut c_void, rows: c_int, cols: c_int) -> c_int;
     // Phase 12: terminal_check_size helper
     fn nvim_terminal_find_size(term: *mut c_void, out_width: *mut u16, out_height: *mut u16);
+    // Phase 13: terminal_close helpers
+    fn nvim_entered_free_all_mem() -> c_int;
+    fn nvim_terminal_refresh_blocking(term: *mut c_void);
+    fn nvim_terminal_opts_is_internal(term: *mut c_void) -> c_int;
+    fn nvim_terminal_call_close_cb(term: *mut c_void);
+    fn nvim_terminal_apply_termclose_event(buf: *mut c_void, status: c_int);
 }
 
 /// Write input data to a terminal's `VTerm` instance.
@@ -3717,6 +3723,85 @@ pub unsafe extern "C" fn rs_on_scrollback_option_changed(term: TerminalHandle) {
     if !t.sb_buffer.is_null() {
         unsafe { rs_refresh_terminal(term) };
     }
+}
+
+// Phase 13: Migrate terminal_close
+
+/// Close the terminal buffer.
+///
+/// Replaces `terminal_close` in `terminal_shim.c`.
+///
+/// # Safety
+/// `termpp` must point to a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_close(termpp: *mut *mut c_void, status: c_int) {
+    if termpp.is_null() {
+        return;
+    }
+    let term = unsafe { TerminalHandle::from_ptr(*termpp) };
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if t.destroy {
+        return;
+    }
+
+    // If called inside free_all_mem(), the main loop has already been freed;
+    // just destroy the terminal struct directly.
+    if unsafe { nvim_entered_free_all_mem() } != 0 {
+        unsafe { rs_terminal_destroy(termpp) };
+        return;
+    }
+
+    let only_destroy = if t.closed {
+        // Process already exited: only clean up the terminal object.
+        true
+    } else {
+        let t = unsafe { term.as_mut() };
+        t.forward_mouse = false;
+        if unsafe { nvim_is_exiting() } == 0 {
+            unsafe { nvim_terminal_refresh_blocking(term.as_ptr()) };
+        }
+        t.closed = true;
+        false
+    };
+
+    let t = unsafe { term.as_ref() };
+    let buf = unsafe { nvim_terminal_handle_get_buffer(t.buf_handle) };
+
+    if status == -1 || unsafe { nvim_is_exiting() } != 0 {
+        // Called by close_buffer() or while exiting: disconnect buffer from terminal.
+        let t = unsafe { term.as_mut() };
+        t.buf_handle = 0;
+        if !buf.is_null() {
+            unsafe { nvim_buf_set_terminal(buf, std::ptr::null_mut()) };
+        }
+        if t.refcount == 0 {
+            // Not inside Terminal mode event handling: destroy immediately.
+            t.destroy = true;
+            unsafe { nvim_terminal_call_close_cb(term.as_ptr()) };
+        }
+    } else if !only_destroy {
+        // Channel closed, editor not exiting: display exit message, wait for keypress.
+        let is_internal = unsafe { nvim_terminal_opts_is_internal(term.as_ptr()) } != 0;
+        let msg: std::ffi::CString = if is_internal {
+            std::ffi::CString::new("\r\n[Terminal closed]").unwrap_or_default()
+        } else {
+            let s = format!("\r\n[Process exited {status}]");
+            std::ffi::CString::new(s).unwrap_or_default()
+        };
+        let msg_bytes = msg.to_bytes();
+        unsafe {
+            rs_terminal_receive_impl(term, msg_bytes.as_ptr().cast(), msg_bytes.len());
+        }
+    }
+
+    if only_destroy {
+        return;
+    }
+
+    unsafe { nvim_terminal_apply_termclose_event(buf, status) };
 }
 
 // Phase 12: Migrate terminal_check_size

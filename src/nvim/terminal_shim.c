@@ -479,83 +479,9 @@ void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
 /// Closes the Terminal buffer.
 ///
 /// May call terminal_destroy, which sets caller storage to NULL.
+extern void rs_terminal_close(Terminal **termpp, int status);
 void terminal_close(Terminal **termpp, int status)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Terminal *term = *termpp;
-  if (term->destroy) {
-    return;
-  }
-
-#ifdef EXITFREE
-  if (entered_free_all_mem) {
-    // If called from close_buffer() inside free_all_mem(), the main loop has
-    // already been freed, so it is not safe to call the close callback here.
-    terminal_destroy(termpp);
-    return;
-  }
-#endif
-
-  bool only_destroy = false;
-
-  if (term->closed) {
-    // If called from close_buffer() after the process has already exited, we
-    // only need to call the close callback to clean up the terminal object.
-    only_destroy = true;
-  } else {
-    term->forward_mouse = false;
-    // flush any pending changes to the buffer
-    if (!exiting) {
-      block_autocmds();
-      refresh_terminal(term);
-      unblock_autocmds();
-    }
-    term->closed = true;
-  }
-
-  buf_T *buf = handle_get_buffer(term->buf_handle);
-
-  if (status == -1 || exiting) {
-    // If this was called by close_buffer() (status is -1), or if exiting, we
-    // must inform the buffer the terminal no longer exists so that
-    // close_buffer() won't call this again.
-    // If inside Terminal mode event handling, setting buf_handle to 0 also
-    // informs terminal_enter() to call the close callback before returning.
-    term->buf_handle = 0;
-    if (buf) {
-      buf->terminal = NULL;
-    }
-    if (!term->refcount) {
-      // Not inside Terminal mode event handling.
-      // We should not wait for the user to press a key.
-      term->destroy = true;
-      term->opts.close_cb(term->opts.data);
-    }
-  } else if (!only_destroy) {
-    // Associated channel has been closed and the editor is not exiting.
-    // Do not call the close callback now. Wait for the user to press a key.
-    char msg[sizeof("\r\n[Process exited ]") + NUMBUFLEN];
-    if (((Channel *)term->opts.data)->streamtype == kChannelStreamInternal) {
-      snprintf(msg, sizeof msg, "\r\n[Terminal closed]");
-    } else {
-      snprintf(msg, sizeof msg, "\r\n[Process exited %d]", status);
-    }
-    terminal_receive(term, msg, strlen(msg));
-  }
-
-  if (only_destroy) {
-    return;
-  }
-
-  if (buf && !is_autocmd_blocked()) {
-    save_v_event_T save_v_event;
-    dict_T *dict = get_v_event(&save_v_event);
-    tv_dict_add_nr(dict, S_LEN("status"), status);
-    tv_dict_set_keys_readonly(dict);
-    apply_autocmds(EVENT_TERMCLOSE, NULL, NULL, false, buf);
-    restore_v_event(dict, &save_v_event);
-  }
-}
+  FUNC_ATTR_NONNULL_ALL { rs_terminal_close(termpp, status); }
 
 extern void rs_terminal_check_size(Terminal *term);
 void terminal_check_size(Terminal *term) { rs_terminal_check_size(term); }
@@ -1429,6 +1355,32 @@ void nvim_terminal_foreach_invalidated(void (*fn)(void *term, void *ctx), void *
 }
 int nvim_is_exiting(void) { return exiting; }
 
+// terminal_close helpers
+int nvim_entered_free_all_mem(void)
+{
+#ifdef EXITFREE
+  return (int)entered_free_all_mem;
+#else
+  return 0;
+#endif
+}
+void nvim_terminal_refresh_blocking(void *term)
+  { block_autocmds(); refresh_terminal((Terminal *)term); unblock_autocmds(); }
+int nvim_terminal_opts_is_internal(void *term)
+  { return ((Channel *)((Terminal *)term)->opts.data)->streamtype == kChannelStreamInternal; }
+void nvim_terminal_call_close_cb(void *term)
+  { Terminal *t = (Terminal *)term; ((void (*)(void *))t->opts.close_cb)(t->opts.data); }
+void nvim_terminal_apply_termclose_event(void *buf, int status)
+{
+  if (buf && !is_autocmd_blocked()) {
+    save_v_event_T save_v_event;
+    dict_T *dict = get_v_event(&save_v_event);
+    tv_dict_add_nr(dict, S_LEN("status"), status);
+    tv_dict_set_keys_readonly(dict);
+    apply_autocmds(EVENT_TERMCLOSE, NULL, NULL, false, (buf_T *)buf);
+    restore_v_event(dict, &save_v_event);
+  }
+}
 // FOR_ALL_TAB_WINDOWS wrappers (macro not callable from Rust)
 void rs_adjust_topline_cursor(void *term, void *buf, int added)
   { adjust_topline_cursor((Terminal *)term, (buf_T *)buf, added); }
