@@ -62,17 +62,11 @@
 #include "nvim/winfloat.h"
 
 // Rust FFI declarations
-extern int rs_ins_compl_active(void);
 extern const char *rs_ins_compl_leader(void);
-extern int rs_compl_match_curr_select(int selected);
 extern unsigned rs_get_cot_flags(void);
-extern void rs_win_setheight(int height);
 extern void rs_pum_ext_select_item(int item, int insert, int finish);
 extern int rs_pum_undisplay(int immediate);
 extern int rs_pum_border_width(void);
-
-extern int rs_win_valid(win_T *win);
-extern int rs_valid_tabpage(tabpage_T *tpc);
 
 
 typedef struct {
@@ -104,7 +98,7 @@ const char *const opt_winborder_shadow = "shadow";
 const char *const opt_winborder_none = "none";
 
 
-// Phase 1 accessor: ui_call_win_float_pos wrapper for pum_grid
+// ui_call_win_float_pos wrapper for pum_grid
 void nvim_pum_ui_call_win_float_pos(int handle, const char *anchor, int anchor_grid,
                                      int row, int col, int zindex, int comp_index,
                                      int comp_row, int comp_col)
@@ -120,7 +114,7 @@ _Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
 _Static_assert(kUIPopupmenu == 1, "kUIPopupmenu must be 1");
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 
-// Phase 2 accessors: mouse_find_win_outer wrapper
+// mouse_find_win_outer wrapper
 PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
 {
   mouse_find_win_outer(&grid, &row, &col);
@@ -128,7 +122,7 @@ PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
 }
 
 
-// Phase 2 accessors: curwin geometry for make_popup
+// curwin geometry for make_popup
 /// Batch curwin geometry accessor (replaces 10 individual nvim_pum_curwin_* functions).
 PumCurwinGeometry nvim_pum_get_curwin_geometry(void)
 {
@@ -146,7 +140,7 @@ PumCurwinGeometry nvim_pum_get_curwin_geometry(void)
   };
 }
 
-// Phase 3 accessors: text attrs computation helpers
+// Text attrs computation helpers
 
 /// Get completion leader string.
 char *nvim_pum_get_compl_leader(void)
@@ -181,7 +175,7 @@ uint32_t *nvim_pum_fuzzy_match_positions(const char *text, const char *leader, i
 }
 
 
-// Phase 3 accessors: position_at_mouse helpers
+// position_at_mouse helpers
 
 PumWinInfo nvim_pum_get_win_by_grid(int grid)
 {
@@ -198,7 +192,7 @@ PumWinInfo nvim_pum_get_win_by_grid(int grid)
 
 _Static_assert(kOptCotFlagFuzzy == 0x80, "kOptCotFlagFuzzy must be 0x80");
 
-// Phase 4 accessors: preview window helpers
+// Preview window helpers
 
 /// Set window config fields and call win_config_float.
 void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor,
@@ -218,7 +212,7 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
 
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
-// Phase 5 accessors: show_popupmenu helpers
+// show_popupmenu helpers
 
 /// Set mousemoveevent option via UI.
 void nvim_pum_ui_set_mousemoveevent(int val)
@@ -360,7 +354,7 @@ void nvim_pum_border_cfg_free(PumBorderConfig *cfg)
   xfree(cfg);
 }
 
-// Phase 7 C accessor functions (selection / preview window management)
+// Selection / preview window management
 
 
 /// Hide a floating preview window by setting its hide flag and reconfiguring.
@@ -395,7 +389,7 @@ void nvim_pum_set_wipeout_options(void)
 }
 
 
-// Phase 8 C accessor functions (display orchestrator)
+// Display orchestrator
 
 /// Compute the complete display geometry for popup menu positioning.
 /// This encapsulates all target_win field access and cmdline_win queries.
@@ -486,17 +480,13 @@ void nvim_pum_find_pvwin_rows(int *above_row_out, int *below_row_out)
   }
 }
 
-// Phase 8 static assertions
+// Static assertions for constants used by Rust FFI
 _Static_assert(DEFAULT_GRID_HANDLE == 1, "DEFAULT_GRID_HANDLE must be 1");
 _Static_assert(kZIndexPopupMenu == 100, "kZIndexPopupMenu must be 100");
-
-// Phase 7 static assertions
 _Static_assert(kOptCotFlagPopup == 0x10, "kOptCotFlagPopup must be 0x10");
 _Static_assert(kOptCotFlagPreview == 0x08, "kOptCotFlagPreview must be 0x08");
 _Static_assert(ECMD_ONE == 1, "ECMD_ONE must be 1");
 _Static_assert(UPD_SOME_VALID == 35, "UPD_SOME_VALID must be 35");
-
-// Phase 6 static assertions
 _Static_assert(HLF_PNI == 41, "HLF_PNI must be 41");
 _Static_assert(HLF_PSI == 42, "HLF_PSI must be 42");
 _Static_assert(HLF_PNK == 45, "HLF_PNK must be 45");
