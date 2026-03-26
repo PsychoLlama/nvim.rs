@@ -3765,3 +3765,141 @@ void *nvim_docmd_loop_cookie_get_cookie(void *lc)
 {
   return ((struct loop_cookie *)lc)->cookie;
 }
+
+// =============================================================================
+// Phase 1 (do_cmdline plan): C accessor functions for do_cmdline Rust port
+// =============================================================================
+
+/// Return function pointer to getsourceline (for getline_equal comparison).
+void *nvim_docmd_get_getsourceline_ptr(void) { return (void *)getsourceline; }
+
+/// Return function pointer to getexline (for getline_equal comparison).
+void *nvim_docmd_get_getexline_ptr(void) { return (void *)getexline; }
+
+/// func_name wrapper (wraps func_name(cookie)).
+char *nvim_docmd_func_name(void *cookie) { return func_name(cookie); }
+
+/// func_breakpoint wrapper.
+linenr_T *nvim_docmd_func_breakpoint(void *cookie) { return func_breakpoint(cookie); }
+
+/// func_dbg_tick wrapper.
+int *nvim_docmd_func_dbg_tick(void *cookie) { return func_dbg_tick(cookie); }
+
+/// func_has_abort wrapper.
+int nvim_docmd_func_has_abort(void *cookie) { return func_has_abort(cookie); }
+
+/// func_has_ended wrapper.
+int nvim_docmd_func_has_ended(void *cookie) { return func_has_ended(cookie); }
+
+/// func_level wrapper.
+int nvim_docmd_func_level(void *cookie) { return func_level(cookie); }
+
+/// source_finished wrapper (for do_cmdline).
+int nvim_docmd_c_source_finished(LineGetter fgetline, void *cookie)
+{
+  return source_finished(fgetline, cookie) ? 1 : 0;
+}
+
+/// source_breakpoint wrapper.
+linenr_T *nvim_docmd_source_breakpoint(void *cookie) { return source_breakpoint(cookie); }
+
+/// source_dbg_tick wrapper.
+int *nvim_docmd_source_dbg_tick(void *cookie) { return source_dbg_tick(cookie); }
+
+/// source_level wrapper.
+int nvim_docmd_source_level(void *cookie) { return source_level(cookie); }
+
+/// has_loop_cmd wrapper.
+int nvim_docmd_has_loop_cmd(const char *p) { return has_loop_cmd((char *)p) ? 1 : 0; }
+
+/// ui_has(kUICmdline) check.
+int nvim_docmd_ui_has_cmdline(void) { return ui_has(kUICmdline) ? 1 : 0; }
+
+/// ui_ext_cmdline_block_append wrapper.
+void nvim_docmd_ui_ext_cmdline_block_append(size_t indent, const char *s)
+{
+  ui_ext_cmdline_block_append(indent, s);
+}
+
+/// ui_ext_cmdline_block_leave wrapper.
+void nvim_docmd_ui_ext_cmdline_block_leave(void) { ui_ext_cmdline_block_leave(); }
+
+/// msg_verbose_cmd wrapper.
+void nvim_docmd_msg_verbose_cmd(linenr_T lnum, char *s) { msg_verbose_cmd(lnum, s); }
+
+/// msg_start wrapper.
+void nvim_docmd_msg_start(void) { msg_start(); }
+
+/// wait_return wrapper.
+void nvim_docmd_wait_return(int redraw) { wait_return(redraw ? true : false); }
+
+/// dbg_find_breakpoint wrapper.
+linenr_T nvim_docmd_dbg_find_breakpoint(bool file, char *fname, linenr_T after)
+{
+  return dbg_find_breakpoint(file, fname, after);
+}
+
+/// dbg_breakpoint wrapper.
+void nvim_docmd_dbg_breakpoint(char *name, linenr_T lnum) { dbg_breakpoint(name, lnum); }
+
+/// do_debug wrapper.
+void nvim_docmd_do_debug(char *cmd) { do_debug(cmd); }
+
+/// do_errthrow for do_cmdline (takes cstack and raw string cmd name).
+void nvim_docmd_c_do_errthrow(cstack_T *cstack, const char *cmdname)
+{
+  do_errthrow(cstack, (char *)cmdname);
+}
+
+/// report_make_pending wrapper.
+void nvim_docmd_report_make_pending(int pending, void *value)
+{
+  report_make_pending(pending, value);
+}
+
+/// cleanup_conditionals wrapper.
+int nvim_docmd_cleanup_conditionals(cstack_T *cstack, int searched_cond, int inclusive)
+{
+  return cleanup_conditionals(cstack, searched_cond, inclusive);
+}
+
+/// rewind_conditionals wrapper.
+void nvim_docmd_rewind_conditionals(cstack_T *cstack, int idx, int cond_type, int *cond_level)
+{
+  rewind_conditionals(cstack, idx, cond_type, cond_level);
+}
+
+/// func_line_start wrapper.
+void nvim_docmd_func_line_start(void *cookie) { func_line_start(cookie); }
+
+/// func_line_end wrapper.
+void nvim_docmd_func_line_end(void *cookie) { func_line_end(cookie); }
+
+/// script_line_start wrapper.
+void nvim_docmd_script_line_start(void) { script_line_start(); }
+
+/// script_line_end wrapper.
+void nvim_docmd_script_line_end(void) { script_line_end(); }
+
+/// line_breakcheck wrapper.
+void nvim_docmd_line_breakcheck(void) { line_breakcheck(); }
+
+/// getcmdline(':') wrapper for get_loop_line fallback.
+char *nvim_docmd_getcmdline_colon(int indent, bool do_concat)
+{
+  return getcmdline(':', 0, indent, do_concat);
+}
+
+/// Set SOURCING_LNUM (top of exestack).
+void nvim_docmd_set_sourcing_lnum(linenr_T lnum)
+{
+  if (exestack.ga_data != NULL && exestack.ga_len > 0) {
+    SOURCING_LNUM = lnum;
+  }
+}
+
+/// v_exception wrapper: get/set v:exception.
+char *nvim_docmd_v_exception(char *newval) { return v_exception(newval); }
+
+/// v_throwpoint wrapper: get/set v:throwpoint.
+char *nvim_docmd_v_throwpoint(char *newval) { return v_throwpoint(newval); }

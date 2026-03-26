@@ -10,6 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
+#![allow(dead_code)] // Phase 1 do_cmdline scaffolding: will be used in Phase 2-4
 
 pub mod address;
 pub mod args;
