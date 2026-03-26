@@ -142,19 +142,8 @@ typedef struct {
 
 // Rust fold FFI declaration
 extern void rs_newFoldLevel(void);
-
-// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
-void diff_redraw(bool dofold);
-void ex_diffupdate(exarg_T *eap);
-void ex_diffpatch(exarg_T *eap);
-void ex_diffsplit(exarg_T *eap);
-void ex_diffthis(exarg_T *eap);
-void diff_win_options(win_T *wp, bool addbuf);
-void ex_diffoff(exarg_T *eap);
-void nv_diffgetput(bool put, size_t count);
+// ex_diffgetput is a Rust function called from nvim_diff_call_nv_ex_diffgetput below
 void ex_diffgetput(exarg_T *eap);
-void f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 static diffline_change_T simple_diffline_change;
 
