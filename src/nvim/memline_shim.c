@@ -27,7 +27,6 @@
 //  changed since then, can have a negative block number. This means that it
 //  has not yet been assigned a place in the file. When recovering, the lines
 //  in this data block can be read from the original file. When the block is
-//  changed (lines appended/deleted/changed) or when it is flushed it gets a
 //  positive number. Use mf_trans_del() to get the new number, before calling
 //  mf_get().
 //
@@ -150,7 +149,6 @@ typedef struct {
 // This method is not clean, but otherwise there would be at least one extra
 // byte used for each line.
 // The mark has to be in this place to keep it with the correct line when other
-// lines are inserted or deleted.
 #define DB_MARKED       ((unsigned)1 << ((sizeof(unsigned) * 8) - 1))
 #define DB_INDEX_MASK   (~DB_MARKED)
 
@@ -195,9 +193,6 @@ enum {
 // When empty there is only the NUL.
 #define B0_HAS_FENC     8
 
-// lowest_marked is now owned by Rust (LOWEST_MARKED in modify.rs).
-// Use rs_ml_get_lowest_marked() / rs_ml_set_lowest_marked() to access it.
-
 // arguments for ml_find_line()
 enum {
   ML_DELETE = 0x11,  // delete line
@@ -226,58 +221,14 @@ typedef enum {
 #include "memline_shim.c.generated.h"
 
 extern int rs_get_fileformat(buf_T *buf);
-// Phase 1 Rust function declarations
 extern void rs_long_to_char(long n, char *s);
 extern long rs_char_to_long(const char *s);
-// Phase 2 Rust function declarations
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
-// rs_ml_setmarked deleted: now exported as ml_setmarked via #[export_name]
-// rs_ml_firstmarked deleted: now exported as ml_firstmarked via #[export_name]
-// rs_ml_clearmarked deleted: now exported as ml_clearmarked via #[export_name]
 extern linenr_T rs_ml_get_lowest_marked(void);
 extern void rs_ml_set_lowest_marked(linenr_T lnum);
-// Pass 2 Phase 2: Swap file path helper Rust function declarations
-// rs_make_percent_swname deleted: now exported as make_percent_swname via #[export_name]
-// rs_resolve_symlink deleted: now exported as resolve_symlink via #[export_name]
-// rs_get_file_in_dir deleted: now exported as get_file_in_dir via #[export_name]
-// rs_makeswapname deleted: now exported as makeswapname via #[export_name]
-// rs_ml_close deleted: now exported as ml_close via #[export_name]
-// rs_check_need_swap deleted: now exported as check_need_swap via #[export_name]
-// rs_ml_timestamp deleted: now exported as ml_timestamp via #[export_name]
-// rs_ml_flush_deleted_bytes deleted: now exported as ml_flush_deleted_bytes via #[export_name]
-// rs_ml_add_deleted_len deleted: now exported as ml_add_deleted_len via #[export_name]
-// rs_ml_add_deleted_len_buf deleted: now exported as ml_add_deleted_len_buf via #[export_name]
-// rs_ml_setflags deleted: now exported as ml_setflags via #[export_name]
-// Pass 3 Phase 1: swapfile_dict Rust function declaration
-// rs_swapfile_dict deleted: now exported as swapfile_dict via #[export_name]
-// Pass 3 Phase 2: swapfile_info Rust function declaration
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
-// Pass 3 Phase 3: ml_replace_buf_len now exported directly from Rust via #[export_name]
-// rs_ml_replace_buf_len deleted: now exported as ml_replace_buf_len via #[export_name]
-// Pass 3 Phase 4: ml_get_buf_impl Rust function declaration
 extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
-// Pass 4 Phase 1: line-access thin wrappers now exported directly from Rust via #[export_name]
-// rs_ml_get_pos, rs_ml_get_len, rs_ml_get_pos_len, rs_ml_get_buf_len, rs_gchar_pos deleted
-// Pass 4 Phase 2: modification dispatch now exported directly from Rust via #[export_name]
-// rs_ml_append_flags_impl deleted: now exported as ml_append_flags via #[export_name]
-// rs_ml_append_buf_impl deleted: now exported as ml_append_buf via #[export_name]
-// rs_ml_delete_flags_impl deleted: now exported as ml_delete_flags via #[export_name]
-// rs_ml_delete_buf_impl deleted: now exported as ml_delete_buf via #[export_name]
-// rs_ml_replace_buf_impl deleted: now exported as ml_replace_buf via #[export_name]
-// Pass 3 Phase 3: ml_replace_buf_len still used by rs_ml_replace_buf_len alias
-// Pass 4 Phase 3: ml_append_flush Rust function declaration
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
-// Pass 5 Phase 2: ml_flush_line now exported directly from Rust via #[export_name]
-// rs_ml_flush_line deleted: now exported as ml_flush_line via #[export_name]
-// Pass 8 Phase 2: ml_preserve Rust function declaration
-// rs_ml_preserve deleted: now exported as ml_preserve via #[export_name]
-// rs_ml_open_file deleted: now exported as ml_open_file via #[export_name]
-// rs_ml_open_files deleted: now exported as ml_open_files via #[export_name]
-// rs_ml_setname deleted: now exported as ml_setname via #[export_name]
-// rs_ml_open deleted: now exported as ml_open via #[export_name]
-// rs_ml_close_all deleted: now exported as ml_close_all via #[export_name]
-// rs_ml_close_notmod deleted: now exported as ml_close_notmod via #[export_name]
-// rs_ml_sync_all deleted: now exported as ml_sync_all via #[export_name]
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -302,32 +253,6 @@ static const char e_warning_pointer_block_corrupted[]
 # define ML_GET_ALLOC_LINES
 #endif
 
-// ml_open deleted: Rust exports under the C name directly via #[export_name = "ml_open"].
-
-// ml_setname deleted: Rust exports under the C name directly via #[export_name = "ml_setname"].
-// ml_open_files deleted: Rust exports under the C name directly via #[export_name = "ml_open_files"].
-// ml_open_file deleted: Rust exports under the C name directly via #[export_name = "ml_open_file"].
-// check_need_swap deleted: Rust exports under the C name directly via #[export_name = "check_need_swap"].
-// ml_close deleted: Rust exports under the C name directly via #[export_name = "ml_close"].
-// ml_close_all deleted: Rust exports under the C name directly via #[export_name = "ml_close_all"].
-// ml_close_notmod deleted: Rust exports under the C name directly via #[export_name = "ml_close_notmod"].
-// ml_timestamp deleted: Rust exports under the C name directly via #[export_name = "ml_timestamp"].
-// ml_recover deleted: Rust exports under the C name directly via #[export_name = "ml_recover"].
-
-// Forward declaration for Rust implementation (migrated from C)
-
-// recover_names and recov_file_names migrated to Rust (recovery.rs)
-
-// make_percent_swname deleted: now exported directly from Rust via #[export_name]
-
-// swapfile_dict deleted: now exported directly from Rust via #[export_name]
-
-// recov_file_names migrated to Rust (recovery.rs)
-// proc_running static, swapfile_info wrapper migrated to Rust (swap.rs Phase 8)
-
-// ml_sync_all deleted: now exported directly from Rust via #[export_name]
-
-// ml_preserve deleted: now exported directly from Rust via #[export_name]
 
 // NOTE: The pointer returned by the ml_get_*() functions only remains valid
 // until the next call!
@@ -364,12 +289,8 @@ char *ml_get_buf_mut(buf_T *buf, linenr_T lnum)
   return rs_ml_get_buf_impl(buf, lnum, true);
 }
 
-// ml_get_pos, ml_get_len, ml_get_pos_len, ml_get_buf_len, gchar_pos deleted:
-// now exported from Rust access.rs via #[export_name]
 
-// =============================================================================
 // C accessors for Rust FFI (memline crate)
-// =============================================================================
 
 // Current buffer accessor
 int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
@@ -424,7 +345,6 @@ char *nvim_buf_get_ml_mfp_fname(buf_T *buf)
 }
 char *nvim_get_p_dir(void) { return p_dir; }
 
-// Pass 3 Phase 3: ml_replace_buf_len accessors
 void nvim_buf_set_ml_line_ptr(buf_T *buf, char *ptr) { buf->b_ml.ml_line_ptr = ptr; }
 void nvim_buf_set_ml_line_lnum(buf_T *buf, linenr_T lnum) { buf->b_ml.ml_line_lnum = lnum; }
 /// open_buffer() if ml_mfp is NULL. Returns FAIL if it fails.
@@ -436,7 +356,6 @@ int nvim_buf_open_buffer_if_needed(buf_T *buf)
   return OK;
 }
 
-// Pass 3 Phase 4: Error message wrappers for rs_ml_get_buf_impl
 /// Emit the "invalid lnum" internal error for ml_get_buf_impl.
 /// Wraps: siemsg(_(e_ml_get_invalid_lnum_nr), lnum)
 void nvim_siemsg_ml_get_invalid_lnum(int64_t lnum)
@@ -466,7 +385,6 @@ void nvim_swapfile_info_and_print(char *fname)
   kv_destroy(msg);
 }
 
-// Pass 3 Phase 2: C wrappers for StringBuilder operations (used by rs_swapfile_info)
 
 /// Append a string to a StringBuilder (opaque void* pointer from Rust)
 void nvim_sb_append_str(void *sb, const char *s)
@@ -586,7 +504,6 @@ void nvim_sb_swapinfo_msg(void *sb, int msg_id, const char *str_arg, int int_arg
   }
 }
 
-// Phase 4 accessors for Rust FFI (ml_new_ptr, ml_new_data, ml_lineadd, ml_upd_block0)
 
 // B-tree stack accessors
 int nvim_buf_get_ml_stack_top(buf_T *buf) { return buf->b_ml.ml_stack_top; }
@@ -606,7 +523,6 @@ void nvim_pp_pe_linecount_add(void *pp, int idx, int count)
 void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
 void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
 
-// Pass 5 Phase 1: ml_find_line accessors for Rust FFI
 
 // ml_locked block pointer accessors
 void *nvim_buf_get_ml_locked(buf_T *buf) { return buf->b_ml.ml_locked; }
@@ -669,13 +585,10 @@ void nvim_siemsg_line_count_wrong_in_block(int64_t bnum)
   siemsg(_(e_line_count_wrong_in_block_nr), bnum);
 }
 
-// Pass 5 Phase 2: ml_flush_line accessors for Rust FFI
 
 /// Increment buf->flush_count
 void nvim_buf_inc_flush_count(buf_T *buf) { buf->flush_count++; }
 
-
-// Pass 6 Phase 1: ml_delete_int accessors for Rust FFI
 
 /// Decrement buf->b_ml.ml_line_count and return new value.
 linenr_T nvim_buf_dec_ml_line_count(buf_T *buf) { return --buf->b_ml.ml_line_count; }
@@ -709,7 +622,6 @@ void nvim_pp_pe_memmove(void *pp, int dst_idx, int src_idx, int count)
           (size_t)count * sizeof(PointerEntry));
 }
 
-// Pass 7 Phase 1: ml_append_int accessors for Rust FFI
 
 /// Get hp->bh_bnum as int64_t.
 int64_t nvim_bhdr_get_bh_bnum(bhdr_T *hp) { return (int64_t)hp->bh_bnum; }
@@ -726,7 +638,6 @@ void nvim_iemsg_e318_updated_too_many(void) { iemsg(_("E318: Updated too many bl
 /// Increment pp->pb_count and return new value.
 uint16_t nvim_pp_inc_count(void *pp) { return ++(((PointerBlock *)pp)->pb_count); }
 
-// Pass 6 Phase 2: ml_updatechunk accessors for Rust FFI
 
 /// Set buf->b_ml.ml_chunksize[idx].mlcs_numlines
 void nvim_buf_set_ml_chunksize_numlines(buf_T *buf, int idx, int val)
@@ -875,7 +786,6 @@ uint64_t nvim_get_file_inode(const char *fname)
   return 0;
 }
 
-// Pass 2 Phase 3: Buffer lifecycle accessors for Rust FFI
 // ml_close accessors
 void *nvim_buf_get_ml_stack_void(buf_T *buf) { return buf->b_ml.ml_stack; }
 void nvim_buf_clear_ml_after_close(buf_T *buf)
@@ -896,16 +806,10 @@ void nvim_buf_set_deleted_codepoints(buf_T *buf, size_t val) { buf->deleted_code
 size_t nvim_buf_get_deleted_codeunits(buf_T *buf) { return buf->deleted_codeunits; }
 void nvim_buf_set_deleted_codeunits(buf_T *buf, size_t val) { buf->deleted_codeunits = val; }
 // check_need_swap accessors
-// nvim_get_msg_silent / nvim_set_msg_silent - already defined in message.c
-// nvim_buf_get_b_may_swap - already defined in change_ffi.c (returns bool)
-// nvim_buf_get_b_p_ro     - already defined in buffer.c (returns int)
 // ml_setflags accessors (also used by Phase 5)
 bhdr_T *nvim_mf_get_block0_hp(memfile_T *mfp) { return pmap_get(int64_t)(&mfp->mf_hash, 0); }
 void nvim_bhdr_set_bh_flags_dirty(bhdr_T *hp) { hp->bh_flags |= BH_DIRTY; }
 
-// Pass 2 Phase 4: Deleted-length tracking and stack accessors for Rust FFI
-// nvim_get_inhibit_delete_count - already in change_ffi.c
-// nvim_buf_get_deleted_bytes2 / nvim_buf_set_deleted_bytes2 - already in buffer.c
 void nvim_buf_add_deleted_bytes(buf_T *buf, size_t n) { buf->deleted_bytes += n; }
 void nvim_buf_add_deleted_bytes2(buf_T *buf, size_t n) { buf->deleted_bytes2 += n; }
 bool nvim_buf_get_update_need_codepoints(buf_T *buf) { return buf->update_need_codepoints; }
@@ -919,7 +823,6 @@ void *nvim_buf_get_ml_stack(buf_T *buf) { return buf->b_ml.ml_stack; }
 void nvim_buf_set_ml_stack(buf_T *buf, void *ptr) { buf->b_ml.ml_stack = ptr; }
 size_t nvim_get_infoptr_size(void) { return sizeof(infoptr_T); }
 
-// Phase 2 accessors for Rust FFI
 uint8_t nvim_b0_get_flags_byte(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_flags; }
 void nvim_b0_set_flags_byte(ZeroBlock *b0p, uint8_t val) { b0p->b0_flags = (char)val; }
 char *nvim_b0_get_fname_mut(ZeroBlock *b0p) { return b0p->b0_fname; }
@@ -938,7 +841,6 @@ int64_t nvim_get_file_mtime(const char *fname)
   return 0;
 }
 
-// Pass 9 Phase 1: ml_open_file + ml_open_files accessors for Rust FFI
 
 /// Get buf->b_spell (returns 1 if true, 0 if false)
 int nvim_buf_get_b_spell(buf_T *buf) { return buf->b_spell ? 1 : 0; }
@@ -946,7 +848,6 @@ int nvim_buf_get_b_spell(buf_T *buf) { return buf->b_spell ? 1 : 0; }
 /// Set buf->b_may_swap (0 = false, non-zero = true)
 void nvim_buf_set_b_may_swap(buf_T *buf, int val) { buf->b_may_swap = (val != 0); }
 
-// Pass 9 Phase 2: ml_setname accessors for Rust FFI
 
 /// Wrap os_set_cloexec (os_set_cloexec itself is now a thin wrapper around Rust)
 void nvim_os_set_cloexec(int fd) { os_set_cloexec(fd); }
@@ -957,7 +858,6 @@ int nvim_vim_rename(const char *from, const char *to) { return vim_rename(from, 
 /// Get O_RDWR flag value for os_open calls
 int nvim_get_o_rdwr(void) { return O_RDWR; }
 
-// Pass 9 Phase 3: ml_open accessors for Rust FFI
 
 /// Initialize all ml fields to their zero/NULL defaults for ml_open
 void nvim_buf_init_ml_empty(buf_T *buf)
@@ -1017,7 +917,6 @@ void nvim_buf_set_b_p_swf_false(buf_T *buf) { buf->b_p_swf = false; }
 void nvim_buf_set_b_may_swap_true(buf_T *buf) { buf->b_may_swap = true; }
 
 /// Get buf->b_help (returns 1 if true)
-// nvim_buf_get_b_help already in option_shim.c
 
 /// Set b0_dirty field in block 0 from buf->b_changed
 void nvim_b0_set_dirty_from_buf(ZeroBlock *b0p, buf_T *buf)
@@ -1040,7 +939,6 @@ void nvim_b0_fill_hname(ZeroBlock *b0p) { os_get_hostname(b0p->b0_hname, B0_HNAM
 /// Write PID into b0_pid
 void nvim_b0_fill_pid(ZeroBlock *b0p) { rs_long_to_char((long)os_get_pid(), b0p->b0_pid); }
 
-// Pass 8 Phase 1: findswapname cluster accessors for Rust FFI
 
 /// Get the swap_exists_action global
 int nvim_get_swap_exists_action(void) { return swap_exists_action; }
@@ -1060,7 +958,6 @@ void nvim_inc_no_wait_return(void) { no_wait_return++; }
 /// Decrement no_wait_return
 void nvim_dec_no_wait_return(void) { no_wait_return--; }
 
-// nvim_get_no_wait_return is already in option_shim.c
 
 /// Set buf->b_p_ro = true
 void nvim_buf_set_b_p_ro_true(buf_T *buf) { buf->b_p_ro = true; }
@@ -1079,7 +976,6 @@ int nvim_read_block0(int fd, ZeroBlock *b0p)
   return (n == (ssize_t)sizeof(*b0p)) ? 1 : 0;
 }
 
-// nvim_path_fnamecmp is already in buffer.c
 
 /// Check if two paths are in the same directory (same_directory wrapper)
 int nvim_same_directory(const char *a, const char *b) { return same_directory(a, b); }
@@ -1096,7 +992,6 @@ int nvim_os_mkdir_recurse(const char *dir, int mode, char **failed_dir)
   return os_mkdir_recurse(dir, mode, failed_dir, NULL);
 }
 
-// nvim_os_remove is already in undo.c
 
 /// Get path tail pointer from a file path (for findswapname, const-correct version)
 char *nvim_path_tail_const(const char *fname) { return path_tail(fname); }
@@ -1189,7 +1084,6 @@ void nvim_sb_append(void *sb, const char *s)
   kv_printf(*(StringBuilder *)sb, "%s", s);
 }
 
-// nvim_emsg(const char *s) is already in normal_shim.c
 
 /// msg_puts("\n") wrapper
 void nvim_msg_puts_newline(void) { msg_puts("\n"); }
@@ -1197,7 +1091,6 @@ void nvim_msg_puts_newline(void) { msg_puts("\n"); }
 /// os_strerror wrapper (os_strerror is a macro, cannot be referenced directly from Rust)
 const char *nvim_os_strerror(int err) { return os_strerror(err); }
 
-// Pass 8 Phase 2: ml_preserve and ml_sync_all accessors for Rust FFI
 
 /// Sync memfile blocks to disk
 int nvim_mf_sync(memfile_T *mfp, int flags) { return mf_sync(mfp, flags); }
@@ -1267,10 +1160,6 @@ int ml_append(linenr_T lnum, char *line, colnr_T len, bool newfile)
   return ml_append_flags(lnum, line, len, newfile ? ML_APPEND_NEW : 0);
 }
 
-// ml_append_flags deleted: now exported from Rust modify.rs via #[export_name]
-// ml_append_buf deleted: now exported from Rust modify.rs via #[export_name]
-// ml_add_deleted_len deleted: Rust exports under the C name directly via #[export_name = "ml_add_deleted_len"].
-// ml_add_deleted_len_buf deleted: now exported from Rust modify.rs via #[export_name]
 
 /// Replace line "lnum", with buffering, in current buffer.
 int ml_replace(linenr_T lnum, char *line, bool copy)
@@ -1285,10 +1174,6 @@ int ml_replace_len(linenr_T lnum, char *line, size_t len, bool copy)
   return ml_replace_buf_len(curbuf, lnum, line, len, copy, false);
 }
 
-// ml_replace_buf deleted: now exported from Rust modify.rs via #[export_name]
-// ml_replace_buf_len deleted: now exported from Rust modify.rs via #[export_name]
-// ml_delete_buf deleted: now exported from Rust modify.rs via #[export_name]
-// ml_delete_flags deleted: now exported from Rust modify.rs via #[export_name]
 
 /// Delete line "lnum" in the current buffer.
 ///
@@ -1301,33 +1186,9 @@ int ml_delete(linenr_T lnum)
   return ml_delete_flags(lnum, 0);
 }
 
-// ml_setmarked deleted: Rust exports under the C name directly via #[export_name = "ml_setmarked"].
-// ml_firstmarked deleted: Rust exports under the C name directly via #[export_name = "ml_firstmarked"].
-// ml_clearmarked deleted: Rust exports under the C name directly via #[export_name = "ml_clearmarked"].
 
-// ml_flush_deleted_bytes deleted: now exported from Rust navigate.rs via #[export_name]
-// ml_flush_line deleted: now exported from Rust modify.rs via #[export_name]
-
-// resolve_symlink deleted: Rust exports under the C name directly via #[export_name = "resolve_symlink"].
-// makeswapname deleted: now exported from Rust swap.rs via #[export_name]
-// get_file_in_dir deleted: now exported from Rust swap.rs via #[export_name]
-
-// attention_message, do_swapexists, findswapname migrated to Rust (swap.rs Phase 8 Pass 1)
-
-// ml_setflags deleted: Rust exports under the C name directly via #[export_name = "ml_setflags"].
-
-// ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)
-
-// inc, incl, dec, decl deleted: Rust exports under the C names directly via #[export_name].
-
-// ============================================================================
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
-// ============================================================================
 
-
-// ============================================================================
-// Pass 10 Phase 1: ml_recover migration accessors for Rust FFI
-// ============================================================================
 
 /// Set the recoverymode global
 void nvim_set_recoverymode(int val) { recoverymode = (val != 0); }
@@ -1692,7 +1553,6 @@ void nvim_b0_set_fname0_nul(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
 int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
 
 
-
 /// Get sizeof(buf_T) for Rust allocation of temporary recovery buffer.
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
 
@@ -1771,9 +1631,7 @@ unsigned nvim_pp_pe_get_page_count_uint(const void *pp, int idx)
 /// Get the pb_count_max field from a PointerBlock.
 uint16_t nvim_pp_get_count_max(const void *pp) { return ((const PointerBlock *)pp)->pb_count_max; }
 
-// =============================================================================
 // Addsub shims for Rust inline absorption of nvim_addsub_* functions
-// =============================================================================
 
 /// Returns nonzero if char c is in curbuf->b_p_nf (nrformats option).
 int nvim_curbuf_nf_has(int c) { return vim_strchr(curbuf->b_p_nf, c) != NULL; }
@@ -1801,9 +1659,7 @@ void nvim_curwin_set_cursor_from_pos(const pos_T *pos) { curwin->w_cursor = *pos
 /// Set curwin->w_cursor.coladd.
 void nvim_curwin_set_cursor_coladd(int v) { curwin->w_cursor.coladd = (colnr_T)v; }
 
-// =============================================================================
 // cursor_pos_info shims for Rust inline absorption of nvim_cpi_* functions
-// =============================================================================
 
 /// Get the file format of the current buffer (returns EOL_UNIX or EOL_DOS).
 int nvim_curbuf_get_fileformat(void) { return rs_get_fileformat((buf_T *)curbuf); }
