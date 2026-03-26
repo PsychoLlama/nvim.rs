@@ -252,7 +252,6 @@ void nvim_findtags_fseek_zero(void *st_void) { findtags_state_T *st = (findtags_
 bool nvim_findtags_lbuf_is_blank(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return vim_isblankline(st->lbuf); }
 int nvim_findtags_get_flags(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->flags; }
 void nvim_findtags_set_linear(void *st_void, bool linear) { findtags_state_T *st = (findtags_state_T *)st_void; st->linear = linear; }
-int nvim_findtags_get_sorted(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->tag_file_sorted; }
 void nvim_findtags_set_sorted(void *st_void, int val) { findtags_state_T *st = (findtags_state_T *)st_void; st->tag_file_sorted = val; }
 bool nvim_findtags_get_orgpat_rm_ic(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->regmatch.rm_ic; }
 void nvim_findtags_set_orgpat_rm_ic(void *st_void, bool ic) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->regmatch.rm_ic = ic; }
@@ -340,11 +339,9 @@ int nvim_get_tc_flags(void) { return (int)tc_flags; }
 int nvim_get_curbuf_tc_flags(void) { return (int)curbuf->b_tc_flags; }
 const char *nvim_get_p_hlg(void) { return p_hlg; }
 const char *nvim_get_curbuf_b_fname(void) { return curbuf->b_fname; }
-const char *nvim_get_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 const char *nvim_get_curbuf_p_tfu(void) { return curbuf->b_p_tfu; }
 void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
 int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
-void nvim_ins_compl_check_keys(int interval, bool pum_wanted) { rs_ins_compl_check_keys(interval, pum_wanted ? 1 : 0); }
 bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
 bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2) { return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2); }
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }

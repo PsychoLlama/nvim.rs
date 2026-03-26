@@ -1249,7 +1249,7 @@ extern "C" {
     fn nvim_findtags_get_flags(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_get_linear(st: FindTagsStateHandle) -> bool;
     fn nvim_findtags_set_linear(st: FindTagsStateHandle, linear: bool);
-    fn nvim_findtags_get_sorted(st: FindTagsStateHandle) -> c_int;
+    fn nvim_findtags_get_tag_file_sorted(st: FindTagsStateHandle) -> c_int;
     fn nvim_findtags_set_sorted(st: FindTagsStateHandle, val: c_int);
     fn nvim_findtags_get_orgpat_rm_ic(st: FindTagsStateHandle) -> bool;
     fn nvim_findtags_set_orgpat_rm_ic(st: FindTagsStateHandle, ic: bool);
@@ -1449,7 +1449,7 @@ pub unsafe extern "C" fn rs_findtags_start_state_handler(
     // Headers ends.
 
     let linear = nvim_findtags_get_linear(st);
-    let tag_file_sorted = nvim_findtags_get_sorted(st);
+    let tag_file_sorted = nvim_findtags_get_tag_file_sorted(st);
 
     // When there is no tag head, or ignoring case, need to do a linear search.
     // When no "!_TAG_" is found, default to binary search.
@@ -2161,7 +2161,7 @@ extern "C" {
     // Function wrappers
     fn line_breakcheck();
     fn nvim_fast_breakcheck();
-    fn nvim_ins_compl_check_keys(interval: c_int, pum_wanted: bool);
+    fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func: c_int);
     fn rs_ins_compl_interrupted() -> c_int;
     fn verbose_enter();
     fn verbose_leave();
@@ -2364,7 +2364,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
         }
 
         if (flags & find_tags_flags::TAG_INS_COMP) != 0 {
-            nvim_ins_compl_check_keys(30, false);
+            rs_ins_compl_check_keys(30, 0);
         }
 
         if unsafe { got_int } || rs_ins_compl_interrupted() != 0 {

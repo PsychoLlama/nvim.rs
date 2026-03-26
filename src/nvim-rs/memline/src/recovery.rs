@@ -144,7 +144,7 @@ extern "C" {
     fn nvim_set_recoverymode(val: c_int);
     fn nvim_get_called_from_main() -> c_int;
     fn nvim_get_curbuf_b_fname() -> *const c_char;
-    fn nvim_get_curbuf_b_ffname() -> *const c_char;
+    fn nvim_get_curbuf_ffname() -> *const c_char;
     fn nvim_recover_msg(
         msg_id: c_int,
         fname: *const c_char,
@@ -502,7 +502,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         }
 
         // Read original file to get fileformat/encoding (errors ignored)
-        let buf_ffname = nvim_get_curbuf_b_ffname();
+        let buf_ffname = nvim_get_curbuf_ffname();
         if !buf_ffname.is_null() {
             orig_file_status = nvim_readfile_for_recovery(buf_ffname);
         }
@@ -671,7 +671,7 @@ unsafe fn recover_btree(
     let mut hp: *mut c_void = std::ptr::null_mut();
 
     nvim_buf_reset_ml_stack(buf.cast::<c_void>());
-    let mut cannot_open = nvim_get_curbuf_b_ffname().is_null();
+    let mut cannot_open = nvim_get_curbuf_ffname().is_null();
 
     'traverse: loop {
         if unsafe { got_int } {
@@ -754,7 +754,7 @@ unsafe fn recover_btree(
                         if !cannot_open {
                             line_count = nvim_pp_pe_get_line_count(data, idx);
                             let topline = nvim_pp_pe_get_old_lnum(data, idx) - 1;
-                            let ffname = nvim_get_curbuf_b_ffname();
+                            let ffname = nvim_get_curbuf_ffname();
                             if nvim_readfile_from_original(ffname, lnum, topline, line_count)
                                 == OK_C
                             {

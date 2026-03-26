@@ -22,7 +22,7 @@ extern "C" {
     ) -> c_int;
     fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
     fn rs_ctrl_x_mode_not_default() -> c_int;
-    fn nvim_get_curbuf_b_ffname() -> *const c_char;
+    fn nvim_get_curbuf_ffname() -> *const c_char;
     #[link_name = "p_ic"]
     static mut p_ic_tag: c_int;
     #[link_name = "g_tag_at_cursor"]
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn rs_get_next_tag_completion() {
         &raw mut matches,
         flags,
         TAG_MANY,
-        nvim_get_curbuf_b_ffname().cast_mut(),
+        nvim_get_curbuf_ffname().cast_mut(),
     ) == OK
         && num_matches > 0
     {
