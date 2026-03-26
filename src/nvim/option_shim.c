@@ -374,47 +374,14 @@ OptIndex nvim_find_option_len_hash(const char *name, size_t len)
 OptVal optval_from_varp(OptIndex opt_idx, void *varp)
   FUNC_ATTR_NONNULL_ARG(2) { return rs_optval_from_varp(opt_idx, varp); }
 
+extern Object rs_optval_as_object(OptVal o);
+extern OptVal rs_object_as_optval(Object o, bool *error);
+
 /// Convert an OptVal to an API Object.
-Object optval_as_object(OptVal o)
-{
-  switch (o.type) {
-  case kOptValTypeNil:
-    return NIL;
-  case kOptValTypeBoolean:
-    switch (o.data.boolean) {
-    case kFalse:
-    case kTrue:
-      return BOOLEAN_OBJ(o.data.boolean);
-    case kNone:
-      return NIL;
-    }
-    UNREACHABLE;
-  case kOptValTypeNumber:
-    return INTEGER_OBJ(o.data.number);
-  case kOptValTypeString:
-    return STRING_OBJ(o.data.string);
-  }
-  UNREACHABLE;
-}
+Object optval_as_object(OptVal o) { return rs_optval_as_object(o); }
 
 /// Convert an API Object to an OptVal.
-OptVal object_as_optval(Object o, bool *error)
-{
-  switch (o.type) {
-  case kObjectTypeNil:
-    return NIL_OPTVAL;
-  case kObjectTypeBoolean:
-    return BOOLEAN_OPTVAL(o.data.boolean);
-  case kObjectTypeInteger:
-    return NUMBER_OPTVAL((OptInt)o.data.integer);
-  case kObjectTypeString:
-    return STRING_OPTVAL(o.data.string);
-  default:
-    *error = true;
-    return NIL_OPTVAL;
-  }
-  UNREACHABLE;
-}
+OptVal object_as_optval(Object o, bool *error) { return rs_object_as_optval(o, error); }
 
 /// Switch current context to get/set option value for window/buffer.
 ///

@@ -1197,6 +1197,104 @@ pub unsafe extern "C" fn rs_set_option_value_give_err(
 }
 
 // =============================================================================
+// OptVal <-> Object conversions
+// =============================================================================
+
+/// Minimal Object representation matching C layout (api/private/defs.h).
+///
+/// We define this inline to avoid depending on the api crate from option.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union ObjectData {
+    pub boolean: bool,
+    pub integer: i64,
+    pub string: String_,
+    // Other variants (float, array, dict, luaref) occupy the same space.
+    // We only need boolean, integer, and string for OptVal conversions.
+    pub _padding: [u8; 16], // ensure union is large enough
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Object {
+    pub obj_type: c_int,
+    pub data: ObjectData,
+}
+
+// kObjectType* constants (must match C enum in api/private/defs.h)
+const K_OBJECT_TYPE_NIL: c_int = 0;
+const K_OBJECT_TYPE_BOOLEAN: c_int = 1;
+const K_OBJECT_TYPE_INTEGER: c_int = 2;
+const K_OBJECT_TYPE_STRING: c_int = 4;
+
+/// Convert an OptVal to an API Object.
+///
+/// Mirrors `optval_as_object` in option_shim.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_optval_as_object(o: OptVal) -> Object {
+    match o.type_ {
+        StorageOptValType::Nil => Object {
+            obj_type: K_OBJECT_TYPE_NIL,
+            data: ObjectData { integer: 0 },
+        },
+        StorageOptValType::Boolean => {
+            let val = o.data.boolean;
+            if val == K_NONE {
+                // kNone -> NIL
+                Object {
+                    obj_type: K_OBJECT_TYPE_NIL,
+                    data: ObjectData { integer: 0 },
+                }
+            } else {
+                Object {
+                    obj_type: K_OBJECT_TYPE_BOOLEAN,
+                    data: ObjectData {
+                        boolean: val != K_FALSE,
+                    },
+                }
+            }
+        }
+        StorageOptValType::Number => Object {
+            obj_type: K_OBJECT_TYPE_INTEGER,
+            data: ObjectData {
+                integer: o.data.number,
+            },
+        },
+        StorageOptValType::String => Object {
+            obj_type: K_OBJECT_TYPE_STRING,
+            data: ObjectData {
+                string: o.data.string,
+            },
+        },
+    }
+}
+
+/// Convert an API Object to an OptVal.
+///
+/// Mirrors `object_as_optval` in option_shim.c.
+///
+/// # Safety
+/// `error` must be a valid pointer to a bool.
+#[no_mangle]
+pub unsafe extern "C" fn rs_object_as_optval(o: Object, error: *mut bool) -> OptVal {
+    match o.obj_type {
+        K_OBJECT_TYPE_NIL => OptVal::nil(),
+        K_OBJECT_TYPE_BOOLEAN => OptVal::boolean(if o.data.boolean { K_TRUE } else { K_FALSE }),
+        K_OBJECT_TYPE_INTEGER => OptVal::number(o.data.integer),
+        K_OBJECT_TYPE_STRING => OptVal {
+            type_: StorageOptValType::String,
+            data: OptValData {
+                string: o.data.string,
+            },
+        },
+        _ => {
+            *error = true;
+            OptVal::nil()
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
