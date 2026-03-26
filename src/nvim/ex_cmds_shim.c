@@ -20,7 +20,6 @@
 #include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/buffer_updates.h"
 #include "nvim/bufwrite.h"
 #include "nvim/change.h"
 #include "nvim/channel.h"
@@ -29,14 +28,12 @@
 #include "nvim/cmdhist.h"
 #include "nvim/cursor.h"
 #include "nvim/decoration.h"
-#include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds.h"
-#include "nvim/ex_cmds2.h"
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_eval.h"
@@ -46,7 +43,6 @@
 #include "nvim/fold.h"
 #include "nvim/getchar.h"
 #include "nvim/globals.h"
-#include "nvim/help.h"
 #include "nvim/highlight_group.h"
 #include "nvim/input.h"
 #include "nvim/macros_defs.h"
@@ -58,7 +54,6 @@
 #include "nvim/memline_defs.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
-#include "nvim/mouse.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
 #include "nvim/ops.h"
@@ -74,11 +69,9 @@
 #include "nvim/plines.h"
 #include "nvim/pos_defs.h"
 #include "nvim/profile.h"
-#include "nvim/quickfix.h"
 #include "nvim/regexp.h"
 #include "nvim/regexp_defs.h"
 #include "nvim/search.h"
-#include "nvim/spell.h"
 #include "nvim/state.h"
 #include "nvim/strings.h"
 #include "nvim/terminal.h"
@@ -317,35 +310,11 @@ extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 
 int append_indent = 0;              // autoindent for first line
 
-
-/// Previous substitute replacement string
-static SubReplacementString old_sub = { NULL, 0, NULL };
-
 int global_need_beginline = 0;           // call beginline() after ":g"
 
 // sub_get_replacement, sub_set_replacement, free_old_sub, ex_substitute, ex_substitute_preview
-// implemented in Rust (ex_cmds/src/substitute.rs).
-extern void rs_sub_get_replacement(void *ret_sub);
+// implemented in Rust (ex_cmds/src/substitute.rs). old_sub state is owned by Rust.
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
-
-/// Get old substitute replacement string. Thin wrapper calling Rust.
-///
-/// @param[out]  ret_sub    Location where old string will be saved.
-void sub_get_replacement(SubReplacementString *const ret_sub)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_sub_get_replacement((void *)ret_sub);
-}
-
-/// Set substitute string and timestamp. Thin wrapper calling Rust.
-///
-/// @warning `sub` must be in allocated memory. It is not copied.
-///
-/// @param[in]  sub  New replacement string.
-void sub_set_replacement(SubReplacementString sub)
-{
-  rs_sub_set_replacement(sub.sub, (uint64_t)sub.timestamp, (void *)sub.additional_data);
-}
 
 /// Format and display the substitution count message.
 ///
@@ -612,21 +581,6 @@ void nvim_exarg_set_line1(exarg_T *eap, int line1) { eap->line1 = (linenr_T)line
 int nvim_excmds_curwin_get_w_arg_idx(void) { return curwin->w_arg_idx; }
 int nvim_exarg_get_cmd_byte1(const exarg_T *eap) { return (unsigned char)eap->cmd[1]; }
 
-// --- sub_get_replacement, sub_set_replacement, free_old_sub, ex_substitute, ex_substitute_preview FFI ---
-char *nvim_excmds_old_sub_get_sub(void) { return old_sub.sub; }
-uint64_t nvim_excmds_old_sub_get_timestamp(void) { return (uint64_t)old_sub.timestamp; }
-void *nvim_excmds_old_sub_get_additional_data(void) { return (void *)old_sub.additional_data; }
-/// Set old_sub from its three fields, freeing old memory.
-void nvim_excmds_old_sub_set(char *sub, uint64_t timestamp, void *additional_data)
-{
-  xfree(old_sub.sub);
-  if ((void *)old_sub.additional_data != additional_data) {
-    xfree(old_sub.additional_data);
-  }
-  old_sub.sub = sub;
-  old_sub.timestamp = (Timestamp)timestamp;
-  old_sub.additional_data = (AdditionalData *)additional_data;
-}
 
 int nvim_excmds_arg_has_valid_delim(const exarg_T *eap) { return (*eap->arg && !ASCII_ISALNUM(*eap->arg)) ? 1 : 0; }
 void nvim_excmds_eap_arg_restore(exarg_T *eap, char *saved) { eap->arg = saved; }
@@ -1046,14 +1000,10 @@ void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)
   add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL);
 }
 
-/// Wrap sub_set_replacement for do_sub (xstrdup of sub, os_time, NULL additional).
+/// Wrap rs_sub_set_replacement for do_sub (xstrdup of sub, os_time, NULL additional).
 void nvim_do_sub_set_replacement(const char *sub)
 {
-  sub_set_replacement((SubReplacementString) {
-    .sub = xstrdup(sub),
-    .timestamp = os_time(),
-    .additional_data = NULL,
-  });
+  rs_sub_set_replacement(xstrdup(sub), (uint64_t)os_time(), NULL);
 }
 
 // regmmatch_T opaque handle accessors for do_sub

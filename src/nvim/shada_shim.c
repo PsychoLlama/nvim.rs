@@ -63,6 +63,9 @@ extern int rs_magic_isset(void);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern var_flavour_T rs_var_flavour(const char *varname);
+// Rust-owned old_sub accessors (from src/nvim-rs/ex_cmds/src/substitute.rs)
+extern void rs_sub_get_replacement(void *ret_sub);
+extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
 
 /// Generic semsg wrapper: one string argument.
 void nvim_shada_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
@@ -904,8 +907,9 @@ void nvim_shada_buf_changelist_entry(const void *buf, int idx,
 void nvim_shada_sub_get_replacement(const char **out_sub, uint64_t *out_ts,
                                     void **out_additional)
 {
-  SubReplacementString sub;
-  sub_get_replacement(&sub);
+  typedef struct { char *sub; uint64_t timestamp; void *additional_data; } SubRepC;
+  SubRepC sub;
+  rs_sub_get_replacement(&sub);
   *out_sub = sub.sub;
   *out_ts = sub.timestamp;
   *out_additional = sub.additional_data;
@@ -1132,20 +1136,18 @@ void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitu
 
 uint64_t nvim_shada_get_sub_replacement_timestamp(void)
 {
-  SubReplacementString sub;
-  sub_get_replacement(&sub);
-  return sub.sub != NULL ? (uint64_t)sub.timestamp : 0;
+  typedef struct { char *sub; uint64_t timestamp; void *additional_data; } SubRepC;
+  SubRepC sub;
+  rs_sub_get_replacement(&sub);
+  return sub.sub != NULL ? sub.timestamp : 0;
 }
 
-/// Build SubReplacementString from entry and call sub_set_replacement + regtilde.
+/// Build SubReplacementString from entry and call rs_sub_set_replacement + regtilde.
 /// Memory ownership: entry's sub_string.sub and additional_data are consumed.
 void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
 {
-  sub_set_replacement((SubReplacementString) {
-    .sub = entry->data.sub_string.sub,
-    .timestamp = entry->timestamp,
-    .additional_data = entry->additional_data,
-  });
+  rs_sub_set_replacement(entry->data.sub_string.sub, (uint64_t)entry->timestamp,
+                         entry->additional_data);
   regtilde(entry->data.sub_string.sub, rs_magic_isset(), false);
 }
 

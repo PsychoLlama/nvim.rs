@@ -1301,20 +1301,21 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    // old_sub C accessors
-    fn nvim_excmds_old_sub_get_sub() -> *mut c_char;
-    fn nvim_excmds_old_sub_get_timestamp() -> u64;
-    fn nvim_excmds_old_sub_get_additional_data() -> *mut std::ffi::c_void;
-    fn nvim_excmds_old_sub_set(
-        sub: *mut c_char,
-        timestamp: u64,
-        additional_data: *mut std::ffi::c_void,
-    );
-
     // ex_substitute_preview accessors
     fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char);
 }
+
+// =============================================================================
+// old_sub: Rust-owned substitute replacement string state
+// (Previously stored as a C static; moved here in Phase 2 migration.)
+// =============================================================================
+
+/// Rust-owned equivalent of C's `SubReplacementString old_sub`.
+/// These are C-heap-allocated pointers (xmalloc/xfree). nvim is single-threaded.
+static mut OLD_SUB: *mut c_char = std::ptr::null_mut();
+static mut OLD_SUB_TIMESTAMP: u64 = 0;
+static mut OLD_SUB_ADDITIONAL_DATA: *mut std::ffi::c_void = std::ptr::null_mut();
 
 // =============================================================================
 // Pure Rust helpers (replacing trivial C character/predicate wrappers)
@@ -1546,14 +1547,13 @@ pub unsafe extern "C" fn rs_do_sub(
         }
     } else if nvim_exarg_get_skip(eap) == 0 {
         // Use previous pattern and substitution
-        let old_sub = nvim_excmds_old_sub_get_sub();
-        if old_sub.is_null() {
+        if OLD_SUB.is_null() {
             nvim_emsg_nopresub();
             return 0;
         }
         pat = std::ptr::null();
         patlen = 0;
-        sub = xstrdup(old_sub);
+        sub = xstrdup(OLD_SUB);
 
         // Vi compatibility: if last command used "$", keep cursor in last column
         let endcolumn = nvim_curwin_get_w_curswant() == MAXCOL;
@@ -2769,9 +2769,9 @@ pub struct SubReplacementStringC {
 /// `ret_sub` must be a valid pointer to a SubReplacementStringC.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sub_get_replacement(ret_sub: *mut SubReplacementStringC) {
-    (*ret_sub).sub = nvim_excmds_old_sub_get_sub();
-    (*ret_sub).timestamp = nvim_excmds_old_sub_get_timestamp();
-    (*ret_sub).additional_data = nvim_excmds_old_sub_get_additional_data();
+    (*ret_sub).sub = OLD_SUB;
+    (*ret_sub).timestamp = OLD_SUB_TIMESTAMP;
+    (*ret_sub).additional_data = OLD_SUB_ADDITIONAL_DATA;
 }
 
 /// Set substitute string and timestamp. Replaces C `sub_set_replacement`.
@@ -2787,16 +2787,26 @@ pub unsafe extern "C" fn rs_sub_set_replacement(
     timestamp: u64,
     additional_data: *mut std::ffi::c_void,
 ) {
-    nvim_excmds_old_sub_set(sub_ptr, timestamp, additional_data);
+    // Free old values before overwriting (matching C semantics in nvim_excmds_old_sub_set).
+    extern "C" {
+        fn xfree(ptr: *mut std::ffi::c_void);
+    }
+    xfree(OLD_SUB as *mut std::ffi::c_void);
+    if OLD_SUB_ADDITIONAL_DATA != additional_data {
+        xfree(OLD_SUB_ADDITIONAL_DATA);
+    }
+    OLD_SUB = sub_ptr;
+    OLD_SUB_TIMESTAMP = timestamp;
+    OLD_SUB_ADDITIONAL_DATA = additional_data;
 }
 
 /// EXITFREE cleanup for old_sub. Replaces C `free_old_sub`.
 ///
 /// # Safety
-/// Calls C accessor.
+/// Frees Rust-owned old_sub state.
 #[export_name = "free_old_sub"]
 pub unsafe extern "C" fn rs_free_old_sub() {
-    nvim_excmds_old_sub_set(std::ptr::null_mut(), 0, std::ptr::null_mut());
+    rs_sub_set_replacement(std::ptr::null_mut(), 0, std::ptr::null_mut());
 }
 
 /// `:substitute` entry point. Replaces C `ex_substitute`.
