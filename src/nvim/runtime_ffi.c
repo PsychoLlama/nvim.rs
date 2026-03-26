@@ -48,10 +48,6 @@
 
 extern int rs_get_copyID(void);
 
-// =============================================================================
-// Static assertions for constants used in Rust code
-// =============================================================================
-
 _Static_assert(ETYPE_TOP == 0, "ETYPE_TOP must be 0");
 _Static_assert(ETYPE_SCRIPT == 1, "ETYPE_SCRIPT must be 1");
 _Static_assert(ETYPE_UFUNC == 2, "ETYPE_UFUNC must be 2");
@@ -83,10 +79,6 @@ _Static_assert(DOSO_VIMRC == 1, "DOSO_VIMRC must be 1");
 
 _Static_assert(FAIL == 0, "FAIL must be 0");
 _Static_assert(OK == 1, "OK must be 1");
-
-// =============================================================================
-// Phase 1: Execution stack accessors
-// =============================================================================
 
 /// Grow the execution stack garray by n entries.
 void nvim_exestack_ga_grow(int n)
@@ -126,8 +118,6 @@ bool nvim_exestack_has_data(void)
 {
   return exestack.ga_data != NULL && exestack.ga_len > 0;
 }
-
-// --- estack_T field accessors ---
 
 linenr_T nvim_estack_get_lnum(estack_T *entry)
 {
@@ -186,8 +176,6 @@ AutoPatCmd *nvim_estack_get_info_aucmd(estack_T *entry)
   return entry->es_info.aucmd;
 }
 
-// --- ufunc_T field accessors ---
-
 /// Get the name of a ufunc.
 const char *nvim_ufunc_get_name(ufunc_T *fp)
 {
@@ -212,8 +200,6 @@ linenr_T nvim_ufunc_get_script_ctx_lnum(ufunc_T *fp)
   return fp->uf_script_ctx.sc_lnum;
 }
 
-// --- AutoPatCmd field accessors ---
-
 /// Get the script context SID of an aucmd.
 int nvim_aucmd_get_script_ctx_sid(AutoPatCmd *apc)
 {
@@ -225,8 +211,6 @@ linenr_T nvim_aucmd_get_script_ctx_lnum(AutoPatCmd *apc)
 {
   return apc->script_ctx.sc_lnum;
 }
-
-// --- estack_sfile helpers ---
 
 /// Get the SOURCING_LNUM (lnum of the top exestack entry).
 linenr_T nvim_get_sourcing_lnum_direct(void)
@@ -240,7 +224,6 @@ char *nvim_runtime_xstrdup(const char *s)
   return xstrdup(s);
 }
 
-
 /// Format a stack entry with line number: "type_name name[lnum]dots"
 /// Returns the number of bytes written.
 int nvim_estack_format_entry(char *buf, size_t buflen,
@@ -253,8 +236,6 @@ int nvim_estack_format_entry(char *buf, size_t buflen,
   return vim_snprintf(buf, buflen, "%s%s[%" PRIdLINENR "]%s",
                       type_name, name, lnum, dots);
 }
-
-// --- Script item accessors ---
 
 /// Get the script_items garray length.
 int nvim_script_items_get_len(void)
@@ -289,8 +270,6 @@ bool nvim_scriptitem_get_prof_on(scriptitem_T *si)
   return si->sn_prof_on;
 }
 
-// --- estack_T source context accessors ---
-
 /// Get the SID from an estack entry's sctx (for Script/Modeline types).
 int nvim_estack_get_sctx_sid(estack_T *entry)
 {
@@ -299,8 +278,6 @@ int nvim_estack_get_sctx_sid(estack_T *entry)
   }
   return 0;
 }
-
-// --- estack_sfile: script context from entry ---
 
 /// For a ufunc/aucmd entry, get the SID of the defining script context.
 /// Returns the SID, or 0 if not available.
@@ -329,10 +306,6 @@ char *nvim_estack_get_def_script_name(estack_T *entry)
   }
   return NULL;
 }
-
-// =============================================================================
-// Phase 1: Typval accessors for stacktrace
-// =============================================================================
 
 /// Allocate a locked dict.
 dict_T *nvim_rt_dict_alloc_lock(void)
@@ -408,11 +381,6 @@ const char *nvim_aucmd_get_scriptname(AutoPatCmd *apc)
   return "";
 }
 
-// =============================================================================
-// Phase 2: Script registry accessors
-// =============================================================================
-
-// --- SID constant assertions ---
 _Static_assert(SID_MODELINE == -1, "SID_MODELINE");
 _Static_assert(SID_CMDARG == -2, "SID_CMDARG");
 _Static_assert(SID_CARG == -3, "SID_CARG");
@@ -423,8 +391,6 @@ _Static_assert(SID_WINLAYOUT == -7, "SID_WINLAYOUT");
 _Static_assert(SID_LUA == -8, "SID_LUA");
 _Static_assert(SID_API_CLIENT == -9, "SID_API_CLIENT");
 _Static_assert(SID_STR == -10, "SID_STR");
-
-// --- script_items garray operations ---
 
 /// Grow script_items garray by n entries.
 void nvim_script_items_ga_grow(int n)
@@ -474,18 +440,12 @@ int nvim_rt_path_fnamecmp(const char *a, const char *b)
   return path_fnamecmp(a, b);
 }
 
-// --- get_scriptname helper ---
-// This function has complex return semantics (static strings, IObuff, allocated
-// strings), so we delegate the entire implementation to C.
-
 /// Full implementation of get_scriptname, callable from Rust.
 char *nvim_rt_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
 {
   sctx_T ctx = { .sc_sid = sc_sid, .sc_chan = sc_chan };
   return get_scriptname(ctx, should_free);
 }
-
-// --- ex_scriptnames helpers ---
 
 /// Get exarg_T addr_count.
 int nvim_rt_exarg_get_addr_count(void *eap)
@@ -600,19 +560,6 @@ void nvim_rt_line_breakcheck(void)
 {
   line_breakcheck();
 }
-
-// --- free_scriptnames and free_autoload_scriptnames helpers ---
-// These access static variables (ga_loaded, script_items with EXITFREE macros),
-// so their C helpers live in runtime.c as nvim_rt_free_scriptnames() and
-// nvim_rt_ga_clear_loaded(). See runtime.c for the implementations.
-
-// --- get_sourced_lnum helper ---
-// nvim_rt_get_sourced_lnum lives in runtime.c (uses LineGetter type).
-
-// --- get_script_local_funcs helper ---
-// nvim_rt_get_script_local_funcs lives in runtime.c.
-
-// --- f_getscriptinfo helpers ---
 
 /// Allocate a list and set it as the return value.
 void nvim_rt_list_alloc_ret(void *rettv, int count)
@@ -752,8 +699,6 @@ void nvim_rt_dict_add_list(dict_T *d, const char *key, size_t keylen,
   tv_dict_add_list(d, key, keylen, val);
 }
 
-// --- scriptnames_slash_adjust helper ---
-
 #if defined(BACKSLASH_IN_FILENAME)
 /// Adjust slashes in a filename (Windows only).
 void nvim_rt_slash_adjust(char *name)
@@ -761,10 +706,6 @@ void nvim_rt_slash_adjust(char *name)
   slash_adjust(name);
 }
 #endif
-
-// =============================================================================
-// Phase 3: Path utilities and runtimepath accessors
-// =============================================================================
 
 // Static assertions for XDG types
 _Static_assert(kXDGNone == -1, "kXDGNone");
@@ -857,16 +798,11 @@ void nvim_rt_xmemcpyz(void *dst, const void *src, size_t len)
   xmemcpyz(dst, src, len);
 }
 
-
 /// Get IOSIZE constant (already exists as nvim_rt_iosize, but alias for clarity).
 size_t nvim_rt_get_iosize(void)
 {
   return (size_t)IOSIZE;
 }
-
-// =============================================================================
-// Phase 6: Package management accessors
-// =============================================================================
 
 _Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
 _Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
@@ -925,10 +861,6 @@ void nvim_rt_pkg_time_msg(const char *msg)
   TIME_MSG(msg);
 }
 
-// =============================================================================
-// Phase 8: Runtime command accessors
-// =============================================================================
-
 _Static_assert(EXPAND_RUNTIME == 51, "EXPAND_RUNTIME must be 51");
 
 /// Set xp_context and xp_pattern on an expand_T.
@@ -937,10 +869,6 @@ void nvim_rt_cmd_expand_set_context(void *xp, int context, const char *pattern)
   ((expand_T *)xp)->xp_context = context;
   ((expand_T *)xp)->xp_pattern = (char *)pattern;
 }
-
-// =============================================================================
-// Phase 3: add_pack_dir_to_rtp migration helpers
-// =============================================================================
 
 /// Advance pointer by one multibyte character (MB_PTR_ADV).
 int nvim_rt_utfc_ptr2len(const char *p)
