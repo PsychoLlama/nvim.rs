@@ -441,7 +441,7 @@ extern "C" {
     fn nvim_win_get_p_spell_dict(wp: *mut u8) -> c_int;
     #[link_name = "nvim_get_curwin"]
     fn nvim_get_curwin_dict() -> *mut u8;
-    #[link_name = "nvim_curbuf_get_b_p_inf"]
+    #[link_name = "nvim_get_p_inf"]
     fn nvim_curbuf_get_b_p_inf_dict() -> c_int;
     #[link_name = "p_scs"]
     static mut p_scs_dict: c_int;

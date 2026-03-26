@@ -535,7 +535,7 @@ extern "C" {
     fn rs_ctrl_x_mode_not_default() -> c_int;
 
     /// Get curbuf->b_p_inf (infercase option).
-    fn nvim_curbuf_get_b_p_inf() -> c_int;
+    fn nvim_get_p_inf() -> c_int;
 }
 
 /// Magic mode values (from regexp_defs.h)
@@ -643,8 +643,7 @@ pub unsafe fn ignorecase_opt(pat: *const std::ffi::c_char, ic_in: bool, scs: boo
 
     if ic && !get_no_smartcase() && scs {
         // Check for ctrl-x mode with infercase
-        let in_ctrl_x_with_inf =
-            rs_ctrl_x_mode_not_default() != 0 && nvim_curbuf_get_b_p_inf() != 0;
+        let in_ctrl_x_with_inf = rs_ctrl_x_mode_not_default() != 0 && nvim_get_p_inf() != 0;
 
         if !in_ctrl_x_with_inf {
             // Smartcase: if pattern has uppercase, don't ignore case

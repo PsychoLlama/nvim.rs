@@ -270,10 +270,12 @@ extern "C" {
     static mut IObuff_expand: [std::ffi::c_char; 1025];
 
     // helpers for inlined nvim_ins_compl_st_msg_scanning (Phase 18)
-    fn nvim_buf_get_b_fname_void(buf: *mut core::ffi::c_void) -> *const std::ffi::c_char;
-    fn nvim_buf_get_b_sfname_void(buf: *mut core::ffi::c_void) -> *const std::ffi::c_char;
+    #[link_name = "nvim_buf_get_b_fname"]
+    fn nvim_buf_get_b_fname_void(buf: nvim_buffer::BufHandle) -> *const std::ffi::c_char;
+    #[link_name = "nvim_buf_get_b_sfname"]
+    fn nvim_buf_get_b_sfname_void(buf: nvim_buffer::BufHandle) -> *const std::ffi::c_char;
     #[link_name = "rs_buf_spname"]
-    fn buf_spname_void(buf: *mut core::ffi::c_void) -> *mut std::ffi::c_char;
+    fn buf_spname_void(buf: nvim_buffer::BufHandle) -> *mut std::ffi::c_char;
 
     // helpers for inlined nvim_compl_p_scs_save_set (Phase 18)
     fn nvim_buf_get_b_p_inf_void(buf: *mut core::ffi::c_void) -> c_int;
@@ -305,7 +307,7 @@ unsafe fn ins_compl_st_msg_scanning() {
     if !shortmess(SHM_COMPLETIONSCAN) && crate::vars::nvim_get_compl_autocomplete() == 0 {
         msg_hist_off_expand = true;
         msg_ext_set_kind(c"completion".as_ptr());
-        let ins_buf = crate::vars::ins_compl_st.ins_buf;
+        let ins_buf = nvim_buffer::BufHandle::from_ptr(crate::vars::ins_compl_st.ins_buf);
         let name_ptr: *const std::ffi::c_char = {
             let fname = nvim_buf_get_b_fname_void(ins_buf);
             if fname.is_null() {

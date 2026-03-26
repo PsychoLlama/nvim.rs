@@ -1143,27 +1143,25 @@ void nvim_free_insexpand_stuff_impl(void)
   clear_cpt_callbacks(&cpt_cb, cpt_cb_count);
 }
 
-/// Called when starting CTRL_X_SPELL mode: Move backwards to a previous badly
-/// spelled word, if there is one.
-void nvim_spell_back_to_badword_impl(void)
-{
-  pos_T tpos = curwin->w_cursor;
-  spell_bad_len = spell_move_to(curwin, BACKWARD, SMT_ALL, true, NULL);
-  if (curwin->w_cursor.col != tpos.col) {
-    start_arrow(&tpos);
-  }
-}
-
 // Completion state accessors (used by Rust insexpand crate)
 unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
 int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
 int nvim_get_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
-int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
-void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
+/// Move backwards to a previous badly spelled word (CTRL_X_SPELL mode).
+void nvim_spell_back_safe(void)
+{
+  emsg_off++;
+  pos_T tpos = curwin->w_cursor;
+  spell_bad_len = spell_move_to(curwin, BACKWARD, SMT_ALL, true, NULL);
+  if (curwin->w_cursor.col != tpos.col) {
+    start_arrow(&tpos);
+  }
+  emsg_off--;
+}
 char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
@@ -1518,12 +1516,6 @@ int nvim_buf_get_b_scanned(buf_T *buf) { return buf->b_scanned; }
 
 /// Returns (void*)buf->b_p_inf (takes void* to avoid buf_T in Rust).
 int nvim_buf_get_b_p_inf_void(void *buf) { return ((buf_T *)buf)->b_p_inf ? 1 : 0; }
-
-/// Returns (void*)buf->b_fname (takes void* to avoid buf_T in Rust).
-const char *nvim_buf_get_b_fname_void(void *buf) { return buf ? ((buf_T *)buf)->b_fname : NULL; }
-
-/// Returns (void*)buf->b_sfname (takes void* to avoid buf_T in Rust).
-const char *nvim_buf_get_b_sfname_void(void *buf) { return buf ? ((buf_T *)buf)->b_sfname : NULL; }
 
 /// Returns wp->w_next (next window in the window list).
 win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }
