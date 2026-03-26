@@ -254,6 +254,8 @@ int nvim_spellsug_get_sps_limit(void) { return sps_limit; }
 
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
+extern int rs_stp_sal_score(suggest_T *stp, const char *su_badptr, int su_badlen,
+                            slang_T *slang, const char *badsound);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -2121,50 +2123,7 @@ static void score_combine(suginfo_T *su)
 /// @param badsound  sound-folded badword
 static int stp_sal_score(suggest_T *stp, suginfo_T *su, slang_T *slang, char *badsound)
 {
-  char *pbad;
-  char *pgood;
-  char badsound2[MAXWLEN];
-  char fword[MAXWLEN];
-  char goodsound[MAXWLEN];
-  char goodword[MAXWLEN];
-
-  int lendiff = su->su_badlen - stp->st_orglen;
-  if (lendiff >= 0) {
-    pbad = badsound;
-  } else {
-    // soundfold the bad word with more characters following
-    spell_casefold(curwin, su->su_badptr, stp->st_orglen, fword, MAXWLEN);
-
-    // When joining two words the sound often changes a lot.  E.g., "t he"
-    // sounds like "t h" while "the" sounds like "@".  Avoid that by
-    // removing the space.  Don't do it when the good word also contains a
-    // space.
-    if (ascii_iswhite(su->su_badptr[su->su_badlen])
-        && *skiptowhite(stp->st_word) == NUL) {
-      for (char *p = fword; *(p = skiptowhite(p)) != NUL;) {
-        STRMOVE(p, p + 1);
-      }
-    }
-
-    spell_soundfold(slang, fword, true, badsound2);
-    pbad = badsound2;
-  }
-
-  if (lendiff > 0 && stp->st_wordlen + lendiff < MAXWLEN) {
-    // Add part of the bad word to the good word, so that we soundfold
-    // what replaces the bad word.
-    STRCPY(goodword, stp->st_word);
-    xmemcpyz(goodword + stp->st_wordlen,
-             su->su_badptr + su->su_badlen - lendiff, (size_t)lendiff);
-    pgood = goodword;
-  } else {
-    pgood = stp->st_word;
-  }
-
-  // Sound-fold the word and compute the score for the difference.
-  spell_soundfold(slang, pgood, false, goodsound);
-
-  return rs_soundalike_score(goodsound, pbad);
+  return rs_stp_sal_score(stp, su->su_badptr, su->su_badlen, slang, badsound);
 }
 
 /// structure used to store soundfolded words that add_sound_suggest() has

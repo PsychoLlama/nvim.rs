@@ -2620,6 +2620,9 @@ pub unsafe extern "C" fn rs_spell_check_sps(option: *const u8, option_len: usize
 extern "C" {
     fn nvim_spellsug_set_sps_flags(f: c_int);
     fn nvim_spellsug_set_sps_limit(l: c_int);
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+    #[link_name = "curwin"]
+    static stp_sal_curwin: *mut std::ffi::c_void;
 }
 
 /// Full replacement for C spell_check_sps():
@@ -2773,6 +2776,137 @@ pub unsafe extern "C" fn rs_cleanup_suggestions(
         }
     }
     maxscore
+}
+
+// =============================================================================
+// Phase 3: stp_sal_score
+// =============================================================================
+
+/// Advance pointer past non-whitespace bytes (equivalent to C skiptowhite).
+unsafe fn skip_to_white(mut p: *const c_char) -> *const c_char {
+    while *p != 0 && rs_ascii_iswhite(c_int::from(*p as u8)) == 0 {
+        p = p.add(1);
+    }
+    p
+}
+
+/// Rust replacement for C `stp_sal_score`.
+///
+/// Computes sound-alike score for a suggestion by soundfolding the good word
+/// and comparing to the soundfolded bad word.
+///
+/// # Safety
+/// All pointers must be valid. `stp` must point to a valid `CSuggestT`.
+/// `su_badptr` and `badsound` must be valid null-terminated C strings.
+/// `slang` must be a valid non-null handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stp_sal_score(
+    stp: *mut CSuggestT,
+    su_badptr: *const c_char,
+    su_badlen: c_int,
+    slang: SlangHandle,
+    badsound: *const c_char,
+) -> c_int {
+    let mut badsound2 = [0u8; MAXWLEN];
+    let mut fword = [0u8; MAXWLEN];
+    let mut goodsound = [0u8; MAXWLEN];
+    let mut goodword = [0u8; MAXWLEN];
+
+    let lendiff = su_badlen - (*stp).st_orglen;
+
+    let pbad: *const c_char = if lendiff >= 0 {
+        badsound
+    } else {
+        // Soundfold the bad word with more characters following.
+        crate::check::rs_spell_casefold_c_compat(
+            stp_sal_curwin.cast(),
+            su_badptr,
+            (*stp).st_orglen,
+            fword.as_mut_ptr().cast::<c_char>(),
+            MAXWLEN as c_int,
+        );
+
+        // When joining two words the sound often changes a lot. Avoid that
+        // by removing the space -- but only if the good word has no space.
+        let badptr_after_badlen = su_badptr.add(su_badlen as usize);
+        if rs_ascii_iswhite(c_int::from(*badptr_after_badlen as u8)) != 0
+            && *skip_to_white((*stp).st_word.cast::<c_char>()) == 0
+        {
+            // Remove spaces from fword in place.
+            let mut p = fword.as_mut_ptr();
+            loop {
+                p = skip_to_white(p.cast::<c_char>()).cast_mut().cast::<u8>();
+                if *p == 0 {
+                    break;
+                }
+                // STRMOVE(p, p+1): shift everything left by one
+                let remaining = {
+                    let mut q = p.add(1);
+                    while *q != 0 {
+                        q = q.add(1);
+                    }
+                    q.offset_from(p) as usize // includes the NUL at new position
+                };
+                std::ptr::copy(p.add(1), p, remaining + 1);
+            }
+        }
+
+        crate::rs_spell_soundfold(
+            slang.0,
+            fword.as_mut_ptr().cast::<c_char>(),
+            true,
+            badsound2.as_mut_ptr().cast::<c_char>(),
+        );
+        badsound2.as_ptr().cast::<c_char>()
+    };
+
+    if lendiff > 0 && (*stp).st_wordlen + lendiff < MAXWLEN as c_int {
+        // Add part of the bad word to the good word so we soundfold what
+        // replaces the bad word.
+        let wlen = (*stp).st_wordlen as usize;
+        let src = std::slice::from_raw_parts((*stp).st_word.cast::<u8>(), wlen);
+        goodword[..wlen].copy_from_slice(src);
+        let ld = lendiff as usize;
+        let bad_extra =
+            std::slice::from_raw_parts(su_badptr.add(su_badlen as usize - ld).cast::<u8>(), ld);
+        goodword[wlen..wlen + ld].copy_from_slice(bad_extra);
+        goodword[wlen + ld] = 0;
+
+        crate::rs_spell_soundfold(
+            slang.0,
+            goodword.as_mut_ptr().cast::<c_char>(),
+            false,
+            goodsound.as_mut_ptr().cast::<c_char>(),
+        );
+    } else {
+        crate::rs_spell_soundfold(
+            slang.0,
+            (*stp).st_word.cast::<c_char>(),
+            false,
+            goodsound.as_mut_ptr().cast::<c_char>(),
+        );
+    }
+
+    // Find the NUL length for goodsound and pbad, then compute score.
+    let good_end = {
+        let mut q = goodsound.as_ptr();
+        while *q != 0 {
+            q = q.add(1);
+        }
+        q.offset_from(goodsound.as_ptr()) as usize
+    };
+    let bad_end = {
+        let mut q = pbad.cast::<u8>();
+        while *q != 0 {
+            q = q.add(1);
+        }
+        q.offset_from(pbad.cast::<u8>()) as usize
+    };
+
+    soundalike_score_impl(
+        &goodsound[..good_end],
+        std::slice::from_raw_parts(pbad.cast::<u8>(), bad_end),
+    )
 }
 
 // =============================================================================
