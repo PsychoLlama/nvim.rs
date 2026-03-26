@@ -467,9 +467,9 @@ extern "C" {
     fn nvim_setpcmark();
     fn nvim_equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int;
 
-    // For may_add_char_to_search
-    fn nvim_save_last_search_pattern();
-    fn nvim_restore_last_search_pattern();
+    // For may_add_char_to_search (Rust exports from search crate)
+    fn save_last_search_pattern();
+    fn restore_last_search_pattern();
     fn nvim_gchar_cursor() -> c_int;
     fn nvim_get_p_ic() -> c_int;
     fn nvim_get_p_scs() -> c_int;
@@ -896,7 +896,7 @@ pub unsafe extern "C" fn may_add_char_to_search_rs(
     let mut search_delim: c_int = 0;
 
     // NOTE: must call restore_last_search_pattern() before returning!
-    nvim_save_last_search_pattern();
+    save_last_search_pattern();
 
     // Add a character from under the cursor for 'incsearch'
     if !do_incsearch_highlighting_rs(
@@ -906,10 +906,10 @@ pub unsafe extern "C" fn may_add_char_to_search_rs(
         &raw mut skiplen,
         &raw mut patlen,
     ) {
-        nvim_restore_last_search_pattern();
+        restore_last_search_pattern();
         return 0; // FAIL
     }
-    nvim_restore_last_search_pattern();
+    restore_last_search_pattern();
 
     let s = &mut *is_state;
     if s.did_incsearch {
@@ -1144,7 +1144,7 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
 
     // Parsing range may already set the last search pattern.
     // NOTE: must call restore_last_search_pattern() before returning!
-    nvim_save_last_search_pattern();
+    save_last_search_pattern();
 
     if !do_incsearch_highlighting_rs(
         firstc,
@@ -1153,14 +1153,14 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
         &raw mut skiplen,
         &raw mut patlen,
     ) {
-        nvim_restore_last_search_pattern();
+        restore_last_search_pattern();
         rs_finish_incsearch_highlighting(0, s, 1);
         return;
     }
 
     // if there is a character waiting, search and redraw later
     if nvim_char_avail() != 0 {
-        nvim_restore_last_search_pattern();
+        restore_last_search_pattern();
         (*s).incsearch_postponed = true;
         return;
     }
@@ -1308,7 +1308,7 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
     redraw_later(curwin, UPD_SOME_VALID);
     nvim_update_screen();
     nvim_set_highlight_match(0);
-    nvim_restore_last_search_pattern();
+    restore_last_search_pattern();
 
     // Leave cursor at end to make CTRL-R CTRL-W work. But not when beyond
     // end of pattern, e.g. for ":s/pat/".
@@ -1344,7 +1344,7 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
 
     // Parsing range may already set the last search pattern.
     // NOTE: must call restore_last_search_pattern() before returning!
-    nvim_save_last_search_pattern();
+    save_last_search_pattern();
 
     if !do_incsearch_highlighting_rs(
         firstc,
@@ -1353,13 +1353,13 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
         &raw mut skiplen,
         &raw mut patlen,
     ) {
-        nvim_restore_last_search_pattern();
+        restore_last_search_pattern();
         return OK;
     }
 
     let cmdbuff = nvim_get_ccline_cmdbuff();
     if patlen == 0 && *cmdbuff.add(skiplen as usize) == 0 {
-        nvim_restore_last_search_pattern();
+        restore_last_search_pattern();
         return FAIL;
     }
 
@@ -1373,7 +1373,7 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
     if search_delim == *cmdbuff.add(skiplen as usize) as c_int {
         pat = last_search_pattern();
         if pat.is_null() {
-            nvim_restore_last_search_pattern();
+            restore_last_search_pattern();
             return FAIL;
         }
         let _ = skiplen; // skiplen not needed when using last_search_pattern
@@ -1469,7 +1469,7 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
     } else {
         vim_beep(K_OPT_BO_FLAG_ERROR);
     }
-    nvim_restore_last_search_pattern();
+    restore_last_search_pattern();
     FAIL
 }
 

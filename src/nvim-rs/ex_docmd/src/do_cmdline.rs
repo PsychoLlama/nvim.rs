@@ -184,8 +184,8 @@ extern "C" {
     fn nvim_docmd_script_line_start();
     fn nvim_docmd_script_line_end();
 
-    // has_loop_cmd
-    fn nvim_docmd_has_loop_cmd(p: *const c_char) -> c_int;
+    // has_loop_cmd (Rust export from ex_eval crate)
+    fn has_loop_cmd(p: *mut c_char) -> bool;
 
     // UI helpers
     fn nvim_docmd_ui_has_cmdline() -> c_int;
@@ -193,7 +193,7 @@ extern "C" {
     fn nvim_docmd_ui_ext_cmdline_block_leave();
 
     // Message helpers
-    fn nvim_docmd_msg_verbose_cmd(lnum: LinenrT, s: *mut c_char);
+    fn msg_verbose_cmd(lnum: LinenrT, s: *const c_char);
     fn nvim_docmd_msg_start();
     fn nvim_docmd_wait_return(redraw: c_int);
 
@@ -772,7 +772,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
         // Inside a while/for loop, or when the command looks like a ":while"/":for",
         // the line is stored.
-        if cstack.cs_looplevel > 0 || unsafe { nvim_docmd_has_loop_cmd(next_cmdline) } != 0 {
+        if cstack.cs_looplevel > 0 || unsafe { has_loop_cmd(next_cmdline as *mut c_char) } {
             // Set up get_loop_line
             cmd_getline = unsafe { nvim_docmd_get_loop_line_ptr() };
             cmd_cookie = std::ptr::addr_of_mut!(cmd_loop_cookie).cast();
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             || unsafe { p_verbose } >= 16
         {
             unsafe {
-                nvim_docmd_msg_verbose_cmd(nvim_get_sourcing_lnum_direct(), cmdline_copy);
+                msg_verbose_cmd(nvim_get_sourcing_lnum_direct(), cmdline_copy);
             }
         }
 

@@ -138,8 +138,9 @@ extern "C" {
         eap: ExArgHandle,
         errormsg: *mut *const c_char,
     ) -> c_int;
-    fn nvim_apply_global_cmdmod();
-    fn nvim_undo_global_cmdmod();
+    fn apply_cmdmod(cmod: *mut c_void);
+    fn undo_cmdmod(cmod: *mut c_void);
+    static mut cmdmod: u8;
 
     // find_excmd_after_range (called via C wrapper until Rust version is ready)
     fn nvim_find_excmd_after_range(eap: ExArgHandle) -> *mut c_char;
@@ -159,12 +160,12 @@ extern "C" {
     fn nvim_docmd_do_intthrow(cstack: CstackHandle) -> bool;
 
     // Address/range
-    fn nvim_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char);
+    fn set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char);
     fn parse_cmd_address(eap: ExArgHandle, errormsg: *mut *const c_char, silent: bool) -> c_int;
 
     // String helpers
     fn nvim_skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char;
-    fn nvim_check_nextcmd(p: *const c_char) -> *mut c_char;
+    fn check_nextcmd(p: *const c_char) -> *mut c_char;
 
     // Range without command
     fn ex_range_without_command(eap: ExArgHandle) -> *const c_char;
@@ -188,7 +189,7 @@ extern "C" {
     fn nvim_docmd_cmdnames_func_is_ni(cmdidx: c_int) -> c_int;
 
     // parse_bang
-    fn nvim_parse_bang(eap: ExArgHandle, p_ptr: *mut *mut c_char) -> bool;
+    fn parse_bang(eap: ExArgHandle, p_ptr: *mut *mut c_char) -> bool;
     fn nvim_eap_set_forceit(eap: ExArgHandle, forceit: bool);
 
     // Security checks
@@ -252,10 +253,10 @@ extern "C" {
 
     // dflall
     fn nvim_eap_argt_has_dflall(eap: ExArgHandle) -> bool;
-    fn nvim_set_cmd_dflall_range(eap: ExArgHandle);
+    fn set_cmd_dflall_range(eap: ExArgHandle);
 
     // register / count / flags
-    fn nvim_parse_register(eap: ExArgHandle);
+    fn parse_register(eap: ExArgHandle);
 
     // trailing / needarg
     fn nvim_docmd_get_e_argreq() -> *const c_char;
@@ -468,7 +469,7 @@ pub unsafe extern "C" fn do_one_cmd(
         );
         return ea_cleanup_and_return(eap, None);
     }
-    nvim_apply_global_cmdmod();
+    apply_cmdmod(std::ptr::addr_of_mut!(cmdmod).cast());
 
     let after_modifier = nvim_eap_get_cmd(eap);
 
@@ -493,7 +494,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     // 4. Parse range.
-    nvim_set_cmd_addr_type(eap, p);
+    set_cmd_addr_type(eap, p);
     if parse_cmd_address(eap, &mut errormsg, false) == FAIL {
         do_one_cmd_doend(
             eap,
@@ -533,7 +534,7 @@ pub unsafe extern "C" fn do_one_cmd(
             return ea_cleanup_and_return(eap, None);
         }
         // Check nextcmd
-        let next = nvim_check_nextcmd(cmd_ptr);
+        let next = check_nextcmd(cmd_ptr);
         if !next.is_null() {
             nvim_eap_set_nextcmd(eap, next);
             if !nvim_eap_get_skip_bool(eap) {
@@ -633,7 +634,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Determine if command has forceit flag.
     let mut p_mut = p;
-    let forceit = nvim_parse_bang(eap, &mut p_mut);
+    let forceit = parse_bang(eap, &mut p_mut);
     p = p_mut;
     nvim_eap_set_forceit(eap, forceit);
 
@@ -968,11 +969,11 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     if nvim_eap_argt_has_dflall(eap) && nvim_eap_get_addr_count(eap) == 0 {
-        nvim_set_cmd_dflall_range(eap);
+        set_cmd_dflall_range(eap);
     }
 
     // Parse register and count.
-    nvim_parse_register(eap);
+    parse_register(eap);
     if crate::args::rs_parse_count_ex(eap, &mut errormsg, 1) == FAIL {
         do_one_cmd_doend(
             eap,
@@ -1119,7 +1120,7 @@ unsafe fn do_one_cmd_doend(
     nvim_docmd_do_one_cmd_doend(cstack, errormsg, flags, eap);
 
     // Undo and restore cmdmod.
-    nvim_undo_global_cmdmod();
+    undo_cmdmod(std::ptr::addr_of_mut!(cmdmod).cast());
     nvim_docmd_restore_cmdmod(save_cmdmod);
 
     // Restore register execution state.

@@ -162,8 +162,8 @@ extern "C" {
     #[link_name = "rs_magic_isset"]
     fn nvim_cmd_magic_isset() -> c_int;
 
-    // check_nextcmd
-    fn nvim_check_nextcmd(p: *const c_char) -> *mut c_char;
+    // check_nextcmd (Rust export)
+    fn check_nextcmd(p: *const c_char) -> *mut c_char;
 
     // getdigits
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn rs_ex_findpat(eap: ExArgHandle) {
             if !ends_excmd(*p_after as i32) {
                 nvim_eap_set_errmsg_const(eap, c"E488: Trailing characters: %s".as_ptr());
             } else {
-                let nextcmd = nvim_check_nextcmd(p_after);
+                let nextcmd = check_nextcmd(p_after);
                 nvim_eap_set_nextcmd(eap, nextcmd);
             }
         }
