@@ -150,7 +150,6 @@ static diffline_change_T simple_diffline_change;
 int nvim_get_diff_flags(void) { return diff_flags; }
 bool nvim_is_diffexpr_empty(void) { return *p_dex == NUL; }
 buf_T *nvim_get_curtab_diffbuf(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
-int nvim_get_curtab_diff_invalid(void) { return curtab->tp_diff_invalid; }
 diff_T *nvim_get_diff_first_block(void) { return curtab->tp_first_diff; }
 diff_T *nvim_diffblock_get_next(diff_T *dp) { if (dp == NULL) { return NULL; } return dp->df_next; }
 linenr_T nvim_diffblock_get_lnum(diff_T *dp, int idx) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return dp->df_lnum[idx]; }
@@ -171,7 +170,6 @@ diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx) { if (d
 void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end) { mmfile_t *mm = (mmfile_t *)m; rs_diff_write_buffer(buf, &mm->ptr, &mm->size, start, end, diff_flags); }
 int nvim_diff_buf_get_ml_flags(buf_T *buf) { return buf ? buf->b_ml.ml_flags : 0; }
 int nvim_diff_ml_get_buf_len(buf_T *buf, linenr_T lnum) { return buf ? ml_get_buf_len(buf, lnum) : 0; }
-void nvim_curtab_set_diffbuf(int idx, buf_T *buf) { if (idx >= 0 && idx < DB_COUNT) { curtab->tp_diffbuf[idx] = buf; } }
 void nvim_tabpage_set_diffbuf(tabpage_T *tp, int idx, buf_T *buf) { if (tp != NULL && idx >= 0 && idx < DB_COUNT) { tp->tp_diffbuf[idx] = buf; } }
 void nvim_tabpage_set_first_diff(tabpage_T *tp, diff_T *dp) { if (tp != NULL) { tp->tp_first_diff = dp; } }
 void nvim_diff_set_next(diff_T *dp, diff_T *next) { if (dp != NULL) { dp->df_next = next; } }
@@ -219,7 +217,6 @@ void nvim_diff_fclose(void *fd) { if (fd != NULL) { fclose((FILE *)fd); } }
 bool nvim_diff_buf_valid(buf_T *buf) { return buf_valid(buf); }
 void nvim_diff_buf_check_timestamp(buf_T *buf) { if (buf != NULL) { buf_check_timestamp(buf); } }
 bool nvim_diff_buf_is_loaded(buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
-void nvim_diff_curtab_set_first_diff(diff_T *dp) { curtab->tp_first_diff = dp; }
 bool nvim_eap_forceit(const exarg_T *eap) { return eap != NULL && eap->forceit; }
 void nvim_diff_invalidate_cursor(void) { curwin->w_valid_cursor.lnum = 0; }
 void nvim_diff_fire_diffupdated(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }

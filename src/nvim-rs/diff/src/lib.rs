@@ -125,7 +125,8 @@ extern "C" {
     fn nvim_get_diff_flags() -> c_int;
     fn nvim_is_diffexpr_empty() -> bool;
     fn nvim_get_curtab_diffbuf(idx: c_int) -> BufPtr;
-    fn nvim_get_curtab_diff_invalid() -> c_int;
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_tabpage_is_diff_invalid(tp: TabpageHandle) -> bool;
     fn nvim_get_diff_first_block() -> DiffBlockPtr;
     fn nvim_diffblock_get_next(dp: DiffBlockPtr) -> DiffBlockPtr;
     fn nvim_diffblock_get_lnum(dp: DiffBlockPtr, idx: c_int) -> LinenrT;
@@ -514,7 +515,7 @@ fn diff_buf_idx_impl(buf: BufHandle) -> c_int {
 
 /// Check if the diff list is invalid (needs update).
 fn diff_check_invalid_impl() -> bool {
-    unsafe { nvim_get_curtab_diff_invalid() != 0 }
+    unsafe { nvim_tabpage_is_diff_invalid(nvim_get_curtab()) }
 }
 
 /// Count the number of active diff buffers.

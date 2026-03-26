@@ -66,9 +66,9 @@ extern "C" {
     fn nvim_diff_get_foldcolumn() -> c_int;
 
     fn nvim_get_diff_first_block() -> DiffBlockHandle;
-    fn nvim_diff_curtab_set_first_diff(dp: DiffBlockHandle);
+    fn nvim_tabpage_set_first_diff(tp: *mut std::ffi::c_void, dp: DiffBlockHandle);
+    fn nvim_tabpage_set_diffbuf(tp: *mut std::ffi::c_void, idx: c_int, buf: BufHandle);
     fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
-    fn nvim_curtab_set_diffbuf(idx: c_int, buf: BufHandle);
 
     fn nvim_diff_buf_is_loaded(buf: BufHandle) -> bool;
 
@@ -535,7 +535,7 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
 
     // Save curtab scratch state (tp_first_diff and tp_diffbuf)
     let orig_first_diff = nvim_get_diff_first_block();
-    nvim_diff_curtab_set_first_diff(DiffBlockHandle::null());
+    nvim_tabpage_set_first_diff(nvim_get_curtab(), DiffBlockHandle::null());
     let mut orig_diffbuf = [BufHandle::null(); DB_COUNT as usize];
     for i in 0..DB_COUNT {
         orig_diffbuf[i as usize] = nvim_get_curtab_diffbuf(i);
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
         }
         if nvim_diffblock_get_count(dp, i) == 0 {
             // Multi-buffer diff: skip buffers with no text in this block
-            nvim_curtab_set_diffbuf(i, BufHandle::null());
+            nvim_tabpage_set_diffbuf(nvim_get_curtab(), i, BufHandle::null());
             continue;
         }
 
@@ -603,9 +603,9 @@ pub unsafe extern "C" fn rs_compute_inline_diff(dp: DiffBlockHandle) {
     rs_diff_clear(nvim_get_curtab());
 
     // Restore curtab state
-    nvim_diff_curtab_set_first_diff(orig_first_diff);
+    nvim_tabpage_set_first_diff(nvim_get_curtab(), orig_first_diff);
     for i in 0..DB_COUNT {
-        nvim_curtab_set_diffbuf(i, orig_diffbuf[i as usize]);
+        nvim_tabpage_set_diffbuf(nvim_get_curtab(), i, orig_diffbuf[i as usize]);
     }
 
     // Restore diff options

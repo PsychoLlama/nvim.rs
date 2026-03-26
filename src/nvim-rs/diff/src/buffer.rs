@@ -131,7 +131,6 @@ extern "C" {
     // Tabpage accessors
     fn nvim_get_curtab() -> TabpageHandle;
     fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
-    fn nvim_get_curtab_diff_invalid() -> c_int;
     fn nvim_tabpage_get_diffbuf(tp: TabpageHandle, idx: c_int) -> BufHandle;
     fn nvim_tabpage_is_diff_invalid(tp: TabpageHandle) -> bool;
     fn nvim_tabpage_set_diff_invalid(tp: TabpageHandle, val: c_int);
@@ -153,7 +152,6 @@ extern "C" {
     fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
 
     // Phase 1: State mutation accessors
-    fn nvim_curtab_set_diffbuf(idx: c_int, buf: BufHandle);
     fn nvim_tabpage_set_diffbuf(tp: TabpageHandle, idx: c_int, buf: BufHandle);
     fn nvim_tabpage_set_first_diff(tp: TabpageHandle, dp: DiffBlockHandle);
     fn nvim_diff_set_next(dp: DiffBlockHandle, next: DiffBlockHandle);
@@ -292,7 +290,7 @@ pub fn diff_buf_idx_tp(buf: BufHandle, tp: TabpageHandle) -> c_int {
 
 /// Check if the diff list is invalid (needs update).
 pub fn diff_check_invalid() -> bool {
-    unsafe { nvim_get_curtab_diff_invalid() != 0 }
+    unsafe { nvim_tabpage_is_diff_invalid(nvim_get_curtab()) }
 }
 
 /// Count the number of active diff buffers in the current tab.
@@ -913,7 +911,7 @@ pub unsafe extern "C" fn rs_diff_buf_clear() {
     let tp = nvim_get_curtab();
     for i in 0..DB_COUNT {
         if !nvim_get_curtab_diffbuf(i).is_null() {
-            nvim_curtab_set_diffbuf(i, BufHandle::null());
+            nvim_tabpage_set_diffbuf(nvim_get_curtab(), i, BufHandle::null());
             nvim_tabpage_set_diff_invalid(tp, 1);
             rs_diff_redraw(true);
         }
@@ -985,7 +983,7 @@ pub unsafe extern "C" fn rs_diff_buf_add(buf: BufHandle) {
     // Find a free slot
     for i in 0..DB_COUNT {
         if nvim_get_curtab_diffbuf(i).is_null() {
-            nvim_curtab_set_diffbuf(i, buf);
+            nvim_tabpage_set_diffbuf(nvim_get_curtab(), i, buf);
             nvim_tabpage_set_diff_invalid(tp, 1);
             rs_diff_redraw(true);
             return;
@@ -1024,7 +1022,7 @@ pub unsafe extern "C" fn rs_diff_buf_adjust(win: WinHandle) {
             let tp = nvim_get_curtab();
             let i = rs_diff_buf_idx_tp(buf, tp);
             if i != DB_COUNT {
-                nvim_curtab_set_diffbuf(i, BufHandle::null());
+                nvim_tabpage_set_diffbuf(nvim_get_curtab(), i, BufHandle::null());
                 nvim_tabpage_set_diff_invalid(tp, 1);
                 rs_diff_redraw(true);
             }
@@ -1810,7 +1808,6 @@ extern "C" {
     fn nvim_diff_buf_valid(buf: BufHandle) -> bool;
     fn nvim_diff_buf_check_timestamp(buf: BufHandle);
     fn nvim_diff_buf_is_loaded(buf: BufHandle) -> bool;
-    fn nvim_diff_curtab_set_first_diff(dp: DiffBlockHandle);
     fn nvim_eap_forceit(eap: ExargHandle) -> bool;
     fn nvim_diff_invalidate_cursor();
     fn nvim_diff_fire_diffupdated();
@@ -2333,7 +2330,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
         let mut orig_diff = DiffBlockHandle::null();
         if anchor_i != 0 {
             orig_diff = nvim_get_diff_first_block();
-            nvim_diff_curtab_set_first_diff(DiffBlockHandle::null());
+            nvim_tabpage_set_first_diff(nvim_get_curtab(), DiffBlockHandle::null());
         }
 
         let lnum_start = if anchor_i == 0 {
@@ -2351,7 +2348,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
         let buf = nvim_get_curtab_diffbuf(idx_orig);
         if nvim_diffio_write_orig(dio, buf, lnum_start, lnum_end) == FAIL {
             if !orig_diff.is_null() {
-                nvim_diff_curtab_set_first_diff(orig_diff);
+                nvim_tabpage_set_first_diff(nvim_get_curtab(), orig_diff);
                 rs_diff_clear(nvim_get_curtab());
             }
             nvim_diffio_free_tempfiles(dio);
@@ -2419,7 +2416,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
                 }
                 let cur_first = nvim_get_diff_first_block();
                 nvim_diff_set_next(last_diff, cur_first);
-                nvim_diff_curtab_set_first_diff(orig_diff);
+                nvim_tabpage_set_first_diff(nvim_get_curtab(), orig_diff);
             }
         }
     }
