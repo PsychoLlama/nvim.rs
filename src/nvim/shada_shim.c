@@ -426,9 +426,7 @@ char *nvim_xmemdupz(const char *s, size_t len)
   return xmemdupz(s, len);
 }
 
-const char *nvim_shada_get_p_shada(void) { return p_shada; }
 char *nvim_shada_get_namebuff(void) { return NameBuff; }
-const void *nvim_shada_buf_first(void) { return firstbuf; }
 const void *nvim_shada_buf_next(const void *buf)
 {
   return buf ? ((const buf_T *)buf)->b_next : NULL;
@@ -546,7 +544,6 @@ void nvim_shada_buf_get_buflist_info(const void *buf, pos_T *out_pos,
 }
 
 // Jump list accessors
-void *nvim_shada_curwin(void) { return curwin; }
 
 // mark_jumplist_iter wrapper
 const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
@@ -578,9 +575,6 @@ void nvim_shada_free_variable(ShadaEntry *entry)
   xfree(entry->data.global_var.name);
   tv_clear(&entry->data.global_var.value);
 }
-
-/// Get p_verbose value
-int nvim_shada_get_p_verbose(void) { return (int)p_verbose; }
 
 /// Non-variadic smsg wrapper for "Reading ShaDa file" verbose message
 void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,

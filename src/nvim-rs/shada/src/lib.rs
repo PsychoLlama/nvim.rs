@@ -395,7 +395,7 @@ extern "C" {
     // nvim_filemarks_get_greatest_timestamp removed (plan 9106c29c Phase 2): direct field access.
 
     // Buffer/path filtering (Phase 2)
-    fn nvim_shada_get_p_shada() -> *const c_char;
+    static p_shada: *const c_char;
     fn home_replace_save(buf: *const c_void, src: *const c_char) -> *mut c_char;
     fn home_replace(
         buf: *const c_void,
@@ -412,7 +412,7 @@ extern "C" {
     ) -> usize;
     fn mb_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn nvim_shada_get_namebuff() -> *mut c_char;
-    fn nvim_shada_buf_first() -> *const c_void;
+    static firstbuf: *const c_void;
     fn nvim_shada_buf_next(buf: *const c_void) -> *const c_void;
     fn nvim_shada_buf_get_ffname(buf: *const c_void) -> *const c_char;
     fn nvim_shada_buf_should_skip(buf: *const c_void) -> c_int;
@@ -466,7 +466,7 @@ extern "C" {
     fn os_time() -> Timestamp;
     fn setpcmark();
     fn cleanup_jumplist(wp: *mut c_void, loadfiles: bool);
-    fn nvim_shada_curwin() -> *mut c_void;
+    static curwin: *mut c_void;
     fn nvim_shada_jumplist_iter(
         iter: *const c_void,
         wp: *mut c_void,
@@ -496,7 +496,7 @@ extern "C" {
     fn uv_strerror(err: c_int) -> *const c_char;
     fn verbose_enter();
     fn verbose_leave();
-    fn nvim_shada_get_p_verbose() -> c_int;
+    static p_verbose: i64;
     fn nvim_shada_smsg_reading(
         fname: *const c_char,
         want_info: c_int,
@@ -1958,14 +1958,14 @@ pub extern "C" fn rs_marks_equal(a: Position, b: Position) -> c_int {
 ///
 /// # Safety
 ///
-/// `nvim_shada_get_p_shada()` must return a valid NUL-terminated C string.
+/// `p_shada` must return a valid NUL-terminated C string.
 unsafe fn find_shada_parameter_impl(typ: c_int) -> *const c_char {
-    let p_shada = nvim_shada_get_p_shada();
-    if p_shada.is_null() {
+    let shada_opt = p_shada;
+    if shada_opt.is_null() {
         return std::ptr::null();
     }
     let target = typ as u8;
-    let mut p = p_shada;
+    let mut p = shada_opt;
     while *p != 0 {
         if *p as u8 == target {
             // Return pointer to the character after the type char
@@ -1995,7 +1995,7 @@ unsafe fn find_shada_parameter_impl(typ: c_int) -> *const c_char {
 ///
 /// # Safety
 ///
-/// `nvim_shada_get_p_shada()` must return a valid NUL-terminated C string.
+/// `p_shada` must return a valid NUL-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_shada_parameter(typ: c_int) -> c_int {
     let p = find_shada_parameter_impl(typ);
@@ -2014,7 +2014,7 @@ pub unsafe extern "C" fn rs_get_shada_parameter(typ: c_int) -> c_int {
 ///
 /// # Safety
 ///
-/// `nvim_shada_get_p_shada()` must return a valid NUL-terminated C string.
+/// `p_shada` must return a valid NUL-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_find_shada_parameter(typ: c_int) -> *const c_char {
     find_shada_parameter_impl(typ)
@@ -4178,7 +4178,7 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
 
     let of_ret = file_open(fd, fname, K_FILE_READ_ONLY, 0);
 
-    if nvim_shada_get_p_verbose() > 1 {
+    if p_verbose > 1 {
         verbose_enter();
         nvim_shada_smsg_reading(
             fname,
@@ -4513,8 +4513,7 @@ unsafe fn shada_read_when_writing(
                         } else {
                             // wms_entry is Missing: check if a buffer already has this mark.
                             // We use the C accessor to compare mark timestamps.
-                            let curwin = nvim_shada_curwin();
-                            let mut buf = nvim_shada_buf_first();
+                            let mut buf = firstbuf;
                             while !buf.is_null() {
                                 let buf_ffname = nvim_shada_buf_get_ffname(buf);
                                 if !buf_ffname.is_null() && path_fnamecmp(fm_fname, buf_ffname) == 0
@@ -4908,7 +4907,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
 
         // Initialize buffers (local marks and changelists).
         if num_marked_files > 0 {
-            let mut buf = nvim_shada_buf_first();
+            let mut buf = firstbuf;
             while !buf.is_null() {
                 if rs_ignore_buf(buf, removable_bufs) != 0 {
                     buf = nvim_shada_buf_next(buf);
@@ -5044,7 +5043,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
         }
 
         // Update numbered marks: replace '0 with current position.
-        if dump_global_marks && rs_ignore_buf(nvim_shada_buf_first(), removable_bufs) == 0 {
+        if dump_global_marks && rs_ignore_buf(firstbuf, removable_bufs) == 0 {
             let cur_lnum = nvim_shada_curwin_lnum();
             if cur_lnum != 0 {
                 let mut cl: i64 = 0;
@@ -5413,7 +5412,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
         return FAIL;
     }
 
-    if nvim_shada_get_p_verbose() > 1 {
+    if p_verbose > 1 {
         verbose_enter();
         nvim_shada_smsg_1s(c"Writing ShaDa file \"%s\"".as_ptr(), fname);
         verbose_leave();
@@ -7298,7 +7297,6 @@ pub type SetPtrHandle = *mut c_void;
 pub unsafe extern "C" fn rs_shada_removable(name: *const c_char) -> c_int {
     let mut part = [0u8; MAXPATHL + 1];
     let new_name = home_replace_save(std::ptr::null(), name);
-    let p_shada = nvim_shada_get_p_shada();
     let mut p = p_shada.cast_mut();
     let mut retval = false;
 
@@ -7365,7 +7363,7 @@ pub unsafe extern "C" fn rs_ignore_buf(buf: BufHandle, removable_bufs: SetPtrHan
 /// `removable_bufs` must be a valid Set(ptr_t) handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_find_removable_bufs(removable_bufs: SetPtrHandle) {
-    let mut buf = nvim_shada_buf_first();
+    let mut buf = firstbuf;
     while !buf.is_null() {
         let ffname = nvim_shada_buf_get_ffname(buf);
         if !ffname.is_null() && rs_shada_removable(ffname) != 0 {
@@ -7593,7 +7591,7 @@ pub unsafe extern "C" fn rs_shada_get_buflist(removable_bufs: SetPtrHandle) -> S
     let mut buf_count: usize = 0;
 
     // Count buffers
-    let mut buf = nvim_shada_buf_first();
+    let mut buf = firstbuf;
     while !buf.is_null() {
         if rs_ignore_buf(buf, removable_bufs) == 0
             && (max_bufs < 0 || buf_count < max_bufs as usize)
@@ -7608,7 +7606,7 @@ pub unsafe extern "C" fn rs_shada_get_buflist(removable_bufs: SetPtrHandle) -> S
     let buffers = nvim_xmalloc(buf_count * buf_size).cast::<BufferListBuffer>();
 
     let mut i: usize = 0;
-    buf = nvim_shada_buf_first();
+    buf = firstbuf;
     while !buf.is_null() {
         if rs_ignore_buf(buf, removable_bufs) != 0 {
             buf = nvim_shada_buf_next(buf);
@@ -7657,7 +7655,7 @@ pub unsafe extern "C" fn rs_shada_init_jumps(
     let mut jump_iter: *const c_void = std::ptr::null();
 
     setpcmark();
-    let wp = nvim_shada_curwin();
+    let wp = curwin;
     cleanup_jumplist(wp, false);
 
     loop {
