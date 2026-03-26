@@ -618,11 +618,9 @@ extern "C" {
     fn nvim_shada_jumplist_marklist_insert(i: c_int) -> c_int;
     fn nvim_shada_changelist_marklist_insert(buf: *mut c_void, i: c_int) -> c_int;
     // Phase 1 (plan b499a5d0): thin accessors for search/sub apply
-    fn nvim_shada_get_search_pattern_timestamp(is_substitute: c_int) -> u64;
     fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry, is_substitute: c_int);
     fn set_last_used_pattern(is_substitute: bool);
     fn set_no_hlsearch(val: bool);
-    fn nvim_shada_get_sub_replacement_timestamp() -> u64;
     fn nvim_shada_set_sub_replacement_from_entry(entry: *mut ShadaEntry);
     // Phase 2 (plan b499a5d0): thin accessors for register/variable apply
     fn nvim_shada_entry_get_reg_type_valid(entry: *const ShadaEntry) -> c_int;
@@ -712,9 +710,6 @@ extern "C" {
         out_ts: *mut Timestamp,
         out_additional: *mut *mut c_void,
     );
-    /// Get curwin->w_cursor.lnum.
-    fn nvim_shada_curwin_lnum() -> i64;
-    /// Get curwin->w_cursor as (lnum, col).
     fn nvim_shada_curwin_cursor(out_lnum: *mut i64, out_col: *mut i32);
     /// Put fname into WMS file_marks PMap; returns pointer to value slot.
     fn nvim_shada_wms_file_marks_put_ref(
@@ -5044,11 +5039,10 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
 
         // Update numbered marks: replace '0 with current position.
         if dump_global_marks && rs_ignore_buf(firstbuf, removable_bufs) == 0 {
-            let cur_lnum = nvim_shada_curwin_lnum();
-            if cur_lnum != 0 {
-                let mut cl: i64 = 0;
-                let mut cc: i32 = 0;
-                nvim_shada_curwin_cursor(&raw mut cl, &raw mut cc);
+            let mut cl: i64 = 0;
+            let mut cc: i32 = 0;
+            nvim_shada_curwin_cursor(&raw mut cl, &raw mut cc);
+            if cl != 0 {
                 let curbuf_ffname = nvim_shada_curbuf_ffname();
                 rs_replace_numbered_mark(
                     wms,
@@ -5496,9 +5490,25 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
         is_substitute_pattern
     ));
     if !force {
-        let cur_ts = nvim_shada_get_search_pattern_timestamp(is_sub);
+        let mut cur_pat: *mut c_char = std::ptr::null_mut();
+        let mut cur_ts: Timestamp = 0;
+        let (mut m, mut n, mut ol, mut oe, mut oo, mut od) = (0i32, 0i32, 0i32, 0i32, 0i64, 0i8);
+        let mut ad: *mut c_void = std::ptr::null_mut();
+        nvim_shada_get_search_pattern(
+            is_sub,
+            &raw mut cur_pat,
+            &raw mut m,
+            &raw mut n,
+            &raw mut cur_ts,
+            &raw mut ol,
+            &raw mut oe,
+            &raw mut oo,
+            &raw mut od,
+            &raw mut ad,
+        );
+        let _ = (m, n, ol, oe, oo, od, ad);
         // cur_ts == 0 means no pattern set (pat is NULL); skip only if pat exists and is newer
-        if cur_ts != 0 && cur_ts >= (*entry).timestamp {
+        if !cur_pat.is_null() && cur_ts >= (*entry).timestamp {
             rs_shada_free_entry_contents(entry);
             return;
         }
@@ -5522,8 +5532,12 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
 /// `entry` must be a valid pointer to a ShadaEntry of type SubString.
 unsafe fn rs_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) {
     if !force {
-        let cur_ts = nvim_shada_get_sub_replacement_timestamp();
-        if cur_ts != 0 && cur_ts >= (*entry).timestamp {
+        let mut cur_sub: *const c_char = std::ptr::null();
+        let mut cur_ts: Timestamp = 0;
+        let mut ad: *mut c_void = std::ptr::null_mut();
+        nvim_shada_sub_get_replacement(&raw mut cur_sub, &raw mut cur_ts, &raw mut ad);
+        let _ = ad;
+        if !cur_sub.is_null() && cur_ts >= (*entry).timestamp {
             rs_shada_free_entry_contents(entry);
             return;
         }

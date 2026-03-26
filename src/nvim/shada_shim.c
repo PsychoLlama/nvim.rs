@@ -622,8 +622,6 @@ void nvim_shada_sub_get_replacement(const char **out_sub, uint64_t *out_ts,
   *out_additional = sub.additional_data;
 }
 
-int64_t nvim_shada_curwin_lnum(void) { return (int64_t)curwin->w_cursor.lnum; }
-
 void nvim_shada_curwin_cursor(int64_t *out_lnum, int32_t *out_col) { *out_lnum = (int64_t)curwin->w_cursor.lnum; *out_col = (int32_t)curwin->w_cursor.col; }
 
 void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
@@ -749,17 +747,6 @@ void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype,
   }
 }
 
-uint64_t nvim_shada_get_search_pattern_timestamp(int is_substitute)
-{
-  SearchPattern pat;
-  if (is_substitute) {
-    get_substitute_pattern(&pat);
-  } else {
-    get_search_pattern(&pat);
-  }
-  return pat.pat != NULL ? (uint64_t)pat.timestamp : 0;
-}
-
 void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitute)
 {
   SearchPattern spat = (SearchPattern) {
@@ -781,14 +768,6 @@ void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitu
   } else {
     set_search_pattern(spat);
   }
-}
-
-uint64_t nvim_shada_get_sub_replacement_timestamp(void)
-{
-  typedef struct { char *sub; uint64_t timestamp; void *additional_data; } SubRepC;
-  SubRepC sub;
-  rs_sub_get_replacement(&sub);
-  return sub.sub != NULL ? sub.timestamp : 0;
 }
 
 void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
