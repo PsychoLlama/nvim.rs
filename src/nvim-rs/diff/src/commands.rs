@@ -55,7 +55,7 @@ extern "C" {
     fn nvim_diff_buf_is_modifiable(buf: BufHandle) -> bool;
     fn nvim_diff_get_curbuf() -> BufHandle;
     fn nvim_diff_buflist_findpat(arg: *const c_char, end: *const c_char) -> c_int;
-    fn nvim_diff_buflist_findnr(nr: c_int) -> BufHandle;
+    fn buflist_findnr(nr: c_int) -> BufHandle;
     fn nvim_diff_aucmd_prepbuf_idx(idx: c_int);
     fn nvim_diff_aucmd_restbuf();
     fn nvim_diff_change_warning_curbuf();
@@ -67,7 +67,7 @@ extern "C" {
     // Phase 4 (diffgetput) accessors
     fn u_save(top: LinenrT, bot: LinenrT) -> c_int;
     fn ml_delete(lnum: LinenrT) -> c_int;
-    fn nvim_diff_ml_append(lnum: LinenrT, line: *const c_char, len: c_int, newfile: bool) -> c_int;
+    fn ml_append(lnum: LinenrT, line: *mut c_char, len: c_int, newfile: bool) -> c_int;
     fn nvim_diff_buf_is_empty_curbuf() -> bool;
     fn nvim_diff_mark_adjust(
         line1: LinenrT,
@@ -752,7 +752,7 @@ unsafe fn diffgetput_resolve_arg(
         nr
     };
 
-    let buf = nvim_diff_buflist_findnr(bufnr);
+    let buf = buflist_findnr(bufnr);
     if buf.is_null() {
         nvim_diff_semsg_e102(arg_ptr);
         return Err(());
@@ -991,7 +991,7 @@ pub unsafe extern "C" fn rs_diffgetput(
                     break;
                 }
                 let p = xstrdup(p_raw);
-                nvim_diff_ml_append(lnum + i - 1, p, 0, false);
+                ml_append(lnum + i - 1, p, 0, false);
                 xfree(p.cast());
                 added += 1;
                 if buf_empty && nvim_diff_curbuf_ml_line_count() == 2 {

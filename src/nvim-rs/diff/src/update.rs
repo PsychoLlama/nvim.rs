@@ -29,7 +29,7 @@ extern "C" {
     fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
 
     // Validity checks
-    fn nvim_diff_buf_valid(buf: BufHandle) -> bool;
+    fn buf_valid(buf: BufHandle) -> bool;
 
     // Redraw
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
         let buf = nvim_win_get_w_buffer(wp);
 
         // Skip windows where w_p_diff is not set or buffer is invalid
-        if nvim_win_get_p_diff(wp) == 0 || !nvim_diff_buf_valid(buf) {
+        if nvim_win_get_p_diff(wp) == 0 || !buf_valid(buf) {
             wp = nvim_win_next(wp);
             continue;
         }

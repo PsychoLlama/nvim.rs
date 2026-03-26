@@ -1804,7 +1804,7 @@ extern "C" {
     fn nvim_diffio_open_output(dio: DiffioHandle) -> *mut c_void;
     fn nvim_diff_fgets(fd: *mut c_void, buf: *mut c_char, buflen: c_int) -> bool;
     fn nvim_diff_fclose(fd: *mut c_void);
-    fn nvim_diff_buf_valid(buf: BufHandle) -> bool;
+    fn buf_valid(buf: BufHandle) -> bool;
     fn nvim_diff_buf_check_timestamp(buf: BufHandle);
     fn nvim_diff_buf_is_loaded(buf: BufHandle) -> bool;
     fn nvim_eap_forceit(eap: ExargHandle) -> bool;
@@ -1854,9 +1854,8 @@ extern "C" {
     fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
     // Diff-specific accessors (defined in diff.c)
     fn nvim_diff_get_context() -> c_int;
-    fn nvim_diff_hasFolding(wp: WinHandle, lnum: LinenrT) -> bool;
-    fn nvim_diff_hasFolding_topline(wp: WinHandle, lnum: LinenrT, topline: *mut LinenrT) -> bool;
-    fn nvim_diff_decor_conceal_line(wp: WinHandle, lnum: LinenrT) -> bool;
+    fn hasFolding(wp: WinHandle, lnum: LinenrT, firstp: *mut LinenrT, lastp: *mut LinenrT) -> bool;
+    fn decor_conceal_line(wp: WinHandle, lnum: LinenrT, force: bool) -> bool;
     fn invalidate_botline(wp: WinHandle);
     fn changed_line_abv_curs_win(wp: WinHandle);
     fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
@@ -2282,7 +2281,7 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
     if nvim_eap_forceit(eap) {
         for idx_new in idx_orig..DB_COUNT {
             let buf = nvim_get_curtab_diffbuf(idx_new);
-            if nvim_diff_buf_valid(buf) {
+            if buf_valid(buf) {
                 nvim_diff_buf_check_timestamp(buf);
             }
         }
@@ -2575,7 +2574,9 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
         return 0;
     }
 
-    if nvim_diff_hasFolding(wp, lnum) || nvim_diff_decor_conceal_line(wp, lnum) {
+    if hasFolding(wp, lnum, std::ptr::null_mut(), std::ptr::null_mut())
+        || decor_conceal_line(wp, lnum - 1, false)
+    {
         return 0;
     }
 
@@ -2756,7 +2757,12 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
     nvim_diff_check_topfill(towin, false);
 
     let mut new_topline = nvim_win_get_topline(towin);
-    nvim_diff_hasFolding_topline(towin, new_topline, &raw mut new_topline);
+    hasFolding(
+        towin,
+        new_topline,
+        &raw mut new_topline,
+        std::ptr::null_mut(),
+    );
     nvim_win_set_topline(towin, new_topline);
 }
 

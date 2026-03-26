@@ -543,9 +543,8 @@ const K_TRUE: c_int = 1;
 const LBUFLEN: usize = 50;
 
 extern "C" {
-    fn nvim_diff_fopen_write(fname: *const c_char) -> *mut std::ffi::c_void;
+    fn os_fopen(path: *const c_char, mode: *const c_char) -> *mut std::ffi::c_void;
     fn nvim_diff_fwrite_line(fd: *mut std::ffi::c_void, data: *const c_char, len: usize) -> bool;
-    fn nvim_diff_fopen_read(fname: *const c_char) -> *mut std::ffi::c_void;
     fn nvim_diff_fclose(fd: *mut std::ffi::c_void);
     fn nvim_diff_fgets(fd: *mut std::ffi::c_void, buf: *mut c_char, buflen: c_int) -> bool;
     fn os_remove(fname: *const c_char) -> c_int;
@@ -571,7 +570,7 @@ pub unsafe extern "C" fn rs_check_external_diff(dio: DiffioHandle) -> c_int {
         ok = K_FALSE;
 
         let orig_fname = nvim_diffio_get_orig_fname(dio);
-        let fd = nvim_diff_fopen_write(orig_fname);
+        let fd = os_fopen(orig_fname, c"w".as_ptr());
 
         if fd.is_null() {
             io_error = true;
@@ -583,7 +582,7 @@ pub unsafe extern "C" fn rs_check_external_diff(dio: DiffioHandle) -> c_int {
             nvim_diff_fclose(fd);
 
             let new_fname = nvim_diffio_get_new_fname(dio);
-            let fd2 = nvim_diff_fopen_write(new_fname);
+            let fd2 = os_fopen(new_fname, c"w".as_ptr());
 
             if fd2.is_null() {
                 io_error = true;
@@ -596,7 +595,7 @@ pub unsafe extern "C" fn rs_check_external_diff(dio: DiffioHandle) -> c_int {
 
                 let diff_fname = nvim_diffio_get_diff_fname(dio);
                 let fd3 = if rs_diff_file(dio) == OK {
-                    nvim_diff_fopen_read(diff_fname)
+                    os_fopen(diff_fname, c"r".as_ptr())
                 } else {
                     std::ptr::null_mut()
                 };
