@@ -49,6 +49,9 @@ pub struct LoopCookie {
 }
 
 /// Matches C `struct dbg_stuff` -- fields saved/restored for debug mode.
+///
+/// IMPORTANT: `did_throw` is C `bool` (1 byte). The `int need_rethrow` after it
+/// will be at offset +3 due to alignment. This repr(C) struct matches the C layout.
 #[repr(C)]
 pub struct DbgStuff {
     pub trylevel: c_int,
@@ -58,7 +61,7 @@ pub struct DbgStuff {
     pub vv_throwpoint: *mut c_char,
     pub did_emsg: c_int,
     pub got_int: c_int,
-    pub did_throw: c_int,
+    pub did_throw: bool, // C `bool` is 1 byte; followed by 3 bytes padding before need_rethrow
     pub need_rethrow: c_int,
     pub check_cstack: c_int,
     pub current_exception: *mut c_void,
@@ -264,6 +267,69 @@ pub unsafe extern "C" fn getline_cookie(fgetline: LineGetter, cookie: *mut c_voi
         cp = new_cp;
     }
     cp
+}
+
+// =============================================================================
+// Phase 3: save_dbg_stuff and restore_dbg_stuff
+// =============================================================================
+
+/// Save global exception/debug state into `dsp`, zeroing the globals.
+/// Exported as `save_dbg_stuff` so the C `do_cmdline` can still call it.
+///
+/// # Safety
+///
+/// `dsp` must be a valid pointer to a `DbgStuff` struct.
+#[no_mangle]
+pub unsafe extern "C" fn save_dbg_stuff(dsp: *mut DbgStuff) {
+    unsafe {
+        (*dsp).trylevel = trylevel;
+        trylevel = 0;
+        (*dsp).force_abort = force_abort as c_int;
+        force_abort = false;
+        (*dsp).caught_stack = caught_stack;
+        caught_stack = std::ptr::null_mut();
+        (*dsp).vv_exception = nvim_docmd_v_exception(std::ptr::null_mut());
+        (*dsp).vv_throwpoint = nvim_docmd_v_throwpoint(std::ptr::null_mut());
+
+        // Necessary for debugging an inactive ":catch", ":finally", ":endtry".
+        (*dsp).did_emsg = did_emsg;
+        did_emsg = 0;
+        (*dsp).got_int = got_int as c_int;
+        got_int = false;
+        (*dsp).did_throw = did_throw;
+        did_throw = false;
+        (*dsp).need_rethrow = need_rethrow as c_int;
+        need_rethrow = false;
+        (*dsp).check_cstack = check_cstack as c_int;
+        check_cstack = false;
+        (*dsp).current_exception = current_exception;
+        current_exception = std::ptr::null_mut();
+    }
+}
+
+/// Restore global exception/debug state from `dsp`.
+/// Exported as `restore_dbg_stuff` so the C `do_cmdline` can still call it.
+///
+/// # Safety
+///
+/// `dsp` must be a valid pointer to a `DbgStuff` struct previously filled by
+/// `save_dbg_stuff`.
+#[no_mangle]
+pub unsafe extern "C" fn restore_dbg_stuff(dsp: *mut DbgStuff) {
+    unsafe {
+        suppress_errthrow = false;
+        trylevel = (*dsp).trylevel;
+        force_abort = (*dsp).force_abort != 0;
+        caught_stack = (*dsp).caught_stack;
+        nvim_docmd_v_exception((*dsp).vv_exception);
+        nvim_docmd_v_throwpoint((*dsp).vv_throwpoint);
+        did_emsg = (*dsp).did_emsg;
+        got_int = (*dsp).got_int != 0;
+        did_throw = (*dsp).did_throw;
+        need_rethrow = (*dsp).need_rethrow != 0;
+        check_cstack = (*dsp).check_cstack != 0;
+        current_exception = (*dsp).current_exception;
+    }
 }
 
 // =============================================================================

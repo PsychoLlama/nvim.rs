@@ -214,6 +214,8 @@ struct loop_cookie {
 };
 
 // Struct to save a few things while debugging.  Used in do_cmdline() only.
+// Phase 3: save_dbg_stuff/restore_dbg_stuff are now in Rust; struct stays for
+// compatibility until Phase 4 deletes the C do_cmdline.
 struct dbg_stuff {
   int trylevel;
   int force_abort;
@@ -232,6 +234,11 @@ struct dbg_stuff {
 // Declared here (before do_cmdline body) so the C do_cmdline can call them.
 extern char *get_loop_line(int c, void *cookie, int indent, bool do_concat);
 extern void store_loop_line(garray_T *gap, char *line);
+
+// Phase 3 (do_cmdline plan): Rust-exported debug save/restore helpers.
+// The C struct dbg_stuff is deleted; do_cmdline uses these Rust exports.
+extern void save_dbg_stuff(struct dbg_stuff *dsp);
+extern void restore_dbg_stuff(struct dbg_stuff *dsp);
 
 #include "ex_docmd.c.generated.h"
 extern int rs_win_valid(win_T *win);
@@ -406,48 +413,8 @@ int cmdname_first_char(int cmdidx)
 }
 
 static char dollar_command[2] = { '$', 0 };
-
-static void save_dbg_stuff(struct dbg_stuff *dsp)
-{
-  dsp->trylevel = trylevel;
-  trylevel = 0;
-  dsp->force_abort = force_abort;
-  force_abort = false;
-  dsp->caught_stack = caught_stack;
-  caught_stack = NULL;
-  dsp->vv_exception = v_exception(NULL);
-  dsp->vv_throwpoint = v_throwpoint(NULL);
-
-  // Necessary for debugging an inactive ":catch", ":finally", ":endtry".
-  dsp->did_emsg = did_emsg;
-  did_emsg = false;
-  dsp->got_int = got_int;
-  got_int = false;
-  dsp->did_throw = did_throw;
-  did_throw = false;
-  dsp->need_rethrow = need_rethrow;
-  need_rethrow = false;
-  dsp->check_cstack = check_cstack;
-  check_cstack = false;
-  dsp->current_exception = current_exception;
-  current_exception = NULL;
-}
-
-static void restore_dbg_stuff(struct dbg_stuff *dsp)
-{
-  suppress_errthrow = false;
-  trylevel = dsp->trylevel;
-  force_abort = dsp->force_abort;
-  caught_stack = dsp->caught_stack;
-  v_exception(dsp->vv_exception);
-  v_throwpoint(dsp->vv_throwpoint);
-  did_emsg = dsp->did_emsg;
-  got_int = dsp->got_int;
-  did_throw = dsp->did_throw;
-  need_rethrow = dsp->need_rethrow;
-  check_cstack = dsp->check_cstack;
-  current_exception = dsp->current_exception;
-}
+// save_dbg_stuff and restore_dbg_stuff are implemented in Rust (do_cmdline.rs, Phase 3).
+// Declarations are at the top of this file.
 
 static int cmdline_call_depth = 0;  ///< recursiveness
 
