@@ -9,6 +9,7 @@ description = "Indentation utilities for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+libc = "0.2"
 nvim-buffer = { path = "../buffer" }
 nvim-charset = { path = "../charset" }
 nvim-memory = { path = "../memory" }

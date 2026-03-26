@@ -52,7 +52,6 @@ extern "C" {
     // Memory functions
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
 
     // Line access
     fn nvim_ml_get_buf(buf: BufHandle, lnum: crate::LinenrT) -> *mut c_char;
@@ -115,7 +114,7 @@ fn file_ff_differs_impl(buf: BufHandle, ignore_empty: bool) -> bool {
         if start_fenc.is_null() {
             return !p_fenc.is_null() && *p_fenc != NUL;
         }
-        nvim_strcmp(start_fenc, p_fenc) != 0
+        libc::strcmp(start_fenc, p_fenc) != 0
     }
 }
 
@@ -144,7 +143,7 @@ fn save_file_ff_impl(buf: BufHandle) {
         let start_fenc = nvim_buf_get_b_start_fenc(buf);
         let p_fenc = nvim_buf_get_b_p_fenc(buf);
 
-        if start_fenc.is_null() || nvim_strcmp(start_fenc, p_fenc) != 0 {
+        if start_fenc.is_null() || libc::strcmp(start_fenc, p_fenc) != 0 {
             nvim_xfree(start_fenc.cast());
             nvim_buf_set_b_start_fenc(buf, nvim_xstrdup(p_fenc));
         }

@@ -7,6 +7,16 @@ use nvim_memory::xfree;
 
 use crate::{rs_indent_size_no_ts, rs_indent_size_ts, WinHandle};
 
+#[inline]
+unsafe fn nvim_strcmp(s1: *const c_char, s2: *const c_char) -> c_int {
+    libc::strcmp(s1, s2)
+}
+
+#[inline]
+unsafe fn nvim_strlen(s: *const c_char) -> usize {
+    libc::strlen(s)
+}
+
 // C accessor functions
 extern "C" {
     // Existing accessors (window.c, move.c, message.c, option.c)
@@ -41,9 +51,7 @@ extern "C" {
         out_width: *mut c_int,
     ) -> c_int;
 
-    fn nvim_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
-    fn nvim_strlen(s: *const c_char) -> usize;
 }
 
 /// Static cache for breakindent calculation.

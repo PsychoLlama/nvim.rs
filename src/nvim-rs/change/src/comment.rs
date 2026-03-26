@@ -59,7 +59,12 @@ extern "C" {
         sep: *const c_char,
     ) -> usize;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
-    fn nvim_change_ascii_iswhite(c: c_int) -> bool;
+}
+
+/// ASCII whitespace check (space or tab).
+#[inline]
+fn nvim_change_ascii_iswhite(c: c_int) -> bool {
+    c == 0x20 || c == 0x09
 }
 
 // =============================================================================

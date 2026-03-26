@@ -238,8 +238,7 @@ extern "C" {
     fn nvim_xfree(ptr: *mut c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
-    // String comparison
-    fn nvim_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+    // String comparison (use libc::strcmp directly)
 
     // Marktree accessors
     fn nvim_buf_marktree_n_keys(buf: BufHandle) -> c_int;

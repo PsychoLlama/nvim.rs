@@ -148,15 +148,9 @@ extern "C" {
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // String functions
-    fn nvim_strlen(s: *const c_char) -> usize;
-    fn nvim_strcat(dest: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn nvim_strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_change_ascii_iswhite(c: c_int) -> bool;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
-    fn nvim_strmove(dest: *mut c_char, src: *const c_char);
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
-    fn nvim_xmemcpyz(dest: *mut c_char, src: *const c_char, len: usize);
 
     // Indent functions
     fn nvim_indent_size_ts(line: *const c_char, ts: ColnrT, vts_array: *const ColnrT) -> c_int;
@@ -269,6 +263,37 @@ extern "C" {
 
     // Ins_bytes function
     fn nvim_ins_bytes(p: *const c_char);
+}
+
+#[inline]
+unsafe fn nvim_strlen(s: *const c_char) -> usize {
+    libc::strlen(s)
+}
+
+#[inline]
+unsafe fn nvim_strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int {
+    libc::strncmp(s1, s2, n)
+}
+
+#[inline]
+unsafe fn nvim_strcat(dest: *mut c_char, src: *const c_char) -> *mut c_char {
+    libc::strcat(dest, src)
+}
+
+#[inline]
+unsafe fn nvim_strmove(dest: *mut c_char, src: *const c_char) {
+    libc::memmove(dest.cast(), src.cast(), libc::strlen(src) + 1);
+}
+
+#[inline]
+unsafe fn nvim_xmemcpyz(dest: *mut c_char, src: *const c_char, len: usize) {
+    std::ptr::copy_nonoverlapping(src, dest, len);
+    *dest.add(len) = 0;
+}
+
+#[inline]
+fn nvim_change_ascii_iswhite(c: c_int) -> bool {
+    c == 0x20 || c == 0x09
 }
 
 // =============================================================================

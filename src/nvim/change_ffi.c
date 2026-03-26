@@ -133,13 +133,7 @@ void nvim_ui_flush(void) { ui_flush(); }
 void nvim_os_delay(long ms, bool allow_input) { os_delay((uint64_t)ms, allow_input); }
 void nvim_wait_return(bool redraw) { wait_return(redraw); }
 
-int nvim_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
 char *nvim_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
-void nvim_xmemcpyz(char *dest, const char *src, size_t len) { xmemcpyz(dest, src, len); }
-size_t nvim_strlen(const char *s) { return strlen(s); }
-char *nvim_strcat(char *dest, const char *src) { strcat(dest, src); return dest; }  // NOLINT(runtime/printf)
-int nvim_strncmp(const char *s1, const char *s2, size_t n) { return strncmp(s1, s2, n); }
-void nvim_strmove(char *dest, const char *src) { STRMOVE(dest, src); }
 char *nvim_concat_str(const char *s1, const char *s2) { return concat_str(s1, s2); }
 const char *nvim_gettext(const char *s) { return _(s); }
 
@@ -351,7 +345,6 @@ size_t nvim_change_copy_option_part(char **option, char *buf, int maxlen, const 
 }
 
 char *nvim_skipwhite(const char *s) { return skipwhite(s); }
-bool nvim_change_ascii_iswhite(int c) { return ascii_iswhite(c); }
 char *nvim_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
 
 bool nvim_use_indentexpr_for_lisp(void) { return use_indentexpr_for_lisp(); }
