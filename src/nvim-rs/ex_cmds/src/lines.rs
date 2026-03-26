@@ -715,12 +715,12 @@ const KEXTMARK_UNDO_MOVE: c_int = 1;
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int) -> c_int {
     use crate::{
-        changed_lines, ml_append, ml_delete_flags, ml_get, ml_get_len, nvim_cmdmod_has_lockmarks,
+        changed_lines, extmark_move_region, mark_adjust_nofold, ml_append, ml_delete_flags, ml_get,
+        ml_get_len, nvim_buf_updates_send_changes, nvim_cmdmod_has_lockmarks,
         nvim_curbuf_get_b_ml_ml_line_count, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
-        nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes, nvim_excmds_emsg_e134,
-        nvim_excmds_extmark_move_region, nvim_excmds_fold_move_range_all_wins,
-        nvim_excmds_mark_adjust_nofold, nvim_excmds_smsg_lines_moved, nvim_get_curbuf,
-        rs_ml_find_line_or_offset, u_save, xfree, xstrnsave,
+        nvim_curwin_set_cursor_lnum, nvim_excmds_emsg_e134, nvim_excmds_fold_move_range_all_wins,
+        nvim_excmds_smsg_lines_moved, nvim_get_curbuf, rs_ml_find_line_or_offset, u_save, xfree,
+        xstrnsave,
     };
 
     if dest >= line1 && dest < line2 {
@@ -764,7 +764,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
 
     // Adjust marks: first move marks in old text to end of file (temporarily).
     let mut last_line = nvim_curbuf_get_b_ml_ml_line_count();
-    nvim_excmds_mark_adjust_nofold(line1, line2, last_line - line2, 0, KEXTMARK_NOOP_MOVE);
+    mark_adjust_nofold(line1, line2, last_line - line2, 0, KEXTMARK_NOOP_MOVE);
 
     crate::disable_fold_update += 1;
     changed_lines(
@@ -780,7 +780,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     let mut line_off: c_int = 0;
     let mut byte_off: i64 = 0;
     if dest >= line2 {
-        nvim_excmds_mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, KEXTMARK_NOOP_MOVE);
+        mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, KEXTMARK_NOOP_MOVE);
         nvim_excmds_fold_move_range_all_wins(line1, line2, dest);
         if nvim_cmdmod_has_lockmarks() == 0 {
             nvim_curbuf_set_op_start(dest - num_lines + 1, 0);
@@ -789,14 +789,14 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         line_off = -num_lines;
         byte_off = -extent_byte;
     } else {
-        nvim_excmds_mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, KEXTMARK_NOOP_MOVE);
+        mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, KEXTMARK_NOOP_MOVE);
         nvim_excmds_fold_move_range_all_wins(dest + 1, line1 - 1, line2);
         if nvim_cmdmod_has_lockmarks() == 0 {
             nvim_curbuf_set_op_start(dest + 1, 0);
             nvim_curbuf_set_op_end(dest + num_lines, 0);
         }
     }
-    nvim_excmds_mark_adjust_nofold(
+    mark_adjust_nofold(
         last_line - num_lines + 1,
         last_line,
         -(last_line - dest - extra),
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     crate::disable_fold_update -= 1;
 
     // Send update regarding the new lines that were added.
-    nvim_excmds_buf_updates_send_changes(dest + 1, i64::from(num_lines), 0);
+    nvim_buf_updates_send_changes(curbuf, dest + 1, i64::from(num_lines), 0);
 
     // Now delete the original text.
     if u_save(line1 + extra - 1, line2 + extra + 1) == FAIL {
@@ -830,7 +830,8 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         nvim_excmds_smsg_lines_moved(i64::from(num_lines));
     }
 
-    nvim_excmds_extmark_move_region(
+    extmark_move_region(
+        curbuf,
         line1 - 1,
         0,
         start_byte,
@@ -862,7 +863,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     }
 
     // Send nvim_buf_lines_event regarding lines that were deleted.
-    nvim_excmds_buf_updates_send_changes(line1 + extra, 0, i64::from(num_lines));
+    nvim_buf_updates_send_changes(curbuf, line1 + extra, 0, i64::from(num_lines));
 
     OK
 }

@@ -89,13 +89,13 @@ extern "C" {
     fn buf_ensure_loaded(buf: *mut crate::BufHandle);
     fn ml_get_buf(buf: *mut crate::BufHandle, lnum: c_int) -> *mut c_char;
     fn ml_get_buf_len(buf: *mut crate::BufHandle, lnum: c_int) -> c_int;
-    fn nvim_excmds_ml_replace_buf(
+    fn ml_replace_buf(
         buf: *mut crate::BufHandle,
         lnum: c_int,
         line: *mut c_char,
         copy: bool,
         keep_dirty: bool,
-    );
+    ) -> c_int;
     fn ml_append_buf(
         buf: *mut crate::BufHandle,
         lnum: c_int,
@@ -966,7 +966,7 @@ pub unsafe extern "C" fn rs_show_sub(
                 );
 
                 if linenr_preview == 0 {
-                    nvim_excmds_ml_replace_buf(cmdpreview_buf, 1, str_buf, true, false);
+                    ml_replace_buf(cmdpreview_buf, 1, str_buf, true, false);
                 } else {
                     ml_append_buf(
                         cmdpreview_buf,
@@ -1221,27 +1221,27 @@ extern "C" {
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn nvim_excmds_emsg_with_arg(id: c_int, arg: *const c_char);
     fn nvim_do_sub_format_confirm_prompt(sub_str: *const c_char) -> *mut c_char;
-    fn nvim_excmds_extmark_splice(
+    fn appended_lines(lnum: c_int, count: c_int);
+    fn nvim_do_sub_changed_lines(first: c_int, last: c_int, xtra: c_int);
+    fn mark_adjust(line1: c_int, line2: c_int, amount: c_int, amount_after: c_int, op: c_int);
+    fn extmark_splice(
+        buf: *mut crate::BufHandle,
         start_row: c_int,
         start_col: c_int,
         old_row: c_int,
         old_col: c_int,
-        old_bytes: i64,
+        old_byte: i64,
         new_row: c_int,
         new_col: c_int,
-        new_bytes: i64,
-        etype: c_int,
+        new_byte: i64,
+        undo: c_int,
     );
-    fn nvim_excmds_mark_adjust(
-        line1: c_int,
-        line2: c_int,
-        amount: c_int,
-        amount_after: c_int,
-        etype: c_int,
+    fn nvim_buf_updates_send_changes(
+        buf: *mut crate::BufHandle,
+        lnum: c_int,
+        added: i64,
+        deleted: i64,
     );
-    fn appended_lines(lnum: c_int, count: c_int);
-    fn nvim_do_sub_changed_lines(first: c_int, last: c_int, xtra: c_int);
-    fn nvim_excmds_buf_updates_send_changes(lnum: c_int, num_added: i64, num_removed: i64);
     fn line_breakcheck();
     fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char);
     fn nvim_excmds_msg_empty();
@@ -1998,8 +1998,10 @@ pub unsafe extern "C" fn rs_do_sub(
                         ml_replace(lnum, new_start, 1);
 
                         // Process extmarks
+                        let curbuf_for_splice = nvim_get_curbuf();
                         for md in &line_matches {
-                            nvim_excmds_extmark_splice(
+                            extmark_splice(
+                                curbuf_for_splice,
                                 md.lnum_before - 1,
                                 md.start_col,
                                 md.start_lnum_endpos - md.start_lnum,
@@ -2021,7 +2023,7 @@ pub unsafe extern "C" fn rs_do_sub(
                             for _ in 0..nmatch_tl {
                                 ml_delete(lnum);
                             }
-                            nvim_excmds_mark_adjust(
+                            mark_adjust(
                                 lnum,
                                 lnum + nmatch_tl - 1,
                                 MAXLNUM,
@@ -2123,7 +2125,7 @@ pub unsafe extern "C" fn rs_do_sub(
 
         let num_added = (last_line - first_line) as i64;
         let num_removed = num_added - i as i64;
-        nvim_excmds_buf_updates_send_changes(first_line, num_added, num_removed);
+        nvim_buf_updates_send_changes(nvim_get_curbuf(), first_line, num_added, num_removed);
     }
 
     xfree(sub_firstline as *mut std::ffi::c_void);
@@ -2659,7 +2661,7 @@ unsafe fn goto_sub_main(
                 let new_start_ptr = *new_start;
                 let append_len = (p_iter.offset_from(new_start_ptr) + 1) as c_int;
                 ml_append(*lnum - 1, new_start_ptr, append_len, 0);
-                nvim_excmds_mark_adjust(*lnum + 1, MAXLNUM, 1, 0, KEXTMARK_NOOP);
+                mark_adjust(*lnum + 1, MAXLNUM, 1, 0, KEXTMARK_NOOP);
 
                 if subflags.do_ask {
                     appended_lines(*lnum - 1, 1);

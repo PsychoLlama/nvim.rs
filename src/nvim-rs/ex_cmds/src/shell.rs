@@ -1338,23 +1338,17 @@ pub unsafe extern "C" fn rs_do_filter(
                 const MAXLNUM: c_int = 0x7FFF_FFFF;
                 if read_linecount >= linecount {
                     // move all marks
-                    crate::nvim_excmds_mark_adjust(line1, line2, linecount, 0, KEXTMARK_NOOP);
+                    crate::mark_adjust(line1, line2, linecount, 0, KEXTMARK_NOOP);
                 } else {
                     // move marks from valid range, delete marks in deleted lines
-                    crate::nvim_excmds_mark_adjust(
+                    crate::mark_adjust(
                         line1,
                         line1 + read_linecount - 1,
                         linecount,
                         0,
                         KEXTMARK_NOOP,
                     );
-                    crate::nvim_excmds_mark_adjust(
-                        line1 + read_linecount,
-                        line2,
-                        MAXLNUM,
-                        0,
-                        KEXTMARK_NOOP,
-                    );
+                    crate::mark_adjust(line1 + read_linecount, line2, MAXLNUM, 0, KEXTMARK_NOOP);
                 }
             }
 

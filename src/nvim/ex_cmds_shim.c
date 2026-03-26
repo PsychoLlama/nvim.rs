@@ -245,45 +245,7 @@ void nvim_excmds_emsg_interr(void) { emsg(_(e_interr)); }
 void nvim_exarg_set_nextcmd(exarg_T *eap, const char *p) { eap->nextcmd = (char *)p; }
 int nvim_exarg_is_nextcmd_null(exarg_T *eap) { return eap->nextcmd == NULL ? 1 : 0; }
 
-// Mark/extmark wrappers
-void nvim_excmds_mark_adjust(linenr_T line1, linenr_T line2, int amount, int amount_after,
-                              int etype)
-{
-  mark_adjust(line1, line2, (long)amount, (long)amount_after, (ExtmarkOp)etype);
-}
-
-void nvim_excmds_extmark_splice(int start_row, int start_col,
-                                 int old_row, int old_col, int64_t old_byte,
-                                 int new_row, int new_col, int64_t new_byte,
-                                 int etype)
-{
-  extmark_splice(curbuf, start_row, start_col,
-                 old_row, old_col, (bcount_t)old_byte,
-                 new_row, new_col, (bcount_t)new_byte,
-                 (ExtmarkOp)etype);
-}
-
 // --- do_move accessor functions for Rust FFI ---
-
-void nvim_excmds_mark_adjust_nofold(linenr_T line1, linenr_T line2,
-                                     int amount, int amount_after, int etype)
-{
-  mark_adjust_nofold(line1, line2, (long)amount, (long)amount_after, (ExtmarkOp)etype);
-}
-
-void nvim_excmds_extmark_move_region(int start_row, int start_col, int64_t start_byte,
-                                      int extent_row, int extent_col, int64_t extent_byte,
-                                      int new_row, int new_col, int64_t new_byte, int etype)
-{
-  extmark_move_region(curbuf, start_row, (colnr_T)start_col, (bcount_t)start_byte,
-                      extent_row, (colnr_T)extent_col, (bcount_t)extent_byte,
-                      new_row, (colnr_T)new_col, (bcount_t)new_byte, (ExtmarkOp)etype);
-}
-
-void nvim_excmds_buf_updates_send_changes(linenr_T lnum, int64_t added, int64_t deleted)
-{
-  buf_updates_send_changes(curbuf, lnum, added, deleted);
-}
 
 // Wrap the FOR_ALL_TAB_WINDOWS loop for fold move range.
 void nvim_excmds_fold_move_range_all_wins(linenr_T line1, linenr_T line2, linenr_T dest)
@@ -556,10 +518,6 @@ void nvim_excmds_restore_shortmess(char *saved)
 /// Return first char of p_icm option.
 int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
 
-void nvim_excmds_ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool keep_dirty)
-{
-  ml_replace_buf(buf, lnum, line, copy, keep_dirty);
-}
 
 void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id,
                                           linenr_T start_lnum, colnr_T start_col,
@@ -896,19 +854,6 @@ void nvim_excmds_curbuf_op_adjust_lnum(int delta)
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 
 // --- getfile, set_swapcommand, delbuf_msg FFI accessors ---
-
-
-/// Expand fname and sfname for curbuf. Both pointers are modified in-place.
-/// ffname_ptr and sfname_ptr point to the buffers, fname_expand fills them.
-/// Returns the expanded ffname (allocated, caller must free) via *out_ffname.
-/// *out_sfname is set to point into the allocated ffname or the original sfname.
-void nvim_excmds_fname_expand(char *ffname_in, char *sfname_in,
-                              char **out_ffname, char **out_sfname)
-{
-  *out_ffname = ffname_in;
-  *out_sfname = sfname_in;
-  fname_expand(curbuf, out_ffname, out_sfname);
-}
 
 /// Get curbuf->b_fnum.
 int nvim_excmds_curbuf_get_b_fnum(void) { return curbuf->b_fnum; }
@@ -1353,20 +1298,6 @@ void nvim_ecmd_curbuf_clear_op_marks(void)
 }
 
 // --- curwin field accessors ---
-
-/// Get curwin->w_cursor.lnum and col packed as two ints via out pointers
-void nvim_ecmd_curwin_get_cursor(int *lnum_out, int *col_out)
-{
-  *lnum_out = (int)curwin->w_cursor.lnum;
-  *col_out = (int)curwin->w_cursor.col;
-}
-
-/// Set curwin->w_cursor.lnum and col
-void nvim_ecmd_curwin_set_cursor(int lnum, int col)
-{
-  curwin->w_cursor.lnum = (linenr_T)lnum;
-  curwin->w_cursor.col = (colnr_T)col;
-}
 
 /// Get curwin->w_cursor.col
 int nvim_ecmd_curwin_get_cursor_col(void) { return (int)curwin->w_cursor.col; }

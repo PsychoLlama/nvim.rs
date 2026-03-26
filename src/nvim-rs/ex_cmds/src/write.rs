@@ -414,12 +414,8 @@ extern "C" {
     fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn text_locked() -> c_int;
     fn curbuf_locked() -> bool;
-    fn nvim_excmds_fname_expand(
-        ffname_in: *mut c_char,
-        sfname_in: *mut c_char,
-        out_ffname: *mut *mut c_char,
-        out_sfname: *mut *mut c_char,
-    );
+    fn rs_fname_expand(buf: *mut BufHandle, ffname: *mut *mut c_char, sfname: *mut *mut c_char);
+    fn nvim_get_curbuf() -> *mut BufHandle;
     fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
     fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
     fn rs_buf_hide(buf: *mut BufHandle) -> bool;
@@ -430,8 +426,8 @@ extern "C" {
     fn setpcmark();
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_get_curwin() -> *mut WinHandle;
-    fn nvim_excmds_get_vim_var_str_swapcommand() -> *const c_char;
-    fn nvim_excmds_set_vim_var_string_swapcommand(p: *const c_char);
+    fn get_vim_var_str(idx: c_int) -> *const c_char;
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
     fn beginline(flags: c_int);
 }
 
@@ -465,7 +461,7 @@ pub unsafe extern "C" fn rs_getfile(
         // Expand filename
         let mut out_ffname: *mut c_char = ffname_arg;
         let mut out_sfname: *mut c_char = sfname_arg;
-        nvim_excmds_fname_expand(ffname_arg, sfname_arg, &mut out_ffname, &mut out_sfname);
+        rs_fname_expand(nvim_get_curbuf(), &mut out_ffname, &mut out_sfname);
         let other = otherfile(out_ffname);
         // out_ffname is the newly allocated expanded name
         let free_me = if out_ffname != ffname_arg {
@@ -569,7 +565,7 @@ pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_i
         return false;
     }
     // Don't set if v:swapcommand is already set
-    let existing = nvim_excmds_get_vim_var_str_swapcommand();
+    let existing = get_vim_var_str(49);
     if !existing.is_null() && *existing != 0 {
         return false;
     }
@@ -581,7 +577,7 @@ pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_i
     } else {
         CString::new(format!("{}G", newlnum)).unwrap_or_default()
     };
-    nvim_excmds_set_vim_var_string_swapcommand(s.as_ptr());
+    set_vim_var_string(49, s.as_ptr(), -1);
     true
 }
 
@@ -839,7 +835,6 @@ extern "C" {
     fn nvim_excmds_dialog_write_partial() -> c_int;
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
     fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
-    fn nvim_get_curbuf() -> *mut BufHandle;
 
     fn nvim_excmds_do_saveas_swap(alt_buf: *mut BufHandle, out_sfname: *mut *const c_char)
         -> c_int;

@@ -475,14 +475,15 @@ enum InternalSortKey {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
     use crate::{
-        beginline, changed_lines, check_nextcmd, fast_breakcheck, last_search_pat, ml_append,
-        ml_delete, ml_get, ml_get_len, msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg,
-        nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
+        beginline, changed_lines, check_nextcmd, extmark_splice, fast_breakcheck, last_search_pat,
+        mark_adjust, ml_append, ml_delete, ml_get, ml_get_len, msgmore,
+        nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
+        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
         nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg, nvim_excmds_emsg_noprevre,
-        nvim_excmds_extmark_splice, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
-        nvim_excmds_regfree, nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic,
-        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_excmds_str2nr,
-        nvim_get_curbuf, skip_regexp_err, skiptobin, skiptodigit, skiptohex, u_save, vim_regexec,
+        nvim_excmds_regcomp, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
+        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
+        nvim_excmds_str2nr, nvim_get_curbuf, skip_regexp_err, skiptobin, skiptodigit, skiptohex,
+        u_save, vim_regexec,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -842,14 +843,16 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
     // Adjust marks for deleted (or added) lines.
     let deleted = count as c_int - (lnum - line2);
     if deleted > 0 {
-        nvim_excmds_mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, KEXTMARK_NOOP);
+        mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, KEXTMARK_NOOP);
         msgmore(-deleted);
     } else if deleted < 0 {
-        nvim_excmds_mark_adjust(line2, MAXLNUM, -deleted, 0, KEXTMARK_NOOP);
+        mark_adjust(line2, MAXLNUM, -deleted, 0, KEXTMARK_NOOP);
     }
 
+    let curbuf = nvim_get_curbuf();
     if change_occurred || deleted != 0 {
-        nvim_excmds_extmark_splice(
+        extmark_splice(
+            curbuf,
             line1 - 1,
             0,
             count as c_int,
@@ -860,7 +863,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
             new_count,
             KEXTMARK_UNDO,
         );
-        changed_lines(nvim_get_curbuf(), line1, 0, line2 + 1, -deleted, 1);
+        changed_lines(curbuf, line1, 0, line2 + 1, -deleted, 1);
     }
 
     nvim_curwin_set_cursor_lnum(line1);
@@ -884,14 +887,13 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
     use crate::{
-        beginline, changed_lines, check_nextcmd, fast_breakcheck, last_search_pat, ml_delete,
-        ml_get, ml_get_len, msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg,
+        beginline, changed_lines, check_nextcmd, fast_breakcheck, last_search_pat, mark_adjust,
+        ml_delete, ml_get, ml_get_len, msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg,
         nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
         nvim_exarg_is_nextcmd_null, nvim_exarg_set_nextcmd, nvim_excmds_emsg_interr,
-        nvim_excmds_emsg_noprevre, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
-        nvim_excmds_regfree, nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic,
-        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_get_curbuf, skip_regexp_err,
-        u_save, vim_regexec,
+        nvim_excmds_emsg_noprevre, nvim_excmds_regcomp, nvim_excmds_regfree,
+        nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0,
+        nvim_excmds_semsg_invarg2, nvim_get_curbuf, skip_regexp_err, u_save, vim_regexec,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -1123,7 +1125,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
     } else {
         KEXTMARK_NOOP
     };
-    nvim_excmds_mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, etype);
+    mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, etype);
     msgmore(-deleted);
 
     if change_occurred {

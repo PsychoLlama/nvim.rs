@@ -87,8 +87,9 @@ extern "C" {
     fn nvim_ecmd_curbuf_clear_op_marks();
 
     // curwin field accessors
-    fn nvim_ecmd_curwin_get_cursor(lnum_out: *mut c_int, col_out: *mut c_int);
-    fn nvim_ecmd_curwin_set_cursor(lnum: c_int, col: c_int);
+    fn nvim_curwin_get_cursor_lnum() -> c_int;
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_ecmd_curwin_get_cursor_col() -> c_int;
     fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn nvim_ecmd_curwin_set_coladd_curswant();
@@ -248,7 +249,7 @@ extern "C" {
         cookie: *mut std::ffi::c_void,
         flags: c_int,
     ) -> c_int;
-    fn nvim_ecmd_clear_swapcommand();
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
 
     fn nvim_ecmd_emsg_closing_buffer();
     fn xstrdup(s: *const c_char) -> *mut c_char;
@@ -760,7 +761,8 @@ pub unsafe extern "C" fn rs_do_ecmd(
             // Save cursor and topline for autocommand comparison
             let mut orig_lnum: c_int = 0;
             let mut orig_col: c_int = 0;
-            nvim_ecmd_curwin_get_cursor(&mut orig_lnum, &mut orig_col);
+            orig_lnum = nvim_curwin_get_cursor_lnum();
+            orig_col = nvim_ecmd_curwin_get_cursor_col();
             topline = nvim_ecmd_curwin_get_topline();
 
             if oldbuf == 0 {
@@ -830,15 +832,18 @@ pub unsafe extern "C" fn rs_do_ecmd(
         if command.is_null() {
             if newcol >= 0 {
                 // Position set by autocommands
-                nvim_ecmd_curwin_set_cursor(newlnum, newcol);
+                nvim_curwin_set_cursor_lnum(newlnum);
+                nvim_curwin_set_cursor_col(newcol);
                 nvim_check_cursor();
             } else if newlnum > 0 {
                 // Line number from caller or old position
-                nvim_ecmd_curwin_set_cursor(newlnum, nvim_ecmd_curwin_get_cursor_col());
+                nvim_curwin_set_cursor_lnum(newlnum);
+                nvim_curwin_set_cursor_col(nvim_ecmd_curwin_get_cursor_col());
                 crate::nvim_check_cursor_lnum_call();
                 if solcol >= 0 && nvim_get_p_sol() == 0 {
                     // 'sol' is off: use last known column
-                    nvim_ecmd_curwin_set_cursor(nvim_excmds_curwin_cursor_lnum(), solcol);
+                    nvim_curwin_set_cursor_lnum(nvim_excmds_curwin_cursor_lnum());
+                    nvim_curwin_set_cursor_col(solcol);
                     check_cursor_col(nvim_get_curwin());
                     nvim_ecmd_curwin_set_coladd_curswant();
                 } else {
@@ -847,7 +852,8 @@ pub unsafe extern "C" fn rs_do_ecmd(
             } else {
                 // No line number -- go to last line in Ex mode
                 if exmode_active {
-                    nvim_ecmd_curwin_set_cursor(nvim_excmds_curbuf_ml_line_count(), 0);
+                    nvim_curwin_set_cursor_lnum(nvim_excmds_curbuf_ml_line_count());
+                    nvim_curwin_set_cursor_col(0);
                 }
                 nvim_beginline(BL_WHITE | BL_FIX);
             }
@@ -926,7 +932,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
     }
 
     if did_set_swapcommand {
-        nvim_ecmd_clear_swapcommand();
+        set_vim_var_string(49, std::ptr::null(), -1);
     }
 
     if !free_fname.is_null() {

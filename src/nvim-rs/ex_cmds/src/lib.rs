@@ -870,17 +870,12 @@ extern "C" {
     /// Check if eap->nextcmd is NULL.
     pub fn nvim_exarg_is_nextcmd_null(eap: *mut ExArgHandle) -> c_int;
 
-    // Mark/extmark
-    /// mark_adjust wrapper.
-    pub fn nvim_excmds_mark_adjust(
-        line1: c_int,
-        line2: c_int,
-        amount: c_int,
-        amount_after: c_int,
-        etype: c_int,
-    );
-    /// extmark_splice wrapper (operates on curbuf).
-    pub fn nvim_excmds_extmark_splice(
+    // Mark/extmark (direct C functions)
+    /// mark_adjust: adjust marks after line changes.
+    pub fn mark_adjust(line1: c_int, line2: c_int, amount: c_int, amount_after: c_int, op: c_int);
+    /// extmark_splice: splice extmarks on a buffer.
+    pub fn extmark_splice(
+        buf: *mut BufHandle,
         start_row: c_int,
         start_col: c_int,
         old_row: c_int,
@@ -889,17 +884,17 @@ extern "C" {
         new_row: c_int,
         new_col: c_int,
         new_byte: i64,
-        etype: c_int,
+        undo: c_int,
     );
 
     // --- do_move FFI functions ---
-    /// mark_adjust_nofold wrapper.
-    pub fn nvim_excmds_mark_adjust_nofold(
+    /// mark_adjust_nofold: adjust marks without touching folds.
+    pub fn mark_adjust_nofold(
         line1: c_int,
         line2: c_int,
         amount: c_int,
         amount_after: c_int,
-        etype: c_int,
+        op: c_int,
     );
     /// ml_find_line_or_offset (on curbuf, no offset, with ff).
     pub fn rs_ml_find_line_or_offset(
@@ -910,8 +905,9 @@ extern "C" {
     ) -> c_int;
     /// ml_delete_flags wrapper.
     pub fn nvim_excmds_ml_delete_flags(lnum: c_int, flags: c_int) -> c_int;
-    /// extmark_move_region wrapper (on curbuf).
-    pub fn nvim_excmds_extmark_move_region(
+    /// extmark_move_region: move extmark region on a buffer.
+    pub fn extmark_move_region(
+        buf: *mut BufHandle,
         start_row: c_int,
         start_col: c_int,
         start_byte: i64,
@@ -921,10 +917,15 @@ extern "C" {
         new_row: c_int,
         new_col: c_int,
         new_byte: i64,
-        etype: c_int,
+        undo: c_int,
     );
-    /// buf_updates_send_changes wrapper (on curbuf).
-    pub fn nvim_excmds_buf_updates_send_changes(lnum: c_int, added: i64, deleted: i64);
+    /// buf_updates_send_changes: notify listeners of buffer changes.
+    pub fn nvim_buf_updates_send_changes(
+        buf: *mut BufHandle,
+        lnum: c_int,
+        added: i64,
+        deleted: i64,
+    );
     /// FOR_ALL_TAB_WINDOWS fold move range wrapper.
     pub fn nvim_excmds_fold_move_range_all_wins(line1: c_int, line2: c_int, dest: c_int);
     /// Direct C global: disable_fold_update (fold update disable counter)
