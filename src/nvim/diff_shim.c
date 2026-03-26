@@ -186,8 +186,6 @@ win_T *nvim_win_next(win_T *wp) { if (wp == NULL) { return NULL; } return wp->w_
 void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot) { if (wp != NULL) { rs_foldUpdate(wp, top, bot); } }
 void nvim_diff_set_diff_option(win_T *wp, bool value) { if (wp == NULL) { return; } win_T *old_curwin = curwin; curwin = wp; curbuf = curwin->w_buffer; curbuf->b_ro_locked++; set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(value), OPT_LOCAL); curbuf->b_ro_locked--; curwin = old_curwin; curbuf = curwin->w_buffer; }
 const char *nvim_diff_ml_get_buf(buf_T *buf, linenr_T lnum) { if (buf == NULL) { return ""; } return ml_get_buf(buf, lnum); }
-char *nvim_diff_xstrdup(const char *s) { if (s == NULL) { return NULL; } return xstrdup(s); }
-void nvim_diff_xfree(void *p) { xfree(p); }
 int nvim_upd_valid(void) { return UPD_VALID; }
 int nvim_upd_some_valid(void) { return UPD_SOME_VALID; }
 bool nvim_diff_get_busy(void) { return diff_busy; }
@@ -367,7 +365,6 @@ linenr_T nvim_diff_diffbuf_ml_line_count(int idx) { if (idx < 0 || idx >= DB_COU
 int nvim_diff_get_CMD_diffget(void) { return (int)CMD_diffget; }
 int nvim_diff_get_CMD_diffput(void) { return (int)CMD_diffput; }
 linenr_T nvim_diff_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
-bool nvim_diff_curtab_first_diff_is_null(void) { return curtab->tp_first_diff == NULL; }
 bool nvim_diff_win_get_w_p_fdm_starts_d(win_T *wp) { return wp->w_p_fdm[0] == 'd'; }
 bool nvim_diff_curbuf_is_curtab_diffbuf(int idx_to) { if (idx_to < 0 || idx_to >= DB_COUNT) { return false; } return rs_diff_buf_idx_tp(curbuf, curtab) == idx_to; }
 const char *nvim_diff_get_buf_dia(buf_T *buf) { return buf->b_p_dia; }
@@ -397,7 +394,6 @@ char *nvim_diff_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len);
 int nvim_diff_get_MAXPATHL(void) { return MAXPATHL; }
 char *nvim_diff_xmalloc(size_t size) { return xmalloc(size); }
 void nvim_diff_vim_snprintf_patch(char *buf, size_t buflen, const char *tmp_new, const char *tmp_orig, const char *esc_name) { vim_snprintf(buf, buflen, "patch -o %s %s < %s", tmp_new, tmp_orig, esc_name); }
-size_t nvim_diff_strlen(const char *s) { return s ? strlen(s) : 0; }
 const char *nvim_diff_get_curbuf_fname(void) { return curbuf->b_fname; }
 void nvim_diff_emsg_e816(void) { emsg(_("E816: Cannot read patch output")); }
 void nvim_diff_emsg_prev_dir(void) { emsg(_(e_prev_dir)); }

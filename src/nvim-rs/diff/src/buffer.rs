@@ -186,8 +186,8 @@ extern "C" {
 
     // String/memory for diff_equal_entry
     fn nvim_diff_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
-    fn nvim_diff_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_diff_xfree(p: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(p: *mut c_void);
 
     // UTF-8 helpers for diff_equal_char
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -1127,9 +1127,9 @@ pub unsafe extern "C" fn rs_diff_equal_entry_full(
     let lnum2 = nvim_diffblock_get_lnum(dp, idx2);
 
     for i in 0..count1 {
-        let line = nvim_diff_xstrdup(nvim_diff_ml_get_buf(buf1, lnum1 + i));
+        let line = xstrdup(nvim_diff_ml_get_buf(buf1, lnum1 + i));
         let cmp = crate::rs_diff_cmp(line, nvim_diff_ml_get_buf(buf2, lnum2 + i));
-        nvim_diff_xfree(line.cast::<c_void>());
+        xfree(line.cast::<c_void>());
         if cmp != 0 {
             return false;
         }
@@ -1597,7 +1597,7 @@ pub unsafe extern "C" fn rs_diff_check_unchanged(tp: TabpageHandle, dp: DiffBloc
 
             let org_buf = nvim_tabpage_get_diffbuf(tp, i_org);
             let org_lnum = nvim_diffblock_get_lnum(dp, i_org);
-            let line_org = nvim_diff_xstrdup(nvim_diff_ml_get_buf(org_buf, org_lnum + off_org));
+            let line_org = xstrdup(nvim_diff_ml_get_buf(org_buf, org_lnum + off_org));
 
             let mut i_new = i_org + 1;
             let mut found_mismatch = false;
@@ -1629,7 +1629,7 @@ pub unsafe extern "C" fn rs_diff_check_unchanged(tp: TabpageHandle, dp: DiffBloc
                 i_new += 1;
             }
 
-            nvim_diff_xfree(line_org.cast::<c_void>());
+            xfree(line_org.cast::<c_void>());
 
             // Stop when a line isn't equal in all diff buffers
             if found_mismatch || i_new != DB_COUNT {
@@ -3154,7 +3154,7 @@ pub unsafe extern "C" fn rs_diff_find_change_simple(
         std::ptr::null_mut()
     } else {
         // Make a copy, the next ml_get will invalidate it
-        nvim_diff_xstrdup(nvim_diff_ml_get_buf(buf, lnum))
+        xstrdup(nvim_diff_ml_get_buf(buf, lnum))
     };
 
     let off = lnum - nvim_diffblock_get_lnum(dp, idx);
@@ -3261,7 +3261,7 @@ pub unsafe extern "C" fn rs_diff_find_change_simple(
     }
 
     if !line_org.is_null() {
-        nvim_diff_xfree(line_org.cast());
+        xfree(line_org.cast());
     }
 
     added

@@ -191,7 +191,7 @@ extern "C" {
     fn nvim_diff_call_shell_diff(cmd: *const c_char);
     fn nvim_diff_get_a_works() -> c_int;
     fn nvim_diff_set_a_works(val: c_int);
-    fn nvim_diff_xfree(p: *mut std::ffi::c_void);
+    fn xfree(p: *mut std::ffi::c_void);
 
     /// append_redir -- append output redirection to the buffer.
     #[link_name = "append_redir"]
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn rs_diff_run_external_shell(dio: DiffioHandle) -> c_int 
     nvim_diff_call_shell_diff(cmd);
 
     // Free the C-allocated buffer
-    nvim_diff_xfree(cmd.cast());
+    xfree(cmd.cast());
 
     OK
 }

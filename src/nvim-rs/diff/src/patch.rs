@@ -48,7 +48,8 @@ extern "C" {
     fn nvim_diff_os_remove(fname: *const c_char);
 
     // Memory
-    fn nvim_diff_xfree(p: *mut std::ffi::c_void);
+    fn xfree(p: *mut std::ffi::c_void);
+    fn strlen(s: *const c_char) -> usize;
     fn nvim_diff_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_diff_get_MAXPATHL() -> c_int;
     fn nvim_diff_xmalloc(size: usize) -> *mut c_char;
@@ -59,7 +60,6 @@ extern "C" {
         tmp_orig: *const c_char,
         esc_name: *const c_char,
     );
-    fn nvim_diff_strlen(s: *const c_char) -> usize;
 
     // Curbuf info
     fn nvim_diff_get_curbuf_fname() -> *const c_char;
@@ -120,14 +120,14 @@ unsafe fn ex_diffpatch_body(
     // Shell-escape the patchfile name.
     let esc_name = nvim_diff_vim_strsave_shellescape(diff_path);
     if esc_name.is_null() {
-        nvim_diff_xfree(fullname.cast());
+        xfree(fullname.cast());
         return false;
     }
 
     // Allocate command buffer.
-    let buflen = nvim_diff_strlen(tmp_orig.cast_const())
-        + nvim_diff_strlen(esc_name.cast_const())
-        + nvim_diff_strlen(tmp_new.cast_const())
+    let buflen = strlen(tmp_orig.cast_const())
+        + strlen(esc_name.cast_const())
+        + strlen(tmp_new.cast_const())
         + 16;
     let cmdbuf = nvim_diff_xmalloc(buflen);
 
@@ -174,13 +174,13 @@ unsafe fn ex_diffpatch_body(
         }
         nvim_diff_shorten_fnames();
     }
-    nvim_diff_xfree(dirbuf.cast());
-    nvim_diff_xfree(cmdbuf.cast());
-    nvim_diff_xfree(esc_name.cast());
-    nvim_diff_xfree(fullname.cast());
+    xfree(dirbuf.cast());
+    xfree(cmdbuf.cast());
+    xfree(esc_name.cast());
+    xfree(fullname.cast());
 
     // Delete .orig and .rej files created by patch.
-    let tmp_new_len = nvim_diff_strlen(tmp_new.cast_const());
+    let tmp_new_len = strlen(tmp_new.cast_const());
     let suffixed_len = tmp_new_len + 8;
     let suffixed = nvim_diff_xmalloc(suffixed_len);
     if !suffixed.is_null() {
@@ -202,7 +202,7 @@ unsafe fn ex_diffpatch_body(
             rej_suffix.len(),
         );
         nvim_diff_os_remove(suffixed.cast_const());
-        nvim_diff_xfree(suffixed.cast());
+        xfree(suffixed.cast());
     }
 
     // Only continue if the output file was created and is non-empty.
@@ -217,7 +217,7 @@ unsafe fn ex_diffpatch_body(
     // Build the new buffer name (curbuf->b_fname + ".new").
     let curbuf_fname = nvim_diff_get_curbuf_fname();
     let newname: *mut c_char = if !curbuf_fname.is_null() && *curbuf_fname != 0 {
-        let fname_len = nvim_diff_strlen(curbuf_fname);
+        let fname_len = strlen(curbuf_fname);
         let p = nvim_diff_xstrnsave(curbuf_fname, fname_len + 4);
         if !p.is_null() {
             let new_suffix: &[u8] = b".new\0";
@@ -268,7 +268,7 @@ unsafe fn ex_diffpatch_body(
         }
     }
 
-    nvim_diff_xfree(newname.cast());
+    xfree(newname.cast());
     true
 }
 
@@ -289,12 +289,12 @@ unsafe fn ex_diffpatch_impl(eap: *mut std::ffi::c_void, old_curwin: WinHandle) {
     if !tmp_orig.is_null() {
         nvim_diff_os_remove(tmp_orig.cast_const());
     }
-    nvim_diff_xfree(tmp_orig.cast());
+    xfree(tmp_orig.cast());
 
     if !tmp_new.is_null() {
         nvim_diff_os_remove(tmp_new.cast_const());
     }
-    nvim_diff_xfree(tmp_new.cast());
+    xfree(tmp_new.cast());
 }
 
 // =============================================================================

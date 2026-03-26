@@ -87,12 +87,11 @@ extern "C" {
     fn nvim_diff_maxlnum() -> LinenrT;
     fn nvim_diffblock_set_count(dp: DiffBlockHandle, idx: c_int, count: LinenrT);
     fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
-    fn nvim_diff_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_diff_xfree(p: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(p: *mut c_void);
     fn nvim_diff_get_CMD_diffget() -> c_int;
     fn nvim_diff_get_CMD_diffput() -> c_int;
     fn nvim_diff_curbuf_ml_line_count() -> LinenrT;
-    fn nvim_diff_curtab_first_diff_is_null() -> bool;
     fn nvim_diff_win_get_w_p_fdm_starts_d(wp: WinHandle) -> bool;
     fn nvim_diff_curbuf_is_curtab_diffbuf(idx_to: c_int) -> bool;
     fn nvim_diff_fire_diffupdated();
@@ -828,7 +827,7 @@ unsafe fn diffgetput_cleanup() {
     nvim_diff_changed_line_abv_curs();
 
     // If all diffs are gone, update folds in all diff windows.
-    if nvim_diff_curtab_first_diff_is_null() {
+    if nvim_get_diff_first_block().is_null() {
         let tp = nvim_get_curtab();
         let mut wp = nvim_tabpage_first_win(tp);
         while !wp.is_null() {
@@ -991,9 +990,9 @@ pub unsafe extern "C" fn rs_diffgetput(
                 if p_raw.is_null() {
                     break;
                 }
-                let p = nvim_diff_xstrdup(p_raw);
+                let p = xstrdup(p_raw);
                 nvim_diff_ml_append(lnum + i - 1, p, 0, false);
-                nvim_diff_xfree(p.cast());
+                xfree(p.cast());
                 added += 1;
                 if buf_empty && nvim_diff_curbuf_ml_line_count() == 2 {
                     // Added the first line into an empty buffer; delete dummy line.
