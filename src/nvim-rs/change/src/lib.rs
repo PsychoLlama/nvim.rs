@@ -184,7 +184,6 @@ extern "C" {
 
     // Message functions
     fn nvim_msg_start();
-    fn nvim_msg_source(attr: c_int);
     fn nvim_msg_ext_set_kind(kind: *const c_char);
     fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
     fn nvim_msg_clr_eos();
@@ -200,10 +199,7 @@ extern "C" {
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Other functions
-    fn nvim_ml_setflags(buf: BufHandle);
-    fn nvim_ml_open_file(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
-    fn nvim_apply_autocmds_filechangedro(buf: BufHandle);
     fn nvim_showmode();
     fn nvim_ui_flush();
     fn nvim_os_delay(ms: c_long, allow_input: bool);

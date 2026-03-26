@@ -44,7 +44,7 @@ extern "C" {
 
     // Message functions
     fn nvim_msg_start();
-    fn nvim_msg_source(attr: c_int);
+    fn msg_source(attr: c_int);
     fn nvim_msg_ext_set_kind(kind: *const c_char);
     fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
     fn nvim_msg_clr_eos();
@@ -60,10 +60,10 @@ extern "C" {
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Other functions
-    fn nvim_ml_setflags(buf: BufHandle);
-    fn nvim_ml_open_file(buf: BufHandle);
+    fn ml_setflags(buf: BufHandle);
+    fn ml_open_file(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
-    fn nvim_apply_autocmds_filechangedro(buf: BufHandle);
+    fn apply_autocmds_filechangedro(buf: BufHandle);
     fn nvim_showmode();
     fn nvim_ui_flush();
     fn nvim_os_delay(ms: c_long, allow_input: bool);
@@ -99,7 +99,7 @@ fn changed_internal_impl(buf: BufHandle) {
     unsafe {
         nvim_buf_set_b_changed(buf, true);
         nvim_buf_set_b_changed_invalid(buf, true);
-        nvim_ml_setflags(buf);
+        ml_setflags(buf);
         nvim_redraw_buf_status_later(buf);
         redraw_tabline = true;
         need_maketitle = true;
@@ -149,7 +149,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         nvim_buf_set_b_ro_locked(buf, ro_locked + 1);
 
         // Trigger FileChangedRO autocmd
-        nvim_apply_autocmds_filechangedro(buf);
+        apply_autocmds_filechangedro(buf);
 
         // Decrement ro_locked
         nvim_buf_set_b_ro_locked(buf, ro_locked);
@@ -167,7 +167,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
             msg_col = col;
         }
 
-        nvim_msg_source(HLF_W);
+        msg_source(HLF_W);
         nvim_msg_ext_set_kind(c"wmsg".as_ptr());
 
         // Get the translated warning message
@@ -227,7 +227,7 @@ fn changed_impl(buf: BufHandle) {
                 let save_need_wait_return = need_wait_return;
 
                 need_wait_return = false;
-                nvim_ml_open_file(buf);
+                ml_open_file(buf);
 
                 // The ml_open_file() can cause an ATTENTION message.
                 // Wait two seconds, to make sure the user reads this unexpected

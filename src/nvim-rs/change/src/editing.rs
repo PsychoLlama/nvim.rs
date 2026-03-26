@@ -27,40 +27,42 @@ extern "C" {
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
     #[link_name = "rs_ml_line_alloced"]
     fn nvim_ml_line_alloced() -> bool;
-    fn nvim_ml_add_deleted_len(ptr: *mut c_char, len: ColnrT);
+    fn ml_add_deleted_len(ptr: *mut c_char, len: ColnrT);
 
     // Memory allocation
     fn nvim_xmalloc(size: usize) -> *mut c_char;
 
     // State checks
+    #[link_name = "virtual_active"]
     fn nvim_change_virtual_active(win: WinHandle) -> bool;
     fn nvim_coladvance_force(vcol: ColnrT) -> c_int;
     fn nvim_getviscol() -> ColnrT;
     fn nvim_get_state() -> c_int;
     static mut restart_edit: c_int;
+    #[link_name = "get_ve_flags"]
     fn nvim_change_get_ve_flags(win: WinHandle) -> c_int;
 
     // Multi-byte functions
     fn nvim_mb_adjust_cursor();
     fn nvim_get_cursor_pos_ptr() -> *mut c_char;
     fn nvim_utfc_ptr2len(ptr: *const c_char) -> c_int;
-    fn nvim_utfc_ptr2len_len(ptr: *const c_char, maxlen: c_int) -> c_int;
-    fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
-    fn nvim_utf_ptr2len(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len_len(ptr: *const c_char, maxlen: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_ptr2len(ptr: *const c_char) -> c_int;
     #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
     fn nvim_utf_composinglike(p0: *const c_char, p1: *const c_char, state: *mut u64) -> bool;
 
     // Replace mode functions
-    fn nvim_replace_push_nul();
-    fn nvim_replace_push(ptr: *const c_char, len: usize);
+    fn replace_push_nul();
+    fn replace_push(ptr: *const c_char, len: usize);
 
     // Showmatch
     fn nvim_p_sm() -> bool;
     fn nvim_msg_silent() -> c_int;
     #[link_name = "rs_ins_compl_active"]
     fn nvim_ins_compl_active() -> bool;
-    fn nvim_showmatch(c: c_int);
+    fn showmatch(c: c_int);
     fn nvim_utf_ptr2char(ptr: *const c_char) -> c_int;
 
     // Right-to-left
@@ -146,7 +148,7 @@ fn ins_bytes_len_impl(p: *const c_char, len: usize) {
         while i < len {
             // avoid reading past p[len]
             let remaining = (len - i) as c_int;
-            let n = nvim_utfc_ptr2len_len(p.add(i), remaining) as usize;
+            let n = utfc_ptr2len_len(p.add(i), remaining) as usize;
             ins_char_bytes_impl(p.add(i) as *mut c_char, n);
             i += n;
         }
@@ -167,7 +169,7 @@ fn ins_char_impl(c: c_int) {
     // SAFETY: All operations are safe FFI calls
     unsafe {
         let mut buf = [0i8; MB_MAXCHAR + 1];
-        let n = nvim_utf_char2bytes(c, buf.as_mut_ptr()) as usize;
+        let n = utf_char2bytes(c, buf.as_mut_ptr()) as usize;
 
         // When "c" is 0x100, 0x200, etc. we don't want to insert a NUL byte.
         if buf[0] == 0 {
@@ -239,8 +241,8 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
             }
 
             // Push replaced bytes onto the replace stack
-            nvim_replace_push_nul();
-            nvim_replace_push(oldp.add(col), oldlen);
+            replace_push_nul();
+            replace_push(oldp.add(col), oldlen);
         }
 
         let newp = nvim_xmalloc(linelen + newlen - oldlen);
@@ -280,7 +282,7 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
             && nvim_msg_silent() == 0
             && !nvim_ins_compl_active()
         {
-            nvim_showmatch(nvim_utf_ptr2char(buf));
+            showmatch(nvim_utf_ptr2char(buf));
         }
 
         if !nvim_p_ri() || (state & REPLACE_FLAG) != 0 {
@@ -425,12 +427,12 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
         if nvim_p_deco() && use_delcombine && nvim_utfc_ptr2len(oldp.add(col as usize)) >= count {
             let p0 = oldp.add(col as usize);
             let mut state: u64 = GRAPHEME_STATE_INIT;
-            if nvim_utf_composinglike(p0, p0.add(nvim_utf_ptr2len(p0) as usize), &mut state) {
+            if nvim_utf_composinglike(p0, p0.add(utf_ptr2len(p0) as usize), &mut state) {
                 // Find the last composing char, there can be several.
                 let mut n = col;
                 loop {
                     col = n;
-                    count = nvim_utf_ptr2len(oldp.add(n as usize));
+                    count = utf_ptr2len(oldp.add(n as usize));
                     n += count;
                     if !nvim_utf_composinglike(
                         oldp.add(col as usize),
@@ -468,7 +470,7 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
         let alloc_newp = !nvim_ml_line_alloced();
         let newp;
         if !alloc_newp {
-            nvim_ml_add_deleted_len(nvim_curbuf_get_ml_line_ptr(), oldlen);
+            ml_add_deleted_len(nvim_curbuf_get_ml_line_ptr(), oldlen);
             newp = oldp; // use same allocated memory
         } else {
             newp = nvim_xmalloc((newlen + 1) as usize);

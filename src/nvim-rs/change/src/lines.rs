@@ -36,10 +36,10 @@ extern "C" {
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // Undo
-    fn nvim_u_savedel(lnum: LinenrT, count: LinenrT) -> c_int;
+    fn u_savedel(lnum: LinenrT, count: LinenrT) -> c_int;
 
     // Cursor check
-    fn nvim_check_cursor_lnum(win: WinHandle);
+    fn check_cursor_lnum(win: WinHandle);
 
     // Changed notification
     #[link_name = "inserted_bytes"]
@@ -114,7 +114,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
         let first = nvim_win_get_cursor_lnum(curwin);
 
         // save the deleted lines for undo
-        if undo && nvim_u_savedel(first, nlines) == FAIL {
+        if undo && u_savedel(first, nlines) == FAIL {
             return;
         }
 
@@ -137,7 +137,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
         // Correct the cursor position before calling deleted_lines_mark(), it may
         // trigger a callback to display the cursor.
         nvim_win_set_cursor_col(curwin, 0);
-        nvim_check_cursor_lnum(curwin);
+        check_cursor_lnum(curwin);
 
         // adjust marks, mark the buffer as changed and prepare for displaying
         rs_deleted_lines_mark(first, n as c_int);

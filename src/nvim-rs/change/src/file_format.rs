@@ -46,7 +46,7 @@ extern "C" {
     fn nvim_buf_get_b_p_fenc(buf: BufHandle) -> *const c_char;
 
     // Other functions
-    fn nvim_ml_setflags(buf: BufHandle);
+    fn ml_setflags(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn nvim_redraw_buf_status_later(buf: BufHandle);
     // Memory functions
@@ -170,7 +170,7 @@ fn unchanged_impl(buf: BufHandle, ff: bool, always_inc_changedtick: bool) {
         if nvim_buf_get_b_changed(buf) || (ff && file_ff_differs_impl(buf, false)) {
             nvim_buf_set_b_changed(buf, false);
             nvim_buf_set_b_changed_invalid(buf, true);
-            nvim_ml_setflags(buf);
+            ml_setflags(buf);
             if ff {
                 save_file_ff_impl(buf);
             }

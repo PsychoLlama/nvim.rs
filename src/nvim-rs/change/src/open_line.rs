@@ -81,7 +81,7 @@ extern "C" {
     // State accessors
     fn nvim_get_state() -> c_int;
     fn nvim_set_state(state: c_int);
-    fn nvim_may_do_si() -> bool;
+    fn may_do_si() -> bool;
     fn nvim_get_did_si() -> bool;
     fn nvim_set_did_si(val: bool);
     fn nvim_get_can_si() -> bool;
@@ -156,12 +156,13 @@ extern "C" {
     fn nvim_indent_size_ts(line: *const c_char, ts: ColnrT, vts_array: *const ColnrT) -> c_int;
     fn nvim_get_indent() -> c_int;
     fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
+    #[link_name = "copy_indent"]
     fn nvim_copy_indent(size: c_int, src: *const c_char) -> bool;
     fn nvim_change_get_sw_value() -> c_int;
     #[link_name = "getwhitecols_curline"]
     fn nvim_getwhitecols_curline() -> c_int;
     fn nvim_linewhite(lnum: LinenrT) -> bool;
-    fn nvim_truncate_spaces(line: *mut c_char, col: usize);
+    fn truncate_spaces(line: *mut c_char, col: usize);
 
     // Comment leader functions
     fn nvim_get_leader_len(
@@ -181,7 +182,7 @@ extern "C" {
     // Format option functions
     fn nvim_has_format_option(opt: c_int) -> bool;
     fn nvim_in_cinkeys(keytyped: c_int, when: c_int, line_is_white: bool) -> bool;
-    fn nvim_cin_is_cinword(line: *const c_char) -> bool;
+    fn cin_is_cinword(line: *const c_char) -> bool;
 
     // Findmatch function
     fn nvim_findmatch(initc: *mut c_char, ch: c_char) -> *mut PosT;
@@ -191,8 +192,8 @@ extern "C" {
     fn nvim_u_save_cursor() -> c_int;
 
     // Replace stack functions
-    fn nvim_replace_push(p: *const c_char, len: usize);
-    fn nvim_replace_push_nul();
+    fn replace_push(p: *const c_char, len: usize);
+    fn replace_push_nul();
 
     // Mark functions
     fn nvim_mark_adjust(
@@ -244,20 +245,21 @@ extern "C" {
     fn nvim_changed_bytes(lnum: LinenrT, col: ColnrT);
 
     // Indentation functions
-    fn nvim_use_indentexpr_for_lisp() -> bool;
+    fn use_indentexpr_for_lisp() -> bool;
+    #[link_name = "fixthisline"]
     fn nvim_fixthisline(get_indent_fn: *const c_void);
-    fn nvim_get_lisp_indent() -> c_int;
-    fn nvim_do_c_expr_indent();
+    fn get_lisp_indent() -> c_int;
+    fn do_c_expr_indent();
 
     // Prompt functions
-    fn nvim_prompt_text() -> *const c_char;
+    fn prompt_text() -> *const c_char;
 
     // Multi-byte functions
     fn nvim_utfc_ptr2len(s: *const c_char) -> c_int;
     #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
-    fn nvim_ptr2cells(p: *const c_char) -> c_int;
-    fn nvim_vim_strnsize(s: *const c_char, len: c_int) -> c_int;
+    fn ptr2cells(p: *const c_char) -> c_int;
+    fn vim_strnsize(s: *const c_char, len: c_int) -> c_int;
     fn nvim_utf_iscomposing_first(c: c_int) -> c_int;
     fn nvim_utf_ptr2char(s: *const c_char) -> c_int;
 
@@ -410,7 +412,7 @@ fn open_line_impl(
         let mut allocated: *mut c_char = std::ptr::null_mut();
         let mut p: *mut c_char;
         let mut saved_char: c_char = NUL;
-        let do_si = nvim_may_do_si();
+        let do_si = may_do_si();
         let mut no_si = false;
         let mut first_char: c_int = NUL as c_int;
         let vreplace_mode: c_int;
@@ -438,11 +440,11 @@ fn open_line_impl(
             }
 
             // Push rest of line onto replace stack
-            nvim_replace_push_nul();
-            nvim_replace_push_nul();
+            replace_push_nul();
+            replace_push_nul();
             let col = nvim_get_curwin_cursor_col();
             p = saved_line.add(col as usize);
-            nvim_replace_push(p, nvim_strlen(p));
+            replace_push(p, nvim_strlen(p));
             *saved_line.add(col as usize) = NUL;
         }
 
@@ -552,7 +554,7 @@ fn open_line_impl(
                             no_si = true;
                         } else if last_char != b';' as c_char
                             && last_char != b'}' as c_char
-                            && nvim_cin_is_cinword(ptr)
+                            && cin_is_cinword(ptr)
                         {
                             nvim_set_did_si(true);
                         }
@@ -856,14 +858,14 @@ fn open_line_impl(
                         }
                         p = p.add(1);
 
-                        let repl_size = nvim_vim_strnsize(lead_repl, lead_repl_len);
+                        let repl_size = vim_strnsize(lead_repl, lead_repl_len);
                         let mut old_size = 0;
                         let endp = p;
 
                         while old_size < repl_size && p > leader {
                             let head_off = nvim_utf_head_off(leader, p.sub(1));
                             p = p.sub(1 + head_off as usize);
-                            old_size += nvim_ptr2cells(p);
+                            old_size += ptr2cells(p);
                         }
                         let l = lead_repl_len - (endp.offset_from(p) as c_int);
                         if l != 0 {
@@ -885,7 +887,7 @@ fn open_line_impl(
                             let head_off = nvim_utf_head_off(leader, p);
                             if head_off > 1 {
                                 p = p.sub(head_off as usize);
-                                if nvim_ptr2cells(p) > 1 {
+                                if ptr2cells(p) > 1 {
                                     *p.add(1) = b' ' as c_char;
                                 }
                                 std::ptr::copy(
@@ -905,11 +907,11 @@ fn open_line_impl(
                     } else {
                         // Left adjusted leader
                         p = nvim_skipwhite(leader);
-                        let repl_size = nvim_vim_strnsize(lead_repl, lead_repl_len);
+                        let repl_size = vim_strnsize(lead_repl, lead_repl_len);
                         let mut i = 0;
                         while i < lead_len && *p.add(i as usize) != NUL {
                             let l = nvim_utfc_ptr2len(p.add(i as usize));
-                            if nvim_vim_strnsize(p, i + l) > repl_size {
+                            if vim_strnsize(p, i + l) > repl_size {
                                 break;
                             }
                             i += l;
@@ -930,7 +932,7 @@ fn open_line_impl(
                             if !nvim_change_ascii_iswhite(*p as c_int) {
                                 let l = nvim_utfc_ptr2len(p);
                                 if l > 1 {
-                                    if nvim_ptr2cells(p) > 1 {
+                                    if ptr2cells(p) > 1 {
                                         *p = b' ' as c_char;
                                         p = p.add(1);
                                     }
@@ -1034,14 +1036,14 @@ fn open_line_impl(
 
             // When 'ai' set or OPENLINE_DELSPACES, skip to first non-blank
             if replace_normal(state) {
-                nvim_replace_push_nul();
+                replace_push_nul();
             }
             if nvim_curbuf_get_b_p_ai() || openline_flags.contains(OpenlineFlags::DELSPACES) {
                 while (*p_extra == b' ' as c_char || *p_extra == TAB)
                     && nvim_utf_iscomposing_first(nvim_utf_ptr2char(p_extra.add(1))) == 0
                 {
                     if replace_normal(state) {
-                        nvim_replace_push(p_extra, 1);
+                        replace_push(p_extra, 1);
                     }
                     p_extra = p_extra.add(1);
                     less_cols_off += 1;
@@ -1088,7 +1090,7 @@ fn open_line_impl(
             if nvim_change_bt_prompt() && cursor_lnum == nvim_get_curbuf_b_prompt_start_mark_lnum()
             {
                 let prompt_line = nvim_ml_get(cursor_lnum);
-                let prompt = nvim_prompt_text();
+                let prompt = prompt_text();
                 let prompt_len = nvim_strlen(prompt);
 
                 if nvim_strncmp(prompt_line, prompt, prompt_len) == 0 {
@@ -1164,7 +1166,7 @@ fn open_line_impl(
             if replace_normal(state) {
                 let col = nvim_get_curwin_cursor_col();
                 for _ in 0..col {
-                    nvim_replace_push_nul();
+                    replace_push_nul();
                 }
             }
             newcol += nvim_get_curwin_cursor_col();
@@ -1179,7 +1181,7 @@ fn open_line_impl(
         if replace_normal(state) {
             let mut lead_remaining = lead_len;
             while lead_remaining > 0 {
-                nvim_replace_push_nul();
+                replace_push_nul();
                 lead_remaining -= 1;
             }
         }
@@ -1193,7 +1195,7 @@ fn open_line_impl(
                 *saved_line.add(col as usize) = NUL;
                 // Remove trailing whitespace unless KEEPTRAIL
                 if trunc_line && !openline_flags.contains(OpenlineFlags::KEEPTRAIL) {
-                    nvim_truncate_spaces(saved_line, col as usize);
+                    truncate_spaces(saved_line, col as usize);
                 }
                 let cursor_lnum = nvim_get_curwin_cursor_lnum();
                 nvim_ml_replace(cursor_lnum, saved_line, false);
@@ -1294,16 +1296,16 @@ fn open_line_impl(
         // Do indentation
         if !nvim_p_paste() {
             if leader.is_null()
-                && !nvim_use_indentexpr_for_lisp()
+                && !use_indentexpr_for_lisp()
                 && nvim_curbuf_get_b_p_lisp()
                 && nvim_curbuf_get_b_p_ai()
             {
                 // Do lisp indenting
-                nvim_fixthisline(nvim_get_lisp_indent as *const c_void);
+                nvim_fixthisline(get_lisp_indent as *const c_void);
                 nvim_set_ai_col(nvim_getwhitecols_curline() as ColnrT);
-            } else if do_cindent || (nvim_curbuf_get_b_p_ai() && nvim_use_indentexpr_for_lisp()) {
+            } else if do_cindent || (nvim_curbuf_get_b_p_ai() && use_indentexpr_for_lisp()) {
                 // Do 'cindent' or 'indentexpr' indenting
-                nvim_do_c_expr_indent();
+                do_c_expr_indent();
                 nvim_set_ai_col(nvim_getwhitecols_curline() as ColnrT);
             }
         }
