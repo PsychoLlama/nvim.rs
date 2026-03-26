@@ -148,14 +148,8 @@ _Static_assert(sizeof(FileID) <= 16, "FileID size exceeds Rust FILE_ID_SIZE");
 int nvim_buf_file_id_valid(buf_T *buf) { return buf->file_id_valid; }
 void nvim_buf_get_file_id(buf_T *buf, void *out) { *(FileID *)out = buf->file_id; }
 
-/// Set buffer's file_id from a FileID and validity flag (accessor for Rust).
 void nvim_buf_set_file_id_data(buf_T *buf, const void *file_id, bool valid)
-{
-  if (valid) {
-    buf->file_id = *(const FileID *)file_id;
-  }
-  buf->file_id_valid = valid;
-}
+{ if (valid) { buf->file_id = *(const FileID *)file_id; } buf->file_id_valid = valid; }
 
 /// Perform the body of buf_set_name: free old names, set new ffname, expand paths.
 /// Rust calls rs_buflist_findnr + this to implement buf_set_name.
@@ -171,13 +165,8 @@ void nvim_buf_set_name_body(buf_T *buf, char *name)
   buf->b_fname = buf->b_sfname;
 }
 
-/// Call check_arg_idx(curwin) if curwin->w_buffer == buf.
 void nvim_check_arg_idx_if_curbuf(buf_T *buf)
-{
-  if (curwin->w_buffer == buf) {
-    check_arg_idx(curwin);
-  }
-}
+{ if (curwin->w_buffer == buf) { check_arg_idx(curwin); } }
 
 linenr_T nvim_buflist_findlnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
 int nvim_get_argcount(void) { return ARGCOUNT; }
@@ -198,16 +187,10 @@ void nvim_buf_set_b_p_bl(buf_T *buf, int val) { buf->b_p_bl = val; }
 int64_t nvim_buf_get_last_used(buf_T *buf) { return buf ? (int64_t)buf->b_last_used : 0; }
 
 int nvim_buf_terminal_running(buf_T *buf)
-{
-  if (!buf || !buf->terminal) { return 0; }
-  return terminal_running(buf->terminal) ? 1 : 0;
-}
+{ return (buf && buf->terminal && terminal_running(buf->terminal)) ? 1 : 0; }
 
 int nvim_buf_channel_job_running(buf_T *buf)
-{
-  if (!buf || !buf->terminal) { return 0; }
-  return channel_job_running((uint64_t)buf->b_p_channel) ? 1 : 0;
-}
+{ return (buf && buf->terminal && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0; }
 
 const char *nvim_curbuf_get_fname(void) { return curbuf->b_fname; }
 
@@ -226,23 +209,14 @@ int nvim_try_getdigits(const char *s, int64_t *vers)
 
 // Regex accessor helpers
 
-/// Compile a regex for buflist_findpat, returning heap-allocated regmatch_T or NULL.
 void *nvim_blfp_regex_compile(const char *pat, int magic)
-{
-  regmatch_T *rmp = xmalloc(sizeof(regmatch_T));
-  rmp->regprog = vim_regcomp((char *)pat, magic);
-  return rmp;
-}
+{ regmatch_T *rmp = xmalloc(sizeof(regmatch_T)); rmp->regprog = vim_regcomp((char *)pat, magic); return rmp; }
 
-/// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
 void *nvim_bufname_regex_compile(char *pat)
 {
   regmatch_T *rmp = xmalloc(sizeof(regmatch_T));
   rmp->regprog = vim_regcomp(pat, RE_MAGIC);
-  if (rmp->regprog == NULL) {
-    xfree(rmp);
-    return NULL;
-  }
+  if (rmp->regprog == NULL) { xfree(rmp); return NULL; }
   return rmp;
 }
 
@@ -389,13 +363,8 @@ void nvim_buf_clear_b_p_script_ctx(buf_T *buf) { CLEAR_FIELD(buf->b_p_script_ctx
 /// Returns 1 if buf->b_p_bt[0] == 'h' (help buftype), else 0.
 int nvim_buf_get_b_p_bt_is_help(buf_T *buf) { return (buf->b_p_bt && buf->b_p_bt[0] == 'h') ? 1 : 0; }
 
-/// Saves b_p_isk pointer and NULLs the field.
 char *nvim_buf_save_and_clear_b_p_isk(buf_T *buf)
-{
-  char *saved = buf->b_p_isk;
-  buf->b_p_isk = NULL;
-  return saved;
-}
+{ char *saved = buf->b_p_isk; buf->b_p_isk = NULL; return saved; }
 
 /// Restores b_p_isk from a previously saved pointer.
 void nvim_buf_restore_b_p_isk(buf_T *buf, char *saved) { buf->b_p_isk = saved; }
@@ -419,19 +388,11 @@ void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT
 
 // Generic helpers for offset-based buf_T field writes (used by bufcopy.rs):
 
-/// Set a buf_T char* field at the given byte offset to xstrdup(s).
 void nvim_buf_set_string_field(buf_T *buf, ptrdiff_t offset, const char *s)
-{
-  char **field = (char **)(((char *)buf) + offset);
-  *field = xstrdup(s);
-}
+{ *(char **)(((char *)buf) + offset) = xstrdup(s); }
 
-/// Set a buf_T char* field at the given byte offset to empty_string_option.
 void nvim_buf_empty_string_field(buf_T *buf, ptrdiff_t offset)
-{
-  char **field = (char **)(((char *)buf) + offset);
-  *field = empty_string_option;
-}
+{ *(char **)(((char *)buf) + offset) = empty_string_option; }
 
 /// Generic buf_T bool field setter: writes 0 or 1 via byte offset.
 void nvim_buf_set_bool_field(buf_T *buf, ptrdiff_t offset, int val) { *(int *)(((char *)buf) + offset) = val != 0; }
@@ -568,33 +529,16 @@ WinInfo *nvim_buf_wininfo_find_and_detach(buf_T *buf, win_T *win, bool copy_opti
   return wip;
 }
 
-/// Prepend wip to buf->b_wininfo (push to front of vector).
 void nvim_buf_wininfo_prepend(buf_T *buf, WinInfo *wip)
-{
-  kv_pushp(buf->b_wininfo);
-  memmove(&kv_A(buf->b_wininfo, 1), &kv_A(buf->b_wininfo, 0),
-          (kv_size(buf->b_wininfo) - 1) * sizeof(kv_A(buf->b_wininfo, 0)));
-  kv_A(buf->b_wininfo, 0) = wip;
-}
+{ kv_pushp(buf->b_wininfo); memmove(&kv_A(buf->b_wininfo, 1), &kv_A(buf->b_wininfo, 0), (kv_size(buf->b_wininfo) - 1) * sizeof(kv_A(buf->b_wininfo, 0))); kv_A(buf->b_wininfo, 0) = wip; }
 
-/// Set wi_mark on wip from lnum/col, and compute view if win != NULL.
 void nvim_wininfo_set_mark(WinInfo *wip, linenr_T lnum, colnr_T col, win_T *win)
-{
-  wip->wi_mark.mark.lnum = lnum;
-  wip->wi_mark.mark.col = col;
-  if (win != NULL) {
-    wip->wi_mark.view = mark_view_make(win->w_topline, wip->wi_mark.mark);
-  }
-}
+{ wip->wi_mark.mark.lnum = lnum; wip->wi_mark.mark.col = col;
+  if (win != NULL) { wip->wi_mark.view = mark_view_make(win->w_topline, wip->wi_mark.mark); } }
 
-/// Copy window options from win into wip, set fold_manual and clone folds.
 void nvim_wininfo_copy_from_win(WinInfo *wip, win_T *win)
-{
-  copy_winopt(&win->w_onebuf_opt, &wip->wi_opt);
-  wip->wi_fold_manual = win->w_fold_manual;
-  rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds);
-  wip->wi_optset = true;
-}
+{ copy_winopt(&win->w_onebuf_opt, &wip->wi_opt); wip->wi_fold_manual = win->w_fold_manual;
+  rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds); wip->wi_optset = true; }
 
 /// get_winopts: apply WinInfo wip to curwin (copy opts + folds), or copy from win.
 /// Returns 0 if no matching wip (fall back to allbuf_opt),
@@ -636,10 +580,7 @@ void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
 void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
 
 fmark_T *nvim_get_no_position_ptr(void)
-{
-  static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL };
-  return &no_position;
-}
+{ static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL }; return &no_position; }
 
 void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T changedtick)
   FUNC_ATTR_NONNULL_ALL
@@ -712,12 +653,10 @@ void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
 }
 
 void nvim_set_buf_opts_scratch(void)
-{
-  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
+{ set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
   set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
   set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-  RESET_BINDING(curwin);
-}
+  RESET_BINDING(curwin); }
 
 // Buffer navigation accessors
 
@@ -730,47 +669,21 @@ int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 
 // buf_contents_changed accessors
 
-/// Heap-allocate an exarg_T, fill it via prep_exarg(ea, buf), return pointer.
 void *nvim_buf_prep_exarg_alloc(buf_T *buf)
-{
-  exarg_T *ea = xcalloc(1, sizeof(exarg_T));
-  prep_exarg(ea, buf);
-  return ea;
-}
+{ exarg_T *ea = xcalloc(1, sizeof(exarg_T)); prep_exarg(ea, buf); return ea; }
 
-/// Free ea->cmd and then free the exarg_T pointer.
 void nvim_exarg_free(void *ea_void)
-{
-  exarg_T *ea = (exarg_T *)ea_void;
-  xfree(ea->cmd);
-  xfree(ea);
-}
+{ exarg_T *ea = (exarg_T *)ea_void; xfree(ea->cmd); xfree(ea); }
 
-/// Heap-allocate an aco_save_T and call aucmd_prepbuf(aco, buf). Returns aco pointer.
 void *nvim_buf_aucmd_prepbuf_alloc(buf_T *buf)
-{
-  aco_save_T *aco = xcalloc(1, sizeof(aco_save_T));
-  aucmd_prepbuf(aco, buf);
-  return aco;
-}
+{ aco_save_T *aco = xcalloc(1, sizeof(aco_save_T)); aucmd_prepbuf(aco, buf); return aco; }
 
-/// Call aucmd_restbuf(aco) and free the aco_save_T.
 void nvim_buf_aucmd_restbuf_free(void *aco_void)
-{
-  aco_save_T *aco = (aco_save_T *)aco_void;
-  aucmd_restbuf(aco);
-  xfree(aco);
-}
+{ aco_save_T *aco = (aco_save_T *)aco_void; aucmd_restbuf(aco); xfree(aco); }
 
-/// Compound: readfile(buf->b_ffname, buf->b_fname, 0, 0, MAXLNUM, ea, READ_NEW|READ_DUMMY, false).
-/// Returns OK (1) or FAIL (0).
 int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
-{
-  exarg_T *ea = (exarg_T *)ea_void;
-  return readfile(buf->b_ffname, buf->b_fname,
-                  0, 0, (linenr_T)MAXLNUM,
-                  ea, READ_NEW | READ_DUMMY, false);
-}
+{ return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM,
+                  (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
 
 /// Set current buffer to "buf".  Executes autocommands and closes current
 /// buffer.
@@ -871,13 +784,8 @@ void set_curbuf(buf_T *buf, int action, bool update_jumplist)
 // Buffer loading and command dispatch
 
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
-{
-  aco_save_T aco;
-  aucmd_prepbuf(&aco, buf);
-  int status = open_buffer(false, NULL, 0);
-  aucmd_restbuf(&aco);
-  return (status != FAIL) ? 1 : 0;
-}
+{ aco_save_T aco; aucmd_prepbuf(&aco, buf); int status = open_buffer(false, NULL, 0);
+  aucmd_restbuf(&aco); return (status != FAIL) ? 1 : 0; }
 
 /// Implementation of the commands for the buffer list.
 ///
@@ -1075,16 +983,9 @@ void nvim_buf_flags_and(buf_T *buf, int mask) { buf->b_flags &= mask; }
 void nvim_syntax_clear_buf(buf_T *buf) { syntax_clear(&buf->b_s); }
 
 void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
-{
-  if (curwin != NULL && curwin->w_buffer == buf) { reset_synblock(curwin); }
-}
-
+{ if (curwin != NULL && curwin->w_buffer == buf) { reset_synblock(curwin); } }
 void nvim_buf_clearFolding_all_windows(buf_T *buf)
-{
-  FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (win->w_buffer == buf) { rs_clearFolding(win); }
-  }
-}
+{ FOR_ALL_TAB_WINDOWS(tp, win) { if (win->w_buffer == buf) { rs_clearFolding(win); } } }
 
 /// Close the link to a buffer.
 ///
