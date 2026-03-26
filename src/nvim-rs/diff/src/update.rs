@@ -40,7 +40,7 @@ extern "C" {
 
     // Diff-specific
     fn rs_diff_check_fill(wp: WinHandle, lnum: c_int) -> c_int;
-    fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
+    fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandle);
 
     // Global state accessors
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
                     used_max_fill_other = true;
                 }
             }
-            nvim_diff_check_topfill(wp, false);
+            nvim_check_topfill(wp, 0);
         }
 
         wp = nvim_win_next(wp);

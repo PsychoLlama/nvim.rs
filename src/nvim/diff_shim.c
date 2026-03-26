@@ -1,7 +1,6 @@
 /// @file diff_shim.c
 /// FFI bridge between C and the Rust `nvim-diff` crate.
 /// Contains thin wrappers, accessor functions, static state, and type definitions.
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -42,19 +41,16 @@
 #include "nvim/undo.h"
 #include "xdiff/xdiff.h"
 
-// Rust function declarations called from C accessor bodies within this file
 extern int rs_lnum_compare(const void *s1, const void *s2);
 extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
-extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
-                                linenr_T start, linenr_T end, int diff_flags);
+extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size, linenr_T start, linenr_T end, int diff_flags);
 extern int rs_diff_file_internal(void *dio);
 extern int rs_diff_file(void *dio);
 extern int rs_check_external_diff(void *dio);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
-
 // Flags obtained from the 'diffopt' option
 #define DIFF_FILLER     0x001   // display filler lines
 #define DIFF_IBLANK     0x002   // ignore empty lines
@@ -77,8 +73,7 @@ static bool diff_need_update = false;  // ex_diffupdate needs to be called
 #define ALL_WHITE_DIFF (DIFF_IWHITE | DIFF_IWHITEALL | DIFF_IWHITEEOL)
 #define ALL_INLINE (DIFF_INLINE_NONE | DIFF_INLINE_SIMPLE | DIFF_INLINE_CHAR | DIFF_INLINE_WORD)
 #define ALL_INLINE_DIFF (DIFF_INLINE_CHAR | DIFF_INLINE_WORD)
-static int diff_flags = DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF
-                        | DIFF_LINEMATCH | DIFF_INLINE_CHAR;
+static int diff_flags = DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF | DIFF_LINEMATCH | DIFF_INLINE_CHAR;
 
 static int diff_algorithm = XDF_INDENT_HEURISTIC;
 static int linematch_lines = 40;
@@ -108,9 +103,7 @@ typedef struct {
 } diffio_T;
 #include "diff_shim.c.generated.h"
 
-// Rust fold FFI declaration
 extern void rs_newFoldLevel(void);
-// ex_diffgetput is a Rust function called from nvim_diff_call_nv_ex_diffgetput below
 void ex_diffgetput(exarg_T *eap);
 
 static diffline_change_T simple_diffline_change;
@@ -173,9 +166,7 @@ void nvim_diffio_clear_new(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr;
 void nvim_diffio_clear_output(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } if (dio->dio_diff.dout_fname == NULL) { ga_clear(&dio->dio_diff.dout_ga); } else { os_remove(dio->dio_diff.dout_fname); } }
 void nvim_diffio_clear_orig(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } if (dio->dio_orig.din_fname == NULL) { XFREE_CLEAR(dio->dio_orig.din_mmfile.ptr); } else { os_remove(dio->dio_orig.din_fname); } }
 int nvim_diffio_get_hunk_count(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return 0; } return dio->dio_diff.dout_ga.ga_len; }
-bool nvim_diffio_get_hunk(void *dio_ptr, int idx,
-                          linenr_T *lnum_orig, int *count_orig,
-                          linenr_T *lnum_new, int *count_new) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || idx < 0 || idx >= dio->dio_diff.dout_ga.ga_len) { return false; } diffhunk_T *hunks = (diffhunk_T *)dio->dio_diff.dout_ga.ga_data; *lnum_orig = hunks[idx].lnum_orig; *count_orig = hunks[idx].count_orig; *lnum_new = hunks[idx].lnum_new; *count_new = hunks[idx].count_new; return true; }
+bool nvim_diffio_get_hunk(void *dio_ptr, int idx, linenr_T *lnum_orig, int *count_orig, linenr_T *lnum_new, int *count_new) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || idx < 0 || idx >= dio->dio_diff.dout_ga.ga_len) { return false; } diffhunk_T *hunks = (diffhunk_T *)dio->dio_diff.dout_ga.ga_data; *lnum_orig = hunks[idx].lnum_orig; *count_orig = hunks[idx].count_orig; *lnum_new = hunks[idx].lnum_new; *count_new = hunks[idx].count_new; return true; }
 void *nvim_diffio_open_output(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || dio->dio_diff.dout_fname == NULL) { return NULL; } return os_fopen(dio->dio_diff.dout_fname, "r"); }
 bool nvim_diff_fgets(void *fd, char *buf, int buflen) { if (fd == NULL) { return true; } return vim_fgets(buf, buflen, (FILE *)fd); }
 void nvim_diff_fclose(void *fd) { if (fd != NULL) { fclose((FILE *)fd); } }
@@ -192,12 +183,9 @@ void nvim_diff_emsg_e98(void) { emsg(_("E98: Cannot read diff output")); }
 void nvim_diff_emsg_anchors(void) { emsg(_(e_failed_to_find_all_diff_anchors)); }
 int nvim_diff_parse_buf_anchors(buf_T *buf, linenr_T *anchors, int max_anchors) { if (buf == NULL) { return -1; } int num = 0; if (rs_parse_diffanchors(false, buf, anchors, &num) != OK) { return -1; } return num; }
 void nvim_diff_sort_lnums(linenr_T *arr, int count) { if (arr != NULL && count > 0) { qsort(arr, (size_t)count, sizeof(linenr_T), rs_lnum_compare); } }
-int nvim_diff_parse_ed(const char *line, linenr_T *lnum_orig, int *count_orig,
-                       linenr_T *lnum_new, int *count_new) { diffhunk_T hunk = { 0 }; int r = rs_parse_diff_ed(line, &hunk); if (r == OK) { *lnum_orig = hunk.lnum_orig; *count_orig = hunk.count_orig; *lnum_new = hunk.lnum_new; *count_new = hunk.count_new; } return r; }
-int nvim_diff_parse_unified(const char *line, linenr_T *lnum_orig, int *count_orig,
-                            linenr_T *lnum_new, int *count_new) { diffhunk_T hunk = { 0 }; int r = rs_parse_diff_unified(line, &hunk); if (r == OK) { *lnum_orig = hunk.lnum_orig; *count_orig = hunk.count_orig; *lnum_new = hunk.lnum_new; *count_new = hunk.count_new; } return r; }
+int nvim_diff_parse_ed(const char *line, linenr_T *lnum_orig, int *count_orig, linenr_T *lnum_new, int *count_new) { diffhunk_T hunk = { 0 }; int r = rs_parse_diff_ed(line, &hunk); if (r == OK) { *lnum_orig = hunk.lnum_orig; *count_orig = hunk.count_orig; *lnum_new = hunk.lnum_new; *count_new = hunk.count_new; } return r; }
+int nvim_diff_parse_unified(const char *line, linenr_T *lnum_orig, int *count_orig, linenr_T *lnum_new, int *count_new) { diffhunk_T hunk = { 0 }; int r = rs_parse_diff_unified(line, &hunk); if (r == OK) { *lnum_orig = hunk.lnum_orig; *count_orig = hunk.count_orig; *lnum_new = hunk.lnum_new; *count_new = hunk.count_new; } return r; }
 int nvim_diff_get_context(void) { return diff_context; }
-void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
 bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
 void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }
 void nvim_diffblock_reset_changes_len(diff_T *dp) { if (dp != NULL) { dp->df_changes.ga_len = 0; } }

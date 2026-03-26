@@ -1858,7 +1858,7 @@ extern "C" {
     fn decor_conceal_line(wp: WinHandle, lnum: LinenrT, force: bool) -> bool;
     fn invalidate_botline(wp: WinHandle);
     fn changed_line_abv_curs_win(wp: WinHandle);
-    fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
+    fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn setpcmark();
     #[link_name = "rs_run_linematch"]
     fn nvim_diff_run_linematch(dp: DiffBlockHandle);
@@ -2754,7 +2754,7 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
 
     invalidate_botline(towin);
     changed_line_abv_curs_win(towin);
-    nvim_diff_check_topfill(towin, false);
+    nvim_check_topfill(towin, 0);
 
     let mut new_topline = nvim_win_get_topline(towin);
     hasFolding(
