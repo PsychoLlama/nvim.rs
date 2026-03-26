@@ -59,7 +59,6 @@
 extern int rs_spell_edit_score(slang_T *slang, const char *badword, const char *goodword);
 extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const char *goodword,
                                      int limit);
-extern int rs_soundalike_score(const char *goodstart, const char *badstart);
 extern int rs_bytes2offset(const uint8_t **pp);
 extern int soundfold_find(slang_T *slang, char *word);
 extern void find_keepcap_word(slang_T *slang, char *fword, char *kword);
@@ -653,7 +652,7 @@ static void spell_find_suggest(char *badptr, int badlen, suginfo_T *su, int maxc
   if (do_combine) {
     // Combine the two list of suggestions.  This must be done last,
     // because sorting changes the order again.
-    score_combine(su);
+    rs_score_combine_lists(su);
   }
 }
 
@@ -2035,13 +2034,6 @@ static void score_comp_sal(suginfo_T *su)
       break;
     }
   }
-}
-
-/// Combine the list of suggestions in su->su_ga and su->su_sga.
-/// They are entwined.
-static void score_combine(suginfo_T *su)
-{
-  rs_score_combine_lists(su);
 }
 
 /// For the goodword in "stp" compute the soundalike score compared to the
