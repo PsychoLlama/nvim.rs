@@ -72,14 +72,6 @@ extern "C" {
     // C Implementation Functions
     // -------------------------------------------------------------------------
 
-    /// Get a line from curbuf (C implementation)
-    fn ml_get(lnum: LineNr) -> *mut c_char;
-
-    /// Get a line from a specific buffer (C implementation)
-    fn ml_get_buf(buf: *mut BufHandle, lnum: LineNr) -> *mut c_char;
-
-    // Note: ml_get_buf_mut is available but not currently used from Rust
-
     /// Get UTF-8 character from string (in mbyte.c)
     fn utf_ptr2char(p: *const c_char) -> c_int;
 
@@ -159,8 +151,8 @@ pub unsafe extern "C" fn rs_ml_get_buf_len(buf: *mut BufHandle, lnum: LineNr) ->
         return 0;
     }
 
-    // Call ml_get_buf to ensure the line is cached
-    let line = ml_get_buf(buf, lnum);
+    // Call rs_ml_get_buf_impl to ensure the line is cached
+    let line = rs_ml_get_buf_impl(buf, lnum, 0);
     if line.is_null() {
         return 0;
     }
@@ -217,7 +209,7 @@ pub unsafe extern "C" fn rs_ml_get_pos(pos: *const PosHandle) -> *mut c_char {
     let lnum = nvim_pos_get_lnum(pos);
     let col = nvim_pos_get_col(pos);
 
-    let line = ml_get_buf(curbuf, lnum);
+    let line = rs_ml_get_buf_impl(curbuf, lnum, 0);
     if line.is_null() {
         return ptr::null_mut();
     }
@@ -372,7 +364,7 @@ pub unsafe extern "C" fn rs_ml_valid_lnum(buf: *mut BufHandle, lnum: LineNr) -> 
 /// Calls C functions that access buffer state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_line_empty(lnum: LineNr) -> c_int {
-    let line = ml_get(lnum);
+    let line = rs_ml_get_buf_impl(nvim_get_curbuf(), lnum, 0);
     if line.is_null() {
         return 1; // Treat as empty
     }
@@ -391,7 +383,7 @@ pub unsafe extern "C" fn rs_line_empty_buf(buf: *mut BufHandle, lnum: LineNr) ->
         return 1; // Treat as empty
     }
 
-    let line = ml_get_buf(buf, lnum);
+    let line = rs_ml_get_buf_impl(buf, lnum, 0);
     if line.is_null() {
         return 1; // Treat as empty
     }
@@ -530,6 +522,38 @@ pub unsafe extern "C" fn rs_ml_get_buf_impl(
     }
 
     nvim_buf_get_ml_line_ptr(buf)
+}
+
+/// Get a pointer to a line in curbuf.
+///
+/// # Safety
+/// Calls C functions that access buffer state.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_get"]
+pub unsafe extern "C" fn ml_get_rust(lnum: LineNr) -> *mut c_char {
+    rs_ml_get_buf_impl(nvim_get_curbuf(), lnum, 0)
+}
+
+/// Get a pointer to a line in a specific buffer.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer or NULL
+/// - Calls C functions that access buffer state
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_get_buf"]
+pub unsafe extern "C" fn ml_get_buf_rust(buf: *mut BufHandle, lnum: LineNr) -> *mut c_char {
+    rs_ml_get_buf_impl(buf, lnum, 0)
+}
+
+/// Like `ml_get_buf`, but allow the line to be mutated in place.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer or NULL
+/// - Calls C functions that access buffer state
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_get_buf_mut"]
+pub unsafe extern "C" fn ml_get_buf_mut_rust(buf: *mut BufHandle, lnum: LineNr) -> *mut c_char {
+    rs_ml_get_buf_impl(buf, lnum, 1)
 }
 
 // =============================================================================

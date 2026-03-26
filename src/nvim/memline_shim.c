@@ -225,7 +225,6 @@ extern void rs_long_to_char(long n, char *s);
 extern long rs_char_to_long(const char *s);
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
-extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
 
 static const char e_ml_get_invalid_lnum_nr[]
@@ -250,42 +249,6 @@ static const char e_warning_pointer_block_corrupted[]
 #if __has_feature(address_sanitizer)
 # define ML_GET_ALLOC_LINES
 #endif
-
-
-// NOTE: The pointer returned by the ml_get_*() functions only remains valid
-// until the next call!
-//  line1 = ml_get(1);
-//  line2 = ml_get(2);  // line1 is now invalid!
-// Make a copy of the line if necessary.
-
-/// @return  a pointer to a (read-only copy of a) line in curbuf.
-///
-/// On failure an error message is given and IObuff is returned (to avoid
-/// having to check for error everywhere).
-char *ml_get(linenr_T lnum)
-{
-  return rs_ml_get_buf_impl(curbuf, lnum, false);
-}
-
-/// @return  a pointer to a (read-only copy of a) line.
-///
-/// This is the same as ml_get(), but taking in the buffer
-/// as an argument.
-char *ml_get_buf(buf_T *buf, linenr_T lnum)
-{
-  return rs_ml_get_buf_impl(buf, lnum, false);
-}
-
-/// Like `ml_get_buf`, but allow the line to be mutated in place.
-///
-/// This is very limited. Generally ml_replace_buf()
-/// should be used to modify a line.
-///
-/// @return a pointer to a line in the buffer
-char *ml_get_buf_mut(buf_T *buf, linenr_T lnum)
-{
-  return rs_ml_get_buf_impl(buf, lnum, true);
-}
 
 
 // C accessors for Rust FFI (memline crate)

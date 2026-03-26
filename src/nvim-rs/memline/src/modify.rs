@@ -186,9 +186,6 @@ extern "C" {
     /// Open the buffer's memfile if needed; returns FAIL if open_buffer fails
     fn nvim_buf_open_buffer_if_needed(buf: *mut BufHandle) -> c_int;
 
-    /// Get a line from a specific buffer (C implementation)
-    fn ml_get_buf(buf: *mut BufHandle, lnum: LineNr) -> *mut c_char;
-
     /// Duplicate a memory region, NUL-terminated (xmalloc + memcpy + NUL)
     fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void;
 
@@ -630,7 +627,7 @@ pub unsafe extern "C" fn rs_ml_replace_buf_len(
 
     if nvim_buf_get_update_callbacks_size(buf) > 0 {
         // Track deleted bytes for update callbacks
-        let current_line = ml_get_buf(buf, lnum);
+        let current_line = crate::access::rs_ml_get_buf_impl(buf, lnum, 0);
         rs_ml_add_deleted_len_buf(buf, current_line, -1);
     }
 

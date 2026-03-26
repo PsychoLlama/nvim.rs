@@ -8,6 +8,9 @@
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 int ml_open(buf_T *buf);
+char *ml_get(linenr_T lnum);
+char *ml_get_buf(buf_T *buf, linenr_T lnum);
+char *ml_get_buf_mut(buf_T *buf, linenr_T lnum);
 char *ml_get_pos(const pos_T *pos);
 colnr_T ml_get_len(linenr_T lnum);
 colnr_T ml_get_pos_len(pos_T *pos);
