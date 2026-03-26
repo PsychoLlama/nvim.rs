@@ -99,7 +99,7 @@ extern "C" {
     fn rs_new_frame(wp: WinHandle);
     fn rs_win_init(wp: WinHandle, oldwin: WinHandle, flags: c_int);
     fn rs_frame_flatten(frp: *mut Frame);
-    fn nvim_xcalloc_frame() -> *mut Frame;
+    fn nvim_alloc_frame_raw() -> *mut Frame;
     fn nvim_ui_comp_remove_grid_win(wp: WinHandle);
     fn nvim_ui_has_multigrid() -> c_int;
     fn nvim_ui_call_win_hide_win(wp: WinHandle);
@@ -716,7 +716,7 @@ unsafe fn reorganize_frame_tree(
 
     // Create a new branch in the frame tree if needed
     if (*curfrp).fr_parent.is_null() || (*(*curfrp).fr_parent).fr_layout != layout {
-        let new_frp = nvim_xcalloc_frame();
+        let new_frp = nvim_alloc_frame_raw();
         *new_frp = *curfrp;
         (*curfrp).fr_layout = layout;
         (*new_frp).fr_parent = curfrp;

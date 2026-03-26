@@ -738,7 +738,6 @@ int nvim_win_get_fraction(win_T *wp) { return wp ? wp->w_fraction : 0; }
 // nvim_get_p_ch() — already defined in message.c
 // nvim_get_sc_col() — already defined in message.c
 
-frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }
 void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
 void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }
 
@@ -1120,7 +1119,6 @@ void nvim_set_curwin_from_wp(win_T *wp)
   }
 }
 
-buf_T *nvim_win_get_buffer_raw(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 
 
 /// Get RedrawingDisabled.
@@ -1767,9 +1765,6 @@ int nvim_win_syntax_present(win_T *wp) { return syntax_present(wp) ? 1 : 0; }
 int nvim_win_p_fdt_empty(win_T *wp) { return *wp->w_p_fdt == NUL ? 1 : 0; }
 
 
-/// w_p_cc_cols (colorcolumn array, NULL if not set)
-int *nvim_win_get_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
-
 // nvim_win_get_topline, nvim_win_get_topfill already defined above.
 // nvim_win_get_leftcol already defined above.
 
@@ -1792,11 +1787,6 @@ int nvim_win_get_p_cuc_val(win_T *wp) { return wp->w_p_cuc ? 1 : 0; }
 /// w_p_wrap getter
 int nvim_win_get_wrap_val(win_T *wp) { return wp->w_p_wrap ? 1 : 0; }
 
-/// buffer terminal pointer (non-null if terminal buffer)
-int nvim_win_buf_is_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL ? 1 : 0; }
-
-/// buffer line count
-linenr_T nvim_win_buf_line_count_direct(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
 
 /// VirtLines helpers for win_line
 /// VirtLines is kvec_t(struct virt_line { VirtText line; int flags; }) from decoration_defs.h
@@ -1903,7 +1893,6 @@ int nvim_curwin_get_topfill(void) { return curwin->w_topfill; }
 int nvim_curwin_is_qf_not_ll(void) { return curwin->w_llist_ref == NULL ? 1 : 0; }
 void nvim_curwin_invalidate_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL); }
 void nvim_curwin_clear_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WCOL | VALID_VIRTCOL); }
-void nvim_curwin_clear_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL); }
 void nvim_curwin_cursor_lnum_add(linenr_T delta) { curwin->w_cursor.lnum += delta; }
 void nvim_set_Insstart_from_cursor(void) { Insstart = curwin->w_cursor; }
 

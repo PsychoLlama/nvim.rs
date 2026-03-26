@@ -39,7 +39,7 @@ extern "C" {
     fn rs_one_window_in_tab(win: WinHandle, tp: crate::TabpageHandle) -> c_int;
 
     /// Get raw buffer pointer for a window.
-    fn nvim_win_get_buffer_raw(wp: WinHandle) -> BufHandle;
+    fn nvim_win_get_buf_ptr(wp: WinHandle) -> BufHandle;
 
     /// Set buffer to NULL on a window.
     fn nvim_win_set_buffer_raw(wp: WinHandle, buf: BufHandle);
@@ -141,7 +141,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
         }
 
         // Autocommands messed the buffer pointer up.
-        let buf = nvim_win_get_buffer_raw(wp);
+        let buf = nvim_win_get_buf_ptr(wp);
         if nvim_buf_valid_ptr(buf) == 0 && rs_win_valid(wp) != 0 {
             nvim_win_set_buffer_raw(wp, BufHandle::null());
             rs_win_close(wp, 0, 0);

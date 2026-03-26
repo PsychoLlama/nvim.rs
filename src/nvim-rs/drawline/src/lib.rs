@@ -568,13 +568,13 @@ extern "C" {
     fn nvim_get_state() -> c_int;
     fn nvim_virtual_active_win(wp: WinHandle) -> bool;
     fn nvim_win_buf_meta_total_inline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cc_cols(wp: WinHandle) -> *mut c_int;
+    fn nvim_win_get_p_cc_cols(wp: WinHandle) -> *mut c_int;
     fn nvim_win_get_syn_error(wp: WinHandle) -> c_int;
     fn nvim_win_set_syn_error(wp: WinHandle, val: c_int);
     fn nvim_win_get_syn_slow(wp: WinHandle) -> c_int;
     fn nvim_win_p_fdt_empty(wp: WinHandle) -> c_int;
-    fn nvim_win_buf_is_terminal(wp: WinHandle) -> c_int;
-    fn nvim_win_buf_line_count_direct(wp: WinHandle) -> LinenrT;
+    fn nvim_win_buf_has_terminal(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
     fn nvim_win_bt_quickfix(wp: WinHandle) -> c_int;
     fn nvim_win_get_wrap_val(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_cuc_val(wp: WinHandle) -> c_int;
