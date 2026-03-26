@@ -194,7 +194,7 @@ void nvim_marktree_inc_n_keys(MarkTree *b) { b->n_keys++; }
 void nvim_marktree_add_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] += val; }
 void nvim_marktree_set_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] = val; }
 
-// Memory management accessors for Phase 7
+// Memory management accessors
 void nvim_kvi_destroy_intersect(MTNode *x) { kvi_destroy(x->intersect); }
 void nvim_xfree_node(MTNode *x) { xfree(x); }
 void nvim_marktree_dec_n_nodes(MarkTree *b) { b->n_nodes--; }
