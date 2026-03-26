@@ -126,7 +126,7 @@ typedef struct {
   OptInt save_w_p_siso;
 } TerminalState;
 
-#include "terminal.c.generated.h"
+#include "terminal_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
 // Rust implementation in nvim-event crate
