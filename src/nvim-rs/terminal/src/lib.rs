@@ -2015,22 +2015,17 @@ pub struct VTermPos {
     pub col: c_int,
 }
 
-/// `VTerm` property constants.
-pub const VTERM_PROP_ALTSCREEN: c_int = 1;
-/// Cursor visible property.
-pub const VTERM_PROP_CURSORVISIBLE: c_int = 2;
-/// Title property.
-pub const VTERM_PROP_TITLE: c_int = 3;
-/// Icon name property.
-pub const VTERM_PROP_ICONNAME: c_int = 4;
-/// Reverse property.
-pub const VTERM_PROP_REVERSE: c_int = 5;
-/// Cursor shape property.
-pub const VTERM_PROP_CURSORSHAPE: c_int = 6;
-/// Mouse property.
-pub const VTERM_PROP_MOUSE: c_int = 7;
-/// Cursor blink property.
-pub const VTERM_PROP_CURSORBLINK: c_int = 8;
+/// `VTerm` property constants (matching `VTermProp` enum in `vterm_defs.h`).
+pub const VTERM_PROP_CURSORVISIBLE: c_int = 1;
+pub const VTERM_PROP_CURSORBLINK: c_int = 2;
+pub const VTERM_PROP_ALTSCREEN: c_int = 3;
+pub const VTERM_PROP_TITLE: c_int = 4;
+pub const VTERM_PROP_ICONNAME: c_int = 5;
+pub const VTERM_PROP_REVERSE: c_int = 6;
+pub const VTERM_PROP_CURSORSHAPE: c_int = 7;
+pub const VTERM_PROP_MOUSE: c_int = 8;
+pub const VTERM_PROP_FOCUSREPORT: c_int = 9;
+pub const VTERM_PROP_THEMEUPDATES: c_int = 10;
 
 // =============================================================================
 // VTerm Callback Helpers
@@ -2759,6 +2754,207 @@ pub unsafe extern "C" fn rs_terminal_notify_theme_impl(term: TerminalHandle, dar
     unsafe { nvim_terminal_send(term.as_ptr(), buf.as_ptr().cast::<i8>(), len) };
 }
 
+// =============================================================================
+// Phase 5: Migrate terminal_receive, terminal_send, invalidate_terminal,
+//          and term_settermprop
+// =============================================================================
+
+extern "C" {
+    fn nvim_terminal_timer_start();
+    fn nvim_terminal_get_refresh_pending() -> c_int;
+    fn nvim_terminal_set_refresh_pending(v: c_int);
+    fn nvim_terminal_handle_get_buffer(buf_handle: c_int) -> *mut c_void;
+    fn nvim_terminal_buf_set_title(buf: *mut c_void, title: *const i8, len: usize);
+    fn nvim_term_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    fn nvim_terminal_write_cb(term: *mut c_void, data: *const i8, size: usize);
+    fn nvim_terminal_get_pending_send(term: *mut c_void) -> *mut c_void;
+    fn nvim_term_sb_concat_len(sb: *mut c_void, data: *const i8, len: usize);
+    fn nvim_vterm_value_boolean(val: *const c_void) -> c_int;
+    fn nvim_vterm_value_number(val: *const c_void) -> c_int;
+    fn nvim_vterm_frag_str(val: *const c_void) -> *const i8;
+    fn nvim_vterm_frag_len(val: *const c_void) -> usize;
+    fn nvim_vterm_frag_initial(val: *const c_void) -> c_int;
+    fn nvim_vterm_frag_final(val: *const c_void) -> c_int;
+}
+
+/// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.
+///
+/// Replaces `terminal_receive` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`, `data` must point to `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_receive_impl(
+    term: TerminalHandle,
+    data: *const i8,
+    len: usize,
+) {
+    if data.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if t.opts.force_crlf {
+        let slice = unsafe { std::slice::from_raw_parts(data.cast::<u8>(), len) };
+        let mut buf: Vec<u8> = Vec::with_capacity(len + 16);
+        let mut prev = b' ';
+        for &c in slice {
+            if c == b'\n' && prev != b'\r' {
+                buf.push(b'\r');
+            }
+            buf.push(c);
+            prev = c;
+        }
+        unsafe { rs_vterm_input_write(t.vt, buf.as_ptr().cast::<i8>(), buf.len()) };
+    } else {
+        unsafe { rs_vterm_input_write(t.vt, data, len) };
+    }
+    unsafe { rs_vterm_screen_flush_damage(t.vts) };
+}
+
+/// Send data to terminal process, buffering if a pending `TermRequest` is active.
+///
+/// Replaces `terminal_send` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`, `data` must point to `size` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_do_send(term: TerminalHandle, data: *const i8, size: usize) {
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if t.closed {
+        return;
+    }
+    let pending_send = unsafe { nvim_terminal_get_pending_send(term.as_ptr()) };
+    if !pending_send.is_null() {
+        unsafe { nvim_term_sb_concat_len(pending_send, data, size) };
+        return;
+    }
+    unsafe { nvim_terminal_write_cb(term.as_ptr(), data, size) };
+}
+
+/// Queue a terminal instance for refresh (starts the refresh timer if needed).
+///
+/// Replaces `invalidate_terminal` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate_terminal(
+    term: TerminalHandle,
+    start_row: c_int,
+    end_row: c_int,
+) {
+    if term.is_null() {
+        return;
+    }
+    if start_row != -1 && end_row != -1 {
+        let t = unsafe { term.as_mut() };
+        t.invalid_start = t.invalid_start.min(start_row);
+        t.invalid_end = t.invalid_end.max(end_row);
+    }
+    unsafe { nvim_terminal_set_put(term.as_ptr()) };
+    if unsafe { nvim_terminal_get_refresh_pending() } == 0 {
+        unsafe { nvim_terminal_timer_start() };
+        unsafe { nvim_terminal_set_refresh_pending(1) };
+    }
+}
+
+/// Handle a `VTerm` property change (settermprop callback).
+///
+/// Replaces `term_settermprop` in `terminal_shim.c`.
+///
+/// # Safety
+/// `data` must be a valid `Terminal *`, `val` must be a valid `VTermValue *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_settermprop(
+    prop: c_int,
+    val: *const c_void,
+    data: *mut c_void,
+) -> c_int {
+    let term = unsafe { TerminalHandle::from_ptr(data) };
+    if term.is_null() || val.is_null() {
+        return 0;
+    }
+    let t = unsafe { term.as_mut() };
+
+    match prop {
+        VTERM_PROP_ALTSCREEN => {} // no-op
+
+        VTERM_PROP_CURSORVISIBLE => {
+            t.cursor.visible = unsafe { nvim_vterm_value_boolean(val) } != 0;
+            unsafe { rs_invalidate_terminal(term, -1, -1) };
+        }
+
+        VTERM_PROP_TITLE => {
+            let buf = unsafe { nvim_terminal_handle_get_buffer(t.buf_handle) };
+            let frag_str = unsafe { nvim_vterm_frag_str(val) };
+            let frag_len = unsafe { nvim_vterm_frag_len(val) };
+            let is_initial = unsafe { nvim_vterm_frag_initial(val) } != 0;
+            let is_final = unsafe { nvim_vterm_frag_final(val) } != 0;
+
+            if is_initial && is_final {
+                if !buf.is_null() {
+                    unsafe { nvim_terminal_buf_set_title(buf, frag_str, frag_len) };
+                }
+            } else {
+                if is_initial {
+                    t.title_len = 0;
+                    t.title_size = frag_len.max(1024);
+                    t.title = unsafe { xmalloc(t.title_size).cast::<i8>() };
+                } else if t.title_len + frag_len > t.title_size {
+                    t.title_size *= 2;
+                    t.title = unsafe {
+                        nvim_term_xrealloc(t.title.cast::<c_void>(), t.title_size).cast::<i8>()
+                    };
+                }
+                if !t.title.is_null() && !frag_str.is_null() {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            frag_str.cast::<u8>(),
+                            t.title.add(t.title_len).cast::<u8>(),
+                            frag_len,
+                        );
+                    }
+                    t.title_len += frag_len;
+                }
+                if is_final {
+                    if !buf.is_null() {
+                        unsafe { nvim_terminal_buf_set_title(buf, t.title, t.title_len) };
+                    }
+                    unsafe { xfree(t.title.cast::<c_void>()) };
+                    t.title = std::ptr::null_mut();
+                }
+            }
+        }
+
+        VTERM_PROP_MOUSE => {
+            t.forward_mouse = unsafe { nvim_vterm_value_number(val) } != 0;
+        }
+
+        VTERM_PROP_CURSORBLINK => {
+            t.cursor.blink = unsafe { nvim_vterm_value_boolean(val) } != 0;
+            t.pending.cursor = true;
+            unsafe { rs_invalidate_terminal(term, -1, -1) };
+        }
+
+        VTERM_PROP_CURSORSHAPE => {
+            t.cursor.shape = unsafe { nvim_vterm_value_number(val) };
+            t.pending.cursor = true;
+            unsafe { rs_invalidate_terminal(term, -1, -1) };
+        }
+
+        VTERM_PROP_THEMEUPDATES => {
+            t.theme_updates = unsafe { nvim_vterm_value_boolean(val) } != 0;
+        }
+
+        _ => return 0,
+    }
+
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3119,12 +3315,13 @@ mod tests {
 
     #[test]
     fn test_vterm_prop_constants() {
-        assert_eq!(VTERM_PROP_ALTSCREEN, 1);
-        assert_eq!(VTERM_PROP_CURSORVISIBLE, 2);
-        assert_eq!(VTERM_PROP_TITLE, 3);
-        assert_eq!(VTERM_PROP_CURSORSHAPE, 6);
-        assert_eq!(VTERM_PROP_MOUSE, 7);
-        assert_eq!(VTERM_PROP_CURSORBLINK, 8);
+        // Values match `VTermProp` enum in vterm_defs.h
+        assert_eq!(VTERM_PROP_CURSORVISIBLE, 1);
+        assert_eq!(VTERM_PROP_CURSORBLINK, 2);
+        assert_eq!(VTERM_PROP_ALTSCREEN, 3);
+        assert_eq!(VTERM_PROP_TITLE, 4);
+        assert_eq!(VTERM_PROP_CURSORSHAPE, 7);
+        assert_eq!(VTERM_PROP_MOUSE, 8);
     }
 
     #[test]

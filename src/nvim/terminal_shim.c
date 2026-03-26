@@ -1041,16 +1041,10 @@ void terminal_destroy(Terminal **termpp)
   }
 }
 
+extern void rs_terminal_do_send(void *term, const char *data, size_t size);
 static void terminal_send(Terminal *term, const char *data, size_t size)
 {
-  if (term->closed) {
-    return;
-  }
-  if (term->pending.send) {
-    kv_concat_len(*term->pending.send, data, size);
-    return;
-  }
-  term->opts.write_cb(data, size, term->opts.data);
+  rs_terminal_do_send(term, data, size);
 }
 
 void terminal_paste(int count, String *y_array, size_t y_size)
@@ -1100,28 +1094,10 @@ static void terminal_send_key(Terminal *term, int c)
   rs_terminal_send_key_impl(term, c);
 }
 
+extern void rs_terminal_receive_impl(void *term, const char *data, size_t len);
 void terminal_receive(Terminal *term, const char *data, size_t len)
 {
-  if (!data) {
-    return;
-  }
-
-  if (term->opts.force_crlf) {
-    StringBuilder crlf_data = KV_INITIAL_VALUE;
-
-    for (size_t i = 0; i < len; i++) {
-      if (data[i] == '\n' && (i == 0 || (i > 0 && data[i - 1] != '\r'))) {
-        kv_push(crlf_data, '\r');
-      }
-      kv_push(crlf_data, data[i]);
-    }
-
-    vterm_input_write(term->vt, crlf_data.items, kv_size(crlf_data));
-    kv_destroy(crlf_data);
-  } else {
-    vterm_input_write(term->vt, data, len);
-  }
-  vterm_screen_flush_damage(term->vts);
+  rs_terminal_receive_impl(term, data, len);
 }
 
 static int get_rgb(VTermState *state, VTermColor color)
@@ -1220,73 +1196,10 @@ static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
   status_redraw_buf(buf);
 }
 
+extern int rs_term_settermprop(VTermProp prop, VTermValue *val, void *data);
 static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
 {
-  Terminal *term = data;
-
-  switch (prop) {
-  case VTERM_PROP_ALTSCREEN:
-    break;
-
-  case VTERM_PROP_CURSORVISIBLE:
-    term->cursor.visible = val->boolean;
-    invalidate_terminal(term, -1, -1);
-    break;
-
-  case VTERM_PROP_TITLE: {
-    buf_T *buf = handle_get_buffer(term->buf_handle);
-    VTermStringFragment frag = val->string;
-
-    if (frag.initial && frag.final) {
-      buf_set_term_title(buf, frag.str, frag.len);
-      break;
-    }
-
-    if (frag.initial) {
-      term->title_len = 0;
-      term->title_size = MAX(frag.len, 1024);
-      term->title = xmalloc(sizeof(char *) * term->title_size);
-    } else if (term->title_len + frag.len > term->title_size) {
-      term->title_size *= 2;
-      term->title = xrealloc(term->title, sizeof(char *) * term->title_size);
-    }
-
-    memcpy(term->title + term->title_len, frag.str, frag.len);
-    term->title_len += frag.len;
-
-    if (frag.final) {
-      buf_set_term_title(buf, term->title, term->title_len);
-      xfree(term->title);
-      term->title = NULL;
-    }
-    break;
-  }
-
-  case VTERM_PROP_MOUSE:
-    term->forward_mouse = (bool)val->number;
-    break;
-
-  case VTERM_PROP_CURSORBLINK:
-    term->cursor.blink = val->boolean;
-    term->pending.cursor = true;
-    invalidate_terminal(term, -1, -1);
-    break;
-
-  case VTERM_PROP_CURSORSHAPE:
-    term->cursor.shape = val->number;
-    term->pending.cursor = true;
-    invalidate_terminal(term, -1, -1);
-    break;
-
-  case VTERM_PROP_THEMEUPDATES:
-    term->theme_updates = val->boolean;
-    break;
-
-  default:
-    return 0;
-  }
-
-  return 1;
+  return rs_term_settermprop(prop, val, data);
 }
 
 
@@ -1515,19 +1428,11 @@ static bool fetch_cell(Terminal *term, int row, int col, VTermScreenCell *cell)
   return true;
 }
 
+extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
 // queue a terminal instance for refresh
 static void invalidate_terminal(Terminal *term, int start_row, int end_row)
 {
-  if (start_row != -1 && end_row != -1) {
-    term->invalid_start = MIN(term->invalid_start, start_row);
-    term->invalid_end = MAX(term->invalid_end, end_row);
-  }
-
-  set_put(ptr_t, &invalidated_terminals, term);
-  if (!refresh_pending) {
-    time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0);
-    refresh_pending = true;
-  }
+  rs_invalidate_terminal(term, start_row, end_row);
 }
 
 static void refresh_terminal(Terminal *term)
@@ -1906,5 +1811,64 @@ void nvim_vterm_cell_zero(void *cell_ptr)
   c->schar = 0;
   c->width = 1;
 }
+
+// Phase 5 accessor functions
+
+/// Start the refresh timer (wraps time_watcher_start for refresh_timer_cb).
+void nvim_terminal_timer_start(void)
+{
+  time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0);
+}
+
+/// Get the current value of refresh_pending.
+int nvim_terminal_get_refresh_pending(void)
+{
+  return (int)refresh_pending;
+}
+
+/// Set refresh_pending to v (0 or 1).
+void nvim_terminal_set_refresh_pending(int v)
+{
+  refresh_pending = (bool)v;
+}
+
+/// Get a buf_T* from a buffer handle (wraps handle_get_buffer macro).
+void *nvim_terminal_handle_get_buffer(int buf_handle)
+{
+  return handle_get_buffer(buf_handle);
+}
+
+/// Set terminal title on buffer b: variable (wraps buf_set_term_title).
+void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
+{
+  buf_set_term_title((buf_T *)buf, title, len);
+}
+
+/// Realloc wrapper for Rust terminal title buffer.
+void *nvim_term_xrealloc(void *ptr, size_t size)
+{
+  return xrealloc(ptr, size);
+}
+
+/// Call write_cb on a terminal (sends data to PTY).
+void nvim_terminal_write_cb(void *term, const char *data, size_t size)
+{
+  Terminal *t = (Terminal *)term;
+  t->opts.write_cb(data, size, t->opts.data);
+}
+
+/// Get pending.send StringBuilder pointer (NULL if not pending).
+void *nvim_terminal_get_pending_send(void *term)
+{
+  return ((Terminal *)term)->pending.send;
+}
+
+// VTermValue accessors for term_settermprop
+int nvim_vterm_value_boolean(const void *val) { return ((const VTermValue *)val)->boolean; }
+int nvim_vterm_value_number(const void *val) { return ((const VTermValue *)val)->number; }
+const char *nvim_vterm_frag_str(const void *val) { return ((const VTermValue *)val)->string.str; }
+size_t nvim_vterm_frag_len(const void *val) { return ((const VTermValue *)val)->string.len; }
+int nvim_vterm_frag_initial(const void *val) { return (int)((const VTermValue *)val)->string.initial; }
+int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)val)->string.final; }
 
 // vim: foldmethod=marker
