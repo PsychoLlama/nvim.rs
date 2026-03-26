@@ -312,47 +312,13 @@ PumBorderConfig *nvim_pum_parse_border(int has_scrollbar)
   return cfg;
 }
 
-/// Get has_border from PumBorderConfig.
-int nvim_pum_border_cfg_has_border(PumBorderConfig *cfg)
-{
-  return cfg->has_border ? 1 : 0;
-}
-
-/// Get is_shadow from PumBorderConfig.
-int nvim_pum_border_cfg_is_shadow(PumBorderConfig *cfg)
-{
-  return cfg->is_shadow ? 1 : 0;
-}
-
-/// Get fconfig.border (whether border chars are set) from PumBorderConfig.
-int nvim_pum_border_cfg_has_border_chars(PumBorderConfig *cfg)
-{
-  return cfg->fconfig.border ? 1 : 0;
-}
-
-/// Get scrollbar border char from PumBorderConfig.
-schar_T nvim_pum_border_cfg_scrollbar_char(PumBorderConfig *cfg)
-{
-  return cfg->scrollbar_border_char;
-}
-
-/// Get scrollbar border attr from PumBorderConfig.
-int nvim_pum_border_cfg_scrollbar_attr(PumBorderConfig *cfg)
-{
-  return cfg->scrollbar_border_attr;
-}
-
-/// Draw border on pum_grid using PumBorderConfig.
-void nvim_pum_border_draw(PumBorderConfig *cfg)
-{
-  grid_draw_border(&pum_grid, &cfg->fconfig, NULL, 0, NULL);
-}
-
-/// Free PumBorderConfig.
-void nvim_pum_border_cfg_free(PumBorderConfig *cfg)
-{
-  xfree(cfg);
-}
+int nvim_pum_border_cfg_has_border(PumBorderConfig *cfg) { return cfg->has_border ? 1 : 0; }
+int nvim_pum_border_cfg_is_shadow(PumBorderConfig *cfg) { return cfg->is_shadow ? 1 : 0; }
+int nvim_pum_border_cfg_has_border_chars(PumBorderConfig *cfg) { return cfg->fconfig.border ? 1 : 0; }
+schar_T nvim_pum_border_cfg_scrollbar_char(PumBorderConfig *cfg) { return cfg->scrollbar_border_char; }
+int nvim_pum_border_cfg_scrollbar_attr(PumBorderConfig *cfg) { return cfg->scrollbar_border_attr; }
+void nvim_pum_border_draw(PumBorderConfig *cfg) { grid_draw_border(&pum_grid, &cfg->fconfig, NULL, 0, NULL); }
+void nvim_pum_border_cfg_free(PumBorderConfig *cfg) { xfree(cfg); }
 
 // Selection / preview window management
 
