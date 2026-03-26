@@ -125,7 +125,7 @@ int nvim_ses_utfc_ptr2len(const char *p)
   return utfc_ptr2len(p);
 }
 
-// _Static_assert for Phase 3 constants
+// Static assertions for session directory flags
 _Static_assert(kOptSsopFlagCurdir == 0x1000, "kOptSsopFlagCurdir");
 _Static_assert(kOptSsopFlagSesdir == 0x800, "kOptSsopFlagSesdir");
 
@@ -155,7 +155,7 @@ int nvim_ses_vim_FullName(const char *fname, char *buf, size_t len, bool force)
   return vim_FullName(fname, buf, len, force);
 }
 
-// _Static_assert for Phase 4 constants
+// Static assertions for cursor/window size
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
 _Static_assert(kOptSsopFlagWinsize == 0x08, "kOptSsopFlagWinsize");
 
@@ -263,7 +263,7 @@ int nvim_ses_makeset(FILE *fd, int opt, bool local_only)
 }
 int nvim_ses_makefoldset(FILE *fd) { return makefoldset(fd); }
 
-// _Static_assert for Phase 6 constants
+// Static assertions for session option flags
 _Static_assert(kOptSsopFlagCursor == 0x4000, "kOptSsopFlagCursor");
 _Static_assert(kOptSsopFlagOptions == 0x20, "kOptSsopFlagOptions");
 _Static_assert(kOptSsopFlagLocaloptions == 0x10, "kOptSsopFlagLocaloptions");
@@ -315,7 +315,7 @@ int64_t nvim_ses_get_p_wiw(void) { return p_wiw; }
 const char *nvim_ses_get_p_shm(void) { return p_shm; }
 int64_t nvim_ses_get_p_stal(void) { return p_stal; }
 
-// _Static_assert for Phase 7 constants
+// Static assertions for buffer/tab/resize flags
 _Static_assert(kOptSsopFlagBuffers == 0x01, "kOptSsopFlagBuffers");
 _Static_assert(kOptSsopFlagGlobals == 0x100, "kOptSsopFlagGlobals");
 _Static_assert(kOptSsopFlagTabpages == 0x8000, "kOptSsopFlagTabpages");
@@ -383,7 +383,7 @@ const char *nvim_ses_get_EXRC_FILE(void) { return EXRC_FILE; }
 int nvim_ses_get_OPT_GLOBAL(void) { return OPT_GLOBAL; }
 int nvim_ses_get_OPT_SKIPRTP(void) { return OPT_SKIPRTP; }
 
-// _Static_assert for Phase 8 constants
+// Static assertions for source/global flags
 _Static_assert(kOptSsopFlagSkiprtp == 0x20000, "kOptSsopFlagSkiprtp");
 _Static_assert(DOSO_NONE == 0, "DOSO_NONE");
 _Static_assert(OPT_GLOBAL == 0x01, "OPT_GLOBAL");
