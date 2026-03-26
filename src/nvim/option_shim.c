@@ -124,10 +124,8 @@ _Static_assert(sizeof(vimoption_T) == 160,
 // Rust FFI declarations (used by internal code)
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 
-// Rust metadata query functions (option pass 8 phase 1)
-// is_option_hidden, option_has_type, option_has_scope now exported directly from Rust via #[export_name]
+// Rust metadata query functions
 extern int rs_option_is_global_local(int opt_idx);
-// New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
 
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
@@ -143,7 +141,6 @@ _Static_assert(UPD_CLEAR == 50, "UPD_CLEAR mismatch with Rust UpdateType::Clear"
 _Static_assert(NO_SCREEN == 2, "NO_SCREEN mismatch with Rust NO_SCREEN constant");
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch with Rust CTRL_C constant");
 _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constant");
-// Constant accessors replaced by Rust constants + static_assert validation
 _Static_assert(BCO_ENTER == 1, "BCO_ENTER mismatch with Rust BCO_ENTER constant");
 _Static_assert(BCO_ALWAYS == 2, "BCO_ALWAYS mismatch with Rust BCO_ALWAYS constant");
 _Static_assert(BCO_NOHELP == 4, "BCO_NOHELP mismatch with Rust BCO_NOHELP constant");
@@ -215,10 +212,7 @@ extern const char *rs_did_set_paste_full(optset_T *args);
 extern const char *rs_did_set_shellslash(optset_T *args);
 #endif
 
-// Phase 3: winhighlight callback (from Rust winhl.rs)
 extern const char *rs_did_set_winhighlight(optset_T *args);
-
-// Phase 2: Medium-complexity string callbacks (from Rust string_simple.rs)
 extern const char *rs_did_set_backupcopy(optset_T *args);
 extern const char *rs_did_set_commentstring(optset_T *args);
 extern const char *rs_did_set_comments(optset_T *args);
@@ -266,7 +260,6 @@ extern const char *rs_did_set_ambiwidth(optset_T *args);
 extern const char *rs_did_set_emoji(optset_T *args);
 extern const char *rs_did_set_showbreak(optset_T *args);
 extern const char *rs_did_set_cursorlineopt(optset_T *args);
-// Phase 1: moved to direct C calls (no more nvim_did_set_* wrappers needed)
 extern const char *rs_did_set_background(optset_T *args);
 extern const char *rs_did_set_buftype(optset_T *args);
 extern const char *rs_did_set_chars_option(optset_T *args);
@@ -284,8 +277,6 @@ extern const char *rs_did_set_cedit(optset_T *args);
 extern const char *rs_did_set_operatorfunc(optset_T *args);
 extern const char *rs_did_set_findfunc(optset_T *args);
 extern const char *rs_did_set_completeitemalign(optset_T *args);
-
-// Phase 109: rs_* aliases for already-Rust callbacks (didset.rs, userfunc.rs, tag, quickfix)
 extern const char *rs_did_set_helplang(optset_T *args);
 extern const char *rs_did_set_breakat(optset_T *args);
 extern const char *rs_did_set_backupext_or_patchmode(optset_T *args);
@@ -295,8 +286,6 @@ extern const char *rs_did_set_omnifunc(optset_T *args);
 extern const char *rs_did_set_thesaurusfunc(optset_T *args);
 extern const char *rs_did_set_tagfunc(optset_T *args);
 extern const char *rs_did_set_quickfixtextfunc(optset_T *args);
-
-// Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
 extern const char *rs_did_set_cpoptions(optset_T *args);
 extern const char *rs_did_set_formatoptions(optset_T *args);
@@ -313,17 +302,13 @@ extern const char *rs_did_set_display(optset_T *args);
 extern const char *rs_did_set_showcmdloc(optset_T *args);
 extern const char *rs_did_set_selection(optset_T *args);
 
-// OptVal helpers (from Rust value.rs)
+// OptVal helpers
 extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
 extern char *rs_optval_to_cstr(OptVal o);
 
 // Rust FFI declarations (window/layout module)
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
-
-// =============================================================================
-// Accessor functions for Rust code
-// =============================================================================
 
 // optset_T field accessors for Rust callbacks
 void *nvim_optset_get_win(const void *args) { return (void *)((const optset_T *)args)->os_win; }
@@ -339,7 +324,6 @@ void nvim_optset_set_value_changed(void *args, int val) { ((optset_T *)args)->os
 void nvim_optset_set_value_checked(void *args, int val) { ((optset_T *)args)->os_value_checked = val != 0; }
 const char *nvim_optset_get_oldval_str(const void *args) { return ((const optset_T *)args)->os_oldval.string.data; }
 
-// Phase 99: verbosefile / helpfile accessors
 int nvim_verbose_check_and_open(void) {
   verbose_stop();
   if (*p_vfile != NUL && verbose_open() == FAIL) {
@@ -348,16 +332,7 @@ int nvim_verbose_check_and_open(void) {
   return 1;  // OK
 }
 
-
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
-
-// =============================================================================
-// Setter functions for Rust code
-// =============================================================================
-
-// =============================================================================
-// Callback accessor functions for Rust callbacks module
-// =============================================================================
 
 // Window diff accessor
 int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
@@ -391,15 +366,8 @@ int nvim_option_buf_get_b_p_ro(buf_T *buf) { return buf ? buf->b_p_ro : 0; }
 void nvim_option_buf_set_b_did_warn(buf_T *buf, int val) { if (buf) buf->b_did_warn = val != 0; }
 void *nvim_option_buf_get_terminal_ptr(buf_T *buf) { return buf ? buf->terminal : NULL; }
 int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
-// Phase 88: undolevels accessors
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
-
-// Phase 96: spellcapcheck and keymodel accessors
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
-
-// Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
-
-// Phase 98: spell / border option accessors
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c
 
 // Iterate callback for all tab windows
@@ -460,10 +428,6 @@ void nvim_callback_win_set_scbind_pos(win_T *win, int value) {
   if (win) win->w_scbind_pos = value;
 }
 
-// =============================================================================
-// Phase 1 accessors for string callback migration
-// =============================================================================
-
 // Dereference varp as char** to get the current string value
 const char *nvim_optset_get_varp_str(const void *args)
 {
@@ -484,10 +448,6 @@ const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)
 // Return varp from optset_T (as void*)
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
 
-// =============================================================================
-// Phase 2 accessors for medium-complexity string callback migration
-// =============================================================================
-
 // Return os_newval.string.data from optset_T
 const char *nvim_optset_get_newval_str(const void *args)
 {
@@ -501,10 +461,6 @@ const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
 // Pointer accessors for option value arrays (return pointer to NULL-terminated array)
-
-// =============================================================================
-// Phase 3 accessors for parse_winhl_opt migration
-// =============================================================================
 
 // Window ns_hl_winhl accessors
 int nvim_win_get_ns_hl_winhl(win_T *win) { return win->w_ns_hl_winhl; }
@@ -534,14 +490,9 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
   ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL);
 }
 
-// =============================================================================
-// Simple accessor functions for Rust (don't require options array)
-// =============================================================================
-
 // fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
-
 
 #define OPTION_COUNT ARRAY_SIZE(options)
 
@@ -554,8 +505,6 @@ void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_cul
 #include "options.generated.h"
 #include "options_map.generated.h"
 
-// Rust behavior.rs now uses #[link_name] to call qf_resize_stack/ll_resize_stack directly.
-
 // lines_or_columns callback: restore option varp to its old number value
 void nvim_optset_restore_oldval_number(const void *args)
 {
@@ -563,10 +512,6 @@ void nvim_optset_restore_oldval_number(const void *args)
   OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval };
   rs_set_option_varp(a->os_idx, a->os_varp, oldval, 0);
 }
-
-// =============================================================================
-// Accessor functions for Rust setcmd module (require options array)
-// =============================================================================
 
 // Options array accessor
 vimoption_T *nvim_get_options_array(void) { return options; }
@@ -587,10 +532,6 @@ void *nvim_get_option_var(OptIndex opt_idx) {
   return options[opt_idx].var;
 }
 
-// =============================================================================
-// Accessor functions for rs_get_varp_from / rs_get_varp_scope_from
-// =============================================================================
-
 // Get p->var from a vimoption_T pointer
 void *nvim_vimoption_get_var(vimoption_T *p) { return p->var; }
 // Get p->flags_var from a vimoption_T pointer (NULL if not set)
@@ -602,9 +543,6 @@ OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - optio
 // Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
 int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
 
-// =============================================================================
-// Phase 8 metadata query accessors (Phase 1)
-// =============================================================================
 // Returns options[opt_idx].type as c_int for Rust metadata.rs
 int nvim_get_option_type(OptIndex opt_idx) { return (int)options[opt_idx].type; }
 // Returns options[opt_idx].scope_flags as c_int for Rust metadata.rs
@@ -618,9 +556,6 @@ const void *nvim_get_option_def_val_data_ptr(OptIndex opt_idx) { return &options
 // Returns &options[opt_idx].script_ctx as void* for Rust metadata.rs
 void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx].script_ctx; }
 
-// =============================================================================
-// Phase 8 default value management accessors (Phase 2)
-// =============================================================================
 // Set options[opt_idx].def_val (write accessor for Rust)
 void nvim_set_option_def_val(OptIndex opt_idx, OptVal val) { options[opt_idx].def_val = val; }
 // Returns get_varp(&options[opt_idx]) for check_options loop in Rust
@@ -628,9 +563,6 @@ void *nvim_get_option_varp_for_check(OptIndex opt_idx) { return get_varp(&option
 // Get the cmdheight default value as a number for set_init_tablocal
 int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_val.data.number; }
 
-// =============================================================================
-// Phase 8 validate_option_value cluster accessors (Phase 3)
-// =============================================================================
 // Returns 1 if the current user is root (getuid() == ROOT_UID), 0 otherwise.
 int nvim_is_root_user(void)
 {
@@ -640,10 +572,6 @@ int nvim_is_root_user(void)
   return 0;
 #endif
 }
-
-// nvim_buf_opt_field_offsets: moved to buffer_shim.c
-// nvim_win_get_opt_field_addr: moved to window_shim.c
-
 
 // Option script context accessor
 sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) {
@@ -682,9 +610,6 @@ int nvim_curbuf_get_b_p_ml(void) { return curbuf->b_p_ml; }
 void nvim_curbuf_set_b_p_ml(int v) { curbuf->b_p_ml = v != 0; }
 int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
-// =============================================================================
-// Phase 4 (option pass 4) accessors for query.rs migration
-// =============================================================================
 
 // b_p_ep / p_ep accessors (for get_equalprg)
 const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
@@ -718,27 +643,19 @@ void nvim_curwin_set_p_script_ctx(int idx, sctx_T sctx) { curwin->w_p_script_ctx
 void nvim_curwin_set_allbuf_opt_script_ctx(int idx, sctx_T sctx) { curwin->w_allbuf_opt.wo_script_ctx[idx] = sctx; }
 void nvim_option_set_script_ctx(OptIndex opt_idx, sctx_T sctx) { options[opt_idx].script_ctx = sctx; }
 
-// Phase 4 (session.rs) accessors
 void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
 {
   return get_varp_scope(&options[opt_idx], opt_flags);
 }
-// nvim_get_namebuff is defined in buffer.c
 void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
-// Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
-// Accessors for rs_ex_set and rs_validate_opt_idx (option pass 7 phase 3)
 int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
 int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }
 
 // Get the option fullname for writing to session files
 const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx].fullname; }
-// Get kOptSyntax and kOptFiletype indices (already exist as enum values in opt_index.rs)
-
-// nvim_winopt_string_field_ptr, nvim_copy_winopt_scalars, nvim_copy_winopt_save_strs,
-// nvim_copy_winopt_script_ctx, nvim_win_update_grid_blending: moved to window_shim.c
 
 /// Get the address of p_kp (keywordprg global), as void*.
 /// Used by Rust stropt_get_newval to detect keywordprg option.
@@ -1006,13 +923,8 @@ void win_copy_options(win_T *wp_from, win_T *wp_to)
   didset_window_options(wp_to, true);
 }
 
-// expand_option_start_col and expand_option_append live in Rust (setcmd.rs).
 extern int expand_option_start_col;
 extern bool expand_option_append;
-
-// =============================================================================
-// Accessors for rs_set_context_in_set_cmd (Rust Phase 3)
-// =============================================================================
 
 // expand_T field accessors
 int nvim_xp_get_context(expand_T *xp) { return xp->xp_context; }
@@ -1205,12 +1117,6 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
   return dict;
 }
 
-// nvim_validate_opt_idx: broken circular wrapper deleted; setcmd.rs now calls rs_validate_opt_idx directly.
-
-// =============================================================================
-// Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
-// =============================================================================
-
 /// Apply EVENT_SYNTAX autocmds for the given buffer.
 /// @param force  whether to force the autocmd (value_changed || syn_recursive == 1)
 void nvim_apply_syntax_autocmd(buf_T *buf, bool force)
@@ -1230,10 +1136,6 @@ int nvim_buf_get_b_p_ff_first(const buf_T *buf)
   return (buf && buf->b_p_ff) ? (unsigned char)(*buf->b_p_ff) : 0;
 }
 
-// =============================================================================
-// Phase 6 accessors: showoptions / showoneopt
-// =============================================================================
-
 /// Get the varp for an option by index (using get_varp for the current/global value).
 void *nvim_get_varp_by_idx(OptIndex opt_idx)
 {
@@ -1246,10 +1148,6 @@ int nvim_varp_is_curbuf_b_changed(const void *varp)
 {
   return (const int *)varp == &curbuf->b_changed ? 1 : 0;
 }
-
-// =============================================================================
-// Phase 6 accessors: ExpandSettings / match_str / escape_option_str_cmdline
-// =============================================================================
 
 extern char *rs_escape_option_str_cmdline(const char *var);
 
@@ -1314,10 +1212,6 @@ void nvim_option_fuzmatch_set(void *fuzmatch, int idx, const char *str, int scor
   fm[idx].score = score;
 }
 
-// =============================================================================
-// Phase 9 (pass 9) accessors: did_set_option / set_option / apply_optionset_autocmd
-// =============================================================================
-
 /// Invoke the did_set_cb for an option. Constructs optset_T in C and calls the callback.
 /// Returns NULL on success, error message on failure.
 /// Output fields are written back to *value_changed_out, *value_checked_out, *restore_chartab_out.
@@ -1363,12 +1257,6 @@ void nvim_set_option_sctx_from_sid(OptIndex opt_idx, int opt_flags, int set_sid)
 /// Returns 1 if opt->opt_did_set_cb is non-NULL for opt_idx.
 int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_did_set_cb != NULL ? 1 : 0; }
 
-// nvim_curwin_get_w_curswant and nvim_curwin_set_w_set_curswant are defined in indent_ffi.c
-
-/// Get `secure` global variable
-// nvim_get_secure, nvim_set_secure are defined in ex_docmd.c
-// nvim_get_sandbox is defined in undo.c
-
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
 {
@@ -1386,10 +1274,6 @@ vimoption_T *nvim_get_option_ptr_by_idx(OptIndex opt_idx)
 {
   return &options[opt_idx];
 }
-
-// =============================================================================
-// Phase 9 (pass 9) trampolines: set_option / apply_optionset_autocmd
-// =============================================================================
 
 /// Apply the OptionSet autocommand: called from rs_set_option_impl in Rust.
 /// Keeps VimL type system interactions (optval_as_tv, set_vim_var_tv, etc.) in C.
@@ -1439,11 +1323,6 @@ void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
   ui_call_option_set(cstr_as_string(options[opt_idx].fullname), optval_as_object(saved_new_value));
 }
 
-// rs_set_option_impl is declared at the top of the extern declarations section above.
-
-// Most buf_copy_options accessors moved to buffer_shim.c.
-// nvim_buf_copy_opt_sctx stays here because it accesses options[buf_opt_idx[]].
-
 /// Copy global script_ctx for a buf-opt index to the buffer's script_ctx array.
 /// Implements COPY_OPT_SCTX(buf, bv).
 void nvim_buf_copy_opt_sctx(buf_T *buf, int bv)
@@ -1452,10 +1331,6 @@ void nvim_buf_copy_opt_sctx(buf_T *buf, int bv)
     buf->b_p_script_ctx[bv] = options[buf_opt_idx[bv]].script_ctx;
   }
 }
-
-// =============================================================================
-// Phase 11 compile-time assertions and remaining init accessors
-// =============================================================================
 
 // Compile-time boundary validation for kBufOpt enum (Rust K_BUF_OPT_* constants).
 // Checks first value, last value, and count; specific index alignment is validated at
@@ -1473,12 +1348,6 @@ void nvim_call_bind_textdomain_codeset(void)
 #endif
 }
 
-// =============================================================================
-// Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers
-// =============================================================================
-
-// didset_string_options is now implemented in Rust; this call goes directly to Rust.
-// (The Rust implementation is registered via #[export_name = "didset_string_options"])
 extern void didset_string_options(void);  // defined in Rust optionstr crate
 /// xfree(curbuf->b_p_vsts_array) + tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array).
 void nvim_call_curbuf_tabstop_set_vsts(void)
@@ -1493,10 +1362,6 @@ void nvim_call_curbuf_tabstop_set_vts(void)
   tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array);
 }
 
-// =============================================================================
-// Phase 12 lifecycle accessors
-// =============================================================================
-
 /// free_operatorfunc_option() wrapper (EXITFREE only).
 #if defined(EXITFREE)
 void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
@@ -1504,10 +1369,7 @@ void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 void nvim_call_free_operatorfunc_option(void) {}
 #endif
 
-// =============================================================================
-// optexpand_T field accessors for Rust expand.rs
-// =============================================================================
-
+// optexpand_T field accessors
 char *nvim_oe_get_opt_value(const optexpand_T *args) { return args->oe_opt_value; }
 const char *nvim_oe_get_set_arg(const optexpand_T *args) { return args->oe_set_arg; }
 bool nvim_oe_get_append(const optexpand_T *args) { return args->oe_append; }
@@ -1521,17 +1383,10 @@ int nvim_oe_get_idx(const optexpand_T *args) { return (int)args->oe_idx; }
 const char **nvim_option_get_values(const vimoption_T *opt) { return (const char **)opt->values; }
 size_t nvim_option_get_values_len(const vimoption_T *opt) { return opt->values_len; }
 
-
 // Window p_lcs accessor
 const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : NULL; }
 
-// =============================================================================
-// Phase 4 (optionstr): check_str_opt infrastructure for Rust migration
-// =============================================================================
-// =============================================================================
-// Regex match accessors for buffer name matching (used by buffer/expand.rs)
-// =============================================================================
-
+// Regex match accessors
 /// Get p_fic (fileignorecase) option value.
 bool nvim_get_p_fic(void)
 {
@@ -1551,13 +1406,6 @@ bool nvim_regmatch_exec(void *handle, const char *name)
   if (handle == NULL || name == NULL) { return false; }
   return vim_regexec((regmatch_T *)handle, (char *)name, 0);
 }
-
-
-
-
-// =============================================================================
-// Modeline option-setting accessors (used by buffer/modeline.rs)
-// =============================================================================
 
 /// Call do_set(s, flags).  Returns OK (0) or FAIL (-1).
 int nvim_do_set(char *s, int flags)
