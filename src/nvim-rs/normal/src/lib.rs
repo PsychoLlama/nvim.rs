@@ -282,15 +282,12 @@ extern "C" {
     fn nvim_set_b_visual_vi_curswant(val: c_int);
     fn nvim_set_curbuf_visual_mode_eval(val: c_int);
     fn nvim_p_sel_is_exclusive() -> bool;
-    fn nvim_getvcols_call(
-        lnum1: c_int,
-        col1: c_int,
-        coladd1: c_int,
-        lnum2: c_int,
-        col2: c_int,
-        coladd2: c_int,
-        out_left: *mut c_int,
-        out_right: *mut c_int,
+    fn getvcols(
+        wp: WinHandle,
+        pos1: *const crate::types::PosT,
+        pos2: *const crate::types::PosT,
+        left: *mut c_int,
+        right: *mut c_int,
     );
     fn findmatch(oap: OapHandle, initc: c_int) -> *mut crate::types::PosT;
     #[allow(dead_code)]
@@ -5593,7 +5590,7 @@ extern "C" {
     fn nvim_hasFolding_cursor_set_lnum_up();
     fn nvim_hasFolding_cursor_set_lnum_down();
     fn nvim_set_curbuf_b_last_changedtick_i();
-    fn nvim_u_save_for_opencmd(backward: bool) -> bool;
+    fn u_save(top: c_int, bot: c_int) -> c_int;
     fn open_line(
         dir: c_int,
         flags: c_int,
@@ -5980,7 +5977,10 @@ pub unsafe extern "C" fn rs_n_opencmd(cap: CapHandle) {
     // trigger TextChangedI for the 'o/O' command
     nvim_set_curbuf_b_last_changedtick_i();
 
-    if nvim_u_save_for_opencmd(backward) {
+    let lnum = nvim_get_cursor_lnum();
+    let u_save_top = lnum - c_int::from(backward);
+    let u_save_bot = lnum + c_int::from(!backward);
+    if u_save(u_save_top, u_save_bot) != 0 {
         let do_com = has_format_option(c_int::from(b'o')); // FO_OPEN_COMS
         let dir = if backward { BACKWARD } else { FORWARD };
         let flags = if do_com { 0x02 } else { 0 }; // 0x02 = OPENLINE_DO_COM
@@ -7136,13 +7136,20 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
     if cmdchar == c_int::from(b'O') && nvim_get_VIsual_mode() == CTRL_V {
         let mut left: c_int = 0;
         let mut right: c_int = 0;
-        nvim_getvcols_call(
-            old_lnum,
-            old_col,
-            old_coladd,
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
+        let pos1 = crate::types::PosT {
+            lnum: old_lnum,
+            col: old_col,
+            coladd: old_coladd,
+        };
+        let pos2 = crate::types::PosT {
+            lnum: nvim_get_VIsual_lnum(),
+            col: nvim_get_VIsual_col(),
+            coladd: nvim_get_VIsual_coladd(),
+        };
+        getvcols(
+            nvim_get_curwin(),
+            &raw const pos1,
+            &raw const pos2,
             &raw mut left,
             &raw mut right,
         );

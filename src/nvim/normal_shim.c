@@ -570,17 +570,6 @@ bool nvim_p_sel_is_exclusive(void) { return *p_sel == 'e'; }
 
 
 /// Wrapper for getvcols: takes two positions, returns left/right via out-params.
-void nvim_getvcols_call(int lnum1, int col1, int coladd1,
-                        int lnum2, int col2, int coladd2,
-                        int *out_left, int *out_right)
-{
-  pos_T pos1 = { lnum1, col1, coladd1 };
-  pos_T pos2 = { lnum2, col2, coladd2 };
-  colnr_T left, right;
-  getvcols(curwin, &pos1, &pos2, &left, &right);
-  *out_left = left;
-  *out_right = right;
-}
 
 /// mark_mb_adjustpos for arbitrary pos (by lnum/col/coladd).
 /// Updates *col_out after adjustment and returns new col.
@@ -675,7 +664,6 @@ int nvim_getvvcol_cursor_end(void) { colnr_T vcol; getvvcol(curwin, &curwin->w_c
 void nvim_hasFolding_cursor_set_lnum_up(void) { hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL); }
 void nvim_hasFolding_cursor_set_lnum_down(void) { hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum); }
 void nvim_set_curbuf_b_last_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
-bool nvim_u_save_for_opencmd(bool backward) { return u_save(curwin->w_cursor.lnum - (backward ? 1 : 0), curwin->w_cursor.lnum + (backward ? 0 : 1)) != 0; }
 void nvim_clear_curwin_w_valid_crow(void) { curwin->w_valid &= ~VALID_CROW; }
 /// mark_mb_adjustpos for cursor: adjusts curwin->w_cursor via curbuf,
 /// returns new col.
