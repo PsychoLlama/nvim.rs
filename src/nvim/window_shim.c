@@ -2495,3 +2495,23 @@ void nvim_buf_terminal_get_line_attributes(void *terminal, win_T *wp, int lnum, 
 /// kMTMetaInline constant (value 2).
 int nvim_get_kMTMetaInline(void) { return (int)kMTMetaInline; }
 
+// ============================================================================
+// Phase 3 (win_line setup migration): additional C accessor functions
+// ============================================================================
+
+#include "nvim/quickfix.h"
+
+// nvim_win_get_topfill and nvim_win_get_leftcol already exported from Rust window crate.
+
+/// Get qf_current_entry(wp) == lnum for win_line setup.
+int nvim_win_qf_current_entry(win_T *wp) { return (int)qf_current_entry(wp); }
+
+/// Check if wp->w_buffer == curwin->w_buffer.
+int nvim_win_buf_eq_curwin_buf(win_T *wp) { return wp->w_buffer == curwin->w_buffer ? 1 : 0; }
+
+/// Get ml_get_buf_len for a buffer pointer (not a window).
+int nvim_buf_ml_get_buf_len(buf_T *buf, int lnum) { return (int)ml_get_buf_len(buf, (linenr_T)lnum); }
+
+/// Set spv_checked_col.
+void nvim_spv_set_checked_col(void *spv, int val) { ((spellvars_T *)spv)->spv_checked_col = val; }
+

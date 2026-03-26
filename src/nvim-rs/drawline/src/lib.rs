@@ -606,6 +606,14 @@ extern "C" {
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_win_syntax_present(wp: WinHandle) -> c_int;
     fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
+
+    // Phase 3 (win_line setup migration): additional accessors
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
+    fn nvim_win_qf_current_entry(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_eq_curwin_buf(wp: WinHandle) -> c_int;
+    fn nvim_buf_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
+    fn nvim_spv_set_checked_col(spv: *mut c_void, val: c_int);
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -3879,7 +3887,6 @@ pub unsafe extern "C" fn rs_decor_providers_setup(
 ) -> c_int {
     decor_providers_setup_impl(rows_to_draw, draw_from_line_start, lnum, col, wp)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
