@@ -812,66 +812,7 @@ static void f_chansend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 ///
 /// @return  the character index of the column if 'charcol' is true,
 ///          otherwise the byte index of the column.
-static void get_col(typval_T *argvars, typval_T *rettv, bool charcol)
-{
-  if (tv_check_for_string_or_list_arg(argvars, 0) == FAIL
-      || tv_check_for_opt_number_arg(argvars, 1) == FAIL) {
-    return;
-  }
 
-  switchwin_T switchwin;
-  bool winchanged = false;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    // use the window specified in the second argument
-    tabpage_T *tp;
-    win_T *wp = win_id2wp_tp((int)tv_get_number(&argvars[1]), &tp);
-    if (wp == NULL || tp == NULL) {
-      return;
-    }
-
-    if (switch_win_noblock(&switchwin, wp, tp, true) != OK) {
-      return;
-    }
-
-    check_cursor(curwin);
-    winchanged = true;
-  }
-
-  colnr_T col = 0;
-  int fnum = curbuf->b_fnum;
-  pos_T *fp = var2fpos(&argvars[0], false, &fnum, charcol);
-  if (fp != NULL && fnum == curbuf->b_fnum) {
-    if (fp->col == MAXCOL) {
-      // '> can be MAXCOL, get the length of the line then
-      if (fp->lnum <= curbuf->b_ml.ml_line_count) {
-        col = ml_get_len(fp->lnum) + 1;
-      } else {
-        col = MAXCOL;
-      }
-    } else {
-      col = fp->col + 1;
-      // col(".") when the cursor is on the NUL at the end of the line
-      // because of "coladd" can be seen as an extra column.
-      if (virtual_active(curwin) && fp == &curwin->w_cursor) {
-        char *p = get_cursor_pos_ptr();
-        if (curwin->w_cursor.coladd >=
-            (colnr_T)win_chartabsize(curwin, p,
-                                     curwin->w_virtcol - curwin->w_cursor.coladd)) {
-          int l;
-          if (*p != NUL && p[(l = utfc_ptr2len(p))] == NUL) {
-            col += l;
-          }
-        }
-      }
-    }
-  }
-  rettv->vval.v_number = col;
-
-  if (winchanged) {
-    restore_win_noblock(&switchwin, true);
-  }
-}
 
 win_T *get_optional_window(typval_T *argvars, int idx)
 {
@@ -893,69 +834,7 @@ win_T *get_optional_window(typval_T *argvars, int idx)
 /// Set the cursor position.
 /// If "charcol" is true, then use the column number as a character offset.
 /// Otherwise use the column number as a byte offset.
-static void set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
-{
-  linenr_T lnum;
-  colnr_T col;
-  colnr_T coladd = 0;
-  bool set_curswant = true;
 
-  rettv->vval.v_number = -1;
-  if (argvars[0].v_type == VAR_LIST) {
-    pos_T pos;
-    colnr_T curswant = -1;
-
-    if (list2fpos(argvars, &pos, NULL, &curswant, charcol) == FAIL) {
-      emsg(_(e_invarg));
-      return;
-    }
-
-    lnum = pos.lnum;
-    col = pos.col;
-    coladd = pos.coladd;
-    if (curswant >= 0) {
-      curwin->w_curswant = curswant - 1;
-      set_curswant = false;
-    }
-  } else if ((argvars[0].v_type == VAR_NUMBER || argvars[0].v_type == VAR_STRING)
-             && (argvars[1].v_type == VAR_NUMBER || argvars[1].v_type == VAR_STRING)) {
-    lnum = tv_get_lnum(argvars);
-    if (lnum < 0) {
-      semsg(_(e_invarg2), tv_get_string(&argvars[0]));
-    } else if (lnum == 0) {
-      lnum = curwin->w_cursor.lnum;
-    }
-    col = (colnr_T)tv_get_number_chk(&argvars[1], NULL);
-    if (charcol) {
-      col = rs_buf_charidx_to_byteidx(curbuf, lnum, (int)col) + 1;
-    }
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      coladd = (colnr_T)tv_get_number_chk(&argvars[2], NULL);
-    }
-  } else {
-    emsg(_(e_invarg));
-    return;
-  }
-  if (lnum < 0 || col < 0 || coladd < 0) {
-    return;  // type error; errmsg already given
-  }
-  if (lnum > 0) {
-    curwin->w_cursor.lnum = lnum;
-  }
-  if (col != MAXCOL && --col < 0) {
-    col = 0;
-  }
-  curwin->w_cursor.col = col;
-  curwin->w_cursor.coladd = coladd;
-
-  // Make sure the cursor is in a valid position.
-  check_cursor(curwin);
-  // Correct cursor for multi-byte character.
-  mb_adjust_cursor();
-
-  curwin->w_set_curswant = set_curswant;
-  rettv->vval.v_number = 0;
-}
 
 /// "cursor(lnum, col)" function, or
 /// "cursor(list)"
@@ -1186,51 +1065,7 @@ static void f_expandcmd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "flatten()" and "flattennew()" functions
-static void flatten_common(typval_T *argvars, typval_T *rettv, bool make_copy)
-{
-  bool error = false;
 
-  if (argvars[0].v_type != VAR_LIST) {
-    semsg(_(e_listarg), "flatten()");
-    return;
-  }
-
-  int maxdepth;
-  if (argvars[1].v_type == VAR_UNKNOWN) {
-    maxdepth = 999999;
-  } else {
-    maxdepth = (int)tv_get_number_chk(&argvars[1], &error);
-    if (error) {
-      return;
-    }
-    if (maxdepth < 0) {
-      emsg(_("E900: maxdepth must be non-negative number"));
-      return;
-    }
-  }
-
-  list_T *list = argvars[0].vval.v_list;
-  rettv->v_type = VAR_LIST;
-  rettv->vval.v_list = list;
-  if (list == NULL) {
-    return;
-  }
-
-  if (make_copy) {
-    list = tv_list_copy(NULL, list, false, rs_get_copyID());
-    rettv->vval.v_list = list;
-    if (list == NULL) {
-      return;
-    }
-  } else {
-    if (value_check_lock(tv_list_locked(list), N_("flatten() argument"), TV_TRANSLATE)) {
-      return;
-    }
-    tv_list_ref(list);
-  }
-
-  tv_list_flatten(list, NULL, tv_list_len(list), maxdepth);
-}
 
 /// "flatten(list[, {maxdepth}])" function
 /// "feedkeys()" function
@@ -1571,61 +1406,6 @@ static void f_getchangelist(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
     tv_dict_add_nr(d, S_LEN("lnum"), buf->b_changelist[i].mark.lnum);
     tv_dict_add_nr(d, S_LEN("col"), buf->b_changelist[i].mark.col);
     tv_dict_add_nr(d, S_LEN("coladd"), buf->b_changelist[i].mark.coladd);
-  }
-}
-
-static void getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool charcol)
-{
-  pos_T *fp = NULL;
-  pos_T pos;
-  win_T *wp = curwin;
-  int fnum = -1;
-
-  if (getcurpos) {
-    if (argvars[0].v_type != VAR_UNKNOWN) {
-      wp = find_win_by_nr_or_id(&argvars[0]);
-      if (wp != NULL) {
-        fp = &wp->w_cursor;
-      }
-    } else {
-      fp = &curwin->w_cursor;
-    }
-    if (fp != NULL && charcol) {
-      pos = *fp;
-      pos.col = rs_buf_byteidx_to_charidx(wp->w_buffer, pos.lnum, pos.col);
-      fp = &pos;
-    }
-  } else {
-    fp = var2fpos(&argvars[0], true, &fnum, charcol);
-  }
-
-  list_T *const l = tv_list_alloc_ret(rettv, 4 + getcurpos);
-  tv_list_append_number(l, (fnum != -1) ? (varnumber_T)fnum : (varnumber_T)0);
-  tv_list_append_number(l, ((fp != NULL) ? (varnumber_T)fp->lnum : (varnumber_T)0));
-  tv_list_append_number(l, ((fp != NULL)
-                            ? (varnumber_T)(fp->col == MAXCOL ? MAXCOL : fp->col + 1)
-                            : (varnumber_T)0));
-  tv_list_append_number(l, (fp != NULL) ? (varnumber_T)fp->coladd : (varnumber_T)0);
-  if (getcurpos) {
-    const bool save_set_curswant = curwin->w_set_curswant;
-    const colnr_T save_curswant = curwin->w_curswant;
-    const colnr_T save_virtcol = curwin->w_virtcol;
-
-    if (wp == curwin) {
-      update_curswant();
-    }
-    tv_list_append_number(l, (wp == NULL) ? 0 : ((wp->w_curswant == MAXCOL)
-                                                 ? (varnumber_T)MAXCOL
-                                                 : (varnumber_T)wp->w_curswant + 1));
-
-    // Do not change "curswant", as it is unexpected that a get
-    // function has a side effect.
-    if (wp == curwin && save_set_curswant) {
-      curwin->w_set_curswant = save_set_curswant;
-      curwin->w_curswant = save_curswant;
-      curwin->w_virtcol = save_virtcol;
-      curwin->w_valid &= ~VALID_VIRTCOL;
-    }
   }
 }
 
@@ -2726,48 +2506,6 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// json_encode() function
 /// "keytrans()" function
 
-static void libcall_common(typval_T *argvars, typval_T *rettv, int out_type)
-{
-  rettv->v_type = (VarType)out_type;
-  if (out_type != VAR_NUMBER) {
-    rettv->vval.v_string = NULL;
-  }
-
-  if (rs_check_secure()) {
-    return;
-  }
-
-  // The first two args (libname and funcname) must be strings
-  if (argvars[0].v_type != VAR_STRING || argvars[1].v_type != VAR_STRING) {
-    return;
-  }
-
-  const char *libname = argvars[0].vval.v_string;
-  const char *funcname = argvars[1].vval.v_string;
-
-  VarType in_type = argvars[2].v_type;
-
-  // input variables
-  char *str_in = (in_type == VAR_STRING) ? argvars[2].vval.v_string : NULL;
-  int int_in = (int)argvars[2].vval.v_number;
-
-  // output variables
-  char **str_out = (out_type == VAR_STRING) ? &rettv->vval.v_string : NULL;
-  int int_out = 0;
-
-  bool success = os_libcall(libname, funcname,
-                            str_in, int_in,
-                            str_out, &int_out);
-
-  if (!success) {
-    semsg(_(e_libcall), funcname);
-    return;
-  }
-
-  if (out_type == VAR_NUMBER) {
-    rettv->vval.v_number = (varnumber_T)int_out;
-  }
-}
 
 /// "libcall()" function
 /// "line(string, [winid])" function
@@ -3237,46 +2975,7 @@ theend:
 ///                     vval.v_number, type is not touched. Returns zero for
 ///                     empty lists/dictionaries.
 /// @param[in]  domax  Determines whether maximal or minimal value is desired.
-static void max_min(const typval_T *const tv, typval_T *const rettv, const bool domax)
-  FUNC_ATTR_NONNULL_ALL
-{
-  bool error = false;
 
-  rettv->vval.v_number = 0;
-  varnumber_T n = (domax ? VARNUMBER_MIN : VARNUMBER_MAX);
-  if (tv->v_type == VAR_LIST) {
-    if (tv_list_len(tv->vval.v_list) == 0) {
-      return;
-    }
-    TV_LIST_ITER_CONST(tv->vval.v_list, li, {
-      const varnumber_T i = tv_get_number_chk(TV_LIST_ITEM_TV(li), &error);
-      if (error) {
-        return;  // type error; errmsg already given
-      }
-      if (domax ? i > n : i < n) {
-        n = i;
-      }
-    });
-  } else if (tv->v_type == VAR_DICT) {
-    if (tv_dict_len(tv->vval.v_dict) == 0) {
-      return;
-    }
-    TV_DICT_ITER(tv->vval.v_dict, di, {
-      const varnumber_T i = tv_get_number_chk(&di->di_tv, &error);
-      if (error) {
-        return;  // type error; errmsg already given
-      }
-      if (domax ? i > n : i < n) {
-        n = i;
-      }
-    });
-  } else {
-    semsg(_(e_listdictarg), domax ? "max()" : "min()");
-    return;
-  }
-
-  rettv->vval.v_number = n;
-}
 
 /// "mode()" function
 
@@ -4138,43 +3837,6 @@ cleanup:
 /// Set the cursor or mark position.
 /// If "charpos" is true, then use the column number as a character offset.
 /// Otherwise use the column number as a byte offset.
-static void set_position(typval_T *argvars, typval_T *rettv, bool charpos)
-{
-  colnr_T curswant = -1;
-
-  rettv->vval.v_number = -1;
-  const char *const name = tv_get_string_chk(argvars);
-  if (name == NULL) {
-    return;
-  }
-
-  pos_T pos;
-  int fnum;
-  if (list2fpos(&argvars[1], &pos, &fnum, &curswant, charpos) != OK) {
-    return;
-  }
-
-  if (pos.col != MAXCOL && --pos.col < 0) {
-    pos.col = 0;
-  }
-  if (name[0] == '.' && name[1] == NUL) {
-    // set cursor; "fnum" is ignored
-    curwin->w_cursor = pos;
-    if (curswant >= 0) {
-      curwin->w_curswant = curswant - 1;
-      curwin->w_set_curswant = false;
-    }
-    check_cursor(curwin);
-    rettv->vval.v_number = 0;
-  } else if (name[0] == '\'' && name[1] != NUL && name[2] == NUL) {
-    // set mark
-    if (setmark_pos((uint8_t)name[1], &pos, fnum, NULL) == OK) {
-      rettv->vval.v_number = 0;
-    }
-  } else {
-    emsg(_(e_invarg));
-  }
-}
 
 
 /// "setfperm({fname}, {mode})" function
@@ -4691,11 +4353,117 @@ int nvim_eval_pum_visible(void) { return pum_visible() ? 1 : 0; }
 int nvim_eval_os_get_pid(void) { return (int)os_get_pid(); }
 void nvim_eval_get_col(typval_T *argvars, typval_T *rettv, bool charcol)
 {
-  get_col(argvars, rettv, charcol);
+  if (tv_check_for_string_or_list_arg(argvars, 0) == FAIL
+      || tv_check_for_opt_number_arg(argvars, 1) == FAIL) {
+    return;
+  }
+
+  switchwin_T switchwin;
+  bool winchanged = false;
+
+  if (argvars[1].v_type != VAR_UNKNOWN) {
+    // use the window specified in the second argument
+    tabpage_T *tp;
+    win_T *wp = win_id2wp_tp((int)tv_get_number(&argvars[1]), &tp);
+    if (wp == NULL || tp == NULL) {
+      return;
+    }
+
+    if (switch_win_noblock(&switchwin, wp, tp, true) != OK) {
+      return;
+    }
+
+    check_cursor(curwin);
+    winchanged = true;
+  }
+
+  colnr_T col = 0;
+  int fnum = curbuf->b_fnum;
+  pos_T *fp = var2fpos(&argvars[0], false, &fnum, charcol);
+  if (fp != NULL && fnum == curbuf->b_fnum) {
+    if (fp->col == MAXCOL) {
+      // '> can be MAXCOL, get the length of the line then
+      if (fp->lnum <= curbuf->b_ml.ml_line_count) {
+        col = ml_get_len(fp->lnum) + 1;
+      } else {
+        col = MAXCOL;
+      }
+    } else {
+      col = fp->col + 1;
+      // col(".") when the cursor is on the NUL at the end of the line
+      // because of "coladd" can be seen as an extra column.
+      if (virtual_active(curwin) && fp == &curwin->w_cursor) {
+        char *p = get_cursor_pos_ptr();
+        if (curwin->w_cursor.coladd >=
+            (colnr_T)win_chartabsize(curwin, p,
+                                     curwin->w_virtcol - curwin->w_cursor.coladd)) {
+          int l;
+          if (*p != NUL && p[(l = utfc_ptr2len(p))] == NUL) {
+            col += l;
+          }
+        }
+      }
+    }
+  }
+  rettv->vval.v_number = col;
+
+  if (winchanged) {
+    restore_win_noblock(&switchwin, true);
+  }
 }
 void nvim_eval_getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool charcol)
 {
-  getpos_both(argvars, rettv, getcurpos, charcol);
+  pos_T *fp = NULL;
+  pos_T pos;
+  win_T *wp = curwin;
+  int fnum = -1;
+
+  if (getcurpos) {
+    if (argvars[0].v_type != VAR_UNKNOWN) {
+      wp = find_win_by_nr_or_id(&argvars[0]);
+      if (wp != NULL) {
+        fp = &wp->w_cursor;
+      }
+    } else {
+      fp = &curwin->w_cursor;
+    }
+    if (fp != NULL && charcol) {
+      pos = *fp;
+      pos.col = rs_buf_byteidx_to_charidx(wp->w_buffer, pos.lnum, pos.col);
+      fp = &pos;
+    }
+  } else {
+    fp = var2fpos(&argvars[0], true, &fnum, charcol);
+  }
+
+  list_T *const l = tv_list_alloc_ret(rettv, 4 + getcurpos);
+  tv_list_append_number(l, (fnum != -1) ? (varnumber_T)fnum : (varnumber_T)0);
+  tv_list_append_number(l, ((fp != NULL) ? (varnumber_T)fp->lnum : (varnumber_T)0));
+  tv_list_append_number(l, ((fp != NULL)
+                            ? (varnumber_T)(fp->col == MAXCOL ? MAXCOL : fp->col + 1)
+                            : (varnumber_T)0));
+  tv_list_append_number(l, (fp != NULL) ? (varnumber_T)fp->coladd : (varnumber_T)0);
+  if (getcurpos) {
+    const bool save_set_curswant = curwin->w_set_curswant;
+    const colnr_T save_curswant = curwin->w_curswant;
+    const colnr_T save_virtcol = curwin->w_virtcol;
+
+    if (wp == curwin) {
+      update_curswant();
+    }
+    tv_list_append_number(l, (wp == NULL) ? 0 : ((wp->w_curswant == MAXCOL)
+                                                 ? (varnumber_T)MAXCOL
+                                                 : (varnumber_T)wp->w_curswant + 1));
+
+    // Do not change "curswant", as it is unexpected that a get
+    // function has a side effect.
+    if (wp == curwin && save_set_curswant) {
+      curwin->w_set_curswant = save_set_curswant;
+      curwin->w_curswant = save_curswant;
+      curwin->w_virtcol = save_virtcol;
+      curwin->w_valid &= ~VALID_VIRTCOL;
+    }
+  }
 }
 const char *nvim_eval_get_windows_version(void) { return windowsVersion; }
 
@@ -4707,7 +4475,42 @@ void nvim_eval_find_some_match(typval_T *argvars, typval_T *rettv, int kind)
 }
 void nvim_eval_max_min(typval_T *argvars, typval_T *rettv, bool domax)
 {
-  max_min(argvars, rettv, domax);
+  bool error = false;
+
+  rettv->vval.v_number = 0;
+  varnumber_T n = (domax ? VARNUMBER_MIN : VARNUMBER_MAX);
+  if (argvars->v_type == VAR_LIST) {
+    if (tv_list_len(argvars->vval.v_list) == 0) {
+      return;
+    }
+    TV_LIST_ITER_CONST(argvars->vval.v_list, li, {
+      const varnumber_T i = tv_get_number_chk(TV_LIST_ITEM_TV(li), &error);
+      if (error) {
+        return;  // type error; errmsg already given
+      }
+      if (domax ? i > n : i < n) {
+        n = i;
+      }
+    });
+  } else if (argvars->v_type == VAR_DICT) {
+    if (tv_dict_len(argvars->vval.v_dict) == 0) {
+      return;
+    }
+    TV_DICT_ITER(argvars->vval.v_dict, di, {
+      const varnumber_T i = tv_get_number_chk(&di->di_tv, &error);
+      if (error) {
+        return;  // type error; errmsg already given
+      }
+      if (domax ? i > n : i < n) {
+        n = i;
+      }
+    });
+  } else {
+    semsg(_(e_listdictarg), domax ? "max()" : "min()");
+    return;
+  }
+
+  rettv->vval.v_number = n;
 }
 int nvim_eval_searchpair_cmn(typval_T *argvars)
 {
@@ -4715,11 +4518,103 @@ int nvim_eval_searchpair_cmn(typval_T *argvars)
 }
 void nvim_eval_set_position(typval_T *argvars, typval_T *rettv, bool charpos)
 {
-  set_position(argvars, rettv, charpos);
+  colnr_T curswant = -1;
+
+  rettv->vval.v_number = -1;
+  const char *const name = tv_get_string_chk(argvars);
+  if (name == NULL) {
+    return;
+  }
+
+  pos_T pos;
+  int fnum;
+  if (list2fpos(&argvars[1], &pos, &fnum, &curswant, charpos) != OK) {
+    return;
+  }
+
+  if (pos.col != MAXCOL && --pos.col < 0) {
+    pos.col = 0;
+  }
+  if (name[0] == '.' && name[1] == NUL) {
+    // set cursor; "fnum" is ignored
+    curwin->w_cursor = pos;
+    if (curswant >= 0) {
+      curwin->w_curswant = curswant - 1;
+      curwin->w_set_curswant = false;
+    }
+    check_cursor(curwin);
+    rettv->vval.v_number = 0;
+  } else if (name[0] == '\'' && name[1] != NUL && name[2] == NUL) {
+    // set mark
+    if (setmark_pos((uint8_t)name[1], &pos, fnum, NULL) == OK) {
+      rettv->vval.v_number = 0;
+    }
+  } else {
+    emsg(_(e_invarg));
+  }
 }
 void nvim_eval_set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 {
-  set_cursorpos(argvars, rettv, charcol);
+  linenr_T lnum;
+  colnr_T col;
+  colnr_T coladd = 0;
+  bool set_curswant = true;
+
+  rettv->vval.v_number = -1;
+  if (argvars[0].v_type == VAR_LIST) {
+    pos_T pos;
+    colnr_T curswant = -1;
+
+    if (list2fpos(argvars, &pos, NULL, &curswant, charcol) == FAIL) {
+      emsg(_(e_invarg));
+      return;
+    }
+
+    lnum = pos.lnum;
+    col = pos.col;
+    coladd = pos.coladd;
+    if (curswant >= 0) {
+      curwin->w_curswant = curswant - 1;
+      set_curswant = false;
+    }
+  } else if ((argvars[0].v_type == VAR_NUMBER || argvars[0].v_type == VAR_STRING)
+             && (argvars[1].v_type == VAR_NUMBER || argvars[1].v_type == VAR_STRING)) {
+    lnum = tv_get_lnum(argvars);
+    if (lnum < 0) {
+      semsg(_(e_invarg2), tv_get_string(&argvars[0]));
+    } else if (lnum == 0) {
+      lnum = curwin->w_cursor.lnum;
+    }
+    col = (colnr_T)tv_get_number_chk(&argvars[1], NULL);
+    if (charcol) {
+      col = rs_buf_charidx_to_byteidx(curbuf, lnum, (int)col) + 1;
+    }
+    if (argvars[2].v_type != VAR_UNKNOWN) {
+      coladd = (colnr_T)tv_get_number_chk(&argvars[2], NULL);
+    }
+  } else {
+    emsg(_(e_invarg));
+    return;
+  }
+  if (lnum < 0 || col < 0 || coladd < 0) {
+    return;  // type error; errmsg already given
+  }
+  if (lnum > 0) {
+    curwin->w_cursor.lnum = lnum;
+  }
+  if (col != MAXCOL && --col < 0) {
+    col = 0;
+  }
+  curwin->w_cursor.col = col;
+  curwin->w_cursor.coladd = coladd;
+
+  // Make sure the cursor is in a valid position.
+  check_cursor(curwin);
+  // Correct cursor for multi-byte character.
+  mb_adjust_cursor();
+
+  curwin->w_set_curswant = set_curswant;
+  rettv->vval.v_number = 0;
 }
 
 // Full-body wrappers for copy/deepcopy
@@ -4895,7 +4790,48 @@ void nvim_eval_execute(typval_T *argvars, typval_T *rettv)
 
 void nvim_eval_flatten(typval_T *argvars, typval_T *rettv, bool make_copy)
 {
-  flatten_common(argvars, rettv, make_copy);
+  bool error = false;
+
+  if (argvars[0].v_type != VAR_LIST) {
+    semsg(_(e_listarg), "flatten()");
+    return;
+  }
+
+  int maxdepth;
+  if (argvars[1].v_type == VAR_UNKNOWN) {
+    maxdepth = 999999;
+  } else {
+    maxdepth = (int)tv_get_number_chk(&argvars[1], &error);
+    if (error) {
+      return;
+    }
+    if (maxdepth < 0) {
+      emsg(_("E900: maxdepth must be non-negative number"));
+      return;
+    }
+  }
+
+  list_T *list = argvars[0].vval.v_list;
+  rettv->v_type = VAR_LIST;
+  rettv->vval.v_list = list;
+  if (list == NULL) {
+    return;
+  }
+
+  if (make_copy) {
+    list = tv_list_copy(NULL, list, false, rs_get_copyID());
+    rettv->vval.v_list = list;
+    if (list == NULL) {
+      return;
+    }
+  } else {
+    if (value_check_lock(tv_list_locked(list), N_("flatten() argument"), TV_TRANSLATE)) {
+      return;
+    }
+    tv_list_ref(list);
+  }
+
+  tv_list_flatten(list, NULL, tv_list_len(list), maxdepth);
 }
 
 void nvim_eval_common_function(typval_T *argvars, typval_T *rettv, bool is_funcref)
@@ -4926,7 +4862,47 @@ void nvim_eval_json_encode(typval_T *argvars, typval_T *rettv)
 
 void nvim_eval_libcall(typval_T *argvars, typval_T *rettv, bool retstr)
 {
-  libcall_common(argvars, rettv, retstr ? VAR_STRING : VAR_NUMBER);
+  int out_type = retstr ? VAR_STRING : VAR_NUMBER;
+
+  rettv->v_type = (VarType)out_type;
+  if (out_type != VAR_NUMBER) {
+    rettv->vval.v_string = NULL;
+  }
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  // The first two args (libname and funcname) must be strings
+  if (argvars[0].v_type != VAR_STRING || argvars[1].v_type != VAR_STRING) {
+    return;
+  }
+
+  const char *libname = argvars[0].vval.v_string;
+  const char *funcname = argvars[1].vval.v_string;
+
+  VarType in_type = argvars[2].v_type;
+
+  // input variables
+  char *str_in = (in_type == VAR_STRING) ? argvars[2].vval.v_string : NULL;
+  int int_in = (int)argvars[2].vval.v_number;
+
+  // output variables
+  char **str_out = (out_type == VAR_STRING) ? &rettv->vval.v_string : NULL;
+  int int_out = 0;
+
+  bool success = os_libcall(libname, funcname,
+                            str_in, int_in,
+                            str_out, &int_out);
+
+  if (!success) {
+    semsg(_(e_libcall), funcname);
+    return;
+  }
+
+  if (out_type == VAR_NUMBER) {
+    rettv->vval.v_number = (varnumber_T)int_out;
+  }
 }
 
 void nvim_eval_script_host_eval(const char *name, typval_T *argvars, typval_T *rettv)
