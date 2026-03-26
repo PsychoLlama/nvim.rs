@@ -47,117 +47,57 @@ static size_t linebuf_size = 0;
 
 /// C accessor for Rust to call check_chars_options()
 /// @return 0 on success, non-zero on error
-int nvim_check_chars_options(void)
-{
-  return check_chars_options() != NULL ? 1 : 0;
-}
+int nvim_check_chars_options(void) { return check_chars_options() != NULL ? 1 : 0; }
 
-// =============================================================================
 // Line buffer accessors (Phase 28)
-// =============================================================================
 
 /// Get pointer to linebuf_char array
-schar_T *nvim_get_linebuf_char(void)
-{
-  return linebuf_char;
-}
+schar_T *nvim_get_linebuf_char(void) { return linebuf_char; }
 
 /// Get pointer to linebuf_attr array
-sattr_T *nvim_get_linebuf_attr(void)
-{
-  return linebuf_attr;
-}
+sattr_T *nvim_get_linebuf_attr(void) { return linebuf_attr; }
 
 /// Get pointer to linebuf_vcol array
-colnr_T *nvim_get_linebuf_vcol(void)
-{
-  return linebuf_vcol;
-}
+colnr_T *nvim_get_linebuf_vcol(void) { return linebuf_vcol; }
 
 /// Get pointer to linebuf_scratch buffer
-char *nvim_get_linebuf_scratch(void)
-{
-  return linebuf_scratch;
-}
+char *nvim_get_linebuf_scratch(void) { return linebuf_scratch; }
 
 /// Get the current linebuf size
-size_t nvim_get_linebuf_size(void)
-{
-  return linebuf_size;
-}
+size_t nvim_get_linebuf_size(void) { return linebuf_size; }
 
-/// Wrapper for ui_grid_cursor_goto
-void nvim_ui_grid_cursor_goto(handle_T grid_handle, int row, int col)
-{
-  ui_grid_cursor_goto(grid_handle, row, col);
-}
+void nvim_ui_grid_cursor_goto(handle_T grid_handle, int row, int col) { ui_grid_cursor_goto(grid_handle, row, col); }
 
 /// Get handle from a ScreenGrid pointer
-handle_T nvim_screengrid_get_handle(ScreenGrid *grid)
-{
-  return grid ? grid->handle : 0;
-}
+handle_T nvim_screengrid_get_handle(ScreenGrid *grid) { return grid ? grid->handle : 0; }
 
 /// Get pointer to handle in a ScreenGrid (for Rust to assign)
-handle_T *nvim_screengrid_get_handle_ptr(ScreenGrid *grid)
-{
-  return grid ? &grid->handle : NULL;
-}
+handle_T *nvim_screengrid_get_handle_ptr(ScreenGrid *grid) { return grid ? &grid->handle : NULL; }
 
 /// Get rows from a ScreenGrid pointer
-int nvim_screengrid_get_rows(ScreenGrid *grid)
-{
-  return grid ? grid->rows : 0;
-}
+int nvim_screengrid_get_rows(ScreenGrid *grid) { return grid ? grid->rows : 0; }
 
 /// Get rdb_flags global
-unsigned int nvim_get_rdb_flags(void)
-{
-  return rdb_flags;
-}
+unsigned int nvim_get_rdb_flags(void) { return rdb_flags; }
 
 // ScreenGrid array accessors
-schar_T *nvim_screengrid_get_chars(ScreenGrid *grid)
-{
-  return grid ? grid->chars : NULL;
-}
+schar_T *nvim_screengrid_get_chars(ScreenGrid *grid) { return grid ? grid->chars : NULL; }
 
-sattr_T *nvim_screengrid_get_attrs(ScreenGrid *grid)
-{
-  return grid ? grid->attrs : NULL;
-}
+sattr_T *nvim_screengrid_get_attrs(ScreenGrid *grid) { return grid ? grid->attrs : NULL; }
 
-colnr_T *nvim_screengrid_get_vcols(ScreenGrid *grid)
-{
-  return grid ? grid->vcols : NULL;
-}
+colnr_T *nvim_screengrid_get_vcols(ScreenGrid *grid) { return grid ? grid->vcols : NULL; }
 
-size_t *nvim_screengrid_get_line_offset(ScreenGrid *grid)
-{
-  return grid ? grid->line_offset : NULL;
-}
+size_t *nvim_screengrid_get_line_offset(ScreenGrid *grid) { return grid ? grid->line_offset : NULL; }
 
-int *nvim_screengrid_get_dirty_col(ScreenGrid *grid)
-{
-  return grid ? grid->dirty_col : NULL;
-}
+int *nvim_screengrid_get_dirty_col(ScreenGrid *grid) { return grid ? grid->dirty_col : NULL; }
 
 // ScreenGrid field accessors
-int nvim_screengrid_get_cols(ScreenGrid *grid)
-{
-  return grid ? grid->cols : 0;
-}
+int nvim_screengrid_get_cols(ScreenGrid *grid) { return grid ? grid->cols : 0; }
 
-bool nvim_screengrid_get_throttled(ScreenGrid *grid)
-{
-  return grid ? grid->throttled : false;
-}
+bool nvim_screengrid_get_throttled(ScreenGrid *grid) { return grid ? grid->throttled : false; }
 
 // ScreenGrid compositor field accessors (for Rust compositor crate)
-int nvim_screengrid_get_comp_row(ScreenGrid *grid)
-{
-  return grid ? grid->comp_row : 0;
-}
+int nvim_screengrid_get_comp_row(ScreenGrid *grid) { return grid ? grid->comp_row : 0; }
 
 void nvim_screengrid_set_comp_row(ScreenGrid *grid, int val)
 {
@@ -166,10 +106,7 @@ void nvim_screengrid_set_comp_row(ScreenGrid *grid, int val)
   }
 }
 
-int nvim_screengrid_get_comp_col(ScreenGrid *grid)
-{
-  return grid ? grid->comp_col : 0;
-}
+int nvim_screengrid_get_comp_col(ScreenGrid *grid) { return grid ? grid->comp_col : 0; }
 
 void nvim_screengrid_set_comp_col(ScreenGrid *grid, int val)
 {
@@ -178,10 +115,7 @@ void nvim_screengrid_set_comp_col(ScreenGrid *grid, int val)
   }
 }
 
-int nvim_screengrid_get_comp_width(ScreenGrid *grid)
-{
-  return grid ? grid->comp_width : 0;
-}
+int nvim_screengrid_get_comp_width(ScreenGrid *grid) { return grid ? grid->comp_width : 0; }
 
 void nvim_screengrid_set_comp_width(ScreenGrid *grid, int val)
 {
@@ -190,10 +124,7 @@ void nvim_screengrid_set_comp_width(ScreenGrid *grid, int val)
   }
 }
 
-int nvim_screengrid_get_comp_height(ScreenGrid *grid)
-{
-  return grid ? grid->comp_height : 0;
-}
+int nvim_screengrid_get_comp_height(ScreenGrid *grid) { return grid ? grid->comp_height : 0; }
 
 void nvim_screengrid_set_comp_height(ScreenGrid *grid, int val)
 {
@@ -202,10 +133,7 @@ void nvim_screengrid_set_comp_height(ScreenGrid *grid, int val)
   }
 }
 
-size_t nvim_screengrid_get_comp_index(ScreenGrid *grid)
-{
-  return grid ? grid->comp_index : 0;
-}
+size_t nvim_screengrid_get_comp_index(ScreenGrid *grid) { return grid ? grid->comp_index : 0; }
 
 void nvim_screengrid_set_comp_index(ScreenGrid *grid, size_t val)
 {
@@ -214,20 +142,11 @@ void nvim_screengrid_set_comp_index(ScreenGrid *grid, size_t val)
   }
 }
 
-int nvim_screengrid_get_zindex(ScreenGrid *grid)
-{
-  return grid ? grid->zindex : 0;
-}
+int nvim_screengrid_get_zindex(ScreenGrid *grid) { return grid ? grid->zindex : 0; }
 
-bool nvim_screengrid_get_blending(ScreenGrid *grid)
-{
-  return grid ? grid->blending : false;
-}
+bool nvim_screengrid_get_blending(ScreenGrid *grid) { return grid ? grid->blending : false; }
 
-bool nvim_screengrid_get_comp_disabled(ScreenGrid *grid)
-{
-  return grid ? grid->comp_disabled : false;
-}
+bool nvim_screengrid_get_comp_disabled(ScreenGrid *grid) { return grid ? grid->comp_disabled : false; }
 
 void nvim_screengrid_set_comp_disabled(ScreenGrid *grid, bool val)
 {
@@ -248,61 +167,31 @@ void nvim_screengrid_set_pending_comp_index_update(ScreenGrid *grid, bool val)
   }
 }
 
-bool nvim_screengrid_get_mouse_enabled(ScreenGrid *grid)
-{
-  return grid ? grid->mouse_enabled : false;
-}
+bool nvim_screengrid_get_mouse_enabled(ScreenGrid *grid) { return grid ? grid->mouse_enabled : false; }
 
 void nvim_screengrid_set_zindex(ScreenGrid *grid, int val) { if (grid) { grid->zindex = val; } }
 void nvim_screengrid_set_valid(ScreenGrid *grid, bool val) { if (grid) { grid->valid = val; } }
 void nvim_screengrid_set_mouse_enabled(ScreenGrid *grid, bool val) { if (grid) { grid->mouse_enabled = val; } }
 
 // Global accessors
-ScreenGrid *nvim_get_default_grid(void)
-{
-  return &default_grid;
-}
+ScreenGrid *nvim_get_default_grid(void) { return &default_grid; }
 
-GridView *nvim_get_default_gridview(void)
-{
-  return &default_gridview;
-}
+GridView *nvim_get_default_gridview(void) { return &default_gridview; }
 
-int nvim_get_p_arshape(void)
-{
-  return p_arshape;
-}
+int nvim_get_p_arshape(void) { return p_arshape; }
 
-int nvim_get_p_tbidi(void)
-{
-  return p_tbidi;
-}
+int nvim_get_p_tbidi(void) { return p_tbidi; }
 
-bool nvim_get_full_screen(void)
-{
-  return full_screen;
-}
+bool nvim_get_full_screen(void) { return full_screen; }
 
-int nvim_get_default_grid_has_chars(void)
-{
-  return default_grid.chars != NULL;
-}
+int nvim_get_default_grid_has_chars(void) { return default_grid.chars != NULL; }
 
 // GridView field accessors
-ScreenGrid *nvim_gridview_get_target(GridView *view)
-{
-  return view->target;
-}
+ScreenGrid *nvim_gridview_get_target(GridView *view) { return view->target; }
 
-int nvim_gridview_get_row_offset(GridView *view)
-{
-  return view->row_offset;
-}
+int nvim_gridview_get_row_offset(GridView *view) { return view->row_offset; }
 
-int nvim_gridview_get_col_offset(GridView *view)
-{
-  return view->col_offset;
-}
+int nvim_gridview_get_col_offset(GridView *view) { return view->col_offset; }
 
 void nvim_ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endcol,
                   int clearcol, int clearattr, bool wrap)

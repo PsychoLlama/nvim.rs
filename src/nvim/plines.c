@@ -50,79 +50,42 @@ extern int rs_diffopt_filler(void);
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
 
-// ============================================================================
 // CharsizeArg accessor functions for Rust
-// ============================================================================
 
 /// Get the window handle from CharsizeArg.
-win_T *nvim_csarg_get_win(CharsizeArg *csarg)
-{
-  return csarg->win;
-}
+win_T *nvim_csarg_get_win(CharsizeArg *csarg) { return csarg->win; }
 
 /// Get the line pointer from CharsizeArg.
-char *nvim_csarg_get_line(CharsizeArg *csarg)
-{
-  return csarg->line;
-}
+char *nvim_csarg_get_line(CharsizeArg *csarg) { return csarg->line; }
 
 /// Get the virt_row from CharsizeArg.
-int nvim_csarg_get_virt_row(CharsizeArg *csarg)
-{
-  return csarg->virt_row;
-}
+int nvim_csarg_get_virt_row(CharsizeArg *csarg) { return csarg->virt_row; }
 
 /// Get use_tabstop from CharsizeArg.
-int nvim_csarg_get_use_tabstop(CharsizeArg *csarg)
-{
-  return csarg->use_tabstop ? 1 : 0;
-}
+int nvim_csarg_get_use_tabstop(CharsizeArg *csarg) { return csarg->use_tabstop ? 1 : 0; }
 
 /// Get max_head_vcol from CharsizeArg.
-int nvim_csarg_get_max_head_vcol(CharsizeArg *csarg)
-{
-  return csarg->max_head_vcol;
-}
+int nvim_csarg_get_max_head_vcol(CharsizeArg *csarg) { return csarg->max_head_vcol; }
 
 /// Get indent_width from CharsizeArg.
-int nvim_csarg_get_indent_width(CharsizeArg *csarg)
-{
-  return csarg->indent_width;
-}
+int nvim_csarg_get_indent_width(CharsizeArg *csarg) { return csarg->indent_width; }
 
 /// Set indent_width in CharsizeArg.
-void nvim_csarg_set_indent_width(CharsizeArg *csarg, int value)
-{
-  csarg->indent_width = value;
-}
+void nvim_csarg_set_indent_width(CharsizeArg *csarg, int value) { csarg->indent_width = value; }
 
 /// Get cur_text_width_left from CharsizeArg.
-int nvim_csarg_get_cur_text_width_left(CharsizeArg *csarg)
-{
-  return csarg->cur_text_width_left;
-}
+int nvim_csarg_get_cur_text_width_left(CharsizeArg *csarg) { return csarg->cur_text_width_left; }
 
 /// Set cur_text_width_left in CharsizeArg.
-void nvim_csarg_set_cur_text_width_left(CharsizeArg *csarg, int value)
-{
-  csarg->cur_text_width_left = value;
-}
+void nvim_csarg_set_cur_text_width_left(CharsizeArg *csarg, int value) { csarg->cur_text_width_left = value; }
 
 /// Get cur_text_width_right from CharsizeArg.
-int nvim_csarg_get_cur_text_width_right(CharsizeArg *csarg)
-{
-  return csarg->cur_text_width_right;
-}
+int nvim_csarg_get_cur_text_width_right(CharsizeArg *csarg) { return csarg->cur_text_width_right; }
 
 /// Set cur_text_width_right in CharsizeArg.
-void nvim_csarg_set_cur_text_width_right(CharsizeArg *csarg, int value)
-{
-  csarg->cur_text_width_right = value;
-}
+void nvim_csarg_set_cur_text_width_right(CharsizeArg *csarg, int value) { csarg->cur_text_width_right = value; }
 
-// ============================================================================
 // Marktree iterator accessor functions for Rust
-// ============================================================================
 
 /// Get the current mark's row position.
 int nvim_csarg_itr_current_row(CharsizeArg *csarg)
@@ -192,9 +155,7 @@ void nvim_csarg_itr_next(CharsizeArg *csarg)
                            csarg->virt_row + 1, 0, inline_filter);
 }
 
-// ============================================================================
 // Additional accessor functions for charsize_regular
-// ============================================================================
 
 /// Get the cursor offset for virtual text.
 int nvim_virt_text_cursor_off(CharsizeArg *csarg, int on_NUL)
@@ -210,36 +171,21 @@ int nvim_virt_text_cursor_off(CharsizeArg *csarg, int on_NUL)
 }
 
 /// Get breakindent for a window/line.
-int nvim_get_breakindent_win(win_T *wp, char *line)
-{
-  return get_breakindent_win(wp, line);
-}
+int nvim_get_breakindent_win(win_T *wp, char *line) { return get_breakindent_win(wp, line); }
 
 /// Check if character is in 'breakat'.
-int nvim_vim_isbreak(int c)
-{
-  return breakat_flags[(uint8_t)c] ? 1 : 0;
-}
+int nvim_vim_isbreak(int c) { return breakat_flags[(uint8_t)c] ? 1 : 0; }
 
 /// Get the 'linebreak' option.
-int nvim_win_get_p_lbr(win_T *wp)
-{
-  return wp->w_p_lbr ? 1 : 0;
-}
+int nvim_win_get_p_lbr(win_T *wp) { return wp->w_p_lbr ? 1 : 0; }
 
 // Note: nvim_win_get_p_bri is defined in window.c
 
 /// Get the 'listchars' eol character.
-int nvim_win_get_lcs_eol(win_T *wp)
-{
-  return wp->w_p_lcs_chars.eol;
-}
+int nvim_win_get_lcs_eol(win_T *wp) { return wp->w_p_lcs_chars.eol; }
 
 /// Get filler lines for a window at a given line number (FFI wrapper).
-int nvim_win_get_fill(win_T *wp, linenr_T lnum)
-{
-  return win_get_fill(wp, lnum);
-}
+int nvim_win_get_fill(win_T *wp, linenr_T lnum) { return win_get_fill(wp, lnum); }
 
 /// Get screen lines for a buffer line without filler lines (FFI wrapper).
 /// @param winheight When non-zero, limit to window height.
@@ -250,45 +196,26 @@ int nvim_plines_win_nofill(win_T *wp, linenr_T lnum, int winheight)
 
 // Note: nvim_win_get_p_list is defined in window.c
 
-// ============================================================================
 // Visual mode and virtual editing accessors for getvcol
-// ============================================================================
 
 /// Check if virtual editing is active for a window.
-int nvim_win_virtual_active(win_T *wp)
-{
-  return virtual_active(wp) ? 1 : 0;
-}
+int nvim_win_virtual_active(win_T *wp) { return virtual_active(wp) ? 1 : 0; }
 
 /// Get the VIsual_active global.
-int nvim_get_VIsual_active(void)
-{
-  return VIsual_active ? 1 : 0;
-}
+int nvim_get_VIsual_active(void) { return VIsual_active ? 1 : 0; }
 
 /// Get the VIsual position (lnum).
-int nvim_get_VIsual_lnum(void)
-{
-  return VIsual.lnum;
-}
+int nvim_get_VIsual_lnum(void) { return VIsual.lnum; }
 
 /// Get the VIsual position (col).
-int nvim_get_VIsual_col(void)
-{
-  return VIsual.col;
-}
+int nvim_get_VIsual_col(void) { return VIsual.col; }
 
 /// Get the VIsual position (coladd).
-int nvim_get_VIsual_coladd(void)
-{
-  return VIsual.coladd;
-}
+int nvim_get_VIsual_coladd(void) { return VIsual.coladd; }
 
 // Note: nvim_get_p_sel_first is defined in cursor_shape.c
 
-// ============================================================================
 // Character iteration accessors for linesize_regular
-// ============================================================================
 
 /// Initialize StrCharInfo and return the first character value.
 /// Returns the character value, and sets *ptr_out to the pointer,
@@ -611,33 +538,19 @@ int plines_m_win_fill(win_T *wp, linenr_T first, linenr_T last)
 }
 
 
-// =============================================================================
 // C Wrappers for Rust FFI
-// =============================================================================
 
 /// Wrapper for linetabsize_eol() (accessor for Rust).
-int nvim_linetabsize_eol(win_T *wp, linenr_T lnum)
-{
-  return linetabsize_eol(wp, lnum);
-}
+int nvim_linetabsize_eol(win_T *wp, linenr_T lnum) { return linetabsize_eol(wp, lnum); }
 
 /// Wrapper for plines_win() (accessor for Rust).
-int nvim_plines_win(win_T *wp, linenr_T lnum, int limit)
-{
-  return plines_win(wp, lnum, limit != 0);
-}
+int nvim_plines_win(win_T *wp, linenr_T lnum, int limit) { return plines_win(wp, lnum, limit != 0); }
 
 /// Wrapper for plines_win_col() (accessor for Rust).
-int nvim_plines_win_col(win_T *wp, linenr_T lnum, long column)
-{
-  return plines_win_col(wp, lnum, column);
-}
+int nvim_plines_win_col(win_T *wp, linenr_T lnum, long column) { return plines_win_col(wp, lnum, column); }
 
 /// Wrapper for win_may_fill() (accessor for Rust).
-int nvim_win_may_fill(win_T *wp)
-{
-  return win_may_fill(wp) ? 1 : 0;
-}
+int nvim_win_may_fill(win_T *wp) { return win_may_fill(wp) ? 1 : 0; }
 
 /// Wrapper for win_linetabsize() (accessor for Rust).
 int nvim_win_linetabsize(win_T *wp, linenr_T lnum, char *line, colnr_T len)
@@ -652,10 +565,7 @@ void nvim_getvcol_byval(win_T *wp, pos_T pos, colnr_T *start, colnr_T *cursor, c
 }
 
 /// Set the p_list option for a window (accessor for Rust).
-void nvim_win_set_p_list(win_T *wp, int val)
-{
-  wp->w_p_list = val != 0;
-}
+void nvim_win_set_p_list(win_T *wp, int val) { wp->w_p_list = val != 0; }
 
 /// Wrapper for hasFolding without cache (accessor for Rust).
 int nvim_hasFolding_nocache(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
