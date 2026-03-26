@@ -93,9 +93,6 @@ void nvim_ins_compl_add_list_impl(void *list);
 void nvim_ins_compl_add_dict_impl(void *dict);
 void nvim_expand_by_function_full_impl(int type, char *base, void *cb);
 void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx);
-// Definitions used for CTRL-X submode.
-// Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
-// and ctrl_x_mode_names[].
 
 #define CTRL_X_WANT_IDENT       0x100
 
@@ -121,8 +118,6 @@ enum {
   CTRL_X_BUFNAMES = 18,
   CTRL_X_REGISTER = 19,        ///< complete words from registers
 };
-
-#define CTRL_X_MSG(i) ctrl_x_msgs[(i) & ~CTRL_X_WANT_IDENT]
 
 /// Message for CTRL-X mode, index is ctrl_x_mode.
 static char *ctrl_x_msgs[] = {
@@ -227,7 +222,6 @@ typedef enum {
   CP_FAST = 32,          ///< use fast_breakcheck instead of os_breakcheck
 } cp_flags_T;
 
-static const char e_hitend[] = N_("Hit end of paragraph");
 static const char e_compldel[] = N_("E840: Completion function deleted text");
 
 // All the current matches are stored in a list.
@@ -296,44 +290,11 @@ expand_T compl_xp;  // non-static: accessible from Rust
 win_T *compl_curr_win = NULL;  ///< win where completion is active
 buf_T *compl_curr_buf = NULL;  ///< buf where completion is active
 
-#define COMPL_INITIAL_TIMEOUT_MS    80
-// Autocomplete uses a decaying timeout: starting from COMPL_INITIAL_TIMEOUT_MS,
-// if the current source exceeds its timeout, it is interrupted and the next
-// begins with half the time. A small minimum timeout ensures every source
-// gets at least a brief chance.
-// Special case: when 'complete' contains "F" or "o" (function sources), a
-// longer fixed timeout is used (COMPL_FUNC_TIMEOUT_MS or
-// COMPL_FUNC_TIMEOUT_NON_KW_MS). - girish
 bool compl_autocomplete = false;        ///< whether autocompletion is active
-uint64_t compl_timeout_ms = COMPL_INITIAL_TIMEOUT_MS;
+uint64_t compl_timeout_ms = 80;         ///< COMPL_INITIAL_TIMEOUT_MS
 bool compl_time_slice_expired = false;  ///< time budget exceeded for current source
 bool compl_from_nonkeyword = false;     ///< completion started from non-keyword
-
-// Halve the current completion timeout, simulating exponential decay.
-#define COMPL_MIN_TIMEOUT_MS    5
-#define DECAY_COMPL_TIMEOUT() \
-  do { \
-    if (compl_timeout_ms > COMPL_MIN_TIMEOUT_MS) { \
-      compl_timeout_ms /= 2; \
-    } \
-  } while (0)
-
-// Timeout values for F{func}, F and o values in 'complete'
-#define COMPL_FUNC_TIMEOUT_MS           300
-#define COMPL_FUNC_TIMEOUT_NON_KW_MS    1000
-
-// List of flags for method of completion.
 int compl_cont_status = 0;
-#define CONT_ADDING    1        ///< "normal" or "adding" expansion
-#define CONT_INTRPT    (2 + 4)  ///< a ^X interrupted the current expansion
-                                ///< it's set only iff N_ADDS is set
-#define CONT_N_ADDS    4        ///< next ^X<> will add-new or expand-current
-#define CONT_S_IPOS    8        ///< next ^X<> will set initial_pos?
-                                ///< if so, word-wise-expansion will set SOL
-#define CONT_SOL       16       ///< pattern includes start of line, just for
-                                ///< word-wise expansion, not set for ^X^L
-#define CONT_LOCAL     32       ///< for ctrl_x_mode 0, ^X^P/^X^N do a local
-                                ///< expansion, (eg use complete=.)
 
 bool compl_opt_refresh_always = false;
 
@@ -656,9 +617,6 @@ static int cp_compare_nearest(const void *a, const void *b)
   }
   return (score_a > score_b) ? 1 : (score_a < score_b) ? -1 : 0;
 }
-
-#define DICT_FIRST      (1)     ///< use just first element in "dict"
-#define DICT_EXACT      (2)     ///< "dict" is the exact name of a file
 
 /// Returns curbuf->b_p_tsr if non-empty, else p_tsr.
 const char *nvim_get_curbuf_b_p_tsr(void) { return *curbuf->b_p_tsr == NUL ? p_tsr : curbuf->b_p_tsr; }
@@ -1162,7 +1120,7 @@ void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
-void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(CTRL_X_MSG(mode)); }
+void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(ctrl_x_msgs[(mode) & ~CTRL_X_WANT_IDENT]); }
 void nvim_ins_compl_set_original_text_impl(const char *str, size_t len) {
   if (match_at_original_text(compl_first_match)) {
     API_CLEAR_STRING(compl_first_match->cp_str);
