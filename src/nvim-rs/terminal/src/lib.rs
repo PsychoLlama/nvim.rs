@@ -2783,6 +2783,7 @@ extern "C" {
     fn nvim_term_treqbuf_printf_apc(term: *mut c_void);
     fn nvim_terminal_has_termrequest_event() -> c_int;
     fn nvim_terminal_schedule_termrequest(term: *mut c_void);
+    fn nvim_terminal_get_vt(term: *mut c_void) -> *mut c_void;
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
     // Phase 7: refresh pipeline
     fn nvim_term_buf_line_count(buf: *const c_void) -> c_int;
@@ -2822,6 +2823,11 @@ extern "C" {
         ctx: *mut c_void,
     );
     fn nvim_is_exiting() -> c_int;
+    // Phase 9: terminal_paste helpers
+    fn nvim_term_utf_ptr2len(s: *const i8) -> c_int;
+    fn nvim_term_utf_ptr2char(s: *const i8) -> c_int;
+    fn nvim_terminal_get_tpf_flags() -> c_int;
+    fn nvim_curbuf_terminal() -> *mut c_void;
 }
 
 /// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.
@@ -2879,6 +2885,81 @@ pub unsafe extern "C" fn rs_terminal_do_send(term: TerminalHandle, data: *const 
         return;
     }
     unsafe { nvim_terminal_write_cb(term.as_ptr(), data, size) };
+}
+
+/// Nvim API `String` type (matches C `typedef struct { char *data; size_t size; } String`).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NvimStr {
+    /// Pointer to string data (not necessarily NUL-terminated)
+    pub data: *const i8,
+    /// Length in bytes
+    pub size: usize,
+}
+
+/// Paste yank array into the terminal, filtering out characters in `tpf_flags`.
+///
+/// Replaces `terminal_paste` in `terminal_shim.c`.
+///
+/// # Safety
+/// `y_array` must point to `y_size` valid `NvimStr` values.
+/// The current buffer must have a terminal (`curbuf->terminal != NULL`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_paste(count: c_int, y_array: *const NvimStr, y_size: usize) {
+    if y_size == 0 {
+        return;
+    }
+    let term = unsafe { nvim_curbuf_terminal() };
+    let vt = unsafe { nvim_terminal_get_vt(term) };
+    let tpf = unsafe { nvim_terminal_get_tpf_flags() };
+
+    unsafe { rs_vterm_keyboard_start_paste(vt) };
+
+    let items = unsafe { std::slice::from_raw_parts(y_array, y_size) };
+    // Allocate an initial work buffer.
+    let mut buff: Vec<u8> = Vec::with_capacity(items[0].size.max(16));
+
+    for _ in 0..count {
+        for (j, item) in items.iter().enumerate() {
+            if j > 0 {
+                // Terminate the previous line.
+                #[cfg(target_os = "windows")]
+                unsafe {
+                    nvim_terminal_send(term, b"\r\n".as_ptr().cast(), 2)
+                };
+                #[cfg(not(target_os = "windows"))]
+                unsafe {
+                    nvim_terminal_send(term, b"\n".as_ptr().cast(), 1);
+                };
+            }
+            let src_len = item.size;
+            buff.clear();
+            if src_len == 0 {
+                continue;
+            }
+            let mut src = item.data;
+            let end = unsafe { src.add(src_len) };
+            while src < end {
+                // NUL byte terminates
+                if unsafe { *src } == 0 {
+                    break;
+                }
+                #[allow(clippy::cast_sign_loss)]
+                let char_len = unsafe { nvim_term_utf_ptr2len(src) } as usize;
+                let c = unsafe { nvim_term_utf_ptr2char(src) };
+                if crate::pty::rs_terminal_is_filter_char_flags(c, tpf) == 0 {
+                    let bytes = unsafe { std::slice::from_raw_parts(src.cast::<u8>(), char_len) };
+                    buff.extend_from_slice(bytes);
+                }
+                src = unsafe { src.add(char_len) };
+            }
+            if !buff.is_empty() {
+                unsafe { nvim_terminal_send(term, buff.as_ptr().cast(), buff.len()) };
+            }
+        }
+    }
+
+    unsafe { rs_vterm_keyboard_end_paste(vt) };
 }
 
 /// Queue a terminal instance for refresh (starts the refresh timer if needed).

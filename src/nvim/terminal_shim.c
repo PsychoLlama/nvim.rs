@@ -979,46 +979,10 @@ extern void rs_terminal_do_send(void *term, const char *data, size_t size);
 static void terminal_send(Terminal *term, const char *data, size_t size)
   { rs_terminal_do_send(term, data, size); }
 
+extern void rs_terminal_paste(int count, const String *y_array, size_t y_size);
 void terminal_paste(int count, String *y_array, size_t y_size)
 {
-  if (y_size == 0) {
-    return;
-  }
-  rs_vterm_keyboard_start_paste(curbuf->terminal->vt);
-  size_t buff_len = y_array[0].size;
-  char *buff = xmalloc(buff_len);
-  for (int i = 0; i < count; i++) {
-    // feed the lines to the terminal
-    for (size_t j = 0; j < y_size; j++) {
-      if (j) {
-        // terminate the previous line
-#ifdef MSWIN
-        terminal_send(curbuf->terminal, "\r\n", 2);
-#else
-        terminal_send(curbuf->terminal, "\n", 1);
-#endif
-      }
-      size_t len = y_array[j].size;
-      if (len > buff_len) {
-        buff = xrealloc(buff, len);
-        buff_len = len;
-      }
-      char *dst = buff;
-      char *src = y_array[j].data;
-      while (*src != NUL) {
-        len = (size_t)utf_ptr2len(src);
-        int c = utf_ptr2char(src);
-        if (!rs_terminal_is_filter_char_flags(c, (int)tpf_flags)) {
-          memcpy(dst, src, len);
-          dst += len;
-        }
-        src += len;
-      }
-      terminal_send(curbuf->terminal, buff, (size_t)(dst - buff));
-    }
-  }
-  xfree(buff);
-  rs_vterm_keyboard_end_paste(curbuf->terminal->vt);
+  rs_terminal_paste(count, y_array, y_size);
 }
 
 static void terminal_send_key(Terminal *term, int c)
@@ -1468,6 +1432,18 @@ void *nvim_scrollback_line_cells_mut(void *sbrow) { return ((ScrollbackLine *)sb
 size_t nvim_vterm_screen_cell_size(void) { return sizeof(VTermScreenCell); }
 void nvim_vterm_cell_zero(void *cell_ptr)
   { VTermScreenCell *c = (VTermScreenCell *)cell_ptr; c->schar = 0; c->width = 1; }
+
+// terminal_get_line_attributes helpers
+int nvim_fetch_cell(void *term, int row, int col, void *cell)
+  { return (int)fetch_cell((Terminal *)term, row, col, (VTermScreenCell *)cell); }
+int nvim_get_rgb(void *state, VTermColor color)
+  { return get_rgb((VTermState *)state, color); }
+
+// terminal_paste helpers
+int nvim_term_utf_ptr2len(const char *s) { return utf_ptr2len(s); }
+int nvim_term_utf_ptr2char(const char *s) { return utf_ptr2char(s); }
+int nvim_terminal_get_tpf_flags(void) { return (int)tpf_flags; }
+Terminal *nvim_curbuf_terminal(void) { return curbuf->terminal; }
 
 // Timer / refresh_pending accessors
 void nvim_terminal_timer_start(void)
