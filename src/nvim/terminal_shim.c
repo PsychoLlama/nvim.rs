@@ -149,6 +149,8 @@ extern void rs_terminal_focus_gain(void *term);
 extern void rs_terminal_focus_lose(void *term);
 extern int rs_terminal_underline_hl_flag(VTermScreenCellAttrs attrs);
 extern int rs_terminal_parse_osc8(const char *str, int *attr);
+extern int rs_terminal_bell(void);
+extern int rs_terminal_theme_query(bool *dark);
 
 // Result of rs_terminal_convert_key: VTerm key code and modifier mask.
 typedef struct {
@@ -1354,16 +1356,14 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
 /// Called when the terminal wants to ring the system bell.
 static int term_bell(void *data)
 {
-  vim_beep(kOptBoFlagTerm);
-  return 1;
+  return rs_terminal_bell();
 }
 
 /// Called when the terminal wants to query the system theme.
 static int term_theme(bool *dark, void *data)
   FUNC_ATTR_NONNULL_ALL
 {
-  *dark = (*p_bg == 'd');
-  return 1;
+  return rs_terminal_theme_query(dark);
 }
 
 /// Scrollback push handler: called just before a line goes offscreen (and libvterm will forget it),
@@ -1987,6 +1987,22 @@ static char *get_config_string(char *key)
 }
 
 // }}}
+
+// =============================================================================
+// C accessors for Rust terminal callbacks
+// =============================================================================
+
+/// Ring the terminal bell (accessor for rs_terminal_bell).
+void nvim_vim_beep_term(void)
+{
+  vim_beep(kOptBoFlagTerm);
+}
+
+/// Get the first character of the 'background' option (accessor for rs_terminal_theme_query).
+char nvim_get_bg_char(void)
+{
+  return *p_bg;
+}
 
 // =============================================================================
 // vim: foldmethod=marker

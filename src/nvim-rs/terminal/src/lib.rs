@@ -940,6 +940,42 @@ pub extern "C" fn rs_terminal_focus_lose(term: TerminalHandle) {
 }
 
 // =============================================================================
+// VTerm Callback Implementations
+// =============================================================================
+
+extern "C" {
+    /// Ring the terminal bell (wraps `vim_beep(kOptBoFlagTerm)`).
+    fn nvim_vim_beep_term();
+    /// Return the first character of the `'background'` option.
+    fn nvim_get_bg_char() -> std::ffi::c_char;
+}
+
+/// Terminal bell callback -- ring the system bell.
+///
+/// Replaces the body of `term_bell` in `terminal_shim.c`.
+#[no_mangle]
+pub extern "C" fn rs_terminal_bell() -> c_int {
+    unsafe { nvim_vim_beep_term() };
+    1
+}
+
+/// Terminal theme query callback -- report whether the background is dark.
+///
+/// Replaces the body of `term_theme` in `terminal_shim.c`.
+///
+/// # Safety
+/// `dark` must be a valid non-null pointer to a `bool`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_theme_query(dark: *mut bool) -> c_int {
+    if dark.is_null() {
+        return 0;
+    }
+    let bg = unsafe { nvim_get_bg_char() };
+    unsafe { *dark = bg == 0x64 }; // 0x64 == b'd' (dark)
+    1
+}
+
+// =============================================================================
 // Callback Helper Functions
 // =============================================================================
 
