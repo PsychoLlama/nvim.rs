@@ -1,7 +1,5 @@
 // quickfix.c: functions for quickfix mode, using a file with error messages
 
-#include <assert.h>
-#include <inttypes.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +28,6 @@
 #include "nvim/fileio.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/help.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mbyte.h"
 #include "nvim/mbyte_defs.h"
@@ -39,7 +36,6 @@
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
-#include "nvim/normal.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
