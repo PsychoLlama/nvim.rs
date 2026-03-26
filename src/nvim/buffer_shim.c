@@ -109,307 +109,64 @@ extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int co
 extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
 
 // ============================================================
-// Core buf_T field accessors (Phase 1 / lifecycle)
+// Core buf_T field accessors
 // ============================================================
 
-/// Get the buffer handle (b_fnum) from a buffer.
-int nvim_buf_get_handle(buf_T *buf)
-{
-  return buf ? buf->b_fnum : 0;
-}
-
-/// Get the first character of the b_p_bt (buftype option) field.
-char nvim_buf_get_buftype(buf_T *buf)
-{
-  return buf->b_p_bt[0];
-}
-
-/// Get the third character of the b_p_bt field (for nofile/nowrite check).
-char nvim_buf_get_buftype_2(buf_T *buf)
-{
-  return buf->b_p_bt[2];
-}
-
-/// Get the b_help field from a buffer.
-int nvim_buf_get_help(buf_T *buf)
-{
-  return buf->b_help;
-}
-
-/// Check if buffer has a terminal attached (buf->terminal != NULL).
-int nvim_buf_get_terminal(buf_T *buf)
-{
-  return buf->terminal != NULL;
-}
-
-/// Get the first character of the b_p_ff (fileformat option) field.
-char nvim_buf_get_fileformat(buf_T *buf)
-{
-  return buf->b_p_ff[0];
-}
-
-/// Get the b_p_bin (binary mode) field from a buffer.
-int nvim_buf_get_bin(buf_T *buf)
-{
-  return buf->b_p_bin;
-}
-
-/// Get the last buffer in the buffer list (lastbuf global).
-buf_T *nvim_get_lastbuf(void)
-{
-  return lastbuf;
-}
-
-/// Get the b_prev field from a buffer.
-buf_T *nvim_buf_get_prev(buf_T *buf)
-{
-  return buf->b_prev;
-}
-
-/// Get the br_buf field from a bufref (accessor for Rust).
-buf_T *nvim_bufref_get_buf(bufref_T *bufref)
-{
-  return bufref->br_buf;
-}
-
+int nvim_buf_get_handle(buf_T *buf) { return buf ? buf->b_fnum : 0; }
+char nvim_buf_get_buftype(buf_T *buf) { return buf->b_p_bt[0]; }
+char nvim_buf_get_buftype_2(buf_T *buf) { return buf->b_p_bt[2]; }
+int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
+int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
+char nvim_buf_get_fileformat(buf_T *buf) { return buf->b_p_ff[0]; }
+int nvim_buf_get_bin(buf_T *buf) { return buf->b_p_bin; }
+buf_T *nvim_get_lastbuf(void) { return lastbuf; }
+buf_T *nvim_buf_get_prev(buf_T *buf) { return buf->b_prev; }
+buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
 /// Get the total sign HL metadata count for a buffer.
-uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf)
-{
-  return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0;
-}
-
+uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0; }
 /// Get the total sign text metadata count for a buffer.
-uint32_t nvim_buf_meta_total_sign_text(buf_T *buf)
-{
-  return buf ? buf_meta_total(buf, kMTMetaSignText) : 0;
-}
-
-/// Get the br_fnum field from a bufref (accessor for Rust).
-int nvim_bufref_get_fnum(bufref_T *bufref)
-{
-  return bufref->br_fnum;
-}
-
-/// Get the br_buf_free_count field from a bufref (accessor for Rust).
-int nvim_bufref_get_buf_free_count(bufref_T *bufref)
-{
-  return bufref->br_buf_free_count;
-}
-
-/// Get the b_fnum field from a buffer (accessor for Rust).
-int nvim_buf_get_fnum(buf_T *buf)
-{
-  return buf->b_fnum;
-}
-
-/// Get the first character of the b_p_bh (bufhidden option) field.
-char nvim_buf_get_bufhidden(buf_T *buf)
-{
-  return buf->b_p_bh[0];
-}
-
-/// Get the b_fname field from a buffer (short filename).
-const char *nvim_buf_get_b_fname(buf_T *buf)
-{
-  return buf->b_fname;
-}
-/// Get the b_p_syn option field from a buffer.
+uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignText) : 0; }
+int nvim_bufref_get_fnum(bufref_T *bufref) { return bufref->br_fnum; }
+int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_free_count; }
+int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
+char nvim_buf_get_bufhidden(buf_T *buf) { return buf->b_p_bh[0]; }
+const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
 const char *nvim_buf_get_b_p_syn(buf_T *buf) { return buf ? buf->b_p_syn : NULL; }
-
-/// Get the b_ffname field from a buffer (full filename).
-const char *nvim_buf_get_b_ffname(buf_T *buf)
-{
-  return buf->b_ffname;
-}
-
-/// Get the b_sfname field from a buffer (short filename for display).
-const char *nvim_buf_get_b_sfname(buf_T *buf)
-{
-  return buf->b_sfname;
-}
-
-/// Get the b_p_efm (errorformat option) field from a buffer.
-const char *nvim_buf_get_b_p_efm(buf_T *buf)
-{
-  return buf->b_p_efm;
-}
-
-/// Get the b_p_ro (readonly option) field from a buffer.
-int nvim_buf_get_b_p_ro(buf_T *buf)
-{
-  return buf->b_p_ro;
-}
-
-/// Get the b_p_ft (filetype option) field from a buffer.
-const char *nvim_buf_get_b_p_ft(buf_T *buf)
-{
-  return buf->b_p_ft;
-}
-
-/// Get the b_p_ma (modifiable option) field from a buffer.
-int nvim_buf_get_b_p_ma(buf_T *buf)
-{
-  return buf->b_p_ma;
-}
-
-/// Set the b_p_ml (modeline) field on a buffer.
-void nvim_buf_set_b_p_ml(buf_T *buf, int val)
-{
-  if (buf) {
-    buf->b_p_ml = val != 0;
-  }
-}
-
-/// Set the b_p_iminsert field on a buffer.
-void nvim_buf_set_b_p_iminsert(buf_T *buf, int val)
-{
-  if (buf) {
-    buf->b_p_iminsert = val;
-  }
-}
-
-/// Set the b_p_imsearch field on a buffer.
-void nvim_buf_set_b_p_imsearch(buf_T *buf, int val)
-{
-  if (buf) {
-    buf->b_p_imsearch = val;
-  }
-}
-
-/// Get the cmdmod.cmod_flags field.
-int nvim_get_cmdmod_cmod_flags(void)
-{
-  return cmdmod.cmod_flags;
-}
-
-/// Get the b_chartab field from a buffer.
-uint64_t *nvim_buf_get_chartab(buf_T *buf)
-{
-  return buf->b_chartab;
-}
-
-/// Get the 'tabstop' option value for a buffer.
-OptInt nvim_buf_get_p_ts(buf_T *buf)
-{
-  return buf->b_p_ts;
-}
-
-/// Get the 'vartabstop' array for a buffer.
-int *nvim_buf_get_p_vts_array(buf_T *buf)
-{
-  return buf->b_p_vts_array;
-}
-
-/// Get the 'shiftwidth' option value for a buffer.
-OptInt nvim_buf_get_p_sw(buf_T *buf)
-{
-  return buf->b_p_sw;
-}
-
-/// Get the b_nwindows field from a buffer (number of windows).
-int nvim_buf_get_nwindows(buf_T *buf)
-{
-  return buf->b_nwindows;
-}
-
-/// Get the b_locked field from a buffer.
-int nvim_buf_get_locked(buf_T *buf)
-{
-  return buf->b_locked;
-}
-
-/// Get the b_locked_split field from a buffer.
-int nvim_buf_get_locked_split(buf_T *buf)
-{
-  return buf->b_locked_split;
-}
-
-/// Get the b_flags field from a buffer.
-int nvim_buf_get_flags(buf_T *buf)
-{
-  return buf->b_flags;
-}
-
-/// Get the b_changed field from a buffer.
-int nvim_buf_get_changed(buf_T *buf)
-{
-  return buf->b_changed;
-}
-
-/// Get the b_p_bl (buflisted option) field from a buffer.
-int nvim_buf_get_b_p_bl(buf_T *buf)
-{
-  return buf->b_p_bl;
-}
-
-/// Get the b_ffname field from a buffer (full filename) - for Rust.
-const char *nvim_buf_get_ffname(buf_T *buf)
-{
-  return buf->b_ffname;
-}
-
-/// Get the b_sfname field from a buffer (short filename) - for Rust.
-const char *nvim_buf_get_sfname(buf_T *buf)
-{
-  return buf->b_sfname;
-}
-
-/// Get curbuf->b_ffname (full filename) - accessor for Rust.
-const char *nvim_curbuf_get_ffname(void)
-{
-  return curbuf->b_ffname;
-}
-
-/// Get curbuf->b_p_path (buffer-local 'path' option) - accessor for Rust.
-const char *nvim_curbuf_get_path(void)
-{
-  return curbuf->b_p_path;
-}
-
-/// Get curbuf->b_p_inex (buffer-local 'includeexpr' option) - accessor for Rust.
-const char *nvim_curbuf_get_inex(void)
-{
-  return curbuf->b_p_inex;
-}
-
-/// Get the NameBuff global (accessor for Rust).
-char *nvim_get_namebuff(void)
-{
-  return NameBuff;
-}
-
-/// Get the 'softtabstop' option value for a buffer.
-OptInt nvim_buf_get_p_sts(buf_T *buf)
-{
-  return buf ? buf->b_p_sts : 0;
-}
-
-// nvim_curbuf_get_line_ptr: kept (needs curbuf + curwin->w_cursor.lnum, cannot inline from Rust)
-const char *nvim_curbuf_get_line_ptr(void)
-{
-  return ml_get_buf(curbuf, curwin->w_cursor.lnum);
-}
-
-/// Check if the memfile pointer is NULL for a buffer (accessor for Rust).
-int nvim_buf_get_ml_mfp_null(buf_T *buf)
-{
-  return buf->b_ml.ml_mfp == NULL;
-}
+const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
+const char *nvim_buf_get_b_sfname(buf_T *buf) { return buf->b_sfname; }
+const char *nvim_buf_get_b_p_efm(buf_T *buf) { return buf->b_p_efm; }
+int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
+const char *nvim_buf_get_b_p_ft(buf_T *buf) { return buf->b_p_ft; }
+int nvim_buf_get_b_p_ma(buf_T *buf) { return buf->b_p_ma; }
+void nvim_buf_set_b_p_ml(buf_T *buf, int val) { if (buf) { buf->b_p_ml = val != 0; } }
+void nvim_buf_set_b_p_iminsert(buf_T *buf, int val) { if (buf) { buf->b_p_iminsert = val; } }
+void nvim_buf_set_b_p_imsearch(buf_T *buf, int val) { if (buf) { buf->b_p_imsearch = val; } }
+int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
+uint64_t *nvim_buf_get_chartab(buf_T *buf) { return buf->b_chartab; }
+OptInt nvim_buf_get_p_ts(buf_T *buf) { return buf->b_p_ts; }
+int *nvim_buf_get_p_vts_array(buf_T *buf) { return buf->b_p_vts_array; }
+OptInt nvim_buf_get_p_sw(buf_T *buf) { return buf->b_p_sw; }
+int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
+int nvim_buf_get_locked(buf_T *buf) { return buf->b_locked; }
+int nvim_buf_get_locked_split(buf_T *buf) { return buf->b_locked_split; }
+int nvim_buf_get_flags(buf_T *buf) { return buf->b_flags; }
+int nvim_buf_get_changed(buf_T *buf) { return buf->b_changed; }
+int nvim_buf_get_b_p_bl(buf_T *buf) { return buf->b_p_bl; }
+const char *nvim_buf_get_ffname(buf_T *buf) { return buf->b_ffname; }
+const char *nvim_buf_get_sfname(buf_T *buf) { return buf->b_sfname; }
+const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
+const char *nvim_curbuf_get_path(void) { return curbuf->b_p_path; }
+const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
+char *nvim_get_namebuff(void) { return NameBuff; }
+OptInt nvim_buf_get_p_sts(buf_T *buf) { return buf ? buf->b_p_sts : 0; }
+const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
+int nvim_buf_get_ml_mfp_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
 
 // Rust uses a 16-byte buffer to hold FileID; assert this is sufficient.
 _Static_assert(sizeof(FileID) <= 16, "FileID size exceeds Rust FILE_ID_SIZE");
 
-/// Check if buffer has a valid cached file_id (accessor for Rust).
-int nvim_buf_file_id_valid(buf_T *buf)
-{
-  return buf->file_id_valid;
-}
-
-/// Copy buffer's cached file_id into output buffer (accessor for Rust).
-void nvim_buf_get_file_id(buf_T *buf, void *out)
-{
-  *(FileID *)out = buf->file_id;
-}
+int nvim_buf_file_id_valid(buf_T *buf) { return buf->file_id_valid; }
+void nvim_buf_get_file_id(buf_T *buf, void *out) { *(FileID *)out = buf->file_id; }
 
 /// Set buffer's file_id from a FileID and validity flag (accessor for Rust).
 void nvim_buf_set_file_id_data(buf_T *buf, const void *file_id, bool valid)
@@ -442,160 +199,38 @@ void nvim_check_arg_idx_if_curbuf(buf_T *buf)
   }
 }
 
-/// Get the stored line number for a buffer (accessor for Rust).
-linenr_T nvim_buflist_findlnum(buf_T *buf)
-{
-  return buflist_findfmark(buf)->mark.lnum;
-}
+linenr_T nvim_buflist_findlnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
+int nvim_get_argcount(void) { return ARGCOUNT; }
+buf_T *nvim_get_cmdwin_buf(void) { return cmdwin_buf; }
+void nvim_buf_set_ml_line_count(buf_T *buf, linenr_T val) { buf->b_ml.ml_line_count = val; }
+void nvim_buf_set_ml_mfp_null(buf_T *buf) { buf->b_ml.ml_mfp = NULL; }
+int64_t nvim_buf_get_changedtick_direct(buf_T *buf) { return buf_get_changedtick(buf); }
+void nvim_buf_set_p_eof(buf_T *buf, int val) { buf->b_p_eof = val; }
+void nvim_buf_set_start_eof(buf_T *buf, int val) { buf->b_start_eof = val; }
+void nvim_buf_set_p_eol(buf_T *buf, int val) { buf->b_p_eol = val; }
+void nvim_buf_set_start_eol(buf_T *buf, int val) { buf->b_start_eol = val; }
+void nvim_buf_set_p_bomb(buf_T *buf, int val) { buf->b_p_bomb = val; }
+void nvim_buf_set_start_bomb(buf_T *buf, int val) { buf->b_start_bomb = val; }
 
-/// Get ARGCOUNT value (accessor for Rust). ARGCOUNT is a macro.
-int nvim_get_argcount(void)
-{
-  return ARGCOUNT;
-}
+int nvim_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
+buf_T *nvim_handle_get_buffer(handle_T handle) { return handle_get_buffer(handle); }
+linenr_T nvim_buflist_findfmark_lnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
+void nvim_buf_set_b_p_bl(buf_T *buf, int val) { buf->b_p_bl = val; }
+int64_t nvim_buf_get_last_used(buf_T *buf) { return buf ? (int64_t)buf->b_last_used : 0; }
 
-/// Get the cmdwin_buf global (accessor for Rust).
-buf_T *nvim_get_cmdwin_buf(void)
-{
-  return cmdwin_buf;
-}
-
-/// Set b_ml.ml_line_count on a buffer (accessor for Rust).
-void nvim_buf_set_ml_line_count(buf_T *buf, linenr_T val)
-{
-  buf->b_ml.ml_line_count = val;
-}
-
-/// Set b_ml.ml_mfp to NULL on a buffer (accessor for Rust).
-void nvim_buf_set_ml_mfp_null(buf_T *buf)
-{
-  buf->b_ml.ml_mfp = NULL;
-}
-
-// nvim_buf_set_ml_flags already defined in memline.c
-
-/// Get buf_get_changedtick value (direct accessor for Rust, avoids API function).
-int64_t nvim_buf_get_changedtick_direct(buf_T *buf)
-{
-  return buf_get_changedtick(buf);
-}
-
-/// Set b_p_eof on a buffer (accessor for Rust).
-void nvim_buf_set_p_eof(buf_T *buf, int val)
-{
-  buf->b_p_eof = val;
-}
-
-/// Set b_start_eof on a buffer (accessor for Rust).
-void nvim_buf_set_start_eof(buf_T *buf, int val)
-{
-  buf->b_start_eof = val;
-}
-
-/// Set b_p_eol on a buffer (accessor for Rust).
-void nvim_buf_set_p_eol(buf_T *buf, int val)
-{
-  buf->b_p_eol = val;
-}
-
-/// Set b_start_eol on a buffer (accessor for Rust).
-void nvim_buf_set_start_eol(buf_T *buf, int val)
-{
-  buf->b_start_eol = val;
-}
-
-/// Set b_p_bomb on a buffer (accessor for Rust).
-void nvim_buf_set_p_bomb(buf_T *buf, int val)
-{
-  buf->b_p_bomb = val;
-}
-
-/// Set b_start_bomb on a buffer (accessor for Rust).
-void nvim_buf_set_start_bomb(buf_T *buf, int val)
-{
-  buf->b_start_bomb = val;
-}
-
-// ============================================================
-// Phase 2 accessor functions for buffer lookup helpers.
-// ============================================================
-
-/// Get alternate file number for the current window (accessor for Rust).
-int nvim_curwin_get_alt_fnum(void)
-{
-  return curwin->w_alt_fnum;
-}
-
-/// Look up a buffer by handle number (accessor for Rust: handle_get_buffer is a macro).
-buf_T *nvim_handle_get_buffer(handle_T handle)
-{
-  return handle_get_buffer(handle);
-}
-
-// nvim_FullName_save already defined in undo.c
-
-// ============================================================
-// Phase 4 accessor functions for buffer display & info helpers.
-// ============================================================
-
-/// Get stored lnum from buflist_findfmark (accessor for Rust).
-linenr_T nvim_buflist_findfmark_lnum(buf_T *buf)
-{
-  return buflist_findfmark(buf)->mark.lnum;
-}
-
-/// Set b_p_bl on a buffer (accessor for Rust).
-void nvim_buf_set_b_p_bl(buf_T *buf, int val)
-{
-  buf->b_p_bl = val;
-}
-
-// ============================================================
-// Phase 4 accessor functions for buflist_list.
-// ============================================================
-
-// nvim_get_firstbuf is already defined in undo.c.
-// nvim_buf_get_next is already defined in undo.c.
-// nvim_msg_ext_set_kind is already defined in change_ffi.c.
-// nvim_eap_get_arg is already defined in ex_docmd.c.
-// nvim_eap_get_forceit is already defined in indent_ffi.c.
-
-/// Get buf->b_last_used (accessor for Rust).
-int64_t nvim_buf_get_last_used(buf_T *buf)
-{
-  return buf ? (int64_t)buf->b_last_used : 0;
-}
-
-/// Check if the buffer's terminal is running (accessor for Rust).
 int nvim_buf_terminal_running(buf_T *buf)
 {
-  if (!buf || !buf->terminal) {
-    return 0;
-  }
+  if (!buf || !buf->terminal) { return 0; }
   return terminal_running(buf->terminal) ? 1 : 0;
 }
 
-/// Check if buf's channel job is running (accessor for Rust).
 int nvim_buf_channel_job_running(buf_T *buf)
 {
-  if (!buf || !buf->terminal) {
-    return 0;
-  }
+  if (!buf || !buf->terminal) { return 0; }
   return channel_job_running((uint64_t)buf->b_p_channel) ? 1 : 0;
 }
 
-// nvim_get_iobuff is already defined in option_shim.c.
-
-// ============================================================
-// Phase 3 accessor functions for fileinfo.
-// NOTE: nvim_get_p_ru is already defined in drawscreen.c.
-// ============================================================
-
-/// Get curbuf->b_fname (short filename) (accessor for Rust).
-const char *nvim_curbuf_get_fname(void)
-{
-  return curbuf->b_fname;
-}
+const char *nvim_curbuf_get_fname(void) { return curbuf->b_fname; }
 
 // ============================================================
 // Phase 6 accessor functions for do_modelines / chk_modeline.
@@ -659,31 +294,21 @@ void *nvim_bufname_regex_compile(char *pat)
   return rmp;
 }
 
-/// Check if the compiled regex handle is still valid (regprog not NULL).
 int nvim_bufname_regex_valid(void *handle)
 {
-  if (handle == NULL) {
-    return 0;
-  }
+  if (handle == NULL) { return 0; }
   return ((regmatch_T *)handle)->regprog != NULL ? 1 : 0;
 }
 
-/// Free a compiled regex handle from nvim_bufname_regex_compile.
 void nvim_bufname_regex_free(void *handle)
 {
-  if (handle == NULL) {
-    return;
-  }
+  if (handle == NULL) { return; }
   regmatch_T *rmp = handle;
   vim_regfree(rmp->regprog);
   xfree(rmp);
 }
 
-/// Get curwin->w_p_diff value (accessor for Rust).
-int nvim_curwin_get_p_diff(void)
-{
-  return curwin->w_p_diff ? 1 : 0;
-}
+int nvim_curwin_get_p_diff(void) { return curwin->w_p_diff ? 1 : 0; }
 
 // Accessors for cmdwin migration
 int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
@@ -963,55 +588,16 @@ const char *nvim_buf_get_lasticon(void) { return lasticon; }
 void nvim_buf_set_lasticon(char *s) { lasticon = s; }
 
 // ============================================================================
-// Extmark Accessor Functions (moved from buffer.c, for Rust FFI - extmark crate)
+// Extmark Accessor Functions
 // ============================================================================
 
-/// Get the marktree pointer from a buffer.
-MarkTree *nvim_buf_get_marktree(buf_T *buf)
-{
-  return buf->b_marktree;
-}
-
-/// Get the deleted_bytes2 field from a buffer.
-bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf)
-{
-  return buf->deleted_bytes2;
-}
-
-/// Set the deleted_bytes2 field in a buffer.
-void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val)
-{
-  buf->deleted_bytes2 = val;
-}
-
-/// Get the b_prev_line_count field from a buffer (for extmark adjust).
-int nvim_buf_get_prev_line_count(buf_T *buf)
-{
-  return buf->b_prev_line_count;
-}
-
-/// Set the b_prev_line_count field in a buffer.
-void nvim_buf_set_prev_line_count(buf_T *buf, int val)
-{
-  buf->b_prev_line_count = val;
-}
-
-/// Get the autom field from b_signcols.
-bool nvim_buf_signcols_get_autom(buf_T *buf)
-{
-  return buf->b_signcols.autom;
-}
-
-/// Clear the b_signcols structure.
-void nvim_buf_signcols_clear(buf_T *buf)
-{
-  buf->b_signcols.max = 0;
-  CLEAR_FIELD(buf->b_signcols.count);
-}
-
-// ============================================================
-// WinInfo / buffer position functions (Phase 11)
-// ============================================================
+MarkTree *nvim_buf_get_marktree(buf_T *buf) { return buf->b_marktree; }
+bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf) { return buf->deleted_bytes2; }
+void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val) { buf->deleted_bytes2 = val; }
+int nvim_buf_get_prev_line_count(buf_T *buf) { return buf->b_prev_line_count; }
+void nvim_buf_set_prev_line_count(buf_T *buf, int val) { buf->b_prev_line_count = val; }
+bool nvim_buf_signcols_get_autom(buf_T *buf) { return buf->b_signcols.autom; }
+void nvim_buf_signcols_clear(buf_T *buf) { buf->b_signcols.max = 0; CLEAR_FIELD(buf->b_signcols.count); }
 
 // ============================================================
 // WinInfo FFI accessor helpers (for Rust wininfo.rs)
@@ -1976,47 +1562,22 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags)
 // Accessors for buf_freeall (migrated to Rust, src/nvim-rs/buffer/src/close.rs)
 // ============================================================
 
-void nvim_buf_lock(buf_T *buf)
-{
-  buf->b_locked++;
-  buf->b_locked_split++;
-}
-
-void nvim_buf_unlock(buf_T *buf)
-{
-  buf->b_locked--;
-  buf->b_locked_split--;
-}
-
-void nvim_buf_set_nwindows(buf_T *buf, int val)
-{
-  buf->b_nwindows = val;
-}
-
-void nvim_buf_flags_and(buf_T *buf, int mask)
-{
-  buf->b_flags &= mask;
-}
+void nvim_buf_lock(buf_T *buf) { buf->b_locked++; buf->b_locked_split++; }
+void nvim_buf_unlock(buf_T *buf) { buf->b_locked--; buf->b_locked_split--; }
+void nvim_buf_set_nwindows(buf_T *buf, int val) { buf->b_nwindows = val; }
+void nvim_buf_flags_and(buf_T *buf, int mask) { buf->b_flags &= mask; }
+void nvim_syntax_clear_buf(buf_T *buf) { syntax_clear(&buf->b_s); }
 
 void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
 {
-  if (curwin != NULL && curwin->w_buffer == buf) {
-    reset_synblock(curwin);
-  }
+  if (curwin != NULL && curwin->w_buffer == buf) { reset_synblock(curwin); }
 }
 
 void nvim_buf_clearFolding_all_windows(buf_T *buf)
 {
   FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (win->w_buffer == buf) {
-      rs_clearFolding(win);
-    }
+    if (win->w_buffer == buf) { rs_clearFolding(win); }
   }
-}
-
-void nvim_syntax_clear_buf(buf_T *buf)
-{
-  syntax_clear(&buf->b_s);
 }
 
 /// Close the link to a buffer.
