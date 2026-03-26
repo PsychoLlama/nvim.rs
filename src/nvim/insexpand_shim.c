@@ -5,8 +5,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "klib/kvec.h"
@@ -30,23 +28,17 @@
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/eval/vars.h"
-#include "nvim/ex_eval.h"
 #include "nvim/ex_getln.h"
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
-#include "nvim/fileio.h"
 #include "nvim/fuzzy.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
-#include "nvim/getchar.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/highlight_group.h"
-#include "nvim/indent.h"
-#include "nvim/indent_c.h"
 #include "nvim/insexpand.h"
-#include "nvim/keycodes.h"
 #include "nvim/lua/executor.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark_defs.h"
@@ -59,7 +51,6 @@
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/fs.h"
 #include "nvim/os/input.h"
 #include "nvim/os/time.h"
 #include "nvim/path.h"
@@ -74,7 +65,6 @@
 #include "nvim/state_defs.h"
 #include "nvim/strings.h"
 #include "nvim/tag.h"
-#include "nvim/textformat.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/undo.h"
@@ -375,10 +365,9 @@ int compl_match_arraysize;
 static bool match_at_original_text(const compl_T *const match) { return match->cp_flags & CP_ORIGINAL_TEXT; }
 /// @return  true if "match" is the first match in the completion list.
 static bool is_first_match(const compl_T *const match) { return match == compl_first_match; }
-/// If the result is in allocated memory "tofree" is set to it.
 
 /// ins_compl_add_infercase: see rs_ins_compl_add_infercase in infercase.rs.
-/// Still exported from C for spell.c and search_shim.c callers; now calls rs_ins_compl_infercase_gettext.
+/// Still exported from C for spell.c and search_shim.c callers.
 int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Direction dir,
                             bool cont_s_ipos, int score)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -603,8 +592,6 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
 
   return OK;
 }
-
-// drawline.c already calls rs_ins_compl_col_range_attr() directly.
 
 /// Convert to complete item dict
 static dict_T *ins_compl_dict_alloc(compl_T *match)
@@ -1001,11 +988,6 @@ void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
 
-// NOTE: f_complete, f_complete_add, f_complete_check exported from Rust via
-// #[export_name] in src/nvim-rs/insexpand/src/funcexpand.rs
-
-/// Fill the dict of complete_info
-
 /// complete_info() implementation.
 /// Contains the full what_flag parsing and dictionary population logic.
 void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
@@ -1143,27 +1125,11 @@ void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
   (void)ret;
 }
 
-// NOTE: f_complete_info exported from Rust via #[export_name] in
-// src/nvim-rs/insexpand/src/info.rs
-
-// Ported to Rust as rs_get_next_filename_completion in file.rs.
-// Logic now lives in rs_get_next_default_completion (expand.rs) and the
 // Accessors for compl_xp fields needed by inlined cmdline completion
 int nvim_compl_xp_get_context(void) { return compl_xp.xp_context; }
 const char *nvim_compl_xp_get_pattern(void) { return compl_xp.xp_pattern; }
 void nvim_compl_xp_set_cmd_context(int len, int col) { set_cmd_context(&compl_xp, compl_pattern.data, len, col, false); }
 void nvim_compl_xp_nlua_expand(void) { nlua_expand_pat(&compl_xp); }
-
-/// compl_col, compl_length, compl_pattern, and cpt_compl_pattern.
-
-///
-/// @param startcol  start column number of the completion pattern/text
-/// @param cur_col   current cursor column
-///
-/// On return, "line_invalid" is set to true, if the current line may have
-/// become invalid and needs to be fetched again.
-///
-/// @return  OK on success.
 const char *nvim_ml_get_curline(void) { return ml_get(curwin->w_cursor.lnum); }
 char *nvim_get_ctrl_x_msg(int idx) { return _(ctrl_x_msgs[idx & ~CTRL_X_WANT_IDENT]); }
 
@@ -1188,9 +1154,6 @@ void nvim_spell_back_to_badword_impl(void)
   }
 }
 
-// NOTE: f_preinserted exported from Rust via #[export_name] in
-// src/nvim-rs/insexpand/src/funcexpand.rs
-
 // Completion state accessors (used by Rust insexpand crate)
 unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
 int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
@@ -1199,23 +1162,12 @@ int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
-// Complex null-guard accessors
-// Accessors for set_ctrl_x_mode / may_advance_cpt_index
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
-// nvim_set_edit_submode_null, nvim_set_edit_submode_pre_null, nvim_set_redraw_mode_true,
 void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
-// nvim_utf_ptr2char is defined in mbyte.c; re-use it via extern declaration
-
-// Accessors for ins_compl_stop
 char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
-
-// Accessor for internal_error in compl_get_info dispatch
-
-// nvim_update_screen() already exists in drawscreen.c
-// nvim_get_cursor_col() already exists in normal_shim.c
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
@@ -1256,34 +1208,18 @@ void nvim_clear_ins_compl_st(void) {
   CLEAR_FIELD(ins_compl_st);
 }
 
-// Called at the top of ins_compl_get_exp when compl_started && ins_buf != curbuf.
-
-// Sets st.cur_match_pos based on current direction (call after init).
-
-// rs_ins_compl_get_exp now calls rs_process_next_cpt_value directly.
-// rs_get_next_default_completion in expand.rs calls compound accessors directly.
-// rs_get_next_filename_completion in file.rs calls compound accessors directly.
 int nvim_expand_wildcards_files(int count, char **pat, int *num_matches, char ***matches)
 {
   return expand_wildcards(count, pat, num_matches, matches,
                           EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT);
 }
 void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches) { tilde_replace(pat, num_matches, matches); }
-// insert.rs and leader.rs call rs_ins_compl_new_leader() directly.
-// Ported to Rust as rs_ins_compl_addfrommatch in leader.rs.
-// nvim_get_cursor_line_ptr: defined in change_ffi.c as char *nvim_get_cursor_line_ptr(void)
-// Raw mergesort accessor: sorts linked list starting at `head`, returns new head.
-// compare_type: 0 = fuzzy (descending score), 1 = nearest (ascending score).
 void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
 {
   return mergesort_list(head, cp_get_next, cp_set_next, cp_get_prev, cp_set_prev,
                         compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest);
 }
-// Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
-// compl_first_match->cp_prev for backward), 0 otherwise
-
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
-// get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
 
 void nvim_do_autocmd_completedone_impl(int c, int mode, char *word)
