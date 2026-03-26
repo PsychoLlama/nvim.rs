@@ -5,8 +5,63 @@
 //! and command execution state management.
 
 use std::ffi::{c_char, c_int};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::ExArgHandle;
+
+// ---------------------------------------------------------------------------
+// cmdline_call_depth — Rust-owned recursion counter (was C static)
+// ---------------------------------------------------------------------------
+
+static CMDLINE_CALL_DEPTH: AtomicI32 = AtomicI32::new(0);
+
+// ---------------------------------------------------------------------------
+// do_cmdline_start / do_cmdline_end — Rust implementations
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn start_batch_changes();
+    fn end_batch_changes();
+    static p_mfd: i64;
+}
+
+const FAIL_DEPTH: c_int = 0;
+const OK_DEPTH: c_int = 1;
+
+/// Start executing an Ex command line.
+///
+/// Returns `OK` (1) on success, `FAIL` (0) if too recursive.
+/// Mirrors the C `do_cmdline_start()`.
+///
+/// # Safety
+/// Must be called from a single-threaded context (C/Rust interop).
+#[export_name = "do_cmdline_start"]
+pub unsafe extern "C" fn rs_do_cmdline_start() -> c_int {
+    let depth = CMDLINE_CALL_DEPTH.load(Ordering::Relaxed);
+    debug_assert!(depth >= 0);
+    // Allow 200 or p_mfd, whichever is larger.
+    let limit = unsafe { p_mfd as c_int };
+    if depth >= 200 && depth >= limit {
+        return FAIL_DEPTH;
+    }
+    CMDLINE_CALL_DEPTH.store(depth + 1, Ordering::Relaxed);
+    unsafe { start_batch_changes() };
+    OK_DEPTH
+}
+
+/// End executing an Ex command line.
+///
+/// Mirrors the C `do_cmdline_end()`.
+///
+/// # Safety
+/// Must be called after a successful `do_cmdline_start`.
+#[export_name = "do_cmdline_end"]
+pub unsafe extern "C" fn rs_do_cmdline_end() {
+    let depth = CMDLINE_CALL_DEPTH.load(Ordering::Relaxed);
+    debug_assert!(depth > 0);
+    CMDLINE_CALL_DEPTH.store(depth - 1, Ordering::Relaxed);
+    unsafe { end_batch_changes() };
+}
 
 // =============================================================================
 // EXFLAG constants for command flags
@@ -321,9 +376,6 @@ extern "C" {
     fn do_ucmd(eap: ExArgHandle, preview: bool) -> c_int;
 
     // execute_cmd helpers
-    fn nvim_do_cmdline_start() -> c_int;
-    fn nvim_do_cmdline_end();
-    fn nvim_get_e_command_too_recursive() -> *const c_char;
     fn emsg(s: *const c_char);
     fn nvim_cmdmod_load_from_cmdinfo(cmdinfo: CmdParseInfoHandle);
     fn nvim_cmdmod_store_to_save(save: *mut c_void);
@@ -679,8 +731,8 @@ pub unsafe extern "C" fn rs_execute_cmd(
 ) -> c_int {
     let mut retv: c_int = 0;
 
-    if nvim_do_cmdline_start() == FAIL_P2 {
-        emsg(nvim_get_e_command_too_recursive());
+    if rs_do_cmdline_start() == FAIL_DEPTH {
+        emsg(crate::gt(crate::E_COMMAND_TOO_RECURSIVE_STR.as_ptr()));
         return retv;
     }
 
@@ -772,7 +824,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
     nvim_cmdmod_restore_from_save(save_buf as *const c_void);
     xfree(save_buf);
 
-    nvim_do_cmdline_end();
+    rs_do_cmdline_end();
     retv
 }
 
@@ -791,7 +843,7 @@ unsafe fn goto_end_ret(
     undo_cmdmod(std::ptr::addr_of_mut!(cmdmod).cast());
     nvim_cmdmod_restore_from_save(save_buf as *const c_void);
     xfree(save_buf);
-    nvim_do_cmdline_end();
+    rs_do_cmdline_end();
 }
 
 /// Rust implementation of parse_cmdline.

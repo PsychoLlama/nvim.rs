@@ -230,8 +230,6 @@ extern "C" {
     fn nvim_docmd_v_throwpoint(newval: *mut c_char) -> *mut c_char;
 
     // do_cmdline_start / do_cmdline_end wrappers
-    fn nvim_do_cmdline_start() -> c_int;
-    fn nvim_do_cmdline_end();
 
     // Memory
     fn xfree(ptr: *mut c_void);
@@ -535,7 +533,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         msg_list = std::ptr::addr_of_mut!(private_msg_list).cast();
     }
 
-    if unsafe { nvim_do_cmdline_start() } == FAIL {
+    if unsafe { crate::execute::rs_do_cmdline_start() } == FAIL {
         unsafe {
             emsg(gettext(crate::E_COMMAND_TOO_RECURSIVE_STR.as_ptr()));
             nvim_docmd_c_do_errthrow(std::ptr::null_mut(), std::ptr::null());
@@ -1136,6 +1134,6 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
     unsafe { did_endif = false }; // in case do_cmdline used recursively
 
-    unsafe { nvim_do_cmdline_end() };
+    unsafe { crate::execute::rs_do_cmdline_end() };
     retval
 }

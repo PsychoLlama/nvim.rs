@@ -29,8 +29,7 @@ extern "C" {
 
     // --- dialog-specific accessors ---
     fn nvim_ex2_buf_get_fnum(buf: *mut BufHandle) -> c_int;
-    #[link_name = "dialog_msg"]
-    fn nvim_ex2_dialog_msg(buff: *mut c_char, format: *const c_char, fname: *const c_char);
+    fn snprintf(s: *mut c_char, n: usize, format: *const c_char, ...) -> c_int;
     #[link_name = "vim_dialog_yesnocancel"]
     fn nvim_ex2_vim_dialog_yesnocancel(
         typ: c_int,
@@ -59,6 +58,30 @@ extern "C" {
     fn nvim_ex2_buf_set_fname_null(buf: *mut BufHandle);
 }
 
+const UNTITLED_STR: &std::ffi::CStr = c"Untitled";
+
+/// Port of `dialog_msg`: fill `buff` with a formatted message using `format` and `fname`.
+/// If `fname` is NULL, substitutes "Untitled" (via gettext).
+///
+/// # Safety
+/// `buff` must point to a buffer of at least `DIALOG_MSG_SIZE` bytes.
+/// `format` must be a valid null-terminated C format string with a single `%s`.
+#[export_name = "dialog_msg"]
+pub unsafe extern "C" fn rs_dialog_msg(
+    buff: *mut c_char,
+    format: *const c_char,
+    fname: *const c_char,
+) {
+    let effective_fname = if fname.is_null() {
+        unsafe { nvim_ex2_gettext(UNTITLED_STR.as_ptr()) }
+    } else {
+        fname
+    };
+    unsafe {
+        snprintf(buff, DIALOG_MSG_SIZE, format, effective_fname);
+    }
+}
+
 // Rust-internal: write all lines in a buffer
 unsafe fn buf_write_all(buf: *mut BufHandle, forceit: bool) -> c_int {
     // Call the Rust implementation exported as "buf_write_all"
@@ -82,7 +105,7 @@ pub unsafe extern "C" fn rs_dialog_close_terminal(buf: *mut BufHandle) -> bool {
     };
 
     unsafe {
-        nvim_ex2_dialog_msg(
+        rs_dialog_msg(
             buff.as_mut_ptr().cast(),
             nvim_ex2_gettext(b"Close \"%s\"?\0".as_ptr().cast()),
             display_name,
@@ -102,7 +125,7 @@ pub unsafe extern "C" fn rs_dialog_changed(buf: *mut BufHandle, checkall: bool) 
     let mut buff = [0u8; DIALOG_MSG_SIZE];
 
     unsafe {
-        nvim_ex2_dialog_msg(
+        rs_dialog_msg(
             buff.as_mut_ptr().cast(),
             nvim_ex2_gettext(b"Save changes to \"%s\"?\0".as_ptr().cast()),
             nvim_ex2_buf_get_fname(buf),

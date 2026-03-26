@@ -30,6 +30,9 @@ enum {
 
 enum { DIALOG_MSG_SIZE = 1000, };  ///< buffer size for dialog_msg()
 
+/// Fill `buff` with `format` applied to `fname` (uses "Untitled" if fname is NULL).
+void dialog_msg(char *buff, char *format, char *fname);
+
 /// Structure used to save the current state.  Used when executing Normal mode
 /// commands while in any other mode.
 typedef struct {

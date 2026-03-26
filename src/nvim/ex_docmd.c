@@ -324,32 +324,6 @@ int cmdname_first_char(int cmdidx)
 
 static char dollar_command[2] = { '$', 0 };
 
-static int cmdline_call_depth = 0;  ///< recursiveness
-
-/// Start executing an Ex command line.
-///
-/// @return  FAIL if too recursive, OK otherwise.
-static int do_cmdline_start(void)
-{
-  assert(cmdline_call_depth >= 0);
-  // It's possible to create an endless loop with ":execute", catch that
-  // here.  The value of 200 allows nested function calls, ":source", etc.
-  // Allow 200 or 'maxfuncdepth', whatever is larger.
-  if (cmdline_call_depth >= 200 && cmdline_call_depth >= p_mfd) {
-    return FAIL;
-  }
-  cmdline_call_depth++;
-  start_batch_changes();
-  return OK;
-}
-
-/// End executing an Ex command line.
-static void do_cmdline_end(void)
-{
-  cmdline_call_depth--;
-  assert(cmdline_call_depth >= 0);
-  end_batch_changes();
-}
 
 /// Helper function to apply an offset for buffer commands, i.e. ":bdelete",
 /// ":bwipeout", etc.
@@ -1392,7 +1366,6 @@ cstack_T *nvim_cstack_alloc(void)
 }
 void nvim_eap_set_cstack(exarg_T *eap, cstack_T *cstack) { eap->cstack = cstack; }
 int nvim_curbuf_is_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
-const char *nvim_get_e_command_too_recursive(void) { return _(e_command_too_recursive); }
 const char *nvim_get_e_modifiable(void) { return _(e_modifiable); }
 int nvim_get_eap_addr_type_lines(const exarg_T *eap) { return eap->addr_type == ADDR_LINES ? 1 : 0; }
 void nvim_hasFolding_line1(linenr_T lnum, linenr_T *line1_out)
@@ -1540,9 +1513,6 @@ const char *nvim_get_e_nobang(void) { return _(e_nobang); }
 // ascii_iswhite wrapper (the inline version can't be called from Rust)
 int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
 
-// Wrappers for static Phase 2 helpers called from Rust
-int nvim_do_cmdline_start(void) { return do_cmdline_start(); }
-void nvim_do_cmdline_end(void) { do_cmdline_end(); }
 
 // changedir_func helpers
 bool nvim_allbuf_locked(void) { return allbuf_locked(); }
@@ -1991,13 +1961,6 @@ void nvim_docmd_do_autocmd_dirchanged_manual_post(const char *cwd, int scope)
   do_autocmd_dirchanged(cwd, (CdScope)scope, kCdCauseManual, false);
 }
 
-void dialog_msg(char *buff, char *format, char *fname)
-{
-  if (fname == NULL) {
-    fname = _("Untitled");
-  }
-  vim_snprintf(buff, DIALOG_MSG_SIZE, format, fname);
-}
 void ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 // set_ref_in_findfunc: only called from Rust directly as nvim_docmd_set_ref_in_findfunc_impl
 // free_findfunc_option: only called from option_shim.c as nvim_docmd_free_findfunc_option_impl
