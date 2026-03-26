@@ -32,7 +32,8 @@ extern "C" {
     // Buffer state (generic shims)
     fn nvim_curbuf_ml_empty() -> bool;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
-    fn nvim_curbuf_get_fileformat() -> c_int;
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn rs_get_fileformat(buf: *mut c_void) -> c_int;
 
     // Visual state: individual shims replace nvim_cpi_get_visual_state
     static mut VIsual_active: bool;
@@ -473,7 +474,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
         return;
     }
 
-    let eol_size: c_int = if nvim_curbuf_get_fileformat() == EOL_DOS {
+    let eol_size: c_int = if rs_get_fileformat(nvim_get_curbuf()) == EOL_DOS {
         2
     } else {
         1

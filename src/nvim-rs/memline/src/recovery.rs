@@ -166,8 +166,7 @@ extern "C" {
     fn nvim_bhdr_set_bh_data(hp: *mut c_void, data: *mut c_void);
     fn nvim_b0_get_ff(b0p: *const c_void) -> c_int;
     fn nvim_b0_extract_fenc(b0p: *const c_void) -> *mut c_char;
-    fn nvim_b0_get_mtime_int(b0p: *const c_void) -> c_int;
-    fn nvim_b0_get_page_size_int(b0p: *const c_void) -> c_uint;
+    fn nvim_b0_get_page_size_ptr(b0p: *const c_void) -> *const c_char;
     fn nvim_b0_set_fname0_nul(b0p: *mut c_void);
     fn nvim_b0_is_vim3(b0p: *const c_void) -> c_int;
     fn nvim_pp_get_id(pp: *const c_void) -> u16;
@@ -421,7 +420,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // If page size in swap file differs from what we assumed, recalculate
         let current_page_size = nvim_mf_get_page_size(mfp);
-        let b0_page_size = nvim_b0_get_page_size_int(b0p);
+        let b0_page_size = rs_char_to_long(nvim_b0_get_page_size_ptr(b0p)) as c_uint;
         if current_page_size != b0_page_size {
             let previous_page_size = current_page_size;
             nvim_mf_new_page_size_wrapper(mfp, b0_page_size);
@@ -469,7 +468,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         // Extract fileformat and encoding from block 0 before releasing it
         let b0_ff = nvim_b0_get_ff(b0p);
         b0_fenc = nvim_b0_extract_fenc(b0p);
-        let mtime_b0 = nvim_b0_get_mtime_int(b0p);
+        let mtime_b0 = rs_char_to_long(nvim_b0_get_mtime(b0p).cast_const()) as c_int;
 
         // Display swap file and original file names
         nvim_home_replace_into_namebuff(nvim_mf_get_fname(mfp));

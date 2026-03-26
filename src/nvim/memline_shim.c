@@ -561,6 +561,7 @@ int16_t nvim_b0_get_magic_short(const ZeroBlock *b0p) { return b0p->b0_magic_sho
 uint8_t nvim_b0_get_magic_char(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_magic_char; }
 uint8_t nvim_b0_get_id(const ZeroBlock *b0p, int idx) { return (uint8_t)b0p->b0_id[idx]; }
 const char *nvim_b0_get_version_ptr(const ZeroBlock *b0p) { return b0p->b0_version; }
+const char *nvim_b0_get_page_size_ptr(const ZeroBlock *b0p) { return b0p->b0_page_size; }
 const char *nvim_b0_get_uname_ptr(const ZeroBlock *b0p) { return b0p->b0_uname; }
 const char *nvim_b0_get_hname_ptr(const ZeroBlock *b0p) { return b0p->b0_hname; }
 const char *nvim_b0_get_fname_ptr(const ZeroBlock *b0p) { return b0p->b0_fname; }
@@ -928,10 +929,6 @@ int nvim_recover_check_timestamps(memfile_T *mfp, int mtime_b0)
   return 0;
 }
 
-int nvim_b0_get_mtime_int(const ZeroBlock *b0p) { return (int)rs_char_to_long(b0p->b0_mtime); }
-
-unsigned nvim_b0_get_page_size_int(const ZeroBlock *b0p) { return (unsigned)rs_char_to_long(b0p->b0_page_size); }
-
 int nvim_readfile_for_recovery(const char *fname)
 {
   return readfile((char *)fname, NULL, 0, 0, MAXLNUM, NULL, READ_NEW, false);
@@ -1161,8 +1158,6 @@ void nvim_curbuf_set_op_end_to_cursor_col(int col)
 void nvim_curwin_set_cursor_from_pos(const pos_T *pos) { curwin->w_cursor = *pos; }
 
 void nvim_curwin_set_cursor_coladd(int v) { curwin->w_cursor.coladd = (colnr_T)v; }
-
-int nvim_curbuf_get_fileformat(void) { return rs_get_fileformat((buf_T *)curbuf); }
 
 void nvim_os_breakcheck(void) { os_breakcheck(); }
 
