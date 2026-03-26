@@ -278,8 +278,8 @@ extern "C" {
     fn rs_ascii_isalnum(c: c_int) -> c_int;
 
     // dict/list/blob check helpers (take raw pointers via void*)
-    fn nvim_tv_blob_check_index(bloblen: c_int, n1: c_int, quiet: bool) -> c_int;
-    fn nvim_tv_blob_check_range(bloblen: c_int, n1: c_int, n2: c_int, quiet: bool) -> c_int;
+    fn tv_blob_check_index(bloblen: c_int, n1: i64, quiet: bool) -> c_int;
+    fn tv_blob_check_range(bloblen: c_int, n1: i64, n2: i64, quiet: bool) -> c_int;
     fn nvim_tv_list_check_range_index_one(lp: *mut c_void, quiet: bool) -> *mut c_void;
     fn nvim_tv_list_check_range_index_two(lp: *mut c_void, quiet: bool) -> c_int;
 
@@ -490,13 +490,19 @@ unsafe fn get_lval_blob_impl(
         (*lp).ll_n1 = tv_get_number(var1) as c_int;
     }
 
-    if nvim_tv_blob_check_index(bloblen, (*lp).ll_n1, quiet) == FAIL {
+    if tv_blob_check_index(bloblen, i64::from((*lp).ll_n1), quiet) == FAIL {
         return FAIL;
     }
 
     if (*lp).ll_range && !(*lp).ll_empty2 {
         (*lp).ll_n2 = tv_get_number(var2) as c_int;
-        if nvim_tv_blob_check_range(bloblen, (*lp).ll_n1, (*lp).ll_n2, quiet) == FAIL {
+        if tv_blob_check_range(
+            bloblen,
+            i64::from((*lp).ll_n1),
+            i64::from((*lp).ll_n2),
+            quiet,
+        ) == FAIL
+        {
             return FAIL;
         }
     }

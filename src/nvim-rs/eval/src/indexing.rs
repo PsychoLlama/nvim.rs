@@ -239,7 +239,7 @@ type ListHandle = *mut c_void;
 extern "C" {
     #[link_name = "tv_get_string_chk"]
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
-    fn nvim_tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
+    fn tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
     fn nvim_tv_list_item_is_dollar(l: ListHandle, idx: c_int) -> bool;
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
 
@@ -314,14 +314,14 @@ pub unsafe extern "C" fn rs_var2fpos(
         let mut error = false;
 
         // Get the line number.
-        let lnum = nvim_tv_list_find_nr(l, 0, &raw mut error) as i32;
+        let lnum = tv_list_find_nr(l, 0, &raw mut error) as i32;
         if error || lnum <= 0 || lnum > nvim_get_line_count() {
             // Invalid line number.
             return false;
         }
 
         // Get the column number.
-        let mut col = nvim_tv_list_find_nr(l, 1, &raw mut error) as i32;
+        let mut col = tv_list_find_nr(l, 1, &raw mut error) as i32;
         if error {
             return false;
         }
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn rs_var2fpos(
         col -= 1;
 
         // Get the virtual offset. Defaults to zero.
-        let coladd = nvim_tv_list_find_nr(l, 2, &raw mut error) as i32;
+        let coladd = tv_list_find_nr(l, 2, &raw mut error) as i32;
         let coladd = if error { 0 } else { coladd };
 
         *out = PosT { lnum, col, coladd };
@@ -542,7 +542,7 @@ pub unsafe extern "C" fn rs_list2fpos(
     let mut i: c_int = 0;
 
     if !fnump.is_null() {
-        let n = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
+        let n = tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
         i += 1;
         if n < 0 {
             return FAIL;
@@ -551,14 +551,14 @@ pub unsafe extern "C" fn rs_list2fpos(
         *fnump = n;
     }
 
-    let lnum = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as i32;
+    let lnum = tv_list_find_nr(l, i, std::ptr::null_mut()) as i32;
     i += 1;
     if lnum < 0 {
         return FAIL;
     }
     (*posp).lnum = lnum;
 
-    let mut col = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
+    let mut col = tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
     i += 1;
     if col < 0 {
         return FAIL;
@@ -588,11 +588,11 @@ pub unsafe extern "C" fn rs_list2fpos(
     }
     (*posp).col = col;
 
-    let off = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
+    let off = tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
     (*posp).coladd = if off < 0 { 0 } else { off };
 
     if !curswantp.is_null() {
-        *curswantp = nvim_tv_list_find_nr(l, i + 1, std::ptr::null_mut()) as c_int;
+        *curswantp = tv_list_find_nr(l, i + 1, std::ptr::null_mut()) as c_int;
     }
 
     OK

@@ -1453,8 +1453,7 @@ extern "C" {
     fn p2_nvim_tv_get_list(tv: *const c_void) -> *const c_void;
     #[link_name = "nvim_list_get_len"]
     fn p2_nvim_list_get_len(l: *const c_void) -> c_int;
-    #[link_name = "nvim_tv_list_find_nr"]
-    fn p2_nvim_tv_list_find_nr(l: *mut c_void, n: c_int, error_out: *mut bool) -> i64;
+    fn tv_list_find_nr(l: *mut c_void, n: c_int, error_out: *mut bool) -> i64;
     #[link_name = "nvim_tv_set_number"]
     fn p2_nvim_tv_set_number(tv: *mut c_void, n: i64);
     #[link_name = "nvim_tv_set_float"]
@@ -1491,8 +1490,8 @@ unsafe fn list2proftime(arg: *const c_void) -> Option<u64> {
     }
     let list_mut = list.cast_mut();
     let mut error = false;
-    let n1 = p2_nvim_tv_list_find_nr(list_mut, 0, &raw mut error);
-    let n2 = p2_nvim_tv_list_find_nr(list_mut, 1, &raw mut error);
+    let n1 = tv_list_find_nr(list_mut, 0, &raw mut error);
+    let n2 = tv_list_find_nr(list_mut, 1, &raw mut error);
     if error {
         return None;
     }

@@ -69,10 +69,7 @@
 #include "nvim/window.h"
 
 // Rust FFI declarations (typval functions migrated to Rust)
-extern int tv_blob_check_index(int bloblen, varnumber_T n1, bool quiet);
-extern int tv_blob_check_range(int bloblen, varnumber_T n1, varnumber_T n2, bool quiet);
 extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
-extern varnumber_T tv_list_find_nr(list_T *l, int n, bool *ret_error);
 extern const char *tv_list_find_str(list_T *l, int n);
 extern bool tv2bool(const typval_T *tv);
 
@@ -417,8 +414,6 @@ bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_
 void nvim_lval_set_tv_to_li_tv(lval_T *lp) { lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li); }
 void nvim_lval_tv_list_alloc_ret(lval_T *lp) { tv_list_alloc_ret(lp->ll_tv, kListLenUnknown); }
 void nvim_lval_tv_blob_alloc_ret(lval_T *lp) { tv_blob_alloc_ret(lp->ll_tv); }
-int nvim_tv_blob_check_index(int bloblen, int n1, bool quiet) { return tv_blob_check_index(bloblen, (varnumber_T)n1, quiet); }
-int nvim_tv_blob_check_range(int bloblen, int n1, int n2, bool quiet) { return tv_blob_check_range(bloblen, (varnumber_T)n1, (varnumber_T)n2, quiet); }
 listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet) { return tv_list_check_range_index_one(lp->ll_list, &lp->ll_n1, quiet); }
 int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet) { return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet); }
 bool nvim_partial_get_pt_auto(const partial_T *pt) { return pt->pt_auto; }
@@ -489,7 +484,6 @@ bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *cola
 
 void nvim_update_topline_curwin(void) { update_topline(curwin); }
 void nvim_check_cursor_moved_curwin(void) { check_cursor_moved(curwin); }
-int64_t nvim_tv_list_find_nr(list_T *l, int n, bool *error_out) { return (int64_t)tv_list_find_nr(l, n, error_out); }
 
 bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 {
