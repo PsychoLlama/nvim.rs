@@ -412,14 +412,10 @@ int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Dir
   return res;
 }
 
-/// free cptext
 static inline void free_cptext(char *const *const cptext)
 {
-  if (cptext != NULL) {
-    for (size_t i = 0; i < CPT_COUNT; i++) {
-      xfree(cptext[i]);
-    }
-  }
+  if (cptext == NULL) { return; }
+  for (size_t i = 0; i < CPT_COUNT; i++) { xfree(cptext[i]); }
 }
 
 /// Add a match to the list of matches
@@ -757,13 +753,10 @@ static Callback tsrfu_cb;  ///< 'thesaurusfunc' callback function
 static Callback *cpt_cb;   ///< Callback functions associated with F{func}
 static int cpt_cb_count;   ///< Number of cpt callbacks
 
-/// Copy a global callback function to a buffer local callback.
 static void copy_global_to_buflocal_cb(Callback *globcb, Callback *bufcb)
 {
   callback_free(bufcb);
-  if (globcb->type != kCallbackNone) {
-    callback_copy(bufcb, globcb);
-  }
+  if (globcb->type != kCallbackNone) { callback_copy(bufcb, globcb); }
 }
 
 /// did_set_completefunc implementation.
@@ -970,8 +963,7 @@ static inline int get_user_highlight_attr(const char *hlname)
   return -1;
 }
 
-void nvim_save_orig_extmarks_impl(void)
-{
+void nvim_save_orig_extmarks_impl(void) {
   extmark_splice_delete(curbuf, curwin->w_cursor.lnum - 1, compl_col, curwin->w_cursor.lnum - 1,
                         compl_col + compl_length, &compl_orig_extmarks, true, kExtmarkUndo);
 }
@@ -1181,42 +1173,15 @@ void nvim_ins_compl_set_original_text_impl(const char *str, size_t len) {
     compl_first_match->cp_prev->cp_str = cbuf_to_string(str, len);
   }
 }
-int nvim_check_compl_option_dict(void) {
-  return (*curbuf->b_p_dict == NUL && *p_dict == NUL && !curwin->w_p_spell) ? 1 : 0;
-}
-int nvim_check_compl_option_tsr(void) {
-  return (*curbuf->b_p_tsr == NUL && *p_tsr == NUL
-          && *curbuf->b_p_tsrfu == NUL && *p_tsrfu == NUL) ? 1 : 0;
-}
-void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
-  if (ins_compl_st.ins_buf) {
-    ins_compl_st.ins_buf->b_scanned = true;
-  }
-}
+int nvim_check_compl_option_dict(void) { return (*curbuf->b_p_dict == NUL && *p_dict == NUL && !curwin->w_p_spell) ? 1 : 0; }
+int nvim_check_compl_option_tsr(void) { return (*curbuf->b_p_tsr == NUL && *p_tsr == NUL && *curbuf->b_p_tsrfu == NUL && *p_tsrfu == NUL) ? 1 : 0; }
+void nvim_ins_compl_st_mark_ins_buf_scanned(void) { if (ins_compl_st.ins_buf) { ins_compl_st.ins_buf->b_scanned = true; } }
+void nvim_clear_all_buf_scanned(void) { FOR_ALL_BUFFERS(buf) { buf->b_scanned = false; } }
+void nvim_clear_ins_compl_st(void) { CLEAR_FIELD(ins_compl_st); }
 
-// Helper for nvim_ins_compl_get_exp_init_state inline: clears b_scanned for all bufs.
-void nvim_clear_all_buf_scanned(void) {
-  FOR_ALL_BUFFERS(buf) {
-    buf->b_scanned = false;
-  }
-}
-
-// Helper for nvim_ins_compl_get_exp_init_state inline: zero-init ins_compl_st.
-void nvim_clear_ins_compl_st(void) {
-  CLEAR_FIELD(ins_compl_st);
-}
-
-int nvim_expand_wildcards_files(int count, char **pat, int *num_matches, char ***matches)
-{
-  return expand_wildcards(count, pat, num_matches, matches,
-                          EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT);
-}
+int nvim_expand_wildcards_files(int count, char **pat, int *num_matches, char ***matches) { return expand_wildcards(count, pat, num_matches, matches, EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT); }
 void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches) { tilde_replace(pat, num_matches, matches); }
-void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
-{
-  return mergesort_list(head, cp_get_next, cp_set_next, cp_get_prev, cp_set_prev,
-                        compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest);
-}
+void *nvim_mergesort_compl_list_raw(void *head, int compare_type) { return mergesort_list(head, cp_get_next, cp_set_next, cp_get_prev, cp_set_prev, compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest); }
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
 
@@ -1242,41 +1207,22 @@ void nvim_do_autocmd_completedone_impl(int c, int mode, char *word)
 }
 
 /// Returns the column offset of skipwhite(line + length + start_col) relative to line.
-int nvim_skipwhite_offset(const char *line, int length, int start_col) {
-  return (int)(skipwhite(line + length + start_col) - line);
-}
+int nvim_skipwhite_offset(const char *line, int length, int start_col) { return (int)(skipwhite(line + length + start_col) - line); }
 
 size_t nvim_yankreg_y_size(void *reg) { return reg ? ((yankreg_T *)reg)->y_size : 0; }
 int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y_array == NULL) ? 1 : 0; }
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
 {
-  if (!reg) {
-    return NULL;
-  }
+  if (!reg) { return NULL; }
   yankreg_T *r = (yankreg_T *)reg;
-  if (j >= r->y_size || r->y_array == NULL) {
-    return NULL;
-  }
-  return r->y_array[j].data;
+  return (j >= r->y_size || r->y_array == NULL) ? NULL : r->y_array[j].data;
 }
-int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const char *fname,
-                                     int dir, int cont_s_ipos, int score)
-{
-  return ins_compl_add_infercase((char *)str, len, icase != 0, (char *)fname, (Direction)dir,
-                                 cont_s_ipos != 0, score);
-}
+int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const char *fname, int dir, int cont_s_ipos, int score) { return ins_compl_add_infercase((char *)str, len, icase != 0, (char *)fname, (Direction)dir, cont_s_ipos != 0, score); }
 
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
-int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score)
-{
-  return ins_compl_add((char *)str, len, NULL, NULL, false, NULL, (Direction)dir, flags, false,
-                       NULL, score);
-}
+int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score) { return ins_compl_add((char *)str, len, NULL, NULL, false, NULL, (Direction)dir, flags, false, NULL, score); }
 
-size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep)
-{
-  return copy_option_part(src, buf, (size_t)maxlen, sep);
-}
+size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep) { return copy_option_part(src, buf, (size_t)maxlen, sep); }
 int nvim_get_complete_funcname_empty(int ctrl_x_mode_val) { return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0; }
 // Returns an opaque pointer to the Callback for the given ctrl_x_mode.
 void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val) { return (void *)get_insert_callback(ctrl_x_mode_val); }
@@ -1309,14 +1255,10 @@ int nvim_callback_call_findstart(void *cb_opaque)
   return (int)col;
 }
 
-// Reset ctrl_x_mode to CTRL_X_NORMAL and clear the menu status message.
-void nvim_ctrl_x_mode_reset_to_normal(void)
-{
+void nvim_ctrl_x_mode_reset_to_normal(void) {
   ctrl_x_mode = CTRL_X_NORMAL;
   edit_submode = NULL;
-  if (!shortmess(SHM_COMPLETIONMENU)) {
-    msg_clr_cmdline();
-  }
+  if (!shortmess(SHM_COMPLETIONMENU)) { msg_clr_cmdline(); }
 }
 // Emit "option not set" error for completefunc/omnifunc.
 void nvim_emit_completefunc_not_set_error(int is_function) { semsg(_(e_notset), is_function ? "completefunc" : "omnifunc"); }
