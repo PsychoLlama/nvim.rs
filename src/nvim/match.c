@@ -39,9 +39,7 @@
 
 #include "match.c.generated.h"
 
-// =============================================================================
 // Rust FFI declarations
-// =============================================================================
 
 // core.rs - Core match management (called from match_add)
 extern int rs_match_add(win_T *wp, const char *grp, const char *pat,
@@ -53,39 +51,22 @@ extern int rs_match_add_pos(win_T *wp, const char *grp, int prio, int id,
 
 static const char *e_invalwindow = N_("E957: Invalid window number");
 
-// =============================================================================
 // Accessor functions for Rust FFI
-// =============================================================================
 
 /// Get the head of the match list for a window.
-matchitem_T *nvim_match_get_head(win_T *wp)
-{
-  return wp->w_match_head;
-}
+matchitem_T *nvim_match_get_head(win_T *wp) { return wp->w_match_head; }
 
 /// Set the head of the match list for a window.
-void nvim_match_set_head(win_T *wp, matchitem_T *head)
-{
-  wp->w_match_head = head;
-}
+void nvim_match_set_head(win_T *wp, matchitem_T *head) { wp->w_match_head = head; }
 
 /// Get the next match ID for a window.
-int nvim_match_get_next_id(win_T *wp)
-{
-  return wp->w_next_match_id;
-}
+int nvim_match_get_next_id(win_T *wp) { return wp->w_next_match_id; }
 
 /// Set the next match ID for a window.
-void nvim_match_set_next_id(win_T *wp, int id)
-{
-  wp->w_next_match_id = id;
-}
+void nvim_match_set_next_id(win_T *wp, int id) { wp->w_next_match_id = id; }
 
 /// Get the next match item in the linked list.
-matchitem_T *nvim_match_item_next(matchitem_T *m)
-{
-  return m != NULL ? m->mit_next : NULL;
-}
+matchitem_T *nvim_match_item_next(matchitem_T *m) { return m != NULL ? m->mit_next : NULL; }
 
 /// Set the next pointer of a match item.
 void nvim_match_item_set_next(matchitem_T *m, matchitem_T *next)
@@ -95,48 +76,25 @@ void nvim_match_item_set_next(matchitem_T *m, matchitem_T *next)
   }
 }
 
-/// Get the ID of a match item.
-int nvim_match_item_get_id(matchitem_T *m)
-{
-  return m != NULL ? m->mit_id : 0;
-}
+int nvim_match_item_get_id(matchitem_T *m) { return m != NULL ? m->mit_id : 0; }
 
-/// Get the priority of a match item.
-int nvim_match_item_get_priority(matchitem_T *m)
-{
-  return m != NULL ? m->mit_priority : 0;
-}
+int nvim_match_item_get_priority(matchitem_T *m) { return m != NULL ? m->mit_priority : 0; }
 
 
 /// Get the highlight group ID of a match item.
-int nvim_match_item_get_hlg_id(matchitem_T *m)
-{
-  return m != NULL ? m->mit_hlg_id : 0;
-}
+int nvim_match_item_get_hlg_id(matchitem_T *m) { return m != NULL ? m->mit_hlg_id : 0; }
 
 /// Get the conceal character of a match item.
-int nvim_match_item_get_conceal_char(matchitem_T *m)
-{
-  return m != NULL ? m->mit_conceal_char : 0;
-}
+int nvim_match_item_get_conceal_char(matchitem_T *m) { return m != NULL ? m->mit_conceal_char : 0; }
 
 /// Get the top line number for position matches.
-linenr_T nvim_match_item_get_toplnum(matchitem_T *m)
-{
-  return m != NULL ? m->mit_toplnum : 0;
-}
+linenr_T nvim_match_item_get_toplnum(matchitem_T *m) { return m != NULL ? m->mit_toplnum : 0; }
 
 /// Get the bottom line number for position matches.
-linenr_T nvim_match_item_get_botlnum(matchitem_T *m)
-{
-  return m != NULL ? m->mit_botlnum : 0;
-}
+linenr_T nvim_match_item_get_botlnum(matchitem_T *m) { return m != NULL ? m->mit_botlnum : 0; }
 
 /// Check if a match item has a pattern (vs positions).
-bool nvim_match_item_has_pattern(matchitem_T *m)
-{
-  return m != NULL && m->mit_pattern != NULL;
-}
+bool nvim_match_item_has_pattern(matchitem_T *m) { return m != NULL && m->mit_pattern != NULL; }
 
 /// Check if a match item has positions.
 bool nvim_match_item_has_positions(matchitem_T *m)
@@ -145,16 +103,10 @@ bool nvim_match_item_has_positions(matchitem_T *m)
 }
 
 /// Get the position count for a match item.
-int nvim_match_item_get_pos_count(matchitem_T *m)
-{
-  return m != NULL ? m->mit_pos_count : 0;
-}
+int nvim_match_item_get_pos_count(matchitem_T *m) { return m != NULL ? m->mit_pos_count : 0; }
 
 /// Allocate a new match item.
-matchitem_T *nvim_match_alloc(void)
-{
-  return xcalloc(1, sizeof(matchitem_T));
-}
+matchitem_T *nvim_match_alloc(void) { return xcalloc(1, sizeof(matchitem_T)); }
 
 /// Free a match item and all its resources.
 void nvim_match_free(matchitem_T *m)
@@ -280,84 +232,45 @@ void nvim_match_pos_set(llpos_T *arr, int idx, linenr_T lnum, colnr_T col, int l
 // --- Phase 2 accessors (for highlight.rs) ---
 
 /// Get lnum field of a match_T.
-linenr_T nvim_match_hl_get_lnum(match_T *shl)
-{
-  return shl->lnum;
-}
+linenr_T nvim_match_hl_get_lnum(match_T *shl) { return shl->lnum; }
 
 /// Set has_cursor field of a match_T.
-void nvim_match_hl_set_has_cursor(match_T *shl, int val)
-{
-  shl->has_cursor = (bool)val;
-}
+void nvim_match_hl_set_has_cursor(match_T *shl, int val) { shl->has_cursor = (bool)val; }
 
 /// Get startcol field of a match_T.
-colnr_T nvim_match_hl_get_startcol(match_T *shl)
-{
-  return shl->startcol;
-}
+colnr_T nvim_match_hl_get_startcol(match_T *shl) { return shl->startcol; }
 
 /// Get endcol field of a match_T.
-colnr_T nvim_match_hl_get_endcol(match_T *shl)
-{
-  return shl->endcol;
-}
+colnr_T nvim_match_hl_get_endcol(match_T *shl) { return shl->endcol; }
 
 /// Get attr field of a match_T.
-int nvim_match_hl_get_attr(match_T *shl)
-{
-  return shl->attr;
-}
+int nvim_match_hl_get_attr(match_T *shl) { return shl->attr; }
 
 /// Get is_addpos field of a match_T.
-int nvim_match_hl_get_is_addpos(match_T *shl)
-{
-  return shl->is_addpos ? 1 : 0;
-}
+int nvim_match_hl_get_is_addpos(match_T *shl) { return shl->is_addpos ? 1 : 0; }
 
 /// Get rm.startpos[idx].lnum from a match_T.
-linenr_T nvim_match_hl_rm_startpos_lnum(match_T *shl, int idx)
-{
-  return shl->rm.startpos[idx].lnum;
-}
+linenr_T nvim_match_hl_rm_startpos_lnum(match_T *shl, int idx) { return shl->rm.startpos[idx].lnum; }
 
 /// Get rm.startpos[idx].col from a match_T.
-colnr_T nvim_match_hl_rm_startpos_col(match_T *shl, int idx)
-{
-  return shl->rm.startpos[idx].col;
-}
+colnr_T nvim_match_hl_rm_startpos_col(match_T *shl, int idx) { return shl->rm.startpos[idx].col; }
 
 /// Get rm.endpos[idx].lnum from a match_T.
-linenr_T nvim_match_hl_rm_endpos_lnum(match_T *shl, int idx)
-{
-  return shl->rm.endpos[idx].lnum;
-}
+linenr_T nvim_match_hl_rm_endpos_lnum(match_T *shl, int idx) { return shl->rm.endpos[idx].lnum; }
 
 /// Get rm.endpos[idx].col from a match_T.
-colnr_T nvim_match_hl_rm_endpos_col(match_T *shl, int idx)
-{
-  return shl->rm.endpos[idx].col;
-}
+colnr_T nvim_match_hl_rm_endpos_col(match_T *shl, int idx) { return shl->rm.endpos[idx].col; }
 
 /// Get pointer to mit_hl of a match item.
-match_T *nvim_match_item_get_hl(matchitem_T *m)
-{
-  return m != NULL ? &m->mit_hl : NULL;
-}
+match_T *nvim_match_item_get_hl(matchitem_T *m) { return m != NULL ? &m->mit_hl : NULL; }
 
 // --- Phase 3 accessors (for search_pos.rs) ---
 
 /// Set lnum field of a match_T.
-void nvim_match_hl_set_lnum(match_T *shl, linenr_T lnum)
-{
-  shl->lnum = lnum;
-}
+void nvim_match_hl_set_lnum(match_T *shl, linenr_T lnum) { shl->lnum = lnum; }
 
 /// Set is_addpos field of a match_T.
-void nvim_match_hl_set_is_addpos(match_T *shl, int val)
-{
-  shl->is_addpos = (bool)val;
-}
+void nvim_match_hl_set_is_addpos(match_T *shl, int val) { shl->is_addpos = (bool)val; }
 
 /// Set rm.startpos[idx] of a match_T.
 void nvim_match_hl_rm_set_startpos(match_T *shl, int idx, linenr_T lnum, colnr_T col)
@@ -374,10 +287,7 @@ void nvim_match_hl_rm_set_endpos(match_T *shl, int idx, linenr_T lnum, colnr_T c
 }
 
 /// Get mit_pos_cur of a match item.
-int nvim_match_item_get_pos_cur(matchitem_T *m)
-{
-  return m != NULL ? m->mit_pos_cur : 0;
-}
+int nvim_match_item_get_pos_cur(matchitem_T *m) { return m != NULL ? m->mit_pos_cur : 0; }
 
 /// Set mit_pos_cur of a match item.
 void nvim_match_item_set_pos_cur(matchitem_T *m, int cur)
@@ -431,58 +341,31 @@ void nvim_match_item_pos_swap(matchitem_T *m, int idx1, int idx2)
 // --- Phase 4 accessors (for search.rs) ---
 
 /// Get buf field of a match_T.
-buf_T *nvim_match_hl_get_buf(match_T *shl)
-{
-  return shl->buf;
-}
+buf_T *nvim_match_hl_get_buf(match_T *shl) { return shl->buf; }
 
 /// Set buf field of a match_T.
-void nvim_match_hl_set_buf(match_T *shl, buf_T *buf)
-{
-  shl->buf = buf;
-}
+void nvim_match_hl_set_buf(match_T *shl, buf_T *buf) { shl->buf = buf; }
 
 /// Get first_lnum field of a match_T.
-linenr_T nvim_match_hl_get_first_lnum(match_T *shl)
-{
-  return shl->first_lnum;
-}
+linenr_T nvim_match_hl_get_first_lnum(match_T *shl) { return shl->first_lnum; }
 
 /// Set first_lnum field of a match_T.
-void nvim_match_hl_set_first_lnum(match_T *shl, linenr_T lnum)
-{
-  shl->first_lnum = lnum;
-}
+void nvim_match_hl_set_first_lnum(match_T *shl, linenr_T lnum) { shl->first_lnum = lnum; }
 
 /// Set attr field of a match_T.
-void nvim_match_hl_set_attr(match_T *shl, int attr)
-{
-  shl->attr = attr;
-}
+void nvim_match_hl_set_attr(match_T *shl, int attr) { shl->attr = attr; }
 
 /// Get the tm (proftime_T) from a match_T, cast to opaque pointer.
-void *nvim_match_hl_get_tm_ptr(match_T *shl)
-{
-  return &shl->tm;
-}
+void *nvim_match_hl_get_tm_ptr(match_T *shl) { return &shl->tm; }
 
 /// Set the tm (proftime_T) of a match_T from a profile_setlimit call.
-void nvim_match_hl_set_tm(match_T *shl, int64_t msec)
-{
-  shl->tm = profile_setlimit(msec);
-}
+void nvim_match_hl_set_tm(match_T *shl, int64_t msec) { shl->tm = profile_setlimit(msec); }
 
 /// Get the regprog from a match_T.
-regprog_T *nvim_match_hl_get_regprog(match_T *shl)
-{
-  return shl->rm.regprog;
-}
+regprog_T *nvim_match_hl_get_regprog(match_T *shl) { return shl->rm.regprog; }
 
 /// Set the regprog of a match_T (does NOT free the old one).
-void nvim_match_hl_set_regprog(match_T *shl, regprog_T *rp)
-{
-  shl->rm.regprog = rp;
-}
+void nvim_match_hl_set_regprog(match_T *shl, regprog_T *rp) { shl->rm.regprog = rp; }
 
 /// Copy rm from match item to match_T: shl->rm = m->mit_match.
 void nvim_match_hl_copy_rm_from_item(match_T *shl, matchitem_T *m)
@@ -513,67 +396,32 @@ int nvim_match_hl_regprog_is_copy(match_T *shl, matchitem_T *cur)
 // --- Phase 5 accessors (for prepare.rs) ---
 
 /// Set startcol field of a match_T.
-void nvim_match_hl_set_startcol(match_T *shl, colnr_T col)
-{
-  shl->startcol = col;
-}
+void nvim_match_hl_set_startcol(match_T *shl, colnr_T col) { shl->startcol = col; }
 
 /// Set endcol field of a match_T.
-void nvim_match_hl_set_endcol(match_T *shl, colnr_T col)
-{
-  shl->endcol = col;
-}
+void nvim_match_hl_set_endcol(match_T *shl, colnr_T col) { shl->endcol = col; }
 
 /// Get attr_cur field of a match_T.
-int nvim_match_hl_get_attr_cur(match_T *shl)
-{
-  return shl->attr_cur;
-}
+int nvim_match_hl_get_attr_cur(match_T *shl) { return shl->attr_cur; }
 
 /// Set attr_cur field of a match_T.
-void nvim_match_hl_set_attr_cur(match_T *shl, int attr)
-{
-  shl->attr_cur = attr;
-}
+void nvim_match_hl_set_attr_cur(match_T *shl, int attr) { shl->attr_cur = attr; }
 
 /// Get has_cursor field of a match_T.
-int nvim_match_hl_get_has_cursor(match_T *shl)
-{
-  return shl->has_cursor ? 1 : 0;
-}
+int nvim_match_hl_get_has_cursor(match_T *shl) { return shl->has_cursor ? 1 : 0; }
 
 // --- C function wrappers for Rust to call ---
 // Names prefixed with nvim_match_ to avoid symbol conflicts with other files.
 
-/// Wrapper for syn_check_group.
-int nvim_match_syn_check_group(const char *grp, size_t len)
-{
-  return syn_check_group(grp, len);
-}
+int nvim_match_syn_check_group(const char *grp, size_t len) { return syn_check_group(grp, len); }
 
-/// Wrapper for vim_regcomp.
-regprog_T *nvim_match_vim_regcomp(const char *pat, int flags)
-{
-  return vim_regcomp(pat, flags);
-}
+regprog_T *nvim_match_vim_regcomp(const char *pat, int flags) { return vim_regcomp(pat, flags); }
 
-/// Wrapper for utf_ptr2char.
-int nvim_match_utf_ptr2char(const char *p)
-{
-  return utf_ptr2char(p);
-}
+int nvim_match_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 
-/// Wrapper for redraw_later.
-void nvim_match_redraw_later(win_T *wp, int type)
-{
-  redraw_later(wp, type);
-}
+void nvim_match_redraw_later(win_T *wp, int type) { redraw_later(wp, type); }
 
-/// Wrapper for redraw_win_range_later.
-void nvim_match_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
-{
-  redraw_win_range_later(wp, top, bot);
-}
+void nvim_match_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot) { redraw_win_range_later(wp, top, bot); }
 
 // --- Phase 4 function wrappers ---
 
@@ -584,17 +432,9 @@ int nvim_match_vim_regexec_multi(match_T *shl, win_T *win, linenr_T lnum,
   return vim_regexec_multi(&shl->rm, win, shl->buf, lnum, col, &shl->tm, timed_out);
 }
 
-/// Wrapper for vim_regfree.
-void nvim_match_vim_regfree(regprog_T *rp)
-{
-  vim_regfree(rp);
-}
+void nvim_match_vim_regfree(regprog_T *rp) { vim_regfree(rp); }
 
-/// Wrapper for set_no_hlsearch.
-void nvim_match_set_no_hlsearch(int flag)
-{
-  set_no_hlsearch((bool)flag);
-}
+void nvim_match_set_no_hlsearch(int flag) { set_no_hlsearch((bool)flag); }
 
 /// Wrapper for re_multiline.
 int nvim_match_re_multiline(regprog_T *rp)
@@ -621,97 +461,52 @@ int nvim_match_utfc_ptr2len(buf_T *buf, linenr_T lnum, colnr_T col)
 }
 
 /// Check if CPO_SEARCH is set in 'cpoptions'.
-int nvim_match_has_cpo_search(void)
-{
-  return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0;
-}
+int nvim_match_has_cpo_search(void) { return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0; }
 
 /// Get search_first_line global.
-linenr_T nvim_match_get_search_first_line(void)
-{
-  return search_first_line;
-}
+linenr_T nvim_match_get_search_first_line(void) { return search_first_line; }
 
 /// Get search_last_line global.
-linenr_T nvim_match_get_search_last_line(void)
-{
-  return search_last_line;
-}
+linenr_T nvim_match_get_search_last_line(void) { return search_last_line; }
 
 /// Get p_rdt (redrawtime option).
-int64_t nvim_match_get_p_rdt(void)
-{
-  return p_rdt;
-}
+int64_t nvim_match_get_p_rdt(void) { return p_rdt; }
 
 /// Get HLF_L constant.
-int nvim_match_get_HLF_L(void)
-{
-  return (int)HLF_L;
-}
+int nvim_match_get_HLF_L(void) { return (int)HLF_L; }
 
 /// Get the window's buffer.
-buf_T *nvim_match_win_get_buffer(win_T *wp)
-{
-  return wp->w_buffer;
-}
+buf_T *nvim_match_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 
 /// Get the window's topline.
-linenr_T nvim_match_win_get_topline(win_T *wp)
-{
-  return wp->w_topline;
-}
+linenr_T nvim_match_win_get_topline(win_T *wp) { return wp->w_topline; }
 
 // --- Phase 5 function wrappers ---
 
 /// Check if a line has folding (simplified: just checks existence).
-int nvim_match_hasFolding(win_T *wp, linenr_T lnum)
-{
-  return hasFolding(wp, lnum, NULL, NULL) ? 1 : 0;
-}
+int nvim_match_hasFolding(win_T *wp, linenr_T lnum) { return hasFolding(wp, lnum, NULL, NULL) ? 1 : 0; }
 
 /// Refresh *line pointer by calling ml_get_buf.
-void nvim_match_ml_get_buf_line(win_T *wp, linenr_T lnum, char **line)
-{
-  *line = ml_get_buf(wp->w_buffer, lnum);
-}
+void nvim_match_ml_get_buf_line(win_T *wp, linenr_T lnum, char **line) { *line = ml_get_buf(wp->w_buffer, lnum); }
 
 /// Get byte at position col in line.
-int nvim_match_line_byte_at(const char *line, colnr_T col)
-{
-  return (unsigned char)line[col];
-}
+int nvim_match_line_byte_at(const char *line, colnr_T col) { return (unsigned char)line[col]; }
 
 /// Get utfc_ptr2len at position col in line.
-int nvim_match_utfc_ptr2len_at(const char *line, colnr_T col)
-{
-  return utfc_ptr2len(line + col);
-}
+int nvim_match_utfc_ptr2len_at(const char *line, colnr_T col) { return utfc_ptr2len(line + col); }
 
 /// Get syn_name2id for "Conceal".
-int nvim_match_syn_name2id_conceal(void)
-{
-  return syn_name2id("Conceal");
-}
+int nvim_match_syn_name2id_conceal(void) { return syn_name2id("Conceal"); }
 
 /// Set search_hl_has_cursor_lnum global.
-void nvim_match_set_search_hl_has_cursor_lnum(linenr_T lnum)
-{
-  search_hl_has_cursor_lnum = lnum;
-}
+void nvim_match_set_search_hl_has_cursor_lnum(linenr_T lnum) { search_hl_has_cursor_lnum = lnum; }
 
 /// Get HLF_LC constant.
-int nvim_match_get_HLF_LC(void)
-{
-  return (int)HLF_LC;
-}
+int nvim_match_get_HLF_LC(void) { return (int)HLF_LC; }
 
 // --- Error message wrappers ---
 
-void nvim_semsg_id_taken(int64_t id)
-{
-  semsg(_("E801: ID already taken: %" PRId64), id);
-}
+void nvim_semsg_id_taken(int64_t id) { semsg(_("E801: ID already taken: %" PRId64), id); }
 
 void nvim_semsg_invalid_id(int64_t id)
 {
@@ -725,32 +520,17 @@ void nvim_semsg_invalid_delete_id(int64_t id)
           " (must be greater than or equal to 1)"), id);
 }
 
-void nvim_semsg_id_not_found(int64_t id)
-{
-  semsg(_("E803: ID not found: %" PRId64), id);
-}
+void nvim_semsg_id_not_found(int64_t id) { semsg(_("E803: ID not found: %" PRId64), id); }
 
-void nvim_semsg_invarg2(const char *arg)
-{
-  semsg(_(e_invarg2), arg);
-}
+void nvim_semsg_invarg2(const char *arg) { semsg(_(e_invarg2), arg); }
 
 // --- Constant accessors ---
 
-int nvim_get_RE_MAGIC(void)
-{
-  return RE_MAGIC;
-}
+int nvim_get_RE_MAGIC(void) { return RE_MAGIC; }
 
-int nvim_get_UPD_SOME_VALID(void)
-{
-  return UPD_SOME_VALID;
-}
+int nvim_get_UPD_SOME_VALID(void) { return UPD_SOME_VALID; }
 
-int nvim_get_UPD_VALID(void)
-{
-  return UPD_VALID;
-}
+int nvim_get_UPD_VALID(void) { return UPD_VALID; }
 
 /// Add match to the match list of window "wp".
 /// If "pat" is not NULL the pattern will be highlighted with the group "grp"
