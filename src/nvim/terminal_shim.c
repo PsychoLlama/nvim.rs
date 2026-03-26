@@ -556,92 +556,8 @@ static void unset_terminal_winopts(TerminalState *const s)
 }
 
 /// Implements MODE_TERMINAL state. :help Terminal-mode
-bool terminal_enter(void)
-{
-  buf_T *buf = curbuf;
-  assert(buf->terminal);  // Should only be called when curbuf has a terminal.
-  TerminalState s[1] = { 0 };
-  s->term = buf->terminal;
-  s->cursor_visible = true;  // Assume visible; may change via refresh_cursor later.
-  stop_insert_mode = false;
-
-  // Ensure the terminal is properly sized. Ideally window size management
-  // code should always have resized the terminal already, but check here to
-  // be sure.
-  terminal_check_size(s->term);
-
-  int save_state = State;
-  s->save_rd = RedrawingDisabled;
-  State = MODE_TERMINAL;
-  mapped_ctrl_c |= MODE_TERMINAL;  // Always map CTRL-C to avoid interrupt.
-  RedrawingDisabled = false;
-
-  set_terminal_winopts(s);
-
-  s->term->pending.cursor = true;  // Update the cursor shape table
-  adjust_topline_cursor(s->term, buf, 0);  // scroll to end
-  showmode();
-  ui_cursor_shape();
-
-  // Tell the terminal it has focus
-  rs_terminal_focus_gain(s->term);
-  // Don't fire TextChangedT from changes in Normal mode.
-  curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-
-  apply_autocmds(EVENT_TERMENTER, NULL, NULL, false, curbuf);
-  may_trigger_modechanged();
-
-  s->state.execute = terminal_execute;
-  s->state.check = terminal_check;
-  state_enter(&s->state);
-
-  if (!s->got_bsl_o) {
-    restart_edit = 0;
-  }
-  State = save_state;
-  RedrawingDisabled = s->save_rd;
-  if (!s->cursor_visible) {
-    // If cursor was hidden, show it again. Do so right after restoring State.
-    ui_busy_stop();
-  }
-
-  // Restore the terminal cursor to what is set in 'guicursor'
-  (void)parse_shape_opt(SHAPE_CURSOR);
-
-  unset_terminal_winopts(s);
-
-  // Tell the terminal it lost focus
-  rs_terminal_focus_lose(s->term);
-  // Don't fire TextChanged from changes in terminal mode.
-  curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
-
-  if (curbuf->terminal == s->term && !s->close) {
-    terminal_check_cursor();
-  }
-  if (restart_edit) {
-    showmode();
-  } else {
-    unshowmode(true);
-  }
-  ui_cursor_shape();
-
-  // If we're to close the terminal, don't let TermLeave autocommands free it first!
-  if (s->close) {
-    s->term->refcount++;
-  }
-  apply_autocmds(EVENT_TERMLEAVE, NULL, NULL, false, curbuf);
-  if (s->close) {
-    s->term->refcount--;
-    const handle_T buf_handle = s->term->buf_handle;  // Callback may free s->term.
-    s->term->destroy = true;
-    s->term->opts.close_cb(s->term->opts.data);
-    if (buf_handle != 0) {
-      do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, DOBUF_FORCEIT);
-    }
-  }
-
-  return s->got_bsl_o;
-}
+extern bool rs_terminal_enter(void);
+bool terminal_enter(void) { return rs_terminal_enter(); }
 
 static void terminal_check_cursor(void)
 {
@@ -687,150 +603,12 @@ static bool terminal_check_focus(TerminalState *const s)
 /// @return:
 ///           1 if the iteration should continue normally
 ///           0 if the main loop must exit
-static int terminal_check(VimState *state)
-{
-  TerminalState *const s = (TerminalState *)state;
-
-  if (stop_insert_mode || !terminal_check_focus(s)) {
-    return 0;
-  }
-
-  // Validate topline and cursor position for autocommands. Especially important for WinScrolled.
-  terminal_check_cursor();
-  validate_cursor(curwin);
-
-  // Don't let autocommands free the terminal from under our fingers.
-  s->term->refcount++;
-  if (has_event(EVENT_TEXTCHANGEDT)
-      && curbuf->b_last_changedtick_i != buf_get_changedtick(curbuf)) {
-    apply_autocmds(EVENT_TEXTCHANGEDT, NULL, NULL, false, curbuf);
-    curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-  }
-  may_trigger_win_scrolled_resized();
-  s->term->refcount--;
-  if (s->term->buf_handle == 0) {
-    s->close = true;
-    return 0;
-  }
-
-  // Autocommands above may have changed focus, scrolled, or moved the cursor.
-  if (!terminal_check_focus(s)) {
-    return 0;
-  }
-  terminal_check_cursor();
-  validate_cursor(curwin);
-
-  show_cursor_info_later(false);
-  if (must_redraw) {
-    update_screen();
-  } else {
-    redraw_statuslines();
-    if (clear_cmdline || redraw_cmdline || redraw_mode) {
-      showmode();  // clear cmdline and show mode
-    }
-  }
-
-  setcursor();
-  refresh_cursor(s->term, &s->cursor_visible);
-  ui_flush();
-  return 1;
-}
+extern int rs_terminal_check(void *state);
+static int terminal_check(VimState *state) { return rs_terminal_check(state); }
 
 /// Processes one char of terminal-mode input.
-static int terminal_execute(VimState *state, int key)
-{
-  TerminalState *s = (TerminalState *)state;
-
-  // Check for certain control keys like Ctrl-C and Ctrl-\. We still send the
-  // unmerged key and modifiers to the terminal.
-  int tmp_mod_mask = mod_mask;
-  int mod_key = merge_modifiers(key, &tmp_mod_mask);
-
-  switch (mod_key) {
-  case K_LEFTMOUSE:
-  case K_LEFTDRAG:
-  case K_LEFTRELEASE:
-  case K_MIDDLEMOUSE:
-  case K_MIDDLEDRAG:
-  case K_MIDDLERELEASE:
-  case K_RIGHTMOUSE:
-  case K_RIGHTDRAG:
-  case K_RIGHTRELEASE:
-  case K_X1MOUSE:
-  case K_X1DRAG:
-  case K_X1RELEASE:
-  case K_X2MOUSE:
-  case K_X2DRAG:
-  case K_X2RELEASE:
-  case K_MOUSEDOWN:
-  case K_MOUSEUP:
-  case K_MOUSELEFT:
-  case K_MOUSERIGHT:
-  case K_MOUSEMOVE:
-    if (send_mouse_event(s->term, key)) {
-      return 0;
-    }
-    break;
-
-  case K_PASTE_START:
-    paste_repeat(1);
-    break;
-
-  case K_EVENT:
-    // We cannot let an event free the terminal yet. It is still needed.
-    s->term->refcount++;
-    state_handle_k_event();
-    s->term->refcount--;
-    if (s->term->buf_handle == 0) {
-      s->close = true;
-      return 0;
-    }
-    break;
-
-  case K_COMMAND:
-    do_cmdline(NULL, getcmdkeycmd, NULL, 0);
-    break;
-
-  case K_LUA:
-    map_execute_lua(false, false);
-    break;
-
-  case Ctrl_N:
-    if (s->got_bsl) {
-      return 0;
-    }
-    FALLTHROUGH;
-
-  case Ctrl_O:
-    if (s->got_bsl) {
-      s->got_bsl_o = true;
-      restart_edit = 'I';
-      return 0;
-    }
-    FALLTHROUGH;
-
-  default:
-    if (mod_key == Ctrl_C) {
-      // terminal_enter() always sets `mapped_ctrl_c` to avoid `got_int`. 8eeda7169aa4
-      // But `got_int` may be set elsewhere, e.g. by interrupt() or an autocommand,
-      // so ensure that it is cleared.
-      got_int = false;
-    }
-    if (mod_key == Ctrl_BSL && !s->got_bsl) {
-      s->got_bsl = true;
-      break;
-    }
-    if (s->term->closed) {
-      s->close = true;
-      return 0;
-    }
-
-    s->got_bsl = false;
-    terminal_send_key(s->term, key);
-  }
-
-  return 1;
-}
+extern int rs_terminal_execute(void *state, int key);
+static int terminal_execute(VimState *state, int key) { return rs_terminal_execute(state, key); }
 
 /// Frees the given Terminal structure and sets the caller storage to NULL (in the spirit of
 /// XFREE_CLEAR).
@@ -1417,5 +1195,73 @@ void nvim_term_set_osc8_attr(void *vt, int attr)
   VTermValue value = { .number = attr };
   vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
 }
+
+// Phase 14: terminal_enter state machine helpers
+
+// vim state
+// nvim_get_state - already in cursor_shape.c
+// nvim_set_state - already in change_ffi.c
+// nvim_get_RedrawingDisabled/nvim_set_RedrawingDisabled - already in window_shim.c
+// nvim_get/set_mapped_ctrl_c - already in getchar.c
+// nvim_get/set_stop_insert_mode - already in nvim-window crate
+// nvim_get/set_restart_edit - already in ex_docmd.c
+void nvim_set_got_int(int v) { got_int = (bool)v; }
+
+// cursor/display
+// nvim_showmode - already in normal_shim.c
+void nvim_unshowmode(void) { unshowmode(true); }
+// nvim_ui_cursor_shape - already in mouse.c
+void nvim_setcursor(void) { setcursor(); }
+void nvim_parse_shape_opt(int scope) { (void)parse_shape_opt(scope); }
+void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
+void nvim_refresh_cursor_c(void *term, int *cursor_visible)
+  { bool vis = (bool)*cursor_visible; refresh_cursor((Terminal *)term, &vis); *cursor_visible = (int)vis; }
+
+// redraw
+void nvim_validate_cursor_cw(void) { validate_cursor(curwin); }
+void nvim_update_screen_c(void) { update_screen(); }
+void nvim_redraw_statuslines(void) { redraw_statuslines(); }
+int nvim_must_redraw(void) { return (int)must_redraw; }
+int nvim_clear_cmdline(void) { return (int)clear_cmdline; }
+int nvim_redraw_cmdline(void) { return (int)redraw_cmdline; }
+int nvim_redraw_mode(void) { return (int)redraw_mode; }
+void nvim_ui_flush(void) { ui_flush(); }
+
+// autocmds
+void nvim_apply_termenter_autocmd(void) { apply_autocmds(EVENT_TERMENTER, NULL, NULL, false, curbuf); }
+void nvim_apply_termleave_autocmd(void) { apply_autocmds(EVENT_TERMLEAVE, NULL, NULL, false, curbuf); }
+void nvim_apply_textchangedt_autocmd(void) { apply_autocmds(EVENT_TEXTCHANGEDT, NULL, NULL, false, curbuf); }
+// nvim_may_trigger_modechanged - already in normal_shim.c
+void nvim_may_trigger_win_scrolled_resized(void) { may_trigger_win_scrolled_resized(); }
+int nvim_has_event_textchangedt(void) { return (int)has_event(EVENT_TEXTCHANGEDT); }
+
+// changedtick
+// nvim_buf_get_changedtick - already defined (inline in buffer.h)
+void nvim_curbuf_update_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
+void nvim_curbuf_update_changedtick(void) { curbuf->b_last_changedtick = buf_get_changedtick(curbuf); }
+int nvim_curbuf_last_changedtick_i(void) { return (int)curbuf->b_last_changedtick_i; }
+
+// state machine
+void nvim_state_enter_c(void *state) { state_enter((VimState *)state); }
+
+// key handling
+// nvim_get_mod_mask - already in getchar.c
+int nvim_merge_modifiers_c(int key, int *tmp_mod_mask) { return merge_modifiers(key, tmp_mod_mask); }
+void nvim_paste_repeat_c(void) { paste_repeat(1); }
+// nvim_state_handle_k_event - already in normal_shim.c
+void nvim_do_cmdline_key_cmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
+void nvim_map_execute_lua_c(void) { map_execute_lua(false, false); }
+
+// terminal mode window options
+void nvim_terminal_set_winopts(void *s) { set_terminal_winopts((TerminalState *)s); }
+void nvim_terminal_unset_winopts(void *s) { unset_terminal_winopts((TerminalState *)s); }
+void nvim_terminal_check_cursor_c(void) { terminal_check_cursor(); }
+int nvim_terminal_send_mouse_event_c(void *term, int c) { return (int)send_mouse_event((Terminal *)term, c); }
+int nvim_curwin_handle(void) { return curwin->handle; }
+int nvim_buf_get_changedtick_curbuf(void) { return (int)buf_get_changedtick(curbuf); }
+
+// buffer wipe
+void nvim_do_buffer_wipe(int buf_handle)
+  { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
 
 // vim: foldmethod=marker

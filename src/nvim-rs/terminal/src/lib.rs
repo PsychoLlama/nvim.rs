@@ -278,6 +278,61 @@ impl TerminalHandle {
 }
 
 // =============================================================================
+// TerminalState: C-compatible layout for the terminal mode state machine
+// =============================================================================
+
+/// Function pointer type for `VimState` check callback: `int (*)(VimState *)`
+type StateCheckFn = Option<unsafe extern "C" fn(*mut c_void) -> c_int>;
+/// Function pointer type for `VimState` execute callback: `int (*)(VimState *, int)`
+type StateExecFn = Option<unsafe extern "C" fn(*mut c_void, c_int) -> c_int>;
+
+/// `VimState` from `state_defs.h` -- two function pointers.
+#[repr(C)]
+struct VimStateRust {
+    check: StateCheckFn,
+    execute: StateExecFn,
+}
+
+/// `TerminalState` from `terminal_shim.c` -- layout-verified below.
+#[repr(C)]
+struct TerminalStateRust {
+    state: VimStateRust,       // offset 0,  size 16
+    term: *mut c_void,         // offset 16, Terminal *
+    save_rd: c_int,            // offset 24, RedrawingDisabled
+    close: bool,               // offset 28
+    got_bsl: bool,             // offset 29
+    got_bsl_o: bool,           // offset 30
+    cursor_visible: bool,      // offset 31
+    save_curwin_handle: c_int, // offset 32, handle_T
+    save_w_p_cul: bool,        // offset 36
+    _pad1: [u8; 3],            // offset 37–39
+    save_w_p_culopt: *mut i8,  // offset 40, char *
+    save_w_p_culopt_flags: u8, // offset 48
+    _pad2: [u8; 3],            // offset 49–51
+    save_w_p_cuc: c_int,       // offset 52
+    save_w_p_so: i64,          // offset 56, OptInt
+    save_w_p_siso: i64,        // offset 64, OptInt
+}
+
+const _: () = {
+    use std::mem::{offset_of, size_of};
+    assert!(size_of::<TerminalStateRust>() == 72);
+    assert!(offset_of!(TerminalStateRust, term) == 16);
+    assert!(offset_of!(TerminalStateRust, save_rd) == 24);
+    assert!(offset_of!(TerminalStateRust, close) == 28);
+    assert!(offset_of!(TerminalStateRust, got_bsl) == 29);
+    assert!(offset_of!(TerminalStateRust, got_bsl_o) == 30);
+    assert!(offset_of!(TerminalStateRust, cursor_visible) == 31);
+    assert!(offset_of!(TerminalStateRust, save_curwin_handle) == 32);
+    assert!(offset_of!(TerminalStateRust, save_w_p_cul) == 36);
+    assert!(offset_of!(TerminalStateRust, save_w_p_culopt) == 40);
+    assert!(offset_of!(TerminalStateRust, save_w_p_culopt_flags) == 48);
+    assert!(offset_of!(TerminalStateRust, save_w_p_cuc) == 52);
+    assert!(offset_of!(TerminalStateRust, save_w_p_so) == 56);
+    assert!(offset_of!(TerminalStateRust, save_w_p_siso) == 64);
+};
+
+// =============================================================================
 // FFI for vterm state focus and global state
 // =============================================================================
 
@@ -1170,6 +1225,56 @@ extern "C" {
     fn rs_vterm_set_size(vt: *mut c_void, rows: c_int, cols: c_int) -> c_int;
     // Phase 12: terminal_check_size helper
     fn nvim_terminal_find_size(term: *mut c_void, out_width: *mut u16, out_height: *mut u16);
+    // Phase 14: terminal_enter state machine helpers
+    // nvim_get_state already declared above
+    fn nvim_set_state(s: c_int);
+    fn nvim_get_RedrawingDisabled() -> c_int;
+    fn nvim_set_RedrawingDisabled(v: c_int);
+    fn nvim_get_mapped_ctrl_c() -> c_int;
+    fn nvim_set_mapped_ctrl_c(v: c_int);
+    fn nvim_get_stop_insert_mode() -> c_int;
+    fn nvim_set_stop_insert_mode(v: c_int);
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_set_restart_edit(v: c_int);
+    fn nvim_set_got_int(v: c_int);
+    fn nvim_showmode();
+    fn nvim_unshowmode();
+    fn nvim_ui_cursor_shape();
+    fn nvim_setcursor();
+    fn nvim_parse_shape_opt(scope: c_int);
+    fn nvim_show_cursor_info_later();
+    fn nvim_refresh_cursor_c(term: *mut c_void, cursor_visible: *mut c_int);
+    fn nvim_validate_cursor_cw();
+    fn nvim_update_screen_c();
+    fn nvim_redraw_statuslines();
+    fn nvim_must_redraw() -> c_int;
+    fn nvim_clear_cmdline() -> c_int;
+    fn nvim_redraw_cmdline() -> c_int;
+    fn nvim_redraw_mode() -> c_int;
+    fn nvim_ui_flush();
+    fn nvim_apply_termenter_autocmd();
+    fn nvim_apply_termleave_autocmd();
+    fn nvim_apply_textchangedt_autocmd();
+    fn nvim_may_trigger_modechanged();
+    fn nvim_may_trigger_win_scrolled_resized();
+    fn nvim_has_event_textchangedt() -> c_int;
+    fn nvim_curbuf_update_changedtick_i();
+    fn nvim_curbuf_update_changedtick();
+    fn nvim_curbuf_last_changedtick_i() -> c_int;
+    fn nvim_state_enter_c(state: *mut c_void);
+    fn nvim_get_mod_mask() -> c_int;
+    fn nvim_merge_modifiers_c(key: c_int, tmp_mod_mask: *mut c_int) -> c_int;
+    fn nvim_paste_repeat_c();
+    fn nvim_state_handle_k_event();
+    fn nvim_do_cmdline_key_cmd();
+    fn nvim_map_execute_lua_c();
+    fn nvim_terminal_set_winopts(s: *mut c_void);
+    fn nvim_terminal_unset_winopts(s: *mut c_void);
+    fn nvim_terminal_check_cursor_c();
+    fn nvim_terminal_send_mouse_event_c(term: *mut c_void, c: c_int) -> c_int;
+    fn nvim_curwin_handle() -> c_int;
+    fn nvim_buf_get_changedtick_curbuf() -> c_int;
+    fn nvim_do_buffer_wipe(buf_handle: c_int);
     // Phase 13: terminal_close helpers
     fn nvim_entered_free_all_mem() -> c_int;
     fn nvim_terminal_refresh_blocking(term: *mut c_void);
@@ -3845,6 +3950,351 @@ pub unsafe extern "C" fn rs_terminal_check_size(term: TerminalHandle) {
     unsafe { rs_vterm_screen_flush_damage(t.vts) };
     t.pending.resize = true;
     unsafe { rs_invalidate_terminal(term, -1, -1) };
+}
+
+// Phase 14: Migrate terminal_enter state machine
+
+// Constants for terminal_execute
+const K_EVENT: c_int = -26365; // TERMCAP2KEY(KS_EXTRA, KE_EVENT=102)
+const K_COMMAND: c_int = -26877; // TERMCAP2KEY(KS_EXTRA, KE_COMMAND=104)
+const K_LUA: c_int = -26621; // TERMCAP2KEY(KS_EXTRA, KE_LUA=103)
+const K_PASTE_START: c_int = -21328; // TERMCAP2KEY('P','S')
+const CTRL_BSL: c_int = 28; // Ctrl_BSL from ascii_defs.h
+const CTRL_N: c_int = 14; // Ctrl_N
+const CTRL_O: c_int = 15; // Ctrl_O
+const CTRL_C: c_int = 3; // Ctrl_C
+const SHAPE_CURSOR: c_int = 2; // SHAPE_CURSOR from cursor_shape.h
+
+/// Process one char of terminal-mode input.
+///
+/// Replaces `terminal_execute` in `terminal_shim.c`.
+/// Called via the `VimState.execute` function pointer.
+///
+/// # Safety
+/// `state` must be a valid `*mut TerminalStateRust`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_execute(state: *mut c_void, key: c_int) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    let s = unsafe { &mut *state.cast::<TerminalStateRust>() };
+
+    let mut tmp_mod_mask = unsafe { nvim_get_mod_mask() };
+    let mod_key = unsafe { nvim_merge_modifiers_c(key, &raw mut tmp_mod_mask) };
+
+    // Mouse events
+    let is_mouse = matches!(
+        mod_key,
+        _ if mod_key == K_LEFTMOUSE
+            || mod_key == K_LEFTDRAG
+            || mod_key == K_LEFTRELEASE
+            || mod_key == K_MIDDLEMOUSE
+            || mod_key == K_MIDDLEDRAG
+            || mod_key == K_MIDDLERELEASE
+            || mod_key == K_RIGHTMOUSE
+            || mod_key == K_RIGHTDRAG
+            || mod_key == K_RIGHTRELEASE
+            || mod_key == K_X1MOUSE
+            || mod_key == K_X1DRAG
+            || mod_key == K_X1RELEASE
+            || mod_key == K_X2MOUSE
+            || mod_key == K_X2DRAG
+            || mod_key == K_X2RELEASE
+            || mod_key == K_MOUSEDOWN
+            || mod_key == K_MOUSEUP
+            || mod_key == K_MOUSELEFT
+            || mod_key == K_MOUSERIGHT
+            || mod_key == K_MOUSEMOVE
+    );
+
+    if is_mouse {
+        if unsafe { nvim_terminal_send_mouse_event_c(s.term, key) } != 0 {
+            return 0;
+        }
+        return 1;
+    }
+
+    if mod_key == K_PASTE_START {
+        unsafe { nvim_paste_repeat_c() };
+        return 1;
+    }
+
+    if mod_key == K_EVENT {
+        // Don't free the terminal yet; it is still needed.
+        let term = unsafe { TerminalHandle::from_ptr(s.term) };
+        unsafe { term.as_mut().refcount += 1 };
+        unsafe { nvim_state_handle_k_event() };
+        unsafe { term.as_mut().refcount -= 1 };
+        if unsafe { term.as_ref().buf_handle } == 0 {
+            s.close = true;
+            return 0;
+        }
+        return 1;
+    }
+
+    if mod_key == K_COMMAND {
+        unsafe { nvim_do_cmdline_key_cmd() };
+        return 1;
+    }
+
+    if mod_key == K_LUA {
+        unsafe { nvim_map_execute_lua_c() };
+        return 1;
+    }
+
+    if mod_key == CTRL_N && s.got_bsl {
+        return 0;
+    }
+
+    if mod_key == CTRL_O && s.got_bsl {
+        s.got_bsl_o = true;
+        unsafe { nvim_set_restart_edit(c_int::from(b'I')) };
+        return 0;
+    }
+
+    // Default / fallthrough
+    if mod_key == CTRL_C {
+        // Always map CTRL-C to avoid interrupt.
+        unsafe { nvim_set_got_int(0) };
+    }
+
+    if mod_key == CTRL_BSL && !s.got_bsl {
+        s.got_bsl = true;
+        return 1;
+    }
+
+    let term = unsafe { TerminalHandle::from_ptr(s.term) };
+    if unsafe { term.as_ref().closed } {
+        s.close = true;
+        return 0;
+    }
+
+    s.got_bsl = false;
+    // terminal_send_key is rs_terminal_send_key_impl
+    unsafe { rs_terminal_send_key_impl(term, key) };
+
+    1
+}
+
+/// Check function called before each iteration of terminal mode.
+///
+/// Replaces `terminal_check` in `terminal_shim.c`.
+/// Called via the `VimState.check` function pointer.
+///
+/// # Safety
+/// `state` must be a valid `*mut TerminalStateRust`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    let s = unsafe { &mut *state.cast::<TerminalStateRust>() };
+
+    if unsafe { nvim_get_stop_insert_mode() } != 0 {
+        return 0;
+    }
+
+    // Check focus; returns false if we should exit the state machine.
+    if !rs_terminal_check_focus_impl(s) {
+        return 0;
+    }
+
+    // Validate topline and cursor position for autocommands.
+    unsafe { nvim_terminal_check_cursor_c() };
+    unsafe { nvim_validate_cursor_cw() };
+
+    // Don't let autocommands free the terminal from under our fingers.
+    let term = unsafe { TerminalHandle::from_ptr(s.term) };
+    unsafe { term.as_mut().refcount += 1 };
+
+    if unsafe { nvim_has_event_textchangedt() } != 0
+        && unsafe { nvim_curbuf_last_changedtick_i() }
+            != unsafe { nvim_buf_get_changedtick_curbuf() }
+    {
+        unsafe { nvim_apply_textchangedt_autocmd() };
+        unsafe { nvim_curbuf_update_changedtick_i() };
+    }
+    unsafe { nvim_may_trigger_win_scrolled_resized() };
+    unsafe { term.as_mut().refcount -= 1 };
+
+    if unsafe { term.as_ref().buf_handle } == 0 {
+        s.close = true;
+        return 0;
+    }
+
+    if !rs_terminal_check_focus_impl(s) {
+        return 0;
+    }
+    unsafe { nvim_terminal_check_cursor_c() };
+    unsafe { nvim_validate_cursor_cw() };
+
+    unsafe { nvim_show_cursor_info_later() };
+    if unsafe { nvim_must_redraw() } != 0 {
+        unsafe { nvim_update_screen_c() };
+    } else {
+        unsafe { nvim_redraw_statuslines() };
+        if unsafe { nvim_clear_cmdline() } != 0
+            || unsafe { nvim_redraw_cmdline() } != 0
+            || unsafe { nvim_redraw_mode() } != 0
+        {
+            unsafe { nvim_showmode() };
+        }
+    }
+
+    unsafe { nvim_setcursor() };
+    let mut cv = c_int::from(s.cursor_visible);
+    unsafe { nvim_refresh_cursor_c(s.term, &raw mut cv) };
+    s.cursor_visible = cv != 0;
+    unsafe { nvim_ui_flush() };
+    1
+}
+
+/// Check focus state and update `TerminalStateRust` accordingly.
+/// Returns `true` if the state machine should continue, `false` to exit.
+fn rs_terminal_check_focus_impl(s: &mut TerminalStateRust) -> bool {
+    let cur_terminal = unsafe { nvim_curbuf_terminal() };
+    if cur_terminal.is_null() {
+        return false;
+    }
+
+    let curwin_handle = unsafe { nvim_curwin_handle() };
+    if s.save_curwin_handle != curwin_handle {
+        // Terminal window changed, update window options.
+        unsafe { nvim_terminal_unset_winopts(std::ptr::addr_of_mut!(*s).cast()) };
+        unsafe { nvim_terminal_set_winopts(std::ptr::addr_of_mut!(*s).cast()) };
+    }
+
+    if s.term != cur_terminal {
+        // Active terminal buffer changed.
+        let old_term = unsafe { TerminalHandle::from_ptr(s.term) };
+        rs_terminal_focus_lose(old_term);
+
+        s.term = cur_terminal;
+        let new_term = unsafe { TerminalHandle::from_ptr(s.term) };
+        unsafe { new_term.as_mut().pending.cursor = true };
+        unsafe { rs_invalidate_terminal(new_term, -1, -1) };
+        rs_terminal_focus_gain(new_term);
+    }
+    true
+}
+
+/// Implements `MODE_TERMINAL` state. :help Terminal-mode.
+///
+/// Replaces `terminal_enter` in `terminal_shim.c`.
+#[no_mangle]
+pub extern "C" fn rs_terminal_enter() -> bool {
+    let cur_terminal = unsafe { nvim_curbuf_terminal() };
+    if cur_terminal.is_null() {
+        return false;
+    }
+
+    let mut s = TerminalStateRust {
+        state: VimStateRust {
+            check: Some(rs_terminal_check),
+            execute: Some(rs_terminal_execute),
+        },
+        term: cur_terminal,
+        cursor_visible: true, // Assume visible; may change via refresh_cursor later.
+        save_rd: 0,
+        close: false,
+        got_bsl: false,
+        got_bsl_o: false,
+        save_curwin_handle: 0,
+        save_w_p_cul: false,
+        _pad1: [0; 3],
+        save_w_p_culopt: std::ptr::null_mut(),
+        save_w_p_culopt_flags: 0,
+        _pad2: [0; 3],
+        save_w_p_cuc: 0,
+        save_w_p_so: 0,
+        save_w_p_siso: 0,
+    };
+
+    // Ensure the terminal is properly sized.
+    let term = unsafe { TerminalHandle::from_ptr(s.term) };
+    unsafe { rs_terminal_check_size(term) };
+
+    let save_state = unsafe { nvim_get_state() };
+    s.save_rd = unsafe { nvim_get_RedrawingDisabled() };
+    unsafe { nvim_set_state(MODE_TERMINAL) };
+    // Always map CTRL-C to avoid interrupt.
+    unsafe { nvim_set_mapped_ctrl_c(nvim_get_mapped_ctrl_c() | MODE_TERMINAL) };
+    unsafe { nvim_set_RedrawingDisabled(0) };
+    unsafe { nvim_set_stop_insert_mode(0) };
+
+    unsafe { nvim_terminal_set_winopts(std::ptr::addr_of_mut!(s).cast()) };
+
+    // Update the cursor shape and scroll to end.
+    unsafe { term.as_mut().pending.cursor = true };
+    let buf = unsafe { nvim_terminal_handle_get_buffer(term.as_ref().buf_handle) };
+    unsafe { rs_adjust_topline_cursor(s.term, buf, 0) };
+    unsafe { nvim_showmode() };
+    unsafe { nvim_ui_cursor_shape() };
+
+    // Tell the terminal it has focus.
+    rs_terminal_focus_gain(term);
+    // Don't fire TextChangedT from changes in Normal mode.
+    unsafe { nvim_curbuf_update_changedtick_i() };
+
+    unsafe { nvim_apply_termenter_autocmd() };
+    unsafe { nvim_may_trigger_modechanged() };
+
+    // Run the state machine.
+    unsafe { nvim_state_enter_c(std::ptr::addr_of_mut!(s.state).cast()) };
+
+    let got_bsl_o = s.got_bsl_o;
+    if !got_bsl_o {
+        unsafe { nvim_set_restart_edit(0) };
+    }
+    unsafe { nvim_set_state(save_state) };
+    unsafe { nvim_set_RedrawingDisabled(s.save_rd) };
+
+    if !s.cursor_visible {
+        // If cursor was hidden, show it again.
+        unsafe { nvim_ui_busy_stop() };
+    }
+
+    // Restore the terminal cursor to what is set in 'guicursor'.
+    unsafe { nvim_parse_shape_opt(SHAPE_CURSOR) };
+
+    unsafe { nvim_terminal_unset_winopts(std::ptr::addr_of_mut!(s).cast()) };
+
+    // Tell the terminal it lost focus.
+    let term = unsafe { TerminalHandle::from_ptr(s.term) };
+    rs_terminal_focus_lose(term);
+    // Don't fire TextChanged from changes in terminal mode.
+    unsafe { nvim_curbuf_update_changedtick() };
+
+    let cur_terminal = unsafe { nvim_curbuf_terminal() };
+    let same_term = cur_terminal == s.term;
+    if same_term && !s.close {
+        unsafe { nvim_terminal_check_cursor_c() };
+    }
+    if unsafe { nvim_get_restart_edit() } != 0 {
+        unsafe { nvim_showmode() };
+    } else {
+        unsafe { nvim_unshowmode() };
+    }
+    unsafe { nvim_ui_cursor_shape() };
+
+    // If we're to close the terminal, don't let TermLeave autocmds free it first!
+    if s.close {
+        let term = unsafe { TerminalHandle::from_ptr(s.term) };
+        unsafe { term.as_mut().refcount += 1 };
+    }
+    unsafe { nvim_apply_termleave_autocmd() };
+    if s.close {
+        let term = unsafe { TerminalHandle::from_ptr(s.term) };
+        unsafe { term.as_mut().refcount -= 1 };
+        let buf_handle = unsafe { term.as_ref().buf_handle };
+        unsafe { term.as_mut().destroy = true };
+        unsafe { nvim_terminal_call_close_cb(term.as_ptr()) };
+        if buf_handle != 0 {
+            unsafe { nvim_do_buffer_wipe(buf_handle) };
+        }
+    }
+
+    got_bsl_o
 }
 
 #[cfg(test)]
