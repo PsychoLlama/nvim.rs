@@ -1547,11 +1547,8 @@ extern "C" {
     static mut VIsual_active: bool;
     fn nvim_win_get_old_visual_mode(wp: WinHandle) -> c_int;
     fn nvim_win_set_old_visual_mode(wp: WinHandle, val: c_int);
-    fn nvim_win_get_old_cursor_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_win_set_old_cursor_lnum(wp: WinHandle, val: LinenrT);
-    fn nvim_win_get_old_visual_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_win_set_old_visual_lnum(wp: WinHandle, val: LinenrT);
-    fn nvim_win_get_old_visual_col(wp: WinHandle) -> ColnrT;
     fn nvim_win_set_old_visual_col(wp: WinHandle, val: ColnrT);
 }
 

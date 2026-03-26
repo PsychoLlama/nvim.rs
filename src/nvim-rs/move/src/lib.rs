@@ -1911,7 +1911,6 @@ extern "C" {
     // Filler rows and botfill
     fn nvim_win_get_filler_rows(wp: WinHandle) -> c_int;
     fn nvim_win_set_filler_rows(wp: WinHandle, val: c_int);
-    fn nvim_win_get_botfill(wp: WinHandle) -> c_int;
     fn nvim_win_set_botfill(wp: WinHandle, val: c_int);
 
     // Mouse dragging state
@@ -4602,7 +4601,6 @@ extern "C" {
     fn nvim_get_default_grid_has_chars() -> c_int;
 
     // Scroll binding position
-    fn nvim_win_get_scbind_pos(wp: WinHandle) -> c_int;
     fn nvim_win_set_scbind_pos(wp: WinHandle, val: c_int);
 
     // Buffer empty check (operates on window's buffer)

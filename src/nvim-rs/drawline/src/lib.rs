@@ -494,14 +494,6 @@ extern "C" {
     fn set_empty_rows(wp: WinHandle, used: c_int);
     fn win_bg_attr(wp: WinHandle) -> c_int;
 
-    // Terminal
-    fn nvim_buf_terminal_get_line_attributes(
-        terminal: *mut c_void,
-        wp: WinHandle,
-        lnum: c_int,
-        term_attrs: *mut c_int,
-    );
-
     // Multibyte / charset
     fn transchar_buf(buf: *mut c_void, c: c_int) -> *mut c_char;
     fn transchar_hex(buf: *mut c_char, c: c_int) -> usize;
@@ -520,56 +512,8 @@ extern "C" {
     fn schar_get_first_codepoint(sc: ScharT) -> c_int;
     fn ml_get_buf(buf: *mut c_void, lnum: LinenrT) -> *const c_char;
 
-    // Globals accessors (Phase 2 additions)
-    fn nvim_get_did_emsg() -> c_int;
-    fn nvim_set_did_emsg(val: c_int);
-    fn nvim_get_screen_search_hl() -> *mut c_void;
-    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
-    fn nvim_ltoreq_pos(pos_a: *const c_int, pos_b: *const c_int) -> bool;
-    fn nvim_gchar_pos_byval(pos: *const c_int) -> c_int;
-    fn nvim_getvvcol_byval(
-        wp: WinHandle,
-        pos: *const c_int,
-        scol: *mut c_int,
-        ccol: *mut c_int,
-        ecol: *mut c_int,
-    );
-    fn nvim_getvcol_byval3(
-        wp: WinHandle,
-        pos: *const c_int,
-        scol: *mut c_int,
-        ccol: *mut c_int,
-        ecol: *mut c_int,
-    );
-    fn nvim_get_search_match_lines() -> c_int;
-    fn nvim_get_search_match_endcol() -> c_int;
-    fn nvim_get_highlight_match() -> c_int;
-    fn nvim_get_VIsual_active() -> c_int;
-    fn nvim_get_VIsual_mode() -> c_int;
-    fn nvim_get_VIsual_pos_fields(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
     fn nvim_get_state() -> c_int;
-    fn nvim_virtual_active_win(wp: WinHandle) -> bool;
-    fn nvim_win_get_p_cc_cols(wp: WinHandle) -> *mut c_int;
-    fn nvim_win_buf_has_terminal(wp: WinHandle) -> c_int;
-    fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
-    fn nvim_init_charsize_arg_wrap(
-        csarg: *mut c_void,
-        wp: WinHandle,
-        lnum: LinenrT,
-        line: *const c_char,
-    ) -> c_int;
-    fn nvim_charsize_arg_size() -> c_int;
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
-    fn nvim_curwin_cursor_lnum() -> LinenrT;
-    fn nvim_curwin_cursor_col() -> ColnrT;
-    fn nvim_get_p_sel() -> *const c_char;
-    fn nvim_get_cmdwin_win() -> WinHandle;
-    fn nvim_get_cmdwin_type() -> c_int;
-    fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
-
-    // Phase 3 (win_line setup migration): additional accessors
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
 }
 
 /// Opaque handle to buffer (buf_T).

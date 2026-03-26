@@ -30,9 +30,6 @@ extern "C" {
     /// Check if a window's buffer is NULL (closed buffer).
     fn nvim_win_has_buffer(wp: WinHandle) -> c_int;
 
-    /// Get wp->w_p_cc_cols.
-    fn nvim_win_get_p_cc_cols(wp: WinHandle) -> *mut c_int;
-
     /// Set wp->w_p_cc_cols.
     fn nvim_win_set_p_cc_cols(wp: WinHandle, cols: *mut c_int);
 

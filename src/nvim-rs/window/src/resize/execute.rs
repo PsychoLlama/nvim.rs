@@ -418,7 +418,6 @@ extern "C" {
     fn nvim_win_border_height_wrapper(wp: WinHandle) -> c_int;
     fn nvim_win_border_width_wrapper(wp: WinHandle) -> c_int;
     fn nvim_win_get_grid_alloc_handle(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_handle(wp: WinHandle) -> c_int;
     fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
     fn nvim_ui_has_multigrid() -> c_int;
     fn nvim_ui_call_win_viewport_margins_wrapper(wp: WinHandle);

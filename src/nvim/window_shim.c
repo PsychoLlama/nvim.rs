@@ -172,7 +172,6 @@ char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
 int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
-int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
 int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
 int nvim_win_get_wrap_flags(win_T *wp) { return wp->w_p_wrap_flags; }
@@ -662,9 +661,7 @@ void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 
 
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
-int nvim_win_get_botfill(win_T *wp) { return wp ? (wp->w_botfill ? 1 : 0) : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
-int nvim_win_get_scbind_pos(win_T *wp) { return wp ? wp->w_scbind_pos : 0; }
 int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0; }
 
 // Accessors for rs_win_set_inner_size
@@ -678,7 +675,6 @@ int nvim_win_get_p_spk_char(void) { return (int)(unsigned char)*p_spk; }
 void nvim_terminal_check_size_win(win_T *wp) { if (wp && wp->w_buffer->terminal) { terminal_check_size(wp->w_buffer->terminal); } }
 int nvim_win_border_height_wrapper(win_T *wp) { return wp ? win_border_height(wp) : 0; }
 int nvim_win_border_width_wrapper(win_T *wp) { return wp ? win_border_width(wp) : 0; }
-int nvim_win_get_w_handle(win_T *wp) { return wp ? wp->handle : 0; }
 // nvim_win_get_border_adj already defined earlier in this file
 win_T *nvim_get_au_pending_free_win(void) { return au_pending_free_win; }
 void nvim_set_au_pending_free_win(win_T *wp) { au_pending_free_win = wp; }
@@ -1568,9 +1564,6 @@ void nvim_buf_set_mod_set(buf_T *buf, int val)
 }
 
 int nvim_win_get_old_visual_mode(win_T *wp) { return wp ? wp->w_old_visual_mode : 0; }
-linenr_T nvim_win_get_old_cursor_lnum(win_T *wp) { return wp ? wp->w_old_cursor_lnum : 0; }
-linenr_T nvim_win_get_old_visual_lnum(win_T *wp) { return wp ? wp->w_old_visual_lnum : 0; }
-colnr_T nvim_win_get_old_visual_col(win_T *wp) { return wp ? wp->w_old_visual_col : 0; }
 int nvim_redrawing(void) { return redrawing() ? 1 : 0; }
 
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
@@ -1739,17 +1732,6 @@ colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
 /// wp->w_grid (GridView) pointer accessor for win_line
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
-
-/// CharsizeArg init (opaque; we pass it around as void* from Rust)
-/// We need to call init_charsize_arg from Rust.
-/// Returns CSType as int (0 = kCharsizeRegular, 1 = kCharsizeFast).
-int nvim_init_charsize_arg_wrap(void *csarg, win_T *wp, linenr_T lnum, const char *line)
-{
-  return (int)init_charsize_arg((CharsizeArg *)csarg, wp, lnum, line);
-}
-/// Size of CharsizeArg (for stack allocation in Rust)
-int nvim_charsize_arg_size(void) { return (int)sizeof(CharsizeArg); }
-
 
 /// Return 1 if the cursor line in curwin starts with NUL (empty line, not insert mode).
 int nvim_curwin_cursor_line_is_nul(void) { return *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL ? 1 : 0; }
@@ -1994,53 +1976,5 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
 
-int nvim_get_did_emsg(void) { return did_emsg ? 1 : 0; }
-void nvim_set_did_emsg(int val) { did_emsg = (bool)val; }
-
-/// screen_search_hl global pointer accessor.
-/// Returns a pointer to the file-static match_T used for 'hlsearch' in the screen.
-void *nvim_get_screen_search_hl(void) { return &screen_search_hl; }
-
 // nvim_win_get_p_cole already exported from Rust (window crate).
-
-/// ltoreq macro: returns true if pos_a <= pos_b.
-/// Positions are passed as [lnum, col, coladd] int arrays (matching pos_T layout).
-bool nvim_ltoreq_pos(const int *pos_a, const int *pos_b)
-{
-  pos_T a = { .lnum = pos_a[0], .col = pos_a[1], .coladd = pos_a[2] };
-  pos_T b = { .lnum = pos_b[0], .col = pos_b[1], .coladd = pos_b[2] };
-  return ltoreq(a, b);
-}
-
-/// gchar_pos wrapper taking position as [lnum, col, coladd] int array.
-int nvim_gchar_pos_byval(const int *pos)
-{
-  pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
-  return gchar_pos(&p);
-}
-
-/// getvvcol wrapper taking position as [lnum, col, coladd] int array.
-void nvim_getvvcol_byval(win_T *wp, const int *pos, int *scol, int *ccol, int *ecol)
-{
-  pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
-  colnr_T sc = 0, cc = 0, ec = 0;
-  getvvcol(wp, &p, scol ? (colnr_T *)scol : &sc, ccol ? (colnr_T *)ccol : &cc,
-           ecol ? (colnr_T *)ecol : &ec);
-}
-
-/// getvcol wrapper taking position as [lnum, col, coladd] int array.
-void nvim_getvcol_byval3(win_T *wp, const int *pos, int *scol, int *ccol, int *ecol)
-{
-  pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
-  colnr_T sc = 0, cc = 0, ec = 0;
-  getvcol(wp, &p, scol ? (colnr_T *)scol : &sc, ccol ? (colnr_T *)ccol : &cc,
-          ecol ? (colnr_T *)ecol : &ec);
-}
-
-/// Terminal line attributes (wrapped to avoid exposing Terminal type in Rust).
-void nvim_buf_terminal_get_line_attributes(void *terminal, win_T *wp, int lnum, int *term_attrs)
-{
-  terminal_get_line_attributes((Terminal *)terminal, wp, (linenr_T)lnum, term_attrs);
-}
-
 
