@@ -13,6 +13,8 @@
 use std::ffi::c_int;
 use std::os::raw::c_void;
 
+use nvim_vterm::VTermScreenCellAttrs;
+
 // =============================================================================
 // Submodules
 // =============================================================================
@@ -940,6 +942,80 @@ pub extern "C" fn rs_terminal_focus_lose(term: TerminalHandle) {
 // =============================================================================
 // Callback Helper Functions
 // =============================================================================
+
+/// HL_ flag constants for underline attributes (must match `highlight_defs.h`).
+const HL_UNDERLINE: c_int = 0x08;
+const HL_UNDERCURL: c_int = 0x10;
+const HL_UNDERDOUBLE: c_int = 0x18;
+
+/// Map a `VTermScreenCellAttrs` underline style to the corresponding `HL_*` flag.
+///
+/// Returns `HL_UNDERLINE`, `HL_UNDERDOUBLE`, `HL_UNDERCURL`, or `0`.
+/// Replaces the C `get_underline_hl_flag` in `terminal_shim.c`.
+#[no_mangle]
+pub extern "C" fn rs_terminal_underline_hl_flag(attrs: VTermScreenCellAttrs) -> c_int {
+    match attrs.underline() {
+        0 => 0,
+        2 => HL_UNDERDOUBLE,
+        3 => HL_UNDERCURL,
+        _ => HL_UNDERLINE, // 1 (single) and unknown values
+    }
+}
+
+/// Parse an OSC 8 hyperlink sequence and return the URL attribute id.
+///
+/// The `str` pointer must be nul-terminated and point to the content after
+/// the `\x1b]8;` prefix (i.e. `id;uri`).  Returns 1 on success (writing the
+/// `hl_add_url` result into `*attr_out`) and 0 if the sequence is invalid.
+///
+/// Replaces the C `parse_osc8` in `terminal_shim.c`.
+///
+/// # Safety
+/// `str_ptr` must be a valid nul-terminated C string.  `attr_out` must be a
+/// valid, non-null pointer to a `c_int`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_parse_osc8(
+    str_ptr: *const std::ffi::c_char,
+    attr_out: *mut c_int,
+) -> c_int {
+    extern "C" {
+        fn hl_add_url(attr: c_int, url: *const std::ffi::c_char) -> c_int;
+    }
+
+    if str_ptr.is_null() || attr_out.is_null() {
+        return 0;
+    }
+
+    // Find the semicolon separating id from uri.
+    let mut i = 0usize;
+    loop {
+        let ch: std::ffi::c_char = unsafe { *str_ptr.add(i) };
+        if ch == 0 {
+            // No semicolon found -- invalid sequence.
+            return 0;
+        }
+        // 0x3B == b';' (ASCII semicolon)
+        if ch == 0x3B {
+            break;
+        }
+        i += 1;
+    }
+
+    // Move past the semicolon.
+    i += 1;
+
+    let ch: std::ffi::c_char = unsafe { *str_ptr.add(i) };
+    if ch == 0 {
+        // Empty URI -- clear the URL attribute.
+        unsafe { *attr_out = 0 };
+        return 1;
+    }
+
+    // Pass the URI part to hl_add_url.
+    let uri_ptr = unsafe { str_ptr.add(i) };
+    unsafe { *attr_out = hl_add_url(0, uri_ptr) };
+    1
+}
 
 /// Set the cursor position on a terminal.
 #[no_mangle]

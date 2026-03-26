@@ -145,6 +145,10 @@ extern void rs_vterm_mouse_button(void *vt, int button, int pressed, int mods);
 extern int rs_terminal_is_filter_char_flags(int c, int flags);
 extern int rs_terminal_row_to_linenr_term(void *term, int row);
 extern int rs_terminal_linenr_to_row_term(void *term, int linenr);
+extern void rs_terminal_focus_gain(void *term);
+extern void rs_terminal_focus_lose(void *term);
+extern int rs_terminal_underline_hl_flag(VTermScreenCellAttrs attrs);
+extern int rs_terminal_parse_osc8(const char *str, int *attr);
 
 // Result of rs_terminal_convert_key: VTerm key code and modifier mask.
 typedef struct {
@@ -313,35 +317,6 @@ static void schedule_termrequest(Terminal *term)
                  (void *)(intptr_t)term->sb_deleted);
 }
 
-static int parse_osc8(const char *str, int *attr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Parse the URI from the OSC 8 sequence and add the URL to our URL set.
-  // Skip the ID, we don't use it (for now)
-  size_t i = 0;
-  for (; str[i] != NUL; i++) {
-    if (str[i] == ';') {
-      break;
-    }
-  }
-
-  if (str[i] != ';') {
-    // Invalid OSC sequence
-    return 0;
-  }
-
-  // Move past the semicolon
-  i++;
-
-  if (str[i] == NUL) {
-    // Empty OSC 8, no URL
-    *attr = 0;
-    return 1;
-  }
-
-  *attr = hl_add_url(0, str + i);
-  return 1;
-}
 
 static int on_osc(int command, VTermStringFragment frag, void *user)
   FUNC_ATTR_NONNULL_ALL
@@ -369,7 +344,7 @@ static int on_osc(int command, VTermStringFragment frag, void *user)
       kv_push(term->termrequest_buffer, NUL);
       const size_t off = STRLEN_LITERAL("\x1b]8;");
       int attr = 0;
-      if (parse_osc8(term->termrequest_buffer.items + off, &attr)) {
+      if (rs_terminal_parse_osc8(term->termrequest_buffer.items + off, &attr)) {
         VTermState *state = vterm_obtain_state(term->vt);
         VTermValue value = { .number = attr };
         vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
@@ -804,7 +779,7 @@ bool terminal_enter(void)
   ui_cursor_shape();
 
   // Tell the terminal it has focus
-  terminal_focus(s->term, true);
+  rs_terminal_focus_gain(s->term);
   // Don't fire TextChangedT from changes in Normal mode.
   curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
 
@@ -831,7 +806,7 @@ bool terminal_enter(void)
   unset_terminal_winopts(s);
 
   // Tell the terminal it lost focus
-  terminal_focus(s->term, false);
+  rs_terminal_focus_lose(s->term);
   // Don't fire TextChanged from changes in terminal mode.
   curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
 
@@ -892,12 +867,12 @@ static bool terminal_check_focus(TerminalState *const s)
   }
   if (s->term != curbuf->terminal) {
     // Active terminal buffer changed, flush terminal's cursor state to the UI.
-    terminal_focus(s->term, false);
+    rs_terminal_focus_lose(s->term);
 
     s->term = curbuf->terminal;
     s->term->pending.cursor = true;
     invalidate_terminal(s->term, -1, -1);
-    terminal_focus(s->term, true);
+    rs_terminal_focus_gain(s->term);
   }
   return true;
 }
@@ -1187,21 +1162,6 @@ static int get_rgb(VTermState *state, VTermColor color)
   return RGB_(color.rgb.red, color.rgb.green, color.rgb.blue);
 }
 
-static int get_underline_hl_flag(VTermScreenCellAttrs attrs)
-{
-  switch (attrs.underline) {
-  case VTERM_UNDERLINE_OFF:
-    return 0;
-  case VTERM_UNDERLINE_SINGLE:
-    return HL_UNDERLINE;
-  case VTERM_UNDERLINE_DOUBLE:
-    return HL_UNDERDOUBLE;
-  case VTERM_UNDERLINE_CURLY:
-    return HL_UNDERCURL;
-  default:
-    return HL_UNDERLINE;
-  }
-}
 
 void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs)
 {
@@ -1239,7 +1199,7 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
     int hl_attrs = (cell.attrs.bold ? HL_BOLD : 0)
                    | (cell.attrs.italic ? HL_ITALIC : 0)
                    | (cell.attrs.reverse ? HL_INVERSE : 0)
-                   | get_underline_hl_flag(cell.attrs)
+                   | rs_terminal_underline_hl_flag(cell.attrs)
                    | (cell.attrs.strike ? HL_STRIKETHROUGH : 0)
                    | ((fg_indexed && !fg_set) ? HL_FG_INDEXED : 0)
                    | ((bg_indexed && !bg_set) ? HL_BG_INDEXED : 0);
@@ -1280,17 +1240,6 @@ void terminal_notify_theme(Terminal *term, bool dark)
   assert(ret > 0);
   assert((size_t)ret <= sizeof(buf));
   terminal_send(term, buf, (size_t)ret);
-}
-
-static void terminal_focus(const Terminal *term, bool focus)
-  FUNC_ATTR_NONNULL_ALL
-{
-  VTermState *state = vterm_obtain_state(term->vt);
-  if (focus) {
-    vterm_state_focus_in(state);
-  } else {
-    vterm_state_focus_out(state);
-  }
 }
 
 // }}}
@@ -1561,15 +1510,6 @@ static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag,
 // }}}
 // input handling {{{
 
-static void mouse_action(Terminal *term, int button, int row, int col, bool pressed,
-                         VTermModifier mod)
-{
-  rs_vterm_mouse_move(term->vt, row, col, mod);
-  if (button) {
-    rs_vterm_mouse_button(term->vt, button, (int)pressed, mod);
-  }
-}
-
 // process a mouse event while the terminal is focused. return true if the
 // terminal should lose focus
 static bool send_mouse_event(Terminal *term, int c)
@@ -1633,7 +1573,11 @@ static bool send_mouse_event(Terminal *term, int c)
     }
 
     VTermKeyResult mouse_result = rs_terminal_convert_key(c, mod_mask);
-    mouse_action(term, button, row, col - offset, pressed, (VTermModifier)mouse_result.modifiers);
+    VTermModifier mouse_mod = (VTermModifier)mouse_result.modifiers;
+    rs_vterm_mouse_move(term->vt, row, col - offset, mouse_mod);
+    if (button) {
+      rs_vterm_mouse_button(term->vt, button, (int)pressed, mouse_mod);
+    }
     return false;
   }
 
