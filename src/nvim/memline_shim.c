@@ -225,7 +225,6 @@ extern void rs_long_to_char(long n, char *s);
 extern long rs_char_to_long(const char *s);
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
-extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1093,13 +1092,6 @@ void nvim_emsg_preserve_failed(void) { emsg(_("E314: Preserve failed")); }
 
 /// Emit E313 "Cannot preserve, there is no swap file" error
 void nvim_emsg_no_swapfile(void) { emsg(_("E313: Cannot preserve, there is no swap file")); }
-
-/// Public wrapper around rs_ml_append_flush, used by Rust _impl functions.
-int nvim_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ml_append_flush(buf, lnum, line, len, flags);
-}
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
 

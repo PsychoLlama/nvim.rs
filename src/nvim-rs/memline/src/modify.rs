@@ -363,15 +363,6 @@ extern "C" {
     // Pass 4 Phase 2: Public wrappers for static C functions
     // -------------------------------------------------------------------------
 
-    /// Public wrapper around static ml_append_flush
-    fn nvim_ml_append_flush(
-        buf: *mut BufHandle,
-        lnum: LineNr,
-        line: *mut c_char,
-        len: ColNr,
-        flags: c_int,
-    ) -> c_int;
-
     // -------------------------------------------------------------------------
     // Pass 5 Phase 2: rs_ml_flush_line accessors
     // -------------------------------------------------------------------------
@@ -764,7 +755,7 @@ pub unsafe extern "C" fn ml_delete_rust(lnum: LineNr) -> c_int {
 // =============================================================================
 
 /// Implement `ml_append_flags`: open buffer if needed, then call
-/// `nvim_ml_append_flush` (public wrapper for the static `ml_append_flush`).
+/// `rs_ml_append_flush`.
 ///
 /// # Safety
 /// Modifies buffer state. Only call from main Nvim thread.
@@ -780,11 +771,11 @@ pub unsafe extern "C" fn rs_ml_append_flags_impl(
     if nvim_buf_open_buffer_if_needed(buf) == FAIL {
         return FAIL;
     }
-    nvim_ml_append_flush(buf, lnum, line, len, flags)
+    rs_ml_append_flush(buf, lnum, line, len, flags)
 }
 
 /// Implement `ml_append_buf`: guard on ml_mfp, then call
-/// `nvim_ml_append_flush` for the specified buffer.
+/// `rs_ml_append_flush` for the specified buffer.
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
@@ -805,7 +796,7 @@ pub unsafe extern "C" fn rs_ml_append_buf_impl(
         return FAIL;
     }
     let flags = if newfile != 0 { ML_APPEND_NEW } else { 0 };
-    nvim_ml_append_flush(buf, lnum, line, len, flags)
+    rs_ml_append_flush(buf, lnum, line, len, flags)
 }
 
 /// Implement `ml_delete_flags`: flush cached line, range-check, then delete.
