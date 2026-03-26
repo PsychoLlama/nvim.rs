@@ -296,7 +296,6 @@ extern "C" {
     fn nvim_docmd_skip_range(cmd: *const c_char) -> *mut c_char;
     #[link_name = "skipwhite"]
     fn nvim_docmd_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_docmd_get_e_invrange() -> *mut c_char;
     #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
     #[link_name = "rs_ascii_isdigit"]
@@ -620,7 +619,8 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             nvim_cmod_set_tab(cmod, nvim_rs_tabpage_index(nvim_get_curtab()) + 1);
                         } else {
                             if tabnr < 0 || tabnr > nvim_docmd_last_tab_nr() as i32 {
-                                *errormsg = nvim_docmd_get_e_invrange();
+                                *errormsg =
+                                    crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                                 return 0; // false
                             }
                             nvim_cmod_set_tab(cmod, tabnr as c_int + 1);

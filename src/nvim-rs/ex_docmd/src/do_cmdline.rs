@@ -242,11 +242,7 @@ extern "C" {
 
     // Error messages for do_cmdline
     fn gettext(s: *const c_char) -> *const c_char;
-    fn nvim_docmd_emsg_too_recursive();
-    fn nvim_docmd_emsg_endtry();
-    fn nvim_docmd_emsg_endwhile();
-    fn nvim_docmd_emsg_endfor();
-    fn nvim_docmd_emsg_endif();
+    fn emsg(s: *const c_char);
     fn aborting() -> bool;
     fn nvim_docmd_PROF_YES() -> c_int;
     fn nvim_docmd_end_of_sourced_file_msg() -> *const c_char;
@@ -541,7 +537,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
     if unsafe { nvim_do_cmdline_start() } == FAIL {
         unsafe {
-            nvim_docmd_emsg_too_recursive();
+            emsg(gettext(crate::E_COMMAND_TOO_RECURSIVE_STR.as_ptr()));
             nvim_docmd_c_do_errthrow(std::ptr::null_mut(), std::ptr::null());
             msg_list = saved_msg_list;
         }
@@ -1012,13 +1008,13 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     && unsafe { nvim_docmd_func_has_ended(real_cookie) } == 0))
         {
             if cstack.cs_flags[cstack.cs_idx as usize] & CSF_TRY != 0 {
-                unsafe { nvim_docmd_emsg_endtry() };
+                unsafe { emsg(gettext(crate::E_ENDTRY_STR.as_ptr())) };
             } else if cstack.cs_flags[cstack.cs_idx as usize] & CSF_WHILE != 0 {
-                unsafe { nvim_docmd_emsg_endwhile() };
+                unsafe { emsg(gettext(crate::E_ENDWHILE_STR.as_ptr())) };
             } else if cstack.cs_flags[cstack.cs_idx as usize] & CSF_FOR != 0 {
-                unsafe { nvim_docmd_emsg_endfor() };
+                unsafe { emsg(gettext(crate::E_ENDFOR_STR.as_ptr())) };
             } else {
-                unsafe { nvim_docmd_emsg_endif() };
+                unsafe { emsg(gettext(crate::E_ENDIF_STR.as_ptr())) };
             }
         }
 

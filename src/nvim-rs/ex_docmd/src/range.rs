@@ -47,8 +47,6 @@ extern "C" {
     fn nvim_docmd_qf_get_valid_size(eap: ExArgHandle) -> usize;
 
     // Error messages
-    fn nvim_docmd_get_e_invrange() -> *mut c_char;
-    fn nvim_docmd_get_e_no_errors() -> *mut c_char;
 }
 
 // =============================================================================
@@ -707,7 +705,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
     let line2 = nvim_eap_get_line2(eap);
 
     if line1 < 0 || line2 < 0 || line1 > line2 {
-        return nvim_docmd_get_e_invrange();
+        return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
     }
 
     let argt = nvim_eap_get_argt(eap);
@@ -724,7 +722,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                     0
                 };
                 if line2 > nvim_docmd_get_curbuf_line_count() + diff_extra {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_ARGUMENTS => {
@@ -732,38 +730,38 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 // add 1 if ARGCOUNT is 0
                 let limit = argcount + c_int::from(argcount == 0);
                 if line2 > limit as i32 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_BUFFERS => {
                 if line1 < 1 || line2 > nvim_docmd_get_highest_fnum() as i32 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_LOADED_BUFFERS => {
                 let first_loaded = nvim_docmd_first_loaded_fnum_or_fail();
                 if first_loaded < 0 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
                 if line1 < first_loaded as i32 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
                 let last_loaded = nvim_docmd_last_loaded_fnum_or_fail();
                 if last_loaded < 0 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
                 if line2 > last_loaded as i32 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_WINDOWS => {
                 if line2 > nvim_docmd_last_win_nr() as i32 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_TABS => {
                 if line2 > nvim_docmd_last_tab_nr() as i32 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_TABS_RELATIVE || x == ADDR_OTHER => {
@@ -773,15 +771,15 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 debug_assert!(line2 >= 0);
                 if line2 <= 0 {
                     if nvim_eap_get_addr_count(eap) == 0 {
-                        return nvim_docmd_get_e_no_errors();
+                        return crate::gt(crate::E_NO_ERRORS_STR.as_ptr()) as *mut c_char;
                     }
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_QUICKFIX_VALID => {
                 if (line2 != 1 && (line2 as usize) > nvim_docmd_qf_get_valid_size(eap)) || line2 < 0
                 {
-                    return nvim_docmd_get_e_invrange();
+                    return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
             x if x == ADDR_UNSIGNED || x == ADDR_NONE => {

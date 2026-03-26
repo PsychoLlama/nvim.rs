@@ -284,7 +284,6 @@ extern "C" {
     fn nvim_docmd_getdigits(pp: *mut *mut c_char, def: c_int) -> c_int;
     fn nvim_docmd_ex_errmsg_invargval(arg: *const c_char) -> *mut c_char;
     fn nvim_docmd_ex_errmsg_invarg2(arg: *const c_char) -> *mut c_char;
-    fn nvim_docmd_get_e_invrange() -> *mut c_char;
     fn nvim_docmd_last_win_nr() -> c_int;
     #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
@@ -552,7 +551,10 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
         tab_number
     } else if nvim_eap_get_addr_count(eap) > 0 {
         if unaccept_arg0 != 0 && nvim_eap_get_line2(eap) == 0 {
-            nvim_eap_set_errmsg(eap, nvim_docmd_get_e_invrange());
+            nvim_eap_set_errmsg(
+                eap,
+                crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char,
+            );
             return 0;
         }
         let mut tab_number = nvim_eap_get_line2(eap);
@@ -575,7 +577,10 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
             if *cmdp as u8 == b'-' {
                 tab_number -= 1;
                 if tab_number < unaccept_arg0 as i32 {
-                    nvim_eap_set_errmsg(eap, nvim_docmd_get_e_invrange());
+                    nvim_eap_set_errmsg(
+                        eap,
+                        crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char,
+                    );
                 }
             }
         }
@@ -669,9 +674,6 @@ extern "C" {
     fn nvim_docmd_getdigits_int32(pp: *mut *mut c_char) -> c_int;
 
     // Error messages
-    fn nvim_docmd_get_e_norange() -> *mut c_char;
-    fn nvim_docmd_get_e_backslash() -> *mut c_char;
-    fn nvim_docmd_get_e_line_number_out_of_range() -> *mut c_char;
 
     // skip_regexp (already in Rust, exposed via FFI)
     fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
@@ -755,9 +757,9 @@ pub unsafe extern "C" fn rs_compute_buffer_local_count(
 /// Mirrors C `addr_error()`.
 unsafe fn addr_error(addr_type: c_int) -> *const c_char {
     if addr_type == ADDR_NONE {
-        nvim_docmd_get_e_norange()
+        crate::gt(crate::E_NORANGE_STR.as_ptr())
     } else {
-        nvim_docmd_get_e_invrange()
+        crate::gt(crate::E_INVRANGE_STR.as_ptr())
     }
 }
 
@@ -982,7 +984,7 @@ pub unsafe fn get_address_impl(
                 } else if *cmd as u8 == b'?' || *cmd as u8 == b'/' {
                     i = RE_SEARCH;
                 } else {
-                    *errormsg = nvim_docmd_get_e_backslash();
+                    *errormsg = crate::gt(crate::E_BACKSLASH_STR.as_ptr());
                     cmd = std::ptr::null_mut();
                     *ptr = cmd;
                     return lnum;
@@ -1081,7 +1083,7 @@ pub unsafe fn get_address_impl(
                 // "number", "+number" or "-number"
                 n = nvim_docmd_getdigits_int32(&mut cmd);
                 if n == MAXLNUM {
-                    *errormsg = nvim_docmd_get_e_line_number_out_of_range();
+                    *errormsg = crate::gt(crate::E_LINE_NUMBER_OUT_OF_RANGE_STR.as_ptr());
                     cmd = std::ptr::null_mut();
                     *ptr = cmd;
                     return lnum;
@@ -1089,7 +1091,7 @@ pub unsafe fn get_address_impl(
             }
 
             if addr_type == ADDR_TABS_RELATIVE {
-                *errormsg = nvim_docmd_get_e_invrange();
+                *errormsg = crate::gt(crate::E_INVRANGE_STR.as_ptr());
                 cmd = std::ptr::null_mut();
                 *ptr = cmd;
                 return lnum;
@@ -1109,7 +1111,7 @@ pub unsafe fn get_address_impl(
                     lnum -= n;
                 } else {
                     if lnum >= 0 && n >= INT32_MAX - lnum {
-                        *errormsg = nvim_docmd_get_e_line_number_out_of_range();
+                        *errormsg = crate::gt(crate::E_LINE_NUMBER_OUT_OF_RANGE_STR.as_ptr());
                         cmd = std::ptr::null_mut();
                         *ptr = cmd;
                         return lnum;
@@ -1242,7 +1244,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                         } else {
                             // there is no Vim command which uses '%' and
                             // ADDR_WINDOWS or ADDR_TABS
-                            *errormsg = nvim_docmd_get_e_invrange();
+                            *errormsg = crate::gt(crate::E_INVRANGE_STR.as_ptr());
                             if need_check_cursor {
                                 check_cursor(nvim_get_curwin());
                             }
@@ -1250,7 +1252,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                         }
                     }
                     ADDR_TABS_RELATIVE | ADDR_UNSIGNED | ADDR_QUICKFIX => {
-                        *errormsg = nvim_docmd_get_e_invrange();
+                        *errormsg = crate::gt(crate::E_INVRANGE_STR.as_ptr());
                         if need_check_cursor {
                             check_cursor(nvim_get_curwin());
                         }
@@ -1285,7 +1287,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                 // '*' - visual area
                 let addr_type = nvim_eap_get_addr_type(eap);
                 if addr_type != ADDR_LINES {
-                    *errormsg = nvim_docmd_get_e_invrange();
+                    *errormsg = crate::gt(crate::E_INVRANGE_STR.as_ptr());
                     if need_check_cursor {
                         check_cursor(nvim_get_curwin());
                     }

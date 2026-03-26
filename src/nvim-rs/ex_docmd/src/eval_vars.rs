@@ -122,19 +122,6 @@ extern "C" {
     // getdigits_int wrapper (advances *pp and returns the int)
     fn nvim_docmd_getdigits_int(pp: *mut *mut c_char) -> c_int;
 
-    // error string constants (translated)
-    fn nvim_docmd_eval_get_e_no_alt_file() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_afile() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_abuf() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_amatch() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_sfile() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_stack() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_slnum() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_sflnum() -> *const c_char;
-    fn nvim_docmd_eval_get_e_no_script() -> *const c_char;
-    fn nvim_docmd_eval_get_e_usingsid() -> *const c_char;
-    fn nvim_docmd_eval_get_e_empty_fname() -> *const c_char;
-    fn nvim_docmd_eval_get_e_empty_string() -> *const c_char;
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +264,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
                     }
                     let buf = rs_buflist_findnr(i);
                     if buf.is_null() {
-                        *errormsg = nvim_docmd_eval_get_e_no_alt_file();
+                        *errormsg = crate::gt(crate::E_NO_ALT_FILE_STR.as_ptr());
                         return ptr::null_mut();
                     }
                     if !lnump.is_null() {
@@ -319,7 +306,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             }
             result = nvim_docmd_get_autocmd_fname();
             if result.is_null() {
-                *errormsg = nvim_docmd_eval_get_e_no_afile();
+                *errormsg = crate::gt(crate::E_NO_AFILE_STR.as_ptr());
                 return ptr::null_mut();
             }
             result = nvim_docmd_path_try_shorten_fname(result);
@@ -329,7 +316,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             // buffer number for autocommand
             let bufnr = nvim_get_autocmd_bufnr();
             if bufnr <= 0 {
-                *errormsg = nvim_docmd_eval_get_e_no_abuf();
+                *errormsg = crate::gt(crate::E_NO_ABUF_STR.as_ptr());
                 return ptr::null_mut();
             }
             snprintf(
@@ -345,7 +332,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             // match name for autocommand
             result = nvim_docmd_get_autocmd_match() as *mut c_char;
             if result.is_null() {
-                *errormsg = nvim_docmd_eval_get_e_no_amatch();
+                *errormsg = crate::gt(crate::E_NO_AMATCH_STR.as_ptr());
                 return ptr::null_mut();
             }
         }
@@ -354,7 +341,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             // file name for ":so" command
             result = estack_sfile(ESTACK_SFILE);
             if result.is_null() {
-                *errormsg = nvim_docmd_eval_get_e_no_sfile();
+                *errormsg = crate::gt(crate::E_NO_SFILE_STR.as_ptr());
                 return ptr::null_mut();
             }
             resultbuf = result; // remember allocated string
@@ -364,7 +351,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             // call stack
             result = estack_sfile(ESTACK_STACK);
             if result.is_null() {
-                *errormsg = nvim_docmd_eval_get_e_no_stack();
+                *errormsg = crate::gt(crate::E_NO_STACK_STR.as_ptr());
                 return ptr::null_mut();
             }
             resultbuf = result;
@@ -374,7 +361,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             // script file name
             result = estack_sfile(ESTACK_SCRIPT);
             if result.is_null() {
-                *errormsg = nvim_docmd_eval_get_e_no_script();
+                *errormsg = crate::gt(crate::E_NO_SCRIPT_STR.as_ptr());
                 return ptr::null_mut();
             }
             resultbuf = result;
@@ -385,7 +372,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             let sourcing_name = nvim_get_sourcing_name();
             let sourcing_lnum = nvim_get_sourcing_lnum();
             if sourcing_name.is_null() || sourcing_lnum == 0 {
-                *errormsg = nvim_docmd_eval_get_e_no_slnum();
+                *errormsg = crate::gt(crate::E_NO_SLNUM_STR.as_ptr());
                 return ptr::null_mut();
             }
             snprintf(
@@ -402,7 +389,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             let sc_lnum = nvim_docmd_get_current_sctx_lnum();
             let sourcing_lnum = nvim_get_sourcing_lnum();
             if sc_lnum + sourcing_lnum == 0 {
-                *errormsg = nvim_docmd_eval_get_e_no_sflnum();
+                *errormsg = crate::gt(crate::E_NO_SFLNUM_STR.as_ptr());
                 return ptr::null_mut();
             }
             snprintf(
@@ -417,7 +404,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
         SPEC_SID => {
             let sc_sid = nvim_docmd_get_current_sctx_sid();
             if sc_sid <= 0 {
-                *errormsg = nvim_docmd_eval_get_e_usingsid();
+                *errormsg = crate::gt(crate::E_USINGSID_STR.as_ptr());
                 return ptr::null_mut();
             }
             snprintf(
@@ -488,9 +475,9 @@ unsafe fn finish_result(
         if empty_is_error {
             if valid != VALID_HEAD + VALID_PATH {
                 // xgettext:no-c-format
-                *errormsg = nvim_docmd_eval_get_e_empty_fname();
+                *errormsg = crate::gt(crate::E_EMPTY_FNAME_STR.as_ptr());
             } else {
-                *errormsg = nvim_docmd_eval_get_e_empty_string();
+                *errormsg = crate::gt(crate::E_EMPTY_STRING_STR.as_ptr());
             }
         }
         xfree(resultbuf as *mut c_void);

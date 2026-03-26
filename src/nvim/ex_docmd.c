@@ -138,24 +138,8 @@ extern int rs_do_move(linenr_T line1, linenr_T line2, linenr_T dest);
 
 static const char e_ambiguous_use_of_user_defined_command[]
   = N_("E464: Ambiguous use of user-defined command");
-static const char e_no_call_stack_to_substitute_for_stack[]
-  = N_("E489: No call stack to substitute for \"<stack>\"");
 static const char e_not_an_editor_command[]
   = N_("E492: Not an editor command");
-static const char e_no_autocommand_file_name_to_substitute_for_afile[]
-  = N_("E495: No autocommand file name to substitute for \"<afile>\"");
-static const char e_no_autocommand_buffer_number_to_substitute_for_abuf[]
-  = N_("E496: No autocommand buffer number to substitute for \"<abuf>\"");
-static const char e_no_autocommand_match_name_to_substitute_for_amatch[]
-  = N_("E497: No autocommand match name to substitute for \"<amatch>\"");
-static const char e_no_source_file_name_to_substitute_for_sfile[]
-  = N_("E498: No :source file name to substitute for \"<sfile>\"");
-static const char e_no_line_number_to_use_for_slnum[]
-  = N_("E842: No line number to use for \"<slnum>\"");
-static const char e_no_line_number_to_use_for_sflnum[]
-  = N_("E961: No line number to use for \"<sflnum>\"");
-static const char e_no_script_file_name_to_substitute_for_script[]
-  = N_("E1274: No script file name to substitute for \"<script>\"");
 
 static int quitmore = 0;
 static bool ex_pressedreturn = false;
@@ -645,7 +629,6 @@ int nvim_get_exestack_len(void)
 }
 
 void nvim_docmd_set_must_redraw(int val) { must_redraw = val; }
-const char *nvim_docmd_get_e_screenmode(void) { return _(e_screenmode); }
 const char *nvim_docmd_get_curbuf_swapname(void)
 {
   if (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) {
@@ -671,10 +654,6 @@ int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
   return tab_number;
 }
 
-const char *nvim_docmd_get_e_undobang(void)
-{
-  return _(e_undobang_cannot_redo_or_move_branch);
-}
 // Count the number of undo steps to reach sequence 'step' in the current branch.
 // Sets *found to 1 if the target was found in the branch, 0 otherwise.
 int nvim_docmd_undo_count_steps(linenr_T step, int *found)
@@ -966,11 +945,6 @@ int nvim_docmd_parse_count_digits(exarg_T *eap)
   return (int)n;
 }
 
-/// Get e_zerocount error message.
-const char *nvim_docmd_get_e_zerocount(void)
-{
-  return _(e_zerocount);
-}
 
 /// Advance eap->arg to end of string (skip to NUL).
 void nvim_docmd_arg_skip_to_end(exarg_T *eap)
@@ -1102,11 +1076,6 @@ int nvim_docmd_last_loaded_fnum_or_fail(void)
   return buf->b_fnum;
 }
 
-/// Get e_invrange error message.
-char *nvim_docmd_get_e_invrange(void) { return _(e_invrange); }
-
-/// Get e_no_errors error message.
-char *nvim_docmd_get_e_no_errors(void) { return _(e_no_errors); }
 
 // Tabpage accessors for get_tabpage_arg
 /// Call getdigits on a string, return the number and advance the pointer.
@@ -1308,15 +1277,6 @@ int nvim_docmd_qf_get_size(exarg_T *eap)
 {
   return (int)qf_get_size(eap);
 }
-
-/// Get _(e_norange).
-char *nvim_docmd_get_e_norange(void) { return _(e_norange); }
-
-/// Get _(e_backslash).
-char *nvim_docmd_get_e_backslash(void) { return _(e_backslash); }
-
-/// Get _(e_line_number_out_of_range).
-char *nvim_docmd_get_e_line_number_out_of_range(void) { return _(e_line_number_out_of_range); }
 
 // --- Accessors for parse_cmd_address ---
 
@@ -1739,11 +1699,6 @@ void nvim_docmd_set_stop_insert_mode(void) { stop_insert_mode = true; }
 /// Call clearmode().
 void nvim_docmd_clearmode(void) { clearmode(); }
 
-/// Get the _(e_nogvim) string for :nogui.
-const char *nvim_docmd_get_e_nogvim(void) { return _("E25: Nvim does not have a built-in GUI"); }
-
-/// Get _(e_invcmd).
-const char *nvim_docmd_get_e_invcmd(void) { return _(e_invcmd); }
 
 /// Wrapper for goto_buffer(eap, DOBUF_MOD, FORWARD, eap->line2) + do_cmdline_cmd.
 void nvim_docmd_goto_buffer_mod(exarg_T *eap)
@@ -1848,8 +1803,6 @@ void nvim_docmd_do_autocmd(exarg_T *eap, const char *arg, int forceit)
 /// Wrapper for do_augroup.
 void nvim_docmd_do_augroup(const char *arg, int forceit) { do_augroup((char *)arg, forceit); }
 
-/// Get e_curdir error message string.
-const char *nvim_docmd_get_e_curdir(void) { return _(e_curdir); }
 
 /// Wrapper for check_nomodeline.
 int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1 : 0; }
@@ -2162,56 +2115,6 @@ int nvim_docmd_getdigits_int(char **pp)
   return getdigits_int(pp, false, 0);
 }
 
-// Error string accessors for eval_vars.rs
-const char *nvim_docmd_eval_get_e_no_alt_file(void)
-{
-  return _("E194: No alternate file name to substitute for '#'");
-}
-const char *nvim_docmd_eval_get_e_no_afile(void)
-{
-  return _(e_no_autocommand_file_name_to_substitute_for_afile);
-}
-const char *nvim_docmd_eval_get_e_no_abuf(void)
-{
-  return _(e_no_autocommand_buffer_number_to_substitute_for_abuf);
-}
-const char *nvim_docmd_eval_get_e_no_amatch(void)
-{
-  return _(e_no_autocommand_match_name_to_substitute_for_amatch);
-}
-const char *nvim_docmd_eval_get_e_no_sfile(void)
-{
-  return _(e_no_source_file_name_to_substitute_for_sfile);
-}
-const char *nvim_docmd_eval_get_e_no_stack(void)
-{
-  return _(e_no_call_stack_to_substitute_for_stack);
-}
-const char *nvim_docmd_eval_get_e_no_slnum(void)
-{
-  return _(e_no_line_number_to_use_for_slnum);
-}
-const char *nvim_docmd_eval_get_e_no_sflnum(void)
-{
-  return _(e_no_line_number_to_use_for_sflnum);
-}
-const char *nvim_docmd_eval_get_e_no_script(void)
-{
-  return _(e_no_script_file_name_to_substitute_for_script);
-}
-const char *nvim_docmd_eval_get_e_usingsid(void)
-{
-  return _(e_usingsid);
-}
-const char *nvim_docmd_eval_get_e_empty_fname(void)
-{
-  // xgettext:no-c-format
-  return _("E499: Empty file name for '%' or '#', only works with \":p:h\"");
-}
-const char *nvim_docmd_eval_get_e_empty_string(void)
-{
-  return _("E500: Evaluates to an empty string");
-}
 
 // =============================================================================
 // =============================================================================
@@ -2591,8 +2494,6 @@ void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
   }
   do_errthrow(cstack, (char *)cmd_name);
 }
-/// get e_sandbox error string.
-const char *nvim_docmd_get_e_sandbox(void) { return _(e_sandbox); }
 /// apply_autocmds wrapper (for CmdUndefined event in do_one_cmd).
 bool nvim_docmd_apply_autocmds_cmdundefined(const char *cmdname)
 {
@@ -2639,10 +2540,6 @@ bool nvim_eap_argt_has_bang_bit(const exarg_T *eap) { return (eap->argt & EX_BAN
 int nvim_docmd_ADDR_OTHER(void) { return (int)ADDR_OTHER; }
 /// Wrap nvim_curbuf_modifiable (MODIFIABLE macro check).
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
-/// e_argreq getter.
-const char *nvim_docmd_get_e_argreq(void) { return _(e_argreq); }
-/// e_invarg getter.
-const char *nvim_docmd_get_e_invarg(void) { return _(e_invarg); }
 /// e_nobang getter (already have nvim_get_e_nobang).
 /// nvim_get_reg_executing (already defined in autocmd.c).
 /// nvim_get_pending_end_reg_executing (already defined in getchar.c).
@@ -2664,13 +2561,6 @@ int nvim_docmd_CMD_iput(void) { return (int)CMD_iput; }
 int nvim_docmd_CMD_checktime(void) { return (int)CMD_checktime; }
 /// CMD_edit constant.
 int nvim_docmd_CMD_edit(void) { return (int)CMD_edit; }
-/// "Backwards range given" error string.
-const char *nvim_docmd_get_e_backwards_range(void)
-{
-  return _("E493: Backwards range given");
-}
-/// "E494: Use w or w>>" error string.
-const char *nvim_docmd_get_e_w_usage(void) { return _("E494: Use w or w>>"); }
 /// EX_WHOLEFOLD check on eap->argt.
 bool nvim_eap_argt_has_wholefold(const exarg_T *eap)
 {
@@ -2842,17 +2732,6 @@ char *nvim_docmd_v_exception(char *newval) { return v_exception(newval); }
 /// v_throwpoint wrapper: get/set v:throwpoint.
 char *nvim_docmd_v_throwpoint(char *newval) { return v_throwpoint(newval); }
 
-// do_cmdline phase 4 helpers (error message wrappers, etc.)
-/// emsg(_(e_command_too_recursive))
-void nvim_docmd_emsg_too_recursive(void) { emsg(_(e_command_too_recursive)); }
-/// emsg(_(e_endtry))
-void nvim_docmd_emsg_endtry(void) { emsg(_(e_endtry)); }
-/// emsg(_(e_endwhile))
-void nvim_docmd_emsg_endwhile(void) { emsg(_(e_endwhile)); }
-/// emsg(_(e_endfor))
-void nvim_docmd_emsg_endfor(void) { emsg(_(e_endfor)); }
-/// emsg(_(e_endif))
-void nvim_docmd_emsg_endif(void) { emsg(_(e_endif)); }
 /// PROF_YES constant.
 int nvim_docmd_PROF_YES(void) { return PROF_YES; }
 /// _("End of sourced file") for do_debug.

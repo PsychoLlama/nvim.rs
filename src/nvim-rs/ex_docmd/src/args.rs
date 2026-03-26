@@ -56,7 +56,6 @@ extern "C" {
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
     fn nvim_docmd_get_dollar_command() -> *mut c_char;
     fn nvim_docmd_parse_count_digits(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_get_e_zerocount() -> *const c_char;
     fn nvim_docmd_count_buf_check(eap: ExArgHandle) -> c_int;
 
     fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
@@ -544,7 +543,7 @@ pub unsafe extern "C" fn rs_parse_count_ex(
 
     if n <= 0 && (argt & crate::table::EX_ZEROR) == 0 {
         if !errormsg.is_null() {
-            *errormsg = nvim_docmd_get_e_zerocount();
+            *errormsg = crate::gt(crate::E_ZEROCOUNT_STR.as_ptr());
         }
         return FAIL;
     }

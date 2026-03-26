@@ -33,6 +33,57 @@ pub const E_NORANGE: c_int = 481;
 pub const E_TRAILING: c_int = 488;
 
 // =============================================================================
+// Error string constants (copied byte-for-byte from C source for gettext lookup)
+// =============================================================================
+
+pub const E_INVARG_STR: &std::ffi::CStr = c"E474: Invalid argument";
+pub const E_INVARG2_STR: &std::ffi::CStr = c"E475: Invalid argument: %s";
+pub const E_INVARGVAL_STR: &std::ffi::CStr = c"E475: Invalid value for argument %s";
+pub const E_INVRANGE_STR: &std::ffi::CStr = c"E16: Invalid range";
+pub const E_NORANGE_STR: &std::ffi::CStr = c"E481: No range allowed";
+pub const E_TRAILING_ARG_STR: &std::ffi::CStr = c"E488: Trailing characters: %s";
+pub const E_ARGREQ_STR: &std::ffi::CStr = c"E471: Argument required";
+pub const E_BACKSLASH_STR: &std::ffi::CStr = c"E10: \\ should be followed by /, ? or &";
+pub const E_CURDIR_STR: &std::ffi::CStr =
+    c"E12: Command not allowed in secure mode in current dir or tag search";
+pub const E_INVCMD_STR: &std::ffi::CStr = c"E476: Invalid command";
+pub const E_SANDBOX_STR: &std::ffi::CStr = c"E48: Not allowed in sandbox";
+pub const E_SCREENMODE_STR: &std::ffi::CStr = c"E359: Screen mode setting not supported";
+pub const E_NO_ERRORS_STR: &std::ffi::CStr = c"E42: No Errors";
+pub const E_LINE_NUMBER_OUT_OF_RANGE_STR: &std::ffi::CStr = c"E1247: Line number out of range";
+pub const E_UNDOBANG_STR: &std::ffi::CStr =
+    c"E5767: Cannot use :undo! to redo or move to a different undo branch";
+pub const E_ZEROCOUNT_STR: &std::ffi::CStr = c"E939: Positive count required";
+pub const E_NOGVIM_STR: &std::ffi::CStr = c"E25: Nvim does not have a built-in GUI";
+pub const E_BACKWARDS_RANGE_STR: &std::ffi::CStr = c"E493: Backwards range given";
+pub const E_W_USAGE_STR: &std::ffi::CStr = c"E494: Use w or w>>";
+pub const E_USINGSID_STR: &std::ffi::CStr = c"E81: Using <SID> not in a script context";
+// Local error strings from ex_docmd.c static consts:
+pub const E_NO_ALT_FILE_STR: &std::ffi::CStr =
+    c"E194: No alternate file name to substitute for '#'";
+pub const E_NO_AFILE_STR: &std::ffi::CStr =
+    c"E495: No autocommand file name to substitute for \"<afile>\"";
+pub const E_NO_ABUF_STR: &std::ffi::CStr =
+    c"E496: No autocommand buffer number to substitute for \"<abuf>\"";
+pub const E_NO_AMATCH_STR: &std::ffi::CStr =
+    c"E497: No autocommand match name to substitute for \"<amatch>\"";
+pub const E_NO_SFILE_STR: &std::ffi::CStr =
+    c"E498: No :source file name to substitute for \"<sfile>\"";
+pub const E_NO_STACK_STR: &std::ffi::CStr = c"E489: No call stack to substitute for \"<stack>\"";
+pub const E_NO_SLNUM_STR: &std::ffi::CStr = c"E842: No line number to use for \"<slnum>\"";
+pub const E_NO_SFLNUM_STR: &std::ffi::CStr = c"E961: No line number to use for \"<sflnum>\"";
+pub const E_NO_SCRIPT_STR: &std::ffi::CStr =
+    c"E1274: No script file name to substitute for \"<script>\"";
+pub const E_EMPTY_FNAME_STR: &std::ffi::CStr =
+    c"E499: Empty file name for '%' or '#', only works with \":p:h\"";
+pub const E_EMPTY_STRING_STR: &std::ffi::CStr = c"E500: Evaluates to an empty string";
+pub const E_COMMAND_TOO_RECURSIVE_STR: &std::ffi::CStr = c"E169: Command too recursive";
+pub const E_ENDTRY_STR: &std::ffi::CStr = c"E600: Missing :endtry";
+pub const E_ENDWHILE_STR: &std::ffi::CStr = c"E170: Missing :endwhile";
+pub const E_ENDFOR_STR: &std::ffi::CStr = c"E170: Missing :endfor";
+pub const E_ENDIF_STR: &std::ffi::CStr = c"E171: Missing :endif";
+
+// =============================================================================
 // FFI declarations for C error strings and functions
 // =============================================================================
 
@@ -43,6 +94,7 @@ extern "C" {
     fn nvim_get_e_invrange() -> *const c_char;
     fn nvim_get_e_norange() -> *const c_char;
     fn nvim_get_e_trailing_arg() -> *const c_char;
+    pub fn gettext(s: *const c_char) -> *const c_char;
 
     fn nvim_emsg(s: *const c_char);
 
@@ -56,6 +108,15 @@ extern "C" {
     #[link_name = "mb_copy_char"]
     fn nvim_docmd_mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char);
     fn nvim_docmd_xstrlcat_iobuff(src: *const c_char);
+}
+
+/// Translate a null-terminated C string via gettext at runtime.
+///
+/// # Safety
+/// `s` must point to a null-terminated C string literal.
+#[inline]
+pub unsafe fn gt(s: *const c_char) -> *const c_char {
+    gettext(s)
 }
 
 // =============================================================================

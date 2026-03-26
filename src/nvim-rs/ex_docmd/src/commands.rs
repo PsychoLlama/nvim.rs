@@ -321,8 +321,6 @@ extern "C" {
 
     // Phase 5: ex_mode helpers
     fn nvim_docmd_set_must_redraw(val: c_int);
-    fn nvim_docmd_get_e_screenmode() -> *const c_char;
-
     // Phase 5: ex_swapname helpers
     fn nvim_docmd_get_curbuf_swapname() -> *const c_char;
     fn nvim_docmd_no_swap_file_msg() -> *const c_char;
@@ -338,8 +336,6 @@ extern "C" {
     fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool);
     fn nvim_curbuf_get_u_seq_cur() -> c_int;
     fn nvim_docmd_undo_count_steps(step: LinenrT, found: *mut c_int) -> c_int;
-    fn nvim_docmd_get_e_undobang() -> *const c_char;
-
     // eval_vars helpers
     fn eval_vars(
         src: *mut c_char,
@@ -1672,7 +1668,6 @@ extern "C" {
     fn nvim_docmd_clear_restart_edit();
     fn nvim_docmd_set_stop_insert_mode();
     fn nvim_docmd_clearmode();
-    fn nvim_docmd_get_e_invcmd() -> *const c_char;
     fn nvim_eap_set_errmsg_const(eap: ExArgHandle, msg: *const c_char);
     fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
@@ -1691,7 +1686,6 @@ extern "C" {
     fn tabpage_move(nr: c_int);
     fn nvim_docmd_checkpath(forceit: bool);
     fn nvim_set_ex_pressedreturn(val: bool);
-    fn nvim_docmd_get_e_nogvim() -> *const c_char;
 }
 
 /// ":buffer" -- delegates to do_exbuffer.
@@ -1773,15 +1767,13 @@ pub unsafe extern "C" fn rs_ex_bang(eap: ExArgHandle) {
 /// Command modifier used in the wrong context.
 #[export_name = "ex_wrongmodifier"]
 pub unsafe extern "C" fn rs_ex_wrongmodifier(eap: ExArgHandle) {
-    let msg = nvim_docmd_get_e_invcmd();
-    nvim_eap_set_errmsg_const(eap, msg);
+    nvim_eap_set_errmsg_const(eap, crate::gt(crate::E_INVCMD_STR.as_ptr()));
 }
 
 /// ":nogui" -- set error message (Nvim has no built-in GUI).
 #[export_name = "ex_nogui"]
 pub unsafe extern "C" fn rs_ex_nogui(eap: ExArgHandle) {
-    let msg = nvim_docmd_get_e_nogvim();
-    nvim_eap_set_errmsg_const(eap, msg);
+    nvim_eap_set_errmsg_const(eap, crate::gt(crate::E_NOGVIM_STR.as_ptr()));
 }
 
 /// ":popup" -- call pum_make_popup.
@@ -1878,7 +1870,6 @@ extern "C" {
     ) -> *mut c_char;
     fn nvim_docmd_do_autocmd(eap: ExArgHandle, arg: *const c_char, forceit: c_int);
     fn nvim_docmd_do_augroup(arg: *const c_char, forceit: c_int);
-    fn nvim_docmd_get_e_curdir() -> *const c_char;
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
@@ -1950,8 +1941,7 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
     let secure = nvim_get_secure();
     if secure != 0 {
         nvim_set_secure(2);
-        let e_curdir = nvim_docmd_get_e_curdir();
-        nvim_eap_set_errmsg_const(eap, e_curdir);
+        nvim_eap_set_errmsg_const(eap, crate::gt(crate::E_CURDIR_STR.as_ptr()));
     } else {
         let cmdidx = nvim_eap_get_cmdidx(eap);
         let arg = nvim_eap_get_arg(eap);
@@ -3246,7 +3236,7 @@ pub unsafe extern "C" fn rs_ex_mode(eap: ExArgHandle) {
         nvim_docmd_set_must_redraw(UPD_CLEAR);
         rs_ex_redraw(eap);
     } else {
-        emsg(nvim_docmd_get_e_screenmode());
+        emsg(crate::gt(crate::E_SCREENMODE_STR.as_ptr()));
     }
 }
 
@@ -3329,13 +3319,13 @@ pub unsafe extern "C" fn rs_ex_undo(eap: ExArgHandle) {
     if nvim_eap_get_forceit(eap) {
         // :undo! N -- must go to an earlier change in the same branch
         if step >= nvim_curbuf_get_u_seq_cur() as LinenrT {
-            emsg(nvim_docmd_get_e_undobang());
+            emsg(crate::gt(crate::E_UNDOBANG_STR.as_ptr()));
             return;
         }
         let mut found: c_int = 0;
         let count = nvim_docmd_undo_count_steps(step, &mut found);
         if found == 0 {
-            emsg(nvim_docmd_get_e_undobang());
+            emsg(crate::gt(crate::E_UNDOBANG_STR.as_ptr()));
             return;
         }
         let _ = u_undo_and_forget(count, true);

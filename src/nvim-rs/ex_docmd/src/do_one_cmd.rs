@@ -193,7 +193,6 @@ extern "C" {
 
     // Security checks
     fn nvim_get_sandbox() -> c_int;
-    fn nvim_docmd_get_e_sandbox() -> *const c_char;
     fn nvim_docmd_curbuf_modifiable() -> bool;
     fn nvim_get_e_modifiable() -> *const c_char;
     fn nvim_curbuf_is_terminal() -> c_int;
@@ -241,9 +240,6 @@ extern "C" {
     fn nvim_docmd_CMD_rshift() -> c_int;
     fn nvim_docmd_CMD_file() -> c_int;
 
-    // ++opt parsing
-    fn nvim_docmd_get_e_invarg() -> *const c_char;
-
     // +command
     fn nvim_eap_set_do_ecmd_cmd_from_arg(eap: ExArgHandle);
 
@@ -258,7 +254,6 @@ extern "C" {
     fn parse_register(eap: ExArgHandle);
 
     // trailing / needarg
-    fn nvim_docmd_get_e_argreq() -> *const c_char;
     fn nvim_docmd_ex_errmsg_trailing(arg: *const c_char) -> *mut c_char;
 
     // skip_cmd / execute_cmd0
@@ -296,8 +291,7 @@ extern "C" {
     fn nvim_eap_argt_has_sboxok(eap: ExArgHandle) -> bool;
     fn nvim_eap_argt_has_flags(eap: ExArgHandle) -> bool;
 
-    // e_norange / e_nobang
-    fn nvim_docmd_get_e_norange() -> *mut c_char;
+    // e_nobang
     fn nvim_get_e_nobang() -> *const c_char;
 
     // skipwhite
@@ -645,7 +639,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     if !nvim_eap_get_skip_bool(eap) {
         if nvim_get_sandbox() != 0 && !nvim_eap_argt_has_sboxok(eap) {
-            errormsg = nvim_docmd_get_e_sandbox();
+            errormsg = crate::gt(crate::E_SANDBOX_STR.as_ptr());
             do_one_cmd_doend(
                 eap,
                 cstack,
@@ -736,7 +730,7 @@ pub unsafe extern "C" fn do_one_cmd(
         }
 
         if !ni && !nvim_eap_argt_has_range_bit(eap) && nvim_eap_get_addr_count(eap) > 0 {
-            errormsg = nvim_docmd_get_e_norange() as *const c_char;
+            errormsg = crate::gt(crate::E_NORANGE_STR.as_ptr());
             do_one_cmd_doend(
                 eap,
                 cstack,
@@ -771,7 +765,7 @@ pub unsafe extern "C" fn do_one_cmd(
         if !nvim_docmd_global_busy() && nvim_eap_get_line1(eap) > nvim_eap_get_line2(eap) {
             if nvim_docmd_msg_silent() == 0 {
                 if (flags & DOCMD_VERBOSE) != 0 || nvim_docmd_exmode_active() {
-                    errormsg = nvim_docmd_get_e_backwards_range();
+                    errormsg = crate::gt(crate::E_BACKWARDS_RANGE_STR.as_ptr());
                     do_one_cmd_doend(
                         eap,
                         cstack,
@@ -886,7 +880,7 @@ pub unsafe extern "C" fn do_one_cmd(
         let mut arg_ptr = nvim_eap_get_arg(eap);
         while *arg_ptr == b'+' as c_char && *arg_ptr.add(1) == b'+' as c_char {
             if crate::args::rs_getargopt(eap) == FAIL && !ni {
-                errormsg = nvim_docmd_get_e_invarg();
+                errormsg = crate::gt(crate::E_INVARG_STR.as_ptr());
                 do_one_cmd_doend(
                     eap,
                     cstack,
@@ -910,7 +904,7 @@ pub unsafe extern "C" fn do_one_cmd(
         if arg0 == b'>' as c_char {
             let arg1 = *nvim_eap_get_arg(eap).add(1);
             if arg1 != b'>' as c_char {
-                errormsg = nvim_docmd_get_e_w_usage();
+                errormsg = crate::gt(crate::E_W_USAGE_STR.as_ptr());
                 do_one_cmd_doend(
                     eap,
                     cstack,
@@ -1015,7 +1009,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     if !ni && nvim_eap_argt_has_needarg(eap) && arg_char == 0 {
-        errormsg = nvim_docmd_get_e_argreq();
+        errormsg = crate::gt(crate::E_ARGREQ_STR.as_ptr());
         do_one_cmd_doend(
             eap,
             cstack,
@@ -1093,8 +1087,6 @@ extern "C" {
     fn nvim_docmd_CMD_iput() -> c_int;
     fn nvim_docmd_CMD_checktime() -> c_int;
     fn nvim_docmd_CMD_edit() -> c_int;
-    fn nvim_docmd_get_e_backwards_range() -> *const c_char;
-    fn nvim_docmd_get_e_w_usage() -> *const c_char;
     fn nvim_eap_argt_has_wholefold(eap: ExArgHandle) -> bool;
 }
 
