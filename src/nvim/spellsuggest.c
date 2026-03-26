@@ -265,6 +265,15 @@ int nvim_suginfo_get_maxscore(void *su) { return ((suginfo_T *)su)->su_maxscore;
 int nvim_suginfo_get_maxcount(void *su) { return ((suginfo_T *)su)->su_maxcount; }
 void nvim_suginfo_set_ga(void *su, garray_T ga) { ((suginfo_T *)su)->su_ga = ga; }
 int nvim_suginfo_get_badlen(void *su) { return ((suginfo_T *)su)->su_badlen; }
+// Phase 1 accessors
+int nvim_suginfo_get_sfmaxscore(void *su) { return ((suginfo_T *)su)->su_sfmaxscore; }
+void nvim_suginfo_set_sfmaxscore(void *su, int v) { ((suginfo_T *)su)->su_sfmaxscore = v; }
+void nvim_suginfo_set_maxscore(void *su, int v) { ((suginfo_T *)su)->su_maxscore = v; }
+hashtab_T *nvim_suginfo_get_banned(void *su) { return &((suginfo_T *)su)->su_banned; }
+const char *nvim_suginfo_get_sal_badword(void *su) { return ((suginfo_T *)su)->su_sal_badword; }
+slang_T *nvim_suginfo_get_sallang(void *su) { return ((suginfo_T *)su)->su_sallang; }
+int nvim_suginfo_get_badflags(void *su) { return ((suginfo_T *)su)->su_badflags; }
+void nvim_suginfo_set_badflags(void *su, int v) { ((suginfo_T *)su)->su_badflags = v; }
 
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
@@ -272,6 +281,12 @@ extern int rs_stp_sal_score(suggest_T *stp, const char *su_badptr, int su_badlen
                             slang_T *slang, const char *badsound);
 extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
 extern void rs_score_combine_lists(void *su);
+extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int badlenarg,
+                              int score, int altscore, bool had_bonus, slang_T *slang,
+                              bool maxsf);
+extern void rs_add_banned(void *su, char *word);
+extern void rs_rescore_one(void *su, suggest_T *stp);
+extern void rs_rescore_suggestions(void *su);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -2305,103 +2320,7 @@ badword:
 static void add_suggestion(suginfo_T *su, garray_T *gap, const char *goodword, int badlenarg,
                            int score, int altscore, bool had_bonus, slang_T *slang, bool maxsf)
 {
-  int goodlen;                  // len of goodword changed
-  int badlen;                   // len of bad word changed
-  suggest_T new_sug;
-
-  // Minimize "badlen" for consistency.  Avoids that changing "the the" to
-  // "thee the" is added next to changing the first "the" the "thee".
-  const char *pgood = goodword + strlen(goodword);
-  char *pbad = su->su_badptr + badlenarg;
-  while (true) {
-    goodlen = (int)(pgood - goodword);
-    badlen = (int)(pbad - su->su_badptr);
-    if (goodlen <= 0 || badlen <= 0) {
-      break;
-    }
-    MB_PTR_BACK(goodword, pgood);
-    MB_PTR_BACK(su->su_badptr, pbad);
-    if (utf_ptr2char(pgood) != utf_ptr2char(pbad)) {
-      break;
-    }
-  }
-
-  if (badlen == 0 && goodlen == 0) {
-    // goodword doesn't change anything; may happen for "the the" changing
-    // the first "the" to itself.
-    return;
-  }
-
-  int i;
-  if (GA_EMPTY(gap)) {
-    i = -1;
-  } else {
-    // Check if the word is already there.  Also check the length that is
-    // being replaced "thes," -> "these" is a different suggestion from
-    // "thes" -> "these".
-    suggest_T *stp = &SUG(*gap, 0);
-    for (i = gap->ga_len; --i >= 0; stp++) {
-      if (stp->st_wordlen == goodlen
-          && stp->st_orglen == badlen
-          && strncmp(stp->st_word, goodword, (size_t)goodlen) == 0) {
-        // Found it.  Remember the word with the lowest score.
-        if (stp->st_slang == NULL) {
-          stp->st_slang = slang;
-        }
-
-        new_sug.st_score = score;
-        new_sug.st_altscore = altscore;
-        new_sug.st_had_bonus = had_bonus;
-
-        if (stp->st_had_bonus != had_bonus) {
-          // Only one of the two had the soundalike score computed.
-          // Need to do that for the other one now, otherwise the
-          // scores can't be compared.  This happens because
-          // suggest_try_change() doesn't compute the soundalike
-          // word to keep it fast, while some special methods set
-          // the soundalike score to zero.
-          if (had_bonus) {
-            rescore_one(su, stp);
-          } else {
-            new_sug.st_word = stp->st_word;
-            new_sug.st_wordlen = stp->st_wordlen;
-            new_sug.st_slang = stp->st_slang;
-            new_sug.st_orglen = badlen;
-            rescore_one(su, &new_sug);
-          }
-        }
-
-        if (stp->st_score > new_sug.st_score) {
-          stp->st_score = new_sug.st_score;
-          stp->st_altscore = new_sug.st_altscore;
-          stp->st_had_bonus = new_sug.st_had_bonus;
-        }
-        break;
-      }
-    }
-  }
-
-  if (i < 0) {
-    // Add a suggestion.
-    suggest_T *stp = GA_APPEND_VIA_PTR(suggest_T, gap);
-    stp->st_word = xmemdupz(goodword, (size_t)goodlen);
-    stp->st_wordlen = goodlen;
-    stp->st_score = score;
-    stp->st_altscore = altscore;
-    stp->st_had_bonus = had_bonus;
-    stp->st_orglen = badlen;
-    stp->st_slang = slang;
-
-    // If we have too many suggestions now, sort the list and keep
-    // the best suggestions.
-    if (gap->ga_len > SUG_MAX_COUNT(su)) {
-      if (maxsf) {
-        su->su_sfmaxscore = cleanup_suggestions(gap, su->su_sfmaxscore, SUG_CLEAN_COUNT(su));
-      } else {
-        su->su_maxscore = cleanup_suggestions(gap, su->su_maxscore, SUG_CLEAN_COUNT(su));
-      }
-    }
-  }
+  rs_add_suggestion(su, gap, goodword, badlenarg, score, altscore, had_bonus, slang, maxsf);
 }
 
 /// Suggestions may in fact be flagged as errors.  Esp. for banned words and
@@ -2416,51 +2335,20 @@ static void check_suggestions(suginfo_T *su, garray_T *gap)
 /// Add a word to be banned.
 static void add_banned(suginfo_T *su, char *word)
 {
-  hash_T hash = hash_hash(word);
-  const size_t word_len = strlen(word);
-  hashitem_T *hi = hash_lookup(&su->su_banned, word, word_len, hash);
-  if (!HASHITEM_EMPTY(hi)) {  // already present
-    return;
-  }
-  char *s = xmemdupz(word, word_len);
-  hash_add_item(&su->su_banned, hi, s, hash);
+  rs_add_banned(su, word);
 }
 
 /// Recompute the score for all suggestions if sound-folding is possible.  This
 /// is slow, thus only done for the final results.
 static void rescore_suggestions(suginfo_T *su)
 {
-  if (su->su_sallang != NULL) {
-    for (int i = 0; i < su->su_ga.ga_len; i++) {
-      rescore_one(su, &SUG(su->su_ga, i));
-    }
-  }
+  rs_rescore_suggestions(su);
 }
 
 /// Recompute the score for one suggestion if sound-folding is possible.
 static void rescore_one(suginfo_T *su, suggest_T *stp)
 {
-  slang_T *slang = stp->st_slang;
-  char sal_badword[MAXWLEN];
-
-  // Only rescore suggestions that have no sal score yet and do have a
-  // language.
-  if (slang != NULL && !GA_EMPTY(&slang->sl_sal) && !stp->st_had_bonus) {
-    char *p;
-    if (slang == su->su_sallang) {
-      p = su->su_sal_badword;
-    } else {
-      spell_soundfold(slang, su->su_fbadword, true, sal_badword);
-      p = sal_badword;
-    }
-
-    stp->st_altscore = stp_sal_score(stp, su, slang, p);
-    if (stp->st_altscore == SCORE_MAXMAX) {
-      stp->st_altscore = SCORE_BIG;
-    }
-    stp->st_score = RESCORE(stp->st_score, stp->st_altscore);
-    stp->st_had_bonus = true;
-  }
+  rs_rescore_one(su, stp);
 }
 
 /// Cleanup the suggestions:

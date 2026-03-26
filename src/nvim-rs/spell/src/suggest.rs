@@ -3206,6 +3206,337 @@ pub unsafe extern "C" fn rs_score_combine_lists(su: *mut std::ffi::c_void) {
 }
 
 // =============================================================================
+// Phase 1: add_suggestion, add_banned, rescore_one, rescore_suggestions
+// =============================================================================
+
+extern "C" {
+    fn nvim_suginfo_get_sfmaxscore(su: *mut std::ffi::c_void) -> c_int;
+    fn nvim_suginfo_set_sfmaxscore(su: *mut std::ffi::c_void, v: c_int);
+    fn nvim_suginfo_set_maxscore(su: *mut std::ffi::c_void, v: c_int);
+    fn nvim_suginfo_get_banned(su: *mut std::ffi::c_void) -> *mut crate::HashtabRaw;
+    fn nvim_suginfo_get_sal_badword(su: *mut std::ffi::c_void) -> *const c_char;
+    fn nvim_suginfo_get_sallang(su: *mut std::ffi::c_void) -> *mut crate::SlangRaw;
+    #[allow(dead_code)]
+    fn nvim_suginfo_get_badflags(su: *mut std::ffi::c_void) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_suginfo_set_badflags(su: *mut std::ffi::c_void, v: c_int);
+    #[link_name = "hash_hash"]
+    fn suggest_hash_hash(key: *const c_char) -> usize;
+    #[link_name = "hash_lookup"]
+    fn suggest_hash_lookup(
+        ht: *const crate::HashtabRaw,
+        key: *const c_char,
+        key_len: usize,
+        hash: usize,
+    ) -> *mut crate::HashitemRaw;
+    #[link_name = "hash_add_item"]
+    fn suggest_hash_add_item(
+        ht: *mut crate::HashtabRaw,
+        hi: *mut crate::HashitemRaw,
+        key: *mut c_char,
+        hash: usize,
+    );
+    #[link_name = "xmalloc"]
+    fn suggest_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    #[link_name = "hash_removed"]
+    static suggest_hash_removed: c_char;
+}
+
+/// Rust implementation of C `add_suggestion`.
+///
+/// Adds a suggestion to gap (either su_ga or su_sga), deduplicating and
+/// pruning overflow via rs_cleanup_suggestions.
+///
+/// # Safety
+/// All pointers must be valid. `su` must be a valid suginfo_T*.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::used_underscore_binding)]
+pub unsafe extern "C" fn rs_add_suggestion(
+    su: *mut std::ffi::c_void,
+    gap: *mut crate::GArrayRaw,
+    goodword: *const c_char,
+    badlenarg: c_int,
+    score: c_int,
+    altscore: c_int,
+    had_bonus: bool,
+    slang: *mut std::ffi::c_void,
+    maxsf: bool,
+) {
+    // Minimize badlen: walk back while trailing chars match.
+    let goodword_len = libc_strlen(goodword);
+    let mut pgood = goodword.add(goodword_len); // points past NUL
+    let su_badptr = nvim_suginfo_get_badptr(su);
+    let mut pbad = su_badptr.add(badlenarg as usize);
+
+    let mut goodlen: c_int;
+    let mut badlen: c_int;
+    loop {
+        goodlen = pbad_diff(pgood, goodword);
+        badlen = pbad_diff(pbad, su_badptr);
+        if goodlen <= 0 || badlen <= 0 {
+            break;
+        }
+        // MB_PTR_BACK: walk one character back
+        pgood = mb_ptr_back(goodword, pgood);
+        pbad = mb_ptr_back(su_badptr, pbad);
+        if utf_ptr2char(pgood) != utf_ptr2char(pbad) {
+            break;
+        }
+    }
+
+    if badlen == 0 && goodlen == 0 {
+        return;
+    }
+
+    // Check for duplicate suggestion.
+    let mut found_idx: c_int = -1;
+    let gap_len = (*gap).ga_len as usize;
+    if gap_len > 0 {
+        let stp_arr = (*gap).ga_data.cast::<CSuggestT>();
+        for i in 0..gap_len {
+            let stp = stp_arr.add(i);
+            if (*stp).st_wordlen == goodlen
+                && (*stp).st_orglen == badlen
+                && strncmp_n((*stp).st_word, goodword, goodlen as usize)
+            {
+                // Found a duplicate.
+                if (*stp).st_slang.is_null() {
+                    (*stp).st_slang = slang;
+                }
+
+                let new_score = score;
+                let new_altscore = altscore;
+                let new_had_bonus = had_bonus;
+
+                if (*stp).st_had_bonus != had_bonus {
+                    if had_bonus {
+                        // existing entry needs rescore
+                        rs_rescore_one(su, stp);
+                    } else {
+                        // new entry needs rescore: use a temporary CSuggestT
+                        let mut tmp = CSuggestT {
+                            st_word: (*stp).st_word,
+                            st_wordlen: (*stp).st_wordlen,
+                            st_orglen: badlen,
+                            st_score: new_score,
+                            st_altscore: new_altscore,
+                            st_had_bonus: new_had_bonus,
+                            st_salscore: false,
+                            _pad: [0u8; 6],
+                            st_slang: (*stp).st_slang,
+                        };
+                        rs_rescore_one(su, &raw mut tmp);
+                        // update new_score/new_altscore from rescored tmp
+                        let rescored_score = tmp.st_score;
+                        let rescored_altscore = tmp.st_altscore;
+                        let rescored_had_bonus = tmp.st_had_bonus;
+                        if (*stp).st_score > rescored_score {
+                            (*stp).st_score = rescored_score;
+                            (*stp).st_altscore = rescored_altscore;
+                            (*stp).st_had_bonus = rescored_had_bonus;
+                        }
+                        found_idx = i as c_int;
+                        break;
+                    }
+                }
+
+                if (*stp).st_score > new_score {
+                    (*stp).st_score = new_score;
+                    (*stp).st_altscore = new_altscore;
+                    (*stp).st_had_bonus = new_had_bonus;
+                }
+                found_idx = i as c_int;
+                break;
+            }
+        }
+    }
+
+    if found_idx < 0 {
+        // Grow array by 1 and append.
+        ga_grow_suggest(gap, 1);
+        let stp = (*gap)
+            .ga_data
+            .cast::<CSuggestT>()
+            .add((*gap).ga_len as usize);
+        (*stp).st_word = xmemdupz_rs(goodword, goodlen as usize);
+        (*stp).st_wordlen = goodlen;
+        (*stp).st_score = score;
+        (*stp).st_altscore = altscore;
+        (*stp).st_had_bonus = had_bonus;
+        (*stp).st_orglen = badlen;
+        (*stp).st_salscore = false;
+        (*stp)._pad = [0u8; 6];
+        (*stp).st_slang = slang;
+        (*gap).ga_len += 1;
+
+        // If too many suggestions, cleanup.
+        let gap_len_now = (*gap).ga_len;
+        let maxcount = nvim_suginfo_get_maxcount(su);
+        let sug_max_count = if maxcount < 130 {
+            150 + 50
+        } else {
+            maxcount + 20 + 50
+        };
+        if gap_len_now > sug_max_count {
+            let sug_clean = if maxcount < 130 { 150 } else { maxcount + 20 };
+            if maxsf {
+                let cur = nvim_suginfo_get_sfmaxscore(su);
+                let new_max = rs_cleanup_suggestions(
+                    (*gap).ga_data.cast::<CSuggestT>(),
+                    &raw mut (*gap).ga_len,
+                    cur,
+                    sug_clean,
+                );
+                nvim_suginfo_set_sfmaxscore(su, new_max);
+            } else {
+                let cur = nvim_suginfo_get_maxscore(su);
+                let new_max = rs_cleanup_suggestions(
+                    (*gap).ga_data.cast::<CSuggestT>(),
+                    &raw mut (*gap).ga_len,
+                    cur,
+                    sug_clean,
+                );
+                nvim_suginfo_set_maxscore(su, new_max);
+            }
+        }
+    }
+}
+
+/// Compute pointer difference in bytes (equivalent to `pgood - goodword`).
+#[inline]
+unsafe fn pbad_diff(p: *const c_char, base: *const c_char) -> c_int {
+    p.offset_from(base) as c_int
+}
+
+/// MB_PTR_BACK: move pointer one multibyte character back.
+/// Scans forward from `base` to find the previous char start before `p`.
+#[inline]
+unsafe fn mb_ptr_back(base: *const c_char, p: *const c_char) -> *const c_char {
+    if p <= base {
+        return base;
+    }
+    // Walk back: find the start of the previous UTF-8 character.
+    // A continuation byte has the top bit set and bit 6 clear (0x80..0xBF).
+    let mut q = p.sub(1);
+    while q > base && ((*q as u8) & 0xC0) == 0x80 {
+        q = q.sub(1);
+    }
+    q
+}
+
+/// strncmp that takes a length and returns bool.
+#[inline]
+unsafe fn strncmp_n(a: *const c_char, b: *const c_char, n: usize) -> bool {
+    std::slice::from_raw_parts(a.cast::<u8>(), n) == std::slice::from_raw_parts(b.cast::<u8>(), n)
+}
+
+/// Allocate a NUL-terminated copy of `data[..len]`.
+#[inline]
+unsafe fn xmemdupz_rs(data: *const c_char, len: usize) -> *mut c_char {
+    let buf = suggest_xmalloc(len + 1).cast::<c_char>();
+    std::ptr::copy_nonoverlapping(data, buf, len);
+    *buf.add(len) = 0;
+    buf
+}
+
+/// Returns true if a hashitem is empty (unused or removed).
+#[inline]
+unsafe fn suggest_hashitem_empty(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq(
+            (*hi).hi_key,
+            std::ptr::addr_of!(suggest_hash_removed).cast_mut(),
+        )
+}
+
+/// Rust implementation of C `add_banned`.
+///
+/// Adds `word` to su->su_banned hashtable.
+///
+/// # Safety
+/// `su` and `word` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_banned(su: *mut std::ffi::c_void, word: *mut c_char) {
+    let ht = nvim_suginfo_get_banned(su);
+    let word_len = libc_strlen(word);
+    let hash = suggest_hash_hash(word);
+    let hi = suggest_hash_lookup(ht, word, word_len, hash);
+    if !suggest_hashitem_empty(hi) {
+        return;
+    }
+    let s = xmemdupz_rs(word, word_len);
+    suggest_hash_add_item(ht, hi, s, hash);
+}
+
+/// Rust implementation of C `rescore_one`.
+///
+/// Recomputes the score for one suggestion using sound-alike scoring.
+///
+/// # Safety
+/// `su` and `stp` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rescore_one(su: *mut std::ffi::c_void, stp: *mut CSuggestT) {
+    let slang_ptr = (*stp).st_slang.cast::<crate::SlangRaw>();
+    if slang_ptr.is_null() {
+        return;
+    }
+    // Check !GA_EMPTY(&slang->sl_sal)
+    let sl_sal_len = (*slang_ptr).sl_sal.ga_len;
+    if sl_sal_len == 0 {
+        return;
+    }
+    if (*stp).st_had_bonus {
+        return;
+    }
+
+    let slang = SlangHandle(slang_ptr);
+    let su_sallang = nvim_suginfo_get_sallang(su);
+
+    let mut sal_badword = [0u8; MAXWLEN];
+    let p: *const c_char = if std::ptr::eq(slang_ptr, su_sallang) {
+        nvim_suginfo_get_sal_badword(su)
+    } else {
+        let fbadword = nvim_suginfo_get_fbadword(su);
+        crate::rs_spell_soundfold(
+            slang_ptr,
+            fbadword.cast_mut(),
+            true,
+            sal_badword.as_mut_ptr().cast::<c_char>(),
+        );
+        sal_badword.as_ptr().cast::<c_char>()
+    };
+
+    let su_badptr = nvim_suginfo_get_badptr(su);
+    let su_badlen = nvim_suginfo_get_badlen(su);
+    let alt = rs_stp_sal_score(stp, su_badptr, su_badlen, slang, p);
+    (*stp).st_altscore = if alt == SCORE_MAXMAX { SCORE_BIG } else { alt };
+    // RESCORE(word_score, sound_score) = (3 * word + sound) / 4
+    (*stp).st_score = (3 * (*stp).st_score + (*stp).st_altscore) / 4;
+    (*stp).st_had_bonus = true;
+}
+
+/// Rust implementation of C `rescore_suggestions`.
+///
+/// Recomputes scores for all suggestions in su->su_ga.
+///
+/// # Safety
+/// `su` must be a valid pointer to a suginfo_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rescore_suggestions(su: *mut std::ffi::c_void) {
+    let su_sallang = nvim_suginfo_get_sallang(su);
+    if su_sallang.is_null() {
+        return;
+    }
+    let ga = nvim_suginfo_get_ga(su);
+    let ga_len = (*ga).ga_len as usize;
+    let ga_data = (*ga).ga_data.cast::<CSuggestT>();
+    for i in 0..ga_len {
+        rs_rescore_one(su, ga_data.add(i));
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
