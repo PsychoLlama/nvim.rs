@@ -277,6 +277,18 @@ extern "C" {
     fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool);
     /// fputc: write a byte to a FILE
     fn fputc(c: c_int, stream: *mut std::ffi::c_void) -> c_int;
+    /// p_sc: 'showcmd' option
+    static p_sc: c_int;
+    /// msg_silent: suppress messages when non-zero
+    static mut msg_silent: c_int;
+    /// mb_unescape: unescape a key sequence, advancing the pointer
+    fn mb_unescape(pp: *mut *const std::ffi::c_char) -> *const std::ffi::c_char;
+    /// utf_ptr2char: convert UTF-8 pointer to codepoint
+    fn utf_ptr2char(p: *const u8) -> c_int;
+    /// merge_modifiers: merge modifier bits into key, return result
+    fn merge_modifiers(c: c_int, modifiers: *mut c_int) -> c_int;
+    /// add_to_showcmd: add a character to the showcmd display
+    fn add_to_showcmd(c: c_int) -> bool;
 }
 
 /// Static counter for updatescript (mirrors C's `static int count`).
@@ -304,8 +316,84 @@ pub(crate) unsafe fn updatescript(c: c_int) {
     }
 }
 
-/// Static state for gotchars (mirrors C's `static gotchars_state_T state`).
+/// Static gotchars state for rs_gotchars.
 static mut GOTCHARS_STATE: GotcharsState = GotcharsState::new();
+
+/// Static gotchars state for add_byte_to_showcmd (separate instance from GOTCHARS_STATE).
+static mut SHOWCMD_STATE: GotcharsState = GotcharsState::new();
+
+/// K_SPECIAL byte value (0x80)
+const K_SPECIAL_BYTE: u8 = 0x80;
+/// KS_MODIFIER byte value (252)
+const KS_MODIFIER_BYTE: u8 = 252;
+
+/// Add a single byte to 'showcmd' for a partially matched mapping.
+/// Calls add_to_showcmd() when a full key has been received.
+///
+/// # Safety
+/// Calls C functions for showcmd display.
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_byte_to_showcmd(byte: u8) {
+    let sc = std::ptr::read(std::ptr::addr_of!(p_sc));
+    let ms = std::ptr::read(std::ptr::addr_of!(msg_silent));
+    if sc == 0 || ms != 0 {
+        return;
+    }
+
+    let state = &mut *std::ptr::addr_of_mut!(SHOWCMD_STATE);
+    if !state.add_byte(byte) {
+        return;
+    }
+
+    // NUL-terminate and reset buflen
+    state.nul_terminate();
+    state.reset_buflen();
+
+    let mut modifiers: c_int = 0;
+    let mut c: c_int = 0; // NUL
+
+    let ptr_start = state.buf.as_ptr();
+    let mut ptr = ptr_start;
+
+    // Check for modifier prefix: K_SPECIAL KS_MODIFIER mod_byte
+    if *ptr == K_SPECIAL_BYTE && *ptr.add(1) == KS_MODIFIER_BYTE && *ptr.add(2) != 0 {
+        modifiers = c_int::from(*ptr.add(2));
+        ptr = ptr.add(3);
+    }
+
+    if *ptr != 0 {
+        let mut cpp = ptr.cast::<std::ffi::c_char>();
+        let mb_ptr = mb_unescape(std::ptr::addr_of_mut!(cpp));
+        if mb_ptr.is_null() {
+            c = c_int::from(*ptr);
+            ptr = ptr.add(1);
+        } else {
+            c = utf_ptr2char(mb_ptr.cast::<u8>());
+            ptr = cpp.cast::<u8>();
+        }
+        if c <= 0x7f {
+            let mut modifiers_after = modifiers;
+            let mod_c = merge_modifiers(c, std::ptr::addr_of_mut!(modifiers_after));
+            if modifiers_after == 0 {
+                modifiers = 0;
+                c = mod_c;
+            }
+        }
+    }
+
+    if modifiers != 0 {
+        add_to_showcmd(c_int::from(K_SPECIAL_BYTE));
+        add_to_showcmd(c_int::from(KS_MODIFIER_BYTE));
+        add_to_showcmd(modifiers);
+    }
+    if c != 0 {
+        add_to_showcmd(c);
+    }
+    while *ptr != 0 {
+        add_to_showcmd(c_int::from(*ptr));
+        ptr = ptr.add(1);
+    }
+}
 
 /// Write typed characters to script file.
 /// If recording is on, put the character in the record buffer.

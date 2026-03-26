@@ -92,16 +92,9 @@ extern uint8_t *rs_get_inserted(void);
 
 // Recording/gotchars operations (full functions in Rust)
 extern void rs_gotchars(const uint8_t *chars, size_t len);
+extern void rs_add_byte_to_showcmd(uint8_t byte);
 
 
-/// State for adding bytes to a recording or 'showcmd'.
-typedef struct {
-  uint8_t buf[MB_MAXBYTES * 3 + 4];
-  int prev_c;
-  size_t buflen;
-  unsigned pending_special;
-  unsigned pending_mbyte;
-} gotchars_state_T;
 
 /// Index in scriptin
 static int curscript = -1;
@@ -173,54 +166,6 @@ static void init_typebuf(void)
   typebuf.tb_change_cnt = 1;
 }
 
-
-/// Add a single byte to a recording or 'showcmd'.
-/// Return true if a full key has been received, false otherwise.
-static bool gotchars_add_byte(gotchars_state_T *state, uint8_t byte)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int c = state->buf[state->buflen++] = byte;
-  bool retval = false;
-  const bool in_special = state->pending_special > 0;
-  const bool in_mbyte = state->pending_mbyte > 0;
-
-  if (in_special) {
-    state->pending_special--;
-  } else if (c == K_SPECIAL) {
-    // When receiving a special key sequence, store it until we have all
-    // the bytes and we can decide what to do with it.
-    state->pending_special = 2;
-  }
-
-  if (state->pending_special > 0) {
-    goto ret_false;
-  }
-
-  if (in_mbyte) {
-    state->pending_mbyte--;
-  } else {
-    if (in_special) {
-      if (state->prev_c == KS_MODIFIER) {
-        // When receiving a modifier, wait for the modified key.
-        goto ret_false;
-      }
-      c = TO_SPECIAL(state->prev_c, c);
-    }
-    // When receiving a multibyte character, store it until we have all
-    // the bytes, so that it won't be split between two buffer blocks,
-    // and delete_buff_tail() will work properly.
-    state->pending_mbyte = MB_BYTE2LEN_CHECK(c) - 1;
-  }
-
-  if (state->pending_mbyte > 0) {
-    goto ret_false;
-  }
-
-  retval = true;
-ret_false:
-  state->prev_c = c;
-  return retval;
-}
 
 
 /// Make "typebuf" empty and allocate new buffers.
@@ -409,60 +354,6 @@ bool open_scriptin(char *scriptin_name)
 
 
 
-/// Add a single byte to 'showcmd' for a partially matched mapping.
-/// Call add_to_showcmd() if a full key has been received.
-static void add_byte_to_showcmd(uint8_t byte)
-{
-  static gotchars_state_T state;
-
-  if (!p_sc || msg_silent != 0) {
-    return;
-  }
-
-  if (!gotchars_add_byte(&state, byte)) {
-    return;
-  }
-
-  state.buf[state.buflen] = NUL;
-  state.buflen = 0;
-
-  int modifiers = 0;
-  int c = NUL;
-
-  const uint8_t *ptr = state.buf;
-  if (ptr[0] == K_SPECIAL && ptr[1] == KS_MODIFIER && ptr[2] != NUL) {
-    modifiers = ptr[2];
-    ptr += 3;
-  }
-
-  if (*ptr != NUL) {
-    const char *mb_ptr = mb_unescape((const char **)&ptr);
-    c = mb_ptr != NULL ? utf_ptr2char(mb_ptr) : *ptr++;
-    if (c <= 0x7f) {
-      // Merge modifiers into the key to make the result more readable.
-      int modifiers_after = modifiers;
-      int mod_c = merge_modifiers(c, &modifiers_after);
-      if (modifiers_after == 0) {
-        modifiers = 0;
-        c = mod_c;
-      }
-    }
-  }
-
-  // TODO(zeertzjq): is there a more readable and yet compact representation of
-  // modifiers and special keys?
-  if (modifiers != 0) {
-    add_to_showcmd(K_SPECIAL);
-    add_to_showcmd(KS_MODIFIER);
-    add_to_showcmd(modifiers);
-  }
-  if (c != NUL) {
-    add_to_showcmd(c);
-  }
-  while (*ptr != NUL) {
-    add_to_showcmd(*ptr++);
-  }
-}
 
 static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
 
@@ -1401,7 +1292,7 @@ int vgetorpeek(bool advance)
               showcmd_idx = typebuf.tb_len - SHOWCMD_COLS;
             }
             while (showcmd_idx < typebuf.tb_len) {
-              add_byte_to_showcmd(typebuf.tb_buf[typebuf.tb_off + showcmd_idx++]);
+              rs_add_byte_to_showcmd(typebuf.tb_buf[typebuf.tb_off + showcmd_idx++]);
             }
             curwin->w_wcol = old_wcol;
             curwin->w_wrow = old_wrow;
