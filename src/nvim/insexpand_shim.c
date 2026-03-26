@@ -261,7 +261,6 @@ int compl_match_arraysize;
 static bool match_at_original_text(const compl_T *const match) { return match->cp_flags & CP_ORIGINAL_TEXT; }
 /// @return  true if "match" is the first match in the completion list.
 static bool is_first_match(const compl_T *const match) { return match == compl_first_match; }
-
 /// ins_compl_add_infercase: see rs_ins_compl_add_infercase in infercase.rs.
 /// Still exported from C for spell.c and search_shim.c callers.
 int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Direction dir,
@@ -598,22 +597,18 @@ int nvim_find_shown_match_in_match_array(void) {
   return -1;
 }
 
-// Memory operations for Rust
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
-
 // Completion state accessors (used by Rust insexpand crate)
 int nvim_compl_match_get_cp_number(void *m) { return m ? ((compl_T *)m)->cp_number : -1; }
 void nvim_compl_match_set_cp_number(void *m, int num) { if (m) ((compl_T *)m)->cp_number = num; }
 const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED)); }
-
 void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->cp_score = score; } }
 const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_compl_match_has_fname(void *m) { return (m && ((compl_T *)m)->cp_fname != NULL) ? 1 : 0; }
 const char *nvim_compl_shown_match_fname(void) { return compl_shown_match ? compl_shown_match->cp_fname : NULL; }
-
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
 static Callback cfu_cb;    ///< 'completefunc' callback function
@@ -840,7 +835,6 @@ static void restore_orig_extmarks(void)
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
-
 /// complete_info() implementation.
 /// Contains the full what_flag parsing and dictionary population logic.
 void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
@@ -1002,7 +996,6 @@ int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
 int nvim_get_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
-
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
 /// Move backwards to a previous badly spelled word (CTRL_X_SPELL mode).
 void nvim_spell_back_safe(void)
@@ -1075,7 +1068,6 @@ void nvim_do_autocmd_completedone_with_strs(const char *word, const char *comple
 }
 
 int nvim_skipwhite_offset(const char *line, int length, int start_col) { return (int)(skipwhite(line + length + start_col) - line); }
-
 size_t nvim_yankreg_y_size(void *reg) { return reg ? ((yankreg_T *)reg)->y_size : 0; }
 int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y_array == NULL) ? 1 : 0; }
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
