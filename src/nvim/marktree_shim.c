@@ -65,9 +65,7 @@ extern bool rs_marktree_itr_get_ext_full(MarkTree *b, MTPos p, MarkTreeIter *itr
 
 #include "marktree_shim.c.generated.h"
 
-// ============================================================================
 // Rust FFI Accessor Functions
-// ============================================================================
 
 int nvim_mtnode_get_n(MTNode *x) { return x->n; }
 int nvim_mtnode_get_level(MTNode *x) { return x->level; }
@@ -79,9 +77,7 @@ int nvim_marktree_get_root_level(MarkTree *b) { return b->root ? b->root->level 
 MTNode *nvim_mtnode_get_parent(MTNode *x) { return x->parent; }
 int nvim_mtnode_get_p_idx(MTNode *x) { return x->p_idx; }
 
-// ============================================================================
 // Iterator Accessor Functions
-// ============================================================================
 
 MTNode *nvim_mtitr_get_x(MarkTreeIter *itr) { return itr->x; }
 int nvim_mtitr_get_i(MarkTreeIter *itr) { return itr->i; }
@@ -96,9 +92,7 @@ int nvim_mtitr_get_s_oldcol(MarkTreeIter *itr, int lvl) { return itr->s[lvl].old
 void nvim_mtitr_set_s_i(MarkTreeIter *itr, int lvl, int i) { itr->s[lvl].i = i; }
 void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol) { itr->s[lvl].oldcol = oldcol; }
 
-// ============================================================================
 // Iterator Allocation Functions (for Rust FFI - extmark crate)
-// ============================================================================
 
 MarkTreeIter *nvim_marktree_itr_alloc(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
 void nvim_marktree_itr_free(MarkTreeIter *itr) { xfree(itr); }
@@ -108,9 +102,7 @@ void nvim_mt_itr_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(it
 DecorInlineData nvim_mt_itr_rawkey_get_decor_data(MarkTreeIter *itr) { return rawkey(itr).decor_data; }
 void nvim_mt_itr_rawkey_set_decor_data(MarkTreeIter *itr, DecorInlineData data) { rawkey(itr).decor_data = data; }
 
-// ============================================================================
 // Iterator Overlap Accessor Functions (for Rust FFI)
-// ============================================================================
 
 MTPos nvim_mtitr_get_intersect_pos(MarkTreeIter *itr) { return itr->intersect_pos; }
 void nvim_mtitr_set_intersect_pos(MarkTreeIter *itr, MTPos pos) { itr->intersect_pos = pos; }
@@ -119,15 +111,11 @@ void nvim_mtitr_set_intersect_pos_x(MarkTreeIter *itr, MTPos pos) { itr->interse
 size_t nvim_mtitr_get_intersect_idx(MarkTreeIter *itr) { return itr->intersect_idx; }
 void nvim_mtitr_set_intersect_idx(MarkTreeIter *itr, size_t idx) { itr->intersect_idx = idx; }
 
-// ============================================================================
 // Iterator Adapter Functions (for Rust extmark FFI)
-// ============================================================================
 
 void nvim_marktree_itr_get_ext_simple(MarkTree *b, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get_ext_full(b, MTPos(row, col), itr, false, false, NULL, NULL); }
 
-// ============================================================================
 // Node Intersection Accessor Functions (for Rust FFI)
-// ============================================================================
 
 size_t nvim_mtnode_get_intersect_size(MTNode *x) { return kv_size(x->intersect); }
 uint64_t nvim_mtnode_get_intersect_elem(MTNode *x, size_t idx) { return kv_A(x->intersect, idx); }
@@ -159,9 +147,7 @@ uint64_t nvim_mtnode_intersect_id(MTNode *x, size_t idx)
 MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return pmap_get(uint64_t)(b->id2node, id); }
 size_t nvim_marktree_id2node_count(MarkTree *b) { return b->id2node ? map_size(b->id2node) : 0; }
 
-// ============================================================================
 // Node Mutation Accessor Functions (for Rust FFI)
-// ============================================================================
 
 void nvim_mtnode_set_n(MTNode *x, int n) { x->n = (int32_t)n; }
 void nvim_mtnode_set_level(MTNode *x, int level) { x->level = (int16_t)level; }
@@ -177,9 +163,7 @@ void nvim_mtnode_memcpy_keys(MTNode *dst, int dst_idx, MTNode *src, int src_idx,
 void nvim_mtnode_memcpy_ptr(MTNode *dst, int dst_idx, MTNode *src, int src_idx, int count) { memcpy(&dst->s[0].i_ptr[dst_idx], &src->s[0].i_ptr[src_idx], (size_t)count * sizeof(MTNode *)); }
 void nvim_mtnode_memcpy_meta(MTNode *dst, int dst_idx, MTNode *src, int src_idx, int count) { memcpy(&dst->s[0].i_meta[dst_idx], &src->s[0].i_meta[src_idx], (size_t)count * sizeof(dst->s[0].i_meta[0])); }
 
-// ============================================================================
 // Tree Mutation Functions (for Rust FFI)
-// ============================================================================
 
 MTNode *nvim_marktree_alloc_node(MarkTree *b, bool internal)
 {
@@ -201,9 +185,7 @@ void nvim_marktree_dec_n_nodes(MarkTree *b) { b->n_nodes--; }
 void nvim_marktree_set_n_keys(MarkTree *b, size_t n) { b->n_keys = n; }
 void nvim_marktree_destroy_id2node(MarkTree *b) { map_destroy(uint64_t, b->id2node); }
 
-// ============================================================================
 // Intersection Operations (for Rust FFI)
-// ============================================================================
 
 void nvim_kvi_copy_intersect(MTNode *dst, MTNode *src) { kvi_copy(dst->intersect, src->intersect); }
 void nvim_kvi_init_intersect(MTNode *x) { kvi_init(x->intersect); }
@@ -220,10 +202,7 @@ void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
   kvi_push(x->intersect, id);
 }
 
-
-// ============================================================================
 // B-tree Deletion Operations (for Rust FFI)
-// ============================================================================
 
 void nvim_marktree_del_id(MarkTree *b, uint64_t id) { pmap_del(uint64_t)(b->id2node, id, NULL); }
 void nvim_marktree_dec_n_keys(MarkTree *b) { b->n_keys--; }
@@ -237,10 +216,7 @@ MTPos nvim_rawkey_get_pos(MarkTreeIter *itr) { return rawkey(itr).pos; }
 void nvim_rawkey_add_pos_col(MarkTreeIter *itr, int delta) { rawkey(itr).pos.col += delta; }
 void nvim_rawkey_add_pos_row(MarkTreeIter *itr, int delta) { rawkey(itr).pos.row += delta; }
 
-
-// ============================================================================
 // MTKey Accessor Functions (for Rust sign crate)
-// ============================================================================
 
 int32_t nvim_mtkey_get_row(MTKey key) { return key.pos.row; }
 uint32_t nvim_mtkey_get_ns(MTKey key) { return key.ns; }
