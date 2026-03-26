@@ -189,8 +189,8 @@ extern "C" {
     fn nvim_qf_snprintf_iobuff(title: *const c_char, sfname: *const c_char);
     static IObuff: *mut c_char;
 
-    // GET_LOC_LIST
-    fn nvim_win_get_loclist_ptr(wp: *const c_void) -> *mut c_void;
+    // GET_LOC_LIST (same as nvim_win_get_loclist in lib.rs)
+    fn nvim_win_get_loclist(wp: *const c_void) -> *const c_void;
 
     // copy_loclist_stack helpers
     fn nvim_win_get_llist_or_ref(from_win: *const c_void) -> *mut c_void;
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     let qi_post = if wp.is_null() {
         nvim_get_ql_info()
     } else {
-        nvim_win_get_loclist_ptr(wp)
+        nvim_win_get_loclist(wp).cast_mut()
     };
 
     if qi_post.is_null() {
@@ -601,7 +601,7 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     let qi_post = if wp.is_null() {
         nvim_get_ql_info()
     } else {
-        nvim_win_get_loclist_ptr(wp)
+        nvim_win_get_loclist(wp).cast_mut()
     };
 
     if qi_post.is_null() {

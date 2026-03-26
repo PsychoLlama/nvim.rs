@@ -435,7 +435,7 @@ extern "C" {
     fn nvim_qf_delete_all_lines() -> bool;
     fn nvim_qf_zero_skipcol_for_curbuf();
     fn nvim_qf_u_clearallandblockfree();
-    fn nvim_qf_get_start_nonnull(qfl: *const c_void) -> QfLinePtr;
+    fn nvim_qf_get_start(qfl: *const c_void) -> QfLinePtr;
     fn nvim_qfline_get_next(qfp: QfLinePtr) -> QfLinePtr;
     fn nvim_qfline_get_fnum(qfp: QfLinePtr) -> c_int;
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
@@ -803,7 +803,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
     }
 
     // Check if there is anything to display
-    let qf_start = nvim_qf_get_start_nonnull(qfl);
+    let qf_start = nvim_qf_get_start(qfl);
     if !qfl.is_null() && !qf_start.is_null() {
         let mut dirname = [0u8; MAXPATHL];
 

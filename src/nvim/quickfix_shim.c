@@ -1291,8 +1291,6 @@ bool nvim_qf_get_key_typed(void) { return KeyTyped; }
 
 void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 
-void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
-
 // curbuf option accessors (struct field access - retained as opaque accessors):
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
@@ -1326,9 +1324,6 @@ bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == 
 void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
 
 void nvim_qf_snprintf_iobuff(const char *title, const char *sfname) { vim_snprintf(IObuff, IOSIZE, "%s (%s)", title, sfname); }
-// GET_LOC_LIST wrapper
-void *nvim_win_get_loclist_ptr(const void *wp) { return (void *)GET_LOC_LIST((const win_T *)wp); }
-
 // copy_loclist_stack accessors
 void *nvim_win_get_llist_or_ref(const void *from_win)
 {
