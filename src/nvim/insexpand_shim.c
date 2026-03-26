@@ -218,9 +218,9 @@ typedef struct {
   Callback *func_cb;      ///< callback of function in 'cpt' option
 } ins_compl_next_state_T;
 
-// Static state for ins_compl_get_exp, made non-static for Rust access (Phase 26).
+// Static state for ins_compl_get_exp, made non-static for Rust access
 ins_compl_next_state_T ins_compl_st;
-bool ins_compl_st_cleared = false;  ///< made non-static for Rust access (Phase 21)
+bool ins_compl_st_cleared = false;  ///< made non-static for Rust access
 
 // In large buffers, timeout may miss nearby matches — search above cursor
 #define LOOKBACK_LINE_COUNT     1000
@@ -262,7 +262,7 @@ bool compl_enter_selects = false;
 
 /// When "compl_leader" is not NULL only matches that start with this string
 /// are used.
-String compl_leader = STRING_INIT;  // made non-static for Rust access (Phase 20)
+String compl_leader = STRING_INIT;  // made non-static for Rust access
 
 bool compl_get_longest = false;  ///< put longest common string in compl_leader
 
@@ -285,11 +285,11 @@ bool compl_started = false;
 int ctrl_x_mode = CTRL_X_NORMAL;
 
 int compl_matches = 0;           ///< number of completion matches
-String compl_pattern = STRING_INIT;      ///< search pattern for matching items, made non-static for Rust access (Phase 22)
-String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in 'cpt', made non-static for Rust access (Phase 20)
+String compl_pattern = STRING_INIT;      ///< search pattern for matching items, made non-static for Rust access
+String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in 'cpt', made non-static for Rust access
 Direction compl_direction = FORWARD;
 Direction compl_shows_dir = FORWARD;
-pos_T compl_startpos;  // made non-static for Rust access (Phase 19)
+pos_T compl_startpos;  // made non-static for Rust access
 /// Length in bytes of the text being completed (this is deleted to be replaced
 /// by the match.)
 int compl_length = 0;
@@ -297,11 +297,11 @@ linenr_T compl_lnum = 0;         ///< lnum where the completion start
 colnr_T compl_col = 0;           ///< column where the text starts
                                         ///< that is being completed
 colnr_T compl_ins_end_col = 0;
-String compl_orig_text = STRING_INIT;  // made non-static for Rust access (Phase 20)
+String compl_orig_text = STRING_INIT;  // made non-static for Rust access
 /// Undo information to restore extmarks for original text.
 static extmark_undo_vec_t compl_orig_extmarks;
 int compl_cont_mode = 0;
-expand_T compl_xp;  // non-static: accessible from Rust (Phase 25)
+expand_T compl_xp;  // non-static: accessible from Rust
 
 win_T *compl_curr_win = NULL;  ///< win where completion is active
 buf_T *compl_curr_buf = NULL;  ///< buf where completion is active
@@ -360,7 +360,6 @@ typedef struct cpt_source_T {
   char cs_flag;             ///< Flag indicating the type of source
 } cpt_source_T;
 
-/// Pointer to the array of completion sources (made non-static for Rust access Phase 23)
 cpt_source_T *cpt_sources_array;
 /// Total number of completion sources specified in the 'cpt' option
 int cpt_sources_count;
@@ -373,18 +372,9 @@ pumitem_T *compl_match_array = NULL;
 int compl_match_arraysize;
 
 /// @return  true if "match" is the original text when the completion began.
-static bool match_at_original_text(const compl_T *const match)
-{
-  return match->cp_flags & CP_ORIGINAL_TEXT;
-}
-
+static bool match_at_original_text(const compl_T *const match) { return match->cp_flags & CP_ORIGINAL_TEXT; }
 /// @return  true if "match" is the first match in the completion list.
-static bool is_first_match(const compl_T *const match)
-{
-  return match == compl_first_match;
-}
-
-/// Get the completed text by inferring the case of the originally typed text.
+static bool is_first_match(const compl_T *const match) { return match == compl_first_match; }
 /// If the result is in allocated memory "tofree" is set to it.
 
 /// ins_compl_add_infercase: see rs_ins_compl_add_infercase in infercase.rs.
@@ -663,26 +653,10 @@ static void trigger_complete_changed_event(int cur)
 // Helper functions for nvim_mergesort_compl_list_raw() -- C function pointer
 // callbacks required by mergesort_list(); sort logic lives in rs_sort_compl_match_list.
 
-static void *cp_get_next(void *node)
-{
-  return ((compl_T *)node)->cp_next;
-}
-
-static void cp_set_next(void *node, void *next)
-{
-  ((compl_T *)node)->cp_next = (compl_T *)next;
-}
-
-static void *cp_get_prev(void *node)
-{
-  return ((compl_T *)node)->cp_prev;
-}
-
-static void cp_set_prev(void *node, void *prev)
-{
-  ((compl_T *)node)->cp_prev = (compl_T *)prev;
-}
-
+static void *cp_get_next(void *node) { return ((compl_T *)node)->cp_next; }
+static void cp_set_next(void *node, void *next) { ((compl_T *)node)->cp_next = (compl_T *)next; }
+static void *cp_get_prev(void *node) { return ((compl_T *)node)->cp_prev; }
+static void cp_set_prev(void *node, void *prev) { ((compl_T *)node)->cp_prev = (compl_T *)prev; }
 static int cp_compare_fuzzy(const void *a, const void *b)
 {
   int score_a = ((compl_T *)a)->cp_score;
@@ -703,20 +677,10 @@ static int cp_compare_nearest(const void *a, const void *b)
 #define DICT_FIRST      (1)     ///< use just first element in "dict"
 #define DICT_EXACT      (2)     ///< "dict" is the exact name of a file
 
-/// Compound accessor: returns the effective thesaurus option string.
 /// Returns curbuf->b_p_tsr if non-empty, else p_tsr.
-const char *nvim_get_curbuf_b_p_tsr(void)
-{
-  return *curbuf->b_p_tsr == NUL ? p_tsr : curbuf->b_p_tsr;
-}
-
-/// Compound accessor: returns the effective dictionary option string.
+const char *nvim_get_curbuf_b_p_tsr(void) { return *curbuf->b_p_tsr == NUL ? p_tsr : curbuf->b_p_tsr; }
 /// Returns curbuf->b_p_dict if non-empty, else p_dict.
-const char *nvim_get_curbuf_b_p_dict(void)
-{
-  return *curbuf->b_p_dict == NUL ? p_dict : curbuf->b_p_dict;
-}
-
+const char *nvim_get_curbuf_b_p_dict(void) { return *curbuf->b_p_dict == NUL ? p_dict : curbuf->b_p_dict; }
 /// Free a completion item in the list
 static void ins_compl_item_free(compl_T *match)
 {
@@ -815,7 +779,7 @@ static void copy_global_to_buflocal_cb(Callback *globcb, Callback *bufcb)
   }
 }
 
-/// Compound accessor for Phase 5 (pass 5): did_set_completefunc implementation.
+/// did_set_completefunc implementation.
 const char *nvim_did_set_completefunc_impl(void *args_v)
 {
   optset_T *args = (optset_T *)args_v;
@@ -829,12 +793,8 @@ const char *nvim_did_set_completefunc_impl(void *args_v)
 
 /// Copy the global 'completefunc' callback function to the buffer-local
 /// 'completefunc' callback for "buf".
-void set_buflocal_cfu_callback(buf_T *buf)
-{
-  copy_global_to_buflocal_cb(&cfu_cb, &buf->b_cfu_cb);
-}
-
-/// Compound accessor for Phase 5 (pass 5): did_set_omnifunc implementation.
+void set_buflocal_cfu_callback(buf_T *buf) { copy_global_to_buflocal_cb(&cfu_cb, &buf->b_cfu_cb); }
+/// did_set_omnifunc implementation.
 const char *nvim_did_set_omnifunc_impl(void *args_v)
 {
   optset_T *args = (optset_T *)args_v;
@@ -848,11 +808,7 @@ const char *nvim_did_set_omnifunc_impl(void *args_v)
 
 /// Copy the global 'omnifunc' callback function to the buffer-local 'omnifunc'
 /// callback for "buf".
-void set_buflocal_ofu_callback(buf_T *buf)
-{
-  copy_global_to_buflocal_cb(&ofu_cb, &buf->b_ofu_cb);
-}
-
+void set_buflocal_ofu_callback(buf_T *buf) { copy_global_to_buflocal_cb(&ofu_cb, &buf->b_ofu_cb); }
 /// Free an array of 'complete' F{func} callbacks and set the pointer to NULL.
 void clear_cpt_callbacks(Callback **callbacks, int count)
 {
@@ -948,7 +904,7 @@ int set_cpt_callbacks(optset_T *args)
   return OK;
 }
 
-/// Compound accessor for Phase 5 (pass 5): did_set_thesaurusfunc implementation.
+/// did_set_thesaurusfunc implementation.
 const char *nvim_did_set_thesaurusfunc_impl(void *args_v)
 {
   optset_T *args = (optset_T *)args_v;
@@ -983,7 +939,7 @@ bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
   return abort;
 }
 
-/// Compound accessor for Phase 5 (pass 5): set_ref_in_insexpand_funcs implementation.
+/// set_ref_in_insexpand_funcs implementation.
 int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
 {
   bool abort = rs_set_ref_in_callback(&cfu_cb, copyID, NULL, NULL);
@@ -993,7 +949,6 @@ int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
   return abort ? 1 : 0;
 }
 
-/// Get the user-defined completion function name for completion "type"
 static char *get_complete_funcname(int type)
 {
   switch (type) {
@@ -1008,7 +963,6 @@ static char *get_complete_funcname(int type)
   }
 }
 
-/// Get the callback to use for insert mode completion.
 static Callback *get_insert_callback(int type)
 {
   if (type == CTRL_X_FUNCTION) {
@@ -1029,14 +983,12 @@ static inline int get_user_highlight_attr(const char *hlname)
   return -1;
 }
 
-/// Compound accessor: save extmarks before completion modifies text.
 void nvim_save_orig_extmarks_impl(void)
 {
   extmark_splice_delete(curbuf, curwin->w_cursor.lnum - 1, compl_col, curwin->w_cursor.lnum - 1,
                         compl_col + compl_length, &compl_orig_extmarks, true, kExtmarkUndo);
 }
 
-/// Compound accessor: restore extmarks in reverse order.
 static void restore_orig_extmarks(void)
 {
   for (long i = (int)kv_size(compl_orig_extmarks) - 1; i > -1; i--) {
@@ -1050,11 +1002,11 @@ void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char 
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
 
 // NOTE: f_complete, f_complete_add, f_complete_check exported from Rust via
-// #[export_name] in src/nvim-rs/insexpand/src/funcexpand.rs (Phase 1).
+// #[export_name] in src/nvim-rs/insexpand/src/funcexpand.rs
 
 /// Fill the dict of complete_info
 
-/// Compound accessor for Phase 2 (pass 5): complete_info() implementation.
+/// complete_info() implementation.
 /// Contains the full what_flag parsing and dictionary population logic.
 void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
 {
@@ -1192,22 +1144,18 @@ void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
 }
 
 // NOTE: f_complete_info exported from Rust via #[export_name] in
-// src/nvim-rs/insexpand/src/info.rs (Phase 1).
+// src/nvim-rs/insexpand/src/info.rs
 
 // Ported to Rust as rs_get_next_filename_completion in file.rs.
 // Logic now lives in rs_get_next_default_completion (expand.rs) and the
-/// Compound accessor: get the pattern, column and length for command-line completion.
-/// Sets the global variables: compl_col, compl_length and compl_pattern.
-// Accessors for compl_xp fields needed by inlined cmdline completion (Phase 27)
+// Accessors for compl_xp fields needed by inlined cmdline completion
 int nvim_compl_xp_get_context(void) { return compl_xp.xp_context; }
 const char *nvim_compl_xp_get_pattern(void) { return compl_xp.xp_pattern; }
 void nvim_compl_xp_set_cmd_context(int len, int col) { set_cmd_context(&compl_xp, compl_pattern.data, len, col, false); }
 void nvim_compl_xp_nlua_expand(void) { nlua_expand_pat(&compl_xp); }
 
-/// Compound accessor: set global variables related to completion:
 /// compl_col, compl_length, compl_pattern, and cpt_compl_pattern.
 
-/// Get the completion pattern, column and length.
 ///
 /// @param startcol  start column number of the completion pattern/text
 /// @param cur_col   current cursor column
@@ -1216,21 +1164,9 @@ void nvim_compl_xp_nlua_expand(void) { nlua_expand_pat(&compl_xp); }
 /// become invalid and needs to be fetched again.
 ///
 /// @return  OK on success.
-/// Accessor: return the current buffer line at cursor position.
-const char *nvim_ml_get_curline(void)
-{
-  return ml_get(curwin->w_cursor.lnum);
-}
+const char *nvim_ml_get_curline(void) { return ml_get(curwin->w_cursor.lnum); }
+char *nvim_get_ctrl_x_msg(int idx) { return _(ctrl_x_msgs[idx & ~CTRL_X_WANT_IDENT]); }
 
-/// Accessor: return translated ctrl_x_msgs entry at index (used by Rust, Phase 22).
-char *nvim_get_ctrl_x_msg(int idx)
-{
-  return _(ctrl_x_msgs[idx & ~CTRL_X_WANT_IDENT]);
-}
-
-/// Compound accessor: return os_hrtime().
-
-/// Compound accessor: free all completion global state at process exit.
 void nvim_free_insexpand_stuff_impl(void)
 {
   API_CLEAR_STRING(compl_orig_text);
@@ -1253,7 +1189,7 @@ void nvim_spell_back_to_badword_impl(void)
 }
 
 // NOTE: f_preinserted exported from Rust via #[export_name] in
-// src/nvim-rs/insexpand/src/funcexpand.rs (Phase 1).
+// src/nvim-rs/insexpand/src/funcexpand.rs
 
 // Completion state accessors (used by Rust insexpand crate)
 unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
@@ -1264,23 +1200,20 @@ int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
 // Complex null-guard accessors
-// Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
+// Accessors for set_ctrl_x_mode / may_advance_cpt_index
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
 // nvim_set_edit_submode_null, nvim_set_edit_submode_pre_null, nvim_set_redraw_mode_true,
 void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
-// Accessors for Phase 2 (pass 12): ins_compl_longest_match
 // nvim_utf_ptr2char is defined in mbyte.c; re-use it via extern declaration
 
-// Accessors for ins_compl_stop (Phase 3)
+// Accessors for ins_compl_stop
 char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
-// Compound accessors for ins_compl_stop (Phase 3)
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 
 // Accessor for internal_error in compl_get_info dispatch
 
-// Compound accessors for ins_compl_show_pum (Phase 2)
 // nvim_update_screen() already exists in drawscreen.c
 // nvim_get_cursor_col() already exists in normal_shim.c
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
@@ -1335,11 +1268,7 @@ int nvim_expand_wildcards_files(int count, char **pat, int *num_matches, char **
   return expand_wildcards(count, pat, num_matches, matches,
                           EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT);
 }
-void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches)
-{
-  tilde_replace(pat, num_matches, matches);
-}
-
+void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches) { tilde_replace(pat, num_matches, matches); }
 // insert.rs and leader.rs call rs_ins_compl_new_leader() directly.
 // Ported to Rust as rs_ins_compl_addfrommatch in leader.rs.
 // nvim_get_cursor_line_ptr: defined in change_ffi.c as char *nvim_get_cursor_line_ptr(void)
@@ -1353,10 +1282,7 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
 // Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
 // compl_first_match->cp_prev for backward), 0 otherwise
 
-// Accessors for Phase 4: ins_compl_new_leader migration
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
-// Accessor for Phase 5: ins_compl_del_pum migration
-// Accessors for Phase 1 (pass 3): ins_compl_mode, thesaurus_func_complete,
 // get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
 
@@ -1417,17 +1343,9 @@ size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *
 {
   return copy_option_part(src, buf, (size_t)maxlen, sep);
 }
-int nvim_get_complete_funcname_empty(int ctrl_x_mode_val)
-{
-  return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0;
-}
-
+int nvim_get_complete_funcname_empty(int ctrl_x_mode_val) { return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0; }
 // Returns an opaque pointer to the Callback for the given ctrl_x_mode.
-void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val)
-{
-  return (void *)get_insert_callback(ctrl_x_mode_val);
-}
-
+void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val) { return (void *)get_insert_callback(ctrl_x_mode_val); }
 // Call the completion callback with findstart=1 to get the start column.
 // Saves/restores State and cursor. Returns the column number from the callback,
 // or INT_MIN if the cursor was moved (error emitted).
@@ -1467,22 +1385,11 @@ void nvim_ctrl_x_mode_reset_to_normal(void)
   }
 }
 // Emit "option not set" error for completefunc/omnifunc.
-void nvim_emit_completefunc_not_set_error(int is_function)
-{
-  semsg(_(e_notset), is_function ? "completefunc" : "omnifunc");
-}
+void nvim_emit_completefunc_not_set_error(int is_function) { semsg(_(e_notset), is_function ? "completefunc" : "omnifunc"); }
 // expand_by_function with non-NULL callback (for cpt func sources).
-void nvim_expand_by_function_with_cb(void *cb_opaque)
-{
-  nvim_expand_by_function_full_impl(0, cpt_compl_pattern.data, cb_opaque);
-}
+void nvim_expand_by_function_with_cb(void *cb_opaque) { nvim_expand_by_function_full_impl(0, cpt_compl_pattern.data, cb_opaque); }
 // Advance p past cpt option segment using IObuff (for prepare_cpt_compl_funcs)
-size_t nvim_copy_option_part_iobuff_ffi(char **src)
-{
-  return copy_option_part(src, IObuff, IOSIZE, ",");
-}
-
-/// Compound accessor: full expand_by_function logic, callable from Rust.
+size_t nvim_copy_option_part_iobuff_ffi(char **src) { return copy_option_part(src, IObuff, IOSIZE, ","); }
 /// Contains the same logic as the static expand_by_function but calls
 /// nvim_ins_compl_add_list_impl / nvim_ins_compl_add_dict_impl to avoid
 /// circular calls after expand_by_function becomes a thin wrapper.
@@ -1557,7 +1464,6 @@ theend:
   }
 }
 
-/// Compound accessor: ins_compl_add_tv logic, callable from Rust.
 /// Contains the full logic moved from the static ins_compl_add_tv function.
 int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
 {
@@ -1614,7 +1520,6 @@ int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
   return status;
 }
 
-/// Compound accessor: ins_compl_add_list logic, callable from Rust.
 void nvim_ins_compl_add_list_impl(void *list_opaque)
 {
   list_T *list = (list_T *)list_opaque;
@@ -1629,7 +1534,6 @@ void nvim_ins_compl_add_list_impl(void *list_opaque)
   });
 }
 
-/// Compound accessor: ins_compl_add_dict logic, callable from Rust.
 void nvim_ins_compl_add_dict_impl(void *dict_opaque)
 {
   dict_T *dict = (dict_T *)dict_opaque;
@@ -1694,7 +1598,6 @@ int nvim_win_get_focusable(win_T *wp) { return wp->w_config.focusable ? 1 : 0; }
 /// Returns wp->w_buffer (for insexpand, distinct name to avoid declaration conflicts).
 buf_T *nvim_win_get_w_buffer_raw(win_T *wp) { return wp->w_buffer; }
 
-/// Compound accessor: wraps the insexpand-specific searchit() call.
 /// Equivalent to: searchit(NULL, buf, pos, NULL, dir, pat, patlen, 1,
 ///                         SEARCH_KEEP+SEARCH_NFMSG, RE_LAST, NULL)
 /// Returns FAIL/OK; modifies pos in place.
@@ -1702,18 +1605,10 @@ buf_T *nvim_win_get_w_buffer_raw(win_T *wp) { return wp->w_buffer; }
 int nvim_curbuf_get_b_scanned(void) { return curbuf->b_scanned ? 1 : 0; }
 
 /// Returns ins_compl_st.ins_buf->b_fname (may be NULL) as a C string pointer.
-const char *nvim_ins_compl_st_get_ins_buf_fname(void)
-{
-  return ins_compl_st.ins_buf ? ins_compl_st.ins_buf->b_fname : NULL;
-}
-
+const char *nvim_ins_compl_st_get_ins_buf_fname(void) { return ins_compl_st.ins_buf ? ins_compl_st.ins_buf->b_fname : NULL; }
 /// Get a pointer into the given buffer at lnum+col offset (for word/line completion).
 /// Equivalent to ml_get_buf(ins_buf, lnum) + col, but takes void* to avoid buf_T in Rust.
-char *nvim_ins_compl_ml_get_buf_at(void *buf, linenr_T lnum, int col)
-{
-  return ml_get_buf((buf_T *)buf, lnum) + col;
-}
-
+char *nvim_ins_compl_ml_get_buf_at(void *buf, linenr_T lnum, int col) { return ml_get_buf((buf_T *)buf, lnum) + col; }
 /// Returns ins_compl_st.ins_buf->b_sfname (NULL if ins_buf==curbuf or ins_buf is NULL).
 const char *nvim_ins_compl_st_ins_buf_get_sfname(void)
 {
