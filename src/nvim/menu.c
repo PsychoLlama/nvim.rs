@@ -471,60 +471,32 @@ void f_menu_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-// ============================================================================
 // Remaining C accessor functions for Rust FFI
-// ============================================================================
 
 /// Get the cmd field from an exarg_T.
-const char *nvim_menu_eap_get_cmd(exarg_T *eap)
-{
-  return eap->cmd;
-}
+const char *nvim_menu_eap_get_cmd(exarg_T *eap) { return eap->cmd; }
 
 /// Get the arg field from an exarg_T.
-char *nvim_menu_eap_get_arg(exarg_T *eap)
-{
-  return eap->arg;
-}
+char *nvim_menu_eap_get_arg(exarg_T *eap) { return eap->arg; }
 
 /// Get the forceit field from an exarg_T.
-bool nvim_menu_eap_get_forceit(exarg_T *eap)
-{
-  return eap->forceit;
-}
+bool nvim_menu_eap_get_forceit(exarg_T *eap) { return eap->forceit; }
 
 /// Get the addr_count field from an exarg_T.
-int nvim_menu_eap_get_addr_count(exarg_T *eap)
-{
-  return eap->addr_count;
-}
+int nvim_menu_eap_get_addr_count(exarg_T *eap) { return eap->addr_count; }
 
 /// Get the line2 field from an exarg_T.
-int nvim_menu_eap_get_line2(exarg_T *eap)
-{
-  return (int)eap->line2;
-}
+int nvim_menu_eap_get_line2(exarg_T *eap) { return (int)eap->line2; }
 
-// ============================================================================
 // Completion + Translation accessors for Rust FFI
-// ============================================================================
 
 // expand_T field accessors
-void nvim_menu_xp_set_context(expand_T *xp, int ctx)
-{
-  xp->xp_context = ctx;
-}
+void nvim_menu_xp_set_context(expand_T *xp, int ctx) { xp->xp_context = ctx; }
 
-void nvim_menu_xp_set_pattern(expand_T *xp, char *pattern)
-{
-  xp->xp_pattern = pattern;
-}
+void nvim_menu_xp_set_pattern(expand_T *xp, char *pattern) { xp->xp_pattern = pattern; }
 
 // menutrans_ga accessors
-int nvim_menu_menutrans_ga_itemsize(void)
-{
-  return menutrans_ga.ga_itemsize;
-}
+int nvim_menu_menutrans_ga_itemsize(void) { return menutrans_ga.ga_itemsize; }
 
 int nvim_menu_menutrans_ga_init(void)
 {
@@ -532,10 +504,7 @@ int nvim_menu_menutrans_ga_init(void)
   return 1;
 }
 
-int nvim_menu_menutrans_ga_len(void)
-{
-  return menutrans_ga.ga_len;
-}
+int nvim_menu_menutrans_ga_len(void) { return menutrans_ga.ga_len; }
 
 const char *nvim_menu_menutrans_get_from(int idx)
 {
@@ -555,10 +524,7 @@ const char *nvim_menu_menutrans_get_to(int idx)
   return tp[idx].to;
 }
 
-void nvim_menu_menutrans_clear(void)
-{
-  GA_DEEP_CLEAR(&menutrans_ga, menutrans_T, FREE_MENUTRANS);
-}
+void nvim_menu_menutrans_clear(void) { GA_DEEP_CLEAR(&menutrans_ga, menutrans_T, FREE_MENUTRANS); }
 
 void nvim_menu_menutrans_append(char *from, char *from_noamp, char *to)
 {
@@ -572,10 +538,7 @@ void nvim_menu_menutrans_append(char *from, char *from_noamp, char *to)
 }
 
 // Error message wrapper
-void nvim_menu_emsg_invarg(void)
-{
-  emsg(_(e_invarg));
-}
+void nvim_menu_emsg_invarg(void) { emsg(_(e_invarg)); }
 
 /// Execute a menu item: clears ea, then calls execute_menu.
 void nvim_menu_execute(vimmenu_T *mp)

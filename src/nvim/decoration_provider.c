@@ -366,52 +366,28 @@ bool nvim_decor_provider_has_hl_def(int ns_id)
 // Pointer-based accessor functions for Rust FFI (callbacks module)
 
 /// Get redraw_start callback ref from provider
-LuaRef nvim_decor_provider_get_redraw_start(DecorProvider *p)
-{
-  return p ? p->redraw_start : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_redraw_start(DecorProvider *p) { return p ? p->redraw_start : LUA_NOREF; }
 
 /// Get redraw_buf callback ref from provider
-LuaRef nvim_decor_provider_get_redraw_buf(DecorProvider *p)
-{
-  return p ? p->redraw_buf : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_redraw_buf(DecorProvider *p) { return p ? p->redraw_buf : LUA_NOREF; }
 
 /// Get redraw_win callback ref from provider
-LuaRef nvim_decor_provider_get_redraw_win(DecorProvider *p)
-{
-  return p ? p->redraw_win : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_redraw_win(DecorProvider *p) { return p ? p->redraw_win : LUA_NOREF; }
 
 /// Get redraw_line callback ref from provider
-LuaRef nvim_decor_provider_get_redraw_line(DecorProvider *p)
-{
-  return p ? p->redraw_line : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_redraw_line(DecorProvider *p) { return p ? p->redraw_line : LUA_NOREF; }
 
 /// Get redraw_range callback ref from provider
-LuaRef nvim_decor_provider_get_redraw_range(DecorProvider *p)
-{
-  return p ? p->redraw_range : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_redraw_range(DecorProvider *p) { return p ? p->redraw_range : LUA_NOREF; }
 
 /// Get redraw_end callback ref from provider
-LuaRef nvim_decor_provider_get_redraw_end(DecorProvider *p)
-{
-  return p ? p->redraw_end : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_redraw_end(DecorProvider *p) { return p ? p->redraw_end : LUA_NOREF; }
 
 /// Get spell_nav callback ref from provider
-LuaRef nvim_decor_provider_get_spell_nav(DecorProvider *p)
-{
-  return p ? p->spell_nav : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_spell_nav(DecorProvider *p) { return p ? p->spell_nav : LUA_NOREF; }
 
 /// Get conceal_line callback ref from provider
-LuaRef nvim_decor_provider_get_conceal_line(DecorProvider *p)
-{
-  return p ? p->conceal_line : LUA_NOREF;
-}
+LuaRef nvim_decor_provider_get_conceal_line(DecorProvider *p) { return p ? p->conceal_line : LUA_NOREF; }
 
 void decor_provider_clear(DecorProvider *p)
 {

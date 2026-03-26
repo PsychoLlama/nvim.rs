@@ -85,43 +85,26 @@ static const char e_overlapping_ranges_for_nr[]
 static const char e_only_values_of_0x80_and_higher_supported[]
   = N_("E1114: Only values of 0x80 and higher supported");
 
-// =============================================================================
 // Rust accessor functions for buffer properties
-// =============================================================================
 
 /// Check if current buffer has 'bomb' option set (accessor for Rust).
-int nvim_curbuf_get_b_p_bomb(void)
-{
-  return curbuf->b_p_bomb ? 1 : 0;
-}
+int nvim_curbuf_get_b_p_bomb(void) { return curbuf->b_p_bomb ? 1 : 0; }
 
 /// Check if current buffer has 'binary' option set (accessor for Rust).
-int nvim_curbuf_get_b_p_bin(void)
-{
-  return curbuf->b_p_bin ? 1 : 0;
-}
+int nvim_curbuf_get_b_p_bin(void) { return curbuf->b_p_bin ? 1 : 0; }
 
 /// Get current buffer's 'fileencoding' option (accessor for Rust).
-const char *nvim_curbuf_get_b_p_fenc(void)
-{
-  return curbuf->b_p_fenc;
-}
+const char *nvim_curbuf_get_b_p_fenc(void) { return curbuf->b_p_fenc; }
 
 
 // mb_ptr2char_adv, utfc_ptr2schar, utfc_ptrlen2schar, schar_from_buf_first
 // are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 /// Accessor for Rust FFI: get UTF character from byte pointer.
-int nvim_utf_ptr2char(const char *p)
-{
-  return utf_ptr2char(p);
-}
+int nvim_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 
 /// Accessor for Rust FFI: get UTF character length including composing chars.
-int nvim_utfc_ptr2len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
+int nvim_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
 
 
 #ifdef MSWIN
@@ -319,16 +302,10 @@ theend:
 
 // If the cursor moves on an trail byte, set the cursor on the lead byte.
 // Thus it moves left if necessary.
-void mb_adjust_cursor(void)
-{
-  mark_mb_adjustpos(curbuf, &curwin->w_cursor);
-}
+void mb_adjust_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_cursor); }
 
 /// C accessor for mb_adjust_cursor (for Rust FFI).
-void nvim_mb_adjust_cursor(void)
-{
-  mb_adjust_cursor();
-}
+void nvim_mb_adjust_cursor(void) { mb_adjust_cursor(); }
 
 /// Checks and adjusts cursor column. Not mode-dependent.
 /// @see check_cursor_col
@@ -586,10 +563,7 @@ void f_iconv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// Afterwards invoke with "from" and "to" equal to NULL to cleanup.
 ///
 /// @return  FAIL when conversion is not supported, OK otherwise.
-int convert_setup(vimconv_T *vcp, char *from, char *to)
-{
-  return convert_setup_ext(vcp, from, true, to, true);
-}
+int convert_setup(vimconv_T *vcp, char *from, char *to) { return convert_setup_ext(vcp, from, true, to, true); }
 
 /// As convert_setup(), but only when from_unicode_is_utf8 is true will all
 /// "from" unicode charsets be considered utf-8.  Same for "to".

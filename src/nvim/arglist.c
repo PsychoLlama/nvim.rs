@@ -122,9 +122,7 @@ _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
 /// function that might trigger an autocommand.
 static bool arglist_locked = false;
 
-// =============================================================================
 // C accessor functions for Rust FFI
-// =============================================================================
 
 // -- Globals --
 int nvim_al_get_arglist_locked(void) { return arglist_locked; }
@@ -190,14 +188,8 @@ void nvim_al_deep_clear_aentry(alist_T *al)
   GA_DEEP_CLEAR(&al->al_ga, aentry_T, FREE_AENTRY_FNAME);
 #undef FREE_AENTRY_FNAME
 }
-int nvim_al_buflist_add(const char *fname, int flags)
-{
-  return buflist_add((char *)fname, flags);
-}
-void nvim_al_buf_set_name(int fnum, const char *name)
-{
-  buf_set_name(fnum, (char *)name);
-}
+int nvim_al_buflist_add(const char *fname, int flags) { return buflist_add((char *)fname, flags); }
+void nvim_al_buf_set_name(int fnum, const char *name) { buf_set_name(fnum, (char *)name); }
 void nvim_al_os_breakcheck(void) { os_breakcheck(); }
 
 // -- Phase 3 extra accessors --
@@ -217,10 +209,7 @@ void nvim_al_ga_append_charptr(garray_T *ga, char *ptr) { GA_APPEND(char *, ga, 
 garray_T *nvim_al_alloc_garray(void) { return xcalloc(1, sizeof(garray_T)); }
 void nvim_al_free_garray(garray_T *ga) { xfree(ga); }
 
-alist_T *nvim_al_alloc_alist(void)
-{
-  return xmalloc(sizeof(alist_T));
-}
+alist_T *nvim_al_alloc_alist(void) { return xmalloc(sizeof(alist_T)); }
 
 // -- Phase 4 extra accessors --
 
@@ -236,24 +225,15 @@ void nvim_al_foreach_tab_window(int (*callback)(win_T *wp, void *ud), void *ud)
 }
 
 // Opaque regex wrappers: allocate regmatch_T on C heap, compile, execute, free.
-void *nvim_al_regmatch_alloc(void)
-{
-  return xcalloc(1, sizeof(regmatch_T));
-}
-void nvim_al_regmatch_set_ic(void *rm, int ic)
-{
-  ((regmatch_T *)rm)->rm_ic = ic;
-}
+void *nvim_al_regmatch_alloc(void) { return xcalloc(1, sizeof(regmatch_T)); }
+void nvim_al_regmatch_set_ic(void *rm, int ic) { ((regmatch_T *)rm)->rm_ic = ic; }
 int nvim_al_regmatch_compile(void *rm, const char *pat, int re_flags)
 {
   regmatch_T *rmp = (regmatch_T *)rm;
   rmp->regprog = vim_regcomp(pat, re_flags);
   return rmp->regprog != NULL;
 }
-int nvim_al_regmatch_exec(void *rm, const char *line)
-{
-  return vim_regexec((regmatch_T *)rm, line, 0);
-}
+int nvim_al_regmatch_exec(void *rm, const char *line) { return vim_regexec((regmatch_T *)rm, line, 0); }
 void nvim_al_regmatch_free(void *rm)
 {
   regmatch_T *rmp = (regmatch_T *)rm;
@@ -267,10 +247,7 @@ void nvim_al_regmatch_free_prog(void *rm)
   rmp->regprog = NULL;
 }
 
-char *nvim_al_file_pat_to_reg_pat(const char *pat)
-{
-  return file_pat_to_reg_pat(pat, NULL, NULL, false);
-}
+char *nvim_al_file_pat_to_reg_pat(const char *pat) { return file_pat_to_reg_pat(pat, NULL, NULL, false); }
 int nvim_al_get_p_fic(void) { return p_fic; }
 void nvim_al_semsg_nomatch2(const char *s) { semsg(_(e_nomatch2), s); }
 void nvim_al_emsg_nomatch(void) { emsg(_(e_nomatch)); }

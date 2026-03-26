@@ -87,75 +87,40 @@ extern int rs_get_digraphdefault_len(void);
 // The following block was here: { 'N', 'U', 0x0a } through { NUL, NUL, NUL }
 // plus all DG_START_* #defines and _Static_asserts
 
-// =============================================================================
 // Accessor functions for Rust FFI
-// =============================================================================
 
 /// Get pointer to user digraphs array data (opaque for Rust).
-void *nvim_get_user_digraphs_data(void)
-{
-  return user_digraphs.ga_data;
-}
+void *nvim_get_user_digraphs_data(void) { return user_digraphs.ga_data; }
 
 /// Get length of user digraphs array.
-int nvim_get_user_digraphs_len(void)
-{
-  return user_digraphs.ga_len;
-}
+int nvim_get_user_digraphs_len(void) { return user_digraphs.ga_len; }
 
 /// Get pointer to user digraphs garray for mutation.
-void *nvim_get_user_digraphs_ptr(void)
-{
-  return &user_digraphs;
-}
+void *nvim_get_user_digraphs_ptr(void) { return &user_digraphs; }
 
 /// Grow the user digraphs garray by n items.
-void nvim_user_digraphs_grow(int n)
-{
-  ga_grow(&user_digraphs, n);
-}
+void nvim_user_digraphs_grow(int n) { ga_grow(&user_digraphs, n); }
 
 /// Increment the user digraphs garray length.
-void nvim_user_digraphs_inc_len(void)
-{
-  user_digraphs.ga_len++;
-}
+void nvim_user_digraphs_inc_len(void) { user_digraphs.ga_len++; }
 
 /// Get the value of the 'digraph' option.
-int nvim_get_p_dg(void)
-{
-  return p_dg;
-}
+int nvim_get_p_dg(void) { return p_dg; }
 
 /// Check if a character is a composing character (for Rust FFI).
-int nvim_utf_iscomposing_first(int c)
-{
-  return utf_iscomposing_first(c);
-}
+int nvim_utf_iscomposing_first(int c) { return utf_iscomposing_first(c); }
 
 /// Get display width of a character in cells (for Rust FFI).
-int nvim_char2cells(int c)
-{
-  return char2cells(c);
-}
+int nvim_char2cells(int c) { return char2cells(c); }
 
 /// Check if user pressed Ctrl-C (for Rust FFI).
-int nvim_digraph_got_int(void)
-{
-  return got_int;
-}
+int nvim_digraph_got_int(void) { return got_int; }
 
 /// Fast check for user interrupt (for Rust FFI).
-void nvim_digraph_fast_breakcheck(void)
-{
-  fast_breakcheck();
-}
+void nvim_digraph_fast_breakcheck(void) { fast_breakcheck(); }
 
 /// Get a character without mapping (for Rust FFI).
-int nvim_digraph_plain_vgetc(void)
-{
-  return plain_vgetc();
-}
+int nvim_digraph_plain_vgetc(void) { return plain_vgetc(); }
 
 /// Increment no_mapping and allow_keys (for Rust FFI).
 void nvim_digraph_inc_no_mapping(void)
@@ -172,22 +137,13 @@ void nvim_digraph_dec_no_mapping(void)
 }
 
 /// Get cmdline_star value (for Rust FFI).
-int nvim_digraph_get_cmdline_star(void)
-{
-  return cmdline_star;
-}
+int nvim_digraph_get_cmdline_star(void) { return cmdline_star; }
 
 /// Put a character on the command line (for Rust FFI).
-void nvim_digraph_putcmdline(int c, int shift)
-{
-  putcmdline((char)c, shift != 0);
-}
+void nvim_digraph_putcmdline(int c, int shift) { putcmdline((char)c, shift != 0); }
 
 /// Add a character to the showcmd display (for Rust FFI).
-void nvim_digraph_add_to_showcmd(int c)
-{
-  add_to_showcmd(c);
-}
+void nvim_digraph_add_to_showcmd(int c) { add_to_showcmd(c); }
 
 /// handle digraphs after typing a character
 ///

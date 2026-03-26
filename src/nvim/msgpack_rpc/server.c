@@ -87,10 +87,7 @@ end:
 }
 
 /// Teardown a single server
-static void close_socket_watcher(SocketWatcher **watcher)
-{
-  socket_watcher_close(*watcher, free_server);
-}
+static void close_socket_watcher(SocketWatcher **watcher) { socket_watcher_close(*watcher, free_server); }
 
 /// Sets the "primary address" (v:servername and $NVIM) to the first server in
 /// the server list, or unsets if no servers are known.
@@ -103,10 +100,7 @@ static void set_vservername(garray_T *srvs)
 }
 
 /// Teardown the server module
-void server_teardown(void)
-{
-  GA_DEEP_CLEAR(&watchers, SocketWatcher *, close_socket_watcher);
-}
+void server_teardown(void) { GA_DEEP_CLEAR(&watchers, SocketWatcher *, close_socket_watcher); }
 
 /// Generates unique address for local server.
 ///
@@ -280,35 +274,14 @@ static void connection_cb(SocketWatcher *watcher, int result, void *data)
   channel_from_connection(watcher);
 }
 
-static void free_server(SocketWatcher *watcher, void *data)
-{
-  xfree(watcher);
-}
+static void free_server(SocketWatcher *watcher, void *data) { xfree(watcher); }
 
-// =============================================================================
 // Accessor functions for Rust FFI (nvim-msgpack-rpc crate)
-// =============================================================================
 
-/// Wrapper for server_start
-int nvim_server_start(const char *addr)
-{
-  return server_start(addr);
-}
+int nvim_server_start(const char *addr) { return server_start(addr); }
 
-/// Wrapper for server_stop
-int nvim_server_stop(const char *addr)
-{
-  return server_stop((char *)addr) ? 1 : 0;
-}
+int nvim_server_stop(const char *addr) { return server_stop((char *)addr) ? 1 : 0; }
 
-/// Wrapper for server_address_new
-char *nvim_server_address_new(const char *name)
-{
-  return server_address_new(name);
-}
+char *nvim_server_address_new(const char *name) { return server_address_new(name); }
 
-/// Wrapper for server_owns_pipe_address
-int nvim_server_owns_pipe_address(const char *addr)
-{
-  return server_owns_pipe_address(addr) ? 1 : 0;
-}
+int nvim_server_owns_pipe_address(const char *addr) { return server_owns_pipe_address(addr) ? 1 : 0; }

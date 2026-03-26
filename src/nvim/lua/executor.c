@@ -151,10 +151,7 @@ typedef enum luv_err_type {
   kThreadCallback,
 } luv_err_t;
 
-lua_State *get_global_lstate(void)
-{
-  return global_lstate;
-}
+lua_State *get_global_lstate(void) { return global_lstate; }
 
 /// Gets the Lua error at top of stack as a string, possibly modifying it in-place (but doesn't
 /// change stack height).
@@ -447,10 +444,7 @@ static void dummy_timer_due_cb(TimeWatcher *tw, void *data)
 }
 
 // Dummy timer close callback. Used by f_wait().
-static void dummy_timer_close_cb(TimeWatcher *tw, void *data)
-{
-  xfree(tw);
-}
+static void dummy_timer_close_cb(TimeWatcher *tw, void *data) { xfree(tw); }
 
 static bool nlua_wait_condition(lua_State *lstate, int *status, bool *callback_result,
                                 int *nresults)
@@ -917,10 +911,7 @@ void nlua_init(char **argv, int argc, int lua_arg0)
   nlua_init_argv(lstate, argv, argc, lua_arg0);
 }
 
-static lua_State *nlua_thread_acquire_vm(void)
-{
-  return nlua_init_state(true);
-}
+static lua_State *nlua_thread_acquire_vm(void) { return nlua_init_state(true); }
 
 void nlua_run_script(char **argv, int argc, int lua_arg0)
   FUNC_ATTR_NORETURN
@@ -1278,10 +1269,7 @@ static int nlua_rpcrequest(lua_State *lstate)
   return nlua_rpc(lstate, true);
 }
 
-static int nlua_rpcnotify(lua_State *lstate)
-{
-  return nlua_rpc(lstate, false);
-}
+static int nlua_rpcnotify(lua_State *lstate) { return nlua_rpc(lstate, false); }
 
 static int nlua_rpc(lua_State *lstate, bool request)
 {
@@ -1373,10 +1361,7 @@ LuaRef nlua_ref(lua_State *lstate, nlua_ref_state_t *ref_state, int index)
 // TODO(lewis6991): Currently cannot be run in __gc metamethods as they are
 // invoked in lua_close() which can be invoked after the ref_markers map is
 // destroyed in nlua_common_free_all_mem.
-LuaRef nlua_ref_global(lua_State *lstate, int index)
-{
-  return nlua_ref(lstate, nlua_global_refs, index);
-}
+LuaRef nlua_ref_global(lua_State *lstate, int index) { return nlua_ref(lstate, nlua_global_refs, index); }
 
 /// remove the value from the registry
 void nlua_unref(lua_State *lstate, nlua_ref_state_t *ref_state, LuaRef ref)
@@ -1393,21 +1378,12 @@ void nlua_unref(lua_State *lstate, nlua_ref_state_t *ref_state, LuaRef ref)
   }
 }
 
-void nlua_unref_global(lua_State *lstate, LuaRef ref)
-{
-  nlua_unref(lstate, nlua_global_refs, ref);
-}
+void nlua_unref_global(lua_State *lstate, LuaRef ref) { nlua_unref(lstate, nlua_global_refs, ref); }
 
-void api_free_luaref(LuaRef ref)
-{
-  nlua_unref_global(global_lstate, ref);
-}
+void api_free_luaref(LuaRef ref) { nlua_unref_global(global_lstate, ref); }
 
 /// push a value referenced in the registry
-void nlua_pushref(lua_State *lstate, LuaRef ref)
-{
-  lua_rawgeti(lstate, LUA_REGISTRYINDEX, ref);
-}
+void nlua_pushref(lua_State *lstate, LuaRef ref) { lua_rawgeti(lstate, LUA_REGISTRYINDEX, ref); }
 
 /// Gets a new reference to an object stored at original_ref
 ///
@@ -1634,10 +1610,7 @@ Object nlua_call_ref(LuaRef ref, const char *name, Array args, LuaRetMode mode, 
   return nlua_call_ref_ctx(false, ref, name, args, mode, arena, err);
 }
 
-static int mode_ret(LuaRetMode mode)
-{
-  return mode == kRetMulti ? LUA_MULTRET : 1;
-}
+static int mode_ret(LuaRetMode mode) { return mode == kRetMulti ? LUA_MULTRET : 1; }
 
 Object nlua_call_ref_ctx(bool fast, LuaRef ref, const char *name, Array args, LuaRetMode mode,
                          Arena *arena, Error *err)
@@ -2458,15 +2431,10 @@ bool nlua_func_exists(const char *lua_funcname)
   return LUARET_TRUTHY(result);
 }
 
-// =============================================================================
 // Rust FFI accessor functions
-// =============================================================================
 
 /// C accessor for the static in_fast_callback variable (used by Rust FFI).
-int nvim_get_in_fast_callback(void)
-{
-  return in_fast_callback;
-}
+int nvim_get_in_fast_callback(void) { return in_fast_callback; }
 
 /// C wrapper for nlua_call_ref callable from Rust.
 /// Note: Array is passed by value (16 bytes on 64-bit), which is ABI-safe.

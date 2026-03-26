@@ -45,103 +45,53 @@ extern int rs_buf_init_chartab(buf_T *buf, bool global);
 
 static bool chartab_initialized = false;
 
-// ============================================================================
 // Accessor functions for Rust FFI
-// ============================================================================
 
 /// Get 'isident' option value.
-const char *nvim_charset_get_p_isi(void)
-{
-  return p_isi;
-}
+const char *nvim_charset_get_p_isi(void) { return p_isi; }
 
 /// Get 'isprint' option value.
-const char *nvim_charset_get_p_isp(void)
-{
-  return p_isp;
-}
+const char *nvim_charset_get_p_isp(void) { return p_isp; }
 
 /// Get 'isfname' option value.
-const char *nvim_charset_get_p_isf(void)
-{
-  return p_isf;
-}
+const char *nvim_charset_get_p_isf(void) { return p_isf; }
 
 /// Get 'iskeyword' for a buffer.
-const char *nvim_charset_get_buf_p_isk(buf_T *buf)
-{
-  return buf ? buf->b_p_isk : NULL;
-}
+const char *nvim_charset_get_buf_p_isk(buf_T *buf) { return buf ? buf->b_p_isk : NULL; }
 
 /// Get dy_flags (display flags).
-unsigned nvim_charset_get_dy_flags(void)
-{
-  return dy_flags;
-}
+unsigned nvim_charset_get_dy_flags(void) { return dy_flags; }
 
 /// Get b_p_lisp flag from a buffer.
-int nvim_charset_get_buf_lisp(buf_T *buf)
-{
-  return buf ? buf->b_p_lisp : 0;
-}
+int nvim_charset_get_buf_lisp(buf_T *buf) { return buf ? buf->b_p_lisp : 0; }
 
 /// Advance pointer and get UTF character (skips composing characters).
-int nvim_charset_mb_ptr2char_adv(const char **pp)
-{
-  return mb_ptr2char_adv(pp);
-}
+int nvim_charset_mb_ptr2char_adv(const char **pp) { return mb_ptr2char_adv(pp); }
 
 /// Check if character is lowercase.
-int nvim_charset_mb_islower(int c)
-{
-  return mb_islower(c) ? 1 : 0;
-}
+int nvim_charset_mb_islower(int c) { return mb_islower(c) ? 1 : 0; }
 
 /// Check if character is uppercase.
-int nvim_charset_mb_isupper(int c)
-{
-  return mb_isupper(c) ? 1 : 0;
-}
+int nvim_charset_mb_isupper(int c) { return mb_isupper(c) ? 1 : 0; }
 
 /// Get pointer to g_chartab array.
-uint8_t *nvim_charset_get_g_chartab(void)
-{
-  return g_chartab;
-}
+uint8_t *nvim_charset_get_g_chartab(void) { return g_chartab; }
 
 /// Get pointer to the cursor line.
-const char *nvim_charset_get_cursor_line_ptr(void)
-{
-  return get_cursor_line_ptr();
-}
+const char *nvim_charset_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
 
 /// Check if chartab is initialized.
-int nvim_charset_is_initialized(void)
-{
-  return chartab_initialized ? 1 : 0;
-}
+int nvim_charset_is_initialized(void) { return chartab_initialized ? 1 : 0; }
 
 /// Get pointer comparison values for option string detection.
 /// These are used in parse_isopt to determine which option is being set.
-const char *nvim_charset_get_p_isi_ptr(void)
-{
-  return p_isi;
-}
+const char *nvim_charset_get_p_isi_ptr(void) { return p_isi; }
 
-const char *nvim_charset_get_p_isp_ptr(void)
-{
-  return p_isp;
-}
+const char *nvim_charset_get_p_isp_ptr(void) { return p_isp; }
 
-const char *nvim_charset_get_p_isf_ptr(void)
-{
-  return p_isf;
-}
+const char *nvim_charset_get_p_isf_ptr(void) { return p_isf; }
 
-// ============================================================================
-// ============================================================================
 // g_chartab - Character properties table
-// ============================================================================
 //
 // g_chartab is owned by Rust and contains properties for bytes 0-255:
 // - Lower 3 bits (0x07): display cell count (1, 2, or 4)
@@ -172,10 +122,7 @@ extern uint8_t g_chartab[256];
 ///
 /// @return FAIL if 'iskeyword', 'isident', 'isfname' or 'isprint' option has
 /// an error, OK otherwise.
-int init_chartab(void)
-{
-  return buf_init_chartab(curbuf, true);
-}
+int init_chartab(void) { return buf_init_chartab(curbuf, true); }
 
 /// Helper for init_chartab
 ///
@@ -253,10 +200,7 @@ static uint8_t transchar_charbuf[11];
 /// @param[in]  c  Character to translate.
 ///
 /// @return translated character into a static buffer.
-char *transchar(int c)
-{
-  return transchar_buf(curbuf, c);
-}
+char *transchar(int c) { return transchar_buf(curbuf, c); }
 
 char *transchar_buf(const buf_T *buf, int c)
 {

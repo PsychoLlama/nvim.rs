@@ -125,10 +125,7 @@ extern void rs_f_getscriptinfo(void *argvars, void *rettv, void *fptr);
 // These live here (not in runtime_ffi.c) because ga_loaded is static.
 
 /// Helper for rs_free_autoload_scriptnames: clear ga_loaded.
-void nvim_rt_ga_clear_loaded(void)
-{
-  ga_clear_strings(&ga_loaded);
-}
+void nvim_rt_ga_clear_loaded(void) { ga_clear_strings(&ga_loaded); }
 
 /// Helper for rs_free_scriptnames: full cleanup of script_items.
 void nvim_rt_free_scriptnames(void)
@@ -173,27 +170,16 @@ list_T *nvim_rt_get_script_local_funcs(scid_T sid)
   return l;
 }
 
-// =============================================================================
 // Phase 3: ga_loaded accessors (ga_loaded is static, so these must live here)
-// =============================================================================
 
 /// Get ga_loaded length.
-int nvim_rt_ga_loaded_len(void)
-{
-  return ga_loaded.ga_len;
-}
+int nvim_rt_ga_loaded_len(void) { return ga_loaded.ga_len; }
 
 /// Get loaded script name at index.
-const char *nvim_rt_ga_loaded_get(int idx)
-{
-  return ((char **)ga_loaded.ga_data)[idx];
-}
+const char *nvim_rt_ga_loaded_get(int idx) { return ((char **)ga_loaded.ga_data)[idx]; }
 
 /// Append a string to ga_loaded (takes ownership).
-void nvim_rt_ga_loaded_append(char *name)
-{
-  GA_APPEND(char *, &ga_loaded, name);
-}
+void nvim_rt_ga_loaded_append(char *name) { GA_APPEND(char *, &ga_loaded, name); }
 
 /// do_in_runtimepath wrapper that passes rs_source_callback.
 int nvim_rt_do_in_runtimepath_source(const char *name, int flags, void *cookie)
@@ -219,57 +205,31 @@ extern const char *rs_did_set_runtimepackpath(optset_T *args);
 extern void rs_runtime_search_path_get_cached(int *ref);
 extern bool rs_runtime_search_path_unref(const int *ref);
 
-// =============================================================================
 // Phase 4: Search path global state accessors (globals are static)
-// =============================================================================
 
 /// Get runtime_search_path_valid.
-bool nvim_rt_sp_get_valid(void)
-{
-  return runtime_search_path_valid;
-}
+bool nvim_rt_sp_get_valid(void) { return runtime_search_path_valid; }
 
 /// Set runtime_search_path_valid.
-void nvim_rt_sp_set_valid(bool valid)
-{
-  runtime_search_path_valid = valid;
-}
+void nvim_rt_sp_set_valid(bool valid) { runtime_search_path_valid = valid; }
 
 /// Get runtime_search_path_ref.
-int *nvim_rt_sp_get_ref(void)
-{
-  return runtime_search_path_ref;
-}
+int *nvim_rt_sp_get_ref(void) { return runtime_search_path_ref; }
 
 /// Set runtime_search_path_ref.
-void nvim_rt_sp_set_ref(int *ref_ptr)
-{
-  runtime_search_path_ref = ref_ptr;
-}
+void nvim_rt_sp_set_ref(int *ref_ptr) { runtime_search_path_ref = ref_ptr; }
 
 /// Initialize runtime_search_path_mutex.
-void nvim_rt_sp_mutex_init(void)
-{
-  uv_mutex_init(&runtime_search_path_mutex);
-}
+void nvim_rt_sp_mutex_init(void) { uv_mutex_init(&runtime_search_path_mutex); }
 
 /// Lock runtime_search_path_mutex.
-void nvim_rt_sp_mutex_lock(void)
-{
-  uv_mutex_lock(&runtime_search_path_mutex);
-}
+void nvim_rt_sp_mutex_lock(void) { uv_mutex_lock(&runtime_search_path_mutex); }
 
 /// Unlock runtime_search_path_mutex.
-void nvim_rt_sp_mutex_unlock(void)
-{
-  uv_mutex_unlock(&runtime_search_path_mutex);
-}
+void nvim_rt_sp_mutex_unlock(void) { uv_mutex_unlock(&runtime_search_path_mutex); }
 
 /// Check if deferred execution is safe.
-bool nvim_rt_nlua_is_deferred_safe(void)
-{
-  return nlua_is_deferred_safe();
-}
+bool nvim_rt_nlua_is_deferred_safe(void) { return nlua_is_deferred_safe(); }
 
 static void runtime_search_path_free(RuntimeSearchPath path);
 static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src);
@@ -283,10 +243,7 @@ void nvim_rt_sp_free_path(void)
 }
 
 /// Build a new search path and set it as the global.
-void nvim_rt_sp_build_and_set(void)
-{
-  runtime_search_path = runtime_search_path_build();
-}
+void nvim_rt_sp_build_and_set(void) { runtime_search_path = runtime_search_path_build(); }
 
 /// Copy global search path to thread-safe copy (frees old thread copy first).
 void nvim_rt_sp_copy_to_thread(void)
@@ -759,10 +716,7 @@ static void cmd_source(char *fname, exarg_T *eap)
 }
 
 /// ":source [{fname}]"
-void ex_source(exarg_T *eap)
-{
-  cmd_source(eap->arg, eap);
-}
+void ex_source(exarg_T *eap) { cmd_source(eap->arg, eap); }
 
 /// ":options"
 void ex_options(exarg_T *eap)
@@ -780,16 +734,10 @@ void ex_options(exarg_T *eap)
 /// ":source" and associated commands.
 ///
 /// @return address holding the next breakpoint line for a source cookie
-linenr_T *source_breakpoint(void *cookie)
-{
-  return &((source_cookie_T *)cookie)->breakpoint;
-}
+linenr_T *source_breakpoint(void *cookie) { return &((source_cookie_T *)cookie)->breakpoint; }
 
 /// @return  the address holding the debug tick for a source cookie.
-int *source_dbg_tick(void *cookie)
-{
-  return &((source_cookie_T *)cookie)->dbg_tick;
-}
+int *source_dbg_tick(void *cookie) { return &((source_cookie_T *)cookie)->dbg_tick; }
 
 /// @return  the nesting level for a source cookie.
 int source_level(void *cookie)
@@ -1465,10 +1413,7 @@ retry:
 
 /// Returns true if sourcing a script either from a file or a buffer or a string.
 /// Otherwise returns false.
-int sourcing_a_script(exarg_T *eap)
-{
-  return getline_equal(eap->ea_getline, eap->cookie, getsourceline);
-}
+int sourcing_a_script(exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getsourceline); }
 
 /// ":scriptencoding": Set encoding conversion for a sourced script.
 /// Without the multi-byte feature it's simply ignored.

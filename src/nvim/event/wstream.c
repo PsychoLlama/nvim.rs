@@ -70,10 +70,7 @@ void wstream_init_stream(Stream *stream, uv_stream_t *uvstream, size_t maxmem)
   wstream_init(stream, maxmem);
 }
 
-void wstream_init(Stream *stream, size_t maxmem)
-{
-  stream_set_maxmem(stream, maxmem ? maxmem : DEFAULT_MAXMEM);
-}
+void wstream_init(Stream *stream, size_t maxmem) { stream_set_maxmem(stream, maxmem ? maxmem : DEFAULT_MAXMEM); }
 
 /// Sets a callback that will be called on completion of a write request,
 /// indicating failure/success.
@@ -207,49 +204,26 @@ void wstream_release_wbuffer(WBuffer *buffer)
   }
 }
 
-// =============================================================================
 // Rust accessor functions for WBuffer opaque handle pattern
-// =============================================================================
 
 /// Get the size from a WBuffer (accessor for Rust).
-size_t nvim_wbuffer_get_size(WBuffer *buffer)
-{
-  return buffer->size;
-}
+size_t nvim_wbuffer_get_size(WBuffer *buffer) { return buffer->size; }
 
 /// Get the refcount from a WBuffer (accessor for Rust).
-size_t nvim_wbuffer_get_refcount(WBuffer *buffer)
-{
-  return buffer->refcount;
-}
+size_t nvim_wbuffer_get_refcount(WBuffer *buffer) { return buffer->refcount; }
 
 /// Get the data pointer from a WBuffer (accessor for Rust).
-char *nvim_wbuffer_get_data(WBuffer *buffer)
-{
-  return buffer->data;
-}
+char *nvim_wbuffer_get_data(WBuffer *buffer) { return buffer->data; }
 
 /// Get the callback from a WBuffer (accessor for Rust).
-void *nvim_wbuffer_get_cb(WBuffer *buffer)
-{
-  return (void *)buffer->cb;
-}
+void *nvim_wbuffer_get_cb(WBuffer *buffer) { return (void *)buffer->cb; }
 
 /// Set the size for a WBuffer (accessor for Rust).
-void nvim_wbuffer_set_size(WBuffer *buffer, size_t size)
-{
-  buffer->size = size;
-}
+void nvim_wbuffer_set_size(WBuffer *buffer, size_t size) { buffer->size = size; }
 
 /// Set the refcount for a WBuffer (accessor for Rust).
-void nvim_wbuffer_set_refcount(WBuffer *buffer, size_t refcount)
-{
-  buffer->refcount = refcount;
-}
+void nvim_wbuffer_set_refcount(WBuffer *buffer, size_t refcount) { buffer->refcount = refcount; }
 
 /// Decrement refcount for a WBuffer (accessor for Rust).
 /// Returns 1 if refcount is now 0 and buffer should be freed.
-int nvim_wbuffer_decref(WBuffer *buffer)
-{
-  return (--buffer->refcount == 0) ? 1 : 0;
-}
+int nvim_wbuffer_decref(WBuffer *buffer) { return (--buffer->refcount == 0) ? 1 : 0; }

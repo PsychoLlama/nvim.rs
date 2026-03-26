@@ -294,27 +294,16 @@ cleanup:
   return success;
 }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Get the address from a SocketWatcher (accessor for Rust).
-const char *nvim_socket_watcher_get_addr(SocketWatcher *watcher)
-{
-  return watcher->addr;
-}
+const char *nvim_socket_watcher_get_addr(SocketWatcher *watcher) { return watcher->addr; }
 
 /// Get the events queue from a SocketWatcher (accessor for Rust).
-MultiQueue *nvim_socket_watcher_get_events(SocketWatcher *watcher)
-{
-  return watcher->events;
-}
+MultiQueue *nvim_socket_watcher_get_events(SocketWatcher *watcher) { return watcher->events; }
 
 /// Get the user data from a SocketWatcher (accessor for Rust).
-void *nvim_socket_watcher_get_data(SocketWatcher *watcher)
-{
-  return watcher->data;
-}
+void *nvim_socket_watcher_get_data(SocketWatcher *watcher) { return watcher->data; }
 
 /// Check if a SocketWatcher is TCP type (accessor for Rust).
 int nvim_socket_watcher_is_tcp(SocketWatcher *watcher)
@@ -323,40 +312,22 @@ int nvim_socket_watcher_is_tcp(SocketWatcher *watcher)
 }
 
 /// Set the user data for a SocketWatcher (accessor for Rust).
-void nvim_socket_watcher_set_data(SocketWatcher *watcher, void *data)
-{
-  watcher->data = data;
-}
+void nvim_socket_watcher_set_data(SocketWatcher *watcher, void *data) { watcher->data = data; }
 
 /// Set the events queue for a SocketWatcher (accessor for Rust).
-void nvim_socket_watcher_set_events(SocketWatcher *watcher, MultiQueue *events)
-{
-  watcher->events = events;
-}
+void nvim_socket_watcher_set_events(SocketWatcher *watcher, MultiQueue *events) { watcher->events = events; }
 
 /// Get the cb from a SocketWatcher (accessor for Rust).
-void *nvim_socket_watcher_get_cb(SocketWatcher *watcher)
-{
-  return (void *)watcher->cb;
-}
+void *nvim_socket_watcher_get_cb(SocketWatcher *watcher) { return (void *)watcher->cb; }
 
 /// Set the cb for a SocketWatcher (accessor for Rust).
-void nvim_socket_watcher_set_cb(SocketWatcher *watcher, void *cb)
-{
-  watcher->cb = (socket_cb)cb;
-}
+void nvim_socket_watcher_set_cb(SocketWatcher *watcher, void *cb) { watcher->cb = (socket_cb)cb; }
 
 /// Get the close_cb from a SocketWatcher (accessor for Rust).
-void *nvim_socket_watcher_get_close_cb(SocketWatcher *watcher)
-{
-  return (void *)watcher->close_cb;
-}
+void *nvim_socket_watcher_get_close_cb(SocketWatcher *watcher) { return (void *)watcher->close_cb; }
 
 /// Set the close_cb for a SocketWatcher (accessor for Rust).
-void nvim_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb)
-{
-  watcher->close_cb = (socket_close_cb)cb;
-}
+void nvim_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb) { watcher->close_cb = (socket_close_cb)cb; }
 
 /// Call the socket callback if set (accessor for Rust).
 void nvim_socket_watcher_call_cb(SocketWatcher *watcher, int status)

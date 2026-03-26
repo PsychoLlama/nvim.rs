@@ -70,39 +70,22 @@ extern void rs_may_start_select(int c);
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
 
-// =============================================================================
 // C accessors for Rust (mouse state)
-// =============================================================================
 
 /// Get the original topline for double-click detection.
-linenr_T nvim_get_orig_topline(void)
-{
-  return orig_topline;
-}
+linenr_T nvim_get_orig_topline(void) { return orig_topline; }
 
 /// Set the original topline for double-click detection.
-void nvim_set_orig_topline(linenr_T val)
-{
-  orig_topline = val;
-}
+void nvim_set_orig_topline(linenr_T val) { orig_topline = val; }
 
 /// Get the original topfill for double-click detection.
-int nvim_get_orig_topfill(void)
-{
-  return orig_topfill;
-}
+int nvim_get_orig_topfill(void) { return orig_topfill; }
 
 /// Set the original topfill for double-click detection.
-void nvim_set_orig_topfill(int val)
-{
-  orig_topfill = val;
-}
+void nvim_set_orig_topfill(int val) { orig_topfill = val; }
 
 /// Get the mouse_dragging global value.
-int nvim_get_mouse_dragging(void)
-{
-  return mouse_dragging;
-}
+int nvim_get_mouse_dragging(void) { return mouse_dragging; }
 
 /// Get tabnr from tab_page_click_defs at given column.
 int nvim_mouse_get_tab_click_tabnr(int col)
@@ -114,34 +97,19 @@ int nvim_mouse_get_tab_click_tabnr(int col)
 }
 
 /// Wrapper for tabpage_move().
-void nvim_tabpage_move(int nr)
-{
-  tabpage_move(nr);
-}
+void nvim_tabpage_move(int nr) { tabpage_move(nr); }
 
 /// Wrapper for tabpage_close().
-void nvim_tabpage_close(int forceit)
-{
-  tabpage_close(forceit);
-}
+void nvim_tabpage_close(int forceit) { tabpage_close(forceit); }
 
 /// Wrapper for tabpage_close_other().
-void nvim_tabpage_close_other(tabpage_T *tp, int forceit)
-{
-  tabpage_close_other(tp, forceit);
-}
+void nvim_tabpage_close_other(tabpage_T *tp, int forceit) { tabpage_close_other(tp, forceit); }
 
 /// Wrapper for ui_cursor_shape().
-void nvim_ui_cursor_shape(void)
-{
-  ui_cursor_shape();
-}
+void nvim_ui_cursor_shape(void) { ui_cursor_shape(); }
 
 /// Wrapper for ui_check_mouse().
-void nvim_ui_check_mouse(void)
-{
-  ui_check_mouse();
-}
+void nvim_ui_check_mouse(void) { ui_check_mouse(); }
 
 /// Move "pos" back to the start of the word it's in.
 static void find_start_of_word(pos_T *pos)
@@ -169,16 +137,10 @@ extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int 
 static bool got_click = false;  // got a click some time back
 
 /// Get whether a click was received.
-bool nvim_get_got_click(void)
-{
-  return got_click;
-}
+bool nvim_get_got_click(void) { return got_click; }
 
 /// Set whether a click was received.
-void nvim_set_got_click(bool val)
-{
-  got_click = val;
-}
+void nvim_set_got_click(bool val) { got_click = val; }
 
 /// Bridge for Rust-computed click arguments to VimL function call.
 /// Builds typval_T args from pre-computed strings and calls the VimL callback.
@@ -996,61 +958,35 @@ void nvim_ins_mousescroll_impl(int dir)
 static win_T *dragwin = NULL;  ///< window being dragged
 
 /// Get the window being dragged.
-win_T *nvim_get_dragwin(void)
-{
-  return dragwin;
-}
+win_T *nvim_get_dragwin(void) { return dragwin; }
 
 /// Set the window being dragged.
-void nvim_set_dragwin(win_T *wp)
-{
-  dragwin = wp;
-}
+void nvim_set_dragwin(win_T *wp) { dragwin = wp; }
 
 /// Check if a window is being dragged.
-bool nvim_is_dragging(void)
-{
-  return dragwin != NULL;
-}
+bool nvim_is_dragging(void) { return dragwin != NULL; }
 
-// =============================================================================
 // Phase 2 accessors: needed for Rust migration of _impl functions
-// =============================================================================
 
 /// Get `p_mousescroll_vert` (vertical mouse scroll step).
-int nvim_get_p_mousescroll_vert(void)
-{
-  return (int)p_mousescroll_vert;
-}
+int nvim_get_p_mousescroll_vert(void) { return (int)p_mousescroll_vert; }
 
 /// Get `p_mousescroll_hor` (horizontal mouse scroll step).
-int nvim_get_p_mousescroll_hor(void)
-{
-  return (int)p_mousescroll_hor;
-}
+int nvim_get_p_mousescroll_hor(void) { return (int)p_mousescroll_hor; }
 
 /// Wrapper for pagescroll().
 /// @param dir   FORWARD (1) or BACKWARD (0)
-int nvim_mouse_pagescroll(int dir, int count, int half)
-{
-  return pagescroll(dir, count, half != 0);
-}
+int nvim_mouse_pagescroll(int dir, int count, int half) { return pagescroll(dir, count, half != 0); }
 
 // Saved cursor for ins_mouse_impl start_arrow pattern.
 static pos_T mouse_saved_tpos;
 
 /// Save curwin->w_cursor for later use with start_arrow.
-void nvim_mouse_save_tpos(void)
-{
-  mouse_saved_tpos = curwin->w_cursor;
-}
+void nvim_mouse_save_tpos(void) { mouse_saved_tpos = curwin->w_cursor; }
 
 /// Call start_arrow(&mouse_saved_tpos) or start_arrow(NULL).
 /// @param use_tpos  true to pass &mouse_saved_tpos, false to pass NULL.
-void nvim_mouse_start_arrow(bool use_tpos)
-{
-  start_arrow(use_tpos ? &mouse_saved_tpos : NULL);
-}
+void nvim_mouse_start_arrow(bool use_tpos) { start_arrow(use_tpos ? &mouse_saved_tpos : NULL); }
 
 /// Move the cursor to the specified row and column on the screen.
 /// Change current window if necessary. Returns an integer with the

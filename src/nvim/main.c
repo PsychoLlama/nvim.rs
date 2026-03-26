@@ -178,10 +178,7 @@ extern void rs_handle_quickfix(mparm_T *paramp);
 extern void rs_handle_tag(char *tagname);
 
 // Thin helper: set 'errorfile' option from Rust (avoids OptVal complexity)
-void nvim_set_errorfile_opt(const char *val)
-{
-  set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(val), 0, SID_CARG);
-}
+void nvim_set_errorfile_opt(const char *val) { set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(val), 0, SID_CARG); }
 
 Loop main_loop;
 
@@ -1513,15 +1510,9 @@ scripterror:
   TIME_MSG("parsing arguments");
 }
 
-static void init_params(mparm_T *paramp, int argc, char **argv)
-{
-  rs_init_params(paramp, argc, argv);
-}
+static void init_params(mparm_T *paramp, int argc, char **argv) { rs_init_params(paramp, argc, argv); }
 
-static void init_startuptime(mparm_T *paramp)
-{
-  rs_init_startuptime(paramp);
-}
+static void init_startuptime(mparm_T *paramp) { rs_init_startuptime(paramp); }
 
 static void check_and_set_isatty(mparm_T *paramp)
 {
@@ -1535,10 +1526,7 @@ static void init_path(const char *exename)
   rs_init_path(exename);
 }
 
-static void set_window_layout(mparm_T *paramp)
-{
-  rs_set_window_layout(paramp);
-}
+static void set_window_layout(mparm_T *paramp) { rs_set_window_layout(paramp); }
 
 static void handle_quickfix(mparm_T *paramp)
 {
@@ -1874,34 +1862,16 @@ static void mainerr(const char *msg1, const char *msg2, const char *msg3)
   abort();  // unreachable: rs_mainerr is noreturn
 }
 
-static void print_mainerr(const char *msg1, const char *msg2, const char *msg3)
-{
-  rs_print_mainerr(msg1, msg2, msg3);
-}
+static void print_mainerr(const char *msg1, const char *msg2, const char *msg3) { rs_print_mainerr(msg1, msg2, msg3); }
 
-static void version(void)
-{
-  rs_version();
-}
+static void version(void) { rs_version(); }
 
-static void usage(void)
-{
-  rs_usage();
-}
+static void usage(void) { rs_usage(); }
 
-static void check_swap_exists_action(void)
-{
-  rs_check_swap_exists_action();
-}
+static void check_swap_exists_action(void) { rs_check_swap_exists_action(); }
 
 #ifdef ENABLE_ASAN_UBSAN
-const char *__ubsan_default_options(void)
-{
-  return "print_stacktrace=1";
-}
+const char *__ubsan_default_options(void) { return "print_stacktrace=1"; }
 
-const char *__asan_default_options(void)
-{
-  return "handle_abort=1,handle_sigill=1";
-}
+const char *__asan_default_options(void) { return "handle_abort=1,handle_sigill=1"; }
 #endif

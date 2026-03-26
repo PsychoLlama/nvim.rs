@@ -121,9 +121,7 @@ struct bw_info {
   iconv_t bw_iconv_fd;            // descriptor for iconv() or -1
 };
 
-// =============================================================================
 // C accessor functions for Rust FFI
-// =============================================================================
 
 void nvim_bw_semsg_2(const char *fmt, const char *a, const char *b)
 {
@@ -131,58 +129,31 @@ void nvim_bw_semsg_2(const char *fmt, const char *a, const char *b)
   semsg(fmt, a);
 }
 
-void nvim_bw_semsg_3(const char *fmt, const char *a, const char *b, const char *c)
-{
-  semsg(fmt, a, b, c);
-}
+void nvim_bw_semsg_3(const char *fmt, const char *a, const char *b, const char *c) { semsg(fmt, a, b, c); }
 
 void nvim_bw_semsg_4(const char *fmt, const char *a, const char *b, const char *c, const char *d)
 {
   semsg(fmt, a, b, c, d);
 }
 
-const char *nvim_bw_os_strerror(int errnum)
-{
-  return os_strerror(errnum);
-}
+const char *nvim_bw_os_strerror(int errnum) { return os_strerror(errnum); }
 
-void nvim_bw_xfree(char *ptr)
-{
-  xfree(ptr);
-}
+void nvim_bw_xfree(char *ptr) { xfree(ptr); }
 
 
 // File info accessors
-int nvim_bw_os_nodetype(const char *fname)
-{
-  return os_nodetype(fname);
-}
+int nvim_bw_os_nodetype(const char *fname) { return os_nodetype(fname); }
 
-int nvim_bw_fi_get_st_mode(FileInfo *info)
-{
-  return (int)info->stat.st_mode;
-}
+int nvim_bw_fi_get_st_mode(FileInfo *info) { return (int)info->stat.st_mode; }
 
-int nvim_bw_fi_is_regular(FileInfo *info)
-{
-  return S_ISREG(info->stat.st_mode);
-}
+int nvim_bw_fi_is_regular(FileInfo *info) { return S_ISREG(info->stat.st_mode); }
 
-int nvim_bw_fi_is_dir(FileInfo *info)
-{
-  return S_ISDIR(info->stat.st_mode);
-}
+int nvim_bw_fi_is_dir(FileInfo *info) { return S_ISDIR(info->stat.st_mode); }
 
 // Buffer mtime accessors
-int64_t nvim_bw_buf_get_mtime_read(buf_T *buf)
-{
-  return buf->b_mtime_read;
-}
+int64_t nvim_bw_buf_get_mtime_read(buf_T *buf) { return buf->b_mtime_read; }
 
-int64_t nvim_bw_buf_get_mtime_read_ns(buf_T *buf)
-{
-  return buf->b_mtime_read_ns;
-}
+int64_t nvim_bw_buf_get_mtime_read_ns(buf_T *buf) { return buf->b_mtime_read_ns; }
 
 int nvim_bw_time_differs(FileInfo *info, int64_t mtime, int64_t mtime_ns)
 {
@@ -196,16 +167,10 @@ int nvim_bw_time_differs(FileInfo *info, int64_t mtime, int64_t mtime_ns)
 }
 
 // Options
-int nvim_bw_cpo_contains(int c)
-{
-  return vim_strchr(p_cpo, c) != NULL;
-}
+int nvim_bw_cpo_contains(int c) { return vim_strchr(p_cpo, c) != NULL; }
 
 // Gettext
-const char *nvim_bw_gettext(const char *s)
-{
-  return _(s);
-}
+const char *nvim_bw_gettext(const char *s) { return _(s); }
 
 // bw_info field accessors (use void* for opaque handle pattern)
 int nvim_bw_info_get_fd(void *p) { struct bw_info *ip = p; return ip->bw_fd; }
@@ -277,10 +242,7 @@ int nvim_bw_iconv_convert(void *p, char **bufp, int *lenp)
 }
 
 // I/O
-int nvim_bw_write_eintr(int fd, const char *buf, size_t len)
-{
-  return write_eintr(fd, (void *)buf, len);
-}
+int nvim_bw_write_eintr(int fd, const char *buf, size_t len) { return write_eintr(fd, (void *)buf, len); }
 
 // Backup accessors
 void nvim_bw_os_set_acl(const char *fname, vim_acl_T acl) { os_set_acl(fname, acl); }
@@ -414,16 +376,10 @@ void nvim_bw_sha256_update(void *ctx, const uint8_t *data, uint32_t len)
 {
   sha256_update((context_sha256_T *)ctx, data, (size_t)len);
 }
-void nvim_bw_sha256_finish(void *ctx, uint8_t *hash)
-{
-  sha256_finish((context_sha256_T *)ctx, hash);
-}
+void nvim_bw_sha256_finish(void *ctx, uint8_t *hash) { sha256_finish((context_sha256_T *)ctx, hash); }
 
 // Undo
-void nvim_bw_u_write_undo(buf_T *buf, const uint8_t *hash)
-{
-  u_write_undo(NULL, false, buf, (uint8_t *)hash);
-}
+void nvim_bw_u_write_undo(buf_T *buf, const uint8_t *hash) { u_write_undo(NULL, false, buf, (uint8_t *)hash); }
 
 // Eval
 int nvim_bw_eval_charconvert(const char *from, const char *to, const char *src, const char *dst)
@@ -432,10 +388,7 @@ int nvim_bw_eval_charconvert(const char *from, const char *to, const char *src, 
 }
 
 // I/O - direct write_eintr (for use in write loop)
-int nvim_bw_write_eintr_direct(int fd, const char *buf, size_t len)
-{
-  return write_eintr(fd, (void *)buf, len);
-}
+int nvim_bw_write_eintr_direct(int fd, const char *buf, size_t len) { return write_eintr(fd, (void *)buf, len); }
 
 // bw_info management
 size_t nvim_bw_sizeof_bw_info(void) { return sizeof(struct bw_info); }

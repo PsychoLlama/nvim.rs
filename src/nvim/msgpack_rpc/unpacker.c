@@ -166,10 +166,7 @@ void unpacker_init(Unpacker *p)
   p->has_grid_line_event = false;
 }
 
-void unpacker_teardown(Unpacker *p)
-{
-  arena_mem_free(arena_finish(&p->arena));
-}
+void unpacker_teardown(Unpacker *p) { arena_mem_free(arena_finish(&p->arena)); }
 
 bool unpacker_parse_header(Unpacker *p)
 {
@@ -693,90 +690,42 @@ bool unpack_keydict(void *retval, FieldHashfn hashy, AdditionalDataBuilder *ad, 
   return true;
 }
 
-// =============================================================================
 // Accessor functions for Rust FFI (nvim-msgpack-rpc crate)
-// =============================================================================
 
 /// Get message type from Unpacker
-int nvim_unpacker_get_type(Unpacker *p)
-{
-  return (int)p->type;
-}
+int nvim_unpacker_get_type(Unpacker *p) { return (int)p->type; }
 
-/// Get request ID from Unpacker
-uint32_t nvim_unpacker_get_request_id(Unpacker *p)
-{
-  return p->request_id;
-}
+uint32_t nvim_unpacker_get_request_id(Unpacker *p) { return p->request_id; }
 
 /// Get parser state from Unpacker
-int nvim_unpacker_get_state(Unpacker *p)
-{
-  return p->state;
-}
+int nvim_unpacker_get_state(Unpacker *p) { return p->state; }
 
 /// Set parser state in Unpacker
-void nvim_unpacker_set_state(Unpacker *p, int state)
-{
-  p->state = state;
-}
+void nvim_unpacker_set_state(Unpacker *p, int state) { p->state = state; }
 
 /// Check if unpacker is closed (state == -1)
-int nvim_unpacker_is_closed(Unpacker *p)
-{
-  return p->state == -1 ? 1 : 0;
-}
+int nvim_unpacker_is_closed(Unpacker *p) { return p->state == -1 ? 1 : 0; }
 
 /// Get read pointer from Unpacker
-const char *nvim_unpacker_get_read_ptr(Unpacker *p)
-{
-  return p->read_ptr;
-}
+const char *nvim_unpacker_get_read_ptr(Unpacker *p) { return p->read_ptr; }
 
 /// Set read pointer in Unpacker
-void nvim_unpacker_set_read_ptr(Unpacker *p, const char *ptr)
-{
-  p->read_ptr = ptr;
-}
+void nvim_unpacker_set_read_ptr(Unpacker *p, const char *ptr) { p->read_ptr = ptr; }
 
-/// Get read size from Unpacker
-size_t nvim_unpacker_get_read_size(Unpacker *p)
-{
-  return p->read_size;
-}
+size_t nvim_unpacker_get_read_size(Unpacker *p) { return p->read_size; }
 
-/// Set read size in Unpacker
-void nvim_unpacker_set_read_size(Unpacker *p, size_t size)
-{
-  p->read_size = size;
-}
+void nvim_unpacker_set_read_size(Unpacker *p, size_t size) { p->read_size = size; }
 
 /// Get method name length from Unpacker
-size_t nvim_unpacker_get_method_name_len(Unpacker *p)
-{
-  return p->method_name_len;
-}
+size_t nvim_unpacker_get_method_name_len(Unpacker *p) { return p->method_name_len; }
 
 /// Check if Unpacker has a grid line event
-int nvim_unpacker_has_grid_line_event(Unpacker *p)
-{
-  return p->has_grid_line_event ? 1 : 0;
-}
+int nvim_unpacker_has_grid_line_event(Unpacker *p) { return p->has_grid_line_event ? 1 : 0; }
 
 /// Get handler function pointer from Unpacker
-void *nvim_unpacker_get_handler_fn(Unpacker *p)
-{
-  return (void *)p->handler.fn;
-}
+void *nvim_unpacker_get_handler_fn(Unpacker *p) { return (void *)p->handler.fn; }
 
-/// Get handler name from Unpacker
-const char *nvim_unpacker_get_handler_name(Unpacker *p)
-{
-  return p->handler.name;
-}
+const char *nvim_unpacker_get_handler_name(Unpacker *p) { return p->handler.name; }
 
 /// Check if handler is fast (can be invoked immediately)
-int nvim_unpacker_is_handler_fast(Unpacker *p)
-{
-  return p->handler.fast ? 1 : 0;
-}
+int nvim_unpacker_is_handler_fast(Unpacker *p) { return p->handler.fast ? 1 : 0; }

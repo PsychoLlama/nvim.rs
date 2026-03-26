@@ -56,73 +56,41 @@ extern char *expr_line;
 extern int execreg_lastc;
 
 /// Set curwin->w_alt_fnum from a buf_T pointer (called from Rust write_reg_contents_ex).
-void nvim_register_set_alt_fnum(buf_T *buf)
-{
-  curwin->w_alt_fnum = buf->b_fnum;
-}
+void nvim_register_set_alt_fnum(buf_T *buf) { curwin->w_alt_fnum = buf->b_fnum; }
 
 // Functions now implemented in Rust (src/nvim-rs/register/src/lib.rs) with #[export_name].
 extern int stuff_yank(int regname, char *p);
 
-// ---------------------------------------------------------------------------
 // C accessor wrappers used by Rust crates via FFI.
 // These thin wrappers delegate to Neovim's memory allocator and error helpers.
-// ---------------------------------------------------------------------------
 
 /// Free a register's contents (delegating to the Rust free_register export).
 extern void free_register(yankreg_T *reg);
-void nvim_free_register(yankreg_T *reg)
-{
-  free_register(reg);
-}
+void nvim_free_register(yankreg_T *reg) { free_register(reg); }
 
 /// Generic xfree wrapper used by Rust crates that cannot call xfree directly.
-void nvim_xfree(void *ptr)
-{
-  xfree(ptr);
-}
+void nvim_xfree(void *ptr) { xfree(ptr); }
 
 /// Generic xstrdup wrapper.
-char *nvim_xstrdup(const char *str)
-{
-  return xstrdup(str);
-}
+char *nvim_xstrdup(const char *str) { return xstrdup(str); }
 
 /// Generic xmalloc wrapper.
-void *nvim_xmalloc(size_t size)
-{
-  return xmalloc(size);
-}
+void *nvim_xmalloc(size_t size) { return xmalloc(size); }
 
 /// Generic xcalloc wrapper.
-void *nvim_xcalloc(size_t count, size_t size)
-{
-  return xcalloc(count, size);
-}
+void *nvim_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
 
 /// Generic xrealloc wrapper.
-void *nvim_xrealloc(void *ptr, size_t size)
-{
-  return xrealloc(ptr, size);
-}
+void *nvim_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
 
 /// Generic xmallocz wrapper (allocates size+1 bytes zeroed at end).
-char *nvim_xmallocz(size_t size)
-{
-  return xmallocz(size);
-}
+char *nvim_xmallocz(size_t size) { return xmallocz(size); }
 
 /// Emit "E35: No previous regular expression" error.
-void nvim_emsg_noprevre(void)
-{
-  emsg(_(e_noprevre));
-}
+void nvim_emsg_noprevre(void) { emsg(_(e_noprevre)); }
 
 /// Emit "E29: No inserted text yet" error.
-void nvim_emsg_noinstext(void)
-{
-  emsg(_(e_noinstext));
-}
+void nvim_emsg_noinstext(void) { emsg(_(e_noinstext)); }
 
 /// Start or stop recording into a yank register.
 ///

@@ -39,15 +39,9 @@ static uv_mutex_t mutex;
 
 #include "log.c.generated.h"
 
-// =============================================================================
 // C Accessor Functions for Rust FFI
-// =============================================================================
 
-/// Get the log file path.
-const char *nvim_log_get_file_path(void)
-{
-  return log_file_path;
-}
+const char *nvim_log_get_file_path(void) { return log_file_path; }
 
 /// Set the log file path.
 void nvim_log_set_file_path(const char *path)
@@ -60,47 +54,26 @@ void nvim_log_set_file_path(const char *path)
 }
 
 /// Get the size of the log file path buffer.
-size_t nvim_log_get_file_path_size(void)
-{
-  return sizeof(log_file_path);
-}
+size_t nvim_log_get_file_path_size(void) { return sizeof(log_file_path); }
 
 /// Check if logging has been initialized.
-bool nvim_log_is_initialized(void)
-{
-  return did_log_init;
-}
+bool nvim_log_is_initialized(void) { return did_log_init; }
 
 
 /// Increment the log_skip counter in g_stats.
-void nvim_log_increment_skip(void)
-{
-  g_stats.log_skip++;
-}
+void nvim_log_increment_skip(void) { g_stats.log_skip++; }
 
 /// Get ui_client_channel_id (non-zero means running as UI client).
-uint64_t nvim_log_get_ui_client_channel_id(void)
-{
-  return ui_client_channel_id;
-}
+uint64_t nvim_log_get_ui_client_channel_id(void) { return ui_client_channel_id; }
 
 /// Get the servername (v:servername).
-const char *nvim_log_get_servername(void)
-{
-  return get_vim_var_str(VV_SEND_SERVER);
-}
+const char *nvim_log_get_servername(void) { return get_vim_var_str(VV_SEND_SERVER); }
 
 /// Get the parent $NVIM environment variable.
-const char *nvim_log_get_parent_nvim(void)
-{
-  return os_getenv_noalloc(ENV_NVIM);
-}
+const char *nvim_log_get_parent_nvim(void) { return os_getenv_noalloc(ENV_NVIM); }
 
 /// Get the current PID.
-int64_t nvim_log_get_pid(void)
-{
-  return os_get_pid();
-}
+int64_t nvim_log_get_pid(void) { return os_get_pid(); }
 
 /// Get the tail of a path (filename part).
 const char *nvim_log_path_tail(const char *path)
@@ -132,22 +105,13 @@ int nvim_log_get_millis(void)
 }
 
 /// Expand environment variables in a string.
-void nvim_log_expand_env(const char *src, char *dst, int dstlen)
-{
-  expand_env((char *)src, dst, dstlen);
-}
+void nvim_log_expand_env(const char *src, char *dst, int dstlen) { expand_env((char *)src, dst, dstlen); }
 
 /// Check if path is a directory.
-bool nvim_log_is_dir(const char *path)
-{
-  return os_isdir(path);
-}
+bool nvim_log_is_dir(const char *path) { return os_isdir(path); }
 
 /// Get XDG state home path (caller must free).
-char *nvim_log_get_xdg_state_home(void)
-{
-  return get_xdg_home(kXDGStateHome);
-}
+char *nvim_log_get_xdg_state_home(void) { return get_xdg_home(kXDGStateHome); }
 
 /// Create directory recursively.
 /// Returns 0 on success, error code on failure.
@@ -158,43 +122,26 @@ int nvim_log_mkdir_recurse(const char *path, char **failed_dir)
 
 /// Get the user state subpath (e.g., ~/.local/state/nvim/log).
 /// Caller must free the result.
-char *nvim_log_get_state_subpath(const char *subpath)
-{
-  return stdpaths_user_state_subpath(subpath, 0, true);
-}
+char *nvim_log_get_state_subpath(const char *subpath) { return stdpaths_user_state_subpath(subpath, 0, true); }
 
 /// Set environment variable.
-void nvim_log_setenv(const char *name, const char *value)
-{
-  os_setenv(name, value, true);
-}
+void nvim_log_setenv(const char *name, const char *value) { os_setenv(name, value, true); }
 
 /// Free a C string allocated by xmalloc/xstrdup.
-void nvim_log_free(void *ptr)
-{
-  xfree(ptr);
-}
+void nvim_log_free(void *ptr) { xfree(ptr); }
 
 /// Check if two strings are equal.
-bool nvim_log_strequal(const char *s1, const char *s2)
-{
-  return strequal(s1, s2);
-}
+bool nvim_log_strequal(const char *s1, const char *s2) { return strequal(s1, s2); }
 
 /// Copy a string with length limit.
-size_t nvim_log_strlcpy(char *dst, const char *src, size_t dstsize)
-{
-  return xstrlcpy(dst, src, dstsize);
-}
+size_t nvim_log_strlcpy(char *dst, const char *src, size_t dstsize) { return xstrlcpy(dst, src, dstsize); }
 
 
 #ifdef HAVE_EXECINFO_BACKTRACE
 # include <execinfo.h>
 #endif
 
-// =============================================================================
 // Rust FFI declarations
-// =============================================================================
 
 extern void rs_log_path_init(void);
 extern bool rs_do_log_to_file(FILE *log_file, int log_level, const char *context,
@@ -222,15 +169,9 @@ void log_init(void)
   did_log_init = true;
 }
 
-void log_lock(void)
-{
-  uv_mutex_lock(&mutex);
-}
+void log_lock(void) { uv_mutex_lock(&mutex); }
 
-void log_unlock(void)
-{
-  uv_mutex_unlock(&mutex);
-}
+void log_unlock(void) { uv_mutex_unlock(&mutex); }
 
 /// Logs a message to $NVIM_LOG_FILE.
 ///

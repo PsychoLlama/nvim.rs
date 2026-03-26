@@ -232,10 +232,7 @@ static void read_event(void **argv)
   }
 }
 
-size_t rstream_available(RStream *stream)
-{
-  return (size_t)(stream->write_pos - stream->read_pos);
-}
+size_t rstream_available(RStream *stream) { return (size_t)(stream->write_pos - stream->read_pos); }
 
 void rstream_consume(RStream *stream, size_t consumed)
 {
@@ -285,65 +282,33 @@ static void rstream_close_cb(Stream *s, void *data)
   }
 }
 
-void rstream_may_close(RStream *stream)
-{
-  stream_may_close(&stream->s);
-}
+void rstream_may_close(RStream *stream) { stream_may_close(&stream->s); }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Check if an RStream has reached EOF (accessor for Rust).
-int nvim_rstream_did_eof(RStream *stream)
-{
-  return stream->did_eof ? 1 : 0;
-}
+int nvim_rstream_did_eof(RStream *stream) { return stream->did_eof ? 1 : 0; }
 
 /// Check if an RStream wants to read (accessor for Rust).
-int nvim_rstream_want_read(RStream *stream)
-{
-  return stream->want_read ? 1 : 0;
-}
+int nvim_rstream_want_read(RStream *stream) { return stream->want_read ? 1 : 0; }
 
 /// Get the number of bytes read by RStream (accessor for Rust).
-size_t nvim_rstream_num_bytes(RStream *stream)
-{
-  return stream->num_bytes;
-}
+size_t nvim_rstream_num_bytes(RStream *stream) { return stream->num_bytes; }
 
 /// Get the number of bytes available in RStream buffer (accessor for Rust).
-size_t nvim_rstream_available(RStream *stream)
-{
-  return rstream_available(stream);
-}
+size_t nvim_rstream_available(RStream *stream) { return rstream_available(stream); }
 
 /// Get the underlying Stream from RStream (accessor for Rust).
-Stream *nvim_rstream_get_stream(RStream *stream)
-{
-  return &stream->s;
-}
+Stream *nvim_rstream_get_stream(RStream *stream) { return &stream->s; }
 
 /// Set the did_eof flag for an RStream (accessor for Rust).
-void nvim_rstream_set_did_eof(RStream *stream, int eof)
-{
-  stream->did_eof = eof != 0;
-}
+void nvim_rstream_set_did_eof(RStream *stream, int eof) { stream->did_eof = eof != 0; }
 
 /// Set the want_read flag for an RStream (accessor for Rust).
-void nvim_rstream_set_want_read(RStream *stream, int want_read)
-{
-  stream->want_read = want_read != 0;
-}
+void nvim_rstream_set_want_read(RStream *stream, int want_read) { stream->want_read = want_read != 0; }
 
 /// Set the num_bytes for an RStream (accessor for Rust).
-void nvim_rstream_set_num_bytes(RStream *stream, size_t num_bytes)
-{
-  stream->num_bytes = num_bytes;
-}
+void nvim_rstream_set_num_bytes(RStream *stream, size_t num_bytes) { stream->num_bytes = num_bytes; }
 
 /// Add to the num_bytes for an RStream (accessor for Rust).
-void nvim_rstream_num_bytes_add(RStream *stream, size_t amount)
-{
-  stream->num_bytes += amount;
-}
+void nvim_rstream_num_bytes_add(RStream *stream, size_t amount) { stream->num_bytes += amount; }
