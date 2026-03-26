@@ -229,8 +229,6 @@ extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *c
 
 static char *tagmatchname = NULL;   // name of last used tag
 
-// Tag for preview window is remembered separately, to avoid messing up the
-// normal tagstack.
 static taggy_T ptag_entry = { NULL, INIT_FMARK, 0, 0, NULL };
 
 static bool tfu_in_use = false;  // disallow recursive call of tagfunc
@@ -347,8 +345,6 @@ bool nvim_findtags_grow_lbuf(void *st_void, void *sinfo_void)
 
 void nvim_findtags_set_orgpat_len(void *st_void, int len) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->len = len; }
 void nvim_findtags_set_orgpat_pat(void *st_void, char *pat) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->pat = pat; }
-// Global variable accessors for search orchestration
-
 void nvim_set_p_ic(int val) { p_ic = val; }
 bool nvim_get_p_tbs(void) { return p_tbs; }
 int nvim_get_tc_flags(void) { return (int)tc_flags; }
@@ -359,8 +355,6 @@ const char *nvim_get_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 const char *nvim_get_curbuf_p_tfu(void) { return curbuf->b_p_tfu; }
 void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
 int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
-// Function wrappers for search orchestration
-
 void nvim_ins_compl_check_keys(int interval, bool pum_wanted) { rs_ins_compl_check_keys(interval, pum_wanted ? 1 : 0); }
 bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
 bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2) { return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2); }
@@ -380,9 +374,7 @@ void nvim_tag_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
 void nvim_tag_set_topline_curwin(void) { set_topline(curwin, curwin->w_cursor.lnum); }
 void nvim_tag_win_close_curwin(void) { win_close(curwin, false, false); }
 char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
-
 int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
-
 int nvim_tag_find_tags(char *pat, int *num_matches, char ***matchesp,
                        int flags, int mincount, char *buf_ffname)
 {
@@ -435,12 +427,10 @@ bool nvim_tag_tfu_cb_is_none(void) { return tfu_cb.type == kCallbackNone; }
 bool nvim_tag_set_ref_in_tfu_callback(int copyID) { return rs_set_ref_in_callback(&tfu_cb, copyID, NULL, NULL); }
 void *nvim_tag_optset_get_buf(const void *args_void) { const optset_T *args = (const optset_T *)args_void; return (void *)args->os_buf; }
 const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
-
 bool nvim_tag_get_g_tag_at_cursor(void) { return g_tag_at_cursor; }
 void *nvim_tag_dict_alloc_lock_fixed(void) { return (void *)tv_dict_alloc_lock(VAR_FIXED); }
 void nvim_tag_dict_refcount_inc(void *dict_void) { ((dict_T *)dict_void)->dv_refcount++; }
 void nvim_tag_dict_refcount_dec(void *dict_void) { ((dict_T *)dict_void)->dv_refcount--; }
-
 /// Set up the args and invoke the curbuf tagfunc callback.
 /// - pat: the tag pattern (VAR_STRING arg 0)
 /// - flag_str: the flag string (VAR_STRING arg 1)
@@ -479,7 +469,6 @@ void *nvim_tag_rettv_get_list(const void *rettv_storage)
 }
 
 size_t nvim_tag_pos_size(void) { return sizeof(pos_T); }
-
 void nvim_tag_tv_clear_rettv(void *rettv_storage) { tv_clear((typval_T *)rettv_storage); }
 size_t nvim_tag_rettv_size(void) { return sizeof(typval_T); }
 bool nvim_tag_listitem_is_dict(const void *li) { const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type == VAR_DICT; }
@@ -595,7 +584,6 @@ bool nvim_tag_do_search(int dir, char *pat, size_t patlen, int options) { return
 void nvim_tag_do_cmdline_cmd(char *cmd) { do_cmdline_cmd(cmd); }
 void nvim_tag_wait_return(void) { wait_return(true); }
 void nvim_tag_check_cursor(void) { check_cursor(curwin); }
-
 bool nvim_tag_get_p_tgst(void) { return p_tgst; }
 int nvim_tag_get_curbuf_fnum(void) { return curbuf->b_fnum; }
 bool nvim_tag_get_got_int(void) { return got_int; }
@@ -610,7 +598,6 @@ char *nvim_tag_buflist_findnr_ffname(int fnum) { buf_T *buf = buflist_findnr(fnu
 int nvim_tag_buflist_getfile_with_result(int fnum, linenr_T lnum, int flags, int forceit) { return buflist_getfile(fnum, lnum, flags, forceit); }
 void nvim_tag_give_warning(const char *msg_str, bool ic) { give_warning(msg_str, ic); }
 bool nvim_tag_get_KeyTyped(void) { return KeyTyped; }
-
 bool nvim_tag_tagstack_changed(void *saved_tagstack) { return saved_tagstack != curwin->w_tagstack; }
 void *nvim_tag_get_tagstack_ptr(void) { return curwin->w_tagstack; }
 void nvim_tag_save_cursor_in_entry(void *tg_void, int idx)
