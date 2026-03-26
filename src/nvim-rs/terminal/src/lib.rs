@@ -2652,6 +2652,46 @@ pub unsafe extern "C" fn rs_term_sb_pop(
     1
 }
 
+// =============================================================================
+// Phase 4: Migrate refresh_size
+// =============================================================================
+
+/// Handle pending resize for a terminal.
+///
+/// Replaces `refresh_size` in `terminal_shim.c`.
+/// Called from `refresh_terminal` in C.
+/// The `_buf` parameter is the associated buffer but unused here.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_refresh_size(term: TerminalHandle, _buf: *mut c_void) {
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_mut() };
+    if !t.pending.resize || t.closed {
+        return;
+    }
+    t.pending.resize = false;
+
+    let size = unsafe { rs_vterm_get_size(t.vt) };
+    t.invalid_start = 0;
+    t.invalid_end = size.rows;
+
+    // Call resize_cb: void (*)(uint16_t width, uint16_t height, void *data)
+    if !t.opts.resize_cb.is_null() {
+        // SAFETY: resize_cb is a valid fn pointer stored by terminal_open.
+        let resize_fn: unsafe extern "C" fn(u16, u16, *mut c_void) =
+            unsafe { std::mem::transmute(t.opts.resize_cb) };
+        // rows/cols from VTermSize are guaranteed >= 0 and fit in u16
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        unsafe {
+            resize_fn(size.cols as u16, size.rows as u16, t.opts.data);
+        }
+    }
+}
+
 // K_ZERO = TERMCAP2KEY(KS_ZERO=255, KE_FILLER='X') = -(255 + ('X' << 8)) = -22783
 const K_ZERO: c_int = termcap2key(255, b'X' as c_int);
 // Ctrl-@ = ASCII NUL (0)

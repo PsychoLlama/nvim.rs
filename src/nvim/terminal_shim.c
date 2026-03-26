@@ -217,6 +217,8 @@ extern int rs_term_sb_pop(int cols, VTermScreenCell *cells, void *data);
 // Rust key/theme implementations (Phase 3)
 extern void rs_terminal_send_key_impl(void *term, int c);
 extern void rs_terminal_notify_theme_impl(void *term, int dark);
+// Rust refresh_size implementation (Phase 4)
+extern void rs_terminal_refresh_size(void *term, void *buf);
 
 static VTermScreenCallbacks vterm_screen_callbacks = {
   .damage = rs_term_damage,
@@ -1541,7 +1543,7 @@ static void refresh_terminal(Terminal *term)
   }
   linenr_T ml_before = buf->b_ml.ml_line_count;
 
-  refresh_size(term, buf);
+  rs_terminal_refresh_size(term, buf);
   refresh_scrollback(term, buf);
   refresh_screen(term, buf);
 
@@ -1616,20 +1618,6 @@ static void refresh_timer_cb(TimeWatcher *watcher, void *data)
   });
   set_clear(ptr_t, &invalidated_terminals);
   unblock_autocmds();
-}
-
-static void refresh_size(Terminal *term, buf_T *buf)
-{
-  if (!term->pending.resize || term->closed) {
-    return;
-  }
-
-  term->pending.resize = false;
-  int width, height;
-  vterm_get_size(term->vt, &height, &width);
-  term->invalid_start = 0;
-  term->invalid_end = height;
-  term->opts.resize_cb((uint16_t)width, (uint16_t)height, term->opts.data);
 }
 
 void on_scrollback_option_changed(Terminal *term)
