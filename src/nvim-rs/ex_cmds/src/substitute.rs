@@ -1238,7 +1238,7 @@ extern "C" {
     fn nvim_do_sub_changed_lines(first: c_int, last: c_int, xtra: c_int);
     fn nvim_excmds_buf_updates_send_changes(lnum: c_int, num_added: i64, num_removed: i64);
     fn line_breakcheck();
-    fn nvim_excmds_set_nextcmd_direct(eap: *mut ExArgHandle, p: *mut c_char);
+    fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char);
     fn nvim_excmds_msg_empty();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
     fn nvim_do_sub_set_replacement(sub_str: *const c_char);
@@ -1639,7 +1639,7 @@ pub unsafe extern "C" fn rs_do_sub(
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         }
-        nvim_excmds_set_nextcmd_direct(eap, nextcmd);
+        nvim_exarg_set_nextcmd(eap, nextcmd);
     }
 
     if nvim_exarg_get_skip(eap) != 0 {

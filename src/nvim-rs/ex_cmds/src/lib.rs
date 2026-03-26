@@ -966,8 +966,6 @@ extern "C" {
     pub fn nvim_excmds_call_getline(eap: *mut ExArgHandle, c: c_int, indent: c_int) -> *mut c_char;
     /// Get eap->nextcmd pointer
     pub fn nvim_excmds_get_nextcmd(eap: *mut ExArgHandle) -> *mut c_char;
-    /// Set eap->nextcmd directly
-    pub fn nvim_excmds_set_nextcmd_direct(eap: *mut ExArgHandle, p: *mut c_char);
     /// Get mutable eap->arg
     pub fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
     /// Mark lines as appended (without mark adjustment)

@@ -202,7 +202,7 @@ extern "C" {
     fn nvim_ecmd_cmdwin_restore_free(bundle: *mut std::ffi::c_void);
     static mut exmode_active: bool;
     fn nvim_get_skip_redraw() -> bool;
-    fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
+    fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_get_p_sol() -> c_int;
     static mut msg_scroll: c_int;
     fn nvim_get_p_verbose() -> c_int;
@@ -415,7 +415,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             let prev_alt_fnum = nvim_ecmd_curwin_get_alt_fnum();
 
             if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) == 0 {
-                if nvim_ecmd_cmdmod_has_keepalt() == 0 {
+                if nvim_excmds_cmdmod_has_keepalt() == 0 {
                     nvim_excmds_set_curwin_alt_fnum(nvim_excmds_curbuf_get_b_fnum());
                 }
                 if !oldwin.is_null() {

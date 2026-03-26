@@ -820,8 +820,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
 extern "C" {
     fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
     fn nvim_excmds_eap_get_append(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_eap_get_line1(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_eap_get_line2_val(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
     fn fix_fname(ffname: *const c_char) -> *mut c_char;
     fn otherfile(ffname: *const c_char) -> c_int;
     fn nvim_excmds_vim_strchr_cpo_altwrite() -> c_int;
@@ -831,7 +830,7 @@ extern "C" {
         lnum: c_int,
     ) -> *mut BufHandle;
     fn nvim_excmds_buflist_findname(ffname: *const c_char) -> *mut BufHandle;
-    fn nvim_excmds_buf_has_mfp(buf: *const BufHandle) -> c_int;
+    fn nvim_ecmd_buf_has_memfile(buf: *mut BufHandle) -> c_int;
     fn nvim_excmds_emsg_e_bufloaded();
     fn nvim_excmds_bt_dontwrite_msg_curbuf() -> c_int;
     fn check_fname() -> c_int;
@@ -853,7 +852,6 @@ extern "C" {
         forceit: c_int,
     ) -> c_int;
     fn nvim_excmds_saveas_post_success();
-    fn nvim_excmds_curbuf_ffname_null() -> c_int;
     fn do_autochdir();
     fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
 }
@@ -914,7 +912,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         } else {
             alt_buf = nvim_excmds_buflist_findname(ffname);
         }
-        if !alt_buf.is_null() && nvim_excmds_buf_has_mfp(alt_buf) != 0 {
+        if !alt_buf.is_null() && nvim_ecmd_buf_has_memfile(alt_buf) != 0 {
             nvim_excmds_emsg_e_bufloaded();
             xfree(free_fname.cast());
             return 0; // FAIL
@@ -940,8 +938,8 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         fname = nvim_excmds_curbuf_get_fname() as *mut c_char;
 
         // Partial write check
-        let line1 = nvim_excmds_eap_get_line1(eap);
-        let line2 = nvim_excmds_eap_get_line2_val(eap);
+        let line1 = nvim_exarg_get_line1(eap);
+        let line2 = nvim_exarg_get_line2(eap);
         let line_count = nvim_curbuf_get_b_ml_ml_line_count();
         let forceit = nvim_exarg_get_forceit(eap);
         let append = nvim_excmds_eap_get_append(eap);
@@ -983,11 +981,15 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
             return 0; // FAIL
         }
 
-        let name_was_missing = nvim_excmds_curbuf_ffname_null();
+        let name_was_missing = if nvim_excmds_curbuf_ffname_not_null() == 0 {
+            1
+        } else {
+            0
+        };
         let append = nvim_excmds_eap_get_append(eap);
         let forceit = nvim_exarg_get_forceit(eap);
-        let line1 = nvim_excmds_eap_get_line1(eap);
-        let line2 = nvim_excmds_eap_get_line2_val(eap);
+        let line1 = nvim_exarg_get_line1(eap);
+        let line2 = nvim_exarg_get_line2(eap);
 
         let write_ok =
             nvim_excmds_buf_write_do_write(ffname, fname, line1, line2, eap, append, forceit);

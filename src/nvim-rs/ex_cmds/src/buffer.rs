@@ -362,7 +362,7 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> *mut crate::BufHandle;
-    fn nvim_excmds_buf_get_fnum(buf: *mut crate::BufHandle) -> c_int;
+    fn nvim_excmds_buf_get_b_fnum(buf: *const crate::BufHandle) -> c_int;
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
     fn do_autochdir();
@@ -427,7 +427,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
         let lnum = nvim_excmds_curwin_cursor_lnum();
         let buf = buflist_new(fname as *mut c_char, xfname as *mut c_char, lnum, 0);
         if !buf.is_null() && nvim_excmds_cmdmod_has_keepalt() == 0 {
-            let fnum = nvim_excmds_buf_get_fnum(buf);
+            let fnum = nvim_excmds_buf_get_b_fnum(buf);
             nvim_excmds_set_curwin_alt_fnum(fnum);
         }
     }

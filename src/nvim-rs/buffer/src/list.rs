@@ -66,7 +66,7 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> BufHandle;
-    fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
+    fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
 
     // buflist_getfile accessors
@@ -1091,7 +1091,7 @@ pub unsafe extern "C" fn rs_setaltfname(
     lnum: c_int,
 ) -> BufHandle {
     let buf = nvim_buflist_new(ffname, sfname, lnum, 0);
-    if !buf.is_null() && nvim_ecmd_cmdmod_has_keepalt() == 0 {
+    if !buf.is_null() && nvim_excmds_cmdmod_has_keepalt() == 0 {
         nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(buf));
     }
     buf

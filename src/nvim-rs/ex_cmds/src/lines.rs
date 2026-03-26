@@ -463,9 +463,9 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_check_cursor_lnum_call, nvim_cmdmod_has_lockmarks, nvim_curbuf_get_b_ml_ml_line_count,
         nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_curbuf_set_op_end,
         nvim_curbuf_set_op_start, nvim_curwin_set_cursor_lnum, nvim_exarg_get_cmdidx,
-        nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_excmds_call_getline,
-        nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut, nvim_excmds_get_b_p_iminsert,
-        nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd, nvim_excmds_set_nextcmd_direct,
+        nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
+        nvim_excmds_call_getline, nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut,
+        nvim_excmds_get_b_p_iminsert, nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd,
         nvim_excmds_toggle_b_p_ai, nvim_set_ex_no_reprint, nvim_ui_cursor_shape_wrapper, u_save,
         vim_strchr, xfree, xmemdupz, xstrdup,
     };
@@ -535,9 +535,9 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
             theline = xmemdupz(nextcmd, p.offset_from(nextcmd) as usize);
             if *p != NUL {
                 // advance past the NL
-                nvim_excmds_set_nextcmd_direct(eap, (p as *mut c_char).add(1));
+                nvim_exarg_set_nextcmd(eap, (p as *const c_char).add(1));
             } else {
-                nvim_excmds_set_nextcmd_direct(eap, std::ptr::null_mut());
+                nvim_exarg_set_nextcmd(eap, std::ptr::null());
             }
         } else {
             let save_state = State;
