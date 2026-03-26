@@ -86,14 +86,10 @@ extern void rs_restore_readbufs(void);
 extern void rs_gotchars(const uint8_t *chars, size_t len);
 extern void rs_add_byte_to_showcmd(uint8_t byte);
 
-
-
 /// Index in scriptin
 static int curscript = -1;
 /// Streams to read script from
 static FileDescriptor scriptin[NSCRIPT] = { 0 };
-
-
 
 static int typeahead_char = 0;  ///< typeahead char that's not flushed
 
@@ -158,8 +154,6 @@ static void init_typebuf(void)
   typebuf.tb_change_cnt = 1;
 }
 
-
-
 /// Make "typebuf" empty and allocate new buffers.
 static void alloc_typebuf(void)
 {
@@ -206,7 +200,6 @@ static void save_typebuf(void)
 static int old_char = -1;   ///< character put back by vungetc()
 static int old_mod_mask;    ///< mod_mask for ungotten character
 static int old_KeyStuffed;  ///< whether old_char was stuffed
-
 
 /// Save all three kinds of typeahead, so that the user must type at a prompt.
 void save_typeahead(tasave_T *tp)
@@ -343,9 +336,6 @@ bool open_scriptin(char *scriptin_name)
 
   return true;
 }
-
-
-
 
 static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
 
@@ -1974,8 +1964,6 @@ void nvim_set_visual_from_cursor(void)
   VIsual_reselect = true;
   redo_VIsual_busy = true;
 }
-
-
 
 /// Wrapper for MB_BYTE2LEN_CHECK macro (used by Rust vgetc).
 int nvim_mb_byte2len_check(int b)
