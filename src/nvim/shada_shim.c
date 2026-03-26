@@ -69,11 +69,7 @@
 extern int rs_magic_isset(void);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
-extern void rs_shada_free_entry_contents(ShadaEntry *entry);
-extern int rs_shada_write_file(const char *file, bool nomerge);
-extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
-extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
 
 /// Generic semsg wrapper: one string argument.
 void nvim_shada_semsg_1s(const char *fmt, const char *arg)
@@ -300,7 +296,6 @@ typedef struct {
   uint8_t history_type;
 } HistoryMergerState;
 
-
 /// Structure that holds one file marks.
 typedef struct {
   ShadaEntry marks[NLOCALMARKS];  ///< All file marks.
@@ -327,7 +322,6 @@ typedef struct {
   Set(cstr_t) dumped_variables;  ///< Names of already dumped variables.
   PMap(cstr_t) file_marks;  ///< All file marks.
 } WriteMergerState;
-
 
 #include "shada_shim.c.generated.h"
 
@@ -362,9 +356,7 @@ buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const f
   return NULL;
 }
 
-
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
-
 
 /// Decode a msgpack binary string to a typval_T at dst.
 /// Wrapper for decode_string() that writes the result to an existing buffer.
@@ -433,8 +425,6 @@ char *nvim_xmemdupz(const char *s, size_t len)
 {
   return xmemdupz(s, len);
 }
-
-
 
 const char *nvim_shada_get_p_shada(void) { return p_shada; }
 char *nvim_shada_home_replace_save(const void *buf, const char *src)
@@ -610,7 +600,6 @@ void nvim_shada_tv_clear(typval_T *tv)
   tv_clear(tv);
 }
 
-
 /// Free the value portion of a global_var entry.
 /// Takes a pointer to the typval_T within the ShadaEntry union.
 void nvim_shada_free_variable(ShadaEntry *entry)
@@ -624,7 +613,6 @@ int nvim_shada_file_open(void *fd, const char *fname) { return file_open((FileDe
 
 /// Initialize a FileDescriptor to read from an in-memory buffer (no fd backing).
 void nvim_shada_file_open_buffer(void *fd, char *data, size_t len) { file_open_buffer((FileDescriptor *)fd, data, len); }
-
 
 /// Get the os_strerror() message for an error code.
 const char *nvim_shada_os_strerror(int err)
@@ -697,10 +685,6 @@ void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
   he->additional_data = additional_data;
 }
 
-// =============================================================================
-// Phase 2 (plan 11dd3cf4): shada_write_file migration accessors
-// =============================================================================
-
 /// Wrapper for modname() used by rs_shada_write_file.
 char *nvim_shada_modname(const char *fname, const char *ext, bool prepend_dot)
 {
@@ -741,7 +725,6 @@ int nvim_shada_os_mkdir_recurse(const char *fname, int perm, char **out_failed_d
   return os_mkdir_recurse(fname, (int)perm, out_failed_dir, NULL);
 }
 
-
 /// Wrapper for vim_rename() used by rs_shada_write_file.
 int nvim_shada_vim_rename(const char *from, const char *to)
 {
@@ -753,10 +736,6 @@ void nvim_shada_os_remove(const char *fname)
 {
   os_remove(fname);
 }
-
-// =============================================================================
-// Phase 4 (plan fd426e0f): nvim_shada_platform_check_writable migration accessors
-// =============================================================================
 
 /// Get stat fields (mode, uid, gid) for a file via os_fileinfo.
 /// Returns 1 if file exists and is not a directory, 0 otherwise.
@@ -793,10 +772,6 @@ int nvim_shada_os_fchown(void *sd_writer, uint64_t uid, uint64_t gid)
   return os_fchown(file_fd((FileDescriptor *)sd_writer),
                    (uv_uid_t)uid, (uv_gid_t)gid);
 }
-
-// =============================================================================
-// Phase 3 (plan 11dd3cf4): shada_read migration accessors
-// =============================================================================
 
 /// Allocate and initialize a PMap(cstr_t) for fname_bufs caching.
 void *nvim_shada_fname_bufs_new(void)
@@ -887,10 +862,6 @@ void *nvim_shada_hist_get_array(int i, int **out_hisidx, int **out_hisnum)
 {
   return hist_get_array((uint8_t)i, out_hisidx, out_hisnum);
 }
-
-// =============================================================================
-// Phase 1 accessors: shada_pack_entry migration
-// =============================================================================
 
 /// Wrapper for encode_vim_to_msgpack (for encoding typval_T variables).
 int nvim_encode_vim_to_msgpack(PackerBuffer *packer, void *tv, const char *desc)
@@ -1028,10 +999,6 @@ void nvim_shada_clear_gvar_entry_value(ShadaEntry *entry)
 {
   tv_clear(&entry->data.global_var.value);
 }
-
-// =============================================================================
-// Phase 2 accessor functions: shada_write / shada_read_when_writing migration
-// =============================================================================
 
 /// Set b_last_cursor for all windows in all tabs (wraps FOR_ALL_TAB_WINDOWS loop).
 void nvim_shada_set_all_last_cursors(void)
@@ -1211,7 +1178,6 @@ void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
   return (void **)val;
 }
 
-
 /// Collect all FileMarks from the PMap, sort by greatest_timestamp (descending),
 /// and return as an allocated array of void* pointers.
 /// Caller must xfree the returned array.
@@ -1283,7 +1249,6 @@ void nvim_shada_wms_dumped_vars_destroy(void *wms_opaque)
   }
 }
 
-
 /// Get the (lnum, col) of the mark returned by mark_get for a local mark.
 /// Returns 1 if a mark was found with timestamp >= entry_ts, 0 otherwise.
 int nvim_shada_mark_get_cmp(const void *buf, const void *win, int name, uint64_t entry_ts)
@@ -1305,7 +1270,6 @@ int nvim_shada_path_fnamecmp(const char *a, const char *b)
 {
   return path_fnamecmp(a, b);
 }
-
 
 /// Flush the packer buffer.
 
@@ -1336,10 +1300,6 @@ void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
     .packer_flush = nvim_shada_flush_file_buffer_,
   };
 }
-
-// =============================================================================
-// Phase 3 (plan fd426e0f): nvim_shada_pack_all_gvars migration accessors
-// =============================================================================
 
 /// Get refcheck info from a typval for circular-reference detection.
 /// @param tv           xmalloc'd typval_T pointer.
@@ -1378,10 +1338,6 @@ void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype,
     *out_copy_id = 0;
   }
 }
-
-// =============================================================================
-// Phase 1 (plan b499a5d0): thin C accessors for search/sub apply migration
-// =============================================================================
 
 /// Get current search or substitute pattern timestamp (0 if no pattern set).
 uint64_t nvim_shada_get_search_pattern_timestamp(int is_substitute)
@@ -1453,8 +1409,6 @@ void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
   regtilde(entry->data.sub_string.sub, rs_magic_isset(), false);
 }
 
-// Phase 2 (plan b499a5d0): thin C accessors for register/variable apply migration
-
 /// Return 1 if register type is char/line/block-wise (valid for ShaDa), 0 otherwise.
 int nvim_shada_entry_get_reg_type_valid(const ShadaEntry *entry)
 {
@@ -1520,8 +1474,6 @@ void nvim_shada_var_set_global_from_entry(ShadaEntry *entry)
   var_set_global(entry->data.global_var.name, &entry->data.global_var.value);
   entry->data.global_var.value.v_type = VAR_UNKNOWN;
 }
-
-// Phase 4 (plan b499a5d0): thin C accessors for mark/jump and local/change apply migration
 
 /// Build xfmark_T from entry fields and call mark_set_global.
 /// Handles buf lookup, XFREE_CLEAR of fname when buf found.
@@ -1594,8 +1546,6 @@ void nvim_shada_jumplist_insert_entry(int i, ShadaEntry *entry,
     curwin->w_jumplistidx++;
   }
 }
-
-// Phase 3 (plan b499a5d0): thin C accessors for buffer list apply migration
 
 /// Wrap path_try_shorten_fname. Returns shortened fname (may be original pointer).
 char *nvim_shada_path_try_shorten_fname(const char *fname)
@@ -1745,10 +1695,6 @@ int nvim_shada_changelist_marklist_insert(void *buf_handle, int i)
   return rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist),
                             buf->b_changelistlen, i);
 }
-
-// =============================================================================
-// Phase 2 (plan 92c8078e): shada_read_next_item migration accessors
-// =============================================================================
 
 /// Thin wrapper for file_try_read_buffered.
 /// Returns pointer to buffered data or NULL if not available.
