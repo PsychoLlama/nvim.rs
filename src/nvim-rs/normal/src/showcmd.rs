@@ -124,13 +124,13 @@ extern "C" {
     fn nvim_normal_showcmd_buf_ptr() -> *mut std::ffi::c_char;
 
     // Phase 2: display_showcmd accessors
-    fn nvim_showcmd_get_p_sloc_first() -> c_int;
+    static p_sloc: *const std::ffi::c_char;
     fn nvim_showcmd_set_w_redr_status();
     fn nvim_showcmd_win_redr_status();
-    fn nvim_showcmd_set_redraw_tabline();
+    static mut redraw_tabline: bool;
     fn draw_tabline();
     fn nvim_showcmd_ui_msg_showcmd(buf: *const std::ffi::c_char, is_clear: bool);
-    fn nvim_showcmd_get_p_ch() -> c_int;
+    static p_ch: i64;
     fn nvim_showcmd_grid_render(buf: *const std::ffi::c_char, is_clear: bool);
 
     // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
@@ -502,7 +502,10 @@ pub unsafe extern "C" fn rs_display_showcmd() {
     let is_clear = *buf_ptr == 0;
     SHOWCMD_IS_CLEAR.store(is_clear, Ordering::Relaxed);
 
-    let sloc = nvim_showcmd_get_p_sloc_first();
+    // SAFETY: p_sloc points to a NUL-terminated C string; reading first byte is valid.
+    // Cast via i8->u8 reinterprets the bit pattern (same as C's `(unsigned char)*p_sloc`).
+    #[allow(clippy::cast_sign_loss)]
+    let sloc = c_int::from(*p_sloc as u8);
 
     if sloc == c_int::from(b's') {
         // showcmdloc=statusline
@@ -517,7 +520,7 @@ pub unsafe extern "C" fn rs_display_showcmd() {
     if sloc == c_int::from(b't') {
         // showcmdloc=tabline
         if is_clear {
-            nvim_showcmd_set_redraw_tabline();
+            redraw_tabline = true;
         } else {
             draw_tabline();
         }
@@ -530,7 +533,7 @@ pub unsafe extern "C" fn rs_display_showcmd() {
         return;
     }
 
-    if nvim_showcmd_get_p_ch() == 0 {
+    if p_ch == 0 {
         return;
     }
 

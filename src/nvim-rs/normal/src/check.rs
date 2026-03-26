@@ -137,7 +137,7 @@ extern "C" {
     fn ui_has(ext: c_int) -> bool;
     fn os_delay(ms: c_int, can_interrupt: bool);
     fn nvim_showmode();
-    fn nvim_show_cursor_info_later();
+    fn show_cursor_info_later(full: bool);
     fn update_screen();
     fn redraw_statuslines();
     fn nvim_curbuf_set_b_last_used();
@@ -156,16 +156,21 @@ extern "C" {
     fn has_event(event: c_int) -> c_int;
     static mut time_fd: *mut std::ffi::c_void;
 
-    // Phase 5 autocmd-check accessors
+    // Autocmd-check accessors
     fn nvim_last_cursormoved_check() -> bool;
-    fn nvim_apply_autocmds_cursormoved();
+    fn apply_autocmds(
+        event: c_int,
+        pat: *const std::ffi::c_char,
+        fname: *const std::ffi::c_char,
+        force: bool,
+        buf: *mut std::ffi::c_void,
+    ) -> bool;
     fn nvim_update_last_cursormoved();
     fn nvim_curbuf_changedtick_changed() -> bool;
-    fn nvim_apply_autocmds_textchanged();
     fn nvim_curbuf_update_last_changedtick();
     fn nvim_curbuf_b_changed_invalid_get() -> bool;
-    fn nvim_apply_autocmds_bufmodifiedset();
     fn nvim_curbuf_b_changed_invalid_clear();
+    static mut curbuf: *mut std::ffi::c_void;
 
     fn nvim_get_curwin() -> WinHandle;
     fn update_topline(win: WinHandle);
@@ -251,7 +256,13 @@ unsafe fn normal_check_cursor_moved() {
         && has_event(EVENT_CURSORMOVED) != 0
         && nvim_last_cursormoved_check()
     {
-        nvim_apply_autocmds_cursormoved();
+        apply_autocmds(
+            EVENT_CURSORMOVED,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            curbuf,
+        );
         nvim_update_last_cursormoved();
     }
 }
@@ -262,7 +273,13 @@ unsafe fn normal_check_text_changed() {
         && has_event(EVENT_TEXTCHANGED) != 0
         && nvim_curbuf_changedtick_changed()
     {
-        nvim_apply_autocmds_textchanged();
+        apply_autocmds(
+            EVENT_TEXTCHANGED,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            curbuf,
+        );
         nvim_curbuf_update_last_changedtick();
     }
 }
@@ -273,7 +290,13 @@ unsafe fn normal_check_buffer_modified() {
         && has_event(EVENT_BUFMODIFIEDSET) != 0
         && nvim_curbuf_b_changed_invalid_get()
     {
-        nvim_apply_autocmds_bufmodifiedset();
+        apply_autocmds(
+            EVENT_BUFMODIFIEDSET,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            curbuf,
+        );
         nvim_curbuf_b_changed_invalid_clear();
     }
 }
@@ -309,7 +332,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     update_topline(nvim_get_curwin());
     nvim_validate_cursor();
 
-    nvim_show_cursor_info_later();
+    show_cursor_info_later(false);
 
     if unsafe { must_redraw } != 0 {
         update_screen();

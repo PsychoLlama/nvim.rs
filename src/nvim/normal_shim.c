@@ -969,10 +969,6 @@ bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
 void nvim_fileinfo_call(void) { fileinfo(false, true, false); }
 
 
-/// show_cursor_info_later(false) call.
-void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
-
-
 
 /// Set curbuf->b_last_used to time(NULL).
 void nvim_curbuf_set_b_last_used(void) { curbuf->b_last_used = time(NULL); }
@@ -1091,17 +1087,6 @@ void nvim_update_last_cursormoved(void)
   last_cursormoved = curwin->w_cursor;
 }
 
-/// Fire EVENT_CURSORMOVED autocmds for curbuf.
-void nvim_apply_autocmds_cursormoved(void)
-{
-  apply_autocmds(EVENT_CURSORMOVED, NULL, NULL, false, curbuf);
-}
-
-/// Fire EVENT_TEXTCHANGED autocmds for curbuf.
-void nvim_apply_autocmds_textchanged(void)
-{
-  apply_autocmds(EVENT_TEXTCHANGED, NULL, NULL, false, curbuf);
-}
 
 /// Check if curbuf changedtick has changed since b_last_changedtick.
 bool nvim_curbuf_changedtick_changed(void)
@@ -1115,11 +1100,6 @@ void nvim_curbuf_update_last_changedtick(void)
   curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
 }
 
-/// Fire EVENT_BUFMODIFIEDSET autocmds for curbuf.
-void nvim_apply_autocmds_bufmodifiedset(void)
-{
-  apply_autocmds(EVENT_BUFMODIFIEDSET, NULL, NULL, false, curbuf);
-}
 
 /// Get curbuf->b_changed_invalid.
 bool nvim_curbuf_b_changed_invalid_get(void) { return curbuf->b_changed_invalid; }
@@ -1139,8 +1119,6 @@ _Static_assert(SHOWCMD_BUFLEN == SHOWCMD_COLS + 1 + 30, "SHOWCMD_BUFLEN changed"
 
 char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 
-/// Returns the first character of p_sloc option.
-int nvim_showcmd_get_p_sloc_first(void) { return (unsigned char)*p_sloc; }
 
 /// Set w_redr_status for curwin (showcmdloc=statusline, clear path).
 void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
@@ -1151,8 +1129,6 @@ void nvim_showcmd_win_redr_status(void) { win_redr_status(curwin); setcursor(); 
 /// Redraw all status lines.
 void nvim_redraw_statuslines_call(void) { redraw_statuslines(); }
 
-/// Set redraw_tabline flag (showcmdloc=tabline, clear path).
-void nvim_showcmd_set_redraw_tabline(void) { redraw_tabline = true; }
 
 
 /// Send showcmd via UI messages protocol.
