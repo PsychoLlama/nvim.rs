@@ -427,10 +427,6 @@ char *nvim_xmemdupz(const char *s, size_t len)
 }
 
 const char *nvim_shada_get_p_shada(void) { return p_shada; }
-void nvim_shada_home_replace(const void *buf, const char *src, char *dst, size_t dstlen, int one)
-{
-  home_replace((buf_T *)buf, src, dst, dstlen, one != 0);
-}
 char *nvim_shada_get_namebuff(void) { return NameBuff; }
 const void *nvim_shada_buf_first(void) { return firstbuf; }
 const void *nvim_shada_buf_next(const void *buf)
@@ -537,8 +533,6 @@ const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
   return ret;
 }
 
-int nvim_shada_op_reg_index(char name) { return op_reg_index(name); }
-
 // Buffer list accessors
 
 /// Get last cursor position and additional data for buffer list entry.
@@ -577,30 +571,12 @@ void nvim_shada_free_header_entry(ShadaEntry *entry)
   api_free_dict(entry->data.header);
 }
 
-/// Clear a typval_T (tv_clear wrapper)
-void nvim_shada_tv_clear(typval_T *tv)
-{
-  tv_clear(tv);
-}
-
 /// Free the value portion of a global_var entry.
 /// Takes a pointer to the typval_T within the ShadaEntry union.
 void nvim_shada_free_variable(ShadaEntry *entry)
 {
   xfree(entry->data.global_var.name);
   tv_clear(&entry->data.global_var.value);
-}
-
-/// Open a file for reading. Returns 0 on success, error code on failure.
-int nvim_shada_file_open(void *fd, const char *fname) { return file_open((FileDescriptor *)fd, fname, kFileReadOnly, 0); }
-
-/// Initialize a FileDescriptor to read from an in-memory buffer (no fd backing).
-void nvim_shada_file_open_buffer(void *fd, char *data, size_t len) { file_open_buffer((FileDescriptor *)fd, data, len); }
-
-/// Get the os_strerror() message for an error code.
-const char *nvim_shada_os_strerror(int err)
-{
-  return os_strerror(err);
 }
 
 /// Get p_verbose value
@@ -653,26 +629,12 @@ void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
   he->additional_data = additional_data;
 }
 
-/// Wrapper for file_open() with write flags used by rs_shada_write_file.
-/// flags: combination of FileOpenFlags bits (int).
-int nvim_shada_file_open_write(void *fd, const char *fname, int flags, int perm)
-{
-  return file_open((FileDescriptor *)fd, fname, (int)flags, perm);
-}
-
 /// Return the byte offset from fname to path_tail_with_sep(fname).
 /// Used by rs_shada_write_file to find the directory portion.
 size_t nvim_shada_path_tail_with_sep_offset(const char *fname)
 {
   const char *tail = path_tail_with_sep((char *)fname);
   return (size_t)(tail - fname);
-}
-
-/// Wrapper for os_mkdir_recurse() used by rs_shada_write_file.
-/// Returns error code; sets *out_failed_dir to the failed directory (caller must free).
-int nvim_shada_os_mkdir_recurse(const char *fname, int perm, char **out_failed_dir)
-{
-  return os_mkdir_recurse(fname, (int)perm, out_failed_dir, NULL);
 }
 
 /// Get stat fields (mode, uid, gid) for a file via os_fileinfo.
@@ -745,26 +707,6 @@ void nvim_shada_oldfiles_set_destroy(void *handle)
   xfree(s);
 }
 
-/// Get VV_OLDFILES list (returns NULL if not set).
-void *nvim_shada_get_oldfiles_list(void)
-{
-  return get_vim_var_list(VV_OLDFILES);
-}
-
-/// Get the length of a list_T.
-int nvim_shada_tv_list_len(void *list)
-{
-  return (int)tv_list_len((list_T *)list);
-}
-
-/// Allocate a new list and set it as VV_OLDFILES. Returns the new list.
-void *nvim_shada_create_oldfiles_list(void)
-{
-  list_T *list = tv_list_alloc(kListLenUnknown);
-  set_vim_var_list(VV_OLDFILES, list);
-  return list;
-}
-
 /// Return ARGCOUNT.
 int nvim_shada_argcount(void)
 {
@@ -785,12 +727,6 @@ void nvim_shada_for_all_tab_windows_update_changelist(void *cl_bufs_handle)
       wp->w_changelistidx = wp->w_buffer->b_changelistlen;
     }
   }
-}
-
-/// Wrapper for encode_vim_to_msgpack (for encoding typval_T variables).
-int nvim_encode_vim_to_msgpack(PackerBuffer *packer, void *tv, const char *desc)
-{
-  return encode_vim_to_msgpack(packer, (typval_T *)tv, desc);
 }
 
 /// Return the number of additional data items in an AdditionalData struct.
@@ -963,18 +899,6 @@ const void *nvim_shada_mark_global_iter(const void *iter,
     *out_additional = fm.fmark.additional_data;
   }
   return next;
-}
-
-/// Get the global mark index for a mark name character.
-int nvim_shada_mark_global_index(int name)
-{
-  return mark_global_index((char)name);
-}
-
-/// Get the local mark index for a mark name character.
-int nvim_shada_mark_local_index(int name)
-{
-  return mark_local_index((char)name);
 }
 
 /// Get the timestamp of a named global mark (namedfm[idx].fmark.timestamp).
@@ -1442,18 +1366,6 @@ void nvim_shada_jumplist_insert_entry(int i, ShadaEntry *entry,
       && curwin->w_jumplistidx + 1 <= curwin->w_jumplistlen) {
     curwin->w_jumplistidx++;
   }
-}
-
-/// Wrap path_try_shorten_fname. Returns shortened fname (may be original pointer).
-char *nvim_shada_path_try_shorten_fname(const char *fname)
-{
-  return path_try_shorten_fname((char *)fname);
-}
-
-/// Wrap buflist_new(fname, sfname, 0, BLN_LISTED). Returns buf_T* or NULL.
-void *nvim_shada_buflist_new(const char *fname, const char *sfname)
-{
-  return buflist_new((char *)fname, (char *)sfname, 0, BLN_LISTED);
 }
 
 /// Set buffer cursor position and additional data from a buffer list entry.
