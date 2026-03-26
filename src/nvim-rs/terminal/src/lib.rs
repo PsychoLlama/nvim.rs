@@ -10,7 +10,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_long};
 use std::os::raw::c_void;
 
 use nvim_vterm::VTermScreenCellAttrs;
@@ -2901,6 +2901,20 @@ extern "C" {
     fn nvim_terminal_schedule_termrequest(term: *mut c_void);
     fn nvim_terminal_get_vt(term: *mut c_void) -> *mut c_void;
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
+    // Phase 16: term_selection_set / term_clipboard_set migration
+    fn nvim_terminal_clipboard_queue(mask: c_long, data: *mut i8);
+    fn nvim_terminal_selection_dupz(term: *mut c_void, out_len: *mut usize) -> *mut i8;
+    fn rs_eval_call_provider(
+        provider: *const i8,
+        method: *const i8,
+        args: *mut c_void,
+        discard: bool,
+        rettv: *mut c_void,
+    );
+    fn tv_list_alloc(count_hint: isize) -> *mut c_void;
+    fn tv_list_append_allocated_string(l: *mut c_void, val: *mut i8);
+    fn tv_list_append_list(l: *mut c_void, val: *mut c_void);
+    fn tv_list_append_string(l: *mut c_void, val: *const i8, len: isize);
     // Phase 15: emit_termrequest / schedule_termrequest migration
     fn nvim_terminal_set_vim_var_termrequest(seq: *const i8, seqlen: usize);
     fn nvim_terminal_apply_termrequest_autocmd(
@@ -3574,6 +3588,86 @@ pub unsafe extern "C" fn rs_on_apc(
     if is_final != 0 {
         unsafe { nvim_terminal_schedule_termrequest(user) };
     }
+    1
+}
+
+// =============================================================================
+// Phase 16: Migrate term_selection_set / term_clipboard_set
+// =============================================================================
+
+/// Set clipboard from terminal selection data.
+///
+/// Replaces `term_clipboard_set` in `terminal_shim.c`.
+/// Called as a `void **argv` multiqueue callback.
+///
+/// # Safety
+/// `argv` must be a valid pointer to at least 2 elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_clipboard_set(argv: *mut *mut c_void) {
+    let mask = unsafe { *argv } as c_long;
+    let data = unsafe { (*argv.add(1)).cast::<i8>() };
+
+    // VTERM_SELECTION_CLIPBOARD = 1, VTERM_SELECTION_PRIMARY = 2
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let is_primary = (mask as u32) == 2;
+    let regname = if is_primary { b'*' } else { b'+' };
+
+    let lines = unsafe { tv_list_alloc(1) };
+    unsafe { tv_list_append_allocated_string(lines, data) };
+
+    let argv_list = unsafe { tv_list_alloc(3) };
+    unsafe { tv_list_append_list(argv_list, lines) };
+
+    let regtype = b'v';
+    unsafe {
+        tv_list_append_string(argv_list, std::ptr::addr_of!(regtype).cast::<i8>(), 1);
+        tv_list_append_string(argv_list, std::ptr::addr_of!(regname).cast::<i8>(), 1);
+    }
+
+    let mut rettv = std::mem::MaybeUninit::<c_void>::uninit();
+    unsafe {
+        rs_eval_call_provider(
+            c"clipboard".as_ptr(),
+            c"set".as_ptr(),
+            argv_list,
+            true,
+            rettv.as_mut_ptr(),
+        );
+    }
+}
+
+/// Accumulate `VTerm` selection data and queue clipboard set when final.
+///
+/// Replaces `term_selection_set` in `terminal_shim.c`.
+///
+/// # Safety
+/// `user` must be a valid `Terminal` pointer, `str_ptr` must point to `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_selection_set(
+    mask: c_int,
+    str_ptr: *const i8,
+    len: usize,
+    initial: c_int,
+    is_final: c_int,
+    user: *mut c_void,
+) -> c_int {
+    let term = unsafe { TerminalHandle::from_ptr(user) };
+    let t = unsafe { term.as_mut() };
+
+    if initial != 0 {
+        t.selection.size = 0;
+    }
+
+    if len > 0 {
+        unsafe { nvim_term_sb_concat_len((&raw mut t.selection).cast(), str_ptr, len) };
+    }
+
+    if is_final != 0 {
+        let mut data_len: usize = 0;
+        let data = unsafe { nvim_terminal_selection_dupz(user, &raw mut data_len) };
+        unsafe { nvim_terminal_clipboard_queue(c_long::from(mask), data) };
+    }
+
     1
 }
 

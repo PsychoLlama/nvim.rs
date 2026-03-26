@@ -583,54 +583,13 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
   { return rs_term_settermprop(prop, val, data); }
 
 
-static void term_clipboard_set(void **argv)
-{
-  VTermSelectionMask mask = (VTermSelectionMask)(long)argv[0];
-  char *data = argv[1];
+extern void rs_term_clipboard_set(void **argv);
+static void term_clipboard_set(void **argv) { rs_term_clipboard_set(argv); }
 
-  char regname;
-  switch (mask) {
-  case VTERM_SELECTION_CLIPBOARD:
-    regname = '+';
-    break;
-  case VTERM_SELECTION_PRIMARY:
-    regname = '*';
-    break;
-  default:
-    regname = '+';
-    break;
-  }
-
-  list_T *lines = tv_list_alloc(1);
-  tv_list_append_allocated_string(lines, data);
-
-  list_T *args = tv_list_alloc(3);
-  tv_list_append_list(args, lines);
-
-  const char regtype = 'v';
-  tv_list_append_string(args, &regtype, 1);
-
-  tv_list_append_string(args, &regname, 1);
-  typval_T rettv;
-  rs_eval_call_provider("clipboard", "set", args, true, &rettv);
-}
-
+extern int rs_term_selection_set(int mask, const char *str, size_t len, int initial, int is_final,
+                                  void *user);
 static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user)
-{
-  Terminal *term = user;
-  if (frag.initial) {
-    kv_size(term->selection) = 0;
-  }
-
-  kv_concat_len(term->selection, frag.str, frag.len);
-
-  if (frag.final) {
-    char *data = xmemdupz(term->selection.items, kv_size(term->selection));
-    multiqueue_put(loop_get_events(&main_loop), term_clipboard_set, (void *)mask, data);
-  }
-
-  return 1;
-}
+  { return rs_term_selection_set((int)mask, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
 
 // }}}
 // input handling {{{
@@ -1161,6 +1120,16 @@ int nvim_buf_get_changedtick_curbuf(void) { return (int)buf_get_changedtick(curb
 // buffer wipe
 void nvim_do_buffer_wipe(int buf_handle)
   { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
+
+// term_selection_set / term_clipboard_set helpers (Phase 16)
+void nvim_terminal_clipboard_queue(long mask, char *data)
+  { multiqueue_put(loop_get_events(&main_loop), term_clipboard_set, (void *)mask, data); }
+char *nvim_terminal_selection_dupz(void *term, size_t *out_len)
+{
+  Terminal *t = (Terminal *)term;
+  *out_len = kv_size(t->selection);
+  return xmemdupz(t->selection.items, *out_len);
+}
 
 // emit_termrequest helpers (Phase 15)
 void nvim_terminal_set_vim_var_termrequest(const char *seq, size_t seqlen)
