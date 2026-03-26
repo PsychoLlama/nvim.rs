@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "klib/kvec.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/api/vim.h"
@@ -110,11 +109,6 @@ static int curscript = -1;
 static FileDescriptor scriptin[NSCRIPT] = { 0 };
 
 
-/// Buffer used to store typed characters for vim.on_key().
-static kvec_withinit_t(char, MAXMAPLEN + 1) on_key_buf = KVI_INITIAL_VALUE(on_key_buf);
-
-/// Number of following bytes that should not be stored for vim.on_key().
-static size_t on_key_ignore_len = 0;
 
 static int typeahead_char = 0;  ///< typeahead char that's not flushed
 
@@ -2092,10 +2086,6 @@ int nvim_char_avail(void)
   return char_avail() ? 1 : 0;
 }
 
-void nvim_add_on_key_ignore_len(size_t val)
-{
-  on_key_ignore_len += val;
-}
 
 void nvim_set_reg_executing(int val)
 {
@@ -2124,43 +2114,6 @@ void nvim_set_visual_from_cursor(void)
 void nvim_call_updatescript(int c)
 {
   updatescript(c);
-}
-
-/// Process bytes for on_key_buf, handling on_key_ignore_len.
-void nvim_on_key_buf_process(const uint8_t *buf, size_t buflen)
-{
-  if (buflen > on_key_ignore_len) {
-    kvi_concat_len(on_key_buf, (char *)buf + on_key_ignore_len,
-                   buflen - on_key_ignore_len);
-    on_key_ignore_len = 0;
-  } else {
-    on_key_ignore_len -= buflen;
-  }
-}
-
-
-/// Push a NUL byte onto on_key_buf.
-void nvim_on_key_buf_push_nul(void)
-{
-  kvi_push(on_key_buf, NUL);
-}
-
-/// Execute on_key Lua callbacks and reset on_key_buf.
-/// Returns true if the key should be discarded.
-bool nvim_on_key_buf_execute_and_reset(int c)
-{
-  bool discard = nlua_execute_on_key(c, on_key_buf.items);
-  kvi_destroy(on_key_buf);
-  kvi_init(on_key_buf);
-  return discard;
-}
-
-/// Shrink on_key_buf by `len` bytes (for ALT key rewrite path).
-void nvim_on_key_buf_shrink(size_t len)
-{
-  if (on_key_buf.size >= len) {
-    on_key_buf.size -= len;
-  }
 }
 
 

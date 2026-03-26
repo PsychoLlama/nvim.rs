@@ -265,8 +265,7 @@ pub unsafe extern "C" fn check_end_reg_executing_export(advance: bool) {
 extern "C" {
     /// Call updatescript(c)
     fn nvim_call_updatescript(c: c_int);
-    /// Append bytes to on_key_buf, subtracting on_key_ignore_len
-    fn nvim_on_key_buf_process(buf: *const u8, buflen: usize);
+    // (on_key_buf_process removed - now calls Rust function directly)
     /// debug_did_msg global (direct access)
     static mut debug_did_msg: bool;
     /// Increment maptick
@@ -296,8 +295,8 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
             nvim_call_updatescript(c_int::from(state.buf[i]));
         }
 
-        // Process on_key_buf (handles on_key_ignore_len subtraction in C)
-        nvim_on_key_buf_process(state.buf.as_ptr(), state.buflen);
+        // Process on_key_buf (handles on_key_ignore_len subtraction)
+        crate::orchestrator::on_key_buf_process(state.buf.as_ptr(), state.buflen);
 
         if nvim_get_reg_recording() != 0 {
             state.nul_terminate();
@@ -322,12 +321,8 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
 #[export_name = "gotchars_ignore"]
 pub unsafe extern "C" fn rs_gotchars_ignore() {
     let nop_buf: [u8; 3] = [K_SPECIAL, crate::stuff::KS_EXTRA, crate::stuff::KE_IGNORE];
-    nvim_add_on_key_ignore_len(3);
+    crate::orchestrator::on_key_ignore_len_add(3);
     rs_gotchars(nop_buf.as_ptr(), 3);
-}
-
-extern "C" {
-    fn nvim_add_on_key_ignore_len(val: usize);
 }
 
 /// Undo the last gotchars() for "len" bytes. To be used when putting a typed

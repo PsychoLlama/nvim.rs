@@ -79,7 +79,6 @@ extern "C" {
     fn nvim_get_keynoremap() -> c_int;
     fn nvim_get_keytyped() -> c_int;
     fn nvim_get_cmd_silent() -> c_int;
-    fn nvim_add_on_key_ignore_len(val: usize);
 
     // For fix_input_buffer
     fn rs_using_script() -> c_int;
@@ -495,7 +494,7 @@ pub unsafe extern "C" fn rs_ins_char_typebuf(
     rs_ins_typebuf(buf.as_ptr(), keynoremap, 0, nottyped, cmd_silent);
 
     if keytyped != 0 && on_key_ignore != 0 {
-        nvim_add_on_key_ignore_len(len as usize);
+        crate::orchestrator::on_key_ignore_len_add(len as usize);
     }
 
     len as c_int

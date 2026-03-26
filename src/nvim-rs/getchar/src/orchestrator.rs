@@ -130,10 +130,7 @@ extern "C" {
     // got_int global
     static mut got_int: bool;
 
-    // Phase 4: on_key_buf wrappers
-    fn nvim_on_key_buf_push_nul();
-    fn nvim_on_key_buf_execute_and_reset(c: c_int) -> bool;
-    fn nvim_on_key_buf_shrink(len: usize);
+    // (on_key_buf wrappers removed - now pure Rust state)
 }
 
 // =============================================================================
@@ -262,6 +259,67 @@ const fn k_third(c: c_int) -> u8 {
     } else {
         key2termcap1(c) as u8
     }
+}
+
+// =============================================================================
+// on_key_buf state (moved from C statics on_key_buf / on_key_ignore_len)
+// =============================================================================
+
+/// Buffer used to store typed characters for vim.on_key() callbacks.
+/// Functionally equivalent to C's `kvec_withinit_t(char, MAXMAPLEN + 1)`.
+static mut ON_KEY_BUF: Vec<u8> = Vec::new();
+
+/// Number of following bytes to skip when feeding into on_key_buf.
+static mut ON_KEY_IGNORE_LEN: usize = 0;
+
+extern "C" {
+    /// nlua_execute_on_key: invoke vim.on_key() Lua callbacks
+    fn nlua_execute_on_key(c: c_int, typed_buf: *const std::ffi::c_char) -> bool;
+}
+
+/// Process bytes for on_key_buf, honouring on_key_ignore_len.
+///
+/// # Safety
+/// `buf` must point to at least `buflen` valid bytes.
+pub(crate) unsafe fn on_key_buf_process(buf: *const u8, buflen: usize) {
+    let ignore = std::ptr::read(std::ptr::addr_of!(ON_KEY_IGNORE_LEN));
+    if buflen > ignore {
+        let slice = std::slice::from_raw_parts(buf.add(ignore), buflen - ignore);
+        (*std::ptr::addr_of_mut!(ON_KEY_BUF)).extend_from_slice(slice);
+        *std::ptr::addr_of_mut!(ON_KEY_IGNORE_LEN) = 0;
+    } else {
+        *std::ptr::addr_of_mut!(ON_KEY_IGNORE_LEN) = ignore - buflen;
+    }
+}
+
+/// Push a NUL byte onto on_key_buf (makes it a valid C string).
+pub(crate) unsafe fn on_key_buf_push_nul() {
+    (*std::ptr::addr_of_mut!(ON_KEY_BUF)).push(0);
+}
+
+/// Execute on_key Lua callbacks with current on_key_buf contents, then reset.
+/// Returns true if the key should be discarded.
+pub(crate) unsafe fn on_key_buf_execute_and_reset(c: c_int) -> bool {
+    // The buffer has a NUL pushed via on_key_buf_push_nul before this call.
+    let buf_ptr = (*std::ptr::addr_of!(ON_KEY_BUF))
+        .as_ptr()
+        .cast::<std::ffi::c_char>();
+    let discard = nlua_execute_on_key(c, buf_ptr);
+    (*std::ptr::addr_of_mut!(ON_KEY_BUF)).clear();
+    discard
+}
+
+/// Shrink on_key_buf by `len` bytes (for ALT key rewrite path).
+pub(crate) unsafe fn on_key_buf_shrink(len: usize) {
+    let current = (*std::ptr::addr_of!(ON_KEY_BUF)).len();
+    if current >= len {
+        (*std::ptr::addr_of_mut!(ON_KEY_BUF)).truncate(current - len);
+    }
+}
+
+/// Increment on_key_ignore_len by `val`.
+pub(crate) unsafe fn on_key_ignore_len_add(val: usize) {
+    *std::ptr::addr_of_mut!(ON_KEY_IGNORE_LEN) += val;
 }
 
 // =============================================================================
@@ -580,8 +638,8 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
     *mgc_ptr = false;
 
     // Execute Lua on_key callbacks.
-    nvim_on_key_buf_push_nul();
-    let out = if nvim_on_key_buf_execute_and_reset(c) {
+    on_key_buf_push_nul();
+    let out = if on_key_buf_execute_and_reset(c) {
         // Keys following K_COMMAND/K_LUA/K_PASTE_START aren't normally received by
         // vim.on_key() callbacks, so discard them along with the current key.
         if c == K_COMMAND {
@@ -683,7 +741,7 @@ unsafe fn vgetc_inner_loop() -> c_int {
             // K_SPECIAL KS_MODIFIER MOD_MASK_ALT takes 3 more bytes
             let old_len = len + 3;
             ungetchars(old_len);
-            nvim_on_key_buf_shrink(old_len as usize);
+            on_key_buf_shrink(old_len as usize);
             continue;
         }
 
