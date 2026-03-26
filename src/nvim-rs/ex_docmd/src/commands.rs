@@ -1693,7 +1693,7 @@ extern "C" {
     fn tabpage_move(nr: c_int);
     fn nvim_docmd_checkpath(forceit: bool);
     fn nvim_docmd_redraw_all_later_some_valid();
-    fn nvim_docmd_set_pressedreturn(val: bool);
+    fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_docmd_get_e_nogvim() -> *const c_char;
 }
 
@@ -1862,7 +1862,7 @@ pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
 /// set_pressedreturn -- set ex_pressedreturn flag.
 #[export_name = "set_pressedreturn"]
 pub unsafe extern "C" fn rs_set_pressedreturn(val: bool) {
-    nvim_docmd_set_pressedreturn(val);
+    nvim_set_ex_pressedreturn(val);
 }
 
 // =============================================================================
@@ -2201,7 +2201,7 @@ extern "C" {
     fn nvim_docmd_get_last_chdir_reason() -> *const c_char;
     fn nvim_docmd_curwin_has_localdir() -> bool;
     fn nvim_docmd_curtab_has_localdir() -> bool;
-    fn nvim_docmd_nth_curtab_window(nr: c_int) -> WinHandle;
+    fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
     fn nvim_docmd_win_goto(wp: WinHandle);
     fn nvim_docmd_close_others(message: bool, forceit: bool);
     fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
@@ -2408,7 +2408,7 @@ pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
             std::ptr::null_mut(),
         );
     } else {
-        let win = nvim_docmd_nth_curtab_window(nvim_eap_get_line2(eap) as c_int);
+        let win = nvim_docmd_nth_window(nvim_eap_get_line2(eap) as c_int);
         nvim_docmd_ex_win_close_impl(
             c_int::from(nvim_eap_get_forceit(eap)),
             win,
@@ -2485,7 +2485,6 @@ extern "C" {
     fn nvim_docmd_tabpage_close_impl(forceit: c_int);
     fn nvim_docmd_tabpage_close_other_impl(tp: *mut c_void, forceit: c_int);
     fn nvim_docmd_tabpage_is_current(tp: *mut c_void) -> c_int;
-    fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
     fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
     fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
     fn nvim_docmd_get_address_for_copymove(

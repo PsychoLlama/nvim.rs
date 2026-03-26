@@ -1593,7 +1593,7 @@ extern "C" {
 
     // ex_pressedreturn get/set
     fn nvim_get_ex_pressedreturn() -> c_int;
-    fn nvim_docmd_set_pressedreturn(val: bool);
+    fn nvim_set_ex_pressedreturn(val: bool);
 
     // ex_no_reprint set/get
     fn nvim_set_ex_no_reprint(val: c_int);
@@ -1776,7 +1776,7 @@ pub unsafe extern "C" fn do_exmode() {
         }
         msg_scroll = 1;
         need_wait_return = false;
-        nvim_docmd_set_pressedreturn(false);
+        nvim_set_ex_pressedreturn(false);
         nvim_set_ex_no_reprint(0);
         let changedtick = nvim_docmd_curbuf_changedtick();
         let prev_msg_row = msg_row;
@@ -2067,7 +2067,7 @@ extern "C" {
 
     // w_alt_fnum setter + curbuf b_fnum getter
     fn nvim_docmd_win_set_alt_fnum(wp: WinHandle, fnum: c_int);
-    fn nvim_docmd_curbuf_b_fnum() -> c_int;
+    fn nvim_docmd_get_curbuf_fnum() -> c_int;
 
     // win_split: returns OK (1) on success, FAIL (0) on failure
     fn win_split(size: c_int, flags: c_int) -> c_int;
@@ -2174,7 +2174,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
                 && nvim_win_buf_is_curbuf(old_curwin) == 0
                 && (nvim_docmd_get_global_cmdmod_flags() & CMOD_KEEPALT) == 0
             {
-                nvim_docmd_win_set_alt_fnum(old_curwin, nvim_docmd_curbuf_b_fnum());
+                nvim_docmd_win_set_alt_fnum(old_curwin, nvim_docmd_get_curbuf_fnum());
             }
         }
     } else {
@@ -2339,7 +2339,7 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
         && nvim_win_buf_is_curbuf(old_curwin) == 0
         && (nvim_docmd_get_global_cmdmod_flags() & CMOD_KEEPALT) == 0
     {
-        nvim_docmd_win_set_alt_fnum(old_curwin, nvim_docmd_curbuf_b_fnum());
+        nvim_docmd_win_set_alt_fnum(old_curwin, nvim_docmd_get_curbuf_fnum());
     }
     nvim_set_ex_no_reprint(1);
 }

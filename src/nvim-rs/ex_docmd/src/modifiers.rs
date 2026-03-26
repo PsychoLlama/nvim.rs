@@ -279,7 +279,7 @@ extern "C" {
     fn nvim_docmd_get_exmode_active() -> c_int;
     fn nvim_docmd_getline_is_getexline(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_get_exmode_plus() -> *mut c_char;
-    fn nvim_docmd_set_ex_pressedreturn(val: c_int);
+    fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_docmd_get_curwin_cursor_lnum() -> i32;
     fn nvim_docmd_get_curbuf_line_count() -> i32;
     #[link_name = "vim_strchr"]
@@ -290,13 +290,13 @@ extern "C" {
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
     #[link_name = "rs_tabpage_index"]
     fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
-    fn nvim_docmd_LAST_TAB_NR() -> c_int;
+    fn nvim_docmd_last_tab_nr() -> c_int;
     #[link_name = "atoi"]
     fn nvim_docmd_atoi(s: *const c_char) -> c_int;
     fn nvim_docmd_skip_range(cmd: *const c_char) -> *mut c_char;
     #[link_name = "skipwhite"]
     fn nvim_docmd_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_docmd_get_e_invrange_msg() -> *mut c_char;
+    fn nvim_docmd_get_e_invrange() -> *mut c_char;
     #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
     #[link_name = "rs_ascii_isdigit"]
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         {
             nvim_eap_set_cmd(eap, nvim_docmd_get_exmode_plus());
             if !skip_only {
-                nvim_docmd_set_ex_pressedreturn(1);
+                nvim_set_ex_pressedreturn(true);
             }
         }
 
@@ -374,7 +374,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         }
         if *cmd == 0 {
             if !skip_only {
-                nvim_docmd_set_ex_pressedreturn(1);
+                nvim_set_ex_pressedreturn(true);
             }
             return FAIL;
         }
@@ -619,8 +619,8 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         if tabnr == MAXLNUM {
                             nvim_cmod_set_tab(cmod, nvim_rs_tabpage_index(nvim_get_curtab()) + 1);
                         } else {
-                            if tabnr < 0 || tabnr > nvim_docmd_LAST_TAB_NR() as i32 {
-                                *errormsg = nvim_docmd_get_e_invrange_msg();
+                            if tabnr < 0 || tabnr > nvim_docmd_last_tab_nr() as i32 {
+                                *errormsg = nvim_docmd_get_e_invrange();
                                 return 0; // false
                             }
                             nvim_cmod_set_tab(cmod, tabnr as c_int + 1);

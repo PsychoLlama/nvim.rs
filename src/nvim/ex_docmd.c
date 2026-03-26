@@ -1251,17 +1251,12 @@ char *nvim_docmd_get_exmode_plus(void)
   return exmode_plus;
 }
 
-/// Set ex_pressedreturn.
-void nvim_docmd_set_ex_pressedreturn(int val) { ex_pressedreturn = (bool)val; }
-
 /// Wrap vim_regcomp for Rust.
 void *nvim_docmd_vim_regcomp(const char *pat, int flags)
 {
   return vim_regcomp((char *)pat, flags);
 }
 
-/// Wrap LAST_TAB_NR for Rust.
-int nvim_docmd_LAST_TAB_NR(void) { return LAST_TAB_NR; }
 
 /// Wrap skip_range for Rust.
 char *nvim_docmd_skip_range(const char *cmd)
@@ -1269,8 +1264,6 @@ char *nvim_docmd_skip_range(const char *cmd)
   return skip_range(cmd, NULL);
 }
 
-/// Get _(e_invrange).
-char *nvim_docmd_get_e_invrange_msg(void) { return _(e_invrange); }
 
 // --- Accessors for get_address ---
 
@@ -1380,9 +1373,6 @@ void nvim_docmd_check_cursor(void) { check_cursor(curwin); }
 
 /// Wrap check_cursor_col(curwin).
 void nvim_docmd_check_cursor_col(void) { check_cursor_col(curwin); }
-
-/// Check IS_USER_CMDIDX(eap->cmdidx).
-int nvim_docmd_is_user_cmdidx(const exarg_T *eap) { return IS_USER_CMDIDX(eap->cmdidx); }
 
 // =========================================================================
 // (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
@@ -1908,9 +1898,6 @@ void nvim_docmd_checkpath(bool forceit)
 /// Wrapper for redraw_all_later(UPD_SOME_VALID).
 void nvim_docmd_redraw_all_later_some_valid(void) { redraw_all_later(UPD_SOME_VALID); }
 
-/// Set ex_pressedreturn (direct implementation for Rust FFI).
-void nvim_docmd_set_pressedreturn(bool val) { ex_pressedreturn = val; }
-
 // =============================================================================
 // =============================================================================
 
@@ -1998,21 +1985,6 @@ bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
 
 /// True if curtab has a local directory.
 bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
-
-/// Find Nth window in curtab (1-based). Returns lastwin if not found.
-win_T *nvim_docmd_nth_curtab_window(int nr)
-{
-  win_T *win = NULL;
-  int winnr = 0;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    winnr++;
-    if (winnr == nr) {
-      win = wp;
-      break;
-    }
-  }
-  return win != NULL ? win : lastwin;
-}
 
 /// win_goto wrapper.
 void nvim_docmd_win_goto(win_T *wp) { win_goto(wp); }
@@ -2248,8 +2220,6 @@ int nvim_docmd_get_CMD_vnew(void) { return (int)CMD_vnew; }
 int nvim_docmd_get_CMD_sfind(void) { return (int)CMD_sfind; }
 /// Set w_alt_fnum for an arbitrary window (used after tabpage switch).
 void nvim_docmd_win_set_alt_fnum(win_T *wp, int fnum) { wp->w_alt_fnum = fnum; }
-/// Get curbuf->b_fnum.
-int nvim_docmd_curbuf_b_fnum(void) { return curbuf->b_fnum; }
 /// Get cmdmod.cmod_flags (global).
 int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
 
@@ -2837,9 +2807,6 @@ int nvim_docmd_ADDR_OTHER(void) { return (int)ADDR_OTHER; }
 int nvim_eap_get_forceit_int(const exarg_T *eap) { return (int)eap->forceit; }
 /// Wrap nvim_curbuf_modifiable (MODIFIABLE macro check).
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
-/// curbuf->terminal check (already have nvim_curbuf_is_terminal).
-/// e_trailing_arg getter (already used elsewhere).
-const char *nvim_docmd_get_e_trailing_arg(void) { return e_trailing_arg; }
 /// e_argreq getter.
 const char *nvim_docmd_get_e_argreq(void) { return _(e_argreq); }
 /// e_invarg getter.
