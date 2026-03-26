@@ -205,8 +205,11 @@ extern "C" {
     fn nvim_get_swap_exists_action() -> c_int;
     fn nvim_set_swap_exists_action(val: c_int);
     fn nvim_ecmd_cmdwin_buf_is_nonnull() -> c_int;
-    fn nvim_ecmd_cmdwin_save_clear() -> *mut std::ffi::c_void;
-    fn nvim_ecmd_cmdwin_restore_free(bundle: *mut std::ffi::c_void);
+    fn nvim_ecmd_cmdwin_get_type() -> c_int;
+    fn nvim_ecmd_cmdwin_get_win() -> *mut WinHandle;
+    fn nvim_ecmd_cmdwin_get_old_curwin() -> *mut WinHandle;
+    fn nvim_ecmd_cmdwin_clear();
+    fn nvim_ecmd_cmdwin_restore(type_: c_int, win: *mut WinHandle, old_curwin: *mut WinHandle);
     static mut exmode_active: bool;
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
@@ -216,7 +219,10 @@ extern "C" {
     // Misc wrappers
     fn rs_buflist_altfpos(win: *mut WinHandle);
     fn nvim_ecmd_buflist_findfmark(buf: *mut BufHandle, lnum: *mut c_int, col: *mut c_int);
-    fn nvim_ecmd_terminal_check_size_cleanup(r: *mut std::ffi::c_void);
+    fn nvim_ecmd_bufref_has_terminal(r: *mut std::ffi::c_void) -> c_int;
+    fn nvim_ecmd_bufref_terminal_check_size(r: *mut std::ffi::c_void);
+    fn nvim_ecmd_bufref_valid_is_curbuf(r: *mut std::ffi::c_void) -> c_int;
+    fn nvim_ecmd_curbuf_terminal_check_size();
     fn nvim_ecmd_handle_swap_exists(old_curbuf_ref: *mut std::ffi::c_void);
     fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: c_int) -> *mut crate::BufHandle;
     fn rs_delbuf_msg(name: *mut c_char);
@@ -518,7 +524,10 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 );
 
                 // Save and clear cmdwin state for BufLeave
-                let cmdwin_state = nvim_ecmd_cmdwin_save_clear();
+                let saved_cmdwin_type = nvim_ecmd_cmdwin_get_type();
+                let saved_cmdwin_win = nvim_ecmd_cmdwin_get_win();
+                let saved_cmdwin_old_curwin = nvim_ecmd_cmdwin_get_old_curwin();
+                nvim_ecmd_cmdwin_clear();
 
                 // Track new_name for delbuf_msg
                 let fname = nvim_excmds_buf_get_b_fname(buf);
@@ -540,7 +549,11 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 );
 
                 // Restore cmdwin state
-                nvim_ecmd_cmdwin_restore_free(cmdwin_state);
+                nvim_ecmd_cmdwin_restore(
+                    saved_cmdwin_type,
+                    saved_cmdwin_win,
+                    saved_cmdwin_old_curwin,
+                );
 
                 if nvim_ecmd_au_new_curbuf_valid() == 0 {
                     // New buffer has been deleted
@@ -925,7 +938,12 @@ pub unsafe extern "C" fn rs_do_ecmd(
     } // end 'outer
 
     // theend: cleanup
-    nvim_ecmd_terminal_check_size_cleanup(old_curbuf);
+    if nvim_ecmd_bufref_has_terminal(old_curbuf) != 0 {
+        nvim_ecmd_bufref_terminal_check_size(old_curbuf);
+    }
+    if nvim_ecmd_bufref_valid_is_curbuf(old_curbuf) == 0 {
+        nvim_ecmd_curbuf_terminal_check_size();
+    }
 
     if did_inc_redrawing_disabled {
         nvim_dec_RedrawingDisabled();

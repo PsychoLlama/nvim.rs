@@ -146,35 +146,14 @@ void nvim_curbuf_set_op_end(linenr_T lnum, colnr_T col) { curbuf->b_op_end.lnum 
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
 
 // Regex accessors (opaque regmatch_T handle)
-void *nvim_excmds_regcomp(const char *pat, int magic_val)
-{
-  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
-  rm->regprog = vim_regcomp(pat, magic_val);
-  if (rm->regprog == NULL) {
-    xfree(rm);
-    return NULL;
-  }
-  return rm;
-}
-
-void nvim_excmds_regfree(void *rm)
-{
-  if (rm != NULL) {
-    vim_regfree(((regmatch_T *)rm)->regprog);
-    xfree(rm);
-  }
-}
+void *nvim_excmds_regcomp(const char *pat, int magic_val) { regmatch_T *rm = xcalloc(1, sizeof(regmatch_T)); rm->regprog = vim_regcomp(pat, magic_val); if (rm->regprog == NULL) { xfree(rm); return NULL; } return rm; }
+void nvim_excmds_regfree(void *rm) { if (rm != NULL) { vim_regfree(((regmatch_T *)rm)->regprog); xfree(rm); } }
 
 const char *nvim_excmds_regmatch_startp0(const void *rm) { return ((const regmatch_T *)rm)->startp[0]; }
 const char *nvim_excmds_regmatch_endp0(const void *rm) { return ((const regmatch_T *)rm)->endp[0]; }
 void nvim_excmds_regmatch_set_ic(void *rm, int ic) { ((regmatch_T *)rm)->rm_ic = ic; }
 // Number parsing wrapper
-void nvim_excmds_str2nr(const char *s, int what, int64_t *result)
-{
-  varnumber_T val = 0;
-  vim_str2nr(s, NULL, NULL, what, &val, NULL, 0, false, NULL);
-  *result = (int64_t)val;
-}
+void nvim_excmds_str2nr(const char *s, int what, int64_t *result) { varnumber_T val = 0; vim_str2nr(s, NULL, NULL, what, &val, NULL, 0, false, NULL); *result = (int64_t)val; }
 
 // Error message wrappers (can't call variadic semsg from Rust)
 void nvim_excmds_semsg_invarg2(const char *p) { semsg(_(e_invarg2), p); }
@@ -205,9 +184,7 @@ void nvim_excmds_smsg_lines_moved(int64_t num_lines)
        num_lines);
 }
 
-void nvim_excmds_emsg_e134(void) {
-  emsg(_("E134: Cannot move a range of lines into itself"));
-}
+void nvim_excmds_emsg_e134(void) { emsg(_("E134: Cannot move a range of lines into itself")); }
 
 // --- ex_append FFI accessors ---
 // Toggle curbuf->b_p_ai (autoindent)
@@ -403,103 +380,23 @@ int nvim_excmds_any_buf_changed(void)
 }
 
 // --- global_exe FFI accessors ---
-void nvim_excmds_do_cmdline_global(const char *cmd)
-{
-  if (cmd == NULL || *cmd == NUL || *cmd == '\n') {
-    do_cmdline("p", NULL, NULL, DOCMD_NOWAIT);
-  } else {
-    do_cmdline((char *)cmd, NULL, NULL, DOCMD_NOWAIT);
-  }
-}
+void nvim_excmds_do_cmdline_global(const char *cmd) { if (cmd == NULL || *cmd == NUL || *cmd == '\n') { do_cmdline("p", NULL, NULL, DOCMD_NOWAIT); } else { do_cmdline((char *)cmd, NULL, NULL, DOCMD_NOWAIT); } }
 
 // --- show_sub FFI accessors ---
-
-/// Save and set p_shm to "F" (disable file info message). Returns strdup of p_shm.
-char *nvim_excmds_save_set_shortmess_F(void)
-{
-  char *saved = xstrdup(p_shm);
-  set_option_direct(kOptShortmess, STATIC_CSTR_AS_OPTVAL("F"), 0, SID_NONE);
-  return saved;
-}
-/// Restore p_shm from a previously saved value (and free the saved string).
-void nvim_excmds_restore_shortmess(char *saved)
-{
-  set_option_direct(kOptShortmess, CSTR_AS_OPTVAL(saved), 0, SID_NONE);
-  xfree(saved);
-}
+char *nvim_excmds_save_set_shortmess_F(void) { char *saved = xstrdup(p_shm); set_option_direct(kOptShortmess, STATIC_CSTR_AS_OPTVAL("F"), 0, SID_NONE); return saved; }
+void nvim_excmds_restore_shortmess(char *saved) { set_option_direct(kOptShortmess, CSTR_AS_OPTVAL(saved), 0, SID_NONE); xfree(saved); }
 int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
-
-void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id,
-                                          linenr_T start_lnum, colnr_T start_col,
-                                          linenr_T end_lnum, colnr_T end_col,
-                                          colnr_T offset)
-{
-  lpos_T start = { start_lnum, start_col };
-  lpos_T end = { end_lnum, end_col };
-  bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start, end, offset);
-}
-
+void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id, linenr_T start_lnum, colnr_T start_col, linenr_T end_lnum, colnr_T end_col, colnr_T offset) { lpos_T start = { start_lnum, start_col }; lpos_T end = { end_lnum, end_col }; bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start, end, offset); }
 size_t nvim_excmds_preview_lines_size(const void *pl) { return ((const PreviewLines *)pl)->subresults.size; }
-void nvim_excmds_preview_lines_item(const void *pl, size_t idx,
-                                     linenr_T *start_lnum, colnr_T *start_col,
-                                     linenr_T *end_lnum, colnr_T *end_col,
-                                     linenr_T *pre_match)
-{
-  SubResult item = ((const PreviewLines *)pl)->subresults.items[idx];
-  *start_lnum = item.start.lnum;
-  *start_col = item.start.col;
-  *end_lnum = item.end.lnum;
-  *end_col = item.end.col;
-  *pre_match = item.pre_match;
-}
+void nvim_excmds_preview_lines_item(const void *pl, size_t idx, linenr_T *start_lnum, colnr_T *start_col, linenr_T *end_lnum, colnr_T *end_col, linenr_T *pre_match) { SubResult item = ((const PreviewLines *)pl)->subresults.items[idx]; *start_lnum = item.start.lnum; *start_col = item.start.col; *end_lnum = item.end.lnum; *end_col = item.end.col; *pre_match = item.pre_match; }
 
 // --- ex_global FFI accessors ---
 const char *nvim_exarg_get_cmd(const exarg_T *eap) { return eap->cmd; }
-
-/// Allocate and call search_regcomp for ex_global. Returns opaque regmmatch_T* or NULL on failure.
-/// On success, *used_pat_out is set to the pattern actually used.
-void *nvim_excmds_search_regcomp_multi(const char *pat, size_t patlen, const char **used_pat_out,
-                                        int which_pat)
-{
-  regmmatch_T *rm = xmalloc(sizeof(regmmatch_T));
-  memset(rm, 0, sizeof(*rm));
-  if (search_regcomp((char *)pat, patlen, (char **)used_pat_out, RE_BOTH,
-                     which_pat, SEARCH_HIS, rm) == FAIL) {
-    xfree(rm);
-    return NULL;
-  }
-  return rm;
-}
-
-/// Call vim_regexec_multi on an opaque regmmatch_T handle for the given lnum.
-/// Returns match count (> 0 means matched).
-int nvim_excmds_vim_regexec_multi(void *regmatch, int lnum)
-{
-  regmmatch_T *rm = (regmmatch_T *)regmatch;
-  return vim_regexec_multi(rm, curwin, curbuf, (linenr_T)lnum, 0, NULL, NULL);
-}
-
-/// Free an opaque regmmatch_T handle (calls vim_regfree on regprog, then xfree).
-void nvim_excmds_vim_regfree_multi(void *regmatch)
-{
-  if (regmatch == NULL) { return; }
-  regmmatch_T *rm = (regmmatch_T *)regmatch;
-  vim_regfree(rm->regprog);
-  xfree(rm);
-}
-
-/// Check if regmatch->regprog is NULL (re-compile failed mid-loop).
-int nvim_excmds_regmmatch_regprog_null(void *regmatch)
-{
-  regmmatch_T *rm = (regmmatch_T *)regmatch;
-  return rm->regprog == NULL ? 1 : 0;
-}
-
-/// Returns pointer to the character after the end delimiter (or to NUL).
-char *nvim_excmds_skip_regexp_ex_global(exarg_T *eap, char *pat, int delim)
-{
-  return skip_regexp_ex(pat, (char)delim, rs_magic_isset(), &eap->arg, NULL, NULL);
-}
+void *nvim_excmds_search_regcomp_multi(const char *pat, size_t patlen, const char **used_pat_out, int which_pat) { regmmatch_T *rm = xmalloc(sizeof(regmmatch_T)); memset(rm, 0, sizeof(*rm)); if (search_regcomp((char *)pat, patlen, (char **)used_pat_out, RE_BOTH, which_pat, SEARCH_HIS, rm) == FAIL) { xfree(rm); return NULL; } return rm; }
+int nvim_excmds_vim_regexec_multi(void *regmatch, int lnum) { return vim_regexec_multi((regmmatch_T *)regmatch, curwin, curbuf, (linenr_T)lnum, 0, NULL, NULL); }
+void nvim_excmds_vim_regfree_multi(void *regmatch) { if (regmatch == NULL) { return; } regmmatch_T *rm = (regmmatch_T *)regmatch; vim_regfree(rm->regprog); xfree(rm); }
+int nvim_excmds_regmmatch_regprog_null(void *regmatch) { return ((regmmatch_T *)regmatch)->regprog == NULL ? 1 : 0; }
+char *nvim_excmds_skip_regexp_ex_global(exarg_T *eap, char *pat, int delim) { return skip_regexp_ex(pat, (char)delim, rs_magic_isset(), &eap->arg, NULL, NULL); }
 
 /// Dispatch no-arg error/message by id.
 /// IDs: 1=e_noprev, 2=E147, 3=E148, 4=e_backslash, 5=e_invcmd, 6=e_interr(msg),
@@ -586,56 +483,18 @@ int nvim_excmds_curbuf_op_end_lnum(void) { return (int)curbuf->b_op_end.lnum; }
 void nvim_excmds_curbuf_set_op_start_lnum(int lnum) { curbuf->b_op_start.lnum = (linenr_T)lnum; }
 void nvim_excmds_curbuf_set_op_end_lnum(int lnum) { curbuf->b_op_end.lnum = (linenr_T)lnum; }
 
-/// Save entire cursor position (returns lnum, col as a packed 64-bit int: high32=lnum, low32=col).
-uint64_t nvim_excmds_curwin_cursor_save(void)
-{
-  return ((uint64_t)(uint32_t)curwin->w_cursor.lnum << 32)
-         | (uint32_t)(int32_t)curwin->w_cursor.col;
-}
-
-/// Restore cursor position from packed 64-bit int.
-void nvim_excmds_curwin_cursor_restore(uint64_t saved)
-{
-  curwin->w_cursor.lnum = (linenr_T)(uint32_t)(saved >> 32);
-  curwin->w_cursor.col = (colnr_T)(int32_t)(uint32_t)saved;
-}
-
-/// Save cmdmod.cmod_flags and clear CMOD_LOCKMARKS.
-int nvim_excmds_cmdmod_save_clear_lockmarks(void)
-{
-  int saved = cmdmod.cmod_flags;
-  cmdmod.cmod_flags &= ~CMOD_LOCKMARKS;
-  return saved;
-}
+uint64_t nvim_excmds_curwin_cursor_save(void) { return ((uint64_t)(uint32_t)curwin->w_cursor.lnum << 32) | (uint32_t)(int32_t)curwin->w_cursor.col; }
+void nvim_excmds_curwin_cursor_restore(uint64_t saved) { curwin->w_cursor.lnum = (linenr_T)(uint32_t)(saved >> 32); curwin->w_cursor.col = (colnr_T)(int32_t)(uint32_t)saved; }
+int nvim_excmds_cmdmod_save_clear_lockmarks(void) { int saved = cmdmod.cmod_flags; cmdmod.cmod_flags &= ~CMOD_LOCKMARKS; return saved; }
 
 /// Restore cmdmod.cmod_flags.
 void nvim_excmds_cmdmod_restore_flags(int saved) { cmdmod.cmod_flags = saved; }
 int nvim_excmds_cmdmod_has_keepmarks_now(void) { return (cmdmod.cmod_flags & CMOD_KEEPMARKS) != 0 ? 1 : 0; }
-/// Call buf_write for the filter temp file write. Returns 1=OK, 0=FAIL.
-int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T *eap)
-{
-  return buf_write(curbuf, (char *)itmp, NULL, (linenr_T)line1, (linenr_T)line2,
-                   eap, false, false, false, true) == OK ? 1 : 0;
-}
-
-/// Call readfile for filter output. Returns 1=OK, 0=FAIL.
-int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap)
-{
-  return readfile((char *)otmp, NULL, (linenr_T)line2, 0, (linenr_T)MAXLNUM,
-                  eap, READ_FILTER, false) == OK ? 1 : 0;
-}
+int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T *eap) { return buf_write(curbuf, (char *)itmp, NULL, (linenr_T)line1, (linenr_T)line2, eap, false, false, false, true) == OK ? 1 : 0; }
+int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap) { return readfile((char *)otmp, NULL, (linenr_T)line2, 0, (linenr_T)MAXLNUM, eap, READ_FILTER, false) == OK ? 1 : 0; }
 
 int nvim_excmds_p_cpo_no_remmark(void) { return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0; }
-/// Format and display "N lines filtered" message via set_keep_msg if scrolled.
-void nvim_excmds_msg_lines_filtered(int linecount)
-{
-  char msg_buf[80];
-  vim_snprintf(msg_buf, sizeof(msg_buf),
-               _("%" PRId64 " lines filtered"), (int64_t)linecount);
-  if (msg(msg_buf, 0) && !msg_scroll) {
-    set_keep_msg(msg_buf, 0);
-  }
-}
+void nvim_excmds_msg_lines_filtered(int linecount) { char msg_buf[80]; vim_snprintf(msg_buf, sizeof(msg_buf), _("%" PRId64 " lines filtered"), (int64_t)linecount); if (msg(msg_buf, 0) && !msg_scroll) { set_keep_msg(msg_buf, 0); } }
 
 /// Unified error message dispatcher for do_filter/write/check_overwrite error paths.
 /// error_id values are defined as Rust constants (see shell.rs / write.rs).
@@ -665,33 +524,9 @@ void nvim_excmds_error_msg(int error_id, const char *arg)
   }
 }
 
-/// Save curbuf->b_op_start and b_op_end as packed values.
-/// Returns two packed uint64 values via out pointers.
-void nvim_excmds_curbuf_op_save(uint64_t *out_start, uint64_t *out_end)
-{
-  *out_start = ((uint64_t)(uint32_t)curbuf->b_op_start.lnum << 32)
-               | (uint32_t)(int32_t)curbuf->b_op_start.col;
-  *out_end = ((uint64_t)(uint32_t)curbuf->b_op_end.lnum << 32)
-             | (uint32_t)(int32_t)curbuf->b_op_end.col;
-}
-
-/// Restore curbuf->b_op_start and b_op_end from packed values.
-void nvim_excmds_curbuf_op_restore(uint64_t saved_start, uint64_t saved_end)
-{
-  curbuf->b_op_start.lnum = (linenr_T)(uint32_t)(saved_start >> 32);
-  curbuf->b_op_start.col = (colnr_T)(int32_t)(uint32_t)saved_start;
-  curbuf->b_op_end.lnum = (linenr_T)(uint32_t)(saved_end >> 32);
-  curbuf->b_op_end.col = (colnr_T)(int32_t)(uint32_t)saved_end;
-}
-
-/// Adjust curbuf->b_op_start.lnum and b_op_end.lnum by delta.
-void nvim_excmds_curbuf_op_adjust_lnum(int delta)
-{
-  curbuf->b_op_start.lnum += (linenr_T)delta;
-  curbuf->b_op_end.lnum += (linenr_T)delta;
-}
-
-/// Get curbuf->b_ml.ml_line_count.
+void nvim_excmds_curbuf_op_save(uint64_t *out_start, uint64_t *out_end) { *out_start = ((uint64_t)(uint32_t)curbuf->b_op_start.lnum << 32) | (uint32_t)(int32_t)curbuf->b_op_start.col; *out_end = ((uint64_t)(uint32_t)curbuf->b_op_end.lnum << 32) | (uint32_t)(int32_t)curbuf->b_op_end.col; }
+void nvim_excmds_curbuf_op_restore(uint64_t saved_start, uint64_t saved_end) { curbuf->b_op_start.lnum = (linenr_T)(uint32_t)(saved_start >> 32); curbuf->b_op_start.col = (colnr_T)(int32_t)(uint32_t)saved_start; curbuf->b_op_end.lnum = (linenr_T)(uint32_t)(saved_end >> 32); curbuf->b_op_end.col = (colnr_T)(int32_t)(uint32_t)saved_end; }
+void nvim_excmds_curbuf_op_adjust_lnum(int delta) { curbuf->b_op_start.lnum += (linenr_T)delta; curbuf->b_op_end.lnum += (linenr_T)delta; }
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 
 // --- getfile, set_swapcommand, delbuf_msg FFI accessors ---
@@ -712,16 +547,7 @@ int nvim_excmds_buf_has_running_job(const buf_T *buf)
 
 int nvim_excmds_buf_get_b_fnum(const buf_T *buf) { return buf->b_fnum; }
 void nvim_excmds_semsg_e141(int64_t fnum) { semsg(_("E141: No file name for buffer %" PRId64), fnum); }
-/// Wrap check_readonly via rs_ (Rust). Takes buf, uses fake_eap with forceit.
-/// Returns 1 if readonly (error), 0 if OK. Updates *forceit_out.
-int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out)
-{
-  exarg_T fake_eap = { 0 };
-  fake_eap.forceit = (bool)forceit_in;
-  int result = rs_check_readonly(&fake_eap, buf);
-  *forceit_out = (int)fake_eap.forceit;
-  return result;
-}
+int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out) { exarg_T fake_eap = { 0 }; fake_eap.forceit = (bool)forceit_in; int result = rs_check_readonly(&fake_eap, buf); *forceit_out = (int)fake_eap.forceit; return result; }
 
 /// Set a bufref to buf. Opaque handle for buffer reference tracking.
 /// Uses a C-allocated bufref_T. Returns opaque pointer to bufref.
@@ -736,77 +562,22 @@ int nvim_excmds_buf_get_b_flags(const buf_T *buf) { return (int)buf->b_flags; }
 /// Check vim_strchr(p_cpo, CPO_OVERNEW) == NULL. Returns 1 if not found.
 int nvim_excmds_cpo_no_overnew(void) { return vim_strchr(p_cpo, CPO_OVERNEW) == NULL ? 1 : 0; }
 
-/// Dialog: "Overwrite existing file "fname"?" Returns 1 if user said yes, sets forceit.
-int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname)
-{
-  char buff[DIALOG_MSG_SIZE];
-  dialog_msg(buff, _("Overwrite existing file \"%s\"?"), (char *)fname);
-  if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) {
-    eap->forceit = true;
-    return 1;
-  }
-  return 0;
-}
-
-/// Allocate a copy_option_part result for the first dir entry.
-/// Returns newly allocated string (caller must free). Returns "." if p_dir is empty.
-char *nvim_excmds_get_first_dir(void)
-{
-  if (*p_dir == NUL) {
-    char *dir = xmalloc(5);
-    STRCPY(dir, ".");
-    return dir;
-  }
-  char *dir = xmalloc(MAXPATHL);
-  char *p = p_dir;
-  copy_option_part(&p, dir, MAXPATHL, ",");
-  return dir;
-}
-
-/// Wrap makeswapname(fname, ffname, curbuf, dir). Returns allocated string (caller must free).
-char *nvim_excmds_makeswapname(const char *fname, const char *ffname, const char *dir)
-{
-  return makeswapname((char *)fname, (char *)ffname, curbuf, (char *)dir);
-}
-
-/// Dialog: "Swap file "sname" exists, overwrite anyway?" Returns 1 if yes, sets forceit.
-int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname)
-{
-  char buff[DIALOG_MSG_SIZE];
-  dialog_msg(buff, _("Swap file \"%s\" exists, overwrite anyway?"), (char *)swapname);
-  if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) {
-    eap->forceit = true;
-    return 1;
-  }
-  return 0;
-}
+int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname) { char buff[DIALOG_MSG_SIZE]; dialog_msg(buff, _("Overwrite existing file \"%s\"?"), (char *)fname); if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) { eap->forceit = true; return 1; } return 0; }
+char *nvim_excmds_get_first_dir(void) { if (*p_dir == NUL) { char *dir = xmalloc(5); STRCPY(dir, "."); return dir; } char *dir = xmalloc(MAXPATHL); char *p = p_dir; copy_option_part(&p, dir, MAXPATHL, ","); return dir; }
+char *nvim_excmds_makeswapname(const char *fname, const char *ffname, const char *dir) { return makeswapname((char *)fname, (char *)ffname, curbuf, (char *)dir); }
+int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname) { char buff[DIALOG_MSG_SIZE]; dialog_msg(buff, _("Swap file \"%s\" exists, overwrite anyway?"), (char *)swapname); if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) { eap->forceit = true; return 1; } return 0; }
 
 // --- do_write FFI accessors ---
 int nvim_excmds_eap_get_append(const exarg_T *eap) { return eap->append ? 1 : 0; }
 int nvim_excmds_vim_strchr_cpo_altwrite(void) { return vim_strchr(p_cpo, CPO_ALTWRITE) != NULL ? 1 : 0; }
-/// Wrap setaltfname(ffname, fname, 1). Returns opaque buf pointer (may be NULL).
-void *nvim_excmds_setaltfname(const char *ffname, const char *fname, int lnum)
-{
-  return setaltfname((char *)ffname, (char *)fname, (linenr_T)lnum);
-}
-
+void *nvim_excmds_setaltfname(const char *ffname, const char *fname, int lnum) { return setaltfname((char *)ffname, (char *)fname, (linenr_T)lnum); }
 void nvim_excmds_emsg_e_bufloaded(void) { emsg(_(e_bufloaded)); }
-
-/// Check curbuf->b_ffname writable (Unix: rs_check_writable).
-int nvim_excmds_curbuf_check_writable(void)
-{
 #ifdef UNIX
-  return rs_check_writable(curbuf->b_ffname);
+int nvim_excmds_curbuf_check_writable(void) { return rs_check_writable(curbuf->b_ffname); }
 #else
-  return 1;
+int nvim_excmds_curbuf_check_writable(void) { return 1; }
 #endif
-}
-
-/// Dialog: "Write partial file?" Returns 1 if user said yes.
-int nvim_excmds_dialog_write_partial(void)
-{
-  return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0;
-}
+int nvim_excmds_dialog_write_partial(void) { return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0; }
 
 // --- rs_do_saveas_swap FFI accessors ---
 void nvim_excmds_buf_swap_filenames(buf_T *alt_buf)
@@ -824,15 +595,7 @@ int nvim_excmds_augroup_exists_filetypedetect(void) { return augroup_exists("fil
 void nvim_excmds_do_doautocmd_filetypedetect(void) { do_doautocmd("filetypedetect BufRead", true, NULL); }
 void nvim_excmds_do_modelines(void) { do_modelines(0); }
 
-/// Wrap buf_write for do_write. Returns 1=OK, 0=FAIL.
-int nvim_excmds_buf_write_do_write(const char *ffname, const char *fname,
-                                   int line1, int line2,
-                                   exarg_T *eap, int append, int forceit)
-{
-  return buf_write(curbuf, (char *)ffname, (char *)fname,
-                   (linenr_T)line1, (linenr_T)line2,
-                   eap, (bool)append, (bool)forceit, true, false) == OK ? 1 : 0;
-}
+int nvim_excmds_buf_write_do_write(const char *ffname, const char *fname, int line1, int line2, exarg_T *eap, int append, int forceit) { return buf_write(curbuf, (char *)ffname, (char *)fname, (linenr_T)line1, (linenr_T)line2, eap, (bool)append, (bool)forceit, true, false) == OK ? 1 : 0; }
 
 /// After saveas: set curbuf->b_p_ro=false, redraw_tabline=true.
 void nvim_excmds_saveas_post_success(void) { curbuf->b_p_ro = false; redraw_tabline = true; }
@@ -843,43 +606,12 @@ int nvim_excmds_buf_get_b_p_ro(const buf_T *buf) { return buf->b_p_ro ? 1 : 0; }
 const char *nvim_excmds_buf_get_b_fname(const buf_T *buf) { return buf->b_fname; }
 const char *nvim_excmds_buf_get_b_ffname_ptr(const buf_T *buf) { return buf->b_ffname; }
 
-/// Check os_path_exists(buf->b_ffname). Returns 1 if exists.
-int nvim_excmds_buf_ffname_path_exists(const buf_T *buf)
-{
-  return (buf->b_ffname != NULL && os_path_exists(buf->b_ffname)) ? 1 : 0;
-}
-
-/// Check os_file_is_writable(buf->b_ffname). Returns 1 if writable.
-int nvim_excmds_buf_ffname_is_writable(const buf_T *buf)
-{
-  return (buf->b_ffname != NULL && os_file_is_writable(buf->b_ffname)) ? 1 : 0;
-}
-
-/// Check p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM).
+int nvim_excmds_buf_ffname_path_exists(const buf_T *buf) { return (buf->b_ffname != NULL && os_path_exists(buf->b_ffname)) ? 1 : 0; }
+int nvim_excmds_buf_ffname_is_writable(const buf_T *buf) { return (buf->b_ffname != NULL && os_file_is_writable(buf->b_ffname)) ? 1 : 0; }
 int nvim_excmds_p_confirm_or_cmod_confirm(void) { return (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) ? 1 : 0; }
-/// Wrap vim_dialog_yesno(VIM_QUESTION, NULL, msg, 2). Returns VIM_YES (1) or not.
-int nvim_excmds_vim_dialog_yesno_question(const char *msg)
-{
-  return vim_dialog_yesno(VIM_QUESTION, NULL, (char *)msg, 2) == VIM_YES ? 1 : 0;
-}
+int nvim_excmds_vim_dialog_yesno_question(const char *msg) { return vim_dialog_yesno(VIM_QUESTION, NULL, (char *)msg, 2) == VIM_YES ? 1 : 0; }
 
-/// Format dialog_msg(buff, fmt, arg) into a newly allocated string. Caller must free.
-/// fmt_id: 0 = readonly option, 1 = read-only permissions
-char *nvim_excmds_dialog_msg_readonly(int fmt_id, const char *arg)
-{
-  char *buff = xmalloc(DIALOG_MSG_SIZE);
-  if (fmt_id == 0) {
-    dialog_msg(buff,
-               _("'readonly' option is set for \"%s\".\nDo you wish to write anyway?"),
-               (char *)arg);
-  } else {
-    dialog_msg(buff,
-               _("File permissions of \"%s\" are read-only.\nIt may still be possible to "
-                 "write it.\nDo you wish to try?"),
-               (char *)arg);
-  }
-  return buff;
-}
+char *nvim_excmds_dialog_msg_readonly(int fmt_id, const char *arg) { char *buff = xmalloc(DIALOG_MSG_SIZE); if (fmt_id == 0) { dialog_msg(buff, _("'readonly' option is set for \"%s\".\nDo you wish to write anyway?"), (char *)arg); } else { dialog_msg(buff, _("File permissions of \"%s\" are read-only.\nIt may still be possible to write it.\nDo you wish to try?"), (char *)arg); } return buff; }
 
 void nvim_excmds_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; }
 int nvim_curwin_get_w_botline(void) { return (int)curwin->w_botline; }
@@ -888,87 +620,17 @@ int nvim_curwin_get_w_p_fen(void) { return curwin->w_p_fen ? 1 : 0; }
 void nvim_curwin_set_w_p_fen(int val) { curwin->w_p_fen = (bool)val; }
 void nvim_curbuf_set_deleted_bytes2(int val) { curbuf->deleted_bytes2 = (bcount_t)val; }
 
-/// Wrap skip_regexp_ex for do_sub. Updates *arg_ptr in place.
-char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
-{
-  return skip_regexp_ex(cmd, (char)delim, rs_magic_isset(), arg_ptr, NULL, NULL);
-}
-
-/// Wrap getvcol for both start and end columns.
-void nvim_do_sub_getvcol_start_end(int lnum, int start_col, int end_col,
-                                    int *sc_out, int *ec_out)
-{
-  pos_T pos = { (linenr_T)lnum, (colnr_T)start_col, 0 };
-  colnr_T sc = 0;
-  getvcol(curwin, &pos, &sc, NULL, NULL);
-  *sc_out = (int)sc;
-  pos.col = (colnr_T)end_col;
-  colnr_T ec = 0;
-  getvcol(curwin, &pos, NULL, NULL, &ec);
-  *ec_out = (int)ec;
-}
-
-/// Wrap getcmdline_prompt for exmode substitution confirm.
-/// Returns the first character typed (or NUL).
-int nvim_do_sub_getcmdline_prompt(const char *prompt_str)
-{
-  char *resp = getcmdline_prompt(-1, (char *)prompt_str, 0, EXPAND_NOTHING, NULL,
-                                  CALLBACK_NONE, false, NULL);
-  msg_putchar('\n');
-  int typed = NUL;
-  if (resp != NULL) {
-    typed = (uint8_t)(*resp);
-    xfree(resp);
-  }
-  return typed;
-}
-
-/// Call update_topline, validate_cursor, redraw and update_screen for confirm.
-void nvim_do_sub_update_screen_for_confirm(void)
-{
-  update_topline(curwin);
-  validate_cursor(curwin);
-  redraw_later(curwin, UPD_SOME_VALID);
-  show_cursor_info_later(true);
-  update_screen();
-  redraw_later(curwin, UPD_SOME_VALID);
-}
-
-/// Set curbuf->b_op_start.lnum and b_op_end.lnum (both col = 0).
-void nvim_do_sub_set_op_start_end(int start_lnum, int end_lnum)
-{
-  curbuf->b_op_start.lnum = (linenr_T)start_lnum;
-  curbuf->b_op_start.col = 0;
-  curbuf->b_op_end.lnum = (linenr_T)end_lnum;
-  curbuf->b_op_end.col = 0;
-}
-
-/// Format the confirm prompt string into IObuff and return xstrdup of it.
-char *nvim_do_sub_format_confirm_prompt(const char *sub)
-{
-  const char *p = _("replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)");
-  vim_snprintf(IObuff, IOSIZE, p, sub);
-  return xstrdup(IObuff);
-}
+char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr) { return skip_regexp_ex(cmd, (char)delim, rs_magic_isset(), arg_ptr, NULL, NULL); }
+void nvim_do_sub_getvcol_start_end(int lnum, int start_col, int end_col, int *sc_out, int *ec_out) { pos_T pos = { (linenr_T)lnum, (colnr_T)start_col, 0 }; colnr_T sc = 0; getvcol(curwin, &pos, &sc, NULL, NULL); *sc_out = (int)sc; pos.col = (colnr_T)end_col; colnr_T ec = 0; getvcol(curwin, &pos, NULL, NULL, &ec); *ec_out = (int)ec; }
+int nvim_do_sub_getcmdline_prompt(const char *prompt_str) { char *resp = getcmdline_prompt(-1, (char *)prompt_str, 0, EXPAND_NOTHING, NULL, CALLBACK_NONE, false, NULL); msg_putchar('\n'); int typed = NUL; if (resp != NULL) { typed = (uint8_t)(*resp); xfree(resp); } return typed; }
+void nvim_do_sub_update_screen_for_confirm(void) { update_topline(curwin); validate_cursor(curwin); redraw_later(curwin, UPD_SOME_VALID); show_cursor_info_later(true); update_screen(); redraw_later(curwin, UPD_SOME_VALID); }
+void nvim_do_sub_set_op_start_end(int start_lnum, int end_lnum) { curbuf->b_op_start.lnum = (linenr_T)start_lnum; curbuf->b_op_start.col = 0; curbuf->b_op_end.lnum = (linenr_T)end_lnum; curbuf->b_op_end.col = 0; }
+char *nvim_do_sub_format_confirm_prompt(const char *sub) { const char *p = _("replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)"); vim_snprintf(IObuff, IOSIZE, p, sub); return xstrdup(IObuff); }
 
 /// Wrap changed_lines(curbuf, first, 0, last, xtra, false) for do_sub.
-void nvim_do_sub_changed_lines(int first, int last, int xtra)
-{
-  changed_lines(curbuf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)xtra, false);
-}
-
-/// Save substitute pattern and history via save_re_pat + add_to_history.
-void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)
-{
-  save_re_pat(which_pat, (char *)pat, patlen, rs_magic_isset());
-  add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL);
-}
-
-/// Wrap rs_sub_set_replacement for do_sub (xstrdup of sub, os_time, NULL additional).
-void nvim_do_sub_set_replacement(const char *sub)
-{
-  rs_sub_set_replacement(xstrdup(sub), (uint64_t)os_time(), NULL);
-}
+void nvim_do_sub_changed_lines(int first, int last, int xtra) { changed_lines(curbuf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)xtra, false); }
+void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat) { save_re_pat(which_pat, (char *)pat, patlen, rs_magic_isset()); add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL); }
+void nvim_do_sub_set_replacement(const char *sub) { rs_sub_set_replacement(xstrdup(sub), (uint64_t)os_time(), NULL); }
 
 // regmmatch_T opaque handle accessors for do_sub
 int nvim_regmmatch_startpos0_lnum(void *rm) { return (int)((regmmatch_T *)rm)->startpos[0].lnum; }
@@ -978,38 +640,9 @@ int nvim_regmmatch_endpos0_col(void *rm) { return (int)((regmmatch_T *)rm)->endp
 void nvim_regmmatch_set_rmm_ic(void *rm, int ic) { ((regmmatch_T *)rm)->rmm_ic = (bool)ic; }
 int nvim_regmmatch_get_rmm_ic(void *rm) { return ((regmmatch_T *)rm)->rmm_ic ? 1 : 0; }
 int nvim_regmmatch_re_multiline(void *rm) { return re_multiline(((regmmatch_T *)rm)->regprog) ? 1 : 0; }
-/// Wrap search_regcomp for do_sub, allocating and returning opaque regmmatch_T*.
-/// Returns NULL on failure. flags=0 normally, flags=SEARCH_HIS to save history.
-void *nvim_do_sub_search_regcomp(const char *pat, size_t patlen, int which_pat, int flags)
-{
-  regmmatch_T *rm = xmalloc(sizeof(regmmatch_T));
-  memset(rm, 0, sizeof(*rm));
-  if (search_regcomp((char *)pat, patlen, NULL, RE_SUBST, which_pat, flags, rm) == FAIL) {
-    xfree(rm);
-    return NULL;
-  }
-  return rm;
-}
-
-/// Wrap vim_regexec_multi for do_sub.
-/// Returns match count (>0 means matched).
-int nvim_do_sub_vim_regexec_multi(void *rm, int lnum, int col)
-{
-  return vim_regexec_multi((regmmatch_T *)rm, curwin, curbuf, (linenr_T)lnum, (colnr_T)col,
-                           NULL, NULL);
-}
-
-/// Wrap vim_regsub_multi for do_sub.
-/// source_lnum is sub_firstlnum - regmatch.startpos[0].lnum.
-/// sub is the replacement string (source arg to vim_regsub_multi).
-/// dest is the output buffer, destlen is its size.
-/// Returns sublen (length including NUL), or 0 on error.
-int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub,
-                                  char *dest, int destlen, int flags)
-{
-  return vim_regsub_multi((regmmatch_T *)rm, (linenr_T)source_lnum,
-                          (char *)sub, dest, destlen, flags);
-}
+void *nvim_do_sub_search_regcomp(const char *pat, size_t patlen, int which_pat, int flags) { regmmatch_T *rm = xmalloc(sizeof(regmmatch_T)); memset(rm, 0, sizeof(*rm)); if (search_regcomp((char *)pat, patlen, NULL, RE_SUBST, which_pat, flags, rm) == FAIL) { xfree(rm); return NULL; } return rm; }
+int nvim_do_sub_vim_regexec_multi(void *rm, int lnum, int col) { return vim_regexec_multi((regmmatch_T *)rm, curwin, curbuf, (linenr_T)lnum, (colnr_T)col, NULL, NULL); }
+int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub, char *dest, int destlen, int flags) { return vim_regsub_multi((regmmatch_T *)rm, (linenr_T)source_lnum, (char *)sub, dest, destlen, flags); }
 
 // do_ecmd accessor infrastructure
 // These accessors are used by rs_do_ecmd in src/nvim-rs/ex_cmds/src/edit.rs
@@ -1036,37 +669,12 @@ void nvim_ecmd_curwin_set_coladd_curswant(void) { curwin->w_cursor.coladd = 0; c
 int nvim_ecmd_curwin_get_topline(void) { return (int)curwin->w_topline; }
 int nvim_ecmd_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 
-/// Set curwin->w_pcmark.lnum and col
-void nvim_ecmd_curwin_set_pcmark(int lnum, int col)
-{
-  curwin->w_pcmark.lnum = (linenr_T)lnum;
-  curwin->w_pcmark.col = (colnr_T)col;
-}
+void nvim_ecmd_curwin_set_pcmark(int lnum, int col) { curwin->w_pcmark.lnum = (linenr_T)lnum; curwin->w_pcmark.col = (colnr_T)col; }
 
 int nvim_ecmd_curwin_get_effective_p_so(void) { return (int)(curwin->w_p_so >= 0 ? curwin->w_p_so : p_so); }
-/// Set effective scroll offset (only if curwin->w_p_so >= 0, else set p_so)
-void nvim_ecmd_curwin_set_effective_p_so(int val)
-{
-  if (curwin->w_p_so >= 0) {
-    curwin->w_p_so = val;
-  } else {
-    p_so = val;
-  }
-}
-
-/// Get diff/spell state: fills *diff_out, *spell_out, *spl_empty_out
-void nvim_ecmd_curwin_diff_spell_state(int *diff_out, int *spell_out, int *spl_empty_out)
-{
-  *diff_out = curwin->w_p_diff ? 1 : 0;
-  *spell_out = curwin->w_p_spell ? 1 : 0;
-  *spl_empty_out = *curwin->w_s->b_p_spl == NUL ? 1 : 0;
-}
-
-/// Set curwin->w_scbind_pos to plines_m_win_fill(curwin, 1, topline)
-void nvim_ecmd_curwin_set_scbind_pos_from_topline(void)
-{
-  curwin->w_scbind_pos = plines_m_win_fill(curwin, 1, curwin->w_topline);
-}
+void nvim_ecmd_curwin_set_effective_p_so(int val) { if (curwin->w_p_so >= 0) { curwin->w_p_so = val; } else { p_so = val; } }
+void nvim_ecmd_curwin_diff_spell_state(int *diff_out, int *spell_out, int *spl_empty_out) { *diff_out = curwin->w_p_diff ? 1 : 0; *spell_out = curwin->w_p_spell ? 1 : 0; *spl_empty_out = *curwin->w_s->b_p_spl == NUL ? 1 : 0; }
+void nvim_ecmd_curwin_set_scbind_pos_from_topline(void) { curwin->w_scbind_pos = plines_m_win_fill(curwin, 1, curwin->w_topline); }
 
 int nvim_ecmd_curwin_buf_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
 int nvim_ecmd_curwin_ws_is_own_buf(void) { return curwin->w_s == &(curwin->w_buffer->b_s) ? 1 : 0; }
@@ -1105,107 +713,39 @@ void *nvim_ecmd_au_new_curbuf_save(void) { bufref_T *saved = xmalloc(sizeof(bufr
 void nvim_ecmd_au_new_curbuf_restore(void *saved) { au_new_curbuf = *(bufref_T *)saved; }
 
 // --- Cursor manipulation wrappers ---
-
-/// Returns 1 if cursor position equals orig (pass lnum and col)
-int nvim_ecmd_cursor_eq(int lnum, int col)
-{
-  pos_T orig = { .lnum = (linenr_T)lnum, .col = (colnr_T)col };
-  return equalpos(curwin->w_cursor, orig) ? 1 : 0;
-}
+int nvim_ecmd_cursor_eq(int lnum, int col) { pos_T orig = { .lnum = (linenr_T)lnum, .col = (colnr_T)col }; return equalpos(curwin->w_cursor, orig) ? 1 : 0; }
 
 /// Get pointer to current cursor line text and return col of first non-blank.
 /// This is used to check if cursor moved to first non-blank.
 int nvim_ecmd_cursor_col_skipwhite(void) { const char *text = get_cursor_line_ptr(); return (int)(skipwhite(text) - text); }
 
 // --- Autocmd wrappers ---
-
-/// Call apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval)
-void nvim_ecmd_apply_autocmds_bufenter_retval(int *retval)
-{
-  apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval);
-}
-
-/// Call apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf, retval)
-void nvim_ecmd_apply_autocmds_bufwinenter_retval(int *retval)
-{
-  apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf, retval);
-}
+void nvim_ecmd_apply_autocmds_bufenter_retval(int *retval) { apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval); }
+void nvim_ecmd_apply_autocmds_bufwinenter_retval(int *retval) { apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf, retval); }
 
 // --- Global state accessors ---
 int nvim_ecmd_cmdwin_buf_is_nonnull(void) { return cmdwin_buf != NULL ? 1 : 0; }
-
-/// Save and clear cmdwin state, returns heap-allocated bundle {type, win, old_curwin}
-/// Save and clear cmdwin state. Returns heap-allocated opaque bundle.
-/// Must be freed with nvim_ecmd_cmdwin_restore_free after restoring.
-void *nvim_ecmd_cmdwin_save_clear(void)
-{
-  typedef struct { int type; win_T *win; win_T *old_curwin; } CmdwinState;
-  CmdwinState *s = xmalloc(sizeof(CmdwinState));
-  s->type = cmdwin_type;
-  s->win = cmdwin_win;
-  s->old_curwin = cmdwin_old_curwin;
-  cmdwin_type = 0;
-  cmdwin_win = NULL;
-  cmdwin_old_curwin = NULL;
-  return s;
-}
-
-/// Restore cmdwin state from heap-allocated bundle and free it
-void nvim_ecmd_cmdwin_restore_free(void *bundle)
-{
-  typedef struct { int type; win_T *win; win_T *old_curwin; } CmdwinState;
-  CmdwinState *s = (CmdwinState *)bundle;
-  cmdwin_type = s->type;
-  cmdwin_win = s->win;
-  cmdwin_old_curwin = s->old_curwin;
-  xfree(s);
-}
+int nvim_ecmd_cmdwin_get_type(void) { return cmdwin_type; }
+win_T *nvim_ecmd_cmdwin_get_win(void) { return cmdwin_win; }
+win_T *nvim_ecmd_cmdwin_get_old_curwin(void) { return cmdwin_old_curwin; }
+void nvim_ecmd_cmdwin_clear(void) { cmdwin_type = 0; cmdwin_win = NULL; cmdwin_old_curwin = NULL; }
+void nvim_ecmd_cmdwin_restore(int type, win_T *win, win_T *old_curwin) { cmdwin_type = type; cmdwin_win = win; cmdwin_old_curwin = old_curwin; }
 
 // --- Misc wrappers ---
-
-/// Get mark from buflist_findfmark(buf): fills *lnum and *col
-void nvim_ecmd_buflist_findfmark(buf_T *buf, int *lnum, int *col)
-{
-  const pos_T *pos = &buflist_findfmark(buf)->mark;
-  *lnum = (int)pos->lnum;
-  *col = (int)pos->col;
-}
-
-/// Check terminal size at cleanup: call terminal_check_size on old_curbuf's terminal
-/// if valid; if bufref is invalid or no longer curbuf, also check curbuf's terminal.
-void nvim_ecmd_terminal_check_size_cleanup(void *ref)
-{
-  bufref_T *br = (bufref_T *)ref;
-  if (bufref_valid(br) && br->br_buf->terminal != NULL) {
-    terminal_check_size(br->br_buf->terminal);
-  }
-  if (!bufref_valid(br) || br->br_buf != curbuf) {
-    if (curbuf->terminal != NULL) {
-      terminal_check_size(curbuf->terminal);
-    }
-  }
-}
+void nvim_ecmd_buflist_findfmark(buf_T *buf, int *lnum, int *col) { const pos_T *pos = &buflist_findfmark(buf)->mark; *lnum = (int)pos->lnum; *col = (int)pos->col; }
+int nvim_ecmd_bufref_has_terminal(void *ref) { bufref_T *br = (bufref_T *)ref; return (bufref_valid(br) && br->br_buf->terminal != NULL) ? 1 : 0; }
+void nvim_ecmd_bufref_terminal_check_size(void *ref) { terminal_check_size(((bufref_T *)ref)->br_buf->terminal); }
+int nvim_ecmd_bufref_valid_is_curbuf(void *ref) { bufref_T *br = (bufref_T *)ref; return (bufref_valid(br) && br->br_buf == curbuf) ? 1 : 0; }
+void nvim_ecmd_curbuf_terminal_check_size(void) { if (curbuf->terminal != NULL) { terminal_check_size(curbuf->terminal); } }
 
 void nvim_ecmd_handle_swap_exists(void *old_curbuf_ref) { handle_swap_exists((bufref_T *)old_curbuf_ref); }
-/// Call path_fix_case(sfname) [only on case-insensitive systems]
-void nvim_ecmd_path_fix_case(char *sfname)
-{
 #ifdef CASE_INSENSITIVE_FILENAME
-  path_fix_case(sfname);
+void nvim_ecmd_path_fix_case(char *sfname) { path_fix_case(sfname); }
+int nvim_ecmd_has_case_insensitive_filename(void) { return 1; }
 #else
-  (void)sfname;
+void nvim_ecmd_path_fix_case(char *sfname) { (void)sfname; }
+int nvim_ecmd_has_case_insensitive_filename(void) { return 0; }
 #endif
-}
-
-/// Returns 1 if build has CASE_INSENSITIVE_FILENAME defined
-int nvim_ecmd_has_case_insensitive_filename(void)
-{
-#ifdef CASE_INSENSITIVE_FILENAME
-  return 1;
-#else
-  return 0;
-#endif
-}
 
 /// Wrap the FOR_ALL_TAB_WINDOWS loop for fold update all curbuf wins
 void nvim_ecmd_fold_update_all_curbuf_wins(void)
