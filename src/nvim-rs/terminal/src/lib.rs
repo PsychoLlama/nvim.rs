@@ -2769,12 +2769,21 @@ extern "C" {
     fn nvim_terminal_write_cb(term: *mut c_void, data: *const i8, size: usize);
     fn nvim_terminal_get_pending_send(term: *mut c_void) -> *mut c_void;
     fn nvim_term_sb_concat_len(sb: *mut c_void, data: *const i8, len: usize);
+    fn nvim_term_sb_reset(sb: *mut c_void);
+    fn nvim_term_sb_push_char(sb: *mut c_void, c: i8);
     fn nvim_vterm_value_boolean(val: *const c_void) -> c_int;
     fn nvim_vterm_value_number(val: *const c_void) -> c_int;
     fn nvim_vterm_frag_str(val: *const c_void) -> *const i8;
     fn nvim_vterm_frag_len(val: *const c_void) -> usize;
     fn nvim_vterm_frag_initial(val: *const c_void) -> c_int;
     fn nvim_vterm_frag_final(val: *const c_void) -> c_int;
+    // Phase 6: termrequest / OSC / DCS / APC
+    fn nvim_term_treqbuf_printf_osc(term: *mut c_void, command: c_int);
+    fn nvim_term_treqbuf_printf_dcs(term: *mut c_void, command: *const i8, cmdlen: c_int);
+    fn nvim_term_treqbuf_printf_apc(term: *mut c_void);
+    fn nvim_terminal_has_termrequest_event() -> c_int;
+    fn nvim_terminal_schedule_termrequest(term: *mut c_void);
+    fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
 }
 
 /// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.
@@ -2952,6 +2961,142 @@ pub unsafe extern "C" fn rs_term_settermprop(
         _ => return 0,
     }
 
+    1
+}
+
+// =============================================================================
+// Phase 6: Migrate on_osc, on_dcs, on_apc (VTerm fallback callbacks)
+// =============================================================================
+
+/// `VTerm` OSC (Operating System Command) fallback callback.
+///
+/// Replaces `on_osc` in `terminal_shim.c`.
+///
+/// # Safety
+/// `user` must be a valid `Terminal *`, `str` must point to `len` bytes (or be null).
+#[no_mangle]
+pub unsafe extern "C" fn rs_on_osc(
+    command: c_int,
+    str_ptr: *const i8,
+    len: usize,
+    initial: c_int,
+    is_final: c_int,
+    user: *mut c_void,
+) -> c_int {
+    if str_ptr.is_null() || len == 0 {
+        return 0;
+    }
+    if command != 8 && unsafe { nvim_terminal_has_termrequest_event() } == 0 {
+        return 1;
+    }
+    let term = unsafe { TerminalHandle::from_ptr(user) };
+    if term.is_null() {
+        return 0;
+    }
+    let t = unsafe { term.as_mut() };
+    let treq_buf = (&raw mut t.termrequest_buffer).cast::<c_void>();
+
+    if initial != 0 {
+        unsafe { nvim_term_sb_reset(treq_buf) };
+        unsafe { nvim_term_treqbuf_printf_osc(user, command) };
+    }
+    unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
+
+    if is_final != 0 {
+        if unsafe { nvim_terminal_has_termrequest_event() } != 0 {
+            unsafe { nvim_terminal_schedule_termrequest(user) };
+        }
+        if command == 8 {
+            unsafe { nvim_term_sb_push_char(treq_buf, 0) };
+            // Offset past "\x1b]8;" (4 bytes)
+            let osc8_start = unsafe { t.termrequest_buffer.items.add(4) };
+            let mut attr: c_int = 0;
+            if unsafe { rs_terminal_parse_osc8(osc8_start, &raw mut attr) } != 0 {
+                unsafe { nvim_term_set_osc8_attr(t.vt, attr) };
+            }
+        }
+    }
+    1
+}
+
+/// `VTerm` DCS (Device Control String) fallback callback.
+///
+/// Replaces `on_dcs` in `terminal_shim.c`.
+///
+/// # Safety
+/// `user` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_on_dcs(
+    command: *const i8,
+    commandlen: usize,
+    str_ptr: *const i8,
+    len: usize,
+    initial: c_int,
+    is_final: c_int,
+    user: *mut c_void,
+) -> c_int {
+    if command.is_null() || str_ptr.is_null() {
+        return 0;
+    }
+    if unsafe { nvim_terminal_has_termrequest_event() } == 0 {
+        return 1;
+    }
+    let term = unsafe { TerminalHandle::from_ptr(user) };
+    if term.is_null() {
+        return 0;
+    }
+    let t = unsafe { term.as_mut() };
+    let treq_buf = (&raw mut t.termrequest_buffer).cast::<c_void>();
+
+    if initial != 0 {
+        unsafe { nvim_term_sb_reset(treq_buf) };
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        unsafe {
+            nvim_term_treqbuf_printf_dcs(user, command, commandlen as c_int);
+        };
+    }
+    unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
+    if is_final != 0 {
+        unsafe { nvim_terminal_schedule_termrequest(user) };
+    }
+    1
+}
+
+/// `VTerm` APC (Application Program Command) fallback callback.
+///
+/// Replaces `on_apc` in `terminal_shim.c`.
+///
+/// # Safety
+/// `user` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_on_apc(
+    str_ptr: *const i8,
+    len: usize,
+    initial: c_int,
+    is_final: c_int,
+    user: *mut c_void,
+) -> c_int {
+    if str_ptr.is_null() || len == 0 {
+        return 0;
+    }
+    if unsafe { nvim_terminal_has_termrequest_event() } == 0 {
+        return 1;
+    }
+    let term = unsafe { TerminalHandle::from_ptr(user) };
+    if term.is_null() {
+        return 0;
+    }
+    let t = unsafe { term.as_mut() };
+    let treq_buf = (&raw mut t.termrequest_buffer).cast::<c_void>();
+
+    if initial != 0 {
+        unsafe { nvim_term_sb_reset(treq_buf) };
+        unsafe { nvim_term_treqbuf_printf_apc(user) };
+    }
+    unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
+    if is_final != 0 {
+        unsafe { nvim_terminal_schedule_termrequest(user) };
+    }
     1
 }
 

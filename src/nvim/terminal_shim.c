@@ -302,84 +302,26 @@ static void schedule_termrequest(Terminal *term)
 }
 
 
+extern int rs_on_osc(int command, const char *str, size_t len, int initial, int is_final,
+                     void *user);
 static int on_osc(int command, VTermStringFragment frag, void *user)
   FUNC_ATTR_NONNULL_ALL
 {
-  Terminal *term = user;
-
-  if (frag.str == NULL || frag.len == 0) {
-    return 0;
-  }
-
-  if (command != 8 && !has_event(EVENT_TERMREQUEST)) {
-    return 1;
-  }
-
-  if (frag.initial) {
-    kv_size(term->termrequest_buffer) = 0;
-    kv_printf(term->termrequest_buffer, "\x1b]%d;", command);
-  }
-  kv_concat_len(term->termrequest_buffer, frag.str, frag.len);
-  if (frag.final) {
-    if (has_event(EVENT_TERMREQUEST)) {
-      schedule_termrequest(term);
-    }
-    if (command == 8) {
-      kv_push(term->termrequest_buffer, NUL);
-      const size_t off = STRLEN_LITERAL("\x1b]8;");
-      int attr = 0;
-      if (rs_terminal_parse_osc8(term->termrequest_buffer.items + off, &attr)) {
-        VTermState *state = vterm_obtain_state(term->vt);
-        VTermValue value = { .number = attr };
-        vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
-      }
-    }
-  }
-  return 1;
+  return rs_on_osc(command, frag.str, frag.len, (int)frag.initial, (int)frag.final, user);
 }
 
+extern int rs_on_dcs(const char *command, size_t commandlen, const char *str, size_t len,
+                     int initial, int is_final, void *user);
 static int on_dcs(const char *command, size_t commandlen, VTermStringFragment frag, void *user)
 {
-  Terminal *term = user;
-
-  if (command == NULL || frag.str == NULL) {
-    return 0;
-  }
-  if (!has_event(EVENT_TERMREQUEST)) {
-    return 1;
-  }
-
-  if (frag.initial) {
-    kv_size(term->termrequest_buffer) = 0;
-    kv_printf(term->termrequest_buffer, "\x1bP%*s", (int)commandlen, command);
-  }
-  kv_concat_len(term->termrequest_buffer, frag.str, frag.len);
-  if (frag.final) {
-    schedule_termrequest(term);
-  }
-  return 1;
+  return rs_on_dcs(command, commandlen, frag.str, frag.len, (int)frag.initial,
+                   (int)frag.final, user);
 }
 
+extern int rs_on_apc(const char *str, size_t len, int initial, int is_final, void *user);
 static int on_apc(VTermStringFragment frag, void *user)
 {
-  Terminal *term = user;
-  if (frag.str == NULL || frag.len == 0) {
-    return 0;
-  }
-
-  if (!has_event(EVENT_TERMREQUEST)) {
-    return 1;
-  }
-
-  if (frag.initial) {
-    kv_size(term->termrequest_buffer) = 0;
-    kv_printf(term->termrequest_buffer, "\x1b_");
-  }
-  kv_concat_len(term->termrequest_buffer, frag.str, frag.len);
-  if (frag.final) {
-    schedule_termrequest(term);
-  }
-  return 1;
+  return rs_on_apc(frag.str, frag.len, (int)frag.initial, (int)frag.final, user);
 }
 
 static VTermStateFallbacks vterm_fallbacks = {
@@ -1870,5 +1812,40 @@ const char *nvim_vterm_frag_str(const void *val) { return ((const VTermValue *)v
 size_t nvim_vterm_frag_len(const void *val) { return ((const VTermValue *)val)->string.len; }
 int nvim_vterm_frag_initial(const void *val) { return (int)((const VTermValue *)val)->string.initial; }
 int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)val)->string.final; }
+
+// Phase 6: termrequest buffer printf wrappers (kv_printf is a macro, can't call from Rust)
+void nvim_term_treqbuf_printf_osc(void *term, int command)
+{
+  kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b]%d;", command);
+}
+void nvim_term_treqbuf_printf_dcs(void *term, const char *command, int cmdlen)
+{
+  kv_printf(((Terminal *)term)->termrequest_buffer, "\x1bP%*s", cmdlen, command);
+}
+void nvim_term_treqbuf_printf_apc(void *term)
+{
+  kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b_");
+}
+// Check if the TermRequest event is registered
+int nvim_terminal_has_termrequest_event(void) { return (int)has_event(EVENT_TERMREQUEST); }
+// Schedule a termrequest event from a Rust fallback callback
+void nvim_terminal_schedule_termrequest(void *term)
+{
+  schedule_termrequest((Terminal *)term);
+}
+// Get a pointer to term->termrequest_buffer (a StringBuilder *)
+void *nvim_terminal_treqbuf_ptr(void *term)
+{
+  return &((Terminal *)term)->termrequest_buffer;
+}
+// Get a pointer to term->vt for vterm_obtain_state
+void *nvim_terminal_get_vt(void *term) { return ((Terminal *)term)->vt; }
+// Set OSC8 URI attribute on vterm state
+void nvim_term_set_osc8_attr(void *vt, int attr)
+{
+  VTermState *state = vterm_obtain_state((VTerm *)vt);
+  VTermValue value = { .number = attr };
+  vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
+}
 
 // vim: foldmethod=marker
