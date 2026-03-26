@@ -261,15 +261,47 @@ pub unsafe extern "C" fn check_end_reg_executing_export(advance: bool) {
 // Phase 4: gotchars / ungetchars / gotchars_ignore
 // =============================================================================
 
-#[allow(dead_code)]
 extern "C" {
-    /// Call updatescript(c)
-    fn nvim_call_updatescript(c: c_int);
     // (on_key_buf_process removed - now calls Rust function directly)
     /// debug_did_msg global (direct access)
     static mut debug_did_msg: bool;
     /// Increment maptick
     fn nvim_inc_maptick();
+    /// scriptout: FILE* for -w output
+    static mut scriptout: *mut std::ffi::c_void;
+    /// p_uc: 'updatecount' option (OptInt = i64)
+    static p_uc: i64;
+    /// p_fs: 'fsync' option
+    static p_fs: c_int;
+    /// ml_sync_all: sync all memfiles
+    fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool);
+    /// fputc: write a byte to a FILE
+    fn fputc(c: c_int, stream: *mut std::ffi::c_void) -> c_int;
+}
+
+/// Static counter for updatescript (mirrors C's `static int count`).
+static mut UPDATESCRIPT_COUNT: c_int = 0;
+
+/// Write typed character to script file, sync memfiles when threshold reached.
+///
+/// # Safety
+/// Accesses C globals scriptout, p_uc, p_fs and calls ml_sync_all.
+pub(crate) unsafe fn updatescript(c: c_int) {
+    if c != 0 {
+        let sout = std::ptr::read(std::ptr::addr_of!(scriptout));
+        if !sout.is_null() {
+            fputc(c, sout);
+        }
+    }
+    let idle = c == 0;
+    let uc = std::ptr::read(std::ptr::addr_of!(p_uc));
+    let count = std::ptr::addr_of_mut!(UPDATESCRIPT_COUNT);
+    *count += 1;
+    if idle || (uc > 0 && *count >= uc as c_int) {
+        let fs = std::ptr::read(std::ptr::addr_of!(p_fs));
+        ml_sync_all(c_int::from(idle), 1, fs != 0 || idle);
+        *count = 0;
+    }
 }
 
 /// Static state for gotchars (mirrors C's `static gotchars_state_T state`).
@@ -292,7 +324,7 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
 
         // Handle one byte at a time; no translation to be done.
         for i in 0..state.buflen {
-            nvim_call_updatescript(c_int::from(state.buf[i]));
+            updatescript(c_int::from(state.buf[i]));
         }
 
         // Process on_key_buf (handles on_key_ignore_len subtraction)

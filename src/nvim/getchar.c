@@ -408,25 +408,6 @@ bool open_scriptin(char *scriptin_name)
 }
 
 
-/// updatescript() is called when a character can be written to the script
-/// file or when we have waited some time for a character (c == 0).
-///
-/// All the changed memfiles are synced if c == 0 or when the number of typed
-/// characters reaches 'updatecount' and 'updatecount' is non-zero.
-static void updatescript(int c)
-{
-  static int count = 0;
-
-  if (c && scriptout) {
-    putc(c, scriptout);
-  }
-  bool idle = (c == 0);
-  if (idle || (p_uc > 0 && ++count >= p_uc)) {
-    ml_sync_all(idle, true,
-                (!!p_fs || idle));  // Always fsync at idle (CursorHold).
-    count = 0;
-  }
-}
 
 /// Add a single byte to 'showcmd' for a partially matched mapping.
 /// Call add_to_showcmd() if a full key has been received.
@@ -2111,10 +2092,6 @@ void nvim_set_visual_from_cursor(void)
   redo_VIsual_busy = true;
 }
 
-void nvim_call_updatescript(int c)
-{
-  updatescript(c);
-}
 
 
 /// Wrapper for MB_BYTE2LEN_CHECK macro (used by Rust vgetc).

@@ -25,8 +25,7 @@ extern "C" {
     /// garbage_collect: run the garbage collector
     fn garbage_collect(testing: bool);
 
-    /// nvim_call_updatescript: call updatescript(c) from C
-    fn nvim_call_updatescript(c: c_int);
+    // (nvim_call_updatescript removed - now calls Rust directly)
 
     /// can_get_old_char: check if old_char is available
     fn rs_can_get_old_char() -> c_int;
@@ -421,7 +420,7 @@ pub unsafe extern "C" fn rs_char_avail() -> bool {
 /// Calls C functions.
 #[export_name = "before_blocking"]
 pub unsafe extern "C" fn rs_before_blocking() {
-    nvim_call_updatescript(0);
+    crate::macro_recording::updatescript(0);
     if may_garbage_collect {
         garbage_collect(false);
     }
