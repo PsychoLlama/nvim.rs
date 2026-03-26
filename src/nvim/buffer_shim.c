@@ -71,15 +71,12 @@
 
 #include "buffer_shim.c.generated.h"
 
-// Rust-exported fold functions used in wininfo cluster (Phase 11)
+// Rust-exported fold functions
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 extern void rs_clearFolding(win_T *win);
 extern void rs_foldUpdateAll(win_T *win);
-// Internal arglist function used in buf_name_changed (Phase 13)
 extern void check_arg_idx(win_T *win);
-// Rust file identity helper used in buflist_findname_file_id (Phase 14)
-extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
-// Rust window helpers used in ex_buffer_all (Phase 17)
+// Rust window helpers
 extern void rs_reset_VIsual_and_resel(void);
 extern int rs_win_locked(win_T *wp);
 extern int rs_global_stl_height(void);
@@ -87,23 +84,19 @@ extern win_T *rs_lastwin_nofloating(void);
 extern int rs_tabline_height(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern int rs_win_valid(win_T *win);
-// rs_get_last_winid() is Rust-exported (used in set_curbuf, Phase 19).
 extern int rs_get_last_winid(void);
-// Rust diff helpers (used in enter_buffer, Phase 20).
 extern void rs_diff_buf_add(buf_T *buf);
-// Rust window helpers used in do_buffer_ext (Phase 21).
 extern int rs_last_window(win_T *win);
-// Rust window/diff helpers used in close_buffer/buf_freeall (Phase 22).
 extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern void rs_diff_buf_delete(buf_T *buf);
 extern int rs_diffopt_hiddenoff(void);
 extern int rs_buf_effective_action(buf_T *buf, int action);
-// buffer.c non-static helpers for close_buffer/buf_freeall cluster (Phase 22).
+// buffer.c non-static helpers for close_buffer/buf_freeall cluster
 extern void free_buffer(buf_T *buf);
 extern void clear_wininfo(buf_T *buf);
 extern void free_buffer_stuff(buf_T *buf, int free_flags);
-// Rust buffer-lifecycle helpers used in do_buffer_ext (Phase 21).
+// Rust buffer-lifecycle helpers
 extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int count, int flags,
                                           int unload);
 extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
@@ -232,12 +225,6 @@ int nvim_buf_channel_job_running(buf_T *buf)
 
 const char *nvim_curbuf_get_fname(void) { return curbuf->b_fname; }
 
-// ============================================================
-// Phase 6 accessor functions for do_modelines / chk_modeline.
-// ============================================================
-
-/// Call do_set(s, OPT_MODELINE|OPT_LOCAL|flags) with modeline context saved/restored.
-/// This handles the secure and current_sctx save/restore internally.
 /// Wrapper for try_getdigits: parses digits at s, sets *vers, returns bytes consumed.
 /// Returns -1 on failure (no digits parsed).
 int nvim_try_getdigits(const char *s, int64_t *vers)
@@ -252,7 +239,7 @@ int nvim_try_getdigits(const char *s, int64_t *vers)
 }
 
 // ============================================================
-// buflist_findpat Rust FFI accessor helpers (Phase 8)
+// Regex accessor helpers
 // ============================================================
 
 /// Compile a regex for buflist_findpat, returning heap-allocated regmatch_T or NULL.
@@ -277,10 +264,6 @@ void nvim_blfp_regex_free(void *handle)
   vim_regfree(((regmatch_T *)handle)->regprog);
   xfree(handle);
 }
-
-// ============================================================
-// Phase 5 accessor functions for ExpandBufnames.
-// ============================================================
 
 /// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
 void *nvim_bufname_regex_compile(char *pat)
@@ -331,7 +314,7 @@ bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }
 bool nvim_curbuf_has_b_p_fex(void) { return *curbuf->b_p_fex != NUL; }
 
 // =============================================================================
-// buf_T option field offset table (moved from option_shim.c)
+// buf_T option field offset table
 // =============================================================================
 
 // Fill offset table for buf_T option fields indexed by OptIndex.
@@ -438,7 +421,7 @@ void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
 }
 
 // =============================================================================
-// buf_copy_options accessors (moved from option_shim.c Phase 11)
+// buf_copy_options accessors
 // =============================================================================
 
 /// Returns buf->b_p_initialized.
@@ -572,7 +555,7 @@ void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xs
 void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags = spo_flags; }
 
 // ============================================================================
-// lasttitle/lasticon statics and accessors (moved from buffer.c, used by Rust info.rs)
+// lasttitle/lasticon statics and accessors
 // ============================================================================
 
 static char *lasttitle = NULL;
@@ -728,10 +711,6 @@ fmark_T *nvim_get_no_position_ptr(void)
   return &no_position;
 }
 
-// buflist_setfpos, wininfo_other_tab_diff, find_wininfo, get_winopts, buflist_findfmark:
-// migrated to Rust (src/nvim-rs/buffer/src/wininfo.rs)
-
-/// Compound accessor: full body of buf_set_changedtick (migrated to Rust).
 void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T changedtick)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -760,11 +739,7 @@ void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T chang
   }
 }
 
-// wininfo_other_tab_diff, find_wininfo, get_winopts, buflist_findfmark:
-// migrated to Rust (src/nvim-rs/buffer/src/wininfo.rs)
-
 /// Return true if "buf" is displayed in any window across all tabs.
-/// Used by setfname to check if obuf is in use. Accessor for Rust.
 bool nvim_buf_is_in_any_window(buf_T *buf)
 {
   FOR_ALL_TAB_WINDOWS(tab, win) {
@@ -806,10 +781,6 @@ void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
   buf->b_fname = buf->b_sfname;
 }
 
-// Accessors for buf_open_scratch (migrated to Rust, src/nvim-rs/buffer/src/lifecycle.rs)
-
-/// Sets bufhidden=hide, buftype=nofile, swapfile=false, and resets bindings.
-/// Compound accessor for buf_open_scratch (Rust).
 void nvim_set_buf_opts_scratch(void)
 {
   set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
@@ -818,13 +789,8 @@ void nvim_set_buf_opts_scratch(void)
   RESET_BINDING(curwin);
 }
 
-// buf_open_scratch migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs)
-
-// setfname migrated to Rust (src/nvim-rs/buffer/src/filename.rs)
-
 // ============================================================
-// Buffer navigation (Phase 15)
-// Accessors for buflist_getfile (migrated to Rust, src/nvim-rs/buffer/src/list.rs)
+// Buffer navigation accessors
 // ============================================================
 
 /// Returns non-zero if 'switchbuf' has the "newtab" flag.
@@ -839,10 +805,8 @@ int nvim_swb_win_split_flags(void)
   return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0;
 }
 
-// buflist_getfile migrated to Rust (src/nvim-rs/buffer/src/list.rs)
-
 // ============================================================
-// Accessors for buf_contents_changed (migrated to Rust)
+// buf_contents_changed accessors
 // ============================================================
 
 /// Heap-allocate an exarg_T, fill it via prep_exarg(ea, buf), return pointer.
@@ -877,8 +841,6 @@ void nvim_buf_aucmd_restbuf_free(void *aco_void)
   xfree(aco);
 }
 
-// nvim_ml_open_curbuf: duplicate removed (defined in memline_shim.c)
-
 /// Compound: readfile(buf->b_ffname, buf->b_fname, 0, 0, MAXLNUM, ea, READ_NEW|READ_DUMMY, false).
 /// Returns OK (1) or FAIL (0).
 int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
@@ -888,12 +850,6 @@ int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
                   0, 0, (linenr_T)MAXLNUM,
                   ea, READ_NEW | READ_DUMMY, false);
 }
-
-// buf_contents_changed migrated to Rust (src/nvim-rs/buffer/src/misc.rs)
-
-// ============================================================
-// Open all buffers (Phase 17)
-// ============================================================
 
 /// Open a window for a number of buffers.
 void ex_buffer_all(exarg_T *eap)
@@ -1353,13 +1309,9 @@ void enter_buffer(buf_T *buf)
 }
 
 // ============================================================
-// Buffer loading and command dispatch (Phase 21)
+// Buffer loading and command dispatch
 // ============================================================
 
-// e_attempt_to_delete_buffer_that_is_in_use_str: deleted (Phase 1, only user was nvim_emsg_e937_buf_in_use)
-
-/// Compound accessor: aucmd_prepbuf + open_buffer(false,NULL,0) + aucmd_restbuf.
-/// Returns 0 on FAIL, non-zero on OK/NOTDONE (accessor for Rust buf_ensure_loaded).
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
 {
   aco_save_T aco;
@@ -1368,8 +1320,6 @@ int nvim_buf_aucmd_open_buffer(buf_T *buf)
   aucmd_restbuf(&aco);
   return (status != FAIL) ? 1 : 0;
 }
-
-// buf_ensure_loaded migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs)
 
 /// Implementation of the commands for the buffer list.
 ///
@@ -1559,7 +1509,7 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags)
 }
 
 // ============================================================
-// Accessors for buf_freeall (migrated to Rust, src/nvim-rs/buffer/src/close.rs)
+// buf_freeall / close_buffer accessors
 // ============================================================
 
 void nvim_buf_lock(buf_T *buf) { buf->b_locked++; buf->b_locked_split++; }
@@ -1603,7 +1553,6 @@ void nvim_buf_clearFolding_all_windows(buf_T *buf)
 /// @return  true if b_nwindows was decremented directly by this call (e.g: not via autocmds).
 bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool ignore_abort)
 {
-  // Adjust action for 'bufhidden' and terminal: migrated to Rust.
   action = rs_buf_effective_action(buf, action);
   bool unload_buf = (action != 0);
   bool del_buf = (action == DOBUF_DEL || action == DOBUF_WIPE);
@@ -1826,4 +1775,3 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   return true;
 }
 
-// buf_freeall migrated to Rust (src/nvim-rs/buffer/src/close.rs)
