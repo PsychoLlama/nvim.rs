@@ -120,9 +120,9 @@ _Static_assert(kCallbackNone == 0, "kCallbackNone mismatch");
 _Static_assert(kCallbackFuncref == 1, "kCallbackFuncref mismatch");
 _Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch");
 
-// Phase 11: lval_T layout assertions (Rust LvalT must match exactly).
+// lval_T layout assertions (Rust LvalT must match exactly).
 _Static_assert(sizeof(lval_T) == 96, "lval_T size mismatch: Rust LvalT must be updated");
-// Phase 11: funcexe_T layout assertions (Rust FuncExeT must match exactly).
+// funcexe_T layout assertions (Rust FuncExeT must match exactly).
 _Static_assert(sizeof(funcexe_T) == 64, "funcexe_T size mismatch: Rust FuncExeT must be updated");
 _Static_assert(offsetof(funcexe_T, fe_argv_func) == 0, "funcexe_T fe_argv_func offset mismatch");
 _Static_assert(offsetof(funcexe_T, fe_firstline) == 8, "funcexe_T fe_firstline offset mismatch");
@@ -133,7 +133,7 @@ _Static_assert(offsetof(funcexe_T, fe_partial) == 32, "funcexe_T fe_partial offs
 _Static_assert(offsetof(funcexe_T, fe_selfdict) == 40, "funcexe_T fe_selfdict offset mismatch");
 _Static_assert(offsetof(funcexe_T, fe_basetv) == 48, "funcexe_T fe_basetv offset mismatch");
 _Static_assert(offsetof(funcexe_T, fe_found_var) == 56, "funcexe_T fe_found_var offset mismatch");
-// Phase 11: typval_T size for provider.rs argvars array (3 * sizeof(typval_T)).
+// typval_T size for provider.rs argvars array (3 * sizeof(typval_T)).
 _Static_assert(sizeof(typval_T) == 16, "typval_T size mismatch: update provider.rs argvars stride");
 _Static_assert(offsetof(lval_T, ll_name) == 0, "lval_T ll_name offset mismatch");
 _Static_assert(offsetof(lval_T, ll_name_len) == 8, "lval_T ll_name_len offset mismatch");
@@ -149,17 +149,17 @@ _Static_assert(offsetof(lval_T, ll_dict) == 64, "lval_T ll_dict offset mismatch"
 _Static_assert(offsetof(lval_T, ll_di) == 72, "lval_T ll_di offset mismatch");
 _Static_assert(offsetof(lval_T, ll_newkey) == 80, "lval_T ll_newkey offset mismatch");
 _Static_assert(offsetof(lval_T, ll_blob) == 88, "lval_T ll_blob offset mismatch");
-// Phase 14: evalarg_T layout assertions (Rust EvalargT must match exactly).
+// evalarg_T layout assertions (Rust EvalargT must match exactly).
 _Static_assert(sizeof(evalarg_T) == 32, "evalarg_T size mismatch: Rust EvalargT must be updated");
 _Static_assert(offsetof(evalarg_T, eval_flags) == 0, "evalarg_T eval_flags offset mismatch");
 _Static_assert(offsetof(evalarg_T, eval_getline) == 8, "evalarg_T eval_getline offset mismatch");
 _Static_assert(offsetof(evalarg_T, eval_cookie) == 16, "evalarg_T eval_cookie offset mismatch");
 _Static_assert(offsetof(evalarg_T, eval_tofree) == 24, "evalarg_T eval_tofree offset mismatch");
-// Phase 2: typval_T field layout assertions (Rust TypvalT must match exactly).
+// typval_T field layout assertions (Rust TypvalT must match exactly).
 _Static_assert(offsetof(typval_T, v_type) == 0, "typval_T v_type offset mismatch");
 _Static_assert(offsetof(typval_T, v_lock) == 4, "typval_T v_lock offset mismatch");
 _Static_assert(offsetof(typval_T, vval) == 8, "typval_T vval offset mismatch");
-// Phase 2: partial_T field layout assertions (Rust PartialT must match exactly).
+// partial_T field layout assertions (Rust PartialT must match exactly).
 _Static_assert(offsetof(partial_T, pt_refcount) == 0, "partial_T pt_refcount offset mismatch");
 _Static_assert(offsetof(partial_T, pt_copyID) == 4, "partial_T pt_copyID offset mismatch");
 _Static_assert(offsetof(partial_T, pt_name) == 8, "partial_T pt_name offset mismatch");
@@ -169,16 +169,16 @@ _Static_assert(offsetof(partial_T, pt_argc) == 28, "partial_T pt_argc offset mis
 _Static_assert(offsetof(partial_T, pt_argv) == 32, "partial_T pt_argv offset mismatch");
 _Static_assert(offsetof(partial_T, pt_dict) == 40, "partial_T pt_dict offset mismatch");
 _Static_assert(sizeof(partial_T) == 48, "partial_T size mismatch");
-// Phase 2: dict_T field layout assertions.
+// dict_T field layout assertions.
 _Static_assert(offsetof(dict_T, dv_lock) == 0, "dict_T dv_lock offset mismatch");
 _Static_assert(offsetof(dict_T, dv_scope) == 4, "dict_T dv_scope offset mismatch");
 _Static_assert(offsetof(dict_T, dv_refcount) == 8, "dict_T dv_refcount offset mismatch");
 _Static_assert(offsetof(dict_T, dv_copyID) == 12, "dict_T dv_copyID offset mismatch");
 _Static_assert(offsetof(dict_T, dv_hashtab) == 16, "dict_T dv_hashtab offset mismatch");
-// Phase 2: list_T field layout assertions.
+// list_T field layout assertions.
 _Static_assert(offsetof(list_T, lv_first) == 0, "list_T lv_first offset mismatch");
 _Static_assert(offsetof(list_T, lv_copyID) == 68, "list_T lv_copyID offset mismatch");
-// Phase 2: CallbackReader field layout assertions.
+// CallbackReader field layout assertions.
 _Static_assert(offsetof(CallbackReader, cb) == 0, "CallbackReader cb offset mismatch");
 _Static_assert(offsetof(CallbackReader, self) == 16, "CallbackReader self offset mismatch");
 _Static_assert(offsetof(CallbackReader, buffer) == 24, "CallbackReader buffer offset mismatch");
@@ -227,15 +227,9 @@ void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T 
 }
 
 // C accessors for buffer operations (used by Rust indexing module)
-int nvim_eval_buf_ml_valid(const buf_T *buf)
-{
-  return buf != NULL && buf->b_ml.ml_mfp != NULL;
-}
+int nvim_eval_buf_ml_valid(const buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
 
-int nvim_eval_buf_line_count(const buf_T *buf)
-{
-  return buf->b_ml.ml_line_count;
-}
+int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 // C accessors for p_cpo save/restore (used by Rust pattern_match)
 static char *saved_eval_p_cpo;
@@ -246,10 +240,7 @@ void nvim_eval_save_set_cpo(void)
   p_cpo = empty_string_option;
 }
 
-void nvim_eval_restore_cpo(void)
-{
-  p_cpo = saved_eval_p_cpo;
-}
+void nvim_eval_restore_cpo(void) { p_cpo = saved_eval_p_cpo; }
 
 /// Restore p_cpo via set_option_value_give_err when the expression changed it
 /// during substitution. Handles the complex path in do_string_sub where p_cpo
@@ -334,7 +325,6 @@ char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
   return eval_one_expr_in_str(p, gap, evaluate);
 }
 
-/// Get partial_T->pt_func->uf_name (accessor for Rust).
 char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
 {
   if (pt->pt_func != NULL) {
@@ -342,10 +332,6 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
   }
   return NULL;
 }
-
-// =============================================================================
-// GC composite iteration wrappers (for Rust garbage_collect, Phase 13)
-// =============================================================================
 
 /// Mark buffer-local variables and callbacks with copyID.
 /// Iterates all buffers and calls rs_set_ref_in_item / rs_set_ref_in_callback
@@ -456,7 +442,6 @@ bool nvim_gc_mark_timers(int copyID, bool abort)
   return abort;
 }
 
-/// Iterate registers (ShaDa additional data) -- no marking, preserves side effects.
 void nvim_gc_iterate_registers(void)
 {
   const void *reg_iter = NULL;
@@ -468,7 +453,6 @@ void nvim_gc_iterate_registers(void)
   } while (reg_iter != NULL);
 }
 
-/// Iterate global marks (ShaDa additional data) -- no marking, preserves side effects.
 void nvim_gc_iterate_marks(void)
 {
   const void *mark_iter = NULL;
@@ -479,7 +463,6 @@ void nvim_gc_iterate_marks(void)
   } while (mark_iter != NULL);
 }
 
-/// Emit the "not enough memory" GC abort verbose message, if p_verbose > 0.
 void nvim_gc_verb_msg_abort(void)
 {
   if (p_verbose > 0) {
@@ -496,30 +479,14 @@ bool nvim_callback_call_lua(LuaRef luaref)
   return LUARET_TRUTHY(rv);
 }
 
-/// Get v:lua partial pointer (accessor for Rust).
-partial_T *nvim_get_vlua_partial(void)
-{
-  return get_vim_var_partial(VV_LUA);
-}
+partial_T *nvim_get_vlua_partial(void) { return get_vim_var_partial(VV_LUA); }
 
 // _Static_assert for sctx_T layout:
 _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 
-// =============================================================================
-// Accessor functions for Rust FFI
-// =============================================================================
+int nvim_blob_len(const blob_T *b) { return tv_blob_len(b); }
 
-/// Wrapper for tv_blob_len inline function (accessor for Rust eval_exec).
-int nvim_blob_len(const blob_T *b)
-{
-  return tv_blob_len(b);
-}
-
-/// Wrapper for tv_blob_get inline function (accessor for Rust eval_exec).
-int nvim_blob_get(const blob_T *b, int idx)
-{
-  return (int)tv_blob_get(b, idx);
-}
+int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 
 /// Clear blob's ga and free the blob - for error path in Rust eval_exec.
 void nvim_blob_ga_clear_and_free(blob_T *b)
@@ -530,49 +497,17 @@ void nvim_blob_ga_clear_and_free(blob_T *b)
   }
 }
 
-/// Wrapper for tv_blob_set_ret inline function (accessor for Rust eval_exec).
-void nvim_blob_set_ret(typval_T *tv, blob_T *b)
-{
-  tv_blob_set_ret(tv, b);
-}
+void nvim_blob_set_ret(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
 
-// =============================================================================
-// Phase 1: eval_func helpers (accessor functions for rs_eval_func)
-// =============================================================================
+const char *nvim_get_tv_empty_string(void) { return tv_empty_string; }
 
-/// Return address of the tv_empty_string global - accessor for Rust.
-const char *nvim_get_tv_empty_string(void)
-{
-  return tv_empty_string;
-}
+typval_T *nvim_di_get_tv(dictitem_T *di) { return &di->di_tv; }
 
-// =============================================================================
-// Phase 2: get_lval / clear_lval helpers (lval_T accessors for rs_get_lval)
-// =============================================================================
-
-/// Get a pointer to di->di_tv from a dictitem_T - accessor for Rust.
-typval_T *nvim_di_get_tv(dictitem_T *di)
-{
-  return &di->di_tv;
-}
-
-/// Return address of the EVALARG_EVALUATE global - accessor for Rust.
-evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
-{
-  return &EVALARG_EVALUATE;
-}
+evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
 
 // nvim_semsg_invarg2 is in match.c (not in eval_shim.c).
 
-// =============================================================================
-// Phase 3: set_var_lval helpers (additional lval_T accessors for rs_set_var_lval)
-// =============================================================================
-
-/// Get bv_lock from a blob_T - accessor for Rust.
-VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob)
-{
-  return blob->bv_lock;
-}
+VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob) { return blob->bv_lock; }
 
 /// Get value_check_lock condition for set_var_lval - composite accessor for Rust.
 ///
@@ -587,41 +522,17 @@ bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
   return value_check_lock(lock, name, TV_CSTRING);
 }
 
-/// Get di_key from a dictitem_T - accessor for Rust.
-const char *nvim_di_get_key(const dictitem_T *di)
-{
-  return di->di_key;
-}
+const char *nvim_di_get_key(const dictitem_T *di) { return di->di_key; }
 
 // nvim_value_check_lock moved to typval.c (3-param version)
 
-/// Check if di_flags indicate read-only and report error - accessor for Rust.
-bool nvim_di_check_ro(const dictitem_T *di, const char *name)
-{
-  return var_check_ro(di->di_flags, name, TV_CSTRING);
-}
+bool nvim_di_check_ro(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_CSTRING); }
 
-/// Check if di has lock set and report error - accessor for Rust.
-bool nvim_di_check_lock(const dictitem_T *di, const char *name)
-{
-  return tv_check_lock(&di->di_tv, name, TV_CSTRING);
-}
+bool nvim_di_check_lock(const dictitem_T *di, const char *name) { return tv_check_lock(&di->di_tv, name, TV_CSTRING); }
 
-/// Wrapper for tv_dict_is_watched inline function - accessor for Rust.
-bool nvim_tv_dict_is_watched(const dict_T *d)
-{
-  return tv_dict_is_watched(d);
-}
+bool nvim_tv_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
 
-/// Free a dictitem_T that failed to be added - accessor for Rust.
-void nvim_tv_dict_item_free(dictitem_T *di)
-{
-  xfree(di);
-}
-
-// =============================================================================
-// Phase 3: eval_list accessor wrappers for Rust
-// =============================================================================
+void nvim_tv_dict_item_free(dictitem_T *di) { xfree(di); }
 
 /// Wrapper for tv_list_append_owned_tv taking a pointer - accessor for Rust eval_exec.
 /// Takes a typval_T pointer and copies by value, avoiding FFI struct-by-value issues.
@@ -631,30 +542,16 @@ void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
   tv_list_append_owned_tv(l, *tv);
 }
 
-/// Wrapper for tv_list_set_ret inline function - accessor for Rust eval_exec.
-void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l)
-{
-  tv_list_set_ret(rettv, l);
-}
+void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l) { tv_list_set_ret(rettv, l); }
 
-/// Set di->di_tv = *tv with v_lock = VAR_UNLOCKED - accessor for Rust eval_dict.
 void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
 {
   di->di_tv = *tv;
   di->di_tv.v_lock = VAR_UNLOCKED;
 }
 
-/// Wrapper for tv_dict_set_ret inline function - accessor for Rust eval_dict.
-void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d)
-{
-  tv_dict_set_ret(rettv, d);
-}
+void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d) { tv_dict_set_ret(rettv, d); }
 
-// =============================================================================
-// Phase 1 (lval subscript): composite C accessor/wrapper functions for rs_get_lval_subscript
-// =============================================================================
-
-/// Returns true if ll_dict is v: or a: scope dict - composite accessor for Rust.
 bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp)
 {
   return lp->ll_dict == get_vimvar_dict()
@@ -668,23 +565,11 @@ bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_
          || var_check_lock(lp->ll_di->di_flags, name, name_len);
 }
 
-/// Set lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li) - composite setter for Rust.
-void nvim_lval_set_tv_to_li_tv(lval_T *lp)
-{
-  lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li);
-}
+void nvim_lval_set_tv_to_li_tv(lval_T *lp) { lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li); }
 
-/// Alloc list and set ll_tv - composite accessor for Rust.
-void nvim_lval_tv_list_alloc_ret(lval_T *lp)
-{
-  tv_list_alloc_ret(lp->ll_tv, kListLenUnknown);
-}
+void nvim_lval_tv_list_alloc_ret(lval_T *lp) { tv_list_alloc_ret(lp->ll_tv, kListLenUnknown); }
 
-/// Alloc blob and set ll_tv - composite accessor for Rust.
-void nvim_lval_tv_blob_alloc_ret(lval_T *lp)
-{
-  tv_blob_alloc_ret(lp->ll_tv);
-}
+void nvim_lval_tv_blob_alloc_ret(lval_T *lp) { tv_blob_alloc_ret(lp->ll_tv); }
 
 /// tv_blob_check_index wrapper - accessor for Rust.
 int nvim_tv_blob_check_index(int bloblen, int n1, bool quiet)
@@ -710,18 +595,9 @@ int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
   return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet);
 }
 
-// =============================================================================
-// Phase 5 (handle_subscript): new C accessor/wrapper functions
-// =============================================================================
-
-/// Get partial->pt_auto - accessor for Rust rs_handle_subscript.
-bool nvim_partial_get_pt_auto(const partial_T *pt)
-{
-  return pt->pt_auto;
-}
+bool nvim_partial_get_pt_auto(const partial_T *pt) { return pt->pt_auto; }
 
 /// Scope check for get_lval_dict_item: set key[len]=NUL, check scope, restore.
-/// Returns true if the variable is 'wrong' (validation failed).
 bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *rettv)
 {
   char prevval;
@@ -741,40 +617,20 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
   return wrong;
 }
 
-// =============================================================================
-// Phase 6 (ex_echo + ex_execute): new C accessor/wrapper functions
-// =============================================================================
-
 /// encode_tv2echo wrapper - accessor for Rust.
-char *nvim_encode_tv2echo(typval_T *tv)
-{
-  return encode_tv2echo(tv, NULL);
-}
+char *nvim_encode_tv2echo(typval_T *tv) { return encode_tv2echo(tv, NULL); }
 
 /// encode_tv2string wrapper - accessor for Rust.
-char *nvim_encode_tv2string_wrapper(typval_T *tv)
-{
-  return encode_tv2string(tv, NULL);
-}
+char *nvim_encode_tv2string_wrapper(typval_T *tv) { return encode_tv2string(tv, NULL); }
 
-/// Set msg_ext_append global - accessor for Rust.
-void nvim_set_msg_ext_append(bool val)
-{
-  msg_ext_append = val;
-}
+void nvim_set_msg_ext_append(bool val) { msg_ext_append = val; }
 
 /// emsg_multiline for echoerr - accessor for Rust.
 /// Wraps: emsg_multiline(str, "echoerr", HLF_E, true)
-void nvim_emsg_multiline_echoerr(const char *str)
-{
-  emsg_multiline(str, "echoerr", HLF_E, true);
-}
+void nvim_emsg_multiline_echoerr(const char *str) { emsg_multiline(str, "echoerr", HLF_E, true); }
 
 /// msg() wrapper for echomsg - accessor for Rust.
-void nvim_msg_echomsg(const char *str, int hl_id)
-{
-  msg(str, hl_id);
-}
+void nvim_msg_echomsg(const char *str, int hl_id) { msg(str, hl_id); }
 
 /// do_cmdline wrapper for :execute - accessor for Rust.
 void nvim_do_cmdline_execute(char *cmd, exarg_T *eap)
@@ -782,33 +638,14 @@ void nvim_do_cmdline_execute(char *cmd, exarg_T *eap)
   do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
 }
 
-/// Get eap->skip - accessor for Rust (local, avoids dependency on ex_docmd).
-int nvim_eap_get_skip_local(const exarg_T *eap)
-{
-  return eap->skip;
-}
+int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 
-/// Get eap->arg - accessor for Rust (local).
-char *nvim_eap_get_arg_local(const exarg_T *eap)
-{
-  return eap->arg;
-}
-
-// =============================================================================
-// Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
-// =============================================================================
+char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 
 /// may_call_simple_func wrapper - accessor for Rust eval_top.
-int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
-{
-  return may_call_simple_func(arg, rettv);
-}
+int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv) { return may_call_simple_func(arg, rettv); }
 
-// ============================================================================
-// Phase 3: C accessors for var2fpos / list2fpos (used by Rust indexing module)
-// ============================================================================
-
-// NvimCursorVisualState typedef is in eval.h (Phase 15).
+// NvimCursorVisualState typedef is in eval.h.
 _Static_assert(sizeof(NvimCursorVisualState) == 40,
                "NvimCursorVisualState size mismatch: expected 40 bytes");
 
@@ -827,11 +664,7 @@ void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
   out->curbuf_fnum = curbuf->b_fnum;
 }
 
-/// Get curbuf->b_fnum.
-int nvim_curbuf_fnum(void)
-{
-  return curbuf->b_fnum;
-}
+int nvim_curbuf_fnum(void) { return curbuf->b_fnum; }
 
 /// mark_get wrapper for Rust var2fpos.
 /// Returns true if mark was found and is valid (lnum > 0).
@@ -851,25 +684,14 @@ bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *cola
 }
 
 /// Call update_topline(curwin).
-void nvim_update_topline_curwin(void)
-{
-  update_topline(curwin);
-}
+void nvim_update_topline_curwin(void) { update_topline(curwin); }
 
 /// Call check_cursor_moved(curwin).
-void nvim_check_cursor_moved_curwin(void)
-{
-  check_cursor_moved(curwin);
-}
+void nvim_check_cursor_moved_curwin(void) { check_cursor_moved(curwin); }
 
 /// tv_list_find_nr wrapper with bool error output.
-/// Returns the number at list index n. Sets *error_out to true on error.
-int64_t nvim_tv_list_find_nr(list_T *l, int n, bool *error_out)
-{
-  return (int64_t)tv_list_find_nr(l, n, error_out);
-}
+int64_t nvim_tv_list_find_nr(list_T *l, int n, bool *error_out) { return (int64_t)tv_list_find_nr(l, n, error_out); }
 
-/// Returns true if the list item at index idx is a string equal to "$".
 bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 {
   listitem_T *li = tv_list_find(l, idx);
@@ -880,41 +702,19 @@ bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 }
 
 /// tv_list_len wrapper.
-int nvim_tv_list_len(const list_T *l)
-{
-  return tv_list_len(l);
-}
+int nvim_tv_list_len(const list_T *l) { return tv_list_len(l); }
 
 /// mb_charlen(ml_get(lnum)) for current buffer.
-int nvim_mb_charlen_ml(int32_t lnum)
-{
-  return mb_charlen(ml_get(lnum));
-}
+int nvim_mb_charlen_ml(int32_t lnum) { return mb_charlen(ml_get(lnum)); }
 
 /// mb_charlen(get_cursor_line_ptr()) wrapper.
-int nvim_get_cursor_line_charlen(void)
-{
-  return mb_charlen(get_cursor_line_ptr());
-}
+int nvim_get_cursor_line_charlen(void) { return mb_charlen(get_cursor_line_ptr()); }
 
-// =============================================================================
-// Phase 1 (eval_shim pass 4): C accessors for rs_call_func_rettv / rs_eval_lambda
-// =============================================================================
-
-/// Wrap get_lambda_tv for Rust rs_eval_lambda.
-int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
-{
-  return get_lambda_tv(arg, rettv, evalarg);
-}
-
-// =============================================================================
-// Accessors for Phase 2 (eval_shim pass 4): eval_option + eval_env_var
-// =============================================================================
+int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg) { return get_lambda_tv(arg, rettv, evalarg); }
 
 /// Wraps find_option_var_end: parse &[g:|l:]optname from *arg.
 /// On success, *arg is set to "optname" and returned value is pointer after name.
 /// opt_idxp and opt_flagsp are set.
-/// Returns NULL when no option name found (error).
 const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flagsp)
 {
   OptIndex opt_idx = kOptInvalid;
@@ -934,7 +734,6 @@ void nvim_get_option_value_as_tv(int opt_idx, int opt_flags, typval_T *rettv)
   *rettv = optval_as_tv(value, true);
 }
 
-/// Get tty option value as typval using get_tty_option() + optval_as_tv().
 void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
 {
   OptVal value = get_tty_option(name);
@@ -942,149 +741,55 @@ void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
   *rettv = optval_as_tv(value, true);
 }
 
-// =============================================================================
-// Accessors for Phase 3 (eval_shim pass 4): var_item_copy
-// =============================================================================
-
-/// Get conv->vc_type; returns CONV_NONE (0) if conv is NULL.
-int nvim_vimconv_get_type(const vimconv_T *conv)
-{
-  return conv == NULL ? CONV_NONE : (int)conv->vc_type;
-}
+int nvim_vimconv_get_type(const vimconv_T *conv) { return conv == NULL ? CONV_NONE : (int)conv->vc_type; }
 
 /// Wrap string_convert(conv, str, NULL).
-/// Returns converted string (allocated) or NULL. Caller must xfree.
 char *nvim_string_convert(const vimconv_T *conv, const char *str)
 {
   return string_convert((vimconv_T *)conv, (char *)str, NULL);
 }
 
-/// Get tv_list_copyid(list).
-int nvim_tv_list_copyid(const list_T *list)
-{
-  return tv_list_copyid(list);
-}
+int nvim_tv_list_copyid(const list_T *list) { return tv_list_copyid(list); }
 
-/// Get tv_list_latest_copy(list).
-list_T *nvim_tv_list_latest_copy(const list_T *list)
-{
-  return tv_list_latest_copy(list);
-}
+list_T *nvim_tv_list_latest_copy(const list_T *list) { return tv_list_latest_copy(list); }
 
 /// Call tv_list_ref(list) to increment refcount.
-void nvim_tv_list_ref(list_T *list)
-{
-  tv_list_ref(list);
-}
+void nvim_tv_list_ref(list_T *list) { tv_list_ref(list); }
 
-/// Get dict->dv_copydict.
-dict_T *nvim_dict_get_copydict(const dict_T *dict)
-{
-  return dict->dv_copydict;
-}
+dict_T *nvim_dict_get_copydict(const dict_T *dict) { return dict->dv_copydict; }
 
-// =============================================================================
-// Accessors for Phase 4 (eval_shim pass 4): save_tv_as_string
-// =============================================================================
-
-/// Get first item of list (tv_list_first). Returns NULL for empty/NULL list.
-listitem_T *nvim_list_first_item(const list_T *l)
-{
-  return tv_list_first(l);
-}
+listitem_T *nvim_list_first_item(const list_T *l) { return tv_list_first(l); }
 
 /// Call tv_get_string on a listitem's tv.
-const char *nvim_list_item_get_string(listitem_T *item)
-{
-  return tv_get_string(TV_LIST_ITEM_TV(item));
-}
+const char *nvim_list_item_get_string(listitem_T *item) { return tv_get_string(TV_LIST_ITEM_TV(item)); }
 
-// =============================================================================
-// Accessors for Phase 5 (eval_shim pass 4): fill_evalarg_from_eap,
-//   clear_evalarg, may_call_simple_func, eval_expr_ext, partial_unref,
-//   typval_tostring
-// =============================================================================
+char *nvim_eap_get_cmdline_tofree(exarg_T *eap) { return eap->cmdline_tofree; }
 
-/// Get eap->cmdline_tofree - accessor for Rust clear_evalarg.
-char *nvim_eap_get_cmdline_tofree(exarg_T *eap)
-{
-  return eap->cmdline_tofree;
-}
+void nvim_eap_set_cmdline_tofree(exarg_T *eap, char *val) { eap->cmdline_tofree = val; }
 
-/// Set eap->cmdline_tofree - accessor for Rust clear_evalarg.
-void nvim_eap_set_cmdline_tofree(exarg_T *eap, char *val)
-{
-  eap->cmdline_tofree = val;
-}
+char *nvim_eap_get_cmdlinep_deref(const exarg_T *eap) { return *eap->cmdlinep; }
 
-/// Get *eap->cmdlinep (dereference the cmdlinep pointer) - accessor for Rust.
-char *nvim_eap_get_cmdlinep_deref(const exarg_T *eap)
-{
-  return *eap->cmdlinep;
-}
+void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val) { *eap->cmdlinep = val; }
 
-/// Set *eap->cmdlinep = val - accessor for Rust.
-void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val)
-{
-  *eap->cmdlinep = val;
-}
+LineGetter nvim_eap_get_getline(const exarg_T *eap) { return eap->ea_getline; }
 
-/// Get eap->ea_getline function pointer - accessor for Rust fill_evalarg_from_eap.
-LineGetter nvim_eap_get_getline(const exarg_T *eap)
-{
-  return eap->ea_getline;
-}
-
-/// Get eap->cookie - accessor for Rust fill_evalarg_from_eap.
-void *nvim_eap_get_cookie(const exarg_T *eap)
-{
-  return eap->cookie;
-}
+void *nvim_eap_get_cookie(const exarg_T *eap) { return eap->cookie; }
 
 /// Allocate exactly sizeof(typval_T) bytes for a heap typval - accessor for Rust.
-typval_T *nvim_alloc_typval(void)
-{
-  return xmalloc(sizeof(typval_T));
-}
+typval_T *nvim_alloc_typval(void) { return xmalloc(sizeof(typval_T)); }
 
 /// Decrement pt->pt_refcount and return true if it drops to <= 0.
-/// Accessor for Rust partial_unref.
-bool nvim_partial_decref_and_check(partial_T *pt)
-{
-  return --pt->pt_refcount <= 0;
-}
+bool nvim_partial_decref_and_check(partial_T *pt) { return --pt->pt_refcount <= 0; }
 
-// =============================================================================
-// Accessors for Phase 1 (eval_shim pass 5): call_vim_function family +
-//   set_argv_var, var_set_global, eval_fmt_source_name_line, find_option_var_end
-// =============================================================================
+void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv) { set_var(name, name_len, tv, false); }
 
-/// Wrap set_var(name, name_len, tv, false) - accessor for rs_var_set_global.
-void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv)
-{
-  set_var(name, name_len, tv, false);
-}
+void nvim_set_vim_var_argv_list(list_T *list) { set_vim_var_list(VV_ARGV, list); }
 
-/// Wrap set_vim_var_list(VV_ARGV, list) - accessor for rs_set_argv_var.
-void nvim_set_vim_var_argv_list(list_T *list)
-{
-  set_vim_var_list(VV_ARGV, list);
-}
+const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
 
-/// Return SOURCING_NAME - accessor for rs_eval_fmt_source_name_line.
-const char *nvim_sourcing_name_get(void)
-{
-  return SOURCING_NAME;
-}
-
-/// Return SOURCING_LNUM - accessor for rs_eval_fmt_source_name_line.
-linenr_T nvim_sourcing_lnum_get(void)
-{
-  return SOURCING_LNUM;
-}
+linenr_T nvim_sourcing_lnum_get(void) { return SOURCING_LNUM; }
 
 /// Wrap rs_find_option_end(p) - accessor for rs_find_option_var_end.
-/// Returns pointer after option name, or NULL on failure.
 const char *nvim_find_option_end_wrapper(const char *p, int *opt_idxp)
 {
   typedef struct { const char *end; int opt_idx; } FindOptionEndResult_;
@@ -1094,23 +799,11 @@ const char *nvim_find_option_end_wrapper(const char *p, int *opt_idxp)
   return r.end;
 }
 
-/// Wrap tv_list_set_lock - accessor for rs_set_argv_var.
-void nvim_tv_list_set_lock(list_T *l, int lock)
-{
-  tv_list_set_lock(l, (VarLockStatus)lock);
-}
+void nvim_tv_list_set_lock(list_T *l, int lock) { tv_list_set_lock(l, (VarLockStatus)lock); }
 
 /// Get tv_list_last item's typval v_lock field address - accessor for rs_set_argv_var.
 /// Sets VAR_FIXED lock on the last item's tv.
-void nvim_tv_list_last_fix_lock(list_T *l)
-{
-  TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED;
-}
-
-// =============================================================================
-// Accessors for Phase 2 (eval_shim pass 5): prompt functions
-// Phase 16: consolidated into NvimPromptState bulk struct.
-// =============================================================================
+void nvim_tv_list_last_fix_lock(list_T *l) { TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED; }
 
 /// Bulk-read prompt state from curbuf into *out - accessor for Rust prompt functions.
 void nvim_read_prompt_state(NvimPromptState *out)
@@ -1123,33 +816,13 @@ void nvim_read_prompt_state(NvimPromptState *out)
 }
 
 /// Write back prompt_start_lnum to curbuf - accessor for Rust prompt functions.
-void nvim_write_prompt_start_lnum(int32_t lnum)
-{
-  curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum;
-}
+void nvim_write_prompt_start_lnum(int32_t lnum) { curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum; }
 
-/// Get buf->b_prompt_start.mark.lnum - accessor for rs_prompt_get_input.
-linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf)
-{
-  return buf->b_prompt_start.mark.lnum;
-}
+linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf) { return buf->b_prompt_start.mark.lnum; }
 
-/// Wrap appended_lines_mark(lnum, count) - accessor for rs_prompt_invoke_callback.
-void nvim_appended_lines_mark(linenr_T lnum, int count)
-{
-  appended_lines_mark(lnum, count);
-}
+void nvim_appended_lines_mark(linenr_T lnum, int count) { appended_lines_mark(lnum, count); }
 
-/// Wrap u_clearallandblockfree(curbuf) - accessor for rs_prompt_invoke_callback.
-void nvim_curbuf_u_clearallandblockfree(void)
-{
-  u_clearallandblockfree(curbuf);
-}
-
-// =============================================================================
-// Accessors for Phase 3 (eval_shim pass 5): eval_foldexpr and eval_foldtext
-// Phase 16: consolidated into NvimFoldEvalState bulk struct.
-// =============================================================================
+void nvim_curbuf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
 /// Bulk-read fold eval state from wp into *out - accessor for Rust fold functions.
 void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
@@ -1161,7 +834,6 @@ void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
 }
 
 /// Save current_sctx and set it from wp's foldexpr script context.
-/// Returns an opaque pointer to the saved sctx (caller must call nvim_restore_current_sctx).
 sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
 {
   sctx_T *saved = xmalloc(sizeof(sctx_T));
@@ -1191,60 +863,28 @@ void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
   }
 }
 
-// =============================================================================
-// Accessors for Phase 2 (eval_shim pass 6): tv_to_argv + system output
-// =============================================================================
-
 /// set_vim_var_nr wrapper for VV_SHELL_ERROR.
-void nvim_set_shell_error(int status)
-{
-  set_vim_var_nr(VV_SHELL_ERROR, (varnumber_T)status);
-}
+void nvim_set_shell_error(int status) { set_vim_var_nr(VV_SHELL_ERROR, (varnumber_T)status); }
 
-/// Emit the "Executing command: ..." verbose message.
-void nvim_smsg_system_cmd(const char *cmdstr)
-{
-  smsg(0, _("Executing command: \"%s\""), cmdstr);
-}
+void nvim_smsg_system_cmd(const char *cmdstr) { smsg(0, _("Executing command: \"%s\""), cmdstr); }
 
 /// do_profiling accessor -- returns true when profiling is active (PROF_YES).
-bool nvim_do_profiling_active(void)
-{
-  return do_profiling == PROF_YES;
-}
+bool nvim_do_profiling_active(void) { return do_profiling == PROF_YES; }
 
 /// os_can_exe wrapper for tv_to_argv -- check if the command is executable.
-/// Returns true if executable. Sets *abspath to the resolved path (caller must free).
-bool nvim_eval_os_can_exe(const char *name, char **abspath)
-{
-  return os_can_exe(name, abspath, true);
-}
-
-// =============================================================================
-// Accessors for Phase 3 (eval_shim pass 6): provider infrastructure
-// =============================================================================
+bool nvim_eval_os_can_exe(const char *name, char **abspath) { return os_can_exe(name, abspath, true); }
 
 /// eval_variable wrapper for Rust.
 int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
-                       bool import_script)
-{
-  return eval_variable(name, len, rettv, NULL, verbose, import_script);
-}
+                       bool import_script) { return eval_variable(name, len, rettv, NULL, verbose, import_script); }
 
 /// find_func wrapper for Rust -- returns non-NULL if function is defined.
-bool nvim_eval_find_func(const char *name)
-{
-  return find_func(name) != NULL;
-}
+bool nvim_eval_find_func(const char *name) { return find_func(name) != NULL; }
 
 /// nlua_is_deferred_safe accessor for Rust.
-bool nvim_eval_nlua_is_deferred_safe(void)
-{
-  return nlua_is_deferred_safe();
-}
+bool nvim_eval_nlua_is_deferred_safe(void) { return nlua_is_deferred_safe(); }
 
 /// Save the provider_caller_scope and related globals to an opaque heap blob.
-/// Returns a pointer that must be passed to nvim_restore_provider_caller_scope.
 void *nvim_save_provider_caller_scope(void)
 {
   struct caller_scope *saved = xmalloc(sizeof(struct caller_scope));
@@ -1269,40 +909,23 @@ void nvim_restore_provider_caller_scope(void *saved)
 }
 
 /// tv_list_alloc with explicit count (for provider args list).
-list_T *nvim_eval_list_alloc_n(int n)
-{
-  return tv_list_alloc((ptrdiff_t)n);
-}
+list_T *nvim_eval_list_alloc_n(int n) { return tv_list_alloc((ptrdiff_t)n); }
 
 /// tv_list_ref wrapper for provider list argument.
-void nvim_eval_list_ref(list_T *l)
-{
-  tv_list_ref(l);
-}
-
-// =============================================================================
-// Timer accessors for Rust timer migration (Phase 8)
-// =============================================================================
+void nvim_eval_list_ref(list_T *l) { tv_list_ref(l); }
 
 /// Allocate and zero-initialize a timer_T.
-timer_T *nvim_timer_alloc(void)
-{
-  return xcalloc(1, sizeof(timer_T));
-}
+timer_T *nvim_timer_alloc(void) { return xcalloc(1, sizeof(timer_T)); }
 
-/// Free a timer_T (only after refcount reaches 0).
-void nvim_timer_free(timer_T *timer)
-{
-  xfree(timer);
-}
+void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
 // nvim_timer_get_id, nvim_timer_set_id, nvim_timer_get_repeat_count, nvim_timer_set_repeat_count,
 // nvim_timer_get_refcount, nvim_timer_set_refcount, nvim_timer_get_emsg_count,
 // nvim_timer_set_emsg_count, nvim_timer_get_timeout, nvim_timer_get_stopped,
 // nvim_timer_set_stopped, nvim_timer_get_paused:
-// deleted -- replaced by nvim_timer_read_fields / nvim_timer_write_fields (Phase 13).
+// deleted -- replaced by nvim_timer_read_fields / nvim_timer_write_fields.
 
-// NvimTimerFields typedef is in eval.h (Phase 13).
+// NvimTimerFields typedef is in eval.h.
 // Verify field offsets match expected layout.
 _Static_assert(offsetof(NvimTimerFields, timer_id) == 0, "NvimTimerFields.timer_id offset");
 _Static_assert(offsetof(NvimTimerFields, repeat_count) == 4, "NvimTimerFields.repeat_count offset");
@@ -1336,89 +959,39 @@ void nvim_timer_write_fields(timer_T *timer, const NvimTimerFields *fields)
   timer->paused = fields->paused;
 }
 
-/// Get pointer to the callback field.
-Callback *nvim_timer_get_callback_ptr(timer_T *timer)
-{
-  return &timer->callback;
-}
+Callback *nvim_timer_get_callback_ptr(timer_T *timer) { return &timer->callback; }
 
-/// Copy callback into timer (sets timer->callback = *cb).
-void nvim_timer_set_callback(timer_T *timer, const Callback *cb)
-{
-  timer->callback = *cb;
-}
+void nvim_timer_set_callback(timer_T *timer, const Callback *cb) { timer->callback = *cb; }
 
-/// Initialize the TimeWatcher embedded in timer (calls time_watcher_init).
-void nvim_timer_tw_init(timer_T *timer)
-{
-  time_watcher_init(&main_loop, &timer->tw, timer);
-}
+void nvim_timer_tw_init(timer_T *timer) { time_watcher_init(&main_loop, &timer->tw, timer); }
 
-/// Start the TimeWatcher (calls time_watcher_start with timer_due_cb).
 void nvim_timer_tw_start(timer_T *timer, uint64_t timeout, uint64_t repeat)
 {
   time_watcher_start(&timer->tw, timer_due_cb, timeout, repeat);
 }
 
-/// Stop the TimeWatcher (calls time_watcher_stop).
-void nvim_timer_tw_stop(timer_T *timer)
-{
-  time_watcher_stop(&timer->tw);
-}
+void nvim_timer_tw_stop(timer_T *timer) { time_watcher_stop(&timer->tw); }
 
-/// Close the TimeWatcher (calls time_watcher_close with rs_timer_close_cb).
-void nvim_timer_tw_close(timer_T *timer)
-{
-  time_watcher_close(&timer->tw, rs_timer_close_cb);
-}
+void nvim_timer_tw_close(timer_T *timer) { time_watcher_close(&timer->tw, rs_timer_close_cb); }
 
-/// Set timer->tw.events to a new child queue of main_loop events.
 void nvim_timer_tw_set_events_child(timer_T *timer)
 {
   timer->tw.events = multiqueue_new_child(loop_get_events(&main_loop));
 }
 
-/// Set timer->tw.blockable.
-void nvim_timer_tw_set_blockable(timer_T *timer, int blockable)
-{
-  timer->tw.blockable = blockable != 0;
-}
+void nvim_timer_tw_set_blockable(timer_T *timer, int blockable) { timer->tw.blockable = blockable != 0; }
 
-/// Free the timer's tw.events multiqueue.
-void nvim_timer_tw_free_events(timer_T *timer)
-{
-  multiqueue_free(timer->tw.events);
-}
+void nvim_timer_tw_free_events(timer_T *timer) { multiqueue_free(timer->tw.events); }
 
-/// Get a timer_T from the timers PMap by numeric ID.
-timer_T *nvim_timers_get(int64_t id)
-{
-  return pmap_get(uint64_t)(&timers, (uint64_t)id);
-}
+timer_T *nvim_timers_get(int64_t id) { return pmap_get(uint64_t)(&timers, (uint64_t)id); }
 
-/// Insert a timer_T into the timers PMap.
-void nvim_timers_put(timer_T *timer)
-{
-  pmap_put(uint64_t)(&timers, (uint64_t)timer->timer_id, timer);
-}
+void nvim_timers_put(timer_T *timer) { pmap_put(uint64_t)(&timers, (uint64_t)timer->timer_id, timer); }
 
-/// Remove a timer_T from the timers PMap.
-void nvim_timers_del(int64_t id)
-{
-  pmap_del(uint64_t)(&timers, (uint64_t)id, NULL);
-}
+void nvim_timers_del(int64_t id) { pmap_del(uint64_t)(&timers, (uint64_t)id, NULL); }
 
-/// Return the current map size (number of timers).
-size_t nvim_timers_size(void)
-{
-  return map_size(&timers);
-}
+size_t nvim_timers_size(void) { return map_size(&timers); }
 
-/// Get and increment last_timer_id, returning the OLD value.
-uint64_t nvim_timers_next_id(void)
-{
-  return last_timer_id++;
-}
+uint64_t nvim_timers_next_id(void) { return last_timer_id++; }
 
 /// Iterate all timers, calling cb(timer, userdata) for each.
 /// Used from Rust to implement add_timer_info_all and timer_stop_all.
@@ -1430,36 +1003,16 @@ void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
   })
 }
 
-/// Alloc a dictitem_T with the given key.
-dictitem_T *nvim_tv_dict_item_alloc_key(const char *key)
-{
-  return tv_dict_item_alloc(key);
-}
+dictitem_T *nvim_tv_dict_item_alloc_key(const char *key) { return tv_dict_item_alloc(key); }
 
 /// Add dictitem to dict. Returns OK (0) or FAIL (-1 in C: but we expose as bool).
-int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di)
-{
-  return tv_dict_add(dict, di);
-}
+int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di) { return tv_dict_add(dict, di); }
 
-/// Wrapper for get_pressedreturn() -- returns 1 if true.
-int nvim_get_pressedreturn(void)
-{
-  return get_pressedreturn() ? 1 : 0;
-}
+int nvim_get_pressedreturn(void) { return get_pressedreturn() ? 1 : 0; }
 
-/// Wrapper for set_pressedreturn().
-void nvim_set_pressedreturn(int val)
-{
-  set_pressedreturn(val != 0);
-}
-
-// =============================================================================
-// Job helper accessors for Rust Phase 2 (eval_shim pass 8)
-// =============================================================================
+void nvim_set_pressedreturn(int val) { set_pressedreturn(val != 0); }
 
 /// Check if a Channel is a proc stream and not stopped.
-/// Returns 1 if it is a valid job channel, 0 otherwise.
 int nvim_channel_is_valid_job(Channel *chan)
 {
   if (chan == NULL) {
@@ -1474,19 +1027,10 @@ int nvim_channel_is_valid_job(Channel *chan)
   return 1;
 }
 
-/// Check if a Channel is NOT a proc stream (for find_job error reporting).
-int nvim_channel_is_not_proc(Channel *chan)
-{
-  return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0;
-}
+int nvim_channel_is_not_proc(Channel *chan) { return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0; }
 
-/// Find channel by ID (accessor for Rust FFI - used by eval/src/job.rs).
-Channel *nvim_find_channel(uint64_t id)
-{
-  return find_channel(id);
-}
+Channel *nvim_find_channel(uint64_t id) { return find_channel(id); }
 
-/// Format "E605: Exception not caught: %s" with value into allocated string.
 char *nvim_docmd_fmt_exception_not_caught(const char *value)
 {
   vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value);
