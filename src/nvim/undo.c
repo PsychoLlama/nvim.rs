@@ -298,103 +298,47 @@ void f_undotree(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 
-// ============================================================================
 // Rust FFI accessor functions
-// ============================================================================
 
 // Buffer undo field accessors
-u_header_T *nvim_buf_get_b_u_oldhead(buf_T *buf)
-{
-  return buf->b_u_oldhead;
-}
+u_header_T *nvim_buf_get_b_u_oldhead(buf_T *buf) { return buf->b_u_oldhead; }
 
-u_header_T *nvim_buf_get_b_u_newhead(buf_T *buf)
-{
-  return buf->b_u_newhead;
-}
+u_header_T *nvim_buf_get_b_u_newhead(buf_T *buf) { return buf->b_u_newhead; }
 
-u_header_T *nvim_buf_get_b_u_curhead(buf_T *buf)
-{
-  return buf->b_u_curhead;
-}
+u_header_T *nvim_buf_get_b_u_curhead(buf_T *buf) { return buf->b_u_curhead; }
 
-int nvim_buf_get_b_u_numhead(buf_T *buf)
-{
-  return buf->b_u_numhead;
-}
+int nvim_buf_get_b_u_numhead(buf_T *buf) { return buf->b_u_numhead; }
 
-bool nvim_buf_get_b_u_synced(buf_T *buf)
-{
-  return buf->b_u_synced;
-}
+bool nvim_buf_get_b_u_synced(buf_T *buf) { return buf->b_u_synced; }
 
-char *nvim_buf_get_b_u_line_ptr(buf_T *buf)
-{
-  return buf->b_u_line_ptr;
-}
+char *nvim_buf_get_b_u_line_ptr(buf_T *buf) { return buf->b_u_line_ptr; }
 
-linenr_T nvim_buf_get_b_u_line_lnum(buf_T *buf)
-{
-  return buf->b_u_line_lnum;
-}
+linenr_T nvim_buf_get_b_u_line_lnum(buf_T *buf) { return buf->b_u_line_lnum; }
 
-void nvim_buf_set_b_u_oldhead(buf_T *buf, u_header_T *val)
-{
-  buf->b_u_oldhead = val;
-}
+void nvim_buf_set_b_u_oldhead(buf_T *buf, u_header_T *val) { buf->b_u_oldhead = val; }
 
-void nvim_buf_set_b_u_newhead(buf_T *buf, u_header_T *val)
-{
-  buf->b_u_newhead = val;
-}
+void nvim_buf_set_b_u_newhead(buf_T *buf, u_header_T *val) { buf->b_u_newhead = val; }
 
-void nvim_buf_set_b_u_curhead(buf_T *buf, u_header_T *val)
-{
-  buf->b_u_curhead = val;
-}
+void nvim_buf_set_b_u_curhead(buf_T *buf, u_header_T *val) { buf->b_u_curhead = val; }
 
-void nvim_buf_set_b_u_numhead(buf_T *buf, int val)
-{
-  buf->b_u_numhead = val;
-}
+void nvim_buf_set_b_u_numhead(buf_T *buf, int val) { buf->b_u_numhead = val; }
 
-void nvim_buf_set_b_u_synced(buf_T *buf, bool val)
-{
-  buf->b_u_synced = val;
-}
+void nvim_buf_set_b_u_synced(buf_T *buf, bool val) { buf->b_u_synced = val; }
 
-void nvim_buf_set_b_u_line_ptr(buf_T *buf, char *val)
-{
-  buf->b_u_line_ptr = val;
-}
+void nvim_buf_set_b_u_line_ptr(buf_T *buf, char *val) { buf->b_u_line_ptr = val; }
 
-void nvim_buf_set_b_u_line_lnum(buf_T *buf, linenr_T val)
-{
-  buf->b_u_line_lnum = val;
-}
+void nvim_buf_set_b_u_line_lnum(buf_T *buf, linenr_T val) { buf->b_u_line_lnum = val; }
 
 // Buffer state accessors
-bool nvim_buf_get_b_changed(buf_T *buf)
-{
-  return buf->b_changed;
-}
+bool nvim_buf_get_b_changed(buf_T *buf) { return buf->b_changed; }
 
-bool nvim_bt_dontwrite(buf_T *buf)
-{
-  return bt_dontwrite(buf);
-}
+bool nvim_bt_dontwrite(buf_T *buf) { return bt_dontwrite(buf); }
 
 
 // Global buffer iteration
-buf_T *nvim_get_firstbuf(void)
-{
-  return firstbuf;
-}
+buf_T *nvim_get_firstbuf(void) { return firstbuf; }
 
-buf_T *nvim_buf_get_next(buf_T *buf)
-{
-  return buf->b_next;
-}
+buf_T *nvim_buf_get_next(buf_T *buf) { return buf->b_next; }
 
 // Static assertions for u_entry_T layout verification (Phase 1).
 // These verify field offsets so the Rust repr(C) UEntry struct stays in sync.
@@ -448,197 +392,89 @@ _Static_assert(offsetof(u_header_T, uh_time) == 1176, "u_header_T.uh_time offset
 _Static_assert(offsetof(u_header_T, uh_save_nr) == 1184, "u_header_T.uh_save_nr offset mismatch");
 
 // Error message wrappers
-void nvim_iemsg_undo_list_corrupt(void)
-{
-  iemsg(_(e_undo_list_corrupt));
-}
+void nvim_iemsg_undo_list_corrupt(void) { iemsg(_(e_undo_list_corrupt)); }
 
-void nvim_iemsg_undo_line_missing(void)
-{
-  iemsg(_(e_undo_line_missing));
-}
+void nvim_iemsg_undo_line_missing(void) { iemsg(_(e_undo_line_missing)); }
 
-void nvim_iemsg_undo_line_numbers_wrong(void)
-{
-  iemsg(_("E438: u_undo: line numbers wrong"));
-}
+void nvim_iemsg_undo_line_numbers_wrong(void) { iemsg(_("E438: u_undo: line numbers wrong")); }
 
 // Global state accessors
-int nvim_get_no_u_sync(void)
-{
-  return no_u_sync;
-}
+int nvim_get_no_u_sync(void) { return no_u_sync; }
 
 // Wrapper for get_undolevel
-OptInt nvim_get_undolevel(buf_T *buf)
-{
-  return get_undolevel(buf);
-}
+OptInt nvim_get_undolevel(buf_T *buf) { return get_undolevel(buf); }
 
 // Buffer b_did_warn accessor
-void nvim_buf_set_b_did_warn(buf_T *buf, bool val)
-{
-  buf->b_did_warn = val;
-}
+void nvim_buf_set_b_did_warn(buf_T *buf, bool val) { buf->b_did_warn = val; }
 
 // Buffer save_nr accessors
-int nvim_buf_get_b_u_save_nr_last(buf_T *buf)
-{
-  return buf->b_u_save_nr_last;
-}
+int nvim_buf_get_b_u_save_nr_last(buf_T *buf) { return buf->b_u_save_nr_last; }
 
-void nvim_buf_set_b_u_save_nr_last(buf_T *buf, int val)
-{
-  buf->b_u_save_nr_last = val;
-}
+void nvim_buf_set_b_u_save_nr_last(buf_T *buf, int val) { buf->b_u_save_nr_last = val; }
 
-void nvim_buf_set_b_u_save_nr_cur(buf_T *buf, int val)
-{
-  buf->b_u_save_nr_cur = val;
-}
+void nvim_buf_set_b_u_save_nr_cur(buf_T *buf, int val) { buf->b_u_save_nr_cur = val; }
 
 // undo_allowed accessors
-bool nvim_buf_is_modifiable(buf_T *buf)
-{
-  return MODIFIABLE(buf);
-}
+bool nvim_buf_is_modifiable(buf_T *buf) { return MODIFIABLE(buf); }
 
-int nvim_get_sandbox(void)
-{
-  return sandbox;
-}
+int nvim_get_sandbox(void) { return sandbox; }
 
 // undo_allowed error message wrappers
-void nvim_emsg_modifiable(void)
-{
-  emsg(_(e_modifiable));
-}
+void nvim_emsg_modifiable(void) { emsg(_(e_modifiable)); }
 
-void nvim_emsg_sandbox(void)
-{
-  emsg(_(e_sandbox));
-}
+void nvim_emsg_sandbox(void) { emsg(_(e_sandbox)); }
 
-void nvim_emsg_textlock(void)
-{
-  emsg(_(e_textlock));
-}
+void nvim_emsg_textlock(void) { emsg(_(e_textlock)); }
 
-void nvim_emsg_undojoin_after_undo(void)
-{
-  emsg(_("E790: undojoin is not allowed after undo"));
-}
+void nvim_emsg_undojoin_after_undo(void) { emsg(_("E790: undojoin is not allowed after undo")); }
 
 // u_undo/u_redo accessors
-bool nvim_has_cpo_undo(void)
-{
-  return vim_strchr(p_cpo, CPO_UNDO) != NULL;
-}
+bool nvim_has_cpo_undo(void) { return vim_strchr(p_cpo, CPO_UNDO) != NULL; }
 
-bool nvim_get_undo_undoes(void)
-{
-  return undo_undoes;
-}
+bool nvim_get_undo_undoes(void) { return undo_undoes; }
 
-void nvim_set_undo_undoes(bool val)
-{
-  undo_undoes = val;
-}
+void nvim_set_undo_undoes(bool val) { undo_undoes = val; }
 
 
 // u_undo_and_forget accessors
-int nvim_buf_get_b_u_seq_cur(buf_T *buf)
-{
-  return buf->b_u_seq_cur;
-}
+int nvim_buf_get_b_u_seq_cur(buf_T *buf) { return buf->b_u_seq_cur; }
 
-void nvim_buf_set_b_u_seq_cur(buf_T *buf, int val)
-{
-  buf->b_u_seq_cur = val;
-}
+void nvim_buf_set_b_u_seq_cur(buf_T *buf, int val) { buf->b_u_seq_cur = val; }
 
-int nvim_buf_get_b_u_seq_last(buf_T *buf)
-{
-  return buf->b_u_seq_last;
-}
+int nvim_buf_get_b_u_seq_last(buf_T *buf) { return buf->b_u_seq_last; }
 
-void nvim_buf_set_b_u_seq_last(buf_T *buf, int val)
-{
-  buf->b_u_seq_last = val;
-}
+void nvim_buf_set_b_u_seq_last(buf_T *buf, int val) { buf->b_u_seq_last = val; }
 
 // u_doit accessors
-bool nvim_buf_ml_is_empty(buf_T *buf)
-{
-  return buf->b_ml.ml_flags & ML_EMPTY;
-}
+bool nvim_buf_ml_is_empty(buf_T *buf) { return buf->b_ml.ml_flags & ML_EMPTY; }
 
-int nvim_get_u_newcount(void)
-{
-  return u_newcount;
-}
+int nvim_get_u_newcount(void) { return u_newcount; }
 
-void nvim_set_u_newcount(int val)
-{
-  u_newcount = val;
-}
+void nvim_set_u_newcount(int val) { u_newcount = val; }
 
-int nvim_get_u_oldcount(void)
-{
-  return u_oldcount;
-}
+int nvim_get_u_oldcount(void) { return u_oldcount; }
 
-void nvim_set_u_oldcount(int val)
-{
-  u_oldcount = val;
-}
+void nvim_set_u_oldcount(int val) { u_oldcount = val; }
 
-void nvim_msg_ext_set_kind_undo(void)
-{
-  msg_ext_set_kind("undo");
-}
+void nvim_msg_ext_set_kind_undo(void) { msg_ext_set_kind("undo"); }
 
-void nvim_change_warning_curbuf(void)
-{
-  change_warning(curbuf, 0);
-}
+void nvim_change_warning_curbuf(void) { change_warning(curbuf, 0); }
 
-void nvim_beep_flush(void)
-{
-  beep_flush();
-}
+void nvim_beep_flush(void) { beep_flush(); }
 
-void nvim_msg_oldest_change(void)
-{
-  msg(_("Already at oldest change"), 0);
-}
+void nvim_msg_oldest_change(void) { msg(_("Already at oldest change"), 0); }
 
-void nvim_msg_newest_change(void)
-{
-  msg(_("Already at newest change"), 0);
-}
+void nvim_msg_newest_change(void) { msg(_("Already at newest change"), 0); }
 
 // Buffer line access (infrastructure for future migration)
 // Returns allocated copy of line - caller must free with nvim_xfree
-char *nvim_ml_get_buf_copy(buf_T *buf, linenr_T lnum)
-{
-  return xstrdup(ml_get_buf(buf, lnum));
-}
+char *nvim_ml_get_buf_copy(buf_T *buf, linenr_T lnum) { return xstrdup(ml_get_buf(buf, lnum)); }
 
-void nvim_fast_breakcheck(void)
-{
-  fast_breakcheck();
-}
+void nvim_fast_breakcheck(void) { fast_breakcheck(); }
 
-bool nvim_undo_got_int(void)
-{
-  return got_int;
-}
+bool nvim_undo_got_int(void) { return got_int; }
 
-time_t nvim_time_now(void)
-{
-  return time(NULL);
-}
+time_t nvim_time_now(void) { return time(NULL); }
 
 // Window cursor access for undo header
 void nvim_get_curwin_cursor(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
@@ -648,26 +484,14 @@ void nvim_get_curwin_cursor(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
   *coladd = curwin->w_cursor.coladd;
 }
 
-bool nvim_curwin_virtual_active(void)
-{
-  return virtual_active(curwin);
-}
+bool nvim_curwin_virtual_active(void) { return virtual_active(curwin); }
 
-colnr_T nvim_getviscol(void)
-{
-  return getviscol();
-}
+colnr_T nvim_getviscol(void) { return getviscol(); }
 
 // u_savecommon infrastructure
-void nvim_buf_set_b_new_change(buf_T *buf, bool val)
-{
-  buf->b_new_change = val;
-}
+void nvim_buf_set_b_new_change(buf_T *buf, bool val) { buf->b_new_change = val; }
 
-void nvim_buf_set_b_u_time_cur(buf_T *buf, time_t val)
-{
-  buf->b_u_time_cur = val;
-}
+void nvim_buf_set_b_u_time_cur(buf_T *buf, time_t val) { buf->b_u_time_cur = val; }
 
 // Copy marks and visual from buffer to undo header
 void nvim_uhp_copy_marks_visual(buf_T *buf, u_header_T *uhp)
@@ -679,53 +503,29 @@ void nvim_uhp_copy_marks_visual(buf_T *buf, u_header_T *uhp)
 
 
 // Error message wrapper
-void nvim_emsg_line_count_changed(void)
-{
-  emsg(_("E881: Line count changed unexpectedly"));
-}
+void nvim_emsg_line_count_changed(void) { emsg(_("E881: Line count changed unexpectedly")); }
 
 // Check if buf equals curbuf
-bool nvim_buf_is_curbuf(buf_T *buf)
-{
-  return buf == curbuf;
-}
+bool nvim_buf_is_curbuf(buf_T *buf) { return buf == curbuf; }
 
 
 // Get b_u_line_colnr
-colnr_T nvim_buf_get_b_u_line_colnr(buf_T *buf)
-{
-  return buf->b_u_line_colnr;
-}
+colnr_T nvim_buf_get_b_u_line_colnr(buf_T *buf) { return buf->b_u_line_colnr; }
 
 // Set b_u_line_colnr
-void nvim_buf_set_b_u_line_colnr(buf_T *buf, colnr_T val)
-{
-  buf->b_u_line_colnr = val;
-}
+void nvim_buf_set_b_u_line_colnr(buf_T *buf, colnr_T val) { buf->b_u_line_colnr = val; }
 
 // Get curwin->w_cursor.col (undo-specific)
-colnr_T nvim_undo_curwin_get_cursor_col(void)
-{
-  return curwin->w_cursor.col;
-}
+colnr_T nvim_undo_curwin_get_cursor_col(void) { return curwin->w_cursor.col; }
 
 // Set curwin->w_cursor.col (undo-specific)
-void nvim_undo_curwin_set_cursor_col(colnr_T col)
-{
-  curwin->w_cursor.col = col;
-}
+void nvim_undo_curwin_set_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 
 // Set curwin->w_cursor.lnum (undo-specific)
-void nvim_undo_curwin_set_cursor_lnum(linenr_T lnum)
-{
-  curwin->w_cursor.lnum = lnum;
-}
+void nvim_undo_curwin_set_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
 
 // Call check_cursor_col for curwin
-void nvim_check_cursor_col_curwin(void)
-{
-  check_cursor_col(curwin);
-}
+void nvim_check_cursor_col_curwin(void) { check_cursor_col(curwin); }
 
 // Perform the u_undoline line replacement and swap operation
 // Swaps b_u_line_ptr with the current line content
@@ -742,36 +542,18 @@ void nvim_u_undoline_replace_and_swap(void)
 }
 
 // Get curwin->w_cursor.lnum (undo-specific)
-linenr_T nvim_undo_curwin_get_cursor_lnum(void)
-{
-  return curwin->w_cursor.lnum;
-}
+linenr_T nvim_undo_curwin_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
 // undo_time accessors
-time_t nvim_buf_get_b_u_time_cur(buf_T *buf)
-{
-  return buf->b_u_time_cur;
-}
+time_t nvim_buf_get_b_u_time_cur(buf_T *buf) { return buf->b_u_time_cur; }
 
-int nvim_buf_get_b_u_save_nr_cur(buf_T *buf)
-{
-  return buf->b_u_save_nr_cur;
-}
+int nvim_buf_get_b_u_save_nr_cur(buf_T *buf) { return buf->b_u_save_nr_cur; }
 
-bool nvim_text_locked(void)
-{
-  return text_locked();
-}
+bool nvim_text_locked(void) { return text_locked(); }
 
-void nvim_text_locked_msg(void)
-{
-  text_locked_msg();
-}
+void nvim_text_locked_msg(void) { text_locked_msg(); }
 
-time_t nvim_undo_os_time(void)
-{
-  return os_time();
-}
+time_t nvim_undo_os_time(void) { return os_time(); }
 
 // Strftime wrapper for Rust time formatting
 size_t nvim_undo_strftime(char *buf, size_t buflen, const char *fmt, time_t tt)
@@ -792,60 +574,31 @@ const char *nvim_undo_time(int64_t seconds)
   return buf;
 }
 
-int nvim_inc_lastmark(void)
-{
-  return ++lastmark;
-}
+int nvim_inc_lastmark(void) { return ++lastmark; }
 
-void nvim_internal_error_undo_time(void)
-{
-  internal_error("undo_time()");
-}
+void nvim_internal_error_undo_time(void) { internal_error("undo_time()"); }
 
-void nvim_semsg_undo_number_not_found(int64_t step)
-{
-  semsg(_("E830: Undo number %" PRId64 " not found"), step);
-}
+void nvim_semsg_undo_number_not_found(int64_t step) { semsg(_("E830: Undo number %" PRId64 " not found"), step); }
 
-// ============================================================================
 // Undo File I/O FFI Functions
-// ============================================================================
 
 // File system operations still needed by other Rust crates (memline, quickfix)
-bool nvim_os_path_exists(const char *path)
-{
-  return os_path_exists(path);
-}
+bool nvim_os_path_exists(const char *path) { return os_path_exists(path); }
 
-int nvim_os_remove(const char *path)
-{
-  return os_remove(path);
-}
+int nvim_os_remove(const char *path) { return os_remove(path); }
 
 // Option accessors
-int nvim_get_p_verbose(void)
-{
-  return p_verbose;
-}
+int nvim_get_p_verbose(void) { return p_verbose; }
 
 void nvim_set_p_verbose(int val) { p_verbose = val; }
 
-bool nvim_get_p_fs(void)
-{
-  return p_fs;
-}
+bool nvim_get_p_fs(void) { return p_fs; }
 
 // u_sync wrapper (still called from ex_cmds and window Rust crates)
-void nvim_u_sync(bool force)
-{
-  u_sync(force);
-}
+void nvim_u_sync(bool force) { u_sync(force); }
 
 // Buffer line count and line accessors for hash computation
-linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf)
-{
-  return buf->b_ml.ml_line_count;
-}
+linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 // File info for Unix ownership checks
 #ifdef UNIX
@@ -873,30 +626,17 @@ int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_pat
 }
 #endif
 
-// ============================================================================
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
-// ============================================================================
 
 /// Force get undo header for current operation (wrapper for Rust FFI).
-u_header_T *nvim_u_force_get_undo_header(buf_T *buf)
-{
-  return u_force_get_undo_header(buf);
-}
+u_header_T *nvim_u_force_get_undo_header(buf_T *buf) { return u_force_get_undo_header(buf); }
 
 /// Get extmark undo vector pointer from undo header.
-extmark_undo_vec_t *nvim_uhp_get_extmark(u_header_T *uhp)
-{
-  return &uhp->uh_extmark;
-}
+extmark_undo_vec_t *nvim_uhp_get_extmark(u_header_T *uhp) { return &uhp->uh_extmark; }
 
-// ============================================================================
 // Undo File I/O Message Functions (for Rust FFI)
-// ============================================================================
 
-void nvim_undo_cannot_write_no_dir(void)
-{
-  verb_msg(_("Cannot write undo file in any directory in 'undodir'"));
-}
+void nvim_undo_cannot_write_no_dir(void) { verb_msg(_("Cannot write undo file in any directory in 'undodir'")); }
 
 void nvim_undo_will_not_overwrite_cannot_read(const char *file_name)
 {
@@ -908,25 +648,13 @@ void nvim_undo_will_not_overwrite_not_undo(const char *file_name)
   smsg(0, _("Will not overwrite, this is not an undo file: %s"), file_name);
 }
 
-void nvim_undo_skip_write_nothing(void)
-{
-  verb_msg(_("Skipping undo file write, nothing to undo"));
-}
+void nvim_undo_skip_write_nothing(void) { verb_msg(_("Skipping undo file write, nothing to undo")); }
 
-void nvim_undo_write_error(const char *file_name)
-{
-  semsg(_(e_write_error_in_undo_file_str), file_name);
-}
+void nvim_undo_write_error(const char *file_name) { semsg(_(e_write_error_in_undo_file_str), file_name); }
 
-void nvim_undo_writing(const char *file_name)
-{
-  smsg(0, _("Writing undo file: %s"), file_name);
-}
+void nvim_undo_writing(const char *file_name) { smsg(0, _("Writing undo file: %s"), file_name); }
 
-void nvim_undo_reading(const char *file_name)
-{
-  smsg(0, _("Reading undo file: %s"), file_name);
-}
+void nvim_undo_reading(const char *file_name) { smsg(0, _("Reading undo file: %s"), file_name); }
 
 void nvim_undo_not_reading_owner_differs(const char *file_name)
 {
@@ -938,30 +666,18 @@ void nvim_undo_cannot_open_for_reading(const char *file_name)
   semsg(_("E822: Cannot open undo file for reading: %s"), file_name);
 }
 
-void nvim_undo_not_undo_file(const char *file_name)
-{
-  semsg(_("E823: Not an undo file: %s"), file_name);
-}
+void nvim_undo_not_undo_file(const char *file_name) { semsg(_("E823: Not an undo file: %s"), file_name); }
 
-void nvim_undo_incompatible_version(const char *file_name)
-{
-  semsg(_("E824: Incompatible undo file: %s"), file_name);
-}
+void nvim_undo_incompatible_version(const char *file_name) { semsg(_("E824: Incompatible undo file: %s"), file_name); }
 
 void nvim_undo_corruption_error(const char *what, const char *file_name)
 {
   semsg(_("E825: Corrupted undo file (%s): %s"), what, file_name);
 }
 
-void nvim_undo_file_changed_warning(void)
-{
-  give_warning(_("File contents changed, cannot use undo info"), true);
-}
+void nvim_undo_file_changed_warning(void) { give_warning(_("File contents changed, cannot use undo info"), true); }
 
-void nvim_undo_finished_reading(const char *file_name)
-{
-  smsg(0, _("Finished reading undo file %s"), file_name);
-}
+void nvim_undo_finished_reading(const char *file_name) { smsg(0, _("Finished reading undo file %s"), file_name); }
 
 bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
 {
@@ -978,19 +694,14 @@ bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
   return true;
 }
 
-// ============================================================================
 // Phase 3: u_undoredo FFI Helpers
-// ============================================================================
 
 // Save named marks and visual info from buffer before undo/redo.
 // Clears additional_data, saves namedm to uhp_saved_namedm[],
 // and saves visual info. Returns opaque handle to saved state.
 // The saved state is stored directly in the undo header's namedm array
 // after swapping.
-void nvim_undoredo_save_marks(buf_T *buf, u_header_T *curhead)
-{
-  zero_fmark_additional_data(buf->b_namedm);
-}
+void nvim_undoredo_save_marks(buf_T *buf, u_header_T *curhead) { zero_fmark_additional_data(buf->b_namedm); }
 
 // Restore named marks from undo header to buffer and vice versa
 void nvim_undoredo_restore_marks(buf_T *buf, u_header_T *curhead,
@@ -1038,40 +749,22 @@ void nvim_undoredo_init_op_marks(buf_T *buf)
 }
 
 // Get b_op_start.lnum
-linenr_T nvim_buf_get_op_start_lnum(buf_T *buf)
-{
-  return buf->b_op_start.lnum;
-}
+linenr_T nvim_buf_get_op_start_lnum(buf_T *buf) { return buf->b_op_start.lnum; }
 
 // Get b_op_end.lnum
-linenr_T nvim_buf_get_op_end_lnum(buf_T *buf)
-{
-  return buf->b_op_end.lnum;
-}
+linenr_T nvim_buf_get_op_end_lnum(buf_T *buf) { return buf->b_op_end.lnum; }
 
 // Set b_op_start.lnum
-void nvim_buf_set_op_start_lnum(buf_T *buf, linenr_T lnum)
-{
-  buf->b_op_start.lnum = lnum;
-}
+void nvim_buf_set_op_start_lnum(buf_T *buf, linenr_T lnum) { buf->b_op_start.lnum = lnum; }
 
 // Adjust b_op_start.lnum by delta
-void nvim_buf_adjust_op_start_lnum(buf_T *buf, linenr_T delta)
-{
-  buf->b_op_start.lnum += delta;
-}
+void nvim_buf_adjust_op_start_lnum(buf_T *buf, linenr_T delta) { buf->b_op_start.lnum += delta; }
 
 // Set b_op_end.lnum
-void nvim_buf_set_op_end_lnum(buf_T *buf, linenr_T lnum)
-{
-  buf->b_op_end.lnum = lnum;
-}
+void nvim_buf_set_op_end_lnum(buf_T *buf, linenr_T lnum) { buf->b_op_end.lnum = lnum; }
 
 // Adjust b_op_end.lnum by delta
-void nvim_buf_adjust_op_end_lnum(buf_T *buf, linenr_T delta)
-{
-  buf->b_op_end.lnum += delta;
-}
+void nvim_buf_adjust_op_end_lnum(buf_T *buf, linenr_T delta) { buf->b_op_end.lnum += delta; }
 
 // Clamp op marks to ml_line_count
 void nvim_undoredo_clamp_op_marks(buf_T *buf)
@@ -1116,9 +809,7 @@ void nvim_undoredo_adjust_cursor(u_header_T *curhead)
   check_cursor(curwin);
 }
 
-// ============================================================================
 // Phase 4: u_undo_end + helpers FFI
-// ============================================================================
 
 // Redraw conceal for all windows showing this buffer
 void nvim_undo_end_redraw_conceal(buf_T *buf)
@@ -1150,9 +841,7 @@ void nvim_undo_end_smsg(int64_t count, const char *msgstr, bool did_undo,
             timebuf);
 }
 
-// ============================================================================
 // Phase 5: u_get_undo_file_name FFI Helpers
-// ============================================================================
 
 // Resolve symlink if available, returning resolved path or original
 // Returns allocated copy
@@ -1168,10 +857,7 @@ char *nvim_undo_resolve_symlink(const char *ffname)
 }
 
 // Get p_udir option value
-const char *nvim_undo_get_p_udir(void)
-{
-  return p_udir;
-}
+const char *nvim_undo_get_p_udir(void) { return p_udir; }
 
 // Wrapper for copy_option_part
 size_t nvim_undo_copy_option_part(const char **dirp, char *buf, size_t maxlen)
@@ -1187,10 +873,7 @@ int nvim_undo_mkdir_recurse(const char *dir, char **failed_dir)
 }
 
 // Emit a semsg with one string argument (used from Rust undo code)
-void nvim_undo_semsg(const char *msg, const char *arg)
-{
-  semsg(msg, arg);
-}
+void nvim_undo_semsg(const char *msg, const char *arg) { semsg(msg, arg); }
 
 // Format and emit E5003 error message
 void nvim_undo_semsg_mkdir(const char *failed_dir, int err)
@@ -1200,66 +883,32 @@ void nvim_undo_semsg_mkdir(const char *failed_dir, int err)
 }
 
 // Get path_tail for a string (returns offset into the string)
-size_t nvim_undo_path_tail_offset(const char *path)
-{
-  return (size_t)(path_tail(path) - path);
-}
+size_t nvim_undo_path_tail_offset(const char *path) { return (size_t)(path_tail(path) - path); }
 
 // concat_fnames wrapper
-char *nvim_undo_concat_fnames(const char *dir, const char *fname)
-{
-  return concat_fnames(dir, fname, true);
-}
+char *nvim_undo_concat_fnames(const char *dir, const char *fname) { return concat_fnames(dir, fname, true); }
 
 // Get MAXPATHL value
-size_t nvim_undo_get_maxpathl(void)
-{
-  return MAXPATHL;
-}
+size_t nvim_undo_get_maxpathl(void) { return MAXPATHL; }
 
-// ============================================================================
 // Ex Command FFI Functions (for Rust FFI)
-// ============================================================================
 
-void nvim_undo_msg_simple(const char *s)
-{
-  msg(s, 0);
-}
+void nvim_undo_msg_simple(const char *s) { msg(s, 0); }
 
-void nvim_msg_start(void)
-{
-  msg_start();
-}
+void nvim_msg_start(void) { msg_start(); }
 
-void nvim_msg_end(void)
-{
-  msg_end();
-}
+void nvim_msg_end(void) { msg_end(); }
 
-void nvim_undo_msg_puts_hl_title(const char *s)
-{
-  msg_puts_hl(s, HLF_T, false);
-}
+void nvim_undo_msg_puts_hl_title(const char *s) { msg_puts_hl(s, HLF_T, false); }
 
-// ============================================================================
 // Phase 5: VimL function FFI wrappers
-// ============================================================================
 
-list_T *nvim_tv_list_alloc(void)
-{
-  return tv_list_alloc(kListLenMayKnow);
-}
+list_T *nvim_tv_list_alloc(void) { return tv_list_alloc(kListLenMayKnow); }
 
 // VimL typval wrappers (still needed by eval crate without #[link_name])
-dict_T *nvim_tv_dict_alloc(void)
-{
-  return tv_dict_alloc();
-}
+dict_T *nvim_tv_dict_alloc(void) { return tv_dict_alloc(); }
 
-void nvim_tv_list_append_dict(list_T *list, dict_T *dict)
-{
-  tv_list_append_dict(list, dict);
-}
+void nvim_tv_list_append_dict(list_T *list, dict_T *dict) { tv_list_append_dict(list, dict); }
 
 void nvim_tv_dict_add_nr(dict_T *dict, const char *key, size_t key_len, varnumber_T nr)
 {
@@ -1271,26 +920,15 @@ void nvim_tv_dict_add_list(dict_T *dict, const char *key, size_t key_len, list_T
   tv_dict_add_list(dict, key, key_len, list);
 }
 
-char *nvim_FullName_save(const char *fname, bool force)
-{
-  return FullName_save(fname, force);
-}
+char *nvim_FullName_save(const char *fname, bool force) { return FullName_save(fname, force); }
 
-// ============================================================================
 // Memline Accessor Functions (for Rust FFI - u_undoredo migration)
-// ============================================================================
 
 /// Delete line 'lnum' in current buffer. Returns OK/FAIL.
-int nvim_ml_delete_lnum(linenr_T lnum)
-{
-  return ml_delete(lnum);
-}
+int nvim_ml_delete_lnum(linenr_T lnum) { return ml_delete(lnum); }
 
 /// Delete line 'lnum' in current buffer with flags. Returns OK/FAIL.
-int nvim_ml_delete_flags(linenr_T lnum, int flags)
-{
-  return ml_delete_flags(lnum, flags);
-}
+int nvim_ml_delete_flags(linenr_T lnum, int flags) { return ml_delete_flags(lnum, flags); }
 
 /// Append line with flags. Returns OK/FAIL.
 int nvim_ml_append_flags(linenr_T lnum, const char *line, colnr_T len, int flags)
@@ -1299,21 +937,12 @@ int nvim_ml_append_flags(linenr_T lnum, const char *line, colnr_T len, int flags
 }
 
 /// Replace line in current buffer. Returns OK/FAIL.
-int nvim_ml_replace_lnum(linenr_T lnum, const char *line, bool copy)
-{
-  return ml_replace(lnum, (char *)line, copy);
-}
+int nvim_ml_replace_lnum(linenr_T lnum, const char *line, bool copy) { return ml_replace(lnum, (char *)line, copy); }
 
 /// Block/unblock autocommands
-void nvim_block_autocmds(void)
-{
-  block_autocmds();
-}
+void nvim_block_autocmds(void) { block_autocmds(); }
 
-void nvim_unblock_autocmds(void)
-{
-  unblock_autocmds();
-}
+void nvim_unblock_autocmds(void) { unblock_autocmds(); }
 
 /// Mark adjust for undo
 void nvim_undo_mark_adjust(linenr_T top, linenr_T bot, linenr_T amount, linenr_T amount_after)
@@ -1321,17 +950,10 @@ void nvim_undo_mark_adjust(linenr_T top, linenr_T bot, linenr_T amount, linenr_T
   mark_adjust(top, bot, amount, amount_after, kExtmarkNOOP);
 }
 
-/// Check spell for window
-bool nvim_spell_check_window(win_T *win)
-{
-  return spell_check_window(win);
-}
+bool nvim_spell_check_window(win_T *win) { return spell_check_window(win); }
 
 /// Redraw window line
-void nvim_redrawWinline(win_T *win, linenr_T lnum)
-{
-  redrawWinline(win, lnum);
-}
+void nvim_redrawWinline(win_T *win, linenr_T lnum) { redrawWinline(win, lnum); }
 
 /// Apply extmark undo
 void nvim_extmark_apply_undo(u_header_T *uhp, size_t idx, bool undo)
@@ -1342,22 +964,13 @@ void nvim_extmark_apply_undo(u_header_T *uhp, size_t idx, bool undo)
 }
 
 /// Check position validity
-void nvim_check_pos(buf_T *buf, pos_T *pos)
-{
-  check_pos(buf, pos);
-}
+void nvim_check_pos(buf_T *buf, pos_T *pos) { check_pos(buf, pos); }
 
 /// Current window handle accessor
-win_T *nvim_undo_get_curwin(void)
-{
-  return curwin;
-}
+win_T *nvim_undo_get_curwin(void) { return curwin; }
 
 /// Window buffer accessor
-buf_T *nvim_undo_win_get_buffer(win_T *win)
-{
-  return win->w_buffer;
-}
+buf_T *nvim_undo_win_get_buffer(win_T *win) { return win->w_buffer; }
 
 /// Set window cursor
 void nvim_undo_win_set_cursor_pos(win_T *win, linenr_T lnum, colnr_T col, colnr_T coladd)
@@ -1368,10 +981,7 @@ void nvim_undo_win_set_cursor_pos(win_T *win, linenr_T lnum, colnr_T col, colnr_
 }
 
 /// Get window cursor line
-linenr_T nvim_undo_win_get_cursor_lnum(win_T *win)
-{
-  return win->w_cursor.lnum;
-}
+linenr_T nvim_undo_win_get_cursor_lnum(win_T *win) { return win->w_cursor.lnum; }
 
 /// Save line for undo (returns allocated string)
 char *nvim_u_save_line_for_undo(buf_T *buf, linenr_T lnum)
@@ -1380,35 +990,19 @@ char *nvim_u_save_line_for_undo(buf_T *buf, linenr_T lnum)
   return xstrdup(ml_get_buf(curbuf, lnum));
 }
 
-/// Get global_busy flag
-bool nvim_get_global_busy(void)
-{
-  return global_busy;
-}
+bool nvim_get_global_busy(void) { return global_busy; }
 
 /// Increment global_busy (for breaking :global command on error)
-void nvim_inc_global_busy(void)
-{
-  global_busy++;
-}
+void nvim_inc_global_busy(void) { global_busy++; }
 
 /// Check if messaging is allowed
-bool nvim_messaging(void)
-{
-  return messaging();
-}
+bool nvim_messaging(void) { return messaging(); }
 
 /// Get KeyTyped flag
-bool nvim_undo_get_key_typed(void)
-{
-  return KeyTyped;
-}
+bool nvim_undo_get_key_typed(void) { return KeyTyped; }
 
 /// Get fdo_flags for fold options
-int nvim_undo_get_fdo_flags(void)
-{
-  return fdo_flags;
-}
+int nvim_undo_get_fdo_flags(void) { return fdo_flags; }
 
 
 
@@ -1427,7 +1021,4 @@ int nvim_u_inssub(int lnum) { return u_inssub((linenr_T)lnum) == OK ? 1 : 0; }
 /// Wrap u_savesub(lnum). Returns 1 on OK, 0 on FAIL.
 int nvim_u_savesub(int lnum) { return u_savesub((linenr_T)lnum) == OK ? 1 : 0; }
 /// Wrap u_savedel(lnum, count). Returns 1 on OK, 0 on FAIL.
-int nvim_u_savedel2(int lnum, int count)
-{
-  return u_savedel((linenr_T)lnum, (linenr_T)count) == OK ? 1 : 0;
-}
+int nvim_u_savedel2(int lnum, int count) { return u_savedel((linenr_T)lnum, (linenr_T)count) == OK ? 1 : 0; }
