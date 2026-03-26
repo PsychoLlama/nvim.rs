@@ -76,19 +76,11 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// Rust FFI declarations (functions called directly from remaining C code)
-extern int rs_can_get_old_char(void);
-extern int rs_get_old_char(void);
-extern void rs_restore_old_char_state(void);
-
 // Buffer FFI functions (buffers owned by Rust)
 extern int rs_read_readbuffers(int advance);
 extern void rs_start_stuff(void);
-extern int rs_get_block_redo(void);
-extern void rs_set_block_redo(int val);
 extern void rs_save_readbufs(void);
 extern void rs_restore_readbufs(void);
-extern uint8_t *rs_get_inserted(void);
 
 // Recording/gotchars operations (full functions in Rust)
 extern void rs_gotchars(const uint8_t *chars, size_t len);
