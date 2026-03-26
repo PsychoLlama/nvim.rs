@@ -213,32 +213,13 @@ struct loop_cookie {
   void *cookie;
 };
 
-// Struct to save a few things while debugging.  Used in do_cmdline() only.
-// Phase 3: save_dbg_stuff/restore_dbg_stuff are now in Rust; struct stays for
-// compatibility until Phase 4 deletes the C do_cmdline.
-struct dbg_stuff {
-  int trylevel;
-  int force_abort;
-  except_T *caught_stack;
-  char *vv_exception;
-  char *vv_throwpoint;
-  int did_emsg;
-  int got_int;
-  bool did_throw;
-  int need_rethrow;
-  int check_cstack;
-  except_T *current_exception;
-};
-
-// Phase 2 (do_cmdline plan): Rust-exported loop line helpers.
-// Declared here (before do_cmdline body) so the C do_cmdline can call them.
+// Phase 5 (do_cmdline plan): struct dbg_stuff, save_dbg_stuff,
+// restore_dbg_stuff, get_loop_line, store_loop_line are all now in Rust
+// (do_cmdline.rs). struct loop_cookie and wcmd_T remain here to support the
+// C accessor wrappers nvim_docmd_loop_cookie_get_* and
+// nvim_docmd_ga_deep_clear_lines used by Rust.
+// get_loop_line is still referenced by nvim_docmd_get_loop_line_ptr below.
 extern char *get_loop_line(int c, void *cookie, int indent, bool do_concat);
-extern void store_loop_line(garray_T *gap, char *line);
-
-// Phase 3 (do_cmdline plan): Rust-exported debug save/restore helpers.
-// The C struct dbg_stuff is deleted; do_cmdline uses these Rust exports.
-extern void save_dbg_stuff(struct dbg_stuff *dsp);
-extern void restore_dbg_stuff(struct dbg_stuff *dsp);
 
 #include "ex_docmd.c.generated.h"
 extern int rs_win_valid(win_T *win);
@@ -413,8 +394,6 @@ int cmdname_first_char(int cmdidx)
 }
 
 static char dollar_command[2] = { '$', 0 };
-// save_dbg_stuff and restore_dbg_stuff are implemented in Rust (do_cmdline.rs, Phase 3).
-// Declarations are at the top of this file.
 
 static int cmdline_call_depth = 0;  ///< recursiveness
 

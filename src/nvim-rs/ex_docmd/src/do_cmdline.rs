@@ -1,11 +1,11 @@
 //! do_cmdline: command-line execution loop and helpers.
 //!
 //! This module contains:
-//! - `getline_equal` and `getline_cookie` (Phase 0)
-//! - Rust types matching C structs: `WcmdT`, `LoopCookie`, `DbgStuff` (Phase 1)
-//! - `store_loop_line`, `get_loop_line` (Phase 2)
-//! - `save_dbg_stuff`, `restore_dbg_stuff` (Phase 3)
-//! - `do_cmdline` main body (Phase 4)
+//! - `getline_equal` and `getline_cookie`
+//! - Rust types: `WcmdT`, `LoopCookie`, `DbgStuff`
+//! - `store_loop_line`, `get_loop_line` (exported for C symbol compatibility)
+//! - `save_dbg_stuff`, `restore_dbg_stuff` (exported for C symbol compatibility)
+//! - `do_cmdline` (the main command execution loop)
 
 // Phase 1 scaffolding: many items here will be used in later phases
 #![allow(dead_code)]
