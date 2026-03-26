@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 libc = "0.2"
+nvim-api = { path = "../api" }
 
 [dev-dependencies]
 nvim-strings = { path = "../strings" }

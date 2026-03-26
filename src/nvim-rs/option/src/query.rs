@@ -8,6 +8,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::if_not_else)]
 #![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::useless_let_if_seq)]
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -539,4 +540,293 @@ pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const c_v
         b'm' => EOL_MAC,
         _ => EOL_DOS,
     }
+}
+
+// =============================================================================
+// vimoption2dict cluster
+// =============================================================================
+
+use crate::storage::SctxT;
+use nvim_api::{Dict, Error, NvimString, Object};
+
+/// OptIndex type matching C (c_int alias).
+type OptIndex = c_int;
+
+// kOptFlag* bitmask constants for vimoption2dict
+const K_OPT_FLAG_WAS_SET: u32 = 1 << 3;
+const K_OPT_FLAG_COMMA: u32 = 1 << 10;
+const K_OPT_FLAG_NO_DUP: u32 = 1 << 12;
+const K_OPT_FLAG_FLAG_LIST: u32 = 1 << 13;
+
+// Scope constants
+const K_OPT_SCOPE_WIN: c_int = 1;
+const K_OPT_SCOPE_BUF: c_int = 2;
+
+// OPT_GLOBAL / OPT_LOCAL flags
+const OPT_GLOBAL_FLAG: c_int = 0x01;
+const OPT_LOCAL_FLAG: c_int = 0x02;
+
+// kOptValType* constants (must match C enum)
+const K_OPT_VAL_TYPE_NIL: c_int = -1;
+const K_OPT_VAL_TYPE_BOOLEAN: c_int = 0;
+const K_OPT_VAL_TYPE_NUMBER: c_int = 1;
+const K_OPT_VAL_TYPE_STRING: c_int = 2;
+
+// kOptCount is not a Rust constant, so we read it from C
+// kOptInvalid = -1
+const K_OPT_INVALID: c_int = -1;
+
+extern "C" {
+    // Option scope query
+    fn option_has_scope(opt_idx: OptIndex, scope: c_int) -> c_int;
+    fn nvim_get_option_scope_idx(opt_idx: OptIndex, scope: c_int) -> c_int;
+
+    // Option metadata accessors
+    fn nvim_option_get_fullname(opt_idx: OptIndex) -> *const c_char;
+    fn nvim_option_get_shortname(opt_idx: OptIndex) -> *const c_char;
+    fn nvim_get_option_flags(opt_idx: OptIndex) -> u32;
+    fn rs_option_is_global_local(opt_idx: OptIndex) -> c_int;
+    fn rs_option_get_type(opt_idx: OptIndex) -> c_int;
+
+    // Script context accessors (return sctx_T by value)
+    // Use link_name alias to avoid clash with setcmd.rs's ScriptContext variant
+    #[link_name = "nvim_get_option_script_ctx"]
+    fn nvim_get_option_script_ctx_sctx(opt_idx: OptIndex) -> SctxT;
+    // scope-index based script context accessors (scope_idx = scope_specific index)
+    fn nvim_option_get_buf_scope_script_ctx(buf: *const c_void, scope_idx: c_int) -> SctxT;
+    fn nvim_option_get_win_scope_script_ctx(win: *const c_void, scope_idx: c_int) -> SctxT;
+
+    // def_val accessor
+    fn nvim_get_option_def_val_data_ptr(opt_idx: OptIndex) -> *const c_void;
+    fn rs_optval_from_varp(opt_idx: OptIndex, varp: *mut c_void) -> crate::storage::OptVal;
+
+    // optval -> Object conversion (implemented in value.rs, exported via #[no_mangle])
+    fn rs_optval_as_object(o: crate::storage::OptVal) -> Object;
+
+    // Option lookup
+    fn nvim_find_option_len_hash(name: *const c_char, len: usize) -> OptIndex;
+
+    // API Error helpers (matches VALIDATE_S macro behavior)
+    fn api_err_invalid(
+        err: *mut Error,
+        name: *const c_char,
+        val_s: *const c_char,
+        val_n: i64,
+        is_string: bool,
+    );
+
+    // Arena arena_dict
+    fn rs_arena_dict(arena: *mut c_void, max_size: usize) -> Dict;
+
+    // Dict put
+    fn rs_dict_put_static(dict: *mut Dict, key: *const c_char, value: Object);
+}
+
+/// Return a static C string for the option value type.
+unsafe fn optval_type_name(type_: c_int) -> *const c_char {
+    match type_ {
+        K_OPT_VAL_TYPE_NIL => c"nil".as_ptr(),
+        K_OPT_VAL_TYPE_BOOLEAN => c"boolean".as_ptr(),
+        K_OPT_VAL_TYPE_NUMBER => c"number".as_ptr(),
+        K_OPT_VAL_TYPE_STRING => c"string".as_ptr(),
+        _ => c"unknown".as_ptr(),
+    }
+}
+
+/// C string for static keys.
+macro_rules! ckey {
+    ($s:literal) => {
+        concat!($s, "\0").as_ptr().cast::<c_char>()
+    };
+}
+
+/// Build a Dict for one vimoption.
+///
+/// Mirrors `vimoption2dict` in option_shim.c.
+///
+/// # Safety
+/// All pointers must be valid for their respective lifetimes.
+#[allow(clippy::too_many_lines)]
+unsafe fn vimoption2dict_rs(
+    opt_idx: OptIndex,
+    opt_flags: c_int,
+    buf: *const c_void,
+    win: *const c_void,
+    arena: *mut c_void,
+) -> Dict {
+    let mut dict = rs_arena_dict(arena, 13);
+
+    let fullname = nvim_option_get_fullname(opt_idx);
+    let shortname = nvim_option_get_shortname(opt_idx);
+
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("name"),
+        Object::string(NvimString {
+            data: fullname.cast_mut(),
+            size: libc::strlen(fullname),
+        }),
+    );
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("shortname"),
+        Object::string(NvimString {
+            data: shortname.cast_mut(),
+            size: libc::strlen(shortname),
+        }),
+    );
+
+    let scope_str = if option_has_scope(opt_idx, K_OPT_SCOPE_BUF) != 0 {
+        c"buf".as_ptr()
+    } else if option_has_scope(opt_idx, K_OPT_SCOPE_WIN) != 0 {
+        c"win".as_ptr()
+    } else {
+        c"global".as_ptr()
+    };
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("scope"),
+        Object::string(NvimString {
+            data: scope_str.cast_mut(),
+            size: libc::strlen(scope_str),
+        }),
+    );
+
+    let flags = nvim_get_option_flags(opt_idx);
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("global_local"),
+        Object::boolean(rs_option_is_global_local(opt_idx) != 0),
+    );
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("commalist"),
+        Object::boolean(flags & K_OPT_FLAG_COMMA != 0),
+    );
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("flaglist"),
+        Object::boolean(flags & K_OPT_FLAG_FLAG_LIST != 0),
+    );
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("was_set"),
+        Object::boolean(flags & K_OPT_FLAG_WAS_SET != 0),
+    );
+
+    // Determine script context for this option.
+    let script_ctx = if opt_flags == OPT_GLOBAL_FLAG {
+        nvim_get_option_script_ctx_sctx(opt_idx)
+    } else {
+        // OPT_LOCAL or fallback mode
+        let mut sctx = SctxT {
+            sc_sid: 0,
+            sc_seq: 0,
+            sc_lnum: 0,
+            sc_chan: 0,
+        };
+        if option_has_scope(opt_idx, K_OPT_SCOPE_BUF) != 0 {
+            let idx = nvim_get_option_scope_idx(opt_idx, K_OPT_SCOPE_BUF);
+            sctx = nvim_option_get_buf_scope_script_ctx(buf, idx);
+        }
+        if option_has_scope(opt_idx, K_OPT_SCOPE_WIN) != 0 {
+            let idx = nvim_get_option_scope_idx(opt_idx, K_OPT_SCOPE_WIN);
+            sctx = nvim_option_get_win_scope_script_ctx(win, idx);
+        }
+        if opt_flags != OPT_LOCAL_FLAG && sctx.sc_sid == 0 {
+            sctx = nvim_get_option_script_ctx_sctx(opt_idx);
+        }
+        sctx
+    };
+
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("last_set_sid"),
+        Object::integer(i64::from(script_ctx.sc_sid)),
+    );
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("last_set_linenr"),
+        Object::integer(i64::from(script_ctx.sc_lnum)),
+    );
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("last_set_chan"),
+        Object::integer(script_ctx.sc_chan as i64),
+    );
+
+    let type_name = optval_type_name(rs_option_get_type(opt_idx));
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("type"),
+        Object::string(NvimString {
+            data: type_name.cast_mut(),
+            size: libc::strlen(type_name),
+        }),
+    );
+
+    // def_val: read default value from options[opt_idx].def_val
+    let def_varp = nvim_get_option_def_val_data_ptr(opt_idx)
+        .cast_mut()
+        .cast::<c_void>();
+    let def_val = rs_optval_from_varp(opt_idx, def_varp);
+    rs_dict_put_static(&mut dict, ckey!("default"), rs_optval_as_object(def_val));
+
+    rs_dict_put_static(
+        &mut dict,
+        ckey!("allows_duplicates"),
+        Object::boolean(flags & K_OPT_FLAG_NO_DUP == 0),
+    );
+
+    dict
+}
+
+/// Rust implementation of get_vimoption.
+///
+/// Looks up option by name and returns a Dict of option metadata.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_vimoption(
+    name_data: *const c_char,
+    name_size: usize,
+    opt_flags: c_int,
+    buf: *const c_void,
+    win: *const c_void,
+    arena: *mut c_void,
+    err: *mut Error,
+) -> Dict {
+    let opt_idx = nvim_find_option_len_hash(name_data, name_size);
+    if opt_idx == K_OPT_INVALID {
+        // Match VALIDATE_S(opt_idx != kOptInvalid, "option (not found)", name.data, {...})
+        api_err_invalid(err, c"option (not found)".as_ptr(), name_data, 0, true);
+        return Dict::empty();
+    }
+    vimoption2dict_rs(opt_idx, opt_flags, buf, win, arena)
+}
+
+/// Rust implementation of get_all_vimoptions.
+///
+/// Returns a Dict containing metadata for all options.
+///
+/// # Safety
+/// `arena` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_all_vimoptions(arena: *mut c_void) -> Dict {
+    use crate::opt_index::K_OPT_COUNT;
+    let count = K_OPT_COUNT as usize;
+    let mut retval = rs_arena_dict(arena, count);
+    for opt_idx in 0..K_OPT_COUNT {
+        let fullname = nvim_option_get_fullname(opt_idx);
+        let opt_dict = vimoption2dict_rs(
+            opt_idx,
+            OPT_GLOBAL_FLAG,
+            std::ptr::null(),
+            std::ptr::null(),
+            arena,
+        );
+        rs_dict_put_static(&mut retval, fullname, Object::dict(opt_dict));
+    }
+    retval
 }

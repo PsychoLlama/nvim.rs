@@ -298,6 +298,20 @@ sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
   return buf->b_p_script_ctx[opt_idx];
 }
 
+sctx_T nvim_option_get_buf_scope_script_ctx(buf_T *buf, int scope_idx) {
+  if (!buf || scope_idx < 0) {
+    return (sctx_T){ 0 };
+  }
+  return buf->b_p_script_ctx[scope_idx];
+}
+
+sctx_T nvim_option_get_win_scope_script_ctx(win_T *win, int scope_idx) {
+  if (!win || scope_idx < 0) {
+    return (sctx_T){ 0 };
+  }
+  return win->w_p_script_ctx[scope_idx];
+}
+
 int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
 void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
 int nvim_curbuf_get_b_p_wm_nobin(void) { return (int)curbuf->b_p_wm_nobin; }
@@ -673,77 +687,18 @@ dict_T *get_winbuf_options(const int bufopt)
   return d;
 }
 
+extern Dict rs_get_vimoption(const char *name_data, size_t name_size, int opt_flags,
+                             const void *buf, const void *win, void *arena, Error *err);
+extern Dict rs_get_all_vimoptions(void *arena);
+
 Dict get_vimoption(String name, int opt_flags, buf_T *buf, win_T *win, Arena *arena, Error *err)
 {
-  OptIndex opt_idx = find_option_len(name.data, name.size);
-  VALIDATE_S(opt_idx != kOptInvalid, "option (not found)", name.data, {
-    return (Dict)ARRAY_DICT_INIT;
-  });
-
-  return vimoption2dict(&options[opt_idx], opt_flags, buf, win, arena);
+  return rs_get_vimoption(name.data, name.size, opt_flags, buf, win, arena, err);
 }
 
 Dict get_all_vimoptions(Arena *arena)
 {
-  Dict retval = arena_dict(arena, kOptCount);
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    Dict opt_dict = vimoption2dict(&options[opt_idx], OPT_GLOBAL, curbuf, curwin, arena);
-    PUT_C(retval, options[opt_idx].fullname, DICT_OBJ(opt_dict));
-  }
-  return retval;
-}
-
-static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *win, Arena *arena)
-{
-  OptIndex opt_idx = get_opt_idx(opt);
-  Dict dict = arena_dict(arena, 13);
-
-  PUT_C(dict, "name", CSTR_AS_OBJ(opt->fullname));
-  PUT_C(dict, "shortname", CSTR_AS_OBJ(opt->shortname));
-
-  const char *scope;
-  if (option_has_scope(opt_idx, kOptScopeBuf)) {
-    scope = "buf";
-  } else if (option_has_scope(opt_idx, kOptScopeWin)) {
-    scope = "win";
-  } else {
-    scope = "global";
-  }
-
-  PUT_C(dict, "scope", CSTR_AS_OBJ(scope));
-
-  // welcome to the jungle
-  PUT_C(dict, "global_local", BOOLEAN_OBJ(rs_option_is_global_local(opt_idx)));
-  PUT_C(dict, "commalist", BOOLEAN_OBJ(opt->flags & kOptFlagComma));
-  PUT_C(dict, "flaglist", BOOLEAN_OBJ(opt->flags & kOptFlagFlagList));
-
-  PUT_C(dict, "was_set", BOOLEAN_OBJ(opt->flags & kOptFlagWasSet));
-
-  sctx_T script_ctx = { .sc_sid = 0 };
-  if (opt_flags == OPT_GLOBAL) {
-    script_ctx = opt->script_ctx;
-  } else {
-    // Scope is either OPT_LOCAL or a fallback mode was requested.
-    if (option_has_scope(opt_idx, kOptScopeBuf)) {
-      script_ctx = buf->b_p_script_ctx[opt->scope_idx[kOptScopeBuf]];
-    }
-    if (option_has_scope(opt_idx, kOptScopeWin)) {
-      script_ctx = win->w_p_script_ctx[opt->scope_idx[kOptScopeWin]];
-    }
-    if (opt_flags != OPT_LOCAL && script_ctx.sc_sid == 0) {
-      script_ctx = opt->script_ctx;
-    }
-  }
-
-  PUT_C(dict, "last_set_sid", INTEGER_OBJ(script_ctx.sc_sid));
-  PUT_C(dict, "last_set_linenr", INTEGER_OBJ(script_ctx.sc_lnum));
-  PUT_C(dict, "last_set_chan", INTEGER_OBJ((int64_t)script_ctx.sc_chan));
-
-  PUT_C(dict, "type", CSTR_AS_OBJ(optval_type_get_name((OptValType)rs_option_get_type(get_opt_idx(opt)))));
-  PUT_C(dict, "default", optval_as_object(opt->def_val));
-  PUT_C(dict, "allows_duplicates", BOOLEAN_OBJ(!(opt->flags & kOptFlagNoDup)));
-
-  return dict;
+  return rs_get_all_vimoptions(arena);
 }
 
 /// Apply EVENT_SYNTAX autocmds for the given buffer.

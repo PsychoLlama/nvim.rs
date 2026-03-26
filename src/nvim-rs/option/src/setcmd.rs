@@ -506,7 +506,7 @@ extern "C" {
     fn msg_putchar(c: c_int);
     fn msg_ext_set_kind(kind: *const c_char);
     fn gotocmdline(clr: c_int) -> c_int;
-    fn last_set_msg(sctx: ScriptContext);
+    fn last_set_msg(sctx: crate::storage::SctxT);
     fn emsg(s: *const c_char) -> c_int;
     fn trans_characters(buf: *mut c_char, bufsize: c_int);
     fn vim_snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
@@ -518,9 +518,11 @@ extern "C" {
     #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
-    fn nvim_get_option_script_ctx(opt_idx: c_int) -> ScriptContext;
-    fn nvim_get_win_p_script_ctx(win: *const std::ffi::c_void, idx: c_int) -> ScriptContext;
-    fn nvim_get_buf_p_script_ctx(buf: *const std::ffi::c_void, idx: c_int) -> ScriptContext;
+    fn nvim_get_option_script_ctx(opt_idx: c_int) -> crate::storage::SctxT;
+    fn nvim_get_win_p_script_ctx(win: *const std::ffi::c_void, idx: c_int)
+        -> crate::storage::SctxT;
+    fn nvim_get_buf_p_script_ctx(buf: *const std::ffi::c_void, idx: c_int)
+        -> crate::storage::SctxT;
     static mut IObuff: [c_char; 1025];
 
     // get_option_newval dependencies
@@ -583,15 +585,6 @@ const IOSIZE: usize = 1025;
 
 /// Error buffer length
 const ERR_BUFLEN: usize = 256;
-
-/// Script context structure (matches C's sctx_T)
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ScriptContext {
-    pub sc_sid: c_int,
-    pub sc_seq: c_int,
-    pub sc_lnum: i64,
-}
 
 /// Error messages
 mod errmsg {

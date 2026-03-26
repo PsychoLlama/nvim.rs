@@ -327,6 +327,34 @@ pub extern "C" fn rs_optval_is_string(o: OptVal) -> c_int {
 // Tests
 // =============================================================================
 
+// =============================================================================
+// SctxT: Rust mirror of C's sctx_T
+// =============================================================================
+
+/// Rust mirror of C `sctx_T` (24 bytes).
+///
+/// C definition (eval/typval_defs.h):
+///   typedef struct {
+///     scid_T sc_sid;     // int, offset 0
+///     int sc_seq;        // int, offset 4
+///     linenr_T sc_lnum;  // int32_t, offset 8
+///     // 4 bytes implicit padding for sc_chan alignment
+///     uint64_t sc_chan;  // offset 16
+///   } sctx_T;            // sizeof = 24
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SctxT {
+    /// Script ID (scid_T = int).
+    pub sc_sid: c_int,
+    /// Sourcing sequence number.
+    pub sc_seq: c_int,
+    /// Line number in script (linenr_T = int32_t).
+    pub sc_lnum: i32,
+    // 4 bytes implicit padding here (repr(C) aligns sc_chan to 8 bytes)
+    /// Channel ID (only used when sc_sid is SID_API_CLIENT).
+    pub sc_chan: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
