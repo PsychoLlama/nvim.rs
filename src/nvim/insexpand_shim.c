@@ -143,29 +143,6 @@ static char *ctrl_x_msgs[] = {
   N_(" Register completion (^N^P)"),
 };
 
-static char *ctrl_x_mode_names[] = {
-  "keyword",
-  "ctrl_x",
-  "scroll",
-  "whole_line",
-  "files",
-  "tags",
-  "path_patterns",
-  "path_defines",
-  "unknown",          // CTRL_X_FINISHED
-  "dictionary",
-  "thesaurus",
-  "cmdline",
-  "function",
-  "omni",
-  "spell",
-  NULL,               // CTRL_X_LOCAL_MSG only used in "ctrl_x_msgs"
-  "eval",
-  "cmdline",
-  NULL,               // CTRL_X_BUFNAME
-  "register",
-};
-
 /// Structure used to store one match for insert completion.
 typedef struct compl_S compl_T;
 struct compl_S {
@@ -1084,23 +1061,15 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type) { return merge
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
 
-void nvim_do_autocmd_completedone_impl(int c, int mode, char *word)
+void nvim_do_autocmd_completedone_with_strs(const char *word, const char *complete_type,
+                                            const char *reason)
 {
   save_v_event_T save_v_event;
   dict_T *v_event = get_v_event(&save_v_event);
-
-  mode = mode & ~CTRL_X_WANT_IDENT;
-  char *mode_str = NULL;
-  if (ctrl_x_mode_names[mode]) {
-    mode_str = ctrl_x_mode_names[mode];
-  }
-  tv_dict_add_str(v_event, S_LEN("complete_word"), word != NULL ? word : "");
-  tv_dict_add_str(v_event, S_LEN("complete_type"), mode_str != NULL ? mode_str : "");
-
-  tv_dict_add_str(v_event, S_LEN("reason"),
-                  (c == Ctrl_Y ? "accept" : (c == Ctrl_E ? "cancel" : "discard")));
+  tv_dict_add_str(v_event, S_LEN("complete_word"), word);
+  tv_dict_add_str(v_event, S_LEN("complete_type"), complete_type);
+  tv_dict_add_str(v_event, S_LEN("reason"), reason);
   tv_dict_set_keys_readonly(v_event);
-
   ins_apply_autocmds(EVENT_COMPLETEDONE);
   restore_v_event(v_event, &save_v_event);
 }

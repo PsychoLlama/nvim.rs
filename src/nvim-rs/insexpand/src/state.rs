@@ -254,7 +254,11 @@ extern "C" {
     fn nvim_get_curbuf_b_p_tsrfu_nonempty() -> c_int;
     // Compound accessors for complex functions
     // nvim_get_next_spell_completion_impl: deleted (Phase 13), inlined below
-    fn nvim_do_autocmd_completedone_impl(c: c_int, mode: c_int, word: *const c_char);
+    fn nvim_do_autocmd_completedone_with_strs(
+        word: *const c_char,
+        complete_type: *const c_char,
+        reason: *const c_char,
+    );
     // nvim_ins_compl_show_filename_impl: deleted (Phase 29), inlined below
     // Helpers for inlined nvim_get_next_spell_completion_impl
     fn expand_spelling(lnum: c_int, pat: *const c_char, matches: *mut *mut *mut c_char) -> c_int;
@@ -411,11 +415,36 @@ pub unsafe extern "C" fn rs_get_next_spell_completion(lnum: c_int) {
 
 /// Build v_event dict and fire EVENT_COMPLETEDONE autocmd.
 ///
+/// Resolves the mode name from CTRL_X_MODE_NAMES and the reason string
+/// from `c` (Ctrl_Y = "accept", Ctrl_E = "cancel", otherwise "discard"),
+/// then delegates dict-building and autocmd firing to C.
+///
 /// # Safety
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_autocmd_completedone(c: c_int, mode: c_int, word: *const c_char) {
-    nvim_do_autocmd_completedone_impl(c, mode, word);
+    const CTRL_X_WANT_IDENT: c_int = 0x100;
+    const CTRL_Y: c_int = 25;
+    const CTRL_E: c_int = 5;
+
+    #[allow(clippy::cast_sign_loss)]
+    let idx = (mode & !CTRL_X_WANT_IDENT) as usize;
+    let mode_name: *const c_char = CTRL_X_MODE_NAMES
+        .get(idx)
+        .and_then(|opt| *opt)
+        .map_or_else(|| c"".as_ptr(), |name| name.as_ptr().cast());
+
+    let reason: *const c_char = if c == CTRL_Y {
+        c"accept".as_ptr()
+    } else if c == CTRL_E {
+        c"cancel".as_ptr()
+    } else {
+        c"discard".as_ptr()
+    };
+
+    let word_str: *const c_char = if word.is_null() { c"".as_ptr() } else { word };
+
+    nvim_do_autocmd_completedone_with_strs(word_str, mode_name, reason);
 }
 
 /// Show the file name for the completion match (if any).
