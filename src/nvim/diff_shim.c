@@ -82,42 +82,30 @@ static int diff_flags = DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF
 
 static int diff_algorithm = XDF_INDENT_HEURISTIC;
 static int linematch_lines = 40;
-
 static TriState diff_a_works = kNone;  // kTrue/"diff -a" works, kFalse/doesn't, kNone/not checked
-
 enum { MAX_DIFF_ANCHORS = 20, };
-
-// used for diff input
 typedef struct {
   char *din_fname;   // used for external diff
   mmfile_t din_mmfile;  // used for internal diff
 } diffin_T;
-
-// used for diff result
 typedef struct {
   char *dout_fname;  // used for external diff
   garray_T dout_ga;     // used for internal diff
 } diffout_T;
-
-// used for recording hunks from xdiff
 typedef struct {
   linenr_T lnum_orig;
   int count_orig;
   linenr_T lnum_new;
   int count_new;
 } diffhunk_T;
-
 extern int rs_parse_diff_ed(const char *line, diffhunk_T *hunk);
 extern int rs_parse_diff_unified(const char *line, diffhunk_T *hunk);
-
-// two diff inputs and one result
 typedef struct {
   diffin_T dio_orig;      // original file input
   diffin_T dio_new;       // new file input
   diffout_T dio_diff;      // diff result
   int dio_internal;  // using internal diff
 } diffio_T;
-
 #include "diff_shim.c.generated.h"
 
 // Rust fold FFI declaration
