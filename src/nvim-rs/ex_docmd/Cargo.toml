@@ -6,6 +6,7 @@ description = "Ex command utilities for Neovim"
 
 [dependencies]
 nvim-normal = { path = "../normal" }
+nvim-ex-eval = { path = "../ex_eval" }
 
 [lib]
 crate-type = ["rlib"]

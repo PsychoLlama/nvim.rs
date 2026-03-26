@@ -94,6 +94,8 @@ void do_sleep(int64_t msec, bool hide_cursor);
 // Phase 6 (ex_docmd plan): C bodies deleted; Rust exports old names via #[no_mangle].
 void do_exmode(void);
 int do_cmdline_cmd(const char *cmd);
+// Phase 4 (do_cmdline plan): do_cmdline implemented in Rust (do_cmdline.rs).
+int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags);
 void filetype_plugin_enable(void);
 void filetype_maybe_enable(void);
 // Phase 2 (ex_docmd plan): C bodies renamed to nvim_docmd_*_impl; Rust exports old names.
