@@ -2477,6 +2477,181 @@ pub unsafe extern "C" fn rs_term_output_callback(s: *const i8, len: usize, user_
 // Phase 3: Migrate terminal_send_key and terminal_notify_theme
 // =============================================================================
 
+// =============================================================================
+// Phase 2: Migrate term_sb_push and term_sb_pop (scrollback callbacks)
+// =============================================================================
+
+extern "C" {
+    /// Neovim memory allocator (wraps malloc, never returns null).
+    fn xmalloc(size: usize) -> *mut c_void;
+    /// Neovim memory deallocator.
+    fn xfree(ptr: *mut c_void);
+
+    /// Accessor: add terminal to invalidated set without starting timer.
+    fn nvim_terminal_set_put(term: *mut c_void);
+
+    /// Return the byte size of a `ScrollbackLine` with `cols` cells.
+    fn nvim_scrollback_line_size(cols: usize) -> usize;
+    /// Get `cols` field from a `ScrollbackLine *`.
+    fn nvim_scrollback_line_cols(sbrow: *const c_void) -> usize;
+    /// Get pointer to cells array inside a `ScrollbackLine *` (const).
+    fn nvim_scrollback_line_cells(sbrow: *const c_void) -> *const c_void;
+    /// Get mutable pointer to cells array inside a `ScrollbackLine *`.
+    fn nvim_scrollback_line_cells_mut(sbrow: *mut c_void) -> *mut c_void;
+    /// Return the size of a single `VTermScreenCell`.
+    fn nvim_vterm_screen_cell_size() -> usize;
+    /// Zero-fill a `VTermScreenCell` at the given pointer (schar=0, width=1).
+    fn nvim_vterm_cell_zero(cell_ptr: *mut c_void);
+}
+
+/// `VTerm` scrollback push callback -- store a line going offscreen.
+///
+/// Replaces `term_sb_push` in `terminal_shim.c`.
+/// Called just before a line goes offscreen; stores it in the scrollback buffer.
+///
+/// # Safety
+/// - `cells` must be a valid pointer to `cols` `VTermScreenCell` structs.
+/// - `data` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_sb_push(
+    cols: c_int,
+    cells: *const c_void,
+    data: *mut c_void,
+) -> c_int {
+    let term = unsafe { TerminalHandle::from_ptr(data) };
+    if term.is_null() {
+        return 0;
+    }
+    let t = unsafe { term.as_mut() };
+
+    if t.sb_size == 0 {
+        return 0;
+    }
+
+    // cols >= 0 because it comes from vterm (number of columns)
+    #[allow(clippy::cast_sign_loss)]
+    let c = cols as usize;
+    let cell_size = unsafe { nvim_vterm_screen_cell_size() };
+    // sb_buffer is *mut *mut c_void (array of ScrollbackLine* pointers)
+    let sb_buf = t.sb_buffer;
+
+    let mut sbrow: *mut c_void = std::ptr::null_mut();
+
+    if t.sb_current == t.sb_size {
+        // Buffer is full. Recycle the last row if it has the right column count.
+        let last = unsafe { *sb_buf.add(t.sb_current - 1) };
+        if unsafe { nvim_scrollback_line_cols(last) } == c {
+            sbrow = last;
+        } else {
+            unsafe { xfree(last) };
+        }
+        t.sb_deleted += 1;
+
+        // Shift the buffer right by one to make room at the front.
+        // memmove(sb_buffer + 1, sb_buffer, sizeof(*sb_buffer) * (sb_current - 1))
+        unsafe {
+            std::ptr::copy(sb_buf, sb_buf.add(1), t.sb_current - 1);
+        }
+    } else if t.sb_current > 0 {
+        // Make room at the front.
+        // memmove(sb_buffer + 1, sb_buffer, sizeof(*sb_buffer) * sb_current)
+        unsafe {
+            std::ptr::copy(sb_buf, sb_buf.add(1), t.sb_current);
+        }
+    }
+
+    if sbrow.is_null() {
+        let row_size = unsafe { nvim_scrollback_line_size(c) };
+        sbrow = unsafe { xmalloc(row_size) };
+        // Write cols field (first usize in ScrollbackLine)
+        unsafe { sbrow.cast::<usize>().write(c) };
+    }
+
+    // sb_buffer[0] = sbrow
+    unsafe { *sb_buf = sbrow };
+
+    if t.sb_current < t.sb_size {
+        t.sb_current += 1;
+    }
+
+    // sb_pending is c_int; check against sb_size (usize)
+    #[allow(clippy::cast_sign_loss)]
+    if (t.sb_pending as usize) < t.sb_size {
+        t.sb_pending += 1;
+    }
+
+    // Copy cells into the row: memcpy(sbrow->cells, cells, cell_size * c)
+    let dest = unsafe { nvim_scrollback_line_cells_mut(sbrow) };
+    unsafe { std::ptr::copy_nonoverlapping(cells.cast::<u8>(), dest.cast::<u8>(), cell_size * c) };
+
+    unsafe { nvim_terminal_set_put(data) };
+
+    1
+}
+
+/// `VTerm` scrollback pop callback -- restore a line from the scrollback buffer.
+///
+/// Replaces `term_sb_pop` in `terminal_shim.c`.
+/// Called when the screen height increases and a previously-pushed line is restored.
+///
+/// # Safety
+/// - `cells` must be a valid pointer to `cols` `VTermScreenCell` structs.
+/// - `data` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_sb_pop(
+    cols: c_int,
+    cells: *mut c_void,
+    data: *mut c_void,
+) -> c_int {
+    let term = unsafe { TerminalHandle::from_ptr(data) };
+    if term.is_null() {
+        return 0;
+    }
+    let t = unsafe { term.as_mut() };
+
+    if t.sb_current == 0 {
+        return 0;
+    }
+
+    if t.sb_pending > 0 {
+        t.sb_pending -= 1;
+    }
+
+    let sb_buf = t.sb_buffer;
+    let sbrow = unsafe { *sb_buf };
+    t.sb_current -= 1;
+
+    // Shift buffer left: memmove(sb_buffer, sb_buffer + 1, sizeof(*) * sb_current)
+    unsafe { std::ptr::copy(sb_buf.add(1), sb_buf, t.sb_current) };
+
+    // cols >= 0 because it comes from vterm
+    #[allow(clippy::cast_sign_loss)]
+    let c = cols as usize;
+    let cell_size = unsafe { nvim_vterm_screen_cell_size() };
+    let sbrow_cols = unsafe { nvim_scrollback_line_cols(sbrow) };
+    let cols_to_copy = c.min(sbrow_cols);
+
+    // Copy stored cells to the output buffer
+    let src = unsafe { nvim_scrollback_line_cells(sbrow) };
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            src.cast::<u8>(),
+            cells.cast::<u8>(),
+            cell_size * cols_to_copy,
+        );
+    }
+
+    // Zero-fill any remaining columns
+    for col in cols_to_copy..c {
+        let cell_ptr = unsafe { cells.cast::<u8>().add(cell_size * col).cast::<c_void>() };
+        unsafe { nvim_vterm_cell_zero(cell_ptr) };
+    }
+
+    unsafe { xfree(sbrow) };
+
+    1
+}
+
 // K_ZERO = TERMCAP2KEY(KS_ZERO=255, KE_FILLER='X') = -(255 + ('X' << 8)) = -22783
 const K_ZERO: c_int = termcap2key(255, b'X' as c_int);
 // Ctrl-@ = ASCII NUL (0)

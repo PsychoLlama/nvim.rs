@@ -211,6 +211,9 @@ extern int rs_term_movecursor(VTermPos new_pos, VTermPos old_pos, int visible, v
 extern int rs_term_bell_cb(void *user);
 extern int rs_term_theme_cb(bool *dark, void *user);
 extern void rs_term_output_callback(const char *s, size_t len, void *user_data);
+// Rust scrollback callback implementations (Phase 2)
+extern int rs_term_sb_push(int cols, const VTermScreenCell *cells, void *data);
+extern int rs_term_sb_pop(int cols, VTermScreenCell *cells, void *data);
 // Rust key/theme implementations (Phase 3)
 extern void rs_terminal_send_key_impl(void *term, int c);
 extern void rs_terminal_notify_theme_impl(void *term, int dark);
@@ -222,8 +225,8 @@ static VTermScreenCallbacks vterm_screen_callbacks = {
   .settermprop = term_settermprop,
   .bell = rs_term_bell_cb,
   .theme = rs_term_theme_cb,
-  .sb_pushline = term_sb_push,  // Called before a line goes offscreen.
-  .sb_popline = term_sb_pop,
+  .sb_pushline = rs_term_sb_push,  // Called before a line goes offscreen.
+  .sb_popline = rs_term_sb_pop,
 };
 
 static VTermSelectionCallbacks vterm_selection_callbacks = {
@@ -1284,97 +1287,6 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
   return 1;
 }
 
-/// Scrollback push handler: called just before a line goes offscreen (and libvterm will forget it),
-/// giving us a chance to store it.
-///
-/// Code adapted from pangoterm.
-static int term_sb_push(int cols, const VTermScreenCell *cells, void *data)
-{
-  Terminal *term = data;
-
-  if (!term->sb_size) {
-    return 0;
-  }
-
-  // copy vterm cells into sb_buffer
-  size_t c = (size_t)cols;
-  ScrollbackLine *sbrow = NULL;
-  if (term->sb_current == term->sb_size) {
-    if (term->sb_buffer[term->sb_current - 1]->cols == c) {
-      // Recycle old row if it's the right size
-      sbrow = term->sb_buffer[term->sb_current - 1];
-    } else {
-      xfree(term->sb_buffer[term->sb_current - 1]);
-    }
-    term->sb_deleted++;
-
-    // Make room at the start by shifting to the right.
-    memmove(term->sb_buffer + 1, term->sb_buffer,
-            sizeof(term->sb_buffer[0]) * (term->sb_current - 1));
-  } else if (term->sb_current > 0) {
-    // Make room at the start by shifting to the right.
-    memmove(term->sb_buffer + 1, term->sb_buffer,
-            sizeof(term->sb_buffer[0]) * term->sb_current);
-  }
-
-  if (!sbrow) {
-    sbrow = xmalloc(sizeof(ScrollbackLine) + c * sizeof(sbrow->cells[0]));
-    sbrow->cols = c;
-  }
-
-  // New row is added at the start of the storage buffer.
-  term->sb_buffer[0] = sbrow;
-  if (term->sb_current < term->sb_size) {
-    term->sb_current++;
-  }
-
-  if (term->sb_pending < (int)term->sb_size) {
-    term->sb_pending++;
-  }
-
-  memcpy(sbrow->cells, cells, sizeof(cells[0]) * c);
-  set_put(ptr_t, &invalidated_terminals, term);
-
-  return 1;
-}
-
-/// Scrollback pop handler (from pangoterm).
-///
-/// @param cols
-/// @param cells  VTerm state to update.
-/// @param data   Terminal
-static int term_sb_pop(int cols, VTermScreenCell *cells, void *data)
-{
-  Terminal *term = data;
-
-  if (!term->sb_current) {
-    return 0;
-  }
-
-  if (term->sb_pending) {
-    term->sb_pending--;
-  }
-
-  ScrollbackLine *sbrow = term->sb_buffer[0];
-  term->sb_current--;
-  // Forget the "popped" row by shifting the rest onto it.
-  memmove(term->sb_buffer, term->sb_buffer + 1,
-          sizeof(term->sb_buffer[0]) * (term->sb_current));
-
-  size_t cols_to_copy = MIN((size_t)cols, sbrow->cols);
-
-  // copy to vterm state
-  memcpy(cells, sbrow->cells, sizeof(cells[0]) * cols_to_copy);
-  for (size_t col = cols_to_copy; col < (size_t)cols; col++) {
-    cells[col].schar = 0;
-    cells[col].width = 1;
-  }
-
-  xfree(sbrow);
-  set_put(ptr_t, &invalidated_terminals, term);
-
-  return 1;
-}
 
 static void term_clipboard_set(void **argv)
 {
@@ -1923,6 +1835,88 @@ void nvim_terminal_invalidate(void *term, int start_row, int end_row)
 void nvim_terminal_send(void *term, const char *data, size_t size)
 {
   terminal_send((Terminal *)term, data, size);
+}
+
+/// Accessor: add terminal to invalidated set (without starting timer).
+/// Used by Rust scrollback callbacks.
+void nvim_terminal_set_put(void *term)
+{
+  set_put(ptr_t, &invalidated_terminals, (Terminal *)term);
+}
+
+/// Accessor: concat data into a StringBuilder (wraps `kv_concat_len`).
+/// `sb` is a `StringBuilder *` pointer.
+void nvim_term_sb_concat_len(void *sb, const char *data, size_t len)
+{
+  kv_concat_len(*(StringBuilder *)sb, data, len);
+}
+
+/// Accessor: get size of a StringBuilder (wraps `kv_size`).
+/// `sb` is a `StringBuilder *` pointer.
+size_t nvim_term_sb_size(const void *sb)
+{
+  return kv_size(*(const StringBuilder *)sb);
+}
+
+/// Accessor: get items pointer from a StringBuilder.
+/// `sb` is a `StringBuilder *` pointer.
+char *nvim_term_sb_items(void *sb)
+{
+  return ((StringBuilder *)sb)->items;
+}
+
+/// Accessor: reset size of a StringBuilder to 0 (wraps `kv_size(v) = 0`).
+/// `sb` is a `StringBuilder *` pointer.
+void nvim_term_sb_reset(void *sb)
+{
+  ((StringBuilder *)sb)->size = 0;
+}
+
+/// Accessor: push a char onto a StringBuilder (wraps `kv_push`).
+/// `sb` is a `StringBuilder *` pointer.
+void nvim_term_sb_push_char(void *sb, char c)
+{
+  kv_push(*(StringBuilder *)sb, c);
+}
+
+/// Return the size of a ScrollbackLine with `cols` cells.
+/// Used by Rust to allocate scrollback rows.
+size_t nvim_scrollback_line_size(size_t cols)
+{
+  return sizeof(ScrollbackLine) + cols * sizeof(VTermScreenCell);
+}
+
+/// Get cols from a ScrollbackLine (the first field).
+size_t nvim_scrollback_line_cols(const void *sbrow)
+{
+  return ((const ScrollbackLine *)sbrow)->cols;
+}
+
+/// Get the cells pointer from a ScrollbackLine.
+const void *nvim_scrollback_line_cells(const void *sbrow)
+{
+  return ((const ScrollbackLine *)sbrow)->cells;
+}
+
+/// Get mutable cells pointer from a ScrollbackLine.
+void *nvim_scrollback_line_cells_mut(void *sbrow)
+{
+  return ((ScrollbackLine *)sbrow)->cells;
+}
+
+/// Return the size of a single VTermScreenCell (for Rust allocations).
+size_t nvim_vterm_screen_cell_size(void)
+{
+  return sizeof(VTermScreenCell);
+}
+
+/// Zero-fill a single VTermScreenCell at the given pointer.
+/// Used by term_sb_pop to fill cells beyond the scrollback row width.
+void nvim_vterm_cell_zero(void *cell_ptr)
+{
+  VTermScreenCell *c = (VTermScreenCell *)cell_ptr;
+  c->schar = 0;
+  c->width = 1;
 }
 
 // vim: foldmethod=marker
