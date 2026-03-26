@@ -211,6 +211,9 @@ extern int rs_term_movecursor(VTermPos new_pos, VTermPos old_pos, int visible, v
 extern int rs_term_bell_cb(void *user);
 extern int rs_term_theme_cb(bool *dark, void *user);
 extern void rs_term_output_callback(const char *s, size_t len, void *user_data);
+// Rust key/theme implementations (Phase 3)
+extern void rs_terminal_send_key_impl(void *term, int c);
+extern void rs_terminal_notify_theme_impl(void *term, int dark);
 
 static VTermScreenCallbacks vterm_screen_callbacks = {
   .damage = rs_term_damage,
@@ -1089,18 +1092,7 @@ void terminal_paste(int count, String *y_array, size_t y_size)
 
 static void terminal_send_key(Terminal *term, int c)
 {
-  // Convert K_ZERO back to ASCII NUL (Ctrl-@)
-  if (c == K_ZERO) {
-    c = Ctrl_AT;
-  }
-
-  VTermKeyResult result = rs_terminal_convert_key(c, mod_mask);
-
-  if (result.key != VTERM_KEY_NONE) {
-    rs_vterm_keyboard_key(term->vt, (VTermKey)result.key, (VTermModifier)result.modifiers);
-  } else if (!IS_SPECIAL(c)) {
-    rs_vterm_keyboard_unichar(term->vt, (uint32_t)c, (VTermModifier)result.modifiers);
-  }
+  rs_terminal_send_key_impl(term, c);
 }
 
 void terminal_receive(Terminal *term, const char *data, size_t len)
@@ -1202,15 +1194,7 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
 void terminal_notify_theme(Terminal *term, bool dark)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (!term->theme_updates) {
-    return;
-  }
-
-  char buf[10];
-  ssize_t ret = snprintf(buf, sizeof(buf), "\x1b[997;%cn", dark ? '1' : '2');
-  assert(ret > 0);
-  assert((size_t)ret <= sizeof(buf));
-  terminal_send(term, buf, (size_t)ret);
+  rs_terminal_notify_theme_impl(term, (int)dark);
 }
 
 // }}}

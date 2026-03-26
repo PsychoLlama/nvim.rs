@@ -2473,6 +2473,77 @@ pub unsafe extern "C" fn rs_term_output_callback(s: *const i8, len: usize, user_
     unsafe { nvim_terminal_send(user_data, s, len) };
 }
 
+// =============================================================================
+// Phase 3: Migrate terminal_send_key and terminal_notify_theme
+// =============================================================================
+
+// K_ZERO = TERMCAP2KEY(KS_ZERO=255, KE_FILLER='X') = -(255 + ('X' << 8)) = -22783
+const K_ZERO: c_int = termcap2key(255, b'X' as c_int);
+// Ctrl-@ = ASCII NUL (0)
+const CTRL_AT: c_int = 0;
+
+extern "C" {
+    /// Current key modifier mask (from `globals.h`).
+    static mod_mask: c_int;
+}
+
+/// Send a key to a terminal, handling special key codes.
+///
+/// Replaces `terminal_send_key` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_send_key_impl(term: TerminalHandle, c: c_int) {
+    if term.is_null() {
+        return;
+    }
+    let vt = unsafe { term.as_ref().vt };
+    if vt.is_null() {
+        return;
+    }
+
+    // Convert K_ZERO back to ASCII NUL (Ctrl-@)
+    let c = if c == K_ZERO { CTRL_AT } else { c };
+
+    let mods = unsafe { mod_mask };
+    let result = rs_terminal_convert_key(c, mods);
+
+    if result.key != VTERM_KEY_NONE {
+        unsafe { rs_vterm_keyboard_key(vt, result.key, result.modifiers) };
+    } else if c >= 0 {
+        // IS_SPECIAL(c) is (c < 0); only send non-special chars as unichar
+        // c >= 0 is checked above, so this cast is safe
+        #[allow(clippy::cast_sign_loss)]
+        unsafe {
+            rs_vterm_keyboard_unichar(vt, c as u32, result.modifiers);
+        };
+    }
+}
+
+/// Send a theme notification to a terminal (OSC 997 sequence).
+///
+/// Replaces `terminal_notify_theme` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_notify_theme_impl(term: TerminalHandle, dark: c_int) {
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if !t.theme_updates {
+        return;
+    }
+    // Format: ESC [ 997 ; {1|2} n  (max 10 bytes including NUL)
+    let ch = if dark != 0 { b'1' } else { b'2' };
+    // The sequence is always exactly 9 bytes: \x1b[997;Xn
+    let buf: [u8; 9] = [0x1b, b'[', b'9', b'9', b'7', b';', ch, b'n', 0];
+    let len = 8usize; // without the NUL terminator
+    unsafe { nvim_terminal_send(term.as_ptr(), buf.as_ptr().cast::<i8>(), len) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
