@@ -68,21 +68,7 @@ extern void nvim_win_update(win_T *wp);
 
 #include "drawscreen_shim.c.generated.h"
 
-// showmode helpers
-
-void nvim_drawscreen_msg_grid_validate(void) { msg_grid_validate(); }
-void nvim_drawscreen_msg_check_for_delay(void) { msg_check_for_delay(false); }
-/// Call msg_clr_cmdline() (already declared as nvim_msg_clr_cmdline_wrap in
-/// insexpand_shim.c; provide a second alias here for use by drawscreen).
-void nvim_drawscreen_msg_clr_cmdline(void) { msg_clr_cmdline(); }
-int nvim_drawscreen_get_keymap_str(void) { return get_keymap_str(curwin, " (%s)", NameBuff, MAXPATHL); }
-const char *nvim_drawscreen_namebuff_ptr(void) { return NameBuff; }
-int nvim_win_get_w_p_arab(win_T *wp) { return wp ? (int)wp->w_p_arab : 0; }
-
 // default_grid_alloc, screenclear, screen_resize batch helpers
-
-int nvim_default_grid_get_rows(void) { return default_grid.rows; }
-int nvim_default_grid_get_cols(void) { return default_grid.cols; }
 
 /// Return 1 if default_grid needs reallocation (size mismatch or NULL), else 0.
 /// Also returns 0 if Rows==0 or Columns==0.

@@ -22,6 +22,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions follow standard C calling conventions
 
 use std::ffi::{c_char, c_int, c_void};
+use std::ptr::{addr_of, addr_of_mut};
 
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
@@ -2578,11 +2579,11 @@ extern "C" {
     static mut p_ch: i64;
     // ui_has is already declared in the Phase 1 extern block above.
     static mut need_wait_return: bool;
-    fn nvim_drawscreen_msg_check_for_delay();
+    fn msg_check_for_delay(check_msg_scroll: c_int);
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_set_clear_cmdline(val: bool);
     static mut cmdline_row: c_int;
-    fn nvim_drawscreen_msg_clr_cmdline();
+    fn msg_clr_cmdline();
     static mut msg_no_more: bool;
     fn nvim_set_msg_no_more(val: c_int);
     static mut lines_left: c_int;
@@ -2599,20 +2600,20 @@ extern "C" {
     fn nvim_docmd_curbuf_has_terminal() -> c_int;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_get_p_paste() -> c_int;
-    fn nvim_drawscreen_get_keymap_str() -> c_int;
-    fn nvim_drawscreen_namebuff_ptr() -> *const c_char;
+    fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
+    static mut NameBuff: [c_char; 4096];
     fn nvim_get_mode_displayed() -> bool;
     fn nvim_set_mode_displayed(val: bool);
     static mut msg_didout: bool;
     fn redraw_ruler();
-    fn nvim_drawscreen_msg_grid_validate();
+    fn msg_grid_validate();
     /// edit_submode_extra global (from globals.h).
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
     /// edit_submode_extra pointer (from insexpand_shim.c).
     // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
-    /// w_p_arab window option accessor.
-    fn nvim_win_get_w_p_arab(wp: WinHandle) -> c_int;
+    /// w_p_arab window option accessor (from window crate).
+    fn nvim_win_get_p_arab(wp: WinHandle) -> c_int;
     /// Clear the showcmd area.
     fn rs_clear_showcmd();
 }
@@ -2703,10 +2704,16 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             }
         }
         if (state & MODE_LANGMAP) != 0 {
-            if nvim_win_get_w_p_arab(nvim_get_curwin()) != 0 {
+            if nvim_win_get_p_arab(nvim_get_curwin()) != 0 {
                 msg_puts_hl(c" Arabic".as_ptr(), hl_id, false);
-            } else if nvim_drawscreen_get_keymap_str() > 0 {
-                msg_puts_hl(nvim_drawscreen_namebuff_ptr(), hl_id, false);
+            } else if get_keymap_str(
+                nvim_get_curwin(),
+                c" (%s)".as_ptr(),
+                addr_of_mut!(NameBuff).cast::<c_char>(),
+                4096,
+            ) > 0
+            {
+                msg_puts_hl(addr_of!(NameBuff).cast::<c_char>(), hl_id, false);
             }
         }
         if (state & MODE_INSERT) != 0 && nvim_get_p_paste() != 0 {
@@ -2744,7 +2751,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     let mut length: c_int = 0;
 
     msg_ext_ui_flush();
-    nvim_drawscreen_msg_grid_validate();
+    msg_grid_validate();
 
     let state = State;
     let do_mode = (p_smd != 0 && msg_silent == 0)
@@ -2761,11 +2768,11 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         }
 
         let nwr_save = need_wait_return;
-        nvim_drawscreen_msg_check_for_delay();
+        msg_check_for_delay(0);
 
         let mut need_clear = nvim_get_clear_cmdline();
         if nvim_get_clear_cmdline() && cmdline_row < Rows - 1 {
-            nvim_drawscreen_msg_clr_cmdline();
+            msg_clr_cmdline();
         }
 
         msg_pos_mode();
@@ -2796,7 +2803,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         lines_left = save_lines_left;
         need_wait_return = nwr_save;
     } else if nvim_get_clear_cmdline() && msg_silent == 0 {
-        nvim_drawscreen_msg_clr_cmdline();
+        msg_clr_cmdline();
     } else if redraw_mode != 0 {
         msg_pos_mode();
         msg_clr_eos();
