@@ -359,7 +359,6 @@ int nvim_diff_u_save(linenr_T top, linenr_T bot) { return u_save(top, bot); }
 int nvim_diff_ml_delete(linenr_T lnum) { return ml_delete(lnum); }
 int nvim_diff_ml_append(linenr_T lnum, const char *line, int len, bool newfile) { return ml_append(lnum, (char *)line, len, newfile); }
 bool nvim_diff_buf_is_empty_curbuf(void) { return buf_is_empty(curbuf); }
-linenr_T nvim_diff_curbuf_ml_line_count_direct(void) { return curbuf->b_ml.ml_line_count; }
 void nvim_diff_mark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after) { mark_adjust(line1, line2, amount, amount_after, kExtmarkNOOP); }
 void nvim_diff_extmark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after) { extmark_adjust(curbuf, line1, line2, amount, amount_after, kExtmarkUndo); }
 void nvim_diff_changed_lines(linenr_T lnum, int col, linenr_T lnum_end, linenr_T xtra) { changed_lines(curbuf, lnum, col, lnum_end, xtra, true); }
@@ -411,6 +410,4 @@ int nvim_diff_hlf_chd(void) { return (int)HLF_CHD; }
 int nvim_diff_hlf_txd(void) { return (int)HLF_TXD; }
 int nvim_diff_hlf_txa(void) { return (int)HLF_TXA; }
 diffline_change_T *nvim_diff_diffline_get_change(diffline_T *dl, int i) { if (!dl || i < 0 || i >= dl->num_changes) { return NULL; } return &dl->changes[i]; }
-colnr_T nvim_diff_change_dc_start(diffline_change_T *dc, int idx) { if (!dc || idx < 0 || idx >= DB_COUNT) { return 0; } return dc->dc_start[idx]; }
-colnr_T nvim_diff_change_dc_end(diffline_change_T *dc, int idx) { if (!dc || idx < 0 || idx >= DB_COUNT) { return 0; } return dc->dc_end[idx]; }
 

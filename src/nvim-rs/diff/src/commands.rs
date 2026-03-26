@@ -69,7 +69,6 @@ extern "C" {
     fn nvim_diff_ml_delete(lnum: LinenrT) -> c_int;
     fn nvim_diff_ml_append(lnum: LinenrT, line: *const c_char, len: c_int, newfile: bool) -> c_int;
     fn nvim_diff_buf_is_empty_curbuf() -> bool;
-    fn nvim_diff_curbuf_ml_line_count_direct() -> LinenrT;
     fn nvim_diff_mark_adjust(
         line1: LinenrT,
         line2: LinenrT,
@@ -972,7 +971,7 @@ pub unsafe extern "C" fn rs_diffgetput(
             // Delete lines from target buffer.
             for _i in 0..count {
                 // Remember deleting the last line of the buffer.
-                buf_empty = nvim_diff_curbuf_ml_line_count_direct() == 1;
+                buf_empty = nvim_diff_curbuf_ml_line_count() == 1;
                 if nvim_diff_ml_delete(lnum) == OK {
                     added -= 1;
                 }
@@ -996,7 +995,7 @@ pub unsafe extern "C" fn rs_diffgetput(
                 nvim_diff_ml_append(lnum + i - 1, p, 0, false);
                 nvim_diff_xfree(p.cast());
                 added += 1;
-                if buf_empty && nvim_diff_curbuf_ml_line_count_direct() == 2 {
+                if buf_empty && nvim_diff_curbuf_ml_line_count() == 2 {
                     // Added the first line into an empty buffer; delete dummy line.
                     buf_empty = false;
                     nvim_diff_ml_delete(2);

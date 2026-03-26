@@ -46,8 +46,8 @@ extern "C" {
     fn nvim_diff_hlf_txd() -> c_int;
     fn nvim_diff_hlf_txa() -> c_int;
     fn nvim_diff_diffline_get_change(dl: *mut c_void, i: c_int) -> *mut c_void;
-    fn nvim_diff_change_dc_start(dc: *mut c_void, idx: c_int) -> c_int;
-    fn nvim_diff_change_dc_end(dc: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_diffchange_get_start(dc: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_diffchange_get_end(dc: *mut c_void, idx: c_int) -> c_int;
     fn rs_diff_check_with_linestatus(wp: WinHandle, lnum: LinenrT, linestatus: *mut c_int)
         -> c_int;
     fn rs_diff_find_change(wp: WinHandle, lnum: LinenrT, diffline: *mut c_void) -> bool;
@@ -566,8 +566,8 @@ pub unsafe extern "C" fn rs_f_diff_hl_id(
                         let bufidx = diffline.bufidx;
                         let change0 = nvim_diff_diffline_get_change(diffline_ptr, 0);
                         if !change0.is_null() {
-                            HLID_CHANGE_START = nvim_diff_change_dc_start(change0, bufidx);
-                            HLID_CHANGE_END = nvim_diff_change_dc_end(change0, bufidx);
+                            HLID_CHANGE_START = nvim_diffchange_get_start(change0, bufidx);
+                            HLID_CHANGE_END = nvim_diffchange_get_end(change0, bufidx);
                         }
                     }
                 }
