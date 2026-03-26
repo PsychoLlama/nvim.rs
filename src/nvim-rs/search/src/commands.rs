@@ -3,6 +3,7 @@
 //! This module provides functions for search commands like character search
 //! (f/F/t/T), line search, and related operations.
 
+use nvim_normal::types::{CmdargT, OpargT};
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::char_search_state;
@@ -12,14 +13,7 @@ use crate::char_search_state;
 // =============================================================================
 
 extern "C" {
-    // Phase 5: searchc() accessors
-    fn nvim_cap_get_nchar(cap: *const c_void) -> c_int;
-    fn nvim_cap_get_arg(cap: *const c_void) -> c_int;
-    fn nvim_cap_get_count1(cap: *const c_void) -> c_int;
-    fn nvim_cap_get_nchar_len(cap: *const c_void) -> c_int;
     fn nvim_cap_get_nchar_composing_ptr(cap: *const c_void) -> *const c_char;
-    fn nvim_cap_get_oap(cap: *const c_void) -> *mut c_void;
-    fn nvim_oap_set_inclusive(oap: *mut c_void, val: bool);
     fn nvim_get_keystuffed() -> c_int;
     fn nvim_get_cursor_line_ptr() -> *const c_char;
     fn nvim_get_cursor_line_len() -> c_int;
@@ -519,9 +513,9 @@ const FAIL: c_int = 0;
 /// `cap` must be a valid, non-null pointer to a `cmdarg_T`.
 #[unsafe(export_name = "searchc")]
 pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int {
-    let mut c = nvim_cap_get_nchar(cap);
-    let mut dir = nvim_cap_get_arg(cap);
-    let mut count = nvim_cap_get_count1(cap);
+    let mut c = (*cap.cast::<CmdargT>()).nchar;
+    let mut dir = (*cap.cast::<CmdargT>()).arg;
+    let mut count = (*cap.cast::<CmdargT>()).count1;
     let mut t_cmd = t_cmd_arg;
     let mut stop = true;
 
@@ -529,7 +523,7 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
         // Normal search: remember args for repeat
         if nvim_get_keystuffed() == 0 {
             // Don't remember when redoing
-            let nchar_len = nvim_cap_get_nchar_len(cap);
+            let nchar_len = (*cap.cast::<CmdargT>()).nchar_len;
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(cap);
             char_search_state::searchc_save_lastc_state(c, nchar_len, composing_ptr);
             set_csearch_direction(dir);
@@ -554,8 +548,8 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
     }
 
     // Set oap->inclusive
-    let oap = nvim_cap_get_oap(cap);
-    nvim_oap_set_inclusive(oap, dir != DIRECTION_BACKWARD);
+    let oap = (*cap.cast::<CmdargT>()).oap;
+    (*oap.cast::<OpargT>()).inclusive = dir != DIRECTION_BACKWARD;
 
     let p = nvim_get_cursor_line_ptr();
     let mut col = nvim_get_curwin_cursor_col();

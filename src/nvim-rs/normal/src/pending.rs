@@ -14,13 +14,13 @@
 
 use std::ffi::c_int;
 
-use crate::types::CmdargT;
+use crate::types::{CmdargT, OpargT};
 
-/// Opaque handle to command arguments (`cmdarg_T*`).
-pub type CapHandle = *mut std::ffi::c_void;
+/// Typed handle to command arguments (`cmdarg_T*`).
+pub type CapHandle = *mut CmdargT;
 
-/// Opaque handle to operator arguments (`oparg_T*`).
-pub type OapHandle = *mut std::ffi::c_void;
+/// Typed handle to operator arguments (`oparg_T*`).
+pub type OapHandle = *mut OpargT;
 
 // =============================================================================
 // External C Functions
@@ -206,15 +206,15 @@ pub unsafe fn get_pending_state(oap: OapHandle) -> PendingState {
         return PendingState::new();
     }
 
-    let op_type = nvim_oap_get_op_type_ptr(oap);
+    let op_type = (*oap).op_type;
     let op_pending = op_type != op_types::OP_NOP;
 
     PendingState {
         op_pending,
         op_type,
-        motion_type: nvim_oap_get_motion_type(oap),
-        inclusive: nvim_oap_get_inclusive(oap),
-        motion_force: nvim_oap_get_motion_force(oap),
+        motion_type: (*oap).motion_type,
+        inclusive: (*oap).inclusive,
+        motion_force: (*oap).motion_force,
         op_count: 0, // Would need cap to get this
         total_count: 1,
     }
@@ -231,11 +231,11 @@ pub unsafe fn get_pending_state_from_cap(cap: CapHandle) -> PendingState {
         return PendingState::new();
     }
 
-    let oap = nvim_cap_get_oap(cap);
+    let oap = (*cap).oap;
     let mut state = get_pending_state(oap);
 
     state.op_count = (*cap.cast::<CmdargT>()).opcount;
-    let count1 = nvim_cap_get_count1(cap);
+    let count1 = (*cap).count1;
     state.total_count = if state.op_count > 0 {
         state.op_count * count1
     } else {
@@ -385,7 +385,7 @@ pub unsafe extern "C" fn rs_is_op_pending(oap: OapHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    c_int::from(nvim_oap_get_op_type_ptr(oap) != op_types::OP_NOP)
+    c_int::from((*oap).op_type != op_types::OP_NOP)
 }
 
 /// Get pending operator type.
@@ -394,7 +394,7 @@ pub unsafe extern "C" fn rs_get_pending_op_type(oap: OapHandle) -> c_int {
     if oap.is_null() {
         return op_types::OP_NOP;
     }
-    nvim_oap_get_op_type_ptr(oap)
+    (*oap).op_type
 }
 
 /// Check if delete is pending.
@@ -403,7 +403,7 @@ pub unsafe extern "C" fn rs_delete_pending(oap: OapHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    c_int::from(nvim_oap_get_op_type_ptr(oap) == op_types::OP_DELETE)
+    c_int::from((*oap).op_type == op_types::OP_DELETE)
 }
 
 /// Check if change is pending.
@@ -412,7 +412,7 @@ pub unsafe extern "C" fn rs_change_pending(oap: OapHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    c_int::from(nvim_oap_get_op_type_ptr(oap) == op_types::OP_CHANGE)
+    c_int::from((*oap).op_type == op_types::OP_CHANGE)
 }
 
 /// Check if yank is pending.
@@ -421,7 +421,7 @@ pub unsafe extern "C" fn rs_yank_pending(oap: OapHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    c_int::from(nvim_oap_get_op_type_ptr(oap) == op_types::OP_YANK)
+    c_int::from((*oap).op_type == op_types::OP_YANK)
 }
 
 /// Apply motion force to get effective motion type.

@@ -4,6 +4,7 @@
 //! The DPO statics (dpo_redo_VIsual, dpo_include_line_break, dpo_saved_lbr,
 //! dpo_saved_old_cursor) are moved to Rust as static mut values.
 
+use nvim_normal::types::{CmdargT, OpargT};
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -138,61 +139,17 @@ extern "C" {
     fn nvim_get_cursor_coladd() -> c_int;
     fn nvim_set_cursor_pos(lnum: c_int, col: c_int, coladd: c_int);
 
-    // oap accessors
-    fn nvim_cap_get_oap(cap: *mut c_void) -> *mut c_void;
-    fn nvim_cap_get_cmdchar(cap: *mut c_void) -> c_int;
-    fn nvim_cap_get_nchar(cap: *mut c_void) -> c_int;
-    fn nvim_cap_get_count0(cap: *mut c_void) -> c_int;
-    fn nvim_cap_get_count1(cap: *mut c_void) -> c_int;
-    fn nvim_cap_set_count0(cap: *mut c_void, val: c_int);
-    fn nvim_cap_set_count1(cap: *mut c_void, val: c_int);
-    fn nvim_cap_get_arg(cap: *mut c_void) -> c_int;
-    fn nvim_cap_get_retval(cap: *mut c_void) -> c_int;
-    fn nvim_cap_set_retval(cap: *mut c_void, val: c_int);
-    fn nvim_cap_get_searchbuf(cap: *mut c_void) -> *const c_char;
-
-    fn nvim_oap_get_op_type_ptr(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_regname_ptr(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_motion_type(oap: *const c_void) -> c_int;
-    fn nvim_oap_set_motion_type(oap: *mut c_void, val: c_int);
-    fn nvim_oap_get_motion_force(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_inclusive(oap: *const c_void) -> bool;
-    fn nvim_oap_set_inclusive(oap: *mut c_void, val: c_int);
-    fn nvim_oap_get_is_visual(oap: *const c_void) -> c_int;
-    fn nvim_oap_set_is_VIsual(oap: *mut c_void, val: bool);
-    fn nvim_oap_get_line_count(oap: *const c_void) -> c_int;
-    fn nvim_oap_set_line_count(oap: *mut c_void, val: c_int);
-    fn nvim_oap_get_empty(oap: *const c_void) -> c_int;
-    fn nvim_oap_set_empty(oap: *mut c_void, val: c_int);
-    fn nvim_oap_get_start_lnum(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_start_col(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_start_coladd(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_end_lnum(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_end_col(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_end_coladd(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_start_vcol(oap: *const c_void) -> c_int;
-    fn nvim_oap_get_end_vcol(oap: *const c_void) -> c_int;
-    fn nvim_oap_set_end_pos(oap: *mut c_void, lnum: c_int, col: c_int, coladd: c_int);
-    fn nvim_oap_set_start_col(oap: *mut c_void, val: c_int);
-    fn nvim_oap_set_end_lnum(oap: *mut c_void, val: c_int);
-    fn nvim_oap_set_end_col(oap: *mut c_void, val: c_int);
-    fn nvim_oap_set_end_coladd(oap: *mut c_void, val: c_int);
-    fn nvim_oap_set_start_vcol(oap: *mut c_void, val: c_int);
-    fn nvim_oap_set_end_vcol(oap: *mut c_void, val: c_int);
-    fn nvim_oap_set_end_adjusted(oap: *mut c_void, val: bool);
-    fn nvim_oap_get_end_adjusted(oap: *mut c_void) -> bool;
-    fn nvim_oap_set_excl_tr_ws(oap: *mut c_void, val: bool);
-    fn nvim_oap_set_start_from_cursor(oap: *mut c_void);
-    fn nvim_oap_set_end_from_cursor(oap: *mut c_void);
-    fn nvim_oap_set_start_from_VIsual(oap: *mut c_void);
-    fn nvim_oap_start_zero_col_if_linewise(oap: *mut c_void);
-    fn nvim_VIsual_set_from_oap_start(oap: *mut c_void);
-    fn nvim_oap_end_is_NUL(oap: *mut c_void) -> bool;
-    fn nvim_gchar_pos_oap_end(oap: *mut c_void) -> c_int;
-    fn nvim_equalpos_oap(oap: *mut c_void) -> bool;
-    fn nvim_utfc_ptr2len_oap_end(oap: *mut c_void) -> c_int;
-    fn nvim_lt_oap_start_cursor(oap: *mut c_void) -> bool;
-    fn nvim_cursor_set_oap_start(oap: *mut c_void);
+    fn nvim_oap_set_start_from_cursor(oap: *mut OpargT);
+    fn nvim_oap_set_end_from_cursor(oap: *mut OpargT);
+    fn nvim_oap_set_start_from_VIsual(oap: *mut OpargT);
+    fn nvim_oap_start_zero_col_if_linewise(oap: *mut OpargT);
+    fn nvim_VIsual_set_from_oap_start(oap: *mut OpargT);
+    fn nvim_oap_end_is_NUL(oap: *mut OpargT) -> bool;
+    fn nvim_gchar_pos_oap_end(oap: *mut OpargT) -> c_int;
+    fn nvim_equalpos_oap(oap: *mut OpargT) -> bool;
+    fn nvim_utfc_ptr2len_oap_end(oap: *mut OpargT) -> c_int;
+    fn nvim_lt_oap_start_cursor(oap: *mut OpargT) -> bool;
+    fn nvim_cursor_set_oap_start(oap: *mut OpargT);
 
     // VIsual save/restore
     fn nvim_dpo_save_visual_state();
@@ -206,19 +163,19 @@ extern "C" {
     fn nvim_set_resel_VIsual_line_count(val: c_int);
 
     // fold / vcol
-    fn nvim_hasFolding_oap_start_up(oap: *mut c_void) -> bool;
+    fn nvim_hasFolding_oap_start_up(oap: *mut OpargT) -> bool;
     fn nvim_hasFolding_cursor_end_of_fold() -> bool;
     fn nvim_hasFolding_cursor_start_of_fold() -> bool;
-    fn nvim_hasFolding_oap_start_down(oap: *mut c_void) -> bool;
-    fn nvim_check_pos_oap_end(oap: *mut c_void);
+    fn nvim_hasFolding_oap_start_down(oap: *mut OpargT) -> bool;
+    fn nvim_check_pos_oap_end(oap: *mut OpargT);
     fn nvim_set_virtual_op_from_active();
-    fn nvim_getvvcol_oap_end(oap: *mut c_void);
-    fn nvim_getvvcol_oap_start(oap: *mut c_void);
-    fn nvim_mark_mb_adjustpos_oap_end(oap: *mut c_void);
-    fn nvim_getvvcol_oap_start_both(oap: *mut c_void);
-    fn nvim_getvvcol_oap_end_both(oap: *mut c_void, start_out: *mut c_int, end_out: *mut c_int);
-    fn nvim_coladvance_set_oap_end(oap: *mut c_void);
-    fn nvim_coladvance_set_oap_start(oap: *mut c_void);
+    fn nvim_getvvcol_oap_end(oap: *mut OpargT);
+    fn nvim_getvvcol_oap_start(oap: *mut OpargT);
+    fn nvim_mark_mb_adjustpos_oap_end(oap: *mut OpargT);
+    fn nvim_getvvcol_oap_start_both(oap: *mut OpargT);
+    fn nvim_getvvcol_oap_end_both(oap: *mut OpargT, start_out: *mut c_int, end_out: *mut c_int);
+    fn nvim_coladvance_set_oap_end(oap: *mut OpargT);
+    fn nvim_coladvance_set_oap_start(oap: *mut OpargT);
     fn nvim_get_curwin_w_view_width() -> c_int;
     fn nvim_coladvance(col: c_int);
     fn nvim_get_cursor_line_len() -> c_int;
@@ -276,8 +233,8 @@ extern "C" {
     // rs_* Rust helpers already implemented in Rust
     fn rs_restore_visual_mode();
     fn rs_unadjust_for_sel() -> bool;
-    fn rs_clearop(oap: *mut c_void);
-    fn rs_clearopbeep(oap: *mut c_void);
+    fn rs_clearop(oap: *mut OpargT);
+    fn rs_clearopbeep(oap: *mut OpargT);
     fn rs_may_clear_cmdline();
     fn rs_foldCreate(wp: *mut c_void, start_lnum: c_int, end_lnum: c_int);
     fn rs_deleteFold(wp: *mut c_void, start: c_int, end: c_int, recursive: bool, had_visual: bool);
@@ -290,18 +247,18 @@ extern "C" {
     );
 
     // operators (still in C)
-    fn op_shift(oap: *mut c_void, curs_top: c_int, amount: c_int);
-    fn op_delete(oap: *mut c_void) -> c_int;
-    fn op_yank(oap: *mut c_void, message: bool);
-    fn op_change(oap: *mut c_void) -> c_int;
-    fn op_tilde(oap: *mut c_void);
-    fn op_insert(oap: *mut c_void, count1: c_int);
-    fn op_replace(oap: *mut c_void, c: c_int) -> c_int;
-    fn op_addsub(oap: *mut c_void, prenum1: c_int, g_cmd: bool);
-    fn op_format(oap: *mut c_void, keep_cursor: bool);
-    fn op_formatexpr(oap: *mut c_void);
-    fn op_reindent(oap: *mut c_void, get_indent: *const c_void);
-    fn nvim_dpo_call_op_function(oap: *mut c_void);
+    fn op_shift(oap: *mut OpargT, curs_top: c_int, amount: c_int);
+    fn op_delete(oap: *mut OpargT) -> c_int;
+    fn op_yank(oap: *mut OpargT, message: bool);
+    fn op_change(oap: *mut OpargT) -> c_int;
+    fn op_tilde(oap: *mut OpargT);
+    fn op_insert(oap: *mut OpargT, count1: c_int);
+    fn op_replace(oap: *mut OpargT, c: c_int) -> c_int;
+    fn op_addsub(oap: *mut OpargT, prenum1: c_int, g_cmd: bool);
+    fn op_format(oap: *mut OpargT, keep_cursor: bool);
+    fn op_formatexpr(oap: *mut OpargT);
+    fn op_reindent(oap: *mut OpargT, get_indent: *const c_void);
+    fn nvim_dpo_call_op_function(oap: *mut OpargT);
     fn do_join(
         count: usize,
         join_spaces: bool,
@@ -349,7 +306,7 @@ static NL_STR: &[u8] = b"\n\0";
 /// Check if cap->cmdchar is an ex-command character (':' or K_COMMAND).
 #[inline]
 unsafe fn is_ex_cmdchar(cap: *mut c_void) -> bool {
-    let ch = nvim_cap_get_cmdchar(cap);
+    let ch = (*cap.cast::<CmdargT>()).cmdchar;
     ch == c_int::from(b':') || ch == K_COMMAND
 }
 
@@ -368,14 +325,16 @@ unsafe fn restore_lbr(saved: c_int) {
 }
 
 /// Port of `get_op_vcol` -- calculate start/end virtual columns for block mode.
-unsafe fn get_op_vcol(oap: *mut c_void, redo_vcol: c_int, initial: bool) {
+unsafe fn get_op_vcol(oap: *mut OpargT, redo_vcol: c_int, initial: bool) {
     let vis_mode = nvim_get_VIsual_mode();
     // Ctrl-V = 22
-    if vis_mode != 22 || (!initial && nvim_oap_get_end_col(oap) < nvim_get_curwin_w_view_width()) {
+    if vis_mode != 22
+        || (!initial && (*oap.cast::<OpargT>()).end.col < nvim_get_curwin_w_view_width())
+    {
         return;
     }
 
-    nvim_oap_set_motion_type(oap, K_MT_BLOCK_WISE);
+    (*oap.cast::<OpargT>()).motion_type = K_MT_BLOCK_WISE;
     nvim_mark_mb_adjustpos_oap_end(oap);
 
     nvim_getvvcol_oap_start_both(oap);
@@ -385,16 +344,16 @@ unsafe fn get_op_vcol(oap: *mut c_void, redo_vcol: c_int, initial: bool) {
         let mut end: c_int = 0;
         nvim_getvvcol_oap_end_both(oap, &raw mut start, &raw mut end);
 
-        let start_vcol = nvim_oap_get_start_vcol(oap);
+        let start_vcol = (*oap.cast::<OpargT>()).start_vcol;
         let new_start = start_vcol.min(start);
-        nvim_oap_set_start_vcol(oap, new_start);
+        (*oap.cast::<OpargT>()).start_vcol = new_start;
 
-        let end_vcol = nvim_oap_get_end_vcol(oap);
+        let end_vcol = (*oap.cast::<OpargT>()).end_vcol;
         if end > end_vcol {
             if initial && nvim_p_sel_is_exclusive() && start >= 1 && start > end_vcol {
-                nvim_oap_set_end_vcol(oap, start - 1);
+                (*oap.cast::<OpargT>()).end_vcol = start - 1;
             } else {
-                nvim_oap_set_end_vcol(oap, end);
+                (*oap.cast::<OpargT>()).end_vcol = end;
             }
         }
     }
@@ -403,9 +362,9 @@ unsafe fn get_op_vcol(oap: *mut c_void, redo_vcol: c_int, initial: bool) {
     let curswant = nvim_get_curswant();
     if curswant == MAXCOL {
         nvim_set_cursor_col(MAXCOL);
-        nvim_oap_set_end_vcol(oap, 0);
-        let start_lnum = nvim_oap_get_start_lnum(oap);
-        let end_lnum = nvim_oap_get_end_lnum(oap);
+        (*oap.cast::<OpargT>()).end_vcol = 0;
+        let start_lnum = (*oap.cast::<OpargT>()).start.lnum;
+        let end_lnum = (*oap.cast::<OpargT>()).end.lnum;
         let mut lnum = start_lnum;
         while lnum <= end_lnum {
             nvim_set_cursor_lnum(lnum);
@@ -413,13 +372,13 @@ unsafe fn get_op_vcol(oap: *mut c_void, redo_vcol: c_int, initial: bool) {
             let mut e: c_int = 0;
             // Use a compound: place cursor then get vcol
             nvim_getvvcol_oap_end_both(oap, std::ptr::null_mut(), &raw mut e);
-            let current_end_vcol = nvim_oap_get_end_vcol(oap);
-            nvim_oap_set_end_vcol(oap, current_end_vcol.max(e));
+            let current_end_vcol = (*oap.cast::<OpargT>()).end_vcol;
+            (*oap.cast::<OpargT>()).end_vcol = current_end_vcol.max(e);
             lnum += 1;
         }
     } else if nvim_get_redo_VIsual_busy() {
-        let start_vcol = nvim_oap_get_start_vcol(oap);
-        nvim_oap_set_end_vcol(oap, start_vcol + redo_vcol - 1);
+        let start_vcol = (*oap.cast::<OpargT>()).start_vcol;
+        (*oap.cast::<OpargT>()).end_vcol = start_vcol + redo_vcol - 1;
     }
 
     nvim_coladvance_set_oap_end(oap);
@@ -438,8 +397,8 @@ unsafe fn dpo_should_process(cap: *mut c_void) -> bool {
         nvim_get_cursor_col(),
         nvim_get_cursor_coladd(),
     );
-    let oap = nvim_cap_get_oap(cap);
-    let op_type = nvim_oap_get_op_type_ptr(oap);
+    let oap = (*cap.cast::<CmdargT>()).oap;
+    let op_type = (*oap.cast::<OpargT>()).op_type;
     (nvim_dpo_get_finish_op() || nvim_dpo_get_VIsual_active()) && op_type != OP_NOP
 }
 
@@ -449,26 +408,26 @@ unsafe fn dpo_should_process(cap: *mut c_void) -> bool {
 
 #[allow(clippy::too_many_lines)]
 unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
-    let oap = nvim_cap_get_oap(cap);
+    let oap = (*cap.cast::<CmdargT>()).oap;
     let mut include_line_break = false;
     let redo_yank = nvim_vim_strchr_p_cpo(CPO_YANK) && !gui_yank;
 
     reset_lbr();
-    nvim_oap_set_is_VIsual(oap, nvim_dpo_get_VIsual_active());
+    (*oap.cast::<OpargT>()).is_visual = nvim_dpo_get_VIsual_active();
 
     // Handle motion_force
-    let motion_force = nvim_oap_get_motion_force(oap);
+    let motion_force = (*oap.cast::<OpargT>()).motion_force;
     if motion_force == c_int::from(b'V') {
-        nvim_oap_set_motion_type(oap, K_MT_LINE_WISE);
+        (*oap.cast::<OpargT>()).motion_type = K_MT_LINE_WISE;
     } else if motion_force == c_int::from(b'v') {
-        let mt = nvim_oap_get_motion_type(oap);
+        let mt = (*oap.cast::<OpargT>()).motion_type;
         if mt == K_MT_LINE_WISE {
-            nvim_oap_set_inclusive(oap, 0);
+            (*oap.cast::<OpargT>()).inclusive = false;
         } else if mt == K_MT_CHAR_WISE {
-            let inc = nvim_oap_get_inclusive(oap);
-            nvim_oap_set_inclusive(oap, c_int::from(!inc));
+            let inc = (*oap.cast::<OpargT>()).inclusive;
+            (*oap.cast::<OpargT>()).inclusive = !inc;
         }
-        nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+        (*oap.cast::<OpargT>()).motion_type = K_MT_CHAR_WISE;
     } else if motion_force == 22 {
         // Ctrl_V
         if !nvim_dpo_get_VIsual_active() {
@@ -481,8 +440,8 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
     }
 
     // Prep redo
-    let op_type = nvim_oap_get_op_type_ptr(oap);
-    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let op_type = (*oap.cast::<OpargT>()).op_type;
+    let cmdchar = (*cap.cast::<CmdargT>()).cmdchar;
     let vis_active = nvim_dpo_get_VIsual_active();
     let should_prep_redo = (redo_yank || op_type != OP_YANK)
         && ((!vis_active || motion_force != NUL)
@@ -497,9 +456,9 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
         && op_type != OP_FOLDDELREC;
 
     if should_prep_redo {
-        let regname = nvim_oap_get_regname_ptr(oap);
-        let count0 = nvim_cap_get_count0(cap);
-        let nchar = nvim_cap_get_nchar(cap);
+        let regname = (*oap.cast::<OpargT>()).regname;
+        let count0 = (*cap.cast::<CmdargT>()).count0;
+        let nchar = (*cap.cast::<CmdargT>()).nchar;
         rs_prep_redo(
             regname,
             count0,
@@ -511,7 +470,7 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
         );
         if cmdchar == c_int::from(b'/') || cmdchar == c_int::from(b'?') {
             if !nvim_vim_strchr_p_cpo(CPO_REDO) {
-                let searchbuf = nvim_cap_get_searchbuf(cap);
+                let searchbuf = (*cap.cast::<CmdargT>()).searchbuf;
                 AppendToRedobuffLit(searchbuf, -1);
             }
             AppendToRedobuff(NL_STR.as_ptr().cast::<c_char>());
@@ -548,8 +507,8 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
             nvim_coladvance(nvim_get_curswant());
         }
         let rv_count = DPO_REDO_VISUAL.count;
-        nvim_cap_set_count0(cap, rv_count);
-        nvim_cap_set_count1(cap, if rv_count == 0 { 1 } else { rv_count });
+        (*cap.cast::<CmdargT>()).count0 = rv_count;
+        (*cap.cast::<CmdargT>()).count1 = if rv_count == 0 { 1 } else { rv_count };
     } else if nvim_dpo_get_VIsual_active() {
         if !gui_yank {
             nvim_dpo_save_visual_state();
@@ -587,7 +546,7 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
 
 #[allow(clippy::too_many_lines)]
 unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
-    let oap = nvim_cap_get_oap(cap);
+    let oap = (*cap.cast::<CmdargT>()).oap;
     let lbr_saved = nvim_curwin_get_p_lbr();
     let redo_yank = nvim_vim_strchr_p_cpo(CPO_YANK) && !gui_yank;
     let include_line_break = DPO_INCLUDE_LINE_BREAK;
@@ -596,11 +555,11 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
     if nvim_lt_oap_start_cursor(oap) {
         if !nvim_dpo_get_VIsual_active() {
             if nvim_hasFolding_oap_start_up(oap) {
-                nvim_oap_set_start_col(oap, 0);
+                (*oap.cast::<OpargT>()).start.col = 0;
             }
             let cursor_col = nvim_get_cursor_col();
-            let inclusive = nvim_oap_get_inclusive(oap);
-            let mt = nvim_oap_get_motion_type(oap);
+            let inclusive = (*oap.cast::<OpargT>()).inclusive;
+            let mt = (*oap.cast::<OpargT>()).motion_type;
             if (cursor_col > 0 || inclusive || mt == K_MT_LINE_WISE)
                 && nvim_hasFolding_cursor_end_of_fold()
             {
@@ -610,25 +569,28 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
         nvim_oap_set_end_from_cursor(oap);
         nvim_cursor_set_oap_start(oap);
     } else {
-        if !nvim_dpo_get_VIsual_active() && nvim_oap_get_motion_type(oap) == K_MT_LINE_WISE {
+        if !nvim_dpo_get_VIsual_active() && (*oap.cast::<OpargT>()).motion_type == K_MT_LINE_WISE {
             if nvim_hasFolding_cursor_start_of_fold() {
                 nvim_set_cursor_col(0);
             }
             if nvim_hasFolding_oap_start_down(oap) {
-                nvim_oap_set_start_col(oap, nvim_ml_get_len_call(nvim_oap_get_start_lnum(oap)));
+                (*oap.cast::<OpargT>()).start.col =
+                    nvim_ml_get_len_call((*oap.cast::<OpargT>()).start.lnum);
             }
         }
         // oap->end = oap->start; oap->start = cursor
-        let sl = nvim_oap_get_start_lnum(oap);
-        let sc = nvim_oap_get_start_col(oap);
-        let sca = nvim_oap_get_start_coladd(oap);
-        nvim_oap_set_end_pos(oap, sl, sc, sca);
+        let sl = (*oap.cast::<OpargT>()).start.lnum;
+        let sc = (*oap.cast::<OpargT>()).start.col;
+        let sca = (*oap.cast::<OpargT>()).start.coladd;
+        (*oap.cast::<OpargT>()).end.lnum = sl;
+        (*oap.cast::<OpargT>()).end.col = sc;
+        (*oap.cast::<OpargT>()).end.coladd = sca;
         nvim_oap_set_start_from_cursor(oap);
     }
 
     nvim_check_pos_oap_end(oap);
-    let line_count = nvim_oap_get_end_lnum(oap) - nvim_oap_get_start_lnum(oap) + 1;
-    nvim_oap_set_line_count(oap, line_count);
+    let line_count = (*oap.cast::<OpargT>()).end.lnum - (*oap.cast::<OpargT>()).start.lnum + 1;
+    (*oap.cast::<OpargT>()).line_count = line_count;
     nvim_set_virtual_op_from_active();
 
     let vis_active = nvim_dpo_get_VIsual_active();
@@ -648,26 +610,26 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                     // not Ctrl_V
                     nvim_getvvcol_oap_end(oap);
                 }
-                let end_vcol = nvim_oap_get_end_vcol(oap);
-                let line_count2 = nvim_oap_get_line_count(oap);
+                let end_vcol = (*oap.cast::<OpargT>()).end_vcol;
+                let line_count2 = (*oap.cast::<OpargT>()).line_count;
                 if vis_mode == 22 || line_count2 <= 1 {
                     if vis_mode != 22 {
                         nvim_getvvcol_oap_start(oap);
                     }
-                    let start_vcol = nvim_oap_get_start_vcol(oap);
+                    let start_vcol = (*oap.cast::<OpargT>()).start_vcol;
                     nvim_set_resel_VIsual_vcol(end_vcol - start_vcol + 1);
                 } else {
                     nvim_set_resel_VIsual_vcol(end_vcol);
                 }
             }
-            nvim_set_resel_VIsual_line_count(nvim_oap_get_line_count(oap));
+            nvim_set_resel_VIsual_line_count((*oap.cast::<OpargT>()).line_count);
         }
 
         // Redo visual prep
-        let motion_force = nvim_oap_get_motion_force(oap);
-        let op_type = nvim_oap_get_op_type_ptr(oap);
-        let cmdchar = nvim_cap_get_cmdchar(cap);
-        let nchar = nvim_cap_get_nchar(cap);
+        let motion_force = (*oap.cast::<OpargT>()).motion_force;
+        let op_type = (*oap.cast::<OpargT>()).op_type;
+        let cmdchar = (*cap.cast::<CmdargT>()).cmdchar;
+        let nchar = (*cap.cast::<CmdargT>()).nchar;
         if (redo_yank || op_type != OP_YANK)
             && op_type != OP_COLON
             && op_type != OP_FOLD
@@ -682,8 +644,8 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
             if cmdchar == c_int::from(b'g')
                 && (nchar == c_int::from(b'n') || nchar == c_int::from(b'N'))
             {
-                let regname = nvim_oap_get_regname_ptr(oap);
-                let count0 = nvim_cap_get_count0(cap);
+                let regname = (*oap.cast::<OpargT>()).regname;
+                let count0 = (*cap.cast::<CmdargT>()).count0;
                 rs_prep_redo(
                     regname,
                     count0,
@@ -704,9 +666,9 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                     // REPLACE_NL_NCHAR
                     nchar2 = c_int::from(b'\n');
                 }
-                let regname = nvim_oap_get_regname_ptr(oap);
+                let regname = (*oap.cast::<OpargT>()).regname;
                 if opchar == c_int::from(b'g') && extra_opchar == c_int::from(b'@') {
-                    let count0 = nvim_cap_get_count0(cap);
+                    let count0 = (*cap.cast::<CmdargT>()).count0;
                     rs_prep_redo_num2(
                         regname,
                         0,
@@ -733,35 +695,35 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                 DPO_REDO_VISUAL.mode = nvim_get_resel_VIsual_mode();
                 DPO_REDO_VISUAL.vcol = nvim_get_resel_VIsual_vcol();
                 DPO_REDO_VISUAL.line_count = nvim_get_resel_VIsual_line_count();
-                DPO_REDO_VISUAL.count = nvim_cap_get_count0(cap);
-                DPO_REDO_VISUAL.arg = nvim_cap_get_arg(cap);
+                DPO_REDO_VISUAL.count = (*cap.cast::<CmdargT>()).count0;
+                DPO_REDO_VISUAL.arg = (*cap.cast::<CmdargT>()).arg;
             }
         }
 
         // Inclusive/motion_type adjustments
-        let motion_force2 = nvim_oap_get_motion_force(oap);
-        let mt = nvim_oap_get_motion_type(oap);
+        let motion_force2 = (*oap.cast::<OpargT>()).motion_force;
+        let mt = (*oap.cast::<OpargT>()).motion_type;
         if motion_force2 == NUL || mt == K_MT_LINE_WISE {
-            nvim_oap_set_inclusive(oap, 1);
+            (*oap.cast::<OpargT>()).inclusive = true;
         }
         let vis_mode = nvim_get_VIsual_mode();
         if vis_mode == c_int::from(b'V') {
-            nvim_oap_set_motion_type(oap, K_MT_LINE_WISE);
+            (*oap.cast::<OpargT>()).motion_type = K_MT_LINE_WISE;
         } else if vis_mode == c_int::from(b'v') {
-            nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+            (*oap.cast::<OpargT>()).motion_type = K_MT_CHAR_WISE;
             if nvim_oap_end_is_NUL(oap) && (include_line_break || nvim_get_virtual_op() == 0) {
-                nvim_oap_set_inclusive(oap, 0);
-                let op_type2 = nvim_oap_get_op_type_ptr(oap);
+                (*oap.cast::<OpargT>()).inclusive = false;
+                let op_type2 = (*oap.cast::<OpargT>()).op_type;
                 if !nvim_p_sel_is_old()
                     && !nvim_op_on_lines(op_type2)
-                    && nvim_oap_get_end_lnum(oap) < nvim_curbuf_get_ml_line_count()
+                    && (*oap.cast::<OpargT>()).end.lnum < nvim_curbuf_get_ml_line_count()
                 {
-                    let end_lnum = nvim_oap_get_end_lnum(oap);
-                    nvim_oap_set_end_lnum(oap, end_lnum + 1);
-                    nvim_oap_set_end_col(oap, 0);
-                    nvim_oap_set_end_coladd(oap, 0);
-                    let lc = nvim_oap_get_line_count(oap);
-                    nvim_oap_set_line_count(oap, lc + 1);
+                    let end_lnum = (*oap.cast::<OpargT>()).end.lnum;
+                    (*oap.cast::<OpargT>()).end.lnum = end_lnum + 1;
+                    (*oap.cast::<OpargT>()).end.col = 0;
+                    (*oap.cast::<OpargT>()).end.coladd = 0;
+                    let lc = (*oap.cast::<OpargT>()).line_count;
+                    (*oap.cast::<OpargT>()).line_count = lc + 1;
                 }
             }
         }
@@ -773,8 +735,8 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
             nvim_setmouse();
             nvim_set_mouse_dragging(0);
             rs_may_clear_cmdline();
-            let op_type3 = nvim_oap_get_op_type_ptr(oap);
-            let motion_force3 = nvim_oap_get_motion_force(oap);
+            let op_type3 = (*oap.cast::<OpargT>()).op_type;
+            let motion_force3 = (*oap.cast::<OpargT>()).motion_force;
             if (op_type3 == OP_YANK
                 || op_type3 == OP_COLON
                 || op_type3 == OP_FUNCTION
@@ -788,68 +750,68 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
     }
 
     // Include trailing multi-byte byte
-    if nvim_oap_get_inclusive(oap) {
+    if (*oap.cast::<OpargT>()).inclusive {
         let l = nvim_utfc_ptr2len_oap_end(oap);
         if l > 1 {
-            let col = nvim_oap_get_end_col(oap);
-            nvim_oap_set_end_col(oap, col + l - 1);
+            let col = (*oap.cast::<OpargT>()).end.col;
+            (*oap.cast::<OpargT>()).end.col = col + l - 1;
         }
     }
     // curwin->w_set_curswant = true
     nvim_curwin_set_curswant_flag(true);
 
     // empty check
-    let mt = nvim_oap_get_motion_type(oap);
-    let inclusive = nvim_oap_get_inclusive(oap);
-    let op_type4 = nvim_oap_get_op_type_ptr(oap);
+    let mt = (*oap.cast::<OpargT>()).motion_type;
+    let inclusive = (*oap.cast::<OpargT>()).inclusive;
+    let op_type4 = (*oap.cast::<OpargT>()).op_type;
     let virtual_op = nvim_get_virtual_op();
-    let start_coladd = nvim_oap_get_start_coladd(oap);
-    let end_coladd = nvim_oap_get_end_coladd(oap);
+    let start_coladd = (*oap.cast::<OpargT>()).start.coladd;
+    let end_coladd = (*oap.cast::<OpargT>()).end.coladd;
     let empty = mt != K_MT_LINE_WISE
         && (!inclusive || (op_type4 == OP_YANK && nvim_gchar_pos_oap_end(oap) == NUL))
         && nvim_equalpos_oap(oap)
         && !(virtual_op != 0 && start_coladd != end_coladd);
-    nvim_oap_set_empty(oap, c_int::from(empty));
+    (*oap.cast::<OpargT>()).empty = empty;
 
     // Force redraw for empty visual region
-    let is_visual = nvim_oap_get_is_visual(oap);
-    let op_type5 = nvim_oap_get_op_type_ptr(oap);
-    if is_visual != 0 && (empty || !nvim_curbuf_modifiable() || op_type5 == OP_FOLD) {
+    let is_visual = (*oap.cast::<OpargT>()).is_visual;
+    let op_type5 = (*oap.cast::<OpargT>()).op_type;
+    if is_visual && (empty || !nvim_curbuf_modifiable() || op_type5 == OP_FOLD) {
         restore_lbr(lbr_saved);
         nvim_redraw_curbuf_later_inverted();
     }
 
     // Adjust end for column-one case
-    let retval = nvim_cap_get_retval(cap);
-    let mt2 = nvim_oap_get_motion_type(oap);
-    let inclusive2 = nvim_oap_get_inclusive(oap);
-    let is_visual2 = nvim_oap_get_is_visual(oap);
-    let end_col = nvim_oap_get_end_col(oap);
-    let line_count3 = nvim_oap_get_line_count(oap);
+    let retval = (*cap.cast::<CmdargT>()).retval;
+    let mt2 = (*oap.cast::<OpargT>()).motion_type;
+    let inclusive2 = (*oap.cast::<OpargT>()).inclusive;
+    let is_visual2 = (*oap.cast::<OpargT>()).is_visual;
+    let end_col = (*oap.cast::<OpargT>()).end.col;
+    let line_count3 = (*oap.cast::<OpargT>()).line_count;
     if mt2 == K_MT_CHAR_WISE
         && !inclusive2
         && (retval & CA_NO_ADJ_OP_END) == 0
         && end_col == 0
-        && (is_visual2 == 0 || nvim_p_sel_is_old())
+        && (!is_visual2 || nvim_p_sel_is_old())
         && line_count3 > 1
     {
-        nvim_oap_set_end_adjusted(oap, true);
-        let lc = nvim_oap_get_line_count(oap);
-        nvim_oap_set_line_count(oap, lc - 1);
-        let el = nvim_oap_get_end_lnum(oap);
-        nvim_oap_set_end_lnum(oap, el - 1);
+        (*oap.cast::<OpargT>()).end_adjusted = true;
+        let lc = (*oap.cast::<OpargT>()).line_count;
+        (*oap.cast::<OpargT>()).line_count = lc - 1;
+        let el = (*oap.cast::<OpargT>()).end.lnum;
+        (*oap.cast::<OpargT>()).end.lnum = el - 1;
         if nvim_inindent_zero_dpo() {
-            nvim_oap_set_motion_type(oap, K_MT_LINE_WISE);
+            (*oap.cast::<OpargT>()).motion_type = K_MT_LINE_WISE;
         } else {
-            let new_end_col = nvim_ml_get_len_call(nvim_oap_get_end_lnum(oap));
-            nvim_oap_set_end_col(oap, new_end_col);
+            let new_end_col = nvim_ml_get_len_call((*oap.cast::<OpargT>()).end.lnum);
+            (*oap.cast::<OpargT>()).end.col = new_end_col;
             if new_end_col > 0 {
-                nvim_oap_set_end_col(oap, new_end_col - 1);
-                nvim_oap_set_inclusive(oap, 1);
+                (*oap.cast::<OpargT>()).end.col = new_end_col - 1;
+                (*oap.cast::<OpargT>()).inclusive = true;
             }
         }
     } else {
-        nvim_oap_set_end_adjusted(oap, false);
+        (*oap.cast::<OpargT>()).end_adjusted = false;
     }
 }
 
@@ -859,16 +821,17 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
 
 #[allow(clippy::too_many_lines)]
 unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
-    let oap = nvim_cap_get_oap(cap);
+    let oap = (*cap.cast::<CmdargT>()).oap;
     let lbr_saved = nvim_curwin_get_p_lbr();
-    let empty_region_error = nvim_oap_get_empty(oap) != 0 && nvim_vim_strchr_p_cpo(CPO_EMPTYREGION);
+    let empty_region_error =
+        (*oap.cast::<OpargT>()).empty && nvim_vim_strchr_p_cpo(CPO_EMPTYREGION);
 
-    let op_type = nvim_oap_get_op_type_ptr(oap);
+    let op_type = (*oap.cast::<OpargT>()).op_type;
 
     match op_type {
         OP_LSHIFT | OP_RSHIFT => {
-            let count1 = if nvim_oap_get_is_visual(oap) != 0 {
-                nvim_cap_get_count1(cap)
+            let count1 = if (*oap.cast::<OpargT>()).is_visual {
+                (*cap.cast::<CmdargT>()).count1
             } else {
                 1
             };
@@ -877,9 +840,9 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
         }
 
         OP_JOIN_NS | OP_JOIN => {
-            let lc = nvim_oap_get_line_count(oap);
+            let lc = (*oap.cast::<OpargT>()).line_count;
             let lc = lc.max(2);
-            nvim_oap_set_line_count(oap, lc);
+            (*oap.cast::<OpargT>()).line_count = lc;
             if nvim_dpo_join_would_overflow(lc) {
                 nvim_beep_flush();
             } else {
@@ -896,7 +859,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 nvim_CancelRedo();
             } else {
                 op_delete(oap);
-                let mt = nvim_oap_get_motion_type(oap);
+                let mt = (*oap.cast::<OpargT>()).motion_type;
                 if mt == K_MT_LINE_WISE && nvim_has_format_option_fo_auto() && u_save_cursor() == OK
                 {
                     auto_format(false, true);
@@ -912,8 +875,8 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 }
             } else {
                 restore_lbr(lbr_saved);
-                let cmdchar = nvim_cap_get_cmdchar(cap);
-                nvim_oap_set_excl_tr_ws(oap, cmdchar == c_int::from(b'z'));
+                let cmdchar = (*cap.cast::<CmdargT>()).cmdchar;
+                (*oap.cast::<OpargT>()).excl_tr_ws = cmdchar == c_int::from(b'z');
                 op_yank(oap, !gui_yank);
             }
             check_cursor_col(nvim_dpo_get_curwin());
@@ -930,8 +893,8 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 restore_lbr(lbr_saved);
                 nvim_sync_curbuf_last_changedtick_i();
                 if op_change(oap) != 0 {
-                    let rv = nvim_cap_get_retval(cap);
-                    nvim_cap_set_retval(cap, rv | CA_COMMAND_BUSY);
+                    let rv = (*cap.cast::<CmdargT>()).retval;
+                    (*cap.cast::<CmdargT>()).retval = rv | CA_COMMAND_BUSY;
                 }
                 if restart_edit == 0 {
                     restart_edit = restart_edit_save;
@@ -998,15 +961,15 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 restart_edit = 0;
                 restore_lbr(lbr_saved);
                 nvim_sync_curbuf_last_changedtick_i();
-                let count1 = nvim_cap_get_count1(cap);
+                let count1 = (*cap.cast::<CmdargT>()).count1;
                 op_insert(oap, count1);
                 nvim_curwin_reset_lbr();
                 auto_format(false, true);
                 if restart_edit == 0 {
                     restart_edit = re_save;
                 } else {
-                    let rv = nvim_cap_get_retval(cap);
-                    nvim_cap_set_retval(cap, rv | CA_COMMAND_BUSY);
+                    let rv = (*cap.cast::<CmdargT>()).retval;
+                    (*cap.cast::<CmdargT>()).retval = rv | CA_COMMAND_BUSY;
                 }
             }
         }
@@ -1018,7 +981,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 nvim_CancelRedo();
             } else {
                 restore_lbr(lbr_saved);
-                let nchar = nvim_cap_get_nchar(cap);
+                let nchar = (*cap.cast::<CmdargT>()).nchar;
                 op_replace(oap, nchar);
             }
         }
@@ -1027,19 +990,19 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             nvim_set_VIsual_reselect(false);
             rs_foldCreate(
                 nvim_dpo_get_curwin(),
-                nvim_oap_get_start_lnum(oap),
-                nvim_oap_get_end_lnum(oap),
+                (*oap.cast::<OpargT>()).start.lnum,
+                (*oap.cast::<OpargT>()).end.lnum,
             );
         }
 
         OP_FOLDOPEN | OP_FOLDOPENREC | OP_FOLDCLOSE | OP_FOLDCLOSEREC => {
             nvim_set_VIsual_reselect(false);
             rs_opFoldRange(
-                nvim_oap_get_start_lnum(oap),
-                nvim_oap_get_end_lnum(oap),
+                (*oap.cast::<OpargT>()).start.lnum,
+                (*oap.cast::<OpargT>()).end.lnum,
                 c_int::from(op_type == OP_FOLDOPEN || op_type == OP_FOLDOPENREC),
                 c_int::from(op_type == OP_FOLDOPENREC || op_type == OP_FOLDCLOSEREC),
-                nvim_oap_get_is_visual(oap) != 0,
+                (*oap.cast::<OpargT>()).is_visual,
             );
         }
 
@@ -1047,10 +1010,10 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             nvim_set_VIsual_reselect(false);
             rs_deleteFold(
                 nvim_dpo_get_curwin(),
-                nvim_oap_get_start_lnum(oap),
-                nvim_oap_get_end_lnum(oap),
+                (*oap.cast::<OpargT>()).start.lnum,
+                (*oap.cast::<OpargT>()).end.lnum,
                 op_type == OP_FOLDDELREC,
-                nvim_oap_get_is_visual(oap) != 0,
+                (*oap.cast::<OpargT>()).is_visual,
             );
         }
 
@@ -1061,7 +1024,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             } else {
                 nvim_set_VIsual_active(true);
                 restore_lbr(lbr_saved);
-                let count1 = nvim_cap_get_count1(cap);
+                let count1 = (*cap.cast::<CmdargT>()).count1;
                 let rv_arg = DPO_REDO_VISUAL.arg;
                 op_addsub(oap, count1, rv_arg != 0);
                 nvim_set_VIsual_active(false);
@@ -1077,8 +1040,8 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
 
 /// OP_INDENT / OP_COLON dispatch (shared with FILTER fallthrough).
 #[inline]
-unsafe fn dpo_dispatch_indent_colon(oap: *mut c_void, _gui_yank: bool) {
-    let op_type = nvim_oap_get_op_type_ptr(oap);
+unsafe fn dpo_dispatch_indent_colon(oap: *mut OpargT, _gui_yank: bool) {
+    let op_type = (*oap.cast::<OpargT>()).op_type;
     if op_type == OP_INDENT {
         if nvim_get_curbuf_b_p_lisp() {
             if nvim_use_indentexpr_for_lisp() {
@@ -1100,11 +1063,11 @@ unsafe fn dpo_dispatch_indent_colon(oap: *mut c_void, _gui_yank: bool) {
 }
 
 /// op_colon(oap) -- stuffs ':' command into read buffer.
-unsafe fn dpo_dispatch_op_colon(oap: *mut c_void) {
+unsafe fn dpo_dispatch_op_colon(oap: *mut OpargT) {
     // This is the static op_colon() from ops.c -- it remains in C for now.
     // We call it via a shim.
     extern "C" {
-        fn nvim_dpo_call_op_colon(oap: *mut c_void);
+        fn nvim_dpo_call_op_colon(oap: *mut OpargT);
     }
     nvim_dpo_call_op_colon(oap);
 }
@@ -1114,16 +1077,16 @@ unsafe fn dpo_dispatch_op_colon(oap: *mut c_void) {
 // =============================================================================
 
 unsafe fn dpo_postamble(cap: *mut c_void, old_col: c_int, gui_yank: bool) {
-    let oap = nvim_cap_get_oap(cap);
+    let oap = (*cap.cast::<CmdargT>()).oap;
 
     nvim_set_virtual_op_none();
     if gui_yank {
         let (lnum, col, coladd) = DPO_SAVED_CURSOR;
         nvim_set_cursor_pos(lnum, col, coladd);
     } else {
-        let op_type = nvim_oap_get_op_type_ptr(oap);
-        let mt = nvim_oap_get_motion_type(oap);
-        let end_adjusted = nvim_oap_get_end_adjusted(oap);
+        let op_type = (*oap.cast::<OpargT>()).op_type;
+        let mt = (*oap.cast::<OpargT>()).motion_type;
+        let end_adjusted = (*oap.cast::<OpargT>()).end_adjusted;
         if !nvim_dpo_get_p_sol()
             && mt == K_MT_LINE_WISE
             && !end_adjusted

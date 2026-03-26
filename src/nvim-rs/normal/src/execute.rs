@@ -47,7 +47,6 @@ pub const OP_NOP: c_int = 0;
 // =============================================================================
 
 extern "C" {
-    fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
     static mut VIsual_active: bool;
     fn nvim_get_reg_recording() -> c_int;
     fn nvim_get_reg_executing() -> c_int;
@@ -223,7 +222,7 @@ pub extern "C" fn rs_multiply_counts(opcount: c_int, count0: c_int) -> c_int {
 /// `oap` must be a valid oparg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_operator_pending(oap: OapHandle) -> bool {
-    nvim_oap_get_op_type_ptr(oap) != OP_NOP
+    (*oap).op_type != OP_NOP
 }
 
 // =============================================================================

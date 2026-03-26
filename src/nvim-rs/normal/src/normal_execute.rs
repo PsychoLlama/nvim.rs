@@ -55,11 +55,6 @@ extern "C" {
     static mut State: c_int;
 
     // cmdarg_T accessors
-    fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
-    fn nvim_cap_set_count0(cap: CapHandle, val: c_int);
-    fn nvim_cap_set_count1(cap: CapHandle, val: c_int);
 
     // Global accessors (existing)
     static mut restart_edit: c_int;
@@ -112,7 +107,6 @@ extern "C" {
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
 
     // Phase 5 count/visual accessors
-    fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
     fn del_from_showcmd(len: c_int);
     fn nvim_inc_no_mapping();
     fn nvim_dec_no_mapping();
@@ -191,32 +185,32 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
     if (*sp).c == K_EVENT {
         // Save count values for K_EVENT re-entry.
         (*oa.cast::<OpargT>()).prev_opcount = (*ca.cast::<CmdargT>()).opcount;
-        (*oa.cast::<OpargT>()).prev_count0 = nvim_cap_get_count0(ca);
+        (*oa.cast::<OpargT>()).prev_count0 = (*ca).count0;
     } else if (*ca.cast::<CmdargT>()).opcount != 0 {
         // Multiply counts: "3dw" → "d3w".
         let opcount = (*ca.cast::<CmdargT>()).opcount;
-        let count0 = nvim_cap_get_count0(ca);
+        let count0 = (*ca).count0;
         if count0 != 0 {
             if opcount >= 999_999_999 / count0 {
-                nvim_cap_set_count0(ca, 999_999_999);
+                (*ca).count0 = 999_999_999;
             } else {
-                nvim_cap_set_count0(ca, count0 * opcount);
+                (*ca).count0 = count0 * opcount;
             }
         } else {
-            nvim_cap_set_count0(ca, opcount);
+            (*ca).count0 = opcount;
         }
     }
 
     // Always remember the count.
-    let count0 = nvim_cap_get_count0(ca);
+    let count0 = (*ca).count0;
     (*ca.cast::<CmdargT>()).opcount = count0;
-    nvim_cap_set_count1(ca, if count0 == 0 { 1 } else { count0 });
+    (*ca).count1 = if count0 == 0 { 1 } else { count0 };
 
     // Only set v:count when called from main() and not a stuffed command.
     if (*sp).toplevel && readbuf1_empty() {
         set_vcount(
-            i64::from(nvim_cap_get_count0(ca)),
-            i64::from(nvim_cap_get_count0(ca).max(1)),
+            i64::from((*ca).count0),
+            i64::from((*ca).count0.max(1)),
             (*sp).set_prevcount,
         );
     }
@@ -229,7 +223,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         (*ca.cast::<CmdargT>()).cmdchar = (*sp).c;
     }
 
-    let idx = rs_find_command(nvim_cap_get_cmdchar(ca));
+    let idx = rs_find_command((*ca).cmdchar);
     (*sp).idx = idx;
 
     'finish: {
@@ -257,14 +251,14 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             && nvim_get_keystuffed() == 0
             && (crate::dispatch::table::rs_table_get_cmd_flags((*sp).idx) & NV_RL != 0)
         {
-            let new_cmdchar = rs_invert_horizontal(nvim_cap_get_cmdchar(ca));
+            let new_cmdchar = rs_invert_horizontal((*ca).cmdchar);
             (*ca.cast::<CmdargT>()).cmdchar = new_cmdchar;
             (*sp).idx = rs_find_command(new_cmdchar);
         }
 
         // Get an additional character if we need one.
-        let pending_op = nvim_oap_get_op_type_ptr(oa) != OP_NOP;
-        if rs_need_additional_char((*sp).idx, nvim_cap_get_cmdchar(ca), pending_op) {
+        let pending_op = (*oa).op_type != OP_NOP;
+        if rs_need_additional_char((*sp).idx, (*ca).cmdchar, pending_op) {
             rs_normal_get_additional_char(s);
         }
 
@@ -273,19 +267,19 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             ui_flush();
         }
 
-        if nvim_cap_get_cmdchar(ca) != K_IGNORE && nvim_cap_get_cmdchar(ca) != K_EVENT {
+        if (*ca).cmdchar != K_IGNORE && (*ca).cmdchar != K_EVENT {
             nvim_set_did_cursorhold(false);
         }
 
         State = MODE_NORMAL;
 
-        if nvim_cap_get_nchar(ca) == ESC || (*ca.cast::<CmdargT>()).extra_char == ESC {
+        if (*ca).nchar == ESC || (*ca.cast::<CmdargT>()).extra_char == ESC {
             rs_clearop(oa);
             (*sp).command_finished = true;
             break 'finish;
         }
 
-        if nvim_cap_get_cmdchar(ca) != K_IGNORE {
+        if (*ca).cmdchar != K_IGNORE {
             msg_didout = false;
             msg_col = 0;
         }
@@ -301,7 +295,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             if flags & NV_SS != 0 {
                 rs_start_selection();
                 let mut mm = nvim_get_mod_mask();
-                let new_cmdchar = rs_unshift_special(nvim_cap_get_cmdchar(ca), &raw mut mm);
+                let new_cmdchar = rs_unshift_special((*ca).cmdchar, &raw mut mm);
                 nvim_set_mod_mask(mm);
                 (*ca.cast::<CmdargT>()).cmdchar = new_cmdchar;
                 let new_idx = rs_find_command(new_cmdchar);
@@ -344,19 +338,18 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
     while {
         let c = (*sp).c;
         (c >= c_int::from(b'1') && c <= c_int::from(b'9'))
-            || (nvim_cap_get_count0(ca) != 0
-                && (c == K_DEL || c == K_KDEL || c == c_int::from(b'0')))
+            || ((*ca).count0 != 0 && (c == K_DEL || c == K_KDEL || c == c_int::from(b'0')))
     } {
         let c = (*sp).c;
         if c == K_DEL || c == K_KDEL {
-            let new_count0 = nvim_cap_get_count0(ca) / 10;
-            nvim_cap_set_count0(ca, new_count0);
+            let new_count0 = (*ca).count0 / 10;
+            (*ca).count0 = new_count0;
             del_from_showcmd(4); // delete the digit and ~@%
-        } else if nvim_cap_get_count0(ca) > 99_999_999 {
-            nvim_cap_set_count0(ca, 999_999_999);
+        } else if (*ca).count0 > 99_999_999 {
+            (*ca).count0 = 999_999_999;
         } else {
-            let new_count0 = nvim_cap_get_count0(ca) * 10 + (c - c_int::from(b'0'));
-            nvim_cap_set_count0(ca, new_count0);
+            let new_count0 = (*ca).count0 * 10 + (c - c_int::from(b'0'));
+            (*ca).count0 = new_count0;
         }
 
         // Set v:count here, when called from main() and not a stuffed
@@ -386,10 +379,10 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
     }
 
     // If we got CTRL-W there may be a/another count
-    if (*sp).c == CTRL_W && !(*sp).ctrl_w && nvim_oap_get_op_type_ptr(oa) == OP_NOP {
+    if (*sp).c == CTRL_W && !(*sp).ctrl_w && (*oa).op_type == OP_NOP {
         (*sp).ctrl_w = true;
-        (*ca.cast::<CmdargT>()).opcount = nvim_cap_get_count0(ca); // remember first count
-        nvim_cap_set_count0(ca, 0);
+        (*ca.cast::<CmdargT>()).opcount = (*ca).count0; // remember first count
+        (*ca).count0 = 0;
         nvim_inc_no_mapping();
         nvim_inc_allow_keys(); // no mapping for nchar, but keys
         let new_c = nvim_plain_vgetc_wrapper(); // get next character
@@ -432,7 +425,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
         let flags = crate::dispatch::table::rs_table_get_cmd_flags(idx);
         if flags & NV_SS != 0 {
             let mut mm = nvim_get_mod_mask();
-            let new_cmdchar = rs_unshift_special(nvim_cap_get_cmdchar(ca), &raw mut mm);
+            let new_cmdchar = rs_unshift_special((*ca).cmdchar, &raw mut mm);
             nvim_set_mod_mask(mm);
             (*ca.cast::<CmdargT>()).cmdchar = new_cmdchar;
             let new_idx = rs_find_command(new_cmdchar);

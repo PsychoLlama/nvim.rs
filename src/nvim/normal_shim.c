@@ -151,58 +151,6 @@ int nvim_get_opcount(void) { return opcount; }
 
 void nvim_set_opcount(int val) { opcount = val; }
 
-// oparg_T pointer accessors for Rust FFI (takes explicit oap parameter)
-
-int nvim_oap_get_op_type_ptr(oparg_T *oap) { return oap ? oap->op_type : OP_NOP; }
-
-void nvim_oap_set_op_type(oparg_T *oap, int val) { if (oap) oap->op_type = val; }
-
-int nvim_oap_get_regname_ptr(oparg_T *oap) { return oap ? oap->regname : NUL; }
-
-void nvim_oap_set_regname(oparg_T *oap, int val) { if (oap) oap->regname = val; }
-
-int nvim_oap_get_motion_force(oparg_T *oap) { return oap ? oap->motion_force : NUL; }
-
-int nvim_oap_get_motion_type(oparg_T *oap) { return oap ? oap->motion_type : kMTUnknown; }
-
-void nvim_oap_set_motion_type(oparg_T *oap, int val) { if (oap) oap->motion_type = val; }
-
-bool nvim_oap_get_inclusive(oparg_T *oap) { return oap ? oap->inclusive : false; }
-
-void nvim_oap_set_inclusive(oparg_T *oap, bool val) { if (oap) oap->inclusive = val; }
-
-// Additional oparg_T accessors for Rust ops crate
-
-int nvim_oap_get_use_reg_one(oparg_T *oap) { return oap ? oap->use_reg_one : false; }
-
-int nvim_oap_get_line_count(oparg_T *oap) { return oap ? oap->line_count : 0; }
-
-void nvim_oap_set_line_count(oparg_T *oap, int val) { if (oap) oap->line_count = val; }
-
-int nvim_oap_get_empty(oparg_T *oap) { return oap ? oap->empty : false; }
-
-void nvim_oap_set_empty(oparg_T *oap, int val) { if (oap) oap->empty = val != 0; }
-
-int nvim_oap_get_is_visual(oparg_T *oap) { return oap ? oap->is_VIsual : false; }
-
-int nvim_oap_get_excl_tr_ws(oparg_T *oap) { return oap ? oap->excl_tr_ws : false; }
-
-int nvim_oap_get_start_lnum(oparg_T *oap) { return oap ? oap->start.lnum : 0; }
-
-int nvim_oap_get_start_col(oparg_T *oap) { return oap ? oap->start.col : 0; }
-
-int nvim_oap_get_start_coladd(oparg_T *oap) { return oap ? oap->start.coladd : 0; }
-
-int nvim_oap_get_end_lnum(oparg_T *oap) { return oap ? oap->end.lnum : 0; }
-
-int nvim_oap_get_end_col(oparg_T *oap) { return oap ? oap->end.col : 0; }
-
-int nvim_oap_get_end_coladd(oparg_T *oap) { return oap ? oap->end.coladd : 0; }
-
-int nvim_oap_get_start_vcol(oparg_T *oap) { return oap ? oap->start_vcol : 0; }
-
-int nvim_oap_get_end_vcol(oparg_T *oap) { return oap ? oap->end_vcol : 0; }
-
 void nvim_set_motion_force(int val) { motion_force = val; }
 
 void nvim_goto_tabpage(int n) { goto_tabpage(n); }
@@ -255,26 +203,6 @@ int nvim_gchar_cursor(void) { return utf_ptr2char(get_cursor_pos_ptr()); }
 void nvim_coladvance(colnr_T col) { coladvance(curwin, col); }
 
 // cmdarg_T accessors for Rust FFI
-
-oparg_T *nvim_cap_get_oap(cmdarg_T *cap) { return cap ? cap->oap : NULL; }
-
-int nvim_cap_get_retval(cmdarg_T *cap) { return cap ? cap->retval : 0; }
-
-void nvim_cap_set_retval(cmdarg_T *cap, int val) { if (cap) cap->retval = val; }
-
-int nvim_cap_get_cmdchar(cmdarg_T *cap) { return cap ? cap->cmdchar : 0; }
-
-int nvim_cap_get_nchar(cmdarg_T *cap) { return cap ? cap->nchar : 0; }
-
-int nvim_cap_get_count0(cmdarg_T *cap) { return cap ? cap->count0 : 0; }
-
-void nvim_cap_set_count0(cmdarg_T *cap, int val) { if (cap) cap->count0 = val; }
-
-int nvim_cap_get_count1(cmdarg_T *cap) { return cap ? cap->count1 : 0; }
-
-void nvim_cap_set_count1(cmdarg_T *cap, int val) { if (cap) cap->count1 = val; }
-
-int nvim_cap_get_arg(cmdarg_T *cap) { return cap ? cap->arg : 0; }
 
 // Word motion accessors for Rust FFI
 
@@ -406,8 +334,6 @@ void nvim_set_mode_displayed(bool val) { mode_displayed = val; }
 void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 
 // Redo/count accessors for Rust FFI
-
-int nvim_cap_get_nchar_len(cmdarg_T *cap) { return cap ? cap->nchar_len : 0; }
 
 // Visual operator accessors for Rust FFI
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
@@ -1084,19 +1010,7 @@ void nvim_curwin_reset_lbr(void) { if (curwin->w_p_lbr) { curwin->w_p_lbr = fals
 void nvim_curwin_restore_lbr(int saved) { if (!curwin->w_p_lbr && saved) { curwin->w_p_lbr = true; curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL); } }
 void nvim_dpo_validate_virtcol(void) { validate_virtcol(curwin); }
 void nvim_CancelRedo(void) { CancelRedo(); }
-char *nvim_cap_get_searchbuf(cmdarg_T *cap) { return cap ? cap->searchbuf : NULL; }
 
-void nvim_oap_set_is_VIsual(oparg_T *oap, bool val) { if (oap) oap->is_VIsual = val; }
-void nvim_oap_set_end_pos(oparg_T *oap, int lnum, int col, int coladd) { if (oap) { oap->end.lnum = lnum; oap->end.col = col; oap->end.coladd = coladd; } }
-void nvim_oap_set_start_col(oparg_T *oap, int val) { if (oap) oap->start.col = val; }
-void nvim_oap_set_end_lnum(oparg_T *oap, int val) { if (oap) oap->end.lnum = val; }
-void nvim_oap_set_end_col(oparg_T *oap, int val) { if (oap) oap->end.col = val; }
-void nvim_oap_set_end_coladd(oparg_T *oap, int val) { if (oap) oap->end.coladd = val; }
-void nvim_oap_set_start_vcol(oparg_T *oap, int val) { if (oap) oap->start_vcol = val; }
-void nvim_oap_set_end_vcol(oparg_T *oap, int val) { if (oap) oap->end_vcol = val; }
-void nvim_oap_set_end_adjusted(oparg_T *oap, bool val) { if (oap) oap->end_adjusted = val; }
-bool nvim_oap_get_end_adjusted(oparg_T *oap) { return oap ? oap->end_adjusted : false; }
-void nvim_oap_set_excl_tr_ws(oparg_T *oap, bool val) { if (oap) oap->excl_tr_ws = val; }
 void nvim_oap_set_start_from_cursor(oparg_T *oap) { if (oap) { oap->start = curwin->w_cursor; } }
 void nvim_oap_set_end_from_cursor(oparg_T *oap) { if (oap) { oap->end = curwin->w_cursor; } }
 

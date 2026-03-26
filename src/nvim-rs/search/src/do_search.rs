@@ -9,6 +9,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 
+use nvim_normal::types::OpargT;
 use std::ffi::{c_char, c_int, c_longlong, c_void};
 
 use crate::direction;
@@ -115,9 +116,6 @@ extern "C" {
     fn nvim_set_curwin_cursor_coladd(coladd: ColnrT);
     fn nvim_curwin_set_curswant(val: bool);
 
-    // operator-pending accessor
-    fn nvim_oap_set_inclusive(oap: OapHandle, val: bool);
-
     // incl/decl position helpers (pos_T by components); return -1 at buffer boundary
     fn nvim_search_incl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int) -> c_int;
     fn nvim_search_decl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int) -> c_int;
@@ -222,7 +220,7 @@ unsafe fn do_search_get_cursor() -> DoSearchPos {
 /// Set oap->inclusive if search has end offset.
 unsafe fn do_search_set_oap_inclusive(oap: OapHandle) {
     if !oap.is_null() && state::get_spat_off_end(state::RE_SEARCH) {
-        nvim_oap_set_inclusive(oap, true);
+        (*oap.cast::<OpargT>()).inclusive = true;
     }
 }
 

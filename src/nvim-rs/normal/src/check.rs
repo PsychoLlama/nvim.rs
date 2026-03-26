@@ -8,7 +8,7 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
-use crate::types::{CmdargT, NormalState};
+use crate::types::NormalState;
 use crate::WinHandle;
 
 /// UIExtension value for kUIMessages (ui_defs.h)
@@ -51,14 +51,6 @@ extern "C" {
 }
 
 extern "C" {
-    // oparg_T accessors (used for shared oap accessors, not ns-based)
-    fn nvim_oap_get_op_type_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_regname_ptr(oap: *mut std::ffi::c_void) -> c_int;
-
-    // cmdarg_T accessors
-    fn nvim_cap_get_retval(cap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_cap_set_count0(cap: *mut std::ffi::c_void, val: c_int);
-
     // Global accessors
     static did_throw: bool;
     fn nvim_get_ex_normal_busy() -> c_int;
@@ -145,7 +137,7 @@ extern "C" {
     fn nvim_fileinfo_call();
     fn may_clear_sb_text();
     fn readbuf1_empty() -> bool;
-    fn rs_set_vcount_ca(cap: *mut std::ffi::c_void, set_prevcount: *mut bool);
+    fn rs_set_vcount_ca(cap: *mut crate::types::CmdargT, set_prevcount: *mut bool);
 
     // Fold functions (from fold crate)
     fn rs_foldAdjustVisual();
@@ -378,8 +370,8 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool {
     let sp = ns(s);
-    let ca = (&raw mut (*sp).ca).cast::<std::ffi::c_void>();
-    let oa = (&raw mut (*sp).oa).cast::<std::ffi::c_void>();
+    let ca = &raw mut (*sp).ca;
+    let oa = &raw mut (*sp).oa;
 
     (
         // 'showmode' is set and messages can be printed
@@ -406,14 +398,14 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
                 && c_int::from(emsg_on_display) != 0)
     )
     // no register was used
-    && nvim_oap_get_regname_ptr(oa) == 0
-    && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
+    && (*oa).regname == 0
+    && ((*ca).retval & CA_COMMAND_BUSY == 0)
     && nvim_stuff_empty()
     && typebuf_typed()
     && emsg_silent == 0
     && !nvim_get_in_assert_fails()
     && !did_wait_return
-    && nvim_oap_get_op_type_ptr(oa) == OP_NOP
+    && (*oa).op_type == OP_NOP
 }
 
 /// Rust implementation of normal_redraw_mode_message.
@@ -474,15 +466,15 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     (*sp).ca = crate::types::CmdargT::default();
     (*sp).ca.oap = &raw mut (*sp).oa;
 
-    let ca = (&raw mut (*sp).ca).cast::<std::ffi::c_void>();
-    let oa = (&raw mut (*sp).oa).cast::<std::ffi::c_void>();
+    let ca = &raw mut (*sp).ca;
+    let oa = &raw mut (*sp).oa;
 
     // Use a count remembered from before entering an operator.
-    (*ca.cast::<CmdargT>()).opcount = nvim_get_opcount();
+    (*ca).opcount = nvim_get_opcount();
 
     // Finish_op tells us to finish the operation before returning.
     let old_finish_op = nvim_get_finish_op();
-    let new_finish_op = nvim_oap_get_op_type_ptr(oa) != OP_NOP;
+    let new_finish_op = (*oa).op_type != OP_NOP;
     nvim_set_finish_op(new_finish_op);
     if new_finish_op != (old_finish_op != 0) {
         nvim_ui_cursor_shape_wrapper();
@@ -491,8 +483,8 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
 
     (*sp).set_prevcount = false;
     // When not finishing an operator and no register name typed, reset count.
-    if !new_finish_op && nvim_oap_get_regname_ptr(oa) == 0 {
-        (*ca.cast::<CmdargT>()).opcount = 0;
+    if !new_finish_op && (*oa).regname == 0 {
+        (*ca).opcount = 0;
         (*sp).set_prevcount = true;
     }
 
@@ -501,8 +493,8 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     let prev_opcount = (*oap_typed).prev_opcount;
     let prev_count0 = (*oap_typed).prev_count0;
     if prev_opcount > 0 || prev_count0 > 0 {
-        (*ca.cast::<CmdargT>()).opcount = prev_opcount;
-        nvim_cap_set_count0(ca, prev_count0);
+        (*ca).opcount = prev_opcount;
+        (*ca).count0 = prev_count0;
         (*oap_typed).prev_opcount = 0;
         (*oap_typed).prev_count0 = 0;
     }

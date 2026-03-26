@@ -11,37 +11,18 @@
 #![allow(clippy::cast_lossless)]
 #![allow(dead_code)]
 
+use crate::CapHandle;
 use std::ffi::c_int;
-
-/// Opaque handle to command arguments (`cmdarg_T*`).
-pub type CapHandle = *mut std::ffi::c_void;
-
-/// Opaque handle to operator arguments (`oparg_T*`).
-pub type OapHandle = *mut std::ffi::c_void;
 
 // =============================================================================
 // External C Functions
 // =============================================================================
 
 extern "C" {
-    // Cap accessors
-    fn nvim_cap_get_oap(cap: CapHandle) -> OapHandle;
-    fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_count1(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_arg(cap: CapHandle) -> c_int;
-
-    // Oap accessors
-    fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
-    fn nvim_oap_set_op_type(oap: OapHandle, val: c_int);
-    fn nvim_oap_set_inclusive(oap: OapHandle, val: bool);
-    fn nvim_oap_set_motion_type(oap: OapHandle, val: c_int);
-
     // Utility functions
     fn beep_flush();
 
-    // Phase 3: do_nv_ident accessor
+    // do_nv_ident accessor
     fn nvim_create_temp_cap_for_ident(c1: c_int, c2: c_int) -> CapHandle;
 }
 

@@ -38,12 +38,7 @@ const NV_KEEPREG: c_int = 0x100;
 
 extern "C" {
     // cmdarg_T accessors
-    fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_retval(cap: CapHandle) -> c_int;
     // oparg_T accessors
-    fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
-    fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
 
     // Global accessors
     fn nvim_get_finish_op() -> c_int;
@@ -108,7 +103,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         // unless we need it later.
         let idx = (*sp).idx;
         if nvim_get_finish_op() == 0
-            && nvim_oap_get_op_type_ptr(oa) == 0
+            && (*oa).op_type == 0
             && (idx < 0 || (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_KEEPREG == 0))
         {
             rs_clearop(oa);
@@ -122,9 +117,9 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         }
 
         // If an operation is pending, handle it. But not for K_IGNORE or K_MOUSEMOVE.
-        let cmdchar = nvim_cap_get_cmdchar(ca);
+        let cmdchar = (*ca).cmdchar;
         if cmdchar != K_IGNORE && cmdchar != K_MOUSEMOVE {
-            let op_type = nvim_oap_get_op_type_ptr(oa);
+            let op_type = (*oa).op_type;
             did_visual_op = VIsual_active && op_type != OP_NOP && op_type != OP_COLON;
             do_pending_operator(ca, (*sp).old_col, false);
         }
@@ -144,7 +139,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     }
 
     let prev_finish_op = nvim_get_finish_op() != 0;
-    if nvim_oap_get_op_type_ptr(oa) == OP_NOP {
+    if (*oa).op_type == OP_NOP {
         // Reset finish_op, in case it was set.
         nvim_set_finish_op(false);
         nvim_may_trigger_modechanged();
@@ -152,18 +147,15 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
 
     // Redraw the cursor with another shape, if we were in Operator-pending
     // mode or did a replace command.
-    let cmdchar = nvim_cap_get_cmdchar(ca);
+    let cmdchar = (*ca).cmdchar;
     if prev_finish_op
         || cmdchar == c_int::from(b'r')
-        || (cmdchar == c_int::from(b'g') && nvim_cap_get_nchar(ca) == c_int::from(b'r'))
+        || (cmdchar == c_int::from(b'g') && (*ca).nchar == c_int::from(b'r'))
     {
         nvim_ui_cursor_shape_wrapper();
     }
 
-    if nvim_oap_get_op_type_ptr(oa) == OP_NOP
-        && nvim_oap_get_regname_ptr(oa) == 0
-        && cmdchar != K_EVENT
-    {
+    if (*oa).op_type == OP_NOP && (*oa).regname == 0 && cmdchar != K_EVENT {
         rs_clear_showcmd();
     }
 
@@ -189,12 +181,12 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     // May restart edit(), if we got here with CTRL-O in Insert mode
     // (but not if still inside a mapping that started in Visual mode).
     // May switch from Visual to Select mode after CTRL-O command.
-    if nvim_oap_get_op_type_ptr(oa) == OP_NOP
+    if (*oa).op_type == OP_NOP
         && ((restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0)
             || restart_VIsual_select == 1)
-        && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
+        && ((*ca).retval & CA_COMMAND_BUSY == 0)
         && nvim_stuff_empty()
-        && nvim_oap_get_regname_ptr(oa) == 0
+        && (*oa).regname == 0
     {
         if restart_VIsual_select == 1 {
             nvim_set_VIsual_select(true);

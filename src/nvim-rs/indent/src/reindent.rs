@@ -1,8 +1,9 @@
 //! Implementation of `op_reindent()` — block reindent with function pointer.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 
 use crate::set_indent::rs_set_indent;
+use nvim_normal::types::OpargT;
 
 type LinenrT = i32;
 type ColnrT = i32;
@@ -12,8 +13,8 @@ const BL_SOL: c_int = 2;
 const BL_FIX: c_int = 4;
 const UPD_INVERTED: c_int = 20;
 
-/// Opaque handle to oparg_T.
-type OapHandle = *mut c_void;
+/// Typed pointer to oparg_T.
+type OapHandle = *mut OpargT;
 
 /// Function pointer type for indenter functions (matching C `Indenter`).
 type Indenter = unsafe extern "C" fn() -> c_int;
@@ -42,8 +43,7 @@ extern "C" {
     // Buffer change notification
     fn nvim_indent_changed_lines(first: LinenrT, last: LinenrT, xtra: LinenrT);
 
-    // oparg_T field accessors
-    fn nvim_oap_get_line_count(oap: OapHandle) -> LinenrT;
+    // oparg_T field accessors (oap_is_visual and oap_set_marks remain in indent_ffi.c)
     fn nvim_oap_is_visual(oap: OapHandle) -> bool;
     fn nvim_oap_set_marks(oap: OapHandle);
 
@@ -63,7 +63,7 @@ const OK: c_int = 1;
 #[export_name = "op_reindent"]
 pub unsafe extern "C" fn rs_op_reindent(oap: OapHandle, how: Indenter) {
     let start_lnum = nvim_get_curwin_cursor_lnum();
-    let line_count = nvim_oap_get_line_count(oap);
+    let line_count = (*oap).line_count;
 
     // Don't even try when 'modifiable' is off.
     if !nvim_curbuf_is_modifiable() {

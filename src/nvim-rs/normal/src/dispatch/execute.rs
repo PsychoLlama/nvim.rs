@@ -8,107 +8,16 @@
 use std::ffi::c_int;
 
 use super::types::{CmdArgHandle, OpArgHandle};
-use crate::types::OpargT;
 
 // =============================================================================
 // External C Functions
 // =============================================================================
 
-#[cfg(not(test))]
-#[allow(dead_code)]
 extern "C" {
-    // OpArg accessors (from normal.c)
-    fn nvim_oap_get_op_type_ptr(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_set_op_type(oap: OpArgHandle, val: c_int);
-    fn nvim_oap_get_motion_type(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_set_motion_type(oap: OpArgHandle, val: c_int);
-    fn nvim_oap_get_inclusive(oap: OpArgHandle) -> bool;
-    fn nvim_oap_set_inclusive(oap: OpArgHandle, val: bool);
-    fn nvim_oap_get_regname_ptr(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_set_regname(oap: OpArgHandle, val: c_int);
-    fn nvim_oap_get_motion_force(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_get_line_count(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_set_line_count(oap: OpArgHandle, val: c_int);
-    fn nvim_oap_get_empty(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_set_empty(oap: OpArgHandle, val: c_int);
-
-    // CmdArg accessors (from normal.c)
-    fn nvim_cap_get_oap(cap: CmdArgHandle) -> OpArgHandle;
-    fn nvim_cap_get_cmdchar(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_get_nchar(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_get_count0(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_set_count0(cap: CmdArgHandle, val: c_int);
-    fn nvim_cap_get_count1(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_set_count1(cap: CmdArgHandle, val: c_int);
-    fn nvim_cap_get_retval(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_set_retval(cap: CmdArgHandle, val: c_int);
-    fn nvim_cap_get_arg(cap: CmdArgHandle) -> c_int;
-
     // Global state
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_cmdwin_type() -> c_int;
 }
-
-// =============================================================================
-// Test stubs for C functions
-// =============================================================================
-
-#[cfg(test)]
-mod test_stubs {
-    #![allow(unused_variables, non_snake_case)]
-    use super::*;
-
-    pub unsafe fn nvim_oap_get_op_type_ptr(_oap: OpArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_oap_set_op_type(_oap: OpArgHandle, _val: c_int) {}
-    pub unsafe fn nvim_oap_get_motion_type(_oap: OpArgHandle) -> c_int {
-        -1
-    }
-    pub unsafe fn nvim_oap_set_motion_type(_oap: OpArgHandle, _val: c_int) {}
-    pub unsafe fn nvim_oap_get_inclusive(_oap: OpArgHandle) -> bool {
-        false
-    }
-    pub unsafe fn nvim_oap_set_inclusive(_oap: OpArgHandle, _val: bool) {}
-    pub unsafe fn nvim_oap_get_regname_ptr(_oap: OpArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_oap_set_regname(_oap: OpArgHandle, _val: c_int) {}
-    pub unsafe fn nvim_oap_get_motion_force(_oap: OpArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_cap_get_oap(_cap: CmdArgHandle) -> OpArgHandle {
-        OpArgHandle::null()
-    }
-    pub unsafe fn nvim_cap_get_cmdchar(_cap: CmdArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_cap_get_nchar(_cap: CmdArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_cap_get_count0(_cap: CmdArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_cap_get_count1(_cap: CmdArgHandle) -> c_int {
-        1
-    }
-    pub unsafe fn nvim_cap_get_arg(_cap: CmdArgHandle) -> c_int {
-        0
-    }
-    pub unsafe fn nvim_cap_get_retval(_cap: CmdArgHandle) -> c_int {
-        0
-    }
-
-    pub unsafe fn nvim_get_VIsual_active() -> c_int {
-        0
-    }
-    pub unsafe fn nvim_get_cmdwin_type() -> c_int {
-        0
-    }
-}
-
-#[cfg(test)]
-use test_stubs::*;
 
 // =============================================================================
 // Operator Argument Helpers
@@ -120,14 +29,14 @@ fn op_pending_impl(oap: OpArgHandle) -> bool {
     if oap.is_null() {
         return false;
     }
-    unsafe { nvim_oap_get_op_type_ptr(oap) != 0 }
+    unsafe { (*oap.as_ptr()).op_type != 0 }
 }
 
 /// Clear pending operator.
 #[inline]
 fn clear_op_impl(oap: OpArgHandle) {
     if !oap.is_null() {
-        unsafe { nvim_oap_set_op_type(oap, 0) };
+        unsafe { (*oap.as_ptr()).op_type = 0 };
     }
 }
 
@@ -137,14 +46,14 @@ fn get_op_type_impl(oap: OpArgHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    unsafe { nvim_oap_get_op_type_ptr(oap) }
+    unsafe { (*oap.as_ptr()).op_type }
 }
 
 /// Set operator type.
 #[inline]
 fn set_op_type_impl(oap: OpArgHandle, val: c_int) {
     if !oap.is_null() {
-        unsafe { nvim_oap_set_op_type(oap, val) };
+        unsafe { (*oap.as_ptr()).op_type = val };
     }
 }
 
@@ -154,14 +63,14 @@ fn get_motion_type_impl(oap: OpArgHandle) -> c_int {
     if oap.is_null() {
         return -1;
     }
-    unsafe { nvim_oap_get_motion_type(oap) }
+    unsafe { (*oap.as_ptr()).motion_type }
 }
 
 /// Set motion type.
 #[inline]
 fn set_motion_type_impl(oap: OpArgHandle, val: c_int) {
     if !oap.is_null() {
-        unsafe { nvim_oap_set_motion_type(oap, val) };
+        unsafe { (*oap.as_ptr()).motion_type = val };
     }
 }
 
@@ -171,14 +80,14 @@ fn get_inclusive_impl(oap: OpArgHandle) -> bool {
     if oap.is_null() {
         return false;
     }
-    unsafe { nvim_oap_get_inclusive(oap) }
+    unsafe { (*oap.as_ptr()).inclusive }
 }
 
 /// Set inclusive flag.
 #[inline]
 fn set_inclusive_impl(oap: OpArgHandle, val: bool) {
     if !oap.is_null() {
-        unsafe { nvim_oap_set_inclusive(oap, val) };
+        unsafe { (*oap.as_ptr()).inclusive = val };
     }
 }
 
@@ -188,14 +97,14 @@ fn get_regname_impl(oap: OpArgHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    unsafe { nvim_oap_get_regname_ptr(oap) }
+    unsafe { (*oap.as_ptr()).regname }
 }
 
 /// Set register name.
 #[inline]
 fn set_regname_impl(oap: OpArgHandle, val: c_int) {
     if !oap.is_null() {
-        unsafe { nvim_oap_set_regname(oap, val) };
+        unsafe { (*oap.as_ptr()).regname = val };
     }
 }
 
@@ -205,14 +114,14 @@ fn get_motion_force_impl(oap: OpArgHandle) -> c_int {
     if oap.is_null() {
         return 0;
     }
-    unsafe { nvim_oap_get_motion_force(oap) }
+    unsafe { (*oap.as_ptr()).motion_force }
 }
 
 /// Set motion force character.
 #[inline]
 unsafe fn set_motion_force_impl(oap: OpArgHandle, val: c_int) {
     if !oap.is_null() {
-        (*oap.as_ptr().cast::<OpargT>()).motion_force = val;
+        (*oap.as_ptr()).motion_force = val;
     }
 }
 
@@ -226,7 +135,14 @@ fn cap_get_oap_impl(cap: CmdArgHandle) -> OpArgHandle {
     if cap.is_null() {
         return OpArgHandle::null();
     }
-    unsafe { nvim_cap_get_oap(cap) }
+    unsafe {
+        let oap_ptr = (*cap.as_ptr()).oap;
+        if oap_ptr.is_null() {
+            OpArgHandle::null()
+        } else {
+            OpArgHandle::from_ptr(oap_ptr)
+        }
+    }
 }
 
 /// Get command character from cmdarg.
@@ -235,7 +151,7 @@ fn cap_get_cmdchar_impl(cap: CmdArgHandle) -> c_int {
     if cap.is_null() {
         return 0;
     }
-    unsafe { nvim_cap_get_cmdchar(cap) }
+    unsafe { (*cap.as_ptr()).cmdchar }
 }
 
 /// Get second character from cmdarg.
@@ -244,7 +160,7 @@ fn cap_get_nchar_impl(cap: CmdArgHandle) -> c_int {
     if cap.is_null() {
         return 0;
     }
-    unsafe { nvim_cap_get_nchar(cap) }
+    unsafe { (*cap.as_ptr()).nchar }
 }
 
 /// Get count0 from cmdarg.
@@ -253,7 +169,7 @@ fn cap_get_count0_impl(cap: CmdArgHandle) -> c_int {
     if cap.is_null() {
         return 0;
     }
-    unsafe { nvim_cap_get_count0(cap) }
+    unsafe { (*cap.as_ptr()).count0 }
 }
 
 /// Get count1 from cmdarg.
@@ -262,7 +178,7 @@ fn cap_get_count1_impl(cap: CmdArgHandle) -> c_int {
     if cap.is_null() {
         return 1;
     }
-    unsafe { nvim_cap_get_count1(cap) }
+    unsafe { (*cap.as_ptr()).count1 }
 }
 
 /// Get arg from cmdarg.
@@ -271,7 +187,7 @@ fn cap_get_arg_impl(cap: CmdArgHandle) -> c_int {
     if cap.is_null() {
         return 0;
     }
-    unsafe { nvim_cap_get_arg(cap) }
+    unsafe { (*cap.as_ptr()).arg }
 }
 
 /// Get retval from cmdarg.
@@ -280,7 +196,7 @@ fn cap_get_retval_impl(cap: CmdArgHandle) -> c_int {
     if cap.is_null() {
         return 0;
     }
-    unsafe { nvim_cap_get_retval(cap) }
+    unsafe { (*cap.as_ptr()).retval }
 }
 
 // =============================================================================

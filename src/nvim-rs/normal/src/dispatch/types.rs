@@ -5,6 +5,7 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
+use crate::types::{CmdargT, OpargT};
 use std::ffi::c_int;
 
 // =============================================================================
@@ -52,14 +53,10 @@ impl NormalStateHandle {
     }
 }
 
-/// Opaque handle to command arguments (cmdarg_T*).
-///
-/// This is an opaque pointer type - Rust code should not attempt to
-/// dereference or inspect the contents. All field access is done
-/// through C accessor functions.
+/// Typed handle to command arguments (cmdarg_T*).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CmdArgHandle(*mut std::ffi::c_void);
+pub struct CmdArgHandle(*mut CmdargT);
 
 impl CmdArgHandle {
     /// Create a null handle.
@@ -74,14 +71,14 @@ impl CmdArgHandle {
     /// # Safety
     /// The pointer must be a valid `cmdarg_T*` or null.
     #[inline]
-    pub const unsafe fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+    pub const unsafe fn from_ptr(ptr: *mut CmdargT) -> Self {
         Self(ptr)
     }
 
     /// Get the raw pointer.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
+    pub const fn as_ptr(self) -> *mut CmdargT {
         self.0
     }
 
@@ -93,14 +90,10 @@ impl CmdArgHandle {
     }
 }
 
-/// Opaque handle to operator arguments (oparg_T*).
-///
-/// This is an opaque pointer type - Rust code should not attempt to
-/// dereference or inspect the contents. All field access is done
-/// through C accessor functions.
+/// Typed handle to operator arguments (oparg_T*).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OpArgHandle(*mut std::ffi::c_void);
+pub struct OpArgHandle(*mut OpargT);
 
 impl OpArgHandle {
     /// Create a null handle.
@@ -115,14 +108,14 @@ impl OpArgHandle {
     /// # Safety
     /// The pointer must be a valid `oparg_T*` or null.
     #[inline]
-    pub const unsafe fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+    pub const unsafe fn from_ptr(ptr: *mut OpargT) -> Self {
         Self(ptr)
     }
 
     /// Get the raw pointer.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
+    pub const fn as_ptr(self) -> *mut OpargT {
         self.0
     }
 

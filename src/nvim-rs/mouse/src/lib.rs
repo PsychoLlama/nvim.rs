@@ -14,6 +14,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
+use nvim_normal::types::CmdargT;
 use std::ffi::{c_char, c_int};
 
 // =============================================================================
@@ -1021,10 +1022,10 @@ pub struct PosT {
 }
 
 /// Opaque handle for `cmdarg_T *`
-pub type CmdargHandle = *mut std::ffi::c_void;
+pub type CmdargHandle = *mut nvim_normal::types::CmdargT;
 
 /// Opaque handle for `oparg_T *`
-pub type OpargHandle = *mut std::ffi::c_void;
+pub type OpargHandle = *mut nvim_normal::types::OpargT;
 
 // =============================================================================
 // Phase 4 — Window Find Functions
@@ -1162,24 +1163,6 @@ extern "C" {
 
     /// Call `pagescroll(dir, count, half != 0)`.
     fn nvim_mouse_pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int;
-
-    /// Get `cap->oap` field.
-    fn nvim_cap_get_oap(cap: CmdargHandle) -> OpargHandle;
-
-    /// Get `cap->cmdchar` field.
-    fn nvim_cap_get_cmdchar(cap: CmdargHandle) -> c_int;
-
-    /// Get `cap->count1` field.
-    fn nvim_cap_get_count1(cap: CmdargHandle) -> c_int;
-
-    /// Set `cap->count1` field.
-    fn nvim_cap_set_count1(cap: CmdargHandle, val: c_int);
-
-    /// Set `cap->count0` field.
-    fn nvim_cap_set_count0(cap: CmdargHandle, val: c_int);
-
-    /// Get `cap->arg` field.
-    fn nvim_cap_get_arg(cap: CmdargHandle) -> c_int;
 
     /// Call `undisplay_dollar()`.
     #[link_name = "nvim_textfmt_undisplay_dollar"]
@@ -1382,7 +1365,7 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
     let mod_mask = nvim_get_mod_mask();
     // MOD_MASK_SHIFT = 0x02, MOD_MASK_CTRL = 0x04
     let shift_or_ctrl = (mod_mask & (0x02 | 0x04)) != 0;
-    let cap_arg = nvim_cap_get_arg(cap);
+    let cap_arg = (*cap.cast::<CmdargT>()).arg;
     let curwin = nvim_get_curwin();
 
     if cap_arg == MSCR_UP || cap_arg == MSCR_DOWN {
@@ -1400,8 +1383,8 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
                 nvim_get_p_mousescroll_vert()
             };
             if count > 0 {
-                nvim_cap_set_count1(cap, count);
-                nvim_cap_set_count0(cap, count);
+                (*cap.cast::<CmdargT>()).count1 = count;
+                (*cap.cast::<CmdargT>()).count0 = count;
                 rs_nv_scroll_line(cap);
             }
         }
@@ -1529,9 +1512,9 @@ pub unsafe extern "C" fn rs_do_mouse(
 /// `cap` must be a valid `cmdarg_T` pointer.
 #[export_name = "nv_mouse"]
 pub unsafe extern "C" fn rs_nv_mouse(cap: CmdargHandle) {
-    let oap = nvim_cap_get_oap(cap);
-    let cmdchar = nvim_cap_get_cmdchar(cap);
-    let count1 = nvim_cap_get_count1(cap);
+    let oap = (*cap.cast::<CmdargT>()).oap;
+    let cmdchar = (*cap.cast::<CmdargT>()).cmdchar;
+    let count1 = (*cap.cast::<CmdargT>()).count1;
     rs_do_mouse(oap, cmdchar, -1 /* BACKWARD */, count1, false);
 }
 

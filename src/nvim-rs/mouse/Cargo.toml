@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 nvim-mbyte = { path = "../mbyte" }
 nvim-charset = { path = "../charset" }
+nvim-normal = { path = "../normal" }
 
 [lints]
 workspace = true

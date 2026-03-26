@@ -9,3 +9,4 @@ description = "Search-related functions for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+nvim-normal = { path = "../normal" }

@@ -43,11 +43,8 @@ extern "C" {
     static mut State: c_int;
 
     // cmdarg_T accessors
-    fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
 
     // oparg_T accessors
-    fn nvim_oap_set_op_type(oap: OapHandle, val: c_int);
 
     // Phase 2B wrappers
     fn nvim_plain_vgetc_wrapper() -> c_int;
@@ -73,7 +70,6 @@ extern "C" {
     static p_tm: i64;
 
     // Phase 6: composing char handler accessors
-    fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
     fn nvim_cap_get_nchar_composing_ptr(cap: CapHandle) -> *const std::ffi::c_char; // search.c
     fn utf_iscomposing(prev: c_int, c: c_int, state_ptr: *mut i32) -> bool;
     fn utf_char2len(c: c_int) -> c_int;
@@ -97,7 +93,7 @@ impl CharTarget {
     /// Read the target character from the cmdarg.
     unsafe fn get(self, ca: CapHandle) -> c_int {
         match self {
-            Self::Nchar => nvim_cap_get_nchar(ca),
+            Self::Nchar => (*ca).nchar,
             Self::ExtraChar => (*ca.cast::<CmdargT>()).extra_char,
         }
     }
@@ -175,7 +171,7 @@ unsafe fn read_target_char(
 
     // When the next character is CTRL-\ a following CTRL-N means the
     // command is aborted and we go to Normal mode.
-    let nchar = nvim_cap_get_nchar(ca);
+    let nchar = (*ca).nchar;
     let extra_char = (*ca.cast::<CmdargT>()).extra_char;
 
     if target == CharTarget::ExtraChar
@@ -189,7 +185,7 @@ unsafe fn read_target_char(
         && cmdchar == c_int::from(b'g')
     {
         let op_type = get_op_type(target.get(ca), 0);
-        nvim_oap_set_op_type(oa, op_type);
+        (*oa).op_type = op_type;
     } else if target.get(ca) == CTRL_BSL {
         #[allow(clippy::cast_possible_truncation)]
         let mut towait: c_int = if p_ttm >= 0 {
@@ -250,7 +246,7 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
     nvim_inc_allow_keys();
     nvim_set_did_cursorhold(true);
 
-    let cmdchar = nvim_cap_get_cmdchar(ca);
+    let cmdchar = (*ca).cmdchar;
     let idx = (*sp).idx;
 
     // Determine which character field to use and whether we need a third char.
@@ -316,7 +312,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
 
     // GraphemeState is int32_t; GRAPHEME_STATE_INIT = 0.
     let mut grapheme_state: i32 = 0;
-    let mut prev_code = nvim_cap_get_nchar(ca);
+    let mut prev_code = (*ca).nchar;
 
     loop {
         let peeked = vpeekc();
@@ -340,8 +336,8 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
         }
 
         // Ensure nchar_composing holds the base character first.
-        if nvim_cap_get_nchar_len(ca) == 0 {
-            let nchar = nvim_cap_get_nchar(ca);
+        if (*ca).nchar_len == 0 {
+            let nchar = (*ca).nchar;
             // nchar_composing is mutable; the const is a C API convention.
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
             let written = utf_char2bytes(nchar, composing_ptr);
@@ -349,7 +345,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
         }
 
         // Append composing character if it fits.
-        let cur_len = nvim_cap_get_nchar_len(ca);
+        let cur_len = (*ca).nchar_len;
         let extra = utf_char2len(c);
         if cur_len + extra < MAX_SCHAR_SIZE_INT {
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
@@ -363,7 +359,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
     // NUL-terminate nchar_composing.
     {
         let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
-        let cur_len = nvim_cap_get_nchar_len(ca);
+        let cur_len = (*ca).nchar_len;
         let offset = usize::try_from(cur_len)
             .unwrap_or(0)
             .min(MAX_SCHAR_SIZE - 1);
