@@ -20,7 +20,7 @@
 //! - Validation utilities
 //! - Helper functions for the C implementation
 
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
 use crate::range::{LineNr, LineRange};
 use crate::{BufHandle, ExArgHandle, WinHandle};
@@ -834,10 +834,9 @@ extern "C" {
     fn nvim_excmds_curbuf_check_writable() -> c_int;
     fn nvim_excmds_dialog_write_partial() -> c_int;
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
+    fn nvim_excmds_curbuf_get_sfname() -> *mut c_char;
     fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
 
-    fn nvim_excmds_do_saveas_swap(alt_buf: *mut BufHandle, out_sfname: *mut *const c_char)
-        -> c_int;
     fn nvim_excmds_buf_write_do_write(
         ffname: *const c_char,
         fname: *const c_char,
@@ -850,6 +849,104 @@ extern "C" {
     fn nvim_excmds_saveas_post_success();
     fn do_autochdir();
     fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
+
+    // rs_do_saveas_swap support
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    fn aborting() -> c_int;
+    fn nvim_excmds_buf_swap_filenames(alt_buf: *mut BufHandle);
+    fn nvim_excmds_buf_name_changed_curbuf();
+    fn nvim_excmds_buf_get_b_p_bl(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_buf_set_b_p_bl_true(buf: *mut BufHandle);
+    fn nvim_excmds_buf_ft_is_empty(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_augroup_exists_filetypedetect() -> c_int;
+    fn nvim_excmds_do_doautocmd_filetypedetect();
+    fn nvim_excmds_do_modelines();
+}
+
+// EVENT_* constants verified by _Static_assert in ex_cmds_shim.c
+const EVENT_BUFADD: c_int = 0;
+const EVENT_BUFFILEPOST: c_int = 4;
+const EVENT_BUFFILEPRE: c_int = 5;
+
+/// Implement the saveas name-swap + autocmd sequence.
+/// Returns 1=OK (write can proceed), 0=FAIL (buffer changed or aborting).
+///
+/// # Safety
+/// `alt_buf` must be a valid buf_T pointer.
+#[allow(clippy::must_use_candidate)]
+unsafe fn rs_do_saveas_swap(alt_buf: *mut BufHandle, out_sfname: *mut *const c_char) -> c_int {
+    let was_curbuf = nvim_get_curbuf() as usize; // identity for comparison
+
+    apply_autocmds(
+        EVENT_BUFFILEPRE,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        nvim_get_curbuf() as *mut c_void,
+    );
+    apply_autocmds(
+        EVENT_BUFFILEPRE,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        alt_buf.cast::<c_void>(),
+    );
+    if (nvim_get_curbuf() as usize) != was_curbuf || aborting() != 0 {
+        return 0;
+    }
+
+    // Exchange the file names between curbuf and alt_buf
+    nvim_excmds_buf_swap_filenames(alt_buf);
+    nvim_excmds_buf_name_changed_curbuf();
+
+    apply_autocmds(
+        EVENT_BUFFILEPOST,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        nvim_get_curbuf() as *mut c_void,
+    );
+    apply_autocmds(
+        EVENT_BUFFILEPOST,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        alt_buf.cast::<c_void>(),
+    );
+
+    if nvim_excmds_buf_get_b_p_bl(alt_buf as *const BufHandle) == 0 {
+        nvim_excmds_buf_set_b_p_bl_true(alt_buf);
+        apply_autocmds(
+            EVENT_BUFADD,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            alt_buf.cast::<c_void>(),
+        );
+    }
+
+    if (nvim_get_curbuf() as usize) != was_curbuf || aborting() != 0 {
+        return 0;
+    }
+
+    // If 'filetype' was empty, try detecting it now
+    let curbuf_ptr = nvim_get_curbuf() as *const BufHandle;
+    if nvim_excmds_buf_ft_is_empty(curbuf_ptr) != 0 {
+        if nvim_excmds_augroup_exists_filetypedetect() != 0 {
+            nvim_excmds_do_doautocmd_filetypedetect();
+        }
+        nvim_excmds_do_modelines();
+    }
+
+    // Autocommands may have changed buffer names; return updated sfname
+    *out_sfname = nvim_excmds_curbuf_get_sfname() as *const c_char;
+    1
 }
 
 /// Implement `do_write`. Replaces C `do_write`.
@@ -963,7 +1060,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
 
         if is_saveas && !alt_buf.is_null() {
             let mut sfname_out: *const c_char = std::ptr::null();
-            if nvim_excmds_do_saveas_swap(alt_buf, &mut sfname_out) == 0 {
+            if rs_do_saveas_swap(alt_buf, &mut sfname_out) == 0 {
                 // Buffer changed, abort
                 xfree(free_fname.cast());
                 return 0; // FAIL

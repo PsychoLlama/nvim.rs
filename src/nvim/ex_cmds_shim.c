@@ -251,6 +251,10 @@ _Static_assert(kExtmarkUndo == 1, "kExtmarkUndo mismatch");
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
 _Static_assert(EOL_MAC == 2, "EOL_MAC mismatch");
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
+// Event constants used in rs_do_saveas_swap (Phase 5)
+_Static_assert(EVENT_BUFADD == 0, "EVENT_BUFADD mismatch");
+_Static_assert(EVENT_BUFFILEPOST == 4, "EVENT_BUFFILEPOST mismatch");
+_Static_assert(EVENT_BUFFILEPRE == 5, "EVENT_BUFFILEPRE mismatch");
 
 // Verify constants used in Rust code.
 _Static_assert(CMD_left == 229, "CMD_left mismatch");
@@ -804,50 +808,21 @@ int nvim_excmds_dialog_write_partial(void)
   return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0;
 }
 
-/// Do saveas: apply BufFilePre, swap names, BufFilePost, BufAdd autocmds.
-/// Returns 1=OK (write can proceed), 0=FAIL (buffer changed, abort).
-/// Updates curbuf->b_sfname; returns the sfname via out_sfname (borrowed from curbuf).
-int nvim_excmds_do_saveas_swap(buf_T *alt_buf, const char **out_sfname)
+// --- rs_do_saveas_swap FFI accessors ---
+void nvim_excmds_buf_swap_filenames(buf_T *alt_buf)
 {
-  buf_T *was_curbuf = curbuf;
-
-  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
-  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, alt_buf);
-  if (curbuf != was_curbuf || aborting()) {
-    return 0;
-  }
-  // Exchange the file names
   char *tmp;
-  tmp = alt_buf->b_fname;
-  alt_buf->b_fname = curbuf->b_fname;
-  curbuf->b_fname = tmp;
-  tmp = alt_buf->b_ffname;
-  alt_buf->b_ffname = curbuf->b_ffname;
-  curbuf->b_ffname = tmp;
-  tmp = alt_buf->b_sfname;
-  alt_buf->b_sfname = curbuf->b_sfname;
-  curbuf->b_sfname = tmp;
-  buf_name_changed(curbuf);
-  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
-  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, alt_buf);
-  if (!alt_buf->b_p_bl) {
-    alt_buf->b_p_bl = true;
-    apply_autocmds(EVENT_BUFADD, NULL, NULL, false, alt_buf);
-  }
-  if (curbuf != was_curbuf || aborting()) {
-    return 0;
-  }
-  // If 'filetype' was empty try detecting it now.
-  if (*curbuf->b_p_ft == NUL) {
-    if (augroup_exists("filetypedetect")) {
-      do_doautocmd("filetypedetect BufRead", true, NULL);
-    }
-    do_modelines(0);
-  }
-  // Autocommands may have changed buffer names.
-  *out_sfname = curbuf->b_sfname;
-  return 1;
+  tmp = alt_buf->b_fname; alt_buf->b_fname = curbuf->b_fname; curbuf->b_fname = tmp;
+  tmp = alt_buf->b_ffname; alt_buf->b_ffname = curbuf->b_ffname; curbuf->b_ffname = tmp;
+  tmp = alt_buf->b_sfname; alt_buf->b_sfname = curbuf->b_sfname; curbuf->b_sfname = tmp;
 }
+void nvim_excmds_buf_name_changed_curbuf(void) { buf_name_changed(curbuf); }
+int nvim_excmds_buf_get_b_p_bl(const buf_T *buf) { return buf->b_p_bl ? 1 : 0; }
+void nvim_excmds_buf_set_b_p_bl_true(buf_T *buf) { buf->b_p_bl = true; }
+int nvim_excmds_buf_ft_is_empty(const buf_T *buf) { return *buf->b_p_ft == NUL ? 1 : 0; }
+int nvim_excmds_augroup_exists_filetypedetect(void) { return augroup_exists("filetypedetect") ? 1 : 0; }
+void nvim_excmds_do_doautocmd_filetypedetect(void) { do_doautocmd("filetypedetect BufRead", true, NULL); }
+void nvim_excmds_do_modelines(void) { do_modelines(0); }
 
 /// Wrap buf_write for do_write. Returns 1=OK, 0=FAIL.
 int nvim_excmds_buf_write_do_write(const char *ffname, const char *fname,
