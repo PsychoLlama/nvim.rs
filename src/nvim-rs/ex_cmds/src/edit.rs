@@ -176,7 +176,7 @@ extern "C" {
     fn check_arg_idx(win: *mut WinHandle);
     fn do_autochdir();
     fn changed_line_abv_curs();
-    fn nvim_excmds_update_topline_curwin();
+    fn update_topline(win: *mut WinHandle);
     fn redraw_curbuf_later(type_: c_int);
 
     // Cursor manipulation wrappers
@@ -188,7 +188,13 @@ extern "C" {
     fn nvim_ecmd_cursor_col_skipwhite() -> c_int;
 
     // Autocmd wrappers
-    fn nvim_ecmd_apply_autocmds_bufleave();
+    fn apply_autocmds(
+        event: c_int,
+        pat: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut std::ffi::c_void,
+    ) -> bool;
     fn nvim_ecmd_apply_autocmds_bufenter_retval(retval: *mut c_int);
     fn nvim_ecmd_apply_autocmds_bufwinenter_retval(retval: *mut c_int);
 
@@ -524,7 +530,13 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 nvim_ecmd_au_new_curbuf_set(buf);
 
                 // Fire BufLeave for the current (old) buffer
-                nvim_ecmd_apply_autocmds_bufleave();
+                apply_autocmds(
+                    7,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    false,
+                    crate::nvim_get_curbuf().cast(),
+                );
 
                 // Restore cmdwin state
                 nvim_ecmd_cmdwin_restore_free(cmdwin_state);
@@ -894,7 +906,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if topline == 0 && command.is_null() {
                 nvim_ecmd_curwin_set_effective_p_so(999);
             }
-            nvim_excmds_update_topline_curwin();
+            update_topline(crate::nvim_get_curwin());
             nvim_ecmd_curwin_set_scbind_pos_from_topline();
             // Restore original scroll offset
             nvim_ecmd_curwin_set_effective_p_so(orig_p_so);

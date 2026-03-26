@@ -108,7 +108,8 @@ extern "C" {
     ) -> c_int;
 
     // --- topline update ---
-    fn nvim_excmds_update_topline_curwin();
+    fn update_topline(wp: *mut c_void);
+    fn nvim_get_curwin() -> *mut c_void;
 
     // --- validate cursor ---
     fn nvim_validate_cursor_curwin_wrapper();
@@ -275,7 +276,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
 
     // Update topline
     if unsafe { (*s).count } <= 1 {
-        unsafe { nvim_excmds_update_topline_curwin() };
+        unsafe { update_topline(nvim_get_curwin()) };
     }
 
     unsafe { (*s).did_backspace = false };

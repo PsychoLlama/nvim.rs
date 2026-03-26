@@ -344,8 +344,13 @@ pub unsafe extern "C" fn rs_is_numeric_bufarg(arg: *const u8, len: c_int) -> c_i
 extern "C" {
     // rename_buffer FFI
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
-    fn nvim_excmds_apply_autocmds_buffilepre();
-    fn nvim_excmds_apply_autocmds_buffilepost();
+    fn apply_autocmds(
+        event: c_int,
+        pat: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut std::ffi::c_void,
+    ) -> bool;
     fn nvim_excmds_curbuf_is(ptr: *mut std::ffi::c_void) -> c_int;
     fn aborting() -> c_int;
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
@@ -354,7 +359,12 @@ extern "C" {
     fn nvim_excmds_curbuf_set_ffname(p: *mut c_char);
     fn nvim_excmds_curbuf_set_sfname(p: *mut c_char);
     fn nvim_excmds_curbuf_clear_filenames();
-    fn nvim_excmds_setfname(name: *const c_char) -> c_int;
+    fn setfname(
+        buf: *mut crate::BufHandle,
+        ffname: *const c_char,
+        sfname: *const c_char,
+        message: bool,
+    ) -> c_int;
     fn nvim_excmds_curbuf_set_bf_notedited();
     fn buflist_new(
         ffname_arg: *mut c_char,
@@ -394,7 +404,13 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
     // Save curbuf identity before autocmds can change it
     let saved_buf = nvim_excmds_get_curbuf_identity();
 
-    nvim_excmds_apply_autocmds_buffilepre();
+    apply_autocmds(
+        5,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        crate::nvim_get_curbuf().cast(),
+    );
 
     // Buffer changed (autocmd), don't change name now
     if nvim_excmds_curbuf_is(saved_buf) == 0 {
@@ -413,7 +429,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
     // Clear ffname and sfname before setfname
     nvim_excmds_curbuf_clear_filenames();
 
-    if nvim_excmds_setfname(new_fname) == 0 {
+    if setfname(crate::nvim_get_curbuf(), new_fname, std::ptr::null(), true) == 0 {
         // setfname failed: restore original names
         nvim_excmds_curbuf_set_ffname(fname);
         nvim_excmds_curbuf_set_sfname(sfname);
@@ -435,7 +451,13 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
     xfree(fname as *mut std::ffi::c_void);
     xfree(sfname as *mut std::ffi::c_void);
 
-    nvim_excmds_apply_autocmds_buffilepost();
+    apply_autocmds(
+        4,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        crate::nvim_get_curbuf().cast(),
+    );
     // Change directories when the 'acd' option is set.
     do_autochdir();
 

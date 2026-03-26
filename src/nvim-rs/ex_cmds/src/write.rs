@@ -411,9 +411,9 @@ const ERR_E_ARGREQ: c_int = 13; // e_argreq
 const ERR_E143: c_int = 14; // E143 autocommands deleted new buffer + clear au_new_curbuf
 
 extern "C" {
-    fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
+    fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn text_locked() -> c_int;
-    fn nvim_excmds_curbuf_locked() -> c_int;
+    fn curbuf_locked() -> bool;
     fn nvim_excmds_fname_expand(
         ffname_in: *mut c_char,
         sfname_in: *mut c_char,
@@ -422,9 +422,10 @@ extern "C" {
     );
     fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
     fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
-    fn nvim_excmds_buf_hide_curbuf() -> c_int;
-    fn nvim_excmds_autowrite_curbuf(forceit: c_int) -> c_int;
-    fn nvim_excmds_dialog_changed_curbuf();
+    fn rs_buf_hide(buf: *mut BufHandle) -> bool;
+    fn autowrite(buf: *mut BufHandle, forceit: bool) -> c_int;
+    fn dialog_changed(buf: *mut BufHandle, checkall: bool);
+    fn curbufIsChanged() -> bool;
     fn no_write_message();
     fn setpcmark();
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
@@ -450,13 +451,13 @@ pub unsafe extern "C" fn rs_getfile(
     lnum: c_int,
     forceit: c_int,
 ) -> c_int {
-    if nvim_excmds_check_can_set_curbuf_forceit(forceit) == 0 {
+    if !check_can_set_curbuf_forceit(forceit) {
         return GETFILE_ERROR_VAL;
     }
     if text_locked() != 0 {
         return GETFILE_ERROR_VAL;
     }
-    if nvim_excmds_curbuf_locked() != 0 {
+    if curbuf_locked() {
         return GETFILE_ERROR_VAL;
     }
 
@@ -496,14 +497,14 @@ pub unsafe extern "C" fn rs_getfile(
     if other != 0
         && forceit == 0
         && nvim_excmds_curbuf_get_b_nwindows() == 1
-        && nvim_excmds_buf_hide_curbuf() == 0
-        && nvim_excmds_curbufIsChanged() != 0
-        && nvim_excmds_autowrite_curbuf(forceit) == 0
+        && !rs_buf_hide(crate::nvim_get_curbuf())
+        && curbufIsChanged()
+        && autowrite(crate::nvim_get_curbuf(), forceit != 0) == 0
     {
         if crate::p_confirm != 0 && crate::p_write != 0 {
-            nvim_excmds_dialog_changed_curbuf();
+            dialog_changed(crate::nvim_get_curbuf(), false);
         }
-        if nvim_excmds_curbufIsChanged() != 0 {
+        if curbufIsChanged() {
             crate::no_wait_return -= 1;
             no_write_message();
             xfree(free_me.cast());
@@ -526,7 +527,7 @@ pub unsafe extern "C" fn rs_getfile(
         beginline(BL_SOL_FIX_VAL);
         retval = GETFILE_SAME_FILE_VAL;
     } else {
-        let hide_flag = if nvim_excmds_buf_hide_curbuf() != 0 {
+        let hide_flag = if rs_buf_hide(crate::nvim_get_curbuf()) {
             ECMD_HIDE_VAL
         } else {
             0
@@ -624,7 +625,7 @@ extern "C" {
     fn nvim_excmds_new_bufref(buf: *mut BufHandle) -> *mut std::ffi::c_void;
     fn nvim_excmds_bufref_valid(refp: *mut std::ffi::c_void) -> c_int;
 
-    fn nvim_excmds_buf_write_all(buf: *mut BufHandle, forceit: c_int) -> c_int;
+    fn buf_write_all(buf: *mut BufHandle, forceit: bool) -> c_int;
     fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
 }
 
@@ -685,7 +686,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
                     let bufref = nvim_excmds_new_bufref(buf);
                     let forceit = nvim_exarg_get_forceit(eap);
                     if rs_handle_mkdir_p_arg(eap, buf_fname) == 0
-                        || nvim_excmds_buf_write_all(buf, forceit) == 0
+                        || buf_write_all(buf, forceit != 0) == 0
                     {
                         error += 1;
                     }
@@ -829,10 +830,10 @@ extern "C" {
         fname: *const c_char,
         lnum: c_int,
     ) -> *mut BufHandle;
-    fn nvim_excmds_buflist_findname(ffname: *const c_char) -> *mut BufHandle;
+    fn rs_buflist_findname(ffname: *mut c_char) -> *mut BufHandle;
     fn nvim_ecmd_buf_has_memfile(buf: *mut BufHandle) -> c_int;
     fn nvim_excmds_emsg_e_bufloaded();
-    fn nvim_excmds_bt_dontwrite_msg_curbuf() -> c_int;
+    fn rs_bt_dontwrite_msg(buf: *mut BufHandle) -> bool;
     fn check_fname() -> c_int;
     fn nvim_excmds_curbuf_check_writable() -> c_int;
     fn nvim_excmds_dialog_write_partial() -> c_int;
@@ -910,7 +911,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         if nvim_excmds_vim_strchr_cpo_altwrite() != 0 || nvim_exarg_cmdidx_is_saveas(eap) != 0 {
             alt_buf = nvim_excmds_setaltfname(ffname, fname, 1);
         } else {
-            alt_buf = nvim_excmds_buflist_findname(ffname);
+            alt_buf = rs_buflist_findname(ffname as *mut c_char);
         }
         if !alt_buf.is_null() && nvim_ecmd_buf_has_memfile(alt_buf) != 0 {
             nvim_excmds_emsg_e_bufloaded();
@@ -922,7 +923,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
     // Writing to the current file checks
     if other == 0 {
         let curbuf = nvim_get_curbuf();
-        if nvim_excmds_bt_dontwrite_msg_curbuf() != 0
+        if rs_bt_dontwrite_msg(curbuf)
             || check_fname() == 0
             || nvim_excmds_curbuf_check_writable() == 0
             || rs_check_readonly(eap, curbuf) != 0
@@ -1013,8 +1014,6 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_curbufIsChanged() -> c_int;
-    fn nvim_excmds_bt_nofilename_curbuf() -> c_int;
     fn nvim_excmds_curbuf_ffname_not_null() -> c_int;
     fn nvim_excmds_os_path_exists_curbuf_ffname() -> c_int;
 
@@ -1036,8 +1035,8 @@ extern "C" {
 /// `eap` must be a valid exarg_T pointer.
 #[export_name = "ex_update"]
 pub unsafe extern "C" fn rs_ex_update(eap: *mut ExArgHandle) {
-    let is_changed = nvim_excmds_curbufIsChanged() != 0;
-    let no_filename = nvim_excmds_bt_nofilename_curbuf() != 0;
+    let is_changed = curbufIsChanged();
+    let no_filename = rs_bt_nofilename(crate::nvim_get_curbuf());
     let has_ffname = nvim_excmds_curbuf_ffname_not_null() != 0;
     let path_exists = nvim_excmds_os_path_exists_curbuf_ffname() != 0;
 

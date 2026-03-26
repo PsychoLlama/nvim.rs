@@ -85,7 +85,7 @@ extern "C" {
     fn nvim_get_fdo_flags() -> c_uint;
 
     // Topline
-    fn nvim_excmds_update_topline_curwin();
+    fn update_topline(wp: WinHandle);
 
     // ASCII helpers (Rust-implemented, callable via FFI)
     fn rs_ascii_iswhite(c: c_int) -> c_int;
@@ -369,7 +369,7 @@ unsafe fn cursor_up_impl(n: LinenrT, upd_topline: bool) -> c_int {
     nvim_coladvance(nvim_curwin_get_w_curswant());
 
     if upd_topline {
-        nvim_excmds_update_topline_curwin();
+        update_topline(nvim_get_curwin());
     }
 
     OK
@@ -462,7 +462,7 @@ unsafe fn cursor_down_impl(n: c_int, upd_topline: bool) -> c_int {
     nvim_coladvance(nvim_curwin_get_w_curswant());
 
     if upd_topline {
-        nvim_excmds_update_topline_curwin();
+        update_topline(nvim_get_curwin());
     }
 
     OK

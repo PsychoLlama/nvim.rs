@@ -420,7 +420,13 @@ extern "C" {
     fn nvim_excmds_any_buf_changed() -> c_int;
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn call_shell(cmd: *mut c_char, opts: c_int, extra_shell_arg: *mut c_char) -> c_int;
-    fn nvim_excmds_apply_autocmds_shellcmdpost();
+    fn apply_autocmds(
+        event: c_int,
+        pat: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut std::ffi::c_void,
+    ) -> bool;
 
     // do_bang FFI
     fn rs_check_secure() -> c_int;
@@ -429,7 +435,6 @@ extern "C" {
     fn AppendToRedobuffLit(str_: *const c_char, len: c_int);
     fn AppendToRedobuff(s: *const c_char);
     fn ui_cursor_goto(new_row: c_int, new_col: c_int);
-    fn nvim_excmds_apply_autocmds_shellfilterpost();
     fn msg_start();
     fn msg_putchar(c: c_int);
     fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
@@ -800,7 +805,13 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
     crate::msg_row = rows - 1;
     crate::msg_col = 0;
 
-    nvim_excmds_apply_autocmds_shellcmdpost();
+    apply_autocmds(
+        98,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        crate::nvim_get_curbuf().cast(),
+    );
 }
 
 /// Handle the `:!cmd` command. Also for `:r !cmd` and `:w !cmd`.
@@ -1003,7 +1014,13 @@ pub unsafe extern "C" fn rs_do_bang(
         // :range! -- filter through shell command
         // Note: This may recursively call do_bang() again (via autocommands).
         rs_do_filter(line1, line2, eap, newcmd, do_in as c_int, do_out as c_int);
-        nvim_excmds_apply_autocmds_shellfilterpost();
+        apply_autocmds(
+            99,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            crate::nvim_get_curbuf().cast(),
+        );
     }
 
     if free_newcmd {
@@ -1051,8 +1068,8 @@ extern "C" {
     ) -> c_int;
     fn del_lines(count: c_int, undo: c_int) -> c_int;
     fn write_lnum_adjust(offset: c_int);
-    fn nvim_excmds_redraw_curbuf_later_valid();
-    fn nvim_excmds_invalidate_botline();
+    fn redraw_curbuf_later(redraw_type: c_int);
+    fn invalidate_botline(wp: *mut std::ffi::c_void);
     fn nvim_excmds_p_cpo_no_remmark() -> c_int;
     #[link_name = "rs_foldUpdate"]
     fn nvim_rs_foldUpdate(wp: *mut std::ffi::c_void, top: c_int, bot: c_int);
@@ -1129,7 +1146,7 @@ pub unsafe extern "C" fn rs_do_filter(
     nvim_curwin_set_cursor_lnum(line1);
     nvim_curwin_set_cursor_col(0);
     changed_line_abv_curs();
-    nvim_excmds_invalidate_botline();
+    invalidate_botline(crate::nvim_get_curwin().cast());
 
     let k_shell_opt_do_out = K_SHELL_OPT_DO_OUT;
     let k_shell_opt_read = K_SHELL_OPT_READ;
@@ -1253,7 +1270,7 @@ pub unsafe extern "C" fn rs_do_filter(
             );
             return;
         }
-        nvim_excmds_redraw_curbuf_later_valid();
+        redraw_curbuf_later(10);
     }
 
     let mut read_linecount = nvim_excmds_curbuf_ml_line_count();

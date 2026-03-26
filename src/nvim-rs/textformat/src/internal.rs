@@ -89,7 +89,7 @@ extern "C" {
     fn nvim_set_can_si(val: bool);
     fn nvim_set_can_si_back(val: bool);
     fn nvim_set_can_cindent(val: bool);
-    fn nvim_excmds_update_topline_curwin(win: *mut c_void);
+    fn update_topline(win: *mut c_void);
     fn line_breakcheck();
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_curbuf_get_b_p_cin() -> c_int;
@@ -577,7 +577,7 @@ pub(crate) unsafe fn internal_format_impl(
     nvim_textfmt_set_curwin_w_p_lbr(has_lbr);
 
     if !format_only && haveto_redraw {
-        nvim_excmds_update_topline_curwin(nvim_textfmt_get_curwin());
+        update_topline(nvim_textfmt_get_curwin());
         nvim_textfmt_redraw_curbuf_later(UPD_VALID);
     }
 }

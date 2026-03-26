@@ -64,7 +64,7 @@ extern "C" {
     fn rs_buflist_findnr(nr: c_int) -> BufHandle;
 
     // Validation helpers for do_buffer_ext (implemented in ex_cmds_shim.c)
-    fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
+    fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn nvim_ecmd_emsg_closing_buffer();
 
     // can_unload_buffer accessors
@@ -802,7 +802,7 @@ unsafe fn find_and_validate_buffer(
     // Pre-action validation.
     if action == DOBUF_GOTO && buf != curbuf {
         let forceit = c_int::from((flags & DOBUF_FORCEIT) != 0);
-        if nvim_excmds_check_can_set_curbuf_forceit(forceit) == 0 {
+        if !check_can_set_curbuf_forceit(forceit) {
             return null;
         }
         if nvim_buf_get_locked_split(buf) != 0 {

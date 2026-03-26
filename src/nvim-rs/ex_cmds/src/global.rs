@@ -35,7 +35,7 @@ extern "C" {
     fn nvim_excmds_do_cmdline_global(cmd: *const c_char);
     fn os_breakcheck();
     fn beginline(flags: c_int);
-    fn nvim_excmds_check_cursor_curwin();
+    fn check_cursor(wp: *mut crate::WinHandle);
     fn changed_line_abv_curs();
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
     fn msgmore(n: c_int);
@@ -436,7 +436,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     if crate::global_need_beginline != 0 {
         beginline(BL_WHITE | BL_FIX);
     } else {
-        nvim_excmds_check_cursor_curwin();
+        check_cursor(crate::nvim_get_curwin());
     }
 
     // The cursor may not have moved in the text but a change in a previous

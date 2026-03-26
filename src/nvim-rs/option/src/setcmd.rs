@@ -1221,7 +1221,7 @@ extern "C" {
     fn os_breakcheck();
     static mut msg_col: c_int;
     fn nvim_get_namebuff() -> *mut c_char;
-    fn nvim_excmds_curbufIsChanged() -> c_int;
+    fn curbufIsChanged() -> bool;
     fn nvim_varp_is_curbuf_b_changed(varp: *const std::ffi::c_void) -> c_int;
     fn nvim_get_varp_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
@@ -1275,7 +1275,7 @@ pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
         let val = *(varp as *const c_int);
         let show_false = if nvim_varp_is_curbuf_b_changed(varp) != 0 {
             // 'modified' option: false when buffer not actually changed
-            nvim_excmds_curbufIsChanged() == 0
+            !curbufIsChanged()
         } else {
             val == 0
         };

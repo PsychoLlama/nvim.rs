@@ -113,7 +113,7 @@ extern "C" {
         end_col: c_int,
         offset: c_int,
     );
-    fn nvim_excmds_update_topline_curwin();
+    fn update_topline(win: *mut crate::WinHandle);
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_preview_lines_size(pl: *const std::ffi::c_void) -> usize;
     fn nvim_excmds_preview_lines_item(
@@ -832,7 +832,7 @@ pub unsafe extern "C" fn rs_show_sub(
     }
 
     // Update the topline to ensure that main window is on the correct line.
-    nvim_excmds_update_topline_curwin();
+    update_topline(crate::nvim_get_curwin());
 
     // Width of the "| lnum|..." column which displays the line numbers.
     let mut col_width: c_int = 0;

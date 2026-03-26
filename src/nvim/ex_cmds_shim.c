@@ -518,9 +518,6 @@ void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
   eap->cmdidx = saved_cmdidx;
 }
 
-// --- do_bang FFI accessors ---
-
-void nvim_excmds_apply_autocmds_shellfilterpost(void) { apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf); }
 // --- do_shell FFI accessors ---
 int nvim_excmds_any_buf_changed(void)
 {
@@ -532,7 +529,6 @@ int nvim_excmds_any_buf_changed(void)
   return 0;
 }
 
-void nvim_excmds_apply_autocmds_shellcmdpost(void) { apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf); }
 // --- global_exe FFI accessors ---
 void nvim_excmds_do_cmdline_global(const char *cmd)
 {
@@ -542,7 +538,7 @@ void nvim_excmds_do_cmdline_global(const char *cmd)
     do_cmdline((char *)cmd, NULL, NULL, DOCMD_NOWAIT);
   }
 }
-void nvim_excmds_check_cursor_curwin(void) { check_cursor(curwin); }
+
 // --- show_sub FFI accessors ---
 
 /// Save and set p_shm to "F" (disable file info message). Returns strdup of p_shm.
@@ -575,7 +571,7 @@ void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id,
   lpos_T end = { end_lnum, end_col };
   bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start, end, offset);
 }
-void nvim_excmds_update_topline_curwin(void) { update_topline(curwin); }
+
 
 size_t nvim_excmds_preview_lines_size(const void *pl) { return ((const PreviewLines *)pl)->subresults.size; }
 void nvim_excmds_preview_lines_item(const void *pl, size_t idx,
@@ -691,10 +687,7 @@ void nvim_excmds_curwin_set_col_zero(void) { curwin->w_cursor.col = 0; }
 /// Save and return curbuf identity (opaque pointer for comparison).
 void *nvim_excmds_get_curbuf_identity(void) { return (void *)curbuf; }
 
-/// Apply BufFilePre autocmd on curbuf.
-void nvim_excmds_apply_autocmds_buffilepre(void) { apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf); }
-/// Apply BufFilePost autocmd on curbuf.
-void nvim_excmds_apply_autocmds_buffilepost(void) { apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf); }
+
 /// Check if curbuf matches a saved identity pointer.
 int nvim_excmds_curbuf_is(void *ptr) { return curbuf == (buf_T *)ptr ? 1 : 0; }
 
@@ -720,8 +713,7 @@ void nvim_excmds_curbuf_clear_filenames(void)
   curbuf->b_sfname = NULL;
 }
 
-/// Call setfname(curbuf, name, NULL, true). Returns OK (1) or FAIL (0).
-int nvim_excmds_setfname(const char *name) { return setfname(curbuf, (char *)name, NULL, true) == OK ? 1 : 0; }
+
 void nvim_excmds_curbuf_set_bf_notedited(void) { curbuf->b_flags |= BF_NOTEDITED; }
 
 
@@ -732,11 +724,6 @@ void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 
 // --- ex_update, ex_write, ex_wnext FFI accessors ---
 
-/// Check if current buffer has been changed (curbufIsChanged).
-int nvim_excmds_curbufIsChanged(void) { return curbufIsChanged() ? 1 : 0; }
-
-/// Check if current buffer has no file name (bt_nofilename(curbuf)).
-int nvim_excmds_bt_nofilename_curbuf(void) { return bt_nofilename(curbuf) ? 1 : 0; }
 
 /// Check if curbuf->b_ffname is not NULL.
 int nvim_excmds_curbuf_ffname_not_null(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
@@ -840,9 +827,6 @@ int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap)
                   eap, READ_FILTER, false) == OK ? 1 : 0;
 }
 
-void nvim_excmds_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }
-
-void nvim_excmds_invalidate_botline(void) { invalidate_botline(curwin); }
 
 /// Check vim_strchr(p_cpo, CPO_REMMARK) == NULL (returns 1 if NULL, 0 if found).
 int nvim_excmds_p_cpo_no_remmark(void) { return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0; }
@@ -916,10 +900,6 @@ int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_co
 
 // --- getfile, set_swapcommand, delbuf_msg FFI accessors ---
 
-/// Wrap check_can_set_curbuf_forceit(forceit). Returns 1 if allowed.
-int nvim_excmds_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit((bool)forceit) ? 1 : 0; }
-/// Wrap curbuf_locked(). Returns 1 if locked.
-int nvim_excmds_curbuf_locked(void) { return curbuf_locked() ? 1 : 0; }
 
 /// Expand fname and sfname for curbuf. Both pointers are modified in-place.
 /// ffname_ptr and sfname_ptr point to the buffers, fname_expand fills them.
@@ -939,13 +919,6 @@ int nvim_excmds_curbuf_get_b_fnum(void) { return curbuf->b_fnum; }
 /// Get curbuf->b_nwindows.
 int nvim_excmds_curbuf_get_b_nwindows(void) { return curbuf->b_nwindows; }
 
-/// Wrap buf_hide(curbuf). Returns 1 if true.
-int nvim_excmds_buf_hide_curbuf(void) { return buf_hide(curbuf) ? 1 : 0; }
-
-/// Wrap autowrite(curbuf, forceit). Returns 1=OK, 0=FAIL.
-int nvim_excmds_autowrite_curbuf(int forceit) { return autowrite(curbuf, (bool)forceit) == OK ? 1 : 0; }
-/// Wrap dialog_changed(curbuf, false).
-void nvim_excmds_dialog_changed_curbuf(void) { dialog_changed(curbuf, false); }
 
 /// For set_swapcommand: get_vim_var_str(VV_SWAPCOMMAND). Returns the string (not owned).
 const char *nvim_excmds_get_vim_var_str_swapcommand(void) { return get_vim_var_str(VV_SWAPCOMMAND); }
@@ -993,8 +966,7 @@ void *nvim_excmds_new_bufref(buf_T *buf)
 int nvim_excmds_bufref_valid(void *ref) { return bufref_valid((bufref_T *)ref) ? 1 : 0; }
 
 
-/// Wrap buf_write_all(buf, forceit). Returns 1=OK, 0=FAIL.
-int nvim_excmds_buf_write_all(buf_T *buf, int forceit) { return buf_write_all(buf, (bool)forceit) == OK ? 1 : 0; }
+
 // --- check_overwrite FFI accessors ---
 
 /// Get buf->b_flags field.
@@ -1062,14 +1034,10 @@ void *nvim_excmds_setaltfname(const char *ffname, const char *fname, int lnum)
   return setaltfname((char *)ffname, (char *)fname, (linenr_T)lnum);
 }
 
-/// Wrap buflist_findname(ffname). Returns opaque buf pointer (may be NULL).
-void *nvim_excmds_buflist_findname(const char *ffname) { return buflist_findname((char *)ffname); }
 
 /// emsg(_(e_bufloaded)).
 void nvim_excmds_emsg_e_bufloaded(void) { emsg(_(e_bufloaded)); }
 
-/// Wrap bt_dontwrite_msg(curbuf). Returns 1 if true.
-int nvim_excmds_bt_dontwrite_msg_curbuf(void) { return bt_dontwrite_msg(curbuf) ? 1 : 0; }
 
 /// Check curbuf->b_ffname writable (Unix: rs_check_writable).
 int nvim_excmds_curbuf_check_writable(void)
@@ -1560,8 +1528,7 @@ int nvim_ecmd_cursor_col_skipwhite(void)
 
 // --- Autocmd wrappers ---
 
-/// Call apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf)
-void nvim_ecmd_apply_autocmds_bufleave(void) { apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf); }
+
 /// Call apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval)
 void nvim_ecmd_apply_autocmds_bufenter_retval(int *retval)
 {
