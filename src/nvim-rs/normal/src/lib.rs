@@ -7262,8 +7262,6 @@ extern "C" {
     fn nvim_do_cmdline_for_colon(cap: CapHandle, is_cmdkey: bool) -> bool;
     fn nvim_map_execute_lua_for_colon() -> bool;
     fn nvim_compute_cmdrow();
-    fn nvim_get_oap_start_lnum(cap: CapHandle) -> c_int;
-    fn nvim_get_oap_start_col(cap: CapHandle) -> c_int;
     fn nvim_did_emsg_check() -> c_int;
     // nvim_ml_get_len_call already declared above (line ~299)
 
@@ -7353,9 +7351,14 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
         // The Ex command failed, do not execute the operator.
         rs_clearop(oap);
     } else if nvim_oap_get_op_type_ptr(oap) != OP_NOP
-        && (nvim_get_oap_start_lnum(cap) > nvim_get_line_count()
-            || nvim_get_oap_start_col(cap) > nvim_ml_get_len_call(nvim_get_oap_start_lnum(cap))
-            || nvim_did_emsg_check() != 0)
+        && ({
+            let ca = &*(cap as *const crate::types::CmdargT);
+            let oap_start_lnum = (*ca.oap).start.lnum as c_int;
+            let oap_start_col = (*ca.oap).start.col as c_int;
+            oap_start_lnum > nvim_get_line_count()
+                || oap_start_col > nvim_ml_get_len_call(oap_start_lnum)
+                || nvim_did_emsg_check() != 0
+        })
     {
         // The start of the operator has become invalid by the Ex command.
         rs_clearopbeep(oap);

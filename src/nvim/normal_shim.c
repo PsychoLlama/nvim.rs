@@ -1392,12 +1392,6 @@ bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) {
 /// Call map_execute_lua(true, false).
 bool nvim_map_execute_lua_for_colon(void) { return map_execute_lua(true, false); }
 
-/// Get cap->oap->start.lnum.
-int nvim_get_oap_start_lnum(cmdarg_T *cap) { return (int)cap->oap->start.lnum; }
-
-/// Get cap->oap->start.col.
-int nvim_get_oap_start_col(cmdarg_T *cap) { return (int)cap->oap->start.col; }
-
 /// Return did_emsg.
 int nvim_did_emsg_check(void) { return did_emsg; }
 
