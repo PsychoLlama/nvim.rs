@@ -1,18 +1,11 @@
-#include <assert.h>
 #include <inttypes.h>
-#include <limits.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "klib/kvec.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/arglist.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
-#include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
 #include "nvim/cursor.h"
 #include "nvim/decoration.h"
@@ -20,12 +13,10 @@
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
-#include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
 #include "nvim/eval/window.h"
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
-#include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
 #include "nvim/file_search.h"
@@ -33,7 +24,6 @@
 #include "nvim/garray.h"
 #include "nvim/globals.h"
 #include "nvim/grid.h"
-#include "nvim/grid_defs.h"
 #include "nvim/highlight.h"
 #include "nvim/keycodes.h"
 #include "nvim/main.h"
@@ -55,7 +45,6 @@
 #include "nvim/terminal.h"
 #include "nvim/ui.h"
 #include "nvim/ui_compositor.h"
-#include "nvim/ui_defs.h"
 #include "nvim/undo.h"
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
@@ -294,8 +283,6 @@ void nvim_win_cleanup_b_wininfo(win_T *wp)
 void nvim_win_clear_config_virttext(win_T *wp) { clear_virttext(&wp->w_config.title_chunks); clear_virttext(&wp->w_config.footer_chunks); }
 void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 
-#define FRACTION_MULT   16384
-
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
 int nvim_win_get_width_request(win_T *wp) { return wp ? wp->w_width_request : 0; }
@@ -360,7 +347,6 @@ int nvim_win_new_float_external(void)
   return 1;
 }
 
-_Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
 _Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
