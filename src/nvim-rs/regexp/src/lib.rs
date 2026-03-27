@@ -60,8 +60,8 @@ extern "C" {
     // skip_regexp_err accessor
 
     // reg_prev_class accessors
-    fn nvim_regexp_get_rex_reg_buf_chartab() -> *mut i64;
-    fn mb_get_class_tab(p: *const c_char, chartab: *const i64) -> c_int;
+    fn nvim_buf_get_chartab(buf: *mut c_void) -> *mut u64;
+    fn mb_get_class_tab(p: *const c_char, chartab: *const u64) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // cleanup_subexpr / cleanup_zsubexpr accessors
@@ -1537,7 +1537,7 @@ pub unsafe extern "C" fn rs_reg_prev_class() -> c_int {
         let base = line as *const c_char;
         let head = utf_head_off(base, p);
         let start = p.sub(head as usize);
-        mb_get_class_tab(start, nvim_regexp_get_rex_reg_buf_chartab())
+        mb_get_class_tab(start, nvim_buf_get_chartab(REX.reg_buf))
     } else {
         -1
     }
@@ -1582,7 +1582,7 @@ pub unsafe extern "C" fn rs_reg_iswordc(c: c_int) -> c_int {
 // --- reg_match_visual ---
 
 extern "C" {
-    fn nvim_regexp_visual_quick_check() -> c_int;
+    fn nvim_regexp_get_VIsual_lnum() -> i32;
     fn nvim_regexp_get_visual_area(
         top_lnum: *mut i32,
         top_col: *mut i32,
@@ -1617,7 +1617,10 @@ const MAXCOL_I32: i32 = 0x7fff_ffff;
 #[no_mangle]
 pub unsafe extern "C" fn rs_reg_match_visual() -> c_int {
     // Quick reject: wrong buffer, no visual lnum, or not multiline
-    if nvim_regexp_visual_quick_check() == 0 {
+    if REX.reg_buf != nvim_regexp_get_curbuf()
+        || nvim_regexp_get_VIsual_lnum() == 0
+        || !REX.reg_match.is_null()
+    {
         return 0;
     }
 
@@ -2758,7 +2761,7 @@ extern "C" {
         nested: c_int,
     ) -> c_int;
     fn nvim_regexp_get_curbuf() -> *mut c_void;
-    fn nvim_regexp_get_curbuf_ml_line_count() -> i32;
+    fn nvim_regexp_get_buf_ml_line_count(buf: *mut c_void) -> i32;
 }
 
 /// Core substitution function: handles both literal and `\=` expression paths.
@@ -2881,7 +2884,7 @@ pub unsafe extern "C" fn rs_vim_regsub_multi(
     REX.reg_mmatch = rmp.cast();
     REX.reg_buf = nvim_regexp_get_curbuf().cast();
     REX.reg_firstlnum = lnum;
-    REX.reg_maxline = nvim_regexp_get_curbuf_ml_line_count() - lnum;
+    REX.reg_maxline = nvim_regexp_get_buf_ml_line_count(nvim_regexp_get_curbuf()) - lnum;
     REX.reg_line_lbr = false;
 
     let result = rs_vim_regsub_both(source, core::ptr::null_mut(), dest, destlen, flags);
@@ -5429,10 +5432,9 @@ extern "C" {
         name: c_int,
     ) -> *mut c_void;
 
-    // Window/cursor
-    fn nvim_regexp_get_rex_reg_win_or_curwin() -> *mut c_void;
-    fn nvim_regexp_get_rex_reg_win_cursor_lnum() -> i32;
-    fn nvim_regexp_get_rex_reg_win_cursor_col() -> i32;
+    // Window/cursor accessors
+    fn nvim_win_get_cursor_lnum(wp: *mut c_void) -> i32;
+    fn nvim_win_get_cursor_col(wp: *mut c_void) -> i32;
 
     // Virtual column: reuse existing nvim_regexp_call_win_linetabsize (declared above)
 
@@ -6110,7 +6112,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } else {
                             let this_class = mb_get_class_tab(
                                 REX.input.cast::<c_char>(),
-                                nvim_regexp_get_rex_reg_buf_chartab(),
+                                nvim_buf_get_chartab(REX.reg_buf),
                             );
                             if this_class <= 1 {
                                 status = RA_NOMATCH;
@@ -6125,7 +6127,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } else {
                             let this_class = mb_get_class_tab(
                                 REX.input.cast::<c_char>(),
-                                nvim_regexp_get_rex_reg_buf_chartab(),
+                                nvim_buf_get_chartab(REX.reg_buf),
                             );
                             let prev_class = rs_reg_prev_class();
                             if this_class == prev_class || prev_class == 0 || prev_class == 1 {
@@ -6467,10 +6469,9 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     // --- Phase 6: Special position opcodes ---
                     CURSOR => {
                         if REX.reg_win.is_null()
-                            || REX.lnum + REX.reg_firstlnum
-                                != nvim_regexp_get_rex_reg_win_cursor_lnum()
+                            || REX.lnum + REX.reg_firstlnum != nvim_win_get_cursor_lnum(REX.reg_win)
                             || (REX.input.offset_from(REX.line) as i32
-                                != nvim_regexp_get_rex_reg_win_cursor_col())
+                                != nvim_win_get_cursor_col(REX.reg_win))
                         {
                             status = RA_NOMATCH;
                         }
@@ -6554,7 +6555,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     }
 
                     RE_VCOL => {
-                        let wp = nvim_regexp_get_rex_reg_win_or_curwin();
+                        let wp = if REX.reg_win.is_null() {
+                            nvim_regexp_get_curwin()
+                        } else {
+                            REX.reg_win
+                        };
                         let mut lnum = if is_reg_multi {
                             REX.reg_firstlnum + REX.lnum
                         } else {
@@ -13177,7 +13182,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     } else {
                         let this_class = mb_get_class_tab(
                             REX.input.cast::<c_char>(),
-                            nvim_regexp_get_rex_reg_buf_chartab(),
+                            nvim_buf_get_chartab(REX.reg_buf),
                         );
                         if this_class <= 1 {
                             result = 0;
@@ -13201,7 +13206,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     } else {
                         let this_class = mb_get_class_tab(
                             REX.input.cast::<c_char>(),
-                            nvim_regexp_get_rex_reg_buf_chartab(),
+                            nvim_buf_get_chartab(REX.reg_buf),
                         );
                         let prev_class = rs_reg_prev_class();
                         if this_class == prev_class || prev_class == 0 || prev_class == 1 {
@@ -14006,11 +14011,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         // no match possible
                     } else {
                         result = 0;
-                        let rex_reg_win = nvim_regexp_get_rex_reg_win_or_curwin();
-                        let wp = if rex_reg_win.is_null() {
+                        let wp = if REX.reg_win.is_null() {
                             nvim_regexp_get_curwin()
                         } else {
-                            rex_reg_win
+                            REX.reg_win
                         };
                         if op == 1 && col - 1 > val && col > 100 {
                             let mut ts = nvim_regexp_get_win_b_p_ts(wp);
@@ -14119,10 +14123,9 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                 x if x == NFA_CURSOR => {
                     result = if !REX.reg_win.is_null()
-                        && (REX.lnum + REX.reg_firstlnum
-                            == nvim_regexp_get_rex_reg_win_cursor_lnum())
+                        && (REX.lnum + REX.reg_firstlnum == nvim_win_get_cursor_lnum(REX.reg_win))
                         && ((REX.input as isize - REX.line as isize) as i32
-                            == nvim_regexp_get_rex_reg_win_cursor_col())
+                            == nvim_win_get_cursor_col(REX.reg_win))
                     {
                         1
                     } else {
@@ -14478,7 +14481,6 @@ const fn ascii_isdigit_i(c: c_int) -> c_int {
 extern "C" {
     // iemsg null error
 
-    fn nvim_regexp_get_buf_ml_line_count(buf: *mut c_void) -> i32;
     fn nvim_regexp_set_re_extmatch_out_match(i: c_int, v: *mut u8);
 }
 

@@ -97,14 +97,11 @@ typedef struct {
   int sm_line_lbr;
 } regsubmatch_T;
 
-#define REG_MULTI       (REX_PTR->reg_match == NULL)
-
-int64_t *nvim_regexp_get_rex_reg_buf_chartab(void) { return REX_PTR->reg_buf->b_chartab; }
+int32_t nvim_regexp_get_VIsual_lnum(void) { return (int32_t)VIsual.lnum; }
 int nvim_regexp_get_got_int(void) { return got_int; }
 void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
 void nvim_regexp_set_re_extmatch_out_match(int i, uint8_t *v) { re_extmatch_out->matches[i] = v; }
-int nvim_regexp_visual_quick_check(void) { return (REX_PTR->reg_buf == curbuf && VIsual.lnum != 0 && REG_MULTI) ? 1 : 0; }
 
 void *nvim_regexp_get_visual_area(int32_t *top_lnum, int32_t *top_col,
                                   int32_t *bot_lnum, int32_t *bot_col,
@@ -306,10 +303,6 @@ int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col;
 int32_t nvim_regexp_get_curwin_vcol(void) { colnr_T vcol = 0; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int32_t)(++vcol); }
 int64_t nvim_regexp_get_p_mmp(void) { return p_mmp; }
 uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) { return (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) ? re_extmatch_in->matches[no] : NULL; }
-void *nvim_regexp_get_rex_reg_win_or_curwin(void) { return (void *)(REX_PTR->reg_win == NULL ? curwin : REX_PTR->reg_win); }
-int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) { return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.lnum : 0; }
-int32_t nvim_regexp_get_rex_reg_win_cursor_col(void) { return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.col : 0; }
-
 void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
 int64_t nvim_regexp_get_win_b_p_ts(void *wp) { return (int64_t)((win_T *)wp)->w_buffer->b_p_ts; }
 int32_t nvim_regexp_get_win_buf_line_count(void *wp) { return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count; }
@@ -317,7 +310,6 @@ int nvim_regexp_fmark_is_set(void *fm) { return fm != NULL && ((fmark_T *)fm)->m
 int32_t nvim_regexp_fmark_get_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
 int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
 void *nvim_regexp_get_curbuf(void) { return (void *)curbuf; }
-int32_t nvim_regexp_get_curbuf_ml_line_count(void) { return (int32_t)curbuf->b_ml.ml_line_count; }
 int32_t nvim_regexp_get_buf_ml_line_count(void *buf) { return (int32_t)((buf_T *)buf)->b_ml.ml_line_count; }
 int32_t nvim_regexp_get_p_re(void) { return (int32_t)p_re; }
 void nvim_regexp_set_p_re(int32_t v) { p_re = (long)v; }
