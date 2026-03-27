@@ -187,6 +187,7 @@ extern void rs_terminal_send_key_impl(void *term, int c);
 extern void rs_terminal_notify_theme_impl(void *term, int dark);
 extern void rs_terminal_refresh_size(void *term, void *buf);
 extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
+extern void rs_refresh_screen_pub(Terminal *term, buf_T *buf);
 
 static VTermScreenCallbacks vterm_screen_callbacks = {
   .damage = rs_term_damage,
@@ -307,7 +308,7 @@ void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
 
   aco_save_T aco;
   aucmd_prepbuf(&aco, buf);
-  refresh_screen(term, buf);
+  rs_refresh_screen_pub(term, buf);
   set_option_value(kOptBuftype, STATIC_CSTR_AS_OPTVAL("terminal"), OPT_LOCAL);
   if (buf->b_ffname != NULL) {
     buf_set_term_title(buf, buf->b_ffname, strlen(buf->b_ffname));
@@ -414,7 +415,6 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
   { return rs_term_settermprop(prop, val, data); }
 
 extern void rs_term_clipboard_set(void **argv);
-static void term_clipboard_set(void **argv) { rs_term_clipboard_set(argv); }
 
 extern int rs_term_selection_set(int mask, const char *str, size_t len, int initial, int is_final,
                                   void *user);
@@ -432,10 +432,6 @@ static void refresh_timer_cb(TimeWatcher *watcher, void *data) { rs_refresh_time
 
 extern void rs_on_scrollback_option_changed(void *term);
 void on_scrollback_option_changed(Terminal *term) { rs_on_scrollback_option_changed(term); }
-
-// refresh_screen, adjust_scrollback, refresh_scrollback are implemented in Rust
-extern void rs_refresh_screen_pub(Terminal *term, buf_T *buf);
-static void refresh_screen(Terminal *term, buf_T *buf) { rs_refresh_screen_pub(term, buf); }
 
 static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
 {
@@ -724,7 +720,7 @@ void nvim_do_buffer_wipe(int buf_handle)
   { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
 
 void nvim_terminal_clipboard_queue(long mask, char *data)
-  { multiqueue_put(loop_get_events(&main_loop), term_clipboard_set, (void *)mask, data); }
+  { multiqueue_put(loop_get_events(&main_loop), rs_term_clipboard_set, (void *)mask, data); }
 char *nvim_terminal_selection_dupz(void *term, size_t *out_len)
   { Terminal *t = (Terminal *)term; *out_len = kv_size(t->selection); return xmemdupz(t->selection.items, *out_len); }
 
