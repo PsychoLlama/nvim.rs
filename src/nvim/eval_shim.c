@@ -177,8 +177,6 @@ void eval_clear(void)
 
 #endif
 
-char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return eval_one_expr_in_str(p, gap, evaluate); }
-
 char *nvim_partial_get_pt_func_uf_name(partial_T *pt) { return pt->pt_func != NULL ? pt->pt_func->uf_name : NULL; }
 
 bool nvim_gc_mark_buffers(int copyID, bool abort)
@@ -477,15 +475,6 @@ void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv) { set
 void nvim_set_vim_var_argv_list(list_T *list) { set_vim_var_list(VV_ARGV, list); }
 const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
 linenr_T nvim_sourcing_lnum_get(void) { return SOURCING_LNUM; }
-
-const char *nvim_find_option_end_wrapper(const char *p, int *opt_idxp)
-{
-  typedef struct { const char *end; int opt_idx; } FindOptionEndResult_;
-  extern FindOptionEndResult_ rs_find_option_end(const char *arg);
-  FindOptionEndResult_ r = rs_find_option_end(p);
-  *opt_idxp = r.opt_idx;
-  return r.end;
-}
 
 void nvim_tv_list_set_lock(list_T *l, int lock) { tv_list_set_lock(l, (VarLockStatus)lock); }
 void nvim_tv_list_last_fix_lock(list_T *l) { TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED; }

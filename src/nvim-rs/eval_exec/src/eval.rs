@@ -1181,8 +1181,8 @@ extern "C" {
     fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
     fn ga_concat(gap: *mut GArray, s: *const c_char);
     fn ga_clear(gap: *mut c_void);
-    // eval_one_expr_in_str wrapper (stays in C: wraps static C function)
-    fn nvim_eval_one_expr_in_str(p: *mut c_char, gap: *mut GArray, evaluate: bool) -> *mut c_char;
+    // Direct call to rs_eval_one_expr_in_str (Rust, vars crate) - eliminates C round-trip
+    fn rs_eval_one_expr_in_str(p: *mut c_char, gap: *mut GArray, evaluate: bool) -> *mut c_char;
     // (nvim_tv_get_vstring and nvim_tv_set_vstring_owned inlined -- see tv_get_vstring / tv_set_vstring_owned)
 }
 
@@ -1234,7 +1234,7 @@ pub unsafe fn eval_interp_string_impl(
                 *arg = (*arg).add(1);
                 break 'interp OK;
             }
-            let p = nvim_eval_one_expr_in_str(*arg, ga, evaluate);
+            let p = rs_eval_one_expr_in_str(*arg, ga, evaluate);
             if p.is_null() {
                 break 'interp FAIL;
             }

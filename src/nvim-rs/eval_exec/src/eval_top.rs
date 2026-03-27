@@ -24,6 +24,13 @@ use crate::callback::CallbackT;
 use crate::eval::{EvalargHandle, EvalargT, ExargHandle, LineGetter, TypevalHandle};
 use crate::funcexe::FuncExeT;
 
+/// Return type of rs_find_option_end (mirrors C struct in option crate).
+#[repr(C)]
+struct FindOptionEndResult {
+    end: *const c_char,
+    opt_idx: c_int,
+}
+
 // =============================================================================
 // funccal_entry_T layout (Phase 4)
 // =============================================================================
@@ -861,8 +868,8 @@ extern "C" {
     fn nvim_sourcing_name_get() -> *const c_char;
     fn nvim_sourcing_lnum_get() -> i64; // linenr_T
 
-    // Phase 1: find_option_var_end accessors
-    fn nvim_find_option_end_wrapper(p: *const c_char, opt_idxp: *mut c_int) -> *const c_char;
+    // Direct call to rs_find_option_end (Rust, option crate) - eliminates round-trip via C shim
+    fn rs_find_option_end(arg: *const c_char) -> FindOptionEndResult;
 
     // Phase 1: call_func_retstr helper
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
@@ -1080,13 +1087,14 @@ pub unsafe extern "C" fn rs_find_option_var_end(
         *opt_flags = 0;
     }
 
-    let end = nvim_find_option_end_wrapper(p, opt_idxp);
-    if end.is_null() {
+    let r = rs_find_option_end(p);
+    *opt_idxp = r.opt_idx;
+    if r.end.is_null() {
         // Leave *arg unchanged on failure
     } else {
         *arg = p;
     }
-    end
+    r.end
 }
 
 // Helper: compute strlen of a C string without linking libc explicitly.
