@@ -1,17 +1,10 @@
 // insexpand_shim.c: C shim for Insert mode completion (Rust insexpand crate)
 
-#include <assert.h>
-#include <limits.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
 
 #include "klib/kvec.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
@@ -22,7 +15,6 @@
 #include "nvim/edit.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
-#include "nvim/eval/executor.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/userfunc.h"
@@ -31,35 +23,25 @@
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/fuzzy.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/highlight_defs.h"
 #include "nvim/highlight_group.h"
 #include "nvim/insexpand.h"
 #include "nvim/lua/executor.h"
-#include "nvim/macros_defs.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
 #include "nvim/option.h"
-#include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/input.h"
 #include "nvim/path.h"
 #include "nvim/popupmenu.h"
-#include "nvim/pos_defs.h"
 #include "nvim/register.h"
-#include "nvim/search.h"
 #include "nvim/spell.h"
 #include "nvim/state.h"
-#include "nvim/state_defs.h"
-#include "nvim/strings.h"
 #include "nvim/tag.h"
-#include "nvim/ui.h"
 #include "nvim/vim_defs.h"
-#include "nvim/window.h"
 #include "nvim/winfloat.h"
 
 // Rust rs_* function declarations called from this file
@@ -420,152 +402,73 @@ static int cpt_cb_count;   ///< Number of cpt callbacks
 
 static void copy_global_to_buflocal_cb(Callback *globcb, Callback *bufcb)
   { callback_free(bufcb); if (globcb->type != kCallbackNone) { callback_copy(bufcb, globcb); } }
-
-const char *nvim_did_set_completefunc_impl(void *args_v)
-{
-  optset_T *args = (optset_T *)args_v;
-  buf_T *buf = (buf_T *)args->os_buf;
-  if (option_set_callback_func(buf->b_p_cfu, &cfu_cb) == FAIL) {
-    return e_invarg;
-  }
-  set_buflocal_cfu_callback(buf);
-  return NULL;
-}
-
+const char *nvim_did_set_completefunc_impl(void *a)
+  { buf_T *buf = ((optset_T *)a)->os_buf; if (option_set_callback_func(buf->b_p_cfu, &cfu_cb) == FAIL) { return e_invarg; } set_buflocal_cfu_callback(buf); return NULL; }
 void set_buflocal_cfu_callback(buf_T *buf) { copy_global_to_buflocal_cb(&cfu_cb, &buf->b_cfu_cb); }
-const char *nvim_did_set_omnifunc_impl(void *args_v)
-{
-  optset_T *args = (optset_T *)args_v;
-  buf_T *buf = (buf_T *)args->os_buf;
-  if (option_set_callback_func(buf->b_p_ofu, &ofu_cb) == FAIL) {
-    return e_invarg;
-  }
-  set_buflocal_ofu_callback(buf);
-  return NULL;
-}
-
+const char *nvim_did_set_omnifunc_impl(void *a)
+  { buf_T *buf = ((optset_T *)a)->os_buf; if (option_set_callback_func(buf->b_p_ofu, &ofu_cb) == FAIL) { return e_invarg; } set_buflocal_ofu_callback(buf); return NULL; }
 void set_buflocal_ofu_callback(buf_T *buf) { copy_global_to_buflocal_cb(&ofu_cb, &buf->b_ofu_cb); }
 void clear_cpt_callbacks(Callback **callbacks, int count)
 {
-  if (callbacks == NULL || *callbacks == NULL) {
-    return;
-  }
-
-  for (int i = 0; i < count; i++) {
-    callback_free(&(*callbacks)[i]);
-  }
-
+  if (callbacks == NULL || *callbacks == NULL) { return; }
+  for (int i = 0; i < count; i++) { callback_free(&(*callbacks)[i]); }
   XFREE_CLEAR(*callbacks);
 }
-
 static void copy_cpt_callbacks(Callback **dest, int *dest_cnt, Callback *src, int cnt)
 {
-  if (cnt == 0) {
-    return;
-  }
-
+  if (cnt == 0) { return; }
   clear_cpt_callbacks(dest, *dest_cnt);
   *dest = xcalloc((size_t)cnt, sizeof(Callback));
   *dest_cnt = cnt;
-
-  for (int i = 0; i < cnt; i++) {
-    if (src[i].type != kCallbackNone) {
-      callback_copy(&(*dest)[i], &src[i]);
-    }
-  }
+  for (int i = 0; i < cnt; i++) { if (src[i].type != kCallbackNone) { callback_copy(&(*dest)[i], &src[i]); } }
 }
-
 void set_buflocal_cpt_callbacks(buf_T *buf)
   { if (buf != NULL && cpt_cb_count != 0) { copy_cpt_callbacks(&buf->b_p_cpt_cb, &buf->b_p_cpt_count, cpt_cb, cpt_cb_count); } }
-
 int set_cpt_callbacks(optset_T *args)
 {
+  if (curbuf == NULL) { return FAIL; }
   bool local = (args->os_flags & OPT_LOCAL) != 0;
-
-  if (curbuf == NULL) {
-    return FAIL;
-  }
-
   clear_cpt_callbacks(&curbuf->b_p_cpt_cb, curbuf->b_p_cpt_count);
   curbuf->b_p_cpt_count = 0;
-
   int count = rs_get_cpt_sources_count();
-  if (count == 0) {
-    return OK;
-  }
-
+  if (count == 0) { return OK; }
   curbuf->b_p_cpt_cb = xcalloc((size_t)count, sizeof(Callback));
   curbuf->b_p_cpt_count = count;
-
   char buf[LSIZE];
   int idx = 0;
   for (char *p = curbuf->b_p_cpt; *p != NUL;) {
-    while (*p == ',' || *p == ' ') {
-      p++;  // Skip delimiters
-    }
+    while (*p == ',' || *p == ' ') { p++; }
     if (*p != NUL) {
-      size_t slen = copy_option_part(&p, buf, LSIZE, ",");  // Advance p
+      size_t slen = copy_option_part(&p, buf, LSIZE, ",");
       if (slen > 0 && buf[0] == 'F' && buf[1] != NUL) {
         char *caret = vim_strchr(buf, '^');
-        if (caret != NULL) {
-          *caret = NUL;
-        }
-        if (option_set_callback_func(buf + 1, &curbuf->b_p_cpt_cb[idx]) != OK) {
-          curbuf->b_p_cpt_cb[idx].type = kCallbackNone;
-        }
+        if (caret != NULL) { *caret = NUL; }
+        if (option_set_callback_func(buf + 1, &curbuf->b_p_cpt_cb[idx]) != OK) { curbuf->b_p_cpt_cb[idx].type = kCallbackNone; }
       }
       idx++;
     }
   }
-
-  if (!local) {  // ':set' used instead of ':setlocal'
-    // Cache the callback array
-    copy_cpt_callbacks(&cpt_cb, &cpt_cb_count, curbuf->b_p_cpt_cb,
-                       curbuf->b_p_cpt_count);
-  }
-
+  if (!local) { copy_cpt_callbacks(&cpt_cb, &cpt_cb_count, curbuf->b_p_cpt_cb, curbuf->b_p_cpt_count); }
   return OK;
 }
-
-const char *nvim_did_set_thesaurusfunc_impl(void *args_v)
-{
-  optset_T *args = (optset_T *)args_v;
-  buf_T *buf = (buf_T *)args->os_buf;
-  int retval;
-
-  if (args->os_flags & OPT_LOCAL) {
-    retval = option_set_callback_func(buf->b_p_tsrfu, &buf->b_tsrfu_cb);
-  } else {
-    retval = option_set_callback_func(p_tsrfu, &tsrfu_cb);
-    if (!(args->os_flags & OPT_GLOBAL)) {
-      callback_free(&buf->b_tsrfu_cb);
-    }
-  }
-
-  return retval == FAIL ? e_invarg : NULL;
+const char *nvim_did_set_thesaurusfunc_impl(void *a) {
+  optset_T *args = (optset_T *)a; buf_T *buf = args->os_buf; int rv;
+  if (args->os_flags & OPT_LOCAL) { rv = option_set_callback_func(buf->b_p_tsrfu, &buf->b_tsrfu_cb); }
+  else { rv = option_set_callback_func(p_tsrfu, &tsrfu_cb); if (!(args->os_flags & OPT_GLOBAL)) { callback_free(&buf->b_tsrfu_cb); } }
+  return rv == FAIL ? e_invarg : NULL;
 }
-
 bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
 {
+  if (callbacks == NULL) { return false; }
   bool abort = false;
-
-  if (callbacks == NULL) {
-    return false;
-  }
-
-  for (int i = 0; i < count; i++) {
-    abort = abort || rs_set_ref_in_callback(&callbacks[i], copyID, NULL, NULL);
-  }
+  for (int i = 0; i < count; i++) { abort = abort || rs_set_ref_in_callback(&callbacks[i], copyID, NULL, NULL); }
   return abort;
 }
-
 int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
 {
-  bool abort = rs_set_ref_in_callback(&cfu_cb, copyID, NULL, NULL);
-  abort = abort || rs_set_ref_in_callback(&ofu_cb, copyID, NULL, NULL);
-  abort = abort || rs_set_ref_in_callback(&tsrfu_cb, copyID, NULL, NULL);
-  abort = abort || set_ref_in_cpt_callbacks(cpt_cb, cpt_cb_count, copyID);
-  return abort ? 1 : 0;
+  bool ab = rs_set_ref_in_callback(&cfu_cb, copyID, NULL, NULL) || rs_set_ref_in_callback(&ofu_cb, copyID, NULL, NULL)
+            || rs_set_ref_in_callback(&tsrfu_cb, copyID, NULL, NULL) || set_ref_in_cpt_callbacks(cpt_cb, cpt_cb_count, copyID);
+  return ab ? 1 : 0;
 }
 
 static char *get_complete_funcname(int type)
@@ -764,83 +667,48 @@ void nvim_expand_by_function_full_impl(int type, char *base, void *cb_opaque)
   dict_T *matchdict = NULL;
   typval_T rettv;
   const int save_State = State;
-
   assert(curbuf != NULL);
-
   const bool is_cpt_function = (cb != NULL);
   if (!is_cpt_function) {
     char *funcname = get_complete_funcname(type);
-    if (*funcname == NUL) {
-      return;
-    }
+    if (*funcname == NUL) { return; }
     cb = get_insert_callback(type);
   }
-
   typval_T args[3];
-  args[0].v_type = VAR_NUMBER;
-  args[1].v_type = VAR_STRING;
-  args[2].v_type = VAR_UNKNOWN;
-  args[0].vval.v_number = 0;
-  args[1].vval.v_string = base != NULL ? base : "";
-
+  args[0].v_type = VAR_NUMBER; args[1].v_type = VAR_STRING; args[2].v_type = VAR_UNKNOWN;
+  args[0].vval.v_number = 0; args[1].vval.v_string = base != NULL ? base : "";
   pos_T pos = curwin->w_cursor;
   textlock++;
-
   if (callback_call(cb, 2, args, &rettv)) {
     switch (rettv.v_type) {
-    case VAR_LIST:
-      matchlist = rettv.vval.v_list;
-      break;
-    case VAR_DICT:
-      matchdict = rettv.vval.v_dict;
-      break;
-    case VAR_SPECIAL:
-      FALLTHROUGH;
-    default:
-      tv_clear(&rettv);
-      break;
+    case VAR_LIST: matchlist = rettv.vval.v_list; break;
+    case VAR_DICT: matchdict = rettv.vval.v_dict; break;
+    case VAR_SPECIAL: FALLTHROUGH;
+    default: tv_clear(&rettv); break;
     }
   }
   textlock--;
-
   curwin->w_cursor = pos;
   check_cursor(curwin);
   validate_cursor(curwin);
-  if (!equalpos(curwin->w_cursor, pos)) {
-    emsg(_(e_compldel));
-    goto theend;
-  }
-
-  if (matchlist != NULL) {
-    nvim_ins_compl_add_list_impl(matchlist);
-  } else if (matchdict != NULL) {
-    nvim_ins_compl_add_dict_impl(matchdict);
-  }
-
+  if (!equalpos(curwin->w_cursor, pos)) { emsg(_(e_compldel)); goto theend; }
+  if (matchlist != NULL) { nvim_ins_compl_add_list_impl(matchlist); }
+  else if (matchdict != NULL) { nvim_ins_compl_add_dict_impl(matchdict); }
 theend:
   State = save_State;
-
-  if (matchdict != NULL) {
-    tv_dict_unref(matchdict);
-  }
-  if (matchlist != NULL) {
-    tv_list_unref(matchlist);
-  }
+  if (matchdict != NULL) { tv_dict_unref(matchdict); }
+  if (matchlist != NULL) { tv_list_unref(matchlist); }
 }
 
 int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
 {
   typval_T *tv = (typval_T *)tv_opaque;
   const char *word;
-  bool dup = false;
-  bool empty = false;
+  bool dup = false, empty = false;
   int flags = fast ? CP_FAST : 0;
   char *(cptext[CPT_COUNT]);
-  char *user_abbr_hlname = NULL;
-  char *user_kind_hlname = NULL;
   int user_hl[2] = { -1, -1 };
   typval_T user_data;
-
   user_data.v_type = VAR_UNKNOWN;
   if (tv->v_type == VAR_DICT && tv->vval.v_dict != NULL) {
     word = tv_dict_get_string(tv->vval.v_dict, "word", false);
@@ -848,38 +716,24 @@ int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
     cptext[CPT_MENU] = tv_dict_get_string(tv->vval.v_dict, "menu", true);
     cptext[CPT_KIND] = tv_dict_get_string(tv->vval.v_dict, "kind", true);
     cptext[CPT_INFO] = tv_dict_get_string(tv->vval.v_dict, "info", true);
-
-    user_abbr_hlname = tv_dict_get_string(tv->vval.v_dict, "abbr_hlgroup", false);
-    user_hl[0] = (user_abbr_hlname != NULL && *user_abbr_hlname != NUL) ? syn_name2attr(user_abbr_hlname) : -1;
-
-    user_kind_hlname = tv_dict_get_string(tv->vval.v_dict, "kind_hlgroup", false);
-    user_hl[1] = (user_kind_hlname != NULL && *user_kind_hlname != NUL) ? syn_name2attr(user_kind_hlname) : -1;
-
+    char *abbr_hl = tv_dict_get_string(tv->vval.v_dict, "abbr_hlgroup", false);
+    user_hl[0] = (abbr_hl != NULL && *abbr_hl != NUL) ? syn_name2attr(abbr_hl) : -1;
+    char *kind_hl = tv_dict_get_string(tv->vval.v_dict, "kind_hlgroup", false);
+    user_hl[1] = (kind_hl != NULL && *kind_hl != NUL) ? syn_name2attr(kind_hl) : -1;
     tv_dict_get_tv(tv->vval.v_dict, "user_data", &user_data);
-
-    if (tv_dict_get_number(tv->vval.v_dict, "icase")) {
-      flags |= CP_ICASE;
-    }
+    if (tv_dict_get_number(tv->vval.v_dict, "icase")) { flags |= CP_ICASE; }
     dup = (bool)tv_dict_get_number(tv->vval.v_dict, "dup");
     empty = (bool)tv_dict_get_number(tv->vval.v_dict, "empty");
     if (tv_dict_get_string(tv->vval.v_dict, "equal", false) != NULL
-        && tv_dict_get_number(tv->vval.v_dict, "equal")) {
-      flags |= CP_EQUAL;
-    }
+        && tv_dict_get_number(tv->vval.v_dict, "equal")) { flags |= CP_EQUAL; }
   } else {
     word = tv_get_string_chk(tv);
     CLEAR_FIELD(cptext);
   }
-  if (word == NULL || (!empty && *word == NUL)) {
-    free_cptext(cptext);
-    tv_clear(&user_data);
-    return FAIL;
-  }
+  if (word == NULL || (!empty && *word == NUL)) { free_cptext(cptext); tv_clear(&user_data); return FAIL; }
   int status = rs_ins_compl_add((char *)word, -1, NULL, cptext, 1,
                                &user_data, dir, flags, dup ? 1 : 0, user_hl, FUZZY_SCORE_NONE);
-  if (status != OK) {
-    tv_clear(&user_data);
-  }
+  if (status != OK) { tv_clear(&user_data); }
   return status;
 }
 
