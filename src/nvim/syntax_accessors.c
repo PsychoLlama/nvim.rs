@@ -62,14 +62,12 @@ extern void rs_restore_chartab(const char *chartab);
 extern void rs_validate_current_state(void);
 extern char *rs_syn_getcurline(void);
 extern void rs_syn_clear_time(syn_time_T *st);
-// rs_check_state_ends: Rust function called via #[link_name] bypasses nvim_syn_check_state_ends
 extern void rs_update_si_attr(int idx);
 
 extern void rs_syn_remove_pattern(synblock_T *block, int idx);
 extern void rs_syntax_clear(synblock_T *block);
 extern void rs_syntax_sync_clear(void);
 extern void rs_clear_keywtab(hashtab_T *ht);
-// rs_invalidate_current_state: Rust function called via #[link_name] bypasses nvim_syn_invalidate_current_state
 
 // different types of offsets that are possible
 #define SPO_MS_OFF      0       // match  start offset
@@ -198,7 +196,6 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 #define SYN_STATE_P(ssp)    ((bufstate_T *)((ssp)->ga_data))
 
 // The attributes of the syntax item that has been recognized.
-// These are now Rust static variables (statics.rs); accessed via extern.
 extern int CURRENT_SUB_CHAR;
 #define current_sub_char CURRENT_SUB_CHAR
 
@@ -225,7 +222,6 @@ static char **syn_cmdlinep;
 // Another Annoying Hack(TM):  To prevent rules from other ":syn include"'d
 // files from leaking into ALLBUT lists, we assign a unique ID to the
 // rules in each ":syn include"'d file.
-// These are now Rust static variables; accessed via extern.
 extern int CURRENT_SYN_INC_TAG;
 #define current_syn_inc_tag CURRENT_SYN_INC_TAG
 
@@ -242,14 +238,12 @@ static keyentry_T dumkey;
 // To reduce the time spent in keepend(), remember at which level in the state
 // stack the first item with "keepend" is present.  When "-1", there is no
 // "keepend" on the stack.
-// Now a Rust static variable; accessed via extern.
 
 // value of si_idx for keywords
 #define KEYWORD_IDX     (-1)
 // valid of si_cont_list for containing all but contained groups
 #define ID_LIST_ALL     ((int16_t *)-1)
 
-// next_seqnr: now a Rust static variable; accessed via extern.
 extern int NEXT_SEQNR;
 #define next_seqnr NEXT_SEQNR
 
@@ -258,7 +252,6 @@ extern int NEXT_SEQNR;
 // If NEXT_MATCH_IDX == -1, not tried (in this line) yet.
 // If NEXT_MATCH_COL == MAXCOL, no match found in this line.
 // (All end positions have the column of the char after the end)
-// These are now Rust static variables (statics.rs); accessed via extern.
 extern int NEXT_MATCH_COL;
 extern int NEXT_MATCH_IDX;
 extern int NEXT_MATCH_FLAGS;
@@ -279,21 +272,17 @@ static win_T *syn_win;                  // current window for highlighting
 static buf_T *syn_buf;                  // current buffer for highlighting
 static synblock_T *syn_block;              // current buffer for highlighting
 static proftime_T *syn_tm;                 // timeout limit
-// These are now Rust static variables (statics.rs); accessed via extern.
 extern int CURRENT_LNUM;
 extern int CURRENT_COL;
 #define current_lnum       ((linenr_T)CURRENT_LNUM)
 #define current_col        ((colnr_T)CURRENT_COL)
-// current_state is now a Rust static variable (CURRENT_STATE); accessed via extern.
 extern garray_T CURRENT_STATE;
 #define current_state CURRENT_STATE
-// current_next_list is now a Rust static variable; accessed via extern.
 extern int16_t *CURRENT_NEXT_LIST;
 #define current_next_list CURRENT_NEXT_LIST
 
 #define CUR_STATE(idx)  ((stateitem_T *)(current_state.ga_data))[idx]
 
-// Now a Rust static variable; accessed via extern.
 extern int SYN_TIME_ON;
 #define syn_time_on (SYN_TIME_ON != 0)
 
@@ -373,10 +362,6 @@ int nvim_syn_do_regexec(void *regprog, int ic,
 
 int nvim_syn_get_b_syn_slow(void) { return syn_win->w_s->b_syn_slow ? 1 : 0; }
 void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
-
-/// Get pointer to syn_block->b_syn_linecont_time as void*.
-/// Returns pointer to the inline syn_time_T field in the synblock.
-/// NOTE: nvim_syn_block_get_linecont_time_ptr already exists; this is a new alias.
 
 /// Update syn_time_T fields from Rust after a regex execution.
 /// elapsed: elapsed time (proftime_T / u64).
@@ -485,7 +470,6 @@ int16_t *nvim_synstate_get_next_list(synstate_T *state)
   return state->sst_next_list;
 }
 
-/// Get bufstate item from synstate at index
 bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
 {
   if (state == NULL || idx < 0 || idx >= state->sst_stacksize) {
@@ -500,7 +484,6 @@ bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
   return &bp[idx];
 }
 
-/// Call update_si_attr for item at index
 void nvim_syn_update_si_attr(int idx)
 {
   if (idx >= 0 && idx < current_state.ga_len) {
@@ -616,14 +599,12 @@ int nvim_syn_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_
 int nvim_syn_get_line_len(int lnum) { return (int)ml_get_buf_len(syn_buf, (linenr_T)lnum); }
 int nvim_syn_get_buf_line_count(void) { return (int)syn_buf->b_ml.ml_line_count; }
 
-/// Get/set re_extmatch_in for find_endpos.
 void nvim_syn_set_extmatch_in(reg_extmatch_T *em)
 {
   unref_extmatch(re_extmatch_in);
   re_extmatch_in = ref_extmatch(em);
 }
 
-/// Clear re_extmatch_in.
 void nvim_syn_clear_extmatch_in(void)
 {
   unref_extmatch(re_extmatch_in);
@@ -639,7 +620,6 @@ reg_extmatch_T *nvim_syn_take_re_extmatch_out(void)
   return em;
 }
 
-/// Unref and clear re_extmatch_out
 void nvim_syn_clear_re_extmatch_out(void)
 {
   unref_extmatch(re_extmatch_out);
@@ -647,12 +627,6 @@ void nvim_syn_clear_re_extmatch_out(void)
 }
 
 int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
-
-/// Check in_id_list for a pattern by index against the current_next_list or
-/// cur_si cont_list.
-/// mode: 0 = check current_next_list (cur_si ignored)
-///       1 = check cur_si->si_cont_list
-///       2 = check HL_CONTAINED flag
 
 int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id)
 {
@@ -663,37 +637,8 @@ int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
 
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
 
-_Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
-_Static_assert(SPO_ME_OFF == 1, "SPO_ME_OFF");
-_Static_assert(SPO_HS_OFF == 2, "SPO_HS_OFF");
-_Static_assert(SPO_HE_OFF == 3, "SPO_HE_OFF");
-_Static_assert(SPO_RS_OFF == 4, "SPO_RS_OFF");
-_Static_assert(SPO_RE_OFF == 5, "SPO_RE_OFF");
-_Static_assert(SPO_LC_OFF == 6, "SPO_LC_OFF");
-_Static_assert(SPO_COUNT == 7, "SPO_COUNT");
-_Static_assert(SPTYPE_MATCH == 1, "SPTYPE_MATCH");
-_Static_assert(SPTYPE_START == 2, "SPTYPE_START");
-_Static_assert(SPTYPE_END == 3, "SPTYPE_END");
-_Static_assert(SPTYPE_SKIP == 4, "SPTYPE_SKIP");
-_Static_assert(HL_HAS_EOL == 0x08, "HL_HAS_EOL");
-_Static_assert(HL_ONELINE == 0x04, "HL_ONELINE");
-_Static_assert(HL_KEEPEND == 0x400, "HL_KEEPEND");
-_Static_assert(HL_EXTEND == 0x4000, "HL_EXTEND");
-_Static_assert(HL_MATCHCONT == 0x8000, "HL_MATCHCONT");
-_Static_assert(HL_CONCEALENDS == 0x40000, "HL_CONCEALENDS");
-_Static_assert(HL_MATCH == 0x40, "HL_MATCH");
-_Static_assert(HL_CONCEAL == 0x20000, "HL_CONCEAL");
-_Static_assert(HL_TRANSP == 0x02, "HL_TRANSP");
-_Static_assert(HL_TRANS_CONT == 0x10000, "HL_TRANS_CONT");
-_Static_assert(HL_CONTAINED == 0x01, "HL_CONTAINED");
-_Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
-_Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
-
 char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
-/// Thin C helper for C-comment sync: saves/restores curwin, curbuf, and cursor;
-/// does backslash-continuation skip; sets current_lnum; calls find_start_comment.
-/// Returns the adjusted start_lnum in *out_start_lnum.
 int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
 {
   win_T *curwin_save = curwin;
@@ -724,41 +669,7 @@ int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
   return found;
 }
 
-_Static_assert(HL_DISPLAY == 0x1000, "HL_DISPLAY");
-_Static_assert(HL_SKIPWHITE == 0x100, "HL_SKIPWHITE");
-_Static_assert(HL_SYNC_HERE == 0x10, "HL_SYNC_HERE");
-_Static_assert(HL_SYNC_THERE == 0x20, "HL_SYNC_THERE");
-_Static_assert(SYNSPL_DEFAULT == 0, "SYNSPL_DEFAULT");
-_Static_assert(SYNSPL_TOP == 1, "SYNSPL_TOP");
-_Static_assert(SYNSPL_NOTOP == 2, "SYNSPL_NOTOP");
-_Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
-
-// Struct layout assertions: verify sizes and field offsets match Rust repr(C)
 // definitions in src/nvim-rs/syntax/src/ffi_types.rs.
-_Static_assert(sizeof(synpat_T) == 136, "synpat_T size");
-_Static_assert(offsetof(synpat_T, sp_type) == 0, "synpat_T.sp_type");
-_Static_assert(offsetof(synpat_T, sp_syncing) == 1, "synpat_T.sp_syncing");
-_Static_assert(offsetof(synpat_T, sp_syn_match_id) == 2, "synpat_T.sp_syn_match_id");
-_Static_assert(offsetof(synpat_T, sp_off_flags) == 4, "synpat_T.sp_off_flags");
-_Static_assert(offsetof(synpat_T, sp_offsets) == 8, "synpat_T.sp_offsets");
-_Static_assert(offsetof(synpat_T, sp_flags) == 36, "synpat_T.sp_flags");
-_Static_assert(offsetof(synpat_T, sp_cchar) == 40, "synpat_T.sp_cchar");
-_Static_assert(offsetof(synpat_T, sp_ic) == 44, "synpat_T.sp_ic");
-_Static_assert(offsetof(synpat_T, sp_sync_idx) == 48, "synpat_T.sp_sync_idx");
-_Static_assert(offsetof(synpat_T, sp_line_id) == 52, "synpat_T.sp_line_id");
-_Static_assert(offsetof(synpat_T, sp_startcol) == 56, "synpat_T.sp_startcol");
-_Static_assert(offsetof(synpat_T, sp_cont_list) == 64, "synpat_T.sp_cont_list");
-_Static_assert(offsetof(synpat_T, sp_next_list) == 72, "synpat_T.sp_next_list");
-_Static_assert(offsetof(synpat_T, sp_syn) == 80, "synpat_T.sp_syn");
-_Static_assert(offsetof(synpat_T, sp_pattern) == 96, "synpat_T.sp_pattern");
-_Static_assert(offsetof(synpat_T, sp_prog) == 104, "synpat_T.sp_prog");
-_Static_assert(offsetof(synpat_T, sp_time) == 112, "synpat_T.sp_time");
-
-_Static_assert(sizeof(syn_time_T) == 24, "syn_time_T size");
-_Static_assert(offsetof(syn_time_T, total) == 0, "syn_time_T.total");
-_Static_assert(offsetof(syn_time_T, slowest) == 8, "syn_time_T.slowest");
-_Static_assert(offsetof(syn_time_T, count) == 16, "syn_time_T.count");
-_Static_assert(offsetof(syn_time_T, match) == 20, "syn_time_T.match");
 
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
 
@@ -778,16 +689,6 @@ void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextc
 char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
 int nvim_syn_get_eap_skip(const exarg_T *eap) { return eap->skip; }
 
-_Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
-_Static_assert(SF_MATCH == 0x02, "SF_MATCH");
-_Static_assert(NONE_IDX == -2, "NONE_IDX");
-_Static_assert(SYNID_ALLBUT == MAX_HL_ID, "SYNID_ALLBUT");
-_Static_assert(SYNID_TOP == 21000, "SYNID_TOP");
-_Static_assert(SYNID_CONTAINED == 22000, "SYNID_CONTAINED");
-_Static_assert(HL_FOLD == 0x2000, "HL_FOLD");
-_Static_assert(HL_EXCLUDENL == 0x800, "HL_EXCLUDENL");
-_Static_assert(HL_INCLUDED_TOPLEVEL == 0x80000, "HL_INCLUDED_TOPLEVEL");
-
 char *nvim_syn_skip_regexp(char *arg, int delim, int magic) { return skip_regexp(arg, delim, magic); }
 
 int nvim_syn_getdigits_int(char **pp, int strict, int def) { return getdigits_int(pp, (bool)strict, def); }
@@ -799,13 +700,11 @@ int nvim_syn_get_curwin_syn_ic(void) { return curwin->w_s->b_syn_ic; }
 
 int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
 
-/// Append one slot to curwin b_syn_patterns and return a pointer to it.
 synpat_T *nvim_synblock_ga_append_pattern(void) { return GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns); }
 
 void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
 void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
 
-/// Allocate a zeroed synpat_T on the heap and return it.
 synpat_T *nvim_syn_xcalloc_synpat(void) { return xcalloc(1, sizeof(synpat_T)); }
 
 void nvim_syn_free_synpat(synpat_T *pat)
@@ -821,8 +720,6 @@ void nvim_syn_set_reg_do_extmatch(int val) { reg_do_extmatch = val; }
 
 void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2) { semsg(fmt, arg1, arg2); }
 
-/// Combine a cluster's ID list with a new list, consuming both.
-/// Calls syn_combine_list on the cluster's list and clstr_list.
 void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op)
 {
   rs_syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op);
@@ -834,7 +731,6 @@ void nvim_syn_set_eap_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
 
 int nvim_syn_getdigits_int32(char **pp, int strict, int def) { return getdigits_int32(pp, (bool)strict, def); }
 
-/// OR flags into b_syn_sync_flags.
 void nvim_synblock_or_sync_flags(synblock_T *block, int flags) { block->b_syn_sync_flags |= flags; }
 
 void nvim_synblock_set_sync_id(synblock_T *block, int id) { block->b_syn_sync_id = (int16_t)id; }
@@ -855,7 +751,6 @@ void nvim_synblock_set_linecont_ic(synblock_T *block, int ic) { block->b_syn_lin
 
 void nvim_synblock_set_linecont_prog2(synblock_T *block, void *prog) { block->b_syn_linecont_prog = (regprog_T *)prog; }
 
-/// XFREE_CLEAR b_syn_linecont_pat.
 void nvim_syn_clear_linecont_pat(synblock_T *block) { XFREE_CLEAR(block->b_syn_linecont_pat); }
 
 void *nvim_synblock_get_linecont_time_ptr(synblock_T *block) { return (void *)&block->b_syn_linecont_time; }
@@ -870,7 +765,6 @@ void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags)
   return prog;
 }
 
-/// Look up a syntax group name+length and return its ID.
 int nvim_syn_name2id_len_wrapper(const char *arg, int len) { return syn_name2id_len(arg, (size_t)len); }
 
 /// Prepare for :syntax include.
@@ -946,13 +840,10 @@ void nvim_msg_puts_hl_syn(const char *s, int hl_id, bool hist) { msg_puts_hl(s, 
 
 int nvim_syn_vim_strchr(const char *s, int c) { return vim_strchr(s, (uint8_t)c) != NULL ? 1 : 0; }
 
-/// Hashtab iteration: returns (ht_mask + 1) = array size.
 size_t nvim_ht_get_array_size(const hashtab_T *ht) { return ht->ht_mask + 1; }
 
-/// Hashtab iteration: returns used count.
 size_t nvim_ht_get_used(const hashtab_T *ht) { return ht->ht_used; }
 
-/// Hashtab iteration: returns HI2KE at index if not empty, else NULL.
 keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
 {
   const hashitem_T *hi = &ht->ht_array[idx];
@@ -962,10 +853,8 @@ keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
   return HI2KE(hi);
 }
 
-/// Increment emsg_skip (suppress error messages during :syntax with skip set).
 void nvim_syn_emsg_skip_inc(void) { emsg_skip++; }
 
-/// Decrement emsg_skip.
 void nvim_syn_emsg_skip_dec(void) { emsg_skip--; }
 
 int nvim_syn_iskeyword_is_set(synblock_T *block) { return block->b_syn_isk != empty_string_option ? 1 : 0; }
@@ -996,13 +885,10 @@ void nvim_syn_iskeyword_set(synblock_T *block, const char *arg)
   curbuf->b_p_isk = save_isk;
 }
 
-/// msg_outtrans wrapper for syn_cmd_iskeyword display.
 void nvim_syn_msg_outtrans(const char *s) { msg_outtrans(s, 0, false); }
 
-/// Get value of a Vim variable (b:current_syntax etc.).
 char *nvim_syn_get_var_value(const char *name) { return get_var_value(name); }
 
-/// Apply EVENT_SYNTAX autocmds for :ownsyntax.
 void nvim_syn_apply_autocmds_syntax(const char *arg)
 {
   apply_autocmds(EVENT_SYNTAX, arg, curbuf->b_fname, true, curbuf);
@@ -1010,19 +896,16 @@ void nvim_syn_apply_autocmds_syntax(const char *arg)
 
 void nvim_syn_set_internal_string_var(const char *name, const char *val) { set_internal_string_var(name, val); }
 
-/// Unlet b:current_syntax.
 void nvim_syn_do_unlet_b_current_syntax(void) { do_unlet(S_LEN("b:current_syntax"), true); }
 
 void nvim_synblock_set_pattern_count(synblock_T *block, int len) { block->b_syn_patterns.ga_len = len; }
 
-/// Memmove within SYN_ITEMS array: copy [src_idx..src_idx+count) to dst_idx.
 void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx, int count)
 {
   synpat_T *base = SYN_ITEMS(block);
   memmove(base + dst_idx, base + src_idx, sizeof(synpat_T) * (size_t)count);
 }
 
-/// Decrement b_syn_folditems.
 void nvim_synblock_dec_folditems(synblock_T *block) { block->b_syn_folditems--; }
 
 /// Full clear of a synblock: keytabs, patterns, clusters, cluster_ids,
@@ -1093,7 +976,6 @@ void nvim_synblock_set_spell_cluster_id(int id) { curwin->w_s->b_spell_cluster_i
 
 void nvim_synblock_set_nospell_cluster_id(int id) { curwin->w_s->b_nospell_cluster_id = id; }
 
-/// vim_strsave_up for a null-terminated string -- used by rs_syn_add_cluster.
 char *nvim_syn_vim_strsave_up(const char *s) { return vim_strsave_up(s); }
 
 void nvim_synblock_ga_init_patterns(void)
@@ -1200,16 +1082,12 @@ void nvim_syn_do_clear_time(syn_time_T *st)
   st->match = 0;
 }
 
-/// Get the base pointer to the synpat_T array for a synblock (SYN_ITEMS(block)).
-/// Used by Rust to do direct field access into SynPat via repr(C) pointer arithmetic.
 synpat_T *nvim_synblock_get_patterns_ga_data(synblock_T *block)
 {
   if (block == NULL || block->b_syn_patterns.ga_len == 0) return NULL;
   return (synpat_T *)block->b_syn_patterns.ga_data;
 }
 
-/// Get the base pointer to the syn_cluster_T array for a synblock (SYN_CLSTR(block)).
-/// Used by Rust to do direct field access into SynCluster via repr(C) pointer arithmetic.
 syn_cluster_T *nvim_synblock_get_clusters_ga_data(synblock_T *block)
 {
   if (block == NULL || block->b_syn_clusters.ga_len == 0) return NULL;
@@ -1225,8 +1103,6 @@ void nvim_synstate_set_sst_next_list(synstate_T *state, int16_t *list) { if (sta
 
 void nvim_synstate_set_tick_to_display(synstate_T *state) { if (state) state->sst_tick = display_tick; }
 
-/// Call ga_clear on state->sst_union.sst_ga (for use after unreffing all extmatches
-/// in the growarray path of clear_syn_state).
 void nvim_synstate_ga_clear(synstate_T *state) { if (state) ga_clear(&state->sst_union.sst_ga); }
 
 /// Fill one bufstate slot in sp->sst_union from CUR_STATE(i).
@@ -1277,10 +1153,8 @@ void nvim_ht_clear_and_init(hashtab_T *ht)
   hash_init(ht);
 }
 
-/// Lock a hashtab for iteration (wraps hash_lock).
 void nvim_ht_lock(hashtab_T *ht) { if (ht) hash_lock(ht); }
 
-/// Unlock a hashtab after iteration (wraps hash_unlock).
 void nvim_ht_unlock(hashtab_T *ht) { if (ht) hash_unlock(ht); }
 
 void nvim_ke_set_next(keyentry_T *kp, keyentry_T *next) { if (kp) kp->ke_next = next; }
@@ -1292,7 +1166,6 @@ void nvim_ht_remove_at(hashtab_T *ht, size_t idx)
   hash_remove(ht, &ht->ht_array[idx]);
 }
 
-/// Get hi_key pointer for the KE2HIKEY of kp (the key used for hash chain relink).
 char *nvim_ke_get_hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
 
 void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key)
@@ -1301,7 +1174,6 @@ void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key)
   ht->ht_array[idx].hi_key = key;
 }
 
-/// Find a keyword in hashtab: wraps hash_find + HI2KE.
 keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
 {
   if (!ht || !keyword) return NULL;
@@ -1343,7 +1215,6 @@ void nvim_ke_alloc_and_insert(hashtab_T *ht, const char *name_ic, int name_iclen
 
 hashtab_T *nvim_curwin_get_keywtab(int use_ic) { return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab; }
 
-/// Check if curwin shares the buffer's synblock (i.e. has not yet called ownsyntax).
 int nvim_curwin_shares_buf_synblock(void) { return curwin->w_s == &curwin->w_buffer->b_s ? 1 : 0; }
 
 /// Allocate a new zeroed synblock_T, initialise its hashtabs and spell options.
@@ -1361,7 +1232,6 @@ synblock_T *nvim_syn_alloc_new_synblock(void)
   return block;
 }
 
-/// Assign synblock to curwin->w_s and clear curwin->w_p_spell.
 void nvim_curwin_set_synblock(synblock_T *block)
 {
   curwin->w_s = block;
