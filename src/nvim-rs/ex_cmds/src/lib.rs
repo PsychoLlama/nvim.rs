@@ -559,8 +559,7 @@ extern "C" {
     pub fn getout(exitval: c_int) -> !;
     /// before_quit_all: pre-quit checks
     pub fn before_quit_all(eap: *mut ExArgHandle) -> c_int;
-    /// fileinfo: display file information
-    pub fn fileinfo(shortmess: c_int, dont_truncate: c_int, forceit: c_int);
+    pub fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
     /// expand_env_save: expand environment variables, return allocated string
     pub fn expand_env_save(str_: *const c_char) -> *mut c_char;
     /// rs_buflist_altfpos: update alternate file position for window (Rust impl)
@@ -978,8 +977,7 @@ extern "C" {
     pub fn appended_lines(lnum: c_int, count: c_int);
     pub static mut State: c_int;
     pub static mut need_wait_return: bool;
-    /// Call ui_cursor_shape()
-    pub fn nvim_ui_cursor_shape_wrapper();
+    pub fn ui_cursor_shape();
     /// Duplicate a string with length (allocates len+1 bytes)
     pub fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
     /// Duplicate a string

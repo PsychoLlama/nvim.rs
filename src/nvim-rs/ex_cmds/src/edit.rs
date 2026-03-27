@@ -184,7 +184,7 @@ extern "C" {
     fn nvim_check_cursor();
     fn check_cursor_col(win: *mut WinHandle);
     fn check_fname() -> c_int;
-    fn nvim_beginline(flags: c_int);
+    fn beginline(flags: c_int);
     fn nvim_ecmd_cursor_eq(lnum: c_int, col: c_int) -> c_int;
     fn nvim_ecmd_cursor_col_skipwhite() -> c_int;
 
@@ -247,7 +247,7 @@ extern "C" {
     fn shortmess(x: c_int) -> bool;
     fn msg_check_for_delay(check_msg_scroll: bool);
     fn msg_start();
-    fn nvim_fileinfo_call();
+    fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
     fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_char;
     fn do_cmdline(
         cmdline: *mut c_char,
@@ -860,7 +860,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     check_cursor_col(nvim_get_curwin());
                     nvim_ecmd_curwin_set_coladd_curswant();
                 } else {
-                    nvim_beginline(BL_SOL | BL_FIX);
+                    beginline(BL_SOL | BL_FIX);
                 }
             } else {
                 // No line number -- go to last line in Ex mode
@@ -868,7 +868,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     nvim_curwin_set_cursor_lnum(nvim_excmds_curbuf_ml_line_count());
                     nvim_curwin_set_cursor_col(0);
                 }
-                nvim_beginline(BL_WHITE | BL_FIX);
+                beginline(BL_WHITE | BL_FIX);
             }
         }
 
@@ -895,7 +895,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             crate::msg_scrolled_ign = true;
 
             if !shortmess(SHM_FILEINFO) {
-                nvim_fileinfo_call();
+                fileinfo(c_int::from(false), true, false);
             }
 
             crate::msg_scrolled_ign = false;

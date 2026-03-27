@@ -81,7 +81,7 @@ extern "C" {
     fn nvim_gchar_cursor() -> c_int;
     fn del_char(fixpos: bool) -> c_int;
     fn nvim_ins_str(ptr: *const std::ffi::c_char, len: usize);
-    fn nvim_ins_char_call(c: c_int);
+    fn ins_char(c: c_int);
 
     fn nvim_beep_flush();
 
@@ -456,7 +456,7 @@ unsafe fn addsub_do_alpha(
 
     nvim_set_cursor_col(col);
     del_char(false);
-    nvim_ins_char_call(fd);
+    ins_char(fd);
     let endpos_col = nvim_get_cursor_col();
     nvim_set_cursor_col(col);
     (true, endpos_col)

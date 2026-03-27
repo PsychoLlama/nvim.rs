@@ -122,8 +122,8 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
 
     // Mode state machinery
-    fn nvim_may_trigger_modechanged();
-    fn nvim_setmouse();
+    fn may_trigger_modechanged();
+    fn setmouse();
     fn gchar_cursor() -> c_int;
 
     // Utilities
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         State = MODE_INSERT;
     }
 
-    nvim_may_trigger_modechanged();
+    may_trigger_modechanged();
     nvim_set_stop_insert_mode(0);
 
     // Need to position cursor again when on a TAB and
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         State |= MODE_LANGMAP;
     }
 
-    nvim_setmouse();
+    setmouse();
     rs_clear_showcmd();
 
     // There is no reverse replace mode

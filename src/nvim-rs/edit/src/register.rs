@@ -47,17 +47,17 @@ extern "C" {
     fn nvim_dec_no_mapping();
     fn nvim_inc_allow_keys();
     fn nvim_dec_allow_keys();
-    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn plain_vgetc() -> c_int;
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
     fn nvim_inc_no_u_sync();
     fn nvim_dec_no_u_sync();
     fn nvim_get_u_sync_once() -> c_int;
     fn nvim_set_u_sync_once(val: c_int);
     fn nvim_set_ins_need_undo(val: c_int);
-    fn nvim_get_expr_register() -> c_int;
+    fn get_expr_register() -> c_int;
     fn nvim_ins_reg_restore_cursor_save();
     fn nvim_ins_reg_restore_cursor();
-    fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
+    fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn vim_beep(val: c_uint);
     fn nvim_get_yank_register_paste(regname: c_int) -> *mut std::ffi::c_void;
     fn nvim_reg_y_size(reg: *const std::ffi::c_void) -> usize;
@@ -72,7 +72,7 @@ extern "C" {
     );
     fn nvim_insert_reg(regname: c_int, literally: c_int) -> c_int;
     fn nvim_get_stop_insert_mode() -> c_int;
-    fn nvim_stuff_empty() -> bool;
+    fn stuff_empty() -> bool;
     fn nvim_VIsual_active() -> c_int;
     fn end_visual_mode();
 }
@@ -102,13 +102,13 @@ pub unsafe extern "C" fn rs_ins_reg() {
     // Don't map the register name.
     nvim_inc_no_mapping();
     nvim_inc_allow_keys();
-    let mut regname = nvim_plain_vgetc_wrapper();
+    let mut regname = plain_vgetc();
     regname = nvim_langmap_adjust(regname, true);
     if regname == CTRL_R || regname == CTRL_O || regname == CTRL_P {
         // Get a third key for literal register insertion.
         literally = regname;
         add_to_showcmd_c(literally);
-        regname = nvim_plain_vgetc_wrapper();
+        regname = plain_vgetc();
         regname = nvim_langmap_adjust(regname, true);
     }
     nvim_dec_no_mapping();
@@ -119,11 +119,11 @@ pub unsafe extern "C" fn rs_ins_reg() {
     if regname == EQ_CHAR {
         nvim_ins_reg_restore_cursor_save();
         nvim_set_u_sync_once(2);
-        regname = nvim_get_expr_register();
+        regname = get_expr_register();
         nvim_ins_reg_restore_cursor();
     }
 
-    if regname == NUL || !nvim_valid_yank_reg(regname, false) {
+    if regname == NUL || !valid_yank_reg(regname, false) {
         vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
         need_redraw = true;
     } else {
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
     nvim_set_u_sync_once(0);
 
     // If the inserted register is empty, remove the `"`.
-    if need_redraw || nvim_stuff_empty() {
+    if need_redraw || stuff_empty() {
         edit_unputchar();
     }
     rs_clear_showcmd();

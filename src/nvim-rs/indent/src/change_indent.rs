@@ -56,7 +56,7 @@ extern "C" {
     fn nvim_getvcol_nolist() -> ColnrT;
 
     // Navigation
-    fn nvim_beginline(flags: c_int);
+    fn beginline(flags: c_int);
 
     // Indentation
     fn nvim_shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: c_int);
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn rs_change_indent(
 
     // determine offset from first non-blank
     let mut new_cursor_col: c_int = nvim_get_curwin_cursor_col();
-    nvim_beginline(BL_WHITE);
+    beginline(BL_WHITE);
     new_cursor_col -= nvim_get_curwin_cursor_col();
 
     let insstart_less_before = nvim_get_curwin_cursor_col();

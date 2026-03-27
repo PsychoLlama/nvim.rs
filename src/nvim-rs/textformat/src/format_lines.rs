@@ -81,7 +81,7 @@ extern "C" {
         spaces_removed: c_int,
     );
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
-    fn nvim_ui_cursor_shape_wrapper();
+    fn ui_cursor_shape();
     fn nvim_curbuf_get_b_p_lisp() -> c_int;
     fn nvim_curbuf_get_b_p_inde_ptr() -> *const c_char;
     fn line_breakcheck();
@@ -331,7 +331,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
                 nvim_textfmt_set_p_smd(smd_save);
                 // Cursor shape may have been updated (e.g. by :normal) in insertchar(),
                 // so it needs to be updated here.
-                nvim_ui_cursor_shape_wrapper();
+                ui_cursor_shape();
 
                 second_indent = -1;
                 // at end of par.: need to set indent of next par.

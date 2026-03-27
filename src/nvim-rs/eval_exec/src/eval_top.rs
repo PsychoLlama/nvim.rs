@@ -1119,7 +1119,7 @@ extern "C" {
     fn nvim_mark_bt_prompt(buf: *mut c_void) -> c_int; // static inline, needs wrapper
     fn nvim_buf_get_prompt_start_lnum(buf: *mut c_void) -> i32; // linenr_T = i32
     fn nvim_buf_get_b_ml_ml_line_count(buf: *mut c_void) -> i32; // linenr_T = i32
-    fn nvim_ml_get_buf_wrapper(buf: *mut c_void, lnum: i32) -> *mut c_char;
+    fn ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
     fn nvim_prompt_text() -> *const c_char;
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     // nvim_xstrdup declared in Phase 1 extern block above
@@ -1166,7 +1166,7 @@ pub unsafe extern "C" fn rs_prompt_get_input(buf: *mut c_void) -> *mut c_char {
     let lnum_last: i32 = nvim_buf_get_b_ml_ml_line_count(buf);
 
     // Get the first line and skip past the prompt prefix
-    let text_raw = nvim_ml_get_buf_wrapper(buf, lnum_start);
+    let text_raw = ml_get_buf(buf, lnum_start);
     let prompt = nvim_prompt_text();
     let prompt_len = libc_strlen(prompt);
     let text_len = libc_strlen(text_raw);
@@ -1184,7 +1184,7 @@ pub unsafe extern "C" fn rs_prompt_get_input(buf: *mut c_void) -> *mut c_char {
         let newline = b"\n\0";
         let half_text = nvim_concat_str(full_text, newline.as_ptr() as *const c_char);
         xfree(full_text as *mut c_void);
-        let line = nvim_ml_get_buf_wrapper(buf, i);
+        let line = ml_get_buf(buf, i);
         full_text = nvim_concat_str(half_text, line);
         xfree(half_text as *mut c_void);
         i += 1;

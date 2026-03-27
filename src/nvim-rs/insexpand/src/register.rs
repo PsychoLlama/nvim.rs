@@ -14,8 +14,8 @@ const BLACK_HOLE_REGISTER: c_char = b'_' as c_char;
 // C accessor functions
 extern "C" {
     // Register access (from normal_shim.c)
-    fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
-    fn nvim_put_copy_register(regname: c_int) -> *mut std::ffi::c_void;
+    fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
+    fn copy_register(regname: c_int) -> *mut std::ffi::c_void;
     fn nvim_put_free_register(reg: *mut std::ffi::c_void);
 
     // Register field accessors (from insexpand_shim.c)
@@ -97,11 +97,11 @@ pub unsafe extern "C" fn rs_get_register_completion() {
         let regname = rs_get_register_name(i);
 
         // Skip invalid or black hole register
-        if !nvim_valid_yank_reg(regname, false) || regname == c_int::from(BLACK_HOLE_REGISTER) {
+        if !valid_yank_reg(regname, false) || regname == c_int::from(BLACK_HOLE_REGISTER) {
             continue;
         }
 
-        let reg = nvim_put_copy_register(regname);
+        let reg = copy_register(regname);
 
         if nvim_yankreg_y_array_null(reg) != 0 || nvim_yankreg_y_size(reg) == 0 {
             nvim_put_free_register(reg);

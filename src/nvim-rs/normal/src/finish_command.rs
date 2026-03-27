@@ -50,7 +50,7 @@ extern "C" {
     static mut VIsual_select_reg: c_int;
     static mut restart_VIsual_select: c_int;
     fn nvim_set_opcount(val: c_int);
-    fn nvim_stuff_empty() -> bool;
+    fn stuff_empty() -> bool;
 
     // Phase 3 wrappers
     fn rs_clearop(oap: OapHandle);
@@ -60,18 +60,18 @@ extern "C" {
     fn do_pending_operator(ca: CapHandle, old_col: c_int, gui_yank: bool);
     fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool;
     fn rs_normal_redraw_mode_message(s: NormalStateHandle);
-    fn nvim_may_trigger_modechanged();
-    fn nvim_ui_cursor_shape_wrapper();
+    fn may_trigger_modechanged();
+    fn ui_cursor_shape();
     fn rs_clear_showcmd();
-    fn nvim_checkpcmark_wrapper();
+    fn checkpcmark();
     fn xfree(ptr: *mut std::ffi::c_void);
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_curwin_get_p_crb() -> bool;
     fn nvim_validate_cursor_curwin_wrapper();
-    fn nvim_do_check_scrollbind_wrapper(flag: bool);
-    fn nvim_do_check_cursorbind_wrapper();
+    fn do_check_scrollbind(flag: bool);
+    fn do_check_cursorbind();
     fn edit(cmd: c_int, startln: bool, count: c_int) -> bool;
-    fn nvim_showmode();
+    fn showmode() -> c_int;
     fn nvim_get_curwin() -> WinHandle;
     fn mb_check_adjust_col(win: WinHandle);
 }
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     if (*oa).op_type == OP_NOP {
         // Reset finish_op, in case it was set.
         nvim_set_finish_op(false);
-        nvim_may_trigger_modechanged();
+        may_trigger_modechanged();
     }
 
     // Redraw the cursor with another shape, if we were in Operator-pending
@@ -152,14 +152,14 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         || cmdchar == c_int::from(b'r')
         || (cmdchar == c_int::from(b'g') && (*ca).nchar == c_int::from(b'r'))
     {
-        nvim_ui_cursor_shape_wrapper();
+        ui_cursor_shape();
     }
 
     if (*oa).op_type == OP_NOP && (*oa).regname == 0 && cmdchar != K_EVENT {
         rs_clear_showcmd();
     }
 
-    nvim_checkpcmark_wrapper();
+    checkpcmark();
     {
         let cap_typed = ca.cast::<CmdargT>();
         xfree((*cap_typed).searchbuf.cast::<std::ffi::c_void>());
@@ -170,12 +170,12 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
 
     if nvim_curwin_get_p_scb() && (*sp).toplevel {
         nvim_validate_cursor_curwin_wrapper();
-        nvim_do_check_scrollbind_wrapper(true);
+        do_check_scrollbind(true);
     }
 
     if nvim_curwin_get_p_crb() && (*sp).toplevel {
         nvim_validate_cursor_curwin_wrapper();
-        nvim_do_check_cursorbind_wrapper();
+        do_check_cursorbind();
     }
 
     // May restart edit(), if we got here with CTRL-O in Insert mode
@@ -185,14 +185,14 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         && ((restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0)
             || restart_VIsual_select == 1)
         && ((*ca).retval & CA_COMMAND_BUSY == 0)
-        && nvim_stuff_empty()
+        && stuff_empty()
         && (*oa).regname == 0
     {
         if restart_VIsual_select == 1 {
             nvim_set_VIsual_select(true);
             VIsual_select_reg = 0;
-            nvim_may_trigger_modechanged();
-            nvim_showmode();
+            may_trigger_modechanged();
+            showmode();
             restart_VIsual_select = 0;
         }
         if restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0 {

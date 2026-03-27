@@ -200,7 +200,7 @@ extern "C" {
 
     // Other functions
     fn nvim_buf_inc_changedtick(buf: BufHandle);
-    fn nvim_showmode();
+    fn showmode();
     fn ui_flush();
     fn os_delay(ms: u64, allow_input: bool);
     fn wait_return(redraw: c_int);

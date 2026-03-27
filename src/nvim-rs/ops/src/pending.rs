@@ -179,13 +179,13 @@ extern "C" {
     fn nvim_get_curwin_w_view_width() -> c_int;
     fn nvim_coladvance(col: c_int);
     fn nvim_get_cursor_line_len() -> c_int;
-    fn nvim_ml_get_len_call(lnum: c_int) -> c_int;
+    fn ml_get_len(lnum: c_int) -> c_int;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
     fn nvim_get_virtual_op() -> c_int;
     fn nvim_set_virtual_op_none();
 
     // misc ops state
-    fn nvim_setmouse();
+    fn setmouse();
     fn nvim_set_mouse_dragging(val: c_int);
     fn nvim_coladvance_set_curswant(old_col: c_int);
     fn nvim_set_motion_force_nul();
@@ -200,10 +200,10 @@ extern "C" {
     fn nvim_curbuf_modifiable() -> bool;
 
     // op utilities
-    fn nvim_op_on_lines(op_type: c_int) -> bool;
-    fn nvim_inindent_zero_dpo() -> bool;
-    fn nvim_get_op_char(op_type: c_int) -> c_int;
-    fn nvim_get_extra_op_char(op_type: c_int) -> c_int;
+    fn op_on_lines(op: c_int) -> c_int;
+    fn inindent(extra: c_int) -> c_int;
+    fn get_op_char(op_type: c_int) -> c_int;
+    fn get_extra_op_char(op_type: c_int) -> c_int;
 
     // redo
     fn rs_prep_redo(
@@ -228,7 +228,7 @@ extern "C" {
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
     fn AppendToRedobuff(s: *const c_char);
     fn AppendNumberToRedobuff(n: c_int);
-    fn nvim_CancelRedo();
+    fn CancelRedo();
 
     // rs_* Rust helpers already implemented in Rust
     fn rs_restore_visual_mode();
@@ -286,7 +286,7 @@ extern "C" {
     fn nvim_get_p_fp_nonempty() -> bool;
     fn nvim_get_curbuf_b_p_inde_nonempty() -> bool;
     fn nvim_use_indentexpr_for_lisp() -> bool;
-    fn nvim_has_format_option_fo_auto() -> bool;
+    fn nvim_has_format_option(opt: c_int) -> bool;
     fn nvim_get_KeyTyped() -> bool;
 
     // curwin handle for fold calls
@@ -462,8 +462,8 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
         rs_prep_redo(
             regname,
             count0,
-            nvim_get_op_char(op_type),
-            nvim_get_extra_op_char(op_type),
+            get_op_char(op_type),
+            get_extra_op_char(op_type),
             motion_force,
             cmdchar,
             nchar,
@@ -523,10 +523,10 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
                 || (vis_lnum == cursor_lnum && nvim_get_VIsual_col() < nvim_get_cursor_col())
             {
                 nvim_set_VIsual_col(0);
-                nvim_set_cursor_col(nvim_ml_get_len_call(cursor_lnum));
+                nvim_set_cursor_col(ml_get_len(cursor_lnum));
             } else {
                 nvim_set_cursor_col(0);
-                nvim_set_VIsual_col(nvim_ml_get_len_call(nvim_get_VIsual_lnum()));
+                nvim_set_VIsual_col(ml_get_len(nvim_get_VIsual_lnum()));
             }
             nvim_set_VIsual_mode(c_int::from(b'v'));
         } else if vis_mode == c_int::from(b'v') {
@@ -574,8 +574,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                 nvim_set_cursor_col(0);
             }
             if nvim_hasFolding_oap_start_down(oap) {
-                (*oap.cast::<OpargT>()).start.col =
-                    nvim_ml_get_len_call((*oap.cast::<OpargT>()).start.lnum);
+                (*oap.cast::<OpargT>()).start.col = ml_get_len((*oap.cast::<OpargT>()).start.lnum);
             }
         }
         // oap->end = oap->start; oap->start = cursor
@@ -649,15 +648,15 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                 rs_prep_redo(
                     regname,
                     count0,
-                    nvim_get_op_char(op_type),
-                    nvim_get_extra_op_char(op_type),
+                    get_op_char(op_type),
+                    get_extra_op_char(op_type),
                     motion_force,
                     cmdchar,
                     nchar,
                 );
             } else if !is_ex_cmdchar(cap) && cmdchar != K_LUA {
-                let opchar = nvim_get_op_char(op_type);
-                let extra_opchar = nvim_get_extra_op_char(op_type);
+                let opchar = get_op_char(op_type);
+                let extra_opchar = get_extra_op_char(op_type);
                 let mut nchar2 = if op_type == OP_REPLACE { nchar } else { NUL };
                 if nchar2 == -1 {
                     // REPLACE_CR_NCHAR
@@ -715,7 +714,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                 (*oap.cast::<OpargT>()).inclusive = false;
                 let op_type2 = (*oap.cast::<OpargT>()).op_type;
                 if !nvim_p_sel_is_old()
-                    && !nvim_op_on_lines(op_type2)
+                    && op_on_lines(op_type2) == 0
                     && (*oap.cast::<OpargT>()).end.lnum < nvim_curbuf_get_ml_line_count()
                 {
                     let end_lnum = (*oap.cast::<OpargT>()).end.lnum;
@@ -732,7 +731,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
 
         if !gui_yank {
             nvim_set_VIsual_active(false);
-            nvim_setmouse();
+            setmouse();
             nvim_set_mouse_dragging(0);
             rs_may_clear_cmdline();
             let op_type3 = (*oap.cast::<OpargT>()).op_type;
@@ -800,10 +799,10 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
         (*oap.cast::<OpargT>()).line_count = lc - 1;
         let el = (*oap.cast::<OpargT>()).end.lnum;
         (*oap.cast::<OpargT>()).end.lnum = el - 1;
-        if nvim_inindent_zero_dpo() {
+        if inindent(0) != 0 {
             (*oap.cast::<OpargT>()).motion_type = K_MT_LINE_WISE;
         } else {
-            let new_end_col = nvim_ml_get_len_call((*oap.cast::<OpargT>()).end.lnum);
+            let new_end_col = ml_get_len((*oap.cast::<OpargT>()).end.lnum);
             (*oap.cast::<OpargT>()).end.col = new_end_col;
             if new_end_col > 0 {
                 (*oap.cast::<OpargT>()).end.col = new_end_col - 1;
@@ -856,11 +855,13 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             nvim_set_VIsual_reselect(false);
             if empty_region_error {
                 nvim_vim_beep_operator();
-                nvim_CancelRedo();
+                CancelRedo();
             } else {
                 op_delete(oap);
                 let mt = (*oap.cast::<OpargT>()).motion_type;
-                if mt == K_MT_LINE_WISE && nvim_has_format_option_fo_auto() && u_save_cursor() == OK
+                if mt == K_MT_LINE_WISE
+                    && nvim_has_format_option(c_int::from(b'a'))
+                    && u_save_cursor() == OK
                 {
                     auto_format(false, true);
                 }
@@ -871,7 +872,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             if empty_region_error {
                 if !gui_yank {
                     nvim_vim_beep_operator();
-                    nvim_CancelRedo();
+                    CancelRedo();
                 }
             } else {
                 restore_lbr(lbr_saved);
@@ -886,7 +887,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             nvim_set_VIsual_reselect(false);
             if empty_region_error {
                 nvim_vim_beep_operator();
-                nvim_CancelRedo();
+                CancelRedo();
             } else {
                 let restart_edit_save = if nvim_get_KeyTyped() { 0 } else { restart_edit };
                 restart_edit = 0;
@@ -921,7 +922,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
         OP_TILDE | OP_UPPER | OP_LOWER | OP_ROT13 => {
             if empty_region_error {
                 nvim_vim_beep_operator();
-                nvim_CancelRedo();
+                CancelRedo();
             } else {
                 op_tilde(oap);
             }
@@ -955,7 +956,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             nvim_set_VIsual_reselect(false);
             if empty_region_error {
                 nvim_vim_beep_operator();
-                nvim_CancelRedo();
+                CancelRedo();
             } else {
                 let re_save = restart_edit;
                 restart_edit = 0;
@@ -978,7 +979,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             nvim_set_VIsual_reselect(false);
             if empty_region_error {
                 nvim_vim_beep_operator();
-                nvim_CancelRedo();
+                CancelRedo();
             } else {
                 restore_lbr(lbr_saved);
                 let nchar = (*cap.cast::<CmdargT>()).nchar;
@@ -1020,7 +1021,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
         OP_NR_ADD | OP_NR_SUB => {
             if empty_region_error {
                 nvim_vim_beep_operator();
-                nvim_CancelRedo();
+                CancelRedo();
             } else {
                 nvim_set_VIsual_active(true);
                 restore_lbr(lbr_saved);

@@ -2192,7 +2192,7 @@ extern "C" {
     fn win_goto(wp: WinHandle);
     fn close_others(message: c_int, forceit: c_int);
     fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
-    fn nvim_setmark(name: c_int) -> bool;
+    fn setmark(name: c_int) -> c_int;
     fn rs_print_line(lnum: LinenrT, use_number: c_int, list: c_int, first: c_int);
     fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
     static mut got_int: bool;
@@ -2260,7 +2260,7 @@ pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
     nvim_docmd_get_curwin_cursor_pos(&mut saved_lnum, &mut saved_col, &mut saved_coladd);
     nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
     beginline(BL_WHITE | BL_FIX);
-    if !nvim_setmark(*(arg as *const u8) as c_int) {
+    if setmark(*(arg as *const u8) as c_int) == 0 {
         emsg(c"E191: Argument must be a letter or forward/backward quote".as_ptr());
     }
     nvim_docmd_set_curwin_cursor_pos(saved_lnum, saved_col, saved_coladd);

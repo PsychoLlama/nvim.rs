@@ -92,11 +92,11 @@ extern "C" {
     fn nvim_get_revins_on() -> c_int;
 
     // `may_trigger_modechanged`
-    fn nvim_may_trigger_modechanged();
+    fn may_trigger_modechanged();
 
     // `setmouse` / `showmode` / `unshowmode`
-    fn nvim_setmouse();
-    fn nvim_showmode();
+    fn setmouse();
+    fn showmode() -> c_int;
     fn nvim_unshowmode_false();
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     }
 
     State = MODE_NORMAL;
-    nvim_may_trigger_modechanged();
+    may_trigger_modechanged();
 
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text.
@@ -240,13 +240,13 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         nvim_curwin_invalidate_wrow_wcol_virtcol();
     }
 
-    nvim_setmouse();
+    setmouse();
     ui_cursor_shape();
 
     // When recording or for CTRL-O, need to display the new mode.
     // Otherwise remove the mode message.
     if nvim_get_reg_recording() != 0 || restart_edit != 0 {
-        nvim_showmode();
+        showmode();
     } else if p_smd != 0
         && (unsafe { got_int } || !skip_showmode())
         && nvim_get_p_ch_zero_no_ui_messages() == 0

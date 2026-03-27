@@ -184,8 +184,8 @@ extern "C" {
     fn plines_m_win_fill(wp: WinHandle, first: LinenrT, last: LinenrT) -> c_int;
     #[link_name = "cursor_correct"]
     fn nvim_docmd_cursor_correct(wp: WinHandle);
-    fn nvim_setpcmark();
-    fn nvim_checkpcmark_wrapper();
+    fn setpcmark();
+    fn checkpcmark();
     fn nvim_set_did_syncbind(val: bool);
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
     // scrollup/scrolldown (Rust exports)
@@ -567,7 +567,7 @@ pub unsafe extern "C" fn rs_ex_syncbind_impl(_eap: ExArgHandle) {
     let curwin = nvim_get_curwin();
     let old_linenr = nvim_win_get_cursor_lnum(curwin);
 
-    nvim_setpcmark();
+    setpcmark();
 
     // Determine the minimum virtual topline across all scrollbind windows.
     let vtopline: LinenrT;
@@ -613,7 +613,7 @@ pub unsafe extern "C" fn rs_ex_syncbind_impl(_eap: ExArgHandle) {
 
     if nvim_win_get_w_p_scb(curwin) {
         nvim_set_did_syncbind(true);
-        nvim_checkpcmark_wrapper();
+        checkpcmark();
         if old_linenr != nvim_win_get_cursor_lnum(curwin) {
             let ctrl_o = [b'\x0f' as c_char, 0i8];
             nvim_docmd_ins_typebuf(ctrl_o.as_ptr(), REMAP_NONE, 0, true, false);
@@ -2077,7 +2077,7 @@ extern "C" {
 
     // scrollbind reset/check
     fn nvim_reset_binding_curwin();
-    fn nvim_do_check_scrollbind_wrapper(flag: bool);
+    fn do_check_scrollbind(flag: bool);
 }
 
 // CMOD_KEEPALT = 0x0100 (from ex_cmds_defs.h)
@@ -2196,7 +2196,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
             if !arg2.is_null() && *arg2 != 0 {
                 nvim_reset_binding_curwin();
             } else {
-                nvim_do_check_scrollbind_wrapper(false);
+                do_check_scrollbind(false);
             }
             rs_do_exedit_impl(eap, old_curwin);
         }
@@ -2265,7 +2265,7 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
     if (cmdidx == cmd_new || cmdidx == cmd_tabnew || cmdidx == cmd_tabedit || cmdidx == cmd_vnew)
         && (*arg == 0)
     {
-        nvim_setpcmark();
+        setpcmark();
         let oldwin = if old_curwin.is_null() {
             nvim_get_curwin()
         } else {
@@ -2291,7 +2291,7 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
             nvim_docmd_set_readonlymode(0);
         }
         if cmdidx != cmd_balt && cmdidx != cmd_badd {
-            nvim_setpcmark();
+            setpcmark();
         }
         let curbuf = nvim_get_curbuf();
         let flags = (if buf_hide(curbuf) { ECMD_HIDE } else { 0 })

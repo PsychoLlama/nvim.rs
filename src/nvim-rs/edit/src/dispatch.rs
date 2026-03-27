@@ -176,7 +176,7 @@ extern "C" {
     fn ins_ctrl_x();
     fn nvim_do_cmdline_getcmdkeycmd();
     fn nvim_map_execute_lua_false();
-    fn nvim_paste_repeat(count: c_int);
+    fn paste_repeat(count: c_int);
     fn state_handle_k_event();
     fn nvim_curwin_is_qf_not_ll() -> c_int;
     fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
@@ -859,7 +859,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         // K_IGNORE: merged with K_SELECT above
         K_PASTE_START => {
-            nvim_paste_repeat(1);
+            paste_repeat(1);
             SwitchAction::CheckPum
         }
 

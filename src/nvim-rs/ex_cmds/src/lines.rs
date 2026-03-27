@@ -466,8 +466,8 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
         nvim_excmds_call_getline, nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut,
         nvim_excmds_get_b_p_iminsert, nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd,
-        nvim_excmds_toggle_b_p_ai, nvim_set_ex_no_reprint, nvim_ui_cursor_shape_wrapper, u_save,
-        vim_strchr, xfree, xmemdupz, xstrdup,
+        nvim_excmds_toggle_b_p_ai, nvim_set_ex_no_reprint, u_save, ui_cursor_shape, vim_strchr,
+        xfree, xmemdupz, xstrdup,
     };
 
     let mut did_undo = false;
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         }
     }
     State = MODE_NORMAL;
-    nvim_ui_cursor_shape_wrapper();
+    ui_cursor_shape();
 
     if forceit {
         nvim_excmds_toggle_b_p_ai();

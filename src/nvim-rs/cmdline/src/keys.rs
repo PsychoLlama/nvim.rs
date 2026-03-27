@@ -673,7 +673,7 @@ unsafe extern "C" {
     fn realloc_cmdbuff(len: c_int) -> c_int;
     fn nvim_strcpy_cmdbuff(src: *const c_char);
     fn dealloc_cmdbuff();
-    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn plain_vgetc() -> c_int;
     fn vungetc(c: c_int);
     fn get_expr_register() -> c_int;
     fn get_expr_line() -> *mut c_char;
@@ -701,7 +701,7 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
 ) -> c_int {
     nvim_set_no_mapping(nvim_get_no_mapping() + 1);
     nvim_set_allow_keys(nvim_get_allow_keys() + 1);
-    let c = nvim_plain_vgetc_wrapper();
+    let c = plain_vgetc();
     *c_ptr = c;
     nvim_set_no_mapping(nvim_get_no_mapping() - 1);
     nvim_set_allow_keys(nvim_get_allow_keys() - 1);
@@ -788,13 +788,13 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
     putcmdline(b'"' as c_char, true);
     nvim_set_no_mapping(nvim_get_no_mapping() + 1);
     nvim_set_allow_keys(nvim_get_allow_keys() + 1);
-    let mut i = nvim_plain_vgetc_wrapper(); // CTRL-R <char>
+    let mut i = plain_vgetc(); // CTRL-R <char>
     *c_ptr = i;
     if i == CTRL_O {
         i = CTRL_R; // CTRL-R CTRL-O == CTRL-R CTRL-R
     }
     if i == CTRL_R {
-        *c_ptr = nvim_plain_vgetc_wrapper(); // CTRL-R CTRL-R <char>
+        *c_ptr = plain_vgetc(); // CTRL-R CTRL-R <char>
     }
     nvim_set_no_mapping(nvim_get_no_mapping() - 1);
     nvim_set_allow_keys(nvim_get_allow_keys() - 1);
@@ -1065,8 +1065,8 @@ unsafe extern "C" {
     fn redraw_statuslines();
     // putcmdline(c, shift) declared in the earlier extern block in this file
     fn unputcmdline();
-    fn nvim_get_literal_call(no_simplify: bool) -> c_int;
-    fn nvim_get_digraph(flag: bool) -> c_int;
+    fn get_literal(no_simplify: bool) -> c_int;
+    fn get_digraph(flag: bool) -> c_int;
     fn nvim_utf_iscomposing_first(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -1506,7 +1506,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             putcmdline(b'^' as c_char, true);
 
             let mod_mask = nvim_get_mod_mask();
-            let c_new = nvim_get_literal_call((mod_mask & MOD_MASK_SHIFT) != 0);
+            let c_new = get_literal((mod_mask & MOD_MASK_SHIFT) != 0);
             nvim_cls_set_c(s, c_new);
             nvim_cls_set_do_abbr(s, 0);
             nvim_set_ccline_special_char(NUL);
@@ -1530,7 +1530,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         x if x == CTRL_K => {
             nvim_cls_set_ignore_drag_release(s, 1);
             putcmdline(b'?' as c_char, true);
-            let c_new = nvim_get_digraph(true);
+            let c_new = get_digraph(true);
             nvim_cls_set_c(s, c_new);
             nvim_set_ccline_special_char(NUL);
 

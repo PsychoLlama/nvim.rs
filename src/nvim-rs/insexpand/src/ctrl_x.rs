@@ -600,7 +600,6 @@ extern "C" {
 // Additional extern "C" declarations for Phase 4
 extern "C" {
     fn nvim_set_edit_submode_ctrl_x_msg(mode: c_int);
-    fn nvim_may_trigger_modechanged();
 }
 
 // Additional constants for ins_ctrl_x
@@ -636,7 +635,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_x() {
         crate::vars::nvim_set_ctrl_x_mode(CTRL_X_CMDLINE_CTRL_X);
     }
 
-    nvim_may_trigger_modechanged();
+    may_trigger_modechanged();
 }
 
 // =============================================================================

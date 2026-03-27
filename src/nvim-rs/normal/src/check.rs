@@ -65,7 +65,7 @@ extern "C" {
     static diff_need_scrollbind: bool;
     fn nvim_set_diff_need_scrollbind(val: bool);
     static mut may_garbage_collect: bool;
-    fn nvim_stuff_empty() -> bool;
+    fn stuff_empty() -> bool;
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
     fn nvim_get_global_busy() -> bool;
@@ -112,29 +112,29 @@ extern "C" {
     fn check_scrollbind(vtopline_diff: c_int, leftcol_diff: c_int);
     fn nvim_time_msg_first_screen_and_finish();
     fn may_make_initial_scroll_size_snapshot();
-    fn nvim_update_curswant_wrapper();
+    fn update_curswant();
     fn do_exmode();
-    fn nvim_check_timestamps_call(focus: bool);
+    fn check_timestamps(focus: bool);
     fn may_trigger_win_scrolled_resized();
     fn may_trigger_safestate(safe: bool);
     fn char_avail() -> bool;
     static fdo_flags: u32;
     fn vgetc() -> c_int;
     fn rs_op_pending() -> bool;
-    fn nvim_ui_cursor_shape_wrapper();
+    fn ui_cursor_shape();
     fn ui_flush();
-    fn nvim_may_trigger_modechanged();
+    fn may_trigger_modechanged();
     fn typebuf_maplen() -> c_int;
     fn typebuf_typed() -> bool;
     fn ui_has(ext: c_int) -> bool;
     fn os_delay(ms: c_int, can_interrupt: bool);
-    fn nvim_showmode();
+    fn showmode() -> c_int;
     fn show_cursor_info_later(full: bool);
     fn update_screen();
     fn redraw_statuslines();
     fn nvim_curbuf_set_b_last_used();
     fn shortmess(x: c_int) -> bool;
-    fn nvim_fileinfo_call();
+    fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
     fn may_clear_sb_text();
     fn readbuf1_empty() -> bool;
     fn rs_set_vcount_ca(cap: *mut crate::types::CmdargT, set_prevcount: *mut bool);
@@ -192,11 +192,11 @@ const SHM_FILEINFO: c_int = b'F' as c_int;
 /// Inline of normal_check_stuff_buffer.
 unsafe fn normal_check_stuff_buffer(s: NormalStateHandle) {
     let _ = s; // s is not used in the body
-    if nvim_stuff_empty() {
+    if stuff_empty() {
         nvim_set_did_check_timestamps(false);
 
         if nvim_get_need_check_timestamps() {
-            nvim_check_timestamps_call(false);
+            check_timestamps(false);
         }
 
         if need_wait_return {
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     } else {
         redraw_statuslines();
         if redraw_cmdline || nvim_get_clear_cmdline() || unsafe { redraw_mode } != 0 {
-            nvim_showmode();
+            showmode();
         }
     }
 
@@ -349,7 +349,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
 
     // Show fileinfo after redraw.
     if c_int::from(need_fileinfo) != 0 && !shortmess(SHM_FILEINFO) {
-        nvim_fileinfo_call();
+        fileinfo(c_int::from(false), true, false);
         need_fileinfo = false;
     }
 
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
     // no register was used
     && (*oa).regname == 0
     && ((*ca).retval & CA_COMMAND_BUSY == 0)
-    && nvim_stuff_empty()
+    && stuff_empty()
     && typebuf_typed()
     && emsg_silent == 0
     && !nvim_get_in_assert_fails()
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     }
 
     setcursor();
-    nvim_ui_cursor_shape_wrapper(); // show different cursor shape
+    ui_cursor_shape(); // show different cursor shape
     ui_flush();
     if !ui_has(K_UI_MESSAGES) && (msg_scroll != 0 || c_int::from(emsg_on_display) != 0) {
         os_delay(1003, true); // wait at least one second
@@ -477,9 +477,9 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     let new_finish_op = (*oa).op_type != OP_NOP;
     nvim_set_finish_op(new_finish_op);
     if new_finish_op != (old_finish_op != 0) {
-        nvim_ui_cursor_shape_wrapper();
+        ui_cursor_shape();
     }
-    nvim_may_trigger_modechanged();
+    may_trigger_modechanged();
 
     (*sp).set_prevcount = false;
     // When not finishing an operator and no register name typed, reset count.
@@ -543,7 +543,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     if nvim_get_skip_redraw() || exmode_active {
         nvim_set_skip_redraw(false);
         setcursor();
-    } else if do_redraw || nvim_stuff_empty() {
+    } else if do_redraw || stuff_empty() {
         // Ensure curwin->w_topline and curwin->w_leftcol are up to date
         // before triggering a WinScrolled autocommand.
         update_topline(nvim_get_curwin());
@@ -588,7 +588,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     may_garbage_collect = !(*ns(s)).cmdwin && !(*ns(s)).noexmode;
 
     // Update w_curswant if w_set_curswant has been set.
-    nvim_update_curswant_wrapper();
+    update_curswant();
 
     if exmode_active {
         if (*ns(s)).noexmode {

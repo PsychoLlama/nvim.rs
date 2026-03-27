@@ -1178,8 +1178,7 @@ extern "C" {
     fn nvim_set_can_cindent(val: c_int);
 
     /// Call `redraw_statuslines()`.
-    #[link_name = "nvim_redraw_statuslines_call"]
-    fn nvim_mouse_redraw_statuslines();
+    fn redraw_statuslines();
 
     /// Check if a window's buffer is a prompt buffer.
     fn nvim_win_bt_prompt(wp: WinHandle) -> c_int;
@@ -1341,7 +1340,7 @@ pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
     }
 
     // Redraw status lines (in case another window became active).
-    nvim_mouse_redraw_statuslines();
+    redraw_statuslines();
 }
 
 // MODE_NORMAL value from state_defs.h

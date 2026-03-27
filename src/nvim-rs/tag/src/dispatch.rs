@@ -117,7 +117,7 @@ extern "C" {
     fn nvim_fmark_get_fnum(fm: *const c_void) -> c_int;
     fn nvim_fmark_get_lnum(fm: *const c_void) -> i32;
     fn nvim_fmark_get_col(fm: *const c_void) -> c_int;
-    fn nvim_setpcmark();
+    fn setpcmark();
     fn nvim_set_cursor_lnum(lnum: i32);
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_curwin_set_curswant(val: bool);
@@ -876,7 +876,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 let pop_linenum = nvim_fmark_get_lnum(pop_fmark);
                 let pop_colnum = nvim_fmark_get_col(pop_fmark);
                 if pop_bufnum == nvim_tag_get_curbuf_fnum() {
-                    nvim_setpcmark();
+                    setpcmark();
                 } else if nvim_tag_buflist_getfile_with_result(
                     pop_bufnum,
                     pop_linenum,

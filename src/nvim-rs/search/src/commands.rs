@@ -57,8 +57,8 @@ extern "C" {
     ) -> c_int;
     fn nvim_get_fdo_flags() -> u32;
     fn nvim_get_KeyTyped() -> bool;
-    fn nvim_setmouse();
-    fn nvim_showmode();
+    fn setmouse();
+    fn showmode();
     fn nvim_redraw_curbuf_inverted();
 
     // Rust functions callable from search crate
@@ -992,9 +992,9 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
     }
 
     rs_may_start_select(b'c' as c_int);
-    nvim_setmouse();
+    setmouse();
     nvim_redraw_curbuf_inverted();
-    nvim_showmode();
+    showmode();
 
     let _ = result;
     OK

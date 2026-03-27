@@ -28,7 +28,7 @@ extern "C" {
     fn nvim_set_curwin_cursor_col(col: ColnrT);
     fn skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
-    fn nvim_beginline(flags: c_int);
+    fn beginline(flags: c_int);
 
     // indent_ffi.c accessors (new for this phase)
     fn nvim_curbuf_is_modifiable() -> bool;
@@ -115,7 +115,7 @@ pub unsafe extern "C" fn rs_op_reindent(oap: OapHandle, how: Indenter) {
 
     // put cursor on first non-blank of indented line
     nvim_set_curwin_cursor_lnum(start_lnum);
-    nvim_beginline(BL_SOL | BL_FIX);
+    beginline(BL_SOL | BL_FIX);
 
     // Mark changed lines so that they will be redrawn.
     if last_changed != 0 {

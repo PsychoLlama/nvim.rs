@@ -61,12 +61,12 @@ extern "C" {
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     // linewise_delete helpers
-    fn nvim_del_lines(count: c_int, undo: bool);
-    fn nvim_truncate_line(del_newline: bool);
+    fn del_lines(nlines: c_int, undo: bool);
+    fn truncate_line(fixpos: c_int);
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_set_did_ai(val: bool);
     fn nvim_set_ai_col(val: c_int);
-    fn nvim_beginline(flags: c_int);
+    fn beginline(flags: c_int);
     fn nvim_u_clearline_curbuf();
     fn nvim_get_cursor_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
@@ -194,26 +194,26 @@ unsafe fn opd_linewise_delete(oap: *mut c_void) -> c_int {
         if line_count > 1 {
             let lnum = nvim_get_cursor_lnum();
             nvim_set_cursor_lnum(lnum + 1);
-            nvim_del_lines(line_count - 1, true);
+            del_lines(line_count - 1, true);
             nvim_set_cursor_lnum(lnum);
         }
         if nvim_u_save_cursor() == FAIL {
             return FAIL;
         }
         if nvim_curbuf_get_b_p_ai() != 0 {
-            nvim_beginline(BL_WHITE);
+            beginline(BL_WHITE);
             nvim_set_did_ai(true);
             nvim_set_ai_col(nvim_get_cursor_col());
         } else {
-            nvim_beginline(0);
+            beginline(0);
         }
-        nvim_truncate_line(false);
+        truncate_line(0);
         if line_count > 1 {
             nvim_u_clearline_curbuf();
         }
     } else {
-        nvim_del_lines(line_count, true);
-        nvim_beginline(BL_WHITE | BL_FIX);
+        del_lines(line_count, true);
+        beginline(BL_WHITE | BL_FIX);
         nvim_u_clearline_curbuf();
     }
     OK

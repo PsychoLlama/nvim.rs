@@ -1237,7 +1237,7 @@ extern "C" {
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(v: c_int);
     fn nvim_set_got_int(v: c_int);
-    fn nvim_showmode();
+    fn showmode();
     fn nvim_unshowmode();
     fn nvim_ui_cursor_shape();
     fn nvim_setcursor();
@@ -1255,7 +1255,7 @@ extern "C" {
     fn nvim_apply_termenter_autocmd();
     fn nvim_apply_termleave_autocmd();
     fn nvim_apply_textchangedt_autocmd();
-    fn nvim_may_trigger_modechanged();
+    fn may_trigger_modechanged();
     fn nvim_may_trigger_win_scrolled_resized();
     fn nvim_has_event_textchangedt() -> c_int;
     fn nvim_curbuf_update_changedtick_i();
@@ -1265,7 +1265,7 @@ extern "C" {
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_merge_modifiers_c(key: c_int, tmp_mod_mask: *mut c_int) -> c_int;
     fn nvim_paste_repeat_c();
-    fn nvim_state_handle_k_event();
+    fn state_handle_k_event();
     fn nvim_do_cmdline_key_cmd();
     fn nvim_map_execute_lua_c();
     fn nvim_terminal_set_winopts(s: *mut c_void);
@@ -4403,7 +4403,7 @@ pub unsafe extern "C" fn rs_terminal_execute(state: *mut c_void, key: c_int) -> 
         // Don't free the terminal yet; it is still needed.
         let term = unsafe { TerminalHandle::from_ptr(s.term) };
         unsafe { term.as_mut().refcount += 1 };
-        unsafe { nvim_state_handle_k_event() };
+        unsafe { state_handle_k_event() };
         unsafe { term.as_mut().refcount -= 1 };
         if unsafe { term.as_ref().buf_handle } == 0 {
             s.close = true;
@@ -4517,7 +4517,7 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
             || unsafe { nvim_redraw_cmdline() } != 0
             || unsafe { nvim_redraw_mode() } != 0
         {
-            unsafe { nvim_showmode() };
+            unsafe { showmode() };
         }
     }
 
@@ -4608,7 +4608,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     unsafe { term.as_mut().pending.cursor = true };
     let buf = unsafe { nvim_terminal_handle_get_buffer(term.as_ref().buf_handle) };
     unsafe { rs_adjust_topline_cursor(s.term, buf, 0) };
-    unsafe { nvim_showmode() };
+    unsafe { showmode() };
     unsafe { nvim_ui_cursor_shape() };
 
     // Tell the terminal it has focus.
@@ -4617,7 +4617,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     unsafe { nvim_curbuf_update_changedtick_i() };
 
     unsafe { nvim_apply_termenter_autocmd() };
-    unsafe { nvim_may_trigger_modechanged() };
+    unsafe { may_trigger_modechanged() };
 
     // Run the state machine.
     unsafe { nvim_state_enter_c(std::ptr::addr_of_mut!(s.state).cast()) };
@@ -4651,7 +4651,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
         unsafe { nvim_terminal_check_cursor_c() };
     }
     if unsafe { nvim_get_restart_edit() } != 0 {
-        unsafe { nvim_showmode() };
+        unsafe { showmode() };
     } else {
         unsafe { nvim_unshowmode() };
     }

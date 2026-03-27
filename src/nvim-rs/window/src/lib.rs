@@ -1638,7 +1638,7 @@ extern "C" {
     fn nvim_get_min_set_ch() -> i64;
 
     /// Wrapper for showmode().
-    fn nvim_showmode();
+    fn showmode();
 }
 
 /// UPD_VALID constant from drawscreen.h
@@ -2218,7 +2218,7 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
         nvim_win_fix_scroll(true);
 
         nvim_redraw_all_later(UPD_SOME_VALID);
-        nvim_showmode();
+        showmode();
     }
 }
 

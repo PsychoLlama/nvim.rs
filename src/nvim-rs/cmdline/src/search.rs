@@ -464,7 +464,7 @@ extern "C" {
     fn nvim_status_redraw_all();
     fn nvim_redraw_all_later(upd_type: c_int);
     fn nvim_update_screen();
-    fn nvim_setpcmark();
+    fn setpcmark();
     fn nvim_equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int;
 
     // For may_add_char_to_search (Rust exports from search crate)
@@ -568,7 +568,7 @@ pub unsafe extern "C" fn rs_finish_incsearch_highlighting(
         {
             // Put the '" mark at the original position
             nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.save_cursor));
-            nvim_setpcmark();
+            setpcmark();
         }
         nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.search_start));
     }

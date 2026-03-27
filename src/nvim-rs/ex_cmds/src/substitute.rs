@@ -1181,7 +1181,7 @@ extern "C" {
     fn nvim_u_savesub(lnum: c_int) -> c_int;
     fn nvim_u_savedel2(lnum: c_int, count: c_int) -> c_int;
     fn nvim_u_save_cursor() -> c_int;
-    fn nvim_do_check_cursorbind_wrapper();
+    fn do_check_cursorbind();
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
     static mut p_rdt: i64;
     fn nvim_do_sub_skip_regexp_ex(
@@ -2264,7 +2264,7 @@ unsafe fn handle_do_ask(
     nvim_curwin_set_cursor_col(startpos0_col);
 
     if nvim_curwin_get_w_p_crb() != 0 {
-        nvim_do_check_cursorbind_wrapper();
+        do_check_cursorbind();
     }
 
     if !vim_strchr(p_cpo, b'u' as c_int).is_null() {

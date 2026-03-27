@@ -1094,7 +1094,7 @@ unsafe extern "C" {
     ) -> *mut c_char;
     fn vim_beep(flag: c_int);
     fn set_no_hlsearch(flag: c_int);
-    fn nvim_state_handle_k_event();
+    fn state_handle_k_event();
     fn nvim_map_execute_lua_false();
     fn nvim_cmdline_do_cmdline_nowait();
     fn msg_cursor_goto(row: c_int, col: c_int);
@@ -1301,7 +1301,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     let c = nvim_cls_get_c(s);
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
         if c == K_EVENT {
-            nvim_state_handle_k_event();
+            state_handle_k_event();
         } else if c == K_COMMAND {
             nvim_cmdline_do_cmdline_nowait();
         } else {

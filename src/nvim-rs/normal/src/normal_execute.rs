@@ -90,7 +90,7 @@ extern "C" {
     fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) -> c_int;
     fn ungetchars(len: c_int);
     fn readbuf1_empty() -> bool;
-    fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool;
+    fn add_to_showcmd(c: c_int) -> bool;
     fn set_vcount(count: i64, count1: i64, set_prevcount: bool);
     fn rs_find_command(cmdchar: c_int) -> c_int;
     fn rs_clearopbeep(oap: OapHandle);
@@ -113,7 +113,7 @@ extern "C" {
     fn nvim_inc_allow_keys();
     fn nvim_dec_allow_keys();
     static mut no_zero_mapping: c_int;
-    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn plain_vgetc() -> c_int;
     static km_stopsel: bool;
     fn nvim_redraw_curbuf_inverted();
     #[link_name = "end_visual_mode"]
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         (*sp).old_mapped_len = 0;
     }
 
-    (*sp).need_flushbuf = nvim_add_to_showcmd_wrapper((*sp).c);
+    (*sp).need_flushbuf = add_to_showcmd((*sp).c);
 
     while rs_normal_get_command_count(s) {}
 
@@ -367,7 +367,7 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         }
 
         no_zero_mapping += 1; // don't map zero here
-        let new_c = nvim_plain_vgetc_wrapper();
+        let new_c = plain_vgetc();
         let adjusted = nvim_langmap_adjust(new_c, true);
         (*sp).c = adjusted;
         no_zero_mapping -= 1;
@@ -375,7 +375,7 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
             nvim_dec_no_mapping();
             nvim_dec_allow_keys();
         }
-        (*sp).need_flushbuf |= nvim_add_to_showcmd_wrapper((*sp).c);
+        (*sp).need_flushbuf |= add_to_showcmd((*sp).c);
     }
 
     // If we got CTRL-W there may be a/another count
@@ -385,12 +385,12 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         (*ca).count0 = 0;
         nvim_inc_no_mapping();
         nvim_inc_allow_keys(); // no mapping for nchar, but keys
-        let new_c = nvim_plain_vgetc_wrapper(); // get next character
+        let new_c = plain_vgetc(); // get next character
         let adjusted = nvim_langmap_adjust(new_c, true);
         (*sp).c = adjusted;
         nvim_dec_no_mapping();
         nvim_dec_allow_keys();
-        (*sp).need_flushbuf |= nvim_add_to_showcmd_wrapper((*sp).c);
+        (*sp).need_flushbuf |= add_to_showcmd((*sp).c);
         return true;
     }
 

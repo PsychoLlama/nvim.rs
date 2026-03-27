@@ -420,7 +420,7 @@ extern "C" {
     // ========================================================================
 
     /// Set the pc mark (for jump list).
-    fn nvim_setpcmark();
+    fn setpcmark();
 
     /// Get the p_fcl option value (pointer to NUL-terminated string).
     fn nvim_get_p_fcl() -> *const c_char;
@@ -3059,7 +3059,7 @@ fn fold_move_to_impl(updown: bool, dir: c_int, count: c_int) -> c_int {
             break;
         }
         if retval == FAIL {
-            unsafe { nvim_setpcmark() };
+            unsafe { setpcmark() };
         }
         unsafe {
             nvim_win_set_cursor_lnum(curwin, lnum_found);

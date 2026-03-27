@@ -64,7 +64,7 @@ extern "C" {
     fn ml_open_file(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn apply_autocmds_filechangedro(buf: BufHandle);
-    fn nvim_showmode();
+    fn showmode();
     fn ui_flush();
     fn os_delay(ms: u64, allow_input: bool);
     fn wait_return(redraw: c_int);
@@ -192,7 +192,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         nvim_set_redraw_cmdline(false); // don't redraw and erase the message
 
         if msg_row < Rows - 1 {
-            nvim_showmode();
+            showmode();
         }
     }
 }

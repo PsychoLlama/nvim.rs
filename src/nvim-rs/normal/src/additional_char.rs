@@ -47,9 +47,9 @@ extern "C" {
     // oparg_T accessors
 
     // Phase 2B wrappers
-    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn plain_vgetc() -> c_int;
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
-    fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool;
+    fn add_to_showcmd(c: c_int) -> bool;
     fn del_from_showcmd(n: c_int);
     fn nvim_inc_no_mapping();
     fn nvim_dec_no_mapping();
@@ -58,7 +58,7 @@ extern "C" {
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_get_curbuf_b_p_iminsert() -> c_int;
     fn ui_cursor_shape_no_check_conceal();
-    fn nvim_get_digraph(flag: bool) -> c_int;
+    fn get_digraph(flag: bool) -> c_int;
     fn vpeekc() -> c_int;
     fn do_sleep(ms: c_int, allow_int: bool);
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
@@ -139,7 +139,7 @@ unsafe fn read_target_char(
         langmap_active = true;
     }
 
-    let ch = nvim_plain_vgetc_wrapper();
+    let ch = plain_vgetc();
     target.set(ca, ch);
 
     if langmap_active {
@@ -147,7 +147,7 @@ unsafe fn read_target_char(
         nvim_inc_allow_keys();
     }
     State = MODE_NORMAL_BUSY;
-    (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(target.get(ca));
+    (*ns(s)).need_flushbuf |= add_to_showcmd(target.get(ca));
 
     if !lit {
         // Typing CTRL-K gets a digraph.
@@ -155,12 +155,12 @@ unsafe fn read_target_char(
             && ((flags & NV_LANG != 0) || target == CharTarget::ExtraChar)
             && !nvim_vim_strchr_p_cpo(CPO_DIGRAPH)
         {
-            let c = nvim_get_digraph(false);
+            let c = get_digraph(false);
             (*ns(s)).c = c;
             if c > 0 {
                 target.set(ca, c);
                 del_from_showcmd(3);
-                (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(target.get(ca));
+                (*ns(s)).need_flushbuf |= add_to_showcmd(target.get(ca));
             }
         }
 
@@ -206,7 +206,7 @@ unsafe fn read_target_char(
             towait -= 50;
         }
         if (*ns(s)).c > 0 {
-            let c = nvim_plain_vgetc_wrapper();
+            let c = plain_vgetc();
             (*ns(s)).c = c;
             if c != CTRL_N && c != CTRL_G {
                 vungetc(c);
@@ -252,10 +252,10 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
     // Determine which character field to use and whether we need a third char.
     let cp: Option<CharTarget> = if cmdchar == c_int::from(b'g') {
         // For 'g' get the next character now.
-        let nchar = nvim_plain_vgetc_wrapper();
+        let nchar = plain_vgetc();
         let nchar = nvim_langmap_adjust(nchar, true);
         (*ca.cast::<CmdargT>()).nchar = nchar;
-        (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(nchar);
+        (*ns(s)).need_flushbuf |= add_to_showcmd(nchar);
 
         if nchar == c_int::from(b'r')
             || nchar == c_int::from(b'\'')
@@ -327,7 +327,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
             break;
         }
 
-        let c = nvim_plain_vgetc_wrapper();
+        let c = plain_vgetc();
         (*sp).c = c;
 
         if !utf_iscomposing(prev_code, c, std::ptr::addr_of_mut!(grapheme_state)) {

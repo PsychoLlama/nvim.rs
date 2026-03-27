@@ -127,7 +127,7 @@ extern "C" {
     fn rs_get_scrolloff_value(wp: WinHandle) -> c_int;
 
     /// setmark(name) -- saves cursor to jumplist.
-    fn nvim_setmark(name: c_int) -> bool;
+    fn setmark(name: c_int) -> c_int;
 
     /// get_real_state() -- returns current editor mode flags.
     #[link_name = "get_real_state"]
@@ -355,7 +355,7 @@ fn win_fix_cursor_impl(normal: bool) {
 
         if normal {
             // Save to jumplist and move cursor directly (avoid scrolling).
-            nvim_setmark(c_int::from(b'\''));
+            setmark(c_int::from(b'\''));
             nvim_win_set_cursor_lnum(wp, nlnum);
         } else {
             // Scroll to make cursor valid.

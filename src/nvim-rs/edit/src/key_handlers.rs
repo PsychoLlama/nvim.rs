@@ -68,8 +68,8 @@ extern "C" {
     fn cursor_down(n: c_int, upd_topline: bool) -> c_int;
 
     // Word movement
-    fn nvim_bck_word(count: c_int, bigword: bool, stop: bool) -> c_int;
-    fn nvim_fwd_word(count: c_int, bigword: bool, eol: c_int) -> c_int;
+    fn bck_word(count: c_int, bigword: bool, stop: bool) -> c_int;
+    fn fwd_word(count: c_int, bigword: bool, eol: bool) -> c_int;
 
     // Character operations
     fn nvim_gchar_cursor() -> c_int;
@@ -81,7 +81,7 @@ extern "C" {
     fn nvim_pagescroll_backward() -> c_int;
     fn nvim_pagescroll_forward() -> c_int;
     fn nvim_first_tabpage_has_next() -> c_int;
-    fn nvim_goto_tabpage(n: c_int);
+    fn goto_tabpage(n: c_int);
 
     // Up/Down with Insstart column
     fn nvim_coladvance_insstart();
@@ -263,7 +263,7 @@ unsafe fn ins_s_left_impl() {
         if !end_change {
             AppendCharToRedobuff(K_S_LEFT);
         }
-        nvim_bck_word(1, false, false);
+        bck_word(1, false, false);
         nvim_curwin_set_w_set_curswant(true);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);
@@ -293,7 +293,7 @@ unsafe fn ins_s_right_impl() {
         if !end_change {
             AppendCharToRedobuff(K_S_RIGHT);
         }
-        nvim_fwd_word(1, false, 0);
+        fwd_word(1, false, false);
         nvim_curwin_set_w_set_curswant(true);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);
@@ -423,7 +423,7 @@ unsafe fn ins_pageup_impl() {
         // <C-PageUp>: tab page back
         if nvim_first_tabpage_has_next() != 0 {
             nvim_start_arrow_curpos();
-            nvim_goto_tabpage(-1);
+            goto_tabpage(-1);
         }
         return;
     }
@@ -454,7 +454,7 @@ unsafe fn ins_pagedown_impl() {
         // <C-PageDown>: tab page forward
         if nvim_first_tabpage_has_next() != 0 {
             nvim_start_arrow_curpos();
-            nvim_goto_tabpage(0);
+            goto_tabpage(0);
         }
         return;
     }

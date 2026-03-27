@@ -78,10 +78,10 @@ extern "C" {
     fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // --- timestamps ---
-    fn nvim_stuff_empty() -> bool;
+    fn stuff_empty() -> bool;
     fn nvim_set_did_check_timestamps(val: bool);
     fn nvim_get_need_check_timestamps() -> bool;
-    fn nvim_check_timestamps_call(focus: bool);
+    fn check_timestamps(focus: bool);
 
     // --- msg_scroll ---
     static mut msg_scroll: c_int;
@@ -119,12 +119,12 @@ extern "C" {
 
     // --- scroll bind ---
     fn nvim_curwin_get_p_scb() -> bool;
-    fn nvim_do_check_scrollbind_wrapper(flag: bool);
+    fn do_check_scrollbind(flag: bool);
     fn nvim_curwin_get_w_p_crb() -> c_int;
-    fn nvim_do_check_cursorbind_wrapper();
+    fn do_check_cursorbind();
 
     // --- curswant update ---
-    fn nvim_update_curswant_wrapper();
+    fn update_curswant();
 
     // --- topline / topfill for saving ---
     fn nvim_curwin_get_topline() -> LinenrT;
@@ -232,10 +232,10 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     // Check for timestamps when no typeahead
-    if unsafe { nvim_stuff_empty() } {
+    if unsafe { stuff_empty() } {
         unsafe { nvim_set_did_check_timestamps(false) };
         if unsafe { nvim_get_need_check_timestamps() } {
-            unsafe { nvim_check_timestamps_call(false) };
+            unsafe { check_timestamps(false) };
         }
     }
 
@@ -289,14 +289,14 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     unsafe { nvim_edit_ins_redraw_impl(1) };
 
     if unsafe { nvim_curwin_get_p_scb() } {
-        unsafe { nvim_do_check_scrollbind_wrapper(true) };
+        unsafe { do_check_scrollbind(true) };
     }
     if unsafe { nvim_curwin_get_w_p_crb() } != 0 {
-        unsafe { nvim_do_check_cursorbind_wrapper() };
+        unsafe { do_check_cursorbind() };
     }
 
     if unsafe { (*s).count } <= 1 {
-        unsafe { nvim_update_curswant_wrapper() };
+        unsafe { update_curswant() };
     }
 
     unsafe { (*s).old_topline = nvim_curwin_get_topline() };

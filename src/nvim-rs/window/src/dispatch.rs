@@ -139,17 +139,16 @@ extern "C" {
     fn nvim_dec_no_mapping(); // normal_shim.c
     fn nvim_inc_allow_keys(); // normal_shim.c
     fn nvim_dec_allow_keys(); // normal_shim.c
-    fn nvim_plain_vgetc_wrapper() -> c_int; // normal_shim.c
+    fn plain_vgetc() -> c_int;
     /// Applies LANGMAP_ADJUST(c, condition). Defined in normal_shim.c.
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int; // normal_shim.c
-    fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool; // normal_shim.c
+    fn add_to_showcmd(c: c_int) -> bool;
     fn nvim_set_g_do_tagpreview(val: c_int); // tag_shim.c
     fn nvim_get_p_pvh() -> c_int; // window_shim.c
     fn nvim_set_postponed_split(val: c_int); // tag_shim.c
     fn nvim_do_nv_ident(prefix: c_int, xchar: c_int); // window_shim.c
-    fn nvim_goto_tabpage(n: c_int); // normal_shim.c
-    /// goto_tabpage_lastused(). Defined in normal_shim.c.
-    fn nvim_goto_tabpage_lastused() -> bool; // normal_shim.c
+    fn goto_tabpage(n: c_int);
+    fn goto_tabpage_lastused() -> bool;
     fn nvim_set_cmdmod_tab_to_curtab_idx(); // window_shim.c
     fn nvim_do_window_g_external(); // window_shim.c
 
@@ -265,7 +264,7 @@ extern "C" {
     fn nvim_semsg_e92_buf_not_found(nr: i64);
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
-    fn nvim_buflist_getfile(nr: c_int, lnum: c_int, flags: c_int, setpm: c_int);
+    fn buflist_getfile(nr: c_int, lnum: c_int, flags: c_int, setpm: c_int);
 
     // --- Resize ---
     fn rs_win_setheight(height: c_int);
@@ -871,12 +870,12 @@ pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
         nvim_inc_no_mapping();
         nvim_inc_allow_keys();
         if xchar == NUL {
-            xchar = nvim_plain_vgetc_wrapper();
+            xchar = plain_vgetc();
         }
         xchar = nvim_langmap_adjust(xchar, true);
         nvim_dec_no_mapping();
         nvim_dec_allow_keys();
-        nvim_add_to_showcmd_wrapper(xchar);
+        add_to_showcmd(xchar);
 
         match xchar {
             // =================================================================
@@ -924,21 +923,21 @@ pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
             // Goto tabpage: 't'
             // =================================================================
             CH_T => {
-                nvim_goto_tabpage(prenum);
+                goto_tabpage(prenum);
             }
 
             // =================================================================
             // Goto tabpage backwards: 'T'
             // =================================================================
             CH_T_UPPER => {
-                nvim_goto_tabpage(-prenum1);
+                goto_tabpage(-prenum1);
             }
 
             // =================================================================
             // Goto last used tabpage: Tab
             // =================================================================
             TAB => {
-                if !nvim_goto_tabpage_lastused() {
+                if !goto_tabpage_lastused() {
                     nvim_beep_flush_wrapper();
                 }
             }
@@ -1133,7 +1132,7 @@ pub unsafe extern "C" fn rs_do_window_hat(prenum: c_int) {
     }
 
     if nvim_curbuf_locked() == 0 && rs_win_split(0, 0) == OK {
-        nvim_buflist_getfile(alt_fnum, 0, GETF_ALT, 0);
+        buflist_getfile(alt_fnum, 0, GETF_ALT, 0);
     }
 }
 

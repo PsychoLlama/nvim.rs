@@ -114,7 +114,7 @@ extern "C" {
     // restart_edit
     static mut restart_edit: c_int;
     // setmouse()
-    fn nvim_setmouse();
+    fn setmouse();
 
     // do_autochdir()
     fn nvim_do_autochdir_wrap();
@@ -301,7 +301,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
             rs_win_setwidth(p_wiw);
         }
 
-        nvim_setmouse(); // in case jumped to/from help buffer
+        setmouse(); // in case jumped to/from help buffer
 
         // Change directories when the 'acd' option is set.
         nvim_do_autochdir_wrap();
