@@ -2877,7 +2877,6 @@ extern "C" {
     fn nvim_terminal_timer_start();
     fn nvim_terminal_get_refresh_pending() -> c_int;
     fn nvim_terminal_set_refresh_pending(v: c_int);
-    fn nvim_terminal_handle_get_buffer(buf_handle: c_int) -> *mut c_void;
     fn nvim_terminal_buf_set_title(buf: *mut c_void, title: *const i8, len: usize);
     fn nvim_term_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
     fn nvim_terminal_write_cb(term: *mut c_void, data: *const i8, size: usize);
@@ -3388,7 +3387,7 @@ pub unsafe extern "C" fn rs_term_settermprop(
         }
 
         VTERM_PROP_TITLE => {
-            let buf = unsafe { nvim_terminal_handle_get_buffer(t.buf_handle) };
+            let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
             let frag_str = unsafe { nvim_vterm_frag_str(val) };
             let frag_len = unsafe { nvim_vterm_frag_len(val) };
             let is_initial = unsafe { nvim_vterm_frag_initial(val) } != 0;
@@ -4105,7 +4104,7 @@ pub unsafe extern "C" fn rs_terminal_close(termpp: *mut *mut c_void, status: c_i
     };
 
     let t = unsafe { term.as_ref() };
-    let buf = unsafe { nvim_terminal_handle_get_buffer(t.buf_handle) };
+    let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
 
     if status == -1 || unsafe { nvim_is_exiting() } != 0 {
         // Called by close_buffer() or while exiting: disconnect buffer from terminal.
@@ -4606,7 +4605,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
 
     // Update the cursor shape and scroll to end.
     unsafe { term.as_mut().pending.cursor = true };
-    let buf = unsafe { nvim_terminal_handle_get_buffer(term.as_ref().buf_handle) };
+    let buf = unsafe { nvim_terminal_get_buffer(term.as_ref().buf_handle) };
     unsafe { rs_adjust_topline_cursor(s.term, buf, 0) };
     unsafe { showmode() };
     unsafe { nvim_ui_cursor_shape() };

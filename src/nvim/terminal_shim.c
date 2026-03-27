@@ -253,8 +253,6 @@ void terminal_teardown(void)
   invalidated_terminals = (Set(ptr_t)) SET_INIT;
 }
 
-// public API {{{
-
 void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -406,9 +404,6 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
 void terminal_notify_theme(Terminal *term, bool dark)
   { rs_terminal_notify_theme_impl(term, (int)dark); }
 
-// }}}
-// libvterm callbacks {{{
-
 static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
 {
   Error err = ERROR_INIT;
@@ -430,9 +425,6 @@ extern int rs_term_selection_set(int mask, const char *str, size_t len, int init
                                   void *user);
 static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user)
   { return rs_term_selection_set((int)mask, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
-
-// }}}
-// input handling {{{
 
 // process a mouse event while the terminal is focused. return true if the
 // terminal should lose focus
@@ -561,9 +553,6 @@ end:
   return true;
 }
 
-// }}}
-// terminal buffer refresh & misc {{{
-
 static void fetch_row(Terminal *term, int row, int end_col)
 {
   int col = 0;
@@ -682,12 +671,9 @@ static char *get_config_string(char *key)
   return NULL;
 }
 
-// }}}
-
 void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 char nvim_get_bg_char(void) { return *p_bg; }
 
-// C accessor functions for Rust
 void nvim_terminal_invalidate(void *term, int start_row, int end_row)
   { invalidate_terminal((Terminal *)term, start_row, end_row); }
 void nvim_terminal_send(void *term, const char *data, size_t size)
@@ -749,7 +735,6 @@ int nvim_terminal_get_refresh_pending(void) { return (int)refresh_pending; }
 void nvim_terminal_set_refresh_pending(int v) { refresh_pending = (bool)v; }
 
 // Buffer / title accessors
-void *nvim_terminal_handle_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
   { buf_set_term_title((buf_T *)buf, title, len); }
 void *nvim_term_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
@@ -791,8 +776,6 @@ void nvim_changed_lines_term(void *buf, int first, int last, int added)
 void nvim_multiqueue_move_events_term(void *term)
   { Terminal *t = (Terminal *)term; multiqueue_move_events(loop_get_events(&main_loop), t->pending.events); }
 void *nvim_terminal_sb_get(void *term, size_t idx) { return ((Terminal *)term)->sb_buffer[idx]; }
-void nvim_terminal_sb_set(void *term, size_t idx, void *sbrow)
-  { ((Terminal *)term)->sb_buffer[idx] = (ScrollbackLine *)sbrow; }
 void nvim_terminal_sb_buffer_resize(void *term, size_t new_size)
   { Terminal *t = (Terminal *)term; t->sb_buffer = xrealloc(t->sb_buffer, sizeof(ScrollbackLine *) * new_size); t->sb_size = new_size; }
 void nvim_fetch_row(void *term, int row, int end_col) { fetch_row((Terminal *)term, row, end_col); }
