@@ -20,7 +20,7 @@
 //! Recovery operations read from potentially corrupted files and should
 //! be prepared to handle invalid data gracefully.
 
-use std::ffi::{c_char, c_int, c_uint, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 
 use crate::types::{
     BlockNr, BufHandle, InfoPtrHandle, B0_FF_MASK, B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC,
@@ -141,17 +141,27 @@ const FAIL: c_int = 0;
 // =============================================================================
 
 extern "C" {
+    /// Translate a message string (gettext wrapper)
+    fn gettext(msgid: *const c_char) -> *const c_char;
+    /// Display an error message
+    fn emsg(s: *const c_char) -> bool;
+    /// Start a multi-part message
+    fn msg_start();
+    /// End a multi-part message
+    fn msg_end() -> bool;
+    /// Output a string with highlight
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    /// Output a translated filename with highlight
+    fn msg_outtrans(str_arg: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    /// no_wait_return global counter
+    static mut no_wait_return: c_int;
+}
+
+extern "C" {
     fn nvim_set_recoverymode(val: c_int);
     fn nvim_get_called_from_main() -> c_int;
     fn nvim_get_curbuf_b_fname() -> *const c_char;
     fn nvim_get_curbuf_ffname() -> *const c_char;
-    fn nvim_recover_msg(
-        msg_id: c_int,
-        fname: *const c_char,
-        extra: *const c_char,
-        hl_id: c_int,
-        int_arg: c_int,
-    );
     fn nvim_mf_open_rdonly(fname: *mut c_char) -> *mut c_void;
     fn nvim_mf_close_nodelete(mfp: *mut c_void);
     fn nvim_mf_get_block(mfp: *mut c_void, bnum: i64, page_count: c_uint) -> *mut c_void;
@@ -247,7 +257,7 @@ extern "C" {
 const OK_C: c_int = 1;
 const ML_EMPTY_FLAG: c_int = 0x0001;
 
-// recover_msg_id_T enum values (must match C enum in memline_shim.c)
+// recover_msg_id_T enum values
 const RECOVER_MSG_E305_NO_SWAP: c_int = 0;
 const RECOVER_MSG_E306_CANNOT_OPEN: c_int = 1;
 const RECOVER_MSG_E307_NOT_SWAP: c_int = 2;
@@ -262,6 +272,128 @@ const RECOVER_MSG_PTR_BLOCK_CORRUPTED: c_int = 10;
 const RECOVER_MSG_E311_INTERRUPTED: c_int = 11;
 const RECOVER_MSG_SUCCESS: c_int = 12;
 const RECOVER_MSG_ERRORS: c_int = 13;
+
+// =============================================================================
+// Recovery message dispatch (replaces nvim_recover_msg C shim)
+// =============================================================================
+
+/// Format and display a recovery-related message.
+///
+/// This replaces the C `nvim_recover_msg` dispatch function.
+/// # Safety
+/// `fname` and `extra` must be valid C strings or NULL.
+#[allow(clippy::cast_possible_wrap, clippy::too_many_lines)]
+unsafe fn recover_msg(
+    msg_id: c_int,
+    fname: *const c_char,
+    extra: *const c_char,
+    hl_id: c_int,
+    int_arg: c_int,
+) {
+    // Helper: translate a literal string via gettext
+    macro_rules! t {
+        ($s:expr) => {
+            gettext($s.as_ptr())
+        };
+    }
+    // Helper: format a C-string interpolation and call emsg
+    macro_rules! semsg_fmt {
+        ($fmt:literal, $arg:expr) => {{
+            let s = $arg;
+            let fmtted = if s.is_null() {
+                CString::new(format!($fmt, "")).unwrap_or_default()
+            } else {
+                let cstr = std::ffi::CStr::from_ptr(s);
+                CString::new(format!($fmt, cstr.to_string_lossy())).unwrap_or_default()
+            };
+            emsg(fmtted.as_ptr());
+        }};
+    }
+    match msg_id {
+        0 /* E305_NO_SWAP */ => {
+            semsg_fmt!("E305: No swap file found for {}", fname);
+        }
+        1 /* E306_CANNOT_OPEN */ => {
+            semsg_fmt!("E306: Cannot open {}", fname);
+        }
+        2 /* E307_NOT_SWAP */ => {
+            semsg_fmt!("E307: {} does not look like a Nvim swap file", fname);
+        }
+        3 /* E309_BLOCK1 */ => {
+            semsg_fmt!("E309: Unable to read block 1 from {}", fname);
+        }
+        4 /* E310_BLOCK1_ID */ => {
+            semsg_fmt!("E310: Block 1 ID wrong ({} not a .swp file?)", fname);
+        }
+        5 /* BLOCK0_UNREADABLE */ => {
+            msg_start();
+            msg_puts_hl(t!(c"Unable to read block 0 from "), hl_id, true);
+            msg_outtrans(fname, hl_id, true);
+            msg_puts_hl(
+                t!(c"\nMaybe no changes were made or Nvim did not update the swap file."),
+                hl_id,
+                true,
+            );
+            msg_end();
+        }
+        6 /* VIM3 */ => {
+            msg_start();
+            msg_outtrans(fname, 0, true);
+            msg_puts_hl(t!(c" cannot be used with this version of Nvim.\n"), 0, true);
+            msg_puts_hl(t!(c"Use Vim version 3.0.\n"), 0, true);
+            msg_end();
+        }
+        7 /* WRONG_BYTE_ORDER */ => {
+            msg_start();
+            msg_outtrans(fname, hl_id, true);
+            msg_puts_hl(t!(c" cannot be used on this computer.\n"), hl_id, true);
+            msg_puts_hl(t!(c"The file was created on "), hl_id, true);
+            msg_puts_hl(extra, hl_id, true);
+            msg_puts_hl(t!(c",\nor the file has been damaged."), hl_id, true);
+            msg_end();
+        }
+        8 /* PAGE_SIZE_TOO_SMALL */ => {
+            msg_start();
+            msg_outtrans(fname, hl_id, true);
+            msg_puts_hl(
+                t!(c" has been damaged (page size is smaller than minimum value).\n"),
+                hl_id,
+                true,
+            );
+            msg_end();
+        }
+        9 /* E308_ORIGINAL_CHANGED */ => {
+            emsg(t!(c"E308: Warning: Original file may have been changed"));
+        }
+        10 /* PTR_BLOCK_CORRUPTED */ => {
+            emsg(t!(c"E1364: Warning: Pointer block corrupted"));
+        }
+        11 /* E311_INTERRUPTED */ => {
+            emsg(t!(c"E311: Recovery Interrupted"));
+        }
+        12 /* SUCCESS */ => {
+            if int_arg != 0 {
+                msg(t!(c"Recovery completed. You should check if everything is OK."), 0);
+                msg_puts(t!(c"\n(You might want to write out this file under another name\n"));
+                msg_puts(t!(c"and run diff with the original file to check for changes)"));
+            } else {
+                msg(t!(c"Recovery completed. Buffer contents equals file contents."), 0);
+            }
+            msg_puts(t!(c"\nYou may want to delete the .swp file now."));
+        }
+        13 /* ERRORS */ => {
+            no_wait_return += 1;
+            msg(c">>>>>>>>>>>>>".as_ptr(), 0);
+            emsg(t!(
+                c"E312: Errors detected while recovering; look for lines starting with ???"
+            ));
+            no_wait_return -= 1;
+            msg(t!(c"See \":help E312\" for more information."), 0);
+            msg(c">>>>>>>>>>>>>".as_ptr(), 0);
+        }
+        _ => {}
+    }
+}
 
 // =============================================================================
 // Recovery Functions
@@ -312,7 +444,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             directly = false;
             let len = rs_recover_names(fname, 0, std::ptr::null_mut(), 0, std::ptr::null_mut());
             if len == 0 {
-                nvim_recover_msg(RECOVER_MSG_E305_NO_SWAP, fname, std::ptr::null(), 0, 0);
+                recover_msg(RECOVER_MSG_E305_NO_SWAP, fname, std::ptr::null(), 0, 0);
                 break 'cleanup;
             }
             let chosen: c_int = if len == 1 {
@@ -350,7 +482,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         fname_used = fname_copy;
 
         if mfp.is_null() || nvim_mf_get_fd(mfp) < 0 {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_E306_CANNOT_OPEN,
                 fname_used,
                 std::ptr::null(),
@@ -368,7 +500,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         // Read block 0
         hp = nvim_mf_get_block(mfp, 0, 1);
         if hp.is_null() {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_BLOCK0_UNREADABLE,
                 nvim_mf_get_fname(mfp),
                 std::ptr::null(),
@@ -382,7 +514,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // VIM 3.0 swap file?
         if b0_is_vim3_native(b0p) {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_VIM3,
                 nvim_mf_get_fname(mfp),
                 std::ptr::null(),
@@ -393,7 +525,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         }
         // Bad block 0 ID?
         if rs_ml_check_b0_id(b0p) != 0 {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_E307_NOT_SWAP,
                 nvim_mf_get_fname(mfp),
                 std::ptr::null(),
@@ -406,7 +538,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         if rs_b0_magic_wrong(b0p) != 0 {
             nvim_b0_set_fname0(b0p);
             let hname = nvim_b0_get_hname_ptr(b0p);
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_WRONG_BYTE_ORDER,
                 nvim_mf_get_fname(mfp),
                 hname,
@@ -424,7 +556,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             nvim_mf_new_page_size_wrapper(mfp, b0_page_size);
             let new_page_size = nvim_mf_get_page_size(mfp);
             if new_page_size < previous_page_size {
-                nvim_recover_msg(
+                recover_msg(
                     RECOVER_MSG_PAGE_SIZE_TOO_SMALL,
                     nvim_mf_get_fname(mfp),
                     std::ptr::null(),
@@ -482,7 +614,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // Warn if original file was modified since swap file was written
         if nvim_recover_check_timestamps(mfp, mtime_b0) != 0 {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_E308_ORIGINAL_CHANGED,
                 std::ptr::null(),
                 std::ptr::null(),
@@ -572,7 +704,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // Final status messages
         if unsafe { got_int } {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_E311_INTERRUPTED,
                 std::ptr::null(),
                 std::ptr::null(),
@@ -580,9 +712,9 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
                 0,
             );
         } else if error > 0 {
-            nvim_recover_msg(RECOVER_MSG_ERRORS, std::ptr::null(), std::ptr::null(), 0, 0);
+            recover_msg(RECOVER_MSG_ERRORS, std::ptr::null(), std::ptr::null(), 0, 0);
         } else {
-            nvim_recover_msg(
+            recover_msg(
                 RECOVER_MSG_SUCCESS,
                 std::ptr::null(),
                 std::ptr::null(),
@@ -686,7 +818,7 @@ unsafe fn recover_btree(
 
         if hp.is_null() {
             if bnum == 1 {
-                nvim_recover_msg(
+                recover_msg(
                     RECOVER_MSG_E309_BLOCK1,
                     nvim_mf_get_fname(mfp),
                     std::ptr::null(),
@@ -717,7 +849,7 @@ unsafe fn recover_btree(
                     nvim_pp_set_count(data, expected_max);
                 }
                 if ptr_block_error {
-                    nvim_recover_msg(
+                    recover_msg(
                         RECOVER_MSG_PTR_BLOCK_CORRUPTED,
                         std::ptr::null(),
                         std::ptr::null(),
@@ -789,7 +921,7 @@ unsafe fn recover_btree(
                 // ---- Data block ----
                 if nvim_dp_get_id(data) != DATA_ID {
                     if bnum == 1 {
-                        nvim_recover_msg(
+                        recover_msg(
                             RECOVER_MSG_E310_BLOCK1_ID,
                             nvim_mf_get_fname(mfp),
                             std::ptr::null(),

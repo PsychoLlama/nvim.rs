@@ -704,7 +704,7 @@ extern "C" {
     fn nvim_os_set_cloexec(fd: c_int);
 
     /// emsg: print error message
-    fn emsg(msg: *const c_char);
+    fn emsg(msg: *const c_char) -> bool;
 
     /// Direct access: p_uc (updatecount)
     static mut p_uc: i64;
