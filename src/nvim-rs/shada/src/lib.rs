@@ -625,10 +625,12 @@ extern "C" {
     // Phase 2 (plan b499a5d0): thin accessors for register/variable apply
     // nvim_shada_entry_get_reg_type_valid removed (plan 377dbefc Phase 2): inlined in Rust.
     fn nvim_shada_op_reg_get_timestamp(name: c_char) -> u64;
-    fn nvim_shada_op_reg_set_from_entry(entry: *mut ShadaEntry) -> c_int;
+    // nvim_shada_op_reg_set_from_entry removed (plan 377dbefc Phase 3): inlined in Rust.
     fn nvim_shada_var_set_global_from_entry(entry: *mut ShadaEntry);
     // Phase 3 (plan b499a5d0): thin accessors for buffer list apply
     // nvim_shada_apply_buffer_list removed (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
+    // nvim_shada_mark_set_global_from_entry removed (plan 377dbefc Phase 3): inlined in Rust.
+    // nvim_shada_mark_set_local_from_entry removed (plan 377dbefc Phase 3): inlined in Rust.
     fn nvim_shada_find_buffer(fname_bufs: *mut c_void, fname: *const c_char) -> *mut c_void;
     fn path_try_shorten_fname(fname: *mut c_char) -> *mut c_char;
     fn buflist_new(
@@ -5518,6 +5520,69 @@ extern "C" {
 }
 
 // =============================================================================
+// Phase 3 (plan 377dbefc): Direct FFI structs for mark migration
+// =============================================================================
+
+/// C pos_T: cursor position with i32 lnum (vs Rust Position's i64).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct PosT {
+    lnum: i32,
+    col: i32,
+    coladd: i32,
+}
+
+/// C fmarkv_T: view information for a mark.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct FmarkvT {
+    topline_offset: i32,
+}
+
+/// MAXLNUM value from pos_defs.h.
+const MAXLNUM: i32 = 0x7fff_ffff;
+
+/// C fmark_T: file mark.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct FmarkT {
+    mark: PosT,
+    fnum: c_int,
+    timestamp: Timestamp,
+    view: FmarkvT,
+    additional_data: *mut c_void,
+}
+
+/// C xfmark_T: extended file mark with optional file name.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct XfmarkT {
+    fmark: FmarkT,
+    fname: *mut c_char,
+}
+
+/// yankreg_T matching C register layout.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct YankRegC {
+    y_array: *mut NvimString,
+    y_size: usize,
+    y_type: c_int,
+    y_width: c_int,
+    timestamp: u64,
+    additional_data: *mut c_void,
+}
+
+extern "C" {
+    /// Set a global mark (Rust in mark crate, export_name = "mark_set_global").
+    fn mark_set_global(name: c_char, fm: XfmarkT, update: bool) -> bool;
+    /// Set a local mark (Rust in mark crate, export_name = "mark_set_local").
+    fn mark_set_local(name: c_char, buf: *mut c_void, fm: FmarkT, update: bool) -> bool;
+    /// Set a register (Rust in register crate, export_name = "op_reg_set").
+    fn op_reg_set(name: c_char, reg: YankRegC, is_unnamed: bool) -> bool;
+}
+
+// =============================================================================
 // Phase 1 (plan b499a5d0): Rust apply functions for search pattern and sub string
 // =============================================================================
 
@@ -5654,10 +5719,60 @@ unsafe fn rs_shada_apply_register(entry: *mut ShadaEntry, force: bool) {
             return;
         }
     }
-    if nvim_shada_op_reg_set_from_entry(entry) == 0 {
+    // Inline nvim_shada_op_reg_set_from_entry: convert char** to NvimString* array.
+    let n = read_union_field!(entry, reg, contents_size);
+    let chars: *mut *mut c_char = read_union_field!(entry, reg, contents);
+    // Clear from entry so rs_shada_free_entry_contents won't double-free on failure.
+    {
+        let reg_ptr = std::ptr::addr_of_mut!((*entry).data.reg).cast::<RegisterData>();
+        std::ptr::write(
+            std::ptr::addr_of_mut!((*reg_ptr).contents),
+            std::ptr::null_mut(),
+        );
+        std::ptr::write(std::ptr::addr_of_mut!((*reg_ptr).contents_size), 0);
+    }
+    let strings: *mut NvimString = if n > 0 && !chars.is_null() {
+        let arr = nvim_xmalloc(n * std::mem::size_of::<NvimString>()).cast::<NvimString>();
+        for i in 0..n {
+            let data = *chars.add(i);
+            let size = if data.is_null() {
+                0
+            } else {
+                libc::strlen(data)
+            };
+            std::ptr::write(arr.add(i), NvimString { data, size });
+        }
+        nvim_xfree(chars.cast::<c_void>()); // free container; elements owned by arr[]
+        arr
+    } else {
+        std::ptr::null_mut()
+    };
+    let name = read_union_field!(entry, reg, name);
+    let reg_type = read_union_field!(entry, reg, reg_type);
+    let width = read_union_field!(entry, reg, width);
+    let is_unnamed = read_union_field!(entry, reg, is_unnamed);
+    let ok = op_reg_set(
+        name,
+        YankRegC {
+            y_array: strings,
+            y_size: n,
+            y_type: reg_type,
+            #[allow(clippy::cast_possible_wrap)]
+            y_width: width as c_int,
+            timestamp: (*entry).timestamp,
+            additional_data: (*entry).additional_data,
+        },
+        is_unnamed,
+    );
+    if !ok {
+        // op_reg_set rejected the name; free the NvimString array we built.
+        for i in 0..n {
+            nvim_xfree((*strings.add(i)).data.cast::<c_void>());
+        }
+        nvim_xfree(strings.cast::<c_void>());
         rs_shada_free_entry_contents(entry);
     }
-    // If op_reg_set returned 1, memory was consumed; do not free.
+    // If ok, memory was consumed by op_reg_set; do not free.
 }
 
 /// Apply a global variable ShaDa entry (Rust replacement for C nvim_shada_apply_variable).
@@ -5721,11 +5836,51 @@ unsafe fn rs_shada_apply_mark_or_jump(
     force: bool,
 ) {
     if (*entry).entry_type == ShadaEntryType::GlobalMark {
-        let no_overwrite = c_int::from(!force);
-        if nvim_shada_mark_set_global_from_entry(entry, fname_bufs, no_overwrite) == 0 {
+        // Inline nvim_shada_mark_set_global_from_entry.
+        let entry_fname = read_union_field!(entry, filemark, fname);
+        let buf = nvim_shada_find_buffer(fname_bufs, entry_fname);
+        if !buf.is_null() {
+            // buf found: free fname, set to NULL (XFREE_CLEAR equivalent).
+            // Use addr_of! on the inner field via ManuallyDrop to avoid triggering Drop.
+            nvim_xfree(entry_fname.cast::<c_void>());
+            let filemark_ptr: *mut FilemarkData =
+                std::ptr::addr_of_mut!((*entry).data.filemark).cast::<FilemarkData>();
+            std::ptr::write(
+                std::ptr::addr_of_mut!((*filemark_ptr).fname),
+                std::ptr::null_mut(),
+            );
+        }
+        let entry_fname2 = read_union_field!(entry, filemark, fname);
+        let entry_mark = read_union_field!(entry, filemark, mark);
+        let fm = XfmarkT {
+            fmark: FmarkT {
+                mark: PosT {
+                    lnum: entry_mark.lnum as i32,
+                    col: entry_mark.col,
+                    coladd: entry_mark.coladd,
+                },
+                fnum: if buf.is_null() {
+                    0
+                } else {
+                    nvim_shada_buf_get_fnum(buf)
+                },
+                timestamp: (*entry).timestamp,
+                view: FmarkvT {
+                    topline_offset: MAXLNUM,
+                },
+                additional_data: (*entry).additional_data,
+            },
+            fname: if buf.is_null() {
+                entry_fname2
+            } else {
+                std::ptr::null_mut()
+            },
+        };
+        let name = read_union_field!(entry, filemark, name);
+        if !mark_set_global(name, fm, !force) {
             rs_shada_free_entry_contents(entry);
         }
-        // If 1: memory was consumed by mark_set_global.
+        // If mark_set_global returned true, memory was consumed; do not free.
         return;
     }
 
@@ -5824,8 +5979,23 @@ unsafe fn rs_shada_apply_local_or_change(
     }
 
     if (*entry).entry_type == ShadaEntryType::LocalMark {
-        let no_overwrite = c_int::from(!force);
-        if nvim_shada_mark_set_local_from_entry(entry, buf, no_overwrite) == 0 {
+        // Inline nvim_shada_mark_set_local_from_entry.
+        let entry_mark = read_union_field!(entry, filemark, mark);
+        let fm = FmarkT {
+            mark: PosT {
+                lnum: entry_mark.lnum as i32,
+                col: entry_mark.col,
+                coladd: entry_mark.coladd,
+            },
+            fnum: 0,
+            timestamp: (*entry).timestamp,
+            view: FmarkvT {
+                topline_offset: MAXLNUM,
+            },
+            additional_data: (*entry).additional_data,
+        };
+        let name = read_union_field!(entry, filemark, name);
+        if !mark_set_local(name, buf, fm, !force) {
             rs_shada_free_entry_contents(entry);
         }
         // mark_set_local uses fnum=0, does not own fname.

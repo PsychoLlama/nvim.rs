@@ -643,68 +643,7 @@ void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype, void **out_
 
 uint64_t nvim_shada_op_reg_get_timestamp(char name) { const yankreg_T *const reg = op_reg_get(name); return reg ? (uint64_t)reg->timestamp : 0; }
 
-int nvim_shada_op_reg_set_from_entry(ShadaEntry *entry)
-{
-  // entry->data.reg.contents is char** (Rust thin-pointer layout): one char* per line.
-  // yankreg_T.y_array expects String* (fat {data,size} pairs, 16 bytes each).
-  // Build a String* array by stealing the char* pointers from the Rust array.
-  size_t n = entry->data.reg.contents_size;
-  char **chars = entry->data.reg.contents;
-  // Clear from entry so rs_shada_free_entry_contents won't double-free on failure.
-  entry->data.reg.contents = NULL;
-  entry->data.reg.contents_size = 0;
-
-  String *strings = NULL;
-  if (n > 0 && chars != NULL) {
-    strings = xmalloc(n * sizeof(String));
-    for (size_t i = 0; i < n; i++) {
-      char *data = chars[i];
-      strings[i] = cbuf_as_string(data, data ? strlen(data) : 0);
-    }
-    xfree(chars);  // free container; elements are now owned by strings[]
-  }
-
-  bool ok = op_reg_set(entry->data.reg.name, (yankreg_T) {
-    .y_array = strings,
-    .y_size = n,
-    .y_type = (MotionType)entry->data.reg.type,
-    .y_width = (colnr_T)entry->data.reg.width,
-    .timestamp = entry->timestamp,
-    .additional_data = entry->additional_data,
-  }, entry->data.reg.is_unnamed);
-
-  if (!ok) {
-    // op_reg_set rejected the name; free the String* array we built.
-    for (size_t i = 0; i < n; i++) {
-      xfree(strings[i].data);
-    }
-    xfree(strings);
-    return 0;
-  }
-  return 1;
-}
-
 void nvim_shada_var_set_global_from_entry(ShadaEntry *entry) { var_set_global(entry->data.global_var.name, &entry->data.global_var.value); entry->data.global_var.value.v_type = VAR_UNKNOWN; }
-
-int nvim_shada_mark_set_global_from_entry(ShadaEntry *entry, void *fname_bufs_handle,
-                                          int no_overwrite)
-{
-  buf_T *buf = nvim_shada_find_buffer(fname_bufs_handle, entry->data.filemark.fname);
-  if (buf != NULL) {
-    XFREE_CLEAR(entry->data.filemark.fname);
-  }
-  xfmark_T fm = (xfmark_T) {
-    .fname = buf == NULL ? entry->data.filemark.fname : NULL,
-    .fmark = {
-      .mark = RS_POS_TO_POST(entry->data.filemark.mark),
-      .fnum = (buf == NULL ? 0 : buf->b_fnum),
-      .timestamp = entry->timestamp,
-      .view = INIT_FMARKV,
-      .additional_data = entry->additional_data,
-    },
-  };
-  return mark_set_global(entry->data.filemark.name, fm, (bool)no_overwrite) ? 1 : 0;
-}
 
 int nvim_shada_jumplist_len(void) { return curwin->w_jumplistlen; }
 
@@ -777,19 +716,6 @@ int nvim_shada_oldfiles_has(void *oldfiles_set_handle, const ShadaEntry *entry)
 {
   Set(cstr_t) *oldfiles_set = (Set(cstr_t) *)oldfiles_set_handle;
   return set_has(cstr_t, oldfiles_set, entry->data.filemark.fname) ? 1 : 0;
-}
-
-int nvim_shada_mark_set_local_from_entry(ShadaEntry *entry, void *buf_handle, int no_overwrite)
-{
-  buf_T *buf = (buf_T *)buf_handle;
-  fmark_T fm = (fmark_T) {
-    .mark = RS_POS_TO_POST(entry->data.filemark.mark),
-    .fnum = 0,
-    .timestamp = entry->timestamp,
-    .view = INIT_FMARKV,
-    .additional_data = entry->additional_data,
-  };
-  return mark_set_local(entry->data.filemark.name, buf, fm, (bool)no_overwrite) ? 1 : 0;
 }
 
 void nvim_shada_cl_bufs_set_put(void *cl_bufs_handle, void *buf_handle)
