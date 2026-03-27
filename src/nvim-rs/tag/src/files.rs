@@ -40,7 +40,7 @@ extern "C" {
     fn nvim_tag_fnames_init();
     fn nvim_tag_fnames_add(fname: *mut c_char);
 
-    // Runtime path searching
+    // Runtime path searching (calls do_in_runtimepath with hardcoded args for tags)
     fn nvim_do_in_runtimepath_for_tags();
 
     // Current buffer check
@@ -51,34 +51,34 @@ extern "C" {
     fn nvim_get_curbuf_tags() -> *const c_char;
     fn nvim_get_p_tags() -> *const c_char;
 
-    // Path functions
-    fn nvim_path_tail(path: *mut c_char) -> *mut c_char;
-    fn nvim_simplify_filename(fname: *mut c_char);
+    // Path functions (direct C functions)
+    fn path_tail(fname: *const c_char) -> *mut c_char;
+    fn simplify_filename(filename: *mut c_char) -> usize;
 
-    // File search functions
-    fn nvim_vim_findfile_init(
-        path: *const c_char,
-        filename: *const c_char,
+    // File search functions (direct C functions)
+    fn vim_findfile_init(
+        path: *mut c_char,
+        filename: *mut c_char,
         filename_len: usize,
-        stopdirs: *const c_char,
+        stopdirs: *mut c_char,
         level: c_int,
         free_visited: bool,
         find_what: c_int,
         search_ctx: *mut c_void,
         tagfile: bool,
-        buf_ffname: *const c_char,
+        buf_ffname: *mut c_char,
     ) -> *mut c_void;
-    fn nvim_vim_findfile(search_ctx: *mut c_void) -> *mut c_char;
-    fn nvim_vim_findfile_cleanup(search_ctx: *mut c_void);
-    fn nvim_vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char;
+    fn vim_findfile(search_ctx: *mut c_void) -> *mut c_char;
+    fn vim_findfile_cleanup(search_ctx: *mut c_void);
+    fn vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char;
     fn nvim_get_curbuf_ffname() -> *const c_char;
 
     // String functions
-    fn nvim_copy_option_part(
+    fn copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
         maxlen: usize,
-        sep: *const c_char,
+        sep_chars: *mut c_char,
     );
     fn strlen(s: *const c_char) -> usize;
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -87,13 +87,18 @@ extern "C" {
     // Path manipulation (for STRMOVE-like operation)
     fn memmove(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
 
-    // Path comparison (returns nonzero if files are the same)
-    fn nvim_path_full_compare_equal(s1: *const c_char, s2: *const c_char) -> c_int;
+    // Path comparison (returns FileComparison enum as c_int, nonzero means equal)
+    fn path_full_compare(
+        s1: *mut c_char,
+        s2: *mut c_char,
+        checkname: bool,
+        expandenv: bool,
+    ) -> c_int;
 
-    // Phase 3: expand_tag_fname dependencies
-    fn nvim_path_has_wildcard(fname: *const c_char) -> bool;
+    // Path utilities (direct C functions)
+    fn path_has_wildcard(p: *const c_char) -> bool;
     fn nvim_expand_one_file(fname: *mut c_char) -> *mut c_char;
-    fn nvim_vim_isAbsName(fname: *const c_char) -> bool;
+    fn vim_isAbsName(name: *const c_char) -> bool;
     fn nvim_get_p_tr() -> bool;
     fn xmalloc(size: usize) -> *mut c_void;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
@@ -101,6 +106,9 @@ extern "C" {
 
 /// FINDFILE_FILE constant from file_search.h
 const FINDFILE_FILE: c_int = 0;
+
+/// kEqualFiles bit from FileComparison enum (path.h)
+const K_EQUAL_FILES: c_int = 0x02;
 
 // =============================================================================
 // Tag file iterator state
@@ -167,7 +175,7 @@ pub unsafe extern "C" fn rs_tagfname_free(tnp: *mut TagFileIterator) {
 
     // Cleanup file search context
     if !tnp.tn_search_ctx.is_null() {
-        nvim_vim_findfile_cleanup(tnp.tn_search_ctx);
+        vim_findfile_cleanup(tnp.tn_search_ctx);
     }
 
     // Clear the global help tag file names
@@ -194,7 +202,7 @@ pub unsafe extern "C" fn rs_tagfname_init(tnp: *mut TagFileIterator) {
         xfree(tnp.tn_tags as *mut c_void);
     }
     if !tnp.tn_search_ctx.is_null() {
-        nvim_vim_findfile_cleanup(tnp.tn_search_ctx);
+        vim_findfile_cleanup(tnp.tn_search_ctx);
     }
 
     // Reset to initial state
@@ -276,9 +284,9 @@ unsafe fn get_help_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut c_
         }
         tnp.tn_hf_idx += 1;
         strcpy(buf, p_hf);
-        let tail = nvim_path_tail(buf);
+        let tail = path_tail(buf);
         strcpy(tail, c"tags".as_ptr());
-        nvim_simplify_filename(buf);
+        simplify_filename(buf);
 
         // Check if this file was already in the list
         for i in 0..tag_fnames_len {
@@ -332,7 +340,7 @@ unsafe fn get_regular_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut
     // tn_did_filefind_init == 1: find next file in this part.
     loop {
         if tnp.tn_did_filefind_init != 0 {
-            let fname = nvim_vim_findfile(tnp.tn_search_ctx);
+            let fname = vim_findfile(tnp.tn_search_ctx);
             if !fname.is_null() {
                 strcpy(buf, fname);
                 xfree(fname as *mut c_void);
@@ -344,7 +352,7 @@ unsafe fn get_regular_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut
             // Stop when used all parts of 'tags'.
             if tnp.tn_np.is_null() || *tnp.tn_np == 0 {
                 if !tnp.tn_search_ctx.is_null() {
-                    nvim_vim_findfile_cleanup(tnp.tn_search_ctx);
+                    vim_findfile_cleanup(tnp.tn_search_ctx);
                     tnp.tn_search_ctx = ptr::null_mut();
                 }
                 return FAIL;
@@ -352,12 +360,13 @@ unsafe fn get_regular_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut
 
             // Copy next file name into buf.
             *buf = 0;
-            nvim_copy_option_part(&mut tnp.tn_np, buf, MAXPATHL - 1, c" ,".as_ptr());
+            #[allow(clippy::ptr_cast_constness)]
+            copy_option_part(&mut tnp.tn_np, buf, MAXPATHL - 1, c" ,".as_ptr().cast_mut());
 
-            let r_ptr = nvim_vim_findfile_stopdir(buf);
+            let r_ptr = vim_findfile_stopdir(buf);
 
             // Move the filename one char forward and truncate the filepath with a NUL
-            let filename = nvim_path_tail(buf);
+            let filename = path_tail(buf);
             let filename_len = strlen(filename);
 
             if !r_ptr.is_null() {
@@ -382,12 +391,12 @@ unsafe fn get_regular_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut
 
             let buf_ffname = nvim_get_curbuf_ffname();
 
-            tnp.tn_search_ctx = nvim_vim_findfile_init(
+            tnp.tn_search_ctx = vim_findfile_init(
                 buf,
                 filename,
                 filename_len,
                 if r_ptr.is_null() {
-                    ptr::null()
+                    ptr::null_mut()
                 } else {
                     r_ptr.add(1)
                 },
@@ -396,7 +405,7 @@ unsafe fn get_regular_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut
                 FINDFILE_FILE,
                 tnp.tn_search_ctx,
                 true,
-                buf_ffname,
+                buf_ffname.cast_mut(),
             );
 
             if !tnp.tn_search_ctx.is_null() {
@@ -485,7 +494,7 @@ pub unsafe extern "C" fn rs_found_tagfile_cb(
             continue;
         }
 
-        nvim_simplify_filename(tag_fname);
+        simplify_filename(tag_fname);
         nvim_tag_fnames_add(tag_fname);
 
         if !all {
@@ -564,7 +573,7 @@ pub unsafe extern "C" fn rs_test_for_current(
     *fname_end = 0;
 
     let fullname = rs_expand_tag_fname(fname, tag_fname, true);
-    let retval = nvim_path_full_compare_equal(fullname, buf_ffname);
+    let retval = path_full_compare(fullname as *mut c_char, buf_ffname, true, true) & K_EQUAL_FILES;
 
     xfree(fullname as *mut c_void);
 
@@ -596,7 +605,7 @@ pub unsafe extern "C" fn rs_expand_tag_fname(
     let mut expanded_fname: *mut c_char = ptr::null_mut();
 
     // Expand file name (for environment variables) when needed.
-    if expand && nvim_path_has_wildcard(fname) {
+    if expand && path_has_wildcard(fname) {
         expanded_fname = nvim_expand_one_file(fname);
         if !expanded_fname.is_null() {
             fname = expanded_fname;
@@ -607,8 +616,8 @@ pub unsafe extern "C" fn rs_expand_tag_fname(
     let p_tr = nvim_get_p_tr();
     let is_help = nvim_curbuf_is_help();
 
-    if (p_tr || is_help) && !nvim_vim_isAbsName(fname) {
-        let p = nvim_path_tail(tag_fname);
+    if (p_tr || is_help) && !vim_isAbsName(fname) {
+        let p = path_tail(tag_fname);
         if p == tag_fname {
             retval = xstrdup(fname);
         } else {
@@ -617,7 +626,7 @@ pub unsafe extern "C" fn rs_expand_tag_fname(
             let offset = p.offset_from(tag_fname) as usize;
             xstrlcpy(retval.add(offset), fname, MAXPATHL - offset);
             // Translate names like "src/a/../b/file.c" into "src/b/file.c".
-            nvim_simplify_filename(retval);
+            simplify_filename(retval);
         }
     } else {
         retval = xstrdup(fname);

@@ -928,9 +928,6 @@ extern "C" {
     fn msg_putchar(c: c_int); // from message.c
     fn msg_advance(col: c_int);
 
-    // path comparison
-    fn nvim_path_full_compare_equal(s1: *const c_char, s2: *const c_char) -> c_int;
-
     // curwin/do_tag
     fn nvim_tag_curwin_is_null() -> bool;
     fn rs_do_tag(tag: *mut c_char, typ: c_int, count: c_int, forceit: c_int, verbose: bool);
@@ -941,8 +938,8 @@ extern "C" {
     // tag_fnames
     fn nvim_tag_fnames_clear();
 
-    // findfile cleanup
-    fn nvim_vim_findfile_cleanup(search_ctx: *mut c_void);
+    // findfile cleanup (direct C function)
+    fn vim_findfile_cleanup(search_ctx: *mut c_void);
 }
 
 /// MAXCOL constant (0x7fffffff) — maximum column number
@@ -1054,7 +1051,7 @@ pub unsafe extern "C" fn rs_tagname_free(tnp: *mut c_void) {
 
     // Cleanup file search context
     if !tnp.tn_search_ctx.is_null() {
-        nvim_vim_findfile_cleanup(tnp.tn_search_ctx);
+        vim_findfile_cleanup(tnp.tn_search_ctx);
         tnp.tn_search_ctx = std::ptr::null_mut();
     }
 

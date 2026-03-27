@@ -1557,8 +1557,8 @@ extern "C" {
         tagname: *const c_char,
     ) -> c_int;
 
-    // Multi-byte string comparison
-    fn nvim_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    // Multi-byte string comparison (direct C function)
+    fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int;
 
     // Tag file state accessors
     fn nvim_findtags_get_tag_fname(st: FindTagsStateHandle) -> *const c_char;
@@ -1716,21 +1716,21 @@ unsafe fn parse_line_check_state(
         }
         return Some(TAG_MATCH_STOP);
     } else if state == TS_SKIP_BACK {
-        if nvim_mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
+        if mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
             nvim_findtags_set_state_val(st, TS_STEP_FORWARD);
         } else {
             sinfo.curr_offset = sinfo.curr_offset_used;
         }
         return Some(TAG_MATCH_NEXT);
     } else if state == TS_STEP_FORWARD {
-        if nvim_mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
+        if mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
             return Some(if nvim_findtags_ftell(st) > sinfo.match_offset {
                 TAG_MATCH_STOP
             } else {
                 TAG_MATCH_NEXT
             });
         }
-    } else if nvim_mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
+    } else if mb_strnicmp((*tagpp).tagname, head, cmplen as usize) != 0 {
         return Some(TAG_MATCH_NEXT);
     }
     None
@@ -1851,7 +1851,7 @@ pub unsafe extern "C" fn rs_findtags_match_tag(
         let pat = nvim_findtags_get_orgpat_pat(st);
 
         if rm_ic {
-            let m = nvim_mb_strnicmp((*tagpp_typed).tagname, pat, cmplen as usize) == 0;
+            let m = mb_strnicmp((*tagpp_typed).tagname, pat, cmplen as usize) == 0;
             if m {
                 margs.match_no_ic = strncmp((*tagpp_typed).tagname, pat, cmplen as usize) == 0;
             }
@@ -2165,8 +2165,8 @@ extern "C" {
     fn rs_ins_compl_interrupted() -> c_int;
     fn verbose_enter();
     fn verbose_leave();
-    fn nvim_ignorecase(pat: *const c_char) -> bool;
-    fn nvim_ignorecase_opt(pat: *const c_char, ic_strstrp: bool, ic_strstrp2: bool) -> bool;
+    fn ignorecase(pat: *mut c_char) -> c_int;
+    fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_int;
 
     // Error/message functions
     fn emsg(s: *const c_char) -> c_int;
@@ -2275,7 +2275,7 @@ pub unsafe extern "C" fn rs_findtags_in_help_init(st: FindTagsStateHandle) -> bo
         if fname_len > 4
             && *curbuf_fname.offset((fname_len - 1) as isize) == b'x' as c_char
             && *curbuf_fname.offset((fname_len - 4) as isize) == b'.' as c_char
-            && nvim_mb_strnicmp(curbuf_fname.offset((fname_len - 3) as isize), help_lang, 2) == 0
+            && mb_strnicmp(curbuf_fname.offset((fname_len - 3) as isize), help_lang, 2) == 0
         {
             nvim_findtags_set_help_pri(st, 0);
             return true;
@@ -2290,7 +2290,7 @@ pub unsafe extern "C" fn rs_findtags_in_help_init(st: FindTagsStateHandle) -> bo
     let mut found = false;
 
     while !s.is_null() && *s != NUL_BYTE as c_char {
-        if nvim_mb_strnicmp(s, help_lang, 2) == 0 {
+        if mb_strnicmp(s, help_lang, 2) == 0 {
             found = true;
             break;
         }
@@ -2307,7 +2307,7 @@ pub unsafe extern "C" fn rs_findtags_in_help_init(st: FindTagsStateHandle) -> bo
         // Language not in 'helplang': use last, prefer English
         pri += 1;
         // Check if help_lang is NOT "en"
-        if nvim_mb_strnicmp(help_lang, c"en".as_ptr(), 2) != 0 {
+        if mb_strnicmp(help_lang, c"en".as_ptr(), 2) != 0 {
             pri += 1;
         }
     }
@@ -2527,8 +2527,7 @@ pub unsafe extern "C" fn rs_findtags_in_file(
 extern "C" {
     /// Heap-allocate a zero-initialized findtags_state_T (caller must call rs_findtags_state_init).
     fn nvim_findtags_state_xcalloc() -> FindTagsStateHandle;
-    /// Free the findtags_state_T struct itself (after rs_findtags_state_free).
-    fn nvim_findtags_state_delete(st: FindTagsStateHandle);
+    // xfree is declared above; use it to free findtags_state_T
     /// Get the mutable tag_fname buffer pointer from the state.
     fn nvim_findtags_get_tag_fname_buf(st: FindTagsStateHandle) -> *mut c_char;
 }
@@ -2563,10 +2562,10 @@ pub unsafe extern "C" fn rs_find_tags(
         x if x == K_OPT_TC_FLAG_IGNORE => nvim_set_p_ic(1),
         x if x == K_OPT_TC_FLAG_MATCH => nvim_set_p_ic(0),
         x if x == K_OPT_TC_FLAG_FOLLOWSCS => {
-            nvim_set_p_ic(c_int::from(nvim_ignorecase(pat)));
+            nvim_set_p_ic(ignorecase(pat));
         }
         x if x == K_OPT_TC_FLAG_SMART => {
-            nvim_set_p_ic(c_int::from(nvim_ignorecase_opt(pat, true, true)));
+            nvim_set_p_ic(ignorecase_opt(pat, 1, 1));
         }
         _ => {}
     }
@@ -2718,7 +2717,7 @@ pub unsafe extern "C" fn rs_find_tags(
     nvim_set_p_ic(save_p_ic);
 
     // Free the heap-allocated struct
-    nvim_findtags_state_delete(st);
+    xfree(st);
 
     retval
 }

@@ -1565,8 +1565,8 @@ pub unsafe extern "C" fn rs_add_tag_field(
 
 #[allow(dead_code)]
 extern "C" {
-    // Phase 8 FFI functions
-    fn nvim_tag_find_tags(
+    // Phase 8 FFI functions (direct C functions)
+    fn find_tags(
         pat: *mut c_char,
         num_matches: *mut c_int,
         matchesp: *mut *mut *mut c_char,
@@ -1574,7 +1574,7 @@ extern "C" {
         mincount: c_int,
         buf_ffname: *mut c_char,
     ) -> c_int;
-    fn nvim_tag_free_wild(count: c_int, files: *mut *mut c_char);
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
     fn nvim_tag_get_curbuf_ffname() -> *mut c_char;
     fn nvim_tag_mb_ptr_adv(p: *const c_char) -> *mut c_char;
     fn nvim_tag_get_tfu_in_use() -> bool;
@@ -1670,7 +1670,7 @@ pub unsafe extern "C" fn rs_expand_tags(
     let tag_many: c_int = 300; // TAG_MANY
 
     let ret = if *pat as u8 == b'/' {
-        nvim_tag_find_tags(
+        find_tags(
             pat.add(1),
             num_file,
             file,
@@ -1682,7 +1682,7 @@ pub unsafe extern "C" fn rs_expand_tags(
             buf_ffname,
         )
     } else {
-        nvim_tag_find_tags(
+        find_tags(
             pat,
             num_file,
             file,
@@ -1769,7 +1769,7 @@ pub unsafe extern "C" fn rs_get_tags(
     let mut num_matches: c_int = 0;
     let mut matches: *mut *mut c_char = std::ptr::null_mut();
 
-    let ret = nvim_tag_find_tags(
+    let ret = find_tags(
         pat,
         &raw mut num_matches,
         &raw mut matches,

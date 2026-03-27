@@ -181,32 +181,24 @@ void *nvim_findtags_state_xcalloc(void) { return xcalloc(1, sizeof(findtags_stat
 void nvim_findtags_init_match_arrays(void *st_void)
 { findtags_state_T *st = (findtags_state_T *)st_void; for (int mtt = 0; mtt < MT_COUNT; mtt++) { ga_init(&st->ga_match[mtt], sizeof(char *), 100); hash_init(&st->ht_match[mtt]); } }
 
-void nvim_findtags_state_delete(void *st_void) { xfree(st_void); }
 char *nvim_findtags_get_tag_fname_buf(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return st->tag_fname; }
 
 bool nvim_curbuf_is_help(void) { return curbuf->b_help; }
 const char *nvim_get_p_hf(void) { return p_hf; }
 const char *nvim_get_curbuf_tags(void) { return curbuf->b_p_tags; }
 const char *nvim_get_p_tags(void) { return p_tags; }
-char *nvim_path_tail(char *path) { return path_tail(path); }
-void nvim_simplify_filename(char *fname) { simplify_filename(fname); }
-void *nvim_vim_findfile_init(const char *path, const char *filename, size_t filename_len,
-                              const char *stopdirs, int level, bool free_visited,
-                              int find_what, void *search_ctx, bool tagfile, const char *buf_ffname)
-{ return vim_findfile_init((char *)path, (char *)filename, filename_len, (char *)stopdirs, level, free_visited, find_what, search_ctx, tagfile, (char *)buf_ffname); }
-
-char *nvim_vim_findfile(void *search_ctx) { return vim_findfile(search_ctx); }
-void nvim_vim_findfile_cleanup(void *search_ctx) { vim_findfile_cleanup(search_ctx); }
-char *nvim_vim_findfile_stopdir(char *buf) { return vim_findfile_stopdir(buf); }
-const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
-void nvim_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep) { copy_option_part(option, buf, maxlen, (char *)sep); }
-bool nvim_tag_path_exists(const char *path) { return os_path_exists(path); }
 bool nvim_has_bufreadcmd(const char *fname) { return has_autocmd(EVENT_BUFREADCMD, fname, NULL); }
+// Shared wrappers used by other Rust crates
+bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
+const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
+bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
+char *nvim_path_tail(char *path) { return path_tail(path); }
+bool nvim_path_has_wildcard(const char *fname) { return path_has_wildcard(fname); }
+void nvim_vim_findfile_cleanup(void *search_ctx) { vim_findfile_cleanup(search_ctx); }
 int nvim_get_postponed_split(void) { return postponed_split; }
 void nvim_set_postponed_split(int val) { postponed_split = val; }
 int nvim_get_g_do_tagpreview(void) { return g_do_tagpreview; }
 void nvim_set_g_do_tagpreview(int val) { g_do_tagpreview = val; }
-bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
 void nvim_set_nofile_fname(const char *fname) { xfree(nofile_fname); nofile_fname = fname != NULL ? xstrdup(fname) : NULL; }
 const char *nvim_get_nofile_fname(void) { return nofile_fname; }
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
@@ -227,13 +219,9 @@ void nvim_xfree_clear_tagmatchname(void) { XFREE_CLEAR(tagmatchname); }
 const char *nvim_get_tagmatchname(void) { return tagmatchname; }
 void nvim_set_tagmatchname(char *name) { tagmatchname = name; }
 void *nvim_get_ptag_entry(void) { return &ptag_entry; }
-int nvim_path_full_compare_equal(const char *s1, const char *s2) { return (path_full_compare((char *)s1, (char *)s2, true, true) & kEqualFiles); }
 bool nvim_tag_curwin_is_null(void) { return curwin == NULL; }
-bool nvim_path_has_wildcard(const char *fname) { return path_has_wildcard(fname); }
 char *nvim_expand_one_file(char *fname)
 { expand_T xpc; ExpandInit(&xpc); xpc.xp_context = EXPAND_FILES; return ExpandOne(&xpc, fname, NULL, WILD_LIST_NOTFOUND|WILD_SILENT, WILD_EXPAND_FREE); }
-
-bool nvim_vim_isAbsName(const char *fname) { return vim_isAbsName(fname); }
 bool nvim_get_p_tr(void) { return p_tr; }
 void nvim_findtags_set_state_val(void *st_void, int state) { findtags_state_T *st = (findtags_state_T *)st_void; st->state = (tagsearch_state_T)state; }
 char *nvim_findtags_get_lbuf(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->lbuf; }
@@ -258,7 +246,6 @@ int nvim_findtags_get_orgpat_len(const void *st_void) { const findtags_state_T *
 bool nvim_findtags_has_regprog(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->orgpat->regmatch.regprog != NULL; }
 bool nvim_findtags_vim_regexec(void *st_void, const char *tagname) { findtags_state_T *st = (findtags_state_T *)st_void; return vim_regexec(&st->orgpat->regmatch, (char *)tagname, 0); }
 int nvim_findtags_get_regmatch_startoff(const void *st_void, const char *tagname) { const findtags_state_T *st = (const findtags_state_T *)st_void; return (int)(st->orgpat->regmatch.startp[0] - tagname); }
-int nvim_mb_strnicmp(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
 const char *nvim_findtags_get_tag_fname(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->tag_fname; }
 const char *nvim_findtags_get_help_lang(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->help_lang; }
 int nvim_findtags_get_help_pri(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->help_pri; }
@@ -328,8 +315,6 @@ const char *nvim_get_curbuf_b_fname(void) { return curbuf->b_fname; }
 const char *nvim_get_curbuf_p_tfu(void) { return curbuf->b_p_tfu; }
 void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
 int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
-bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
-bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2) { return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2); }
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
 
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
@@ -341,14 +326,11 @@ void *nvim_tag_tv_list_alloc(int count) { return (void *)tv_list_alloc(count); }
 void nvim_tag_tv_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
 void nvim_tag_tv_list_free(void *list) { tv_list_free((list_T *)list); }
 void nvim_tag_set_errorlist(void *list, const char *title) { set_errorlist(curwin, (list_T *)list, ' ', (char *)title, NULL); }
-void nvim_tag_set_vim_var_swapcommand(const char *cmd) { set_vim_var_string(VV_SWAPCOMMAND, (char *)cmd, -1); }
 void nvim_tag_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
 void nvim_tag_set_topline_curwin(void) { set_topline(curwin, curwin->w_cursor.lnum); }
 void nvim_tag_win_close_curwin(void) { win_close(curwin, false, false); }
 char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
 int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
-int nvim_tag_find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount, char *buf_ffname) { return find_tags(pat, num_matches, matchesp, flags, mincount, buf_ffname); }
-void nvim_tag_free_wild(int count, char **files) { FreeWild(count, files); }
 char *nvim_tag_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 const char *nvim_tag_mb_ptr_adv(const char *p) { const char *result = p; MB_PTR_ADV(result); return result; }
 bool nvim_tag_get_tfu_in_use(void) { return tfu_in_use; }
@@ -423,16 +405,13 @@ _Static_assert(kOptSwbFlagUsetab == 0x02, "kOptSwbFlagUsetab value for Rust");
 void nvim_tag_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
 bool nvim_tag_curwin_pvw(void) { return curwin->w_p_pvw; }
 char *nvim_tag_fullname_save(char *fname) { return FullName_save(fname, false); }
-void nvim_tag_prepare_tagpreview(void) { prepare_tagpreview(true); }
 bool nvim_tag_swb_has_useopen_or_usetab(void) { return (swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab)) != 0; }
 void *nvim_tag_buflist_findname_exp(char *fname) { return (void *)buflist_findname_exp(fname); }
 bool nvim_tag_swbuf_goto_win_with_buf(void *buf) { return swbuf_goto_win_with_buf((buf_T *)buf) != NULL; }
-int nvim_tag_win_split(int size, int flags) { return win_split(size, flags); }
 int nvim_tag_get_postponed_split_flags(void) { return postponed_split_flags; }
 void nvim_tag_reset_binding_curwin(void) { RESET_BINDING(curwin); }
 void nvim_tag_set_keep_help_flag(bool val) { keep_help_flag = val; }
 bool nvim_tag_bt_help_saved_win(const void *win) { return bt_help(((const win_T *)win)->w_buffer); }
-int nvim_tag_getfile_call(char *fname, int forceit) { return getfile(0, fname, NULL, true, 0, forceit); }
 int nvim_tag_get_cmdmod_tab(void) { return cmdmod.cmod_tab; }
 bool nvim_tag_curbuf_b_p_tfu_is_empty(void) { return *curbuf->b_p_tfu == NUL; }
 bool nvim_tag_curbuf_tfu_cb_is_none(void) { return curbuf->b_tfu_cb.type == kCallbackNone; }
@@ -455,9 +434,6 @@ void nvim_tag_set_secure(int val) { secure = val; }
 void nvim_tag_inc_sandbox(void) { sandbox++; }
 void nvim_tag_dec_sandbox(void) { sandbox--; }
 char *nvim_tag_skip_regexp(char *p, int delim) { return skip_regexp(p, delim, false); }
-bool nvim_tag_do_search(int dir, char *pat, size_t patlen, int options) { return do_search(NULL, dir, dir, pat, patlen, 1, options, NULL); }
-void nvim_tag_do_cmdline_cmd(char *cmd) { do_cmdline_cmd(cmd); }
-void nvim_tag_wait_return(void) { wait_return(true); }
 void nvim_tag_check_cursor(void) { check_cursor(curwin); }
 bool nvim_tag_get_p_tgst(void) { return p_tgst; }
 int nvim_tag_get_curbuf_fnum(void) { return curbuf->b_fnum; }
@@ -466,11 +442,7 @@ int nvim_tag_get_msg_scroll(void) { return msg_scroll; }
 void nvim_tag_set_msg_scroll(int val) { msg_scroll = val; }
 int nvim_tag_get_msg_scrolled(void) { return msg_scrolled; }
 int nvim_tag_get_msg_silent(void) { return msg_silent; }
-bool nvim_tag_ui_has_messages(void) { return ui_has(kUIMessages); }
-void nvim_tag_ui_flush(void) { ui_flush(); }
-void nvim_tag_os_delay(int msec) { os_delay(msec, true); }
 char *nvim_tag_buflist_findnr_ffname(int fnum) { buf_T *buf = buflist_findnr(fnum); return buf != NULL ? buf->b_ffname : NULL; }
-int nvim_tag_buflist_getfile_with_result(int fnum, linenr_T lnum, int flags, int forceit) { return buflist_getfile(fnum, lnum, flags, forceit); }
 void nvim_tag_give_warning(const char *msg_str, bool ic) { give_warning(msg_str, ic); }
 bool nvim_tag_get_KeyTyped(void) { return KeyTyped; }
 bool nvim_tag_tagstack_changed(void *saved_tagstack) { return saved_tagstack != curwin->w_tagstack; }
@@ -479,7 +451,6 @@ void nvim_tag_save_cursor_in_entry(void *tg_void, int idx) { taggy_T *tg = (tagg
 
 void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T)); }
 void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(&tg[idx].fmark, buf, sizeof(fmark_T)); }
-int nvim_tag_prompt_for_selection(void) { return prompt_for_input(NULL, 0, false, NULL); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 void nvim_tag_snprintf_match_msg(char *buf, int buf_size, int cur_match, int num_matches, int max_num_matches)
 { snprintf(buf, (size_t)buf_size, _("tag %d of %d%s"), cur_match + 1, num_matches, max_num_matches != MAXCOL ? _(" or more") : ""); }

@@ -66,6 +66,12 @@ pub mod cmd_type {
 /// MAXCOL constant for maximum match index
 const MAXCOL: c_int = 0x7FFF_FFFF;
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
+/// VimVarIndex for VV_SWAPCOMMAND (verified by _Static_assert in ex_cmds_shim.c)
+const VV_SWAPCOMMAND: c_int = 49;
+
 // =============================================================================
 // External C accessor functions
 // =============================================================================
@@ -77,7 +83,7 @@ extern "C" {
     fn nvim_set_postponed_split(val: c_int);
     fn nvim_get_g_do_tagpreview() -> c_int;
     fn nvim_set_g_do_tagpreview(val: c_int);
-    fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+    fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
 
     // Phase 11 accessors
     fn nvim_tag_get_p_tgst() -> bool;
@@ -89,19 +95,19 @@ extern "C" {
     fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
     fn gettext(msgid: *const c_char) -> *const c_char;
     fn nvim_tag_buflist_findnr_ffname(fnum: c_int) -> *mut c_char;
-    fn nvim_tag_buflist_getfile_with_result(
-        fnum: c_int,
-        lnum: i32,
-        flags: c_int,
-        forceit: c_int,
-    ) -> c_int;
+    fn buflist_getfile(n: c_int, lnum: i32, options: c_int, forceit: c_int) -> c_int;
     fn nvim_tag_tagstack_changed(saved_tagstack: *mut c_void) -> bool;
     fn nvim_tag_get_tagstack_ptr() -> *mut c_void;
     fn nvim_tag_save_cursor_in_entry(tagstack: *mut c_void, idx: c_int);
     fn nvim_tag_copy_fmark_from_entry(tagstack: *mut c_void, idx: c_int, out_buf: *mut c_void);
     fn nvim_tag_restore_fmark_to_entry(tagstack: *mut c_void, idx: c_int, buf: *const c_void);
-    fn nvim_tag_prompt_for_selection() -> c_int;
-    fn nvim_tag_set_vim_var_swapcommand(cmd: *const c_char);
+    fn prompt_for_input(
+        prompt: *mut c_char,
+        hl_id: c_int,
+        one_key: bool,
+        mouse_used: *mut bool,
+    ) -> c_int;
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: i64);
     fn nvim_tag_clear_swap_command();
     fn nvim_tag_snprintf_match_msg(
         buf: *mut c_char,
@@ -127,16 +133,16 @@ extern "C" {
     fn nvim_tag_set_msg_scroll(val: c_int);
     fn nvim_tag_get_msg_scrolled() -> c_int;
     fn nvim_tag_get_msg_silent() -> c_int;
-    fn nvim_tag_ui_has_messages() -> bool;
-    fn nvim_tag_ui_flush();
-    fn nvim_tag_os_delay(msec: c_int);
+    fn ui_has(ext: c_int) -> bool;
+    fn ui_flush();
+    fn os_delay(ms: u64, ignoreinput: bool);
     fn msg(msg: *const c_char, hlf: c_int) -> c_int;
     fn nvim_tag_free_nofile_fname();
     fn nvim_tag_nofile_fname_is_null() -> bool;
     fn nvim_get_nofile_fname() -> *const c_char;
 
-    // Tag match cache
-    fn nvim_tag_find_tags(
+    // Tag match cache (direct C functions)
+    fn find_tags(
         pat: *mut c_char,
         num_matches: *mut c_int,
         matchesp: *mut *mut *mut c_char,
@@ -144,7 +150,7 @@ extern "C" {
         mincount: c_int,
         buf_ffname: *mut c_char,
     ) -> c_int;
-    fn nvim_tag_free_wild(count: c_int, files: *mut *mut c_char);
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
 
     // Tag match name
     fn nvim_get_tagmatchname() -> *const c_char;
@@ -723,7 +729,7 @@ pub unsafe extern "C" fn rs_do_tag(
 ) {
     // DT_FREE: free cached matches and return
     if typ == cmd_type::DT_FREE {
-        nvim_tag_free_wild(NUM_MATCHES, MATCHES);
+        FreeWild(NUM_MATCHES, MATCHES);
         NUM_MATCHES = 0;
         MATCHES = ptr::null_mut();
         return;
@@ -735,7 +741,7 @@ pub unsafe extern "C" fn rs_do_tag(
         return;
     }
 
-    if nvim_get_postponed_split() == 0 && !nvim_check_can_set_curbuf_forceit(forceit) {
+    if nvim_get_postponed_split() == 0 && !check_can_set_curbuf_forceit(forceit) {
         return;
     }
 
@@ -877,13 +883,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 let pop_colnum = nvim_fmark_get_col(pop_fmark);
                 if pop_bufnum == nvim_tag_get_curbuf_fnum() {
                     setpcmark();
-                } else if nvim_tag_buflist_getfile_with_result(
-                    pop_bufnum,
-                    pop_linenum,
-                    GETF_SETMARK,
-                    forceit,
-                ) == FAIL
-                {
+                } else if buflist_getfile(pop_bufnum, pop_linenum, GETF_SETMARK, forceit) == FAIL {
                     tagstackidx = oldtagstackidx;
                     do_tag_cleanup(use_tagstack, tagstackidx, tofree);
                     return;
@@ -897,7 +897,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 }
 
                 // Free old matches
-                nvim_tag_free_wild(NUM_MATCHES, MATCHES);
+                FreeWild(NUM_MATCHES, MATCHES);
                 NUM_MATCHES = 0;
                 MATCHES = ptr::null_mut();
                 crate::rs_tag_freematch();
@@ -1059,7 +1059,7 @@ pub unsafe extern "C" fn rs_do_tag(
             let mut new_num_matches: c_int = 0;
             let mut new_matches: *mut *mut c_char = ptr::null_mut();
 
-            if nvim_tag_find_tags(
+            if find_tags(
                 search_name,
                 &raw mut new_num_matches,
                 &raw mut new_matches,
@@ -1077,7 +1077,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 emsg(gettext(
                     E_WINDOW_UNEXPECTEDLY_CLOSE_WHILE_SEARCHING_FOR_TAGS.as_ptr(),
                 ));
-                nvim_tag_free_wild(new_num_matches, new_matches);
+                FreeWild(new_num_matches, new_matches);
                 break;
             }
 
@@ -1086,7 +1086,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 reorder_matches(NUM_MATCHES, MATCHES, new_num_matches, new_matches);
             }
 
-            nvim_tag_free_wild(NUM_MATCHES, MATCHES);
+            FreeWild(NUM_MATCHES, MATCHES);
             NUM_MATCHES = new_num_matches;
             MATCHES = new_matches;
         }
@@ -1115,7 +1115,7 @@ pub unsafe extern "C" fn rs_do_tag(
             }
 
             if ask_for_selection {
-                let selection = nvim_tag_prompt_for_selection();
+                let selection = prompt_for_input(ptr::null_mut(), 0, false, ptr::null_mut());
                 if selection <= 0 || selection > NUM_MATCHES || nvim_tag_get_got_int() {
                     // Cancelled — restore state
                     if use_tagstack {
@@ -1221,10 +1221,10 @@ pub unsafe extern "C" fn rs_do_tag(
                 if ic
                     && nvim_tag_get_msg_scrolled() == 0
                     && nvim_tag_get_msg_silent() == 0
-                    && !nvim_tag_ui_has_messages()
+                    && !ui_has(K_UI_MESSAGES)
                 {
-                    nvim_tag_ui_flush();
-                    nvim_tag_os_delay(1007);
+                    ui_flush();
+                    os_delay(1007, true);
                 }
             }
 
@@ -1241,7 +1241,7 @@ pub unsafe extern "C" fn rs_do_tag(
                     name,
                 );
             }
-            nvim_tag_set_vim_var_swapcommand(swap_cmd_buf.as_ptr().cast());
+            set_vim_var_string(VV_SWAPCOMMAND, swap_cmd_buf.as_ptr().cast(), -1);
             let jump_result =
                 crate::jump::rs_jumpto_tag(*MATCHES.offset(cur_match as isize), forceit, true);
             nvim_tag_clear_swap_command();

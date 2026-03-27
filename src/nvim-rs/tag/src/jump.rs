@@ -25,6 +25,9 @@ const NOTAGFILE: c_int = 2;
 /// Maximum line size for tag patterns
 const LSIZE: usize = 512;
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // =============================================================================
 // External C functions
 // =============================================================================
@@ -38,8 +41,8 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
     fn memmove(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
 
-    // File functions
-    fn nvim_tag_path_exists(path: *const c_char) -> bool;
+    // File functions (direct C)
+    fn os_path_exists(path: *const c_char) -> bool;
     fn nvim_has_bufreadcmd(fname: *const c_char) -> bool;
 
     // Global state accessors
@@ -48,8 +51,8 @@ extern "C" {
     fn nvim_get_g_do_tagpreview() -> c_int;
     fn nvim_set_g_do_tagpreview(val: c_int);
 
-    // Window functions
-    fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+    // Window functions (direct C)
+    fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
 
     // Error reporting
     fn nvim_set_nofile_fname(fname: *const c_char);
@@ -214,7 +217,7 @@ pub unsafe extern "C" fn rs_jumpto_tag_prepare(
 
     // Check if we can set curbuf
     let postponed_split = nvim_get_postponed_split();
-    if postponed_split == 0 && !nvim_check_can_set_curbuf_forceit(forceit) {
+    if postponed_split == 0 && !check_can_set_curbuf_forceit(forceit) {
         state.phase = phase::ERROR;
         state.result = FAIL;
         return FAIL;
@@ -298,8 +301,7 @@ pub unsafe extern "C" fn rs_jumpto_tag_validate(state: *mut JumpTagState) -> c_i
     }
 
     // Check if file exists or has a BufReadCmd autocmd
-    let exists =
-        nvim_tag_path_exists(state.expanded_fname) || nvim_has_bufreadcmd(state.expanded_fname);
+    let exists = os_path_exists(state.expanded_fname) || nvim_has_bufreadcmd(state.expanded_fname);
 
     if !exists {
         state.file_exists = false;
@@ -438,7 +440,7 @@ pub unsafe extern "C" fn rs_can_open_tag_file(fname: *const c_char) -> bool {
         return false;
     }
 
-    nvim_tag_path_exists(fname) || nvim_has_bufreadcmd(fname)
+    os_path_exists(fname) || nvim_has_bufreadcmd(fname)
 }
 
 // =============================================================================
@@ -499,16 +501,23 @@ extern "C" {
     fn nvim_tag_inc_RedrawingDisabled();
     fn nvim_tag_curwin_pvw() -> bool;
     fn nvim_tag_fullname_save(fname: *mut c_char) -> *mut c_char;
-    fn nvim_tag_prepare_tagpreview();
+    fn prepare_tagpreview(undo_sync: bool) -> bool;
     fn nvim_tag_swb_has_useopen_or_usetab() -> bool;
     fn nvim_tag_buflist_findname_exp(fname: *mut c_char) -> *mut c_void;
     fn nvim_tag_swbuf_goto_win_with_buf(buf: *mut c_void) -> bool;
-    fn nvim_tag_win_split(size: c_int, flags: c_int) -> c_int;
+    fn win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_tag_get_postponed_split_flags() -> c_int;
     fn nvim_tag_reset_binding_curwin();
     fn nvim_tag_set_keep_help_flag(val: bool);
     fn nvim_tag_bt_help_saved_win(win: *const c_void) -> bool;
-    fn nvim_tag_getfile_call(fname: *mut c_char, forceit: c_int) -> c_int;
+    fn getfile(
+        fnum: c_int,
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        setpm: bool,
+        lnum: i32,
+        forceit: bool,
+    ) -> c_int;
     fn nvim_tag_get_cmdmod_tab() -> c_int;
     // Accessors for rs_tag_jumpto_run_search (Phase 1)
     fn nvim_tag_set_curswant(val: bool);
@@ -531,17 +540,26 @@ extern "C" {
     fn nvim_tag_inc_sandbox();
     fn nvim_tag_dec_sandbox();
     fn nvim_tag_skip_regexp(p: *mut c_char, delim: c_int) -> *mut c_char;
-    fn nvim_tag_do_search(dir: c_int, pat: *mut c_char, patlen: usize, options: c_int) -> bool;
-    fn nvim_tag_do_cmdline_cmd(cmd: *mut c_char);
-    fn nvim_tag_wait_return();
+    fn do_search(
+        oap: *mut c_void,
+        dirc: c_int,
+        search_delim: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        count: c_int,
+        options: c_int,
+        sia: *mut c_void,
+    ) -> c_int;
+    fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
+    fn wait_return(redraw: bool);
     fn nvim_tag_check_cursor();
     fn emsg(s: *const c_char) -> c_int;
     fn msg(s: *const c_char, hl_id: c_int) -> c_int;
     fn nvim_tag_get_msg_scrolled() -> c_int;
     fn nvim_tag_get_msg_silent() -> c_int;
-    fn nvim_tag_ui_has_messages() -> bool;
-    fn nvim_tag_ui_flush();
-    fn nvim_tag_os_delay(msec: c_int);
+    fn ui_has(ext: c_int) -> bool;
+    fn ui_flush();
+    fn os_delay(ms: u64, ignoreinput: bool);
     // Post-jump helpers (Phase 3 — migrated to Rust inline)
     fn nvim_curbuf_is_help() -> bool;
     fn nvim_tag_set_topline_curwin();
@@ -635,22 +653,32 @@ unsafe fn rs_tag_jumpto_run_search(
         };
         nvim_tag_set_cursor_lnum(new_lnum);
 
-        if nvim_tag_do_search(
+        if do_search(
+            ptr::null_mut(),
+            c_int::from(first_byte as i8),
             c_int::from(first_byte as i8),
             pbuf.add(1),
             pbuflen - 1,
+            1,
             search_options,
-        ) {
+            ptr::null_mut(),
+        ) != 0
+        {
             retval = OK;
         } else {
             let mut found: c_int = 1;
             nvim_set_p_ic(1); // true
-            if !nvim_tag_do_search(
+            if do_search(
+                ptr::null_mut(),
+                c_int::from(first_byte as i8),
                 c_int::from(first_byte as i8),
                 pbuf.add(1),
                 pbuflen - 1,
+                1,
                 search_options,
-            ) {
+                ptr::null_mut(),
+            ) == 0
+            {
                 found = 2;
                 rs_test_for_static((&raw const tagp).cast::<c_void>());
                 let cc = *tagp.tagname_end;
@@ -660,7 +688,17 @@ unsafe fn rs_tag_jumpto_run_search(
                 let new_len = libc::snprintf(pbuf, LSIZE, c"^%s\\s\\*(".as_ptr(), tagp.tagname);
                 let new_pbuflen = new_len as usize;
 
-                if !nvim_tag_do_search(b'/' as c_int, pbuf, new_pbuflen, search_options) {
+                if do_search(
+                    ptr::null_mut(),
+                    b'/' as c_int,
+                    b'/' as c_int,
+                    pbuf,
+                    new_pbuflen,
+                    1,
+                    search_options,
+                    ptr::null_mut(),
+                ) == 0
+                {
                     // Build wider fallback: "^[#a-zA-Z_].*\<tagname\s\*("
                     let new_len2 = libc::snprintf(
                         pbuf,
@@ -669,7 +707,17 @@ unsafe fn rs_tag_jumpto_run_search(
                         tagp.tagname,
                     );
                     let new_pbuflen2 = new_len2 as usize;
-                    if !nvim_tag_do_search(b'/' as c_int, pbuf, new_pbuflen2, search_options) {
+                    if do_search(
+                        ptr::null_mut(),
+                        b'/' as c_int,
+                        b'/' as c_int,
+                        pbuf,
+                        new_pbuflen2,
+                        1,
+                        search_options,
+                        ptr::null_mut(),
+                    ) == 0
+                    {
                         found = 0;
                     }
                 }
@@ -685,10 +733,10 @@ unsafe fn rs_tag_jumpto_run_search(
                     // Only delay if not scrolled and not silent and no UI messages
                     if nvim_tag_get_msg_scrolled() == 0
                         && nvim_tag_get_msg_silent() == 0
-                        && !nvim_tag_ui_has_messages()
+                        && !ui_has(K_UI_MESSAGES)
                     {
-                        nvim_tag_ui_flush();
-                        nvim_tag_os_delay(1010);
+                        ui_flush();
+                        os_delay(1010, true);
                     }
                 }
                 retval = OK;
@@ -705,11 +753,11 @@ unsafe fn rs_tag_jumpto_run_search(
         nvim_tag_set_secure(1);
         nvim_tag_inc_sandbox();
         nvim_tag_set_cursor_start();
-        nvim_tag_do_cmdline_cmd(pbuf);
+        do_cmdline_cmd(pbuf);
         retval = OK;
 
         if nvim_tag_get_secure() == 2 {
-            nvim_tag_wait_return();
+            wait_return(true);
         }
         nvim_tag_set_secure(save_secure);
         nvim_tag_dec_sandbox();
@@ -773,7 +821,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
             ptr::null_mut()
         } else {
             let full = nvim_tag_fullname_save(fname);
-            nvim_tag_prepare_tagpreview();
+            prepare_tagpreview(true);
             full
         }
     } else {
@@ -807,7 +855,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
         } else {
             0
         };
-        if nvim_tag_win_split(split_size, nvim_tag_get_postponed_split_flags()) == FAIL {
+        if win_split(split_size, nvim_tag_get_postponed_split_flags()) == FAIL {
             // Decrement RedrawingDisabled (was incremented above)
             nvim_tag_dec_RedrawingDisabled();
             xfree(full_fname.cast::<c_void>());
@@ -828,7 +876,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
     // --- Inline nvim_tag_jumpto_load_file ---
     // Load file if not already done by swb switch.
     if getfile_result == GETFILE_UNUSED {
-        getfile_result = nvim_tag_getfile_call(fname, forceit);
+        getfile_result = getfile(0, fname, ptr::null_mut(), true, 0, forceit != 0);
         nvim_tag_set_keep_help_flag(false);
     }
 
@@ -903,7 +951,7 @@ pub unsafe extern "C" fn rs_jumpto_tag(
 ) -> c_int {
     // Check prerequisites
     let postponed_split = nvim_get_postponed_split();
-    if postponed_split == 0 && !nvim_check_can_set_curbuf_forceit(forceit) {
+    if postponed_split == 0 && !check_can_set_curbuf_forceit(forceit) {
         return FAIL;
     }
 
@@ -958,7 +1006,7 @@ pub unsafe extern "C" fn rs_jumpto_tag(
     *tagp.fname_end = saved_fname_end;
 
     // Check if file exists
-    if !nvim_tag_path_exists(expanded_fname) && !nvim_has_bufreadcmd(expanded_fname) {
+    if !os_path_exists(expanded_fname) && !nvim_has_bufreadcmd(expanded_fname) {
         nvim_set_nofile_fname(expanded_fname);
         xfree(lbuf.cast());
         xfree(pbuf.cast());
