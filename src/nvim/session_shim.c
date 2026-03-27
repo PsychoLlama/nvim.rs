@@ -301,7 +301,6 @@ void nvim_ses_eap_set_forceit(exarg_T *eap, bool val) { eap->forceit = val; }
 int nvim_ses_get_CMD_mksession(void) { return CMD_mksession; }
 int nvim_ses_get_CMD_mkview(void) { return CMD_mkview; }
 int nvim_ses_get_CMD_mkvimrc(void) { return CMD_mkvimrc; }
-int nvim_ses_get_CMD_mkexrc(void) { return CMD_mkexrc; }
 
 // File I/O wrappers
 FILE *nvim_ses_open_exfile(char *fname, int forceit, char *mode) { return open_exfile(fname, forceit, mode); }
@@ -330,20 +329,9 @@ const char *nvim_ses_get_e_prev_dir(void) { return _(e_prev_dir); }
 const char *nvim_ses_get_e_write(void) { return _(e_write); }
 const char *nvim_ses_get_e_notopen(void) { return _(e_notopen); }
 
-// Filename constants
-const char *nvim_ses_get_VIMRC_FILE(void) { return VIMRC_FILE; }
-const char *nvim_ses_get_SESSION_FILE(void) { return SESSION_FILE; }
-const char *nvim_ses_get_EXRC_FILE(void) { return EXRC_FILE; }
-
-// Option flag values
-int nvim_ses_get_OPT_GLOBAL(void) { return OPT_GLOBAL; }
-int nvim_ses_get_OPT_SKIPRTP(void) { return OPT_SKIPRTP; }
-
 // Static assertions for source/global flags
 _Static_assert(kOptSsopFlagSkiprtp == 0x20000, "kOptSsopFlagSkiprtp");
 _Static_assert(DOSO_NONE == 0, "DOSO_NONE");
-_Static_assert(OPT_GLOBAL == 0x01, "OPT_GLOBAL");
-_Static_assert(OPT_SKIPRTP == 0x80, "OPT_SKIPRTP");
 
 // _Static_assert for OK/FAIL values used by Rust FFI
 _Static_assert(OK == 1, "OK must be 1");

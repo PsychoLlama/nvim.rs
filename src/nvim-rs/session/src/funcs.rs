@@ -1299,6 +1299,11 @@ const K_OPT_SSOP_FLAG_SKIPRTP: c_uint = 0x20000;
 const OPT_GLOBAL: c_int = 0x01;
 const OPT_SKIPRTP: c_int = 0x80;
 
+/// Filename constants (matching C macros VIMRC_FILE, SESSION_FILE, EXRC_FILE)
+const VIMRC_FILE: *const c_char = c".nvimrc".as_ptr();
+const SESSION_FILE: *const c_char = c"Session.vim".as_ptr();
+const EXRC_FILE: *const c_char = c".exrc".as_ptr();
+
 /// `:loadview [nr]` — load a view file.
 ///
 /// # Safety
@@ -1358,11 +1363,11 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
     } else if arg_byte != 0 {
         fname = arg;
     } else if cmdidx == cmd_mkvimrc {
-        fname = ffi::nvim_ses_get_VIMRC_FILE() as *mut c_char;
+        fname = VIMRC_FILE as *mut c_char;
     } else if cmdidx == cmd_mksession {
-        fname = ffi::nvim_ses_get_SESSION_FILE() as *mut c_char;
+        fname = SESSION_FILE as *mut c_char;
     } else {
-        fname = ffi::nvim_ses_get_EXRC_FILE() as *mut c_char;
+        fname = EXRC_FILE as *mut c_char;
     }
 
     // When using 'viewdir' may have to create the directory.

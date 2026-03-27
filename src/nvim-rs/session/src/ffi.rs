@@ -193,7 +193,6 @@ extern "C" {
     pub fn nvim_ses_get_CMD_mksession() -> c_int;
     pub fn nvim_ses_get_CMD_mkview() -> c_int;
     pub fn nvim_ses_get_CMD_mkvimrc() -> c_int;
-    pub fn nvim_ses_get_CMD_mkexrc() -> c_int;
 
     // File I/O wrappers
     pub fn nvim_ses_open_exfile(
@@ -226,12 +225,4 @@ extern "C" {
     pub fn nvim_ses_get_e_write() -> *const c_char;
     pub fn nvim_ses_get_e_notopen() -> *const c_char;
 
-    // Filename constants
-    pub fn nvim_ses_get_VIMRC_FILE() -> *const c_char;
-    pub fn nvim_ses_get_SESSION_FILE() -> *const c_char;
-    pub fn nvim_ses_get_EXRC_FILE() -> *const c_char;
-
-    // Option flag values
-    pub fn nvim_ses_get_OPT_GLOBAL() -> c_int;
-    pub fn nvim_ses_get_OPT_SKIPRTP() -> c_int;
 }
