@@ -3085,11 +3085,93 @@ extern "C" {
     // Phase 11: terminal_get_line_attributes helpers
     fn nvim_fetch_cell(term: *mut c_void, row: c_int, col: c_int, cell: *mut c_void) -> c_int;
     fn nvim_get_rgb(state: *mut c_void, color: nvim_vterm::VTermColor) -> c_int;
+    // Phase 4 (terminal_shim cleanup): fetch_cell/fetch_row migration
+    fn nvim_vterm_screen_get_cell_c(vts: *mut c_void, row: c_int, col: c_int, cell: *mut c_void);
+    fn schar_get_adv(buf_out: *mut *mut i8, sc: nvim_vterm::SChar) -> usize;
     fn hl_get_term_attr(attrs: *const HlAttrsLocal) -> c_int;
     fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
     /// linenr -> row conversion (from buffer.rs)
     #[link_name = "rs_terminal_linenr_to_row_term"]
     fn rs_terminal_linenr_to_row_term_ffi(term: *mut c_void, linenr: c_int) -> c_int;
+}
+
+/// Fetch a single cell from either scrollback buffer (`row < 0`) or live `VTerm` screen (`row >= 0`).
+///
+/// Returns 1 if the cell was found, 0 if out of bounds (cell is zeroed in that case).
+/// Replaces `fetch_cell` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`, `cell` must be a valid `*mut VTermScreenCell`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fetch_cell(
+    term: TerminalHandle,
+    row: c_int,
+    col: c_int,
+    cell: *mut c_void,
+) -> c_int {
+    let t = unsafe { term.as_ref() };
+    if row < 0 {
+        // row < 0 means scrollback; -row-1 is the scrollback index.
+        #[allow(clippy::cast_sign_loss)]
+        let sb_idx = (-row - 1) as usize;
+        let sbrow = unsafe { *t.sb_buffer.add(sb_idx) };
+        if sbrow.is_null() {
+            return 0;
+        }
+        let cols = unsafe { nvim_scrollback_line_cols(sbrow.cast()) };
+        #[allow(clippy::cast_sign_loss)]
+        let col_idx = col as usize;
+        if col_idx < cols {
+            let cells_ptr = unsafe { nvim_scrollback_line_cells(sbrow.cast()) };
+            let cell_size = unsafe { nvim_vterm_screen_cell_size() };
+            let src = unsafe { cells_ptr.cast::<u8>().add(col_idx * cell_size) };
+            unsafe { std::ptr::copy_nonoverlapping(src, cell.cast::<u8>(), cell_size) };
+        } else {
+            // Out of bounds: write empty cell
+            unsafe { nvim_vterm_cell_zero(cell) };
+            return 0;
+        }
+    } else {
+        unsafe { nvim_vterm_screen_get_cell_c(t.vts, row, col, cell) };
+    }
+    1
+}
+
+/// Fill `term->textbuf` with the UTF-8 text of a screen row from col 0 to `end_col`.
+///
+/// Replaces `fetch_row` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fetch_row(term: TerminalHandle, row: c_int, end_col: c_int) {
+    let t = unsafe { term.as_mut() };
+    let textbuf_ptr = t.textbuf.as_mut_ptr();
+    let mut col: c_int = 0;
+    let mut line_len: usize = 0;
+    let mut ptr: *mut i8 = textbuf_ptr;
+
+    while col < end_col {
+        let mut cell = nvim_vterm::VTermScreenCell::default();
+        unsafe { rs_fetch_cell(term, row, col, (&raw mut cell).cast()) };
+        if cell.schar != 0 {
+            unsafe { schar_get_adv(&raw mut ptr, cell.schar) };
+            // SAFETY: ptr always stays within textbuf bounds (caller guarantees end_col fits)
+            #[allow(clippy::cast_sign_loss)]
+            {
+                line_len = unsafe { ptr.offset_from(textbuf_ptr) } as usize;
+            }
+        } else {
+            #[allow(clippy::cast_possible_wrap)]
+            let space = b' ' as i8;
+            unsafe { *ptr = space };
+            ptr = unsafe { ptr.add(1) };
+        }
+        col += c_int::from(cell.width);
+    }
+
+    // NUL-terminate at the end of the last non-space character
+    unsafe { *textbuf_ptr.add(line_len) = 0 };
 }
 
 /// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.

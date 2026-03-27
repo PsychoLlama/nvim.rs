@@ -425,49 +425,6 @@ static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag,
 
 extern int rs_send_mouse_event(void *term, int c);
 
-static void fetch_row(Terminal *term, int row, int end_col)
-{
-  int col = 0;
-  size_t line_len = 0;
-  char *ptr = term->textbuf;
-
-  while (col < end_col) {
-    VTermScreenCell cell;
-    fetch_cell(term, row, col, &cell);
-    if (cell.schar) {
-      schar_get_adv(&ptr, cell.schar);
-      line_len = (size_t)(ptr - term->textbuf);
-    } else {
-      *ptr++ = ' ';
-    }
-    col += cell.width;
-  }
-
-  // end of line
-  term->textbuf[line_len] = NUL;
-}
-
-static bool fetch_cell(Terminal *term, int row, int col, VTermScreenCell *cell)
-{
-  if (row < 0) {
-    ScrollbackLine *sbrow = term->sb_buffer[-row - 1];
-    if ((size_t)col < sbrow->cols) {
-      *cell = sbrow->cells[col];
-    } else {
-      // fill the pointer with an empty cell
-      *cell = (VTermScreenCell) {
-        .schar = 0,
-        .width = 1,
-      };
-      return false;
-    }
-  } else {
-    vterm_screen_get_cell(term->vts, (VTermPos){ .row = row, .col = col },
-                          cell);
-  }
-  return true;
-}
-
 extern void rs_refresh_terminal(void *term);
 
 extern void rs_refresh_cursor(void *term, bool *cursor_visible);
@@ -577,9 +534,12 @@ void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
 void nvim_vterm_free(void *vt) { vterm_free((VTerm *)vt); }
 void nvim_multiqueue_free(void *q) { multiqueue_free((MultiQueue *)q); }
 
+extern int rs_fetch_cell(void *term, int row, int col, void *cell);
+extern void rs_fetch_row(void *term, int row, int end_col);
+
 // terminal_get_line_attributes helpers
 int nvim_fetch_cell(void *term, int row, int col, void *cell)
-  { return (int)fetch_cell((Terminal *)term, row, col, (VTermScreenCell *)cell); }
+  { return rs_fetch_cell(term, row, col, cell); }
 int nvim_get_rgb(void *state, VTermColor color)
   { return get_rgb((VTermState *)state, color); }
 
@@ -639,7 +599,7 @@ void nvim_multiqueue_move_events_term(void *term)
 void *nvim_terminal_sb_get(void *term, size_t idx) { return ((Terminal *)term)->sb_buffer[idx]; }
 void nvim_terminal_sb_buffer_resize(void *term, size_t new_size)
   { Terminal *t = (Terminal *)term; t->sb_buffer = xrealloc(t->sb_buffer, sizeof(ScrollbackLine *) * new_size); t->sb_size = new_size; }
-void nvim_fetch_row(void *term, int row, int end_col) { fetch_row((Terminal *)term, row, end_col); }
+void nvim_fetch_row(void *term, int row, int end_col) { rs_fetch_row(term, row, end_col); }
 
 // Cursor / UI accessors
 int nvim_terminal_is_active(void *term)
@@ -832,6 +792,10 @@ void *nvim_term_sb_alloc_init(void)
   kv_init(*sb);
   return sb;
 }
+
+// fetch_cell/fetch_row accessor: calls C vterm_screen_get_cell
+void nvim_vterm_screen_get_cell_c(void *vts, int row, int col, void *cell)
+  { vterm_screen_get_cell((VTermScreen *)vts, (VTermPos){ .row = row, .col = col }, (VTermScreenCell *)cell); }
 
 // Mouse event accessors for rs_send_mouse_event
 void *nvim_mouse_find_win_inner(int *grid, int *row, int *col)
