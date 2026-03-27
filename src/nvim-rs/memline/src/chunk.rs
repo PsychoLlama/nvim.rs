@@ -96,11 +96,28 @@ extern "C" {
         count: c_int,
     );
 
-    /// Ensure capacity for usedchunks+1 (grow array 3/2 if needed)
-    fn nvim_buf_ml_chunksize_ensure_capacity(buf: *mut BufHandle);
+    // nvim_buf_ml_chunksize_ensure_capacity and nvim_buf_ml_chunksize_init migrated to Rust
 
-    /// Allocate initial ml_chunksize array (100 entries), set first entry to (1, 1)
-    fn nvim_buf_ml_chunksize_init(buf: *mut BufHandle);
+    /// Get ml_numchunks (allocated chunk capacity)
+    fn nvim_buf_get_ml_numchunks(buf: *mut BufHandle) -> c_int;
+
+    /// Set ml_numchunks
+    fn nvim_buf_set_ml_numchunks(buf: *mut BufHandle, val: c_int);
+
+    /// Get opaque pointer to ml_chunksize array
+    fn nvim_buf_get_ml_chunksize_ptr(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+
+    /// Set opaque pointer to ml_chunksize array
+    fn nvim_buf_set_ml_chunksize_ptr(buf: *mut BufHandle, ptr: *mut std::ffi::c_void);
+
+    /// Allocate memory (like malloc, but panics on OOM)
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+
+    /// Reallocate memory
+    fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
+
+    /// Get sizeof(chunksize_T)
+    fn nvim_get_chunksize_t_size() -> usize;
 
     /// Get ml_locked_high
     fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
@@ -133,6 +150,44 @@ static mut ML_UPD_LASTCURLINE: LineNr = 0;
 
 /// Chunk index cached from the last call.
 static mut ML_UPD_LASTCURIX: c_int = 0;
+
+// =============================================================================
+// Chunk array lifecycle (migrated from C shim)
+// =============================================================================
+
+/// Allocate initial ml_chunksize array (100 entries), set first entry to (1, 1).
+///
+/// # Safety
+/// `buf` must be a valid buffer pointer.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+unsafe fn ml_chunksize_init(buf: *mut BufHandle) {
+    let elem_size = nvim_get_chunksize_t_size();
+    let ptr = xmalloc(elem_size * 100);
+    nvim_buf_set_ml_chunksize_ptr(buf, ptr);
+    nvim_buf_set_ml_numchunks(buf, 100);
+    nvim_buf_set_ml_usedchunks(buf, 1);
+    nvim_buf_set_ml_chunksize_numlines(buf, 0, 1);
+    nvim_buf_set_ml_chunksize_totalsize(buf, 0, 1);
+}
+
+/// Ensure the ml_chunksize array has capacity for usedchunks+1.
+///
+/// Grows the array by factor 3/2 if needed.
+/// # Safety
+/// `buf` must be a valid buffer pointer with an initialized chunksize array.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+unsafe fn ml_chunksize_ensure_capacity(buf: *mut BufHandle) {
+    let usedchunks = nvim_buf_get_ml_usedchunks(buf);
+    let numchunks = nvim_buf_get_ml_numchunks(buf);
+    if usedchunks + 1 >= numchunks {
+        let new_numchunks = numchunks * 3 / 2;
+        nvim_buf_set_ml_numchunks(buf, new_numchunks);
+        let elem_size = nvim_get_chunksize_t_size();
+        let old_ptr = nvim_buf_get_ml_chunksize_ptr(buf);
+        let new_ptr = xrealloc(old_ptr, elem_size * new_numchunks as usize);
+        nvim_buf_set_ml_chunksize_ptr(buf, new_ptr);
+    }
+}
 
 // =============================================================================
 // Implementation
@@ -171,7 +226,7 @@ pub unsafe extern "C" fn rs_ml_updatechunk(
 
     // Initialize chunk array if it doesn't exist yet
     if nvim_buf_get_ml_chunksize_is_null(buf) != 0 {
-        nvim_buf_ml_chunksize_init(buf);
+        ml_chunksize_init(buf);
     }
 
     // Special case: single-line buffer updated via ml_flush_line -- reset cache
@@ -226,7 +281,7 @@ pub unsafe extern "C" fn rs_ml_updatechunk(
         nvim_buf_add_ml_chunksize_numlines(buf, curix, 1);
 
         // Grow the array if needed before potentially splitting
-        nvim_buf_ml_chunksize_ensure_capacity(buf);
+        ml_chunksize_ensure_capacity(buf);
 
         let curchnk_numlines = nvim_buf_get_ml_chunksize_numlines(buf, curix);
         if curchnk_numlines >= MLCS_MAXL {

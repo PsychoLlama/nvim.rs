@@ -246,7 +246,7 @@ extern "C" {
     fn redraw_curbuf_later(redraw_type: c_int);
     fn line_breakcheck();
     fn nvim_prompt_for_recovery() -> c_int;
-    fn nvim_recover_check_proc_and_print(fname_used: *const c_char) -> c_int;
+    // nvim_recover_check_proc_and_print migrated to Rust
     fn nvim_set_cmdline_row_to_msg_row();
     fn nvim_apply_autocmds_bufreadpost();
     fn nvim_apply_autocmds_bufwinenter();
@@ -392,6 +392,42 @@ unsafe fn recover_msg(
         }
         _ => {}
     }
+}
+
+// =============================================================================
+// Recovery utility functions (migrated from C shim)
+// =============================================================================
+
+/// Check if the swap file owner process is still running and print a note.
+///
+/// Opens the swap file, reads block 0, and if the owner process is still
+/// running, prints a message to the user.
+///
+/// # Safety
+/// `fname_used` must be a valid C string.
+unsafe fn recover_check_proc_and_print(fname_used: *const c_char) -> c_int {
+    let fd = os_open(fname_used, 0, 0); // O_RDONLY = 0
+    if fd < 0 {
+        return 0;
+    }
+    let b0_size = nvim_b0_get_struct_size();
+    let mut b0_buf = vec![0u8; b0_size];
+    let n = read_eintr(fd, b0_buf.as_mut_ptr().cast(), b0_size);
+    close(fd);
+    #[allow(clippy::cast_sign_loss)]
+    if n as usize != b0_size {
+        return 0;
+    }
+    let b0 = b0_buf.as_ptr().cast::<c_void>();
+    if rs_swapfile_proc_running(b0, fname_used) != 0 {
+        msg_puts(gettext(c"\nNote: process STILL RUNNING: ".as_ptr()));
+        let pid_ptr = nvim_b0_get_pid_ptr(b0);
+        let pid_val = rs_char_to_long(pid_ptr);
+        #[allow(clippy::cast_possible_truncation)]
+        msg_outnum(pid_val as c_int);
+        return 1;
+    }
+    0
 }
 
 // =============================================================================
@@ -720,7 +756,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
                 0,
                 nvim_curbuf_get_b_changed(),
             );
-            nvim_recover_check_proc_and_print(fname_used);
+            recover_check_proc_and_print(fname_used);
             msg_puts(c"\n\n".as_ptr());
             nvim_set_cmdline_row_to_msg_row();
         }

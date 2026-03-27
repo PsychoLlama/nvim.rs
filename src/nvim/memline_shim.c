@@ -211,6 +211,11 @@ linenr_T nvim_buf_get_ml_locked_low(buf_T *buf) { return buf->b_ml.ml_locked_low
 int nvim_buf_get_ml_chunksize_numlines(buf_T *buf, int idx) { return buf->b_ml.ml_chunksize[idx].mlcs_numlines; }
 int nvim_buf_get_ml_chunksize_totalsize(buf_T *buf, int idx) { return buf->b_ml.ml_chunksize[idx].mlcs_totalsize; }
 int nvim_buf_get_ml_chunksize_is_null(buf_T *buf) { return buf->b_ml.ml_chunksize == NULL; }
+int nvim_buf_get_ml_numchunks(buf_T *buf) { return buf->b_ml.ml_numchunks; }
+void nvim_buf_set_ml_numchunks(buf_T *buf, int val) { buf->b_ml.ml_numchunks = val; }
+void *nvim_buf_get_ml_chunksize_ptr(buf_T *buf) { return buf->b_ml.ml_chunksize; }
+void nvim_buf_set_ml_chunksize_ptr(buf_T *buf, void *ptr) { buf->b_ml.ml_chunksize = ptr; }
+size_t nvim_get_chunksize_t_size(void) { return sizeof(chunksize_T); }
 
 void *nvim_bhdr_get_bh_data(bhdr_T *hp) { return hp->bh_data; }
 
@@ -333,24 +338,6 @@ void nvim_buf_add_ml_chunksize_totalsize(buf_T *buf, int idx, int val) { buf->b_
 void nvim_buf_set_ml_usedchunks(buf_T *buf, int val) { buf->b_ml.ml_usedchunks = val; }
 
 void nvim_buf_ml_chunksize_memmove(buf_T *buf, int dst_idx, int src_idx, int count) { memmove(buf->b_ml.ml_chunksize + dst_idx, buf->b_ml.ml_chunksize + src_idx, (size_t)count * sizeof(chunksize_T)); }
-
-void nvim_buf_ml_chunksize_ensure_capacity(buf_T *buf)
-{
-  if (buf->b_ml.ml_usedchunks + 1 >= buf->b_ml.ml_numchunks) {
-    buf->b_ml.ml_numchunks = buf->b_ml.ml_numchunks * 3 / 2;
-    buf->b_ml.ml_chunksize = xrealloc(buf->b_ml.ml_chunksize,
-                                      sizeof(chunksize_T) * (size_t)buf->b_ml.ml_numchunks);
-  }
-}
-
-void nvim_buf_ml_chunksize_init(buf_T *buf)
-{
-  buf->b_ml.ml_chunksize = xmalloc(sizeof(chunksize_T) * 100);
-  buf->b_ml.ml_numchunks = 100;
-  buf->b_ml.ml_usedchunks = 1;
-  buf->b_ml.ml_chunksize[0].mlcs_numlines = 1;
-  buf->b_ml.ml_chunksize[0].mlcs_totalsize = 1;
-}
 
 void nvim_siemsg_e320_cannot_find_line(int64_t lnum) { siemsg(_("E320: Cannot find line %" PRId64), lnum); }
 
@@ -826,27 +813,6 @@ int nvim_prompt_for_recovery(void)
 }
 
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
-
-int nvim_recover_check_proc_and_print(const char *fname_used)
-{
-  // Open the swap file read-only temporarily
-  int fd = os_open(fname_used, O_RDONLY, 0);
-  if (fd < 0) {
-    return 0;
-  }
-  ZeroBlock b0;
-  ssize_t n = read_eintr(fd, &b0, sizeof(b0));
-  close(fd);
-  if (n != (ssize_t)sizeof(b0)) {
-    return 0;
-  }
-  if (rs_swapfile_proc_running(&b0, fname_used)) {
-    msg_puts(_("\nNote: process STILL RUNNING: "));
-    msg_outnum((int)rs_char_to_long(b0.b0_pid));
-    return 1;
-  }
-  return 0;
-}
 
 void nvim_ml_delete_first_curbuf(void) { ml_delete(1); }
 
