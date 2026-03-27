@@ -6,12 +6,9 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "nvim/ascii_defs.h"
-#include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/change.h"
@@ -57,47 +54,28 @@
 #include "nvim/strings.h"
 #include "nvim/tag.h"
 #include "nvim/ui.h"
-#include "nvim/ui_defs.h"
-#include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
 #include "search_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
-static const char e_search_hit_top_without_match_for_str[]
-  = N_("E384: Search hit TOP without match for: %s");
-static const char e_search_hit_bottom_without_match_for_str[]
-  = N_("E385: Search hit BOTTOM without match for: %s");
+static const char e_search_hit_top_without_match_for_str[] = N_("E384: Search hit TOP without match for: %s");
+static const char e_search_hit_bottom_without_match_for_str[] = N_("E385: Search hit BOTTOM without match for: %s");
 
-// Rust FFI declarations for character search state
 extern int rs_magic_isset(void);
 extern int rs_is_search_forward(void);
-
-
-// Rust FFI declarations for pattern utilities
 extern int rs_compl_status_adding(void);
 extern int rs_compl_status_sol(void);
 extern int rs_ins_compl_len(void);
 extern int rs_ins_compl_interrupted(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
+extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd, int maxcount, int timeout, bool recompute, const char *pattern, searchstat_T *stat);
 
-extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd,
-                                    int maxcount, int timeout, bool recompute,
-                                    const char *pattern, searchstat_T *stat);
-
-/// Returns a pointer past whitespace in the line.
 char *nvim_search_skipwhite_ml_get(linenr_T lnum) { return skipwhite(ml_get(lnum)); }
-/// Reads search direction from Rust-owned state via rs_is_search_forward().
 void nvim_call_set_vv_searchforward(void) { set_vim_var_nr(VV_SEARCHFORWARD, rs_is_search_forward()); }
-// Type used by find_pattern_in_path() to remember which included files have
-// been searched already.
-typedef struct {
-  FILE *fp;              // File pointer
-  char *name;            // Full name of file
-  linenr_T lnum;                // Line we were up to in file
-  int matched;                  // Found a match in this file
-} SearchedFile;
+// Tracks included files already searched by find_pattern_in_path().
+typedef struct { FILE *fp; char *name; linenr_T lnum; int matched; } SearchedFile;
 
 int nvim_get_search_match_lines(void) { return (int)search_match_lines; }
 int nvim_get_search_match_endcol(void) { return (int)search_match_endcol; }
@@ -115,8 +93,6 @@ void nvim_set_no_smartcase(int val) { no_smartcase = val != 0; }
 int nvim_get_p_scs(void) { return p_scs ? 1 : 0; }
 int nvim_get_p_ws(void) { return p_ws ? 1 : 0; }
 int nvim_get_p_hls(void) { return p_hls ? 1 : 0; }
-/// Perform the cursor-display-delay loop for showmatch.
-/// Called from Rust after the match position has been determined.
 void nvim_showmatch_display_cursor(int match_lnum, int match_col, int match_coladd)
 {
   OptInt *so = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
