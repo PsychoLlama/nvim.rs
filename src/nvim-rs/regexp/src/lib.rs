@@ -3295,8 +3295,6 @@ const CLASSCODES: &[c_int] = &[
 extern "C" {
     // Accessors for regatom globals
     fn nvim_regexp_get_reg_do_extmatch() -> c_int;
-    fn nvim_regexp_get_curwin_lnum() -> i32;
-    fn nvim_regexp_get_curwin_col() -> i32;
     fn nvim_regexp_get_curwin_vcol() -> i32;
 
     // Character / multibyte helpers
@@ -4197,7 +4195,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                 let ret;
                 if c == b'l' as c_int {
                     if cur {
-                        n = nvim_regexp_get_curwin_lnum() as u32;
+                        n = nvim_win_get_cursor_lnum(nvim_regexp_get_curwin()) as u32;
                     }
                     ret = rs_regnode(RE_LNUM);
                     if save_prev_at_start != 0 {
@@ -4205,7 +4203,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                     }
                 } else if c == b'c' as c_int {
                     if cur {
-                        n = (nvim_regexp_get_curwin_col() + 1) as u32;
+                        n = (nvim_win_get_cursor_col(nvim_regexp_get_curwin()) + 1) as u32;
                     }
                     ret = rs_regnode(RE_COL);
                 } else {
@@ -9174,7 +9172,7 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
         }
         if c == b'l' as c_int {
             if cur {
-                n = i64::from(nvim_regexp_get_curwin_lnum());
+                n = i64::from(nvim_win_get_cursor_lnum(nvim_regexp_get_curwin()));
             }
             nfa_emit(if cmp == b'<' as c_int {
                 NFA_LNUM_LT
@@ -9188,7 +9186,7 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
             }
         } else if c == b'c' as c_int {
             if cur {
-                n = i64::from(nvim_regexp_get_curwin_col());
+                n = i64::from(nvim_win_get_cursor_col(nvim_regexp_get_curwin()));
                 n += 1;
             }
             nfa_emit(if cmp == b'<' as c_int {

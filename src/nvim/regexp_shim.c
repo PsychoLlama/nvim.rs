@@ -11,16 +11,12 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/globals.h"
-#include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mbyte.h"
 #include "nvim/memory.h"
-#include "nvim/message.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
-#include "nvim/pos_defs.h"
 #include "nvim/regexp.h"
-#include "nvim/regexp_defs.h"
 #include "nvim/strings.h"
 
 extern char *rs_partial_name(partial_T *pt);
@@ -298,8 +294,6 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
 }
 
 int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
-int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
-int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
 int32_t nvim_regexp_get_curwin_vcol(void) { colnr_T vcol = 0; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int32_t)(++vcol); }
 int64_t nvim_regexp_get_p_mmp(void) { return p_mmp; }
 uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) { return (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) ? re_extmatch_in->matches[no] : NULL; }
