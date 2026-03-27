@@ -448,7 +448,6 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
   return OK;
 }
 
-/// Convert to complete item dict
 static dict_T *ins_compl_dict_alloc(compl_T *match)
 {
   // { word, abbr, menu, kind, info }
@@ -473,34 +472,19 @@ static void cp_set_next(void *node, void *next) { ((compl_T *)node)->cp_next = (
 static void *cp_get_prev(void *node) { return ((compl_T *)node)->cp_prev; }
 static void cp_set_prev(void *node, void *prev) { ((compl_T *)node)->cp_prev = (compl_T *)prev; }
 static int cp_compare_fuzzy(const void *a, const void *b)
-{
-  int score_a = ((compl_T *)a)->cp_score;
-  int score_b = ((compl_T *)b)->cp_score;
-  return (score_b > score_a) ? 1 : (score_b < score_a) ? -1 : 0;
-}
-
+  { int sa = ((compl_T *)a)->cp_score, sb = ((compl_T *)b)->cp_score; return (sb > sa) ? 1 : (sb < sa) ? -1 : 0; }
 static int cp_compare_nearest(const void *a, const void *b)
-{
-  int score_a = ((compl_T *)a)->cp_score;
-  int score_b = ((compl_T *)b)->cp_score;
-  if (score_a == FUZZY_SCORE_NONE || score_b == FUZZY_SCORE_NONE) {
-    return 0;
-  }
-  return (score_a > score_b) ? 1 : (score_a < score_b) ? -1 : 0;
-}
+  { int sa = ((compl_T *)a)->cp_score, sb = ((compl_T *)b)->cp_score;
+    return (sa == FUZZY_SCORE_NONE || sb == FUZZY_SCORE_NONE) ? 0 : (sa > sb) ? 1 : (sa < sb) ? -1 : 0; }
 
 /// Returns curbuf->b_p_tsr if non-empty, else p_tsr.
 const char *nvim_get_curbuf_b_p_tsr(void) { return *curbuf->b_p_tsr == NUL ? p_tsr : curbuf->b_p_tsr; }
 /// Returns curbuf->b_p_dict if non-empty, else p_dict.
 const char *nvim_get_curbuf_b_p_dict(void) { return *curbuf->b_p_dict == NUL ? p_dict : curbuf->b_p_dict; }
-/// Free a completion item in the list
 static void ins_compl_item_free(compl_T *match)
 {
   API_CLEAR_STRING(match->cp_str);
-  // several entries may use the same fname, free it just once.
-  if (match->cp_flags & CP_FREE_FNAME) {
-    xfree(match->cp_fname);
-  }
+  if (match->cp_flags & CP_FREE_FNAME) { xfree(match->cp_fname); }
   free_cptext(match->cp_text);
   tv_clear(&match->cp_user_data);
   xfree(match);
@@ -520,40 +504,29 @@ void nvim_compl_match_set_in_match_array(void *m, int val) { if (m) ((compl_T *)
 void *nvim_compl_match_get_match_next(void *m) { return m ? ((compl_T *)m)->cp_match_next : NULL; }
 void nvim_compl_match_set_match_next(void *m, void *next) { if (m) ((compl_T *)m)->cp_match_next = (compl_T *)next; }
 void nvim_compl_match_clear_icase(void *m) { if (m) ((compl_T *)m)->cp_flags &= ~CP_ICASE; }
-/// Build and fill compl_match_array from the cp_match_next linked list.
-/// Allocates compl_match_array[0..count-1] and populates pumitem_T fields.
-/// Returns the count of filled entries (same as count parameter).
 int nvim_build_pum_fill_array(void *match_head_void, int count) {
-  compl_T *match_head = (compl_T *)match_head_void;
   assert(count >= 0);
   compl_match_array = xcalloc((size_t)count, sizeof(pumitem_T));
   int i = 0;
-  compl_T *comp = match_head;
-  while (comp != NULL) {
-    compl_match_array[i].pum_text = comp->cp_text[CPT_ABBR] != NULL
-                                    ? comp->cp_text[CPT_ABBR] : comp->cp_str.data;
+  for (compl_T *comp = (compl_T *)match_head_void; comp != NULL;) {
+    compl_match_array[i].pum_text = comp->cp_text[CPT_ABBR] ? comp->cp_text[CPT_ABBR] : comp->cp_str.data;
     compl_match_array[i].pum_kind = comp->cp_text[CPT_KIND];
     compl_match_array[i].pum_info = comp->cp_text[CPT_INFO];
     compl_match_array[i].pum_cpt_source_idx = comp->cp_cpt_source_idx;
     compl_match_array[i].pum_user_abbr_hlattr = comp->cp_user_abbr_hlattr;
     compl_match_array[i].pum_user_kind_hlattr = comp->cp_user_kind_hlattr;
-    compl_match_array[i++].pum_extra = comp->cp_text[CPT_MENU] != NULL
-                                       ? comp->cp_text[CPT_MENU] : comp->cp_fname;
-    compl_T *match_next = comp->cp_match_next;
+    compl_match_array[i++].pum_extra = comp->cp_text[CPT_MENU] ? comp->cp_text[CPT_MENU] : comp->cp_fname;
+    compl_T *next = comp->cp_match_next;
     comp->cp_match_next = NULL;
-    comp = match_next;
+    comp = next;
   }
   return i;
 }
-/// Find the shown match in the compl_match_array by pointer identity.
-/// Returns the index, or -1 if not found.
 int nvim_find_shown_match_in_match_array(void) {
   if (!compl_match_array || !compl_shown_match) { return -1; }
   for (int i = 0; i < compl_match_arraysize; i++) {
     if (compl_match_array[i].pum_text == compl_shown_match->cp_str.data
-        || compl_match_array[i].pum_text == compl_shown_match->cp_text[CPT_ABBR]) {
-      return i;
-    }
+        || compl_match_array[i].pum_text == compl_shown_match->cp_text[CPT_ABBR]) { return i; }
   }
   return -1;
 }
@@ -579,12 +552,8 @@ static Callback *cpt_cb;   ///< Callback functions associated with F{func}
 static int cpt_cb_count;   ///< Number of cpt callbacks
 
 static void copy_global_to_buflocal_cb(Callback *globcb, Callback *bufcb)
-{
-  callback_free(bufcb);
-  if (globcb->type != kCallbackNone) { callback_copy(bufcb, globcb); }
-}
+  { callback_free(bufcb); if (globcb->type != kCallbackNone) { callback_copy(bufcb, globcb); } }
 
-/// did_set_completefunc implementation.
 const char *nvim_did_set_completefunc_impl(void *args_v)
 {
   optset_T *args = (optset_T *)args_v;
@@ -596,10 +565,7 @@ const char *nvim_did_set_completefunc_impl(void *args_v)
   return NULL;
 }
 
-/// Copy the global 'completefunc' callback function to the buffer-local
-/// 'completefunc' callback for "buf".
 void set_buflocal_cfu_callback(buf_T *buf) { copy_global_to_buflocal_cb(&cfu_cb, &buf->b_cfu_cb); }
-/// did_set_omnifunc implementation.
 const char *nvim_did_set_omnifunc_impl(void *args_v)
 {
   optset_T *args = (optset_T *)args_v;
@@ -611,10 +577,7 @@ const char *nvim_did_set_omnifunc_impl(void *args_v)
   return NULL;
 }
 
-/// Copy the global 'omnifunc' callback function to the buffer-local 'omnifunc'
-/// callback for "buf".
 void set_buflocal_ofu_callback(buf_T *buf) { copy_global_to_buflocal_cb(&ofu_cb, &buf->b_ofu_cb); }
-/// Free an array of 'complete' F{func} callbacks and set the pointer to NULL.
 void clear_cpt_callbacks(Callback **callbacks, int count)
 {
   if (callbacks == NULL || *callbacks == NULL) {
@@ -628,8 +591,6 @@ void clear_cpt_callbacks(Callback **callbacks, int count)
   XFREE_CLEAR(*callbacks);
 }
 
-/// Copies a list of Callback structs from src to *dest, clearing any existing
-/// entries and allocating memory for the destination.
 static void copy_cpt_callbacks(Callback **dest, int *dest_cnt, Callback *src, int cnt)
 {
   if (cnt == 0) {
@@ -647,19 +608,9 @@ static void copy_cpt_callbacks(Callback **dest, int *dest_cnt, Callback *src, in
   }
 }
 
-/// Copy global 'complete' F{func} callbacks into the given buffer's local
-/// callback array. Clears any existing buffer-local callbacks first.
 void set_buflocal_cpt_callbacks(buf_T *buf)
-{
-  if (buf == NULL || cpt_cb_count == 0) {
-    return;
-  }
-  copy_cpt_callbacks(&buf->b_p_cpt_cb, &buf->b_p_cpt_count, cpt_cb, cpt_cb_count);
-}
+  { if (buf != NULL && cpt_cb_count != 0) { copy_cpt_callbacks(&buf->b_p_cpt_cb, &buf->b_p_cpt_count, cpt_cb, cpt_cb_count); } }
 
-/// Parse 'complete' option and initialize F{func} callbacks.
-/// Frees any existing callbacks and allocates new ones.
-/// Only F{func} entries are processed; others are ignored.
 int set_cpt_callbacks(optset_T *args)
 {
   bool local = (args->os_flags & OPT_LOCAL) != 0;
@@ -709,7 +660,6 @@ int set_cpt_callbacks(optset_T *args)
   return OK;
 }
 
-/// did_set_thesaurusfunc implementation.
 const char *nvim_did_set_thesaurusfunc_impl(void *args_v)
 {
   optset_T *args = (optset_T *)args_v;
@@ -728,8 +678,6 @@ const char *nvim_did_set_thesaurusfunc_impl(void *args_v)
   return retval == FAIL ? e_invarg : NULL;
 }
 
-/// Mark "copyID" references in an array of F{func} callbacks so that they are
-/// not garbage collected.
 bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
 {
   bool abort = false;
@@ -744,7 +692,6 @@ bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
   return abort;
 }
 
-/// set_ref_in_insexpand_funcs implementation.
 int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
 {
   bool abort = rs_set_ref_in_callback(&cfu_cb, copyID, NULL, NULL);
@@ -786,18 +733,11 @@ void nvim_save_orig_extmarks_impl(void) {
 }
 
 static void restore_orig_extmarks(void)
-{
-  for (long i = (int)kv_size(compl_orig_extmarks) - 1; i > -1; i--) {
-    ExtmarkUndoObject undo_info = kv_A(compl_orig_extmarks, i);
-    extmark_apply_undo(undo_info, true);
-  }
-}
+  { for (long i = (long)kv_size(compl_orig_extmarks) - 1; i > -1; i--) { extmark_apply_undo(kv_A(compl_orig_extmarks, (size_t)i), true); } }
 
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
-/// complete_info() implementation.
-/// Contains the full what_flag parsing and dictionary population logic.
 void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
 {
   list_T *what_list = (list_T *)what_list_v;
@@ -958,7 +898,6 @@ int nvim_get_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
-/// Move backwards to a previous badly spelled word (CTRL_X_SPELL mode).
 void nvim_spell_back_safe(void)
 {
   emsg_off++;
@@ -1032,11 +971,7 @@ int nvim_skipwhite_offset(const char *line, int length, int start_col) { return 
 size_t nvim_yankreg_y_size(void *reg) { return reg ? ((yankreg_T *)reg)->y_size : 0; }
 int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y_array == NULL) ? 1 : 0; }
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
-{
-  if (!reg) { return NULL; }
-  yankreg_T *r = (yankreg_T *)reg;
-  return (j >= r->y_size || r->y_array == NULL) ? NULL : r->y_array[j].data;
-}
+  { yankreg_T *r = (yankreg_T *)reg; return (!r || j >= r->y_size || !r->y_array) ? NULL : r->y_array[j].data; }
 int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const char *fname, int dir, int cont_s_ipos, int score) { return ins_compl_add_infercase((char *)str, len, icase != 0, (char *)fname, (Direction)dir, cont_s_ipos != 0, score); }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
 int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score) { return ins_compl_add((char *)str, len, NULL, NULL, false, NULL, (Direction)dir, flags, false, NULL, score); }
@@ -1148,7 +1083,6 @@ theend:
   }
 }
 
-/// Contains the full logic moved from the static ins_compl_add_tv function.
 int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
 {
   typval_T *tv = (typval_T *)tv_opaque;
