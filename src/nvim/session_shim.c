@@ -1,18 +1,8 @@
-// C accessor functions for the Rust session crate.
-//
-// This file contains thin C wrapper/accessor functions that Rust calls via FFI
-// to access C struct fields, globals, and standard library functions.
-// These exist because Rust cannot directly access C struct fields without
-// bindgen-generated definitions.
-//
-// All nvim_ses_* functions are called from: src/nvim-rs/session/src/ffi.rs
-// No other C files depend on these functions.
+/// FFI bridge: struct-field accessors for the Rust session crate.
+/// Called from src/nvim-rs/session/src/ffi.rs. No other C files use these.
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 
 #include "klib/kvec.h"
 #include "nvim/arglist.h"
@@ -27,23 +17,13 @@
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
-#include "nvim/ex_getln.h"
-#include "nvim/file_search.h"
-#include "nvim/fileio.h"
-#include "nvim/fold.h"
 #include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/mapping.h"
-#include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/fs.h"
-#include "nvim/os/os.h"
-#include "nvim/os/os_defs.h"
-#include "nvim/path.h"
 #include "nvim/runtime.h"
 #include "nvim/strings.h"
 #include "nvim/vim_defs.h"
@@ -51,10 +31,7 @@
 
 #include "session_shim.c.generated.h"
 
-// Rust FFI declarations
 extern var_flavour_T rs_var_flavour(const char *varname);
-
-// C accessor functions for Rust FFI
 
 // --- Window accessors ---
 bool nvim_ses_win_get_floating(const win_T *wp) { return wp->w_floating; }
@@ -164,8 +141,6 @@ const char *nvim_ses_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 void nvim_ses_emsg_noname(void) { emsg(_(e_noname)); }
 const char *nvim_ses_get_p_vdir(void) { return p_vdir; }
 
-// --- put_view accessors ---
-
 // Window accessors for argument list
 bool nvim_ses_win_uses_global_alist(const win_T *wp) { return wp->w_alist == &global_alist; }
 garray_T *nvim_ses_win_get_alist_ga(win_T *wp) { return &wp->w_alist->al_ga; }
@@ -198,12 +173,7 @@ char *nvim_ses_tp_get_localdir(const tabpage_T *tp) { return tp->tp_localdir; }
 
 // Global state manipulation for local options
 win_T *nvim_ses_get_curwin(void) { return curwin; }
-void nvim_ses_set_curwin(win_T *wp)
-{
-  curwin = wp;
-  curbuf = curwin->w_buffer;
-}
-
+void nvim_ses_set_curwin(win_T *wp) { curwin = wp; curbuf = wp->w_buffer; }
 
 // Static assertions for session option flags
 _Static_assert(kOptSsopFlagCursor == 0x4000, "kOptSsopFlagCursor");
@@ -260,8 +230,6 @@ _Static_assert(kOptSsopFlagGlobals == 0x100, "kOptSsopFlagGlobals");
 _Static_assert(kOptSsopFlagTabpages == 0x8000, "kOptSsopFlagTabpages");
 _Static_assert(kOptSsopFlagResize == 0x04, "kOptSsopFlagResize");
 
-// --- ex_mkrc, ex_loadview accessors ---
-
 // exarg_T field accessors
 int nvim_ses_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
 char *nvim_ses_eap_get_arg(const exarg_T *eap) { return eap->arg; }
@@ -272,7 +240,6 @@ void nvim_ses_eap_set_forceit(exarg_T *eap, bool val) { eap->forceit = val; }
 int nvim_ses_get_CMD_mksession(void) { return CMD_mksession; }
 int nvim_ses_get_CMD_mkview(void) { return CMD_mkview; }
 int nvim_ses_get_CMD_mkvimrc(void) { return CMD_mkvimrc; }
-
 
 // Session-related global state
 bool nvim_ses_get_p_hls(void) { return p_hls; }
