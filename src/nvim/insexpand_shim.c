@@ -76,6 +76,11 @@ extern void rs_ins_compl_update_sequence_numbers(void);
 extern void rs_ins_compl_del_pum(void);
 extern const char *rs_ins_compl_mode(void);
 extern void rs_ins_compl_longest_match(void *match);
+extern int rs_ins_compl_add(char *str, int len, char *fname, char **cptext,
+                            int cptext_allocated, void *user_data, int cdir,
+                            int flags_arg, int adup, const int *user_hl, int score);
+extern int rs_ins_compl_add_infercase(char *str, int len, int icase, const char *fname,
+                                      int dir, int cont_s_ipos, int score);
 
 int nvim_ins_compl_add_tv_impl(void *tv, int dir, int fast);
 void nvim_ins_compl_add_list_impl(void *list);
@@ -253,46 +258,7 @@ static bool is_first_match(const compl_T *const match) { return match == compl_f
 int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Direction dir,
                             bool cont_s_ipos, int score)
   FUNC_ATTR_NONNULL_ARG(1)
-{
-  char *str = str_arg;
-  int char_len;  // count multi-byte characters
-  int compl_char_len;
-  int flags = 0;
-  char *tofree = NULL;
-
-  if (p_ic && curbuf->b_p_inf && len > 0) {
-    // Find actual length of completion.
-    {
-      const char *p = str;
-      char_len = 0;
-      while (*p != NUL) {
-        MB_PTR_ADV(p);
-        char_len++;
-      }
-    }
-    // Find actual length of original text.
-    {
-      const char *p = compl_orig_text.data;
-      compl_char_len = 0;
-      while (*p != NUL) {
-        MB_PTR_ADV(p);
-        compl_char_len++;
-      }
-    }
-    int min_len = MIN(char_len, compl_char_len);
-    str = rs_ins_compl_infercase_gettext(str, char_len, compl_char_len, min_len, &tofree);
-  }
-  if (cont_s_ipos) {
-    flags |= CP_CONT_S_IPOS;
-  }
-  if (icase) {
-    flags |= CP_ICASE;
-  }
-
-  int res = ins_compl_add(str, len, fname, NULL, false, NULL, dir, flags, false, NULL, score);
-  xfree(tofree);
-  return res;
-}
+  { return rs_ins_compl_add_infercase(str_arg, len, icase ? 1 : 0, fname, (int)dir, cont_s_ipos ? 1 : 0, score); }
 
 static inline void free_cptext(char *const *const cptext)
 {
@@ -300,153 +266,6 @@ static inline void free_cptext(char *const *const cptext)
   for (size_t i = 0; i < CPT_COUNT; i++) { xfree(cptext[i]); }
 }
 
-/// Add a match to the list of matches. Returns OK, NOTDONE (duplicate), or FAIL.
-static int ins_compl_add(char *const str, int len, char *const fname, char *const *const cptext,
-                         const bool cptext_allocated, typval_T *user_data, const Direction cdir,
-                         int flags_arg, const bool adup, const int *user_hl, const int score)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  compl_T *match;
-  const Direction dir = (cdir == kDirectionNotSet ? compl_direction : cdir);
-  int flags = flags_arg;
-  bool inserted = false;
-
-  if (flags & CP_FAST) {
-    fast_breakcheck();
-  } else {
-    os_breakcheck();
-  }
-  if (got_int) {
-    if (cptext_allocated) {
-      free_cptext(cptext);
-    }
-    return FAIL;
-  }
-  if (len < 0) {
-    len = (int)strlen(str);
-  }
-
-  // If the same match is already present, don't add it.
-  if (compl_first_match != NULL && !adup) {
-    match = compl_first_match;
-    do {
-      if (!match_at_original_text(match)
-          && strncmp(match->cp_str.data, str, (size_t)len) == 0
-          && ((int)match->cp_str.size <= len || match->cp_str.data[len] == NUL)) {
-        if (rs_is_nearest_active() && score > 0 && score < match->cp_score) {
-          match->cp_score = score;
-        }
-        if (cptext_allocated) {
-          free_cptext(cptext);
-        }
-        return NOTDONE;
-      }
-      match = match->cp_next;
-    } while (match != NULL && !is_first_match(match));
-  }
-
-  // Remove any popup menu before changing the list of matches.
-  rs_ins_compl_del_pum();
-
-  // Allocate a new match structure.
-  // Copy the values to the new match structure.
-  match = xcalloc(1, sizeof(compl_T));
-  match->cp_number = flags & CP_ORIGINAL_TEXT ? 0 : -1;
-  match->cp_str = cbuf_to_string(str, (size_t)len);
-
-  // match-fname is:
-  // - compl_curr_match->cp_fname if it is a string equal to fname.
-  // - a copy of fname, CP_FREE_FNAME is set to free later THE allocated mem.
-  // - NULL otherwise.  --Acevedo
-  if (fname != NULL
-      && compl_curr_match != NULL
-      && compl_curr_match->cp_fname != NULL
-      && strcmp(fname, compl_curr_match->cp_fname) == 0) {
-    match->cp_fname = compl_curr_match->cp_fname;
-  } else if (fname != NULL) {
-    match->cp_fname = xstrdup(fname);
-    flags |= CP_FREE_FNAME;
-  } else {
-    match->cp_fname = NULL;
-  }
-  match->cp_flags = flags;
-  match->cp_user_abbr_hlattr = user_hl ? user_hl[0] : -1;
-  match->cp_user_kind_hlattr = user_hl ? user_hl[1] : -1;
-  match->cp_score = score;
-  match->cp_cpt_source_idx = cpt_sources_index;
-
-  if (cptext != NULL) {
-    for (int i = 0; i < CPT_COUNT; i++) {
-      if (cptext[i] == NULL) {
-        continue;
-      }
-      if (*cptext[i] != NUL) {
-        match->cp_text[i] = (cptext_allocated ? cptext[i] : xstrdup(cptext[i]));
-      } else if (cptext_allocated) {
-        xfree(cptext[i]);
-      }
-    }
-  }
-
-  if (user_data != NULL) {
-    match->cp_user_data = *user_data;
-  }
-
-  // Link the new match structure after (FORWARD) or before (BACKWARD) the
-  // current match in the list of matches .
-  if (compl_first_match == NULL) {
-    match->cp_next = match->cp_prev = NULL;
-  } else if (rs_cot_fuzzy() && score != FUZZY_SCORE_NONE && compl_get_longest) {
-    compl_T *current = compl_first_match->cp_next;
-    compl_T *prev = compl_first_match;
-    inserted = false;
-    // The direction is ignored when using longest and fuzzy match, because
-    // matches are inserted and sorted by score.
-    while (current != NULL && current != compl_first_match) {
-      if (current->cp_score < score) {
-        match->cp_next = current;
-        match->cp_prev = current->cp_prev;
-        if (current->cp_prev) {
-          current->cp_prev->cp_next = match;
-        }
-        current->cp_prev = match;
-        inserted = true;
-        break;
-      }
-      prev = current;
-      current = current->cp_next;
-    }
-    if (!inserted) {
-      prev->cp_next = match;
-      match->cp_prev = prev;
-      match->cp_next = compl_first_match;
-      compl_first_match->cp_prev = match;
-    }
-  } else if (dir == FORWARD) {
-    match->cp_next = compl_curr_match->cp_next;
-    match->cp_prev = compl_curr_match;
-  } else {    // BACKWARD
-    match->cp_next = compl_curr_match;
-    match->cp_prev = compl_curr_match->cp_prev;
-  }
-  if (match->cp_next) {
-    match->cp_next->cp_prev = match;
-  }
-  if (match->cp_prev) {
-    match->cp_prev->cp_next = match;
-  } else {        // if there's nothing before, it is the first match
-    compl_first_match = match;
-  }
-  compl_curr_match = match;
-
-  // Find the longest common string if still doing that.
-  if (compl_get_longest && (flags & CP_ORIGINAL_TEXT) == 0 && !rs_cot_fuzzy()
-      && !rs_ins_compl_preinsert_longest()) {
-    rs_ins_compl_longest_match(match);
-  }
-
-  return OK;
-}
 
 static dict_T *ins_compl_dict_alloc(compl_T *match)
 {
@@ -550,6 +369,19 @@ const char *nvim_compl_match_get_cp_text_kind(void *m) { return m ? ((compl_T *)
 const char *nvim_compl_match_get_cp_text_info(void *m) { return m ? ((compl_T *)m)->cp_text[CPT_INFO] : NULL; }
 int nvim_compl_match_user_data_is_unknown(void *m) { return (!m || ((compl_T *)m)->cp_user_data.v_type == VAR_UNKNOWN) ? 1 : 0; }
 void nvim_compl_match_copy_user_data_tv(void *m, void *dest_tv) { if (m && dest_tv) *(typval_T *)dest_tv = ((compl_T *)m)->cp_user_data; }
+// Compound accessors for rs_ins_compl_add (Phase 6)
+void *nvim_compl_T_alloc(void) { return xcalloc(1, sizeof(compl_T)); }
+void nvim_compl_match_set_flags(void *m, int f) { if (m) ((compl_T *)m)->cp_flags = f; }
+void nvim_compl_match_add_flags(void *m, int f) { if (m) ((compl_T *)m)->cp_flags |= f; }
+void nvim_compl_match_set_cp_str(void *m, const char *s, size_t l) { if (m) ((compl_T *)m)->cp_str = cbuf_to_string(s, l); }
+const char *nvim_compl_match_get_cp_fname(void *m) { return m ? ((compl_T *)m)->cp_fname : NULL; }
+void nvim_compl_match_set_cp_fname_dup(void *m, const char *f) { if (m) ((compl_T *)m)->cp_fname = xstrdup(f); }
+void nvim_compl_match_set_cp_fname_ref(void *m, const char *f) { if (m) ((compl_T *)m)->cp_fname = (char *)f; }
+void nvim_compl_match_set_hl_attrs(void *m, int abbr, int kind) { if (m) { ((compl_T *)m)->cp_user_abbr_hlattr = abbr; ((compl_T *)m)->cp_user_kind_hlattr = kind; } }
+void nvim_compl_match_set_cpt_source_idx(void *m, int idx) { if (m) ((compl_T *)m)->cp_cpt_source_idx = idx; }
+void nvim_compl_match_set_cp_text_take(void *m, int i, char *s) { if (m) ((compl_T *)m)->cp_text[i] = s; }
+void nvim_compl_match_set_cp_text_copy(void *m, int i, const char *s) { if (m) ((compl_T *)m)->cp_text[i] = xstrdup(s); }
+void nvim_compl_match_set_user_data_move(void *m, void *tv) { if (m && tv) ((compl_T *)m)->cp_user_data = *(typval_T *)tv; }
 // Compound accessors for complete_info dict building (nvim_ci_ prefix avoids undo.h conflicts)
 void *nvim_ci_dict_alloc_lock_fixed(void) { return tv_dict_alloc_lock(VAR_FIXED); }
 void *nvim_ci_dict_alloc(void) { return tv_dict_alloc(); }
@@ -901,9 +733,9 @@ size_t nvim_yankreg_y_size(void *reg) { return reg ? ((yankreg_T *)reg)->y_size 
 int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y_array == NULL) ? 1 : 0; }
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
   { yankreg_T *r = (yankreg_T *)reg; return (!r || j >= r->y_size || !r->y_array) ? NULL : r->y_array[j].data; }
-int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const char *fname, int dir, int cont_s_ipos, int score) { return ins_compl_add_infercase((char *)str, len, icase != 0, (char *)fname, (Direction)dir, cont_s_ipos != 0, score); }
+int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const char *fname, int dir, int cont_s_ipos, int score) { return rs_ins_compl_add_infercase((char *)str, len, icase ? 1 : 0, fname, dir, cont_s_ipos ? 1 : 0, score); }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
-int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score) { return ins_compl_add((char *)str, len, NULL, NULL, false, NULL, (Direction)dir, flags, false, NULL, score); }
+int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score) { return rs_ins_compl_add((char *)str, len, NULL, NULL, 0, NULL, dir, flags, 0, NULL, score); }
 size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep) { return copy_option_part(src, buf, (size_t)maxlen, sep); }
 int nvim_get_complete_funcname_empty(int ctrl_x_mode_val) { return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0; }
 void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val) { return (void *)get_insert_callback(ctrl_x_mode_val); }
@@ -1059,8 +891,8 @@ int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
     tv_clear(&user_data);
     return FAIL;
   }
-  int status = ins_compl_add((char *)word, -1, NULL, cptext, true,
-                             &user_data, dir, flags, dup, user_hl, FUZZY_SCORE_NONE);
+  int status = rs_ins_compl_add((char *)word, -1, NULL, cptext, 1,
+                               &user_data, dir, flags, dup ? 1 : 0, user_hl, FUZZY_SCORE_NONE);
   if (status != OK) {
     tv_clear(&user_data);
   }
