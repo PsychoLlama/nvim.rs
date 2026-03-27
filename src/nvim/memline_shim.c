@@ -1,7 +1,3 @@
-// for debugging
-// #define CHECK(c, s) do { if (c) emsg(s); } while (0)
-#define CHECK(c, s) do {} while (0)
-
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -19,7 +15,6 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/change.h"
 #include "nvim/cursor.h"
-#include "nvim/drawscreen.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds_defs.h"
@@ -27,7 +22,6 @@
 #include "nvim/getchar.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/highlight_defs.h"
 #include "nvim/input.h"
 #include "nvim/macros_defs.h"
 #include "nvim/main.h"
@@ -46,9 +40,6 @@
 #include "nvim/os/input.h"
 #include "nvim/os/os.h"
 #include "nvim/os/os_defs.h"
-#include "nvim/os/proc.h"
-#include "nvim/os/time.h"
-#include "nvim/os/time_defs.h"
 #include "nvim/path.h"
 #include "nvim/pos_defs.h"
 #include "nvim/statusline.h"
@@ -111,10 +102,7 @@ typedef struct {
 #define DB_INDEX_MASK   (~DB_MARKED)
 
 #define INDEX_SIZE  (sizeof(unsigned))      // size of one db_index entry
-#define HEADER_SIZE (offsetof(DataBlock, db_index))  // size of data block header
 
-// ZeroBlock is now defined in memline_defs.h
-// Additional block 0 constants kept here for internal use
 enum {
   B0_FNAME_SIZE_NOCRYPT = 898,  // 2 bytes used for other things
 };
@@ -152,11 +140,7 @@ enum {
 
 #include "memline_shim.c.generated.h"
 
-extern int rs_get_fileformat(buf_T *buf);
 extern void rs_long_to_char(long n, char *s);
-extern long rs_char_to_long(const char *s);
-extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
-extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -174,12 +158,6 @@ static const char e_line_number_out_of_range_nr_past_the_end[]
   = N_("E322: Line number out of range: %" PRId64 " past the end");
 static const char e_line_count_wrong_in_block_nr[]
   = N_("E323: Line count wrong in block %" PRId64);
-static const char e_warning_pointer_block_corrupted[]
-  = N_("E1364: Warning: Pointer block corrupted");
-
-#if __has_feature(address_sanitizer)
-# define ML_GET_ALLOC_LINES
-#endif
 
 int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 
