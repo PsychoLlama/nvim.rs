@@ -601,6 +601,16 @@ pub unsafe extern "C" fn rs_skip_regexp(
     )
 }
 
+/// C-exported alias for `rs_skip_regexp`, replacing the C shim wrapper.
+#[export_name = "skip_regexp"]
+pub unsafe extern "C" fn skip_regexp_export(
+    startp: *mut c_char,
+    dirc: c_int,
+    magic: c_int,
+) -> *mut c_char {
+    rs_skip_regexp(startp, dirc, magic)
+}
+
 /// Simple strlen implementation to avoid depending on libc crate.
 #[allow(clippy::missing_const_for_fn)]
 unsafe fn libc_strlen(s: *const c_char) -> usize {

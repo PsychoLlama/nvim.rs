@@ -88,9 +88,6 @@ struct regengine {
 
 #include "regexp_shim.c.generated.h"
 
-/// Skip strings inside [ and ].
-char *skip_regexp(char *startp, int delim, int magic) { return skip_regexp_ex(startp, delim, magic, NULL, NULL, NULL); }
-
 typedef struct {
   regmatch_T *reg_match;
   regmmatch_T *reg_mmatch;
