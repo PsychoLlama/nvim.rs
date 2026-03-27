@@ -1,9 +1,7 @@
 // syntax_accessors.c: syntax highlighting - struct definitions, static state,
 // helper functions, and FFI accessor functions for Rust interop
 
-#include <assert.h>
 #include <inttypes.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -63,7 +61,6 @@ extern void rs_validate_current_state(void);
 extern char *rs_syn_getcurline(void);
 extern void rs_syn_clear_time(syn_time_T *st);
 extern void rs_update_si_attr(int idx);
-
 extern void rs_syn_remove_pattern(synblock_T *block, int idx);
 extern void rs_syntax_clear(synblock_T *block);
 extern void rs_syntax_sync_clear(void);
@@ -392,7 +389,6 @@ int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.
 int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
 int nvim_win_get_keywtab_used(win_T *win) { return (int)win->w_s->b_keywtab.ht_used; }
 int nvim_win_get_keywtab_ic_used(win_T *win) { return (int)win->w_s->b_keywtab_ic.ht_used; }
-
 int nvim_synblock_get_pattern_count(synblock_T *block) { return block->b_syn_patterns.ga_len; }
 int nvim_synblock_get_cluster_count(synblock_T *block) { return block->b_syn_clusters.ga_len; }
 int nvim_synblock_get_syn_ic(synblock_T *block) { return block->b_syn_ic; }
@@ -444,21 +440,15 @@ int nvim_synstate_get_stacksize(synstate_T *state) { return state->sst_stacksize
 int nvim_synstate_get_next_flags(synstate_T *state) { return state->sst_next_flags; }
 int nvim_synstate_get_tick(synstate_T *state) { return (int)state->sst_tick; }
 int nvim_synstate_get_change_lnum(synstate_T *state) { return (int)state->sst_change_lnum; }
-
 int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
-
 hashtab_T *nvim_synblock_get_keywtab(synblock_T *block) { return &block->b_keywtab; }
 hashtab_T *nvim_synblock_get_keywtab_ic(synblock_T *block) { return &block->b_keywtab_ic; }
 int nvim_synblock_has_keywords(synblock_T *block) { return block->b_keywtab.ht_used > 0; }
 int nvim_synblock_has_keywords_ic(synblock_T *block) { return block->b_keywtab_ic.ht_used > 0; }
-
 size_t nvim_synblock_keywtab_count(synblock_T *block) { return block->b_keywtab.ht_used; }
 size_t nvim_synblock_keywtab_ic_count(synblock_T *block) { return block->b_keywtab_ic.ht_used; }
-
 int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
-
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
-
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
@@ -503,22 +493,15 @@ int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
 }
 
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
-
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
-
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
-
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
-
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
-
 reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em) { return ref_extmatch(em); }
-
 void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
-
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
 void nvim_syn_set_syn_win(void *win) { syn_win = (win_T *)win; }
@@ -529,44 +512,27 @@ int nvim_syn_get_sync_id(void) { return syn_block ? syn_block->b_syn_sync_id : 0
 void *nvim_syn_get_sst_first(void) { return syn_block ? syn_block->b_sst_first : NULL; }
 void *nvim_syn_get_sst_array(void) { return syn_block ? syn_block->b_sst_array : NULL; }
 int nvim_syn_get_sst_len(void) { return syn_block ? syn_block->b_sst_len : 0; }
-
 void nvim_synstate_set_change_lnum(synstate_T *p, int lnum) { if (p) p->sst_change_lnum = (linenr_T)lnum; }
-
 void *nvim_win_get_synblock(void *wp) { return wp ? ((win_T *)wp)->w_s : NULL; }
-
 void *nvim_syn_win_get_buffer_ptr(void *wp) { return wp ? ((win_T *)wp)->w_buffer : NULL; }
-
 int nvim_win_get_foldnestmax(void *wp) { return wp ? (int)((win_T *)wp)->w_p_fdn : 0; }
-
 int nvim_syn_buf_get_line_count(void *buf) { return buf ? (int)((buf_T *)buf)->b_ml.ml_line_count : 0; }
 int nvim_syn_buf_get_changed_tick(void *buf) { return buf ? (int)buf_get_changedtick((buf_T *)buf) : 0; }
-
 void nvim_syn_set_sst_lasttick(int tick) { if (syn_block) syn_block->b_sst_lasttick = (disptick_T)tick; }
-
 int nvim_syn_get_display_tick(void) { return (int)display_tick; }
-
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
-
 int nvim_buf_get_mod_top(buf_T *buf) { return (int)buf->b_mod_top; }
 int nvim_buf_get_mod_bot(buf_T *buf) { return (int)buf->b_mod_bot; }
 int nvim_buf_get_mod_xlines(buf_T *buf) { return (int)buf->b_mod_xlines; }
-
 void nvim_synstate_set_lnum(synstate_T *state, int lnum) { state->sst_lnum = lnum; }
-
 int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b) { return a->sst_next_list == b->sst_next_list; }
-
 int nvim_synblock_has_containedin(synblock_T *block) { return block->b_syn_containedin ? 1 : 0; }
-
 int nvim_synblock_is_spell_cluster(synblock_T *block, int id) { return id == block->b_spell_cluster_id; }
 int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == block->b_nospell_cluster_id; }
-
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
-
 win_T *nvim_syn_get_win(void) { return syn_win; }
-
 char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
-
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
@@ -580,28 +546,17 @@ int nvim_syn_get_synblock_pattern_count(void)
 }
 
 int nvim_syn_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
-
 int nvim_syn_get_line_len(int lnum) { return (int)ml_get_buf_len(syn_buf, (linenr_T)lnum); }
 int nvim_syn_get_buf_line_count(void) { return (int)syn_buf->b_ml.ml_line_count; }
-
 void nvim_syn_set_extmatch_in(reg_extmatch_T *em) { unref_extmatch(re_extmatch_in); re_extmatch_in = ref_extmatch(em); }
-
 void nvim_syn_clear_extmatch_in(void) { unref_extmatch(re_extmatch_in); re_extmatch_in = NULL; }
-
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
-
 reg_extmatch_T *nvim_syn_take_re_extmatch_out(void) { reg_extmatch_T *em = re_extmatch_out; re_extmatch_out = NULL; return em; }
-
 void nvim_syn_clear_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); re_extmatch_out = NULL; }
-
 int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
-
 int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id) { return rs_syn_in_id_list(sip, list, id, 0, NULL, 0); }
-
 int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
-
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
-
 char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
 int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
@@ -637,39 +592,25 @@ int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
 // definitions in src/nvim-rs/syntax/src/ffi_types.rs.
 
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
-
 void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
-
 char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
-
 void nvim_syn_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
-
 int nvim_syn_ascii_iswhite_char(int c) { return ascii_iswhite(c); }
-
 int nvim_syn_toupper_asc(int c) { return TOUPPER_ASC(c); }
-
 char *nvim_syn_vim_strnsave_up(const char *str, int len) { return vim_strnsave_up(str, (size_t)len); }
-
 void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextcmd(rest); }
 char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
 int nvim_syn_get_eap_skip(const exarg_T *eap) { return eap->skip; }
-
 char *nvim_syn_skip_regexp(char *arg, int delim, int magic) { return skip_regexp(arg, delim, magic); }
-
 int nvim_syn_getdigits_int(char **pp, int strict, int def) { return getdigits_int(pp, (bool)strict, def); }
-
 char *nvim_syn_get_p_cpo(void) { return p_cpo; }
 void nvim_syn_set_p_cpo(char *val) { p_cpo = val; }
 char *nvim_syn_get_empty_string_option(void) { return empty_string_option; }
 int nvim_syn_get_curwin_syn_ic(void) { return curwin->w_s->b_syn_ic; }
-
 int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
-
 synpat_T *nvim_synblock_ga_append_pattern(void) { return GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns); }
-
 void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
 void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
-
 synpat_T *nvim_syn_xcalloc_synpat(void) { return xcalloc(1, sizeof(synpat_T)); }
 
 void nvim_syn_free_synpat(synpat_T *pat)
@@ -682,37 +623,21 @@ void nvim_syn_free_synpat(synpat_T *pat)
 }
 
 void nvim_syn_set_reg_do_extmatch(int val) { reg_do_extmatch = val; }
-
 void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2) { semsg(fmt, arg1, arg2); }
-
 void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op) { rs_syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op); }
-
 void nvim_syn_find_nextcmd(exarg_T *eap, char *arg) { eap->nextcmd = find_nextcmd(arg); }
-
 void nvim_syn_set_eap_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
-
 int nvim_syn_getdigits_int32(char **pp, int strict, int def) { return getdigits_int32(pp, (bool)strict, def); }
-
 void nvim_synblock_or_sync_flags(synblock_T *block, int flags) { block->b_syn_sync_flags |= flags; }
-
 void nvim_synblock_set_sync_id(synblock_T *block, int id) { block->b_syn_sync_id = (int16_t)id; }
-
 void nvim_synblock_set_sync_minlines(synblock_T *block, int n) { block->b_syn_sync_minlines = (linenr_T)n; }
-
 void nvim_synblock_set_sync_maxlines(synblock_T *block, int n) { block->b_syn_sync_maxlines = (linenr_T)n; }
-
 void nvim_synblock_set_sync_linebreaks(synblock_T *block, int n) { block->b_syn_sync_linebreaks = (linenr_T)n; }
-
 int nvim_synblock_get_linecont_pat_is_set(synblock_T *block) { return block->b_syn_linecont_pat != NULL ? 1 : 0; }
-
 void nvim_synblock_set_linecont_pat(synblock_T *block, char *pat) { block->b_syn_linecont_pat = pat; }
-
 char *nvim_synblock_get_linecont_pat(synblock_T *block) { return block->b_syn_linecont_pat; }
-
 void nvim_synblock_set_linecont_ic(synblock_T *block, int ic) { block->b_syn_linecont_ic = ic; }
-
 void nvim_synblock_set_linecont_prog2(synblock_T *block, void *prog) { block->b_syn_linecont_prog = (regprog_T *)prog; }
-
 void nvim_syn_clear_linecont_pat(synblock_T *block) { XFREE_CLEAR(block->b_syn_linecont_pat); }
 void nvim_synblock_set_sync_flags_zero(synblock_T *block) { block->b_syn_sync_flags = 0; }
 void nvim_synblock_set_folditems(synblock_T *block, int n) { block->b_syn_folditems = n; }
@@ -726,7 +651,6 @@ void nvim_synblock_ga_clear_patterns(synblock_T *block) { ga_clear(&block->b_syn
 void nvim_synblock_ga_clear_clusters(synblock_T *block) { ga_clear(&block->b_syn_clusters); }
 void nvim_synblock_regfree_linecont_prog(synblock_T *block) { vim_regfree(block->b_syn_linecont_prog); block->b_syn_linecont_prog = NULL; }
 void nvim_synblock_clear_syn_isk(synblock_T *block) { clear_string_option(&block->b_syn_isk); }
-
 void *nvim_synblock_get_linecont_time_ptr(synblock_T *block) { return (void *)&block->b_syn_linecont_time; }
 
 /// Compile regexp with empty p_cpo (avoid 'l' flag side-effect).
@@ -780,39 +704,28 @@ int nvim_syn_include_source(exarg_T *eap, int use_source)
 }
 
 void nvim_syn_init_highlight(int reset, int init) { init_highlight((bool)reset, (bool)init); }
-
 void nvim_syn_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 
 /// Redraw curwin with UPD_NOT_VALID (used after :syntax spell dispatch from Rust).
 void nvim_syn_redraw_later_curwin(void) { redraw_later(curwin, UPD_NOT_VALID); }
-
 void nvim_syn_set_cmdlinep_from_eap(exarg_T *eap) { syn_cmdlinep = eap->cmdlinep; }
 
 /// Call do_unlet(name, len, true) -- wrapper for Rust use.
 void nvim_syn_do_unlet(const char *name, int len) { do_unlet(name, (size_t)len, true); }
-
 int nvim_synblock_is_buf_block(synblock_T *block) { return (block == &curwin->w_buffer->b_s) ? 1 : 0; }
 
 /// Trigger redraw_curbuf_later(UPD_SOME_VALID).
 void nvim_syn_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_SOME_VALID); }
-
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
-
 void nvim_syn_set_include_link(int val) { include_link = val; }
 void nvim_syn_set_include_default(int val) { include_default = val; }
 void nvim_syn_set_include_none(int val) { include_none = val; }
-
 int nvim_syn_get_expand_cluster_count(void) { return curwin->w_s->b_syn_clusters.ga_len; }
-
 int nvim_syn_list_header(int did_header, int outlen, int id, int force_newline) { return syn_list_header((bool)did_header, outlen, id, (bool)force_newline) ? 1 : 0; }
-
 void nvim_msg_puts_hl_syn(const char *s, int hl_id, bool hist) { msg_puts_hl(s, hl_id, hist); }
-
 int nvim_syn_vim_strchr(const char *s, int c) { return vim_strchr(s, (uint8_t)c) != NULL ? 1 : 0; }
-
 size_t nvim_ht_get_array_size(const hashtab_T *ht) { return ht->ht_mask + 1; }
-
 size_t nvim_ht_get_used(const hashtab_T *ht) { return ht->ht_used; }
 
 keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
@@ -825,11 +738,8 @@ keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
 }
 
 void nvim_syn_emsg_skip_inc(void) { emsg_skip++; }
-
 void nvim_syn_emsg_skip_dec(void) { emsg_skip--; }
-
 int nvim_syn_iskeyword_is_set(synblock_T *block) { return block->b_syn_isk != empty_string_option ? 1 : 0; }
-
 char *nvim_syn_iskeyword_get(synblock_T *block) { return block->b_syn_isk; }
 
 /// Clear the iskeyword setting: copy curbuf->b_chartab into block->b_syn_chartab
@@ -853,19 +763,12 @@ void nvim_syn_iskeyword_set(synblock_T *block, const char *arg)
 }
 
 void nvim_syn_msg_outtrans(const char *s) { msg_outtrans(s, 0, false); }
-
 char *nvim_syn_get_var_value(const char *name) { return get_var_value(name); }
-
 void nvim_syn_apply_autocmds_syntax(const char *arg) { apply_autocmds(EVENT_SYNTAX, arg, curbuf->b_fname, true, curbuf); }
-
 void nvim_syn_set_internal_string_var(const char *name, const char *val) { set_internal_string_var(name, val); }
-
 void nvim_syn_do_unlet_b_current_syntax(void) { do_unlet(S_LEN("b:current_syntax"), true); }
-
 void nvim_synblock_set_pattern_count(synblock_T *block, int len) { block->b_syn_patterns.ga_len = len; }
-
 void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx, int count) { memmove(SYN_ITEMS(block) + dst_idx, SYN_ITEMS(block) + src_idx, sizeof(synpat_T) * (size_t)count); }
-
 void nvim_synblock_dec_folditems(synblock_T *block) { block->b_syn_folditems--; }
 
 extern void rs_synblock_full_clear(synblock_T *block);
@@ -882,42 +785,26 @@ void nvim_win_release_synblock(win_T *wp)
 }
 
 void nvim_synblock_set_spell_cluster_id(int id) { curwin->w_s->b_spell_cluster_id = id; }
-
 void nvim_synblock_set_nospell_cluster_id(int id) { curwin->w_s->b_nospell_cluster_id = id; }
-
 char *nvim_syn_vim_strsave_up(const char *s) { return vim_strsave_up(s); }
-
 void nvim_synblock_ga_init_patterns(void) { curwin->w_s->b_syn_patterns.ga_itemsize = sizeof(synpat_T); ga_set_growsize(&curwin->w_s->b_syn_patterns, 10); }
-
 synstate_T *nvim_synblock_get_sst_array_ptr(synblock_T *block) { return block ? block->b_sst_array : NULL; }
-
 void nvim_synblock_set_sst_array(synblock_T *block, synstate_T *ptr, int len) { if (!block) return; block->b_sst_array = ptr; block->b_sst_len = len; }
-
 void nvim_synblock_set_sst_first(synblock_T *block, synstate_T *ptr) { if (block) block->b_sst_first = ptr; }
-
 void nvim_synblock_set_sst_firstfree(synblock_T *block, synstate_T *ptr) { if (block) block->b_sst_firstfree = ptr; }
-
 void nvim_synblock_set_sst_freecount(synblock_T *block, int count) { if (block) block->b_sst_freecount = count; }
-
 void nvim_synstate_set_next(synstate_T *state, synstate_T *next) { if (state) state->sst_next = next; }
-
 void nvim_synstate_set_stacksize(synstate_T *state, int size) { if (state) state->sst_stacksize = size; }
 
 /// Allocate a new zeroed synstate array of given length.
 /// Returns the pointer; caller owns the memory and must free with
 /// nvim_syn_free_sst_array().
 synstate_T *nvim_syn_xcalloc_synstate_array(int len) { if (len <= 0) return NULL; return xcalloc((size_t)len, sizeof(synstate_T)); }
-
 void nvim_syn_free_sst_array(synstate_T *ptr) { xfree(ptr); }
-
 synstate_T *nvim_syn_sst_array_at(synstate_T *array, int idx) { return array + idx; }
-
 void nvim_syn_sst_copy_entry(synstate_T *dst, const synstate_T *src) { *dst = *src; }
-
 int nvim_synblock_get_sst_lasttick(synblock_T *block) { return block ? (int)block->b_sst_lasttick : 0; }
-
 int nvim_syn_buf_get_ml_line_count(void) { return syn_buf ? (int)syn_buf->b_ml.ml_line_count : 0; }
-
 synblock_T *nvim_buf_get_b_s(buf_T *buf) { return buf ? &buf->b_s : NULL; }
 
 /// Do the FOR_ALL_WINDOWS_IN_TAB loop for syn_stack_free_all:
@@ -945,27 +832,18 @@ void nvim_syn_apply_changes_for_windows(buf_T *buf)
 }
 
 int nvim_syn_block_isk_is_empty(void) { return (syn_block && syn_block->b_syn_isk == empty_string_option) ? 1 : 0; }
-
 void nvim_syn_buf_chartab_get(char *dst) { if (syn_buf) memmove(dst, syn_buf->b_chartab, 32); }
-
 void nvim_syn_buf_chartab_set(const char *src) { if (syn_buf) memmove(syn_buf->b_chartab, src, 32); }
-
 void nvim_syn_win_chartab_get(char *dst) { if (syn_win) memmove(dst, syn_win->w_s->b_syn_chartab, 32); }
-
 int nvim_syn_win_isk_not_empty(void) { return (syn_win && syn_win->w_s->b_syn_isk != empty_string_option) ? 1 : 0; }
-
 void *nvim_syn_block_get_linecont_prog(void) { return (syn_block) ? syn_block->b_syn_linecont_prog : NULL; }
-
 int nvim_syn_block_get_linecont_ic(void) { return syn_block ? syn_block->b_syn_linecont_ic : 0; }
-
 void *nvim_syn_block_get_linecont_time_ptr(void) { return syn_block ? (void *)&syn_block->b_syn_linecont_time : NULL; }
-
 void nvim_syn_block_set_linecont_prog(void *prog) { if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog; }
 
 /// Return ml_get_buf(syn_buf, current_lnum).
 /// Direct implementation to avoid circular call through syn_getcurline.
 char *nvim_syn_do_getcurline(void) { return ml_get_buf(syn_buf, current_lnum); }
-
 int nvim_syn_do_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
 
 /// Zero out a syn_time_T struct.
@@ -979,15 +857,10 @@ void nvim_syn_do_clear_time(syn_time_T *st)
 }
 
 synpat_T *nvim_synblock_get_patterns_ga_data(synblock_T *block) { if (block == NULL || block->b_syn_patterns.ga_len == 0) return NULL; return (synpat_T *)block->b_syn_patterns.ga_data; }
-
 syn_cluster_T *nvim_synblock_get_clusters_ga_data(synblock_T *block) { if (block == NULL || block->b_syn_clusters.ga_len == 0) return NULL; return (syn_cluster_T *)block->b_syn_clusters.ga_data; }
-
 void nvim_synstate_set_sst_next_flags(synstate_T *state, int flags) { if (state) state->sst_next_flags = (int16_t)flags; }
-
 void nvim_synstate_set_sst_next_list(synstate_T *state, int16_t *list) { if (state) state->sst_next_list = list; }
-
 void nvim_synstate_set_tick_to_display(synstate_T *state) { if (state) state->sst_tick = display_tick; }
-
 void nvim_synstate_ga_clear(synstate_T *state) { if (state) ga_clear(&state->sst_union.sst_ga); }
 
 /// Fill one bufstate slot in sp->sst_union from CUR_STATE(i).
@@ -1032,18 +905,13 @@ void nvim_ke_free(keyentry_T *kp)
 
 /// Call hash_clear + hash_init on a hashtab (for clearing keyword tables).
 void nvim_ht_clear_and_init(hashtab_T *ht) { if (!ht) return; hash_clear(ht); hash_init(ht); }
-
 void nvim_ht_lock(hashtab_T *ht) { if (ht) hash_lock(ht); }
-
 void nvim_ht_unlock(hashtab_T *ht) { if (ht) hash_unlock(ht); }
-
 void nvim_ke_set_next(keyentry_T *kp, keyentry_T *next) { if (kp) kp->ke_next = next; }
 
 /// Call hash_remove on ht at array index idx (hi = &ht->ht_array[idx]).
 void nvim_ht_remove_at(hashtab_T *ht, size_t idx) { if (!ht || idx >= (ht->ht_mask + 1)) return; hash_remove(ht, &ht->ht_array[idx]); }
-
 char *nvim_ke_get_hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
-
 void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key) { if (!ht || idx >= (ht->ht_mask + 1)) return; ht->ht_array[idx].hi_key = key; }
 
 keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
@@ -1054,7 +922,6 @@ keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
   return HI2KE(hi);
 }
 
-
 hashtab_T *nvim_curwin_get_keywtab(int use_ic) { return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab; }
 hash_T nvim_hash_hash(const char *key) { return hash_hash(key); }
 hashitem_T *nvim_hash_lookup(hashtab_T *ht, const char *key, size_t len, hash_T hash) { return hash_lookup(ht, key, len, hash); }
@@ -1064,7 +931,6 @@ keyentry_T *nvim_hikey2ke(const hashitem_T *hi) { return hi ? HI2KE(hi) : NULL; 
 char *nvim_ke2hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
 void nvim_curwin_set_containedin(void) { curwin->w_s->b_syn_containedin = true; }
 void nvim_hashitem_set_key(hashitem_T *hi, char *key) { if (hi) hi->hi_key = key; }
-
 int nvim_curwin_shares_buf_synblock(void) { return curwin->w_s == &curwin->w_buffer->b_s ? 1 : 0; }
 
 /// Allocate a new zeroed synblock_T, initialise its hashtabs and spell options.
@@ -1106,7 +972,5 @@ int nvim_synblock_cluster_append_inner(void)
 }
 
 const char *nvim_synblock_get_b_p_spc(synblock_T *block) { return block->b_p_spc; }
-
 regprog_T *nvim_synblock_get_b_cap_prog(synblock_T *block) { return block->b_cap_prog; }
-
 void nvim_synblock_set_b_cap_prog(synblock_T *block, regprog_T *prog) { block->b_cap_prog = prog; }
