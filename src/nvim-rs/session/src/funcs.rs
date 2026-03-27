@@ -63,15 +63,14 @@ pub unsafe extern "C" fn rs_ses_do_win(wp: ffi::WinPtr) -> c_int {
     let fname = ffi::nvim_ses_buf_get_fname(buf);
     let ssop_flags = ffi::nvim_ses_get_ssop_flags();
 
-    if fname.is_null() || (!ffi::nvim_ses_buf_is_terminal(buf) && ffi::nvim_ses_bt_nofilename(buf))
-    {
+    if fname.is_null() || (!ffi::nvim_ses_buf_is_terminal(buf) && ffi::rs_bt_nofilename(buf)) {
         // When 'buftype' is "nofile" can't restore the window contents.
         return (ssop_flags & K_OPT_SSOP_FLAG_BLANK) as c_int;
     }
-    if ffi::nvim_ses_bt_help(buf) {
+    if ffi::rs_bt_help(buf) {
         return (ssop_flags & K_OPT_SSOP_FLAG_HELP) as c_int;
     }
-    if ffi::nvim_ses_bt_terminal(buf) {
+    if ffi::rs_bt_terminal(buf) {
         return (ssop_flags & K_OPT_SSOP_FLAG_TERMINAL) as c_int;
     }
     1 // true
@@ -175,13 +174,13 @@ pub unsafe extern "C" fn rs_ses_escape_fname(
         if *p == b'\\' as c_char {
             *p = b'/' as c_char;
         }
-        let len = ffi::nvim_ses_utfc_ptr2len(p);
+        let len = ffi::utfc_ptr2len(p);
         p = p.add(if len > 0 { len as usize } else { 1 });
     }
 
     // Escape special characters.
     let result = ffi::nvim_ses_vim_strsave_fnameescape(sname);
-    ffi::nvim_ses_xfree(sname.cast());
+    ffi::xfree(sname.cast());
     result
 }
 
@@ -208,7 +207,7 @@ pub unsafe extern "C" fn rs_ses_put_fname(
     } else {
         FAIL
     };
-    ffi::nvim_ses_xfree(p.cast());
+    ffi::xfree(p.cast());
     retval
 }
 
@@ -448,8 +447,8 @@ pub unsafe extern "C" fn rs_ses_arglist(
 
         let mut buf_ptr: *mut c_char = std::ptr::null_mut();
         let name = if fullname {
-            buf_ptr = ffi::nvim_ses_xmalloc(MAXPATHL);
-            ffi::nvim_ses_vim_FullName(s, buf_ptr, MAXPATHL, false);
+            buf_ptr = ffi::xmalloc(MAXPATHL).cast::<c_char>();
+            ffi::vim_FullName(s, buf_ptr, MAXPATHL, false);
             buf_ptr
         } else {
             s
@@ -459,9 +458,9 @@ pub unsafe extern "C" fn rs_ses_arglist(
         let escaped = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
         let line = format!("$argadd {escaped}\n");
         let ok = w.write_bytes(line.as_bytes());
-        ffi::nvim_ses_xfree(fname_esc.cast());
+        ffi::xfree(fname_esc.cast());
         if !buf_ptr.is_null() {
-            ffi::nvim_ses_xfree(buf_ptr.cast());
+            ffi::xfree(buf_ptr.cast());
         }
         if !ok {
             return FAIL;
@@ -559,7 +558,7 @@ pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
     let mut extra: usize = 0;
     let mut p = sname;
     while *p != 0 {
-        if *p == b'=' as c_char || ffi::nvim_ses_vim_ispathsep(c_int::from(*p as u8)) {
+        if *p == b'=' as c_char || ffi::vim_ispathsep(c_int::from(*p as u8)) {
             extra += 1;
         }
         p = p.add(1);
@@ -572,12 +571,12 @@ pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
     // Allocate: vdir + separator + encoded_name + "=<c>.vim" + NUL
     // The +9 accounts for separator(1) + "=" (1) + c(1) + ".vim"(4) + NUL(1) + spare(1)
     let alloc_size = vdir_len + sname_len + extra + 9;
-    let retval = ffi::nvim_ses_xmalloc(alloc_size);
+    let retval = ffi::xmalloc(alloc_size).cast::<c_char>();
 
     // Copy viewdir
     std::ptr::copy_nonoverlapping(vdir.cast::<u8>(), retval.cast::<u8>(), vdir_len);
     *retval.add(vdir_len) = 0; // NUL terminate for add_pathsep
-    ffi::nvim_ses_add_pathsep(retval);
+    ffi::add_pathsep(retval);
 
     // Find end of retval (after add_pathsep)
     let mut s = retval;
@@ -592,7 +591,7 @@ pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
             *s = b'=' as c_char;
             s = s.add(1);
             *s = b'=' as c_char;
-        } else if ffi::nvim_ses_vim_ispathsep(c_int::from(*p as u8)) {
+        } else if ffi::vim_ispathsep(c_int::from(*p as u8)) {
             *s = b'=' as c_char;
             s = s.add(1);
             // On Unix, BACKSLASH_IN_FILENAME is not defined, always use '+'
@@ -612,7 +611,7 @@ pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
     let suffix = b".vim\0";
     std::ptr::copy_nonoverlapping(suffix.as_ptr(), s.cast::<u8>(), suffix.len());
 
-    ffi::nvim_ses_xfree(sname.cast());
+    ffi::xfree(sname.cast());
     retval
 }
 
@@ -689,7 +688,7 @@ pub unsafe extern "C" fn rs_put_view(
         let fname_raw = rs_ses_get_fname(buf_handle, flagp);
         let fname_esc = rs_ses_escape_fname(fname_raw as *mut c_char, flagp);
 
-        if ffi::nvim_ses_bt_help(buf_handle) {
+        if ffi::rs_bt_help(buf_handle) {
             // Help buffer
             let mut curtag_ptr: *const c_char = c"".as_ptr();
             let tsidx = ffi::nvim_ses_win_get_tagstackidx(wp);
@@ -699,18 +698,17 @@ pub unsafe extern "C" fn rs_put_view(
             }
 
             if w.put_line(b"enew | setl bt=help") == FAIL {
-                ffi::nvim_ses_xfree(fname_esc.cast());
+                ffi::xfree(fname_esc.cast());
                 return FAIL;
             }
             let curtag = CStr::from_ptr(curtag_ptr).to_str().unwrap_or("");
             let line = format!("help {curtag}");
             if !w.write_bytes(line.as_bytes()) || w.put_eol() == FAIL {
-                ffi::nvim_ses_xfree(fname_esc.cast());
+                ffi::xfree(fname_esc.cast());
                 return FAIL;
             }
         } else if !ffi::nvim_ses_buf_get_ffname(buf_handle).is_null()
-            && (!ffi::nvim_ses_bt_nofilename(buf_handle)
-                || ffi::nvim_ses_buf_is_terminal(buf_handle))
+            && (!ffi::rs_bt_nofilename(buf_handle) || ffi::nvim_ses_buf_is_terminal(buf_handle))
         {
             // File buffer: use :edit or :buffer
             let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
@@ -721,38 +719,38 @@ pub unsafe extern "C" fn rs_put_view(
                  endif\n"
             );
             if !w.write_bytes(block.as_bytes()) {
-                ffi::nvim_ses_xfree(fname_esc.cast());
+                ffi::xfree(fname_esc.cast());
                 return FAIL;
             }
         } else {
             // No file, just enew
             if w.put_line(b"enew") == FAIL {
-                ffi::nvim_ses_xfree(fname_esc.cast());
+                ffi::xfree(fname_esc.cast());
                 return FAIL;
             }
             if !ffi::nvim_ses_buf_get_ffname(buf_handle).is_null() {
                 let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
                 let line = format!("file {fe}\n");
                 if !w.write_bytes(line.as_bytes()) {
-                    ffi::nvim_ses_xfree(fname_esc.cast());
+                    ffi::xfree(fname_esc.cast());
                     return FAIL;
                 }
             }
             do_cursor = false;
         }
-        ffi::nvim_ses_xfree(fname_esc.cast());
+        ffi::xfree(fname_esc.cast());
     }
 
     // Alternate file
     let alt_fnum = ffi::nvim_ses_win_get_alt_fnum(wp);
     if alt_fnum != 0 {
-        let alt = ffi::nvim_ses_buflist_findnr(alt_fnum);
+        let alt = ffi::rs_buflist_findnr(alt_fnum);
         if is_session
             && !alt.is_null()
             && !ffi::nvim_ses_buf_get_fname(alt).is_null()
             && *ffi::nvim_ses_buf_get_fname(alt) != 0
             && ffi::nvim_ses_buf_get_p_bl(alt)
-            && !(ffi::nvim_ses_bt_terminal(alt)
+            && !(ffi::rs_bt_terminal(alt)
                 && (ffi::nvim_ses_get_ssop_flags() & K_OPT_SSOP_FLAG_TERMINAL) == 0)
             && (!w.write_bytes(b"balt ") || rs_ses_fname(fd, alt, flagp, true) == FAIL)
         {
@@ -762,7 +760,7 @@ pub unsafe extern "C" fn rs_put_view(
 
     // Local mappings and abbreviations.
     if (opt_flags & (K_OPT_SSOP_FLAG_OPTIONS | K_OPT_SSOP_FLAG_LOCALOPTIONS)) != 0
-        && ffi::nvim_ses_makemap(fd, buf_handle) == FAIL
+        && ffi::makemap(fd, buf_handle) == FAIL
     {
         return FAIL;
     }
@@ -773,9 +771,9 @@ pub unsafe extern "C" fn rs_put_view(
     let f = if (opt_flags & (K_OPT_SSOP_FLAG_OPTIONS | K_OPT_SSOP_FLAG_LOCALOPTIONS)) != 0 {
         let is_vop = std::ptr::eq(flagp.cast_const(), vop_ptr);
         let local_only = is_vop || (opt_flags & K_OPT_SSOP_FLAG_OPTIONS) == 0;
-        ffi::nvim_ses_makeset(fd, OPT_LOCAL, local_only)
+        ffi::makeset(fd, OPT_LOCAL, local_only)
     } else if (opt_flags & K_OPT_SSOP_FLAG_FOLDS) != 0 {
-        ffi::nvim_ses_makefoldset(fd)
+        ffi::makefoldset(fd)
     } else {
         OK
     };
@@ -787,7 +785,7 @@ pub unsafe extern "C" fn rs_put_view(
     // Save folds when 'buftype' is empty and for help files.
     if (opt_flags & K_OPT_SSOP_FLAG_FOLDS) != 0
         && !ffi::nvim_ses_buf_get_ffname(buf_handle).is_null()
-        && (ffi::nvim_ses_bt_normal(buf_handle) || ffi::nvim_ses_bt_help(buf_handle))
+        && (ffi::rs_bt_normal(buf_handle) || ffi::rs_bt_help(buf_handle))
         && ffi::nvim_ses_put_folds(fd, wp) == FAIL
     {
         return FAIL;
@@ -909,7 +907,7 @@ unsafe extern "C" fn makeopens_buf_callback(
     if ffi::nvim_ses_buf_is_help(buf) && (ssop & K_OPT_SSOP_FLAG_HELP) == 0 {
         return OK;
     }
-    if ffi::nvim_ses_bt_terminal(buf) && (ssop & K_OPT_SSOP_FLAG_TERMINAL) == 0 {
+    if ffi::rs_bt_terminal(buf) && (ssop & K_OPT_SSOP_FLAG_TERMINAL) == 0 {
         return OK;
     }
     if ffi::nvim_ses_buf_get_fname(buf).is_null() {
@@ -985,8 +983,8 @@ pub unsafe extern "C" fn rs_makeopens(fd: *mut libc::FILE, dirnow: *mut c_char) 
         let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
         let line = format!("cd {fe}\n");
         let ok = w.write_bytes(line.as_bytes());
-        ffi::nvim_ses_xfree(fname_esc.cast());
-        ffi::nvim_ses_xfree(sname.cast());
+        ffi::xfree(fname_esc.cast());
+        ffi::xfree(sname.cast());
         if !ok {
             return FAIL;
         }
@@ -1104,8 +1102,8 @@ pub unsafe extern "C" fn rs_makeopens(fd: *mut libc::FILE, dirnow: *mut c_char) 
             let buf = ffi::nvim_ses_win_get_buffer(wp);
             if rs_ses_do_win(wp) != 0
                 && !ffi::nvim_ses_buf_get_ffname(buf).is_null()
-                && !ffi::nvim_ses_bt_help(buf)
-                && !ffi::nvim_ses_bt_nofilename(buf)
+                && !ffi::rs_bt_help(buf)
+                && !ffi::rs_bt_nofilename(buf)
             {
                 if need_tabnext && w.put_line(b"tabnext") == FAIL {
                     return FAIL;
@@ -1323,9 +1321,9 @@ pub unsafe extern "C" fn rs_ex_loadview(eap: ffi::ExargPtr) {
 
     if ffi::nvim_ses_do_source(fname) == FAIL {
         let e_notopen = ffi::nvim_ses_get_e_notopen();
-        ffi::nvim_ses_semsg(e_notopen, fname);
+        ffi::semsg(e_notopen, fname);
     }
-    ffi::nvim_ses_xfree(fname.cast::<c_void>());
+    ffi::xfree(fname.cast::<c_void>());
 }
 
 /// `:mkexrc`, `:mkvimrc`, `:mkview`, `:mksession`.
@@ -1375,14 +1373,13 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
     }
 
     // When using 'viewdir' may have to create the directory.
-    if using_vdir && !ffi::nvim_ses_os_isdir(ffi::nvim_ses_get_p_vdir()) {
-        ffi::nvim_ses_vim_mkdir_emsg(ffi::nvim_ses_get_p_vdir(), 0o755);
+    if using_vdir && !ffi::os_isdir(ffi::nvim_ses_get_p_vdir()) {
+        ffi::vim_mkdir_emsg(ffi::nvim_ses_get_p_vdir(), 0o755);
     }
 
     #[allow(clippy::as_ptr_cast_mut)]
     let mode = c"wb".as_ptr() as *mut c_char;
-    let fd =
-        ffi::nvim_ses_open_exfile(fname, c_int::from(ffi::nvim_ses_eap_get_forceit(eap)), mode);
+    let fd = ffi::open_exfile(fname, c_int::from(ffi::nvim_ses_eap_get_forceit(eap)), mode);
     if !fd.is_null() {
         let mut failed = false;
         let flagp: *mut c_uint = if cmdidx == cmd_mkview {
@@ -1407,8 +1404,8 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
             if cmdidx == cmd_mksession && (*flagp & K_OPT_SSOP_FLAG_SKIPRTP) != 0 {
                 opt_flags |= OPT_SKIPRTP;
             }
-            failed |= ffi::nvim_ses_makemap(fd, std::ptr::null_mut()) == FAIL
-                || ffi::nvim_ses_makeset(fd, opt_flags, false) == FAIL;
+            failed |= ffi::makemap(fd, std::ptr::null_mut()) == FAIL
+                || ffi::makeset(fd, opt_flags, false) == FAIL;
         }
 
         if !failed && view_session {
@@ -1419,12 +1416,10 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
                 failed = true;
             }
             if cmdidx == cmd_mksession {
-                let dirnow = ffi::nvim_ses_xmalloc(MAXPATHL);
+                let dirnow = ffi::xmalloc(MAXPATHL).cast::<c_char>();
 
                 // Change to session file's dir.
-                if ffi::nvim_ses_os_dirname(dirnow, MAXPATHL) == FAIL
-                    || ffi::nvim_ses_os_chdir(dirnow) != 0
-                {
+                if ffi::os_dirname(dirnow, MAXPATHL) == FAIL || ffi::os_chdir(dirnow) != 0 {
                     *dirnow = 0;
                 }
 
@@ -1433,14 +1428,14 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
 
                 if *dirnow != 0 && (ssop & K_OPT_SSOP_FLAG_SESDIR) != 0 {
                     if ffi::nvim_ses_vim_chdirfile(fname) == OK {
-                        ffi::nvim_ses_shorten_fnames(1);
+                        ffi::shorten_fnames(1);
                     }
                 } else if *dirnow != 0
                     && (ssop & K_OPT_SSOP_FLAG_CURDIR) != 0
                     && !gdir.is_null()
-                    && ffi::nvim_ses_os_chdir(gdir) == 0
+                    && ffi::os_chdir(gdir) == 0
                 {
-                    ffi::nvim_ses_shorten_fnames(1);
+                    ffi::shorten_fnames(1);
                 }
 
                 failed |= rs_makeopens(fd, dirnow) == FAIL;
@@ -1450,12 +1445,12 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
                     && ((ssop & K_OPT_SSOP_FLAG_SESDIR) != 0
                         || ((ssop & K_OPT_SSOP_FLAG_CURDIR) != 0 && !gdir.is_null()))
                 {
-                    if ffi::nvim_ses_os_chdir(dirnow) != 0 {
-                        ffi::nvim_ses_emsg(ffi::nvim_ses_get_e_prev_dir());
+                    if ffi::os_chdir(dirnow) != 0 {
+                        ffi::emsg(ffi::nvim_ses_get_e_prev_dir());
                     }
-                    ffi::nvim_ses_shorten_fnames(1);
+                    ffi::shorten_fnames(1);
                 }
-                ffi::nvim_ses_xfree(dirnow.cast::<c_void>());
+                ffi::xfree(dirnow.cast::<c_void>());
             } else {
                 let curwin = ffi::nvim_ses_get_curwin();
                 let curtab = ffi::nvim_ses_get_curtab();
@@ -1484,18 +1479,18 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
         failed |= libc::fclose(fd) != 0;
 
         if failed {
-            ffi::nvim_ses_emsg(ffi::nvim_ses_get_e_write());
+            ffi::emsg(ffi::nvim_ses_get_e_write());
         } else if cmdidx == cmd_mksession {
             // successful session write - set v:this_session
-            let tbuf = ffi::nvim_ses_xmalloc(MAXPATHL);
-            if ffi::nvim_ses_vim_FullName(fname, tbuf, MAXPATHL, false) == OK {
+            let tbuf = ffi::xmalloc(MAXPATHL).cast::<c_char>();
+            if ffi::vim_FullName(fname, tbuf, MAXPATHL, false) == OK {
                 ffi::nvim_ses_set_vim_var_string(tbuf);
             }
-            ffi::nvim_ses_xfree(tbuf.cast::<c_void>());
+            ffi::xfree(tbuf.cast::<c_void>());
         }
     }
 
-    ffi::nvim_ses_xfree(view_file.cast::<c_void>());
+    ffi::xfree(view_file.cast::<c_void>());
 
     ffi::nvim_ses_apply_autocmds_session();
 }

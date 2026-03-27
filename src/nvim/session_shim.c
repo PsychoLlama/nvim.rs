@@ -64,9 +64,6 @@ win_T *nvim_ses_win_get_next(const win_T *wp) { return wp->w_next; }
 // --- Buffer query accessors ---
 const char *nvim_ses_buf_get_fname(const buf_T *buf) { return buf->b_fname; }
 bool nvim_ses_buf_is_terminal(const buf_T *buf) { return buf->terminal != NULL; }
-bool nvim_ses_bt_nofilename(const buf_T *buf) { return bt_nofilename(buf); }
-bool nvim_ses_bt_help(const buf_T *buf) { return bt_help(buf); }
-bool nvim_ses_bt_terminal(const buf_T *buf) { return bt_terminal(buf); }
 
 // --- Session flags accessors ---
 unsigned nvim_ses_get_ssop_flags(void) { return ssop_flags; }
@@ -98,10 +95,6 @@ int nvim_ses_get_p_acd(void) { return p_acd; }
 char *nvim_ses_home_replace_save(const char *name) { return home_replace_save(NULL, name); }
 // Wraps vim_strsave_fnameescape(name, VSE_NONE) - returns xmalloc'd string
 char *nvim_ses_vim_strsave_fnameescape(const char *name) { return vim_strsave_fnameescape(name, VSE_NONE); }
-// Wraps xfree
-void nvim_ses_xfree(void *p) { xfree(p); }
-// Wraps utfc_ptr2len for MB_PTR_ADV
-int nvim_ses_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
 
 // Static assertions for session directory flags
 _Static_assert(kOptSsopFlagCurdir == 0x1000, "kOptSsopFlagCurdir");
@@ -124,8 +117,6 @@ int nvim_ses_get_Columns(void) { return Columns; }
 // --- garray / arglist accessors ---
 int nvim_ses_ga_get_len(const garray_T *gap) { return gap->ga_len; }
 char *nvim_ses_alist_name_at(garray_T *gap, int i) { return alist_name(&((aentry_T *)gap->ga_data)[i]); }
-void *nvim_ses_xmalloc(size_t size) { return xmalloc(size); }
-int nvim_ses_vim_FullName(const char *fname, char *buf, size_t len, bool force) { return vim_FullName(fname, buf, len, force); }
 
 // Static assertions for cursor/window size
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
@@ -177,8 +168,6 @@ int nvim_ses_foreach_session_global(
 const char *nvim_ses_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 void nvim_ses_emsg_noname(void) { emsg(_(e_noname)); }
 const char *nvim_ses_get_p_vdir(void) { return p_vdir; }
-bool nvim_ses_vim_ispathsep(int c) { return vim_ispathsep(c); }
-bool nvim_ses_add_pathsep(char *p) { return add_pathsep(p); }
 
 // --- put_view accessors ---
 
@@ -208,13 +197,9 @@ char *nvim_ses_win_get_localdir(const win_T *wp) { return wp->w_localdir; }
 
 // Buffer query
 bool nvim_ses_buf_get_p_bl(const buf_T *buf) { return buf->b_p_bl; }
-bool nvim_ses_bt_normal(const buf_T *buf) { return bt_normal(buf); }
 
 // Tabpage accessors
 char *nvim_ses_tp_get_localdir(const tabpage_T *tp) { return tp->tp_localdir; }
-
-// Buffer lookup
-buf_T *nvim_ses_buflist_findnr(int nr) { return buflist_findnr(nr); }
 
 // Global state manipulation for local options
 win_T *nvim_ses_get_curwin(void) { return curwin; }
@@ -224,10 +209,6 @@ void nvim_ses_set_curwin(win_T *wp)
   curbuf = curwin->w_buffer;
 }
 
-// C functions called from put_view that we wrap rather than migrate
-int nvim_ses_makemap(FILE *fd, buf_T *buf) { return makemap(fd, buf); }
-int nvim_ses_makeset(FILE *fd, int opt, bool local_only) { return makeset(fd, opt, local_only); }
-int nvim_ses_makefoldset(FILE *fd) { return makefoldset(fd); }
 
 // Static assertions for session option flags
 _Static_assert(kOptSsopFlagCursor == 0x4000, "kOptSsopFlagCursor");
@@ -298,24 +279,16 @@ int nvim_ses_get_CMD_mkview(void) { return CMD_mkview; }
 int nvim_ses_get_CMD_mkvimrc(void) { return CMD_mkvimrc; }
 
 // File I/O wrappers
-FILE *nvim_ses_open_exfile(char *fname, int forceit, char *mode) { return open_exfile(fname, forceit, mode); }
 int nvim_ses_do_source(char *fname) { return do_source(fname, false, DOSO_NONE, NULL); }
 
 // OS wrappers
-bool nvim_ses_os_isdir(const char *dir) { return os_isdir(dir); }
-int nvim_ses_vim_mkdir_emsg(const char *dir, int perm) { return vim_mkdir_emsg(dir, perm); }
-int nvim_ses_os_dirname(char *buf, size_t len) { return os_dirname(buf, len); }
-int nvim_ses_os_chdir(const char *dir) { return os_chdir(dir); }
 int nvim_ses_vim_chdirfile(char *fname) { return vim_chdirfile(fname, kCdCauseOther); }
-void nvim_ses_shorten_fnames(int force) { shorten_fnames(force); }
 
 // Session-related global state
 bool nvim_ses_get_p_hls(void) { return p_hls; }
 bool nvim_ses_get_no_hlsearch(void) { return no_hlsearch; }
 void nvim_ses_set_vim_var_string(const char *val) { set_vim_var_string(VV_THIS_SESSION, val, -1); }
 void nvim_ses_apply_autocmds_session(void) { apply_autocmds(EVENT_SESSIONWRITEPOST, NULL, NULL, false, curbuf); }
-void nvim_ses_emsg(const char *s) { emsg(s); }
-void nvim_ses_semsg(const char *fmt, const char *arg) { semsg(fmt, arg); }
 buf_T *nvim_ses_get_curbuf(void) { return curbuf; }
 
 // Error message string accessors

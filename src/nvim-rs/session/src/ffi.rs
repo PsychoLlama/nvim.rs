@@ -23,9 +23,11 @@ extern "C" {
     // --- Buffer query accessors (Phase 2) ---
     pub fn nvim_ses_buf_get_fname(buf: BufPtr) -> *const c_char;
     pub fn nvim_ses_buf_is_terminal(buf: BufPtr) -> bool;
-    pub fn nvim_ses_bt_nofilename(buf: BufPtr) -> bool;
-    pub fn nvim_ses_bt_help(buf: BufPtr) -> bool;
-    pub fn nvim_ses_bt_terminal(buf: BufPtr) -> bool;
+    // bt_* inline fns delegate to rs_bt_* -- call those directly
+    pub fn rs_bt_nofilename(buf: BufPtr) -> bool;
+    pub fn rs_bt_help(buf: BufPtr) -> bool;
+    pub fn rs_bt_terminal(buf: BufPtr) -> bool;
+    pub fn rs_bt_normal(buf: BufPtr) -> bool;
 
     // --- Session flags (Phase 2) ---
     pub fn nvim_ses_get_ssop_flags() -> c_uint;
@@ -44,8 +46,11 @@ extern "C" {
     pub fn nvim_ses_get_p_acd() -> c_int;
     pub fn nvim_ses_home_replace_save(name: *const c_char) -> *mut c_char;
     pub fn nvim_ses_vim_strsave_fnameescape(name: *const c_char) -> *mut c_char;
-    pub fn nvim_ses_xfree(p: *mut c_void);
-    pub fn nvim_ses_utfc_ptr2len(p: *const c_char) -> c_int;
+    // xfree/xmalloc -- direct C functions
+    pub fn xfree(p: *mut c_void);
+    pub fn xmalloc(size: usize) -> *mut c_void;
+    pub fn utfc_ptr2len(p: *const c_char) -> c_int;
+    pub fn vim_FullName(fname: *const c_char, buf: *mut c_char, len: usize, force: bool) -> c_int;
 
     // --- Window struct accessors (Phase 4) ---
     pub fn nvim_ses_win_get_curswant(wp: WinPtr) -> c_int;
@@ -64,13 +69,6 @@ extern "C" {
     // --- garray / arglist accessors (Phase 4) ---
     pub fn nvim_ses_ga_get_len(gap: GarrayPtr) -> c_int;
     pub fn nvim_ses_alist_name_at(gap: GarrayPtr, i: c_int) -> *mut c_char;
-    pub fn nvim_ses_xmalloc(size: usize) -> *mut c_char;
-    pub fn nvim_ses_vim_FullName(
-        fname: *const c_char,
-        buf: *mut c_char,
-        len: usize,
-        force: bool,
-    ) -> c_int;
 
     // --- Phase 5: store_session_globals callback ---
     /// Iterate over session-flavoured global variables.
@@ -93,8 +91,8 @@ extern "C" {
     pub fn nvim_ses_get_curbuf_ffname() -> *const c_char;
     pub fn nvim_ses_emsg_noname();
     pub fn nvim_ses_get_p_vdir() -> *const c_char;
-    pub fn nvim_ses_vim_ispathsep(c: c_int) -> bool;
-    pub fn nvim_ses_add_pathsep(p: *mut c_char) -> bool;
+    pub fn vim_ispathsep(c: c_int) -> bool;
+    pub fn add_pathsep(p: *mut c_char) -> bool;
 
     // --- Phase 6: put_view accessors ---
 
@@ -124,22 +122,21 @@ extern "C" {
 
     // Buffer query
     pub fn nvim_ses_buf_get_p_bl(buf: BufPtr) -> bool;
-    pub fn nvim_ses_bt_normal(buf: BufPtr) -> bool;
 
     // Tabpage
     pub fn nvim_ses_tp_get_localdir(tp: TabpagePtr) -> *mut c_char;
 
-    // Buffer lookup
-    pub fn nvim_ses_buflist_findnr(nr: c_int) -> BufPtr;
+    // Buffer lookup -- buflist_findnr is a static inline calling rs_buflist_findnr
+    pub fn rs_buflist_findnr(nr: c_int) -> BufPtr;
 
     // Global state
     pub fn nvim_ses_get_curwin() -> WinPtr;
     pub fn nvim_ses_set_curwin(wp: WinPtr);
 
-    // C functions wrapped for put_view
-    pub fn nvim_ses_makemap(fd: *mut libc::FILE, buf: BufPtr) -> c_int;
-    pub fn nvim_ses_makeset(fd: *mut libc::FILE, opt: c_int, local_only: bool) -> c_int;
-    pub fn nvim_ses_makefoldset(fd: *mut libc::FILE) -> c_int;
+    // C functions for put_view -- direct calls
+    pub fn makemap(fd: *mut libc::FILE, buf: BufPtr) -> c_int;
+    pub fn makeset(fd: *mut libc::FILE, opt: c_int, local_only: bool) -> c_int;
+    pub fn makefoldset(fd: *mut libc::FILE) -> c_int;
     #[link_name = "rs_put_folds"]
     pub fn nvim_ses_put_folds(fd: *mut libc::FILE, wp: WinPtr) -> c_int;
 
@@ -192,34 +189,29 @@ extern "C" {
     pub fn nvim_ses_get_CMD_mkview() -> c_int;
     pub fn nvim_ses_get_CMD_mkvimrc() -> c_int;
 
-    // File I/O wrappers
-    pub fn nvim_ses_open_exfile(
-        fname: *mut c_char,
-        forceit: c_int,
-        mode: *mut c_char,
-    ) -> *mut libc::FILE;
+    // File I/O
+    pub fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut libc::FILE;
     pub fn nvim_ses_do_source(fname: *mut c_char) -> c_int;
 
-    // OS wrappers
-    pub fn nvim_ses_os_isdir(dir: *const c_char) -> bool;
-    pub fn nvim_ses_vim_mkdir_emsg(dir: *const c_char, perm: c_int) -> c_int;
-    pub fn nvim_ses_os_dirname(buf: *mut c_char, len: usize) -> c_int;
-    pub fn nvim_ses_os_chdir(dir: *const c_char) -> c_int;
+    // OS functions -- direct
+    pub fn os_isdir(dir: *const c_char) -> bool;
+    pub fn vim_mkdir_emsg(dir: *const c_char, perm: c_int) -> c_int;
+    pub fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
+    pub fn os_chdir(dir: *const c_char) -> c_int;
     pub fn nvim_ses_vim_chdirfile(fname: *mut c_char) -> c_int;
-    pub fn nvim_ses_shorten_fnames(force: c_int);
+    pub fn shorten_fnames(force: c_int);
 
     // Session-related global state
     pub fn nvim_ses_get_p_hls() -> bool;
     pub fn nvim_ses_get_no_hlsearch() -> bool;
     pub fn nvim_ses_set_vim_var_string(val: *const c_char);
     pub fn nvim_ses_apply_autocmds_session();
-    pub fn nvim_ses_emsg(s: *const c_char);
-    pub fn nvim_ses_semsg(fmt: *const c_char, arg: *const c_char);
+    pub fn emsg(s: *const c_char) -> bool;
+    pub fn semsg(fmt: *const c_char, ...) -> bool;
     pub fn nvim_ses_get_curbuf() -> BufPtr;
 
     // Error message string accessors
     pub fn nvim_ses_get_e_prev_dir() -> *const c_char;
     pub fn nvim_ses_get_e_write() -> *const c_char;
     pub fn nvim_ses_get_e_notopen() -> *const c_char;
-
 }
