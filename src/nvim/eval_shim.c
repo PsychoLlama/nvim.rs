@@ -238,27 +238,6 @@ bool nvim_gc_mark_timers(int copyID, bool abort)
   return abort;
 }
 
-void nvim_gc_iterate_registers(void)
-{
-  const void *reg_iter = NULL;
-  do {
-    yankreg_T reg;
-    char name = NUL;
-    bool is_unnamed = false;
-    reg_iter = op_global_reg_iter(reg_iter, &name, &reg, &is_unnamed);
-  } while (reg_iter != NULL);
-}
-
-void nvim_gc_iterate_marks(void)
-{
-  const void *mark_iter = NULL;
-  do {
-    xfmark_T fm;
-    char name = NUL;
-    mark_iter = mark_global_iter(mark_iter, &name, &fm);
-  } while (mark_iter != NULL);
-}
-
 void nvim_gc_verb_msg_abort(void)
 {
   if (p_verbose > 0) {
@@ -277,13 +256,7 @@ partial_T *nvim_get_vlua_partial(void) { return get_vim_var_partial(VV_LUA); }
 int nvim_blob_len(const blob_T *b) { return tv_blob_len(b); }
 int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 
-void nvim_blob_ga_clear_and_free(blob_T *b)
-{
-  if (b != NULL) {
-    ga_clear(&b->bv_ga);
-    xfree(b);
-  }
-}
+void nvim_blob_ga_clear_and_free(blob_T *b) { if (b != NULL) { ga_clear(&b->bv_ga); xfree(b); } }
 
 void nvim_blob_set_ret(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
 const char *nvim_get_tv_empty_string(void) { return tv_empty_string; }
@@ -572,19 +545,7 @@ int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di) { return tv_dict_add(dic
 int nvim_get_pressedreturn(void) { return get_pressedreturn() ? 1 : 0; }
 void nvim_set_pressedreturn(int val) { set_pressedreturn(val != 0); }
 
-int nvim_channel_is_valid_job(Channel *chan)
-{
-  if (chan == NULL) {
-    return 0;
-  }
-  if (chan->streamtype != kChannelStreamProc) {
-    return 0;
-  }
-  if (proc_is_stopped(&chan->stream.proc)) {
-    return 0;
-  }
-  return 1;
-}
+int nvim_channel_is_valid_job(Channel *chan) { return chan != NULL && chan->streamtype == kChannelStreamProc && !proc_is_stopped(&chan->stream.proc); }
 
 int nvim_channel_is_not_proc(Channel *chan) { return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0; }
 Channel *nvim_find_channel(uint64_t id) { return find_channel(id); }

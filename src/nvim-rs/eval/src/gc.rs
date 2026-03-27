@@ -132,8 +132,6 @@ extern "C" {
     fn nvim_gc_mark_tabs(copy_id: c_int, abort: bool) -> bool;
     fn nvim_gc_mark_channels(copy_id: c_int, abort: bool) -> bool;
     fn nvim_gc_mark_timers(copy_id: c_int, abort: bool) -> bool;
-    fn nvim_gc_iterate_registers();
-    fn nvim_gc_iterate_marks();
     static mut want_garbage_collect: bool;
     static mut may_garbage_collect: bool;
     static mut garbage_collect_at_exit: bool;
@@ -239,12 +237,6 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
 
     // window-local variables (all tab windows + autocmd windows)
     abort = nvim_gc_mark_tab_windows(copy_id, abort);
-
-    // registers (ShaDa additional data) -- no marking, preserves side effects
-    nvim_gc_iterate_registers();
-
-    // global marks (ShaDa additional data) -- no marking, preserves side effects
-    nvim_gc_iterate_marks();
 
     // tabpage-local variables
     abort = nvim_gc_mark_tabs(copy_id, abort);
