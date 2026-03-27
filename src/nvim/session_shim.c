@@ -54,9 +54,6 @@
 // Rust FFI declarations
 extern var_flavour_T rs_var_flavour(const char *varname);
 
-/// Whether ":lcd" or ":tcd" was produced for a session.
-static int did_lcd;
-
 // C accessor functions for Rust FFI
 
 // --- Window accessors ---
@@ -96,8 +93,6 @@ const char *nvim_ses_buf_get_sfname(const buf_T *buf) { return buf->b_sfname; }
 const char *nvim_ses_buf_get_ffname(const buf_T *buf) { return buf->b_ffname; }
 unsigned *nvim_ses_get_vop_flags_ptr(void) { return &vop_flags; }
 int nvim_ses_get_p_acd(void) { return p_acd; }
-int nvim_ses_get_did_lcd(void) { return did_lcd; }
-void nvim_ses_set_did_lcd(int val) { did_lcd = val; }
 
 // Wraps home_replace_save(NULL, name) - returns xmalloc'd string
 char *nvim_ses_home_replace_save(const char *name) { return home_replace_save(NULL, name); }
@@ -304,7 +299,6 @@ int nvim_ses_get_CMD_mkvimrc(void) { return CMD_mkvimrc; }
 
 // File I/O wrappers
 FILE *nvim_ses_open_exfile(char *fname, int forceit, char *mode) { return open_exfile(fname, forceit, mode); }
-int nvim_ses_fclose(FILE *fd) { return fclose(fd); }
 int nvim_ses_do_source(char *fname) { return do_source(fname, false, DOSO_NONE, NULL); }
 
 // OS wrappers

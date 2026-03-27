@@ -37,6 +37,10 @@ pub const MAXCOL: c_int = 0x7FFF_FFFF;
 /// MAXPATHL - maximum path length (verified via _Static_assert in C)
 pub const MAXPATHL: usize = 4096;
 
+/// Whether ":lcd" or ":tcd" was produced for a session (formerly C static `did_lcd`).
+/// Neovim is single-threaded so a plain static mut is safe here.
+static mut DID_LCD: c_int = 0;
+
 // =============================================================================
 // Phase 2: Window/Frame Predicates
 // =============================================================================
@@ -141,7 +145,7 @@ pub unsafe extern "C" fn rs_ses_get_fname(buf: ffi::BufPtr, flagp: *const c_uint
         && flagp == ssop_ptr
         && (ffi::nvim_ses_get_ssop_flags() & (K_OPT_SSOP_FLAG_CURDIR | K_OPT_SSOP_FLAG_SESDIR)) != 0
         && ffi::nvim_ses_get_p_acd() == 0
-        && ffi::nvim_ses_get_did_lcd() == 0
+        && DID_LCD == 0
     {
         return sfname;
     }
@@ -866,7 +870,7 @@ pub unsafe extern "C" fn rs_put_view(
         {
             return FAIL;
         }
-        ffi::nvim_ses_set_did_lcd(1);
+        DID_LCD = 1;
     }
 
     OK
@@ -1175,7 +1179,7 @@ pub unsafe extern "C" fn rs_makeopens(fd: *mut libc::FILE, dirnow: *mut c_char) 
             {
                 return FAIL;
             }
-            ffi::nvim_ses_set_did_lcd(1);
+            DID_LCD = 1;
         }
 
         // Restore view of each window
@@ -1340,7 +1344,7 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
     let view_session = cmdidx == cmd_mksession || cmdidx == cmd_mkview;
 
     // Use the short file name until ":lcd" is used.
-    ffi::nvim_ses_set_did_lcd(0);
+    DID_LCD = 0;
 
     let mut view_file: *mut c_char = std::ptr::null_mut();
     let mut using_vdir = false;
@@ -1477,7 +1481,7 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
             failed = true;
         }
 
-        failed |= ffi::nvim_ses_fclose(fd) != 0;
+        failed |= libc::fclose(fd) != 0;
 
         if failed {
             ffi::nvim_ses_emsg(ffi::nvim_ses_get_e_write());

@@ -42,8 +42,6 @@ extern "C" {
     pub fn nvim_ses_buf_get_ffname(buf: BufPtr) -> *const c_char;
     pub fn nvim_ses_get_vop_flags_ptr() -> *const c_uint;
     pub fn nvim_ses_get_p_acd() -> c_int;
-    pub fn nvim_ses_get_did_lcd() -> c_int;
-    pub fn nvim_ses_set_did_lcd(val: c_int);
     pub fn nvim_ses_home_replace_save(name: *const c_char) -> *mut c_char;
     pub fn nvim_ses_vim_strsave_fnameescape(name: *const c_char) -> *mut c_char;
     pub fn nvim_ses_xfree(p: *mut c_void);
@@ -200,7 +198,6 @@ extern "C" {
         forceit: c_int,
         mode: *mut c_char,
     ) -> *mut libc::FILE;
-    pub fn nvim_ses_fclose(fd: *mut libc::FILE) -> c_int;
     pub fn nvim_ses_do_source(fname: *mut c_char) -> c_int;
 
     // OS wrappers
