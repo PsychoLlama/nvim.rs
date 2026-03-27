@@ -124,11 +124,9 @@ void nvim_transchar_nonprint_curbuf(char *buf, int c) { transchar_nonprint(curbu
 void nvim_curbuf_set_op_start(linenr_T lnum, colnr_T col) { curbuf->b_op_start.lnum = lnum; curbuf->b_op_start.col = col; }
 void nvim_curbuf_set_op_end(linenr_T lnum, colnr_T col) { curbuf->b_op_end.lnum = lnum; curbuf->b_op_end.col = col; }
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
-
 // Regex accessors (opaque regmatch_T handle)
 void *nvim_excmds_regcomp(const char *pat, int magic_val) { regmatch_T *rm = xcalloc(1, sizeof(regmatch_T)); rm->regprog = vim_regcomp(pat, magic_val); if (rm->regprog == NULL) { xfree(rm); return NULL; } return rm; }
 void nvim_excmds_regfree(void *rm) { if (rm != NULL) { vim_regfree(((regmatch_T *)rm)->regprog); xfree(rm); } }
-
 const char *nvim_excmds_regmatch_startp0(const void *rm) { return ((const regmatch_T *)rm)->startp[0]; }
 const char *nvim_excmds_regmatch_endp0(const void *rm) { return ((const regmatch_T *)rm)->endp[0]; }
 void nvim_excmds_regmatch_set_ic(void *rm, int ic) { ((regmatch_T *)rm)->rm_ic = ic; }
@@ -137,7 +135,6 @@ void nvim_excmds_semsg_invarg2(const char *p) { semsg(_(e_invarg2), p); }
 void nvim_excmds_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_excmds_emsg_noprevre(void) { emsg(_(e_noprevre)); }
 void nvim_excmds_emsg_interr(void) { emsg(_(e_interr)); }
-
 void nvim_exarg_set_nextcmd(exarg_T *eap, const char *p) { eap->nextcmd = (char *)p; }
 int nvim_exarg_is_nextcmd_null(exarg_T *eap) { return eap->nextcmd == NULL ? 1 : 0; }
 
@@ -158,7 +155,6 @@ void nvim_excmds_smsg_lines_moved(int64_t num_lines)
 }
 
 void nvim_excmds_emsg_e134(void) { emsg(_("E134: Cannot move a range of lines into itself")); }
-
 void nvim_excmds_toggle_b_p_ai(void) { curbuf->b_p_ai = !curbuf->b_p_ai; }
 int nvim_excmds_get_b_p_iminsert(void) { return curbuf->b_p_iminsert; }
 int nvim_excmds_ea_getline_is_null(exarg_T *eap) { return eap->ea_getline == NULL ? 1 : 0; }
@@ -171,7 +167,6 @@ void nvim_exarg_set_flags(exarg_T *eap, int flags) { eap->flags = flags; }
 const char *nvim_excmds_shell_name_tail(void) { return invocation_path_tail(p_sh, NULL); }
 
 _Static_assert(ML_DEL_MESSAGE == 1, "ML_DEL_MESSAGE mismatch");
-
 _Static_assert(STR2NR_BIN == (1 << 0), "STR2NR_BIN mismatch");
 _Static_assert(STR2NR_OCT == (1 << 1), "STR2NR_OCT mismatch");
 _Static_assert(STR2NR_HEX == (1 << 2), "STR2NR_HEX mismatch");
@@ -179,7 +174,6 @@ _Static_assert(STR2NR_FORCE == (1 << 7), "STR2NR_FORCE mismatch");
 _Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
 _Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP mismatch");
 _Static_assert(kExtmarkUndo == 1, "kExtmarkUndo mismatch");
-
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS mismatch");
 _Static_assert(EOL_MAC == 2, "EOL_MAC mismatch");
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
@@ -337,17 +331,12 @@ char *nvim_excmds_curbuf_get_sfname(void) { return curbuf->b_sfname; }
 char *nvim_excmds_curbuf_get_fname(void) { return curbuf->b_fname; }
 void nvim_excmds_curbuf_set_ffname(char *p) { curbuf->b_ffname = p; }
 void nvim_excmds_curbuf_set_sfname(char *p) { curbuf->b_sfname = p; }
-
 void nvim_excmds_curbuf_clear_filenames(void) { curbuf->b_ffname = NULL; curbuf->b_sfname = NULL; }
 void nvim_excmds_curbuf_set_bf_notedited(void) { curbuf->b_flags |= BF_NOTEDITED; }
 int nvim_excmds_cmdmod_has_keepalt(void) { return (cmdmod.cmod_flags & CMOD_KEEPALT) != 0 ? 1 : 0; }
 void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 int nvim_excmds_curbuf_ffname_not_null(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
-int nvim_excmds_os_path_exists_curbuf_ffname(void)
-{
-  return curbuf->b_ffname != NULL && os_path_exists(curbuf->b_ffname) ? 1 : 0;
-}
-
+int nvim_excmds_os_path_exists_curbuf_ffname(void) { return curbuf->b_ffname != NULL && os_path_exists(curbuf->b_ffname) ? 1 : 0; }
 int nvim_exarg_cmdidx_is_saveas(const exarg_T *eap) { return eap->cmdidx == CMD_saveas ? 1 : 0; }
 int nvim_exarg_get_usefilter(const exarg_T *eap) { return eap->usefilter ? 1 : 0; }
 void nvim_exarg_set_line1(exarg_T *eap, int line1) { eap->line1 = (linenr_T)line1; }
