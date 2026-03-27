@@ -69,6 +69,173 @@ pub use select::{SelectionAction, SelectionResult, TagMatchDisplayInfo, TagSelec
 pub const TAGSTACKSIZE: c_int = 20;
 
 // =============================================================================
+// Migrated static globals (previously in tag_shim.c)
+// =============================================================================
+
+/// Whether a tagfunc callback is currently executing (prevents recursion).
+static mut TFU_IN_USE: bool = false;
+
+/// Name of the last used tag (owned C string, or NULL).
+static mut TAGMATCHNAME: *mut c_char = std::ptr::null_mut();
+
+/// File name for NOTAGFILE error (owned C string, or NULL).
+static mut NOFILE_FNAME: *mut c_char = std::ptr::null_mut();
+
+/// Tag file names collected during tag search.
+static mut TAG_FNAMES: Vec<*mut c_char> = Vec::new();
+
+// Accessors for TFU_IN_USE
+/// # Safety
+/// Accesses a static mut — safe only in Neovim's single-threaded context.
+#[must_use]
+#[inline]
+pub unsafe fn tag_get_tfu_in_use() -> bool {
+    TFU_IN_USE
+}
+
+/// # Safety
+/// Accesses a static mut — safe only in Neovim's single-threaded context.
+#[inline]
+pub unsafe fn tag_set_tfu_in_use(val: bool) {
+    TFU_IN_USE = val;
+}
+
+// Accessors for TAGMATCHNAME
+/// Free and clear the tagmatchname global.
+/// # Safety
+/// Calls xfree; single-threaded context.
+pub unsafe fn tag_xfree_clear_tagmatchname() {
+    extern "C" {
+        fn xfree(ptr: *mut c_void);
+    }
+    xfree(TAGMATCHNAME.cast());
+    TAGMATCHNAME = std::ptr::null_mut();
+}
+
+/// Get a pointer to the tagmatchname string (may be NULL).
+/// # Safety
+/// Returns raw pointer to static — caller must not outlive the static.
+#[must_use]
+#[inline]
+pub unsafe fn tag_get_tagmatchname() -> *const c_char {
+    TAGMATCHNAME
+}
+
+/// Set the tagmatchname (takes ownership of the xmalloc'd string).
+/// # Safety
+/// The string must be xmalloc'd; the previous value is NOT freed here.
+#[inline]
+pub unsafe fn tag_set_tagmatchname(name: *mut c_char) {
+    TAGMATCHNAME = name;
+}
+
+// Accessors for NOFILE_FNAME
+/// Set the `nofile_fname` global (frees old value, strdup's new).
+/// # Safety
+/// Calls xfree and xstrdup; single-threaded context.
+pub unsafe fn tag_set_nofile_fname(fname: *const c_char) {
+    extern "C" {
+        fn xfree(ptr: *mut c_void);
+        fn xstrdup(s: *const c_char) -> *mut c_char;
+    }
+    xfree(NOFILE_FNAME.cast());
+    NOFILE_FNAME = if fname.is_null() {
+        std::ptr::null_mut()
+    } else {
+        xstrdup(fname)
+    };
+}
+
+/// Get the `nofile_fname` global.
+/// # Safety
+/// Returns raw pointer to static string.
+#[must_use]
+#[inline]
+pub unsafe fn tag_get_nofile_fname() -> *const c_char {
+    NOFILE_FNAME
+}
+
+/// Free the `nofile_fname` using `free_string_option` and set to NULL.
+/// # Safety
+/// Calls `free_string_option`; single-threaded context.
+pub unsafe fn tag_free_nofile_fname() {
+    extern "C" {
+        fn free_string_option(s: *mut c_char);
+    }
+    free_string_option(NOFILE_FNAME);
+    NOFILE_FNAME = std::ptr::null_mut();
+}
+
+/// Returns true if `nofile_fname` is NULL.
+/// # Safety
+/// Accesses a static mut — safe only in Neovim's single-threaded context.
+#[must_use]
+#[inline]
+pub unsafe fn tag_nofile_fname_is_null() -> bool {
+    NOFILE_FNAME.is_null()
+}
+
+// Accessors for TAG_FNAMES
+/// Number of tag filenames collected.
+/// # Safety
+/// Accesses static mut.
+#[must_use]
+#[inline]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    static_mut_refs
+)]
+pub unsafe fn tag_fnames_len() -> c_int {
+    TAG_FNAMES.len() as c_int
+}
+
+/// Get the idx-th tag filename (or NULL if out of range).
+/// # Safety
+/// Accesses static mut.
+#[must_use]
+#[inline]
+#[allow(static_mut_refs)]
+pub unsafe fn tag_fnames_get(idx: c_int) -> *const c_char {
+    usize::try_from(idx)
+        .ok()
+        .filter(|&i| i < TAG_FNAMES.len())
+        .map_or(std::ptr::null(), |idx_u| TAG_FNAMES[idx_u])
+}
+
+/// Free all tag filenames and clear the vec.
+/// # Safety
+/// Calls xfree on each element; single-threaded context.
+#[allow(static_mut_refs)]
+pub unsafe fn tag_fnames_clear() {
+    extern "C" {
+        fn xfree(ptr: *mut c_void);
+    }
+    let fnames = std::mem::take(&mut TAG_FNAMES);
+    for p in fnames {
+        xfree(p.cast());
+    }
+}
+
+/// Re-initialize `tag_fnames` (clears without freeing — call `tag_fnames_clear` first if needed).
+/// # Safety
+/// Accesses static mut.
+#[allow(static_mut_refs)]
+#[inline]
+pub unsafe fn tag_fnames_init() {
+    TAG_FNAMES.clear();
+}
+
+/// Append a tag filename (takes ownership of xmalloc'd string).
+/// # Safety
+/// The string must be xmalloc'd; pushed into the global vec.
+#[allow(static_mut_refs)]
+#[inline]
+pub unsafe fn tag_fnames_add(fname: *mut c_char) {
+    TAG_FNAMES.push(fname);
+}
+
+// =============================================================================
 // Opaque Handle Types
 // =============================================================================
 
@@ -916,11 +1083,6 @@ pub extern "C" fn rs_tag_type_to_cmd(cmd_type: c_int) -> *const c_char {
 
 #[allow(dead_code)]
 extern "C" {
-    // tagmatchname accessors
-    fn nvim_xfree_clear_tagmatchname();
-    fn nvim_get_tagmatchname() -> *const c_char;
-    fn nvim_set_tagmatchname(name: *mut c_char);
-
     // ptag_entry accessor
     fn nvim_get_ptag_entry() -> *mut c_void;
 
@@ -934,9 +1096,6 @@ extern "C" {
 
     // Memory
     fn xfree(ptr: *mut c_void);
-
-    // tag_fnames
-    fn nvim_tag_fnames_clear();
 
     // findfile cleanup (direct C function)
     fn vim_findfile_cleanup(search_ctx: *mut c_void);
@@ -952,7 +1111,7 @@ const MAXCOL: c_int = 0x7fff_ffff;
 /// Calls into C to free the global `tagmatchname` string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_tag_freematch() {
-    nvim_xfree_clear_tagmatchname();
+    tag_xfree_clear_tagmatchname();
 }
 
 /// Advance message output position for tag display.
@@ -1022,7 +1181,7 @@ pub unsafe extern "C" fn rs_tag_strnicmp(
 /// Calls into C to free globals and clear the tag stack.
 #[no_mangle]
 pub unsafe extern "C" fn rs_free_tag_stuff() {
-    nvim_tag_fnames_clear();
+    tag_fnames_clear();
     if !nvim_tag_curwin_is_null() {
         rs_do_tag(std::ptr::null_mut(), tag_cmd::DT_FREE, 0, 0, false);
     }
@@ -1056,7 +1215,7 @@ pub unsafe extern "C" fn rs_tagname_free(tnp: *mut c_void) {
     }
 
     // Clear the global help tag file names
-    nvim_tag_fnames_clear();
+    tag_fnames_clear();
 }
 
 // =============================================================================

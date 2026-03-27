@@ -1577,7 +1577,6 @@ extern "C" {
     fn FreeWild(count: c_int, files: *mut *mut c_char);
     fn nvim_tag_get_curbuf_ffname() -> *mut c_char;
     fn nvim_tag_mb_ptr_adv(p: *const c_char) -> *mut c_char;
-    fn nvim_tag_get_tfu_in_use() -> bool;
     fn nvim_tag_tv_dict_find_item(
         dict: *const c_void,
         key: *const c_char,
@@ -1974,7 +1973,7 @@ pub unsafe extern "C" fn rs_set_tagstack(
     }
 
     // not allowed to alter the tag stack entries from inside tagfunc
-    if nvim_tag_get_tfu_in_use() {
+    if crate::tag_get_tfu_in_use() {
         emsg(gettext(E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC.as_ptr()));
         return FAIL;
     }

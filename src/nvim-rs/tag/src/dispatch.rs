@@ -89,7 +89,6 @@ extern "C" {
     fn nvim_tag_get_p_tgst() -> bool;
     fn nvim_tag_get_curbuf_fnum() -> c_int;
     fn nvim_tag_get_got_int() -> bool;
-    fn nvim_tag_get_tfu_in_use() -> bool;
     fn emsg(s: *const c_char) -> c_int;
     fn semsg(fmt: *const c_char, ...) -> c_int;
     fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
@@ -129,10 +128,6 @@ extern "C" {
     fn ui_flush();
     fn os_delay(ms: u64, ignoreinput: bool);
     fn msg(msg: *const c_char, hlf: c_int) -> c_int;
-    fn nvim_tag_free_nofile_fname();
-    fn nvim_tag_nofile_fname_is_null() -> bool;
-    fn nvim_get_nofile_fname() -> *const c_char;
-
     // Tag match cache (direct C functions)
     fn find_tags(
         pat: *mut c_char,
@@ -143,11 +138,6 @@ extern "C" {
         buf_ffname: *mut c_char,
     ) -> c_int;
     fn FreeWild(count: c_int, files: *mut *mut c_char);
-
-    // Tag match name
-    fn nvim_get_tagmatchname() -> *const c_char;
-    fn nvim_xfree_clear_tagmatchname();
-    fn nvim_set_tagmatchname(name: *mut c_char);
 
     // ptag_entry — use *const for getters, *mut for setters
     fn nvim_get_ptag_entry() -> *mut c_void;
@@ -728,7 +718,7 @@ pub unsafe extern "C" fn rs_do_tag(
     }
 
     // Disallow recursive tagfunc calls
-    if nvim_tag_get_tfu_in_use() {
+    if crate::tag_get_tfu_in_use() {
         emsg(gettext(E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC.as_ptr()));
         return;
     }
@@ -746,7 +736,7 @@ pub unsafe extern "C" fn rs_do_tag(
     let use_tfu = !is_help;
 
     let prev_num_matches = NUM_MATCHES;
-    nvim_tag_free_nofile_fname();
+    crate::tag_free_nofile_fname();
 
     // Determine stack/preview usage
     assert!(!tag.is_null());
@@ -1012,13 +1002,13 @@ pub unsafe extern "C" fn rs_do_tag(
             name = tag;
         }
 
-        let tagmatchname = nvim_get_tagmatchname();
+        let tagmatchname = crate::tag_get_tagmatchname();
         let other_name = tagmatchname.is_null() || strcmp(tagmatchname, name) != 0;
 
         if new_tag || (cur_match >= NUM_MATCHES && MAX_NUM_MATCHES != MAXCOL) || other_name {
             if other_name {
-                nvim_xfree_clear_tagmatchname();
-                nvim_set_tagmatchname(xstrdup(name));
+                crate::tag_xfree_clear_tagmatchname();
+                crate::tag_set_tagmatchname(xstrdup(name));
             }
 
             if cur_type == cmd_type::DT_SELECT
@@ -1125,7 +1115,7 @@ pub unsafe extern "C" fn rs_do_tag(
 
             if cur_match >= NUM_MATCHES {
                 if (cur_type == cmd_type::DT_NEXT || cur_type == cmd_type::DT_FIRST)
-                    && nvim_tag_nofile_fname_is_null()
+                    && crate::tag_nofile_fname_is_null()
                 {
                     if NUM_MATCHES == 1 {
                         emsg(c"E427: There is only one matching tag".as_ptr());
@@ -1171,11 +1161,11 @@ pub unsafe extern "C" fn rs_do_tag(
             }
 
             // Report previous file-not-found
-            if !nvim_tag_nofile_fname_is_null() && error_cur_match != cur_match {
+            if !crate::tag_nofile_fname_is_null() && error_cur_match != cur_match {
                 smsg(
                     0,
                     c"File \"%s\" does not exist".as_ptr(),
-                    nvim_get_nofile_fname(),
+                    crate::tag_get_nofile_fname(),
                 );
             }
 
@@ -1273,7 +1263,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 }
                 semsg(
                     c"E429: File \"%s\" does not exist".as_ptr(),
-                    nvim_get_nofile_fname(),
+                    crate::tag_get_nofile_fname(),
                 );
             } else {
                 // May have jumped to another window

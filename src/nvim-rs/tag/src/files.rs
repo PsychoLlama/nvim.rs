@@ -33,13 +33,6 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
-    // Garray accessors for help file tag names
-    fn nvim_tag_fnames_len() -> c_int;
-    fn nvim_tag_fnames_get(idx: c_int) -> *const c_char;
-    fn nvim_tag_fnames_clear();
-    fn nvim_tag_fnames_init();
-    fn nvim_tag_fnames_add(fname: *mut c_char);
-
     // Runtime path searching (calls do_in_runtimepath with hardcoded args for tags)
     fn nvim_do_in_runtimepath_for_tags();
 
@@ -179,7 +172,7 @@ pub unsafe extern "C" fn rs_tagfname_free(tnp: *mut TagFileIterator) {
     }
 
     // Clear the global help tag file names
-    nvim_tag_fnames_clear();
+    crate::tag_fnames_clear();
 
     drop(Box::from_raw(tnp));
 }
@@ -268,12 +261,12 @@ pub unsafe extern "C" fn rs_get_tagfname(
 unsafe fn get_help_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut c_char) -> c_int {
     if first {
         // Find all "doc/tags" and "doc/tags-??" files in runtimepath
-        nvim_tag_fnames_clear();
-        nvim_tag_fnames_init();
+        crate::tag_fnames_clear();
+        crate::tag_fnames_init();
         nvim_do_in_runtimepath_for_tags();
     }
 
-    let tag_fnames_len = nvim_tag_fnames_len();
+    let tag_fnames_len = crate::tag_fnames_len();
 
     if tnp.tn_hf_idx >= tag_fnames_len {
         // Not found in 'runtimepath', use 'helpfile', if it exists and
@@ -290,13 +283,13 @@ unsafe fn get_help_tagfname(tnp: &mut TagFileIterator, first: bool, buf: *mut c_
 
         // Check if this file was already in the list
         for i in 0..tag_fnames_len {
-            let existing = nvim_tag_fnames_get(i);
+            let existing = crate::tag_fnames_get(i);
             if !existing.is_null() && strcmp(buf, existing) == 0 {
                 return FAIL; // avoid duplicate file names
             }
         }
     } else {
-        let fname = nvim_tag_fnames_get(tnp.tn_hf_idx);
+        let fname = crate::tag_fnames_get(tnp.tn_hf_idx);
         tnp.tn_hf_idx += 1;
         if fname.is_null() {
             return FAIL;
@@ -459,7 +452,7 @@ pub unsafe extern "C" fn rs_tagfname_has_more(tnp: *const TagFileIterator) -> bo
 /// Get the number of help tag files found.
 #[no_mangle]
 pub extern "C" fn rs_tag_fnames_count() -> c_int {
-    unsafe { nvim_tag_fnames_len() }
+    unsafe { crate::tag_fnames_len() }
 }
 
 // =============================================================================
@@ -495,7 +488,7 @@ pub unsafe extern "C" fn rs_found_tagfile_cb(
         }
 
         simplify_filename(tag_fname);
-        nvim_tag_fnames_add(tag_fname);
+        crate::tag_fnames_add(tag_fname);
 
         if !all {
             break;

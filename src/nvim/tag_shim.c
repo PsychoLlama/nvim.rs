@@ -85,7 +85,6 @@ enum {
 };
 
 #define NOTAGFILE       99              // return value for jumpto_tag
-static char *nofile_fname = NULL;       // fname for NOTAGFILE error
 
 /// States used during a tags search
 typedef enum {
@@ -199,8 +198,6 @@ int nvim_get_postponed_split(void) { return postponed_split; }
 void nvim_set_postponed_split(int val) { postponed_split = val; }
 int nvim_get_g_do_tagpreview(void) { return g_do_tagpreview; }
 void nvim_set_g_do_tagpreview(int val) { g_do_tagpreview = val; }
-void nvim_set_nofile_fname(const char *fname) { xfree(nofile_fname); nofile_fname = fname != NULL ? xstrdup(fname) : NULL; }
-const char *nvim_get_nofile_fname(void) { return nofile_fname; }
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
 extern void rs_prepare_pats(pat_T *pats, bool has_re);
@@ -208,16 +205,11 @@ extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *c
 
 #include "tag_shim.c.generated.h"
 
-static char *tagmatchname = NULL;   // name of last used tag
 
 static taggy_T ptag_entry = { NULL, INIT_FMARK, 0, 0, NULL };
 
-static bool tfu_in_use = false;  // disallow recursive call of tagfunc
 static Callback tfu_cb;          // 'tagfunc' callback function
 
-void nvim_xfree_clear_tagmatchname(void) { XFREE_CLEAR(tagmatchname); }
-const char *nvim_get_tagmatchname(void) { return tagmatchname; }
-void nvim_set_tagmatchname(char *name) { tagmatchname = name; }
 void *nvim_get_ptag_entry(void) { return &ptag_entry; }
 bool nvim_tag_curwin_is_null(void) { return curwin == NULL; }
 char *nvim_expand_one_file(char *fname)
@@ -318,8 +310,6 @@ char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg
 int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
 char *nvim_tag_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 const char *nvim_tag_mb_ptr_adv(const char *p) { const char *result = p; MB_PTR_ADV(result); return result; }
-bool nvim_tag_get_tfu_in_use(void) { return tfu_in_use; }
-void nvim_tag_set_tfu_in_use(bool val) { tfu_in_use = val; }
 void *nvim_findtags_get_ga_match_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return (void *)st->ga_match; }
 int *nvim_findtags_get_match_count_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return &st->match_count; }
 void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len) { return (void *)tv_dict_find((const dict_T *)dict, key, key_len); }
@@ -431,14 +421,4 @@ void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf) { tag
 void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(&tg[idx].fmark, buf, sizeof(fmark_T)); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 
-void nvim_tag_free_nofile_fname(void) { free_string_option(nofile_fname); nofile_fname = NULL; }
-bool nvim_tag_nofile_fname_is_null(void) { return nofile_fname == NULL; }
-
-static garray_T tag_fnames = GA_EMPTY_INIT_VALUE;
-
-int nvim_tag_fnames_len(void) { return tag_fnames.ga_len; }
-const char *nvim_tag_fnames_get(int idx) { return (idx >= 0 && idx < tag_fnames.ga_len) ? ((char **)(tag_fnames.ga_data))[idx] : NULL; }
-void nvim_tag_fnames_clear(void) { ga_clear_strings(&tag_fnames); }
-void nvim_tag_fnames_init(void) { ga_init(&tag_fnames, (int)sizeof(char *), 10); }
-void nvim_tag_fnames_add(char *fname) { GA_APPEND(char *, &tag_fnames, fname); }
 void nvim_do_in_runtimepath_for_tags(void) { do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL); }

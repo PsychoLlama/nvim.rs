@@ -54,8 +54,6 @@ extern "C" {
     // Window functions (direct C)
     fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
 
-    // Error reporting
-    fn nvim_set_nofile_fname(fname: *const c_char);
 }
 
 // =============================================================================
@@ -306,7 +304,7 @@ pub unsafe extern "C" fn rs_jumpto_tag_validate(state: *mut JumpTagState) -> c_i
     if !exists {
         state.file_exists = false;
         state.result = NOTAGFILE;
-        nvim_set_nofile_fname(state.expanded_fname);
+        crate::tag_set_nofile_fname(state.expanded_fname);
         state.phase = phase::ERROR;
         return NOTAGFILE;
     }
@@ -1007,7 +1005,7 @@ pub unsafe extern "C" fn rs_jumpto_tag(
 
     // Check if file exists
     if !os_path_exists(expanded_fname) && !nvim_has_bufreadcmd(expanded_fname) {
-        nvim_set_nofile_fname(expanded_fname);
+        crate::tag_set_nofile_fname(expanded_fname);
         xfree(lbuf.cast());
         xfree(pbuf.cast());
         xfree(expanded_fname.cast());

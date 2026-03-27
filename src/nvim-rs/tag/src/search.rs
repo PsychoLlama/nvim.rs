@@ -2177,8 +2177,6 @@ extern "C" {
     fn gettext(msgid: *const c_char) -> *const c_char;
 
     // tfu_in_use guard accessors
-    fn nvim_tag_get_tfu_in_use() -> bool;
-    fn nvim_tag_set_tfu_in_use(val: bool);
     // ga_match and match_count pointer accessors for rs_findtags_apply_tfu
     fn nvim_findtags_get_ga_match_ptr(st: FindTagsStateHandle) -> *mut c_void;
     fn nvim_findtags_get_match_count_ptr(st: FindTagsStateHandle) -> *mut c_int;
@@ -2209,7 +2207,7 @@ unsafe fn rs_findtags_apply_tfu(
     let flags = nvim_findtags_get_flags(st);
     let use_tfu = (flags & find_tags_flags::TAG_NO_TAGFUNC) == 0;
 
-    if !use_tfu || nvim_tag_get_tfu_in_use() {
+    if !use_tfu || crate::tag_get_tfu_in_use() {
         return NOTDONE;
     }
 
@@ -2218,11 +2216,11 @@ unsafe fn rs_findtags_apply_tfu(
         return NOTDONE;
     }
 
-    nvim_tag_set_tfu_in_use(true);
+    crate::tag_set_tfu_in_use(true);
     let ga = nvim_findtags_get_ga_match_ptr(st);
     let match_count = nvim_findtags_get_match_count_ptr(st);
     let retval = rs_find_tagfunc_tags(pat, ga, match_count, flags, buf_ffname);
-    nvim_tag_set_tfu_in_use(false);
+    crate::tag_set_tfu_in_use(false);
     retval
 }
 
