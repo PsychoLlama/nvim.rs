@@ -2483,13 +2483,6 @@ pub extern "C" fn rs_terminal_should_filter_char(c: c_int, tpf_flags: c_int) -> 
 // Phase 1: VTerm Callback Implementations (migrated from terminal_shim.c)
 // =============================================================================
 
-extern "C" {
-    /// Wrapper: queue terminal for refresh (implemented in `terminal_shim.c`).
-    fn nvim_terminal_invalidate(term: *mut c_void, start_row: c_int, end_row: c_int);
-    /// Wrapper: send data to terminal process (implemented in `terminal_shim.c`).
-    fn nvim_terminal_send(term: *mut c_void, data: *const i8, size: usize);
-}
-
 /// `VTerm` damage callback -- invalidate the damaged rows.
 ///
 /// Replaces `term_damage` in `terminal_shim.c`.
@@ -2498,7 +2491,7 @@ extern "C" {
 /// `data` must be a valid `Terminal *` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_term_damage(rect: VTermRect, data: *mut c_void) -> c_int {
-    unsafe { nvim_terminal_invalidate(data, rect.start_row, rect.end_row) };
+    unsafe { rs_invalidate_terminal(TerminalHandle::from_ptr(data), rect.start_row, rect.end_row) };
     1
 }
 
@@ -2516,7 +2509,7 @@ pub unsafe extern "C" fn rs_term_moverect(
 ) -> c_int {
     let start = dest.start_row.min(src.start_row);
     let end = dest.end_row.max(src.end_row);
-    unsafe { nvim_terminal_invalidate(data, start, end) };
+    unsafe { rs_invalidate_terminal(TerminalHandle::from_ptr(data), start, end) };
     1
 }
 
@@ -2539,7 +2532,7 @@ pub unsafe extern "C" fn rs_term_movecursor(
         t.cursor.row = new_pos.row;
         t.cursor.col = new_pos.col;
     }
-    unsafe { nvim_terminal_invalidate(data, -1, -1) };
+    unsafe { rs_invalidate_terminal(TerminalHandle::from_ptr(data), -1, -1) };
     1
 }
 
@@ -2579,7 +2572,7 @@ pub unsafe extern "C" fn rs_term_theme_cb(dark: *mut bool, _user: *mut c_void) -
 /// `s` must be a valid pointer to `len` bytes.
 #[no_mangle]
 pub unsafe extern "C" fn rs_term_output_callback(s: *const i8, len: usize, user_data: *mut c_void) {
-    unsafe { nvim_terminal_send(user_data, s, len) };
+    unsafe { rs_terminal_do_send(TerminalHandle::from_ptr(user_data), s, len) };
 }
 
 // =============================================================================
@@ -2865,7 +2858,7 @@ pub unsafe extern "C" fn rs_terminal_notify_theme_impl(term: TerminalHandle, dar
     // The sequence is always exactly 9 bytes: \x1b[997;Xn
     let buf: [u8; 9] = [0x1b, b'[', b'9', b'9', b'7', b';', ch, b'n', 0];
     let len = 8usize; // without the NUL terminator
-    unsafe { nvim_terminal_send(term.as_ptr(), buf.as_ptr().cast::<i8>(), len) };
+    unsafe { rs_terminal_do_send(term, buf.as_ptr().cast::<i8>(), len) };
 }
 
 // =============================================================================
@@ -3114,11 +3107,11 @@ pub unsafe extern "C" fn rs_terminal_paste(count: c_int, y_array: *const NvimStr
                 // Terminate the previous line.
                 #[cfg(target_os = "windows")]
                 unsafe {
-                    nvim_terminal_send(term, b"\r\n".as_ptr().cast(), 2)
+                    rs_terminal_do_send(TerminalHandle::from_ptr(term), b"\r\n".as_ptr().cast(), 2);
                 };
                 #[cfg(not(target_os = "windows"))]
                 unsafe {
-                    nvim_terminal_send(term, b"\n".as_ptr().cast(), 1);
+                    rs_terminal_do_send(TerminalHandle::from_ptr(term), b"\n".as_ptr().cast(), 1);
                 };
             }
             let src_len = item.size;
@@ -3143,7 +3136,13 @@ pub unsafe extern "C" fn rs_terminal_paste(count: c_int, y_array: *const NvimStr
                 src = unsafe { src.add(char_len) };
             }
             if !buff.is_empty() {
-                unsafe { nvim_terminal_send(term, buff.as_ptr().cast(), buff.len()) };
+                unsafe {
+                    rs_terminal_do_send(
+                        TerminalHandle::from_ptr(term),
+                        buff.as_ptr().cast(),
+                        buff.len(),
+                    );
+                };
             }
         }
     }

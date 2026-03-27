@@ -188,6 +188,7 @@ extern int rs_term_sb_pop(int cols, VTermScreenCell *cells, void *data);
 extern void rs_terminal_send_key_impl(void *term, int c);
 extern void rs_terminal_notify_theme_impl(void *term, int dark);
 extern void rs_terminal_refresh_size(void *term, void *buf);
+extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
 
 static VTermScreenCallbacks vterm_screen_callbacks = {
   .damage = rs_term_damage,
@@ -379,10 +380,6 @@ static void terminal_check_cursor(void)
 extern void rs_terminal_destroy(Terminal **termpp);
 void terminal_destroy(Terminal **termpp) FUNC_ATTR_NONNULL_ALL { rs_terminal_destroy(termpp); }
 
-extern void rs_terminal_do_send(void *term, const char *data, size_t size);
-static void terminal_send(Terminal *term, const char *data, size_t size)
-  { rs_terminal_do_send(term, data, size); }
-
 extern void rs_terminal_paste(int count, const String *y_array, size_t y_size);
 void terminal_paste(int count, String *y_array, size_t y_size)
   { rs_terminal_paste(count, y_array, y_size); }
@@ -533,7 +530,7 @@ static bool send_mouse_event(Terminal *term, int c)
     curwin = save_curwin;
     curbuf = curwin->w_buffer;
     redraw_later(mouse_win, UPD_NOT_VALID);
-    invalidate_terminal(term, -1, -1);
+    rs_invalidate_terminal(term, -1, -1);
     // Only need to exit focus if the scrolled window is the terminal window
     return mouse_win == curwin;
   }
@@ -596,16 +593,9 @@ static bool fetch_cell(Terminal *term, int row, int col, VTermScreenCell *cell)
   return true;
 }
 
-extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
-static void invalidate_terminal(Terminal *term, int start_row, int end_row)
-  { rs_invalidate_terminal(term, start_row, end_row); }
-
 extern void rs_refresh_terminal(void *term);
-static void refresh_terminal(Terminal *term) { rs_refresh_terminal(term); }
 
 extern void rs_refresh_cursor(void *term, bool *cursor_visible);
-static void refresh_cursor(Terminal *term, bool *cursor_visible) FUNC_ATTR_NONNULL_ALL
-  { rs_refresh_cursor(term, cursor_visible); }
 
 extern void rs_refresh_timer_cb(void *watcher, void *data);
 static void refresh_timer_cb(TimeWatcher *watcher, void *data) { rs_refresh_timer_cb(watcher, data); }
@@ -674,10 +664,6 @@ static char *get_config_string(char *key)
 void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 char nvim_get_bg_char(void) { return *p_bg; }
 
-void nvim_terminal_invalidate(void *term, int start_row, int end_row)
-  { invalidate_terminal((Terminal *)term, start_row, end_row); }
-void nvim_terminal_send(void *term, const char *data, size_t size)
-  { terminal_send((Terminal *)term, data, size); }
 void nvim_terminal_set_put(void *term)
   { set_put(ptr_t, &invalidated_terminals, (Terminal *)term); }
 
@@ -704,7 +690,7 @@ int nvim_terminal_invalidated_check_del(void *term)
 {
   if (set_has(ptr_t, &invalidated_terminals, (Terminal *)term)) {
     block_autocmds();
-    refresh_terminal((Terminal *)term);
+    rs_refresh_terminal((Terminal *)term);
     unblock_autocmds();
     set_del(ptr_t, &invalidated_terminals, (Terminal *)term);
     return 1;
@@ -821,7 +807,7 @@ int nvim_entered_free_all_mem(void)
 #endif
 }
 void nvim_terminal_refresh_blocking(void *term)
-  { block_autocmds(); refresh_terminal((Terminal *)term); unblock_autocmds(); }
+  { block_autocmds(); rs_refresh_terminal((Terminal *)term); unblock_autocmds(); }
 int nvim_terminal_opts_is_internal(void *term)
   { return ((Channel *)((Terminal *)term)->opts.data)->streamtype == kChannelStreamInternal; }
 void nvim_terminal_call_close_cb(void *term)
@@ -881,7 +867,7 @@ void nvim_setcursor(void) { setcursor(); }
 void nvim_parse_shape_opt(int scope) { (void)parse_shape_opt(scope); }
 void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
 void nvim_refresh_cursor_c(void *term, int *cursor_visible)
-  { bool vis = (bool)*cursor_visible; refresh_cursor((Terminal *)term, &vis); *cursor_visible = (int)vis; }
+  { bool vis = (bool)*cursor_visible; rs_refresh_cursor((Terminal *)term, &vis); *cursor_visible = (int)vis; }
 void nvim_validate_cursor_cw(void) { validate_cursor(curwin); }
 void nvim_update_screen_c(void) { update_screen(); }
 void nvim_redraw_statuslines(void) { redraw_statuslines(); }
