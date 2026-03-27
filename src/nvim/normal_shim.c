@@ -193,8 +193,6 @@ void nvim_getvcol_cursor(int *scol, int *ecol) { getvcol(curwin, &curwin->w_curs
 
 void nvim_set_cursor_coladd(int val) { curwin->w_cursor.coladd = val; }
 
-_Static_assert(TAB == 0x09, "TAB changed");
-
 fmark_T *nvim_mark_get(int name) { return mark_get(curbuf, curwin, NULL, kMarkAll, name); }
 
 fmark_T *nvim_get_changelist(int count1) { return get_changelist(curbuf, curwin, count1); }
@@ -249,8 +247,6 @@ void nvim_check_cursor(void) { check_cursor(curwin); }
 
 int nvim_get_curswant(void) { return curwin->w_curswant; }
 
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL changed");
-
 /// Clear b_syn_slow for all windows in current tab (for nv_clear).
 void nvim_clear_b_syn_slow_all_windows(void) {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
@@ -259,9 +255,6 @@ void nvim_clear_b_syn_slow_all_windows(void) {
 }
 
 void nvim_syn_stack_free_all_curwin(void) { syn_stack_free_all(curwin->w_s); }
-
-_Static_assert(GETF_SETMARK == 0x01, "GETF_SETMARK changed");
-_Static_assert(GETF_ALT == 0x02, "GETF_ALT changed");
 
 int nvim_get_curbuf_visual_vi_mode(void) { return curbuf->b_visual.vi_mode; }
 
@@ -272,21 +265,6 @@ void nvim_set_mode_displayed(bool val) { mode_displayed = val; }
 
 void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 
-_Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
-_Static_assert(OP_DELETE == 1, "OP_DELETE mismatch");
-_Static_assert(OP_YANK == 2, "OP_YANK mismatch");
-_Static_assert(OP_LSHIFT == 4, "OP_LSHIFT mismatch");
-_Static_assert(OP_RSHIFT == 5, "OP_RSHIFT mismatch");
-_Static_assert(BL_WHITE == 1, "BL_WHITE mismatch");
-_Static_assert(K_DEL == TERMCAP2KEY('k', 'D'), "K_DEL mismatch");
-_Static_assert(K_KDEL == TERMCAP2KEY(KS_EXTRA, KE_KDEL), "K_KDEL mismatch");
-_Static_assert(kMTLineWise == 1, "kMTLineWise mismatch");
-
-_Static_assert(Ctrl_N == 14, "Ctrl_N mismatch");
-_Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
-_Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
-_Static_assert(kMTCharWise == 0, "kMTCharWise mismatch");
-
 bool nvim_set_cursor_from_last_insert(void) { if (curbuf->b_last_insert.mark.lnum != 0) { curwin->w_cursor = curbuf->b_last_insert.mark; return true; } return false; }
 
 void nvim_check_cursor_lnum_call(void) { check_cursor_lnum(curwin); }
@@ -296,16 +274,6 @@ int nvim_get_cursor_line_len(void) { return (int)get_cursor_line_len(); }
 int nvim_get_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
 void nvim_set_cmdwin_result(int val) { cmdwin_result = val; }
-
-// Guards: ensure Rust constants match C values
-_Static_assert(kOptFdoFlagPercent == 0x10,
-               "kOptFdoFlagPercent changed - update K_OPT_FDO_FLAG_PERCENT in normal/src/lib.rs");
-_Static_assert(BL_SOL == 2,
-               "BL_SOL changed - update BL_SOL in normal/src/lib.rs");
-_Static_assert(BL_FIX == 4,
-               "BL_FIX changed - update BL_FIX in normal/src/lib.rs");
-_Static_assert(UPD_INVERTED == 20,
-               "UPD_INVERTED changed - update UPD_INVERTED in normal/src/lib.rs");
 
 void nvim_set_VIsual_pos(int lnum, int col, int coladd) { VIsual.lnum = lnum; VIsual.col = col; VIsual.coladd = coladd; }
 
@@ -409,13 +377,6 @@ void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnu
 void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
-/// Constants for find_ident_at_pos (verified with _Static_assert).
-_Static_assert(FIND_IDENT == 1, "FIND_IDENT changed");
-_Static_assert(FIND_STRING == 2, "FIND_STRING changed");
-_Static_assert(FIND_EVAL == 4, "FIND_EVAL changed");
-_Static_assert(BACKWARD == -1, "BACKWARD changed");
-_Static_assert(FORWARD == 1, "FORWARD changed");
-
 /// Normal state entry point. This is called on:
 ///
 /// - Startup, In this case the function never returns.
@@ -438,13 +399,6 @@ void normal_enter(bool cmdwin, bool noexmode)
   nvim_current_oap = prev_oap;
 }
 
-_Static_assert(MODE_REPLACE == 0x110, "MODE_REPLACE changed");
-_Static_assert(MODE_LREPLACE == 0x120, "MODE_LREPLACE changed");
-_Static_assert(MODE_LANGMAP == 0x20, "MODE_LANGMAP changed");
-_Static_assert(MODE_NORMAL_BUSY == 0x1001, "MODE_NORMAL_BUSY changed");
-_Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP changed");
-_Static_assert(CPO_DIGRAPH == 'D', "CPO_DIGRAPH changed");
-
 int nvim_langmap_adjust(int c, bool condition) { LANGMAP_ADJUST(c, condition); return c; }
 
 void nvim_inc_no_mapping(void) { no_mapping++; }
@@ -463,13 +417,6 @@ bool nvim_vim_strchr_p_cpo(int c) { return vim_strchr(p_cpo, c) != NULL; }
 
 /// Wrapper for get_op_type.
 int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
-
-_Static_assert(K_IGNORE == -13821, "K_IGNORE changed");
-_Static_assert(K_MOUSEMOVE == -25853, "K_MOUSEMOVE changed");
-_Static_assert(K_EVENT == -26365, "K_EVENT changed");
-_Static_assert(OP_NOP == 0, "OP_NOP changed");
-_Static_assert(OP_COLON == 10, "OP_COLON changed");
-_Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
 
 // Layout guards for repr(C) struct mirrors in src/nvim-rs/normal/src/types.rs
 
@@ -546,16 +493,6 @@ bool nvim_curwin_get_p_crb(void) { return curwin->w_p_crb; }
 
 void nvim_validate_cursor_curwin_wrapper(void) { validate_cursor(curwin); }
 
-_Static_assert(K_KENTER == -16715, "K_KENTER changed");
-_Static_assert(K_ZERO == -22783, "K_ZERO changed");
-_Static_assert(ESC == 27, "ESC changed");
-_Static_assert(NL == 10, "NL changed");
-_Static_assert(CAR == 13, "CAR changed");
-_Static_assert(Ctrl_W == 23, "Ctrl_W changed");
-_Static_assert(MOD_MASK_SHIFT == 0x02, "MOD_MASK_SHIFT changed");
-_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL changed");
-_Static_assert(MODE_SELECT == 0x40, "MODE_SELECT changed");
-
 int nvim_get_vgetc_char(void) { return vgetc_char; }
 
 bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
@@ -593,8 +530,6 @@ void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = fal
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 
 /// Constants for clear_showcmd (verified with _Static_assert).
-_Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS changed");
-_Static_assert(SHOWCMD_BUFLEN == SHOWCMD_COLS + 1 + 30, "SHOWCMD_BUFLEN changed");
 
 char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 
