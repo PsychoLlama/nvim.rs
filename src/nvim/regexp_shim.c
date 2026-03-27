@@ -165,8 +165,7 @@ typedef struct {
 
 int64_t *nvim_regexp_get_rex_reg_buf_chartab(void) { return REX_PTR->reg_buf->b_chartab; }
 int nvim_regexp_get_got_int(void) { return got_int; }
-int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, REX_PTR->reg_buf); }
-void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
+void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
 void nvim_regexp_set_re_extmatch_out_match(int i, uint8_t *v) { re_extmatch_out->matches[i] = v; }
 int nvim_regexp_visual_quick_check(void) { return (REX_PTR->reg_buf == curbuf && VIsual.lnum != 0 && REG_MULTI) ? 1 : 0; }
@@ -225,8 +224,6 @@ void nvim_regexp_call_getvvcol(void *wp, int32_t lnum, int32_t col, int32_t *sta
 }
 
 int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum, const char *line, int32_t col) { return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col); }
-char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(REX_PTR->reg_buf, (linenr_T)lnum); }
-int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(REX_PTR->reg_buf, (linenr_T)lnum); }
 
 /// Put the submatches in "argv[argskip]" which is a list passed into
 /// call_func() by vim_regsub_both().
@@ -373,18 +370,13 @@ int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col;
 int32_t nvim_regexp_get_curwin_vcol(void) { colnr_T vcol = 0; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int32_t)(++vcol); }
 int64_t nvim_regexp_get_p_mmp(void) { return p_mmp; }
 uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) { return (re_extmatch_in != NULL && re_extmatch_in->matches[no] != NULL) ? re_extmatch_in->matches[no] : NULL; }
-void *nvim_regexp_call_mark_get(int mark) { return (void *)mark_get(REX_PTR->reg_buf, curwin, NULL, kMarkBufLocal, mark); }
 void *nvim_regexp_get_rex_reg_win_or_curwin(void) { return (void *)(REX_PTR->reg_win == NULL ? curwin : REX_PTR->reg_win); }
 int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) { return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.lnum : 0; }
 int32_t nvim_regexp_get_rex_reg_win_cursor_col(void) { return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.col : 0; }
-int nvim_regexp_call_profile_passed_limit(const void *tm) { return profile_passed_limit(*(const proftime_T *)tm) ? 1 : 0; }
-int nvim_regexp_call_mb_get_class_tab(uint8_t *p) { return mb_get_class_tab((char *)p, REX_PTR->reg_buf->b_chartab); }
-
 
 void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
 int64_t nvim_regexp_get_win_b_p_ts(void *wp) { return (int64_t)((win_T *)wp)->w_buffer->b_p_ts; }
 int32_t nvim_regexp_get_win_buf_line_count(void *wp) { return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count; }
-void *nvim_regexp_call_mark_get_for_nfa(void *buf, void *win, int mark_val) { return (void *)mark_get((buf_T *)buf, (win_T *)win, NULL, kMarkBufLocal, mark_val); }
 int nvim_regexp_fmark_is_set(void *fm) { return fm != NULL && ((fmark_T *)fm)->mark.lnum > 0; }
 int32_t nvim_regexp_fmark_get_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
 int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
@@ -394,8 +386,6 @@ int32_t nvim_regexp_get_buf_ml_line_count(void *buf) { return (int32_t)((buf_T *
 int32_t nvim_regexp_get_p_re(void) { return (int32_t)p_re; }
 void nvim_regexp_set_p_re(int32_t v) { p_re = (long)v; }
 void nvim_regexp_set_reg_do_extmatch(int v) { reg_do_extmatch = v; }
-void *nvim_regexp_call_vim_regcomp(const char *pat, int re_flags) { return vim_regcomp(pat, re_flags); }
-void nvim_regexp_call_vim_regfree(void *prog) { vim_regfree((regprog_T *)prog); }
 int64_t nvim_regexp_get_p_verbose(void) { return p_verbose; }
 size_t nvim_regexp_get_regmatch_size(void) { return sizeof(regmatch_T); }
 void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) { regmatch_T *rmp = (regmatch_T *)buf; memset(rmp, 0, sizeof(regmatch_T)); rmp->regprog = (regprog_T *)prog; rmp->rm_ic = (bool)rm_ic; }
