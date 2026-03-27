@@ -1,5 +1,3 @@
-#include <assert.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -520,14 +518,10 @@ void nvim_vterm_cell_zero(void *cell_ptr)
 // terminal_destroy helpers
 int nvim_terminal_invalidated_check_del(void *term)
 {
-  if (set_has(ptr_t, &invalidated_terminals, (Terminal *)term)) {
-    block_autocmds();
-    rs_refresh_terminal((Terminal *)term);
-    unblock_autocmds();
-    set_del(ptr_t, &invalidated_terminals, (Terminal *)term);
-    return 1;
-  }
-  return 0;
+  if (!set_has(ptr_t, &invalidated_terminals, (Terminal *)term)) { return 0; }
+  block_autocmds(); rs_refresh_terminal((Terminal *)term); unblock_autocmds();
+  set_del(ptr_t, &invalidated_terminals, (Terminal *)term);
+  return 1;
 }
 void nvim_buf_set_terminal(void *buf, void *term) { ((buf_T *)buf)->terminal = (Terminal *)term; }
 void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
@@ -609,13 +603,8 @@ void nvim_ui_busy_stop(void) { ui_busy_stop(); }
 void nvim_term_ui_mode_info_set(void) { ui_mode_info_set(); }
 void nvim_shape_table_set_cursor(int blink, int shape, int percentage)
 {
-  if (blink) {
-    shape_table[SHAPE_IDX_TERM].blinkon = 500;
-    shape_table[SHAPE_IDX_TERM].blinkoff = 500;
-  } else {
-    shape_table[SHAPE_IDX_TERM].blinkon = 0;
-    shape_table[SHAPE_IDX_TERM].blinkoff = 0;
-  }
+  shape_table[SHAPE_IDX_TERM].blinkon = blink ? 500 : 0;
+  shape_table[SHAPE_IDX_TERM].blinkoff = blink ? 500 : 0;
   shape_table[SHAPE_IDX_TERM].shape = shape;
   shape_table[SHAPE_IDX_TERM].percentage = percentage;
 }
@@ -623,8 +612,7 @@ void nvim_shape_table_set_cursor(int blink, int shape, int percentage)
 // Invalidated-terminals set + exiting
 void nvim_terminal_foreach_invalidated(void (*fn)(void *term, void *ctx), void *ctx)
 {
-  Terminal *term;
-  void *stub; (void)(stub);
+  Terminal *term; void *stub; (void)(stub);
   block_autocmds();
   set_foreach(&invalidated_terminals, term, { fn(term, ctx); });
   set_clear(ptr_t, &invalidated_terminals);
@@ -649,32 +637,26 @@ void nvim_terminal_call_close_cb(void *term)
   { Terminal *t = (Terminal *)term; ((void (*)(void *))t->opts.close_cb)(t->opts.data); }
 void nvim_terminal_apply_termclose_event(void *buf, int status)
 {
-  if (buf && !is_autocmd_blocked()) {
-    save_v_event_T save_v_event;
-    dict_T *dict = get_v_event(&save_v_event);
-    tv_dict_add_nr(dict, S_LEN("status"), status);
-    tv_dict_set_keys_readonly(dict);
-    apply_autocmds(EVENT_TERMCLOSE, NULL, NULL, false, (buf_T *)buf);
-    restore_v_event(dict, &save_v_event);
-  }
+  if (!buf || is_autocmd_blocked()) { return; }
+  save_v_event_T save_v_event;
+  dict_T *dict = get_v_event(&save_v_event);
+  tv_dict_add_nr(dict, S_LEN("status"), status);
+  tv_dict_set_keys_readonly(dict);
+  apply_autocmds(EVENT_TERMCLOSE, NULL, NULL, false, (buf_T *)buf);
+  restore_v_event(dict, &save_v_event);
 }
 // FOR_ALL_TAB_WINDOWS wrappers (macro not callable from Rust)
 void rs_adjust_topline_cursor(void *term, void *buf, int added)
   { adjust_topline_cursor((Terminal *)term, (buf_T *)buf, added); }
 void nvim_terminal_find_size(void *term, uint16_t *out_width, uint16_t *out_height)
 {
-  uint16_t width = 0;
-  uint16_t height = 0;
+  uint16_t width = 0, height = 0;
   FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (is_aucmd_win(wp)) { continue; }
-    if (wp->w_buffer && wp->w_buffer->terminal == (Terminal *)term) {
-      const uint16_t win_width = (uint16_t)(MAX(0, wp->w_view_width - win_col_off(wp)));
-      width = MAX(width, win_width);
-      height = (uint16_t)MAX(height, wp->w_view_height);
-    }
+    if (is_aucmd_win(wp) || !wp->w_buffer || wp->w_buffer->terminal != (Terminal *)term) { continue; }
+    width = MAX(width, (uint16_t)(MAX(0, wp->w_view_width - win_col_off(wp))));
+    height = (uint16_t)MAX(height, wp->w_view_height);
   }
-  *out_width = width;
-  *out_height = height;
+  *out_width = width; *out_height = height;
 }
 
 // kv_printf wrappers (macro not callable from Rust)
@@ -689,11 +671,7 @@ void nvim_terminal_schedule_termrequest(void *term) { rs_schedule_termrequest(te
 void *nvim_terminal_treqbuf_ptr(void *term) { return &((Terminal *)term)->termrequest_buffer; }
 void *nvim_terminal_get_vt(void *term) { return ((Terminal *)term)->vt; }
 void nvim_term_set_osc8_attr(void *vt, int attr)
-{
-  VTermState *state = vterm_obtain_state((VTerm *)vt);
-  VTermValue value = { .number = attr };
-  vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
-}
+  { VTermValue v = { .number = attr }; vterm_state_set_penattr(vterm_obtain_state((VTerm *)vt), VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &v); }
 
 // terminal_enter state machine helpers
 void nvim_set_got_int(int v) { got_int = (bool)v; }
@@ -748,50 +726,32 @@ void nvim_do_buffer_wipe(int buf_handle)
 void nvim_terminal_clipboard_queue(long mask, char *data)
   { multiqueue_put(loop_get_events(&main_loop), term_clipboard_set, (void *)mask, data); }
 char *nvim_terminal_selection_dupz(void *term, size_t *out_len)
-{
-  Terminal *t = (Terminal *)term;
-  *out_len = kv_size(t->selection);
-  return xmemdupz(t->selection.items, *out_len);
-}
+  { Terminal *t = (Terminal *)term; *out_len = kv_size(t->selection); return xmemdupz(t->selection.items, *out_len); }
 
 void nvim_terminal_set_vim_var_termrequest(const char *seq, size_t seqlen)
   { set_vim_var_string(VV_TERMREQUEST, seq, (ptrdiff_t)seqlen); }
 void nvim_terminal_apply_termrequest_autocmd(void *buf, int64_t row, int64_t col,
                                              const char *seq, size_t seqlen)
 {
-  MAXSIZE_TEMP_ARRAY(cursor, 2);
-  ADD_C(cursor, INTEGER_OBJ(row));
-  ADD_C(cursor, INTEGER_OBJ(col));
+  MAXSIZE_TEMP_ARRAY(cursor, 2); ADD_C(cursor, INTEGER_OBJ(row)); ADD_C(cursor, INTEGER_OBJ(col));
   MAXSIZE_TEMP_DICT(data, 2);
-  String termrequest = { .data = (char *)seq, .size = seqlen };
-  PUT_C(data, "sequence", STRING_OBJ(termrequest));
+  PUT_C(data, "sequence", STRING_OBJ(((String){ .data = (char *)seq, .size = seqlen })));
   PUT_C(data, "cursor", ARRAY_OBJ(cursor));
-  apply_autocmds_group(EVENT_TERMREQUEST, NULL, NULL, true, AUGROUP_ALL, (buf_T *)buf, NULL,
-                       &DICT_OBJ(data));
+  apply_autocmds_group(EVENT_TERMREQUEST, NULL, NULL, true, AUGROUP_ALL, (buf_T *)buf, NULL, &DICT_OBJ(data));
 }
 typedef void (*emit_termrequest_fn_t)(void **);
 void nvim_terminal_pending_put_termrequest(void *term, emit_termrequest_fn_t fn,
                                            char *sequence, size_t seqlen,
                                            void *pending_send, intptr_t row, intptr_t col,
                                            intptr_t sb_deleted)
-{
-  multiqueue_put(((Terminal *)term)->pending.events, fn, term, sequence, (void *)seqlen,
-                 pending_send, (void *)row, (void *)col, (void *)sb_deleted);
-}
+  { multiqueue_put(((Terminal *)term)->pending.events, fn, term, sequence, (void *)seqlen, pending_send, (void *)row, (void *)col, (void *)sb_deleted); }
 void nvim_terminal_main_put_termrequest(emit_termrequest_fn_t fn, void *term,
                                         char *sequence, size_t seqlen,
                                         void *pending_send, intptr_t row, intptr_t col,
                                         intptr_t sb_deleted)
-{
-  multiqueue_put(loop_get_events(&main_loop), fn, term, sequence, (void *)seqlen,
-                 pending_send, (void *)row, (void *)col, (void *)sb_deleted);
-}
+  { multiqueue_put(loop_get_events(&main_loop), fn, term, sequence, (void *)seqlen, pending_send, (void *)row, (void *)col, (void *)sb_deleted); }
 void *nvim_term_sb_alloc_init(void)
-{
-  StringBuilder *sb = xmalloc(sizeof(StringBuilder));
-  kv_init(*sb);
-  return sb;
-}
+  { StringBuilder *sb = xmalloc(sizeof(StringBuilder)); kv_init(*sb); return sb; }
 
 // fetch_cell/fetch_row accessor: calls C vterm_screen_get_cell
 void nvim_vterm_screen_get_cell_c(void *vts, int row, int col, void *cell)
