@@ -636,26 +636,6 @@ int nvim_win_buf_has_terminal_safe(win_T *win) { return (win && win->w_buffer &&
 int nvim_win_is_cmdline_win(win_T *win) { return (win == cmdline_win) ? 1 : 0; }
 void nvim_set_cmdline_win_null(void) { cmdline_win = NULL; }
 void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf) { if (old_curbuf != curbuf) { apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf); } }
-void nvim_emsg_id(int id)
-{
-  switch (id) {
-  case 0: emsg(_("E444: Cannot close last window")); break;
-  case 1: emsg(_("E814: Cannot close window, only autocmd window would remain")); break;
-  case 2: emsg(_("E443: Cannot rotate when another window is split")); break;
-  case 3: emsg(_("E442: Can't split topleft and botright at the same time")); break;
-  case 4: emsg(_("E242: Can't split a window while closing another")); break;
-  case 5: emsg(_("E445: Other window contains changes")); break;
-  case 6: emsg(_("E441: There is no preview window")); break;
-  case 7: emsg(_(e_noalt)); break;
-  case 8: emsg(e_floatonly); break;
-  case 9: emsg(e_floatexchange); break;
-  case 10: emsg(_(e_autocmd_close)); break;
-  case 11: emsg(_(e_winfixbuf_cannot_go_to_buffer)); break;
-  case 12: emsg(_(e_cannot_split_window_when_closing_buffer)); break;
-  case 13: emsg(_(e_noroom)); break;
-  default: break;
-  }
-}
 int nvim_win_close_force(win_T *wp, int free_buf) { return win_close(wp, free_buf != 0, true); }
 void nvim_getout_zero(void) { getout(0); }
 int nvim_count_diff_windows_in_curtab(void)

@@ -442,3 +442,59 @@ pub unsafe extern "C" fn wrap_win_buf_meta_total_lines(wp: WinHandle) -> c_int {
 pub unsafe extern "C" fn wrap_is_aucmd_win(wp: WinHandle) -> c_int {
     c_int::from(is_aucmd_win(wp) != 0)
 }
+
+// =============================================================================
+// rs_emsg_id: error message dispatcher (replaces nvim_emsg_id in C shim)
+// =============================================================================
+
+extern "C" {
+    fn emsg(s: *const std::ffi::c_char);
+    fn gettext(msgid: *const std::ffi::c_char) -> *const std::ffi::c_char;
+    /// e_noalt: "E23: No alternate file"
+    static e_noalt: [std::ffi::c_char; 0];
+    /// e_floatonly: "E5601: Cannot close window, only floating window would remain"
+    static e_floatonly: [std::ffi::c_char; 0];
+    /// e_floatexchange: "E5602: Cannot exchange or rotate float"
+    static e_floatexchange: [std::ffi::c_char; 0];
+    /// e_autocmd_close: "E813: Cannot close autocmd window"
+    static e_autocmd_close: [std::ffi::c_char; 0];
+    /// e_winfixbuf_cannot_go_to_buffer: "E1513: Cannot switch buffer. 'winfixbuf' is enabled"
+    static e_winfixbuf_cannot_go_to_buffer: [std::ffi::c_char; 0];
+    /// e_noroom: "E36: Not enough room"
+    static e_noroom: [std::ffi::c_char; 0];
+}
+
+// Inline translated strings for IDs 0-6 and 12 (no C extern string variable).
+// Must match window_shim.c nvim_emsg_id exactly (same gettext msgids).
+const MSG_E444: &std::ffi::CStr = c"E444: Cannot close last window";
+const MSG_E814: &std::ffi::CStr = c"E814: Cannot close window, only autocmd window would remain";
+const MSG_E443: &std::ffi::CStr = c"E443: Cannot rotate when another window is split";
+const MSG_E442: &std::ffi::CStr = c"E442: Can't split topleft and botright at the same time";
+const MSG_E242: &std::ffi::CStr = c"E242: Can't split a window while closing another";
+const MSG_E445: &std::ffi::CStr = c"E445: Other window contains changes";
+const MSG_E441: &std::ffi::CStr = c"E441: There is no preview window";
+const MSG_E1159: &std::ffi::CStr = c"E1159: Cannot split a window when closing the buffer";
+
+/// Error message dispatcher, replacing the C `nvim_emsg_id` function.
+///
+/// IDs must match the constants defined in each Rust module's `EMSG_*` consts.
+#[export_name = "nvim_emsg_id"]
+pub unsafe extern "C" fn rs_emsg_id(id: c_int) {
+    match id {
+        0 => emsg(gettext(MSG_E444.as_ptr())),
+        1 => emsg(gettext(MSG_E814.as_ptr())),
+        2 => emsg(gettext(MSG_E443.as_ptr())),
+        3 => emsg(gettext(MSG_E442.as_ptr())),
+        4 => emsg(gettext(MSG_E242.as_ptr())),
+        5 => emsg(gettext(MSG_E445.as_ptr())),
+        6 => emsg(gettext(MSG_E441.as_ptr())),
+        7 => emsg(gettext(e_noalt.as_ptr())),
+        8 => emsg(e_floatonly.as_ptr()),
+        9 => emsg(e_floatexchange.as_ptr()),
+        10 => emsg(gettext(e_autocmd_close.as_ptr())),
+        11 => emsg(gettext(e_winfixbuf_cannot_go_to_buffer.as_ptr())),
+        12 => emsg(gettext(MSG_E1159.as_ptr())),
+        13 => emsg(gettext(e_noroom.as_ptr())),
+        _ => {}
+    }
+}
