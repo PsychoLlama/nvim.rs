@@ -32,7 +32,6 @@
 #include "nvim/hashtab_defs.h"
 #include "nvim/help.h"
 #include "nvim/input.h"
-#include "nvim/insexpand.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
@@ -204,7 +203,6 @@ extern void rs_prepare_pats(pat_T *pats, bool has_re);
 extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie);
 
 #include "tag_shim.c.generated.h"
-
 
 static taggy_T ptag_entry = { NULL, INIT_FMARK, 0, 0, NULL };
 
@@ -406,7 +404,6 @@ void nvim_tag_check_cursor(void) { check_cursor(curwin); }
 bool nvim_tag_get_p_tgst(void) { return p_tgst; }
 int nvim_tag_get_curbuf_fnum(void) { return curbuf->b_fnum; }
 bool nvim_tag_get_got_int(void) { return got_int; }
-int nvim_tag_get_msg_scroll(void) { return msg_scroll; }
 void nvim_tag_set_msg_scroll(int val) { msg_scroll = val; }
 int nvim_tag_get_msg_scrolled(void) { return msg_scrolled; }
 int nvim_tag_get_msg_silent(void) { return msg_silent; }
