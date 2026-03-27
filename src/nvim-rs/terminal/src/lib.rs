@@ -1218,6 +1218,8 @@ extern "C" {
     fn rs_vterm_keyboard_unichar(vt: *mut c_void, ch: u32, mods: c_int);
     fn rs_vterm_keyboard_start_paste(vt: *mut c_void);
     fn rs_vterm_keyboard_end_paste(vt: *mut c_void);
+    fn rs_vterm_mouse_move(vt: *mut c_void, row: c_int, col: c_int, mods: c_int);
+    fn rs_vterm_mouse_button(vt: *mut c_void, button: c_int, pressed: c_int, mods: c_int);
     fn rs_vterm_screen_flush_damage(vts: *mut c_void);
 
     // VTerm size function (defined in vterm crate)
@@ -1271,8 +1273,25 @@ extern "C" {
     fn nvim_terminal_set_winopts(s: *mut c_void);
     fn nvim_terminal_unset_winopts(s: *mut c_void);
     fn nvim_terminal_check_cursor_c();
-    fn nvim_terminal_send_mouse_event_c(term: *mut c_void, c: c_int) -> c_int;
     fn nvim_curwin_handle() -> c_int;
+    // Mouse event accessors (Phase 3)
+    fn nvim_get_mouse_row() -> c_int;
+    fn nvim_get_mouse_col() -> c_int;
+    fn nvim_get_mouse_grid() -> c_int;
+    fn nvim_mouse_find_win_inner(grid: *mut c_int, row: *mut c_int, col: *mut c_int)
+        -> *mut c_void;
+    fn nvim_win_col_off(wp: *mut c_void) -> c_int;
+    fn nvim_term_win_get_buf(wp: *mut c_void) -> *mut c_void;
+    fn nvim_win_get_winbar_height(wp: *mut c_void) -> c_int;
+    fn nvim_term_win_get_height(wp: *mut c_void) -> c_int;
+    fn nvim_term_win_get_width(wp: *mut c_void) -> c_int;
+    fn nvim_buf_get_terminal_ptr(buf: *mut c_void) -> *mut c_void;
+    fn nvim_get_vgetc_char() -> c_int;
+    fn nvim_get_vgetc_mod_mask() -> c_int;
+    fn nvim_key_typed() -> c_int;
+    fn nvim_ins_char_typebuf_c(c: c_int, mod_mask_val: c_int) -> c_int;
+    fn nvim_ungetchars(len: c_int);
+    fn nvim_do_mousescroll_c(term: *mut c_void, mouse_win: *mut c_void, c: c_int) -> c_int;
     fn nvim_buf_get_changedtick_curbuf() -> c_int;
     fn nvim_do_buffer_wipe(buf_handle: c_int);
     // Phase 13: terminal_close helpers
@@ -2429,6 +2448,82 @@ pub extern "C" fn rs_terminal_convert_mouse_button(key: c_int) -> MouseButtonRes
             pressed: 0,
         },
     }
+}
+
+// =============================================================================
+// Mouse Event Handling
+// =============================================================================
+
+/// Process a mouse event while the terminal is focused.
+///
+/// Returns 1 if the terminal should lose focus, 0 otherwise.
+///
+/// Replaces `send_mouse_event` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_send_mouse_event(term: TerminalHandle, c: c_int) -> c_int {
+    let mut row = unsafe { nvim_get_mouse_row() };
+    let mut col = unsafe { nvim_get_mouse_col() };
+    let mut grid = unsafe { nvim_get_mouse_grid() };
+    let mouse_win = unsafe { nvim_mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col) };
+
+    if !mouse_win.is_null() {
+        let t = unsafe { term.as_ref() };
+        let win_buf = unsafe { nvim_term_win_get_buf(mouse_win) };
+        let buf_term = unsafe { nvim_buf_get_terminal_ptr(win_buf) };
+        let winbar_height = unsafe { nvim_win_get_winbar_height(mouse_win) };
+        let win_height = unsafe { nvim_term_win_get_height(mouse_win) };
+        let win_width = unsafe { nvim_term_win_get_width(mouse_win) };
+        let offset = unsafe { nvim_win_col_off(mouse_win) };
+
+        if t.forward_mouse
+            && buf_term == term.as_ptr()
+            && row >= 0
+            && (grid > 1 || row + winbar_height < win_height)
+            && col >= offset
+            && (grid > 1 || col < win_width)
+        {
+            // Event in terminal window with mouse forwarding enabled.
+            let mb = rs_terminal_convert_mouse_button(c);
+            if mb.button < 0 {
+                return 0;
+            }
+            let mouse_result = rs_terminal_convert_key(c, unsafe { mod_mask });
+            let mouse_mod = mouse_result.modifiers;
+            unsafe { rs_vterm_mouse_move(t.vt, row, col - offset, mouse_mod) };
+            if mb.button > 0 {
+                unsafe { rs_vterm_mouse_button(t.vt, mb.button, mb.pressed, mouse_mod) };
+            }
+            return 0;
+        }
+
+        if c == K_MOUSEUP || c == K_MOUSEDOWN || c == K_MOUSELEFT || c == K_MOUSERIGHT {
+            return unsafe { nvim_do_mousescroll_c(term.as_ptr(), mouse_win, c) };
+        }
+    }
+
+    // end: label logic
+    let win_matches = if mouse_win.is_null() {
+        false
+    } else {
+        let win_buf = unsafe { nvim_term_win_get_buf(mouse_win) };
+        let buf_term = unsafe { nvim_buf_get_terminal_ptr(win_buf) };
+        buf_term == term.as_ptr()
+    };
+
+    if (c == K_LEFTRELEASE && win_matches) || c == K_MOUSEMOVE {
+        return 0;
+    }
+
+    let vgetc_char = unsafe { nvim_get_vgetc_char() };
+    let vgetc_mod = unsafe { nvim_get_vgetc_mod_mask() };
+    let len = unsafe { nvim_ins_char_typebuf_c(vgetc_char, vgetc_mod) };
+    if unsafe { nvim_key_typed() } != 0 {
+        unsafe { nvim_ungetchars(len) };
+    }
+    1
 }
 
 // =============================================================================
@@ -4386,7 +4481,7 @@ pub unsafe extern "C" fn rs_terminal_execute(state: *mut c_void, key: c_int) -> 
     );
 
     if is_mouse {
-        if unsafe { nvim_terminal_send_mouse_event_c(s.term, key) } != 0 {
+        if unsafe { rs_send_mouse_event(TerminalHandle::from_ptr(s.term), key) } != 0 {
             return 0;
         }
         return 1;

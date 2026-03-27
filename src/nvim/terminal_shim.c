@@ -423,132 +423,7 @@ extern int rs_term_selection_set(int mask, const char *str, size_t len, int init
 static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user)
   { return rs_term_selection_set((int)mask, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
 
-// process a mouse event while the terminal is focused. return true if the
-// terminal should lose focus
-static bool send_mouse_event(Terminal *term, int c)
-{
-  int row = mouse_row;
-  int col = mouse_col;
-  int grid = mouse_grid;
-  win_T *mouse_win = mouse_find_win_inner(&grid, &row, &col);
-  if (mouse_win == NULL) {
-    goto end;
-  }
-
-  int offset;
-  if (term->forward_mouse && mouse_win->w_buffer->terminal == term && row >= 0
-      && (grid > 1 || row + mouse_win->w_winbar_height < mouse_win->w_height)
-      && col >= (offset = win_col_off(mouse_win))
-      && (grid > 1 || col < mouse_win->w_width)) {
-    // event in the terminal window and mouse events was enabled by the
-    // program. translate and forward the event
-    int button;
-    bool pressed = false;
-
-    switch (c) {
-    case K_LEFTDRAG:
-    case K_LEFTMOUSE:
-      pressed = true; FALLTHROUGH;
-    case K_LEFTRELEASE:
-      button = 1; break;
-    case K_MIDDLEDRAG:
-    case K_MIDDLEMOUSE:
-      pressed = true; FALLTHROUGH;
-    case K_MIDDLERELEASE:
-      button = 2; break;
-    case K_RIGHTDRAG:
-    case K_RIGHTMOUSE:
-      pressed = true; FALLTHROUGH;
-    case K_RIGHTRELEASE:
-      button = 3; break;
-    case K_X1DRAG:
-    case K_X1MOUSE:
-      pressed = true; FALLTHROUGH;
-    case K_X1RELEASE:
-      button = 8; break;
-    case K_X2DRAG:
-    case K_X2MOUSE:
-      pressed = true; FALLTHROUGH;
-    case K_X2RELEASE:
-      button = 9; break;
-    case K_MOUSEDOWN:
-      pressed = true; button = 4; break;
-    case K_MOUSEUP:
-      pressed = true; button = 5; break;
-    case K_MOUSELEFT:
-      pressed = true; button = 7; break;
-    case K_MOUSERIGHT:
-      pressed = true; button = 6; break;
-    case K_MOUSEMOVE:
-      button = 0; break;
-    default:
-      return false;
-    }
-
-    VTermKeyResult mouse_result = rs_terminal_convert_key(c, mod_mask);
-    VTermModifier mouse_mod = (VTermModifier)mouse_result.modifiers;
-    rs_vterm_mouse_move(term->vt, row, col - offset, mouse_mod);
-    if (button) {
-      rs_vterm_mouse_button(term->vt, button, (int)pressed, mouse_mod);
-    }
-    return false;
-  }
-
-  if (c == K_MOUSEUP || c == K_MOUSEDOWN || c == K_MOUSELEFT || c == K_MOUSERIGHT) {
-    win_T *save_curwin = curwin;
-    // switch window/buffer to perform the scroll
-    curwin = mouse_win;
-    curbuf = curwin->w_buffer;
-
-    cmdarg_T cap;
-    oparg_T oa;
-    CLEAR_FIELD(cap);
-    clear_oparg(&oa);
-    cap.oap = &oa;
-
-    switch (cap.cmdchar = c) {
-    case K_MOUSEUP:
-      cap.arg = MSCR_UP;
-      break;
-    case K_MOUSEDOWN:
-      cap.arg = MSCR_DOWN;
-      break;
-    case K_MOUSELEFT:
-      cap.arg = MSCR_LEFT;
-      break;
-    case K_MOUSERIGHT:
-      cap.arg = MSCR_RIGHT;
-      break;
-    default:
-      abort();
-    }
-
-    // Call the common mouse scroll function shared with other modes.
-    do_mousescroll(&cap);
-
-    curwin->w_redr_status = true;
-    curwin = save_curwin;
-    curbuf = curwin->w_buffer;
-    redraw_later(mouse_win, UPD_NOT_VALID);
-    rs_invalidate_terminal(term, -1, -1);
-    // Only need to exit focus if the scrolled window is the terminal window
-    return mouse_win == curwin;
-  }
-
-end:
-  // Ignore left release action if it was not forwarded to prevent
-  // leaving Terminal mode after entering to it using a mouse.
-  if ((c == K_LEFTRELEASE && mouse_win != NULL && mouse_win->w_buffer->terminal == term)
-      || c == K_MOUSEMOVE) {
-    return false;
-  }
-
-  int len = ins_char_typebuf(vgetc_char, vgetc_mod_mask, true);
-  if (KeyTyped) {
-    ungetchars(len);
-  }
-  return true;
-}
+extern int rs_send_mouse_event(void *term, int c);
 
 static void fetch_row(Terminal *term, int row, int end_col)
 {
@@ -905,7 +780,6 @@ void nvim_win_redraw_later_valid(win_T *wp) { redraw_later(wp, UPD_VALID); }
 void nvim_free_string_option(char *str) { free_string_option(str); }
 void nvim_win_set_p_culopt(win_T *wp, char *s) { wp->w_p_culopt = s; }
 void nvim_terminal_check_cursor_c(void) { terminal_check_cursor(); }
-int nvim_terminal_send_mouse_event_c(void *term, int c) { return (int)send_mouse_event((Terminal *)term, c); }
 int nvim_curwin_handle(void) { return curwin->handle; }
 int nvim_buf_get_changedtick_curbuf(void) { return (int)buf_get_changedtick(curbuf); }
 void nvim_do_buffer_wipe(int buf_handle)
@@ -959,4 +833,42 @@ void *nvim_term_sb_alloc_init(void)
   return sb;
 }
 
-// vim: foldmethod=marker
+// Mouse event accessors for rs_send_mouse_event
+void *nvim_mouse_find_win_inner(int *grid, int *row, int *col)
+  { return mouse_find_win_inner(grid, row, col); }
+void *nvim_term_win_get_buf(void *wp) { return ((win_T *)wp)->w_buffer; }
+int nvim_term_win_get_height(void *wp) { return ((win_T *)wp)->w_height; }
+int nvim_term_win_get_width(void *wp) { return ((win_T *)wp)->w_width; }
+void *nvim_buf_get_terminal_ptr(void *buf) { return ((buf_T *)buf)->terminal; }
+int nvim_get_vgetc_mod_mask(void) { return vgetc_mod_mask; }
+int nvim_key_typed(void) { return KeyTyped; }
+int nvim_ins_char_typebuf_c(int c, int mod_mask_val) { return ins_char_typebuf(c, mod_mask_val, true); }
+void nvim_ungetchars(int len) { ungetchars(len); }
+// Wraps the do_mousescroll block: saves/restores curwin/curbuf, calls do_mousescroll,
+// redraws status, and returns whether mouse_win == old curwin.
+int nvim_do_mousescroll_c(void *term, void *mouse_win, int c)
+{
+  win_T *save_curwin = curwin;
+  curwin = (win_T *)mouse_win;
+  curbuf = curwin->w_buffer;
+  cmdarg_T cap;
+  oparg_T oa;
+  CLEAR_FIELD(cap);
+  clear_oparg(&oa);
+  cap.oap = &oa;
+  cap.cmdchar = c;
+  switch (c) {
+  case K_MOUSEUP:    cap.arg = MSCR_UP; break;
+  case K_MOUSEDOWN:  cap.arg = MSCR_DOWN; break;
+  case K_MOUSELEFT:  cap.arg = MSCR_LEFT; break;
+  case K_MOUSERIGHT: cap.arg = MSCR_RIGHT; break;
+  default: abort();
+  }
+  do_mousescroll(&cap);
+  curwin->w_redr_status = true;
+  curwin = save_curwin;
+  curbuf = curwin->w_buffer;
+  redraw_later((win_T *)mouse_win, UPD_NOT_VALID);
+  rs_invalidate_terminal(term, -1, -1);
+  return (win_T *)mouse_win == curwin;
+}
