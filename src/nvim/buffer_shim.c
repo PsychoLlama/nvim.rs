@@ -463,33 +463,18 @@ void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual 
 fmark_T *nvim_get_no_position_ptr(void)
 { static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL }; return &no_position; }
 
-void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T changedtick)
-  FUNC_ATTR_NONNULL_ALL
-{
-  typval_T old_val = buf->changedtick_di.di_tv;
-
-#ifndef NDEBUG
-  dictitem_T *const changedtick_di = tv_dict_find(buf->b_vars, S_LEN("changedtick"));
-  assert(changedtick_di != NULL);
-  assert(changedtick_di->di_tv.v_type == VAR_NUMBER);
-  assert(changedtick_di->di_tv.v_lock == VAR_FIXED);
-  // For some reason formatc does not like the below.
-# ifndef UNIT_TESTING_LUA_PREPROCESSING
-  assert(changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX));
-# endif
-  assert(changedtick_di == (dictitem_T *)&buf->changedtick_di);
-#endif
-  buf->changedtick_di.di_tv.vval.v_number = changedtick;
-
-  if (tv_dict_is_watched(buf->b_vars)) {
-    buf->b_locked++;
-    tv_dict_watcher_notify(buf->b_vars,
-                           (char *)buf->changedtick_di.di_key,
-                           &buf->changedtick_di.di_tv,
-                           &old_val);
-    buf->b_locked--;
-  }
-}
+// Phase 2 accessors: changedtick_di watcher machinery
+void nvim_buf_changedtick_di_tv_copy(buf_T *buf, void *out)
+{ memcpy(out, &buf->changedtick_di.di_tv, sizeof(typval_T)); }
+void nvim_buf_changedtick_di_set_number(buf_T *buf, int64_t val)
+{ buf->changedtick_di.di_tv.vval.v_number = (varnumber_T)val; }
+dict_T *nvim_buf_get_b_vars(buf_T *buf) { return buf->b_vars; }
+void nvim_tv_dict_watcher_notify(dict_T *dict, const char *key, void *newtv, void *oldtv)
+{ tv_dict_watcher_notify(dict, (char *)key, (typval_T *)newtv, (typval_T *)oldtv); }
+const char *nvim_buf_changedtick_di_key(buf_T *buf) { return (const char *)buf->changedtick_di.di_key; }
+void *nvim_buf_changedtick_di_tv_ptr(buf_T *buf) { return &buf->changedtick_di.di_tv; }
+void nvim_buf_b_locked_inc(buf_T *buf) { buf->b_locked++; }
+void nvim_buf_b_locked_dec(buf_T *buf) { buf->b_locked--; }
 
 bool nvim_buf_is_in_any_window(buf_T *buf)
 { FOR_ALL_TAB_WINDOWS(tab, win) { if (win->w_buffer == buf) { return true; } } return false; }

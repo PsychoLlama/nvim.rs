@@ -10,7 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::BufHandle;
 
@@ -22,7 +22,7 @@ extern "C" {
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-    fn ml_get_buf(buf: BufHandle, lnum: c_int) -> *const std::ffi::c_char;
+    fn ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
 
     // Phase 1 accessors: buffer ml and file state fields
     fn nvim_buf_set_ml_line_count(buf: BufHandle, val: c_int);
@@ -38,7 +38,6 @@ extern "C" {
     // Phase 1: unchanged, changedtick, autocmd, close_buffer
     fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
     fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
-    fn nvim_buf_set_changedtick_compound(buf: BufHandle, changedtick: i64);
     fn block_autocmds();
     fn unblock_autocmds();
     fn close_buffer(
@@ -48,6 +47,22 @@ extern "C" {
         abort_if_last: bool,
         ignore_abort: bool,
     ) -> bool;
+
+    // Phase 2: changedtick_di watcher machinery
+    fn nvim_buf_changedtick_di_tv_copy(buf: BufHandle, out: *mut u8);
+    fn nvim_buf_changedtick_di_set_number(buf: BufHandle, val: i64);
+    fn nvim_buf_get_b_vars(buf: BufHandle) -> *mut std::ffi::c_void;
+    fn nvim_tv_dict_is_watched(dict: *const std::ffi::c_void) -> bool;
+    fn nvim_tv_dict_watcher_notify(
+        dict: *mut std::ffi::c_void,
+        key: *const c_char,
+        newtv: *mut u8,
+        oldtv: *mut u8,
+    );
+    fn nvim_buf_changedtick_di_key(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_changedtick_di_tv_ptr(buf: BufHandle) -> *mut u8;
+    fn nvim_buf_b_locked_inc(buf: BufHandle);
+    fn nvim_buf_b_locked_dec(buf: BufHandle);
 }
 
 // =============================================================================
@@ -369,15 +384,42 @@ pub unsafe extern "C" fn rs_buf_clear_file(buf: BufHandle) {
     nvim_buf_set_ml_flags(buf, ML_EMPTY);
 }
 
+/// Size of typval_T in bytes (asserted in testing.c).
+const TYPVAL_SIZE: usize = 16;
+
 /// Set `b:changedtick`, triggering dict watcher notification if watched.
 ///
-/// Mirrors C `buf_set_changedtick`.
+/// Mirrors C `buf_set_changedtick` / `nvim_buf_set_changedtick_compound`.
+/// Omits the debug-only asserts (`#ifndef NDEBUG` block) from the C version.
 ///
 /// # Safety
 /// Must be called on the main thread with valid Neovim state.
 #[unsafe(export_name = "buf_set_changedtick")]
 pub unsafe extern "C" fn rs_buf_set_changedtick(buf: BufHandle, changedtick: i64) {
-    nvim_buf_set_changedtick_compound(buf, changedtick);
+    if buf.is_null() {
+        return;
+    }
+    // Copy old typval before overwriting.
+    let mut old_val = [0u8; TYPVAL_SIZE];
+    nvim_buf_changedtick_di_tv_copy(buf, old_val.as_mut_ptr());
+
+    // Set new value.
+    nvim_buf_changedtick_di_set_number(buf, changedtick);
+
+    // Notify dict watchers if any.
+    let b_vars = nvim_buf_get_b_vars(buf);
+    if nvim_tv_dict_is_watched(b_vars.cast_const()) {
+        // Increment b_locked around the notify to match C semantics.
+        nvim_buf_b_locked_inc(buf);
+        let newtv = nvim_buf_changedtick_di_tv_ptr(buf);
+        nvim_tv_dict_watcher_notify(
+            b_vars,
+            nvim_buf_changedtick_di_key(buf),
+            newtv,
+            old_val.as_mut_ptr(),
+        );
+        nvim_buf_b_locked_dec(buf);
+    }
 }
 
 /// Increment `b:changedtick` value.
