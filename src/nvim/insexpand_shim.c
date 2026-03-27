@@ -1,4 +1,4 @@
-// insexpand.c: functions for Insert mode completion
+// insexpand_shim.c: C shim for Insert mode completion (Rust insexpand crate)
 
 #include <assert.h>
 #include <limits.h>
@@ -14,7 +14,6 @@
 #include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/change.h"
 #include "nvim/charset.h"
 #include "nvim/cmdexpand.h"
 #include "nvim/cmdexpand_defs.h"
@@ -32,8 +31,6 @@
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/fuzzy.h"
-#include "nvim/garray.h"
-#include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/highlight_defs.h"
@@ -41,9 +38,7 @@
 #include "nvim/insexpand.h"
 #include "nvim/lua/executor.h"
 #include "nvim/macros_defs.h"
-#include "nvim/mark_defs.h"
 #include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
@@ -52,12 +47,9 @@
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/input.h"
-#include "nvim/os/time.h"
 #include "nvim/path.h"
 #include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
-#include "nvim/regexp.h"
-#include "nvim/regexp_defs.h"
 #include "nvim/register.h"
 #include "nvim/search.h"
 #include "nvim/spell.h"
@@ -65,9 +57,7 @@
 #include "nvim/state_defs.h"
 #include "nvim/strings.h"
 #include "nvim/tag.h"
-#include "nvim/types_defs.h"
 #include "nvim/ui.h"
-#include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
@@ -87,7 +77,6 @@ extern void rs_ins_compl_del_pum(void);
 extern const char *rs_ins_compl_mode(void);
 extern void rs_ins_compl_longest_match(void *match);
 
-// Forward declarations for compound C accessors defined at the bottom of this file.
 int nvim_ins_compl_add_tv_impl(void *tv, int dir, int fast);
 void nvim_ins_compl_add_list_impl(void *list);
 void nvim_ins_compl_add_dict_impl(void *dict);
@@ -261,8 +250,6 @@ int compl_match_arraysize;
 static bool match_at_original_text(const compl_T *const match) { return match->cp_flags & CP_ORIGINAL_TEXT; }
 /// @return  true if "match" is the first match in the completion list.
 static bool is_first_match(const compl_T *const match) { return match == compl_first_match; }
-/// ins_compl_add_infercase: see rs_ins_compl_add_infercase in infercase.rs.
-/// Still exported from C for spell.c and search_shim.c callers.
 int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Direction dir,
                             bool cont_s_ipos, int score)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -313,30 +300,7 @@ static inline void free_cptext(char *const *const cptext)
   for (size_t i = 0; i < CPT_COUNT; i++) { xfree(cptext[i]); }
 }
 
-/// Add a match to the list of matches
-///
-/// @param[in]  str     text of the match to add
-/// @param[in]  len     length of "str". If -1, then the length of "str" is computed.
-/// @param[in]  fname   file name to associate with this match. May be NULL.
-/// @param[in]  cptext  list of strings to use with this match (for abbr, menu, info
-///                     and kind). May be NULL.
-///                     If not NULL, must have exactly #CPT_COUNT items.
-/// @param[in]  cptext_allocated  If true, will not copy cptext strings.
-///
-///                               @note Will free strings in case of error.
-///                                     cptext itself will not be freed.
-/// @param[in]  user_data  user supplied data (any vim type) for this match
-/// @param[in]  cdir       match direction. If 0, use "compl_direction".
-/// @param[in]  flags_arg  match flags (cp_flags)
-/// @param[in]  adup       accept this match even if it is already present.
-/// @param[in]  user_hl    list of extra highlight attributes for abbr kind.
-///
-/// If "cdir" is FORWARD, then the match is added after the current match.
-/// Otherwise, it is added before the current match.
-///
-/// @return NOTDONE if the given string is already in the list of completions,
-///         otherwise it is added to the list and  OK is returned. FAIL will be
-///         returned in case of error.
+/// Add a match to the list of matches. Returns OK, NOTDONE (duplicate), or FAIL.
 static int ins_compl_add(char *const str, int len, char *const fname, char *const *const cptext,
                          const bool cptext_allocated, typval_T *user_data, const Direction cdir,
                          int flags_arg, const bool adup, const int *user_hl, const int score)
@@ -502,11 +466,8 @@ static dict_T *ins_compl_dict_alloc(compl_T *match)
   return dict;
 }
 
-/// Trigger the CompleteChanged autocmd event. Invoked each time the Insert mode
-/// completion menu is changed.
-// Helper functions for nvim_mergesort_compl_list_raw() -- C function pointer
+// Helper functions for nvim_mergesort_compl_list_raw(): C function pointer
 // callbacks required by mergesort_list(); sort logic lives in rs_sort_compl_match_list.
-
 static void *cp_get_next(void *node) { return ((compl_T *)node)->cp_next; }
 static void cp_set_next(void *node, void *next) { ((compl_T *)node)->cp_next = (compl_T *)next; }
 static void *cp_get_prev(void *node) { return ((compl_T *)node)->cp_prev; }
