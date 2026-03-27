@@ -31,7 +31,7 @@ extern "C" {
     fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
     fn nvim_get_first_tabpage() -> TabpageHandle;
     fn nvim_get_curtab() -> TabpageHandle;
-    fn nvim_buf_valid_ptr(buf: BufHandle) -> c_int;
+    fn buf_valid(buf: BufHandle) -> bool;
 
     // --- Existing Rust FFI helpers ---
     #[link_name = "is_aucmd_win"]
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
         let bufref_valid = if bufref_buf.is_null() {
             0
         } else {
-            nvim_buf_valid_ptr(bufref_buf)
+            c_int::from(buf_valid(bufref_buf))
         };
         rs_close_othertab_leave_open(win, did_decrement, bufref_buf, bufref_valid);
         return 0;
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
         let bufref_valid = if bufref_buf.is_null() {
             0
         } else {
-            nvim_buf_valid_ptr(bufref_buf)
+            c_int::from(buf_valid(bufref_buf))
         };
         rs_close_othertab_leave_open(win, did_decrement, bufref_buf, bufref_valid);
         return 0;
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
         let bufref_valid = if bufref_buf.is_null() {
             0
         } else {
-            nvim_buf_valid_ptr(bufref_buf)
+            c_int::from(buf_valid(bufref_buf))
         };
         rs_close_othertab_leave_open(win, did_decrement, bufref_buf, bufref_valid);
         return 0;

@@ -36,8 +36,7 @@ extern "C" {
     /// Get curwin global.
     fn nvim_get_curwin() -> WinHandle;
 
-    /// Check if text or buf is locked. Returns 1 if locked.
-    fn nvim_text_or_buf_locked() -> c_int;
+    fn text_or_buf_locked() -> bool;
 
     /// Call beep_flush().
     fn nvim_beep_flush();
@@ -304,8 +303,7 @@ const MODE_INSERT: c_int = 0x10;
 const NUL: c_int = 0;
 
 extern "C" {
-    /// Check if a window's buffer is a prompt buffer.
-    fn nvim_win_bt_prompt(wp: WinHandle) -> c_int;
+    fn rs_bt_prompt(buf: BufHandle) -> bool;
 
     /// Get b_prompt_insert from window's buffer.
     fn nvim_buf_get_prompt_insert(buf: *mut std::ffi::c_void) -> c_int;
@@ -340,7 +338,7 @@ extern "C" {
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn leaving_window_impl(win: WinHandle) {
-    if nvim_win_bt_prompt(win) == 0 {
+    if !rs_bt_prompt(nvim_win_get_buffer(win)) {
         return;
     }
 
@@ -371,7 +369,7 @@ unsafe fn leaving_window_impl(win: WinHandle) {
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn entering_window_impl(win: WinHandle) {
-    if nvim_win_bt_prompt(win) == 0 {
+    if !rs_bt_prompt(nvim_win_get_buffer(win)) {
         return;
     }
 
@@ -437,7 +435,7 @@ pub unsafe extern "C" fn entering_window(win: WinHandle) {
 unsafe fn win_goto_impl(wp: WinHandle) {
     let owp = nvim_get_curwin();
 
-    if nvim_text_or_buf_locked() != 0 {
+    if text_or_buf_locked() {
         nvim_beep_flush();
         return;
     }

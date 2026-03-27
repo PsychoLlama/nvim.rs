@@ -100,8 +100,7 @@ extern "C" {
     /// Get global p_ead (equalalways direction).
     fn nvim_get_p_ead() -> *const std::ffi::c_char;
 
-    /// Call win_fix_scroll (C wrapper).
-    fn nvim_win_fix_scroll(resize: bool);
+    fn win_fix_scroll(resize: c_int);
 
     /// Set w_winrow on a window.
     fn nvim_win_set_winrow(wp: WinHandle, row: c_int);
@@ -447,7 +446,7 @@ fn win_equal_impl(next_curwin: WinHandle, current: bool, mut dir: c_int) {
         );
 
         if is_aucmd_win(next_curwin) == 0 {
-            nvim_win_fix_scroll(true);
+            win_fix_scroll(1);
         }
     }
 }

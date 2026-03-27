@@ -206,7 +206,8 @@ extern "C" {
     fn nvim_emsg_e_cmdwin();
     #[link_name = "rs_reset_VIsual_and_resel"]
     fn nvim_reset_visual_wrapper();
-    fn nvim_bt_quickfix_curbuf() -> c_int;
+    fn nvim_get_curbuf() -> BufHandle;
+    fn rs_bt_quickfix(buf: BufHandle) -> bool;
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     // nvim_cmd_with_count_exec removed: replaced by rs_cmd_with_count_exec (Phase 4)
     #[link_name = "do_cmdline_cmd"]
@@ -260,7 +261,7 @@ extern "C" {
     fn nvim_al_win_close(wp: WinHandle, free_buf: c_int, force: c_int);
     fn nvim_apply_autocmds_tabnewentered();
     fn nvim_win_get_alt_fnum(wp: WinHandle) -> c_int;
-    fn nvim_curbuf_locked() -> c_int;
+    fn curbuf_locked() -> bool;
     fn nvim_semsg_e92_buf_not_found(nr: i64);
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
@@ -487,7 +488,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 }
                 nvim_reset_visual_wrapper();
                 // When splitting the quickfix window, open a new buffer.
-                if nvim_bt_quickfix_curbuf() != 0 {
+                if rs_bt_quickfix(nvim_get_curbuf()) {
                     rs_do_window_new(nchar, prenum);
                     return;
                 }
@@ -502,7 +503,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     return;
                 }
                 nvim_reset_visual_wrapper();
-                if nvim_bt_quickfix_curbuf() != 0 {
+                if rs_bt_quickfix(nvim_get_curbuf()) {
                     rs_do_window_new(nchar, prenum);
                     return;
                 }
@@ -825,7 +826,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // Quickfix: K_KENTER, CAR
             // =================================================================
             K_KENTER | CAR => {
-                if nvim_bt_quickfix_curbuf() != 0 {
+                if rs_bt_quickfix(nvim_get_curbuf()) {
                     rs_qf_view_result(true);
                 }
             }
@@ -1131,7 +1132,7 @@ pub unsafe extern "C" fn rs_do_window_hat(prenum: c_int) {
         return;
     }
 
-    if nvim_curbuf_locked() == 0 && rs_win_split(0, 0) == OK {
+    if !curbuf_locked() && rs_win_split(0, 0) == OK {
         buflist_getfile(alt_fnum, 0, GETF_ALT, 0);
     }
 }

@@ -59,8 +59,7 @@ extern "C" {
     /// Check if only one non-floating window in the tab.
     fn rs_one_window_in_tab(wp: WinHandle, tp: crate::TabpageHandle) -> c_int;
 
-    /// Check if text or buffer is locked.
-    fn nvim_text_or_buf_locked() -> c_int;
+    fn text_or_buf_locked() -> bool;
 
     /// Generic error message dispatcher.
     fn nvim_emsg_id(id: c_int);
@@ -454,7 +453,7 @@ unsafe fn win_exchange_impl(prenum: c_int) {
     }
 
     // Do not exchange if text or buffer is locked.
-    if nvim_text_or_buf_locked() != 0 {
+    if text_or_buf_locked() {
         nvim_beep_flush_wrapper();
         return;
     }

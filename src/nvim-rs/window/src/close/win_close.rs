@@ -79,13 +79,12 @@ extern "C" {
     fn nvim_win_valid_wrapper(wp: WinHandle) -> c_int;
     #[link_name = "rs_win_equal"]
     fn nvim_win_equal_wrapper(wp: WinHandle, current: c_int, dir: c_int);
-    fn nvim_win_fix_scroll(upd_topline: bool);
+    fn win_fix_scroll(upd_topline: c_int);
     fn nvim_win_get_frame_parent(wp: WinHandle) -> *mut Frame;
     fn nvim_get_p_ea() -> c_int;
     fn nvim_get_p_ead_char() -> c_int;
 
     // --- Phase 11 new accessors ---
-    fn nvim_bt_help_win(wp: WinHandle) -> c_int;
     fn nvim_win_close_force(wp: WinHandle, free_buf: c_int) -> c_int;
     fn nvim_getout_zero() -> !;
     fn nvim_count_diff_windows_in_curtab() -> c_int;
@@ -98,7 +97,7 @@ extern "C" {
         tp: TabpageHandle,
         force: c_int,
     ) -> c_int;
-    fn nvim_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
+    fn win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
     fn nvim_apply_autocmds_event(event: std::ffi::c_int);
     fn aborting() -> c_int;
 }
@@ -225,7 +224,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
 
     // --- Autocmd-heavy section ---
 
-    let help_window = nvim_bt_help_win(win) != 0;
+    let help_window = rs_bt_help(nvim_win_get_buffer(win));
     if !help_window {
         rs_clear_snapshot(nvim_get_curtab(), SNAP_HELP_IDX);
     }
@@ -237,7 +236,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
 
         // Find the alternate window.
         let wp_alt: WinHandle = if nvim_win_get_floating(win) != 0 {
-            nvim_win_float_find_altwin(win, TabpageHandle::null())
+            win_float_find_altwin(win, TabpageHandle::null())
         } else {
             rs_frame2win(rs_win_altframe(win))
         };
@@ -596,11 +595,11 @@ pub extern "C" fn rs_win_close_post_layout(was_floating: c_int, dir: c_int, win_
                 nvim_win_equal_wrapper(curwin, c_int::from(current), dir);
             } else {
                 rs_win_comp_pos();
-                nvim_win_fix_scroll(false);
+                win_fix_scroll(0);
             }
         } else {
             rs_win_comp_pos();
-            nvim_win_fix_scroll(false);
+            win_fix_scroll(0);
         }
     }
 }

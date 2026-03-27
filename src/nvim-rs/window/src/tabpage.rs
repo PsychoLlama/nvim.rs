@@ -631,7 +631,7 @@ pub extern "C" fn rs_tabpage_insert_position(after: c_int) -> TabpageHandle {
 
 extern "C" {
     fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-    fn nvim_win_has_winnr(wp: WinHandle, tp: TabpageHandle) -> c_int;
+    fn win_has_winnr(wp: WinHandle, tp: TabpageHandle) -> bool;
 }
 
 /// Find the tabpage number and window number for a window ID.
@@ -649,12 +649,12 @@ fn win_get_tabwin_impl(id: c_int) -> (c_int, c_int) {
             let mut wp = get_tabpage_firstwin(tp);
             while !wp.is_null() {
                 if nvim_win_get_handle(wp) == id {
-                    if nvim_win_has_winnr(wp, tp) != 0 {
+                    if win_has_winnr(wp, tp) {
                         return (tnum, wnum);
                     }
                     return (0, 0);
                 }
-                wnum += nvim_win_has_winnr(wp, tp);
+                wnum += c_int::from(win_has_winnr(wp, tp));
                 wp = nvim_win_get_next(wp);
             }
             tnum += 1;

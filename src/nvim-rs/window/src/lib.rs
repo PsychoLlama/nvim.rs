@@ -1595,17 +1595,10 @@ extern "C" {
     /// Set the w_vsep_width field of a window.
     fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
 
-    /// Set the fr_height field of a frame.
-    fn nvim_frame_set_height(frp: *mut Frame, val: c_int);
-
-    /// Set the fr_width field of a frame.
-    fn nvim_frame_set_width(frp: *mut Frame, val: c_int);
-
     /// Wrapper for win_config_float().
     fn nvim_win_config_float(wp: WinHandle);
 
-    /// Wrapper for win_fix_scroll().
-    fn nvim_win_fix_scroll(upd_topline: bool);
+    fn win_fix_scroll(upd_topline: c_int);
 
     /// Wrapper for redraw_all_later().
     fn nvim_redraw_all_later(redraw_type: c_int);
@@ -1683,7 +1676,7 @@ fn win_setheight_win_impl(mut height: c_int, win: WinHandle) {
 
             // recompute the window positions
             win_comp_pos_impl();
-            nvim_win_fix_scroll(true);
+            win_fix_scroll(1);
 
             nvim_redraw_all_later(UPD_NOT_VALID);
             nvim_set_redraw_cmdline(true);
@@ -2215,7 +2208,7 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
         }
 
         win_comp_pos_impl();
-        nvim_win_fix_scroll(true);
+        win_fix_scroll(1);
 
         nvim_redraw_all_later(UPD_SOME_VALID);
         showmode();
@@ -2603,7 +2596,7 @@ fn frame_fix_width_impl(wp: WinHandle) {
         if !frame.is_null() {
             let w_width = nvim_win_get_w_width(wp);
             let vsep_width = nvim_win_get_vsep_width(wp);
-            nvim_frame_set_width(frame, w_width + vsep_width);
+            (*frame).fr_width = w_width + vsep_width;
         }
     }
 }
@@ -2629,7 +2622,7 @@ fn frame_fix_height_impl(wp: WinHandle) {
             let w_height = nvim_win_get_w_height(wp);
             let hsep_height = nvim_win_get_hsep_height(wp);
             let status_height = nvim_win_get_status_height(wp);
-            nvim_frame_set_height(frame, w_height + hsep_height + status_height);
+            (*frame).fr_height = w_height + hsep_height + status_height;
         }
     }
 }

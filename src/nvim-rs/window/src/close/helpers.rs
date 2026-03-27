@@ -72,8 +72,7 @@ extern "C" {
     fn nvim_apply_autocmds_bufenter_if_changed(old_curbuf: BufHandle);
 
     // --- win_free_mem helpers ---
-    /// win_float_find_altwin(win, tp) wrapper.
-    fn nvim_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
+    fn win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
     /// xfree for frame_T*.
     fn nvim_xfree_frame(frp: *mut std::ffi::c_void);
     /// win_free(win, tp) -- direct Rust call.
@@ -236,7 +235,7 @@ pub unsafe extern "C" fn rs_win_free_mem(
         }
     } else {
         *dirp = c_int::from(b'h'); // Dummy value.
-        wp = nvim_win_float_find_altwin(win, tp);
+        wp = win_float_find_altwin(win, tp);
     }
 
     rs_win_free(win, tp);

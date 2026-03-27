@@ -44,8 +44,7 @@ extern "C" {
     /// Set buffer to NULL on a window.
     fn nvim_win_set_buffer_raw(wp: WinHandle, buf: BufHandle);
 
-    /// Validate a buffer pointer.
-    fn nvim_buf_valid_ptr(buf: BufHandle) -> c_int;
+    fn buf_valid(buf: BufHandle) -> bool;
 
     /// Check if buffer can be abandoned.
     fn nvim_win_can_abandon(wp: WinHandle, forceit: c_int) -> c_int;
@@ -142,7 +141,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
 
         // Autocommands messed the buffer pointer up.
         let buf = nvim_win_get_buf_ptr(wp);
-        if nvim_buf_valid_ptr(buf) == 0 && rs_win_valid(wp) != 0 {
+        if !buf_valid(buf) && rs_win_valid(wp) != 0 {
             nvim_win_set_buffer_raw(wp, BufHandle::null());
             rs_win_close(wp, 0, 0);
             wp = nvim_get_firstwin();
