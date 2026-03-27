@@ -71,7 +71,6 @@ extern char *rs_find_word_end(char *ptr);
 extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd, int maxcount, int timeout, bool recompute, const char *pattern, searchstat_T *stat);
 char *nvim_search_skipwhite_ml_get(linenr_T lnum) { return skipwhite(ml_get(lnum)); }
 void nvim_call_set_vv_searchforward(void) { set_vim_var_nr(VV_SEARCHFORWARD, rs_is_search_forward()); }
-// Tracks included files already searched by find_pattern_in_path().
 typedef struct { FILE *fp; char *name; linenr_T lnum; int matched; } SearchedFile;
 int nvim_get_search_match_lines(void) { return (int)search_match_lines; }
 int nvim_get_search_match_endcol(void) { return (int)search_match_endcol; }
@@ -160,22 +159,13 @@ void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool
                           int type, int count, int action, linenr_T start_lnum, linenr_T end_lnum,
                           bool forceit, bool silent)
 {
-  FpipInitResult init = nvim_fpip_init(ptr, dir, len,
-                                       whole ? 1 : 0, skip_comments ? 1 : 0,
-                                       type, count, action,
-                                       start_lnum, end_lnum,
+  FpipInitResult init = nvim_fpip_init(ptr, dir, len, whole ? 1 : 0, skip_comments ? 1 : 0,
+                                       type, count, action, start_lnum, end_lnum,
                                        forceit ? 1 : 0, silent ? 1 : 0);
-  if (!init.ok || init.handle == NULL) {
-    if (init.handle != NULL) {
-      nvim_fpip_cleanup(init.handle);
-    }
-    return;
-  }
+  if (!init.ok || init.handle == NULL) { if (init.handle != NULL) { nvim_fpip_cleanup(init.handle); } return; }
   nvim_fpip_run(init.handle);
   nvim_fpip_cleanup(init.handle);
 }
-
-// find_pattern_in_path batch helpers
 
 /// Opaque state for the find_pattern_in_path operation.
 typedef struct {
@@ -217,25 +207,14 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
                               int forceit, int silent)
 {
   FpipState *st = xcalloc(1, sizeof(FpipState));
-  st->max_path_depth = 50;
-  st->match_count = 1;
-  st->ptr = (char *)ptr;
-  st->dir = (Direction)dir;
-  st->len = len;
-  st->whole = whole != 0;
-  st->skip_comments = skip_comments != 0;
-  st->type = type;
-  st->count = count;
-  st->action = action;
-  st->start_lnum = start_lnum;
-  st->end_lnum = end_lnum;
-  st->forceit = forceit != 0;
-  st->silent = silent != 0;
-  st->curr_fname = curbuf->b_fname;
-  st->prev_fname = NULL;
-  st->did_show = false;
-  st->found = false;
-  st->l_g_do_tagpreview = g_do_tagpreview;
+  st->max_path_depth = 50; st->match_count = 1;
+  st->ptr = (char *)ptr; st->dir = (Direction)dir; st->len = len;
+  st->whole = whole != 0; st->skip_comments = skip_comments != 0;
+  st->type = type; st->count = count; st->action = action;
+  st->start_lnum = start_lnum; st->end_lnum = end_lnum;
+  st->forceit = forceit != 0; st->silent = silent != 0;
+  st->curr_fname = curbuf->b_fname; st->prev_fname = NULL;
+  st->did_show = false; st->found = false; st->l_g_do_tagpreview = g_do_tagpreview;
   st->depth = -1; st->depth_displayed = -1;
   st->regmatch.regprog = NULL; st->incl_regmatch.regprog = NULL; st->def_regmatch.regprog = NULL;
   st->file_line = xmalloc(LSIZE);
@@ -264,10 +243,8 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
     st->def_regmatch.rm_ic = false;
   }
   st->files = xcalloc((size_t)st->max_path_depth, sizeof(SearchedFile));
-  st->old_files = st->max_path_depth;
-  st->end_lnum = MIN(st->end_lnum, curbuf->b_ml.ml_line_count);
-  st->lnum = MIN(st->start_lnum, st->end_lnum);
-  return (FpipInitResult){ st, 1 };
+  st->old_files = st->max_path_depth; st->end_lnum = MIN(st->end_lnum, curbuf->b_ml.ml_line_count);
+  st->lnum = MIN(st->start_lnum, st->end_lnum); return (FpipInitResult){ st, 1 };
 }
 
 void nvim_fpip_run(void *handle)
@@ -638,20 +615,13 @@ exit_matched:
   xfree(files);
   if (type == CHECK_PATH) {
     if (!did_show) {
-      if (action != ACTION_SHOW_ALL) {
-        msg(_("All included files were found"), 0);
-      } else {
-        msg(_("No included files"), 0);
-      }
+      if (action != ACTION_SHOW_ALL) { msg(_("All included files were found"), 0); }
+      else { msg(_("No included files"), 0); }
     }
   } else if (!found && action != ACTION_EXPAND && !st->silent) {
-    if (got_int || rs_ins_compl_interrupted()) {
-      emsg(_(e_interr));
-    } else if (type == FIND_DEFINE) {
-      emsg(_("E388: Couldn't find definition"));
-    } else {
-      emsg(_("E389: Couldn't find pattern"));
-    }
+    if (got_int || rs_ins_compl_interrupted()) { emsg(_(e_interr)); }
+    else if (type == FIND_DEFINE) { emsg(_("E388: Couldn't find definition")); }
+    else { emsg(_("E389: Couldn't find pattern")); }
   }
   if (action == ACTION_SHOW || action == ACTION_SHOW_ALL) { msg_end(); }
   st->files = files; st->max_path_depth = max_path_depth; st->old_files = old_files;
@@ -697,7 +667,6 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
   }
 }
 
-// Accessor wrappers for C globals still needed by Rust crates
 void nvim_call_iemsg_restore_mismatch(void) { iemsg("restore_last_search_pattern() called more often than save_last_search_pattern()"); }
 void nvim_emsg_nopresub(void) { emsg(_(e_nopresub)); }
 void nvim_set_rc_did_emsg(void) { rc_did_emsg = true; }
