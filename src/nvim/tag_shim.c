@@ -293,16 +293,6 @@ void nvim_findtags_set_did_open(void *st_void) { findtags_state_T *st = (findtag
 bool nvim_findtags_get_did_open(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->did_open; }
 void nvim_findtags_set_state_start(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->state = TS_START; }
 int nvim_findtags_get_mincount(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->mincount; }
-bool nvim_findtags_grow_lbuf(void *st_void, void *sinfo_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  tagsearch_info_T *sinfo = (tagsearch_info_T *)sinfo_void;
-  if (st->lbuf[st->lbuf_size - 2] == NUL) { return false; }
-  st->lbuf_size *= 2; xfree(st->lbuf); st->lbuf = xmalloc((size_t)st->lbuf_size);
-  if (st->state == TS_STEP_FORWARD || st->state == TS_LINEAR) { vim_ignored = vim_fseek(st->fp, sinfo->curr_offset, SEEK_SET); }
-  sinfo->curr_offset = 0;
-  return true;
-}
 
 void nvim_findtags_set_orgpat_len(void *st_void, int len) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->len = len; }
 void nvim_findtags_set_orgpat_pat(void *st_void, char *pat) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->pat = pat; }
@@ -440,9 +430,6 @@ void nvim_tag_save_cursor_in_entry(void *tg_void, int idx) { taggy_T *tg = (tagg
 void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T)); }
 void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(&tg[idx].fmark, buf, sizeof(fmark_T)); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
-void nvim_tag_snprintf_match_msg(char *buf, int buf_size, int cur_match, int num_matches, int max_num_matches)
-{ snprintf(buf, (size_t)buf_size, _("tag %d of %d%s"), cur_match + 1, num_matches, max_num_matches != MAXCOL ? _(" or more") : ""); }
-void nvim_tag_append_ic_warning_to_buf(char *buf, int buf_size) { xstrlcat(buf, _("  Using tag with different case!"), (size_t)buf_size); }
 
 void nvim_tag_free_nofile_fname(void) { free_string_option(nofile_fname); nofile_fname = NULL; }
 bool nvim_tag_nofile_fname_is_null(void) { return nofile_fname == NULL; }

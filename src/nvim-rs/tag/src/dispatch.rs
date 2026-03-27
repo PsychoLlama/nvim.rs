@@ -109,14 +109,6 @@ extern "C" {
     ) -> c_int;
     fn set_vim_var_string(idx: c_int, val: *const c_char, len: i64);
     fn nvim_tag_clear_swap_command();
-    fn nvim_tag_snprintf_match_msg(
-        buf: *mut c_char,
-        buf_size: c_int,
-        cur_match: c_int,
-        num_matches: c_int,
-        max_num_matches: c_int,
-    );
-    fn nvim_tag_append_ic_warning_to_buf(buf: *mut c_char, buf_size: c_int);
     fn nvim_tag_give_warning(msg: *const c_char, ic: bool);
     fn nvim_tag_get_KeyTyped() -> bool;
     fn nvim_taggy_get_fmark(tg: *const c_void) -> *const c_void;
@@ -1196,20 +1188,38 @@ pub unsafe extern "C" fn rs_do_tag(
                 && (NUM_MATCHES > 1 || ic)
                 && !skip_msg
             {
-                // Inline Rust port of nvim_tag_show_match_msg (Phase 1)
+                // Format match message inline
                 let mut msg_buf = [0u8; 256];
-                nvim_tag_snprintf_match_msg(
-                    msg_buf.as_mut_ptr().cast(),
-                    msg_buf.len() as c_int,
-                    cur_match,
-                    NUM_MATCHES,
-                    MAX_NUM_MATCHES,
-                );
-                if ic {
-                    nvim_tag_append_ic_warning_to_buf(
+                {
+                    extern "C" {
+                        fn snprintf(
+                            buf: *mut c_char,
+                            size: usize,
+                            fmt: *const c_char,
+                            ...
+                        ) -> c_int;
+                        fn xstrlcat(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
+                    }
+                    let or_more: *const c_char = if MAX_NUM_MATCHES == MAXCOL {
+                        c"".as_ptr()
+                    } else {
+                        gettext(c" or more".as_ptr())
+                    };
+                    snprintf(
                         msg_buf.as_mut_ptr().cast(),
-                        msg_buf.len() as c_int,
+                        msg_buf.len(),
+                        gettext(c"tag %d of %d%s".as_ptr()),
+                        cur_match + 1,
+                        NUM_MATCHES,
+                        or_more,
                     );
+                    if ic {
+                        xstrlcat(
+                            msg_buf.as_mut_ptr().cast(),
+                            gettext(c"  Using tag with different case!".as_ptr()),
+                            msg_buf.len(),
+                        );
+                    }
                 }
                 let msg_str: *const c_char = msg_buf.as_ptr().cast();
                 if (NUM_MATCHES > prev_num_matches || new_tag) && NUM_MATCHES > 1 {

@@ -2142,7 +2142,6 @@ extern "C" {
     fn nvim_findtags_get_did_open(st: FindTagsStateHandle) -> bool;
     fn nvim_findtags_set_state_start(st: FindTagsStateHandle);
     fn nvim_findtags_get_mincount(st: FindTagsStateHandle) -> c_int;
-    fn nvim_findtags_grow_lbuf(st: FindTagsStateHandle, sinfo: *mut c_void) -> bool;
     fn nvim_findtags_set_orgpat_len(st: FindTagsStateHandle, len: c_int);
     fn nvim_findtags_set_orgpat_pat(st: FindTagsStateHandle, pat: *mut c_char);
     fn nvim_findtags_set_stop_searching(st: FindTagsStateHandle, val: bool);
@@ -2414,8 +2413,21 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
         }
 
         // Check if line is too long (needs lbuf grow)
-        if nvim_findtags_grow_lbuf(st, (&raw mut sinfo).cast()) {
-            continue;
+        {
+            let lbuf = nvim_findtags_get_lbuf(st);
+            let lbuf_size = nvim_findtags_get_lbuf_size(st) as usize;
+            if *lbuf.add(lbuf_size - 2) != 0 {
+                let new_size = (lbuf_size * 2) as c_int;
+                xfree(lbuf.cast());
+                let new_lbuf: *mut c_char = xmalloc(new_size as usize).cast();
+                nvim_findtags_set_lbuf(st, new_lbuf, new_size);
+                let state = nvim_findtags_get_state(st);
+                if state == TS_STEP_FORWARD || state == TS_LINEAR {
+                    let _ = nvim_findtags_fseek(st, sinfo.curr_offset, SEEK_SET);
+                }
+                sinfo.curr_offset = 0;
+                continue;
+            }
         }
 
         // Parse the line and check for match
