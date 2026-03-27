@@ -431,6 +431,8 @@ _Static_assert(EVENT_WINENTER == 136, "EVENT_WINENTER value mismatch");
 _Static_assert(EVENT_WINLEAVE == 137, "EVENT_WINLEAVE value mismatch");
 _Static_assert(EVENT_WINNEW == 138, "EVENT_WINNEW value mismatch");
 void nvim_apply_autocmds_event(int event) { apply_autocmds((event_T)event, NULL, NULL, false, curbuf); }
+void nvim_apply_autocmds_winresized(const char *winid_str, void *buf) { apply_autocmds(EVENT_WINRESIZED, (char *)winid_str, (char *)winid_str, false, (buf_T *)buf); }
+void nvim_apply_autocmds_winscrolled(const char *winid_str, void *buf) { apply_autocmds(EVENT_WINSCROLLED, (char *)winid_str, (char *)winid_str, false, (buf_T *)buf); }
 const char *nvim_curwin_get_localdir(void) { return curwin->w_localdir; }
 const char *nvim_curtab_get_localdir(void) { return curtab->tp_localdir; }
 const char *nvim_get_globaldir(void) { return globaldir; }
@@ -544,6 +546,9 @@ int nvim_has_event_winscrolled(void) { return has_event(EVENT_WINSCROLLED) ? 1 :
 int nvim_has_event_winresized(void) { return has_event(EVENT_WINRESIZED) ? 1 : 0; }
 int nvim_win_get_buf_fnum(win_T *wp) { return (wp && wp->w_buffer) ? (int)wp->w_buffer->handle : 0; }
 void *nvim_tv_dict_alloc_refcount1(void) { dict_T *d = tv_dict_alloc(); if (d) { d->dv_refcount = 1; } return d; }
+void nvim_tv_dict_unref_wrapper(void *dict) { if (dict) { tv_dict_unref((dict_T *)dict); } }
+void *nvim_tv_list_alloc_wrapper(int count) { return tv_list_alloc((ptrdiff_t)count); }
+void nvim_tv_list_append_number(void *list, int nr) { if (!list) { return; } typval_T tv = { .v_lock = VAR_UNLOCKED, .v_type = VAR_NUMBER, .vval.v_number = (varnumber_T)nr }; tv_list_append_owned_tv((list_T *)list, tv); }
 int nvim_tv_dict_add_number(void *dict, const char *key, size_t key_len, int nr)
 {
   if (!dict || !key) { return 0; }
@@ -557,71 +562,18 @@ int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, v
   ((dict_T *)child)->dv_refcount--;
   return 1;
 }
-void nvim_tv_dict_unref_wrapper(void *dict) { if (dict) { tv_dict_unref((dict_T *)dict); } }
-void *nvim_tv_list_alloc_wrapper(int count) { return tv_list_alloc((ptrdiff_t)count); }
-void nvim_tv_list_append_number(void *list, int nr)
-{
-  if (!list) { return; }
-  typval_T tv = { .v_lock = VAR_UNLOCKED, .v_type = VAR_NUMBER, .vval.v_number = (varnumber_T)nr };
-  tv_list_append_owned_tv((list_T *)list, tv);
-}
-void nvim_fire_winresized(void *list, const char *winid_str,
-                          win_T *first_size_win, int first_size_win_buf_fnum)
-{
-  if (!list) {
-    return;
-  }
-  save_v_event_T save_v_event;
-  dict_T *v_event = get_v_event(&save_v_event);
-
-  buf_T *buf = curbuf;
-  if (first_size_win_buf_fnum != 0) {
-    bufref_T bufref;
-    // Find buffer by fnum and set bufref for validity check
-    buf_T *b = buflist_findnr(first_size_win_buf_fnum);
-    if (b != NULL) {
-      set_bufref(&bufref, b);
-      if (bufref_valid(&bufref)) {
-        buf = bufref.br_buf;
-      }
-    }
-  }
-
-  if (tv_dict_add_list(v_event, S_LEN("windows"), (list_T *)list) == OK) {
-    tv_dict_set_keys_readonly(v_event);
-    apply_autocmds(EVENT_WINRESIZED, (char *)winid_str, (char *)winid_str, false, buf);
-  }
-  restore_v_event(v_event, &save_v_event);
-}
-void nvim_fire_winscrolled(void *dict, const char *winid_str,
-                           win_T *first_scroll_win, int first_scroll_win_buf_fnum)
-{
-  if (!dict) {
-    return;
-  }
-  save_v_event_T save_v_event;
-  dict_T *v_event = get_v_event(&save_v_event);
-
-  buf_T *buf = curbuf;
-  if (first_scroll_win_buf_fnum != 0) {
-    buf_T *b = buflist_findnr(first_scroll_win_buf_fnum);
-    if (b != NULL) {
-      bufref_T bufref;
-      set_bufref(&bufref, b);
-      if (bufref_valid(&bufref)) {
-        buf = bufref.br_buf;
-      }
-    }
-  }
-  // Move entries from scroll_dict to v_event.
-  tv_dict_extend(v_event, (dict_T *)dict, "move");
-  tv_dict_set_keys_readonly(v_event);
-  tv_dict_unref((dict_T *)dict);
-
-  apply_autocmds(EVENT_WINSCROLLED, (char *)winid_str, (char *)winid_str, false, buf);
-
-  restore_v_event(v_event, &save_v_event);
-}
+// Accessors for save_v_event_T / bufref_T used by Rust scroll.rs fire functions
+_Static_assert(sizeof(save_v_event_T) == 304, "save_v_event_T size mismatch");
+void *nvim_get_v_event_opaque(void *buf) { return get_v_event((save_v_event_T *)buf); }
+void nvim_restore_v_event_opaque(void *dict, void *buf) { restore_v_event((dict_T *)dict, (save_v_event_T *)buf); }
+buf_T *nvim_buflist_findnr_win(int nr) { return buflist_findnr(nr); }
+void nvim_set_bufref_win(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
+int nvim_bufref_valid_win(void *br) { return bufref_valid((bufref_T *)br) ? 1 : 0; }
+buf_T *nvim_bufref_get_buf_win(void *br) { return ((bufref_T *)br)->br_buf; }
+void *nvim_tv_dict_add_list_win(void *dict, const char *key, size_t key_len, void *list) { tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list); return dict; }
+void nvim_tv_dict_extend_win(void *dst, void *src) { tv_dict_extend((dict_T *)dst, (dict_T *)src, "move"); }
+void nvim_tv_dict_set_keys_readonly_win(void *dict) { tv_dict_set_keys_readonly((dict_T *)dict); }
+buf_T *nvim_get_curbuf_ptr(void) { return curbuf; }
 void nvim_buf_set_p_bl(buf_T *buf, int val) { if (buf) { buf->b_p_bl = (val != 0); } }
 int nvim_close_buffer_for_win(win_T *win, int action, int abort_if_last)
 {

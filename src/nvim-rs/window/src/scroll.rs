@@ -434,22 +434,30 @@ extern "C" {
     fn nvim_tv_list_alloc_wrapper(count: c_int) -> ListHandle;
     fn nvim_tv_list_append_number(list: ListHandle, nr: c_int);
 
-    // Compound autocmd/v:event fire operations.
-    // These wrappers take full ownership of list/dict and handle the entire
-    // get_v_event / set_keys_readonly / apply_autocmds / restore_v_event lifecycle.
-    // The win_handle is used to find the buffer (via bufref_valid check).
-    fn nvim_fire_winresized(
-        list: ListHandle,
-        winid_str: *const std::ffi::c_char,
-        first_size_win: WinHandle,
-        first_size_win_buf_fnum: c_int,
-    );
-    fn nvim_fire_winscrolled(
+    // save_v_event_T / bufref_T opaque accessors
+    fn nvim_get_v_event_opaque(buf: *mut u8) -> DictHandle;
+    fn nvim_restore_v_event_opaque(dict: DictHandle, buf: *mut u8);
+    fn nvim_buflist_findnr_win(nr: c_int) -> *mut std::ffi::c_void;
+    fn nvim_set_bufref_win(br: *mut u8, buf: *mut std::ffi::c_void);
+    fn nvim_bufref_valid_win(br: *mut u8) -> c_int;
+    fn nvim_bufref_get_buf_win(br: *mut u8) -> *mut std::ffi::c_void;
+    fn nvim_tv_dict_add_list_win(
         dict: DictHandle,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        list: ListHandle,
+    ) -> DictHandle;
+    fn nvim_tv_dict_extend_win(dst: DictHandle, src: DictHandle);
+    fn nvim_tv_dict_set_keys_readonly_win(dict: DictHandle);
+    fn nvim_apply_autocmds_winresized(
         winid_str: *const std::ffi::c_char,
-        first_scroll_win: WinHandle,
-        first_scroll_win_buf_fnum: c_int,
+        buf: *mut std::ffi::c_void,
     );
+    fn nvim_apply_autocmds_winscrolled(
+        winid_str: *const std::ffi::c_char,
+        buf: *mut std::ffi::c_void,
+    );
+    fn nvim_get_curbuf_ptr() -> *mut std::ffi::c_void;
 
     // Get buf fnum for bufref validity check
     fn nvim_win_get_buf_fnum(wp: WinHandle) -> c_int;
@@ -731,6 +739,78 @@ fn format_int_to_buf(val: c_int, buf: &mut [u8; 24]) -> usize {
     pos
 }
 
+/// Size of C `save_v_event_T` (bool + hashtab_T; validated by _Static_assert in C).
+const SAVE_V_EVENT_SIZE: usize = 304;
+
+/// Size of C `bufref_T` (buf_T*, int, int).
+const BUFREF_SIZE: usize = 16;
+
+/// Rust port of `nvim_fire_winresized` from window_shim.c.
+///
+/// Takes ownership of `list` (refcount-1 list_T*). Fires EVENT_WINRESIZED.
+/// Safe to call with null list (no-op).
+unsafe fn fire_winresized(
+    list: ListHandle,
+    winid_str: *const std::ffi::c_char,
+    first_size_win_buf_fnum: c_int,
+) {
+    if list.is_null() {
+        return;
+    }
+    let mut save_buf = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::zeroed();
+    let v_event = nvim_get_v_event_opaque(save_buf.as_mut_ptr().cast());
+    let buf = resolve_buf_from_fnum(first_size_win_buf_fnum);
+    let added = !nvim_tv_dict_add_list_win(v_event, c"windows".as_ptr(), 7, list).is_null();
+    if added {
+        nvim_tv_dict_set_keys_readonly_win(v_event);
+        nvim_apply_autocmds_winresized(winid_str, buf);
+    }
+    nvim_restore_v_event_opaque(v_event, save_buf.as_mut_ptr().cast());
+}
+
+/// Rust port of `nvim_fire_winscrolled` from window_shim.c.
+///
+/// Takes ownership of `dict` (refcount-1 dict_T*). Fires EVENT_WINSCROLLED.
+/// Safe to call with null dict (no-op).
+unsafe fn fire_winscrolled(
+    dict: DictHandle,
+    winid_str: *const std::ffi::c_char,
+    first_scroll_win_buf_fnum: c_int,
+) {
+    if dict.is_null() {
+        return;
+    }
+    let mut save_buf = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::zeroed();
+    let v_event = nvim_get_v_event_opaque(save_buf.as_mut_ptr().cast());
+    let buf = resolve_buf_from_fnum(first_scroll_win_buf_fnum);
+    nvim_tv_dict_extend_win(v_event, dict);
+    nvim_tv_dict_set_keys_readonly_win(v_event);
+    nvim_tv_dict_unref_wrapper(dict);
+    nvim_apply_autocmds_winscrolled(winid_str, buf);
+    nvim_restore_v_event_opaque(v_event, save_buf.as_mut_ptr().cast());
+}
+
+/// Find the buffer for an autocmd by fnum, falling back to curbuf.
+///
+/// Matches the pattern in the C `nvim_fire_win*` functions.
+unsafe fn resolve_buf_from_fnum(fnum: c_int) -> *mut std::ffi::c_void {
+    let curbuf = nvim_get_curbuf_ptr();
+    if fnum == 0 {
+        return curbuf;
+    }
+    let b = nvim_buflist_findnr_win(fnum);
+    if b.is_null() {
+        return curbuf;
+    }
+    let mut bufref = std::mem::MaybeUninit::<[u8; BUFREF_SIZE]>::zeroed();
+    nvim_set_bufref_win(bufref.as_mut_ptr().cast(), b);
+    if nvim_bufref_valid_win(bufref.as_mut_ptr().cast()) != 0 {
+        nvim_bufref_get_buf_win(bufref.as_mut_ptr().cast())
+    } else {
+        curbuf
+    }
+}
+
 /// Recursive guard for may_trigger_win_scrolled_resized.
 ///
 /// AtomicBool with Relaxed ordering is sufficient since Neovim is single-threaded.
@@ -807,26 +887,13 @@ fn may_trigger_win_scrolled_resized_impl() {
         };
 
         // Fire WinResized first
-        if trigger_resize && !windows_list.is_null() {
-            nvim_fire_winresized(
-                windows_list,
-                resize_winid.as_ptr().cast(),
-                scan.first_size_win,
-                resize_buf_fnum,
-            );
-            // windows_list ownership transferred to wrapper
-            // If windows_list is null (alloc failed), skip firing but don't crash
+        if trigger_resize {
+            fire_winresized(windows_list, resize_winid.as_ptr().cast(), resize_buf_fnum);
         }
 
         // Fire WinScrolled
-        if trigger_scroll && !scroll_dict.is_null() {
-            nvim_fire_winscrolled(
-                scroll_dict,
-                scroll_winid.as_ptr().cast(),
-                scan.first_scroll_win,
-                scroll_buf_fnum,
-            );
-            // scroll_dict ownership transferred to wrapper
+        if trigger_scroll {
+            fire_winscrolled(scroll_dict, scroll_winid.as_ptr().cast(), scroll_buf_fnum);
         }
 
         SCROLLED_RESIZED_RECURSIVE.store(false, Ordering::Relaxed);
