@@ -97,46 +97,24 @@ void nvim_showmatch_display_cursor(int match_lnum, int match_col, int match_cola
 {
   OptInt *so = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
   OptInt *siso = curwin->w_p_siso >= 0 ? &curwin->w_p_siso : &p_siso;
-
   pos_T mpos = { match_lnum, match_col, match_coladd };
   pos_T save_cursor = curwin->w_cursor;
-  OptInt save_so = *so;
-  OptInt save_siso = *siso;
-  // Handle "$" in 'cpo': If the ')' is typed on top of the "$",
-  // stop displaying the "$".
-  if (dollar_vcol >= 0 && dollar_vcol == curwin->w_virtcol) {
-    dollar_vcol = -1;
-  }
-  curwin->w_virtcol++;              // do display ')' just before "$"
-
+  OptInt save_so = *so, save_siso = *siso;
+  if (dollar_vcol >= 0 && dollar_vcol == curwin->w_virtcol) { dollar_vcol = -1; }
+  curwin->w_virtcol++;
   colnr_T save_dollar_vcol = dollar_vcol;
   int save_state = State;
-  State = MODE_SHOWMATCH;
-  ui_cursor_shape();                // may show different cursor shape
-  curwin->w_cursor = mpos;          // move to matching char
-  *so = 0;                          // don't use 'scrolloff' here
-  *siso = 0;                        // don't use 'sidescrolloff' here
-  show_cursor_info_later(false);
-  update_screen();                  // show the new char
-  setcursor();
-  ui_flush();
-  // Restore dollar_vcol(), because setcursor() may call curs_rows()
-  // which resets it if the matching position is in a previous line
-  // and has a higher column number.
+  State = MODE_SHOWMATCH; ui_cursor_shape();
+  curwin->w_cursor = mpos; *so = 0; *siso = 0;
+  show_cursor_info_later(false); update_screen(); setcursor(); ui_flush();
   dollar_vcol = save_dollar_vcol;
-
-  // brief pause, unless 'm' is present in 'cpo' and a character is
-  // available.
   if (vim_strchr(p_cpo, CPO_SHOWMATCH) != NULL) {
     os_delay((uint64_t)p_mat * 100 + 8, true);
   } else if (!char_avail()) {
     os_delay((uint64_t)p_mat * 100 + 9, false);
   }
-  curwin->w_cursor = save_cursor;           // restore cursor position
-  *so = save_so;
-  *siso = save_siso;
-  State = save_state;
-  ui_cursor_shape();                // may show different cursor shape
+  curwin->w_cursor = save_cursor; *so = save_so; *siso = save_siso;
+  State = save_state; ui_cursor_shape();
 }
 
 void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -147,88 +125,32 @@ void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   int timeout = SEARCH_STAT_DEF_TIMEOUT;
   bool recompute = true;
   searchstat_T stat;
-
   tv_dict_alloc_ret(rettv);
-
-  if (shortmess(SHM_SEARCHCOUNT)) {  // 'shortmess' contains 'S' flag
-    recompute = true;
-  }
-
   if (argvars[0].v_type != VAR_UNKNOWN) {
-    dict_T *dict;
-    dictitem_T *di;
     bool error = false;
-
-    if (tv_check_for_nonnull_dict_arg(argvars, 0) == FAIL) {
-      return;
-    }
-    dict = argvars[0].vval.v_dict;
-    di = tv_dict_find(dict, "timeout", -1);
-    if (di != NULL) {
-      timeout = (int)tv_get_number_chk(&di->di_tv, &error);
-      if (error) {
-        return;
-      }
-    }
+    if (tv_check_for_nonnull_dict_arg(argvars, 0) == FAIL) { return; }
+    dict_T *dict = argvars[0].vval.v_dict;
+    dictitem_T *di = tv_dict_find(dict, "timeout", -1);
+    if (di != NULL) { timeout = (int)tv_get_number_chk(&di->di_tv, &error); if (error) { return; } }
     di = tv_dict_find(dict, "maxcount", -1);
-    if (di != NULL) {
-      maxcount = (int)tv_get_number_chk(&di->di_tv, &error);
-      if (error) {
-        return;
-      }
-    }
+    if (di != NULL) { maxcount = (int)tv_get_number_chk(&di->di_tv, &error); if (error) { return; } }
     di = tv_dict_find(dict, "recompute", -1);
-    if (di != NULL) {
-      recompute = tv_get_number_chk(&di->di_tv, &error);
-      if (error) {
-        return;
-      }
-    }
+    if (di != NULL) { recompute = tv_get_number_chk(&di->di_tv, &error); if (error) { return; } }
     di = tv_dict_find(dict, "pattern", -1);
-    if (di != NULL) {
-      pattern = (char *)tv_get_string_chk(&di->di_tv);
-      if (pattern == NULL) {
-        return;
-      }
-    }
+    if (di != NULL) { pattern = (char *)tv_get_string_chk(&di->di_tv); if (pattern == NULL) { return; } }
     di = tv_dict_find(dict, "pos", -1);
     if (di != NULL) {
-      if (di->di_tv.v_type != VAR_LIST) {
-        semsg(_(e_invarg2), "pos");
-        return;
-      }
-      if (tv_list_len(di->di_tv.vval.v_list) != 3) {
-        semsg(_(e_invarg2), "List format should be [lnum, col, off]");
-        return;
-      }
+      if (di->di_tv.v_type != VAR_LIST) { semsg(_(e_invarg2), "pos"); return; }
+      if (tv_list_len(di->di_tv.vval.v_list) != 3) { semsg(_(e_invarg2), "List format should be [lnum, col, off]"); return; }
       listitem_T *li = tv_list_find(di->di_tv.vval.v_list, 0);
-      if (li != NULL) {
-        pos.lnum = (linenr_T)tv_get_number_chk(TV_LIST_ITEM_TV(li), &error);
-        if (error) {
-          return;
-        }
-      }
+      if (li != NULL) { pos.lnum = (linenr_T)tv_get_number_chk(TV_LIST_ITEM_TV(li), &error); if (error) { return; } }
       li = tv_list_find(di->di_tv.vval.v_list, 1);
-      if (li != NULL) {
-        pos.col = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(li), &error) - 1;
-        if (error) {
-          return;
-        }
-      }
+      if (li != NULL) { pos.col = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(li), &error) - 1; if (error) { return; } }
       li = tv_list_find(di->di_tv.vval.v_list, 2);
-      if (li != NULL) {
-        pos.coladd = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(li), &error);
-        if (error) {
-          return;
-        }
-      }
+      if (li != NULL) { pos.coladd = (colnr_T)tv_get_number_chk(TV_LIST_ITEM_TV(li), &error); if (error) { return; } }
     }
   }
-
-  // Rust handles: save/restore patterns, pattern setup, stat computation
-  rs_searchcount_compute(pos.lnum, pos.col, pos.coladd,
-                          maxcount, timeout, recompute, pattern, &stat);
-
+  rs_searchcount_compute(pos.lnum, pos.col, pos.coladd, maxcount, timeout, recompute, pattern, &stat);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("current"), stat.cur);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("total"), stat.cnt);
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("exact_match"), stat.exact_match);
