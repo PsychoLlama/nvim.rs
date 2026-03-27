@@ -58,10 +58,8 @@
 
 #include "search_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
-
 static const char e_search_hit_top_without_match_for_str[] = N_("E384: Search hit TOP without match for: %s");
 static const char e_search_hit_bottom_without_match_for_str[] = N_("E385: Search hit BOTTOM without match for: %s");
-
 extern int rs_magic_isset(void);
 extern int rs_is_search_forward(void);
 extern int rs_compl_status_adding(void);
@@ -71,12 +69,10 @@ extern int rs_ins_compl_interrupted(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
 extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd, int maxcount, int timeout, bool recompute, const char *pattern, searchstat_T *stat);
-
 char *nvim_search_skipwhite_ml_get(linenr_T lnum) { return skipwhite(ml_get(lnum)); }
 void nvim_call_set_vv_searchforward(void) { set_vim_var_nr(VV_SEARCHFORWARD, rs_is_search_forward()); }
 // Tracks included files already searched by find_pattern_in_path().
 typedef struct { FILE *fp; char *name; linenr_T lnum; int matched; } SearchedFile;
-
 int nvim_get_search_match_lines(void) { return (int)search_match_lines; }
 int nvim_get_search_match_endcol(void) { return (int)search_match_endcol; }
 void nvim_set_search_match_lines(int val) { search_match_lines = (linenr_T)val; }
@@ -277,46 +273,24 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
 void nvim_fpip_run(void *handle)
 {
   FpipState *st = (FpipState *)handle;
-
   SearchedFile *files = st->files;
-  int max_path_depth = st->max_path_depth;
-  int old_files = st->old_files;
-  int depth = st->depth;
-  int depth_displayed = st->depth_displayed;
-  int match_count = st->match_count;
-  char *ptr = st->ptr;
-  size_t len = st->len;
-  int type = st->type;
-  int action = st->action;
-  linenr_T end_lnum = st->end_lnum;
-  linenr_T lnum = st->lnum;
-  char *file_line = st->file_line;
-  char *curr_fname = st->curr_fname;
-  char *prev_fname = st->prev_fname;
-  regmatch_T *regmatch = &st->regmatch;
-  regmatch_T *incl_regmatch = &st->incl_regmatch;
-  regmatch_T *def_regmatch = &st->def_regmatch;
+  int max_path_depth = st->max_path_depth, old_files = st->old_files;
+  int depth = st->depth, depth_displayed = st->depth_displayed, match_count = st->match_count;
+  char *ptr = st->ptr; size_t len = st->len;
+  int type = st->type, action = st->action;
+  linenr_T end_lnum = st->end_lnum, lnum = st->lnum;
+  char *file_line = st->file_line, *curr_fname = st->curr_fname, *prev_fname = st->prev_fname;
+  regmatch_T *regmatch = &st->regmatch, *incl_regmatch = &st->incl_regmatch, *def_regmatch = &st->def_regmatch;
   char *inc_opt = st->inc_opt;
-  bool did_show = st->did_show;
-  bool found = st->found;
+  bool did_show = st->did_show, found = st->found;
   int l_g_do_tagpreview = st->l_g_do_tagpreview;
-
-  char *new_fname;
-  char *p;
-  bool define_matched;
-  bool matched = false;
-  int i;
-  char *already = NULL;
-  char *startp = NULL;
-  win_T *curwin_save = NULL;
-
+  char *new_fname, *p; bool define_matched; bool matched = false; int i;
+  char *already = NULL, *startp = NULL; win_T *curwin_save = NULL;
   char *line = get_line_and_copy(lnum, file_line);
   while (true) {
     if (incl_regmatch->regprog != NULL
         && vim_regexec(incl_regmatch, line, 0)) {
-      char *p_fname = (curr_fname == curbuf->b_fname)
-                      ? curbuf->b_ffname : curr_fname;
-
+      char *p_fname = (curr_fname == curbuf->b_fname) ? curbuf->b_ffname : curr_fname;
       if (inc_opt != NULL && strstr(inc_opt, "\\zs") != NULL) {
         new_fname = find_file_name_in_path(incl_regmatch->startp[0],
                                            (size_t)(incl_regmatch->endp[0]
@@ -354,7 +328,6 @@ void nvim_fpip_run(void *handle)
           }
         }
       }
-
       if (type == CHECK_PATH && (action == ACTION_SHOW_ALL
                                  || (new_fname == NULL && !already_searched))) {
         if (did_show) {
@@ -393,7 +366,6 @@ void nvim_fpip_run(void *handle)
                    *p && !vim_isfilec((uint8_t)(*p)); p++) {}
               for (i = 0; vim_isfilec((uint8_t)p[i]); i++) {}
             }
-
             if (i == 0) {
               p = incl_regmatch->endp[0];
               i = (int)strlen(p);
@@ -411,7 +383,6 @@ void nvim_fpip_run(void *handle)
             msg_outtrans(p, HLF_D, false);
             p[i] = save_char;
           }
-
           if (new_fname == NULL && action == ACTION_SHOW_ALL) {
             if (already_searched) {
               msg_puts(_("  (Already listed)"));
@@ -421,7 +392,6 @@ void nvim_fpip_run(void *handle)
           }
         }
       }
-
       if (new_fname != NULL) {
         SearchedFile *bigger;
         if (depth + 1 == old_files) {
@@ -451,18 +421,11 @@ void nvim_fpip_run(void *handle)
             old_files++;
           }
           files[depth].name = curr_fname = new_fname;
-          files[depth].lnum = 0;
-          files[depth].matched = false;
+          files[depth].lnum = 0; files[depth].matched = false;
           if (action == ACTION_EXPAND && !shortmess(SHM_COMPLETIONSCAN) && !st->silent) {
-            msg_hist_off = true;
-            vim_snprintf(IObuff, IOSIZE,
-                         _("Scanning included file: %s"),
-                         new_fname);
-            msg_trunc(IObuff, true, HLF_R);
+            msg_hist_off = true; vim_snprintf(IObuff, IOSIZE, _("Scanning included file: %s"), new_fname); msg_trunc(IObuff, true, HLF_R);
           } else if (p_verbose >= 5) {
-            verbose_enter();
-            smsg(0, _("Searching included file %s"), new_fname);
-            verbose_leave();
+            verbose_enter(); smsg(0, _("Searching included file %s"), new_fname); verbose_leave();
           }
         }
       }
@@ -478,19 +441,11 @@ search_line:
         }
         define_matched = true;
       }
-
       if (def_regmatch->regprog == NULL || define_matched) {
         if (define_matched || rs_compl_status_sol()) {
           startp = skipwhite(p);
-          if (p_ic) {
-            matched = !mb_strnicmp(startp, ptr, len);
-          } else {
-            matched = !strncmp(startp, ptr, len);
-          }
-          if (matched && define_matched && st->whole
-              && vim_iswordc((uint8_t)startp[len])) {
-            matched = false;
-          }
+          matched = p_ic ? !mb_strnicmp(startp, ptr, len) : !strncmp(startp, ptr, len);
+          if (matched && define_matched && st->whole && vim_iswordc((uint8_t)startp[len])) { matched = false; }
         } else if (regmatch->regprog != NULL
                    && vim_regexec(regmatch, line, (colnr_T)(p - line))) {
           matched = true;
@@ -501,7 +456,6 @@ search_line:
                 && get_leader_len(line, NULL, false, true)) {
               matched = false;
             }
-
             p = skipwhite(line);
             if (matched
                 || (p[0] == '/' && p[1] == '*') || p[0] == '*') {
@@ -527,7 +481,6 @@ search_line:
     if (matched) {
       if (action == ACTION_EXPAND) {
         bool cont_s_ipos = false;
-
         if (depth == -1 && lnum == curwin->w_cursor.lnum) {
           break;
         }
@@ -542,20 +495,14 @@ search_line:
         }
         p = rs_find_word_end(p);
         i = (int)(p - aux);
-
         if (rs_compl_status_adding() && i == rs_ins_compl_len()) {
           strncpy(IObuff, aux, (size_t)i);  // NOLINT(runtime/printf)
-
           if (depth < 0) {
-            if (lnum >= end_lnum) {
-              goto exit_matched;
-            }
+            if (lnum >= end_lnum) { goto exit_matched; }
             line = get_line_and_copy(++lnum, file_line);
-          } else if (vim_fgets(line = file_line,
-                               LSIZE, files[depth].fp)) {
+          } else if (vim_fgets(line = file_line, LSIZE, files[depth].fp)) {
             goto exit_matched;
           }
-
           already = aux = p = skipwhite(line);
           p = rs_find_word_start(p);
           p = rs_find_word_end(p);
@@ -580,12 +527,10 @@ search_line:
           }
           IObuff[i] = NUL;
           aux = IObuff;
-
           if (i == rs_ins_compl_len()) {
             goto exit_matched;
           }
         }
-
         const int add_r = ins_compl_add_infercase(aux, i, p_ic,
                                                   curr_fname == curbuf->b_fname
                                                   ? NULL : curr_fname,
@@ -616,10 +561,7 @@ search_line:
                            (depth == -1) ? &lnum : &files[depth].lnum,
                            match_count++);
         }
-
-        for (i = 0; i <= depth; i++) {
-          files[i].matched = true;
-        }
+        for (i = 0; i <= depth; i++) { files[i].matched = true; }
       } else if (--st->count <= 0) {
         found = true;
         if (depth == -1 && lnum == curwin->w_cursor.lnum
@@ -631,69 +573,38 @@ search_line:
                            (depth == -1) ? &lnum : &files[depth].lnum, 1);
           did_show = true;
         } else {
-          if (l_g_do_tagpreview != 0) {
-            curwin_save = curwin;
-            prepare_tagpreview(true);
-          }
+          if (l_g_do_tagpreview != 0) { curwin_save = curwin; prepare_tagpreview(true); }
           if (action == ACTION_SPLIT) {
-            if (win_split(0, 0) == FAIL) {
-              break;
-            }
+            if (win_split(0, 0) == FAIL) { break; }
             RESET_BINDING(curwin);
           }
           if (depth == -1) {
             if (l_g_do_tagpreview != 0) {
-              if (!rs_win_valid(curwin_save)) {
-                break;
-              }
-              if (!GETFILE_SUCCESS(getfile(curwin_save->w_buffer->b_fnum, NULL,
-                                           NULL, true, lnum, st->forceit))) {
-                break;
-              }
-            } else {
-              setpcmark();
-            }
-            curwin->w_cursor.lnum = lnum;
-            check_cursor(curwin);
+              if (!rs_win_valid(curwin_save)) { break; }
+              if (!GETFILE_SUCCESS(getfile(curwin_save->w_buffer->b_fnum, NULL, NULL, true, lnum, st->forceit))) { break; }
+            } else { setpcmark(); }
+            curwin->w_cursor.lnum = lnum; check_cursor(curwin);
           } else {
-            if (!GETFILE_SUCCESS(getfile(0, files[depth].name, NULL, true,
-                                         files[depth].lnum, st->forceit))) {
-              break;
-            }
+            if (!GETFILE_SUCCESS(getfile(0, files[depth].name, NULL, true, files[depth].lnum, st->forceit))) { break; }
             curwin->w_cursor.lnum = files[depth].lnum;
           }
         }
-        if (action != ACTION_SHOW) {
-          curwin->w_cursor.col = (colnr_T)(startp - line);
-          curwin->w_set_curswant = true;
-        }
-
-        if (l_g_do_tagpreview != 0
-            && curwin != curwin_save && rs_win_valid(curwin_save)) {
-          validate_cursor(curwin);
-          redraw_later(curwin, UPD_VALID);
-          win_enter(curwin_save, true);
+        if (action != ACTION_SHOW) { curwin->w_cursor.col = (colnr_T)(startp - line); curwin->w_set_curswant = true; }
+        if (l_g_do_tagpreview != 0 && curwin != curwin_save && rs_win_valid(curwin_save)) {
+          validate_cursor(curwin); redraw_later(curwin, UPD_VALID); win_enter(curwin_save, true);
         }
         break;
       }
 exit_matched:
       matched = false;
-      if (def_regmatch->regprog == NULL
-          && action == ACTION_EXPAND
-          && !rs_compl_status_sol()
-          && *startp != NUL
-          && *(startp + utfc_ptr2len(startp)) != NUL) {
+      if (def_regmatch->regprog == NULL && action == ACTION_EXPAND
+          && !rs_compl_status_sol() && *startp != NUL && *(startp + utfc_ptr2len(startp)) != NUL) {
         goto search_line;
       }
     }
     line_breakcheck();
-    if (action == ACTION_EXPAND) {
-      rs_ins_compl_check_keys(30, 0);
-    }
-    if (got_int || rs_ins_compl_interrupted()) {
-      break;
-    }
-
+    if (action == ACTION_EXPAND) { rs_ins_compl_check_keys(30, 0); }
+    if (got_int || rs_ins_compl_interrupted()) { break; }
     while (depth >= 0 && !already
            && vim_fgets(line = file_line, LSIZE, files[depth].fp)) {
       fclose(files[depth].fp);
@@ -722,16 +633,9 @@ exit_matched:
     }
     already = NULL;
   }
-
-  for (i = 0; i <= depth; i++) {
-    fclose(files[i].fp);
-    xfree(files[i].name);
-  }
-  for (i = old_files; i < max_path_depth; i++) {
-    xfree(files[i].name);
-  }
+  for (i = 0; i <= depth; i++) { fclose(files[i].fp); xfree(files[i].name); }
+  for (i = old_files; i < max_path_depth; i++) { xfree(files[i].name); }
   xfree(files);
-
   if (type == CHECK_PATH) {
     if (!did_show) {
       if (action != ACTION_SHOW_ALL) {
@@ -749,24 +653,15 @@ exit_matched:
       emsg(_("E389: Couldn't find pattern"));
     }
   }
-  if (action == ACTION_SHOW || action == ACTION_SHOW_ALL) {
-    msg_end();
-  }
-
-  st->files = files;
-  st->max_path_depth = max_path_depth;
-  st->old_files = old_files;
-  st->did_show = did_show;
-  st->found = found;
+  if (action == ACTION_SHOW || action == ACTION_SHOW_ALL) { msg_end(); }
+  st->files = files; st->max_path_depth = max_path_depth; st->old_files = old_files;
+  st->did_show = did_show; st->found = found;
 }
-
 void nvim_fpip_cleanup(void *handle)
 {
   FpipState *st = (FpipState *)handle;
   xfree(st->file_line);
-  vim_regfree(st->regmatch.regprog);
-  vim_regfree(st->incl_regmatch.regprog);
-  vim_regfree(st->def_regmatch.regprog);
+  vim_regfree(st->regmatch.regprog); vim_regfree(st->incl_regmatch.regprog); vim_regfree(st->def_regmatch.regprog);
   xfree(st);
 }
 
@@ -874,11 +769,7 @@ proftime_T nvim_profile_setlimit_ms(int timeout) { return profile_setlimit(timeo
 int nvim_profile_passed_limit_val(proftime_T start) { return profile_passed_limit(start) ? 1 : 0; }
 void nvim_stat_free_pat(char *pat) { xfree(pat); }
 int nvim_curwin_rl_with_rlc_s(void) { return (curwin->w_p_rl && *curwin->w_p_rlc == 's') ? 1 : 0; }
-void nvim_cmdline_stat_display(const char *msgbuf)
-{
-  msg_hist_off = true; msg_ext_overwrite = true;
-  msg_ext_set_kind("search_count"); give_warning(msgbuf, false); msg_hist_off = false;
-}
+void nvim_cmdline_stat_display(const char *msgbuf) { msg_hist_off = true; msg_ext_overwrite = true; msg_ext_set_kind("search_count"); give_warning(msgbuf, false); msg_hist_off = false; }
 int nvim_is_pos_in_string(const char *line, int col) { return is_pos_in_string(line, (colnr_T)col); }
 int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch) { return search_regcomp((char *)pat, patlen, NULL, RE_SEARCH, RE_SEARCH, SEARCH_KEEP, (regmmatch_T *)regmatch); }
 void nvim_regmatch_set_startcol(void *regmatch, int col) { ((regmmatch_T *)regmatch)->startpos[0].col = (colnr_T)col; }
