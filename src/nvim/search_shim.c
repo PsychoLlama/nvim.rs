@@ -1096,6 +1096,12 @@ int nvim_do_search_check_lineoff(void)
 int nvim_do_search_hasFolding_fwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, NULL, lnum) ? 1 : 0; }
 /// hasFolding backward: find start of fold at *lnum, update *lnum. Returns 1 if folded.
 int nvim_do_search_hasFolding_bwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, lnum, NULL) ? 1 : 0; }
+/// Check if fdo_flags has kOptFdoFlagSearch set.
+int nvim_fdo_has_search_flag(void) { return (fdo_flags & kOptFdoFlagSearch) != 0 ? 1 : 0; }
+/// hasFolding check-only on curwin->w_cursor.lnum. Returns 1 if folded.
+int nvim_hasFolding_cursor(void) { return hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL) ? 1 : 0; }
+/// Get curwin->w_cursor.coladd.
+int nvim_get_curwin_cursor_coladd(void) { return (int)curwin->w_cursor.coladd; }
 
 /// Turn hlsearch back on if needed.
 void nvim_do_search_hlsearch_on(int options)
@@ -1115,20 +1121,6 @@ char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
 
 void nvim_do_search_set_searchcmdlen(int val) { searchcmdlen = val; }
 int nvim_do_search_get_searchcmdlen(void) { return searchcmdlen; }
-/// Show search stats (cmdline_search_stat).
-void nvim_do_search_show_stats(int dirc, linenr_T pos_lnum, colnr_T pos_col,
-                               int show_top_bot, char *msgbuf, size_t msgbuflen,
-                               int count, int has_offset)
-{
-  pos_T pos = { .lnum = pos_lnum, .col = pos_col, .coladd = 0 };
-  cmdline_search_stat(dirc, &pos, &curwin->w_cursor,
-                      show_top_bot != 0, msgbuf, msgbuflen,
-                      (count != 1 || has_offset
-                       || (!(fdo_flags & kOptFdoFlagSearch)
-                           && hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL))),
-                      (int)p_msc,
-                      SEARCH_STAT_DEF_TIMEOUT);
-}
 
 // findmatchlimit accessor functions
 

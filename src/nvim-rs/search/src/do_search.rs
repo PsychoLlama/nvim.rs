@@ -31,6 +31,7 @@ const MAXCOL: ColnrT = 0x7fff_ffff;
 const SHM_SEARCHCOUNT: c_int = b'S' as c_int;
 const K_UI_MESSAGES: c_int = 4;
 const SEARCH_STAT_BUF_LEN: usize = 16;
+const SEARCH_STAT_DEF_TIMEOUT: c_int = 40;
 /// EVENT_SEARCHWRAPPED = 95 (from auevents_enum.generated.h)
 const EVENT_SEARCHWRAPPED: c_int = 95;
 
@@ -93,20 +94,13 @@ extern "C" {
     ) -> *mut c_char;
     fn nvim_do_search_set_searchcmdlen(val: c_int);
     fn nvim_do_search_get_searchcmdlen() -> c_int;
-    fn nvim_do_search_show_stats(
-        dirc: c_int,
-        pos_lnum: LinenrT,
-        pos_col: ColnrT,
-        show_top_bot: c_int,
-        msgbuf: *mut c_char,
-        msgbuflen: usize,
-        count: c_int,
-        has_offset: c_int,
-    );
 
     // fold helpers
     fn nvim_do_search_hasFolding_fwd(lnum: *mut LinenrT) -> c_int;
     fn nvim_do_search_hasFolding_bwd(lnum: *mut LinenrT) -> c_int;
+    fn nvim_fdo_has_search_flag() -> c_int;
+    fn nvim_hasFolding_cursor() -> c_int;
+    fn nvim_get_curwin_cursor_coladd() -> ColnrT;
 
     // cursor read/write
     fn nvim_get_curwin_cursor_lnum() -> LinenrT;
@@ -177,6 +171,9 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn memmove(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
     fn memset(s: *mut c_void, c: c_int, n: usize) -> *mut c_void;
+
+    // search stat
+    fn nvim_get_p_msc() -> i64;
 }
 
 // =============================================================================
@@ -861,17 +858,28 @@ pub unsafe extern "C" fn rs_do_search(
             has_offset = true;
         }
 
-        // Show search stats
+        // Show search stats (inline: was Rust->C->Rust round-trip)
         if echo_result.show_search_stats != 0 {
-            nvim_do_search_show_stats(
+            let cursor_lnum = nvim_get_curwin_cursor_lnum();
+            let cursor_col = nvim_get_curwin_cursor_col();
+            let cursor_coladd = nvim_get_curwin_cursor_coladd();
+            let recompute = count != 1
+                || has_offset
+                || (nvim_fdo_has_search_flag() == 0 && nvim_hasFolding_cursor() != 0);
+            crate::stats::rs_cmdline_search_stat(
                 dirc,
                 pos_lnum,
                 pos_col,
-                c_int::from(show_top_bot_msg),
+                0,
+                cursor_lnum,
+                cursor_col,
+                cursor_coladd,
+                show_top_bot_msg,
                 echo_result.msgbuf,
                 echo_result.msgbuflen,
-                count,
-                c_int::from(has_offset),
+                recompute,
+                nvim_get_p_msc() as c_int,
+                SEARCH_STAT_DEF_TIMEOUT,
             );
         }
 
