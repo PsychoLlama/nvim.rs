@@ -2,47 +2,28 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "auto/config.h"
 #include "nvim/api/extmark.h"
-#include "nvim/api/private/defs.h"
-#include "nvim/api/private/helpers.h"
-#include "nvim/api/private/validate.h"
-#include "nvim/ascii_defs.h"
-#include "nvim/assert_defs.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
-#include "nvim/buffer_defs.h"
 #include "nvim/cmdexpand.h"
-#include "nvim/cmdexpand_defs.h"
-#include "nvim/decoration_defs.h"
 #include "nvim/decoration_provider.h"
 #include "nvim/drawscreen.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
-#include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
 #include "nvim/eval/window.h"
-#include "nvim/ex_session.h"
 #include "nvim/fuzzy.h"
 #include "nvim/globals.h"
 #include "nvim/highlight.h"
-#include "nvim/highlight_defs.h"
-#include "nvim/highlight_group.h"
 #include "nvim/indent.h"
 #include "nvim/keycodes.h"
 #include "nvim/log.h"
 #include "nvim/memory.h"
-#include "nvim/message.h"
-#include "nvim/mouse.h"
 #include "nvim/option.h"
-#include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/input.h"
 #include "nvim/os/os.h"
 #include "nvim/popupmenu.h"
 #include "nvim/regexp.h"
@@ -226,9 +207,7 @@ int nvim_is_root_user(void) { return 0; }
 #endif
 
 sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : options[opt_idx].script_ctx; }
-
 sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) { return (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : win->w_p_script_ctx[opt_idx]; }
-
 sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) { return (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : buf->b_p_script_ctx[opt_idx]; }
 
 int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
