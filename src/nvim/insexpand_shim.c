@@ -727,13 +727,23 @@ static Callback *get_insert_callback(int type)
   return (*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb;
 }
 
-void nvim_save_orig_extmarks_impl(void) {
+/// Compound accessor: calls extmark_splice_delete for completion extmark save.
+void nvim_extmark_splice_delete_compl(void) {
   extmark_splice_delete(curbuf, curwin->w_cursor.lnum - 1, compl_col, curwin->w_cursor.lnum - 1,
                         compl_col + compl_length, &compl_orig_extmarks, true, kExtmarkUndo);
 }
-
-static void restore_orig_extmarks(void)
-  { for (long i = (long)kv_size(compl_orig_extmarks) - 1; i > -1; i--) { extmark_apply_undo(kv_A(compl_orig_extmarks, (size_t)i), true); } }
+/// Compound accessor: returns size of compl_orig_extmarks vec.
+size_t nvim_compl_orig_extmarks_size(void) { return kv_size(compl_orig_extmarks); }
+/// Compound accessor: applies undo for the extmark at index idx in compl_orig_extmarks.
+void nvim_extmark_apply_undo_at(size_t idx) { extmark_apply_undo(kv_A(compl_orig_extmarks, idx), true); }
+/// Compound accessor: API_CLEAR_STRING on compl_orig_text.
+void nvim_api_clear_string_compl_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
+/// Compound accessor: callback_free on the static cfu_cb, ofu_cb, tsrfu_cb.
+void nvim_callback_free_cfu(void) { callback_free(&cfu_cb); }
+void nvim_callback_free_ofu(void) { callback_free(&ofu_cb); }
+void nvim_callback_free_tsrfu(void) { callback_free(&tsrfu_cb); }
+/// Compound accessor: clear_cpt_callbacks on the static cpt_cb array.
+void nvim_clear_static_cpt_callbacks(void) { clear_cpt_callbacks(&cpt_cb, cpt_cb_count); }
 
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
@@ -881,16 +891,6 @@ void nvim_compl_xp_nlua_expand(void) { nlua_expand_pat(&compl_xp); }
 const char *nvim_ml_get_curline(void) { return ml_get(curwin->w_cursor.lnum); }
 char *nvim_get_ctrl_x_msg(int idx) { return _(ctrl_x_msgs[idx & ~CTRL_X_WANT_IDENT]); }
 
-void nvim_free_insexpand_stuff_impl(void)
-{
-  API_CLEAR_STRING(compl_orig_text);
-  kv_destroy(compl_orig_extmarks);
-  callback_free(&cfu_cb);
-  callback_free(&ofu_cb);
-  callback_free(&tsrfu_cb);
-  clear_cpt_callbacks(&cpt_cb, cpt_cb_count);
-}
-
 // Completion state accessors (used by Rust insexpand crate)
 unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
 int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
@@ -911,7 +911,6 @@ void nvim_spell_back_safe(void)
 char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
-void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 void nvim_trigger_complete_changed(int cur)
 {
   static bool recursive = false;

@@ -178,7 +178,7 @@ extern "C" {
     fn rs_get_compl_len() -> c_int;
     // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
     fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int);
-    fn nvim_restore_orig_extmarks();
+    fn rs_restore_orig_extmarks();
     fn get_can_cindent() -> bool;
     fn cindent_on() -> bool;
     fn do_c_expr_indent();
@@ -529,7 +529,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
                 rs_ins_compl_insert_bytes(p.add(compl_len as usize), (plen as c_int) - compl_len);
             }
         }
-        nvim_restore_orig_extmarks();
+        rs_restore_orig_extmarks();
         retval = true;
     }
 
