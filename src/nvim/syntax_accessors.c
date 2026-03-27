@@ -714,6 +714,18 @@ void nvim_synblock_set_linecont_ic(synblock_T *block, int ic) { block->b_syn_lin
 void nvim_synblock_set_linecont_prog2(synblock_T *block, void *prog) { block->b_syn_linecont_prog = (regprog_T *)prog; }
 
 void nvim_syn_clear_linecont_pat(synblock_T *block) { XFREE_CLEAR(block->b_syn_linecont_pat); }
+void nvim_synblock_set_sync_flags_zero(synblock_T *block) { block->b_syn_sync_flags = 0; }
+void nvim_synblock_set_folditems(synblock_T *block, int n) { block->b_syn_folditems = n; }
+void nvim_synblock_set_syn_error(synblock_T *block, int val) { block->b_syn_error = (bool)val; }
+void nvim_synblock_set_syn_slow(synblock_T *block, int val) { block->b_syn_slow = (bool)val; }
+void nvim_synblock_set_syn_containedin_b(synblock_T *block, int val) { block->b_syn_containedin = (bool)val; }
+void nvim_synblock_set_syn_conceal(synblock_T *block, int val) { block->b_syn_conceal = (bool)val; }
+void nvim_synblock_set_spell_cluster_id_b(synblock_T *block, int id) { block->b_spell_cluster_id = id; }
+void nvim_synblock_set_nospell_cluster_id_b(synblock_T *block, int id) { block->b_nospell_cluster_id = id; }
+void nvim_synblock_ga_clear_patterns(synblock_T *block) { ga_clear(&block->b_syn_patterns); }
+void nvim_synblock_ga_clear_clusters(synblock_T *block) { ga_clear(&block->b_syn_clusters); }
+void nvim_synblock_regfree_linecont_prog(synblock_T *block) { vim_regfree(block->b_syn_linecont_prog); block->b_syn_linecont_prog = NULL; }
+void nvim_synblock_clear_syn_isk(synblock_T *block) { clear_string_option(&block->b_syn_isk); }
 
 void *nvim_synblock_get_linecont_time_ptr(synblock_T *block) { return (void *)&block->b_syn_linecont_time; }
 
@@ -856,59 +868,8 @@ void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx,
 
 void nvim_synblock_dec_folditems(synblock_T *block) { block->b_syn_folditems--; }
 
-/// Full clear of a synblock: keytabs, patterns, clusters, cluster_ids,
-/// sync_flags, linecont, syn_isk, and all scalar flags.
-/// Replaces the 8 individual clearing functions called by rs_syntax_clear.
-void nvim_synblock_full_clear(synblock_T *block)
-{
-  // Clear keyword tables (call rs_clear_keywtab directly to avoid circular call)
-  rs_clear_keywtab(&block->b_keywtab);
-  rs_clear_keywtab(&block->b_keywtab_ic);
-  // Free pattern and cluster arrays
-  ga_clear(&block->b_syn_patterns);
-  ga_clear(&block->b_syn_clusters);
-  // Reset cluster IDs
-  block->b_spell_cluster_id = 0;
-  block->b_nospell_cluster_id = 0;
-  // Reset sync flags
-  block->b_syn_sync_flags = 0;
-  block->b_syn_sync_minlines = 0;
-  block->b_syn_sync_maxlines = 0;
-  block->b_syn_sync_linebreaks = 0;
-  block->b_syn_folditems = 0;
-  // Free linecont
-  vim_regfree(block->b_syn_linecont_prog);
-  block->b_syn_linecont_prog = NULL;
-  XFREE_CLEAR(block->b_syn_linecont_pat);
-  // Clear iskeyword option
-  clear_string_option(&block->b_syn_isk);
-  // Reset scalar flags
-  block->b_syn_error = false;
-  block->b_syn_slow = false;
-  block->b_syn_ic = false;
-  block->b_syn_foldlevel = SYNFLD_START;
-  block->b_syn_spell = SYNSPL_DEFAULT;
-  block->b_syn_containedin = false;
-  block->b_syn_conceal = false;
-}
-
-/// Sync-only clear of a synblock: reset sync_flags, linecont, syn_isk.
-/// Replaces the 3 individual calls in rs_syntax_sync_clear.
-void nvim_synblock_sync_clear(synblock_T *block)
-{
-  // Reset sync flags
-  block->b_syn_sync_flags = 0;
-  block->b_syn_sync_minlines = 0;
-  block->b_syn_sync_maxlines = 0;
-  block->b_syn_sync_linebreaks = 0;
-  block->b_syn_folditems = 0;
-  // Free linecont
-  vim_regfree(block->b_syn_linecont_prog);
-  block->b_syn_linecont_prog = NULL;
-  XFREE_CLEAR(block->b_syn_linecont_pat);
-  // Clear iskeyword option
-  clear_string_option(&block->b_syn_isk);
-}
+extern void rs_synblock_full_clear(synblock_T *block);
+extern void rs_synblock_sync_clear(synblock_T *block);
 
 /// Release ownsyntax block for a window: clear it, free it, reset to buf's b_s.
 void nvim_win_release_synblock(win_T *wp)
