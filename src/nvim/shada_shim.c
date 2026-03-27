@@ -1,4 +1,3 @@
-#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -12,7 +11,6 @@
 #include "nvim/api/keysets_defs.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
-#include "nvim/ascii_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/cmdhist.h"
@@ -35,7 +33,6 @@
 #include "nvim/message.h"
 #include "nvim/msgpack_rpc/packer.h"
 #include "nvim/msgpack_rpc/packer_defs.h"
-#include "nvim/msgpack_rpc/unpacker.h"
 #include "nvim/normal_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/fileio.h"
@@ -219,8 +216,6 @@ buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const f
   *ref = NULL;
   return NULL;
 }
-
-#define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
 void nvim_shada_decode_string_into(const char *s, size_t len, bool force_blob, void *dst) { typval_T tv = decode_string(s, len, force_blob, false); memcpy(dst, &tv, sizeof(typval_T)); }
 
@@ -630,7 +625,7 @@ static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
 void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
 {
   FileDescriptor *file = (FileDescriptor *)fd;
-  if (file_space(file) < SHADA_MPACK_FREE_SPACE) {
+  if (file_space(file) < (4 * MPACK_ITEM_SIZE)) {
     file_flush(file);
   }
   *out = (PackerBuffer) {
