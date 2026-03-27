@@ -182,31 +182,15 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt) { return pt->pt_func != NU
 bool nvim_gc_mark_buffers(int copyID, bool abort)
 {
   FOR_ALL_BUFFERS(buf) {
-    if (!abort) {
-      abort = abort || rs_set_ref_in_item(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_prompt_callback, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_prompt_interrupt, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_cfu_cb, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_ofu_cb, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_tsrfu_cb, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_tfu_cb, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&buf->b_ffu_cb, copyID, NULL, NULL);
-    }
-    if (!abort && buf->b_p_cpt_cb != NULL) {
+    abort = abort || rs_set_ref_in_item(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_prompt_callback, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_prompt_interrupt, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_cfu_cb, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_ofu_cb, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_tsrfu_cb, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_tfu_cb, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&buf->b_ffu_cb, copyID, NULL, NULL);
+    if (buf->b_p_cpt_cb != NULL) {
       abort = abort || set_ref_in_cpt_callbacks(buf->b_p_cpt_cb, buf->b_p_cpt_count, copyID);
     }
   }
@@ -216,14 +200,11 @@ bool nvim_gc_mark_buffers(int copyID, bool abort)
 bool nvim_gc_mark_tab_windows(int copyID, bool abort)
 {
   FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (!abort) {
-      abort = abort || rs_set_ref_in_item(&wp->w_winvar.di_tv, copyID, NULL, NULL);
-    }
+    abort = abort || rs_set_ref_in_item(&wp->w_winvar.di_tv, copyID, NULL, NULL);
   }
   for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
-    if (!abort && aucmd_win[i].auc_win != NULL) {
-      abort = abort
-              || rs_set_ref_in_item(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
+    if (aucmd_win[i].auc_win != NULL) {
+      abort = abort || rs_set_ref_in_item(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
     }
   }
   return abort;
@@ -232,9 +213,7 @@ bool nvim_gc_mark_tab_windows(int copyID, bool abort)
 bool nvim_gc_mark_tabs(int copyID, bool abort)
 {
   FOR_ALL_TABS(tp) {
-    if (!abort) {
-      abort = abort || rs_set_ref_in_item(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
-    }
+    abort = abort || rs_set_ref_in_item(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
   }
   return abort;
 }
@@ -243,17 +222,9 @@ bool nvim_gc_mark_channels(int copyID, bool abort)
 {
   Channel *data;
   map_foreach_value(&channels, data, {
-    if (!abort) {
-      abort = abort
-              || rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort
-              || rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
-    }
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
-    }
+    abort = abort || rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
+    abort = abort || rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
   })
   return abort;
 }
@@ -262,9 +233,7 @@ bool nvim_gc_mark_timers(int copyID, bool abort)
 {
   timer_T *timer;
   map_foreach_value(&timers, timer, {
-    if (!abort) {
-      abort = abort || rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
-    }
+    abort = abort || rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
   })
   return abort;
 }
