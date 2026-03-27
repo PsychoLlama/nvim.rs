@@ -5,12 +5,14 @@
 #include <stdint.h>
 
 #include "nvim/ascii_defs.h"
+#include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/change.h"
 #include "nvim/charset.h"
 #include "nvim/cursor.h"
+#include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/eval/vars.h"
@@ -19,6 +21,7 @@
 #include "nvim/getchar.h"
 #include "nvim/globals.h"
 #include "nvim/indent.h"
+#include "nvim/indent_c.h"
 #include "nvim/keycodes.h"
 #include "nvim/mapping.h"
 #include "nvim/mbyte.h"
@@ -31,11 +34,15 @@
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
+#include "nvim/register.h"
+#include "nvim/register_defs.h"
 #include "nvim/state.h"
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
+#include "nvim/textformat.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
+#include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
 
 #include "edit_shim.c.generated.h"
@@ -242,3 +249,54 @@ void nvim_handle_end_comment_pending(int c)
     }
   }
 }
+
+// One-liner accessors for edit crate (migrated from normal_shim.c)
+
+extern int rs_ins_compl_col(void);
+extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
+extern void nvim_set_o_lnum(linenr_T val);
+
+int nvim_merge_modifiers(int c) { return merge_modifiers(c, &mod_mask); }
+int nvim_MB_BYTE2LEN_CHECK(int c) { return MB_BYTE2LEN_CHECK(c); }
+int nvim_get_K_ZERO(void) { return K_ZERO; }
+char *nvim_get_special_key_name(int c, int modifiers) { return get_special_key_name(c, modifiers); }
+int nvim_comp_textwidth(int ff) { return comp_textwidth((bool)ff); }
+void nvim_internal_format(int textwidth, int second_indent, int flags, int format_only, int c) { internal_format(textwidth, second_indent, flags, (bool)format_only, c); }
+int nvim_byte2cells(int b) { return byte2cells((uint8_t)b); }
+int nvim_mb_get_class_cursor(void) { return mb_get_class(get_cursor_pos_ptr()); }
+int nvim_cursor_has_composing(void) { if (!p_deco) { return 0; } char *p0 = get_cursor_pos_ptr(); return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0; }
+void *nvim_get_yank_register_paste(int regname) { return get_yank_register(regname, YREG_PASTE); }
+int nvim_insert_reg(int regname, int literally) { return insert_reg(regname, NULL, literally != 0); }
+bool nvim_is_literal_register(int regname) { return is_literal_register(regname); }
+size_t nvim_reg_y_size(void *reg) { return ((yankreg_T *)reg)->y_size; }
+int nvim_curbuf_meta_total_inline(void) { return buf_meta_total(curbuf, kMTMetaInline); }
+int nvim_get_p_ch_zero_no_ui_messages(void) { return (p_ch == 0 && !ui_has(kUIMessages)) ? 1 : 0; }
+int nvim_has_event_insertcharpre(void) { return has_event(EVENT_INSERTCHARPRE) ? 1 : 0; }
+int nvim_pagescroll_backward(void) { return pagescroll(BACKWARD, 1, false); }
+int nvim_pagescroll_forward(void) { return pagescroll(FORWARD, 1, false); }
+void nvim_map_execute_lua_false(void) { map_execute_lua(false, false); }
+void nvim_auto_format_ins(int force_format) { auto_format(false, force_format != 0); }
+int nvim_get_need_highlight_changed(void) { return need_highlight_changed ? 1 : 0; }
+void nvim_set_need_start_insertmode(int val) { need_start_insertmode = (val != 0); }
+void nvim_state_enter(void *state) { state_enter((VimState *)state); }
+int nvim_ww_allows(int ch) { return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0; }
+int nvim_vv_char_is_empty(void) { return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0; }
+int nvim_cursor_on_tab_or_inline(void) { return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0; }
+void nvim_set_vv_insertmode(int cmdchar) { const char *ptr = cmdchar == 'R' ? "r" : cmdchar == 'V' ? "v" : "i"; set_vim_var_string(VV_INSERTMODE, ptr, 1); }
+int nvim_cursor_col_ge_compl_col(void) { return curwin->w_cursor.col >= rs_ins_compl_col() ? 1 : 0; }
+void nvim_change_warning_col(int col) { change_warning(curbuf, col); }
+void nvim_check_cursor_col_insert_mode(void) { int save_state = State; State = MODE_INSERT; check_cursor_col(curwin); State = save_state; }
+void nvim_coladvance_insstart(void) { coladvance(curwin, getvcol_nolist(&Insstart)); }
+int nvim_cursor_equals_saved(linenr_T lnum, colnr_T col, colnr_T coladd) { pos_T saved = { .lnum = lnum, .col = col, .coladd = coladd }; return equalpos(curwin->w_cursor, saved) ? 1 : 0; }
+int nvim_in_cinkeys_int(int c, int type, int line_is_white) { return in_cinkeys(c, (char)type, line_is_white != 0) ? 1 : 0; }
+int nvim_insstart_col_gt_orig(void) { return Insstart.col > Insstart_orig.col ? 1 : 0; }
+colnr_T nvim_linetabsize_cursor_line(void) { return linetabsize_str(get_cursor_line_ptr()); }
+void nvim_restore_cursor_pos(linenr_T lnum, colnr_T col, colnr_T coladd) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; curwin->w_cursor.coladd = coladd; }
+void nvim_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *coladd_out) { *lnum_out = curwin->w_cursor.lnum; *col_out = curwin->w_cursor.col; *coladd_out = curwin->w_cursor.coladd; }
+void nvim_set_vim_var_char(const char *buf, ptrdiff_t len) { set_vim_var_string(VV_CHAR, buf, len); }
+void nvim_start_arrow_curpos(void) { start_arrow(&curwin->w_cursor); }
+void nvim_start_arrow_with_change_curpos(bool end_change) { start_arrow_with_change(&curwin->w_cursor, end_change); }
+void nvim_ui_cursor_shape_and_clear_digraph(void) { ui_cursor_shape(); do_digraph(-1); }
+void nvim_clear_where_paste_started(void) { where_paste_started.lnum = 0; }
+void nvim_update_o_lnum_if_at_eol(void) { if (ins_at_eol) { nvim_set_o_lnum(curwin->w_cursor.lnum); } }
+const char *nvim_get_vim_var_char(void) { return get_vim_var_str(VV_CHAR); }
