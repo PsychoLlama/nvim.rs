@@ -509,6 +509,44 @@ pub unsafe extern "C" fn rs_didset_options2() {
 }
 
 // =============================================================================
+// ui_refresh_options migration
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_option_flags(opt_idx: c_int) -> u32;
+    fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_ui_call_option_set(opt_idx: c_int, saved_new_value: crate::storage::OptVal);
+    fn setmouse();
+}
+
+/// Send update to UIs with values of UI relevant options.
+/// Rust implementation of C `ui_refresh_options`.
+///
+/// # Safety
+/// Calls C UI and option functions; safe when called during option processing.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_ui_refresh_options() {
+    use crate::opt_index::K_OPT_COUNT;
+    use crate::K_OPT_FLAG_UI_OPTION;
+
+    for opt_idx in 0..K_OPT_COUNT {
+        let flags = nvim_get_option_flags(opt_idx);
+        if flags & K_OPT_FLAG_UI_OPTION == 0 {
+            continue;
+        }
+        let varp = nvim_get_option_var(opt_idx);
+        if varp.is_null() {
+            continue;
+        }
+        let optval = crate::value::rs_optval_from_varp(opt_idx, varp);
+        nvim_ui_call_option_set(opt_idx, optval);
+    }
+    if !crate::get_mouse().is_null() {
+        setmouse();
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 

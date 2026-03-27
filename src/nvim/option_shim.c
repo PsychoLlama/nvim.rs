@@ -324,22 +324,8 @@ const char *nvim_option_set_value_handle_tty(const char *name, OptIndex opt_idx,
   return set_option_value_handle_tty(name, opt_idx, value, opt_flags);
 }
 
-/// Send update to UIs with values of UI relevant options
-void ui_refresh_options(void)
-{
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    uint32_t flags = options[opt_idx].flags;
-    if (!(flags & kOptFlagUIOption)) {
-      continue;
-    }
-    String name = cstr_as_string(options[opt_idx].fullname);
-    Object value = rs_optval_as_object(rs_optval_from_varp(opt_idx, options[opt_idx].var));
-    ui_call_option_set(name, value);
-  }
-  if (p_mouse != NULL) {
-    setmouse();
-  }
-}
+extern void rs_ui_refresh_options(void);
+void ui_refresh_options(void) { rs_ui_refresh_options(); }
 
 /// Get pointer to option variable, depending on local or global scope.
 ///
