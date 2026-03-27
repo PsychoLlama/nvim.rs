@@ -73,16 +73,12 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-/// Partial result of a substitution during :substitute.
-/// Numbers refer to the buffer _after_ substitution
 typedef struct {
-  lpos_T start;  // start of the match
+  lpos_T start;  // start of the match (after substitution)
   lpos_T end;    // end of the match
   linenr_T pre_match;  // where to begin showing lines before the match
 } SubResult;
 
-// Collected results of a substitution for showing them in
-// the preview window
 typedef struct {
   kvec_t(SubResult) subresults;
   linenr_T lines_needed;  // lines needed in the preview window
@@ -90,7 +86,6 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
-// Constant assertions for values inlined into Rust (Phase 3)
 _Static_assert(VV_SWAPCOMMAND == 49, "VV_SWAPCOMMAND mismatch with Rust constant");
 _Static_assert(HLF_R == 18, "HLF_R mismatch with Rust constant");
 
@@ -177,7 +172,6 @@ const char *nvim_excmds_shell_name_tail(void) { return invocation_path_tail(p_sh
 
 _Static_assert(ML_DEL_MESSAGE == 1, "ML_DEL_MESSAGE mismatch");
 
-// Verify sort-related constants for Rust
 _Static_assert(STR2NR_BIN == (1 << 0), "STR2NR_BIN mismatch");
 _Static_assert(STR2NR_OCT == (1 << 1), "STR2NR_OCT mismatch");
 _Static_assert(STR2NR_HEX == (1 << 2), "STR2NR_HEX mismatch");
@@ -582,7 +576,6 @@ void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
   }
 }
 
-/// Format and display the visual mode message.
 void nvim_cpi_format_visual_msg(int line_count_selected,
                                 int start_vcol,
                                 int end_vcol,
@@ -629,7 +622,6 @@ void nvim_cpi_format_visual_msg(int line_count_selected,
   }
 }
 
-/// Format and display the normal mode message.
 void nvim_cpi_format_normal_msg(int64_t word_count_cursor,
                                 int64_t word_count,
                                 int64_t char_count_cursor,
@@ -672,7 +664,6 @@ void nvim_cpi_format_normal_msg(int64_t word_count_cursor,
   }
 }
 
-/// Append BOM info to IObuff and display the message.
 void nvim_cpi_append_bom_and_display(int64_t bom_count)
 {
   if (bom_count > 0) {
