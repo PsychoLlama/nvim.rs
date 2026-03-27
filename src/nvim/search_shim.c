@@ -139,7 +139,6 @@ void nvim_showmatch_display_cursor(int match_lnum, int match_col, int match_cola
   ui_cursor_shape();                // may show different cursor shape
 }
 
-// "searchcount()" function
 void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   pos_T pos = curwin->w_cursor;
@@ -237,30 +236,8 @@ void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   tv_dict_add_nr(rettv->vval.v_dict, S_LEN("maxcount"), stat.last_maxcount);
 }
 
-/// Get line "lnum" and copy it into "buf[LSIZE]".
-/// The copy is made because the regexp may make the line invalid when using a
-/// mark.
-static char *get_line_and_copy(linenr_T lnum, char *buf)
-{
-  char *line = ml_get(lnum);
-  xstrlcpy(buf, line, LSIZE);
-  return buf;
-}
+static char *get_line_and_copy(linenr_T lnum, char *buf) { xstrlcpy(buf, ml_get(lnum), LSIZE); return buf; }
 
-/// Find identifiers or defines in included files.
-/// If p_ic && rs_compl_status_sol() then ptr must be in lowercase.
-///
-/// @param ptr            pointer to search pattern
-/// @param dir            direction of expansion
-/// @param len            length of search pattern
-/// @param whole          match whole words only
-/// @param skip_comments  don't match inside comments
-/// @param type           Type of search; are we looking for a type? a macro?
-/// @param action         What to do when we find it
-/// @param start_lnum     first line to start searching
-/// @param end_lnum       last line for searching
-/// @param forceit        If true, always switch to the found path
-/// @param silent         Do not print messages when ACTION_EXPAND
 void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool skip_comments,
                           int type, int count, int action, linenr_T start_lnum, linenr_T end_lnum,
                           bool forceit, bool silent)
@@ -315,7 +292,6 @@ typedef struct {
   int l_g_do_tagpreview;
 } FpipState;
 
-/// Initialize the fpip state.
 FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
                               int whole, int skip_comments,
                               int type, int count, int action,
@@ -342,15 +318,9 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
   st->did_show = false;
   st->found = false;
   st->l_g_do_tagpreview = g_do_tagpreview;
-  st->depth = -1;
-  st->depth_displayed = -1;
-
-  st->regmatch.regprog = NULL;
-  st->incl_regmatch.regprog = NULL;
-  st->def_regmatch.regprog = NULL;
-
+  st->depth = -1; st->depth_displayed = -1;
+  st->regmatch.regprog = NULL; st->incl_regmatch.regprog = NULL; st->def_regmatch.regprog = NULL;
   st->file_line = xmalloc(LSIZE);
-
   if (type != CHECK_PATH && type != FIND_DEFINE
       && !rs_compl_status_sol()) {
     size_t patsize = len + 5;
@@ -364,42 +334,28 @@ FpipInitResult nvim_fpip_init(const char *ptr, int dir, size_t len,
       return (FpipInitResult){ st, 0 };
     }
   }
-
   st->inc_opt = (*curbuf->b_p_inc == NUL) ? p_inc : curbuf->b_p_inc;
   if (*st->inc_opt != NUL) {
     st->incl_regmatch.regprog = vim_regcomp(st->inc_opt, rs_magic_isset() ? RE_MAGIC : 0);
-    if (st->incl_regmatch.regprog == NULL) {
-      return (FpipInitResult){ st, 0 };
-    }
+    if (st->incl_regmatch.regprog == NULL) { return (FpipInitResult){ st, 0 }; }
     st->incl_regmatch.rm_ic = false;
   }
-
   if (type == FIND_DEFINE && (*curbuf->b_p_def != NUL || *p_def != NUL)) {
-    st->def_regmatch.regprog = vim_regcomp(
-        *curbuf->b_p_def == NUL ? p_def : curbuf->b_p_def,
-        rs_magic_isset() ? RE_MAGIC : 0);
-    if (st->def_regmatch.regprog == NULL) {
-      return (FpipInitResult){ st, 0 };
-    }
+    st->def_regmatch.regprog = vim_regcomp(*curbuf->b_p_def == NUL ? p_def : curbuf->b_p_def, rs_magic_isset() ? RE_MAGIC : 0);
+    if (st->def_regmatch.regprog == NULL) { return (FpipInitResult){ st, 0 }; }
     st->def_regmatch.rm_ic = false;
   }
-
   st->files = xcalloc((size_t)st->max_path_depth, sizeof(SearchedFile));
   st->old_files = st->max_path_depth;
-
   st->end_lnum = MIN(st->end_lnum, curbuf->b_ml.ml_line_count);
   st->lnum = MIN(st->start_lnum, st->end_lnum);
-
   return (FpipInitResult){ st, 1 };
 }
 
-/// Run the main search loop. Contains the entire original while(true) loop
-/// and all the match/action handling.
 void nvim_fpip_run(void *handle)
 {
   FpipState *st = (FpipState *)handle;
 
-  // Local aliases for readability (matching original variable names)
   SearchedFile *files = st->files;
   int max_path_depth = st->max_path_depth;
   int old_files = st->old_files;
@@ -433,7 +389,6 @@ void nvim_fpip_run(void *handle)
   win_T *curwin_save = NULL;
 
   char *line = get_line_and_copy(lnum, file_line);
-
   while (true) {
     if (incl_regmatch->regprog != NULL
         && vim_regexec(incl_regmatch, line, 0)) {
@@ -846,7 +801,6 @@ exit_matched:
     already = NULL;
   }
 
-  // Close any files still open
   for (i = 0; i <= depth; i++) {
     fclose(files[i].fp);
     xfree(files[i].name);
@@ -877,7 +831,6 @@ exit_matched:
     msg_end();
   }
 
-  // Write back state that cleanup needs
   st->files = files;
   st->max_path_depth = max_path_depth;
   st->old_files = old_files;
@@ -885,7 +838,6 @@ exit_matched:
   st->found = found;
 }
 
-/// Clean up fpip state.
 void nvim_fpip_cleanup(void *handle)
 {
   FpipState *st = (FpipState *)handle;
@@ -900,54 +852,29 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
                              linenr_T *lnum, int count)
   FUNC_ATTR_NONNULL_ARG(1, 6)
 {
-  if (did_show) {
-    msg_putchar('\n');          // cursor below last one
-  } else if (!msg_silent) {
-    gotocmdline(true);          // cursor at status line
-  }
-  if (got_int) {                // 'q' typed at "--more--" message
-    return;
-  }
+  if (did_show) { msg_putchar('\n'); } else if (!msg_silent) { gotocmdline(true); }
+  if (got_int) { return; }
   size_t linelen = strlen(line);
   while (true) {
     char *p = line + linelen - 1;
     if (fp != NULL) {
-      // We used fgets(), so get rid of newline at end
-      if (p >= line && *p == '\n') {
-        p--;
-      }
-      if (p >= line && *p == '\r') {
-        p--;
-      }
+      if (p >= line && *p == '\n') { p--; }
+      if (p >= line && *p == '\r') { p--; }
       *(p + 1) = NUL;
     }
     if (action == ACTION_SHOW_ALL) {
-      snprintf(IObuff, IOSIZE, "%3d: ", count);  // Show match nr.
-      msg_puts(IObuff);
-      snprintf(IObuff, IOSIZE, "%4" PRIdLINENR, *lnum);  // Show line nr.
-      // Highlight line numbers.
-      msg_puts_hl(IObuff, HLF_N, false);
-      msg_puts(" ");
+      snprintf(IObuff, IOSIZE, "%3d: ", count); msg_puts(IObuff);
+      snprintf(IObuff, IOSIZE, "%4" PRIdLINENR, *lnum);
+      msg_puts_hl(IObuff, HLF_N, false); msg_puts(" ");
     }
     msg_prt_line(line, false);
-
-    // Definition continues until line that doesn't end with '\'
-    if (got_int || type != FIND_DEFINE || p < line || *p != '\\') {
-      break;
-    }
-
+    if (got_int || type != FIND_DEFINE || p < line || *p != '\\') { break; }
     if (fp != NULL) {
-      if (vim_fgets(line, LSIZE, fp)) {     // end of file
-        break;
-      }
-      linelen = strlen(line);
-      (*lnum)++;
+      if (vim_fgets(line, LSIZE, fp)) { break; }
+      linelen = strlen(line); (*lnum)++;
     } else {
-      if (++*lnum > curbuf->b_ml.ml_line_count) {
-        break;
-      }
-      line = ml_get(*lnum);
-      linelen = (size_t)ml_get_len(*lnum);
+      if (++*lnum > curbuf->b_ml.ml_line_count) { break; }
+      line = ml_get(*lnum); linelen = (size_t)ml_get_len(*lnum);
     }
     msg_putchar('\n');
   }
@@ -955,15 +882,10 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
 
 // Accessor wrappers for C globals still needed by Rust crates
 void nvim_call_iemsg_restore_mismatch(void) { iemsg("restore_last_search_pattern() called more often than save_last_search_pattern()"); }
-/// Emit "no previous substitute regular expression" error.
 void nvim_emsg_nopresub(void) { emsg(_(e_nopresub)); }
-/// Set rc_did_emsg = true.
 void nvim_set_rc_did_emsg(void) { rc_did_emsg = true; }
-/// Get rc_did_emsg.
 int nvim_get_rc_did_emsg(void) { return rc_did_emsg; }
-/// Clear rc_did_emsg.
 void nvim_clear_rc_did_emsg(void) { rc_did_emsg = false; }
-/// Add search pattern to history.
 void nvim_search_add_to_history(const char *pat, size_t patlen) { add_to_history(HIST_SEARCH, pat, patlen, true, NUL); }
 int nvim_get_cmdmod_keeppatterns(void) { return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0; }
 int nvim_search_regcomp_compile(const char *pat, int magic, regmmatch_T *regmatch)
@@ -976,13 +898,11 @@ void nvim_inc_emsg_off(void) { emsg_off++; }
 void nvim_dec_emsg_off(void) { emsg_off--; }
 int nvim_search_regcomp(char *pat, size_t patlen, int pat_use, int options, void *regmatch_out) { return search_regcomp(pat, patlen, NULL, RE_SEARCH, pat_use, options, (regmmatch_T *)regmatch_out); }
 int nvim_searchit_regexec_multi(void *regmatch, void *win, void *buf, linenr_T lnum, colnr_T col, void *tm, int *timed_out) { return vim_regexec_multi((regmmatch_T *)regmatch, (win_T *)win, (buf_T *)buf, lnum, col, (proftime_T *)tm, timed_out); }
-
 void nvim_searchit_regfree(void *regmatch) { vim_regfree(((regmmatch_T *)regmatch)->regprog); }
 int nvim_regmatch_regprog_is_null(const void *regmatch) { return ((const regmmatch_T *)regmatch)->regprog == NULL ? 1 : 0; }
 colnr_T nvim_regmatch_rmm_matchcol(const void *regmatch) { return ((const regmmatch_T *)regmatch)->rmm_matchcol; }
 int nvim_cpo_has_search(void) { return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0; }
 int nvim_profile_passed_limit(void *tm) { return tm != NULL && profile_passed_limit(*(proftime_T *)tm) ? 1 : 0; }
-
 void nvim_searchit_emsg_patnotf(int p_ws_val, linenr_T lnum)
 {
   char *pat = get_search_pat();
@@ -996,7 +916,6 @@ void nvim_searchit_give_warning(int dir) { give_warning(_(dir == BACKWARD ? top_
 void *nvim_regmmatch_alloc(void) { return xcalloc(1, sizeof(regmmatch_T)); }
 void nvim_regmmatch_free(void *rm) { xfree(rm); }
 int nvim_do_search_check_lineoff(void) { extern int rs_get_search_offset_line(int idx); return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0; }
-
 int nvim_do_search_hasFolding_fwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, NULL, lnum) ? 1 : 0; }
 int nvim_do_search_hasFolding_bwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, lnum, NULL) ? 1 : 0; }
 int nvim_fdo_has_search_flag(void) { return (fdo_flags & kOptFdoFlagSearch) != 0 ? 1 : 0; }
@@ -1015,8 +934,6 @@ int nvim_search_get_curwin_w_p_rl(void) { return curwin->w_p_rl ? 1 : 0; }
 int nvim_search_check_linecomment(const char *line) { return check_linecomment(line); }
 void nvim_search_set_oap_motion_type(void *oap, int motion_type) { if (oap != NULL) { ((oparg_T *)oap)->motion_type = (MotionType)motion_type; } }
 const char *nvim_cap_get_nchar_composing_ptr(cmdarg_T *cap) { return cap ? cap->nchar_composing : NULL; }
-// update_search_stat / cmdline_search_stat accessors
-
 void nvim_set_p_ws(int val) { p_ws = val; }
 long nvim_get_p_msc(void) { return (long)p_msc; }
 int nvim_curbuf_get_changedtick(void) { return (int)buf_get_changedtick(curbuf); }
