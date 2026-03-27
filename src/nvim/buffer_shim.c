@@ -530,101 +530,24 @@ int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
 { return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM,
                   (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
 
-/// Set current buffer to "buf".  Executes autocommands and closes current
-/// buffer.
-///
-/// @param action  tells how to close the current buffer:
-///                DOBUF_GOTO       free or hide it
-///                DOBUF_SPLIT      nothing
-///                DOBUF_UNLOAD     unload it
-///                DOBUF_DEL        delete it
-///                DOBUF_WIPE       wipe it out
-void set_curbuf(buf_T *buf, int action, bool update_jumplist)
-{
-  buf_T *prevbuf;
-  int unload = (action == DOBUF_UNLOAD || action == DOBUF_DEL
-                || action == DOBUF_WIPE);
-  OptInt old_tw = curbuf->b_p_tw;
-  const int last_winid = rs_get_last_winid();
-
-  if (update_jumplist) {
-    setpcmark();
-  }
-
-  if ((cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-    curwin->w_alt_fnum = curbuf->b_fnum;     // remember alternate file
-  }
-  buflist_altfpos(curwin);                       // remember curpos
-
-  // Don't restart Select mode after switching to another buffer.
-  VIsual_reselect = false;
-
-  // close_windows() or apply_autocmds() may change curbuf and wipe out "buf"
-  prevbuf = curbuf;
-  bufref_T newbufref;
-  bufref_T prevbufref;
-  set_bufref(&prevbufref, prevbuf);
-  set_bufref(&newbufref, buf);
-
-  // Autocommands may delete the current buffer and/or the buffer we want to
-  // go to.  In those cases don't close the buffer.
-  if (!apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf)
-      || (bufref_valid(&prevbufref) && bufref_valid(&newbufref)
-          && !aborting())) {
-    if (prevbuf == curwin->w_buffer) {
-      reset_synblock(curwin);
-    }
-    // autocommands may have opened a new window
-    // with prevbuf, grr
-    if (unload
-        || (last_winid != rs_get_last_winid()
-            && strchr("wdu", prevbuf->b_p_bh[0]) != NULL)) {
-      close_windows(prevbuf, false);
-    }
-    if (bufref_valid(&prevbufref) && !aborting()) {
-      win_T *previouswin = curwin;
-
-      // Do not sync when in Insert mode and the buffer is open in
-      // another window, might be a timer doing something in another
-      // window.
-      if (prevbuf == curbuf && ((State & MODE_INSERT) == 0 || curbuf->b_nwindows <= 1)) {
-        u_sync(false);
-      }
-      close_buffer(prevbuf == curwin->w_buffer ? curwin : NULL,
-                   prevbuf,
-                   unload
-                   ? action
-                   : (action == DOBUF_GOTO && !buf_hide(prevbuf)
-                      && !bufIsChanged(prevbuf)) ? DOBUF_UNLOAD : 0,
-                   false, false);
-      if (curwin != previouswin && rs_win_valid(previouswin)) {
-        // autocommands changed curwin, Grr!
-        curwin = previouswin;
-      }
-    }
-  }
-  // An autocommand may have deleted "buf", already entered it (e.g., when
-  // it did ":bunload") or aborted the script processing!
-  // If curwin->w_buffer is null, enter_buffer() will make it valid again
-  bool valid = buf_valid(buf);
-  if ((valid && buf != curbuf && !aborting()) || curwin->w_buffer == NULL) {
-    // autocommands changed curbuf and we will move to another
-    // buffer soon, so decrement curbuf->b_nwindows
-    if (curbuf != NULL && prevbuf != curbuf) {
-      curbuf->b_nwindows--;
-    }
-    // If the buffer is not valid but curwin->w_buffer is NULL we must
-    // enter some buffer.  Using the last one is hopefully OK.
-    enter_buffer(valid ? buf : lastbuf);
-    if (old_tw != curbuf->b_p_tw) {
-      check_colorcolumn(NULL, curwin);
-    }
-  }
-
-  if (bufref_valid(&prevbufref) && prevbuf->terminal != NULL) {
-    terminal_check_size(prevbuf->terminal);
-  }
-}
+// Phase 3 accessors: set_curbuf helpers
+void nvim_setpcmark(void) { setpcmark(); }
+void nvim_buflist_altfpos_curwin(void) { buflist_altfpos(curwin); }
+void nvim_set_visual_reselect(int val) { VIsual_reselect = val != 0; }
+void nvim_reset_synblock_curwin(void) { if (curwin) { reset_synblock(curwin); } }
+void nvim_close_windows(buf_T *buf, bool keep_curwin) { close_windows(buf, keep_curwin); }
+int nvim_get_state_mode(void) { return State; }
+int nvim_buf_hide(buf_T *buf) { return buf_hide(buf) ? 1 : 0; }
+int nvim_bufIsChanged(buf_T *buf) { return bufIsChanged(buf); }
+void nvim_enter_buffer(buf_T *buf) { enter_buffer(buf); }
+void nvim_check_colorcolumn_curwin(void) { check_colorcolumn(NULL, curwin); }
+int nvim_buf_terminal_check_size(buf_T *buf)
+{ if (buf && buf->terminal) { terminal_check_size(buf->terminal); return 1; } return 0; }
+int nvim_buf_valid(buf_T *buf) { return buf_valid(buf) ? 1 : 0; }
+void nvim_curbuf_dec_nwindows(void) { if (curbuf) { curbuf->b_nwindows--; } }
+int nvim_curwin_buffer_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
+OptInt nvim_curbuf_get_p_tw(void) { return curbuf->b_p_tw; }
+int nvim_curwin_buffer_is_buf(buf_T *buf) { return curwin->w_buffer == buf ? 1 : 0; }
 
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
 { aco_save_T aco; aucmd_prepbuf(&aco, buf); int status = open_buffer(false, NULL, 0);

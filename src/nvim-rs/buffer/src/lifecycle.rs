@@ -1257,6 +1257,156 @@ pub unsafe extern "C" fn rs_buf_open_scratch(bufnr: c_int, bufname: *mut c_char)
 }
 
 // =============================================================================
+// set_curbuf: switch current buffer
+// =============================================================================
+
+extern "C" {
+    // Phase 3: set_curbuf helpers
+    fn nvim_setpcmark();
+    fn nvim_get_cmdmod_cmod_flags() -> c_int;
+    fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
+    fn nvim_buflist_altfpos_curwin();
+    fn nvim_set_visual_reselect(val: c_int);
+    fn nvim_reset_synblock_curwin();
+    fn nvim_get_state_mode() -> c_int;
+    fn nvim_u_sync(force: bool);
+    fn nvim_buf_hide(buf: BufHandle) -> c_int;
+    fn nvim_bufIsChanged(buf: BufHandle) -> c_int;
+    fn nvim_enter_buffer(buf: BufHandle);
+    fn nvim_check_colorcolumn_curwin();
+    fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
+    fn nvim_buf_valid(buf: BufHandle) -> c_int;
+    fn nvim_curbuf_dec_nwindows();
+    fn nvim_curwin_buffer_is_null() -> c_int;
+    fn nvim_curbuf_get_p_tw() -> i64;
+    fn nvim_curwin_buffer_is_buf(buf: BufHandle) -> c_int;
+    fn aborting() -> c_int;
+    fn rs_win_valid(win: *mut c_void) -> c_int;
+    fn rs_get_last_winid() -> c_int;
+    fn nvim_set_curwin(win: *mut c_void);
+}
+
+// CMOD_KEEPALT flag from ex_cmds_defs.h
+const CMOD_KEEPALT: c_int = 0x0100;
+// MODE_INSERT from state_defs.h
+const MODE_INSERT: c_int = 0x10;
+// DOBUF action values
+const DOBUF_UNLOAD: c_int = 2;
+const DOBUF_DEL: c_int = 3;
+const DOBUF_WIPE: c_int = 4;
+// auevents_enum
+const EVENT_BUFLEAVE: c_int = 7;
+
+/// Switch the current buffer to `buf`.
+///
+/// Fires `BufLeave` autocommands, closes the previous buffer (if needed),
+/// and calls `enter_buffer` for the new buffer.
+///
+/// # Safety
+/// Must be called on the Neovim main thread with valid state.
+#[unsafe(export_name = "set_curbuf")]
+pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jumplist: bool) {
+    let unload = action == DOBUF_UNLOAD || action == DOBUF_DEL || action == DOBUF_WIPE;
+    let old_tw = nvim_curbuf_get_p_tw();
+    let last_winid = rs_get_last_winid();
+
+    if update_jumplist {
+        nvim_setpcmark();
+    }
+
+    if (nvim_get_cmdmod_cmod_flags() & CMOD_KEEPALT) == 0 {
+        nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(nvim_get_curbuf()));
+    }
+    nvim_buflist_altfpos_curwin();
+
+    nvim_set_visual_reselect(0);
+
+    let prevbuf = nvim_get_curbuf();
+    let mut prevbufref = crate::misc::BufRef {
+        br_buf: std::ptr::null_mut(),
+        br_fnum: 0,
+        br_buf_free_count: 0,
+    };
+    let mut newbufref = crate::misc::BufRef {
+        br_buf: std::ptr::null_mut(),
+        br_fnum: 0,
+        br_buf_free_count: 0,
+    };
+    crate::misc::set_bufref(&raw mut prevbufref, prevbuf);
+    crate::misc::set_bufref(&raw mut newbufref, buf);
+
+    let curbuf = nvim_get_curbuf();
+    if !apply_autocmds(
+        EVENT_BUFLEAVE,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        curbuf,
+    ) || (bufref_valid(&raw mut prevbufref)
+        && bufref_valid(&raw mut newbufref)
+        && aborting() == 0)
+    {
+        if nvim_curwin_buffer_is_buf(prevbuf) != 0 {
+            nvim_reset_synblock_curwin();
+        }
+        // Close windows if unloading or if alt-bufhidden triggers it.
+        let bh = nvim_buf_get_bufhidden(prevbuf);
+        let new_lastwinid = rs_get_last_winid();
+        if unload
+            || (new_lastwinid != last_winid
+                && (bh == b'w' as c_char || bh == b'd' as c_char || bh == b'u' as c_char))
+        {
+            close_windows(prevbuf, 0);
+        }
+        if bufref_valid(&raw mut prevbufref) && aborting() == 0 {
+            let previouswin = nvim_get_curwin();
+
+            // Do not sync when in Insert mode and buffer is open in another window.
+            if prevbuf == nvim_get_curbuf()
+                && ((nvim_get_state_mode() & MODE_INSERT) == 0
+                    || nvim_buf_get_nwindows(nvim_get_curbuf()) <= 1)
+            {
+                nvim_u_sync(false);
+            }
+            let close_win = if nvim_curwin_buffer_is_buf(prevbuf) != 0 {
+                nvim_get_curwin()
+            } else {
+                std::ptr::null_mut()
+            };
+            let close_action = if unload {
+                action
+            } else if action == DOBUF_GOTO
+                && nvim_buf_hide(prevbuf) == 0
+                && nvim_bufIsChanged(prevbuf) == 0
+            {
+                DOBUF_UNLOAD
+            } else {
+                0
+            };
+            close_buffer(close_win, prevbuf, close_action, false, false);
+            if nvim_get_curwin() != previouswin && rs_win_valid(previouswin) != 0 {
+                nvim_set_curwin(previouswin);
+            }
+        }
+    }
+
+    let valid = nvim_buf_valid(buf) != 0;
+    if (valid && buf != nvim_get_curbuf() && aborting() == 0) || nvim_curwin_buffer_is_null() != 0 {
+        if !nvim_get_curbuf().is_null() && prevbuf != nvim_get_curbuf() {
+            nvim_curbuf_dec_nwindows();
+        }
+        nvim_enter_buffer(if valid { buf } else { nvim_get_lastbuf() });
+        if old_tw != nvim_curbuf_get_p_tw() {
+            nvim_check_colorcolumn_curwin();
+        }
+    }
+
+    if bufref_valid(&raw mut prevbufref) {
+        nvim_buf_terminal_check_size(prevbuf);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
