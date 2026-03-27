@@ -25,47 +25,6 @@
 
 extern char *rs_partial_name(partial_T *pt);
 
-/// Structure returned by vim_regcomp() to pass on to vim_regexec().
-/// This is the general structure. For the actual matcher, two specific
-/// structures are used. See code below.
-struct regprog {
-  regengine_T *engine;
-  unsigned regflags;
-  unsigned re_engine;  ///< Automatic, backtracking or NFA engine.
-  unsigned re_flags;   ///< Second argument for vim_regcomp().
-  bool re_in_use;      ///< prog is being executed
-};
-
-/// Structure used by the back track matcher.
-/// These fields are only to be used in regexp.c!
-/// See regexp.c for an explanation.
-typedef struct {
-  // These four members implement regprog_T.
-  regengine_T *engine;
-  unsigned regflags;
-  unsigned re_engine;
-  unsigned re_flags;
-  bool re_in_use;
-
-  int regstart;
-  uint8_t reganch;
-  uint8_t *regmust;
-  int regmlen;
-  uint8_t reghasz;
-  uint8_t program[];
-} bt_regprog_T;
-
-struct regengine {
-  /// bt_regcomp or nfa_regcomp
-  regprog_T *(*regcomp)(uint8_t *, int);
-  /// bt_regfree or nfa_regfree
-  void (*regfree)(regprog_T *);
-  /// bt_regexec_nl or nfa_regexec_nl
-  int (*regexec_nl)(regmatch_T *, uint8_t *, colnr_T, bool);
-  /// bt_regexec_mult or nfa_regexec_mult
-  int (*regexec_multi)(regmmatch_T *, win_T *, buf_T *, linenr_T, colnr_T, proftime_T *, int *);
-};
-
 #include "regexp_shim.c.generated.h"
 
 typedef struct {
@@ -364,8 +323,4 @@ int32_t nvim_regexp_get_p_re(void) { return (int32_t)p_re; }
 void nvim_regexp_set_p_re(int32_t v) { p_re = (long)v; }
 void nvim_regexp_set_reg_do_extmatch(int v) { reg_do_extmatch = v; }
 int64_t nvim_regexp_get_p_verbose(void) { return p_verbose; }
-size_t nvim_regexp_get_regmatch_size(void) { return sizeof(regmatch_T); }
-void nvim_regexp_init_regmatch(void *buf, void *prog, int rm_ic) { regmatch_T *rmp = (regmatch_T *)buf; memset(rmp, 0, sizeof(regmatch_T)); rmp->regprog = (regprog_T *)prog; rmp->rm_ic = (bool)rm_ic; }
-void nvim_regexp_set_rex_reg_buf_curbuf(void) { REX_PTR->reg_buf = curbuf; }
 int nvim_regexp_get_called_emsg(void) { return called_emsg; }
-void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) { bt_regprog_T *r = xmalloc(offsetof(bt_regprog_T, program) + (size_t)regsize_val); r->re_in_use = false; return r; }

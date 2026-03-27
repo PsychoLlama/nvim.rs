@@ -15212,9 +15212,7 @@ extern "C" {
     fn msg_puts(s: *const c_char);
     // vim_regcomp / vim_regfree: call rs_vim_regcomp / vim_regfree directly (same crate)
 
-    // regmatch_T handling for vim_regexec_prog
-    fn nvim_regexp_get_regmatch_size() -> usize;
-    fn nvim_regexp_init_regmatch(buf: *mut c_void, prog: *mut c_void, rm_ic: c_int);
+    // regmatch_T: constructed directly in Rust (RegmatchT struct)
 }
 
 /// Save rex and `rex_in_use` state. Returns (`saved_rex`, `saved_rex_in_use`).
@@ -15397,16 +15395,16 @@ pub unsafe extern "C" fn rs_vim_regexec_prog(
     line: *const u8,
     col: i32,
 ) -> c_int {
-    // Create a regmatch_T on stack via C accessor
-    let rmp_size = nvim_regexp_get_regmatch_size();
-    let mut rmp_buf = vec![0u8; rmp_size];
-    let rmp = rmp_buf.as_mut_ptr().cast::<c_void>();
-    nvim_regexp_init_regmatch(rmp, *prog_ptr, ignore_case);
+    // Create a regmatch_T on stack directly
+    let mut rm: RegmatchT = core::mem::zeroed();
+    rm.regprog = (*prog_ptr).cast::<RegprogT>();
+    rm.rm_ic = ignore_case != 0;
+    let rmp = core::ptr::addr_of_mut!(rm).cast::<c_void>();
 
     let result = rs_vim_regexec_string(rmp, line, col, 0);
 
     // Extract potentially-updated prog pointer
-    *prog_ptr = (*rmp.cast::<RegmatchT>()).regprog.cast::<c_void>();
+    *prog_ptr = rm.regprog.cast::<c_void>();
 
     result
 }
@@ -15473,7 +15471,7 @@ pub unsafe extern "C" fn rs_vim_regexec_multi(
 const NFA_ENGINE: c_int = 2;
 
 extern "C" {
-    fn nvim_regexp_set_rex_reg_buf_curbuf();
+    // nvim_regexp_set_rex_reg_buf_curbuf: replaced with REX.reg_buf = nvim_regexp_get_curbuf()
     fn nvim_regexp_get_called_emsg() -> c_int;
 }
 
@@ -15506,7 +15504,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
     }
 
     // reg_iswordc() uses rex.reg_buf
-    nvim_regexp_set_rex_reg_buf_curbuf();
+    REX.reg_buf = nvim_regexp_get_curbuf();
 
     // First try the NFA engine, unless backtracking was requested
     let called_emsg_before = nvim_regexp_get_called_emsg();
@@ -15550,9 +15548,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
 const REGMAGIC: c_int = 0o234;
 const RF_LOOKBH: c_uint = 8;
 
-extern "C" {
-    fn nvim_regexp_alloc_bt_regprog(regsize_val: i64) -> *mut c_void;
-}
+// nvim_regexp_alloc_bt_regprog: replaced with xmalloc + re_in_use = false directly
 
 /// BT compiler wrapper: two-pass compilation, allocation, optimization extraction.
 #[no_mangle]
@@ -15574,7 +15570,11 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
 
     // Allocate space.
     let regsize_val = REGSIZE;
-    let r = nvim_regexp_alloc_bt_regprog(regsize_val);
+    let prog_offset = core::mem::offset_of!(BtRegprogT, reghasz) + 1;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let r = xmalloc(prog_offset + regsize_val as usize).cast::<BtRegprogT>();
+    (*r).re_in_use = false;
+    let r = r.cast::<c_void>();
 
     // Second pass: emit code.
     regcomp_start(expr, re_flags);
