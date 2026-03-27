@@ -44,8 +44,21 @@ extern "C" {
     pub fn nvim_ses_buf_get_ffname(buf: BufPtr) -> *const c_char;
     pub fn nvim_ses_get_vop_flags_ptr() -> *const c_uint;
     pub fn nvim_ses_get_p_acd() -> c_int;
-    pub fn nvim_ses_home_replace_save(name: *const c_char) -> *mut c_char;
-    pub fn nvim_ses_vim_strsave_fnameescape(name: *const c_char) -> *mut c_char;
+    // home_replace_save(NULL, name) -- pass null_mut() for buf
+    pub fn home_replace_save(buf: *mut c_void, src: *const c_char) -> *mut c_char;
+    // vim_strsave_fnameescape(name, VSE_NONE=0)
+    pub fn vim_strsave_fnameescape(fname: *const c_char, what: c_int) -> *mut c_char;
+    // do_source(fname, false, DOSO_NONE=0, NULL)
+    pub fn do_source(
+        fname: *mut c_char,
+        check_other: bool,
+        is_vimrc: c_int,
+        ret_sid: *mut c_int,
+    ) -> c_int;
+    // vim_chdirfile(fname, kCdCauseOther=-1)
+    pub fn vim_chdirfile(fname: *mut c_char, cause: c_int) -> c_int;
+    // set_vim_var_string(VV_THIS_SESSION=7, val, -1)
+    pub fn set_vim_var_string(idx: c_int, val: *const c_char, len: isize);
     // xfree/xmalloc -- direct C functions
     pub fn xfree(p: *mut c_void);
     pub fn xmalloc(size: usize) -> *mut c_void;
@@ -191,20 +204,17 @@ extern "C" {
 
     // File I/O
     pub fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut libc::FILE;
-    pub fn nvim_ses_do_source(fname: *mut c_char) -> c_int;
 
     // OS functions -- direct
     pub fn os_isdir(dir: *const c_char) -> bool;
     pub fn vim_mkdir_emsg(dir: *const c_char, perm: c_int) -> c_int;
     pub fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
     pub fn os_chdir(dir: *const c_char) -> c_int;
-    pub fn nvim_ses_vim_chdirfile(fname: *mut c_char) -> c_int;
     pub fn shorten_fnames(force: c_int);
 
     // Session-related global state
     pub fn nvim_ses_get_p_hls() -> bool;
     pub fn nvim_ses_get_no_hlsearch() -> bool;
-    pub fn nvim_ses_set_vim_var_string(val: *const c_char);
     pub fn nvim_ses_apply_autocmds_session();
     pub fn emsg(s: *const c_char) -> bool;
     pub fn semsg(fmt: *const c_char, ...) -> bool;

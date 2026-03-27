@@ -165,7 +165,7 @@ pub unsafe extern "C" fn rs_ses_escape_fname(
     name: *mut c_char,
     _flagp: *mut c_uint,
 ) -> *mut c_char {
-    let sname = ffi::nvim_ses_home_replace_save(name);
+    let sname = ffi::home_replace_save(std::ptr::null_mut(), name);
 
     // Always kOptSsopFlagSlash: change all backslashes to forward slashes.
     // Use MB_PTR_ADV equivalent (utfc_ptr2len) to advance past multibyte chars.
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_ses_escape_fname(
     }
 
     // Escape special characters.
-    let result = ffi::nvim_ses_vim_strsave_fnameescape(sname);
+    let result = ffi::vim_strsave_fnameescape(sname, 0);
     ffi::xfree(sname.cast());
     result
 }
@@ -552,7 +552,7 @@ pub unsafe extern "C" fn rs_get_view_file(c: c_char) -> *mut c_char {
         return std::ptr::null_mut();
     }
 
-    let sname = ffi::nvim_ses_home_replace_save(ffname);
+    let sname = ffi::home_replace_save(std::ptr::null_mut(), ffname);
 
     // Count extra bytes needed for escaping
     let mut extra: usize = 0;
@@ -978,7 +978,7 @@ pub unsafe extern "C" fn rs_makeopens(fd: *mut libc::FILE, dirnow: *mut c_char) 
         } else {
             gdir as *mut c_char
         };
-        let sname = ffi::nvim_ses_home_replace_save(dir);
+        let sname = ffi::home_replace_save(std::ptr::null_mut(), dir);
         let fname_esc = rs_ses_escape_fname(sname, ssop_ptr);
         let fe = CStr::from_ptr(fname_esc).to_str().unwrap_or("");
         let line = format!("cd {fe}\n");
@@ -1306,6 +1306,11 @@ const VIMRC_FILE: *const c_char = c".nvimrc".as_ptr();
 const SESSION_FILE: *const c_char = c"Session.vim".as_ptr();
 const EXRC_FILE: *const c_char = c".exrc".as_ptr();
 
+/// VV_THIS_SESSION enum value (verified via _Static_assert in C)
+const VV_THIS_SESSION: c_int = 7;
+/// kCdCauseOther enum value (verified via _Static_assert in C)
+const KCD_CAUSE_OTHER: c_int = -1;
+
 /// `:loadview [nr]` — load a view file.
 ///
 /// # Safety
@@ -1319,7 +1324,7 @@ pub unsafe extern "C" fn rs_ex_loadview(eap: ffi::ExargPtr) {
         return;
     }
 
-    if ffi::nvim_ses_do_source(fname) == FAIL {
+    if ffi::do_source(fname, false, 0, std::ptr::null_mut()) == FAIL {
         let e_notopen = ffi::nvim_ses_get_e_notopen();
         ffi::semsg(e_notopen, fname);
     }
@@ -1427,7 +1432,7 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
                 let gdir = ffi::nvim_ses_get_globaldir();
 
                 if *dirnow != 0 && (ssop & K_OPT_SSOP_FLAG_SESDIR) != 0 {
-                    if ffi::nvim_ses_vim_chdirfile(fname) == OK {
+                    if ffi::vim_chdirfile(fname, KCD_CAUSE_OTHER) == OK {
                         ffi::shorten_fnames(1);
                     }
                 } else if *dirnow != 0
@@ -1484,7 +1489,7 @@ pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
             // successful session write - set v:this_session
             let tbuf = ffi::xmalloc(MAXPATHL).cast::<c_char>();
             if ffi::vim_FullName(fname, tbuf, MAXPATHL, false) == OK {
-                ffi::nvim_ses_set_vim_var_string(tbuf);
+                ffi::set_vim_var_string(VV_THIS_SESSION, tbuf, -1);
             }
             ffi::xfree(tbuf.cast::<c_void>());
         }

@@ -91,11 +91,6 @@ const char *nvim_ses_buf_get_ffname(const buf_T *buf) { return buf->b_ffname; }
 unsigned *nvim_ses_get_vop_flags_ptr(void) { return &vop_flags; }
 int nvim_ses_get_p_acd(void) { return p_acd; }
 
-// Wraps home_replace_save(NULL, name) - returns xmalloc'd string
-char *nvim_ses_home_replace_save(const char *name) { return home_replace_save(NULL, name); }
-// Wraps vim_strsave_fnameescape(name, VSE_NONE) - returns xmalloc'd string
-char *nvim_ses_vim_strsave_fnameescape(const char *name) { return vim_strsave_fnameescape(name, VSE_NONE); }
-
 // Static assertions for session directory flags
 _Static_assert(kOptSsopFlagCurdir == 0x1000, "kOptSsopFlagCurdir");
 _Static_assert(kOptSsopFlagSesdir == 0x800, "kOptSsopFlagSesdir");
@@ -278,16 +273,10 @@ int nvim_ses_get_CMD_mksession(void) { return CMD_mksession; }
 int nvim_ses_get_CMD_mkview(void) { return CMD_mkview; }
 int nvim_ses_get_CMD_mkvimrc(void) { return CMD_mkvimrc; }
 
-// File I/O wrappers
-int nvim_ses_do_source(char *fname) { return do_source(fname, false, DOSO_NONE, NULL); }
-
-// OS wrappers
-int nvim_ses_vim_chdirfile(char *fname) { return vim_chdirfile(fname, kCdCauseOther); }
 
 // Session-related global state
 bool nvim_ses_get_p_hls(void) { return p_hls; }
 bool nvim_ses_get_no_hlsearch(void) { return no_hlsearch; }
-void nvim_ses_set_vim_var_string(const char *val) { set_vim_var_string(VV_THIS_SESSION, val, -1); }
 void nvim_ses_apply_autocmds_session(void) { apply_autocmds(EVENT_SESSIONWRITEPOST, NULL, NULL, false, curbuf); }
 buf_T *nvim_ses_get_curbuf(void) { return curbuf; }
 
@@ -299,6 +288,8 @@ const char *nvim_ses_get_e_notopen(void) { return _(e_notopen); }
 // Static assertions for source/global flags
 _Static_assert(kOptSsopFlagSkiprtp == 0x20000, "kOptSsopFlagSkiprtp");
 _Static_assert(DOSO_NONE == 0, "DOSO_NONE");
+_Static_assert(VV_THIS_SESSION == 7, "VV_THIS_SESSION");
+_Static_assert(kCdCauseOther == -1, "kCdCauseOther");
 
 // _Static_assert for OK/FAIL values used by Rust FFI
 _Static_assert(OK == 1, "OK must be 1");
