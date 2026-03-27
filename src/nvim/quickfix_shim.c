@@ -4,17 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
-#include "nvim/buffer_defs.h"
-#include "nvim/charset.h"
 #include "nvim/cursor.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/ex_eval.h"
-#include "nvim/ex_eval_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -22,39 +17,26 @@
 #include "nvim/eval/window.h"
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
-#include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/extmark.h"
 #include "nvim/fileio.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/macros_defs.h"
 #include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
-#include "nvim/memline_defs.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
 #include "nvim/option.h"
-#include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/optionstr.h"
 #include "nvim/os/fs.h"
-#include "nvim/os/fs_defs.h"
 #include "nvim/os/os.h"
-#include "nvim/os/os_defs.h"
 #include "nvim/path.h"
-#include "nvim/pos_defs.h"
 #include "nvim/quickfix.h"
 #include "nvim/regexp.h"
-#include "nvim/regexp_defs.h"
 #include "nvim/search.h"
 #include "nvim/strings.h"
-#include "nvim/types_defs.h"
-#include "nvim/ui.h"
 #include "nvim/undo.h"
-#include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
 struct dir_stack_T {
@@ -197,17 +179,10 @@ void nvim_qf_set_multiscan(void *qfl_void, bool multiscan) { ((qf_list_T *)qfl_v
 #include "quickfix_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
-// Quickfix window check helper macro
 #define IS_QF_WINDOW(wp) (bt_quickfix((wp)->w_buffer) && (wp)->w_llist_ref == NULL)
-// Location list window check helper macro
 #define IS_LL_WINDOW(wp) (bt_quickfix((wp)->w_buffer) && (wp)->w_llist_ref != NULL)
-
-// Quickfix and location list stack check helper macros
 #define IS_LL_STACK(qi)       ((qi)->qfl_type == QFLT_LOCATION)
 #define IS_QF_LIST(qfl)       ((qfl)->qfl_type == QFLT_QUICKFIX)
-
-// Return location list for window 'wp'
-// For location list window, return the referenced location list
 #define GET_LOC_LIST(wp) (IS_LL_WINDOW(wp) ? (wp)->w_llist_ref : (wp)->w_llist)
 
 bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_win_valid((win_T *)wp_void) != 0; }
@@ -321,7 +296,6 @@ bool nvim_qfl_set_qftf_cb_from_tv(void *qfl_void, void *tv_void)
 
 void nvim_qf_tv_set_number(void *tv_void, int64_t nr) { if (tv_void != NULL) ((typval_T *)tv_void)->vval.v_number = (varnumber_T)nr; }
 
-/// Check if a typval_T has type VAR_LIST (qf-specific void* version).
 bool nvim_qf_tv_is_list_type(const void *tv_void) { return tv_void != NULL && ((const typval_T *)tv_void)->v_type == VAR_LIST; }
 int nvim_qf_get_valid_bufnr(const void *qi_void)
 { if (qi_void == NULL) { return 0; } const qf_info_T *qi = (const qf_info_T *)qi_void; return buflist_findnr(qi->qf_bufnr) != NULL ? qi->qf_bufnr : 0; }
@@ -337,11 +311,8 @@ void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)q
 void nvim_qf_set_refcount(void *qi_void, int v) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount = v; }
 void nvim_qf_free_lists_array(void *qi_void) { if (qi_void != NULL) { xfree(((qf_info_T *)qi_void)->qf_lists); ((qf_info_T *)qi_void)->qf_lists = NULL; } }
 
-/// Free the qf_info_T struct itself (only for heap-allocated stacks).
-/// Return curwin->w_buffer (may be NULL).
 void *nvim_curwin_get_buffer(void) { return (void *)curwin->w_buffer; }
 
-/// Set curwin->w_buffer (may be set to NULL).
 void nvim_curwin_set_buffer(void *buf) { curwin->w_buffer = (buf_T *)buf; }
 void nvim_close_buffer_wipe(void *buf_void) { if (buf_void != NULL) close_buffer(NULL, (buf_T *)buf_void, DOBUF_WIPE, false, false); }
 
@@ -564,65 +535,43 @@ void nvim_qf_set_cwindow_options(void)
 
 void nvim_qf_curwin_set_llist_ref_incr(void *qi_void) { if (qi_void != NULL) { curwin->w_llist_ref = (qf_info_T *)qi_void; ((qf_info_T *)qi_void)->qf_refcount++; } }
 
-/// Set curwin->w_p_wfh to true (winfixheight).
 void nvim_qf_curwin_set_wfh(void) { curwin->w_p_wfh = true; }
 
-/// Reset key bindings on curwin (RESET_BINDING).
 void nvim_qf_curwin_reset_binding(void) { RESET_BINDING(curwin); }
 
-/// Call option_set_callback_func(p_qftf, &qftf_cb). Returns FAIL or OK.
 int nvim_qf_option_set_callback_func_for_qftf(void) { return option_set_callback_func(p_qftf, &qftf_cb); }
-/// extmark_splice for quickfix buffer updates.
 void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
                              bcount_t bc, int nr, colnr_T nc, bcount_t nbc)
 {
   extmark_splice((buf_T *)buf, r1, c1, r2, c2, bc, nr, nc, nbc, kExtmarkNoUndo);
 }
 
-/// Set buf->b_changed = false.
 void nvim_qf_buf_set_changed_false(void *buf) { ((buf_T *)buf)->b_changed = false; }
 
-/// Return win->w_botline.
 linenr_T nvim_qf_win_botline(const void *win) { return ((const win_T *)win)->w_botline; }
 
-/// Allocate aco_save_T, call aucmd_prepbuf(aco, buf), return aco pointer.
 void *nvim_qf_aucmd_prepbuf_alloc(void *buf) { aco_save_T *aco = xmalloc(sizeof(aco_save_T)); aucmd_prepbuf(aco, (buf_T *)buf); return aco; }
 void nvim_qf_aucmd_restbuf_free(void *aco_void) { if (aco_void != NULL) { aucmd_restbuf((aco_save_T *)aco_void); xfree(aco_void); } }
 void *nvim_qf_fnum_cache_check(const char *bufname)
 { if (bufname == NULL) { return NULL; } return (qf_last_bufname != NULL && strcmp(bufname, qf_last_bufname) == 0 && bufref_valid(&qf_last_bufref)) ? qf_last_bufref.br_buf : NULL; }
 
-/// Update the filename cache: free old name, store new buf.
-/// Always copies bufname (caller retains ownership of the passed pointer).
 void nvim_qf_fnum_cache_update(const char *bufname, void *buf) { xfree(qf_last_bufname); qf_last_bufname = xstrdup(bufname); set_bufref(&qf_last_bufref, (buf_T *)buf); }
 
-/// Return buflist_new(bufname, NULL, 0, BLN_NOOPT).
 void *nvim_qf_buflist_new(char *bufname) { return buflist_new(bufname, NULL, 0, BLN_NOOPT); }
-/// Return the fnum of a buf_T pointer.
 int nvim_qf_buf_fnum_from_ptr(const void *buf_void) { return buf_void == NULL ? 0 : ((const buf_T *)buf_void)->b_fnum; }
-/// Set b_has_qf_entry on a buf_T (is_qf_list: true=QF, false=LL).
 void nvim_qf_buf_set_has_qf_entry(void *buf_void, bool is_qf_list) { if (buf_void != NULL) ((buf_T *)buf_void)->b_has_qf_entry = is_qf_list ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY; }
 
-/// Return vim_isAbsName(fname).
 bool nvim_qf_vim_is_abs_name(const char *fname) { return fname != NULL && vim_isAbsName(fname); }
-/// Return concat_fnames(dir, fname, true) -- caller must free.
 char *nvim_qf_concat_fnames(const char *dir, const char *fname) { return concat_fnames((char *)dir, (char *)fname, true); }
-/// Return IS_QF_LIST(qfl).
 bool nvim_qf_is_qf_list(const void *qfl_void) { return qfl_void != NULL && IS_QF_LIST((const qf_list_T *)qfl_void); }
-/// Return nvim_qf_init_clear_last_bufname (XFREE_CLEAR(qf_last_bufname)).
 void nvim_qf_clear_fnum_cache(void) { XFREE_CLEAR(qf_last_bufname); }
-/// Allocate a new VAR_FIXED-locked dict.
-/// Increment dict->dv_refcount by 1.
 void nvim_tv_dict_incr_refcount(void *dict) { if (dict != NULL) ((dict_T *)dict)->dv_refcount++; }
-/// Return true if callback cb has type kCallbackNone.
 bool nvim_callback_is_none(const void *cb) { return cb == NULL || ((const Callback *)cb)->type == kCallbackNone; }
 
-/// Call cb with a single VAR_DICT argument (dict) and write result to rettv.
-/// Returns true on success.
 bool nvim_callback_call_one_dict(void *cb, void *dict, void *rettv) { if (cb == NULL || dict == NULL || rettv == NULL) { return false; } typval_T args[1] = { { .v_type = VAR_DICT, .vval = { .v_dict = (dict_T *)dict } } }; return callback_call((Callback *)cb, 1, args, (typval_T *)rettv); }
 void *nvim_tv_rettv_list_if_var_list(const void *rettv_void) { if (rettv_void == NULL) { return NULL; } const typval_T *rettv = (const typval_T *)rettv_void; return rettv->v_type == VAR_LIST ? (void *)rettv->vval.v_list : NULL; }
 bool nvim_qf_buf_is_curbuf(const void *buf) { return (const buf_T *)buf == curbuf; }
 
-/// Returns true on success.
 bool nvim_qf_delete_all_lines(void)
 {
   while ((curbuf->b_ml.ml_flags & ML_EMPTY) == 0) {
@@ -634,7 +583,6 @@ bool nvim_qf_delete_all_lines(void)
   return true;
 }
 
-/// Zero skipcol for all windows showing curbuf
 void nvim_qf_zero_skipcol_for_curbuf(void)
 {
   FOR_ALL_TAB_WINDOWS(tp, wp) {
@@ -648,47 +596,35 @@ void nvim_qf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 char *nvim_tv_list_item_string(const void *li) { return li == NULL ? NULL : (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li)); }
 const char *nvim_qf_buf_get_fname(const void *buf) { return ((const buf_T *)buf)->b_fname; }
 
-/// Increment curbuf->b_ro_locked.
 void nvim_qf_curbuf_incr_ro_locked(void) { curbuf->b_ro_locked++; }
-/// Decrement curbuf->b_ro_locked.
 void nvim_qf_curbuf_decr_ro_locked(void) { curbuf->b_ro_locked--; }
-/// Set curbuf->b_p_ma = false.
 void nvim_qf_curbuf_set_ma_false(void) { curbuf->b_p_ma = false; }
-/// Set curbuf->b_keep_filetype = val.
 void nvim_qf_curbuf_set_keep_filetype(bool val) { curbuf->b_keep_filetype = val; }
-/// Call set_option_value_give_err(kOptFiletype, "qf", OPT_LOCAL).
 void nvim_qf_set_option_filetype_qf(void) { set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("qf"), OPT_LOCAL); }
-/// Call redraw_curbuf_later(UPD_NOT_VALID).
 void nvim_qf_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
 bool nvim_qf_get_key_typed(void) { return KeyTyped; }
 void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 
-// curbuf option accessors (struct field access - retained as opaque accessors):
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
 bool nvim_os_fileinfo_link_exists(const char *name) { FileInfo fi; return os_fileinfo_link(name, &fi); }
 unsigned nvim_qf_get_curlist_id(const void *qi_void) { const qf_info_T *qi = (const qf_info_T *)qi_void; return qi->qf_lists[qi->qf_curlist].qf_id; }
 
-// win_T lhi (p_lhi) setter for copy_loclist_stack
 void nvim_win_set_p_lhi(void *win, int v) { ((win_T *)win)->w_p_lhi = (OptInt)v; }
 
-// eap cmdlinep accessor (for qf_cmdtitle)
 char *nvim_eap_get_cmdlinep_deref_make(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
 
-// set_option_direct wrapper for :cfile
 void nvim_set_option_direct_ef(const char *val) { set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(val), 0, 0); }
 bool nvim_buf_has_ml_mfp_void(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_mfp != NULL; }
 linenr_T nvim_buf_get_ml_line_count_void(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
 const char *nvim_buf_get_sfname_void(const void *buf) { return ((const buf_T *)buf)->b_sfname; }
 void *nvim_buflist_findnr_ptr(int nr) { return (void *)buflist_findnr(nr); }
-// eval_expr / tv_free wrappers for ex_cexpr
 void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr((char *)arg_ptr, (exarg_T *)eap); }
 int nvim_tv_get_type_void(const void *tv) { return ((const typval_T *)tv)->v_type; }
 const char *nvim_tv_get_vval_string(const void *tv) { return ((const typval_T *)tv)->vval.v_string; }
 bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
 void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
 void nvim_qf_snprintf_iobuff(const char *title, const char *sfname) { vim_snprintf(IObuff, IOSIZE, "%s (%s)", title, sfname); }
-// copy_loclist_stack accessors
 void *nvim_win_get_llist_or_ref(const void *from_win) { const win_T *from = (const win_T *)from_win; return (void *)(IS_LL_WINDOW(from) ? from->w_llist_ref : from->w_llist); }
 void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (qf_info_T *)qi; }
 void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
@@ -700,7 +636,6 @@ bool nvim_qf_curbuf_has_flag(int flag) { return (curbuf->b_has_qf_entry & flag) 
 int nvim_qf_curbuf_fnum(void) { return curbuf->b_fnum; }
 bool nvim_grep_uses_internal(void) { return strcmp("internal", *curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp) == 0; }
 
-/// Returns pointer to static storage; only valid until next call.
 const void *nvim_qf_curwin_pos_adj(void)
 {
   static pos_T pos;
@@ -714,7 +649,6 @@ const char *nvim_buf_get_mfp_fname(const void *buf) { const buf_T *b = (const bu
 char nvim_buf_get_bh_first_char(const void *buf) { return ((const buf_T *)buf)->b_p_bh[0]; }
 bool nvim_cmdmod_has_cmod_hide(void) { return (cmdmod.cmod_flags & CMOD_HIDE) != 0; }
 void nvim_buf_clear_bf_dummy(void *buf) { ((buf_T *)buf)->b_flags &= ~BF_DUMMY; }
-// Accessors for dummy_buf.rs Rust implementation
 void *nvim_buflist_new(char *ffname, char *sfname, int lnum, int flags) { return buflist_new(ffname, sfname, (linenr_T)lnum, flags); }
 void nvim_setfname_curbuf(char *fname) { setfname(curbuf, fname, NULL, false); }
 void nvim_check_need_swap_newfile(void) { check_need_swap(true); }
@@ -730,7 +664,6 @@ void *nvim_qf_bufref_get_buf(void *br) { return ((bufref_T *)br)->br_buf; }
 void nvim_qf_bufref_set_buf_null(void *br) { ((bufref_T *)br)->br_buf = NULL; }
 void nvim_qf_bufref_free(void *br) { xfree(br); }
 
-/// Apply Filetype autocmds and modelines to buf (for dummy buffer finalization).
 void nvim_apply_filetype_autocmds_and_modelines(void *buf_void)
 {
   buf_T *buf = (buf_T *)buf_void;
@@ -741,7 +674,6 @@ void nvim_apply_filetype_autocmds_and_modelines(void *buf_void)
   aucmd_restbuf(&aco);
 }
 
-/// Execute ex_cd with either CMD_cd or CMD_lcd.
 void nvim_ex_cd_arg(char *arg, bool is_lcd)
 {
   exarg_T ea = {
@@ -757,9 +689,6 @@ linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx) { return rm->
 colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx) { return rm->endpos[idx].col; }
 colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum) { return ml_get_buf_len((buf_T *)buf, lnum); }
 
-/// Heap-allocate and initialize a regmmatch_T for vimgrep.
-/// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
-/// or NULL if compilation failed (error already emitted).
 void *nvim_vgr_regcomp_init(const char *pat)
 {
   regmmatch_T *rm = xcalloc(1, sizeof(regmmatch_T));
@@ -786,7 +715,6 @@ void *nvim_vgr_regcomp_init(const char *pat)
   return rm;
 }
 
-/// Free a heap-allocated regmmatch_T from nvim_vgr_regcomp_init.
 void nvim_vgr_regmatch_free(void *rm_void)
 {
   if (rm_void == NULL) {
@@ -801,8 +729,6 @@ void *nvim_tv_list_first(const void *list) { return list == NULL ? NULL : tv_lis
 void *nvim_tv_list_item_next(const void *list, const void *li) { return (list == NULL || li == NULL) ? NULL : TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
 void *nvim_tv_list_item_dict(const void *li) { if (li == NULL) { return NULL; } const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type != VAR_DICT ? NULL : tv->vval.v_dict; }
 
-/// Allocate a single null byte (empty C string). Caller must xfree/
-/// Free a char * allocated by xmalloc/xstrdup/etc.
 void nvim_xfree_char(char *ptr) { xfree(ptr); }
 
 void nvim_qf_get_ptr_position(const void *qfl_void, int *fnum, int *lnum, int *col)
@@ -810,19 +736,13 @@ void nvim_qf_get_ptr_position(const void *qfl_void, int *fnum, int *lnum, int *c
   *fnum = qfl->qf_ptr->qf_fnum; *lnum = qfl->qf_ptr->qf_lnum; *col = qfl->qf_ptr->qf_col; }
 bool nvim_tv_list_item_is_first(const void *list, const void *li) { return (list != NULL && li != NULL) && li == tv_list_first((const list_T *)list); }
 
-/// Return a mutable pointer to qfl->qf_qftf_cb.
 void *nvim_qfl_get_qftf_cb_ptr(void *qfl_void) { return qfl_void == NULL ? NULL : (void *)&((qf_list_T *)qfl_void)->qf_qftf_cb; }
-/// Return a mutable pointer to the global qftf_cb static.
 void *nvim_qf_get_global_qftf_cb_ptr(void) { return (void *)&qftf_cb; }
-/// Return win->w_llist (mutable).
 void *nvim_qf_win_get_llist_mut(void *win_void) { return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist; }
-/// Return win->w_llist_ref (mutable).
 void *nvim_qf_win_get_llist_ref_mut(void *win_void) { return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist_ref; }
-/// Return true if IS_LL_WINDOW(win) and win->w_llist_ref->qf_refcount == 1.
 bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void) { if (win_void == NULL) { return false; } const win_T *win = (const win_T *)win_void; return IS_LL_WINDOW(win) && win->w_llist_ref->qf_refcount == 1; }
 void *nvim_save_cpo_set_empty(void) { char *save_cpo = p_cpo; p_cpo = empty_string_option; return save_cpo; }
 
-/// Restore p_cpo from a saved value. Handles plugin interference.
 void nvim_restore_cpo(void *saved_cpo_void)
 {
   char *save_cpo = (char *)saved_cpo_void;
