@@ -1600,10 +1600,8 @@ extern "C" {
 
     // options[] array accessors
     fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
-    fn nvim_opt_var_is_p_syn(opt_idx: OptIndex) -> c_int;
-    fn nvim_opt_var_is_p_ft(opt_idx: OptIndex) -> c_int;
-    fn nvim_opt_var_is_p_keymap(opt_idx: OptIndex) -> c_int;
-    fn nvim_opt_var_is_p_sps(opt_idx: OptIndex) -> c_int;
+    /// Returns: 0=none, 1=syn, 2=ft, 3=keymap, 4=sps
+    fn nvim_opt_var_identity(opt_idx: OptIndex) -> c_int;
     /// Returns: 1=dir+XP_BS_THREE, 2=dir+XP_BS_ONE, 3=file+XP_BS_THREE, 4=file+XP_BS_ONE
     fn nvim_opt_var_expand_type(opt_idx: OptIndex) -> c_int;
 
@@ -1787,17 +1785,20 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     expand_option_start_col = col as c_int;
 
     // Special-case options that reuse expansion logic from other commands
-    if nvim_opt_var_is_p_syn(opt_idx) != 0 {
-        nvim_xp_set_context(xp, expand_ctx::EXPAND_OWNSYNTAX);
-        return;
-    }
-    if nvim_opt_var_is_p_ft(opt_idx) != 0 {
-        nvim_xp_set_context(xp, expand_ctx::EXPAND_FILETYPE);
-        return;
-    }
-    if nvim_opt_var_is_p_keymap(opt_idx) != 0 {
-        nvim_xp_set_context(xp, expand_ctx::EXPAND_KEYMAP);
-        return;
+    match nvim_opt_var_identity(opt_idx) {
+        1 => {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_OWNSYNTAX);
+            return;
+        }
+        2 => {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_FILETYPE);
+            return;
+        }
+        3 => {
+            nvim_xp_set_context(xp, expand_ctx::EXPAND_KEYMAP);
+            return;
+        }
+        _ => {}
     }
 
     // Determine expansion context
@@ -1884,8 +1885,8 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
         nvim_xp_set_pattern(xp, argend);
     }
 
-    // Special case for 'spellsuggest': "file:" prefix triggers file expansion
-    if nvim_opt_var_is_p_sps(opt_idx) != 0 {
+    // Special case for 'spellsuggest' (identity==4): "file:" prefix triggers file expansion
+    if nvim_opt_var_identity(opt_idx) == 4 {
         let xp_pat = nvim_xp_get_pattern(xp);
         // Compare first 5 bytes with "file:"
         let file_prefix = b"file:";

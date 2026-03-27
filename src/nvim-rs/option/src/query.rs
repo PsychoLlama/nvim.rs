@@ -593,8 +593,8 @@ extern "C" {
     #[link_name = "nvim_get_option_script_ctx"]
     fn nvim_get_option_script_ctx_sctx(opt_idx: OptIndex) -> SctxT;
     // scope-index based script context accessors (scope_idx = scope_specific index)
-    fn nvim_option_get_buf_scope_script_ctx(buf: *const c_void, scope_idx: c_int) -> SctxT;
-    fn nvim_option_get_win_scope_script_ctx(win: *const c_void, scope_idx: c_int) -> SctxT;
+    fn nvim_get_buf_p_script_ctx(buf: *const c_void, scope_idx: c_int) -> SctxT;
+    fn nvim_get_win_p_script_ctx(win: *const c_void, scope_idx: c_int) -> SctxT;
 
     // def_val accessor
     fn nvim_get_option_def_val_data_ptr(opt_idx: OptIndex) -> *const c_void;
@@ -727,11 +727,11 @@ unsafe fn vimoption2dict_rs(
         };
         if option_has_scope(opt_idx, K_OPT_SCOPE_BUF) != 0 {
             let idx = nvim_get_option_scope_idx(opt_idx, K_OPT_SCOPE_BUF);
-            sctx = nvim_option_get_buf_scope_script_ctx(buf, idx);
+            sctx = nvim_get_buf_p_script_ctx(buf, idx);
         }
         if option_has_scope(opt_idx, K_OPT_SCOPE_WIN) != 0 {
             let idx = nvim_get_option_scope_idx(opt_idx, K_OPT_SCOPE_WIN);
-            sctx = nvim_option_get_win_scope_script_ctx(win, idx);
+            sctx = nvim_get_win_p_script_ctx(win, idx);
         }
         if opt_flags != OPT_LOCAL_FLAG && sctx.sc_sid == 0 {
             sctx = nvim_get_option_script_ctx_sctx(opt_idx);

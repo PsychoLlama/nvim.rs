@@ -140,39 +140,23 @@ int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c
-void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    callback(wp);
-  }
-}
-void nvim_for_all_buffers(void (*callback)(buf_T *)) {
-  FOR_ALL_BUFFERS(bp) {
-    callback(bp);
-  }
-}
+void nvim_callback_for_all_tab_windows(void (*callback)(win_T *))
+  { FOR_ALL_TAB_WINDOWS(tp, wp) { callback(wp); } }
+void nvim_for_all_buffers(void (*callback)(buf_T *))
+  { FOR_ALL_BUFFERS(bp) { callback(bp); } }
 int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
 int nvim_buf_has_memfile(buf_T *buf) { return buf && buf->b_ml.ml_mfp != NULL; }
 int nvim_buf_get_p_bl(buf_T *buf) { return buf ? buf->b_p_bl : 0; }
-void nvim_apply_autocmds_buf_event(int event, buf_T *buf) {
-  apply_autocmds((event_T)event, NULL, NULL, true, buf);
-}
+void nvim_apply_autocmds_buf_event(int event, buf_T *buf) { apply_autocmds((event_T)event, NULL, NULL, true, buf); }
 int nvim_win_get_p_pvw(win_T *win) { return win ? win->w_p_pvw : 0; }
 void nvim_win_set_p_pvw(win_T *win, int val) { if (win) win->w_p_pvw = val != 0; }
-void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud) {
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    callback(wp, ud);
-  }
-}
+void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud)
+  { FOR_ALL_WINDOWS_IN_TAB(wp, curtab) { callback(wp, ud); } }
 int nvim_win_get_p_spell(win_T *win) { return win ? win->w_p_spell : 0; }
 void *nvim_buf_get_b_p_sw_addr(buf_T *buf) { return buf ? (void *)&buf->b_p_sw : NULL; }
 OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
-void nvim_callback_win_clamp_winbl(win_T *win) {
-  if (win) {
-    if (win->w_p_winbl > 100) win->w_p_winbl = 100;
-    if (win->w_p_winbl < 0) win->w_p_winbl = 0;
-  }
-}
+void nvim_callback_win_clamp_winbl(win_T *win) { if (win) { if (win->w_p_winbl > 100) win->w_p_winbl = 100; if (win->w_p_winbl < 0) win->w_p_winbl = 0; } }
 void nvim_callback_win_set_hl_needs_update(win_T *win, int value) {
   if (win) win->w_hl_needs_update = (value != 0);
 }
@@ -201,25 +185,12 @@ void nvim_win_set_ns_hl_winhl(win_T *win, int val) { win->w_ns_hl_winhl = val; }
 void nvim_win_set_ns_hl(win_T *win, int val) { win->w_ns_hl = val; }
 const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }
 const void *nvim_win_get_p_winhl_addr(win_T *win) { return win ? (const void *)&win->w_p_winhl : NULL; }
-// Prepare namespace for winhighlight: create if absent, bump hl_valid if existing.
-// Returns the namespace id.
-int nvim_winhl_ns_prepare(win_T *wp)
-{
-  if (wp->w_ns_hl_winhl == 0) {
-    wp->w_ns_hl_winhl = (int)nvim_create_namespace(NULL_STRING);
-  } else {
-    DecorProvider *dp = get_decor_provider(wp->w_ns_hl_winhl, true);
-    dp->hl_valid++;
-  }
+int nvim_winhl_ns_prepare(win_T *wp) {
+  if (wp->w_ns_hl_winhl == 0) { wp->w_ns_hl_winhl = (int)nvim_create_namespace(NULL_STRING); }
+  else { get_decor_provider(wp->w_ns_hl_winhl, true)->hl_valid++; }
   return wp->w_ns_hl_winhl;
 }
-// Apply winhighlight namespace highlight definition (HL_GLOBAL flag set).
-void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
-{
-  HlAttrs attrs = HLATTRS_INIT;
-  attrs.rgb_ae_attr |= HL_GLOBAL;
-  ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL);
-}
+void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id) { HlAttrs attrs = HLATTRS_INIT; attrs.rgb_ae_attr |= HL_GLOBAL; ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL); }
 
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
@@ -228,25 +199,13 @@ void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_cul
 #include "options.generated.h"
 #include "options_map.generated.h"
 
-void nvim_optset_restore_oldval_number(const void *args)
-{
+void nvim_optset_restore_oldval_number(const void *args) {
   const optset_T *a = (const optset_T *)args;
-  OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval };
-  rs_set_option_varp(a->os_idx, a->os_varp, oldval, 0);
+  rs_set_option_varp(a->os_idx, a->os_varp, (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval }, 0);
 }
 vimoption_T *nvim_get_options_array(void) { return options; }
-uint32_t nvim_get_option_flags(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return 0;
-  }
-  return options[opt_idx].flags;
-}
-void *nvim_get_option_var(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return NULL;
-  }
-  return options[opt_idx].var;
-}
+uint32_t nvim_get_option_flags(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? 0 : options[opt_idx].flags; }
+void *nvim_get_option_var(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? NULL : options[opt_idx].var; }
 void *nvim_vimoption_get_var(vimoption_T *p) { return p->var; }
 unsigned *nvim_vimoption_get_flags_var_ptr(vimoption_T *p) { return p->flags_var; }
 OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - options); }
@@ -258,53 +217,19 @@ int nvim_get_option_immutable(OptIndex opt_idx) { return (int)options[opt_idx].i
 const void *nvim_get_option_def_val_data_ptr(OptIndex opt_idx) { return &options[opt_idx].def_val.data; }
 void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx].script_ctx; }
 void nvim_set_option_def_val(OptIndex opt_idx, OptVal val) { options[opt_idx].def_val = val; }
-void *nvim_get_option_varp_for_check(OptIndex opt_idx) { return get_varp(&options[opt_idx]); }
 int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_val.data.number; }
 
-// Returns 1 if the current user is root (getuid() == ROOT_UID), 0 otherwise.
-int nvim_is_root_user(void)
-{
 #ifdef UNIX
-  return getuid() == ROOT_UID ? 1 : 0;
+int nvim_is_root_user(void) { return getuid() == ROOT_UID ? 1 : 0; }
 #else
-  return 0;
+int nvim_is_root_user(void) { return 0; }
 #endif
-}
 
-sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return (sctx_T){ 0 };
-  }
-  return options[opt_idx].script_ctx;
-}
+sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : options[opt_idx].script_ctx; }
 
-sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) {
-  if (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return (sctx_T){ 0 };
-  }
-  return win->w_p_script_ctx[opt_idx];
-}
+sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) { return (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : win->w_p_script_ctx[opt_idx]; }
 
-sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
-  if (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return (sctx_T){ 0 };
-  }
-  return buf->b_p_script_ctx[opt_idx];
-}
-
-sctx_T nvim_option_get_buf_scope_script_ctx(buf_T *buf, int scope_idx) {
-  if (!buf || scope_idx < 0) {
-    return (sctx_T){ 0 };
-  }
-  return buf->b_p_script_ctx[scope_idx];
-}
-
-sctx_T nvim_option_get_win_scope_script_ctx(win_T *win, int scope_idx) {
-  if (!win || scope_idx < 0) {
-    return (sctx_T){ 0 };
-  }
-  return win->w_p_script_ctx[scope_idx];
-}
+sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) { return (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : buf->b_p_script_ctx[opt_idx]; }
 
 int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
 void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
@@ -458,29 +383,17 @@ int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 
-int nvim_option_has_expand_cb(OptIndex opt_idx)
-{
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return 0;
-  }
-  return options[opt_idx].opt_expand_cb != NULL ? 1 : 0;
-}
+int nvim_option_has_expand_cb(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? 0 : (options[opt_idx].opt_expand_cb != NULL ? 1 : 0); }
 
-int nvim_opt_var_is_p_syn(OptIndex opt_idx) {
+// Returns an identity code for special option vars: 0=none, 1=syn, 2=ft, 3=keymap, 4=sps
+int nvim_opt_var_identity(OptIndex opt_idx) {
   if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
-  return options[opt_idx].var == &p_syn ? 1 : 0;
-}
-int nvim_opt_var_is_p_ft(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
-  return options[opt_idx].var == &p_ft ? 1 : 0;
-}
-int nvim_opt_var_is_p_keymap(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
-  return options[opt_idx].var == &p_keymap ? 1 : 0;
-}
-int nvim_opt_var_is_p_sps(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
-  return options[opt_idx].var == &p_sps ? 1 : 0;
+  void *v = options[opt_idx].var;
+  if (v == &p_syn) return 1;
+  if (v == &p_ft) return 2;
+  if (v == &p_keymap) return 3;
+  if (v == &p_sps) return 4;
+  return 0;
 }
 // For the expand dir/file option var comparisons - returns an enum:
 // 0 = not a special path option, 1 = directory (XP_BS_THREE), 2 = directory (XP_BS_ONE), 3 = files (XP_BS_THREE), 4 = files (XP_BS_ONE)
@@ -615,12 +528,9 @@ void nvim_regmatch_set_rm_ic(void *regmatch, int val) { ((regmatch_T *)regmatch)
 
 size_t nvim_option_get_fuzmatch_size(void) { return sizeof(fuzmatch_str_T); }
 
-void nvim_option_fuzmatch_set(void *fuzmatch, int idx, const char *str, int score)
-{
+void nvim_option_fuzmatch_set(void *fuzmatch, int idx, const char *str, int score) {
   fuzmatch_str_T *fm = (fuzmatch_str_T *)fuzmatch;
-  fm[idx].idx = idx;
-  fm[idx].str = xstrdup(str);
-  fm[idx].score = score;
+  fm[idx].idx = idx; fm[idx].str = xstrdup(str); fm[idx].score = score;
 }
 
 /// Invoke the did_set_cb for an option. Constructs optset_T in C and calls the callback.
@@ -742,18 +652,8 @@ void nvim_call_bind_textdomain_codeset(void)
 #endif
 }
 
-/// xfree(curbuf->b_p_vsts_array) + tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array).
-void nvim_call_curbuf_tabstop_set_vsts(void)
-{
-  xfree(curbuf->b_p_vsts_array);
-  tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array);
-}
-/// xfree(curbuf->b_p_vts_array) + tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array).
-void nvim_call_curbuf_tabstop_set_vts(void)
-{
-  xfree(curbuf->b_p_vts_array);
-  tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array);
-}
+void nvim_call_curbuf_tabstop_set_vsts(void) { xfree(curbuf->b_p_vsts_array); tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array); }
+void nvim_call_curbuf_tabstop_set_vts(void) { xfree(curbuf->b_p_vts_array); tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array); }
 
 /// free_operatorfunc_option() wrapper (EXITFREE only).
 #if defined(EXITFREE)
@@ -792,22 +692,8 @@ bool nvim_regmatch_exec(void *handle, const char *name)
 /// Call do_set(s, flags).  Returns OK (0) or FAIL (-1).
 int nvim_do_set(char *s, int flags) { return do_set(s, flags); }
 
-/// Save current_sctx on the heap, set it to SID_MODELINE/lnum context.
-/// Caller must pass the returned pointer to nvim_modeline_sctx_restore().
-sctx_T *nvim_modeline_sctx_save_and_set(int lnum)
-{
-  sctx_T *saved = xmalloc(sizeof(sctx_T));
-  *saved = current_sctx;
-  current_sctx.sc_sid  = SID_MODELINE;
-  current_sctx.sc_seq  = 0;
-  current_sctx.sc_lnum = lnum;
-  return saved;
+sctx_T *nvim_modeline_sctx_save_and_set(int lnum) {
+  sctx_T *saved = xmalloc(sizeof(sctx_T)); *saved = current_sctx;
+  current_sctx = (sctx_T){ .sc_sid = SID_MODELINE, .sc_lnum = lnum }; return saved;
 }
-
-/// Restore current_sctx from a pointer previously returned by
-/// nvim_modeline_sctx_save_and_set() and free the pointer.
-void nvim_modeline_sctx_restore(sctx_T *saved)
-{
-  current_sctx = *saved;
-  xfree(saved);
-}
+void nvim_modeline_sctx_restore(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
