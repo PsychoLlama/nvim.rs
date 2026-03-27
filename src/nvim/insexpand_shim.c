@@ -65,17 +65,7 @@
 // Rust rs_* function declarations called from this file
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
-extern int rs_cot_fuzzy(void);
-extern int rs_is_nearest_active(void);
 extern int rs_get_cpt_sources_count(void);
-extern int rs_ins_compl_preinsert_longest(void);
-extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
-                                            int min_len, char **tofree);
-extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
-extern void rs_ins_compl_update_sequence_numbers(void);
-extern void rs_ins_compl_del_pum(void);
-extern const char *rs_ins_compl_mode(void);
-extern void rs_ins_compl_longest_match(void *match);
 extern int rs_ins_compl_add(char *str, int len, char *fname, char **cptext,
                             int cptext_allocated, void *user_data, int cdir,
                             int flags_arg, int adup, const int *user_hl, int score);
@@ -372,7 +362,6 @@ void nvim_compl_match_copy_user_data_tv(void *m, void *dest_tv) { if (m && dest_
 // Compound accessors for rs_ins_compl_add (Phase 6)
 void *nvim_compl_T_alloc(void) { return xcalloc(1, sizeof(compl_T)); }
 void nvim_compl_match_set_flags(void *m, int f) { if (m) ((compl_T *)m)->cp_flags = f; }
-void nvim_compl_match_add_flags(void *m, int f) { if (m) ((compl_T *)m)->cp_flags |= f; }
 void nvim_compl_match_set_cp_str(void *m, const char *s, size_t l) { if (m) ((compl_T *)m)->cp_str = cbuf_to_string(s, l); }
 const char *nvim_compl_match_get_cp_fname(void *m) { return m ? ((compl_T *)m)->cp_fname : NULL; }
 void nvim_compl_match_set_cp_fname_dup(void *m, const char *f) { if (m) ((compl_T *)m)->cp_fname = xstrdup(f); }
@@ -383,7 +372,6 @@ void nvim_compl_match_set_cp_text_take(void *m, int i, char *s) { if (m) ((compl
 void nvim_compl_match_set_cp_text_copy(void *m, int i, const char *s) { if (m) ((compl_T *)m)->cp_text[i] = xstrdup(s); }
 void nvim_compl_match_set_user_data_move(void *m, void *tv) { if (m && tv) ((compl_T *)m)->cp_user_data = *(typval_T *)tv; }
 // Compound accessors for complete_info dict building (nvim_ci_ prefix avoids undo.h conflicts)
-void *nvim_ci_dict_alloc_lock_fixed(void) { return tv_dict_alloc_lock(VAR_FIXED); }
 void *nvim_ci_dict_alloc(void) { return tv_dict_alloc(); }
 void *nvim_ci_list_alloc_known(void) { return tv_list_alloc(kListLenMayKnow); }
 int nvim_ci_dict_add_str(void *d, const char *key, size_t klen, const char *val) { return tv_dict_add_str((dict_T *)d, key, klen, val); }
@@ -394,16 +382,12 @@ int nvim_ci_dict_add_tv(void *d, const char *key, size_t klen, void *tv) { retur
 int nvim_ci_dict_add_dict(void *d, const char *key, size_t klen, void *val_dict) { return tv_dict_add_dict((dict_T *)d, key, klen, (dict_T *)val_dict); }
 int nvim_ci_dict_add_list(void *d, const char *key, size_t klen, void *list) { return tv_dict_add_list((dict_T *)d, key, klen, (list_T *)list); }
 void nvim_ci_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
-void nvim_ci_dict_set_keys_readonly(void *d) { tv_dict_set_keys_readonly((dict_T *)d); }
 int nvim_pum_visible(void) { return pum_visible(); }
-void nvim_set_vim_var_dict(void *d) { set_vim_var_dict(VV_COMPLETED_ITEM, (dict_T *)d); }
 // win_float_find_preview accessors for complete_info
 void *nvim_win_float_find_preview(void) { return win_float_find_preview(); }
 int nvim_ci_win_get_handle(void *wp) { return wp ? ((win_T *)wp)->handle : -1; }
 int nvim_ci_win_get_buf_handle(void *wp) { return (wp && ((win_T *)wp)->w_buffer) ? ((win_T *)wp)->w_buffer->handle : -1; }
 // Compound accessors for complete_changed
-void *nvim_ins_compl_alloc_curr_match_dict(void) { return ins_compl_dict_alloc(compl_curr_match); }
-void *nvim_ins_compl_alloc_shown_match_dict(void) { return compl_shown_match ? ins_compl_dict_alloc(compl_shown_match) : NULL; }
 void nvim_compl_set_vim_var_dict_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
 // Compound accessors for preinserted_text in complete_info
 const char *nvim_ci_preinserted_text_ptr(void) { char *line = get_cursor_line_ptr(); int len = compl_ins_end_col - curwin->w_cursor.col; return (len > 0) ? line + curwin->w_cursor.col : ""; }
