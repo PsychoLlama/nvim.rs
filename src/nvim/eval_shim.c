@@ -8,15 +8,12 @@
 #include "nvim/api/private/helpers.h"
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
-#include "nvim/change.h"
 #include "nvim/channel.h"
-#include "nvim/charset.h"
 #include "nvim/cursor.h"
-#include "nvim/errors.h"
 #include "nvim/eval.h"
+#include "nvim/change.h"
+#include "nvim/charset.h"
 #include "nvim/eval/encode.h"
-#include "nvim/eval/executor.h"
-#include "nvim/eval/gc.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/eval/vars.h"
@@ -28,10 +25,8 @@
 #include "nvim/garray.h"
 #include "nvim/globals.h"
 #include "nvim/hashtab.h"
-#include "nvim/highlight_group.h"
 #include "nvim/insexpand.h"
 #include "nvim/lua/executor.h"
-#include "nvim/main.h"
 #include "nvim/mark.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
@@ -43,9 +38,8 @@
 #include "nvim/option_vars.h"
 #include "nvim/optionstr.h"
 #include "nvim/os/fs.h"
-#include "nvim/os/lang.h"
 #include "nvim/os/os.h"
-#include "nvim/os/shell.h"
+#include "nvim/main.h"
 #include "nvim/profile.h"
 #include "nvim/register.h"
 #include "nvim/runtime.h"
@@ -53,7 +47,6 @@
 #include "nvim/undo.h"
 #include "nvim/window.h"
 
-// Rust FFI declarations
 extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
 extern const char *tv_list_find_str(list_T *l, int n);
 extern bool tv2bool(const typval_T *tv);
@@ -110,18 +103,13 @@ void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T 
   })
 }
 
-// C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
 int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
 
-// C accessors for p_cpo save/restore (used by Rust pattern_match)
 static char *saved_eval_p_cpo;
 void nvim_eval_save_set_cpo(void) { saved_eval_p_cpo = p_cpo; p_cpo = empty_string_option; }
 void nvim_eval_restore_cpo(void) { p_cpo = saved_eval_p_cpo; }
 
-/// Restore p_cpo via set_option_value_give_err when the expression changed it
-/// during substitution. Handles the complex path in do_string_sub where p_cpo
-/// changed but is now NUL (was changed and restored).
 void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
 {
   if (*p_cpo == NUL) {
@@ -130,7 +118,6 @@ void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
   free_string_option(save_cpo);
 }
 
-/// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
 
 typedef enum {
@@ -194,11 +181,6 @@ char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return 
 
 char *nvim_partial_get_pt_func_uf_name(partial_T *pt) { return pt->pt_func != NULL ? pt->pt_func->uf_name : NULL; }
 
-/// Mark buffer-local variables and callbacks with copyID.
-/// Iterates all buffers and calls rs_set_ref_in_item / rs_set_ref_in_callback
-/// for each buffer's variables and callback functions.
-/// @param abort  in/out: if true on entry, short-circuits all marking.
-/// @return updated abort value.
 bool nvim_gc_mark_buffers(int copyID, bool abort)
 {
   FOR_ALL_BUFFERS(buf) {
@@ -233,9 +215,6 @@ bool nvim_gc_mark_buffers(int copyID, bool abort)
   return abort;
 }
 
-/// Mark window-local variables (all tab windows + autocmd windows) with copyID.
-/// @param abort  in/out abort value.
-/// @return updated abort value.
 bool nvim_gc_mark_tab_windows(int copyID, bool abort)
 {
   FOR_ALL_TAB_WINDOWS(tp, wp) {
@@ -252,9 +231,6 @@ bool nvim_gc_mark_tab_windows(int copyID, bool abort)
   return abort;
 }
 
-/// Mark tabpage-local variables with copyID.
-/// @param abort  in/out abort value.
-/// @return updated abort value.
 bool nvim_gc_mark_tabs(int copyID, bool abort)
 {
   FOR_ALL_TABS(tp) {
@@ -265,10 +241,6 @@ bool nvim_gc_mark_tabs(int copyID, bool abort)
   return abort;
 }
 
-/// Mark channel callback references with copyID.
-/// Iterates the global channels map.
-/// @param abort  in/out abort value.
-/// @return updated abort value.
 bool nvim_gc_mark_channels(int copyID, bool abort)
 {
   Channel *data;
@@ -288,10 +260,6 @@ bool nvim_gc_mark_channels(int copyID, bool abort)
   return abort;
 }
 
-/// Mark timer callback references with copyID.
-/// Iterates the global timers map.
-/// @param abort  in/out abort value.
-/// @return updated abort value.
 bool nvim_gc_mark_timers(int copyID, bool abort)
 {
   timer_T *timer;
@@ -331,8 +299,6 @@ void nvim_gc_verb_msg_abort(void)
   }
 }
 
-/// Handle the kCallbackLua case: call nlua_call_ref and return LUARET_TRUTHY.
-/// Retained in C because LUARET_TRUTHY is a C macro that cannot be called from Rust.
 bool nvim_callback_call_lua(LuaRef luaref)
 {
   Array args = ARRAY_DICT_INIT;
@@ -344,7 +310,6 @@ partial_T *nvim_get_vlua_partial(void) { return get_vim_var_partial(VV_LUA); }
 int nvim_blob_len(const blob_T *b) { return tv_blob_len(b); }
 int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 
-/// Clear blob's ga and free the blob - for error path in Rust eval_exec.
 void nvim_blob_ga_clear_and_free(blob_T *b)
 {
   if (b != NULL) {
@@ -359,11 +324,6 @@ typval_T *nvim_di_get_tv(dictitem_T *di) { return &di->di_tv; }
 evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob) { return blob->bv_lock; }
 
-/// Get value_check_lock condition for set_var_lval - composite accessor for Rust.
-///
-/// Returns true if the lock check should skip assignment (locked).
-/// Mirrors: value_check_lock(lp->ll_newkey == NULL ? lp->ll_tv->v_lock
-///                                                 : lp->ll_tv->vval.v_dict->dv_lock, ...)
 bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
 {
   VarLockStatus lock = lp->ll_newkey == NULL
@@ -378,8 +338,6 @@ bool nvim_di_check_lock(const dictitem_T *di, const char *name) { return tv_chec
 bool nvim_tv_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
 void nvim_tv_dict_item_free(dictitem_T *di) { xfree(di); }
 
-/// Wrapper for tv_list_append_owned_tv taking a pointer - accessor for Rust eval_exec.
-/// Takes a typval_T pointer and copies by value, avoiding FFI struct-by-value issues.
 void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
 {
   tv->v_lock = VAR_UNLOCKED; tv_list_append_owned_tv(l, *tv);
@@ -398,7 +356,6 @@ listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet) { return 
 int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet) { return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet); }
 bool nvim_partial_get_pt_auto(const partial_T *pt) { return pt->pt_auto; }
 
-/// Scope check for get_lval_dict_item: set key[len]=NUL, check scope, restore.
 bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *rettv)
 {
   char prevval;
@@ -428,7 +385,6 @@ int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv) { return may_call_simple_func(arg, rettv); }
 
-/// Bulk-read cursor/visual state into *out.
 void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 {
   out->cursor_lnum = curwin->w_cursor.lnum;
@@ -445,9 +401,6 @@ void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 
 int nvim_curbuf_fnum(void) { return curbuf->b_fnum; }
 
-/// mark_get wrapper for Rust var2fpos.
-/// Returns true if mark was found and is valid (lnum > 0).
-/// Fills lnum_out, col_out, coladd_out, fnum_out when returning true.
 bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *coladd_out,
                            int *fnum_out)
 {
@@ -479,9 +432,6 @@ int nvim_mb_charlen_ml(int32_t lnum) { return mb_charlen(ml_get(lnum)); }
 int nvim_get_cursor_line_charlen(void) { return mb_charlen(get_cursor_line_ptr()); }
 int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg) { return get_lambda_tv(arg, rettv, evalarg); }
 
-/// Wraps find_option_var_end: parse &[g:|l:]optname from *arg.
-/// On success, *arg is set to "optname" and returned value is pointer after name.
-/// opt_idxp and opt_flagsp are set.
 const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flagsp)
 {
   OptIndex opt_idx = kOptInvalid;
@@ -492,8 +442,6 @@ const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_f
   return end;
 }
 
-/// Get option value as typval using get_option_value() + optval_as_tv().
-/// opt_idx must not be kOptInvalid.
 void nvim_get_option_value_as_tv(int opt_idx, int opt_flags, typval_T *rettv)
 {
   OptVal value = get_option_value((OptIndex)opt_idx, opt_flags);
@@ -542,7 +490,6 @@ const char *nvim_find_option_end_wrapper(const char *p, int *opt_idxp)
 void nvim_tv_list_set_lock(list_T *l, int lock) { tv_list_set_lock(l, (VarLockStatus)lock); }
 void nvim_tv_list_last_fix_lock(list_T *l) { TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED; }
 
-/// Bulk-read prompt state from curbuf into *out - accessor for Rust prompt functions.
 void nvim_read_prompt_state(NvimPromptState *out)
 {
   out->curbuf = curbuf;
@@ -557,7 +504,6 @@ linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf) { return buf->b_prompt_start
 void nvim_appended_lines_mark(linenr_T lnum, int count) { appended_lines_mark(lnum, count); }
 void nvim_curbuf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
-/// Bulk-read fold eval state from wp into *out - accessor for Rust fold functions.
 void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
 {
   out->insecure_foldexpr = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
@@ -566,7 +512,6 @@ void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
   out->foldtext = wp->w_p_fdt;
 }
 
-/// Save current_sctx and set it from wp's foldexpr script context.
 sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
 {
   sctx_T *saved = xmalloc(sizeof(sctx_T));
@@ -577,9 +522,6 @@ sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
 
 void nvim_restore_current_sctx(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
 
-/// Construct an Object result for foldtext evaluation.
-/// tv_type: VAR_LIST (4) -> vim_to_object; otherwise -> STRING_OBJ(cstr_to_string(tv_get_string)).
-/// If tv is NULL, write STRING_OBJ(NULL_STRING).
 void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
 {
   if (tv == NULL) {
@@ -600,7 +542,6 @@ int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
 bool nvim_eval_find_func(const char *name) { return find_func(name) != NULL; }
 bool nvim_eval_nlua_is_deferred_safe(void) { return nlua_is_deferred_safe(); }
 
-/// Save the provider_caller_scope and related globals to an opaque heap blob.
 void *nvim_save_provider_caller_scope(void)
 {
   struct caller_scope *saved = xmalloc(sizeof(struct caller_scope));
@@ -622,7 +563,6 @@ list_T *nvim_eval_list_alloc_n(int n) { return tv_list_alloc((ptrdiff_t)n); }
 timer_T *nvim_timer_alloc(void) { return xcalloc(1, sizeof(timer_T)); }
 void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
-/// Bulk-read all scalar timer fields into a NvimTimerFields struct.
 void nvim_timer_read_fields(const timer_T *timer, NvimTimerFields *out)
 {
   out->timer_id = timer->timer_id;
@@ -634,7 +574,6 @@ void nvim_timer_read_fields(const timer_T *timer, NvimTimerFields *out)
   out->paused = timer->paused;
 }
 
-/// Bulk-write all scalar timer fields from a NvimTimerFields struct.
 void nvim_timer_write_fields(timer_T *timer, const NvimTimerFields *fields)
 {
   timer->timer_id = fields->timer_id;
@@ -662,8 +601,6 @@ void nvim_timers_del(int64_t id) { pmap_del(uint64_t)(&timers, (uint64_t)id, NUL
 size_t nvim_timers_size(void) { return map_size(&timers); }
 uint64_t nvim_timers_next_id(void) { return last_timer_id++; }
 
-/// Iterate all timers, calling cb(timer, userdata) for each.
-/// Used from Rust to implement add_timer_info_all and timer_stop_all.
 void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
 {
   timer_T *timer;
@@ -677,7 +614,6 @@ int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di) { return tv_dict_add(dic
 int nvim_get_pressedreturn(void) { return get_pressedreturn() ? 1 : 0; }
 void nvim_set_pressedreturn(int val) { set_pressedreturn(val != 0); }
 
-/// Check if a Channel is a proc stream and not stopped.
 int nvim_channel_is_valid_job(Channel *chan)
 {
   if (chan == NULL) {
@@ -701,5 +637,4 @@ char *nvim_docmd_fmt_exception_not_caught(const char *value)
   return xstrdup(IObuff);
 }
 
-// msg_multiline wrapper for eval_exec crate.
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear) { msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear); }
