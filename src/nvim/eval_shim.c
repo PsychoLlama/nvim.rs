@@ -111,12 +111,7 @@ void nvim_eval_save_set_cpo(void) { saved_eval_p_cpo = p_cpo; p_cpo = empty_stri
 void nvim_eval_restore_cpo(void) { p_cpo = saved_eval_p_cpo; }
 
 void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
-{
-  if (*p_cpo == NUL) {
-    set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0);
-  }
-  free_string_option(save_cpo);
-}
+{ if (*p_cpo == NUL) { set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0); } free_string_option(save_cpo); }
 
 bool *eval_lavars_used = NULL;
 
@@ -265,12 +260,7 @@ evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob) { return blob->bv_lock; }
 
 bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
-{
-  VarLockStatus lock = lp->ll_newkey == NULL
-                       ? lp->ll_tv->v_lock
-                       : lp->ll_tv->vval.v_dict->dv_lock;
-  return value_check_lock(lock, name, TV_CSTRING);
-}
+{ VarLockStatus lock = lp->ll_newkey == NULL ? lp->ll_tv->v_lock : lp->ll_tv->vval.v_dict->dv_lock; return value_check_lock(lock, name, TV_CSTRING); }
 
 const char *nvim_di_get_key(const dictitem_T *di) { return di->di_key; }
 bool nvim_di_check_ro(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_CSTRING); }
@@ -327,31 +317,21 @@ int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv) { return ma
 
 void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 {
-  out->cursor_lnum = curwin->w_cursor.lnum;
-  out->cursor_col = curwin->w_cursor.col;
-  out->cursor_coladd = curwin->w_cursor.coladd;
-  out->topline = curwin->w_topline;
-  out->botline = curwin->w_botline;
-  out->visual_active = VIsual_active;
-  out->visual_lnum = VIsual.lnum;
-  out->visual_col = VIsual.col;
-  out->visual_coladd = VIsual.coladd;
-  out->curbuf_fnum = curbuf->b_fnum;
+  out->cursor_lnum = curwin->w_cursor.lnum; out->cursor_col = curwin->w_cursor.col;
+  out->cursor_coladd = curwin->w_cursor.coladd; out->topline = curwin->w_topline;
+  out->botline = curwin->w_botline; out->visual_active = VIsual_active;
+  out->visual_lnum = VIsual.lnum; out->visual_col = VIsual.col;
+  out->visual_coladd = VIsual.coladd; out->curbuf_fnum = curbuf->b_fnum;
 }
 
 int nvim_curbuf_fnum(void) { return curbuf->b_fnum; }
 
-bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *coladd_out,
-                           int *fnum_out)
+bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *coladd_out, int *fnum_out)
 {
   const fmark_T *const fm = mark_get(curbuf, curwin, NULL, kMarkAll, mname);
-  if (fm == NULL || fm->mark.lnum <= 0) {
-    return false;
-  }
-  *lnum_out = fm->mark.lnum;
-  *col_out = fm->mark.col;
-  *coladd_out = fm->mark.coladd;
-  *fnum_out = fm->fnum;
+  if (fm == NULL || fm->mark.lnum <= 0) { return false; }
+  *lnum_out = fm->mark.lnum; *col_out = fm->mark.col;
+  *coladd_out = fm->mark.coladd; *fnum_out = fm->fnum;
   return true;
 }
 
@@ -361,8 +341,7 @@ void nvim_check_cursor_moved_curwin(void) { check_cursor_moved(curwin); }
 bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 {
   listitem_T *li = tv_list_find(l, idx);
-  return li != NULL
-         && TV_LIST_ITEM_TV(li)->v_type == VAR_STRING
+  return li != NULL && TV_LIST_ITEM_TV(li)->v_type == VAR_STRING
          && TV_LIST_ITEM_TV(li)->vval.v_string != NULL
          && strcmp(TV_LIST_ITEM_TV(li)->vval.v_string, "$") == 0;
 }
@@ -374,27 +353,17 @@ int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg) { return
 
 const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flagsp)
 {
-  OptIndex opt_idx = kOptInvalid;
-  int opt_flags = 0;
+  OptIndex opt_idx = kOptInvalid; int opt_flags = 0;
   const char *end = find_option_var_end(arg, &opt_idx, &opt_flags);
-  *opt_idxp = (int)opt_idx;
-  *opt_flagsp = opt_flags;
+  *opt_idxp = (int)opt_idx; *opt_flagsp = opt_flags;
   return end;
 }
 
 void nvim_get_option_value_as_tv(int opt_idx, int opt_flags, typval_T *rettv)
-{
-  OptVal value = get_option_value((OptIndex)opt_idx, opt_flags);
-  assert(value.type != kOptValTypeNil);
-  *rettv = optval_as_tv(value, true);
-}
+{ OptVal value = get_option_value((OptIndex)opt_idx, opt_flags); assert(value.type != kOptValTypeNil); *rettv = optval_as_tv(value, true); }
 
 void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
-{
-  OptVal value = get_tty_option(name);
-  assert(value.type != kOptValTypeNil);
-  *rettv = optval_as_tv(value, true);
-}
+{ OptVal value = get_tty_option(name); assert(value.type != kOptValTypeNil); *rettv = optval_as_tv(value, true); }
 
 int nvim_vimconv_get_type(const vimconv_T *conv) { return conv == NULL ? CONV_NONE : (int)conv->vc_type; }
 char *nvim_string_convert(const vimconv_T *conv, const char *str) { return string_convert((vimconv_T *)conv, (char *)str, NULL); }
@@ -423,11 +392,9 @@ void nvim_tv_list_last_fix_lock(list_T *l) { TV_LIST_ITEM_TV(tv_list_last(l))->v
 
 void nvim_read_prompt_state(NvimPromptState *out)
 {
-  out->curbuf = curbuf;
-  out->ml_line_count = (int32_t)curbuf->b_ml.ml_line_count;
+  out->curbuf = curbuf; out->ml_line_count = (int32_t)curbuf->b_ml.ml_line_count;
   out->prompt_start_lnum = (int32_t)curbuf->b_prompt_start.mark.lnum;
-  out->prompt_callback = &curbuf->b_prompt_callback;
-  out->prompt_interrupt = &curbuf->b_prompt_interrupt;
+  out->prompt_callback = &curbuf->b_prompt_callback; out->prompt_interrupt = &curbuf->b_prompt_interrupt;
 }
 
 void nvim_write_prompt_start_lnum(int32_t lnum) { curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum; }
@@ -439,17 +406,11 @@ void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
 {
   out->insecure_foldexpr = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
   out->insecure_foldtext = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL);
-  out->foldexpr = skipwhite(wp->w_p_fde);
-  out->foldtext = wp->w_p_fdt;
+  out->foldexpr = skipwhite(wp->w_p_fde); out->foldtext = wp->w_p_fdt;
 }
 
 sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
-{
-  sctx_T *saved = xmalloc(sizeof(sctx_T));
-  *saved = current_sctx;
-  current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr];
-  return saved;
-}
+{ sctx_T *saved = xmalloc(sizeof(sctx_T)); *saved = current_sctx; current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr]; return saved; }
 
 void nvim_restore_current_sctx(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
 
@@ -496,24 +457,15 @@ void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
 void nvim_timer_read_fields(const timer_T *timer, NvimTimerFields *out)
 {
-  out->timer_id = timer->timer_id;
-  out->repeat_count = timer->repeat_count;
-  out->refcount = timer->refcount;
-  out->emsg_count = timer->emsg_count;
-  out->timeout = timer->timeout;
-  out->stopped = timer->stopped;
-  out->paused = timer->paused;
+  out->timer_id = timer->timer_id; out->repeat_count = timer->repeat_count;
+  out->refcount = timer->refcount; out->emsg_count = timer->emsg_count;
+  out->timeout = timer->timeout; out->stopped = timer->stopped; out->paused = timer->paused;
 }
-
 void nvim_timer_write_fields(timer_T *timer, const NvimTimerFields *fields)
 {
-  timer->timer_id = fields->timer_id;
-  timer->repeat_count = fields->repeat_count;
-  timer->refcount = fields->refcount;
-  timer->emsg_count = fields->emsg_count;
-  timer->timeout = fields->timeout;
-  timer->stopped = fields->stopped;
-  timer->paused = fields->paused;
+  timer->timer_id = fields->timer_id; timer->repeat_count = fields->repeat_count;
+  timer->refcount = fields->refcount; timer->emsg_count = fields->emsg_count;
+  timer->timeout = fields->timeout; timer->stopped = fields->stopped; timer->paused = fields->paused;
 }
 
 Callback *nvim_timer_get_callback_ptr(timer_T *timer) { return &timer->callback; }
@@ -551,9 +503,6 @@ int nvim_channel_is_not_proc(Channel *chan) { return (chan != NULL && chan->stre
 Channel *nvim_find_channel(uint64_t id) { return find_channel(id); }
 
 char *nvim_docmd_fmt_exception_not_caught(const char *value)
-{
-  vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value);
-  return xstrdup(IObuff);
-}
+{ vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value); return xstrdup(IObuff); }
 
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear) { msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear); }
