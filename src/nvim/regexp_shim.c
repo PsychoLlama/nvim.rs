@@ -1,22 +1,11 @@
-// regexp_shim.c -- FFI bridge between Neovim's C core and the Rust regexp engine.
-//
-// All regexp logic (matching, compilation, parsing, substitution) lives in
-// src/nvim-rs/regexp/src/lib.rs. This file contains only:
-//   - Struct/type definitions (regexec_T, bt_regprog_T, nfa_regprog_T, etc.)
-//   - Static global variables (rex, regstack, parser state, etc.)
-//   - Accessor functions that let Rust read/write C struct fields and globals
-//   - Error message helpers wrapping emsg()/semsg() with gettext
-//   - Engine vtable definitions (bt_regengine, nfa_regengine)
-//   - Thin wrappers for public API functions that need C type casts
+// regexp_shim.c -- FFI bridge: C struct/global accessors for the Rust regexp engine.
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/charset.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -24,16 +13,12 @@
 #include "nvim/globals.h"
 #include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
-#include "nvim/mark.h"
-#include "nvim/mark_defs.h"
 #include "nvim/mbyte.h"
-#include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
 #include "nvim/pos_defs.h"
-#include "nvim/profile.h"
 #include "nvim/regexp.h"
 #include "nvim/regexp_defs.h"
 #include "nvim/strings.h"
@@ -80,11 +65,6 @@ struct regengine {
   /// bt_regexec_mult or nfa_regexec_mult
   int (*regexec_multi)(regmmatch_T *, win_T *, buf_T *, linenr_T, colnr_T, proftime_T *, int *);
 };
-
-// flags for regflags
-#define RF_ICASE    1   // ignore case
-#define RF_NOICASE  2   // don't ignore case
-#define RF_ICOMBINE 8   // ignore combining characters
 
 #include "regexp_shim.c.generated.h"
 
@@ -142,8 +122,8 @@ typedef struct {
   int nfa_has_zsubexpr;  ///< NFA regexp has \z( ), set zsubexpr.
 } regexec_T;
 
-void *nvim_regexp_get_rex_ptr(void);  // returns regexec_T*
-void *nvim_regexp_get_rsm_ptr(void);  // returns regsubmatch_T* equivalent
+void *nvim_regexp_get_rex_ptr(void);
+void *nvim_regexp_get_rsm_ptr(void);
 bool *nvim_regexp_get_can_f_submatch_ptr(void);
 #define REX_PTR ((regexec_T *)nvim_regexp_get_rex_ptr())
 #define RSM_PTR ((regsubmatch_T *)nvim_regexp_get_rsm_ptr())
