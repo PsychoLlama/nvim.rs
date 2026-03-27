@@ -22,6 +22,15 @@
 #include "api/options.c.generated.h"
 
 extern void rs_optval_free(OptVal o);
+extern OptVal rs_get_option_value_for(OptIndex opt_idx, int opt_flags, int scope,
+                                      void *from, Error *err);
+extern void rs_set_option_value_for(const char *name, OptIndex opt_idx, OptVal value,
+                                    int opt_flags, int scope, void *from, Error *err);
+extern Object rs_optval_as_object(OptVal o);
+extern OptVal rs_object_as_optval(Object o, bool *error);
+extern Dict rs_get_vimoption(const char *name_data, size_t name_size, int opt_flags,
+                             const void *buf, const void *win, void *arena, Error *err);
+extern Dict rs_get_all_vimoptions(void *arena);
 
 static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *opt_idxp,
                                       int *opt_flags, OptScope *scope, void **from, char **filetype,
@@ -182,7 +191,7 @@ Object nvim_get_option_value(String name, Dict(option) *opts, Error *err)
     from = ftbuf;
   }
 
-  OptVal value = get_option_value_for(opt_idx, opt_flags, scope, from, err);
+  OptVal value = rs_get_option_value_for(opt_idx, opt_flags, (int)scope, from, err);
 
   if (ftbuf != NULL) {
     // restore curwin/curbuf and a few other things
@@ -200,7 +209,7 @@ Object nvim_get_option_value(String name, Dict(option) *opts, Error *err)
     goto err;
   });
 
-  return optval_as_object(value);
+  return rs_optval_as_object(value);
 err:
   rs_optval_free(value);
   return (Object)OBJECT_INIT;
@@ -246,7 +255,7 @@ void nvim_set_option_value(uint64_t channel_id, String name, Object value, Dict(
   }
 
   bool error = false;
-  OptVal optval = object_as_optval(value, &error);
+  OptVal optval = rs_object_as_optval(value, &error);
 
   // Handle invalid option value type.
   // Don't use `name` in the error message here, because `name` can be any String.
@@ -257,7 +266,7 @@ void nvim_set_option_value(uint64_t channel_id, String name, Object value, Dict(
   });
 
   WITH_SCRIPT_CONTEXT(channel_id, {
-    set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
+    rs_set_option_value_for(name.data, opt_idx, optval, opt_flags, (int)scope, to, err);
   });
 }
 
@@ -272,7 +281,7 @@ void nvim_set_option_value(uint64_t channel_id, String name, Object value, Dict(
 Dict nvim_get_all_options_info(Arena *arena, Error *err)
   FUNC_API_SINCE(7)
 {
-  return get_all_vimoptions(arena);
+  return rs_get_all_vimoptions(arena);
 }
 
 /// Gets the option information for one option from arbitrary buffer or window
@@ -324,5 +333,5 @@ DictAs(get_option_info) nvim_get_option_info2(String name, Dict(option) *opts, A
   buf_T *buf = (scope == kOptScopeBuf) ? (buf_T *)from : curbuf;
   win_T *win = (scope == kOptScopeWin) ? (win_T *)from : curwin;
 
-  return get_vimoption(name, opt_flags, buf, win, arena, err);
+  return rs_get_vimoption(name.data, name.size, opt_flags, buf, win, arena, err);
 }

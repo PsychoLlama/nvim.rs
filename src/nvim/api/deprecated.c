@@ -34,6 +34,15 @@
 
 #include "api/deprecated.c.generated.h"
 
+extern OptVal rs_get_option_value_for(OptIndex opt_idx, int opt_flags, int scope,
+                                      void *from, Error *err);
+extern void rs_set_option_value_for(const char *name, OptIndex opt_idx, OptVal value,
+                                    int opt_flags, int scope, void *from, Error *err);
+extern Object rs_optval_as_object(OptVal o);
+extern OptVal rs_object_as_optval(Object o, bool *error);
+extern Dict rs_get_vimoption(const char *name_data, size_t name_size, int opt_flags,
+                             const void *buf, const void *win, void *arena, Error *err);
+
 /// @deprecated Use nvim_exec2() instead.
 /// @see nvim_exec2
 String nvim_exec(uint64_t channel_id, String src, Boolean output, Error *err)
@@ -603,7 +612,7 @@ DictAs(get_option_info) nvim_get_option_info(String name, Arena *arena, Error *e
   FUNC_API_SINCE(7)
   FUNC_API_DEPRECATED_SINCE(11)
 {
-  return get_vimoption(name, OPT_GLOBAL, curbuf, curwin, arena, err);
+  return rs_get_vimoption(name.data, name.size, OPT_GLOBAL, curbuf, curwin, arena, err);
 }
 
 /// Sets the global value of an option.
@@ -742,8 +751,8 @@ static Object get_option_from(void *from, OptScope scope, String name, Error *er
   OptVal value = NIL_OPTVAL;
 
   if (option_has_scope(opt_idx, scope)) {
-    value = get_option_value_for(opt_idx, scope == kOptScopeGlobal ? OPT_GLOBAL : OPT_LOCAL,
-                                 scope, from, err);
+    value = rs_get_option_value_for(opt_idx, scope == kOptScopeGlobal ? OPT_GLOBAL : OPT_LOCAL,
+                                    (int)scope, from, err);
     if (ERROR_SET(err)) {
       return (Object)OBJECT_INIT;
     }
@@ -753,7 +762,7 @@ static Object get_option_from(void *from, OptScope scope, String name, Error *er
     return (Object)OBJECT_INIT;
   });
 
-  return optval_as_object(value);
+  return rs_optval_as_object(value);
 }
 
 /// Sets the value of a global or local (buffer, window) option.
@@ -776,7 +785,7 @@ static void set_option_to(uint64_t channel_id, void *to, OptScope scope, String 
   });
 
   bool error = false;
-  OptVal optval = object_as_optval(value, &error);
+  OptVal optval = rs_object_as_optval(value, &error);
 
   // Handle invalid option value type.
   // Don't use `name` in the error message here, because `name` can be any String.
@@ -794,7 +803,7 @@ static void set_option_to(uint64_t channel_id, void *to, OptScope scope, String 
       : ((scope == kOptScopeGlobal) ? OPT_GLOBAL : OPT_LOCAL);
 
   WITH_SCRIPT_CONTEXT(channel_id, {
-    set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
+    rs_set_option_value_for(name.data, opt_idx, optval, opt_flags, (int)scope, to, err);
   });
 }
 

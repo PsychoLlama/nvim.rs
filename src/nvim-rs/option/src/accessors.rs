@@ -158,13 +158,22 @@ extern "C" {
 
     // Option value access
     fn get_varp_scope(opt: *const c_void, scope: c_int) -> *mut c_void;
-    fn optval_from_varp(opt_idx: c_int, varp: *const c_void) -> OptValue;
 
     // Option setting
     fn set_option_value(opt_idx: c_int, value: *const c_char, opt_flags: c_int) -> *const c_char;
 
     // Options array
     fn nvim_get_options_array() -> *const c_void;
+}
+
+/// Convert storage::OptVal to simplified OptValue.
+unsafe fn storage_optval_to_optvalue(v: crate::storage::OptVal) -> OptValue {
+    match v.type_ {
+        crate::OptValType::Boolean => OptValue::boolean(v.data.boolean != 0),
+        crate::OptValType::Number => OptValue::number(v.data.number),
+        crate::OptValType::String => OptValue::string(v.data.string.data),
+        crate::OptValType::Nil => OptValue::nil(),
+    }
 }
 
 /// Invalid option index
@@ -222,7 +231,7 @@ pub unsafe extern "C" fn rs_get_option_by_idx(opt_idx: c_int, scope: c_int) -> O
         return OptValue::nil();
     }
 
-    optval_from_varp(opt_idx, varp)
+    storage_optval_to_optvalue(crate::value::rs_optval_from_varp(opt_idx, varp))
 }
 
 /// Get a boolean option value by name.

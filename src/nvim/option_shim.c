@@ -55,13 +55,9 @@
 _Static_assert(sizeof(vimoption_T) == 160,
                "sizeof(vimoption_T) changed - update Rust VIMOPTION_SIZE in option/src/accessors.rs");
 
-// Rust FFI declarations (used by internal code)
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
-
-// Rust metadata query functions
 extern int rs_option_is_global_local(int opt_idx);
 extern int rs_option_get_type(int opt_idx);
-
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
@@ -91,12 +87,10 @@ _Static_assert(kOptFlagCurswant == (1 << 21), "kOptFlagCurswant mismatch with Ru
 _Static_assert(kOptFlagHLOnly == (1 << 23), "kOptFlagHLOnly mismatch with Rust K_OPT_FLAG_HL_ONLY constant");
 _Static_assert(OPT_MODELINE == 0x04, "OPT_MODELINE mismatch with Rust OPT_MODELINE constant");
 
-
-// OptVal helpers
 extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
+extern Object rs_optval_as_object(OptVal o);
+extern OptVal rs_object_as_optval(Object o, bool *error);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
-
-// Rust FFI declarations (window/layout module)
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 
 // optset_T field accessors for Rust callbacks
@@ -379,24 +373,6 @@ OptIndex nvim_find_option_len_hash(const char *name, size_t len)
   return index >= 0 ? option_hash_elems[index].opt_idx : kOptInvalid;
 }
 
-/// Create OptVal from var pointer.
-///
-/// @param       opt_idx  Option index in options[] table.
-/// @param[out]  varp     Pointer to option variable.
-///
-/// @return Option value stored in varp.
-OptVal optval_from_varp(OptIndex opt_idx, void *varp)
-  FUNC_ATTR_NONNULL_ARG(2) { return rs_optval_from_varp(opt_idx, varp); }
-
-extern Object rs_optval_as_object(OptVal o);
-extern OptVal rs_object_as_optval(Object o, bool *error);
-
-/// Convert an OptVal to an API Object.
-Object optval_as_object(OptVal o) { return rs_optval_as_object(o); }
-
-/// Convert an API Object to an OptVal.
-OptVal object_as_optval(Object o, bool *error) { return rs_object_as_optval(o, error); }
-
 // Context-switch helpers called by Rust (Phase 6).
 // Rust uses MaybeUninit<[u8; N]> for switchwin_T and aco_save_T.
 _Static_assert(sizeof(switchwin_T) == 24,
@@ -423,24 +399,6 @@ const char *nvim_option_set_value_handle_tty(const char *name, OptIndex opt_idx,
   return set_option_value_handle_tty(name, opt_idx, value, opt_flags);
 }
 
-extern OptVal rs_get_option_value_for(OptIndex opt_idx, int opt_flags, int scope,
-                                      void *from, Error *err);
-extern void rs_set_option_value_for(const char *name, OptIndex opt_idx, OptVal value,
-                                    int opt_flags, int scope, void *from, Error *err);
-
-OptVal get_option_value_for(OptIndex opt_idx, int opt_flags, const OptScope scope, void *const from,
-                            Error *err)
-{
-  return rs_get_option_value_for(opt_idx, opt_flags, (int)scope, (void *)from, err);
-}
-
-void set_option_value_for(const char *name, OptIndex opt_idx, OptVal value, const int opt_flags,
-                          const OptScope scope, void *const from, Error *err)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  rs_set_option_value_for(name, opt_idx, value, opt_flags, (int)scope, (void *)from, err);
-}
-
 /// Send update to UIs with values of UI relevant options
 void ui_refresh_options(void)
 {
@@ -450,7 +408,7 @@ void ui_refresh_options(void)
       continue;
     }
     String name = cstr_as_string(options[opt_idx].fullname);
-    Object value = optval_as_object(optval_from_varp(opt_idx, options[opt_idx].var));
+    Object value = rs_optval_as_object(rs_optval_from_varp(opt_idx, options[opt_idx].var));
     ui_call_option_set(name, value);
   }
   if (p_mouse != NULL) {
@@ -593,27 +551,13 @@ dict_T *get_winbuf_options(const int bufopt)
       void *varp = get_varp(opt);
 
       if (varp != NULL) {
-        typval_T opt_tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
+        typval_T opt_tv = optval_as_tv(rs_optval_from_varp(opt_idx, varp), true);
         tv_dict_add_tv(d, opt->fullname, strlen(opt->fullname), &opt_tv);
       }
     }
   }
 
   return d;
-}
-
-extern Dict rs_get_vimoption(const char *name_data, size_t name_size, int opt_flags,
-                             const void *buf, const void *win, void *arena, Error *err);
-extern Dict rs_get_all_vimoptions(void *arena);
-
-Dict get_vimoption(String name, int opt_flags, buf_T *buf, win_T *win, Arena *arena, Error *err)
-{
-  return rs_get_vimoption(name.data, name.size, opt_flags, buf, win, arena, err);
-}
-
-Dict get_all_vimoptions(Arena *arena)
-{
-  return rs_get_all_vimoptions(arena);
 }
 
 /// Apply EVENT_SYNTAX autocmds for the given buffer.
@@ -770,7 +714,7 @@ void nvim_apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldval
 /// Call ui_call_option_set for a specific option with a saved new value.
 void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
 {
-  ui_call_option_set(cstr_as_string(options[opt_idx].fullname), optval_as_object(saved_new_value));
+  ui_call_option_set(cstr_as_string(options[opt_idx].fullname), rs_optval_as_object(saved_new_value));
 }
 
 /// Copy global script_ctx for a buf-opt index to the buffer's script_ctx array.
