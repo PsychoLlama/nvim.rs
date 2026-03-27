@@ -33,15 +33,12 @@
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
-#include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
 #include "nvim/optionstr.h"
 #include "nvim/os/fs.h"
-#include "nvim/os/os.h"
 #include "nvim/main.h"
 #include "nvim/profile.h"
-#include "nvim/register.h"
 #include "nvim/runtime.h"
 #include "nvim/strings.h"
 #include "nvim/undo.h"
@@ -114,12 +111,6 @@ void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
 { if (*p_cpo == NUL) { set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0); } free_string_option(save_cpo); }
 
 bool *eval_lavars_used = NULL;
-
-typedef enum {
-  GLV_FAIL,
-  GLV_OK,
-  GLV_STOP,
-} glv_status_T;
 
 #include "eval_shim.c.generated.h"
 
