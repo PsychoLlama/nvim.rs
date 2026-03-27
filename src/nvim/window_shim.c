@@ -66,40 +66,26 @@
 _Static_assert(sizeof(WinSnapshot) == 6 * sizeof(int), "WinSnapshot size mismatch");
 _Static_assert(sizeof(WinViewportSnapshot) == 4 * sizeof(int32_t), "WinViewportSnapshot size mismatch");
 
-// Rust FFI declarations (tag module)
 extern void rs_tagstack_clear_entry(void *tg);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
-
-// Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
-
 extern int rs_tabline_height(void);
 extern int rs_global_stl_height(void);
 extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
-
-// Result structure from rs_winframe_find_altwin
-typedef struct {
-  frame_T *altfr;
-  int dir;
-} WinframeResult;
+typedef struct { frame_T *altfr; int dir; } WinframeResult;
 extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial);
-
 extern void rs_win_setheight(int height);
-
-// win_split_ins migration: Rust orchestrator
 typedef struct {
-  win_T *wp;           // new window or NULL
-  int do_enter;        // whether to call win_enter_ext
-  int enter_flags;     // WEE_* flags for win_enter_ext
-  int vertical;        // 1 if vertical split
-  int saved_option;    // saved p_wiw or p_wh value
+  win_T *wp;
+  int do_enter;
+  int enter_flags;
+  int vertical;
+  int saved_option;
 } SplitInsResult;
-
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
-// rs_win_free_mem still used by win_free_all
 extern win_T *rs_win_free_mem(win_T *win, int *dirp, tabpage_T *tp);
 
 int *nvim_win_get_ns_hl_attr(win_T *wp) { return wp->w_ns_hl_attr; }
@@ -124,7 +110,6 @@ void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
 int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
 char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
-// Colorcolumn accessors
 char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
 int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
@@ -144,8 +129,6 @@ void nvim_win_set_p_wfb(win_T *wp, int val) { wp->w_p_wfb = val != 0; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
 
-#define NOWIN           ((win_T *)-1)   // non-existing window
-
 #define ROWS_AVAIL (Rows - p_ch - rs_tabline_height() - rs_global_stl_height())
 
 /// flags for win_enter_ext()
@@ -162,18 +145,12 @@ static const char e_cannot_split_window_when_closing_buffer[]
 
 static char *m_onlyone = N_("Already only one window");
 
-/// When non-zero splitting a window is forbidden.  Used to avoid that nasty
-/// autocommands mess up the window structure.
 static int split_disallowed = 0;
-
-// 'cmdheight' value explicitly set by the user: window commands are allowed to
-// resize the topframe to values higher than this minimum, but not lower.
 static OptInt min_set_ch = 1;
 
 OptInt nvim_get_min_set_ch(void) { return min_set_ch; }
 
 void win_set_buf(win_T *win, buf_T *buf, Error *err)
-  FUNC_ATTR_NONNULL_ALL
 {
   const handle_T win_handle = win->handle;
   tabpage_T *tab = rs_win_find_tabpage(win);
@@ -212,7 +189,6 @@ void win_set_buf(win_T *win, buf_T *buf, Error *err)
 }
 /// Merges two window configs, freeing replaced fields if necessary.
 void merge_win_config(WinConfig *dst, const WinConfig src)
-  FUNC_ATTR_NONNULL_ALL
 {
   if (dst->title_chunks.items != src.title_chunks.items) {
     clear_virttext(&dst->title_chunks);
@@ -222,21 +198,11 @@ void merge_win_config(WinConfig *dst, const WinConfig src)
   }
   *dst = src;
 }
-// Close window "win" in tab page "tp", which is not the current tab page.
-// This may be the last window in that tab page and result in closing the tab,
-// thus "tp" may become invalid!
-// Caller must check if buffer is hidden and whether the tabline needs to be
-// updated.
-// @return false when the window was not closed as a direct result of this call
-//         (e.g: not via autocmds).
 bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
 { return rs_win_close_othertab(win, free_buf, tp, force ? 1 : 0) != 0; }
-// When switching tabpage, handle other side-effects in command_height(), but
-// avoid setting frame sizes which are still correct.
 static bool command_frame_height = true;
 
 buf_T *nvim_buflist_new_initial(void) { return buflist_new(NULL, NULL, 1, BLN_LISTED); }
-
 void nvim_win_setup_first_buffer(win_T *wp, buf_T *buf)
 {
   curwin = wp; curbuf = buf; wp->w_buffer = buf; wp->w_s = &(buf->b_s);
@@ -244,7 +210,6 @@ void nvim_win_setup_first_buffer(win_T *wp, buf_T *buf)
 }
 void nvim_win_reset_binding(win_T *wp) { RESET_BINDING(wp); }
 void nvim_alloc_firstwin_set_topframe(win_T *wp) { topframe = wp->w_frame; topframe->fr_width = Columns; topframe->fr_height = Rows - (int)p_ch - rs_global_stl_height(); }
-/// Allocate and initialize aucmd_win[idx] as a hidden float.
 void nvim_win_alloc_aucmd_win_impl(int idx)
 {
   Error err = ERROR_INIT;
@@ -264,7 +229,6 @@ win_T *nvim_aucmd_win_get(int idx) { return aucmd_win[idx].auc_win; }
 void nvim_aucmd_win_clear(int idx) { aucmd_win[idx].auc_win = NULL; }
 void nvim_kv_destroy_aucmd_win_vec(void) { kv_destroy(aucmd_win_vec); }
 tabpage_T *nvim_alloc_tabpage_raw(void) { return xcalloc(1, sizeof(tabpage_T)); }
-
 void nvim_tabpage_init_handle(tabpage_T *tp)
 {
   static int last_tp_handle = 0;
@@ -279,17 +243,11 @@ frame_T *nvim_alloc_frame_raw(void) { return xcalloc(1, sizeof(frame_T)); }
 void nvim_tabpage_copy_localdir(tabpage_T *dst, tabpage_T *src) { if (dst && src) { dst->tp_localdir = src->tp_localdir ? xstrdup(src->tp_localdir) : NULL; } }
 void nvim_curbuf_terminal_check_size(void) { if (curbuf->terminal) { terminal_check_size(curbuf->terminal); } }
 void nvim_apply_autocmds_tabnew(const char *filename) { apply_autocmds(EVENT_TABNEW, (char *)filename, (char *)filename, false, curbuf); }
-/// Make window `wp` the current window.
-/// @warning Autocmds may close the window immediately, so caller must check
-///          win_valid(wp).
 void win_enter(win_T *wp, bool undo_sync)
 {
   win_enter_ext(wp, (undo_sync ? WEE_UNDO_SYNC : 0)
                 | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS);
 }
-/// Make window "wp" the current window.
-/// @param flags  if contains WEE_CURWIN_INVALID, it means curwin has just been
-///               closed and isn't valid.
 extern void rs_win_enter_ext(win_T *wp, int flags);
 static void win_enter_ext(win_T *const wp, const int flags) { rs_win_enter_ext(wp, flags); }
 
@@ -304,7 +262,6 @@ void nvim_win_init_ns_set(win_T *wp) { wp->w_ns_hl = -1; Set(uint32_t) ns_set = 
 void nvim_win_init_global_local_opts(win_T *wp) { wp->w_allbuf_opt.wo_so = wp->w_p_so = -1; wp->w_allbuf_opt.wo_siso = wp->w_p_siso = -1; }
 void nvim_win_set_config_init(win_T *wp) { WinConfig init = WIN_CONFIG_INIT; wp->w_config = init; }
 void nvim_win_set_next_match_id(win_T *wp) { wp->w_next_match_id = 1000; }
-/// Compound: clear_winopt + deleteFoldRecurse + xfree for a WinInfo.
 void nvim_free_wininfo_raw(WinInfo *wip, buf_T *bp)
 {
   if (wip->wi_optset) {
@@ -373,7 +330,6 @@ void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
 int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0; }
-// Accessors for rs_win_set_inner_size
 int nvim_win_get_width_request(win_T *wp) { return wp ? wp->w_width_request : 0; }
 int nvim_win_get_height_request(win_T *wp) { return wp ? wp->w_height_request : 0; }
 int nvim_win_get_prev_fraction_row(win_T *wp) { return wp ? wp->w_prev_fraction_row : 0; }
@@ -429,8 +385,6 @@ int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0
 buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp((char *)ptr); }
 void nvim_reset_binding_curwin(void) { RESET_BINDING(curwin); }
 int nvim_do_ecmd_lastl_hide(const char *ptr) { return do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL); }
-/// find_pattern_in_path with ACTION_SPLIT and fixed extra params.
-/// @param whole  1 to search whole file (Prenum == 0), 0 otherwise
 void nvim_find_pattern_in_path_split(const char *ptr, size_t len, int type, int prenum1, int whole)
 {
   find_pattern_in_path(ptr, 0, len, true, whole != 0, type,
@@ -439,9 +393,6 @@ void nvim_find_pattern_in_path_split(const char *ptr, size_t len, int type, int 
 void nvim_set_curswant_curwin(void) { curwin->w_set_curswant = true; }
 size_t nvim_find_ident_under_cursor(char **pp) { return rs_find_ident_under_cursor(pp, FIND_IDENT); }
 void nvim_set_cmdmod_tab_to_curtab_idx(void) { cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1; }
-/// win_new_float external wrapper: converts curwin to external float.
-/// Returns 1 on success, 0 on failure (also calls beep_flush on failure).
-/// Returns -1 if curwin is already floating or kUIMultigrid not supported.
 int nvim_win_new_float_external(void)
 {
   if (curwin->w_floating || !ui_has(kUIMultigrid)) {
@@ -467,8 +418,6 @@ _Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
 _Static_assert(1 == SNAP_AUCMD_IDX, "SNAP_AUCMD_IDX mismatch");
 _Static_assert(0x80 == VALID_TOPLINE, "VALID_TOPLINE mismatch");
 _Static_assert(1 == STATUS_HEIGHT, "STATUS_HEIGHT mismatch");
-
-// WSP and WEE flag static asserts for Rust constant validation
 _Static_assert(0x01 == WSP_ROOM, "WSP_ROOM mismatch");
 _Static_assert(0x02 == WSP_VERT, "WSP_VERT mismatch");
 _Static_assert(0x04 == WSP_HOR, "WSP_HOR mismatch");
@@ -486,8 +435,6 @@ _Static_assert(0x08 == WEE_TRIGGER_ENTER_AUTOCMDS, "WEE_TRIGGER_ENTER_AUTOCMDS m
 _Static_assert(0x10 == WEE_TRIGGER_LEAVE_AUTOCMDS, "WEE_TRIGGER_LEAVE_AUTOCMDS mismatch");
 _Static_assert(40 == UPD_NOT_VALID, "UPD_NOT_VALID mismatch");
 _Static_assert(2 == DOBUF_UNLOAD, "DOBUF_UNLOAD mismatch");
-
-// Key code static asserts for do_window Rust dispatch
 _Static_assert(-30059 == K_UP, "K_UP mismatch");
 _Static_assert(-25707 == K_DOWN, "K_DOWN mismatch");
 _Static_assert(-27755 == K_LEFT, "K_LEFT mismatch");
@@ -497,12 +444,7 @@ _Static_assert(-16715 == K_KENTER, "K_KENTER mismatch");
 _Static_assert(30 == Ctrl_HAT, "Ctrl_HAT mismatch");
 _Static_assert(29 == Ctrl_RSB, "Ctrl_RSB mismatch");
 _Static_assert(31 == Ctrl__, "Ctrl__ mismatch");
-
-// === Accessors for rs_ui_ext_win_position ===
-
-// WinConfig field accessors
 int nvim_win_get_pos_changed(win_T *wp) { return wp ? wp->w_pos_changed : 0; }
-// Find a window by its integer handle (wraps find_window_by_handle)
 win_T *nvim_handle_get_window(int handle)
 {
   Error dummy = ERROR_INIT;
@@ -510,9 +452,7 @@ win_T *nvim_handle_get_window(int handle)
   api_clear_error(&dummy);
   return wp;
 }
-// UI call wrappers (these wrap auto-generated ui_call_* functions)
 void nvim_win_ui_call_win_pos(int grid, int win, int row, int col, int width, int height) { ui_call_win_pos(grid, win, row, col, width, height); }
-
 void nvim_win_ui_call_win_float_pos(int grid_handle, int win_handle, int anchor,
                                      int anchor_grid, double row, double col,
                                      int mouse, int zindex, int comp_index,
@@ -529,7 +469,6 @@ int nvim_buf_get_prompt_insert(buf_T *buf) { return buf ? buf->b_prompt_insert :
 void nvim_buf_set_prompt_insert(buf_T *buf, int val) { if (buf) { buf->b_prompt_insert = val; } }
 buf_T *nvim_win_get_buf_ptr(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buffer->b_s; } }
-
 void nvim_win_set_script_ctx_scroll(win_T *wp)
 {
   if (wp) {
@@ -555,7 +494,6 @@ void nvim_win_clear_winbar_click_defs(win_T *wp)
   wp->w_winbar_click_defs_size = 0;
   wp->w_winbar_click_defs = NULL;
 }
-
 _Static_assert(EVENT_BUFENTER == 3, "EVENT_BUFENTER value mismatch");
 _Static_assert(EVENT_BUFLEAVE == 7, "EVENT_BUFLEAVE value mismatch");
 _Static_assert(EVENT_TABENTER == 110, "EVENT_TABENTER value mismatch");
@@ -572,9 +510,6 @@ void nvim_clear_globaldir(void) { XFREE_CLEAR(globaldir); }
 int nvim_os_dirname_maxpathl(char *buf) { return (int)os_dirname(buf, MAXPATHL); }
 int nvim_get_p_acd(void) { return p_acd ? 1 : 0; }
 void nvim_set_last_chdir_reason_null(void) { last_chdir_reason = NULL; }
-/// do_autocmd_dirchanged for window-scoped dir change (kCdScopeWindow or kCdScopeTabpage).
-/// localdir==1 means window scope, localdir==0 means tabpage scope.
-/// pre==1 means pre-change, pre==0 means post-change.
 void nvim_do_autocmd_dirchanged_win(const char *new_dir, int localdir, int pre) {
   do_autocmd_dirchanged(new_dir,
                         localdir ? kCdScopeWindow : kCdScopeTabpage,
@@ -591,8 +526,6 @@ int nvim_get_curtab_ch_used(void) { return curtab ? (int)curtab->tp_ch_used : 0;
 void nvim_set_curtab_ch_used(int64_t val) { if (curtab) { curtab->tp_ch_used = val; } }
 void nvim_set_min_set_ch(int64_t val) { min_set_ch = val; }
 void nvim_update_cmdline_row(void) { cmdline_row = Rows - (int)p_ch; }
-/// depending on ui_has(kUIMessages). Also sets msg_row = cmdline_row.
-/// Only called when msg_scrolled==0 and full_screen.
 void nvim_grid_clear_cmd_area(void)
 {
   if (msg_scrolled != 0 || !full_screen) {
@@ -626,7 +559,6 @@ void nvim_set_RedrawingDisabled(int val) { RedrawingDisabled = val; }
 void nvim_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
 void nvim_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
 int nvim_win_buf_b_locked(win_T *wp) { return (wp && wp->w_buffer && wp->w_buffer->b_locked > 0) ? 1 : 0; }
-
 void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botline,
                                        int curline, int curcol, int line_count, int64_t delta)
 {
@@ -643,7 +575,6 @@ void nvim_set_lastused_tabpage_from_rust(tabpage_T *tp) { lastused_tabpage = tp;
 void nvim_set_skip_win_fix_scroll(int val) { skip_win_fix_scroll = (val != 0); }
 void nvim_set_cmdheight_for_tabpage(int64_t new_ch) { command_frame_height = false; set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0); command_frame_height = true; }
 int nvim_win_get_changelistidx(win_T *wp) { return wp ? wp->w_changelistidx : 0; }
-
 void nvim_win_init_copy_compound(win_T *dst, win_T *src, int flags)
 {
   if (!dst || !src) {
@@ -685,15 +616,11 @@ void nvim_win_init_copy_compound(win_T *dst, win_T *src, int flags)
   win_copy_options(src, dst);
   rs_copyFoldingState(src, dst);
 }
-// Event ignored wrappers
 int nvim_event_ignored_winscrolled(win_T *wp) { return wp ? (event_ignored(EVENT_WINSCROLLED, wp->w_p_eiw) ? 1 : 0) : 1; }
 int nvim_event_ignored_winresized(win_T *wp) { return wp ? (event_ignored(EVENT_WINRESIZED, wp->w_p_eiw) ? 1 : 0) : 1; }
-// has_event wrappers for scroll/resize events
 int nvim_has_event_winscrolled(void) { return has_event(EVENT_WINSCROLLED) ? 1 : 0; }
 int nvim_has_event_winresized(void) { return has_event(EVENT_WINRESIZED) ? 1 : 0; }
 int nvim_win_get_buf_fnum(win_T *wp) { return (wp && wp->w_buffer) ? (int)wp->w_buffer->handle : 0; }
-// Typval compound operations for scroll/resize event building
-
 void *nvim_tv_dict_alloc_refcount1(void)
 {
   dict_T *d = tv_dict_alloc();
@@ -702,7 +629,6 @@ void *nvim_tv_dict_alloc_refcount1(void)
   }
   return d;
 }
-
 int nvim_tv_dict_add_number(void *dict, const char *key, size_t key_len, int nr)
 {
   if (!dict || !key) {
@@ -715,7 +641,6 @@ int nvim_tv_dict_add_number(void *dict, const char *key, size_t key_len, int nr)
   };
   return tv_dict_add_tv((dict_T *)dict, key, key_len, &tv) == OK ? 1 : 0;
 }
-
 int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, void *child)
 {
   if (!dict || !key || !child) {
@@ -727,7 +652,6 @@ int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, v
   ((dict_T *)child)->dv_refcount--;
   return 1;
 }
-
 void nvim_tv_dict_unref_wrapper(void *dict)
 {
   if (dict) {
@@ -747,8 +671,6 @@ void nvim_tv_list_append_number(void *list, int nr)
   };
   tv_list_append_owned_tv((list_T *)list, tv);
 }
-// Compound autocmd/v:event fire operations
-
 void nvim_fire_winresized(void *list, const char *winid_str,
                           win_T *first_size_win, int first_size_win_buf_fnum)
 {
@@ -777,7 +699,6 @@ void nvim_fire_winresized(void *list, const char *winid_str,
   }
   restore_v_event(v_event, &save_v_event);
 }
-
 void nvim_fire_winscrolled(void *dict, const char *winid_str,
                            win_T *first_scroll_win, int first_scroll_win_buf_fnum)
 {
@@ -808,7 +729,6 @@ void nvim_fire_winscrolled(void *dict, const char *winid_str,
   restore_v_event(v_event, &save_v_event);
 }
 void nvim_buf_set_p_bl(buf_T *buf, int val) { if (buf) { buf->b_p_bl = (val != 0); } }
-
 int nvim_close_buffer_for_win(win_T *win, int action, int abort_if_last)
 {
   if (!win || !win->w_buffer) {
@@ -831,7 +751,6 @@ win_T *nvim_win_float_find_altwin(win_T *win, tabpage_T *tp) { return win_float_
 int nvim_win_is_cmdline_win(win_T *win) { return (win == cmdline_win) ? 1 : 0; }
 void nvim_set_cmdline_win_null(void) { cmdline_win = NULL; }
 void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf) { if (old_curbuf != curbuf) { apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf); } }
-
 void nvim_emsg_id(int id)
 {
   switch (id) {
@@ -890,9 +809,7 @@ int nvim_buf_get_mod_set(buf_T *buf) { return buf ? buf->b_mod_set : 0; }
 void nvim_buf_set_mod_set(buf_T *buf, int val) { if (buf) { buf->b_mod_set = (val != 0); } }
 int nvim_win_get_old_visual_mode(win_T *wp) { return wp ? wp->w_old_visual_mode : 0; }
 int nvim_redrawing(void) { return redrawing() ? 1 : 0; }
-
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
-
 int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *out_fi_lines,
                    foldinfo_T *out_foldinfo)
 {
@@ -908,8 +825,6 @@ int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *ou
   }
   return fi.fi_level;
 }
-/// Compute rightleft column adjustment for cursor positioning.
-/// Returns the adjusted column, accounting for double-wide chars.
 int nvim_win_rl_cursor_col(win_T *wp)
 {
   if (!wp) { return 0; }
@@ -919,8 +834,6 @@ int nvim_win_rl_cursor_col(win_T *wp)
   return view_width - wcol - ((utf_ptr2cells(cursor) == 2
                                && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1);
 }
-/// Combined grid_adjust + ui_grid_cursor_goto.
-/// Avoids exposing ScreenGrid pointer to Rust.
 void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col)
 {
   ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col);
@@ -930,7 +843,6 @@ void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col)
 }
 void nvim_validate_cursor_for_win(win_T *wp) { validate_cursor(wp); }
 int nvim_VIsual_active(void) { return VIsual_active ? 1 : 0; }
-/// Mark status lines for redraw for all windows (Rust incsearch).
 void nvim_status_redraw_all(void)
 {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
@@ -948,15 +860,12 @@ void nvim_ui_call_set_icon(const char *s) { ui_call_set_icon(cstr_as_string(s ? 
 int nvim_utf_cp_bounds_end_off(const char *str, const char *ptr) { return utf_cp_bounds((char *)str, (char *)ptr).end_off; }
 int nvim_cmdline_mouse_used(void) { return get_cmdline_info()->mouse_used != NULL ? 1 : 0; }
 void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
-// Spell checking synblock accessors — used by Rust spell crate for spell_iswordp*
 bool nvim_win_get_b_cjk(const win_T *wp) { return wp->w_s->b_cjk != 0; }
 const bool *nvim_win_get_b_spell_ismw(const win_T *wp) { return wp->w_s->b_spell_ismw; }
 const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_spell_ismw_mb; }
 const garray_T *nvim_win_get_b_langp(const win_T *wp) { return &wp->w_s->b_langp; }
 void nvim_emsg_no_spell(void) { emsg(_(e_no_spell)); }
 regprog_T *nvim_win_get_b_cap_prog(const win_T *wp) { return wp->w_s->b_cap_prog; }
-// Runs vim_regexec with b_cap_prog against ptr. Updates b_cap_prog (may be GC'd).
-// Returns the offset of endp[0] from ptr if matched, -1 if no match.
 int nvim_win_spell_capcol_regexec(win_T *wp, char *ptr)
 {
   regmatch_T regmatch = { .regprog = wp->w_s->b_cap_prog, .rm_ic = false };
@@ -967,9 +876,7 @@ int nvim_win_spell_capcol_regexec(win_T *wp, char *ptr)
   }
   return -1;
 }
-// set_topline wrapper for winrestview (window viml)
 void nvim_set_topline(win_T *wp, int lnum) { set_topline(wp, (linenr_T)lnum); }
-// Typval accessors for window VimL functions (viml.rs)
 typval_T *nvim_eval_tv_idx(typval_T *argvars, int i) { return &argvars[i]; }
 void nvim_eval_tv_set_number(typval_T *tv, int64_t n) { tv->v_type = VAR_NUMBER; tv->vval.v_number = (varnumber_T)n; }
 void nvim_eval_tv_set_string(typval_T *tv, char *s) { tv->vval.v_string = s; }
@@ -988,7 +895,6 @@ stl_hlrec_t *nvim_hlrec_next(stl_hlrec_t *sp) { return sp + 1; }
 int nvim_build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf, statuscol_T *stcp) { return build_statuscol_str(wp, lnum, relnum, buf, stcp); }
 linenr_T nvim_get_cursor_rel_lnum(win_T *wp, linenr_T lnum) { return get_cursor_rel_lnum(wp, lnum); }
 size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen) { return transstr_buf(s, slen, buf, buflen, true); }
-// Global variable accessors
 const char *nvim_get_p_sel(void) { return p_sel; }
 linenr_T nvim_get_spell_redraw_lnum(void) { return spell_redraw_lnum; }
 void nvim_set_spell_redraw_lnum(linenr_T val) { spell_redraw_lnum = val; }
@@ -1004,10 +910,6 @@ void nvim_get_VIsual_pos_fields(int32_t *lnum, int32_t *col, int32_t *coladd)
   *col = (int32_t)VIsual.col;
   *coladd = (int32_t)VIsual.coladd;
 }
-/// Batch read curwin's w_stl_* state into output buffer.
-/// Layout: [cursor_lnum, cursor_col, cursor_coladd, virtcol, topline,
-///          line_count, topfill, empty, recording, state, visual_mode,
-///          vis_pos_lnum, vis_pos_col, vis_pos_coladd]
 void nvim_curwin_get_stl_state(int32_t *out)
 {
   out[0]  = (int32_t)curwin->w_stl_cursor.lnum;
@@ -1025,8 +927,6 @@ void nvim_curwin_get_stl_state(int32_t *out)
   out[12] = (int32_t)curwin->w_stl_visual_pos.col;
   out[13] = (int32_t)curwin->w_stl_visual_pos.coladd;
 }
-/// Batch write curwin's w_stl_* state fields from current window state.
-/// Also copies w_stl_visual_mode/visual_pos when visual is active.
 void nvim_curwin_set_stl_state(int32_t state, int32_t empty_line,
                                int32_t visual_active, int32_t visual_mode,
                                int32_t vis_lnum, int32_t vis_col, int32_t vis_coladd)
@@ -1055,7 +955,6 @@ void nvim_curwin_invalidate_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID
 void nvim_curwin_clear_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WCOL | VALID_VIRTCOL); }
 void nvim_curwin_cursor_lnum_add(linenr_T delta) { curwin->w_cursor.lnum += delta; }
 void nvim_set_Insstart_from_cursor(void) { Insstart = curwin->w_cursor; }
-
 void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
 {
   if (!win) { return NULL; }
@@ -1118,13 +1017,11 @@ void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
   default: abort();
   }
 }
-// Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
 _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
 _Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
 _Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
-
 char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
 {
   switch (idx) {
@@ -1174,7 +1071,5 @@ void nvim_copy_winopt_scalars(winopt_T *from, winopt_T *to)
 }
 void nvim_copy_winopt_save_strs(winopt_T *from, winopt_T *to) { to->wo_fdc_save = from->wo_diff_saved ? xstrdup(from->wo_fdc_save) : empty_string_option; to->wo_fdm_save = from->wo_diff_saved ? xstrdup(from->wo_fdm_save) : empty_string_option; }
 void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to) { memmove(to->wo_script_ctx, from->wo_script_ctx, sizeof(to->wo_script_ctx)); }
-// Update w_grid_alloc.blending based on current w_p_winbl value.
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
-// nvim_win_get_p_cole already exported from Rust (window crate).
 
