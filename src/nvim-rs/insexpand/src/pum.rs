@@ -177,7 +177,7 @@ extern "C" {
 extern "C" {
     fn nvim_update_screen();
     fn nvim_find_shown_match_in_match_array() -> c_int;
-    fn nvim_trigger_complete_changed(cur: c_int);
+    fn nvim_trigger_complete_changed_guarded(cur: c_int);
     fn nvim_has_completechanged_event() -> c_int;
     fn nvim_set_dollar_vcol(val: c_int);
     fn nvim_get_cursor_col() -> c_int;
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
 
     if crate::vars::nvim_get_compl_match_array_exists() == 0 {
         if crate::vars::nvim_get_compl_started() != 0 && nvim_has_completechanged_event() != 0 {
-            nvim_trigger_complete_changed(cur);
+            nvim_trigger_complete_changed_guarded(cur);
         }
         return;
     }
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     }
 
     if nvim_has_completechanged_event() != 0 {
-        nvim_trigger_complete_changed(cur);
+        nvim_trigger_complete_changed_guarded(cur);
     }
 }
 

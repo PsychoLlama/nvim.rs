@@ -178,7 +178,7 @@ extern "C" {
     // nvim_ins_compl_insert_bytes: deleted (Phase 2), inlined below via ins_bytes_len
     #[link_name = "ins_bytes_len"]
     fn ins_bytes_len(p: *const c_char, len: usize);
-    fn nvim_ins_compl_dict_alloc_set_shown();
+    fn nvim_compl_set_vim_var_dict_shown();
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
     fn rs_compl_status_adding() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
@@ -452,7 +452,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
         !crate::match_list::shown_match_at_orig_text() && (preinsert == 0 || insert_prefix != 0);
     crate::vars::nvim_set_compl_used_match(c_int::from(used_match));
 
-    nvim_ins_compl_dict_alloc_set_shown();
+    nvim_compl_set_vim_var_dict_shown();
     crate::state::COMPL_HI_ON_AUTOCOMPL_LONGEST = insert_prefix != 0 && move_cursor != 0;
 }
 
