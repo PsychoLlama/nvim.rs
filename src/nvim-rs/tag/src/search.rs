@@ -27,6 +27,9 @@ type OffT = i64;
 /// Number of match type buckets
 pub const MT_COUNT: usize = 16;
 
+/// VarLockStatus::VAR_FIXED — dict locked forever
+const VAR_FIXED: c_int = 2;
+
 // =============================================================================
 // Tag search state enum
 // =============================================================================
@@ -2738,8 +2741,8 @@ extern "C" {
     fn nvim_win_get_tagstackidx(wp: *const c_void) -> c_int;
     fn nvim_win_get_tagstack_entry(wp: *const c_void, idx: c_int) -> *const c_void;
     fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
-    // Accessor: allocate a VAR_FIXED-locked dict
-    fn nvim_tag_dict_alloc_lock_fixed() -> *mut c_void;
+    // Allocate a dict; VAR_FIXED = 2
+    fn tv_dict_alloc_lock(lock: c_int) -> *mut c_void;
     // Accessor: increment/decrement dict refcount
     fn nvim_tag_dict_refcount_inc(dict: *mut c_void);
     fn nvim_tag_dict_refcount_dec(dict: *mut c_void);
@@ -2758,15 +2761,15 @@ extern "C" {
     fn nvim_tag_rettv_get_list(rettv_storage: *const c_void) -> *mut c_void;
     // Accessor: size of pos_T for stack allocation
     fn nvim_tag_pos_size() -> usize;
-    // Accessor: add string to dict
-    fn nvim_tag_tv_dict_add_str(
+    // Add string to dict
+    fn tv_dict_add_str(
         dict: *mut c_void,
         key: *const c_char,
         key_len: usize,
         val: *mut c_char,
     ) -> c_int;
     // tv_clear for rettv storage
-    fn nvim_tag_tv_clear_rettv(rettv_storage: *mut c_void);
+    fn tv_clear(rettv_storage: *mut c_void);
 }
 
 /// Implement the tagfunc callback invocation in Rust.
@@ -2826,7 +2829,7 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
     let flag_str = flag_buf.as_ptr().cast::<c_char>();
 
     // Allocate the info dict with VAR_FIXED lock
-    let d = nvim_tag_dict_alloc_lock_fixed();
+    let d = tv_dict_alloc_lock(VAR_FIXED);
 
     // Phase 2: inline nvim_tag_get_curwin_tagstack_user_data logic using fine-grained accessors
     let curwin = nvim_tag_get_curwin();
@@ -2845,12 +2848,12 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
     };
     if !user_data.is_null() {
         // key = "user_data", key_len = 9
-        nvim_tag_tv_dict_add_str(d, c"user_data".as_ptr(), 9, user_data.cast_mut());
+        tv_dict_add_str(d, c"user_data".as_ptr(), 9, user_data.cast_mut());
     }
 
     // Add buf_ffname if provided
     if !buf_ffname.is_null() {
-        nvim_tag_tv_dict_add_str(d, c"buf_ffname".as_ptr(), 10, buf_ffname.cast_mut());
+        tv_dict_add_str(d, c"buf_ffname".as_ptr(), 10, buf_ffname.cast_mut());
     }
 
     // Increment dict refcount to keep it alive during the call
@@ -2878,13 +2881,13 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
 
     // Check rettv result type
     if nvim_tag_rettv_is_null_special(rettv_storage) {
-        nvim_tag_tv_clear_rettv(rettv_storage);
+        tv_clear(rettv_storage);
         return 2;
     }
 
     let list = nvim_tag_rettv_get_list(rettv_storage);
     if list.is_null() {
-        nvim_tag_tv_clear_rettv(rettv_storage);
+        tv_clear(rettv_storage);
         emsg(gettext(E_INVALID_RETURN_VALUE_FROM_TAGFUNC.as_ptr()));
         return 3;
     }
@@ -3169,7 +3172,7 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
         li = nvim_tag_tv_list_item_next(list, li);
     }
 
-    nvim_tag_tv_clear_rettv(rettv_ptr);
+    tv_clear(rettv_ptr);
 
     *match_count = ntags;
     result

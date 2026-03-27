@@ -964,9 +964,9 @@ extern "C" {
     fn nvim_taggy_get_fmark_fnum(tg: *const c_void) -> c_int;
 
     // Dictionary/list operations
-    fn nvim_tag_tv_dict_alloc() -> DictHandle;
+    fn tv_dict_alloc() -> DictHandle;
     fn nvim_tag_tv_dict_find(dict: DictHandle, key: *const c_char, key_len: c_int) -> bool;
-    fn nvim_tag_tv_dict_add_str(
+    fn tv_dict_add_str(
         dict: DictHandle,
         key: *const c_char,
         key_len: usize,
@@ -978,9 +978,9 @@ extern "C" {
         key_len: usize,
         nr: i64,
     ) -> c_int;
-    fn nvim_tag_tv_list_alloc(count: c_int) -> ListHandle;
-    fn nvim_tag_tv_list_append_dict(list: ListHandle, dict: DictHandle);
-    fn nvim_tag_tv_list_free(list: ListHandle);
+    fn tv_list_alloc(count: isize) -> ListHandle;
+    fn tv_list_append_dict(list: ListHandle, dict: DictHandle);
+    fn tv_list_free(list: ListHandle);
     fn nvim_tag_set_errorlist(list: ListHandle, title: *const c_char);
 
     // Memory management
@@ -1304,7 +1304,7 @@ pub unsafe extern "C" fn rs_add_llist_tags(
 
     let fname: *mut c_char = xmalloc(MAXPATHL + 1).cast();
     let cmd: *mut c_char = xmalloc(CMDBUFFSIZE_C + 1).cast();
-    let list = nvim_tag_tv_list_alloc(0);
+    let list = tv_list_alloc(0);
 
     let mut tagp: TagPtrs = TagPtrs::default();
     let tagp_ptr: *mut TagPtrs = &raw mut tagp;
@@ -1398,14 +1398,14 @@ pub unsafe extern "C" fn rs_add_llist_tags(
             *cmd.add(pos) = 0;
         }
 
-        let dict = nvim_tag_tv_dict_alloc();
-        nvim_tag_tv_list_append_dict(list, dict);
+        let dict = tv_dict_alloc();
+        tv_list_append_dict(list, dict);
 
-        nvim_tag_tv_dict_add_str(dict, c"text".as_ptr(), 4, tag_name_buf.as_mut_ptr().cast());
-        nvim_tag_tv_dict_add_str(dict, c"filename".as_ptr(), 8, fname);
+        tv_dict_add_str(dict, c"text".as_ptr(), 4, tag_name_buf.as_mut_ptr().cast());
+        tv_dict_add_str(dict, c"filename".as_ptr(), 8, fname);
         nvim_tag_tv_dict_add_nr(dict, c"lnum".as_ptr(), 4, lnum as i64);
         if lnum == 0 {
-            nvim_tag_tv_dict_add_str(dict, c"pattern".as_ptr(), 7, cmd);
+            tv_dict_add_str(dict, c"pattern".as_ptr(), 7, cmd);
         }
     }
 
@@ -1419,7 +1419,7 @@ pub unsafe extern "C" fn rs_add_llist_tags(
     );
     nvim_tag_set_errorlist(list, title_buf.as_ptr().cast());
 
-    nvim_tag_tv_list_free(list);
+    tv_list_free(list);
     xfree(fname.cast());
     xfree(cmd.cast());
 
@@ -1554,7 +1554,7 @@ pub unsafe extern "C" fn rs_add_tag_field(
     *buf.add(len) = 0;
 
     let field_name_len = strlen(field_name);
-    let retval = nvim_tag_tv_dict_add_str(dict, field_name, field_name_len, buf);
+    let retval = tv_dict_add_str(dict, field_name, field_name_len, buf);
     xfree(buf.cast());
     retval
 }
@@ -1586,13 +1586,9 @@ extern "C" {
     fn nvim_tag_dictitem_tv(di: *mut c_void) -> *mut c_void;
     fn nvim_tag_tv_is_list(tv: *const c_void) -> bool;
     fn nvim_tag_tv_get_list(tv: *const c_void) -> *mut c_void;
-    fn nvim_tag_tv_get_number(tv: *const c_void) -> i64;
-    fn nvim_tag_tv_dict_get_string(
-        dict: *const c_void,
-        key: *const c_char,
-        save: bool,
-    ) -> *mut c_char;
-    fn nvim_tag_tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
+    fn tv_get_number(tv: *const c_void) -> i64;
+    fn tv_dict_get_string(dict: *const c_void, key: *const c_char, save: bool) -> *mut c_char;
+    fn tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
     fn nvim_tag_tv_list_first(list: *const c_void) -> *mut c_void;
     fn nvim_tag_tv_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
     fn nvim_tag_listitem_get_dict(li: *const c_void) -> *mut c_void;
@@ -1603,13 +1599,8 @@ extern "C" {
         coladd: *mut i32,
         fnum: *mut c_int,
     ) -> c_int;
-    fn nvim_tag_tv_list_append_number(list: *mut c_void, nr: i64);
-    fn nvim_tag_tv_dict_add_list(
-        dict: *mut c_void,
-        key: *const c_char,
-        key_len: usize,
-        list: *mut c_void,
-    );
+    fn tv_list_append_number(list: *mut c_void, nr: i64);
+    fn tv_dict_add_list(dict: *mut c_void, key: *const c_char, key_len: usize, list: *mut c_void);
     fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
     fn nvim_taggy_get_fmark_col(tg: *const c_void) -> c_int;
     fn nvim_tag_taggy_fmark_coladd(tg: *const c_void) -> c_int;
@@ -1802,8 +1793,8 @@ pub unsafe extern "C" fn rs_get_tags(
             continue;
         }
 
-        let dict = nvim_tag_tv_dict_alloc();
-        nvim_tag_tv_list_append_dict(list, dict);
+        let dict = tv_dict_alloc();
+        tv_list_append_dict(list, dict);
 
         let full_fname = rs_tag_full_fname(tagp_ptr.cast());
         let tagname_end = tagp_tagname_end(tagp_ptr);
@@ -1894,16 +1885,16 @@ pub unsafe extern "C" fn rs_get_tag_details(entry: *const c_void, retdict: *mut 
     let cur_fnum = nvim_taggy_get_cur_fnum(entry);
     let user_data = nvim_taggy_get_user_data(entry);
 
-    nvim_tag_tv_dict_add_str(retdict, c"tagname".as_ptr(), 7, tagname.cast_mut());
+    tv_dict_add_str(retdict, c"tagname".as_ptr(), 7, tagname.cast_mut());
     nvim_tag_tv_dict_add_nr(retdict, c"matchnr".as_ptr(), 7, (cur_match + 1) as i64);
     nvim_tag_tv_dict_add_nr(retdict, c"bufnr".as_ptr(), 5, cur_fnum as i64);
 
     if !user_data.is_null() {
-        nvim_tag_tv_dict_add_str(retdict, c"user_data".as_ptr(), 9, user_data.cast_mut());
+        tv_dict_add_str(retdict, c"user_data".as_ptr(), 9, user_data.cast_mut());
     }
 
-    let pos = nvim_tag_tv_list_alloc(4);
-    nvim_tag_tv_dict_add_list(retdict, c"from".as_ptr(), 4, pos);
+    let pos = tv_list_alloc(4);
+    tv_dict_add_list(retdict, c"from".as_ptr(), 4, pos);
 
     let fmark = nvim_taggy_get_fmark(entry);
     let mark_fnum = nvim_fmark_get_fnum(fmark);
@@ -1911,9 +1902,9 @@ pub unsafe extern "C" fn rs_get_tag_details(entry: *const c_void, retdict: *mut 
     let fmark_col = nvim_taggy_get_fmark_col(entry);
     let fmark_coladd = nvim_tag_taggy_fmark_coladd(entry);
 
-    nvim_tag_tv_list_append_number(pos, if mark_fnum == -1 { 0 } else { mark_fnum as i64 });
-    nvim_tag_tv_list_append_number(pos, fmark_lnum);
-    nvim_tag_tv_list_append_number(
+    tv_list_append_number(pos, if mark_fnum == -1 { 0 } else { mark_fnum as i64 });
+    tv_list_append_number(pos, fmark_lnum);
+    tv_list_append_number(
         pos,
         if fmark_col == MAXCOL {
             MAXCOL as i64
@@ -1921,7 +1912,7 @@ pub unsafe extern "C" fn rs_get_tag_details(entry: *const c_void, retdict: *mut 
             (fmark_col + 1) as i64
         },
     );
-    nvim_tag_tv_list_append_number(pos, fmark_coladd as i64);
+    tv_list_append_number(pos, fmark_coladd as i64);
 }
 
 extern "C" {
@@ -1950,13 +1941,13 @@ pub unsafe extern "C" fn rs_get_tagstack(wp: *mut c_void, retdict: *mut c_void) 
     nvim_tag_tv_dict_add_nr(retdict, c"length".as_ptr(), 6, tagstacklen as i64);
     nvim_tag_tv_dict_add_nr(retdict, c"curidx".as_ptr(), 6, (tagstackidx + 1) as i64);
 
-    let items_list = nvim_tag_tv_list_alloc(2);
-    nvim_tag_tv_dict_add_list(retdict, c"items".as_ptr(), 5, items_list);
+    let items_list = tv_list_alloc(2);
+    tv_dict_add_list(retdict, c"items".as_ptr(), 5, items_list);
 
     for i in 0..tagstacklen {
         let entry = nvim_win_get_tagstack_entry(wp, i);
-        let d = nvim_tag_tv_dict_alloc();
-        nvim_tag_tv_list_append_dict(items_list, d);
+        let d = tv_dict_alloc();
+        tv_list_append_dict(items_list, d);
         rs_get_tag_details(entry, d);
     }
 }
@@ -2005,7 +1996,7 @@ pub unsafe extern "C" fn rs_set_tagstack(
     let di = nvim_tag_tv_dict_find_item(d, c"curidx".as_ptr(), -1);
     if !di.is_null() {
         let tv = nvim_tag_dictitem_tv(di);
-        let curidx = nvim_tag_tv_get_number(tv) as c_int - 1;
+        let curidx = tv_get_number(tv) as c_int - 1;
         rs_tagstack_set_idx(wp, curidx);
     }
 
@@ -2066,7 +2057,7 @@ unsafe fn tagstack_push_items_from_list(wp: *mut c_void, list: *mut c_void) {
             continue;
         }
 
-        let tagname = nvim_tag_tv_dict_get_string(itemdict, c"tagname".as_ptr(), true);
+        let tagname = tv_dict_get_string(itemdict, c"tagname".as_ptr(), true);
         if tagname.is_null() {
             li = nvim_tag_tv_list_item_next(list, li);
             continue;
@@ -2076,9 +2067,9 @@ unsafe fn tagstack_push_items_from_list(wp: *mut c_void, list: *mut c_void) {
             col -= 1;
         }
 
-        let bufnr = nvim_tag_tv_dict_get_number(itemdict, c"bufnr".as_ptr()) as c_int;
-        let matchnr = nvim_tag_tv_dict_get_number(itemdict, c"matchnr".as_ptr()) as c_int - 1;
-        let user_data = nvim_tag_tv_dict_get_string(itemdict, c"user_data".as_ptr(), true);
+        let bufnr = tv_dict_get_number(itemdict, c"bufnr".as_ptr()) as c_int;
+        let matchnr = tv_dict_get_number(itemdict, c"matchnr".as_ptr()) as c_int - 1;
+        let user_data = tv_dict_get_string(itemdict, c"user_data".as_ptr(), true);
 
         rs_tagstack_push(wp, tagname, bufnr, matchnr, lnum, col, fnum, user_data);
 

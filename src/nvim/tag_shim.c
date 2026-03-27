@@ -318,13 +318,8 @@ int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
 
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
-void *nvim_tag_tv_dict_alloc(void) { return (void *)tv_dict_alloc(); }
 bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len) { return tv_dict_find((dict_T *)dict, key, key_len) != NULL; }
-int nvim_tag_tv_dict_add_str(void *dict, const char *key, size_t key_len, char *val) { return tv_dict_add_str((dict_T *)dict, key, key_len, val); }
 int nvim_tag_tv_dict_add_nr(void *dict, const char *key, size_t key_len, int64_t nr) { return tv_dict_add_nr((dict_T *)dict, key, key_len, (varnumber_T)nr); }
-void *nvim_tag_tv_list_alloc(int count) { return (void *)tv_list_alloc(count); }
-void nvim_tag_tv_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
-void nvim_tag_tv_list_free(void *list) { tv_list_free((list_T *)list); }
 void nvim_tag_set_errorlist(void *list, const char *title) { set_errorlist(curwin, (list_T *)list, ' ', (char *)title, NULL); }
 void nvim_tag_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
 void nvim_tag_set_topline_curwin(void) { set_topline(curwin, curwin->w_cursor.lnum); }
@@ -341,15 +336,10 @@ void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len)
 void *nvim_tag_dictitem_tv(void *di) { return (void *)&((dictitem_T *)di)->di_tv; }
 bool nvim_tag_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
 void *nvim_tag_tv_get_list(const void *tv) { return (void *)((const typval_T *)tv)->vval.v_list; }
-int64_t nvim_tag_tv_get_number(const void *tv) { return (int64_t)tv_get_number((const typval_T *)tv); }
-char *nvim_tag_tv_dict_get_string(const void *dict, const char *key, bool save) { return tv_dict_get_string((const dict_T *)dict, key, save); }
-int64_t nvim_tag_tv_dict_get_number(const void *dict, const char *key) { return (int64_t)tv_dict_get_number((const dict_T *)dict, key); }
 void *nvim_tag_tv_list_first(const void *list) { return (void *)tv_list_first((const list_T *)list); }
 void *nvim_tag_tv_list_item_next(const void *list, const void *li) { return (void *)TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
 int nvim_tag_list2fpos(void *tv, int32_t *lnum, int32_t *col, int32_t *coladd, int *fnum)
 { pos_T pos; int r = list2fpos((typval_T *)tv, &pos, fnum, NULL, false); if (r == OK) { *lnum = pos.lnum; *col = pos.col; *coladd = pos.coladd; } return r; }
-void nvim_tag_tv_list_append_number(void *list, int64_t nr) { tv_list_append_number((list_T *)list, (varnumber_T)nr); }
-void nvim_tag_tv_dict_add_list(void *dict, const char *key, size_t key_len, void *list) { tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list); }
 int nvim_tag_taggy_fmark_coladd(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.mark.coladd; }
 void nvim_tag_callback_free_tfu(void) { callback_free(&tfu_cb); }
 void nvim_tag_callback_free_buf_tfu(void *buf_void) { buf_T *buf = (buf_T *)buf_void; callback_free(&buf->b_tfu_cb); }
@@ -361,7 +351,6 @@ bool nvim_tag_set_ref_in_tfu_callback(int copyID) { return rs_set_ref_in_callbac
 void *nvim_tag_optset_get_buf(const void *args_void) { const optset_T *args = (const optset_T *)args_void; return (void *)args->os_buf; }
 const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
 bool nvim_tag_get_g_tag_at_cursor(void) { return g_tag_at_cursor; }
-void *nvim_tag_dict_alloc_lock_fixed(void) { return (void *)tv_dict_alloc_lock(VAR_FIXED); }
 void nvim_tag_dict_refcount_inc(void *dict_void) { ((dict_T *)dict_void)->dv_refcount++; }
 void nvim_tag_dict_refcount_dec(void *dict_void) { ((dict_T *)dict_void)->dv_refcount--; }
 /// Set up the args and invoke the curbuf tagfunc callback.
@@ -386,7 +375,6 @@ void nvim_tag_restore_cursor_check(void *pos_storage) { curwin->w_cursor = *(pos
 bool nvim_tag_rettv_is_null_special(const void *rettv_storage) { const typval_T *rettv = (const typval_T *)rettv_storage; return rettv->v_type == VAR_SPECIAL && rettv->vval.v_special == kSpecialVarNull; }
 void *nvim_tag_rettv_get_list(const void *rettv_storage) { const typval_T *rettv = (const typval_T *)rettv_storage; return (rettv->v_type == VAR_LIST && rettv->vval.v_list) ? (void *)rettv->vval.v_list : NULL; }
 size_t nvim_tag_pos_size(void) { return sizeof(pos_T); }
-void nvim_tag_tv_clear_rettv(void *rettv_storage) { tv_clear((typval_T *)rettv_storage); }
 size_t nvim_tag_rettv_size(void) { return sizeof(typval_T); }
 bool nvim_tag_listitem_is_dict(const void *li) { const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type == VAR_DICT; }
 void *nvim_tag_listitem_get_dict(const void *li) { const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return (tv->v_type == VAR_DICT && tv->vval.v_dict) ? (void *)tv->vval.v_dict : NULL; }
