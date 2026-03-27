@@ -1054,38 +1054,16 @@ keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
   return HI2KE(hi);
 }
 
-/// Allocate a keyentry_T, fill all fields, and insert into the given hashtab.
-/// This accessor owns the offsetof arithmetic that Rust cannot replicate.
-/// Ownership of cont_in_list_copy and next_list_copy is transferred.
-/// Sets curwin->w_s->b_syn_containedin if cont_in_list_copy is non-NULL.
-void nvim_ke_alloc_and_insert(hashtab_T *ht, const char *name_ic, int name_iclen,
-                               int id, int inc_tag, int flags, int conceal_char,
-                               int16_t *cont_in_list_copy, int16_t *next_list_copy)
-{
-  keyentry_T *const kp = xmalloc(offsetof(keyentry_T, keyword) + (size_t)name_iclen + 1);
-  STRCPY(kp->keyword, name_ic);
-  kp->k_syn.id = (int16_t)id;
-  kp->k_syn.inc_tag = inc_tag;
-  kp->flags = flags;
-  kp->k_char = conceal_char;
-  kp->k_syn.cont_in_list = cont_in_list_copy;
-  if (cont_in_list_copy != NULL) {
-    curwin->w_s->b_syn_containedin = true;
-  }
-  kp->next_list = next_list_copy;
-
-  const hash_T hash = hash_hash(kp->keyword);
-  hashitem_T *const hi = hash_lookup(ht, kp->keyword, (size_t)name_iclen, hash);
-  if (HASHITEM_EMPTY(hi)) {
-    kp->ke_next = NULL;
-    hash_add_item(ht, hi, kp->keyword, hash);
-  } else {
-    kp->ke_next = HI2KE(hi);
-    hi->hi_key = KE2HIKEY(kp);
-  }
-}
 
 hashtab_T *nvim_curwin_get_keywtab(int use_ic) { return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab; }
+hash_T nvim_hash_hash(const char *key) { return hash_hash(key); }
+hashitem_T *nvim_hash_lookup(hashtab_T *ht, const char *key, size_t len, hash_T hash) { return hash_lookup(ht, key, len, hash); }
+int nvim_hashitem_is_empty(const hashitem_T *hi) { return HASHITEM_EMPTY(hi) ? 1 : 0; }
+void nvim_hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T hash) { hash_add_item(ht, hi, key, hash); }
+keyentry_T *nvim_hikey2ke(const hashitem_T *hi) { return hi ? HI2KE(hi) : NULL; }
+char *nvim_ke2hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
+void nvim_curwin_set_containedin(void) { curwin->w_s->b_syn_containedin = true; }
+void nvim_hashitem_set_key(hashitem_T *hi, char *key) { if (hi) hi->hi_key = key; }
 
 int nvim_curwin_shares_buf_synblock(void) { return curwin->w_s == &curwin->w_buffer->b_s ? 1 : 0; }
 

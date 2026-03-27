@@ -44,17 +44,14 @@ extern "C" {
     fn nvim_ht_get_used(ht: *const c_void) -> usize;
     fn nvim_ht_find_ke(ht: *mut c_void, keyword: *mut c_char) -> KeyEntryHandle;
     fn nvim_curwin_get_keywtab(use_ic: c_int) -> *mut c_void;
-    fn nvim_ke_alloc_and_insert(
-        ht: *mut c_void,
-        name_ic: *const c_char,
-        name_iclen: c_int,
-        id: c_int,
-        inc_tag: c_int,
-        flags: c_int,
-        conceal_char: c_int,
-        cont_in_list_copy: *mut i16,
-        next_list_copy: *mut i16,
-    );
+    fn nvim_hash_hash(key: *const c_char) -> u64;
+    fn nvim_hash_lookup(ht: *mut c_void, key: *const c_char, len: usize, hash: u64) -> *mut c_void;
+    fn nvim_hashitem_is_empty(hi: *const c_void) -> c_int;
+    fn nvim_hash_add_item(ht: *mut c_void, hi: *mut c_void, key: *mut c_char, hash: u64);
+    fn nvim_hikey2ke(hi: *const c_void) -> KeyEntryHandle;
+    fn nvim_ke2hikey(kp: KeyEntryHandle) -> *mut c_char;
+    fn nvim_curwin_set_containedin();
+    fn nvim_hashitem_set_key(hi: *mut c_void, key: *mut c_char);
 }
 
 // =============================================================================
@@ -261,7 +258,7 @@ pub unsafe extern "C" fn rs_syn_hash_insert_keyword(
     if ht.is_null() {
         return;
     }
-    nvim_ke_alloc_and_insert(
+    rs_ke_alloc_and_insert(
         ht,
         name_ic,
         name_iclen,
@@ -588,6 +585,64 @@ pub unsafe fn copy_id_list_impl(list: *const i16) -> *mut i16 {
 #[no_mangle]
 pub unsafe extern "C" fn rs_copy_id_list(list: *const i16) -> *mut i16 {
     copy_id_list_impl(list)
+}
+
+/// Allocate a keyentry_T, fill all fields, and insert into the given hashtab.
+/// Rust replacement for C nvim_ke_alloc_and_insert.
+/// Ownership of cont_in_list_copy and next_list_copy is transferred.
+/// Sets curwin->w_s->b_syn_containedin if cont_in_list_copy is non-NULL.
+///
+/// # Safety
+/// All pointer arguments follow the same ownership semantics as C add_keyword.
+#[allow(clippy::too_many_arguments)]
+unsafe fn rs_ke_alloc_and_insert(
+    ht: *mut c_void,
+    name_ic: *const c_char,
+    name_iclen: c_int,
+    id: c_int,
+    inc_tag: c_int,
+    flags: c_int,
+    conceal_char: c_int,
+    cont_in_list_copy: *mut i16,
+    next_list_copy: *mut i16,
+) {
+    use crate::ffi_types::KeyEntry;
+    // Allocation: sizeof(KeyEntry) + name_iclen + 1  (matching C offsetof arithmetic)
+    let alloc_size = std::mem::size_of::<KeyEntry>() + name_iclen as usize + 1;
+    let kp_raw = xmalloc(alloc_size) as *mut KeyEntry;
+    // Copy keyword string after the fixed fields
+    let kw_dst = (kp_raw as *mut u8).add(std::mem::size_of::<KeyEntry>()) as *mut c_char;
+    std::ptr::copy_nonoverlapping(name_ic, kw_dst, name_iclen as usize);
+    *kw_dst.add(name_iclen as usize) = 0;
+    // Fill fields
+    (*kp_raw).k_syn.id = id as i16;
+    (*kp_raw).k_syn.inc_tag = inc_tag;
+    (*kp_raw).flags = flags;
+    (*kp_raw).k_char = conceal_char;
+    (*kp_raw).k_syn.cont_in_list = cont_in_list_copy;
+    if !cont_in_list_copy.is_null() {
+        nvim_curwin_set_containedin();
+    }
+    (*kp_raw).next_list = next_list_copy;
+    // Hash and insert
+    let kp = KeyEntryHandle(kp_raw);
+    let kw_ptr = kw_dst; // points to keyword in the allocation
+    let hash = nvim_hash_hash(kw_ptr);
+    let hi = nvim_hash_lookup(ht, kw_ptr, name_iclen as usize, hash);
+    if nvim_hashitem_is_empty(hi) != 0 {
+        (*kp_raw).ke_next = std::ptr::null_mut();
+        nvim_hash_add_item(ht, hi, kw_ptr, hash);
+    } else {
+        let existing = nvim_hikey2ke(hi);
+        (*kp_raw).ke_next = if existing.is_null() {
+            std::ptr::null_mut()
+        } else {
+            existing.as_ptr()
+        };
+        let new_hikey = nvim_ke2hikey(kp);
+        // Update hi->hi_key to point to new entry's keyword (chain replacement)
+        nvim_hashitem_set_key(hi, new_hikey);
+    }
 }
 
 /// Add a keyword to the current window's syntax hash table.
