@@ -1,9 +1,3 @@
-// fold_shim.c: C accessor wrappers for the Rust fold crate (nvim-fold).
-//
-// These thin wrappers provide a stable C ABI for Rust code to call into
-// Neovim's C internals.  Each function is called from one or more Rust
-// modules in src/nvim-rs/fold/.
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -42,19 +36,14 @@
 
 #include "fold_shim.c.generated.h"
 
-// VimL function accessors (for f_foldclosed, f_foldlevel, etc.)
-
 linenr_T nvim_fold_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 void nvim_fold_rettv_set_number(typval_T *rettv, varnumber_T nr) { rettv->vval.v_number = nr; }
 
-/// Set rettv type to VAR_STRING and set rettv->vval.v_string.
 void nvim_fold_rettv_init_string(typval_T *rettv, char *s)
 {
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = s;
 }
-
-// Fold FFI accessors
 
 void nvim_emsg_fold_cannot_create(void) { emsg(_("E350: Cannot create fold with current 'foldmethod'")); }
 void nvim_emsg_fold_cannot_delete(void) { emsg(_("E351: Cannot delete fold with current 'foldmethod'")); }
@@ -63,7 +52,6 @@ int nvim_win_get_w_fold_manual(win_T *wp) { return wp->w_fold_manual; }
 garray_T *nvim_win_get_folds(win_T *wp) { return &wp->w_folds; }
 int nvim_ga_len(garray_T *gap) { return gap->ga_len; }
 
-/// Get a fold_T pointer at index in a garray.
 /// Returns NULL if index is out of bounds.
 fold_T *nvim_ga_fold_at(garray_T *gap, int idx)
 {
@@ -83,8 +71,6 @@ void nvim_fold_set_fd_flags(fold_T *fp, int flags) { fp->fd_flags = (char)flags;
 int nvim_fold_get_fd_small(fold_T *fp) { return (int)fp->fd_small; }
 void nvim_fold_set_fd_small(fold_T *fp, int small) { fp->fd_small = (TriState)small; }
 
-/// Swap two fold entries in a garray.
-/// idx1 and idx2 must be valid indices.
 void nvim_fold_swap(garray_T *gap, int idx1, int idx2)
 {
   fold_T *data = (fold_T *)gap->ga_data;
@@ -107,7 +93,6 @@ void nvim_fold_extmark_splice_cols(buf_T *buf, int lnum_0, colnr_T col, colnr_T 
   extmark_splice_cols(buf, lnum_0, col, old_col, new_col, kExtmarkUndo);
 }
 
-/// Check if a buffer line ends with an unclosed comment.
 /// Wraps skip_comment(line, false, false, out_is_comment).
 void nvim_fold_skip_comment(const char *line, int *out_is_comment)
 {
@@ -129,8 +114,6 @@ void nvim_fold_set_fd_len(fold_T *fp, linenr_T len) { fp->fd_len = len; }
 fold_T *nvim_ga_get_fold_data(garray_T *gap) { return (fold_T *)gap->ga_data; }
 void nvim_ga_set_len(garray_T *gap, int len) { gap->ga_len = len; }
 
-/// Move fold entries within a garray.
-/// Moves `count` entries from src_idx to dst_idx.
 void nvim_fold_memmove(garray_T *gap, int dst_idx, int src_idx, int count)
 {
   fold_T *data = (fold_T *)gap->ga_data;
@@ -139,7 +122,6 @@ void nvim_fold_memmove(garray_T *gap, int dst_idx, int src_idx, int count)
 
 void nvim_fold_copy(fold_T *dst, const fold_T *src) { *dst = *src; }
 
-/// Free the ga_data pointer of a garray (for nested folds).
 void nvim_ga_free_data(garray_T *gap)
 {
   xfree(gap->ga_data);
@@ -162,17 +144,9 @@ void nvim_check_cursor_col(win_T *wp) { check_cursor_col(wp); }
 linenr_T nvim_fold_buf_get_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 linenr_T nvim_get_diff_context(void) { return diff_context; }
 void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot) { redraw_win_range_later(wp, top, bot); }
-
-/// Get the p_fcl option value.
 char *nvim_get_p_fcl(void) { return p_fcl; }
-
-/// Get the disable_fold_update flag.
 int nvim_get_disable_fold_update(void) { return disable_fold_update; }
-
-/// Get the need_diff_redraw flag.
 int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
-
-// Accessors for f_foldtext Rust implementation
 
 int64_t nvim_fold_get_vim_var_nr(int vv_idx) { return (int64_t)get_vim_var_nr(vv_idx); }
 void nvim_fold_set_vim_var_nr(int vv_idx, int64_t val) { set_vim_var_nr(vv_idx, (varnumber_T)val); }
@@ -181,13 +155,10 @@ const char *nvim_fold_ngettext_foldtext(int count) { return NGETTEXT("+-%s%3d li
 const char *nvim_fold_ngettext_default(int count) { return NGETTEXT("+--%3d line folded", "+--%3d lines folded ", count); }
 linenr_T nvim_fold_get_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
-// Accessors for Rust fold level calculation
-
 int nvim_syn_get_foldlevel(win_T *wp, linenr_T lnum) { return syn_get_foldlevel(wp, lnum); }
 int nvim_fold_eval_foldexpr(win_T *wp, int *out_char) { return eval_foldexpr(wp, out_char); }
 
-/// Save curwin/curbuf and set them to wp/wp->w_buffer.
-/// Returns the old curwin pointer.
+/// Save curwin/curbuf and set them to wp/wp->w_buffer. Returns old curwin.
 win_T *nvim_fold_save_curwin(win_T *wp)
 {
   win_T *saved = curwin;
@@ -196,7 +167,6 @@ win_T *nvim_fold_save_curwin(win_T *wp)
   return saved;
 }
 
-/// Restore curwin/curbuf from saved_win.
 void nvim_fold_restore_curwin(win_T *saved_win)
 {
   curwin = saved_win;
@@ -207,10 +177,7 @@ int nvim_fold_get_keytyped(void) { return (int)KeyTyped; }
 void nvim_fold_set_keytyped(int val) { KeyTyped = (bool)val; }
 void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum) { set_vim_var_nr(VV_LNUM, (varnumber_T)lnum); }
 
-// Accessors for get_foldtext Rust migration (display.rs)
-
-/// Save current_sctx into *out_saved (sctx_T), then set current_sctx from
-/// wp->w_p_script_ctx[kWinOptFoldtext].
+/// Save current_sctx into *out_saved, then set from wp->w_p_script_ctx[kWinOptFoldtext].
 void nvim_fold_save_sctx_foldtext(win_T *wp, void *out_saved)
 {
   *(sctx_T *)out_saved = current_sctx;
@@ -219,9 +186,7 @@ void nvim_fold_save_sctx_foldtext(win_T *wp, void *out_saved)
 
 void nvim_fold_restore_sctx(void *saved) { current_sctx = *(sctx_T *)saved; }
 
-/// Call parse_virt_text on an Array embedded in an Object.
 /// obj_ptr must point to an Object with type == kObjectTypeArray.
-/// vt_out receives the VirtText result.
 /// *out_error is set to 1 if parse_virt_text fails.
 void nvim_fold_parse_virt_text_from_obj(void *obj_ptr, void *vt_out, int *out_error)
 {
