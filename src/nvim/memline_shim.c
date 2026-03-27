@@ -237,123 +237,18 @@ void nvim_siemsg_ml_get_cannot_find_line(int64_t lnum, buf_T *buf)
          lnum, buf->b_fnum, NameBuff);
 }
 
-void nvim_swapfile_info_and_print(char *fname)
-{
-  StringBuilder msg = KV_INITIAL_VALUE;
-  kv_resize(msg, IOSIZE);
-  int proc_running_unused = 0;
-  rs_swapfile_info(fname, &msg, &proc_running_unused);
-  bool need_clear = false;
-  msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
-  kv_destroy(msg);
-}
-
 void nvim_sb_append_str(void *sb, const char *s) { kv_printf(*(StringBuilder *)sb, "%s", s); }
 
-int64_t nvim_swapfile_get_file_info(const char *fname, char *uname_buf, size_t uname_len,
-                                    int *uname_found)
+#ifdef UNIX
+int nvim_swapfile_get_uname(const char *fname, char *uname_buf, size_t uname_len)
 {
   FileInfo file_info;
-  *uname_found = 0;
   if (!os_fileinfo(fname, &file_info)) {
     return 0;
   }
-#ifdef UNIX
-  if (os_get_uname((uv_uid_t)file_info.stat.st_uid, uname_buf, uname_len) == OK) {
-    *uname_found = 1;
-  }
+  return os_get_uname((uv_uid_t)file_info.stat.st_uid, uname_buf, uname_len) == OK ? 1 : 0;
+}
 #endif
-  return (int64_t)file_info.stat.st_mtim.tv_sec;
-}
-
-void nvim_sb_append_ctime(void *sb, int64_t mtime)
-{
-  time_t x = (time_t)mtime;
-  char ctime_buf[100];
-  kv_printf(*(StringBuilder *)sb, "%s", os_ctime_r(&x, ctime_buf, sizeof(ctime_buf), true));
-}
-
-typedef enum {
-  SB_MSG_OWNED_BY = 0,
-  SB_MSG_DATED,
-  SB_MSG_VIM3,
-  SB_MSG_NOT_NVIM,
-  SB_MSG_GARBLED,
-  SB_MSG_FILENAME,
-  SB_MSG_MODIFIED,
-  SB_MSG_USER,
-  SB_MSG_HOST,
-  SB_MSG_PID,
-  SB_MSG_STILL_RUNNING,
-  SB_MSG_NOT_USABLE,
-  SB_MSG_CANNOT_READ,
-  SB_MSG_CANNOT_OPEN,
-} sb_msg_id_T;
-
-void nvim_sb_swapinfo_msg(void *sb, int msg_id, const char *str_arg, int int_arg)
-{
-  switch (msg_id) {
-  case SB_MSG_OWNED_BY:
-    kv_printf(*(StringBuilder *)sb, "%s%s", _("          owned by: "), str_arg);
-    break;
-  case SB_MSG_DATED:
-    if (int_arg) {
-      kv_printf(*(StringBuilder *)sb, _("   dated: "));
-    } else {
-      kv_printf(*(StringBuilder *)sb, _("             dated: "));
-    }
-    break;
-  case SB_MSG_VIM3:
-    kv_printf(*(StringBuilder *)sb, _("         [from Vim version 3.0]"));
-    break;
-  case SB_MSG_NOT_NVIM:
-    kv_printf(*(StringBuilder *)sb, _("         [does not look like a Nvim swap file]"));
-    break;
-  case SB_MSG_GARBLED:
-    kv_printf(*(StringBuilder *)sb, _("         [garbled strings (not nul terminated)]"));
-    break;
-  case SB_MSG_FILENAME:
-    kv_printf(*(StringBuilder *)sb, _("         file name: "));
-    if (str_arg[0] == NUL) {
-      kv_printf(*(StringBuilder *)sb, _("[No Name]"));
-    } else {
-      kv_printf(*(StringBuilder *)sb, "%s", str_arg);
-    }
-    break;
-  case SB_MSG_MODIFIED:
-    kv_printf(*(StringBuilder *)sb, _("\n          modified: "));
-    kv_printf(*(StringBuilder *)sb, int_arg ? _("YES") : _("no"));
-    break;
-  case SB_MSG_USER:
-    kv_printf(*(StringBuilder *)sb, _("\n         user name: "));
-    kv_printf(*(StringBuilder *)sb, "%s", str_arg);
-    break;
-  case SB_MSG_HOST:
-    if (int_arg) {
-      kv_printf(*(StringBuilder *)sb, _("   host name: "));
-    } else {
-      kv_printf(*(StringBuilder *)sb, _("\n         host name: "));
-    }
-    kv_printf(*(StringBuilder *)sb, "%s", str_arg);
-    break;
-  case SB_MSG_PID:
-    kv_printf(*(StringBuilder *)sb, _("\n        process ID: "));
-    kv_printf(*(StringBuilder *)sb, "%d", int_arg);
-    break;
-  case SB_MSG_STILL_RUNNING:
-    kv_printf(*(StringBuilder *)sb, _(" (STILL RUNNING)"));
-    break;
-  case SB_MSG_NOT_USABLE:
-    kv_printf(*(StringBuilder *)sb, _("\n         [not usable on this computer]"));
-    break;
-  case SB_MSG_CANNOT_READ:
-    kv_printf(*(StringBuilder *)sb, _("         [cannot be read]"));
-    break;
-  case SB_MSG_CANNOT_OPEN:
-    kv_printf(*(StringBuilder *)sb, _("         [cannot be opened]"));
-    break;
-  }
-}
 
 int nvim_buf_get_ml_stack_top(buf_T *buf) { return buf->b_ml.ml_stack_top; }
 infoptr_T *nvim_buf_get_ml_stack_ip(buf_T *buf, int idx) { return &(buf->b_ml.ml_stack[idx]); }

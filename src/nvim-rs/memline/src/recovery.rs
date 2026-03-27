@@ -111,8 +111,7 @@ extern "C" {
     /// Append an allocated string to a Vim list (takes ownership)
     fn tv_list_append_allocated_string(list: *mut c_void, s: *mut c_char);
 
-    /// Print swap file info (handles StringBuilder internally)
-    fn nvim_swapfile_info_and_print(fname: *mut c_char);
+    // nvim_swapfile_info_and_print migrated to Rust (swapfile_info_and_print)
 
     // -------------------------------------------------------------------------
     // Memory allocation
@@ -1384,7 +1383,7 @@ pub unsafe extern "C" fn rs_recover_names(
                     msg_puts(c".    ".as_ptr());
                     msg_puts(path_tail(*files.add(i as usize)));
                     msg_putchar(c_int::from(b'\n'));
-                    nvim_swapfile_info_and_print(*files.add(i as usize));
+                    swapfile_info_and_print(*files.add(i as usize));
                     i += 1;
                 }
             } else {
@@ -1553,25 +1552,21 @@ pub unsafe extern "C" fn rs_swapfile_info(
     let mut mtime: i64 = 0;
 
     // Get file date and owner (UNIX: get owner name)
-    let mut uname_buf = [0i8; 40]; // B0_UNAME_SIZE
-    let mut uname_found: c_int = 0;
-    let file_mtime =
-        nvim_swapfile_get_file_info(fname, uname_buf.as_mut_ptr(), 40, &raw mut uname_found);
-
+    let (file_mtime, uname_opt) = swapfile_get_file_info(fname);
     if file_mtime != 0 {
         mtime = file_mtime;
-        if uname_found != 0 {
-            nvim_sb_swapinfo_msg(sb, SB_MSG_OWNED_BY, uname_buf.as_ptr(), 0);
+        if let Some(ref uname_buf) = uname_opt {
+            sb_append_owned_by(sb, uname_buf.as_ptr());
         }
-        nvim_sb_swapinfo_msg(sb, SB_MSG_DATED, std::ptr::null(), uname_found);
-        nvim_sb_append_ctime(sb, mtime);
+        sb_append_dated(sb, uname_opt.is_some());
+        sb_append_ctime(sb, mtime);
     }
 
     // Open swap file and read block 0
     // O_RDONLY = 0
     let fd = os_open(fname, 0, 0);
     if fd < 0 {
-        nvim_sb_swapinfo_msg(sb, SB_MSG_CANNOT_OPEN, std::ptr::null(), 0);
+        nvim_sb_append_str(sb, gettext(c"         [cannot be opened]".as_ptr()));
         nvim_sb_append_str(sb, c"\n".as_ptr());
         return mtime;
     }
@@ -1584,7 +1579,7 @@ pub unsafe extern "C" fn rs_swapfile_info(
     if bytes_read as usize != b0_size {
         // cast_sign_loss: allowed because bytes_read < 0 means error (mismatch with b0_size)
         xfree(b0_ptr);
-        nvim_sb_swapinfo_msg(sb, SB_MSG_CANNOT_READ, std::ptr::null(), 0);
+        nvim_sb_append_str(sb, gettext(c"         [cannot be read]".as_ptr()));
         nvim_sb_append_str(sb, c"\n".as_ptr());
         return mtime;
     }
@@ -1599,54 +1594,80 @@ pub unsafe extern "C" fn rs_swapfile_info(
     let is_vim3 = (0..7).all(|i| *version_ptr.add(i) as u8 == vim3[i]);
 
     if is_vim3 {
-        nvim_sb_swapinfo_msg(sb, SB_MSG_VIM3, std::ptr::null(), 0);
+        nvim_sb_append_str(sb, gettext(c"         [from Vim version 3.0]".as_ptr()));
     } else if rs_ml_check_b0_id(b0) != 0 {
-        nvim_sb_swapinfo_msg(sb, SB_MSG_NOT_NVIM, std::ptr::null(), 0);
+        nvim_sb_append_str(
+            sb,
+            gettext(c"         [does not look like a Nvim swap file]".as_ptr()),
+        );
     } else if rs_ml_check_b0_strings(b0) != 0 {
-        nvim_sb_swapinfo_msg(sb, SB_MSG_GARBLED, std::ptr::null(), 0);
+        nvim_sb_append_str(
+            sb,
+            gettext(c"         [garbled strings (not nul terminated)]".as_ptr()),
+        );
     } else {
         // Print filename
         let fname_ptr = nvim_b0_get_fname_ptr(b0);
-        nvim_sb_swapinfo_msg(sb, SB_MSG_FILENAME, fname_ptr, 0);
+        nvim_sb_append_str(sb, gettext(c"         file name: ".as_ptr()));
+        if *fname_ptr == 0 {
+            nvim_sb_append_str(sb, gettext(c"[No Name]".as_ptr()));
+        } else {
+            nvim_sb_append_str(sb, fname_ptr);
+        }
 
         // Print modified status
         let dirty = nvim_b0_get_dirty(b0);
-        nvim_sb_swapinfo_msg(
+        nvim_sb_append_str(sb, gettext(c"\n          modified: ".as_ptr()));
+        nvim_sb_append_str(
             sb,
-            SB_MSG_MODIFIED,
-            std::ptr::null(),
-            c_int::from(dirty != 0),
+            gettext(if dirty != 0 {
+                c"YES".as_ptr()
+            } else {
+                c"no".as_ptr()
+            }),
         );
 
         // Print user name if present
         let uname_ptr = nvim_b0_get_uname_ptr(b0);
         let uname_present = *uname_ptr != 0;
         if uname_present {
-            nvim_sb_swapinfo_msg(sb, SB_MSG_USER, uname_ptr, 0);
+            nvim_sb_append_str(sb, gettext(c"\n         user name: ".as_ptr()));
+            nvim_sb_append_str(sb, uname_ptr);
         }
 
         // Print host name if present
         let hname_ptr = nvim_b0_get_hname_ptr(b0);
         let hname_present = *hname_ptr != 0;
         if hname_present {
-            nvim_sb_swapinfo_msg(sb, SB_MSG_HOST, hname_ptr, c_int::from(uname_present));
+            if uname_present {
+                nvim_sb_append_str(sb, gettext(c"   host name: ".as_ptr()));
+            } else {
+                nvim_sb_append_str(sb, gettext(c"\n         host name: ".as_ptr()));
+            }
+            nvim_sb_append_str(sb, hname_ptr);
         }
 
         // Print process ID if present
         let pid_ptr = nvim_b0_get_pid_ptr(b0);
         let pid_val = rs_char_to_long(pid_ptr);
         if pid_val != 0 {
-            nvim_sb_swapinfo_msg(sb, SB_MSG_PID, std::ptr::null(), pid_val as c_int);
+            nvim_sb_append_str(sb, gettext(c"\n        process ID: ".as_ptr()));
+            // Format the PID as decimal
+            let pid_cstr = CString::new(format!("{pid_val}")).unwrap_or_default();
+            nvim_sb_append_str(sb, pid_cstr.as_ptr());
             let running = rs_swapfile_proc_running(b0, fname);
             *proc_running_out = running;
             if running != 0 {
-                nvim_sb_swapinfo_msg(sb, SB_MSG_STILL_RUNNING, std::ptr::null(), 0);
+                nvim_sb_append_str(sb, gettext(c" (STILL RUNNING)".as_ptr()));
             }
         }
 
         // Print if not usable on this computer (wrong byte order)
         if rs_b0_magic_wrong(b0) != 0 {
-            nvim_sb_swapinfo_msg(sb, SB_MSG_NOT_USABLE, std::ptr::null(), 0);
+            nvim_sb_append_str(
+                sb,
+                gettext(c"\n         [not usable on this computer]".as_ptr()),
+            );
         }
     }
 
@@ -1769,42 +1790,99 @@ extern "C" {
     fn nvim_b0_get_ino(b0: *mut c_void) -> *mut c_char;
 
     // -------------------------------------------------------------------------
-    // Phase 2 (pass 3): StringBuilder and swapfile_info helpers
-    // -------------------------------------------------------------------------
+    fn nvim_sb_append_str(sb: *mut c_void, s: *const c_char);
 
-    /// Get file mtime and owner name for swapfile_info display.
-    /// Returns mtime in seconds, or 0 if file not found.
-    /// uname_found is set to 1 if uname_buf was filled (UNIX only).
-    fn nvim_swapfile_get_file_info(
+    /// Format a time_t as ctime string (with trailing newline)
+    fn os_ctime_r(
+        clock: *const i64,
+        result: *mut c_char,
+        result_len: usize,
+        add_newline: bool,
+    ) -> *mut c_char;
+
+    /// Print a multi-line message to the message area
+    fn nvim_msg_multiline(s: *const c_char, hl_id: c_int);
+}
+
+#[cfg(unix)]
+extern "C" {
+    /// Get username for file owner (UNIX only). Returns 1 on success.
+    fn nvim_swapfile_get_uname(
         fname: *const c_char,
         uname_buf: *mut c_char,
         uname_len: usize,
-        uname_found: *mut c_int,
-    ) -> i64;
-
-    /// Append the ctime string for an mtime value to a StringBuilder.
-    fn nvim_sb_append_ctime(sb: *mut c_void, mtime: i64);
-
-    // Message dispatch for swapfile_info (replaces 14 individual wrappers)
-    fn nvim_sb_swapinfo_msg(sb: *mut c_void, msg_id: c_int, str_arg: *const c_char, int_arg: c_int);
-    fn nvim_sb_append_str(sb: *mut c_void, s: *const c_char);
+    ) -> c_int;
 }
 
-// sb_msg_id_T enum values (must match C enum in memline_shim.c)
-const SB_MSG_OWNED_BY: c_int = 0;
-const SB_MSG_DATED: c_int = 1;
-const SB_MSG_VIM3: c_int = 2;
-const SB_MSG_NOT_NVIM: c_int = 3;
-const SB_MSG_GARBLED: c_int = 4;
-const SB_MSG_FILENAME: c_int = 5;
-const SB_MSG_MODIFIED: c_int = 6;
-const SB_MSG_USER: c_int = 7;
-const SB_MSG_HOST: c_int = 8;
-const SB_MSG_PID: c_int = 9;
-const SB_MSG_STILL_RUNNING: c_int = 10;
-const SB_MSG_NOT_USABLE: c_int = 11;
-const SB_MSG_CANNOT_READ: c_int = 12;
-const SB_MSG_CANNOT_OPEN: c_int = 13;
+// =============================================================================
+// Swapfile info StringBuilder helpers (replace C dispatch functions)
+// =============================================================================
+
+/// Append "owned by: <uname>" to a StringBuilder.
+unsafe fn sb_append_owned_by(sb: *mut c_void, uname: *const c_char) {
+    nvim_sb_append_str(sb, gettext(c"          owned by: ".as_ptr()));
+    nvim_sb_append_str(sb, uname);
+}
+
+/// Append "dated: " or "             dated: " to a StringBuilder.
+unsafe fn sb_append_dated(sb: *mut c_void, after_uname: bool) {
+    if after_uname {
+        nvim_sb_append_str(sb, gettext(c"   dated: ".as_ptr()));
+    } else {
+        nvim_sb_append_str(sb, gettext(c"             dated: ".as_ptr()));
+    }
+}
+
+/// Append ctime string for mtime to a StringBuilder.
+unsafe fn sb_append_ctime(sb: *mut c_void, mtime: i64) {
+    let mut ctime_buf = [0i8; 100];
+    let s = os_ctime_r(
+        &raw const mtime,
+        ctime_buf.as_mut_ptr(),
+        ctime_buf.len(),
+        true,
+    );
+    nvim_sb_append_str(sb, s);
+}
+
+/// Get file mtime and owner (UNIX only) for swapfile_info display.
+///
+/// Returns `(mtime, uname)` where uname is Some if the owner name was found.
+/// # Safety
+/// `fname` must be a valid C string.
+unsafe fn swapfile_get_file_info(fname: *const c_char) -> (i64, Option<[i8; 40]>) {
+    let mtime = nvim_get_file_mtime(fname);
+    if mtime == 0 {
+        return (0, None);
+    }
+    #[cfg(unix)]
+    {
+        let mut uname_buf = [0i8; 40];
+        if nvim_swapfile_get_uname(fname, uname_buf.as_mut_ptr(), uname_buf.len()) != 0 {
+            return (mtime, Some(uname_buf));
+        }
+    }
+    (mtime, None)
+}
+
+/// Print swapfile info to the message area.
+///
+/// Allocates a StringBuilder, calls rs_swapfile_info, then prints via msg_multiline.
+/// # Safety
+/// `fname` must be a valid C string.
+unsafe fn swapfile_info_and_print(fname: *mut c_char) {
+    extern "C" {
+        fn nvim_alloc_stringbuilder_iosize() -> *mut c_void;
+        fn nvim_sb_get_items(sb: *mut c_void) -> *const c_char;
+        fn nvim_free_stringbuilder(sb: *mut c_void);
+    }
+    let sb = nvim_alloc_stringbuilder_iosize();
+    let mut proc_running_unused: c_int = 0;
+    rs_swapfile_info(fname, sb, &raw mut proc_running_unused);
+    let items = nvim_sb_get_items(sb);
+    nvim_msg_multiline(items, 0);
+    nvim_free_stringbuilder(sb);
+}
 
 use crate::types::{
     B0_FNAME_SIZE_CRYPT, B0_HNAME_SIZE, B0_MAGIC_CHAR, B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT,

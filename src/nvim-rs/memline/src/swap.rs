@@ -1688,8 +1688,13 @@ extern "C" {
     /// Get file mtime (0 if not found)
     fn nvim_get_file_mtime(fname: *const c_char) -> i64;
 
-    /// Append ctime string to StringBuilder
-    fn nvim_sb_append_ctime(sb: *mut c_void, mtime: i64);
+    /// Format a time_t as ctime string (with trailing newline)
+    fn os_ctime_r(
+        clock: *const i64,
+        result: *mut c_char,
+        result_len: usize,
+        add_newline: bool,
+    ) -> *mut c_char;
 
     /// copy_option_part wrapper
     fn copy_option_part(
@@ -1805,7 +1810,16 @@ unsafe fn attention_message(
         nvim_sb_append(sb, c"      CANNOT BE FOUND".as_ptr());
     } else {
         nvim_sb_append(sb, c"             dated: ".as_ptr());
-        nvim_sb_append_ctime(sb, file_mtime);
+        {
+            let mut ctime_buf = [0i8; 100];
+            let s = os_ctime_r(
+                &raw const file_mtime,
+                ctime_buf.as_mut_ptr(),
+                ctime_buf.len(),
+                true,
+            );
+            nvim_sb_append(sb, s);
+        }
         if swap_mtime != 0 && file_mtime > swap_mtime {
             nvim_sb_append(sb, c"      NEWER than swap file!\n".as_ptr());
         }
