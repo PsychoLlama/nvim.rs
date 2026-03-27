@@ -806,8 +806,40 @@ pub unsafe extern "C" fn rs_get_vimoption(
     vimoption2dict_rs(opt_idx, opt_flags, buf, win, arena)
 }
 
-/// Rust implementation of get_all_vimoptions.
+// C helpers for rs_get_winbuf_options
+extern "C" {
+    fn nvim_tv_dict_alloc_for_winbuf() -> *mut c_void;
+    fn nvim_get_varp_current(opt_idx: OptIndex) -> *mut c_void;
+    fn nvim_dict_add_option_varp(dict: *mut c_void, opt_idx: OptIndex, varp: *mut c_void);
+}
+
+/// Rust implementation of get_winbuf_options.
+/// Returns a dict_T* containing all buffer-local or window-local options.
 ///
+/// # Safety
+/// Calls C allocation and dict functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_winbuf_options(bufopt: c_int) -> *mut c_void {
+    use crate::opt_index::K_OPT_COUNT;
+    let d = nvim_tv_dict_alloc_for_winbuf();
+    for opt_idx in 0..K_OPT_COUNT {
+        let scope = if bufopt != 0 {
+            K_OPT_SCOPE_BUF
+        } else {
+            K_OPT_SCOPE_WIN
+        };
+        if option_has_scope(opt_idx, scope) == 0 {
+            continue;
+        }
+        let varp = nvim_get_varp_current(opt_idx);
+        if !varp.is_null() {
+            nvim_dict_add_option_varp(d, opt_idx, varp);
+        }
+    }
+    d
+}
+
+/// Rust implementation of get_all_vimoptions.
 /// Returns a Dict containing metadata for all options.
 ///
 /// # Safety

@@ -437,27 +437,19 @@ int option_set_callback_func(char *optval, Callback *optcb)
   return OK;
 }
 
-dict_T *get_winbuf_options(const int bufopt)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  dict_T *const d = tv_dict_alloc();
-
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    vimoption_T *opt = &options[opt_idx];
-
-    if ((bufopt && (option_has_scope(opt_idx, kOptScopeBuf)))
-        || (!bufopt && (option_has_scope(opt_idx, kOptScopeWin)))) {
-      void *varp = get_varp(opt);
-
-      if (varp != NULL) {
-        typval_T opt_tv = optval_as_tv(rs_optval_from_varp(opt_idx, varp), true);
-        tv_dict_add_tv(d, opt->fullname, strlen(opt->fullname), &opt_tv);
-      }
-    }
-  }
-
-  return d;
+// C helper: allocate a dict_T for use by rs_get_winbuf_options
+void *nvim_tv_dict_alloc_for_winbuf(void) { return tv_dict_alloc(); }
+// C helper: get current varp for opt_idx (local/global depending on curbuf/curwin)
+void *nvim_get_varp_current(OptIndex opt_idx) { return get_varp(&options[opt_idx]); }
+// C helper: convert OptVal from varp and add to dict under fullname
+void nvim_dict_add_option_varp(void *dict, OptIndex opt_idx, void *varp) {
+  typval_T opt_tv = optval_as_tv(rs_optval_from_varp(opt_idx, varp), true);
+  tv_dict_add_tv((dict_T *)dict, options[opt_idx].fullname, strlen(options[opt_idx].fullname), &opt_tv);
 }
+
+extern void *rs_get_winbuf_options(int bufopt);
+dict_T *get_winbuf_options(const int bufopt)
+  FUNC_ATTR_WARN_UNUSED_RESULT { return (dict_T *)rs_get_winbuf_options(bufopt); }
 
 /// Apply EVENT_SYNTAX autocmds for the given buffer.
 /// @param force  whether to force the autocmd (value_changed || syn_recursive == 1)
