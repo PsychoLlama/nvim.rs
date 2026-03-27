@@ -47,9 +47,7 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 #include "nvim/normal.h"
-#include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
-#include "nvim/ex_docmd.h"
 #include "nvim/ex_eval.h"
 #include "nvim/indent.h"
 #include "nvim/memory.h"
@@ -62,14 +60,7 @@
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 extern void rs_clearFolding(win_T *win);
 extern int rs_win_locked(win_T *wp);
-extern int rs_win_valid(win_T *win);
-extern int rs_get_last_winid(void);
 extern int rs_last_window(win_T *win);
-extern int rs_win_valid_any_tab(win_T *win);
-extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
-extern void rs_diff_buf_delete(buf_T *buf);
-extern int rs_diffopt_hiddenoff(void);
-extern int rs_buf_effective_action(buf_T *buf, int action);
 // buffer.c non-static helpers
 extern void free_buffer(buf_T *buf);
 extern void free_buffer_stuff(buf_T *buf, int free_flags);
@@ -463,7 +454,6 @@ void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual 
 fmark_T *nvim_get_no_position_ptr(void)
 { static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL }; return &no_position; }
 
-// Phase 2 accessors: changedtick_di watcher machinery
 void nvim_buf_changedtick_di_tv_copy(buf_T *buf, void *out)
 { memcpy(out, &buf->changedtick_di.di_tv, sizeof(typval_T)); }
 void nvim_buf_changedtick_di_set_number(buf_T *buf, int64_t val)
@@ -530,7 +520,6 @@ int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
 { return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM,
                   (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
 
-// Phase 3 accessors: set_curbuf helpers
 void nvim_setpcmark(void) { setpcmark(); }
 void nvim_buflist_altfpos_curwin(void) { buflist_altfpos(curwin); }
 void nvim_set_visual_reselect(int val) { VIsual_reselect = val != 0; }
@@ -751,9 +740,6 @@ void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
 void nvim_buf_clearFolding_all_windows(buf_T *buf)
 { FOR_ALL_TAB_WINDOWS(tp, win) { if (win->w_buffer == buf) { rs_clearFolding(win); } } }
 
-// close_buffer migrated to Rust (src/nvim-rs/buffer/src/close.rs).
-
-// Phase 4 accessors: close_buffer helpers
 void nvim_buf_b_locked_split_inc(buf_T *buf) { buf->b_locked_split++; }
 void nvim_buf_b_locked_split_dec(buf_T *buf) { buf->b_locked_split--; }
 void nvim_emsg_auabort(void) { emsg(_(e_auabort)); }
