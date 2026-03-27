@@ -1677,6 +1677,7 @@ pub mod jump_machinery {
         // Phase 4 accessors (for qf_jump_open_window)
         fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
         fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
+        fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
         fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
         fn nvim_qf_get_qfl_type(qfl: *const c_void) -> c_int;
         fn nvim_qfline_get_type(qfp: QfLineHandle) -> i8;
@@ -1724,7 +1725,6 @@ pub mod jump_machinery {
         // Phase 14 Phase 2: print_msg inlined accessors
         static mut msg_scrolled: c_int;
         fn nvim_update_screen();
-        fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
         #[link_name = "nvim_qfline_get_cleared"]
         fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
         #[link_name = "nvim_qfline_get_type"]
@@ -1886,7 +1886,7 @@ pub mod jump_machinery {
             ""
         };
 
-        let count = nvim_qf_get_curlist_count(qi);
+        let count = nvim_qf_get_count(nvim_qf_get_curlist(qi).cast());
 
         // Build the header prefix (mirrors C vim_snprintf(IObuff, ...))
         let header = format!("({qf_index} of {count}){cleared_str}{type_str}: ");

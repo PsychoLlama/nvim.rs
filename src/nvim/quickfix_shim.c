@@ -296,7 +296,6 @@ bool nvim_qfl_set_qftf_cb_from_tv(void *qfl_void, void *tv_void)
 
 void nvim_qf_tv_set_number(void *tv_void, int64_t nr) { if (tv_void != NULL) ((typval_T *)tv_void)->vval.v_number = (varnumber_T)nr; }
 
-bool nvim_qf_tv_is_list_type(const void *tv_void) { return tv_void != NULL && ((const typval_T *)tv_void)->v_type == VAR_LIST; }
 int nvim_qf_get_valid_bufnr(const void *qi_void)
 { if (qi_void == NULL) { return 0; } const qf_info_T *qi = (const qf_info_T *)qi_void; return buflist_findnr(qi->qf_bufnr) != NULL ? qi->qf_bufnr : 0; }
 
@@ -475,7 +474,6 @@ bool nvim_qf_do_search_pattern(const char *pat)
   }
   return true;
 }
-int nvim_qf_get_curlist_count(const void *qi_void) { const qf_info_T *qi = (const qf_info_T *)qi_void; return qi->qf_lists[qi->qf_curlist].qf_count; }
 const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
 void *nvim_qf_get_p_swb(void) { return p_swb; }
@@ -608,8 +606,6 @@ void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
 bool nvim_os_fileinfo_link_exists(const char *name) { FileInfo fi; return os_fileinfo_link(name, &fi); }
-unsigned nvim_qf_get_curlist_id(const void *qi_void) { const qf_info_T *qi = (const qf_info_T *)qi_void; return qi->qf_lists[qi->qf_curlist].qf_id; }
-
 void nvim_win_set_p_lhi(void *win, int v) { ((win_T *)win)->w_p_lhi = (OptInt)v; }
 
 char *nvim_eap_get_cmdlinep_deref_make(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
