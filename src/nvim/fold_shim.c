@@ -1,15 +1,12 @@
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "klib/kvec.h"
 #include "nvim/api/extmark.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/cursor.h"
-#include "nvim/decoration.h"
 #include "nvim/diff.h"
 #include "nvim/drawscreen.h"
 #include "nvim/errors.h"
@@ -17,21 +14,16 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/vars.h"
 #include "nvim/extmark.h"
-#include "nvim/extmark_defs.h"
 #include "nvim/fold.h"
 #include "nvim/garray.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/indent.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/ops.h"
-#include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
-#include "nvim/pos_defs.h"
 #include "nvim/syntax.h"
-#include "nvim/types_defs.h"
 #include "nvim/undo.h"
 
 #include "fold_shim.c.generated.h"
