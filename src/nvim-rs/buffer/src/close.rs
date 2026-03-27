@@ -54,6 +54,23 @@ impl BufRef {
 }
 
 // =============================================================================
+// Event constants (from auevents_enum.generated.h)
+// =============================================================================
+
+const EVENT_BUFWINLEAVE: c_int = 17;
+const EVENT_BUFHIDDEN: c_int = 6;
+
+// =============================================================================
+// Buffer flags (from buffer_defs.h)
+// =============================================================================
+
+const BF_CHECK_RO: c_int = 0x02;
+const BF_NEVERLOADED: c_int = 0x04;
+
+// free_buffer_stuff flags (from buffer.h kBff* enum)
+// kBffClearWinInfo = 1, kBffInitChangedtick = 2
+
+// =============================================================================
 // External C Functions
 // =============================================================================
 
@@ -87,6 +104,7 @@ extern "C" {
     ) -> bool;
 
     fn rs_win_valid_any_tab(win: *mut c_void) -> c_int;
+    fn rs_one_window_in_tab(win: *mut c_void, tp: *mut c_void) -> c_int;
     fn nvim_win_get_buffer(win: *mut c_void) -> BufHandle;
     fn goto_tabpage_win(tab: *mut c_void, win: *mut c_void);
 
@@ -95,11 +113,40 @@ extern "C" {
     fn aborting() -> c_int;
 
     fn rs_diff_buf_delete(buf: BufHandle);
+    fn rs_diffopt_hiddenoff() -> c_int;
     fn nvim_reset_synblock_if_curwin_buf(buf: BufHandle);
     fn nvim_buf_clearFolding_all_windows(buf: BufHandle);
     fn ml_close(buf: BufHandle, del_file: bool);
     fn u_clearallandblockfree(buf: BufHandle);
     fn nvim_syntax_clear_buf(buf: BufHandle);
+
+    // Phase 4: close_buffer helpers
+    fn nvim_buf_b_locked_inc(buf: BufHandle);
+    fn nvim_buf_b_locked_dec(buf: BufHandle);
+    fn nvim_buf_b_locked_split_inc(buf: BufHandle);
+    fn nvim_buf_b_locked_split_dec(buf: BufHandle);
+    fn nvim_emsg_auabort();
+    fn nvim_buflist_setfpos_win(buf: BufHandle, win: *mut c_void);
+    fn nvim_buf_b_nwindows_dec_safe(buf: BufHandle);
+    fn nvim_terminal_close_buf(buf: BufHandle);
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_get_entered_free_all_mem() -> c_int;
+    fn nvim_end_visual_mode();
+    fn nvim_buf_set_flags(buf: BufHandle, flags: c_int);
+    fn nvim_buf_clear_file(buf: BufHandle);
+    fn nvim_win_set_buffer_null(win: *mut c_void);
+    fn nvim_mark_forget_file_all_tabs(fnum: c_int);
+    fn nvim_buf_wipe_free(buf: BufHandle);
+    fn nvim_buf_free_stuff_del(buf: BufHandle);
+    fn nvim_set_last_cursor(win: *mut c_void);
+    fn nvim_buf_b_ffname_is_null(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_p_bl(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_b_p_initialized(buf: BufHandle, val: c_int);
+    fn can_unload_buffer(buf: BufHandle) -> bool;
+
+    fn rs_buf_effective_action(buf: BufHandle, action: c_int) -> c_int;
+    fn buf_freeall(buf: BufHandle, flags: c_int);
 }
 
 // =============================================================================
@@ -219,4 +266,224 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
 
     nvim_syntax_clear_buf(buf); // reset syntax info
     nvim_buf_flags_and(buf, !BF_READERR); // a read error is no longer relevant
+}
+
+// =============================================================================
+// close_buffer
+// =============================================================================
+
+/// Close the link to a buffer.
+///
+/// - `win`: If not NULL, set `b_last_cursor`.
+/// - `action`: What to do when there is no longer a window for the buffer:
+///   - 0 (`DOBUF_NONE`):   buffer becomes hidden
+///   - 1 (`DOBUF_UNLOAD`): buffer is unloaded
+///   - 2 (`DOBUF_DEL`):    buffer is unloaded and removed from buffer list
+///   - 3 (`DOBUF_WIPE`):   buffer is unloaded and really deleted
+///
+///   The `bufhidden` option can force freeing and deleting.
+/// - `abort_if_last`: If true, do not close the buffer if autocommands cause
+///   there to be only one window with this buffer.
+/// - `ignore_abort`: If true, don't abort even when `aborting()` returns true.
+///
+/// Returns true if `b_nwindows` was decremented directly by this call.
+///
+/// # Safety
+///
+/// Must be called on the main thread with valid Neovim state.
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "close_buffer")]
+pub unsafe extern "C" fn rs_close_buffer(
+    win: *mut c_void,
+    buf: BufHandle,
+    action: c_int,
+    abort_if_last: bool,
+    ignore_abort: bool,
+) -> bool {
+    let action = rs_buf_effective_action(buf, action);
+    let unload_buf = action != 0;
+    let del_buf = action == 2 || action == 3; // DOBUF_DEL || DOBUF_WIPE
+    let wipe_buf = action == 3; // DOBUF_WIPE
+
+    let the_curwin = nvim_get_curwin();
+    let is_curwin = !the_curwin.is_null() && nvim_win_get_buffer(the_curwin) == buf;
+    let the_curtab = nvim_get_curtab();
+
+    // Disallow deleting the buffer when it is locked (already being closed or
+    // halfway a command that relies on it). Unloading is allowed.
+    if (del_buf || wipe_buf) && !can_unload_buffer(buf) {
+        return false;
+    }
+
+    // Check no autocommands closed the window
+    if !win.is_null() && rs_win_valid_any_tab(win) != 0 {
+        // Set b_last_cursor when closing the last window for the buffer.
+        if nvim_buf_get_nwindows(buf) == 1 {
+            nvim_set_last_cursor(win);
+        }
+        nvim_buflist_setfpos_win(buf, win);
+    }
+
+    let mut bufref = BufRef::zeroed();
+    set_bufref(&raw mut bufref, buf);
+
+    // When the buffer is no longer in a window, trigger BufWinLeave
+    if nvim_buf_get_nwindows(buf) == 1 {
+        nvim_buf_b_locked_inc(buf);
+        nvim_buf_b_locked_split_inc(buf);
+        if apply_autocmds(
+            EVENT_BUFWINLEAVE,
+            nvim_buf_get_b_fname(buf),
+            nvim_buf_get_b_fname(buf),
+            false,
+            buf,
+        ) && nvim_bufref_valid(&raw const bufref) == 0
+        {
+            // Autocommands deleted the buffer.
+            nvim_emsg_auabort();
+            return false;
+        }
+        nvim_buf_b_locked_dec(buf);
+        nvim_buf_b_locked_split_dec(buf);
+        if abort_if_last && !win.is_null() && rs_one_window_in_tab(win, std::ptr::null_mut()) != 0 {
+            // Autocommands made this the only window.
+            nvim_emsg_auabort();
+            return false;
+        }
+
+        // When the buffer becomes hidden, but is not unloaded, trigger BufHidden
+        if !unload_buf {
+            nvim_buf_b_locked_inc(buf);
+            nvim_buf_b_locked_split_inc(buf);
+            if apply_autocmds(
+                EVENT_BUFHIDDEN,
+                nvim_buf_get_b_fname(buf),
+                nvim_buf_get_b_fname(buf),
+                false,
+                buf,
+            ) && nvim_bufref_valid(&raw const bufref) == 0
+            {
+                // Autocommands deleted the buffer.
+                nvim_emsg_auabort();
+                return false;
+            }
+            nvim_buf_b_locked_dec(buf);
+            nvim_buf_b_locked_split_dec(buf);
+            if abort_if_last
+                && !win.is_null()
+                && rs_one_window_in_tab(win, std::ptr::null_mut()) != 0
+            {
+                // Autocommands made this the only window.
+                nvim_emsg_auabort();
+                return false;
+            }
+        }
+        // autocmds may abort script processing
+        if !ignore_abort && aborting() != 0 {
+            return false;
+        }
+    }
+
+    // If the buffer was in curwin and the window has changed, go back to that
+    // window, if it still exists.
+    if is_curwin && nvim_get_curwin() != the_curwin && rs_win_valid_any_tab(the_curwin) != 0 {
+        nvim_block_autocmds();
+        goto_tabpage_win(the_curtab, the_curwin);
+        nvim_unblock_autocmds();
+    }
+
+    let nwindows = nvim_buf_get_nwindows(buf);
+
+    // Decrease the link count from windows (unless not in any window)
+    nvim_buf_b_nwindows_dec_safe(buf);
+
+    if rs_diffopt_hiddenoff() != 0 && !unload_buf && nvim_buf_get_nwindows(buf) == 0 {
+        rs_diff_buf_delete(buf); // Clear 'diff' for hidden buffer.
+    }
+
+    // Return when a window is displaying the buffer or when it's not unloaded.
+    if nvim_buf_get_nwindows(buf) > 0 || !unload_buf {
+        return true;
+    }
+
+    nvim_terminal_close_buf(buf);
+
+    // Always remove the buffer when there is no file name.
+    let del_buf = if nvim_buf_b_ffname_is_null(buf) != 0 {
+        true
+    } else {
+        del_buf
+    };
+
+    // Free all things allocated for this buffer.
+    let is_curbuf = buf == nvim_get_curbuf();
+
+    // When closing the current buffer stop Visual mode before freeing anything.
+    if is_curbuf && nvim_get_VIsual_active() != 0 && nvim_get_entered_free_all_mem() == 0 {
+        nvim_end_visual_mode();
+    }
+
+    nvim_buf_set_nwindows(buf, nwindows);
+
+    buf_freeall(
+        buf,
+        (if del_buf { BFA_DEL } else { 0 })
+            + (if wipe_buf { BFA_WIPE } else { 0 })
+            + (if ignore_abort { BFA_IGNORE_ABORT } else { 0 }),
+    );
+
+    if nvim_bufref_valid(&raw const bufref) == 0 {
+        // Autocommands may have deleted the buffer.
+        return false;
+    }
+    // autocmds may abort script processing.
+    if !ignore_abort && aborting() != 0 {
+        return false;
+    }
+
+    // It's possible that autocommands change curbuf to the one being deleted.
+    if buf == nvim_get_curbuf() && !is_curbuf {
+        return false;
+    }
+
+    let clear_w_buf =
+        !win.is_null() && rs_win_valid_any_tab(win) != 0 && nvim_win_get_buffer(win) == buf;
+
+    // Autocommands may have opened or closed windows for this buffer.
+    // Decrement the count for the close we do here.
+    nvim_buf_b_nwindows_dec_safe(buf);
+
+    // Remove the buffer from the list.
+    if wipe_buf {
+        if clear_w_buf {
+            nvim_win_set_buffer_null(win);
+        }
+        // Do not wipe out the buffer if it is used in a window.
+        if nvim_buf_get_nwindows(buf) > 0 {
+            return true;
+        }
+        nvim_mark_forget_file_all_tabs(nvim_buf_get_fnum(buf));
+        nvim_buf_wipe_free(buf);
+    } else {
+        if del_buf {
+            // Free all internal variables and reset option values, to make
+            // ":bdel" compatible with Vim 5.7.
+            nvim_buf_free_stuff_del(buf);
+
+            // Make it look like a new buffer.
+            nvim_buf_set_flags(buf, BF_CHECK_RO | BF_NEVERLOADED);
+
+            // Init the options when loaded again.
+            nvim_buf_set_b_p_initialized(buf, 0);
+        }
+        nvim_buf_clear_file(buf);
+        if clear_w_buf {
+            nvim_win_set_buffer_null(win);
+        }
+        if del_buf {
+            nvim_buf_set_b_p_bl(buf, 0);
+        }
+    }
+    // NOTE: at this point "curbuf" may be invalid!
+    true
 }
