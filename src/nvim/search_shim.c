@@ -978,14 +978,7 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
 }
 
 // Accessor wrappers for C globals still needed by Rust crates
-
-/// Call iemsg() for the restore mismatch error.
-void nvim_call_iemsg_restore_mismatch(void)
-{
-  iemsg("restore_last_search_pattern() called more often than"
-        " save_last_search_pattern()");
-}
-
+void nvim_call_iemsg_restore_mismatch(void) { iemsg("restore_last_search_pattern() called more often than save_last_search_pattern()"); }
 /// Emit "no previous substitute regular expression" error.
 void nvim_emsg_nopresub(void) { emsg(_(e_nopresub)); }
 /// Set rc_did_emsg = true.
@@ -996,358 +989,144 @@ int nvim_get_rc_did_emsg(void) { return rc_did_emsg; }
 void nvim_clear_rc_did_emsg(void) { rc_did_emsg = false; }
 /// Add search pattern to history.
 void nvim_search_add_to_history(const char *pat, size_t patlen) { add_to_history(HIST_SEARCH, pat, patlen, true, NUL); }
-/// Check if cmdmod has keeppatterns flag.
 int nvim_get_cmdmod_keeppatterns(void) { return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0; }
-/// Compile regex: call vim_regcomp and set regmatch fields.
-/// Returns 1 on success, 0 on failure.
 int nvim_search_regcomp_compile(const char *pat, int magic, regmmatch_T *regmatch)
 {
-  regmatch->rmm_ic = ignorecase(pat);
-  regmatch->rmm_maxcol = 0;
+  regmatch->rmm_ic = ignorecase(pat); regmatch->rmm_maxcol = 0;
   regmatch->regprog = vim_regcomp(pat, magic ? RE_MAGIC : 0);
   return regmatch->regprog != NULL ? 1 : 0;
 }
-
-/// Increment emsg_off.
 void nvim_inc_emsg_off(void) { emsg_off++; }
-/// Decrement emsg_off.
 void nvim_dec_emsg_off(void) { emsg_off--; }
-// rs_searchit accessor functions
+int nvim_search_regcomp(char *pat, size_t patlen, int pat_use, int options, void *regmatch_out) { return search_regcomp(pat, patlen, NULL, RE_SEARCH, pat_use, options, (regmmatch_T *)regmatch_out); }
+int nvim_searchit_regexec_multi(void *regmatch, void *win, void *buf, linenr_T lnum, colnr_T col, void *tm, int *timed_out) { return vim_regexec_multi((regmmatch_T *)regmatch, (win_T *)win, (buf_T *)buf, lnum, col, (proftime_T *)tm, timed_out); }
 
-
-
-/// Compile search pattern for rs_searchit.
-/// Returns FAIL (0) or OK (1). regmatch is an opaque handle.
-int nvim_search_regcomp(char *pat, size_t patlen, int pat_use, int options, void *regmatch_out)
-{
-  return search_regcomp(pat, patlen, NULL, RE_SEARCH, pat_use, options, (regmmatch_T *)regmatch_out);
-}
-
-/// Execute multi-line regex match with timeout support.
-int nvim_searchit_regexec_multi(void *regmatch, void *win, void *buf,
-                                linenr_T lnum, colnr_T col,
-                                void *tm, int *timed_out)
-{
-  return vim_regexec_multi((regmmatch_T *)regmatch, (win_T *)win, (buf_T *)buf,
-                           lnum, col, (proftime_T *)tm, timed_out);
-}
-
-/// Free regprog from regmmatch_T.
-void nvim_searchit_regfree(void *regmatch)
-{
-  regmmatch_T *rm = (regmmatch_T *)regmatch;
-  vim_regfree(rm->regprog);
-}
-
-/// Check if regprog is NULL (pattern was freed during search).
+void nvim_searchit_regfree(void *regmatch) { vim_regfree(((regmmatch_T *)regmatch)->regprog); }
 int nvim_regmatch_regprog_is_null(const void *regmatch) { return ((const regmmatch_T *)regmatch)->regprog == NULL ? 1 : 0; }
-/// Get rmm_matchcol from regmmatch_T.
 colnr_T nvim_regmatch_rmm_matchcol(const void *regmatch) { return ((const regmmatch_T *)regmatch)->rmm_matchcol; }
-/// Check if p_cpo contains CPO_SEARCH ('c').
 int nvim_cpo_has_search(void) { return vim_strchr(p_cpo, CPO_SEARCH) != NULL ? 1 : 0; }
-/// Check if profile time limit has been passed.
-int nvim_profile_passed_limit(void *tm)
-{
-  if (tm == NULL) {
-    return 0;
-  }
-  return profile_passed_limit(*(proftime_T *)tm) ? 1 : 0;
-}
+int nvim_profile_passed_limit(void *tm) { return tm != NULL && profile_passed_limit(*(proftime_T *)tm) ? 1 : 0; }
 
-/// Emit "Pattern not found" error with the pattern from Rust-owned mr_pattern.
 void nvim_searchit_emsg_patnotf(int p_ws_val, linenr_T lnum)
 {
-  // get_search_pat is the export_name for rs_get_mr_pattern (reads Rust MR_PATTERN)
   char *pat = get_search_pat();
-  if (p_ws_val) {
-    semsg(_(e_patnotf2), pat);
-  } else if (lnum == 0) {
-    semsg(_(e_search_hit_top_without_match_for_str), pat);
-  } else {
-    semsg(_(e_search_hit_bottom_without_match_for_str), pat);
-  }
+  if (p_ws_val) { semsg(_(e_patnotf2), pat); }
+  else if (lnum == 0) { semsg(_(e_search_hit_top_without_match_for_str), pat); }
+  else { semsg(_(e_search_hit_bottom_without_match_for_str), pat); }
 }
-
-/// Emit "E383: Invalid search string" error using Rust-owned mr_pattern.
 void nvim_searchit_emsg_invalid(void) { semsg(_("E383: Invalid search string: %s"), get_search_pat()); }
-/// Emit "Interrupted" error.
 void nvim_searchit_emsg_interr(void) { emsg(_(e_interr)); }
-/// Give search wrap-around warning message.
 void nvim_searchit_give_warning(int dir) { give_warning(_(dir == BACKWARD ? top_bot_msg : bot_top_msg), true); }
-/// Allocate a regmmatch_T on the heap and return as opaque handle.
-void *nvim_regmmatch_alloc(void)
-{
-  regmmatch_T *rm = xcalloc(1, sizeof(regmmatch_T));
-  return rm;
-}
-
-/// Free a heap-allocated regmmatch_T.
+void *nvim_regmmatch_alloc(void) { return xcalloc(1, sizeof(regmmatch_T)); }
 void nvim_regmmatch_free(void *rm) { xfree(rm); }
-// rs_do_search accessor functions
+int nvim_do_search_check_lineoff(void) { extern int rs_get_search_offset_line(int idx); return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0; }
 
-/// Check if Rust-owned spats[0].off.line is set and CPO_LINEOFF is in p_cpo.
-int nvim_do_search_check_lineoff(void)
-{
-  extern int rs_get_search_offset_line(int idx);
-  return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0;
-}
-
-/// hasFolding forward: find end of fold at *lnum, update *lnum. Returns 1 if folded.
 int nvim_do_search_hasFolding_fwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, NULL, lnum) ? 1 : 0; }
-/// hasFolding backward: find start of fold at *lnum, update *lnum. Returns 1 if folded.
 int nvim_do_search_hasFolding_bwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, lnum, NULL) ? 1 : 0; }
-/// Check if fdo_flags has kOptFdoFlagSearch set.
 int nvim_fdo_has_search_flag(void) { return (fdo_flags & kOptFdoFlagSearch) != 0 ? 1 : 0; }
-/// hasFolding check-only on curwin->w_cursor.lnum. Returns 1 if folded.
 int nvim_hasFolding_cursor(void) { return hasFolding(curwin, curwin->w_cursor.lnum, NULL, NULL) ? 1 : 0; }
-/// Get curwin->w_cursor.coladd.
 int nvim_get_curwin_cursor_coladd(void) { return (int)curwin->w_cursor.coladd; }
-
-/// Turn hlsearch back on if needed.
-void nvim_do_search_hlsearch_on(int options)
-{
-  if (no_hlsearch && !(options & SEARCH_KEEP)) {
-    redraw_all_later(UPD_SOME_VALID);
-    set_no_hlsearch(false);
-  }
-}
-
-/// Call skip_regexp_ex for do_search pattern parsing.
-/// Returns: pointer to end of regexp.  Sets *newp if copy was made.
-char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp)
-{
-  return skip_regexp_ex(pat, delim, rs_magic_isset(), newp, NULL, NULL);
-}
-
+void nvim_do_search_hlsearch_on(int options) { if (no_hlsearch && !(options & SEARCH_KEEP)) { redraw_all_later(UPD_SOME_VALID); set_no_hlsearch(false); } }
+char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp) { return skip_regexp_ex(pat, delim, rs_magic_isset(), newp, NULL, NULL); }
 void nvim_do_search_set_searchcmdlen(int val) { searchcmdlen = val; }
 int nvim_do_search_get_searchcmdlen(void) { return searchcmdlen; }
-
-// findmatchlimit accessor functions
-
-/// Get ml_get(lnum) for curbuf.
 char *nvim_search_ml_get(linenr_T lnum) { return ml_get(lnum); }
-/// Get ml_get_len(lnum) for curbuf.
 colnr_T nvim_search_ml_get_len(linenr_T lnum) { return ml_get_len(lnum); }
-/// Get curbuf->b_ml.ml_line_count.
 linenr_T nvim_search_get_line_count(void) { return curbuf->b_ml.ml_line_count; }
-/// Get curbuf->b_p_mps.
 char *nvim_search_get_curbuf_b_p_mps(void) { return curbuf->b_p_mps; }
-/// Get curbuf->b_p_lisp.
 int nvim_search_get_curbuf_b_p_lisp(void) { return curbuf->b_p_lisp ? 1 : 0; }
-/// Get curwin->w_p_rl.
 int nvim_search_get_curwin_w_p_rl(void) { return curwin->w_p_rl ? 1 : 0; }
-/// Wrap check_linecomment().
 int nvim_search_check_linecomment(const char *line) { return check_linecomment(line); }
-/// Set oap->motion_type.
-void nvim_search_set_oap_motion_type(void *oap, int motion_type)
-{
-  if (oap != NULL) {
-    ((oparg_T *)oap)->motion_type = (MotionType)motion_type;
-  }
-}
-
-/// Get a pointer to cap->nchar_composing.
+void nvim_search_set_oap_motion_type(void *oap, int motion_type) { if (oap != NULL) { ((oparg_T *)oap)->motion_type = (MotionType)motion_type; } }
 const char *nvim_cap_get_nchar_composing_ptr(cmdarg_T *cap) { return cap ? cap->nchar_composing : NULL; }
 // update_search_stat / cmdline_search_stat accessors
 
 void nvim_set_p_ws(int val) { p_ws = val; }
 long nvim_get_p_msc(void) { return (long)p_msc; }
-/// Get buf_get_changedtick(curbuf).
 int nvim_curbuf_get_changedtick(void) { return (int)buf_get_changedtick(curbuf); }
-/// Get curbuf as opaque pointer for identity comparison.
 void *nvim_search_get_curbuf_ptr(void) { return (void *)curbuf; }
-/// Call searchit from Rust for update_search_stat.
-/// This wraps the pos_T marshalling.
 int nvim_searchit_for_stat(int *pos_lnum, int *pos_col, int *pos_coladd,
                            int *end_lnum, int *end_col, int *end_coladd)
 {
   pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
   pos_T endpos = { 0, 0, 0 };
-  int retval = searchit(curwin, curbuf, &pos, &endpos,
-                         FORWARD, NULL, 0, 1, SEARCH_KEEP, RE_LAST, NULL);
-  *pos_lnum = pos.lnum;
-  *pos_col = pos.col;
-  *pos_coladd = pos.coladd;
-  *end_lnum = endpos.lnum;
-  *end_col = endpos.col;
-  *end_coladd = endpos.coladd;
+  int retval = searchit(curwin, curbuf, &pos, &endpos, FORWARD, NULL, 0, 1, SEARCH_KEEP, RE_LAST, NULL);
+  *pos_lnum = pos.lnum; *pos_col = pos.col; *pos_coladd = pos.coladd;
+  *end_lnum = endpos.lnum; *end_col = endpos.col; *end_coladd = endpos.coladd;
   return retval;
 }
-
-/// Set profile limit for search stat timeout.
 proftime_T nvim_profile_setlimit_ms(int timeout) { return profile_setlimit(timeout); }
-/// Check if profile time limit has been passed (for search stat).
 int nvim_profile_passed_limit_val(proftime_T start) { return profile_passed_limit(start) ? 1 : 0; }
-/// Free a pointer allocated by nvim_stat_copy_spats_pat.
 void nvim_stat_free_pat(char *pat) { xfree(pat); }
-/// Check if curwin->w_p_rl is set and curwin->w_p_rlc starts with 's'.
 int nvim_curwin_rl_with_rlc_s(void) { return (curwin->w_p_rl && *curwin->w_p_rlc == 's') ? 1 : 0; }
-/// Display the cmdline search stat message.
-/// Handles msg_hist_off, msg_ext_overwrite, msg_ext_set_kind, give_warning.
 void nvim_cmdline_stat_display(const char *msgbuf)
 {
-  msg_hist_off = true;
-  msg_ext_overwrite = true;
-  msg_ext_set_kind("search_count");
-  give_warning(msgbuf, false);
-  msg_hist_off = false;
+  msg_hist_off = true; msg_ext_overwrite = true;
+  msg_ext_set_kind("search_count"); give_warning(msgbuf, false); msg_hist_off = false;
 }
-
-// Integration function accessors
-
 int nvim_is_pos_in_string(const char *line, int col) { return is_pos_in_string(line, (colnr_T)col); }
-/// Call search_regcomp for is_zero_width.
-int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch)
-{
-  return search_regcomp((char *)pat, patlen, NULL, RE_SEARCH, RE_SEARCH,
-                         SEARCH_KEEP, (regmmatch_T *)regmatch);
-}
-
-/// Set regmatch.startpos[0].col.
+int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch) { return search_regcomp((char *)pat, patlen, NULL, RE_SEARCH, RE_SEARCH, SEARCH_KEEP, (regmmatch_T *)regmatch); }
 void nvim_regmatch_set_startcol(void *regmatch, int col) { ((regmmatch_T *)regmatch)->startpos[0].col = (colnr_T)col; }
-/// Get regmatch.startpos[0].col.
 int nvim_regmatch_get_startcol(const void *regmatch) { return ((const regmmatch_T *)regmatch)->startpos[0].col; }
-/// Get regmatch.startpos[0].lnum.
 int nvim_regmatch_get_startlnum(const void *regmatch) { return ((const regmmatch_T *)regmatch)->startpos[0].lnum; }
-/// Get regmatch.endpos[0].col.
 int nvim_regmatch_get_endcol(const void *regmatch) { return ((const regmmatch_T *)regmatch)->endpos[0].col; }
-/// Get regmatch.endpos[0].lnum.
 int nvim_regmatch_get_endlnum(const void *regmatch) { return ((const regmmatch_T *)regmatch)->endpos[0].lnum; }
-/// Call vim_regexec_multi for is_zero_width.
-int nvim_is_zero_width_regexec(void *regmatch, int lnum, int col)
-{
-  return vim_regexec_multi((regmmatch_T *)regmatch, curwin, curbuf,
-                            (linenr_T)lnum, (colnr_T)col, NULL, NULL);
-}
-
-/// Call searchit for is_zero_width (pos_T marshalling).
-int nvim_is_zero_width_searchit(const char *pat, size_t patlen, int dir,
-                                int flags, int *pos_lnum, int *pos_col,
-                                int *pos_coladd)
+int nvim_is_zero_width_regexec(void *regmatch, int lnum, int col) { return vim_regexec_multi((regmmatch_T *)regmatch, curwin, curbuf, (linenr_T)lnum, (colnr_T)col, NULL, NULL); }
+int nvim_is_zero_width_searchit(const char *pat, size_t patlen, int dir, int flags, int *pos_lnum, int *pos_col, int *pos_coladd)
 {
   pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
-  int result = searchit(curwin, curbuf, &pos, NULL, (Direction)dir,
-                        (char *)pat, patlen, 1,
-                        SEARCH_KEEP + flags, RE_SEARCH, NULL);
-  *pos_lnum = pos.lnum;
-  *pos_col = pos.col;
-  *pos_coladd = pos.coladd;
+  int result = searchit(curwin, curbuf, &pos, NULL, (Direction)dir, (char *)pat, patlen, 1, SEARCH_KEEP + flags, RE_SEARCH, NULL);
+  *pos_lnum = pos.lnum; *pos_col = pos.col; *pos_coladd = pos.coladd;
   return result;
 }
-
-/// Get buf->b_ml.ml_line_count.
 int nvim_buf_ml_line_count(void *buf) { return ((buf_T *)buf)->b_ml.ml_line_count; }
-/// Get ml_get_buf(buf, lnum) and skipwhite offset.
 const char *nvim_buf_get_line_skipwhite(void *buf, int lnum, int *skipwhite_off)
 {
   char *ptr = ml_get_buf((buf_T *)buf, (linenr_T)lnum);
-  char *p = skipwhite(ptr);
-  *skipwhite_off = (int)(p - ptr);
-  return p;
+  char *p = skipwhite(ptr); *skipwhite_off = (int)(p - ptr); return p;
 }
-
-/// Compare with mb_strcmp_ic.
 int nvim_mb_strcmp_ic_wrapper(int ic, const char *s1, const char *s2) { return mb_strcmp_ic((bool)ic, s1, s2); }
-/// Compare with mb_strnicmp.
 int nvim_mb_strnicmp_wrapper(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
 int nvim_search_get_p_ic(void) { return p_ic ? 1 : 0; }
-/// Call shortmess(SHM_SEARCH).
 int nvim_shortmess_search(void) { return shortmess(SHM_SEARCH) ? 1 : 0; }
-/// Give top_bot_msg or bot_top_msg warning.
 void nvim_give_search_wrap_warning(int at_top) { give_warning(_(at_top ? top_bot_msg : bot_top_msg), true); }
-// showmatch accessors
-
 int nvim_showmatch_get_p_ri(void) { return p_ri ? 1 : 0; }
-/// Call findmatch(NULL, NUL) and check if the match is visible.
-/// Returns: -1 = no match pair found (beep), 0 = match not visible, 1 = visible.
-/// On success (1), out_lnum/out_col/out_coladd are set.
 int nvim_showmatch_find_and_check(int *out_lnum, int *out_col, int *out_coladd)
 {
   pos_T *lpos = findmatch(NULL, NUL);
-  if (lpos == NULL) {
-    return -1;  // no match
-  }
-
-  if (lpos->lnum < curwin->w_topline || lpos->lnum >= curwin->w_botline) {
-    return 0;  // not visible vertically
-  }
-
+  if (lpos == NULL) { return -1; }
+  if (lpos->lnum < curwin->w_topline || lpos->lnum >= curwin->w_botline) { return 0; }
   colnr_T vcol = 0;
-  if (!curwin->w_p_wrap) {
-    getvcol(curwin, lpos, NULL, &vcol, NULL);
-  }
-
-  bool col_visible = curwin->w_p_wrap
-                     || (vcol >= curwin->w_leftcol
-                         && vcol < curwin->w_leftcol + curwin->w_view_width);
-  if (!col_visible) {
-    return 0;  // not visible horizontally
-  }
-
-  *out_lnum = lpos->lnum;
-  *out_col = lpos->col;
-  *out_coladd = lpos->coladd;
+  if (!curwin->w_p_wrap) { getvcol(curwin, lpos, NULL, &vcol, NULL); }
+  bool col_visible = curwin->w_p_wrap || (vcol >= curwin->w_leftcol && vcol < curwin->w_leftcol + curwin->w_view_width);
+  if (!col_visible) { return 0; }
+  *out_lnum = lpos->lnum; *out_col = lpos->col; *out_coladd = lpos->coladd;
   return 1;
 }
-
-/// Beep for showmatch.
 void nvim_showmatch_beep(void) { vim_beep(kOptBoFlagShowmatch); }
-// f_searchcount accessors
-
-// current_search accessors
-
-/// Get curwin->w_cursor.coladd.
 colnr_T nvim_search_get_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
-/// incl() on a position passed by components.
-/// Updates *lnum, *col, *coladd in place.
 int nvim_search_incl_pos(int *lnum, int *col, int *coladd)
 {
-  pos_T pos = { *lnum, *col, *coladd };
-  int ret = incl(&pos);
-  *lnum = pos.lnum;
-  *col = pos.col;
-  *coladd = pos.coladd;
-  return ret;
+  pos_T pos = { *lnum, *col, *coladd }; int ret = incl(&pos);
+  *lnum = pos.lnum; *col = pos.col; *coladd = pos.coladd; return ret;
 }
-
-/// decl() on a position passed by components.
-/// Updates *lnum, *col, *coladd in place.
 int nvim_search_decl_pos(int *lnum, int *col, int *coladd)
 {
-  pos_T pos = { *lnum, *col, *coladd };
-  int ret = decl(&pos);
-  *lnum = pos.lnum;
-  *col = pos.col;
-  *coladd = pos.coladd;
-  return ret;
+  pos_T pos = { *lnum, *col, *coladd }; int ret = decl(&pos);
+  *lnum = pos.lnum; *col = pos.col; *coladd = pos.coladd; return ret;
 }
-
-/// Call searchit for current_search.
-/// Marshals pos and end_pos from/to integer components.
-/// dir: 1 = FORWARD, 0 = BACKWARD.
-/// flags: SEARCH_* flags.
-/// pat/patlen: the search pattern (from Rust-owned SPATS[last_idx]).
-/// Returns 1 if found, 0 if not found.
 int nvim_search_current_searchit(int dir, int flags, int count,
                                  int *pos_lnum, int *pos_col, int *pos_coladd,
                                  int *end_lnum, int *end_col, int *end_coladd)
 {
-  // Read pat/patlen from Rust-owned state
   extern const char *rs_get_last_used_pattern(void);
   extern size_t rs_get_last_used_pattern_len(void);
   const char *pat = rs_get_last_used_pattern();
   size_t patlen = rs_get_last_used_pattern_len();
   pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
   pos_T end_pos = { *end_lnum, *end_col, *end_coladd };
-  int result = searchit(curwin, curbuf, &pos, &end_pos,
-                        dir ? FORWARD : BACKWARD,
-                        (char *)pat, patlen,
-                        count, SEARCH_KEEP | flags, RE_SEARCH, NULL);
-  *pos_lnum = pos.lnum;
-  *pos_col = pos.col;
-  *pos_coladd = pos.coladd;
-  *end_lnum = end_pos.lnum;
-  *end_col = end_pos.col;
-  *end_coladd = end_pos.coladd;
+  int result = searchit(curwin, curbuf, &pos, &end_pos, dir ? FORWARD : BACKWARD, (char *)pat, patlen, count, SEARCH_KEEP | flags, RE_SEARCH, NULL);
+  *pos_lnum = pos.lnum; *pos_col = pos.col; *pos_coladd = pos.coladd;
+  *end_lnum = end_pos.lnum; *end_col = end_pos.col; *end_coladd = end_pos.coladd;
   return result;
 }
