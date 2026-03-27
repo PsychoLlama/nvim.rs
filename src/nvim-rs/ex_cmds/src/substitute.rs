@@ -159,7 +159,7 @@ extern "C" {
     fn messaging() -> c_int;
     /// Format and display the substitution count message (NGETTEXT in C).
     /// Returns true if message was displayed.
-    fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
+    fn nvim_excmds_format_sub_msg(count_only: c_int, nsubs: c_int, nlines: c_int) -> c_int;
     /// emsg(_(e_interr)) wrapper.
     fn nvim_excmds_emsg_interr();
 
@@ -691,7 +691,7 @@ pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
         || count_only;
 
     if threshold_met && messaging {
-        nvim_excmds_format_sub_msg(c_int::from(count_only));
+        nvim_excmds_format_sub_msg(c_int::from(count_only), cur_nsubs, cur_nlines);
         return true;
     }
     if got_int {

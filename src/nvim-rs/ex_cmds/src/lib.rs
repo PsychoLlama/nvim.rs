@@ -1005,7 +1005,7 @@ extern "C" {
     /// Set sub_nlines global.
     pub fn nvim_excmds_set_sub_nlines(val: c_int);
     /// Format and display the substitution count message (NGETTEXT in C).
-    pub fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
+    pub fn nvim_excmds_format_sub_msg(count_only: c_int, nsubs: c_int, nlines: c_int) -> c_int;
     /// Call nvim_docmd_ex_may_print_impl(eap) -- implemented in Rust (ex_docmd crate).
     pub fn nvim_docmd_ex_may_print_impl(eap: *mut ExArgHandle);
     /// save_re_pat: save regexp pattern (direct C call)

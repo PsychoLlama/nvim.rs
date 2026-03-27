@@ -223,27 +223,26 @@ extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *addition
 int append_indent = 0;
 int global_need_beginline = 0;
 
-bool nvim_excmds_format_sub_msg(bool count_only)
+bool nvim_excmds_format_sub_msg(bool count_only, int nsubs, int nlines)
 {
   if (got_int) {
     STRCPY(msg_buf, _("(Interrupted) "));
   } else {
     *msg_buf = NUL;
   }
-
   char *msg_single = count_only
                      ? NGETTEXT("%" PRId64 " match on %" PRId64 " line",
-                                "%" PRId64 " matches on %" PRId64 " line", sub_nsubs)
+                                "%" PRId64 " matches on %" PRId64 " line", nsubs)
                      : NGETTEXT("%" PRId64 " substitution on %" PRId64 " line",
-                                "%" PRId64 " substitutions on %" PRId64 " line", sub_nsubs);
+                                "%" PRId64 " substitutions on %" PRId64 " line", nsubs);
   char *msg_plural = count_only
                      ? NGETTEXT("%" PRId64 " match on %" PRId64 " lines",
-                                "%" PRId64 " matches on %" PRId64 " lines", sub_nsubs)
+                                "%" PRId64 " matches on %" PRId64 " lines", nsubs)
                      : NGETTEXT("%" PRId64 " substitution on %" PRId64 " lines",
-                                "%" PRId64 " substitutions on %" PRId64 " lines", sub_nsubs);
+                                "%" PRId64 " substitutions on %" PRId64 " lines", nsubs);
   vim_snprintf_add(msg_buf, sizeof(msg_buf),
-                   NGETTEXT(msg_single, msg_plural, sub_nlines),
-                   (int64_t)sub_nsubs, (int64_t)sub_nlines);
+                   NGETTEXT(msg_single, msg_plural, nlines),
+                   (int64_t)nsubs, (int64_t)nlines);
   if (msg(msg_buf, 0)) {
     set_keep_msg(msg_buf, 0);
   }
