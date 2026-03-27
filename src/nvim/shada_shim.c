@@ -43,17 +43,13 @@
 #include "nvim/os/time_defs.h"
 #include "nvim/path.h"
 #include "nvim/pos_defs.h"
-#include "nvim/regexp.h"
 #include "nvim/register.h"
 #include "nvim/search.h"
 #include "nvim/vim_defs.h"
 
-extern int rs_magic_isset(void);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern var_flavour_T rs_var_flavour(const char *varname);
-extern void rs_sub_get_replacement(void *ret_sub);
-extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
 
 void nvim_shada_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
 void nvim_shada_semsg_2s(const char *fmt, const char *a, const char *b) { semsg(fmt, a, b); }
@@ -560,14 +556,6 @@ void nvim_shada_buf_changelist_entry(const void *buf, int idx, int64_t *out_lnum
   *out_ts = fm.timestamp; *out_additional = fm.additional_data;
 }
 
-void nvim_shada_sub_get_replacement(const char **out_sub, uint64_t *out_ts, void **out_additional)
-{
-  typedef struct { char *sub; uint64_t timestamp; void *additional_data; } SubRepC;
-  SubRepC sub;
-  rs_sub_get_replacement(&sub);
-  *out_sub = sub.sub; *out_ts = sub.timestamp; *out_additional = sub.additional_data;
-}
-
 void nvim_shada_curwin_cursor(int64_t *out_lnum, int32_t *out_col) { *out_lnum = (int64_t)curwin->w_cursor.lnum; *out_col = (int32_t)curwin->w_cursor.col; }
 
 void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname, bool *is_new, const char **out_key)
@@ -651,43 +639,6 @@ void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype, void **out_
     *out_container = t->vval.v_list;
     *out_copy_id = t->vval.v_list->lv_copyID;
   }
-}
-
-void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitute)
-{
-  SearchPattern spat = (SearchPattern) {
-    .magic = entry->data.search_pattern.magic,
-    .no_scs = !entry->data.search_pattern.smartcase,
-    .off = {
-      .dir = entry->data.search_pattern.search_backward ? '?' : '/',
-      .line = entry->data.search_pattern.has_line_offset,
-      .end = entry->data.search_pattern.place_cursor_at_end,
-      .off = entry->data.search_pattern.offset,
-    },
-    .pat = entry->data.search_pattern.pat.data,
-    .patlen = entry->data.search_pattern.pat.size,
-    .additional_data = entry->additional_data,
-    .timestamp = entry->timestamp,
-  };
-  if (is_substitute) {
-    set_substitute_pattern(spat);
-  } else {
-    set_search_pattern(spat);
-  }
-}
-
-void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
-{
-  rs_sub_set_replacement(entry->data.sub_string.sub, (uint64_t)entry->timestamp,
-                         entry->additional_data);
-  regtilde(entry->data.sub_string.sub, rs_magic_isset(), false);
-}
-
-int nvim_shada_entry_get_reg_type_valid(const ShadaEntry *entry)
-{
-  return (entry->data.reg.type == kMTCharWise
-          || entry->data.reg.type == kMTLineWise
-          || entry->data.reg.type == kMTBlockWise) ? 1 : 0;
 }
 
 uint64_t nvim_shada_op_reg_get_timestamp(char name) { const yankreg_T *const reg = op_reg_get(name); return reg ? (uint64_t)reg->timestamp : 0; }

@@ -618,12 +618,12 @@ extern "C" {
     fn nvim_shada_jumplist_marklist_insert(i: c_int) -> c_int;
     fn nvim_shada_changelist_marklist_insert(buf: *mut c_void, i: c_int) -> c_int;
     // Phase 1 (plan b499a5d0): thin accessors for search/sub apply
-    fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry, is_substitute: c_int);
+    // nvim_shada_set_search_pattern_from_entry removed (plan 377dbefc Phase 2): inlined in Rust.
     fn set_last_used_pattern(is_substitute: bool);
     fn set_no_hlsearch(val: bool);
-    fn nvim_shada_set_sub_replacement_from_entry(entry: *mut ShadaEntry);
+    // nvim_shada_set_sub_replacement_from_entry removed (plan 377dbefc Phase 2): inlined in Rust.
     // Phase 2 (plan b499a5d0): thin accessors for register/variable apply
-    fn nvim_shada_entry_get_reg_type_valid(entry: *const ShadaEntry) -> c_int;
+    // nvim_shada_entry_get_reg_type_valid removed (plan 377dbefc Phase 2): inlined in Rust.
     fn nvim_shada_op_reg_get_timestamp(name: c_char) -> u64;
     fn nvim_shada_op_reg_set_from_entry(entry: *mut ShadaEntry) -> c_int;
     fn nvim_shada_var_set_global_from_entry(entry: *mut ShadaEntry);
@@ -704,12 +704,7 @@ extern "C" {
         out_ts: *mut Timestamp,
         out_additional: *mut *mut c_void,
     );
-    /// Get current substitute replacement string.
-    fn nvim_shada_sub_get_replacement(
-        out_sub: *mut *const c_char,
-        out_ts: *mut Timestamp,
-        out_additional: *mut *mut c_void,
-    );
+    // nvim_shada_sub_get_replacement removed (plan 377dbefc Phase 2): use rs_sub_get_replacement directly.
     fn nvim_shada_curwin_cursor(out_lnum: *mut i64, out_col: *mut i32);
     /// Put fname into WMS file_marks PMap; returns pointer to value slot.
     fn nvim_shada_wms_file_marks_put_ref(
@@ -4793,13 +4788,16 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             );
 
             // Initialize substitute replacement string.
-            let mut sub_str: *const c_char = std::ptr::null();
-            let mut sub_ts: Timestamp = 0;
-            let mut sub_additional: *mut c_void = std::ptr::null_mut();
-            nvim_shada_sub_get_replacement(
-                &raw mut sub_str,
-                &raw mut sub_ts,
-                &raw mut sub_additional,
+            let mut sub_rep = SubRepC {
+                sub: std::ptr::null_mut(),
+                timestamp: 0,
+                additional_data: std::ptr::null_mut(),
+            };
+            rs_sub_get_replacement(&raw mut sub_rep);
+            let (sub_str, sub_ts, sub_additional) = (
+                sub_rep.sub.cast_const(),
+                sub_rep.timestamp,
+                sub_rep.additional_data,
             );
             if !sub_str.is_null() {
                 (*wms).replacement = ShadaEntry {
@@ -5472,6 +5470,54 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
 }
 
 // =============================================================================
+// Phase 2 (plan 377dbefc): Direct FFI for search/sub round-trip elimination
+// =============================================================================
+
+/// Opaque representation of C SearchOffset struct.
+#[repr(C)]
+struct SearchOffsetC {
+    dir: i8,
+    line: bool,
+    end: bool,
+    off: i64,
+}
+
+/// Opaque representation of C SearchPattern struct (from search.h).
+#[repr(C)]
+struct SearchPatternC {
+    pat: *mut c_char,
+    patlen: usize,
+    magic: bool,
+    no_scs: bool,
+    timestamp: u64,
+    off: SearchOffsetC,
+    additional_data: *mut c_void,
+}
+
+/// Opaque representation of sub-replacement return struct from ex_cmds Rust crate.
+#[repr(C)]
+struct SubRepC {
+    sub: *mut c_char,
+    timestamp: u64,
+    additional_data: *mut c_void,
+}
+
+extern "C" {
+    /// Get old substitute replacement string (Rust in ex_cmds crate).
+    fn rs_sub_get_replacement(ret_sub: *mut SubRepC);
+    /// Set substitute replacement string and timestamp (Rust in ex_cmds crate).
+    fn rs_sub_set_replacement(sub: *mut c_char, timestamp: u64, additional_data: *mut c_void);
+    /// Get magic option state (Rust in search crate).
+    fn rs_magic_isset() -> c_int;
+    /// Expand ~ in replacement string (Rust in regexp crate).
+    fn regtilde(source: *mut c_char, magic: c_int, preview: bool) -> *mut c_char;
+    /// Set the last search pattern (Rust in search crate, by-value C ABI).
+    fn set_search_pattern(pat: SearchPatternC);
+    /// Set the last substitute pattern (Rust in search crate, by-value C ABI).
+    fn set_substitute_pattern(pat: SearchPatternC);
+}
+
+// =============================================================================
 // Phase 1 (plan b499a5d0): Rust apply functions for search pattern and sub string
 // =============================================================================
 
@@ -5513,7 +5559,38 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
             return;
         }
     }
-    nvim_shada_set_search_pattern_from_entry(entry, is_sub);
+    // Build SearchPatternC from SearchPatternData fields and call set_search_pattern directly.
+    let sp_magic = read_union_field!(entry, search_pattern, magic);
+    let sp_smartcase = read_union_field!(entry, search_pattern, smartcase);
+    let sp_has_line_offset = read_union_field!(entry, search_pattern, has_line_offset);
+    let sp_place_cursor_at_end = read_union_field!(entry, search_pattern, place_cursor_at_end);
+    let sp_search_backward = read_union_field!(entry, search_pattern, search_backward);
+    let sp_offset = read_union_field!(entry, search_pattern, offset);
+    let sp_pat = read_union_field!(entry, search_pattern, pat);
+    let sp_pat_len = read_union_field!(entry, search_pattern, pat_len);
+    let spat = SearchPatternC {
+        pat: sp_pat,
+        patlen: sp_pat_len,
+        magic: sp_magic,
+        no_scs: !sp_smartcase,
+        timestamp: (*entry).timestamp,
+        off: SearchOffsetC {
+            dir: if sp_search_backward {
+                c_int::from(b'?') as i8
+            } else {
+                c_int::from(b'/') as i8
+            },
+            line: sp_has_line_offset,
+            end: sp_place_cursor_at_end,
+            off: sp_offset,
+        },
+        additional_data: (*entry).additional_data,
+    };
+    if is_sub != 0 {
+        set_substitute_pattern(spat);
+    } else {
+        set_search_pattern(spat);
+    }
     if read_union_field!(entry, search_pattern, is_last_used) {
         set_last_used_pattern(is_sub != 0);
         let highlighted = read_union_field!(entry, search_pattern, highlighted);
@@ -5532,18 +5609,22 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
 /// `entry` must be a valid pointer to a ShadaEntry of type SubString.
 unsafe fn rs_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) {
     if !force {
-        let mut cur_sub: *const c_char = std::ptr::null();
-        let mut cur_ts: Timestamp = 0;
-        let mut ad: *mut c_void = std::ptr::null_mut();
-        nvim_shada_sub_get_replacement(&raw mut cur_sub, &raw mut cur_ts, &raw mut ad);
-        let _ = ad;
-        if !cur_sub.is_null() && cur_ts >= (*entry).timestamp {
+        let mut sub_rep = SubRepC {
+            sub: std::ptr::null_mut(),
+            timestamp: 0,
+            additional_data: std::ptr::null_mut(),
+        };
+        rs_sub_get_replacement(&raw mut sub_rep);
+        if !sub_rep.sub.is_null() && sub_rep.timestamp >= (*entry).timestamp {
             rs_shada_free_entry_contents(entry);
             return;
         }
     }
-    nvim_shada_set_sub_replacement_from_entry(entry);
-    // Memory was consumed by sub_set_replacement; do not free.
+    // Inline nvim_shada_set_sub_replacement_from_entry: call rs_sub_set_replacement + regtilde.
+    let sub = read_union_field!(entry, sub_string, sub);
+    rs_sub_set_replacement(sub, (*entry).timestamp, (*entry).additional_data);
+    regtilde(sub, rs_magic_isset(), false);
+    // Memory was consumed by rs_sub_set_replacement; do not free.
 }
 
 // =============================================================================
@@ -5559,7 +5640,8 @@ unsafe fn rs_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) {
 ///
 /// `entry` must be a valid pointer to a ShadaEntry of type Register.
 unsafe fn rs_shada_apply_register(entry: *mut ShadaEntry, force: bool) {
-    if nvim_shada_entry_get_reg_type_valid(entry) == 0 {
+    let reg_type = read_union_field!(entry, reg, reg_type);
+    if reg_type != MT_CHAR_WISE && reg_type != MT_LINE_WISE && reg_type != MT_BLOCK_WISE {
         rs_shada_free_entry_contents(entry);
         return;
     }
