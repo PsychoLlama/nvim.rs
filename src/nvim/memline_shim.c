@@ -54,58 +54,6 @@ enum {
   BLOCK0_ID1 = '0',              // block 0 id 1
 };
 
-// pointer to a block, used in a pointer block
-typedef struct {
-  blocknr_T pe_bnum;            // block number
-  linenr_T pe_line_count;       // number of lines in this branch
-  linenr_T pe_old_lnum;         // lnum for this block (for recovery)
-  int pe_page_count;            // number of pages in block pe_bnum
-} PointerEntry;
-
-// A pointer block contains a list of branches in the tree.
-typedef struct {
-  uint16_t pb_id;               // ID for pointer block: PTR_ID
-  uint16_t pb_count;            // number of pointers in this block
-  uint16_t pb_count_max;        // maximum value for pb_count
-  PointerEntry pb_pointer[];    // list of pointers to blocks
-                                // followed by empty space until end of page
-} PointerBlock;
-
-// Value for pb_count_max.
-#define PB_COUNT_MAX(mfp) \
-  (uint16_t)((mfp->mf_page_size - offsetof(PointerBlock, pb_pointer)) / sizeof(PointerEntry))
-
-// A data block is a leaf in the tree.
-//
-// The text of the lines is at the end of the block. The text of the first line
-// in the block is put at the end, the text of the second line in front of it,
-// etc. Thus the order of the lines is the opposite of the line number.
-typedef struct {
-  uint16_t db_id;               // ID for data block: DATA_ID
-  unsigned db_free;             // free space available
-  unsigned db_txt_start;        // byte where text starts
-  unsigned db_txt_end;          // byte just after data block
-  // linenr_T db_line_count;
-  long db_line_count;           // number of lines in this block
-  unsigned db_index[];          // index for start of line
-                                // followed by empty space up to db_txt_start
-                                // followed by the text in the lines until
-                                // end of page
-} DataBlock;
-
-// The low bits of db_index hold the actual index. The topmost bit is
-// used for the global command to be able to mark a line.
-// This method is not clean, but otherwise there would be at least one extra
-// byte used for each line.
-// The mark has to be in this place to keep it with the correct line when other
-#define DB_MARKED       ((unsigned)1 << ((sizeof(unsigned) * 8) - 1))
-#define DB_INDEX_MASK   (~DB_MARKED)
-
-#define INDEX_SIZE  (sizeof(unsigned))      // size of one db_index entry
-
-enum {
-  B0_FNAME_SIZE_NOCRYPT = 898,  // 2 bytes used for other things
-};
 // Restrict the numbers to 32 bits, otherwise most compilers will complain.
 // This won't detect a 64 bit machine that only swaps a byte in the top 32
 // bits, but that is crazy anyway.
@@ -126,38 +74,9 @@ enum {
 // The b0_flags field is new in Vim 7.0.
 #define b0_flags        b0_fname[B0_FNAME_SIZE_ORG - 2]
 
-// The lowest two bits contain the fileformat.  Zero means it's not set
-// (compatible with Vim 6.x), otherwise it's EOL_UNIX + 1, EOL_DOS + 1 or
-// EOL_MAC + 1.
-#define B0_FF_MASK      3
-
-// Swapfile is in directory of edited file.  Used to find the file from different mount points.
-#define B0_SAME_DIR     4
-
-// The 'fileencoding' is at the end of b0_fname[], with a NUL in front of it.
-// When empty there is only the NUL.
-#define B0_HAS_FENC     8
-
 #include "memline_shim.c.generated.h"
 
 extern void rs_long_to_char(long n, char *s);
-
-static const char e_ml_get_invalid_lnum_nr[]
-  = N_("E315: ml_get: Invalid lnum: %" PRId64);
-static const char e_ml_get_cannot_find_line_nr_in_buffer_nr_str[]
-  = N_("E316: ml_get: Cannot find line %" PRId64 "in buffer %d %s");
-static const char e_pointer_block_id_wrong[]
-  = N_("E317: Pointer block id wrong");
-static const char e_pointer_block_id_wrong_two[]
-  = N_("E317: Pointer block id wrong 2");
-static const char e_pointer_block_id_wrong_three[]
-  = N_("E317: Pointer block id wrong 3");
-static const char e_pointer_block_id_wrong_four[]
-  = N_("E317: Pointer block id wrong 4");
-static const char e_line_number_out_of_range_nr_past_the_end[]
-  = N_("E322: Line number out of range: %" PRId64 " past the end");
-static const char e_line_count_wrong_in_block_nr[]
-  = N_("E323: Line count wrong in block %" PRId64);
 
 int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 memfile_T *nvim_buf_get_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp; }
@@ -200,13 +119,13 @@ int nvim_buf_open_buffer_if_needed(buf_T *buf)
   return OK;
 }
 
-void nvim_siemsg_ml_get_invalid_lnum(int64_t lnum) { siemsg(_(e_ml_get_invalid_lnum_nr), lnum); }
+void nvim_siemsg_ml_get_invalid_lnum(int64_t lnum) { siemsg(_("E315: ml_get: Invalid lnum: %" PRId64), lnum); }
 
 void nvim_siemsg_ml_get_cannot_find_line(int64_t lnum, buf_T *buf)
 {
   get_trans_bufname(buf);
   shorten_dir(NameBuff);
-  siemsg(_(e_ml_get_cannot_find_line_nr_in_buffer_nr_str),
+  siemsg(_("E316: ml_get: Cannot find line %" PRId64 "in buffer %d %s"),
          lnum, buf->b_fnum, NameBuff);
 }
 
@@ -228,7 +147,7 @@ infoptr_T *nvim_buf_get_ml_stack_ip(buf_T *buf, int idx) { return &(buf->b_ml.ml
 int64_t nvim_ip_get_bnum(const infoptr_T *ip) { return (int64_t)ip->ip_bnum; }
 int nvim_ip_get_index(const infoptr_T *ip) { return ip->ip_index; }
 void nvim_ip_add_high(infoptr_T *ip, int count) { ip->ip_high += count; }
-void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
+void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_("E317: Pointer block id wrong 2")); }
 void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
 void *nvim_buf_get_ml_locked(buf_T *buf) { return buf->b_ml.ml_locked; }
 void nvim_buf_set_ml_locked(buf_T *buf, void *hp) { buf->b_ml.ml_locked = hp; }
@@ -242,23 +161,20 @@ void nvim_ip_set_bnum(infoptr_T *ip, int64_t bnum) { ip->ip_bnum = (blocknr_T)bn
 void nvim_ip_set_low(infoptr_T *ip, linenr_T lnum) { ip->ip_low = lnum; }
 void nvim_ip_set_high(infoptr_T *ip, linenr_T lnum) { ip->ip_high = lnum; }
 void nvim_ip_set_index(infoptr_T *ip, int idx) { ip->ip_index = idx; }
-void nvim_iemsg_pointer_block_id_wrong(void) { iemsg(_(e_pointer_block_id_wrong)); }
-void nvim_siemsg_line_number_out_of_range(int64_t lnum_past)
-{
-  siemsg(_(e_line_number_out_of_range_nr_past_the_end), lnum_past);
-}
-void nvim_siemsg_line_count_wrong_in_block(int64_t bnum) { siemsg(_(e_line_count_wrong_in_block_nr), bnum); }
+void nvim_iemsg_pointer_block_id_wrong(void) { iemsg(_("E317: Pointer block id wrong")); }
+void nvim_siemsg_line_number_out_of_range(int64_t lnum_past) { siemsg(_("E322: Line number out of range: %" PRId64 " past the end"), lnum_past); }
+void nvim_siemsg_line_count_wrong_in_block(int64_t bnum) { siemsg(_("E323: Line count wrong in block %" PRId64), bnum); }
 void nvim_buf_inc_flush_count(buf_T *buf) { buf->flush_count++; }
 linenr_T nvim_buf_dec_ml_line_count(buf_T *buf) { return --buf->b_ml.ml_line_count; }
 linenr_T nvim_buf_inc_ml_line_count(buf_T *buf) { return ++buf->b_ml.ml_line_count; }
 linenr_T nvim_buf_get_b_prev_line_count(buf_T *buf) { return buf->b_prev_line_count; }
 void nvim_buf_set_b_prev_line_count(buf_T *buf, linenr_T val) { buf->b_prev_line_count = val; }
 void nvim_set_keep_msg_no_lines(void) { set_keep_msg(_(no_lines_msg), 0); }
-void nvim_iemsg_pointer_block_id_wrong_four(void) { iemsg(_(e_pointer_block_id_wrong_four)); }
+void nvim_iemsg_pointer_block_id_wrong_four(void) { iemsg(_("E317: Pointer block id wrong 4")); }
 void nvim_mf_free(memfile_T *mfp, bhdr_T *hp) { mf_free(mfp, hp); }
 int64_t nvim_bhdr_get_bh_bnum(bhdr_T *hp) { return (int64_t)hp->bh_bnum; }
 int nvim_bhdr_get_bh_page_count(bhdr_T *hp) { return (int)hp->bh_page_count; }
-void nvim_iemsg_pointer_block_id_wrong_three(void) { iemsg(_(e_pointer_block_id_wrong_three)); }
+void nvim_iemsg_pointer_block_id_wrong_three(void) { iemsg(_("E317: Pointer block id wrong 3")); }
 void nvim_iemsg_e318_updated_too_many(void) { iemsg(_("E318: Updated too many blocks?")); }
 void nvim_buf_set_ml_chunksize_numlines(buf_T *buf, int idx, int val) { buf->b_ml.ml_chunksize[idx].mlcs_numlines = val; }
 void nvim_buf_set_ml_chunksize_totalsize(buf_T *buf, int idx, int val) { buf->b_ml.ml_chunksize[idx].mlcs_totalsize = val; }
