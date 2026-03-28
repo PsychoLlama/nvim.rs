@@ -1266,17 +1266,14 @@ extern "C" {
     fn nvim_setpcmark();
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
-    fn nvim_buflist_altfpos_curwin();
     fn nvim_set_visual_reselect(val: c_int);
     fn nvim_reset_synblock_curwin();
     fn nvim_get_state_mode() -> c_int;
     fn nvim_u_sync(force: bool);
-    fn nvim_buf_hide(buf: BufHandle) -> c_int;
     fn nvim_bufIsChanged(buf: BufHandle) -> c_int;
     fn nvim_enter_buffer(buf: BufHandle);
     fn nvim_check_colorcolumn_curwin();
     fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
-    fn nvim_buf_valid(buf: BufHandle) -> c_int;
     fn nvim_curbuf_dec_nwindows();
     fn nvim_curwin_buffer_is_null() -> c_int;
     fn nvim_curbuf_get_p_tw() -> i64;
@@ -1318,7 +1315,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     if (nvim_get_cmdmod_cmod_flags() & CMOD_KEEPALT) == 0 {
         nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(nvim_get_curbuf()));
     }
-    nvim_buflist_altfpos_curwin();
+    crate::rs_buflist_altfpos(crate::WinHandle(nvim_get_curwin()));
 
     nvim_set_visual_reselect(0);
 
@@ -1377,7 +1374,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
             let close_action = if unload {
                 action
             } else if action == DOBUF_GOTO
-                && nvim_buf_hide(prevbuf) == 0
+                && !crate::rs_buf_hide(prevbuf)
                 && nvim_bufIsChanged(prevbuf) == 0
             {
                 DOBUF_UNLOAD
@@ -1391,7 +1388,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         }
     }
 
-    let valid = nvim_buf_valid(buf) != 0;
+    let valid = crate::rs_buf_valid(buf) != 0;
     if (valid && buf != nvim_get_curbuf() && aborting() == 0) || nvim_curwin_buffer_is_null() != 0 {
         if !nvim_get_curbuf().is_null() && prevbuf != nvim_get_curbuf() {
             nvim_curbuf_dec_nwindows();

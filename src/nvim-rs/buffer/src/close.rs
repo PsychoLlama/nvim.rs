@@ -133,7 +133,6 @@ extern "C" {
     fn nvim_get_entered_free_all_mem() -> c_int;
     fn nvim_end_visual_mode();
     fn nvim_buf_set_flags(buf: BufHandle, flags: c_int);
-    fn nvim_buf_clear_file(buf: BufHandle);
     fn nvim_win_set_buffer_null(win: *mut c_void);
     fn nvim_mark_forget_file_all_tabs(fnum: c_int);
     fn nvim_buf_wipe_free(buf: BufHandle);
@@ -476,7 +475,7 @@ pub unsafe extern "C" fn rs_close_buffer(
             // Init the options when loaded again.
             nvim_buf_set_b_p_initialized(buf, 0);
         }
-        nvim_buf_clear_file(buf);
+        crate::state::rs_buf_clear_file(buf);
         if clear_w_buf {
             nvim_win_set_buffer_null(win);
         }

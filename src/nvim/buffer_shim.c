@@ -478,7 +478,6 @@ void nvim_set_buf_opts_scratch(void)
   set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
   RESET_BINDING(curwin); }
 int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; }
-int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 void *nvim_buf_prep_exarg_alloc(buf_T *buf)
 { exarg_T *ea = xcalloc(1, sizeof(exarg_T)); prep_exarg(ea, buf); return ea; }
 void nvim_exarg_free(void *ea_void)
@@ -492,17 +491,14 @@ int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
                   (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
 
 void nvim_setpcmark(void) { setpcmark(); }
-void nvim_buflist_altfpos_curwin(void) { buflist_altfpos(curwin); }
 void nvim_set_visual_reselect(int val) { VIsual_reselect = val != 0; }
 void nvim_reset_synblock_curwin(void) { if (curwin) { reset_synblock(curwin); } }
 int nvim_get_state_mode(void) { return State; }
-int nvim_buf_hide(buf_T *buf) { return buf_hide(buf) ? 1 : 0; }
 int nvim_bufIsChanged(buf_T *buf) { return bufIsChanged(buf); }
 void nvim_enter_buffer(buf_T *buf) { enter_buffer(buf); }
 void nvim_check_colorcolumn_curwin(void) { check_colorcolumn(NULL, curwin); }
 int nvim_buf_terminal_check_size(buf_T *buf)
 { if (buf && buf->terminal) { terminal_check_size(buf->terminal); return 1; } return 0; }
-int nvim_buf_valid(buf_T *buf) { return buf_valid(buf) ? 1 : 0; }
 void nvim_curbuf_dec_nwindows(void) { if (curbuf) { curbuf->b_nwindows--; } }
 int nvim_curwin_buffer_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
 OptInt nvim_curbuf_get_p_tw(void) { return curbuf->b_p_tw; }
@@ -543,7 +539,6 @@ int nvim_get_entered_free_all_mem(void)
 }
 void nvim_end_visual_mode(void) { end_visual_mode(); }
 void nvim_buf_set_flags(buf_T *buf, int flags) { buf->b_flags = flags; }
-void nvim_buf_clear_file(buf_T *buf) { buf_clear_file(buf); }
 void nvim_win_set_buffer_null(win_T *win) { win->w_buffer = NULL; }
 void nvim_mark_forget_file_all_tabs(int fnum)
 { FOR_ALL_TAB_WINDOWS(tp, wp) { mark_forget_file(wp, fnum); } }

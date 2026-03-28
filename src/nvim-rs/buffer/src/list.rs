@@ -77,7 +77,6 @@ extern "C" {
     fn swbuf_goto_win_with_buf(buf: BufHandle) -> *mut c_void;
     static swb_flags: c_uint;
     fn nvim_swb_has_newtab() -> c_int;
-    fn nvim_curbuf_is_empty() -> c_int;
     fn tabpage_new();
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_reset_binding_curwin();
@@ -1167,7 +1166,7 @@ pub unsafe extern "C" fn rs_buflist_getfile(
             && ((swb_flags & SWB_FLAG_VSPLIT) != 0
                 || (swb_flags & SWB_FLAG_SPLIT) != 0
                 || nvim_swb_has_newtab() != 0)
-            && nvim_curbuf_is_empty() == 0
+            && !crate::state::rs_buf_is_empty(nvim_get_curbuf())
         {
             if nvim_swb_has_newtab() != 0 {
                 tabpage_new();
