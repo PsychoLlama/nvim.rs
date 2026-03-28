@@ -51,6 +51,7 @@
 #![allow(unsafe_code)]
 
 pub mod access;
+pub mod block_ops;
 pub mod chunk;
 pub mod modify;
 pub mod navigate;

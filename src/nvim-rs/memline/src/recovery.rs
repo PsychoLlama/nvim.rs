@@ -22,6 +22,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 
+use crate::block_ops;
 use crate::types::{
     BlockNr, BufHandle, InfoPtrHandle, B0_FF_MASK, B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC,
     B0_VERSION_SIZE, DATA_BLOCK_HEADER_SIZE, DATA_ID, HLF_E, MIN_SWAP_PAGE_SIZE, PTR_ID,
@@ -176,24 +177,6 @@ extern "C" {
     fn nvim_bhdr_set_bh_data(hp: *mut c_void, data: *mut c_void);
     fn nvim_b0_get_page_size_ptr(b0p: *const c_void) -> *const c_char;
     fn nvim_b0_set_fname0(b0p: *mut c_void);
-    fn nvim_pp_get_id(pp: *const c_void) -> u16;
-    fn nvim_pp_get_count(pp: *const c_void) -> u16;
-    fn nvim_pp_get_count_max(pp: *const c_void) -> u16;
-    fn nvim_pp_count_max_for_mfp(mfp: *mut c_void) -> u16;
-    fn nvim_pp_set_count_max(pp: *mut c_void, val: u16);
-    fn nvim_pp_set_count(pp: *mut c_void, val: u16);
-    fn nvim_pp_pe_get_bnum(pp: *const c_void, idx: c_int) -> i64;
-    fn nvim_pp_pe_get_line_count(pp: *const c_void, idx: c_int) -> i64;
-    fn nvim_pp_pe_get_old_lnum(pp: *const c_void, idx: c_int) -> i64;
-    fn nvim_pp_pe_get_page_count_uint(pp: *const c_void, idx: c_int) -> c_uint;
-    fn nvim_dp_get_id(dp: *const c_void) -> u16;
-    fn nvim_dp_get_txt_end(dp: *const c_void) -> c_uint;
-    fn nvim_dp_set_txt_end(dp: *mut c_void, val: c_uint);
-    fn nvim_dp_get_line_count(dp: *const c_void) -> i64;
-    fn nvim_dp_get_index_masked(dp: *const c_void, i: c_int) -> c_uint;
-    fn nvim_dp_index_overruns_txt(dp: *const c_void, i: c_int) -> c_int;
-    fn nvim_dp_get_txt_ptr(dp: *const c_void, offset: c_uint) -> *const c_char;
-    fn nvim_dp_write_nul_at_txt_end(dp: *mut c_void);
     fn nvim_curbuf_set_b_flags_recovered();
     fn nvim_get_curbuf_ml_line_count() -> i64;
     fn nvim_get_curbuf_ml_flags() -> c_int;
@@ -869,19 +852,19 @@ unsafe fn recover_btree(
         } else {
             let data = nvim_bhdr_get_bh_data(hp);
 
-            if nvim_pp_get_id(data) == PTR_ID {
+            if block_ops::pp_get_id(data) == PTR_ID {
                 // ---- Pointer block ----
-                let expected_max = nvim_pp_count_max_for_mfp(mfp);
-                let actual_max = nvim_pp_get_count_max(data);
+                let expected_max = block_ops::pp_count_max_for_mfp(mfp);
+                let actual_max = block_ops::pp_get_count_max(data);
                 let mut ptr_block_error = false;
                 if actual_max != expected_max {
                     ptr_block_error = true;
-                    nvim_pp_set_count_max(data, expected_max);
+                    block_ops::pp_set_count_max(data, expected_max);
                 }
-                let pb_count = nvim_pp_get_count(data);
+                let pb_count = block_ops::pp_get_count(data);
                 if pb_count > expected_max {
                     ptr_block_error = true;
-                    nvim_pp_set_count(data, expected_max);
+                    block_ops::pp_set_count(data, expected_max);
                 }
                 if ptr_block_error {
                     recover_msg(
@@ -894,13 +877,13 @@ unsafe fn recover_btree(
                 }
 
                 // Re-read pb_count after potential correction
-                let pb_count_now = nvim_pp_get_count(data);
+                let pb_count_now = block_ops::pp_get_count(data);
 
                 // Line count check on first entry into this pointer block
                 if idx == 0 && line_count != 0 {
                     let mut lc = line_count;
                     for i in 0..c_int::from(pb_count_now) {
-                        lc -= nvim_pp_pe_get_line_count(data, i);
+                        lc -= block_ops::pp_pe_get_line_count(data, i);
                     }
                     if lc != 0 {
                         error += 1;
@@ -915,12 +898,12 @@ unsafe fn recover_btree(
                     nvim_ml_append_recovery(lnum, c"???EMPTY BLOCK".as_ptr(), true);
                     lnum += 1;
                 } else if idx < c_int::from(pb_count_now) {
-                    let pe_bnum = nvim_pp_pe_get_bnum(data, idx);
+                    let pe_bnum = block_ops::pp_pe_get_bnum(data, idx);
                     if pe_bnum < 0 {
                         // Negative block num: try reading from original file
                         if !cannot_open {
-                            line_count = nvim_pp_pe_get_line_count(data, idx);
-                            let topline = nvim_pp_pe_get_old_lnum(data, idx) - 1;
+                            line_count = block_ops::pp_pe_get_line_count(data, idx);
+                            let topline = block_ops::pp_pe_get_old_lnum(data, idx) - 1;
                             let ffname = nvim_get_curbuf_ffname();
                             if nvim_readfile_from_original(ffname, lnum, topline, line_count)
                                 == OK_C
@@ -946,15 +929,15 @@ unsafe fn recover_btree(
                     nvim_ip_set_index(ip, idx);
 
                     bnum = pe_bnum;
-                    line_count = nvim_pp_pe_get_line_count(data, idx);
-                    page_count = nvim_pp_pe_get_page_count_uint(data, idx);
+                    line_count = block_ops::pp_pe_get_line_count(data, idx);
+                    page_count = block_ops::pp_pe_get_page_count_uint(data, idx);
                     idx = 0;
                     continue 'traverse;
                 }
                 // idx >= pb_count_now: fall through to stack pop
             } else {
                 // ---- Data block ----
-                if nvim_dp_get_id(data) != DATA_ID {
+                if block_ops::dp_get_id(data) != DATA_ID {
                     if bnum == 1 {
                         recover_msg(
                             RECOVER_MSG_E310_BLOCK1_ID,
@@ -973,7 +956,7 @@ unsafe fn recover_btree(
                     let mut has_error = false;
                     let page_size = nvim_mf_get_page_size(mfp);
                     let expected_txt_end = page_count * page_size;
-                    let txt_end = nvim_dp_get_txt_end(data);
+                    let txt_end = block_ops::dp_get_txt_end(data);
 
                     if expected_txt_end != txt_end {
                         nvim_ml_append_recovery(
@@ -984,11 +967,11 @@ unsafe fn recover_btree(
                         lnum += 1;
                         error += 1;
                         has_error = true;
-                        nvim_dp_set_txt_end(data, expected_txt_end);
+                        block_ops::dp_set_txt_end(data, expected_txt_end);
                     }
-                    nvim_dp_write_nul_at_txt_end(data);
+                    block_ops::dp_write_nul_at_txt_end(data);
 
-                    let dp_line_count = nvim_dp_get_line_count(data);
+                    let dp_line_count = block_ops::dp_get_line_count(data);
                     if line_count != dp_line_count {
                         nvim_ml_append_recovery(
                             lnum,
@@ -1004,7 +987,7 @@ unsafe fn recover_btree(
                     let mut did_questions = false;
                     let mut i: c_int = 0;
                     while i < dp_line_count as c_int {
-                        if nvim_dp_index_overruns_txt(data, i) != 0 {
+                        if block_ops::dp_index_overruns_txt(data, i) != 0 {
                             error += 1;
                             nvim_ml_append_recovery(
                                 lnum,
@@ -1014,9 +997,9 @@ unsafe fn recover_btree(
                             lnum += 1;
                             break;
                         }
-                        let txt_start = nvim_dp_get_index_masked(data, i);
+                        let txt_start = block_ops::dp_get_index_masked(data, i);
                         let header_size = DATA_BLOCK_HEADER_SIZE as c_uint;
-                        let dp_txt_end = nvim_dp_get_txt_end(data);
+                        let dp_txt_end = block_ops::dp_get_txt_end(data);
                         let line_ptr: *const c_char =
                             if txt_start <= header_size || txt_start >= dp_txt_end {
                                 error += 1;
@@ -1028,7 +1011,7 @@ unsafe fn recover_btree(
                                 c"???".as_ptr()
                             } else {
                                 did_questions = false;
-                                nvim_dp_get_txt_ptr(data, txt_start)
+                                block_ops::dp_get_txt_ptr(data, txt_start)
                             };
                         nvim_ml_append_recovery(lnum, line_ptr, true);
                         lnum += 1;

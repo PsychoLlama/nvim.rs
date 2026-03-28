@@ -22,12 +22,13 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+use crate::block_ops;
 use crate::types::{
     BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr, PointerBlockHeader,
-    PointerEntry, DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED,
-    ML_APPEND_MARK, ML_APPEND_NEW, ML_CHNK_ADDLINE, ML_CHNK_DELLINE, ML_CHNK_UPDLINE,
-    ML_DEL_MESSAGE, ML_EMPTY, ML_FIND, ML_FLUSH, ML_INSERT, ML_LINE_DIRTY, ML_LOCKED_DIRTY,
-    ML_LOCKED_POS, PTR_ID, STACK_INCR,
+    DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK,
+    ML_APPEND_NEW, ML_CHNK_ADDLINE, ML_CHNK_DELLINE, ML_CHNK_UPDLINE, ML_DEL_MESSAGE, ML_EMPTY,
+    ML_FIND, ML_FLUSH, ML_INSERT, ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS, PTR_ID,
+    STACK_INCR,
 };
 
 // =============================================================================
@@ -201,12 +202,6 @@ extern "C" {
     /// Free a block in the memfile (mf_free wrapper)
     fn nvim_mf_free(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void);
 
-    /// Decrement pp->pb_count and return new value
-    fn nvim_pp_dec_count(pp: *mut std::ffi::c_void) -> c_int;
-
-    /// memmove pointer entries within a pointer block
-    fn nvim_pp_pe_memmove(pp: *mut std::ffi::c_void, dst_idx: c_int, src_idx: c_int, count: c_int);
-
     /// Get buf->b_ml.ml_locked_lineadd
     fn nvim_buf_get_ml_locked_lineadd(buf: *mut BufHandle) -> c_int;
 
@@ -224,9 +219,6 @@ extern "C" {
 
     /// Release block to memfile (mf_put)
     fn mf_put(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void, dirty: bool, release: bool);
-
-    /// Get pp->pb_id
-    fn nvim_pp_get_id(pp: *const std::ffi::c_void) -> u16;
 
     /// Add count to ip->ip_high
     fn nvim_ip_add_high(ip: *mut InfoPtrHandle, count: c_int);
@@ -270,8 +262,6 @@ extern "C" {
     /// Set buf->b_ml.ml_locked_high
     fn nvim_buf_set_ml_locked_high(buf: *mut BufHandle, val: LineNr);
 
-    /// Increment pp->pb_count
-    fn nvim_pp_inc_count(pp: *mut c_void);
 }
 
 // =============================================================================
@@ -862,21 +852,6 @@ pub unsafe extern "C" fn rs_ml_replace_buf_impl(
     rs_ml_replace_buf_len(buf, lnum, line, len, copy, noalloc)
 }
 
-/// Get a mutable pointer to the PointerEntry array inside a pointer block.
-///
-/// The pb_pointer array immediately follows the `PointerBlockHeader` in memory,
-/// matching the C flexible array member `pb_pointer[]`.
-///
-/// # Safety
-/// - `pp` must be a valid pointer to a `PointerBlock` (PointerBlockHeader + pb_pointer[])
-#[inline]
-unsafe fn pb_pointer_ptr(pp: *mut c_void) -> *mut PointerEntry {
-    #[allow(clippy::cast_ptr_alignment)]
-    pp.cast::<u8>()
-        .add(std::mem::size_of::<PointerBlockHeader>())
-        .cast::<PointerEntry>()
-}
-
 // =============================================================================
 // Pass 7 Phase 2: rs_ml_append_int -- core B-tree line insertion
 // =============================================================================
@@ -1229,7 +1204,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
             }
             let pp = nvim_bhdr_get_bh_data(block_hp);
             let pp_header = pp.cast::<PointerBlockHeader>();
-            if nvim_pp_get_id(pp) != PTR_ID {
+            if block_ops::pp_get_id(pp) != PTR_ID {
                 nvim_iemsg_pointer_block_id_wrong_three();
                 mf_put(mfp, block_hp, false, false);
                 return FAIL;
@@ -1237,7 +1212,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
 
             if (*pp_header).pb_count < (*pp_header).pb_count_max {
                 // Block not full: insert one entry after pb_idx.
-                let ptr_arr = pb_pointer_ptr(pp);
+                let ptr_arr = block_ops::pb_pointer_ptr(pp);
                 let count = (*pp_header).pb_count as usize;
                 if (pb_idx + 1) < c_int::from((*pp_header).pb_count) {
                     // Shift existing entries to make room.
@@ -1247,7 +1222,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
                         count - (pb_idx + 1) as usize,
                     );
                 }
-                nvim_pp_inc_count(pp);
+                block_ops::pp_inc_count(pp);
                 (*ptr_arr.add(pb_idx as usize)).pe_line_count = line_count_left_cur as i32;
                 (*ptr_arr.add(pb_idx as usize)).pe_bnum = bnum_left_cur;
                 (*ptr_arr.add(pb_idx as usize)).pe_page_count = page_count_left_cur;
@@ -1311,7 +1286,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
                 );
                 let pp_root = cur_pp.cast::<PointerBlockHeader>();
                 (*pp_root).pb_count = 1;
-                let root_arr = pb_pointer_ptr(cur_pp);
+                let root_arr = block_ops::pb_pointer_ptr(cur_pp);
                 (*root_arr).pe_bnum = nvim_bhdr_get_bh_bnum(hp_new);
                 (*root_arr).pe_line_count = nvim_buf_get_ml_line_count(buf) as i32;
                 (*root_arr).pe_old_lnum = 1;
@@ -1334,8 +1309,8 @@ pub unsafe extern "C" fn rs_ml_append_int(
 
             // Move pointers after cur_pb_idx into hp_split_new.
             let pp_split = nvim_bhdr_get_bh_data(hp_split_new);
-            let ptr_arr_old = pb_pointer_ptr(cur_pp);
-            let ptr_arr_new = pb_pointer_ptr(pp_split);
+            let ptr_arr_old = block_ops::pb_pointer_ptr(cur_pp);
+            let ptr_arr_new = block_ops::pb_pointer_ptr(pp_split);
             let pp_header_cur = cur_pp.cast::<PointerBlockHeader>();
             let pp_split_header = pp_split.cast::<PointerBlockHeader>();
 
@@ -2417,19 +2392,19 @@ pub unsafe extern "C" fn rs_ml_delete_int(
                 return ret;
             }
             let pp = nvim_bhdr_get_bh_data(block_hp);
-            if nvim_pp_get_id(pp) != PTR_ID {
+            if block_ops::pp_get_id(pp) != PTR_ID {
                 nvim_iemsg_pointer_block_id_wrong_four();
                 mf_put(mfp, block_hp, false, false);
                 return ret;
             }
-            let new_count = nvim_pp_dec_count(pp) as usize;
+            let new_count = block_ops::pp_dec_count(pp) as usize;
             if new_count == 0 {
                 // pointer block becomes empty too -- free it and keep going up
                 nvim_mf_free(mfp, block_hp);
             } else {
                 if new_count != cur_idx {
                     // move entries after the deleted one to fill the gap
-                    nvim_pp_pe_memmove(
+                    block_ops::pp_pe_memmove(
                         pp,
                         cur_idx as c_int,
                         cur_idx as c_int + 1,

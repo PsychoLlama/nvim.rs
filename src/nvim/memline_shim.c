@@ -228,8 +228,6 @@ infoptr_T *nvim_buf_get_ml_stack_ip(buf_T *buf, int idx) { return &(buf->b_ml.ml
 int64_t nvim_ip_get_bnum(const infoptr_T *ip) { return (int64_t)ip->ip_bnum; }
 int nvim_ip_get_index(const infoptr_T *ip) { return ip->ip_index; }
 void nvim_ip_add_high(infoptr_T *ip, int count) { ip->ip_high += count; }
-uint16_t nvim_pp_get_id(const void *pp) { return ((const PointerBlock *)pp)->pb_id; }
-void nvim_pp_pe_linecount_add(void *pp, int idx, int count) { ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count += count; }
 void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
 void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
 void *nvim_buf_get_ml_locked(buf_T *buf) { return buf->b_ml.ml_locked; }
@@ -244,14 +242,6 @@ void nvim_ip_set_bnum(infoptr_T *ip, int64_t bnum) { ip->ip_bnum = (blocknr_T)bn
 void nvim_ip_set_low(infoptr_T *ip, linenr_T lnum) { ip->ip_low = lnum; }
 void nvim_ip_set_high(infoptr_T *ip, linenr_T lnum) { ip->ip_high = lnum; }
 void nvim_ip_set_index(infoptr_T *ip, int idx) { ip->ip_index = idx; }
-uint16_t nvim_pp_get_count(const void *pp) { return ((const PointerBlock *)pp)->pb_count; }
-int64_t nvim_pp_pe_get_bnum(const void *pp, int idx) { return (int64_t)((const PointerBlock *)pp)->pb_pointer[idx].pe_bnum; }
-linenr_T nvim_pp_pe_get_line_count(const void *pp, int idx) { return ((const PointerBlock *)pp)->pb_pointer[idx].pe_line_count; }
-int nvim_pp_pe_get_page_count(const void *pp, int idx) { return ((const PointerBlock *)pp)->pb_pointer[idx].pe_page_count; }
-void nvim_pp_pe_set_bnum(void *pp, int idx, int64_t bnum) { ((PointerBlock *)pp)->pb_pointer[idx].pe_bnum = (blocknr_T)bnum; }
-void nvim_pp_pe_dec_line_count(void *pp, int idx) { ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count--; }
-void nvim_pp_pe_inc_line_count(void *pp, int idx) { ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count++; }
-uint16_t nvim_dp_get_id(const void *dp) { return ((const DataBlock *)dp)->db_id; }
 void nvim_iemsg_pointer_block_id_wrong(void) { iemsg(_(e_pointer_block_id_wrong)); }
 void nvim_siemsg_line_number_out_of_range(int64_t lnum_past)
 {
@@ -266,13 +256,10 @@ void nvim_buf_set_b_prev_line_count(buf_T *buf, linenr_T val) { buf->b_prev_line
 void nvim_set_keep_msg_no_lines(void) { set_keep_msg(_(no_lines_msg), 0); }
 void nvim_iemsg_pointer_block_id_wrong_four(void) { iemsg(_(e_pointer_block_id_wrong_four)); }
 void nvim_mf_free(memfile_T *mfp, bhdr_T *hp) { mf_free(mfp, hp); }
-int nvim_pp_dec_count(void *pp) { return --(((PointerBlock *)pp)->pb_count); }
-void nvim_pp_pe_memmove(void *pp, int dst_idx, int src_idx, int count) { PointerBlock *pb = (PointerBlock *)pp; memmove(&pb->pb_pointer[dst_idx], &pb->pb_pointer[src_idx], (size_t)count * sizeof(PointerEntry)); }
 int64_t nvim_bhdr_get_bh_bnum(bhdr_T *hp) { return (int64_t)hp->bh_bnum; }
 int nvim_bhdr_get_bh_page_count(bhdr_T *hp) { return (int)hp->bh_page_count; }
 void nvim_iemsg_pointer_block_id_wrong_three(void) { iemsg(_(e_pointer_block_id_wrong_three)); }
 void nvim_iemsg_e318_updated_too_many(void) { iemsg(_("E318: Updated too many blocks?")); }
-uint16_t nvim_pp_inc_count(void *pp) { return ++(((PointerBlock *)pp)->pb_count); }
 void nvim_buf_set_ml_chunksize_numlines(buf_T *buf, int idx, int val) { buf->b_ml.ml_chunksize[idx].mlcs_numlines = val; }
 void nvim_buf_set_ml_chunksize_totalsize(buf_T *buf, int idx, int val) { buf->b_ml.ml_chunksize[idx].mlcs_totalsize = val; }
 void nvim_buf_add_ml_chunksize_numlines(buf_T *buf, int idx, int val) { buf->b_ml.ml_chunksize[idx].mlcs_numlines += val; }
@@ -530,17 +517,6 @@ bhdr_T *nvim_mf_get_block(memfile_T *mfp, int64_t bnum, unsigned page_count)
 void nvim_mf_put_block(memfile_T *mfp, bhdr_T *hp, bool dirty, bool infile) { mf_put(mfp, hp, dirty, infile); }
 void nvim_mf_new_page_size_wrapper(memfile_T *mfp, unsigned new_size) { mf_new_page_size(mfp, new_size); }
 void nvim_bhdr_set_bh_data(bhdr_T *hp, void *data) { hp->bh_data = data; }
-uint16_t nvim_pp_count_max_for_mfp(memfile_T *mfp) { return PB_COUNT_MAX(mfp); }
-void nvim_pp_set_count_max(void *pp, uint16_t val) { ((PointerBlock *)pp)->pb_count_max = val; }
-void nvim_pp_set_count(void *pp, uint16_t val) { ((PointerBlock *)pp)->pb_count = val; }
-linenr_T nvim_pp_pe_get_old_lnum(const void *pp, int idx) { return ((const PointerBlock *)pp)->pb_pointer[idx].pe_old_lnum; }
-unsigned nvim_dp_get_txt_end(const void *dp) { return ((const DataBlock *)dp)->db_txt_end; }
-void nvim_dp_set_txt_end(void *dp, unsigned val) { ((DataBlock *)dp)->db_txt_end = val; }
-long nvim_dp_get_line_count(const void *dp) { return ((const DataBlock *)dp)->db_line_count; }
-unsigned nvim_dp_get_index_masked(const void *dp, int i) { return ((const DataBlock *)dp)->db_index[i] & DB_INDEX_MASK; }
-int nvim_dp_index_overruns_txt(const void *dp, int i) { const DataBlock *d = (const DataBlock *)dp; return (const char *)&d->db_index[i] >= (const char *)d + d->db_txt_start ? 1 : 0; }
-const char *nvim_dp_get_txt_ptr(const void *dp, unsigned offset) { return (const char *)dp + offset; }
-void nvim_dp_write_nul_at_txt_end(void *dp) { DataBlock *d = (DataBlock *)dp; *((char *)d + d->db_txt_end - 1) = NUL; }
 void nvim_curbuf_set_b_flags_recovered(void) { curbuf->b_flags |= BF_RECOVERED; }
 void nvim_getout_one(void) { getout(1); }
 int nvim_ml_open_curbuf(void) { return ml_open(curbuf); }
@@ -609,8 +585,6 @@ size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
 void nvim_ml_delete_first_curbuf(void) { ml_delete(1); }
 int64_t nvim_mf_get_file_size(memfile_T *mfp) { off_T size = vim_lseek(mfp->mf_fd, 0, SEEK_END); return (int64_t)(size <= 0 ? 0 : size); }
 int nvim_ml_append_recovery(linenr_T lnum, const char *line, bool is_new) { return ml_append(lnum, (char *)line, 0, is_new); }
-unsigned nvim_pp_pe_get_page_count_uint(const void *pp, int idx) { return (unsigned)((const PointerBlock *)pp)->pb_pointer[idx].pe_page_count; }
-uint16_t nvim_pp_get_count_max(const void *pp) { return ((const PointerBlock *)pp)->pb_count_max; }
 int nvim_curbuf_nf_has(int c) { return vim_strchr(curbuf->b_p_nf, c) != NULL; }
 void nvim_curbuf_set_op_start_to_cursor_col(int col) { curbuf->b_op_start = curwin->w_cursor; curbuf->b_op_start.col = col; }
 void nvim_curbuf_set_op_end_to_cursor_col(int col) { curbuf->b_op_end = curwin->w_cursor; curbuf->b_op_end.col = col; if (curbuf->b_op_end.col > 0) { curbuf->b_op_end.col--; } }

@@ -20,6 +20,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::block_ops;
 use crate::types::{
     BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr, PointerBlockHeader,
     PointerEntry, PosHandle, DATA_ID, DB_INDEX_MASK, ML_DELETE, ML_FIND, ML_FLUSH, ML_INSERT,
@@ -204,12 +205,6 @@ extern "C" {
     /// Add count to ip_high in stack entry
     fn nvim_ip_add_high(ip: *mut InfoPtrHandle, count: c_int);
 
-    /// Get id field from pointer block (first u16 field)
-    fn nvim_pp_get_id(pp: *const std::ffi::c_void) -> u16;
-
-    /// Add count to pb_pointer[idx].pe_line_count
-    fn nvim_pp_pe_linecount_add(pp: *mut std::ffi::c_void, idx: c_int, count: c_int);
-
     /// Get memfile from buffer
     fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut std::ffi::c_void;
 
@@ -261,24 +256,6 @@ extern "C" {
 
     /// Translate a negative block number to a positive one
     fn mf_trans_del(mfp: *mut std::ffi::c_void, bnum: BlockNr) -> BlockNr;
-
-    /// Get pb_count from pointer block
-    fn nvim_pp_get_count(pp: *const std::ffi::c_void) -> u16;
-    /// Get pe_bnum from pointer block entry at idx
-    fn nvim_pp_pe_get_bnum(pp: *const std::ffi::c_void, idx: c_int) -> BlockNr;
-    /// Get pe_line_count from pointer block entry at idx
-    fn nvim_pp_pe_get_line_count(pp: *const std::ffi::c_void, idx: c_int) -> LineNr;
-    /// Get pe_page_count from pointer block entry at idx
-    fn nvim_pp_pe_get_page_count(pp: *const std::ffi::c_void, idx: c_int) -> c_int;
-    /// Set pe_bnum in pointer block entry at idx
-    fn nvim_pp_pe_set_bnum(pp: *mut std::ffi::c_void, idx: c_int, bnum: BlockNr);
-    /// Decrement pe_line_count in pointer block entry at idx
-    fn nvim_pp_pe_dec_line_count(pp: *mut std::ffi::c_void, idx: c_int);
-    /// Increment pe_line_count in pointer block entry at idx
-    fn nvim_pp_pe_inc_line_count(pp: *mut std::ffi::c_void, idx: c_int);
-
-    /// Get db_id from data block (to check if it's a data or pointer block)
-    fn nvim_dp_get_id(dp: *const std::ffi::c_void) -> u16;
 
     /// Get buffer's ml_flags
     fn nvim_buf_get_ml_flags(buf: *mut BufHandle) -> c_int;
@@ -445,7 +422,7 @@ pub unsafe extern "C" fn rs_ml_find_line(
 
         let dp = nvim_bhdr_get_bh_data(hp);
 
-        if nvim_dp_get_id(dp) == DATA_ID {
+        if block_ops::dp_get_id(dp) == DATA_ID {
             // Found the data block - lock it
             nvim_buf_set_ml_locked(buf, hp);
             nvim_buf_set_ml_locked_low(buf, low);
@@ -457,7 +434,7 @@ pub unsafe extern "C" fn rs_ml_find_line(
         }
 
         // Must be a pointer block
-        if nvim_pp_get_id(dp) != PTR_ID {
+        if block_ops::pp_get_id(dp) != PTR_ID {
             nvim_iemsg_pointer_block_id_wrong();
             // error_block: release block without marking dirty
             mf_put(mfp, hp, false, false);
@@ -480,18 +457,18 @@ pub unsafe extern "C" fn rs_ml_find_line(
         nvim_ip_set_index(ip, -1); // index not known yet
 
         let mut dirty = false;
-        let count = c_int::from(nvim_pp_get_count(dp));
+        let count = c_int::from(block_ops::pp_get_count(dp));
         let mut idx = 0_i32;
         let mut found = false;
 
         while idx < count {
-            let t = nvim_pp_pe_get_line_count(dp, idx);
+            let t = block_ops::pp_pe_get_line_count(dp, idx);
             // CHECK(t == 0, "pe_line_count is zero") -- debug only, omitted
             low += t;
             if low > lnum {
                 nvim_ip_set_index(ip, idx);
-                bnum = nvim_pp_pe_get_bnum(dp, idx);
-                page_count = nvim_pp_pe_get_page_count(dp, idx);
+                bnum = block_ops::pp_pe_get_bnum(dp, idx);
+                page_count = block_ops::pp_pe_get_page_count(dp, idx);
                 high = low - 1;
                 low -= t;
 
@@ -500,7 +477,7 @@ pub unsafe extern "C" fn rs_ml_find_line(
                     let bnum2 = mf_trans_del(mfp, bnum);
                     if bnum != bnum2 {
                         bnum = bnum2;
-                        nvim_pp_pe_set_bnum(dp, idx, bnum);
+                        block_ops::pp_pe_set_bnum(dp, idx, bnum);
                         dirty = true;
                     }
                 }
@@ -533,10 +510,10 @@ pub unsafe extern "C" fn rs_ml_find_line(
 
         // Update pointer entry line count for insert/delete
         if action == ML_DELETE {
-            nvim_pp_pe_dec_line_count(dp, idx);
+            block_ops::pp_pe_dec_line_count(dp, idx);
             dirty = true;
         } else if action == ML_INSERT {
-            nvim_pp_pe_inc_line_count(dp, idx);
+            block_ops::pp_pe_inc_line_count(dp, idx);
             dirty = true;
         }
 
@@ -1404,13 +1381,13 @@ pub unsafe extern "C" fn rs_ml_lineadd(buf: *mut BufHandle, count: c_int) {
             break;
         }
         let pp = nvim_bhdr_get_bh_data(hp);
-        if nvim_pp_get_id(pp) != crate::types::PTR_ID {
+        if block_ops::pp_get_id(pp) != crate::types::PTR_ID {
             mf_put(mfp, hp, false, false);
             nvim_iemsg_pointer_block_id_wrong_two();
             break;
         }
         let ip_index = nvim_ip_get_index(ip);
-        nvim_pp_pe_linecount_add(pp, ip_index, count);
+        block_ops::pp_pe_linecount_add(pp, ip_index, count);
         nvim_ip_add_high(ip, count);
         mf_put(mfp, hp, true, false);
     }
