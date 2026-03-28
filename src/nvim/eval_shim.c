@@ -63,42 +63,14 @@ extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, b
                               void *selfdict, typval_T *basetv, const char *lua_funcname);
 extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
-// Hashtab iteration: iterate over entries and call rs_set_ref_in_item for each
-bool nvim_eval_ht_foreach_di_tv(hashtab_T *ht, int copyID, ht_stack_T **ht_stack,
-                                list_stack_T **list_stack)
-{
-  bool abort = false;
-  HASHTAB_ITER(ht, hi, {
-    abort = abort || rs_set_ref_in_item(&TV_DICT_HI2DI(hi)->di_tv, copyID, ht_stack, list_stack);
-  });
-  return abort;
-}
+bool nvim_eval_ht_foreach_di_tv(hashtab_T *ht, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
+{ bool abort = false; HASHTAB_ITER(ht, hi, { abort = abort || rs_set_ref_in_item(&TV_DICT_HI2DI(hi)->di_tv, copyID, ht_stack, list_stack); }); return abort; }
 
-// List iteration: iterate over items and call rs_set_ref_in_item for each
-bool nvim_eval_list_foreach_tv(list_T *l, int copyID, ht_stack_T **ht_stack,
-                               list_stack_T **list_stack)
-{
-  bool abort = false;
-  TV_LIST_ITER(l, li, {
-    if (abort) {
-      break;
-    }
-    abort = rs_set_ref_in_item(TV_LIST_ITEM_TV(li), copyID, ht_stack, list_stack);
-  });
-  return abort;
-}
+bool nvim_eval_list_foreach_tv(list_T *l, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
+{ bool abort = false; TV_LIST_ITER(l, li, { if (abort) { break; } abort = rs_set_ref_in_item(TV_LIST_ITEM_TV(li), copyID, ht_stack, list_stack); }); return abort; }
 
-// Dict watcher iteration
-void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T **ht_stack,
-                                             list_stack_T **list_stack)
-{
-  QUEUE *w = NULL;
-  DictWatcher *watcher = NULL;
-  QUEUE_FOREACH(w, &dd->watchers, {
-    watcher = tv_dict_watcher_node_data(w);
-    rs_set_ref_in_callback(&watcher->callback, copyID, ht_stack, list_stack);
-  })
-}
+void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
+{ QUEUE *w = NULL; DictWatcher *watcher = NULL; QUEUE_FOREACH(w, &dd->watchers, { watcher = tv_dict_watcher_node_data(w); rs_set_ref_in_callback(&watcher->callback, copyID, ht_stack, list_stack); }) }
 
 int nvim_eval_buf_ml_valid(const buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
 int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
@@ -166,63 +138,19 @@ void eval_clear(void)
 char *nvim_partial_get_pt_func_uf_name(partial_T *pt) { return pt->pt_func != NULL ? pt->pt_func->uf_name : NULL; }
 
 bool nvim_gc_mark_buffers(int copyID, bool abort)
-{
-  FOR_ALL_BUFFERS(buf) {
-    abort = abort || rs_set_ref_in_item(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_prompt_callback, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_prompt_interrupt, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_cfu_cb, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_ofu_cb, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_tsrfu_cb, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_tfu_cb, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&buf->b_ffu_cb, copyID, NULL, NULL);
-    if (buf->b_p_cpt_cb != NULL) {
-      abort = abort || set_ref_in_cpt_callbacks(buf->b_p_cpt_cb, buf->b_p_cpt_count, copyID);
-    }
-  }
-  return abort;
-}
+{ FOR_ALL_BUFFERS(buf) { abort = abort || rs_set_ref_in_item(&buf->b_bufvar.di_tv, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_prompt_callback, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_prompt_interrupt, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_cfu_cb, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_ofu_cb, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_tsrfu_cb, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_tfu_cb, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&buf->b_ffu_cb, copyID, NULL, NULL); if (buf->b_p_cpt_cb != NULL) { abort = abort || set_ref_in_cpt_callbacks(buf->b_p_cpt_cb, buf->b_p_cpt_count, copyID); } } return abort; }
 
 bool nvim_gc_mark_tab_windows(int copyID, bool abort)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    abort = abort || rs_set_ref_in_item(&wp->w_winvar.di_tv, copyID, NULL, NULL);
-  }
-  for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
-    if (aucmd_win[i].auc_win != NULL) {
-      abort = abort || rs_set_ref_in_item(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
-    }
-  }
-  return abort;
-}
+{ FOR_ALL_TAB_WINDOWS(tp, wp) { abort = abort || rs_set_ref_in_item(&wp->w_winvar.di_tv, copyID, NULL, NULL); } for (int i = 0; i < AUCMD_WIN_COUNT; i++) { if (aucmd_win[i].auc_win != NULL) { abort = abort || rs_set_ref_in_item(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL); } } return abort; }
 
 bool nvim_gc_mark_tabs(int copyID, bool abort)
-{
-  FOR_ALL_TABS(tp) {
-    abort = abort || rs_set_ref_in_item(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
-  }
-  return abort;
-}
+{ FOR_ALL_TABS(tp) { abort = abort || rs_set_ref_in_item(&tp->tp_winvar.di_tv, copyID, NULL, NULL); } return abort; }
 
 bool nvim_gc_mark_channels(int copyID, bool abort)
-{
-  Channel *data;
-  map_foreach_value(&channels, data, {
-    abort = abort || rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
-    abort = abort || rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
-  })
-  return abort;
-}
+{ Channel *data; map_foreach_value(&channels, data, { abort = abort || rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL); }) return abort; }
 
 bool nvim_gc_mark_timers(int copyID, bool abort)
-{
-  timer_T *timer;
-  map_foreach_value(&timers, timer, {
-    abort = abort || rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
-  })
-  return abort;
-}
+{ timer_T *timer; map_foreach_value(&timers, timer, { abort = abort || rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL); }) return abort; }
 
 void nvim_gc_verb_msg_abort(void)
 {
@@ -300,13 +228,7 @@ int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 
 void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
-{
-  out->cursor_lnum = curwin->w_cursor.lnum; out->cursor_col = curwin->w_cursor.col;
-  out->cursor_coladd = curwin->w_cursor.coladd; out->topline = curwin->w_topline;
-  out->botline = curwin->w_botline; out->visual_active = VIsual_active;
-  out->visual_lnum = VIsual.lnum; out->visual_col = VIsual.col;
-  out->visual_coladd = VIsual.coladd; out->curbuf_fnum = curbuf->b_fnum;
-}
+{ out->cursor_lnum = curwin->w_cursor.lnum; out->cursor_col = curwin->w_cursor.col; out->cursor_coladd = curwin->w_cursor.coladd; out->topline = curwin->w_topline; out->botline = curwin->w_botline; out->visual_active = VIsual_active; out->visual_lnum = VIsual.lnum; out->visual_col = VIsual.col; out->visual_coladd = VIsual.coladd; out->curbuf_fnum = curbuf->b_fnum; }
 
 int nvim_curbuf_fnum(void) { return curbuf->b_fnum; }
 
@@ -375,11 +297,7 @@ void nvim_tv_list_set_lock(list_T *l, int lock) { tv_list_set_lock(l, (VarLockSt
 void nvim_tv_list_last_fix_lock(list_T *l) { TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED; }
 
 void nvim_read_prompt_state(NvimPromptState *out)
-{
-  out->curbuf = curbuf; out->ml_line_count = (int32_t)curbuf->b_ml.ml_line_count;
-  out->prompt_start_lnum = (int32_t)curbuf->b_prompt_start.mark.lnum;
-  out->prompt_callback = &curbuf->b_prompt_callback; out->prompt_interrupt = &curbuf->b_prompt_interrupt;
-}
+{ out->curbuf = curbuf; out->ml_line_count = (int32_t)curbuf->b_ml.ml_line_count; out->prompt_start_lnum = (int32_t)curbuf->b_prompt_start.mark.lnum; out->prompt_callback = &curbuf->b_prompt_callback; out->prompt_interrupt = &curbuf->b_prompt_interrupt; }
 
 void nvim_write_prompt_start_lnum(int32_t lnum) { curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum; }
 linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf) { return buf->b_prompt_start.mark.lnum; }
@@ -387,11 +305,7 @@ void nvim_appended_lines_mark(linenr_T lnum, int count) { appended_lines_mark(ln
 void nvim_curbuf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
 void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
-{
-  out->insecure_foldexpr = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
-  out->insecure_foldtext = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL);
-  out->foldexpr = skipwhite(wp->w_p_fde); out->foldtext = wp->w_p_fdt;
-}
+{ out->insecure_foldexpr = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL); out->insecure_foldtext = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL); out->foldexpr = skipwhite(wp->w_p_fde); out->foldtext = wp->w_p_fdt; }
 
 sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
 { sctx_T *saved = xmalloc(sizeof(sctx_T)); *saved = current_sctx; current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr]; return saved; }
@@ -438,17 +352,9 @@ timer_T *nvim_timer_alloc(void) { return xcalloc(1, sizeof(timer_T)); }
 void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
 void nvim_timer_read_fields(const timer_T *timer, NvimTimerFields *out)
-{
-  out->timer_id = timer->timer_id; out->repeat_count = timer->repeat_count;
-  out->refcount = timer->refcount; out->emsg_count = timer->emsg_count;
-  out->timeout = timer->timeout; out->stopped = timer->stopped; out->paused = timer->paused;
-}
+{ out->timer_id = timer->timer_id; out->repeat_count = timer->repeat_count; out->refcount = timer->refcount; out->emsg_count = timer->emsg_count; out->timeout = timer->timeout; out->stopped = timer->stopped; out->paused = timer->paused; }
 void nvim_timer_write_fields(timer_T *timer, const NvimTimerFields *fields)
-{
-  timer->timer_id = fields->timer_id; timer->repeat_count = fields->repeat_count;
-  timer->refcount = fields->refcount; timer->emsg_count = fields->emsg_count;
-  timer->timeout = fields->timeout; timer->stopped = fields->stopped; timer->paused = fields->paused;
-}
+{ timer->timer_id = fields->timer_id; timer->repeat_count = fields->repeat_count; timer->refcount = fields->refcount; timer->emsg_count = fields->emsg_count; timer->timeout = fields->timeout; timer->stopped = fields->stopped; timer->paused = fields->paused; }
 
 Callback *nvim_timer_get_callback_ptr(timer_T *timer) { return &timer->callback; }
 void nvim_timer_set_callback(timer_T *timer, const Callback *cb) { timer->callback = *cb; }
@@ -467,12 +373,7 @@ size_t nvim_timers_size(void) { return map_size(&timers); }
 uint64_t nvim_timers_next_id(void) { return last_timer_id++; }
 
 void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
-{
-  timer_T *timer;
-  map_foreach_value(&timers, timer, {
-    cb(timer, userdata);
-  })
-}
+{ timer_T *timer; map_foreach_value(&timers, timer, { cb(timer, userdata); }) }
 
 int nvim_get_pressedreturn(void) { return get_pressedreturn() ? 1 : 0; }
 void nvim_set_pressedreturn(int val) { set_pressedreturn(val != 0); }
