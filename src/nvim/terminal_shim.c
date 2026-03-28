@@ -22,8 +22,6 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
-extern void rs_eval_call_provider(const char *provider, const char *method,
-                                  list_T *arguments, bool discard, typval_T *out_rettv);
 #include "nvim/event/defs.h"
 #include "nvim/event/loop.h"
 #include "nvim/event/multiqueue.h"
@@ -69,28 +67,9 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 #include "nvim/window.h"
 
 #include "terminal_shim.c.generated.h"
-extern int rs_win_valid(win_T *win);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
-
-extern void rs_vterm_keyboard_key(void *vt, int key, int mods);
-extern void rs_vterm_keyboard_unichar(void *vt, unsigned int ch, int mods);
-extern void rs_vterm_keyboard_start_paste(void *vt);
-extern void rs_vterm_keyboard_end_paste(void *vt);
-extern void rs_vterm_mouse_move(void *vt, int row, int col, int mods);
-extern void rs_vterm_mouse_button(void *vt, int button, int pressed, int mods);
-extern int rs_terminal_is_filter_char_flags(int c, int flags);
 extern int rs_terminal_row_to_linenr_term(void *term, int row);
-extern int rs_terminal_linenr_to_row_term(void *term, int linenr);
-extern void rs_terminal_focus_gain(void *term);
-extern void rs_terminal_focus_lose(void *term);
-extern int rs_terminal_underline_hl_flag(VTermScreenCellAttrs attrs);
-extern int rs_terminal_parse_osc8(const char *str, int *attr);
-typedef struct {
-  int key;        ///< VTermKey code (VTERM_KEY_NONE if not a special key)
-  int modifiers;  ///< VTermModifier flags
-} VTermKeyResult;
-extern VTermKeyResult rs_terminal_convert_key(int key, int nvim_mod_mask);
 #define REFRESH_DELAY     10       // Refresh delay (ms) for burst performance
 #define TEXTBUF_SIZE      0x1fff
 #define SELECTIONBUF_SIZE 0x0400
@@ -174,9 +153,7 @@ extern int rs_term_theme_cb(bool *dark, void *user);
 extern void rs_term_output_callback(const char *s, size_t len, void *user_data);
 extern int rs_term_sb_push(int cols, const VTermScreenCell *cells, void *data);
 extern int rs_term_sb_pop(int cols, VTermScreenCell *cells, void *data);
-extern void rs_terminal_send_key_impl(void *term, int c);
 extern void rs_terminal_notify_theme_impl(void *term, int dark);
-extern void rs_terminal_refresh_size(void *term, void *buf);
 extern void rs_invalidate_terminal(void *term, int start_row, int end_row);
 extern void rs_refresh_screen_pub(Terminal *term, buf_T *buf);
 
@@ -198,7 +175,6 @@ static VTermSelectionCallbacks vterm_selection_callbacks = {
 };
 
 static Set(ptr_t) invalidated_terminals = SET_INIT;
-extern void rs_emit_termrequest(void **argv);
 extern int rs_on_osc(int command, const char *str, size_t len, int initial, int is_final,
                      void *user);
 static int on_osc(int command, VTermStringFragment frag, void *user) FUNC_ATTR_NONNULL_ALL { return rs_on_osc(command, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
@@ -380,7 +356,6 @@ extern void rs_term_clipboard_set(void **argv);
 extern int rs_term_selection_set(int mask, const char *str, size_t len, int initial, int is_final,
                                   void *user);
 static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user) { return rs_term_selection_set((int)mask, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
-extern int rs_send_mouse_event(void *term, int c);
 extern void rs_refresh_terminal(void *term);
 extern void rs_refresh_cursor(void *term, bool *cursor_visible);
 extern void rs_refresh_timer_cb(void *watcher, void *data);
