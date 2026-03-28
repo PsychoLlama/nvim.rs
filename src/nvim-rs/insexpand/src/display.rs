@@ -3,7 +3,7 @@
 //! This module provides Rust implementations for completion display helpers
 //! that orchestrate popup menu display and match addition.
 
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 
 // Direct access to C globals.
 extern "C" {
@@ -24,12 +24,18 @@ extern "C" {
 
     // Completion direction
 
-    // ins_compl_add wrapper (from insexpand_shim.c)
-    fn nvim_ins_compl_add_simple(
+    // ins_compl_add (direct call)
+    fn rs_ins_compl_add(
         str_: *const c_char,
         len: c_int,
+        fname: *const c_char,
+        cptext: *const c_void,
+        cptext_allocated: c_int,
+        user_data: *const c_void,
         dir: c_int,
         flags: c_int,
+        adup: c_int,
+        user_hl: *const c_int,
         score: c_int,
     ) -> c_int;
 
@@ -94,7 +100,19 @@ pub unsafe extern "C" fn rs_ins_compl_add_matches(
     while i < num_matches && add_r != -1 {
         // FAIL = -1
         let str_ = *matches.add(i as usize);
-        add_r = nvim_ins_compl_add_simple(str_, -1, dir, flags, FUZZY_SCORE_NONE);
+        add_r = rs_ins_compl_add(
+            str_,
+            -1,
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            std::ptr::null(),
+            dir,
+            flags,
+            0,
+            std::ptr::null(),
+            FUZZY_SCORE_NONE,
+        );
         if add_r == 0 {
             // OK
             dir = FORWARD;

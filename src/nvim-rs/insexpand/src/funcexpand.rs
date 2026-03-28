@@ -244,11 +244,17 @@ extern "C" {
     fn rs_ins_compl_free();
     fn rs_get_cot_flags() -> u32;
     fn rs_save_orig_extmarks();
-    fn nvim_ins_compl_add_simple(
+    fn rs_ins_compl_add(
         str_: *const c_char,
         len: c_int,
+        fname: *const c_char,
+        cptext: *const c_void,
+        cptext_allocated: c_int,
+        user_data: *const c_void,
         dir: c_int,
         flags: c_int,
+        adup: c_int,
+        user_hl: *const c_int,
         score: c_int,
     ) -> c_int;
     #[link_name = "cbuf_to_string"]
@@ -341,11 +347,17 @@ pub unsafe extern "C" fn rs_set_completion(startcol: c_int, list: ListPtr) {
         flags |= CP_ICASE_SC;
     }
 
-    let add_result = nvim_ins_compl_add_simple(
+    let add_result = rs_ins_compl_add(
         crate::vars::compl_orig_text.data.cast_const(),
         crate::vars::compl_orig_text.size as c_int,
+        std::ptr::null(),
+        std::ptr::null(),
+        0,
+        std::ptr::null(),
         0,
         flags | CP_FAST_SC,
+        0,
+        std::ptr::null(),
         FUZZY_SCORE_NONE_SC,
     );
     if add_result != OK_FUNCEXPAND {

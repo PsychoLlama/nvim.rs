@@ -311,7 +311,7 @@ extern "C" {
         startcol: *mut c_int,
     ) -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_expand_by_function_with_cb(cb_opaque: *mut c_void);
+    fn nvim_expand_by_function_full_impl(type_: c_int, base: *mut c_char, cb_opaque: *mut c_void);
     // Completion state
     fn rs_set_compl_globals(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
     // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
@@ -467,7 +467,7 @@ pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_vo
         rs_ins_compl_insert_bytes(rs_ins_compl_leader(), -1);
     }
 
-    nvim_expand_by_function_with_cb(cb_opaque);
+    nvim_expand_by_function_full_impl(0, crate::pattern::cpt_compl_pattern.data, cb_opaque);
 
     if !refresh_always {
         rs_ins_compl_delete(0);

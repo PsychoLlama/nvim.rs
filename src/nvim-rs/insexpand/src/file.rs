@@ -5,7 +5,7 @@
 //! provides utilities for path manipulation and state management.
 
 #![allow(dead_code, unused_imports)]
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 
 // C accessor functions
 
@@ -414,12 +414,18 @@ extern "C" {
     // Fuzzy matching
     fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
 
-    // Match addition
-    fn nvim_ins_compl_add_simple(
+    // Match addition (direct call)
+    fn rs_ins_compl_add(
         str_: *const c_char,
         len: c_int,
+        fname: *const c_char,
+        cptext: *const c_void,
+        cptext_allocated: c_int,
+        user_data: *const c_void,
         dir: c_int,
         flags: c_int,
+        adup: c_int,
+        user_hl: *const c_int,
         score: c_int,
     ) -> c_int;
     fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
@@ -568,8 +574,19 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
                 let idx = fidx as usize;
                 let match_str = *matches.add(idx);
                 let current_score = fuzzy_scores[idx];
-                if nvim_ins_compl_add_simple(match_str.cast_const(), -1, dir, flags, current_score)
-                    == OK
+                if rs_ins_compl_add(
+                    match_str.cast_const(),
+                    -1,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    dir,
+                    flags,
+                    0,
+                    std::ptr::null(),
+                    current_score,
+                ) == OK
                 {
                     dir = FORWARD;
                 }

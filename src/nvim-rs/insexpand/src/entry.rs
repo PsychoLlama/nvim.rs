@@ -5,7 +5,7 @@
 //! provides utilities for state checking and setup.
 
 #![allow(dead_code, unused_imports)]
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 
 use nvim_window::WinHandle;
 
@@ -58,11 +58,17 @@ extern "C" {
     // Helpers for inlined Phase 11 functions
     #[link_name = "cbuf_to_string"]
     fn cbuf_to_string_entry(buf: *const c_char, size: usize) -> crate::vars::NvimString;
-    fn nvim_ins_compl_add_simple(
+    fn rs_ins_compl_add(
         str_: *const c_char,
         len: c_int,
+        fname: *const c_char,
+        cptext: *const c_void,
+        cptext_allocated: c_int,
+        user_data: *const c_void,
         dir: c_int,
         flags: c_int,
+        adup: c_int,
+        user_hl: *const c_int,
         score: c_int,
     ) -> c_int;
     fn nvim_clear_compl_orig_extmarks();
@@ -325,11 +331,17 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     // nvim_ins_compl_add_orig_text inlined (Phase 11):
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let orig_text_len_int = crate::vars::nvim_get_compl_orig_text_size() as c_int;
-    if nvim_ins_compl_add_simple(
+    if rs_ins_compl_add(
         crate::vars::compl_orig_text.data.cast_const(),
         orig_text_len_int,
+        std::ptr::null(),
+        std::ptr::null(),
+        0,
+        std::ptr::null(),
         0,
         orig_flags,
+        0,
+        std::ptr::null(),
         -1, // FUZZY_SCORE_NONE
     ) != OK
     {

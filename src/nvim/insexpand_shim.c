@@ -392,7 +392,6 @@ void nvim_trigger_complete_changed_guarded(int cur)
   recursive = false;
   restore_v_event(v_event, &save_v_event);
 }
-_Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
 static Callback cfu_cb;    ///< 'completefunc' callback function
 static Callback ofu_cb;    ///< 'omnifunc' callback function
@@ -620,9 +619,7 @@ size_t nvim_yankreg_y_size(void *reg) { return reg ? ((yankreg_T *)reg)->y_size 
 int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y_array == NULL) ? 1 : 0; }
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
   { yankreg_T *r = (yankreg_T *)reg; return (!r || j >= r->y_size || !r->y_array) ? NULL : r->y_array[j].data; }
-int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const char *fname, int dir, int cont_s_ipos, int score) { return rs_ins_compl_add_infercase((char *)str, len, icase ? 1 : 0, fname, dir, cont_s_ipos ? 1 : 0, score); }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
-int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score) { return rs_ins_compl_add((char *)str, len, NULL, NULL, 0, NULL, dir, flags, 0, NULL, score); }
 size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep) { return copy_option_part(src, buf, (size_t)maxlen, sep); }
 int nvim_get_complete_funcname_empty(int ctrl_x_mode_val) { return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0; }
 void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val) { return (void *)get_insert_callback(ctrl_x_mode_val); }
@@ -658,7 +655,6 @@ void nvim_ctrl_x_mode_reset_to_normal(void) {
   if (!shortmess(SHM_COMPLETIONMENU)) { msg_clr_cmdline(); }
 }
 void nvim_emit_completefunc_not_set_error(int is_function) { semsg(_(e_notset), is_function ? "completefunc" : "omnifunc"); }
-void nvim_expand_by_function_with_cb(void *cb_opaque) { nvim_expand_by_function_full_impl(0, cpt_compl_pattern.data, cb_opaque); }
 size_t nvim_copy_option_part_iobuff_ffi(char **src) { return copy_option_part(src, IObuff, IOSIZE, ","); }
 void nvim_expand_by_function_full_impl(int type, char *base, void *cb_opaque)
 {

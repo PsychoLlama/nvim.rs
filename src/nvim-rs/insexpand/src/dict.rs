@@ -425,8 +425,8 @@ extern "C" {
     fn rs_ins_compl_leader() -> *const c_char;
     fn rs_ins_compl_leader_len() -> usize;
     fn rs_ins_compl_check_keys(max_count: c_int, must_redraw: c_int);
-    fn nvim_ins_compl_add_infercase_ffi(
-        str_: *const c_char,
+    fn rs_ins_compl_add_infercase(
+        str_: *mut c_char,
         len: c_int,
         icase: c_int,
         fname: *const c_char,
@@ -626,8 +626,8 @@ unsafe fn ins_compl_dictionaries(dict_start: *const c_char, flags: c_int, thesau
                                 } else {
                                     crate::rs_find_word_end(lptr)
                                 };
-                                let add_r = nvim_ins_compl_add_infercase_ffi(
-                                    lptr.cast_const(),
+                                let add_r = rs_ins_compl_add_infercase(
+                                    lptr,
                                     end_ptr.offset_from(lptr) as c_int,
                                     p_ic_dict,
                                     (*files.add(i as usize)).cast_const(),
@@ -667,8 +667,8 @@ unsafe fn ins_compl_dictionaries(dict_start: *const c_char, flags: c_int, thesau
                             } else {
                                 crate::rs_find_word_end(lptr)
                             };
-                            let mut add_r = nvim_ins_compl_add_infercase_ffi(
-                                regmatch.startp[0].cast_const(),
+                            let mut add_r = rs_ins_compl_add_infercase(
+                                regmatch.startp[0],
                                 lptr.offset_from(regmatch.startp[0]) as c_int,
                                 p_ic_dict,
                                 (*files.add(i as usize)).cast_const(),
@@ -693,8 +693,8 @@ unsafe fn ins_compl_dictionaries(dict_start: *const c_char, flags: c_int, thesau
                                         lptr = lptr.add(l);
                                     }
                                     if wstart != regmatch.startp[0] {
-                                        add_r = nvim_ins_compl_add_infercase_ffi(
-                                            wstart.cast_const(),
+                                        add_r = rs_ins_compl_add_infercase(
+                                            wstart,
                                             lptr.offset_from(wstart) as c_int,
                                             p_ic_dict,
                                             (*files.add(i as usize)).cast_const(),

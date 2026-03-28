@@ -24,9 +24,9 @@ extern "C" {
     fn nvim_yankreg_y_array_null(reg: *mut std::ffi::c_void) -> c_int;
     fn nvim_yankreg_y_array_entry_data(reg: *mut std::ffi::c_void, j: usize) -> *const c_char;
 
-    // ins_compl_add_infercase wrapper
-    fn nvim_ins_compl_add_infercase_ffi(
-        str_: *const c_char,
+    // ins_compl_add_infercase (direct call)
+    fn rs_ins_compl_add_infercase(
+        str_: *mut c_char,
         len: c_int,
         icase: c_int,
         fname: *const c_char,
@@ -124,8 +124,8 @@ pub unsafe extern "C" fn rs_get_register_completion() {
                 }
 
                 if matches_orig_text(str_, str_len as usize) {
-                    let r = nvim_ins_compl_add_infercase_ffi(
-                        str_,
+                    let r = rs_ins_compl_add_infercase(
+                        str_.cast_mut(),
                         str_len,
                         c_int::from(p_ic),
                         std::ptr::null(),
@@ -169,8 +169,8 @@ pub unsafe extern "C" fn rs_get_register_completion() {
 
                     let len = word_end.offset_from(p) as c_int;
                     if len > 0 && matches_orig_text(p.cast_const(), len as usize) {
-                        let r = nvim_ins_compl_add_infercase_ffi(
-                            p.cast_const(),
+                        let r = rs_ins_compl_add_infercase(
+                            p,
                             len,
                             c_int::from(p_ic),
                             std::ptr::null(),

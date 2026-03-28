@@ -5,7 +5,7 @@
 //! The core buffer operations remain in C.
 
 #![allow(dead_code, unused_imports)]
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 
 use nvim_buffer::BufHandle;
 
@@ -30,11 +30,17 @@ extern "C" {
     fn path_tail(path: *const c_char) -> *mut c_char;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn strlen(s: *const c_char) -> usize;
-    fn nvim_ins_compl_add_simple(
+    fn rs_ins_compl_add(
         str_: *const c_char,
         len: c_int,
+        fname: *const c_char,
+        cptext: *const c_void,
+        cptext_allocated: c_int,
+        user_data: *const c_void,
         dir: c_int,
         flags: c_int,
+        adup: c_int,
+        user_hl: *const c_int,
         score: c_int,
     ) -> c_int;
 }
@@ -93,11 +99,17 @@ pub unsafe extern "C" fn rs_get_next_bufname_token() {
                         0
                     };
                     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-                    nvim_ins_compl_add_simple(
+                    rs_ins_compl_add(
                         tail.cast_const(),
                         strlen(tail.cast_const()) as c_int,
+                        std::ptr::null(),
+                        std::ptr::null(),
+                        0,
+                        std::ptr::null(),
                         0,
                         flags,
+                        0,
+                        std::ptr::null(),
                         -1, // FUZZY_SCORE_NONE
                     );
                 }

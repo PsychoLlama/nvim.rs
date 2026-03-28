@@ -197,8 +197,8 @@ extern "C" {
     ) -> *mut std::ffi::c_char;
     fn xstrlcpy(dst: *mut std::ffi::c_char, src: *const std::ffi::c_char, size: usize) -> usize;
     fn strcmp(s1: *const std::ffi::c_char, s2: *const std::ffi::c_char) -> c_int;
-    fn nvim_ins_compl_add_infercase_ffi(
-        str_: *const std::ffi::c_char,
+    fn rs_ins_compl_add_infercase(
+        str_: *mut std::ffi::c_char,
         len: c_int,
         icase: c_int,
         fname: *const std::ffi::c_char,
@@ -773,7 +773,7 @@ unsafe fn rs_ins_compl_add_word_or_line(
 
     let sfname = nvim_ins_compl_st_ins_buf_get_sfname();
 
-    let add_r = nvim_ins_compl_add_infercase_ffi(
+    let add_r = rs_ins_compl_add_infercase(
         ptr,
         len,
         crate::vars::nvim_get_p_ic(),
