@@ -7,6 +7,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 #![allow(clippy::cast_possible_wrap)] // FFI with C char types
 
+use libc;
 use std::ffi::{c_char, c_int};
 
 use crate::opt_index::{
@@ -365,6 +366,23 @@ pub extern "C" fn rs_is_unix() -> c_int {
     #[cfg(unix)]
     {
         1
+    }
+    #[cfg(not(unix))]
+    {
+        0
+    }
+}
+
+/// Check if the current process is running as root (UID 0).
+///
+/// Returns 1 on Unix if `getuid() == 0`, 0 otherwise.
+/// Replaces the C `nvim_is_root_user` accessor.
+#[no_mangle]
+pub extern "C" fn rs_is_root_user() -> c_int {
+    #[cfg(unix)]
+    {
+        // SAFETY: getuid() is always safe to call on Unix
+        c_int::from(unsafe { libc::getuid() } == 0)
     }
     #[cfg(not(unix))]
     {

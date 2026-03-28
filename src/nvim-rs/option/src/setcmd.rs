@@ -1600,11 +1600,67 @@ extern "C" {
 
     // options[] array accessors
     fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
-    /// Returns: 0=none, 1=syn, 2=ft, 3=keymap, 4=sps
-    fn nvim_opt_var_identity(opt_idx: OptIndex) -> c_int;
-    /// Returns: 1=dir+XP_BS_THREE, 2=dir+XP_BS_ONE, 3=file+XP_BS_THREE, 4=file+XP_BS_ONE
-    fn nvim_opt_var_expand_type(opt_idx: OptIndex) -> c_int;
 
+    // Global option var pointer accessors (used by opt_var_identity / opt_var_expand_type)
+    fn nvim_option_get_p_syn_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_ft_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_keymap_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_sps_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_bdir_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_dir_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_pp_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_rtp_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_vdir_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_path_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_cdpath_ptr() -> *mut std::ffi::c_void;
+    fn nvim_option_get_p_tags_ptr() -> *mut std::ffi::c_void;
+
+}
+
+/// Returns an identity code for special option vars: 0=none, 1=syn, 2=ft, 3=keymap, 4=sps.
+/// Replaces the C `nvim_opt_var_identity` function.
+#[inline]
+unsafe fn opt_var_identity(opt_idx: c_int) -> c_int {
+    let v = nvim_get_option_var(opt_idx);
+    if v.is_null() {
+        return 0;
+    }
+    if v == nvim_option_get_p_syn_ptr() {
+        1
+    } else if v == nvim_option_get_p_ft_ptr() {
+        2
+    } else if v == nvim_option_get_p_keymap_ptr() {
+        3
+    } else if v == nvim_option_get_p_sps_ptr() {
+        4
+    } else {
+        0
+    }
+}
+
+/// Returns expansion type for path/file options.
+/// 0=not special, 1=dir+XP_BS_THREE, 2=dir+XP_BS_ONE, 3=file+XP_BS_THREE, 4=file+XP_BS_ONE.
+/// Replaces the C `nvim_opt_var_expand_type` function.
+#[inline]
+unsafe fn opt_var_expand_type(opt_idx: c_int) -> c_int {
+    let p = nvim_get_option_var(opt_idx);
+    if p.is_null() {
+        return 0;
+    }
+    if p == nvim_option_get_p_bdir_ptr()
+        || p == nvim_option_get_p_dir_ptr()
+        || p == nvim_option_get_p_pp_ptr()
+        || p == nvim_option_get_p_rtp_ptr()
+        || p == nvim_option_get_p_vdir_ptr()
+    {
+        2 // EXPAND_DIRECTORIES + XP_BS_ONE
+    } else if p == nvim_option_get_p_path_ptr() || p == nvim_option_get_p_cdpath_ptr() {
+        1 // EXPAND_DIRECTORIES + XP_BS_THREE
+    } else if p == nvim_option_get_p_tags_ptr() {
+        3 // EXPAND_FILES + XP_BS_THREE
+    } else {
+        4 // EXPAND_FILES + XP_BS_ONE
+    }
 }
 
 /// Check if a byte is alphanumeric or underscore.
@@ -1785,7 +1841,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     expand_option_start_col = col as c_int;
 
     // Special-case options that reuse expansion logic from other commands
-    match nvim_opt_var_identity(opt_idx) {
+    match opt_var_identity(opt_idx) {
         1 => {
             nvim_xp_set_context(xp, expand_ctx::EXPAND_OWNSYNTAX);
             return;
@@ -1823,7 +1879,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
 
     // Only string options below. Handle kOptFlagExpand options.
     if flags & opt_flag::EXPAND != 0 {
-        let expand_type = nvim_opt_var_expand_type(opt_idx);
+        let expand_type = opt_var_expand_type(opt_idx);
         match expand_type {
             1 => {
                 // EXPAND_DIRECTORIES + XP_BS_THREE (p_path or p_cdpath)
@@ -1886,7 +1942,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     }
 
     // Special case for 'spellsuggest' (identity==4): "file:" prefix triggers file expansion
-    if nvim_opt_var_identity(opt_idx) == 4 {
+    if opt_var_identity(opt_idx) == 4 {
         let xp_pat = nvim_xp_get_pattern(xp);
         // Compare first 5 bytes with "file:"
         let file_prefix = b"file:";

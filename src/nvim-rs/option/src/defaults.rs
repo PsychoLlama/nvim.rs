@@ -146,8 +146,6 @@ use crate::opt_index::{
 };
 
 extern "C" {
-    /// Check if running as root user (getuid() == ROOT_UID)
-    fn nvim_is_root_user() -> c_int;
     /// Check if option is global-local (scope_flags is not a power of two)
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     /// Check if option has the given type
@@ -245,7 +243,7 @@ pub unsafe extern "C" fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal 
 #[export_name = "get_option_default"]
 pub unsafe extern "C" fn rs_get_option_default(opt_idx: OptIndex, opt_flags: c_int) -> OptVal {
     // On Unix, modeline defaults to off for root.
-    if opt_idx == K_OPT_MODELINE && nvim_is_root_user() != 0 {
+    if opt_idx == K_OPT_MODELINE && crate::init::rs_is_root_user() != 0 {
         return OptVal {
             type_: OptValType::Boolean,
             data: OptValData { boolean: 0 }, // false

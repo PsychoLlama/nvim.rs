@@ -142,11 +142,6 @@ const void *nvim_get_option_def_val_data_ptr(OptIndex opt_idx) { return &options
 void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx].script_ctx; }
 void nvim_set_option_def_val(OptIndex opt_idx, OptVal val) { options[opt_idx].def_val = val; }
 int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_val.data.number; }
-#ifdef UNIX
-int nvim_is_root_user(void) { return getuid() == ROOT_UID ? 1 : 0; }
-#else
-int nvim_is_root_user(void) { return 0; }
-#endif
 sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : options[opt_idx].script_ctx; }
 sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) { return (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : win->w_p_script_ctx[opt_idx]; }
 sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) { return (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : buf->b_p_script_ctx[opt_idx]; }
@@ -194,6 +189,18 @@ int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
 int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }
 const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx].fullname; }
 void *nvim_option_get_p_kp_ptr(void) { return (void *)&p_kp; }
+void *nvim_option_get_p_syn_ptr(void) { return (void *)&p_syn; }
+void *nvim_option_get_p_ft_ptr(void) { return (void *)&p_ft; }
+void *nvim_option_get_p_keymap_ptr(void) { return (void *)&p_keymap; }
+void *nvim_option_get_p_sps_ptr(void) { return (void *)&p_sps; }
+void *nvim_option_get_p_bdir_ptr(void) { return (void *)&p_bdir; }
+void *nvim_option_get_p_dir_ptr(void) { return (void *)&p_dir; }
+void *nvim_option_get_p_pp_ptr(void) { return (void *)&p_pp; }
+void *nvim_option_get_p_rtp_ptr(void) { return (void *)&p_rtp; }
+void *nvim_option_get_p_vdir_ptr(void) { return (void *)&p_vdir; }
+void *nvim_option_get_p_path_ptr(void) { return (void *)&p_path; }
+void *nvim_option_get_p_cdpath_ptr(void) { return (void *)&p_cdpath; }
+void *nvim_option_get_p_tags_ptr(void) { return (void *)&p_tags; }
 OptIndex nvim_find_option_len_hash(const char *name, size_t len)
   { int index = find_option_hash(name, len); return index >= 0 ? option_hash_elems[index].opt_idx : kOptInvalid; }
 _Static_assert(sizeof(switchwin_T) == 24,
@@ -236,30 +243,6 @@ int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 int nvim_option_has_expand_cb(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? 0 : (options[opt_idx].opt_expand_cb != NULL ? 1 : 0); }
-int nvim_opt_var_identity(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
-  void *v = options[opt_idx].var;
-  if (v == &p_syn) return 1;
-  if (v == &p_ft) return 2;
-  if (v == &p_keymap) return 3;
-  if (v == &p_sps) return 4;
-  return 0;
-}
-int nvim_opt_var_expand_type(OptIndex opt_idx) {
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
-  char *p = options[opt_idx].var;
-  if (p == (char *)&p_bdir || p == (char *)&p_dir || p == (char *)&p_pp
-      || p == (char *)&p_rtp || p == (char *)&p_vdir) {
-    return 2;  // EXPAND_DIRECTORIES + XP_BS_ONE
-  }
-  if (p == (char *)&p_path || p == (char *)&p_cdpath) {
-    return 1;  // EXPAND_DIRECTORIES + XP_BS_THREE
-  }
-  if (p == (char *)&p_tags) {
-    return 3;  // EXPAND_FILES + XP_BS_THREE
-  }
-  return 4;  // EXPAND_FILES + XP_BS_ONE
-}
 int option_set_callback_func(char *optval, Callback *optcb)
 {
   if (optval == NULL || *optval == NUL) {
