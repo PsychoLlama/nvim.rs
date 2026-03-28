@@ -229,7 +229,7 @@ void early_init(mparm_T *paramp)
   estack_init();
   cmdline_init();
   eval_init();          // init global variables
-  init_path(argv0 ? argv0 : "nvim");
+  rs_init_path(argv0 ? argv0 : "nvim");
   init_normal_cmds();   // Init the table of Normal mode commands.
   runtime_init();
   highlight_init();
@@ -308,9 +308,9 @@ int main(int argc, char **argv)
 
   // Many variables are in `params` so that we can pass them around easily.
   // `argc` and `argv` are also copied, so that they can be changed.
-  init_params(&params, argc, argv);
+  rs_init_params(&params, argc, argv);
 
-  init_startuptime(&params);
+  rs_init_startuptime(&params);
 
   // Need to find "--clean" before actually parsing arguments.
   for (int i = 1; i < params.argc; i++) {
@@ -327,11 +327,13 @@ int main(int argc, char **argv)
   set_argv_var(argv, argc);  // set v:argv
 
   // Check if we have an interactive window.
-  check_and_set_isatty(&params);
+  rs_check_and_set_isatty(&params);
+  TIME_MSG("window checked");
 
   // Process the command line arguments.  File names are put in the global
   // argument list "global_alist".
-  command_line_scan(&params);
+  rs_command_line_scan(&params);
+  TIME_MSG("parsing arguments");
 
   nlua_init(argv, argc, params.lua_arg0);
   TIME_MSG("init lua interpreter");
@@ -387,7 +389,7 @@ int main(int argc, char **argv)
   // Nvim server...
 
   if (!server_init(params.listen_addr)) {
-    mainerr(IObuff, NULL, NULL);
+    rs_mainerr(IObuff, NULL, NULL);
   }
 
   TIME_MSG("expanding arguments");
@@ -480,7 +482,8 @@ int main(int argc, char **argv)
   p_lpl = vimrc_none ? params.clean : p_lpl;
 
   // Execute --cmd arguments.
-  exe_pre_commands(&params);
+  rs_exe_pre_commands(&params);
+  TIME_MSG("--cmd commands");
 
   if (!vimrc_none || params.clean) {
     // Sources ftplugin.vim and indent.vim. We do this *before* the user startup scripts to ensure
@@ -490,7 +493,8 @@ int main(int argc, char **argv)
   }
 
   // Source startup scripts.
-  source_startup_scripts(&params);
+  rs_source_startup_scripts(&params);
+  TIME_MSG("sourcing vimrc file(s)");
 
   // If using the runtime (-u is not NONE), enable syntax & filetype plugins.
   if (!vimrc_none || params.clean) {
@@ -507,7 +511,7 @@ int main(int argc, char **argv)
   load_plugins();
 
   // Decide about window layout for diff mode after reading vimrc.
-  set_window_layout(&params);
+  rs_set_window_layout(&params);
 
   // Recovery mode without a file name: List swap files.
   // Uses the 'dir' option, therefore it must be after the initializations.
@@ -546,7 +550,10 @@ int main(int argc, char **argv)
 
   // "-q errorfile": Load the error file now.
   // If the error file can't be read, exit before doing anything else.
-  handle_quickfix(&params);
+  rs_handle_quickfix(&params);
+  if (params.edit_type == EDIT_QF) {
+    TIME_MSG("reading errorfile");
+  }
 
   //
   // Start putting things on the screen.
@@ -619,11 +626,15 @@ int main(int argc, char **argv)
 
   // Need to jump to the tag before executing the '-c command'.
   // Makes "vim -c '/return' -t main" work.
-  handle_tag(params.tagname);
+  rs_handle_tag(params.tagname);
+  if (params.tagname != NULL) {
+    TIME_MSG("jumping to tag");
+  }
 
   // Execute any "+", "-c" and "-S" arguments.
   if (params.n_commands > 0) {
-    exe_commands(&params);
+    rs_exe_commands(&params);
+    TIME_MSG("executing command arguments");
   }
 
   starting = 0;
@@ -1049,46 +1060,6 @@ static void remote_request(mparm_T *params, int remote_args, char *server_addr, 
   }
 }
 
-/// Scan the command line arguments.
-static void command_line_scan(mparm_T *parmp)
-{
-  rs_command_line_scan(parmp);
-  TIME_MSG("parsing arguments");
-}
-
-static void init_params(mparm_T *paramp, int argc, char **argv) { rs_init_params(paramp, argc, argv); }
-
-static void init_startuptime(mparm_T *paramp) { rs_init_startuptime(paramp); }
-
-static void check_and_set_isatty(mparm_T *paramp)
-{
-  rs_check_and_set_isatty(paramp);
-  TIME_MSG("window checked");
-}
-
-static void init_path(const char *exename)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_init_path(exename);
-}
-
-static void set_window_layout(mparm_T *paramp) { rs_set_window_layout(paramp); }
-
-static void handle_quickfix(mparm_T *paramp)
-{
-  rs_handle_quickfix(paramp);
-  if (paramp->edit_type == EDIT_QF) {
-    TIME_MSG("reading errorfile");
-  }
-}
-
-static void handle_tag(char *tagname)
-{
-  rs_handle_tag(tagname);
-  if (tagname != NULL) {
-    TIME_MSG("jumping to tag");
-  }
-}
 
 /// Read text from stdin.
 static void read_stdin(void)
@@ -1143,7 +1114,7 @@ static void read_stdin(void)
   no_wait_return = false;
   msg_didany = save_msg_didany;
   TIME_MSG("reading stdin");
-  check_swap_exists_action();
+  rs_check_swap_exists_action();
 }
 
 // Create the requested number of windows and edit buffers in them.
@@ -1379,42 +1350,6 @@ static void edit_buffers(mparm_T *parmp, char *cwd)
   }
 }
 
-static void exe_pre_commands(mparm_T *parmp)
-{
-  rs_exe_pre_commands(parmp);
-  TIME_MSG("--cmd commands");
-}
-
-static void exe_commands(mparm_T *parmp)
-{
-  rs_exe_commands(parmp);
-  TIME_MSG("executing command arguments");
-}
-
-
-
-
-static void source_startup_scripts(const mparm_T *const parmp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_source_startup_scripts(parmp);
-  TIME_MSG("sourcing vimrc file(s)");
-}
-
-static void mainerr(const char *msg1, const char *msg2, const char *msg3)
-  FUNC_ATTR_NORETURN
-{
-  rs_mainerr(msg1, msg2, msg3);
-  abort();  // unreachable: rs_mainerr is noreturn
-}
-
-static void print_mainerr(const char *msg1, const char *msg2, const char *msg3) { rs_print_mainerr(msg1, msg2, msg3); }
-
-static void version(void) { rs_version(); }
-
-static void usage(void) { rs_usage(); }
-
-static void check_swap_exists_action(void) { rs_check_swap_exists_action(); }
 
 #ifdef ENABLE_ASAN_UBSAN
 const char *__ubsan_default_options(void) { return "print_stacktrace=1"; }
