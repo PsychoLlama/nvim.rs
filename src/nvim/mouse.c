@@ -27,7 +27,6 @@
 #include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
-#include "nvim/menu.h"
 #include "nvim/message.h"
 #include "nvim/mouse.h"
 #include "nvim/move.h"
@@ -79,21 +78,6 @@ int nvim_mouse_get_tab_click_tabnr(int col)
   return tab_page_click_defs[col].tabnr;
 }
 
-
-/// Move "pos" back to the start of the word it's in.
-static void find_start_of_word(pos_T *pos)
-{
-  char *line = ml_get(pos->lnum);
-  pos->col = rs_find_start_of_word(line, pos->col);
-}
-
-/// Move "pos" forward to the end of the word it's in.
-/// When 'selection' is "exclusive", the position is just after the word.
-static void find_end_of_word(pos_T *pos)
-{
-  char *line = ml_get(pos->lnum);
-  pos->col = rs_find_end_of_word(line, pos->col, *p_sel == 'e');
-}
 
 extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_move_tab_to_mouse(void);
@@ -772,15 +756,15 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       if (pos == NULL && (is_click || is_drag)) {
         // When not found a match or when dragging: extend to include a word.
         if (lt(curwin->w_cursor, orig_cursor)) {
-          find_start_of_word(&curwin->w_cursor);
-          find_end_of_word(&VIsual);
+          { char *line = ml_get(curwin->w_cursor.lnum); curwin->w_cursor.col = rs_find_start_of_word(line, curwin->w_cursor.col); }
+          { char *line = ml_get(VIsual.lnum); VIsual.col = rs_find_end_of_word(line, VIsual.col, *p_sel == 'e'); }
         } else {
-          find_start_of_word(&VIsual);
+          { char *line = ml_get(VIsual.lnum); VIsual.col = rs_find_start_of_word(line, VIsual.col); }
           if (*p_sel == 'e' && *get_cursor_pos_ptr() != NUL) {
             curwin->w_cursor.col +=
               utfc_ptr2len(get_cursor_pos_ptr());
           }
-          find_end_of_word(&curwin->w_cursor);
+          { char *line = ml_get(curwin->w_cursor.lnum); curwin->w_cursor.col = rs_find_end_of_word(line, curwin->w_cursor.col, *p_sel == 'e'); }
         }
       }
       curwin->w_set_curswant = true;
