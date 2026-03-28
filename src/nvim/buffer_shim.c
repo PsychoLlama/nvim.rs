@@ -26,6 +26,7 @@
 #include "nvim/indent.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
+#include "nvim/memfile.h"
 #include "nvim/memline.h"
 #include "nvim/message.h"
 #include "nvim/option.h"
@@ -540,3 +541,10 @@ int nvim_buf_get_b_p_ff_char(const buf_T *buf) { return (unsigned char)buf->b_p_
 void nvim_set_fileencoding_local(const char *fenc) {
   set_option_direct(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL, 0);
 }
+
+// Phase 3: shorten_buf_fname / shorten_fnames accessors
+void nvim_buf_set_b_sfname(buf_T *buf, char *val) { buf->b_sfname = val; }
+void nvim_buf_set_b_fname(buf_T *buf, char *val) { buf->b_fname = val; }
+void nvim_buf_mf_fullname(buf_T *buf) { mf_fullname(buf->b_ml.ml_mfp); }
+void nvim_set_redraw_tabline(int val) { redraw_tabline = (bool)val; }
+int nvim_bt_nofilename(buf_T *buf) { return bt_nofilename(buf) ? 1 : 0; }

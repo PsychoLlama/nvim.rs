@@ -1041,6 +1041,116 @@ pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char
     OK
 }
 
+// =============================================================================
+// shorten_buf_fname and shorten_fnames
+// =============================================================================
+
+const MAXPATHL: usize = 4096;
+
+extern "C" {
+    /// Check if buftype is "nofile" or similar.
+    fn nvim_bt_nofilename(buf: *mut c_void) -> c_int;
+    /// Returns non-zero if the given path looks like a URL.
+    fn path_with_url(fname: *const c_char) -> c_int;
+    /// Returns non-zero if the path is absolute.
+    fn path_is_absolute(fname: *const c_char) -> bool;
+    /// Returns a pointer into ffname shortened relative to dirname, or NULL.
+    fn path_shorten_fname(ffname: *const c_char, dirname: *const c_char) -> *mut c_char;
+    /// Duplicate a C string.
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    /// Free memory.
+    fn xfree(ptr: *mut c_void);
+    /// Get buf->b_fname (non-owning pointer).
+    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
+    /// Get buf->b_ffname (non-owning pointer).
+    fn nvim_buf_get_b_ffname(buf: *const c_void) -> *const c_char;
+    /// Get buf->b_sfname (non-owning pointer).
+    fn nvim_buf_get_b_sfname(buf: *const c_void) -> *const c_char;
+    /// Set buf->b_sfname.
+    fn nvim_buf_set_b_sfname(buf: *mut c_void, val: *mut c_char);
+    /// Set buf->b_fname.
+    fn nvim_buf_set_b_fname(buf: *mut c_void, val: *mut c_char);
+    /// Call mf_fullname(buf->b_ml.ml_mfp).
+    fn nvim_buf_mf_fullname(buf: *mut c_void);
+    /// Get dirname from current working directory.
+    fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
+    /// Trigger redraw of all status lines.
+    fn status_redraw_all();
+    /// Set redraw_tabline global.
+    fn nvim_set_redraw_tabline(val: c_int);
+    /// Get firstbuf pointer.
+    fn nvim_get_firstbuf() -> *mut c_void;
+    /// Get buf->b_next.
+    fn nvim_buf_get_b_next(buf: *mut c_void) -> *mut c_void;
+}
+
+/// Shorten a single buffer's filename relative to the current directory.
+///
+/// Replaces the C `shorten_buf_fname` function.
+///
+/// # Safety
+/// All pointer arguments must be valid for their documented lifetimes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shorten_buf_fname(
+    buf: *mut c_void,
+    dirname: *const c_char,
+    force: c_int,
+) {
+    let b_fname = unsafe { nvim_buf_get_b_fname(buf) };
+    if b_fname.is_null() {
+        return;
+    }
+    if unsafe { nvim_bt_nofilename(buf) } != 0 {
+        return;
+    }
+    if unsafe { path_with_url(b_fname) } != 0 {
+        return;
+    }
+    let b_sfname = unsafe { nvim_buf_get_b_sfname(buf) };
+    let b_ffname = unsafe { nvim_buf_get_b_ffname(buf) };
+    let should_shorten = force != 0 || b_sfname.is_null() || unsafe { path_is_absolute(b_sfname) };
+    if !should_shorten {
+        return;
+    }
+
+    // Free b_sfname if it's not aliased to b_ffname.
+    if b_sfname != b_ffname {
+        unsafe { xfree(b_sfname as *mut c_void) };
+        unsafe { nvim_buf_set_b_sfname(buf, std::ptr::null_mut()) };
+    }
+
+    let p = unsafe { path_shorten_fname(b_ffname, dirname) };
+    if !p.is_null() {
+        let new_sfname = unsafe { xstrdup(p) };
+        unsafe { nvim_buf_set_b_sfname(buf, new_sfname) };
+        unsafe { nvim_buf_set_b_fname(buf, new_sfname) };
+    } else {
+        unsafe { nvim_buf_set_b_fname(buf, b_ffname as *mut c_char) };
+    }
+}
+
+/// Shorten filenames for all buffers.
+///
+/// Replaces the C `shorten_fnames` function.
+///
+/// # Safety
+/// Accesses global buffer list and global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shorten_fnames(force: c_int) {
+    let mut dirname = vec![0u8; MAXPATHL];
+    unsafe { os_dirname(dirname.as_mut_ptr() as *mut c_char, MAXPATHL) };
+
+    let mut buf = unsafe { nvim_get_firstbuf() };
+    while !buf.is_null() {
+        unsafe { rs_shorten_buf_fname(buf, dirname.as_ptr() as *const c_char, force) };
+        unsafe { nvim_buf_mf_fullname(buf) };
+        buf = unsafe { nvim_buf_get_b_next(buf) };
+    }
+
+    unsafe { status_redraw_all() };
+    unsafe { nvim_set_redraw_tabline(1) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

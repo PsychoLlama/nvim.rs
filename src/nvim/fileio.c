@@ -113,6 +113,9 @@ extern void rs_set_forced_fenc(exarg_T *eap);
 // Phase 2 Rust replacements
 extern void rs_set_file_options(int set_options, exarg_T *eap);
 extern int rs_set_rw_fname(char *fname, char *sfname);
+// Phase 3 Rust replacements
+extern void rs_shorten_buf_fname(buf_T *buf, char *dirname, int force);
+extern void rs_shorten_fnames(int force);
 
 #include "fileio.c.generated.h"
 
@@ -1922,41 +1925,13 @@ int set_rw_fname(char *fname, char *sfname)
 /// name.
 void shorten_buf_fname(buf_T *buf, char *dirname, int force)
 {
-  if (buf->b_fname != NULL
-      && !bt_nofilename(buf)
-      && !path_with_url(buf->b_fname)
-      && (force
-          || buf->b_sfname == NULL
-          || path_is_absolute(buf->b_sfname))) {
-    if (buf->b_sfname != buf->b_ffname) {
-      XFREE_CLEAR(buf->b_sfname);
-    }
-    char *p = path_shorten_fname(buf->b_ffname, dirname);
-    if (p != NULL) {
-      buf->b_sfname = xstrdup(p);
-      buf->b_fname = buf->b_sfname;
-    }
-    if (p == NULL) {
-      buf->b_fname = buf->b_ffname;
-    }
-  }
+  rs_shorten_buf_fname(buf, dirname, force);
 }
 
 /// Shorten filenames for all buffers.
 void shorten_fnames(int force)
 {
-  char dirname[MAXPATHL];
-
-  os_dirname(dirname, MAXPATHL);
-  FOR_ALL_BUFFERS(buf) {
-    shorten_buf_fname(buf, dirname, force);
-
-    // Always make the swap file name a full path, a "nofile" buffer may
-    // also have a swap file.
-    mf_fullname(buf->b_ml.ml_mfp);
-  }
-  status_redraw_all();
-  redraw_tabline = true;
+  rs_shorten_fnames(force);
 }
 
 
