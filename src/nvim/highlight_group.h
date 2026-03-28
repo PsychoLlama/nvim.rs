@@ -65,4 +65,7 @@ void do_highlight(const char *line, bool forceit, bool init);
 int syn_name2id(const char *name);
 void highlight_changed(void);
 
+// Phase 4: migrated to Rust
+void free_highlight(void);
+
 #include "highlight_group.h.generated.h"

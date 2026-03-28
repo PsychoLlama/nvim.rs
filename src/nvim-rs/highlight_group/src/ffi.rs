@@ -2350,3 +2350,81 @@ pub unsafe extern "C" fn rs_highlight_changed() {
     highlight_ga.ga_len = hlcnt;
     decor_provider_invalidate_hl();
 }
+
+// =============================================================================
+// Phase 4: free_highlight
+// =============================================================================
+
+/// MapHash layout (matches C struct in map_defs.h).
+/// sizeof(MapHash) == 6*sizeof(u32) + sizeof(*void) = 32 bytes on 64-bit.
+#[repr(C)]
+struct MapHash {
+    n_buckets: u32,
+    size: u32,
+    n_occupied: u32,
+    upper_bound: u32,
+    n_keys: u32,
+    keys_capacity: u32,
+    hash: *mut u32,
+}
+
+/// Set(cstr_t) layout (matches C struct in map_defs.h).
+#[repr(C)]
+struct SetCstrT {
+    h: MapHash,
+    keys: *mut *const c_char,
+}
+
+/// Map(cstr_t, int) layout (matches C struct in map_defs.h).
+#[repr(C)]
+struct MapCstrTInt {
+    set: SetCstrT,
+    values: *mut c_int,
+}
+
+/// Arena layout (matches C struct in memory_defs.h).
+#[repr(C)]
+struct CArena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+extern "C" {
+    /// The highlight group name map (Map(cstr_t, int) in C).
+    static mut highlight_unames: MapCstrTInt;
+    /// The highlight group arena allocator.
+    static mut highlight_arena: CArena;
+
+    fn ga_clear(gap: *mut GArray);
+    fn arena_finish(arena: *mut CArena) -> *mut c_void; // returns ArenaMem
+    fn arena_mem_free(mem: *mut c_void);
+}
+
+/// Free all highlight group data (called on exit via EXITFREE).
+///
+/// Replaces C `void free_highlight(void)`.
+#[unsafe(export_name = "free_highlight")]
+pub unsafe extern "C" fn rs_free_highlight() {
+    ga_clear(&raw mut highlight_ga);
+
+    // Equivalent to map_destroy(cstr_t, &highlight_unames):
+    //   set_destroy(cstr_t, &set)  =>  xfree(keys), xfree(h.hash), zero set
+    //   XFREE_CLEAR(values)
+    xfree(highlight_unames.set.keys as *mut c_void);
+    xfree(highlight_unames.set.h.hash as *mut c_void);
+    highlight_unames.set.h = MapHash {
+        n_buckets: 0,
+        size: 0,
+        n_occupied: 0,
+        upper_bound: 0,
+        n_keys: 0,
+        keys_capacity: 0,
+        hash: std::ptr::null_mut(),
+    };
+    highlight_unames.set.keys = std::ptr::null_mut();
+    xfree(highlight_unames.values as *mut c_void);
+    highlight_unames.values = std::ptr::null_mut();
+
+    arena_mem_free(arena_finish(&raw mut highlight_arena));
+}

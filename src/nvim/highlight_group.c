@@ -229,15 +229,6 @@ void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id)
 }
 
 
-#if defined(EXITFREE)
-void free_highlight(void)
-{
-  ga_clear(&highlight_ga);
-  map_destroy(cstr_t, &highlight_unames);
-  arena_mem_free(arena_finish(&highlight_arena));
-}
-
-#endif
 
 
 
