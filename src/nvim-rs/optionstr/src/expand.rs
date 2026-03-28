@@ -51,6 +51,8 @@ extern "C" {
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn snprintf(str_: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
 
     // Regex
     fn vim_regexec(rmp: *mut RegmatchT, line: *const c_char, col: i32) -> bool;
@@ -76,6 +78,9 @@ extern "C" {
     fn nvim_oe_get_varp(args: *const OptExpandArgs) -> *mut c_char;
     fn nvim_oe_get_idx(args: *const OptExpandArgs) -> c_int;
 
+    // expand_T field accessors
+    fn nvim_xp_get_pattern(xp: *mut ExpandT) -> *mut c_char;
+
     // Option infrastructure
     fn get_option(idx: c_int) -> *mut c_void;
     fn nvim_option_get_values(opt: *mut c_void) -> *const *const c_char;
@@ -83,6 +88,9 @@ extern "C" {
 
     // Window handle (defined in window_shim)
     fn nvim_get_curwin() -> *const c_void;
+
+    // autocmd event names
+    fn get_event_name_no_group(xp: *mut ExpandT, idx: c_int, win: bool) -> *mut c_char;
 }
 
 // OptIndex constants for normalization (must match opt_index.rs)
@@ -430,6 +438,123 @@ pub unsafe extern "C" fn expand_set_winhighlight(
         fn get_highlight_name(xp: *mut ExpandT, idx: c_int) -> *mut c_char;
     }
     expand_set_opt_generic_impl(args, get_highlight_name, num_matches, matches)
+}
+
+// =============================================================================
+// expand_set_diffopt
+// =============================================================================
+
+extern "C" {
+    #[link_name = "opt_dip_algorithm_values"]
+    static opt_dip_algorithm_values: [*const c_char; 5];
+
+    #[link_name = "opt_dip_inline_values"]
+    static opt_dip_inline_values: [*const c_char; 5];
+}
+
+/// Expand 'diffopt' option
+///
+/// # Safety
+#[export_name = "expand_set_diffopt"]
+pub unsafe extern "C" fn expand_set_diffopt(
+    args: *const OptExpandArgs,
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    let xp = nvim_oe_get_xp(args);
+    let xp_pattern = nvim_xp_get_pattern(xp);
+    let set_arg = nvim_oe_get_set_arg(args);
+
+    if xp_pattern > set_arg.cast_mut() && *xp_pattern.sub(1) as u8 == b':' {
+        // Within "algorithm:", we have a subgroup of possible options.
+        let algo_len = b"algorithm:".len();
+        let offset = xp_pattern.offset_from(set_arg) as usize;
+        if offset >= algo_len
+            && strncmp(xp_pattern.sub(algo_len), c"algorithm:".as_ptr(), algo_len) == 0
+        {
+            return expand_set_opt_string_impl(
+                args,
+                opt_dip_algorithm_values.as_ptr(),
+                opt_dip_algorithm_values.len() - 1,
+                num_matches,
+                matches,
+            );
+        }
+        // Within "inline:", we have a subgroup of possible options.
+        let inline_len = b"inline:".len();
+        if offset >= inline_len
+            && strncmp(xp_pattern.sub(inline_len), c"inline:".as_ptr(), inline_len) == 0
+        {
+            return expand_set_opt_string_impl(
+                args,
+                opt_dip_inline_values.as_ptr(),
+                opt_dip_inline_values.len() - 1,
+                num_matches,
+                matches,
+            );
+        }
+        return FAIL;
+    }
+
+    expand_set_str_generic(args, num_matches, matches)
+}
+
+// =============================================================================
+// expand_set_eventignore
+// =============================================================================
+
+extern "C" {
+    #[link_name = "p_ei"]
+    static p_ei: *const c_char;
+
+    // IObuff global buffer
+    #[link_name = "IObuff"]
+    static mut IOBUFF: [c_char; IOSIZE];
+}
+
+const IOSIZE: usize = 1025;
+
+// Thread-local state for expand_set_eventignore
+static mut EXPAND_EIW: bool = false;
+
+unsafe extern "C" fn get_eventignore_name(xp: *mut ExpandT, idx: c_int) -> *mut c_char {
+    let subtract = *nvim_xp_get_pattern(xp) as u8 == b'-';
+    // 'eventignore(win)' allows special keyword "all" in addition to all event names.
+    if !subtract && idx == 0 {
+        return c"all".as_ptr().cast_mut();
+    }
+
+    let name = get_event_name_no_group(xp, idx - 1 + c_int::from(subtract), EXPAND_EIW);
+    if name.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let iobuf = std::ptr::addr_of_mut!(IOBUFF).cast::<c_char>();
+    snprintf(
+        iobuf,
+        IOSIZE,
+        c"%s%s".as_ptr(),
+        if subtract {
+            c"-".as_ptr()
+        } else {
+            c"".as_ptr()
+        },
+        name,
+    );
+    iobuf
+}
+
+/// Expand 'eventignore' option
+///
+/// # Safety
+#[export_name = "expand_set_eventignore"]
+pub unsafe extern "C" fn expand_set_eventignore(
+    args: *const OptExpandArgs,
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    EXPAND_EIW = nvim_oe_get_varp(args) != p_ei.cast_mut();
+    expand_set_opt_generic_impl(args, get_eventignore_name, num_matches, matches)
 }
 
 /// Expand 'fillchars' or 'listchars' option

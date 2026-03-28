@@ -22,6 +22,12 @@ const char *did_set_backupext_or_patchmode(optset_T *args);
 const char *did_set_mousescroll(optset_T *args);
 const char *did_set_str_generic(optset_T *args);
 void didset_string_options(void);
+const char *did_set_shada(optset_T *args);
+const char *did_set_completeitemalign(optset_T *args);
+const char *did_set_titleiconstring(optset_T *args, int flagval);
+
+// Implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
+char *illegal_char(char *errbuf, size_t errbuflen, int c);
 
 // Implemented in Rust (src/nvim-rs/optionstr/src/lib.rs)
 void free_string_option(char *p);
@@ -45,5 +51,7 @@ int expand_set_str_generic(optexpand_T *args, int *numMatches, char ***matches);
 int expand_set_encoding(optexpand_T *args, int *numMatches, char ***matches);
 int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches);
 int expand_set_chars_option(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_eventignore(optexpand_T *args, int *numMatches, char ***matches);
 
 #include "optionstr.h.generated.h"

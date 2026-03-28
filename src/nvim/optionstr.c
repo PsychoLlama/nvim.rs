@@ -126,7 +126,7 @@ static const char e_wrong_character_width_for_field_str[]
 // didset_string_options() is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // illegal_char is implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
-extern char *illegal_char(char *errbuf, size_t errbuflen, int c);
+// (declaration in optionstr.h)
 
 static char *illegal_char_after_chr(char *errbuf, size_t errbuflen, int c)
 {
@@ -246,77 +246,8 @@ int check_signcolumn(char *scl, win_T *wp)
 // (src/nvim-rs/optionstr/src/didset.rs)
 
 
-/// Expand an option that accepts a list of string values.
-static int expand_set_opt_string(optexpand_T *args, const char **values, size_t numValues,
-                                 int *numMatches, char ***matches)
-{
-  regmatch_T *regmatch = args->oe_regmatch;
-  bool include_orig_val = args->oe_include_orig_val;
-  char *option_val = args->oe_opt_value;
-
-  // Assume numValues is small since they are fixed enums, so just allocate
-  // upfront instead of needing two passes to calculate output size.
-  *matches = xmalloc(sizeof(char *) * (numValues + 1));
-
-  int count = 0;
-
-  if (include_orig_val && *option_val != NUL) {
-    (*matches)[count++] = xstrdup(option_val);
-  }
-
-  for (const char **val = values; *val != NULL; val++) {
-    if (**val == NUL) {
-      continue;  // Ignore empty
-    } else if (include_orig_val && *option_val != NUL) {
-      if (strcmp(*val, option_val) == 0) {
-        continue;
-      }
-    }
-    if (vim_regexec(regmatch, *val, 0)) {
-      (*matches)[count++] = xstrdup(*val);
-    }
-  }
-  if (count == 0) {
-    XFREE_CLEAR(*matches);
-    return FAIL;
-  }
-  *numMatches = count;
-  return OK;
-}
-
-static char *set_opt_callback_orig_option = NULL;
-static char *((*set_opt_callback_func)(expand_T *, int));
-
-/// Callback used by expand_set_opt_generic to also include the original value.
-static char *expand_set_opt_callback(expand_T *xp, int idx)
-{
-  if (idx == 0) {
-    if (set_opt_callback_orig_option != NULL) {
-      return set_opt_callback_orig_option;
-    } else {
-      return "";  // empty strings are ignored
-    }
-  }
-  return set_opt_callback_func(xp, idx - 1);
-}
-
-/// Expand an option with a callback that iterates through a list of possible names.
-static int expand_set_opt_generic(optexpand_T *args, CompleteListItemGetter func, int *numMatches,
-                                  char ***matches)
-{
-  set_opt_callback_orig_option = args->oe_include_orig_val ? args->oe_opt_value : NULL;
-  set_opt_callback_func = func;
-
-  // not using fuzzy as currently EXPAND_STRING_SETTING doesn't use it
-  ExpandGeneric("", args->oe_xp, args->oe_regmatch, matches, numMatches,
-                expand_set_opt_callback, false);
-
-  set_opt_callback_orig_option = NULL;
-  set_opt_callback_func = NULL;
-  return OK;
-}
-
-// expand_set_opt_listflag removed: all callers migrated to Rust
+// expand_set_opt_string, expand_set_opt_callback, expand_set_opt_generic, and their
+// static state are implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
 /// The 'ambiwidth' option is changed.
 
@@ -570,38 +501,7 @@ const char *did_set_completeslash(optset_T *args)
 }
 #endif
 
-// expand_set_concealcursor and expand_set_cpoptions moved to Rust
-
-int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches)
-{
-  expand_T *xp = args->oe_xp;
-
-  if (xp->xp_pattern > args->oe_set_arg && *(xp->xp_pattern - 1) == ':') {
-    // Within "algorithm:", we have a subgroup of possible options.
-    const size_t algo_len = strlen("algorithm:");
-    if (xp->xp_pattern - args->oe_set_arg >= (int)algo_len
-        && strncmp(xp->xp_pattern - algo_len, "algorithm:", algo_len) == 0) {
-      return expand_set_opt_string(args,
-                                   opt_dip_algorithm_values,
-                                   ARRAY_SIZE(opt_dip_algorithm_values) - 1,
-                                   numMatches,
-                                   matches);
-    }
-    // Within "inline:", we have a subgroup of possible options.
-    const size_t inline_len = strlen("inline:");
-    if (xp->xp_pattern - args->oe_set_arg >= (int)inline_len
-        && strncmp(xp->xp_pattern - inline_len, "inline:", inline_len) == 0) {
-      return expand_set_opt_string(args,
-                                   opt_dip_inline_values,
-                                   ARRAY_SIZE(opt_dip_inline_values) - 1,
-                                   numMatches,
-                                   matches);
-    }
-    return FAIL;
-  }
-
-  return expand_set_str_generic(args, numMatches, matches);
-}
+// expand_set_concealcursor, expand_set_cpoptions, and expand_set_diffopt moved to Rust
 
 /// One of the 'encoding', 'fileencoding' or 'makeencoding'
 /// options is changed.
@@ -645,36 +545,8 @@ const char *did_set_encoding(optset_T *args)
   return NULL;
 }
 
-// expand_set_encoding moved to Rust
-
-static bool expand_eiw = false;
-
-// Rust implementation (exported under same C name)
-extern char *get_event_name_no_group(expand_T *xp, int idx, bool win);
-
-static char *get_eventignore_name(expand_T *xp, int idx)
-{
-  bool subtract = *xp->xp_pattern == '-';
-  // 'eventignore(win)' allows special keyword "all" in addition to
-  // all event names.
-  if (!subtract && idx == 0) {
-    return "all";
-  }
-
-  char *name = get_event_name_no_group(xp, idx - 1 + subtract, expand_eiw);
-  if (name == NULL) {
-    return NULL;
-  }
-
-  snprintf(IObuff, IOSIZE, "%s%s", subtract ? "-" : "", name);
-  return IObuff;
-}
-
-int expand_set_eventignore(optexpand_T *args, int *numMatches, char ***matches)
-{
-  expand_eiw = args->oe_varp != (char *)&p_ei;
-  return expand_set_opt_generic(args, get_eventignore_name, numMatches, matches);
-}
+// expand_set_encoding, expand_set_eventignore, get_eventignore_name, and
+// expand_eiw static are implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
 /// The 'fileformat' option is changed.
 const char *did_set_fileformat(optset_T *args)
