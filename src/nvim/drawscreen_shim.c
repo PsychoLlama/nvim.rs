@@ -17,6 +17,9 @@
 #include "nvim/normal.h"
 #include "nvim/option_vars.h"
 #include "nvim/popupmenu.h"
+#include "nvim/profile.h"
+#include "nvim/regexp.h"
+#include "nvim/search.h"
 #include "nvim/statusline.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
@@ -281,4 +284,22 @@ void nvim_screenclear_impl(void)
     msg_grid_invalid = false;
     clear_cmdline = true;
   }
+}
+
+/// Check if screen_search_hl has a regprog.
+int nvim_search_hl_has_regprog(void) { return screen_search_hl.rm.regprog != NULL ? 1 : 0; }
+
+/// Prepare search highlight: set regprog and time limit.
+/// Keeps regexp lifetime management in C.
+void nvim_search_hl_start(void)
+{
+  last_pat_prog(&screen_search_hl.rm);
+  screen_search_hl.tm = profile_setlimit(p_rdt);
+}
+
+/// Free search highlight regprog. Keeps regexp lifetime management in C.
+void nvim_search_hl_end(void)
+{
+  vim_regfree(screen_search_hl.rm.regprog);
+  screen_search_hl.rm.regprog = NULL;
 }

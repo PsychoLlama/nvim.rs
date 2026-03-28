@@ -75,5 +75,11 @@ DLLEXPORT void redraw_buf_status_later(buf_T *buf);
 DLLEXPORT void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int endrow, hlf_T hl);
 DLLEXPORT void clearmode(void);
 DLLEXPORT bool default_grid_alloc(void);
+DLLEXPORT void screenclear(void);
+DLLEXPORT void screen_resize(int width, int height);
+DLLEXPORT int update_screen(void);
+DLLEXPORT void show_cursor_info_later(bool force);
+DLLEXPORT int showmode(void);
+DLLEXPORT void win_scroll_lines(win_T *wp, int row, int line_count);
 
 #include "drawscreen.h.generated.h"

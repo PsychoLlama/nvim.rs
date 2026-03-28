@@ -120,14 +120,6 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-/// corner value flags for hsep_connected and vsep_connected
-typedef enum {
-  WC_TOP_LEFT = 0,
-  WC_TOP_RIGHT,
-  WC_BOTTOM_LEFT,
-  WC_BOTTOM_RIGHT,
-} WindowCorner;
-
 #include "drawscreen.c.generated.h"
 
 // Rust FFI declarations
@@ -140,30 +132,17 @@ extern void rs_clear_showcmd(void);
 extern void rs_draw_vsep_win(win_T *wp);
 extern void rs_draw_hsep_win(win_T *wp);
 extern void rs_draw_sep_connectors_win(win_T *wp);
-extern void rs_win_scroll_lines(win_T *wp, int row, int line_count);
-extern int rs_showmode(void);
-extern void rs_screenclear(void);
-extern void rs_drawscreen_screen_resize(int width, int height);
-extern void rs_show_cursor_info_later(bool force);
-extern int rs_update_screen(void);
 extern void rs_win_update_visual_region(win_T *wp, buf_T *buf, int type,
                                         int top_end, bool scrolled_down,
                                         int *mid_start, int *mid_end);
-extern bool redrawing(void);
 extern void rs_ins_compl_show_pum(void);
+extern void nvim_set_conceal_cursor_used(int val);
 
 bool redraw_popupmenu = false;
 bool msg_grid_invalid = false;
 bool resizing_autocmd = false;
-static bool conceal_cursor_used = false;
 
 static void win_update(win_T *wp);  // forward declaration
-
-
-void screenclear(void) { rs_screenclear(); }
-
-/// Set dimensions of the Nvim application "screen".
-void screen_resize(int width, int height) { rs_drawscreen_screen_resize(width, height); }
 
 // win_update visual region helper
 
@@ -318,29 +297,6 @@ void nvim_win_visual_region_impl(win_T *wp, buf_T *buf, int type,
     wp->w_old_visual_col = 0;
   }
 }
-
-
-/// Redraw the parts of the screen that is marked for redraw.
-///
-/// Most code shouldn't call this directly, rather use redraw_later() and
-/// and redraw_all_later() to mark parts of the screen as needing a redraw.
-int update_screen(void) { return rs_update_screen(); }
-
-
-/// Show current cursor info in ruler and various other places
-///
-/// @param always  if false, only show ruler if position has changed.
-void show_cursor_info_later(bool force) { rs_show_cursor_info_later(force); }
-
-
-/// Show the current mode and ruler.
-///
-/// If clear_cmdline is true, clear the rest of the cmdline.
-/// If clear_cmdline is false there may be a message there that needs to be
-/// cleared only if a mode is shown.
-/// If redraw_mode is true show or clear the mode.
-/// @return the length of the message (0 if no message).
-int showmode(void) { return rs_showmode(); }
 
 #define COL_RULER 17        // columns needed by standard ruler
 
@@ -816,7 +772,7 @@ static void win_update(win_T *wp)
   foldinfo_T cursorline_fi = { 0 };
   win_update_cursorline(wp, &cursorline_fi);
   if (wp == curwin) {
-    conceal_cursor_used = conceal_cursor_line(curwin);
+    nvim_set_conceal_cursor_used(conceal_cursor_line(curwin) ? 1 : 0);
   }
 
   win_check_ns_hl(wp);
@@ -1376,39 +1332,3 @@ void nvim_update_screen_win_loop(int type, int hl_changed)
   }
 }
 
-/// Scroll `line_count` lines at 'row' in window 'wp'.
-///
-/// Positive `line_count` means scrolling down, so that more space is available
-/// at 'row'. Negative `line_count` implies deleting lines at `row`.
-void win_scroll_lines(win_T *wp, int row, int line_count) { rs_win_scroll_lines(wp, row, line_count); }
-
-_Static_assert(HLF_FC == 29, "HLF_FC must be 29");
-_Static_assert(HLF_SC == 35, "HLF_SC must be 35");
-_Static_assert(HLF_N == 12, "HLF_N must be 12");
-_Static_assert(HLF_CM == 11, "HLF_CM must be 11");
-_Static_assert(COL_RULER == 17, "COL_RULER must be 17");
-_Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
-
-/// Get conceal_cursor_used (file-static).
-int nvim_get_conceal_cursor_used(void) { return conceal_cursor_used ? 1 : 0; }
-
-/// Set conceal_cursor_used (file-static).
-void nvim_set_conceal_cursor_used(int val) { conceal_cursor_used = (val != 0); }
-
-/// Check if screen_search_hl has a regprog.
-int nvim_search_hl_has_regprog(void) { return screen_search_hl.rm.regprog != NULL ? 1 : 0; }
-
-/// Prepare search highlight: set regprog and time limit.
-/// Keeps regexp lifetime management in C.
-void nvim_search_hl_start(void)
-{
-  last_pat_prog(&screen_search_hl.rm);
-  screen_search_hl.tm = profile_setlimit(p_rdt);
-}
-
-/// Free search highlight regprog. Keeps regexp lifetime management in C.
-void nvim_search_hl_end(void)
-{
-  vim_regfree(screen_search_hl.rm.regprog);
-  screen_search_hl.rm.regprog = NULL;
-}

@@ -2121,6 +2121,22 @@ pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
 // Phase 5: Conceal Check and Cursorline Update
 // =============================================================================
 
+/// Rust-owned static for the `conceal_cursor_used` flag (previously file-static in drawscreen.c).
+static CONCEAL_CURSOR_USED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Get conceal_cursor_used (Rust-owned static). Called by C code in drawscreen.c.
+#[unsafe(export_name = "nvim_get_conceal_cursor_used")]
+pub extern "C" fn rs_get_conceal_cursor_used() -> c_int {
+    c_int::from(CONCEAL_CURSOR_USED.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// Set conceal_cursor_used (Rust-owned static). Called by C code in drawscreen.c.
+#[unsafe(export_name = "nvim_set_conceal_cursor_used")]
+pub extern "C" fn rs_set_conceal_cursor_used(val: c_int) {
+    CONCEAL_CURSOR_USED.store(val != 0, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Opaque handle to C's foldinfo_T.
 type FoldinfoHandle = *mut c_void;
 
@@ -2137,8 +2153,6 @@ struct FoldInfo {
 }
 
 extern "C" {
-    fn nvim_get_conceal_cursor_used() -> c_int;
-    fn nvim_set_conceal_cursor_used(val: c_int);
     #[link_name = "nvim_win_get_p_cole"]
     fn nvim_win_get_w_p_cole(wp: WinHandle) -> c_int;
     #[link_name = "nvim_win_get_p_cul"]
@@ -2167,7 +2181,7 @@ pub extern "C" fn rs_conceal_check_cursor_line() {
         let curwin = nvim_get_curwin();
         let should_conceal = rs_conceal_cursor_line(curwin);
         if nvim_win_get_w_p_cole(curwin) <= 0
-            || (nvim_get_conceal_cursor_used() != 0) == should_conceal
+            || CONCEAL_CURSOR_USED.load(std::sync::atomic::Ordering::Relaxed) == should_conceal
         {
             return;
         }
@@ -2519,7 +2533,7 @@ pub unsafe extern "C" fn rs_default_grid_alloc() -> bool {
 /// Clear entire screen and reset state.
 ///
 /// Rust equivalent of `screenclear()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "screenclear")]
 pub unsafe extern "C" fn rs_screenclear() {
     nvim_screenclear_impl();
 }
@@ -2530,7 +2544,7 @@ pub unsafe extern "C" fn rs_screenclear() {
 /// C behavioral helpers in drawscreen_shim.c.
 ///
 /// Rust equivalent of `screen_resize()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "screen_resize")]
 pub unsafe extern "C" fn rs_drawscreen_screen_resize(width: c_int, height: c_int) {
     // Avoid recursiveness.
     if updating_screen || resizing_screen || rs_cmdline_number_prompt() != 0 {
@@ -2637,7 +2651,7 @@ extern "C" {
 /// Scroll lines in window `wp` grid by `line_count` (positive = scroll up, negative = scroll down).
 ///
 /// Rust equivalent of `win_scroll_lines()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "win_scroll_lines")]
 pub unsafe extern "C" fn rs_win_scroll_lines(wp: WinHandle, row: c_int, line_count: c_int) {
     if !redrawing_impl() || line_count == 0 {
         return;
@@ -2880,7 +2894,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
 /// Returns the length of the message (0 if no message).
 ///
 /// Rust equivalent of `showmode()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "showmode")]
 pub unsafe extern "C" fn rs_showmode() -> c_int {
     let mut length: c_int = 0;
 
@@ -3094,7 +3108,7 @@ const K_UI_CMDLINE: c_int = 3;
 /// C behavioral helpers in drawscreen_shim.c.
 ///
 /// Rust equivalent of `update_screen()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "update_screen")]
 pub unsafe extern "C" fn rs_update_screen() -> c_int {
     // Static: tracks whether intro has been shown.
     static STILL_MAY_INTRO: std::sync::atomic::AtomicBool =
@@ -3281,7 +3295,7 @@ extern "C" {
 /// Check if cursor/ruler/statusline info changed and schedule redraw.
 ///
 /// Rust equivalent of `show_cursor_info_later()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "show_cursor_info_later")]
 pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
     let curwin = nvim_get_curwin();
     let state = nvim_get_real_state();
