@@ -50,8 +50,22 @@ extern "C" {
         unflat_altfr: *mut *mut Frame,
     ) -> WinHandle;
 
-    /// Compound: close_buffer with bufref guard; returns 1 if curbuf invalid.
-    fn nvim_close_buffer_for_win(win: WinHandle, action: c_int, abort_if_last: c_int) -> c_int;
+    /// Set win->w_locked.
+    fn nvim_win_set_locked(wp: WinHandle, val: c_int);
+    /// Check if win is valid in any tab.
+    fn rs_win_valid_any_tab(wp: WinHandle) -> c_int;
+    /// close_buffer(win, buf, action, abort_if_last, ignore_abort).
+    fn close_buffer(
+        win: WinHandle,
+        buf: BufHandle,
+        action: c_int,
+        abort_if_last: bool,
+        ignore_abort: bool,
+    ) -> bool;
+    /// set_bufref(&br, buf).
+    fn nvim_set_bufref_win(br: *mut u8, buf: BufHandle);
+    /// bufref_valid(&br).
+    fn nvim_bufref_valid_win(br: *mut u8) -> c_int;
 
     // --- close_last_window_tabpage helpers ---
     /// Safe terminal check: 1 if w_buffer != NULL && w_buffer->terminal != NULL.
@@ -91,6 +105,8 @@ extern "C" {
 
 /// DOBUF_UNLOAD from buffer.h.
 const DOBUF_UNLOAD: c_int = 2;
+/// sizeof(bufref_T) - two pointers and an int: 16 bytes on 64-bit.
+const BUFREF_SIZE: usize = 16;
 
 /// EVENT_* constants matching auevents_enum.generated.h
 const EVENT_TABENTER: c_int = 110;
@@ -127,8 +143,21 @@ pub unsafe extern "C" fn rs_win_close_buffer(win: WinHandle, action: c_int, abor
         nvim_buf_set_p_bl(buf, 0);
     }
 
-    // Close the link to the buffer (compound C wrapper handles bufref).
-    let curbuf_invalid = nvim_close_buffer_for_win(win, action, abort_if_last);
+    // Close the link to the buffer (inlined nvim_close_buffer_for_win).
+    let buf = nvim_win_get_buffer(win);
+    let curbuf_invalid = if buf.is_null() {
+        0
+    } else {
+        let mut bufref = std::mem::MaybeUninit::<[u8; BUFREF_SIZE]>::zeroed();
+        let curbuf = nvim_get_curbuf();
+        nvim_set_bufref_win(bufref.as_mut_ptr().cast(), curbuf);
+        nvim_win_set_locked(win, 1);
+        close_buffer(win, buf, action, abort_if_last != 0, true);
+        if rs_win_valid_any_tab(win) != 0 {
+            nvim_win_set_locked(win, 0);
+        }
+        c_int::from(nvim_bufref_valid_win(bufref.as_mut_ptr().cast()) == 0)
+    };
 
     // Make sure curbuf is valid. It can become invalid if 'bufhidden' is "wipe".
     if curbuf_invalid != 0 {

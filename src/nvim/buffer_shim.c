@@ -450,6 +450,8 @@ void nvim_win_set_minimal_style_curwin(void) { win_set_minimal_style(curwin); }
 void nvim_wininfo_set_changelistidx(WinInfo *wip, int val) { wip->wi_changelistidx = val; }
 void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
 void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
+void nvim_wininfo_set_win(WinInfo *wip, win_T *win) { wip->wi_win = win; }
+void nvim_buf_wininfo_remove(buf_T *buf, size_t i) { kv_shift(buf->b_wininfo, i, 1); }
 
 fmark_T *nvim_get_no_position_ptr(void)
 { static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL }; return &no_position; }

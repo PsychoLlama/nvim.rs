@@ -87,7 +87,6 @@ extern "C" {
     // --- Phase 11 new accessors ---
     fn nvim_win_close_force(wp: WinHandle, free_buf: c_int) -> c_int;
     fn nvim_getout_zero() -> !;
-    fn nvim_count_diff_windows_in_curtab() -> c_int;
     fn nvim_do_cmdline_cmd_diffoff();
     fn nvim_one_window_and_locked_split() -> c_int;
     fn nvim_curwin_set_buffer_to_curbuf();
@@ -345,7 +344,14 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
 
     // Diff closeoff handling.
     if rs_diffopt_closeoff() != 0 && had_diffmode && nvim_get_curtab() == prev_curtab {
-        let diffcount = nvim_count_diff_windows_in_curtab();
+        let mut diffcount: c_int = 0;
+        let mut dwin = nvim_get_firstwin();
+        while !dwin.is_null() {
+            if nvim_win_get_p_diff(dwin) != 0 {
+                diffcount += 1;
+            }
+            dwin = nvim_win_get_next(dwin);
+        }
         if diffcount == 1 {
             nvim_do_cmdline_cmd_diffoff();
         }

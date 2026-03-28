@@ -59,7 +59,13 @@ extern "C" {
     fn rs_free_tabpage(tp: TabpageHandle);
 
     // --- Phase 11 new accessors ---
-    fn nvim_close_buffer_othertab(win: WinHandle, free_buf: c_int) -> c_int;
+    fn close_buffer(
+        win: WinHandle,
+        buf: BufHandle,
+        action: c_int,
+        abort_if_last: bool,
+        ignore_abort: bool,
+    ) -> bool;
     fn nvim_apply_autocmds_tabclosed(idx_str: *const std::ffi::c_char, buf: BufHandle);
     fn nvim_has_event_tabclosed() -> c_int;
 }
@@ -70,6 +76,7 @@ extern "C" {
 
 const EMSG_E_AUTOCMD_CLOSE: c_int = 10;
 const EMSG_E_FLOATONLY: c_int = 8;
+const DOBUF_UNLOAD: c_int = 2;
 
 // =============================================================================
 // Return type
@@ -145,7 +152,14 @@ pub unsafe extern "C" fn rs_win_close_othertab(
     bufref_buf = nvim_win_get_buffer(win);
 
     if !nvim_win_get_buffer(win).is_null() {
-        did_decrement = nvim_close_buffer_othertab(win, free_buf);
+        let buf = nvim_win_get_buffer(win);
+        did_decrement = c_int::from(close_buffer(
+            win,
+            buf,
+            if free_buf != 0 { DOBUF_UNLOAD } else { 0 },
+            false,
+            true,
+        ));
     }
 
     // Re-validate after autocmds.

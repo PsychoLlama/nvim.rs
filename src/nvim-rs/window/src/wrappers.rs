@@ -58,6 +58,14 @@ extern "C" {
     fn ui_call_win_hide(grid_handle: c_int);
 
     fn nvim_get_curwin() -> WinHandle;
+
+    // --- nvim_status_redraw_all helpers ---
+    fn nvim_get_firstwin() -> WinHandle;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+    fn rs_global_stl_height() -> c_int;
 }
 
 // =============================================================================
@@ -496,5 +504,26 @@ pub unsafe extern "C" fn rs_emsg_id(id: c_int) {
         12 => emsg(gettext(MSG_E1159.as_ptr())),
         13 => emsg(gettext(e_noroom.as_ptr())),
         _ => {}
+    }
+}
+
+/// Rust port of `nvim_status_redraw_all` from window_shim.c.
+///
+/// Marks w_redr_status for all windows in the current tab that have a
+/// status line or winbar height > 0, or are curwin and there is a global
+/// status line. Does NOT call redraw_later (unlike `status_redraw_all`).
+#[export_name = "nvim_status_redraw_all"]
+pub unsafe extern "C" fn rs_nvim_status_redraw_all() {
+    let curwin = nvim_get_curwin();
+    let global_stl = rs_global_stl_height();
+    let mut wp = nvim_get_firstwin();
+    while !wp.is_null() {
+        if nvim_win_get_status_height(wp) > 0 || (wp == curwin && global_stl > 0) {
+            nvim_win_set_redr_status(wp, 1);
+        }
+        if nvim_win_get_winbar_height(wp) > 0 {
+            nvim_win_set_redr_status(wp, 1);
+        }
+        wp = nvim_win_get_next(wp);
     }
 }

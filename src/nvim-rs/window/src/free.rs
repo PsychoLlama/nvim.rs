@@ -5,7 +5,7 @@
 use std::ffi::{c_int, c_void};
 
 use crate::win_struct::win_mut;
-use crate::{TabpageHandle, WinHandle};
+use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // Imports for inlined compound accessors (Phase 13)
 use crate::list::{nvim_get_first_tabpage, nvim_tabpage_get_next};
@@ -48,9 +48,6 @@ extern "C" {
 
     /// Clear all three click_defs arrays.
     fn nvim_win_clear_click_defs_all(wp: WinHandle);
-
-    /// Remove window from all b_wininfo kvecs.
-    fn nvim_win_cleanup_b_wininfo(wp: WinHandle);
 
     /// Clear border text virttext.
     fn nvim_win_clear_config_virttext(wp: WinHandle);
@@ -120,6 +117,23 @@ extern "C" {
 
     /// xfree(wp) -- raw deallocation of a window struct.
     fn nvim_xfree_win_raw(wp: WinHandle);
+
+    // --- cleanup_b_wininfo helpers ---
+
+    /// Get `firstbuf` global.
+    fn nvim_get_firstbuf_wrapper() -> BufHandle;
+    /// Get `buf->b_next`.
+    fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
+    /// Get `kv_size(buf->b_wininfo)`.
+    fn nvim_buf_wininfo_count(buf: BufHandle) -> usize;
+    /// Get `kv_A(buf->b_wininfo, i)`.
+    fn nvim_buf_wininfo_get(buf: BufHandle, i: usize) -> *mut c_void;
+    /// Get `wip->wi_win`.
+    fn nvim_wininfo_get_win(wip: *mut c_void) -> WinHandle;
+    /// Set `wip->wi_win = win`.
+    fn nvim_wininfo_set_win(wip: *mut c_void, win: WinHandle);
+    /// `kv_shift(buf->b_wininfo, i, 1)`.
+    fn nvim_buf_wininfo_remove(buf: BufHandle, i: usize);
 }
 
 // =============================================================================
@@ -200,8 +214,33 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
     xfree(win_mut(wp).w_prevdir.cast::<c_void>());
     nvim_win_clear_click_defs_all(wp);
 
-    // Remove the window from the b_wininfo lists.
-    nvim_win_cleanup_b_wininfo(wp);
+    // Remove the window from the b_wininfo lists (inlined nvim_win_cleanup_b_wininfo).
+    let mut buf = nvim_get_firstbuf_wrapper();
+    while !buf.is_null() {
+        let count = nvim_buf_wininfo_count(buf);
+        let mut wip_wp: *mut c_void = std::ptr::null_mut();
+        let mut pos_wip = count;
+        let mut pos_null = count;
+        for i in 0..count {
+            let wip = nvim_buf_wininfo_get(buf, i);
+            let wip_win = nvim_wininfo_get_win(wip);
+            if wip_win == wp {
+                wip_wp = wip;
+                pos_wip = i;
+            } else if wip_win.is_null() {
+                pos_null = i;
+            }
+        }
+        if !wip_wp.is_null() {
+            nvim_wininfo_set_win(wip_wp, WinHandle::null());
+            if pos_null < nvim_buf_wininfo_count(buf) {
+                let pos_delete = pos_null.max(pos_wip);
+                crate::alloc::free_wininfo(nvim_buf_wininfo_get(buf, pos_delete), buf);
+                nvim_buf_wininfo_remove(buf, pos_delete);
+            }
+        }
+        buf = nvim_buf_get_next(buf);
+    }
 
     // Free the border text.
     nvim_win_clear_config_virttext(wp);
