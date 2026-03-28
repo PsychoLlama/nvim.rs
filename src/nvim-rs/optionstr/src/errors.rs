@@ -33,6 +33,40 @@ pub static E_CONFLICTS_WITH_VALUE_OF_LISTCHARS: &[u8] =
 pub static E_CONFLICTS_WITH_VALUE_OF_FILLCHARS: &[u8] =
     b"E835: Conflicts with value of 'fillchars'\0";
 
+// =============================================================================
+// illegal_char helper
+// =============================================================================
+
+use std::ffi::{c_char, c_int};
+
+extern "C" {
+    fn vim_snprintf(str_: *mut c_char, str_m: usize, fmt: *const c_char, ...) -> c_int;
+    fn transchar(c: c_int) -> *const c_char;
+}
+
+/// Format "E539: Illegal character <%s>" error into errbuf.
+/// Returns errbuf on success, or empty string if errbuf is NULL.
+///
+/// # Safety
+/// errbuf must be either NULL or a valid writable buffer of errbuflen bytes.
+#[export_name = "illegal_char"]
+pub unsafe extern "C" fn illegal_char(
+    errbuf: *mut c_char,
+    errbuflen: usize,
+    c: c_int,
+) -> *mut c_char {
+    if errbuf.is_null() {
+        return c"".as_ptr().cast_mut();
+    }
+    vim_snprintf(
+        errbuf,
+        errbuflen,
+        c"E539: Illegal character <%s>".as_ptr(),
+        transchar(c),
+    );
+    errbuf
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

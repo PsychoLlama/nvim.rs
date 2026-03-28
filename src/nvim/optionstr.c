@@ -125,15 +125,8 @@ static const char e_wrong_character_width_for_field_str[]
 
 // didset_string_options() is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
-char *illegal_char(char *errbuf, size_t errbuflen, int c)
-{
-  if (errbuf == NULL) {
-    return "";
-  }
-  vim_snprintf(errbuf, errbuflen, _("E539: Illegal character <%s>"),
-               transchar(c));
-  return errbuf;
-}
+// illegal_char is implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
+extern char *illegal_char(char *errbuf, size_t errbuflen, int c);
 
 static char *illegal_char_after_chr(char *errbuf, size_t errbuflen, int c)
 {
@@ -538,50 +531,7 @@ const char *did_set_complete(optset_T *args)
   return NULL;
 }
 
-/// The 'completeitemalign' option is changed.
-const char *did_set_completeitemalign(optset_T *args)
-{
-  char *p = p_cia;
-  unsigned new_cia_flags = 0;
-  bool seen[3] = { false, false, false };
-  int count = 0;
-  char buf[10];
-  while (*p) {
-    copy_option_part(&p, buf, sizeof(buf), ",");
-    if (count >= 3) {
-      return e_invarg;
-    }
-    if (strequal(buf, "abbr")) {
-      if (seen[CPT_ABBR]) {
-        return e_invarg;
-      }
-      new_cia_flags = new_cia_flags * 10 + CPT_ABBR;
-      seen[CPT_ABBR] = true;
-      count++;
-    } else if (strequal(buf, "kind")) {
-      if (seen[CPT_KIND]) {
-        return e_invarg;
-      }
-      new_cia_flags = new_cia_flags * 10 + CPT_KIND;
-      seen[CPT_KIND] = true;
-      count++;
-    } else if (strequal(buf, "menu")) {
-      if (seen[CPT_MENU]) {
-        return e_invarg;
-      }
-      new_cia_flags = new_cia_flags * 10 + CPT_MENU;
-      seen[CPT_MENU] = true;
-      count++;
-    } else {
-      return e_invarg;
-    }
-  }
-  if (new_cia_flags == 0 || count != 3) {
-    return e_invarg;
-  }
-  cia_flags = new_cia_flags;
-  return NULL;
-}
+// did_set_completeitemalign is implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 /// The 'completeopt' option is changed.
 const char *did_set_completeopt(optset_T *args FUNC_ATTR_UNUSED)
@@ -861,54 +811,7 @@ const char *did_set_keymap(optset_T *args)
 
 
 
-const char *did_set_shada(optset_T *args)
-{
-  char *errbuf = args->os_errbuf;
-  size_t errbuflen = args->os_errbuflen;
-
-  for (char *s = p_shada; *s;) {
-    // Check it's a valid character
-    if (vim_strchr("!\"%'/:<@cfhnrs", (uint8_t)(*s)) == NULL) {
-      return illegal_char(errbuf, errbuflen, (uint8_t)(*s));
-    }
-    if (*s == 'n') {          // name is always last one
-      break;
-    } else if (*s == 'r') {  // skip until next ','
-      while (*++s && *s != ',') {}
-    } else if (*s == '%') {
-      // optional number
-      while (ascii_isdigit(*++s)) {}
-    } else if (*s == '!' || *s == 'h' || *s == 'c') {
-      s++;                    // no extra chars
-    } else {                    // must have a number
-      while (ascii_isdigit(*++s)) {}
-
-      if (!ascii_isdigit(*(s - 1))) {
-        if (errbuf != NULL) {
-          vim_snprintf(errbuf, errbuflen,
-                       _("E526: Missing number after <%s>"),
-                       transchar_byte((uint8_t)(*(s - 1))));
-          return errbuf;
-        } else {
-          return "";
-        }
-      }
-    }
-    if (*s == ',') {
-      s++;
-    } else if (*s) {
-      if (errbuf != NULL) {
-        return N_("E527: Missing comma");
-      } else {
-        return "";
-      }
-    }
-  }
-  if (*p_shada && rs_get_shada_parameter('\'') < 0) {
-    return N_("E528: Must specify a ' value");
-  }
-  return NULL;
-}
+// did_set_shada is implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // expand_set_shortmess moved to Rust
 
@@ -1023,21 +926,7 @@ const char *did_set_tagcase(optset_T *args)
   return NULL;
 }
 
-/// The 'titlestring' or the 'iconstring' option is changed.
-const char *did_set_titleiconstring(optset_T *args, int flagval)
-{
-  char **varp = (char **)args->os_varp;
-
-  // NULL => statusline syntax
-  if (vim_strchr(*varp, '%') && check_stl_option(*varp) == NULL) {
-    stl_syntax |= flagval;
-  } else {
-    stl_syntax &= ~flagval;
-  }
-  rs_did_set_title();
-
-  return NULL;
-}
+// did_set_titleiconstring is implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 
 /// The 'varsofttabstop' option is changed.

@@ -512,3 +512,244 @@ pub unsafe extern "C" fn rs_did_set_backupext_or_patchmode(args: *const c_void) 
 pub unsafe extern "C" fn rs_did_set_mousescroll(args: *const c_void) -> *const c_char {
     did_set_mousescroll(args)
 }
+
+// =============================================================================
+// Phase 1 FFI additions
+// =============================================================================
+
+extern "C" {
+    // optset_T field accessors
+    fn nvim_optset_get_errbuf(args: *const c_void) -> *mut c_char;
+    fn nvim_optset_get_errbuflen(args: *const c_void) -> usize;
+
+    // String utilities
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+    fn vim_snprintf(str_: *mut c_char, str_m: usize, fmt: *const c_char, ...) -> c_int;
+
+    // shada parameter query (already used in C: rs_get_shada_parameter)
+    fn rs_get_shada_parameter(param: c_int) -> c_int;
+
+    // transchar_byte: returns static buffer with printable form of char
+    fn transchar_byte(c: c_int) -> *const c_char;
+
+    // check_stl_option: validates statusline format string
+    fn check_stl_option(s: *mut c_char) -> *const c_char;
+
+    // rs_did_set_title: update window titles
+    fn rs_did_set_title();
+
+    // copy_option_part: parse next comma-sep part into buf, advance pp
+    fn copy_option_part(
+        pp: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
+
+    // strequal: strcmp == 0 helper
+    fn strequal(a: *const c_char, b: *const c_char) -> bool;
+}
+
+// =============================================================================
+// C globals for did_set_shada
+// =============================================================================
+
+extern "C" {
+    #[link_name = "p_shada"]
+    static p_shada: *const c_char;
+}
+
+/// Error strings reused in shada validation
+const E_ILLEGAL_CHAR_PREFIX: *const c_char = c"E539: Illegal character <%s>".as_ptr();
+const E_MISSING_NUMBER: *const c_char = c"E526: Missing number after <%s>".as_ptr();
+const E_MISSING_COMMA: *const c_char = c"E527: Missing comma".as_ptr();
+const E_MUST_SPECIFY_QUOTE: *const c_char = c"E528: Must specify a ' value".as_ptr();
+
+/// Validate 'shada' option value.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_shada"]
+pub unsafe extern "C" fn did_set_shada(args: *const c_void) -> *const c_char {
+    let errbuf = nvim_optset_get_errbuf(args);
+    let errbuflen = nvim_optset_get_errbuflen(args);
+
+    let mut s = p_shada;
+    while *s != 0 {
+        // Check it's a valid character
+        if vim_strchr(c"!\"%'/:<@cfhnrs".as_ptr(), c_int::from(*s as u8)).is_null() {
+            // illegal_char equivalent
+            if errbuf.is_null() {
+                return c"".as_ptr();
+            }
+            vim_snprintf(
+                errbuf,
+                errbuflen,
+                E_ILLEGAL_CHAR_PREFIX,
+                transchar_byte(c_int::from(*s as u8)),
+            );
+            return errbuf;
+        }
+
+        if *s as u8 == b'n' {
+            // name is always last one
+            break;
+        } else if *s as u8 == b'r' {
+            // skip until next ','
+            s = s.add(1);
+            while *s != 0 && *s as u8 != b',' {
+                s = s.add(1);
+            }
+        } else if *s as u8 == b'%' {
+            // optional number
+            s = s.add(1);
+            while (*s as u8).is_ascii_digit() {
+                s = s.add(1);
+            }
+        } else if *s as u8 == b'!' || *s as u8 == b'h' || *s as u8 == b'c' {
+            s = s.add(1); // no extra chars
+        } else {
+            // must have a number
+            s = s.add(1);
+            while (*s as u8).is_ascii_digit() {
+                s = s.add(1);
+            }
+            // s-1 must have been a digit
+            if !(*s.sub(1) as u8).is_ascii_digit() {
+                if !errbuf.is_null() {
+                    vim_snprintf(
+                        errbuf,
+                        errbuflen,
+                        E_MISSING_NUMBER,
+                        transchar_byte(c_int::from(*s.sub(1) as u8)),
+                    );
+                    return errbuf;
+                }
+                return c"".as_ptr();
+            }
+        }
+
+        if *s as u8 == b',' {
+            s = s.add(1);
+        } else if *s != 0 {
+            if !errbuf.is_null() {
+                return E_MISSING_COMMA;
+            }
+            return c"".as_ptr();
+        }
+    }
+
+    if *p_shada != 0 && rs_get_shada_parameter(b'\'' as c_int) < 0 {
+        return E_MUST_SPECIFY_QUOTE;
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
+// C globals for did_set_completeitemalign
+// =============================================================================
+
+extern "C" {
+    #[link_name = "p_cia"]
+    static mut p_cia: *const c_char;
+
+    #[link_name = "cia_flags"]
+    static mut cia_flags: c_uint;
+}
+
+// CPT enum values (from insexpand.h)
+const CPT_ABBR: usize = 0;
+const CPT_KIND: usize = 1;
+const CPT_MENU: usize = 2;
+
+/// Validate 'completeitemalign' option value.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_completeitemalign"]
+pub unsafe extern "C" fn did_set_completeitemalign(_args: *const c_void) -> *const c_char {
+    let mut p = p_cia.cast_mut();
+    let mut new_cia_flags: c_uint = 0;
+    let mut seen = [false; 3];
+    let mut count = 0usize;
+    let mut buf = [0u8; 10];
+
+    while *p != 0 {
+        copy_option_part(
+            &mut p,
+            buf.as_mut_ptr().cast::<c_char>(),
+            buf.len(),
+            c",".as_ptr(),
+        );
+        if count >= 3 {
+            return E_INVARG;
+        }
+
+        if strequal(buf.as_ptr().cast::<c_char>(), c"abbr".as_ptr()) {
+            if seen[CPT_ABBR] {
+                return E_INVARG;
+            }
+            new_cia_flags = new_cia_flags * 10 + CPT_ABBR as c_uint;
+            seen[CPT_ABBR] = true;
+            count += 1;
+        } else if strequal(buf.as_ptr().cast::<c_char>(), c"kind".as_ptr()) {
+            if seen[CPT_KIND] {
+                return E_INVARG;
+            }
+            new_cia_flags = new_cia_flags * 10 + CPT_KIND as c_uint;
+            seen[CPT_KIND] = true;
+            count += 1;
+        } else if strequal(buf.as_ptr().cast::<c_char>(), c"menu".as_ptr()) {
+            if seen[CPT_MENU] {
+                return E_INVARG;
+            }
+            new_cia_flags = new_cia_flags * 10 + CPT_MENU as c_uint;
+            seen[CPT_MENU] = true;
+            count += 1;
+        } else {
+            return E_INVARG;
+        }
+    }
+
+    if new_cia_flags == 0 || count != 3 {
+        return E_INVARG;
+    }
+
+    cia_flags = new_cia_flags;
+    std::ptr::null()
+}
+
+// =============================================================================
+// C globals for did_set_titleiconstring
+// =============================================================================
+
+extern "C" {
+    #[link_name = "stl_syntax"]
+    static mut stl_syntax: c_int;
+}
+
+/// The 'titlestring' or the 'iconstring' option is changed.
+/// flagval should be STL_IN_ICON or STL_IN_TITLE.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_titleiconstring"]
+pub unsafe extern "C" fn did_set_titleiconstring(
+    args: *const c_void,
+    flagval: c_int,
+) -> *const c_char {
+    let varp_void = nvim_optset_get_varp(args);
+    let varp = varp_void.cast::<*mut c_char>();
+    let s = *varp;
+
+    // NULL => statusline syntax
+    if !vim_strchr(s, b'%' as c_int).is_null() && check_stl_option(s).is_null() {
+        stl_syntax |= flagval;
+    } else {
+        stl_syntax &= !flagval;
+    }
+    rs_did_set_title();
+
+    std::ptr::null()
+}
