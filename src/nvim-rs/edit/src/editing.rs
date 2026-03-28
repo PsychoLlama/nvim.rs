@@ -27,10 +27,24 @@ extern "C" {
     static mut State: c_int;
     // -- Delegated wrappers for complex functions --
     fn nvim_edit_ins_eol(c: c_int) -> c_int;
-    fn nvim_edit_ins_ctrl_v();
     fn nvim_ins_copychar(lnum: LinenrT) -> c_int;
     fn nvim_edit_ins_ctrl_ey(tc: c_int) -> c_int;
-    fn nvim_edit_ins_digraph() -> c_int;
+    // -- ins_ctrl_v / ins_digraph dependencies --
+    fn nvim_edit_ins_redraw_impl(ready: c_int);
+    fn nvim_redrawing() -> c_int;
+    fn char_avail() -> bool;
+    fn nvim_putchar(c: c_int, highlight: c_int);
+    fn edit_unputchar();
+    fn add_to_showcmd_c(c: c_int);
+    fn nvim_get_revins_chars() -> c_int;
+    fn nvim_set_revins_chars(val: c_int);
+    fn nvim_get_revins_legal() -> c_int;
+    fn nvim_set_revins_legal(val: c_int);
+    fn nvim_set_pc_status_unset();
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
+    fn char2cells(c: c_int) -> c_int;
+    fn digraph_get(char1: c_int, char2: c_int, meta_char: bool) -> c_int;
 
     // -- stuff_inserted dependencies --
     fn rs_get_last_insert() -> NvimString;
@@ -70,6 +84,7 @@ extern "C" {
     fn nvim_digraph_inc_no_mapping();
     fn nvim_digraph_dec_no_mapping();
     fn nvim_get_K_ZERO() -> c_int;
+    fn rs_clear_showcmd();
 }
 
 // ============================================================================
@@ -134,12 +149,38 @@ pub unsafe extern "C" fn rs_ins_eol(c: c_int) -> bool {
 }
 
 // ============================================================================
-// ins_ctrl_v — delegated to C helper
+// ins_ctrl_v — moved from C nvim_edit_ins_ctrl_v
 // ============================================================================
+
+/// `CTRL_V` string for redo buffer (`\026` = Ctrl-V, null-terminated).
+const CTRL_V_STR: &[u8; 2] = b"\x16\0";
+
+unsafe fn ins_ctrl_v_impl() {
+    let mut did_putchar = false;
+
+    nvim_edit_ins_redraw_impl(0);
+
+    if nvim_redrawing() != 0 && !char_avail() {
+        nvim_putchar(c_int::from(b'^'), 1);
+        did_putchar = true;
+    }
+    AppendToRedobuff(CTRL_V_STR.as_ptr().cast());
+
+    add_to_showcmd_c(c_int::from(b'\x16')); // Ctrl_V = 0x16
+
+    let c = get_literal_impl(nvim_get_mod_mask() & MOD_MASK_SHIFT);
+    if did_putchar {
+        edit_unputchar();
+    }
+    rs_clear_showcmd();
+    insert_special_impl(c, 1, 1);
+    nvim_set_revins_chars(nvim_get_revins_chars() + 1);
+    nvim_set_revins_legal(nvim_get_revins_legal() + 1);
+}
 
 #[unsafe(export_name = "ins_ctrl_v")]
 pub unsafe extern "C" fn rs_ins_ctrl_v() {
-    nvim_edit_ins_ctrl_v();
+    ins_ctrl_v_impl();
 }
 
 // ============================================================================
@@ -163,13 +204,73 @@ pub unsafe extern "C" fn rs_ins_ctrl_ey(tc: c_int) -> c_int {
 }
 
 // ============================================================================
-// ins_digraph — delegated to C helper
+// ins_digraph — moved from C nvim_edit_ins_digraph
 // ============================================================================
+
+/// `IS_SPECIAL(c)`: special key if `c < 0` (matches C macro).
+const fn is_special(c: c_int) -> bool {
+    c < 0
+}
+
+unsafe fn ins_digraph_impl() -> c_int {
+    let mut did_putchar = false;
+
+    nvim_set_pc_status_unset();
+    if nvim_redrawing() != 0 && !char_avail() {
+        nvim_edit_ins_redraw_impl(0);
+        nvim_putchar(c_int::from(b'?'), 1);
+        did_putchar = true;
+        add_to_showcmd_c(c_int::from(b'\x0b')); // Ctrl_K = 0x0b
+    }
+
+    no_mapping += 1;
+    allow_keys += 1;
+    let c = plain_vgetc();
+    no_mapping -= 1;
+    allow_keys -= 1;
+    if did_putchar {
+        edit_unputchar();
+    }
+
+    if is_special(c) || nvim_get_mod_mask() != 0 {
+        rs_clear_showcmd();
+        insert_special_impl(c, 1, 0);
+        return 0; // NUL
+    }
+    if c != c_int::from(ESC) {
+        did_putchar = false;
+        if nvim_redrawing() != 0 && !char_avail() {
+            nvim_edit_ins_redraw_impl(0);
+            if char2cells(c) == 1 {
+                nvim_edit_ins_redraw_impl(0);
+                nvim_putchar(c, 1);
+                did_putchar = true;
+            }
+            add_to_showcmd_c(c);
+        }
+        no_mapping += 1;
+        allow_keys += 1;
+        let cc = plain_vgetc();
+        no_mapping -= 1;
+        allow_keys -= 1;
+        if did_putchar {
+            edit_unputchar();
+        }
+        if cc != c_int::from(ESC) {
+            AppendToRedobuff(CTRL_V_STR.as_ptr().cast());
+            let result = digraph_get(c, cc, true);
+            rs_clear_showcmd();
+            return result;
+        }
+    }
+    rs_clear_showcmd();
+    0 // NUL
+}
 
 #[must_use]
 #[unsafe(export_name = "ins_digraph")]
 pub unsafe extern "C" fn rs_ins_digraph() -> c_int {
-    nvim_edit_ins_digraph()
+    ins_digraph_impl()
 }
 
 // ============================================================================

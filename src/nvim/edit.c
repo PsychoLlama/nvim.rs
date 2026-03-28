@@ -400,30 +400,6 @@ int nvim_edit_ins_eol(int c)
   return i;
 }
 
-/// Delegated wrapper for ins_ctrl_v (Rust FFI export).
-void nvim_edit_ins_ctrl_v(void)
-{
-  bool did_putchar = false;
-
-  ins_redraw(false);
-
-  if (redrawing() && !char_avail()) {
-    edit_putchar('^', true);
-    did_putchar = true;
-  }
-  AppendToRedobuff(CTRL_V_STR);
-
-  add_to_showcmd_c(Ctrl_V);
-
-  int c = get_literal(mod_mask & MOD_MASK_SHIFT);
-  if (did_putchar) {
-    edit_unputchar();
-  }
-  rs_clear_showcmd();
-  insert_special(c, true, true);
-  nvim_set_revins_chars(nvim_get_revins_chars() + 1);
-  nvim_set_revins_legal(nvim_get_revins_legal() + 1);
-}
 
 /// Delegated wrapper for ins_ctrl_ey (Rust FFI export).
 int nvim_edit_ins_ctrl_ey(int tc)
@@ -456,62 +432,6 @@ int nvim_edit_ins_ctrl_ey(int tc)
   return c;
 }
 
-/// Delegated wrapper for ins_digraph (Rust FFI export).
-int nvim_edit_ins_digraph(void)
-{
-  bool did_putchar = false;
-
-  pc_status = PC_STATUS_UNSET;
-  if (redrawing() && !char_avail()) {
-    ins_redraw(false);
-    edit_putchar('?', true);
-    did_putchar = true;
-    add_to_showcmd_c(Ctrl_K);
-  }
-
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  if (did_putchar) {
-    edit_unputchar();
-  }
-
-  if (IS_SPECIAL(c) || mod_mask) {
-    rs_clear_showcmd();
-    insert_special(c, true, false);
-    return NUL;
-  }
-  if (c != ESC) {
-    did_putchar = false;
-    if (redrawing() && !char_avail()) {
-      ins_redraw(false);
-      if (char2cells(c) == 1) {
-        ins_redraw(false);
-        edit_putchar(c, true);
-        did_putchar = true;
-      }
-      add_to_showcmd_c(c);
-    }
-    no_mapping++;
-    allow_keys++;
-    int cc = plain_vgetc();
-    no_mapping--;
-    allow_keys--;
-    if (did_putchar) {
-      edit_unputchar();
-    }
-    if (cc != ESC) {
-      AppendToRedobuff(CTRL_V_STR);
-      c = digraph_get(c, cc, true);
-      rs_clear_showcmd();
-      return c;
-    }
-  }
-  rs_clear_showcmd();
-  return NUL;
-}
 
 /// Update curbuf->b_last_changedtick if TextChangedI was triggered (accessor for Rust).
 void nvim_curbuf_sync_changedtick_after_insert(void)
