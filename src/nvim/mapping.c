@@ -153,25 +153,6 @@ static const char e_entries_missing_in_mapset_dict_argument[]
 static const char e_illegal_map_mode_string_str[]
   = N_("E1276: Illegal map mode string: '%s'");
 
-/// Get the start of the hashed map list for "state" and first character "c".
-/// Delete one entry from the abbrlist or maphash[].
-/// "mpp" is a pointer to the m_next field of the PREVIOUS entry!
-static void mapblock_free(mapblock_T **mpp)
-{
-  mapblock_T *mp = *mpp;
-  xfree(mp->m_keys);
-  if (mp->m_alt != NULL) {
-    mp->m_alt->m_alt = NULL;
-  } else {
-    NLUA_CLEAR_REF(mp->m_luaref);
-    xfree(mp->m_str);
-    xfree(mp->m_orig_str);
-    xfree(mp->m_desc);
-  }
-  *mpp = mp->m_next;
-  xfree(mp);
-}
-
 
 /// @param local  true for buffer-local map
 static void showmap(mapblock_T *mp, bool local)
