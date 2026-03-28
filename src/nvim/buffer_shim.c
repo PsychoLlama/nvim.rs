@@ -31,15 +31,23 @@
 #include "nvim/message.h"
 #include "nvim/option.h"
 #include "nvim/os/fs.h"
+#include "nvim/os/os.h"
+#include "nvim/os/time.h"
 #include "nvim/path.h"
 #include "nvim/regexp.h"
 #include "nvim/spell.h"
+#include "nvim/state_defs.h"
 #include "nvim/strings.h"
 #include "nvim/terminal.h"
 #include "nvim/types_defs.h"
 #include "nvim/syntax.h"
+#include "nvim/ui.h"
+#include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 #include "nvim/channel.h"
+#include "nvim/change.h"
+#include "nvim/eval.h"
+#include "nvim/eval/vars.h"
 #include "nvim/memory.h"
 #include "nvim/window.h"
 
@@ -548,3 +556,74 @@ void nvim_buf_set_b_fname(buf_T *buf, char *val) { buf->b_fname = val; }
 void nvim_buf_mf_fullname(buf_T *buf) { mf_fullname(buf->b_ml.ml_mfp); }
 void nvim_set_redraw_tabline(int val) { redraw_tabline = (bool)val; }
 int nvim_bt_nofilename(buf_T *buf) { return bt_nofilename(buf) ? 1 : 0; }
+
+// Phase 5: buf_check_timestamp accessors
+// --- buf field getters ---
+int64_t nvim_buf_get_b_mtime(const buf_T *buf) { return buf->b_mtime; }
+int64_t nvim_buf_get_b_mtime_ns(const buf_T *buf) { return buf->b_mtime_ns; }
+uint64_t nvim_buf_get_b_orig_size(const buf_T *buf) { return buf->b_orig_size; }
+int nvim_buf_get_b_orig_mode(const buf_T *buf) { return buf->b_orig_mode; }
+int nvim_buf_get_b_saving(const buf_T *buf) { return (int)buf->b_saving; }
+int nvim_buf_get_b_p_ar(const buf_T *buf) { return (int)buf->b_p_ar; }
+int nvim_buf_get_b_p_udf(const buf_T *buf) { return (int)buf->b_p_udf; }
+int64_t nvim_get_p_ar(void) { return p_ar; }
+// --- b_mtime/b_orig manipulation for buf_check_timestamp ---
+void nvim_buf_set_b_mtime_minus1(buf_T *buf) { buf->b_mtime = -1; buf->b_orig_size = 0; buf->b_orig_mode = 0; }
+void nvim_buf_copy_mtime_to_mtime_read(buf_T *buf) { buf->b_mtime_read = buf->b_mtime; buf->b_mtime_read_ns = buf->b_mtime_ns; }
+// --- bt_normal wrapper ---
+int nvim_bt_normal(const buf_T *buf) { return bt_normal(buf) ? 1 : 0; }
+// --- buf_contents_changed wrapper ---
+int nvim_buf_contents_changed(buf_T *buf) { return buf_contents_changed(buf) ? 1 : 0; }
+// --- os_fileinfo combined accessor: fill file_info from fname ---
+//     Returns 1 if the file was found, 0 otherwise.
+//     Also extracts the metadata into output parameters.
+int nvim_os_fileinfo(const char *fname, int64_t *mtime_sec, int64_t *mtime_ns,
+                     uint64_t *size, int32_t *mode) {
+  FileInfo fi;
+  if (!os_fileinfo(fname, &fi)) {
+    return 0;
+  }
+  if (mtime_sec) *mtime_sec = (int64_t)fi.stat.st_mtim.tv_sec;
+  if (mtime_ns)  *mtime_ns  = (int64_t)fi.stat.st_mtim.tv_nsec;
+  if (size)      *size      = os_fileinfo_size(&fi);
+  if (mode)      *mode      = (int32_t)fi.stat.st_mode;
+  return 1;
+}
+// --- os_isdir and os_path_exists (some may already exist in other shims) ---
+int nvim_os_isdir2(const char *name) { return os_isdir(name) ? 1 : 0; }
+// --- allbuf_lock setter ---
+void nvim_set_allbuf_lock(int val) { allbuf_lock = val; }
+// --- VV_ vim variable accessors ---
+void nvim_set_vim_var_fcs_reason(const char *reason) { set_vim_var_string(VV_FCS_REASON, (char *)reason, -1); }
+void nvim_set_vim_var_fcs_choice_empty(void) { set_vim_var_string(VV_FCS_CHOICE, "", -1); }
+const char *nvim_get_vim_var_fcs_choice(void) { return get_vim_var_str(VV_FCS_CHOICE); }
+void nvim_set_vim_var_warningmsg(const char *msg, int len) { set_vim_var_string(VV_WARNINGMSG, (char *)msg, len); }
+// --- UI/message functions ---
+int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
+void nvim_os_delay(int ms, int ignoreinput) { os_delay((uint64_t)ms, ignoreinput != 0); }
+int nvim_get_emsg_silent(void) { return emsg_silent; }
+int nvim_get_redraw_cmdline(void) { return (int)redraw_cmdline; }
+// Note: nvim_set_redraw_cmdline is defined in src/nvim-rs/window/src/globals.rs
+int nvim_get_State(void) { return State; }
+int nvim_get_MODE_NORMAL_BUSY(void) { return MODE_NORMAL_BUSY; }
+int nvim_get_MODE_CMDLINE(void) { return MODE_CMDLINE; }
+void nvim_msg_puts_hl_e(const char *s) { msg_puts_hl(s, HLF_E, true); }
+void nvim_msg_puts_hl_w(const char *s) { msg_puts_hl(s, HLF_W, true); }
+void nvim_msg_end_wrap(void) { msg_end(); }
+// --- home_replace_save wrapper ---
+char *nvim_home_replace_save(const buf_T *buf, const char *fname) { return home_replace_save(buf, (char *)fname); }
+// --- do_dialog for file-changed warning ---
+int nvim_do_dialog_file_changed(const char *tbuf) {
+  return do_dialog(VIM_WARNING, _("Warning"), (char *)tbuf,
+                   _("&OK\n&Load File\nLoad File &and Options"), 1, NULL, true);
+}
+// --- undo accessors for buf_reload (used in Phase 5/6) ---
+void nvim_u_compute_hash(buf_T *buf, uint8_t *hash) { u_compute_hash(buf, hash); }
+void nvim_u_write_undo(const char *name, int forceit, buf_T *buf, uint8_t *hash) {
+  u_write_undo((char *)name, (bool)forceit, buf, hash);
+}
+// buf_reload caller wrapper for use from Rust (Phase 5)
+extern void buf_reload(buf_T *buf, int orig_mode, bool reload_options);
+void nvim_buf_reload(buf_T *buf, int orig_mode, int reload_options) {
+  buf_reload(buf, orig_mode, reload_options != 0);
+}

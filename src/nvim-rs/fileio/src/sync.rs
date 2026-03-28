@@ -500,6 +500,8 @@ extern "C" {
     fn nvim_get_curbuf_b_ro_locked() -> c_int;
     /// Returns `allbuf_lock`.
     fn nvim_get_allbuf_lock() -> c_int;
+    /// Sets `allbuf_lock`.
+    fn nvim_set_allbuf_lock(val: c_int);
     /// Returns `no_wait_return`.
     fn nvim_get_no_wait_return() -> c_int;
     /// Sets `no_wait_return`.
@@ -518,8 +520,7 @@ extern "C" {
     fn nvim_bufref_valid(br: *mut c_void) -> c_int;
     /// Returns sizeof(bufref_T) – used to sanity-check our stack allocation.
     fn nvim_bufref_size() -> c_int;
-    /// Calls `buf_check_timestamp` on a single buffer.
-    fn buf_check_timestamp(buf: *mut c_void) -> c_int;
+    // Note: buf_check_timestamp is now called as rs_buf_check_timestamp (defined in this file).
     /// Calls `msg_puts("\n")`.
     fn msg_puts(s: *const c_char);
     /// Flushes the UI.
@@ -575,7 +576,7 @@ pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
             // Only check buffers in a window.
             if nvim_buf_get_nwindows(buf) > 0 {
                 nvim_set_bufref(bufref_ptr, buf);
-                let n = buf_check_timestamp(buf);
+                let n = rs_buf_check_timestamp(buf);
                 if n > didit {
                     didit = n;
                 }
@@ -615,6 +616,452 @@ pub extern "C" fn rs_get_already_warned() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_set_already_warned(val: c_int) {
     ALREADY_WARNED.store(val != 0, Ordering::Relaxed);
+}
+
+// =============================================================================
+// FFI: buf_check_timestamp
+// =============================================================================
+
+/// Constants for reload decision.
+const RELOAD_NONE: c_int = 0;
+const RELOAD_NORMAL: c_int = 1;
+const RELOAD_DETECT: c_int = 2;
+
+/// Buffer flags related to new-file state.
+const BF_NEW: c_int = 0x04;
+const BF_NEW_W: c_int = 0x20;
+const BF_NOTEDITED: c_int = 0x08;
+
+/// UNDO_HASH_SIZE (from undo_defs.h)
+const UNDO_HASH_SIZE: usize = 32;
+
+extern "C" {
+    /// Returns non-zero if buf->terminal is set.
+    fn nvim_buf_get_terminal(buf: *const c_void) -> c_int;
+    /// Returns buf->b_ffname.
+    fn nvim_buf_get_b_ffname(buf: *const c_void) -> *const c_char;
+    /// Returns non-null if buf->b_ml.ml_mfp is set.
+    fn nvim_buf_get_ml_mfp(buf: *const c_void) -> *mut c_void;
+    /// Returns non-zero if buf has type 'normal'.
+    fn nvim_bt_normal(buf: *const c_void) -> c_int;
+    /// Returns buf->b_saving.
+    fn nvim_buf_get_b_saving(buf: *const c_void) -> c_int;
+    /// Returns buf->b_flags.
+    fn nvim_buf_get_b_flags(buf: *const c_void) -> c_int;
+    /// Sets buf->b_flags.
+    fn nvim_buf_set_b_flags(buf: *mut c_void, val: c_int);
+    /// Returns buf->b_mtime.
+    fn nvim_buf_get_b_mtime(buf: *const c_void) -> i64;
+    /// Returns buf->b_mtime_ns.
+    fn nvim_buf_get_b_mtime_ns(buf: *const c_void) -> i64;
+    /// Returns buf->b_orig_size.
+    fn nvim_buf_get_b_orig_size(buf: *const c_void) -> u64;
+    /// Returns buf->b_orig_mode.
+    fn nvim_buf_get_b_orig_mode(buf: *const c_void) -> c_int;
+    /// Returns buf->b_p_ar (autoread: -1 = inherit global, 0 = off, 1 = on).
+    fn nvim_buf_get_b_p_ar(buf: *const c_void) -> c_int;
+    /// Returns buf->b_p_udf (undofile option).
+    fn nvim_buf_get_b_p_udf(buf: *const c_void) -> c_int;
+    /// Returns global p_ar (autoread option).
+    fn nvim_get_p_ar() -> i64;
+    /// Returns buf->b_fname.
+    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
+    /// Sets buf->b_mtime = -1, b_orig_size = 0, b_orig_mode = 0.
+    fn nvim_buf_set_b_mtime_minus1(buf: *mut c_void);
+    // Note: rs_buf_store_file_info is defined in this file, not an extern.
+    /// os_fileinfo wrapper: fills metadata, returns 1 on success.
+    fn nvim_os_fileinfo(
+        fname: *const c_char,
+        mtime_sec: *mut i64,
+        mtime_ns: *mut i64,
+        size: *mut u64,
+        mode: *mut i32,
+    ) -> c_int;
+    /// os_isdir wrapper.
+    fn nvim_os_isdir2(name: *const c_char) -> c_int;
+    /// bufIsChanged wrapper.
+    fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
+    /// buf_contents_changed wrapper.
+    fn nvim_buf_contents_changed(buf: *mut c_void) -> c_int;
+    /// Sets VV_FCS_REASON to reason string.
+    fn nvim_set_vim_var_fcs_reason(reason: *const c_char);
+    /// Sets VV_FCS_CHOICE to "".
+    fn nvim_set_vim_var_fcs_choice_empty();
+    /// Gets VV_FCS_CHOICE value.
+    fn nvim_get_vim_var_fcs_choice() -> *const c_char;
+    /// Sets VV_WARNINGMSG.
+    fn nvim_set_vim_var_warningmsg(msg: *const c_char, len: c_int);
+    // Note: nvim_get_autocmd_busy, nvim_set_allbuf_lock, nvim_get_allbuf_lock
+    // are declared in the check_timestamps extern block above.
+    /// Emit error message.
+    fn emsg(msg: *const c_char);
+    /// Displays a warning dialog and returns the button pressed.
+    fn nvim_do_dialog_file_changed(tbuf: *const c_char) -> c_int;
+    /// msg_start().
+    fn msg_start();
+    /// msg_puts_hl for error highlight.
+    fn nvim_msg_puts_hl_e(s: *const c_char);
+    /// msg_puts_hl for warning highlight.
+    fn nvim_msg_puts_hl_w(s: *const c_char);
+    /// msg_clr_eos().
+    fn msg_clr_eos();
+    /// msg_end().
+    fn nvim_msg_end_wrap();
+    /// Returns emsg_silent global.
+    fn nvim_get_emsg_silent() -> c_int;
+    /// Returns in_assert_fails global.
+    fn nvim_get_in_assert_fails() -> bool;
+    /// Returns 1 if UI has messages capability.
+    fn nvim_ui_has_messages() -> c_int;
+    /// os_delay(ms, ignoreinput).
+    fn nvim_os_delay(ms: c_int, ignoreinput: c_int);
+    /// Sets redraw_cmdline. (defined in window/src/globals.rs, takes bool)
+    fn nvim_set_redraw_cmdline(val: bool);
+    /// Returns State global.
+    fn nvim_get_State() -> c_int;
+    /// Returns MODE_NORMAL_BUSY constant.
+    fn nvim_get_MODE_NORMAL_BUSY() -> c_int;
+    /// Returns MODE_CMDLINE constant.
+    fn nvim_get_MODE_CMDLINE() -> c_int;
+    /// home_replace_save: returns newly allocated string (caller must xfree).
+    fn nvim_home_replace_save(buf: *const c_void, fname: *const c_char) -> *mut c_char;
+    /// xmalloc.
+    fn xmalloc(size: usize) -> *mut c_char;
+    /// xfree.
+    fn xfree(ptr: *mut c_void);
+    /// xstrlcat.
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, dstlen: usize) -> usize;
+    /// snprintf.
+    fn snprintf(buf: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
+    /// buf_reload via nvim_buf_reload wrapper.
+    fn nvim_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int);
+    /// u_compute_hash wrapper.
+    fn nvim_u_compute_hash(buf: *mut c_void, hash: *mut u8);
+    /// u_write_undo wrapper.
+    fn nvim_u_write_undo(name: *const c_char, forceit: c_int, buf: *mut c_void, hash: *mut u8);
+    /// os_path_exists (from undo.c).
+    fn nvim_os_path_exists(path: *const c_char) -> bool;
+    /// Copies buf->b_mtime to b_mtime_read and b_mtime_ns to b_mtime_read_ns.
+    fn nvim_buf_copy_mtime_to_mtime_read(buf: *mut c_void);
+    /// rs_time_differs: compare file time vs stored.
+    fn rs_time_differs(
+        file_sec: i64,
+        file_nsec: i64,
+        mtime: i64,
+        mtime_ns: i64,
+        fat_tolerance: c_int,
+    ) -> c_int;
+    /// apply_autocmds(event, fname, fname_io, force, buf) -> bool.
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    // Note: nvim_bufref_valid and nvim_set_bufref are declared in
+    // the check_timestamps extern block above.
+}
+
+// On Linux, FAT tolerance is enabled (1); on other platforms, 0.
+#[cfg(target_os = "linux")]
+const FAT_TOLERANCE: c_int = 1;
+#[cfg(not(target_os = "linux"))]
+const FAT_TOLERANCE: c_int = 0;
+
+// EVENT_FILECHANGEDSHELL = 20, EVENT_FILECHANGEDSHELLPOST = 21
+// (from auevents_enum.generated.h in the build directory)
+const EVENT_FILECHANGEDSHELL: c_int = 20;
+const EVENT_FILECHANGEDSHELLPOST: c_int = 21;
+
+/// Re-entrancy guard for `rs_buf_check_timestamp`.
+static BUF_CHECK_BUSY: AtomicBool = AtomicBool::new(false);
+
+/// Check if buffer "buf" has been changed externally.
+///
+/// Returns 1 if a changed buffer was found, 2 if a message has been
+/// displayed, or 0 otherwise.
+///
+/// Replaces the C `buf_check_timestamp` function in `fileio.c`.
+///
+/// # Safety
+/// Calls into C. Must be called from the main thread only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_check_timestamp(buf: *mut c_void) -> c_int {
+    // Re-entrancy guard: set busy = true while we run
+    if BUF_CHECK_BUSY.swap(true, Ordering::Relaxed) {
+        return 0;
+    }
+
+    let result = buf_check_timestamp_inner(buf);
+
+    BUF_CHECK_BUSY.store(false, Ordering::Relaxed);
+    result
+}
+
+unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
+    // If terminal, no filename, not loaded, not normal buftype, saving, or re-entrant: skip.
+    if nvim_buf_get_terminal(buf) != 0
+        || nvim_buf_get_b_ffname(buf).is_null()
+        || nvim_buf_get_ml_mfp(buf).is_null()
+        || nvim_bt_normal(buf) == 0
+        || nvim_buf_get_b_saving(buf) != 0
+    {
+        return 0;
+    }
+
+    let mut retval: c_int = 0;
+    let mut mesg: *const c_char = std::ptr::null();
+    let mut mesg2: *const c_char = c"".as_ptr();
+    let mut helpmesg = false;
+    let mut can_reload = false;
+    let mut reload: c_int = RELOAD_NONE;
+
+    let orig_size = nvim_buf_get_b_orig_size(buf);
+    let orig_mode = nvim_buf_get_b_orig_mode(buf);
+    let b_flags = nvim_buf_get_b_flags(buf);
+
+    // Set up a bufref to detect if buf gets deleted by autocmds
+    let mut bufref: [u64; 2] = [0; 2];
+    let bufref_ptr = bufref.as_mut_ptr() as *mut c_void;
+    nvim_set_bufref(bufref_ptr, buf);
+
+    let ffname = nvim_buf_get_b_ffname(buf);
+
+    let b_mtime = nvim_buf_get_b_mtime(buf);
+    let b_mtime_ns = nvim_buf_get_b_mtime_ns(buf);
+
+    // Check if timestamp changed (file modified since we read it)
+    if (b_flags & BF_NOTEDITED) == 0 && b_mtime != 0 {
+        let mut fi_mtime_sec: i64 = 0;
+        let mut fi_mtime_ns: i64 = 0;
+        let mut fi_size: u64 = 0;
+        let mut fi_mode: i32 = 0;
+        let file_info_ok = nvim_os_fileinfo(
+            ffname,
+            &mut fi_mtime_sec,
+            &mut fi_mtime_ns,
+            &mut fi_size,
+            &mut fi_mode,
+        ) != 0;
+
+        let time_differs = if file_info_ok {
+            rs_time_differs(
+                fi_mtime_sec,
+                fi_mtime_ns,
+                b_mtime,
+                b_mtime_ns,
+                FAT_TOLERANCE,
+            ) != 0
+        } else {
+            false
+        };
+        let mode_differs = file_info_ok && (fi_mode as c_int) != orig_mode as c_int;
+
+        if !file_info_ok || time_differs || mode_differs {
+            let prev_b_mtime = b_mtime;
+
+            retval = 1;
+
+            // Update stored metadata immediately to stop further warnings
+            // (e.g., when firing FileChangedShell autocmd)
+            if !file_info_ok {
+                nvim_buf_set_b_mtime_minus1(buf);
+            } else {
+                // Use the individual setters to update buffer metadata.
+                // (We can't use rs_buf_store_file_info here since nvim_os_fileinfo
+                // already extracted the values without returning the raw C FileInfo ptr.)
+                nvim_buf_set_b_mtime(buf, fi_mtime_sec);
+                nvim_buf_set_b_mtime_ns(buf, fi_mtime_ns);
+                nvim_buf_set_b_orig_size(buf, fi_size as i64);
+                nvim_buf_set_b_orig_mode(buf, fi_mode);
+            }
+
+            let b_fname = nvim_buf_get_b_fname(buf);
+
+            if nvim_os_isdir2(b_fname) != 0 {
+                // Don't do anything for a directory.
+            } else if (nvim_buf_get_b_p_ar(buf) >= 0 && nvim_buf_get_b_p_ar(buf) != 0
+                || nvim_buf_get_b_p_ar(buf) < 0 && nvim_get_p_ar() != 0)
+                && nvim_buf_is_changed(buf) == 0
+                && file_info_ok
+            {
+                // autoread: buffer not modified, file still exists
+                reload = RELOAD_NORMAL;
+            } else {
+                // Determine reason for the change
+                let reason: *const c_char = if !file_info_ok {
+                    c"deleted".as_ptr()
+                } else if nvim_buf_is_changed(buf) != 0 {
+                    c"conflict".as_ptr()
+                } else if orig_size != nvim_buf_get_b_orig_size(buf)
+                    || nvim_buf_contents_changed(buf) != 0
+                {
+                    c"changed".as_ptr()
+                } else if orig_mode != nvim_buf_get_b_orig_mode(buf) {
+                    c"mode".as_ptr()
+                } else {
+                    c"time".as_ptr()
+                };
+
+                // Only give warning if no FileChangedShell autocmds.
+                // Avoid re-entrancy by temporarily setting busy on the Rust side.
+                // (BUF_CHECK_BUSY is already set at the outer level; the inner guard
+                //  in rs_buf_check_timestamp handles recursion. We just need to set
+                //  allbuf_lock here to match C behavior.)
+                nvim_set_vim_var_fcs_reason(reason);
+                nvim_set_vim_var_fcs_choice_empty();
+                let old_allbuf_lock = nvim_get_allbuf_lock();
+                nvim_set_allbuf_lock(old_allbuf_lock + 1);
+                let n = apply_autocmds(EVENT_FILECHANGEDSHELL, b_fname, b_fname, false, buf);
+                nvim_set_allbuf_lock(old_allbuf_lock);
+                // show_mesg tracks whether to show the user a warning message.
+                // It mirrors the C idiom: `bool n = apply_autocmds(); if (n) { ...; if (ask) n=false; else return 2; } if (!n) { show message; }`
+                let mut show_mesg = !n;
+                if n {
+                    if nvim_bufref_valid(bufref_ptr) == 0 {
+                        emsg(c"E246: FileChangedShell autocommand deleted buffer".as_ptr());
+                    }
+                    let s = nvim_get_vim_var_fcs_choice();
+                    let choice = if s.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(s).to_str().unwrap_or("")
+                    };
+                    // reason[0] = 'd' means deleted
+                    let first_char = *reason as u8;
+                    if choice == "reload" && first_char != b'd' {
+                        reload = RELOAD_NORMAL;
+                    } else if choice == "edit" {
+                        reload = RELOAD_DETECT;
+                    } else if choice == "ask" {
+                        show_mesg = true; // fall through to show dialog
+                    } else {
+                        return 2;
+                    }
+                }
+                if show_mesg {
+                    let first_char = *reason as u8;
+                    if first_char == b'd' {
+                        // Only give the message once.
+                        if prev_b_mtime != -1 {
+                            mesg = c"E211: File \"%s\" no longer available".as_ptr();
+                        }
+                    } else {
+                        helpmesg = true;
+                        can_reload = true;
+
+                        // Check 3rd char: 'n' = "conflict", 'h' = "changed"
+                        let reason_bytes = std::ffi::CStr::from_ptr(reason).to_bytes();
+                        if reason_bytes.get(2) == Some(&b'n') {
+                            mesg = c"W12: Warning: File \"%s\" has changed and the buffer was changed in Vim as well".as_ptr();
+                            mesg2 = c"See \":help W12\" for more info.".as_ptr();
+                        } else if reason_bytes.get(1) == Some(&b'h') {
+                            mesg = c"W11: Warning: File \"%s\" has changed since editing started"
+                                .as_ptr();
+                            mesg2 = c"See \":help W11\" for more info.".as_ptr();
+                        } else if first_char == b'm' {
+                            mesg = c"W16: Warning: Mode of file \"%s\" has changed since editing started".as_ptr();
+                            mesg2 = c"See \":help W16\" for more info.".as_ptr();
+                        } else {
+                            // Only timestamp changed: store to avoid check_mtime() warnings.
+                            nvim_buf_copy_mtime_to_mtime_read(buf);
+                        }
+                    }
+                }
+            }
+        }
+    } else if (b_flags & BF_NEW) != 0 && (b_flags & BF_NEW_W) == 0 && nvim_os_path_exists(ffname) {
+        retval = 1;
+        mesg = c"W13: Warning: File \"%s\" has been created after editing started".as_ptr();
+        nvim_buf_set_b_flags(buf, b_flags | BF_NEW_W);
+        can_reload = true;
+    }
+
+    if !mesg.is_null() {
+        let b_fname = nvim_buf_get_b_fname(buf);
+        let path = nvim_home_replace_save(buf, b_fname);
+
+        if !helpmesg {
+            mesg2 = c"".as_ptr();
+        }
+
+        let mesg_len = libc::strlen(mesg);
+        let path_len = libc::strlen(path);
+        let mesg2_len = libc::strlen(mesg2);
+        let tbuf_len = path_len + mesg_len + mesg2_len + 2;
+        let tbuf = xmalloc(tbuf_len);
+        snprintf(tbuf, tbuf_len, mesg, path);
+
+        // Set VV_WARNINGMSG before appending mesg2
+        nvim_set_vim_var_warningmsg(tbuf, -1);
+
+        if can_reload {
+            if *mesg2 != 0 {
+                xstrlcat(tbuf, c"\n".as_ptr(), tbuf_len - 1);
+                xstrlcat(tbuf, mesg2, tbuf_len - 1);
+            }
+            let choice = nvim_do_dialog_file_changed(tbuf);
+            match choice {
+                2 => reload = RELOAD_NORMAL,
+                3 => reload = RELOAD_DETECT,
+                _ => {}
+            }
+        } else {
+            let state = nvim_get_State();
+            let mode_normal_busy = nvim_get_MODE_NORMAL_BUSY();
+            let mode_cmdline = nvim_get_MODE_CMDLINE();
+            if state > mode_normal_busy
+                || (state & mode_cmdline) != 0
+                || ALREADY_WARNED.load(Ordering::Relaxed)
+            {
+                if *mesg2 != 0 {
+                    xstrlcat(tbuf, c"; ".as_ptr(), tbuf_len - 1);
+                    xstrlcat(tbuf, mesg2, tbuf_len - 1);
+                }
+                emsg(tbuf);
+                retval = 2;
+            } else if !nvim_get_autocmd_busy() {
+                msg_start();
+                nvim_msg_puts_hl_e(tbuf);
+                if *mesg2 != 0 {
+                    nvim_msg_puts_hl_w(mesg2);
+                }
+                msg_clr_eos();
+                nvim_msg_end_wrap();
+                if nvim_get_emsg_silent() == 0
+                    && !nvim_get_in_assert_fails()
+                    && nvim_ui_has_messages() == 0
+                {
+                    ui_flush();
+                    nvim_os_delay(1004, 1);
+                    nvim_set_redraw_cmdline(false);
+                }
+                ALREADY_WARNED.store(true, Ordering::Relaxed);
+            }
+        }
+
+        xfree(path as *mut c_void);
+        xfree(tbuf as *mut c_void);
+    }
+
+    if reload != RELOAD_NONE {
+        let reload_options = if reload == RELOAD_DETECT { 1 } else { 0 };
+        nvim_buf_reload(buf, orig_mode, reload_options);
+        if nvim_buf_get_b_p_udf(buf) != 0 && !nvim_buf_get_b_ffname(buf).is_null() {
+            let mut hash: [u8; UNDO_HASH_SIZE] = [0; UNDO_HASH_SIZE];
+            nvim_u_compute_hash(buf, hash.as_mut_ptr());
+            nvim_u_write_undo(std::ptr::null(), 0, buf, hash.as_mut_ptr());
+        }
+    }
+
+    // Trigger FileChangedShellPost when the file was changed in any way.
+    if nvim_bufref_valid(bufref_ptr) != 0 && retval != 0 {
+        let b_fname = nvim_buf_get_b_fname(buf);
+        apply_autocmds(EVENT_FILECHANGEDSHELLPOST, b_fname, b_fname, false, buf);
+    }
+
+    retval
 }
 
 #[cfg(test)]
