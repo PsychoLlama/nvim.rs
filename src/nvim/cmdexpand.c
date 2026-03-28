@@ -921,65 +921,6 @@ static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T
   return ret;
 }
 
-/// Expand `file` for all comma-separated directories in `path`.
-/// Adds matches to `ga`.
-/// If "dirs" is true only expand directory names.
-void globpath(char *path, char *file, garray_T *ga, int expand_options, bool dirs)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *buf = xmalloc(MAXPATHL);
-
-  expand_T xpc;
-  ExpandInit(&xpc);
-  xpc.xp_context = dirs ? EXPAND_DIRECTORIES : EXPAND_FILES;
-
-  size_t filelen = strlen(file);
-
-#if defined(MSWIN)
-  // Using the platform's path separator (\) makes vim incorrectly
-  // treat it as an escape character, use '/' instead.
-# define TMP_PATHSEPSTR "/"
-#else
-# define TMP_PATHSEPSTR PATHSEPSTR
-#endif
-
-  // Loop over all entries in {path}.
-  while (*path != NUL) {
-    // Copy one item of the path to buf[] and concatenate the file name.
-
-    // length of the path portion of buf (including trailing slash).
-    size_t pathlen = copy_option_part(&path, buf, MAXPATHL, ",");
-    size_t seplen = (*buf != NUL && !after_pathsep(buf, buf + pathlen))
-                    ? STRLEN_LITERAL(TMP_PATHSEPSTR) : 0;
-
-    if (pathlen + seplen + filelen + 1 <= MAXPATHL) {
-      if (seplen > 0) {
-        xmemcpyz(buf + pathlen, S_LEN(TMP_PATHSEPSTR));
-        pathlen += seplen;
-      }
-      xmemcpyz(buf + pathlen, file, filelen);
-
-      char **p;
-      int num_p = 0;
-      ExpandFromContext(&xpc, buf, &p, &num_p, WILD_SILENT | expand_options);
-      if (num_p > 0) {
-        rs_expand_escape(&xpc, buf, num_p, p, WILD_SILENT | expand_options);
-
-        // Concatenate new results to previous ones.
-        ga_grow(ga, num_p);
-        // take over the pointers and put them in "ga"
-        for (int i = 0; i < num_p; i++) {
-          ((char **)ga->ga_data)[ga->ga_len] = p[i];
-          ga->ga_len++;
-        }
-        xfree(p);
-      }
-    }
-  }
-
-  xfree(buf);
-}
-#undef TMP_PATHSEPSTR
 
 // cmdline_del -- used by nvim_cmdexpand_cmdline_del accessor only (kept for now)
 static void cmdline_del(CmdlineInfo *cclp, int from)

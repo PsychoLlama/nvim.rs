@@ -79,6 +79,9 @@ void ExpandGeneric(const char *pat, expand_T *xp, regmatch_T *regmatch, char ***
 int nextwild(expand_T *xp, int type, int options, bool escape);
 int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool noselect);
 
+// Phase 6 Rust migrations (files.rs)
+void globpath(char *path, char *file, garray_T *ga, int expand_options, bool dirs);
+
 // Phase 5 Rust migrations (viml.rs)
 #include "nvim/eval/typval_defs.h"  // for typval_T, EvalFuncData
 void f_getcompletion(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
