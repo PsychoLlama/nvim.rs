@@ -12,7 +12,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Navigation Direction and Types
@@ -477,6 +477,533 @@ pub unsafe extern "C" fn rs_spell_repall_count(state: *const SpellRepallState) -
         return 0;
     }
     (*state).count
+}
+
+// =============================================================================
+// Phase 2: Spell dump helper functions
+// =============================================================================
+
+/// DUMPFLAG constants (local to spell.c dump logic).
+const DUMPFLAG_KEEPCASE: c_int = 1;
+const DUMPFLAG_COUNT: c_int = 2;
+const DUMPFLAG_ICASE: c_int = 4;
+const DUMPFLAG_ONECAP: c_int = 8;
+const DUMPFLAG_ALLCAP: c_int = 16;
+
+/// C OK constant (vim_defs.h: #define OK 1)
+const OK: c_int = 1;
+/// FORWARD direction constant
+const FORWARD: c_int = 1;
+/// WF_ word flag constants used in dump logic
+const WF_ONECAP: c_int = 0x02;
+const WF_ALLCAP: c_int = 0x04;
+const WF_FIXCAP: c_int = 0x40;
+const WF_KEEPCAP: c_int = 0x80;
+const WF_CAPMASK: c_int = WF_ONECAP | WF_ALLCAP | WF_KEEPCAP;
+const WF_BANNED: c_int = 0x10;
+const WF_RARE: c_int = 0x08;
+const WF_REGION: c_int = 0x01;
+const WF_RAREPFX: c_int = 0x0020_0000;
+const WF_NEEDCOMP: c_int = 0x100;
+
+extern "C" {
+    fn ml_append(lnum: i32, line: *const c_char, len: c_int, newfile: bool) -> c_int;
+    fn ins_compl_add_infercase(
+        str_arg: *mut c_char,
+        len: c_int,
+        icase: bool,
+        fname: *const c_char,
+        dir: c_int,
+        cont_s_ipos: bool,
+        score: c_int,
+    ) -> c_int;
+    fn line_breakcheck();
+    fn mb_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn vim_snprintf(str_: *mut c_char, str_m: usize, fmt: *const c_char, ...) -> c_int;
+    fn hash_find(ht: *const crate::HashtabRaw, key: *const c_char) -> *mut crate::HashitemRaw;
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func: c_int);
+    fn rs_ins_compl_interrupted() -> c_int;
+    fn nvim_win_get_b_langp(wp: *const c_void) -> *const crate::GArrayRaw;
+
+    static hash_removed: c_char;
+    static mut got_int: bool;
+
+    #[link_name = "IObuff"]
+    static mut IObuff_global: [c_char; 1025];
+
+    #[link_name = "p_ic"]
+    static p_ic_global: c_int;
+
+    #[link_name = "curwin"]
+    static curwin_global: *mut c_void;
+}
+
+/// WC_KEY_OFF: offset of wc_count before the key in wordcount_T
+const WC_KEY_OFF: usize = 2;
+
+/// Returns true if the hash item is empty (HASHITEM_EMPTY macro).
+#[inline]
+unsafe fn hashitem_empty_dump(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed).cast_mut())
+}
+
+/// Get the word count from a hash item (HI2WC macro: key - WC_KEY_OFF gives wc_count u16).
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn hi2wc_count(hi: *const crate::HashitemRaw) -> u32 {
+    let wc_base = (*hi).hi_key.cast::<u8>().sub(WC_KEY_OFF);
+    let b0 = wc_base.read();
+    let b1 = wc_base.add(1).read();
+    u32::from(u16::from_ne_bytes([b0, b1]))
+}
+
+/// Dump one word: apply case modifications and append or add to completion.
+///
+/// Mirrors C: static void dump_word(slang, word, pat, dir, dumpflags, wordflags, lnum)
+///
+/// # Safety
+/// All pointers must be valid. `dir` may be null when `pat` is null.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn dump_word(
+    slang: *mut crate::SlangRaw,
+    word: *mut c_char,
+    pat: *mut c_char,
+    dir: *mut c_int,
+    dumpflags: c_int,
+    wordflags: c_int,
+    lnum: i32,
+) {
+    let mut flags = wordflags;
+    if dumpflags & DUMPFLAG_ONECAP != 0 {
+        flags |= WF_ONECAP;
+    }
+    if dumpflags & DUMPFLAG_ALLCAP != 0 {
+        flags |= WF_ALLCAP;
+    }
+
+    // Determine the word to display: apply case modification if needed.
+    let mut cword = [0u8; crate::MAXWLEN + 10];
+    let (p, keepcap) = if (dumpflags & DUMPFLAG_KEEPCASE) == 0 && (flags & WF_CAPMASK) != 0 {
+        crate::rs_make_case_word(word, cword.as_mut_ptr().cast::<c_char>(), flags);
+        (cword.as_ptr().cast::<c_char>(), false)
+    } else {
+        let kc = (dumpflags & DUMPFLAG_KEEPCASE) != 0
+            && ((crate::rs_captype(word, std::ptr::null()) & WF_KEEPCAP) == 0
+                || (flags & WF_FIXCAP) != 0);
+        (word.cast_const(), kc)
+    };
+    let tw: *const c_char = p; // pointer used for word-count lookup
+
+    if pat.is_null() {
+        // Build the output string, possibly with flags/regions.
+        let mut badword = [0u8; crate::MAXWLEN + 10];
+
+        let out: *const c_char = if (flags & (WF_BANNED | WF_RARE | WF_REGION)) != 0 || keepcap {
+            // Copy the word into badword then append flag characters.
+            let plen = strlen(p);
+            std::ptr::copy_nonoverlapping(p.cast::<u8>(), badword.as_mut_ptr(), plen);
+            badword[plen] = b'/';
+            let mut blen = plen + 1;
+            if keepcap {
+                badword[blen] = b'=';
+                blen += 1;
+            }
+            if flags & WF_BANNED != 0 {
+                badword[blen] = b'!';
+                blen += 1;
+            } else if flags & WF_RARE != 0 {
+                badword[blen] = b'?';
+                blen += 1;
+            }
+            if flags & WF_REGION != 0 {
+                for i in 0..7usize {
+                    if flags & (0x1_0000 << i) != 0 {
+                        badword[blen] = (i + 1) as u8 + b'0';
+                        blen += 1;
+                    }
+                }
+            }
+            badword[blen] = 0;
+            badword.as_ptr().cast::<c_char>()
+        } else {
+            p
+        };
+
+        if dumpflags & DUMPFLAG_COUNT != 0 {
+            // Include word count for ":spelldump!"
+            let hi = hash_find(std::ptr::addr_of!((*slang).sl_wordcount), tw);
+            if !hashitem_empty_dump(hi) {
+                let wc = hi2wc_count(hi);
+                let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+                vim_snprintf(iobuff, 1025, c"%s\t%d".as_ptr(), tw, wc);
+                ml_append(lnum, iobuff, 0, false);
+                return;
+            }
+        }
+
+        ml_append(lnum, out, 0, false);
+    } else {
+        // Pattern mode: match and add to completion list.
+        let patlen = strlen(pat);
+        let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
+            mb_strnicmp(p, pat, patlen) == 0
+        } else {
+            strncmp(p, pat, patlen) == 0
+        };
+        if matches
+            && ins_compl_add_infercase(
+                p.cast_mut(),
+                strlen(p) as c_int,
+                p_ic_global != 0,
+                std::ptr::null(),
+                *dir,
+                false,
+                0,
+            ) == OK
+        {
+            // If dir was BACKWARD, honor it just once.
+            *dir = FORWARD;
+        }
+    }
+}
+
+/// For `:spelldump`: find matching prefixes for "word", prepend each to "word",
+/// then call dump_word for each valid prefix+word combination.
+///
+/// Mirrors C: static linenr_T dump_prefixes(slang, word, pat, dir, dumpflags, flags, startlnum)
+///
+/// # Safety
+/// All pointers must be valid. `dir` may be null when `pat` is null.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_lossless)]
+unsafe fn dump_prefixes(
+    slang: *mut crate::SlangRaw,
+    word: *mut c_char,
+    pat: *mut c_char,
+    dir: *mut c_int,
+    dumpflags: c_int,
+    flags: c_int,
+    startlnum: i32,
+) -> i32 {
+    let mut lnum = startlnum;
+    let byts = (*slang).sl_pbyts;
+    let idxs = (*slang).sl_pidxs;
+
+    if byts.is_null() {
+        return lnum;
+    }
+
+    // If word starts with a lower-case letter, make uppercase variant in word_up.
+    let c = utf_ptr2char(word);
+    let mut word_up = [0u8; crate::MAXWLEN];
+    let has_word_up = crate::spell_toupper(c) != c;
+    if has_word_up {
+        crate::rs_onecap_copy(word, word_up.as_mut_ptr().cast::<c_char>(), true);
+    }
+
+    // Depth-first walk over the prefix tree.
+    let mut arridx = [0i32; crate::MAXWLEN];
+    let mut curi = [0i32; crate::MAXWLEN];
+    let mut prefix = [0u8; crate::MAXWLEN];
+    let mut depth: i32 = 0;
+    arridx[0] = 0;
+    curi[0] = 1;
+
+    while depth >= 0 && !got_int {
+        let n = arridx[depth as usize] as usize;
+        let len = *byts.add(n) as i32;
+        if curi[depth as usize] > len {
+            // Done all bytes at this node, go up one level.
+            depth -= 1;
+            line_breakcheck();
+        } else {
+            let ni = n + curi[depth as usize] as usize;
+            curi[depth as usize] += 1;
+            let c = *byts.add(ni) as i32;
+            if c == 0 {
+                // End of prefix: count how many NUL bytes there are.
+                let mut i = 1i32;
+                while i < len {
+                    if *byts.add(n + i as usize) != 0 {
+                        break;
+                    }
+                    i += 1;
+                }
+                curi[depth as usize] += i - 1;
+
+                let vwp =
+                    crate::check::rs_valid_word_prefix(i, ni as i32, flags, word, slang, false);
+                if vwp != 0 {
+                    xstrlcpy(
+                        prefix.as_mut_ptr().cast::<c_char>().add(depth as usize),
+                        word,
+                        crate::MAXWLEN.saturating_sub(depth as usize),
+                    );
+                    dump_word(
+                        slang,
+                        prefix.as_mut_ptr().cast::<c_char>(),
+                        pat,
+                        dir,
+                        dumpflags,
+                        if vwp & WF_RAREPFX != 0 {
+                            flags | WF_RARE
+                        } else {
+                            flags
+                        },
+                        lnum,
+                    );
+                    if lnum != 0 {
+                        lnum += 1;
+                    }
+                }
+
+                // Also check with the uppercased first letter.
+                if has_word_up {
+                    let vwp2 = crate::check::rs_valid_word_prefix(
+                        i,
+                        ni as i32,
+                        flags,
+                        word_up.as_mut_ptr().cast::<c_char>(),
+                        slang,
+                        true,
+                    );
+                    if vwp2 != 0 {
+                        xstrlcpy(
+                            prefix.as_mut_ptr().cast::<c_char>().add(depth as usize),
+                            word_up.as_mut_ptr().cast::<c_char>(),
+                            crate::MAXWLEN.saturating_sub(depth as usize),
+                        );
+                        dump_word(
+                            slang,
+                            prefix.as_mut_ptr().cast::<c_char>(),
+                            pat,
+                            dir,
+                            dumpflags,
+                            if vwp2 & WF_RAREPFX != 0 {
+                                flags | WF_RARE
+                            } else {
+                                flags
+                            },
+                            lnum,
+                        );
+                        if lnum != 0 {
+                            lnum += 1;
+                        }
+                    }
+                }
+            } else {
+                // Normal character: go one level deeper.
+                prefix[depth as usize] = c as u8;
+                depth += 1;
+                arridx[depth as usize] = *idxs.add(ni);
+                curi[depth as usize] = 1;
+            }
+        }
+    }
+
+    lnum
+}
+
+// =============================================================================
+// Phase 3: spell_dump_compl traversal engine
+// =============================================================================
+
+/// Iterate all loaded spell languages, traverse word trees, apply pattern
+/// matching, and call dump_word/dump_prefixes for each valid entry.
+///
+/// Signature matches C: void spell_dump_compl(char *pat, int ic, Direction *dir, int dumpflags_arg)
+///
+/// # Safety
+/// Must be called from the main thread with a valid current window.
+/// `pat` may be null (dump all words); `dir` may be null when `pat` is null.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_lossless)]
+pub unsafe extern "C" fn spell_dump_compl(
+    pat: *mut c_char,
+    ic: c_int,
+    dir: *mut c_int,
+    dumpflags_arg: c_int,
+) {
+    let mut dumpflags = dumpflags_arg;
+    let mut lnum: i32 = 0;
+    let mut region_names: *const c_char = std::ptr::null();
+    let mut do_region = true;
+
+    // When ignoring case or when the pattern starts with capital, pass this on
+    // to dump_word().
+    if !pat.is_null() {
+        if ic != 0 {
+            dumpflags |= DUMPFLAG_ICASE;
+        } else {
+            let n = crate::rs_captype(pat, std::ptr::null());
+            if n == WF_ONECAP {
+                dumpflags |= DUMPFLAG_ONECAP;
+            } else if n == WF_ALLCAP && strlen(pat) as c_int > utfc_ptr2len(pat) {
+                dumpflags |= DUMPFLAG_ALLCAP;
+            }
+        }
+    }
+
+    // Find out if we can support regions: all languages must have the same
+    // region names or none at all.
+    let langp_ga = nvim_win_get_b_langp(curwin_global);
+    let ga_len = (*langp_ga).ga_len;
+    for lpi in 0..ga_len {
+        let lp = crate::langp_entry(langp_ga, lpi);
+        let p = (*(*lp).lp_slang).sl_regions.as_ptr();
+        if *p != 0 {
+            if region_names.is_null() {
+                region_names = p;
+            } else if strcmp(region_names, p) != 0 {
+                do_region = false;
+                break;
+            }
+        }
+    }
+
+    if do_region && !region_names.is_null() && pat.is_null() {
+        let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+        vim_snprintf(iobuff, 1025, c"/regions=%s".as_ptr(), region_names);
+        ml_append(lnum, iobuff, 0, false);
+        lnum += 1;
+    } else {
+        do_region = false;
+    }
+
+    // Loop over all spell files loaded for 'spelllang'.
+    for lpi in 0..ga_len {
+        let lp = crate::langp_entry(langp_ga, lpi);
+        let slang = (*lp).lp_slang;
+        if (*slang).sl_fbyts.is_null() {
+            continue; // reloading failed
+        }
+
+        if pat.is_null() {
+            let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+            vim_snprintf(iobuff, 1025, c"# file: %s".as_ptr(), (*slang).sl_fname);
+            ml_append(lnum, iobuff, 0, false);
+            lnum += 1;
+        }
+
+        // When matching with a pattern and there are no prefixes, only use
+        // parts of the tree that match "pat".
+        let patlen: i32 = if !pat.is_null() && (*slang).sl_pbyts.is_null() {
+            strlen(pat) as i32
+        } else {
+            -1
+        };
+
+        // Round 1: case-folded tree; round 2: keep-case tree.
+        for round in 1..=2i32 {
+            let (byts, idxs) = if round == 1 {
+                dumpflags &= !DUMPFLAG_KEEPCASE;
+                ((*slang).sl_fbyts, (*slang).sl_fidxs)
+            } else {
+                dumpflags |= DUMPFLAG_KEEPCASE;
+                ((*slang).sl_kbyts, (*slang).sl_kidxs)
+            };
+            if byts.is_null() {
+                continue;
+            }
+
+            let mut arridx = [0i32; crate::MAXWLEN];
+            let mut curi = [0i32; crate::MAXWLEN];
+            let mut word = [0u8; crate::MAXWLEN];
+            let mut depth: i32 = 0;
+            arridx[0] = 0;
+            curi[0] = 1;
+
+            while depth >= 0 && !got_int && (pat.is_null() || rs_ins_compl_interrupted() == 0) {
+                let ad = arridx[depth as usize] as usize;
+                if curi[depth as usize] > *byts.add(ad) as i32 {
+                    // Done all bytes at this node, go up one level.
+                    depth -= 1;
+                    line_breakcheck();
+                    rs_ins_compl_check_keys(50, 0);
+                } else {
+                    let n = ad + curi[depth as usize] as usize;
+                    curi[depth as usize] += 1;
+                    let c = *byts.add(n) as i32;
+
+                    if c == 0 || depth >= crate::MAXWLEN as i32 - 1 {
+                        // End of word or max depth: process the word.
+                        let flags = *idxs.add(n);
+                        let lp_ref = crate::langp_entry(langp_ga, lpi);
+                        if (round == 2 || (flags & WF_KEEPCAP) == 0)
+                            && (flags & WF_NEEDCOMP) == 0
+                            && (do_region
+                                || (flags & WF_REGION) == 0
+                                || (((flags as u32) >> 16) & ((*lp_ref).lp_region as u32)) != 0)
+                        {
+                            word[depth as usize] = 0;
+                            let wflags = if do_region { flags } else { flags & !WF_REGION };
+
+                            // Dump basic word if no prefix or it's the first.
+                            let pfx_id = (flags as u32) >> 24;
+                            if pfx_id == 0 || curi[depth as usize] == 2 {
+                                dump_word(
+                                    slang,
+                                    word.as_mut_ptr().cast::<c_char>(),
+                                    pat,
+                                    dir,
+                                    dumpflags,
+                                    wflags,
+                                    lnum,
+                                );
+                                if pat.is_null() {
+                                    lnum += 1;
+                                }
+                            }
+
+                            // Apply prefix if there is one.
+                            if pfx_id != 0 {
+                                lnum = dump_prefixes(
+                                    slang,
+                                    word.as_mut_ptr().cast::<c_char>(),
+                                    pat,
+                                    dir,
+                                    dumpflags,
+                                    wflags,
+                                    lnum,
+                                );
+                            }
+                        }
+                    } else {
+                        // Normal char: go one level deeper.
+                        word[depth as usize] = c as u8;
+                        depth += 1;
+                        arridx[depth as usize] = *idxs.add(n);
+                        curi[depth as usize] = 1;
+
+                        // Check if this character matches the pattern.
+                        // If not, skip the whole tree below it.
+                        if depth <= patlen
+                            && mb_strnicmp(word.as_ptr().cast::<c_char>(), pat, depth as usize) != 0
+                        {
+                            depth -= 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================
