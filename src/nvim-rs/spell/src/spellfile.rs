@@ -6602,12 +6602,6 @@ extern "C" {
     fn put_time(fd: *mut libc::FILE, time_: i64) -> c_int;
     fn free_blocks(bl: *mut c_void);
     fn slang_free(lp: *mut crate::SlangRaw);
-    fn spell_load_file(
-        fname: *mut c_char,
-        lang: *mut c_char,
-        old_lp: *mut crate::SlangRaw,
-        silent: bool,
-    ) -> *mut crate::SlangRaw;
     #[link_name = "path_full_compare"]
     fn path_full_compare_sug(
         s1: *mut c_char,
@@ -6626,6 +6620,68 @@ extern "C" {
     static e_write_sug: *const c_char;
     #[link_name = "e_notopen"]
     static e_notopen_sug: *const c_char;
+}
+
+// Declarations for spell_load_file migration (Phase 1)
+extern "C" {
+    fn slang_alloc(lang: *mut c_char) -> *mut crate::SlangRaw;
+    fn slang_clear(lp: *mut crate::SlangRaw);
+    #[allow(dead_code)] // used in Phase 2 (suggest_load_files)
+    fn slang_clear_sug(lp: *mut crate::SlangRaw);
+    fn read_string(fd: *mut libc::FILE, cnt: usize) -> *mut c_char;
+    fn get4c(fd: *mut libc::FILE) -> c_int;
+    fn get8ctime(fd: *mut libc::FILE) -> i64;
+    // ETYPE_SPELL = 9 (index of ETYPE_SPELL in etype_T enum, 0-based)
+    fn estack_push(etype: c_int, name: *const c_char, lnum: i32);
+    fn estack_pop();
+    fn path_tail(fname: *const c_char) -> *mut c_char;
+    #[link_name = "xstrdup"]
+    fn xstrdup_slang(s: *const c_char) -> *mut c_char;
+    #[link_name = "path_full_compare"]
+    fn path_full_compare_slang(
+        s1: *mut c_char,
+        s2: *mut c_char,
+        checkname: bool,
+        expandenv: bool,
+    ) -> c_int;
+    fn redraw_all_later(type_: c_int);
+    #[link_name = "parse_spelllang"]
+    fn parse_spelllang_slang(win: *mut c_void) -> *mut c_char;
+    // Error message strings
+    #[link_name = "e_format"]
+    static e_format_slang: *const c_char;
+    #[link_name = "e_notopen"]
+    static e_notopen_slang: *const c_char;
+    // first_lang as mutable for list insertion
+    #[link_name = "first_lang"]
+    static mut first_lang_mut: *mut crate::SlangRaw;
+    // curwin
+    #[link_name = "curwin"]
+    static curwin_slang: *mut c_void;
+    // p_verbose
+    #[link_name = "p_verbose"]
+    static p_verbose_slang: i64;
+    // semsg / smsg / emsg / verbose_enter / verbose_leave
+    #[link_name = "semsg"]
+    fn semsg_slang(fmt: *const c_char, ...) -> bool;
+    #[link_name = "smsg"]
+    fn smsg_slang(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    #[link_name = "emsg"]
+    fn emsg_slang(s: *const c_char) -> bool;
+    #[link_name = "verbose_enter"]
+    fn verbose_enter_slang();
+    #[link_name = "verbose_leave"]
+    fn verbose_leave_slang();
+    // xfree / xmalloc / xcalloc
+    #[link_name = "xfree"]
+    fn xfree_slang(ptr: *mut c_void);
+    #[link_name = "xmalloc"]
+    fn xmalloc_slang(size: usize) -> *mut c_void;
+    #[link_name = "xcalloc"]
+    fn xcalloc_slang(count: usize, size: usize) -> *mut c_void;
+    // os_fopen
+    #[link_name = "os_fopen"]
+    fn os_fopen_slang(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
 }
 
 /// Magic bytes and version for .sug file header.
@@ -6967,6 +7023,623 @@ unsafe fn sug_write(spin: *mut SpellinfoT, fname: *const c_char) {
     libc::fclose(fd);
 }
 
+// =============================================================================
+// Phase: spell_load_file migration
+// =============================================================================
+
+/// ETYPE_SPELL value: position of ETYPE_SPELL in the etype_T enum (0-indexed).
+const ETYPE_SPELL_VAL: c_int = 9;
+
+/// SPL_FNAME_ADD: suffix that marks add-word spell files.
+const SPL_FNAME_ADD: &[u8] = b".add.\0";
+
+/// UPD_SOME_VALID: redraw type for redraw_all_later.
+const UPD_SOME_VALID: c_int = 35;
+
+/// kEqualFiles: path_full_compare return value when both paths point to the same file.
+const K_EQUAL_FILES_SLANG: c_int = 1;
+
+/// Load a spell file (.spl) and return the slang_T it was loaded into.
+///
+/// This is the Rust implementation replacing the C `spell_load_file`.
+///
+/// Three calling modes:
+/// - `lang != NULL`, `old_lp == NULL`: first load, allocates a new slang_T.
+/// - `lang == NULL`, `old_lp != NULL`: reload an existing slang_T.
+/// - `lang == NULL`, `old_lp == NULL`: read-back after writing (for .sug creation).
+///
+/// # Safety
+/// `fname` must be a valid NUL-terminated string. `lang` and `old_lp` may be null.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    unused_assignments
+)]
+pub unsafe extern "C" fn rs_spell_load_file(
+    fname: *mut c_char,
+    lang: *mut c_char,
+    old_lp: *mut crate::SlangRaw,
+    silent: bool,
+) -> *mut crate::SlangRaw {
+    // SP_* error codes
+    const SP_FORMERROR: c_int = -2;
+    const SP_TRUNCERROR: c_int = -1;
+    const SP_OTHERERROR: c_int = -3;
+    const OK: c_int = 0;
+    const NUL: u8 = 0;
+    const EOF: c_int = -1;
+
+    // VIMSPELLMAGIC / VIMSPELLMAGICL
+    const VIMSPELLMAGIC_BYTES: &[u8; 8] = b"VIMspell";
+    const VIMSPELLMAGICL: usize = 8;
+    const VIMSPELLVERSION: c_int = 50;
+
+    // Section IDs (keep in sync with spellfile.rs constants and C enum)
+    const SN_REGION_V: u8 = 0;
+    const SN_CHARFLAGS_V: u8 = 1;
+    const SN_MIDWORD_V: u8 = 2;
+    const SN_PREFCOND_V: u8 = 3;
+    const SN_REP_V: u8 = 4;
+    const SN_SAL_V: u8 = 5;
+    const SN_SOFO_V: u8 = 6;
+    const SN_MAP_V: u8 = 7;
+    const SN_COMPOUND_V: u8 = 8;
+    const SN_SYLLABLE_V: u8 = 9;
+    const SN_NOBREAK_V: u8 = 10;
+    const SN_SUGFILE_V: u8 = 11;
+    const SN_REPSAL_V: u8 = 12;
+    const SN_WORDS_V: u8 = 13;
+    const SN_NOSPLITSUGS_V: u8 = 14;
+    const SN_INFO_V: u8 = 15;
+    const SN_NOCOMPOUNDSUGS_V: u8 = 16;
+    const SN_END_V: u8 = 255;
+    const SNF_REQUIRED_V: u8 = 1;
+
+    const MAXWLEN_V: usize = 254;
+    const MAXREGIONS: usize = 8;
+
+    let fd = os_fopen_slang(fname, c"r".as_ptr());
+    if fd.is_null() {
+        if !silent {
+            semsg_slang(e_notopen_slang, fname);
+        } else if p_verbose_slang > 2 {
+            verbose_enter_slang();
+            smsg_slang(0, e_notopen_slang, fname);
+            verbose_leave_slang();
+        }
+        return std::ptr::null_mut();
+    }
+
+    if p_verbose_slang > 2 {
+        verbose_enter_slang();
+        smsg_slang(0, c"Reading spell file \"%s\"".as_ptr(), fname);
+        verbose_leave_slang();
+    }
+
+    let lp: *mut crate::SlangRaw = if old_lp.is_null() {
+        let new_lp = slang_alloc(lang);
+        (*new_lp).sl_fname = xstrdup_slang(fname);
+        // Check for .add.spl
+        let tail = path_tail(fname);
+        (*new_lp).sl_add = !libc::strstr(tail, SPL_FNAME_ADD.as_ptr().cast::<c_char>()).is_null();
+        new_lp
+    } else {
+        old_lp
+    };
+
+    // Set sourcing_name so that error messages mention the file name.
+    estack_push(ETYPE_SPELL_VAL, fname, 0);
+    let did_estack_push = true;
+
+    // Track whether we should free lp on error
+    let allocated_lp = old_lp.is_null();
+
+    // Helper: clean up and return null on failure
+    macro_rules! fail {
+        () => {{
+            if !lang.is_null() {
+                *lang = NUL as c_char;
+            }
+            if allocated_lp {
+                slang_free(lp);
+            }
+            libc::fclose(fd);
+            if did_estack_push {
+                estack_pop();
+            }
+            return std::ptr::null_mut();
+        }};
+    }
+
+    // <HEADER>: <fileID> -- validate magic string
+    {
+        let mut magic_buf = [0u8; VIMSPELLMAGICL];
+        if libc::fread(magic_buf.as_mut_ptr().cast(), 1, VIMSPELLMAGICL, fd) != VIMSPELLMAGICL {
+            if libc::feof(fd) != 0 {
+                emsg_slang(c"E757: This does not look like a spell file".as_ptr());
+            } else {
+                let err = libc::strerror(libc::ferror(fd));
+                semsg_slang(
+                    c"E5042: Failed to read spell file %s: %s".as_ptr(),
+                    fname,
+                    err,
+                );
+            }
+            fail!();
+        }
+        if magic_buf != *VIMSPELLMAGIC_BYTES {
+            emsg_slang(c"E757: This does not look like a spell file".as_ptr());
+            fail!();
+        }
+    }
+
+    let c_ver = libc::fgetc(fd);
+    if c_ver < VIMSPELLVERSION {
+        emsg_slang(c"E771: Old spell file, needs to be updated".as_ptr());
+        fail!();
+    } else if c_ver > VIMSPELLVERSION {
+        emsg_slang(c"E772: Spell file is for newer version of Vim".as_ptr());
+        fail!();
+    }
+
+    // <SECTIONS>: <section> ... <sectionend>
+    'sections: loop {
+        let n = libc::fgetc(fd) as u8;
+        if n == SN_END_V {
+            break 'sections;
+        }
+        let sflags = libc::fgetc(fd) as u8; // <sectionflags>
+        let len = get4c(fd); // <sectionlen>
+        if len < 0 {
+            emsg_slang(c"E758: Truncated spell file".as_ptr());
+            fail!();
+        }
+
+        let mut res: c_int = 0;
+
+        match n {
+            SN_INFO_V => {
+                if !(*lp).sl_info.is_null() {
+                    xfree_slang((*lp).sl_info.cast::<c_void>());
+                    (*lp).sl_info = std::ptr::null_mut();
+                }
+                (*lp).sl_info = read_string(fd, len as usize);
+                if (*lp).sl_info.is_null() {
+                    fail!();
+                }
+            }
+            SN_REGION_V => {
+                if len as usize > MAXREGIONS * 2 {
+                    res = SP_FORMERROR;
+                } else {
+                    let rlen = len as usize;
+                    if libc::fread((*lp).sl_regions.as_mut_ptr().cast(), 1, rlen, fd) != rlen {
+                        res = if libc::feof(fd) != 0 {
+                            SP_TRUNCERROR
+                        } else {
+                            SP_OTHERERROR
+                        };
+                    } else if !libc::memchr((*lp).sl_regions.as_ptr().cast(), 0, rlen).is_null() {
+                        res = SP_FORMERROR;
+                    } else {
+                        (*lp).sl_regions[rlen] = 0;
+                    }
+                }
+            }
+            SN_CHARFLAGS_V => {
+                // Read 1-byte flagslen
+                let fc = libc::fgetc(fd);
+                if fc == EOF {
+                    res = SP_TRUNCERROR;
+                } else {
+                    let flagslen = fc as usize;
+                    let flags_ptr: *mut c_char = if flagslen == 0 {
+                        std::ptr::null_mut()
+                    } else {
+                        read_string(fd, flagslen)
+                    };
+                    if flagslen > 0 && flags_ptr.is_null() {
+                        res = SP_OTHERERROR;
+                    } else {
+                        // Read 2-byte follen
+                        let fc1 = libc::fgetc(fd);
+                        let fc2 = libc::fgetc(fd);
+                        if fc1 == EOF || fc2 == EOF {
+                            if !flags_ptr.is_null() {
+                                xfree_slang(flags_ptr.cast());
+                            }
+                            res = SP_TRUNCERROR;
+                        } else {
+                            let follen = ((fc1 as usize) << 8) | (fc2 as usize);
+                            let fol_ptr: *mut c_char = if follen == 0 {
+                                std::ptr::null_mut()
+                            } else {
+                                read_string(fd, follen)
+                            };
+                            if follen > 0 && fol_ptr.is_null() {
+                                if !flags_ptr.is_null() {
+                                    xfree_slang(flags_ptr.cast());
+                                }
+                                res = SP_OTHERERROR;
+                            } else if flags_ptr.is_null() != fol_ptr.is_null() {
+                                if !flags_ptr.is_null() {
+                                    xfree_slang(flags_ptr.cast());
+                                }
+                                if !fol_ptr.is_null() {
+                                    xfree_slang(fol_ptr.cast());
+                                }
+                                res = SP_FORMERROR;
+                            } else if !flags_ptr.is_null() && !fol_ptr.is_null() {
+                                let r = rs_set_spell_charflags(
+                                    flags_ptr.cast::<u8>(),
+                                    flagslen as c_int,
+                                    fol_ptr,
+                                );
+                                if r != 0 {
+                                    res = SP_OTHERERROR;
+                                }
+                                xfree_slang(flags_ptr.cast());
+                                xfree_slang(fol_ptr.cast());
+                            }
+                        }
+                    }
+                }
+            }
+            SN_MIDWORD_V => {
+                (*lp).sl_midword = read_string(fd, len as usize);
+                if (*lp).sl_midword.is_null() {
+                    fail!();
+                }
+            }
+            SN_PREFCOND_V => {
+                res = rs_read_prefcond_section(fd, lp);
+            }
+            SN_REP_V => {
+                res = rs_read_rep_section(
+                    fd,
+                    std::ptr::addr_of_mut!((*lp).sl_rep),
+                    (*lp).sl_rep_first.as_mut_ptr(),
+                );
+            }
+            SN_REPSAL_V => {
+                res = rs_read_rep_section(
+                    fd,
+                    std::ptr::addr_of_mut!((*lp).sl_repsal),
+                    (*lp).sl_repsal_first.as_mut_ptr(),
+                );
+            }
+            SN_SAL_V => {
+                let sal_buf = xmalloc_slang(len as usize).cast::<u8>();
+                if libc::fread(sal_buf.cast(), 1, len as usize, fd) != len as usize {
+                    xfree_slang(sal_buf.cast());
+                    res = if libc::feof(fd) != 0 {
+                        SP_TRUNCERROR
+                    } else {
+                        SP_OTHERERROR
+                    };
+                } else {
+                    res = rs_read_sal_section(sal_buf, len as usize, lp);
+                    xfree_slang(sal_buf.cast());
+                }
+            }
+            SN_SOFO_V => {
+                (*lp).sl_sofo = true;
+                if len <= 0 {
+                    res = SP_FORMERROR;
+                } else {
+                    let sofo_buf = xmalloc_slang(len as usize).cast::<u8>();
+                    if libc::fread(sofo_buf.cast(), 1, len as usize, fd) != len as usize {
+                        xfree_slang(sofo_buf.cast());
+                        res = if libc::feof(fd) != 0 {
+                            SP_TRUNCERROR
+                        } else {
+                            SP_OTHERERROR
+                        };
+                    } else {
+                        let mut sofo_section = SofoSection::default();
+                        let mut sofo_consumed: usize = 0;
+                        res = rs_parse_sofo_section(
+                            sofo_buf,
+                            len as usize,
+                            std::ptr::addr_of_mut!(sofo_section),
+                            std::ptr::addr_of_mut!(sofo_consumed),
+                        );
+                        xfree_slang(sofo_buf.cast());
+                        if res == 0 {
+                            let flen = sofo_section.from_len as usize;
+                            let tlen = sofo_section.to_len as usize;
+                            if flen == 0 && tlen == 0 {
+                                // empty, OK
+                            } else if flen == 0 || tlen == 0 {
+                                res = SP_FORMERROR;
+                            } else {
+                                let mut sofo_from = [0u8; 513];
+                                let mut sofo_to = [0u8; 513];
+                                sofo_from[..flen].copy_from_slice(&sofo_section.from[..flen]);
+                                sofo_to[..tlen].copy_from_slice(&sofo_section.to[..tlen]);
+                                res = rs_set_sofo(
+                                    lp,
+                                    sofo_from.as_ptr().cast::<c_char>(),
+                                    sofo_to.as_ptr().cast::<c_char>(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            SN_MAP_V => {
+                let p = read_string(fd, len as usize);
+                if p.is_null() {
+                    fail!();
+                }
+                rs_set_map_str(lp, p);
+                xfree_slang(p.cast());
+            }
+            SN_WORDS_V => {
+                let wbuf = xmalloc_slang(len as usize).cast::<u8>();
+                if libc::fread(wbuf.cast(), 1, len as usize, fd) != len as usize {
+                    xfree_slang(wbuf.cast());
+                    res = if libc::feof(fd) != 0 {
+                        SP_TRUNCERROR
+                    } else {
+                        SP_OTHERERROR
+                    };
+                    // fall through to error handling below
+                } else {
+                    let mut woff: usize = 0;
+                    let mut wword = [0u8; MAXWLEN_V + 1];
+                    let mut words_ok = true;
+                    while woff < len as usize {
+                        let mut wconsumed: usize = 0;
+                        let wlen = rs_parse_words_entry(
+                            wbuf.add(woff),
+                            len as usize - woff,
+                            wword.as_mut_ptr(),
+                            MAXWLEN_V,
+                            std::ptr::addr_of_mut!(wconsumed),
+                        );
+                        if wlen < 0 {
+                            xfree_slang(wbuf.cast());
+                            res = wlen;
+                            words_ok = false;
+                            break;
+                        }
+                        crate::rs_count_common_word(lp, wword.as_ptr().cast::<c_char>(), -1, 10);
+                        woff += wconsumed;
+                    }
+                    if words_ok {
+                        xfree_slang(wbuf.cast());
+                    }
+                }
+            }
+            SN_SUGFILE_V => {
+                (*lp).sl_sugtime = get8ctime(fd);
+            }
+            SN_NOSPLITSUGS_V => {
+                (*lp).sl_nosplitsugs = true;
+            }
+            SN_NOCOMPOUNDSUGS_V => {
+                (*lp).sl_nocompoundsugs = true;
+            }
+            SN_COMPOUND_V => {
+                let cmp_buf = xmalloc_slang(len as usize).cast::<u8>();
+                if libc::fread(cmp_buf.cast(), 1, len as usize, fd) != len as usize {
+                    xfree_slang(cmp_buf.cast());
+                    res = if libc::feof(fd) != 0 {
+                        SP_TRUNCERROR
+                    } else {
+                        SP_OTHERERROR
+                    };
+                } else {
+                    res = rs_read_compound(cmp_buf, len as usize, lp);
+                    xfree_slang(cmp_buf.cast());
+                }
+            }
+            SN_NOBREAK_V => {
+                (*lp).sl_nobreak = true;
+            }
+            SN_SYLLABLE_V => {
+                (*lp).sl_syllable = read_string(fd, len as usize);
+                if (*lp).sl_syllable.is_null() {
+                    fail!();
+                }
+                if crate::rs_init_syl_tab(lp) != OK {
+                    fail!();
+                }
+            }
+            _ => {
+                // Unsupported section: skip if not required, error if required.
+                if sflags & SNF_REQUIRED_V != 0 {
+                    emsg_slang(c"E770: Unsupported section in spell file".as_ptr());
+                    fail!();
+                }
+                let mut skip = len;
+                while skip > 0 {
+                    skip -= 1;
+                    if libc::fgetc(fd) < 0 {
+                        emsg_slang(c"E758: Truncated spell file".as_ptr());
+                        fail!();
+                    }
+                }
+            }
+        }
+
+        // Handle section errors
+        if res == SP_FORMERROR {
+            emsg_slang(e_format_slang);
+            fail!();
+        }
+        if res == SP_TRUNCERROR {
+            emsg_slang(c"E758: Truncated spell file".as_ptr());
+            fail!();
+        }
+        if res == SP_OTHERERROR {
+            fail!();
+        }
+    }
+
+    // Read all remaining tree data (<LWORDTREE> <KWORDTREE> <PREFIXTREE>).
+    {
+        let pos_before = libc::ftell(fd);
+        libc::fseek(fd, 0, libc::SEEK_END);
+        let pos_end = libc::ftell(fd);
+        libc::fseek(fd, pos_before, libc::SEEK_SET);
+
+        let tree_data_size = if pos_end > pos_before {
+            (pos_end - pos_before) as usize
+        } else {
+            0
+        };
+        if tree_data_size == 0 {
+            emsg_slang(c"E758: Truncated spell file".as_ptr());
+            fail!();
+        }
+
+        let tree_data = xmalloc_slang(tree_data_size).cast::<u8>();
+        if libc::fread(tree_data.cast(), 1, tree_data_size, fd) != tree_data_size {
+            xfree_slang(tree_data.cast());
+            emsg_slang(c"E758: Truncated spell file".as_ptr());
+            fail!();
+        }
+
+        let mut toff: usize = 0;
+
+        // Helper closure: read one tree from the buffer.
+        // Returns false on error (after freeing tree_data and calling fail! logic).
+        macro_rules! read_tree_from_buf {
+            ($bytsp:expr, $bytsp_len_p:expr, $idxsp:expr, $is_prefix:expr, $prefcnt:expr) => {{
+                let remaining = tree_data_size - toff;
+                if remaining < 4 {
+                    xfree_slang(tree_data.cast());
+                    emsg_slang(c"E758: Truncated spell file".as_ptr());
+                    fail!();
+                }
+                let mut nodecount: u32 = 0;
+                if rs_read_tree_peek_nodecount(
+                    tree_data.add(toff),
+                    remaining,
+                    std::ptr::addr_of_mut!(nodecount),
+                ) != 0
+                {
+                    xfree_slang(tree_data.cast());
+                    emsg_slang(c"E758: Truncated spell file".as_ptr());
+                    fail!();
+                }
+                if nodecount == 0 {
+                    $bytsp = std::ptr::null_mut();
+                    if let Some(len_p) = $bytsp_len_p {
+                        *len_p = 0;
+                    }
+                    $idxsp = std::ptr::null_mut();
+                    toff += 4;
+                } else {
+                    let nc = nodecount as usize;
+                    $bytsp = xmalloc_slang(nc).cast::<u8>();
+                    if let Some(len_p) = $bytsp_len_p {
+                        *len_p = nc as c_int;
+                    }
+                    $idxsp = xcalloc_slang(nc, std::mem::size_of::<c_int>()).cast::<c_int>();
+                    let mut consumed: usize = 0;
+                    let mut nc_out: c_int = 0;
+                    let r = rs_read_tree(
+                        tree_data.add(toff),
+                        remaining,
+                        $bytsp,
+                        $idxsp as *mut i32,
+                        nc,
+                        $is_prefix,
+                        $prefcnt,
+                        std::ptr::addr_of_mut!(consumed),
+                        std::ptr::addr_of_mut!(nc_out),
+                    );
+                    if r != 0 {
+                        xfree_slang(tree_data.cast());
+                        // error handling
+                        if r == SP_FORMERROR {
+                            emsg_slang(e_format_slang);
+                        } else {
+                            emsg_slang(c"E758: Truncated spell file".as_ptr());
+                        }
+                        fail!();
+                    }
+                    toff += consumed;
+                }
+            }};
+        }
+
+        // <LWORDTREE>
+        read_tree_from_buf!(
+            (*lp).sl_fbyts,
+            Some(std::ptr::addr_of_mut!((*lp).sl_fbyts_len)),
+            (*lp).sl_fidxs,
+            false,
+            0
+        );
+        // <KWORDTREE>
+        read_tree_from_buf!((*lp).sl_kbyts, None::<*mut c_int>, (*lp).sl_kidxs, false, 0);
+        // <PREFIXTREE>
+        let prefcnt = (*lp).sl_prefixcnt;
+        read_tree_from_buf!(
+            (*lp).sl_pbyts,
+            None::<*mut c_int>,
+            (*lp).sl_pidxs,
+            true,
+            prefcnt
+        );
+
+        xfree_slang(tree_data.cast());
+    }
+
+    // For a new file, link it into the list of spell files.
+    if old_lp.is_null() && !lang.is_null() {
+        (*lp).sl_next = first_lang_mut;
+        first_lang_mut = lp;
+    }
+
+    // Success path
+    libc::fclose(fd);
+    if did_estack_push {
+        estack_pop();
+    }
+    lp
+}
+
+/// Reload the spell file `fname` if it's already loaded.
+///
+/// Called after writing a new .add.spl (from mkspell / spell_add_word).
+/// `added_word` is true when invoked via "zg".
+///
+/// # Safety
+/// `fname` must be a valid NUL-terminated path string.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_spell_reload_one(fname: *mut c_char, added_word: bool) {
+    let mut didit = false;
+
+    let mut slang = first_lang_mut;
+    while !slang.is_null() {
+        if path_full_compare_slang(fname, (*slang).sl_fname, false, true) == K_EQUAL_FILES_SLANG {
+            slang_clear(slang);
+            if rs_spell_load_file(fname, std::ptr::null_mut(), slang, false).is_null() {
+                // reloading failed, clear the language
+                slang_clear(slang);
+            }
+            redraw_all_later(UPD_SOME_VALID);
+            didit = true;
+        }
+        slang = (*slang).sl_next;
+    }
+
+    // When "zg" was used and the file wasn't loaded yet, redo 'spelllang' to load it.
+    if added_word && !didit {
+        parse_spelllang_slang(curwin_slang);
+    }
+}
+
 /// Orchestrate .sug file creation for a spell language.
 ///
 /// # Safety
@@ -6991,7 +7664,7 @@ pub unsafe extern "C" fn rs_spell_make_sugfile(spin: *mut SpellinfoT, wfname: *m
     let free_slang = slang.is_null();
     if free_slang {
         rs_spell_message(spin, c"Reading back spell file...".as_ptr());
-        slang = spell_load_file(wfname, std::ptr::null_mut(), std::ptr::null_mut(), false);
+        slang = rs_spell_load_file(wfname, std::ptr::null_mut(), std::ptr::null_mut(), false);
         if slang.is_null() {
             return;
         }
