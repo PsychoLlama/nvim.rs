@@ -385,14 +385,7 @@ const char *did_set_chars_option(optset_T *args)
 
 // expand_set_chars_option is now implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
-/// The 'colorcolumn' option is changed.
-const char *did_set_colorcolumn(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-  return check_colorcolumn(*varp, varp == &win->w_p_cc ? win : NULL);
-}
-
+// did_set_colorcolumn is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 /// Check if value for 'complete' is valid when 'complete' option is changed.
 const char *did_set_complete(optset_T *args)

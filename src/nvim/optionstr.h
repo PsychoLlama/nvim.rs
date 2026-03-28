@@ -25,6 +25,7 @@ void didset_string_options(void);
 const char *did_set_shada(optset_T *args);
 const char *did_set_completeitemalign(optset_T *args);
 const char *did_set_titleiconstring(optset_T *args, int flagval);
+const char *did_set_colorcolumn(optset_T *args);
 
 // Implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
 char *illegal_char(char *errbuf, size_t errbuflen, int c);

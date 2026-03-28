@@ -551,6 +551,31 @@ extern "C" {
 }
 
 // =============================================================================
+// did_set_colorcolumn
+// =============================================================================
+
+extern "C" {
+    fn nvim_optset_get_win(args: *const c_void) -> *mut c_void;
+
+    /// Validate 'colorcolumn' string; apply to window if wp != NULL.
+    fn check_colorcolumn(cc: *mut c_char, wp: *mut c_void) -> *const c_char;
+}
+
+/// The 'colorcolumn' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_colorcolumn"]
+pub unsafe extern "C" fn did_set_colorcolumn(args: *const c_void) -> *const c_char {
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let s = *varp;
+    let win = nvim_optset_get_win(args);
+    // colorcolumn is a window-only option, so varp is always &win->w_p_cc.
+    // Always pass win to check_colorcolumn so it applies the value.
+    check_colorcolumn(s, win)
+}
+
+// =============================================================================
 // C globals for did_set_shada
 // =============================================================================
 
