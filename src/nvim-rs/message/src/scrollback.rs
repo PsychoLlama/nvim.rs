@@ -565,6 +565,465 @@ pub unsafe extern "C" fn rs_inc_msg_scrolled_full() {
     set_must_redraw(UPD_VALID);
 }
 
+// ============================================================================
+// Phase 3: do_more_prompt, disp_sb_line, show_sb_text
+// ============================================================================
+
+/// Special key code constants (from keycodes.h via TERMCAP2KEY macro)
+const K_BS: c_int = -25195; // TERMCAP2KEY('k','b')
+const K_UP: c_int = -30059; // TERMCAP2KEY('k','u')
+const K_DOWN: c_int = -25707; // TERMCAP2KEY('k','d')
+const K_PAGEUP: c_int = -20587; // TERMCAP2KEY('k','P')
+const K_PAGEDOWN: c_int = -20075; // TERMCAP2KEY('k','N')
+const K_LEFTMOUSE: c_int = -11517; // TERMCAP2KEY(253, 44)
+const K_EVENT: c_int = -26365; // TERMCAP2KEY(KS_EXTRA, 102)
+
+/// ASCII/control key constants
+const BS: c_int = 0x08; // backspace
+const CAR: c_int = 0x0d; // carriage return
+const NL: c_int = 0x0a; // newline (Ctrl-J)
+const CTRL_B: c_int = 0x02;
+const CTRL_C: c_int = 0x03;
+const CTRL_F: c_int = 0x06;
+const ESC: c_int = 0x1b;
+
+/// Mode flags (state_defs.h)
+const MODE_HITRETURN: c_int = 0x2000 | 0x01; // MODE_HITRETURN = 0x2000 | MODE_NORMAL
+const MODE_ASKMORE: c_int = 0x3000; // MODE_ASKMORE
+
+/// Option bell flag values (option_vars.generated.h)
+const K_OPT_BO_FLAG_MESS: c_int = 0x1000; // kOptBoFlagMess
+
+// UIExtension for kUIMessages is already defined as K_UI_MESSAGES above.
+
+/// GridView struct layout (grid_defs.h) - local copy for scrollback module
+#[repr(C)]
+struct SbGridView {
+    target: *mut std::ffi::c_void,
+    row_offset: c_int,
+    col_offset: c_int,
+}
+
+extern "C" {
+    // For do_more_prompt
+    fn get_keystroke(events: *mut std::ffi::c_void) -> c_int;
+    fn multiqueue_process_events(q: *mut std::ffi::c_void);
+    fn grid_ins_lines(
+        grid: *mut crate::ScreenGrid,
+        row: c_int,
+        line_count: c_int,
+        end: c_int,
+        col: c_int,
+        width: c_int,
+    );
+    fn setmouse();
+    fn vim_beep(flag: c_int);
+    fn typeahead_noflush(c: c_int);
+
+    static mut resize_events: *mut std::ffi::c_void;
+    static mut headless_mode: bool;
+    static mut embedded_mode: bool;
+    static mut State: c_int;
+    static mut got_int: bool;
+    static mut quit_more: bool;
+    static mut skip_redraw: bool;
+    static mut need_wait_return: bool;
+    static mut lines_left: c_int;
+    static mut cmdline_row: c_int;
+    // Rows already declared above
+    static Columns: c_int;
+
+    fn ui_active() -> c_int;
+    // ui_has already declared above
+    fn msg_scroll_up(may_throttle: bool, zerocmd: bool);
+    fn msg_do_throttle() -> bool;
+    fn inc_msg_scrolled();
+    fn wait_return(redraw: c_int);
+    fn msg_moremsg(full: bool);
+
+    // Grid state (msg_grid, msg_scrolled, msg_scrolled_at_flush, msg_grid_scroll_discount
+    // already declared above)
+    static mut msg_grid_adj: SbGridView;
+    static mut msg_row: c_int;
+    static mut msg_col: c_int;
+
+    // hl_attr_active for HLF_MSG
+    static mut hl_attr_active: *mut c_int;
+
+    // msg_puts_display for disp_sb_line
+    fn msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int, recurse: c_int);
+
+    // Grid clear operations
+    fn grid_clear(
+        grid: *mut SbGridView,
+        start_row: c_int,
+        end_row: c_int,
+        start_col: c_int,
+        end_col: c_int,
+        attr: c_int,
+    );
+
+    // nvim_set_ wrappers for C globals
+    fn nvim_set_clear_cmdline(val: bool);
+    fn nvim_set_mode_displayed(val: bool);
+    static mut redraw_cmdline: bool;
+}
+
+/// Highlight field for message area (HLF_MSG)
+/// Note: value matches the constant in misc.rs
+const HLF_MSG_SB: c_int = 5;
+
+/// Get HL_ATTR value for a given highlight field index.
+///
+/// # Safety
+/// Reads from the hl_attr_active global array.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn hl_attr_sb(hlf: c_int) -> c_int {
+    *hl_attr_active.add(hlf as usize)
+}
+
+/// Display a screen line from previously displayed text at row `row`.
+///
+/// Equivalent to C `disp_sb_line()` (was static in message.c).
+///
+/// # Safety
+/// Accesses global message state and chunk pointers.
+unsafe fn disp_sb_line(row: c_int, smp: *mut MsgChunk) -> *mut MsgChunk {
+    let mut mp = smp;
+
+    loop {
+        msg_row = row;
+        msg_col = (*mp).sb_msg_col;
+        let p = crate::chunk::rs_msgchunk_text(mp);
+        msg_puts_display(p, -1, (*mp).sb_hl_id, 1);
+        if (*mp).sb_eol != 0 || (*mp).sb_next.is_null() {
+            break;
+        }
+        mp = (*mp).sb_next;
+    }
+
+    (*mp).sb_next
+}
+
+/// Reentrancy guard for do_more_prompt.
+static mut ENTERED: bool = false;
+
+/// Show the more-prompt and handle the user response.
+///
+/// Equivalent to C `do_more_prompt()` (was static in message.c).
+/// Takes care of scrollback navigation, keyboard input, screen redraw.
+/// When at hit-enter prompt `typed_char` is the already typed character,
+/// otherwise it's NUL.
+///
+/// Returns true when jumping ahead to `confirm_buttons`.
+///
+/// # Safety
+/// Accesses global message state and UI.
+#[export_name = "do_more_prompt"]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_do_more_prompt(typed_char: c_int) -> bool {
+    let mut used_typed_char = typed_char;
+    let old_state = State;
+    let mut retval = false;
+    let mut to_redraw = false;
+    let mut mp_last: *mut MsgChunk = std::ptr::null_mut();
+
+    // If headless mode is enabled and no input is required, skip.
+    // However if server mode (embedded) is enabled, show "--more--".
+    let no_need_more = headless_mode && !embedded_mode && ui_active() == 0;
+
+    // We get called recursively when a timer callback outputs a message.
+    // Don't show another prompt. Also when at the hit-Enter prompt and nothing typed.
+    if no_need_more || ENTERED || (State == MODE_HITRETURN && typed_char == 0) {
+        return false;
+    }
+    ENTERED = true;
+
+    if typed_char == c_int::from(b'G') {
+        // "g<": Find first line on the last page.
+        mp_last = crate::chunk::rs_msg_sb_start(last_msgchunk);
+        let mut i = 0;
+        while i < Rows - 2 && !mp_last.is_null() && !(*mp_last).sb_prev.is_null() {
+            mp_last = crate::chunk::rs_msg_sb_start((*mp_last).sb_prev);
+            i += 1;
+        }
+    }
+
+    State = MODE_ASKMORE;
+    setmouse();
+    if typed_char == 0 {
+        msg_moremsg(false);
+    }
+
+    'outer: loop {
+        // Get a typed character directly from the user.
+        let c = if used_typed_char != 0 {
+            let ch = used_typed_char;
+            used_typed_char = 0;
+            ch
+        } else {
+            get_keystroke(resize_events)
+        };
+
+        let mut toscroll: c_int = 0;
+
+        match c {
+            // Scroll one line back
+            v if v == BS || v == K_BS || v == c_int::from(b'k') || v == K_UP => {
+                toscroll = -1;
+            }
+            // One extra line
+            v if v == CAR || v == NL || v == c_int::from(b'j') || v == K_DOWN => {
+                toscroll = 1;
+            }
+            // Up half a page
+            v if v == c_int::from(b'u') => {
+                toscroll = -(Rows / 2);
+            }
+            // Down half a page
+            v if v == c_int::from(b'd') => {
+                toscroll = Rows / 2;
+            }
+            // One page back
+            v if v == c_int::from(b'b') || v == CTRL_B || v == K_PAGEUP => {
+                toscroll = -(Rows - 1);
+            }
+            // One extra page
+            v if v == c_int::from(b' ')
+                || v == c_int::from(b'f')
+                || v == CTRL_F
+                || v == K_PAGEDOWN
+                || v == K_LEFTMOUSE =>
+            {
+                toscroll = Rows - 1;
+            }
+            // All the way back to start
+            v if v == c_int::from(b'g') => {
+                toscroll = -999_999;
+            }
+            // All the way to the end
+            v if v == c_int::from(b'G') => {
+                toscroll = 999_999;
+                lines_left = 999_999;
+            }
+            // Start new command line
+            v if v == c_int::from(b':') => {
+                if crate::dialog::confirm_msg_used == 0 {
+                    // Since got_int is set all typeahead will be flushed, but we
+                    // want to keep this ':', remember that in a special way.
+                    typeahead_noflush(c_int::from(b':'));
+                    cmdline_row = Rows - 1; // put ':' on this line
+                    skip_redraw = true; // skip redraw once
+                    need_wait_return = false; // don't wait in main()
+                }
+                // FALLTHROUGH to 'q' case
+                if crate::dialog::confirm_msg_used != 0 {
+                    retval = true;
+                } else {
+                    got_int = true;
+                    quit_more = true;
+                }
+                lines_left = Rows - 1;
+                break 'outer;
+            }
+            // Quit
+            v if v == c_int::from(b'q') || v == CTRL_C || v == ESC => {
+                if crate::dialog::confirm_msg_used != 0 {
+                    retval = true;
+                } else {
+                    got_int = true;
+                    quit_more = true;
+                }
+                lines_left = Rows - 1;
+                break 'outer;
+            }
+            // Process resize events
+            v if v == K_EVENT => {
+                multiqueue_process_events(resize_events);
+                to_redraw = true;
+            }
+            // No valid response
+            _ => {
+                msg_moremsg(true);
+                continue 'outer;
+            }
+        }
+
+        // code assumes we only do one at a time
+        debug_assert!(toscroll == 0 || !to_redraw);
+
+        if toscroll != 0 || to_redraw {
+            if toscroll < 0 || to_redraw {
+                // go to start of last line
+                let mp = if mp_last.is_null() {
+                    crate::chunk::rs_msg_sb_start(last_msgchunk)
+                } else if !(*mp_last).sb_prev.is_null() {
+                    crate::chunk::rs_msg_sb_start((*mp_last).sb_prev)
+                } else {
+                    std::ptr::null_mut()
+                };
+
+                // go to start of line at top of the screen
+                let mut mp = mp;
+                let mut i = 0;
+                while i < Rows - 2 && !mp.is_null() && !(*mp).sb_prev.is_null() {
+                    mp = crate::chunk::rs_msg_sb_start((*mp).sb_prev);
+                    i += 1;
+                }
+
+                if !mp.is_null() && (!(*mp).sb_prev.is_null() || to_redraw) {
+                    // Find line to be displayed at top
+                    let mut i = 0;
+                    while i > toscroll {
+                        if mp.is_null() || (*mp).sb_prev.is_null() {
+                            break;
+                        }
+                        mp = crate::chunk::rs_msg_sb_start((*mp).sb_prev);
+                        mp_last = if mp_last.is_null() {
+                            crate::chunk::rs_msg_sb_start(last_msgchunk)
+                        } else {
+                            crate::chunk::rs_msg_sb_start((*mp_last).sb_prev)
+                        };
+                        i -= 1;
+                    }
+
+                    if toscroll == -1 && !to_redraw {
+                        grid_ins_lines(&raw mut msg_grid, 0, 1, Rows, 0, Columns);
+                        grid_clear(
+                            &raw mut msg_grid_adj,
+                            0,
+                            1,
+                            0,
+                            Columns,
+                            hl_attr_sb(HLF_MSG_SB),
+                        );
+                        // display line at top
+                        disp_sb_line(0, mp);
+                    } else {
+                        // redisplay all lines
+                        grid_clear(
+                            &raw mut msg_grid_adj,
+                            0,
+                            Rows,
+                            0,
+                            Columns,
+                            hl_attr_sb(HLF_MSG_SB),
+                        );
+                        let mut mp = mp;
+                        let mut i = 0;
+                        while !mp.is_null() && i < Rows - 1 {
+                            mp = disp_sb_line(i, mp);
+                            msg_scrolled += 1;
+                            i += 1;
+                        }
+                        to_redraw = false;
+                    }
+                    toscroll = 0;
+                }
+            } else {
+                // First display any text that we scrolled back.
+                // if p_ch=0 we need to allocate a line for "press enter" messages!
+                if cmdline_row >= Rows && !ui_has(K_UI_MESSAGES) {
+                    msg_scroll_up(true, false);
+                    msg_scrolled += 1;
+                }
+                while toscroll > 0 && !mp_last.is_null() {
+                    if msg_do_throttle() && !msg_grid.throttled {
+                        // Tricky: we redraw at one line higher than usual.
+                        msg_scrolled_at_flush -= 1;
+                        msg_grid_scroll_discount += 1;
+                    }
+                    // scroll up, display line at bottom
+                    msg_scroll_up(true, false);
+                    inc_msg_scrolled();
+                    grid_clear(
+                        &raw mut msg_grid_adj,
+                        Rows - 2,
+                        Rows - 1,
+                        0,
+                        Columns,
+                        hl_attr_sb(HLF_MSG_SB),
+                    );
+                    mp_last = disp_sb_line(Rows - 2, mp_last);
+                    toscroll -= 1;
+                }
+            }
+
+            if toscroll <= 0 {
+                // displayed the requested text, more prompt again
+                grid_clear(
+                    &raw mut msg_grid_adj,
+                    Rows - 1,
+                    Rows,
+                    0,
+                    Columns,
+                    hl_attr_sb(HLF_MSG_SB),
+                );
+                msg_moremsg(false);
+                continue 'outer;
+            }
+
+            // display more text, return to caller
+            lines_left = toscroll;
+        }
+
+        break 'outer;
+    }
+
+    // clear the --more-- message
+    grid_clear(
+        &raw mut msg_grid_adj,
+        Rows - 1,
+        Rows,
+        0,
+        Columns,
+        hl_attr_sb(HLF_MSG_SB),
+    );
+    nvim_set_clear_cmdline(false);
+    nvim_set_mode_displayed(false);
+
+    redraw_cmdline = true;
+
+    State = old_state;
+    setmouse();
+    if quit_more {
+        msg_row = Rows - 1;
+        msg_col = 0;
+    }
+
+    ENTERED = false;
+    retval
+}
+
+/// "g<" command: show scrollback text.
+///
+/// Equivalent to C `show_sb_text()`.
+///
+/// # Safety
+/// Accesses global message state.
+#[export_name = "show_sb_text"]
+pub unsafe extern "C" fn rs_show_sb_text() {
+    if ui_has(K_UI_MESSAGES) {
+        // Call ex_messages with skip=true, arg="", addr_count=0.
+        // This shows only temp history entries (since last cmdline).
+        crate::display::rs_ex_messages_with_skip();
+        return;
+    }
+    // Only show something if there is more than one line
+    let mp = crate::chunk::rs_msg_sb_start(last_msgchunk);
+    if mp.is_null() || (*mp).sb_prev.is_null() {
+        vim_beep(K_OPT_BO_FLAG_MESS);
+    } else {
+        rs_do_more_prompt(c_int::from(b'G'));
+        wait_return(0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

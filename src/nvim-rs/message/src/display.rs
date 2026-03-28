@@ -1057,6 +1057,150 @@ pub unsafe extern "C" fn rs_ex_messages(eap: *const c_void) {
     }
 }
 
+/// Call `ex_messages` with `skip=true, arg="", addr_count=0`.
+///
+/// Used by `show_sb_text` to display scrollback via the ext_messages UI
+/// without constructing a C `exarg_T`.
+///
+/// # Safety
+/// Accesses global message history state.
+#[allow(clippy::too_many_lines)]
+pub(crate) unsafe fn rs_ex_messages_with_skip() {
+    let mut entries = Array {
+        size: 0,
+        capacity: 0,
+        items: std::ptr::null_mut(),
+    };
+
+    let p_start: *mut crate::history::MessageHistoryEntry = crate::history::msg_hist_temp;
+    let mut p = p_start;
+    while !p.is_null() {
+        let entry = &*p;
+        if ui_has(K_UI_MESSAGES) && msg_silent == 0 {
+            let mut ui_entry = Array {
+                size: 0,
+                capacity: 0,
+                items: std::ptr::null_mut(),
+            };
+            array_push(
+                &mut ui_entry,
+                Object {
+                    obj_type: K_OBJECT_TYPE_STRING,
+                    data: ObjectData {
+                        string: cstr_as_string(entry.kind),
+                    },
+                },
+            );
+            let mut content = Array {
+                size: 0,
+                capacity: 0,
+                items: std::ptr::null_mut(),
+            };
+            for i in 0..entry.msg.size {
+                let chunk = &*entry.msg.items.add(i);
+                let attr = if chunk.hl_id != 0 {
+                    syn_id2attr(chunk.hl_id)
+                } else {
+                    0
+                };
+                let mut content_entry = Array {
+                    size: 0,
+                    capacity: 0,
+                    items: std::ptr::null_mut(),
+                };
+                array_push(
+                    &mut content_entry,
+                    Object {
+                        obj_type: K_OBJECT_TYPE_INTEGER,
+                        data: ObjectData {
+                            integer: i64::from(attr),
+                        },
+                    },
+                );
+                let chunk_text = NvimString {
+                    data: chunk.text_data,
+                    size: chunk.text_size,
+                };
+                array_push(
+                    &mut content_entry,
+                    Object {
+                        obj_type: K_OBJECT_TYPE_STRING,
+                        data: ObjectData {
+                            string: copy_string(chunk_text, std::ptr::null_mut()),
+                        },
+                    },
+                );
+                array_push(
+                    &mut content_entry,
+                    Object {
+                        obj_type: K_OBJECT_TYPE_INTEGER,
+                        data: ObjectData {
+                            integer: i64::from(chunk.hl_id),
+                        },
+                    },
+                );
+                array_push(
+                    &mut content,
+                    Object {
+                        obj_type: K_OBJECT_TYPE_ARRAY,
+                        data: ObjectData {
+                            array: content_entry,
+                        },
+                    },
+                );
+            }
+            array_push(
+                &mut ui_entry,
+                Object {
+                    obj_type: K_OBJECT_TYPE_ARRAY,
+                    data: ObjectData { array: content },
+                },
+            );
+            array_push(
+                &mut ui_entry,
+                Object {
+                    obj_type: 1, // K_OBJECT_TYPE_BOOLEAN
+                    data: ObjectData {
+                        boolean: entry.append,
+                    },
+                },
+            );
+            array_push(
+                &mut entries,
+                Object {
+                    obj_type: K_OBJECT_TYPE_ARRAY,
+                    data: ObjectData { array: ui_entry },
+                },
+            );
+        }
+
+        if redirecting() != 0 || !ui_has(K_UI_MESSAGES) {
+            msg_silent += c_int::from(ui_has(K_UI_MESSAGES));
+            let mut needs_clear = false;
+            rs_msg_multihl(
+                Object {
+                    obj_type: K_OBJECT_TYPE_INTEGER,
+                    data: ObjectData { integer: 0 },
+                },
+                entry.msg,
+                entry.kind,
+                false,
+                false,
+                std::ptr::null_mut(),
+                &raw mut needs_clear,
+            );
+            msg_silent -= c_int::from(ui_has(K_UI_MESSAGES));
+        }
+
+        p = entry.next;
+    }
+
+    if entries.size > 0 {
+        ui_call_msg_history_show(entries, true);
+        api_free_array(entries);
+    }
+}
+
 /// Send an empty msg_show UI event.
 ///
 /// Equivalent to the C function `nvim_msg_show_empty()`.
