@@ -26,13 +26,13 @@
 #include "nvim/grid.h"
 #include "nvim/highlight.h"
 #include "nvim/keycodes.h"
-#include "nvim/main.h"
 #include "nvim/mark.h"
 #include "nvim/match.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
+#include "nvim/main.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
 #include "nvim/option.h"
@@ -51,7 +51,6 @@
 
 #include "window_shim.c.generated.h"
 
-// Static assertions for bulk snapshot struct sizes (types defined in window.h).
 _Static_assert(sizeof(WinSnapshot) == 6 * sizeof(int), "WinSnapshot size mismatch");
 _Static_assert(sizeof(WinViewportSnapshot) == 4 * sizeof(int32_t), "WinViewportSnapshot size mismatch");
 
@@ -114,10 +113,7 @@ buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 void nvim_win_set_p_wfb(win_T *wp, int val) { wp->w_p_wfb = val != 0; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
-
 #define ROWS_AVAIL (Rows - p_ch - rs_tabline_height() - rs_global_stl_height())
-
-/// flags for win_enter_ext()
 typedef enum {
   WEE_UNDO_SYNC = 0x01,
   WEE_CURWIN_INVALID = 0x02,
@@ -125,15 +121,11 @@ typedef enum {
   WEE_TRIGGER_ENTER_AUTOCMDS = 0x08,
   WEE_TRIGGER_LEAVE_AUTOCMDS = 0x10,
 } wee_flags_T;
-
 static const char e_cannot_split_window_when_closing_buffer[]
   = N_("E1159: Cannot split a window when closing the buffer");
-
 static char *m_onlyone = N_("Already only one window");
-
 static int split_disallowed = 0;
 static OptInt min_set_ch = 1;
-
 OptInt nvim_get_min_set_ch(void) { return min_set_ch; }
 
 void win_set_buf(win_T *win, buf_T *buf, Error *err)
@@ -173,7 +165,6 @@ void win_set_buf(win_T *win, buf_T *buf, Error *err)
   restore_win_noblock(&switchwin, true);
   RedrawingDisabled--;
 }
-/// Merges two window configs, freeing replaced fields if necessary.
 void merge_win_config(WinConfig *dst, const WinConfig src)
 {
   if (dst->title_chunks.items != src.title_chunks.items) {
@@ -228,9 +219,7 @@ void win_enter(win_T *wp, bool undo_sync)
 }
 extern void rs_win_enter_ext(win_T *wp, int flags);
 static void win_enter_ext(win_T *const wp, const int flags) { rs_win_enter_ext(wp, flags); }
-
 static int last_win_id = LOWEST_WIN_ID - 1;
-
 int nvim_get_last_win_id(void) { return last_win_id; }
 win_T *nvim_alloc_win_raw(void) { return xcalloc(1, sizeof(win_T)); }
 void nvim_win_init_handle(win_T *wp) { wp->handle = ++last_win_id; pmap_put(int)(&window_handles, wp->handle, wp); }
@@ -247,11 +236,8 @@ void nvim_win_clear_ns_set(win_T *wp) { set_destroy(uint32_t, &wp->w_ns_set); }
 void nvim_win_clear_winopts(win_T *wp) { clear_winopt(&wp->w_onebuf_opt); clear_winopt(&wp->w_allbuf_opt); }
 void nvim_win_free_lcs_chars(win_T *wp) { xfree(wp->w_p_lcs_chars.multispace); xfree(wp->w_p_lcs_chars.leadmultispace); }
 void nvim_win_clear_vars(win_T *wp) { vars_clear(&wp->w_vars->dv_hashtab); hash_init(&wp->w_vars->dv_hashtab); unref_var_dict(wp->w_vars); }
-
 void nvim_win_clear_tagstack(win_T *wp) { for (int i = 0; i < wp->w_tagstacklen; i++) { rs_tagstack_clear_entry(&wp->w_tagstack[i]); } }
-
 void nvim_win_clear_click_defs_all(win_T *wp) { stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size); xfree(wp->w_status_click_defs); stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size); xfree(wp->w_winbar_click_defs); stl_clear_click_defs(wp->w_statuscol_click_defs, wp->w_statuscol_click_defs_size); xfree(wp->w_statuscol_click_defs); }
-
 void nvim_win_cleanup_b_wininfo(win_T *wp)
 {
   FOR_ALL_BUFFERS(buf) {
@@ -282,7 +268,6 @@ void nvim_win_cleanup_b_wininfo(win_T *wp)
 }
 void nvim_win_clear_config_virttext(win_T *wp) { clear_virttext(&wp->w_config.title_chunks); clear_virttext(&wp->w_config.footer_chunks); }
 void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
-
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
 int nvim_win_get_width_request(win_T *wp) { return wp ? wp->w_width_request : 0; }
@@ -301,7 +286,6 @@ void nvim_ga_grow(garray_T *gap, int n) { ga_grow(gap, n); }
 int nvim_ga_get_len(garray_T *gap) { return gap ? gap->ga_len : 0; }
 int nvim_ga_get_int(garray_T *gap, int idx) { return (gap && gap->ga_data && idx >= 0 && idx < gap->ga_len) ? ((int *)gap->ga_data)[idx] : 0; }
 void nvim_ga_set_int(garray_T *gap, int idx, int val) { if (gap && gap->ga_data && idx >= 0) { ((int *)gap->ga_data)[idx] = val; } }
-
 void nvim_win_stl_clear_click_defs(win_T *wp) { if (!wp) { return; } stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size); xfree(wp->w_status_click_defs); wp->w_status_click_defs_size = 0; wp->w_status_click_defs = NULL; }
 int nvim_win_get_prev_height(win_T *wp) { return wp ? wp->w_prev_height : 0; }
 int nvim_win_get_fraction(win_T *wp) { return wp ? wp->w_fraction : 0; }
@@ -346,7 +330,6 @@ int nvim_win_new_float_external(void)
   if (!win_new_float(curwin, false, config, &err)) { emsg(err.msg); api_clear_error(&err); return 0; }
   return 1;
 }
-
 _Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
 _Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
 _Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
@@ -548,7 +531,6 @@ int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, v
   ((dict_T *)child)->dv_refcount--;
   return 1;
 }
-// Accessors for save_v_event_T / bufref_T used by Rust scroll.rs fire functions
 _Static_assert(sizeof(save_v_event_T) == 304, "save_v_event_T size mismatch");
 void *nvim_get_v_event_opaque(void *buf) { return get_v_event((save_v_event_T *)buf); }
 void nvim_restore_v_event_opaque(void *dict, void *buf) { restore_v_event((dict_T *)dict, (save_v_event_T *)buf); }
@@ -827,7 +809,6 @@ char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
   default: return NULL;
   }
 }
-
 void nvim_copy_winopt_scalars(winopt_T *from, winopt_T *to)
 {
   to->wo_arab = from->wo_arab; to->wo_list = from->wo_list; to->wo_nu = from->wo_nu;
@@ -848,4 +829,3 @@ void nvim_copy_winopt_scalars(winopt_T *from, winopt_T *to)
 void nvim_copy_winopt_save_strs(winopt_T *from, winopt_T *to) { to->wo_fdc_save = from->wo_diff_saved ? xstrdup(from->wo_fdc_save) : empty_string_option; to->wo_fdm_save = from->wo_diff_saved ? xstrdup(from->wo_fdm_save) : empty_string_option; }
 void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to) { memmove(to->wo_script_ctx, from->wo_script_ctx, sizeof(to->wo_script_ctx)); }
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
-
