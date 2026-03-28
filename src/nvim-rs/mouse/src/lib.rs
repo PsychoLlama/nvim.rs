@@ -203,13 +203,16 @@ extern "C" {
     fn nvim_first_tabpage_has_next() -> c_int;
 
     /// Move current tab to position nr.
-    fn nvim_tabpage_move(nr: c_int);
+    #[link_name = "tabpage_move"]
+    fn tabpage_move(nr: c_int);
 
     /// Close the current tabpage.
-    fn nvim_tabpage_close(forceit: c_int);
+    #[link_name = "tabpage_close"]
+    fn tabpage_close(forceit: c_int);
 
     /// Close another tabpage.
-    fn nvim_tabpage_close_other(tp: TabpageHandle, forceit: c_int);
+    #[link_name = "tabpage_close_other"]
+    fn tabpage_close_other(tp: TabpageHandle, forceit: c_int);
 
     /// Get tabpage index (Rust impl in window crate).
     fn rs_tabpage_index(ftp: TabpageHandle) -> c_int;
@@ -220,10 +223,12 @@ extern "C" {
     // --- UI operations ---
 
     /// Call `ui_cursor_shape()`.
-    fn nvim_ui_cursor_shape();
+    #[link_name = "ui_cursor_shape"]
+    fn ui_cursor_shape();
 
     /// Call `ui_check_mouse()`.
-    fn nvim_ui_check_mouse();
+    #[link_name = "ui_check_mouse"]
+    fn ui_check_mouse();
 }
 
 // =============================================================================
@@ -625,8 +630,8 @@ pub unsafe extern "C" fn rs_set_mouse_topline(wp: WinHandle) {
 /// Emits `mouse_on`/`mouse_off` UI event (unless 'mouse' is empty).
 #[export_name = "setmouse"]
 pub unsafe extern "C" fn rs_setmouse() {
-    nvim_ui_cursor_shape();
-    nvim_ui_check_mouse();
+    ui_cursor_shape();
+    ui_check_mouse();
 }
 
 /// Reset the window being dragged to NULL.
@@ -645,11 +650,11 @@ pub unsafe extern "C" fn rs_reset_dragwin() {
 pub unsafe extern "C" fn rs_move_tab_to_mouse() {
     let tabnr = nvim_mouse_get_tab_click_tabnr(nvim_get_mouse_col());
     if tabnr <= 0 {
-        nvim_tabpage_move(9999);
+        tabpage_move(9999);
     } else if tabnr < rs_tabpage_index(nvim_get_curtab()) {
-        nvim_tabpage_move(tabnr - 1);
+        tabpage_move(tabnr - 1);
     } else {
-        nvim_tabpage_move(tabnr);
+        tabpage_move(tabnr);
     }
 }
 
@@ -671,10 +676,10 @@ pub unsafe extern "C" fn rs_mouse_tab_close(c1: c_int) {
     let curtab = nvim_get_curtab();
     if tp == curtab {
         if nvim_first_tabpage_has_next() != 0 {
-            nvim_tabpage_close(0); // false
+            tabpage_close(0); // false
         }
     } else if !tp.is_null() {
-        nvim_tabpage_close_other(tp, 0); // false
+        tabpage_close_other(tp, 0); // false
     }
 }
 
@@ -1161,8 +1166,9 @@ extern "C" {
     /// Get `p_mousescroll_hor` option.
     fn nvim_get_p_mousescroll_hor() -> c_int;
 
-    /// Call `pagescroll(dir, count, half != 0)`.
-    fn nvim_mouse_pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int;
+    /// Call `pagescroll(dir, count, half)`.
+    #[link_name = "pagescroll"]
+    fn pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int;
 
     /// Call `undisplay_dollar()`.
     #[link_name = "nvim_textfmt_undisplay_dollar"]
@@ -1373,7 +1379,7 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
         if (state & MODE_NORMAL) != 0 && shift_or_ctrl {
             // Whole page up or down
             let dir = if cap_arg != 0 { FORWARD } else { BACKWARD_DIR };
-            nvim_mouse_pagescroll(dir, 1, 0);
+            pagescroll(dir, 1, 0);
         } else {
             let count = if shift_or_ctrl {
                 // Whole page up or down: botline - topline

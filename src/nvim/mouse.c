@@ -96,20 +96,6 @@ int nvim_mouse_get_tab_click_tabnr(int col)
   return tab_page_click_defs[col].tabnr;
 }
 
-/// Wrapper for tabpage_move().
-void nvim_tabpage_move(int nr) { tabpage_move(nr); }
-
-/// Wrapper for tabpage_close().
-void nvim_tabpage_close(int forceit) { tabpage_close(forceit); }
-
-/// Wrapper for tabpage_close_other().
-void nvim_tabpage_close_other(tabpage_T *tp, int forceit) { tabpage_close_other(tp, forceit); }
-
-/// Wrapper for ui_cursor_shape().
-void nvim_ui_cursor_shape(void) { ui_cursor_shape(); }
-
-/// Wrapper for ui_check_mouse().
-void nvim_ui_check_mouse(void) { ui_check_mouse(); }
 
 /// Move "pos" back to the start of the word it's in.
 static void find_start_of_word(pos_T *pos)
@@ -974,9 +960,6 @@ int nvim_get_p_mousescroll_vert(void) { return (int)p_mousescroll_vert; }
 /// Get `p_mousescroll_hor` (horizontal mouse scroll step).
 int nvim_get_p_mousescroll_hor(void) { return (int)p_mousescroll_hor; }
 
-/// Wrapper for pagescroll().
-/// @param dir   FORWARD (1) or BACKWARD (0)
-int nvim_mouse_pagescroll(int dir, int count, int half) { return pagescroll(dir, count, half != 0); }
 
 // Saved cursor for ins_mouse_impl start_arrow pattern.
 static pos_T mouse_saved_tpos;

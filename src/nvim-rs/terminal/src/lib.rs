@@ -1241,6 +1241,7 @@ extern "C" {
     fn nvim_set_got_int(v: c_int);
     fn showmode();
     fn nvim_unshowmode();
+    #[link_name = "ui_cursor_shape"]
     fn nvim_ui_cursor_shape();
     fn nvim_setcursor();
     fn nvim_parse_shape_opt(scope: c_int);
