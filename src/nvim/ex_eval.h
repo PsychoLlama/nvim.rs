@@ -37,3 +37,8 @@ void enter_cleanup(cleanup_T *csp);
 void leave_cleanup(cleanup_T *csp);
 int cleanup_conditionals(cstack_T *cstack, int searched_cond, int inclusive);
 char *get_end_emsg(cstack_T *cstack);
+void ex_endif(exarg_T *eap);
+void ex_continue(exarg_T *eap);
+void ex_break(exarg_T *eap);
+void ex_throw(exarg_T *eap);
+void ex_try(exarg_T *eap);

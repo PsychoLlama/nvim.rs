@@ -70,6 +70,50 @@ pub union CstackPend {
     pub csp_ex: [*mut c_void; 50],
 }
 
+/// Representation of exarg_T matching C layout (sizeof=192).
+/// Fields needed for ex_* command handlers.
+#[repr(C)]
+pub struct ExargT {
+    pub arg: *mut c_char,            // offset 0
+    pub args: *mut *mut c_char,      // offset 8
+    pub arglens: *mut usize,         // offset 16
+    pub argc: usize,                 // offset 24
+    pub nextcmd: *mut c_char,        // offset 32
+    pub cmd: *mut c_char,            // offset 40
+    pub cmdlinep: *mut *mut c_char,  // offset 48
+    pub cmdline_tofree: *mut c_char, // offset 56
+    pub cmdidx: c_int,               // offset 64 (cmdidx_T)
+    pub argt: u32,                   // offset 68
+    pub skip: c_int,                 // offset 72
+    pub forceit: c_int,              // offset 76
+    pub addr_count: c_int,           // offset 80
+    pub line1: i32,                  // offset 84 (linenr_T)
+    pub line2: i32,                  // offset 88 (linenr_T)
+    pub addr_type: c_int,            // offset 92 (cmd_addr_T)
+    pub flags: c_int,                // offset 96
+    _padding_flags: [u8; 4],         // offset 100 (padding)
+    pub do_ecmd_cmd: *mut c_char,    // offset 104
+    pub do_ecmd_lnum: i32,           // offset 112 (linenr_T)
+    pub append: c_int,               // offset 116
+    pub usefilter: c_int,            // offset 120
+    pub amount: c_int,               // offset 124
+    pub regname: c_int,              // offset 128
+    pub force_bin: c_int,            // offset 132
+    pub read_edit: c_int,            // offset 136
+    pub mkdir_p: c_int,              // offset 140
+    pub force_ff: c_int,             // offset 144
+    pub force_enc: c_int,            // offset 148
+    pub bad_char: c_int,             // offset 152
+    pub useridx: c_int,              // offset 156
+    pub errmsg: *mut c_char,         // offset 160
+    pub ea_getline: Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char>, // offset 168
+    pub cookie: *mut c_void,  // offset 176
+    pub cstack: *mut CstackT, // offset 184
+}
+
+/// Number of entries in the conditional stack.
+const CSTACK_LEN: c_int = 50;
+
 // Direct access to C globals for exception state variables
 extern "C" {
     static mut force_abort: bool;
@@ -97,6 +141,8 @@ extern "C" {
 // Phase 4 additional C functions
 extern "C" {
     fn get_return_cmd(rettv: *mut c_void) -> *mut c_char;
+    fn eval_to_string_skip(arg: *mut c_char, eap: *mut ExargT, skip: bool) -> *mut c_char;
+    fn dbg_check_skipped(eap: *const ExargT) -> bool;
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn gettext(s: *const c_char) -> *const c_char;
 }
@@ -137,6 +183,8 @@ extern "C" {
     static e_endwhile: *const c_char;
     static e_endfor: *const c_char;
     static e_endif: *const c_char;
+    static e_argreq: *const c_char;
+    static mut did_endif: bool;
 }
 
 // VimVarIndex constants matching eval_defs.h VimVarIndex enum
@@ -841,6 +889,141 @@ pub unsafe extern "C" fn report_discard_pending(pending: c_int, value: *mut c_vo
         report_pending(RP_DISCARD, pending, value);
         if debug_break_level <= 0 {
             verbose_leave();
+        }
+    }
+}
+
+/// Check if a command should be skipped.
+/// Equivalent to C macro CHECK_SKIP in ex_eval.c.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn check_skip(cstack: *const CstackT) -> bool {
+    did_emsg != 0
+        || got_int
+        || did_throw
+        || ((*cstack).cs_idx > 0
+            && ((*cstack).cs_flags[((*cstack).cs_idx - 1) as usize] & CSF_ACTIVE == 0))
+}
+
+/// Handle ":endif"
+#[export_name = "ex_endif"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn ex_endif_impl(eap: *mut ExargT) {
+    did_endif = true;
+    let cstack = (*eap).cstack;
+    if (*cstack).cs_idx < 0
+        || ((*cstack).cs_flags[(*cstack).cs_idx as usize] & (CSF_WHILE | CSF_FOR | CSF_TRY) != 0)
+    {
+        (*eap).errmsg = gettext(c"E580: :endif without :if".as_ptr()).cast_mut();
+    } else {
+        // When debugging or a breakpoint was encountered, display the debug
+        // prompt (if not already done).  Throw an interrupt exception if appropriate.
+        if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE == 0 && dbg_check_skipped(eap) {
+            do_intthrow(cstack);
+        }
+        (*cstack).cs_idx -= 1;
+    }
+}
+
+/// Handle ":continue"
+#[export_name = "ex_continue"]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn ex_continue_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    if (*cstack).cs_looplevel <= 0 || (*cstack).cs_idx < 0 {
+        (*eap).errmsg = gettext(c"E586: :continue without :while or :for".as_ptr()).cast_mut();
+    } else {
+        // cleanup_conditionals always returns a valid index when cs_looplevel > 0
+        let idx = cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, 0);
+        if (*cstack).cs_flags[idx as usize] & (CSF_WHILE | CSF_FOR) != 0 {
+            rewind_conditionals(
+                cstack,
+                idx,
+                CSF_TRY,
+                std::ptr::addr_of_mut!((*cstack).cs_trylevel),
+            );
+            // Set CSL_HAD_CONT so do_cmdline() jumps back to the matching ":while".
+            (*cstack).cs_lflags |= 4; // CSL_HAD_CONT = 4
+        } else if idx >= 0 {
+            // A try conditional not in its finally clause is reached first.
+            (*cstack).cs_pending[idx as usize] = CSTP_CONTINUE as i8;
+            report_make_pending_impl(CSTP_CONTINUE, std::ptr::null_mut());
+        }
+    }
+}
+
+/// Handle ":break"
+#[export_name = "ex_break"]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn ex_break_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    if (*cstack).cs_looplevel <= 0 || (*cstack).cs_idx < 0 {
+        (*eap).errmsg = gettext(c"E587: :break without :while or :for".as_ptr()).cast_mut();
+    } else {
+        let idx = cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, 1);
+        if idx >= 0 && (*cstack).cs_flags[idx as usize] & (CSF_WHILE | CSF_FOR) == 0 {
+            (*cstack).cs_pending[idx as usize] = CSTP_BREAK as i8;
+            report_make_pending_impl(CSTP_BREAK, std::ptr::null_mut());
+        }
+    }
+}
+
+/// Handle ":throw expr"
+#[export_name = "ex_throw"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn ex_throw_impl(eap: *mut ExargT) {
+    let arg = (*eap).arg;
+    // NUL = 0, '|' = 0x7C, '\n' = 0x0A -- all safe as i8
+    let value = if *arg != 0 && *arg != 0x7C_i8 && *arg != 0x0A_i8 {
+        eval_to_string_skip(arg, eap, (*eap).skip != 0)
+    } else {
+        emsg(e_argreq);
+        std::ptr::null_mut()
+    };
+
+    // On error or when an exception is thrown during argument evaluation, do not throw.
+    if (*eap).skip == 0 && !value.is_null() {
+        if throw_exception(
+            value.cast::<c_void>(),
+            ExceptTypeT::EtUser,
+            std::ptr::null_mut(),
+        ) == FAIL
+        {
+            xfree(value.cast::<c_void>());
+        } else {
+            do_throw((*eap).cstack);
+        }
+    }
+}
+
+/// Handle ":try"
+#[export_name = "ex_try"]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn ex_try_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    if (*cstack).cs_idx == CSTACK_LEN - 1 {
+        (*eap).errmsg = gettext(c"E601: :try nesting too deep".as_ptr()).cast_mut();
+    } else {
+        (*cstack).cs_idx += 1;
+        (*cstack).cs_trylevel += 1;
+        (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRY;
+        (*cstack).cs_pending[(*cstack).cs_idx as usize] = 0; // CSTP_NONE
+
+        let skip = check_skip(cstack);
+
+        if !skip {
+            // Set ACTIVE and TRUE.
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_ACTIVE | CSF_TRUE;
+
+            // If emsg_silent is non-zero, save and reset it.
+            if emsg_silent != 0 {
+                let elem = xmalloc(std::mem::size_of::<EslistT>()).cast::<EslistT>();
+                (*elem).saved_emsg_silent = emsg_silent;
+                (*elem).next = (*cstack).cs_emsg_silent_list;
+                (*cstack).cs_emsg_silent_list = elem;
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_SILENT;
+                emsg_silent = 0;
+            }
         }
     }
 }

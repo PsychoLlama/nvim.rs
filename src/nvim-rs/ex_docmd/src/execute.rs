@@ -405,7 +405,7 @@ extern "C" {
     fn nvim_cstack_get_idx(cs: CstackHandle) -> c_int;
     fn nvim_cstack_get_flags(cs: CstackHandle, idx: c_int) -> c_int;
     static mut did_emsg: c_int;
-    fn nvim_get_did_throw() -> c_int;
+    static mut did_throw: bool;
     fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn nvim_getline_equal_getsourceline(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn nvim_getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void;
@@ -560,7 +560,7 @@ pub unsafe extern "C" fn rs_profile_cmd(
 
     let did_emsg_val = did_emsg != 0;
     let got_int_val = unsafe { got_int };
-    let did_throw_val = nvim_get_did_throw() != 0;
+    let did_throw_val = did_throw;
 
     let cmdidx = nvim_eap_get_cmdidx(eap);
 

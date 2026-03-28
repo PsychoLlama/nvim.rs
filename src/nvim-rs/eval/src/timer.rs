@@ -117,7 +117,7 @@ extern "C" {
     // -- Error state accessors --
     static mut did_emsg: c_int;
     static mut called_emsg: c_int;
-    fn nvim_get_did_throw() -> c_int;
+    static mut did_throw: bool;
     fn nvim_get_pressedreturn() -> c_int;
     fn nvim_set_pressedreturn(val: c_int);
     #[link_name = "discard_current_exception"]
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
         let mut f2 = read_fields(timer);
         f2.emsg_count += 1;
         write_fields(timer, &f2);
-        if nvim_get_did_throw() != 0 {
+        if did_throw {
             nvim_discard_current_exception();
         }
     }

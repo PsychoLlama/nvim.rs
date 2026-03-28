@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_docmd_set_did_emsg_syntax();
 
     // did_throw
-    fn nvim_get_did_throw() -> c_int;
+    static mut did_throw: bool;
 
     // exarg_T allocation
     fn nvim_eap_alloc() -> ExArgHandle;
@@ -470,7 +470,7 @@ pub unsafe extern "C" fn do_one_cmd(
     let cs_idx = nvim_cstack_get_idx(cstack);
     let skip = did_emsg != 0
         || got_int
-        || nvim_get_did_throw() != 0
+        || did_throw
         || (cs_idx >= 0 && (nvim_cstack_get_flags(cstack, cs_idx) & CSF_ACTIVE) == 0);
     nvim_eap_set_skip(eap, skip);
 

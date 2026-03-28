@@ -84,8 +84,6 @@ static const char e_multiple_finally[] = N_("E607: Multiple :finally");
    || (cstack->cs_idx > 0 \
        && !(cstack->cs_flags[cstack->cs_idx - 1] & CSF_ACTIVE)))
 
-static void discard_pending_return(typval_T *p) { tv_free(p); }
-
 // cause_abort is now owned by Rust (rs_get_cause_abort/rs_set_cause_abort).
 // When several errors appear in a row, setting "force_abort" is delayed until
 // the failing command returned.  "cause_abort" is set to true meanwhile, in
@@ -98,6 +96,8 @@ extern bool rs_get_cause_abort(void);
 extern void rs_set_cause_abort(bool val);
 // free_msglist is now implemented in Rust
 extern void free_msglist(msglist_T *l);
+// discard_pending_return is now implemented in Rust
+extern void discard_pending_return(typval_T *p);
 /// Handle ":eval".
 void ex_eval(exarg_T *eap)
 {
@@ -137,31 +137,6 @@ void ex_if(exarg_T *eap)
       // set TRUE, so this conditional will never get active
       cstack->cs_flags[cstack->cs_idx] = CSF_TRUE;
     }
-  }
-}
-
-/// Handle ":endif".
-void ex_endif(exarg_T *eap)
-{
-  did_endif = true;
-  if (eap->cstack->cs_idx < 0
-      || (eap->cstack->cs_flags[eap->cstack->cs_idx]
-          & (CSF_WHILE | CSF_FOR | CSF_TRY))) {
-    eap->errmsg = _("E580: :endif without :if");
-  } else {
-    // When debugging or a breakpoint was encountered, display the debug
-    // prompt (if not already done).  This shows the user that an ":endif"
-    // is executed when the ":if" or a previous ":elseif" was not TRUE.
-    // Handle a ">quit" debug command as if an interrupt had occurred before
-    // the ":endif".  That is, throw an interrupt exception if appropriate.
-    // Doing this here prevents an exception for a parsing error being
-    // discarded by throwing the interrupt exception later on.
-    if (!(eap->cstack->cs_flags[eap->cstack->cs_idx] & CSF_TRUE)
-        && dbg_check_skipped(eap)) {
-      do_intthrow(eap->cstack);
-    }
-
-    eap->cstack->cs_idx--;
   }
 }
 
@@ -317,55 +292,6 @@ void ex_while(exarg_T *eap)
   }
 }
 
-/// Handle ":continue"
-void ex_continue(exarg_T *eap)
-{
-  cstack_T *const cstack = eap->cstack;
-
-  if (cstack->cs_looplevel <= 0 || cstack->cs_idx < 0) {
-    eap->errmsg = _("E586: :continue without :while or :for");
-  } else {
-    // Try to find the matching ":while".  This might stop at a try
-    // conditional not in its finally clause (which is then to be executed
-    // next).  Therefore, deactivate all conditionals except the ":while"
-    // itself (if reached).
-    int idx = cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, false);
-    assert(idx >= 0);
-    if (cstack->cs_flags[idx] & (CSF_WHILE | CSF_FOR)) {
-      rewind_conditionals(cstack, idx, CSF_TRY, &cstack->cs_trylevel);
-
-      // Set CSL_HAD_CONT, so do_cmdline() will jump back to the
-      // matching ":while".
-      cstack->cs_lflags |= CSL_HAD_CONT;        // let do_cmdline() handle it
-    } else {
-      // If a try conditional not in its finally clause is reached first,
-      // make the ":continue" pending for execution at the ":endtry".
-      cstack->cs_pending[idx] = CSTP_CONTINUE;
-      report_make_pending(CSTP_CONTINUE, NULL);
-    }
-  }
-}
-
-/// Handle ":break"
-void ex_break(exarg_T *eap)
-{
-  cstack_T *const cstack = eap->cstack;
-
-  if (cstack->cs_looplevel <= 0 || cstack->cs_idx < 0) {
-    eap->errmsg = _("E587: :break without :while or :for");
-  } else {
-    // Deactivate conditionals until the matching ":while" or a try
-    // conditional not in its finally clause (which is then to be
-    // executed next) is found.  In the latter case, make the ":break"
-    // pending for execution at the ":endtry".
-    int idx = cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, true);
-    if (idx >= 0 && !(cstack->cs_flags[idx] & (CSF_WHILE | CSF_FOR))) {
-      cstack->cs_pending[idx] = CSTP_BREAK;
-      report_make_pending(CSTP_BREAK, NULL);
-    }
-  }
-}
-
 /// Handle ":endwhile" and ":endfor"
 void ex_endwhile(exarg_T *eap)
 {
@@ -434,77 +360,6 @@ void ex_endwhile(exarg_T *eap)
     // Set loop flag, so do_cmdline() will jump back to the matching
     // ":while" or ":for".
     cstack->cs_lflags |= CSL_HAD_ENDLOOP;
-  }
-}
-
-/// Handle ":throw expr"
-void ex_throw(exarg_T *eap)
-{
-  char *arg = eap->arg;
-  char *value;
-
-  if (*arg != NUL && *arg != '|' && *arg != '\n') {
-    value = eval_to_string_skip(arg, eap, eap->skip);
-  } else {
-    emsg(_(e_argreq));
-    value = NULL;
-  }
-
-  // On error or when an exception is thrown during argument evaluation, do
-  // not throw.
-  if (!eap->skip && value != NULL) {
-    if (throw_exception(value, ET_USER, NULL) == FAIL) {
-      xfree(value);
-    } else {
-      do_throw(eap->cstack);
-    }
-  }
-}
-
-/// Handle ":try"
-void ex_try(exarg_T *eap)
-{
-  cstack_T *const cstack = eap->cstack;
-
-  if (cstack->cs_idx == CSTACK_LEN - 1) {
-    eap->errmsg = _("E601: :try nesting too deep");
-  } else {
-    cstack->cs_idx++;
-    cstack->cs_trylevel++;
-    cstack->cs_flags[cstack->cs_idx] = CSF_TRY;
-    cstack->cs_pending[cstack->cs_idx] = CSTP_NONE;
-
-    int skip = CHECK_SKIP;
-
-    if (!skip) {
-      // Set ACTIVE and TRUE.  TRUE means that the corresponding ":catch"
-      // commands should check for a match if an exception is thrown and
-      // that the finally clause needs to be executed.
-      cstack->cs_flags[cstack->cs_idx] |= CSF_ACTIVE | CSF_TRUE;
-
-      // ":silent!", even when used in a try conditional, disables
-      // displaying of error messages and conversion of errors to
-      // exceptions.  When the silent commands again open a try
-      // conditional, save "emsg_silent" and reset it so that errors are
-      // again converted to exceptions.  The value is restored when that
-      // try conditional is left.  If it is left normally, the commands
-      // following the ":endtry" are again silent.  If it is left by
-      // a ":continue", ":break", ":return", or ":finish", the commands
-      // executed next are again silent.  If it is left due to an
-      // aborting error, an interrupt, or an exception, restoring
-      // "emsg_silent" does not matter since we are already in the
-      // aborting state and/or the exception has already been thrown.
-      // The effect is then just freeing the memory that was allocated
-      // to save the value.
-      if (emsg_silent) {
-        eslist_T *elem = xmalloc(sizeof(*elem));
-        elem->saved_emsg_silent = emsg_silent;
-        elem->next = cstack->cs_emsg_silent_list;
-        cstack->cs_emsg_silent_list = elem;
-        cstack->cs_flags[cstack->cs_idx] |= CSF_SILENT;
-        emsg_silent = 0;
-      }
-    }
   }
 }
 
@@ -941,14 +796,4 @@ void ex_endtry(exarg_T *eap)
 extern int cleanup_conditionals(cstack_T *cstack, int searched_cond, int inclusive);
 extern char *get_end_emsg(cstack_T *cstack);
 
-// Rust FFI accessor functions
-
-/// C accessor for the global force_abort variable (used by Rust FFI).
-int nvim_get_force_abort(void) { return force_abort ? 1 : 0; }
-
-/// C accessor for the global did_throw variable (used by Rust FFI).
-int nvim_get_did_throw(void) { return did_throw ? 1 : 0; }
-
-/// C accessor for the global trylevel variable (used by Rust FFI).
-int nvim_get_trylevel(void) { return trylevel; }
 

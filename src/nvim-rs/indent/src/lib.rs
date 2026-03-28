@@ -69,9 +69,9 @@ extern "C" {
     static e_resulting_text_too_long: *const c_char;
 }
 
-// Global state accessors
+// Global state
 extern "C" {
-    fn nvim_get_trylevel() -> c_int;
+    static mut trylevel: c_int;
 }
 
 /// Translate a gettext message.
@@ -107,7 +107,7 @@ const TAB: c_char = b'\t' as c_char;
 pub unsafe extern "C" fn rs_emsg_text_too_long() {
     emsg(translate(e_resulting_text_too_long));
     // when not inside a try/catch set got_int to break out of any loop
-    if nvim_get_trylevel() == 0 {
+    if trylevel == 0 {
         unsafe {
             got_int = true;
         }
