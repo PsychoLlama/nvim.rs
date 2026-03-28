@@ -54,6 +54,9 @@
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
 
+// Rust sign FFI: unplace inner (implemented in operations.rs)
+extern int nvim_sign_unplace_inner_impl(buf_T *buf, int id, char *group, linenr_T atlnum);
+
 // Rust FFI declarations
 extern int rs_sign_row_cmp(int row1, int row2);
 extern int rs_sign_cmd_idx(const char *cmd);
@@ -283,58 +286,6 @@ int nvim_sign_undefine_by_name_impl(const char *name)
   return OK;
 }
 
-/// Place a sign — composite accessor implementing the core logic.
-/// Returns OK on success, FAIL on failure. Error messages stay in C.
-int nvim_sign_place_impl(uint32_t *id, char *group, char *name, buf_T *buf, linenr_T lnum,
-                         int prio)
-{
-  // Check for reserved character '*' in group name
-  if (group != NULL && (*group == '*' || *group == NUL)) {
-    return FAIL;
-  }
-
-  sign_T *sp = pmap_get(cstr_t)(&sign_map, name);
-  if (sp == NULL) {
-    semsg(_("E155: Unknown sign: %s"), name);
-    return FAIL;
-  }
-
-  // Use the default priority value for this sign.
-  prio = rs_sign_effective_priority(prio == -1 && sp->sn_priority != -1 ? sp->sn_priority : prio);
-
-  if (lnum > 0) {
-    rs_buf_set_sign(buf, id, group, prio, lnum, sp);
-  } else {
-    lnum = rs_buf_mod_sign(buf, id, group, prio, sp);
-  }
-  if (lnum <= 0) {
-    semsg(_("E885: Not possible to change sign %s"), name);
-    return FAIL;
-  }
-
-  return OK;
-}
-
-/// Unplace sign(s) from a single buffer — composite accessor.
-int nvim_sign_unplace_inner_impl(buf_T *buf, int id, char *group, linenr_T atlnum)
-{
-  if (!rs_sign_buffer_has_signs(buf)) {
-    return FAIL;
-  }
-
-  if (id == 0 || atlnum > 0 || (group != NULL && *group == '*')) {
-    if (!rs_buf_delete_signs(buf, group, id, atlnum)) {
-      return FAIL;
-    }
-  } else {
-    int64_t ns = rs_group_get_ns(group, nvim_namespace_lookup_fn);
-    if (ns < 0 || !extmark_del_id(buf, (uint32_t)ns, (uint32_t)id)) {
-      return FAIL;
-    }
-  }
-
-  return OK;
-}
 
 /// Unplace sign(s) from a single buffer or all buffers.
 int nvim_sign_unplace_impl(buf_T *buf, int id, char *group, linenr_T atlnum)

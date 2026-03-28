@@ -19,15 +19,39 @@ extern "C" {
     /// Get sign by name from the sign map
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
 
-    // Composite C accessors for high-level operations
-    fn nvim_sign_place_impl(
+    // Error reporting
+    fn semsg(fmt: *const c_char, ...);
+
+    // Sign placement helpers
+    fn rs_buf_set_sign(
+        buf: crate::SignBufHandle,
         id: *mut u32,
         group: *const c_char,
-        name: *const c_char,
-        buf: crate::SignBufHandle,
-        lnum: LinenrT,
         prio: c_int,
+        lnum: LinenrT,
+        sp: SignHandle,
+    );
+    fn rs_buf_mod_sign(
+        buf: crate::SignBufHandle,
+        id: *mut u32,
+        group: *const c_char,
+        prio: c_int,
+        sp: SignHandle,
+    ) -> LinenrT;
+    fn rs_sign_effective_priority(prio: c_int) -> c_int;
+
+    // Sign unplace helpers
+    fn rs_sign_buffer_has_signs(buf: crate::SignBufHandle) -> bool;
+    fn rs_buf_delete_signs(
+        buf: crate::SignBufHandle,
+        group: *const c_char,
+        id: c_int,
+        atlnum: LinenrT,
     ) -> c_int;
+    fn extmark_del_id(buf: crate::SignBufHandle, ns: u32, id: u32) -> bool;
+    fn group_get_ns(group: *const c_char) -> i64;
+
+    // Composite C accessor still used until Phase 2
     fn nvim_sign_unplace_impl(
         buf: crate::SignBufHandle,
         id: c_int,
@@ -36,6 +60,10 @@ extern "C" {
     ) -> c_int;
     fn nvim_sign_jump_impl(id: c_int, group: *const c_char, buf: crate::SignBufHandle) -> LinenrT;
 }
+
+// Error format strings
+const E155_FMT: &[u8] = b"E155: Unknown sign: %s\0";
+const E885_FMT: &[u8] = b"E885: Not possible to change sign %s\0";
 
 // =============================================================================
 // Sign Place Operation
@@ -512,6 +540,52 @@ pub unsafe extern "C" fn rs_sign_can_undefine(name: *const c_char) -> SignUndefi
 // Core High-Level Operations
 // =============================================================================
 
+/// Inline implementation of unplace_inner: unplace sign(s) from a single buffer.
+///
+/// Returns OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+unsafe fn unplace_inner(
+    buf: crate::SignBufHandle,
+    id: c_int,
+    group: *const c_char,
+    atlnum: LinenrT,
+) -> c_int {
+    if !rs_sign_buffer_has_signs(buf) {
+        return 0; // FAIL
+    }
+
+    let group_is_star = !group.is_null() && *group.cast::<u8>() == b'*';
+    if id == 0 || atlnum > 0 || group_is_star {
+        if rs_buf_delete_signs(buf, group, id, atlnum) == 0 {
+            return 0; // FAIL
+        }
+    } else {
+        let ns = group_get_ns(group);
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        if ns < 0 || !extmark_del_id(buf, ns as u32, id as u32) {
+            return 0; // FAIL
+        }
+    }
+
+    1 // OK
+}
+
+/// C-visible export: unplace sign(s) from a single buffer (replaces C impl).
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[unsafe(export_name = "nvim_sign_unplace_inner_impl")]
+pub unsafe extern "C" fn rs_sign_unplace_inner_impl(
+    buf: crate::SignBufHandle,
+    id: c_int,
+    group: *const c_char,
+    atlnum: LinenrT,
+) -> c_int {
+    unplace_inner(buf, id, group, atlnum)
+}
+
 /// Place a sign at the specified file location or update a sign.
 ///
 /// Returns OK (1) on success, FAIL (0) on failure.
@@ -527,7 +601,41 @@ pub unsafe extern "C" fn rs_sign_place(
     lnum: LinenrT,
     prio: c_int,
 ) -> c_int {
-    nvim_sign_place_impl(id, group, name, buf, lnum, prio)
+    // Check for reserved character '*' or empty string in group name
+    if !group.is_null() {
+        let group_byte = *group.cast::<u8>();
+        if group_byte == b'*' || group_byte == 0 {
+            return 0; // FAIL
+        }
+    }
+
+    // Look up sign definition
+    let sp = nvim_sign_map_get(name);
+    if sp.is_null() {
+        semsg(E155_FMT.as_ptr().cast(), name);
+        return 0; // FAIL
+    }
+
+    // Calculate effective priority: if prio == -1 and sign has a priority, use it
+    let effective_prio = rs_sign_effective_priority(if prio == -1 && (*sp).sn_priority != -1 {
+        (*sp).sn_priority
+    } else {
+        prio
+    });
+
+    let result_lnum = if lnum > 0 {
+        rs_buf_set_sign(buf, id, group, effective_prio, lnum, sp);
+        lnum
+    } else {
+        rs_buf_mod_sign(buf, id, group, effective_prio, sp)
+    };
+
+    if result_lnum <= 0 {
+        semsg(E885_FMT.as_ptr().cast(), name);
+        return 0; // FAIL
+    }
+
+    1 // OK
 }
 
 /// Unplace the specified sign for a single or all buffers.
