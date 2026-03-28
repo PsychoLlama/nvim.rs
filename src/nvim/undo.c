@@ -64,12 +64,6 @@
 //
 // All data is allocated and will all be freed when the buffer is unloaded.
 
-// Uncomment the next line for including the u_check() function.  This warns
-// for errors in the debug information.
-// #define U_DEBUG 1
-#define UH_MAGIC 0x18dade       // value for uh_magic when in use
-#define UE_MAGIC 0xabc123       // value for ue_magic when in use
-
 #include <assert.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -158,84 +152,6 @@ static int u_newcount, u_oldcount;
 static bool undo_undoes = false;
 
 static int lastmark = 0;
-
-#if defined(U_DEBUG)
-// Check the undo structures for being valid.  Print a warning when something
-// looks wrong.
-static int seen_b_u_curhead;
-static int seen_b_u_newhead;
-static int header_count;
-
-static void u_check_tree(u_header_T *uhp, u_header_T *exp_uh_next, u_header_T *exp_uh_alt_prev)
-{
-  if (uhp == NULL) {
-    return;
-  }
-  header_count++;
-  if (uhp == curbuf->b_u_curhead && ++seen_b_u_curhead > 1) {
-    emsg("b_u_curhead found twice (looping?)");
-    return;
-  }
-  if (uhp == curbuf->b_u_newhead && ++seen_b_u_newhead > 1) {
-    emsg("b_u_newhead found twice (looping?)");
-    return;
-  }
-
-  if (uhp->uh_magic != UH_MAGIC) {
-    emsg("uh_magic wrong (may be using freed memory)");
-  } else {
-    // Check pointers back are correct.
-    if (uhp->uh_next.ptr != exp_uh_next) {
-      emsg("uh_next wrong");
-      smsg(0, "expected: 0x%x, actual: 0x%x",
-           exp_uh_next, uhp->uh_next.ptr);
-    }
-    if (uhp->uh_alt_prev.ptr != exp_uh_alt_prev) {
-      emsg("uh_alt_prev wrong");
-      smsg(0, "expected: 0x%x, actual: 0x%x",
-           exp_uh_alt_prev, uhp->uh_alt_prev.ptr);
-    }
-
-    // Check the undo tree at this header.
-    for (u_entry_T *uep = uhp->uh_entry; uep != NULL; uep = uep->ue_next) {
-      if (uep->ue_magic != UE_MAGIC) {
-        emsg("ue_magic wrong (may be using freed memory)");
-        break;
-      }
-    }
-
-    // Check the next alt tree.
-    u_check_tree(uhp->uh_alt_next.ptr, uhp->uh_next.ptr, uhp);
-
-    // Check the next header in this branch.
-    u_check_tree(uhp->uh_prev.ptr, uhp, NULL);
-  }
-}
-
-static void u_check(int newhead_may_be_NULL)
-{
-  seen_b_u_newhead = 0;
-  seen_b_u_curhead = 0;
-  header_count = 0;
-
-  u_check_tree(curbuf->b_u_oldhead, NULL, NULL);
-
-  if (seen_b_u_newhead == 0 && curbuf->b_u_oldhead != NULL
-      && !(newhead_may_be_NULL && curbuf->b_u_newhead == NULL)) {
-    semsg("b_u_newhead invalid: 0x%x", curbuf->b_u_newhead);
-  }
-  if (curbuf->b_u_curhead != NULL && seen_b_u_curhead == 0) {
-    semsg("b_u_curhead invalid: 0x%x", curbuf->b_u_curhead);
-  }
-  if (header_count != curbuf->b_u_numhead) {
-    emsg("b_u_numhead invalid");
-    smsg(0, "expected: %" PRId64 ", actual: %" PRId64,
-         (int64_t)header_count, (int64_t)curbuf->b_u_numhead);
-  }
-}
-
-#endif
-
 
 /// Get the 'undolevels' value for the current buffer.
 static OptInt get_undolevel(buf_T *buf)
