@@ -37,6 +37,7 @@ pub mod replace;
 pub mod replace_full;
 pub mod shift;
 pub mod tilde;
+pub mod tilde_full;
 pub mod types;
 pub mod yank;
 
