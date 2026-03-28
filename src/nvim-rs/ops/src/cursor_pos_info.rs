@@ -79,7 +79,13 @@ extern "C" {
         tabsize: *mut c_int,
     );
     fn rs_col_print(buf: *mut u8, buflen: usize, col: c_int, vcol: c_int) -> c_int;
-    fn nvim_cpi_append_bom_and_display(bom_count: i64);
+    fn nvim_cpi_save_clear_p_shm() -> *mut c_char;
+    fn nvim_cpi_restore_p_shm(saved: *mut c_char);
+    fn msg_start();
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
+    static mut msg_scroll: c_int;
+    static mut p_ch: i64;
+    fn strlen(s: *const c_char) -> usize;
     fn nvim_bomb_size() -> c_int;
 
     // dict operations (for nvim_cpi_populate_dict absorption)
@@ -553,6 +559,34 @@ unsafe fn format_normal_msg(
     }
 }
 
+/// Rust port of `nvim_cpi_append_bom_and_display` (C function deleted).
+///
+/// Appends BOM info to IObuff if needed, then displays via msg().
+/// Temporarily clears p_shm so the message is not suppressed.
+///
+/// # Safety
+/// Reads/writes global state (IObuff, p_shm, p_ch, msg_scroll) via C accessors.
+unsafe fn append_bom_and_display(bom_count: i64) {
+    if bom_count > 0 {
+        let iobuf = std::ptr::addr_of_mut!(IObuff_cpi).cast::<c_char>();
+        let len = strlen(iobuf);
+        // C key: "(+%ld for BOM)"
+        vim_snprintf(
+            iobuf.add(len),
+            IOSIZE - len,
+            gettext(c"(+%ld for BOM)".as_ptr()),
+            bom_count,
+        );
+    }
+    let saved = nvim_cpi_save_clear_p_shm();
+    if p_ch < 1 {
+        msg_start();
+        msg_scroll = 1;
+    }
+    msg(std::ptr::addr_of!(IObuff_cpi).cast::<c_char>(), 0);
+    nvim_cpi_restore_p_shm(saved);
+}
+
 /// Display or store the counted results.
 ///
 /// # Safety
@@ -585,7 +619,7 @@ unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts
                 c.byte_count,
             );
         }
-        nvim_cpi_append_bom_and_display(bom_count);
+        append_bom_and_display(bom_count);
     } else {
         cpi_populate_dict(
             dict,

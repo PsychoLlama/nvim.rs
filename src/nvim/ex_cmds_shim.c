@@ -506,22 +506,8 @@ void nvim_cpi_get_col_info(int *col1, int *vcol1, int *linelen, int *tabsize)
   *linelen = get_cursor_line_len();
   *tabsize = linetabsize_str(p);
 }
-void nvim_cpi_append_bom_and_display(int64_t bom_count)
-{
-  if (bom_count > 0) {
-    const size_t len = strlen(IObuff);
-    vim_snprintf(IObuff + len, IOSIZE - len,
-                 _("(+%" PRId64 " for BOM)"), bom_count);
-  }
-  char *p = p_shm;
-  p_shm = "";
-  if (p_ch < 1) {
-    msg_start();
-    msg_scroll = true;
-  }
-  msg(IObuff, 0);
-  p_shm = p;
-}
+char *nvim_cpi_save_clear_p_shm(void) { char *saved = p_shm; p_shm = ""; return saved; }
+void nvim_cpi_restore_p_shm(char *saved) { p_shm = saved; }
 extern varnumber_T nvim_rs_line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
                                            varnumber_T limit, int eol_size);
 typedef struct {
