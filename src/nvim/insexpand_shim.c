@@ -411,31 +411,6 @@ int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
   return ab ? 1 : 0;
 }
 
-static char *get_complete_funcname(int type)
-{
-  switch (type) {
-  case CTRL_X_FUNCTION:
-    return curbuf->b_p_cfu;
-  case CTRL_X_OMNI:
-    return curbuf->b_p_ofu;
-  case CTRL_X_THESAURUS:
-    return *curbuf->b_p_tsrfu == NUL ? p_tsrfu : curbuf->b_p_tsrfu;
-  default:
-    return "";
-  }
-}
-
-static Callback *get_insert_callback(int type)
-{
-  if (type == CTRL_X_FUNCTION) {
-    return &curbuf->b_cfu_cb;
-  }
-  if (type == CTRL_X_OMNI) {
-    return &curbuf->b_ofu_cb;
-  }
-  // CTRL_X_THESAURUS
-  return (*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb;
-}
 
 void nvim_extmark_splice_delete_compl(void)
   { extmark_splice_delete(curbuf, curwin->w_cursor.lnum - 1, compl_col, curwin->w_cursor.lnum - 1, compl_col + compl_length, &compl_orig_extmarks, true, kExtmarkUndo); }
@@ -496,8 +471,8 @@ const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
   { yankreg_T *r = (yankreg_T *)reg; return (!r || j >= r->y_size || !r->y_array) ? NULL : r->y_array[j].data; }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
 size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep) { return copy_option_part(src, buf, (size_t)maxlen, sep); }
-int nvim_get_complete_funcname_empty(int ctrl_x_mode_val) { return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0; }
-void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val) { return (void *)get_insert_callback(ctrl_x_mode_val); }
+int nvim_get_complete_funcname_empty(int t) { const char *fn = t == CTRL_X_FUNCTION ? curbuf->b_p_cfu : t == CTRL_X_OMNI ? curbuf->b_p_ofu : t == CTRL_X_THESAURUS ? (*curbuf->b_p_tsrfu == NUL ? p_tsrfu : curbuf->b_p_tsrfu) : ""; return *fn == NUL ? 1 : 0; }
+void *nvim_get_insert_callback_opaque(int t) { return t == CTRL_X_FUNCTION ? (void *)&curbuf->b_cfu_cb : t == CTRL_X_OMNI ? (void *)&curbuf->b_ofu_cb : (void *)((*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb); }
 int nvim_callback_call_findstart(void *cb_opaque)
 {
   const int save_State = State;
@@ -527,9 +502,9 @@ void nvim_expand_by_function_full_impl(int type, char *base, void *cb_opaque)
   assert(curbuf != NULL);
   const bool is_cpt_function = (cb != NULL);
   if (!is_cpt_function) {
-    char *funcname = get_complete_funcname(type);
-    if (*funcname == NUL) { return; }
-    cb = get_insert_callback(type);
+    const char *fn = type == CTRL_X_FUNCTION ? curbuf->b_p_cfu : type == CTRL_X_OMNI ? curbuf->b_p_ofu : type == CTRL_X_THESAURUS ? (*curbuf->b_p_tsrfu == NUL ? p_tsrfu : curbuf->b_p_tsrfu) : "";
+    if (*fn == NUL) { return; }
+    cb = type == CTRL_X_FUNCTION ? &curbuf->b_cfu_cb : type == CTRL_X_OMNI ? &curbuf->b_ofu_cb : ((*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb);
   }
   typval_T args[3];
   args[0].v_type = VAR_NUMBER; args[1].v_type = VAR_STRING; args[2].v_type = VAR_UNKNOWN;
