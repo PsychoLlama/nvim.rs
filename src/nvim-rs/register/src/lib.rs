@@ -191,6 +191,40 @@ extern "C" {
 
     // Global variables (Phase 1)
     static mut got_int: bool;
+
+    // Typeahead buffer (Phase 2)
+    fn ins_typebuf(
+        str: *const c_char,
+        noremap: c_int,
+        offset: c_int,
+        nottyped: bool,
+        silent: c_int,
+    ) -> c_int;
+    fn vim_strsave_escape_ks(s: *mut c_char) -> *mut c_char;
+    fn vim_strsave_escaped_ext(
+        s: *const c_char,
+        esc: *const c_char,
+        cc: c_int,
+        bsl: bool,
+    ) -> *mut c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn get_last_insert_save() -> *mut c_char;
+    fn xmemdupz(src: *const c_void, len: usize) -> *mut c_void;
+
+    // GArray (Phase 2)
+    fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_set_growsize(gap: *mut GArray, growsize: c_int);
+    fn ga_concat(gap: *mut GArray, s: *const c_char);
+    fn ga_append(gap: *mut GArray, c: u8);
+    fn ga_clear(gap: *mut GArray);
+
+    // Global variables (Phase 2)
+    static mut reg_executing: c_int;
+    static mut pending_end_reg_executing: bool;
+    static mut VIsual_active: bool;
+    static mut last_cmdline: *mut c_char;
+    static mut new_last_cmdline: *mut c_char;
+    static mut restart_edit: c_int;
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -1515,6 +1549,32 @@ pub unsafe extern "C" fn rs_register_has_content(regname: c_int) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// GArray struct matching C's garray_T (Phase 2).
+// ---------------------------------------------------------------------------
+
+/// Growable array matching C's `garray_T` (24 bytes on 64-bit).
+#[repr(C)]
+struct GArray {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut c_void,
+}
+
+impl GArray {
+    fn zeroed() -> Self {
+        Self {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 0,
+            ga_growsize: 0,
+            ga_data: std::ptr::null_mut(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 1: Register Contents and Command-Line Paste
 // ---------------------------------------------------------------------------
 
@@ -1664,6 +1724,294 @@ pub unsafe extern "C" fn rs_get_reg_contents(regname: c_int, flags: c_int) -> *m
     *out.add(offset) = 0;
 
     out as *mut c_void
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Execute Register Subsystem
+// ---------------------------------------------------------------------------
+
+/// REMAP_YES: allow remapping.
+const REMAP_YES: c_int = 0;
+/// REMAP_NONE: no remapping.
+const REMAP_NONE: c_int = -1;
+
+/// Ctrl_V character (0x16 = 22 decimal) -- for vim_strsave_escaped_ext.
+const CTRL_V_INT: c_int = 22;
+
+/// Error message for E748.
+static E748_MSG: &[u8] = b"E748: No previously used register\0";
+/// Error message for E30 (no last command line).
+static E_NOLASTCMD: &[u8] = b"E30: No previous command line\0";
+/// Error message for E29 (no inserted text).
+static E_NOINSTEXT: &[u8] = b"E29: No inserted text yet\0";
+
+/// If "restart_edit" is not zero, put it in the typeahead buffer, so that
+/// it's used only after other typeahead has been processed.
+///
+/// # Safety
+///
+/// Reads and writes global `restart_edit`.
+unsafe fn put_reedit_in_typebuf(silent: c_int) {
+    if restart_edit == NUL {
+        return;
+    }
+    let mut buf = [0u8; 3];
+    let len = if restart_edit == c_int::from(b'V') {
+        buf[0] = b'g';
+        buf[1] = b'R';
+        2usize
+    } else {
+        buf[0] = if restart_edit == c_int::from(b'I') {
+            b'i'
+        } else {
+            restart_edit as u8
+        };
+        1usize
+    };
+    buf[len] = 0;
+    if ins_typebuf(buf.as_ptr() as *const c_char, REMAP_NONE, 0, true, silent) == OK {
+        restart_edit = NUL;
+    }
+}
+
+/// Insert register contents `s` into the typeahead buffer, so that it will be
+/// executed again.
+///
+/// `esc`: when true, escape K_SPECIAL characters and no remapping.
+/// `colon`: add ':' before the line.
+///
+/// # Safety
+///
+/// Reads global state and calls C functions.
+unsafe fn put_in_typebuf(s: *mut c_char, esc: bool, colon: bool, silent: c_int) -> c_int {
+    let mut retval = OK;
+
+    put_reedit_in_typebuf(silent);
+    if colon {
+        retval = ins_typebuf(c"\n".as_ptr(), REMAP_NONE, 0, true, silent);
+    }
+    if retval == OK {
+        let p = if esc { vim_strsave_escape_ks(s) } else { s };
+        if p.is_null() {
+            retval = FAIL;
+        } else {
+            retval = ins_typebuf(p, if esc { REMAP_NONE } else { REMAP_YES }, 0, true, silent);
+        }
+        if esc && !p.is_null() {
+            xfree(p as *mut c_void);
+        }
+    }
+    if colon && retval == OK {
+        retval = ins_typebuf(c":".as_ptr(), REMAP_NONE, 0, true, silent);
+    }
+    retval
+}
+
+/// When executing a register as a series of ex-commands, if the
+/// line-continuation character is used for a line, join it with predecessor
+/// lines. Lines are processed backwards.
+///
+/// Returns a newly allocated concatenated line. Updates `*idx` to the
+/// starting line index.
+///
+/// # Safety
+///
+/// `lines` must point to valid `NvimString` entries. `idx` must be valid.
+unsafe fn execreg_line_continuation(lines: *const NvimString, idx: *mut usize) -> *mut c_char {
+    let mut i = *idx;
+    assert!(i > 0);
+    let cmd_end = i;
+
+    let mut ga = GArray::zeroed();
+    ga_init(&raw mut ga, 1 /* sizeof(char) */, 400);
+
+    // Search backwards for the first line of this command.
+    while i > 0 {
+        i -= 1;
+        let s = &*lines.add(i);
+        let p = skipwhite(s.data);
+        let p_bytes = std::slice::from_raw_parts(p as *const u8, libc::strlen(p));
+        let is_continuation = p_bytes.first() == Some(&b'\\')
+            || (p_bytes.len() >= 3
+                && p_bytes[0] == b'"'
+                && p_bytes[1] == b'\\'
+                && p_bytes[2] == b' ');
+        if !is_continuation {
+            break;
+        }
+    }
+    let cmd_start = i;
+
+    // Join all the lines.
+    ga_concat(&raw mut ga, (*lines.add(cmd_start)).data);
+    for j in (cmd_start + 1)..=cmd_end {
+        let s = &*lines.add(j);
+        let p = skipwhite(s.data);
+        let p_bytes = std::slice::from_raw_parts(p as *const u8, libc::strlen(p));
+        if p_bytes.first() == Some(&b'\\') {
+            // Adjust growsize to current length to speed up concatenating many lines.
+            if ga.ga_len > 400 {
+                ga_set_growsize(&raw mut ga, ga.ga_len.min(8000));
+            }
+            ga_concat(&raw mut ga, p.add(1));
+        }
+    }
+    ga_append(&raw mut ga, 0); // NUL terminator
+
+    let str_ptr = xmemdupz(ga.ga_data, ga.ga_len as usize) as *mut c_char;
+    ga_clear(&raw mut ga);
+
+    *idx = i;
+    str_ptr
+}
+
+/// Execute a yank register: copy it into the stuff buffer.
+///
+/// `colon`:  insert ':' before each line
+/// `addcr`:  always add '\n' to end of line
+/// `silent`: set "silent" flag in typeahead buffer
+///
+/// Returns FAIL for failure, OK otherwise.
+///
+/// # Safety
+///
+/// Reads/writes global state and calls C functions.
+#[unsafe(export_name = "do_execreg")]
+pub unsafe extern "C" fn rs_do_execreg(
+    mut regname: c_int,
+    colon: c_int,
+    addcr: c_int,
+    silent: c_int,
+) -> c_int {
+    let mut retval = OK;
+
+    if regname == c_int::from(b'@') {
+        // repeat previous one
+        if execreg_lastc == NUL {
+            emsg(E748_MSG.as_ptr() as *const c_char);
+            return FAIL;
+        }
+        regname = execreg_lastc;
+    }
+
+    // check for valid regname
+    if regname == c_int::from(b'%')
+        || regname == c_int::from(b'#')
+        || !rs_valid_yank_reg(regname, false)
+    {
+        emsg_invreg(regname);
+        return FAIL;
+    }
+    execreg_lastc = regname;
+
+    if regname == c_int::from(b'_') {
+        // black hole: don't stuff anything
+        return OK;
+    }
+
+    if regname == c_int::from(b':') {
+        // use last command line
+        if last_cmdline.is_null() {
+            emsg(E_NOLASTCMD.as_ptr() as *const c_char);
+            return FAIL;
+        }
+        // don't keep the cmdline containing @:
+        xfree(new_last_cmdline as *mut c_void);
+        new_last_cmdline = std::ptr::null_mut();
+
+        // Escape all control characters with CTRL-V.
+        let esc_chars = b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\0";
+        let p = vim_strsave_escaped_ext(
+            last_cmdline,
+            esc_chars.as_ptr() as *const c_char,
+            CTRL_V_INT,
+            false,
+        );
+
+        // When in Visual mode "'<,'>" will be prepended to the command.
+        // Remove it when it's already there.
+        let prefix = b"'<,'>".as_ptr() as *const c_char;
+        if VIsual_active && libc::strncmp(p, prefix, 5) == 0 {
+            retval = put_in_typebuf(p.add(5), true, true, silent);
+        } else {
+            retval = put_in_typebuf(p, true, true, silent);
+        }
+        xfree(p as *mut c_void);
+    } else if regname == c_int::from(b'=') {
+        let p = rs_get_expr_line();
+        if p.is_null() {
+            return FAIL;
+        }
+        retval = put_in_typebuf(p, true, colon != 0, silent);
+        xfree(p as *mut c_void);
+    } else if regname == c_int::from(b'.') {
+        // use last inserted text
+        let p = get_last_insert_save();
+        if p.is_null() {
+            emsg(E_NOINSTEXT.as_ptr() as *const c_char);
+            return FAIL;
+        }
+        retval = put_in_typebuf(p, false, colon != 0, silent);
+        xfree(p as *mut c_void);
+    } else {
+        let reg = rs_get_yank_register(regname, 0 /* YREG_PASTE */);
+        if (*reg).y_array.is_null() {
+            return FAIL;
+        }
+
+        // Disallow remapping for ":@r".
+        let remap = if colon != 0 { REMAP_NONE } else { REMAP_YES };
+
+        // Insert lines into typeahead buffer, from last one to first one.
+        put_reedit_in_typebuf(silent);
+        let size = (*reg).y_size;
+        let mut i = size;
+        while i > 0 {
+            i -= 1;
+            // insert NL between lines and after last line if type is kMTLineWise
+            if ((*reg).y_type == K_MT_LINE_WISE || i < size - 1 || addcr != 0)
+                && ins_typebuf(c"\n".as_ptr(), remap, 0, true, silent) == FAIL
+            {
+                return FAIL;
+            }
+
+            // Handle line-continuation for :@<register>
+            let mut str_ptr = (*(*reg).y_array.add(i)).data;
+            let mut free_str = false;
+            if colon != 0 && i > 0 {
+                let p = skipwhite(str_ptr);
+                let p_bytes = std::slice::from_raw_parts(p as *const u8, libc::strlen(p));
+                let is_continuation = p_bytes.first() == Some(&b'\\')
+                    || (p_bytes.len() >= 3
+                        && p_bytes[0] == b'"'
+                        && p_bytes[1] == b'\\'
+                        && p_bytes[2] == b' ');
+                if is_continuation {
+                    str_ptr = execreg_line_continuation((*reg).y_array, &raw mut i);
+                    free_str = true;
+                }
+            }
+            let escaped = vim_strsave_escape_ks(str_ptr);
+            if free_str {
+                xfree(str_ptr as *mut c_void);
+            }
+            retval = ins_typebuf(escaped, remap, 0, true, silent);
+            xfree(escaped as *mut c_void);
+            if retval == FAIL {
+                return FAIL;
+            }
+            if colon != 0 && ins_typebuf(c":".as_ptr(), remap, 0, true, silent) == FAIL {
+                return FAIL;
+            }
+        }
+        reg_executing = if regname == 0 {
+            c_int::from(b'"')
+        } else {
+            regname
+        };
+        pending_end_reg_executing = false;
+    }
+    retval
 }
 
 // ---------------------------------------------------------------------------
