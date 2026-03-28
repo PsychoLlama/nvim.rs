@@ -1614,12 +1614,9 @@ int nvim_get_old_char(void) { return old_char; }
 void nvim_set_old_char(int val) { old_char = val; }
 int nvim_get_old_mod_mask(void) { return old_mod_mask; }
 void nvim_set_old_mod_mask(int val) { old_mod_mask = val; }
-int nvim_get_mod_mask(void) { return mod_mask; }
-void nvim_set_mod_mask(int val) { mod_mask = val; }
 int nvim_get_typebuf_silent(void) { return typebuf.tb_silent; }
 int nvim_get_typebuf_no_abbr_cnt(void) { return typebuf.tb_no_abbr_cnt; }
 void nvim_init_typebuf(void) { init_typebuf(); }
-void nvim_state_no_longer_safe(void) { state_no_longer_safe("rs_ins_typebuf()"); }
 int nvim_grow_typebuf(int new_buflen)
 {
   // Grow the typeahead buffer
@@ -1638,11 +1635,10 @@ int nvim_grow_typebuf(int new_buflen)
   return 1;
 }
 
-int nvim_get_cmd_silent(void) { return cmd_silent ? 1 : 0; }
-void nvim_set_cmd_silent(int val) { cmd_silent = val != 0; }
 size_t nvim_get_last_recorded_len(void) { return last_recorded_len; }
 void nvim_set_last_recorded_len(size_t val) { last_recorded_len = val; }
 void nvim_add_last_recorded_len(size_t val) { last_recorded_len += val; }
+void nvim_set_keynoremap(int val) { KeyNoremap = val; }
 int nvim_get_no_mapping(void) { return no_mapping; }
 void nvim_set_no_mapping(int val) { no_mapping = val; }
 int nvim_get_allow_keys(void) { return allow_keys; }
@@ -1661,28 +1657,32 @@ void nvim_dec_vgetc_busy(void)
     vgetc_busy--;
   }
 }
-
 int nvim_get_ex_normal_busy(void) { return ex_normal_busy; }
 int nvim_get_maptick(void) { return maptick; }
 void nvim_inc_maptick(void) { maptick++; }
-void nvim_set_keynoremap(int val) { KeyNoremap = val; }
-int nvim_get_typeahead_char(void) { return typeahead_char; }
-void nvim_set_typeahead_char(int val) { typeahead_char = val; }
-
-int nvim_get_old_keystuffed(void) { return old_KeyStuffed; }
-void nvim_set_old_keystuffed(int val) { old_KeyStuffed = val; }
+int nvim_get_mod_mask(void) { return mod_mask; }
+void nvim_set_mod_mask(int val) { mod_mask = val; }
+int nvim_get_cmd_silent(void) { return cmd_silent ? 1 : 0; }
+void nvim_set_cmd_silent(int val) { cmd_silent = val != 0; }
 int nvim_get_mouse_grid(void) { return mouse_grid; }
 void nvim_set_mouse_grid(int val) { mouse_grid = val; }
 int nvim_get_mouse_row(void) { return mouse_row; }
 void nvim_set_mouse_row(int val) { mouse_row = val; }
 int nvim_get_mouse_col(void) { return mouse_col; }
 void nvim_set_mouse_col(int val) { mouse_col = val; }
-
 int nvim_char_avail(void) { return char_avail() ? 1 : 0; }
-
 void nvim_set_reg_executing(int val) { reg_executing = val; }
 int nvim_get_pending_end_reg_executing(void) { return pending_end_reg_executing ? 1 : 0; }
 void nvim_set_pending_end_reg_executing(int val) { pending_end_reg_executing = val != 0; }
+int nvim_mb_byte2len_check(int b) { return MB_BYTE2LEN_CHECK(b); }
+void nvim_state_no_longer_safe(void) { state_no_longer_safe("rs_ins_typebuf()"); }
+int nvim_get_key_stuffed(void) { return KeyStuffed ? 1 : 0; }
+int nvim_get_typeahead_char(void) { return typeahead_char; }
+void nvim_set_typeahead_char(int val) { typeahead_char = val; }
+
+int nvim_get_old_keystuffed(void) { return old_KeyStuffed; }
+void nvim_set_old_keystuffed(int val) { old_KeyStuffed = val; }
+
 void nvim_set_visual_from_cursor(void)
 {
   VIsual = curwin->w_cursor;
@@ -1692,7 +1692,5 @@ void nvim_set_visual_from_cursor(void)
   redo_VIsual_busy = true;
 }
 
-int nvim_mb_byte2len_check(int b) { return MB_BYTE2LEN_CHECK(b); }
 bool nvim_map_execute_lua_discard(void) { return map_execute_lua(false, true); }
 void nvim_paste_repeat_discard(void) { paste_repeat(0); }
-int nvim_get_key_stuffed(void) { return KeyStuffed ? 1 : 0; }

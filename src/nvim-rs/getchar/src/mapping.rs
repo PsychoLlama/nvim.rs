@@ -125,65 +125,52 @@ impl MappingDepth {
 // C FFI Accessor Functions
 // =============================================================================
 
-#[allow(dead_code)]
 extern "C" {
-    /// Get the no_mapping global variable
-    fn nvim_get_no_mapping() -> c_int;
-    /// Set the no_mapping global variable
-    fn nvim_set_no_mapping(val: c_int);
-    /// Get the allow_keys global variable
-    fn nvim_get_allow_keys() -> c_int;
-    /// Get the KeyNoremap global variable
+    /// no_mapping: currently no mapping allowed
+    static mut no_mapping: c_int;
+    /// allow_keys: allow key codes when no_mapping is set
+    static mut allow_keys: c_int;
+    /// KeyNoremap: remapping flags (getchar.c static, made non-static in Phase 3)
     fn nvim_get_keynoremap() -> c_int;
     /// Set the KeyNoremap global variable
     fn nvim_set_keynoremap(val: c_int);
-    /// Get the KeyTyped global variable
-    fn nvim_get_keytyped() -> c_int;
-    /// Set the KeyTyped global variable
-    fn nvim_set_keytyped(val: c_int);
-    /// Get the KeyStuffed global variable
-    fn nvim_get_keystuffed() -> c_int;
-    /// Set the KeyStuffed global variable
-    fn nvim_set_keystuffed(val: c_int);
-    /// Get the vgetc_busy counter
-    fn nvim_get_vgetc_busy() -> c_int;
-    /// Increment vgetc_busy counter
-    fn nvim_inc_vgetc_busy();
-    /// Decrement vgetc_busy counter
-    fn nvim_dec_vgetc_busy();
-    /// Get the ex_normal_busy counter
-    fn nvim_get_ex_normal_busy() -> c_int;
-    /// Get the maptick counter
-    fn nvim_get_maptick() -> c_int;
-    /// Increment maptick counter
-    fn nvim_inc_maptick();
+    /// KeyTyped: true if user typed current char
+    static mut KeyTyped: bool;
+    /// KeyStuffed: true if current char from stuffbuf
+    static mut KeyStuffed: c_int;
+    /// vgetc_busy: counter for vgetc recursion
+    static mut vgetc_busy: c_int;
+    /// ex_normal_busy: recursiveness of ex_normal()
+    static mut ex_normal_busy: c_int;
+    /// maptick: tick for each non-mapped char
+    static mut maptick: c_int;
 }
 
 /// Check if key mapping is disabled.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_no_mapping() -> c_int {
-    nvim_get_no_mapping()
+    no_mapping
 }
 
 /// Set the no_mapping flag.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_no_mapping(val: c_int) {
-    nvim_set_no_mapping(val);
+    no_mapping = val;
 }
 
 /// Check if special keys are allowed.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_allow_keys() -> c_int {
-    nvim_get_allow_keys()
+    allow_keys
 }
 
 /// Get the current key noremap value.
@@ -207,100 +194,102 @@ pub unsafe extern "C" fn rs_set_keynoremap(val: c_int) {
 /// Check if the key was typed by user.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_key_typed() -> c_int {
-    nvim_get_keytyped()
+    c_int::from(KeyTyped)
 }
 
 /// Set the key typed flag.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_key_typed(val: c_int) {
-    nvim_set_keytyped(val);
+    KeyTyped = val != 0;
 }
 
 /// Check if the key was stuffed (from mapping or script).
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_key_stuffed() -> c_int {
-    nvim_get_keystuffed()
+    KeyStuffed
 }
 
 /// Set the key stuffed flag.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_key_stuffed(val: c_int) {
-    nvim_set_keystuffed(val);
+    KeyStuffed = val;
 }
 
 /// Check if we are busy getting a character (in vgetc).
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_vgetc_busy() -> c_int {
-    nvim_get_vgetc_busy()
+    vgetc_busy
 }
 
 /// Increment the vgetc busy counter.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_inc_vgetc_busy() {
-    nvim_inc_vgetc_busy();
+    vgetc_busy += 1;
 }
 
 /// Decrement the vgetc busy counter.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_dec_vgetc_busy() {
-    nvim_dec_vgetc_busy();
+    if vgetc_busy > 0 {
+        vgetc_busy -= 1;
+    }
 }
 
 /// Check if :normal command is being executed.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_normal_busy() -> c_int {
-    nvim_get_ex_normal_busy()
+    ex_normal_busy
 }
 
 /// Get the mapping tick counter.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_maptick() -> c_int {
-    nvim_get_maptick()
+    maptick
 }
 
 /// Increment the mapping tick counter.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_inc_maptick() {
-    nvim_inc_maptick();
+    maptick += 1;
 }
 
 /// Check if in recursive vgetc call (not safe to get user input).
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Reads C globals directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_vgetc_recursive() -> c_int {
-    c_int::from(nvim_get_vgetc_busy() > 0 && nvim_get_ex_normal_busy() == 0)
+    c_int::from(vgetc_busy > 0 && ex_normal_busy == 0)
 }
 
 #[cfg(test)]

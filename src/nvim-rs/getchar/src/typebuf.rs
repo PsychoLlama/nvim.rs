@@ -489,8 +489,8 @@ extern "C" {
     fn nvim_set_typebuf_no_abbr_cnt(val: c_int);
     fn nvim_set_typebuf_change_cnt(val: c_int);
     // nvim_get_maxmaplen already declared at module level
-    fn nvim_get_cmd_silent() -> c_int;
-    fn nvim_set_cmd_silent(val: c_int);
+    /// cmd_silent: don't echo the command line
+    static mut cmd_silent: bool;
 }
 
 /// Check if a typeahead change has occurred.
@@ -639,7 +639,7 @@ pub unsafe extern "C" fn rs_flush_typebuf_mapped() {
     nvim_set_typebuf_len(tb_len - tb_maplen);
     nvim_set_typebuf_maplen(0);
     nvim_set_typebuf_silent(0);
-    nvim_set_cmd_silent(0);
+    cmd_silent = false;
     nvim_set_typebuf_no_abbr_cnt(0);
     increment_typebuf_change_cnt();
 }
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn rs_ins_typebuf(
     increment_typebuf_change_cnt();
 
     // Notify state is no longer safe
-    nvim_state_no_longer_safe();
+    state_no_longer_safe(c"rs_ins_typebuf()".as_ptr());
 
     if str.is_null() {
         return OK;
@@ -961,7 +961,7 @@ const FAIL: c_int = 0;
 // Additional C function declarations needed
 extern "C" {
     fn nvim_init_typebuf();
-    fn nvim_state_no_longer_safe();
+    fn state_no_longer_safe(reason: *const std::ffi::c_char);
     fn nvim_grow_typebuf(new_buflen: c_int) -> c_int;
     /// Read input characters into buf (up to maxlen), waiting wait_time ms.
     fn inchar(buf: *mut u8, maxlen: c_int, wait_time: std::ffi::c_long) -> c_int;
@@ -1012,7 +1012,7 @@ pub unsafe extern "C" fn flush_buffers_export(flush_typeahead: c_int) {
 
     nvim_set_typebuf_maplen(0);
     nvim_set_typebuf_silent(0);
-    nvim_set_cmd_silent(0);
+    cmd_silent = false;
     nvim_set_typebuf_no_abbr_cnt(0);
     increment_typebuf_change_cnt();
 }

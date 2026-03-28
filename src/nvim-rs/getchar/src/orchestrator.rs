@@ -37,20 +37,12 @@ extern "C" {
     /// Get typebuf.tb_len
     fn nvim_get_typebuf_len() -> c_int;
 
-    /// Get no_mapping global
-    fn nvim_get_no_mapping() -> c_int;
-    /// Set no_mapping global
-    fn nvim_set_no_mapping(val: c_int);
-
-    /// Get allow_keys global
-    fn nvim_get_allow_keys() -> c_int;
-    /// Set allow_keys global
-    fn nvim_set_allow_keys(val: c_int);
-
-    /// Get mod_mask global
-    fn nvim_get_mod_mask() -> c_int;
-    /// Set mod_mask global
-    fn nvim_set_mod_mask(val: c_int);
+    /// no_mapping: currently no mapping allowed
+    static mut no_mapping: c_int;
+    /// allow_keys: allow key codes when no_mapping is set
+    static mut allow_keys: c_int;
+    /// mod_mask: current key modifiers
+    static mut mod_mask: c_int;
 
     /// vgetc_mod_mask global (direct access)
     static mut vgetc_mod_mask: c_int;
@@ -60,8 +52,8 @@ extern "C" {
     /// vgetc_char global (direct access)
     static mut vgetc_char: c_int;
 
-    /// Get KeyTyped global
-    fn nvim_get_keytyped() -> c_int;
+    /// KeyTyped: true if user typed current char
+    static mut KeyTyped: bool;
 
     /// Get State global (for MODE_TERMINAL check)
     fn nvim_get_state() -> c_int;
@@ -77,8 +69,8 @@ extern "C" {
     /// ungetchars: un-get characters from the typeahead buffer
     fn ungetchars(len: c_int);
 
-    /// state_no_longer_safe wrapper
-    fn nvim_state_no_longer_safe();
+    /// state_no_longer_safe: mark state as no longer safe
+    fn state_no_longer_safe(reason: *const std::ffi::c_char);
 
     /// utf_ptr2char: convert UTF-8 bytes to codepoint
     fn utf_ptr2char(p: *const u8) -> c_int;
@@ -86,8 +78,8 @@ extern "C" {
     /// is_mouse_key: check if a key code is a mouse key
     fn is_mouse_key(c: c_int) -> bool;
 
-    /// MB_BYTE2LEN_CHECK wrapper
-    fn nvim_mb_byte2len_check(b: c_int) -> c_int;
+    /// utf8len_tab: UTF-8 byte length lookup table
+    static utf8len_tab: [u8; 256];
 
     /// getcmdkeycmd: get command after <Cmd> key (now in Rust, but usable via FFI)
     fn getcmdkeycmd(
@@ -221,6 +213,19 @@ const fn to_special_key(a: c_int, b: c_int) -> c_int {
         NUL
     } else {
         termcap2key(a, b)
+    }
+}
+
+/// MB_BYTE2LEN_CHECK: check bytes needed for UTF-8 character, treating
+/// values outside 0..=255 as 1 byte.
+///
+/// # Safety
+/// Reads from `utf8len_tab` C global.
+unsafe fn mb_byte2len_check(b: c_int) -> c_int {
+    if (0..=255).contains(&b) {
+        c_int::from(utf8len_tab[b as usize])
+    } else {
+        1
     }
 }
 
@@ -405,10 +410,10 @@ pub unsafe extern "C" fn rs_char_avail() -> bool {
     if test_disable_char_avail {
         return false;
     }
-    let nm = nvim_get_no_mapping();
-    nvim_set_no_mapping(nm + 1);
+    let nm = no_mapping;
+    no_mapping = nm + 1;
     let retval = rs_vpeekc();
-    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
+    no_mapping -= 1;
     retval != NUL
 }
 
@@ -451,8 +456,8 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
     let mut cmod: c_int = 0;
     let mut aborted = false;
 
-    let nm = nvim_get_no_mapping();
-    nvim_set_no_mapping(nm + 1);
+    let nm = no_mapping;
+    no_mapping = nm + 1;
 
     unsafe {
         got_int = false;
@@ -512,7 +517,7 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
         cmod = 0;
     }
 
-    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
+    no_mapping -= 1;
 
     if aborted {
         ga_clear(ga_ptr);
@@ -619,7 +624,7 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
         let last_recorded = nvim_get_last_recorded_len();
         nvim_set_last_recorded_len(last_recorded.saturating_sub(LAST_VGETC_RECORDED_LEN));
 
-        nvim_set_mod_mask(0);
+        mod_mask = 0;
         vgetc_mod_mask = 0;
         vgetc_char = 0;
 
@@ -657,7 +662,7 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
 
     // Need to process the character before we know it's safe to do something else.
     if out != K_IGNORE {
-        nvim_state_no_longer_safe();
+        state_no_longer_safe(c"rs_vgetc()".as_ptr());
     }
 
     out
@@ -672,30 +677,30 @@ unsafe fn vgetc_inner_loop() -> c_int {
 
     loop {
         // no mapping after modifier has been read
-        let did_inc = if nvim_get_mod_mask() != 0 {
-            nvim_set_no_mapping(nvim_get_no_mapping() + 1);
-            nvim_set_allow_keys(nvim_get_allow_keys() + 1);
+        let did_inc = if mod_mask != 0 {
+            no_mapping += 1;
+            allow_keys += 1;
             true
         } else {
             false
         };
         let mut c = vgetorpeek(true);
         if did_inc {
-            nvim_set_no_mapping(nvim_get_no_mapping() - 1);
-            nvim_set_allow_keys(nvim_get_allow_keys() - 1);
+            no_mapping -= 1;
+            allow_keys -= 1;
         }
 
         // Get two extra bytes for special keys
         if c == K_SPECIAL_BYTE {
-            let save_allow_keys = nvim_get_allow_keys();
-            nvim_set_no_mapping(nvim_get_no_mapping() + 1);
-            nvim_set_allow_keys(0); // make sure BS is not found
+            let save_allow_keys = allow_keys;
+            no_mapping += 1;
+            allow_keys = 0; // make sure BS is not found
             let c2 = vgetorpeek(true); // no mapping for these chars
             c = vgetorpeek(true);
-            nvim_set_no_mapping(nvim_get_no_mapping() - 1);
-            nvim_set_allow_keys(save_allow_keys);
+            no_mapping -= 1;
+            allow_keys = save_allow_keys;
             if c2 == KS_MODIFIER {
-                nvim_set_mod_mask(c);
+                mod_mask = c;
                 continue;
             }
             c = to_special_key(c2, c);
@@ -704,9 +709,9 @@ unsafe fn vgetc_inner_loop() -> c_int {
         // For a multi-byte character get all the bytes and return the
         // converted character.
         // Note: This will loop until enough bytes are received!
-        let n = nvim_mb_byte2len_check(c);
+        let n = mb_byte2len_check(c);
         if n > 1 {
-            nvim_set_no_mapping(nvim_get_no_mapping() + 1);
+            no_mapping += 1;
             buf[0] = c as u8;
             #[allow(clippy::needless_range_loop)]
             for i in 1..(n as usize) {
@@ -718,7 +723,7 @@ unsafe fn vgetc_inner_loop() -> c_int {
                     vgetorpeek(true); // skip KE_FILLER
                 }
             }
-            nvim_set_no_mapping(nvim_get_no_mapping() - 1);
+            no_mapping -= 1;
             c = utf_ptr2char(buf.as_ptr());
         }
 
@@ -728,13 +733,13 @@ unsafe fn vgetc_inner_loop() -> c_int {
         // In Terminal mode, however, this is not desirable. #16202 #16220
         // Also do not do this for mouse keys, as terminals encode mouse events as
         // CSI sequences, and MOD_MASK_ALT has a meaning even for unmapped mouse keys.
-        if nvim_get_no_mapping() == 0
-            && nvim_get_keytyped() != 0
-            && nvim_get_mod_mask() == MOD_MASK_ALT
+        if no_mapping == 0
+            && KeyTyped
+            && mod_mask == MOD_MASK_ALT
             && (nvim_get_state() & MODE_TERMINAL) == 0
             && !is_mouse_key(c)
         {
-            nvim_set_mod_mask(0);
+            mod_mask = 0;
             let len = ins_char_typebuf(c, 0, false);
             ins_char_typebuf(ESC, 0, false);
             // K_SPECIAL KS_MODIFIER MOD_MASK_ALT takes 3 more bytes
@@ -745,13 +750,13 @@ unsafe fn vgetc_inner_loop() -> c_int {
         }
 
         if nvim_get_vgetc_char() == 0 {
-            vgetc_mod_mask = nvim_get_mod_mask();
+            vgetc_mod_mask = mod_mask;
             vgetc_char = c;
         }
 
         // A keypad or special function key was not mapped, use it like
         // its ASCII equivalent.
-        c = normalize_keypad(c, nvim_get_mod_mask());
+        c = normalize_keypad(c, std::ptr::addr_of_mut!(mod_mask));
 
         break c;
     }
@@ -759,8 +764,12 @@ unsafe fn vgetc_inner_loop() -> c_int {
 
 /// Normalize keypad keys to their ASCII equivalents.
 /// Also normalizes extended home/end/cursor keys based on mod_mask.
-/// When mod_mask changes (e.g., K_XHOME + SHIFT -> K_S_HOME), it is updated via the pointer.
-unsafe fn normalize_keypad(c: c_int, mod_mask: c_int) -> c_int {
+/// When mod_mask changes (e.g., K_XHOME + SHIFT -> K_S_HOME), it is updated via raw pointer.
+///
+/// # Safety
+/// `mm` must be a valid non-null pointer to `mod_mask`.
+unsafe fn normalize_keypad(c: c_int, mm: *mut c_int) -> c_int {
+    let cur_mm = *mm;
     match c {
         K_KPLUS => c_int::from(b'+'),
         K_KMINUS => c_int::from(b'-'),
@@ -781,22 +790,22 @@ unsafe fn normalize_keypad(c: c_int, mod_mask: c_int) -> c_int {
         K_K8 => c_int::from(b'8'),
         K_K9 => c_int::from(b'9'),
         K_XHOME | K_ZHOME => {
-            if mod_mask == MOD_MASK_SHIFT {
-                nvim_set_mod_mask(0);
+            if cur_mm == MOD_MASK_SHIFT {
+                *mm = 0;
                 K_S_HOME
-            } else if mod_mask == MOD_MASK_CTRL {
-                nvim_set_mod_mask(0);
+            } else if cur_mm == MOD_MASK_CTRL {
+                *mm = 0;
                 K_C_HOME
             } else {
                 K_HOME
             }
         }
         K_XEND | K_ZEND => {
-            if mod_mask == MOD_MASK_SHIFT {
-                nvim_set_mod_mask(0);
+            if cur_mm == MOD_MASK_SHIFT {
+                *mm = 0;
                 K_S_END
-            } else if mod_mask == MOD_MASK_CTRL {
-                nvim_set_mod_mask(0);
+            } else if cur_mm == MOD_MASK_CTRL {
+                *mm = 0;
                 K_C_END
             } else {
                 K_END

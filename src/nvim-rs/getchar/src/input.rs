@@ -59,26 +59,24 @@ extern "C" {
     fn nvim_get_old_keystuffed() -> c_int;
     fn nvim_set_old_keystuffed(val: c_int);
 
-    // Global state accessors for mod_mask and mouse state
-    fn nvim_get_mod_mask() -> c_int;
-    fn nvim_set_mod_mask(val: c_int);
-    fn nvim_get_mouse_grid() -> c_int;
-    fn nvim_set_mouse_grid(val: c_int);
-    fn nvim_get_mouse_row() -> c_int;
-    fn nvim_set_mouse_row(val: c_int);
-    fn nvim_get_mouse_col() -> c_int;
-    fn nvim_set_mouse_col(val: c_int);
+    // Global state: mod_mask and mouse state (direct access)
+    static mut mod_mask: c_int;
+    static mut mouse_grid: c_int;
+    static mut mouse_row: c_int;
+    static mut mouse_col: c_int;
 
-    // Keystuffed state
-    fn nvim_get_keystuffed() -> c_int;
+    // KeyStuffed: true if current char from stuffbuf
+    static mut KeyStuffed: c_int;
 
     // Stuff buffer check (for can_get_old_char logic)
     fn rs_stuff_empty() -> c_int;
 
     // For ins_char_typebuf
     fn nvim_get_keynoremap() -> c_int;
-    fn nvim_get_keytyped() -> c_int;
-    fn nvim_get_cmd_silent() -> c_int;
+    /// KeyTyped: true if user typed current char
+    static mut KeyTyped: bool;
+    /// cmd_silent: don't echo the command line
+    static mut cmd_silent: bool;
 
     // For fix_input_buffer
     fn rs_using_script() -> c_int;
@@ -223,9 +221,9 @@ impl OldCharState {
     }
 
     /// Save a character to be retrieved later.
-    pub const fn save(&mut self, c: c_int, mod_mask: c_int, grid: c_int, row: c_int, col: c_int) {
+    pub const fn save(&mut self, c: c_int, mm: c_int, grid: c_int, row: c_int, col: c_int) {
         self.char = c;
-        self.mod_mask = mod_mask;
+        self.mod_mask = mm;
         self.mouse_grid = grid;
         self.mouse_row = row;
         self.mouse_col = col;
@@ -346,7 +344,7 @@ pub const fn translate_keypad_key(c: c_int) -> c_int {
 /// Returns the translated key and whether the modifier was consumed.
 #[must_use]
 #[allow(clippy::wildcard_imports)]
-pub const fn translate_home_end_key(c: c_int, mod_mask: c_int) -> (c_int, bool) {
+pub const fn translate_home_end_key(c: c_int, mm: c_int) -> (c_int, bool) {
     use keys::*;
 
     const MOD_MASK_SHIFT: c_int = 0x02;
@@ -354,18 +352,18 @@ pub const fn translate_home_end_key(c: c_int, mod_mask: c_int) -> (c_int, bool) 
 
     match c {
         K_XHOME | K_ZHOME => {
-            if mod_mask == MOD_MASK_SHIFT {
+            if mm == MOD_MASK_SHIFT {
                 (K_S_HOME, true)
-            } else if mod_mask == MOD_MASK_CTRL {
+            } else if mm == MOD_MASK_CTRL {
                 (K_C_HOME, true)
             } else {
                 (K_HOME, false)
             }
         }
         K_XEND | K_ZEND => {
-            if mod_mask == MOD_MASK_SHIFT {
+            if mm == MOD_MASK_SHIFT {
                 (K_S_END, true)
-            } else if mod_mask == MOD_MASK_CTRL {
+            } else if mm == MOD_MASK_CTRL {
                 (K_C_END, true)
             } else {
                 (K_END, false)
@@ -403,11 +401,11 @@ pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
 #[export_name = "vungetc"]
 pub unsafe extern "C" fn rs_vungetc(c: c_int) {
     nvim_set_old_char(c);
-    nvim_set_old_mod_mask(nvim_get_mod_mask());
-    OLD_MOUSE_GRID = nvim_get_mouse_grid();
-    OLD_MOUSE_ROW = nvim_get_mouse_row();
-    OLD_MOUSE_COL = nvim_get_mouse_col();
-    nvim_set_old_keystuffed(nvim_get_keystuffed());
+    nvim_set_old_mod_mask(mod_mask);
+    OLD_MOUSE_GRID = mouse_grid;
+    OLD_MOUSE_ROW = mouse_row;
+    OLD_MOUSE_COL = mouse_col;
+    nvim_set_old_keystuffed(KeyStuffed);
 }
 
 /// Get the old character that was put back.
@@ -437,10 +435,10 @@ pub unsafe extern "C" fn rs_clear_old_char() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_restore_old_char_state() {
-    nvim_set_mod_mask(nvim_get_old_mod_mask());
-    nvim_set_mouse_grid(OLD_MOUSE_GRID);
-    nvim_set_mouse_row(OLD_MOUSE_ROW);
-    nvim_set_mouse_col(OLD_MOUSE_COL);
+    mod_mask = nvim_get_old_mod_mask();
+    mouse_grid = OLD_MOUSE_GRID;
+    mouse_row = OLD_MOUSE_ROW;
+    mouse_col = OLD_MOUSE_COL;
     nvim_set_old_char(-1);
 }
 
@@ -486,12 +484,12 @@ pub unsafe extern "C" fn rs_ins_char_typebuf(
     buf[len as usize] = 0;
 
     let keynoremap = nvim_get_keynoremap();
-    let keytyped = nvim_get_keytyped();
-    let cmd_silent = nvim_get_cmd_silent();
+    let keytyped = c_int::from(KeyTyped);
+    let cmd_silent_val = c_int::from(cmd_silent);
 
     // ins_typebuf(buf, KeyNoremap, 0, !KeyTyped, cmd_silent)
     let nottyped = c_int::from(keytyped == 0); // !KeyTyped
-    rs_ins_typebuf(buf.as_ptr(), keynoremap, 0, nottyped, cmd_silent);
+    rs_ins_typebuf(buf.as_ptr(), keynoremap, 0, nottyped, cmd_silent_val);
 
     if keytyped != 0 && on_key_ignore != 0 {
         crate::orchestrator::on_key_ignore_len_add(len as usize);

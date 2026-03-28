@@ -154,7 +154,6 @@ impl GotcharsState {
 // C FFI Accessor Functions
 // =============================================================================
 
-#[allow(dead_code)]
 extern "C" {
     /// Get the current recording register (0 if not recording)
     fn nvim_get_reg_recording() -> c_int;
@@ -164,14 +163,10 @@ extern "C" {
     fn nvim_set_last_recorded_len(val: usize);
     /// Add last_recorded_len
     fn nvim_add_last_recorded_len(val: usize);
-    /// Get reg_executing
-    fn nvim_get_reg_executing() -> c_int;
-    /// Set reg_executing
-    fn nvim_set_reg_executing(val: c_int);
-    /// Get pending_end_reg_executing
-    fn nvim_get_pending_end_reg_executing() -> c_int;
-    /// Set pending_end_reg_executing
-    fn nvim_set_pending_end_reg_executing(val: c_int);
+    /// reg_executing: register being executed or zero
+    static mut reg_executing: c_int;
+    /// pending_end_reg_executing: clear reg_executing at a safe moment
+    static mut pending_end_reg_executing: bool;
     /// Get typebuf.tb_maplen
     fn nvim_get_typebuf_maplen() -> c_int;
 }
@@ -234,16 +229,16 @@ pub unsafe extern "C" fn rs_is_block_redo() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_end_reg_executing(advance: c_int) {
-    let reg_executing = nvim_get_reg_executing();
+    let re = reg_executing;
     let tb_maplen = nvim_get_typebuf_maplen();
-    let pending = nvim_get_pending_end_reg_executing() != 0;
+    let pending = pending_end_reg_executing;
 
-    if reg_executing != 0 && (tb_maplen == 0 || pending) {
+    if re != 0 && (tb_maplen == 0 || pending) {
         if advance != 0 {
-            nvim_set_reg_executing(0);
-            nvim_set_pending_end_reg_executing(0);
+            reg_executing = 0;
+            pending_end_reg_executing = false;
         } else {
-            nvim_set_pending_end_reg_executing(1);
+            pending_end_reg_executing = true;
         }
     }
 }
@@ -265,8 +260,8 @@ extern "C" {
     // (on_key_buf_process removed - now calls Rust function directly)
     /// debug_did_msg global (direct access)
     static mut debug_did_msg: bool;
-    /// Increment maptick
-    fn nvim_inc_maptick();
+    /// maptick: tick for each non-mapped char
+    static mut maptick: c_int;
     /// scriptout: FILE* for -w output
     static mut scriptout: *mut std::ffi::c_void;
     /// p_uc: 'updatecount' option (OptInt = i64)
@@ -434,7 +429,7 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
 
     // Since characters have been typed, consider the following to be in
     // another mapping. Search string will be kept in history.
-    nvim_inc_maptick();
+    maptick += 1;
 }
 
 /// Record an <Ignore> key.

@@ -830,7 +830,7 @@ pub unsafe extern "C" fn rs_start_redo(count: c_int, old_redo: c_int) -> c_int {
         // The expression register should be re-evaluated
         if c == c_int::from(b'=') {
             buffheader::readbuf2().add_char(CAR);
-            nvim_set_cmd_silent(1);
+            cmd_silent = true;
         }
 
         c = read_redo_char();
@@ -892,7 +892,8 @@ pub unsafe extern "C" fn rs_start_redo_ins() -> c_int {
 }
 
 extern "C" {
-    fn nvim_set_cmd_silent(val: c_int);
+    /// cmd_silent: don't echo the command line
+    static mut cmd_silent: bool;
     fn nvim_set_visual_from_cursor();
 }
 

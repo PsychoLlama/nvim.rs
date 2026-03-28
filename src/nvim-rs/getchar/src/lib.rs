@@ -33,14 +33,10 @@ extern "C" {
     fn nvim_get_typebuf_was_filled() -> c_int;
     /// Get `typebuf.tb_maplen`
     fn nvim_get_typebuf_maplen() -> c_int;
-    /// Get `curscript`
+    /// curscript: index in scriptin (getchar.c static, made non-static in Phase 3)
     fn nvim_get_curscript() -> c_int;
-    /// Get `KeyNoremap`
+    /// KeyNoremap: remapping flags (getchar.c static, made non-static in Phase 3)
     fn nvim_get_keynoremap() -> c_int;
-    /// Get `RM_NONE` constant
-    fn nvim_get_rm_none() -> c_int;
-    /// Get `RM_SCRIPT` constant
-    fn nvim_get_rm_script() -> c_int;
     /// Get `State` global
     fn nvim_get_state() -> c_int;
     /// Get `arrow_used` global
@@ -48,6 +44,11 @@ extern "C" {
     /// Sync undo
     fn u_sync(force: bool);
 }
+
+/// RM_NONE constant (= 1): tb_noremap: don't remap
+const RM_NONE: c_int = 1;
+/// RM_SCRIPT constant (= 2): tb_noremap: remap local script mappings
+const RM_SCRIPT: c_int = 2;
 
 /// Returns true if the stuff buffer is empty (both readbufs empty).
 ///
@@ -186,9 +187,7 @@ pub unsafe extern "C" fn using_script_export() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
     let keynoremap = nvim_get_keynoremap();
-    let rm_none = nvim_get_rm_none();
-    let rm_script = nvim_get_rm_script();
-    c_int::from((keynoremap & (rm_none | rm_script)) != 0)
+    c_int::from((keynoremap & (RM_NONE | RM_SCRIPT)) != 0)
 }
 
 /// `noremap_keys(void)` -> bool: Phase 1 export replacing C wrapper
@@ -199,9 +198,7 @@ pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
 #[export_name = "noremap_keys"]
 pub unsafe extern "C" fn noremap_keys_export() -> bool {
     let keynoremap = nvim_get_keynoremap();
-    let rm_none = nvim_get_rm_none();
-    let rm_script = nvim_get_rm_script();
-    (keynoremap & (rm_none | rm_script)) != 0
+    (keynoremap & (RM_NONE | RM_SCRIPT)) != 0
 }
 
 /// Mode flags
