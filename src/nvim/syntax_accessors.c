@@ -261,19 +261,6 @@ int nvim_syn_do_regexec(void *regprog, int ic,
 int nvim_syn_get_b_syn_slow(void) { return syn_win->w_s->b_syn_slow ? 1 : 0; }
 void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
 
-void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
-{
-  if (st_ptr == NULL) return;
-  syn_time_T *st = (syn_time_T *)st_ptr;
-  st->total = profile_add(st->total, (proftime_T)elapsed);
-  if (profile_cmp((proftime_T)elapsed, st->slowest) < 0) {
-    st->slowest = (proftime_T)elapsed;
-  }
-  st->count++;
-  if (matched) {
-    st->match++;
-  }
-}
 
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
 int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
@@ -606,7 +593,6 @@ void *nvim_syn_block_get_linecont_time_ptr(void) { return syn_block ? (void *)&s
 void nvim_syn_block_set_linecont_prog(void *prog) { if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog; }
 char *nvim_syn_do_getcurline(void) { return ml_get_buf(syn_buf, current_lnum); }
 int nvim_syn_do_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
-void nvim_syn_do_clear_time(syn_time_T *st) { st->total = profile_zero(); st->slowest = profile_zero(); st->count = 0; st->match = 0; }
 synpat_T *nvim_synblock_get_patterns_ga_data(synblock_T *block) { if (block == NULL || block->b_syn_patterns.ga_len == 0) return NULL; return (synpat_T *)block->b_syn_patterns.ga_data; }
 syn_cluster_T *nvim_synblock_get_clusters_ga_data(synblock_T *block) { if (block == NULL || block->b_syn_clusters.ga_len == 0) return NULL; return (syn_cluster_T *)block->b_syn_clusters.ga_data; }
 void nvim_synstate_set_sst_next_flags(synstate_T *state, int flags) { if (state) state->sst_next_flags = (int16_t)flags; }

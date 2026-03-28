@@ -48,9 +48,6 @@ extern "C" {
     fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
     fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
 
-    // syn_clear_time (wraps syn_clear_time)
-    fn nvim_syn_do_clear_time(st: *mut c_void);
-
     // Already-Rust functions called from syn_update_ends / syn_start_line
     fn rs_update_si_end(sip: StateItemHandle, startcol: c_int, force: c_int);
     fn rs_check_keepend();
@@ -263,8 +260,15 @@ pub unsafe extern "C" fn rs_syn_getcurline_len() -> c_int {
 /// Replaces static C `syn_clear_time`.
 ///
 /// # Safety
-/// Accesses C structs; must be called from main thread.
+/// `st` must be a valid pointer to a syn_time_T struct (or null).
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_clear_time(st: *mut c_void) {
-    nvim_syn_do_clear_time(st);
+    if st.is_null() {
+        return;
+    }
+    let t = &mut *(st as *mut crate::ffi_types::SynTime);
+    t.total = 0;
+    t.slowest = 0;
+    t.count = 0;
+    t.match_ = 0;
 }

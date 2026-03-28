@@ -49,7 +49,7 @@ extern "C" {
     fn nvim_syn_clear_linecont_pat(block: SynBlockHandle);
     fn nvim_synblock_get_linecont_time_ptr(block: SynBlockHandle) -> *mut c_void;
     fn nvim_syn_vim_regcomp_empty_cpo(pat: *mut c_char, flags: c_int) -> *mut c_void;
-    fn nvim_syn_do_clear_time(st: *mut c_void);
+    fn rs_syn_clear_time(st: *mut c_void);
 
     // Current window synblock
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
@@ -114,7 +114,7 @@ unsafe fn synblock_set_linecont(
 
     // Zero out the timing info.
     let time_ptr = nvim_synblock_get_linecont_time_ptr(block);
-    nvim_syn_do_clear_time(time_ptr);
+    rs_syn_clear_time(time_ptr);
 
     if prog.is_null() {
         // Compile failed: free the pattern string.

@@ -43,8 +43,9 @@ extern "C" {
     fn profile_start() -> u64;
     fn profile_end(tm: u64) -> u64;
 
-    // Timing update: updates syn_time_T fields (total, slowest, count, match)
-    fn nvim_syn_time_update(st_ptr: *mut c_void, elapsed: u64, matched: c_int);
+    // Profile arithmetic (from profile crate)
+    fn profile_add(tm1: u64, tm2: u64) -> u64;
+    fn profile_cmp(tm1: u64, tm2: u64) -> c_int;
 
     // (synpat_T setters removed -- use direct repr(C) field access)
 
@@ -119,7 +120,15 @@ unsafe fn syn_regexec_impl(
 
     if syn_time_on && !st_ptr.is_null() {
         let elapsed = profile_end(pt);
-        nvim_syn_time_update(st_ptr, elapsed, (r > 0) as c_int);
+        let st = &mut *(st_ptr as *mut crate::ffi_types::SynTime);
+        st.total = profile_add(st.total, elapsed);
+        if profile_cmp(elapsed, st.slowest) < 0 {
+            st.slowest = elapsed;
+        }
+        st.count += 1;
+        if r > 0 {
+            st.match_ += 1;
+        }
     }
 
     if timed_out != 0 && nvim_syn_get_b_syn_slow() == 0 {
