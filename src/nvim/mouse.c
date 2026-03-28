@@ -144,55 +144,6 @@ void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
   tv_clear(&rettv);
 }
 
-/// C accessor: perform the popup menu logic that depends on visual mode,
-/// jump_to_mouse, getvcols/getvcol, and UI flush.
-int nvim_do_popup_impl(int which_button, int m_pos_flag, pos_T m_pos)
-{
-  int jump_flags = 0;
-  if (strcmp(p_mousem, "popup_setpos") == 0) {
-    // First set the cursor position before showing the popup menu.
-    if (VIsual_active) {
-      // set MOUSE_MAY_STOP_VIS if we are outside the selection
-      // or the current window (might have false negative here)
-      if (m_pos_flag != IN_BUFFER) {
-        jump_flags = MOUSE_MAY_STOP_VIS;
-      } else {
-        if (VIsual_mode == 'V') {
-          if ((curwin->w_cursor.lnum <= VIsual.lnum
-               && (m_pos.lnum < curwin->w_cursor.lnum || VIsual.lnum < m_pos.lnum))
-              || (VIsual.lnum < curwin->w_cursor.lnum
-                  && (m_pos.lnum < VIsual.lnum || curwin->w_cursor.lnum < m_pos.lnum))) {
-            jump_flags = MOUSE_MAY_STOP_VIS;
-          }
-        } else if ((ltoreq(curwin->w_cursor, VIsual)
-                    && (lt(m_pos, curwin->w_cursor) || lt(VIsual, m_pos)))
-                   || (lt(VIsual, curwin->w_cursor)
-                       && (lt(m_pos, VIsual) || lt(curwin->w_cursor, m_pos)))) {
-          jump_flags = MOUSE_MAY_STOP_VIS;
-        } else if (VIsual_mode == Ctrl_V) {
-          colnr_T leftcol, rightcol;
-          getvcols(curwin, &curwin->w_cursor, &VIsual, &leftcol, &rightcol);
-          getvcol(curwin, &m_pos, NULL, &m_pos.col, NULL);
-          if (m_pos.col < leftcol || m_pos.col > rightcol) {
-            jump_flags = MOUSE_MAY_STOP_VIS;
-          }
-        }
-      }
-    } else {
-      jump_flags = MOUSE_MAY_STOP_VIS;
-    }
-  }
-  if (jump_flags) {
-    jump_flags = jump_to_mouse(jump_flags, NULL, which_button);
-    redraw_curbuf_later(VIsual_active ? UPD_INVERTED : UPD_VALID);
-    update_screen();
-    setcursor();
-    ui_flush();  // Update before showing popup menu
-  }
-  show_popupmenu();
-  got_click = false;  // ignore release events
-  return jump_flags;
-}
 
 /// Do the appropriate action for the current mouse click in the current mode.
 /// Not used for Command-line mode.

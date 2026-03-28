@@ -1146,9 +1146,6 @@ extern "C" {
     /// C accessor: grid-based vcol/flags lookup for mouse click.
     fn nvim_mouse_check_grid_impl(vcolp: *mut colnr_T, flagsp: *mut c_int);
 
-    /// C accessor: popup menu logic.
-    fn nvim_do_popup_impl(which_button: c_int, m_pos_flag: c_int, m_pos: PosT) -> c_int;
-
     /// C accessor: `ins_mousescroll` logic.
     fn nvim_ins_mousescroll_impl(dir: c_int);
 
@@ -1203,6 +1200,73 @@ extern "C" {
 
     /// Call `rs_nv_scroll_line(cap)`.
     fn rs_nv_scroll_line(cap: CmdargHandle);
+}
+
+// =============================================================================
+// Phase 3 — Popup Menu Implementation (extern declarations)
+// =============================================================================
+
+extern "C" {
+    /// `VIsual_active` global.
+    static VIsual_active: bool;
+
+    /// `VIsual_mode` global (character: 'v', 'V', or Ctrl-V).
+    static VIsual_mode: c_int;
+
+    /// `VIsual` global (start of visual selection, `pos_T`).
+    static VIsual: PosT;
+
+    /// `p_mousem` option (`char *`).
+    #[link_name = "p_mousem"]
+    static P_MOUSEM: *const c_char;
+
+    /// `getvcols(wp, pos1, pos2, left, right)` — Rust impl in plines crate.
+    fn rs_getvcols(wp: WinHandle, pos1: PosT, pos2: PosT, left: *mut colnr_T, right: *mut colnr_T);
+
+    /// `getvcol(wp, pos, scol, ccol, ecol)`.
+    fn nvim_getvcol(
+        wp: WinHandle,
+        pos: *mut PosT,
+        scol: *mut colnr_T,
+        ccol: *mut colnr_T,
+        ecol: *mut colnr_T,
+    );
+
+    /// Show the popup menu.
+    fn show_popupmenu();
+
+    /// Update the screen display.
+    fn update_screen() -> c_int;
+
+    /// Set cursor position on screen.
+    fn setcursor();
+
+    /// Flush UI events.
+    fn ui_flush();
+
+    /// Mark current buffer for redraw with given type.
+    fn redraw_curbuf_later(typ: c_int);
+}
+
+/// Screen update type: buffer not changed (from drawscreen.h).
+const UPD_VALID: c_int = 10;
+
+/// Screen update type: redisplay inverted part (from drawscreen.h).
+const UPD_INVERTED: c_int = 20;
+
+/// Ctrl-V character code for block-visual mode detection.
+const CTRL_V: c_int = 0x16;
+
+/// Compare two `PosT` values: return true if `a < b`.
+#[inline]
+fn pos_lt(a: PosT, b: PosT) -> bool {
+    a.lnum < b.lnum || (a.lnum == b.lnum && a.col < b.col)
+}
+
+/// Compare two `PosT` values: return true if `a <= b`.
+#[inline]
+fn pos_ltoreq(a: PosT, b: PosT) -> bool {
+    a.lnum < b.lnum || (a.lnum == b.lnum && a.col <= b.col)
 }
 
 /// Check the mouse click grid for virtual column and fold flags.
@@ -1309,11 +1373,86 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
 
 /// Handle popup menu action for mouse click.
 ///
+/// Port of `nvim_do_popup_impl` from mouse.c. Sets cursor position if
+/// `mousemodel=popup_setpos` and the click is outside the current visual
+/// selection, then shows the popup menu.
+///
 /// # Safety
 /// Requires valid mouse and visual mode state.
 #[no_mangle]
-pub unsafe extern "C" fn rs_do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: PosT) -> c_int {
-    nvim_do_popup_impl(which_button, m_pos_flag, m_pos)
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_do_popup(
+    which_button: c_int,
+    m_pos_flag: c_int,
+    mut m_pos: PosT,
+) -> c_int {
+    let mut jump_flags: c_int = 0;
+
+    // Compare p_mousem to "popup_setpos"
+    let popup_setpos = b"popup_setpos\0";
+    if !P_MOUSEM.is_null() && {
+        let n = popup_setpos.len();
+        let s = std::slice::from_raw_parts(P_MOUSEM.cast::<u8>(), n);
+        s == popup_setpos
+    } {
+        // First set the cursor position before showing the popup menu.
+        if VIsual_active {
+            // Set MOUSE_MAY_STOP_VIS if we are outside the selection
+            // or the current window (might have false negative here).
+            if m_pos_flag == IN_BUFFER {
+                let curwin = nvim_get_curwin();
+                let cursor = *nvim_win_get_cursor_ptr(curwin);
+                if VIsual_mode == c_int::from(b'V') {
+                    if (cursor.lnum <= VIsual.lnum
+                        && (m_pos.lnum < cursor.lnum || VIsual.lnum < m_pos.lnum))
+                        || (VIsual.lnum < cursor.lnum
+                            && (m_pos.lnum < VIsual.lnum || cursor.lnum < m_pos.lnum))
+                    {
+                        jump_flags = MOUSE_MAY_STOP_VIS;
+                    }
+                } else if (pos_ltoreq(cursor, VIsual)
+                    && (pos_lt(m_pos, cursor) || pos_lt(VIsual, m_pos)))
+                    || (pos_lt(VIsual, cursor) && (pos_lt(m_pos, VIsual) || pos_lt(cursor, m_pos)))
+                {
+                    jump_flags = MOUSE_MAY_STOP_VIS;
+                } else if VIsual_mode == CTRL_V {
+                    let mut leftcol: colnr_T = 0;
+                    let mut rightcol: colnr_T = 0;
+                    rs_getvcols(curwin, cursor, VIsual, &raw mut leftcol, &raw mut rightcol);
+                    nvim_getvcol(
+                        curwin,
+                        &raw mut m_pos,
+                        std::ptr::null_mut(),
+                        &raw mut m_pos.col,
+                        std::ptr::null_mut(),
+                    );
+                    if m_pos.col < leftcol || m_pos.col > rightcol {
+                        jump_flags = MOUSE_MAY_STOP_VIS;
+                    }
+                }
+            } else {
+                jump_flags = MOUSE_MAY_STOP_VIS;
+            }
+        } else {
+            jump_flags = MOUSE_MAY_STOP_VIS;
+        }
+    }
+
+    if jump_flags != 0 {
+        jump_flags = rs_jump_to_mouse(jump_flags, std::ptr::null_mut(), which_button);
+        redraw_curbuf_later(if VIsual_active {
+            UPD_INVERTED
+        } else {
+            UPD_VALID
+        });
+        update_screen();
+        setcursor();
+        ui_flush(); // Update before showing popup menu
+    }
+
+    show_popupmenu();
+    nvim_set_got_click(false); // ignore release events
+    jump_flags
 }
 
 /// Handle mouse click in Insert mode.
