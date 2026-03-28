@@ -197,35 +197,19 @@ void nvim_hmll_map_init(PMap(cstr_t) *map) { *map = (PMap(cstr_t)) MAP_INIT; }
 void nvim_hmll_map_destroy(PMap(cstr_t) *map) { if (map) { map_destroy(cstr_t, map); } }
 void *nvim_hmll_map_get(PMap(cstr_t) *map, const char *key) { return (map && key) ? pmap_get(cstr_t)(map, key) : NULL; }
 void nvim_hmll_map_put(PMap(cstr_t) *map, const char *key, void *entry)
-{
-  if (!map || !key) { return; }
-  bool new_item = false;
-  ptr_t *val = pmap_put_ref(cstr_t)(map, key, NULL, &new_item);
-  if (val) { *val = entry; }
-}
+{ if (!map || !key) { return; } bool new_item = false; ptr_t *val = pmap_put_ref(cstr_t)(map, key, NULL, &new_item); if (val) { *val = entry; } }
 void nvim_hmll_map_del(PMap(cstr_t) *map, const char *key) { if (map && key) { pmap_del(cstr_t)(map, key, NULL); } }
 int64_t nvim_get_p_hi(void) { return p_hi; }
 const char *nvim_get_p_shadafile(void) { return p_shadafile; }
 size_t nvim_expand_env(const char *src, char *dst, size_t dstlen)
-{
-  if (!src || !dst || dstlen == 0) { return 0; }
-  expand_env((char *)src, dst, (int)dstlen);
-  return strlen(dst);
-}
-
+{ if (!src || !dst || dstlen == 0) { return 0; } expand_env((char *)src, dst, (int)dstlen); return strlen(dst); }
 char *nvim_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
-
 char *nvim_shada_get_namebuff(void) { return NameBuff; }
 const void *nvim_shada_buf_next(const void *buf) { return buf ? ((const buf_T *)buf)->b_next : NULL; }
 const char *nvim_shada_buf_get_ffname(const void *buf) { return buf ? ((const buf_T *)buf)->b_ffname : NULL; }
 int nvim_shada_buf_should_skip(const void *buf) { const buf_T *b = (const buf_T *)buf; return (!b || !b->b_p_bl || bt_quickfix(b) || bt_terminal(b)) ? 1 : 0; }
-
 void *nvim_shada_set_init_ptr(void)
-{
-  Set(ptr_t) *s = xcalloc(1, sizeof(Set(ptr_t)));
-  *s = (Set(ptr_t))SET_INIT;
-  return s;
-}
+{ Set(ptr_t) *s = xcalloc(1, sizeof(Set(ptr_t))); *s = (Set(ptr_t))SET_INIT; return s; }
 int nvim_shada_set_has_ptr(const void *set, const void *ptr) { return set ? set_has(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr) : 0; }
 void nvim_shada_set_put_ptr(void *set, const void *ptr) { if (set) { set_put(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr); } }
 void nvim_shada_set_destroy_ptr(void *set) { if (set) { set_destroy(ptr_t, (Set(ptr_t) *)set); xfree(set); } }
@@ -250,9 +234,7 @@ const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
   *out_width = (size_t)(reg.y_type == kMTBlockWise ? reg.y_width : 0);
   *out_is_unnamed = is_unnamed; *out_ts = reg.timestamp; *out_additional_data = reg.additional_data; return ret; }
 void nvim_shada_buf_get_buflist_info(const void *buf, pos_T *out_pos, void **out_additional_data)
-{
-  if (buf) { *out_pos = ((const buf_T *)buf)->b_last_cursor.mark; *out_additional_data = ((const buf_T *)buf)->additional_data; }
-}
+{ if (buf) { *out_pos = ((const buf_T *)buf)->b_last_cursor.mark; *out_additional_data = ((const buf_T *)buf)->additional_data; } }
 const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
                                      pos_T *out_mark, int *out_fnum,
                                      Timestamp *out_ts, char **out_fname,
@@ -269,20 +251,13 @@ void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
        want_info ? _(" info") : "", want_marks ? _(" marks") : "",
        get_oldfiles ? _(" oldfiles") : "", failed ? _(" FAILED") : ""); }
 char *nvim_shada_build_default_path(void)
-{
-  char *shada_dir = stdpaths_user_state_subpath("shada", 0, false);
-  return concat_fnames_realloc(shada_dir, "main.shada", true);
-}
+{ char *shada_dir = stdpaths_user_state_subpath("shada", 0, false); return concat_fnames_realloc(shada_dir, "main.shada", true); }
 size_t nvim_shada_file_descriptor_size(void) { return sizeof(FileDescriptor); }
 int nvim_shada_curbuf_marks_read(void) { return curbuf->b_marks_read; }
 void nvim_shada_curbuf_set_marks_read(int val) { curbuf->b_marks_read = val; }
 const char *nvim_shada_curbuf_ffname(void) { return curbuf->b_ffname; }
 void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts, char *hisstr, void *additional_data)
-{
-  histentry_T *he = &((histentry_T *)hist_array)[idx];
-  he->timestamp = ts; he->hisnum = idx + 1; he->hisstr = hisstr;
-  he->hisstrlen = strlen(hisstr); he->additional_data = additional_data;
-}
+{ histentry_T *he = &((histentry_T *)hist_array)[idx]; he->timestamp = ts; he->hisnum = idx + 1; he->hisstr = hisstr; he->hisstrlen = strlen(hisstr); he->additional_data = additional_data; }
 size_t nvim_shada_path_tail_with_sep_offset(const char *fname) { return (size_t)(path_tail_with_sep((char *)fname) - fname); }
 int nvim_shada_os_fileinfo(const char *fname, uint64_t *out_mode, uint64_t *out_uid, uint64_t *out_gid)
 { FileInfo info;
@@ -291,20 +266,12 @@ int nvim_shada_os_fileinfo(const char *fname, uint64_t *out_mode, uint64_t *out_
   return S_ISDIR(info.stat.st_mode) ? 0 : 1; }
 int nvim_shada_os_fchown(void *sd_writer, uint64_t uid, uint64_t gid) { return os_fchown(file_fd((FileDescriptor *)sd_writer), (uv_uid_t)uid, (uv_gid_t)gid); }
 void *nvim_shada_fname_bufs_new(void)
-{
-  PMap(cstr_t) *m = xcalloc(1, sizeof(PMap(cstr_t)));
-  *m = (PMap(cstr_t))MAP_INIT;
-  return m;
-}
+{ PMap(cstr_t) *m = xcalloc(1, sizeof(PMap(cstr_t))); *m = (PMap(cstr_t))MAP_INIT; return m; }
 void nvim_shada_fname_bufs_destroy(void *handle)
 { PMap(cstr_t) *m = (PMap(cstr_t) *)handle; const char *key;
   map_foreach_key(m, key, { xfree((char *)key); }) map_destroy(cstr_t, m); xfree(m); }
 void *nvim_shada_oldfiles_set_new(void)
-{
-  Set(cstr_t) *s = xcalloc(1, sizeof(Set(cstr_t)));
-  *s = (Set(cstr_t))SET_INIT;
-  return s;
-}
+{ Set(cstr_t) *s = xcalloc(1, sizeof(Set(cstr_t))); *s = (Set(cstr_t))SET_INIT; return s; }
 void nvim_shada_oldfiles_set_destroy(void *handle) { Set(cstr_t) *s = (Set(cstr_t) *)handle; set_destroy(cstr_t, s); xfree(s); }
 int nvim_shada_argcount(void) { return ARGCOUNT; }
 void nvim_shada_for_all_tab_windows_update_changelist(void *cl_bufs_handle)
@@ -377,30 +344,12 @@ const void *nvim_shada_var_shada_iter(const void *iter, const char **out_name, v
 }
 int nvim_shada_tv_get_type(const void *tv) { return tv ? ((const typval_T *)tv)->v_type : 0; }
 void nvim_shada_build_gvar_entry(const char *name, void *tv, Timestamp ts, ShadaEntry *out)
-{
-  typval_T tgttv;
-  tv_copy((typval_T *)tv, &tgttv);
-  tv_clear((typval_T *)tv);
-  xfree(tv);
-  *out = (ShadaEntry){
-    .type = kSDItemVariable,
-    .timestamp = ts,
-    .data = {
-      .global_var = {
-        .name = (char *)name,
-        .value = tgttv,
-      }
-    },
-    .additional_data = NULL,
-  };
-}
+{ typval_T tgttv; tv_copy((typval_T *)tv, &tgttv); tv_clear((typval_T *)tv); xfree(tv);
+  *out = (ShadaEntry){ .type = kSDItemVariable, .timestamp = ts,
+    .data = { .global_var = { .name = (char *)name, .value = tgttv } }, .additional_data = NULL }; }
 void nvim_shada_clear_gvar_entry_value(ShadaEntry *entry) { tv_clear(&entry->data.global_var.value); }
 void nvim_shada_set_all_last_cursors(void)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    set_last_cursor(wp);
-  }
-}
+{ FOR_ALL_TAB_WINDOWS(tp, wp) { (void)tp; set_last_cursor(wp); } }
 const void *nvim_shada_mark_global_iter(const void *iter,
                                         char *out_name, int64_t *out_lnum, int32_t *out_col,
                                         int *out_fnum, uint64_t *out_ts,
@@ -420,12 +369,8 @@ const void *nvim_shada_mark_buffer_iter(const void *iter,
   return next; }
 int nvim_shada_buf_changelist_len(const void *buf) { return buf ? ((const buf_T *)buf)->b_changelistlen : 0; }
 void nvim_shada_buf_changelist_entry(const void *buf, int idx, int64_t *out_lnum, int32_t *out_col, uint64_t *out_ts, void **out_additional)
-{
-  if (!buf || idx < 0) { return; }
-  const fmark_T fm = ((const buf_T *)buf)->b_changelist[idx];
-  *out_lnum = (int64_t)fm.mark.lnum; *out_col = (int32_t)fm.mark.col;
-  *out_ts = fm.timestamp; *out_additional = fm.additional_data;
-}
+{ if (!buf || idx < 0) { return; } const fmark_T fm = ((const buf_T *)buf)->b_changelist[idx];
+  *out_lnum = (int64_t)fm.mark.lnum; *out_col = (int32_t)fm.mark.col; *out_ts = fm.timestamp; *out_additional = fm.additional_data; }
 void nvim_shada_curwin_cursor(int64_t *out_lnum, int32_t *out_col) { *out_lnum = (int64_t)curwin->w_cursor.lnum; *out_col = (int32_t)curwin->w_cursor.col; }
 void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname, bool *is_new, const char **out_key)
 { WriteMergerState *wms = (WriteMergerState *)wms_opaque; if (!wms || !fname) { return NULL; }
@@ -521,21 +466,12 @@ void nvim_shada_oldfiles_add(void *oldfiles_set_handle, void *oldfiles_list,
   }
 }
 int nvim_shada_oldfiles_has(void *oldfiles_set_handle, const ShadaEntry *entry)
-{
-  Set(cstr_t) *oldfiles_set = (Set(cstr_t) *)oldfiles_set_handle;
-  return set_has(cstr_t, oldfiles_set, entry->data.filemark.fname) ? 1 : 0;
-}
+{ return set_has(cstr_t, (Set(cstr_t) *)oldfiles_set_handle, entry->data.filemark.fname) ? 1 : 0; }
 void nvim_shada_cl_bufs_set_put(void *cl_bufs_handle, void *buf_handle)
-{
-  Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
-  set_put(ptr_t, cl_bufs, buf_handle);
-}
+{ set_put(ptr_t, (Set(ptr_t) *)cl_bufs_handle, buf_handle); }
 int nvim_shada_buf_get_changelistlen(const void *buf_handle) { return ((const buf_T *)buf_handle)->b_changelistlen; }
 void nvim_shada_changelist_get_entry(const void *buf_handle, int idx, uint64_t *out_ts, int64_t *out_lnum, int32_t *out_col)
-{
-  const fmark_T *fm = &((const buf_T *)buf_handle)->b_changelist[idx];
-  *out_ts = (uint64_t)fm->timestamp; *out_lnum = (int64_t)fm->mark.lnum; *out_col = (int32_t)fm->mark.col;
-}
+{ const fmark_T *fm = &((const buf_T *)buf_handle)->b_changelist[idx]; *out_ts = (uint64_t)fm->timestamp; *out_lnum = (int64_t)fm->mark.lnum; *out_col = (int32_t)fm->mark.col; }
 void nvim_shada_changelist_insert_entry(void *buf_handle, int i,
                                         ShadaEntry *entry, int cl_len)
 {
