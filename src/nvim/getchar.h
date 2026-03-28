@@ -58,6 +58,8 @@ char *get_recorded(void);
 
 // Typeahead / buffer flushing
 void flush_buffers(flush_buffers_T flush_typeahead);
+void save_typeahead(tasave_T *tp);
+void restore_typeahead(tasave_T *tp);
 
 // Orchestrator functions (implemented in Rust, src/nvim-rs/getchar/src/orchestrator.rs)
 void before_blocking(void);

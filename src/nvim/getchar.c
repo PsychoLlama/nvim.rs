@@ -79,8 +79,6 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 // Buffer FFI functions (buffers owned by Rust)
 extern int rs_read_readbuffers(int advance);
 extern void rs_start_stuff(void);
-extern void rs_save_readbufs(void);
-extern void rs_restore_readbufs(void);
 
 // Typebuf lifecycle (owned by Rust: rs_init/alloc/free/save/close_typebuf)
 extern void rs_init_typebuf(void);
@@ -144,38 +142,7 @@ static const char e_recursive_mapping[] = N_("E223: Recursive mapping");
 // Rust replacements: rs_init_typebuf, rs_alloc_typebuf, rs_free_typebuf,
 // rs_save_typebuf, rs_close_typebuf (in nvim-getchar crate)
 
-// old_char, old_mod_mask, old_KeyStuffed moved to Rust (input.rs) as #[no_mangle] statics
-extern int old_char;
-extern int old_mod_mask;
-extern int old_KeyStuffed;
-
-/// Save all three kinds of typeahead, so that the user must type at a prompt.
-void save_typeahead(tasave_T *tp)
-{
-  tp->save_typebuf = typebuf;
-  rs_alloc_typebuf();
-  tp->typebuf_valid = true;
-  tp->old_char = old_char;
-  tp->old_mod_mask = old_mod_mask;
-  old_char = -1;
-
-  rs_save_readbufs();
-}
-
-/// Restore the typeahead to what it was before calling save_typeahead().
-/// The allocated memory is freed, can only be called once!
-void restore_typeahead(tasave_T *tp)
-{
-  if (tp->typebuf_valid) {
-    rs_free_typebuf();
-    typebuf = tp->save_typebuf;
-  }
-
-  old_char = tp->old_char;
-  old_mod_mask = tp->old_mod_mask;
-
-  rs_restore_readbufs();
-}
+// save_typeahead / restore_typeahead moved to Rust (typebuf.rs) as #[export_name] fns
 
 /// Open a new script file for the ":source!" command.
 ///

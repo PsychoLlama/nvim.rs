@@ -1266,6 +1266,74 @@ pub unsafe extern "C" fn at_ins_compl_key_export() -> bool {
 }
 
 // =============================================================================
+// Phase 4: save_typeahead and restore_typeahead
+// =============================================================================
+
+/// Mirror of the first fields in C `tasave_T` (from getchar_defs.h).
+///
+/// Layout (64-bit):
+/// - offset 0: `save_typebuf: TypebufT` (48 bytes)
+/// - offset 48: `typebuf_valid: bool` (1 byte + 3 bytes padding)
+/// - offset 52: `old_char: c_int` (4 bytes)
+/// - offset 56: `old_mod_mask: c_int` (4 bytes)
+///
+/// The remaining fields (save_readbuf1, save_readbuf2, save_inputbuf) are
+/// handled by Rust's internal `rs_save_readbufs`/`rs_restore_readbufs`.
+#[repr(C)]
+pub struct TasaveHeader {
+    save_typebuf: TypebufT,
+    typebuf_valid: bool,
+    _pad: [u8; 3],
+    old_char: c_int,
+    old_mod_mask: c_int,
+}
+
+extern "C" {
+    /// old_char: character put back by vungetc() (Rust static, Phase 3)
+    static mut old_char: c_int;
+    /// old_mod_mask: mod_mask for ungotten character (Rust static, Phase 3)
+    static mut old_mod_mask: c_int;
+    /// rs_save_readbufs: save read buffers to Rust internal statics
+    fn rs_save_readbufs();
+    /// rs_restore_readbufs: restore read buffers from Rust internal statics
+    fn rs_restore_readbufs();
+}
+
+/// Save all three kinds of typeahead, so that the user must type at a prompt.
+///
+/// Replaces C `save_typeahead(tasave_T *tp)`.
+///
+/// # Safety
+/// `tp` must point to a valid `tasave_T` with at least 60 bytes.
+#[export_name = "save_typeahead"]
+pub unsafe extern "C" fn rs_save_typeahead(tp: *mut TasaveHeader) {
+    (*tp).save_typebuf = typebuf;
+    rs_alloc_typebuf_impl();
+    (*tp).typebuf_valid = true;
+    (*tp).old_char = old_char;
+    (*tp).old_mod_mask = old_mod_mask;
+    old_char = -1;
+    rs_save_readbufs();
+}
+
+/// Restore the typeahead to what it was before calling save_typeahead().
+///
+/// Replaces C `restore_typeahead(tasave_T *tp)`.
+///
+/// # Safety
+/// `tp` must point to a valid `tasave_T` previously saved by `rs_save_typeahead`.
+#[export_name = "restore_typeahead"]
+pub unsafe extern "C" fn rs_restore_typeahead(tp: *mut TasaveHeader) {
+    if (*tp).typebuf_valid {
+        rs_free_typebuf_impl();
+        typebuf = (*tp).save_typebuf;
+    }
+    old_char = (*tp).old_char;
+    old_mod_mask = (*tp).old_mod_mask;
+    rs_restore_readbufs();
+}
+
+// =============================================================================
 // Phase 3: check_simplify_modifier and no_reduce_keys
 // =============================================================================
 
