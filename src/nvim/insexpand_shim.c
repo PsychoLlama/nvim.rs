@@ -317,6 +317,7 @@ void nvim_compl_match_copy_user_data_tv(void *m, void *dest_tv) { if (m && dest_
 void *nvim_compl_T_alloc(void) { return xcalloc(1, sizeof(compl_T)); }
 void nvim_compl_match_set_flags(void *m, int f) { if (m) ((compl_T *)m)->cp_flags = f; }
 void nvim_compl_match_set_cp_str(void *m, const char *s, size_t l) { if (m) ((compl_T *)m)->cp_str = cbuf_to_string(s, l); }
+void nvim_compl_match_replace_cp_str(void *m, const char *s, size_t l) { if (m) { API_CLEAR_STRING(((compl_T *)m)->cp_str); ((compl_T *)m)->cp_str = cbuf_to_string(s, l); } }
 const char *nvim_compl_match_get_cp_fname(void *m) { return m ? ((compl_T *)m)->cp_fname : NULL; }
 void nvim_compl_match_set_cp_fname_dup(void *m, const char *f) { if (m) ((compl_T *)m)->cp_fname = xstrdup(f); }
 void nvim_compl_match_set_cp_fname_ref(void *m, const char *f) { if (m) ((compl_T *)m)->cp_fname = (char *)f; }
@@ -482,12 +483,6 @@ void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_CO
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
 void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(ctrl_x_msgs[(mode) & ~CTRL_X_WANT_IDENT]); }
-void nvim_ins_compl_set_original_text_impl(const char *str, size_t len) {
-  if (match_at_original_text(compl_first_match))
-    { API_CLEAR_STRING(compl_first_match->cp_str); compl_first_match->cp_str = cbuf_to_string(str, len); }
-  else if (compl_first_match->cp_prev != NULL && match_at_original_text(compl_first_match->cp_prev))
-    { API_CLEAR_STRING(compl_first_match->cp_prev->cp_str); compl_first_match->cp_prev->cp_str = cbuf_to_string(str, len); }
-}
 int nvim_check_compl_option_dict(void) { return (*curbuf->b_p_dict == NUL && *p_dict == NUL && !curwin->w_p_spell) ? 1 : 0; }
 int nvim_check_compl_option_tsr(void) { return (*curbuf->b_p_tsr == NUL && *p_tsr == NUL && *curbuf->b_p_tsrfu == NUL && *p_tsrfu == NUL) ? 1 : 0; }
 void nvim_ins_compl_st_mark_ins_buf_scanned(void) { if (ins_compl_st.ins_buf) { ins_compl_st.ins_buf->b_scanned = true; } }

@@ -462,7 +462,11 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
 
 extern "C" {
     // Accessors for rs_ins_compl_set_original_text
-    fn nvim_ins_compl_set_original_text_impl(str_ptr: *const c_char, len: usize);
+    #[link_name = "nvim_compl_match_at_original_text"]
+    fn nvim_compl_match_at_original_text_insert(m: *mut std::ffi::c_void) -> c_int;
+    #[link_name = "nvim_compl_match_get_prev"]
+    fn nvim_compl_match_get_prev_insert(m: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn nvim_compl_match_replace_cp_str(m: *mut std::ffi::c_void, s: *const c_char, l: usize);
 
     // Accessors for rs_ins_compl_addleader
     fn stop_arrow() -> c_int;
@@ -490,7 +494,18 @@ extern "C" {
 /// Requires valid completion list state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_set_original_text(str_ptr: *const c_char, len: usize) {
-    nvim_ins_compl_set_original_text_impl(str_ptr, len);
+    let first = crate::match_list::nvim_compl_get_first_match().0;
+    if first.is_null() {
+        return;
+    }
+    if nvim_compl_match_at_original_text_insert(first) != 0 {
+        nvim_compl_match_replace_cp_str(first, str_ptr, len);
+    } else {
+        let prev = nvim_compl_match_get_prev_insert(first);
+        if !prev.is_null() && nvim_compl_match_at_original_text_insert(prev) != 0 {
+            nvim_compl_match_replace_cp_str(prev, str_ptr, len);
+        }
+    }
 }
 
 // Maximum multi-byte character size in bytes
