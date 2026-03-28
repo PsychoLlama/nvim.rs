@@ -44,21 +44,22 @@ const NUL: u8 = 0;
 // C FFI Declarations
 // =============================================================================
 
-// Phase 4: old_mouse_* moved from C statics to Rust statics.
+// old_char, old_mod_mask, old_KeyStuffed: moved from C statics to Rust (Phase 3).
+// Exported as #[no_mangle] so C can still reference them via extern.
+#[no_mangle]
+pub static mut old_char: c_int = -1;
+#[no_mangle]
+pub static mut old_mod_mask: c_int = 0;
+#[no_mangle]
+pub static mut old_KeyStuffed: c_int = 0;
+
+// old_mouse_* moved from C statics to Rust statics (Phase 4).
 // These are only used by rs_vungetc and rs_restore_old_char_state (both in Rust).
 static mut OLD_MOUSE_GRID: c_int = 0;
 static mut OLD_MOUSE_ROW: c_int = 0;
 static mut OLD_MOUSE_COL: c_int = 0;
 
 extern "C" {
-    // Global state accessors for old_char (vungetc/can_get_old_char)
-    fn nvim_get_old_char() -> c_int;
-    fn nvim_set_old_char(val: c_int);
-    fn nvim_get_old_mod_mask() -> c_int;
-    fn nvim_set_old_mod_mask(val: c_int);
-    fn nvim_get_old_keystuffed() -> c_int;
-    fn nvim_set_old_keystuffed(val: c_int);
-
     // Global state: mod_mask and mouse state (direct access)
     static mut mod_mask: c_int;
     static mut mouse_grid: c_int;
@@ -71,8 +72,8 @@ extern "C" {
     // Stuff buffer check (for can_get_old_char logic)
     fn rs_stuff_empty() -> c_int;
 
-    // For ins_char_typebuf
-    fn nvim_get_keynoremap() -> c_int;
+    // For ins_char_typebuf (KeyNoremap is now non-static in C after Phase 3)
+    static KeyNoremap: c_int;
     /// KeyTyped: true if user typed current char
     static mut KeyTyped: bool;
     /// cmd_silent: don't echo the command line
@@ -386,9 +387,7 @@ pub const fn translate_home_end_key(c: c_int, mm: c_int) -> (c_int, bool) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
-    c_int::from(
-        nvim_get_old_char() != -1 && (nvim_get_old_keystuffed() != 0 || rs_stuff_empty() != 0),
-    )
+    c_int::from(old_char != -1 && (old_KeyStuffed != 0 || rs_stuff_empty() != 0))
 }
 
 /// Unget one character (can only be done once!).
@@ -400,12 +399,12 @@ pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
 /// Calls C accessor functions.
 #[export_name = "vungetc"]
 pub unsafe extern "C" fn rs_vungetc(c: c_int) {
-    nvim_set_old_char(c);
-    nvim_set_old_mod_mask(mod_mask);
+    old_char = c;
+    old_mod_mask = mod_mask;
     OLD_MOUSE_GRID = mouse_grid;
     OLD_MOUSE_ROW = mouse_row;
     OLD_MOUSE_COL = mouse_col;
-    nvim_set_old_keystuffed(KeyStuffed);
+    old_KeyStuffed = KeyStuffed;
 }
 
 /// Get the old character that was put back.
@@ -414,16 +413,16 @@ pub unsafe extern "C" fn rs_vungetc(c: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_old_char() -> c_int {
-    nvim_get_old_char()
+    old_char
 }
 
 /// Clear the old character, called after it has been consumed.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses `old_char` static directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_old_char() {
-    nvim_set_old_char(-1);
+    old_char = -1;
 }
 
 /// Restore state from old_char (for vgetc when old_char is available).
@@ -432,14 +431,14 @@ pub unsafe extern "C" fn rs_clear_old_char() {
 /// and clears old_char.
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Accesses old_* and mouse_* statics directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_restore_old_char_state() {
-    mod_mask = nvim_get_old_mod_mask();
+    mod_mask = old_mod_mask;
     mouse_grid = OLD_MOUSE_GRID;
     mouse_row = OLD_MOUSE_ROW;
     mouse_col = OLD_MOUSE_COL;
-    nvim_set_old_char(-1);
+    old_char = -1;
 }
 
 // =============================================================================
@@ -483,7 +482,7 @@ pub unsafe extern "C" fn rs_ins_char_typebuf(
     // NUL-terminate the buffer
     buf[len as usize] = 0;
 
-    let keynoremap = nvim_get_keynoremap();
+    let keynoremap = KeyNoremap;
     let keytyped = c_int::from(KeyTyped);
     let cmd_silent_val = c_int::from(cmd_silent);
 

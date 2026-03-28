@@ -134,8 +134,8 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     /// internal_error: report internal error
     fn internal_error(msg: *const std::ffi::c_char);
-    /// curscript: index in scriptin (getchar.c static, made non-static in Phase 3)
-    fn nvim_get_curscript() -> c_int;
+    /// curscript: index in scriptin (non-static in C after Phase 3)
+    static curscript: c_int;
     /// cmd_silent: don't echo the command line
     static mut cmd_silent: bool;
 }
@@ -226,7 +226,7 @@ pub unsafe fn rs_free_typebuf_impl() {
 /// # Panics
 /// Panics if `curscript < 0` (should not happen during normal script execution).
 pub unsafe fn rs_save_typebuf_impl() {
-    let cs = nvim_get_curscript();
+    let cs = curscript;
     assert!(cs >= 0, "save_typebuf called with curscript < 0");
     rs_init_typebuf_impl();
     SAVED_TYPEBUF[cs as usize] = typebuf;
@@ -242,7 +242,7 @@ pub unsafe fn rs_save_typebuf_impl() {
 /// # Panics
 /// Panics if `curscript < 0`.
 pub unsafe fn rs_close_typebuf_impl() {
-    let cs = nvim_get_curscript();
+    let cs = curscript;
     assert!(cs >= 0, "rs_close_typebuf called with curscript < 0");
     rs_free_typebuf_impl();
     typebuf = SAVED_TYPEBUF[cs as usize];
@@ -1263,6 +1263,132 @@ pub unsafe extern "C" fn at_ins_compl_key_export() -> bool {
     (rs_ctrl_x_mode_not_default() != 0
         && (rs_ins_compl_pum_key(c) != 0 || rs_vim_is_ctrl_x_key(c) != 0))
         || (rs_compl_status_local() != 0 && (c == CTRL_N || c == CTRL_P))
+}
+
+// =============================================================================
+// Phase 3: check_simplify_modifier and no_reduce_keys
+// =============================================================================
+
+/// no_reduce_keys: do not apply modifiers to the key (moved from C to Rust).
+/// Exported `#[no_mangle]` so C can reference it via extern.
+#[no_mangle]
+pub static mut no_reduce_keys: c_int = 0;
+
+/// Increment no_reduce_keys (called from C getchar_common when !simplify).
+///
+/// # Safety
+/// Accesses `no_reduce_keys` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_inc_no_reduce_keys() {
+    no_reduce_keys += 1;
+}
+
+/// Decrement no_reduce_keys (called from C getchar_common when !simplify).
+///
+/// # Safety
+/// Accesses `no_reduce_keys` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dec_no_reduce_keys() {
+    no_reduce_keys -= 1;
+}
+
+// Constants for check_simplify_modifier
+
+/// K_SPECIAL byte (0x80)
+const K_SPECIAL_VAL: u8 = 0x80;
+/// KS_MODIFIER (252)
+const KS_MODIFIER_VAL: u8 = 252;
+/// MODE_TERMINAL flag (matches C MODE_TERMINAL = 0x4000)
+const MODE_TERMINAL: c_int = 0x4000;
+/// MB_MAXBYTES = 21 (max bytes for a multibyte char)
+const MB_MAXBYTES: usize = 21;
+
+extern "C" {
+    /// merge_modifiers: apply modifier to key, update modifier mask, return new key
+    fn merge_modifiers(c: c_int, modifiers: *mut c_int) -> c_int;
+    /// utf_char2bytes: encode Unicode char to UTF-8 bytes, returns byte count
+    fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
+    /// vgetc_char: the character from vgetc (direct C global access)
+    static mut vgetc_char: c_int;
+    /// vgetc_mod_mask: the mod_mask from vgetc (direct C global access)
+    static mut vgetc_mod_mask: c_int;
+    /// Get State global (for MODE_TERMINAL check)
+    fn nvim_get_state() -> c_int;
+}
+
+/// Convert a special key code to its 3-byte encoding.
+/// Returns the second and third bytes for K_SPECIAL encoding.
+/// Matches C `K_SECOND(c)` and `K_THIRD(c)`.
+const fn key2termcap(c: c_int) -> (u8, u8) {
+    let neg_c = (-c) as u32;
+    let b0 = (neg_c & 0xff) as u8;
+    let b1 = ((neg_c >> 8) & 0xff) as u8;
+    (b0, b1)
+}
+
+/// Check if typebuf contains a modifier+key sequence that can be simplified.
+///
+/// Checks from `typebuf.tb_off` to `typebuf.tb_off + max_offset`.
+///
+/// # Returns
+/// Length of replaced bytes, 0 if nothing changed, -1 for error.
+///
+/// # Safety
+/// Accesses `typebuf`, `no_reduce_keys`, and calls C functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_simplify_modifier(max_offset: c_int) -> c_int {
+    // We want full modifiers in Terminal mode or when no_reduce_keys > 0
+    if (nvim_get_state() & MODE_TERMINAL) != 0 || no_reduce_keys > 0 {
+        return 0;
+    }
+
+    for offset in 0..max_offset {
+        if offset + 3 >= typebuf.tb_len {
+            break;
+        }
+        let tp = typebuf.tb_buf.add((typebuf.tb_off + offset) as usize);
+        if *tp == K_SPECIAL_VAL && *tp.add(1) == KS_MODIFIER_VAL {
+            // A modifier was not used for a mapping, apply it to ASCII keys
+            let mut modifier = c_int::from(*tp.add(2));
+            let c = c_int::from(*tp.add(3));
+            let new_c = merge_modifiers(c, &raw mut modifier);
+
+            if new_c != c {
+                if offset == 0 {
+                    // At the start: remember character and mod_mask before merging
+                    vgetc_char = c;
+                    vgetc_mod_mask = c_int::from(*tp.add(2));
+                }
+
+                let mut new_string = [0u8; MB_MAXBYTES + 1];
+                let len: c_int = if new_c < 0 {
+                    // IS_SPECIAL(new_c): encode as 3-byte sequence
+                    new_string[0] = K_SPECIAL_VAL;
+                    let (b1, b2) = key2termcap(new_c);
+                    new_string[1] = b1;
+                    new_string[2] = b2;
+                    3
+                } else {
+                    utf_char2bytes(new_c, new_string.as_mut_ptr().cast())
+                };
+                if modifier == 0 {
+                    if put_string_in_typebuf_export(offset, 4, new_string.as_mut_ptr(), len) == FAIL
+                    {
+                        return -1;
+                    }
+                } else {
+                    *tp.add(2) = modifier as u8;
+                    if put_string_in_typebuf_export(offset + 3, 1, new_string.as_mut_ptr(), len)
+                        == FAIL
+                    {
+                        return -1;
+                    }
+                }
+                return len;
+            }
+        }
+    }
+    0
 }
 
 #[cfg(test)]

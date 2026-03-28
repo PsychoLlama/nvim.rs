@@ -154,15 +154,13 @@ impl GotcharsState {
 // C FFI Accessor Functions
 // =============================================================================
 
+// last_recorded_len moved from C static to Rust (Phase 3); exported #[no_mangle] for C access.
+#[no_mangle]
+pub static mut last_recorded_len: usize = 0;
+
 extern "C" {
     /// Get the current recording register (0 if not recording)
     fn nvim_get_reg_recording() -> c_int;
-    /// Get last_recorded_len
-    fn nvim_get_last_recorded_len() -> usize;
-    /// Set last_recorded_len
-    fn nvim_set_last_recorded_len(val: usize);
-    /// Add last_recorded_len
-    fn nvim_add_last_recorded_len(val: usize);
     /// reg_executing: register being executed or zero
     static mut reg_executing: c_int;
     /// pending_end_reg_executing: clear reg_executing at a safe moment
@@ -192,28 +190,28 @@ pub unsafe extern "C" fn rs_get_recording_register() -> c_int {
 /// Get the length of the last recorded sequence.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses `last_recorded_len` static directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_last_recorded_len() -> usize {
-    nvim_get_last_recorded_len()
+    last_recorded_len
 }
 
 /// Set the length of the last recorded sequence.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses `last_recorded_len` static directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_last_recorded_len(len: usize) {
-    nvim_set_last_recorded_len(len);
+    last_recorded_len = len;
 }
 
 /// Add to the length of the last recorded sequence.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses `last_recorded_len` static directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_add_last_recorded_len(len: usize) {
-    nvim_add_last_recorded_len(len);
+    last_recorded_len += len;
 }
 
 /// Check if redo buffer modifications are blocked.
@@ -416,7 +414,7 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
         if nvim_get_reg_recording() != 0 {
             state.nul_terminate();
             crate::buffheader::recordbuff().add(&state.buf[..state.buflen]);
-            nvim_add_last_recorded_len(state.buflen);
+            last_recorded_len += state.buflen;
         }
 
         state.buflen = 0;
@@ -449,8 +447,7 @@ pub unsafe extern "C" fn rs_ungetchars(len: c_int) {
         return;
     }
     crate::buffheader::recordbuff().delete_tail(len as usize);
-    let current = nvim_get_last_recorded_len();
-    nvim_set_last_recorded_len(current - len as usize);
+    last_recorded_len = last_recorded_len.saturating_sub(len as usize);
 }
 
 // =============================================================================

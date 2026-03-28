@@ -93,14 +93,18 @@ extern void rs_close_typebuf(void);
 extern void rs_gotchars(const uint8_t *chars, size_t len);
 extern void rs_add_byte_to_showcmd(uint8_t byte);
 
-/// Index in scriptin
-static int curscript = -1;
+// no_reduce_keys is now owned by Rust; getchar_common calls these
+extern void rs_inc_no_reduce_keys(void);
+extern void rs_dec_no_reduce_keys(void);
+
+/// Index in scriptin (non-static: accessed by Rust via extern)
+int curscript = -1;
 /// Streams to read script from
 static FileDescriptor scriptin[NSCRIPT] = { 0 };
 
-static int typeahead_char = 0;  ///< typeahead char that's not flushed
+int typeahead_char = 0;  ///< typeahead char that's not flushed (non-static: accessed by Rust)
 
-static int KeyNoremap = 0;  ///< remapping flags
+int KeyNoremap = 0;  ///< remapping flags (non-static: accessed by Rust)
 
 /// Variables used by vgetorpeek() and flush_buffers()
 ///
@@ -125,7 +129,8 @@ enum {
   RM_ABBR   = 4,  ///< tb_noremap: don't remap, do abbrev.
 };
 
-static size_t last_recorded_len = 0;  ///< number of last recorded chars
+// last_recorded_len moved to Rust (macro_recording.rs); export as #[no_mangle]
+extern size_t last_recorded_len;
 
 enum {
   KEYLEN_PART_KEY = -1,  ///< keylen value for incomplete key-code
@@ -139,9 +144,10 @@ static const char e_recursive_mapping[] = N_("E223: Recursive mapping");
 // Rust replacements: rs_init_typebuf, rs_alloc_typebuf, rs_free_typebuf,
 // rs_save_typebuf, rs_close_typebuf (in nvim-getchar crate)
 
-static int old_char = -1;   ///< character put back by vungetc()
-static int old_mod_mask;    ///< mod_mask for ungotten character
-static int old_KeyStuffed;  ///< whether old_char was stuffed
+// old_char, old_mod_mask, old_KeyStuffed moved to Rust (input.rs) as #[no_mangle] statics
+extern int old_char;
+extern int old_mod_mask;
+extern int old_KeyStuffed;
 
 /// Save all three kinds of typeahead, so that the user must type at a prompt.
 void save_typeahead(tasave_T *tp)
@@ -278,7 +284,7 @@ bool open_scriptin(char *scriptin_name)
   return true;
 }
 
-static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
+// no_reduce_keys moved to Rust (typebuf.rs); getchar_common uses rs_inc/dec_no_reduce_keys()
 
 /// "getchar()" and "getcharstr()" functions
 static void getchar_common(typval_T *argvars, typval_T *rettv, bool allow_number)
@@ -329,7 +335,7 @@ static void getchar_common(typval_T *argvars, typval_T *rettv, bool allow_number
   no_mapping++;
   allow_keys++;
   if (!simplify) {
-    no_reduce_keys++;
+    rs_inc_no_reduce_keys();
   }
   while (true) {
     if (cursor_flag == 'm' || (cursor_flag == NUL && msg_col > 0)) {
@@ -373,7 +379,7 @@ static void getchar_common(typval_T *argvars, typval_T *rettv, bool allow_number
   no_mapping--;
   allow_keys--;
   if (!simplify) {
-    no_reduce_keys--;
+    rs_dec_no_reduce_keys();
   }
 
   if (cursor_flag == 'h') {
@@ -458,64 +464,8 @@ typedef enum {
 int put_string_in_typebuf(int offset, int slen, uint8_t *string, int new_slen);
 bool at_ins_compl_key(void);
 
-/// Check if typebuf.tb_buf[] contains a modifier plus key that can be changed
-/// into just a key, apply that.
-/// Check from typebuf.tb_buf[typebuf.tb_off] to typebuf.tb_buf[typebuf.tb_off + "max_offset"].
-/// @return  the length of the replaced bytes, 0 if nothing changed, -1 for error.
-static int check_simplify_modifier(int max_offset)
-{
-  // We want full modifiers in Terminal mode so that the key can be correctly
-  // encoded
-  if ((State & MODE_TERMINAL) || no_reduce_keys > 0) {
-    return 0;
-  }
-
-  for (int offset = 0; offset < max_offset; offset++) {
-    if (offset + 3 >= typebuf.tb_len) {
-      break;
-    }
-    uint8_t *tp = typebuf.tb_buf + typebuf.tb_off + offset;
-    if (tp[0] == K_SPECIAL && tp[1] == KS_MODIFIER) {
-      // A modifier was not used for a mapping, apply it to ASCII
-      // keys.  Shift would already have been applied.
-      int modifier = tp[2];
-      int c = tp[3];
-      int new_c = merge_modifiers(c, &modifier);
-
-      if (new_c != c) {
-        if (offset == 0) {
-          // At the start: remember the character and mod_mask before
-          // merging, in some cases, e.g. at the hit-return prompt,
-          // they are put back in the typeahead buffer.
-          vgetc_char = c;
-          vgetc_mod_mask = tp[2];
-        }
-        uint8_t new_string[MB_MAXBYTES];
-        int len;
-        if (IS_SPECIAL(new_c)) {
-          new_string[0] = K_SPECIAL;
-          new_string[1] = (uint8_t)K_SECOND(new_c);
-          new_string[2] = (uint8_t)K_THIRD(new_c);
-          len = 3;
-        } else {
-          len = utf_char2bytes(new_c, (char *)new_string);
-        }
-        if (modifier == 0) {
-          if (put_string_in_typebuf(offset, 4, new_string, len) == FAIL) {
-            return -1;
-          }
-        } else {
-          tp[2] = (uint8_t)modifier;
-          if (put_string_in_typebuf(offset + 3, 1, new_string, len) == FAIL) {
-            return -1;
-          }
-        }
-        return len;
-      }
-    }
-  }
-  return 0;
-}
+// check_simplify_modifier migrated to Rust (typebuf.rs)
+extern int rs_check_simplify_modifier(int max_offset);
 
 /// Handle mappings in the typeahead buffer.
 /// - When something was mapped, return map_result_retry for recursive mappings.
@@ -699,7 +649,7 @@ static int handle_mapping(int *keylenp, const bool *timedout, int *mapdepth)
         keylen = KEYLEN_PART_KEY;
       } else {
         // Try to include the modifier into the key.
-        keylen = check_simplify_modifier(max_mlen + 1);
+        keylen = rs_check_simplify_modifier(max_mlen + 1);
         if (keylen < 0) {
           // ins_typebuf() failed
           return map_result_fail;
@@ -1536,8 +1486,7 @@ int nvim_get_typebuf_change_cnt(void) { return typebuf.tb_change_cnt; }
 int nvim_get_typebuf_was_filled(void) { return typebuf_was_filled ? 1 : 0; }
 int nvim_get_typebuf_maplen(void) { return typebuf.tb_maplen; }
 int nvim_get_typebuf_len(void) { return typebuf.tb_len; }
-int nvim_get_curscript(void) { return curscript; }
-int nvim_get_keynoremap(void) { return KeyNoremap; }
+// nvim_get_curscript, nvim_get_keynoremap deleted: curscript, KeyNoremap now non-static
 int nvim_get_rm_none(void) { return RM_NONE; }
 int nvim_get_rm_script(void) { return RM_SCRIPT; }
 int nvim_get_maxmaplen(void) { return MAXMAPLEN; }
@@ -1552,17 +1501,12 @@ void nvim_set_typebuf_silent(int val) { typebuf.tb_silent = val; }
 void nvim_set_typebuf_no_abbr_cnt(int val) { typebuf.tb_no_abbr_cnt = val; }
 void nvim_set_typebuf_change_cnt(int val) { typebuf.tb_change_cnt = val; }
 void nvim_set_typebuf_was_filled(int val) { typebuf_was_filled = val != 0; }
-int nvim_get_old_char(void) { return old_char; }
-void nvim_set_old_char(int val) { old_char = val; }
-int nvim_get_old_mod_mask(void) { return old_mod_mask; }
-void nvim_set_old_mod_mask(int val) { old_mod_mask = val; }
+// nvim_get/set_old_char, nvim_get/set_old_mod_mask deleted: moved to Rust (input.rs)
 int nvim_get_typebuf_silent(void) { return typebuf.tb_silent; }
 int nvim_get_typebuf_no_abbr_cnt(void) { return typebuf.tb_no_abbr_cnt; }
 void nvim_init_typebuf(void) { rs_init_typebuf(); }
 
-size_t nvim_get_last_recorded_len(void) { return last_recorded_len; }
-void nvim_set_last_recorded_len(size_t val) { last_recorded_len = val; }
-void nvim_add_last_recorded_len(size_t val) { last_recorded_len += val; }
+// nvim_get/set/add_last_recorded_len deleted: moved to Rust (macro_recording.rs)
 void nvim_set_keynoremap(int val) { KeyNoremap = val; }
 int nvim_get_no_mapping(void) { return no_mapping; }
 void nvim_set_no_mapping(int val) { no_mapping = val; }
@@ -1602,11 +1546,8 @@ void nvim_set_pending_end_reg_executing(int val) { pending_end_reg_executing = v
 int nvim_mb_byte2len_check(int b) { return MB_BYTE2LEN_CHECK(b); }
 void nvim_state_no_longer_safe(void) { state_no_longer_safe("rs_ins_typebuf()"); }
 int nvim_get_key_stuffed(void) { return KeyStuffed ? 1 : 0; }
-int nvim_get_typeahead_char(void) { return typeahead_char; }
-void nvim_set_typeahead_char(int val) { typeahead_char = val; }
-
-int nvim_get_old_keystuffed(void) { return old_KeyStuffed; }
-void nvim_set_old_keystuffed(int val) { old_KeyStuffed = val; }
+// nvim_get/set_typeahead_char deleted: typeahead_char now non-static
+// nvim_get/set_old_keystuffed deleted: moved to Rust (input.rs)
 
 void nvim_set_visual_from_cursor(void)
 {

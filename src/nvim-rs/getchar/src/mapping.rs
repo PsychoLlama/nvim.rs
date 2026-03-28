@@ -130,8 +130,8 @@ extern "C" {
     static mut no_mapping: c_int;
     /// allow_keys: allow key codes when no_mapping is set
     static mut allow_keys: c_int;
-    /// KeyNoremap: remapping flags (getchar.c static, made non-static in Phase 3)
-    fn nvim_get_keynoremap() -> c_int;
+    /// KeyNoremap: remapping flags (non-static in C after Phase 3)
+    static KeyNoremap: c_int;
     /// Set the KeyNoremap global variable
     fn nvim_set_keynoremap(val: c_int);
     /// KeyTyped: true if user typed current char
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_allow_keys() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_keynoremap() -> c_int {
-    nvim_get_keynoremap()
+    KeyNoremap
 }
 
 /// Set the key noremap value.

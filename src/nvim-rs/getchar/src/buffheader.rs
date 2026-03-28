@@ -763,7 +763,7 @@ pub unsafe extern "C" fn rs_get_recorded() -> *mut u8 {
     let contents = recordbuff().get_contents();
     recordbuff().clear();
 
-    let last_len = nvim_get_last_recorded_len();
+    let last_len = crate::macro_recording::last_recorded_len;
     let restart_edit_val = restart_edit;
 
     if contents.is_empty() {
@@ -814,7 +814,6 @@ pub unsafe extern "C" fn rs_get_inserted_len() -> usize {
 
 extern "C" {
     fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
-    fn nvim_get_last_recorded_len() -> usize;
     static mut restart_edit: c_int;
 }
 

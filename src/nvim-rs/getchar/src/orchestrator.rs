@@ -58,11 +58,6 @@ extern "C" {
     /// Get State global (for MODE_TERMINAL check)
     fn nvim_get_state() -> c_int;
 
-    /// Get last_recorded_len
-    fn nvim_get_last_recorded_len() -> usize;
-    /// Set last_recorded_len
-    fn nvim_set_last_recorded_len(val: usize);
-
     /// ins_char_typebuf: insert a character into the typeahead buffer
     fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) -> c_int;
 
@@ -621,8 +616,8 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
     } else {
         // last_recorded_len can be larger than LAST_VGETC_RECORDED_LEN
         // if peeking records more
-        let last_recorded = nvim_get_last_recorded_len();
-        nvim_set_last_recorded_len(last_recorded.saturating_sub(LAST_VGETC_RECORDED_LEN));
+        crate::macro_recording::last_recorded_len =
+            crate::macro_recording::last_recorded_len.saturating_sub(LAST_VGETC_RECORDED_LEN);
 
         mod_mask = 0;
         vgetc_mod_mask = 0;
@@ -631,7 +626,7 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
         let result = vgetc_inner_loop();
         c = result;
 
-        LAST_VGETC_RECORDED_LEN = nvim_get_last_recorded_len();
+        LAST_VGETC_RECORDED_LEN = crate::macro_recording::last_recorded_len;
     }
 
     // In the main loop "may_garbage_collect" can be set to do garbage

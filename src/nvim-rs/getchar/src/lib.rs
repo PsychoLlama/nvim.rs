@@ -33,10 +33,10 @@ extern "C" {
     fn nvim_get_typebuf_was_filled() -> c_int;
     /// Get `typebuf.tb_maplen`
     fn nvim_get_typebuf_maplen() -> c_int;
-    /// curscript: index in scriptin (getchar.c static, made non-static in Phase 3)
-    fn nvim_get_curscript() -> c_int;
-    /// KeyNoremap: remapping flags (getchar.c static, made non-static in Phase 3)
-    fn nvim_get_keynoremap() -> c_int;
+    /// curscript: index in scriptin (non-static in C after Phase 3)
+    static curscript: c_int;
+    /// KeyNoremap: remapping flags (non-static in C after Phase 3)
+    static KeyNoremap: c_int;
     /// Get `State` global
     fn nvim_get_state() -> c_int;
     /// Get `arrow_used` global
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn typebuf_maplen_export() -> c_int {
 /// Calls C accessor function for `curscript`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_using_script() -> c_int {
-    c_int::from(nvim_get_curscript() >= 0)
+    c_int::from(curscript >= 0)
 }
 
 /// `using_script(void)` -- Phase 1 export replacing C wrapper
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn rs_using_script() -> c_int {
 #[must_use]
 #[export_name = "using_script"]
 pub unsafe extern "C" fn using_script_export() -> c_int {
-    c_int::from(nvim_get_curscript() >= 0)
+    c_int::from(curscript >= 0)
 }
 
 /// Return true when keys cannot be remapped.
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn using_script_export() -> c_int {
 /// Calls C accessor functions for `KeyNoremap` and remap constants.
 #[no_mangle]
 pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
-    let keynoremap = nvim_get_keynoremap();
+    let keynoremap = KeyNoremap;
     c_int::from((keynoremap & (RM_NONE | RM_SCRIPT)) != 0)
 }
 
@@ -197,7 +197,7 @@ pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
 #[must_use]
 #[export_name = "noremap_keys"]
 pub unsafe extern "C" fn noremap_keys_export() -> bool {
-    let keynoremap = nvim_get_keynoremap();
+    let keynoremap = KeyNoremap;
     (keynoremap & (RM_NONE | RM_SCRIPT)) != 0
 }
 
@@ -217,9 +217,9 @@ const MODE_CMDLINE: c_int = 0x08;
 pub unsafe extern "C" fn rs_may_sync_undo() {
     let state = nvim_get_state();
     let arrow_used = nvim_get_arrow_used() != 0;
-    let curscript = nvim_get_curscript();
+    let cur = curscript;
 
-    if (state & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used) && curscript < 0 {
+    if (state & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used) && cur < 0 {
         u_sync(false);
     }
 }

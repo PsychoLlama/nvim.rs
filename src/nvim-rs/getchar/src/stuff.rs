@@ -190,10 +190,8 @@ fn utf_char2bytes(c: c_int, buf: &mut [u8]) -> usize {
 // =============================================================================
 
 extern "C" {
-    /// Get typeahead_char value
-    fn nvim_get_typeahead_char() -> c_int;
-    /// Set typeahead_char value
-    fn nvim_set_typeahead_char(val: c_int);
+    /// typeahead_char: non-static in C after Phase 3
+    static mut typeahead_char: c_int;
     /// Get emsg_silent
     static mut emsg_silent: c_int;
     /// flush_buffers(flush_type): flush map and typeahead buffers
@@ -297,13 +295,13 @@ pub unsafe extern "C" fn rs_AppendNumberToRedobuff(n: c_int) {
 /// Get the typeahead character that won't be flushed.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_typeahead_char() -> c_int {
-    nvim_get_typeahead_char()
+    typeahead_char
 }
 
 /// Set the typeahead character that won't be flushed.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_typeahead_char(c: c_int) {
-    nvim_set_typeahead_char(c);
+    typeahead_char = c;
 }
 
 /// Encode a character for the stuffbuffer.
@@ -338,7 +336,7 @@ const K_OPT_BO_FLAG_ERROR: c_int = 0x40;
 /// Calls C accessor function.
 #[export_name = "typeahead_noflush"]
 pub unsafe extern "C" fn rs_typeahead_noflush(c: c_int) {
-    nvim_set_typeahead_char(c);
+    typeahead_char = c;
 }
 
 /// Flush map and typeahead buffers and give a warning for an error.
