@@ -236,6 +236,8 @@ const CMD_write: c_int = 521;
 // Special values (negative)
 const CMD_USER: c_int = -1;
 const CMD_USER_BUF: c_int = -2;
+const CMD_k: c_int = 205;
+const CMD_SIZE: c_int = 556;
 
 // =============================================================================
 // Option flags
@@ -276,12 +278,19 @@ extern "C" {
     fn excmd_get_argt(idx: c_int) -> u32;
     fn skip_cmd_arg(p: *mut c_char, rembs: c_int) -> *mut c_char;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
-    fn nvim_cmdexpand_set_cmd_index(
-        cmd: *const c_char,
+    // Functions needed for set_cmd_index
+    fn excmd_get_cmdidx(cmd: *const c_char, len: usize) -> c_int;
+    fn find_ucmd(
+        eap: *mut libc::c_void,
+        p: *mut c_char,
+        full: *mut c_int,
         xp: ExpandHandle,
         complp: *mut c_int,
-        cmdidx_out: *mut c_int,
-    ) -> *const c_char;
+    ) -> *mut c_char;
+    fn xcalloc(count: usize, size: usize) -> *mut libc::c_void;
+    fn xfree(ptr: *mut libc::c_void);
+    fn nvim_eap_set_cmd(eap: *mut libc::c_void, p: *mut c_char);
+    fn nvim_eap_get_cmdidx(eap: *const libc::c_void) -> c_int;
 
     // Context-setting functions still in C
     fn set_context_in_user_cmd(xp: ExpandHandle, arg: *const c_char) -> *const c_char;
@@ -864,6 +873,148 @@ fn may_expand_pattern() -> bool {
 }
 
 // =============================================================================
+// set_cmd_index: port of C set_cmd_index
+// =============================================================================
+
+/// ASCII predicate helpers (inlined from `ascii_defs.h` macros).
+#[inline]
+const fn ascii_isalpha(c: u8) -> bool {
+    c.is_ascii_alphabetic()
+}
+#[inline]
+const fn ascii_isupper(c: u8) -> bool {
+    c.is_ascii_uppercase()
+}
+#[inline]
+const fn ascii_isalnum(c: u8) -> bool {
+    c.is_ascii_alphanumeric()
+}
+
+/// Sets the command index in `eap->cmdidx` for the command at `cmd`.
+/// Returns a pointer past the command name, or NULL on failure.
+/// On failure also sets `xp->xp_context = EXPAND_UNSUCCESSFUL`.
+///
+/// # Safety
+///
+/// `cmd` must be a valid null-terminated C string. `xp` and `complp` must be valid pointers.
+unsafe fn set_cmd_index(
+    cmd: *const c_char,
+    xp: ExpandHandle,
+    complp: *mut c_int,
+    cmdidx_out: *mut c_int,
+) -> *const c_char {
+    let fuzzy = {
+        let s = std::ffi::CStr::from_ptr(cmd);
+        let s = std::str::from_utf8_unchecked(s.to_bytes());
+        crate::cmdline_fuzzy_complete(s)
+    };
+    let xp_ref = &mut *xp;
+
+    // Allocate a zeroed exarg_T on the heap (opaque handle).
+    // Size is accessed only through C accessor functions.
+    let eap = xcalloc(1, 4096); // 4096 bytes is more than enough for exarg_T
+
+    // Early return helper that also frees eap.
+    macro_rules! fail {
+        ($cidx:expr) => {{
+            xp_ref.xp_context = ExpandContext::Unsuccessful as c_int;
+            xfree(eap);
+            *cmdidx_out = $cidx;
+            return std::ptr::null();
+        }};
+    }
+
+    let p = if !fuzzy && (*cmd == b'k' as c_char) && (*cmd.add(1) != b'e' as c_char) {
+        // 'k' command can be followed directly by any character (except "keep*").
+        *cmdidx_out = CMD_k;
+        nvim_eap_set_cmd(eap, cmd.cast_mut());
+        cmd.add(1)
+    } else {
+        let mut pp = cmd;
+        while ascii_isalpha(*pp as u8) || *pp == b'*' as c_char {
+            pp = pp.add(1);
+        }
+        // User commands may contain digits.
+        if ascii_isupper(*cmd as u8) {
+            while ascii_isalnum(*pp as u8) || *pp == b'*' as c_char {
+                pp = pp.add(1);
+            }
+        }
+        // Python 3.x: ":py3*" commands.
+        if *cmd == b'p' as c_char
+            && *cmd.add(1) == b'y' as c_char
+            && pp == cmd.add(2)
+            && *pp == b'3' as c_char
+        {
+            pp = pp.add(1);
+            while ascii_isalpha(*pp as u8) || *pp == b'*' as c_char {
+                pp = pp.add(1);
+            }
+        }
+        // Non-alpha commands.
+        if pp == cmd && !vim_strchr(c"@*!=><&~#".as_ptr(), c_int::from(*pp as u8)).is_null() {
+            pp = pp.add(1);
+        }
+
+        let len = pp.offset_from(cmd) as usize;
+        if len == 0 {
+            fail!(CMD_SIZE);
+        }
+
+        let mut cidx = excmd_get_cmdidx(cmd, len);
+        nvim_eap_set_cmd(eap, cmd.cast_mut());
+
+        // User-defined or fuzzy: allow alphanumeric after the command.
+        if ascii_isupper(*cmd as u8) || (fuzzy && cidx != CMD_bang && *pp != 0) {
+            while ascii_isalnum(*pp as u8) || *pp == b'*' as c_char {
+                pp = pp.add(1);
+            }
+        }
+
+        // If cursor touches the end of an alphanumeric command, complete name.
+        if *pp == 0 && ascii_isalnum(*pp.sub(1) as u8) {
+            xfree(eap);
+            *cmdidx_out = cidx;
+            return std::ptr::null();
+        }
+
+        if cidx == CMD_SIZE {
+            // Check for 's' substitute shorthand or user command.
+            if *cmd == b's' as c_char
+                && !vim_strchr(c"cgriI".as_ptr(), c_int::from(*cmd.add(1) as u8)).is_null()
+            {
+                cidx = CMD_substitute;
+                pp = cmd.add(1);
+            } else if ascii_isupper(*cmd as u8) {
+                let res = find_ucmd(eap, pp.cast_mut(), std::ptr::null_mut(), xp, complp);
+                if res.is_null() {
+                    cidx = CMD_SIZE; // Ambiguous user command.
+                } else {
+                    pp = res;
+                    cidx = nvim_eap_get_cmdidx(eap);
+                }
+            }
+        }
+
+        if cidx == CMD_SIZE {
+            fail!(CMD_SIZE);
+        }
+
+        *cmdidx_out = cidx;
+        pp
+    };
+
+    // If the cursor is touching the command and it ends in alphanumeric, complete name.
+    if *p == 0 && ascii_isalnum(*p.sub(1) as u8) {
+        xfree(eap);
+        return std::ptr::null();
+    }
+
+    xfree(eap);
+    p
+}
+
+// =============================================================================
 // set_one_cmd_context: port of C set_one_cmd_context
 // =============================================================================
 
@@ -932,9 +1083,9 @@ pub unsafe extern "C" fn rs_set_one_cmd_context(
         return cmd.add(1); // There's another command
     }
 
-    // Get the command index via C wrapper (avoids needing exarg_T layout).
+    // Determine command index.
     let mut cmdidx: c_int = 0;
-    let p = nvim_cmdexpand_set_cmd_index(cmd, xph, &raw mut context, &raw mut cmdidx);
+    let p = set_cmd_index(cmd, xph, &raw mut context, &raw mut cmdidx);
     if p.is_null() {
         return std::ptr::null();
     }
