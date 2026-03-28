@@ -72,18 +72,6 @@ Arena highlight_arena = ARENA_EMPTY;
 
 Map(cstr_t, int) highlight_unames = MAP_INIT;
 
-/// The "term", "cterm" and "gui" arguments can be any combination of the
-/// following names, separated by commas (but no spaces!).
-static char *(hl_name_table[]) =
-{ "bold", "standout", "underline",
-  "undercurl", "underdouble", "underdotted", "underdashed",
-  "italic", "reverse", "inverse", "strikethrough", "altfont",
-  "nocombine", "NONE" };
-static int hl_attr_table[] =
-{ HL_BOLD, HL_STANDOUT, HL_UNDERLINE,
-  HL_UNDERCURL, HL_UNDERDOUBLE, HL_UNDERDOTTED, HL_UNDERDASHED,
-  HL_ITALIC, HL_INVERSE, HL_INVERSE, HL_STRIKETHROUGH, HL_ALTFONT,
-  HL_NOCOMBINE, 0 };
 
 /// Structure that stores information about a highlight group.
 /// The ID of a highlight group is also called group ID.  It is the index in
@@ -126,16 +114,6 @@ enum {
 
 #include "highlight_group.c.generated.h"
 
-static const char e_highlight_group_name_not_found_str[]
-  = N_("E411: Highlight group not found: %s");
-static const char e_group_has_settings_highlight_link_ignored[]
-  = N_("E414: Group has settings, highlight link ignored");
-static const char e_unexpected_equal_sign_str[]
-  = N_("E415: Unexpected equal sign: %s");
-static const char e_missing_equal_sign_str_2[]
-  = N_("E416: Missing equal sign: %s");
-static const char e_missing_argument_str[]
-  = N_("E417: Missing argument: %s");
 
 #define hl_table ((HlGroup *)((highlight_ga.ga_data)))
 
@@ -339,15 +317,6 @@ cleanup:
 
 
 
-int syn_name2id(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (name[0] == '@') {
-    // if we look up @aaa.bbb, we have to consider @aaa as well
-    return syn_check_group(name, strlen(name));
-  }
-  return syn_name2id_len(name, strlen(name));
-}
 
 /// Find highlight group name in the table and return its ID.
 /// If it doesn't exist yet, a new entry is created.
@@ -429,115 +398,6 @@ static int syn_add_group(const char *name, size_t len)
 }
 
 
-// Apply difference between User[1-9] and HLF_S to HLF_SNC.
-static void combine_stl_hlt(int id, int id_S, int id_alt, int hlcnt, int i, int hlf, int *table)
-  FUNC_ATTR_NONNULL_ALL
-{
-  HlGroup *const hlt = hl_table;
 
-  if (id_alt == 0) {
-    CLEAR_POINTER(&hlt[hlcnt + i]);
-    hlt[hlcnt + i].sg_cterm = highlight_attr[hlf];
-    hlt[hlcnt + i].sg_gui = highlight_attr[hlf];
-  } else {
-    memmove(&hlt[hlcnt + i], &hlt[id_alt - 1], sizeof(HlGroup));
-  }
-  hlt[hlcnt + i].sg_link = 0;
-
-  hlt[hlcnt + i].sg_cterm ^= hlt[id - 1].sg_cterm ^ hlt[id_S - 1].sg_cterm;
-  if (hlt[id - 1].sg_cterm_fg != hlt[id_S - 1].sg_cterm_fg) {
-    hlt[hlcnt + i].sg_cterm_fg = hlt[id - 1].sg_cterm_fg;
-  }
-  if (hlt[id - 1].sg_cterm_bg != hlt[id_S - 1].sg_cterm_bg) {
-    hlt[hlcnt + i].sg_cterm_bg = hlt[id - 1].sg_cterm_bg;
-  }
-  hlt[hlcnt + i].sg_gui ^= hlt[id - 1].sg_gui ^ hlt[id_S - 1].sg_gui;
-  if (hlt[id - 1].sg_rgb_fg != hlt[id_S - 1].sg_rgb_fg) {
-    hlt[hlcnt + i].sg_rgb_fg = hlt[id - 1].sg_rgb_fg;
-  }
-  if (hlt[id - 1].sg_rgb_bg != hlt[id_S - 1].sg_rgb_bg) {
-    hlt[hlcnt + i].sg_rgb_bg = hlt[id - 1].sg_rgb_bg;
-  }
-  if (hlt[id - 1].sg_rgb_sp != hlt[id_S - 1].sg_rgb_sp) {
-    hlt[hlcnt + i].sg_rgb_sp = hlt[id - 1].sg_rgb_sp;
-  }
-  highlight_ga.ga_len = hlcnt + i + 1;
-  set_hl_attr(hlcnt + i);  // At long last we can apply
-  table[i] = syn_id2attr(hlcnt + i + 1);
-}
-
-/// Translate highlight groups into attributes in highlight_attr[] and set up
-/// the user highlights User1..9. A set of corresponding highlights to use on
-/// top of HLF_SNC is computed.  Called only when nvim starts and upon first
-/// screen redraw after any :highlight command.
-void highlight_changed(void)
-{
-  char userhl[30];  // use 30 to avoid compiler warning
-  int id_S = -1;
-  int id_SNC = 0;
-
-  need_highlight_changed = false;
-
-  // sentinel value. used when no highlight is active
-  highlight_attr[HLF_NONE] = 0;
-
-  /// Translate builtin highlight groups into attributes for quick lookup.
-  for (int hlf = 1; hlf < HLF_COUNT; hlf++) {
-    int id = syn_check_group(hlf_names[hlf], strlen(hlf_names[hlf]));
-    if (id == 0) {
-      abort();
-    }
-    int ns_id = -1;
-    int final_id = id;
-    syn_ns_get_final_id(&ns_id, &final_id);
-    if (hlf == HLF_SNC) {
-      id_SNC = final_id;
-    } else if (hlf == HLF_S) {
-      id_S = final_id;
-    }
-
-    highlight_attr[hlf] = hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
-
-    if (highlight_attr[hlf] != highlight_attr_last[hlf]) {
-      if (hlf == HLF_MSG) {
-        clear_cmdline = true;
-        HlAttrs attrs = syn_attr2entry(highlight_attr[hlf]);
-        msg_grid.blending = attrs.hl_blend > -1;
-      }
-      ui_call_hl_group_set(cstr_as_string(hlf_names[hlf]),
-                           highlight_attr[hlf]);
-      highlight_attr_last[hlf] = highlight_attr[hlf];
-    }
-  }
-
-  // Setup the user highlights
-  //
-  // Temporarily utilize 10 more hl entries:
-  // 9 for User1-User9 combined with StatusLineNC
-  // 1 for StatusLine default
-  // Must to be in there simultaneously in case of table overflows in
-  // get_attr_entry()
-  ga_grow(&highlight_ga, 10);
-  int hlcnt = highlight_ga.ga_len;
-  if (id_S == -1) {
-    // Make sure id_S is always valid to simplify code below. Use the last entry
-    CLEAR_POINTER(&hl_table[hlcnt + 9]);
-    id_S = hlcnt + 10;
-  }
-  for (int i = 0; i < 9; i++) {
-    snprintf(userhl, sizeof(userhl), "User%d", i + 1);
-    int id = syn_name2id(userhl);
-    if (id == 0) {
-      highlight_user[i] = 0;
-      highlight_stlnc[i] = 0;
-    } else {
-      highlight_user[i] = syn_id2attr(id);
-      combine_stl_hlt(id, id_S, id_SNC, hlcnt, i, HLF_SNC, highlight_stlnc);
-    }
-  }
-  highlight_ga.ga_len = hlcnt;
-
-  decor_provider_invalidate_hl();
-}
 
 

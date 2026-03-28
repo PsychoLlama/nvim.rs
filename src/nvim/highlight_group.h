@@ -61,4 +61,8 @@ const char *get_highlight_name_ext(expand_T *xp, int idx, bool skip_cleared);
 // Phase 2: migrated to Rust
 void do_highlight(const char *line, bool forceit, bool init);
 
+// Phase 3: migrated to Rust
+int syn_name2id(const char *name);
+void highlight_changed(void);
+
 #include "highlight_group.h.generated.h"

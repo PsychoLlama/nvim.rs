@@ -1448,7 +1448,6 @@ extern "C" {
     fn name_to_color(name: *const c_char, idx: *mut c_int) -> crate::types::RgbValue;
     fn do_unlet(name: *const c_char, name_len: usize, forceit: bool) -> c_int;
     fn restore_cterm_colors();
-    fn highlight_changed();
     fn redraw_all_later(r#type: c_int);
     fn ui_refresh();
     fn ui_default_colors_set();
@@ -1729,7 +1728,7 @@ pub unsafe extern "C" fn rs_do_highlight(line: *const c_char, forceit: bool, ini
                 j += 1;
             }
             init_highlight(true, true);
-            highlight_changed();
+            rs_highlight_changed();
             redraw_all_later(UPD_NOT_VALID);
             return;
         }
@@ -2139,4 +2138,215 @@ fn is_ascii_white(c: u8) -> bool {
 #[inline]
 fn is_ascii_digit(c: u8) -> bool {
     c.is_ascii_digit()
+}
+
+// =============================================================================
+// Phase 3: syn_name2id, combine_stl_hlt, highlight_changed
+// =============================================================================
+
+// HLF_* constants matching C enum hlf_T values in highlight_defs.h.
+const HLF_NONE: c_int = 0;
+const HLF_S: c_int = 19; // status lines
+const HLF_SNC: c_int = 20; // status lines of not-current windows
+const HLF_INACTIVE: c_int = 60; // NormalNC
+const HLF_MSG: c_int = 63; // Message area
+const HLF_COUNT: c_int = 76;
+
+extern "C" {
+    /// highlight_attr[] -- attribute per HLF_ index.
+    static mut highlight_attr: [c_int; 76]; // [HLF_COUNT]
+    /// highlight_attr_last[] -- previous values for change detection.
+    static mut highlight_attr_last: [c_int; 76];
+    /// User[1-9] highlight attributes.
+    static mut highlight_user: [c_int; 9];
+    /// User[1-9] highlights on top of StatusLineNC.
+    static mut highlight_stlnc: [c_int; 9];
+    /// Name strings for each HLF_ index.
+    static hlf_names: [*const c_char; 76]; // [HLF_COUNT]
+    /// bool: the command line must be cleared.
+    static mut clear_cmdline: bool;
+    /// The message area grid.
+    static mut msg_grid: MsgGrid;
+
+    fn strlen(s: *const c_char) -> usize;
+    fn syn_attr2entry(attr: c_int) -> crate::HlAttrs;
+    fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool) -> c_int;
+    fn ui_call_hl_group_set(name: nvim_api::NvimString, id: i64);
+    fn syn_id2attr(hl_id: c_int) -> c_int;
+    fn ga_grow(gap: *mut GArray, n: c_int);
+    fn decor_provider_invalidate_hl();
+    fn syn_ns_get_final_id(ns_id: *mut c_int, hl_idp: *mut c_int) -> bool;
+}
+
+/// Partial layout of ScreenGrid matching C struct grid_defs.h.
+/// Only fields up to `blending` are modeled; the rest are opaque.
+#[repr(C)]
+struct MsgGrid {
+    handle: c_int,
+    _pad: c_int, // alignment padding before pointers
+    chars: *mut u32,
+    attrs: *mut i32,
+    vcols: *mut c_int,
+    line_offset: *mut usize,
+    dirty_col: *mut c_int,
+    rows: c_int,
+    cols: c_int,
+    valid: bool,
+    throttled: bool,
+    pub blending: bool,
+    // remaining fields omitted (mouse_enabled, zindex, ...)
+}
+
+/// Replace C `int syn_name2id(const char *name)`.
+///
+/// If the name starts with '@', calls `syn_check_group` (which may create the
+/// group); otherwise calls `syn_name2id_len`.
+#[unsafe(export_name = "syn_name2id")]
+pub unsafe extern "C" fn rs_syn_name2id(name: *const c_char) -> c_int {
+    if *name as u8 == b'@' {
+        syn_check_group(name, strlen(name))
+    } else {
+        syn_name2id_len(name, strlen(name))
+    }
+}
+
+/// Apply the difference between User[1-9] and HLF_S to HLF_SNC.
+///
+/// Equivalent to the static C `combine_stl_hlt()`.
+///
+/// # Safety
+/// `highlight_ga` and the hl_table must be valid.
+unsafe fn rs_combine_stl_hlt(
+    id: c_int,
+    id_s: c_int,
+    id_alt: c_int,
+    hlcnt: c_int,
+    i: c_int,
+    hlf: c_int,
+    table: *mut c_int,
+) {
+    let dst = hl_table_ptr(hlcnt + i);
+    let src_s = hl_table_ptr(id_s - 1);
+    let src_id = hl_table_ptr(id - 1);
+
+    if id_alt == 0 {
+        // Zero the destination slot and copy current HLF attrs.
+        std::ptr::write_bytes(dst, 0, 1);
+        (*dst).sg_cterm = highlight_attr[hlf as usize];
+        (*dst).sg_gui = highlight_attr[hlf as usize];
+    } else {
+        let src_alt = hl_table_ptr(id_alt - 1);
+        std::ptr::copy_nonoverlapping(src_alt, dst, 1);
+    }
+
+    (*dst).sg_link = 0;
+
+    (*dst).sg_cterm ^= (*src_id).sg_cterm ^ (*src_s).sg_cterm;
+    if (*src_id).sg_cterm_fg != (*src_s).sg_cterm_fg {
+        (*dst).sg_cterm_fg = (*src_id).sg_cterm_fg;
+    }
+    if (*src_id).sg_cterm_bg != (*src_s).sg_cterm_bg {
+        (*dst).sg_cterm_bg = (*src_id).sg_cterm_bg;
+    }
+    (*dst).sg_gui ^= (*src_id).sg_gui ^ (*src_s).sg_gui;
+    if (*src_id).sg_rgb_fg != (*src_s).sg_rgb_fg {
+        (*dst).sg_rgb_fg = (*src_id).sg_rgb_fg;
+    }
+    if (*src_id).sg_rgb_bg != (*src_s).sg_rgb_bg {
+        (*dst).sg_rgb_bg = (*src_id).sg_rgb_bg;
+    }
+    if (*src_id).sg_rgb_sp != (*src_s).sg_rgb_sp {
+        (*dst).sg_rgb_sp = (*src_id).sg_rgb_sp;
+    }
+
+    highlight_ga.ga_len = hlcnt + i + 1;
+    rs_set_hl_attr(hlcnt + i);
+    *table.add(i as usize) = syn_id2attr(hlcnt + i + 1);
+}
+
+/// Translate highlight groups into attributes in `highlight_attr[]` and set up
+/// the User1..9 statusline highlights.
+///
+/// Replaces C `void highlight_changed(void)`.
+#[unsafe(export_name = "highlight_changed")]
+pub unsafe extern "C" fn rs_highlight_changed() {
+    need_highlight_changed = false;
+
+    // sentinel: no UI highlight active
+    highlight_attr[HLF_NONE as usize] = 0;
+
+    let mut id_s: c_int = -1;
+    let mut id_snc: c_int = 0;
+
+    // Translate builtin highlight groups into attributes for quick lookup.
+    for hlf in 1..HLF_COUNT {
+        let name = hlf_names[hlf as usize];
+        let id = syn_check_group(name, strlen(name));
+        if id == 0 {
+            std::process::abort();
+        }
+        let mut ns_id: c_int = -1;
+        let mut final_id = id;
+        syn_ns_get_final_id(&mut ns_id, &mut final_id);
+        if hlf == HLF_SNC {
+            id_snc = final_id;
+        } else if hlf == HLF_S {
+            id_s = final_id;
+        }
+
+        let attr = hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
+        highlight_attr[hlf as usize] = attr;
+
+        if attr != highlight_attr_last[hlf as usize] {
+            if hlf == HLF_MSG {
+                clear_cmdline = true;
+                let attrs = syn_attr2entry(attr);
+                msg_grid.blending = attrs.hl_blend > -1;
+            }
+            ui_call_hl_group_set(
+                nvim_api::NvimString {
+                    data: hlf_names[hlf as usize] as *mut c_char,
+                    size: strlen(hlf_names[hlf as usize]),
+                },
+                attr as i64,
+            );
+            highlight_attr_last[hlf as usize] = attr;
+        }
+    }
+
+    // Setup User[1-9] highlights.
+    // Temporarily use 10 extra hl entries (9 for User combined with SNC, 1 for S default).
+    ga_grow(&raw mut highlight_ga, 10);
+    let hlcnt = highlight_ga.ga_len;
+
+    if id_s == -1 {
+        // Make sure id_s is always valid to simplify code below.
+        std::ptr::write_bytes(hl_table_ptr(hlcnt + 9), 0, 1);
+        id_s = hlcnt + 10;
+    }
+
+    for i in 0..9i32 {
+        // Build "User<n>" name in a stack buffer.
+        let n = (i + 1) as u8;
+        let userhl: [u8; 8] = [b'U', b's', b'e', b'r', b'0' + n, 0, 0, 0];
+        let id = syn_name2id_len(userhl.as_ptr() as *const c_char, 5);
+        if id == 0 {
+            highlight_user[i as usize] = 0;
+            highlight_stlnc[i as usize] = 0;
+        } else {
+            highlight_user[i as usize] = syn_id2attr(id);
+            rs_combine_stl_hlt(
+                id,
+                id_s,
+                id_snc,
+                hlcnt,
+                i,
+                HLF_SNC,
+                (&raw mut highlight_stlnc).cast::<c_int>(),
+            );
+        }
+    }
+
+    highlight_ga.ga_len = hlcnt;
+    decor_provider_invalidate_hl();
 }
