@@ -7,7 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
-use crate::types::{DecorRange, DecorRangeSlot, DecorVirtText, KVec};
+use crate::types::{DecorRange, DecorRangeSlot, DecorVirtText, KVec, VirtText};
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
     DRAW_COL_JUST_ADDED, DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
@@ -36,9 +36,6 @@ extern "C" {
     // Memory management (shared with decor.rs)
     fn nvim_xfree_ptr(ptr: *mut c_void);
     fn nvim_clear_virttext(vt: *mut c_void);
-
-    // Decoration helpers called by decor_init_draw_col chain
-    fn decor_init_draw_col(win_col: c_int, hidden: bool, item: *mut DecorRange);
 
     // Phase 5: Redraw Dispatch
     fn nvim_redraw_buf_line_later(buf: BufHandle, lnum: c_int, redraw: bool);
@@ -838,6 +835,9 @@ extern "C" {
 
     #[link_name = "hl_add_url"]
     fn hl_add_url(attr: c_int, url: *const c_char) -> c_int;
+
+    #[link_name = "syn_id2attr"]
+    fn syn_id2attr(hl_id: c_int) -> c_int;
 }
 
 /// TriState values matching C enum: kNone = -1, kFalse = 0, kTrue = 1
@@ -981,7 +981,7 @@ unsafe fn col_init_draw_col(
 ) {
     let s = &mut *state;
     let r = get_slot_range(std::ptr::addr_of_mut!(s.slots), slot_index);
-    decor_init_draw_col(win_col, hidden, r);
+    decor_init_draw_col_export(win_col, hidden, r);
 }
 
 /// Update DecorState output fields after attribute computation.
@@ -1250,6 +1250,167 @@ pub unsafe extern "C" fn buf_decor_remove_export(
         hl_conceal_char,
         do_free,
     );
+}
+
+// =============================================================================
+// Phase 3: Self-contained function migrations
+// =============================================================================
+
+/// Initialize the draw_col of a newly-added virtual text item.
+///
+/// Rust replacement for C `decor_init_draw_col`.
+///
+/// # Safety
+/// `item` must be a valid non-null pointer to a `DecorRange`.
+#[export_name = "decor_init_draw_col"]
+pub unsafe extern "C" fn decor_init_draw_col_export(
+    win_col: c_int,
+    hidden: bool,
+    item: *mut DecorRange,
+) {
+    (*item).draw_col = crate::decor::rs_decor_init_draw_col(win_col, c_int::from(hidden), item);
+}
+
+/// Recheck draw_col for all active ranges that need it.
+///
+/// Rust replacement for C `decor_recheck_draw_col`.
+///
+/// # Safety
+/// `state` must be a valid non-null `DecorState` pointer.
+#[export_name = "decor_recheck_draw_col"]
+pub unsafe extern "C" fn decor_recheck_draw_col_export(
+    win_col: c_int,
+    hidden: bool,
+    state: DecorStateHandle,
+) {
+    let s = &*state;
+    let end = s.current_end;
+    let ranges_i_items = s.ranges_i.items;
+    let slots_items = s.slots.items;
+    for i in 0..end {
+        let slot_idx = *ranges_i_items.add(i as usize);
+        let r = slots_items.add(slot_idx as usize).cast::<DecorRange>();
+        if crate::decor::should_recheck_draw_col((*r).draw_col) {
+            decor_init_draw_col_export(win_col, hidden, r);
+        }
+    }
+}
+
+/// Handle EOL decorations: advance to end of line and collect eol attributes.
+///
+/// Returns true if any active range has a virtual position on the current row.
+///
+/// Rust replacement for C `decor_redraw_eol`.
+///
+/// # Safety
+/// `wp`, `state`, `eol_attr` must be valid non-null pointers.
+#[export_name = "decor_redraw_eol"]
+pub unsafe extern "C" fn decor_redraw_eol_export(
+    wp: WinHandle,
+    state: DecorStateHandle,
+    eol_attr: *mut c_int,
+    eol_col: c_int,
+) -> bool {
+    // MAXCOL = 0x7fffffff = i32::MAX
+    rs_decor_redraw_col_impl(wp, i32::MAX, i32::MAX, false, state);
+    (*state).eol_col = eol_col;
+
+    let count = (*state).current_end;
+    let ranges_i_items = (*state).ranges_i.items;
+    let slots_items = (*state).slots.items;
+
+    let mut has_virt_pos = false;
+    for i in 0..count {
+        let slot_idx = *ranges_i_items.add(i as usize);
+        let r = &*slots_items.add(slot_idx as usize).cast::<DecorRange>();
+        if r.start_row == (*state).row {
+            has_virt_pos |= crate::decor_range_has_virt_pos(std::ptr::from_ref(r).cast_mut());
+        }
+        if crate::decor::decor_kind_is_highlight(
+            crate::DecorKind::from_c_int(c_int::from(r.kind))
+                .unwrap_or(crate::DecorKind::Highlight),
+        ) && crate::decor::sh_is_hl_eol(r.data.sh.flags)
+        {
+            *eol_attr = hl_combine_attr(*eol_attr, r.attr_id);
+        }
+    }
+    has_virt_pos
+}
+
+/// Get the next chunk of a virtual text item.
+///
+/// Rust replacement for C `next_virt_text_chunk`.
+///
+/// # Safety
+/// `pos` and `attr` must be valid non-null pointers.
+#[export_name = "next_virt_text_chunk"]
+pub unsafe extern "C" fn next_virt_text_chunk_export(
+    vt: VirtText,
+    pos: *mut usize,
+    attr: *mut c_int,
+) -> *mut c_char {
+    let mut text: *mut c_char = std::ptr::null_mut();
+    while text.is_null() && *pos < vt.size {
+        let chunk = &*vt.items.add(*pos).cast_const();
+        *pos += 1;
+        text = chunk.text;
+        let hl_id = chunk.hl_id;
+        if hl_id >= 0 {
+            *attr = (*attr).max(0);
+            if hl_id > 0 {
+                *attr = hl_combine_attr(*attr, syn_id2attr(hl_id));
+            }
+        }
+    }
+    text
+}
+
+/// Get the total EOL right-aligned virtual text width from `from_idx` onwards.
+///
+/// Rust replacement for C `nvim_decor_state_get_eol_right_width`.
+///
+/// # Safety
+/// `state_ptr` must be a valid non-null `DecorState` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_decor_state_get_eol_right_width(
+    state_ptr: DecorStateHandle,
+    from_idx: c_int,
+) -> c_int {
+    let state = &*state_ptr;
+    let count = state.ranges_i.size as c_int;
+    let ranges_i_items = state.ranges_i.items;
+    let slots_items = state.slots.items;
+
+    let mut total_width: c_int = 0;
+    let mut j = from_idx;
+    while j < state.current_end && j < count {
+        let slot_idx = *ranges_i_items.add(j as usize);
+        let r = &*slots_items.add(slot_idx as usize).cast::<DecorRange>();
+
+        if r.start_row != state.row
+            || !crate::decor_range_has_virt_pos(std::ptr::from_ref(r).cast_mut())
+            || r.draw_col != -1
+        {
+            j += 1;
+            continue;
+        }
+
+        if crate::decor_range_virt_pos_kind(std::ptr::from_ref(r).cast_mut())
+            == Some(crate::VirtTextPos::EndOfLineRightAlign)
+            && r.kind == crate::DecorKind::VirtText as u8
+        {
+            let vt = r.data.vt;
+            if !vt.is_null() {
+                total_width += (*vt).width as c_int + 1;
+            }
+        }
+        j += 1;
+    }
+
+    if total_width > 0 {
+        total_width -= 1;
+    }
+    total_width
 }
 
 // =============================================================================

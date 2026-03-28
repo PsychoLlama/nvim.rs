@@ -129,6 +129,13 @@ DecorSignHighlight *decor_find_sign(DecorInline decor);
 int sign_item_cmp(const void *p1, const void *p2);
 void decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor);
 
+// Phase 3: Self-contained functions replaced by Rust exports
+void decor_init_draw_col(int win_col, bool hidden, DecorRange *item);
+void decor_recheck_draw_col(int win_col, bool hidden, DecorState *state);
+bool decor_redraw_eol(win_T *wp, DecorState *state, int *eol_attr, int eol_col);
+char *next_virt_text_chunk(VirtText vt, size_t *pos, int *attr);
+uint16_t decor_type_flags(DecorInline decor);
+
 // Forward declarations for functions migrated to Rust (no longer in generated header)
 bool decor_virt_pos(const DecorRange *decor);
 VirtTextPos decor_virt_pos_kind(const DecorRange *decor);

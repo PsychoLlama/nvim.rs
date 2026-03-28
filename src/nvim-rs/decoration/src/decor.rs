@@ -304,6 +304,50 @@ pub extern "C" fn rs_decor_type_flags(
     decor_type_flags(ext != 0, vt_flags, sh_flags, has_vt != 0, has_sh != 0)
 }
 
+/// Walk a `DecorInline` and return the combined type flags.
+///
+/// Rust replacement for C `decor_type_flags(DecorInline decor)`.
+/// Traverses VirtText and DecorSignHighlight linked lists.
+///
+/// # Safety
+/// `decor.data.ext.vt` must be null or a valid `DecorVirtText` pointer when `decor.ext` is true.
+#[export_name = "decor_type_flags"]
+pub unsafe extern "C" fn decor_type_flags_export(decor: crate::types::DecorInline) -> u16 {
+    if decor.ext {
+        let mut type_flags: u16 = KEXTMARK_NONE;
+        // Walk VirtText linked list
+        let mut vt: *mut DecorVirtText = decor.data.ext.vt;
+        while !vt.is_null() {
+            let flags = (*vt).flags;
+            if flags & crate::KVT_IS_LINES != 0 {
+                type_flags |= KEXTMARK_VIRT_LINES;
+            } else {
+                type_flags |= KEXTMARK_VIRT_TEXT;
+            }
+            vt = (*vt).next;
+        }
+        // Walk DecorSignHighlight linked list
+        let mut idx = decor.data.ext.sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh_flags = nvim_decor_items_get_flags(idx);
+            if sh_is_sign(sh_flags) {
+                type_flags |= KEXTMARK_SIGN;
+            } else {
+                type_flags |= KEXTMARK_HIGHLIGHT;
+            }
+            idx = nvim_decor_items_get_next(idx);
+        }
+        type_flags
+    } else {
+        let hl_flags = decor.data.hl.flags;
+        if sh_is_sign(hl_flags) {
+            KEXTMARK_SIGN
+        } else {
+            KEXTMARK_HIGHLIGHT
+        }
+    }
+}
+
 // =============================================================================
 // Draw Column Initialization
 // =============================================================================

@@ -36,10 +36,6 @@ extern int rs_hasAnyFolding(win_T *win);
 // Rust implementations
 extern bool decor_virt_pos(const DecorRange *decor);
 extern VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
-extern int rs_decor_init_draw_col_value(int win_col, int hidden, int kind,
-                                        int pos, int vt_flags);
-extern int rs_should_recheck_draw_col(int draw_col);
-extern int rs_decor_kind_is_highlight(int kind);
 extern int rs_sh_is_sign(uint16_t flags);
 extern int rs_sh_is_hl_eol(uint16_t flags);
 extern int rs_sh_is_ui_watched(uint16_t flags);
@@ -189,29 +185,6 @@ void buf_remove_decor_sh(buf_T *buf, int row1, int row2, DecorSignHighlight *sh)
 }
 
 
-/// Get the next chunk of a virtual text item.
-///
-/// @param[in]     vt    The virtual text item
-/// @param[in,out] pos   Position in the virtual text item
-/// @param[in,out] attr  Highlight attribute
-///
-/// @return  The text of the chunk, or NULL if there are no more chunks
-char *next_virt_text_chunk(VirtText vt, size_t *pos, int *attr)
-{
-  char *text = NULL;
-  for (; text == NULL && *pos < kv_size(vt); (*pos)++) {
-    text = kv_A(vt, *pos).text;
-    int hl_id = kv_A(vt, *pos).hl_id;
-    if (hl_id >= 0) {
-      *attr = MAX(*attr, 0);
-      if (hl_id > 0) {
-        *attr = hl_combine_attr(*attr, syn_id2attr(hl_id));
-      }
-    }
-  }
-  return text;
-}
-
 DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id)
 {
   MarkTreeIter itr[1] = { 0 };
@@ -264,29 +237,6 @@ bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
   }
 
   return true;  // TODO(bfredl): check if available in the region
-}
-
-/// Initialize the draw_col of a newly-added virtual text item.
-void decor_init_draw_col(int win_col, bool hidden, DecorRange *item)
-{
-  DecorVirtText *vt = item->kind == kDecorKindVirtText ? item->data.vt : NULL;
-  VirtTextPos pos = decor_virt_pos_kind(item);
-  int vt_flags = vt ? vt->flags : 0;
-  item->draw_col = rs_decor_init_draw_col_value(win_col, hidden, item->kind, pos, vt_flags);
-}
-
-void decor_recheck_draw_col(int win_col, bool hidden, DecorState *state)
-{
-  int const end = state->current_end;
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  for (int i = 0; i < end; i++) {
-    DecorRange *const r = &slots[indices[i]].range;
-    if (rs_should_recheck_draw_col(r->draw_col)) {
-      decor_init_draw_col(win_col, hidden, r);
-    }
-  }
 }
 
 static const uint32_t conceal_filter[kMTMetaCount] = {[kMTMetaConcealLines] = kMTFilterSelect };
@@ -494,27 +444,6 @@ void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState 
   xfree(count);
 }
 
-bool decor_redraw_eol(win_T *wp, DecorState *state, int *eol_attr, int eol_col)
-{
-  decor_redraw_col(wp, MAXCOL, MAXCOL, false, state);
-  state->eol_col = eol_col;
-
-  int const count = state->current_end;
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  bool has_virt_pos = false;
-  for (int i = 0; i < count; i++) {
-    DecorRange *r = &slots[indices[i]].range;
-    has_virt_pos |= r->start_row == state->row && decor_virt_pos(r);
-
-    if (rs_decor_kind_is_highlight(r->kind) && rs_sh_is_hl_eol(r->data.sh.flags)) {
-      *eol_attr = hl_combine_attr(*eol_attr, r->attr_id);
-    }
-  }
-  return has_virt_pos;
-}
-
 static const uint32_t lines_filter[kMTMetaCount] = {[kMTMetaLines] = kMTFilterSelect };
 
 /// @param apply_folds Only count virtual lines that are not in folds.
@@ -701,27 +630,6 @@ void decor_to_dict_legacy(Dict *dict, DecorInline decor, bool hl_name, Arena *ar
 
   if (priority != -1) {
     PUT_C(*dict, "priority", INTEGER_OBJ(priority));
-  }
-}
-
-uint16_t decor_type_flags(DecorInline decor)
-{
-  if (decor.ext) {
-    uint16_t type_flags = kExtmarkNone;
-    DecorVirtText *vt = decor.data.ext.vt;
-    while (vt) {
-      type_flags |= rs_vt_is_lines(vt->flags) ? kExtmarkVirtLines : kExtmarkVirtText;
-      vt = vt->next;
-    }
-    uint32_t idx = decor.data.ext.sh_idx;
-    while (idx != DECOR_ID_INVALID) {
-      DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      type_flags |= rs_sh_is_sign(sh->flags) ? kExtmarkSign : kExtmarkHighlight;
-      idx = sh->next;
-    }
-    return type_flags;
-  } else {
-    return rs_sh_is_sign(decor.data.hl.flags) ? kExtmarkSign : kExtmarkHighlight;
   }
 }
 
@@ -986,42 +894,6 @@ void *nvim_decor_state_get_active_range(void *state_ptr, int i)
   }
   int idx = kv_A(state->ranges_i, i);
   return &kv_A(state->slots, idx).range;
-}
-
-/// Get the total width of EOL right-aligned virtual text from index i onwards.
-/// This is a helper for draw_virt_text EOL right alignment calculation.
-int nvim_decor_state_get_eol_right_width(void *state_ptr, int from_idx)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  int total_width = 0;
-  int count = (int)kv_size(state->ranges_i);
-
-  for (int j = from_idx; j < state->current_end && j < count; j++) {
-    int idx = kv_A(state->ranges_i, j);
-    DecorRange *r = &kv_A(state->slots, idx).range;
-
-    if (r->start_row != state->row || !decor_virt_pos(r) || r->draw_col != -1) {
-      continue;
-    }
-
-    if (decor_virt_pos_kind(r) == kVPosEndOfLineRightAlign) {
-      DecorVirtText *vt = NULL;
-      if (r->kind == kDecorKindVirtText) {
-        vt = r->data.vt;
-      }
-      if (vt) {
-        // An extra space is added for single character spacing
-        total_width += (vt->width + 1);
-      }
-    }
-  }
-
-  // Remove one space since no space after last entry
-  if (total_width > 0) {
-    total_width--;
-  }
-
-  return total_width;
 }
 
 // Additional accessor functions for handle_inline_virtual_text migration
