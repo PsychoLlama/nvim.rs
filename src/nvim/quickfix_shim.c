@@ -95,6 +95,54 @@ struct qf_info_S {
   qfltype_T qfl_type;  // type of list
   int qf_bufnr;                     // quickfix window buffer number
 };
+// Layout assertions for Rust ffi_types.rs repr(C) structs.
+_Static_assert(sizeof(qfline_T) == 104, "qfline_T size changed - update QfLineRaw in ffi_types.rs");
+_Static_assert(offsetof(qfline_T, qf_next) == 0, "qfline_T.qf_next offset");
+_Static_assert(offsetof(qfline_T, qf_prev) == 8, "qfline_T.qf_prev offset");
+_Static_assert(offsetof(qfline_T, qf_lnum) == 16, "qfline_T.qf_lnum offset");
+_Static_assert(offsetof(qfline_T, qf_end_lnum) == 20, "qfline_T.qf_end_lnum offset");
+_Static_assert(offsetof(qfline_T, qf_fnum) == 24, "qfline_T.qf_fnum offset");
+_Static_assert(offsetof(qfline_T, qf_col) == 28, "qfline_T.qf_col offset");
+_Static_assert(offsetof(qfline_T, qf_end_col) == 32, "qfline_T.qf_end_col offset");
+_Static_assert(offsetof(qfline_T, qf_nr) == 36, "qfline_T.qf_nr offset");
+_Static_assert(offsetof(qfline_T, qf_module) == 40, "qfline_T.qf_module offset");
+_Static_assert(offsetof(qfline_T, qf_fname) == 48, "qfline_T.qf_fname offset");
+_Static_assert(offsetof(qfline_T, qf_pattern) == 56, "qfline_T.qf_pattern offset");
+_Static_assert(offsetof(qfline_T, qf_text) == 64, "qfline_T.qf_text offset");
+_Static_assert(offsetof(qfline_T, qf_viscol) == 72, "qfline_T.qf_viscol offset");
+_Static_assert(offsetof(qfline_T, qf_cleared) == 73, "qfline_T.qf_cleared offset");
+_Static_assert(offsetof(qfline_T, qf_type) == 74, "qfline_T.qf_type offset");
+_Static_assert(offsetof(qfline_T, qf_user_data) == 80, "qfline_T.qf_user_data offset");
+_Static_assert(offsetof(qfline_T, qf_valid) == 96, "qfline_T.qf_valid offset");
+_Static_assert(sizeof(qf_list_T) == 120, "qf_list_T size changed - update QfListRaw in ffi_types.rs");
+_Static_assert(offsetof(qf_list_T, qf_id) == 0, "qf_list_T.qf_id offset");
+_Static_assert(offsetof(qf_list_T, qfl_type) == 4, "qf_list_T.qfl_type offset");
+_Static_assert(offsetof(qf_list_T, qf_start) == 8, "qf_list_T.qf_start offset");
+_Static_assert(offsetof(qf_list_T, qf_last) == 16, "qf_list_T.qf_last offset");
+_Static_assert(offsetof(qf_list_T, qf_ptr) == 24, "qf_list_T.qf_ptr offset");
+_Static_assert(offsetof(qf_list_T, qf_count) == 32, "qf_list_T.qf_count offset");
+_Static_assert(offsetof(qf_list_T, qf_index) == 36, "qf_list_T.qf_index offset");
+_Static_assert(offsetof(qf_list_T, qf_nonevalid) == 40, "qf_list_T.qf_nonevalid offset");
+_Static_assert(offsetof(qf_list_T, qf_has_user_data) == 41, "qf_list_T.qf_has_user_data offset");
+_Static_assert(offsetof(qf_list_T, qf_title) == 48, "qf_list_T.qf_title offset");
+_Static_assert(offsetof(qf_list_T, qf_ctx) == 56, "qf_list_T.qf_ctx offset");
+_Static_assert(offsetof(qf_list_T, qf_qftf_cb) == 64, "qf_list_T.qf_qftf_cb offset");
+_Static_assert(offsetof(qf_list_T, qf_dir_stack) == 80, "qf_list_T.qf_dir_stack offset");
+_Static_assert(offsetof(qf_list_T, qf_directory) == 88, "qf_list_T.qf_directory offset");
+_Static_assert(offsetof(qf_list_T, qf_file_stack) == 96, "qf_list_T.qf_file_stack offset");
+_Static_assert(offsetof(qf_list_T, qf_currfile) == 104, "qf_list_T.qf_currfile offset");
+_Static_assert(offsetof(qf_list_T, qf_multiline) == 112, "qf_list_T.qf_multiline offset");
+_Static_assert(offsetof(qf_list_T, qf_multiignore) == 113, "qf_list_T.qf_multiignore offset");
+_Static_assert(offsetof(qf_list_T, qf_multiscan) == 114, "qf_list_T.qf_multiscan offset");
+_Static_assert(offsetof(qf_list_T, qf_changedtick) == 116, "qf_list_T.qf_changedtick offset");
+_Static_assert(sizeof(qf_info_T) == 32, "qf_info_T size changed - update QfInfoRaw in ffi_types.rs");
+_Static_assert(offsetof(qf_info_T, qf_refcount) == 0, "qf_info_T.qf_refcount offset");
+_Static_assert(offsetof(qf_info_T, qf_listcount) == 4, "qf_info_T.qf_listcount offset");
+_Static_assert(offsetof(qf_info_T, qf_curlist) == 8, "qf_info_T.qf_curlist offset");
+_Static_assert(offsetof(qf_info_T, qf_maxcount) == 12, "qf_info_T.qf_maxcount offset");
+_Static_assert(offsetof(qf_info_T, qf_lists) == 16, "qf_info_T.qf_lists offset");
+_Static_assert(offsetof(qf_info_T, qfl_type) == 24, "qf_info_T.qfl_type offset");
+_Static_assert(offsetof(qf_info_T, qf_bufnr) == 28, "qf_info_T.qf_bufnr offset");
 static qf_info_T ql_info_actual;  // global quickfix list
 static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
