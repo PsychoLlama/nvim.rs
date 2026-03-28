@@ -53,4 +53,9 @@ const char *coloridx_to_name(int idx, int val, char hexbuf[8]);
 int name_to_ctermcolor(const char *name);
 void syn_init_cmdline_highlight(bool reset, bool init);
 
+// Phase 1: migrated to Rust
+void set_context_in_highlight_cmd(expand_T *xp, const char *arg);
+char *get_highlight_name(expand_T *xp, int idx);
+const char *get_highlight_name_ext(expand_T *xp, int idx, bool skip_cleared);
+
 #include "highlight_group.h.generated.h"

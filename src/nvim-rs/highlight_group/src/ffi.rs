@@ -1090,6 +1090,205 @@ pub unsafe extern "C" fn rs_highlight_list_one(id: c_int) {
 }
 
 // =============================================================================
+// Phase 1: Completion and Display Helpers
+//
+// set_context_in_highlight_cmd, get_highlight_name_ext, get_highlight_name,
+// highlight_list, highlight_list_two
+// =============================================================================
+
+extern "C" {
+    // expand_T field accessors (already provided by option_shim.c)
+    fn nvim_xp_set_context(xp: *mut c_void, val: c_int);
+    fn nvim_xp_set_pattern(xp: *mut c_void, val: *mut c_char);
+
+    // include_link/default/none setters/getters (in syntax_accessors.c)
+    fn nvim_syn_set_include_link(val: c_int);
+    fn nvim_syn_set_include_default(val: c_int);
+    fn nvim_syn_get_include_none() -> c_int;
+    fn nvim_syn_get_include_default() -> c_int;
+    fn nvim_syn_get_include_link() -> c_int;
+
+    fn skiptowhite(s: *const c_char) -> *mut c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+
+    fn msg_clr_eos();
+    fn ui_flush();
+    fn os_delay(msec: u64, ignoreinput: bool);
+}
+
+// EXPAND_* constants (from cmdexpand_defs.h)
+const EXPAND_NOTHING: c_int = 0;
+const EXPAND_HIGHLIGHT: c_int = 13;
+
+/// Handle command line completion for :highlight command.
+///
+/// # Safety
+/// `xp` must be a valid expand_T pointer. `arg` must be a valid C string.
+#[export_name = "set_context_in_highlight_cmd"]
+pub unsafe extern "C" fn rs_set_context_in_highlight_cmd(xp: *mut c_void, arg: *const c_char) {
+    // Default: expand group names.
+    nvim_xp_set_context(xp, EXPAND_HIGHLIGHT);
+    nvim_xp_set_pattern(xp, arg as *mut c_char);
+    nvim_syn_set_include_link(2);
+    nvim_syn_set_include_default(1);
+
+    if *arg == 0 {
+        return;
+    }
+
+    // (part of) subcommand already typed
+    let p = skiptowhite(arg);
+    if *p == 0 {
+        return;
+    }
+
+    // past "default" or group name
+    nvim_syn_set_include_default(0);
+    let p_len = p.offset_from(arg) as usize;
+    if p_len == 7 && libc_strncmp(arg, c"default".as_ptr(), 7) == 0 {
+        let arg2 = skipwhite(p);
+        nvim_xp_set_pattern(xp, arg2);
+        let p2 = skiptowhite(arg2);
+        if *p2 == 0 {
+            return;
+        }
+        // fall through with updated arg and p
+        let p2_len = p2.offset_from(arg2) as usize;
+        // past group name
+        nvim_syn_set_include_link(0);
+        if (*arg2.add(1) == b'i' as c_char) && (*arg2 == b'N' as c_char) {
+            rs_highlight_list_internal();
+        }
+        if (p2_len == 4 && libc_strncmp(arg2, c"link".as_ptr(), 4) == 0)
+            || (p2_len == 5 && libc_strncmp(arg2, c"clear".as_ptr(), 5) == 0)
+        {
+            let pat = skipwhite(p2);
+            nvim_xp_set_pattern(xp, pat);
+            let p3 = skiptowhite(pat);
+            if *p3 != 0 {
+                // past first group name
+                let pat2 = skipwhite(p3);
+                nvim_xp_set_pattern(xp, pat2);
+                let p4 = skiptowhite(pat2);
+                if *p4 != 0 {
+                    nvim_xp_set_context(xp, EXPAND_NOTHING);
+                }
+            }
+        } else if *p2 != 0 {
+            // past group name(s)
+            nvim_xp_set_context(xp, EXPAND_NOTHING);
+        }
+        return;
+    }
+
+    // past group name
+    nvim_syn_set_include_link(0);
+    if (*arg.add(1) == b'i' as c_char) && (*arg == b'N' as c_char) {
+        rs_highlight_list_internal();
+    }
+    if (p_len == 4 && libc_strncmp(arg, c"link".as_ptr(), 4) == 0)
+        || (p_len == 5 && libc_strncmp(arg, c"clear".as_ptr(), 5) == 0)
+    {
+        let pat = skipwhite(p);
+        nvim_xp_set_pattern(xp, pat);
+        let p2 = skiptowhite(pat);
+        if *p2 != 0 {
+            // past first group name
+            let pat2 = skipwhite(p2);
+            nvim_xp_set_pattern(xp, pat2);
+            let p3 = skiptowhite(pat2);
+            if *p3 != 0 {
+                nvim_xp_set_context(xp, EXPAND_NOTHING);
+            }
+        }
+    } else if *p != 0 {
+        // past group name(s)
+        nvim_xp_set_context(xp, EXPAND_NOTHING);
+    }
+}
+
+// Thin wrapper over libc strncmp for use in this module.
+#[inline]
+unsafe fn libc_strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int {
+    extern "C" {
+        fn strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+    }
+    strncmp(a, b, n)
+}
+
+/// Internal highlight list animation.
+unsafe fn rs_highlight_list_internal() {
+    for i in (0..10).rev() {
+        rs_highlight_list_two_internal(i, HLF_D);
+    }
+    for _ in (0..40).rev() {
+        rs_highlight_list_two_internal(99, 0);
+    }
+}
+
+unsafe fn rs_highlight_list_two_internal(cnt: c_int, id: c_int) {
+    // "N \bI \b!  \b" indexed by cnt/11
+    let s = b"N \x08I \x08!  \x08\0";
+    let idx = (cnt / 11) as usize;
+    let ptr = s[idx..].as_ptr() as *const c_char;
+    msg_puts_hl(ptr, id, false);
+    msg_clr_eos();
+    ui_flush();
+    let delay_ms: u64 = if cnt == 99 { 40 } else { cnt as u64 * 50 };
+    os_delay(delay_ms, false);
+}
+
+/// Function given to ExpandGeneric() to obtain the list of group names.
+///
+/// # Safety
+/// `xp` must be valid (unused but required by callback signature).
+#[export_name = "get_highlight_name"]
+pub unsafe extern "C" fn rs_get_highlight_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
+    rs_get_highlight_name_ext(xp, idx, true) as *mut c_char
+}
+
+/// Obtain a highlight group name.
+///
+/// @param skip_cleared  if true don't return a cleared entry.
+///
+/// # Safety
+/// `xp` must be valid (unused but required by callback signature).
+#[export_name = "get_highlight_name_ext"]
+pub unsafe extern "C" fn rs_get_highlight_name_ext(
+    _xp: *mut c_void,
+    idx: c_int,
+    skip_cleared: bool,
+) -> *const c_char {
+    if idx < 0 {
+        return std::ptr::null();
+    }
+
+    let ga_len = highlight_ga.ga_len;
+
+    // Items are never removed from the table, skip the ones that were cleared.
+    if skip_cleared && idx < ga_len && (*hl_table_ptr(idx)).sg_cleared {
+        return c"".as_ptr();
+    }
+
+    let include_none = nvim_syn_get_include_none();
+    let include_default = nvim_syn_get_include_default();
+    let include_link = nvim_syn_get_include_link();
+
+    if idx == ga_len && include_none != 0 {
+        return c"none".as_ptr();
+    } else if idx == ga_len + include_none && include_default != 0 {
+        return c"default".as_ptr();
+    } else if idx == ga_len + include_none + include_default && include_link != 0 {
+        return c"link".as_ptr();
+    } else if idx == ga_len + include_none + include_default + 1 && include_link != 0 {
+        return c"clear".as_ptr();
+    } else if idx >= ga_len {
+        return std::ptr::null();
+    }
+    (*hl_table_ptr(idx)).sg_name
+}
+
+// =============================================================================
 // Phase 5: highlight_attr_set_all and load_colors
 // =============================================================================
 
