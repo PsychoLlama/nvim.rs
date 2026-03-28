@@ -1,8 +1,6 @@
 // search_shim.c: C accessor functions and remaining logic for search module
 
-#include <assert.h>
 #include <inttypes.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -23,14 +21,11 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
-#include "nvim/file_search.h"
-#include "nvim/fileio.h"
 #include "nvim/fold.h"
 #include "nvim/getchar.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/indent_c.h"
-#include "nvim/insexpand.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
@@ -43,17 +38,13 @@
 #include "nvim/os/fs.h"
 #include "nvim/os/input.h"
 #include "nvim/os/time.h"
-#include "nvim/move.h"
-#include "nvim/path.h"
 #include "nvim/plines.h"
 #include "nvim/profile.h"
 #include "nvim/regexp.h"
 #include "nvim/search.h"
 #include "nvim/state_defs.h"
 #include "nvim/strings.h"
-#include "nvim/tag.h"
 #include "nvim/ui.h"
-#include "nvim/window.h"
 
 #include "search_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
