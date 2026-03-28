@@ -337,6 +337,20 @@ static int normal_check(VimState *state) { return rs_normal_check((NormalState *
 char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
 
+// Phase 4 (check_timestamps) accessors
+int nvim_get_no_check_timestamps(void) { return no_check_timestamps; }
+bool nvim_get_did_check_timestamps(void) { return did_check_timestamps; }
+int nvim_stuff_empty(void) { return stuff_empty() ? 1 : 0; }
+int nvim_typebuf_typed(void) { return typebuf_typed(); }
+int nvim_get_allbuf_lock(void) { return allbuf_lock; }
+int nvim_get_curbuf_b_ro_locked(void) { return curbuf->b_ro_locked; }
+int nvim_get_no_wait_return(void) { return no_wait_return; }
+void nvim_set_no_wait_return(int val) { no_wait_return = val; }
+bool nvim_get_need_wait_return(void) { return need_wait_return; }
+void nvim_set_bufref(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
+int nvim_bufref_valid(void *br) { return bufref_valid((bufref_T *)br) ? 1 : 0; }
+int nvim_bufref_size(void) { return (int)sizeof(bufref_T); }
+
 void nvim_showcmd_ui_msg_showcmd(const char *buf, bool is_clear) {
   MAXSIZE_TEMP_ARRAY(content, 1); MAXSIZE_TEMP_ARRAY(chunk, 3);
   if (!is_clear) {

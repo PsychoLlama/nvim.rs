@@ -116,6 +116,10 @@ extern int rs_set_rw_fname(char *fname, char *sfname);
 // Phase 3 Rust replacements
 extern void rs_shorten_buf_fname(buf_T *buf, char *dirname, int force);
 extern void rs_shorten_fnames(int force);
+// Phase 4 Rust replacements
+extern int rs_check_timestamps(int focus);
+extern int rs_get_already_warned(void);
+extern void rs_set_already_warned(int val);
 
 #include "fileio.c.generated.h"
 
@@ -1935,8 +1939,6 @@ void shorten_fnames(int force)
 }
 
 
-static bool already_warned = false;
-
 /// Check if any not hidden buffer has been changed.
 /// Postpone the check if there are characters in the stuff buffer, a global
 /// command is being executed, a mapping is being executed or an autocommand is
@@ -1947,53 +1949,7 @@ static bool already_warned = false;
 /// @return       true if some message was written (screen should be redrawn and cursor positioned).
 int check_timestamps(int focus)
 {
-  // Don't check timestamps while system() or another low-level function may
-  // cause us to lose and gain focus.
-  if (no_check_timestamps > 0) {
-    return false;
-  }
-
-  // Avoid doing a check twice.  The OK/Reload dialog can cause a focus
-  // event and we would keep on checking if the file is steadily growing.
-  // Do check again after typing something.
-  if (focus && did_check_timestamps) {
-    need_check_timestamps = true;
-    return false;
-  }
-
-  int didit = 0;
-
-  if (!stuff_empty() || global_busy || !typebuf_typed()
-      || autocmd_busy || curbuf->b_ro_locked > 0
-      || allbuf_lock > 0) {
-    need_check_timestamps = true;               // check later
-  } else {
-    no_wait_return++;
-    did_check_timestamps = true;
-    already_warned = false;
-    FOR_ALL_BUFFERS(buf) {
-      // Only check buffers in a window.
-      if (buf->b_nwindows > 0) {
-        bufref_T bufref;
-        set_bufref(&bufref, buf);
-        const int n = buf_check_timestamp(buf);
-        didit = MAX(didit, n);
-        if (n > 0 && !bufref_valid(&bufref)) {
-          // Autocommands have removed the buffer, start at the first one again.
-          buf = firstbuf;
-          continue;
-        }
-      }
-    }
-    no_wait_return--;
-    need_check_timestamps = false;
-    if (need_wait_return && didit == 2) {
-      // make sure msg isn't overwritten
-      msg_puts("\n");
-      ui_flush();
-    }
-  }
-  return didit;
+  return rs_check_timestamps(focus);
 }
 
 /// Move all the lines from buffer "frombuf" to buffer "tobuf".
@@ -2217,7 +2173,7 @@ int buf_check_timestamp(buf_T *buf)
         reload = RELOAD_DETECT;
         break;
       }
-    } else if (State > MODE_NORMAL_BUSY || (State & MODE_CMDLINE) || already_warned) {
+    } else if (State > MODE_NORMAL_BUSY || (State & MODE_CMDLINE) || rs_get_already_warned()) {
       if (*mesg2 != NUL) {
         xstrlcat(tbuf, "; ", tbuf_len - 1);
         xstrlcat(tbuf, mesg2, tbuf_len - 1);
@@ -2242,7 +2198,7 @@ int buf_check_timestamp(buf_T *buf)
           redraw_cmdline = false;
         }
       }
-      already_warned = true;
+      rs_set_already_warned(1);
     }
 
     xfree(path);

@@ -5,7 +5,8 @@
 //! - Change reason classification
 //! - Reload decision logic
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // =============================================================================
 // Change Reasons
@@ -466,6 +467,154 @@ pub unsafe extern "C" fn rs_buf_store_file_info(buf: *mut c_void, file_info: *co
     unsafe { nvim_buf_set_b_mtime_ns(buf, mtime_ns) };
     unsafe { nvim_buf_set_b_orig_size(buf, size as i64) };
     unsafe { nvim_buf_set_b_orig_mode(buf, mode) };
+}
+
+// =============================================================================
+// FFI: check_timestamps
+// =============================================================================
+
+/// Tracks whether we have already shown a "file changed" warning during the
+/// current batch of `check_timestamps` / `buf_check_timestamp` calls.
+///
+/// Replaces the `static bool already_warned` local to fileio.c.
+pub static ALREADY_WARNED: AtomicBool = AtomicBool::new(false);
+
+extern "C" {
+    /// Returns non-zero if the global `no_check_timestamps` counter is > 0.
+    fn nvim_get_no_check_timestamps() -> c_int;
+    /// Returns the `did_check_timestamps` flag.
+    fn nvim_get_did_check_timestamps() -> bool;
+    /// Sets the `did_check_timestamps` flag.
+    fn nvim_set_did_check_timestamps(val: bool);
+    /// Sets `need_check_timestamps`.
+    fn nvim_set_need_check_timestamps(val: c_int);
+    /// Returns non-zero if the stuff buffer is empty.
+    fn nvim_stuff_empty() -> c_int;
+    /// Returns the `global_busy` flag.
+    fn nvim_get_global_busy() -> bool;
+    /// Returns non-zero if the typebuf has been typed.
+    fn nvim_typebuf_typed() -> c_int;
+    /// Returns the `autocmd_busy` flag.
+    fn nvim_get_autocmd_busy() -> bool;
+    /// Returns `curbuf->b_ro_locked`.
+    fn nvim_get_curbuf_b_ro_locked() -> c_int;
+    /// Returns `allbuf_lock`.
+    fn nvim_get_allbuf_lock() -> c_int;
+    /// Returns `no_wait_return`.
+    fn nvim_get_no_wait_return() -> c_int;
+    /// Sets `no_wait_return`.
+    fn nvim_set_no_wait_return(val: c_int);
+    /// Returns `need_wait_return`.
+    fn nvim_get_need_wait_return() -> bool;
+    /// Returns the first buffer (firstbuf).
+    fn nvim_get_firstbuf() -> *mut c_void;
+    /// Returns `buf->b_next`.
+    fn nvim_buf_get_b_next(buf: *mut c_void) -> *mut c_void;
+    /// Returns `buf->b_nwindows`.
+    fn nvim_buf_get_nwindows(buf: *mut c_void) -> c_int;
+    /// Initializes a bufref_T (opaque) to point to buf.
+    fn nvim_set_bufref(br: *mut c_void, buf: *mut c_void);
+    /// Returns non-zero if the bufref still points to a valid buffer.
+    fn nvim_bufref_valid(br: *mut c_void) -> c_int;
+    /// Returns sizeof(bufref_T) – used to sanity-check our stack allocation.
+    fn nvim_bufref_size() -> c_int;
+    /// Calls `buf_check_timestamp` on a single buffer.
+    fn buf_check_timestamp(buf: *mut c_void) -> c_int;
+    /// Calls `msg_puts("\n")`.
+    fn msg_puts(s: *const c_char);
+    /// Flushes the UI.
+    fn ui_flush();
+}
+
+/// Check all open buffers for external file changes.
+///
+/// Replaces the C `check_timestamps` function in `fileio.c`.
+///
+/// # Safety
+/// Calls into C. The C globals are accessed only on the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
+    // Don't check while system() or another low-level function may cause
+    // us to lose and gain focus.
+    if nvim_get_no_check_timestamps() > 0 {
+        return 0;
+    }
+
+    // Avoid doing a check twice.  The OK/Reload dialog can cause a focus
+    // event and we would keep on checking if the file is steadily growing.
+    // Do check again after typing something.
+    if focus != 0 && nvim_get_did_check_timestamps() {
+        nvim_set_need_check_timestamps(1);
+        return 0;
+    }
+
+    let mut didit: c_int = 0;
+
+    if nvim_stuff_empty() == 0
+        || nvim_get_global_busy()
+        || nvim_typebuf_typed() == 0
+        || nvim_get_autocmd_busy()
+        || nvim_get_curbuf_b_ro_locked() > 0
+        || nvim_get_allbuf_lock() > 0
+    {
+        // Check later when conditions are safe.
+        nvim_set_need_check_timestamps(1);
+    } else {
+        nvim_set_no_wait_return(nvim_get_no_wait_return() + 1);
+        nvim_set_did_check_timestamps(true);
+        ALREADY_WARNED.store(false, Ordering::Relaxed);
+
+        // bufref_T is { buf_T*, int, int } = 16 bytes. We use [u64; 2]
+        // which is 16 bytes and pointer-aligned.
+        debug_assert_eq!(nvim_bufref_size() as usize, 16);
+        let mut bufref: [u64; 2] = [0; 2];
+        let bufref_ptr = bufref.as_mut_ptr() as *mut c_void;
+
+        let mut buf = nvim_get_firstbuf();
+        while !buf.is_null() {
+            // Only check buffers in a window.
+            if nvim_buf_get_nwindows(buf) > 0 {
+                nvim_set_bufref(bufref_ptr, buf);
+                let n = buf_check_timestamp(buf);
+                if n > didit {
+                    didit = n;
+                }
+                if n > 0 && nvim_bufref_valid(bufref_ptr) == 0 {
+                    // Autocommands have removed the buffer, start at the first one again.
+                    buf = nvim_get_firstbuf();
+                    continue;
+                }
+            }
+            buf = nvim_buf_get_b_next(buf);
+        }
+
+        nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+        nvim_set_need_check_timestamps(0);
+        if nvim_get_need_wait_return() && didit == 2 {
+            // make sure msg isn't overwritten
+            msg_puts(c"\n".as_ptr());
+            ui_flush();
+        }
+    }
+    didit
+}
+
+/// Get the current value of `already_warned` (used by `buf_check_timestamp`).
+///
+/// # Safety
+/// Must be called from the main thread only.
+#[no_mangle]
+pub extern "C" fn rs_get_already_warned() -> c_int {
+    c_int::from(ALREADY_WARNED.load(Ordering::Relaxed))
+}
+
+/// Set the `already_warned` flag (used by `buf_check_timestamp`).
+///
+/// # Safety
+/// Must be called from the main thread only.
+#[no_mangle]
+pub extern "C" fn rs_set_already_warned(val: c_int) {
+    ALREADY_WARNED.store(val != 0, Ordering::Relaxed);
 }
 
 #[cfg(test)]
