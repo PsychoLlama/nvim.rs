@@ -810,18 +810,21 @@ pub const extern "C" fn rs_dialog_hotkey_bufsize(button_count: c_int) -> c_int {
 // ============================================================================
 
 extern "C" {
-    /// Call do_dialog() C function
-    fn do_dialog(
-        dialog_type: c_int,
-        title: *const c_char,
-        message: *const c_char,
-        buttons: *const c_char,
-        dfltbutton: c_int,
-        textfield: *const c_char,
-        ex_cmd: c_int,
-    ) -> c_int;
-
     fn gettext(msgid: *const c_char) -> *const c_char;
+
+    // For do_dialog
+    fn prompt_for_input(
+        prompt: *mut c_char,
+        hl_id: c_int,
+        one_key: bool,
+        mouse_used: *mut bool,
+    ) -> c_int;
+    fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) -> c_int;
+    fn setmouse();
+    fn input_available() -> usize;
+    static mut State: c_int;
+    static mut msg_didout: bool;
+    static mut msg_didany: bool;
 }
 
 /// Yes/No dialog (Rust replacement for C vim_dialog_yesno).
@@ -841,7 +844,7 @@ pub unsafe extern "C" fn rs_vim_dialog_yesno(
     } else {
         title.cast_const()
     };
-    if do_dialog(
+    if rs_do_dialog(
         dialog_type,
         effective_title,
         message.cast_const(),
@@ -874,7 +877,7 @@ pub unsafe extern "C" fn rs_vim_dialog_yesnocancel(
     } else {
         title.cast_const()
     };
-    match do_dialog(
+    match rs_do_dialog(
         dialog_type,
         effective_title,
         message.cast_const(),
@@ -905,7 +908,7 @@ pub unsafe extern "C" fn rs_vim_dialog_yesnoallcancel(
     } else {
         title.cast_const()
     };
-    match do_dialog(
+    match rs_do_dialog(
         dialog_type,
         effective_title,
         message.cast_const(),
@@ -922,45 +925,128 @@ pub unsafe extern "C" fn rs_vim_dialog_yesnoallcancel(
     }
 }
 
-/// Show a dialog and wait for a response.
+/// Console dialog: shows message, waits for hotkey selection, handles Enter/Esc/Cancel.
 ///
-/// This is the main dialog function that handles all types of dialogs.
+/// Used for "confirm()" function, and the :confirm command prefix.
+/// Versions which haven't got flexible dialogs yet, and console
+/// versions, get this generic handler which uses the command line.
 ///
 /// # Arguments
-/// * `dialog_type` - Type of dialog (VIM_GENERIC, VIM_ERROR, etc.)
-/// * `title` - Dialog title (may be NULL)
-/// * `message` - Main message text
-/// * `buttons` - Newline-separated button names with & hotkey markers
-/// * `dfltbutton` - Default button number (1-indexed)
-/// * `textfield` - Input field content for inputdialog(), or NULL
-/// * `ex_cmd` - If true, pressing : accepts default and starts Ex command
+/// * `dialog_type` - one of VIM_QUESTION, VIM_INFO, VIM_WARNING, VIM_ERROR or VIM_GENERIC
+/// * `title` - title string (can be NULL for default; not used in console dialogs)
+/// * `message` - main message text
+/// * `buttons` - `"Button1Name\nButton2Name\nButton3Name"` with `&` for hotkeys
+/// * `dfltbutton` - default button (1-indexed)
+/// * `textfield` - IObuff for inputdialog(), NULL otherwise
+/// * `ex_cmd` - when true pressing `:` accepts default and starts Ex command
 ///
 /// # Returns
-/// * 0 if cancelled
-/// * Otherwise the nth button (1-indexed)
+/// 0 if cancelled, otherwise the nth button (1-indexed).
 ///
 /// # Safety
-/// - `title`, `message`, `buttons` must be valid C strings or NULL
-/// - `textfield` must be valid C string or NULL
-#[no_mangle]
+/// - `title`, `message`, `buttons`, `textfield` must be valid C strings or NULL
+#[export_name = "do_dialog"]
 pub unsafe extern "C" fn rs_do_dialog(
-    dialog_type: c_int,
-    title: *const c_char,
+    _dialog_type: c_int,
+    _title: *const c_char,
     message: *const c_char,
     buttons: *const c_char,
     dfltbutton: c_int,
-    textfield: *const c_char,
+    _textfield: *const c_char,
     ex_cmd: c_int,
 ) -> c_int {
-    do_dialog(
-        dialog_type,
-        title,
-        message,
-        buttons,
-        dfltbutton,
-        textfield,
-        ex_cmd,
-    )
+    const CAR: c_int = 13;
+    const NUL_KEY: c_int = 0;
+    const CTRL_C: c_int = 3;
+    const ESC_KEY: c_int = 0x1b;
+
+    if silent_mode {
+        return dfltbutton;
+    }
+
+    let save_msg_silent = msg_silent;
+    let old_state = State;
+
+    // If dialog prompts for input, user needs to see it! #8788
+    msg_silent = 0;
+
+    // Since we wait for a keypress, don't make the user press RETURN as well afterwards.
+    no_wait_return += 1;
+
+    let hotkeys = rs_msg_show_console_dialog(message, buttons, dfltbutton);
+
+    #[allow(unused_assignments)]
+    let mut retval: c_int = 0;
+
+    loop {
+        // Without a UI Nvim waits for input forever.
+        if ui_active() == 0 && input_available() == 0 {
+            retval = dfltbutton;
+            break;
+        }
+
+        // Get a typed character directly from the user.
+        let c = prompt_for_input(confirm_buttons, HLF_M, true, std::ptr::null_mut());
+        match c {
+            // User accepts default option
+            v if v == CAR || v == NUL_KEY => {
+                retval = dfltbutton;
+                break;
+            }
+            // User aborts/cancels
+            v if v == CTRL_C || v == ESC_KEY => {
+                retval = 0;
+                break;
+            }
+            _ => {
+                // special keys are ignored here
+                if c < 0 {
+                    msg_didout = false;
+                    msg_didany = false;
+                    continue;
+                }
+                if c == c_int::from(b':') && ex_cmd != 0 {
+                    retval = dfltbutton;
+                    ins_char_typebuf(c_int::from(b':'), 0, false);
+                    break;
+                }
+
+                // Make the character lowercase, as chars in "hotkeys" are.
+                let c = mb_tolower(c);
+                retval = 1;
+                let mut i = 0usize;
+                while *hotkeys.add(i) != 0 {
+                    if utf_ptr2char(hotkeys.add(i)) == c {
+                        break;
+                    }
+                    #[allow(clippy::cast_sign_loss)]
+                    {
+                        i += utfc_ptr2len(hotkeys.add(i)) as usize - 1;
+                    }
+                    retval += 1;
+                    i += 1;
+                }
+                if *hotkeys.add(i) != 0 {
+                    break;
+                }
+                // No hotkey match, so keep waiting
+                msg_didout = false;
+                msg_didany = false;
+            }
+        }
+    }
+
+    xfree(hotkeys.cast());
+    xfree(confirm_msg.cast());
+    confirm_msg = std::ptr::null_mut();
+
+    msg_silent = save_msg_silent;
+    State = old_state;
+    setmouse();
+    no_wait_return -= 1;
+    crate::output_core::rs_msg_end_prompt();
+
+    retval
 }
 
 /// Show a Yes/No dialog.

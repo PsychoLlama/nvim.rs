@@ -145,11 +145,7 @@ void inc_msg_scrolled(void);
 
 void nvim_msg_set_pos_for_scroll(int pos, bool scrolled) { ui_ext_msg_set_pos(pos, scrolled); }
 
-void nvim_msg_show_empty(void)
-{
-  ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
-                   INTEGER_OBJ(-1));
-}
+// nvim_msg_show_empty() migrated to Rust (display.rs) with #[export_name]
 
 // message_filtered() is implemented in Rust (#[export_name]); this is its C helper.
 bool nvim_message_filtered_impl(const char *msg)
@@ -1282,108 +1278,7 @@ void swmsg(bool hl, const char *const fmt, ...)
   give_warning(IObuff, hl);
 }
 
-/// Used for "confirm()" function, and the :confirm command prefix.
-/// Versions which haven't got flexible dialogs yet, and console
-/// versions, get this generic handler which uses the command line.
-///
-/// type  = one of:
-///         VIM_QUESTION, VIM_INFO, VIM_WARNING, VIM_ERROR or VIM_GENERIC
-/// title = title string (can be NULL for default)
-/// (neither used in console dialogs at the moment)
-///
-/// Format of the "buttons" string:
-/// "Button1Name\nButton2Name\nButton3Name"
-/// The first button should normally be the default/accept
-/// The second button should be the 'Cancel' button
-/// Other buttons- use your imagination!
-/// A '&' in a button name becomes a shortcut, so each '&' should be before a
-/// different letter.
-///
-/// @param textfiel  IObuff for inputdialog(), NULL otherwise
-/// @param ex_cmd  when true pressing : accepts default and starts Ex command
-/// @returns 0 if cancelled, otherwise the nth button (1-indexed).
-int do_dialog(int type, const char *title, const char *message, const char *buttons, int dfltbutton,
-              const char *textfield, int ex_cmd)
-{
-  int retval = 0;
-  int i;
-
-  if (silent_mode) {  // No dialogs in silent mode ("ex -s")
-    return dfltbutton;  // return default option
-  }
-
-  int save_msg_silent = msg_silent;
-  int oldState = State;
-
-  msg_silent = 0;  // If dialog prompts for input, user needs to see it! #8788
-
-  // Since we wait for a keypress, don't make the
-  // user press RETURN as well afterwards.
-  no_wait_return++;
-  char *hotkeys = rs_msg_show_console_dialog(message, buttons, dfltbutton);
-
-  while (true) {
-    // Without a UI Nvim waits for input forever.
-    if (!ui_active() && !input_available()) {
-      retval = dfltbutton;
-      break;
-    }
-
-    // Get a typed character directly from the user.
-    int c = prompt_for_input(confirm_buttons, HLF_M, true, NULL);
-    switch (c) {
-    case CAR:                 // User accepts default option
-    case NUL:
-      retval = dfltbutton;
-      break;
-    case Ctrl_C:              // User aborts/cancels
-    case ESC:
-      retval = 0;
-      break;
-    default:                  // Could be a hotkey?
-      if (c < 0) {            // special keys are ignored here
-        msg_didout = msg_didany = false;
-        continue;
-      }
-      if (c == ':' && ex_cmd) {
-        retval = dfltbutton;
-        ins_char_typebuf(':', 0, false);
-        break;
-      }
-
-      // Make the character lowercase, as chars in "hotkeys" are.
-      c = mb_tolower(c);
-      retval = 1;
-      for (i = 0; hotkeys[i]; i++) {
-        if (utf_ptr2char(hotkeys + i) == c) {
-          break;
-        }
-        i += utfc_ptr2len(hotkeys + i) - 1;
-        retval++;
-      }
-      if (hotkeys[i]) {
-        break;
-      }
-      // No hotkey match, so keep waiting
-      msg_didout = msg_didany = false;
-      continue;
-    }
-    break;
-  }
-
-  xfree(hotkeys);
-  xfree(confirm_msg);
-  confirm_msg = NULL;
-
-  msg_silent = save_msg_silent;
-  State = oldState;
-  setmouse();
-  no_wait_return--;
-  msg_end_prompt();
-
-  return retval;
-}
-
+// do_dialog() migrated to Rust (dialog.rs) with #[export_name = "do_dialog"]
 // copy_char, console_dialog_alloc, msg_show_console_dialog, copy_confirm_hotkeys
 // migrated to Rust (dialog.rs) as rs_msg_show_console_dialog
 // display_confirm_msg, vim_dialog_yesno, vim_dialog_yesnocancel, vim_dialog_yesnoallcancel

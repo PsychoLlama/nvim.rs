@@ -128,7 +128,9 @@ void msg_puts_hl(const char *s, int hl_id, bool hist);
 // Phase 5 (output): msg_puts_len migrated to Rust
 void msg_puts_len(const char *str, ptrdiff_t len, int hl_id, bool hist);
 
-// display_confirm_msg, vim_dialog_* migrated to Rust (dialog.rs)
+// do_dialog, display_confirm_msg, vim_dialog_* migrated to Rust (dialog.rs)
+int do_dialog(int type, const char *title, const char *message, const char *buttons,
+              int dfltbutton, const char *textfield, int ex_cmd);
 void display_confirm_msg(void);
 int vim_dialog_yesno(int type, char *title, char *message, int dflt);
 int vim_dialog_yesnocancel(int type, char *title, char *message, int dflt);

@@ -1070,6 +1070,31 @@ pub unsafe extern "C" fn rs_ex_messages(eap: *const c_void) {
     }
 }
 
+/// Send an empty msg_show UI event.
+///
+/// Equivalent to the C function `nvim_msg_show_empty()`.
+///
+/// # Safety
+/// Calls C UI function.
+#[export_name = "nvim_msg_show_empty"]
+pub unsafe extern "C" fn rs_nvim_msg_show_empty() {
+    ui_call_msg_show(
+        cstr_as_string(c"empty".as_ptr()),
+        Array {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        },
+        false,
+        false,
+        false,
+        Object {
+            obj_type: K_OBJECT_TYPE_INTEGER,
+            data: ObjectData { integer: -1 },
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests would require mocking C functions
