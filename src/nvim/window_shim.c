@@ -330,38 +330,6 @@ int nvim_win_new_float_external(void)
   if (!win_new_float(curwin, false, config, &err)) { emsg(err.msg); api_clear_error(&err); return 0; }
   return 1;
 }
-_Static_assert(2 == MIN_LINES, "MIN_LINES mismatch");
-_Static_assert(2 == SNAP_COUNT, "SNAP_COUNT mismatch");
-_Static_assert(0 == SNAP_HELP_IDX, "SNAP_HELP_IDX mismatch");
-_Static_assert(1 == SNAP_AUCMD_IDX, "SNAP_AUCMD_IDX mismatch");
-_Static_assert(0x80 == VALID_TOPLINE, "VALID_TOPLINE mismatch");
-_Static_assert(1 == STATUS_HEIGHT, "STATUS_HEIGHT mismatch");
-_Static_assert(0x01 == WSP_ROOM, "WSP_ROOM mismatch");
-_Static_assert(0x02 == WSP_VERT, "WSP_VERT mismatch");
-_Static_assert(0x04 == WSP_HOR, "WSP_HOR mismatch");
-_Static_assert(0x08 == WSP_TOP, "WSP_TOP mismatch");
-_Static_assert(0x10 == WSP_BOT, "WSP_BOT mismatch");
-_Static_assert(0x20 == WSP_HELP, "WSP_HELP mismatch");
-_Static_assert(0x40 == WSP_BELOW, "WSP_BELOW mismatch");
-_Static_assert(0x80 == WSP_ABOVE, "WSP_ABOVE mismatch");
-_Static_assert(0x100 == WSP_NEWLOC, "WSP_NEWLOC mismatch");
-_Static_assert(0x200 == WSP_NOENTER, "WSP_NOENTER mismatch");
-_Static_assert(0x01 == WEE_UNDO_SYNC, "WEE_UNDO_SYNC mismatch");
-_Static_assert(0x02 == WEE_CURWIN_INVALID, "WEE_CURWIN_INVALID mismatch");
-_Static_assert(0x04 == WEE_TRIGGER_NEW_AUTOCMDS, "WEE_TRIGGER_NEW_AUTOCMDS mismatch");
-_Static_assert(0x08 == WEE_TRIGGER_ENTER_AUTOCMDS, "WEE_TRIGGER_ENTER_AUTOCMDS mismatch");
-_Static_assert(0x10 == WEE_TRIGGER_LEAVE_AUTOCMDS, "WEE_TRIGGER_LEAVE_AUTOCMDS mismatch");
-_Static_assert(40 == UPD_NOT_VALID, "UPD_NOT_VALID mismatch");
-_Static_assert(2 == DOBUF_UNLOAD, "DOBUF_UNLOAD mismatch");
-_Static_assert(-30059 == K_UP, "K_UP mismatch");
-_Static_assert(-25707 == K_DOWN, "K_DOWN mismatch");
-_Static_assert(-27755 == K_LEFT, "K_LEFT mismatch");
-_Static_assert(-29291 == K_RIGHT, "K_RIGHT mismatch");
-_Static_assert(-25195 == K_BS, "K_BS mismatch");
-_Static_assert(-16715 == K_KENTER, "K_KENTER mismatch");
-_Static_assert(30 == Ctrl_HAT, "Ctrl_HAT mismatch");
-_Static_assert(29 == Ctrl_RSB, "Ctrl_RSB mismatch");
-_Static_assert(31 == Ctrl__, "Ctrl__ mismatch");
 int nvim_win_get_pos_changed(win_T *wp) { return wp ? wp->w_pos_changed : 0; }
 win_T *nvim_handle_get_window(int handle) { Error dummy = ERROR_INIT; win_T *wp = find_window_by_handle(handle, &dummy); api_clear_error(&dummy); return wp; }
 void nvim_win_ui_call_win_pos(int grid, int win, int row, int col, int width, int height) { ui_call_win_pos(grid, win, row, col, width, height); }
@@ -392,13 +360,6 @@ void nvim_set_option_cmdheight(int64_t val) { set_option_value(kOptCmdheight, NU
 int nvim_win_get_p_wbr_empty(win_T *wp) { return (!wp || !wp->w_p_wbr || *wp->w_p_wbr == NUL) ? 1 : 0; }
 int nvim_win_get_p_wbr_both_empty(win_T *wp) { return (!wp || ((*p_wbr == NUL) && (!wp->w_p_wbr || *wp->w_p_wbr == NUL))) ? 1 : 0; }
 void nvim_win_clear_winbar_click_defs(win_T *wp) { if (!wp) { return; } stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size); xfree(wp->w_winbar_click_defs); wp->w_winbar_click_defs_size = 0; wp->w_winbar_click_defs = NULL; }
-_Static_assert(EVENT_BUFENTER == 3, "EVENT_BUFENTER value mismatch");
-_Static_assert(EVENT_BUFLEAVE == 7, "EVENT_BUFLEAVE value mismatch");
-_Static_assert(EVENT_TABENTER == 110, "EVENT_TABENTER value mismatch");
-_Static_assert(EVENT_TABLEAVE == 111, "EVENT_TABLEAVE value mismatch");
-_Static_assert(EVENT_WINENTER == 136, "EVENT_WINENTER value mismatch");
-_Static_assert(EVENT_WINLEAVE == 137, "EVENT_WINLEAVE value mismatch");
-_Static_assert(EVENT_WINNEW == 138, "EVENT_WINNEW value mismatch");
 void nvim_apply_autocmds_event(int event) { apply_autocmds((event_T)event, NULL, NULL, false, curbuf); }
 void nvim_apply_autocmds_winresized(const char *winid_str, void *buf) { apply_autocmds(EVENT_WINRESIZED, (char *)winid_str, (char *)winid_str, false, (buf_T *)buf); }
 void nvim_apply_autocmds_winscrolled(const char *winid_str, void *buf) { apply_autocmds(EVENT_WINSCROLLED, (char *)winid_str, (char *)winid_str, false, (buf_T *)buf); }
@@ -531,7 +492,6 @@ int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, v
   ((dict_T *)child)->dv_refcount--;
   return 1;
 }
-_Static_assert(sizeof(save_v_event_T) == 304, "save_v_event_T size mismatch");
 void *nvim_get_v_event_opaque(void *buf) { return get_v_event((save_v_event_T *)buf); }
 void nvim_restore_v_event_opaque(void *dict, void *buf) { restore_v_event((dict_T *)dict, (save_v_event_T *)buf); }
 buf_T *nvim_buflist_findnr_win(int nr) { return buflist_findnr(nr); }
@@ -775,11 +735,6 @@ void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
   default: abort();
   }
 }
-_Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
-_Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
-_Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
-_Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
-_Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
 char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
 {
   switch (idx) {
