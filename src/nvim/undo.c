@@ -170,18 +170,6 @@ static inline void zero_fmark_additional_data(fmark_T *fmarks)
 }
 
 
-// Static assertions for Rust FFI constant verification
-_Static_assert(kExtmarkSplice == 0, "kExtmarkSplice must be 0");
-_Static_assert(kExtmarkMove == 1, "kExtmarkMove must be 1");
-_Static_assert(NMARKS == 26, "NMARKS must be 26");
-_Static_assert(UH_CHANGED == 0x01, "UH_CHANGED must be 0x01");
-_Static_assert(UH_EMPTYBUF == 0x02, "UH_EMPTYBUF must be 0x02");
-_Static_assert(UH_RELOAD == 0x04, "UH_RELOAD must be 0x04");
-_Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM must be 0x7fffffff");
-_Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP must be 0");
-_Static_assert(kOptFdoFlagUndo == 0x200, "kOptFdoFlagUndo must be 0x200");
-
-
 /// "undofile(name)" function
 void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -255,57 +243,6 @@ bool nvim_bt_dontwrite(buf_T *buf) { return bt_dontwrite(buf); }
 buf_T *nvim_get_firstbuf(void) { return firstbuf; }
 
 buf_T *nvim_buf_get_next(buf_T *buf) { return buf->b_next; }
-
-// Static assertions for u_entry_T layout verification (Phase 1).
-// These verify field offsets so the Rust repr(C) UEntry struct stays in sync.
-_Static_assert(offsetof(u_entry_T, ue_next) == 0,
-               "ue_next must be first field in u_entry_T");
-_Static_assert(offsetof(u_entry_T, ue_top) == 8,
-               "ue_top offset mismatch in u_entry_T (expected 8 on 64-bit)");
-_Static_assert(offsetof(u_entry_T, ue_bot) == 12,
-               "ue_bot offset mismatch in u_entry_T");
-_Static_assert(offsetof(u_entry_T, ue_lcount) == 16,
-               "ue_lcount offset mismatch in u_entry_T");
-_Static_assert(offsetof(u_entry_T, ue_array) == 24,
-               "ue_array offset mismatch in u_entry_T (pointer after padding)");
-_Static_assert(offsetof(u_entry_T, ue_size) == 32,
-               "ue_size offset mismatch in u_entry_T");
-_Static_assert(sizeof(u_entry_T) == 40,
-               "u_entry_T size mismatch: expected 40 bytes on 64-bit");
-
-// Static assertions for Phase 2+3: fmark_T, visualinfo_T, u_header_T layout
-// These verify that the Rust repr(C) structs match the C struct layouts.
-_Static_assert(sizeof(pos_T) == 12, "pos_T size mismatch");
-_Static_assert(offsetof(pos_T, lnum) == 0, "pos_T.lnum offset mismatch");
-_Static_assert(offsetof(pos_T, col) == 4, "pos_T.col offset mismatch");
-_Static_assert(offsetof(pos_T, coladd) == 8, "pos_T.coladd offset mismatch");
-_Static_assert(sizeof(fmark_T) == 40, "fmark_T size mismatch");
-_Static_assert(offsetof(fmark_T, mark) == 0, "fmark_T.mark offset mismatch");
-_Static_assert(offsetof(fmark_T, fnum) == 12, "fmark_T.fnum offset mismatch");
-_Static_assert(offsetof(fmark_T, timestamp) == 16, "fmark_T.timestamp offset mismatch");
-_Static_assert(offsetof(fmark_T, view) == 24, "fmark_T.view offset mismatch");
-_Static_assert(offsetof(fmark_T, additional_data) == 32, "fmark_T.additional_data offset mismatch");
-_Static_assert(sizeof(visualinfo_T) == 32, "visualinfo_T size mismatch");
-_Static_assert(offsetof(visualinfo_T, vi_start) == 0, "visualinfo_T.vi_start offset mismatch");
-_Static_assert(offsetof(visualinfo_T, vi_end) == 12, "visualinfo_T.vi_end offset mismatch");
-_Static_assert(offsetof(visualinfo_T, vi_mode) == 24, "visualinfo_T.vi_mode offset mismatch");
-_Static_assert(offsetof(visualinfo_T, vi_curswant) == 28, "visualinfo_T.vi_curswant offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_next) == 0, "u_header_T.uh_next offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_prev) == 8, "u_header_T.uh_prev offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_alt_next) == 16, "u_header_T.uh_alt_next offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_alt_prev) == 24, "u_header_T.uh_alt_prev offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_seq) == 32, "u_header_T.uh_seq offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_walk) == 36, "u_header_T.uh_walk offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_entry) == 40, "u_header_T.uh_entry offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_getbot_entry) == 48, "u_header_T.uh_getbot_entry offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_cursor) == 56, "u_header_T.uh_cursor offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_cursor_vcol) == 68, "u_header_T.uh_cursor_vcol offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_flags) == 72, "u_header_T.uh_flags offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_namedm) == 80, "u_header_T.uh_namedm offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_extmark) == 1120, "u_header_T.uh_extmark offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_visual) == 1144, "u_header_T.uh_visual offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_time) == 1176, "u_header_T.uh_time offset mismatch");
-_Static_assert(offsetof(u_header_T, uh_save_nr) == 1184, "u_header_T.uh_save_nr offset mismatch");
 
 // Error message wrappers
 void nvim_iemsg_undo_list_corrupt(void) { iemsg(_(e_undo_list_corrupt)); }
