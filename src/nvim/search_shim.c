@@ -1,5 +1,4 @@
 // search_shim.c: C accessor functions and remaining logic for search module
-// (migrated from search.c; logic functions will be moved to Rust in future phases)
 
 #include <assert.h>
 #include <inttypes.h>
