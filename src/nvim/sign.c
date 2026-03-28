@@ -9,7 +9,6 @@
 
 #include "klib/kvec.h"
 #include "nvim/api/extmark.h"
-#include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer.h"
@@ -28,17 +27,14 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/extmark.h"
-#include "nvim/fold.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/grid.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/highlight_group.h"
 #include "nvim/macros_defs.h"
 #include "nvim/map_defs.h"
 #include "nvim/marktree.h"
 #include "nvim/marktree_defs.h"
-#include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/pos_defs.h"
@@ -51,15 +47,10 @@
 
 #include "sign.c.generated.h"
 
-// Rust fold FFI declaration
+// Rust FFI
 extern void rs_foldOpenCursor(void);
-
-// Rust sign exports
 extern void sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group, list_T *retlist);
 extern int64_t group_get_ns(const char *group);
-
-
-// Rust FFI declarations
 extern int rs_sign_row_cmp(int row1, int row2);
 extern int rs_sign_cmd_idx(const char *cmd);
 extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
@@ -67,17 +58,13 @@ extern bool rs_sign_buffer_has_signs(const buf_T *buf);
 extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
 extern void rs_sign_list_defined(sign_T *sp);
 extern void rs_sign_list_by_name(const char *name);
-extern int rs_sign_define_by_name(const char *name, const char *icon, const char *text,
-                                  const char *linehl, const char *texthl,
-                                  const char *culhl, const char *numhl, int prio);
+extern int rs_sign_define_by_name(const char *name, const char *icon, const char *text, const char *linehl, const char *texthl, const char *culhl, const char *numhl, int prio);
 extern int rs_sign_undefine_by_name(const char *name);
 extern size_t rs_describe_sign_text(char *buf, size_t buf_len, schar_T *sign_text);
-extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf,
-                         linenr_T lnum, int prio);
+extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf, linenr_T lnum, int prio);
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
 extern void sign_define_cmd(char *name, char *cmdline);
-extern int parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group, int *prio,
-                               buf_T **buf, linenr_T *lnum);
+extern int parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group, int *prio, buf_T **buf, linenr_T *lnum);
 extern void sign_place_cmd(buf_T *buf, linenr_T lnum, char *name, int id, char *group, int prio);
 extern void sign_unplace_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
 extern void sign_jump_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
@@ -102,24 +89,19 @@ static char *cmds[] = {
 #define SIGNCMD_LAST    6
 };
 
-/// qsort() function to sort signs by line number, priority, id and recency.
 static int sign_row_cmp(const void *p1, const void *p2)
 {
   const MTKey *s1 = (MTKey *)p1;
   const MTKey *s2 = (MTKey *)p2;
-
-  // Compare rows first using Rust helper
   int row_cmp = rs_sign_row_cmp(s1->pos.row, s2->pos.row);
   if (row_cmp != 0) {
     return row_cmp;
   }
-
   DecorSignHighlight *sh1 = decor_find_sign(mt_decor(*s1));
   DecorSignHighlight *sh2 = decor_find_sign(mt_decor(*s2));
   assert(sh1 && sh2);
   SignItem si1 = { sh1, s1->id };
   SignItem si2 = { sh2, s2->id };
-
   return sign_item_cmp(&si1, &si2);
 }
 
@@ -133,31 +115,11 @@ static enum {
   EXP_SIGN_GROUPS,  // expand with name of placed sign groups
 } expand_what;
 
-// Accessor functions for Rust sign crate
-
-/// Get sign by name from the sign map
 sign_T *nvim_sign_map_get(const char *name)
-{
-  if (name == NULL) {
-    return NULL;
-  }
-  return pmap_get(cstr_t)(&sign_map, name);
-}
-
-/// Check if sign exists in the map
+{ return name ? pmap_get(cstr_t)(&sign_map, name) : NULL; }
 int nvim_sign_map_has(const char *name)
-{
-  if (name == NULL) {
-    return 0;
-  }
-  return map_has(cstr_t, &sign_map, name) ? 1 : 0;
-}
-
-
-/// Build a DecorSignHighlight from sign properties and place/update an extmark.
-/// This composite accessor keeps complex struct construction on the C side.
-void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row,
-                                   sign_T *sp, int prio)
+{ return name ? (map_has(cstr_t, &sign_map, name) ? 1 : 0) : 0; }
+void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row, sign_T *sp, int prio)
 {
   DecorSignHighlight sign = DECOR_SIGN_HIGHLIGHT_INIT;
   sign.flags |= kSHIsSign;
@@ -168,67 +130,38 @@ void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int ro
   sign.number_hl_id = sp->sn_num_hl;
   sign.cursorline_hl_id = sp->sn_cul_hl;
   sign.priority = (DecorPriority)prio;
-
   bool has_hl = (sp->sn_line_hl || sp->sn_num_hl || sp->sn_cul_hl);
   uint16_t decor_flags = (sp->sn_text[0] ? MT_FLAG_DECOR_SIGNTEXT : 0)
                          | (has_hl ? MT_FLAG_DECOR_SIGNHL : 0);
-
   DecorInline decor = { .ext = true, .data.ext = { .vt = NULL, .sh_idx = decor_put_sh(sign) } };
   extmark_set(buf, ns, id, row, 0, -1, -1, decor, decor_flags, true, false, true, true, NULL);
 }
-
-/// Look up a sign in the marktree by namespace and ID.
-/// Returns the 1-based line number, or 0 if not found.
 linenr_T nvim_sign_marktree_lookup_row(buf_T *buf, uint32_t ns, uint32_t id)
-{
-  MTKey mark = rs_marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL);
-  return mark.pos.row + 1;
-}
-
-/// Get the line count of a buffer (for sign operations).
+{ MTKey mark = rs_marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL); return mark.pos.row + 1; }
 linenr_T nvim_sign_buf_line_count(buf_T *buf) { return buf ? buf->b_ml.ml_line_count : 0; }
-
-/// Push a namespace ID onto the sign_ns kvec.
 void nvim_sign_ns_push(Integer ns) { kv_push(sign_ns, ns); }
-
-/// Create a namespace from a C string name.
 int nvim_sign_create_namespace_cstr(const char *name) { return (int)nvim_create_namespace(cstr_as_string(name)); }
+int nvim_sign_namespace_exists(const char *name) { return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0; }
 
-/// Check if a namespace with the given name exists.
-int nvim_sign_namespace_exists(const char *name)
-{
-  return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0;
-}
-
-/// Implement sign definition — allocate/update in sign_map, set all fields.
-/// Returns OK on success, FAIL on failure.
-/// Error messages are handled by caller.
-int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char *text,
-                                  const char *linehl, const char *texthl,
-                                  const char *culhl, const char *numhl, int prio)
+int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char *text, const char *linehl, const char *texthl, const char *culhl, const char *numhl, int prio)
 {
   cstr_t *key;
   bool new_sign = false;
   sign_T **sp = (sign_T **)pmap_put_ref(cstr_t)(&sign_map, name, &key, &new_sign);
-
   if (new_sign) {
     *key = xstrdup(name);
     *sp = xcalloc(1, sizeof(sign_T));
     (*sp)->sn_name = (char *)(*key);
   }
-
   if (icon != NULL) {
     xfree((*sp)->sn_icon);
     (*sp)->sn_icon = xstrdup(icon);
     backslash_halve((*sp)->sn_icon);
   }
-
   if (text != NULL && (init_sign_text(*sp, (*sp)->sn_text, (char *)text) == FAIL)) {
     return FAIL;
   }
-
   (*sp)->sn_priority = prio;
-
   const char *arg[] = { linehl, texthl, culhl, numhl };
   int *hl[] = { &(*sp)->sn_line_hl, &(*sp)->sn_text_hl, &(*sp)->sn_cul_hl, &(*sp)->sn_num_hl };
   for (int i = 0; i < 4; i++) {
@@ -236,7 +169,6 @@ int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char
       *hl[i] = *arg[i] ? syn_check_group(arg[i], strlen(arg[i])) : 0;
     }
   }
-
   // Update already placed signs and redraw if necessary when modifying a sign.
   if (!new_sign) {
     bool did_redraw = false;
@@ -261,34 +193,20 @@ int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char
   }
   return OK;
 }
-
-/// Undefine a sign by name — remove from map and free.
-/// Returns OK on success, FAIL if not found (no error message emitted).
 int nvim_sign_undefine_by_name_impl(const char *name)
 {
   sign_T *sp = pmap_del(cstr_t)(&sign_map, name, NULL);
-  if (sp == NULL) {
-    return FAIL;
-  }
-  xfree(sp->sn_name);
-  xfree(sp->sn_icon);
-  xfree(sp);
+  if (sp == NULL) { return FAIL; }
+  xfree(sp->sn_name); xfree(sp->sn_icon); xfree(sp);
   return OK;
 }
-
-
-
-/// Jump to a sign — composite accessor.
-/// Returns lnum on success, -1 on failure. Error messages stay in C.
 linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
 {
   linenr_T lnum = rs_buf_findsign(buf, id, group);
-
   if (lnum <= 0) {
     semsg(_("E157: Invalid sign ID: %" PRId32), id);
     return -1;
   }
-
   if (buf_jump_open_win(buf) != NULL) {
     curwin->w_cursor.lnum = lnum;
     check_cursor_lnum(curwin);
@@ -304,45 +222,26 @@ linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
     do_cmdline_cmd(cmd);
     xfree(cmd);
   }
-
   rs_foldOpenCursor();
   return lnum;
 }
-
-/// Free all signs — iterate map and undefine each.
 void nvim_sign_free_all_impl(void)
 {
-  cstr_t name;
-  kvec_t(cstr_t) names = KV_INITIAL_VALUE;
-  map_foreach_key(&sign_map, name, {
-    kv_push(names, name);
-  });
-  for (size_t i = 0; i < kv_size(names); i++) {
-    nvim_sign_undefine_by_name_impl(kv_A(names, i));
-  }
+  cstr_t name; kvec_t(cstr_t) names = KV_INITIAL_VALUE;
+  map_foreach_key(&sign_map, name, { kv_push(names, name); });
+  for (size_t i = 0; i < kv_size(names); i++) { nvim_sign_undefine_by_name_impl(kv_A(names, i)); }
   kv_destroy(names);
 }
-
-/// Perform the marktree iteration + sorting + deletion for sign removal.
-/// This composite accessor keeps MarkTreeIter on the C side.
-///
-/// @param buf  buffer
-/// @param ns  namespace filter (0 = global, UINT32_MAX = all)
-/// @param id  sign ID filter (0 = all matching)
-/// @param atlnum  line number (> 0 = specific line, <= 0 = any line)
-/// @return OK on success, FAIL on failure
 int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
 {
   MarkTreeIter itr[1];
   int row = atlnum > 0 ? atlnum - 1 : 0;
   kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-
   // Store signs at a specific line number to remove one later.
   if (atlnum > 0) {
     if (!rs_marktree_itr_get_overlap(buf->b_marktree, row, 0, itr)) {
       return FAIL;
     }
-
     MTPair pair;
     while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
       if ((ns == UINT32_MAX || ns == pair.start.ns) && mt_decor_sign(pair.start)) {
@@ -352,7 +251,6 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
   } else {
     rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
   }
-
   while (itr->x) {
     MTKey mark = rs_marktree_itr_current(itr);
     if (row && mark.pos.row > row) {
@@ -371,7 +269,6 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
       rs_marktree_itr_next(buf->b_marktree, itr);
     }
   }
-
   // Sort to remove the highest priority sign at a specific line number.
   if (kv_size(signs)) {
     qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
@@ -380,12 +277,8 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
   } else if (atlnum > 0) {
     return FAIL;
   }
-
   return OK;
 }
-
-/// List placed signs for a buffer or all buffers — composite accessor.
-/// Performs marktree iteration, sorting, and message output.
 void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
 {
   char lbuf[MSG_BUF_LEN];
@@ -393,22 +286,18 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
   char groupbuf[MSG_BUF_LEN];
   buf_T *buf = rbuf ? rbuf : firstbuf;
   int64_t ns = group_get_ns(group);
-
   msg_puts_title(_("\n--- Signs ---"));
   msg_putchar('\n');
-
   while (buf != NULL && !got_int) {
     if (rs_sign_buffer_has_signs(buf)) {
       vim_snprintf(lbuf, MSG_BUF_LEN, _("Signs for %s:"), buf->b_fname);
       msg_puts_hl(lbuf, HLF_D, false);
       msg_putchar('\n');
     }
-
     if (ns >= 0) {
       MarkTreeIter itr[1];
       kvec_t(MTKey) signs = KV_INITIAL_VALUE;
       rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
-
       while (itr->x) {
         MTKey mark = rs_marktree_itr_current(itr);
         if (!mt_end(mark) && mt_decor_sign(mark)
@@ -417,15 +306,12 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
         }
         rs_marktree_itr_next(buf->b_marktree, itr);
       }
-
       if (kv_size(signs)) {
         qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
-
         for (size_t i = 0; i < kv_size(signs); i++) {
           namebuf[0] = NUL;
           groupbuf[0] = NUL;
           MTKey mark = kv_A(signs, i);
-
           DecorSignHighlight *sh = decor_find_sign(mt_decor(mark));
           if (sh->sign_name != NULL) {
             vim_snprintf(namebuf, MSG_BUF_LEN, _("  name=%s"), rs_sign_get_display_name(sh));
@@ -441,16 +327,12 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
         kv_destroy(signs);
       }
     }
-
     if (rbuf != NULL) {
       return;
     }
     buf = buf->b_next;
   }
 }
-
-/// List a sign definition — composite accessor.
-/// Formats and outputs a single sign definition using message APIs.
 void nvim_sign_list_defined_impl(sign_T *sp)
 {
   smsg(0, "sign %s", sp->sn_name);
@@ -480,14 +362,9 @@ void nvim_sign_list_defined_impl(sign_T *sp)
     }
   }
 }
-
-
-
-/// ":sign" command — composite accessor.
 void nvim_ex_sign_impl(exarg_T *eap)
 {
   char *arg = eap->arg;
-
   // Parse the subcommand.
   char *p = skiptowhite(arg);
   char save_p = *p;
@@ -499,7 +376,6 @@ void nvim_ex_sign_impl(exarg_T *eap)
     return;
   }
   arg = skipwhite(p);
-
   if (idx <= SIGNCMD_LIST) {
     // Define, undefine or list signs.
     if (idx == SIGNCMD_LIST && *arg == NUL) {
@@ -520,7 +396,6 @@ void nvim_ex_sign_impl(exarg_T *eap)
       while (arg[0] == '0' && arg[1] != NUL) {
         arg++;
       }
-
       if (idx == SIGNCMD_DEFINE) {
         sign_define_cmd(arg, p);
       } else if (idx == SIGNCMD_LIST) {
@@ -532,7 +407,6 @@ void nvim_ex_sign_impl(exarg_T *eap)
           semsg(_("E155: Unknown sign: %s"), arg);
         }
       }
-
       return;
     }
   } else {
@@ -542,12 +416,10 @@ void nvim_ex_sign_impl(exarg_T *eap)
     char *group = NULL;
     int prio = -1;
     buf_T *buf = NULL;
-
     // Parse command line arguments
     if (parse_sign_cmd_args(idx, arg, &name, &id, &group, &prio, &buf, &lnum) == FAIL) {
       return;
     }
-
     if (idx == SIGNCMD_PLACE) {
       sign_place_cmd(buf, lnum, name, id, group, prio);
     } else if (idx == SIGNCMD_UNPLACE) {
@@ -557,33 +429,14 @@ void nvim_ex_sign_impl(exarg_T *eap)
     }
   }
 }
-
-// Command completion composite accessors
-
-/// Get the n'th sign name from the sign_map.
 char *nvim_sign_get_nth_name(int idx)
 {
-  cstr_t name;
-  int current_idx = 0;
-  map_foreach_key(&sign_map, name, {
-    if (current_idx++ == idx) {
-      return (char *)name;
-    }
-  });
+  cstr_t name; int current_idx = 0;
+  map_foreach_key(&sign_map, name, { if (current_idx++ == idx) { return (char *)name; } });
   return NULL;
 }
-
-/// Get the n'th sign group name.
 char *nvim_sign_get_nth_group_name(int idx)
-{
-  if (idx < (int)kv_size(sign_ns)) {
-    return (char *)describe_ns((NS)kv_A(sign_ns, idx), "");
-  }
-  return NULL;
-}
-
-
-/// get_sign_name composite accessor — does the full switch on expand_what.
+{ return idx < (int)kv_size(sign_ns) ? (char *)describe_ns((NS)kv_A(sign_ns, idx), "") : NULL; }
 char *nvim_get_sign_name_impl(expand_T *xp, int idx)
 {
   switch (expand_what) {
@@ -614,26 +467,20 @@ char *nvim_get_sign_name_impl(expand_T *xp, int idx)
     return NULL;
   }
 }
-
-/// set_context_in_sign_cmd composite accessor — full completion context logic.
 void nvim_set_context_in_sign_cmd_impl(expand_T *xp, char *arg)
 {
-  // Default: expand subcommands.
   xp->xp_context = EXPAND_SIGN;
   expand_what = EXP_SUBCMD;
   xp->xp_pattern = arg;
-
   char *end_subcmd = skiptowhite(arg);
   if (*end_subcmd == NUL) {
     return;
   }
-
   char save_end = *end_subcmd;
   *end_subcmd = NUL;
   int cmd_idx = rs_sign_cmd_idx(arg);
   *end_subcmd = save_end;
   char *begin_subcmd_args = skipwhite(end_subcmd);
-
   // Loop until reaching last argument.
   char *last;
   char *p = begin_subcmd_args;
@@ -642,9 +489,7 @@ void nvim_set_context_in_sign_cmd_impl(expand_T *xp, char *arg)
     last = p;
     p = skiptowhite(p);
   } while (*p != NUL);
-
   p = vim_strchr(last, '=');
-
   if (p == NULL) {
     xp->xp_pattern = last;
     switch (cmd_idx) {
@@ -710,16 +555,10 @@ void nvim_set_context_in_sign_cmd_impl(expand_T *xp, char *arg)
     }
   }
 }
-
-// Phase 10: VimL function composite accessors
-
-/// Build info dict for a defined sign — composite accessor.
 dict_T *nvim_sign_get_info_dict_impl(sign_T *sp)
 {
   dict_T *d = tv_dict_alloc();
-
   tv_dict_add_str(d, S_LEN("name"), sp->sn_name);
-
   if (sp->sn_icon != NULL) {
     tv_dict_add_str(d, S_LEN("icon"), sp->sn_icon);
   }
@@ -741,14 +580,10 @@ dict_T *nvim_sign_get_info_dict_impl(sign_T *sp)
   }
   return d;
 }
-
-/// Build info dict for a placed sign — composite accessor.
 dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark)
 {
   dict_T *d = tv_dict_alloc();
-
   DecorSignHighlight *sh = decor_find_sign(mt_decor(*mark));
-
   tv_dict_add_str(d, S_LEN("name"), rs_sign_get_display_name(sh));
   tv_dict_add_nr(d,  S_LEN("id"), (int)mark->id);
   tv_dict_add_str(d, S_LEN("group"), describe_ns((int)mark->ns, ""));
@@ -756,14 +591,11 @@ dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark)
   tv_dict_add_nr(d,  S_LEN("priority"), sh->priority);
   return d;
 }
-
-/// Get buffer signs as list — composite accessor.
 list_T *nvim_get_buffer_signs_impl(buf_T *buf)
 {
   list_T *const l = tv_list_alloc(kListLenMayKnow);
   MarkTreeIter itr[1];
   rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
-
   while (itr->x) {
     MTKey mark = rs_marktree_itr_current(itr);
     if (!mt_end(mark) && mt_decor_sign(mark)) {
@@ -771,31 +603,22 @@ list_T *nvim_get_buffer_signs_impl(buf_T *buf)
     }
     rs_marktree_itr_next(buf->b_marktree, itr);
   }
-
   return l;
 }
-
-/// Get placed signs in buffer — composite accessor.
-void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group,
-                                      list_T *retlist)
+void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group, list_T *retlist)
 {
   dict_T *d = tv_dict_alloc();
   tv_list_append_dict(retlist, d);
-
   tv_dict_add_nr(d, S_LEN("bufnr"), buf->b_fnum);
-
   list_T *l = tv_list_alloc(kListLenMayKnow);
   tv_dict_add_list(d, S_LEN("signs"), l);
-
   int64_t ns = group_get_ns(group);
   if (!rs_sign_buffer_has_signs(buf) || ns < 0) {
     return;
   }
-
   MarkTreeIter itr[1];
   kvec_t(MTKey) signs = KV_INITIAL_VALUE;
   rs_marktree_itr_get(buf->b_marktree, lnum ? lnum - 1 : 0, 0, itr);
-
   while (itr->x) {
     MTKey mark = rs_marktree_itr_current(itr);
     if (lnum && mark.pos.row >= lnum) {
@@ -813,7 +636,6 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
     }
     rs_marktree_itr_next(buf->b_marktree, itr);
   }
-
   if (kv_size(signs)) {
     qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
     for (size_t i = 0; i < kv_size(signs); i++) {
@@ -822,9 +644,6 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
     kv_destroy(signs);
   }
 }
-
-
-/// Define sign from dict — composite accessor.
 int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
 {
   if (name == NULL) {
@@ -833,7 +652,6 @@ int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
       return -1;
     }
   }
-
   char *icon = NULL;
   char *linehl = NULL;
   char *text = NULL;
@@ -841,7 +659,6 @@ int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
   char *culhl = NULL;
   char *numhl = NULL;
   int prio = -1;
-
   if (dict != NULL) {
     icon = tv_dict_get_string(dict, "icon", false);
     linehl = tv_dict_get_string(dict, "linehl", false);
@@ -851,30 +668,20 @@ int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
     numhl = tv_dict_get_string(dict, "numhl", false);
     prio = (int)tv_dict_get_number_def(dict, "priority", -1);
   }
-
   return rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1;
 }
-
-/// Define multiple signs — composite accessor.
 void nvim_sign_define_multiple_impl(list_T *l, list_T *retlist)
 {
   TV_LIST_ITER_CONST(l, li, {
-    int retval = -1;
-    if (TV_LIST_ITEM_TV(li)->v_type == VAR_DICT) {
-      retval = nvim_sign_define_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict);
-    } else {
-      emsg(_(e_dictreq));
-    }
+    int retval = TV_LIST_ITEM_TV(li)->v_type == VAR_DICT
+                 ? nvim_sign_define_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict)
+                 : (emsg(_(e_dictreq)), -1);
     tv_list_append_number(retlist, retval);
   });
 }
-
-/// Place sign from dict — composite accessor.
-int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T *name_tv,
-                                   typval_T *buf_tv, dict_T *dict)
+int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T *name_tv, typval_T *buf_tv, dict_T *dict)
 {
   dictitem_T *di;
-
   int id = 0;
   bool notanum = false;
   if (id_tv == NULL) {
@@ -893,7 +700,6 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
       return -1;
     }
   }
-
   char *group = NULL;
   if (group_tv == NULL) {
     di = tv_dict_find(dict, "group", -1);
@@ -910,7 +716,6 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
       group = NULL;
     }
   }
-
   char *name = NULL;
   if (name_tv == NULL) {
     di = tv_dict_find(dict, "name", -1);
@@ -925,7 +730,6 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
   if (name == NULL) {
     return -1;
   }
-
   if (buf_tv == NULL) {
     di = tv_dict_find(dict, "buffer", -1);
     if (di != NULL) {
@@ -939,7 +743,6 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
   if (buf == NULL) {
     return -1;
   }
-
   linenr_T lnum = 0;
   di = tv_dict_find(dict, "lnum", -1);
   if (di != NULL) {
@@ -949,7 +752,6 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
       return -1;
     }
   }
-
   int prio = -1;
   di = tv_dict_find(dict, "priority", -1);
   if (di != NULL) {
@@ -958,16 +760,12 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
       return -1;
     }
   }
-
   uint32_t uid = (uint32_t)id;
   if (rs_sign_place(&uid, group, name, buf, lnum, prio) == OK) {
     return (int)uid;
   }
-
   return -1;
 }
-
-/// Unplace sign from dict — composite accessor.
 int nvim_sign_unplace_from_dict_impl(typval_T *group_tv, dict_T *dict)
 {
   dictitem_T *di;
@@ -978,7 +776,6 @@ int nvim_sign_unplace_from_dict_impl(typval_T *group_tv, dict_T *dict)
   if (group != NULL && group[0] == NUL) {
     group = NULL;
   }
-
   if (dict != NULL) {
     if ((di = tv_dict_find(dict, "buffer", -1)) != NULL) {
       buf = get_buf_arg(&di->di_tv);
@@ -994,24 +791,15 @@ int nvim_sign_unplace_from_dict_impl(typval_T *group_tv, dict_T *dict)
       }
     }
   }
-
   return rs_sign_unplace(buf, id, group, 0) - 1;
 }
-
-/// Undefine multiple signs — composite accessor.
 void nvim_sign_undefine_multiple_impl(list_T *l, list_T *retlist)
 {
   TV_LIST_ITER_CONST(l, li, {
-    int retval = -1;
     char *name = (char *)tv_get_string_chk(TV_LIST_ITEM_TV(li));
-    if (name != NULL && (rs_sign_undefine_by_name(name) == OK)) {
-      retval = 0;
-    }
-    tv_list_append_number(retlist, retval);
+    tv_list_append_number(retlist, name && rs_sign_undefine_by_name(name) == OK ? 0 : -1);
   });
 }
-
-/// f_sign_define — composite accessor.
 void nvim_f_sign_define_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   if (argvars[0].v_type == VAR_LIST && argvars[1].v_type == VAR_UNKNOWN) {
@@ -1019,27 +807,16 @@ void nvim_f_sign_define_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *f
     nvim_sign_define_multiple_impl(argvars[0].vval.v_list, rettv->vval.v_list);
     return;
   }
-
   rettv->vval.v_number = -1;
-
   char *name = (char *)tv_get_string_chk(&argvars[0]);
-  if (name == NULL) {
-    return;
-  }
-
-  if (tv_check_for_opt_dict_arg(argvars, 1) == FAIL) {
-    return;
-  }
-
+  if (name == NULL) { return; }
+  if (tv_check_for_opt_dict_arg(argvars, 1) == FAIL) { return; }
   dict_T *d = argvars[1].v_type == VAR_DICT ? argvars[1].vval.v_dict : NULL;
   rettv->vval.v_number = nvim_sign_define_from_dict_impl(name, d);
 }
-
-/// f_sign_getdefined — composite accessor.
 void nvim_f_sign_getdefined_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   tv_list_alloc_ret(rettv, 0);
-
   if (argvars[0].v_type == VAR_UNKNOWN) {
     sign_T *sp;
     map_foreach_value(&sign_map, sp, {
@@ -1052,8 +829,6 @@ void nvim_f_sign_getdefined_impl(typval_T *argvars, typval_T *rettv, EvalFuncDat
     }
   }
 }
-
-/// f_sign_getplaced — composite accessor.
 void nvim_f_sign_getplaced_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   buf_T *buf = NULL;
@@ -1061,15 +836,12 @@ void nvim_f_sign_getplaced_impl(typval_T *argvars, typval_T *rettv, EvalFuncData
   int sign_id = 0;
   const char *group = NULL;
   bool notanum = false;
-
   tv_list_alloc_ret(rettv, 0);
-
   if (argvars[0].v_type != VAR_UNKNOWN) {
     buf = get_buf_arg(&argvars[0]);
     if (buf == NULL) {
       return;
     }
-
     if (argvars[1].v_type != VAR_UNKNOWN) {
       if (tv_check_for_nonnull_dict_arg(argvars, 1) == FAIL) {
         return;
@@ -1099,82 +871,45 @@ void nvim_f_sign_getplaced_impl(typval_T *argvars, typval_T *rettv, EvalFuncData
       }
     }
   }
-
   sign_get_placed(buf, lnum, sign_id, group, rettv->vval.v_list);
 }
-
-/// f_sign_jump — composite accessor.
 void nvim_f_sign_jump_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   rettv->vval.v_number = -1;
-
   bool notanum = false;
   int id = (int)tv_get_number_chk(&argvars[0], &notanum);
-  if (notanum) {
-    return;
-  }
-  if (id <= 0) {
-    emsg(_(e_invarg));
-    return;
-  }
-
+  if (notanum) { return; }
+  if (id <= 0) { emsg(_(e_invarg)); return; }
   char *group = (char *)tv_get_string_chk(&argvars[1]);
-  if (group == NULL) {
-    return;
-  }
-  if (group[0] == NUL) {
-    group = NULL;
-  }
-
+  if (group == NULL) { return; }
+  if (group[0] == NUL) { group = NULL; }
   buf_T *buf = get_buf_arg(&argvars[2]);
-  if (buf == NULL) {
-    return;
-  }
-
+  if (buf == NULL) { return; }
   rettv->vval.v_number = nvim_sign_jump_impl(id, group, buf);
 }
-
-/// f_sign_place — composite accessor.
 void nvim_f_sign_place_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   dict_T *dict = NULL;
-
   rettv->vval.v_number = -1;
-
   if (argvars[4].v_type != VAR_UNKNOWN) {
     if (tv_check_for_nonnull_dict_arg(argvars, 4) == FAIL) {
       return;
     }
     dict = argvars[4].vval.v_dict;
   }
-
-  rettv->vval.v_number = nvim_sign_place_from_dict_impl(&argvars[0], &argvars[1],
-                                                       &argvars[2], &argvars[3], dict);
+  rettv->vval.v_number = nvim_sign_place_from_dict_impl(&argvars[0], &argvars[1], &argvars[2], &argvars[3], dict);
 }
-
-/// f_sign_placelist — composite accessor.
 void nvim_f_sign_placelist_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   tv_list_alloc_ret(rettv, kListLenMayKnow);
-
-  if (argvars[0].v_type != VAR_LIST) {
-    emsg(_(e_listreq));
-    return;
-  }
-
+  if (argvars[0].v_type != VAR_LIST) { emsg(_(e_listreq)); return; }
   TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
-    int sign_id = -1;
-    if (TV_LIST_ITEM_TV(li)->v_type == VAR_DICT) {
-      sign_id = nvim_sign_place_from_dict_impl(NULL, NULL, NULL, NULL,
-                                              TV_LIST_ITEM_TV(li)->vval.v_dict);
-    } else {
-      emsg(_(e_dictreq));
-    }
+    int sign_id = TV_LIST_ITEM_TV(li)->v_type == VAR_DICT
+                  ? nvim_sign_place_from_dict_impl(NULL, NULL, NULL, NULL, TV_LIST_ITEM_TV(li)->vval.v_dict)
+                  : (emsg(_(e_dictreq)), -1);
     tv_list_append_number(rettv->vval.v_list, sign_id);
   });
 }
-
-/// f_sign_undefine — composite accessor.
 void nvim_f_sign_undefine_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   if (argvars[0].v_type == VAR_LIST && argvars[1].v_type == VAR_UNKNOWN) {
@@ -1182,60 +917,31 @@ void nvim_f_sign_undefine_impl(typval_T *argvars, typval_T *rettv, EvalFuncData 
     nvim_sign_undefine_multiple_impl(argvars[0].vval.v_list, rettv->vval.v_list);
     return;
   }
-
   rettv->vval.v_number = -1;
-
   if (argvars[0].v_type == VAR_UNKNOWN) {
-    nvim_sign_free_all_impl();
-    rettv->vval.v_number = 0;
+    nvim_sign_free_all_impl(); rettv->vval.v_number = 0;
   } else {
     const char *name = tv_get_string_chk(&argvars[0]);
-    if (name == NULL) {
-      return;
-    }
-
-    if (rs_sign_undefine_by_name(name) == OK) {
-      rettv->vval.v_number = 0;
-    }
+    if (name == NULL) { return; }
+    if (rs_sign_undefine_by_name(name) == OK) { rettv->vval.v_number = 0; }
   }
 }
-
-/// f_sign_unplace — composite accessor.
 void nvim_f_sign_unplace_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   dict_T *dict = NULL;
-
   rettv->vval.v_number = -1;
-
-  if (tv_check_for_string_arg(argvars, 0) == FAIL
-      || tv_check_for_opt_dict_arg(argvars, 1) == FAIL) {
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    dict = argvars[1].vval.v_dict;
-  }
-
+  if (tv_check_for_string_arg(argvars, 0) == FAIL || tv_check_for_opt_dict_arg(argvars, 1) == FAIL) { return; }
+  if (argvars[1].v_type != VAR_UNKNOWN) { dict = argvars[1].vval.v_dict; }
   rettv->vval.v_number = nvim_sign_unplace_from_dict_impl(&argvars[0], dict);
 }
-
-/// f_sign_unplacelist — composite accessor.
 void nvim_f_sign_unplacelist_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
 {
   tv_list_alloc_ret(rettv, kListLenMayKnow);
-
-  if (argvars[0].v_type != VAR_LIST) {
-    emsg(_(e_listreq));
-    return;
-  }
-
+  if (argvars[0].v_type != VAR_LIST) { emsg(_(e_listreq)); return; }
   TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
-    int retval = -1;
-    if (TV_LIST_ITEM_TV(li)->v_type == VAR_DICT) {
-      retval = nvim_sign_unplace_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict);
-    } else {
-      emsg(_(e_dictreq));
-    }
+    int retval = TV_LIST_ITEM_TV(li)->v_type == VAR_DICT
+                 ? nvim_sign_unplace_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict)
+                 : (emsg(_(e_dictreq)), -1);
     tv_list_append_number(rettv->vval.v_list, retval);
   });
 }
