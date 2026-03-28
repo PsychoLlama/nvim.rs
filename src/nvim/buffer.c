@@ -186,53 +186,8 @@ _Static_assert(CMD_sbprevious == 394, "CMD_sbprevious mismatch with Rust");
 
 // BufFreeFlags moved to buffer.h (Phase 22).
 
-/// Read data from buffer for retrying.
-///
-/// @param read_stdin  read file from stdin, otherwise fifo
-/// @param eap  for forced 'ff' and 'fenc' or NULL
-/// @param flags  extra flags for readfile()
-static int read_buffer(bool read_stdin, exarg_T *eap, int flags)
-{
-  int retval = OK;
-  bool silent = shortmess(SHM_FILEINFO);
-
-  // Read from the buffer which the text is already filled in and append at
-  // the end.  This makes it possible to retry when 'fileformat' or
-  // 'fileencoding' was guessed wrong.
-  linenr_T line_count = curbuf->b_ml.ml_line_count;
-  retval = readfile(read_stdin ? NULL : curbuf->b_ffname,
-                    read_stdin ? NULL : curbuf->b_fname,
-                    line_count, 0, (linenr_T)MAXLNUM, eap,
-                    flags | READ_BUFFER, silent);
-  if (retval == OK) {
-    // Delete the binary lines.
-    while (--line_count >= 0) {
-      ml_delete(1);
-    }
-  } else {
-    // Delete the converted lines.
-    while (curbuf->b_ml.ml_line_count > line_count) {
-      ml_delete(line_count);
-    }
-  }
-  // Put the cursor on the first line.
-  curwin->w_cursor.lnum = 1;
-  curwin->w_cursor.col = 0;
-
-  if (read_stdin) {
-    // Set or reset 'modified' before executing autocommands, so that
-    // it can be changed there.
-    if (!readonlymode && !buf_is_empty(curbuf)) {
-      changed(curbuf);
-    } else if (retval != FAIL) {
-      unchanged(curbuf, false, true);
-    }
-
-    apply_autocmds_retval(EVENT_STDINREADPOST, NULL, NULL, false,
-                          curbuf, &retval);
-  }
-  return retval;
-}
+// read_buffer() migrated to Rust misc.rs (Phase 2).
+extern int rs_read_buffer(bool read_stdin, exarg_T *eap, int flags);
 
 /// Open current buffer, that is: open the memfile and read the file into
 /// memory.
@@ -338,7 +293,7 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
       if (retval == OK) {
         // don't add READ_FIFO here, otherwise we won't be able to
         // detect the encoding
-        retval = read_buffer(false, eap, flags);
+        retval = rs_read_buffer(false, eap, flags);
       }
     }
 #endif
@@ -360,7 +315,7 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
                       flags | (READ_NEW + READ_STDIN), silent);
     curbuf->b_p_bin = save_bin;
     if (retval == OK) {
-      retval = read_buffer(true, eap, flags);
+      retval = rs_read_buffer(true, eap, flags);
     }
   }
 

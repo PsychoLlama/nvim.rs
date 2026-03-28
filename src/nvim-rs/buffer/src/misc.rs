@@ -599,3 +599,120 @@ pub unsafe extern "C" fn rs_buf_contents_changed(buf: BufHandle) -> bool {
 
     differ
 }
+
+// =============================================================================
+// read_buffer: read file into buffer for retrying (stdin/fifo encoding retry)
+// =============================================================================
+
+extern "C" {
+    fn nvim_curbuf_get_fname() -> *const c_char;
+    fn shortmess(x: c_int) -> bool;
+    fn readfile(
+        fname: *const c_char,
+        sfname: *const c_char,
+        from: c_int,
+        lines_to_skip: c_int,
+        lines_to_read: c_int,
+        eap: *mut c_void,
+        flags: c_int,
+        silent: bool,
+    ) -> c_int;
+    fn nvim_curwin_set_cursor(lnum: c_int, col: c_int);
+    static mut readonlymode: bool;
+    fn buf_is_empty(buf: BufHandle) -> bool;
+    fn changed(buf: BufHandle);
+    fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
+    fn apply_autocmds_retval(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut c_void,
+        retval: *mut c_int,
+    ) -> bool;
+}
+
+// SHM_FILEINFO = 'F' (from option_vars.h)
+const SHM_FILEINFO: c_int = b'F' as c_int;
+// READ_BUFFER flag (from fileio.h)
+const READ_BUFFER: c_int = 0x08;
+// MAXLNUM (from pos_defs.h)
+const MAXLNUM: c_int = 0x7fff_ffff;
+// FAIL/OK return values
+const READ_FAIL: c_int = 0;
+// EVENT_STDINREADPOST = 105 (from auevents_enum.generated.h)
+const EVENT_STDINREADPOST: c_int = 105;
+
+/// Read data from the current buffer for retrying with a different encoding.
+///
+/// Used by `open_buffer` when reading from stdin or a fifo, to re-read with
+/// corrected 'fileformat'/'fileencoding' after binary pre-read.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_buffer(read_stdin: bool, eap: *mut c_void, flags: c_int) -> c_int {
+    // OK = 1, FAIL = 0 (from vim_defs.h)
+    const OK_VAL: c_int = 1;
+    let silent = shortmess(SHM_FILEINFO);
+
+    // Read from the buffer which the text is already filled in and append at
+    // the end.  This makes it possible to retry when 'fileformat' or
+    // 'fileencoding' was guessed wrong.
+    let line_count = nvim_curbuf_ml_line_count();
+    let mut retval = readfile(
+        if read_stdin {
+            std::ptr::null()
+        } else {
+            nvim_curbuf_get_ffname()
+        },
+        if read_stdin {
+            std::ptr::null()
+        } else {
+            nvim_curbuf_get_fname()
+        },
+        line_count,
+        0,
+        MAXLNUM,
+        eap,
+        flags | READ_BUFFER,
+        silent,
+    );
+
+    if retval == OK_VAL {
+        // Delete the binary lines.
+        let mut lnum = line_count;
+        while lnum > 0 {
+            ml_delete(1);
+            lnum -= 1;
+        }
+    } else {
+        // Delete the converted lines.
+        while nvim_curbuf_ml_line_count() > line_count {
+            ml_delete(line_count);
+        }
+    }
+    // Put the cursor on the first line.
+    nvim_curwin_set_cursor(1, 0);
+
+    if read_stdin {
+        // Set or reset 'modified' before executing autocommands, so that
+        // it can be changed there.
+        let curbuf = nvim_get_curbuf();
+        if !readonlymode && !buf_is_empty(curbuf) {
+            changed(curbuf);
+        } else if retval != READ_FAIL {
+            unchanged(curbuf, false, true);
+        }
+
+        apply_autocmds_retval(
+            EVENT_STDINREADPOST,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf.as_ptr(),
+            &raw mut retval,
+        );
+    }
+    retval
+}
