@@ -208,6 +208,12 @@ static void trigger_cmd_autocmd(int typechar, event_T evt)
   apply_autocmds(evt, typestr, typestr, false, curbuf);
 }
 
+/// Thin wrapper for Rust: trigger autocmd with int event (avoids event_T in public header).
+void nvim_trigger_cmd_autocmd(int typechar, int evt)
+{
+  trigger_cmd_autocmd(typechar, (event_T)evt);
+}
+
 /// Internal entry point for cmdline mode.
 ///
 /// @param count  only used for incremental search
@@ -1673,13 +1679,6 @@ void nvim_cls_xfree_lookfor(void *s)
 /// Get cmdline_was_last_drawn global.
 int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
 
-/// Set s->xpc.xp_pre_incsearch_pos from s->is_state.search_start.
-void nvim_cls_set_xpc_pre_incsearch_from_is_state(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  cs->xpc.xp_pre_incsearch_pos = cs->is_state.search_start;
-}
-
 /// Wrapper for wildmenu_translate_key (called from Rust).
 int nvim_wildmenu_translate_key(void *s)
 {
@@ -1694,32 +1693,8 @@ int nvim_wildmenu_process_key(void *s)
   return wildmenu_process_key(&ccline, cs->c, &cs->xpc);
 }
 
-/// Check if is_state.winid != curwin->handle and if so, reset incsearch state.
-void nvim_cls_maybe_reset_incsearch_state(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  if (cs->is_state.winid != curwin->handle) {
-    rs_init_incsearch_state(&cs->is_state);
-  }
-}
-
-/// May do incsearch highlighting for given state (wraps rs_may_do_incsearch_highlighting).
-void nvim_cls_may_do_incsearch(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  rs_may_do_incsearch_highlighting(cs->firstc, cs->count, &cs->is_state);
-}
-
 /// Get is_state.did_incsearch field.
 int nvim_cls_get_is_state_did_incsearch(void *s) { return ((CommandLineState *)s)->is_state.did_incsearch ? 1 : 0; }
-
-/// Set v:char and trigger CmdlineLeavePre for the given state.
-void nvim_cls_trigger_cmdlineleavepre(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  set_vim_var_char(cs->c);
-  trigger_cmd_autocmd(cs->cmdline_type, EVENT_CMDLINELEAVEPRE);
-}
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
 void nvim_cmdline_do_cmdline_nowait(void) { do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT); }

@@ -1035,11 +1035,20 @@ unsafe extern "C" {
     fn nvim_cls_get_did_hist_navigate(s: *mut c_void) -> c_int;
     fn nvim_cls_xfree_lookfor(s: *mut c_void);
     fn nvim_cls_get_lookfor(s: *mut c_void) -> *mut c_char;
-    fn nvim_cls_set_xpc_pre_incsearch_from_is_state(s: *mut c_void);
-    fn nvim_cls_maybe_reset_incsearch_state(s: *mut c_void);
-    fn nvim_cls_may_do_incsearch(s: *mut c_void);
     fn nvim_cls_get_is_state_did_incsearch(s: *mut c_void) -> c_int;
-    fn nvim_cls_trigger_cmdlineleavepre(s: *mut c_void);
+
+    // CLS is_state access
+    fn nvim_cls_get_is_state(s: *mut c_void) -> *mut c_void;
+    fn nvim_cls_get_count(s: *mut c_void) -> c_int;
+
+    // Autocmd trigger wrapper (int event to avoid event_T in public header)
+    fn nvim_trigger_cmd_autocmd(typechar: c_int, evt: c_int);
+
+    // v:char setter
+    fn set_vim_var_char(c: c_int);
+
+    // curwin handle for incsearch state reset
+    fn nvim_get_curwin_handle() -> c_int;
 
     // Wrappers for wildmenu functions
     fn nvim_wildmenu_translate_key(s: *mut c_void) -> c_int;
@@ -1121,6 +1130,9 @@ unsafe extern "C" {
 // CPO_ESC is 'x' in C's cpoptions
 const CPO_ESC_CHAR: c_int = b'x' as c_int;
 
+// Autocmd event constants (from auevents_enum.generated.h)
+const EVENT_CMDLINELEAVEPRE: c_int = 28;
+
 /// Rust replacement for `command_line_wildchar_complete(CommandLineState *s)`.
 ///
 /// Handles wildchar completion in command-line mode.
@@ -1183,7 +1195,15 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
             if c == K_WILD {
                 options |= WILD_FUNC_TRIGGER;
             }
-            nvim_cls_set_xpc_pre_incsearch_from_is_state(s);
+            // Inlined nvim_cls_set_xpc_pre_incsearch_from_is_state
+            {
+                let is_state_ptr =
+                    nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+                let xp_ptr = nvim_cls_get_xpc(s).cast::<nvim_cmdexpand::ExpandT>();
+                (*xp_ptr).xp_pre_incsearch_pos.lnum = (*is_state_ptr).search_start.lnum;
+                (*xp_ptr).xp_pre_incsearch_pos.col = (*is_state_ptr).search_start.col;
+                (*xp_ptr).xp_pre_incsearch_pos.coladd = (*is_state_ptr).search_start.coladd;
+            }
         }
         let cmdpos_before = nvim_get_ccline_cmdpos();
 
@@ -1308,12 +1328,25 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             nvim_map_execute_lua_false();
         }
         // If the window changed incremental search state is not valid.
-        nvim_cls_maybe_reset_incsearch_state(s);
+        // Inlined nvim_cls_maybe_reset_incsearch_state
+        {
+            let is_state_ptr = nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+            if (*is_state_ptr).winid != nvim_get_curwin_handle() {
+                crate::search::rs_init_incsearch_state(is_state_ptr);
+            }
+        }
         // Re-apply 'incsearch' highlighting in case it was cleared.
         if nvim_syn_get_display_tick() > display_tick_saved
             && nvim_cls_get_is_state_did_incsearch(s) != 0
         {
-            nvim_cls_may_do_incsearch(s);
+            // Inlined nvim_cls_may_do_incsearch
+            {
+                let firstc = nvim_cls_get_firstc(s);
+                let count = nvim_cls_get_count(s);
+                let is_state_ptr =
+                    nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+                crate::search::rs_may_do_incsearch_highlighting(firstc, count, is_state_ptr);
+            }
         }
 
         // nvim_select_popupmenu_item() can be called from K_EVENT/K_COMMAND/K_LUA
@@ -1433,7 +1466,13 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 || c_check == ESC))
             || c_check == CTRL_C
         {
-            nvim_cls_trigger_cmdlineleavepre(s);
+            // Inlined nvim_cls_trigger_cmdlineleavepre
+            {
+                let c_val = nvim_cls_get_c(s);
+                set_vim_var_char(c_val);
+                let cmdline_type = crate::entry::rs_entry_cmdline_type(nvim_cls_get_firstc(s));
+                nvim_trigger_cmd_autocmd(cmdline_type, EVENT_CMDLINELEAVEPRE);
+            }
             nvim_cls_set_event_cmdlineleavepre_triggered(s, 1);
             if (c_check == ESC || c_check == CTRL_C) && (nvim_get_wim_flags(0) & WIM_FLAG_LIST) != 0
             {
@@ -1612,9 +1651,22 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // If already used to cancel/accept wildmenu, don't process the key further.
     if wild_type == WILD_CANCEL || wild_type == WILD_APPLY {
-        nvim_cls_maybe_reset_incsearch_state(s);
+        // Inlined nvim_cls_maybe_reset_incsearch_state
+        {
+            let is_state_ptr = nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+            if (*is_state_ptr).winid != nvim_get_curwin_handle() {
+                crate::search::rs_init_incsearch_state(is_state_ptr);
+            }
+        }
         if nvim_get_key_typed_cmdline() != 0 || vpeekc() == NUL_INT {
-            nvim_cls_may_do_incsearch(s);
+            // Inlined nvim_cls_may_do_incsearch
+            {
+                let firstc = nvim_cls_get_firstc(s);
+                let count = nvim_cls_get_count(s);
+                let is_state_ptr =
+                    nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+                crate::search::rs_may_do_incsearch_highlighting(firstc, count, is_state_ptr);
+            }
         }
         return nvim_command_line_not_changed(s);
     }
