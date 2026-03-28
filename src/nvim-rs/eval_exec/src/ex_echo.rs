@@ -9,7 +9,9 @@ use std::ptr;
 
 use nvim_collections::garray::GArray;
 
-use crate::eval::{EvalargHandle, EvalargT, ExargHandle, ExargNextcmdAccess, TypevalHandle};
+use crate::eval::{
+    EvalargHandle, EvalargT, ExargHandle, ExargNextcmdAccess, LineGetter, TypevalHandle,
+};
 
 // CMD_* enum constants (stable values from ex_cmds.lua)
 const CMD_ECHO: c_int = 135;
@@ -58,6 +60,8 @@ extern "C" {
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
     // (nvim_eap_set_nextcmd_checked inlined via ExargNextcmdAccess.nextcmd + check_nextcmd)
     fn nvim_eap_get_cmdidx(eap: ExargHandle) -> c_int;
+    fn nvim_eap_get_getline(eap: ExargHandle) -> LineGetter;
+    fn nvim_eap_get_cookie(eap: ExargHandle) -> *mut c_void;
 
     // Message functions
     fn msg_ext_set_kind(kind: *const c_char);
@@ -74,7 +78,7 @@ extern "C" {
     );
     fn msg_clr_eos();
     fn nvim_msg_end();
-    fn nvim_set_msg_ext_append(val: bool);
+    static mut msg_ext_append: bool;
     fn nvim_msg_echomsg(str: *const c_char, hl_id: c_int);
 
     // encode functions
@@ -86,14 +90,20 @@ extern "C" {
     fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
 
-    // echoerr
-    fn nvim_emsg_multiline_echoerr(str: *const c_char);
+    // echoerr (inline nvim_emsg_multiline_echoerr: emsg_multiline(str, "echoerr", HLF_E=6, true))
+    fn emsg_multiline(s: *const c_char, kind: *const c_char, hl_id: c_int, multiline: bool)
+        -> bool;
 
     // ga_clear for GArray cleanup
     fn ga_clear(ga: *mut c_void);
 
-    // do_cmdline for :execute
-    fn nvim_do_cmdline_execute(cmd: *mut c_char, eap: ExargHandle);
+    // do_cmdline for :execute (inline of nvim_do_cmdline_execute)
+    fn do_cmdline(
+        cmdline: *mut c_char,
+        fgetline: LineGetter,
+        cookie: *mut c_void,
+        flags: c_int,
+    ) -> c_int;
 
     // syn_name2id (direct C function)
     fn syn_name2id(name: *const c_char) -> c_int;
@@ -257,7 +267,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
                 msg_puts_hl(KIND_SPACE.as_ptr() as *const c_char, echo_hl_id, false);
             }
             let tofree = nvim_encode_tv2echo(rettv, ptr::null_mut());
-            nvim_set_msg_ext_append(cmdidx == CMD_ECHON);
+            msg_ext_append = cmdidx == CMD_ECHON;
             nvim_msg_multiline_cstr(tofree, echo_hl_id, true, false, &mut need_clear);
             xfree(tofree as *mut c_void);
         }
@@ -384,12 +394,13 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         } else if cmdidx == cmd_echoerr {
             // We don't want to abort following commands, restore did_emsg.
             let save_did_emsg = did_emsg;
-            nvim_emsg_multiline_echoerr(data);
+            emsg_multiline(data, c"echoerr".as_ptr(), 6 /* HLF_E */, true);
             if !force_abort {
                 did_emsg = save_did_emsg;
             }
         } else if cmdidx == cmd_execute {
-            nvim_do_cmdline_execute(data, eap);
+            // inline nvim_do_cmdline_execute: DOCMD_NOWAIT(2)|DOCMD_VERBOSE(1) = 3
+            do_cmdline(data, nvim_eap_get_getline(eap), nvim_eap_get_cookie(eap), 3);
         }
     }
 

@@ -295,10 +295,7 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
   return wrong;
 }
 
-void nvim_set_msg_ext_append(bool val) { msg_ext_append = val; }
-void nvim_emsg_multiline_echoerr(const char *str) { emsg_multiline(str, "echoerr", HLF_E, true); }
 void nvim_msg_echomsg(const char *str, int hl_id) { msg(str, hl_id); }
-void nvim_do_cmdline_execute(char *cmd, exarg_T *eap) { do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE); }
 int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 

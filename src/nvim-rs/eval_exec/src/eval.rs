@@ -1682,8 +1682,6 @@ extern "C" {
     // skipdigits - advance past digit characters
     fn skipdigits(p: *const c_char) -> *mut c_char;
 
-    // Blob cleanup for error path
-    fn nvim_blob_ga_clear_and_free(b: *mut c_void);
 }
 
 /// STR2NR_ALL = STR2NR_BIN | STR2NR_OCT | STR2NR_HEX | STR2NR_OOCT = 0x0F
@@ -1789,7 +1787,9 @@ pub unsafe fn eval_number_impl(
             if !ascii_isxdigit(get_byte(bp.add(1))) {
                 if !blob.is_null() {
                     emsg(E_BLOB_ODD_HEX.as_ptr() as *const c_char);
-                    nvim_blob_ga_clear_and_free(blob);
+                    // inline nvim_blob_ga_clear_and_free: bv_ga is at offset 0
+                    ga_clear(blob);
+                    xfree(blob);
                 }
                 return FAIL;
             }
