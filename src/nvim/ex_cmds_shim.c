@@ -515,9 +515,8 @@ typedef struct {
   int64_t word_count;
   int64_t char_count;
 } CpiLineCountResult;
-void nvim_cpi_setup_block_visual(int min_lnum, int min_col,
-                                 int max_lnum, int max_col,
-                                 int *out_start_vcol, int *out_end_vcol)
+void nvim_cpi_getvcols_no_sbr(int min_lnum, int min_col, int max_lnum, int max_col,
+                              int *out_start_vcol, int *out_end_vcol)
 {
   pos_T min_pos = { .lnum = min_lnum, .col = min_col, .coladd = 0 };
   pos_T max_pos = { .lnum = max_lnum, .col = max_col, .coladd = 0 };
@@ -525,16 +524,12 @@ void nvim_cpi_setup_block_visual(int min_lnum, int min_col,
   char *const saved_w_sbr = curwin->w_p_sbr;
   p_sbr = empty_string_option;
   curwin->w_p_sbr = empty_string_option;
-  oparg_T oparg;
-  memset(&oparg, 0, sizeof(oparg));
-  oparg.is_VIsual = true;
-  oparg.motion_type = kMTBlockWise;
-  oparg.op_type = OP_NOP;
-  getvcols(curwin, &min_pos, &max_pos, &oparg.start_vcol, &oparg.end_vcol);
+  colnr_T start_vcol = 0, end_vcol = 0;
+  getvcols(curwin, &min_pos, &max_pos, &start_vcol, &end_vcol);
   p_sbr = saved_sbr;
   curwin->w_p_sbr = saved_w_sbr;
-  *out_start_vcol = (int)oparg.start_vcol;
-  *out_end_vcol = (int)oparg.end_vcol;
+  *out_start_vcol = (int)start_vcol;
+  *out_end_vcol = (int)end_vcol;
 }
 void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
 {

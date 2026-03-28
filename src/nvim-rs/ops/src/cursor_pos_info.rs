@@ -50,7 +50,7 @@ extern "C" {
     fn nvim_curwin_get_w_curswant() -> c_int;
 
     // Block visual
-    fn nvim_cpi_setup_block_visual(
+    fn nvim_cpi_getvcols_no_sbr(
         min_lnum: c_int,
         min_col: c_int,
         max_lnum: c_int,
@@ -700,7 +700,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     let mut blk_start_vcol: c_int = 0;
     let mut blk_end_vcol: c_int = 0;
     if visual_active && visual_mode == CTRL_V {
-        nvim_cpi_setup_block_visual(
+        nvim_cpi_getvcols_no_sbr(
             min_lnum,
             min_col,
             max_lnum,
