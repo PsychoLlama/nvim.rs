@@ -1,18 +1,16 @@
-// Code to handle tags and the tag stack
+// tag_shim.c: Rust FFI accessors for tag crate.
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
 #include "nvim/cmdexpand.h"
-#include "nvim/cmdexpand_defs.h"
 #include "nvim/cursor.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
@@ -29,36 +27,26 @@
 #include "nvim/hashtab.h"
 #include "nvim/hashtab_defs.h"
 #include "nvim/help.h"
-#include "nvim/input.h"
-#include "nvim/macros_defs.h"
 #include "nvim/mark.h"
-#include "nvim/mark_defs.h"
 #include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
 #include "nvim/option.h"
-#include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/fs.h"
 #include "nvim/os/input.h"
-#include "nvim/os/os_defs.h"
 #include "nvim/path.h"
 #include "nvim/pos_defs.h"
 #include "nvim/quickfix.h"
 #include "nvim/regexp.h"
-#include "nvim/regexp_defs.h"
 #include "nvim/runtime.h"
 #include "nvim/search.h"
-#include "nvim/state_defs.h"
 #include "nvim/strings.h"
 #include "nvim/tag.h"
 #include "nvim/types_defs.h"
-#include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Structure to hold info about the tag pattern being used.
 typedef struct {
   char *pat;            // the pattern
   int len;              // length of pat[]
@@ -91,10 +79,8 @@ typedef enum {
 
 /// Binary search file offsets in a tags file
 typedef struct {
-  off_T low_offset;        ///< offset for first char of first line that
-                           ///< could match
-  off_T high_offset;       ///< offset of char after last line that could
-                           ///< match
+  off_T low_offset;        ///< offset for first char of first line that could match
+  off_T high_offset;       ///< offset of char after last line that could match
   off_T curr_offset;       ///< Current file offset in search range
   off_T curr_offset_used;  ///< curr_offset used when skipping back
   off_T match_offset;      ///< Where the binary search found a tag
@@ -116,8 +102,7 @@ typedef struct {
   bool get_searchpat;            ///< used for 'showfulltag'
   bool help_only;                ///< only search for help tags
   bool did_open;                 ///< did open a tag file
-  int mincount;                  ///< MAXCOL: find all matches
-                                 ///< other: minimal number of matches
+  int mincount;                  ///< MAXCOL: find all matches, other: minimal number of matches
   bool linear;                   ///< do a linear search
   vimconv_T vimconv;
   char help_lang[3];             ///< lang of current tags file
@@ -170,18 +155,14 @@ void nvim_findtags_free_lbuf(void *st_void) { findtags_state_T *st = (findtags_s
 void nvim_findtags_free_orgpat_regprog(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; vim_regfree(st->orgpat->regmatch.regprog); }
 void nvim_findtags_free_orgpat(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; xfree(st->orgpat); }
 void *nvim_findtags_state_xcalloc(void) { return xcalloc(1, sizeof(findtags_state_T)); }
-
 void nvim_findtags_init_match_arrays(void *st_void)
 { findtags_state_T *st = (findtags_state_T *)st_void; for (int mtt = 0; mtt < MT_COUNT; mtt++) { ga_init(&st->ga_match[mtt], sizeof(char *), 100); hash_init(&st->ht_match[mtt]); } }
-
 char *nvim_findtags_get_tag_fname_buf(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return st->tag_fname; }
-
 bool nvim_curbuf_is_help(void) { return curbuf->b_help; }
 const char *nvim_get_p_hf(void) { return p_hf; }
 const char *nvim_get_curbuf_tags(void) { return curbuf->b_p_tags; }
 const char *nvim_get_p_tags(void) { return p_tags; }
 bool nvim_has_bufreadcmd(const char *fname) { return has_autocmd(EVENT_BUFREADCMD, fname, NULL); }
-// Shared wrappers used by other Rust crates
 bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
 const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
@@ -200,7 +181,6 @@ extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *c
 #include "tag_shim.c.generated.h"
 
 static taggy_T ptag_entry = { NULL, INIT_FMARK, 0, 0, NULL };
-
 static Callback tfu_cb;          // 'tagfunc' callback function
 
 void *nvim_get_ptag_entry(void) { return &ptag_entry; }
@@ -241,23 +221,9 @@ void nvim_findtags_set_match_count(void *st_void, int count) { findtags_state_T 
 int nvim_get_current_State(void) { return State; }
 bool nvim_get_p_sft(void) { return p_sft; }
 int nvim_help_heuristic(const char *tagname, int match_offset, bool wrong_case) { return help_heuristic((char *)tagname, match_offset, wrong_case); }
-// Verify hash_T size matches Rust usize assumption
 _Static_assert(sizeof(hash_T) == sizeof(size_t), "hash_T must be size_t");
-
 bool nvim_findtags_add_match_entry(void *st_void, int mtt, char *mfp, hash_T *hash)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  *hash = hash_hash(mfp);
-  hashitem_T *hi = hash_lookup(&st->ht_match[mtt], mfp, strlen(mfp), *hash);
-  if (HASHITEM_EMPTY(hi)) {
-    hash_add_item(&st->ht_match[mtt], hi, mfp, *hash);
-    GA_APPEND(char *, &st->ga_match[mtt], mfp);
-    st->match_count++;
-    return true;
-  }
-  return false;
-}
-
+{ findtags_state_T *st = (findtags_state_T *)st_void; *hash = hash_hash(mfp); hashitem_T *hi = hash_lookup(&st->ht_match[mtt], mfp, strlen(mfp), *hash); if (HASHITEM_EMPTY(hi)) { hash_add_item(&st->ht_match[mtt], hi, mfp, *hash); GA_APPEND(char *, &st->ga_match[mtt], mfp); st->match_count++; return true; } return false; }
 int nvim_findtags_ga_match_len(const void *st_void, int mtt) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->ga_match[mtt].ga_len; }
 char *nvim_findtags_ga_match_get(const void *st_void, int mtt, int idx) { const findtags_state_T *st = (const findtags_state_T *)st_void; return ((char **)(st->ga_match[mtt].ga_data))[idx]; }
 void nvim_findtags_clear_match(void *st_void, int mtt) { findtags_state_T *st = (findtags_state_T *)st_void; ga_clear(&st->ga_match[mtt]); hash_clear(&st->ht_match[mtt]); }
@@ -278,7 +244,6 @@ void nvim_findtags_set_did_open(void *st_void) { findtags_state_T *st = (findtag
 bool nvim_findtags_get_did_open(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->did_open; }
 void nvim_findtags_set_state_start(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->state = TS_START; }
 int nvim_findtags_get_mincount(const void *st_void) { const findtags_state_T *st = (const findtags_state_T *)st_void; return st->mincount; }
-
 void nvim_findtags_set_orgpat_len(void *st_void, int len) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->len = len; }
 void nvim_findtags_set_orgpat_pat(void *st_void, char *pat) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->pat = pat; }
 void nvim_set_p_ic(int val) { p_ic = val; }
@@ -291,7 +256,6 @@ const char *nvim_get_curbuf_p_tfu(void) { return curbuf->b_p_tfu; }
 void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
 int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
-
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
 bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len) { return tv_dict_find((dict_T *)dict, key, key_len) != NULL; }
 int nvim_tag_tv_dict_add_nr(void *dict, const char *key, size_t key_len, int64_t nr) { return tv_dict_add_nr((dict_T *)dict, key, key_len, (varnumber_T)nr); }
@@ -326,12 +290,6 @@ const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
 bool nvim_tag_get_g_tag_at_cursor(void) { return g_tag_at_cursor; }
 void nvim_tag_dict_refcount_inc(void *dict_void) { ((dict_T *)dict_void)->dv_refcount++; }
 void nvim_tag_dict_refcount_dec(void *dict_void) { ((dict_T *)dict_void)->dv_refcount--; }
-/// Set up the args and invoke the curbuf tagfunc callback.
-/// - pat: the tag pattern (VAR_STRING arg 0)
-/// - flag_str: the flag string (VAR_STRING arg 1)
-/// - dict: the info dict (VAR_DICT arg 2), refcount already managed by caller
-/// - rettv_storage: storage for typval_T result (must be zeroed, will be filled)
-/// Returns FAIL (0) or OK (1) matching C callback_call return value.
 int nvim_tag_do_callback_call_tfu(const char *pat, const char *flag_str, void *dict, void *rettv_storage)
 {
   typval_T args[4] = {
@@ -342,7 +300,6 @@ int nvim_tag_do_callback_call_tfu(const char *pat, const char *flag_str, void *d
   };
   return callback_call(&curbuf->b_tfu_cb, 3, args, (typval_T *)rettv_storage);
 }
-
 void nvim_tag_save_cursor(void *pos_storage) { *(pos_T *)pos_storage = curwin->w_cursor; }
 void nvim_tag_restore_cursor_check(void *pos_storage) { curwin->w_cursor = *(pos_T *)pos_storage; check_cursor(curwin); }
 bool nvim_tag_rettv_is_null_special(const void *rettv_storage) { const typval_T *rettv = (const typval_T *)rettv_storage; return rettv->v_type == VAR_SPECIAL && rettv->vval.v_special == kSpecialVarNull; }
@@ -359,10 +316,8 @@ const char *nvim_tag_dict_iter_key(const void *hi_void) { return TV_DICT_HI2DI((
 bool nvim_tag_dict_iter_value_is_string(const void *hi_void) { const dictitem_T *di = TV_DICT_HI2DI((const hashitem_T *)hi_void); return di->di_tv.v_type == VAR_STRING && di->di_tv.vval.v_string != NULL; }
 const char *nvim_tag_dict_iter_value_string(const void *hi_void) { const dictitem_T *di = TV_DICT_HI2DI((const hashitem_T *)hi_void); return di->di_tv.v_type == VAR_STRING ? di->di_tv.vval.v_string : NULL; }
 void nvim_tag_ga_grow_append(void *ga_void, char *mfp) { garray_T *ga = (garray_T *)ga_void; ga_grow(ga, 1); ((char **)(ga->ga_data))[ga->ga_len++] = mfp; }
-
 _Static_assert(kOptSwbFlagUseopen == 0x01, "kOptSwbFlagUseopen value for Rust");
 _Static_assert(kOptSwbFlagUsetab == 0x02, "kOptSwbFlagUsetab value for Rust");
-
 void nvim_tag_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
 bool nvim_tag_curwin_pvw(void) { return curwin->w_p_pvw; }
 char *nvim_tag_fullname_save(char *fname) { return FullName_save(fname, false); }
@@ -408,9 +363,7 @@ bool nvim_tag_get_KeyTyped(void) { return KeyTyped; }
 bool nvim_tag_tagstack_changed(void *saved_tagstack) { return saved_tagstack != curwin->w_tagstack; }
 void *nvim_tag_get_tagstack_ptr(void) { return curwin->w_tagstack; }
 void nvim_tag_save_cursor_in_entry(void *tg_void, int idx) { taggy_T *tg = (taggy_T *)tg_void; tg[idx].fmark.mark = curwin->w_cursor; tg[idx].fmark.fnum = curbuf->b_fnum; }
-
 void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T)); }
 void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(&tg[idx].fmark, buf, sizeof(fmark_T)); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
-
 void nvim_do_in_runtimepath_for_tags(void) { do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, rs_found_tagfile_cb, NULL); }
