@@ -1069,6 +1069,7 @@ const ECMD_HIDE: c_int = 0x01;
 
 // FAIL/OK from vim_defs.h
 const FAIL: c_int = 0;
+const OK: c_int = 1;
 const DOBUF_UNLOAD_VAL: c_int = 2; // matches DOBUF_UNLOAD
 
 /// Make the current buffer empty.
@@ -1404,6 +1405,229 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     if bufref_valid(&raw mut prevbufref) {
         nvim_buf_terminal_check_size(prevbuf);
     }
+}
+
+// =============================================================================
+// do_buffer_ext: buffer list commands
+// =============================================================================
+
+extern "C" {
+    fn dialog_changed(buf: BufHandle, checkall: bool);
+    fn dialog_close_terminal(buf: BufHandle) -> bool;
+    fn can_abandon(buf: BufHandle, forceit: c_int) -> bool;
+    fn can_unload_buffer(buf: BufHandle) -> bool;
+    fn win_split(size: c_int, flags: c_int) -> c_int;
+    fn nvim_get_p_confirm() -> c_int;
+    fn nvim_get_p_write() -> c_int;
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_reset_binding_curwin();
+    fn swbuf_goto_win_with_buf(buf: BufHandle) -> *mut c_void;
+    fn is_aucmd_win(wp: *mut c_void) -> c_int;
+    fn rs_win_locked(wp: *mut c_void) -> c_int;
+    fn rs_last_window(win: *mut c_void) -> c_int;
+    fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
+    fn nvim_buf_terminal_running(buf: BufHandle) -> c_int;
+    fn nvim_get_lastwin() -> *mut c_void;
+    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
+    fn nvim_end_visual_mode();
+    fn semsg(fmt: *const c_char, ...);
+}
+
+// CMOD_CONFIRM from ex_cmds_defs.h
+const CMOD_CONFIRM: c_int = 0x0080;
+
+/// Implementation of the commands for the buffer list.
+///
+/// # Safety
+/// Must be called on the Neovim main thread with valid state.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_do_buffer_ext(
+    action: c_int,
+    start: c_int,
+    dir: c_int,
+    count: c_int,
+    flags: c_int,
+) -> c_int {
+    let unload = action == DOBUF_UNLOAD || action == DOBUF_DEL || action == DOBUF_WIPE;
+    let mut update_jumplist = true;
+
+    // Find and validate target buffer (navigation + pre-action checks).
+    let mut buf =
+        rs_find_and_validate_buffer(action, start, dir, count, flags, c_int::from(unload));
+    if buf.is_null() {
+        return FAIL;
+    }
+
+    // delete buffer "buf" from memory and/or the list
+    if unload {
+        if !can_unload_buffer(buf) {
+            return FAIL;
+        }
+        let mut bufref = crate::misc::BufRef {
+            br_buf: std::ptr::null_mut(),
+            br_fnum: 0,
+            br_buf_free_count: 0,
+        };
+        crate::misc::set_bufref(&raw mut bufref, buf);
+
+        // When unloading or deleting a buffer that's already unloaded and
+        // unlisted: fail silently.
+        if action != DOBUF_WIPE
+            && nvim_buf_get_ml_mfp_null(buf) != 0
+            && nvim_buf_get_b_p_bl(buf) == 0
+        {
+            return FAIL;
+        }
+
+        if (flags & DOBUF_FORCEIT) == 0 && nvim_bufIsChanged(buf) != 0 {
+            let p_confirm = nvim_get_p_confirm() != 0;
+            let cmod_confirm = (nvim_get_cmdmod_cmod_flags() & CMOD_CONFIRM) != 0;
+            let p_write = nvim_get_p_write() != 0;
+            if (p_confirm || cmod_confirm) && p_write {
+                dialog_changed(buf, false);
+                if !bufref_valid(&raw mut bufref) {
+                    return FAIL;
+                }
+                if nvim_bufIsChanged(buf) != 0 {
+                    return FAIL;
+                }
+            } else {
+                // "E89: No write since last change for buffer %ld (add ! to override)"
+                semsg(
+                    c"E89: No write since last change for buffer %ld (add ! to override)".as_ptr(),
+                    i64::from(nvim_buf_get_fnum(buf)),
+                );
+                return FAIL;
+            }
+        }
+
+        if (flags & DOBUF_FORCEIT) == 0 && nvim_buf_terminal_running(buf) != 0 {
+            let p_confirm = nvim_get_p_confirm() != 0;
+            let cmod_confirm = (nvim_get_cmdmod_cmod_flags() & CMOD_CONFIRM) != 0;
+            if p_confirm || cmod_confirm {
+                if !dialog_close_terminal(buf) {
+                    return FAIL;
+                }
+            } else {
+                semsg(
+                    c"E89: %s will be killed (add ! to override)".as_ptr(),
+                    nvim_buf_get_b_fname(buf),
+                );
+                return FAIL;
+            }
+        }
+
+        let buf_fnum = nvim_buf_get_fnum(buf);
+
+        // When closing the current buffer stop Visual mode.
+        if buf == nvim_get_curbuf() && nvim_get_VIsual_active() != 0 {
+            nvim_end_visual_mode();
+        }
+
+        // If deleting the last (listed) buffer, make it empty.
+        let mut bp: BufHandle = BufHandle(std::ptr::null_mut());
+        let mut iter = nvim_get_firstbuf();
+        while !iter.is_null() {
+            if nvim_buf_get_b_p_bl(iter) != 0 && iter != buf {
+                bp = iter;
+                break;
+            }
+            iter = nvim_buf_get_next(iter);
+        }
+        if bp.is_null() && buf == nvim_get_curbuf() {
+            return empty_curbuf(true, flags & DOBUF_FORCEIT, action);
+        }
+
+        // If the deleted buffer is the current one, close the current window
+        // (unless it's the only non-floating window).
+        let mut curwin = nvim_get_curwin();
+        while buf == nvim_get_curbuf()
+            && rs_win_locked(curwin) == 0
+            && nvim_buf_get_locked(nvim_get_curbuf()) == 0
+            && (is_aucmd_win(nvim_get_lastwin()) != 0 || rs_last_window(curwin) == 0)
+        {
+            if win_close(curwin, false, false) == FAIL {
+                break;
+            }
+            curwin = nvim_get_curwin();
+        }
+
+        // If the buffer to be deleted is not the current one, delete it here.
+        if buf != nvim_get_curbuf() {
+            if (jop_flags & K_OPT_JOP_FLAG_CLEAN) != 0 {
+                mark_jumplist_forget_file(nvim_get_curwin(), buf_fnum);
+            }
+            close_windows(buf, 0);
+            if buf != nvim_get_curbuf()
+                && bufref_valid(&raw mut bufref)
+                && nvim_buf_get_nwindows(buf) <= 0
+            {
+                close_buffer(std::ptr::null_mut(), buf, action, false, false);
+            }
+            return OK;
+        }
+
+        // Deleting the current buffer: Need to find another buffer to go to.
+        let mut update_jumplist_int: c_int = i32::from(update_jumplist);
+        buf = rs_find_buffer_for_delete(buf_fnum, &raw mut update_jumplist_int);
+        update_jumplist = update_jumplist_int != 0;
+    }
+
+    if buf.is_null() {
+        return empty_curbuf(false, flags & DOBUF_FORCEIT, action);
+    }
+
+    // make "buf" the current buffer
+    if action == DOBUF_SPLIT {
+        if !swbuf_goto_win_with_buf(buf).is_null() {
+            return OK;
+        }
+        if win_split(0, 0) == FAIL {
+            return FAIL;
+        }
+    }
+
+    // go to current buffer - nothing to do
+    if buf == nvim_get_curbuf() {
+        return OK;
+    }
+
+    // Check if the current buffer may be abandoned.
+    if action == DOBUF_GOTO && !can_abandon(nvim_get_curbuf(), flags & DOBUF_FORCEIT) {
+        let p_confirm = nvim_get_p_confirm() != 0;
+        let cmod_confirm = (nvim_get_cmdmod_cmod_flags() & CMOD_CONFIRM) != 0;
+        let p_write = nvim_get_p_write() != 0;
+        if (p_confirm || cmod_confirm) && p_write {
+            let mut bufref = crate::misc::BufRef {
+                br_buf: std::ptr::null_mut(),
+                br_fnum: 0,
+                br_buf_free_count: 0,
+            };
+            crate::misc::set_bufref(&raw mut bufref, buf);
+            dialog_changed(nvim_get_curbuf(), false);
+            if !bufref_valid(&raw mut bufref) {
+                return FAIL;
+            }
+        }
+        if nvim_bufIsChanged(nvim_get_curbuf()) != 0 {
+            crate::misc::no_write_message();
+            return FAIL;
+        }
+    }
+
+    // Go to the other buffer.
+    rs_set_curbuf(buf, action, update_jumplist);
+
+    if action == DOBUF_SPLIT {
+        nvim_reset_binding_curwin();
+    }
+
+    if aborting() != 0 {
+        return FAIL;
+    }
+
+    OK
 }
 
 // =============================================================================
