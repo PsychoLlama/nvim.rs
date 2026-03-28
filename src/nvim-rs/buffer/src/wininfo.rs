@@ -64,8 +64,8 @@ extern "C" {
     fn nvim_curwin_config_is_minimal() -> bool;
     static p_fdls: i64;
     fn nvim_curwin_set_p_fdl(val: c_int);
-    fn nvim_didset_window_options_curwin();
-    fn nvim_win_set_minimal_style_curwin();
+    fn didset_window_options(wp: WinHandle, valid_cursor: bool);
+    fn win_set_minimal_style(wp: WinHandle);
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_changelistidx(wp: WinHandle) -> c_int;
     fn nvim_wininfo_set_changelistidx(wip: WinInfoHandle, val: c_int);
@@ -206,8 +206,8 @@ pub unsafe extern "C" fn rs_get_winopts(buf: BufHandle) {
     }
 
     if nvim_curwin_config_is_minimal() {
-        nvim_didset_window_options_curwin();
-        nvim_win_set_minimal_style_curwin();
+        didset_window_options(nvim_get_curwin(), false);
+        win_set_minimal_style(nvim_get_curwin());
     }
 
     // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn rs_get_winopts(buf: BufHandle) {
     if p_fdls_val >= 0 {
         nvim_curwin_set_p_fdl(p_fdls_val as c_int);
     }
-    nvim_didset_window_options_curwin();
+    didset_window_options(nvim_get_curwin(), false);
 }
 
 /// Find the mark for the buffer `buf` for the current window.

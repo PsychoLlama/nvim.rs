@@ -12,28 +12,24 @@
 #include "klib/kvec.h"
 #include "nvim/arglist.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
-#include "nvim/ex_cmds_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval.h"
-#include "nvim/eval/vars.h"
-#include "nvim/hashtab.h"
-#include "nvim/usercmd.h"
-#include "nvim/fold.h"
+#include "nvim/ex_cmds_defs.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/fileio.h"
+#include "nvim/fold.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
+#include "nvim/indent.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/memline.h"
 #include "nvim/message.h"
 #include "nvim/option.h"
 #include "nvim/os/fs.h"
-#include "nvim/os/os.h"
 #include "nvim/path.h"
 #include "nvim/regexp.h"
 #include "nvim/spell.h"
@@ -41,14 +37,10 @@
 #include "nvim/terminal.h"
 #include "nvim/types_defs.h"
 #include "nvim/syntax.h"
-#include "nvim/undo.h"
 #include "nvim/vim_defs.h"
-#include "nvim/normal.h"
 #include "nvim/channel.h"
-#include "nvim/indent.h"
 #include "nvim/memory.h"
 #include "nvim/window.h"
-#include "nvim/winfloat.h"
 
 #include "buffer_shim.c.generated.h"
 
@@ -121,7 +113,6 @@ void nvim_buf_set_name_body(buf_T *buf, char *name)
   fname_expand(buf, &buf->b_ffname, &buf->b_sfname);
   buf->b_fname = buf->b_sfname;
 }
-
 void nvim_check_arg_idx_if_curbuf(buf_T *buf)
 { if (curwin->w_buffer == buf) { check_arg_idx(curwin); } }
 linenr_T nvim_buflist_findlnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
@@ -279,7 +270,6 @@ void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
   out[kOptVartabstop]    = offsetof(buf_T, b_p_vts);
   out[kOptKeymap]        = offsetof(buf_T, b_p_keymap);
 }
-
 int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
 void nvim_buf_set_b_p_initialized(buf_T *buf, int val) { buf->b_p_initialized = val != 0; }
 void nvim_buf_set_b_help(buf_T *buf, int val) { buf->b_help = val != 0; }
@@ -410,13 +400,10 @@ int nvim_get_winopts_apply(WinInfo *wip, buf_T *buf)
     return 0;
   }
 }
-
 void nvim_clear_winopt_curwin(void) { clear_winopt(&curwin->w_onebuf_opt); }
 void nvim_curwin_set_changelistidx(int val) { curwin->w_changelistidx = val; }
 bool nvim_curwin_config_is_minimal(void) { return curwin->w_config.style == kWinStyleMinimal; }
 void nvim_curwin_set_p_fdl(int val) { curwin->w_p_fdl = (OptInt)val; }
-void nvim_didset_window_options_curwin(void) { didset_window_options(curwin, false); }
-void nvim_win_set_minimal_style_curwin(void) { win_set_minimal_style(curwin); }
 void nvim_wininfo_set_changelistidx(WinInfo *wip, int val) { wip->wi_changelistidx = val; }
 void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
 void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
@@ -435,7 +422,6 @@ const char *nvim_buf_changedtick_di_key(buf_T *buf) { return (const char *)buf->
 void *nvim_buf_changedtick_di_tv_ptr(buf_T *buf) { return &buf->changedtick_di.di_tv; }
 void nvim_buf_b_locked_inc(buf_T *buf) { buf->b_locked++; }
 void nvim_buf_b_locked_dec(buf_T *buf) { buf->b_locked--; }
-
 bool nvim_buf_is_in_any_window(buf_T *buf)
 { FOR_ALL_TAB_WINDOWS(tab, win) { if (win->w_buffer == buf) { return true; } } return false; }
 
@@ -482,25 +468,17 @@ void nvim_buf_aucmd_restbuf_free(void *aco_void)
 int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
 { return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM,
                   (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
-
-void nvim_setpcmark(void) { setpcmark(); }
 void nvim_set_visual_reselect(int val) { VIsual_reselect = val != 0; }
-void nvim_reset_synblock_curwin(void) { if (curwin) { reset_synblock(curwin); } }
 int nvim_get_state_mode(void) { return State; }
-int nvim_bufIsChanged(buf_T *buf) { return bufIsChanged(buf); }
-void nvim_enter_buffer(buf_T *buf) { enter_buffer(buf); }
-void nvim_check_colorcolumn_curwin(void) { check_colorcolumn(NULL, curwin); }
 int nvim_buf_terminal_check_size(buf_T *buf)
 { if (buf && buf->terminal) { terminal_check_size(buf->terminal); return 1; } return 0; }
 void nvim_curbuf_dec_nwindows(void) { if (curbuf) { curbuf->b_nwindows--; } }
 int nvim_curwin_buffer_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
 OptInt nvim_curbuf_get_p_tw(void) { return curbuf->b_p_tw; }
 int nvim_curwin_buffer_is_buf(buf_T *buf) { return curwin->w_buffer == buf ? 1 : 0; }
-
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
 { aco_save_T aco; aucmd_prepbuf(&aco, buf); int status = open_buffer(false, NULL, 0);
   aucmd_restbuf(&aco); return (status != FAIL) ? 1 : 0; }
-
 int do_buffer_ext(int action, int start, int dir, int count, int flags)
 { return rs_do_buffer_ext(action, start, dir, count, flags); }
 void nvim_buf_lock(buf_T *buf) { buf->b_locked++; buf->b_locked_split++; }
@@ -508,8 +486,6 @@ void nvim_buf_unlock(buf_T *buf) { buf->b_locked--; buf->b_locked_split--; }
 void nvim_buf_set_nwindows(buf_T *buf, int val) { buf->b_nwindows = val; }
 void nvim_buf_flags_and(buf_T *buf, int mask) { buf->b_flags &= mask; }
 void nvim_syntax_clear_buf(buf_T *buf) { syntax_clear(&buf->b_s); }
-void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
-{ if (curwin != NULL && curwin->w_buffer == buf) { reset_synblock(curwin); } }
 void nvim_buf_clearFolding_all_windows(buf_T *buf)
 { FOR_ALL_TAB_WINDOWS(tp, win) { if (win->w_buffer == buf) { rs_clearFolding(win); } } }
 void nvim_buf_b_locked_split_inc(buf_T *buf) { buf->b_locked_split++; }
@@ -530,7 +506,6 @@ int nvim_get_entered_free_all_mem(void)
   return 0;
 #endif
 }
-void nvim_end_visual_mode(void) { end_visual_mode(); }
 void nvim_buf_set_flags(buf_T *buf, int flags) { buf->b_flags = flags; }
 void nvim_win_set_buffer_null(win_T *win) { win->w_buffer = NULL; }
 void nvim_mark_forget_file_all_tabs(int fnum)
@@ -545,5 +520,4 @@ void nvim_buf_wipe_free(buf_T *buf)
 }
 void nvim_buf_free_stuff_del(buf_T *buf)
 { free_buffer_stuff(buf, kBffClearWinInfo | kBffInitChangedtick); }
-void nvim_set_last_cursor(win_T *win) { set_last_cursor(win); }
 int nvim_buf_b_ffname_is_null(buf_T *buf) { return buf->b_ffname == NULL ? 1 : 0; }

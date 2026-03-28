@@ -114,7 +114,7 @@ extern "C" {
 
     fn rs_diff_buf_delete(buf: BufHandle);
     fn rs_diffopt_hiddenoff() -> c_int;
-    fn nvim_reset_synblock_if_curwin_buf(buf: BufHandle);
+    fn reset_synblock(win: *mut c_void);
     fn nvim_buf_clearFolding_all_windows(buf: BufHandle);
     fn ml_close(buf: BufHandle, del_file: bool);
     fn u_clearallandblockfree(buf: BufHandle);
@@ -131,13 +131,13 @@ extern "C" {
     fn nvim_terminal_close_buf(buf: BufHandle);
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_entered_free_all_mem() -> c_int;
-    fn nvim_end_visual_mode();
+    fn end_visual_mode();
     fn nvim_buf_set_flags(buf: BufHandle, flags: c_int);
     fn nvim_win_set_buffer_null(win: *mut c_void);
     fn nvim_mark_forget_file_all_tabs(fnum: c_int);
     fn nvim_buf_wipe_free(buf: BufHandle);
     fn nvim_buf_free_stuff_del(buf: BufHandle);
-    fn nvim_set_last_cursor(win: *mut c_void);
+    fn set_last_cursor(win: *mut c_void);
     fn nvim_buf_b_ffname_is_null(buf: BufHandle) -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_set_b_p_bl(buf: BufHandle, val: c_int);
@@ -253,7 +253,10 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     }
 
     rs_diff_buf_delete(buf); // Can't use 'diff' for unloaded buffer.
-    nvim_reset_synblock_if_curwin_buf(buf);
+    let curwin_for_synblock = nvim_get_curwin();
+    if !curwin_for_synblock.is_null() && nvim_win_get_buffer(curwin_for_synblock) == buf {
+        reset_synblock(curwin_for_synblock);
+    }
     nvim_buf_clearFolding_all_windows(buf);
 
     ml_close(buf, true); // close and delete the memline/memfile
@@ -318,7 +321,7 @@ pub unsafe extern "C" fn rs_close_buffer(
     if !win.is_null() && rs_win_valid_any_tab(win) != 0 {
         // Set b_last_cursor when closing the last window for the buffer.
         if nvim_buf_get_nwindows(buf) == 1 {
-            nvim_set_last_cursor(win);
+            set_last_cursor(win);
         }
         nvim_buflist_setfpos_win(buf, win);
     }
@@ -419,7 +422,7 @@ pub unsafe extern "C" fn rs_close_buffer(
 
     // When closing the current buffer stop Visual mode before freeing anything.
     if is_curbuf && nvim_get_VIsual_active() != 0 && nvim_get_entered_free_all_mem() == 0 {
-        nvim_end_visual_mode();
+        end_visual_mode();
     }
 
     nvim_buf_set_nwindows(buf, nwindows);

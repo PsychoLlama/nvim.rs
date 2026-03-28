@@ -1263,16 +1263,15 @@ pub unsafe extern "C" fn rs_buf_open_scratch(bufnr: c_int, bufname: *mut c_char)
 
 extern "C" {
     // Phase 3: set_curbuf helpers
-    fn nvim_setpcmark();
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
     fn nvim_set_visual_reselect(val: c_int);
-    fn nvim_reset_synblock_curwin();
+    fn reset_synblock(win: *mut c_void);
     fn nvim_get_state_mode() -> c_int;
     fn nvim_u_sync(force: bool);
-    fn nvim_bufIsChanged(buf: BufHandle) -> c_int;
-    fn nvim_enter_buffer(buf: BufHandle);
-    fn nvim_check_colorcolumn_curwin();
+    fn bufIsChanged(buf: BufHandle) -> bool;
+    fn enter_buffer(buf: BufHandle);
+    fn check_colorcolumn(cc: *const c_char, win: *mut c_void) -> *const c_char;
     fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
     fn nvim_curbuf_dec_nwindows();
     fn nvim_curwin_buffer_is_null() -> c_int;
@@ -1309,7 +1308,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     let last_winid = rs_get_last_winid();
 
     if update_jumplist {
-        nvim_setpcmark();
+        setpcmark();
     }
 
     if (nvim_get_cmdmod_cmod_flags() & CMOD_KEEPALT) == 0 {
@@ -1345,7 +1344,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         && aborting() == 0)
     {
         if nvim_curwin_buffer_is_buf(prevbuf) != 0 {
-            nvim_reset_synblock_curwin();
+            reset_synblock(nvim_get_curwin());
         }
         // Close windows if unloading or if alt-bufhidden triggers it.
         let bh = nvim_buf_get_bufhidden(prevbuf);
@@ -1373,9 +1372,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
             };
             let close_action = if unload {
                 action
-            } else if action == DOBUF_GOTO
-                && !crate::rs_buf_hide(prevbuf)
-                && nvim_bufIsChanged(prevbuf) == 0
+            } else if action == DOBUF_GOTO && !crate::rs_buf_hide(prevbuf) && !bufIsChanged(prevbuf)
             {
                 DOBUF_UNLOAD
             } else {
@@ -1393,9 +1390,9 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         if !nvim_get_curbuf().is_null() && prevbuf != nvim_get_curbuf() {
             nvim_curbuf_dec_nwindows();
         }
-        nvim_enter_buffer(if valid { buf } else { nvim_get_lastbuf() });
+        enter_buffer(if valid { buf } else { nvim_get_lastbuf() });
         if old_tw != nvim_curbuf_get_p_tw() {
-            nvim_check_colorcolumn_curwin();
+            check_colorcolumn(std::ptr::null(), nvim_get_curwin());
         }
     }
 
@@ -1426,7 +1423,7 @@ extern "C" {
     fn nvim_buf_terminal_running(buf: BufHandle) -> c_int;
     fn nvim_get_lastwin() -> *mut c_void;
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_end_visual_mode();
+    fn end_visual_mode();
     fn semsg(fmt: *const c_char, ...);
 }
 
@@ -1477,7 +1474,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
             return FAIL;
         }
 
-        if (flags & DOBUF_FORCEIT) == 0 && nvim_bufIsChanged(buf) != 0 {
+        if (flags & DOBUF_FORCEIT) == 0 && bufIsChanged(buf) {
             let p_confirm = nvim_get_p_confirm() != 0;
             let cmod_confirm = (nvim_get_cmdmod_cmod_flags() & CMOD_CONFIRM) != 0;
             let p_write = nvim_get_p_write() != 0;
@@ -1486,7 +1483,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
                 if !bufref_valid(&raw mut bufref) {
                     return FAIL;
                 }
-                if nvim_bufIsChanged(buf) != 0 {
+                if bufIsChanged(buf) {
                     return FAIL;
                 }
             } else {
@@ -1519,7 +1516,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
 
         // When closing the current buffer stop Visual mode.
         if buf == nvim_get_curbuf() && nvim_get_VIsual_active() != 0 {
-            nvim_end_visual_mode();
+            end_visual_mode();
         }
 
         // If deleting the last (listed) buffer, make it empty.
@@ -1607,7 +1604,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
                 return FAIL;
             }
         }
-        if nvim_bufIsChanged(nvim_get_curbuf()) != 0 {
+        if bufIsChanged(nvim_get_curbuf()) {
             crate::misc::no_write_message();
             return FAIL;
         }
