@@ -118,12 +118,7 @@ void nvim_excmds_fold_move_range_all_wins(linenr_T line1, linenr_T line2, linenr
     }
   }
 }
-void nvim_excmds_smsg_lines_moved(int64_t num_lines)
-{
-  smsg(0, NGETTEXT("%" PRId64 " line moved",
-                   "%" PRId64 " lines moved", (int)num_lines),
-       num_lines);
-}
+void nvim_excmds_smsg_lines_moved(int64_t num_lines) { smsg(0, NGETTEXT("%" PRId64 " line moved", "%" PRId64 " lines moved", (int)num_lines), num_lines); }
 void nvim_excmds_emsg_e134(void) { emsg(_("E134: Cannot move a range of lines into itself")); }
 void nvim_excmds_toggle_b_p_ai(void) { curbuf->b_p_ai = !curbuf->b_p_ai; }
 int nvim_excmds_get_b_p_iminsert(void) { return curbuf->b_p_iminsert; }
@@ -185,27 +180,15 @@ int append_indent = 0;
 int global_need_beginline = 0;
 bool nvim_excmds_format_sub_msg(bool count_only, int nsubs, int nlines)
 {
-  if (got_int) {
-    STRCPY(msg_buf, _("(Interrupted) "));
-  } else {
-    *msg_buf = NUL;
-  }
-  char *msg_single = count_only
-                     ? NGETTEXT("%" PRId64 " match on %" PRId64 " line",
-                                "%" PRId64 " matches on %" PRId64 " line", nsubs)
-                     : NGETTEXT("%" PRId64 " substitution on %" PRId64 " line",
-                                "%" PRId64 " substitutions on %" PRId64 " line", nsubs);
-  char *msg_plural = count_only
-                     ? NGETTEXT("%" PRId64 " match on %" PRId64 " lines",
-                                "%" PRId64 " matches on %" PRId64 " lines", nsubs)
-                     : NGETTEXT("%" PRId64 " substitution on %" PRId64 " lines",
-                                "%" PRId64 " substitutions on %" PRId64 " lines", nsubs);
-  vim_snprintf_add(msg_buf, sizeof(msg_buf),
-                   NGETTEXT(msg_single, msg_plural, nlines),
-                   (int64_t)nsubs, (int64_t)nlines);
-  if (msg(msg_buf, 0)) {
-    set_keep_msg(msg_buf, 0);
-  }
+  if (got_int) { STRCPY(msg_buf, _("(Interrupted) ")); } else { *msg_buf = NUL; }
+  char *s = count_only
+    ? NGETTEXT("%" PRId64 " match on %" PRId64 " line", "%" PRId64 " matches on %" PRId64 " line", nsubs)
+    : NGETTEXT("%" PRId64 " substitution on %" PRId64 " line", "%" PRId64 " substitutions on %" PRId64 " line", nsubs);
+  char *p = count_only
+    ? NGETTEXT("%" PRId64 " match on %" PRId64 " lines", "%" PRId64 " matches on %" PRId64 " lines", nsubs)
+    : NGETTEXT("%" PRId64 " substitution on %" PRId64 " lines", "%" PRId64 " substitutions on %" PRId64 " lines", nsubs);
+  vim_snprintf_add(msg_buf, sizeof(msg_buf), NGETTEXT(s, p, nlines), (int64_t)nsubs, (int64_t)nlines);
+  if (msg(msg_buf, 0)) { set_keep_msg(msg_buf, 0); }
   return true;
 }
 int nvim_excmds_curwin_get_pvw(void) { return curwin->w_p_pvw; }
@@ -327,12 +310,7 @@ void nvim_excmds_error_msg(int error_id, const char *arg)
   case 11:  semsg(_("E768: Swap file exists: %s (:silent! overrides)"), arg); break;
   case 12:  emsg(_("E140: Use ! to write partial buffer")); break;
   case 13:  emsg(_(e_argreq)); break;
-  case 14:
-    semsg(_("E143: Autocommands unexpectedly deleted new buffer %s"),
-          arg == NULL ? "" : arg);
-    au_new_curbuf.br_buf = NULL;
-    au_new_curbuf.br_buf_free_count = 0;
-    break;
+  case 14: semsg(_("E143: Autocommands unexpectedly deleted new buffer %s"), arg == NULL ? "" : arg); au_new_curbuf.br_buf = NULL; au_new_curbuf.br_buf_free_count = 0; break;
   default:  break;
   }
 }
@@ -345,10 +323,7 @@ int nvim_excmds_curbuf_get_b_nwindows(void) { return curbuf->b_nwindows; }
 _Static_assert(CMD_xall == 537, "CMD_xall mismatch -- update the Rust constant in write.rs");
 _Static_assert(CMD_wqall == 532, "CMD_wqall mismatch -- update the Rust constant in write.rs");
 buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
-int nvim_excmds_buf_has_running_job(const buf_T *buf)
-{
-  return (buf->terminal != NULL && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0;
-}
+int nvim_excmds_buf_has_running_job(const buf_T *buf) { return (buf->terminal != NULL && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0; }
 int nvim_excmds_buf_get_b_fnum(const buf_T *buf) { return buf->b_fnum; }
 void nvim_excmds_semsg_e141(int64_t fnum) { semsg(_("E141: No file name for buffer %" PRId64), fnum); }
 int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out) { exarg_T fake_eap = { 0 }; fake_eap.forceit = (bool)forceit_in; int result = rs_check_readonly(&fake_eap, buf); *forceit_out = (int)fake_eap.forceit; return result; }
@@ -485,18 +460,9 @@ void nvim_ecmd_fold_update_all_curbuf_wins(void)
 }
 const char *nvim_ecmd_eap_get_do_ecmd_cmd(exarg_T *eap) { return eap != NULL ? eap->do_ecmd_cmd : NULL; }
 void nvim_ecmd_emsg_closing_buffer(void) { emsg(_(e_cannot_switch_to_a_closing_buffer)); }
-int nvim_ecmd_should_dec_nwindows_on_locked(win_T *oldwin)
-{
-  return (oldwin == NULL && curwin->w_buffer != NULL
-          && curwin->w_buffer->b_nwindows > 1) ? 1 : 0;
-}
+int nvim_ecmd_should_dec_nwindows_on_locked(win_T *oldwin) { return (oldwin == NULL && curwin->w_buffer != NULL && curwin->w_buffer->b_nwindows > 1) ? 1 : 0; }
 void nvim_ecmd_curwin_set_ws_to_buf(buf_T *buf) { curwin->w_s = &(buf->b_s); }
-void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
-{
-  if (curwin->w_buffer != NULL && curwin->w_buffer->b_nwindows > 1) {
-    curwin->w_buffer->b_nwindows--;
-  }
-}
+void nvim_ecmd_dec_curwin_buf_nwindows_safe(void) { if (curwin->w_buffer != NULL && curwin->w_buffer->b_nwindows > 1) { curwin->w_buffer->b_nwindows--; } }
 void nvim_cpi_get_col_info(int *col1, int *vcol1, int *linelen, int *tabsize)
 {
   char *p = get_cursor_line_ptr();
