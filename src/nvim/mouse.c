@@ -67,23 +67,6 @@ extern void rs_clearopbeep(oparg_T *oap);
 extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
 extern void rs_may_start_select(int c);
 
-static linenr_T orig_topline = 0;
-static int orig_topfill = 0;
-
-// C accessors for Rust (mouse state)
-
-/// Get the original topline for double-click detection.
-linenr_T nvim_get_orig_topline(void) { return orig_topline; }
-
-/// Set the original topline for double-click detection.
-void nvim_set_orig_topline(linenr_T val) { orig_topline = val; }
-
-/// Get the original topfill for double-click detection.
-int nvim_get_orig_topfill(void) { return orig_topfill; }
-
-/// Set the original topfill for double-click detection.
-void nvim_set_orig_topfill(int val) { orig_topfill = val; }
-
 /// Get the mouse_dragging global value.
 int nvim_get_mouse_dragging(void) { return mouse_dragging; }
 
@@ -952,24 +935,6 @@ void nvim_set_dragwin(win_T *wp) { dragwin = wp; }
 /// Check if a window is being dragged.
 bool nvim_is_dragging(void) { return dragwin != NULL; }
 
-// Phase 2 accessors: needed for Rust migration of _impl functions
-
-/// Get `p_mousescroll_vert` (vertical mouse scroll step).
-int nvim_get_p_mousescroll_vert(void) { return (int)p_mousescroll_vert; }
-
-/// Get `p_mousescroll_hor` (horizontal mouse scroll step).
-int nvim_get_p_mousescroll_hor(void) { return (int)p_mousescroll_hor; }
-
-
-// Saved cursor for ins_mouse_impl start_arrow pattern.
-static pos_T mouse_saved_tpos;
-
-/// Save curwin->w_cursor for later use with start_arrow.
-void nvim_mouse_save_tpos(void) { mouse_saved_tpos = curwin->w_cursor; }
-
-/// Call start_arrow(&mouse_saved_tpos) or start_arrow(NULL).
-/// @param use_tpos  true to pass &mouse_saved_tpos, false to pass NULL.
-void nvim_mouse_start_arrow(bool use_tpos) { start_arrow(use_tpos ? &mouse_saved_tpos : NULL); }
 
 /// Move the cursor to the specified row and column on the screen.
 /// Change current window if necessary. Returns an integer with the

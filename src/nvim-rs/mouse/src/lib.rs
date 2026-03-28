@@ -141,6 +141,23 @@ pub type WinHandle = *mut std::ffi::c_void;
 pub type TabpageHandle = *mut std::ffi::c_void;
 
 // =============================================================================
+// Rust-owned static state (moved from C)
+// =============================================================================
+
+/// Original topline for double-click detection (was `orig_topline` in mouse.c).
+static mut ORIG_TOPLINE: linenr_T = 0;
+
+/// Original topfill for double-click detection (was `orig_topfill` in mouse.c).
+static mut ORIG_TOPFILL: c_int = 0;
+
+/// Saved cursor position for `start_arrow` pattern (was `mouse_saved_tpos` in mouse.c).
+static mut MOUSE_SAVED_TPOS: PosT = PosT {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+// =============================================================================
 // C accessors for mouse state
 // =============================================================================
 
@@ -148,17 +165,12 @@ pub type TabpageHandle = *mut std::ffi::c_void;
 extern "C" {
     static Rows: c_int;
     static Columns: c_int;
-    /// Get the original topline for double-click detection.
-    fn nvim_get_orig_topline() -> linenr_T;
 
-    /// Set the original topline for double-click detection.
-    fn nvim_set_orig_topline(val: linenr_T);
+    /// `p_mousescroll_vert` option value (`OptInt` = `int64_t`).
+    static p_mousescroll_vert: i64;
 
-    /// Get the original topfill for double-click detection.
-    fn nvim_get_orig_topfill() -> c_int;
-
-    /// Set the original topfill for double-click detection.
-    fn nvim_set_orig_topfill(val: c_int);
+    /// `p_mousescroll_hor` option value (`OptInt` = `int64_t`).
+    static p_mousescroll_hor: i64;
 
     /// Get whether a click was received.
     fn nvim_get_got_click() -> bool;
@@ -621,8 +633,8 @@ pub const extern "C" fn rs_is_horizontal_scroll(scroll_dir: c_int) -> bool {
 /// `wp` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_mouse_topline(wp: WinHandle) {
-    nvim_set_orig_topline(nvim_win_get_topline(wp));
-    nvim_set_orig_topfill(nvim_win_get_topfill(wp));
+    ORIG_TOPLINE = nvim_win_get_topline(wp);
+    ORIG_TOPFILL = nvim_win_get_topfill(wp);
 }
 
 /// Set UI mouse depending on current mode and 'mouse'.
@@ -1160,12 +1172,6 @@ extern "C" {
     /// Get `State` global.
     fn nvim_get_state() -> c_int;
 
-    /// Get `p_mousescroll_vert` option.
-    fn nvim_get_p_mousescroll_vert() -> c_int;
-
-    /// Get `p_mousescroll_hor` option.
-    fn nvim_get_p_mousescroll_hor() -> c_int;
-
     /// Call `pagescroll(dir, count, half)`.
     #[link_name = "pagescroll"]
     fn pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int;
@@ -1174,11 +1180,11 @@ extern "C" {
     #[link_name = "nvim_textfmt_undisplay_dollar"]
     fn nvim_undisplay_dollar();
 
-    /// Save `curwin->w_cursor` to `mouse_saved_tpos`.
-    fn nvim_mouse_save_tpos();
+    /// Get `&curwin->w_cursor` pointer.
+    fn nvim_win_get_cursor_ptr(wp: WinHandle) -> *mut PosT;
 
-    /// Call `start_arrow(&mouse_saved_tpos)` or `start_arrow(NULL)`.
-    fn nvim_mouse_start_arrow(use_tpos: bool);
+    /// Call `start_arrow(end_insert_pos)` (Rust impl in edit crate).
+    fn start_arrow(end_insert_pos: *mut PosT);
 
     /// Call `set_can_cindent(val)`.
     fn nvim_set_can_cindent(val: c_int);
@@ -1320,7 +1326,7 @@ pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
 
     nvim_undisplay_dollar();
     // Save curwin->w_cursor as tpos before do_mouse changes it.
-    nvim_mouse_save_tpos();
+    MOUSE_SAVED_TPOS = *nvim_win_get_cursor_ptr(old_curwin);
 
     if rs_do_mouse(std::ptr::null_mut(), c, -1 /* BACKWARD */, 1, false) {
         let new_curwin = nvim_get_curwin();
@@ -1337,7 +1343,12 @@ pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
             }
         }
         let same_window = nvim_get_curwin() == old_curwin;
-        nvim_mouse_start_arrow(same_window);
+        let tpos_ptr = if same_window {
+            std::ptr::addr_of_mut!(MOUSE_SAVED_TPOS)
+        } else {
+            std::ptr::null_mut()
+        };
+        start_arrow(tpos_ptr);
         if nvim_get_curwin() != new_curwin && rs_win_valid(new_curwin) != 0 {
             nvim_set_curwin(new_curwin);
             nvim_set_curbuf(nvim_win_get_w_buffer(new_curwin));
@@ -1366,6 +1377,7 @@ const BACKWARD_DIR: c_int = 0; // pagescroll BACKWARD is 0 in C
 /// # Safety
 /// `cap` must be a valid `cmdarg_T` pointer.
 #[export_name = "do_mousescroll"]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
     let mod_mask = nvim_get_mod_mask();
     // MOD_MASK_SHIFT = 0x02, MOD_MASK_CTRL = 0x04
@@ -1385,7 +1397,7 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
                 // Whole page up or down: botline - topline
                 nvim_win_get_botline(curwin) - nvim_win_get_topline(curwin)
             } else {
-                nvim_get_p_mousescroll_vert()
+                p_mousescroll_vert as c_int
             };
             if count > 0 {
                 (*cap.cast::<CmdargT>()).count1 = count;
@@ -1398,7 +1410,7 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
         let step = if shift_or_ctrl {
             nvim_win_get_view_width(curwin)
         } else {
-            nvim_get_p_mousescroll_hor()
+            p_mousescroll_hor as c_int
         };
         let leftcol =
             nvim_win_get_leftcol(curwin) + if cap_arg == MSCR_RIGHT { -step } else { step };
