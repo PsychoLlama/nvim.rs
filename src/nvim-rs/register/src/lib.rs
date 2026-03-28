@@ -171,6 +171,26 @@ extern "C" {
 
     // Command line
     fn getcmdline(firstc: c_int, count: i64, indent: c_int, do_concat: bool) -> *mut c_char;
+
+    // Command-line paste (Phase 1)
+    fn cmdline_paste_str(s: *const c_char, literally: bool);
+    fn os_breakcheck();
+
+    // Typval list operations (Phase 1)
+    fn tv_list_alloc(count: isize) -> *mut c_void;
+    fn tv_list_append_string(list: *mut c_void, s: *const c_char, len: isize);
+    fn tv_list_append_allocated_string(list: *mut c_void, s: *mut c_char);
+
+    // Special register contents (Phase 1)
+    fn get_spec_reg(
+        regname: c_int,
+        argp: *mut *mut c_char,
+        allocated: *mut bool,
+        errmsg: bool,
+    ) -> bool;
+
+    // Global variables (Phase 1)
+    static mut got_int: bool;
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -1492,6 +1512,158 @@ pub unsafe extern "C" fn rs_register_has_content(regname: c_int) -> bool {
         return false;
     }
     !y_regs[i as usize].is_empty()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: Register Contents and Command-Line Paste
+// ---------------------------------------------------------------------------
+
+/// GRegFlags constants matching `register_defs.h`.
+const K_GREG_NO_EXPR: c_int = 1;
+const K_GREG_EXPR_SRC: c_int = 2;
+const K_GREG_LIST: c_int = 4;
+
+/// YREG_PUT mode constant.
+const YREG_PUT: c_int = 2;
+
+/// When `flags` has `kGRegList` return a list with text `s`.
+/// Otherwise just return `s`.
+///
+/// # Safety
+///
+/// `s` must be a valid C-allocated string or NULL.
+unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
+    if flags & K_GREG_LIST == 0 {
+        return s as *mut c_void;
+    }
+    let list = tv_list_alloc(1);
+    tv_list_append_allocated_string(list, s);
+    list
+}
+
+/// Paste a yank register into the command line.
+/// Only for non-special registers.
+/// Used by CTRL-R in command-line mode.
+///
+/// # Safety
+///
+/// Reads global register state and calls C functions.
+#[unsafe(export_name = "cmdline_paste_reg")]
+pub unsafe extern "C" fn rs_cmdline_paste_reg(
+    regname: c_int,
+    literally_arg: bool,
+    remcr: bool,
+) -> bool {
+    let literally = literally_arg || rs_is_literal_register(regname) != 0;
+
+    let reg = rs_get_yank_register(regname, 0 /* YREG_PASTE */);
+    if (*reg).y_array.is_null() {
+        return false; // FAIL
+    }
+
+    let size = (*reg).y_size;
+    for i in 0..size {
+        let s = &*(*reg).y_array.add(i);
+        cmdline_paste_str(s.data, literally);
+
+        // Insert ^M between lines, unless `remcr` is true.
+        if i < size - 1 && !remcr {
+            cmdline_paste_str(c"\r".as_ptr(), literally);
+        }
+
+        // Check for CTRL-C.
+        os_breakcheck();
+        if got_int {
+            return false; // FAIL
+        }
+    }
+    true // OK
+}
+
+/// Gets the contents of a register.
+/// Used for `@r` in expressions and for `getreg()`.
+///
+/// # Safety
+///
+/// Reads global register state and calls C functions.
+#[unsafe(export_name = "get_reg_contents")]
+pub unsafe extern "C" fn rs_get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
+    // Don't allow using an expression register inside an expression.
+    if regname == c_int::from(b'=') {
+        if flags & K_GREG_NO_EXPR != 0 {
+            return std::ptr::null_mut();
+        }
+        if flags & K_GREG_EXPR_SRC != 0 {
+            return get_reg_wrap_one_line(rs_get_expr_line_src(), flags);
+        }
+        return get_reg_wrap_one_line(rs_get_expr_line(), flags);
+    }
+
+    // "@@" is used for unnamed register
+    let regname = if regname == c_int::from(b'@') {
+        c_int::from(b'"')
+    } else {
+        regname
+    };
+
+    // check for valid regname
+    if regname != NUL && !rs_valid_yank_reg(regname, false) {
+        return std::ptr::null_mut();
+    }
+
+    let mut retval: *mut c_char = std::ptr::null_mut();
+    let mut allocated = false;
+    if get_spec_reg(regname, &raw mut retval, &raw mut allocated, false) {
+        if retval.is_null() {
+            return std::ptr::null_mut();
+        }
+        if allocated {
+            return get_reg_wrap_one_line(retval, flags);
+        }
+        return get_reg_wrap_one_line(xstrdup(retval), flags);
+    }
+
+    let reg = rs_get_yank_register(regname, YREG_PUT);
+    if (*reg).y_array.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    if flags & K_GREG_LIST != 0 {
+        let list = tv_list_alloc((*reg).y_size as isize);
+        for i in 0..(*reg).y_size {
+            let s = &*(*reg).y_array.add(i);
+            tv_list_append_string(list, s.data, -1);
+        }
+        return list;
+    }
+
+    // Compute length of resulting string.
+    let mut len: usize = 0;
+    for i in 0..(*reg).y_size {
+        let s = &*(*reg).y_array.add(i);
+        len += s.size;
+        // Insert a newline between lines and after last line if y_type is kMTLineWise.
+        if (*reg).y_type == K_MT_LINE_WISE || i < (*reg).y_size - 1 {
+            len += 1;
+        }
+    }
+
+    let out = xmalloc(len + 1) as *mut c_char;
+
+    // Copy lines into string.
+    let mut offset: usize = 0;
+    for i in 0..(*reg).y_size {
+        let s = &*(*reg).y_array.add(i);
+        std::ptr::copy_nonoverlapping(s.data, out.add(offset), s.size);
+        offset += s.size;
+        if (*reg).y_type == K_MT_LINE_WISE || i < (*reg).y_size - 1 {
+            *out.add(offset) = b'\n' as c_char;
+            offset += 1;
+        }
+    }
+    *out.add(offset) = 0;
+
+    out as *mut c_void
 }
 
 // ---------------------------------------------------------------------------
