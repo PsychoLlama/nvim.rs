@@ -60,6 +60,10 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 
 #include "channel.c.generated.h"
 
+// Rust implementations in channel crate (src/nvim-rs/channel/src/lib.rs)
+extern void free_channel_event(void **argv);
+extern void close_cb(Stream *stream, void *data);
+
 // Rust implementation in nvim-event crate
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern int rs_stream_is_closed(Stream *stream);
@@ -232,12 +236,7 @@ bool channel_close(uint64_t id, ChannelPart part, const char **error)
   return true;
 }
 
-/// Initializes the module
-void channel_init(void)
-{
-  channel_alloc(kChannelStreamStderr);
-  rpc_init();
-}
+// channel_init implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 /// Allocates a channel.
 ///
@@ -298,52 +297,11 @@ void channel_create_event(Channel *chan, const char *ext_source)
   channel_info_changed(chan, true);
 }
 
-void channel_incref(Channel *chan) { chan->refcount++; }
+// channel_incref, channel_decref, callback_reader_free, callback_reader_start
+// implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-void channel_decref(Channel *chan)
-{
-  if (!(--chan->refcount)) {
-    // delay free, so that libuv is done with the handles
-    multiqueue_put(loop_get_events(&main_loop), free_channel_event, chan);
-  }
-}
-
-void callback_reader_free(CallbackReader *reader)
-{
-  callback_free(&reader->cb);
-  ga_clear(&reader->buffer);
-}
-
-void callback_reader_start(CallbackReader *reader, const char *type)
-{
-  ga_init(&reader->buffer, sizeof(char *), 32);
-  reader->type = type;
-}
-
-static void channel_destroy(Channel *chan)
-{
-  if (chan->is_rpc) {
-    rpc_free(chan);
-  }
-
-  if (chan->streamtype == kChannelStreamProc) {
-    proc_free(&chan->stream.proc);
-  }
-
-  callback_reader_free(&chan->on_data);
-  callback_reader_free(&chan->on_stderr);
-  callback_free(&chan->on_exit);
-
-  multiqueue_free(chan->events);
-  xfree(chan);
-}
-
-static void free_channel_event(void **argv)
-{
-  Channel *chan = argv[0];
-  pmap_del(uint64_t)(&channels, chan->id, NULL);
-  channel_destroy(chan);
-}
+// channel_destroy (static helper), free_channel_event, close_cb
+// implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 static void channel_destroy_early(Channel *chan)
 {
@@ -360,8 +318,6 @@ static void channel_destroy_early(Channel *chan)
   // uv will keep a reference to handles until next loop tick, so delay free
   multiqueue_put(loop_get_events(&main_loop), free_channel_event, chan);
 }
-
-static void close_cb(Stream *stream, void *data) { channel_decref(data); }
 
 /// Starts a job and returns the associated channel
 ///
@@ -999,13 +955,7 @@ Dict channel_info(uint64_t id, Arena *arena)
   return info;
 }
 
-/// Simple int64_t comparison function for use with qsort()
-static int int64_t_cmp(const void *pa, const void *pb)
-{
-  const int64_t a = *(const int64_t *)pa;
-  const int64_t b = *(const int64_t *)pb;
-  return a == b ? 0 : a > b ? 1 : -1;
-}
+// int64_t_cmp implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 Array channel_all_info(Arena *arena)
 {

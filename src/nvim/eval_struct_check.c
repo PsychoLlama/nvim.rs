@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "nvim/buffer_defs.h"
+#include "nvim/channel.h"
 #include "nvim/channel_defs.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -115,6 +117,30 @@ _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 // --- NvimCursorVisualState layout assertions ---
 _Static_assert(sizeof(NvimCursorVisualState) == 40,
                "NvimCursorVisualState size mismatch: expected 40 bytes");
+
+// --- Channel struct layout assertions (Rust ChannelT must match exactly) ---
+_Static_assert(sizeof(Channel) == 1928, "Channel size mismatch: update ChannelT in Rust");
+_Static_assert(offsetof(Channel, id) == 0, "Channel.id offset mismatch");
+_Static_assert(offsetof(Channel, refcount) == 8, "Channel.refcount offset mismatch");
+_Static_assert(offsetof(Channel, events) == 16, "Channel.events offset mismatch");
+_Static_assert(offsetof(Channel, streamtype) == 24, "Channel.streamtype offset mismatch");
+_Static_assert(offsetof(Channel, stream) == 32, "Channel.stream offset mismatch");
+_Static_assert(offsetof(Channel, is_rpc) == 1672, "Channel.is_rpc offset mismatch");
+_Static_assert(offsetof(Channel, detach) == 1673, "Channel.detach offset mismatch");
+_Static_assert(offsetof(Channel, rpc) == 1680, "Channel.rpc offset mismatch");
+_Static_assert(offsetof(Channel, term) == 1768, "Channel.term offset mismatch");
+_Static_assert(offsetof(Channel, on_data) == 1776, "Channel.on_data offset mismatch");
+_Static_assert(offsetof(Channel, on_stderr) == 1840, "Channel.on_stderr offset mismatch");
+_Static_assert(offsetof(Channel, on_exit) == 1904, "Channel.on_exit offset mismatch");
+_Static_assert(offsetof(Channel, exit_status) == 1920, "Channel.exit_status offset mismatch");
+_Static_assert(offsetof(Channel, callback_busy) == 1924, "Channel.callback_busy offset mismatch");
+_Static_assert(offsetof(Channel, callback_scheduled) == 1925,
+               "Channel.callback_scheduled offset mismatch");
+
+// --- Event struct layout assertions (Rust EventT must match exactly) ---
+_Static_assert(sizeof(Event) == 88, "Event size mismatch: update EventT in Rust");
+_Static_assert(offsetof(Event, handler) == 0, "Event.handler offset mismatch");
+_Static_assert(offsetof(Event, argv) == 8, "Event.argv offset mismatch");
 
 // --- NvimTimerFields layout assertions ---
 _Static_assert(offsetof(NvimTimerFields, timer_id) == 0, "NvimTimerFields.timer_id offset");

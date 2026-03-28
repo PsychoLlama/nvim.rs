@@ -367,6 +367,7 @@ int nvim_channel_is_valid_job(Channel *chan) { return chan != NULL && chan->stre
 
 int nvim_channel_is_not_proc(Channel *chan) { return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0; }
 Channel *nvim_find_channel(uint64_t id) { return find_channel(id); }
+void nvim_channels_del(uint64_t id) { pmap_del(uint64_t)(&channels, id, NULL); }
 
 char *nvim_docmd_fmt_exception_not_caught(const char *value)
 { vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value); return xstrdup(IObuff); }
