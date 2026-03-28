@@ -18,6 +18,8 @@ extern int rs_get_register_name(int num);
 extern bool cmdline_paste_reg(int regname, bool literally_arg, bool remcr);
 extern void *get_reg_contents(int regname, int flags);
 extern int do_execreg(int regname, int colon, int addcr, int silent);
+extern int do_record(int c);
+extern void ex_display(exarg_T *eap);
 extern int rs_get_unname_register(void);
 extern int get_unname_register(void);
 extern yankreg_T *get_y_register(int reg);

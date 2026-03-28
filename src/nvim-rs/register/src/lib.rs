@@ -225,6 +225,71 @@ extern "C" {
     static mut last_cmdline: *mut c_char;
     static mut new_last_cmdline: *mut c_char;
     static mut restart_edit: c_int;
+
+    // Messaging (Phase 3)
+    fn msg_puts(s: *const c_char);
+    fn msg_putchar(c: c_int);
+    fn msg_puts_title(s: *const c_char);
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
+    fn ptr2cells(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn message_filtered(msg: *const c_char) -> bool;
+
+    // Buffer list (Phase 3) -- rs_buflist_name_nr is the real implementation; the
+    // C buflist_name_nr inline wrapper calls this.
+    fn rs_buflist_name_nr(fnum: c_int, fname: *mut *mut c_char, lnum: *mut c_int) -> c_int;
+
+    // Search / mbyte (Phase 3)
+    fn last_search_pat() -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn mb_tolower(a: c_int) -> c_int;
+
+    // Edit mode (Phase 3)
+    fn showmode() -> c_int;
+
+    // Autocmds (Phase 3)
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+
+    // v:event (Phase 3)
+    fn get_v_event(save: *mut c_void) -> *mut c_void;
+    fn restore_v_event(dict: *mut c_void, save: *mut c_void);
+    fn tv_dict_add_str(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    ) -> c_int;
+    fn tv_dict_set_keys_readonly(dict: *mut c_void);
+
+    // UI query (Phase 3)
+    fn ui_has(feat: c_int) -> bool;
+
+    // Recording (Phase 3)
+    fn get_recorded() -> *mut c_char;
+    fn vim_unescape_ks(p: *mut c_char);
+    fn get_last_insert() -> NvimString;
+
+    // Existing accessors (Phase 3)
+    fn nvim_al_curbuf_b_fname() -> *mut c_char;
+    fn nvim_al_eap_get_arg(eap: *mut c_void) -> *mut c_char;
+
+    // Global variables (Phase 3)
+    static mut Columns: c_int;
+    static mut redir_reg: c_int;
+    static mut msg_ext_skip_flush: bool;
+    static mut reg_recording: c_int;
+    static mut reg_recorded: c_int;
+    static mut p_ch: i64;
+    static mut curbuf: *mut c_void;
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -2010,6 +2075,320 @@ pub unsafe extern "C" fn rs_do_execreg(
             regname
         };
         pending_end_reg_executing = false;
+    }
+    retval
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: Display and Recording
+// ---------------------------------------------------------------------------
+
+/// kUIMessages value (UIExtension enum).
+const K_UI_MESSAGES: c_int = 4;
+
+/// HLF_8 value (HlGroups enum, first entry after HLF_NONE=0).
+const HLF_8: c_int = 1;
+
+/// EVENT_RECORDINGENTER value (from autocmd/src/event.rs: RecordingEnter = 91).
+const EVENT_RECORDINGENTER: c_int = 91;
+
+/// EVENT_RECORDINGLEAVE value (from autocmd/src/event.rs: RecordingLeave = 92).
+const EVENT_RECORDINGLEAVE: c_int = 92;
+
+/// NUMBUFLEN value (matching NUMBUFLEN in vim.h: max size of a number-to-string buffer).
+const NUMBUFLEN: usize = 65;
+
+/// Size of save_v_event_T: bool (1) + padding (7) + hashtab_T (296) = 304 bytes.
+const SAVE_V_EVENT_SIZE: usize = 304;
+
+/// Display a string for ex_display(), truncate at end of screen line.
+///
+/// # Safety
+///
+/// `p` must be a valid C string.
+unsafe fn dis_msg(p: *const c_char, skip_esc: bool) {
+    let mut n = Columns - 6;
+    let mut pos = p;
+    loop {
+        if *pos == 0 {
+            break;
+        }
+        // Skip trailing ESC if skip_esc is set.
+        if skip_esc && *pos as u8 == 0x1b && *pos.add(1) == 0 {
+            break;
+        }
+        let cells = ptr2cells(pos);
+        n -= cells;
+        if n < 0 {
+            break;
+        }
+        let l = utfc_ptr2len(pos);
+        if l > 1 {
+            msg_outtrans_len(pos, l, 0, false);
+            pos = pos.add(l as usize);
+        } else {
+            msg_outtrans_len(pos, 1, 0, false);
+            pos = pos.add(1);
+        }
+    }
+    os_breakcheck();
+}
+
+/// `:dis` and `:registers`: Display the contents of the yank registers.
+///
+/// # Safety
+///
+/// Reads/writes global state and calls C functions.
+#[unsafe(export_name = "ex_display")]
+pub unsafe extern "C" fn rs_ex_display(eap: *mut c_void) {
+    let mut p: *const c_char;
+    let arg_raw = nvim_al_eap_get_arg(eap);
+    // Normalize: if arg is NULL or empty string, treat as NULL (show all registers).
+    let arg: *const c_char = if arg_raw.is_null() || *arg_raw == 0 {
+        std::ptr::null()
+    } else {
+        arg_raw as *const c_char
+    };
+
+    let hl_id = HLF_8;
+
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+    msg_ext_skip_flush = true;
+
+    // Highlight title.
+    msg_puts_title(c"\nType Name Content".as_ptr());
+
+    let mut i: c_int = -1;
+    while i < NUM_REGISTERS && !got_int {
+        let name = rs_get_register_name(i);
+
+        // filter by arg
+        if !arg.is_null() && vim_strchr(arg, name).is_null() {
+            i += 1;
+            continue;
+        }
+
+        let reg_type_code = rs_get_reg_type(name, std::ptr::null_mut());
+        let type_char: c_int = match reg_type_code {
+            K_MT_LINE_WISE => c_int::from(b'l'),
+            K_MT_CHAR_WISE => c_int::from(b'c'),
+            _ => c_int::from(b'b'),
+        };
+
+        let yb: *mut YankReg = if i == -1 {
+            if !y_previous.is_null() {
+                y_previous
+            } else {
+                &raw mut y_regs[0]
+            }
+        } else {
+            &raw mut y_regs[i as usize]
+        };
+
+        // Check clipboard.
+        get_clipboard(name, &raw mut (*(yb as *mut *mut YankReg)), true);
+
+        // Do not list register being written to.
+        if name == mb_tolower(redir_reg)
+            || (redir_reg == c_int::from(b'"') && std::ptr::eq(yb, y_previous as *const _))
+        {
+            i += 1;
+            continue;
+        }
+
+        if !(*yb).y_array.is_null() {
+            let mut do_show = false;
+            let mut j = 0usize;
+            while !do_show && j < (*yb).y_size {
+                let s = &*(*yb).y_array.add(j);
+                do_show = !message_filtered(s.data);
+                j += 1;
+            }
+
+            if do_show || (*yb).y_size == 0 {
+                msg_putchar(c_int::from(b'\n'));
+                msg_puts(c"  ".as_ptr());
+                msg_putchar(type_char);
+                msg_puts(c"  ".as_ptr());
+                msg_putchar(c_int::from(b'"'));
+                msg_putchar(name);
+                msg_puts(c"   ".as_ptr());
+
+                let mut n = Columns - 11;
+                let mut j = 0usize;
+                while j < (*yb).y_size && n > 1 {
+                    if j > 0 {
+                        msg_puts_hl(c"^J".as_ptr(), hl_id, false);
+                        n -= 2;
+                    }
+                    let line = &*(*yb).y_array.add(j);
+                    p = line.data;
+                    while *p != 0 {
+                        let cells = ptr2cells(p);
+                        n -= cells;
+                        if n < 0 {
+                            break;
+                        }
+                        let clen = utfc_ptr2len(p);
+                        msg_outtrans_len(p, clen, 0, false);
+                        p = p.add(clen as usize);
+                    }
+                    j += 1;
+                }
+                if n > 1 && (*yb).y_type == K_MT_LINE_WISE {
+                    msg_puts_hl(c"^J".as_ptr(), hl_id, false);
+                }
+            }
+            os_breakcheck();
+        }
+        i += 1;
+    }
+
+    // Display last inserted text.
+    let insert = get_last_insert();
+    p = insert.data;
+    if !p.is_null()
+        && (arg.is_null() || !vim_strchr(arg, c_int::from(b'.')).is_null())
+        && !got_int
+        && !message_filtered(p)
+    {
+        msg_puts(c"\n  c  \".   ".as_ptr());
+        dis_msg(p, true);
+    }
+
+    // Display last command line.
+    if !last_cmdline.is_null()
+        && (arg.is_null() || !vim_strchr(arg, c_int::from(b':')).is_null())
+        && !got_int
+        && !message_filtered(last_cmdline)
+    {
+        msg_puts(c"\n  c  \":   ".as_ptr());
+        dis_msg(last_cmdline, false);
+    }
+
+    // Display current file name.
+    let b_fname = nvim_al_curbuf_b_fname();
+    if !b_fname.is_null()
+        && (arg.is_null() || !vim_strchr(arg, c_int::from(b'%')).is_null())
+        && !got_int
+        && !message_filtered(b_fname)
+    {
+        msg_puts(c"\n  c  \"%   ".as_ptr());
+        dis_msg(b_fname, false);
+    }
+
+    // Display alternate file name.
+    if (arg.is_null() || !vim_strchr(arg, c_int::from(b'%')).is_null()) && !got_int {
+        let mut fname: *mut c_char = std::ptr::null_mut();
+        let mut dummy: c_int = 0;
+        if rs_buflist_name_nr(0, &raw mut fname, &raw mut dummy) != FAIL && !message_filtered(fname)
+        {
+            msg_puts(c"\n  c  \"#   ".as_ptr());
+            dis_msg(fname, false);
+        }
+    }
+
+    // Display last search pattern.
+    let sp = last_search_pat();
+    if !sp.is_null()
+        && (arg.is_null() || !vim_strchr(arg, c_int::from(b'/')).is_null())
+        && !got_int
+        && !message_filtered(sp)
+    {
+        msg_puts(c"\n  c  \"/   ".as_ptr());
+        dis_msg(sp, false);
+    }
+
+    // Display last used expression.
+    if !expr_line.is_null()
+        && (arg.is_null() || !vim_strchr(arg, c_int::from(b'=')).is_null())
+        && !got_int
+        && !message_filtered(expr_line)
+    {
+        msg_puts(c"\n  c  \"=   ".as_ptr());
+        dis_msg(expr_line, false);
+    }
+
+    msg_ext_skip_flush = false;
+}
+
+/// Start/stop macro recording into a register.
+///
+/// Returns FAIL for failure, OK otherwise.
+///
+/// # Safety
+///
+/// Reads/writes global state and calls C functions.
+#[unsafe(export_name = "do_record")]
+pub unsafe extern "C" fn rs_do_record(c: c_int) -> c_int {
+    static mut REGNAME: c_int = 0;
+
+    let retval;
+
+    if reg_recording == 0 {
+        // start recording
+        // registers 0-9, a-z and " are allowed
+        if c < 0 || (!ascii_isalnum(c as u8) && c != c_int::from(b'"')) {
+            retval = FAIL;
+        } else {
+            reg_recording = c;
+            // TODO(bfredl): showmode based messaging is currently missing with cmdheight=0
+            showmode();
+            REGNAME = c;
+            retval = OK;
+
+            apply_autocmds(
+                EVENT_RECORDINGENTER,
+                std::ptr::null(),
+                std::ptr::null(),
+                false,
+                curbuf,
+            );
+        }
+    } else {
+        // stop recording
+        let mut save_v_event = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::uninit();
+        let dict = get_v_event(save_v_event.as_mut_ptr() as *mut c_void);
+
+        // The recorded text contents.
+        let p = get_recorded();
+        if !p.is_null() {
+            // Remove escaping for K_SPECIAL in multi-byte chars.
+            vim_unescape_ks(p);
+            tv_dict_add_str(dict, c"regcontents".as_ptr(), 11, p);
+        }
+
+        // Name of requested register.
+        let mut buf = [0u8; NUMBUFLEN + 2];
+        buf[0] = REGNAME as u8;
+        buf[1] = 0;
+        tv_dict_add_str(dict, c"regname".as_ptr(), 7, buf.as_ptr() as *const c_char);
+        tv_dict_set_keys_readonly(dict);
+
+        apply_autocmds(
+            EVENT_RECORDINGLEAVE,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            curbuf,
+        );
+        restore_v_event(dict, save_v_event.as_mut_ptr() as *mut c_void);
+        reg_recorded = reg_recording;
+        reg_recording = 0;
+        if p_ch == 0 || ui_has(K_UI_MESSAGES) {
+            showmode();
+        } else {
+            msg(c"".as_ptr(), 0);
+        }
+        if p.is_null() {
+            retval = FAIL;
+        } else {
+            // We don't want to change the default register here, so save and
+            // restore the current register name.
+            let old_y_previous = y_previous;
+            retval = rs_stuff_yank(REGNAME, p);
+            y_previous = old_y_previous;
+        }
     }
     retval
 }
