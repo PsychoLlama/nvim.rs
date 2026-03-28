@@ -143,6 +143,18 @@ extern "C" {
     fn get_return_cmd(rettv: *mut c_void) -> *mut c_char;
     fn eval_to_string_skip(arg: *mut c_char, eap: *mut ExargT, skip: bool) -> *mut c_char;
     fn dbg_check_skipped(eap: *const ExargT) -> bool;
+    fn eval_to_bool(
+        arg: *mut c_char,
+        error: *mut bool,
+        eap: *mut ExargT,
+        skip: bool,
+        use_simple_function: bool,
+    ) -> bool;
+    fn fill_evalarg_from_eap(evalarg: *mut c_void, eap: *mut ExargT, skip: bool);
+    fn eval0(arg: *mut c_char, rettv: *mut c_void, eap: *mut ExargT, evalarg: *mut c_void)
+        -> c_int;
+    fn tv_clear(tv: *mut c_void);
+    fn clear_evalarg(evalarg: *mut c_void, eap: *mut ExargT);
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn gettext(s: *const c_char) -> *const c_char;
 }
@@ -889,6 +901,60 @@ pub unsafe extern "C" fn report_discard_pending(pending: c_int, value: *mut c_vo
         report_pending(RP_DISCARD, pending, value);
         if debug_break_level <= 0 {
             verbose_leave();
+        }
+    }
+}
+
+/// Size of evalarg_T in bytes (verified by C static assert).
+const EVALARG_SIZE: usize = 32;
+
+/// Size of typval_T in bytes (verified by C static assert).
+const TYPVAL_SIZE: usize = 16;
+
+/// Handle ":eval"
+#[export_name = "ex_eval"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn ex_eval_impl(eap: *mut ExargT) {
+    let mut evalarg = [0u8; EVALARG_SIZE];
+    let mut tv = [0u8; TYPVAL_SIZE];
+
+    fill_evalarg_from_eap(evalarg.as_mut_ptr().cast::<c_void>(), eap, (*eap).skip != 0);
+
+    if eval0(
+        (*eap).arg,
+        tv.as_mut_ptr().cast::<c_void>(),
+        eap,
+        evalarg.as_mut_ptr().cast::<c_void>(),
+    ) == OK
+    {
+        tv_clear(tv.as_mut_ptr().cast::<c_void>());
+    }
+
+    clear_evalarg(evalarg.as_mut_ptr().cast::<c_void>(), eap);
+}
+
+/// Handle ":if"
+#[export_name = "ex_if"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn ex_if_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    if (*cstack).cs_idx == CSTACK_LEN - 1 {
+        (*eap).errmsg = gettext(c"E579: :if nesting too deep".as_ptr()).cast_mut();
+    } else {
+        (*cstack).cs_idx += 1;
+        (*cstack).cs_flags[(*cstack).cs_idx as usize] = 0;
+
+        let skip = check_skip(cstack);
+        let mut error = false;
+        let result = eval_to_bool((*eap).arg, &raw mut error, eap, skip, false);
+
+        if !skip && !error {
+            if result {
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_ACTIVE | CSF_TRUE;
+            }
+        } else {
+            // set TRUE, so this conditional will never get active
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE;
         }
     }
 }

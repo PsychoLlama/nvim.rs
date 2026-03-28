@@ -42,3 +42,5 @@ void ex_continue(exarg_T *eap);
 void ex_break(exarg_T *eap);
 void ex_throw(exarg_T *eap);
 void ex_try(exarg_T *eap);
+void ex_eval(exarg_T *eap);
+void ex_if(exarg_T *eap);

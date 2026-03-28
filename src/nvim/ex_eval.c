@@ -98,48 +98,6 @@ extern void rs_set_cause_abort(bool val);
 extern void free_msglist(msglist_T *l);
 // discard_pending_return is now implemented in Rust
 extern void discard_pending_return(typval_T *p);
-/// Handle ":eval".
-void ex_eval(exarg_T *eap)
-{
-  typval_T tv;
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, eap->skip);
-
-  if (eval0(eap->arg, &tv, eap, &evalarg) == OK) {
-    tv_clear(&tv);
-  }
-
-  clear_evalarg(&evalarg, eap);
-}
-
-/// Handle ":if".
-void ex_if(exarg_T *eap)
-{
-  cstack_T *const cstack = eap->cstack;
-
-  if (cstack->cs_idx == CSTACK_LEN - 1) {
-    eap->errmsg = _("E579: :if nesting too deep");
-  } else {
-    cstack->cs_idx++;
-    cstack->cs_flags[cstack->cs_idx] = 0;
-
-    bool skip = CHECK_SKIP;
-
-    bool error;
-    bool result = eval_to_bool(eap->arg, &error, eap, skip, false);
-
-    if (!skip && !error) {
-      if (result) {
-        cstack->cs_flags[cstack->cs_idx] = CSF_ACTIVE | CSF_TRUE;
-      }
-    } else {
-      // set TRUE, so this conditional will never get active
-      cstack->cs_flags[cstack->cs_idx] = CSF_TRUE;
-    }
-  }
-}
-
 /// Handle ":else" and ":elseif".
 void ex_else(exarg_T *eap)
 {
