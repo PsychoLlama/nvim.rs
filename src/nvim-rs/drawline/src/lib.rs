@@ -318,6 +318,7 @@ extern "C" {
 
     // Additional DecorRange accessors for handle_inline_virtual_text
     fn nvim_decor_range_get_start_col(range: *mut c_void) -> c_int;
+    #[link_name = "decor_init_draw_col"]
     fn nvim_decor_init_draw_col(win_col: c_int, hidden: bool, item: *mut c_void);
     fn nvim_decor_range_get_virt_inline_data(range: *mut c_void) -> *mut c_void;
     fn nvim_decor_range_get_virt_inline_hl_mode(range: *mut c_void) -> c_int;

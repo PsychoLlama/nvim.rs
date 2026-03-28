@@ -7,7 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
-use crate::types::{DecorRange, DecorRangeSlot, DecorVirtText, KVec, VirtText};
+use crate::types::{DecorRange, DecorRangeSlot, DecorSignHighlight, DecorVirtText, KVec, VirtText};
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
     DRAW_COL_JUST_ADDED, DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
@@ -51,19 +51,26 @@ extern "C" {
     fn nvim_decor_vt_ptr_get_pos(vt: DecorVtHandle) -> c_int;
     fn nvim_decor_vt_ptr_get_flags(vt: DecorVtHandle) -> u8;
     fn nvim_decor_vt_ptr_get_next(vt: DecorVtHandle) -> DecorVtHandle;
-    fn nvim_decor_redraw_sh_by_idx(buf: BufHandle, row1: c_int, row2: c_int, idx: u32);
-    fn nvim_decor_redraw_sh_inline(
+    fn nvim_decor_items_get_next(idx: u32) -> u32;
+    fn nvim_decor_items_get_ptr(idx: u32) -> *mut c_void;
+    fn decor_redraw_sh(
         buf: BufHandle,
         row1: c_int,
         row2: c_int,
-        hl_flags: u16,
-        hl_priority: u16,
-        hl_hl_id: c_int,
-        hl_conceal_char: u32,
+        sh: crate::types::DecorSignHighlight,
     );
-    fn nvim_decor_items_get_next(idx: u32) -> u32;
-    fn nvim_buf_put_decor_sh_by_idx(buf: BufHandle, idx: u32, row1: c_int, row2: c_int);
-    fn nvim_buf_remove_decor_sh_by_idx(buf: BufHandle, row1: c_int, row2: c_int, idx: u32);
+    fn buf_put_decor_sh(
+        buf: BufHandle,
+        sh: *mut crate::types::DecorSignHighlight,
+        row1: c_int,
+        row2: c_int,
+    );
+    fn buf_remove_decor_sh(
+        buf: BufHandle,
+        row1: c_int,
+        row2: c_int,
+        sh: *mut crate::types::DecorSignHighlight,
+    );
 }
 
 // =============================================================================
@@ -364,20 +371,27 @@ pub unsafe extern "C" fn rs_decor_redraw(
         let mut idx = sh_idx;
         while idx != DECOR_ID_INVALID {
             let next = nvim_decor_items_get_next(idx);
-            nvim_decor_redraw_sh_by_idx(buf, row1, row2, idx);
+            let sh = std::ptr::read(nvim_decor_items_get_ptr(idx).cast::<DecorSignHighlight>());
+            decor_redraw_sh(buf, row1, row2, sh);
             idx = next;
         }
     } else {
-        // Inline highlight
-        nvim_decor_redraw_sh_inline(
-            buf,
-            row1,
-            row2,
-            hl_flags,
-            hl_priority,
-            hl_hl_id,
-            hl_conceal_char,
-        );
+        // Inline highlight: build types::DecorSignHighlight directly and redraw.
+        let sh = DecorSignHighlight {
+            flags: hl_flags,
+            priority: hl_priority,
+            hl_id: hl_hl_id,
+            text: [hl_conceal_char, 0],
+            sign_name: std::ptr::null_mut(),
+            sign_add_id: 0,
+            number_hl_id: 0,
+            line_hl_id: 0,
+            cursorline_hl_id: 0,
+            next: crate::decor::DECOR_ID_INVALID,
+            _pad_next: 0,
+            url: std::ptr::null(),
+        };
+        decor_redraw_sh(buf, row1, row2, sh);
     }
 }
 
@@ -412,7 +426,12 @@ pub unsafe extern "C" fn rs_buf_put_decor(
     let mut idx = sh_idx;
     while idx != DECOR_ID_INVALID {
         let next = nvim_decor_items_get_next(idx);
-        nvim_buf_put_decor_sh_by_idx(buf, idx, row, clamped_row2);
+        buf_put_decor_sh(
+            buf,
+            nvim_decor_items_get_ptr(idx).cast::<DecorSignHighlight>(),
+            row,
+            clamped_row2,
+        );
         idx = next;
     }
 }
@@ -465,7 +484,12 @@ pub unsafe extern "C" fn rs_buf_decor_remove(
             let mut idx = sh_idx;
             while idx != DECOR_ID_INVALID {
                 let next = nvim_decor_items_get_next(idx);
-                nvim_buf_remove_decor_sh_by_idx(buf, row1, clamped_row2, idx);
+                buf_remove_decor_sh(
+                    buf,
+                    row1,
+                    clamped_row2,
+                    nvim_decor_items_get_ptr(idx).cast::<DecorSignHighlight>(),
+                );
                 idx = next;
             }
         }

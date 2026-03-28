@@ -734,24 +734,6 @@ uint8_t nvim_decor_vt_ptr_get_flags(void *vt_ptr) { return ((DecorVirtText *)vt_
 uint16_t nvim_decor_vt_ptr_get_priority(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->priority; }
 void *nvim_decor_vt_ptr_get_next(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->next; }
 
-/// Handle the inline highlight path: convert DecorHighlightInline to
-/// DecorSignHighlight and add the range via rs_decor_range_add_sh.
-void nvim_decor_range_add_from_inline_hl(void *state, int start_row, int start_col,
-                                          int end_row, int end_col,
-                                          uint16_t hl_flags, uint16_t hl_priority,
-                                          int hl_hl_id, uint32_t hl_conceal_char,
-                                          bool owned, uint32_t ns, uint32_t mark_id)
-{
-  DecorHighlightInline hl = {
-    .flags = hl_flags,
-    .priority = hl_priority,
-    .hl_id = hl_hl_id,
-    .conceal_char = hl_conceal_char,
-  };
-  DecorSignHighlight sh = decor_sh_from_inline(hl);
-  decor_range_add_sh(state, start_row, start_col, end_row, end_col, &sh, owned, ns, mark_id, 0);
-}
-
 // Redraw Dispatch and Buffer Operations helpers
 
 void nvim_redraw_buf_line_later(void *buf_ptr, int lnum, bool redraw) { redraw_buf_line_later((buf_T *)buf_ptr, lnum, redraw); }
@@ -761,30 +743,6 @@ void nvim_redraw_buf_range_later(void *buf_ptr, int first, int last) { redraw_bu
 int nvim_decor_buf_get_line_count(void *buf_ptr) { return ((buf_T *)buf_ptr)->b_ml.ml_line_count; }
 
 int nvim_decor_vt_ptr_get_pos(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->pos; }
-
-/// Call decor_redraw_sh with decor_items[idx].
-void nvim_decor_redraw_sh_by_idx(void *buf_ptr, int row1, int row2, uint32_t idx)
-{
-  DecorSignHighlight sh = kv_A(decor_items, idx);
-  decor_redraw_sh((buf_T *)buf_ptr, row1, row2, sh);
-}
-
-/// Call decor_redraw_sh with inline highlight data.
-void nvim_decor_redraw_sh_inline(void *buf_ptr, int row1, int row2,
-                                 uint16_t hl_flags, uint16_t hl_priority,
-                                 int hl_hl_id, uint32_t hl_conceal_char)
-{
-  DecorHighlightInline hl = {
-    .flags = hl_flags,
-    .priority = hl_priority,
-    .hl_id = hl_hl_id,
-    .conceal_char = hl_conceal_char,
-  };
-  decor_redraw_sh((buf_T *)buf_ptr, row1, row2, decor_sh_from_inline(hl));
-}
-
-void nvim_buf_put_decor_sh_by_idx(void *buf_ptr, uint32_t idx, int row1, int row2) { buf_put_decor_sh((buf_T *)buf_ptr, &kv_A(decor_items, idx), row1, row2); }
-void nvim_buf_remove_decor_sh_by_idx(void *buf_ptr, int row1, int row2, uint32_t idx) { buf_remove_decor_sh((buf_T *)buf_ptr, row1, row2, &kv_A(decor_items, idx)); }
 
 int nvim_decor_state_get_row(void *state_ptr) { return ((DecorState *)state_ptr)->row; }
 int nvim_decor_state_get_eol_col(void *state_ptr) { return ((DecorState *)state_ptr)->eol_col; }
@@ -894,15 +852,6 @@ void *nvim_decor_state_get_active_range(void *state_ptr, int i)
   }
   int idx = kv_A(state->ranges_i, i);
   return &kv_A(state->slots, idx).range;
-}
-
-// Additional accessor functions for handle_inline_virtual_text migration
-
-/// Wrapper for decor_init_draw_col for Rust FFI.
-void nvim_decor_init_draw_col(int win_col, bool hidden, void *item_ptr)
-{
-  DecorRange *item = (DecorRange *)item_ptr;
-  decor_init_draw_col(win_col, hidden, item);
 }
 
 /// Get data.vt->data.virt_text pointer from a DecorRange (for inline virtual text).

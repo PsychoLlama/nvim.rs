@@ -9,7 +9,7 @@ use crate::decor::{
     DECOR_ID_INVALID, DECOR_PRIORITY_BASE, KSH_CONCEAL, KSH_IS_SIGN, KSH_SPELL_OFF, KSH_SPELL_ON,
     KSH_UI_WATCHED, KSH_UI_WATCHED_OVERLAY,
 };
-use crate::types::{DecorRangeData, DecorRangeUiData};
+use crate::types::{DecorRangeData, DecorRangeUiData, DecorSignHighlight};
 use crate::{DecorKind, DecorStateHandle, VirtTextPos, KVT_IS_LINES};
 
 // =============================================================================
@@ -723,28 +723,32 @@ pub unsafe extern "C" fn rs_decor_range_add_from_inline(
             idx = nvim_decor_sh_ptr_get_next(sh);
         }
     } else {
-        // Inline highlight - create a temporary DecorSignHighlight via
-        // decor_sh_from_inline and add it. We call through the existing
-        // rs_decor_sh_from_inline to get the struct, then use the C helper
-        // to build the range.
-        //
-        // For inline highlights, we create a stack-local DecorSignHighlight
-        // by calling the C-side decor_sh_from_inline and then passing it.
-        // However, since we can't easily construct the struct in Rust,
-        // we call a C helper that does the conversion and insertion.
-        nvim_decor_range_add_from_inline_hl(
+        // Inline highlight: build types::DecorSignHighlight directly and add the range.
+        let sh = DecorSignHighlight {
+            flags: hl_flags,
+            priority: hl_priority,
+            hl_id: hl_hl_id,
+            text: [hl_conceal_char, 0],
+            sign_name: std::ptr::null_mut(),
+            sign_add_id: 0,
+            number_hl_id: 0,
+            line_hl_id: 0,
+            cursorline_hl_id: 0,
+            next: DECOR_ID_INVALID,
+            _pad_next: 0,
+            url: std::ptr::null(),
+        };
+        rs_decor_range_add_sh(
             state,
             start_row,
             start_col,
             end_row,
             end_col,
-            hl_flags,
-            hl_priority,
-            hl_hl_id,
-            hl_conceal_char,
+            DecorShHandle(std::ptr::from_ref(&sh).cast_mut().cast::<c_void>()),
             owned,
             ns,
             mark_id,
+            0,
         );
     }
 }
@@ -753,7 +757,7 @@ pub unsafe extern "C" fn rs_decor_range_add_from_inline(
 // Phase 2: decor_range_insert and callers migrated to Rust
 // =============================================================================
 
-use crate::types::{DecorRange, DecorRangeSlot, DecorSignHighlight};
+use crate::types::{DecorRange, DecorRangeSlot};
 
 /// Insert a DecorRange into the DecorState sorted arrays.
 ///
@@ -958,23 +962,6 @@ pub unsafe extern "C" fn nvim_decor_range_insert_ui(
         draw_col: -10,
     };
     decor_range_insert(state_ptr, range);
-}
-
-extern "C" {
-    fn nvim_decor_range_add_from_inline_hl(
-        state: DecorStateHandle,
-        start_row: c_int,
-        start_col: c_int,
-        end_row: c_int,
-        end_col: c_int,
-        hl_flags: u16,
-        hl_priority: u16,
-        hl_hl_id: c_int,
-        hl_conceal_char: u32,
-        owned: bool,
-        ns: u32,
-        mark_id: u32,
-    );
 }
 
 // =============================================================================
