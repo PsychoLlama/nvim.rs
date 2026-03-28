@@ -61,6 +61,11 @@ void flush_buffers(flush_buffers_T flush_typeahead);
 void save_typeahead(tasave_T *tp);
 void restore_typeahead(tasave_T *tp);
 
+// Script file functions (implemented in Rust, Phase 5)
+int inchar(uint8_t *buf, int maxlen, long wait_time);
+void close_all_scripts(void);
+bool open_scriptin(char *scriptin_name) FUNC_ATTR_NONNULL_ALL;
+
 // Orchestrator functions (implemented in Rust, src/nvim-rs/getchar/src/orchestrator.rs)
 void before_blocking(void);
 int vgetc(void);

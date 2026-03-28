@@ -97,8 +97,8 @@ extern void rs_dec_no_reduce_keys(void);
 
 /// Index in scriptin (non-static: accessed by Rust via extern)
 int curscript = -1;
-/// Streams to read script from
-static FileDescriptor scriptin[NSCRIPT] = { 0 };
+/// Streams to read script from (non-static: accessed by Rust via extern)
+FileDescriptor scriptin[NSCRIPT] = { 0 };
 
 int typeahead_char = 0;  ///< typeahead char that's not flushed (non-static: accessed by Rust)
 
@@ -207,49 +207,9 @@ void openscript(char *name, bool directly)
   }
 }
 
-/// Close the currently active input script.
-static void closescript(void)
-{
-  assert(curscript >= 0);
-  rs_close_typebuf();
-
-  file_close(&scriptin[curscript], false);
-  curscript--;
-}
-
-#if defined(EXITFREE)
-void close_all_scripts(void)
-{
-  while (curscript >= 0) {
-    closescript();
-  }
-}
-
-#endif
-
-bool open_scriptin(char *scriptin_name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(curscript == -1);
-  curscript++;
-
-  int error;
-  if (strequal(scriptin_name, "-")) {
-    error = file_open_stdin(&scriptin[0]);
-  } else {
-    error = file_open(&scriptin[0], scriptin_name,
-                      kFileReadOnly|kFileNonBlocking, 0);
-  }
-  if (error) {
-    fprintf(stderr, _("Cannot open for reading: \"%s\": %s\n"),
-            scriptin_name, os_strerror(error));
-    curscript--;
-    return false;
-  }
-  rs_save_typebuf();
-
-  return true;
-}
+// closescript, close_all_scripts, open_scriptin moved to Rust (typebuf.rs, Phase 5)
+// rs_closescript is the Rust implementation; close_all_scripts and open_scriptin
+// are exported with #[export_name] from Rust.
 
 // no_reduce_keys moved to Rust (typebuf.rs); getchar_common uses rs_inc/dec_no_reduce_keys()
 
@@ -1234,119 +1194,7 @@ int vgetorpeek(bool advance)
   return c;
 }
 
-/// inchar() - get one character from
-///      1. a scriptfile
-///      2. the keyboard
-///
-///  As many characters as we can get (up to 'maxlen') are put in "buf" and
-///  NUL terminated (buffer length must be 'maxlen' + 1).
-///  Minimum for "maxlen" is 3!!!!
-///
-///  "tb_change_cnt" is the value of typebuf.tb_change_cnt if "buf" points into
-///  it.  When typebuf.tb_change_cnt changes (e.g., when a message is received
-///  from a remote client) "buf" can no longer be used.  "tb_change_cnt" is 0
-///  otherwise.
-///
-///  If we got an interrupt all input is read until none is available.
-///
-///  If wait_time == 0  there is no waiting for the char.
-///  If wait_time == n  we wait for n msec for a character to arrive.
-///  If wait_time == -1 we wait forever for a character to arrive.
-///
-///  Return the number of obtained characters.
-///  Return -1 when end of input script reached.
-///
-/// @param wait_time  milliseconds
-int inchar(uint8_t *buf, int maxlen, long wait_time)
-{
-  int len = 0;  // Init for GCC.
-  int retesc = false;  // Return ESC with gotint.
-  const int tb_change_cnt = typebuf.tb_change_cnt;
-
-  if (wait_time == -1 || wait_time > 100) {
-    // flush output before waiting
-    ui_flush();
-  }
-
-  // Don't reset these when at the hit-return prompt, otherwise an endless
-  // recursive loop may result (write error in swapfile, hit-return, timeout
-  // on char wait, flush swapfile, write error....).
-  if (State != MODE_HITRETURN) {
-    did_outofmem_msg = false;       // display out of memory message (again)
-    did_swapwrite_msg = false;      // display swap file write error again
-  }
-
-  // Get a character from a script file if there is one.
-  // If interrupted: Stop reading script files, close them all.
-  ptrdiff_t read_size = -1;
-  while (curscript >= 0 && read_size <= 0 && !ignore_script) {
-    char script_char;
-    if (got_int
-        || (read_size = file_read(&scriptin[curscript], &script_char, 1)) != 1) {
-      // Reached EOF or some error occurred.
-      // Careful: closescript() frees typebuf.tb_buf[] and buf[] may
-      // point inside typebuf.tb_buf[].  Don't use buf[] after this!
-      closescript();
-      // When reading script file is interrupted, return an ESC to get
-      // back to normal mode.
-      // Otherwise return -1, because typebuf.tb_buf[] has changed.
-      if (got_int) {
-        retesc = true;
-      } else {
-        return -1;
-      }
-    } else {
-      buf[0] = (uint8_t)script_char;
-      len = 1;
-    }
-  }
-
-  if (read_size <= 0) {  // Did not get a character from script.
-    // If we got an interrupt, skip all previously typed characters and
-    // return true if quit reading script file.
-    // Stop reading typeahead when a single CTRL-C was read,
-    // fill_input_buf() returns this when not able to read from stdin.
-    // Don't use buf[] here, closescript() may have freed typebuf.tb_buf[]
-    // and buf may be pointing inside typebuf.tb_buf[].
-    if (got_int) {
-#define DUM_LEN (MAXMAPLEN * 3 + 3)
-      uint8_t dum[DUM_LEN + 1];
-
-      while (true) {
-        len = input_get(dum, DUM_LEN, 0, 0, NULL);
-        if (len == 0 || (len == 1 && dum[0] == Ctrl_C)) {
-          break;
-        }
-      }
-      return retesc;
-    }
-
-    // Always flush the output characters when getting input characters
-    // from the user and not just peeking.
-    if (wait_time == -1 || wait_time > 10) {
-      ui_flush();
-    }
-
-    // Fill up to a third of the buffer, because each character may be
-    // tripled below.
-    len = input_get(buf, maxlen / 3, (int)wait_time, tb_change_cnt, NULL);
-  }
-
-  // If the typebuf was changed further down, it is like nothing was added by
-  // this call.
-  if (typebuf_changed(tb_change_cnt)) {
-    return 0;
-  }
-
-  // Note the change in the typeahead buffer, this matters for when
-  // vgetorpeek() is called recursively, e.g. using getchar(1) in a timer
-  // function.
-  if (len > 0 && ++typebuf.tb_change_cnt == 0) {
-    typebuf.tb_change_cnt = 1;
-  }
-
-  return fix_input_buffer(buf, len);
-}
+// inchar moved to Rust (typebuf.rs, Phase 5) as #[no_mangle] pub unsafe extern "C" fn inchar
 
 /// Handle a Lua mapping: get its LuaRef from typeahead and execute it.
 ///

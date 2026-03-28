@@ -12,7 +12,7 @@
     clippy::cast_sign_loss
 )]
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 /// Maximum length for a key mapping sequence (matches C MAXMAPLEN = 50).
 const fn maxmaplen() -> i32 {
@@ -135,7 +135,7 @@ extern "C" {
     /// internal_error: report internal error
     fn internal_error(msg: *const std::ffi::c_char);
     /// curscript: index in scriptin (non-static in C after Phase 3)
-    static curscript: c_int;
+    static mut curscript: c_int;
     /// cmd_silent: don't echo the command line
     static mut cmd_silent: bool;
 }
@@ -1129,8 +1129,6 @@ const FAIL: c_int = 0;
 // Additional C function declarations needed
 extern "C" {
     fn state_no_longer_safe(reason: *const std::ffi::c_char);
-    /// Read input characters into buf (up to maxlen), waiting wait_time ms.
-    fn inchar(buf: *mut u8, maxlen: c_int, wait_time: std::ffi::c_long) -> c_int;
 }
 
 /// `flush_buffers_T` enum constants -- must match C enum order
@@ -1457,6 +1455,266 @@ pub unsafe extern "C" fn rs_check_simplify_modifier(max_offset: c_int) -> c_int 
         }
     }
     0
+}
+
+// =============================================================================
+// Phase 5: FileDescriptor mirror, closescript, close_all_scripts, inchar, open_scriptin
+// =============================================================================
+
+/// Mirror of C `FileDescriptor` from `os/fileio_defs.h`.
+///
+/// Layout (64-bit): fd(4) + pad(4) + buffer(*) + read_pos(*) + write_pos(*) +
+/// wr(1) + eof(1) + non_blocking(1) + pad(5) + bytes_read(8) = 48 bytes.
+#[repr(C)]
+pub struct FileDescriptor {
+    pub fd: c_int,
+    _pad: [u8; 4],
+    pub buffer: *mut c_char,
+    pub read_pos: *mut c_char,
+    pub write_pos: *mut c_char,
+    pub wr: bool,
+    pub eof: bool,
+    pub non_blocking: bool,
+    _pad2: [u8; 5],
+    pub bytes_read: u64,
+}
+
+/// Ctrl-C character value
+const CTRL_C: u8 = 3;
+
+extern "C" {
+    /// C `scriptin[NSCRIPT]` array (non-static after Phase 5).
+    static mut scriptin: [FileDescriptor; NSCRIPT];
+    /// `got_int`: interrupt flag
+    static mut got_int: bool;
+    /// `ignore_script`: when true, do not read from script
+    static mut ignore_script: bool;
+    /// `did_outofmem_msg`: whether out-of-memory message has been shown
+    static mut did_outofmem_msg: bool;
+    /// `did_swapwrite_msg`: whether swap write error message has been shown
+    static mut did_swapwrite_msg: bool;
+    /// `State` global (editor state flags)
+    static mut State: c_int;
+    /// File I/O: open a file
+    fn file_open(
+        ret_fp: *mut FileDescriptor,
+        fname: *const c_char,
+        flags: c_int,
+        mode: c_int,
+    ) -> c_int;
+    /// File I/O: open stdin as a FileDescriptor
+    fn file_open_stdin(fp: *mut FileDescriptor) -> c_int;
+    /// File I/O: close a file
+    fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> c_int;
+    /// File I/O: read bytes from a file
+    fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: usize) -> isize;
+    /// UI flush
+    fn ui_flush();
+    /// Get input from OS
+    fn input_get(
+        buf: *mut u8,
+        maxlen: c_int,
+        ms: c_int,
+        tb_change_cnt: c_int,
+        events: *mut c_void,
+    ) -> c_int;
+    /// Translate special bytes
+    fn fix_input_buffer(buf: *mut u8, len: c_int) -> c_int;
+    /// `uv_strerror(int err)` -- libuv error string (os_strerror is a macro for this)
+    fn uv_strerror(err: c_int) -> *const c_char;
+}
+
+/// File open flags matching C `kFileReadOnly` and `kFileNonBlocking`.
+const K_FILE_READ_ONLY: c_int = 1;
+const K_FILE_NON_BLOCKING: c_int = 128;
+
+/// `MODE_HITRETURN` value from `state_defs.h`.
+const MODE_HITRETURN: c_int = 0x2000 | 0x01; // MODE_HITRETURN = 0x2000 | MODE_NORMAL
+
+/// Close the currently active input script.
+///
+/// Calls `rs_close_typebuf()` (restores typebuf), closes `scriptin[curscript]`,
+/// and decrements `curscript`.
+///
+/// # Safety
+/// `curscript` must be >= 0.
+#[no_mangle]
+pub unsafe extern "C" fn rs_closescript() {
+    debug_assert!(curscript >= 0);
+    rs_close_typebuf_impl();
+    file_close(std::ptr::addr_of_mut!(scriptin[curscript as usize]), false);
+    curscript -= 1;
+}
+
+/// Close all active input scripts.
+///
+/// # Safety
+/// Accesses `curscript` and calls `rs_closescript`.
+#[export_name = "close_all_scripts"]
+pub unsafe extern "C" fn rs_close_all_scripts() {
+    while curscript >= 0 {
+        rs_closescript();
+    }
+}
+
+/// `open_scriptin(char *scriptin_name)` -- Phase 5 Rust replacement.
+///
+/// Opens a script file (or stdin if name is "-") for reading via `:source!` / `-s` flag.
+///
+/// # Safety
+/// `scriptin_name` must be a valid NUL-terminated C string.
+#[export_name = "open_scriptin"]
+pub unsafe extern "C" fn rs_open_scriptin(scriptin_name: *const c_char) -> bool {
+    debug_assert!(curscript == -1);
+    curscript += 1;
+
+    // "-" means stdin
+    let is_stdin = {
+        let mut p = scriptin_name;
+        *p == b'-' as c_char && {
+            p = p.add(1);
+            *p == 0
+        }
+    };
+
+    let error = if is_stdin {
+        file_open_stdin(std::ptr::addr_of_mut!(scriptin[0]))
+    } else {
+        file_open(
+            std::ptr::addr_of_mut!(scriptin[0]),
+            scriptin_name,
+            K_FILE_READ_ONLY | K_FILE_NON_BLOCKING,
+            0,
+        )
+    };
+
+    if error != 0 {
+        // Print to stderr: Cannot open for reading: "name": strerror
+        let fmt = c"Cannot open for reading: \"%s\": %s\n".as_ptr();
+        libc_fprintf_stderr(fmt, scriptin_name, uv_strerror(error));
+        curscript -= 1;
+        return false;
+    }
+
+    rs_save_typebuf_impl();
+    true
+}
+
+/// Thin helper: write a formatted message to stderr via C `fprintf(stderr, ...)`.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+unsafe fn libc_fprintf_stderr(fmt: *const c_char, name: *const c_char, err: *const c_char) {
+    extern "C" {
+        static mut stderr: *mut c_void;
+        fn fprintf(stream: *mut c_void, fmt: *const c_char, ...) -> c_int;
+    }
+    fprintf(stderr, fmt, name, err);
+}
+
+/// `inchar(uint8_t *buf, int maxlen, long wait_time)` -- Phase 5 Rust replacement.
+///
+/// Gets characters from a script file or keyboard into `buf`.
+/// Returns number of chars obtained, -1 on end-of-script, or 0 if typebuf changed.
+///
+/// # Safety
+/// `buf` must point to at least `maxlen + 1` bytes. Caller must not use `buf` after
+/// this returns -1 (closescript may have freed typebuf.tb_buf which buf points into).
+#[no_mangle]
+pub unsafe extern "C" fn inchar(buf: *mut u8, maxlen: c_int, wait_time: i64) -> c_int {
+    let mut len: c_int = 0;
+    let mut retesc = false;
+    let tb_change_cnt = (*std::ptr::addr_of!(typebuf)).tb_change_cnt;
+
+    if wait_time == -1 || wait_time > 100 {
+        ui_flush();
+    }
+
+    // Don't reset these when at the hit-return prompt (avoids recursive loop)
+    if State != MODE_HITRETURN {
+        did_outofmem_msg = false;
+        did_swapwrite_msg = false;
+    }
+
+    // Get a character from a script file if there is one.
+    let mut read_size: isize = -1;
+    while curscript >= 0 && read_size <= 0 && !ignore_script {
+        let mut script_char: c_char = 0;
+        if got_int || {
+            read_size = file_read(
+                std::ptr::addr_of_mut!(scriptin[curscript as usize]),
+                std::ptr::addr_of_mut!(script_char),
+                1,
+            );
+            read_size != 1
+        } {
+            // Reached EOF or error.
+            // Careful: rs_closescript() frees typebuf.tb_buf[] and buf[] may
+            // point inside typebuf.tb_buf[]. Don't use buf[] after this!
+            rs_closescript();
+            if got_int {
+                retesc = true;
+            } else {
+                return -1;
+            }
+        } else {
+            *buf = script_char as u8;
+            len = 1;
+        }
+    }
+
+    if read_size <= 0 {
+        // Did not get a character from script.
+        if got_int {
+            // Skip all previously typed characters, return true if quit reading script.
+            const DUM_LEN: usize = MAXMAPLEN_VAL * 3 + 3;
+            let mut dum = [0u8; DUM_LEN + 1];
+            loop {
+                len = input_get(
+                    dum.as_mut_ptr(),
+                    DUM_LEN as c_int,
+                    0,
+                    0,
+                    std::ptr::null_mut(),
+                );
+                if len == 0 || (len == 1 && dum[0] == CTRL_C) {
+                    break;
+                }
+            }
+            return c_int::from(retesc);
+        }
+
+        if wait_time == -1 || wait_time > 10 {
+            ui_flush();
+        }
+
+        // Fill up to a third of the buffer (each char may be tripled below).
+        len = input_get(
+            buf,
+            maxlen / 3,
+            wait_time as c_int,
+            tb_change_cnt,
+            std::ptr::null_mut(),
+        );
+    }
+
+    // If typebuf changed further down, act as if nothing was added.
+    // (Inlined typebuf_changed() logic to avoid cross-crate call.)
+    if tb_change_cnt != 0
+        && ((*std::ptr::addr_of!(typebuf)).tb_change_cnt != tb_change_cnt || typebuf_was_filled)
+    {
+        return 0;
+    }
+
+    // Note the change in typeahead buffer for recursive vgetorpeek() calls.
+    if len > 0 {
+        (*std::ptr::addr_of_mut!(typebuf)).tb_change_cnt += 1;
+        if (*std::ptr::addr_of_mut!(typebuf)).tb_change_cnt == 0 {
+            (*std::ptr::addr_of_mut!(typebuf)).tb_change_cnt = 1;
+        }
+    }
+
+    fix_input_buffer(buf, len)
 }
 
 #[cfg(test)]
