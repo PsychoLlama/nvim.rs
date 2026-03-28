@@ -441,6 +441,42 @@ pub unsafe extern "C" fn expand_set_winhighlight(
 }
 
 // =============================================================================
+// get_fileformat_name
+// =============================================================================
+
+extern "C" {
+    #[link_name = "opt_ff_values"]
+    static opt_ff_values: [*const c_char; 4];
+}
+
+/// Return the file format name at index, or NULL if out of range.
+/// Equivalent to C's get_fileformat_name().
+///
+/// # Safety
+#[export_name = "get_fileformat_name"]
+pub unsafe extern "C" fn get_fileformat_name(_xp: *mut ExpandT, idx: c_int) -> *mut c_char {
+    if idx < 0 || idx as usize >= opt_ff_values.len() {
+        return std::ptr::null_mut();
+    }
+    opt_ff_values[idx as usize].cast_mut()
+}
+
+/// Check if value is a valid fileformat name.
+/// Returns OK (0) if valid, FAIL (-1) otherwise.
+/// Equivalent to C's check_ff_value().
+///
+/// # Safety
+#[export_name = "check_ff_value"]
+pub unsafe extern "C" fn check_ff_value(p: *mut c_char) -> c_int {
+    use crate::listval::rs_opt_strings_flags;
+    if rs_opt_strings_flags(p, opt_ff_values.as_ptr(), false).ok {
+        OK
+    } else {
+        FAIL
+    }
+}
+
+// =============================================================================
 // expand_set_diffopt
 // =============================================================================
 

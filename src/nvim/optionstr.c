@@ -574,16 +574,7 @@ const char *did_set_fileformat(optset_T *args)
   return NULL;
 }
 
-/// Function given to ExpandGeneric() to obtain the possible arguments of the
-/// fileformat options.
-char *get_fileformat_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  if (idx >= (int)ARRAY_SIZE(opt_ff_values)) {
-    return NULL;
-  }
-
-  return (char *)opt_ff_values[idx];
-}
+// get_fileformat_name is implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
 
 
@@ -917,8 +908,7 @@ bool parse_border_opt(char *border_opt)
 
 // expand_set_winhighlight moved to Rust
 
-/// @return  OK if "p" is a valid fileformat name, FAIL otherwise.
-int check_ff_value(char *p) { return rs_opt_strings_flags(p, opt_ff_values, false).ok ? OK : FAIL; }
+// check_ff_value is implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
 static const char e_conflicts_with_value_of_listchars[]
   = N_("E834: Conflicts with value of 'listchars'");

@@ -53,5 +53,7 @@ int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches)
 int expand_set_chars_option(optexpand_T *args, int *numMatches, char ***matches);
 int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches);
 int expand_set_eventignore(optexpand_T *args, int *numMatches, char ***matches);
+char *get_fileformat_name(expand_T *xp, int idx);
+int check_ff_value(char *p);
 
 #include "optionstr.h.generated.h"
