@@ -1229,7 +1229,8 @@ mod jump_edit {
         // (nvim_qf_emsg_winfixbuf deleted: use emsg directly)
 
         // Phase 15 thin primitives replacing thick jump-open wrappers
-        fn nvim_can_abandon_curbuf(forceit: c_int) -> bool;
+        // nvim_can_abandon_curbuf deleted: use can_abandon(curbuf, forceit) directly
+        fn can_abandon(buf: *mut c_void, forceit: c_int) -> bool;
         fn nvim_no_write_message();
         fn nvim_do_ecmd_help(fnum: c_int, prev_winid: c_int) -> c_int;
         // nvim_qf_buflist_getfile deleted: use buflist_getfile directly
@@ -1238,8 +1239,10 @@ mod jump_edit {
         fn nvim_qf_curbuf_fnum() -> c_int;
         fn nvim_qf_get_qi_type(qi: *const c_void) -> c_int;
         fn nvim_qf_prevwin_valid_for_wfb() -> bool;
-        fn nvim_win_id2wp(id: c_int) -> *mut c_void;
+        // nvim_win_id2wp deleted: use win_id2wp directly
+        fn win_id2wp(id: c_int) -> *mut c_void;
         fn nvim_qf_curwin_get_loclist() -> *mut c_void;
+        static mut curbuf: *mut c_void;
         static mut prevwin: *mut c_void;
         fn win_goto(win: *mut c_void);
         fn win_split(size: c_int, flags: c_int) -> c_int;
@@ -1267,7 +1270,7 @@ mod jump_edit {
         let fnum = nvim_qfline_get_fnum(qf_ptr);
         let retval = if nvim_qfline_get_type(qf_ptr) == 1 {
             // Open help file: inline nvim_qf_jump_open_help
-            if !nvim_can_abandon_curbuf(forceit) {
+            if !can_abandon(curbuf, forceit) {
                 nvim_no_write_message();
                 return FAIL; // sentinel: skip post-validation
             }
@@ -1303,7 +1306,7 @@ mod jump_edit {
         // Inline nvim_qf_jump_loc_win_closed: win_id2wp returns NULL means win closed,
         // and curwin->w_llist != qi means we're not in the right location list window.
         if qfl_type == QFLT_LOCATION {
-            let wp = nvim_win_id2wp(prev_winid);
+            let wp = win_id2wp(prev_winid);
             if wp.is_null() && nvim_qf_curwin_get_loclist() != qi {
                 emsg(c"E924: Current window was closed".as_ptr());
                 *opened_window = false;

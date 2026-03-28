@@ -2128,7 +2128,12 @@ extern "C" {
     // Phase 10 Pass 10 Phase 5: qf_get_fnum accessors
     fn nvim_qf_fnum_cache_check(bufname: *const c_char) -> *mut c_void;
     fn nvim_qf_fnum_cache_update(bufname: *const c_char, buf: *mut c_void);
-    fn nvim_qf_buflist_new(bufname: *mut c_char) -> *mut c_void;
+    fn buflist_new(
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        lnum: i32,
+        flags: c_int,
+    ) -> *mut c_void;
     fn nvim_qf_buf_fnum_from_ptr(buf: *const c_void) -> c_int;
     fn nvim_qf_buf_set_has_qf_entry(buf: *mut c_void, is_qf_list: bool);
     fn nvim_qf_vim_is_abs_name(fname: *const c_char) -> bool;
@@ -3152,7 +3157,7 @@ pub unsafe extern "C" fn rs_qf_get_fnum(
     let cached_buf = nvim_qf_fnum_cache_check(bufname.cast_const());
     let buf: *mut c_void = if cached_buf.is_null() {
         // Not in cache: create/find the buffer in the list.
-        let new_buf = nvim_qf_buflist_new(bufname);
+        let new_buf = buflist_new(bufname, std::ptr::null_mut(), 0, 16); // 16 = BLN_NOOPT
         nvim_qf_fnum_cache_update(bufname.cast_const(), new_buf);
         // Free the concat_ptr (cache_update made a copy of bufname).
         if !concat_ptr.is_null() {

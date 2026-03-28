@@ -322,11 +322,9 @@ void *nvim_qf_tv_list_first(void *tv_void) { if (tv_void == NULL) { return NULL;
 void *nvim_qf_list_item_next(const void *list, const void *li) { return (list == NULL || li == NULL) ? NULL : TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
 bool nvim_qf_list_item_is_string(const void *li) { if (li == NULL) { return false; } const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type == VAR_STRING && tv->vval.v_string != NULL; }
 char *nvim_qf_list_item_string(void *li) { if (li == NULL) { return NULL; } const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return (tv->v_type != VAR_STRING || tv->vval.v_string == NULL) ? NULL : tv->vval.v_string; }
-bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit); }
 void nvim_no_write_message(void) { no_write_message(); }
 int nvim_do_ecmd_help(int fnum, int prev_winid) { return do_ecmd(fnum, NULL, NULL, NULL, 1, ECMD_HIDE + ECMD_SET_HELP, prev_winid == curwin->handle ? curwin : NULL); }
 bool nvim_curwin_get_wfb(void) { return curwin->w_p_wfb; }
-void *nvim_win_id2wp(int id) { return win_id2wp(id); }
 void nvim_qf_set_swb_empty_option(void) { p_swb = empty_string_option; swb_flags = 0; }
 bool nvim_qf_prevwin_valid_for_wfb(void) { return rs_win_valid(prevwin) && !prevwin->w_p_wfb && !bt_quickfix(prevwin->w_buffer); }
 void *nvim_qf_find_help_win(void)
@@ -421,7 +419,6 @@ void *nvim_qf_aucmd_prepbuf_alloc(void *buf) { aco_save_T *aco = xmalloc(sizeof(
 void nvim_qf_aucmd_restbuf_free(void *aco_void) { if (aco_void != NULL) { aucmd_restbuf((aco_save_T *)aco_void); xfree(aco_void); } }
 void *nvim_qf_fnum_cache_check(const char *bufname) { if (bufname == NULL) { return NULL; } return (qf_last_bufname != NULL && strcmp(bufname, qf_last_bufname) == 0 && bufref_valid(&qf_last_bufref)) ? qf_last_bufref.br_buf : NULL; }
 void nvim_qf_fnum_cache_update(const char *bufname, void *buf) { xfree(qf_last_bufname); qf_last_bufname = xstrdup(bufname); set_bufref(&qf_last_bufref, (buf_T *)buf); }
-void *nvim_qf_buflist_new(char *bufname) { return buflist_new(bufname, NULL, 0, BLN_NOOPT); }
 int nvim_qf_buf_fnum_from_ptr(const void *buf_void) { return buf_void == NULL ? 0 : ((const buf_T *)buf_void)->b_fnum; }
 void nvim_qf_buf_set_has_qf_entry(void *buf_void, bool is_qf_list) { if (buf_void != NULL) ((buf_T *)buf_void)->b_has_qf_entry = is_qf_list ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY; }
 bool nvim_qf_vim_is_abs_name(const char *fname) { return fname != NULL && vim_isAbsName(fname); }
