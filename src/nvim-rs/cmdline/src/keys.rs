@@ -679,11 +679,9 @@ unsafe extern "C" {
     fn get_expr_line() -> *mut c_char;
     fn xfree(ptr: *mut c_char);
     fn beep_flush();
-    fn nvim_cmdline_paste(regname: c_int, literally: bool, remcr: bool) -> bool;
     fn aborting() -> c_int;
     fn rs_is_literal_register(regname: c_int) -> c_int;
     fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int;
-    fn putcmdline(c: c_char, shift: bool);
 }
 
 const K_UI_CMDLINE: c_int = 24; // kUICmdline
@@ -785,7 +783,7 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
 ) -> c_int {
     let save_new_cmdpos = nvim_get_new_cmdpos();
 
-    putcmdline(b'"' as c_char, true);
+    crate::edit::rs_putcmdline(b'"' as c_int, true);
     nvim_set_no_mapping(nvim_get_no_mapping() + 1);
     nvim_set_allow_keys(nvim_get_allow_keys() + 1);
     let mut i = plain_vgetc(); // CTRL-R <char>
@@ -819,7 +817,7 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
     if c != ESC {
         // use ESC to cancel inserting register
         literally = i == CTRL_R || rs_is_literal_register(c) != 0;
-        nvim_cmdline_paste(c, literally, false);
+        crate::edit::rs_cmdline_paste(c, literally, false);
 
         // When there was a serious error, abort getting the command line.
         if aborting() != 0 {
@@ -1063,8 +1061,6 @@ unsafe extern "C" {
     fn may_trigger_modechanged();
     fn status_redraw_curbuf();
     fn redraw_statuslines();
-    // putcmdline(c, shift) declared in the earlier extern block in this file
-    fn unputcmdline();
     fn get_literal(no_simplify: bool) -> c_int;
     fn get_digraph(flag: bool) -> c_int;
     fn nvim_utf_iscomposing_first(c: c_int) -> c_int;
@@ -1286,7 +1282,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             nvim_set_ccline_cmdspos(cmd_screencol(cmdpos));
             let special_char = nvim_get_ccline_special_char();
             if special_char != NUL {
-                putcmdline(special_char as c_char, nvim_get_ccline_special_shift() != 0);
+                crate::edit::rs_putcmdline(special_char, nvim_get_ccline_special_shift() != 0);
             }
             return nvim_command_line_not_changed(s);
         }
@@ -1309,7 +1305,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             } else {
                 0
             };
-            nvim_cmdline_paste(regname, true, true);
+            crate::edit::rs_cmdline_paste(regname, true, true);
             crate::screen::redrawcmd_rs();
             return nvim_command_line_changed(s);
         }
@@ -1503,7 +1499,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         // CTRL-V / CTRL-Q: literal insert
         k if k == CTRL_V || k == CTRL_Q => {
             nvim_cls_set_ignore_drag_release(s, 1);
-            putcmdline(b'^' as c_char, true);
+            crate::edit::rs_putcmdline(b'^' as c_int, true);
 
             let mod_mask = nvim_get_mod_mask();
             let c_new = get_literal((mod_mask & MOD_MASK_SHIFT) != 0);
@@ -1514,7 +1510,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             let c_curr = nvim_cls_get_c(s);
             if nvim_utf_iscomposing_first(c_curr) != 0 && nvim_get_cmd_silent() == 0 {
                 if ui_has(K_UI_CMDLINE_MAIN) != 0 {
-                    unputcmdline();
+                    crate::edit::rs_unputcmdline();
                 } else {
                     let cmdpos = nvim_get_ccline_cmdpos();
                     let cmdlen = nvim_get_ccline_cmdlen();
@@ -1529,7 +1525,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         // CTRL-K: digraph
         x if x == CTRL_K => {
             nvim_cls_set_ignore_drag_release(s, 1);
-            putcmdline(b'?' as c_char, true);
+            crate::edit::rs_putcmdline(b'?' as c_int, true);
             let c_new = get_digraph(true);
             nvim_cls_set_c(s, c_new);
             nvim_set_ccline_special_char(NUL);

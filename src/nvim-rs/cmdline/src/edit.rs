@@ -69,6 +69,35 @@ extern "C" {
     // Paste support
     fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
     fn stuffcharReadbuff(c: c_int);
+
+    // putcmdline / unputcmdline support
+    fn ui_has(what: c_int) -> c_int;
+    fn msg_putchar(c: c_int);
+    fn ui_cursor_shape();
+    fn nvim_get_ccline_level() -> c_int;
+    fn nvim_get_ccline_redraw_state() -> c_int;
+    fn nvim_set_ccline_special_char(c: c_int);
+    fn nvim_set_ccline_special_shift(shift: c_int);
+    fn nvim_ui_cmdline_special_char(c: c_int, shift: bool, level: c_int);
+
+    // cmdline_paste support
+    static mut got_int: bool;
+    fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
+    fn get_spec_reg(
+        regname: c_int,
+        argp: *mut *mut c_char,
+        allocated: *mut bool,
+        errmsg: bool,
+    ) -> bool;
+    fn cmdline_paste_reg(regname: c_int, literally: bool, remcr: bool) -> bool;
+    fn line_breakcheck();
+    fn nvim_inc_textlock();
+    fn nvim_dec_textlock();
+    fn nvim_get_p_is() -> c_int;
+    fn nvim_get_p_ic() -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn vim_iswordc(c: c_int) -> bool;
+    fn xfree(ptr: *mut c_char);
 }
 
 // =============================================================================
@@ -902,6 +931,174 @@ pub unsafe extern "C" fn rs_cmdline_paste_str(s: *const c_char, literally: bool)
             stuffcharReadbuff(c);
         }
     }
+}
+
+// =============================================================================
+// putcmdline / unputcmdline
+// =============================================================================
+
+/// kUICmdline UIExtension value
+const K_UI_CMDLINE: c_int = 0;
+/// kCmdRedrawAll CmdRedraw value
+const K_CMD_REDRAW_ALL: c_int = 2;
+
+/// Put a special character on the command line.
+///
+/// Shifts the following text to the right when `shift` is true.
+/// Used for CTRL-V, CTRL-K, etc. `c` must be printable (fit in one display cell).
+///
+/// Rust replacement for `putcmdline()` from ex_getln.c.
+///
+/// # Safety
+///
+/// Calls C functions to access ccline state and UI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_putcmdline(c: c_int, shift: bool) {
+    if nvim_get_cmd_silent() != 0 {
+        return;
+    }
+    if ui_has(K_UI_CMDLINE) == 0 {
+        nvim_set_msg_no_more(1);
+        msg_putchar(c);
+        if shift {
+            draw_cmdline(
+                nvim_get_ccline_cmdpos(),
+                nvim_get_ccline_cmdlen() - nvim_get_ccline_cmdpos(),
+            );
+        }
+        nvim_set_msg_no_more(0);
+    } else if nvim_get_ccline_redraw_state() != K_CMD_REDRAW_ALL {
+        nvim_ui_cmdline_special_char(c, shift, nvim_get_ccline_level());
+    }
+    cursorcmd();
+    nvim_set_ccline_special_char(c);
+    nvim_set_ccline_special_shift(shift as c_int);
+    ui_cursor_shape();
+}
+
+/// Undo a `putcmdline(c, false)`.
+///
+/// Rust replacement for `unputcmdline()` from ex_getln.c.
+///
+/// # Safety
+///
+/// Calls C functions to access ccline state and UI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_unputcmdline() {
+    if nvim_get_cmd_silent() != 0 {
+        return;
+    }
+    nvim_set_msg_no_more(1);
+    let cmdpos = nvim_get_ccline_cmdpos();
+    let cmdlen = nvim_get_ccline_cmdlen();
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    if cmdlen == cmdpos && ui_has(K_UI_CMDLINE) == 0 {
+        msg_putchar(b' ' as c_int);
+    } else {
+        let char_len = utfc_ptr2len(cmdbuff.add(cmdpos as usize));
+        draw_cmdline(cmdpos, char_len);
+    }
+    nvim_set_msg_no_more(0);
+    cursorcmd();
+    nvim_set_ccline_special_char(NUL as c_int);
+    ui_cursor_shape();
+}
+
+// =============================================================================
+// Register Paste
+// =============================================================================
+
+/// Ctrl-F, Ctrl-P, Ctrl-W, Ctrl-A, Ctrl-L special register codes
+const CTRL_F: c_int = 6;
+const CTRL_P: c_int = 16;
+const CTRL_W: c_int = 23;
+const CTRL_A: c_int = 1;
+
+/// Paste a register into the command line.
+///
+/// Handles CTRL-R <regname>. When `regname` is CTRL-W the current word
+/// under the cursor is used, deduplicating any overlap with what is already
+/// on the command line when 'incsearch' is active.
+///
+/// Rust replacement for `nvim_cmdline_paste()` from ex_getln.c.
+///
+/// # Safety
+///
+/// Calls C functions to access globals and register content.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_paste(regname: c_int, literally: bool, remcr: bool) -> bool {
+    // Check for valid regname; also accept special codes used in the command line
+    if regname != CTRL_F
+        && regname != CTRL_P
+        && regname != CTRL_W
+        && regname != CTRL_A
+        && regname != CTRL_L
+        && !valid_yank_reg(regname, false)
+    {
+        return false;
+    }
+
+    // A register containing CTRL-R can cause an endless loop.
+    // Allow CTRL-C to break it.
+    line_breakcheck();
+    if got_int {
+        return false;
+    }
+
+    // Set textlock to avoid nasty things like jumping to another buffer
+    // when evaluating an expression.
+    let mut arg: *mut c_char = std::ptr::null_mut();
+    let mut allocated = false;
+    nvim_inc_textlock();
+    let found = get_spec_reg(regname, &raw mut arg, &raw mut allocated, true);
+    nvim_dec_textlock();
+
+    if found {
+        if arg.is_null() {
+            return false;
+        }
+
+        // When 'incsearch' is set and CTRL-R CTRL-W is used: skip the
+        // duplicate part of the word already on the command line.
+        let mut p = arg;
+        if nvim_get_p_is() != 0 && regname == CTRL_W {
+            let cmdbuff = nvim_get_ccline_cmdbuff();
+            let cmdpos = nvim_get_ccline_cmdpos();
+            let mut w = cmdbuff.add(cmdpos as usize);
+            while w > cmdbuff {
+                let len = utf_head_off(cmdbuff, w.sub(1)) + 1;
+                if !vim_iswordc(utf_ptr2char(w.sub(len as usize))) {
+                    break;
+                }
+                w = w.sub(len as usize);
+            }
+            let len = cmdbuff.add(cmdpos as usize).offset_from(w) as c_int;
+            let skip = if nvim_get_p_ic() != 0 {
+                libc::strncasecmp(
+                    w.cast::<libc::c_char>(),
+                    arg.cast::<libc::c_char>(),
+                    len as libc::size_t,
+                ) == 0
+            } else {
+                libc::strncmp(
+                    w.cast::<libc::c_char>(),
+                    arg.cast::<libc::c_char>(),
+                    len as libc::size_t,
+                ) == 0
+            };
+            if skip {
+                p = p.add(len as usize);
+            }
+        }
+
+        rs_cmdline_paste_str(p, literally);
+        if allocated {
+            xfree(arg);
+        }
+        return true;
+    }
+
+    cmdline_paste_reg(regname, literally, remcr)
 }
 
 // =============================================================================

@@ -189,6 +189,8 @@ extern int command_line_handle_key(void *s);
 extern int command_line_wildchar_complete(void *s);
 extern int command_line_execute(VimState *state, int key);
 extern int command_line_check(VimState *state);
+extern void rs_putcmdline(int c, bool shift);
+extern void rs_unputcmdline(void);
 
 // History browsing state (used by Rust cmdline/history.rs)
 typedef struct {
@@ -1136,49 +1138,18 @@ void cmdline_ui_flush(void)
   }
 }
 
-// Put a character on the command line.  Shifts the following text to the
-// right when "shift" is true.  Used for CTRL-V, CTRL-K, etc.
-// "c" must be printable (fit in one display cell)!
-void putcmdline(char c, bool shift)
+/// Thin C wrapper: emit kUICmdline special_char event (for Rust FFI).
+void nvim_ui_cmdline_special_char(int c, bool shift, int level)
 {
-  if (cmd_silent) {
-    return;
-  }
-  if (!ui_has(kUICmdline)) {
-    msg_no_more = true;
-    msg_putchar(c);
-    if (shift) {
-      draw_cmdline(ccline.cmdpos, ccline.cmdlen - ccline.cmdpos);
-    }
-    msg_no_more = false;
-  } else if (ccline.redraw_state != kCmdRedrawAll) {
-    char charbuf[2] = { c, 0 };
-    ui_call_cmdline_special_char(cstr_as_string(charbuf), shift,
-                                 ccline.level);
-  }
-  cursorcmd();
-  ccline.special_char = c;
-  ccline.special_shift = shift;
-  ui_cursor_shape();
+  char charbuf[2] = { (char)c, 0 };
+  ui_call_cmdline_special_char(cstr_as_string(charbuf), shift, level);
 }
 
-/// Undo a putcmdline(c, false).
-void unputcmdline(void)
-{
-  if (cmd_silent) {
-    return;
-  }
-  msg_no_more = true;
-  if (ccline.cmdlen == ccline.cmdpos && !ui_has(kUICmdline)) {
-    msg_putchar(' ');
-  } else {
-    draw_cmdline(ccline.cmdpos, utfc_ptr2len(ccline.cmdbuff + ccline.cmdpos));
-  }
-  msg_no_more = false;
-  cursorcmd();
-  ccline.special_char = NUL;
-  ui_cursor_shape();
-}
+// Put a character on the command line.  Thin C wrapper: delegates to Rust.
+void putcmdline(char c, bool shift) { rs_putcmdline((int)(unsigned char)c, shift); }
+
+/// Undo a putcmdline(c, false).  Thin C wrapper: delegates to Rust.
+void unputcmdline(void) { rs_unputcmdline(); }
 
 // put_on_cmdline, cmdline_paste_str, redrawcmdline, redrawcmd: implemented in Rust (cmdline crate).
 
@@ -1349,69 +1320,6 @@ int nvim_get_new_cmdpos(void) { return new_cmdpos; }
 void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
 void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
-/// Paste a yank register into the command line (called from Rust).
-/// insert_reg() can't be used here, because special characters from the
-/// register contents will be interpreted as commands.
-bool nvim_cmdline_paste(int regname, bool literally, bool remcr)
-{
-  char *arg;
-  bool allocated;
-
-  // check for valid regname; also accept special characters for CTRL-R in
-  // the command line
-  if (regname != Ctrl_F && regname != Ctrl_P && regname != Ctrl_W
-      && regname != Ctrl_A && regname != Ctrl_L
-      && !valid_yank_reg(regname, false)) {
-    return FAIL;
-  }
-
-  // A register containing CTRL-R can cause an endless loop.  Allow using
-  // CTRL-C to break the loop.
-  line_breakcheck();
-  if (got_int) {
-    return FAIL;
-  }
-
-  // Need to set "textlock" to avoid nasty things like going to another
-  // buffer when evaluating an expression.
-  textlock++;
-  const bool i = get_spec_reg(regname, &arg, &allocated, true);
-  textlock--;
-
-  if (i) {
-    if (arg == NULL) {
-      return FAIL;
-    }
-
-    // When 'incsearch' is set and CTRL-R CTRL-W used: skip the duplicate
-    // part of the word.
-    char *p = arg;
-    if (p_is && regname == Ctrl_W) {
-      char *w;
-      int len;
-
-      for (w = ccline.cmdbuff + ccline.cmdpos; w > ccline.cmdbuff;) {
-        len = utf_head_off(ccline.cmdbuff, w - 1) + 1;
-        if (!vim_iswordc(utf_ptr2char(w - len))) {
-          break;
-        }
-        w -= len;
-      }
-      len = (int)((ccline.cmdbuff + ccline.cmdpos) - w);
-      if (p_ic ? STRNICMP(w, arg, len) == 0 : strncmp(w, arg, (size_t)len) == 0) {
-        p += len;
-      }
-    }
-
-    cmdline_paste_str(p, literally);
-    if (allocated) {
-      xfree(arg);
-    }
-    return OK;
-  }
-
-  return cmdline_paste_reg(regname, literally, remcr);
-}
 
 /// Handle no-change return path for command-line mode (called from Rust).
 int nvim_command_line_not_changed(void *s)
