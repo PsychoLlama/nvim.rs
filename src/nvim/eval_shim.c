@@ -13,7 +13,6 @@
 #include "nvim/eval.h"
 #include "nvim/change.h"
 #include "nvim/charset.h"
-#include "nvim/eval/encode.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/eval/vars.h"
@@ -21,7 +20,6 @@
 #include "nvim/event/multiqueue.h"
 #include "nvim/event/proc.h"
 #include "nvim/event/time.h"
-#include "nvim/ex_docmd.h"
 #include "nvim/garray.h"
 #include "nvim/globals.h"
 #include "nvim/hashtab.h"
@@ -44,24 +42,11 @@
 #include "nvim/undo.h"
 #include "nvim/window.h"
 
-extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
-extern const char *tv_list_find_str(list_T *l, int n);
-extern bool tv2bool(const typval_T *tv);
-extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
-                               list_stack_T **list_stack);
-extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
-                                   list_stack_T **list_stack);
+extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack);
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
-extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
-                                          ht_stack_T **ht_stack, list_stack_T **list_stack);
-extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
-                        typval_T *rettv, int flags, typval_T *basetv);
-extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
-extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
+extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack);
 extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
-extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
-                              void *selfdict, typval_T *basetv, const char *lua_funcname);
-extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
 bool nvim_eval_ht_foreach_di_tv(hashtab_T *ht, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
 { bool abort = false; HASHTAB_ITER(ht, hi, { abort = abort || rs_set_ref_in_item(&TV_DICT_HI2DI(hi)->di_tv, copyID, ht_stack, list_stack); }); return abort; }
@@ -375,8 +360,8 @@ uint64_t nvim_timers_next_id(void) { return last_timer_id++; }
 void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
 { timer_T *timer; map_foreach_value(&timers, timer, { cb(timer, userdata); }) }
 
-int nvim_get_pressedreturn(void) { return get_pressedreturn() ? 1 : 0; }
-void nvim_set_pressedreturn(int val) { set_pressedreturn(val != 0); }
+int nvim_get_pressedreturn(void) { extern int get_pressedreturn(void); return get_pressedreturn() ? 1 : 0; }
+void nvim_set_pressedreturn(int val) { extern void set_pressedreturn(bool); set_pressedreturn(val != 0); }
 
 int nvim_channel_is_valid_job(Channel *chan) { return chan != NULL && chan->streamtype == kChannelStreamProc && !proc_is_stopped(&chan->stream.proc); }
 
