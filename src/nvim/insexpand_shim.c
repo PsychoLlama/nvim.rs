@@ -462,38 +462,6 @@ void nvim_clear_static_cpt_callbacks(void) { clear_cpt_callbacks(&cpt_cb, cpt_cb
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
-
-#define CI_WHAT_MODE                0x01
-#define CI_WHAT_PUM_VISIBLE         0x02
-#define CI_WHAT_ITEMS               0x04
-#define CI_WHAT_SELECTED            0x08
-#define CI_WHAT_COMPLETED           0x10
-#define CI_WHAT_MATCHES             0x20
-#define CI_WHAT_PREINSERTED_TEXT    0x40
-#define CI_WHAT_ALL                 0xff
-
-/// Parse what_list and return a bitmask of CI_WHAT_* flags.
-/// If what_list is NULL, returns all flags except MATCHES and COMPLETED.
-int nvim_ci_parse_what_list(void *what_list_v)
-{
-  list_T *what_list = (list_T *)what_list_v;
-  if (what_list == NULL) {
-    return CI_WHAT_ALL & ~(CI_WHAT_MATCHES | CI_WHAT_COMPLETED);
-  }
-  int what_flag = 0;
-  for (listitem_T *item = tv_list_first(what_list); item != NULL; item = TV_LIST_ITEM_NEXT(what_list, item)) {
-    const char *what = tv_get_string(TV_LIST_ITEM_TV(item));
-    if (strcmp(what, "mode") == 0) { what_flag |= CI_WHAT_MODE; }
-    else if (strcmp(what, "pum_visible") == 0) { what_flag |= CI_WHAT_PUM_VISIBLE; }
-    else if (strcmp(what, "items") == 0) { what_flag |= CI_WHAT_ITEMS; }
-    else if (strcmp(what, "selected") == 0) { what_flag |= CI_WHAT_SELECTED; }
-    else if (strcmp(what, "completed") == 0) { what_flag |= CI_WHAT_COMPLETED; }
-    else if (strcmp(what, "preinserted_text") == 0) { what_flag |= CI_WHAT_PREINSERTED_TEXT; }
-    else if (strcmp(what, "matches") == 0) { what_flag |= CI_WHAT_MATCHES; }
-  }
-  return what_flag;
-}
-
 int nvim_compl_xp_get_context(void) { return compl_xp.xp_context; }
 const char *nvim_compl_xp_get_pattern(void) { return compl_xp.xp_pattern; }
 void nvim_compl_xp_set_cmd_context(int len, int col) { set_cmd_context(&compl_xp, compl_pattern.data, len, col, false); }

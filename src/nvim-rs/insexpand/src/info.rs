@@ -9,7 +9,7 @@ use crate::match_list::{
     is_first_match, nvim_compl_get_curr_match, nvim_compl_get_first_match, ComplMatch,
 };
 
-// what_flag bitmasks (must match CI_WHAT_* defines in insexpand_shim.c)
+// what_flag bitmasks
 const CI_WHAT_MODE: c_int = 0x01;
 const CI_WHAT_PUM_VISIBLE: c_int = 0x02;
 const CI_WHAT_ITEMS: c_int = 0x04;
@@ -17,6 +17,7 @@ const CI_WHAT_SELECTED: c_int = 0x08;
 const CI_WHAT_COMPLETED: c_int = 0x10;
 const CI_WHAT_MATCHES: c_int = 0x20;
 const CI_WHAT_PREINSERTED_TEXT: c_int = 0x40;
+const CI_WHAT_ALL: c_int = 0xff;
 
 // VimType enum value for VAR_UNKNOWN
 const VAR_UNKNOWN: c_int = 0;
@@ -38,8 +39,10 @@ struct TypvalTInfo {
 }
 
 extern "C" {
-    // Parsing
-    fn nvim_ci_parse_what_list(what_list: *mut c_void) -> c_int;
+    // List item iteration (from quickfix_shim.c -- already exported)
+    fn nvim_tv_list_first(list: *const c_void) -> *mut c_void;
+    fn nvim_tv_list_item_next(list: *const c_void, item: *const c_void) -> *mut c_void;
+    fn nvim_tv_list_item_string(item: *const c_void) -> *mut c_char;
 
     // Dict/list operations (nvim_ci_ prefix avoids name conflicts)
     fn nvim_ci_dict_alloc() -> *mut c_void;
@@ -156,6 +159,42 @@ unsafe fn build_match_dict(m: ComplMatch) -> *mut c_void {
     di
 }
 
+/// Parse what_list and return a bitmask of CI_WHAT_* flags.
+/// If what_list is NULL, returns all flags except MATCHES and COMPLETED.
+///
+/// # Safety
+/// `what_list` must be NULL or a valid VimL list_T pointer.
+unsafe fn ci_parse_what_list(what_list: *mut c_void) -> c_int {
+    if what_list.is_null() {
+        return CI_WHAT_ALL & !(CI_WHAT_MATCHES | CI_WHAT_COMPLETED);
+    }
+    let mut what_flag: c_int = 0;
+    let mut item = nvim_tv_list_first(what_list);
+    while !item.is_null() {
+        let what = nvim_tv_list_item_string(item);
+        if !what.is_null() {
+            let s = std::ffi::CStr::from_ptr(what).to_bytes();
+            if s == b"mode" {
+                what_flag |= CI_WHAT_MODE;
+            } else if s == b"pum_visible" {
+                what_flag |= CI_WHAT_PUM_VISIBLE;
+            } else if s == b"items" {
+                what_flag |= CI_WHAT_ITEMS;
+            } else if s == b"selected" {
+                what_flag |= CI_WHAT_SELECTED;
+            } else if s == b"completed" {
+                what_flag |= CI_WHAT_COMPLETED;
+            } else if s == b"preinserted_text" {
+                what_flag |= CI_WHAT_PREINSERTED_TEXT;
+            } else if s == b"matches" {
+                what_flag |= CI_WHAT_MATCHES;
+            }
+        }
+        item = nvim_tv_list_item_next(what_list, item);
+    }
+    what_flag
+}
+
 /// Implementation of complete_info(), replacing nvim_get_complete_info_impl.
 ///
 /// # Safety
@@ -163,7 +202,7 @@ unsafe fn build_match_dict(m: ComplMatch) -> *mut c_void {
 #[no_mangle]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_get_complete_info(what_list: *mut c_void, retdict: *mut c_void) {
-    let what_flag = nvim_ci_parse_what_list(what_list);
+    let what_flag = ci_parse_what_list(what_list);
     let mut ret: c_int = 1; // OK = 1, use nonzero as "success" sentinel
 
     if (what_flag & CI_WHAT_MODE) != 0 && ret != 0 {
