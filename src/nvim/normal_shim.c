@@ -206,13 +206,9 @@ void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, 
 void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 char *nvim_ml_get_pos_cursor(void) { return ml_get_pos(&curwin->w_cursor); }
-void nvim_sync_fen_in_diff_windows(void)
-{
+void nvim_sync_fen_in_diff_windows(void) {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp != curwin && rs_foldmethodIsDiff(wp) && wp->w_p_scb) {
-      wp->w_p_fen = curwin->w_p_fen;
-      changed_window_setting(wp);
-    }
+    if (wp != curwin && rs_foldmethodIsDiff(wp) && wp->w_p_scb) { wp->w_p_fen = curwin->w_p_fen; changed_window_setting(wp); }
   }
 }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
@@ -229,17 +225,12 @@ void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnu
 void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
-void normal_enter(bool cmdwin, bool noexmode)
-{
-  NormalState state;
-  normal_state_init(&state);
-  oparg_T *prev_oap = nvim_current_oap;
-  nvim_current_oap = &state.oa;
-  state.cmdwin = cmdwin;
-  state.noexmode = noexmode;
+void normal_enter(bool cmdwin, bool noexmode) {
+  NormalState state; normal_state_init(&state);
+  oparg_T *prev_oap = nvim_current_oap; nvim_current_oap = &state.oa;
+  state.cmdwin = cmdwin; state.noexmode = noexmode;
   state.toplevel = (!cmdwin || cmdwin_result == 0) && !noexmode;
-  state_enter(&state.state);
-  nvim_current_oap = prev_oap;
+  state_enter(&state.state); nvim_current_oap = prev_oap;
 }
 
 int nvim_langmap_adjust(int c, bool condition) { LANGMAP_ADJUST(c, condition); return c; }
@@ -346,45 +337,30 @@ static int normal_check(VimState *state) { return rs_normal_check((NormalState *
 char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
 
-void nvim_showcmd_ui_msg_showcmd(const char *buf, bool is_clear)
-{
-  MAXSIZE_TEMP_ARRAY(content, 1);
-  MAXSIZE_TEMP_ARRAY(chunk, 3);
+void nvim_showcmd_ui_msg_showcmd(const char *buf, bool is_clear) {
+  MAXSIZE_TEMP_ARRAY(content, 1); MAXSIZE_TEMP_ARRAY(chunk, 3);
   if (!is_clear) {
-    ADD_C(chunk, INTEGER_OBJ(0));
-    ADD_C(chunk, CSTR_AS_OBJ(buf));
-    ADD_C(chunk, INTEGER_OBJ(0));
+    ADD_C(chunk, INTEGER_OBJ(0)); ADD_C(chunk, CSTR_AS_OBJ(buf)); ADD_C(chunk, INTEGER_OBJ(0));
     ADD_C(content, ARRAY_OBJ(chunk));
   }
   ui_call_msg_showcmd(content);
 }
 
-void nvim_showcmd_grid_render(const char *buf, bool is_clear)
-{
-  msg_grid_validate();
-  int showcmd_row = Rows - 1;
-  grid_line_start(&msg_grid_adj, showcmd_row);
+void nvim_showcmd_grid_render(const char *buf, bool is_clear) {
+  msg_grid_validate(); int showcmd_row = Rows - 1; grid_line_start(&msg_grid_adj, showcmd_row);
   int len = 0;
-  if (!is_clear) {
-    len = grid_line_puts(sc_col, buf, -1, HL_ATTR(HLF_MSG));
-  }
+  if (!is_clear) { len = grid_line_puts(sc_col, buf, -1, HL_ATTR(HLF_MSG)); }
   // clear the rest of an old message by outputting up to SHOWCMD_COLS spaces
-  grid_line_puts(sc_col + len, (char *)"          " + len, -1, HL_ATTR(HLF_MSG));
-  grid_line_flush();
+  grid_line_puts(sc_col + len, (char *)"          " + len, -1, HL_ATTR(HLF_MSG)); grid_line_flush();
 }
 
-void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
-{
-  char *const saved_sbr = p_sbr;
-  char *const saved_w_sbr = curwin->w_p_sbr;
-  p_sbr = empty_string_option;
-  curwin->w_p_sbr = empty_string_option;
+void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right) {
+  char *const saved_sbr = p_sbr; char *const saved_w_sbr = curwin->w_p_sbr;
+  p_sbr = empty_string_option; curwin->w_p_sbr = empty_string_option;
   colnr_T leftcol, rightcol;
   getvcols(curwin, &curwin->w_cursor, &VIsual, &leftcol, &rightcol);
-  p_sbr = saved_sbr;
-  curwin->w_p_sbr = saved_w_sbr;
-  *out_left = (int)leftcol;
-  *out_right = (int)rightcol;
+  p_sbr = saved_sbr; curwin->w_p_sbr = saved_w_sbr;
+  *out_left = (int)leftcol; *out_right = (int)rightcol;
 }
 
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
@@ -397,17 +373,12 @@ void nvim_curwin_set_w_scbind_pos(int val) { curwin->w_scbind_pos = (linenr_T)va
 void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
                                    int tgt_leftcol, bool want_ver, bool want_hor)
 {
-  win_T *old_curbuf_win = curwin;
-  buf_T *old_curbuf_buf = curbuf;
-  int old_VIsual_select = VIsual_select;
-  int old_VIsual_active = VIsual_active;
+  win_T *old_curbuf_win = curwin; buf_T *old_curbuf_buf = curbuf;
+  int old_VIsual_select = VIsual_select; int old_VIsual_active = VIsual_active;
   VIsual_select = VIsual_active = 0;
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    curwin = wp;
-    curbuf = curwin->w_buffer;
-    if (curwin == old_curwin_arg || !curwin->w_p_scb) {
-      continue;
-    }
+    curwin = wp; curbuf = curwin->w_buffer;
+    if (curwin == old_curwin_arg || !curwin->w_p_scb) { continue; }
     if (want_ver) {
       if (old_curwin_arg->w_p_diff && curwin->w_p_diff) {
         rs_diff_set_topline(old_curwin_arg, curwin);
@@ -415,39 +386,23 @@ void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
         curwin->w_scbind_pos += vtopline_diff;
         int curr_vtopline = rs_get_vtopline(curwin);
         int max_vtopline = curr_vtopline + curwin->w_topfill
-                           + plines_m_win_fill(curwin, curwin->w_topline + 1,
-                                               curbuf->b_ml.ml_line_count);
+                           + plines_m_win_fill(curwin, curwin->w_topline + 1, curbuf->b_ml.ml_line_count);
         int new_vtopline = MAX(MIN((linenr_T)curwin->w_scbind_pos, max_vtopline), 1);
         int y = new_vtopline - curr_vtopline;
-        if (y > 0) {
-          scrollup(curwin, y, false);
-        } else {
-          scrolldown(curwin, -y, false);
-        }
+        if (y > 0) { scrollup(curwin, y, false); } else { scrolldown(curwin, -y, false); }
       }
-      redraw_later(curwin, UPD_VALID);
-      cursor_correct(curwin);
-      curwin->w_redr_status = true;
+      redraw_later(curwin, UPD_VALID); cursor_correct(curwin); curwin->w_redr_status = true;
     }
-    if (want_hor) {
-      set_leftcol((colnr_T)tgt_leftcol);
-    }
+    if (want_hor) { set_leftcol((colnr_T)tgt_leftcol); }
   }
-  VIsual_select = old_VIsual_select;
-  VIsual_active = old_VIsual_active;
-  curwin = old_curbuf_win;
-  curbuf = old_curbuf_buf;
+  VIsual_select = old_VIsual_select; VIsual_active = old_VIsual_active;
+  curwin = old_curbuf_win; curbuf = old_curbuf_buf;
 }
 
-void normal_cmd(oparg_T *oap, bool toplevel)
-{
-  NormalState s;
-  normal_state_init(&s);
-  s.toplevel = toplevel;
-  s.oa = *oap;
-  rs_normal_prepare(&s);
-  normal_execute(&s.state, safe_vgetc());
-  *oap = s.oa;
+void normal_cmd(oparg_T *oap, bool toplevel) {
+  NormalState s; normal_state_init(&s);
+  s.toplevel = toplevel; s.oa = *oap;
+  rs_normal_prepare(&s); normal_execute(&s.state, safe_vgetc()); *oap = s.oa;
 }
 
 char *nvim_ident_get_kp(void) { return *curbuf->b_p_kp == NUL ? p_kp : curbuf->b_p_kp; }
