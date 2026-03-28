@@ -1,11 +1,7 @@
-/// @file diff_shim.c
-/// FFI bridge between C and the Rust `nvim-diff` crate.
-/// Contains thin wrappers, accessor functions, static state, and type definitions.
+// diff_shim.c: Rust FFI accessors for diff crate.
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "auto/config.h"
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/bufwrite.h"
@@ -40,7 +36,6 @@
 #include "nvim/ui.h"
 #include "nvim/undo.h"
 #include "xdiff/xdiff.h"
-
 extern int rs_lnum_compare(const void *s1, const void *s2);
 extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
@@ -48,10 +43,8 @@ extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size, linenr_T 
 extern int rs_diff_file_internal(void *dio);
 extern int rs_diff_file(void *dio);
 extern int rs_check_external_diff(void *dio);
-
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
-// Flags obtained from the 'diffopt' option
 #define DIFF_FILLER     0x001   // display filler lines
 #define DIFF_IBLANK     0x002   // ignore empty lines
 #define DIFF_ICASE      0x004   // ignore case
@@ -102,12 +95,9 @@ typedef struct {
   int dio_internal;  // using internal diff
 } diffio_T;
 #include "diff_shim.c.generated.h"
-
 extern void rs_newFoldLevel(void);
 void ex_diffgetput(exarg_T *eap);
-
 static diffline_change_T simple_diffline_change;
-
 int nvim_get_diff_flags(void) { return diff_flags; }
 bool nvim_is_diffexpr_empty(void) { return *p_dex == NUL; }
 buf_T *nvim_get_curtab_diffbuf(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
