@@ -106,6 +106,13 @@ extern "C" {
 
     /// e_streamkey error string. Defined in errors.h.
     static e_streamkey: std::ffi::c_char;
+
+    // --- Phase 3 FFI ---
+
+    /// Check whether any autocmds are registered for an event. Defined in autocmd.c.
+    fn has_event(event: c_int) -> c_int;
+    /// Deferred autocommand handler for channel info changes. Defined in channel.c (stays in C).
+    fn set_info_event(argv: *mut *mut c_void);
 }
 
 // =============================================================================
@@ -421,13 +428,16 @@ pub unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
     channel_destroy(chan);
 }
 
-/// Internal helper: destroy a channel and free all its resources.
+/// Destroy a channel and free all its resources.
+///
+/// Called from `free_channel_event` (Rust) and `channel_free_all_mem` (C).
 ///
 /// # Safety
 ///
 /// `chan` must be a valid non-null pointer to a `Channel` that has been removed
 /// from the channels map.
-unsafe fn channel_destroy(chan: *mut ChannelT) {
+#[no_mangle]
+pub unsafe extern "C" fn channel_destroy(chan: *mut ChannelT) {
     if (*chan).is_rpc {
         rpc_free(chan.cast());
     }
@@ -471,6 +481,46 @@ pub unsafe extern "C" fn channel_init() {
     // kChannelStreamStderr = 3
     channel_alloc(3);
     rpc_init();
+}
+
+// =============================================================================
+// Migrated functions (Phase 3): lifecycle helpers
+// =============================================================================
+
+// event_T enum values (from auevents_enum.generated.h)
+const EVENT_CHANINFO: c_int = 23;
+const EVENT_CHANOPEN: c_int = 24;
+
+/// Fire a ChanOpen or ChanInfo autocommand if any are registered.
+///
+/// `new_chan` = true  => EVENT_CHANOPEN
+/// `new_chan` = false => EVENT_CHANINFO
+///
+/// # Safety
+///
+/// `chan` must be a valid non-null `Channel *`. Calls into the event loop.
+#[no_mangle]
+pub unsafe extern "C" fn channel_info_changed(chan: *mut ChannelT, new_chan: bool) {
+    let event = if new_chan {
+        EVENT_CHANOPEN
+    } else {
+        EVENT_CHANINFO
+    };
+    if has_event(event) != 0 {
+        channel_incref(chan);
+        // queue a two-argument event: (chan, event)
+        let mut event_argv: EventT = EventT {
+            handler: Some(set_info_event as _),
+            argv: [std::ptr::null_mut(); 10],
+        };
+        event_argv.argv[0] = chan.cast();
+        // pass event value as pointer-sized integer (matches the C `(void *)(intptr_t)event`)
+        // event is always EVENT_CHANINFO (23) or EVENT_CHANOPEN (24), both positive
+        #[allow(clippy::cast_sign_loss)]
+        let event_ptr: *mut c_void = (event as usize) as *mut c_void;
+        event_argv.argv[1] = event_ptr;
+        multiqueue_put_event(rs_loop_get_events(main_loop_ptr()), event_argv);
+    }
 }
 
 // =============================================================================

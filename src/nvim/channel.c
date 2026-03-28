@@ -682,16 +682,9 @@ static void term_close(void *data)
   multiqueue_put(chan->events, term_delayed_free, data);
 }
 
-void channel_info_changed(Channel *chan, bool new_chan)
-{
-  event_T event = new_chan ? EVENT_CHANOPEN : EVENT_CHANINFO;
-  if (has_event(event)) {
-    channel_incref(chan);
-    multiqueue_put(loop_get_events(&main_loop), set_info_event, chan, (void *)(intptr_t)event);
-  }
-}
+// channel_info_changed implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-static void set_info_event(void **argv)
+void set_info_event(void **argv)
 {
   Channel *chan = argv[0];
   event_T event = (event_T)(ptrdiff_t)argv[1];
