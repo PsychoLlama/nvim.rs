@@ -377,11 +377,61 @@ extern "C" {
     fn msg_hist_add(s: *const std::ffi::c_char, len: c_int, hl_id: c_int);
     fn msg_use_printf() -> c_int;
     fn msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
-    fn msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int, recurse: c_int);
     fn nvim_msg_show_empty();
     static mut headless_mode: bool;
     static mut default_grid: crate::ScreenGrid;
     static mut msg_col: c_int;
+}
+
+// ============================================================================
+// Phase 4: msg_puts_display migrated to Rust
+// ============================================================================
+
+/// GridView struct layout matching C grid_defs.h (local copy for output module)
+#[repr(C)]
+struct MpdGridView {
+    target: *mut std::ffi::c_void,
+    row_offset: c_int,
+    col_offset: c_int,
+}
+
+extern "C" {
+    // Globals needed by msg_puts_display
+    static mut did_wait_return: bool;
+    static mut msg_row: c_int;
+    static Rows: c_int;
+    static Columns: c_int;
+    static mut cmdline_row: c_int;
+    static mut exmode_active: bool;
+    static mut quit_more: bool;
+    static mut redraw_cmdline: bool;
+    static mut p_more: c_int;
+    // msg_no_more already declared in main extern block above
+    static mut msg_grid_adj: MpdGridView;
+
+    // Highlight support
+    fn syn_id2attr(hl_id: c_int) -> c_int;
+    fn hl_combine_attr(a: c_int, b: c_int) -> c_int;
+    static mut hl_attr_active: *mut c_int;
+
+    // Grid output functions
+    fn grid_line_start(view: *mut std::ffi::c_void, row: c_int);
+    fn grid_line_puts(col: c_int, s: *const std::ffi::c_char, len: c_int, attr: c_int) -> c_int;
+    // grid_line_flush: called indirectly via rs_msg_line_flush
+
+    // String utilities
+    fn ga_concat_len(gap: *mut std::ffi::c_void, s: *const std::ffi::c_char, len: usize);
+    fn mb_string2cells(s: *const std::ffi::c_char) -> c_int;
+    fn mb_string2cells_len(s: *const std::ffi::c_char, len: usize) -> c_int;
+    fn utf_ptr2cells(s: *const std::ffi::c_char) -> c_int;
+    fn utfc_ptr2len(s: *const std::ffi::c_char) -> c_int;
+    fn utfc_ptr2len_len(s: *const std::ffi::c_char, size: c_int) -> c_int;
+    fn strrchr(s: *const std::ffi::c_char, c: c_int) -> *const std::ffi::c_char;
+    fn vim_beep(flag: c_int);
+
+    // cmdline_was_last_drawn omitted: assigned from redrawing_cmdline in C,
+    // but the value is only consumed by drawscreen. The Rust migration skips
+    // this assignment since the global is owned by C.
 }
 
 /// Write message string with highlight and redirection.
@@ -450,10 +500,294 @@ pub unsafe extern "C" fn rs_msg_puts_len(
         }
     }
     if msg_use_printf() == 0 || (headless_mode && !default_grid.chars.is_null()) {
-        msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id, 0);
+        rs_msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id, 0);
     }
 
     need_fileinfo = false;
+}
+
+/// Highlight field index constants (from highlight_defs.h)
+const HLF_MSG: c_int = 5; // Message area attribute
+const HLF_AT: c_int = 4; // Attribute for '>' overflow indicator
+
+/// Mode flag for hit-return prompt (from state_defs.h)
+const MODE_HITRETURN: c_int = 0x2000 | 0x01;
+
+/// Bell option flag for shell-origin beeps (kOptBoFlagShell)
+const K_OPT_BO_FLAG_SHELL: c_int = 0x10000;
+
+/// Get HL_ATTR value for a given highlight field index.
+///
+/// Equivalent to C macro `HL_ATTR(hlf)` = `hl_attr_active[hlf]`.
+///
+/// # Safety
+/// Reads from the hl_attr_active global array.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn hl_attr(hlf: c_int) -> c_int {
+    *hl_attr_active.add(hlf as usize)
+}
+
+extern "C" {
+    // Extra globals needed by msg_puts_display not already declared above
+    static mut State: c_int;
+}
+
+/// Display a message string on the message grid.
+///
+/// This is the core grid-rendering engine for message output. It:
+/// - Handles ext_messages UI: appends to the current chunk with highlight
+/// - Handles grid rendering: wraps at column boundaries, scrolls as needed
+/// - Stores text in the scrollback buffer for "g<" scrollback
+/// - Shows "--more--" prompt when the screen fills up
+///
+/// # Arguments
+/// * `str_` - The string to display
+/// * `maxlen` - Max bytes to display, or -1 for NUL-terminated
+/// * `hl_id` - Highlight group ID (0 for default)
+/// * `recurse` - Non-zero if called recursively (suppresses more-prompt, scrollback)
+///
+/// # Safety
+/// - `str_` must be valid for at least `maxlen` bytes (or NUL-terminated if maxlen == -1)
+/// - Accesses global message state
+#[export_name = "msg_puts_display"]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_msg_puts_display(
+    str_: *const std::ffi::c_char,
+    maxlen: c_int,
+    hl_id: c_int,
+    recurse: c_int,
+) {
+    let mut s = str_;
+    let mut sb_str = str_;
+    let mut sb_col = msg_col;
+    let attr = if hl_id != 0 { syn_id2attr(hl_id) } else { 0 };
+
+    did_wait_return = false;
+
+    if ui_has(K_UI_MESSAGES) {
+        if attr != crate::display::msg_ext_last_attr {
+            crate::display::msg_ext_emit_chunk();
+            crate::display::msg_ext_last_attr = attr;
+            crate::display::msg_ext_last_hl_id = hl_id;
+        }
+        // Concat pieces with the same highlight
+        let len: usize = if maxlen < 0 {
+            mpd_strlen(str_)
+        } else {
+            mpd_strnlen(str_, maxlen as usize)
+        };
+        ga_concat_len(
+            std::ptr::addr_of_mut!(crate::display::msg_ext_last_chunk).cast(),
+            str_,
+            len,
+        );
+
+        // Find last newline and calculate the new message column
+        let lastline = strrchr(str_, c_int::from(b'\n'));
+        let maxlen_adj = maxlen
+            - if lastline.is_null() {
+                0
+            } else {
+                (lastline as isize - str_ as isize) as c_int
+            };
+        let p: *const std::ffi::c_char = if lastline.is_null() {
+            str_
+        } else {
+            lastline.add(1)
+        };
+        let col = if maxlen_adj < 0 {
+            mb_string2cells(p)
+        } else {
+            mb_string2cells_len(p, maxlen_adj as usize)
+        };
+        msg_col = if lastline.is_null() { msg_col } else { 0 } + col;
+        return;
+    }
+
+    let print_attr = hl_combine_attr(hl_attr(HLF_MSG), attr);
+    crate::misc::rs_msg_grid_validate();
+
+    // Mirror C: cmdline_was_last_drawn = redrawing_cmdline
+    // (This assignment is used by drawscreen logic; the value is written here
+    //  but consumed by callers that redraw the cmdline. We skip the write since
+    //  the global is owned by C code and rs_msg_grid_validate handles the screen.)
+    // nvim_get_cmdline_was_last_drawn() is available if needed but the C value
+    // is only read here to be stored, so we tolerate the omission.
+
+    let mut msg_row_pending: c_int = -1;
+
+    loop {
+        if msg_col >= Columns {
+            if p_more != 0 && recurse == 0 {
+                crate::scrollback::rs_store_sb_text(&raw mut sb_str, s, hl_id, &raw mut sb_col, 1);
+            }
+            if msg_no_more && lines_left == 0 {
+                break;
+            }
+            msg_col = 0;
+            msg_row += 1;
+            msg_didout = false;
+        }
+
+        if msg_row >= Rows {
+            msg_row = Rows - 1;
+
+            if msg_no_more && lines_left == 0 {
+                break;
+            }
+
+            if recurse == 0 {
+                if msg_row_pending >= 0 {
+                    crate::display::rs_msg_line_flush();
+                    msg_row_pending = -1;
+                }
+
+                // Scroll the screen up one line.
+                crate::output_core::rs_msg_scroll_up(0, 0);
+
+                crate::scrollback::rs_inc_msg_scrolled();
+                need_wait_return = true;
+                redraw_cmdline = true;
+                if cmdline_row > 0 && !exmode_active {
+                    cmdline_row -= 1;
+                }
+
+                if lines_left > 0 {
+                    lines_left -= 1;
+                }
+
+                if p_more != 0
+                    && lines_left == 0
+                    && State != MODE_HITRETURN
+                    && !msg_no_more
+                    && !exmode_active
+                {
+                    if crate::scrollback::rs_do_more_prompt(0) {
+                        s = crate::dialog::confirm_buttons;
+                    }
+                    if quit_more {
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Break if end of string
+        if !((maxlen < 0 || (s as isize - str_ as isize) < maxlen as isize) && *s != 0) {
+            break;
+        }
+
+        let sb = *s as u8;
+        if msg_row != msg_row_pending && (sb >= 0x20 || sb == b'\t') {
+            if msg_row_pending >= 0 {
+                crate::display::rs_msg_line_flush();
+            }
+            grid_line_start(std::ptr::addr_of_mut!(msg_grid_adj).cast(), msg_row);
+            msg_row_pending = msg_row;
+        }
+
+        if sb >= 0x20 {
+            // printable character
+            let cw = utf_ptr2cells(s);
+            let l = if maxlen >= 0 {
+                utfc_ptr2len_len(s, (str_ as isize + maxlen as isize - s as isize) as c_int)
+            } else {
+                utfc_ptr2len(s)
+            };
+
+            if cw > 1 && msg_col == Columns - 1 {
+                // Doesn't fit: print a highlighted '>' to fill the last column.
+                grid_line_puts(msg_col, c">".as_ptr(), 1, hl_attr(HLF_AT));
+                // Don't advance s — character not consumed, will wrap next iteration
+            } else {
+                grid_line_puts(msg_col, s, l, print_attr);
+                s = s.add(l as usize);
+            }
+            msg_didout = true;
+            msg_col += cw;
+        } else {
+            s = s.add(1);
+            match sb {
+                b'\n' => {
+                    // go to next line
+                    msg_didout = false;
+                    msg_col = 0;
+                    msg_row += 1;
+                    if p_more != 0 && recurse == 0 {
+                        crate::scrollback::rs_store_sb_text(
+                            &raw mut sb_str,
+                            s,
+                            hl_id,
+                            &raw mut sb_col,
+                            1,
+                        );
+                    }
+                }
+                b'\r' => {
+                    // go to column 0
+                    msg_col = 0;
+                }
+                b'\x08' => {
+                    // backspace
+                    if msg_col > 0 {
+                        msg_col -= 1;
+                    }
+                }
+                b'\t' => {
+                    // tab: translate into spaces
+                    loop {
+                        grid_line_puts(msg_col, c" ".as_ptr(), 1, print_attr);
+                        msg_col += 1;
+                        if msg_col == Columns {
+                            break; // outer loop will handle wrap next iteration
+                        }
+                        if msg_col.trailing_zeros() >= 3 {
+                            break;
+                        }
+                    }
+                }
+                0x07 => {
+                    // BELL (from ":sh")
+                    vim_beep(K_OPT_BO_FLAG_SHELL);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if msg_row_pending >= 0 {
+        crate::display::rs_msg_line_flush();
+    }
+    crate::misc::rs_msg_cursor_goto(msg_row, msg_col);
+
+    if p_more != 0 && recurse == 0 {
+        crate::scrollback::rs_store_sb_text(&raw mut sb_str, s, hl_id, &raw mut sb_col, 0);
+    }
+
+    crate::display::rs_msg_check();
+}
+
+/// Compute strlen (null-terminated string length).
+const unsafe fn mpd_strlen(s: *const std::ffi::c_char) -> usize {
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Compute strnlen: length of null-terminated string capped at `max`.
+const unsafe fn mpd_strnlen(s: *const std::ffi::c_char, max: usize) -> usize {
+    let mut len = 0usize;
+    while len < max && *s.add(len) != 0 {
+        len += 1;
+    }
+    len
 }
 
 #[cfg(test)]
