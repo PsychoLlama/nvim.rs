@@ -2477,8 +2477,6 @@ extern "C" {
     fn nvim_screen_resize_post(state: c_int);
     /// Return true if msg_grid.chars is non-NULL.
     fn nvim_msg_grid_has_chars() -> bool;
-    /// C wrapper for default_grid allocation with reentrancy guard.
-    fn default_grid_alloc() -> bool;
 }
 
 /// EVENT_VIMRESIZED autocmd event number (from auevents_enum.generated.h).
@@ -2488,17 +2486,34 @@ const NO_SCREEN: c_int = 0;
 
 /// Resize the default screen grid to Rows and Columns.
 ///
-/// Returns true if resizing was performed. The static `resizing` guard is kept
-/// in the C wrapper (`default_grid_alloc`) which calls this Rust function.
+/// Includes the reentrancy guard (previously in the C `default_grid_alloc` wrapper).
+/// Returns true if resizing was performed.
+///
+/// Exported as both `rs_default_grid_alloc` and `default_grid_alloc` for C callers.
 ///
 /// Rust equivalent of `default_grid_alloc()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "default_grid_alloc")]
 pub unsafe extern "C" fn rs_default_grid_alloc() -> bool {
-    if nvim_default_grid_needs_alloc() == 0 {
+    static RESIZING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    use std::sync::atomic::Ordering;
+
+    // Reentrancy guard (equivalent to C static bool resizing).
+    if RESIZING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         return false;
     }
-    nvim_default_grid_do_alloc();
-    true
+
+    let result = if nvim_default_grid_needs_alloc() == 0 {
+        false
+    } else {
+        nvim_default_grid_do_alloc();
+        true
+    };
+
+    RESIZING.store(false, Ordering::SeqCst);
+    result
 }
 
 /// Clear entire screen and reset state.
@@ -2550,7 +2565,7 @@ pub unsafe extern "C" fn rs_drawscreen_screen_resize(width: c_int, height: c_int
     resizing_autocmd = true;
 
     // Retry loop: autocommands may alter Rows or Columns.
-    while default_grid_alloc() {
+    while rs_default_grid_alloc() {
         ui_comp_set_screen_valid(false);
         if nvim_msg_grid_has_chars() {
             msg_grid_invalid = true;

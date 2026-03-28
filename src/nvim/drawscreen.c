@@ -142,7 +142,6 @@ extern void rs_draw_hsep_win(win_T *wp);
 extern void rs_draw_sep_connectors_win(win_T *wp);
 extern void rs_win_scroll_lines(win_T *wp, int row, int line_count);
 extern int rs_showmode(void);
-extern bool rs_default_grid_alloc(void);
 extern void rs_screenclear(void);
 extern void rs_drawscreen_screen_resize(int width, int height);
 extern void rs_show_cursor_info_later(bool force);
@@ -160,97 +159,6 @@ static bool conceal_cursor_used = false;
 
 static void win_update(win_T *wp);  // forward declaration
 
-
-/// Resize default_grid to Rows and Columns.
-///
-/// Allocate default_grid.chars[] and other grid arrays.
-///
-/// There may be some time between setting Rows and Columns and (re)allocating
-/// default_grid arrays.  This happens when starting up and when
-/// (manually) changing the screen size.  Always use default_grid.rows and
-/// default_grid.cols to access items in default_grid.chars[].  Use Rows and
-/// Columns for positioning text etc. where the final size of the screen is
-/// needed.
-///
-/// @return  whether resizing has been done
-bool default_grid_alloc(void)
-{
-  static bool resizing = false;
-  if (resizing) {
-    return false;
-  }
-  resizing = true;
-  bool result = rs_default_grid_alloc();
-  resizing = false;
-  return result;
-}
-
-extern void msg_grid_validate(void);  // defined in message.c, not in message.h
-
-/// Perform the grid_alloc + click_defs + field setup for default_grid.
-/// Equivalent to the core of default_grid_alloc() after the guard checks.
-void nvim_default_grid_do_alloc(void)
-{
-  grid_alloc(&default_grid, Rows, Columns, true, true);
-  stl_clear_click_defs(tab_page_click_defs, tab_page_click_defs_size);
-  tab_page_click_defs = stl_alloc_click_defs(tab_page_click_defs, Columns,
-                                             &tab_page_click_defs_size);
-  default_grid.comp_height = Rows;
-  default_grid.comp_width = Columns;
-  default_grid.handle = DEFAULT_GRID_HANDLE;
-}
-
-/// Perform screenclear grid operations (blanking + UI calls + state reset).
-/// Called from rs_screenclear() in Rust.
-void nvim_screenclear_impl(void)
-{
-  msg_check_for_delay(false);
-
-  if (starting == NO_SCREEN || default_grid.chars == NULL) {
-    return;
-  }
-
-  // blank out the default grid
-  for (int i = 0; i < default_grid.rows; i++) {
-    grid_clear_line(&default_grid, default_grid.line_offset[i],
-                    default_grid.cols, true);
-  }
-
-  ui_call_grid_clear(1);  // clear the display
-  ui_comp_set_screen_valid(true);
-
-  ns_hl_fast = -1;
-
-  clear_cmdline = false;
-  mode_displayed = false;
-
-  redraw_all_later(UPD_NOT_VALID);
-  cmdline_was_last_drawn = false;
-  redraw_cmdline = true;
-  redraw_tabline = true;
-  redraw_popupmenu = true;
-  pum_invalidate();
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_floating) {
-      wp->w_redr_type = UPD_CLEAR;
-    }
-  }
-  if (must_redraw == UPD_CLEAR) {
-    must_redraw = UPD_NOT_VALID;  // no need to clear again
-  }
-  compute_cmdrow();
-  msg_row = cmdline_row;  // put cursor on last line for messages
-  msg_col = 0;
-  msg_reset_scroll();     // can't scroll back
-  msg_didany = false;
-  msg_didout = false;
-  if (HL_ATTR(HLF_MSG) > 0 && msg_use_grid() && msg_grid.chars) {
-    grid_invalidate(&msg_grid);
-    msg_grid_validate();
-    msg_grid_invalid = false;
-    clear_cmdline = true;
-  }
-}
 
 void screenclear(void) { rs_screenclear(); }
 

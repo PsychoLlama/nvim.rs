@@ -217,3 +217,68 @@ void nvim_screen_resize_post(int state)
   }
   ui_flush();
 }
+
+/// Perform the grid_alloc + click_defs + field setup for default_grid.
+/// Relocated from drawscreen.c (Phase 3).
+void nvim_default_grid_do_alloc(void)
+{
+  grid_alloc(&default_grid, Rows, Columns, true, true);
+  stl_clear_click_defs(tab_page_click_defs, tab_page_click_defs_size);
+  tab_page_click_defs = stl_alloc_click_defs(tab_page_click_defs, Columns,
+                                             &tab_page_click_defs_size);
+  default_grid.comp_height = Rows;
+  default_grid.comp_width = Columns;
+  default_grid.handle = DEFAULT_GRID_HANDLE;
+}
+
+/// Perform screenclear grid operations (blanking + UI calls + state reset).
+/// Relocated from drawscreen.c (Phase 3). Called from rs_screenclear() in Rust.
+void nvim_screenclear_impl(void)
+{
+  msg_check_for_delay(false);
+
+  if (starting == NO_SCREEN || default_grid.chars == NULL) {
+    return;
+  }
+
+  // blank out the default grid
+  for (int i = 0; i < default_grid.rows; i++) {
+    grid_clear_line(&default_grid, default_grid.line_offset[i],
+                    default_grid.cols, true);
+  }
+
+  ui_call_grid_clear(1);  // clear the display
+  ui_comp_set_screen_valid(true);
+
+  ns_hl_fast = -1;
+
+  clear_cmdline = false;
+  mode_displayed = false;
+
+  redraw_all_later(UPD_NOT_VALID);
+  cmdline_was_last_drawn = false;
+  redraw_cmdline = true;
+  redraw_tabline = true;
+  redraw_popupmenu = true;
+  pum_invalidate();
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_floating) {
+      wp->w_redr_type = UPD_CLEAR;
+    }
+  }
+  if (must_redraw == UPD_CLEAR) {
+    must_redraw = UPD_NOT_VALID;  // no need to clear again
+  }
+  compute_cmdrow();
+  msg_row = cmdline_row;  // put cursor on last line for messages
+  msg_col = 0;
+  msg_reset_scroll();     // can't scroll back
+  msg_didany = false;
+  msg_didout = false;
+  if (HL_ATTR(HLF_MSG) > 0 && msg_use_grid() && msg_grid.chars) {
+    grid_invalidate(&msg_grid);
+    msg_grid_validate();
+    msg_grid_invalid = false;
+    clear_cmdline = true;
+  }
+}
