@@ -78,11 +78,8 @@ extern win_T *rs_win_find_by_handle(int handle);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// Rust functions still needed by remaining C code
 extern const char *rs_event_nr2name(int event, int num_events);
 extern void rs_aubuflocal_remove(int bufnr);
-
-// Phase 5: :augroup command + arg parsing
 extern int arg_augroup_get(char **argp);
 
 // C accessor for event_names array (used by Rust)
@@ -1510,8 +1507,6 @@ void nvim_autocmd_del_at(int event, size_t idx)
   }
 }
 
-// AutoPatInfo and AutoHandlerInfo typedefs are in autocmd.h
-
 /// Get all pattern info for autocmd at (event, idx) in one call.
 AutoPatInfo nvim_autocmd_get_pat_info(int event, size_t idx)
 {
@@ -1529,7 +1524,6 @@ AutoPatInfo nvim_autocmd_get_pat_info(int event, size_t idx)
     .pat_id = (uintptr_t)ap,
   };
 }
-
 
 /// Get handler info for autocmd at (event, idx) in one call.
 AutoHandlerInfo nvim_autocmd_get_handler_info(int event, size_t idx)
@@ -1641,7 +1635,6 @@ bool nvim_autocmd_match_file(int event, size_t idx,
   }
   return buf_fnum != 0 && ap->buflocal_nr == buf_fnum;
 }
-
 
 /// Call last_set_msg for the script context of autocmd at (event, idx).
 void nvim_autocmd_show_last_set(int event, size_t idx)
