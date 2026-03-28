@@ -1831,6 +1831,19 @@ pub unsafe extern "C" fn win_set_topline_was_set(wp: WinHandle, val: c_int) {
     win_mut(wp).w_topline_was_set = u8::from(val != 0);
 }
 
+/// Returns `wp->w_topline_was_set`. Returns 0 if wp is null.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[must_use]
+#[export_name = "nvim_win_get_topline_was_set"]
+pub unsafe extern "C" fn win_get_topline_was_set(wp: WinHandle) -> c_int {
+    if wp.as_ptr().is_null() {
+        return 0;
+    }
+    c_int::from(win_ref(wp).w_topline_was_set != 0)
+}
+
 /// Sets `wp->w_virtcol`. Does nothing if wp is null.
 ///
 /// # Safety

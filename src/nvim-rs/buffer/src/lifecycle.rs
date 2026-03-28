@@ -1737,6 +1737,228 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
 }
 
 // =============================================================================
+// enter_buffer + buflist_getfpos
+// =============================================================================
+
+extern "C" {
+    fn nvim_curwin_set_buffer2(buf: BufHandle);
+    fn nvim_set_curbuf_ptr(buf: BufHandle);
+    fn nvim_buf_set_nwindows(buf: BufHandle, val: c_int);
+    fn buf_copy_options(buf: BufHandle, flags: c_int);
+    fn get_winopts(buf: BufHandle);
+    fn rs_clearFolding(win: *mut c_void);
+    fn rs_foldUpdateAll(win: *mut c_void);
+    fn rs_diff_buf_add(buf: BufHandle);
+    fn nvim_ecmd_curwin_set_ws_to_buf(buf: BufHandle);
+    fn nvim_set_topline(wp: *mut c_void, lnum: c_int);
+    fn nvim_win_set_topfill(wp: *mut c_void, val: c_int);
+    fn nvim_win_set_topline_was_set(wp: *mut c_void, val: c_int);
+    fn nvim_win_set_valid(wp: *mut c_void, val: c_int);
+    fn nvim_ecmd_curwin_set_coladd_curswant();
+    fn nvim_excmds_buf_ft_is_empty(buf: BufHandle) -> c_int;
+    fn shortmess(x: c_int) -> bool;
+    fn nvim_ecmd_curbuf_set_did_filetype(val: c_int);
+    fn open_buffer(read_stdin: bool, eap: *mut c_void, flags: c_int) -> c_int;
+    static msg_silent: c_int;
+    fn buf_check_timestamp(buf: BufHandle);
+    fn nvim_win_get_topline(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_topline_was_set(wp: *mut c_void) -> c_int;
+    fn inindent(extra: c_int) -> c_int;
+    fn maketitle();
+    fn scroll_cursor_halfway(win: *mut c_void, atend: bool, prefer_above: bool);
+    fn nvim_ecmd_curbuf_set_last_used();
+    fn nvim_win_get_p_spell(wp: *const c_void) -> c_int;
+    fn parse_spelllang(win: *mut c_void) -> *mut c_char;
+    fn redraw_later(win: *mut c_void, upd: c_int);
+    fn nvim_get_p_sol() -> c_int;
+    fn check_cursor_lnum(win: *mut c_void);
+    fn check_cursor_col(win: *mut c_void);
+    fn buflist_findfmark(buf: BufHandle) -> *mut c_void;
+    fn nvim_fmark_get_lnum(fm: *const c_void) -> c_int;
+    fn nvim_fmark_get_col(fm: *const c_void) -> c_int;
+    fn nvim_curwin_set_cursor(lnum: c_int, col: c_int);
+    fn keymap_init() -> *mut c_char;
+    fn nvim_ecmd_curbuf_get_kmap_state() -> c_int;
+    fn check_arg_idx(win: *mut c_void);
+    fn nvim_get_entered_free_all_mem() -> c_int;
+    fn nvim_win_get_p_diff(wp: *const c_void) -> c_int;
+    fn nvim_curwin_cursor_lnum() -> c_int;
+    fn nvim_win_get_b_p_spl(win: *const c_void) -> *const c_char;
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_curwin_set_cursor_col(col: c_int);
+    fn nvim_curwin_set_cursor_coladd(coladd: c_int);
+    fn nvim_curwin_set_w_set_curswant(val: bool);
+}
+
+// BCO_* constants (from option.h)
+const BCO_ENTER: c_int = 1;
+const BCO_NOHELP: c_int = 4;
+// SHM_FILEINFO = 'F' (from option_vars.h)
+const SHM_FILEINFO: c_int = b'F' as c_int;
+// EVENT constants (from auevents_enum.generated.h)
+const EVENT_BUFENTER: c_int = 3;
+const EVENT_BUFWINENTER: c_int = 16;
+// UPD_NOT_VALID (from drawscreen.h)
+const UPD_NOT_VALID: c_int = 40;
+// KEYMAP_INIT (from buffer_defs.h)
+const KEYMAP_INIT: c_int = 1;
+
+/// Go to the last known line number for the current buffer.
+///
+/// Port of C `buflist_getfpos()` (static, only called by `enter_buffer`).
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+unsafe fn buflist_getfpos() {
+    let curbuf = nvim_get_curbuf();
+    let curwin = nvim_get_curwin();
+    let fm = buflist_findfmark(curbuf);
+    let fmark_lnum = nvim_fmark_get_lnum(fm);
+    let fmark_col = nvim_fmark_get_col(fm);
+
+    // Set lnum and validate it (check_cursor_lnum may clamp it).
+    nvim_curwin_set_cursor_lnum(fmark_lnum);
+    check_cursor_lnum(curwin);
+
+    if nvim_get_p_sol() != 0 {
+        // 'startofline' set: move to col 0.
+        nvim_curwin_set_cursor_col(0);
+    } else {
+        // Restore saved column, validate it, clear coladd, set curswant.
+        nvim_curwin_set_cursor_col(fmark_col);
+        check_cursor_col(curwin);
+        nvim_curwin_set_cursor_coladd(0);
+        nvim_curwin_set_w_set_curswant(true);
+    }
+}
+
+/// Enter a new current buffer.
+///
+/// Old `curbuf` must have been abandoned already. This also means `curbuf`
+/// may point to freed memory when this function starts.
+///
+/// Port of C `enter_buffer()`.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread with valid
+/// `buf`.
+#[unsafe(export_name = "enter_buffer")]
+pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
+    let curwin = nvim_get_curwin();
+
+    // When closing the current buffer stop Visual mode.
+    if nvim_get_VIsual_active() != 0 && nvim_get_entered_free_all_mem() == 0 {
+        end_visual_mode();
+    }
+
+    // Get the buffer in the current window.
+    nvim_curwin_set_buffer2(buf);
+    nvim_set_curbuf_ptr(buf);
+    let nwindows = nvim_buf_get_nwindows(buf);
+    nvim_buf_set_nwindows(buf, nwindows + 1);
+
+    // Copy buffer and window local option values.  Not for a help buffer.
+    buf_copy_options(buf, BCO_ENTER | BCO_NOHELP);
+    if nvim_buf_get_help(buf) == 0 {
+        get_winopts(buf);
+    } else {
+        // Remove all folds in the window.
+        rs_clearFolding(curwin);
+    }
+    rs_foldUpdateAll(curwin); // update folds (later).
+
+    if nvim_win_get_p_diff(curwin) != 0 {
+        rs_diff_buf_add(buf);
+    }
+
+    nvim_ecmd_curwin_set_ws_to_buf(buf);
+
+    // Cursor on first line by default.
+    nvim_curwin_set_cursor(1, 0);
+    nvim_ecmd_curwin_set_coladd_curswant();
+    nvim_win_set_topline_was_set(curwin, 0);
+
+    // mark cursor position as being invalid
+    nvim_win_set_valid(curwin, 0);
+
+    // Make sure the buffer is loaded.
+    if nvim_buf_get_ml_mfp_null(buf) != 0 {
+        // need to load the file
+        // If there is no filetype, allow for detecting one.  Esp. useful for
+        // ":ball" used in an autocommand.  If there already is a filetype we
+        // might prefer to keep it.
+        if nvim_excmds_buf_ft_is_empty(buf) != 0 {
+            nvim_ecmd_curbuf_set_did_filetype(0);
+        }
+
+        open_buffer(false, std::ptr::null_mut(), 0);
+    } else {
+        if msg_silent == 0 && !shortmess(SHM_FILEINFO) {
+            need_fileinfo = true; // display file info after redraw
+        }
+        // check if file changed
+        buf_check_timestamp(buf);
+
+        nvim_set_topline(curwin, 1);
+        nvim_win_set_topfill(curwin, 0);
+        apply_autocmds(
+            EVENT_BUFENTER,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            buf,
+        );
+        apply_autocmds(
+            EVENT_BUFWINENTER,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            buf,
+        );
+    }
+
+    // If autocommands did not change the cursor position, restore cursor lnum
+    // and possibly cursor col.
+    let curwin = nvim_get_curwin(); // re-acquire after autocommands
+    let curbuf = nvim_get_curbuf();
+    if nvim_curwin_cursor_lnum() == 1 && inindent(0) != 0 {
+        buflist_getfpos();
+    }
+
+    check_arg_idx(curwin); // check for valid arg_idx
+    maketitle();
+    // when autocmds didn't change it
+    if nvim_win_get_topline(curwin) == 1 && nvim_win_get_topline_was_set(curwin) == 0 {
+        scroll_cursor_halfway(curwin, false, false); // redisplay at correct position
+    }
+
+    // Change directories when the 'acd' option is set.
+    crate::misc::do_autochdir();
+
+    if (nvim_ecmd_curbuf_get_kmap_state() & KEYMAP_INIT) != 0 {
+        keymap_init();
+    }
+    // May need to set the spell language.  Can only do this after the buffer
+    // has been properly setup.
+    // May need to set the spell language -- only if !b_help, w_p_spell, and spl is non-empty.
+    let spl = nvim_win_get_b_p_spl(curwin);
+    if nvim_buf_get_help(curbuf) == 0
+        && nvim_win_get_p_spell(curwin) != 0
+        && !spl.is_null()
+        && *spl != 0
+    {
+        parse_spelllang(curwin);
+    }
+    nvim_ecmd_curbuf_set_last_used();
+
+    if nvim_buf_get_terminal(curbuf) != 0 {
+        nvim_buf_terminal_check_size(curbuf);
+    }
+
+    redraw_later(curwin, UPD_NOT_VALID);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
