@@ -6647,6 +6647,8 @@ extern "C" {
     fn redraw_all_later(type_: c_int);
     #[link_name = "parse_spelllang"]
     fn parse_spelllang_slang(win: *mut c_void) -> *mut c_char;
+    fn path_fnamecmp(p1: *const c_char, p2: *const c_char) -> c_int;
+    fn nvim_win_get_b_langp(wp: *const c_void) -> *const crate::GArrayRaw;
     // Error message strings
     #[link_name = "e_format"]
     static e_format_slang: *const c_char;
@@ -7637,6 +7639,242 @@ pub unsafe extern "C" fn rs_spell_reload_one(fname: *mut c_char, added_word: boo
     // When "zg" was used and the file wasn't loaded yet, redo 'spelllang' to load it.
     if added_word && !didit {
         parse_spelllang_slang(curwin_slang);
+    }
+}
+
+/// Load the .sug files for languages that have one and weren't loaded yet.
+///
+/// Iterates over the current window's b_langp array, and for each language that
+/// has a .sug timestamp but has not been loaded yet, loads the .sug file.
+///
+/// # Safety
+/// Must be called with a valid curwin.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::needless_continue,
+    clippy::useless_let_if_seq
+)]
+pub unsafe extern "C" fn rs_suggest_load_files() {
+    const VIMSUGMAGIC_BYTES: &[u8] = b"VIMsug";
+    const VIMSUGMAGICL: usize = 6;
+    const VIMSUGVERSION_V: c_int = 1;
+    const SP_TRUNCERROR_V: c_int = -1;
+    const SP_FORMERROR_V: c_int = -2;
+    const SP_OTHERERROR_V: c_int = -3;
+    const FAIL_V: c_int = 1;
+
+    let langp_ga = nvim_win_get_b_langp(curwin_slang);
+    let lpi_count = (*langp_ga).ga_len;
+
+    for lpi in 0..lpi_count {
+        let lp = crate::langp_entry(langp_ga, lpi);
+        let slang = (*lp).lp_slang;
+        if (*slang).sl_sugtime == 0 || (*slang).sl_sugloaded {
+            continue;
+        }
+
+        // Mark as loaded so we don't retry on failure.
+        (*slang).sl_sugloaded = true;
+
+        // Find the '.' that precedes the extension.
+        let dotp = libc::strrchr((*slang).sl_fname, b'.' as c_int);
+        if dotp.is_null() || path_fnamecmp(dotp, c".spl".as_ptr()) != 0 {
+            continue;
+        }
+
+        // Swap ".spl" -> ".sug" in-place.
+        libc::strcpy(dotp, c".sug".as_ptr());
+
+        let fd = os_fopen_slang((*slang).sl_fname, c"r".as_ptr());
+
+        // Closure to restore ".spl" and optionally close fd.
+        macro_rules! next_one {
+            ($fd_opt:expr) => {{
+                if let Some(fdc) = $fd_opt {
+                    libc::fclose(fdc);
+                }
+                libc::strcpy(dotp, c".spl".as_ptr());
+                continue;
+            }};
+        }
+
+        if fd.is_null() {
+            next_one!(None::<*mut libc::FILE>);
+        }
+
+        // <SUGHEADER>: <fileID> <versionnr> <timestamp>
+        let mut hdr_buf = [0u8; VIMSUGMAGICL];
+        for slot in &mut hdr_buf {
+            let c = libc::fgetc(fd);
+            if c < 0 {
+                next_one!(Some(fd));
+            }
+            *slot = c as u8;
+        }
+        if &hdr_buf[..VIMSUGMAGICL] != VIMSUGMAGIC_BYTES {
+            semsg_slang(
+                c"E778: This does not look like a .sug file: %s".as_ptr(),
+                (*slang).sl_fname,
+            );
+            next_one!(Some(fd));
+        }
+
+        let c_ver = libc::fgetc(fd);
+        if c_ver < VIMSUGVERSION_V {
+            semsg_slang(
+                c"E779: Old .sug file, needs to be updated: %s".as_ptr(),
+                (*slang).sl_fname,
+            );
+            next_one!(Some(fd));
+        } else if c_ver > VIMSUGVERSION_V {
+            semsg_slang(
+                c"E780: .sug file is for newer version of Vim: %s".as_ptr(),
+                (*slang).sl_fname,
+            );
+            next_one!(Some(fd));
+        }
+
+        // Check timestamp: must match .spl timestamp exactly.
+        let timestamp = get8ctime(fd);
+        if timestamp != (*slang).sl_sugtime {
+            semsg_slang(
+                c"E781: .sug file doesn't match .spl file: %s".as_ptr(),
+                (*slang).sl_fname,
+            );
+            next_one!(Some(fd));
+        }
+
+        // Helper macro: report error, clear sug data, and go to next.
+        macro_rules! somerror {
+            ($fd_val:expr) => {{
+                semsg_slang(
+                    c"E782: Error while reading .sug file: %s".as_ptr(),
+                    (*slang).sl_fname,
+                );
+                slang_clear_sug(slang);
+                next_one!(Some($fd_val));
+            }};
+        }
+
+        // <SUGWORDTREE>: read the soundfold trie.
+        {
+            let mut rt_hdr = [0u8; 4];
+            let mut rt_res: c_int = 0;
+            if libc::fread(rt_hdr.as_mut_ptr().cast(), 1, 4, fd) != 4 {
+                rt_res = if libc::feof(fd) != 0 {
+                    SP_TRUNCERROR_V
+                } else {
+                    SP_OTHERERROR_V
+                };
+            } else {
+                let rt_len = ((rt_hdr[0] as i32) << 24)
+                    | ((rt_hdr[1] as i32) << 16)
+                    | ((rt_hdr[2] as i32) << 8)
+                    | rt_hdr[3] as i32;
+                if rt_len < 0 {
+                    rt_res = SP_TRUNCERROR_V;
+                } else if rt_len as usize >= usize::MAX / std::mem::size_of::<c_int>() {
+                    rt_res = SP_FORMERROR_V;
+                } else if rt_len > 0 {
+                    let rt_bp = xmalloc_slang(rt_len as usize).cast::<u8>();
+                    (*slang).sl_sbyts = rt_bp;
+                    let rt_sidxs = xcalloc_slang(rt_len as usize, std::mem::size_of::<c_int>())
+                        .cast::<c_int>();
+                    (*slang).sl_sidxs = rt_sidxs;
+                    // Allocate a reading buffer: header + up to rt_len*6 + 64 bytes.
+                    let rt_buf_max = 4 + (rt_len as usize) * 6 + 64;
+                    let rt_buf = xmalloc_slang(rt_buf_max).cast::<u8>();
+                    libc::memcpy(rt_buf.cast(), rt_hdr.as_ptr().cast(), 4);
+                    let rt_data = libc::fread(rt_buf.add(4).cast(), 1, rt_buf_max - 4, fd);
+                    if rt_data == 0 {
+                        xfree_slang(rt_buf.cast());
+                        rt_res = SP_TRUNCERROR_V;
+                    } else {
+                        let mut rt_consumed: usize = 0;
+                        let mut rt_nc: c_int = 0;
+                        rt_res = rs_read_tree(
+                            rt_buf,
+                            4 + rt_data,
+                            rt_bp,
+                            rt_sidxs,
+                            rt_len as usize,
+                            false,
+                            0,
+                            std::ptr::addr_of_mut!(rt_consumed),
+                            std::ptr::addr_of_mut!(rt_nc),
+                        );
+                        let rt_over = (4 + rt_data) as i64 - rt_consumed as i64;
+                        if rt_over > 0 {
+                            libc::fseek(fd, -rt_over, libc::SEEK_CUR);
+                        }
+                        xfree_slang(rt_buf.cast());
+                    }
+                }
+            }
+            if rt_res != 0 {
+                somerror!(fd);
+            }
+        }
+
+        // <SUGTABLE>: <sugwcount> <sugline> ...
+        (*slang).sl_sugbuf = open_spellbuf();
+
+        let wcount = get4c(fd);
+        if wcount < 0 {
+            somerror!(fd);
+        }
+
+        // Read all the wordnr lists into the buffer, one NUL-terminated list per line.
+        let mut ga = crate::GArrayRaw {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 1,
+            ga_growsize: 100,
+            ga_data: std::ptr::null_mut(),
+        };
+
+        for wordnr in 0..wcount {
+            ga.ga_len = 0;
+            loop {
+                let c = libc::fgetc(fd);
+                if c < 0 {
+                    ga_clear_sug(std::ptr::addr_of_mut!(ga));
+                    somerror!(fd);
+                }
+                // GA_APPEND equivalent: grow by 1 and append the byte.
+                ga_grow(std::ptr::addr_of_mut!(ga), 1);
+                let slot = (ga.ga_data as *mut u8).add(ga.ga_len as usize);
+                *slot = c as u8;
+                ga.ga_len += 1;
+                if c == 0 {
+                    break;
+                }
+            }
+            if ml_append_buf(
+                (*slang).sl_sugbuf,
+                wordnr,
+                ga.ga_data.cast::<c_char>(),
+                ga.ga_len,
+                true,
+            ) == FAIL_V
+            {
+                ga_clear_sug(std::ptr::addr_of_mut!(ga));
+                somerror!(fd);
+            }
+        }
+        ga_clear_sug(std::ptr::addr_of_mut!(ga));
+
+        // Count words in the tries so they can be found by word number.
+        crate::rs_tree_count_words((*slang).sl_fbyts, (*slang).sl_fidxs, (*slang).sl_fbyts_len);
+        // Soundfold tree has no stored length; use i32::MAX.
+        crate::rs_tree_count_words((*slang).sl_sbyts, (*slang).sl_sidxs, c_int::MAX);
+
+        next_one!(Some(fd));
     }
 }
 
