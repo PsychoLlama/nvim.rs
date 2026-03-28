@@ -105,7 +105,6 @@
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
 #include "nvim/syntax.h"
-#include "nvim/terminal.h"
 #include "nvim/ui.h"
 #include "nvim/undo.h"
 #include "nvim/usercmd.h"
@@ -141,7 +140,6 @@ extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
 extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int count, int flags,
                                           int unload);
 extern int rs_buf_effective_action(buf_T *buf, int action);
-
 
 // Accessor functions for Rust opaque handle pattern are in buffer_shim.c.
 // Only accessor functions that reference file-scope static variables remain here.
@@ -783,11 +781,8 @@ void free_buf_options(buf_T *buf, bool free_p_ff)
   clear_string_option(&buf->b_p_menc);
 }
 
-// buflist_getfpos() and enter_buffer() migrated to Rust lifecycle.rs (Phase 3).
-
-// handle_swap_exists() migrated to Rust lifecycle.rs (Phase 1).
-
-// ex_buffer_all() migrated to Rust lifecycle.rs (Phase 4).
+// buflist_getfpos(), enter_buffer(), handle_swap_exists(), ex_buffer_all()
+// migrated to Rust lifecycle.rs (Phases 1, 3, 4).
 _Static_assert(CMD_unhide == 495, "CMD_unhide value changed");
 _Static_assert(CMD_sunhide == 437, "CMD_sunhide value changed");
 
