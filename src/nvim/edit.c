@@ -360,74 +360,6 @@ void nvim_edit_ins_ctrl_(int new_revins_on)
   showmode();
 }
 
-/// ins_ctrl_g 'u' sync handler (accessor for Rust).
-void nvim_edit_ctrl_g_u_sync(void)
-{
-  u_sync(true);
-  nvim_set_ins_need_undo(1);
-  nvim_set_update_Insstart_orig(0);
-  Insstart = curwin->w_cursor;
-}
-
-/// ins_shift() wrapper — handles indent changes.
-void nvim_edit_ins_shift(int c, int lastc)
-{
-  if (stop_arrow() == FAIL) {
-    return;
-  }
-  AppendCharToRedobuff(c);
-
-  if (c == Ctrl_D && (lastc == '0' || lastc == '^')
-      && curwin->w_cursor.col > 0) {
-    curwin->w_cursor.col--;
-    del_char(false);
-    if (State & REPLACE_FLAG) {
-      replace_pop_ins();
-    }
-    if (lastc == '^') {
-      old_indent = get_indent();
-    }
-    change_indent(INDENT_SET, 0, true, true);
-  } else {
-    change_indent(c == Ctrl_D ? INDENT_DEC : INDENT_INC, 0, true, true);
-  }
-
-  if (did_ai && *skipwhite(get_cursor_line_ptr()) != NUL) {
-    did_ai = false;
-  }
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  nvim_set_can_cindent(0);
-}
-
-/// ins_del() wrapper — handles delete key in insert mode.
-void nvim_edit_ins_del(void)
-{
-  if (stop_arrow() == FAIL) {
-    return;
-  }
-  if (gchar_cursor() == NUL) {
-    const int temp = curwin->w_cursor.col;
-    if (!can_bs(BS_EOL)
-        || do_join(2, false, true, false, false) == FAIL) {
-      vim_beep(kOptBoFlagBackspace);
-    } else {
-      curwin->w_cursor.col = temp;
-      if (State & VREPLACE_FLAG
-          && orig_line_count > curbuf->b_ml.ml_line_count) {
-        orig_line_count = curbuf->b_ml.ml_line_count;
-      }
-    }
-  } else if (del_char(false) == FAIL) {
-    vim_beep(kOptBoFlagBackspace);
-  }
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  AppendCharToRedobuff(K_DEL);
-}
 
 static int pc_status;
 #ifndef PC_STATUS_UNSET
@@ -581,12 +513,6 @@ int nvim_edit_ins_digraph(void)
   return NUL;
 }
 
-/// Accessor for stuff_inserted: stuffcharReadbuff (for Rust).
-void nvim_stuffcharReadbuff(int c) { stuffcharReadbuff(c); }
-
-/// Accessor for stuff_inserted: stuffReadbuffLen (for Rust).
-void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len) { stuffReadbuffLen(data, len); }
-
 /// Update curbuf->b_last_changedtick if TextChangedI was triggered (accessor for Rust).
 void nvim_curbuf_sync_changedtick_after_insert(void)
 {
@@ -626,15 +552,6 @@ int nvim_edit_handle_restart_edit_cursor(void)
 
 /// Set Insstart_orig to Insstart (accessor for Rust state_machine).
 void nvim_set_Insstart_orig_from_Insstart(void) { Insstart_orig = Insstart; }
-
-/// Call stuffcharReadbuff(K_NOP) (accessor for Rust state_machine).
-void nvim_stuffcharReadbuff_K_NOP(void) { stuffcharReadbuff(K_NOP); }
-
-/// Call ins_redraw(false) (accessor for Rust state_machine).
-void ins_redraw_false(void) { nvim_edit_ins_redraw_impl(false); }
-
-/// Call ins_ctrl_v() (wrapper for Rust state_machine to avoid name clash).
-void ins_ctrl_v_fn(void) { ins_ctrl_v(); }
 
 /// Composite: prepare prompt buffer for insert mode (for Rust redraw.rs).
 /// Ensures the last line has prompt text and positions the cursor.
@@ -919,12 +836,6 @@ void display_dollar(colnr_T col_arg)
   curwin->w_cursor.col = save_col;
 }
 
-String get_last_insert(void)
-  FUNC_ATTR_PURE
-{
-  RsNvimString rs = rs_get_last_insert();
-  return rs.data == NULL ? NULL_STRING : (String){ .data = rs.data, .size = rs.size };
-}
 
 void set_can_cindent(bool val) { nvim_set_can_cindent(val ? 1 : 0); }
 

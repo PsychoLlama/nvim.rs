@@ -65,7 +65,7 @@ extern "C" {
     fn nvim_get_stop_insert_mode() -> c_int;
     fn nvim_set_stop_insert_mode(val: c_int);
     fn nvim_curbuf_is_terminal() -> c_int;
-    fn nvim_stuffcharReadbuff_K_NOP();
+    fn stuffcharReadbuff(c: c_int);
     static mut restart_edit: c_int;
 
     // --- completion ---
@@ -164,13 +164,12 @@ extern "C" {
     fn rs_pum_wanted() -> c_int;
     fn stop_arrow() -> c_int;
     fn vungetc(c: c_int);
-    fn ins_redraw_false();
     fn ins_ctrl_o();
     fn do_digraph(c: c_int) -> c_int;
     fn rs_ctrl_x_mode_none() -> c_int;
     fn rs_ctrl_x_mode_cmdline() -> c_int;
     fn insert_handle_key(s: *mut InsertState) -> c_int;
-    fn ins_ctrl_v_fn();
+    fn ins_ctrl_v();
     fn cindent_on() -> bool;
     fn in_cinkeys(c: c_int, ty: std::ffi::c_char, line_is_white: bool) -> c_int;
     fn do_c_expr_indent();
@@ -217,7 +216,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     if unsafe { nvim_curbuf_is_terminal() } != 0 && unsafe { nvim_get_stop_insert_mode() } == 0 {
         unsafe { nvim_set_stop_insert_mode(1) };
         unsafe { restart_edit = c_int::from(b'I') };
-        unsafe { nvim_stuffcharReadbuff_K_NOP() };
+        unsafe { stuffcharReadbuff(K_NOP) };
     }
 
     // ":stopinsert" used
@@ -462,7 +461,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
 
     // CTRL-\ CTRL-N/O/G: normal mode or CTRL-O without cursor move
     if unsafe { (*s).c } == CTRL_BSL {
-        unsafe { ins_redraw_false() };
+        unsafe { nvim_edit_ins_redraw_impl(0) };
         let c2 = unsafe {
             no_mapping += 1;
             allow_keys += 1;
@@ -499,7 +498,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
     }
 
     if unsafe { (*s).c } == CTRL_V || unsafe { (*s).c } == CTRL_Q {
-        unsafe { ins_ctrl_v_fn() };
+        unsafe { ins_ctrl_v() };
         unsafe { (*s).c = CTRL_V }; // pretend CTRL-V is last typed character
         return 1;
     }

@@ -4154,7 +4154,7 @@ extern "C" {
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_emsg_modifiable();
     fn get_literal(no_simplify: bool) -> c_int;
-    fn nvim_stuffcharReadbuff(c: c_int);
+    fn stuffcharReadbuff(c: c_int);
 
     // nv_replace C wrappers (lower-level after Phase 1 inlining)
 
@@ -4258,9 +4258,9 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
     let nchar = (*cap).nchar;
     if had_ctrl_v != CTRL_V && nchar == TAB_CHAR && (nvim_curbuf_b_p_et() || p_sta != 0) {
         stuffnumReadbuff(count1);
-        nvim_stuffcharReadbuff(c_int::from(b'R'));
-        nvim_stuffcharReadbuff(TAB_CHAR);
-        nvim_stuffcharReadbuff(ESC_CHAR);
+        stuffcharReadbuff(c_int::from(b'R'));
+        stuffcharReadbuff(TAB_CHAR);
+        stuffcharReadbuff(ESC_CHAR);
         return;
     }
 
@@ -4273,8 +4273,8 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
     if had_ctrl_v != CTRL_V && (nchar == c_int::from(b'\r') || nchar == c_int::from(b'\n')) {
         // Inlined nvim_replace_newline: replace char(s) by single newline
         del_chars(count1, false);
-        nvim_stuffcharReadbuff(c_int::from(b'\r'));
-        nvim_stuffcharReadbuff(ESC_CHAR);
+        stuffcharReadbuff(c_int::from(b'\r'));
+        stuffcharReadbuff(ESC_CHAR);
         invoke_edit_impl(cap, true, c_int::from(b'r'), false);
     } else {
         // Replace with typed character(s)
@@ -4405,10 +4405,10 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
         }
         if extra_char < c_int::from(b' ') {
             // Prefix a control character with CTRL-V to avoid it being used as a command.
-            nvim_stuffcharReadbuff(CTRL_V);
+            stuffcharReadbuff(CTRL_V);
         }
-        nvim_stuffcharReadbuff(extra_char);
-        nvim_stuffcharReadbuff(ESC_CHAR);
+        stuffcharReadbuff(extra_char);
+        stuffcharReadbuff(ESC_CHAR);
         if virtual_active(nvim_get_curwin()) {
             coladvance(nvim_get_curwin(), nvim_getviscol());
         }
@@ -7393,7 +7393,7 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
         (*oap).inclusive = false;
     } else if (*cap).count0 != 0 && !is_cmdkey && !is_lua {
         // translate "count:" into ":.,.+(count - 1)"
-        nvim_stuffcharReadbuff(c_int::from(b'.'));
+        stuffcharReadbuff(c_int::from(b'.'));
         if (*cap).count0 > 1 {
             stuffReadbuff(c",.+".as_ptr());
             stuffnumReadbuff((*cap).count0 - 1);
@@ -7457,8 +7457,8 @@ pub unsafe extern "C" fn rs_nv_record(cap: CapHandle) {
             ));
             return;
         }
-        nvim_stuffcharReadbuff(nchar);
-        nvim_stuffcharReadbuff(K_CMDWIN);
+        stuffcharReadbuff(nchar);
+        stuffcharReadbuff(K_CMDWIN);
     } else {
         // (stop) recording into a named register, unless executing a register.
         if nvim_get_reg_executing() == 0 && do_record(nchar) == FAIL {

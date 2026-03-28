@@ -717,7 +717,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         K_HELP | K_F1 | K_XF1 => {
             // Help key works like <ESC> <Help>
             // stuffcharReadbuff is called in C; we use the accessor
-            nvim_stuffcharReadbuff(K_HELP);
+            stuffcharReadbuff(K_HELP);
             SwitchAction::Exit(0)
         }
 
@@ -803,7 +803,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         CTRL_W => {
             if nvim_bt_prompt_curbuf() && (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 {
-                nvim_stuffcharReadbuff(CTRL_W);
+                stuffcharReadbuff(CTRL_W);
                 restart_edit = c_int::from(b'A');
                 (*s).nomove = true;
                 (*s).count = 0;
@@ -1115,7 +1115,7 @@ unsafe fn handle_completion_pn(s: *mut InsertState) -> SwitchAction {
 // ============================================================================
 
 extern "C" {
-    fn nvim_stuffcharReadbuff(c: c_int);
+    fn stuffcharReadbuff(c: c_int);
     fn nvim_get_p_ari() -> c_int;
     fn rs_compl_status_local() -> c_int;
     #[link_name = "cindent_on"]

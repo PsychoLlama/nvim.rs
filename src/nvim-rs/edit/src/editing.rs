@@ -34,8 +34,8 @@ extern "C" {
 
     // -- stuff_inserted dependencies --
     fn rs_get_last_insert() -> NvimString;
-    fn nvim_stuffcharReadbuff(c: c_int);
-    fn nvim_stuffReadbuffLen(data: *const u8, len: isize);
+    fn stuffcharReadbuff(c: c_int);
+    fn stuffReadbuffLen(data: *const u8, len: isize);
     fn nvim_emsg_noinstext();
 
     // -- redo_literal dependencies --
@@ -192,7 +192,7 @@ unsafe fn stuff_inserted_impl(c: c_int, count: c_int, no_esc: c_int) -> c_int {
 
     // May want to stuff the command character, to start Insert mode
     if c != 0 {
-        nvim_stuffcharReadbuff(c);
+        stuffcharReadbuff(c);
     }
 
     let data = insert.data;
@@ -224,18 +224,18 @@ unsafe fn stuff_inserted_impl(c: c_int, count: c_int, no_esc: c_int) -> c_int {
 
     let mut remaining = count;
     loop {
-        nvim_stuffReadbuffLen(data, size as isize);
+        stuffReadbuffLen(data, size as isize);
         // A trailing "0" is inserted as "<C-V>048", "^" as "<C-V>^".
         match last {
             b'0' => {
                 // "\026\060\064\070" = Ctrl-V 0 4 8
                 let seq: &[u8] = b"\x16\x30\x34\x38";
-                nvim_stuffReadbuffLen(seq.as_ptr(), seq.len() as isize);
+                stuffReadbuffLen(seq.as_ptr(), seq.len() as isize);
             }
             b'^' => {
                 // "\026^" = Ctrl-V ^
                 let seq: &[u8] = b"\x16^";
-                nvim_stuffReadbuffLen(seq.as_ptr(), seq.len() as isize);
+                stuffReadbuffLen(seq.as_ptr(), seq.len() as isize);
             }
             _ => {}
         }
@@ -247,7 +247,7 @@ unsafe fn stuff_inserted_impl(c: c_int, count: c_int, no_esc: c_int) -> c_int {
 
     // May want to stuff a trailing ESC, to get out of Insert mode
     if no_esc == 0 {
-        nvim_stuffcharReadbuff(c_int::from(ESC));
+        stuffcharReadbuff(c_int::from(ESC));
     }
 
     OK

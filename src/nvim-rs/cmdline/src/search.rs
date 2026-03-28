@@ -476,7 +476,7 @@ extern "C" {
     fn pat_has_uppercase(pat: *mut c_char) -> bool;
     fn mb_tolower(c: c_int) -> c_int;
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
-    fn nvim_stuffcharReadbuff(c: c_int);
+    fn stuffcharReadbuff(c: c_int);
     fn utf_char2len(c: c_int) -> c_int;
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_get_cursor_pos_ptr() -> *mut c_char;
@@ -936,7 +936,7 @@ pub unsafe extern "C" fn may_add_char_to_search_rs(
                 c"\\^$".as_ptr()
             };
             if *c == search_delim || !vim_strchr(magic_chars, *c).is_null() {
-                nvim_stuffcharReadbuff(*c);
+                stuffcharReadbuff(*c);
                 *c = b'\\' as c_int;
             }
 
@@ -952,7 +952,7 @@ pub unsafe extern "C" fn may_add_char_to_search_rs(
                     let new_col = nvim_get_curwin_cursor_col() + utf_char2len(*c);
                     nvim_set_curwin_cursor_col(new_col);
                     *c = nvim_gchar_cursor();
-                    nvim_stuffcharReadbuff(*c);
+                    stuffcharReadbuff(*c);
                 }
                 *c = save_c;
             }

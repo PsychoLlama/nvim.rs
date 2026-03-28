@@ -362,6 +362,18 @@ pub unsafe extern "C" fn rs_get_last_insert() -> NvimString {
     }
 }
 
+/// Alias of `rs_get_last_insert` exported as the canonical C symbol `get_last_insert`.
+///
+/// Replaces the thin C wrapper that was deleted from `edit.c`.
+///
+/// # Safety
+/// Calls C accessor functions for last-insert data.
+#[must_use]
+#[unsafe(export_name = "get_last_insert")]
+pub unsafe extern "C" fn rs_get_last_insert_alias() -> NvimString {
+    rs_get_last_insert()
+}
+
 // ============================================================================
 // get_last_insert_save
 // ============================================================================

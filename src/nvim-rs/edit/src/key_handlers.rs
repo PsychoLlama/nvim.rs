@@ -10,7 +10,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(non_snake_case)]
 
-use std::ffi::{c_int, c_uint, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 /// Column number type (matches `colnr_T` in Neovim).
 type ColnrT = i32;
@@ -94,8 +94,6 @@ extern "C" {
     fn nvim_ins_ctrl_hat();
     fn nvim_edit_ins_ctrl_(revins_on: c_int);
     fn nvim_ins_start_select(c: c_int) -> c_int;
-    fn nvim_edit_ins_shift(c: c_int, lastc: c_int);
-    fn nvim_edit_ins_del();
 
     // -- for inlining nvim_ins_ctrl_g_get_key --
     fn setcursor();
@@ -154,6 +152,35 @@ const KU_: c_int = b'u' as c_int;
 const KL_U: c_int = b'U' as c_int;
 const KK_: c_int = b'k' as c_int;
 const KJ_: c_int = b'j' as c_int;
+
+/// `FAIL` from `vim_defs.h`
+const FAIL: c_int = 0;
+
+/// `NUL` character
+const NUL: c_int = 0;
+
+/// `REPLACE_FLAG` bit from `state_defs.h`
+const REPLACE_FLAG: c_int = 0x100;
+
+/// `VREPLACE_FLAG` bit from `state_defs.h`
+const VREPLACE_FLAG: c_int = 0x200;
+
+/// `Ctrl_D` (0x04)
+const CTRL_D: c_int = 0x04;
+
+/// `INDENT_SET`, `INDENT_INC`, `INDENT_DEC` from `indent.h`
+const INDENT_SET: c_int = 1;
+const INDENT_INC: c_int = 2;
+const INDENT_DEC: c_int = 3;
+
+/// `BS_EOL` — backspace at end of line
+const BS_EOL: c_int = b'l' as c_int;
+
+/// `K_DEL` key constant
+const K_DEL: c_int = -17515; // TERMCAP2KEY('k','D')
+
+/// `kOptBoFlagBackspace` (beep flag for backspace)
+const BO_FLAG_BACKSPACE: c_int = 0x02;
 
 // ============================================================================
 // ins_left
@@ -555,7 +582,7 @@ unsafe fn ins_ctrl_g_impl() {
         CTRL_G_UP => ins_up_impl(true),
         CTRL_G_DOWN => ins_down_impl(true),
         CTRL_G_U_SYNC => {
-            nvim_edit_ctrl_g_u_sync();
+            ctrl_g_u_sync_impl();
         }
         CTRL_G_NO_SYNC => {
             nvim_set_dont_sync_undo(K_NONE);
@@ -575,21 +602,99 @@ pub unsafe extern "C" fn rs_ins_ctrl_g() {
 }
 
 // ============================================================================
-// ins_shift (Phase 4b - delegated to C helper)
+// ins_ctrl_g 'u' sync (moved from C nvim_edit_ctrl_g_u_sync)
 // ============================================================================
 
-#[unsafe(export_name = "ins_shift")]
-pub unsafe extern "C" fn rs_ins_shift(c: c_int, lastc: c_int) {
-    nvim_edit_ins_shift(c, lastc);
+unsafe fn ctrl_g_u_sync_impl() {
+    u_sync(true);
+    nvim_set_ins_need_undo(1);
+    nvim_set_update_Insstart_orig(0);
+    let lnum = nvim_curwin_get_cursor_lnum();
+    let col = nvim_curwin_get_cursor_col();
+    nvim_set_Insstart(lnum, col);
 }
 
 // ============================================================================
-// ins_del (Phase 4b - delegated to C helper)
+// ins_shift (moved from C nvim_edit_ins_shift)
 // ============================================================================
+
+unsafe fn ins_shift_impl(c: c_int, lastc: c_int) {
+    if stop_arrow() == FAIL {
+        return;
+    }
+    AppendCharToRedobuff(c);
+
+    if c == CTRL_D
+        && (lastc == c_int::from(b'0') || lastc == c_int::from(b'^'))
+        && nvim_curwin_get_cursor_col() > 0
+    {
+        nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
+        del_char(0);
+        if State & REPLACE_FLAG != 0 {
+            replace_pop_ins();
+        }
+        if lastc == c_int::from(b'^') {
+            nvim_set_old_indent(get_indent());
+        }
+        change_indent(INDENT_SET, 0, true, true);
+    } else {
+        change_indent(
+            if c == CTRL_D { INDENT_DEC } else { INDENT_INC },
+            0,
+            true,
+            true,
+        );
+    }
+
+    let line = nvim_get_cursor_line_ptr();
+    let ws = skipwhite(line);
+    if nvim_get_did_ai() && *ws != NUL as c_char {
+        nvim_set_did_ai(false);
+    }
+    nvim_set_did_si(false);
+    nvim_set_can_si(false);
+    nvim_set_can_si_back(false);
+    nvim_set_can_cindent(0);
+}
+
+#[unsafe(export_name = "ins_shift")]
+pub unsafe extern "C" fn rs_ins_shift(c: c_int, lastc: c_int) {
+    ins_shift_impl(c, lastc);
+}
+
+// ============================================================================
+// ins_del (moved from C nvim_edit_ins_del)
+// ============================================================================
+
+unsafe fn ins_del_impl() {
+    if stop_arrow() == FAIL {
+        return;
+    }
+    if nvim_gchar_cursor() == NUL {
+        let temp = nvim_curwin_get_cursor_col();
+        if !can_bs(BS_EOL) || do_join(2, false, true, false, false) == FAIL {
+            vim_beep(BO_FLAG_BACKSPACE as c_uint);
+        } else {
+            nvim_curwin_set_cursor_col(temp);
+            if State & VREPLACE_FLAG != 0
+                && nvim_get_orig_line_count() > nvim_curwin_buf_line_count()
+            {
+                nvim_set_orig_line_count(nvim_curwin_buf_line_count());
+            }
+        }
+    } else if del_char(0) == FAIL {
+        vim_beep(BO_FLAG_BACKSPACE as c_uint);
+    }
+    nvim_set_did_ai(false);
+    nvim_set_did_si(false);
+    nvim_set_can_si(false);
+    nvim_set_can_si_back(false);
+    AppendCharToRedobuff(K_DEL);
+}
 
 #[unsafe(export_name = "ins_del")]
 pub unsafe extern "C" fn rs_ins_del() {
-    nvim_edit_ins_del();
+    ins_del_impl();
 }
 
 // ============================================================================
@@ -602,7 +707,35 @@ extern "C" {
     fn nvim_has_mod_mask_ctrl() -> c_int;
     fn nvim_set_curswant(val: ColnrT);
     fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
-    fn nvim_edit_ctrl_g_u_sync();
+    // New for ctrl_g_u_sync / ins_shift / ins_del
+    fn u_sync(force: bool);
+    fn nvim_set_ins_need_undo(val: c_int);
+    fn nvim_set_update_Insstart_orig(val: c_int);
+    fn nvim_set_Insstart(lnum: LinenrT, col: ColnrT);
+    fn stop_arrow() -> c_int;
+    fn del_char(fixpos: c_int) -> c_int;
+    fn replace_pop_ins();
+    fn nvim_set_old_indent(val: c_int);
+    fn get_indent() -> c_int;
+    fn change_indent(type_: c_int, amount: c_int, round: bool, call_changed_bytes: bool);
+    fn nvim_get_cursor_line_ptr() -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *const c_char;
+    fn nvim_get_did_ai() -> bool;
+    fn nvim_set_did_ai(val: bool);
+    fn nvim_set_did_si(val: bool);
+    fn nvim_set_can_si(val: bool);
+    fn nvim_set_can_si_back(val: bool);
+    fn can_bs(what: c_int) -> bool;
+    fn do_join(
+        count: usize,
+        insert_space: bool,
+        save_undo: bool,
+        use_formatoptions: bool,
+        setmark: bool,
+    ) -> c_int;
+    fn nvim_get_orig_line_count() -> LinenrT;
+    fn nvim_set_orig_line_count(val: LinenrT);
+    fn nvim_curwin_buf_line_count() -> LinenrT;
 }
 
 // ============================================================================
