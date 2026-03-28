@@ -31,15 +31,12 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
-#include "nvim/fuzzy.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/getchar.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/grid.h"
-#include "nvim/hashtab.h"
-#include "nvim/hashtab_defs.h"
 #include "nvim/help.h"
 #include "nvim/highlight.h"
 #include "nvim/highlight_defs.h"
@@ -438,7 +435,6 @@ int nvim_cmdexpand_find_help_tags(const char *pat, int *numMatches, char ***matc
   return 0;
 }
 
-
 int nvim_cmdexpand_expand_old_setting(int *numMatches, char ***matches)
 {
   return ExpandOldSetting(numMatches, matches);
@@ -602,82 +598,6 @@ char *nvim_cmdexpand_show_match(char **matches, int m, int showtail)
 }
 
 int nvim_cmdexpand_compl_use_pum(int need_wildmenu) { return rs_cmdline_compl_use_pum(need_wildmenu); }
-
-/// Do wildcard expansion on the string "str".
-/// Chars that should not be expanded must be preceded with a backslash.
-/// Return a pointer to allocated memory containing the new string.
-/// Return NULL for failure.
-///
-/// "orig" is the originally expanded string, copied to allocated memory.  It
-/// should either be kept in "xp->xp_orig" or freed.  When "mode" is WILD_NEXT
-/// or WILD_PREV "orig" should be NULL.
-///
-/// Results are cached in xp->xp_files and xp->xp_numfiles, except when "mode"
-/// is WILD_EXPAND_FREE or WILD_ALL.
-///
-/// mode = WILD_FREE:        just free previously expanded matches
-/// mode = WILD_EXPAND_FREE: normal expansion, do not keep matches
-/// mode = WILD_EXPAND_KEEP: normal expansion, keep matches
-/// mode = WILD_NEXT:        use next match in multiple match, wrap to first
-/// mode = WILD_PREV:        use previous match in multiple match, wrap to first
-/// mode = WILD_ALL:         return all matches concatenated
-/// mode = WILD_LONGEST:     return longest matched part
-/// mode = WILD_ALL_KEEP:    get all matches, keep matches
-/// mode = WILD_APPLY:       apply the item selected in the cmdline completion
-///                          popup menu and close the menu.
-/// mode = WILD_CANCEL:      cancel and close the cmdline completion popup and
-///                          use the original text.
-/// mode = WILD_PUM_WANT:    use the match at index pum_want.item
-///
-/// options = WILD_LIST_NOTFOUND:    list entries without a match
-/// options = WILD_HOME_REPLACE:     do home_replace() for buffer names
-/// options = WILD_USE_NL:           Use '\n' for WILD_ALL
-/// options = WILD_NO_BEEP:          Don't beep for multiple matches
-/// options = WILD_ADD_SLASH:        add a slash after directory names
-/// options = WILD_KEEP_ALL:         don't remove 'wildignore' entries
-/// options = WILD_SILENT:           don't print warning messages
-/// options = WILD_ESCAPE:           put backslash before special chars
-/// options = WILD_ICASE:            ignore case for files
-///
-/// The variables xp->xp_context and xp->xp_backslash must have been set!
-///
-
-/// Must parse the command line so far to work out what context we are in.
-/// Completion can then be done based on that context.
-/// This routine sets the variables:
-///  xp->xp_pattern          The start of the pattern to be expanded within
-///                              the command line (ends at the cursor).
-///  xp->xp_context          The type of thing to expand.  Will be one of:
-///
-///  EXPAND_UNSUCCESSFUL     Used sometimes when there is something illegal on
-///                          the command line, like an unknown command.  Caller
-///                          should beep.
-///  EXPAND_NOTHING          Unrecognised context for completion, use char like
-///                          a normal char, rather than for completion.  eg
-///                          :s/^I/
-///  EXPAND_COMMANDS         Cursor is still touching the command, so complete
-///                          it.
-///  EXPAND_BUFFERS          Complete file names for :buf and :sbuf commands.
-///  EXPAND_FILES            After command with EX_XFILE set, or after setting
-///                          with kOptFlagExpand set.  eg :e ^I, :w>>^I
-///  EXPAND_DIRECTORIES      In some cases this is used instead of the latter
-///                          when we know only directories are of interest.
-///                          E.g.  :set dir=^I  and  :cd ^I
-///  EXPAND_SHELLCMD         After ":!cmd", ":r !cmd"  or ":w !cmd".
-///  EXPAND_SETTINGS         Complete variable names.  eg :set d^I
-///  EXPAND_BOOL_SETTINGS    Complete boolean variables only,  eg :set no^I
-///  EXPAND_TAGS             Complete tags from the files in p_tags.  eg :ta a^I
-///  EXPAND_TAGS_LISTFILES   As above, but list filenames on ^D, after :tselect
-///  EXPAND_HELP             Complete tags from the file 'helpfile'/tags
-///  EXPAND_EVENTS           Complete event names
-///  EXPAND_SYNTAX           Complete :syntax command arguments
-///  EXPAND_HIGHLIGHT        Complete highlight (syntax) group names
-///  EXPAND_AUGROUP          Complete autocommand group names
-///  EXPAND_USER_VARS        Complete user defined variable names, eg :unlet a^I
-///  EXPAND_MAPPINGS         Complete mapping and abbreviation names,
-///                            eg :unmap a^I , :cunab x^I
-///  EXPAND_FUNCTIONS        Complete internal or user defined function names,
-///                            eg :call sub^I
 
 int nvim_cmdexpand_tv_get_type(typval_T *argvars, int idx) { return (int)argvars[idx].v_type; }
 int nvim_cmdexpand_tv_check_for_string_arg(typval_T *argvars, int idx) { return tv_check_for_string_arg(argvars, idx); }
@@ -878,8 +798,6 @@ static char *get_healthcheck_names(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return NULL;
 }
 
-
-
 /// Call "user_expand_func()" to invoke a user defined Vim script function and
 /// return the result (either a string, a List or NULL).
 static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T *xp)
@@ -920,7 +838,6 @@ static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T
   xfree(pat);
   return ret;
 }
-
 
 // cmdline_del -- used by nvim_cmdexpand_cmdline_del accessor only (kept for now)
 static void cmdline_del(CmdlineInfo *cclp, int from)
