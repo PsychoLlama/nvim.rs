@@ -2124,6 +2124,18 @@ pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
 /// Opaque handle to C's foldinfo_T.
 type FoldinfoHandle = *mut c_void;
 
+/// Local mirror of `foldinfo_T` / `FoldInfoResult` from the fold crate.
+///
+/// `repr(C)` matches fold crate's `FoldInfoResult`.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct FoldInfo {
+    fi_lnum: LinenrT,
+    fi_level: c_int,
+    fi_low_level: c_int,
+    fi_lines: LinenrT,
+}
+
 extern "C" {
     fn nvim_get_conceal_cursor_used() -> c_int;
     fn nvim_set_conceal_cursor_used(val: c_int);
@@ -2136,13 +2148,9 @@ extern "C" {
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
     fn changed_window_setting(wp: WinHandle);
     fn nvim_curs_columns(wp: WinHandle, may_scroll: c_int);
-    fn nvim_fold_info(
-        wp: WinHandle,
-        lnum: LinenrT,
-        out_fi_lnum: *mut LinenrT,
-        out_fi_lines: *mut LinenrT,
-        out_foldinfo: FoldinfoHandle,
-    ) -> c_int;
+    /// Direct Rust entry: foldinfo for a window+lnum.
+    #[link_name = "rs_fold_info"]
+    fn nvim_fold_info_rs(wp: WinHandle, lnum: LinenrT) -> FoldInfo;
     // Already-migrated functions in other crates (now exported with C names)
     #[link_name = "conceal_cursor_line"]
     fn rs_conceal_cursor_line(wp: WinHandle) -> bool;
@@ -2182,7 +2190,7 @@ pub extern "C" fn rs_conceal_check_cursor_line() {
 /// Rust equivalent of `win_update_cursorline()` in drawscreen.c.
 #[unsafe(export_name = "win_update_cursorline")]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, foldinfo: FoldinfoHandle) {
+pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, _foldinfo: FoldinfoHandle) {
     unsafe {
         let cursor_lnum = nvim_win_get_cursor_lnum(wp);
         let cursorline = if rs_win_cursorline_standout(wp) {
@@ -2194,17 +2202,9 @@ pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, foldinfo: FoldinfoHand
 
         if nvim_win_get_w_p_cul(wp) != 0 {
             // Make sure that the cursorline on a closed fold is redrawn
-            let mut fi_lnum: LinenrT = 0;
-            let mut fi_lines: LinenrT = 0;
-            let fi_level = nvim_fold_info(
-                wp,
-                cursor_lnum,
-                &raw mut fi_lnum,
-                &raw mut fi_lines,
-                foldinfo,
-            );
-            if fi_level != 0 && fi_lines > 0 {
-                nvim_win_set_w_cursorline(wp, fi_lnum);
+            let fi = nvim_fold_info_rs(wp, cursor_lnum);
+            if fi.fi_level != 0 && fi.fi_lines > 0 {
+                nvim_win_set_w_cursorline(wp, fi.fi_lnum);
             }
         }
     }
@@ -2889,10 +2889,23 @@ extern "C" {
     fn nvim_curwin_cursor_line_is_nul() -> c_int;
     /// Get VIsual position (lnum, col, coladd) as three i32 values.
     fn nvim_get_VIsual_pos_fields(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
-    /// Batch read curwin's w_stl_* state (14 i32 values).
-    fn nvim_curwin_get_stl_state(out: *mut i32);
-    /// Batch write curwin's w_stl_* state from current window values.
-    fn nvim_curwin_set_stl_state(
+    /// Individual stl snapshot getters.
+    fn nvim_curwin_get_stl_cursor_lnum() -> i32;
+    fn nvim_curwin_get_stl_cursor_col() -> i32;
+    fn nvim_curwin_get_stl_cursor_coladd() -> i32;
+    fn nvim_curwin_get_stl_virtcol() -> i32;
+    fn nvim_curwin_get_stl_topline() -> i32;
+    fn nvim_curwin_get_stl_line_count() -> i32;
+    fn nvim_curwin_get_stl_topfill() -> i32;
+    fn nvim_curwin_get_stl_empty() -> i32;
+    fn nvim_curwin_get_stl_recording() -> i32;
+    fn nvim_curwin_get_stl_state() -> i32;
+    fn nvim_curwin_get_stl_visual_mode() -> i32;
+    fn nvim_curwin_get_stl_vis_lnum() -> i32;
+    fn nvim_curwin_get_stl_vis_col() -> i32;
+    fn nvim_curwin_get_stl_vis_coladd() -> i32;
+    /// Write curwin's w_stl_* state from current window values.
+    fn nvim_curwin_set_stl_from_cursor(
         state: i32,
         empty_line: i32,
         visual_active: i32,
@@ -2935,12 +2948,21 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
 
     nvim_validate_virtcol_curwin();
 
-    // Read the saved stl snapshot (14 i32 values):
-    // [cursor_lnum, cursor_col, cursor_coladd, virtcol, topline,
-    //  line_count, topfill, empty, recording, state, visual_mode,
-    //  vis_pos_lnum, vis_pos_col, vis_pos_coladd]
-    let mut stl = [0i32; 14];
-    nvim_curwin_get_stl_state(stl.as_mut_ptr());
+    // Read the saved stl snapshot (14 individual fields):
+    let stl_cursor_lnum = nvim_curwin_get_stl_cursor_lnum();
+    let stl_cursor_col = nvim_curwin_get_stl_cursor_col();
+    let stl_cursor_coladd = nvim_curwin_get_stl_cursor_coladd();
+    let stl_virtcol = nvim_curwin_get_stl_virtcol();
+    let stl_topline = nvim_curwin_get_stl_topline();
+    let stl_line_count = nvim_curwin_get_stl_line_count();
+    let stl_topfill = nvim_curwin_get_stl_topfill();
+    let stl_empty = nvim_curwin_get_stl_empty();
+    let stl_recording = nvim_curwin_get_stl_recording();
+    let stl_state = nvim_curwin_get_stl_state();
+    let stl_visual_mode = nvim_curwin_get_stl_visual_mode();
+    let stl_vis_lnum = nvim_curwin_get_stl_vis_lnum();
+    let stl_vis_col = nvim_curwin_get_stl_vis_col();
+    let stl_vis_coladd = nvim_curwin_get_stl_vis_coladd();
 
     let vis_active = nvim_VIsual_active() != 0;
     let cur_lnum = nvim_win_get_cursor_lnum(curwin);
@@ -2959,21 +2981,21 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
     }
 
     let changed = force
-        || cur_lnum != stl[0]
-        || cur_col != stl[1]
-        || cur_virtcol != stl[3]
-        || cur_coladd != stl[2]
-        || cur_topline != stl[4]
-        || cur_line_count != stl[5]
-        || cur_topfill != stl[6]
-        || empty_line != stl[7]
-        || reg_recording != stl[8]
-        || state != stl[9]
+        || cur_lnum != stl_cursor_lnum
+        || cur_col != stl_cursor_col
+        || cur_coladd != stl_cursor_coladd
+        || cur_virtcol != stl_virtcol
+        || cur_topline != stl_topline
+        || cur_line_count != stl_line_count
+        || cur_topfill != stl_topfill
+        || empty_line != stl_empty
+        || reg_recording != stl_recording
+        || state != stl_state
         || (vis_active
-            && (VIsual_mode != stl[10]
-                || vis_lnum != stl[11]
-                || vis_col != stl[12]
-                || vis_coladd != stl[13]));
+            && (VIsual_mode != stl_visual_mode
+                || vis_lnum != stl_vis_lnum
+                || vis_col != stl_vis_col
+                || vis_coladd != stl_vis_coladd));
 
     if changed {
         if nvim_win_get_status_height(curwin) != 0 || global_stl_height() != 0 {
@@ -2987,7 +3009,7 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
         rs_redraw_custom_title_later();
     }
 
-    nvim_curwin_set_stl_state(
+    nvim_curwin_set_stl_from_cursor(
         state,
         empty_line,
         c_int::from(vis_active),

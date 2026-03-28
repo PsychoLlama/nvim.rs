@@ -501,16 +501,6 @@ int nvim_buf_get_mod_set(buf_T *buf) { return buf ? buf->b_mod_set : 0; }
 void nvim_buf_set_mod_set(buf_T *buf, int val) { if (buf) { buf->b_mod_set = (val != 0); } }
 int nvim_win_get_old_visual_mode(win_T *wp) { return wp ? wp->w_old_visual_mode : 0; }
 int nvim_redrawing(void) { return redrawing() ? 1 : 0; }
-extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
-int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *out_fi_lines,
-                   foldinfo_T *out_foldinfo)
-{
-  foldinfo_T fi = rs_fold_info(wp, lnum);
-  if (out_foldinfo) { *out_foldinfo = fi; }
-  if (out_fi_lnum) { *out_fi_lnum = fi.fi_lnum; }
-  if (out_fi_lines) { *out_fi_lines = fi.fi_lines; }
-  return fi.fi_level;
-}
 int nvim_win_rl_cursor_col(win_T *wp)
 {
   if (!wp) { return 0; }
@@ -569,42 +559,24 @@ colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
 int nvim_curwin_cursor_line_is_nul(void) { return *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL ? 1 : 0; }
 void nvim_get_VIsual_pos_fields(int32_t *lnum, int32_t *col, int32_t *coladd) { *lnum = (int32_t)VIsual.lnum; *col = (int32_t)VIsual.col; *coladd = (int32_t)VIsual.coladd; }
-void nvim_curwin_get_stl_state(int32_t *out)
-{
-  out[0]  = (int32_t)curwin->w_stl_cursor.lnum;
-  out[1]  = (int32_t)curwin->w_stl_cursor.col;
-  out[2]  = (int32_t)curwin->w_stl_cursor.coladd;
-  out[3]  = (int32_t)curwin->w_stl_virtcol;
-  out[4]  = (int32_t)curwin->w_stl_topline;
-  out[5]  = (int32_t)curwin->w_stl_line_count;
-  out[6]  = (int32_t)curwin->w_stl_topfill;
-  out[7]  = (int32_t)curwin->w_stl_empty;
-  out[8]  = (int32_t)curwin->w_stl_recording;
-  out[9]  = (int32_t)curwin->w_stl_state;
-  out[10] = (int32_t)curwin->w_stl_visual_mode;
-  out[11] = (int32_t)curwin->w_stl_visual_pos.lnum;
-  out[12] = (int32_t)curwin->w_stl_visual_pos.col;
-  out[13] = (int32_t)curwin->w_stl_visual_pos.coladd;
-}
-void nvim_curwin_set_stl_state(int32_t state, int32_t empty_line,
-                               int32_t visual_active, int32_t visual_mode,
-                               int32_t vis_lnum, int32_t vis_col, int32_t vis_coladd)
-{
-  curwin->w_stl_cursor      = curwin->w_cursor;
-  curwin->w_stl_virtcol     = curwin->w_virtcol;
-  curwin->w_stl_empty       = (char)empty_line;
-  curwin->w_stl_topline     = curwin->w_topline;
-  curwin->w_stl_line_count  = curwin->w_buffer->b_ml.ml_line_count;
-  curwin->w_stl_topfill     = curwin->w_topfill;
-  curwin->w_stl_recording   = reg_recording;
-  curwin->w_stl_state       = state;
-  if (visual_active) {
-    curwin->w_stl_visual_mode       = visual_mode;
-    curwin->w_stl_visual_pos.lnum   = (linenr_T)vis_lnum;
-    curwin->w_stl_visual_pos.col    = (colnr_T)vis_col;
-    curwin->w_stl_visual_pos.coladd = (colnr_T)vis_coladd;
-  }
-}
+int32_t nvim_curwin_get_stl_cursor_lnum(void) { return (int32_t)curwin->w_stl_cursor.lnum; }
+int32_t nvim_curwin_get_stl_cursor_col(void) { return (int32_t)curwin->w_stl_cursor.col; }
+int32_t nvim_curwin_get_stl_cursor_coladd(void) { return (int32_t)curwin->w_stl_cursor.coladd; }
+int32_t nvim_curwin_get_stl_virtcol(void) { return (int32_t)curwin->w_stl_virtcol; }
+int32_t nvim_curwin_get_stl_topline(void) { return (int32_t)curwin->w_stl_topline; }
+int32_t nvim_curwin_get_stl_line_count(void) { return (int32_t)curwin->w_stl_line_count; }
+int32_t nvim_curwin_get_stl_topfill(void) { return (int32_t)curwin->w_stl_topfill; }
+int32_t nvim_curwin_get_stl_empty(void) { return (int32_t)curwin->w_stl_empty; }
+int32_t nvim_curwin_get_stl_recording(void) { return (int32_t)curwin->w_stl_recording; }
+int32_t nvim_curwin_get_stl_state(void) { return (int32_t)curwin->w_stl_state; }
+int32_t nvim_curwin_get_stl_visual_mode(void) { return (int32_t)curwin->w_stl_visual_mode; }
+int32_t nvim_curwin_get_stl_vis_lnum(void) { return (int32_t)curwin->w_stl_visual_pos.lnum; }
+int32_t nvim_curwin_get_stl_vis_col(void) { return (int32_t)curwin->w_stl_visual_pos.col; }
+int32_t nvim_curwin_get_stl_vis_coladd(void) { return (int32_t)curwin->w_stl_visual_pos.coladd; }
+void nvim_curwin_set_stl_from_cursor(int32_t state, int32_t empty_line,
+                                     int32_t visual_active, int32_t visual_mode,
+                                     int32_t vis_lnum, int32_t vis_col, int32_t vis_coladd)
+{ curwin->w_stl_cursor = curwin->w_cursor; curwin->w_stl_virtcol = curwin->w_virtcol; curwin->w_stl_empty = (char)empty_line; curwin->w_stl_topline = curwin->w_topline; curwin->w_stl_line_count = curwin->w_buffer->b_ml.ml_line_count; curwin->w_stl_topfill = curwin->w_topfill; curwin->w_stl_recording = reg_recording; curwin->w_stl_state = state; if (visual_active) { curwin->w_stl_visual_mode = visual_mode; curwin->w_stl_visual_pos.lnum = (linenr_T)vis_lnum; curwin->w_stl_visual_pos.col = (colnr_T)vis_col; curwin->w_stl_visual_pos.coladd = (colnr_T)vis_coladd; } }
 char *nvim_get_empty_string_option(void) { return empty_string_option; }
 int nvim_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp) { return hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) ? 1 : 0; }
 linenr_T nvim_curwin_get_topline(void) { return curwin->w_topline; }
