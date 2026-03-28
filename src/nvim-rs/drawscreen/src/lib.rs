@@ -2061,7 +2061,7 @@ pub extern "C" fn rs_unshowmode(force: bool) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_check_ns_hl(wp: WinHandle);
+    fn nvim_win_check_ns_hl(wp: WinHandle) -> bool;
     fn nvim_win_redr_winbar(wp: WinHandle);
     fn nvim_win_redr_status(wp: WinHandle);
     fn nvim_draw_tabline();
@@ -2865,17 +2865,228 @@ pub unsafe extern "C" fn rs_win_update_visual_region(
 // =============================================================================
 
 extern "C" {
-    /// Full update_screen implementation in C (batch helper in drawscreen_shim.c).
-    fn nvim_update_screen_impl() -> c_int;
+    /// Check if default_grid.chars is non-NULL.
+    fn nvim_default_grid_has_chars() -> bool;
+    /// Check if default_grid.valid is set.
+    fn nvim_default_grid_is_valid() -> bool;
+    /// Set default_grid.valid.
+    fn nvim_default_grid_set_valid(val: bool);
+    /// Invalidate default_grid via grid_invalidate.
+    fn nvim_default_grid_invalidate();
+
+    /// Handle msg_scrolled / msg_grid_invalid block (lines 608-650 of nvim_update_screen_impl).
+    fn nvim_update_screen_msg_scroll(type_: c_int, is_stl_global: c_int) -> c_int;
+    /// Handle curwin nrwidth check and tabline redraw (lines 691-709).
+    fn nvim_update_screen_nrwidth_check(type_: c_int);
+    /// Handle the three window loops (lines 711-771).
+    fn nvim_update_screen_win_loop(type_: c_int, hl_changed: c_int);
+
+    /// resizing_autocmd: true during screen resize autocmds.
+    static mut resizing_autocmd: bool;
+    /// redraw_popupmenu: true when the popupmenu needs redraw.
+    static mut redraw_popupmenu: bool;
+    /// msg_grid_invalid: true when msg_grid needs revalidation.
+    static mut msg_grid_invalid: bool;
+
+    /// display_tick: incremented each time the screen is updated.
+    static mut display_tick: u32;
+    /// need_diff_redraw: diff redraw pending.
+    static mut need_diff_redraw: bool;
+    /// msg_did_scroll: set when message caused scrolling.
+    static mut msg_did_scroll: bool;
+    /// msg_scrolled_at_flush: saved msg_scrolled at last flush.
+    static mut msg_scrolled_at_flush: c_int;
+    /// need_highlight_changed: highlight groups changed.
+    static mut need_highlight_changed: bool;
+    /// must_redraw_pum: popupmenu must be redrawn.
+    static mut must_redraw_pum: bool;
+    /// cmdline_was_last_drawn: cmdline was last thing drawn.
+    static mut cmdline_was_last_drawn: bool;
+
+    /// Clear schar cache if full; returns true if cleared.
+    fn schar_cache_clear_if_full() -> bool;
+    /// Show intro message or return false if conditions not met.
+    fn may_show_intro() -> bool;
+    /// Redraw diffs.
+    fn diff_redraw(check: bool);
+    /// Called after screenclear when cmdline is cleared.
+    fn cmdline_screen_cleared();
+    /// UI clear message area.
+    fn ui_call_msg_clear();
+    /// Start decoration providers.
+    fn decor_providers_start();
+    /// End decoration providers.
+    fn decor_providers_invoke_end();
+    /// Flush window UI.
+    fn win_ui_flush(validate: bool);
+    /// Recompute cmdrow.
+    fn compute_cmdrow();
+    /// Apply pending highlight changes.
+    fn highlight_changed();
+    /// Update curswant after visual mode change.
+    fn update_curswant();
+    /// Show intro message.
+    fn intro_message(when_starting: bool);
+    /// Repeat last message.
+    fn repeat_message();
+    /// Call maketitle.
+    fn maketitle();
+    /// Check if kUICmdline is active; returns redraw_cmdline value.
+    fn nvim_get_redraw_cmdline() -> c_int;
+    /// Set screen valid/invalid for compositing.
+    fn ui_comp_set_screen_valid(valid: bool) -> bool;
+    /// Clear a region of the default grid.
+    fn grid_clear(
+        view: GridViewHandle,
+        start_row: c_int,
+        end_row: c_int,
+        start_col: c_int,
+        end_col: c_int,
+        attr: c_int,
+    );
 }
+
+/// C OK/FAIL return values.
+const OK: c_int = 0;
+const FAIL: c_int = 1;
+
+/// kUIMessages UI extension constant.
+const K_UI_CMDLINE: c_int = 3;
 
 /// Main screen update orchestrator.
 ///
-/// Calls the C implementation which handles all grid, window, and provider logic.
+/// Replaces `nvim_update_screen_impl()` which has been removed from drawscreen.c.
+/// Contains full orchestration logic; struct-heavy sections are delegated to
+/// C behavioral helpers in drawscreen_shim.c.
+///
 /// Rust equivalent of `update_screen()` in drawscreen.c.
 #[no_mangle]
 pub unsafe extern "C" fn rs_update_screen() -> c_int {
-    nvim_update_screen_impl()
+    // Static: tracks whether intro has been shown.
+    static STILL_MAY_INTRO: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(true);
+
+    use std::sync::atomic::Ordering;
+
+    if STILL_MAY_INTRO.load(Ordering::Relaxed) && !may_show_intro() {
+        redraw_later(nvim_get_firstwin(), UPD_NOT_VALID);
+        STILL_MAY_INTRO.store(false, Ordering::Relaxed);
+    }
+
+    let is_stl_global = c_int::from(global_stl_height() != 0);
+
+    // Don't do anything if the screen structures are (not yet) valid.
+    if resizing_autocmd || !nvim_default_grid_has_chars() {
+        return FAIL;
+    }
+
+    // May have postponed updating diffs.
+    if need_diff_redraw {
+        diff_redraw(true);
+    }
+
+    // Postpone redrawing when not needed or called recursively.
+    if !redrawing_impl() || updating_screen || rs_cmdline_number_prompt() != 0 {
+        return FAIL;
+    }
+
+    let mut type_ = must_redraw;
+    must_redraw = 0;
+    updating_screen = true;
+
+    display_tick += 1;
+
+    if schar_cache_clear_if_full() {
+        type_ = type_.max(UPD_CLEAR);
+    }
+
+    if msg_did_scroll {
+        msg_did_scroll = false;
+        msg_scrolled_at_flush = 0;
+    }
+
+    if type_ >= UPD_CLEAR || !nvim_default_grid_is_valid() {
+        ui_comp_set_screen_valid(false);
+    }
+
+    // Handle msg_scrolled / msg_grid_invalid block (struct-heavy, delegated to C).
+    type_ = nvim_update_screen_msg_scroll(type_, is_stl_global);
+
+    win_ui_flush(true);
+    compute_cmdrow();
+
+    let hl_changed: c_int = if need_highlight_changed {
+        highlight_changed();
+        1
+    } else {
+        0
+    };
+
+    if type_ == UPD_CLEAR {
+        rs_screenclear();
+        cmdline_screen_cleared();
+        if ui_has(K_UI_MESSAGES) {
+            ui_call_msg_clear();
+        }
+        type_ = UPD_NOT_VALID;
+        must_redraw = 0;
+    } else if !nvim_default_grid_is_valid() {
+        nvim_default_grid_invalidate();
+        nvim_default_grid_set_valid(true);
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    if type_ == UPD_NOT_VALID && nvim_get_clear_cmdline() && !ui_has(K_UI_MESSAGES) {
+        grid_clear(
+            nvim_get_default_gridview(),
+            Rows - p_ch as c_int,
+            Rows,
+            0,
+            Columns,
+            0,
+        );
+    }
+
+    ui_comp_set_screen_valid(true);
+
+    decor_providers_start();
+
+    if nvim_win_check_ns_hl(WinHandle::null()) {
+        nvim_set_redraw_cmdline(true);
+        redraw_tabline = true;
+    }
+
+    if nvim_get_clear_cmdline() {
+        msg_check_for_delay(c_int::from(false));
+    }
+
+    // Handle nrwidth check and tabline (struct-heavy, delegated to C).
+    nvim_update_screen_nrwidth_check(type_);
+
+    // Handle the three window loops (struct-heavy, delegated to C).
+    nvim_update_screen_win_loop(type_, hl_changed);
+
+    updating_screen = false;
+
+    if need_maketitle {
+        maketitle();
+    }
+
+    if nvim_get_clear_cmdline() || nvim_get_redraw_cmdline() != 0 || redraw_mode != 0 {
+        rs_showmode();
+    }
+
+    if STILL_MAY_INTRO.load(Ordering::Relaxed) {
+        intro_message(false);
+    }
+    repeat_message();
+
+    decor_providers_invoke_end();
+
+    if !ui_has(K_UI_CMDLINE) {
+        cmdline_was_last_drawn = false;
+    }
+    OK
 }
 
 // =============================================================================
