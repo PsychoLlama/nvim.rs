@@ -1,14 +1,10 @@
 // edit_shim.c: Rust FFI accessors for edit crate.
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
 #include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
-#include "nvim/buffer_defs.h"
 #include "nvim/change.h"
 #include "nvim/charset.h"
 #include "nvim/cursor.h"
@@ -25,7 +21,6 @@
 #include "nvim/keycodes.h"
 #include "nvim/mapping.h"
 #include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
@@ -35,27 +30,16 @@
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
 #include "nvim/register.h"
-#include "nvim/register_defs.h"
 #include "nvim/state.h"
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
 #include "nvim/textformat.h"
-#include "nvim/types_defs.h"
 #include "nvim/ui.h"
-#include "nvim/ui_defs.h"
-#include "nvim/vim_defs.h"
-
 #include "edit_shim.c.generated.h"
-
-// General cpo/cmdmod accessors (migrated from ex_cmds_shim.c)
 bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
 bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
 bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
-// Insert mode command/cmdline accessor (migrated from ex_cmds_shim.c)
 void nvim_do_cmdline_getcmdkeycmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
-
-// Multi-line insert-mode helpers (migrated from normal_shim.c)
-
 void nvim_ins_insert(int replaceState)
 {
   set_vim_var_string(VV_INSERTMODE, ((State & REPLACE_FLAG)
@@ -72,7 +56,6 @@ void nvim_ins_insert(int replaceState)
   showmode();
   ui_cursor_shape();
 }
-
 void nvim_ins_ctrl_o(void)
 {
   restart_VIsual_select = 0;
@@ -89,7 +72,6 @@ void nvim_ins_ctrl_o(void)
     ins_at_eol = (gchar_cursor() == NUL);
   }
 }
-
 void nvim_ins_ctrl_hat(void)
 {
   if (map_to_exists_mode("", MODE_LANGMAP, false)) {
@@ -105,7 +87,6 @@ void nvim_ins_ctrl_hat(void)
   showmode();
   status_redraw_curbuf();
 }
-
 void nvim_init_Insstart(int startln)
 {
   if (where_paste_started.lnum != 0) {
@@ -117,7 +98,6 @@ void nvim_init_Insstart(int startln)
     }
   }
 }
-
 int nvim_get_inserted_size(void)
 {
   String inserted = get_inserted();
@@ -127,7 +107,6 @@ int nvim_get_inserted_size(void)
   }
   return sz;
 }
-
 extern int rs_get_scrolloff_value(win_T *wp);
 int nvim_insert_check_scroll(int mincol, linenr_T old_topline, int old_topfill,
                               int did_backspace, int count)
@@ -155,7 +134,6 @@ int nvim_insert_check_scroll(int mincol, linenr_T old_topline, int old_topfill,
   }
   return new_mincol;
 }
-
 int nvim_ins_copychar(linenr_T lnum)
 {
   if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
@@ -182,7 +160,6 @@ int nvim_ins_copychar(linenr_T lnum)
   }
   return c;
 }
-
 extern void rs_start_selection(void);
 int nvim_ins_start_select(int c)
 {
@@ -218,7 +195,6 @@ int nvim_ins_start_select(int c)
   }
   return 0;
 }
-
 void nvim_handle_end_comment_pending(int c)
 {
   char *p;
@@ -249,13 +225,9 @@ void nvim_handle_end_comment_pending(int c)
     }
   }
 }
-
-// One-liner accessors for edit crate (migrated from normal_shim.c)
-
 extern int rs_ins_compl_col(void);
 extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
 extern void nvim_set_o_lnum(linenr_T val);
-
 int nvim_merge_modifiers(int c) { return merge_modifiers(c, &mod_mask); }
 int nvim_MB_BYTE2LEN_CHECK(int c) { return MB_BYTE2LEN_CHECK(c); }
 int nvim_get_K_ZERO(void) { return K_ZERO; }
