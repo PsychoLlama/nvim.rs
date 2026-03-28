@@ -120,18 +120,7 @@ linenr_T nvim_get_line_count(void) { return curbuf->b_ml.ml_line_count; }
 linenr_T nvim_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 void nvim_set_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
 bool nvim_get_KeyTyped(void) { return KeyTyped; }
-unsigned int nvim_get_fdo_flags(void)
-{
-  _Static_assert(kOptFdoFlagHor == 0x04,
-                 "kOptFdoFlagHor changed - update K_OPT_FDO_FLAG_HOR in normal/src/lib.rs");
-  _Static_assert(kOptFdoFlagBlock == 0x02,
-                 "kOptFdoFlagBlock changed - update K_OPT_FDO_FLAG_BLOCK in normal/src/lib.rs");
-  _Static_assert(kOptFdoFlagJump == 0x400,
-                 "kOptFdoFlagJump changed - update K_OPT_FDO_FLAG_JUMP in normal/src/lib.rs");
-  _Static_assert(kOptFdoFlagMark == 0x08,
-                 "kOptFdoFlagMark changed - update K_OPT_FDO_FLAG_MARK in normal/src/lib.rs");
-  return fdo_flags;
-}
+unsigned int nvim_get_fdo_flags(void) { return fdo_flags; }
 void nvim_set_ins_at_eol(bool val) { ins_at_eol = val; }
 void nvim_set_curswant(colnr_T val) { curwin->w_curswant = val; }
 bool nvim_virtual_active(void) { return virtual_active(curwin); }
@@ -290,6 +279,10 @@ bool nvim_vim_strchr_p_cpo(int c) { return vim_strchr(p_cpo, c) != NULL; }
 int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
 
 // Layout guards for repr(C) struct mirrors in src/nvim-rs/normal/src/types.rs
+_Static_assert(kOptFdoFlagHor == 0x04, "kOptFdoFlagHor changed - update K_OPT_FDO_FLAG_HOR in normal/src/lib.rs");
+_Static_assert(kOptFdoFlagBlock == 0x02, "kOptFdoFlagBlock changed - update K_OPT_FDO_FLAG_BLOCK in normal/src/lib.rs");
+_Static_assert(kOptFdoFlagJump == 0x400, "kOptFdoFlagJump changed - update K_OPT_FDO_FLAG_JUMP in normal/src/lib.rs");
+_Static_assert(kOptFdoFlagMark == 0x08, "kOptFdoFlagMark changed - update K_OPT_FDO_FLAG_MARK in normal/src/lib.rs");
 _Static_assert(sizeof(pos_T) == 12, "pos_T size changed");
 _Static_assert(offsetof(pos_T, lnum) == 0, "pos_T.lnum offset changed");
 _Static_assert(offsetof(pos_T, col) == 4, "pos_T.col offset changed");
