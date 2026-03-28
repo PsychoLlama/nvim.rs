@@ -112,7 +112,6 @@ extern "C" {
 
     // repeat_cmdline / repeat_luaref
     fn nvim_get_repeat_luaref() -> c_int;
-    fn nvim_dpo_append_repeat_cmdline_to_redo(is_colon: c_int);
 
     // restart_edit
     static mut restart_edit: c_int;
@@ -226,9 +225,13 @@ extern "C" {
         cmd5: c_int,
     );
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
+    fn AppendToRedobuffSpec(s: *const c_char);
     fn AppendToRedobuff(s: *const c_char);
     fn AppendNumberToRedobuff(n: c_int);
+    fn ResetRedobuff();
     fn CancelRedo();
+    fn xfree(ptr: *mut c_void);
+    static mut repeat_cmdline: *mut c_char;
 
     // rs_* Rust helpers already implemented in Rust
     fn rs_restore_visual_mode();
@@ -475,7 +478,18 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
             }
             AppendToRedobuff(NL_STR.as_ptr().cast::<c_char>());
         } else if is_ex_cmdchar(cap) {
-            nvim_dpo_append_repeat_cmdline_to_redo(c_int::from(cmdchar == c_int::from(b':')));
+            if repeat_cmdline.is_null() {
+                ResetRedobuff();
+            } else {
+                if cmdchar == c_int::from(b':') {
+                    AppendToRedobuffLit(repeat_cmdline, -1);
+                } else {
+                    AppendToRedobuffSpec(repeat_cmdline);
+                }
+                AppendToRedobuff(NL_STR.as_ptr().cast::<c_char>());
+                xfree(repeat_cmdline.cast::<c_void>());
+                repeat_cmdline = std::ptr::null_mut();
+            }
         } else if cmdchar == K_LUA {
             AppendNumberToRedobuff(nvim_get_repeat_luaref());
             AppendToRedobuff(NL_STR.as_ptr().cast::<c_char>());

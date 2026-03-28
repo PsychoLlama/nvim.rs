@@ -16,7 +16,6 @@
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_eval.h"
 #include "nvim/ex_getln.h"
-#include "nvim/file_search.h"
 #include "nvim/fold.h"
 #include "nvim/getchar.h"
 #include "nvim/globals.h"
@@ -440,18 +439,6 @@ void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
   curbuf = old_curbuf_buf;
 }
 
-cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
-{
-  static oparg_T oa;
-  static cmdarg_T ca;
-  clear_oparg(&oa);
-  CLEAR_FIELD(ca);
-  ca.oap = &oa;
-  ca.cmdchar = c1;
-  ca.nchar = c2;
-  return &ca;
-}
-
 void normal_cmd(oparg_T *oap, bool toplevel)
 {
   NormalState s;
@@ -469,16 +456,6 @@ char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
 bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) { return do_cmdline(NULL, is_cmdkey ? getcmdkeycmd : getexline, NULL, cap->oap->op_type != OP_NOP ? DOCMD_KEEPLINE : 0); }
 int nvim_did_emsg_check(void) { return did_emsg; }
 bool nvim_search_hls_needs_redraw(int prev_lnum, int prev_col, int prev_coladd) { pos_T prev = { .lnum = prev_lnum, .col = (colnr_T)prev_col, .coladd = (colnr_T)prev_coladd }; return !equalpos(curwin->w_cursor, prev) && p_hls && !no_hlsearch && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L); }
-
-char *nvim_grab_file_name(int count1, int *lnum_out)
-{
-  linenr_T lnum = -1;
-  char *result = grab_file_name(count1, &lnum);
-  if (lnum_out != NULL) {
-    *lnum_out = (int)lnum;
-  }
-  return result;
-}
 
 int nvim_do_ecmd_for_gotofile(char *ptr) { return do_ecmd(0, ptr, NULL, NULL, ECMD_LAST, buf_hide(curbuf) ? ECMD_HIDE : 0, curwin); }
 char *nvim_ml_get_pos_visual(void) { return ml_get_pos(&VIsual); }
@@ -507,21 +484,6 @@ void nvim_oap_set_start_from_VIsual(oparg_T *oap) { if (oap) { oap->start = VIsu
 void nvim_oap_start_zero_col_if_linewise(oparg_T *oap) { if (oap && VIsual_mode == 'V') { oap->start.col = 0; oap->start.coladd = 0; } }
 void nvim_VIsual_set_from_oap_start(oparg_T *oap) { if (oap) { VIsual = oap->start; } }
 void nvim_dpo_save_visual_state(void) { curbuf->b_visual.vi_start = VIsual; curbuf->b_visual.vi_end = curwin->w_cursor; curbuf->b_visual.vi_mode = VIsual_mode; curbuf->b_visual.vi_curswant = curwin->w_curswant; curbuf->b_visual_mode_eval = VIsual_mode; }
-
-void nvim_dpo_append_repeat_cmdline_to_redo(int is_colon)
-{
-  if (repeat_cmdline != NULL) {
-    if (is_colon) {
-      AppendToRedobuffLit(repeat_cmdline, -1);
-    } else {
-      AppendToRedobuffSpec(repeat_cmdline);
-    }
-    AppendToRedobuff(NL_STR);
-    XFREE_CLEAR(repeat_cmdline);
-  } else {
-    ResetRedobuff();
-  }
-}
 
 bool nvim_oap_end_is_NUL(oparg_T *oap) { return oap ? (*ml_get_pos(&oap->end) == NUL) : false; }
 bool nvim_p_sel_is_old(void) { return *p_sel == 'o'; }

@@ -10,7 +10,9 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
 #![allow(dead_code)]
+#![allow(static_mut_refs)]
 
+use crate::types::{CmdargT, OpargT};
 use crate::CapHandle;
 use std::ffi::c_int;
 
@@ -21,9 +23,20 @@ use std::ffi::c_int;
 extern "C" {
     // Utility functions
     fn beep_flush();
+}
 
-    // do_nv_ident accessor
-    fn nvim_create_temp_cap_for_ident(c1: c_int, c2: c_int) -> CapHandle;
+static mut IDENT_OA: OpargT = unsafe { std::mem::zeroed() };
+static mut IDENT_CA: CmdargT = unsafe { std::mem::zeroed() };
+
+/// Create a temporary cap for identifier operations backed by function-static storage.
+/// Safe for single-threaded nvim.
+unsafe fn create_temp_cap_for_ident(c1: c_int, c2: c_int) -> CapHandle {
+    IDENT_OA.clear();
+    IDENT_CA = std::mem::zeroed();
+    IDENT_CA.oap = &raw mut IDENT_OA;
+    IDENT_CA.cmdchar = c1;
+    IDENT_CA.nchar = c2;
+    &raw mut IDENT_CA
 }
 
 // =============================================================================
@@ -614,7 +627,7 @@ pub extern "C" fn rs_parse_bracket_command(nchar: c_int) -> c_int {
 /// for single-threaded nvim).
 #[export_name = "do_nv_ident"]
 pub unsafe extern "C" fn rs_do_nv_ident(c1: c_int, c2: c_int) {
-    let cap = nvim_create_temp_cap_for_ident(c1, c2);
+    let cap = create_temp_cap_for_ident(c1, c2);
     crate::rs_nv_ident(cap);
 }
 

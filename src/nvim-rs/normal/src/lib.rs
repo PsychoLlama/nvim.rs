@@ -7538,7 +7538,7 @@ extern "C" {
     fn nvim_search_hls_needs_redraw(prev_lnum: c_int, prev_col: c_int, prev_coladd: c_int) -> bool;
 
     // Phase 2: nv_gotofile accessors
-    fn nvim_grab_file_name(count1: c_int, lnum_out: *mut c_int) -> *mut std::ffi::c_char;
+    fn grab_file_name(count: c_int, file_lnum: *mut c_int) -> *mut std::ffi::c_char;
     fn curbufIsChanged() -> bool;
     fn autowrite(buf: *mut std::ffi::c_void, forceit: bool) -> c_int;
     static mut curbuf: *mut std::ffi::c_void;
@@ -7707,7 +7707,7 @@ pub unsafe fn rs_nv_gotofile(cap: CapHandle) {
 
     let count1 = (*cap).count1;
     let mut lnum: c_int = -1;
-    let ptr = nvim_grab_file_name(count1, &raw mut lnum);
+    let ptr = grab_file_name(count1, &raw mut lnum);
 
     if ptr.is_null() {
         rs_clearop(oap);

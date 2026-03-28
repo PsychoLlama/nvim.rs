@@ -153,8 +153,8 @@ extern "C" {
     fn nvim_do_window_g_external(); // window_shim.c
 
     // --- Phase 10: goto_file, find_in_path, g_external accessors ---
-    /// grab_file_name(count1, &lnum): returns owned char*, sets *lnum_out (as int).
-    fn nvim_grab_file_name(count1: c_int, lnum_out: *mut c_int) -> *mut c_char;
+    /// grab_file_name(count, &file_lnum): returns owned char*, sets *file_lnum.
+    fn grab_file_name(count: c_int, file_lnum: *mut c_int) -> *mut c_char;
     /// buflist_findname_exp wrapper.
     fn nvim_buflist_findname_exp(ptr: *const c_char) -> BufHandle;
     /// setpcmark() wrapper.
@@ -380,7 +380,7 @@ unsafe fn do_window_goto_file(nchar: c_int, prenum1: c_int) {
     }
 
     let mut lnum: c_int = -1;
-    let ptr = nvim_grab_file_name(prenum1, std::ptr::addr_of_mut!(lnum));
+    let ptr = grab_file_name(prenum1, std::ptr::addr_of_mut!(lnum));
     if ptr.is_null() {
         return;
     }
