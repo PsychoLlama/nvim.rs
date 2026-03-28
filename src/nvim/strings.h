@@ -59,6 +59,11 @@ char *strrep(const char *src, const char *what, const char *rep);
 char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newline)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
 
+// Rust-implemented printf helpers
+int rs_format_typeof(const char *type_spec);
+char *rs_format_typename(const char *type_spec);
+const char *rs_infinity_str(bool positive, char fmt_spec, int force_sign, int space_for_positive);
+
 // Rust-implemented keyvalue comparators (exported via #[export_name])
 int cmp_keyvalue_value(const void *a, const void *b);
 int cmp_keyvalue_value_n(const void *a, const void *b);

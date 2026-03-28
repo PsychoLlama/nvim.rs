@@ -23,6 +23,7 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::items_after_statements)]
 
+pub mod printf;
 pub mod viml;
 
 use std::ffi::{c_char, c_int};

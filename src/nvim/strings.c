@@ -52,21 +52,6 @@ static const char e_invalid_format_specifier_str[]
 static const char e_aptypes_is_null_nr_str[]
   = "E1507: Internal error: ap_types or ap_types[idx] is NULL: %d: %s";
 
-static const char typename_unknown[] = N_("unknown");
-static const char typename_int[] = N_("int");
-static const char typename_longint[] = N_("long int");
-static const char typename_longlongint[] = N_("long long int");
-static const char typename_signedsizet[] = N_("signed size_t");
-static const char typename_unsignedint[] = N_("unsigned int");
-static const char typename_unsignedlongint[] = N_("unsigned long int");
-static const char typename_unsignedlonglongint[] = N_("unsigned long long int");
-static const char typename_sizet[] = N_("size_t");
-static const char typename_pointer[] = N_("pointer");
-static const char typename_percent[] = N_("percent");
-static const char typename_char[] = N_("char");
-static const char typename_string[] = N_("string");
-static const char typename_float[] = N_("float");
-
 
 
 
@@ -274,22 +259,6 @@ int vim_snprintf(char *str, size_t str_m, const char *fmt, ...)
   return str_l;
 }
 
-// Return the representation of infinity for printf() function:
-// "-inf", "inf", "+inf", " inf", "-INF", "INF", "+INF" or " INF".
-static const char *infinity_str(bool positive, char fmt_spec, int force_sign,
-                                int space_for_positive)
-{
-  static const char *table[] = {
-    "-inf", "inf", "+inf", " inf",
-    "-INF", "INF", "+INF", " INF"
-  };
-  int idx = positive * (1 + force_sign + force_sign * space_for_positive);
-  if (ASCII_ISUPPER(fmt_spec)) {
-    idx += 4;
-  }
-  return table[idx];
-}
-
 /// Like vim_snprintf() except the return value can be safely used to increment a
 /// buffer length.
 /// Normal `snprintf()` (and `vim_snprintf()`) returns the number of bytes that
@@ -328,6 +297,7 @@ int rs_vim_snprintf(char *str, size_t str_m, const char *fmt, ...)
   return str_l;
 }
 
+// TYPE_* constants for skip_to_arg -- values must match rs_format_typeof return values
 enum {
   TYPE_UNKNOWN = -1,
   TYPE_INT,
@@ -344,156 +314,6 @@ enum {
   TYPE_STRING,
   TYPE_FLOAT,
 };
-
-/// Types that can be used in a format string
-static int format_typeof(const char *type)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // allowed values: \0, h, l, L
-  char length_modifier = NUL;
-
-  // current conversion specifier character
-  char fmt_spec = NUL;
-
-  // parse 'h', 'l', 'll' and 'z' length modifiers
-  if (*type == 'h' || *type == 'l' || *type == 'z') {
-    length_modifier = *type;
-    type++;
-    if (length_modifier == 'l' && *type == 'l') {
-      // double l = long long
-      length_modifier = 'L';
-      type++;
-    }
-  }
-  fmt_spec = *type;
-
-  // common synonyms:
-  switch (fmt_spec) {
-  case 'i':
-    fmt_spec = 'd'; break;
-  case '*':
-    fmt_spec = 'd'; length_modifier = 'h'; break;
-  case 'D':
-    fmt_spec = 'd'; length_modifier = 'l'; break;
-  case 'U':
-    fmt_spec = 'u'; length_modifier = 'l'; break;
-  case 'O':
-    fmt_spec = 'o'; length_modifier = 'l'; break;
-  default:
-    break;
-  }
-
-  // get parameter value, do initial processing
-  switch (fmt_spec) {
-  // '%' and 'c' behave similar to 's' regarding flags and field
-  // widths
-  case '%':
-    return TYPE_PERCENT;
-
-  case 'c':
-    return TYPE_CHAR;
-
-  case 's':
-  case 'S':
-    return TYPE_STRING;
-
-  case 'd':
-  case 'u':
-  case 'b':
-  case 'B':
-  case 'o':
-  case 'x':
-  case 'X':
-  case 'p':
-    // NOTE: the u, b, o, x, X and p conversion specifiers
-    // imply the value is unsigned;  d implies a signed
-    // value
-
-    // 0 if numeric argument is zero (or if pointer is
-    // NULL for 'p'), +1 if greater than zero (or nonzero
-    // for unsigned arguments), -1 if negative (unsigned
-    // argument is never negative)
-
-    if (fmt_spec == 'p') {
-      return TYPE_POINTER;
-    } else if (fmt_spec == 'b' || fmt_spec == 'B') {
-      return TYPE_UNSIGNEDLONGLONGINT;
-    } else if (fmt_spec == 'd') {
-      // signed
-      switch (length_modifier) {
-      case NUL:
-      case 'h':
-        // char and short arguments are passed as int.
-        return TYPE_INT;
-      case 'l':
-        return TYPE_LONGINT;
-      case 'L':
-        return TYPE_LONGLONGINT;
-      case 'z':
-        return TYPE_SIGNEDSIZET;
-      }
-    } else {
-      // unsigned
-      switch (length_modifier) {
-      case NUL:
-      case 'h':
-        return TYPE_UNSIGNEDINT;
-      case 'l':
-        return TYPE_UNSIGNEDLONGINT;
-      case 'L':
-        return TYPE_UNSIGNEDLONGLONGINT;
-      case 'z':
-        return TYPE_SIZET;
-      }
-    }
-    break;
-
-  case 'f':
-  case 'F':
-  case 'e':
-  case 'E':
-  case 'g':
-  case 'G':
-    return TYPE_FLOAT;
-  }
-
-  return TYPE_UNKNOWN;
-}
-
-static char *format_typename(const char *type)
-  FUNC_ATTR_NONNULL_ALL
-{
-  switch (format_typeof(type)) {
-  case TYPE_INT:
-    return _(typename_int);
-  case TYPE_LONGINT:
-    return _(typename_longint);
-  case TYPE_LONGLONGINT:
-    return _(typename_longlongint);
-  case TYPE_UNSIGNEDINT:
-    return _(typename_unsignedint);
-  case TYPE_SIGNEDSIZET:
-    return _(typename_signedsizet);
-  case TYPE_UNSIGNEDLONGINT:
-    return _(typename_unsignedlongint);
-  case TYPE_UNSIGNEDLONGLONGINT:
-    return _(typename_unsignedlonglongint);
-  case TYPE_SIZET:
-    return _(typename_sizet);
-  case TYPE_POINTER:
-    return _(typename_pointer);
-  case TYPE_PERCENT:
-    return _(typename_percent);
-  case TYPE_CHAR:
-    return _(typename_char);
-  case TYPE_STRING:
-    return _(typename_string);
-  case TYPE_FLOAT:
-    return _(typename_float);
-  }
-
-  return _(typename_unknown);
-}
 
 static int adjust_types(const char ***ap_types, int arg, int *num_posarg, const char *type)
   FUNC_ATTR_NONNULL_ALL
@@ -525,14 +345,14 @@ static int adjust_types(const char ***ap_types, int arg, int *num_posarg, const 
           break;
         default:
           semsg(_(e_positional_num_field_spec_reused_str_str), arg,
-                format_typename((*ap_types)[arg - 1]), format_typename(type));
+                rs_format_typename((*ap_types)[arg - 1]), rs_format_typename(type));
           return FAIL;
         }
       }
     } else {
-      if (format_typeof(type) != format_typeof((*ap_types)[arg - 1])) {
+      if (rs_format_typeof(type) != rs_format_typeof((*ap_types)[arg - 1])) {
         semsg(_(e_positional_arg_num_type_inconsistent_str_str), arg,
-              format_typename(type), format_typename((*ap_types)[arg - 1]));
+              rs_format_typename(type), rs_format_typename((*ap_types)[arg - 1]));
         return FAIL;
       }
     }
@@ -879,7 +699,7 @@ static void skip_to_arg(const char **ap_types, va_list ap_start, va_list *ap, in
 
     const char *p = ap_types[*arg_cur];
 
-    int fmt_type = format_typeof(p);
+    int fmt_type = rs_format_typeof(p);
 
     // get parameter value, do initial processing
     switch (fmt_type) {
@@ -1587,8 +1407,8 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
 
         if (xisinf(f)
             || (strchr("fF", fmt_spec) != NULL && abs_f > 1.0e307)) {
-          xstrlcpy(tmp, infinity_str(f > 0.0, fmt_spec,
-                                     force_sign, space_for_positive),
+          xstrlcpy(tmp, rs_infinity_str(f > 0.0, fmt_spec,
+                                        force_sign, space_for_positive),
                    sizeof(tmp));
           str_arg_l = strlen(tmp);
           zero_padding = false;
