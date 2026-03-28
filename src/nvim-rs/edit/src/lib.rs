@@ -13,6 +13,7 @@ pub mod dispatch;
 pub mod editing;
 pub mod enter;
 pub mod esc;
+pub mod globals;
 pub mod helpers;
 pub mod insert;
 pub mod insertchar;

@@ -118,30 +118,8 @@ enum {
   BACKSPACE_LINE = 4,
 };
 
-/// Set when doing something for completion that may call edit() recursively,
-/// which is not allowed.
-static bool compl_busy = false;
-
-static colnr_T Insstart_textlen;        // length of line when insert started
-static colnr_T Insstart_blank_vcol;     // vcol for first inserted blank
-static bool update_Insstart_orig = true;  // set Insstart_orig to Insstart
-
 /// the text of the previous insert, K_SPECIAL is escaped
 static String last_insert = STRING_INIT;
-static int last_insert_skip;            // nr of chars in front of previous insert
-static int new_insert_skip;             // nr of chars in front of current insert
-static int did_restart_edit;            // "restart_edit" when calling edit()
-
-static bool can_cindent;                // may do cindenting on this line
-
-static bool revins_on;                  // reverse insert mode on
-static int revins_chars;                // how much to skip after edit
-static int revins_legal;                // was the last char 'legal'?
-static int revins_scol;                 // start column of revins session
-
-static bool ins_need_undo;              // call u_save() before inserting a
-                                        // char.  Set when edit() is called.
-                                        // after that arrow_used is used.
 
 typedef struct {
   char *data;
@@ -166,19 +144,39 @@ extern void replace_pop_ins(void);
 extern void replace_do_bs(int limit_col);
 extern char *do_insert_char_pre(int c);
 
+// Accessors for Rust-owned statics (defined in globals.rs)
+extern int nvim_get_ins_need_undo(void);
+extern void nvim_set_ins_need_undo(int val);
+extern int nvim_get_can_cindent(void);
+extern void nvim_set_can_cindent(int val);
+extern int nvim_get_revins_on(void);
+extern void nvim_edit_set_revins_on(int val);
+extern int nvim_get_did_restart_edit(void);
+extern void nvim_set_did_restart_edit(int val);
+extern int nvim_get_revins_chars(void);
+extern void nvim_set_revins_chars(int val);
+extern int nvim_get_revins_legal(void);
+extern void nvim_set_revins_legal(int val);
+extern int nvim_get_revins_scol(void);
+extern void nvim_set_revins_scol(int val);
+extern int nvim_get_compl_busy(void);
+extern void nvim_set_compl_busy(bool val);
+extern int nvim_get_last_insert_skip(void);
+extern void nvim_set_last_insert_skip(int val);
+extern int nvim_get_new_insert_skip(void);
+extern void nvim_set_new_insert_skip(int val);
+extern int nvim_get_dont_sync_undo(void);
+extern void nvim_set_dont_sync_undo(int val);
+extern int nvim_get_o_lnum(void);
+extern void nvim_set_o_lnum(linenr_T val);
+extern int nvim_get_update_Insstart_orig(void);
+extern void nvim_set_update_Insstart_orig(int val);
+extern colnr_T nvim_get_Insstart_textlen(void);
+extern void nvim_set_Insstart_textlen(colnr_T val);
+extern colnr_T nvim_get_Insstart_blank_vcol(void);
+extern void nvim_set_Insstart_blank_vcol(colnr_T val);
+
 int nvim_get_no_abbr(void) { return no_abbr; }
-
-int nvim_get_ins_need_undo(void) { return ins_need_undo; }
-
-void nvim_set_ins_need_undo(int val) { ins_need_undo = val != 0; }
-
-int nvim_get_can_cindent(void) { return can_cindent; }
-
-void nvim_set_can_cindent(int val) { can_cindent = val != 0; }
-
-int nvim_get_revins_on(void) { return revins_on; }
-
-int nvim_get_did_restart_edit(void) { return did_restart_edit; }
 
 char *nvim_buf_get_b_prompt_text(const buf_T *buf) { return buf->b_prompt_text; }
 
@@ -207,61 +205,6 @@ void nvim_set_Insstart_orig(linenr_T lnum, colnr_T col)
   Insstart_orig.lnum = lnum;
   Insstart_orig.col = col;
 }
-
-colnr_T nvim_get_Insstart_textlen(void) { return Insstart_textlen; }
-
-void nvim_set_Insstart_textlen(colnr_T val) { Insstart_textlen = val; }
-
-colnr_T nvim_get_Insstart_blank_vcol(void) { return Insstart_blank_vcol; }
-
-void nvim_set_Insstart_blank_vcol(colnr_T val) { Insstart_blank_vcol = val; }
-
-void nvim_edit_init_Insstart_textlen(void)
-{
-  Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
-  Insstart_blank_vcol = MAXCOL;
-}
-
-int nvim_get_update_Insstart_orig(void) { return update_Insstart_orig; }
-
-void nvim_set_update_Insstart_orig(int val) { update_Insstart_orig = val != 0; }
-
-int nvim_get_revins_chars(void) { return revins_chars; }
-
-void nvim_set_revins_chars(int val) { revins_chars = val; }
-
-int nvim_get_revins_legal(void) { return revins_legal; }
-
-void nvim_set_revins_legal(int val) { revins_legal = val; }
-
-int nvim_get_revins_scol(void) { return revins_scol; }
-
-void nvim_set_revins_scol(int val) { revins_scol = val; }
-
-void nvim_set_did_restart_edit(int val) { did_restart_edit = val; }
-
-int nvim_get_compl_busy(void) { return compl_busy; }
-
-void nvim_set_compl_busy(bool val) { compl_busy = val; }
-
-int nvim_get_last_insert_skip(void) { return last_insert_skip; }
-
-int nvim_get_new_insert_skip(void) { return new_insert_skip; }
-
-void nvim_set_new_insert_skip(int val) { new_insert_skip = val; }
-
-static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
-                                          // for the next left/right cursor key
-
-static linenr_T o_lnum = 0;
-
-int nvim_get_dont_sync_undo(void) { return dont_sync_undo; }
-
-void nvim_set_dont_sync_undo(int val) { dont_sync_undo = (TriState)val; }
-
-linenr_T nvim_get_o_lnum(void) { return o_lnum; }
-
-void nvim_set_o_lnum(linenr_T val) { o_lnum = val; }
 
 int nvim_get_arrow_used(void) { return arrow_used; }
 
@@ -300,8 +243,6 @@ void nvim_set_last_insert(char *data, size_t size)
 
 void nvim_clear_last_insert(void) { API_CLEAR_STRING(last_insert); }
 
-void nvim_set_last_insert_skip(int val) { last_insert_skip = val; }
-
 int nvim_get_replace_offset(void) { return replace_offset; }
 
 const void *nvim_curwin_get_cursor_ptr(void) { return &curwin->w_cursor; }
@@ -315,11 +256,11 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
 
   // Save inserted text for redo (^@ / CTRL-A).
   String inserted = get_inserted();
-  int added = inserted.data == NULL ? 0 : (int)inserted.size - new_insert_skip;
-  if (did_restart_edit == 0 || added > 0) {
+  int added = inserted.data == NULL ? 0 : (int)inserted.size - nvim_get_new_insert_skip();
+  if (nvim_get_did_restart_edit() == 0 || added > 0) {
     xfree(last_insert.data);
     last_insert = inserted;
-    last_insert_skip = added < 0 ? 0 : new_insert_skip;
+    nvim_set_last_insert_skip(added < 0 ? 0 : nvim_get_new_insert_skip());
   } else {
     xfree(inserted.data);
   }
@@ -327,7 +268,7 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   if (!arrow_used && pos != NULL) {
     // Auto-format + strip trailing auto-indent whitespace.
     int cc;
-    if (!ins_need_undo && has_format_option(FO_AUTO)) {
+    if (!nvim_get_ins_need_undo() && has_format_option(FO_AUTO)) {
       pos_T tpos = curwin->w_cursor;
       cc = 'x';
       if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
@@ -395,54 +336,26 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   }
 }
 
-// Saved cursor positions for start_arrow calls (2 slots)
-static pos_T edit_saved_cursor[2];
-static linenr_T saved_topline;
-static int saved_topfill;
-
-/// Save cursor position to a slot (accessor for Rust).
-void nvim_edit_save_cursor(int slot) { edit_saved_cursor[slot] = curwin->w_cursor; }
-
-/// Call start_arrow() with saved cursor slot (accessor for Rust).
-void nvim_edit_start_arrow_from_slot(int slot) { start_arrow(&edit_saved_cursor[slot]); }
-
-/// Call start_arrow_with_change() with saved cursor slot (accessor for Rust).
-void nvim_edit_start_arrow_with_change_from_slot(int slot, int end_change)
-{
-  start_arrow_with_change(&edit_saved_cursor[slot], end_change != 0);
-}
-
-/// Save topline/topfill for later comparison (accessor for Rust).
-void nvim_edit_save_topline(void)
-{
-  saved_topline = curwin->w_topline;
-  saved_topfill = curwin->w_topfill;
-}
-
-int nvim_edit_topline_changed(void)
-{
-  return (saved_topline != curwin->w_topline
-          || saved_topfill != curwin->w_topfill) ? 1 : 0;
-}
-
 /// ins_ctrl_() helper — handles the state changes that need C access.
 /// The Rust side computes revins_on, this function handles the rest.
 void nvim_edit_ins_ctrl_(int new_revins_on)
 {
-  if (revins_on && revins_chars && revins_scol >= 0) {
-    while (gchar_cursor() != NUL && revins_chars--) {
+  if (nvim_get_revins_on() && nvim_get_revins_chars() && nvim_get_revins_scol() >= 0) {
+    int rc = nvim_get_revins_chars();
+    while (gchar_cursor() != NUL && rc--) {
       curwin->w_cursor.col++;
     }
+    nvim_set_revins_chars(rc);
   }
   p_ri = !p_ri;
-  revins_on = (new_revins_on != 0);
-  if (revins_on) {
-    revins_scol = curwin->w_cursor.col;
-    revins_legal++;
-    revins_chars = 0;
+  nvim_edit_set_revins_on(new_revins_on);
+  if (nvim_get_revins_on()) {
+    nvim_set_revins_scol(curwin->w_cursor.col);
+    nvim_set_revins_legal(nvim_get_revins_legal() + 1);
+    nvim_set_revins_chars(0);
     undisplay_dollar();
   } else {
-    revins_scol = -1;
+    nvim_set_revins_scol(-1);
   }
   showmode();
 }
@@ -451,8 +364,8 @@ void nvim_edit_ins_ctrl_(int new_revins_on)
 void nvim_edit_ctrl_g_u_sync(void)
 {
   u_sync(true);
-  ins_need_undo = true;
-  update_Insstart_orig = false;
+  nvim_set_ins_need_undo(1);
+  nvim_set_update_Insstart_orig(0);
   Insstart = curwin->w_cursor;
 }
 
@@ -485,7 +398,7 @@ void nvim_edit_ins_shift(int c, int lastc)
   did_si = false;
   can_si = false;
   can_si_back = false;
-  can_cindent = false;
+  nvim_set_can_cindent(0);
 }
 
 /// ins_del() wrapper — handles delete key in insert mode.
@@ -540,7 +453,7 @@ int nvim_edit_ins_eol(int c)
     coladvance(curwin, getviscol());
   }
 
-  if (revins_on) {
+  if (nvim_get_revins_on()) {
     curwin->w_cursor.col += get_cursor_pos_len();
   }
 
@@ -549,7 +462,7 @@ int nvim_edit_ins_eol(int c)
                      has_format_option(FO_RET_COMS) ? OPENLINE_DO_COM : 0,
                      old_indent, NULL);
   old_indent = 0;
-  can_cindent = true;
+  nvim_set_can_cindent(1);
   rs_foldOpenCursor();
 
   return i;
@@ -576,8 +489,8 @@ void nvim_edit_ins_ctrl_v(void)
   }
   rs_clear_showcmd();
   insert_special(c, true, true);
-  revins_chars++;
-  revins_legal++;
+  nvim_set_revins_chars(nvim_get_revins_chars() + 1);
+  nvim_set_revins_legal(nvim_get_revins_legal() + 1);
 }
 
 /// Delegated wrapper for ins_ctrl_ey (Rust FFI export).
@@ -602,8 +515,8 @@ int nvim_edit_ins_ctrl_ey(int tc)
       curbuf->b_p_tw = -1;
       insert_special(c, true, false);
       curbuf->b_p_tw = tw_save;
-      revins_chars++;
-      revins_legal++;
+      nvim_set_revins_chars(nvim_get_revins_chars() + 1);
+      nvim_set_revins_legal(nvim_get_revins_legal() + 1);
       c = Ctrl_V;
       auto_format(false, true);
     }
@@ -674,8 +587,6 @@ void nvim_stuffcharReadbuff(int c) { stuffcharReadbuff(c); }
 /// Accessor for stuff_inserted: stuffReadbuffLen (for Rust).
 void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len) { stuffReadbuffLen(data, len); }
 
-void nvim_edit_set_revins_on(int val) { revins_on = (val != 0); }
-
 /// Update curbuf->b_last_changedtick if TextChangedI was triggered (accessor for Rust).
 void nvim_curbuf_sync_changedtick_after_insert(void)
 {
@@ -694,7 +605,7 @@ int nvim_edit_handle_restart_edit_cursor(void)
     validate_virtcol(curwin);
     update_curswant();
     const char *ptr;
-    if (((ins_at_eol && curwin->w_cursor.lnum == o_lnum)
+    if (((ins_at_eol && curwin->w_cursor.lnum == nvim_get_o_lnum())
          || curwin->w_curswant > curwin->w_virtcol)
         && *(ptr = get_cursor_line_ptr() + curwin->w_cursor.col) != NUL) {
       if (ptr[1] == NUL) {
@@ -753,8 +664,8 @@ void nvim_edit_init_prompt_impl(int cmdchar_todo)
     Insstart.lnum = curbuf->b_prompt_start.mark.lnum;
     Insstart.col = (colnr_T)strlen(prompt);
     Insstart_orig = Insstart;
-    Insstart_textlen = Insstart.col;
-    Insstart_blank_vcol = MAXCOL;
+    nvim_set_Insstart_textlen(Insstart.col);
+    nvim_set_Insstart_blank_vcol(MAXCOL);
     arrow_used = false;
   }
   if (cmdchar_todo == 'A') {
@@ -795,7 +706,7 @@ bool nvim_edit_edit_entry(int cmdchar, bool startln, int count)
   // caller of getcmdline() may get confused.
   // Don't allow recursive insert mode when busy with completion.
   // Allow in dummy buffers since they are only used internally
-  if (textlock != 0 || rs_ins_compl_active() || compl_busy || pum_visible()
+  if (textlock != 0 || rs_ins_compl_active() || nvim_get_compl_busy() || pum_visible()
       || expr_map_locked()) {
     emsg(_(e_textlock));
     return false;
@@ -1015,7 +926,7 @@ String get_last_insert(void)
   return rs.data == NULL ? NULL_STRING : (String){ .data = rs.data, .size = rs.size };
 }
 
-void set_can_cindent(bool val) { can_cindent = val; }
+void set_can_cindent(bool val) { nvim_set_can_cindent(val ? 1 : 0); }
 
 /// Trigger "event" and take care of fixing undo.
 int ins_apply_autocmds(event_T event)
