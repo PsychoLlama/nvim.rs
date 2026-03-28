@@ -699,6 +699,9 @@ const char *did_set_encoding(optset_T *args)
 
 static bool expand_eiw = false;
 
+// Rust implementation (exported under same C name)
+extern char *get_event_name_no_group(expand_T *xp, int idx, bool win);
+
 static char *get_eventignore_name(expand_T *xp, int idx)
 {
   bool subtract = *xp->xp_pattern == '-';

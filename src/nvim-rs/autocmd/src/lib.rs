@@ -49,7 +49,10 @@ const VV_TERMRESPONSE: c_int = 11;
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
     fn nvim_get_event_name(event: c_int) -> *const c_char;
+    fn nvim_get_event_sign(event: c_int) -> c_int;
     fn nvim_get_autocmds_count(event: c_int) -> usize;
+    fn nvim_get_next_augroup_id() -> c_int;
+    fn nvim_get_deleted_augroup() -> *const c_char;
 
     // Accessors for aucmd_win array
     fn nvim_get_aucmd_win_count() -> c_int;
@@ -1678,6 +1681,11 @@ pub unsafe extern "C" fn rs_do_doautocmd(
 static FOCUS_RECURSIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static FOCUS_LAST_TIME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// Tracks whether to include group names during event-name expansion.
+/// Replaces the C `static bool autocmd_include_groups`.
+static AUTOCMD_INCLUDE_GROUPS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Trigger FocusGained or FocusLost autocommand, and check timestamps when gaining focus.
 ///
 /// # Safety
@@ -1714,6 +1722,166 @@ pub unsafe extern "C" fn rs_do_autocmd_focusgained(gained: bool) {
     }
 
     FOCUS_RECURSIVE.store(false, Ordering::Relaxed);
+}
+
+// xp_context values from cmdexpand_defs.h
+const EXPAND_NOTHING: c_int = 0;
+const EXPAND_FILES: c_int = 2;
+const EXPAND_EVENTS: c_int = 10;
+
+/// Set the completion context for `:autocmd` / `:doautocmd`.
+///
+/// Port of the C `set_context_in_autocmd` function.
+/// Exported under `set_context_in_autocmd` to replace the C function.
+///
+/// # Safety
+/// `xp` must be a valid `expand_T*`. `arg` must be a NUL-terminated C string.
+/// Accesses `expand_T` fields via raw pointer offsets (xp_pattern@0, xp_context@8).
+#[unsafe(export_name = "set_context_in_autocmd")]
+pub unsafe extern "C" fn rs_set_context_in_autocmd(
+    xp: *mut c_void,
+    arg: *mut c_char,
+    doautocmd: bool,
+) -> *mut c_char {
+    use std::sync::atomic::Ordering;
+
+    // xp_pattern is at offset 0, xp_context is at offset 8 (64-bit ABI).
+    // We use write_unaligned to avoid strict-alignment warnings for the c_int field.
+    let xp_pattern_ptr = xp.cast::<*mut c_char>();
+    let xp_context_raw = xp.cast::<u8>().add(8);
+    macro_rules! set_xp_context {
+        ($val:expr) => {
+            std::ptr::write_unaligned(xp_context_raw.cast::<c_int>(), $val)
+        };
+    }
+
+    AUTOCMD_INCLUDE_GROUPS.store(false, Ordering::Relaxed);
+
+    // Save original position; arg_augroup_get advances arg past group name.
+    let p_orig = arg;
+    let mut argp: *const c_char = arg.cast_const();
+    let group = rs_arg_augroup_get(&raw mut argp);
+    let mut arg = argp.cast_mut();
+
+    // If there is only a group name (not yet followed by whitespace), expand the group.
+    if *arg == 0 && group != group::AUGROUP_ALL && !is_ascii_white(*arg.sub(1) as u8) {
+        arg = p_orig;
+        // group = AUGROUP_ALL; (not needed - only used for include_groups check below)
+        // Fall through: arg is back at start, group effectively treated as AUGROUP_ALL
+        // by setting include_groups based on AUGROUP_ALL condition
+        AUTOCMD_INCLUDE_GROUPS.store(true, Ordering::Relaxed);
+        set_xp_context!(EXPAND_EVENTS);
+        *xp_pattern_ptr = arg;
+        return std::ptr::null_mut();
+    }
+
+    // Skip over event name(s), tracking start of last event after a comma.
+    let mut p = arg;
+    while *p != 0 && !is_ascii_white(*p as u8) {
+        if *p == b',' as c_char {
+            arg = p.add(1); // next event starts after comma
+        }
+        p = p.add(1);
+    }
+    if *p == 0 {
+        if group == group::AUGROUP_ALL {
+            AUTOCMD_INCLUDE_GROUPS.store(true, Ordering::Relaxed);
+        }
+        set_xp_context!(EXPAND_EVENTS);
+        *xp_pattern_ptr = arg;
+        return std::ptr::null_mut();
+    }
+
+    // Skip over pattern (non-whitespace, or backslash-escaped whitespace).
+    arg = skipwhite(p);
+    while *arg != 0 && (!is_ascii_white(*arg as u8) || *arg.sub(1) == b'\\' as c_char) {
+        arg = arg.add(1);
+    }
+    if *arg != 0 {
+        return arg; // expand (next) command
+    }
+
+    if doautocmd {
+        set_xp_context!(EXPAND_FILES);
+    } else {
+        set_xp_context!(EXPAND_NOTHING);
+    }
+    std::ptr::null_mut()
+}
+
+/// Return the augroup name or event name at `idx` for `:autocmd` completion.
+///
+/// Exported under `expand_get_event_name` to replace the C function.
+///
+/// # Safety
+/// `xp` is unused but required for `CompleteListItemGetter` signature.
+#[unsafe(export_name = "expand_get_event_name")]
+pub unsafe extern "C" fn rs_expand_get_event_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
+    use std::sync::atomic::Ordering;
+
+    // Try to get a group name at position idx+1
+    let name = rs_augroup_name(idx + 1);
+    if !name.is_null() {
+        if !AUTOCMD_INCLUDE_GROUPS.load(Ordering::Relaxed) || name == nvim_get_deleted_augroup() {
+            // Return empty string (not NULL) to skip this entry
+            return c"".as_ptr().cast_mut().cast();
+        }
+        return name.cast_mut();
+    }
+
+    // Past all groups: compute event index
+    let next_id = nvim_get_next_augroup_id();
+    let i = idx - next_id;
+    if !(0..NUM_EVENTS).contains(&i) {
+        return std::ptr::null_mut();
+    }
+    nvim_get_event_name(i).cast_mut()
+}
+
+/// Return the augroup name at `idx` for `:autocmd` augroup completion.
+///
+/// Exported under `expand_get_augroup_name` to replace the C function.
+///
+/// # Safety
+/// `xp` is unused but required for `CompleteListItemGetter` signature.
+#[unsafe(export_name = "expand_get_augroup_name")]
+pub unsafe extern "C" fn rs_expand_get_augroup_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
+    rs_augroup_name(idx + 1).cast_mut()
+}
+
+/// Return the event name at `idx` for `eventignorewin` / no-group event completion.
+///
+/// When `win` is true, only returns events with a non-positive sign (window-level events).
+/// Exported under `get_event_name_no_group` to replace the C function.
+///
+/// # Safety
+/// `xp` is unused but required for function signature compatibility.
+#[unsafe(export_name = "get_event_name_no_group")]
+pub unsafe extern "C" fn rs_get_event_name_no_group(
+    _xp: *mut c_void,
+    idx: c_int,
+    win: bool,
+) -> *mut c_char {
+    if !(0..NUM_EVENTS).contains(&idx) {
+        return std::ptr::null_mut();
+    }
+
+    if !win {
+        return nvim_get_event_name(idx).cast_mut();
+    }
+
+    // Filter to window-level events (sign <= 0)
+    let mut j: c_int = 0;
+    for i in 0..NUM_EVENTS {
+        let sign = nvim_get_event_sign(i);
+        if sign <= 0 {
+            j += 1;
+            if j == idx + 1 {
+                return nvim_get_event_name(i).cast_mut();
+            }
+        }
+    }
+    std::ptr::null_mut()
 }
 
 #[cfg(test)]

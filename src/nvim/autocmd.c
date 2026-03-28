@@ -149,8 +149,6 @@ static bool au_need_clean = false;
 static int autocmd_blocked = 0;  // block all autocmds
 
 static bool autocmd_nested = false;
-static bool autocmd_include_groups = false;
-
 static char *old_termresponse = NULL;
 
 // Map of autocmd group names and ids.
@@ -1355,108 +1353,6 @@ bool has_autocmd(event_T event, char *sfname, buf_T *buf)
   int buf_fnum = buf != NULL ? buf->b_fnum : 0;
   return rs_has_autocmd((int)event, sfname, buf_fnum);
 }
-
-// Function given to ExpandGeneric() to obtain the list of autocommand group names.
-char *expand_get_augroup_name(expand_T *xp, int idx)
-{
-  (void)xp;  // Required for ExpandGeneric
-  return augroup_name(idx + 1);
-}
-
-/// @param doautocmd  true for :doauto*, false for :autocmd
-char *set_context_in_autocmd(expand_T *xp, char *arg, bool doautocmd)
-{
-  // check for a group name, skip it if present
-  autocmd_include_groups = false;
-  char *p = arg;
-  int group = arg_augroup_get(&arg);
-
-  // If there only is a group name that's what we expand.
-  if (*arg == NUL && group != AUGROUP_ALL && !ascii_iswhite(arg[-1])) {
-    arg = p;
-    group = AUGROUP_ALL;
-  }
-
-  // skip over event name
-  for (p = arg; *p != NUL && !ascii_iswhite(*p); p++) {
-    if (*p == ',') {
-      arg = p + 1;
-    }
-  }
-  if (*p == NUL) {
-    if (group == AUGROUP_ALL) {
-      autocmd_include_groups = true;
-    }
-    xp->xp_context = EXPAND_EVENTS;  // expand event name
-    xp->xp_pattern = arg;
-    return NULL;
-  }
-
-  // skip over pattern
-  arg = skipwhite(p);
-  while (*arg && (!ascii_iswhite(*arg) || arg[-1] == '\\')) {
-    arg++;
-  }
-  if (*arg) {
-    return arg;  // expand (next) command
-  }
-
-  if (doautocmd) {
-    xp->xp_context = EXPAND_FILES;  // expand file names
-  } else {
-    xp->xp_context = EXPAND_NOTHING;  // pattern is not expanded
-  }
-  return NULL;
-}
-
-/// Function given to ExpandGeneric() to obtain the list of event names.
-char *expand_get_event_name(expand_T *xp, int idx)
-{
-  (void)xp;  // xp is a required parameter to be used with ExpandGeneric
-
-  // List group names
-  char *name = augroup_name(idx + 1);
-  if (name != NULL) {
-    // skip when not including groups or skip deleted entries
-    if (!autocmd_include_groups || name == get_deleted_augroup()) {
-      return "";
-    }
-
-    return name;
-  }
-
-  int i = idx - next_augroup_id;
-  if (i < 0 || i >= NUM_EVENTS) {
-    return NULL;
-  }
-
-  // List event names
-  return event_names[i].name;
-}
-
-/// Function given to ExpandGeneric() to obtain the list of event names. Don't
-/// include groups.
-char *get_event_name_no_group(expand_T *xp FUNC_ATTR_UNUSED, int idx, bool win)
-{
-  if (idx < 0 || idx >= NUM_EVENTS) {
-    return NULL;
-  }
-
-  if (!win) {
-    return event_names[idx].name;
-  }
-
-  // Need to check subset of allowed values for 'eventignorewin'.
-  int j = 0;
-  for (int i = 0; i < NUM_EVENTS; i++) {
-    j += event_names[i].event <= 0;
-    if (j == idx + 1) {
-      return event_names[i].name;
-    }
-  }
-  return NULL;
-}
-
 
 /// Deletes an autocmd by ID.
 /// Only autocmds created via the API have IDs associated with them. There

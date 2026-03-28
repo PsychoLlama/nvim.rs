@@ -525,6 +525,9 @@ CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_names(void) { return get_m
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntax_name(void) { return get_syntax_name; }
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntime_arg(void) { return get_syntime_arg; }
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_highlight_name(void) { return get_highlight_name; }
+// Rust implementations (exported under same C names)
+extern char *expand_get_event_name(expand_T *xp, int idx);
+extern char *expand_get_augroup_name(expand_T *xp, int idx);
 CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_event_name(void) { return expand_get_event_name; }
 CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_augroup_name(void) { return expand_get_augroup_name; }
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_sign_name(void) { return get_sign_name; }
