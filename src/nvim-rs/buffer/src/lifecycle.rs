@@ -950,10 +950,122 @@ extern "C" {
     fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
     fn nvim_eap_get_cmd(eap: *const c_void) -> *const c_char;
     fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
-    fn handle_swap_exists(old_curbuf: *mut c_void);
     fn win_close(win: *mut c_void, free_buf: bool, free_tabpage: bool) -> c_int;
     fn enter_cleanup(csp: *mut CleanupT);
     fn leave_cleanup(csp: *mut CleanupT);
+}
+
+// =============================================================================
+// handle_swap_exists: handle the ATTENTION dialog result
+// =============================================================================
+
+extern "C" {
+    // SEA_RECOVER = 3 (from globals.h)
+    // buflist_new(ffname, sfname, lnum, flags) -> buf_T*
+    #[link_name = "buflist_new"]
+    fn lifecycle_buflist_new(
+        ffname_arg: *const c_char,
+        sfname_arg: *const c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> BufHandle;
+    fn block_autocmds();
+    fn unblock_autocmds();
+    fn ml_recover(checkext: bool);
+    fn do_modelines(flags: c_int);
+    fn msg_puts(s: *const c_char);
+    static mut msg_scroll: c_int;
+    static mut msg_row: c_int;
+    static mut cmdline_row: c_int;
+}
+
+// SEA_RECOVER constant (from globals.h)
+const SEA_RECOVER: c_int = 3;
+// BLN_* constants (from buffer.h)
+const BLN_CURBUF: c_int = 1;
+const BLN_LISTED: c_int = 2;
+// DOBUF_UNLOAD action
+const DOBUF_UNLOAD_ACTION: c_int = 2;
+
+/// Handle the situation of `swap_exists_action` being set.
+///
+/// It is allowed for `old_curbuf` to be NULL or invalid.
+///
+/// Rust port of C `handle_swap_exists()`.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[unsafe(export_name = "handle_swap_exists")]
+pub unsafe extern "C" fn rs_handle_swap_exists(old_curbuf: *mut c_void) {
+    let old_tw = nvim_curbuf_get_p_tw();
+
+    if swap_exists_action == SEA_QUIT {
+        // Reset the error/interrupt/exception state here so that
+        // aborting() returns false when closing a buffer.
+        let mut cs = CleanupT { _data: [0u8; 16] };
+        enter_cleanup(&raw mut cs);
+
+        // User selected Quit at ATTENTION prompt.  Go back to previous
+        // buffer.  If that buffer is gone or the same as the current one,
+        // open a new, empty buffer.
+        swap_exists_action = SEA_NONE; // don't want it again
+        swap_exists_did_quit = true;
+        close_buffer(
+            nvim_get_curwin(),
+            nvim_get_curbuf(),
+            DOBUF_UNLOAD_ACTION,
+            false,
+            false,
+        );
+
+        let old_curbuf_ref = old_curbuf.cast::<crate::misc::BufRef>();
+        let buf = if old_curbuf_ref.is_null()
+            || !bufref_valid(old_curbuf_ref)
+            || (*old_curbuf_ref).br_buf == nvim_get_curbuf().as_ptr()
+        {
+            // Block autocommands here because curwin->w_buffer is NULL.
+            block_autocmds();
+            let b = lifecycle_buflist_new(
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+                BLN_CURBUF | BLN_LISTED,
+            );
+            unblock_autocmds();
+            b
+        } else {
+            BufHandle((*old_curbuf_ref).br_buf)
+        };
+
+        if !buf.is_null() {
+            enter_buffer(buf);
+            if old_tw != nvim_curbuf_get_p_tw() {
+                check_colorcolumn(std::ptr::null(), nvim_get_curwin());
+            }
+        }
+        // If old_curbuf is NULL we are in big trouble here...
+
+        // Restore the error/interrupt/exception state if not discarded by a
+        // new aborting error, interrupt, or uncaught exception.
+        leave_cleanup(&raw mut cs);
+    } else if swap_exists_action == SEA_RECOVER {
+        // Reset the error/interrupt/exception state here so that
+        // aborting() returns false when closing a buffer.
+        let mut cs = CleanupT { _data: [0u8; 16] };
+        enter_cleanup(&raw mut cs);
+
+        // User selected Recover at ATTENTION prompt.
+        msg_scroll = 1;
+        ml_recover(false);
+        msg_puts(c"\n".as_ptr()); // don't overwrite the last message
+        cmdline_row = msg_row;
+        do_modelines(0);
+
+        // Restore the error/interrupt/exception state if not discarded by a
+        // new aborting error, interrupt, or uncaught exception.
+        leave_cleanup(&raw mut cs);
+    }
+    swap_exists_action = SEA_NONE;
 }
 
 // SEA_* constants (from globals.h)
@@ -1018,7 +1130,7 @@ pub unsafe extern "C" fn goto_buffer(eap: *const c_void, start: c_int, dir: c_in
         // new aborting error, interrupt, or uncaught exception.
         leave_cleanup(&raw mut cs);
     } else {
-        handle_swap_exists((&raw mut old_curbuf).cast::<c_void>());
+        rs_handle_swap_exists((&raw mut old_curbuf).cast::<c_void>());
     }
 }
 
