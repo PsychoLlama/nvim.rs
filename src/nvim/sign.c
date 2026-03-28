@@ -54,8 +54,9 @@
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
 
-// Rust sign FFI: unplace inner (implemented in operations.rs)
-extern int nvim_sign_unplace_inner_impl(buf_T *buf, int id, char *group, linenr_T atlnum);
+// Rust sign exports
+extern void sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group, list_T *retlist);
+
 
 // Rust FFI declarations
 extern int rs_sign_row_cmp(int row1, int row2);
@@ -287,21 +288,6 @@ int nvim_sign_undefine_by_name_impl(const char *name)
 }
 
 
-/// Unplace sign(s) from a single buffer or all buffers.
-int nvim_sign_unplace_impl(buf_T *buf, int id, char *group, linenr_T atlnum)
-{
-  if (buf != NULL) {
-    return nvim_sign_unplace_inner_impl(buf, id, group, atlnum);
-  } else {
-    int retval = OK;
-    FOR_ALL_BUFFERS(cbuf) {
-      if (!nvim_sign_unplace_inner_impl(cbuf, id, group, atlnum)) {
-        retval = FAIL;
-      }
-    }
-    return retval;
-  }
-}
 
 /// Jump to a sign — composite accessor.
 /// Returns lnum on success, -1 on failure. Error messages stay in C.
@@ -860,20 +846,6 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
   }
 }
 
-/// Get placed signs — composite accessor.
-void nvim_sign_get_placed_impl(buf_T *buf, linenr_T lnum, int id, const char *group,
-                               list_T *retlist)
-{
-  if (buf != NULL) {
-    nvim_sign_get_placed_in_buf_impl(buf, lnum, id, group, retlist);
-  } else {
-    FOR_ALL_BUFFERS(cbuf) {
-      if (rs_sign_buffer_has_signs(cbuf)) {
-        nvim_sign_get_placed_in_buf_impl(cbuf, 0, id, group, retlist);
-      }
-    }
-  }
-}
 
 /// Define sign from dict — composite accessor.
 int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
@@ -1151,7 +1123,7 @@ void nvim_f_sign_getplaced_impl(typval_T *argvars, typval_T *rettv, EvalFuncData
     }
   }
 
-  nvim_sign_get_placed_impl(buf, lnum, sign_id, group, rettv->vval.v_list);
+  sign_get_placed(buf, lnum, sign_id, group, rettv->vval.v_list);
 }
 
 /// f_sign_jump — composite accessor.

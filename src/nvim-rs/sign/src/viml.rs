@@ -395,13 +395,11 @@ extern "C" {
         group: *const c_char,
         retlist: *mut c_void,
     );
-    fn nvim_sign_get_placed_impl(
-        buf: SignBufHandle,
-        lnum: LinenrT,
-        id: c_int,
-        group: *const c_char,
-        retlist: *mut c_void,
-    );
+
+    // Buffer iteration (for all-buffer queries)
+    fn nvim_get_firstbuf() -> SignBufHandle;
+    fn nvim_buf_get_next(buf: SignBufHandle) -> SignBufHandle;
+    fn rs_sign_buffer_has_signs(buf: SignBufHandle) -> bool;
     fn nvim_sign_define_from_dict_impl(name: *mut c_char, dict: *mut c_void) -> c_int;
     fn nvim_sign_define_multiple_impl(l: *mut c_void, retlist: *mut c_void);
     fn nvim_sign_place_from_dict_impl(
@@ -500,7 +498,7 @@ pub unsafe extern "C" fn rs_sign_get_placed_in_buf(
 /// Get placed signs across buffers.
 ///
 /// If `buf` is non-null, gets signs for that buffer only.
-/// Otherwise gets signs for all buffers.
+/// Otherwise gets signs for all buffers that have signs.
 ///
 /// # Safety
 ///
@@ -517,7 +515,17 @@ pub unsafe extern "C" fn rs_sign_get_placed(
     if retlist.is_null() {
         return;
     }
-    nvim_sign_get_placed_impl(buf, lnum, id, group, retlist);
+    if buf.is_null() {
+        let mut cbuf = nvim_get_firstbuf();
+        while !cbuf.is_null() {
+            if rs_sign_buffer_has_signs(cbuf) {
+                nvim_sign_get_placed_in_buf_impl(cbuf, 0, id, group, retlist);
+            }
+            cbuf = nvim_buf_get_next(cbuf);
+        }
+    } else {
+        nvim_sign_get_placed_in_buf_impl(buf, lnum, id, group, retlist);
+    }
 }
 
 /// Define a sign from a VimL dictionary.

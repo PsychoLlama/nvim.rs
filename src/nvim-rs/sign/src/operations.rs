@@ -51,13 +51,11 @@ extern "C" {
     fn extmark_del_id(buf: crate::SignBufHandle, ns: u32, id: u32) -> bool;
     fn group_get_ns(group: *const c_char) -> i64;
 
-    // Composite C accessor still used until Phase 2
-    fn nvim_sign_unplace_impl(
-        buf: crate::SignBufHandle,
-        id: c_int,
-        group: *const c_char,
-        atlnum: LinenrT,
-    ) -> c_int;
+    // Buffer iteration for all-buffer operations
+    fn nvim_get_firstbuf() -> crate::SignBufHandle;
+    fn nvim_buf_get_next(buf: crate::SignBufHandle) -> crate::SignBufHandle;
+
+    // Composite C accessor still used until Phase 3
     fn nvim_sign_jump_impl(id: c_int, group: *const c_char, buf: crate::SignBufHandle) -> LinenrT;
 }
 
@@ -651,7 +649,19 @@ pub unsafe extern "C" fn rs_sign_unplace(
     group: *const c_char,
     atlnum: LinenrT,
 ) -> c_int {
-    nvim_sign_unplace_impl(buf, id, group, atlnum)
+    if buf.is_null() {
+        let mut retval = 1; // OK
+        let mut cbuf = nvim_get_firstbuf();
+        while !cbuf.is_null() {
+            if unplace_inner(cbuf, id, group, atlnum) == 0 {
+                retval = 0; // FAIL (at least one failed)
+            }
+            cbuf = nvim_buf_get_next(cbuf);
+        }
+        retval
+    } else {
+        unplace_inner(buf, id, group, atlnum)
+    }
 }
 
 /// Jump to a sign.
