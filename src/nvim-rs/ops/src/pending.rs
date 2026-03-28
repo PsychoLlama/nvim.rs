@@ -188,7 +188,7 @@ extern "C" {
     fn setmouse();
     fn nvim_set_mouse_dragging(val: c_int);
     fn nvim_coladvance_set_curswant(old_col: c_int);
-    fn nvim_set_motion_force_nul();
+    fn nvim_set_motion_force(val: c_int);
 
     // p_cpo / p_sel / options
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
@@ -196,7 +196,7 @@ extern "C" {
     fn nvim_p_sel_is_old() -> bool;
 
     // redraw
-    fn nvim_redraw_curbuf_later_inverted();
+    fn nvim_redraw_curbuf_inverted();
     fn nvim_curbuf_modifiable() -> bool;
 
     // op utilities
@@ -743,7 +743,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
                 && motion_force3 == NUL
             {
                 restore_lbr(lbr_saved);
-                nvim_redraw_curbuf_later_inverted();
+                nvim_redraw_curbuf_inverted();
             }
         }
     }
@@ -777,7 +777,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
     let op_type5 = (*oap.cast::<OpargT>()).op_type;
     if is_visual && (empty || !nvim_curbuf_modifiable() || op_type5 == OP_FOLD) {
         restore_lbr(lbr_saved);
-        nvim_redraw_curbuf_later_inverted();
+        nvim_redraw_curbuf_inverted();
     }
 
     // Adjust end for column-one case
@@ -1098,7 +1098,7 @@ unsafe fn dpo_postamble(cap: *mut c_void, old_col: c_int, gui_yank: bool) {
         }
     }
     rs_clearop(oap);
-    nvim_set_motion_force_nul();
+    nvim_set_motion_force(0);
 }
 
 // =============================================================================

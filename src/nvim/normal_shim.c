@@ -584,9 +584,7 @@ bool nvim_get_curbuf_b_p_inde_nonempty(void) { return *curbuf->b_p_inde != NUL; 
 bool nvim_dpo_join_would_overflow(int line_count) { return curwin->w_cursor.lnum + line_count - 1 > curbuf->b_ml.ml_line_count; }
 void nvim_coladvance_set_curswant(int old_col) { coladvance(curwin, curwin->w_curswant = (colnr_T)old_col); }
 void nvim_set_virtual_op_none(void) { virtual_op = kNone; }
-void nvim_set_motion_force_nul(void) { motion_force = NUL; }
 win_T *nvim_dpo_get_curwin(void) { return curwin; }
-void nvim_redraw_curbuf_later_inverted(void) { redraw_curbuf_later(UPD_INVERTED); }
 void nvim_curwin_set_curswant_flag(bool val) { curwin->w_set_curswant = val; }
 int nvim_has_mod_mask_ctrl(void) { return (mod_mask & MOD_MASK_CTRL) ? 1 : 0; }
 bool nvim_has_ve_flag_onemore(void) { return (get_ve_flags(curwin) & kOptVeFlagOnemore) != 0; }
