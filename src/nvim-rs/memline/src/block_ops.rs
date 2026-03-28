@@ -328,3 +328,74 @@ pub(crate) unsafe fn dp_write_nul_at_txt_end(dp: *mut c_void) {
     let off = (*h).db_txt_end as usize - 1;
     *dp.cast::<c_char>().add(off) = 0;
 }
+
+// =============================================================================
+// Init functions (Phase 2)
+// =============================================================================
+
+/// Initialize the root pointer block (block 1) with one entry pointing to block 2.
+///
+/// # Safety
+/// `pp` must point to a writable, fully-allocated pointer block.
+pub(crate) unsafe fn pp_init_root(pp: *mut c_void) {
+    let h = pp.cast::<PointerBlockHeader>();
+    (*h).pb_count = 1;
+    let entry = pb_pointer_ptr(pp);
+    (*entry).pe_bnum = 2;
+    (*entry).pe_page_count = 1;
+    (*entry).pe_old_lnum = 1;
+    (*entry).pe_line_count = 1; // line count after insertion
+}
+
+/// Initialize the first data block (block 2) with one empty line.
+///
+/// # Safety
+/// `dp` must point to a writable, fully-allocated data block whose header
+/// fields (`db_txt_start`, `db_txt_end`, `db_free`) are already initialized.
+pub(crate) unsafe fn dp_init_empty_line(dp: *mut c_void) {
+    let h = dp.cast::<DataBlockHeader>();
+    // Move text start back one byte for the NUL-terminated empty line
+    (*h).db_txt_start -= 1;
+    // Account for one byte of text plus one index entry.
+    // INDEX_SIZE is always 4 (sizeof(unsigned) on all supported platforms).
+    (*h).db_free -= 5;
+    (*h).db_line_count = 1;
+    // Write the NUL byte at db_txt_start
+    *dp.cast::<c_char>().add((*h).db_txt_start as usize) = 0;
+    // Set db_index[0] to the offset of that NUL.
+    // SAFETY: DATA_BLOCK_HEADER_SIZE (24) is a multiple of 4, so the pointer
+    // is aligned for u32.
+    #[allow(clippy::cast_ptr_alignment)]
+    let idx_ptr = dp.cast::<u8>().add(DATA_BLOCK_HEADER_SIZE).cast::<u32>();
+    *idx_ptr = (*h).db_txt_start;
+}
+
+use crate::types::BufHandle;
+
+/// Initialize the memline fields in a `buf_T` to empty/zero state.
+///
+/// Replaces `nvim_buf_init_ml_empty`.
+///
+/// # Safety
+/// `buf` must point to a valid `buf_T`.
+pub(crate) unsafe fn buf_init_ml_empty(buf: *mut BufHandle) {
+    nvim_buf_set_ml_stack_size(buf, 0);
+    nvim_buf_set_ml_stack(buf, std::ptr::null_mut());
+    nvim_buf_set_ml_stack_top(buf, 0);
+    nvim_buf_set_ml_locked(buf, std::ptr::null_mut());
+    nvim_buf_set_ml_line_lnum(buf, 0);
+    nvim_buf_set_ml_line_offset(buf, 0);
+    nvim_buf_set_ml_chunksize_ptr(buf, std::ptr::null_mut());
+    nvim_buf_set_ml_usedchunks(buf, 0);
+}
+
+extern "C" {
+    fn nvim_buf_set_ml_stack_size(buf: *mut BufHandle, n: c_int);
+    fn nvim_buf_set_ml_stack(buf: *mut BufHandle, ptr: *mut c_void);
+    fn nvim_buf_set_ml_stack_top(buf: *mut BufHandle, n: c_int);
+    fn nvim_buf_set_ml_locked(buf: *mut BufHandle, hp: *mut c_void);
+    fn nvim_buf_set_ml_line_lnum(buf: *mut BufHandle, lnum: i64);
+    fn nvim_buf_set_ml_line_offset(buf: *mut BufHandle, offset: usize);
+    fn nvim_buf_set_ml_chunksize_ptr(buf: *mut BufHandle, ptr: *mut c_void);
+    fn nvim_buf_set_ml_usedchunks(buf: *mut BufHandle, val: c_int);
+}

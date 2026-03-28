@@ -359,18 +359,6 @@ void nvim_buf_set_b_may_swap(buf_T *buf, int val) { buf->b_may_swap = (val != 0)
 void nvim_os_set_cloexec(int fd) { os_set_cloexec(fd); }
 int nvim_vim_rename(const char *from, const char *to) { return vim_rename(from, to); }
 
-void nvim_buf_init_ml_empty(buf_T *buf)
-{
-  buf->b_ml.ml_stack_size = 0;
-  buf->b_ml.ml_stack = NULL;
-  buf->b_ml.ml_stack_top = 0;
-  buf->b_ml.ml_locked = NULL;
-  buf->b_ml.ml_line_lnum = 0;
-  buf->b_ml.ml_line_offset = 0;
-  buf->b_ml.ml_chunksize = NULL;
-  buf->b_ml.ml_usedchunks = 0;
-}
-
 void nvim_buf_set_ml_mfp(buf_T *buf, void *mfp) { buf->b_ml.ml_mfp = mfp; }
 
 void nvim_b0_init_header(ZeroBlock *b0p, unsigned page_size)
@@ -383,25 +371,6 @@ void nvim_b0_init_header(ZeroBlock *b0p, unsigned page_size)
   b0p->b0_magic_char = B0_MAGIC_CHAR;
   xstrlcpy(xstpcpy(b0p->b0_version, "VIM "), Versions[0], 6);
   rs_long_to_char((long)page_size, b0p->b0_page_size);
-}
-
-void nvim_pp_init_root(void *pp_raw)
-{
-  PointerBlock *pp = (PointerBlock *)pp_raw;
-  pp->pb_count = 1;
-  pp->pb_pointer[0].pe_bnum = 2;
-  pp->pb_pointer[0].pe_page_count = 1;
-  pp->pb_pointer[0].pe_old_lnum = 1;
-  pp->pb_pointer[0].pe_line_count = 1;  // line count after insertion
-}
-
-void nvim_dp_init_empty_line(void *dp_raw)
-{
-  DataBlock *dp = (DataBlock *)dp_raw;
-  dp->db_index[0] = --dp->db_txt_start;       // at end of block
-  dp->db_free -= 1 + (unsigned)INDEX_SIZE;
-  dp->db_line_count = 1;
-  *((char *)dp + dp->db_txt_start) = NUL;     // empty line
 }
 
 void nvim_buf_set_b_p_swf_false(buf_T *buf) { buf->b_p_swf = false; }

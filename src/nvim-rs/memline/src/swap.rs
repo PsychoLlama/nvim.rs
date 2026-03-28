@@ -16,6 +16,7 @@
 
 use std::ffi::{c_char, c_int, c_uint};
 
+use crate::block_ops;
 use crate::rs_long_to_char;
 use crate::types::{
     BufHandle, B0_DIRTY, B0_FF_MASK, BF_RECOVERED, MFS_ZERO, ML_ALLOCATED, ML_LINE_DIRTY,
@@ -122,7 +123,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     }
 
     // Initialize all ml fields to zero/NULL
-    nvim_buf_init_ml_empty(buf);
+    block_ops::buf_init_ml_empty(buf);
 
     if nvim_get_cmod_flags() & CMOD_NOSWAPFILE != 0 {
         nvim_buf_set_b_p_swf_false(buf);
@@ -200,7 +201,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
         return crate::types::FAIL;
     }
     let pp = nvim_bhdr_get_bh_data(hp1);
-    nvim_pp_init_root(pp);
+    block_ops::pp_init_root(pp);
     mf_put(mfp, hp1, true, false);
 
     // Allocate first data block and create an empty line 1.
@@ -215,7 +216,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
         return crate::types::FAIL;
     }
     let dp = nvim_bhdr_get_bh_data(hp2);
-    nvim_dp_init_empty_line(dp);
+    block_ops::dp_init_empty_line(dp);
     mf_put(mfp, hp2, true, false);
 
     crate::types::OK
@@ -717,8 +718,6 @@ extern "C" {
 
 extern "C" {
     /// Initialize all ml fields to zero/NULL for a new buffer
-    fn nvim_buf_init_ml_empty(buf: *mut BufHandle);
-
     /// Set buf->b_ml.ml_mfp
     fn nvim_buf_set_ml_mfp(buf: *mut BufHandle, mfp: *mut std::ffi::c_void);
 
@@ -727,12 +726,6 @@ extern "C" {
 
     /// Initialize block 0 header (magic numbers, version, page_size)
     fn nvim_b0_init_header(b0p: *mut std::ffi::c_void, page_size: c_uint);
-
-    /// Initialize the root pointer block (block 1) entries
-    fn nvim_pp_init_root(pp: *mut std::ffi::c_void);
-
-    /// Initialize the first data block (block 2) with an empty line
-    fn nvim_dp_init_empty_line(dp: *mut std::ffi::c_void);
 
     /// Set buf->b_p_swf = false
     fn nvim_buf_set_b_p_swf_false(buf: *mut BufHandle);

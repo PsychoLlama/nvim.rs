@@ -199,7 +199,6 @@ extern "C" {
     fn nvim_recover_check_timestamps(mfp: *mut c_void, mtime_b0: c_int) -> c_int;
     fn nvim_get_buf_t_size() -> usize;
     fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int;
-    fn nvim_buf_init_ml_empty(buf: *mut BufHandle);
     fn nvim_buf_set_ml_mfp(buf: *mut BufHandle, mfp: *mut c_void);
     fn nvim_buf_get_ml_stack_void(buf: *mut BufHandle) -> *mut c_void;
     fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
@@ -492,7 +491,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         let buf_size = nvim_get_buf_t_size();
         buf = xmalloc(buf_size);
         std::ptr::write_bytes(buf.cast::<u8>(), 0, buf_size);
-        nvim_buf_init_ml_empty(buf.cast::<BufHandle>());
+        block_ops::buf_init_ml_empty(buf.cast::<BufHandle>());
 
         // Open the swap file (mf_open() consumes fname_used, so save a copy)
         let fname_copy = xstrdup(fname_used);
