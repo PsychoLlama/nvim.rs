@@ -12,7 +12,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_int, c_uint};
+use std::ffi::{c_int, c_uint, c_void};
 
 // ============================================================================
 // Constants
@@ -116,8 +116,11 @@ extern "C" {
     // Autocmds
     fn nvim_ins_apply_autocmds_insertleavepre();
 
-    // `stop_insert(&curwin->w_cursor, true, nomove)`
-    fn nvim_stop_insert_curpos(nomove: c_int);
+    // `stop_insert(end_insert_pos, esc, nomove)` -- unified stop_insert
+    fn nvim_edit_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int);
+
+    // curwin->w_cursor pointer
+    fn nvim_curwin_get_cursor_ptr() -> *const c_void;
 
     // `undisplay_dollar`
     fn undisplay_dollar();
@@ -194,7 +197,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
             return 0; // repeat the insert
         }
 
-        nvim_stop_insert_curpos(nomove);
+        nvim_edit_stop_insert(nvim_curwin_get_cursor_ptr().cast_mut(), 1, nomove);
         undisplay_dollar();
     }
 
