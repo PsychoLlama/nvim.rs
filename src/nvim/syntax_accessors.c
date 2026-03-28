@@ -260,8 +260,6 @@ int nvim_syn_do_regexec(void *regprog, int ic,
 
 int nvim_syn_get_b_syn_slow(void) { return syn_win->w_s->b_syn_slow ? 1 : 0; }
 void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
-
-
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
 int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
 int nvim_win_get_keywtab_used(win_T *win) { return (int)win->w_s->b_keywtab.ht_used; }
@@ -462,10 +460,6 @@ void *nvim_synblock_get_linecont_time_ptr(synblock_T *block) { return (void *)&b
 void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags) { char *cpo_save = p_cpo; p_cpo = empty_string_option; void *prog = vim_regcomp(pat, flags); p_cpo = cpo_save; return prog; }
 int nvim_syn_name2id_len_wrapper(const char *arg, int len) { return syn_name2id_len(arg, (size_t)len); }
 
-/// Prepare for :syntax include.
-/// Returns 1 if file should be :source'd (absolute path),
-///         0 if file should be loaded via source_runtime,
-///        -1 on expand_filename failure.
 int nvim_syn_include_prepare(exarg_T *eap)
 {
   eap->argt |= (EX_XFILE | EX_NOSPC);
