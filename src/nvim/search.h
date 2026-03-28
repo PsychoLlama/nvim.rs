@@ -128,12 +128,6 @@ typedef struct {
   int has_offset;   ///< whether offset actually moved pos
 } DoSearchPostOffset;
 
-/// Result type for find_pattern_in_path batch init helper.
-typedef struct {
-  void *handle;  ///< Opaque handle to FpipState (NULL on failure).
-  int ok;        ///< Whether initialization succeeded.
-} FpipInitResult;
-
 // Functions implemented in Rust (src/nvim-rs/search/) via export_name
 // Phase 2+3: thin C wrappers replaced by Rust exports
 void save_search_patterns(void);
