@@ -104,9 +104,6 @@ extern "C" {
     // UI capability check
     fn ui_has(ext: c_int) -> bool;
 
-    // Display coordination
-    fn msg_grid_validate();
-
     // grid_line_mirror and grid_line_flush_if_valid_row are implemented in Rust (grid crate)
     fn grid_line_mirror(width: c_int);
     fn grid_line_flush_if_valid_row();
@@ -578,17 +575,7 @@ pub unsafe extern "C" fn rs_msg_check() {
     }
 }
 
-/// Validate the message grid for output.
-///
-/// Ensures the message grid is properly allocated and sized
-/// for message display.
-///
-/// # Safety
-/// Calls C function that may allocate memory.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_grid_validate() {
-    msg_grid_validate();
-}
+// rs_msg_grid_validate migrated to misc.rs with #[export_name = "msg_grid_validate"]
 
 /// Flush pending line content to display.
 ///

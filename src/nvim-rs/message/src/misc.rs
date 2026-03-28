@@ -865,6 +865,144 @@ pub unsafe extern "C" fn rs_hit_return_msg(newline_sb: bool) {
     p_more = save_p_more;
 }
 
+// ============================================================================
+// Phase 2: Grid management functions (msg_grid_set_pos, msg_grid_validate)
+// ============================================================================
+
+/// z-index for the message grid (kZIndexMessages from grid_defs.h)
+const K_Z_INDEX_MESSAGES: c_int = 200;
+
+extern "C" {
+    // For msg_grid_validate
+    fn grid_assign_handle(grid: *mut crate::ScreenGrid);
+    fn grid_alloc(grid: *mut crate::ScreenGrid, rows: c_int, cols: c_int, copy: bool, valid: bool);
+    fn grid_free(grid: *mut crate::ScreenGrid);
+    fn ui_comp_put_grid(
+        grid: *mut crate::ScreenGrid,
+        row: c_int,
+        col: c_int,
+        height: c_int,
+        width: c_int,
+        valid: bool,
+        on_top: bool,
+    ) -> bool;
+    fn ui_comp_remove_grid(grid: *mut crate::ScreenGrid);
+    fn ui_call_grid_destroy(handle: i64);
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn msg_use_grid() -> bool;
+    static mut default_grid: crate::ScreenGrid;
+    static mut redraw_cmdline: bool;
+    fn grid_clear(
+        grid: *mut GridView,
+        start_row: c_int,
+        end_row: c_int,
+        start_col: c_int,
+        end_col: c_int,
+        attr: c_int,
+    );
+}
+
+/// Set the message grid row position.
+///
+/// Equivalent to C `msg_grid_set_pos()`.
+///
+/// # Safety
+/// Modifies global message grid state.
+#[export_name = "msg_grid_set_pos"]
+pub unsafe extern "C" fn rs_msg_grid_set_pos(row: c_int, scrolled: bool) {
+    if !msg_grid.throttled {
+        nvim_msg_set_pos_for_scroll(row, scrolled);
+        msg_grid_pos_at_flush = row;
+    }
+    msg_grid_pos = row;
+    if !msg_grid.chars.is_null() {
+        msg_grid_adj.row_offset = -row;
+    }
+}
+
+/// Validate (allocate/resize/free) the message grid.
+///
+/// Equivalent to C `msg_grid_validate()`.
+///
+/// # Safety
+/// Modifies global message grid state and UI.
+#[export_name = "msg_grid_validate"]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+pub unsafe extern "C" fn rs_msg_grid_validate() {
+    grid_assign_handle(&raw mut msg_grid);
+    let should_alloc = msg_use_grid();
+    let max_rows = Rows - p_ch as c_int;
+
+    if should_alloc
+        && (msg_grid.rows != Rows || msg_grid.cols != Columns || msg_grid.chars.is_null())
+    {
+        grid_alloc(&raw mut msg_grid, Rows, Columns, false, true);
+        msg_grid.zindex = K_Z_INDEX_MESSAGES;
+
+        xfree(msg_grid.dirty_col.cast());
+        msg_grid.dirty_col = xcalloc(Rows as usize, std::mem::size_of::<c_int>()).cast();
+
+        // Tricky: allow resize while pager or ex mode is active
+        let pos = if State & MODE_ASKMORE != 0 {
+            0
+        } else {
+            0.max(max_rows - msg_scrolled)
+        };
+        msg_grid.throttled = false; // don't throttle in 'cmdheight' area
+        rs_msg_grid_set_pos(pos, msg_scrolled != 0);
+        ui_comp_put_grid(
+            &raw mut msg_grid,
+            pos,
+            0,
+            msg_grid.rows,
+            msg_grid.cols,
+            false,
+            true,
+        );
+        ui_call_grid_resize(
+            msg_grid.handle.into(),
+            msg_grid.cols.into(),
+            msg_grid.rows.into(),
+        );
+
+        msg_scrolled_at_flush = msg_scrolled;
+        msg_grid.mouse_enabled = false;
+        msg_grid_adj.target = (&raw mut msg_grid).cast();
+    } else if !should_alloc && !msg_grid.chars.is_null() {
+        ui_comp_remove_grid(&raw mut msg_grid);
+        grid_free(&raw mut msg_grid);
+        // XFREE_CLEAR equivalent: free and set to null
+        xfree(msg_grid.dirty_col.cast());
+        msg_grid.dirty_col = std::ptr::null_mut();
+        ui_call_grid_destroy(msg_grid.handle.into());
+        msg_grid.throttled = false;
+        msg_grid_adj.row_offset = 0;
+        msg_grid_adj.target = (&raw mut default_grid).cast();
+        redraw_cmdline = true;
+    } else if !msg_grid.chars.is_null() && msg_scrolled == 0 && msg_grid_pos != max_rows {
+        let diff = msg_grid_pos - max_rows;
+        rs_msg_grid_set_pos(max_rows, false);
+        if diff > 0 {
+            grid_clear(
+                &raw mut msg_grid_adj,
+                Rows - diff,
+                Rows,
+                0,
+                Columns,
+                hl_attr(HLF_MSG),
+            );
+        }
+    }
+
+    if !msg_grid.chars.is_null() && msg_scrolled == 0 && cmdline_row < msg_grid_pos {
+        cmdline_row = msg_grid_pos;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests would require mocking C functions

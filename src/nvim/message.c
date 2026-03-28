@@ -111,17 +111,7 @@ static void ui_ext_msg_set_pos(int row, bool scrolled)
   msg_grid.pending_comp_index_update = false;
 }
 
-void msg_grid_set_pos(int row, bool scrolled)
-{
-  if (!msg_grid.throttled) {
-    ui_ext_msg_set_pos(row, scrolled);
-    msg_grid_pos_at_flush = row;
-  }
-  msg_grid_pos = row;
-  if (msg_grid.chars) {
-    msg_grid_adj.row_offset = -row;
-  }
-}
+// msg_grid_set_pos() migrated to Rust (misc.rs) with #[export_name]
 
 extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 
@@ -158,57 +148,7 @@ bool nvim_message_filtered_impl(const char *msg)
 }
 
 // nvim_msg_ui_refresh_impl and nvim_msg_ui_flush_impl migrated to Rust (misc.rs)
-
-void msg_grid_validate(void)
-{
-  grid_assign_handle(&msg_grid);
-  bool should_alloc = msg_use_grid();
-  int max_rows = Rows - (int)p_ch;
-  if (should_alloc && (msg_grid.rows != Rows || msg_grid.cols != Columns
-                       || !msg_grid.chars)) {
-    // TODO(bfredl): eventually should be set to "invalid". I e all callers
-    // will use the grid including clear to EOS if necessary.
-    grid_alloc(&msg_grid, Rows, Columns, false, true);
-    msg_grid.zindex = kZIndexMessages;
-
-    xfree(msg_grid.dirty_col);
-    msg_grid.dirty_col = xcalloc((size_t)Rows, sizeof(*msg_grid.dirty_col));
-
-    // Tricky: allow resize while pager or ex mode is active
-    int pos = (State & MODE_ASKMORE) ? 0 : MAX(max_rows - msg_scrolled, 0);
-    msg_grid.throttled = false;  // don't throttle in 'cmdheight' area
-    msg_grid_set_pos(pos, msg_scrolled);
-    ui_comp_put_grid(&msg_grid, pos, 0, msg_grid.rows, msg_grid.cols,
-                     false, true);
-    ui_call_grid_resize(msg_grid.handle, msg_grid.cols, msg_grid.rows);
-
-    msg_scrolled_at_flush = msg_scrolled;
-    msg_grid.mouse_enabled = false;
-    msg_grid_adj.target = &msg_grid;
-  } else if (!should_alloc && msg_grid.chars) {
-    ui_comp_remove_grid(&msg_grid);
-    grid_free(&msg_grid);
-    XFREE_CLEAR(msg_grid.dirty_col);
-    ui_call_grid_destroy(msg_grid.handle);
-    msg_grid.throttled = false;
-    msg_grid_adj.row_offset = 0;
-    msg_grid_adj.target = &default_grid;
-    redraw_cmdline = true;
-  } else if (msg_grid.chars && !msg_scrolled && msg_grid_pos != max_rows) {
-    int diff = msg_grid_pos - max_rows;
-    msg_grid_set_pos(max_rows, false);
-    if (diff > 0) {
-      grid_clear(&msg_grid_adj, Rows - diff, Rows, 0, Columns, HL_ATTR(HLF_MSG));
-    }
-  }
-
-  if (msg_grid.chars && !msg_scrolled && cmdline_row < msg_grid_pos) {
-    // TODO(bfredl): this should already be the case, but fails in some
-    // "batched" executions where compute_cmdrow() use stale positions or
-    // something.
-    cmdline_row = msg_grid_pos;
-  }
-}
+// msg_grid_validate() migrated to Rust (misc.rs) with #[export_name]
 
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
 extern bool is_multihl;  // owned by Rust (misc.rs)

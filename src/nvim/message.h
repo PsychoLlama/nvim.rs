@@ -128,6 +128,10 @@ void msg_puts_hl(const char *s, int hl_id, bool hist);
 // Phase 5 (output): msg_puts_len migrated to Rust
 void msg_puts_len(const char *str, ptrdiff_t len, int hl_id, bool hist);
 
+// msg_grid_set_pos, msg_grid_validate migrated to Rust (misc.rs)
+void msg_grid_set_pos(int row, bool scrolled);
+void msg_grid_validate(void);
+
 // do_dialog, display_confirm_msg, vim_dialog_* migrated to Rust (dialog.rs)
 int do_dialog(int type, const char *title, const char *message, const char *buttons,
               int dfltbutton, const char *textfield, int ex_cmd);
