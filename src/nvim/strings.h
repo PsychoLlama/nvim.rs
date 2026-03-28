@@ -66,6 +66,7 @@ const char *rs_infinity_str(bool positive, char fmt_spec, int force_sign, int sp
 void rs_format_overflow_error(const char *pstart);
 int rs_get_unsigned_int(const char *pstart, const char **p, unsigned *uj, bool overflow_err);
 int rs_adjust_types(const char ***ap_types, int arg, int *num_posarg, const char *type);
+int rs_parse_fmt_types(const char ***ap_types, int *num_posarg, const char *fmt, const void *tvs);
 
 // Rust-implemented keyvalue comparators (exported via #[export_name])
 int cmp_keyvalue_value(const void *a, const void *b);

@@ -1,16 +1,20 @@
 //! Printf helper functions: type classification and formatting utilities.
 //!
 //! Implements the format type enum, `format_typeof`, `format_typename`,
-//! `infinity_str`, `format_overflow_error`, `get_unsigned_int`, and
-//! `adjust_types` previously defined in strings.c.
+//! `infinity_str`, `format_overflow_error`, `get_unsigned_int`,
+//! `adjust_types`, and `parse_fmt_types` previously defined in strings.c.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::if_not_else)]
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
+
+use libc;
 
 // =============================================================================
 // C FFI
@@ -413,4 +417,302 @@ pub unsafe extern "C" fn rs_adjust_types(
         *slot = type_spec;
         OK
     }
+}
+
+// =============================================================================
+// parse_fmt_types
+// =============================================================================
+
+// Error strings for parse_fmt_types (N_() equivalents -- gettext called at use time)
+static E_CANNOT_MIX_POSITIONAL: &[u8] =
+    b"E1500: Cannot mix positional and non-positional arguments: %s\0";
+static E_FMT_ARG_NR_UNUSED: &[u8] = b"E1501: format argument %d unused in $-style format: %s\0";
+static E_POSITIONAL_NR_OUT_OF_BOUNDS: &[u8] = b"E1503: Positional argument %d out of bounds: %s\0";
+static E_INVALID_FORMAT_SPECIFIER: &[u8] = b"E1505: Invalid format specifier: %s\0";
+
+const VAR_UNKNOWN: c_int = 0;
+
+/// First-pass parser that validates format string and builds positional
+/// argument type array.
+///
+/// Equivalent to C `parse_fmt_types`. On error, frees `*ap_types` and resets
+/// `*num_posarg` to 0.
+///
+/// # Safety
+/// - `ap_types` and `num_posarg` must be valid non-null pointers.
+/// - `fmt` must be a valid C string or null.
+/// - `tvs` must be null or a valid pointer to a VAR_UNKNOWN-terminated
+///   typval_T array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_fmt_types(
+    ap_types: *mut *mut *const c_char,
+    num_posarg: *mut c_int,
+    fmt: *const c_char,
+    tvs: *const c_void,
+) -> c_int {
+    unsafe {
+        if fmt.is_null() {
+            return OK;
+        }
+
+        // Helper: error cleanup and return FAIL
+        let error = |ap_types: *mut *mut *const c_char, num_posarg: *mut c_int| -> c_int {
+            xfree((*ap_types).cast::<c_void>());
+            *ap_types = std::ptr::null_mut();
+            *num_posarg = 0;
+            FAIL
+        };
+
+        let mut p = fmt as *const u8;
+        let mut any_pos: c_int = 0;
+        let mut any_arg: c_int = 0;
+
+        macro_rules! check_pos_arg {
+            () => {
+                if any_pos != 0 && any_arg != 0 {
+                    semsg(gettext(E_CANNOT_MIX_POSITIONAL.as_ptr().cast()), fmt);
+                    return error(ap_types, num_posarg);
+                }
+            };
+        }
+
+        while *p != NUL {
+            if *p != b'%' {
+                // skip to next '%'
+                let q = libc::strchr((p as *const c_char).add(1), b'%' as c_int);
+                let n = if q.is_null() {
+                    libc::strlen(p as *const c_char)
+                } else {
+                    q.offset_from(p as *const c_char) as usize
+                };
+                p = p.add(n);
+            } else {
+                // variable for positional arg
+                let mut pos_arg: c_int = -1;
+                let pstart = (p as *const c_char).add(1);
+
+                p = p.add(1); // skip '%'
+
+                // Check for positional argument specifier
+                let mut ptype = p;
+                while (*ptype).is_ascii_digit() {
+                    ptype = ptype.add(1);
+                }
+
+                if *ptype == b'$' {
+                    if *p == b'0' {
+                        // 0 flag at the wrong place
+                        semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr().cast()), fmt);
+                        return error(ap_types, num_posarg);
+                    }
+
+                    // Positional argument
+                    let mut uj: c_uint = 0;
+                    let mut pp = p as *const c_char;
+                    if rs_get_unsigned_int(pstart, &mut pp, &mut uj, !tvs.is_null()) == FAIL {
+                        return error(ap_types, num_posarg);
+                    }
+                    p = pp as *const u8;
+
+                    pos_arg = uj as c_int;
+                    any_pos = 1;
+                    check_pos_arg!();
+
+                    p = p.add(1); // skip '$'
+                }
+
+                // parse flags: 0, -, +, space, #, '
+                while *p == b'0'
+                    || *p == b'-'
+                    || *p == b'+'
+                    || *p == b' '
+                    || *p == b'#'
+                    || *p == b'\''
+                {
+                    p = p.add(1);
+                }
+
+                // parse field width
+                let arg = p as *const c_char;
+                if *p == b'*' {
+                    p = p.add(1);
+
+                    if (*p).is_ascii_digit() {
+                        // Positional argument field width
+                        let mut uj: c_uint = 0;
+                        let mut pp = p as *const c_char;
+                        if rs_get_unsigned_int(arg.add(1), &mut pp, &mut uj, !tvs.is_null()) == FAIL
+                        {
+                            return error(ap_types, num_posarg);
+                        }
+                        p = pp as *const u8;
+
+                        if *p != b'$' {
+                            semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr().cast()), fmt);
+                            return error(ap_types, num_posarg);
+                        }
+                        p = p.add(1); // skip '$'
+                        any_pos = 1;
+                        check_pos_arg!();
+
+                        if rs_adjust_types(ap_types, uj as c_int, num_posarg, arg) == FAIL {
+                            return error(ap_types, num_posarg);
+                        }
+                    } else {
+                        any_arg = 1;
+                        check_pos_arg!();
+                    }
+                } else if (*p).is_ascii_digit() {
+                    let digstart = p as *const c_char;
+                    let mut uj: c_uint = 0;
+                    let mut pp = p as *const c_char;
+                    if rs_get_unsigned_int(digstart, &mut pp, &mut uj, !tvs.is_null()) == FAIL {
+                        return error(ap_types, num_posarg);
+                    }
+                    p = pp as *const u8;
+
+                    if *p == b'$' {
+                        semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr().cast()), fmt);
+                        return error(ap_types, num_posarg);
+                    }
+                }
+
+                // parse precision
+                if *p == b'.' {
+                    p = p.add(1);
+                    let arg2 = p as *const c_char;
+
+                    if *p == b'*' {
+                        p = p.add(1);
+
+                        if (*p).is_ascii_digit() {
+                            // Parse precision positional
+                            let mut uj: c_uint = 0;
+                            let mut pp = p as *const c_char;
+                            if rs_get_unsigned_int(arg2.add(1), &mut pp, &mut uj, !tvs.is_null())
+                                == FAIL
+                            {
+                                return error(ap_types, num_posarg);
+                            }
+                            p = pp as *const u8;
+
+                            if *p == b'$' {
+                                any_pos = 1;
+                                check_pos_arg!();
+
+                                p = p.add(1); // skip '$'
+
+                                if rs_adjust_types(ap_types, uj as c_int, num_posarg, arg2) == FAIL
+                                {
+                                    return error(ap_types, num_posarg);
+                                }
+                            } else {
+                                semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr().cast()), fmt);
+                                return error(ap_types, num_posarg);
+                            }
+                        } else {
+                            any_arg = 1;
+                            check_pos_arg!();
+                        }
+                    } else if (*p).is_ascii_digit() {
+                        let digstart = p as *const c_char;
+                        let mut uj: c_uint = 0;
+                        let mut pp = p as *const c_char;
+                        if rs_get_unsigned_int(digstart, &mut pp, &mut uj, !tvs.is_null()) == FAIL {
+                            return error(ap_types, num_posarg);
+                        }
+                        p = pp as *const u8;
+
+                        if *p == b'$' {
+                            semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr().cast()), fmt);
+                            return error(ap_types, num_posarg);
+                        }
+                    }
+                }
+
+                if pos_arg != -1 {
+                    any_pos = 1;
+                    check_pos_arg!();
+                    ptype = p;
+                }
+
+                // parse 'h', 'l', 'll' and 'z' length modifiers
+                if *p == b'h' || *p == b'l' || *p == b'z' {
+                    let lm = *p;
+                    p = p.add(1);
+                    if lm == b'l' && *p == b'l' {
+                        p = p.add(1);
+                    }
+                }
+
+                match *p {
+                    b'i' | b'*' | b'd' | b'u' | b'o' | b'D' | b'U' | b'O' | b'x' | b'X' | b'b'
+                    | b'B' | b'c' | b's' | b'S' | b'p' | b'f' | b'F' | b'e' | b'E' | b'g'
+                    | b'G' => {
+                        if pos_arg != -1 {
+                            if rs_adjust_types(
+                                ap_types,
+                                pos_arg,
+                                num_posarg,
+                                ptype as *const c_char,
+                            ) == FAIL
+                            {
+                                return error(ap_types, num_posarg);
+                            }
+                        } else {
+                            any_arg = 1;
+                            check_pos_arg!();
+                        }
+                    }
+                    _ => {
+                        if pos_arg != -1 {
+                            semsg(gettext(E_CANNOT_MIX_POSITIONAL.as_ptr().cast()), fmt);
+                            return error(ap_types, num_posarg);
+                        }
+                    }
+                }
+
+                if *p != NUL {
+                    p = p.add(1); // step over conversion specifier
+                }
+            }
+        }
+
+        // Validate all positional args are used and within tvs bounds
+        for arg_idx in 0..*num_posarg {
+            if (*(*ap_types).add(arg_idx as usize)).is_null() {
+                semsg(
+                    gettext(E_FMT_ARG_NR_UNUSED.as_ptr().cast()),
+                    arg_idx + 1,
+                    fmt,
+                );
+                return error(ap_types, num_posarg);
+            }
+
+            if !tvs.is_null() {
+                // Access tvs[arg_idx].v_type via repr(C) struct stride
+                let tv_arr = tvs.cast::<TvForTypval>();
+                if (*tv_arr.add(arg_idx as usize)).v_type == VAR_UNKNOWN {
+                    semsg(
+                        gettext(E_POSITIONAL_NR_OUT_OF_BOUNDS.as_ptr().cast()),
+                        arg_idx + 1,
+                        fmt,
+                    );
+                    return error(ap_types, num_posarg);
+                }
+            }
+        }
+
+        OK
+    }
+}
+
+/// Minimal repr(C) mirror of typval_T used only for array striding.
+/// Matches the full struct layout: v_type(4), v_lock(4), vval(8) = 16 bytes.
+/// We only read v_type; the rest is padding to get the correct stride.
+#[repr(C)]
+struct TvForTypval {
+    v_type: c_int,
+    v_lock: c_int,
+    vval: u64, // largest union member is a pointer (8 bytes)
 }
