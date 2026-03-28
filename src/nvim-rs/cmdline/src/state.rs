@@ -1059,9 +1059,9 @@ unsafe extern "C" {
     fn nvim_command_line_not_changed(s: *mut c_void) -> c_int;
     fn nvim_command_line_changed(s: *mut c_void) -> c_int;
 
-    // Wrappers for nextwild/showmatches
-    fn nvim_nextwild(xp: *mut c_void, wild_type: c_int, options: c_int, escape: bool) -> c_int;
-    fn nvim_showmatches(
+    // Direct C expansion functions (replaces nvim_nextwild/nvim_showmatches wrappers)
+    fn nextwild(xp: *mut c_void, wild_type: c_int, options: c_int, escape: bool) -> c_int;
+    fn showmatches(
         xp: *mut c_void,
         display_wildmenu: bool,
         display_list: bool,
@@ -1170,14 +1170,14 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
             && nvim_cls_get_did_wild_list(s) == 0
             && (nvim_get_wim_flags(wim_index) & WIM_FLAG_LIST) != 0
         {
-            nvim_showmatches(xp, false, true, wim_noselect);
+            showmatches(xp, false, true, wim_noselect);
             crate::screen::redrawcmd_rs();
             nvim_cls_set_did_wild_list(s, 1);
         }
         if (nvim_get_wim_flags(wim_index) & WIM_FLAG_LONGEST) != 0 {
-            res = nvim_nextwild(xp, WILD_LONGEST, options, escape);
+            res = nextwild(xp, WILD_LONGEST, options, escape);
         } else if (nvim_get_wim_flags(wim_index) & WIM_FLAG_FULL) != 0 {
-            res = nvim_nextwild(xp, WILD_NEXT, options, escape);
+            res = nextwild(xp, WILD_NEXT, options, escape);
         } else {
             res = OK; // don't insert 'wildchar' now
         }
@@ -1209,13 +1209,13 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
 
         // if 'wildmode' first contains "longest", get longest common part
         if wim_longest {
-            res = nvim_nextwild(xp, WILD_LONGEST, options, escape);
+            res = nextwild(xp, WILD_LONGEST, options, escape);
         } else {
             let mut opts = options;
             if wim_noselect || wim_list {
                 opts |= WILD_NOSELECT;
             }
-            res = nvim_nextwild(xp, WILD_EXPAND_KEEP, opts, escape);
+            res = nextwild(xp, WILD_EXPAND_KEEP, opts, escape);
         }
 
         // Remove popup menu if no completion items are available
@@ -1242,16 +1242,16 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
                 let found_longest_prefix = nvim_get_ccline_cmdpos() != cmdpos_before;
                 let wim_list_check = wim_list || (p_wmnu_set && wim_full);
                 if wim_list_check {
-                    nvim_showmatches(xp, p_wmnu_set, wim_list, true);
+                    showmatches(xp, p_wmnu_set, wim_list, true);
                 } else if !found_longest_prefix {
                     let wim_list_next = (nvim_get_wim_flags(1) & WIM_FLAG_LIST) != 0;
                     let wim_full_next = (nvim_get_wim_flags(1) & WIM_FLAG_FULL) != 0;
                     let wim_noselect_next = (nvim_get_wim_flags(1) & WIM_FLAG_NOSELECT) != 0;
                     if wim_list_next || (p_wmnu_set && (wim_full_next || wim_noselect_next)) {
                         if wim_full_next && !wim_noselect_next {
-                            nvim_nextwild(xp, WILD_NEXT, options, escape);
+                            nextwild(xp, WILD_NEXT, options, escape);
                         } else {
-                            nvim_showmatches(xp, p_wmnu_set, wim_list_next, wim_noselect_next);
+                            showmatches(xp, p_wmnu_set, wim_list_next, wim_noselect_next);
                         }
                         if wim_list_next {
                             nvim_cls_set_did_wild_list(s, 1);
@@ -1261,7 +1261,7 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
             } else {
                 let wim_list2 = wim_list || (p_wmnu_set && (wim_full || wim_noselect));
                 if wim_list2 {
-                    nvim_showmatches(xp, p_wmnu_set, wim_list, wim_noselect);
+                    showmatches(xp, p_wmnu_set, wim_list, wim_noselect);
                 } else {
                     vim_beep(K_OPT_BO_FLAG_WILDMODE);
                 }
@@ -1354,9 +1354,9 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             if cmdline_pum_active() != 0 {
                 let firstc = nvim_cls_get_firstc(s);
                 let xp = nvim_cls_get_xpc(s);
-                nvim_nextwild(xp, WILD_PUM_WANT, 0, firstc != b'@' as c_int);
+                nextwild(xp, WILD_PUM_WANT, 0, firstc != b'@' as c_int);
                 if nvim_get_pum_want_finish() != 0 {
-                    nvim_nextwild(xp, WILD_APPLY, WILD_NO_BEEP, firstc != b'@' as c_int);
+                    nextwild(xp, WILD_APPLY, WILD_NO_BEEP, firstc != b'@' as c_int);
                     nvim_command_line_end_wildmenu(s, false);
                 }
             }
@@ -1452,7 +1452,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             };
             let xp = nvim_cls_get_xpc(s);
             let firstc = nvim_cls_get_firstc(s);
-            nvim_nextwild(xp, wild_type, WILD_NO_BEEP, firstc != b'@' as c_int);
+            nextwild(xp, wild_type, WILD_NO_BEEP, firstc != b'@' as c_int);
         }
     }
 
@@ -1620,7 +1620,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         if c_check == K_S_TAB && nvim_get_key_typed_cmdline() != 0 {
             let xp = nvim_cls_get_xpc(s);
             let firstc = nvim_cls_get_firstc(s);
-            if nvim_nextwild(xp, WILD_EXPAND_KEEP, 0, firstc != b'@' as c_int) == OK {
+            if nextwild(xp, WILD_EXPAND_KEEP, 0, firstc != b'@' as c_int) == OK {
                 let numfiles = nvim_cls_get_xpc_numfiles(s);
                 let wim_idx = nvim_cls_get_wim_index(s);
                 if numfiles > 1
@@ -1628,15 +1628,15 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                         && (nvim_get_wim_flags(wim_idx) & WIM_FLAG_LIST) != 0)
                         || p_wmnu != 0)
                 {
-                    nvim_showmatches(
+                    showmatches(
                         xp,
                         p_wmnu != 0,
                         (nvim_get_wim_flags(wim_idx) & WIM_FLAG_LIST) != 0,
                         (nvim_get_wim_flags(0) & WIM_FLAG_NOSELECT) != 0,
                     );
                 }
-                nvim_nextwild(xp, WILD_PREV, 0, firstc != b'@' as c_int);
-                nvim_nextwild(xp, WILD_PREV, 0, firstc != b'@' as c_int);
+                nextwild(xp, WILD_PREV, 0, firstc != b'@' as c_int);
+                nextwild(xp, WILD_PREV, 0, firstc != b'@' as c_int);
                 return nvim_command_line_changed(s);
             }
         }

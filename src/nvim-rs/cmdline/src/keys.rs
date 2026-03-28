@@ -1024,14 +1024,13 @@ unsafe extern "C" {
     fn nvim_command_line_left_right_mouse(s: *mut c_void);
     fn nvim_command_line_browse_history(s: *mut c_void) -> c_int;
     fn nvim_cmdline_pum_cleanup();
-    fn nvim_showmatches(
+    fn showmatches(
         xp: *mut c_void,
         display_wildmenu: bool,
         display_list: bool,
         noselect: bool,
     ) -> c_int;
-    fn nvim_nextwild(xp: *mut c_void, wild_type: c_int, options: c_int, escape: bool) -> c_int;
-    fn nvim_may_add_char_to_search(firstc: c_int, c: *mut c_int, is_state: *mut c_void) -> c_int;
+    fn nextwild(xp: *mut c_void, wild_type: c_int, options: c_int, escape: bool) -> c_int;
 
     // Global accessors
     fn nvim_get_ccline_one_key() -> c_int;
@@ -1049,7 +1048,6 @@ unsafe extern "C" {
     fn nvim_set_getln_interrupted_highlight(val: c_int);
     fn nvim_get_typebuf_len() -> c_int;
     fn nvim_get_p_ari() -> c_int;
-    fn nvim_ccline_cmdbuff_set_nul();
     fn nvim_get_wim_flags(idx: c_int) -> u8;
 
     // Screen position accessors (not in the earlier extern block)
@@ -1205,7 +1203,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         x if x == CTRL_D => {
             let xp = nvim_cls_get_xpc(s);
             let wim_noselect = (nvim_get_wim_flags(0) & K_OPT_WIM_FLAG_NOSELECT) != 0;
-            if nvim_showmatches(xp, false, true, wim_noselect) == EXPAND_NOTHING {
+            if showmatches(xp, false, true, wim_noselect) == EXPAND_NOTHING {
                 // fall through to normal char handling
             } else {
                 crate::screen::redrawcmd_rs();
@@ -1391,7 +1389,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             }
             let xp = nvim_cls_get_xpc(s);
             let firstc = nvim_cls_get_firstc(s);
-            if nvim_nextwild(xp, WILD_ALL, 0, firstc != b'@' as c_int) == FAIL {
+            if nextwild(xp, WILD_ALL, 0, firstc != b'@' as c_int) == FAIL {
                 // fall through to normal char
             } else {
                 nvim_cls_set_xpc_context(s, EXPAND_NOTHING);
@@ -1405,13 +1403,18 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             let firstc = nvim_cls_get_firstc(s);
             let is_state = nvim_cls_get_is_state(s);
             let mut c_val = c;
-            if nvim_may_add_char_to_search(firstc, &raw mut c_val, is_state) == 1 {
+            if crate::search::may_add_char_to_search_rs(
+                firstc,
+                &raw mut c_val,
+                is_state.cast::<crate::search::IncsearchStateT>(),
+            ) == 1
+            {
                 // OK
                 nvim_cls_set_c(s, c_val);
                 return nvim_command_line_not_changed(s);
             }
             let xp = nvim_cls_get_xpc(s);
-            if nvim_nextwild(xp, WILD_LONGEST, 0, firstc != b'@' as c_int) == FAIL {
+            if nextwild(xp, WILD_LONGEST, 0, firstc != b'@' as c_int) == FAIL {
                 // fall through
             } else {
                 return nvim_command_line_changed(s);
@@ -1425,7 +1428,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
                 let wild_type = if c == CTRL_P { WILD_PREV } else { WILD_NEXT };
                 let xp = nvim_cls_get_xpc(s);
                 let firstc = nvim_cls_get_firstc(s);
-                if nvim_nextwild(xp, wild_type, 0, firstc != b'@' as c_int) == FAIL {
+                if nextwild(xp, wild_type, 0, firstc != b'@' as c_int) == FAIL {
                     // fall through to history
                 } else {
                     return nvim_command_line_changed(s);
@@ -1462,7 +1465,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
                 };
                 let xp = nvim_cls_get_xpc(s);
                 let firstc = nvim_cls_get_firstc(s);
-                if nvim_nextwild(xp, wild_type, 0, firstc != b'@' as c_int) == FAIL {
+                if nextwild(xp, wild_type, 0, firstc != b'@' as c_int) == FAIL {
                     // fall through
                 } else {
                     return nvim_command_line_changed(s);
@@ -1549,7 +1552,10 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         // 'q': return on mouse prompt with NUL
         x if x == b'q' as c_int => {
             if nvim_cls_get_ccline_mouse_used() != 0 {
-                nvim_ccline_cmdbuff_set_nul();
+                let cmdbuff = nvim_get_ccline_cmdbuff();
+                if !cmdbuff.is_null() {
+                    *cmdbuff = NUL as c_char;
+                }
                 return 0;
             }
             // FALLTHROUGH to default

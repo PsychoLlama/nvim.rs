@@ -1538,17 +1538,6 @@ void nvim_cls_set_ccline_mouse_used_val(int val)
 /// Wrapper for cmdline_pum_cleanup(&ccline) (called from Rust).
 void nvim_cmdline_pum_cleanup(void) { cmdline_pum_cleanup(&ccline); }
 
-/// Call showmatches for &s->xpc (called from Rust with opaque xp pointer).
-int nvim_showmatches(void *xp, bool display_wildmenu, bool display_list, bool noselect)
-{
-  return showmatches((expand_T *)xp, display_wildmenu, display_list, noselect);
-}
-
-/// Call nextwild for &s->xpc (called from Rust with opaque xp pointer).
-int nvim_nextwild(void *xp, int type, int options, bool escape)
-{
-  return nextwild((expand_T *)xp, type, options, escape);
-}
 
 /// Get getln_interrupted_highlight global.
 int nvim_get_getln_interrupted_highlight(void) { return getln_interrupted_highlight ? 1 : 0; }
@@ -1556,19 +1545,6 @@ int nvim_get_getln_interrupted_highlight(void) { return getln_interrupted_highli
 /// Set getln_interrupted_highlight global.
 void nvim_set_getln_interrupted_highlight(int val) { getln_interrupted_highlight = (val != 0); }
 
-/// Set ccline.cmdbuff[0] to NUL (for 'q' with mouse prompt).
-void nvim_ccline_cmdbuff_set_nul(void)
-{
-  if (ccline.cmdbuff != NULL) {
-    *ccline.cmdbuff = NUL;
-  }
-}
-
-/// Get may_add_char_to_search result (called from Rust).
-int nvim_may_add_char_to_search(int firstc, int *c, void *is_state)
-{
-  return may_add_char_to_search(firstc, c, (incsearch_state_T *)is_state);
-}
 
 /// Get cedit_key value (static variable, exposed for Rust).
 int nvim_get_cedit_key(void) { return cedit_key; }
