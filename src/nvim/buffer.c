@@ -122,14 +122,6 @@ extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern int rs_last_window(win_T *win);
 
-// Rust FFI declarations (window wrappers removed)
-extern int rs_get_last_winid(void);
-extern int rs_global_stl_height(void);
-extern win_T *rs_lastwin_nofloating(void);
-extern int rs_tabline_height(void);
-extern int rs_tabpage_index(tabpage_T *ftp);
-extern int rs_win_locked(win_T *wp);
-
 // Rust fold FFI declarations
 extern void rs_clearFolding(win_T *win);
 extern void rs_foldUpdateAll(win_T *win);
@@ -145,7 +137,6 @@ extern int rs_diffopt_hiddenoff(void);
 // File identity helpers from Rust
 extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
 
-extern void rs_reset_VIsual_and_resel(void);
 extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
 extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int count, int flags,
                                           int unload);
@@ -796,184 +787,9 @@ void free_buf_options(buf_T *buf, bool free_p_ff)
 
 // handle_swap_exists() migrated to Rust lifecycle.rs (Phase 1).
 
-/// Open a window for a number of buffers.
-void ex_buffer_all(exarg_T *eap)
-{
-  win_T *wpnext;
-  int split_ret = OK;
-  int open_wins = 0;
-  int had_tab = cmdmod.cmod_tab;
-
-  // Maximum number of windows to open.
-  linenr_T count = eap->addr_count == 0
-                   ? 9999         // make as many windows as possible
-                   : eap->line2;  // make as many windows as specified
-
-  // When true also load inactive buffers.
-  int all = eap->cmdidx != CMD_unhide && eap->cmdidx != CMD_sunhide;
-
-  // Stop Visual mode, the cursor and "VIsual" may very well be invalid after
-  // switching to another buffer.
-  rs_reset_VIsual_and_resel();
-
-  setpcmark();
-
-  // Close superfluous windows (two windows for the same buffer).
-  // Also close windows that are not full-width.
-  if (had_tab > 0) {
-    goto_tabpage_tp(first_tabpage, true, true);
-  }
-  while (true) {
-    tabpage_T *tpnext = curtab->tp_next;
-    // Try to close floating windows first
-    for (win_T *wp = lastwin->w_floating ? lastwin : firstwin; wp != NULL; wp = wpnext) {
-      wpnext = wp->w_floating
-               ? wp->w_prev->w_floating ? wp->w_prev : firstwin
-               : (wp->w_next == NULL || wp->w_next->w_floating) ? NULL : wp->w_next;
-      if ((wp->w_buffer->b_nwindows > 1
-           || wp->w_floating
-           || ((cmdmod.cmod_split & WSP_VERT)
-               ? wp->w_height + wp->w_hsep_height + wp->w_status_height < Rows - p_ch
-               - rs_tabline_height() - rs_global_stl_height()
-               : wp->w_width != Columns)
-           || (had_tab > 0 && wp != firstwin))
-          && !ONE_WINDOW
-          && !(rs_win_locked(curwin) || wp->w_buffer->b_locked > 0)
-          && !is_aucmd_win(wp)) {
-        if (win_close(wp, false, false) == FAIL) {
-          break;
-        }
-        // Just in case an autocommand does something strange with
-        // windows: start all over...
-        wpnext = lastwin->w_floating ? lastwin : firstwin;
-        tpnext = first_tabpage;
-        open_wins = 0;
-      } else {
-        open_wins++;
-      }
-    }
-
-    // Without the ":tab" modifier only do the current tab page.
-    if (had_tab == 0 || tpnext == NULL) {
-      break;
-    }
-    goto_tabpage_tp(tpnext, true, true);
-  }
-
-  // Go through the buffer list.  When a buffer doesn't have a window yet,
-  // open one.  Otherwise move the window to the right position.
-  // Watch out for autocommands that delete buffers or windows!
-  //
-  // Don't execute Win/Buf Enter/Leave autocommands here.
-  autocmd_no_enter++;
-  // lastwin may be aucmd_win
-  win_enter(rs_lastwin_nofloating(), false);
-  autocmd_no_leave++;
-  for (buf_T *buf = firstbuf; buf != NULL && open_wins < count; buf = buf->b_next) {
-    // Check if this buffer needs a window
-    if ((!all && buf->b_ml.ml_mfp == NULL) || !buf->b_p_bl) {
-      continue;
-    }
-
-    win_T *wp;
-    if (had_tab != 0) {
-      // With the ":tab" modifier don't move the window.
-      wp = buf->b_nwindows > 0
-           ? lastwin  // buffer has a window, skip it
-           : NULL;
-    } else {
-      // Check if this buffer already has a window
-      for (wp = firstwin; wp != NULL; wp = wp->w_next) {
-        if (!wp->w_floating && wp->w_buffer == buf) {
-          break;
-        }
-      }
-      // If the buffer already has a window, move it
-      if (wp != NULL) {
-        win_move_after(wp, curwin);
-      }
-    }
-
-    if (wp == NULL && split_ret == OK) {
-      bufref_T bufref;
-      set_bufref(&bufref, buf);
-      // Split the window and put the buffer in it.
-      bool p_ea_save = p_ea;
-      p_ea = true;                      // use space from all windows
-      split_ret = win_split(0, WSP_ROOM | WSP_BELOW);
-      open_wins++;
-      p_ea = p_ea_save;
-      if (split_ret == FAIL) {
-        continue;
-      }
-
-      // Open the buffer in this window.
-      swap_exists_action = SEA_DIALOG;
-      set_curbuf(buf, DOBUF_GOTO, !(jop_flags & kOptJopFlagClean));
-      if (!bufref_valid(&bufref)) {
-        // Autocommands deleted the buffer.
-        swap_exists_action = SEA_NONE;
-        break;
-      }
-      if (swap_exists_action == SEA_QUIT) {
-        cleanup_T cs;
-
-        // Reset the error/interrupt/exception state here so that
-        // aborting() returns false when closing a window.
-        enter_cleanup(&cs);
-
-        // User selected Quit at ATTENTION prompt; close this window.
-        win_close(curwin, true, false);
-        open_wins--;
-        swap_exists_action = SEA_NONE;
-        swap_exists_did_quit = true;
-
-        // Restore the error/interrupt/exception state if not
-        // discarded by a new aborting error, interrupt, or uncaught
-        // exception.
-        leave_cleanup(&cs);
-      } else {
-        handle_swap_exists(NULL);
-      }
-    }
-
-    os_breakcheck();
-    if (got_int) {
-      vgetc();            // only break the file loading, not the rest
-      break;
-    }
-    // Autocommands deleted the buffer or aborted script processing!!!
-    if (aborting()) {
-      break;
-    }
-    // When ":tab" was used open a new tab for a new window repeatedly.
-    if (had_tab > 0 && rs_tabpage_index(NULL) <= p_tpm) {
-      cmdmod.cmod_tab = 9999;
-    }
-  }
-  autocmd_no_enter--;
-  win_enter(firstwin, false);           // back to first window
-  autocmd_no_leave--;
-
-  // Close superfluous windows.
-  for (win_T *wp = lastwin; open_wins > count;) {
-    bool r = (buf_hide(wp->w_buffer) || !bufIsChanged(wp->w_buffer)
-              || autowrite(wp->w_buffer, false) == OK) && !is_aucmd_win(wp);
-    if (!rs_win_valid(wp)) {
-      // BufWrite Autocommands made the window invalid, start over
-      wp = lastwin;
-    } else if (r) {
-      win_close(wp, !buf_hide(wp->w_buffer), false);
-      open_wins--;
-      wp = lastwin;
-    } else {
-      wp = wp->w_prev;
-      if (wp == NULL) {
-        break;
-      }
-    }
-  }
-}
+// ex_buffer_all() migrated to Rust lifecycle.rs (Phase 4).
+_Static_assert(CMD_unhide == 495, "CMD_unhide value changed");
+_Static_assert(CMD_sunhide == 437, "CMD_sunhide value changed");
 
 #if defined(BACKSLASH_IN_FILENAME)
 /// Adjust slashes in file names.  Called after 'shellslash' was set.

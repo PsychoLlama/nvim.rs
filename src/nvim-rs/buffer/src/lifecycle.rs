@@ -1959,6 +1959,322 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
 }
 
 // =============================================================================
+// ex_buffer_all: :ball / :sball / :unhide / :sunhide
+// =============================================================================
+
+extern "C" {
+    // eap accessors (ex_docmd.c)
+    fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
+    fn nvim_eap_get_line2(eap: *const c_void) -> c_int;
+
+    // tabpage traversal (window globals)
+    fn nvim_get_curtab() -> *mut c_void;
+    fn nvim_get_first_tabpage() -> *mut c_void;
+    fn nvim_al_tp_get_next(tp: *mut c_void) -> *mut c_void;
+    fn goto_tabpage_tp(tp: *mut c_void, trigger_enter: bool, trigger_leave: bool);
+
+    // reset VIsual mode (normal/src/lib.rs)
+    fn rs_reset_VIsual_and_resel();
+
+    // window list traversal and properties (win_struct.rs)
+    fn nvim_win_get_w_height(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_w_width(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_prev(wp: *mut c_void) -> *mut c_void;
+    fn nvim_win_get_hsep_height(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_status_height(wp: *mut c_void) -> c_int;
+
+    // globals (arglist shim)
+    fn nvim_al_ONE_WINDOW() -> c_int;
+    fn nvim_al_is_aucmd_win(wp: *mut c_void) -> c_int;
+    fn nvim_al_win_enter(wp: *mut c_void, undo_sync: c_int);
+    fn nvim_al_win_move_after(wp: *mut c_void, after: *mut c_void);
+    fn nvim_al_get_autocmd_no_enter() -> c_int;
+    fn nvim_al_set_autocmd_no_enter(val: c_int);
+    fn nvim_al_get_autocmd_no_leave() -> c_int;
+    fn nvim_al_set_autocmd_no_leave(val: c_int);
+    #[link_name = "rs_lastwin_nofloating"]
+    fn nvim_al_lastwin_nofloating() -> *mut c_void;
+    #[link_name = "rs_tabpage_index"]
+    fn nvim_al_tabpage_index(tp: *mut c_void) -> c_int;
+    fn nvim_al_get_p_tpm() -> c_int;
+    fn nvim_al_get_p_ea() -> c_int;
+    fn nvim_al_set_p_ea(val: c_int);
+    fn nvim_al_set_cmdmod_cmod_tab(val: c_int);
+    fn nvim_al_autowrite(buf: BufHandle, eap_forceit: c_int) -> c_int;
+    fn nvim_al_get_Columns() -> c_int;
+
+    // cmdmod split flag (ex_docmd)
+    fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
+    fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
+
+    // screen geometry (window globals)
+    fn nvim_get_rows_avail() -> c_int;
+
+    // global interruption
+    fn os_breakcheck();
+    fn vgetc() -> c_int;
+    #[link_name = "got_int"]
+    static mut ex_buffer_got_int: bool;
+
+    // buf_hide (Rust-exported from buffer lib.rs)
+    fn buf_hide(buf: BufHandle) -> bool;
+}
+
+// CMD_sunhide and CMD_unhide values from ex_cmds_enum.generated.h
+const CMD_SUNHIDE: c_int = 437;
+const CMD_UNHIDE: c_int = 495;
+
+// WSP_* flags from window.h
+const WSP_ROOM: c_int = 0x01;
+const WSP_VERT: c_int = 0x02;
+const WSP_BELOW: c_int = 0x40;
+
+/// Open a window for a number of buffers.
+///
+/// Implements `:ball`, `:sball`, `:unhide`, `:sunhide`.
+///
+/// Port of C `ex_buffer_all()`.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[unsafe(export_name = "ex_buffer_all")]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut c_void) {
+    let mut split_ret = OK;
+    let mut open_wins: c_int = 0;
+    let had_tab = nvim_docmd_get_cmdmod_cmod_tab();
+
+    // Maximum number of windows to open.
+    let count: c_int = if nvim_eap_get_addr_count(eap) == 0 {
+        9999 // make as many windows as possible
+    } else {
+        nvim_eap_get_line2(eap)
+    };
+
+    // When true also load inactive buffers.
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let all = cmdidx != CMD_UNHIDE && cmdidx != CMD_SUNHIDE;
+
+    // Stop Visual mode; cursor and "VIsual" may be invalid after switching buffers.
+    rs_reset_VIsual_and_resel();
+
+    setpcmark();
+
+    // Close superfluous windows (two windows for same buffer or not full-width).
+    if had_tab > 0 {
+        goto_tabpage_tp(nvim_get_first_tabpage(), true, true);
+    }
+    'close_loop: loop {
+        let mut tpnext = nvim_al_tp_get_next(nvim_get_curtab());
+
+        // Try to close floating windows first.
+        let lastwin = nvim_get_lastwin();
+        let firstwin = nvim_get_firstwin();
+        let mut wp = if nvim_win_get_floating(lastwin) != 0 {
+            lastwin
+        } else {
+            firstwin
+        };
+        while !wp.is_null() {
+            // Compute wpnext
+            let wpnext = if nvim_win_get_floating(wp) != 0 {
+                let prev = nvim_win_get_prev(wp);
+                if !prev.is_null() && nvim_win_get_floating(prev) != 0 {
+                    prev
+                } else {
+                    nvim_get_firstwin()
+                }
+            } else {
+                let next = nvim_win_get_next(wp);
+                if next.is_null() || nvim_win_get_floating(next) != 0 {
+                    std::ptr::null_mut()
+                } else {
+                    next
+                }
+            };
+
+            let wp_buf = nvim_win_get_buffer(wp);
+            let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
+            let rows_avail = nvim_get_rows_avail();
+            let height_too_small = if (cmod_split & WSP_VERT) != 0 {
+                nvim_win_get_w_height(wp)
+                    + nvim_win_get_hsep_height(wp)
+                    + nvim_win_get_status_height(wp)
+                    < rows_avail
+            } else {
+                nvim_win_get_w_width(wp) != nvim_al_get_Columns()
+            };
+
+            let should_close = (nvim_buf_get_nwindows(wp_buf) > 1
+                || nvim_win_get_floating(wp) != 0
+                || height_too_small
+                || (had_tab > 0 && wp != nvim_get_firstwin()))
+                && nvim_al_ONE_WINDOW() == 0
+                && rs_win_locked(nvim_get_curwin()) == 0
+                && nvim_buf_get_locked(wp_buf) == 0
+                && nvim_al_is_aucmd_win(wp) == 0;
+
+            if should_close {
+                if win_close(wp, false, false) == FAIL {
+                    break;
+                }
+                // Autocommand may change windows: start all over.
+                let lastwin2 = nvim_get_lastwin();
+                wp = if nvim_win_get_floating(lastwin2) != 0 {
+                    lastwin2
+                } else {
+                    nvim_get_firstwin()
+                };
+                tpnext = nvim_get_first_tabpage();
+                open_wins = 0;
+            } else {
+                open_wins += 1;
+                wp = wpnext;
+            }
+        }
+
+        // Without the ":tab" modifier only do the current tab page.
+        if had_tab == 0 || tpnext.is_null() {
+            break 'close_loop;
+        }
+        goto_tabpage_tp(tpnext, true, true);
+    }
+
+    // Go through the buffer list. When a buffer doesn't have a window yet,
+    // open one. Otherwise move the window to the right position.
+    // Don't execute Win/Buf Enter/Leave autocommands here.
+    let ane = nvim_al_get_autocmd_no_enter();
+    nvim_al_set_autocmd_no_enter(ane + 1);
+    // lastwin may be aucmd_win
+    nvim_al_win_enter(nvim_al_lastwin_nofloating(), 0);
+    let anl = nvim_al_get_autocmd_no_leave();
+    nvim_al_set_autocmd_no_leave(anl + 1);
+
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() && open_wins < count {
+        // Check if this buffer needs a window.
+        if (!all && nvim_buf_get_ml_mfp(buf).is_null()) || nvim_buf_get_b_p_bl(buf) == 0 {
+            buf = nvim_buf_get_b_next(buf);
+            continue;
+        }
+
+        // Find or skip existing window for this buffer.
+        let wp: *mut c_void = if had_tab != 0 {
+            // With ":tab" modifier don't move the window.
+            if nvim_buf_get_nwindows(buf) > 0 {
+                nvim_get_lastwin() // buffer has a window, skip it
+            } else {
+                std::ptr::null_mut()
+            }
+        } else {
+            // Check if this buffer already has a window.
+            let mut found: *mut c_void = std::ptr::null_mut();
+            let mut w = nvim_get_firstwin();
+            while !w.is_null() {
+                if nvim_win_get_floating(w) == 0 && nvim_win_get_buffer(w) == buf {
+                    found = w;
+                    break;
+                }
+                w = nvim_win_get_next(w);
+            }
+            // If the buffer already has a window, move it.
+            if !found.is_null() {
+                nvim_al_win_move_after(found, nvim_get_curwin());
+            }
+            found
+        };
+
+        if wp.is_null() && split_ret == OK {
+            let mut bufref = crate::misc::BufRef {
+                br_buf: std::ptr::null_mut(),
+                br_fnum: 0,
+                br_buf_free_count: 0,
+            };
+            crate::misc::set_bufref(&raw mut bufref, buf);
+
+            // Split the window and put the buffer in it.
+            let p_ea_save = nvim_al_get_p_ea();
+            nvim_al_set_p_ea(1); // use space from all windows
+            split_ret = win_split(0, WSP_ROOM | WSP_BELOW);
+            open_wins += 1;
+            nvim_al_set_p_ea(p_ea_save);
+            if split_ret == FAIL {
+                buf = nvim_buf_get_b_next(buf);
+                continue;
+            }
+
+            // Open the buffer in this window.
+            swap_exists_action = SEA_DIALOG;
+            rs_set_curbuf(buf, DOBUF_GOTO, (jop_flags & K_OPT_JOP_FLAG_CLEAN) == 0);
+            if !bufref_valid(&raw mut bufref) {
+                // Autocommands deleted the buffer.
+                swap_exists_action = SEA_NONE;
+                break;
+            }
+            if swap_exists_action == SEA_QUIT {
+                let mut cs = CleanupT { _data: [0u8; 16] };
+                // Reset error/interrupt/exception state so aborting() is false.
+                enter_cleanup(&raw mut cs);
+
+                // User selected Quit: close this window.
+                win_close(nvim_get_curwin(), true, false);
+                open_wins -= 1;
+                swap_exists_action = SEA_NONE;
+                swap_exists_did_quit = true;
+
+                // Restore error/interrupt/exception state.
+                leave_cleanup(&raw mut cs);
+            } else {
+                rs_handle_swap_exists(std::ptr::null_mut());
+            }
+        }
+
+        os_breakcheck();
+        if ex_buffer_got_int {
+            let _ = vgetc(); // only break file loading, not the rest
+            break;
+        }
+        // Autocommands deleted buffer or aborted script processing.
+        if aborting() != 0 {
+            break;
+        }
+        // When ":tab" was used, open new tab for each new window repeatedly.
+        if had_tab > 0 && nvim_al_tabpage_index(std::ptr::null_mut()) <= nvim_al_get_p_tpm() {
+            nvim_al_set_cmdmod_cmod_tab(9999);
+        }
+
+        buf = nvim_buf_get_b_next(buf);
+    }
+
+    let ane = nvim_al_get_autocmd_no_enter();
+    nvim_al_set_autocmd_no_enter(ane - 1);
+    nvim_al_win_enter(nvim_get_firstwin(), 0); // back to first window
+    let anl = nvim_al_get_autocmd_no_leave();
+    nvim_al_set_autocmd_no_leave(anl - 1);
+
+    // Close superfluous windows.
+    let mut wp = nvim_get_lastwin();
+    while open_wins > count {
+        let wp_buf = nvim_win_get_buffer(wp);
+        let r = (buf_hide(wp_buf) || !bufIsChanged(wp_buf) || nvim_al_autowrite(wp_buf, 0) == OK)
+            && nvim_al_is_aucmd_win(wp) == 0;
+        if rs_win_valid(wp) == 0 {
+            // BufWrite autocommands made window invalid: start over.
+            wp = nvim_get_lastwin();
+        } else if r {
+            win_close(wp, !buf_hide(wp_buf), false);
+            open_wins -= 1;
+            wp = nvim_get_lastwin();
+        } else {
+            wp = nvim_win_get_prev(wp);
+            if wp.is_null() {
+                break;
+            }
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
