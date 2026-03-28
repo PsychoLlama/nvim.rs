@@ -14,7 +14,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
-use nvim_normal::types::CmdargT;
+use nvim_normal::types::{CmdargT, OpargT};
 use std::ffi::{c_char, c_int};
 
 // =============================================================================
@@ -1146,9 +1146,6 @@ extern "C" {
     /// C accessor: grid-based vcol/flags lookup for mouse click.
     fn nvim_mouse_check_grid_impl(vcolp: *mut colnr_T, flagsp: *mut c_int);
 
-    /// C accessor: `ins_mousescroll` logic.
-    fn nvim_ins_mousescroll_impl(dir: c_int);
-
     // --- Phase 2 accessors ---
 
     /// Set `curwin`.
@@ -1200,6 +1197,9 @@ extern "C" {
 
     /// Call `rs_nv_scroll_line(cap)`.
     fn rs_nv_scroll_line(cap: CmdargHandle);
+
+    /// Check if popup menu is visible.
+    fn pum_visible() -> bool;
 }
 
 // =============================================================================
@@ -1598,13 +1598,101 @@ pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
     nvim_set_curbuf(nvim_win_get_w_buffer(old_curwin));
 }
 
+// =============================================================================
+// Phase 4 — ins_mousescroll implementation
+// Key constants computed via TERMCAP2KEY(KS_EXTRA, KE_xxx):
+//   TERMCAP2KEY(a, b) = -(a + (b << 8))
+//   KS_EXTRA = 253
+// =============================================================================
+
+/// `K_MOUSEUP` key code (scroll wheel up).
+const K_MOUSEUP: c_int = -(253 + (76i32 << 8)); // -19709
+
+/// `K_MOUSEDOWN` key code (scroll wheel down).
+const K_MOUSEDOWN: c_int = -(253 + (75i32 << 8)); // -19453
+
+/// `K_MOUSELEFT` key code (scroll wheel left).
+const K_MOUSELEFT: c_int = -(253 + (77i32 << 8)); // -19965
+
+/// `K_MOUSERIGHT` key code (scroll wheel right).
+const K_MOUSERIGHT: c_int = -(253 + (78i32 << 8)); // -20221
+
 /// Insert mode mouse scroll handler.
+///
+/// Port of `nvim_ins_mousescroll_impl` from mouse.c. Constructs a `CmdargT`,
+/// optionally changes `curwin` to the window under the mouse, scrolls, and
+/// calls `start_arrow` if the cursor moved.
 ///
 /// # Safety
 /// Requires valid window and insert mode state.
 #[export_name = "ins_mousescroll"]
+#[allow(clippy::field_reassign_with_default)]
 pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
-    nvim_ins_mousescroll_impl(dir);
+    let mut oa = OpargT::default();
+    let mut cap = CmdargT::default();
+    cap.oap = &raw mut oa;
+    cap.arg = dir;
+    cap.cmdchar = match dir {
+        MSCR_UP => K_MOUSEUP,
+        MSCR_DOWN => K_MOUSEDOWN,
+        MSCR_LEFT => K_MOUSELEFT,
+        MSCR_RIGHT => K_MOUSERIGHT,
+        _ => {
+            // Invalid argument — silently ignore (mirrors siemsg path without crashing)
+            return;
+        }
+    };
+
+    let old_curwin = nvim_get_curwin();
+    let mouse_row = nvim_get_mouse_row();
+    let mouse_col_val = nvim_get_mouse_col();
+    if mouse_row >= 0 && mouse_col_val >= 0 {
+        // Find the window at the mouse pointer coordinates.
+        // NOTE: Must restore curwin to old_curwin before returning!
+        let mut grid = nvim_get_mouse_grid();
+        let mut row = mouse_row;
+        let mut col = mouse_col_val;
+        let wp = rs_mouse_find_win_inner(
+            std::ptr::addr_of_mut!(grid),
+            std::ptr::addr_of_mut!(row),
+            std::ptr::addr_of_mut!(col),
+        );
+        if wp.is_null() {
+            return;
+        }
+        nvim_set_curwin(wp);
+        nvim_set_curbuf(nvim_win_get_w_buffer(wp));
+    }
+
+    let curwin = nvim_get_curwin();
+    if curwin == old_curwin {
+        // Don't scroll the current window if the popup menu is visible.
+        if pum_visible() {
+            return;
+        }
+        nvim_undisplay_dollar();
+    }
+
+    let orig_cursor = *nvim_win_get_cursor_ptr(curwin);
+
+    // Call the common mouse scroll function shared with other modes.
+    rs_do_mousescroll(std::ptr::addr_of_mut!(cap));
+
+    let curwin_after = nvim_get_curwin();
+    nvim_win_set_redr_status(curwin_after, 1);
+    nvim_set_curwin(old_curwin);
+    nvim_set_curbuf(nvim_win_get_w_buffer(old_curwin));
+
+    // If cursor moved, notify insert mode via start_arrow.
+    let new_cursor = *nvim_win_get_cursor_ptr(old_curwin);
+    if new_cursor.lnum != orig_cursor.lnum
+        || new_cursor.col != orig_cursor.col
+        || new_cursor.coladd != orig_cursor.coladd
+    {
+        let mut orig = orig_cursor;
+        start_arrow(std::ptr::addr_of_mut!(orig));
+        nvim_set_can_cindent(1);
+    }
 }
 
 // =============================================================================
