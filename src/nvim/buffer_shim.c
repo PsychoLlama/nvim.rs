@@ -521,3 +521,22 @@ void nvim_buf_wipe_free(buf_T *buf)
 void nvim_buf_free_stuff_del(buf_T *buf)
 { free_buffer_stuff(buf, kBffClearWinInfo | kBffInitChangedtick); }
 int nvim_buf_b_ffname_is_null(buf_T *buf) { return buf->b_ffname == NULL ? 1 : 0; }
+
+// Phase 1: buf_store_file_info / prep_exarg / set_forced_fenc accessors
+
+// FileInfo accessors
+int64_t nvim_fileinfo_get_mtime(const FileInfo *fi) { return (int64_t)fi->stat.st_mtim.tv_sec; }
+int64_t nvim_fileinfo_get_mtime_ns(const FileInfo *fi) { return (int64_t)fi->stat.st_mtim.tv_nsec; }
+uint64_t nvim_fileinfo_get_size(const FileInfo *fi) { return os_fileinfo_size(fi); }
+int32_t nvim_fileinfo_get_mode(const FileInfo *fi) { return (int32_t)fi->stat.st_mode; }
+
+// Buffer option field accessors for prep_exarg
+// (nvim_buf_get_b_p_fenc, nvim_buf_get_b_p_bin already in change_ffi.c)
+// (nvim_buf_set_b_orig_mode already in memline_shim.c)
+int nvim_buf_get_b_bad_char(const buf_T *buf) { return buf->b_bad_char; }
+int nvim_buf_get_b_p_ff_char(const buf_T *buf) { return (unsigned char)buf->b_p_ff[0]; }
+
+// set_option_direct wrapper for fileencoding
+void nvim_set_fileencoding_local(const char *fenc) {
+  set_option_direct(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL, 0);
+}

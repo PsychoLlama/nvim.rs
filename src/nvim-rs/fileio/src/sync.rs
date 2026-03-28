@@ -5,7 +5,7 @@
 //! - Change reason classification
 //! - Reload decision logic
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 // =============================================================================
 // Change Reasons
@@ -423,6 +423,49 @@ impl BufferSyncFlags {
         // Don't check if currently saving
         !self.saving
     }
+}
+
+// =============================================================================
+// FFI: buf_store_file_info
+// =============================================================================
+
+extern "C" {
+    /// Get file modification time (seconds) from a FileInfo struct.
+    fn nvim_fileinfo_get_mtime(fi: *const c_void) -> i64;
+    /// Get file modification time (nanoseconds) from a FileInfo struct.
+    fn nvim_fileinfo_get_mtime_ns(fi: *const c_void) -> i64;
+    /// Get file size in bytes from a FileInfo struct.
+    fn nvim_fileinfo_get_size(fi: *const c_void) -> u64;
+    /// Get file mode from a FileInfo struct.
+    fn nvim_fileinfo_get_mode(fi: *const c_void) -> i32;
+    /// Set buf->b_mtime (in memline_shim.c).
+    fn nvim_buf_set_b_mtime(buf: *mut c_void, val: i64);
+    /// Set buf->b_mtime_ns (in memline_shim.c).
+    fn nvim_buf_set_b_mtime_ns(buf: *mut c_void, val: i64);
+    /// Set buf->b_orig_size (in memline_shim.c, takes int64_t).
+    fn nvim_buf_set_b_orig_size(buf: *mut c_void, val: i64);
+    /// Set buf->b_orig_mode (in buffer_shim.c).
+    fn nvim_buf_set_b_orig_mode(buf: *mut c_void, val: i32);
+}
+
+/// Store file metadata from a FileInfo struct into a buffer.
+///
+/// Replaces the C `buf_store_file_info` function.
+///
+/// # Safety
+/// - `buf` must be a valid non-null pointer to a buf_T.
+/// - `file_info` must be a valid non-null pointer to a FileInfo.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_store_file_info(buf: *mut c_void, file_info: *const c_void) {
+    let mtime = unsafe { nvim_fileinfo_get_mtime(file_info) };
+    let mtime_ns = unsafe { nvim_fileinfo_get_mtime_ns(file_info) };
+    let size = unsafe { nvim_fileinfo_get_size(file_info) };
+    let mode = unsafe { nvim_fileinfo_get_mode(file_info) };
+
+    unsafe { nvim_buf_set_b_mtime(buf, mtime) };
+    unsafe { nvim_buf_set_b_mtime_ns(buf, mtime_ns) };
+    unsafe { nvim_buf_set_b_orig_size(buf, size as i64) };
+    unsafe { nvim_buf_set_b_orig_mode(buf, mode) };
 }
 
 #[cfg(test)]

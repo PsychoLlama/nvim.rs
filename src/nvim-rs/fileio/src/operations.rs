@@ -779,6 +779,74 @@ pub unsafe extern "C" fn rs_filemess(buf: *const c_void, name: *const c_char, s:
     unsafe { msg_scrolled_ign = false };
 }
 
+// =============================================================================
+// prep_exarg: prepare exarg_T for buffer reload
+// =============================================================================
+
+extern "C" {
+    /// Get buf->b_p_fenc (fileencoding option string) -- from change_ffi.c.
+    fn nvim_buf_get_b_p_fenc(buf: *const c_void) -> *const c_char;
+    /// Get buf->b_bad_char -- from buffer_shim.c.
+    fn nvim_buf_get_b_bad_char(buf: *const c_void) -> c_int;
+    /// Get buf->b_p_ff[0] as int -- from buffer_shim.c.
+    fn nvim_buf_get_b_p_ff_char(buf: *const c_void) -> c_int;
+    /// Get buf->b_p_bin (returns bool as int) -- from change_ffi.c.
+    fn nvim_buf_get_b_p_bin(buf: *const c_void) -> bool;
+    /// Set eap->cmd (takes ownership of the pointer).
+    fn nvim_exarg_set_cmd(eap: *mut c_void, cmd: *mut c_char);
+    /// Set eap->force_enc.
+    fn nvim_exarg_set_force_enc(eap: *mut c_void, val: c_int);
+    /// Set eap->bad_char.
+    fn nvim_exarg_set_bad_char(eap: *mut c_void, val: c_int);
+    /// Set eap->force_ff.
+    fn nvim_exarg_set_force_ff(eap: *mut c_void, val: c_int);
+    /// Set eap->force_bin.
+    fn nvim_exarg_set_force_bin(eap: *mut c_void, val: c_int);
+    /// Set eap->read_edit.
+    fn nvim_exarg_set_read_edit(eap: *mut c_void, val: c_int);
+    /// Set eap->forceit.
+    fn nvim_exarg_set_forceit(eap: *mut c_void, val: c_int);
+    /// Allocate memory (like malloc but abort on OOM).
+    fn xmalloc(size: usize) -> *mut c_char;
+    /// snprintf: format into buf.
+    fn snprintf(buf: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
+}
+
+// FORCE_BIN and FORCE_NOBIN from ex_cmds_defs.h
+const FORCE_BIN: c_int = 1;
+const FORCE_NOBIN: c_int = 2;
+
+/// Prepare exarg_T for a buffer reload operation.
+///
+/// Replaces the C `prep_exarg` function.
+///
+/// # Safety
+/// - `eap` must be a valid non-null pointer to an exarg_T.
+/// - `buf` must be a valid non-null pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
+    let fenc = unsafe { nvim_buf_get_b_p_fenc(buf) };
+    // cmd_len = 15 + strlen(buf->b_p_fenc)
+    let fenc_len = if fenc.is_null() {
+        0
+    } else {
+        unsafe { libc::strlen(fenc as *const libc::c_char) }
+    };
+    let cmd_len = 15 + fenc_len;
+    let cmd = unsafe { xmalloc(cmd_len) };
+    unsafe { snprintf(cmd, cmd_len, c"e ++enc=%s".as_ptr(), fenc) };
+
+    unsafe { nvim_exarg_set_cmd(eap, cmd) };
+    unsafe { nvim_exarg_set_force_enc(eap, 8) };
+    unsafe { nvim_exarg_set_bad_char(eap, nvim_buf_get_b_bad_char(buf)) };
+    unsafe { nvim_exarg_set_force_ff(eap, nvim_buf_get_b_p_ff_char(buf)) };
+    let bin = unsafe { nvim_buf_get_b_p_bin(buf) };
+    let force_bin = if bin { FORCE_BIN } else { FORCE_NOBIN };
+    unsafe { nvim_exarg_set_force_bin(eap, force_bin) };
+    unsafe { nvim_exarg_set_read_edit(eap, 0) };
+    unsafe { nvim_exarg_set_forceit(eap, 0) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -105,6 +105,11 @@ extern void rs_diff_invalidate(buf_T *buf);
 // next_fenc and readfile_charconvert are implemented in Rust (fileio crate).
 extern char *next_fenc(char **pp, bool *alloced);
 extern char *readfile_charconvert(char *fname, char *fenc, int *fdp);
+// Phase 1 Rust replacements
+extern void rs_buf_store_file_info(buf_T *buf, FileInfo *file_info);
+extern void rs_forward_slash(char *fname);
+extern void rs_prep_exarg(exarg_T *eap, const buf_T *buf);
+extern void rs_set_forced_fenc(exarg_T *eap);
 
 #include "fileio.c.generated.h"
 
@@ -1873,17 +1878,7 @@ theend:
 void prep_exarg(exarg_T *eap, const buf_T *buf)
   FUNC_ATTR_NONNULL_ALL
 {
-  const size_t cmd_len = 15 + strlen(buf->b_p_fenc);
-  eap->cmd = xmalloc(cmd_len);
-
-  snprintf(eap->cmd, cmd_len, "e ++enc=%s", buf->b_p_fenc);
-  eap->force_enc = 8;
-  eap->bad_char = buf->b_bad_char;
-  eap->force_ff = (unsigned char)(*buf->b_p_ff);
-
-  eap->force_bin = buf->b_p_bin ? FORCE_BIN : FORCE_NOBIN;
-  eap->read_edit = false;
-  eap->forceit = false;
+  rs_prep_exarg(eap, buf);
 }
 
 /// Set default or forced 'fileformat' and 'binary'.
@@ -1910,13 +1905,7 @@ void set_file_options(bool set_options, exarg_T *eap)
 /// Set forced 'fileencoding'.
 void set_forced_fenc(exarg_T *eap)
 {
-  if (eap->force_enc == 0) {
-    return;
-  }
-
-  char *fenc = enc_canonize(eap->cmd + eap->force_enc);
-  set_option_direct(kOptFileencoding, CSTR_AS_OPTVAL(fenc), OPT_LOCAL, 0);
-  xfree(fenc);
+  rs_set_forced_fenc(eap);
 }
 
 
@@ -2491,10 +2480,7 @@ void buf_reload(buf_T *buf, int orig_mode, bool reload_options)
 void buf_store_file_info(buf_T *buf, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-  buf->b_mtime = file_info->stat.st_mtim.tv_sec;
-  buf->b_mtime_ns = file_info->stat.st_mtim.tv_nsec;
-  buf->b_orig_size = os_fileinfo_size(file_info);
-  buf->b_orig_mode = (int)file_info->stat.st_mode;
+  rs_buf_store_file_info(buf, file_info);
 }
 
 
@@ -2503,14 +2489,7 @@ void buf_store_file_info(buf_T *buf, FileInfo *file_info)
 /// unless when it looks like a URL.
 void forward_slash(char *fname)
 {
-  if (path_with_url(fname)) {
-    return;
-  }
-  for (char *p = fname; *p != NUL; p++) {
-    if (*p == '\\') {
-      *p = '/';
-    }
-  }
+  rs_forward_slash(fname);
 }
 #endif
 

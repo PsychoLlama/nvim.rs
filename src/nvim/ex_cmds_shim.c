@@ -504,3 +504,14 @@ void nvim_cpi_block_prep_text(int lnum, int start_vcol, int end_vcol,
   *textstart_out = bd.textstart;
   *textlen_out = bd.textlen;
 }
+
+// Phase 1: prep_exarg / set_forced_fenc exarg accessors
+int nvim_exarg_get_force_enc(const exarg_T *eap) { return eap->force_enc; }
+const char *nvim_exarg_get_cmd_ptr(const exarg_T *eap) { return eap->cmd; }
+void nvim_exarg_set_cmd(exarg_T *eap, char *cmd) { eap->cmd = cmd; }
+void nvim_exarg_set_force_enc(exarg_T *eap, int val) { eap->force_enc = val; }
+void nvim_exarg_set_bad_char(exarg_T *eap, int val) { eap->bad_char = val; }
+void nvim_exarg_set_force_ff(exarg_T *eap, int val) { eap->force_ff = val; }
+void nvim_exarg_set_force_bin(exarg_T *eap, int val) { eap->force_bin = val; }
+void nvim_exarg_set_read_edit(exarg_T *eap, int val) { eap->read_edit = val; }
+void nvim_exarg_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; }

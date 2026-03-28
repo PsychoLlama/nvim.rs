@@ -682,6 +682,43 @@ pub unsafe extern "C" fn rs_check_for_bom(
     }
 }
 
+// =============================================================================
+// Path utility: forward_slash
+// =============================================================================
+
+/// Convert backslashes to forward slashes in-place, unless path is a URL.
+///
+/// Directly replaces the C `forward_slash` symbol.
+/// On non-Windows builds this is a no-op (no backslashes in paths).
+///
+/// # Safety
+/// - `fname` must be a valid pointer to a NUL-terminated, mutable C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_forward_slash(fname: *mut c_char) {
+    #[cfg(target_os = "windows")]
+    {
+        extern "C" {
+            fn path_with_url(fname: *const c_char) -> c_int;
+        }
+        if fname.is_null() {
+            return;
+        }
+        if unsafe { path_with_url(fname as *const c_char) } != 0 {
+            return;
+        }
+        let mut p = fname;
+        while unsafe { *p } != 0 {
+            if unsafe { *p } == b'\\' as c_char {
+                unsafe { *p = b'/' as c_char };
+            }
+            p = unsafe { p.add(1) };
+        }
+    }
+    // On Linux/macOS: paths don't use backslashes; nothing to do.
+    #[cfg(not(target_os = "windows"))]
+    let _ = fname;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
