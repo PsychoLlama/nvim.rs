@@ -508,13 +508,6 @@ void nvim_cpi_get_col_info(int *col1, int *vcol1, int *linelen, int *tabsize)
 }
 char *nvim_cpi_save_clear_p_shm(void) { char *saved = p_shm; p_shm = ""; return saved; }
 void nvim_cpi_restore_p_shm(char *saved) { p_shm = saved; }
-extern varnumber_T nvim_rs_line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
-                                           varnumber_T limit, int eol_size);
-typedef struct {
-  int64_t byte_count;
-  int64_t word_count;
-  int64_t char_count;
-} CpiLineCountResult;
 void nvim_cpi_getvcols_no_sbr(int min_lnum, int min_col, int max_lnum, int max_col,
                               int *out_start_vcol, int *out_end_vcol)
 {
@@ -531,50 +524,20 @@ void nvim_cpi_getvcols_no_sbr(int min_lnum, int min_col, int max_lnum, int max_c
   *out_start_vcol = (int)start_vcol;
   *out_end_vcol = (int)end_vcol;
 }
-void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
+void nvim_cpi_block_prep_text(int lnum, int start_vcol, int end_vcol,
+                              const char **textstart_out, int *textlen_out)
 {
-  CpiLineCountResult *out = (CpiLineCountResult *)out_ptr;
   oparg_T oparg;
   memset(&oparg, 0, sizeof(oparg));
   oparg.is_VIsual = true;
   oparg.motion_type = kMTBlockWise;
   oparg.op_type = OP_NOP;
-  pos_T min_pos, max_pos;
-  if (lt(VIsual, curwin->w_cursor)) {
-    min_pos = VIsual;
-    max_pos = curwin->w_cursor;
-  } else {
-    min_pos = curwin->w_cursor;
-    max_pos = VIsual;
-  }
-  if (*p_sel == 'e' && max_pos.col > 0) {
-    max_pos.col--;
-  }
-  char *const saved_sbr = p_sbr;
-  char *const saved_w_sbr = curwin->w_p_sbr;
-  p_sbr = empty_string_option;
-  curwin->w_p_sbr = empty_string_option;
-  getvcols(curwin, &min_pos, &max_pos, &oparg.start_vcol, &oparg.end_vcol);
-  p_sbr = saved_sbr;
-  curwin->w_p_sbr = saved_w_sbr;
-  if (curwin->w_curswant == MAXCOL) {
-    oparg.end_vcol = MAXCOL;
-  }
-  if (oparg.end_vcol < oparg.start_vcol) {
-    oparg.end_vcol += oparg.start_vcol;
-    oparg.start_vcol = oparg.end_vcol - oparg.start_vcol;
-    oparg.end_vcol -= oparg.start_vcol;
-  }
+  oparg.start_vcol = (colnr_T)start_vcol;
+  oparg.end_vcol = (colnr_T)end_vcol;
   struct block_def bd;
   virtual_op = virtual_active(curwin);
   block_prep(&oparg, &bd, (linenr_T)lnum, false);
   virtual_op = kNone;
-  varnumber_T wc = 0, cc = 0;
-  varnumber_T bc = 0;
-  if (bd.textstart != NULL) {
-    bc = nvim_rs_line_count_info(bd.textstart, &wc, &cc, (varnumber_T)bd.textlen, eol_size);
-  }
-  out->byte_count = (int64_t)bc;
-  out->word_count = (int64_t)wc;
-  out->char_count = (int64_t)cc;
+  *textstart_out = bd.textstart;
+  *textlen_out = bd.textlen;
 }

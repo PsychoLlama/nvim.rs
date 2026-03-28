@@ -58,7 +58,13 @@ extern "C" {
         out_start_vcol: *mut c_int,
         out_end_vcol: *mut c_int,
     );
-    fn nvim_cpi_block_line_count(lnum: c_int, eol_size: c_int, out: *mut c_void);
+    fn nvim_cpi_block_prep_text(
+        lnum: c_int,
+        start_vcol: c_int,
+        end_vcol: c_int,
+        textstart_out: *mut *const c_char,
+        textlen_out: *mut c_int,
+    );
 
     // Last line EOL adjustment (nvim_cpi_last_line_no_eol absorbed below)
     fn nvim_curbuf_get_b_p_eol() -> bool;
@@ -154,12 +160,6 @@ unsafe fn cpi_populate_dict(
     nvim_tag_tv_dict_add_nr(dict, bytes_key.as_ptr(), 12, byte_count_cursor);
     nvim_tag_tv_dict_add_nr(dict, chars_key.as_ptr(), 12, char_count_cursor);
     nvim_tag_tv_dict_add_nr(dict, words_key.as_ptr(), 12, word_count_cursor);
-}
-
-/// `_Static_assert` constants are verified in the C accessor file.
-#[inline]
-fn lcr_void(lcr: &mut CpiLineCountResult) -> *mut c_void {
-    std::ptr::from_mut(lcr).cast::<c_void>()
 }
 
 /// Rust port of `line_count_info()` from ops.c (C version deleted).
@@ -311,6 +311,45 @@ struct CountParams {
     max_col: c_int,
     cursor_lnum: c_int,
     cursor_col: c_int,
+    blk_start_vcol: c_int,
+    blk_end_vcol: c_int,
+}
+
+/// Count bytes/words/chars for a single line in block-visual mode.
+///
+/// Calls `nvim_cpi_block_prep_text` to get the text extent for the block
+/// at this line, then counts using the Rust `line_count_info`.
+///
+/// # Safety
+/// Calls C accessor for block prep.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn count_block_line(
+    lnum: c_int,
+    start_vcol: c_int,
+    end_vcol: c_int,
+    eol_size: c_int,
+) -> CpiLineCountResult {
+    let mut textstart: *const c_char = std::ptr::null();
+    let mut textlen: c_int = 0;
+    nvim_cpi_block_prep_text(
+        lnum,
+        start_vcol,
+        end_vcol,
+        &raw mut textstart,
+        &raw mut textlen,
+    );
+    let mut wc: i64 = 0;
+    let mut cc: i64 = 0;
+    let bc = if textstart.is_null() {
+        0
+    } else {
+        line_count_info(textstart, &mut wc, &mut cc, i64::from(textlen), eol_size)
+    };
+    CpiLineCountResult {
+        byte_count: bc,
+        word_count: wc,
+        char_count: cc,
+    }
 }
 
 /// Count a visual-mode selected region on a single line.
@@ -322,7 +361,7 @@ unsafe fn count_visual_line(p: &CountParams, lnum: c_int) -> CpiLineCountResult 
     let mut lcr = CpiLineCountResult::default();
     match p.visual_mode {
         v if v == CTRL_V => {
-            nvim_cpi_block_line_count(lnum, p.eol_size, lcr_void(&mut lcr));
+            lcr = count_block_line(lnum, p.blk_start_vcol, p.blk_end_vcol, p.eol_size);
         }
         VISUAL_LINE => {
             lcr = cpi_line_count_info(lnum, MAXCOL, p.eol_size);
@@ -731,6 +770,8 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
         max_col,
         cursor_lnum,
         cursor_col,
+        blk_start_vcol,
+        blk_end_vcol,
     };
     let Some(c) = count_lines(&params) else {
         return; // interrupted
