@@ -45,6 +45,31 @@ const BUFLOCAL_PAT_LEN: usize = 25;
 // Vim variable index from eval_defs.h
 const VV_TERMRESPONSE: c_int = 11;
 
+// =============================================================================
+// Consolidated accessor structs (Phase 2)
+// =============================================================================
+
+/// Combined pattern info returned by `nvim_autocmd_get_pat_info`.
+/// Matches the C `AutoPatInfo` typedef in `autocmd.c`.
+#[repr(C)]
+pub struct AutoPatInfo {
+    pub is_null: c_int,
+    pub group: c_int,
+    pub buflocal_nr: c_int,
+    pub pat: *const c_char,
+    pub patlen: c_int,
+    pub pat_id: usize,
+}
+
+/// Combined handler info returned by `nvim_autocmd_get_handler_info`.
+/// Matches the C `AutoHandlerInfo` typedef in `autocmd.c`.
+#[repr(C)]
+pub struct AutoHandlerInfo {
+    pub handler_str: *mut c_char,
+    pub desc: *const c_char,
+    pub has_handler_cmd: c_int,
+}
+
 // C accessors for static data
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
@@ -81,9 +106,7 @@ extern "C" {
 
     // Phase 4: Autocmd deletion + cleanup accessors
     fn nvim_autocmd_del_at(event: c_int, idx: usize);
-    fn nvim_autocmd_pat_is_null(event: c_int, idx: usize) -> c_int;
-    fn nvim_autocmd_get_pat_group(event: c_int, idx: usize) -> c_int;
-    fn nvim_autocmd_get_pat_buflocal_nr(event: c_int, idx: usize) -> c_int;
+    fn nvim_autocmd_get_pat_info(event: c_int, idx: usize) -> AutoPatInfo;
     fn nvim_autocmd_compact_event(event: c_int);
     fn nvim_get_au_need_clean() -> c_int;
     fn nvim_set_au_need_clean(val: c_int);
@@ -108,13 +131,8 @@ extern "C" {
     #[link_name = "xfree"]
     fn nvim_autocmd_xfree(ptr: *mut c_char);
 
-    // Phase 6: Display + Query accessors
-    fn nvim_autocmd_get_pat_str(event: c_int, idx: usize) -> *const c_char;
-    fn nvim_autocmd_get_pat_patlen(event: c_int, idx: usize) -> c_int;
-    fn nvim_autocmd_get_pat_id(event: c_int, idx: usize) -> usize;
-    fn nvim_autocmd_get_handler_str(event: c_int, idx: usize) -> *mut c_char;
-    fn nvim_autocmd_get_desc(event: c_int, idx: usize) -> *const c_char;
-    fn nvim_autocmd_has_handler_cmd(event: c_int, idx: usize) -> bool;
+    // Phase 6: Display + Query accessors (consolidated)
+    fn nvim_autocmd_get_handler_info(event: c_int, idx: usize) -> AutoHandlerInfo;
     fn nvim_autocmd_show_last_set(event: c_int, idx: usize);
     #[link_name = "msg_putchar"]
     fn nvim_autocmd_msg_putchar(c: c_int);
@@ -551,8 +569,8 @@ pub unsafe extern "C" fn rs_aupat_normalize_buflocal_pat(
 pub unsafe extern "C" fn rs_aucmd_del_for_event_and_group(event: c_int, group: c_int) {
     let size = nvim_get_autocmds_count(event);
     for i in 0..size {
-        if nvim_autocmd_pat_is_null(event, i) == 0 && nvim_autocmd_get_pat_group(event, i) == group
-        {
+        let info = nvim_autocmd_get_pat_info(event, i);
+        if info.is_null == 0 && info.group == group {
             nvim_autocmd_del_at(event, i);
         }
     }
@@ -587,10 +605,8 @@ pub unsafe extern "C" fn rs_aubuflocal_remove(bufnr: c_int) {
     for event in 0..NUM_EVENTS {
         let size = nvim_get_autocmds_count(event);
         for i in 0..size {
-            if nvim_autocmd_pat_is_null(event, i) != 0 {
-                continue;
-            }
-            if nvim_autocmd_get_pat_buflocal_nr(event, i) != bufnr {
+            let info = nvim_autocmd_get_pat_info(event, i);
+            if info.is_null != 0 || info.buflocal_nr != bufnr {
                 continue;
             }
             nvim_autocmd_del_at(event, i);
@@ -919,40 +935,36 @@ unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, pa
 
     let size = nvim_get_autocmds_count(event);
     for i in 0..size {
+        let pi = nvim_autocmd_get_pat_info(event, i);
         // Skip deleted autocommands
-        if nvim_autocmd_pat_is_null(event, i) != 0 {
+        if pi.is_null != 0 {
             continue;
         }
 
-        let ac_group = nvim_autocmd_get_pat_group(event, i);
-        let ac_patlen = nvim_autocmd_get_pat_patlen(event, i);
-        let ac_pat = nvim_autocmd_get_pat_str(event, i);
-
         // Filter by group and pattern
-        if (group != group::AUGROUP_ALL && ac_group != group)
-            || (!pat.is_null() && (ac_patlen != patlen || !c_strncmp(pat, ac_pat, patlen as usize)))
+        if (group != group::AUGROUP_ALL && pi.group != group)
+            || (!pat.is_null() && (pi.patlen != patlen || !c_strncmp(pat, pi.pat, patlen as usize)))
         {
             continue;
         }
 
         // Show event name and group only if one of them changed
-        if ac_group != last_group {
-            last_group = ac_group;
-            if !show_group_and_event(ac_group, event) {
+        if pi.group != last_group {
+            last_group = pi.group;
+            if !show_group_and_event(pi.group, event) {
                 return;
             }
         }
 
         // Show pattern only if it changed
-        let pat_id = nvim_autocmd_get_pat_id(event, i);
-        if pat_id != last_pat_id {
-            last_pat_id = pat_id;
+        if pi.pat_id != last_pat_id {
+            last_pat_id = pi.pat_id;
             nvim_autocmd_msg_putchar(c_int::from(b'\n'));
             if nvim_autocmd_get_got_int() != 0 {
                 return;
             }
             msg_col = 4;
-            nvim_autocmd_msg_outtrans(ac_pat);
+            nvim_autocmd_msg_outtrans(pi.pat);
         }
 
         if nvim_autocmd_get_got_int() != 0 {
@@ -1011,9 +1023,10 @@ unsafe fn show_group_and_event(ac_group: c_int, event: c_int) -> bool {
 
 /// Display handler string and description for one autocmd entry.
 unsafe fn show_handler_and_desc(event: c_int, idx: usize) {
-    let handler_str = nvim_autocmd_get_handler_str(event, idx);
-    let desc = nvim_autocmd_get_desc(event, idx);
-    let has_cmd = nvim_autocmd_has_handler_cmd(event, idx);
+    let hi = nvim_autocmd_get_handler_info(event, idx);
+    let handler_str = hi.handler_str;
+    let desc = hi.desc;
+    let has_cmd = hi.has_handler_cmd != 0;
 
     if !desc.is_null() {
         let msglen: usize = 100;
@@ -1199,10 +1212,11 @@ unsafe fn au_exists_inner(event_name: *const c_char, pattern: *const c_char, gro
     if pattern.is_null() {
         // Need at least one autocmd matching the group
         for i in 0..size {
-            if nvim_autocmd_pat_is_null(event, i) != 0 {
+            let pi = nvim_autocmd_get_pat_info(event, i);
+            if pi.is_null != 0 {
                 continue;
             }
-            if group == group::AUGROUP_ALL || nvim_autocmd_get_pat_group(event, i) == group {
+            if group == group::AUGROUP_ALL || pi.group == group {
                 return true;
             }
         }
@@ -1218,21 +1232,20 @@ unsafe fn au_exists_inner(event_name: *const c_char, pattern: *const c_char, gro
 
     // Check if there is an autocommand with the given pattern
     for i in 0..size {
-        if nvim_autocmd_pat_is_null(event, i) != 0 {
+        let pi = nvim_autocmd_get_pat_info(event, i);
+        if pi.is_null != 0 {
             continue;
         }
-        let ac_group = nvim_autocmd_get_pat_group(event, i);
-        if group != group::AUGROUP_ALL && ac_group != group {
+        if group != group::AUGROUP_ALL && pi.group != group {
             continue;
         }
 
-        let ac_pat = nvim_autocmd_get_pat_str(event, i);
         if buflocal_fnum != 0 {
             // Buffer-local: compare buffer numbers
-            if nvim_autocmd_get_pat_buflocal_nr(event, i) == buflocal_fnum {
+            if pi.buflocal_nr == buflocal_fnum {
                 return true;
             }
-        } else if nvim_autocmd_path_fnamecmp(ac_pat, pattern) == 0 {
+        } else if nvim_autocmd_path_fnamecmp(pi.pat, pattern) == 0 {
             return true;
         }
     }
@@ -1258,7 +1271,7 @@ unsafe fn strnicmp_prefix_8(s: *const c_char, prefix: &[u8; 8]) -> bool {
 /// `event` and `idx` must be valid.
 #[no_mangle] // keep rs_ name since it's internal
 pub unsafe extern "C" fn rs_aucmd_handler_to_string(event: c_int, idx: usize) -> *mut c_char {
-    nvim_autocmd_get_handler_str(event, idx)
+    nvim_autocmd_get_handler_info(event, idx).handler_str
 }
 
 // =============================================================================

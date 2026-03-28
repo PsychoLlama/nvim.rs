@@ -1557,34 +1557,40 @@ void nvim_autocmd_del_at(int event, size_t idx)
   }
 }
 
-/// Check if the autocmd pattern at index is NULL (deleted).
-int nvim_autocmd_pat_is_null(int event, size_t idx)
+// AutoPatInfo and AutoHandlerInfo typedefs are in autocmd.h
+
+/// Get all pattern info for autocmd at (event, idx) in one call.
+AutoPatInfo nvim_autocmd_get_pat_info(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
+    return (AutoPatInfo){ .is_null = 1 };
+  }
+  AutoPat *const ap = kv_A(*acs, idx).pat;
+  return (AutoPatInfo){
+    .is_null = 0,
+    .group = ap->group,
+    .buflocal_nr = ap->buflocal_nr,
+    .pat = ap->pat,
+    .patlen = ap->patlen,
+    .pat_id = (uintptr_t)ap,
+  };
+}
+
+
+/// Get handler info for autocmd at (event, idx) in one call.
+AutoHandlerInfo nvim_autocmd_get_handler_info(int event, size_t idx)
 {
   AutoCmdVec *const acs = &autocmds[event];
   if (idx >= kv_size(*acs)) {
-    return 1;
+    return (AutoHandlerInfo){ 0 };
   }
-  return kv_A(*acs, idx).pat == NULL ? 1 : 0;
-}
-
-/// Get the group of the autocmd pattern at index.
-int nvim_autocmd_get_pat_group(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
-    return -1;
-  }
-  return kv_A(*acs, idx).pat->group;
-}
-
-/// Get the buflocal_nr of the autocmd pattern at index.
-int nvim_autocmd_get_pat_buflocal_nr(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
-    return 0;
-  }
-  return kv_A(*acs, idx).pat->buflocal_nr;
+  AutoCmd *const ac = &kv_A(*acs, idx);
+  return (AutoHandlerInfo){
+    .handler_str = aucmd_handler_to_string(ac),
+    .desc = ac->desc,
+    .has_handler_cmd = ac->handler_cmd != NULL ? 1 : 0,
+  };
 }
 
 /// Compact the autocmd vector for a given event (remove NULL-pat entries).
@@ -1669,77 +1675,6 @@ _Static_assert(VV_TERMRESPONSE == 11, "VV_TERMRESPONSE value changed");
 _Static_assert(FAIL == 0, "FAIL value changed");
 _Static_assert(OK == 1, "OK value changed");
 
-/// Get the pattern string of autocmd at (event, idx).
-const char *nvim_autocmd_get_pat_str(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
-    return NULL;
-  }
-  return kv_A(*acs, idx).pat->pat;
-}
-
-/// Get the pattern length of autocmd at (event, idx).
-int nvim_autocmd_get_pat_patlen(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
-    return 0;
-  }
-  return kv_A(*acs, idx).pat->patlen;
-}
-
-/// Get an opaque identifier for the pattern pointer (for same-pattern checks).
-uintptr_t nvim_autocmd_get_pat_id(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
-    return 0;
-  }
-  return (uintptr_t)kv_A(*acs, idx).pat;
-}
-
-/// Get an allocated string representation of the handler for autocmd at (event, idx).
-char *nvim_autocmd_get_handler_str(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs)) {
-    return NULL;
-  }
-  AutoCmd *const ac = &kv_A(*acs, idx);
-  return aucmd_handler_to_string(ac);
-}
-
-/// Get the description string of autocmd at (event, idx). Returns NULL if no desc.
-const char *nvim_autocmd_get_desc(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs)) {
-    return NULL;
-  }
-  return kv_A(*acs, idx).desc;
-}
-
-/// Check if autocmd at (event, idx) has a handler_cmd (vs callback).
-bool nvim_autocmd_has_handler_cmd(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs)) {
-    return false;
-  }
-  return kv_A(*acs, idx).handler_cmd != NULL;
-}
-
-/// Call last_set_msg for the script context of autocmd at (event, idx).
-void nvim_autocmd_show_last_set(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx < kv_size(*acs)) {
-    last_set_msg(kv_A(*acs, idx).script_ctx);
-  }
-}
-
-
 /// Check if autocmd at (event, idx) matches file for has_autocmd.
 /// This consolidates the match_file_pat + buflocal check.
 bool nvim_autocmd_match_file(int event, size_t idx,
@@ -1762,6 +1697,15 @@ bool nvim_autocmd_match_file(int event, size_t idx,
   return buf_fnum != 0 && ap->buflocal_nr == buf_fnum;
 }
 
+
+/// Call last_set_msg for the script context of autocmd at (event, idx).
+void nvim_autocmd_show_last_set(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    last_set_msg(kv_A(*acs, idx).script_ctx);
+  }
+}
 
 void nvim_autocmd_eap_set_nextcmd(void *eap, char *val) { ((exarg_T *)eap)->nextcmd = val; }
 void nvim_autocmd_show_header(void)

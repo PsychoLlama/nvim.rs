@@ -64,6 +64,23 @@ enum {
 
 enum { BUFLOCAL_PAT_LEN = 25, };
 
+/// Combined pattern info for Rust FFI (see nvim_autocmd_get_pat_info).
+typedef struct {
+  int is_null;
+  int group;
+  int buflocal_nr;
+  const char *pat;
+  int patlen;
+  uintptr_t pat_id;
+} AutoPatInfo;
+
+/// Combined handler info for Rust FFI (see nvim_autocmd_get_handler_info).
+typedef struct {
+  char *handler_str;
+  const char *desc;
+  int has_handler_cmd;
+} AutoHandlerInfo;
+
 /// Iterates over all the events for auto commands
 #define FOR_ALL_AUEVENTS(event) \
   for (event_T event = (event_T)0; (int)event < (int)NUM_EVENTS; event = (event_T)((int)event + 1))
