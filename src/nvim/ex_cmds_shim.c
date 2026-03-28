@@ -1,8 +1,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "auto/config.h"
@@ -16,8 +14,11 @@
 #include "nvim/change.h"
 #include "nvim/channel.h"
 #include "nvim/charset.h"
-#include "nvim/cmdhist.h"
 #include "nvim/cursor.h"
+#include "nvim/move.h"
+#include "nvim/ops.h"
+#include "nvim/plines.h"
+#include "nvim/cmdhist.h"
 #include "nvim/decoration.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval.h"
@@ -35,9 +36,6 @@
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
-#include "nvim/move.h"
-#include "nvim/normal.h"
-#include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/fs.h"
@@ -45,7 +43,6 @@
 #include "nvim/os/os.h"
 #include "nvim/os/shell.h"
 #include "nvim/path.h"
-#include "nvim/plines.h"
 #include "nvim/regexp.h"
 #include "nvim/search.h"
 #include "nvim/strings.h"
