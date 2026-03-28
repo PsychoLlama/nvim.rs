@@ -36,12 +36,6 @@ extern int rs_hasAnyFolding(win_T *win);
 // Rust implementations
 extern bool decor_virt_pos(const DecorRange *decor);
 extern VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
-extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
-                            int priority2, uint32_t id2, uint32_t add_id2);
-
-// Additional Rust FFI declarations
-extern DecorSignHighlight rs_decor_sh_from_inline(uint16_t flags, uint16_t priority,
-                                                   int hl_id, uint32_t conceal_char);
 extern int rs_decor_init_draw_col_value(int win_col, int hidden, int kind,
                                         int pos, int vt_flags);
 extern int rs_should_recheck_draw_col(int draw_col);
@@ -66,15 +60,6 @@ uint32_t decor_freelist = UINT32_MAX;
 DecorVirtText *to_free_virt = NULL;
 uint32_t to_free_sh = UINT32_MAX;
 
-// Rust FFI declarations (decor state)
-extern void rs_decor_state_invalidate(void *state, buf_T *buf);
-
-// Rust FFI declarations (memory management)
-extern void *rs_decor_put_vt(DecorVirtText *vt_data, DecorVirtText *next);
-extern void rs_decor_free(int ext, DecorVirtText *vt, uint32_t sh_idx);
-extern void rs_decor_check_to_be_deleted(void);
-
-
 // Rust FFI declarations (range insertion)
 extern void rs_decor_range_add_from_inline(void *state, int start_row, int start_col,
                                            int end_row, int end_col, bool ext,
@@ -82,21 +67,6 @@ extern void rs_decor_range_add_from_inline(void *state, int start_row, int start
                                            uint16_t hl_flags, uint16_t hl_priority,
                                            int hl_hl_id, uint32_t hl_conceal_char,
                                            bool owned, uint32_t ns, uint32_t mark_id);
-
-// Rust FFI declarations (redraw dispatch)
-extern void rs_decor_redraw(void *buf, int row1, int row2, int col1,
-                            bool ext, void *vt, uint32_t sh_idx,
-                            uint16_t hl_flags, uint16_t hl_priority,
-                            int hl_hl_id, uint32_t hl_conceal_char);
-extern void rs_buf_put_decor(void *buf, bool ext, void *vt, uint32_t sh_idx, int row, int row2);
-extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
-                                bool ext, void *vt, uint32_t sh_idx,
-                                uint16_t hl_flags, uint16_t hl_priority,
-                                int hl_hl_id, uint32_t hl_conceal_char,
-                                bool do_free);
-
-// Rust FFI declarations (sign lookup)
-extern void *rs_decor_find_sign(bool ext, uint32_t sh_idx);
 
 // clear_virttext and clear_virtlines are declared in decoration.h
 
@@ -151,12 +121,6 @@ void bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id, lpos_T pos_start
   }
 }
 
-void decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor)
-{
-  rs_decor_redraw(buf, row1, row2, col1, decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx,
-                  decor.data.hl.flags, decor.data.hl.priority,
-                  decor.data.hl.hl_id, decor.data.hl.conceal_char);
-}
 
 void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
 {
@@ -179,20 +143,6 @@ void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
   if (rs_sh_is_ui_watched(sh.flags)) {
     redraw_buf_line_later(buf, row1 + 1, false);
   }
-}
-
-DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next) { return rs_decor_put_vt(&vt, next); }
-
-DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item)
-{
-  // TODO(bfredl): Eventually simple signs will be inlinable as well
-  assert(!(item.flags & kSHIsSign));
-  return rs_decor_sh_from_inline(item.flags, item.priority, item.hl_id, item.conceal_char);
-}
-
-void buf_put_decor(buf_T *buf, DecorInline decor, int row, int row2)
-{
-  rs_buf_put_decor(buf, decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx, row, row2);
 }
 
 /// When displaying signs in the 'number' column, if the width of the number
@@ -222,12 +172,6 @@ void buf_put_decor_sh(buf_T *buf, DecorSignHighlight *sh, int row1, int row2)
   }
 }
 
-void buf_decor_remove(buf_T *buf, int row1, int row2, int col1, DecorInline decor, bool free)
-{
-  rs_buf_decor_remove(buf, row1, row2, col1, decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx,
-                      decor.data.hl.flags, decor.data.hl.priority,
-                      decor.data.hl.hl_id, decor.data.hl.conceal_char, free);
-}
 
 void buf_remove_decor_sh(buf_T *buf, int row1, int row2, DecorSignHighlight *sh)
 {
@@ -243,28 +187,6 @@ void buf_remove_decor_sh(buf_T *buf, int row1, int row2, DecorSignHighlight *sh)
     }
   }
 }
-
-void decor_free(DecorInline decor)
-{
-  if (!decor.ext) {
-    return;
-  }
-  rs_decor_free(1, decor.data.ext.vt, decor.data.ext.sh_idx);
-}
-
-/// Check if we are in a callback while drawing, which might invalidate the marktree iterator.
-///
-/// This should be called whenever a structural modification has been done to a
-/// marktree in a public API function (i e any change which adds or deletes marks).
-void decor_state_invalidate(buf_T *buf) { rs_decor_state_invalidate(&decor_state, buf); }
-
-void decor_check_to_be_deleted(void)
-{
-  assert(!decor_state.running_decor_provider);
-  rs_decor_check_to_be_deleted();
-}
-
-
 
 
 /// Get the next chunk of a virtual text item.
@@ -483,14 +405,6 @@ bool win_lines_concealed(win_T *wp) { return rs_hasAnyFolding(wp) || wp->w_p_col
 /// Wrapper for win_lines_concealed for Rust FFI.
 int nvim_win_lines_concealed(win_T *wp) { return win_lines_concealed(wp) ? 1 : 0; }
 
-int sign_item_cmp(const void *p1, const void *p2)
-{
-  const SignItem *s1 = (SignItem *)p1;
-  const SignItem *s2 = (SignItem *)p2;
-  return rs_sign_item_cmp(s1->sh->priority, s1->id, s1->sh->sign_add_id,
-                          s2->sh->priority, s2->id, s2->sh->sign_add_id);
-}
-
 static const uint32_t sign_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect,
                                                    [kMTMetaSignHL] = kMTFilterSelect };
 
@@ -562,8 +476,6 @@ void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], 
     kv_destroy(signs);
   }
 }
-
-DecorSignHighlight *decor_find_sign(DecorInline decor) { return rs_decor_find_sign(decor.ext, decor.data.ext.sh_idx); }
 
 static const uint32_t signtext_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect };
 

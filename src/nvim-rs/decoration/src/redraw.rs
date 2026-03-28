@@ -16,7 +16,7 @@ use crate::{
 /// Opaque handle to buf_T.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct BufHandle(*mut c_void);
+pub struct BufHandle(pub *mut c_void);
 
 // =============================================================================
 // External C Functions
@@ -1126,6 +1126,130 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     );
 
     attr
+}
+
+// =============================================================================
+// Phase 1: DecorInline-accepting wrappers
+// =============================================================================
+
+use crate::types::DecorInline;
+
+/// Direct export of decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor).
+/// Replaces C wrapper that unpacked DecorInline and called rs_decor_redraw.
+#[export_name = "decor_redraw"]
+pub unsafe extern "C" fn decor_redraw_export(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    col1: c_int,
+    decor: DecorInline,
+) {
+    let ext = decor.ext;
+    // Safety: we branch on ext before reading the union variant
+    let (vt, sh_idx, hl_flags, hl_priority, hl_hl_id, hl_conceal_char) = if ext {
+        let e = unsafe { &*decor.data.ext };
+        (
+            DecorVtHandle(e.vt.cast::<c_void>()),
+            e.sh_idx,
+            0u16,
+            0u16,
+            0i32,
+            0u32,
+        )
+    } else {
+        let h = unsafe { &*decor.data.hl };
+        (
+            DecorVtHandle(std::ptr::null_mut()),
+            0u32,
+            h.flags,
+            h.priority,
+            h.hl_id,
+            h.conceal_char,
+        )
+    };
+    rs_decor_redraw(
+        buf,
+        row1,
+        row2,
+        col1,
+        ext,
+        vt,
+        sh_idx,
+        hl_flags,
+        hl_priority,
+        hl_hl_id,
+        hl_conceal_char,
+    );
+}
+
+/// Direct export of buf_put_decor(buf_T *buf, DecorInline decor, int row, int row2).
+/// Replaces C wrapper that unpacked DecorInline and called rs_buf_put_decor.
+#[export_name = "buf_put_decor"]
+pub unsafe extern "C" fn buf_put_decor_export(
+    buf: BufHandle,
+    decor: DecorInline,
+    row: c_int,
+    row2: c_int,
+) {
+    let ext = decor.ext;
+    // Safety: we branch on ext before reading the union variant
+    let (vt, sh_idx) = if ext {
+        let e = unsafe { &*decor.data.ext };
+        (DecorVtHandle(e.vt.cast::<c_void>()), e.sh_idx)
+    } else {
+        (DecorVtHandle(std::ptr::null_mut()), 0u32)
+    };
+    rs_buf_put_decor(buf, ext, vt, sh_idx, row, row2);
+}
+
+/// Direct export of buf_decor_remove(buf_T *buf, int row1, int row2, int col1, DecorInline decor, bool free).
+/// Replaces C wrapper that unpacked DecorInline and called rs_buf_decor_remove.
+#[export_name = "buf_decor_remove"]
+pub unsafe extern "C" fn buf_decor_remove_export(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    col1: c_int,
+    decor: DecorInline,
+    do_free: bool,
+) {
+    let ext = decor.ext;
+    // Safety: we branch on ext before reading the union variant
+    let (vt, sh_idx, hl_flags, hl_priority, hl_hl_id, hl_conceal_char) = if ext {
+        let e = unsafe { &*decor.data.ext };
+        (
+            DecorVtHandle(e.vt.cast::<c_void>()),
+            e.sh_idx,
+            0u16,
+            0u16,
+            0i32,
+            0u32,
+        )
+    } else {
+        let h = unsafe { &*decor.data.hl };
+        (
+            DecorVtHandle(std::ptr::null_mut()),
+            0u32,
+            h.flags,
+            h.priority,
+            h.hl_id,
+            h.conceal_char,
+        )
+    };
+    rs_buf_decor_remove(
+        buf,
+        row1,
+        row2,
+        col1,
+        ext,
+        vt,
+        sh_idx,
+        hl_flags,
+        hl_priority,
+        hl_hl_id,
+        hl_conceal_char,
+        do_free,
+    );
 }
 
 // =============================================================================

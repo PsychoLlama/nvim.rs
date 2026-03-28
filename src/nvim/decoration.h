@@ -117,6 +117,18 @@ typedef struct {
 void clear_virttext(VirtText *text);
 void clear_virtlines(VirtLines *lines);
 
+// Phase 1: Forwarding wrappers replaced by Rust exports
+DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next);
+DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item);
+void buf_put_decor(buf_T *buf, DecorInline decor, int row, int row2);
+void buf_decor_remove(buf_T *buf, int row1, int row2, int col1, DecorInline decor, bool free);
+void decor_free(DecorInline decor);
+void decor_state_invalidate(buf_T *buf);
+void decor_check_to_be_deleted(void);
+DecorSignHighlight *decor_find_sign(DecorInline decor);
+int sign_item_cmp(const void *p1, const void *p2);
+void decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor);
+
 // Forward declarations for functions migrated to Rust (no longer in generated header)
 bool decor_virt_pos(const DecorRange *decor);
 VirtTextPos decor_virt_pos_kind(const DecorRange *decor);

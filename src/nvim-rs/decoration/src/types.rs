@@ -312,10 +312,72 @@ pub struct DecorState {
 }
 
 // =============================================================================
+// DecorHighlightInline -- matches struct { uint16_t flags; uint16_t priority; int hl_id; schar_T conceal_char; }
+// =============================================================================
+
+/// Rust mirror of DecorHighlightInline. Size = 12 bytes.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DecorHighlightInline {
+    pub flags: u16,
+    pub priority: u16,
+    pub hl_id: c_int,
+    pub conceal_char: u32,
+}
+
+// =============================================================================
+// DecorExt -- matches struct { uint32_t sh_idx; DecorVirtText *vt; }
+// Offsets: sh_idx=0, vt=8 (pointer aligned). Size = 16 bytes.
+// =============================================================================
+
+/// Rust mirror of DecorExt. Size = 16 bytes.
+#[repr(C)]
+pub struct DecorExt {
+    pub sh_idx: u32,
+    #[allow(clippy::pub_underscore_fields)]
+    pub _pad: u32,
+    pub vt: *mut DecorVirtText,
+}
+
+// =============================================================================
+// DecorInlineData -- union { DecorHighlightInline hl; DecorExt ext; }
+// Size = 16 bytes.
+// =============================================================================
+
+/// Rust mirror of DecorInlineData union. Size = 16 bytes.
+#[repr(C)]
+pub union DecorInlineData {
+    pub hl: std::mem::ManuallyDrop<DecorHighlightInline>,
+    pub ext: std::mem::ManuallyDrop<DecorExt>,
+}
+
+// =============================================================================
+// DecorInline -- struct { bool ext; [7 bytes pad]; DecorInlineData data; }
+// Offsets: ext=0, data=8. Size = 24 bytes.
+// =============================================================================
+
+/// Rust mirror of DecorInline. Size = 24 bytes.
+#[repr(C)]
+pub struct DecorInline {
+    pub ext: bool,
+    #[allow(clippy::pub_underscore_fields)]
+    pub _pad: [u8; 7],
+    pub data: DecorInlineData,
+}
+
+// =============================================================================
 // Static size/offset assertions
 // =============================================================================
 
 const _: () = {
+    assert!(std::mem::size_of::<DecorHighlightInline>() == 12);
+    assert!(std::mem::size_of::<DecorExt>() == 16);
+    assert!(std::mem::offset_of!(DecorExt, sh_idx) == 0);
+    assert!(std::mem::offset_of!(DecorExt, vt) == 8);
+    assert!(std::mem::size_of::<DecorInlineData>() == 16);
+    assert!(std::mem::size_of::<DecorInline>() == 24);
+    assert!(std::mem::offset_of!(DecorInline, ext) == 0);
+    assert!(std::mem::offset_of!(DecorInline, data) == 8);
     assert!(std::mem::size_of::<MarkTreeIter>() == 216);
     assert!(std::mem::align_of::<MarkTreeIter>() == 8);
     assert!(std::mem::size_of::<DecorSignHighlight>() == 56);

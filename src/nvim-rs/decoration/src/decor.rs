@@ -1163,6 +1163,119 @@ extern "C" {
 }
 
 // =============================================================================
+// Phase 1: Forwarding Wrapper Replacements
+// =============================================================================
+
+use crate::types::DecorInline;
+
+/// Direct export of decor_sh_from_inline taking DecorHighlightInline by value.
+/// Replaces the C wrapper that called rs_decor_sh_from_inline.
+#[export_name = "decor_sh_from_inline"]
+pub extern "C" fn decor_sh_from_inline_export(item: DecorHighlightInline) -> DecorSignHighlight {
+    debug_assert!(
+        item.flags & KSH_IS_SIGN == 0,
+        "sign decorations should not be inline"
+    );
+    decor_sh_from_inline(item)
+}
+
+/// Direct export of decor_put_vt.
+/// Replaces the C wrapper `DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next)`.
+/// Note: C passes vt by value; we receive pointer from wrapper.
+#[export_name = "decor_put_vt"]
+pub unsafe extern "C" fn decor_put_vt_export(
+    vt: crate::types::DecorVirtText,
+    next: *mut crate::types::DecorVirtText,
+) -> *mut crate::types::DecorVirtText {
+    let alloc = nvim_xmalloc_decor_virt_text().cast::<crate::types::DecorVirtText>();
+    std::ptr::write(alloc, vt);
+    (*alloc).next = next;
+    alloc
+}
+
+/// Direct export of decor_state_invalidate(buf_T *buf).
+/// Replaces the C wrapper that called rs_decor_state_invalidate(&decor_state, buf).
+#[export_name = "decor_state_invalidate"]
+pub unsafe extern "C" fn decor_state_invalidate_export(buf: *mut c_void) {
+    use crate::redraw::BufHandle;
+    crate::redraw::rs_decor_state_invalidate(crate::get_decor_state(), BufHandle(buf));
+}
+
+/// Direct export of decor_check_to_be_deleted().
+/// Replaces the C wrapper that asserted + called rs_decor_check_to_be_deleted.
+#[export_name = "decor_check_to_be_deleted"]
+pub unsafe extern "C" fn decor_check_to_be_deleted_export() {
+    let state = crate::get_decor_state();
+    debug_assert!(
+        !(*state).running_decor_provider,
+        "decor_check_to_be_deleted called while running decor provider"
+    );
+    rs_decor_check_to_be_deleted();
+}
+
+/// Direct export of decor_find_sign(DecorInline decor).
+/// Replaces C wrapper `decor_find_sign(DecorInline decor) { return rs_decor_find_sign(decor.ext, decor.data.ext.sh_idx); }`.
+#[export_name = "decor_find_sign"]
+pub unsafe extern "C" fn decor_find_sign_export(decor: DecorInline) -> *mut c_void {
+    if !decor.ext {
+        return std::ptr::null_mut();
+    }
+    // Safety: ext is true, so data.ext is the active union variant
+    let sh_idx = unsafe { decor.data.ext.sh_idx };
+    rs_decor_find_sign(true, sh_idx)
+}
+
+/// Direct export of decor_free(DecorInline decor).
+/// Replaces C wrapper that checked ext and called rs_decor_free.
+#[export_name = "decor_free"]
+pub unsafe extern "C" fn decor_free_export(decor: DecorInline) {
+    if !decor.ext {
+        return;
+    }
+    // Safety: ext is true, so data.ext is the active union variant
+    let vt = unsafe { decor.data.ext.vt };
+    let sh_idx = unsafe { decor.data.ext.sh_idx };
+    rs_decor_free(1, vt, sh_idx);
+}
+
+/// SignItem mirror for qsort callback use.
+/// Layout: { *mut DecorSignHighlight sh @ 0, u32 id @ 8 }. Size = 16 bytes.
+#[repr(C)]
+pub struct SignItemMirror {
+    pub sh: *mut crate::types::DecorSignHighlight,
+    pub id: u32,
+}
+
+extern "C" {
+    fn rs_sign_item_cmp(
+        priority1: c_int,
+        id1: u32,
+        add_id1: u32,
+        priority2: c_int,
+        id2: u32,
+        add_id2: u32,
+    ) -> c_int;
+}
+
+/// Direct export of sign_item_cmp for use as qsort callback.
+/// Replaces C wrapper that unpacked SignItem fields and called rs_sign_item_cmp.
+#[export_name = "sign_item_cmp"]
+pub unsafe extern "C" fn sign_item_cmp_export(p1: *const c_void, p2: *const c_void) -> c_int {
+    let s1 = &*(p1.cast::<SignItemMirror>());
+    let s2 = &*(p2.cast::<SignItemMirror>());
+    let sh1 = &*s1.sh;
+    let sh2 = &*s2.sh;
+    rs_sign_item_cmp(
+        c_int::from(sh1.priority),
+        s1.id,
+        sh1.sign_add_id as u32,
+        c_int::from(sh2.priority),
+        s2.id,
+        sh2.sign_add_id as u32,
+    )
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

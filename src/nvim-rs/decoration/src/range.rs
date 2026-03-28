@@ -518,7 +518,7 @@ impl DecorShHandle {
 /// Opaque handle to DecorVirtText.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct DecorVtHandle(*mut c_void);
+pub struct DecorVtHandle(pub *mut c_void);
 
 impl DecorVtHandle {
     pub fn is_null(self) -> bool {
