@@ -1041,6 +1041,7 @@ extern "C" {
         newtv: TypevalHandle,
         oldtv: TypevalHandle,
     );
+    #[link_name = "xfree"]
     fn nvim_tv_dict_item_free(di: DictitemHandle);
 }
 

@@ -78,8 +78,10 @@ extern "C" {
     fn nvim_msg_echomsg(str: *const c_char, hl_id: c_int);
 
     // encode functions
-    fn nvim_encode_tv2echo(tv: TypevalHandle) -> *mut c_char;
-    fn nvim_encode_tv2string_wrapper(tv: TypevalHandle) -> *mut c_char;
+    #[link_name = "encode_tv2echo"]
+    fn nvim_encode_tv2echo(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
+    #[link_name = "encode_tv2string"]
+    fn nvim_encode_tv2string_wrapper(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
     #[link_name = "tv_get_string"]
     fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
@@ -254,7 +256,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
             } else if cmdidx == cmd_echo {
                 msg_puts_hl(KIND_SPACE.as_ptr() as *const c_char, echo_hl_id, false);
             }
-            let tofree = nvim_encode_tv2echo(rettv);
+            let tofree = nvim_encode_tv2echo(rettv, ptr::null_mut());
             nvim_set_msg_ext_append(cmdidx == CMD_ECHON);
             nvim_msg_multiline_cstr(tofree, echo_hl_id, true, false, &mut need_clear);
             xfree(tofree as *mut c_void);
@@ -342,9 +344,9 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
             let argstr: *const c_char = if cmdidx == cmd_execute {
                 nvim_eval_tv_get_str(rettv)
             } else if tv_type == VAR_STRING {
-                nvim_encode_tv2echo(rettv) as *const c_char
+                nvim_encode_tv2echo(rettv, ptr::null_mut()) as *const c_char
             } else {
-                nvim_encode_tv2string_wrapper(rettv) as *const c_char
+                nvim_encode_tv2string_wrapper(rettv, ptr::null_mut()) as *const c_char
             };
 
             let len = cstr_len(argstr) as c_int;

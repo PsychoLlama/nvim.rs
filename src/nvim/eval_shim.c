@@ -245,7 +245,6 @@ int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 void nvim_blob_ga_clear_and_free(blob_T *b) { if (b != NULL) { ga_clear(&b->bv_ga); xfree(b); } }
 
 void nvim_blob_set_ret(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
-const char *nvim_get_tv_empty_string(void) { return tv_empty_string; }
 typval_T *nvim_di_get_tv(dictitem_T *di) { return &di->di_tv; }
 evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob) { return blob->bv_lock; }
@@ -257,7 +256,7 @@ const char *nvim_di_get_key(const dictitem_T *di) { return di->di_key; }
 bool nvim_di_check_ro(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_CSTRING); }
 bool nvim_di_check_lock(const dictitem_T *di, const char *name) { return tv_check_lock(&di->di_tv, name, TV_CSTRING); }
 bool nvim_tv_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
-void nvim_tv_dict_item_free(dictitem_T *di) { xfree(di); }
+
 
 void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
 {
@@ -296,15 +295,12 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
   return wrong;
 }
 
-char *nvim_encode_tv2echo(typval_T *tv) { return encode_tv2echo(tv, NULL); }
-char *nvim_encode_tv2string_wrapper(typval_T *tv) { return encode_tv2string(tv, NULL); }
 void nvim_set_msg_ext_append(bool val) { msg_ext_append = val; }
 void nvim_emsg_multiline_echoerr(const char *str) { emsg_multiline(str, "echoerr", HLF_E, true); }
 void nvim_msg_echomsg(const char *str, int hl_id) { msg(str, hl_id); }
 void nvim_do_cmdline_execute(char *cmd, exarg_T *eap) { do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE); }
 int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
-int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv) { return may_call_simple_func(arg, rettv); }
 
 void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 {
@@ -340,7 +336,7 @@ bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 int nvim_tv_list_len(const list_T *l) { return tv_list_len(l); }
 int nvim_mb_charlen_ml(int32_t lnum) { return mb_charlen(ml_get(lnum)); }
 int nvim_get_cursor_line_charlen(void) { return mb_charlen(get_cursor_line_ptr()); }
-int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg) { return get_lambda_tv(arg, rettv, evalarg); }
+
 
 const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flagsp)
 {
@@ -422,8 +418,7 @@ bool nvim_do_profiling_active(void) { return do_profiling == PROF_YES; }
 bool nvim_eval_os_can_exe(const char *name, char **abspath) { return os_can_exe(name, abspath, true); }
 int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
                        bool import_script) { return eval_variable(name, len, rettv, NULL, verbose, import_script); }
-bool nvim_eval_find_func(const char *name) { return find_func(name) != NULL; }
-bool nvim_eval_nlua_is_deferred_safe(void) { return nlua_is_deferred_safe(); }
+
 
 void *nvim_save_provider_caller_scope(void)
 {
@@ -442,7 +437,6 @@ void *nvim_save_provider_caller_scope(void)
 }
 
 void nvim_restore_provider_caller_scope(void *saved) { provider_caller_scope = *(struct caller_scope *)saved; xfree(saved); }
-list_T *nvim_eval_list_alloc_n(int n) { return tv_list_alloc((ptrdiff_t)n); }
 timer_T *nvim_timer_alloc(void) { return xcalloc(1, sizeof(timer_T)); }
 void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
@@ -483,8 +477,6 @@ void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
   })
 }
 
-dictitem_T *nvim_tv_dict_item_alloc_key(const char *key) { return tv_dict_item_alloc(key); }
-int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di) { return tv_dict_add(dict, di); }
 int nvim_get_pressedreturn(void) { return get_pressedreturn() ? 1 : 0; }
 void nvim_set_pressedreturn(int val) { set_pressedreturn(val != 0); }
 

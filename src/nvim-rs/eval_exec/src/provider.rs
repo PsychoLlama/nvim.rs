@@ -20,6 +20,7 @@ use crate::funcexe::FuncExeT;
 
 extern "C" {
     // ----- provider infrastructure -----
+    #[link_name = "nlua_is_deferred_safe"]
     fn nvim_eval_nlua_is_deferred_safe() -> bool;
     // nvim_semsg_fast_api_disabled: now in nvim_eval::errors
     fn nvim_eval_variable(
@@ -31,7 +32,8 @@ extern "C" {
     ) -> c_int;
     #[link_name = "script_autoload"]
     fn nvim_script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
-    fn nvim_eval_find_func(name: *const c_char) -> bool;
+    #[link_name = "find_func"]
+    fn nvim_find_func_raw(name: *const c_char) -> *mut c_void;
     static p_lpl: c_int;
     // nvim_semsg_provider_*: now in nvim_eval::errors
 
@@ -40,7 +42,8 @@ extern "C" {
     fn tv_clear(tv: *mut c_void);
 
     // ----- list operations -----
-    fn nvim_eval_list_alloc_n(n: c_int) -> *mut c_void;
+    #[link_name = "tv_list_alloc"]
+    fn nvim_eval_list_alloc_n(n: isize) -> *mut c_void;
     #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(l: *mut c_void, str: *const c_char, len: isize);
     #[link_name = "tv_list_unref"]
@@ -224,7 +227,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
             call_buf[cp..cp + call_suffix.len()].copy_from_slice(call_suffix);
             let _ = cp;
 
-            if unsafe { nvim_eval_find_func(call_buf.as_ptr() as *const c_char) }
+            if unsafe { !nvim_find_func_raw(call_buf.as_ptr() as *const c_char).is_null() }
                 && unsafe { p_lpl != 0 }
             {
                 unsafe { nvim_eval::errors::semsg_provider_missing_var(name_ptr) };
@@ -260,7 +263,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
         call_buf[cp..cp + call_suffix.len()].copy_from_slice(call_suffix);
         let _ = cp;
 
-        if !unsafe { nvim_eval_find_func(call_buf.as_ptr() as *const c_char) } {
+        if unsafe { nvim_find_func_raw(call_buf.as_ptr() as *const c_char).is_null() } {
             unsafe {
                 nvim_eval::errors::semsg_provider_no_call(
                     name_ptr,

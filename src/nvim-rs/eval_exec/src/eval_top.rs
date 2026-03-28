@@ -92,6 +92,7 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
 
     // may_call_simple_func
+    #[link_name = "may_call_simple_func"]
     fn nvim_eval_may_call_simple_func(arg: *const c_char, rettv: TypevalHandle) -> c_int;
 
     // typval operations
@@ -106,7 +107,8 @@ extern "C" {
     fn nvim_eval_xstrdup(s: *const c_char) -> *mut c_char;
 
     // typval2string helpers
-    fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
+    #[link_name = "encode_tv2string"]
+    fn nvim_encode_tv2string_wrapper(tv: *mut c_void, len: *mut usize) -> *mut c_char;
     // ga helpers for tv_list_join_nl inlining
     fn tv_list_join(ga: *mut GArray, l: *mut c_void, sep: *const c_char);
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
@@ -214,7 +216,7 @@ unsafe fn typval2string_impl(tv: *mut c_void, join_list: bool) -> *mut c_char {
         return ga.ga_data.cast::<c_char>();
     }
     if vtype == VAR_LIST || vtype == VAR_DICT {
-        return nvim_encode_tv2string_wrapper(tv);
+        return nvim_encode_tv2string_wrapper(tv, std::ptr::null_mut());
     }
     nvim_eval_xstrdup(nvim_eval_tv_get_str(tv_h))
 }

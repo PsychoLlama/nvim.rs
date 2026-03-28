@@ -1555,8 +1555,8 @@ extern "C" {
     // Cursor position accessor
     fn nvim_curwin_get_cursor_lnum() -> i32;
 
-    // Return pointer to tv_empty_string global
-    fn nvim_get_tv_empty_string() -> *const c_char;
+    // tv_empty_string global (extern const char *const)
+    static tv_empty_string: *const c_char;
 }
 
 /// Implementation of eval_func: resolve function name, construct funcexe, call get_func_tv.
@@ -1625,8 +1625,7 @@ unsafe fn eval_func_impl(
         // Check if **arg == '('
         let arg_ptr = *arg;
         if !arg_ptr.is_null() && *arg_ptr == b'(' as c_char {
-            (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string =
-                nvim_get_tv_empty_string() as *mut c_char;
+            (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = tv_empty_string as *mut c_char;
             rettv.set_type(VAR_FUNC);
         }
     }
@@ -3433,7 +3432,8 @@ extern "C" {
     // rs_is_luafunc from eval crate
     fn rs_is_luafunc(pt: *const c_void) -> bool;
 
-    // Wrap get_lambda_tv
+    // get_lambda_tv (direct)
+    #[link_name = "get_lambda_tv"]
     fn nvim_get_lambda_tv(
         arg: *mut *mut c_char,
         rettv: TypevalHandle,

@@ -96,9 +96,12 @@ extern "C" {
     fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
     fn nvim_tv_dict_add_nr(dict: DictHandle, key: *const c_char, key_len: usize, nr: i64);
     fn nvim_tv_dict_alloc() -> DictHandle;
+    #[link_name = "tv_dict_item_alloc"]
     fn nvim_tv_dict_item_alloc_key(key: *const c_char) -> DictItemHandle;
+    #[link_name = "tv_dict_add"]
     fn nvim_tv_dict_add_item(dict: DictHandle, di: DictItemHandle) -> c_int;
     fn nvim_di_get_tv(di: DictItemHandle) -> TvHandle;
+    #[link_name = "xfree"]
     fn nvim_tv_dict_item_free(di: DictItemHandle);
 
     // -- Callback operations --

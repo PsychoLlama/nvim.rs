@@ -374,7 +374,8 @@ pub unsafe extern "C" fn rs_string_slice(
 // =============================================================================
 
 extern "C" {
-    fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
+    #[link_name = "encode_tv2string"]
+    fn nvim_encode_tv2string_wrapper(tv: *mut c_void, len: *mut usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -407,7 +408,7 @@ pub unsafe extern "C" fn rs_typval_tostring(arg: *mut c_void, quotes: bool) -> *
         };
         return xstrdup(s_nn);
     }
-    nvim_encode_tv2string_wrapper(arg)
+    nvim_encode_tv2string_wrapper(arg, std::ptr::null_mut())
 }
 
 #[cfg(test)]
