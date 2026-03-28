@@ -25,9 +25,7 @@
 #include "nvim/globals.h"
 #include "nvim/grid.h"
 #include "nvim/highlight.h"
-#include "nvim/keycodes.h"
 #include "nvim/mark.h"
-#include "nvim/match.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
@@ -59,22 +57,9 @@ extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern int rs_tabline_height(void);
 extern int rs_global_stl_height(void);
-extern int rs_win_valid(win_T *win);
-extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
-typedef struct { frame_T *altfr; int dir; } WinframeResult;
-extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial);
-extern void rs_win_setheight(int height);
-typedef struct {
-  win_T *wp;
-  int do_enter;
-  int enter_flags;
-  int vertical;
-  int saved_option;
-} SplitInsResult;
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
-extern win_T *rs_win_free_mem(win_T *win, int *dirp, tabpage_T *tp);
 
 int *nvim_win_get_ns_hl_attr(win_T *wp) { return wp->w_ns_hl_attr; }
 int nvim_win_get_p_winbl(win_T *wp) { return (int)wp->w_p_winbl; }
@@ -113,7 +98,6 @@ buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 void nvim_win_set_p_wfb(win_T *wp, int val) { wp->w_p_wfb = val != 0; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
-#define ROWS_AVAIL (Rows - p_ch - rs_tabline_height() - rs_global_stl_height())
 typedef enum {
   WEE_UNDO_SYNC = 0x01,
   WEE_CURWIN_INVALID = 0x02,
@@ -317,13 +301,7 @@ void nvim_set_curtab_ch_used(int64_t val) { if (curtab) { curtab->tp_ch_used = v
 void nvim_set_min_set_ch(int64_t val) { min_set_ch = val; }
 void nvim_update_cmdline_row(void) { cmdline_row = Rows - (int)p_ch; }
 void nvim_grid_clear_cmd_area(void)
-{
-  if (msg_scrolled != 0 || !full_screen) { return; }
-  GridView *grid = &default_gridview;
-  if (!ui_has(kUIMessages)) { msg_grid_validate(); grid = &msg_grid_adj; }
-  grid_clear(grid, cmdline_row, Rows, 0, Columns, 0);
-  msg_row = cmdline_row;
-}
+{ if (msg_scrolled != 0 || !full_screen) { return; } GridView *grid = &default_gridview; if (!ui_has(kUIMessages)) { msg_grid_validate(); grid = &msg_grid_adj; } grid_clear(grid, cmdline_row, Rows, 0, Columns, 0); msg_row = cmdline_row; }
 void nvim_semsg_e92_buf_not_found(int64_t nr) { semsg(_("E92: Buffer %" PRId64 " not found"), nr); }
 void nvim_apply_autocmds_tabnewentered(void) { apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf); }
 int64_t nvim_get_p_tpm(void) { return p_tpm; }
