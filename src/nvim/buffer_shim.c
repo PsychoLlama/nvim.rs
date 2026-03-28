@@ -48,8 +48,13 @@
 #include "nvim/change.h"
 #include "nvim/eval.h"
 #include "nvim/eval/vars.h"
+#include "nvim/buffer_updates.h"
+#include "nvim/cursor.h"
+#include "nvim/ex_docmd.h"
 #include "nvim/memory.h"
+#include "nvim/move.h"
 #include "nvim/window.h"
+#include "nvim/ex_eval.h"
 
 #include "buffer_shim.c.generated.h"
 
@@ -627,3 +632,92 @@ extern void buf_reload(buf_T *buf, int orig_mode, bool reload_options);
 void nvim_buf_reload(buf_T *buf, int orig_mode, int reload_options) {
   buf_reload(buf, orig_mode, reload_options != 0);
 }
+
+// Phase 6: buf_reload / move_lines accessors
+int nvim_get_p_ur(void) { return (int)p_ur; }
+int nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO) ? 1 : 0; }
+int nvim_buf_is_empty(buf_T *buf) { return buf_is_empty(buf) ? 1 : 0; }
+void nvim_wipe_buffer(buf_T *buf) { wipe_buffer(buf, false); }
+void nvim_buf_updates_unload(buf_T *buf) { buf_updates_unload(buf, true); }
+void nvim_do_modelines(void) { do_modelines(0); }
+void nvim_u_savecommon_reload(buf_T *buf) {
+  u_sync(false);
+  u_savecommon(buf, 0, buf->b_ml.ml_line_count + 1, 0, true);
+}
+int nvim_u_savecommon_reload_ok(buf_T *buf) {
+  u_sync(false);
+  return u_savecommon(buf, 0, buf->b_ml.ml_line_count + 1, 0, true);
+}
+void nvim_u_clearallandblockfree(buf_T *buf) { u_clearallandblockfree(buf); }
+void nvim_u_unchanged(buf_T *buf) { u_unchanged(buf); }
+void nvim_unchanged(buf_T *buf) { unchanged(buf, true, true); }
+int nvim_ml_open_buf(buf_T *buf) {
+  buf_T *saved = curbuf;
+  curbuf = buf;
+  int r = ml_open(curbuf);
+  curbuf = saved;
+  return r;
+}
+void nvim_curbuf_set_b_flags_or(int flags) { curbuf->b_flags |= flags; }
+void nvim_curbuf_set_b_keep_filetype(int val) { curbuf->b_keep_filetype = (bool)val; }
+void nvim_curbuf_set_b_mod_set(int val) { curbuf->b_mod_set = (bool)val; }
+int nvim_curbuf_get_b_orig_mode(void) { return curbuf->b_orig_mode; }
+void nvim_buf_set_b_p_ro_or(buf_T *buf, int val) { buf->b_p_ro |= (bool)val; }
+// Note: nvim_curwin_get_topline is defined in window_shim.c
+void nvim_curwin_set_topline_clamped(linenr_T topline) {
+  linenr_T max_line = curbuf->b_ml.ml_line_count;
+  curwin->w_topline = topline < max_line ? topline : max_line;
+  if (curwin->w_topline < 1) curwin->w_topline = 1;
+}
+void nvim_curwin_get_cursor(linenr_T *lnum, colnr_T *col) {
+  *lnum = curwin->w_cursor.lnum;
+  *col = curwin->w_cursor.col;
+}
+void nvim_curwin_set_cursor(linenr_T lnum, colnr_T col) {
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+  curwin->w_cursor.coladd = 0;
+}
+void nvim_check_cursor_curwin(void) { check_cursor(curwin); }
+// Note: nvim_update_topline_curwin is defined in eval_shim.c
+void nvim_curwin_set_buffer2(buf_T *buf) { curwin->w_buffer = buf; }
+// Note: nvim_get_curbuf_ptr is defined in window_shim.c
+void nvim_set_curbuf_ptr(buf_T *buf) { curbuf = buf; }
+// ml_delete wrapper for move_lines: takes buf as context
+int nvim_ml_delete_in_buf(buf_T *buf, linenr_T lnum) {
+  buf_T *saved = curbuf;
+  curbuf = buf;
+  int r = ml_delete(lnum);
+  curbuf = saved;
+  return r;
+}
+// ml_append wrapper: appends line to curbuf (caller sets curbuf)
+int nvim_ml_append_curbuf(linenr_T lnum, const char *line) {
+  return ml_append(lnum, (char *)line, 0, false);
+}
+void nvim_set_buf_curwin_buffer(buf_T *buf) { curbuf = buf; curwin->w_buffer = buf; }
+// Note: nvim_buf_get_b_ml_line_count is defined in undo.c
+void nvim_semsg_reload_fail(const char *fname) {
+  semsg(_("E321: Could not reload \"%s\""), fname);
+}
+void nvim_semsg_prep_reload_fail(const char *fname) {
+  semsg(_("E462: Could not prepare for reloading \"%s\""), fname);
+}
+int nvim_readfile_reload(buf_T *buf, exarg_T *ea, int flags, int silent) {
+  return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM, ea, flags, silent != 0);
+}
+int nvim_aborting(void) { return aborting() ? 1 : 0; }
+// exarg_T allocation for buf_reload (zero-initialised, no prep_exarg)
+exarg_T *nvim_exarg_alloc_clear(void) {
+  exarg_T *ea = xmalloc(sizeof(exarg_T));
+  CLEAR_FIELD(*ea);
+  return ea;
+}
+// Note: nvim_exarg_free (frees ea->cmd + ea) is defined above at line ~475
+// BLN_DUMMY constant (from buffer.h)
+int nvim_BLN_DUMMY(void) { return BLN_DUMMY; }
+// BF_CHECK_RO constant
+int nvim_BF_CHECK_RO(void) { return BF_CHECK_RO; }
+// READ_NEW and READ_KEEP_UNDO constants
+int nvim_READ_NEW(void) { return READ_NEW; }
+int nvim_READ_KEEP_UNDO(void) { return READ_KEEP_UNDO; }

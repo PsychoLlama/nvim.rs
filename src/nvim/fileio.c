@@ -120,6 +120,8 @@ extern void rs_shorten_fnames(int force);
 extern int rs_check_timestamps(int focus);
 // Phase 5 Rust replacements
 extern int rs_buf_check_timestamp(buf_T *buf);
+// Phase 6 Rust replacements
+extern void rs_buf_reload(buf_T *buf, int orig_mode, int reload_options);
 
 #include "fileio.c.generated.h"
 
@@ -1952,43 +1954,6 @@ int check_timestamps(int focus)
   return rs_check_timestamps(focus);
 }
 
-/// Move all the lines from buffer "frombuf" to buffer "tobuf".
-///
-/// @return  OK or FAIL.
-///          When FAIL "tobuf" is incomplete and/or "frombuf" is not empty.
-static int move_lines(buf_T *frombuf, buf_T *tobuf)
-{
-  buf_T *tbuf = curbuf;
-  int retval = OK;
-
-  // Copy the lines in "frombuf" to "tobuf".
-  curbuf = tobuf;
-  for (linenr_T lnum = 1; lnum <= frombuf->b_ml.ml_line_count; lnum++) {
-    char *p = xstrdup(ml_get_buf(frombuf, lnum));
-    if (ml_append(lnum - 1, p, 0, false) == FAIL) {
-      xfree(p);
-      retval = FAIL;
-      break;
-    }
-    xfree(p);
-  }
-
-  // Delete all the lines in "frombuf".
-  if (retval != FAIL) {
-    curbuf = frombuf;
-    for (linenr_T lnum = curbuf->b_ml.ml_line_count; lnum > 0; lnum--) {
-      if (ml_delete(lnum) == FAIL) {
-        // Oops!  We could try putting back the saved lines, but that
-        // might fail again...
-        retval = FAIL;
-        break;
-      }
-    }
-  }
-
-  curbuf = tbuf;
-  return retval;
-}
 
 /// Check if buffer "buf" has been changed.
 /// Also check if the file for a new buffer unexpectedly appeared.
@@ -2009,133 +1974,7 @@ int buf_check_timestamp(buf_T *buf)
 /// buf->b_orig_mode may have been reset already.
 void buf_reload(buf_T *buf, int orig_mode, bool reload_options)
 {
-  exarg_T ea;
-  int old_ro = buf->b_p_ro;
-  buf_T *savebuf;
-  bufref_T bufref;
-  int saved = OK;
-  aco_save_T aco;
-  int flags = READ_NEW;
-
-  // Set curwin/curbuf for "buf" and save some things.
-  aucmd_prepbuf(&aco, buf);
-
-  // Unless reload_options is set, we only want to read the text from the
-  // file, not reset the syntax highlighting, clear marks, diff status, etc.
-  // Force the fileformat and encoding to be the same.
-  if (reload_options) {
-    CLEAR_FIELD(ea);
-  } else {
-    prep_exarg(&ea, buf);
-  }
-
-  pos_T old_cursor = curwin->w_cursor;
-  linenr_T old_topline = curwin->w_topline;
-
-  if (p_ur < 0 || curbuf->b_ml.ml_line_count <= p_ur) {
-    // Save all the text, so that the reload can be undone.
-    // Sync first so that this is a separate undo-able action.
-    u_sync(false);
-    saved = u_savecommon(curbuf, 0, curbuf->b_ml.ml_line_count + 1, 0, true);
-    flags |= READ_KEEP_UNDO;
-  }
-
-  // To behave like when a new file is edited (matters for
-  // BufReadPost autocommands) we first need to delete the current
-  // buffer contents.  But if reading the file fails we should keep
-  // the old contents.  Can't use memory only, the file might be
-  // too big.  Use a hidden buffer to move the buffer contents to.
-  if (buf_is_empty(curbuf) || saved == FAIL) {
-    savebuf = NULL;
-  } else {
-    // Allocate a buffer without putting it in the buffer list.
-    savebuf = buflist_new(NULL, NULL, 1, BLN_DUMMY);
-    set_bufref(&bufref, savebuf);
-    if (savebuf != NULL && buf == curbuf) {
-      // Open the memline.
-      curbuf = savebuf;
-      curwin->w_buffer = savebuf;
-      saved = ml_open(curbuf);
-      curbuf = buf;
-      curwin->w_buffer = buf;
-    }
-    if (savebuf == NULL || saved == FAIL || buf != curbuf
-        || move_lines(buf, savebuf) == FAIL) {
-      semsg(_("E462: Could not prepare for reloading \"%s\""),
-            buf->b_fname);
-      saved = FAIL;
-    }
-  }
-
-  if (saved == OK) {
-    curbuf->b_flags |= BF_CHECK_RO;           // check for RO again
-    curbuf->b_keep_filetype = true;           // don't detect 'filetype'
-    if (readfile(buf->b_ffname, buf->b_fname, 0, 0,
-                 (linenr_T)MAXLNUM, &ea, flags, shortmess(SHM_FILEINFO)) != OK) {
-      if (!aborting()) {
-        semsg(_("E321: Could not reload \"%s\""), buf->b_fname);
-      }
-      if (savebuf != NULL && bufref_valid(&bufref) && buf == curbuf) {
-        // Put the text back from the save buffer.  First
-        // delete any lines that readfile() added.
-        while (!buf_is_empty(curbuf)) {
-          if (ml_delete(buf->b_ml.ml_line_count) == FAIL) {
-            break;
-          }
-        }
-        move_lines(savebuf, buf);
-      }
-    } else if (buf == curbuf) {  // "buf" still valid.
-      // Mark the buffer as unmodified and free undo info.
-      unchanged(buf, true, true);
-      if ((flags & READ_KEEP_UNDO) == 0) {
-        u_clearallandblockfree(buf);
-      } else {
-        // Mark all undo states as changed.
-        u_unchanged(curbuf);
-      }
-      buf_updates_unload(curbuf, true);
-      curbuf->b_mod_set = true;
-    }
-  }
-  xfree(ea.cmd);
-
-  if (savebuf != NULL && bufref_valid(&bufref)) {
-    wipe_buffer(savebuf, false);
-  }
-
-  // Invalidate diff info if necessary.
-  rs_diff_invalidate(curbuf);
-
-  // Restore the topline and cursor position and check it (lines may
-  // have been removed).
-  curwin->w_topline = MIN(old_topline, curbuf->b_ml.ml_line_count);
-  curwin->w_cursor = old_cursor;
-  check_cursor(curwin);
-  update_topline(curwin);
-  curbuf->b_keep_filetype = false;
-
-  // Update folds unless they are defined manually.
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer == curwin->w_buffer
-        && !rs_foldmethodIsManual(wp)) {
-      rs_foldUpdateAll(wp);
-    }
-  }
-
-  // If the mode didn't change and 'readonly' was set, keep the old
-  // value; the user probably used the ":view" command.  But don't
-  // reset it, might have had a read error.
-  if (orig_mode == curbuf->b_orig_mode) {
-    curbuf->b_p_ro |= old_ro;
-  }
-
-  // Modelines must override settings done by autocommands.
-  do_modelines(0);
-
-  // restore curwin/curbuf and a few other things
-  aucmd_restbuf(&aco);
-  // Careful: autocommands may have made "buf" invalid!
+  rs_buf_reload(buf, orig_mode, (int)reload_options);
 }
 
 void buf_store_file_info(buf_T *buf, FileInfo *file_info)
