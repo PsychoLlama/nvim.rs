@@ -20,6 +20,7 @@ pub mod exit;
 pub mod helpers;
 pub mod init;
 pub mod output;
+pub mod scan;
 pub mod setup;
 pub mod signals;
 
