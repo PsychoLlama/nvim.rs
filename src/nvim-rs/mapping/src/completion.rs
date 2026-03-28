@@ -367,8 +367,7 @@ pub struct MakemapModeResult {
 /// to recreate the mapping in a `:map` command.
 ///
 /// This is the core logic from `makemap()` — the big mode→c1/c2/c3 switch.
-#[no_mangle]
-pub extern "C" fn rs_makemap_mode_chars(mode: c_int, abbr: c_int) -> MakemapModeResult {
+pub fn rs_makemap_mode_chars(mode: c_int, abbr: c_int) -> MakemapModeResult {
     let mut r = MakemapModeResult {
         c1: 0,
         c2: 0,
@@ -452,8 +451,7 @@ pub extern "C" fn rs_makemap_mode_chars(mode: c_int, abbr: c_int) -> MakemapMode
 ///
 /// # Safety
 /// `mp` must be a valid mapblock handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_makemap_should_skip(mp: MapblockHandle) -> c_int {
+pub unsafe fn rs_makemap_should_skip(mp: MapblockHandle) -> c_int {
     // Skip script-local mappings
     if mapblock_noremap(mp) == REMAP_SCRIPT {
         return 1;
@@ -491,8 +489,7 @@ pub unsafe extern "C" fn rs_makemap_should_skip(mp: MapblockHandle) -> c_int {
 ///
 /// # Safety
 /// `mp` must be a valid mapblock handle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_makemap_needs_cpo(mp: MapblockHandle) -> c_int {
+pub unsafe fn rs_makemap_needs_cpo(mp: MapblockHandle) -> c_int {
     let str_ptr = (*mp).m_str;
     let keys_ptr = mapblock_keys(mp);
 
@@ -529,8 +526,7 @@ pub unsafe extern "C" fn rs_makemap_needs_cpo(mp: MapblockHandle) -> c_int {
 /// `is_first`: true if this is the first character (for rhs space escaping)
 ///
 /// Returns: 0 = no escaping, 1 = backslash escape, 2 = Ctrl-V escape
-#[no_mangle]
-pub extern "C" fn rs_put_escstr_escape_type(what: c_int, c: c_int, is_first: c_int) -> c_int {
+pub fn rs_put_escstr_escape_type(what: c_int, c: c_int, is_first: c_int) -> c_int {
     let c_u8 = c as u8;
 
     // :set mode: backslash-escape whitespace, quote, and backslash

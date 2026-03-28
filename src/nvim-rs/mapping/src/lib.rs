@@ -23,6 +23,7 @@ pub mod flags;
 pub mod langmap;
 pub mod lookup;
 pub mod mutate;
+pub mod session;
 
 use std::ffi::{c_char, c_int};
 
