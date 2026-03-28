@@ -87,11 +87,11 @@ extern "C" {
     /// xfree: free memory allocated by C allocator
     fn xfree(ptr: *mut c_void);
 
-    /// map_execute_lua(false, true): execute Lua map with discard=true
-    fn nvim_map_execute_lua_discard() -> bool;
+    /// map_execute_lua: execute Lua mapping
+    fn map_execute_lua(may_repeat: bool, discard: bool) -> bool;
 
-    /// paste_repeat(0): repeat paste for K_PASTE_START discard path
-    fn nvim_paste_repeat_discard();
+    /// paste_repeat: repeat paste (count=0 means discard)
+    fn paste_repeat(count: c_int);
 
     /// may_garbage_collect: set after garbagecollect() is called
     static may_garbage_collect: bool;
@@ -645,9 +645,9 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
             let s = getcmdkeycmd(NUL, std::ptr::null_mut(), 0, false);
             xfree(s.cast::<c_void>());
         } else if c == K_LUA {
-            nvim_map_execute_lua_discard();
+            map_execute_lua(false, true);
         } else if c == K_PASTE_START {
-            nvim_paste_repeat_discard();
+            paste_repeat(0);
         }
         // Discard the current key.
         K_IGNORE

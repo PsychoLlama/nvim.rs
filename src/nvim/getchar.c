@@ -1302,9 +1302,7 @@ int nvim_get_typebuf_was_filled(void) { return typebuf_was_filled ? 1 : 0; }
 int nvim_get_typebuf_maplen(void) { return typebuf.tb_maplen; }
 int nvim_get_typebuf_len(void) { return typebuf.tb_len; }
 // nvim_get_curscript, nvim_get_keynoremap deleted: curscript, KeyNoremap now non-static
-int nvim_get_rm_none(void) { return RM_NONE; }
-int nvim_get_rm_script(void) { return RM_SCRIPT; }
-int nvim_get_maxmaplen(void) { return MAXMAPLEN; }
+// nvim_get_rm_none, nvim_get_rm_script, nvim_get_maxmaplen deleted: Rust uses constants directly
 uint8_t *nvim_get_typebuf_buf(void) { return typebuf.tb_buf; }
 uint8_t *nvim_get_typebuf_noremap(void) { return typebuf.tb_noremap; }
 int nvim_get_typebuf_buflen(void) { return typebuf.tb_buflen; }
@@ -1358,7 +1356,7 @@ int nvim_char_avail(void) { return char_avail() ? 1 : 0; }
 void nvim_set_reg_executing(int val) { reg_executing = val; }
 int nvim_get_pending_end_reg_executing(void) { return pending_end_reg_executing ? 1 : 0; }
 void nvim_set_pending_end_reg_executing(int val) { pending_end_reg_executing = val != 0; }
-int nvim_mb_byte2len_check(int b) { return MB_BYTE2LEN_CHECK(b); }
+// nvim_mb_byte2len_check deleted: no Rust callers
 void nvim_state_no_longer_safe(void) { state_no_longer_safe("rs_ins_typebuf()"); }
 int nvim_get_key_stuffed(void) { return KeyStuffed ? 1 : 0; }
 // nvim_get/set_typeahead_char deleted: typeahead_char now non-static
@@ -1373,5 +1371,5 @@ void nvim_set_visual_from_cursor(void)
   redo_VIsual_busy = true;
 }
 
-bool nvim_map_execute_lua_discard(void) { return map_execute_lua(false, true); }
-void nvim_paste_repeat_discard(void) { paste_repeat(0); }
+// nvim_map_execute_lua_discard, nvim_paste_repeat_discard deleted:
+// Rust calls map_execute_lua/paste_repeat directly
