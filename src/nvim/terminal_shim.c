@@ -211,105 +211,9 @@ void terminal_teardown(void)
   // make sure it is in an empty, valid state
   invalidated_terminals = (Set(ptr_t)) SET_INIT;
 }
+extern void rs_terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts);
 void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Terminal *term = *termpp = xcalloc(1, sizeof(Terminal));
-  term->opts = opts;
-  term->buf_handle = buf->handle;
-  buf->terminal = term;
-  term->vt = vterm_new(opts.height, opts.width);
-  vterm_set_utf8(term->vt, 1);
-  VTermState *state = vterm_obtain_state(term->vt);
-  term->vts = vterm_obtain_screen(term->vt);
-  vterm_screen_enable_altscreen(term->vts, true);
-  vterm_screen_enable_reflow(term->vts, true);
-  vterm_screen_set_callbacks(term->vts, &vterm_screen_callbacks, term);
-  vterm_screen_set_unrecognised_fallbacks(term->vts, &vterm_fallbacks, term);
-  vterm_screen_set_damage_merge(term->vts, VTERM_DAMAGE_SCROLL);
-  vterm_screen_reset(term->vts, 1);
-  vterm_output_set_callback(term->vt, rs_term_output_callback, term);
-
-  term->selection_buffer = xcalloc(SELECTIONBUF_SIZE, 1);
-  vterm_state_set_selection_callbacks(state, &vterm_selection_callbacks, term,
-                                      term->selection_buffer, SELECTIONBUF_SIZE);
-
-  VTermValue cursor_shape;
-  switch (shape_table[SHAPE_IDX_TERM].shape) {
-  case SHAPE_BLOCK:
-    cursor_shape.number = VTERM_PROP_CURSORSHAPE_BLOCK;
-    break;
-  case SHAPE_HOR:
-    cursor_shape.number = VTERM_PROP_CURSORSHAPE_UNDERLINE;
-    break;
-  case SHAPE_VER:
-    cursor_shape.number = VTERM_PROP_CURSORSHAPE_BAR_LEFT;
-    break;
-  }
-  vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, &cursor_shape);
-
-  VTermValue cursor_blink;
-  if (shape_table[SHAPE_IDX_TERM].blinkon != 0 && shape_table[SHAPE_IDX_TERM].blinkoff != 0) {
-    cursor_blink.boolean = true;
-  } else {
-    cursor_blink.boolean = false;
-  }
-  vterm_state_set_termprop(state, VTERM_PROP_CURSORBLINK, &cursor_blink);
-
-  // force a initial refresh of the screen to ensure the buffer will always
-  // have as many lines as screen rows when refresh_scrollback is called
-  term->invalid_start = 0;
-  term->invalid_end = opts.height;
-
-  // Pending events queue: deferred until next terminal refresh (#32753).
-  term->pending.events = multiqueue_new(NULL, NULL);
-
-  aco_save_T aco;
-  aucmd_prepbuf(&aco, buf);
-  rs_refresh_screen_pub(term, buf);
-  set_option_value(kOptBuftype, STATIC_CSTR_AS_OPTVAL("terminal"), OPT_LOCAL);
-  if (buf->b_ffname != NULL) {
-    buf_set_term_title(buf, buf->b_ffname, strlen(buf->b_ffname));
-  }
-  RESET_BINDING(curwin);
-  curwin->w_cursor = (pos_T){ .lnum = 1, .col = 0, .coladd = 0 };
-  term->sb_buffer = NULL;  // check if TermOpen autocmd allocates it
-  apply_autocmds(EVENT_TERMOPEN, NULL, NULL, false, buf);
-
-  aucmd_restbuf(&aco);
-
-  if (*termpp == NULL) {
-    return;  // Terminal has already been destroyed.
-  }
-
-  if (term->sb_buffer == NULL) {
-    if (buf->b_p_scbk < 1) {
-      buf->b_p_scbk = SB_MAX;
-    }
-    term->sb_size = (size_t)buf->b_p_scbk;
-    term->sb_buffer = xmalloc(sizeof(ScrollbackLine *) * term->sb_size);
-  }
-  // Configure color palette from b:terminal_color_{N} / g:terminal_color_{N}.
-  for (int i = 0; i < 16; i++) {
-    char var[64];
-    snprintf(var, sizeof(var), "terminal_color_%d", i);
-    char *name = get_config_string(var);
-    if (name) {
-      int dummy;
-      RgbValue color_val = name_to_color(name, &dummy);
-
-      if (color_val != -1) {
-        VTermColor color;
-        vterm_color_rgb(&color,
-                        (uint8_t)((color_val >> 16) & 0xFF),
-                        (uint8_t)((color_val >> 8) & 0xFF),
-                        (uint8_t)((color_val >> 0) & 0xFF));
-        vterm_state_set_palette_color(state, i, &color);
-        term->color_set[i] = true;
-      }
-    }
-  }
-}
+  FUNC_ATTR_NONNULL_ALL { rs_terminal_open(termpp, buf, opts); }
 extern void rs_terminal_close(Terminal **termpp, int status);
 void terminal_close(Terminal **termpp, int status)
   FUNC_ATTR_NONNULL_ALL { rs_terminal_close(termpp, status); }
@@ -341,15 +245,6 @@ extern void rs_terminal_get_line_attributes(Terminal *term, win_T *wp, int linen
 void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs) { rs_terminal_get_line_attributes(term, wp, linenr, term_attrs); }
 void terminal_notify_theme(Terminal *term, bool dark) { rs_terminal_notify_theme_impl(term, (int)dark); }
 
-static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
-{
-  Error err = ERROR_INIT;
-  dict_set_var(buf->b_vars, STATIC_CSTR_AS_STRING("term_title"),
-               STRING_OBJ(((String){ .data = (char *)title, .size = len })),
-               false, false, NULL, &err);
-  api_clear_error(&err);
-  status_redraw_buf(buf);
-}
 extern int rs_term_settermprop(VTermProp prop, VTermValue *val, void *data);
 static int term_settermprop(VTermProp prop, VTermValue *val, void *data) { return rs_term_settermprop(prop, val, data); }
 extern void rs_term_clipboard_set(void **argv);
@@ -400,22 +295,39 @@ static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
   }
 }
 
-static char *get_config_string(char *key)
-{
-  Error err = ERROR_INIT;
-  // Only called from terminal_open where curbuf->terminal is the context.
+char *nvim_get_config_string(const char *key)
+{ Error err = ERROR_INIT;
   Object obj = dict_get_value(curbuf->b_vars, cstr_as_string(key), NULL, &err);
   api_clear_error(&err);
   if (obj.type == kObjectTypeNil) {
     obj = dict_get_value(get_globvar_dict(), cstr_as_string(key), NULL, &err);
     api_clear_error(&err);
   }
-  if (obj.type == kObjectTypeString) {
-    return obj.data.string.data;
-  }
-  api_free_object(obj);
-  return NULL;
-}
+  if (obj.type == kObjectTypeString) { return obj.data.string.data; }
+  api_free_object(obj); return NULL; }
+int nvim_shape_table_get_shape(void) { return shape_table[SHAPE_IDX_TERM].shape; }
+int nvim_shape_table_get_blinkon(void) { return shape_table[SHAPE_IDX_TERM].blinkon; }
+int nvim_shape_table_get_blinkoff(void) { return shape_table[SHAPE_IDX_TERM].blinkoff; }
+void nvim_terminal_vterm_set_callbacks(void *term)
+{ Terminal *t = (Terminal *)term;
+  vterm_screen_set_callbacks(t->vts, &vterm_screen_callbacks, t);
+  vterm_screen_set_unrecognised_fallbacks(t->vts, &vterm_fallbacks, t);
+  VTermState *state = vterm_obtain_state(t->vt);
+  vterm_state_set_selection_callbacks(state, &vterm_selection_callbacks, t,
+                                      t->selection_buffer, SELECTIONBUF_SIZE); }
+void nvim_set_option_value_buftype_terminal(void) { set_option_value(kOptBuftype, STATIC_CSTR_AS_OPTVAL("terminal"), OPT_LOCAL); }
+void *nvim_aucmd_prepbuf_alloc(void *buf) { aco_save_T *aco = xmalloc(sizeof(aco_save_T)); aucmd_prepbuf(aco, (buf_T *)buf); return aco; }
+void nvim_aucmd_restbuf_free(void *aco) { aucmd_restbuf((aco_save_T *)aco); xfree(aco); }
+void nvim_apply_autocmds_termopen(void *buf) { apply_autocmds(EVENT_TERMOPEN, NULL, NULL, false, (buf_T *)buf); }
+const char *nvim_buf_get_ffname(void *buf) { return ((buf_T *)buf)->b_ffname; }
+size_t nvim_buf_get_ffname_len(void *buf) { const char *n = ((buf_T *)buf)->b_ffname; return n ? strlen(n) : 0; }
+void *nvim_multiqueue_new_standalone(void) { return multiqueue_new(NULL, NULL); }
+int nvim_name_to_color_int(const char *name) { int dummy; return (int)name_to_color(name, &dummy); }
+void nvim_terminal_vterm_set_palette(void *state, int i, int r, int g, int b)
+{ VTermColor color; vterm_color_rgb(&color, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+  vterm_state_set_palette_color((VTermState *)state, i, &color); }
+void *nvim_terminal_vterm_get_state(void *term) { return vterm_obtain_state(((Terminal *)term)->vt); }
+void nvim_curwin_cursor_topleft(void) { curwin->w_cursor = (pos_T){ .lnum = 1, .col = 0, .coladd = 0 }; }
 void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 char nvim_get_bg_char(void) { return *p_bg; }
 void nvim_terminal_set_put(void *term) { set_put(ptr_t, &invalidated_terminals, (Terminal *)term); }
@@ -446,7 +358,12 @@ Terminal *nvim_curbuf_terminal(void) { return curbuf->terminal; }
 void nvim_terminal_timer_start(void) { time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0); }
 int nvim_terminal_get_refresh_pending(void) { return (int)refresh_pending; }
 void nvim_terminal_set_refresh_pending(int v) { refresh_pending = (bool)v; }
-void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len) { buf_set_term_title((buf_T *)buf, title, len); }
+void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
+{ Error err = ERROR_INIT;
+  dict_set_var(((buf_T *)buf)->b_vars, STATIC_CSTR_AS_STRING("term_title"),
+               STRING_OBJ(((String){ .data = (char *)title, .size = len })),
+               false, false, NULL, &err);
+  api_clear_error(&err); status_redraw_buf((buf_T *)buf); }
 void *nvim_term_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
 void nvim_terminal_write_cb(void *term, const char *data, size_t size) { Terminal *t = (Terminal *)term; t->opts.write_cb(data, size, t->opts.data); }
 void *nvim_terminal_get_pending_send(void *term) { return ((Terminal *)term)->pending.send; }

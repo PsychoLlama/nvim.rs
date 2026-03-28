@@ -4858,6 +4858,203 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     got_bsl_o
 }
 
+// =============================================================================
+// Phase 5: Migrate terminal_open
+// =============================================================================
+
+extern "C" {
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn vterm_new(rows: c_int, cols: c_int) -> *mut c_void;
+    fn vterm_set_utf8(vt: *mut c_void, is_utf8: c_int);
+    fn vterm_obtain_screen(vt: *mut c_void) -> *mut c_void;
+    fn vterm_screen_enable_altscreen(vts: *mut c_void, altscreen: c_int);
+    fn vterm_screen_enable_reflow(vts: *mut c_void, reflow: bool);
+    fn vterm_screen_set_damage_merge(vts: *mut c_void, size: c_int);
+    fn vterm_screen_reset(vts: *mut c_void, hard: c_int);
+    fn vterm_output_set_callback(
+        vt: *mut c_void,
+        cb: unsafe extern "C" fn(*const i8, usize, *mut c_void),
+        user: *mut c_void,
+    );
+    fn vterm_state_set_termprop(state: *mut c_void, prop: c_int, val: *mut c_void) -> c_int;
+    fn nvim_terminal_vterm_set_callbacks(term: *mut c_void);
+    fn nvim_shape_table_get_shape() -> c_int;
+    fn nvim_shape_table_get_blinkon() -> c_int;
+    fn nvim_shape_table_get_blinkoff() -> c_int;
+    fn nvim_set_option_value_buftype_terminal();
+    fn nvim_aucmd_prepbuf_alloc(buf: *mut c_void) -> *mut c_void;
+    fn nvim_aucmd_restbuf_free(aco: *mut c_void);
+    fn nvim_apply_autocmds_termopen(buf: *mut c_void);
+    fn nvim_reset_binding_curwin();
+    fn nvim_curwin_cursor_topleft();
+    fn nvim_buf_get_ffname(buf: *mut c_void) -> *const i8;
+    fn nvim_buf_get_ffname_len(buf: *mut c_void) -> usize;
+    fn nvim_buf_get_handle(buf: *mut c_void) -> c_int;
+    fn nvim_multiqueue_new_standalone() -> *mut c_void;
+    fn nvim_get_config_string(key: *const i8) -> *mut i8;
+    fn nvim_name_to_color_int(name: *const i8) -> c_int;
+    fn nvim_terminal_vterm_set_palette(state: *mut c_void, i: c_int, r: c_int, g: c_int, b: c_int);
+    fn nvim_terminal_vterm_get_state(term: *mut c_void) -> *mut c_void;
+}
+
+/// `VTERM_DAMAGE_SCROLL` constant from vterm.h.
+const VTERM_DAMAGE_SCROLL: c_int = 2;
+/// `SELECTIONBUF_SIZE` from `terminal_shim.c`.
+const SELECTIONBUF_SIZE: usize = 0x0400;
+
+/// Initialize a new terminal.
+///
+/// Replaces `terminal_open` in `terminal_shim.c`.
+///
+/// # Safety
+/// `termpp` must be a valid `Terminal **`, `buf` and `opts` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_open(
+    termpp: *mut *mut c_void,
+    buf: *mut c_void,
+    opts: CTerminalOptions,
+) {
+    use nvim_vterm::VTermValue;
+
+    // Allocate and initialize the terminal struct.
+    let term_ptr = unsafe { xcalloc(1, std::mem::size_of::<CTerminal>()) }.cast::<CTerminal>();
+    unsafe { *termpp = term_ptr.cast() };
+    let term = unsafe { &mut *term_ptr };
+
+    // Save height/width before moving opts into term.
+    let height = opts.height;
+    let width = opts.width;
+
+    // Fill in basic fields.
+    term.opts = opts;
+    // buf_handle = buf->handle (accessed via accessor)
+    let buf_handle = unsafe { nvim_buf_get_handle(buf) };
+    term.buf_handle = buf_handle;
+    // buf->terminal = term
+    unsafe { nvim_buf_set_terminal(buf, term_ptr.cast()) };
+
+    // Initialize vterm.
+    term.vt = unsafe { vterm_new(c_int::from(height), c_int::from(width)) };
+    unsafe { vterm_set_utf8(term.vt, 1) };
+    term.vts = unsafe { vterm_obtain_screen(term.vt) };
+    unsafe { vterm_screen_enable_altscreen(term.vts, 1) };
+    unsafe { vterm_screen_enable_reflow(term.vts, true) };
+
+    // Register C static callback tables (must be done in C because they reference C statics).
+    term.selection_buffer = unsafe { xcalloc(SELECTIONBUF_SIZE, 1) }.cast();
+    unsafe { nvim_terminal_vterm_set_callbacks(term_ptr.cast()) };
+
+    unsafe { vterm_screen_set_damage_merge(term.vts, VTERM_DAMAGE_SCROLL) };
+    unsafe { vterm_screen_reset(term.vts, 1) };
+    unsafe {
+        vterm_output_set_callback(term.vt, rs_term_output_callback_trampoline, term_ptr.cast());
+    };
+
+    // Set cursor shape from shape_table.
+    let shape = unsafe { nvim_shape_table_get_shape() };
+    let cursor_shape_num = match shape {
+        SHAPE_BLOCK => VTERM_PROP_CURSORSHAPE_BLOCK,
+        SHAPE_HOR => VTERM_PROP_CURSORSHAPE_UNDERLINE,
+        _ => VTERM_PROP_CURSORSHAPE_BAR_LEFT, // SHAPE_VER
+    };
+    let state = unsafe { nvim_terminal_vterm_get_state(term_ptr.cast()) };
+    let mut val_shape = VTermValue {
+        number: cursor_shape_num,
+    };
+    unsafe { vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, (&raw mut val_shape).cast()) };
+
+    let blinkon = unsafe { nvim_shape_table_get_blinkon() };
+    let blinkoff = unsafe { nvim_shape_table_get_blinkoff() };
+    let mut val_blink = VTermValue {
+        boolean: c_int::from(blinkon != 0 && blinkoff != 0),
+    };
+    unsafe { vterm_state_set_termprop(state, VTERM_PROP_CURSORBLINK, (&raw mut val_blink).cast()) };
+
+    // Force initial refresh of the screen.
+    term.invalid_start = 0;
+    term.invalid_end = c_int::from(height);
+
+    // Pending events queue: deferred until next terminal refresh (#32753).
+    term.pending.events = unsafe { nvim_multiqueue_new_standalone() };
+
+    // Run TermOpen autocmd in the context of the terminal buffer.
+    let aco = unsafe { nvim_aucmd_prepbuf_alloc(buf) };
+    let term_handle = unsafe { TerminalHandle::from_ptr(term_ptr.cast()) };
+    unsafe { rs_refresh_screen_pub(term_handle, buf) };
+    unsafe { nvim_set_option_value_buftype_terminal() };
+    let ffname = unsafe { nvim_buf_get_ffname(buf) };
+    if !ffname.is_null() {
+        let len = unsafe { nvim_buf_get_ffname_len(buf) };
+        unsafe { nvim_terminal_buf_set_title(buf, ffname, len) };
+    }
+    unsafe { nvim_reset_binding_curwin() };
+    unsafe { nvim_curwin_cursor_topleft() };
+    term.sb_buffer = std::ptr::null_mut(); // check if TermOpen autocmd allocates it
+    unsafe { nvim_apply_autocmds_termopen(buf) };
+    unsafe { nvim_aucmd_restbuf_free(aco) };
+
+    // Check if terminal was already destroyed during TermOpen autocmd.
+    if unsafe { *termpp }.is_null() {
+        return;
+    }
+
+    // Allocate scrollback buffer if TermOpen autocmd didn't already.
+    if term.sb_buffer.is_null() {
+        let scbk = unsafe { nvim_buf_get_scrollback(buf) };
+        #[allow(clippy::cast_possible_wrap)]
+        let sb_max_i64 = TERMINAL_SB_MAX as i64;
+        let scbk = if scbk < 1 {
+            unsafe { nvim_buf_set_scrollback(buf, sb_max_i64) };
+            sb_max_i64
+        } else {
+            scbk
+        };
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let sb_size = scbk as usize;
+        term.sb_size = sb_size;
+        term.sb_buffer =
+            unsafe { xmalloc(sb_size * std::mem::size_of::<*mut c_void>()) }.cast::<*mut c_void>();
+    }
+
+    // Configure color palette from b:terminal_color_{N} / g:terminal_color_{N}.
+    for i in 0..16_i32 {
+        let key = format!("terminal_color_{i}\0");
+        let name = unsafe { nvim_get_config_string(key.as_ptr().cast()) };
+        if name.is_null() {
+            continue;
+        }
+        let color_val = unsafe { nvim_name_to_color_int(name) };
+        if color_val == -1 {
+            continue;
+        }
+        #[allow(clippy::cast_sign_loss)]
+        let (r, g, b) = (
+            (color_val >> 16) & 0xFF,
+            (color_val >> 8) & 0xFF,
+            color_val & 0xFF,
+        );
+        unsafe { nvim_terminal_vterm_set_palette(state, i, r, g, b) };
+        #[allow(clippy::cast_sign_loss)]
+        {
+            term.color_set[i as usize] = true;
+        }
+    }
+}
+
+/// The output callback that vterm calls when it has data to send.
+///
+/// This is a thin trampoline to [`rs_term_output_callback`] for use with `vterm_output_set_callback`.
+///
+/// # Safety
+/// Must be called from vterm with valid `s` and `user_data` pointers.
+unsafe extern "C" fn rs_term_output_callback_trampoline(
+    s: *const i8,
+    len: usize,
+    user_data: *mut c_void,
+) {
+    unsafe { rs_term_output_callback(s, len, user_data) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
