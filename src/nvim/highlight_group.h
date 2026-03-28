@@ -58,4 +58,7 @@ void set_context_in_highlight_cmd(expand_T *xp, const char *arg);
 char *get_highlight_name(expand_T *xp, int idx);
 const char *get_highlight_name_ext(expand_T *xp, int idx, bool skip_cleared);
 
+// Phase 2: migrated to Rust
+void do_highlight(const char *line, bool forceit, bool init);
+
 #include "highlight_group.h.generated.h"

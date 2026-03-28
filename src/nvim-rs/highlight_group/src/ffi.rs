@@ -1418,3 +1418,725 @@ pub unsafe extern "C" fn rs_load_colors(name: *mut c_char) -> c_int {
     RECURSIVE.store(false, Ordering::Relaxed);
     retval
 }
+
+// =============================================================================
+// Phase 2: do_highlight
+// =============================================================================
+
+/// Result of rs_lookup_color (matches C LookupColorResult).
+#[repr(C)]
+struct LookupColorResult {
+    color: c_int,
+    bold: c_int, // -1 = unchanged, 0 = false, 1 = true
+}
+
+extern "C" {
+    pub static mut current_sctx: crate::types::SctxT;
+    pub static mut updating_screen: bool;
+    pub static mut need_highlight_changed: bool;
+    pub static mut starting: c_int;
+    fn nvim_get_sourcing_lnum() -> i32;
+    fn nvim_get_sourcing_name() -> *const c_char;
+    fn nlua_set_sctx(ctx: *mut crate::types::SctxT);
+    fn syn_name2id_len(name: *const c_char, len: usize) -> c_int;
+    fn syn_check_group(name: *const c_char, len: usize) -> c_int;
+    fn ends_excmd(c: u8) -> bool;
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn highlight_list_one(id: c_int);
+    fn semsg(fmt: *const c_char, ...);
+    fn emsg(msg: *const c_char) -> bool;
+    fn name_to_color(name: *const c_char, idx: *mut c_int) -> crate::types::RgbValue;
+    fn do_unlet(name: *const c_char, name_len: usize, forceit: bool) -> c_int;
+    fn restore_cterm_colors();
+    fn highlight_changed();
+    fn redraw_all_later(r#type: c_int);
+    fn ui_refresh();
+    fn ui_default_colors_set();
+    fn option_was_set(opt_idx: c_int) -> bool;
+    fn set_option_value_give_err(opt_idx: c_int, value: DhOptVal, opt_flags: c_int);
+    fn reset_option_was_set(opt_idx: c_int);
+    fn strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn strcasecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn strncasecmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+    fn strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+    fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn atoi(s: *const c_char) -> c_int;
+    fn strtol(s: *const c_char, end: *mut *mut c_char, base: c_int) -> i64;
+    fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: usize);
+    fn memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
+    fn memcmp(a: *const c_void, b: *const c_void, n: usize) -> c_int;
+    fn rs_lookup_color(idx: c_int, foreground: bool) -> LookupColorResult;
+    fn init_highlight(both: bool, reset: bool);
+}
+
+/// OptVal for passing string to set_option_value_give_err.
+/// Must match the C OptVal layout (option_defs.h).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct DhOptValString {
+    data: *mut c_char,
+    size: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+union DhOptValData {
+    boolean: c_int,
+    number: i64,
+    string: DhOptValString,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct DhOptVal {
+    type_: c_int, // kOptValTypeString = 2
+    data: DhOptValData,
+}
+
+const K_OPT_VAL_TYPE_STRING: c_int = 2;
+const K_OPT_BACKGROUND: c_int = 13; // kOptBackground index
+const SG_CTERM: c_int = 2;
+const SG_GUI: c_int = 4;
+const SG_LINK: c_int = 8;
+const K_COLOR_IDX_NONE: c_int = -1; // kColorIdxNone
+const UPD_NOT_VALID: c_int = 40;
+const UPD_SOME_VALID: c_int = 35;
+const K_UI_LINEGRID: c_int = 5; // kUILinegrid
+
+use nvim_highlight::hl_attr_flags::{
+    HL_ALTFONT, HL_BOLD, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE, HL_STANDOUT, HL_STRIKETHROUGH,
+    HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK,
+};
+
+// Matches hl_name_table[] and hl_attr_table[] in C (14 entries).
+const HL_NAME_ATTR: [(&[u8], i16); 14] = [
+    (b"bold\0", HL_BOLD),
+    (b"standout\0", HL_STANDOUT),
+    (b"underline\0", HL_UNDERLINE),
+    (b"undercurl\0", HL_UNDERCURL),
+    (b"underdouble\0", HL_UNDERDOUBLE),
+    (b"underdotted\0", HL_UNDERDOTTED),
+    (b"underdashed\0", HL_UNDERDASHED),
+    (b"italic\0", HL_ITALIC),
+    (b"reverse\0", HL_INVERSE),
+    (b"inverse\0", HL_INVERSE),
+    (b"strikethrough\0", HL_STRIKETHROUGH),
+    (b"altfont\0", HL_ALTFONT),
+    (b"nocombine\0", HL_NOCOMBINE),
+    (b"NONE\0", 0),
+];
+
+// color_names[28] from C
+static COLOR_NAMES_28: [&[u8]; 28] = [
+    b"Black\0",
+    b"DarkBlue\0",
+    b"DarkGreen\0",
+    b"DarkCyan\0",
+    b"DarkRed\0",
+    b"DarkMagenta\0",
+    b"Brown\0",
+    b"DarkYellow\0",
+    b"Gray\0",
+    b"Grey\0",
+    b"LightGray\0",
+    b"LightGrey\0",
+    b"DarkGray\0",
+    b"DarkGrey\0",
+    b"Blue\0",
+    b"LightBlue\0",
+    b"Green\0",
+    b"LightGreen\0",
+    b"Cyan\0",
+    b"LightCyan\0",
+    b"Red\0",
+    b"LightRed\0",
+    b"Magenta\0",
+    b"LightMagenta\0",
+    b"Yellow\0",
+    b"LightYellow\0",
+    b"White\0",
+    b"NONE\0",
+];
+
+/// Parse attr string for TERM/CTERM/GUI key. Returns (attr, error).
+/// Iterates through comma-separated attribute names, matching HL_NAME_ATTR table.
+unsafe fn parse_attr_string(arg: *const c_char) -> (c_int, bool) {
+    let mut attr: c_int = 0;
+    let mut off: usize = 0;
+    loop {
+        if *arg.add(off) == 0 {
+            break;
+        }
+        let mut found = false;
+        // Iterate in reverse like C (so later entries take priority)
+        let mut i = HL_NAME_ATTR.len();
+        while i > 0 {
+            i -= 1;
+            let (name_bytes, flag) = HL_NAME_ATTR[i];
+            let name_len = name_bytes.len() - 1; // strip NUL
+            if strncasecmp(arg.add(off), name_bytes.as_ptr() as *const c_char, name_len) == 0 {
+                if flag & HL_UNDERLINE_MASK != 0 {
+                    attr &= !(HL_UNDERLINE_MASK as c_int);
+                }
+                attr |= flag as c_int;
+                off += name_len;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return (attr, true);
+        }
+        if *arg.add(off) == b',' as c_char {
+            off += 1;
+        }
+    }
+    (attr, false)
+}
+
+/// Handle ":highlight" command.
+///
+/// # Safety
+/// `line` must be a valid NUL-terminated C string.
+#[export_name = "do_highlight"]
+pub unsafe extern "C" fn rs_do_highlight(line: *const c_char, forceit: bool, init: bool) {
+    // If no argument, list current highlighting.
+    if !init && ends_excmd(*line as u8) {
+        msg_ext_set_kind(c"list_cmd".as_ptr());
+        let mut i = 1;
+        while i <= highlight_ga.ga_len && !got_int {
+            highlight_list_one(i);
+            i += 1;
+        }
+        return;
+    }
+
+    let mut dodefault = false;
+    let mut line = line;
+
+    // Isolate the name.
+    let mut name_end = skiptowhite(line);
+    let mut linep = skipwhite(name_end);
+
+    // Check for "default" argument.
+    // C uses strncmp(line, "default", name_len) which allows abbreviated prefixes
+    // (e.g. "def" matches "default"). We match that behavior.
+    let name_len = name_end.offset_from(line) as usize;
+    if name_len > 0 && name_len <= 7 && strncmp(line, c"default".as_ptr(), name_len) == 0 {
+        dodefault = true;
+        line = linep;
+        name_end = skiptowhite(line);
+        linep = skipwhite(name_end);
+    }
+
+    let mut doclear = false;
+    let mut dolink = false;
+
+    // Check for "clear" or "link" argument (prefix matching, same as C).
+    let name_len = name_end.offset_from(line) as usize;
+    if name_len > 0 && name_len <= 5 && strncmp(line, c"clear".as_ptr(), name_len) == 0 {
+        doclear = true;
+    } else if name_len > 0 && name_len <= 4 && strncmp(line, c"link".as_ptr(), name_len) == 0 {
+        dolink = true;
+    }
+
+    // ":highlight {group-name}": list highlighting for one group.
+    if !doclear && !dolink && ends_excmd(*linep as u8) {
+        let id = syn_name2id_len(line, name_len);
+        if id == 0 {
+            semsg(c"E411: Highlight group not found: %s".as_ptr(), line);
+        } else {
+            msg_ext_set_kind(c"list_cmd".as_ptr());
+            highlight_list_one(id);
+        }
+        return;
+    }
+
+    // Handle ":highlight link {from} {to}" command.
+    if dolink {
+        let from_start = linep;
+        let from_end = skiptowhite(from_start);
+        let to_start = skipwhite(from_end);
+        let to_end = skiptowhite(to_start);
+
+        if ends_excmd(*from_start as u8) || ends_excmd(*to_start as u8) {
+            semsg(
+                c"E412: Not enough arguments: \":highlight link %s\"".as_ptr(),
+                from_start,
+            );
+            return;
+        }
+
+        if !ends_excmd(*skipwhite(to_end) as u8) {
+            semsg(
+                c"E413: Too many arguments: \":highlight link %s\"".as_ptr(),
+                from_start,
+            );
+            return;
+        }
+
+        let from_id = syn_check_group(from_start, from_end.offset_from(from_start) as usize);
+        let to_id = if strncmp(to_start, c"NONE".as_ptr(), 4) == 0 {
+            0
+        } else {
+            syn_check_group(to_start, to_end.offset_from(to_start) as usize)
+        };
+
+        if from_id > 0 {
+            let hlgroup = &mut *hl_table_ptr(from_id - 1);
+            if dodefault && (forceit || hlgroup.sg_deflink == 0) {
+                hlgroup.sg_deflink = to_id;
+                hlgroup.sg_deflink_sctx = current_sctx;
+                hlgroup.sg_deflink_sctx.sc_lnum += nvim_get_sourcing_lnum();
+                nlua_set_sctx(&mut hlgroup.sg_deflink_sctx);
+            }
+
+            if !init || hlgroup.sg_set == 0 {
+                if to_id > 0 && !forceit && !init && rs_hl_has_settings(from_id - 1, dodefault) {
+                    if nvim_get_sourcing_name().is_null() && !dodefault {
+                        emsg(c"E414: Group has settings, highlight link ignored".as_ptr());
+                    }
+                } else if hlgroup.sg_link != to_id
+                    || hlgroup.sg_script_ctx.sc_sid != current_sctx.sc_sid
+                    || hlgroup.sg_cleared
+                {
+                    if !init {
+                        hlgroup.sg_set |= SG_LINK;
+                    }
+                    hlgroup.sg_link = to_id;
+                    hlgroup.sg_script_ctx = current_sctx;
+                    hlgroup.sg_script_ctx.sc_lnum += nvim_get_sourcing_lnum();
+                    nlua_set_sctx(&mut hlgroup.sg_script_ctx);
+                    hlgroup.sg_cleared = false;
+                    redraw_all_later(UPD_SOME_VALID);
+                    need_highlight_changed = true;
+                }
+            }
+        }
+
+        return;
+    }
+
+    if doclear {
+        // ":highlight clear [group]" command.
+        line = linep;
+        if ends_excmd(*line as u8) {
+            do_unlet(c"g:colors_name".as_ptr(), 13, true);
+            restore_cterm_colors();
+            let mut j = 0;
+            while j < highlight_ga.ga_len {
+                rs_highlight_clear(j);
+                j += 1;
+            }
+            init_highlight(true, true);
+            highlight_changed();
+            redraw_all_later(UPD_NOT_VALID);
+            return;
+        }
+        name_end = skiptowhite(line);
+        linep = skipwhite(name_end);
+    }
+
+    // Find the group name in the table. If it does not exist yet, add it.
+    let name_len = name_end.offset_from(line) as usize;
+    let id = syn_check_group(line, name_len);
+    if id == 0 {
+        return;
+    }
+    let idx = id - 1;
+
+    // Return if "default" was used and the group already has settings.
+    if dodefault && rs_hl_has_settings(idx, true) {
+        return;
+    }
+
+    // Make a copy so we can check if any attribute actually changed.
+    let item_before = (*hl_table_ptr(idx)).clone();
+    let sg_name_u = (*hl_table_ptr(idx)).sg_name_u;
+    let is_normal_group = strcmp(sg_name_u, c"NORMAL".as_ptr()) == 0;
+
+    // Clear the highlighting for ":hi clear {group}" and ":hi clear".
+    if doclear || (forceit && init) {
+        rs_highlight_clear(idx);
+        if !doclear {
+            (*hl_table_ptr(idx)).sg_set = 0;
+        }
+    }
+
+    let mut did_change = false;
+    let mut error = false;
+
+    if !doclear {
+        while !ends_excmd(*linep as u8) {
+            let key_start = linep;
+            if *linep == b'=' as c_char {
+                semsg(c"E415: Unexpected equal sign: %s".as_ptr(), key_start);
+                error = true;
+                break;
+            }
+
+            // Isolate the key and uppercase it.
+            while *linep != 0 && !is_ascii_white(*linep as u8) && *linep != b'=' as c_char {
+                linep = linep.add(1);
+            }
+            let key_len = linep.offset_from(key_start) as usize;
+            if key_len > 63 {
+                emsg(c"E423: Illegal argument".as_ptr());
+                error = true;
+                break;
+            }
+            let mut key_buf = [0u8; 64];
+            vim_memcpy_up(key_buf.as_mut_ptr() as *mut c_char, key_start, key_len);
+            key_buf[key_len] = 0;
+            linep = skipwhite(linep);
+
+            // Handle "NONE" keyword.
+            if key_len == 4 && &key_buf[..4] == b"NONE" {
+                if !init || (*hl_table_ptr(idx)).sg_set == 0 {
+                    if !init {
+                        (*hl_table_ptr(idx)).sg_set |= SG_CTERM + SG_GUI;
+                    }
+                    rs_highlight_clear(idx);
+                }
+                continue;
+            }
+
+            // Check for '='.
+            if *linep != b'=' as c_char {
+                semsg(c"E416: Missing equal sign: %s".as_ptr(), key_start);
+                error = true;
+                break;
+            }
+            linep = linep.add(1);
+
+            // Isolate the argument.
+            linep = skipwhite(linep);
+            let arg_start;
+            let arg_len;
+            if *linep == b'\'' as c_char {
+                linep = linep.add(1);
+                arg_start = linep;
+                let end = strchr(linep, b'\'' as c_int);
+                if end.is_null() {
+                    semsg(c"E475: Invalid argument: %s".as_ptr(), key_start);
+                    error = true;
+                    break;
+                }
+                arg_len = end.offset_from(arg_start) as usize;
+            } else {
+                arg_start = linep;
+                linep = skiptowhite(linep);
+                arg_len = linep.offset_from(arg_start) as usize;
+            }
+
+            if arg_len == 0 {
+                semsg(c"E417: Missing argument: %s".as_ptr(), key_start);
+                error = true;
+                break;
+            }
+            if arg_len > 511 {
+                emsg(c"E423: Illegal argument".as_ptr());
+                error = true;
+                break;
+            }
+
+            // Copy arg to NUL-terminated buffer.
+            let mut arg_buf = [0u8; 512];
+            memcpy(
+                arg_buf.as_mut_ptr() as *mut c_void,
+                arg_start as *const c_void,
+                arg_len,
+            );
+            arg_buf[arg_len] = 0;
+            let arg = arg_buf.as_ptr() as *const c_char;
+
+            // Skip closing quote.
+            if *linep == b'\'' as c_char {
+                linep = linep.add(1);
+            }
+
+            // Dispatch on uppercased key.
+            if (key_len == 4 && &key_buf[..4] == b"TERM")
+                || (key_len == 5 && &key_buf[..5] == b"CTERM")
+                || (key_len == 3 && &key_buf[..3] == b"GUI")
+            {
+                let (parsed_attr, parse_err) = parse_attr_string(arg);
+                if parse_err {
+                    semsg(c"E418: Illegal value: %s".as_ptr(), arg);
+                    error = true;
+                    break;
+                }
+                if key_buf[0] == b'C' {
+                    // CTERM
+                    if !init || ((*hl_table_ptr(idx)).sg_set & SG_CTERM == 0) {
+                        if !init {
+                            (*hl_table_ptr(idx)).sg_set |= SG_CTERM;
+                        }
+                        (*hl_table_ptr(idx)).sg_cterm = parsed_attr;
+                        (*hl_table_ptr(idx)).sg_cterm_bold = false;
+                    }
+                } else if key_buf[0] == b'G' {
+                    // GUI
+                    if !init || ((*hl_table_ptr(idx)).sg_set & SG_GUI == 0) {
+                        if !init {
+                            (*hl_table_ptr(idx)).sg_set |= SG_GUI;
+                        }
+                        (*hl_table_ptr(idx)).sg_gui = parsed_attr;
+                    }
+                }
+                // TERM is ignored.
+            } else if key_len == 4 && &key_buf[..4] == b"FONT" {
+                // Fonts ignored in non-GUI.
+            } else if key_len == 7 && (&key_buf[..7] == b"CTERMFG" || &key_buf[..7] == b"CTERMBG") {
+                if !init || ((*hl_table_ptr(idx)).sg_set & SG_CTERM == 0) {
+                    if !init {
+                        (*hl_table_ptr(idx)).sg_set |= SG_CTERM;
+                    }
+
+                    let is_fg = key_buf[5] == b'F';
+
+                    // Reset bold when setting foreground color if it was set for a light color.
+                    if is_fg && (*hl_table_ptr(idx)).sg_cterm_bold {
+                        (*hl_table_ptr(idx)).sg_cterm &= !(HL_BOLD as c_int);
+                        (*hl_table_ptr(idx)).sg_cterm_bold = false;
+                    }
+
+                    let color;
+                    if is_ascii_digit(*arg as u8) {
+                        color = atoi(arg);
+                    } else if strcasecmp(arg, c"fg".as_ptr()) == 0 {
+                        if cterm_normal_fg_color != 0 {
+                            color = cterm_normal_fg_color - 1;
+                        } else {
+                            emsg(c"E419: FG color unknown".as_ptr());
+                            error = true;
+                            break;
+                        }
+                    } else if strcasecmp(arg, c"bg".as_ptr()) == 0 {
+                        if cterm_normal_bg_color > 0 {
+                            color = cterm_normal_bg_color - 1;
+                        } else {
+                            emsg(c"E420: BG color unknown".as_ptr());
+                            error = true;
+                            break;
+                        }
+                    } else {
+                        // Look up in color_names[].
+                        let first_upper = (*arg as u8).to_ascii_uppercase() as c_char;
+                        let mut found_idx: c_int = -1;
+                        let mut ci = COLOR_NAMES_28.len();
+                        while ci > 0 {
+                            ci -= 1;
+                            let cname = COLOR_NAMES_28[ci].as_ptr() as *const c_char;
+                            if first_upper == (*cname as u8).to_ascii_uppercase() as c_char
+                                && strcasecmp(arg.add(1), cname.add(1)) == 0
+                            {
+                                found_idx = ci as c_int;
+                                break;
+                            }
+                        }
+                        if found_idx < 0 {
+                            semsg(
+                                c"E421: Color name or number not recognized: %s".as_ptr(),
+                                key_start,
+                            );
+                            error = true;
+                            break;
+                        }
+                        let result = rs_lookup_color(found_idx, is_fg);
+                        color = result.color;
+                        if result.bold == 1 {
+                            (*hl_table_ptr(idx)).sg_cterm |= HL_BOLD as c_int;
+                            (*hl_table_ptr(idx)).sg_cterm_bold = true;
+                        } else if result.bold == 0 {
+                            (*hl_table_ptr(idx)).sg_cterm &= !(HL_BOLD as c_int);
+                            (*hl_table_ptr(idx)).sg_cterm_bold = false;
+                        }
+                    }
+
+                    // Add one to avoid zero (zero means NONE).
+                    if is_fg {
+                        (*hl_table_ptr(idx)).sg_cterm_fg = color + 1;
+                        if is_normal_group {
+                            cterm_normal_fg_color = color + 1;
+                        }
+                    } else {
+                        (*hl_table_ptr(idx)).sg_cterm_bg = color + 1;
+                        if is_normal_group {
+                            cterm_normal_bg_color = color + 1;
+                            if !ui_rgb_attached() && color >= 0 {
+                                let dark: c_int = if t_colors < 16 {
+                                    if color == 0 || color == 4 {
+                                        1
+                                    } else {
+                                        0
+                                    }
+                                } else if color < 16 {
+                                    if color < 7 || color == 8 {
+                                        1
+                                    } else {
+                                        0
+                                    }
+                                } else {
+                                    -1
+                                };
+                                if dark != -1
+                                    && (dark != 0) != (*p_bg == b'd' as c_char)
+                                    && !option_was_set(K_OPT_BACKGROUND)
+                                {
+                                    let bg_ptr: *const c_char = if dark != 0 {
+                                        c"dark".as_ptr()
+                                    } else {
+                                        c"light".as_ptr()
+                                    };
+                                    let opt_val = DhOptVal {
+                                        type_: K_OPT_VAL_TYPE_STRING,
+                                        data: DhOptValData {
+                                            string: DhOptValString {
+                                                data: bg_ptr as *mut c_char,
+                                                size: if dark != 0 { 4 } else { 5 },
+                                            },
+                                        },
+                                    };
+                                    set_option_value_give_err(K_OPT_BACKGROUND, opt_val, 0);
+                                    reset_option_was_set(K_OPT_BACKGROUND);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if key_len == 5
+                && (&key_buf[..5] == b"GUIFG"
+                    || &key_buf[..5] == b"GUIBG"
+                    || &key_buf[..5] == b"GUISP")
+            {
+                let indexp = if key_buf[3] == b'F' {
+                    &mut (*hl_table_ptr(idx)).sg_rgb_fg_idx
+                } else if key_buf[3] == b'B' {
+                    &mut (*hl_table_ptr(idx)).sg_rgb_bg_idx
+                } else {
+                    &mut (*hl_table_ptr(idx)).sg_rgb_sp_idx
+                };
+
+                if !init || ((*hl_table_ptr(idx)).sg_set & SG_GUI == 0) {
+                    if !init {
+                        (*hl_table_ptr(idx)).sg_set |= SG_GUI;
+                    }
+
+                    if key_buf[3] == b'F' {
+                        let old_color = (*hl_table_ptr(idx)).sg_rgb_fg;
+                        let old_idx = (*hl_table_ptr(idx)).sg_rgb_fg_idx;
+                        if strcmp(arg, c"NONE".as_ptr()) != 0 {
+                            (*hl_table_ptr(idx)).sg_rgb_fg = name_to_color(arg, indexp);
+                        } else {
+                            (*hl_table_ptr(idx)).sg_rgb_fg = -1;
+                            (*hl_table_ptr(idx)).sg_rgb_fg_idx = K_COLOR_IDX_NONE;
+                        }
+                        did_change = (*hl_table_ptr(idx)).sg_rgb_fg != old_color
+                            || (*hl_table_ptr(idx)).sg_rgb_fg_idx != old_idx;
+                    } else if key_buf[3] == b'B' {
+                        let old_color = (*hl_table_ptr(idx)).sg_rgb_bg;
+                        let old_idx = (*hl_table_ptr(idx)).sg_rgb_bg_idx;
+                        if strcmp(arg, c"NONE".as_ptr()) != 0 {
+                            (*hl_table_ptr(idx)).sg_rgb_bg = name_to_color(arg, indexp);
+                        } else {
+                            (*hl_table_ptr(idx)).sg_rgb_bg = -1;
+                            (*hl_table_ptr(idx)).sg_rgb_bg_idx = K_COLOR_IDX_NONE;
+                        }
+                        did_change = (*hl_table_ptr(idx)).sg_rgb_bg != old_color
+                            || (*hl_table_ptr(idx)).sg_rgb_bg_idx != old_idx;
+                    } else {
+                        let old_color = (*hl_table_ptr(idx)).sg_rgb_sp;
+                        let old_idx = (*hl_table_ptr(idx)).sg_rgb_sp_idx;
+                        if strcmp(arg, c"NONE".as_ptr()) != 0 {
+                            (*hl_table_ptr(idx)).sg_rgb_sp = name_to_color(arg, indexp);
+                        } else {
+                            (*hl_table_ptr(idx)).sg_rgb_sp = -1;
+                            (*hl_table_ptr(idx)).sg_rgb_sp_idx = K_COLOR_IDX_NONE;
+                        }
+                        did_change = (*hl_table_ptr(idx)).sg_rgb_sp != old_color
+                            || (*hl_table_ptr(idx)).sg_rgb_sp_idx != old_idx;
+                    }
+                }
+
+                // Normal group fg/bg/sp update is outside the init check in C.
+                if is_normal_group {
+                    if key_buf[3] == b'F' {
+                        normal_fg = (*hl_table_ptr(idx)).sg_rgb_fg;
+                    } else if key_buf[3] == b'B' {
+                        normal_bg = (*hl_table_ptr(idx)).sg_rgb_bg;
+                    } else {
+                        normal_sp = (*hl_table_ptr(idx)).sg_rgb_sp;
+                    }
+                }
+            } else if (key_len == 5 && &key_buf[..5] == b"START")
+                || (key_len == 4 && &key_buf[..4] == b"STOP")
+            {
+                // Ignored.
+            } else if key_len == 5 && &key_buf[..5] == b"BLEND" {
+                if strcmp(arg, c"NONE".as_ptr()) != 0 {
+                    (*hl_table_ptr(idx)).sg_blend = strtol(arg, std::ptr::null_mut(), 10) as c_int;
+                } else {
+                    (*hl_table_ptr(idx)).sg_blend = -1;
+                }
+            } else {
+                semsg(c"E423: Illegal argument: %s".as_ptr(), key_start);
+                error = true;
+                break;
+            }
+
+            (*hl_table_ptr(idx)).sg_cleared = false;
+
+            // When highlighting has been given for a group, don't link it.
+            if !init || ((*hl_table_ptr(idx)).sg_set & SG_LINK == 0) {
+                (*hl_table_ptr(idx)).sg_link = 0;
+            }
+
+            linep = skipwhite(linep);
+        }
+    }
+
+    let did_highlight_changed;
+
+    if !error && is_normal_group {
+        rs_highlight_attr_set_all();
+        if !ui_has(K_UI_LINEGRID) && starting == 0 {
+            ui_refresh();
+        } else {
+            ui_default_colors_set();
+        }
+        did_highlight_changed = true;
+        redraw_all_later(UPD_NOT_VALID);
+    } else {
+        rs_set_hl_attr(idx);
+        did_highlight_changed = false;
+    }
+
+    (*hl_table_ptr(idx)).sg_script_ctx = current_sctx;
+    (*hl_table_ptr(idx)).sg_script_ctx.sc_lnum += nvim_get_sourcing_lnum();
+    nlua_set_sctx(&mut (*hl_table_ptr(idx)).sg_script_ctx);
+
+    if (did_change
+        || memcmp(
+            &item_before as *const _ as *const c_void,
+            hl_table_ptr(idx) as *const c_void,
+            std::mem::size_of::<crate::types::HlGroup>(),
+        ) != 0)
+        && !did_highlight_changed
+    {
+        if !updating_screen {
+            redraw_all_later(UPD_NOT_VALID);
+        }
+        need_highlight_changed = true;
+    }
+}
+
+#[inline]
+fn is_ascii_white(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+#[inline]
+fn is_ascii_digit(c: u8) -> bool {
+    c.is_ascii_digit()
+}
