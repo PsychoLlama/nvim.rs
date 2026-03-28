@@ -88,7 +88,7 @@ extern "C" {
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_shellcmd(
+    fn expand_shellcmd(
         filepat: *mut c_char,
         matches: *mut *mut *mut c_char,
         num_matches: *mut c_int,
@@ -712,7 +712,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
     }
 
     if ctx == ExpandContext::Shellcmd.to_raw() {
-        nvim_cmdexpand_expand_shellcmd(pat, matches, num_matches, flags);
+        expand_shellcmd(pat, matches, num_matches, flags);
         return OK;
     }
     if ctx == ExpandContext::OldSetting.to_raw() {

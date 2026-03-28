@@ -244,3 +244,292 @@ pub unsafe extern "C" fn rs_expand_user_lua(
     nvim_cmdexpand_list_to_string_matches(retlist, matches, num_matches);
     OK
 }
+
+// =============================================================================
+// expand_shellcmd / expand_shellcmd_onedir -- migrated from cmdexpand.c
+// =============================================================================
+
+use crate::context::ew_flags::{EW_DIR, EW_EXEC, EW_FILE, EW_SHELLCMD};
+
+/// Growing array matching C `garray_T` layout (24 bytes on 64-bit).
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct GArray {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut c_void,
+}
+
+/// Hashtable item matching C `hashitem_T` layout (16 bytes on 64-bit).
+#[repr(C)]
+struct HashitemT {
+    hi_hash: usize,
+    hi_key: *mut c_char,
+}
+
+/// Hashtable matching C `hashtab_T` layout (296 bytes, 16 inline items).
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct HashtabT {
+    ht_mask: usize,
+    ht_used: usize,
+    ht_filled: usize,
+    ht_changed: c_int,
+    ht_locked: c_int,
+    ht_array: *mut HashitemT,
+    ht_smallarray: [HashitemT; 16],
+}
+
+extern "C" {
+    static hash_removed: c_char;
+
+    fn expand_wildcards(
+        num: c_int,
+        pat: *mut *mut c_char,
+        num_files: *mut c_int,
+        files: *mut *mut *mut c_char,
+        flags: c_int,
+    ) -> c_int;
+    fn vim_getenv(name: *const c_char) -> *mut c_char;
+    fn path_is_absolute(fname: *const c_char) -> bool;
+    fn vim_ispathsep(c: c_int) -> c_int;
+    fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
+
+    fn hash_hash(key: *const c_char) -> usize;
+    fn hash_lookup(
+        ht: *const HashtabT,
+        key: *const c_char,
+        len: usize,
+        hash: usize,
+    ) -> *mut HashitemT;
+    fn hash_add_item(ht: *mut HashtabT, hi: *mut HashitemT, key: *mut c_char, hash: usize);
+    fn hash_init(ht: *mut HashtabT);
+    fn hash_clear(ht: *mut HashtabT);
+
+    fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_grow(gap: *mut GArray, n: c_int);
+
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
+}
+
+/// Maximum path length (`MAXPATHL`).
+const MAXPATHL: usize = 4096;
+/// Path separator string on Linux (`PATHSEPSTR`).
+const PATHSEPSTR: &[u8] = b"/";
+/// Environment path separator on Linux (`ENV_SEPCHAR` = `:`).
+const ENV_SEPCHAR: u8 = b':';
+
+/// Returns true if `hi` is an empty (unused or removed) hashtable slot.
+///
+/// Mirrors C `HASHITEM_EMPTY(hi)`.
+#[inline]
+unsafe fn hashitem_empty(hi: *const HashitemT) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed).cast_mut())
+}
+
+/// Expands shell command wildcard matches in one `$PATH` directory.
+///
+/// Mirrors C `expand_shellcmd_onedir`.
+///
+/// # Safety
+///
+/// All pointers must be valid. `ht` and `gap` must be initialized.
+unsafe fn expand_shellcmd_onedir(
+    mut pathed_pattern: *mut c_char,
+    pathlen: usize,
+    matches: *mut *mut *mut c_char,
+    num_matches: *mut c_int,
+    flags: c_int,
+    ht: *mut HashtabT,
+    gap: *mut GArray,
+) {
+    const OK: c_int = 1;
+    if expand_wildcards(1, &raw mut pathed_pattern, num_matches, matches, flags) != OK {
+        return;
+    }
+
+    ga_grow(gap, *num_matches);
+
+    for i in 0..(*num_matches as usize) {
+        let name: *mut c_char = *(*matches).add(i);
+        let namelen = libc::strlen(name);
+
+        if namelen > pathlen {
+            let basename = name.add(pathlen);
+            let baselen = namelen - pathlen;
+            let hash = hash_hash(basename);
+            let hi = hash_lookup(ht, basename, baselen, hash);
+            if hashitem_empty(hi) {
+                // Strip the path prefix by moving name bytes left.
+                std::ptr::copy(basename, name, baselen + 1); // +1 for NUL
+                let slot = (*gap)
+                    .ga_data
+                    .cast::<*mut c_char>()
+                    .add((*gap).ga_len as usize);
+                *slot = name;
+                (*gap).ga_len += 1;
+                hash_add_item(ht, hi, name, hash);
+                // name is now owned by gap; skip the xfree below
+                continue;
+            }
+        }
+        xfree(name.cast());
+    }
+    xfree((*matches).cast());
+}
+
+/// Completes shell command names matching `filepat` by searching `$PATH`.
+///
+/// Direct replacement for C `expand_shellcmd` (exported by name).
+///
+/// # Safety
+///
+/// `filepat`, `matches`, and `num_matches` must be valid non-null pointers.
+#[allow(clippy::too_many_lines)]
+#[export_name = "expand_shellcmd"]
+pub unsafe extern "C" fn rs_expand_shellcmd(
+    filepat: *mut c_char,
+    matches: *mut *mut *mut c_char,
+    num_matches: *mut c_int,
+    flagsarg: c_int,
+) {
+    let buf = xmalloc(MAXPATHL);
+    let mut flags = flagsarg;
+
+    // Strip backslash-escaped spaces ("\ " -> " ").
+    let patlen_orig = libc::strlen(filepat);
+    let pat = xmemdupz(filepat, patlen_orig);
+    {
+        let pat_end = pat.add(patlen_orig);
+        let mut s = pat;
+        while *s != 0 {
+            if *s != b'\\' as c_char {
+                s = s.add(1);
+                continue;
+            }
+            let p = s.add(1);
+            if *p == b' ' as c_char {
+                let remaining = pat_end.offset_from(p) as usize + 1; // +1 for NUL
+                std::ptr::copy(p, s, remaining);
+                // Do NOT advance s.
+            } else {
+                s = s.add(1);
+            }
+        }
+    }
+    let patlen = libc::strlen(pat);
+
+    flags |= EW_FILE | EW_EXEC | EW_SHELLCMD;
+
+    // Determine search path.
+    let mut mustfree = false;
+    let path: *mut c_char = if *pat == b'.' as c_char
+        && (vim_ispathsep(c_int::from(*pat.add(1) as u8)) != 0
+            || (*pat.add(1) == b'.' as c_char
+                && vim_ispathsep(c_int::from(*pat.add(2) as u8)) != 0))
+    {
+        // Pattern starts with "./" or "../": search only current dir.
+        flags |= EW_DIR;
+        c".".as_ptr().cast_mut()
+    } else if !path_is_absolute(pat) {
+        let p = vim_getenv(c"PATH".as_ptr());
+        if p.is_null() {
+            c"".as_ptr().cast_mut()
+        } else {
+            mustfree = true;
+            p
+        }
+    } else {
+        c"".as_ptr().cast_mut()
+    };
+
+    let mut ga = core::mem::MaybeUninit::<GArray>::zeroed().assume_init();
+    ga_init(&raw mut ga, std::mem::size_of::<*mut c_char>() as c_int, 10);
+
+    let mut found_ht = core::mem::MaybeUninit::<HashtabT>::zeroed().assume_init();
+    hash_init(&raw mut found_ht);
+
+    let mut did_curdir = false;
+    let mut s = path;
+
+    loop {
+        if *s == 0 {
+            // No more PATH entries; try current directory if not already done.
+            if did_curdir {
+                break;
+            }
+            flags |= EW_DIR;
+
+            // Current-directory pass: pathlen == 0, no separator.
+            if patlen < MAXPATHL {
+                xmemcpyz(buf, pat, patlen);
+                expand_shellcmd_onedir(
+                    buf,
+                    0,
+                    matches,
+                    num_matches,
+                    flags,
+                    &raw mut found_ht,
+                    &raw mut ga,
+                );
+            }
+            break;
+        }
+
+        // Find next ENV_SEPCHAR in the PATH string.
+        let mut e = s;
+        while *e != 0 && *e != ENV_SEPCHAR as c_char {
+            e = e.add(1);
+        }
+        let dirlen = e.offset_from(s) as usize;
+
+        if dirlen == 1 && *s == b'.' as c_char {
+            did_curdir = true;
+            flags |= EW_DIR;
+        } else {
+            flags &= !EW_DIR;
+        }
+
+        let seplen = if after_pathsep(s, s.add(dirlen)) != 0 {
+            0
+        } else {
+            PATHSEPSTR.len()
+        };
+
+        if dirlen + seplen + patlen < MAXPATHL {
+            if dirlen > 0 {
+                xmemcpyz(buf, s, dirlen);
+                if seplen > 0 {
+                    xmemcpyz(buf.add(dirlen), PATHSEPSTR.as_ptr().cast(), seplen);
+                }
+            }
+            xmemcpyz(buf.add(dirlen + seplen), pat, patlen);
+
+            expand_shellcmd_onedir(
+                buf,
+                dirlen + seplen,
+                matches,
+                num_matches,
+                flags,
+                &raw mut found_ht,
+                &raw mut ga,
+            );
+        }
+
+        s = if *e != 0 { e.add(1) } else { e };
+    }
+
+    *matches = ga.ga_data.cast::<*mut c_char>();
+    *num_matches = ga.ga_len;
+
+    xfree(buf.cast());
+    xfree(pat.cast());
+    if mustfree {
+        xfree(path.cast());
+    }
+    hash_clear(&raw mut found_ht);
+}
