@@ -5041,6 +5041,70 @@ pub unsafe extern "C" fn rs_terminal_open(
     }
 }
 
+// Phase 6: terminal_init, terminal_teardown, terminal_check_cursor
+extern "C" {
+    fn nvim_terminal_init_timer();
+    fn nvim_terminal_teardown_timer();
+    fn nvim_curwin_get_topline() -> c_int;
+    fn nvim_set_topline_curwin(lnum: c_int);
+    fn nvim_curbuf_ml_line_count() -> c_int;
+    fn nvim_curwin_get_view_height() -> c_int;
+    fn nvim_curwin_get_w_p_rl() -> c_int;
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_coladvance(col: c_int);
+}
+
+/// Initialize the terminal subsystem timer and event queue.
+///
+/// Replaces `terminal_init` in `terminal_shim.c`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_init() {
+    unsafe { nvim_terminal_init_timer() };
+}
+
+/// Tear down the terminal subsystem timer and free resources.
+///
+/// Replaces `terminal_teardown` in `terminal_shim.c`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_teardown() {
+    unsafe { nvim_terminal_teardown_timer() };
+}
+
+/// Reposition the cursor to the terminal's current cursor position.
+///
+/// Replaces `terminal_check_cursor` in `terminal_shim.c`.
+///
+/// # Safety
+/// Must be called with a valid current buffer and window that have a terminal attached.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_check_cursor() {
+    let term_ptr = unsafe { nvim_curbuf_terminal() }.cast::<CTerminal>();
+    if term_ptr.is_null() {
+        return;
+    }
+    let t = unsafe { &*term_ptr };
+    let ml_line_count = unsafe { nvim_curbuf_ml_line_count() };
+    let linenr = rs_terminal_row_to_linenr(t.cursor.row, t.sb_current);
+    let lnum = ml_line_count.min(linenr);
+    unsafe { nvim_curwin_set_cursor_lnum(lnum) };
+    let view_height = unsafe { nvim_curwin_get_view_height() };
+    let topline = (ml_line_count - view_height + 1).max(1);
+    if topline != unsafe { nvim_curwin_get_topline() } {
+        unsafe { nvim_set_topline_curwin(topline) };
+    }
+    let state = unsafe { nvim_get_state() };
+    let off =
+        if (state & MODE_TERMINAL) != 0 && unsafe { nvim_curbuf_terminal() } == term_ptr.cast() {
+            0
+        } else if unsafe { nvim_curwin_get_w_p_rl() } != 0 {
+            1
+        } else {
+            -1
+        };
+    let col = (t.cursor.col + off).max(0);
+    unsafe { nvim_coladvance(col) };
+}
+
 /// The output callback that vterm calls when it has data to send.
 ///
 /// This is a thin trampoline to [`rs_term_output_callback`] for use with `vterm_output_set_callback`.

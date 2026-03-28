@@ -194,14 +194,13 @@ static VTermStateFallbacks vterm_fallbacks = {
   .sos = NULL,
 };
 
-void terminal_init(void)
+void nvim_terminal_init_timer(void)
 {
   time_watcher_init(&main_loop, &refresh_timer, NULL);
   // refresh_timer_cb will redraw the screen which can call vimscript
   refresh_timer.events = multiqueue_new_child(loop_get_events(&main_loop));
 }
-
-void terminal_teardown(void)
+void nvim_terminal_teardown_timer(void)
 {
   time_watcher_stop(&refresh_timer);
   multiqueue_free(refresh_timer.events);
@@ -211,6 +210,11 @@ void terminal_teardown(void)
   // make sure it is in an empty, valid state
   invalidated_terminals = (Set(ptr_t)) SET_INIT;
 }
+void nvim_set_topline_curwin(int lnum) { set_topline(curwin, (linenr_T)lnum); }
+extern void rs_terminal_init(void);
+void terminal_init(void) { rs_terminal_init(); }
+extern void rs_terminal_teardown(void);
+void terminal_teardown(void) { rs_terminal_teardown(); }
 extern void rs_terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts);
 void terminal_open(Terminal **termpp, buf_T *buf, TerminalOptions opts)
   FUNC_ATTR_NONNULL_ALL { rs_terminal_open(termpp, buf, opts); }
@@ -222,18 +226,8 @@ void terminal_check_size(Terminal *term) { rs_terminal_check_size(term); }
 extern bool rs_terminal_enter(void);
 bool terminal_enter(void) { return rs_terminal_enter(); }
 
-static void terminal_check_cursor(void)
-{
-  Terminal *term = curbuf->terminal;
-  curwin->w_cursor.lnum = MIN(curbuf->b_ml.ml_line_count,
-                              rs_terminal_row_to_linenr_term(term, term->cursor.row));
-  const linenr_T topline = MAX(curbuf->b_ml.ml_line_count - curwin->w_view_height + 1, 1);
-  if (topline != curwin->w_topline) {
-    set_topline(curwin, topline);
-  }
-  int off = (State & MODE_TERMINAL && curbuf->terminal == term) ? 0 : (curwin->w_p_rl ? 1 : -1);
-  coladvance(curwin, MAX(0, term->cursor.col + off));
-}
+extern void rs_terminal_check_cursor(void);
+static void terminal_check_cursor(void) { rs_terminal_check_cursor(); }
 extern void rs_terminal_destroy(Terminal **termpp);
 void terminal_destroy(Terminal **termpp) FUNC_ATTR_NONNULL_ALL { rs_terminal_destroy(termpp); }
 extern void rs_terminal_paste(int count, const String *y_array, size_t y_size);
