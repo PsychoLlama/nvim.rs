@@ -2,26 +2,37 @@
 
 #include <stdbool.h>
 
+#include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
+#include "nvim/cmdexpand.h"
 #include "nvim/drawscreen.h"
+#include "nvim/ex_getln.h"
 #include "nvim/globals.h"
 #include "nvim/grid.h"
 #include "nvim/grid_defs.h"
 #include "nvim/highlight.h"
+#include "nvim/insexpand.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
+#include "nvim/normal.h"
 #include "nvim/option_vars.h"
+#include "nvim/popupmenu.h"
 #include "nvim/statusline.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/ui_compositor.h"
 #include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
+#include "nvim/window.h"
 
 // file-static variables owned in drawscreen.c, used in these helpers
 extern bool redraw_popupmenu;
 extern bool msg_grid_invalid;
 extern bool resizing_autocmd;
+
+// Rust FFI declarations used in shim helpers
+extern void rs_ins_compl_show_pum(void);
+extern int rs_min_rows(tabpage_T *tp);
 
 #include "drawscreen_shim.c.generated.h"
 
@@ -44,6 +55,9 @@ bool nvim_get_updating_screen(void) { return updating_screen; }
 
 /// Return true if default_grid.chars is non-NULL.
 bool nvim_default_grid_has_chars(void) { return default_grid.chars != NULL; }
+
+/// Return true if msg_grid.chars is non-NULL.
+bool nvim_msg_grid_has_chars(void) { return msg_grid.chars != NULL; }
 
 /// Return true if default_grid.valid is set.
 bool nvim_default_grid_is_valid(void) { return default_grid.valid; }
@@ -131,3 +145,75 @@ void nvim_update_screen_nrwidth_check(int type)
   }
 }
 
+/// Clamp 'cmdheight' for all tabpages after screen resize.
+/// Also sets p_lines and p_columns.
+/// Called from rs_drawscreen_screen_resize() in Rust.
+void nvim_screen_resize_clamp_cmdheight(void)
+{
+  if (!ui_has(kUIMessages)) {
+    int max_p_ch = Rows - rs_min_rows(curtab) + 1;
+    if (p_ch > 0 && p_ch > max_p_ch) {
+      p_ch = MAX(max_p_ch, 1);
+      curtab->tp_ch_used = p_ch;
+    }
+    FOR_ALL_TABS(tp) {
+      if (tp == curtab) {
+        continue;
+      }
+      int max_tp_ch = Rows - rs_min_rows(tp) + 1;
+      if (tp->tp_ch_used > 0 && tp->tp_ch_used > max_tp_ch) {
+        tp->tp_ch_used = MAX(max_tp_ch, 1);
+      }
+    }
+  }
+  p_lines = Rows;
+  p_columns = Columns;
+}
+
+/// Handle post-resize redraw. Called from rs_drawscreen_screen_resize() in Rust.
+/// @param state  Current editor state (State global value at call time).
+void nvim_screen_resize_post(int state)
+{
+  if (starting == NO_SCREEN) {
+    return;
+  }
+
+  maketitle();
+  changed_line_abv_curs();
+  invalidate_botline(curwin);
+
+  if (state == MODE_ASKMORE || state == MODE_EXTERNCMD || exmode_active
+      || ((state & MODE_CMDLINE) && get_cmdline_info()->one_key)) {
+    if (state & MODE_CMDLINE) {
+      update_screen();
+    }
+    if (msg_grid.chars) {
+      msg_grid_validate();
+    }
+    ui_comp_set_screen_valid(true);
+    repeat_message();
+  } else {
+    if (curwin->w_p_scb) {
+      do_check_scrollbind(true);
+    }
+    if (state & MODE_CMDLINE) {
+      redraw_popupmenu = false;
+      update_screen();
+      redrawcmdline();
+      if (pum_drawn()) {
+        cmdline_pum_display(false);
+      }
+    } else {
+      update_topline(curwin);
+      if (pum_drawn()) {
+        redraw_popupmenu = false;
+        rs_ins_compl_show_pum();
+      }
+      update_screen();
+      if (redrawing()) {
+        setcursor();
+      }
+    }
+  }
+  ui_flush();
+}

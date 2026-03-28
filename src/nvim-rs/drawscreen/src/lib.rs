@@ -2424,6 +2424,15 @@ pub extern "C" fn rs_win_draw_end(
 // Phase 3: default_grid_alloc, screenclear, screen_resize
 // =============================================================================
 
+/// MODE_HITRETURN from state_defs.h (0x2000 | MODE_NORMAL).
+const MODE_HITRETURN: c_int = 0x2001;
+/// MODE_SETWSIZE from state_defs.h.
+const MODE_SETWSIZE: c_int = 0x4000;
+/// MODE_ASKMORE from state_defs.h.
+const MODE_ASKMORE: c_int = 0x3000;
+/// MODE_EXTERNCMD from state_defs.h.
+const MODE_EXTERNCMD: c_int = 0x5000;
+
 extern "C" {
     /// Check if default_grid needs reallocation (size mismatch or NULL).
     fn nvim_default_grid_needs_alloc() -> c_int;
@@ -2431,9 +2440,51 @@ extern "C" {
     fn nvim_default_grid_do_alloc();
     /// Full screenclear implementation (C helper, preserves static state).
     fn nvim_screenclear_impl();
-    /// Full screen_resize implementation (C helper, handles all guards and state).
-    fn nvim_screen_resize_impl(width: c_int, height: c_int);
+
+    /// resizing_screen: true while screen_resize is running.
+    static mut resizing_screen: bool;
+    /// exmode_active: true in Ex mode.
+    static exmode_active: c_int;
+    /// starting: startup phase.
+    static starting: c_int;
+    /// p_lines: option 'lines'.
+    static mut p_lines: c_int;
+    /// p_columns: option 'columns'.
+    static mut p_columns: c_int;
+
+    /// Resize the UI grid.
+    fn ui_call_grid_resize(grid: c_int, width: c_int, height: c_int);
+    /// Fit windows in new sized screen.
+    fn win_new_screensize();
+    /// Apply autocommands.
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    /// Invalidate the bottom line of a window.
+    fn invalidate_botline(wp: WinHandle);
+    /// Mark that a line above cursor changed.
+    fn changed_line_abv_curs();
+    /// Get current buffer (curbuf).
+    fn nvim_get_curbuf_ptr() -> *mut c_void;
+
+    /// Clamp cmdheight for all tabs; set p_lines/p_columns.
+    fn nvim_screen_resize_clamp_cmdheight();
+    /// Handle post-resize redraw for starting != NO_SCREEN.
+    fn nvim_screen_resize_post(state: c_int);
+    /// Return true if msg_grid.chars is non-NULL.
+    fn nvim_msg_grid_has_chars() -> bool;
+    /// C wrapper for default_grid allocation with reentrancy guard.
+    fn default_grid_alloc() -> bool;
 }
+
+/// EVENT_VIMRESIZED autocmd event number (from auevents_enum.generated.h).
+const EVENT_VIMRESIZED: c_int = 132;
+/// NO_SCREEN: startup not yet showing a screen.
+const NO_SCREEN: c_int = 0;
 
 /// Resize the default screen grid to Rows and Columns.
 ///
@@ -2460,13 +2511,81 @@ pub unsafe extern "C" fn rs_screenclear() {
 
 /// Set dimensions of the Nvim application "screen".
 ///
-/// All guard logic (recursion check, HITRETURN/SETWSIZE, negative dimensions)
-/// is handled inside `nvim_screen_resize_impl`.
+/// Contains full orchestration logic; struct-heavy sections are delegated to
+/// C behavioral helpers in drawscreen_shim.c.
 ///
 /// Rust equivalent of `screen_resize()` in drawscreen.c.
 #[no_mangle]
 pub unsafe extern "C" fn rs_drawscreen_screen_resize(width: c_int, height: c_int) {
-    nvim_screen_resize_impl(width, height);
+    // Avoid recursiveness.
+    if updating_screen || resizing_screen || rs_cmdline_number_prompt() != 0 {
+        return;
+    }
+
+    if width < 0 || height < 0 {
+        return;
+    }
+
+    if State == MODE_HITRETURN || State == MODE_SETWSIZE {
+        State = MODE_SETWSIZE;
+        return;
+    }
+
+    resizing_screen = true;
+
+    Rows = height;
+    Columns = width;
+    // check_screensize is exported from Rust with export_name; call via FFI name
+    rs_check_screensize();
+
+    // Clamp cmdheight for all tabs; set p_lines/p_columns (struct-heavy, C helper).
+    nvim_screen_resize_clamp_cmdheight();
+
+    // Re-read Rows/Columns after check_screensize may have clamped them.
+    let width = Columns;
+    let height = Rows;
+    ui_call_grid_resize(1, width, height);
+
+    let mut retry_count: c_int = 0;
+    resizing_autocmd = true;
+
+    // Retry loop: autocommands may alter Rows or Columns.
+    while default_grid_alloc() {
+        ui_comp_set_screen_valid(false);
+        if nvim_msg_grid_has_chars() {
+            msg_grid_invalid = true;
+        }
+
+        RedrawingDisabled += 1;
+        win_new_screensize();
+        rs_comp_col();
+        RedrawingDisabled -= 1;
+
+        retry_count += 1;
+        if retry_count > 3 {
+            break;
+        }
+
+        apply_autocmds(
+            EVENT_VIMRESIZED,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            nvim_get_curbuf_ptr(),
+        );
+    }
+
+    resizing_autocmd = false;
+    redraw_all_later_impl(UPD_CLEAR);
+
+    if State != MODE_ASKMORE && State != MODE_EXTERNCMD {
+        rs_screenclear();
+    }
+
+    // Post-resize redraw (struct-heavy, C helper).
+    nvim_screen_resize_post(State);
+
+    resizing_screen = false;
 }
 
 // =============================================================================
