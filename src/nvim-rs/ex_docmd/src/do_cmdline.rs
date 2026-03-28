@@ -206,11 +206,7 @@ extern "C" {
     fn nvim_docmd_c_do_errthrow(cstack: *mut c_void, cmdname: *const c_char);
     fn do_intthrow(cstack: *mut c_void) -> bool;
     fn nvim_docmd_report_make_pending(pending: c_int, value: *mut c_void);
-    fn nvim_docmd_cleanup_conditionals(
-        cstack: *mut c_void,
-        searched_cond: c_int,
-        inclusive: c_int,
-    ) -> c_int;
+    fn cleanup_conditionals(cstack: *mut c_void, searched_cond: c_int, inclusive: c_int) -> c_int;
     fn nvim_docmd_rewind_conditionals(
         cstack: *mut c_void,
         idx: c_int,
@@ -1019,9 +1015,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         // Reset "trylevel" in case of a ":finish" or ":return" or a missing
         // ":endtry" in a sourced file or executed function.
         loop {
-            let idx = unsafe {
-                nvim_docmd_cleanup_conditionals(std::ptr::addr_of_mut!(cstack).cast(), 0, 1)
-            };
+            let idx = unsafe { cleanup_conditionals(std::ptr::addr_of_mut!(cstack).cast(), 0, 1) };
             let idx_adj = if idx >= 0 { idx - 1 } else { idx };
             unsafe {
                 nvim_docmd_rewind_conditionals(

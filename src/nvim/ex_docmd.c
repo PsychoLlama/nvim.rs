@@ -1982,7 +1982,6 @@ void nvim_docmd_dbg_breakpoint(char *name, linenr_T lnum) { dbg_breakpoint(name,
 void nvim_docmd_do_debug(char *cmd) { do_debug(cmd); }
 void nvim_docmd_c_do_errthrow(cstack_T *cstack, const char *cmdname) { do_errthrow(cstack, (char *)cmdname); }
 void nvim_docmd_report_make_pending(int pending, void *value) { report_make_pending(pending, value); }
-int nvim_docmd_cleanup_conditionals(cstack_T *cstack, int searched_cond, int inclusive) { return cleanup_conditionals(cstack, searched_cond, inclusive); }
 void nvim_docmd_rewind_conditionals(cstack_T *cstack, int idx, int cond_type, int *cond_level) { rewind_conditionals(cstack, idx, cond_type, cond_level); }
 void nvim_docmd_func_line_start(void *cookie) { func_line_start(cookie); }
 void nvim_docmd_func_line_end(void *cookie) { func_line_end(cookie); }

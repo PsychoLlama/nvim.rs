@@ -38,6 +38,14 @@ pub struct ExceptT {
     pub caught: *mut ExceptT,
 }
 
+/// Representation of eslist_T matching C layout (sizeof=16).
+#[repr(C)]
+pub struct EslistT {
+    pub saved_emsg_silent: c_int,
+    _padding: [u8; 4],
+    pub next: *mut EslistT,
+}
+
 /// Representation of cstack_T matching C layout (sizeof=1288).
 #[repr(C)]
 pub struct CstackT {
@@ -51,7 +59,7 @@ pub struct CstackT {
     pub cs_looplevel: c_int,
     pub cs_trylevel: c_int,
     _padding_try: [u8; 4],
-    pub cs_emsg_silent_list: *mut c_void, // eslist_T *
+    pub cs_emsg_silent_list: *mut EslistT,
     pub cs_lflags: c_int,
 }
 
@@ -88,7 +96,6 @@ extern "C" {
 
 // Phase 4 additional C functions
 extern "C" {
-    fn cleanup_conditionals(cstack: *mut CstackT, searched_cond: c_int, inclusive: c_int) -> c_int;
     fn get_return_cmd(rettv: *mut c_void) -> *mut c_char;
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn gettext(s: *const c_char) -> *const c_char;
@@ -127,6 +134,9 @@ extern "C" {
     static e_str_not_inside_function: *const c_char;
     static e_outofmem: *const c_char;
     static e_interr: *const c_char;
+    static e_endwhile: *const c_char;
+    static e_endfor: *const c_char;
+    static e_endif: *const c_char;
 }
 
 // VimVarIndex constants matching eval_defs.h VimVarIndex enum
@@ -137,11 +147,17 @@ const VV_THROWPOINT: c_int = 31;
 const VV_STACKTRACE: c_int = 125;
 
 // CSF_ flag constants matching ex_eval_defs.h
+const CSF_TRUE: c_int = 0x0001;
+const CSF_ACTIVE: c_int = 0x0002;
+const CSF_ELSE: c_int = 0x0004;
+const CSF_WHILE: c_int = 0x0008;
 const CSF_FOR: c_int = 0x0010;
 const CSF_TRY: c_int = 0x0100;
+const CSF_FINALLY: c_int = 0x0200;
 const CSF_THROWN: c_int = 0x0800;
 const CSF_CAUGHT: c_int = 0x1000;
-const CSF_ACTIVE: c_int = 0x0002;
+const CSF_FINISHED: c_int = 0x2000;
+const CSF_SILENT: c_int = 0x4000;
 
 // CSTP_ pending type constants matching ex_eval_defs.h
 const CSTP_NONE: c_int = 0;
@@ -827,6 +843,122 @@ pub unsafe extern "C" fn report_discard_pending(pending: c_int, value: *mut c_vo
             verbose_leave();
         }
     }
+}
+
+/// Return an appropriate error message for a missing endwhile/endfor/endif.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn get_end_emsg(cstack: *mut CstackT) -> *mut c_char {
+    let idx = (*cstack).cs_idx as usize;
+    if (*cstack).cs_flags[idx] & CSF_WHILE != 0 {
+        return gettext(e_endwhile).cast_mut();
+    }
+    if (*cstack).cs_flags[idx] & CSF_FOR != 0 {
+        return gettext(e_endfor).cast_mut();
+    }
+    gettext(e_endif).cast_mut()
+}
+
+/// Make conditionals inactive and discard what's pending in finally clauses
+/// until the conditional type searched for or a try conditional not in its
+/// finally clause is reached.  If this is in an active catch clause, finish
+/// the caught exception.
+///
+/// Returns the cstack index where the search stopped.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn cleanup_conditionals(
+    cstack: *mut CstackT,
+    searched_cond: c_int,
+    inclusive: c_int,
+) -> c_int {
+    let mut stop = false;
+    let mut idx = (*cstack).cs_idx;
+
+    while idx >= 0 {
+        let i = idx as usize;
+        if (*cstack).cs_flags[i] & CSF_TRY != 0 {
+            // Discard anything pending in a finally clause and continue the search.
+            if did_emsg != 0 || got_int || ((*cstack).cs_flags[i] & CSF_FINALLY != 0) {
+                match c_int::from((*cstack).cs_pending[i]) {
+                    CSTP_NONE => {}
+                    CSTP_CONTINUE | CSTP_BREAK | CSTP_FINISH => {
+                        report_discard_pending(
+                            c_int::from((*cstack).cs_pending[i]),
+                            std::ptr::null_mut(),
+                        );
+                        (*cstack).cs_pending[i] = 0;
+                    }
+                    CSTP_RETURN => {
+                        report_discard_pending(CSTP_RETURN, (*cstack).cs_pend.csp_rv[i]);
+                        discard_pending_return((*cstack).cs_pend.csp_rv[i]);
+                        (*cstack).cs_pending[i] = 0;
+                    }
+                    _ => {
+                        if (*cstack).cs_flags[i] & CSF_FINALLY != 0 {
+                            if c_int::from((*cstack).cs_pending[i]) & CSTP_THROW != 0
+                                && !(*cstack).cs_pend.csp_ex[i].is_null()
+                            {
+                                discard_exception(
+                                    (*cstack).cs_pend.csp_ex[i].cast::<ExceptT>(),
+                                    false,
+                                );
+                            } else {
+                                report_discard_pending(
+                                    c_int::from((*cstack).cs_pending[i]),
+                                    std::ptr::null_mut(),
+                                );
+                            }
+                            (*cstack).cs_pending[i] = 0;
+                        }
+                    }
+                }
+            }
+
+            // Stop at a try conditional not in its finally clause.
+            if (*cstack).cs_flags[i] & CSF_FINALLY == 0 {
+                if (*cstack).cs_flags[i] & CSF_ACTIVE != 0
+                    && (*cstack).cs_flags[i] & CSF_CAUGHT != 0
+                    && (*cstack).cs_flags[i] & CSF_FINISHED == 0
+                {
+                    finish_exception((*cstack).cs_pend.csp_ex[i].cast::<ExceptT>());
+                    (*cstack).cs_flags[i] |= CSF_FINISHED;
+                }
+                if (*cstack).cs_flags[i] & CSF_TRUE != 0 {
+                    if searched_cond == 0 && inclusive == 0 {
+                        break;
+                    }
+                    stop = true;
+                }
+            }
+        }
+
+        // Stop on the searched conditional type.
+        if (*cstack).cs_flags[i] & searched_cond != 0 {
+            if inclusive == 0 {
+                break;
+            }
+            stop = true;
+        }
+        (*cstack).cs_flags[i] &= !CSF_ACTIVE;
+        if stop && searched_cond != (CSF_TRY | CSF_SILENT) {
+            break;
+        }
+
+        // When leaving a try conditional that reset "emsg_silent", restore the value.
+        if (*cstack).cs_flags[i] & CSF_TRY != 0 && (*cstack).cs_flags[i] & CSF_SILENT != 0 {
+            let elem = (*cstack).cs_emsg_silent_list;
+            (*cstack).cs_emsg_silent_list = (*elem).next;
+            emsg_silent = (*elem).saved_emsg_silent;
+            xfree(elem.cast::<c_void>());
+            (*cstack).cs_flags[i] &= !CSF_SILENT;
+        }
+        if stop {
+            break;
+        }
+        idx -= 1;
+    }
+    idx
 }
 
 /// Throw the current exception through the specified cstack.

@@ -35,3 +35,5 @@ void report_resume_pending(int pending, void *value);
 void report_discard_pending(int pending, void *value);
 void enter_cleanup(cleanup_T *csp);
 void leave_cleanup(cleanup_T *csp);
+int cleanup_conditionals(cstack_T *cstack, int searched_cond, int inclusive);
+char *get_end_emsg(cstack_T *cstack);
