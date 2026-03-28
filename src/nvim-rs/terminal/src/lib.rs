@@ -2985,7 +2985,6 @@ extern "C" {
     fn nvim_term_treqbuf_printf_dcs(term: *mut c_void, command: *const i8, cmdlen: c_int);
     fn nvim_term_treqbuf_printf_apc(term: *mut c_void);
     fn nvim_terminal_has_termrequest_event() -> c_int;
-    fn nvim_terminal_schedule_termrequest(term: *mut c_void);
     fn nvim_terminal_get_vt(term: *mut c_void) -> *mut c_void;
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
     // Phase 16: term_selection_set / term_clipboard_set migration
@@ -3037,7 +3036,7 @@ extern "C" {
     fn nvim_term_buf_line_count(buf: *const c_void) -> c_int;
     fn nvim_buf_get_scrollback(buf: *const c_void) -> i64;
     fn nvim_buf_set_scrollback(buf: *mut c_void, val: i64);
-    fn nvim_rs_buf_valid(buf: *mut c_void) -> c_int;
+    fn rs_buf_valid(buf: *mut c_void) -> c_int;
     fn nvim_terminal_get_buffer(buf_handle: c_int) -> *mut c_void;
     fn nvim_ml_append_buf_term(
         buf: *mut c_void,
@@ -3060,7 +3059,6 @@ extern "C" {
     fn nvim_multiqueue_move_events_term(term: *mut c_void);
     fn nvim_terminal_sb_get(term: *mut c_void, idx: usize) -> *mut c_void;
     fn nvim_terminal_sb_buffer_resize(term: *mut c_void, new_size: usize);
-    fn nvim_fetch_row(term: *mut c_void, row: c_int, end_col: c_int);
     fn nvim_terminal_is_active(term: *mut c_void) -> c_int;
     fn nvim_ui_busy_start();
     fn nvim_ui_busy_stop();
@@ -3082,11 +3080,9 @@ extern "C" {
     fn nvim_term_sb_destroy(sb: *mut c_void);
     fn nvim_vterm_free(vt: *mut c_void);
     fn nvim_multiqueue_free(q: *mut c_void);
-    // Phase 11: terminal_get_line_attributes helpers
-    fn nvim_fetch_cell(term: *mut c_void, row: c_int, col: c_int, cell: *mut c_void) -> c_int;
-    fn nvim_get_rgb(state: *mut c_void, color: nvim_vterm::VTermColor) -> c_int;
     // Phase 4 (terminal_shim cleanup): fetch_cell/fetch_row migration
     fn nvim_vterm_screen_get_cell_c(vts: *mut c_void, row: c_int, col: c_int, cell: *mut c_void);
+    fn rs_vterm_state_convert_color_to_rgb(state: *mut c_void, col: *mut nvim_vterm::VTermColor);
     fn schar_get_adv(buf_out: *mut *mut i8, sc: nvim_vterm::SChar) -> usize;
     fn hl_get_term_attr(attrs: *const HlAttrsLocal) -> c_int;
     fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
@@ -3379,6 +3375,17 @@ pub unsafe extern "C" fn rs_terminal_destroy(termpp: *mut *mut c_void) {
 /// Maximum number of terminal columns for `terminal_get_line_attributes`.
 const TERM_ATTRS_MAX: usize = 1024;
 
+/// Convert a `VTermColor` to a packed RGB integer (same as C `get_rgb`).
+///
+/// # Safety
+/// `state` must be a valid `VTermState *`.
+#[inline]
+unsafe fn get_rgb_impl(state: *mut c_void, mut color: nvim_vterm::VTermColor) -> c_int {
+    unsafe { rs_vterm_state_convert_color_to_rgb(state, &raw mut color) };
+    let rgb = unsafe { color.rgb };
+    (c_int::from(rgb.red) << 16) | (c_int::from(rgb.green) << 8) | c_int::from(rgb.blue)
+}
+
 /// Compute highlight attributes for each cell in a terminal line.
 ///
 /// Replaces `terminal_get_line_attributes` in `terminal_shim.c`.
@@ -3420,8 +3427,7 @@ pub unsafe extern "C" fn rs_terminal_get_line_attributes(
 
     for col in 0..col_limit {
         let mut cell = VTermScreenCell::default();
-        let color_valid =
-            unsafe { nvim_fetch_cell(term.as_ptr(), row, col, (&raw mut cell).cast()) } != 0;
+        let color_valid = unsafe { rs_fetch_cell(term, row, col, (&raw mut cell).cast()) } != 0;
 
         let fg_default = !color_valid || cell.fg.is_default_fg();
         let bg_default = !color_valid || cell.bg.is_default_bg();
@@ -3429,12 +3435,12 @@ pub unsafe extern "C" fn rs_terminal_get_line_attributes(
         let foreground_color = if fg_default {
             -1
         } else {
-            unsafe { nvim_get_rgb(state, cell.fg) }
+            unsafe { get_rgb_impl(state, cell.fg) }
         };
         let background_color = if bg_default {
             -1
         } else {
-            unsafe { nvim_get_rgb(state, cell.bg) }
+            unsafe { get_rgb_impl(state, cell.bg) }
         };
 
         let fg_indexed = cell.fg.is_indexed();
@@ -3670,7 +3676,7 @@ pub unsafe extern "C" fn rs_on_osc(
 
     if is_final != 0 {
         if unsafe { nvim_terminal_has_termrequest_event() } != 0 {
-            unsafe { nvim_terminal_schedule_termrequest(user) };
+            unsafe { rs_schedule_termrequest(user) };
         }
         if command == 8 {
             unsafe { nvim_term_sb_push_char(treq_buf, 0) };
@@ -3723,7 +3729,7 @@ pub unsafe extern "C" fn rs_on_dcs(
     }
     unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
     if is_final != 0 {
-        unsafe { nvim_terminal_schedule_termrequest(user) };
+        unsafe { rs_schedule_termrequest(user) };
     }
     1
 }
@@ -3761,7 +3767,7 @@ pub unsafe extern "C" fn rs_on_apc(
     }
     unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
     if is_final != 0 {
-        unsafe { nvim_terminal_schedule_termrequest(user) };
+        unsafe { rs_schedule_termrequest(user) };
     }
     1
 }
@@ -3989,7 +3995,7 @@ unsafe fn rs_refresh_screen(term: TerminalHandle, buf: *mut c_void) {
 
     for r in row_start..row_end {
         let linenr = rs_terminal_row_to_linenr(r, t.sb_current);
-        unsafe { nvim_fetch_row(term.as_ptr(), r, width) };
+        unsafe { rs_fetch_row(term, r, width) };
         let textbuf = t.textbuf.as_mut_ptr();
         if linenr <= ml_line_count {
             unsafe { nvim_ml_replace_buf_term(buf, linenr, textbuf, true) };
@@ -4076,7 +4082,7 @@ unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
     // May still have pending scrollback after increase in terminal height
     let row_offset = t.sb_pending;
     while t.sb_pending > 0 && unsafe { nvim_term_buf_line_count(buf) } < height {
-        unsafe { nvim_fetch_row(term.as_ptr(), t.sb_pending - row_offset - 1, width) };
+        unsafe { rs_fetch_row(term, t.sb_pending - row_offset - 1, width) };
         unsafe { nvim_ml_append_buf_term(buf, 0, t.textbuf.as_mut_ptr(), false) };
         unsafe { nvim_appended_lines_buf_term(buf, 0, 1) };
         t.sb_pending -= 1;
@@ -4091,7 +4097,7 @@ unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
             unsafe { nvim_ml_delete_buf_term(buf, 1) };
             unsafe { nvim_deleted_lines_buf_term(buf, 1, 1) };
         }
-        unsafe { nvim_fetch_row(term.as_ptr(), -t.sb_pending - row_offset, width) };
+        unsafe { rs_fetch_row(term, -t.sb_pending - row_offset, width) };
         let buf_index = unsafe { nvim_term_buf_line_count(buf) } - height;
         unsafe { nvim_ml_append_buf_term(buf, buf_index, t.textbuf.as_mut_ptr(), false) };
         unsafe { nvim_appended_lines_buf_term(buf, buf_index, 1) };
@@ -4163,7 +4169,7 @@ pub unsafe extern "C" fn rs_refresh_terminal(term: TerminalHandle) {
     }
     let t = unsafe { term.as_ref() };
     let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
-    if buf.is_null() || unsafe { nvim_rs_buf_valid(buf) } == 0 {
+    if buf.is_null() || unsafe { rs_buf_valid(buf) } == 0 {
         if !buf.is_null() {
             // buf was destroyed by close_buffer
             unsafe { term.as_mut() }.buf_handle = 0;

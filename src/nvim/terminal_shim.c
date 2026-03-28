@@ -199,7 +199,6 @@ static VTermSelectionCallbacks vterm_selection_callbacks = {
 
 static Set(ptr_t) invalidated_terminals = SET_INIT;
 extern void rs_emit_termrequest(void **argv);
-extern void rs_schedule_termrequest(void *term);
 extern int rs_on_osc(int command, const char *str, size_t len, int initial, int is_final,
                      void *user);
 static int on_osc(int command, VTermStringFragment frag, void *user) FUNC_ATTR_NONNULL_ALL { return rs_on_osc(command, frag.str, frag.len, (int)frag.initial, (int)frag.final, user); }
@@ -362,11 +361,6 @@ void terminal_paste(int count, String *y_array, size_t y_size) { rs_terminal_pas
 extern void rs_terminal_receive_impl(void *term, const char *data, size_t len);
 void terminal_receive(Terminal *term, const char *data, size_t len) { rs_terminal_receive_impl(term, data, len); }
 
-static int get_rgb(VTermState *state, VTermColor color)
-{
-  vterm_state_convert_color_to_rgb(state, &color);
-  return RGB_(color.rgb.red, color.rgb.green, color.rgb.blue);
-}
 extern void rs_terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs);
 void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *term_attrs) { rs_terminal_get_line_attributes(term, wp, linenr, term_attrs); }
 void terminal_notify_theme(Terminal *term, bool dark) { rs_terminal_notify_theme_impl(term, (int)dark); }
@@ -470,10 +464,6 @@ void nvim_buf_set_terminal(void *buf, void *term) { ((buf_T *)buf)->terminal = (
 void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
 void nvim_vterm_free(void *vt) { vterm_free((VTerm *)vt); }
 void nvim_multiqueue_free(void *q) { multiqueue_free((MultiQueue *)q); }
-extern int rs_fetch_cell(void *term, int row, int col, void *cell);
-extern void rs_fetch_row(void *term, int row, int end_col);
-int nvim_fetch_cell(void *term, int row, int col, void *cell) { return rs_fetch_cell(term, row, col, cell); }
-int nvim_get_rgb(void *state, VTermColor color) { return get_rgb((VTermState *)state, color); }
 int nvim_term_utf_ptr2len(const char *s) { return utf_ptr2len(s); }
 int nvim_term_utf_ptr2char(const char *s) { return utf_ptr2char(s); }
 int nvim_terminal_get_tpf_flags(void) { return (int)tpf_flags; }
@@ -494,7 +484,6 @@ int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)va
 int nvim_term_buf_line_count(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
 int64_t nvim_buf_get_scrollback(const void *buf) { return ((const buf_T *)buf)->b_p_scbk; }
 void nvim_buf_set_scrollback(void *buf, int64_t val) { ((buf_T *)buf)->b_p_scbk = val; }
-int nvim_rs_buf_valid(void *buf) { return rs_buf_valid((buf_T *)buf); }
 void *nvim_terminal_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile) { return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile); }
 int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy) { return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false); }
@@ -508,7 +497,6 @@ void nvim_changed_lines_term(void *buf, int first, int last, int added) { change
 void nvim_multiqueue_move_events_term(void *term) { Terminal *t = (Terminal *)term; multiqueue_move_events(loop_get_events(&main_loop), t->pending.events); }
 void *nvim_terminal_sb_get(void *term, size_t idx) { return ((Terminal *)term)->sb_buffer[idx]; }
 void nvim_terminal_sb_buffer_resize(void *term, size_t new_size) { Terminal *t = (Terminal *)term; t->sb_buffer = xrealloc(t->sb_buffer, sizeof(ScrollbackLine *) * new_size); t->sb_size = new_size; }
-void nvim_fetch_row(void *term, int row, int end_col) { rs_fetch_row(term, row, end_col); }
 int nvim_terminal_is_active(void *term) { return (State & MODE_TERMINAL) && curbuf->terminal == (Terminal *)term; }
 void nvim_ui_busy_start(void) { ui_busy_start(); }
 void nvim_ui_busy_stop(void) { ui_busy_stop(); }
@@ -564,7 +552,6 @@ void nvim_term_treqbuf_printf_osc(void *term, int command) { kv_printf(((Termina
 void nvim_term_treqbuf_printf_dcs(void *term, const char *command, int cmdlen) { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1bP%*s", cmdlen, command); }
 void nvim_term_treqbuf_printf_apc(void *term) { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b_"); }
 int nvim_terminal_has_termrequest_event(void) { return (int)has_event(EVENT_TERMREQUEST); }
-void nvim_terminal_schedule_termrequest(void *term) { rs_schedule_termrequest(term); }
 void *nvim_terminal_treqbuf_ptr(void *term) { return &((Terminal *)term)->termrequest_buffer; }
 void *nvim_terminal_get_vt(void *term) { return ((Terminal *)term)->vt; }
 void nvim_term_set_osc8_attr(void *vt, int attr) { VTermValue v = { .number = attr }; vterm_state_set_penattr(vterm_obtain_state((VTerm *)vt), VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &v); }
