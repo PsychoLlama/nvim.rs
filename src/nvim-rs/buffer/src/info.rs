@@ -113,14 +113,37 @@ extern "C" {
     fn nvim_trans_characters(buf: *mut c_char, bufsize: usize);
     fn nvim_ui_call_set_title(s: *const c_char);
     fn nvim_ui_call_set_icon(s: *const c_char);
-    fn nvim_buf_get_lasttitle() -> *const c_char;
-    fn nvim_buf_set_lasttitle(s: *mut c_char);
-    fn nvim_buf_get_lasticon() -> *const c_char;
-    fn nvim_buf_set_lasticon(s: *mut c_char);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xfree(p: *mut c_void);
     /// Get the `end_off` from `utf_cp_bounds(str, ptr)`.
     fn nvim_utf_cp_bounds_end_off(str_: *const c_char, ptr: *const c_char) -> c_int;
+}
+
+// =============================================================================
+// Last title/icon statics (moved from C buffer_shim.c)
+// =============================================================================
+
+static mut LASTTITLE: *mut c_char = std::ptr::null_mut();
+static mut LASTICON: *mut c_char = std::ptr::null_mut();
+
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_get_lasttitle() -> *const c_char {
+    LASTTITLE
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_set_lasttitle(s: *mut c_char) {
+    LASTTITLE = s;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_get_lasticon() -> *const c_char {
+    LASTICON
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_set_lasticon(s: *mut c_char) {
+    LASTICON = s;
 }
 
 // =============================================================================
