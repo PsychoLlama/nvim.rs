@@ -56,20 +56,15 @@ extern void rs_foldOpenCursor(void);
 
 // Rust sign exports
 extern void sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group, list_T *retlist);
+extern int64_t group_get_ns(const char *group);
 
 
 // Rust FFI declarations
 extern int rs_sign_row_cmp(int row1, int row2);
 extern int rs_sign_cmd_idx(const char *cmd);
-extern int rs_sign_effective_priority(int prio);
-extern int64_t rs_group_get_ns(const char *group, int (*ns_lookup)(const char *));
 extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
 extern bool rs_sign_buffer_has_signs(const buf_T *buf);
-extern void rs_buf_set_sign(buf_T *buf, uint32_t *id, const char *group, int prio, linenr_T lnum,
-                            sign_T *sp);
-extern linenr_T rs_buf_mod_sign(buf_T *buf, uint32_t *id, const char *group, int prio, sign_T *sp);
 extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
-extern int rs_buf_delete_signs(buf_T *buf, const char *group, int id, linenr_T atlnum);
 extern void rs_sign_list_defined(sign_T *sp);
 extern void rs_sign_list_by_name(const char *name);
 extern int rs_sign_define_by_name(const char *name, const char *icon, const char *text,
@@ -106,12 +101,6 @@ static char *cmds[] = {
   NULL
 #define SIGNCMD_LAST    6
 };
-
-/// C accessor: look up namespace by name (wraps map_get for namespace_ids)
-static int nvim_namespace_lookup_fn(const char *name)
-{
-  return map_get(String, int)(&namespace_ids, cstr_as_string(name));
-}
 
 /// qsort() function to sort signs by line number, priority, id and recency.
 static int sign_row_cmp(const void *p1, const void *p2)
@@ -403,7 +392,7 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
   char namebuf[MSG_BUF_LEN];
   char groupbuf[MSG_BUF_LEN];
   buf_T *buf = rbuf ? rbuf : firstbuf;
-  int64_t ns = rs_group_get_ns(group, nvim_namespace_lookup_fn);
+  int64_t ns = group_get_ns(group);
 
   msg_puts_title(_("\n--- Signs ---"));
   msg_putchar('\n');
@@ -798,7 +787,7 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
   list_T *l = tv_list_alloc(kListLenMayKnow);
   tv_dict_add_list(d, S_LEN("signs"), l);
 
-  int64_t ns = rs_group_get_ns(group, nvim_namespace_lookup_fn);
+  int64_t ns = group_get_ns(group);
   if (!rs_sign_buffer_has_signs(buf) || ns < 0) {
     return;
   }
