@@ -146,15 +146,6 @@ typedef struct {
 } HistoryMergerState;
 
 typedef struct {
-  ShadaEntry marks[NLOCALMARKS];
-  ShadaEntry changes[JUMPLISTSIZE];
-  size_t changes_size;
-  ShadaEntry *additional_marks;
-  size_t additional_marks_size;
-  Timestamp greatest_timestamp;
-} FileMarks;
-
-typedef struct {
   HistoryMergerState hms[HIST_COUNT];
   ShadaEntry global_marks[NMARKS];
   ShadaEntry numbered_marks[EXTRA_MARKS];
