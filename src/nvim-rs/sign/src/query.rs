@@ -16,6 +16,7 @@ use crate::{
 extern "C" {
     // Sign map operations
     fn nvim_sign_map_has(name: *const c_char) -> c_int;
+    fn nvim_sign_map_get(name: *const c_char) -> crate::SignHandle;
 
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
@@ -33,11 +34,15 @@ extern "C" {
     // DecorSignHighlight accessors
     fn nvim_decor_sh_get_sign_name(sh: DecorSignHighlightHandle) -> *const c_char;
 
+    // Error reporting
+    fn semsg(fmt: *const c_char, ...);
+
     // Display/listing composite accessors
     fn nvim_sign_list_placed_impl(rbuf: SignBufHandle, group: *const c_char);
     fn nvim_sign_list_defined_impl(sp: crate::SignHandle);
-    fn nvim_sign_list_by_name_impl(name: *const c_char);
 }
+
+const E155_FMT: &[u8] = b"E155: Unknown sign: %s\0";
 
 // =============================================================================
 // Sign Name Lookup
@@ -333,7 +338,12 @@ pub unsafe extern "C" fn rs_sign_list_by_name(name: *const c_char) {
     if name.is_null() {
         return;
     }
-    nvim_sign_list_by_name_impl(name);
+    let sp = nvim_sign_map_get(name);
+    if sp.is_null() {
+        semsg(E155_FMT.as_ptr().cast(), name);
+    } else {
+        nvim_sign_list_defined_impl(sp);
+    }
 }
 
 /// Get the display name for a placed sign — static C wrapper replacement.

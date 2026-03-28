@@ -492,18 +492,6 @@ void nvim_sign_list_defined_impl(sign_T *sp)
   }
 }
 
-/// List sign by name — composite accessor.
-/// Looks up sign in sign_map and delegates to nvim_sign_list_defined_impl.
-/// Emits E155 error for unknown sign names.
-void nvim_sign_list_by_name_impl(const char *name)
-{
-  sign_T *sp = pmap_get(cstr_t)(&sign_map, name);
-  if (sp != NULL) {
-    nvim_sign_list_defined_impl(sp);
-  } else {
-    semsg(_("E155: Unknown sign: %s"), name);
-  }
-}
 
 
 /// ":sign" command — composite accessor.
