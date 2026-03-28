@@ -67,6 +67,7 @@ extern "C" {
     fn msg_ext_set_kind(kind: *const c_char);
     #[link_name = "msg_sb_eol"]
     fn nvim_msg_sb_eol();
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
     fn nvim_msg_multiline_cstr(
@@ -77,6 +78,7 @@ extern "C" {
         need_clear: *mut bool,
     );
     fn msg_clr_eos();
+    #[link_name = "msg_end"]
     fn nvim_msg_end();
     static mut msg_ext_append: bool;
     fn nvim_msg_echomsg(str: *const c_char, hl_id: c_int);

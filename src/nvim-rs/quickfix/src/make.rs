@@ -72,6 +72,7 @@ extern "C" {
     fn append_redir(buf: *mut c_char, buflen: usize, opt: *const c_char, name: *const c_char);
     static mut msg_col: c_int;
     static mut msg_didout: bool;
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn msg_puts(s: *const c_char);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
@@ -80,6 +81,7 @@ extern "C" {
     // autowrite, shell, remove
     fn autowrite_all();
     fn do_shell(cmd: *const c_char, flags: c_int);
+    #[link_name = "os_remove"]
     fn nvim_os_remove(path: *const c_char) -> c_int;
 
     // OS helpers for get_mef_name

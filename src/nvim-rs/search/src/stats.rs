@@ -529,6 +529,7 @@ extern "C" {
     fn nvim_get_p_msc() -> i64;
     fn nvim_curbuf_get_changedtick() -> c_int;
     fn nvim_search_get_curbuf_ptr() -> *mut c_void;
+    #[link_name = "fast_breakcheck"]
     fn nvim_fast_breakcheck();
 
     // Search stat specific

@@ -68,7 +68,9 @@ extern "C" {
     );
 
     // Spell checking
+    #[link_name = "spell_check_window"]
     fn nvim_spell_check_window(win: WinHandle) -> bool;
+    #[link_name = "redrawWinline"]
     fn nvim_redrawWinline(win: WinHandle, lnum: LinenrT);
 
     // Option checking

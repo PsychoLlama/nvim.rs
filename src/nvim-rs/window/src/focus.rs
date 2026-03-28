@@ -39,6 +39,7 @@ extern "C" {
     fn text_or_buf_locked() -> bool;
 
     /// Call beep_flush().
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
 
     /// Get wp->w_buffer.
@@ -84,6 +85,7 @@ extern "C" {
     static mut msg_scrolled: c_int;
 
     /// Redraw window line.
+    #[link_name = "redrawWinline"]
     fn nvim_redrawWinline(wp: WinHandle, lnum: c_int);
 
     // --- can_close_in_cmdwin dependencies (Phase 8 inlined) ---

@@ -860,6 +860,7 @@ extern "C" {
     ) -> bool;
 
     // ex_tabs helpers
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn nvim_docmd_tab_page_fmt(n: c_int) -> *mut c_char;
     fn nvim_docmd_msg_outtrans_attr(s: *const c_char, attr: c_int);

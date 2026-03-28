@@ -2162,6 +2162,7 @@ extern "C" {
 
     // Function wrappers
     fn line_breakcheck();
+    #[link_name = "fast_breakcheck"]
     fn nvim_fast_breakcheck();
     fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func: c_int);
     fn rs_ins_compl_interrupted() -> c_int;

@@ -24,6 +24,7 @@ extern "C" {
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
     fn nvim_ml_get_len(lnum: LinenrT) -> ColnrT;
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
+    #[link_name = "ml_delete_flags"]
     fn nvim_ml_delete_flags(lnum: LinenrT, flags: c_int) -> c_int;
 
     // Buffer state

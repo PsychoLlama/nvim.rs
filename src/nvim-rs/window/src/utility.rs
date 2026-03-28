@@ -72,9 +72,11 @@ extern "C" {
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
 
     /// block_autocmds wrapper.
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
 
     /// unblock_autocmds wrapper.
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
 
     /// api_set_error for E242 (split while closing another).

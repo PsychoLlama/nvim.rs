@@ -46,12 +46,15 @@ extern "C" {
     fn nvim_set_first_tabpage(tp: TabpageHandle);
 
     /// Call text_locked().
+    #[link_name = "text_locked"]
     fn nvim_text_locked() -> bool;
 
     /// Call text_locked_msg().
+    #[link_name = "text_locked_msg"]
     fn nvim_text_locked_msg();
 
     /// Call beep_flush().
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
 
     /// Call goto_tabpage_tp() (triggers autocmds, stays in C).
@@ -1114,9 +1117,11 @@ extern "C" {
     fn nvim_get_p_tpm() -> i64;
 
     /// block_autocmds.
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
 
     /// unblock_autocmds.
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
 
     /// win_enter wrapper.

@@ -529,7 +529,9 @@ extern "C" {
     fn nvim_buf_get_line_at(buf: BufHandle, lnum: c_int) -> *const c_char;
     #[link_name = "ml_get"]
     fn nvim_curbuf_get_line_at(lnum: c_int) -> *const c_char;
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
 }
 

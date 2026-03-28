@@ -93,8 +93,10 @@ extern "C" {
     // -- Dict/List operations for add_timer_info --
     #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: TvHandle, count_hint: isize) -> ListHandle;
+    #[link_name = "tv_list_append_dict"]
     fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
     fn nvim_tv_dict_add_nr(dict: DictHandle, key: *const c_char, key_len: usize, nr: i64);
+    #[link_name = "tv_dict_alloc"]
     fn nvim_tv_dict_alloc() -> DictHandle;
     #[link_name = "tv_dict_item_alloc"]
     fn nvim_tv_dict_item_alloc_key(key: *const c_char) -> DictItemHandle;

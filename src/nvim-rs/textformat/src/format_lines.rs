@@ -85,6 +85,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_lisp() -> c_int;
     fn nvim_curbuf_get_b_p_inde_ptr() -> *const c_char;
     fn line_breakcheck();
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
     fn nvim_textfmt_u_save_cursor() -> c_int;
     fn nvim_textfmt_get_number_indent(lnum: c_int) -> c_int;

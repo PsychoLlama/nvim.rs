@@ -39,6 +39,7 @@ extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // Beep
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
 
     // Line content

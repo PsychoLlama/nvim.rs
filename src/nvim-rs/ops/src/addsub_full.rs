@@ -83,6 +83,7 @@ extern "C" {
     fn nvim_ins_str(ptr: *const std::ffi::c_char, len: usize);
     fn ins_char(c: c_int);
 
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
 
     // Low-level accessors used by inline scan port

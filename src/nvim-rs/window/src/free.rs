@@ -29,6 +29,7 @@ extern "C" {
     fn nvim_win_alist_unlink(wp: WinHandle);
 
     /// Block autocmds.
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
 
     /// Destroy the w_ns_set.
@@ -63,6 +64,7 @@ extern "C" {
     fn nvim_win_grid_clear_field(wp: WinHandle);
 
     /// Unblock autocmds.
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
 
     /// Check if win is valid in any tab.

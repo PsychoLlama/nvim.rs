@@ -45,6 +45,7 @@ extern "C" {
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     #[link_name = "home_replace_save"]
     fn nvim_home_replace_save(buf: BufHandle, src: *const c_char) -> *mut c_char;
+    #[link_name = "FullName_save"]
     fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
     fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
     #[link_name = "os_fileid"]

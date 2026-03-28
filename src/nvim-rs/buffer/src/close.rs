@@ -108,7 +108,9 @@ extern "C" {
     fn nvim_win_get_buffer(win: *mut c_void) -> BufHandle;
     fn goto_tabpage_win(tab: *mut c_void, win: *mut c_void);
 
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
     fn aborting() -> c_int;
 

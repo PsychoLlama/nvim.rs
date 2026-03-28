@@ -340,9 +340,11 @@ extern "C" {
     fn nvim_win_init_vars(wp: WinHandle);
 
     /// Block autocmds.
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
 
     /// Unblock autocmds.
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
 
     /// Find the tabpage containing `wp`.

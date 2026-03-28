@@ -280,6 +280,7 @@ extern "C" {
 
     // misc
     fn nvim_vim_beep_operator();
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
     fn nvim_dpo_join_would_overflow(line_count: c_int) -> bool;
     fn nvim_sync_curbuf_last_changedtick_i();

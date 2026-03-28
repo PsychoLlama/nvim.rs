@@ -481,6 +481,7 @@ extern "C" {
     fn nvim_set_cmd_silent(val: c_int);
     fn nvim_inc_global_busy();
     static mut p_eb: c_int;
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
     fn flush_buffers(flush_typeahead: c_int); // FLUSH_MINIMAL = 0
     static mut msg_nowait: bool;

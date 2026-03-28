@@ -510,6 +510,7 @@ extern "C" {
     fn nvim_set_u_oldcount(val: c_int);
     fn nvim_msg_ext_set_kind_undo();
     fn nvim_change_warning_curbuf();
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
     fn nvim_msg_oldest_change();
     fn nvim_msg_newest_change();
@@ -547,8 +548,11 @@ extern "C" {
     // undo_time accessors
     fn nvim_buf_get_b_u_time_cur(buf: BufHandle) -> TimeT;
     fn nvim_buf_get_b_u_save_nr_cur(buf: BufHandle) -> c_int;
+    #[link_name = "text_locked"]
     fn nvim_text_locked() -> bool;
+    #[link_name = "text_locked_msg"]
     fn nvim_text_locked_msg();
+    #[link_name = "os_time"]
     fn nvim_undo_os_time() -> TimeT;
     fn nvim_inc_lastmark() -> c_int;
     fn nvim_internal_error_undo_time();
@@ -646,13 +650,16 @@ extern "C" {
     // ==========================================================================
 
     /// Delete line 'lnum' in buffer. Returns OK/FAIL.
+    #[link_name = "ml_delete"]
     fn nvim_ml_delete_lnum(lnum: LinenrT) -> c_int;
 
     /// Append line with flags. Returns OK/FAIL.
+    #[link_name = "ml_append_flags"]
     fn nvim_ml_append_flags(lnum: LinenrT, line: *const c_char, len: ColnrT, flags: c_int)
         -> c_int;
 
     /// Replace line in current buffer. Returns OK/FAIL.
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace_lnum(lnum: LinenrT, line: *const c_char, copy: bool) -> c_int;
 
     /// Block/unblock autocommands
@@ -5089,6 +5096,7 @@ extern "C" {
     fn nvim_undo_msg_simple(msg: *const c_char);
     #[link_name = "msg_start"]
     fn nvim_msg_start();
+    #[link_name = "msg_end"]
     fn nvim_msg_end();
     fn nvim_undo_msg_puts_hl_title(msg: *const c_char);
     #[link_name = "msg_putchar"]
@@ -5277,6 +5285,7 @@ extern "C" {
         key_len: usize,
         list: ListHandle,
     );
+    #[link_name = "FullName_save"]
     fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
 }
 

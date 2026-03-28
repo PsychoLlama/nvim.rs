@@ -70,6 +70,7 @@ extern "C" {
     fn nvim_mapping_buf_get_mapped_ctrl_c(buf: BufHandle) -> c_int;
     fn nvim_mapping_buf_set_mapped_ctrl_c(buf: BufHandle, val: c_int);
 
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn nvim_mapping_msg_ext_set_kind_list_cmd();
     fn nvim_mapping_msg_no_mapping(is_abbr: c_int);

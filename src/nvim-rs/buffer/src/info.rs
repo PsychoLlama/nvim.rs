@@ -75,6 +75,7 @@ extern "C" {
     fn rs_col_print(buf: *mut u8, buflen: usize, col: c_int, vcol: c_int) -> c_int;
     fn rs_append_arg_number(wp: WinHandle, buf: *mut c_char, buflen: usize) -> c_int;
 
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     static mut msg_scroll: c_int;
     static restart_edit: c_int;

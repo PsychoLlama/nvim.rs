@@ -324,6 +324,7 @@ extern "C" {
 
     // Phase 3 accessors
     fn path_try_shorten_fname(full_fname: *const c_char) -> *mut c_char;
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;

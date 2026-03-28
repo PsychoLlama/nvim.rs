@@ -43,11 +43,13 @@ extern "C" {
     fn nvim_curbufIsChanged() -> c_int;
 
     // Message functions
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn msg_source(attr: c_int);
     fn msg_ext_set_kind(kind: *const c_char);
     fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
     fn msg_clr_eos();
+    #[link_name = "msg_end"]
     fn nvim_msg_end();
     fn nvim_msg_silent() -> c_int;
     fn nvim_silent_mode() -> bool;

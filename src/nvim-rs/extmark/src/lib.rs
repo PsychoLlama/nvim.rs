@@ -576,6 +576,7 @@ extern "C" {
     // ========================================================================
 
     /// Force get undo header.
+    #[link_name = "u_force_get_undo_header"]
     fn nvim_u_force_get_undo_header(buf: BufHandle) -> UndoHeaderHandle;
 
     /// Get extmark undo vec from undo header.

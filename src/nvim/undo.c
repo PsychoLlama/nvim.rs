@@ -313,8 +313,6 @@ void nvim_msg_ext_set_kind_undo(void) { msg_ext_set_kind("undo"); }
 
 void nvim_change_warning_curbuf(void) { change_warning(curbuf, 0); }
 
-void nvim_beep_flush(void) { beep_flush(); }
-
 void nvim_msg_oldest_change(void) { msg(_("Already at oldest change"), 0); }
 
 void nvim_msg_newest_change(void) { msg(_("Already at newest change"), 0); }
@@ -322,8 +320,6 @@ void nvim_msg_newest_change(void) { msg(_("Already at newest change"), 0); }
 // Buffer line access (infrastructure for future migration)
 // Returns allocated copy of line - caller must free with nvim_xfree
 char *nvim_ml_get_buf_copy(buf_T *buf, linenr_T lnum) { return xstrdup(ml_get_buf(buf, lnum)); }
-
-void nvim_fast_breakcheck(void) { fast_breakcheck(); }
 
 bool nvim_undo_got_int(void) { return got_int; }
 
@@ -402,12 +398,6 @@ time_t nvim_buf_get_b_u_time_cur(buf_T *buf) { return buf->b_u_time_cur; }
 
 int nvim_buf_get_b_u_save_nr_cur(buf_T *buf) { return buf->b_u_save_nr_cur; }
 
-bool nvim_text_locked(void) { return text_locked(); }
-
-void nvim_text_locked_msg(void) { text_locked_msg(); }
-
-time_t nvim_undo_os_time(void) { return os_time(); }
-
 // Strftime wrapper for Rust time formatting
 size_t nvim_undo_strftime(char *buf, size_t buflen, const char *fmt, time_t tt)
 {
@@ -433,9 +423,7 @@ void nvim_internal_error_undo_time(void) { internal_error("undo_time()"); }
 
 void nvim_semsg_undo_number_not_found(int64_t step) { semsg(_("E830: Undo number %" PRId64 " not found"), step); }
 
-// Undo File I/O FFI Functions
-
-// File system operations still needed by other Rust crates (memline, quickfix)
+// File system operations (kept as wrappers; other crates use these names)
 bool nvim_os_path_exists(const char *path) { return os_path_exists(path); }
 
 int nvim_os_remove(const char *path) { return os_remove(path); }
@@ -480,9 +468,6 @@ int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_pat
 #endif
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
-
-/// Force get undo header for current operation (wrapper for Rust FFI).
-u_header_T *nvim_u_force_get_undo_header(buf_T *buf) { return u_force_get_undo_header(buf); }
 
 /// Get extmark undo vector pointer from undo header.
 extmark_undo_vec_t *nvim_uhp_get_extmark(u_header_T *uhp) { return &uhp->uh_extmark; }
@@ -748,20 +733,11 @@ size_t nvim_undo_get_maxpathl(void) { return MAXPATHL; }
 
 void nvim_undo_msg_simple(const char *s) { msg(s, 0); }
 
-void nvim_msg_start(void) { msg_start(); }
-
-void nvim_msg_end(void) { msg_end(); }
-
 void nvim_undo_msg_puts_hl_title(const char *s) { msg_puts_hl(s, HLF_T, false); }
 
 // Phase 5: VimL function FFI wrappers
 
 list_T *nvim_tv_list_alloc(void) { return tv_list_alloc(kListLenMayKnow); }
-
-// VimL typval wrappers (still needed by eval crate without #[link_name])
-dict_T *nvim_tv_dict_alloc(void) { return tv_dict_alloc(); }
-
-void nvim_tv_list_append_dict(list_T *list, dict_T *dict) { tv_list_append_dict(list, dict); }
 
 void nvim_tv_dict_add_nr(dict_T *dict, const char *key, size_t key_len, varnumber_T nr)
 {
@@ -773,40 +749,11 @@ void nvim_tv_dict_add_list(dict_T *dict, const char *key, size_t key_len, list_T
   tv_dict_add_list(dict, key, key_len, list);
 }
 
-char *nvim_FullName_save(const char *fname, bool force) { return FullName_save(fname, force); }
-
-// Memline Accessor Functions (for Rust FFI - u_undoredo migration)
-
-/// Delete line 'lnum' in current buffer. Returns OK/FAIL.
-int nvim_ml_delete_lnum(linenr_T lnum) { return ml_delete(lnum); }
-
-/// Delete line 'lnum' in current buffer with flags. Returns OK/FAIL.
-int nvim_ml_delete_flags(linenr_T lnum, int flags) { return ml_delete_flags(lnum, flags); }
-
-/// Append line with flags. Returns OK/FAIL.
-int nvim_ml_append_flags(linenr_T lnum, const char *line, colnr_T len, int flags)
-{
-  return ml_append_flags(lnum, (char *)line, len, flags);
-}
-
-/// Replace line in current buffer. Returns OK/FAIL.
-int nvim_ml_replace_lnum(linenr_T lnum, const char *line, bool copy) { return ml_replace(lnum, (char *)line, copy); }
-
-/// Block/unblock autocommands
-void nvim_block_autocmds(void) { block_autocmds(); }
-
-void nvim_unblock_autocmds(void) { unblock_autocmds(); }
-
 /// Mark adjust for undo
 void nvim_undo_mark_adjust(linenr_T top, linenr_T bot, linenr_T amount, linenr_T amount_after)
 {
   mark_adjust(top, bot, amount, amount_after, kExtmarkNOOP);
 }
-
-bool nvim_spell_check_window(win_T *win) { return spell_check_window(win); }
-
-/// Redraw window line
-void nvim_redrawWinline(win_T *win, linenr_T lnum) { redrawWinline(win, lnum); }
 
 /// Apply extmark undo
 void nvim_extmark_apply_undo(u_header_T *uhp, size_t idx, bool undo)
