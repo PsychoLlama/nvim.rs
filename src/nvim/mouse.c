@@ -78,7 +78,6 @@ int nvim_mouse_get_tab_click_tabnr(int col)
   return tab_page_click_defs[col].tabnr;
 }
 
-
 extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_move_tab_to_mouse(void);
 extern void rs_mouse_tab_close(int c1);
@@ -128,47 +127,7 @@ void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
   tv_clear(&rettv);
 }
 
-
-/// Do the appropriate action for the current mouse click in the current mode.
-/// Not used for Command-line mode.
-///
-/// Normal and Visual Mode:
-/// event         modi-  position      visual       change   action
-///               fier   cursor                     window
-/// left press     -     yes         end             yes
-/// left press     C     yes         end             yes     "^]" (2)
-/// left press     S     yes     end (popup: extend) yes     "*" (2)
-/// left drag      -     yes     start if moved      no
-/// left relse     -     yes     start if moved      no
-/// middle press   -     yes      if not active      no      put register
-/// middle press   -     yes      if active          no      yank and put
-/// right press    -     yes     start or extend     yes
-/// right press    S     yes     no change           yes     "#" (2)
-/// right drag     -     yes     extend              no
-/// right relse    -     yes     extend              no
-///
-/// Insert or Replace Mode:
-/// event         modi-  position      visual       change   action
-///               fier   cursor                     window
-/// left press     -     yes     (cannot be active)  yes
-/// left press     C     yes     (cannot be active)  yes     "CTRL-O^]" (2)
-/// left press     S     yes     (cannot be active)  yes     "CTRL-O*" (2)
-/// left drag      -     yes     start or extend (1) no      CTRL-O (1)
-/// left relse     -     yes     start or extend (1) no      CTRL-O (1)
-/// middle press   -     no      (cannot be active)  no      put register
-/// right press    -     yes     start or extend     yes     CTRL-O
-/// right press    S     yes     (cannot be active)  yes     "CTRL-O#" (2)
-///
-/// (1) only if mouse pointer moved since press
-/// (2) only if click is in same buffer
-///
-/// @param oap        operator argument, can be NULL
-/// @param c          K_LEFTMOUSE, etc
-/// @param dir        Direction to 'put' if necessary
-/// @param fixindent  PUT_FIXINDENT if fixing indent necessary
-///
-/// @return           true if start_arrow() should be called for edit mode.
-/// C accessor: the actual do_mouse logic — 619 lines touching nearly every subsystem.
+/// C accessor: the actual do_mouse logic — entry point called from rs_do_mouse.
 bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 {
   int which_button;             // MOUSE_LEFT, _MIDDLE or _RIGHT
@@ -326,13 +285,10 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
     }
   }
 
-  // flags for jump_to_mouse()
-  // When dragging or button-up stay in the same window.
   int jump_flags = is_click ? 0 : (MOUSE_FOCUS|MOUSE_DID_MOVE);
   win_T *old_curwin = curwin;
 
   if (tab_page_click_defs != NULL) {  // only when initialized
-    // Check for clicking in the tab page line.
     if (mouse_grid <= 1 && mouse_row == 0 && firstwin->w_winrow > 0) {
       if (is_drag) {
         if (in_tab_line) {
@@ -341,7 +297,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
         return false;
       }
 
-      // click in a tab selects that tab page
       if (is_click && cmdwin_type == 0 && mouse_col < Columns) {
         int tabnr = tab_page_click_defs[mouse_col].tabnr;
         in_tab_line = true;
@@ -352,16 +307,11 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
         case kStlClickTabSwitch:
           if (which_button != MOUSE_MIDDLE) {
             if ((mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK) {
-              // double click opens new page
               end_visual_mode();
               tabpage_new();
               tabpage_move(tabnr == 0 ? 9999 : tabnr - 1);
             } else {
-              // Go to specified tab page, or next one if not clicking
-              // on a label.
               goto_tabpage(tabnr);
-
-              // It's like clicking on the status line of a window.
               if (curwin != old_curwin) {
                 end_visual_mode();
               }
@@ -401,7 +351,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       }
       return (rs_do_popup(which_button, m_pos_flag, m_pos) & CURSOR_MOVED);
     }
-    // Only do this translation when mouse is over the buffer text
     if (!(m_pos_flag & (IN_STATUS_LINE|MOUSE_WINBAR|MOUSE_STATUSCOL))
         && (which_button == MOUSE_LEFT && (mod_mask & (MOD_MASK_SHIFT|MOD_MASK_ALT)))) {
       which_button = MOUSE_RIGHT;
@@ -449,7 +398,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
     jump_flags |= MOUSE_RELEASED;
   }
 
-  // JUMP!
   int old_active = VIsual_active;
   pos_T save_cursor = curwin->w_cursor;
   jump_flags = jump_to_mouse(jump_flags, oap == NULL ? NULL : &(oap->inclusive), which_button);
@@ -516,12 +464,9 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       return false;
     }
   } else if (in_winbar || in_statuscol) {
-    // A drag or release event in the window bar and status column has no side effects.
     return false;
   }
 
-  // When jumping to another window, clear a pending operator.  That's a bit
-  // friendlier than beeping and not jumping to that window.
   if (curwin != old_curwin && oap != NULL && oap->op_type != OP_NOP) {
     rs_clearop(oap);
   }
@@ -530,20 +475,16 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       && !is_drag
       && (jump_flags & (MOUSE_FOLD_CLOSE | MOUSE_FOLD_OPEN))
       && which_button == MOUSE_LEFT) {
-    // open or close a fold at this line
     if (jump_flags & MOUSE_FOLD_OPEN) {
       rs_setFoldRepeat(curwin->w_cursor.lnum, 1, true);
     } else {
       rs_setFoldRepeat(curwin->w_cursor.lnum, 1, false);
     }
-    // don't move the cursor if still in the same window
     if (curwin == old_curwin) {
       curwin->w_cursor = save_cursor;
     }
   }
 
-  // Set global flag that we are extending the Visual area with mouse dragging;
-  // temporarily minimize 'scrolloff'.
   if (VIsual_active && is_drag && rs_get_scrolloff_value(curwin)) {
     // In the very first line, allow scrolling one line
     if (mouse_row == 0) {
@@ -567,8 +508,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       VIsual_mode = Ctrl_V;
     }
 
-    // In Visual-block mode, divide the area in four, pick up the corner
-    // that is in the quarter that the cursor is in.
     if (VIsual_mode == Ctrl_V) {
       colnr_T leftcol, rightcol;
       getvcols(curwin, &start_visual, &end_visual, &leftcol, &rightcol);
@@ -790,7 +729,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   return moved;
 }
 
-
 static win_T *dragwin = NULL;  ///< window being dragged
 
 /// Get the window being dragged.
@@ -802,36 +740,7 @@ void nvim_set_dragwin(win_T *wp) { dragwin = wp; }
 /// Check if a window is being dragged.
 bool nvim_is_dragging(void) { return dragwin != NULL; }
 
-
-/// Move the cursor to the specified row and column on the screen.
-/// Change current window if necessary. Returns an integer with the
-/// CURSOR_MOVED bit set if the cursor has moved or unset otherwise.
-///
-/// The MOUSE_FOLD_CLOSE bit is set when clicked on the '-' in a fold column.
-/// The MOUSE_FOLD_OPEN bit is set when clicked on the '+' in a fold column.
-///
-/// If flags has MOUSE_FOCUS, then the current window will not be changed, and
-/// if the mouse is outside the window then the text will scroll, or if the
-/// mouse was previously on a status line, then the status line may be dragged.
-///
-/// If flags has MOUSE_MAY_VIS, then VIsual mode will be started before the
-/// cursor is moved unless the cursor was on a status line or window bar.
-/// This function returns one of IN_UNKNOWN, IN_BUFFER, IN_STATUS_LINE or
-/// IN_SEP_LINE depending on where the cursor was clicked.
-///
-/// If flags has MOUSE_MAY_STOP_VIS, then Visual mode will be stopped, unless
-/// the mouse is on the status line or window bar of the same window.
-///
-/// If flags has MOUSE_DID_MOVE, nothing is done if the mouse didn't move since
-/// the last call.
-///
-/// If flags has MOUSE_SETPOS, nothing is done, only the current position is
-/// remembered.
-///
-/// @param inclusive  used for inclusive operator, can be NULL
-/// @param which_button  MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE
-/// C accessor: the actual jump_to_mouse logic with all static state and
-/// deep access to curwin, VIsual, grid layout, fold/topline management.
+/// C accessor: the actual jump_to_mouse logic — entry point called from rs_jump_to_mouse.
 int nvim_jump_to_mouse_impl(int flags, bool *inclusive, int which_button)
 {
   static int status_line_offset = 0;        // #lines offset from status line
@@ -869,8 +778,6 @@ int nvim_jump_to_mouse_impl(int flags, bool *inclusive, int which_button)
       && prev_row == mouse_row
       && prev_col == mouse_col) {
 retnomove:
-    // before moving the cursor for a left click which is NOT in a status
-    // line, stop Visual mode
     if (status_line_offset) {
       return IN_STATUS_LINE;
     }
@@ -901,8 +808,6 @@ retnomove:
     return IN_UNKNOWN;
   }
 
-  // find the window where the row is in and adjust "row" and "col" to be
-  // relative to top-left of the window inner area
   win_T *wp = mouse_find_win_inner(&grid, &row, &col);
   if (wp == NULL) {
     return IN_UNKNOWN;
@@ -929,8 +834,6 @@ retnomove:
   }
 
   if (keep_focus) {
-    // If we can't change focus, set the value of row, col and grid back to absolute values
-    // since the values relative to the window are only used when keep_focus is false
     row = mouse_row;
     col = mouse_col;
     grid = mouse_grid;
@@ -950,7 +853,6 @@ retnomove:
     fdc = rs_win_fdccol_count(wp);
     dragwin = NULL;
 
-    // winpos and height may change in win_enter()!
     if (below_window) {
       // In (or below) status line
       status_line_offset = row + wp->w_winbar_height - wp->w_height + 1;
@@ -1004,7 +906,6 @@ retnomove:
     if (dragwin == NULL || (flags & MOUSE_RELEASED)) {
       win_enter(wp, true);                      // can make wp invalid!
     }
-    // set topline, to be able to check for double click ourselves
     if (curwin != old_curwin) {
       rs_set_mouse_topline(curwin);
     }
@@ -1051,8 +952,6 @@ retnomove:
     // After a click on the status column don't start Visual mode.
     return IN_OTHER_WIN | MOUSE_STATUSCOL;
   } else {
-    // keep_window_focus must be true
-    // before moving the cursor for a left click, stop Visual mode
     if (flags & MOUSE_MAY_STOP_VIS) {
       end_visual_mode();
       redraw_curbuf_later(UPD_INVERTED);  // delete the inversion
@@ -1066,8 +965,6 @@ retnomove:
       col -= curwin->w_grid.col_offset;
     }
 
-    // When clicking beyond the end of the window, scroll the screen.
-    // Scroll by however many rows outside the window we are.
     if (row < 0) {
       count = 0;
       for (first = true; curwin->w_topline > 1;) {
@@ -1141,17 +1038,14 @@ foldclick:;
   int mouse_fold_flags = 0;
   rs_mouse_check_grid(&col_from_screen, &mouse_fold_flags);
 
-  // compute the position in the buffer line from the posn on the screen
   if (mouse_comp_pos(curwin, &row, &col, &curwin->w_cursor.lnum)) {
     mouse_past_bottom = true;
   }
 
-  // Start Visual mode before coladvance(), for when 'sel' != "old"
   if ((flags & MOUSE_MAY_VIS) && !VIsual_active) {
     VIsual = old_cursor;
     VIsual_active = true;
     VIsual_reselect = true;
-    // if 'selectmode' contains "mouse", start Select mode
     rs_may_start_select('o');
     setmouse();
 
@@ -1187,7 +1081,6 @@ foldclick:;
 }
 
 /// C accessor: resolve grid handle to window and adjust row/col.
-/// Handles msg_grid, floating windows, compositor focus, and pum_grid.
 win_T *nvim_mouse_find_grid_win(int *gridp, int *rowp, int *colp)
 {
   if (*gridp == msg_grid.handle) {
@@ -1229,8 +1122,6 @@ win_T *nvim_mouse_find_grid_win(int *gridp, int *rowp, int *colp)
 }
 
 /// C accessor: traverse frame tree to find window at row/col position.
-/// Adjusts rowp/colp relative to the found window.
-/// Returns NULL if the window is not valid in the current tabpage.
 win_T *nvim_frame_find_win(int *rowp, int *colp)
 {
   frame_T *fp = topframe;
@@ -1255,8 +1146,6 @@ win_T *nvim_frame_find_win(int *rowp, int *colp)
       }
     }
   }
-  // When using a timer that closes a window the window might not actually
-  // exist.
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp == fp->fr_win) {
       *rowp -= wp->w_winbar_height;
@@ -1267,12 +1156,9 @@ win_T *nvim_frame_find_win(int *rowp, int *colp)
 }
 
 /// C accessor: convert a virtual (screen) column to a character column.
-/// Contains the real implementation using charsize infrastructure.
-/// The first column is zero.
 colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // try to advance to the specified column
   char *line = ml_get_buf(wp->w_buffer, lnum);
   CharsizeArg csarg;
   CSType cstype = init_charsize_arg(&csarg, wp, lnum, line);
@@ -1294,7 +1180,6 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
 }
 
 /// C accessor: perform grid-based vcol/flags lookup for mouse click.
-/// Encapsulates ScreenGrid access which is too opaque for Rust.
 void nvim_mouse_check_grid_impl(colnr_T *vcolp, int *flagsp)
   FUNC_ATTR_NONNULL_ALL
 {
