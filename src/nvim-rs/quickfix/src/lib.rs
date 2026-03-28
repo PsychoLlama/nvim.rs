@@ -15,6 +15,7 @@ pub mod display;
 pub mod dummy_buf;
 pub mod errorformat;
 pub mod external;
+pub mod ffi_types;
 pub mod filter;
 pub mod helpgrep;
 pub mod init;
