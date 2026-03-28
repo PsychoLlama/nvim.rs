@@ -315,91 +315,7 @@ enum {
   TYPE_FLOAT,
 };
 
-static int adjust_types(const char ***ap_types, int arg, int *num_posarg, const char *type)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (*ap_types == NULL || *num_posarg < arg) {
-    const char **new_types = *ap_types == NULL
-                             ? xcalloc((size_t)arg, sizeof(const char *))
-                             : xrealloc(*ap_types, (size_t)arg * sizeof(const char *));
-
-    for (int idx = *num_posarg; idx < arg; idx++) {
-      new_types[idx] = NULL;
-    }
-
-    *ap_types = new_types;
-    *num_posarg = arg;
-  }
-
-  if ((*ap_types)[arg - 1] != NULL) {
-    if ((*ap_types)[arg - 1][0] == '*' || type[0] == '*') {
-      const char *pt = type;
-      if (pt[0] == '*') {
-        pt = (*ap_types)[arg - 1];
-      }
-
-      if (pt[0] != '*') {
-        switch (pt[0]) {
-        case 'd':
-        case 'i':
-          break;
-        default:
-          semsg(_(e_positional_num_field_spec_reused_str_str), arg,
-                rs_format_typename((*ap_types)[arg - 1]), rs_format_typename(type));
-          return FAIL;
-        }
-      }
-    } else {
-      if (rs_format_typeof(type) != rs_format_typeof((*ap_types)[arg - 1])) {
-        semsg(_(e_positional_arg_num_type_inconsistent_str_str), arg,
-              rs_format_typename(type), rs_format_typename((*ap_types)[arg - 1]));
-        return FAIL;
-      }
-    }
-  }
-
-  (*ap_types)[arg - 1] = type;
-
-  return OK;
-}
-
-static void format_overflow_error(const char *pstart)
-{
-  const char *p = pstart;
-
-  while (ascii_isdigit((int)(*p))) {
-    p++;
-  }
-
-  size_t arglen = (size_t)(p - pstart);
-  char *argcopy = xstrnsave(pstart, arglen);
-  semsg(_(e_val_too_large), argcopy);
-  xfree(argcopy);
-}
-
-enum { MAX_ALLOWED_STRING_WIDTH = 1048576, };  // 1MiB
-
-static int get_unsigned_int(const char *pstart, const char **p, unsigned *uj, bool overflow_err)
-{
-  *uj = (unsigned)(**p - '0');
-  (*p)++;
-
-  while (ascii_isdigit((int)(**p)) && *uj < MAX_ALLOWED_STRING_WIDTH) {
-    *uj = 10 * *uj + (unsigned)(**p - '0');
-    (*p)++;
-  }
-
-  if (*uj > MAX_ALLOWED_STRING_WIDTH) {
-    if (overflow_err) {
-      format_overflow_error(pstart);
-      return FAIL;
-    } else {
-      *uj = MAX_ALLOWED_STRING_WIDTH;
-    }
-  }
-
-  return OK;
-}
+enum { MAX_ALLOWED_STRING_WIDTH = 1048576, };  // 1MiB -- must match rs_get_unsigned_int
 
 static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *fmt, typval_T *tvs)
   FUNC_ATTR_NONNULL_ARG(1, 2)
@@ -456,7 +372,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
         // Positional argument
         unsigned uj;
 
-        if (get_unsigned_int(pstart, &p, &uj, tvs != NULL) == FAIL) {
+        if (rs_get_unsigned_int(pstart, &p, &uj, tvs != NULL) == FAIL) {
           goto error;
         }
 
@@ -499,7 +415,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
           // Positional argument field width
           unsigned uj;
 
-          if (get_unsigned_int(arg + 1, &p, &uj, tvs != NULL) == FAIL) {
+          if (rs_get_unsigned_int(arg + 1, &p, &uj, tvs != NULL) == FAIL) {
             goto error;
           }
 
@@ -511,7 +427,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
             any_pos = 1;
             CHECK_POS_ARG;
 
-            if (adjust_types(ap_types, (int)uj, num_posarg, arg) == FAIL) {
+            if (rs_adjust_types(ap_types, (int)uj, num_posarg, arg) == FAIL) {
               goto error;
             }
           }
@@ -525,7 +441,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
         const char *digstart = p;
         unsigned uj;
 
-        if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+        if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
           goto error;
         }
 
@@ -546,7 +462,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
             // Parse precision
             unsigned uj;
 
-            if (get_unsigned_int(arg + 1, &p, &uj, tvs != NULL) == FAIL) {
+            if (rs_get_unsigned_int(arg + 1, &p, &uj, tvs != NULL) == FAIL) {
               goto error;
             }
 
@@ -556,7 +472,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
 
               p++;
 
-              if (adjust_types(ap_types, (int)uj, num_posarg, arg) == FAIL) {
+              if (rs_adjust_types(ap_types, (int)uj, num_posarg, arg) == FAIL) {
                 goto error;
               }
             } else {
@@ -573,7 +489,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
           const char *digstart = p;
           unsigned uj;
 
-          if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+          if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
             goto error;
           }
 
@@ -627,7 +543,7 @@ static int parse_fmt_types(const char ***ap_types, int *num_posarg, const char *
       case 'g':
       case 'G':
         if (pos_arg != -1) {
-          if (adjust_types(ap_types, pos_arg, num_posarg, ptype) == FAIL) {
+          if (rs_adjust_types(ap_types, pos_arg, num_posarg, ptype) == FAIL) {
             goto error;
           }
         } else {
@@ -869,7 +785,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
         const char *digstart = p;
         unsigned uj;
 
-        if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+        if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
           goto error;
         }
 
@@ -911,7 +827,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
           // Positional argument field width
           unsigned uj;
 
-          if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+          if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
             goto error;
           }
 
@@ -928,7 +844,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
 
         if (j > MAX_ALLOWED_STRING_WIDTH) {
           if (tvs != NULL) {
-            format_overflow_error(digstart);
+            rs_format_overflow_error(digstart);
             goto error;
           } else {
             j = MAX_ALLOWED_STRING_WIDTH;
@@ -947,7 +863,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
         const char *digstart = p;
         unsigned uj;
 
-        if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+        if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
           goto error;
         }
 
@@ -965,7 +881,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
           const char *digstart = p;
           unsigned uj;
 
-          if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+          if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
             goto error;
           }
 
@@ -979,7 +895,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
             // positional argument
             unsigned uj;
 
-            if (get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
+            if (rs_get_unsigned_int(digstart, &p, &uj, tvs != NULL) == FAIL) {
               goto error;
             }
 
@@ -996,7 +912,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
 
           if (j > MAX_ALLOWED_STRING_WIDTH) {
             if (tvs != NULL) {
-              format_overflow_error(digstart);
+              rs_format_overflow_error(digstart);
               goto error;
             } else {
               j = MAX_ALLOWED_STRING_WIDTH;

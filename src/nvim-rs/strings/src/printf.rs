@@ -1,7 +1,8 @@
 //! Printf helper functions: type classification and formatting utilities.
 //!
-//! Implements the format type enum, `format_typeof`, `format_typename`, and
-//! `infinity_str` previously defined in strings.c.
+//! Implements the format type enum, `format_typeof`, `format_typename`,
+//! `infinity_str`, `format_overflow_error`, `get_unsigned_int`, and
+//! `adjust_types` previously defined in strings.c.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_truncation)]
@@ -9,7 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 // =============================================================================
 // C FFI
@@ -17,6 +18,14 @@ use std::ffi::{c_char, c_int};
 
 extern "C" {
     fn gettext(msgid: *const c_char) -> *const c_char;
+    fn semsg(fmt: *const c_char, ...) -> bool;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    #[link_name = "xcalloc"]
+    fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    // e_val_too_large: "E1510: Value too large: %s"
+    static e_val_too_large: *const c_char;
 }
 
 // =============================================================================
@@ -61,6 +70,19 @@ const TYPE_FLOAT: c_int = 12;
 
 // NUL character
 const NUL: u8 = 0;
+
+// Return codes matching C OK/FAIL
+const OK: c_int = 1;
+const FAIL: c_int = -1;
+
+// Maximum allowed string width for printf (1 MiB)
+pub const MAX_ALLOWED_STRING_WIDTH: u32 = 1_048_576;
+
+// Error message constants (untranslated, used with gettext at call time)
+static E_POSITIONAL_NUM_FIELD_SPEC_REUSED: &[u8] =
+    b"E1502: Positional argument %d used as field width reused as different type: %s/%s\0";
+static E_POSITIONAL_ARG_NUM_TYPE_INCONSISTENT: &[u8] =
+    b"E1504: Positional argument %d type used inconsistently: %s/%s\0";
 
 // =============================================================================
 // Type name string constants (untranslated, N_() equivalents)
@@ -241,4 +263,154 @@ pub unsafe extern "C" fn rs_infinity_str(
         idx += 4;
     }
     INFINITY_TABLE[idx].as_ptr().cast::<c_char>()
+}
+
+// =============================================================================
+// format_overflow_error
+// =============================================================================
+
+/// Emit "Value too large" error for an oversized numeric format specifier.
+///
+/// # Safety
+/// `pstart` must be a valid pointer to a sequence of ASCII digit bytes
+/// followed by at least one non-digit byte (or NUL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_format_overflow_error(pstart: *const c_char) {
+    unsafe {
+        let mut p = pstart as *const u8;
+        while (*p).is_ascii_digit() {
+            p = p.add(1);
+        }
+        let arglen = p.offset_from(pstart as *const u8) as usize;
+        let argcopy = xstrnsave(pstart, arglen);
+        semsg(gettext(e_val_too_large), argcopy);
+        xfree(argcopy.cast::<c_void>());
+    }
+}
+
+// =============================================================================
+// get_unsigned_int
+// =============================================================================
+
+/// Parse decimal digits from format string into an unsigned int with overflow
+/// checking.
+///
+/// On entry, `*p` must point to the first digit character.
+/// On return, `*p` points past the last consumed digit.
+///
+/// Returns OK (1) or FAIL (-1).
+///
+/// # Safety
+/// - `pstart` must be a valid pointer to the start of the digit sequence.
+/// - `p` must be a valid non-null pointer to a `*const c_char`.
+/// - `uj` must be a valid non-null pointer to a `c_uint`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_unsigned_int(
+    pstart: *const c_char,
+    p: *mut *const c_char,
+    uj: *mut c_uint,
+    overflow_err: bool,
+) -> c_int {
+    unsafe {
+        let first = *(*p as *const u8);
+        *uj = (first - b'0') as c_uint;
+        *p = (*p).add(1);
+
+        while (**p as u8).is_ascii_digit() && *uj < MAX_ALLOWED_STRING_WIDTH {
+            *uj = 10 * *uj + (**p as u8 - b'0') as c_uint;
+            *p = (*p).add(1);
+        }
+
+        if *uj > MAX_ALLOWED_STRING_WIDTH {
+            if overflow_err {
+                rs_format_overflow_error(pstart);
+                return FAIL;
+            }
+            *uj = MAX_ALLOWED_STRING_WIDTH;
+        }
+
+        OK
+    }
+}
+
+// =============================================================================
+// adjust_types
+// =============================================================================
+
+/// Manage the positional argument type tracking array.
+///
+/// Grows `*ap_types` as needed using `xcalloc`/`xrealloc`. Validates that
+/// the same positional argument is not used with inconsistent types.
+///
+/// Returns OK (1) or FAIL (-1).
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_adjust_types(
+    ap_types: *mut *mut *const c_char,
+    arg: c_int,
+    num_posarg: *mut c_int,
+    type_spec: *const c_char,
+) -> c_int {
+    unsafe {
+        if (*ap_types).is_null() || *num_posarg < arg {
+            let new_types: *mut *const c_char = if (*ap_types).is_null() {
+                nvim_xcalloc(arg as usize, std::mem::size_of::<*const c_char>()).cast()
+            } else {
+                xrealloc(
+                    (*ap_types).cast::<c_void>(),
+                    arg as usize * std::mem::size_of::<*const c_char>(),
+                )
+                .cast()
+            };
+
+            for idx in *num_posarg..arg {
+                *new_types.add(idx as usize) = std::ptr::null();
+            }
+
+            *ap_types = new_types;
+            *num_posarg = arg;
+        }
+
+        let slot = (*ap_types).add(arg as usize - 1);
+
+        if !(*slot).is_null() {
+            let existing = *slot;
+            if *existing.cast::<u8>() == b'*' || *type_spec.cast::<u8>() == b'*' {
+                // One of them is a field-width specifier ('*')
+                let pt: *const c_char = if *type_spec.cast::<u8>() == b'*' {
+                    existing
+                } else {
+                    type_spec
+                };
+
+                if *pt.cast::<u8>() != b'*' {
+                    match *pt.cast::<u8>() {
+                        b'd' | b'i' => {}
+                        _ => {
+                            semsg(
+                                gettext(E_POSITIONAL_NUM_FIELD_SPEC_REUSED.as_ptr().cast()),
+                                arg,
+                                rs_format_typename(existing),
+                                rs_format_typename(type_spec),
+                            );
+                            return FAIL;
+                        }
+                    }
+                }
+            } else if rs_format_typeof(type_spec) != rs_format_typeof(existing) {
+                semsg(
+                    gettext(E_POSITIONAL_ARG_NUM_TYPE_INCONSISTENT.as_ptr().cast()),
+                    arg,
+                    rs_format_typename(type_spec),
+                    rs_format_typename(existing),
+                );
+                return FAIL;
+            }
+        }
+
+        *slot = type_spec;
+        OK
+    }
 }

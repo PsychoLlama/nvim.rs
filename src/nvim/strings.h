@@ -63,6 +63,9 @@ char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newli
 int rs_format_typeof(const char *type_spec);
 char *rs_format_typename(const char *type_spec);
 const char *rs_infinity_str(bool positive, char fmt_spec, int force_sign, int space_for_positive);
+void rs_format_overflow_error(const char *pstart);
+int rs_get_unsigned_int(const char *pstart, const char **p, unsigned *uj, bool overflow_err);
+int rs_adjust_types(const char ***ap_types, int arg, int *num_posarg, const char *type);
 
 // Rust-implemented keyvalue comparators (exported via #[export_name])
 int cmp_keyvalue_value(const void *a, const void *b);
