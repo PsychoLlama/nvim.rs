@@ -847,6 +847,200 @@ pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
     unsafe { nvim_exarg_set_forceit(eap, 0) };
 }
 
+// =============================================================================
+// set_file_options and set_rw_fname
+// =============================================================================
+
+// Return values
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// Buffer flags
+const BF_NOTEDITED: c_int = 0x08;
+
+// Autocmd event codes (from auevents_enum.generated.h)
+const EVENT_BUFADD: c_int = 0;
+const EVENT_BUFDELETE: c_int = 2;
+const EVENT_BUFNEW: c_int = 9;
+const EVENT_BUFWIPEOUT: c_int = 18;
+
+extern "C" {
+    /// Get p_ffs (fileformats option) -- returns pointer to the string.
+    fn nvim_get_p_ffs() -> *const c_char;
+    /// set_fileformat(ff, opt) -- wraps C set_fileformat.
+    fn nvim_set_fileformat_local(ff: c_int);
+    /// get_fileformat_force(buf, eap) -- returns file format integer.
+    fn nvim_get_fileformat_force(buf: *mut c_void, eap: *mut c_void) -> c_int;
+    /// set_options_bin(oldval, newval, opt) -- update binary option.
+    fn nvim_set_options_bin(oldval: c_int, newval: c_int, opt: c_int);
+    /// Set buf->b_p_bin.
+    fn nvim_buf_set_b_p_bin(buf: *mut c_void, val: c_int);
+    /// Get eap->force_bin.
+    fn nvim_exarg_get_force_bin(eap: *const c_void) -> c_int;
+    /// Get eap->force_ff.
+    fn nvim_exarg_get_force_ff(eap: *const c_void) -> c_int;
+    /// apply_autocmds(event, fname, fname_io, force, buf).
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    /// Check if script should abort.
+    fn aborting() -> bool;
+    /// setfname(buf, fname, sfname, noswap).
+    fn setfname(
+        buf: *mut c_void,
+        fname: *const c_char,
+        sfname: *const c_char,
+        noswap: bool,
+    ) -> c_int;
+    /// Display error message.
+    fn emsg(msg: *const c_char);
+    /// Get buf->b_flags.
+    fn nvim_buf_get_b_flags(buf: *const c_void) -> c_int;
+    /// Set buf->b_flags.
+    fn nvim_buf_set_b_flags(buf: *mut c_void, val: c_int);
+    /// Get buf->b_p_bl.
+    fn nvim_buf_get_b_p_bl(buf: *const c_void) -> c_int;
+    /// Get buf->b_p_ft.
+    fn nvim_buf_get_b_p_ft(buf: *const c_void) -> *const c_char;
+    /// augroup_exists(name) -> int.
+    fn augroup_exists(name: *const c_char) -> c_int;
+    /// do_doautocmd(autocmds, check_after_done, ret_did_aucmd).
+    fn do_doautocmd(
+        autocmds: *const c_char,
+        check_after_done: bool,
+        ret_did_aucmd: *mut c_int,
+    ) -> c_int;
+    /// do_modelines(flags).
+    fn do_modelines(flags: c_int);
+    /// Get default fileformat (from path/rs_default_fileformat).
+    fn rs_default_fileformat() -> c_int;
+}
+
+/// OPT_LOCAL flag for set_fileformat and set_options_bin
+const OPT_LOCAL: c_int = 0x02;
+
+/// Set default or forced 'fileformat' and 'binary'.
+///
+/// Replaces the C `set_file_options` function.
+///
+/// # Safety
+/// Accesses global curbuf and eap fields via FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_file_options(set_options: c_int, eap: *mut c_void) {
+    if set_options != 0 {
+        let force_ff = if eap.is_null() {
+            0
+        } else {
+            unsafe { nvim_exarg_get_force_ff(eap) }
+        };
+        if force_ff != 0 {
+            let buf = unsafe { nvim_get_curbuf() };
+            let ff = unsafe { nvim_get_fileformat_force(buf, eap) };
+            unsafe { nvim_set_fileformat_local(ff) };
+        } else {
+            let p_ffs = unsafe { nvim_get_p_ffs() };
+            if !p_ffs.is_null() && unsafe { *p_ffs } != 0 {
+                let ff = unsafe { rs_default_fileformat() };
+                unsafe { nvim_set_fileformat_local(ff) };
+            }
+        }
+    }
+
+    let force_bin = if eap.is_null() {
+        0
+    } else {
+        unsafe { nvim_exarg_get_force_bin(eap) }
+    };
+    if force_bin != 0 {
+        let buf = unsafe { nvim_get_curbuf() };
+        let oldval = unsafe { nvim_buf_get_b_p_bin(buf as *const c_void) as c_int };
+        let newval = if force_bin == FORCE_BIN { 1 } else { 0 };
+        unsafe { nvim_buf_set_b_p_bin(buf, newval) };
+        unsafe { nvim_set_options_bin(oldval, newval, OPT_LOCAL) };
+    }
+}
+
+/// Set the name of the current buffer.
+///
+/// Used when the buffer doesn't have a name and a ":r" or ":w" command
+/// with a file name is used. Replaces the C `set_rw_fname` function.
+///
+/// # Safety
+/// Accesses global curbuf and fires autocmds via FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
+    let buf = unsafe { nvim_get_curbuf() };
+
+    // Fire BufDelete/BufWipeout like the unnamed buffer is being deleted.
+    if unsafe { nvim_buf_get_b_p_bl(buf) } != 0 {
+        unsafe {
+            apply_autocmds(
+                EVENT_BUFDELETE,
+                std::ptr::null(),
+                std::ptr::null(),
+                false,
+                buf,
+            )
+        };
+    }
+    unsafe {
+        apply_autocmds(
+            EVENT_BUFWIPEOUT,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            buf,
+        )
+    };
+
+    if unsafe { aborting() } {
+        return FAIL;
+    }
+    if unsafe { nvim_get_curbuf() } != buf {
+        // We are in another buffer now, don't do the renaming.
+        unsafe { emsg(c"E812: Autocommands changed buffer or buffer name".as_ptr()) };
+        return FAIL;
+    }
+
+    let r = unsafe { setfname(buf, fname, sfname, false) };
+    if r == OK {
+        let flags = unsafe { nvim_buf_get_b_flags(buf) };
+        unsafe { nvim_buf_set_b_flags(buf, flags | BF_NOTEDITED) };
+    }
+
+    // Fire BufNew/BufAdd like a new named buffer is being created.
+    unsafe { apply_autocmds(EVENT_BUFNEW, std::ptr::null(), std::ptr::null(), false, buf) };
+    let cur = unsafe { nvim_get_curbuf() };
+    if unsafe { nvim_buf_get_b_p_bl(cur) } != 0 {
+        unsafe { apply_autocmds(EVENT_BUFADD, std::ptr::null(), std::ptr::null(), false, cur) };
+    }
+    if unsafe { aborting() } {
+        return FAIL;
+    }
+
+    // Do filetype detection if 'filetype' is empty.
+    let cur = unsafe { nvim_get_curbuf() };
+    let ft = unsafe { nvim_buf_get_b_p_ft(cur) };
+    if ft.is_null() || unsafe { *ft } == 0 {
+        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } != 0 {
+            unsafe {
+                do_doautocmd(
+                    c"filetypedetect BufRead".as_ptr(),
+                    false,
+                    std::ptr::null_mut(),
+                )
+            };
+        }
+        unsafe { do_modelines(0) };
+    }
+
+    OK
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

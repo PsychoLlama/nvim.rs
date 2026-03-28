@@ -413,3 +413,11 @@ void nvim_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }
 int nvim_buf_get_no_eol_lnum(buf_T *buf) { return (int)buf->b_no_eol_lnum; }
 void nvim_sb_push_byte(void *sb, char byte) { kv_push(*(StringBuilder *)sb, byte); }
 void nvim_sb_concat_len(void *sb, const char *ptr, size_t len) { kv_concat_len(*(StringBuilder *)sb, ptr, len); }
+
+// Phase 2: set_file_options / set_rw_fname accessors
+const char *nvim_get_p_ffs(void) { return p_ffs; }
+int nvim_get_fileformat_force(buf_T *buf, exarg_T *eap) { return get_fileformat_force(buf, eap); }
+void nvim_set_options_bin(int oldval, int newval, int opt) { set_options_bin(oldval, newval, opt); }
+void nvim_buf_set_b_p_bin(buf_T *buf, int val) { buf->b_p_bin = (bool)val; }
+int nvim_exarg_get_force_bin(const exarg_T *eap) { return eap->force_bin; }
+int nvim_exarg_get_force_ff(const exarg_T *eap) { return eap->force_ff; }

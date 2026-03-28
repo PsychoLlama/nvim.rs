@@ -110,6 +110,9 @@ extern void rs_buf_store_file_info(buf_T *buf, FileInfo *file_info);
 extern void rs_forward_slash(char *fname);
 extern void rs_prep_exarg(exarg_T *eap, const buf_T *buf);
 extern void rs_set_forced_fenc(exarg_T *eap);
+// Phase 2 Rust replacements
+extern void rs_set_file_options(int set_options, exarg_T *eap);
+extern int rs_set_rw_fname(char *fname, char *sfname);
 
 #include "fileio.c.generated.h"
 
@@ -1884,22 +1887,7 @@ void prep_exarg(exarg_T *eap, const buf_T *buf)
 /// Set default or forced 'fileformat' and 'binary'.
 void set_file_options(bool set_options, exarg_T *eap)
 {
-  // set default 'fileformat'
-  if (set_options) {
-    if (eap != NULL && eap->force_ff != 0) {
-      set_fileformat(get_fileformat_force(curbuf, eap), OPT_LOCAL);
-    } else if (*p_ffs != NUL) {
-      set_fileformat(rs_default_fileformat(), OPT_LOCAL);
-    }
-  }
-
-  // set or reset 'binary'
-  if (eap != NULL && eap->force_bin != 0) {
-    int oldval = curbuf->b_p_bin;
-
-    curbuf->b_p_bin = (eap->force_bin == FORCE_BIN);
-    set_options_bin(oldval, curbuf->b_p_bin, OPT_LOCAL);
-  }
+  rs_set_file_options((int)set_options, eap);
 }
 
 /// Set forced 'fileencoding'.
@@ -1913,44 +1901,7 @@ void set_forced_fenc(exarg_T *eap)
 /// name and a ":r" or ":w" command with a file name is used.
 int set_rw_fname(char *fname, char *sfname)
 {
-  buf_T *buf = curbuf;
-
-  // It's like the unnamed buffer is deleted....
-  if (curbuf->b_p_bl) {
-    apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, curbuf);
-  }
-  apply_autocmds(EVENT_BUFWIPEOUT, NULL, NULL, false, curbuf);
-  if (aborting()) {         // autocmds may abort script processing
-    return FAIL;
-  }
-  if (curbuf != buf) {
-    // We are in another buffer now, don't do the renaming.
-    emsg(_(e_auchangedbuf));
-    return FAIL;
-  }
-
-  if (setfname(curbuf, fname, sfname, false) == OK) {
-    curbuf->b_flags |= BF_NOTEDITED;
-  }
-
-  // ....and a new named one is created
-  apply_autocmds(EVENT_BUFNEW, NULL, NULL, false, curbuf);
-  if (curbuf->b_p_bl) {
-    apply_autocmds(EVENT_BUFADD, NULL, NULL, false, curbuf);
-  }
-  if (aborting()) {         // autocmds may abort script processing
-    return FAIL;
-  }
-
-  // Do filetype detection now if 'filetype' is empty.
-  if (*curbuf->b_p_ft == NUL) {
-    if (augroup_exists("filetypedetect")) {
-      do_doautocmd("filetypedetect BufRead", false, NULL);
-    }
-    do_modelines(0);
-  }
-
-  return OK;
+  return rs_set_rw_fname(fname, sfname);
 }
 
 
