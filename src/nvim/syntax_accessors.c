@@ -65,8 +65,15 @@ extern void rs_syn_remove_pattern(synblock_T *block, int idx);
 extern void rs_syntax_clear(synblock_T *block);
 extern void rs_syntax_sync_clear(void);
 extern void rs_clear_keywtab(hashtab_T *ht);
+extern void rs_foldUpdateAll(win_T *win);
+extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
+extern int rs_syn_add_cluster(char *name);
+extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
+extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
+                              int16_t *cont_in_list, int flags);
+extern void rs_synblock_full_clear(synblock_T *block);
+extern void rs_synblock_sync_clear(synblock_T *block);
 
-// different types of offsets that are possible
 #define SPO_MS_OFF      0       // match  start offset
 #define SPO_ME_OFF      1       // match  end   offset
 #define SPO_HS_OFF      2       // highl. start offset
@@ -76,17 +83,6 @@ extern void rs_clear_keywtab(hashtab_T *ht);
 #define SPO_LC_OFF      6       // leading context offset
 #define SPO_COUNT       7
 
-// The patterns that are being searched for are stored in a syn_pattern.
-// A match item consists of one pattern.
-// A start/end item consists of n start patterns and m end patterns.
-// A start/skip/end item consists of n start patterns, one skip pattern and m
-// end patterns.
-// For the latter two, the patterns are always consecutive: start-skip-end.
-//
-// A character offset can be given for the matched text (_m_start and _m_end)
-// and for the actually highlighted text (_h_start and _h_end).
-//
-// Note that ordering of members is optimized to reduce padding.
 // synpat_T is forward-declared in syntax_defs.h
 struct synpat_S {
   char sp_type;                         // see SPTYPE_ defines below
@@ -115,9 +111,6 @@ struct syn_cluster_S {
   int16_t *scl_list;        // IDs in this syntax cluster
 };
 
-// For the current state we need to remember more than just the idx.
-// When si_m_endpos.lnum is 0, the items other than si_idx are unknown.
-// (The end positions have the column number of the next char)
 // stateitem_T is forward-declared in syntax_defs.h
 struct stateitem_S {
   int si_idx;                           // index of syntax pattern or
@@ -168,87 +161,44 @@ typedef struct {
 
 #include "syntax_accessors.c.generated.h"
 
-extern void rs_foldUpdateAll(win_T *win);
-
-extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
-
-// The sp_off_flags are computed like this:
-// offset from the start of the matched text: (1 << SPO_XX_OFF)
-// offset from the end   of the matched text: (1 << (SPO_XX_OFF + SPO_COUNT))
-// When both are present, only one is used.
-
 #define SPTYPE_MATCH    1       // match keyword with this group ID
 #define SPTYPE_START    2       // match a regexp, start of item
 #define SPTYPE_END      3       // match a regexp, end of item
 #define SPTYPE_SKIP     4       // match a regexp, skip within item
 
 #define SYN_ITEMS(buf)  ((synpat_T *)((buf)->b_syn_patterns.ga_data))
-
 #define NONE_IDX        (-2)    // value of sp_sync_idx for "NONE"
-
-// Flags for b_syn_sync_flags:
 #define SF_CCOMMENT     0x01    // sync on a C-style comment
 #define SF_MATCH        0x02    // sync by matching a pattern
-
 #define SYN_STATE_P(ssp)    ((bufstate_T *)((ssp)->ga_data))
 
-// The attributes of the syntax item that has been recognized.
 extern int CURRENT_SUB_CHAR;
 #define current_sub_char CURRENT_SUB_CHAR
 
 #define SYN_CLSTR(buf)  ((syn_cluster_T *)((buf)->b_syn_clusters.ga_data))
 
-// Syntax group IDs have different types:
-//     0 - 19999  normal syntax groups
-// 20000 - 20999  ALLBUT indicator (current_syn_inc_tag added)
-// 21000 - 21999  TOP indicator (current_syn_inc_tag added)
-// 22000 - 22999  CONTAINED indicator (current_syn_inc_tag added)
-// 23000 - 32767  cluster IDs (subtract SYNID_CLUSTER for the cluster ID)
 #define SYNID_ALLBUT    MAX_HL_ID   // syntax group ID for contains=ALLBUT
 #define SYNID_TOP       21000       // syntax group ID for contains=TOP
 #define SYNID_CONTAINED 22000       // syntax group ID for contains=CONTAINED
 #define SYNID_CLUSTER   23000       // first syntax group ID for clusters
-
 #define MAX_CLUSTER_ID  (32767 - SYNID_CLUSTER)
 
-// Annoying Hack(TM):  ":syn include" needs this pointer to pass to
-// expand_filename().  Most of the other syntax commands don't need it, so
-// instead of passing it to them, we stow it here.
 static char **syn_cmdlinep;
 
-// Another Annoying Hack(TM):  To prevent rules from other ":syn include"'d
-// files from leaking into ALLBUT lists, we assign a unique ID to the
-// rules in each ":syn include"'d file.
 extern int CURRENT_SYN_INC_TAG;
 #define current_syn_inc_tag CURRENT_SYN_INC_TAG
 
-// In a hashtable item "hi_key" points to "keyword" in a keyentry.
-// This avoids adding a pointer to the hashtable item.
-// KE2HIKEY() converts a var pointer to a hashitem key pointer.
-// HIKEY2KE() converts a hashitem key pointer to a var pointer.
-// HI2KE() converts a hashitem pointer to a var pointer.
 static keyentry_T dumkey;
 #define KE2HIKEY(kp)  ((kp)->keyword)
 #define HIKEY2KE(p)   ((keyentry_T *)((p) - (dumkey.keyword - (char *)&dumkey)))
 #define HI2KE(hi)      HIKEY2KE((hi)->hi_key)
 
-// To reduce the time spent in keepend(), remember at which level in the state
-// stack the first item with "keepend" is present.  When "-1", there is no
-// "keepend" on the stack.
-
-// value of si_idx for keywords
 #define KEYWORD_IDX     (-1)
-// valid of si_cont_list for containing all but contained groups
 #define ID_LIST_ALL     ((int16_t *)-1)
 
 extern int NEXT_SEQNR;
 #define next_seqnr NEXT_SEQNR
 
-// The next possible match in the current line for any pattern is remembered,
-// to avoid having to try for a match in each column.
-// If NEXT_MATCH_IDX == -1, not tried (in this line) yet.
-// If NEXT_MATCH_COL == MAXCOL, no match found in this line.
-// (All end positions have the column of the char after the end)
 extern int NEXT_MATCH_COL;
 extern int NEXT_MATCH_IDX;
 extern int NEXT_MATCH_FLAGS;
@@ -260,11 +210,6 @@ extern reg_extmatch_T *NEXT_MATCH_EXTMATCH;
 #define next_match_end_idx   NEXT_MATCH_END_IDX
 #define next_match_extmatch  NEXT_MATCH_EXTMATCH
 
-// A state stack is an array of integers or stateitem_T, stored in a
-// garray_T.  A state stack is invalid if its itemsize entry is zero.
-
-// The current state (within the line) of the recognition engine.
-// When current_state.ga_itemsize is 0 the current state is invalid.
 static win_T *syn_win;                  // current window for highlighting
 static buf_T *syn_buf;                  // current buffer for highlighting
 static synblock_T *syn_block;              // current buffer for highlighting
@@ -283,52 +228,8 @@ extern int16_t *CURRENT_NEXT_LIST;
 extern int SYN_TIME_ON;
 #define syn_time_on (SYN_TIME_ON != 0)
 
-// Set the timeout used for syntax highlighting.
-// Use NULL to reset, no timeout.
 void syn_set_timeout(proftime_T *tm) { syn_tm = tm; }
 
-// Try to find a synchronisation point for line "lnum".
-//
-// This sets current_lnum and the current state.  One of three methods is
-// used:
-// 1. Search backwards for the end of a C-comment.
-// 2. Search backwards for given sync patterns.
-// 3. Simply start on a given number of lines above "lnum".
-
-// EXPLANATION OF THE SYNTAX STATE STACK CACHE
-//
-// To speed up syntax highlighting, the state stack for the start of some
-// lines is cached.  These entries can be used to start parsing at that point.
-//
-// The stack is kept in b_sst_array[] for each buffer.  There is a list of
-// valid entries.  b_sst_first points to the first one, then follow sst_next.
-// The entries are sorted on line number.  The first entry is often for line 2
-// (line 1 always starts with an empty stack).
-// There is also a list for free entries.  This construction is used to avoid
-// having to allocate and free memory blocks too often.
-//
-// When making changes to the buffer, this is logged in b_mod_*.  When calling
-// update_screen() to update the display, it will call
-// syn_stack_apply_changes() for each displayed buffer to adjust the cached
-// entries.  The entries which are inside the changed area are removed,
-// because they must be recomputed.  Entries below the changed have their line
-// number adjusted for deleted/inserted lines, and have their sst_change_lnum
-// set to indicate that a check must be made if the changed lines would change
-// the cached entry.
-//
-// When later displaying lines, an entry is stored for each line.  Displayed
-// lines are likely to be displayed again, in which case the state at the
-// start of the line is needed.
-// For not displayed lines, an entry is stored for every so many lines.  These
-// entries will be used e.g., when scrolling backwards.  The distance between
-// entries depends on the number of lines in the buffer.  For small buffers
-// the distance is fixed at SST_DIST, for large buffers there is a fixed
-// number of entries SST_MAX_ENTRIES, and the distance is computed.
-
-/// Thin C helper: set up regmmatch_T, call vim_regexec_multi, extract results.
-/// Profiling/timeout/b_syn_slow logic is handled by the Rust caller.
-/// Returns 1 on match (with positions set), 0 on no match, -1 if regprog is NULL.
-/// Sets *out_timed_out if vim_regexec_multi reported a timeout.
 int nvim_syn_do_regexec(void *regprog, int ic,
                         int lnum, int col,
                         int *out_s_lnum, int *out_s_col,
@@ -360,9 +261,6 @@ int nvim_syn_do_regexec(void *regprog, int ic,
 int nvim_syn_get_b_syn_slow(void) { return syn_win->w_s->b_syn_slow ? 1 : 0; }
 void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
 
-/// Update syn_time_T fields from Rust after a regex execution.
-/// elapsed: elapsed time (proftime_T / u64).
-/// matched: 1 if the regex matched, 0 otherwise.
 void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
 {
   if (st_ptr == NULL) return;
@@ -376,14 +274,6 @@ void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
     st->match++;
   }
 }
-
-extern int rs_syn_add_cluster(char *name);
-extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
-extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
-                              int16_t *cont_in_list, int flags);
-
-// ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
-// Their C thin wrappers are at the bottom of this file.
 
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
 int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
@@ -417,23 +307,8 @@ int nvim_synblock_get_nospell_cluster_id(synblock_T *block) { return block->b_no
 synstate_T *nvim_synblock_get_sst_first(synblock_T *block) { return block->b_sst_first; }
 synstate_T *nvim_synblock_get_sst_firstfree(synblock_T *block) { return block->b_sst_firstfree; }
 int nvim_synblock_has_sst_array(synblock_T *block) { return block->b_sst_array != NULL ? 1 : 0; }
-
-synpat_T *nvim_synblock_get_pattern(synblock_T *block, int idx)
-{
-  if (idx < 0 || idx >= block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return &SYN_ITEMS(block)[idx];
-}
-
-syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx)
-{
-  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
-    return NULL;
-  }
-  return &SYN_CLSTR(block)[idx];
-}
-
+synpat_T *nvim_synblock_get_pattern(synblock_T *block, int idx) { if (idx < 0 || idx >= block->b_syn_patterns.ga_len) return NULL; return &SYN_ITEMS(block)[idx]; }
+syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx) { if (idx < 0 || idx >= block->b_syn_clusters.ga_len) return NULL; return &SYN_CLSTR(block)[idx]; }
 synstate_T *nvim_synstate_get_next(synstate_T *state) { return state->sst_next; }
 int nvim_synstate_get_lnum(synstate_T *state) { return (int)state->sst_lnum; }
 int nvim_synstate_get_stacksize(synstate_T *state) { return state->sst_stacksize; }
@@ -451,47 +326,11 @@ int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
-
-int16_t *nvim_synstate_get_next_list(synstate_T *state)
-{
-  if (state == NULL) {
-    return NULL;
-  }
-  return state->sst_next_list;
-}
-
-bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
-{
-  if (state == NULL || idx < 0 || idx >= state->sst_stacksize) {
-    return NULL;
-  }
-  bufstate_T *bp;
-  if (state->sst_stacksize > SST_FIX_STATES) {
-    bp = SYN_STATE_P(&(state->sst_union.sst_ga));
-  } else {
-    bp = state->sst_union.sst_stack;
-  }
-  return &bp[idx];
-}
-
+int16_t *nvim_synstate_get_next_list(synstate_T *state) { if (state == NULL) return NULL; return state->sst_next_list; }
+bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx) { if (state == NULL || idx < 0 || idx >= state->sst_stacksize) return NULL; bufstate_T *bp = state->sst_stacksize > SST_FIX_STATES ? SYN_STATE_P(&state->sst_union.sst_ga) : state->sst_union.sst_stack; return &bp[idx]; }
 void nvim_syn_update_si_attr(int idx) { if (idx >= 0 && idx < current_state.ga_len) rs_update_si_attr(idx); }
-
-const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx)
-{
-  if (em == NULL || subidx < 0 || subidx >= NSUBEXP) {
-    return NULL;
-  }
-  return (const char *)em->matches[subidx];
-}
-
-int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
-{
-  if (a == NULL || b == NULL) {
-    return a == b ? 0 : 1;
-  }
-  return mb_strcmp_ic(ic, a, b);
-}
-
+const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx) { if (em == NULL || subidx < 0 || subidx >= NSUBEXP) return NULL; return (const char *)em->matches[subidx]; }
+int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b) { if (a == NULL || b == NULL) return a == b ? 0 : 1; return mb_strcmp_ic(ic, a, b); }
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
@@ -536,15 +375,7 @@ char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
-
-int nvim_syn_get_synblock_pattern_count(void)
-{
-  if (syn_block == NULL) {
-    return 0;
-  }
-  return syn_block->b_syn_patterns.ga_len;
-}
-
+int nvim_syn_get_synblock_pattern_count(void) { if (syn_block == NULL) return 0; return syn_block->b_syn_patterns.ga_len; }
 int nvim_syn_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
 int nvim_syn_get_line_len(int lnum) { return (int)ml_get_buf_len(syn_buf, (linenr_T)lnum); }
 int nvim_syn_get_buf_line_count(void) { return (int)syn_buf->b_ml.ml_line_count; }
@@ -589,8 +420,6 @@ int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
   return found;
 }
 
-// definitions in src/nvim-rs/syntax/src/ffi_types.rs.
-
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
 void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
 char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
@@ -612,16 +441,7 @@ synpat_T *nvim_synblock_ga_append_pattern(void) { return GA_APPEND_VIA_PTR(synpa
 void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
 void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
 synpat_T *nvim_syn_xcalloc_synpat(void) { return xcalloc(1, sizeof(synpat_T)); }
-
-void nvim_syn_free_synpat(synpat_T *pat)
-{
-  if (pat != NULL) {
-    vim_regfree(pat->sp_prog);
-    xfree(pat->sp_pattern);
-    xfree(pat);
-  }
-}
-
+void nvim_syn_free_synpat(synpat_T *pat) { if (pat != NULL) { vim_regfree(pat->sp_prog); xfree(pat->sp_pattern); xfree(pat); } }
 void nvim_syn_set_reg_do_extmatch(int val) { reg_do_extmatch = val; }
 void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2) { semsg(fmt, arg1, arg2); }
 void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op) { rs_syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op); }
@@ -652,22 +472,10 @@ void nvim_synblock_ga_clear_clusters(synblock_T *block) { ga_clear(&block->b_syn
 void nvim_synblock_regfree_linecont_prog(synblock_T *block) { vim_regfree(block->b_syn_linecont_prog); block->b_syn_linecont_prog = NULL; }
 void nvim_synblock_clear_syn_isk(synblock_T *block) { clear_string_option(&block->b_syn_isk); }
 void *nvim_synblock_get_linecont_time_ptr(synblock_T *block) { return (void *)&block->b_syn_linecont_time; }
-
-/// Compile regexp with empty p_cpo (avoid 'l' flag side-effect).
-void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags)
-{
-  char *cpo_save = p_cpo;
-  p_cpo = empty_string_option;
-  void *prog = vim_regcomp(pat, flags);
-  p_cpo = cpo_save;
-  return prog;
-}
-
+void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags) { char *cpo_save = p_cpo; p_cpo = empty_string_option; void *prog = vim_regcomp(pat, flags); p_cpo = cpo_save; return prog; }
 int nvim_syn_name2id_len_wrapper(const char *arg, int len) { return syn_name2id_len(arg, (size_t)len); }
 
 /// Prepare for :syntax include.
-/// Sets EX_XFILE|EX_NOSPC argt flags, calls separate_nextcmd,
-/// checks if path is absolute/$/<, and optionally calls expand_filename.
 /// Returns 1 if file should be :source'd (absolute path),
 ///         0 if file should be loaded via source_runtime,
 ///        -1 on expand_filename failure.
@@ -688,7 +496,6 @@ int nvim_syn_include_prepare(exarg_T *eap)
   return 0;  // use source_runtime
 }
 
-/// Execute :syntax include -- source or runtime load the file.
 int nvim_syn_include_source(exarg_T *eap, int use_source)
 {
   if (use_source) {
@@ -705,16 +512,10 @@ int nvim_syn_include_source(exarg_T *eap, int use_source)
 
 void nvim_syn_init_highlight(int reset, int init) { init_highlight((bool)reset, (bool)init); }
 void nvim_syn_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
-
-/// Redraw curwin with UPD_NOT_VALID (used after :syntax spell dispatch from Rust).
 void nvim_syn_redraw_later_curwin(void) { redraw_later(curwin, UPD_NOT_VALID); }
 void nvim_syn_set_cmdlinep_from_eap(exarg_T *eap) { syn_cmdlinep = eap->cmdlinep; }
-
-/// Call do_unlet(name, len, true) -- wrapper for Rust use.
 void nvim_syn_do_unlet(const char *name, int len) { do_unlet(name, (size_t)len, true); }
 int nvim_synblock_is_buf_block(synblock_T *block) { return (block == &curwin->w_buffer->b_s) ? 1 : 0; }
-
-/// Trigger redraw_curbuf_later(UPD_SOME_VALID).
 void nvim_syn_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_SOME_VALID); }
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
@@ -727,27 +528,13 @@ void nvim_msg_puts_hl_syn(const char *s, int hl_id, bool hist) { msg_puts_hl(s, 
 int nvim_syn_vim_strchr(const char *s, int c) { return vim_strchr(s, (uint8_t)c) != NULL ? 1 : 0; }
 size_t nvim_ht_get_array_size(const hashtab_T *ht) { return ht->ht_mask + 1; }
 size_t nvim_ht_get_used(const hashtab_T *ht) { return ht->ht_used; }
-
-keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
-{
-  const hashitem_T *hi = &ht->ht_array[idx];
-  if (HASHITEM_EMPTY(hi)) {
-    return NULL;
-  }
-  return HI2KE(hi);
-}
-
+keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx) { const hashitem_T *hi = &ht->ht_array[idx]; if (HASHITEM_EMPTY(hi)) return NULL; return HI2KE(hi); }
 void nvim_syn_emsg_skip_inc(void) { emsg_skip++; }
 void nvim_syn_emsg_skip_dec(void) { emsg_skip--; }
 int nvim_syn_iskeyword_is_set(synblock_T *block) { return block->b_syn_isk != empty_string_option ? 1 : 0; }
 char *nvim_syn_iskeyword_get(synblock_T *block) { return block->b_syn_isk; }
-
-/// Clear the iskeyword setting: copy curbuf->b_chartab into block->b_syn_chartab
-/// and clear block->b_syn_isk.
 void nvim_syn_iskeyword_clear(synblock_T *block) { memmove(block->b_syn_chartab, curbuf->b_chartab, (size_t)32); clear_string_option(&block->b_syn_isk); }
 
-/// Set the iskeyword: save curbuf state, set b_p_isk to arg, run buf_init_chartab,
-/// copy result into block->b_syn_chartab, restore curbuf state, transfer isk to block.
 void nvim_syn_iskeyword_set(synblock_T *block, const char *arg)
 {
   char save_chartab[32];
@@ -770,20 +557,7 @@ void nvim_syn_do_unlet_b_current_syntax(void) { do_unlet(S_LEN("b:current_syntax
 void nvim_synblock_set_pattern_count(synblock_T *block, int len) { block->b_syn_patterns.ga_len = len; }
 void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx, int count) { memmove(SYN_ITEMS(block) + dst_idx, SYN_ITEMS(block) + src_idx, sizeof(synpat_T) * (size_t)count); }
 void nvim_synblock_dec_folditems(synblock_T *block) { block->b_syn_folditems--; }
-
-extern void rs_synblock_full_clear(synblock_T *block);
-extern void rs_synblock_sync_clear(synblock_T *block);
-
-/// Release ownsyntax block for a window: clear it, free it, reset to buf's b_s.
-void nvim_win_release_synblock(win_T *wp)
-{
-  if (wp->w_s != &wp->w_buffer->b_s) {
-    syntax_clear(wp->w_s);
-    xfree(wp->w_s);
-    wp->w_s = &wp->w_buffer->b_s;
-  }
-}
-
+void nvim_win_release_synblock(win_T *wp) { if (wp->w_s != &wp->w_buffer->b_s) { syntax_clear(wp->w_s); xfree(wp->w_s); wp->w_s = &wp->w_buffer->b_s; } }
 void nvim_synblock_set_spell_cluster_id(int id) { curwin->w_s->b_spell_cluster_id = id; }
 void nvim_synblock_set_nospell_cluster_id(int id) { curwin->w_s->b_nospell_cluster_id = id; }
 char *nvim_syn_vim_strsave_up(const char *s) { return vim_strsave_up(s); }
@@ -795,10 +569,6 @@ void nvim_synblock_set_sst_firstfree(synblock_T *block, synstate_T *ptr) { if (b
 void nvim_synblock_set_sst_freecount(synblock_T *block, int count) { if (block) block->b_sst_freecount = count; }
 void nvim_synstate_set_next(synstate_T *state, synstate_T *next) { if (state) state->sst_next = next; }
 void nvim_synstate_set_stacksize(synstate_T *state, int size) { if (state) state->sst_stacksize = size; }
-
-/// Allocate a new zeroed synstate array of given length.
-/// Returns the pointer; caller owns the memory and must free with
-/// nvim_syn_free_sst_array().
 synstate_T *nvim_syn_xcalloc_synstate_array(int len) { if (len <= 0) return NULL; return xcalloc((size_t)len, sizeof(synstate_T)); }
 void nvim_syn_free_sst_array(synstate_T *ptr) { xfree(ptr); }
 synstate_T *nvim_syn_sst_array_at(synstate_T *array, int idx) { return array + idx; }
@@ -807,9 +577,6 @@ int nvim_synblock_get_sst_lasttick(synblock_T *block) { return block ? (int)bloc
 int nvim_syn_buf_get_ml_line_count(void) { return syn_buf ? (int)syn_buf->b_ml.ml_line_count : 0; }
 synblock_T *nvim_buf_get_b_s(buf_T *buf) { return buf ? &buf->b_s : NULL; }
 
-/// Do the FOR_ALL_WINDOWS_IN_TAB loop for syn_stack_free_all:
-/// free block, then update folds for windows that use this block.
-/// This is called by rs_syn_stack_free_all after the block has been freed by Rust.
 void nvim_syn_fold_update_for_block(synblock_T *block)
 {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
@@ -819,9 +586,6 @@ void nvim_syn_fold_update_for_block(synblock_T *block)
   }
 }
 
-/// Do the FOR_ALL_WINDOWS_IN_TAB part of syn_stack_apply_changes:
-/// apply changes to all window-local synblocks that differ from buf->b_s.
-/// rs_syn_stack_apply_changes_block is called for each such window's block.
 void nvim_syn_apply_changes_for_windows(buf_T *buf)
 {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
@@ -840,22 +604,9 @@ void *nvim_syn_block_get_linecont_prog(void) { return (syn_block) ? syn_block->b
 int nvim_syn_block_get_linecont_ic(void) { return syn_block ? syn_block->b_syn_linecont_ic : 0; }
 void *nvim_syn_block_get_linecont_time_ptr(void) { return syn_block ? (void *)&syn_block->b_syn_linecont_time : NULL; }
 void nvim_syn_block_set_linecont_prog(void *prog) { if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog; }
-
-/// Return ml_get_buf(syn_buf, current_lnum).
-/// Direct implementation to avoid circular call through syn_getcurline.
 char *nvim_syn_do_getcurline(void) { return ml_get_buf(syn_buf, current_lnum); }
 int nvim_syn_do_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
-
-/// Zero out a syn_time_T struct.
-void nvim_syn_do_clear_time(syn_time_T *st)
-{
-  // Direct implementation to avoid circular call with syn_clear_time -> rs_syn_clear_time -> here
-  st->total = profile_zero();
-  st->slowest = profile_zero();
-  st->count = 0;
-  st->match = 0;
-}
-
+void nvim_syn_do_clear_time(syn_time_T *st) { st->total = profile_zero(); st->slowest = profile_zero(); st->count = 0; st->match = 0; }
 synpat_T *nvim_synblock_get_patterns_ga_data(synblock_T *block) { if (block == NULL || block->b_syn_patterns.ga_len == 0) return NULL; return (synpat_T *)block->b_syn_patterns.ga_data; }
 syn_cluster_T *nvim_synblock_get_clusters_ga_data(synblock_T *block) { if (block == NULL || block->b_syn_clusters.ga_len == 0) return NULL; return (syn_cluster_T *)block->b_syn_clusters.ga_data; }
 void nvim_synstate_set_sst_next_flags(synstate_T *state, int flags) { if (state) state->sst_next_flags = (int16_t)flags; }
@@ -863,11 +614,6 @@ void nvim_synstate_set_sst_next_list(synstate_T *state, int16_t *list) { if (sta
 void nvim_synstate_set_tick_to_display(synstate_T *state) { if (state) state->sst_tick = display_tick; }
 void nvim_synstate_ga_clear(synstate_T *state) { if (state) ga_clear(&state->sst_union.sst_ga); }
 
-/// Fill one bufstate slot in sp->sst_union from CUR_STATE(i).
-/// Handles both fixed-stack and growarray paths.
-/// Must be called only after nvim_syn_store_bufstates_init() sets up the bp pointer.
-/// Combined accessor: copies idx/flags/seqnr/cchar and calls ref_extmatch.
-/// This avoids exposing CUR_STATE and ref_extmatch macros to Rust.
 void nvim_synstate_fill_bufstate_from_curstate(synstate_T *sp, int i)
 {
   bufstate_T *bp;
@@ -883,45 +629,16 @@ void nvim_synstate_fill_bufstate_from_curstate(synstate_T *sp, int i)
   bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
 }
 
-/// Initialize the growarray path of sst_union for store_bufstates.
-/// Only call when sp->sst_stacksize > SST_FIX_STATES.
-void nvim_synstate_ga_init_for_store(synstate_T *sp)
-{
-  if (sp == NULL) return;
-  ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
-  ga_grow(&sp->sst_union.sst_ga, sp->sst_stacksize);
-  sp->sst_union.sst_ga.ga_len = sp->sst_stacksize;
-}
-
-/// Free a keyentry_T's owned lists and the entry itself.
-/// Frees kp->next_list, kp->k_syn.cont_in_list, and kp.
-void nvim_ke_free(keyentry_T *kp)
-{
-  if (!kp) return;
-  xfree(kp->next_list);
-  xfree(kp->k_syn.cont_in_list);
-  xfree(kp);
-}
-
-/// Call hash_clear + hash_init on a hashtab (for clearing keyword tables).
+void nvim_synstate_ga_init_for_store(synstate_T *sp) { if (sp == NULL) return; ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1); ga_grow(&sp->sst_union.sst_ga, sp->sst_stacksize); sp->sst_union.sst_ga.ga_len = sp->sst_stacksize; }
+void nvim_ke_free(keyentry_T *kp) { if (!kp) return; xfree(kp->next_list); xfree(kp->k_syn.cont_in_list); xfree(kp); }
 void nvim_ht_clear_and_init(hashtab_T *ht) { if (!ht) return; hash_clear(ht); hash_init(ht); }
 void nvim_ht_lock(hashtab_T *ht) { if (ht) hash_lock(ht); }
 void nvim_ht_unlock(hashtab_T *ht) { if (ht) hash_unlock(ht); }
 void nvim_ke_set_next(keyentry_T *kp, keyentry_T *next) { if (kp) kp->ke_next = next; }
-
-/// Call hash_remove on ht at array index idx (hi = &ht->ht_array[idx]).
 void nvim_ht_remove_at(hashtab_T *ht, size_t idx) { if (!ht || idx >= (ht->ht_mask + 1)) return; hash_remove(ht, &ht->ht_array[idx]); }
 char *nvim_ke_get_hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
 void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key) { if (!ht || idx >= (ht->ht_mask + 1)) return; ht->ht_array[idx].hi_key = key; }
-
-keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
-{
-  if (!ht || !keyword) return NULL;
-  hashitem_T *hi = hash_find(ht, keyword);
-  if (HASHITEM_EMPTY(hi)) return NULL;
-  return HI2KE(hi);
-}
-
+keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword) { if (!ht || !keyword) return NULL; hashitem_T *hi = hash_find(ht, keyword); if (HASHITEM_EMPTY(hi)) return NULL; return HI2KE(hi); }
 hashtab_T *nvim_curwin_get_keywtab(int use_ic) { return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab; }
 hash_T nvim_hash_hash(const char *key) { return hash_hash(key); }
 hashitem_T *nvim_hash_lookup(hashtab_T *ht, const char *key, size_t len, hash_T hash) { return hash_lookup(ht, key, len, hash); }
@@ -933,8 +650,6 @@ void nvim_curwin_set_containedin(void) { curwin->w_s->b_syn_containedin = true; 
 void nvim_hashitem_set_key(hashitem_T *hi, char *key) { if (hi) hi->hi_key = key; }
 int nvim_curwin_shares_buf_synblock(void) { return curwin->w_s == &curwin->w_buffer->b_s ? 1 : 0; }
 
-/// Allocate a new zeroed synblock_T, initialise its hashtabs and spell options.
-/// Does NOT assign it to curwin->w_s.
 synblock_T *nvim_syn_alloc_new_synblock(void)
 {
   synblock_T *block = xcalloc(1, sizeof(synblock_T));
@@ -950,10 +665,6 @@ synblock_T *nvim_syn_alloc_new_synblock(void)
 
 void nvim_curwin_set_synblock(synblock_T *block) { curwin->w_s = block; curwin->w_p_spell = false; }
 
-/// Append a new zeroed cluster entry to curwin->w_s->b_syn_clusters.
-/// Initialises the garray if needed. Returns the index of the new entry,
-/// or -1 if MAX_CLUSTER_ID has been reached.
-/// Emits E848 on overflow.
 int nvim_synblock_cluster_append_inner(void)
 {
   synblock_T *block = curwin->w_s;
