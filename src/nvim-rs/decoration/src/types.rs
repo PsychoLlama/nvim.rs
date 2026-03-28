@@ -17,6 +17,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+extern crate libc;
+
 // =============================================================================
 // KVec -- matches kvec_t(T) macro: { size_t size; size_t capacity; T *items; }
 // =============================================================================
@@ -87,6 +89,34 @@ impl<T> KVec<T> {
         } else {
             std::slice::from_raw_parts(self.items, self.size)
         }
+    }
+
+    /// Push a new element, growing the buffer if necessary (like `kv_pushp`).
+    ///
+    /// Uses `libc::realloc` to grow the buffer (matching C's `xrealloc` on
+    /// standard malloc platforms). Capacity doubles when exhausted, starting at 8.
+    ///
+    /// # Panics
+    /// Panics if `libc::realloc` returns null (out of memory).
+    ///
+    /// # Safety
+    /// The `items` pointer must be from `libc::malloc`/`libc::realloc` or null.
+    /// The element `val` must be valid to write.
+    pub unsafe fn push(&mut self, val: T) {
+        if self.size == self.capacity {
+            let new_cap = if self.capacity == 0 {
+                8
+            } else {
+                self.capacity * 2
+            };
+            let new_size = new_cap * std::mem::size_of::<T>();
+            let new_ptr = libc::realloc(self.items.cast::<libc::c_void>(), new_size);
+            assert!(!new_ptr.is_null(), "KVec::push: realloc failed");
+            self.items = new_ptr.cast::<T>();
+            self.capacity = new_cap;
+        }
+        self.items.add(self.size).write(val);
+        self.size += 1;
     }
 }
 

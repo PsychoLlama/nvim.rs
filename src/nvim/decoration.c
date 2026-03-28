@@ -254,70 +254,16 @@ bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
       continue;
     }
 
-    decor_range_add_from_inline(state, pair.start.pos.row, pair.start.pos.col, pair.end_pos.row,
-                                pair.end_pos.col,
-                                mt_decor(m), false, m.ns, m.id);
+    rs_decor_range_add_from_inline(state, pair.start.pos.row, pair.start.pos.col,
+                                   pair.end_pos.row, pair.end_pos.col,
+                                   mt_decor(m).ext, mt_decor(m).data.ext.vt,
+                                   mt_decor(m).data.ext.sh_idx,
+                                   mt_decor(m).data.hl.flags, mt_decor(m).data.hl.priority,
+                                   mt_decor(m).data.hl.hl_id, mt_decor(m).data.hl.conceal_char,
+                                   false, m.ns, m.id);
   }
 
   return true;  // TODO(bfredl): check if available in the region
-}
-
-static void decor_range_add_from_inline(DecorState *state, int start_row, int start_col,
-                                        int end_row, int end_col, DecorInline decor, bool owned,
-                                        uint32_t ns, uint32_t mark_id)
-{
-  rs_decor_range_add_from_inline(state, start_row, start_col, end_row, end_col,
-                                 decor.ext, decor.data.ext.vt, decor.data.ext.sh_idx,
-                                 decor.data.hl.flags, decor.data.hl.priority,
-                                 decor.data.hl.hl_id, decor.data.hl.conceal_char,
-                                 owned, ns, mark_id);
-}
-
-static void decor_range_insert(DecorState *state, DecorRange *range)
-{
-  range->ordering = state->new_range_ordering++;
-
-  int index;
-  // Get space for a new `DecorRange` from the freelist or allocate.
-  if (state->free_slot_i >= 0) {
-    index = state->free_slot_i;
-    DecorRangeSlot *slot = &kv_A(state->slots, index);
-    state->free_slot_i = slot->next_free_i;
-    slot->range = *range;
-  } else {
-    index = (int)kv_size(state->slots);
-    kv_pushp(state->slots)->range = *range;
-  }
-
-  int const row = range->start_row;
-  int const col = range->start_col;
-
-  int const count = (int)kv_size(state->ranges_i);
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  int begin = state->future_begin;
-  int end = count;
-  while (begin < end) {
-    int const mid = begin + ((end - begin) >> 1);
-    DecorRange *const mr = &slots[indices[mid]].range;
-
-    int const mrow = mr->start_row;
-    int const mcol = mr->start_col;
-    if (mrow < row || (mrow == row && mcol <= col)) {
-      begin = mid + 1;
-      if (mrow == row && mcol == col) {
-        break;
-      }
-    } else {
-      end = mid;
-    }
-  }
-
-  kv_pushp(state->ranges_i);
-  int *const item = &kv_A(state->ranges_i, begin);
-  memmove(item + 1, item, (size_t)(count - begin) * sizeof(*item));
-  *item = index;
 }
 
 /// Initialize the draw_col of a newly-added virtual text item.
@@ -871,70 +817,6 @@ void nvim_decor_state_itr_get(void *state_ptr, void *buf_ptr, int row, int col)
   rs_marktree_itr_get(buf->b_marktree, row, col, state->itr);
 }
 
-// Range Insertion and Creation helpers
-
-/// Insert a virtual text range into DecorState.
-/// Constructs a DecorRange and calls decor_range_insert.
-void nvim_decor_range_insert_vt(void *state_ptr, int start_row, int start_col,
-                                int end_row, int end_col, void *vt_ptr, bool owned,
-                                int kind, uint32_t priority_internal)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  DecorRange range = {
-    .start_row = start_row, .start_col = start_col,
-    .end_row = end_row, .end_col = end_col,
-    .kind = (DecorRangeKind)kind,
-    .data.vt = (DecorVirtText *)vt_ptr,
-    .attr_id = 0,
-    .owned = owned,
-    .priority_internal = priority_internal,
-    .draw_col = -10,
-  };
-  decor_range_insert(state, &range);
-}
-
-/// Insert a highlight range into DecorState.
-/// Constructs a DecorRange with a copy of the DecorSignHighlight and calls decor_range_insert.
-void nvim_decor_range_insert_hl(void *state_ptr, int start_row, int start_col,
-                                int end_row, int end_col, void *sh_ptr, bool owned,
-                                uint32_t priority_internal, int attr_id)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  DecorSignHighlight *sh = (DecorSignHighlight *)sh_ptr;
-  DecorRange range = {
-    .start_row = start_row, .start_col = start_col,
-    .end_row = end_row, .end_col = end_col,
-    .kind = kDecorKindHighlight,
-    .data.sh = *sh,
-    .attr_id = attr_id,
-    .owned = owned,
-    .priority_internal = priority_internal,
-    .draw_col = -10,
-  };
-  decor_range_insert(state, &range);
-}
-
-/// Insert a UI watched range into DecorState.
-void nvim_decor_range_insert_ui(void *state_ptr, int start_row, int start_col,
-                                int end_row, int end_col, uint32_t ns_id, uint32_t mark_id,
-                                int pos, bool owned, uint32_t priority_internal, int attr_id)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  DecorRange range = {
-    .start_row = start_row, .start_col = start_col,
-    .end_row = end_row, .end_col = end_col,
-    .kind = kDecorKindUIWatched,
-    .data.ui.ns_id = ns_id,
-    .data.ui.mark_id = mark_id,
-    .data.ui.pos = pos,
-    .attr_id = attr_id,
-    .owned = owned,
-    .priority_internal = priority_internal,
-    .draw_col = -10,
-  };
-  decor_range_insert(state, &range);
-}
-
 uint16_t nvim_decor_sh_get_flags(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->flags; }
 uint16_t nvim_decor_sh_ptr_get_priority(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->priority; }
 int nvim_decor_sh_ptr_get_hl_id(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->hl_id; }
@@ -1259,8 +1141,12 @@ DecorColAdvanceResult nvim_decor_col_advance(win_T *wp, int col, DecorState *sta
     }
 
     MTPos endpos = rs_marktree_get_altpos(buf->b_marktree, mark, NULL);
-    decor_range_add_from_inline(state, mark.pos.row, mark.pos.col, endpos.row, endpos.col,
-                                mt_decor(mark), false, mark.ns, mark.id);
+    DecorInline d = mt_decor(mark);
+    rs_decor_range_add_from_inline(state, mark.pos.row, mark.pos.col, endpos.row, endpos.col,
+                                   d.ext, d.data.ext.vt, d.data.ext.sh_idx,
+                                   d.data.hl.flags, d.data.hl.priority,
+                                   d.data.hl.hl_id, d.data.hl.conceal_char,
+                                   false, mark.ns, mark.id);
 
 next_mark:
     rs_marktree_itr_next(buf->b_marktree, state->itr);

@@ -9,6 +9,7 @@ use crate::decor::{
     DECOR_ID_INVALID, DECOR_PRIORITY_BASE, KSH_CONCEAL, KSH_IS_SIGN, KSH_SPELL_OFF, KSH_SPELL_ON,
     KSH_UI_WATCHED, KSH_UI_WATCHED_OVERLAY,
 };
+use crate::types::{DecorRangeData, DecorRangeUiData};
 use crate::{DecorKind, DecorStateHandle, VirtTextPos, KVT_IS_LINES};
 
 // =============================================================================
@@ -527,43 +528,6 @@ impl DecorVtHandle {
 }
 
 extern "C" {
-    // Range insertion helpers (construct DecorRange in C, call decor_range_insert)
-    fn nvim_decor_range_insert_vt(
-        state: DecorStateHandle,
-        start_row: c_int,
-        start_col: c_int,
-        end_row: c_int,
-        end_col: c_int,
-        vt_ptr: DecorVtHandle,
-        owned: bool,
-        kind: c_int,
-        priority_internal: u32,
-    );
-    fn nvim_decor_range_insert_hl(
-        state: DecorStateHandle,
-        start_row: c_int,
-        start_col: c_int,
-        end_row: c_int,
-        end_col: c_int,
-        sh_ptr: DecorShHandle,
-        owned: bool,
-        priority_internal: u32,
-        attr_id: c_int,
-    );
-    fn nvim_decor_range_insert_ui(
-        state: DecorStateHandle,
-        start_row: c_int,
-        start_col: c_int,
-        end_row: c_int,
-        end_col: c_int,
-        ns_id: u32,
-        mark_id: u32,
-        pos: c_int,
-        owned: bool,
-        priority_internal: u32,
-        attr_id: c_int,
-    );
-
     // DecorSignHighlight field accessors
     fn nvim_decor_sh_get_flags(sh: DecorShHandle) -> u16;
     fn nvim_decor_sh_ptr_get_priority(sh: DecorShHandle) -> u16;
@@ -783,6 +747,217 @@ pub unsafe extern "C" fn rs_decor_range_add_from_inline(
             mark_id,
         );
     }
+}
+
+// =============================================================================
+// Phase 2: decor_range_insert and callers migrated to Rust
+// =============================================================================
+
+use crate::types::{DecorRange, DecorRangeSlot, DecorSignHighlight};
+
+/// Insert a DecorRange into the DecorState sorted arrays.
+///
+/// Assigns ordering, gets/allocates a slot, binary-searches for insertion
+/// position by (start_row, start_col), and inserts the index into ranges_i.
+///
+/// Rust implementation of the static `decor_range_insert()`.
+///
+/// # Safety
+/// `state` must be a valid, non-null pointer to a `DecorState`.
+unsafe fn decor_range_insert(state: crate::DecorStateHandle, range: DecorRange) {
+    let s = &mut *state;
+    let ordering = s.new_range_ordering;
+    s.new_range_ordering += 1;
+
+    // Build the final range with ordering set
+    let mut range = range;
+    range.ordering = ordering;
+
+    // Get a slot index
+    let index: c_int;
+    if s.free_slot_i >= 0 {
+        let fi = s.free_slot_i as usize;
+        index = s.free_slot_i;
+        let slot = &mut *s.slots.items.add(fi);
+        // Read next_free_i before overwriting (union)
+        let next_free = slot.next_free_i;
+        s.free_slot_i = next_free;
+        slot.range = std::mem::ManuallyDrop::new(range);
+    } else {
+        index = s.slots.size as c_int;
+        let slot = DecorRangeSlot {
+            range: std::mem::ManuallyDrop::new(range),
+        };
+        s.slots.push(slot);
+    }
+
+    // Access the range fields through ManuallyDrop union field
+    let (row, col) = unsafe {
+        let slot_ptr = s.slots.items.add(index as usize);
+        let range_ref = &*slot_ptr.cast::<DecorRange>();
+        (range_ref.start_row, range_ref.start_col)
+    };
+
+    let count = s.ranges_i.size as c_int;
+    let indices = s.ranges_i.items;
+    let slots = s.slots.items;
+
+    let mut begin = s.future_begin;
+    let mut end = count;
+    while begin < end {
+        let mid = begin + ((end - begin) >> 1);
+        let slot_idx = *indices.add(mid as usize);
+        // Cast slot ptr to range ptr (range is first union variant, same address)
+        let mr = slots.add(slot_idx as usize).cast::<DecorRange>();
+        let mrow = (*mr).start_row;
+        let mcol = (*mr).start_col;
+        if mrow < row || (mrow == row && mcol <= col) {
+            begin = mid + 1;
+            if mrow == row && mcol == col {
+                break;
+            }
+        } else {
+            end = mid;
+        }
+    }
+
+    // Grow ranges_i by 1 (push a placeholder)
+    s.ranges_i.push(0);
+
+    // Memmove to make room at `begin`
+    let item_ptr = s.ranges_i.items.add(begin as usize);
+    std::ptr::copy(item_ptr, item_ptr.add(1), (count - begin) as usize);
+    *item_ptr = index;
+}
+
+/// Insert a virtual text range into DecorState.
+///
+/// Constructs a DecorRange for a virtual text/lines decoration and inserts it.
+/// Rust implementation replacing C `nvim_decor_range_insert_vt`.
+///
+/// # Safety
+/// `state_ptr` and `vt_ptr` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_decor_range_insert_vt(
+    state_ptr: crate::DecorStateHandle,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+    vt_ptr: DecorVtHandle,
+    owned: bool,
+    kind: c_int,
+    priority_internal: u32,
+) {
+    if state_ptr.is_null() {
+        return;
+    }
+    let range = DecorRange {
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        ordering: 0, // assigned in decor_range_insert
+        priority_internal,
+        owned,
+        kind: kind as u8,
+        _pad: [0; 6],
+        data: DecorRangeData {
+            vt: vt_ptr.0.cast(),
+        },
+        attr_id: 0,
+        draw_col: -10,
+    };
+    decor_range_insert(state_ptr, range);
+}
+
+/// Insert a highlight range into DecorState.
+///
+/// Constructs a DecorRange with a copy of the DecorSignHighlight and inserts it.
+/// Rust implementation replacing C `nvim_decor_range_insert_hl`.
+///
+/// # Safety
+/// `state_ptr` and `sh_ptr` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_decor_range_insert_hl(
+    state_ptr: crate::DecorStateHandle,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+    sh_ptr: DecorShHandle,
+    owned: bool,
+    priority_internal: u32,
+    attr_id: c_int,
+) {
+    if state_ptr.is_null() {
+        return;
+    }
+    let sh = std::ptr::read(sh_ptr.0.cast::<DecorSignHighlight>());
+    let range = DecorRange {
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        ordering: 0,
+        priority_internal,
+        owned,
+        kind: crate::DecorKind::Highlight as u8,
+        _pad: [0; 6],
+        data: DecorRangeData {
+            sh: std::mem::ManuallyDrop::new(sh),
+        },
+        attr_id,
+        draw_col: -10,
+    };
+    decor_range_insert(state_ptr, range);
+}
+
+/// Insert a UI watched range into DecorState.
+///
+/// Constructs a DecorRange for a UI-watched decoration and inserts it.
+/// Rust implementation replacing C `nvim_decor_range_insert_ui`.
+///
+/// # Safety
+/// `state_ptr` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_decor_range_insert_ui(
+    state_ptr: crate::DecorStateHandle,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+    ns_id: u32,
+    mark_id: u32,
+    pos: c_int,
+    owned: bool,
+    priority_internal: u32,
+    attr_id: c_int,
+) {
+    if state_ptr.is_null() {
+        return;
+    }
+    let range = DecorRange {
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        ordering: 0,
+        priority_internal,
+        owned,
+        kind: crate::DecorKind::UIWatched as u8,
+        _pad: [0; 6],
+        data: DecorRangeData {
+            ui: std::mem::ManuallyDrop::new(DecorRangeUiData {
+                ns_id,
+                mark_id,
+                pos,
+            }),
+        },
+        attr_id,
+        draw_col: -10,
+    };
+    decor_range_insert(state_ptr, range);
 }
 
 extern "C" {
