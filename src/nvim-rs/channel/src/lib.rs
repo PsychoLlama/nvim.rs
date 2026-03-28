@@ -63,6 +63,49 @@ extern "C" {
 
     /// Free memory. Defined in memory.c.
     fn xfree(ptr: *mut c_void);
+
+    // --- Phase 2 FFI ---
+
+    /// Allocate a VimL list. Defined in eval/typval.c.
+    /// kListLenMayKnow = -3
+    fn tv_list_alloc(len: isize) -> *mut c_void;
+    /// Append a string item to a list. Defined in eval/typval.c.
+    fn tv_list_append_string(l: *mut c_void, s: *const std::ffi::c_char, len: isize);
+    /// Write bytes to a list (encode_list_write). Defined in eval/encode.c.
+    fn encode_list_write(data: *mut c_void, buf: *const std::ffi::c_char, len: usize);
+    /// Increment list reference count. Defined in eval_shim.c (nvim_tv_list_ref shim).
+    fn nvim_tv_list_ref(l: *mut c_void);
+    /// Find a key in a dict. Defined in eval/typval.c.
+    fn tv_dict_find(d: *mut c_void, key: *const std::ffi::c_char, len: isize) -> *mut c_void;
+    /// Add a list to a dict. Defined in eval/typval.c.
+    fn tv_dict_add_list(
+        d: *mut c_void,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        list: *mut c_void,
+    ) -> c_int;
+    /// Emit an error message (variadic). Defined in message.c.
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    /// Call a Callback with arguments. Defined in eval.c.
+    fn callback_call(
+        cb: *mut CallbackT,
+        argcount: c_int,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+    ) -> bool;
+    /// Clear a typval_T value. Defined in eval/typval.c.
+    fn tv_clear(tv: *mut c_void);
+    /// Append bytes to a garray. Defined in garray.c.
+    fn ga_concat_len(ga: *mut c_void, s: *const std::ffi::c_char, len: usize);
+    /// Compute UTF-8 sequence length with upper bound. Defined in mbyte.c.
+    fn utf_ptr2len_len(p: *const std::ffi::c_char, size: c_int) -> c_int;
+    /// Feed data into a terminal. Defined in terminal.c.
+    fn terminal_receive(term: *mut c_void, data: *const std::ffi::c_char, len: usize);
+    /// Close a terminal. Defined in terminal.c.
+    fn terminal_close(termpp: *mut *mut c_void, status: c_int);
+
+    /// e_streamkey error string. Defined in errors.h.
+    static e_streamkey: std::ffi::c_char;
 }
 
 // =============================================================================
@@ -431,8 +474,338 @@ pub unsafe extern "C" fn channel_init() {
 }
 
 // =============================================================================
+// Migrated functions (Phase 2): callback/event processing chain
+// =============================================================================
+
+/// Convert a binary byte array to a readfile()-style VimL list.
+///
+/// The list always starts with an empty string `['']`, and newlines within
+/// `buf` delimit additional list entries.
+///
+/// # Safety
+///
+/// `buf` must point to `len` valid bytes (or be null if `len == 0`).
+// Pointer to empty C string for use in buffer_to_tv_list
+const EMPTY_CSTR: *const std::ffi::c_char = c"".as_ptr();
+// Pointer to "exit\0" C string for use in channel_callback_call
+const EXIT_CSTR: *const std::ffi::c_char = c"exit".as_ptr();
+
+unsafe fn buffer_to_tv_list(buf: *const std::ffi::c_char, len: usize) -> *mut c_void {
+    // kListLenMayKnow = -3
+    let l = tv_list_alloc(-3isize);
+    // Empty buffer represented as [''] - same as tv_list_append_string(l, "", 0)
+    tv_list_append_string(l, EMPTY_CSTR, 0);
+    if len > 0 {
+        encode_list_write(l, buf, len);
+    }
+    l
+}
+
+/// Schedule a deferred `on_channel_event` call for the channel.
+///
+/// This is a static helper; it does not need to be exported.
+///
+/// # Safety
+///
+/// `chan` must be a valid pointer to a `Channel`.
+unsafe fn schedule_channel_event(chan: *mut ChannelT) {
+    if !(*chan).callback_scheduled {
+        if !(*chan).callback_busy {
+            let event = make_event(on_channel_event as _, chan.cast());
+            multiqueue_put_event((*chan).events, event);
+            channel_incref(chan);
+        }
+        (*chan).callback_scheduled = true;
+    }
+}
+
+/// Deferred event callback: processes buffered channel events.
+///
+/// Signature matches `argv_callback`.
+///
+/// # Safety
+///
+/// `argv[0]` must be a valid `Channel *`.
+#[no_mangle]
+pub unsafe extern "C" fn on_channel_event(argv: *mut *mut c_void) {
+    let chan = (*argv).cast::<ChannelT>();
+
+    (*chan).callback_busy = true;
+    (*chan).callback_scheduled = false;
+
+    let exit_status = (*chan).exit_status;
+    channel_reader_callbacks(chan, &raw mut (*chan).on_data);
+    channel_reader_callbacks(chan, &raw mut (*chan).on_stderr);
+    if exit_status > -1 {
+        channel_callback_call(chan, std::ptr::null_mut());
+        (*chan).exit_status = -1;
+    }
+
+    (*chan).callback_busy = false;
+    if (*chan).callback_scheduled {
+        // further callback was deferred to avoid recursion
+        let event = make_event(on_channel_event as _, chan.cast());
+        multiqueue_put_event((*chan).events, event);
+        channel_incref(chan);
+    }
+
+    channel_decref(chan);
+}
+
+/// Dispatch reader callbacks (buffered or unbuffered).
+///
+/// # Safety
+///
+/// `chan` and `reader` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn channel_reader_callbacks(
+    chan: *mut ChannelT,
+    reader: *mut CallbackReaderT,
+) {
+    if (*reader).buffered {
+        if (*reader).eof {
+            if (*reader).self_.is_null() {
+                channel_callback_call(chan, reader);
+            } else if tv_dict_find((*reader).self_, (*reader).type_, -1).is_null() {
+                let buf_len = (*reader).buffer.ga_len;
+                let data = buffer_to_tv_list(
+                    (*reader).buffer.ga_data.cast(),
+                    if buf_len > 0 {
+                        buf_len.unsigned_abs() as usize
+                    } else {
+                        0
+                    },
+                );
+                let key_len = libc_strlen((*reader).type_);
+                tv_dict_add_list((*reader).self_, (*reader).type_, key_len, data);
+            } else {
+                // e_streamkey is a format string with %s and %" PRIu64
+                semsg(&raw const e_streamkey, (*reader).type_, (*chan).id);
+            }
+            (*reader).eof = false;
+        }
+    } else {
+        let is_eof = (*reader).eof;
+        if (*reader).buffer.ga_len > 0 {
+            channel_callback_call(chan, reader);
+        }
+        // if the stream reached eof, invoke extra callback with no data
+        if is_eof {
+            channel_callback_call(chan, reader);
+            (*reader).eof = false;
+        }
+    }
+}
+
+/// Build typval arguments and call the channel's callback.
+///
+/// If `reader` is non-null, builds a list from the reader's buffer and calls
+/// the reader's callback. Otherwise calls `on_exit` with the exit status.
+///
+/// # Safety
+///
+/// `chan` must be valid. `reader` may be null (exit callback case).
+#[no_mangle]
+pub unsafe extern "C" fn channel_callback_call(chan: *mut ChannelT, reader: *mut CallbackReaderT) {
+    use nvim_eval::typval::TypvalT;
+
+    // Stack-allocate 3 typval_T arguments (16 bytes each)
+    let mut argv: [TypvalT; 3] = [
+        TypvalT {
+            v_type: 0,
+            v_lock: 0,
+            vval: nvim_eval::typval::TypvalVval { v_number: 0 },
+        },
+        TypvalT {
+            v_type: 0,
+            v_lock: 0,
+            vval: nvim_eval::typval::TypvalVval { v_number: 0 },
+        },
+        TypvalT {
+            v_type: 0,
+            v_lock: 0,
+            vval: nvim_eval::typval::TypvalVval { v_number: 0 },
+        },
+    ];
+
+    // argv[0] = channel id (VAR_NUMBER = 1)
+    argv[0].v_type = 1; // VAR_NUMBER
+    argv[0].v_lock = 0; // VAR_UNLOCKED
+    argv[0].vval.v_number = i64::from_ne_bytes((*chan).id.to_ne_bytes());
+
+    let cb: *mut CallbackT = if reader.is_null() {
+        // exit callback: argv[1] = exit status (VAR_NUMBER = 1)
+        argv[1].v_type = 1; // VAR_NUMBER
+        argv[1].v_lock = 0; // VAR_UNLOCKED
+        argv[1].vval.v_number = i64::from((*chan).exit_status);
+        // argv[2] = "exit" string (VAR_STRING = 2)
+        argv[2].vval.v_string = EXIT_CSTR.cast_mut();
+        &raw mut (*chan).on_exit
+    } else {
+        // argv[1] = list (VAR_LIST = 4)
+        let buf_len = (*reader).buffer.ga_len;
+        let list = buffer_to_tv_list(
+            (*reader).buffer.ga_data.cast(),
+            if buf_len > 0 {
+                buf_len.unsigned_abs() as usize
+            } else {
+                0
+            },
+        );
+        nvim_tv_list_ref(list);
+        ga_clear((&raw mut (*reader).buffer).cast());
+        argv[1].v_type = 4; // VAR_LIST
+        argv[1].v_lock = 0; // VAR_UNLOCKED
+        argv[1].vval.v_list = list;
+        // argv[2] = type string (VAR_STRING = 2)
+        argv[2].vval.v_string = (*reader).type_.cast_mut();
+        &raw mut (*reader).cb
+    };
+
+    argv[2].v_type = 2; // VAR_STRING
+    argv[2].v_lock = 0; // VAR_UNLOCKED
+
+    // rettv as a zero-initialized typval_T on the stack (VAR_UNKNOWN = 0)
+    let mut rettv = TypvalT {
+        v_type: 0,
+        v_lock: 0,
+        vval: nvim_eval::typval::TypvalVval { v_number: 0 },
+    };
+    callback_call(cb, 3, argv.as_mut_ptr().cast(), (&raw mut rettv).cast());
+    tv_clear((&raw mut rettv).cast());
+}
+
+/// Handle incoming data from a channel stream.
+///
+/// If the channel has a terminal, feeds data to it (handling incomplete UTF-8).
+/// If a callback reader is set, buffers the data and schedules the callback.
+///
+/// Returns number of bytes consumed.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+unsafe fn on_channel_output_impl(
+    chan: *mut ChannelT,
+    buf: *const std::ffi::c_char,
+    mut count: usize,
+    eof: bool,
+    reader: *mut CallbackReaderT,
+) -> usize {
+    if !(*chan).term.is_null() {
+        if count > 0 {
+            let mut p = buf;
+            let end = buf.add(count);
+            while p < end {
+                // end.offset_from(p) is always positive here (p < end)
+                let remaining = c_int::try_from(end.offset_from(p)).unwrap_or(c_int::MAX);
+                let clen = utf_ptr2len_len(p, remaining);
+                if clen > remaining {
+                    count = p.offset_from(buf).unsigned_abs();
+                    break;
+                }
+                p = p.add(clen.unsigned_abs() as usize);
+            }
+        }
+        terminal_receive((*chan).term, buf, count);
+    }
+
+    if eof {
+        (*reader).eof = true;
+    }
+
+    // callback_reader_set: cb.type != kCallbackNone || self != NULL
+    if (*reader).cb.cb_type != 0 || !(*reader).self_.is_null() {
+        ga_concat_len((&raw mut (*reader).buffer).cast(), buf, count);
+        schedule_channel_event(chan);
+    }
+
+    count
+}
+
+/// RStream read callback for stdout data.
+///
+/// Signature matches `stream_read_cb`.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn on_channel_data(
+    _stream: *mut c_void,
+    buf: *const std::ffi::c_char,
+    count: usize,
+    data: *mut c_void,
+    eof: bool,
+) -> usize {
+    let chan = data.cast::<ChannelT>();
+    on_channel_output_impl(chan, buf, count, eof, &raw mut (*chan).on_data)
+}
+
+/// RStream read callback for stderr data.
+///
+/// Signature matches `stream_read_cb`.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn on_job_stderr(
+    _stream: *mut c_void,
+    buf: *const std::ffi::c_char,
+    count: usize,
+    data: *mut c_void,
+    eof: bool,
+) -> usize {
+    let chan = data.cast::<ChannelT>();
+    on_channel_output_impl(chan, buf, count, eof, &raw mut (*chan).on_stderr)
+}
+
+/// Process exit callback for proc channels.
+///
+/// Signature matches `proc_exit_cb`: `fn(proc: *mut Proc, status: c_int, data: *mut c_void)`.
+///
+/// # Safety
+///
+/// `data` must be a valid `Channel *`.
+#[no_mangle]
+pub unsafe extern "C" fn channel_proc_exit_cb(
+    _proc: *mut c_void,
+    status: c_int,
+    data: *mut c_void,
+) {
+    let chan = data.cast::<ChannelT>();
+    if !(*chan).term.is_null() {
+        terminal_close(&raw mut (*chan).term, status);
+    }
+
+    // If process did not exit, we only closed the handle of a detached process.
+    let exited = status >= 0;
+    if exited && (*chan).on_exit.cb_type != 0 {
+        // kCallbackNone = 0
+        schedule_channel_event(chan);
+        (*chan).exit_status = status;
+    }
+
+    channel_decref(chan);
+}
+
+// =============================================================================
 // Internal helpers
 // =============================================================================
+
+/// Compute `strlen` for a C string pointer (safe wrapper).
+#[inline]
+unsafe fn libc_strlen(s: *const std::ffi::c_char) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
 
 /// Build an `EventT` with a single pointer argument.
 ///

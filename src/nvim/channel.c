@@ -63,6 +63,9 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 // Rust implementations in channel crate (src/nvim-rs/channel/src/lib.rs)
 extern void free_channel_event(void **argv);
 extern void close_cb(Stream *stream, void *data);
+extern size_t on_channel_data(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+extern size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+extern void channel_proc_exit_cb(Proc *proc, int status, void *data);
 
 // Rust implementation in nvim-event crate
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
@@ -614,189 +617,10 @@ retfree:
   return written;
 }
 
-/// Convert binary byte array to a readfile()-style list
-///
-/// @param[in]  buf  Array to convert.
-/// @param[in]  len  Array length.
-///
-/// @return [allocated] Converted list.
-static inline list_T *buffer_to_tv_list(const char *const buf, const size_t len)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE
-{
-  list_T *const l = tv_list_alloc(kListLenMayKnow);
-  // Empty buffer should be represented by [''], encode_list_write() thinks
-  // empty list is fine for the case.
-  tv_list_append_string(l, "", 0);
-  if (len > 0) {
-    encode_list_write(l, buf, len);
-  }
-  return l;
-}
-
-size_t on_channel_data(RStream *stream, const char *buf, size_t count, void *data, bool eof)
-{
-  Channel *chan = data;
-  return on_channel_output(stream, chan, buf, count, eof, &chan->on_data);
-}
-
-size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data, bool eof)
-{
-  Channel *chan = data;
-  return on_channel_output(stream, chan, buf, count, eof, &chan->on_stderr);
-}
-
-static size_t on_channel_output(RStream *stream, Channel *chan, const char *buf, size_t count,
-                                bool eof, CallbackReader *reader)
-{
-  if (chan->term) {
-    if (count) {
-      const char *p = buf;
-      const char *end = buf + count;
-      while (p < end) {
-        // Don't pass incomplete UTF-8 sequences to libvterm. #16245
-        // Composing chars can be passed separately, so utf_ptr2len_len() is enough.
-        int clen = utf_ptr2len_len(p, (int)(end - p));
-        if (clen > end - p) {
-          count = (size_t)(p - buf);
-          break;
-        }
-        p += clen;
-      }
-    }
-
-    terminal_receive(chan->term, buf, count);
-  }
-
-  if (eof) {
-    reader->eof = true;
-  }
-
-  if (callback_reader_set(*reader)) {
-    ga_concat_len(&reader->buffer, buf, count);
-    schedule_channel_event(chan);
-  }
-
-  return count;
-}
-
-/// schedule the necessary callbacks to be invoked as a deferred event
-static void schedule_channel_event(Channel *chan)
-{
-  if (!chan->callback_scheduled) {
-    if (!chan->callback_busy) {
-      multiqueue_put(chan->events, on_channel_event, chan);
-      channel_incref(chan);
-    }
-    chan->callback_scheduled = true;
-  }
-}
-
-static void on_channel_event(void **args)
-{
-  Channel *chan = (Channel *)args[0];
-
-  chan->callback_busy = true;
-  chan->callback_scheduled = false;
-
-  int exit_status = chan->exit_status;
-  channel_reader_callbacks(chan, &chan->on_data);
-  channel_reader_callbacks(chan, &chan->on_stderr);
-  if (exit_status > -1) {
-    channel_callback_call(chan, NULL);
-    chan->exit_status = -1;
-  }
-
-  chan->callback_busy = false;
-  if (chan->callback_scheduled) {
-    // further callback was deferred to avoid recursion.
-    multiqueue_put(chan->events, on_channel_event, chan);
-    channel_incref(chan);
-  }
-
-  channel_decref(chan);
-}
-
-void channel_reader_callbacks(Channel *chan, CallbackReader *reader)
-{
-  if (reader->buffered) {
-    if (reader->eof) {
-      if (reader->self) {
-        if (tv_dict_find(reader->self, reader->type, -1) == NULL) {
-          list_T *data = buffer_to_tv_list(reader->buffer.ga_data,
-                                           (size_t)reader->buffer.ga_len);
-          tv_dict_add_list(reader->self, reader->type, strlen(reader->type),
-                           data);
-        } else {
-          semsg(_(e_streamkey), reader->type, chan->id);
-        }
-      } else {
-        channel_callback_call(chan, reader);
-      }
-      reader->eof = false;
-    }
-  } else {
-    bool is_eof = reader->eof;
-    if (reader->buffer.ga_len > 0) {
-      channel_callback_call(chan, reader);
-    }
-    // if the stream reached eof, invoke extra callback with no data
-    if (is_eof) {
-      channel_callback_call(chan, reader);
-      reader->eof = false;
-    }
-  }
-}
-
-static void channel_proc_exit_cb(Proc *proc, int status, void *data)
-{
-  Channel *chan = data;
-  if (chan->term) {
-    terminal_close(&chan->term, status);
-  }
-
-  // If process did not exit, we only closed the handle of a detached process.
-  bool exited = (status >= 0);
-  if (exited && chan->on_exit.type != kCallbackNone) {
-    schedule_channel_event(chan);
-    chan->exit_status = status;
-  }
-
-  channel_decref(chan);
-}
-
-static void channel_callback_call(Channel *chan, CallbackReader *reader)
-{
-  Callback *cb;
-  typval_T argv[4];
-
-  argv[0].v_type = VAR_NUMBER;
-  argv[0].v_lock = VAR_UNLOCKED;
-  argv[0].vval.v_number = (varnumber_T)chan->id;
-
-  if (reader) {
-    argv[1].v_type = VAR_LIST;
-    argv[1].v_lock = VAR_UNLOCKED;
-    argv[1].vval.v_list = buffer_to_tv_list(reader->buffer.ga_data,
-                                            (size_t)reader->buffer.ga_len);
-    tv_list_ref(argv[1].vval.v_list);
-    ga_clear(&reader->buffer);
-    cb = &reader->cb;
-    argv[2].vval.v_string = (char *)reader->type;
-  } else {
-    argv[1].v_type = VAR_NUMBER;
-    argv[1].v_lock = VAR_UNLOCKED;
-    argv[1].vval.v_number = chan->exit_status;
-    cb = &chan->on_exit;
-    argv[2].vval.v_string = "exit";
-  }
-
-  argv[2].v_type = VAR_STRING;
-  argv[2].v_lock = VAR_UNLOCKED;
-
-  typval_T rettv = TV_INITIAL_VALUE;
-  callback_call(cb, 3, argv, &rettv);
-  tv_clear(&rettv);
-}
+// buffer_to_tv_list, on_channel_data, on_job_stderr, on_channel_output (static),
+// schedule_channel_event (static), on_channel_event (static), channel_reader_callbacks,
+// channel_proc_exit_cb (static), channel_callback_call (static)
+// -- all implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 /// Open terminal for channel
 ///

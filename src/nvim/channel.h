@@ -59,6 +59,12 @@ void callback_reader_start(CallbackReader *reader, const char *type);
 void close_cb(Stream *stream, void *data);
 void free_channel_event(void **argv);
 int int64_t_cmp(const void *pa, const void *pb);
+void on_channel_event(void **argv);
+void channel_reader_callbacks(Channel *chan, CallbackReader *reader);
+void channel_callback_call(Channel *chan, CallbackReader *reader);
+size_t on_channel_data(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+void channel_proc_exit_cb(Proc *proc, int status, void *data);
 
 static inline bool callback_reader_set(CallbackReader reader)
 {
