@@ -2,10 +2,8 @@
 
 #include <assert.h>
 #include <lauxlib.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,8 +25,6 @@
 #include "nvim/eval/userfunc.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds_defs.h"
-#include "nvim/ex_session.h"
-#include "nvim/fuzzy.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/getchar.h"
@@ -49,8 +45,6 @@
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/pos_defs.h"
-#include "nvim/regexp.h"
-#include "nvim/regexp_defs.h"
 #include "nvim/runtime.h"
 #include "nvim/state_defs.h"
 #include "nvim/strings.h"
@@ -73,24 +67,13 @@ static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
 // Each mapping is put in one of the MAX_MAPHASH hash lists,
 // to speed up finding it.
 static mapblock_T *(maphash[MAX_MAPHASH]) = { 0 };
-
-// Make a hash value for a mapping.
-// "mode" is the lower 4 bits of the State for the mapping.
-// "c1" is the first character of the "lhs".
-// Returns a value between 0 and 255, index in maphash.
-// Put Normal/Visual mode mappings mostly separately from Insert/Cmdline mode.
+// Hash index for mode+first-char; NV modes use c1, IC modes use c1^0x80.
 #define MAP_HASH(mode, \
                  c1) (((mode) & \
                        (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | \
                         MODE_OP_PENDING | MODE_TERMINAL)) ? (c1) : ((c1) ^ 0x80))
 
-/// All possible |:map-arguments| usable in a |:map| command.
-///
-/// The <special> argument has no effect on mappings and is excluded from this
-/// struct declaration. |:noremap| is included, since it behaves like a map
-/// argument when used in a mapping.
-///
-/// @see mapblock_T
+/// All possible |:map-arguments| usable in a |:map| command. @see mapblock_T
 struct map_arguments {
   bool buffer;
   bool expr;
@@ -100,24 +83,14 @@ struct map_arguments {
   bool silent;
   bool unique;
   bool replace_keycodes;
-
-  /// The {lhs} of the mapping.
-  ///
-  /// vim limits this to MAXMAPLEN characters, allowing us to use a static
-  /// buffer. Setting lhs_len to a value larger than MAXMAPLEN can signal
-  /// that {lhs} was too long and truncated.
-  char lhs[MAXMAPLEN + 1];
+  char lhs[MAXMAPLEN + 1];  ///< {lhs}; lhs_len > MAXMAPLEN signals truncation
   size_t lhs_len;
-
-  /// Unsimplifed {lhs} of the mapping. If no simplification has been done then alt_lhs_len is 0.
-  char alt_lhs[MAXMAPLEN + 1];
+  char alt_lhs[MAXMAPLEN + 1];  ///< unsimplified {lhs}; alt_lhs_len==0 if no simplification
   size_t alt_lhs_len;
-
   char *rhs;  ///< The {rhs} of the mapping.
   size_t rhs_len;
   LuaRef rhs_lua;  ///< lua function as {rhs}
   bool rhs_is_noop;  ///< True when the {rhs} should be <Nop>.
-
   char *orig_rhs;  ///< The original text of the {rhs}.
   size_t orig_rhs_len;
   char *desc;  ///< map description
@@ -152,7 +125,6 @@ static const char e_entries_missing_in_mapset_dict_argument[]
   = N_("E460: Entries missing in mapset() dict argument");
 static const char e_illegal_map_mode_string_str[]
   = N_("E1276: Illegal map mode string: '%s'");
-
 
 /// @param local  true for buffer-local map
 static void showmap(mapblock_T *mp, bool local)
@@ -222,7 +194,6 @@ static void showmap(mapblock_T *mp, bool local)
   msg_clr_eos();
 }
 
-
 /// @param args  "rhs", "rhs_lua", "orig_rhs", "expr", "silent", "nowait",
 ///              "replace_keycodes" and "desc" fields are used.
 /// @param sid  0 to use current_sctx
@@ -276,24 +247,11 @@ static mapblock_T *map_add(buf_T *buf, mapblock_T **map_table, mapblock_T **abbr
   return mp;
 }
 
-
-
-
-// Check for an abbreviation.
-// Cursor is at ptr[col].
+// Check for an abbreviation. Cursor is at ptr[col].
 // When inserting, mincol is where insert started.
 // For the command line, mincol is what is to be skipped over.
 // "c" is the character typed before check_abbr was called.  It may have
 // ABBR_OFF added to avoid prepending a CTRL-V to it.
-//
-// Historic vi practice: The last character of an abbreviation must be an id
-// character ([a-zA-Z0-9_]). The characters in front of it must be all id
-// characters or all non-id characters. This allows for abbr. "#i" to
-// "#include".
-//
-// Vim addition: Allow for abbreviations that end in a non-keyword character.
-// Then there must be white space before the abbr.
-//
 // Return true if there is an abbreviation, false if not.
 bool check_abbr(int c, char *ptr, int col, int mincol)
 {
@@ -509,14 +467,7 @@ void f_hasmapto(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = map_to_exists(name, mode, abbr);
 }
 
-/// Fill a Dict with all applicable maparg() like dictionaries
-///
-/// @param mp            The maphash that contains the mapping information
-/// @param buffer_value  The "buffer" value
-/// @param abbr          True if abbreviation
-/// @param compatible    True for compatible with old maparg() dict
-///
-/// @return  Dict.
+/// Fill a Dict with all applicable maparg() like dictionaries.
 static Dict mapblock_fill_dict(const mapblock_T *const mp, const char *lhsrawalt,
                                const int buffer_value, const bool abbr, const bool compatible,
                                Arena *arena)
@@ -529,12 +480,8 @@ static Dict mapblock_fill_dict(const mapblock_T *const mp, const char *lhsrawalt
   int noremap_value;
 
   if (compatible) {
-    // Keep old compatible behavior
-    // This is unable to determine whether a mapping is a <script> mapping
     noremap_value = !!mp->m_noremap;
   } else {
-    // Distinguish between <script> mapping
-    // If it's not a <script> mapping, check if it's a noremap
     noremap_value = mp->m_noremap == REMAP_SCRIPT ? 2 : !!mp->m_noremap;
   }
 
@@ -552,7 +499,6 @@ static Dict mapblock_fill_dict(const mapblock_T *const mp, const char *lhsrawalt
   PUT_C(dict, "lhs", CSTR_AS_OBJ(lhs));
   PUT_C(dict, "lhsraw", CSTR_AS_OBJ(mp->m_keys));
   if (lhsrawalt != NULL) {
-    // Also add the value for the simplified entry.
     PUT_C(dict, "lhsrawalt", CSTR_AS_OBJ(lhsrawalt));
   }
   PUT_C(dict, "noremap", INTEGER_OBJ(noremap_value));
@@ -654,7 +600,6 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
   xfree(keys_buf);
   xfree(alt_keys_buf);
 }
-
 
 /// "mapset()" function
 void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1079,138 +1024,50 @@ ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena)
 }
 
 // Rust FFI accessor functions
-
-// Hash table accessors (mapblock_T fields now accessed directly via Rust #[repr(C)])
-
-mapblock_T *nvim_get_maphash_entry(int index)
-{
-  if (index < 0 || index >= MAX_MAPHASH) {
-    return NULL;
-  }
-  return maphash[index];
-}
-
+mapblock_T *nvim_get_maphash_entry(int index) { return (index >= 0 && index < MAX_MAPHASH) ? maphash[index] : NULL; }
 mapblock_T *nvim_get_first_abbr(void) { return first_abbr; }
-
-mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index)
-{
-  if (!buf || index < 0 || index >= MAX_MAPHASH) {
-    return NULL;
-  }
-  return buf->b_maphash[index];
-}
-
+mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index) { return (buf && index >= 0 && index < MAX_MAPHASH) ? buf->b_maphash[index] : NULL; }
 mapblock_T *nvim_buf_get_first_abbr(buf_T *buf) { return buf ? buf->b_first_abbr : NULL; }
-
-// p_cpo accessor for Rust
 const char *nvim_mapping_get_p_cpo(void) { return p_cpo; }
 
 // Static assertions for MapArguments struct layout (Rust #[repr(C)] must match)
-_Static_assert(sizeof(MapArguments) == 184,
-               "MapArguments size mismatch with Rust");
-_Static_assert(offsetof(struct map_arguments, buffer) == 0,
-               "MapArguments.buffer offset mismatch");
-_Static_assert(offsetof(struct map_arguments, lhs) == 8,
-               "MapArguments.lhs offset mismatch");
-_Static_assert(offsetof(struct map_arguments, rhs) == 136,
-               "MapArguments.rhs offset mismatch");
-_Static_assert(offsetof(struct map_arguments, rhs_lua) == 152,
-               "MapArguments.rhs_lua offset mismatch");
-_Static_assert(offsetof(struct map_arguments, desc) == 176,
-               "MapArguments.desc offset mismatch");
-
+_Static_assert(sizeof(MapArguments) == 184, "MapArguments size mismatch with Rust");
+_Static_assert(offsetof(struct map_arguments, buffer) == 0, "MapArguments.buffer offset mismatch");
+_Static_assert(offsetof(struct map_arguments, lhs) == 8, "MapArguments.lhs offset mismatch");
+_Static_assert(offsetof(struct map_arguments, rhs) == 136, "MapArguments.rhs offset mismatch");
+_Static_assert(offsetof(struct map_arguments, rhs_lua) == 152, "MapArguments.rhs_lua offset mismatch");
+_Static_assert(offsetof(struct map_arguments, desc) == 176, "MapArguments.desc offset mismatch");
 // Static assertions for mapblock_T layout (Rust MapblockT #[repr(C)] must match)
-_Static_assert(sizeof(mapblock_T) == 104,
-               "mapblock_T size mismatch with Rust MapblockT");
-_Static_assert(offsetof(mapblock_T, m_next) == 0,
-               "mapblock_T.m_next offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_alt) == 8,
-               "mapblock_T.m_alt offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_keys) == 16,
-               "mapblock_T.m_keys offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_str) == 24,
-               "mapblock_T.m_str offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_orig_str) == 32,
-               "mapblock_T.m_orig_str offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_luaref) == 40,
-               "mapblock_T.m_luaref offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_keylen) == 44,
-               "mapblock_T.m_keylen offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_mode) == 48,
-               "mapblock_T.m_mode offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_simplified) == 52,
-               "mapblock_T.m_simplified offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_noremap) == 56,
-               "mapblock_T.m_noremap offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_silent) == 60,
-               "mapblock_T.m_silent offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_nowait) == 61,
-               "mapblock_T.m_nowait offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_expr) == 62,
-               "mapblock_T.m_expr offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_script_ctx) == 64,
-               "mapblock_T.m_script_ctx offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_desc) == 88,
-               "mapblock_T.m_desc offset mismatch");
-_Static_assert(offsetof(mapblock_T, m_replace_keycodes) == 96,
-               "mapblock_T.m_replace_keycodes offset mismatch");
+_Static_assert(sizeof(mapblock_T) == 104, "mapblock_T size mismatch with Rust MapblockT");
+_Static_assert(offsetof(mapblock_T, m_next) == 0, "mapblock_T.m_next offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_alt) == 8, "mapblock_T.m_alt offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_keys) == 16, "mapblock_T.m_keys offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_str) == 24, "mapblock_T.m_str offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_orig_str) == 32, "mapblock_T.m_orig_str offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_luaref) == 40, "mapblock_T.m_luaref offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_keylen) == 44, "mapblock_T.m_keylen offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_mode) == 48, "mapblock_T.m_mode offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_simplified) == 52, "mapblock_T.m_simplified offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_noremap) == 56, "mapblock_T.m_noremap offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_silent) == 60, "mapblock_T.m_silent offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_nowait) == 61, "mapblock_T.m_nowait offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_expr) == 62, "mapblock_T.m_expr offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_script_ctx) == 64, "mapblock_T.m_script_ctx offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_desc) == 88, "mapblock_T.m_desc offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_replace_keycodes) == 96, "mapblock_T.m_replace_keycodes offset mismatch");
 
 // Langmap C accessors for Rust
-
-uint8_t nvim_langmap_mapchar_get(int index)
-{
-  if (index < 0 || index >= 256) {
-    return (uint8_t)index;
-  }
-  return langmap_mapchar[index];
-}
-
-void nvim_langmap_mapchar_set(int index, uint8_t value)
-{
-  if (index >= 0 && index < 256) {
-    langmap_mapchar[index] = value;
-  }
-}
-
+uint8_t nvim_langmap_mapchar_get(int index) { return (index >= 0 && index < 256) ? langmap_mapchar[index] : (uint8_t)index; }
+void nvim_langmap_mapchar_set(int index, uint8_t value) { if (index >= 0 && index < 256) { langmap_mapchar[index] = value; } }
 int nvim_mapping_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
-
 int nvim_mapping_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
-
-// Write accessors for Rust mutation primitives (Phase 5)
-
 void nvim_mapping_emsg_invarg(void) { emsg(_(e_invarg)); }
-
-void nvim_set_maphash_entry(int index, mapblock_T *mp)
-{
-  if (index >= 0 && index < MAX_MAPHASH) {
-    maphash[index] = mp;
-  }
-}
-
+void nvim_set_maphash_entry(int index, mapblock_T *mp) { if (index >= 0 && index < MAX_MAPHASH) { maphash[index] = mp; } }
 void nvim_set_first_abbr(mapblock_T *mp) { first_abbr = mp; }
-
-void nvim_buf_set_maphash_entry(buf_T *buf, int index, mapblock_T *mp)
-{
-  if (buf && index >= 0 && index < MAX_MAPHASH) {
-    buf->b_maphash[index] = mp;
-  }
-}
-
-void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp)
-{
-  if (buf) {
-    buf->b_first_abbr = mp;
-  }
-}
-
-// Remaining C accessors for buf_do_map / do_map Rust migration
-
-/// Wrapper for showmap() callable from Rust.
+void nvim_buf_set_maphash_entry(buf_T *buf, int index, mapblock_T *mp) { if (buf && index >= 0 && index < MAX_MAPHASH) { buf->b_maphash[index] = mp; } }
+void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp) { if (buf) { buf->b_first_abbr = mp; } }
 void nvim_showmap(mapblock_T *mp, int local) { showmap(mp, local != 0); }
 
-/// Wrapper for map_add() callable from Rust.
-/// @param is_buf_local  if true, uses buf->b_maphash / buf->b_first_abbr;
-///                      otherwise uses global maphash / first_abbr.
 mapblock_T *nvim_map_add(buf_T *buf, int is_buf_local, const char *keys,
                          void *args_ptr, int noremap, int mode,
                          int is_abbr, int sid, int lnum, int simplified)
@@ -1221,9 +1078,6 @@ mapblock_T *nvim_map_add(buf_T *buf, int is_buf_local, const char *keys,
   return map_add(buf, mt, at, keys, args, noremap, mode,
                  is_abbr != 0, (scid_T)sid, (linenr_T)lnum, simplified != 0);
 }
-
-/// Reuse an existing mapblock entry with new RHS data from args.
-/// This handles the complex field-update pattern from buf_do_map (lines 598-624).
 void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
                          int noremap, int mode, int simplified)
 {
@@ -1255,56 +1109,22 @@ void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
   mp->m_desc = args->desc;
 }
 
-// nvim_get_got_int, nvim_get_mapped_ctrl_c, nvim_set_mapped_ctrl_c,
-// nvim_msg_start already defined in other files — reuse those.
-
-/// Set the global no_abbr flag.
 void nvim_mapping_set_no_abbr(int val) { no_abbr = val != 0; }
-
-/// Get the buffer-local b_mapped_ctrl_c.
 int nvim_mapping_buf_get_mapped_ctrl_c(buf_T *buf) { return buf ? buf->b_mapped_ctrl_c : 0; }
-
-/// Set the buffer-local b_mapped_ctrl_c.
-void nvim_mapping_buf_set_mapped_ctrl_c(buf_T *buf, int val)
-{
-  if (buf) {
-    buf->b_mapped_ctrl_c = val;
-  }
-}
-
-/// Call msg_ext_set_kind("list_cmd") from Rust.
+void nvim_mapping_buf_set_mapped_ctrl_c(buf_T *buf, int val) { if (buf) { buf->b_mapped_ctrl_c = val; } }
 void nvim_mapping_msg_ext_set_kind_list_cmd(void) { msg_ext_set_kind("list_cmd"); }
-
-/// Display "No mapping found" or "No abbreviation found" message.
 void nvim_mapping_msg_no_mapping(int is_abbr)
 {
-  if (is_abbr) {
-    msg(_("No abbreviation found"), 0);
-  } else {
-    msg(_("No mapping found"), 0);
-  }
+  msg(is_abbr ? _("No abbreviation found") : _("No mapping found"), 0);
 }
-
-/// Wrapper for vim_iswordp().
 int nvim_vim_iswordp(const char *p) { return vim_iswordp(p); }
-
-/// Format a langmap error message into the provided buffer.
-/// msgid: 357 = E357 (matching missing), 358 = E358 (extra chars)
 void nvim_langmap_format_error(char *buf, size_t buflen, int msgid, const char *arg)
 {
   if (msgid == 357) {
-    snprintf(buf, buflen,
-             _("E357: 'langmap': Matching character missing for %s"), arg);
+    snprintf(buf, buflen, _("E357: 'langmap': Matching character missing for %s"), arg);
   } else if (msgid == 358) {
-    snprintf(buf, buflen,
-             _("E358: 'langmap': Extra characters after semicolon: %s"), arg);
+    snprintf(buf, buflen, _("E358: 'langmap': Extra characters after semicolon: %s"), arg);
   }
 }
-
-// Phase 8 C accessor functions for ex commands + abbreviation search
-
-/// Unescape K_SPECIAL sequences in a string (for abbreviation matching).
 void nvim_mapping_vim_unescape_ks(char *s) { vim_unescape_ks(s); }
-
-/// Get the current editor State for abbreviation mode matching.
 int nvim_mapping_get_state(void) { return State; }
