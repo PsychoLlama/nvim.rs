@@ -145,6 +145,11 @@ extern void rs_optval_free(OptVal o);
 
 // Rust implementations of spell functions
 extern int rs_find_region(const char *rp, const char *region);
+// Phase 1: slang lifecycle functions now implemented in Rust
+extern slang_T *rs_slang_alloc(char *lang);
+extern void rs_slang_free(slang_T *lp);
+extern void rs_slang_clear(slang_T *lp);
+extern void rs_slang_clear_sug(slang_T *lp);
 // spell_iswordp_w was static in C but is now exported from Rust
 extern bool spell_iswordp_w(const int *p, const win_T *wp);
 // Phase 5: functions now implemented in Rust (were static in C)
@@ -558,116 +563,19 @@ static void int_wordlist_spl(char *fname)
 /// Caller must fill "sl_next".
 slang_T *slang_alloc(char *lang)
   FUNC_ATTR_NONNULL_RET
-{
-  slang_T *lp = xcalloc(1, sizeof(slang_T));
-
-  if (lang != NULL) {
-    lp->sl_name = xstrdup(lang);
-  }
-  ga_init(&lp->sl_rep, sizeof(fromto_T), 10);
-  ga_init(&lp->sl_repsal, sizeof(fromto_T), 10);
-  lp->sl_compmax = MAXWLEN;
-  lp->sl_compsylmax = MAXWLEN;
-  hash_init(&lp->sl_wordcount);
-
-  return lp;
-}
+{ return rs_slang_alloc(lang); }
 
 // Free the contents of an slang_T and the structure itself.
 void slang_free(slang_T *lp)
-{
-  xfree(lp->sl_name);
-  xfree(lp->sl_fname);
-  slang_clear(lp);
-  xfree(lp);
-}
-
-/// Frees a salitem_T
-static void free_salitem(salitem_T *smp)
-{
-  xfree(smp->sm_lead);
-  // Don't free sm_oneof and sm_rules, they point into sm_lead.
-  xfree(smp->sm_to);
-  xfree(smp->sm_lead_w);
-  xfree(smp->sm_oneof_w);
-  xfree(smp->sm_to_w);
-}
-
-/// Frees a fromto_T
-static void free_fromto(fromto_T *ftp)
-{
-  xfree(ftp->ft_from);
-  xfree(ftp->ft_to);
-}
+{ rs_slang_free(lp); }
 
 // Clear an slang_T so that the file can be reloaded.
 void slang_clear(slang_T *lp)
-{
-  garray_T *gap;
-
-  XFREE_CLEAR(lp->sl_fbyts);
-  XFREE_CLEAR(lp->sl_kbyts);
-  XFREE_CLEAR(lp->sl_pbyts);
-
-  XFREE_CLEAR(lp->sl_fidxs);
-  XFREE_CLEAR(lp->sl_kidxs);
-  XFREE_CLEAR(lp->sl_pidxs);
-
-  GA_DEEP_CLEAR(&lp->sl_rep, fromto_T, free_fromto);
-  GA_DEEP_CLEAR(&lp->sl_repsal, fromto_T, free_fromto);
-
-  gap = &lp->sl_sal;
-  if (lp->sl_sofo) {
-    // "ga_len" is set to 1 without adding an item for latin1
-    GA_DEEP_CLEAR_PTR(gap);
-  } else {
-    // SAL items: free salitem_T items
-    GA_DEEP_CLEAR(gap, salitem_T, free_salitem);
-  }
-
-  for (int i = 0; i < lp->sl_prefixcnt; i++) {
-    vim_regfree(lp->sl_prefprog[i]);
-  }
-  lp->sl_prefixcnt = 0;
-  XFREE_CLEAR(lp->sl_prefprog);
-  XFREE_CLEAR(lp->sl_info);
-  XFREE_CLEAR(lp->sl_midword);
-
-  vim_regfree(lp->sl_compprog);
-  lp->sl_compprog = NULL;
-  XFREE_CLEAR(lp->sl_comprules);
-  XFREE_CLEAR(lp->sl_compstartflags);
-  XFREE_CLEAR(lp->sl_compallflags);
-
-  XFREE_CLEAR(lp->sl_syllable);
-  ga_clear(&lp->sl_syl_items);
-
-  ga_clear_strings(&lp->sl_comppat);
-
-  hash_clear_all(&lp->sl_wordcount, WC_KEY_OFF);
-  hash_init(&lp->sl_wordcount);
-
-  hash_clear_all(&lp->sl_map_hash, 0);
-
-  // Clear info from .sug file.
-  slang_clear_sug(lp);
-
-  lp->sl_compmax = MAXWLEN;
-  lp->sl_compminlen = 0;
-  lp->sl_compsylmax = MAXWLEN;
-  lp->sl_regions[0] = NUL;
-}
+{ rs_slang_clear(lp); }
 
 // Clear the info from the .sug file in "lp".
 void slang_clear_sug(slang_T *lp)
-{
-  XFREE_CLEAR(lp->sl_sbyts);
-  XFREE_CLEAR(lp->sl_sidxs);
-  close_spellbuf(lp->sl_sugbuf);
-  lp->sl_sugbuf = NULL;
-  lp->sl_sugloaded = false;
-  lp->sl_sugtime = 0;
-}
+{ rs_slang_clear_sug(lp); }
 
 // Load one spell file and store the info into a slang_T.
 // Invoked through do_in_runtimepath().

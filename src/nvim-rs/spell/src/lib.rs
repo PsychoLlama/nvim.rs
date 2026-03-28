@@ -48,7 +48,7 @@ pub mod wordtree;
 // Re-export types for cbindgen
 pub use check::{CaseType, SpellResult, WordLookupResult};
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 // =============================================================================
 // repr(C) Struct Definitions matching C layout exactly
@@ -4229,6 +4229,233 @@ pub unsafe extern "C" fn rs_init_syl_tab(slang: *mut SlangRaw) -> c_int {
         (*syl).sy_len = l as c_int;
     }
     0 // OK
+}
+
+// =============================================================================
+// Phase 1: Slang lifecycle functions
+// =============================================================================
+
+/// Structure matching C fromto_T layout.
+/// sizeof(fromto_T) = 16 bytes on 64-bit (two pointers).
+#[repr(C)]
+pub struct FromtoT {
+    pub ft_from: *mut c_char,
+    pub ft_to: *mut c_char,
+}
+
+extern "C" {
+    fn xfree(ptr: *mut c_void);
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn ga_init(gap: *mut GArrayRaw, itemsize: c_int, growsize: c_int);
+    fn ga_clear(gap: *mut GArrayRaw);
+    fn ga_clear_strings(gap: *mut GArrayRaw);
+    fn hash_init(ht: *mut HashtabRaw);
+    fn hash_clear_all(ht: *mut HashtabRaw, off: c_uint);
+    fn vim_regfree(prog: *mut c_void);
+    fn close_spellbuf(buf: *mut c_void);
+}
+
+/// Frees a fromto_T item (internal helper).
+unsafe fn free_fromto(ftp: *mut FromtoT) {
+    xfree((*ftp).ft_from.cast::<c_void>());
+    xfree((*ftp).ft_to.cast::<c_void>());
+}
+
+/// Frees a salitem_T item (internal helper).
+unsafe fn free_salitem_lifecycle(smp: *mut SalitemT) {
+    xfree((*smp).sm_lead.cast::<c_void>());
+    // sm_oneof and sm_rules point into sm_lead -- do not free them
+    xfree((*smp).sm_to.cast::<c_void>());
+    xfree((*smp).sm_lead_w.cast::<c_void>());
+    xfree((*smp).sm_oneof_w.cast::<c_void>());
+    xfree((*smp).sm_to_w.cast::<c_void>());
+}
+
+/// GA_DEEP_CLEAR for fromto_T: iterate garray items, free each, then ga_clear.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn ga_deep_clear_fromto(gap: *mut GArrayRaw) {
+    let len = (*gap).ga_len as usize;
+    let data = (*gap).ga_data as *mut FromtoT;
+    for i in 0..len {
+        free_fromto(data.add(i));
+    }
+    ga_clear(gap);
+}
+
+/// GA_DEEP_CLEAR for salitem_T: iterate garray items, free each, then ga_clear.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn ga_deep_clear_salitem(gap: *mut GArrayRaw) {
+    let len = (*gap).ga_len as usize;
+    let data = (*gap).ga_data as *mut SalitemT;
+    for i in 0..len {
+        free_salitem_lifecycle(data.add(i));
+    }
+    ga_clear(gap);
+}
+
+/// GA_DEEP_CLEAR_PTR for garray with pointer data: free each pointer, then ga_clear.
+/// Used for sl_sal when sl_sofo is true (ga_data contains *mut c_char pointers).
+#[allow(clippy::cast_sign_loss)]
+unsafe fn ga_deep_clear_ptr(gap: *mut GArrayRaw) {
+    let len = (*gap).ga_len as usize;
+    let data = (*gap).ga_data as *mut *mut c_void;
+    for i in 0..len {
+        xfree(*data.add(i));
+    }
+    ga_clear(gap);
+}
+
+/// Clear the .sug file info from a slang_T.
+/// Implements C: slang_clear_sug()
+///
+/// # Safety
+/// `lp` must be a valid pointer to a SlangRaw.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_slang_clear_sug(lp: *mut SlangRaw) {
+    // XFREE_CLEAR: free and set to null
+    xfree((*lp).sl_sbyts.cast::<c_void>());
+    (*lp).sl_sbyts = std::ptr::null_mut();
+    xfree((*lp).sl_sidxs.cast::<c_void>());
+    (*lp).sl_sidxs = std::ptr::null_mut();
+    close_spellbuf((*lp).sl_sugbuf);
+    (*lp).sl_sugbuf = std::ptr::null_mut();
+    (*lp).sl_sugloaded = false;
+    (*lp).sl_sugtime = 0;
+}
+
+/// Clear an slang_T so that the file can be reloaded.
+/// Implements C: slang_clear()
+///
+/// # Safety
+/// `lp` must be a valid pointer to a SlangRaw.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_slang_clear(lp: *mut SlangRaw) {
+    // XFREE_CLEAR tree byte/index arrays
+    xfree((*lp).sl_fbyts.cast::<c_void>());
+    (*lp).sl_fbyts = std::ptr::null_mut();
+    xfree((*lp).sl_kbyts.cast::<c_void>());
+    (*lp).sl_kbyts = std::ptr::null_mut();
+    xfree((*lp).sl_pbyts.cast::<c_void>());
+    (*lp).sl_pbyts = std::ptr::null_mut();
+    xfree((*lp).sl_fidxs.cast::<c_void>());
+    (*lp).sl_fidxs = std::ptr::null_mut();
+    xfree((*lp).sl_kidxs.cast::<c_void>());
+    (*lp).sl_kidxs = std::ptr::null_mut();
+    xfree((*lp).sl_pidxs.cast::<c_void>());
+    (*lp).sl_pidxs = std::ptr::null_mut();
+
+    // GA_DEEP_CLEAR sl_rep and sl_repsal (fromto_T items)
+    ga_deep_clear_fromto(std::ptr::addr_of_mut!((*lp).sl_rep));
+    ga_deep_clear_fromto(std::ptr::addr_of_mut!((*lp).sl_repsal));
+
+    // sl_sal: if sl_sofo use GA_DEEP_CLEAR_PTR, else GA_DEEP_CLEAR salitem_T
+    let sal_gap = std::ptr::addr_of_mut!((*lp).sl_sal);
+    if (*lp).sl_sofo {
+        // "ga_len" is set to 1 without adding an item for latin1
+        ga_deep_clear_ptr(sal_gap);
+    } else {
+        ga_deep_clear_salitem(sal_gap);
+    }
+
+    // Free prefix regex programs
+    let prefixcnt = (*lp).sl_prefixcnt as usize;
+    let prefprog = (*lp).sl_prefprog;
+    if !prefprog.is_null() {
+        for i in 0..prefixcnt {
+            vim_regfree(*prefprog.add(i));
+        }
+    }
+    (*lp).sl_prefixcnt = 0;
+    xfree((*lp).sl_prefprog.cast::<c_void>());
+    (*lp).sl_prefprog = std::ptr::null_mut();
+
+    // Free misc pointers
+    xfree((*lp).sl_info.cast::<c_void>());
+    (*lp).sl_info = std::ptr::null_mut();
+    xfree((*lp).sl_midword.cast::<c_void>());
+    (*lp).sl_midword = std::ptr::null_mut();
+
+    // Free compound regex
+    vim_regfree((*lp).sl_compprog);
+    (*lp).sl_compprog = std::ptr::null_mut();
+    xfree((*lp).sl_comprules.cast::<c_void>());
+    (*lp).sl_comprules = std::ptr::null_mut();
+    xfree((*lp).sl_compstartflags.cast::<c_void>());
+    (*lp).sl_compstartflags = std::ptr::null_mut();
+    xfree((*lp).sl_compallflags.cast::<c_void>());
+    (*lp).sl_compallflags = std::ptr::null_mut();
+
+    // Free syllable
+    xfree((*lp).sl_syllable.cast::<c_void>());
+    (*lp).sl_syllable = std::ptr::null_mut();
+    ga_clear(std::ptr::addr_of_mut!((*lp).sl_syl_items));
+
+    // Clear compound patterns
+    ga_clear_strings(std::ptr::addr_of_mut!((*lp).sl_comppat));
+
+    // Clear hash tables (WC_KEY_OFF = 2: wordcount_T.wc_count is u16 before the key string)
+    hash_clear_all(std::ptr::addr_of_mut!((*lp).sl_wordcount), 2);
+    hash_init(std::ptr::addr_of_mut!((*lp).sl_wordcount));
+    hash_clear_all(std::ptr::addr_of_mut!((*lp).sl_map_hash), 0);
+
+    // Clear sug file info
+    rs_slang_clear_sug(lp);
+
+    // Reset scalar fields (MAXWLEN = 254, fits in i32)
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        (*lp).sl_compmax = MAXWLEN as c_int;
+        (*lp).sl_compsylmax = MAXWLEN as c_int;
+    }
+    (*lp).sl_compminlen = 0;
+    (*lp).sl_regions[0] = 0; // NUL
+}
+
+/// Free an slang_T and its contents.
+/// Implements C: slang_free()
+///
+/// # Safety
+/// `lp` must be a valid pointer to a heap-allocated SlangRaw. After this call `lp` is invalid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_slang_free(lp: *mut SlangRaw) {
+    xfree((*lp).sl_name.cast::<c_void>());
+    xfree((*lp).sl_fname.cast::<c_void>());
+    rs_slang_clear(lp);
+    xfree(lp.cast::<c_void>());
+}
+
+/// Allocate and initialize a new slang_T for language `lang`.
+/// Implements C: slang_alloc()
+///
+/// # Safety
+/// `lang` must be NULL or a valid NUL-terminated C string. Returns a valid non-null pointer.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_slang_alloc(lang: *const c_char) -> *mut SlangRaw {
+    let lp = xcalloc(1, std::mem::size_of::<SlangRaw>()).cast::<SlangRaw>();
+    if !lang.is_null() {
+        (*lp).sl_name = xstrdup(lang);
+    }
+    // sizeof(fromto_T) = 16, fits in i32; MAXWLEN = 254, fits in i32
+    ga_init(
+        std::ptr::addr_of_mut!((*lp).sl_rep),
+        std::mem::size_of::<FromtoT>() as c_int,
+        10,
+    );
+    ga_init(
+        std::ptr::addr_of_mut!((*lp).sl_repsal),
+        std::mem::size_of::<FromtoT>() as c_int,
+        10,
+    );
+    (*lp).sl_compmax = MAXWLEN as c_int;
+    (*lp).sl_compsylmax = MAXWLEN as c_int;
+    hash_init(std::ptr::addr_of_mut!((*lp).sl_wordcount));
+    lp
 }
 
 #[cfg(test)]
