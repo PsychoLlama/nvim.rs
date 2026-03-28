@@ -599,7 +599,6 @@ extern "C" {
         no_overwrite: c_int,
     ) -> c_int;
     fn nvim_shada_cl_bufs_set_put(cl_bufs: *mut c_void, buf: *mut c_void);
-    fn nvim_shada_buf_get_changelistlen(buf: *const c_void) -> c_int;
     fn nvim_shada_changelist_get_entry(
         buf: *const c_void,
         idx: c_int,
@@ -6003,7 +6002,7 @@ unsafe fn rs_shada_apply_local_or_change(
         // Change entry: duplicate-detection loop (mirrors C nvim_shada_apply_local_or_change).
         nvim_shada_cl_bufs_set_put(cl_bufs, buf);
 
-        let cl_len = nvim_shada_buf_get_changelistlen(buf);
+        let cl_len = nvim_shada_buf_changelist_len(buf);
         let entry_ts = (*entry).timestamp;
 
         let mut i = cl_len;

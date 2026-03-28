@@ -469,7 +469,6 @@ int nvim_shada_oldfiles_has(void *oldfiles_set_handle, const ShadaEntry *entry)
 { return set_has(cstr_t, (Set(cstr_t) *)oldfiles_set_handle, entry->data.filemark.fname) ? 1 : 0; }
 void nvim_shada_cl_bufs_set_put(void *cl_bufs_handle, void *buf_handle)
 { set_put(ptr_t, (Set(ptr_t) *)cl_bufs_handle, buf_handle); }
-int nvim_shada_buf_get_changelistlen(const void *buf_handle) { return ((const buf_T *)buf_handle)->b_changelistlen; }
 void nvim_shada_changelist_get_entry(const void *buf_handle, int idx, uint64_t *out_ts, int64_t *out_lnum, int32_t *out_col)
 { const fmark_T *fm = &((const buf_T *)buf_handle)->b_changelist[idx]; *out_ts = (uint64_t)fm->timestamp; *out_lnum = (int64_t)fm->mark.lnum; *out_col = (int32_t)fm->mark.col; }
 void nvim_shada_changelist_insert_entry(void *buf_handle, int i,
