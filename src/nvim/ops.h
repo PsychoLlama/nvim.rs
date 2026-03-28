@@ -69,5 +69,6 @@ void shift_line(bool left, bool round, int amount, int call_changed_bytes);
 void adjust_cursor_eol(void);
 bcount_t get_region_bytecount(buf_T *buf, linenr_T start_lnum, linenr_T end_lnum, colnr_T start_col, colnr_T end_col);
 char *skip_comment(char *line, bool process, bool include_space, bool *is_comment);
+int do_join(size_t count, bool insert_space, bool save_undo, bool use_formatoptions, bool setmark);
 
 EXTERN LuaRef repeat_luaref INIT( = LUA_NOREF);  ///< LuaRef for "."
