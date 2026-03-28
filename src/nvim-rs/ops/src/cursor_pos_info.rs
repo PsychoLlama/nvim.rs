@@ -28,12 +28,16 @@ struct CpiLineCountResult {
 /// EOL format constant (matches C `EOL_DOS = 1`)
 const EOL_DOS: c_int = 1;
 
+/// IObuff size constant (matches C `IOSIZE = 1025`)
+const IOSIZE: usize = 1025;
+
 extern "C" {
     // Buffer state (generic shims)
     fn nvim_curbuf_ml_empty() -> bool;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
     fn nvim_get_curbuf() -> *mut c_void;
     fn rs_get_fileformat(buf: *mut c_void) -> c_int;
+    fn nvim_excmds_curbuf_ml_line_count() -> c_int;
 
     // Visual state: individual shims replace nvim_cpi_get_visual_state
     static mut VIsual_active: bool;
@@ -68,19 +72,6 @@ extern "C" {
 
     // Output / display
     fn nvim_msg_no_lines();
-    fn nvim_cpi_format_visual_msg(
-        line_count_selected: c_int,
-        start_vcol: c_int,
-        end_vcol: c_int,
-        is_block_mode: c_int,
-        curswant_is_max: c_int,
-        word_count_cursor: i64,
-        word_count: i64,
-        char_count_cursor: i64,
-        char_count: i64,
-        byte_count_cursor: i64,
-        byte_count: i64,
-    );
     fn nvim_cpi_format_normal_msg(
         word_count_cursor: i64,
         word_count: i64,
@@ -103,6 +94,12 @@ extern "C" {
     // Low-level buffer line access
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    // Formatting
+    fn vim_snprintf(dst: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    fn gettext(msgid: *const c_char) -> *const c_char;
+    #[link_name = "IObuff"]
+    static mut IObuff_cpi: [c_char; IOSIZE];
 }
 
 /// Inline replacement of `nvim_cpi_last_line_no_eol` (C function deleted).
@@ -404,6 +401,82 @@ struct VisualDisplayParams {
     blk_end_vcol: c_int,
 }
 
+/// Rust port of `nvim_cpi_format_visual_msg` (C function deleted).
+///
+/// Formats the visual-mode portion of `g CTRL-G` output into IObuff.
+/// Uses gettext for translation of format strings (keys match C preprocessed strings
+/// where PRId64 = "ld" on 64-bit Linux).
+///
+/// # Safety
+/// Writes into IObuff. Reads curbuf ml_line_count via C shim.
+#[allow(clippy::too_many_arguments)]
+unsafe fn format_visual_msg(
+    line_count_selected: c_int,
+    start_vcol: c_int,
+    end_vcol: c_int,
+    is_block_mode: bool,
+    curswant_is_max: bool,
+    word_count_cursor: i64,
+    word_count: i64,
+    char_count_cursor: i64,
+    char_count: i64,
+    byte_count_cursor: i64,
+    byte_count: i64,
+) {
+    let ml_line_count = i64::from(nvim_excmds_curbuf_ml_line_count());
+
+    // Build the "N Cols; " prefix (if block mode and not MAXCOL).
+    // C: vim_snprintf(buf1, sizeof(buf1), _("%" PRId64 " Cols; "), cols);
+    // PRId64 = "ld" on 64-bit Linux, so key = "%ld Cols; "
+    let mut buf1 = [0i8; 50];
+    if is_block_mode && !curswant_is_max {
+        let cols = i64::from(end_vcol + 1) - i64::from(start_vcol);
+        vim_snprintf(
+            buf1.as_mut_ptr(),
+            buf1.len(),
+            gettext(c"%ld Cols; ".as_ptr()),
+            cols,
+        );
+    } else {
+        buf1[0] = 0;
+    }
+
+    let iobuf = std::ptr::addr_of_mut!(IObuff_cpi).cast::<c_char>();
+    if char_count_cursor == byte_count_cursor && char_count == byte_count {
+        // C key: "Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes"
+        vim_snprintf(
+            iobuf,
+            IOSIZE,
+            gettext(c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes".as_ptr()),
+            buf1.as_ptr(),
+            i64::from(line_count_selected),
+            ml_line_count,
+            word_count_cursor,
+            word_count,
+            byte_count_cursor,
+            byte_count,
+        );
+    } else {
+        // C key: "Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes"
+        vim_snprintf(
+            iobuf,
+            IOSIZE,
+            gettext(
+                c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes".as_ptr(),
+            ),
+            buf1.as_ptr(),
+            i64::from(line_count_selected),
+            ml_line_count,
+            word_count_cursor,
+            word_count,
+            char_count_cursor,
+            char_count,
+            byte_count_cursor,
+            byte_count,
+        );
+    }
+}
+
 /// Display or store the counted results.
 ///
 /// # Safety
@@ -413,12 +486,12 @@ unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts
 
     if dict.is_null() {
         if vp.visual_active {
-            nvim_cpi_format_visual_msg(
+            format_visual_msg(
                 vp.line_count_selected,
                 vp.blk_start_vcol,
                 vp.blk_end_vcol,
-                c_int::from(vp.visual_mode == CTRL_V),
-                c_int::from(vp.curswant == MAXCOL),
+                vp.visual_mode == CTRL_V,
+                vp.curswant == MAXCOL,
                 c.word_count_cursor,
                 c.word_count,
                 c.char_count_cursor,

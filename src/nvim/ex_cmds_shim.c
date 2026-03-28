@@ -497,49 +497,6 @@ void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
     curwin->w_buffer->b_nwindows--;
   }
 }
-void nvim_cpi_format_visual_msg(int line_count_selected,
-                                int start_vcol,
-                                int end_vcol,
-                                int is_block_mode,
-                                int curswant_is_max,
-                                int64_t word_count_cursor,
-                                int64_t word_count,
-                                int64_t char_count_cursor,
-                                int64_t char_count,
-                                int64_t byte_count_cursor,
-                                int64_t byte_count)
-{
-  char buf1[50];
-  if (is_block_mode && !curswant_is_max) {
-    int64_t cols;
-    STRICT_SUB(end_vcol + 1, start_vcol, &cols, int64_t);
-    vim_snprintf(buf1, sizeof(buf1), _("%" PRId64 " Cols; "), cols);
-  } else {
-    buf1[0] = NUL;
-  }
-  if (char_count_cursor == byte_count_cursor
-      && char_count == byte_count) {
-    vim_snprintf(IObuff, IOSIZE,
-                 _("Selected %s%" PRId64 " of %" PRId64 " Lines;"
-                   " %" PRId64 " of %" PRId64 " Words;"
-                   " %" PRId64 " of %" PRId64 " Bytes"),
-                 buf1, (int64_t)line_count_selected,
-                 (int64_t)curbuf->b_ml.ml_line_count,
-                 word_count_cursor, word_count,
-                 byte_count_cursor, byte_count);
-  } else {
-    vim_snprintf(IObuff, IOSIZE,
-                 _("Selected %s%" PRId64 " of %" PRId64 " Lines;"
-                   " %" PRId64 " of %" PRId64 " Words;"
-                   " %" PRId64 " of %" PRId64 " Chars;"
-                   " %" PRId64 " of %" PRId64 " Bytes"),
-                 buf1, (int64_t)line_count_selected,
-                 (int64_t)curbuf->b_ml.ml_line_count,
-                 word_count_cursor, word_count,
-                 char_count_cursor, char_count,
-                 byte_count_cursor, byte_count);
-  }
-}
 void nvim_cpi_format_normal_msg(int64_t word_count_cursor,
                                 int64_t word_count,
                                 int64_t char_count_cursor,
