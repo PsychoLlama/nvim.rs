@@ -81,6 +81,11 @@ typedef struct {
   int has_handler_cmd;
 } AutoHandlerInfo;
 
+// Variables exposed for direct Rust access (previously static in autocmd.c)
+extern int autocmd_blocked;    ///< nonzero when autocmds are blocked
+extern int current_augroup;    ///< ID of current augroup
+extern char *old_termresponse; ///< saved value of v:termresponse
+
 /// Iterates over all the events for auto commands
 #define FOR_ALL_AUEVENTS(event) \
   for (event_T event = (event_T)0; (int)event < (int)NUM_EVENTS; event = (event_T)((int)event + 1))

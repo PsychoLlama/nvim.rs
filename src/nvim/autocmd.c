@@ -140,16 +140,16 @@ static int next_augroup_id = 1;
 static const char *deleted_augroup = NULL;
 
 // The ID of the current group.
-static int current_augroup = AUGROUP_DEFAULT;
+int current_augroup = AUGROUP_DEFAULT;
 
 // Whether we need to delete marked patterns.
 // While deleting autocmds, they aren't actually remover, just marked.
 static bool au_need_clean = false;
 
-static int autocmd_blocked = 0;  // block all autocmds
+int autocmd_blocked = 0;  // block all autocmds
 
 static bool autocmd_nested = false;
-static char *old_termresponse = NULL;
+char *old_termresponse = NULL;
 
 // Map of autocmd group names and ids.
 //  name -> ID
@@ -1637,8 +1637,6 @@ void nvim_verbose_buflocal_remove(int event, int bufnr)
   }
 }
 
-void nvim_autocmd_set_current_augroup(int val) { current_augroup = val; }
-
 /// Iterate the augroup name→id map, calling msg_puts for each entry.
 void nvim_autocmd_list_group_names(void)
 {
@@ -1659,12 +1657,6 @@ void nvim_autocmd_list_group_names(void)
   msg_clr_eos();
   msg_end();
 }
-
-const char *nvim_autocmd_get_e_argreq(void) { return _(e_argreq); }
-const char *nvim_autocmd_get_e216_no_such_event(void) { return _("E216: No such event: %s"); }
-const char *nvim_autocmd_get_e216_no_such_group_or_event(void) { return _("E216: No such group or event: %s"); }
-const char *nvim_autocmd_get_e215(void) { return _("E215: Illegal character after *: %s"); }
-const char *nvim_autocmd_get_e_duparg2(void) { return _(e_duparg2); }
 
 // nvim_skipwhite exists in fold.c
 _Static_assert(HLF_8 == 1, "HLF_8 value changed");
@@ -1708,13 +1700,6 @@ void nvim_autocmd_show_last_set(int event, size_t idx)
 }
 
 void nvim_autocmd_eap_set_nextcmd(void *eap, char *val) { ((exarg_T *)eap)->nextcmd = val; }
-void nvim_autocmd_show_header(void)
-{
-  msg_ext_set_kind("list_cmd");
-  msg_puts_title(_("\n--- Autocommands ---"));
-}
-const char *nvim_autocmd_get_e_cannot_define_for_all(void) { return _(e_cannot_define_autocommands_for_all_events); }
-int nvim_autocmd_get_current_augroup(void) { return current_augroup; }
 
 /// Delete matching autocmds for a pattern at (event, idx) if they match findgroup/pat/patlen.
 void nvim_autocmd_del_matching(int event, int findgroup, const char *pat, int patlen)
@@ -1739,12 +1724,6 @@ int nvim_autocmd_register_cmd(int event, const char *pat, int patlen, int group,
                           NULL, cmd, &handler_fn);
 }
 
-int nvim_autocmd_ok(void) { return OK; }
-const char *nvim_autocmd_get_old_termresponse(void) { return old_termresponse; }
-void nvim_autocmd_set_old_termresponse(const char *ptr) { old_termresponse = (char *)ptr; }
-void nvim_autocmd_inc_blocked(void) { autocmd_blocked++; }
-void nvim_autocmd_dec_blocked(void) { autocmd_blocked--; }
-
 /// Call apply_autocmds_group from Rust (casts void* to typed pointers).
 bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, bool force,
                                        int group, void *buf, void *eap, void *data)
@@ -1755,9 +1734,4 @@ bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, b
 
 void *nvim_autocmd_get_curbuf_ptr(void) { return curbuf; }
 void nvim_autocmd_semsg_str(const char *fmt, const char *arg) { semsg(fmt, arg); }
-int nvim_autocmd_get_got_int(void) { return got_int ? 1 : 0; }
-void nvim_autocmd_msg_outtrans(const char *s) { msg_outtrans(s, 0, false); }
-int nvim_autocmd_get_p_verbose(void) { return (int)p_verbose; }
-char *nvim_autocmd_fullname_save(const char *fname) { return FullName_save((char *)fname, false); }
-const char *nvim_autocmd_get_e217(void) { return _("E217: Can't execute autocommands for ALL events"); }
 void nvim_autocmd_smsg_no_matching(const char *arg_start) { smsg(0, _("No matching autocommands: %s"), arg_start); }

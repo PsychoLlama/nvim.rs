@@ -115,16 +115,10 @@ extern "C" {
     fn nvim_verbose_buflocal_remove(event: c_int, bufnr: c_int);
 
     // Phase 5: :augroup command + arg parsing accessors
-    fn nvim_autocmd_set_current_augroup(val: c_int);
     fn nvim_autocmd_list_group_names();
     #[link_name = "emsg"]
     fn nvim_autocmd_emsg(msg: *const c_char);
     fn nvim_autocmd_semsg_str(fmt: *const c_char, arg: *const c_char);
-    fn nvim_autocmd_get_e_argreq() -> *const c_char;
-    fn nvim_autocmd_get_e216_no_such_event() -> *const c_char;
-    fn nvim_autocmd_get_e216_no_such_group_or_event() -> *const c_char;
-    fn nvim_autocmd_get_e215() -> *const c_char;
-    fn nvim_autocmd_get_e_duparg2() -> *const c_char;
     fn skipwhite(p: *const c_char) -> *mut c_char;
     #[link_name = "xmemdupz"]
     fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
@@ -138,10 +132,11 @@ extern "C" {
     fn nvim_autocmd_msg_putchar(c: c_int);
     #[link_name = "msg_puts_hl"]
     fn nvim_autocmd_msg_puts_hl(s: *const c_char, hlf: c_int, append: bool);
-    fn nvim_autocmd_msg_outtrans(s: *const c_char);
+    #[link_name = "msg_outtrans"]
+    fn nvim_autocmd_msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool);
     static mut msg_col: c_int;
-    fn nvim_autocmd_get_got_int() -> c_int;
-    fn nvim_autocmd_get_p_verbose() -> c_int;
+    static mut got_int: bool;
+    static p_verbose: i64;
     fn nvim_autocmd_match_file(
         event: c_int,
         idx: usize,
@@ -152,7 +147,8 @@ extern "C" {
     ) -> bool;
     #[link_name = "path_tail"]
     fn nvim_autocmd_path_tail(fname: *const c_char) -> *const c_char;
-    fn nvim_autocmd_fullname_save(fname: *const c_char) -> *mut c_char;
+    #[link_name = "FullName_save"]
+    fn nvim_autocmd_fullname_save(fname: *const c_char, force: bool) -> *mut c_char;
     #[link_name = "path_fnamecmp"]
     fn nvim_autocmd_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     #[link_name = "nvim_get_curbuf_fnum"]
@@ -166,14 +162,15 @@ extern "C" {
 
     // Phase 7: :autocmd command + registration accessors
     fn nvim_autocmd_eap_set_nextcmd(eap: *mut c_void, val: *mut c_char);
+    #[link_name = "msg_ext_set_kind"]
+    fn nvim_autocmd_msg_ext_set_kind(kind: *const c_char);
+    #[link_name = "msg_puts_title"]
+    fn nvim_autocmd_msg_puts_title(s: *const c_char);
     #[link_name = "vim_strchr"]
     fn nvim_autocmd_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     #[link_name = "expand_env_save"]
     fn nvim_autocmd_expand_env_save(pat: *const c_char) -> *mut c_char;
     fn nvim_docmd_expand_sfile_impl(cmd: *const c_char) -> *mut c_char;
-    fn nvim_autocmd_show_header();
-    fn nvim_autocmd_get_e_cannot_define_for_all() -> *const c_char;
-    fn nvim_autocmd_get_current_augroup() -> c_int;
     fn nvim_autocmd_del_matching(event: c_int, findgroup: c_int, pat: *const c_char, patlen: c_int);
     fn nvim_autocmd_register_cmd(
         event: c_int,
@@ -184,15 +181,14 @@ extern "C" {
         nested: bool,
         cmd: *const c_char,
     ) -> c_int;
-    fn nvim_autocmd_ok() -> c_int;
 
     // Phase 8a: Simple wrappers + blocking accessors
     #[link_name = "get_vim_var_str"]
     fn nvim_autocmd_get_vim_var_str(vv: c_int) -> *const c_char;
-    fn nvim_autocmd_get_old_termresponse() -> *const c_char;
-    fn nvim_autocmd_set_old_termresponse(ptr: *const c_char);
-    fn nvim_autocmd_inc_blocked();
-    fn nvim_autocmd_dec_blocked();
+    // Global variables now accessed directly
+    static mut autocmd_blocked: c_int;
+    static mut current_augroup: c_int;
+    static mut old_termresponse: *const c_char;
     fn nvim_autocmd_apply_autocmds_group(
         event: c_int,
         fname: *mut c_char,
@@ -210,7 +206,6 @@ extern "C" {
     fn nvim_autocmd_get_curbuf_ptr() -> *mut c_void;
 
     // Phase 8e: Event triggers + doautocmd accessors
-    fn nvim_autocmd_get_e217() -> *const c_char;
     fn nvim_autocmd_smsg_no_matching(arg_start: *const c_char);
 
     // Phase 3: Event trigger helpers
@@ -228,6 +223,16 @@ extern "C" {
 
 // Static "Unknown" string for invalid events
 static UNKNOWN_EVENT: &[u8] = b"Unknown\0";
+
+// Error string constants (hardcoded, replacing C accessor functions)
+use std::ffi::CStr;
+const E_ARGREQ: &CStr = c"E471: Argument required";
+const E216_NO_SUCH_EVENT: &CStr = c"E216: No such event: %s";
+const E216_NO_SUCH_GROUP_OR_EVENT: &CStr = c"E216: No such group or event: %s";
+const E215: &CStr = c"E215: Illegal character after *: %s";
+const E_DUPARG2: &CStr = c"E983: Duplicate argument: %s";
+const E217: &CStr = c"E217: Can't execute autocommands for ALL events";
+const E_CANNOT_DEFINE_FOR_ALL: &CStr = c"E1155: Cannot define autocommands for ALL events";
 
 /// Check if autocommands are blocked.
 ///
@@ -633,7 +638,7 @@ pub unsafe extern "C" fn rs_aubuflocal_remove(bufnr: c_int) {
 pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
     if del_group {
         if *arg == 0 {
-            nvim_autocmd_emsg(nvim_autocmd_get_e_argreq());
+            nvim_autocmd_emsg(E_ARGREQ.as_ptr());
         } else {
             // augroup_del is still in C (not yet migrated)
             // We call it through the C wrapper
@@ -647,11 +652,11 @@ pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
         after == 0
     } {
         // ":aug end": back to group 0
-        nvim_autocmd_set_current_augroup(group::AUGROUP_DEFAULT);
+        current_augroup = group::AUGROUP_DEFAULT;
     } else if *arg != 0 {
         // ":aug xxx": switch to group xxx
         let id = rs_augroup_add(arg);
-        nvim_autocmd_set_current_augroup(id);
+        current_augroup = id;
     } else {
         // ":aug": list the group names (msg_start, msg_ext_set_kind, iteration, msg_clr_eos, msg_end all in one C call)
         nvim_autocmd_list_group_names();
@@ -705,7 +710,7 @@ pub unsafe extern "C" fn rs_arg_event_skip(arg: *const c_char, have_group: bool)
     if *arg == b'*' as c_char {
         // Check for illegal character after *
         if *arg.add(1) != 0 && !is_ascii_white(*arg.add(1) as u8) {
-            nvim_autocmd_semsg_str(nvim_autocmd_get_e215(), arg);
+            nvim_autocmd_semsg_str(E215.as_ptr(), arg);
             return std::ptr::null();
         }
         return arg.add(1);
@@ -716,9 +721,9 @@ pub unsafe extern "C" fn rs_arg_event_skip(arg: *const c_char, have_group: bool)
         let result = event::rs_event_name2nr(pat);
         if result.event >= NUM_EVENTS {
             if have_group {
-                nvim_autocmd_semsg_str(nvim_autocmd_get_e216_no_such_event(), pat);
+                nvim_autocmd_semsg_str(E216_NO_SUCH_EVENT.as_ptr(), pat);
             } else {
-                nvim_autocmd_semsg_str(nvim_autocmd_get_e216_no_such_group_or_event(), pat);
+                nvim_autocmd_semsg_str(E216_NO_SUCH_GROUP_OR_EVENT.as_ptr(), pat);
             }
             return std::ptr::null();
         }
@@ -756,7 +761,7 @@ pub unsafe extern "C" fn rs_arg_autocmd_flag_get(
 
     if matches && is_ascii_white(*cmd.add(len) as u8) {
         if *flag {
-            nvim_autocmd_semsg_str(nvim_autocmd_get_e_duparg2(), pattern);
+            nvim_autocmd_semsg_str(E_DUPARG2.as_ptr(), pattern);
             return true;
         }
         *flag = true;
@@ -960,14 +965,14 @@ unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, pa
         if pi.pat_id != last_pat_id {
             last_pat_id = pi.pat_id;
             nvim_autocmd_msg_putchar(c_int::from(b'\n'));
-            if nvim_autocmd_get_got_int() != 0 {
+            if got_int {
                 return;
             }
             msg_col = 4;
-            nvim_autocmd_msg_outtrans(pi.pat);
+            nvim_autocmd_msg_outtrans(pi.pat, 0, false);
         }
 
-        if nvim_autocmd_get_got_int() != 0 {
+        if got_int {
             return;
         }
 
@@ -975,17 +980,17 @@ unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, pa
             nvim_autocmd_msg_putchar(c_int::from(b'\n'));
         }
         msg_col = 14;
-        if nvim_autocmd_get_got_int() != 0 {
+        if got_int {
             return;
         }
 
         show_handler_and_desc(event, i);
 
-        if nvim_autocmd_get_p_verbose() > 0 {
+        if p_verbose > 0 {
             nvim_autocmd_show_last_set(event, i);
         }
 
-        if nvim_autocmd_get_got_int() != 0 {
+        if got_int {
             return;
         }
     }
@@ -995,11 +1000,11 @@ unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, pa
 unsafe fn show_group_and_event(ac_group: c_int, event: c_int) -> bool {
     let group_name = rs_augroup_name(ac_group);
 
-    if nvim_autocmd_get_got_int() != 0 {
+    if got_int {
         return false;
     }
     nvim_autocmd_msg_putchar(c_int::from(b'\n'));
-    if nvim_autocmd_get_got_int() != 0 {
+    if got_int {
         return false;
     }
 
@@ -1037,10 +1042,10 @@ unsafe fn show_handler_and_desc(event: c_int, idx: usize) {
             nvim_autocmd_msg_puts_hl(handler_str, HLF_8, false);
             format_desc_only(msg, msglen, desc);
         }
-        nvim_autocmd_msg_outtrans(msg);
+        nvim_autocmd_msg_outtrans(msg, 0, false);
         nvim_autocmd_xfree(msg);
     } else if has_cmd {
-        nvim_autocmd_msg_outtrans(handler_str);
+        nvim_autocmd_msg_outtrans(handler_str, 0, false);
     } else {
         nvim_autocmd_msg_puts_hl(handler_str, HLF_8, false);
     }
@@ -1116,7 +1121,7 @@ pub unsafe extern "C" fn rs_has_autocmd(
     buf_fnum: c_int,
 ) -> bool {
     let tail = nvim_autocmd_path_tail(sfname);
-    let fname = nvim_autocmd_fullname_save(sfname);
+    let fname = nvim_autocmd_fullname_save(sfname, false);
     if fname.is_null() {
         return false;
     }
@@ -1375,7 +1380,8 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
     let is_showing = forceit == 0 && *cmd == 0;
 
     if is_showing {
-        nvim_autocmd_show_header();
+        nvim_autocmd_msg_ext_set_kind(c"list_cmd".as_ptr());
+        nvim_autocmd_msg_puts_title(c"\n--- Autocommands ---".as_ptr());
         if *arg == b'*' as c_char || *arg == b'|' as c_char || *arg == 0 {
             rs_au_show_for_all_events(group, pat);
         } else {
@@ -1384,7 +1390,7 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
         }
     } else if *arg == b'*' as c_char || *arg == 0 || *arg == b'|' as c_char {
         if *cmd != 0 {
-            nvim_autocmd_emsg(nvim_autocmd_get_e_cannot_define_for_all());
+            nvim_autocmd_emsg(E_CANNOT_DEFINE_FOR_ALL.as_ptr());
         } else {
             rs_do_all_autocmd_events(pat, once, c_int::from(nested), cmd, forceit != 0, group);
         }
@@ -1392,8 +1398,7 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
         while *arg != 0 && *arg != b'|' as c_char && !is_ascii_white(*arg as u8) {
             let result = event::rs_event_name2nr(arg);
             arg = result.end_ptr.cast_mut();
-            if rs_do_autocmd_event(result.event, pat, once, nested, cmd, forceit != 0, group)
-                != nvim_autocmd_ok()
+            if rs_do_autocmd_event(result.event, pat, once, nested, cmd, forceit != 0, group) != OK
             {
                 break;
             }
@@ -1420,8 +1425,7 @@ pub unsafe extern "C" fn rs_do_all_autocmd_events(
     group: c_int,
 ) {
     for event in 0..NUM_EVENTS {
-        if rs_do_autocmd_event(event, pat, once, nested != 0, cmd, del, group) != nvim_autocmd_ok()
-        {
+        if rs_do_autocmd_event(event, pat, once, nested != 0, cmd, del, group) != OK {
             return;
         }
     }
@@ -1444,7 +1448,7 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
 ) -> c_int {
     let is_adding_cmd = *cmd != 0;
     let findgroup = if group == group::AUGROUP_ALL {
-        nvim_autocmd_get_current_augroup()
+        current_augroup
     } else {
         group
     };
@@ -1452,7 +1456,7 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
     // Delete all aupat for an event
     if *pat == 0 && del {
         rs_aucmd_del_for_event_and_group(event, findgroup);
-        return nvim_autocmd_ok();
+        return OK;
     }
 
     let mut buflocal_pat = [0u8; BUFLOCAL_PAT_LEN];
@@ -1494,7 +1498,7 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
     }
 
     rs_au_cleanup();
-    nvim_autocmd_ok()
+    OK
 }
 
 // =============================================================================
@@ -1507,22 +1511,22 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
 pub unsafe extern "C" fn rs_block_autocmds() {
     // Remember the value of v:termresponse.
     if rs_is_autocmd_blocked() == 0 {
-        nvim_autocmd_set_old_termresponse(nvim_autocmd_get_vim_var_str(VV_TERMRESPONSE));
+        old_termresponse = nvim_autocmd_get_vim_var_str(VV_TERMRESPONSE);
     }
-    nvim_autocmd_inc_blocked();
+    autocmd_blocked += 1;
 }
 
 /// Unblock autocommands. When v:termresponse was set while autocommands
 /// were blocked, trigger the autocommands now.
 #[unsafe(export_name = "unblock_autocmds")]
 pub unsafe extern "C" fn rs_unblock_autocmds() {
-    nvim_autocmd_dec_blocked();
+    autocmd_blocked -= 1;
 
     // When v:termresponse was set while autocommands were blocked, trigger
     // the autocommands now. Esp. useful when executing a shell command
     // during startup (nvim -d).
     if rs_is_autocmd_blocked() == 0
-        && nvim_autocmd_get_vim_var_str(VV_TERMRESPONSE) != nvim_autocmd_get_old_termresponse()
+        && nvim_autocmd_get_vim_var_str(VV_TERMRESPONSE) != old_termresponse
     {
         rs_apply_autocmds(
             EVENT_TERMRESPONSE,
@@ -1643,7 +1647,7 @@ pub unsafe extern "C" fn rs_do_doautocmd(
     let group = rs_arg_augroup_get(&raw mut arg);
 
     if *arg == b'*' as c_char {
-        nvim_autocmd_emsg(nvim_autocmd_get_e217());
+        nvim_autocmd_emsg(E217.as_ptr());
         return FAIL;
     }
 
