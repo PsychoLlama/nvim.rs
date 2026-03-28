@@ -497,44 +497,14 @@ void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
     curwin->w_buffer->b_nwindows--;
   }
 }
-void nvim_cpi_format_normal_msg(int64_t word_count_cursor,
-                                int64_t word_count,
-                                int64_t char_count_cursor,
-                                int64_t char_count,
-                                int64_t byte_count_cursor,
-                                int64_t byte_count)
+void nvim_cpi_get_col_info(int *col1, int *vcol1, int *linelen, int *tabsize)
 {
-  char buf1[50];
-  char buf2[40];
   char *p = get_cursor_line_ptr();
   validate_virtcol(curwin);
-  col_print(buf1, sizeof(buf1), (int)curwin->w_cursor.col + 1,
-            (int)curwin->w_virtcol + 1);
-  col_print(buf2, sizeof(buf2), get_cursor_line_len(), linetabsize_str(p));
-  if (char_count_cursor == byte_count_cursor
-      && char_count == byte_count) {
-    vim_snprintf(IObuff, IOSIZE,
-                 _("Col %s of %s; Line %" PRId64 " of %" PRId64 ";"
-                   " Word %" PRId64 " of %" PRId64 ";"
-                   " Byte %" PRId64 " of %" PRId64 ""),
-                 buf1, buf2,
-                 (int64_t)curwin->w_cursor.lnum,
-                 (int64_t)curbuf->b_ml.ml_line_count,
-                 word_count_cursor, word_count,
-                 byte_count_cursor, byte_count);
-  } else {
-    vim_snprintf(IObuff, IOSIZE,
-                 _("Col %s of %s; Line %" PRId64 " of %" PRId64 ";"
-                   " Word %" PRId64 " of %" PRId64 ";"
-                   " Char %" PRId64 " of %" PRId64 ";"
-                   " Byte %" PRId64 " of %" PRId64 ""),
-                 buf1, buf2,
-                 (int64_t)curwin->w_cursor.lnum,
-                 (int64_t)curbuf->b_ml.ml_line_count,
-                 word_count_cursor, word_count,
-                 char_count_cursor, char_count,
-                 byte_count_cursor, byte_count);
-  }
+  *col1 = (int)curwin->w_cursor.col + 1;
+  *vcol1 = (int)curwin->w_virtcol + 1;
+  *linelen = get_cursor_line_len();
+  *tabsize = linetabsize_str(p);
 }
 void nvim_cpi_append_bom_and_display(int64_t bom_count)
 {

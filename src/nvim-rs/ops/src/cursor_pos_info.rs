@@ -72,14 +72,13 @@ extern "C" {
 
     // Output / display
     fn nvim_msg_no_lines();
-    fn nvim_cpi_format_normal_msg(
-        word_count_cursor: i64,
-        word_count: i64,
-        char_count_cursor: i64,
-        char_count: i64,
-        byte_count_cursor: i64,
-        byte_count: i64,
+    fn nvim_cpi_get_col_info(
+        col1: *mut c_int,
+        vcol1: *mut c_int,
+        linelen: *mut c_int,
+        tabsize: *mut c_int,
     );
+    fn rs_col_print(buf: *mut u8, buflen: usize, col: c_int, vcol: c_int) -> c_int;
     fn nvim_cpi_append_bom_and_display(bom_count: i64);
     fn nvim_bomb_size() -> c_int;
 
@@ -477,6 +476,83 @@ unsafe fn format_visual_msg(
     }
 }
 
+/// Rust port of `nvim_cpi_format_normal_msg` (C function deleted).
+///
+/// Formats the normal-mode portion of `g CTRL-G` output into IObuff.
+/// Uses gettext for translation; format keys use `%ld` (PRId64=ld on 64-bit Linux)
+/// and `%s` for the col_print results.
+///
+/// # Safety
+/// Calls C accessors. Writes into IObuff.
+#[allow(clippy::too_many_arguments)]
+unsafe fn format_normal_msg(
+    word_count_cursor: i64,
+    word_count: i64,
+    char_count_cursor: i64,
+    char_count: i64,
+    byte_count_cursor: i64,
+    byte_count: i64,
+) {
+    // Gather col info (validate_virtcol side effect included)
+    let mut col1: c_int = 0;
+    let mut vcol1: c_int = 0;
+    let mut linelen: c_int = 0;
+    let mut tabsize: c_int = 0;
+    nvim_cpi_get_col_info(
+        &raw mut col1,
+        &raw mut vcol1,
+        &raw mut linelen,
+        &raw mut tabsize,
+    );
+
+    // col_print(buf1, ..., col+1, vcol+1) and col_print(buf2, ..., linelen, tabsize)
+    let mut buf1 = [0u8; 50];
+    let mut buf2 = [0u8; 40];
+    rs_col_print(buf1.as_mut_ptr(), buf1.len(), col1, vcol1);
+    rs_col_print(buf2.as_mut_ptr(), buf2.len(), linelen, tabsize);
+
+    let cursor_lnum = i64::from(nvim_get_cursor_lnum());
+    let ml_line_count = i64::from(nvim_excmds_curbuf_ml_line_count());
+    let iobuf = std::ptr::addr_of_mut!(IObuff_cpi).cast::<c_char>();
+
+    if char_count_cursor == byte_count_cursor && char_count == byte_count {
+        // C key: "Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld"
+        vim_snprintf(
+            iobuf,
+            IOSIZE,
+            gettext(c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld".as_ptr()),
+            buf1.as_ptr().cast::<c_char>(),
+            buf2.as_ptr().cast::<c_char>(),
+            cursor_lnum,
+            ml_line_count,
+            word_count_cursor,
+            word_count,
+            byte_count_cursor,
+            byte_count,
+        );
+    } else {
+        // C key: "Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld"
+        vim_snprintf(
+            iobuf,
+            IOSIZE,
+            gettext(
+                c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld"
+                    .as_ptr(),
+            ),
+            buf1.as_ptr().cast::<c_char>(),
+            buf2.as_ptr().cast::<c_char>(),
+            cursor_lnum,
+            ml_line_count,
+            word_count_cursor,
+            word_count,
+            char_count_cursor,
+            char_count,
+            byte_count_cursor,
+            byte_count,
+        );
+    }
+}
+
 /// Display or store the counted results.
 ///
 /// # Safety
@@ -500,7 +576,7 @@ unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts
                 c.byte_count,
             );
         } else {
-            nvim_cpi_format_normal_msg(
+            format_normal_msg(
                 c.word_count_cursor,
                 c.word_count,
                 c.char_count_cursor,
