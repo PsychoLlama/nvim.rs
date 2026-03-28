@@ -56,11 +56,12 @@ impl BlockDefC {
 // FFI declarations
 // -----------------------------------------------------------------------
 
+#[allow(clashing_extern_declarations)]
 extern "C" {
     // Undo
     fn nvim_u_save(top: c_int, bot: c_int) -> c_int;
 
-    // Block preparation
+    // Block preparation (bdp declared as *mut BlockDefC here; shift_full uses *mut c_void)
     fn block_prep(oap: *mut c_void, bdp: *mut BlockDefC, lnum: c_int, is_del: bool);
 
     // Position iteration

@@ -37,6 +37,7 @@ pub mod put;
 pub mod replace;
 pub mod replace_full;
 pub mod shift;
+pub mod shift_full;
 pub mod tilde;
 pub mod tilde_full;
 pub mod types;
