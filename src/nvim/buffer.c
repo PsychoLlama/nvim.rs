@@ -115,6 +115,7 @@
 #include "nvim/winfloat.h"
 
 #include "buffer.c.generated.h"
+extern void rs_aubuflocal_remove(int bufnr);
 extern bool rs_is_dev_fd_file(const char *fname);
 extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
@@ -456,7 +457,7 @@ void free_buffer(buf_T *buf)
                 tv_dict_item_copy((dictitem_T *)(&buf->changedtick_di)));
   }
   unref_var_dict(buf->b_vars);
-  aubuflocal_remove(buf);
+  rs_aubuflocal_remove(buf->b_fnum);
   xfree(buf->additional_data);
   xfree(buf->b_prompt_text);
   kv_destroy(buf->b_wininfo);

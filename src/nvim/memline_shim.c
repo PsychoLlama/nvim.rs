@@ -281,7 +281,8 @@ int nvim_os_mkdir_recurse(const char *dir, int mode, char **failed_dir) { return
 
 char *nvim_path_tail_const(const char *fname) { return path_tail(fname); }
 
-int nvim_has_autocmd_swapexists(const char *fname, buf_T *buf) { return has_autocmd(EVENT_SWAPEXISTS, fname, buf) ? 1 : 0; }
+extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
+int nvim_has_autocmd_swapexists(const char *fname, buf_T *buf) { return rs_has_autocmd(EVENT_SWAPEXISTS, fname, buf ? buf->b_fnum : 0) ? 1 : 0; }
 
 void nvim_apply_autocmds_swapexists(const char *fname, buf_T *buf) { allbuf_lock++; apply_autocmds(EVENT_SWAPEXISTS, (char *)fname, NULL, false, NULL); allbuf_lock--; }
 

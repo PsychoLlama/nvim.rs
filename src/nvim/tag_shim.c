@@ -162,7 +162,8 @@ bool nvim_curbuf_is_help(void) { return curbuf->b_help; }
 const char *nvim_get_p_hf(void) { return p_hf; }
 const char *nvim_get_curbuf_tags(void) { return curbuf->b_p_tags; }
 const char *nvim_get_p_tags(void) { return p_tags; }
-bool nvim_has_bufreadcmd(const char *fname) { return has_autocmd(EVENT_BUFREADCMD, fname, NULL); }
+extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
+bool nvim_has_bufreadcmd(const char *fname) { return rs_has_autocmd(EVENT_BUFREADCMD, fname, 0); }
 bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
 const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }

@@ -80,15 +80,7 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 
 // Rust functions still needed by remaining C code
 extern const char *rs_event_nr2name(int event, int num_events);
-extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
 extern void rs_aubuflocal_remove(int bufnr);
-
-// Phase 2: Event name resolution + EventIgnore
-typedef struct {
-  int event;
-  const char *end_ptr;
-} EventNameResult;
-extern EventNameResult rs_event_name2nr(const char *start);
 
 // Phase 5: :augroup command + arg parsing
 extern int arg_augroup_get(char **argp);
@@ -203,9 +195,6 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
   return &autocmds[(int)event];
 }
 
-// Called when buffer is freed, to remove/invalidate related buffer-local autocmds.
-void aubuflocal_remove(buf_T *buf) { rs_aubuflocal_remove(buf->b_fnum); }
-
 /// Delete the augroup that matches name.
 /// @param stupid_legacy_mode bool: This parameter determines whether to run the augroup
 ///     deletion in the same fashion as `:augroup! {name}` where if there are any remaining
@@ -286,28 +275,6 @@ void free_all_autocmds(void)
   // aucmd_win[] is freed in win_free_all()
 }
 #endif
-
-
-/// Return the event number for event name "start".
-/// Return NUM_EVENTS if the event name was not found.
-/// Return a pointer to the next event name in "end".
-event_T event_name2nr(const char *start, char **end)
-{
-  EventNameResult result = rs_event_name2nr(start);
-  *end = (char *)result.end_ptr;
-  return (event_T)result.event;
-}
-
-/// Return the name for event
-///
-/// @param[in]  event  Event to return name for.
-///
-/// @return Event name, static string. Returns "Unknown" for unknown events.
-const char *event_nr2name(event_T event)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_CONST
-{
-  return rs_event_nr2name((int)event, NUM_EVENTS);
-}
 
 
 // Implements :autocmd.
@@ -1146,7 +1113,7 @@ BYPASS_AU:
   // When wiping out a buffer make sure all its buffer-local autocommands
   // are deleted.
   if (event == EVENT_BUFWIPEOUT && buf != NULL) {
-    aubuflocal_remove(buf);
+    rs_aubuflocal_remove(buf->b_fnum);
   }
 
   if (retval == OK && event == EVENT_FILETYPE) {
@@ -1185,7 +1152,7 @@ static void aucmd_next(AutoPatCmd *apc)
         continue;
       }
 
-      const char *const name = event_nr2name(apc->event);
+      const char *const name = rs_event_nr2name((int)apc->event, NUM_EVENTS);
       const char *const s = _("%s Autocommands for \"%s\"");
 
       const size_t sourcing_name_len = strlen(s) + strlen(name) + (size_t)ap->patlen + 1;
@@ -1225,7 +1192,7 @@ static bool au_callback(const AutoCmd *ac, const AutoPatCmd *apc)
   if (callback.type == kCallbackLua) {
     MAXSIZE_TEMP_DICT(data, 7);
     PUT_C(data, "id", INTEGER_OBJ(ac->id));
-    PUT_C(data, "event", CSTR_AS_OBJ(event_nr2name(apc->event)));
+    PUT_C(data, "event", CSTR_AS_OBJ(rs_event_nr2name((int)apc->event, NUM_EVENTS)));
     PUT_C(data, "file", CSTR_AS_OBJ(apc->afile_orig));
     PUT_C(data, "match", CSTR_AS_OBJ(autocmd_match));
     PUT_C(data, "buf", INTEGER_OBJ(autocmd_bufnr));
@@ -1338,20 +1305,6 @@ char *getnextac(int c, void *cookie, int indent, bool do_concat)
   }
 
   return retval;
-}
-
-/// Return true if there is a matching autocommand for "fname".
-/// To account for buffer-local autocommands, function needs to know
-/// in which buffer the file will be opened.
-///
-/// @param event event that occurred.
-/// @param sfname filename the event occurred in.
-/// @param buf buffer the file is open in
-bool has_autocmd(event_T event, char *sfname, buf_T *buf)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  int buf_fnum = buf != NULL ? buf->b_fnum : 0;
-  return rs_has_autocmd((int)event, sfname, buf_fnum);
 }
 
 /// Deletes an autocmd by ID.
@@ -1632,7 +1585,7 @@ void nvim_verbose_buflocal_remove(int event, int bufnr)
 {
   if (p_verbose >= 6) {
     verbose_enter();
-    smsg(0, _("auto-removing autocommand: %s <buffer=%d>"), event_nr2name((event_T)event), bufnr);
+    smsg(0, _("auto-removing autocommand: %s <buffer=%d>"), rs_event_nr2name(event, NUM_EVENTS), bufnr);
     verbose_leave();
   }
 }

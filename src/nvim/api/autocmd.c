@@ -28,6 +28,7 @@
 #include "nvim/vim_defs.h"
 
 #include "api/autocmd.c.generated.h"
+extern const char *rs_event_nr2name(int event, int num_events);
 
 #define AUCMD_MAX_PATTERNS 256
 
@@ -312,7 +313,7 @@ ArrayOf(DictAs(get_autocmds__ret)) nvim_get_autocmds(Dict(get_autocmds) *opts, A
       }
 
       PUT_C(autocmd_info, "pattern", CSTR_AS_OBJ(ap->pat));
-      PUT_C(autocmd_info, "event", CSTR_AS_OBJ(event_nr2name(event)));
+      PUT_C(autocmd_info, "event", CSTR_AS_OBJ(rs_event_nr2name((int)event, NUM_EVENTS)));
       PUT_C(autocmd_info, "once", BOOLEAN_OBJ(ac->once));
 
       if (ap->buflocal_nr) {

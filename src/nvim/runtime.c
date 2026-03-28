@@ -64,6 +64,9 @@
 #include "nvim/types_defs.h"
 #include "nvim/usercmd.h"
 #include "nvim/vim_defs.h"
+
+extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
+
 #ifdef USE_CRNL
 # include "nvim/highlight.h"
 #endif
@@ -947,7 +950,7 @@ static int do_source_ext(char *const fname, const bool check_other, const int is
 
   if (str == NULL) {
     // Apply SourceCmd autocommands, they should get the file and source it.
-    if (has_autocmd(EVENT_SOURCECMD, fname_exp, NULL)
+    if (rs_has_autocmd(EVENT_SOURCECMD, fname_exp, 0)
         && apply_autocmds(EVENT_SOURCECMD, fname_exp, fname_exp,
                           false, curbuf)) {
       retval = aborting() ? FAIL : OK;
