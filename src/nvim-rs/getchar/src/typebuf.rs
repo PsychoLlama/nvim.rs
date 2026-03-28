@@ -12,19 +12,11 @@
     clippy::cast_sign_loss
 )]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
-// Import MAXMAPLEN from C
-extern "C" {
-    /// Get the MAXMAPLEN constant from C
-    fn nvim_get_maxmaplen() -> c_int;
-}
-
-/// Maximum length for a key mapping sequence.
-/// This is lazily initialized from C's MAXMAPLEN.
-fn maxmaplen() -> i32 {
-    // SAFETY: This is a simple accessor for a C constant
-    unsafe { nvim_get_maxmaplen() }
+/// Maximum length for a key mapping sequence (matches C MAXMAPLEN = 50).
+const fn maxmaplen() -> i32 {
+    MAXMAPLEN_VAL as i32
 }
 
 /// Remapping flags for typeahead buffer entries.
@@ -85,6 +77,225 @@ impl From<c_int> for RemapValues {
         }
     }
 }
+
+// =============================================================================
+// Phase 2: TypebufT repr(C) struct and direct global access
+// =============================================================================
+
+/// MAXMAPLEN constant value (matches C: 50)
+const MAXMAPLEN_VAL: usize = 50;
+
+/// TYPELEN_INIT = 5 * (MAXMAPLEN + 3) = 5 * 53 = 265
+const TYPELEN_INIT: usize = 5 * (MAXMAPLEN_VAL + 3);
+
+/// NSCRIPT: maximum number of nested script files
+const NSCRIPT: usize = 15;
+
+/// Mirror of C `typebuf_T` from getchar_defs.h.
+///
+/// Layout: 2 pointers (16 bytes) + 7 ints (28 bytes) = 44 bytes on 64-bit.
+/// With alignment, the struct is 48 bytes (matches C sizeof(typebuf_T)).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TypebufT {
+    /// Buffer for typed characters
+    pub tb_buf: *mut u8,
+    /// Mapping flags for characters in tb_buf[]
+    pub tb_noremap: *mut u8,
+    /// Size of tb_buf[]
+    pub tb_buflen: c_int,
+    /// Current position in tb_buf[]
+    pub tb_off: c_int,
+    /// Number of valid bytes in tb_buf[]
+    pub tb_len: c_int,
+    /// Number of mapped bytes in tb_buf[]
+    pub tb_maplen: c_int,
+    /// Number of silently mapped bytes in tb_buf[]
+    pub tb_silent: c_int,
+    /// Number of bytes without abbrev. in tb_buf[]
+    pub tb_no_abbr_cnt: c_int,
+    /// Counter for buffer changes; never zero
+    pub tb_change_cnt: c_int,
+}
+
+// SAFETY: Neovim is single-threaded; these statics are only accessed from the main thread.
+unsafe impl Send for TypebufT {}
+
+extern "C" {
+    /// The C `typebuf` global (direct access)
+    static mut typebuf: TypebufT;
+    /// The C `typebuf_was_filled` global
+    static mut typebuf_was_filled: bool;
+    /// xmalloc: allocate memory
+    fn xmalloc(size: usize) -> *mut u8;
+    /// xrealloc: reallocate memory
+    fn xrealloc(ptr: *mut u8, size: usize) -> *mut u8;
+    /// xfree: free memory
+    fn xfree(ptr: *mut c_void);
+    /// internal_error: report internal error
+    fn internal_error(msg: *const std::ffi::c_char);
+    /// curscript: index in scriptin (getchar.c static, made non-static in Phase 3)
+    fn nvim_get_curscript() -> c_int;
+    /// cmd_silent: don't echo the command line
+    static mut cmd_silent: bool;
+}
+
+/// Initial buffer for typebuf when not allocated (avoids early malloc).
+/// This is the Rust equivalent of C's `static uint8_t typebuf_init[TYPELEN_INIT]`.
+static mut TYPEBUF_INIT: [u8; TYPELEN_INIT] = [0u8; TYPELEN_INIT];
+
+/// Initial noremap buffer for typebuf (mirrors C's `noremapbuf_init`).
+static mut NOREMAPBUF_INIT: [u8; TYPELEN_INIT] = [0u8; TYPELEN_INIT];
+
+/// Saved typebuf array for nested script files (mirrors C's `saved_typebuf[NSCRIPT]`).
+static mut SAVED_TYPEBUF: [TypebufT; NSCRIPT] = [TypebufT {
+    tb_buf: std::ptr::null_mut(),
+    tb_noremap: std::ptr::null_mut(),
+    tb_buflen: 0,
+    tb_off: 0,
+    tb_len: 0,
+    tb_maplen: 0,
+    tb_silent: 0,
+    tb_no_abbr_cnt: 0,
+    tb_change_cnt: 0,
+}; NSCRIPT];
+
+/// Initialize `typebuf.tb_buf` to point to `TYPEBUF_INIT`.
+/// Replaces C `init_typebuf()`.
+///
+/// # Safety
+/// Accesses `typebuf` C global and `TYPEBUF_INIT` static.
+pub unsafe fn rs_init_typebuf_impl() {
+    if !typebuf.tb_buf.is_null() {
+        return;
+    }
+    typebuf.tb_buf = std::ptr::addr_of_mut!(TYPEBUF_INIT[0]);
+    typebuf.tb_noremap = std::ptr::addr_of_mut!(NOREMAPBUF_INIT[0]);
+    typebuf.tb_buflen = TYPELEN_INIT as c_int;
+    typebuf.tb_len = 0;
+    typebuf.tb_off = (MAXMAPLEN_VAL + 4) as c_int;
+    typebuf.tb_change_cnt = 1;
+}
+
+/// Make `typebuf` empty and allocate new buffers.
+/// Replaces C `alloc_typebuf()`.
+///
+/// # Safety
+/// Accesses `typebuf` C global.
+pub unsafe fn rs_alloc_typebuf_impl() {
+    typebuf.tb_buf = xmalloc(TYPELEN_INIT);
+    typebuf.tb_noremap = xmalloc(TYPELEN_INIT);
+    typebuf.tb_buflen = TYPELEN_INIT as c_int;
+    typebuf.tb_off = (MAXMAPLEN_VAL + 4) as c_int;
+    typebuf.tb_len = 0;
+    typebuf.tb_maplen = 0;
+    typebuf.tb_silent = 0;
+    typebuf.tb_no_abbr_cnt = 0;
+    typebuf.tb_change_cnt = typebuf.tb_change_cnt.wrapping_add(1);
+    if typebuf.tb_change_cnt == 0 {
+        typebuf.tb_change_cnt = 1;
+    }
+}
+
+/// Free the buffers of `typebuf`.
+/// Replaces C `free_typebuf()`.
+///
+/// # Safety
+/// Accesses `typebuf` C global and `TYPEBUF_INIT`/`NOREMAPBUF_INIT` statics.
+pub unsafe fn rs_free_typebuf_impl() {
+    if typebuf.tb_buf == std::ptr::addr_of_mut!(TYPEBUF_INIT[0]) {
+        internal_error(c"Free typebuf 1".as_ptr());
+    } else {
+        xfree(typebuf.tb_buf.cast::<c_void>());
+        typebuf.tb_buf = std::ptr::null_mut();
+    }
+    if typebuf.tb_noremap == std::ptr::addr_of_mut!(NOREMAPBUF_INIT[0]) {
+        internal_error(c"Free typebuf 2".as_ptr());
+    } else {
+        xfree(typebuf.tb_noremap.cast::<c_void>());
+        typebuf.tb_noremap = std::ptr::null_mut();
+    }
+}
+
+/// Save current typebuf to `SAVED_TYPEBUF[curscript]`.
+/// Replaces C `save_typebuf()`.
+///
+/// # Safety
+/// Accesses `typebuf`, `SAVED_TYPEBUF`, and calls `rs_init_typebuf_impl`.
+///
+/// # Panics
+/// Panics if `curscript < 0` (should not happen during normal script execution).
+pub unsafe fn rs_save_typebuf_impl() {
+    let cs = nvim_get_curscript();
+    assert!(cs >= 0, "save_typebuf called with curscript < 0");
+    rs_init_typebuf_impl();
+    SAVED_TYPEBUF[cs as usize] = typebuf;
+    rs_alloc_typebuf_impl();
+}
+
+/// Free `typebuf` buffers and restore from `SAVED_TYPEBUF[curscript]`.
+/// Used by `closescript()` in C.
+///
+/// # Safety
+/// Accesses `typebuf`, `SAVED_TYPEBUF`, and `curscript`.
+///
+/// # Panics
+/// Panics if `curscript < 0`.
+pub unsafe fn rs_close_typebuf_impl() {
+    let cs = nvim_get_curscript();
+    assert!(cs >= 0, "rs_close_typebuf called with curscript < 0");
+    rs_free_typebuf_impl();
+    typebuf = SAVED_TYPEBUF[cs as usize];
+}
+
+/// Exported C-callable wrapper for `closescript` typebuf restore.
+///
+/// # Safety
+/// Accesses `typebuf`, `SAVED_TYPEBUF`, and `curscript`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_close_typebuf() {
+    rs_close_typebuf_impl();
+}
+
+/// Exported C-callable `init_typebuf()`.
+///
+/// # Safety
+/// Accesses C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_init_typebuf() {
+    rs_init_typebuf_impl();
+}
+
+/// Exported C-callable `alloc_typebuf()`.
+///
+/// # Safety
+/// Accesses C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_alloc_typebuf() {
+    rs_alloc_typebuf_impl();
+}
+
+/// Exported C-callable `free_typebuf()`.
+///
+/// # Safety
+/// Accesses C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_typebuf() {
+    rs_free_typebuf_impl();
+}
+
+/// Exported C-callable `save_typebuf()`.
+///
+/// # Safety
+/// Accesses C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_save_typebuf() {
+    rs_save_typebuf_impl();
+}
+
+// =============================================================================
+// Phase 2 end
+// =============================================================================
 
 /// Typeahead buffer structure.
 ///
@@ -444,7 +655,7 @@ impl TypeaheadBuffer {
     }
 
     /// Clear the buffer, keeping allocations.
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         let maxmaplen = maxmaplen();
         self.off = maxmaplen + 4;
         self.len = 0;
@@ -467,31 +678,8 @@ impl TypeaheadBuffer {
 
 // =============================================================================
 // C FFI Accessor Functions
+// (typebuf fields now accessed directly via `typebuf` global declared above)
 // =============================================================================
-
-#[allow(dead_code)]
-extern "C" {
-    fn nvim_get_typebuf_change_cnt() -> c_int;
-    fn nvim_get_typebuf_was_filled() -> c_int;
-    fn nvim_set_typebuf_was_filled(val: c_int);
-    fn nvim_get_typebuf_buf() -> *mut u8;
-    fn nvim_get_typebuf_noremap() -> *mut u8;
-    fn nvim_get_typebuf_buflen() -> c_int;
-    fn nvim_get_typebuf_off() -> c_int;
-    fn nvim_get_typebuf_len() -> c_int;
-    fn nvim_get_typebuf_maplen() -> c_int;
-    fn nvim_get_typebuf_silent() -> c_int;
-    fn nvim_get_typebuf_no_abbr_cnt() -> c_int;
-    fn nvim_set_typebuf_off(val: c_int);
-    fn nvim_set_typebuf_len(val: c_int);
-    fn nvim_set_typebuf_maplen(val: c_int);
-    fn nvim_set_typebuf_silent(val: c_int);
-    fn nvim_set_typebuf_no_abbr_cnt(val: c_int);
-    fn nvim_set_typebuf_change_cnt(val: c_int);
-    // nvim_get_maxmaplen already declared at module level
-    /// cmd_silent: don't echo the command line
-    static mut cmd_silent: bool;
-}
 
 /// Check if a typeahead change has occurred.
 ///
@@ -505,10 +693,10 @@ pub unsafe extern "C" fn rs_typebuf_was_changed(old_change_cnt: c_int) -> c_int 
         return 0;
     }
 
-    let current = nvim_get_typebuf_change_cnt();
-    let was_filled = nvim_get_typebuf_was_filled();
+    let current = typebuf.tb_change_cnt;
+    let was_filled = typebuf_was_filled;
 
-    c_int::from(current != old_change_cnt || was_filled != 0)
+    c_int::from(current != old_change_cnt || was_filled)
 }
 
 /// Increment the typeahead buffer change counter.
@@ -516,11 +704,10 @@ pub unsafe extern "C" fn rs_typebuf_was_changed(old_change_cnt: c_int) -> c_int 
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn increment_typebuf_change_cnt() {
-    let mut cnt = nvim_get_typebuf_change_cnt().wrapping_add(1);
-    if cnt == 0 {
-        cnt = 1;
+    typebuf.tb_change_cnt = typebuf.tb_change_cnt.wrapping_add(1);
+    if typebuf.tb_change_cnt == 0 {
+        typebuf.tb_change_cnt = 1;
     }
-    nvim_set_typebuf_change_cnt(cnt);
 }
 
 /// Delete characters from the typeahead buffer.
@@ -535,20 +722,20 @@ pub unsafe extern "C" fn rs_del_typebuf(len: c_int, offset: c_int) {
         return;
     }
 
-    let maxmaplen = nvim_get_maxmaplen();
-    let mut tb_off = nvim_get_typebuf_off();
-    let tb_len = nvim_get_typebuf_len() - len;
-    let tb_buflen = nvim_get_typebuf_buflen();
+    let maxmaplen = maxmaplen();
+    let mut tb_off = typebuf.tb_off;
+    let tb_len = typebuf.tb_len - len;
+    let tb_buflen = typebuf.tb_buflen;
 
-    nvim_set_typebuf_len(tb_len);
+    typebuf.tb_len = tb_len;
 
     // Easy case: just increase tb_off
     if offset == 0 && tb_buflen - (tb_off + len) >= 3 * maxmaplen + 3 {
-        nvim_set_typebuf_off(tb_off + len);
+        typebuf.tb_off = tb_off + len;
     } else {
         // Need to move characters
-        let tb_buf = nvim_get_typebuf_buf();
-        let tb_noremap = nvim_get_typebuf_noremap();
+        let tb_buf = typebuf.tb_buf;
+        let tb_noremap = typebuf.tb_noremap;
         let i = tb_off + offset;
 
         // Leave some extra room at the end
@@ -565,7 +752,7 @@ pub unsafe extern "C" fn rs_del_typebuf(len: c_int, offset: c_int) {
                 offset as usize,
             );
             tb_off = maxmaplen;
-            nvim_set_typebuf_off(tb_off);
+            typebuf.tb_off = tb_off;
         }
 
         // Move content after deletion point (including NUL)
@@ -585,40 +772,34 @@ pub unsafe extern "C" fn rs_del_typebuf(len: c_int, offset: c_int) {
     }
 
     // Adjust maplen
-    let mut tb_maplen = nvim_get_typebuf_maplen();
-    if tb_maplen > offset {
-        if tb_maplen < offset + len {
-            tb_maplen = offset;
+    if typebuf.tb_maplen > offset {
+        if typebuf.tb_maplen < offset + len {
+            typebuf.tb_maplen = offset;
         } else {
-            tb_maplen -= len;
+            typebuf.tb_maplen -= len;
         }
-        nvim_set_typebuf_maplen(tb_maplen);
     }
 
     // Adjust silent
-    let mut tb_silent = nvim_get_typebuf_silent();
-    if tb_silent > offset {
-        if tb_silent < offset + len {
-            tb_silent = offset;
+    if typebuf.tb_silent > offset {
+        if typebuf.tb_silent < offset + len {
+            typebuf.tb_silent = offset;
         } else {
-            tb_silent -= len;
+            typebuf.tb_silent -= len;
         }
-        nvim_set_typebuf_silent(tb_silent);
     }
 
     // Adjust no_abbr_cnt
-    let mut tb_no_abbr_cnt = nvim_get_typebuf_no_abbr_cnt();
-    if tb_no_abbr_cnt > offset {
-        if tb_no_abbr_cnt < offset + len {
-            tb_no_abbr_cnt = offset;
+    if typebuf.tb_no_abbr_cnt > offset {
+        if typebuf.tb_no_abbr_cnt < offset + len {
+            typebuf.tb_no_abbr_cnt = offset;
         } else {
-            tb_no_abbr_cnt -= len;
+            typebuf.tb_no_abbr_cnt -= len;
         }
-        nvim_set_typebuf_no_abbr_cnt(tb_no_abbr_cnt);
     }
 
     // Reset typebuf_was_filled flag
-    nvim_set_typebuf_was_filled(0);
+    typebuf_was_filled = false;
     increment_typebuf_change_cnt();
 }
 
@@ -631,16 +812,12 @@ pub unsafe extern "C" fn rs_del_typebuf(len: c_int, offset: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_flush_typebuf_mapped() {
-    let tb_maplen = nvim_get_typebuf_maplen();
-    let tb_off = nvim_get_typebuf_off();
-    let tb_len = nvim_get_typebuf_len();
-
-    nvim_set_typebuf_off(tb_off + tb_maplen);
-    nvim_set_typebuf_len(tb_len - tb_maplen);
-    nvim_set_typebuf_maplen(0);
-    nvim_set_typebuf_silent(0);
+    typebuf.tb_off += typebuf.tb_maplen;
+    typebuf.tb_len -= typebuf.tb_maplen;
+    typebuf.tb_maplen = 0;
+    typebuf.tb_silent = 0;
     cmd_silent = false;
-    nvim_set_typebuf_no_abbr_cnt(0);
+    typebuf.tb_no_abbr_cnt = 0;
     increment_typebuf_change_cnt();
 }
 
@@ -652,14 +829,12 @@ pub unsafe extern "C" fn rs_flush_typebuf_mapped() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_typebuf() {
-    let maxmaplen = nvim_get_maxmaplen();
-
-    nvim_set_typebuf_off(maxmaplen);
-    nvim_set_typebuf_len(0);
-    nvim_set_typebuf_maplen(0);
-    nvim_set_typebuf_silent(0);
-    nvim_set_typebuf_no_abbr_cnt(0);
-    nvim_set_typebuf_was_filled(0);
+    typebuf.tb_off = maxmaplen();
+    typebuf.tb_len = 0;
+    typebuf.tb_maplen = 0;
+    typebuf.tb_silent = 0;
+    typebuf.tb_no_abbr_cnt = 0;
+    typebuf_was_filled = false;
     increment_typebuf_change_cnt();
 }
 
@@ -669,15 +844,11 @@ pub unsafe extern "C" fn rs_clear_typebuf() {
 /// Calls C accessor functions and performs pointer operations.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_get_byte(offset: c_int) -> c_int {
-    let tb_off = nvim_get_typebuf_off();
-    let tb_len = nvim_get_typebuf_len();
-
-    if offset < 0 || offset >= tb_len {
+    if offset < 0 || offset >= typebuf.tb_len {
         return -1;
     }
 
-    let tb_buf = nvim_get_typebuf_buf();
-    c_int::from(*tb_buf.offset((tb_off + offset) as isize))
+    c_int::from(*typebuf.tb_buf.offset((typebuf.tb_off + offset) as isize))
 }
 
 /// Get the remap flag at the given offset in the typeahead buffer.
@@ -686,15 +857,15 @@ pub unsafe extern "C" fn rs_typebuf_get_byte(offset: c_int) -> c_int {
 /// Calls C accessor functions and performs pointer operations.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_get_noremap(offset: c_int) -> c_int {
-    let tb_off = nvim_get_typebuf_off();
-    let tb_len = nvim_get_typebuf_len();
-
-    if offset < 0 || offset >= tb_len {
+    if offset < 0 || offset >= typebuf.tb_len {
         return RemapFlag::Yes as c_int;
     }
 
-    let tb_noremap = nvim_get_typebuf_noremap();
-    c_int::from(*tb_noremap.offset((tb_off + offset) as isize))
+    c_int::from(
+        *typebuf
+            .tb_noremap
+            .offset((typebuf.tb_off + offset) as isize),
+    )
 }
 
 /// Get the current typeahead buffer length.
@@ -703,34 +874,34 @@ pub unsafe extern "C" fn rs_typebuf_get_noremap(offset: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_len() -> c_int {
-    nvim_get_typebuf_len()
+    typebuf.tb_len
 }
 
 /// Get the current typeahead buffer offset.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global `typebuf` directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_off() -> c_int {
-    nvim_get_typebuf_off()
+    typebuf.tb_off
 }
 
 /// Check if the typeahead buffer is empty.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global `typebuf` directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_is_empty() -> c_int {
-    c_int::from(nvim_get_typebuf_len() == 0)
+    c_int::from(typebuf.tb_len == 0)
 }
 
 /// Check if the first character in the typeahead should use silent mode.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads C global `typebuf` directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_is_silent() -> c_int {
-    c_int::from(nvim_get_typebuf_silent() > 0)
+    c_int::from(typebuf.tb_silent > 0)
 }
 
 /// Insert a string into the typeahead buffer.
@@ -765,7 +936,7 @@ pub unsafe extern "C" fn rs_ins_typebuf(
     silent: c_int,
 ) -> c_int {
     // Initialize typebuf if needed
-    nvim_init_typebuf();
+    rs_init_typebuf_impl();
 
     // Increment change counter
     increment_typebuf_change_cnt();
@@ -791,55 +962,61 @@ pub unsafe extern "C" fn rs_ins_typebuf(
         return OK;
     }
 
-    let maxmaplen = nvim_get_maxmaplen();
-    let tb_off = nvim_get_typebuf_off();
-    let tb_len = nvim_get_typebuf_len();
-    let tb_buflen = nvim_get_typebuf_buflen();
-    let tb_buf = nvim_get_typebuf_buf();
+    let maxmaplen = maxmaplen();
 
     // Easy case: there is room in front of typebuf.tb_buf[typebuf.tb_off]
-    if offset == 0 && addlen <= tb_off {
-        let new_off = tb_off - addlen;
-        nvim_set_typebuf_off(new_off);
-        std::ptr::copy_nonoverlapping(str, tb_buf.offset(new_off as isize), addlen as usize);
-    } else if tb_len == 0 && tb_buflen >= addlen + 3 * (maxmaplen + 4) {
+    if offset == 0 && addlen <= typebuf.tb_off {
+        let new_off = typebuf.tb_off - addlen;
+        typebuf.tb_off = new_off;
+        std::ptr::copy_nonoverlapping(
+            str,
+            typebuf.tb_buf.offset(new_off as isize),
+            addlen as usize,
+        );
+    } else if typebuf.tb_len == 0 && typebuf.tb_buflen >= addlen + 3 * (maxmaplen + 4) {
         // Buffer is empty and string fits in the existing buffer.
         // Leave some space before and after, if possible.
-        let new_off = ((tb_buflen - addlen - 3 * (maxmaplen + 4)) / 2).max(0);
-        nvim_set_typebuf_off(new_off);
-        std::ptr::copy_nonoverlapping(str, tb_buf.offset(new_off as isize), addlen as usize);
+        let new_off = ((typebuf.tb_buflen - addlen - 3 * (maxmaplen + 4)) / 2).max(0);
+        typebuf.tb_off = new_off;
+        std::ptr::copy_nonoverlapping(
+            str,
+            typebuf.tb_buf.offset(new_off as isize),
+            addlen as usize,
+        );
     } else {
         // Need to allocate more room for the buffer
         let newoff = maxmaplen + 4;
         let extra = addlen + newoff + 4 * (maxmaplen + 4);
 
-        if tb_len > i32::MAX - extra {
+        if typebuf.tb_len > i32::MAX - extra {
             // String is too long
             return FAIL;
         }
 
-        // Allocate new buffers (done in C via xrealloc)
-        let new_buflen = tb_len + extra;
-        if nvim_grow_typebuf(new_buflen) == 0 {
+        // Grow the typeahead buffer via xrealloc
+        let new_buflen = typebuf.tb_len + extra;
+        let new_buf = xrealloc(typebuf.tb_buf, new_buflen as usize);
+        let new_noremap = xrealloc(typebuf.tb_noremap, new_buflen as usize);
+        if new_buf.is_null() || new_noremap.is_null() {
             return FAIL;
         }
+        typebuf.tb_buf = new_buf;
+        typebuf.tb_noremap = new_noremap;
+        typebuf.tb_buflen = new_buflen;
 
-        // Get updated buffer pointers after reallocation
-        let tb_buf = nvim_get_typebuf_buf();
-        let tb_noremap = nvim_get_typebuf_noremap();
-        let old_off = nvim_get_typebuf_off();
+        let old_off = typebuf.tb_off;
 
         // Copy existing content to new position, making room for insertion
         // First: bytes before offset
         if offset > 0 {
             std::ptr::copy(
-                tb_buf.offset(old_off as isize),
-                tb_buf.offset(newoff as isize),
+                typebuf.tb_buf.offset(old_off as isize),
+                typebuf.tb_buf.offset(newoff as isize),
                 offset as usize,
             );
             std::ptr::copy(
-                tb_noremap.offset(old_off as isize),
-                tb_noremap.offset(newoff as isize),
+                typebuf.tb_noremap.offset(old_off as isize),
+                typebuf.tb_noremap.offset(newoff as isize),
                 offset as usize,
             );
         }
@@ -847,35 +1024,35 @@ pub unsafe extern "C" fn rs_ins_typebuf(
         // Copy new string at offset position
         std::ptr::copy_nonoverlapping(
             str,
-            tb_buf.offset((newoff + offset) as isize),
+            typebuf.tb_buf.offset((newoff + offset) as isize),
             addlen as usize,
         );
 
         // Copy bytes after offset (including NUL)
-        let bytes_after = (tb_len - offset + 1) as usize;
+        let bytes_after = (typebuf.tb_len - offset + 1) as usize;
         std::ptr::copy(
-            tb_buf.offset((old_off + offset) as isize),
-            tb_buf.offset((newoff + offset + addlen) as isize),
+            typebuf.tb_buf.offset((old_off + offset) as isize),
+            typebuf.tb_buf.offset((newoff + offset + addlen) as isize),
             bytes_after,
         );
-        let noremap_after = (tb_len - offset) as usize;
+        let noremap_after = (typebuf.tb_len - offset) as usize;
         std::ptr::copy(
-            tb_noremap.offset((old_off + offset) as isize),
-            tb_noremap.offset((newoff + offset + addlen) as isize),
+            typebuf.tb_noremap.offset((old_off + offset) as isize),
+            typebuf
+                .tb_noremap
+                .offset((newoff + offset + addlen) as isize),
             noremap_after,
         );
 
-        nvim_set_typebuf_off(newoff);
+        typebuf.tb_off = newoff;
     }
 
     // Update length
-    let new_len = nvim_get_typebuf_len() + addlen;
-    nvim_set_typebuf_len(new_len);
+    let new_len = typebuf.tb_len + addlen;
+    typebuf.tb_len = new_len;
 
     // Set the NUL terminator
-    let tb_buf = nvim_get_typebuf_buf();
-    let tb_off = nvim_get_typebuf_off();
-    *tb_buf.offset((tb_off + new_len) as isize) = 0;
+    *typebuf.tb_buf.offset((typebuf.tb_off + new_len) as isize) = 0;
 
     // Determine remap value and count for noremap flags
     let (val, nrm) = match noremap {
@@ -887,33 +1064,24 @@ pub unsafe extern "C" fn rs_ins_typebuf(
     };
 
     // Set noremap flags for the inserted characters
-    let tb_noremap = nvim_get_typebuf_noremap();
     for i in 0..addlen {
-        let idx = tb_off + i + offset;
-        *tb_noremap.offset(idx as isize) = if i < nrm { val } else { RM_YES };
+        let idx = typebuf.tb_off + i + offset;
+        *typebuf.tb_noremap.offset(idx as isize) = if i < nrm { val } else { RM_YES };
     }
 
     // Adjust maplen if characters were not typed (or offset is within mapped region)
-    let mut tb_maplen = nvim_get_typebuf_maplen();
-    if nottyped != 0 || tb_maplen > offset {
-        tb_maplen += addlen;
-        nvim_set_typebuf_maplen(tb_maplen);
+    if nottyped != 0 || typebuf.tb_maplen > offset {
+        typebuf.tb_maplen += addlen;
     }
 
     // Adjust silent if needed
-    let mut tb_silent = nvim_get_typebuf_silent();
-    if silent != 0 || tb_silent > offset {
-        tb_silent += addlen;
-        nvim_set_typebuf_silent(tb_silent);
+    if silent != 0 || typebuf.tb_silent > offset {
+        typebuf.tb_silent += addlen;
     }
 
     // Adjust no_abbr_cnt if needed (when inserting at the beginning)
-    if offset == 0 {
-        let mut tb_no_abbr_cnt = nvim_get_typebuf_no_abbr_cnt();
-        if tb_no_abbr_cnt != 0 {
-            tb_no_abbr_cnt += addlen;
-            nvim_set_typebuf_no_abbr_cnt(tb_no_abbr_cnt);
-        }
+    if offset == 0 && typebuf.tb_no_abbr_cnt != 0 {
+        typebuf.tb_no_abbr_cnt += addlen;
     }
 
     OK
@@ -960,9 +1128,7 @@ const FAIL: c_int = 0;
 
 // Additional C function declarations needed
 extern "C" {
-    fn nvim_init_typebuf();
     fn state_no_longer_safe(reason: *const std::ffi::c_char);
-    fn nvim_grow_typebuf(new_buflen: c_int) -> c_int;
     /// Read input characters into buf (up to maxlen), waiting wait_time ms.
     fn inchar(buf: *mut u8, maxlen: c_int, wait_time: std::ffi::c_long) -> c_int;
 }
@@ -983,37 +1149,32 @@ const FLUSH_INPUT: c_int = 2;
 /// Calls C accessor functions and performs pointer operations.
 #[export_name = "flush_buffers"]
 pub unsafe extern "C" fn flush_buffers_export(flush_typeahead: c_int) {
-    nvim_init_typebuf();
+    rs_init_typebuf_impl();
 
     crate::buffheader::rs_start_stuff();
     while crate::buffheader::rs_read_readbuffers(1) != 0 {}
 
     if flush_typeahead == FLUSH_MINIMAL {
         // Remove only mapped characters at the start
-        let maplen = nvim_get_typebuf_maplen();
-        let off = nvim_get_typebuf_off();
-        let len = nvim_get_typebuf_len();
-        nvim_set_typebuf_off(off + maplen);
-        nvim_set_typebuf_len(len - maplen);
+        typebuf.tb_off += typebuf.tb_maplen;
+        typebuf.tb_len -= typebuf.tb_maplen;
     } else {
         // Remove all typeahead
         if flush_typeahead == FLUSH_INPUT {
             // Drain all pending input chars (may be part of escape sequence)
-            let buf = nvim_get_typebuf_buf();
-            let buflen = nvim_get_typebuf_buflen();
-            while inchar(buf, buflen - 1, 10) != 0 {}
+            while inchar(typebuf.tb_buf, typebuf.tb_buflen - 1, 10) != 0 {}
         }
-        nvim_set_typebuf_off(nvim_get_maxmaplen());
-        nvim_set_typebuf_len(0);
+        typebuf.tb_off = maxmaplen();
+        typebuf.tb_len = 0;
         // Reset the flag that text received from a client or feedkeys() was
         // inserted in the typeahead buffer.
-        nvim_set_typebuf_was_filled(0);
+        typebuf_was_filled = false;
     }
 
-    nvim_set_typebuf_maplen(0);
-    nvim_set_typebuf_silent(0);
+    typebuf.tb_maplen = 0;
+    typebuf.tb_silent = 0;
     cmd_silent = false;
-    nvim_set_typebuf_no_abbr_cnt(0);
+    typebuf.tb_no_abbr_cnt = 0;
     increment_typebuf_change_cnt();
 }
 
@@ -1069,11 +1230,9 @@ pub unsafe extern "C" fn put_string_in_typebuf_export(
     }
 
     // Copy the new content into place (del/ins_typebuf may have reallocated)
-    let tb_buf = nvim_get_typebuf_buf();
-    let tb_off = nvim_get_typebuf_off();
     std::ptr::copy(
         string,
-        tb_buf.add((tb_off + offset) as usize),
+        typebuf.tb_buf.add((typebuf.tb_off + offset) as usize),
         new_slen as usize,
     );
 
@@ -1090,12 +1249,8 @@ pub unsafe extern "C" fn put_string_in_typebuf_export(
 #[must_use]
 #[export_name = "at_ins_compl_key"]
 pub unsafe extern "C" fn at_ins_compl_key_export() -> bool {
-    let tb_buf = nvim_get_typebuf_buf();
-    let tb_off = nvim_get_typebuf_off();
-    let tb_len = nvim_get_typebuf_len();
-
-    let p = tb_buf.add(tb_off as usize);
-    let c = if tb_len > 3
+    let p = typebuf.tb_buf.add(typebuf.tb_off as usize);
+    let c = if typebuf.tb_len > 3
         && *p == K_SPECIAL_BYTE
         && *p.add(1) == KS_MODIFIER_BYTE
         && (*p.add(2) & MOD_MASK_CTRL != 0)

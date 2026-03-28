@@ -82,6 +82,13 @@ extern void rs_start_stuff(void);
 extern void rs_save_readbufs(void);
 extern void rs_restore_readbufs(void);
 
+// Typebuf lifecycle (owned by Rust: rs_init/alloc/free/save/close_typebuf)
+extern void rs_init_typebuf(void);
+extern void rs_alloc_typebuf(void);
+extern void rs_free_typebuf(void);
+extern void rs_save_typebuf(void);
+extern void rs_close_typebuf(void);
+
 // Recording/gotchars operations (full functions in Rust)
 extern void rs_gotchars(const uint8_t *chars, size_t len);
 extern void rs_add_byte_to_showcmd(uint8_t byte);
@@ -118,13 +125,6 @@ enum {
   RM_ABBR   = 4,  ///< tb_noremap: don't remap, do abbrev.
 };
 
-// typebuf.tb_buf has three parts: room in front (for result of mappings), the
-// middle for typeahead and room for new characters (which needs to be 3 *
-// MAXMAPLEN for the Amiga).
-#define TYPELEN_INIT    (5 * (MAXMAPLEN + 3))
-static uint8_t typebuf_init[TYPELEN_INIT];     ///< initial typebuf.tb_buf
-static uint8_t noremapbuf_init[TYPELEN_INIT];  ///< initial typebuf.tb_noremap
-
 static size_t last_recorded_len = 0;  ///< number of last recorded chars
 
 enum {
@@ -136,65 +136,8 @@ enum {
 
 static const char e_recursive_mapping[] = N_("E223: Recursive mapping");
 
-/// Initialize typebuf.tb_buf to point to typebuf_init.
-/// alloc() cannot be used here: In out-of-memory situations it would
-/// be impossible to type anything.
-static void init_typebuf(void)
-{
-  if (typebuf.tb_buf != NULL) {
-    return;
-  }
-
-  typebuf.tb_buf = typebuf_init;
-  typebuf.tb_noremap = noremapbuf_init;
-  typebuf.tb_buflen = TYPELEN_INIT;
-  typebuf.tb_len = 0;
-  typebuf.tb_off = MAXMAPLEN + 4;
-  typebuf.tb_change_cnt = 1;
-}
-
-/// Make "typebuf" empty and allocate new buffers.
-static void alloc_typebuf(void)
-{
-  typebuf.tb_buf = xmalloc(TYPELEN_INIT);
-  typebuf.tb_noremap = xmalloc(TYPELEN_INIT);
-  typebuf.tb_buflen = TYPELEN_INIT;
-  typebuf.tb_off = MAXMAPLEN + 4;     // can insert without realloc
-  typebuf.tb_len = 0;
-  typebuf.tb_maplen = 0;
-  typebuf.tb_silent = 0;
-  typebuf.tb_no_abbr_cnt = 0;
-  if (++typebuf.tb_change_cnt == 0) {
-    typebuf.tb_change_cnt = 1;
-  }
-}
-
-/// Free the buffers of "typebuf".
-static void free_typebuf(void)
-{
-  if (typebuf.tb_buf == typebuf_init) {
-    internal_error("Free typebuf 1");
-  } else {
-    XFREE_CLEAR(typebuf.tb_buf);
-  }
-  if (typebuf.tb_noremap == noremapbuf_init) {
-    internal_error("Free typebuf 2");
-  } else {
-    XFREE_CLEAR(typebuf.tb_noremap);
-  }
-}
-
-/// When doing ":so! file", the current typeahead needs to be saved, and
-/// restored when "file" has been read completely.
-static typebuf_T saved_typebuf[NSCRIPT];
-
-static void save_typebuf(void)
-{
-  assert(curscript >= 0);
-  init_typebuf();
-  saved_typebuf[curscript] = typebuf;
-  alloc_typebuf();
-}
+// Rust replacements: rs_init_typebuf, rs_alloc_typebuf, rs_free_typebuf,
+// rs_save_typebuf, rs_close_typebuf (in nvim-getchar crate)
 
 static int old_char = -1;   ///< character put back by vungetc()
 static int old_mod_mask;    ///< mod_mask for ungotten character
@@ -204,7 +147,7 @@ static int old_KeyStuffed;  ///< whether old_char was stuffed
 void save_typeahead(tasave_T *tp)
 {
   tp->save_typebuf = typebuf;
-  alloc_typebuf();
+  rs_alloc_typebuf();
   tp->typebuf_valid = true;
   tp->old_char = old_char;
   tp->old_mod_mask = old_mod_mask;
@@ -218,7 +161,7 @@ void save_typeahead(tasave_T *tp)
 void restore_typeahead(tasave_T *tp)
 {
   if (tp->typebuf_valid) {
-    free_typebuf();
+    rs_free_typebuf();
     typebuf = tp->save_typebuf;
   }
 
@@ -258,7 +201,7 @@ void openscript(char *name, bool directly)
     curscript--;
     return;
   }
-  save_typebuf();
+  rs_save_typebuf();
 
   // Execute the commands from the file right now when using ":source!"
   // after ":global" or ":argdo" or in a loop.  Also when another command
@@ -295,8 +238,7 @@ void openscript(char *name, bool directly)
 static void closescript(void)
 {
   assert(curscript >= 0);
-  free_typebuf();
-  typebuf = saved_typebuf[curscript];
+  rs_close_typebuf();
 
   file_close(&scriptin[curscript], false);
   curscript--;
@@ -331,7 +273,7 @@ bool open_scriptin(char *scriptin_name)
     curscript--;
     return false;
   }
-  save_typebuf();
+  rs_save_typebuf();
 
   return true;
 }
@@ -982,7 +924,7 @@ int vgetorpeek(bool advance)
     typebuf_was_empty = false;
   }
 
-  init_typebuf();
+  rs_init_typebuf();
   rs_start_stuff();
   check_end_reg_executing(advance);
   do {
@@ -1616,24 +1558,7 @@ int nvim_get_old_mod_mask(void) { return old_mod_mask; }
 void nvim_set_old_mod_mask(int val) { old_mod_mask = val; }
 int nvim_get_typebuf_silent(void) { return typebuf.tb_silent; }
 int nvim_get_typebuf_no_abbr_cnt(void) { return typebuf.tb_no_abbr_cnt; }
-void nvim_init_typebuf(void) { init_typebuf(); }
-int nvim_grow_typebuf(int new_buflen)
-{
-  // Grow the typeahead buffer
-  int new_size = new_buflen;
-  uint8_t *new_buf = xrealloc(typebuf.tb_buf, (size_t)new_size);
-  uint8_t *new_noremap = xrealloc(typebuf.tb_noremap, (size_t)new_size);
-
-  if (new_buf == NULL || new_noremap == NULL) {
-    // Realloc failed - this shouldn't happen with xrealloc but handle it
-    return 0;
-  }
-
-  typebuf.tb_buf = new_buf;
-  typebuf.tb_noremap = new_noremap;
-  typebuf.tb_buflen = new_size;
-  return 1;
-}
+void nvim_init_typebuf(void) { rs_init_typebuf(); }
 
 size_t nvim_get_last_recorded_len(void) { return last_recorded_len; }
 void nvim_set_last_recorded_len(size_t val) { last_recorded_len = val; }
