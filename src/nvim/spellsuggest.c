@@ -632,13 +632,13 @@ static void spell_find_suggest(char *badptr, int badlen, suginfo_T *su, int maxc
   int c = utf_ptr2char(su->su_badptr);
   if (!SPELL_ISUPPER(c) && attr == HLF_COUNT) {
     make_case_word(su->su_badword, buf, WF_ONECAP);
-    add_suggestion(su, &su->su_ga, buf, su->su_badlen, SCORE_ICASE,
-                   0, true, su->su_sallang, false);
+    rs_add_suggestion(su, &su->su_ga, buf, su->su_badlen, SCORE_ICASE,
+                      0, true, su->su_sallang, false);
   }
 
   // Ban the bad word itself.  It may appear in another region.
   if (banbadword) {
-    add_banned(su, su->su_badword);
+    rs_add_banned(su, su->su_badword);
   }
 
   // Make a copy of 'spellsuggest', because the expression may change it.
@@ -697,8 +697,8 @@ static void spell_suggest_expr(suginfo_T *su, char *expr)
         // Get the word and the score from the items.
         int score = get_spellword(TV_LIST_ITEM_TV(li)->vval.v_list, &p);
         if (score >= 0 && score <= su->su_maxscore) {
-          add_suggestion(su, &su->su_ga, p, su->su_badlen,
-                         score, 0, true, su->su_sallang, false);
+          rs_add_suggestion(su, &su->su_ga, p, su->su_badlen,
+                            score, 0, true, su->su_sallang, false);
         }
       }
     });
@@ -706,8 +706,9 @@ static void spell_suggest_expr(suginfo_T *su, char *expr)
   }
 
   // Remove bogus suggestions, sort and truncate at "maxcount".
-  check_suggestions(su, &su->su_ga);
-  cleanup_suggestions(&su->su_ga, su->su_maxscore, su->su_maxcount);
+  rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
+  rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
+                         su->su_maxscore, su->su_maxcount);
 }
 
 /// Find suggestions in file "fname".  Used for "file:" in 'spellsuggest'.
@@ -745,16 +746,17 @@ static void spell_suggest_file(suginfo_T *su, char *fname)
         p = cword;
       }
 
-      add_suggestion(su, &su->su_ga, p, su->su_badlen,
-                     SCORE_FILE, 0, true, su->su_sallang, false);
+      rs_add_suggestion(su, &su->su_ga, p, su->su_badlen,
+                        SCORE_FILE, 0, true, su->su_sallang, false);
     }
   }
 
   fclose(fd);
 
   // Remove bogus suggestions, sort and truncate at "maxcount".
-  check_suggestions(su, &su->su_ga);
-  cleanup_suggestions(&su->su_ga, su->su_maxscore, su->su_maxcount);
+  rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
+  rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
+                         su->su_maxscore, su->su_maxcount);
 }
 
 /// Find suggestions for the internal method indicated by "sps_flags".
@@ -767,15 +769,15 @@ static void spell_suggest_intern(suginfo_T *su, bool interactive)
   //
   // Set a maximum score to limit the combination of operations that is
   // tried.
-  suggest_try_special(su);
+  rs_suggest_try_special(su);
 
   // 2. Try inserting/deleting/swapping/changing a letter, use REP entries
   //    from the .aff file and inserting a space (split the word).
-  suggest_try_change(su);
+  rs_suggest_try_change(su);
 
   // For the resulting top-scorers compute the sound-a-like score.
   if (sps_flags & SPS_DOUBLE) {
-    score_comp_sal(su);
+    rs_score_comp_sal(su);
   }
 
   // 3. Try finding sound-a-like words.
@@ -783,7 +785,7 @@ static void spell_suggest_intern(suginfo_T *su, bool interactive)
     if (sps_flags & SPS_BEST) {
       // Adjust the word score for the suggestions found so far for how
       // they sounds like.
-      rescore_suggestions(su);
+      rs_rescore_suggestions(su);
     }
 
     // While going through the soundfold tree "su_maxscore" is the score
@@ -794,24 +796,24 @@ static void spell_suggest_intern(suginfo_T *su, bool interactive)
     // faster and often already finds the top-N suggestions.  If we didn't
     // find many suggestions try again with a higher edit distance.
     // "sl_sounddone" is used to avoid doing the same word twice.
-    suggest_try_soundalike_prep();
+    rs_suggest_try_soundalike_prep();
     su->su_maxscore = SCORE_SFMAX1;
     su->su_sfmaxscore = SCORE_MAXINIT * 3;
-    suggest_try_soundalike(su);
+    rs_suggest_try_soundalike(su);
     if (su->su_ga.ga_len < SUG_CLEAN_COUNT(su)) {
       // We didn't find enough matches, try again, allowing more
       // changes to the soundfold word.
       su->su_maxscore = SCORE_SFMAX2;
-      suggest_try_soundalike(su);
+      rs_suggest_try_soundalike(su);
       if (su->su_ga.ga_len < SUG_CLEAN_COUNT(su)) {
         // Still didn't find enough matches, try again, allowing even
         // more changes to the soundfold word.
         su->su_maxscore = SCORE_SFMAX3;
-        suggest_try_soundalike(su);
+        rs_suggest_try_soundalike(su);
       }
     }
     su->su_maxscore = su->su_sfmaxscore;
-    suggest_try_soundalike_finish();
+    rs_suggest_try_soundalike_finish();
   }
 
   // When CTRL-C was hit while searching do show the results.  Only clear
@@ -825,12 +827,13 @@ static void spell_suggest_intern(suginfo_T *su, bool interactive)
   if ((sps_flags & SPS_DOUBLE) == 0 && su->su_ga.ga_len != 0) {
     if (sps_flags & SPS_BEST) {
       // Adjust the word score for how it sounds like.
-      rescore_suggestions(su);
+      rs_rescore_suggestions(su);
     }
 
     // Remove bogus suggestions, sort and truncate at "maxcount".
-    check_suggestions(su, &su->su_ga);
-    cleanup_suggestions(&su->su_ga, su->su_maxscore, su->su_maxcount);
+    rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
+    rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
+                           su->su_maxscore, su->su_maxcount);
   }
 }
 
@@ -846,162 +849,4 @@ static void spell_find_cleanup(suginfo_T *su)
   hash_clear_all(&su->su_banned, 0);
 }
 
-/// Try finding suggestions by recognizing specific situations.
-static void suggest_try_special(suginfo_T *su)
-{
-  rs_suggest_try_special(su);
-}
 
-/// Try finding suggestions by adding/removing/swapping letters.
-static void suggest_try_change(suginfo_T *su)
-{
-  rs_suggest_try_change(su);
-}
-
-// Check the maximum score, if we go over it we won't try this change.
-#define TRY_DEEPER(su, stack, depth, add) \
-  ((depth) < MAXWLEN - 1 && (stack)[depth].ts_score + (add) < (su)->su_maxscore)
-
-/// Try finding suggestions by adding/removing/swapping letters.
-///
-/// This uses a state machine.  At each node in the tree we try various
-/// operations.  When trying if an operation works "depth" is increased and the
-/// stack[] is used to store info.  This allows combinations, thus insert one
-/// character, replace one and delete another.  The number of changes is
-/// limited by su->su_maxscore.
-///
-/// After implementing this I noticed an article by Kemal Oflazer that
-/// describes something similar: "Error-tolerant Finite State Recognition with
-/// Applications to Morphological Analysis and Spelling Correction" (1996).
-/// The implementation in the article is simplified and requires a stack of
-/// unknown depth.  The implementation here only needs a stack depth equal to
-/// the length of the word.
-///
-/// This is also used for the sound-folded word, "soundfold" is true then.
-/// The mechanism is the same, but we find a match with a sound-folded word
-/// that comes from one or more original words.  Each of these words may be
-/// added, this is done by add_sound_suggest().
-/// Don't use:
-///      the prefix tree or the keep-case tree
-///      "su->su_badlen"
-///      anything to do with upper and lower case
-///      anything to do with word or non-word characters ("spell_iswordp()")
-///      banned words
-///      word flags (rare, region, compounding)
-///      word splitting for now
-///      "similar_chars()"
-///      use "slang->sl_repsal" instead of "lp->lp_replang->sl_rep"
-static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soundfold)
-{
-  rs_suggest_trie_walk(su, lp, fword, soundfold);
-}
-
-/// Compute the sound-a-like score for suggestions in su->su_ga and add them to
-/// su->su_sga.
-static void score_comp_sal(suginfo_T *su)
-{
-  rs_score_comp_sal(su);
-}
-
-/// For the goodword in "stp" compute the soundalike score compared to the
-/// badword.
-///
-/// @param badsound  sound-folded badword
-static int stp_sal_score(suggest_T *stp, suginfo_T *su, slang_T *slang, char *badsound)
-{
-  return rs_stp_sal_score(stp, su->su_badptr, su->su_badlen, slang, badsound);
-}
-
-/// structure used to store soundfolded words that add_sound_suggest() has
-/// handled already.
-typedef struct {
-  int16_t sft_score;   ///< lowest score used
-  uint8_t sft_word[];   ///< soundfolded word
-} sftword_T;
-
-static sftword_T dumsft;
-#define HIKEY2SFT(p)  ((sftword_T *)((p) - (dumsft.sft_word - (uint8_t *)&dumsft)))
-#define HI2SFT(hi)     HIKEY2SFT((hi)->hi_key)
-
-/// Prepare for calling suggest_try_soundalike().
-static void suggest_try_soundalike_prep(void)
-{
-  rs_suggest_try_soundalike_prep();
-}
-
-/// Find suggestions by comparing the word in a sound-a-like form.
-/// Note: This doesn't support postponed prefixes.
-static void suggest_try_soundalike(suginfo_T *su)
-{
-  rs_suggest_try_soundalike(su);
-}
-
-/// Finish up after calling suggest_try_soundalike().
-static void suggest_try_soundalike_finish(void)
-{
-  rs_suggest_try_soundalike_finish();
-}
-
-/// A match with a soundfolded word is found.  Add the good word(s) that
-/// produce this soundfolded word.
-///
-/// @param score  soundfold score
-static void add_sound_suggest(suginfo_T *su, char *goodword, int score, langp_T *lp)
-{
-  rs_add_sound_suggest(su, goodword, score, lp);
-}
-
-/// Adds a suggestion to the list of suggestions.
-/// For a suggestion that is already in the list the lowest score is remembered.
-///
-/// @param gap  either su_ga or su_sga
-/// @param badlenarg  len of bad word replaced with "goodword"
-/// @param had_bonus  value for st_had_bonus
-/// @param slang  language for sound folding
-/// @param maxsf  su_maxscore applies to soundfold score, su_sfmaxscore to the total score.
-static void add_suggestion(suginfo_T *su, garray_T *gap, const char *goodword, int badlenarg,
-                           int score, int altscore, bool had_bonus, slang_T *slang, bool maxsf)
-{
-  rs_add_suggestion(su, gap, goodword, badlenarg, score, altscore, had_bonus, slang, maxsf);
-}
-
-/// Suggestions may in fact be flagged as errors.  Esp. for banned words and
-/// for split words, such as "the the".  Remove these from the list here.
-///
-/// @param gap  either su_ga or su_sga
-static void check_suggestions(suginfo_T *su, garray_T *gap)
-{
-  rs_check_suggestions((suggest_T *)gap->ga_data, &gap->ga_len, su->su_badptr);
-}
-
-/// Add a word to be banned.
-static void add_banned(suginfo_T *su, char *word)
-{
-  rs_add_banned(su, word);
-}
-
-/// Recompute the score for all suggestions if sound-folding is possible.  This
-/// is slow, thus only done for the final results.
-static void rescore_suggestions(suginfo_T *su)
-{
-  rs_rescore_suggestions(su);
-}
-
-/// Recompute the score for one suggestion if sound-folding is possible.
-static void rescore_one(suginfo_T *su, suggest_T *stp)
-{
-  rs_rescore_one(su, stp);
-}
-
-/// Cleanup the suggestions:
-/// - Sort on score.
-/// - Remove words that won't be displayed.
-///
-/// @param keep  nr of suggestions to keep
-///
-/// @return  the maximum score in the list or "maxscore" unmodified.
-static int cleanup_suggestions(garray_T *gap, int maxscore, int keep)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_cleanup_suggestions((suggest_T *)gap->ga_data, &gap->ga_len, maxscore, keep);
-}
