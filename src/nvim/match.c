@@ -4,18 +4,15 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
-
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
 #include "nvim/drawscreen.h"
 #include "nvim/errors.h"
 #include "nvim/eval/funcs.h"
+#include "nvim/ex_docmd.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/window.h"
-#include "nvim/ex_cmds_defs.h"
-#include "nvim/ex_docmd.h"
 #include "nvim/fold.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
@@ -33,7 +30,6 @@
 #include "nvim/pos_defs.h"
 #include "nvim/profile.h"
 #include "nvim/regexp.h"
-#include "nvim/strings.h"
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
@@ -626,8 +622,7 @@ cleanup:
   return result;
 }
 
-// Rust-exported symbols used by callers remaining in this file.
-extern int match_delete(win_T *wp, int id, bool perr);
+// Rust-exported symbol used by f_matcharg.
 extern matchitem_T *get_match(win_T *wp, int id);
 
 
