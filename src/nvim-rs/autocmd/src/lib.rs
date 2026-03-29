@@ -33,6 +33,8 @@ const EVENT_CURSORHOLDI: c_int = 38;
 const EVENT_FOCUSGAINED: c_int = 66;
 const EVENT_FOCUSLOST: c_int = 67;
 const EVENT_TERMRESPONSE: c_int = 120;
+const EVENT_UIENTER: c_int = 126;
+const EVENT_UILEAVE: c_int = 127;
 const NUM_EVENTS: c_int = 141;
 
 // C constants from vim_defs.h
@@ -216,6 +218,14 @@ extern "C" {
     fn rs_augroup_add(name: *const c_char) -> c_int;
     #[link_name = "augroup_name"]
     fn rs_augroup_name(group: c_int) -> *const c_char;
+
+    // Phase 3: do_autocmd_uienter dependencies
+    fn nvim_get_starting() -> c_int;
+    fn get_v_event(save: *mut c_void) -> *mut c_void;
+    fn restore_v_event(dict: *mut c_void, save: *mut c_void);
+    #[link_name = "tv_dict_add_nr"]
+    fn nvim_autocmd_tv_dict_add_nr(dict: *mut c_void, key: *const c_char, key_len: usize, nr: i64);
+    fn tv_dict_set_keys_readonly(dict: *mut c_void);
 
     // Phase 2: ex_doautoall dependencies
     fn nvim_get_firstbuf() -> *mut c_void;
@@ -1763,6 +1773,55 @@ pub unsafe extern "C" fn rs_ex_doautoall(eap: *mut c_void) {
             do_modelines_flags(0);
         }
     }
+}
+
+// Phase 3: do_autocmd_uienter
+
+/// `NO_SCREEN` from globals.h: startup not yet showing a screen.
+const NO_SCREEN: c_int = 2;
+
+/// Size of `save_v_event_T`: bool (1) + padding (7) + hashtab_T (296) = 304 bytes.
+const SAVE_V_EVENT_SIZE: usize = 304;
+
+/// Static recursion guard for `do_autocmd_uienter`.
+static UIENTER_RECURSIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Trigger UIEnter or UILeave autocommand with channel info in v:event.
+///
+/// # Safety
+/// Calls into C. Must be called from the main Neovim thread.
+#[unsafe(export_name = "do_autocmd_uienter")]
+pub unsafe extern "C" fn rs_do_autocmd_uienter(chanid: u64, attached: bool) {
+    use std::sync::atomic::Ordering;
+
+    if nvim_get_starting() == NO_SCREEN {
+        return; // user config hasn't been sourced yet
+    }
+    if UIENTER_RECURSIVE.load(Ordering::Relaxed) {
+        return; // disallow recursion
+    }
+    UIENTER_RECURSIVE.store(true, Ordering::Relaxed);
+
+    let mut save_buf = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::zeroed();
+    let dict = get_v_event(save_buf.as_mut_ptr().cast::<c_void>());
+    nvim_autocmd_tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as i64);
+    tv_dict_set_keys_readonly(dict);
+
+    let event = if attached {
+        EVENT_UIENTER
+    } else {
+        EVENT_UILEAVE
+    };
+    rs_apply_autocmds(
+        event,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        false,
+        nvim_autocmd_get_curbuf_ptr(),
+    );
+
+    restore_v_event(dict, save_buf.as_mut_ptr().cast::<c_void>());
+    UIENTER_RECURSIVE.store(false, Ordering::Relaxed);
 }
 
 // Phase 3: Migrated event trigger functions

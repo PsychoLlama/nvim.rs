@@ -1217,35 +1217,6 @@ void may_trigger_vim_suspend_resume(bool suspend)
   }
 }
 
-// UI Enter
-void do_autocmd_uienter(uint64_t chanid, bool attached)
-{
-  static bool recursive = false;
-
-#ifdef EXITFREE
-  if (entered_free_all_mem) {
-    return;
-  }
-#endif
-  if (starting == NO_SCREEN) {
-    return;  // user config hasn't been sourced yet
-  }
-  if (recursive) {
-    return;  // disallow recursion
-  }
-  recursive = true;
-
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-  assert(chanid < VARNUMBER_MAX);
-  tv_dict_add_nr(dict, S_LEN("chan"), (varnumber_T)chanid);
-  tv_dict_set_keys_readonly(dict);
-  apply_autocmds(attached ? EVENT_UIENTER : EVENT_UILEAVE, NULL, NULL, false, curbuf);
-  restore_v_event(dict, &save_v_event);
-
-  recursive = false;
-}
-
 void do_filetype_autocmd(buf_T *buf, bool force)
 {
   static int ft_recursive = 0;
