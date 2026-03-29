@@ -52,7 +52,7 @@ const VV_TERMRESPONSE: c_int = 11;
 // =============================================================================
 
 /// Combined pattern info returned by `nvim_autocmd_get_pat_info`.
-/// Matches the C `AutoPatInfo` typedef in `autocmd.c`.
+/// Matches the C `AutoPatInfo` typedef in `autocmd.h`.
 #[repr(C)]
 pub struct AutoPatInfo {
     pub is_null: c_int,
@@ -61,6 +61,7 @@ pub struct AutoPatInfo {
     pub pat: *const c_char,
     pub patlen: c_int,
     pub pat_id: usize,
+    pub id: i64, // AutoCmd ID (from AutoCmd.id); added in Phase 5
 }
 
 /// Mirrors C `Event` struct from `event/defs.h` for passing to `multiqueue_put_event`.
@@ -656,6 +657,28 @@ pub unsafe extern "C" fn rs_aubuflocal_remove(bufnr: c_int) {
         }
     }
     rs_au_cleanup();
+}
+
+/// Delete all autocommands with the given ID. Multiple AutoCmd entries may share the same ID.
+///
+/// Returns true if at least one was deleted.
+///
+/// # Safety
+/// Calls into C. Must be called from the main Neovim thread.
+#[unsafe(export_name = "autocmd_delete_id")]
+pub unsafe extern "C" fn rs_autocmd_delete_id(id: i64) -> bool {
+    let mut success = false;
+    for event in 0..NUM_EVENTS {
+        let size = nvim_get_autocmds_count(event);
+        for i in 0..size {
+            let info = nvim_autocmd_get_pat_info(event, i);
+            if info.is_null == 0 && info.id == id {
+                nvim_autocmd_del_at(event, i);
+                success = true;
+            }
+        }
+    }
+    success
 }
 
 // =============================================================================

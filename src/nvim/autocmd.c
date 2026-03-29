@@ -1160,24 +1160,6 @@ char *getnextac(int c, void *cookie, int indent, bool do_concat)
 /// Deletes an autocmd by ID.
 /// Only autocmds created via the API have IDs associated with them. There
 /// is no way to delete a specific autocmd created via :autocmd
-bool autocmd_delete_id(int64_t id)
-{
-  assert(id > 0);
-  bool success = false;
-
-  // Note that since multiple AutoCmd objects can have the same ID, we need to do a full scan.
-  FOR_ALL_AUEVENTS(event) {
-    AutoCmdVec *const acs = &autocmds[(int)event];
-    for (size_t i = 0; i < kv_size(*acs); i++) {
-      AutoCmd *const ac = &kv_A(*acs, i);
-      if (ac->id == id) {
-        aucmd_del(ac);
-        success = true;
-      }
-    }
-  }
-  return success;
-}
 
 /// Gets an (allocated) string representation of an autocmd command/callback.
 /// NOTE: This is kept as the C implementation for internal use by accessors.
@@ -1290,7 +1272,8 @@ AutoPatInfo nvim_autocmd_get_pat_info(int event, size_t idx)
   if (idx >= kv_size(*acs) || kv_A(*acs, idx).pat == NULL) {
     return (AutoPatInfo){ .is_null = 1 };
   }
-  AutoPat *const ap = kv_A(*acs, idx).pat;
+  AutoCmd *const ac = &kv_A(*acs, idx);
+  AutoPat *const ap = ac->pat;
   return (AutoPatInfo){
     .is_null = 0,
     .group = ap->group,
@@ -1298,6 +1281,7 @@ AutoPatInfo nvim_autocmd_get_pat_info(int event, size_t idx)
     .pat = ap->pat,
     .patlen = ap->patlen,
     .pat_id = (uintptr_t)ap,
+    .id = ac->id,
   };
 }
 

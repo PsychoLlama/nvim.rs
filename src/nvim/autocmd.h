@@ -72,6 +72,7 @@ typedef struct {
   const char *pat;
   int patlen;
   uintptr_t pat_id;
+  int64_t id;  ///< AutoCmd ID (from AutoCmd.id)
 } AutoPatInfo;
 
 /// Combined handler info for Rust FFI (see nvim_autocmd_get_handler_info).
@@ -98,6 +99,7 @@ void augroup_del(char *name, bool stupid_legacy_mode);
 void ex_doautoall(exarg_T *eap);
 void do_autocmd_uienter(uint64_t chanid, bool attached);
 void may_trigger_vim_suspend_resume(bool suspend);
+bool autocmd_delete_id(int64_t id);
 void block_autocmds(void);
 void unblock_autocmds(void);
 bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf);
