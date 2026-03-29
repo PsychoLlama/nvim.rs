@@ -305,6 +305,7 @@ extern "C" {
     fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
 
     /// Get window col offset
+    #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: WinHandle) -> c_int;
 
     /// Get window virtcol
@@ -313,10 +314,10 @@ extern "C" {
     /// Set window `w_set_curswant` flag
     fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
 
-    /// Call `changed_cline_bef_curs`
-    fn nvim_changed_cline_bef_curs(wp: WinHandle);
+    fn changed_cline_bef_curs(wp: WinHandle);
 
     /// Call `validate_virtcol`
+    #[link_name = "validate_virtcol"]
     fn nvim_validate_virtcol(wp: WinHandle);
 
     /// Get `sidescrolloff` value
@@ -1201,7 +1202,7 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
     }
 
     nvim_win_set_leftcol(curwin, leftcol);
-    nvim_changed_cline_bef_curs(curwin);
+    changed_cline_bef_curs(curwin);
 
     // Calculate the last visible column
     let view_width = nvim_win_get_view_width(curwin);
@@ -1241,7 +1242,7 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
         if rs_coladvance(curwin, e + 1) == FAIL {
             // there isn't another character, adjust w_leftcol instead
             nvim_win_set_leftcol(curwin, s);
-            nvim_changed_cline_bef_curs(curwin);
+            changed_cline_bef_curs(curwin);
         }
     }
 

@@ -410,8 +410,10 @@ extern "C" {
     fn nvim_win_get_p_spk_char() -> c_int;
     fn nvim_get_exiting() -> c_int;
     fn rs_win_comp_scroll(wp: WinHandle);
+    #[link_name = "validate_cursor"]
     fn nvim_validate_cursor_win(wp: WinHandle);
     fn nvim_changed_line_abv_curs_win(wp: WinHandle);
+    #[link_name = "invalidate_botline"]
     fn nvim_invalidate_botline(wp: WinHandle);
     fn nvim_curs_columns_win(wp: WinHandle);
     fn nvim_terminal_check_size_win(wp: WinHandle);

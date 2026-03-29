@@ -109,15 +109,19 @@ extern "C" {
     fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
 
     /// cursor_down_inner(wp, n, skip_conceal).
-    fn nvim_cursor_down_inner(wp: WinHandle, n: c_int, skip_conceal: c_int);
+    #[link_name = "cursor_down_inner"]
+    fn nvim_cursor_down_inner(wp: WinHandle, n: c_int, skip_conceal: bool);
 
     /// cursor_up_inner(wp, n, skip_conceal).
-    fn nvim_cursor_up_inner(wp: WinHandle, n: c_int, skip_conceal: c_int);
+    #[link_name = "cursor_up_inner"]
+    fn nvim_cursor_up_inner(wp: WinHandle, n: c_int, skip_conceal: bool);
 
     /// invalidate_botline(wp).
+    #[link_name = "invalidate_botline"]
     fn nvim_invalidate_botline(wp: WinHandle);
 
     /// validate_botline(wp).
+    #[link_name = "validate_botline"]
     fn nvim_validate_botline(wp: WinHandle);
 
     /// scroll_to_fraction(wp, prev_height).
@@ -237,9 +241,9 @@ fn win_fix_scroll_impl(resize: bool) {
 
                     // Add difference in height and row to botline.
                     if diff > 0 {
-                        nvim_cursor_down_inner(wp, diff, 0);
+                        nvim_cursor_down_inner(wp, diff, false);
                     } else {
-                        nvim_cursor_up_inner(wp, -diff, 0);
+                        nvim_cursor_up_inner(wp, -diff, false);
                     }
 
                     // Scroll to put the new cursor position at the bottom of screen.
@@ -325,12 +329,12 @@ fn win_fix_cursor_impl(normal: bool) {
 
         // Find top boundary: move from topline down by 'so'
         nvim_win_set_cursor_lnum(wp, nvim_win_get_topline(wp));
-        nvim_cursor_down_inner(wp, so, 0);
+        nvim_cursor_down_inner(wp, so, false);
         let top = nvim_win_get_cursor_lnum(wp);
 
         // Find bottom boundary: move from botline-1 up by 'so'
         nvim_win_set_cursor_lnum(wp, nvim_win_get_botline(wp) - 1);
-        nvim_cursor_up_inner(wp, so, 0);
+        nvim_cursor_up_inner(wp, so, false);
         let bot = nvim_win_get_cursor_lnum(wp);
 
         // Restore original cursor position

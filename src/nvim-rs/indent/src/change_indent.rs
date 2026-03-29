@@ -61,8 +61,7 @@ extern "C" {
     // Indentation
     fn nvim_shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: c_int);
 
-    // Display
-    fn nvim_changed_cline_bef_curs(wp: *mut c_void);
+    fn changed_cline_bef_curs(wp: *mut c_void);
 
     // Memory
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -224,7 +223,7 @@ pub unsafe extern "C" fn rs_change_indent(
     };
     nvim_set_curwin_cursor_col(final_col);
     nvim_curwin_set_w_set_curswant(true);
-    nvim_changed_cline_bef_curs(nvim_get_curwin());
+    changed_cline_bef_curs(nvim_get_curwin());
 
     // May have to adjust the start of the insert.
     if state & MODE_INSERT != 0 {

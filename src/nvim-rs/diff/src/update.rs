@@ -40,6 +40,7 @@ extern "C" {
 
     // Diff-specific
     fn rs_diff_check_fill(wp: WinHandle, lnum: c_int) -> c_int;
+    #[link_name = "check_topfill"]
     fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandle);
 

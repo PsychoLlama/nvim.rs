@@ -49,5 +49,10 @@ void cursor_correct_sms(win_T *wp);
 void redraw_for_cursorcolumn(win_T *wp);
 void comp_botline(win_T *wp);
 int virtcol2col(win_T *wp, linenr_T lnum, int vcol);
+int plines_correct_topline(win_T *wp, linenr_T lnum, linenr_T *nextp, bool limit_winheight,
+                            bool *foldedp);
+void validate_cursor_col(win_T *wp);
+void textpos2screenpos(win_T *wp, pos_T *pos, int *rowp, int *scolp, int *ccolp, int *ecolp,
+                       bool local);
 
 #include "move.h.generated.h"

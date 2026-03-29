@@ -1858,6 +1858,7 @@ extern "C" {
     fn decor_conceal_line(wp: WinHandle, lnum: LinenrT, force: bool) -> bool;
     fn invalidate_botline(wp: WinHandle);
     fn changed_line_abv_curs_win(wp: WinHandle);
+    #[link_name = "check_topfill"]
     fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn setpcmark();
     #[link_name = "rs_run_linematch"]

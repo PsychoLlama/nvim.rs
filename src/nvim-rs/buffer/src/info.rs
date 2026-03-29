@@ -69,6 +69,7 @@ extern "C" {
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
+    #[link_name = "validate_virtcol"]
     fn nvim_validate_virtcol(wp: WinHandle);
 
     fn rs_calc_percentage(part: i64, whole: i64) -> c_int;

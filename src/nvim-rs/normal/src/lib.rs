@@ -4432,7 +4432,9 @@ extern "C" {
 
 extern "C" {
     // Phase 1: nv_scroll_impl accessors (window-parameterized)
+    #[link_name = "validate_botline"]
     fn nvim_validate_botline(wp: WinHandle);
+    #[link_name = "cursor_correct"]
     fn nvim_cursor_correct(wp: WinHandle);
     fn nvim_win_get_botline(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;

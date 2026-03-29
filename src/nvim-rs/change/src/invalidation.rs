@@ -33,7 +33,7 @@ extern "C" {
 
     // Window state functions
     fn nvim_changed_line_abv_curs_win(win: WinHandle);
-    fn nvim_changed_cline_bef_curs(win: WinHandle);
+    fn changed_cline_bef_curs(win: WinHandle);
     fn nvim_approximate_botline_win(win: WinHandle);
     #[link_name = "rs_find_wl_entry"]
     fn nvim_find_wl_entry(win: WinHandle, lnum: LinenrT) -> c_int;
@@ -88,7 +88,7 @@ fn changed_lines_invalidate_win_impl(
         if cursor_lnum > lnum {
             nvim_changed_line_abv_curs_win(wp);
         } else if cursor_lnum == lnum && cursor_col >= col {
-            nvim_changed_cline_bef_curs(wp);
+            changed_cline_bef_curs(wp);
         }
 
         let botline = nvim_win_get_botline(wp);

@@ -65,6 +65,7 @@ extern "C" {
     fn nvim_emsg_id(id: c_int);
 
     /// Call beep_flush().
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush_wrapper();
 
     /// Remove a window from the window list.

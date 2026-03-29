@@ -2161,6 +2161,7 @@ extern "C" {
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
     fn changed_window_setting(wp: WinHandle);
+    #[link_name = "curs_columns"]
     fn nvim_curs_columns(wp: WinHandle, may_scroll: c_int);
     /// Direct Rust entry: foldinfo for a window+lnum.
     #[link_name = "rs_fold_info"]

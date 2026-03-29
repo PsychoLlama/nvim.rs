@@ -26,7 +26,9 @@ extern "C" {
     fn nvim_win_get_briopt_sbr(wp: WinHandle) -> bool;
     fn nvim_win_get_briopt_list(wp: WinHandle) -> c_int;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: WinHandle) -> c_int;
+    #[link_name = "win_col_off2"]
     fn nvim_win_col_off2(wp: WinHandle) -> c_int;
     fn vim_strsize(s: *const c_char) -> c_int;
 

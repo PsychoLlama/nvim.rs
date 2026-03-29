@@ -212,6 +212,7 @@ extern "C" {
     // nvim_cmd_with_count_exec removed: replaced by rs_cmd_with_count_exec (Phase 4)
     #[link_name = "do_cmdline_cmd"]
     fn nvim_do_cmdline_cmd_wrapper(cmd: *const u8) -> c_int;
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush_wrapper();
     #[link_name = "rs_one_window_in_tab"]
     fn nvim_one_window_curwin(wp: WinHandle, tp: TabpageHandle) -> c_int;

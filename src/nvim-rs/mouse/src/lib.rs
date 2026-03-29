@@ -733,9 +733,11 @@ extern "C" {
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
 
     /// Get column offset for line numbers etc.
+    #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: WinHandle) -> c_int;
 
     /// Get secondary column offset.
+    #[link_name = "win_col_off2"]
     fn nvim_win_col_off2(wp: WinHandle) -> c_int;
 
     /// Convert virtual column to character column (C impl with charsize).

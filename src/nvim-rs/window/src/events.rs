@@ -113,14 +113,14 @@ extern "C" {
     fn rs_grid_adjust(view: *mut c_void, row_off: *mut c_int, col_off: *mut c_int) -> *mut c_void;
 
     // textpos2screenpos
-    fn rs_textpos2screenpos(
+    fn textpos2screenpos(
         wp: WinHandle,
         pos: *const PosT,
         rowp: *mut c_int,
         scolp: *mut c_int,
         ccolp: *mut c_int,
         ecolp: *mut c_int,
-        local: c_int,
+        local: bool,
     );
 
     // Buffer line count (for clamping lnum)
@@ -280,14 +280,14 @@ unsafe fn resolve_window_relative(
         let mut start_col: c_int = 0;
         let mut cursor_col: c_int = 0;
         let mut end_col: c_int = 0;
-        rs_textpos2screenpos(
+        textpos2screenpos(
             win,
             std::ptr::addr_of!(pos),
             std::ptr::addr_of_mut!(screen_row),
             std::ptr::addr_of_mut!(start_col),
             std::ptr::addr_of_mut!(cursor_col),
             std::ptr::addr_of_mut!(end_col),
-            1,
+            false,
         );
         row += f64::from(screen_row - 1);
         col += f64::from(start_col - 1);

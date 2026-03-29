@@ -1281,6 +1281,7 @@ extern "C" {
     fn nvim_get_mouse_grid() -> c_int;
     fn nvim_mouse_find_win_inner(grid: *mut c_int, row: *mut c_int, col: *mut c_int)
         -> *mut c_void;
+    #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: *mut c_void) -> c_int;
     fn nvim_term_win_get_buf(wp: *mut c_void) -> *mut c_void;
     fn nvim_win_get_winbar_height(wp: *mut c_void) -> c_int;

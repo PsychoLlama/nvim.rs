@@ -147,12 +147,14 @@ extern "C" {
     // navigation/update helpers
     fn win_col_off(wp: WinHandle) -> c_int;
     fn nvim_validate_cursor();
+    #[link_name = "validate_botline"]
     fn nvim_validate_botline(wp: WinHandle);
     fn update_curswant();
 
     // view restoration helpers
     fn nvim_set_topline(wp: WinHandle, lnum: c_int);
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
+    #[link_name = "check_topfill"]
     fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn changed_window_setting(wp: WinHandle);
     fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: c_int);
