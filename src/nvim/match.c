@@ -49,8 +49,6 @@ extern int rs_match_add_pos(win_T *wp, const char *grp, int prio, int id,
                             const linenr_T *lnums, const colnr_T *cols,
                             const int *lens, int count);
 
-static const char *e_invalwindow = N_("E957: Invalid window number");
-
 // Accessor functions for Rust FFI
 
 /// Get the head of the match list for a window.
@@ -632,31 +630,6 @@ cleanup:
 extern int match_delete(win_T *wp, int id, bool perr);
 extern matchitem_T *get_match(win_T *wp, int id);
 
-static int matchadd_dict_arg(typval_T *tv, const char **conceal_char, win_T **win)
-{
-  dictitem_T *di;
-
-  if (tv->v_type != VAR_DICT) {
-    emsg(_(e_dictreq));
-    return FAIL;
-  }
-
-  if ((di = tv_dict_find(tv->vval.v_dict, S_LEN("conceal"))) != NULL) {
-    *conceal_char = tv_get_string(&di->di_tv);
-  }
-
-  if ((di = tv_dict_find(tv->vval.v_dict, S_LEN("window"))) == NULL) {
-    return OK;
-  }
-
-  *win = find_win_by_nr_or_id(&di->di_tv);
-  if (*win == NULL) {
-    emsg(_(e_invalwindow));
-    return FAIL;
-  }
-
-  return OK;
-}
 
 /// "getmatches()" function
 void f_getmatches(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -813,98 +786,7 @@ void f_setmatches(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "matchadd()" function
-void f_matchadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char grpbuf[NUMBUFLEN];
-  char patbuf[NUMBUFLEN];
-  // group
-  const char *const grp = tv_get_string_buf_chk(&argvars[0], grpbuf);
-  // pattern
-  const char *const pat = tv_get_string_buf_chk(&argvars[1], patbuf);
-  // default priority
-  int prio = 10;
-  int id = -1;
-  bool error = false;
-  const char *conceal_char = NULL;
-  win_T *win = curwin;
 
-  rettv->vval.v_number = -1;
-
-  if (grp == NULL || pat == NULL) {
-    return;
-  }
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    prio = (int)tv_get_number_chk(&argvars[2], &error);
-    if (argvars[3].v_type != VAR_UNKNOWN) {
-      id = (int)tv_get_number_chk(&argvars[3], &error);
-      if (argvars[4].v_type != VAR_UNKNOWN
-          && matchadd_dict_arg(&argvars[4], &conceal_char, &win) == FAIL) {
-        return;
-      }
-    }
-  }
-  if (error) {
-    return;
-  }
-  if (id >= 1 && id <= 3) {
-    semsg(_("E798: ID is reserved for \":match\": %" PRId64), (int64_t)id);
-    return;
-  }
-
-  rettv->vval.v_number = match_add(win, grp, pat, prio, id, NULL, conceal_char);
-}
-
-/// "matchaddpo()" function
-void f_matchaddpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = -1;
-
-  char buf[NUMBUFLEN];
-  const char *const group = tv_get_string_buf_chk(&argvars[0], buf);
-  if (group == NULL) {
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_LIST) {
-    semsg(_(e_listarg), "matchaddpos()");
-    return;
-  }
-
-  list_T *l;
-  l = argvars[1].vval.v_list;
-  if (tv_list_len(l) == 0) {
-    return;
-  }
-
-  bool error = false;
-  int prio = 10;
-  int id = -1;
-  const char *conceal_char = NULL;
-  win_T *win = curwin;
-
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    prio = (int)tv_get_number_chk(&argvars[2], &error);
-    if (argvars[3].v_type != VAR_UNKNOWN) {
-      id = (int)tv_get_number_chk(&argvars[3], &error);
-      if (argvars[4].v_type != VAR_UNKNOWN
-          && matchadd_dict_arg(&argvars[4], &conceal_char, &win) == FAIL) {
-        return;
-      }
-    }
-  }
-  if (error == true) {
-    return;
-  }
-
-  // id == 3 is ok because matchaddpos() is supposed to substitute :3match
-  if (id == 1 || id == 2) {
-    semsg(_("E798: ID is reserved for \"match\": %" PRId64), (int64_t)id);
-    return;
-  }
-
-  rettv->vval.v_number = match_add(win, group, NULL, prio, id, l, conceal_char);
-}
 
 /// "matcharg()" function
 void f_matcharg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

@@ -269,24 +269,355 @@ pub extern "C" fn rs_match_cmd_line_to_id(line: i64) -> c_int {
 // VimL f_* function implementations
 // =============================================================================
 
-/// Opaque handle to a `win_T`
-#[repr(C)]
-struct WinHandle {
-    _opaque: [u8; 0],
-}
+/// Opaque handle to a `win_T` (re-use from core to avoid type mismatches)
+use crate::core::WinHandle;
 
 /// Opaque pointer to `typval_T`
 type TypvalPtr = *mut std::ffi::c_void;
 
+/// Opaque pointer to a list (`list_T`)
+type ListPtr = *mut std::ffi::c_void;
+
+/// Opaque pointer to a list item (`listitem_T`)
+type ListItemPtr = *mut std::ffi::c_void;
+
 /// `EvalFuncData` (unused callback data, 8-byte union passed by value as pointer)
 type EvalFuncData = *mut std::ffi::c_void;
+
+/// `VAR_UNKNOWN` = 0, `VAR_NUMBER` = 1, `VAR_LIST` = 4, `VAR_DICT` = 5
+const VAR_UNKNOWN: c_int = 0;
+const VAR_NUMBER: c_int = 1;
+const VAR_LIST: c_int = 4;
+const VAR_DICT: c_int = 5;
+
+/// Size of number conversion buffer (NUMBUFLEN = 65)
+const NUMBUFLEN: usize = 65;
 
 extern "C" {
     fn get_optional_window(argvars: TypvalPtr, idx: c_int) -> *mut WinHandle;
     fn nvim_tv_get_number(tv: TypvalPtr) -> i64;
     fn nvim_tv_set_number(tv: TypvalPtr, n: i64);
+    fn nvim_tv_get_type(tv: TypvalPtr) -> c_int;
+    fn nvim_tv_get_list(tv: TypvalPtr) -> ListPtr;
+    fn nvim_tv_get_number_chk(tv: TypvalPtr, error: *mut bool) -> i64;
+    fn nvim_tv_get_string_buf_chk(
+        tv: TypvalPtr,
+        buf: *mut std::ffi::c_char,
+    ) -> *const std::ffi::c_char;
+    fn nvim_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
+    fn nvim_list_get_first(l: ListPtr) -> ListItemPtr;
+    fn nvim_listitem_get_next(li: ListItemPtr) -> ListItemPtr;
+    fn nvim_listitem_get_tv(li: ListItemPtr) -> TypvalPtr;
+    fn nvim_tv_list_len(l: ListPtr) -> c_int;
+    fn tv_dict_find(
+        dict: *mut std::ffi::c_void,
+        key: *const std::ffi::c_char,
+        len: c_int,
+    ) -> *mut std::ffi::c_void;
+    fn tv_get_string(tv: TypvalPtr) -> *const std::ffi::c_char;
+    fn find_win_by_nr_or_id(tv: TypvalPtr) -> *mut WinHandle;
     fn clear_matches(wp: *mut WinHandle);
     fn match_delete(wp: *mut WinHandle, id: c_int, perr: bool) -> c_int;
+    fn emsg(s: *const std::ffi::c_char);
+    fn semsg(fmt: *const std::ffi::c_char, ...);
+    fn nvim_get_curwin() -> *mut WinHandle;
+    static e_dictreq: [std::ffi::c_char; 0];
+    static e_listarg: [std::ffi::c_char; 0];
+}
+
+// =============================================================================
+// Phase 1 VimL f_* implementations
+// =============================================================================
+
+/// Helper that extracts optional conceal char and window from a dict arg.
+///
+/// Mirrors C `matchadd_dict_arg`.
+///
+/// `dictitem_T` layout: `{ typval_T di_tv; uint8_t di_flags; char di_key[]; }`.
+/// So `&di->di_tv` is at offset 0 -- a `dictitem_T *` can be cast directly
+/// to `typval_T *` (i.e. `TypvalPtr`).
+///
+/// `typval_T` layout: `{ int v_type; int v_lock; union vval; }` (16 bytes on
+/// 64-bit). `v_dict` is the pointer in `vval`, at offset 8.
+///
+/// # Safety
+///
+/// `tv` must be a valid `typval_T *`. `conceal_char` and `win` must be valid.
+unsafe fn matchadd_dict_arg_impl(
+    tv: TypvalPtr,
+    conceal_char: *mut *const std::ffi::c_char,
+    win: *mut *mut WinHandle,
+) -> c_int {
+    const FAIL: c_int = 0;
+    const OK: c_int = 1;
+
+    if nvim_tv_get_type(tv) != VAR_DICT {
+        emsg(e_dictreq.as_ptr());
+        return FAIL;
+    }
+
+    // typval_T: { int v_type (4) + int v_lock (4) + union vval (8) }
+    // v_dict is a pointer stored in vval at offset 8.
+    #[allow(clippy::cast_ptr_alignment)]
+    let dict_ptr: *mut std::ffi::c_void =
+        std::ptr::read_unaligned(tv.cast::<u8>().add(8).cast::<*mut std::ffi::c_void>());
+
+    let conceal_key = c"conceal".as_ptr();
+    let window_key = c"window".as_ptr();
+
+    // tv_dict_find returns dictitem_T*, whose first field is typval_T di_tv.
+    // So the returned pointer is directly usable as TypvalPtr.
+    let di_conceal = tv_dict_find(dict_ptr, conceal_key, 7);
+    if !di_conceal.is_null() {
+        // di_conceal points to dictitem_T; di_tv is at offset 0, so cast directly.
+        *conceal_char = tv_get_string(di_conceal.cast::<std::ffi::c_void>());
+    }
+
+    let di_window = tv_dict_find(dict_ptr, window_key, 6);
+    if di_window.is_null() {
+        return OK;
+    }
+
+    *win = find_win_by_nr_or_id(di_window.cast::<std::ffi::c_void>());
+    if (*win).is_null() {
+        emsg(E_INVALWINDOW.as_ptr().cast());
+        return FAIL;
+    }
+
+    OK
+}
+
+/// Error message: "E957: Invalid window number"
+static E_INVALWINDOW: &[u8] = b"E957: Invalid window number\0";
+
+/// `matchadd()` `VimL` function.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers.
+/// `argvars` must point to an array of at least 5 elements.
+#[export_name = "f_matchadd"]
+pub unsafe extern "C" fn rs_f_matchadd(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
+    use std::ffi::c_char;
+
+    nvim_tv_set_number(rettv, -1);
+
+    let mut grpbuf = [0u8; NUMBUFLEN];
+    let mut patbuf = [0u8; NUMBUFLEN];
+
+    let grp = nvim_tv_get_string_buf_chk(argvars, grpbuf.as_mut_ptr().cast::<c_char>());
+    let pat = nvim_tv_get_string_buf_chk(
+        nvim_tv_idx(argvars, 1),
+        patbuf.as_mut_ptr().cast::<c_char>(),
+    );
+
+    if grp.is_null() || pat.is_null() {
+        return;
+    }
+
+    let mut prio: c_int = 10;
+    let mut id: c_int = -1;
+    let mut error = false;
+    let mut conceal_char: *const c_char = std::ptr::null();
+    let mut win: *mut WinHandle = nvim_get_curwin();
+
+    let arg2 = nvim_tv_idx(argvars, 2);
+    if nvim_tv_get_type(arg2) != VAR_UNKNOWN {
+        prio = nvim_tv_get_number_chk(arg2, &raw mut error) as c_int;
+        let arg3 = nvim_tv_idx(argvars, 3);
+        if nvim_tv_get_type(arg3) != VAR_UNKNOWN {
+            id = nvim_tv_get_number_chk(arg3, &raw mut error) as c_int;
+            let arg4 = nvim_tv_idx(argvars, 4);
+            if nvim_tv_get_type(arg4) != VAR_UNKNOWN
+                && matchadd_dict_arg_impl(arg4, &raw mut conceal_char, &raw mut win) == 0
+            {
+                return;
+            }
+        }
+    }
+
+    if error {
+        return;
+    }
+
+    if (1..=3).contains(&id) {
+        let fmt = b"E798: ID is reserved for \":match\": %ld\0";
+        semsg(fmt.as_ptr().cast::<c_char>(), std::ffi::c_long::from(id));
+        return;
+    }
+
+    let result = crate::core::rs_match_add(win, grp, pat, prio, id, conceal_char);
+    nvim_tv_set_number(rettv, i64::from(result));
+}
+
+/// `matchaddpos()` `VimL` function.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers.
+/// `argvars` must point to an array of at least 5 elements.
+#[allow(clippy::too_many_lines)]
+#[export_name = "f_matchaddpos"]
+pub unsafe extern "C" fn rs_f_matchaddpos(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    use std::ffi::c_char;
+
+    nvim_tv_set_number(rettv, -1);
+
+    let mut buf = [0u8; NUMBUFLEN];
+    let group = nvim_tv_get_string_buf_chk(argvars, buf.as_mut_ptr().cast::<c_char>());
+    if group.is_null() {
+        return;
+    }
+
+    let arg1 = nvim_tv_idx(argvars, 1);
+    if nvim_tv_get_type(arg1) != VAR_LIST {
+        semsg(e_listarg.as_ptr(), c"matchaddpos()".as_ptr());
+        return;
+    }
+
+    let l = nvim_tv_get_list(arg1);
+    if nvim_tv_list_len(l) == 0 {
+        return;
+    }
+
+    let mut error = false;
+    let mut prio: c_int = 10;
+    let mut id: c_int = -1;
+    let mut conceal_char: *const c_char = std::ptr::null();
+    let mut win: *mut WinHandle = nvim_get_curwin();
+
+    let arg2 = nvim_tv_idx(argvars, 2);
+    if nvim_tv_get_type(arg2) != VAR_UNKNOWN {
+        prio = nvim_tv_get_number_chk(arg2, &raw mut error) as c_int;
+        let arg3 = nvim_tv_idx(argvars, 3);
+        if nvim_tv_get_type(arg3) != VAR_UNKNOWN {
+            id = nvim_tv_get_number_chk(arg3, &raw mut error) as c_int;
+            let arg4 = nvim_tv_idx(argvars, 4);
+            if nvim_tv_get_type(arg4) != VAR_UNKNOWN
+                && matchadd_dict_arg_impl(arg4, &raw mut conceal_char, &raw mut win) == 0
+            {
+                return;
+            }
+        }
+    }
+
+    if error {
+        return;
+    }
+
+    // id == 3 is ok because matchaddpos() substitutes :3match
+    if id == 1 || id == 2 {
+        let fmt = b"E798: ID is reserved for \"match\": %ld\0";
+        semsg(fmt.as_ptr().cast::<c_char>(), std::ffi::c_long::from(id));
+        return;
+    }
+
+    // Extract positions from VimL list
+    let count = nvim_tv_list_len(l);
+    let mut lnums: Vec<i32> = Vec::with_capacity(count as usize);
+    let mut cols: Vec<i32> = Vec::with_capacity(count as usize);
+    let mut lens: Vec<c_int> = Vec::with_capacity(count as usize);
+
+    let mut li = nvim_list_get_first(l);
+    let mut idx: c_int = 0;
+    while !li.is_null() {
+        let tv_li = nvim_listitem_get_tv(li);
+        let tv_type = nvim_tv_get_type(tv_li);
+
+        let (lnum, col, len): (i32, i32, c_int);
+
+        if tv_type == VAR_LIST {
+            let subl = nvim_tv_get_list(tv_li);
+            let mut subli = nvim_list_get_first(subl);
+            if subli.is_null() {
+                let fmt = b"E5030: Empty list at position %d\0";
+                semsg(fmt.as_ptr().cast::<c_char>(), idx as std::ffi::c_int);
+                return;
+            }
+
+            let mut err = false;
+            lnum = nvim_tv_get_number_chk(nvim_listitem_get_tv(subli), &raw mut err) as i32;
+            if err {
+                return;
+            }
+            if lnum <= 0 {
+                li = nvim_listitem_get_next(li);
+                idx += 1;
+                continue;
+            }
+
+            subli = nvim_listitem_get_next(subli);
+            col = if subli.is_null() {
+                len = 1;
+                0
+            } else {
+                let c = nvim_tv_get_number_chk(nvim_listitem_get_tv(subli), &raw mut err) as i32;
+                if err {
+                    return;
+                }
+                if c < 0 {
+                    li = nvim_listitem_get_next(li);
+                    idx += 1;
+                    continue;
+                }
+                subli = nvim_listitem_get_next(subli);
+                len = if subli.is_null() {
+                    1
+                } else {
+                    let ln =
+                        nvim_tv_get_number_chk(nvim_listitem_get_tv(subli), &raw mut err) as c_int;
+                    if err {
+                        return;
+                    }
+                    if ln < 0 {
+                        li = nvim_listitem_get_next(li);
+                        idx += 1;
+                        continue;
+                    }
+                    ln
+                };
+                c
+            };
+        } else if tv_type == VAR_NUMBER {
+            let n = nvim_tv_get_number(tv_li);
+            if n <= 0 {
+                li = nvim_listitem_get_next(li);
+                idx += 1;
+                continue;
+            }
+            lnum = n as i32;
+            col = 0;
+            len = 0;
+        } else {
+            let fmt = b"E5031: List or number required at position %d\0";
+            semsg(fmt.as_ptr().cast::<c_char>(), idx as std::ffi::c_int);
+            return;
+        }
+
+        lnums.push(lnum);
+        cols.push(col);
+        lens.push(len);
+        li = nvim_listitem_get_next(li);
+        idx += 1;
+    }
+
+    let actual = lnums.len() as c_int;
+    let result = crate::core::rs_match_add_pos(
+        win,
+        group,
+        prio,
+        id,
+        conceal_char,
+        lnums.as_ptr(),
+        cols.as_ptr(),
+        lens.as_ptr(),
+        actual,
+    );
+    nvim_tv_set_number(rettv, i64::from(result));
 }
 
 /// `clearmatches()` `VimL` function.
