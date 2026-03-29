@@ -27,6 +27,7 @@ pub mod addsub_full;
 pub mod cursor_pos_info;
 pub mod delete;
 pub mod delete_full;
+pub mod delete_helpers;
 pub mod format;
 pub mod insert;
 pub mod join;

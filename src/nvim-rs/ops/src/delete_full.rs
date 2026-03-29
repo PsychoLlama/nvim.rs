@@ -3,6 +3,7 @@
 //! Migrated from `op_delete()` in ops.c — delete operations (d, x, D, etc).
 //! Phase 3 absorption: simple accessor functions ported inline.
 
+use crate::delete_helpers::{opd_block_delete, opd_charwise_delete, opd_do_yank_and_registers};
 use nvim_normal::types::OpargT;
 use std::ffi::{c_char, c_int, c_void};
 
@@ -73,10 +74,6 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_set_cursor_lnum(lnum: c_int);
 
-    // Complex ops: still delegated to C
-    fn nvim_opd_do_yank_and_registers(oap: *mut c_void) -> c_int;
-    fn nvim_opd_block_delete(oap: *mut c_void) -> c_int;
-    fn nvim_opd_charwise_delete(oap: *mut c_void) -> c_int;
 }
 
 /// Port of `mb_adjust_opend` -- adjust opend for multi-byte character boundary.
@@ -287,7 +284,7 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     }
 
     // Do yank/register handling (returns FAIL if read-only register)
-    let yank_result = nvim_opd_do_yank_and_registers(oap);
+    let yank_result = opd_do_yank_and_registers(oap);
     if yank_result == OK {
         // yank returned OK = read-only register, return OK
         // (the C code returns OK after beep_flush)
@@ -299,11 +296,11 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     let motion_type = (*oap_const.cast::<OpargT>()).motion_type;
 
     let result = if motion_type == K_MT_BLOCK_WISE {
-        nvim_opd_block_delete(oap)
+        opd_block_delete(oap)
     } else if motion_type == K_MT_LINE_WISE {
         opd_linewise_delete(oap)
     } else {
-        nvim_opd_charwise_delete(oap)
+        opd_charwise_delete(oap)
     };
 
     if result == FAIL {
