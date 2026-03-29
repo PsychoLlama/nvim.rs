@@ -682,8 +682,7 @@ extern "C" {
     fn nvim_qf_win_next(win: *const c_void) -> *mut c_void;
 
     // QFL item iteration (FOR_ALL_QFL_ITEMS)
-    fn nvim_qf_get_start(qfl: *const c_void) -> *mut c_void;
-    fn nvim_qfline_get_next(qfp: *const c_void) -> *mut c_void;
+    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
 
     // qf_info_T accessors
     fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
@@ -694,7 +693,6 @@ extern "C" {
     fn nvim_qf_get_ctx(qfl: *const c_void) -> *mut c_void;
 
     // qfline_T user_data accessor
-    fn nvim_qfline_get_user_data_ptr(qfp: *const c_void) -> *const c_void;
 
     // GC marking via eval crate
     fn rs_set_ref_in_item(
@@ -739,10 +737,10 @@ unsafe fn mark_quickfix_user_data(qi: *const c_void, copy_id: c_int) -> bool {
         // FOR_ALL_QFL_ITEMS: iterate from qfl_start following qf_next
         let mut qfp = nvim_qf_get_start(qfl);
         while !qfp.is_null() {
-            let user_data_ptr = nvim_qfline_get_user_data_ptr(qfp.cast_const());
+            let user_data_ptr = (&raw mut (*qfp).qf_user_data).cast::<::std::ffi::c_void>();
             if !user_data_ptr.is_null()
                 && rs_set_ref_in_item(
-                    user_data_ptr.cast_mut(),
+                    user_data_ptr,
                     copy_id,
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
@@ -750,7 +748,7 @@ unsafe fn mark_quickfix_user_data(qi: *const c_void, copy_id: c_int) -> bool {
             {
                 return true;
             }
-            qfp = nvim_qfline_get_next(qfp.cast_const());
+            qfp = (*qfp).qf_next;
         }
     }
     false

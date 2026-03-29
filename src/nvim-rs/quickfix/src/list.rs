@@ -23,7 +23,7 @@ type QfListHandle = *const c_void;
 type QfListHandleMut = *mut c_void;
 
 /// Opaque handle to `qfline_T` (quickfix entry)
-type QfLineHandle = *const c_void;
+type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
 
 // =============================================================================
 // External C accessor functions
@@ -41,29 +41,18 @@ extern "C" {
     // List accessors
     fn nvim_qf_get_count(qfl: QfListHandle) -> c_int;
     fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
-    fn nvim_qf_get_start(qfl: QfListHandle) -> QfLineHandle;
-    fn nvim_qf_get_ptr(qfl: QfListHandle) -> QfLineHandle;
-    fn nvim_qf_get_last(qfl: QfListHandle) -> QfLineHandle;
+    fn nvim_qf_get_start(qfl: QfListHandle) -> QfLinePtr;
+    fn nvim_qf_get_ptr(qfl: QfListHandle) -> QfLinePtr;
+    fn nvim_qf_get_last(qfl: QfListHandle) -> QfLinePtr;
     fn nvim_qf_get_id(qfl: QfListHandle) -> u32;
     fn nvim_qf_get_changedtick(qfl: QfListHandle) -> c_int;
     fn nvim_qf_get_title(qfl: QfListHandle) -> *const c_char;
     fn nvim_qf_get_nonevalid(qfl: QfListHandle) -> bool;
 
     fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
-    fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLineHandle);
+    fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLinePtr);
 
     // Entry accessors
-    fn nvim_qfline_get_next(qfp: QfLineHandle) -> QfLineHandle;
-    fn nvim_qfline_get_prev(qfp: QfLineHandle) -> QfLineHandle;
-    fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_lnum(qfp: QfLineHandle) -> LinenrT;
-    fn nvim_qfline_get_col(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_end_lnum(qfp: QfLineHandle) -> LinenrT;
-    fn nvim_qfline_get_end_col(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_nr(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_valid(qfp: QfLineHandle) -> bool;
-    fn nvim_qfline_get_type(qfp: QfLineHandle) -> c_char;
-    fn nvim_qfline_get_viscol(qfp: QfLineHandle) -> bool;
 
     // List operations
     // nvim_qf_store_title replaced by nvim_qf_set_title_dup (Phase 14)
@@ -73,14 +62,12 @@ extern "C" {
     fn nvim_qf_get_maxcount(qi: QfInfoHandle) -> c_int;
 
     // Entry modification
-    fn nvim_qfline_get_cleared(qfp: QfLineHandle) -> bool;
-    fn nvim_qfline_set_cleared(qfp: *mut c_void, cleared: c_char);
 
     // Phase 2: qf_add_entries accessors
     fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
     fn nvim_qf_set_nonevalid(qfl: QfListHandleMut, nonevalid: bool);
     #[link_name = "rs_qf_update_buffer"]
-    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
+    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLinePtr);
     fn nvim_qf_get_ptr_position(
         qfl: QfListHandle,
         fnum: *mut c_int,
@@ -93,8 +80,8 @@ extern "C" {
     fn nvim_tv_list_item_is_first(list: *const c_void, li: *const c_void) -> bool;
     fn rs_qf_list_empty(qfl: QfListHandle) -> bool;
     fn rs_qf_entry_is_closer_to_target(
-        entry: QfLineHandle,
-        other: QfLineHandle,
+        entry: QfLinePtr,
+        other: QfLinePtr,
         fnum: c_int,
         lnum: c_int,
         col: c_int,
@@ -154,15 +141,15 @@ pub unsafe extern "C" fn rs_qf_list_stats(qfl: QfListHandle) -> QfListStats {
 
     let mut qfp = nvim_qf_get_start(qfl);
     while !qfp.is_null() {
-        if nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_valid != 0 {
             valid_entries += 1;
         }
-        let fnum = nvim_qfline_get_fnum(qfp);
+        let fnum = (*qfp).qf_fnum;
         if fnum > 0 && fnum != last_fnum {
             file_count += 1;
             last_fnum = fnum;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     QfListStats {
@@ -277,10 +264,10 @@ pub unsafe extern "C" fn rs_qf_curlist_valid_count(qi: QfInfoHandle) -> c_int {
     let mut count = 0;
     let mut qfp = nvim_qf_get_start(qfl);
     while !qfp.is_null() {
-        if nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_valid != 0 {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -738,22 +725,22 @@ impl Default for QfEntrySummary {
 /// - `qfp` may be null (returns empty summary)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_summary(qfp: QfLineHandle) -> QfEntrySummary {
+pub unsafe extern "C" fn rs_qf_entry_summary(qfp: QfLinePtr) -> QfEntrySummary {
     if qfp.is_null() {
         return QfEntrySummary::empty();
     }
 
-    let type_char = nvim_qfline_get_type(qfp);
+    let type_char = (*qfp).qf_type;
     QfEntrySummary {
-        lnum: nvim_qfline_get_lnum(qfp),
-        col: nvim_qfline_get_col(qfp),
-        end_lnum: nvim_qfline_get_end_lnum(qfp),
-        end_col: nvim_qfline_get_end_col(qfp),
-        fnum: nvim_qfline_get_fnum(qfp),
+        lnum: (*qfp).qf_lnum,
+        col: (*qfp).qf_col,
+        end_lnum: (*qfp).qf_end_lnum,
+        end_col: (*qfp).qf_end_col,
+        fnum: (*qfp).qf_fnum,
         entry_type: QfEntryType::from_char(type_char),
-        valid: nvim_qfline_get_valid(qfp),
-        viscol: nvim_qfline_get_viscol(qfp),
-        nr: nvim_qfline_get_nr(qfp),
+        valid: ((*qfp).qf_valid != 0),
+        viscol: ((*qfp).qf_viscol != 0),
+        nr: (*qfp).qf_nr,
     }
 }
 
@@ -809,7 +796,7 @@ pub unsafe extern "C" fn rs_qf_type_counts(qfl: QfListHandle) -> QfTypeCounts {
     let mut counts = QfTypeCounts::default();
     let mut qfp = nvim_qf_get_start(qfl);
     while !qfp.is_null() {
-        let type_char = nvim_qfline_get_type(qfp);
+        let type_char = (*qfp).qf_type;
         match QfEntryType::from_char(type_char) {
             QfEntryType::Error => counts.errors += 1,
             QfEntryType::Warning => counts.warnings += 1,
@@ -817,7 +804,7 @@ pub unsafe extern "C" fn rs_qf_type_counts(qfl: QfListHandle) -> QfTypeCounts {
             QfEntryType::Note => counts.notes += 1,
             QfEntryType::Other => counts.other += 1,
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     counts
@@ -913,11 +900,11 @@ pub unsafe extern "C" fn rs_qf_clear_entries(qfl: QfListHandleMut) {
 ///
 /// - `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_mark_entry_cleared(qfp: QfLineHandle) {
+pub unsafe extern "C" fn rs_qf_mark_entry_cleared(qfp: QfLinePtr) {
     if qfp.is_null() {
         return;
     }
-    nvim_qfline_set_cleared(qfp.cast_mut(), 1);
+    (*qfp).qf_cleared = 1;
 }
 
 /// Check if an entry is cleared.
@@ -926,11 +913,11 @@ pub unsafe extern "C" fn rs_qf_mark_entry_cleared(qfp: QfLineHandle) {
 ///
 /// - `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_is_cleared(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_is_cleared(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return false;
     }
-    nvim_qfline_get_cleared(qfp)
+    (*qfp).qf_cleared != 0
 }
 
 /// Count entries in a specific file.
@@ -948,10 +935,10 @@ pub unsafe extern "C" fn rs_qf_file_entry_count(qfl: QfListHandle, fnum: c_int) 
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == fnum {
+        if (*qfp).qf_fnum == fnum {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -1140,7 +1127,7 @@ pub unsafe extern "C" fn rs_qf_add_entries(
     action: c_int,
 ) -> c_int {
     let mut qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
-    let mut old_last: QfLineHandle = std::ptr::null();
+    let mut old_last: QfLinePtr = std::ptr::null_mut();
     let mut retval: c_int = OK;
     let mut valid_entry = false;
 
@@ -1180,7 +1167,7 @@ pub unsafe extern "C" fn rs_qf_add_entries(
         nvim_qf_set_title_dup(qfl, title);
     }
 
-    let mut entry_to_select: QfLineHandle = std::ptr::null();
+    let mut entry_to_select: QfLinePtr = std::ptr::null_mut();
     let mut entry_to_select_index: c_int = 0;
 
     // Iterate over the VimL list items
@@ -1247,7 +1234,7 @@ mod tests {
     #[test]
     fn test_null_list_stats() {
         unsafe {
-            let stats = rs_qf_list_stats(std::ptr::null());
+            let stats = rs_qf_list_stats(std::ptr::null_mut());
             assert_eq!(stats.total_entries, 0);
             assert_eq!(stats.valid_entries, 0);
         }
@@ -1256,7 +1243,7 @@ mod tests {
     #[test]
     fn test_null_stack_info() {
         unsafe {
-            let info = rs_qf_stack_info(std::ptr::null());
+            let info = rs_qf_stack_info(std::ptr::null_mut());
             assert!(info.is_empty);
             assert_eq!(info.list_count, 0);
         }
@@ -1265,14 +1252,14 @@ mod tests {
     #[test]
     fn test_null_curlist_entry_count() {
         unsafe {
-            assert_eq!(rs_qf_curlist_entry_count(std::ptr::null()), 0);
+            assert_eq!(rs_qf_curlist_entry_count(std::ptr::null_mut()), 0);
         }
     }
 
     #[test]
     fn test_null_curlist_valid_count() {
         unsafe {
-            assert_eq!(rs_qf_curlist_valid_count(std::ptr::null()), 0);
+            assert_eq!(rs_qf_curlist_valid_count(std::ptr::null_mut()), 0);
         }
     }
 
@@ -1328,56 +1315,56 @@ mod tests {
     #[test]
     fn test_null_at_first() {
         unsafe {
-            assert!(rs_qf_at_first(std::ptr::null()));
+            assert!(rs_qf_at_first(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_at_last() {
         unsafe {
-            assert!(rs_qf_at_last(std::ptr::null()));
+            assert!(rs_qf_at_last(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_lists_same() {
         unsafe {
-            assert!(rs_qf_lists_same(std::ptr::null(), std::ptr::null()));
+            assert!(rs_qf_lists_same(std::ptr::null_mut(), std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_list_modified_since() {
         unsafe {
-            assert!(!rs_qf_list_modified_since(std::ptr::null(), 0));
+            assert!(!rs_qf_list_modified_since(std::ptr::null_mut(), 0));
         }
     }
 
     #[test]
     fn test_null_valid_entry_idx() {
         unsafe {
-            assert!(!rs_qf_valid_entry_idx(std::ptr::null(), 1));
+            assert!(!rs_qf_valid_entry_idx(std::ptr::null_mut(), 1));
         }
     }
 
     #[test]
     fn test_null_clamp_entry_idx() {
         unsafe {
-            assert_eq!(rs_qf_clamp_entry_idx(std::ptr::null(), 5), 0);
+            assert_eq!(rs_qf_clamp_entry_idx(std::ptr::null_mut(), 5), 0);
         }
     }
 
     #[test]
     fn test_null_stack_has_room() {
         unsafe {
-            assert!(!rs_qf_stack_has_room(std::ptr::null()));
+            assert!(!rs_qf_stack_has_room(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_stack_available() {
         unsafe {
-            assert_eq!(rs_qf_stack_available(std::ptr::null()), 0);
+            assert_eq!(rs_qf_stack_available(std::ptr::null_mut()), 0);
         }
     }
 
@@ -1489,7 +1476,7 @@ mod tests {
     #[test]
     fn test_null_entry_summary() {
         unsafe {
-            let summary = rs_qf_entry_summary(std::ptr::null());
+            let summary = rs_qf_entry_summary(std::ptr::null_mut());
             assert_eq!(summary.lnum, 0);
             assert!(!summary.valid);
         }
@@ -1498,7 +1485,7 @@ mod tests {
     #[test]
     fn test_null_type_counts() {
         unsafe {
-            let counts = rs_qf_type_counts(std::ptr::null());
+            let counts = rs_qf_type_counts(std::ptr::null_mut());
             assert_eq!(counts.total(), 0);
         }
     }

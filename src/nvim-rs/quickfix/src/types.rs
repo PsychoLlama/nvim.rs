@@ -177,9 +177,9 @@ extern "C" {
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
     fn nvim_qf_get_nonevalid(qfl: *const c_void) -> bool;
     fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_ptr(qfl: *const c_void) -> *const c_void;
-    fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
-    fn nvim_qf_get_last(qfl: *const c_void) -> *const c_void;
+    fn nvim_qf_get_ptr(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
+    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
+    fn nvim_qf_get_last(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
     fn nvim_qf_get_id(qfl: *const c_void) -> u32;
     fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
     fn nvim_qf_get_title(qfl: *const c_void) -> *const c_char;
@@ -190,21 +190,6 @@ extern "C" {
     fn nvim_qf_get_multiscan(qfl: *const c_void) -> bool;
 
     // Entry accessors
-    fn nvim_qfline_get_lnum(qfp: *const c_void) -> LineNr;
-    fn nvim_qfline_get_end_lnum(qfp: *const c_void) -> LineNr;
-    fn nvim_qfline_get_col(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_end_col(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_fnum(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_nr(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_type(qfp: *const c_void) -> c_char;
-    fn nvim_qfline_get_valid(qfp: *const c_void) -> bool;
-    fn nvim_qfline_get_cleared(qfp: *const c_void) -> bool;
-    fn nvim_qfline_get_viscol(qfp: *const c_void) -> bool;
-    fn nvim_qfline_get_next(qfp: *const c_void) -> *const c_void;
-    fn nvim_qfline_get_prev(qfp: *const c_void) -> *const c_void;
-    fn nvim_qfline_get_text(qfp: *const c_void) -> *const c_char;
-    fn nvim_qfline_get_module(qfp: *const c_void) -> *const c_char;
-    fn nvim_qfline_get_pattern(qfp: *const c_void) -> *const c_char;
 
     // Global quickfix stack accessor
     fn nvim_get_ql_info() -> *mut c_void;
@@ -227,91 +212,88 @@ impl QfEntry {
     ///
     /// # Safety
     /// The pointer must be a valid pointer to a `qfline_T` struct.
-    pub const unsafe fn from_raw(ptr: *const c_void) -> Option<Self> {
-        match NonNull::new(ptr as *mut c_void) {
-            Some(nn) => Some(Self(nn)),
-            None => None,
-        }
+    pub unsafe fn from_raw(ptr: *mut crate::ffi_types::QfLineRaw) -> Option<Self> {
+        NonNull::new(ptr.cast::<c_void>()).map(Self)
     }
 
     /// Create a new entry handle from a raw pointer, or return a null handle
     ///
     /// # Safety
     /// If non-null, the pointer must be valid.
-    pub const unsafe fn from_raw_unchecked(ptr: *const c_void) -> Self {
-        Self(NonNull::new_unchecked(ptr as *mut c_void))
+    pub unsafe fn from_raw_unchecked(ptr: *mut crate::ffi_types::QfLineRaw) -> Self {
+        Self(NonNull::new_unchecked(ptr.cast::<c_void>()))
     }
 
     /// Get the raw pointer
-    pub const fn as_ptr(self) -> *const c_void {
-        self.0.as_ptr() as *const c_void
+    pub fn as_ptr(self) -> *mut crate::ffi_types::QfLineRaw {
+        self.0.as_ptr().cast::<crate::ffi_types::QfLineRaw>()
     }
 
     /// Get line number
     pub fn lnum(self) -> LineNr {
-        unsafe { nvim_qfline_get_lnum(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_lnum }
     }
 
     /// Get end line number (0 if no range)
     pub fn end_lnum(self) -> LineNr {
-        unsafe { nvim_qfline_get_end_lnum(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_end_lnum }
     }
 
     /// Get column number
     pub fn col(self) -> c_int {
-        unsafe { nvim_qfline_get_col(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_col }
     }
 
     /// Get end column number (0 if no range)
     pub fn end_col(self) -> c_int {
-        unsafe { nvim_qfline_get_end_col(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_end_col }
     }
 
     /// Get file/buffer number
     pub fn fnum(self) -> c_int {
-        unsafe { nvim_qfline_get_fnum(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_fnum }
     }
 
     /// Get error number
     pub fn nr(self) -> c_int {
-        unsafe { nvim_qfline_get_nr(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_nr }
     }
 
     /// Get entry type
     pub fn entry_type(self) -> QfEntryType {
-        let c = unsafe { nvim_qfline_get_type(self.as_ptr()) };
+        let c = unsafe { (*self.as_ptr()).qf_type };
         QfEntryType::from_char(c)
     }
 
     /// Get entry type as raw char
     pub fn type_char(self) -> c_char {
-        unsafe { nvim_qfline_get_type(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_type }
     }
 
     /// Check if entry is valid
     pub fn is_valid(self) -> bool {
-        unsafe { nvim_qfline_get_valid(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_valid != 0 }
     }
 
     /// Check if entry has been cleared (line deleted)
     pub fn is_cleared(self) -> bool {
-        unsafe { nvim_qfline_get_cleared(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_cleared != 0 }
     }
 
     /// Check if column is a screen column (vs byte offset)
     pub fn is_viscol(self) -> bool {
-        unsafe { nvim_qfline_get_viscol(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_viscol != 0 }
     }
 
     /// Get next entry in the list
     pub fn next(self) -> Option<Self> {
-        let ptr = unsafe { nvim_qfline_get_next(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_next };
         unsafe { Self::from_raw(ptr) }
     }
 
     /// Get previous entry in the list
     pub fn prev(self) -> Option<Self> {
-        let ptr = unsafe { nvim_qfline_get_prev(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_prev };
         unsafe { Self::from_raw(ptr) }
     }
 
@@ -319,7 +301,7 @@ impl QfEntry {
     ///
     /// Returns `None` if text is null
     pub fn text(self) -> Option<&'static CStr> {
-        let ptr = unsafe { nvim_qfline_get_text(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_text };
         if ptr.is_null() {
             None
         } else {
@@ -331,7 +313,7 @@ impl QfEntry {
     ///
     /// Returns `None` if module is null
     pub fn module(self) -> Option<&'static CStr> {
-        let ptr = unsafe { nvim_qfline_get_module(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_module };
         if ptr.is_null() {
             None
         } else {
@@ -343,7 +325,7 @@ impl QfEntry {
     ///
     /// Returns `None` if pattern is null
     pub fn pattern(self) -> Option<&'static CStr> {
-        let ptr = unsafe { nvim_qfline_get_pattern(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_pattern };
         if ptr.is_null() {
             None
         } else {
@@ -405,16 +387,16 @@ impl std::fmt::Debug for QfEntry {
 /// This is useful for FFI where we need to handle null pointers.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct QfEntryOption(*const c_void);
+pub struct QfEntryOption(*mut crate::ffi_types::QfLineRaw);
 
 impl QfEntryOption {
     /// Create a null handle
     pub const fn null() -> Self {
-        Self(std::ptr::null())
+        Self(std::ptr::null_mut())
     }
 
     /// Create from a raw pointer
-    pub const fn from_raw(ptr: *const c_void) -> Self {
+    pub const fn from_raw(ptr: *mut crate::ffi_types::QfLineRaw) -> Self {
         Self(ptr)
     }
 
@@ -424,7 +406,7 @@ impl QfEntryOption {
     }
 
     /// Get the raw pointer
-    pub const fn as_ptr(self) -> *const c_void {
+    pub const fn as_ptr(self) -> *mut crate::ffi_types::QfLineRaw {
         self.0
     }
 
@@ -478,16 +460,13 @@ impl QfList {
     ///
     /// # Safety
     /// The pointer must be a valid pointer to a `qf_list_T` struct.
-    pub const unsafe fn from_raw(ptr: *const c_void) -> Option<Self> {
-        match NonNull::new(ptr as *mut c_void) {
-            Some(nn) => Some(Self(nn)),
-            None => None,
-        }
+    pub unsafe fn from_raw(ptr: *mut c_void) -> Option<Self> {
+        NonNull::new(ptr).map(Self)
     }
 
     /// Get the raw pointer
-    pub const fn as_ptr(self) -> *const c_void {
-        self.0.as_ptr() as *const c_void
+    pub fn as_ptr(self) -> *mut c_void {
+        self.0.as_ptr()
     }
 
     /// Get the unique list ID
@@ -538,7 +517,7 @@ impl QfList {
 
     /// Get the first entry
     pub fn first_entry(self) -> Option<QfEntry> {
-        let ptr = unsafe { nvim_qf_get_start(self.as_ptr()) };
+        let ptr = unsafe { nvim_qf_get_start(self.as_ptr() as *const ::std::ffi::c_void) };
         unsafe { QfEntry::from_raw(ptr) }
     }
 
@@ -658,16 +637,13 @@ impl QfStack {
     ///
     /// # Safety
     /// The pointer must be a valid pointer to a `qf_info_T` struct.
-    pub const unsafe fn from_raw(ptr: *const c_void) -> Option<Self> {
-        match NonNull::new(ptr as *mut c_void) {
-            Some(nn) => Some(Self(nn)),
-            None => None,
-        }
+    pub unsafe fn from_raw(ptr: *mut c_void) -> Option<Self> {
+        NonNull::new(ptr).map(Self)
     }
 
     /// Get the raw pointer
-    pub const fn as_ptr(self) -> *const c_void {
-        self.0.as_ptr() as *const c_void
+    pub fn as_ptr(self) -> *mut c_void {
+        self.0.as_ptr()
     }
 
     /// Get the global quickfix stack
@@ -726,7 +702,7 @@ impl QfStack {
     /// Get the current list
     pub fn current_list(self) -> Option<QfList> {
         let ptr = unsafe { nvim_qf_get_curlist(self.as_ptr()) };
-        unsafe { QfList::from_raw(ptr) }
+        unsafe { QfList::from_raw(ptr as *mut c_void) }
     }
 
     /// Get a list at a specific index
@@ -735,7 +711,7 @@ impl QfStack {
             return None;
         }
         let ptr = unsafe { nvim_qf_get_list_at(self.as_ptr(), idx) };
-        unsafe { QfList::from_raw(ptr) }
+        unsafe { QfList::from_raw(ptr as *mut c_void) }
     }
 
     /// Get stack type
@@ -953,7 +929,7 @@ pub extern "C" fn rs_qf_entry_valid(qfp: *const c_void) -> bool {
 /// Get entry type from a quickfix entry
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_entry_get_type(qfp: *const c_void) -> c_int {
-    if let Some(entry) = QfEntry::from_raw(qfp) {
+    if let Some(entry) = QfEntry::from_raw(qfp as *mut crate::ffi_types::QfLineRaw) {
         entry.entry_type() as c_int
     } else {
         QfEntryType::None as c_int
@@ -963,7 +939,7 @@ pub unsafe extern "C" fn rs_qf_entry_get_type(qfp: *const c_void) -> c_int {
 /// Get position from a quickfix entry
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_entry_get_position(qfp: *const c_void) -> QfPosition {
-    if let Some(entry) = QfEntry::from_raw(qfp) {
+    if let Some(entry) = QfEntry::from_raw(qfp as *mut crate::ffi_types::QfLineRaw) {
         QfPosition::from_entry(entry)
     } else {
         QfPosition::default()
@@ -973,7 +949,7 @@ pub unsafe extern "C" fn rs_qf_entry_get_position(qfp: *const c_void) -> QfPosit
 /// Get summary from a quickfix entry
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_entry_get_summary(qfp: *const c_void) -> QfEntrySummary {
-    if let Some(entry) = QfEntry::from_raw(qfp) {
+    if let Some(entry) = QfEntry::from_raw(qfp as *mut crate::ffi_types::QfLineRaw) {
         QfEntrySummary::from_entry(entry)
     } else {
         QfEntrySummary {
@@ -989,7 +965,7 @@ pub unsafe extern "C" fn rs_qf_entry_get_summary(qfp: *const c_void) -> QfEntryS
 /// Get statistics for a quickfix list
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_list_get_stats(qfl: *const c_void) -> QfListStats {
-    if let Some(list) = QfList::from_raw(qfl) {
+    if let Some(list) = QfList::from_raw(qfl as *mut c_void) {
         QfListStats::from_list(list)
     } else {
         QfListStats::default()
@@ -999,7 +975,7 @@ pub unsafe extern "C" fn rs_qf_list_get_stats(qfl: *const c_void) -> QfListStats
 /// Get list type
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_list_get_type(qfl: *const c_void) -> c_int {
-    if let Some(list) = QfList::from_raw(qfl) {
+    if let Some(list) = QfList::from_raw(qfl as *mut c_void) {
         list.list_type().to_c_int()
     } else {
         QfListType::Quickfix.to_c_int()
@@ -1009,7 +985,7 @@ pub unsafe extern "C" fn rs_qf_list_get_type(qfl: *const c_void) -> c_int {
 /// Get stack type
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_stack_get_type(qi: *const c_void) -> c_int {
-    if let Some(stack) = QfStack::from_raw(qi) {
+    if let Some(stack) = QfStack::from_raw(qi as *mut c_void) {
         stack.stack_type().to_c_int()
     } else {
         QfListType::Quickfix.to_c_int()

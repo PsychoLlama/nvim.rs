@@ -415,7 +415,7 @@ type LinenrT = i32;
 /// Opaque buffer handle
 type BufHandle = *mut c_void;
 /// Opaque qfline handle
-type QfLinePtr = *const c_void;
+type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
 /// Opaque list handle
 type ListPtr = *mut c_void;
 /// Opaque list item handle
@@ -436,8 +436,6 @@ extern "C" {
     fn nvim_qf_zero_skipcol_for_curbuf();
     fn nvim_qf_u_clearallandblockfree();
     fn nvim_qf_get_start(qfl: *const c_void) -> QfLinePtr;
-    fn nvim_qfline_get_next(qfp: QfLinePtr) -> QfLinePtr;
-    fn nvim_qfline_get_fnum(qfp: QfLinePtr) -> c_int;
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     // Phase 11: rs_call_qftf_func accessors (replacing nvim_call_qftf_func)
@@ -482,16 +480,6 @@ extern "C" {
     fn nvim_qf_set_key_typed(val: bool);
 
     // Phase 3: qf_buf_add_line accessors
-    fn nvim_qfline_get_module(qfp: QfLinePtr) -> *const c_char;
-    fn nvim_qfline_get_text(qfp: QfLinePtr) -> *const c_char;
-    fn nvim_qfline_get_pattern(qfp: QfLinePtr) -> *const c_char;
-    fn nvim_qfline_get_lnum(qfp: QfLinePtr) -> LinenrT;
-    fn nvim_qfline_get_end_lnum(qfp: QfLinePtr) -> LinenrT;
-    fn nvim_qfline_get_col(qfp: QfLinePtr) -> c_int;
-    fn nvim_qfline_get_end_col(qfp: QfLinePtr) -> c_int;
-    fn nvim_qfline_get_type(qfp: QfLinePtr) -> c_char;
-    fn nvim_qfline_get_nr(qfp: QfLinePtr) -> c_int;
-    fn nvim_qfline_get_fname(qfp: QfLinePtr) -> *const c_char;
     // nvim_buflist_findnr returns buf_T* (void* in Rust) - from buffer.c
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
@@ -680,18 +668,18 @@ unsafe fn qf_buf_add_line(
         let s = std::ffi::CStr::from_ptr(qftf_str).to_bytes();
         line.extend_from_slice(s);
     } else {
-        let module = nvim_qfline_get_module(qfp);
+        let module = (*qfp).qf_module;
         if !module.is_null() && *module != 0 {
             let s = std::ffi::CStr::from_ptr(module).to_bytes();
             line.extend_from_slice(s);
         } else {
-            let fnum = nvim_qfline_get_fnum(qfp);
+            let fnum = (*qfp).qf_fnum;
             if fnum != 0 {
                 let errbuf = nvim_buflist_findnr(fnum);
                 if !errbuf.is_null() {
                     let b_fname = qf_buf_get_fname_fill(errbuf.cast_const());
                     if !b_fname.is_null() {
-                        let qf_type = nvim_qfline_get_type(qfp);
+                        let qf_type = (*qfp).qf_type;
                         if qf_type == 1 {
                             // :helpgrep -- use filename tail only
                             let tail = path_tail(b_fname);
@@ -709,7 +697,7 @@ unsafe fn qf_buf_add_line(
                                     shorten_buf_fname(errbuf, dirname.as_mut_ptr().cast(), 0);
                                 }
                             }
-                            let qf_fname = nvim_qfline_get_fname(qfp);
+                            let qf_fname = (*qfp).qf_fname;
                             let fname = if qf_fname.is_null() {
                                 b_fname
                             } else {
@@ -725,16 +713,16 @@ unsafe fn qf_buf_add_line(
 
         line.push(b'|');
 
-        let qf_lnum = nvim_qfline_get_lnum(qfp);
-        let qf_pattern = nvim_qfline_get_pattern(qfp);
+        let qf_lnum = (*qfp).qf_lnum;
+        let qf_pattern = (*qfp).qf_pattern;
         if qf_lnum > 0 {
-            let end_lnum = nvim_qfline_get_end_lnum(qfp);
-            let col = nvim_qfline_get_col(qfp);
-            let end_col = nvim_qfline_get_end_col(qfp);
+            let end_lnum = (*qfp).qf_end_lnum;
+            let col = (*qfp).qf_col;
+            let end_col = (*qfp).qf_end_col;
             qf_range_text(&mut line, qf_lnum, end_lnum, col, end_col);
             // Use pure-Rust type formatter directly (no C round-trip needed)
-            let type_c = c_int::from(nvim_qfline_get_type(qfp));
-            let type_nr = nvim_qfline_get_nr(qfp);
+            let type_c = c_int::from((*qfp).qf_type);
+            let type_nr = (*qfp).qf_nr;
             let mut type_buf = [0u8; 20];
             let written = qf_types_fmt(type_c, type_nr, &mut type_buf);
             if written > 0 {
@@ -748,7 +736,7 @@ unsafe fn qf_buf_add_line(
 
         // Remove newlines and leading whitespace from the text.
         // For an unrecognized line keep the indent, the compiler may mark a word with ^^^^.
-        let qf_text = nvim_qfline_get_text(qfp);
+        let qf_text = (*qfp).qf_text;
         if !qf_text.is_null() {
             let text: *const c_char = if line.len() > 3 {
                 skipwhite(qf_text).cast_const()
@@ -815,7 +803,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
             qfp = qf_start;
             lnum = 0;
         } else {
-            let next = nvim_qfline_get_next(old_last);
+            let next = (*old_last).qf_next;
             qfp = if next.is_null() { old_last } else { next };
             lnum = nvim_buf_get_line_count(buf);
         }
@@ -844,14 +832,14 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
                 qfp,
                 &mut dirname,
                 qftf_str,
-                prev_bufnr != nvim_qfline_get_fnum(qfp),
+                prev_bufnr != (*qfp).qf_fnum,
             ) == FAIL
             {
                 break;
             }
-            prev_bufnr = nvim_qfline_get_fnum(qfp);
+            prev_bufnr = (*qfp).qf_fnum;
             lnum += 1;
-            qfp = nvim_qfline_get_next(qfp);
+            qfp = (*qfp).qf_next;
             if qfp.is_null() {
                 break;
             }
@@ -947,7 +935,7 @@ pub unsafe extern "C" fn rs_qf_msg(qi: QfInfoHandleConst, which: c_int, lead: *c
         nvim_qf_get_count(qfl)
     };
     let title_ptr = if qfl.is_null() {
-        std::ptr::null()
+        std::ptr::null_mut()
     } else {
         nvim_qf_get_title(qfl)
     };
@@ -1019,28 +1007,6 @@ extern "C" {
     // nvim_hlf_qfl deleted: use HLF_QFL constant directly
 
     // Phase 3: qfline field accessors (already in lib.rs, re-declare locally)
-    #[link_name = "nvim_qfline_get_module"]
-    fn qfline_get_module_p3(qfp: QfLinePtr) -> *const c_char;
-    #[link_name = "nvim_qfline_get_fnum"]
-    fn qfline_get_fnum_p3(qfp: QfLinePtr) -> c_int;
-    #[link_name = "nvim_qfline_get_fname"]
-    fn qfline_get_fname_p3(qfp: QfLinePtr) -> *const c_char;
-    #[link_name = "nvim_qfline_get_type"]
-    fn qfline_get_type_p3(qfp: QfLinePtr) -> c_char;
-    #[link_name = "nvim_qfline_get_lnum"]
-    fn qfline_get_lnum_p3(qfp: QfLinePtr) -> LinenrT;
-    #[link_name = "nvim_qfline_get_end_lnum"]
-    fn qfline_get_end_lnum_p3(qfp: QfLinePtr) -> LinenrT;
-    #[link_name = "nvim_qfline_get_col"]
-    fn qfline_get_col_p3(qfp: QfLinePtr) -> c_int;
-    #[link_name = "nvim_qfline_get_end_col"]
-    fn qfline_get_end_col_p3(qfp: QfLinePtr) -> c_int;
-    #[link_name = "nvim_qfline_get_nr"]
-    fn qfline_get_nr_p3(qfp: QfLinePtr) -> c_int;
-    #[link_name = "nvim_qfline_get_pattern"]
-    fn qfline_get_pattern_p3(qfp: QfLinePtr) -> *const c_char;
-    #[link_name = "nvim_qfline_get_text"]
-    fn qfline_get_text_p3(qfp: QfLinePtr) -> *const c_char;
     #[link_name = "rs_buflist_findnr"]
     fn buflist_findnr_p3(nr: c_int) -> *mut c_void;
     #[link_name = "nvim_qf_buf_get_fname"]
@@ -1073,7 +1039,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     use std::io::Write;
 
     // --- Determine the filename or module to display as prefix ---
-    let module = qfline_get_module_p3(qfp);
+    let module = (*qfp).qf_module;
     let module_nonempty =
         !module.is_null() && !std::ffi::CStr::from_ptr(module).to_bytes().is_empty();
 
@@ -1081,23 +1047,23 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     let display_name: *const c_char = if module_nonempty {
         module
     } else {
-        let fnum = qfline_get_fnum_p3(qfp);
+        let fnum = (*qfp).qf_fnum;
         if fnum != 0 {
             let buf = buflist_findnr_p3(fnum);
             if buf.is_null() {
-                std::ptr::null()
+                std::ptr::null_mut()
             } else {
                 let b_fname = buf_get_fname_p3(buf.cast_const());
                 if b_fname.is_null() {
-                    std::ptr::null()
+                    std::ptr::null_mut()
                 } else {
-                    let qf_fname = qfline_get_fname_p3(qfp);
+                    let qf_fname = (*qfp).qf_fname;
                     let fname = if qf_fname.is_null() {
                         b_fname
                     } else {
                         qf_fname
                     };
-                    let qf_type = qfline_get_type_p3(qfp);
+                    let qf_type = (*qfp).qf_type;
                     if qf_type == 1 {
                         // :helpgrep — use tail only
                         path_tail_p3(fname)
@@ -1107,7 +1073,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
                 }
             }
         } else {
-            std::ptr::null()
+            std::ptr::null_mut()
         }
     };
 
@@ -1133,11 +1099,11 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     if filter_entry && !display_name.is_null() && !module_nonempty {
         filter_entry &= message_filtered(display_name);
     }
-    let pattern = qfline_get_pattern_p3(qfp);
+    let pattern = (*qfp).qf_pattern;
     if filter_entry && !pattern.is_null() {
         filter_entry &= message_filtered(pattern);
     }
-    let text = qfline_get_text_p3(qfp);
+    let text = (*qfp).qf_text;
     if filter_entry {
         filter_entry &= message_filtered(text);
     }
@@ -1146,12 +1112,12 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     }
 
     // --- Build intermediate text buffers ---
-    let lnum = qfline_get_lnum_p3(qfp);
+    let lnum = (*qfp).qf_lnum;
     let mut range_buf = [0u8; IOSIZE];
     let range_len = if lnum != 0 {
-        let end_lnum = qfline_get_end_lnum_p3(qfp);
-        let col = qfline_get_col_p3(qfp);
-        let end_col = qfline_get_end_col_p3(qfp);
+        let end_lnum = (*qfp).qf_end_lnum;
+        let col = (*qfp).qf_col;
+        let end_col = (*qfp).qf_end_col;
         // Replicate qf_range_text logic inline
         let mut cur = std::io::Cursor::new(&mut range_buf[..]);
         let _ = write!(cur, "{lnum}");
@@ -1171,11 +1137,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
 
     let mut type_buf_arr = [0u8; 20];
     // Call the pure Rust type formatter directly (no FFI round-trip needed)
-    qf_types_fmt(
-        c_int::from(qfline_get_type_p3(qfp)),
-        qfline_get_nr_p3(qfp),
-        &mut type_buf_arr,
-    );
+    qf_types_fmt(c_int::from((*qfp).qf_type), (*qfp).qf_nr, &mut type_buf_arr);
     // type_buf_arr is now a NUL-terminated string (used directly below)
 
     let mut pattern_buf = [0u8; IOSIZE];
@@ -1208,7 +1170,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
 
     // body: skip leading whitespace if we have a file or line
     let body_src = if text.is_null() {
-        std::ptr::null()
+        std::ptr::null_mut()
     } else if !display_name.is_null() || lnum != 0 {
         skipwhite_p3(text)
     } else {

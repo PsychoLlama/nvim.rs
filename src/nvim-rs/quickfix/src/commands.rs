@@ -65,7 +65,7 @@ extern "C" {
     // nvim_hgr_restore_cpo renamed to nvim_restore_cpo (Phase 4)
     fn nvim_restore_cpo(saved_cpo: *mut c_void);
     #[link_name = "rs_qf_update_buffer"]
-    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
+    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *mut crate::ffi_types::QfLineRaw);
     // nvim_hgr_post_autocmd deleted: inlined via apply_autocmds + is_ll_stack + find_win
     fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
     fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
@@ -78,9 +78,9 @@ extern "C" {
     fn nvim_win_set_llist(win: *mut c_void, qi: *mut c_void);
     // Used for finalization after compile+search (Phase 3)
     fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
-    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
+    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *mut crate::ffi_types::QfLineRaw);
     fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
-    fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
+    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
 }
 
 // =============================================================================
@@ -1198,7 +1198,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
 
     // 6. Update quickfix buffer if list was populated
     if updated {
-        nvim_qf_update_buffer(qi, std::ptr::null());
+        nvim_qf_update_buffer(qi, std::ptr::null_mut());
     }
 
     // 7. Post autocmd — may invalidate location list
@@ -1479,7 +1479,7 @@ pub unsafe extern "C" fn rs_qf_age(eap: EapHandle) {
 
     let cur = nvim_qf_get_curlist_idx(qi);
     nvim_qf_msg(qi, cur, c"".as_ptr().cast::<u8>());
-    nvim_qf_update_buffer(qi, std::ptr::null());
+    nvim_qf_update_buffer(qi, std::ptr::null_mut());
 }
 
 /// `:chistory`, `:lhistory`
@@ -1504,7 +1504,7 @@ pub unsafe extern "C" fn rs_qf_history(eap: EapHandle) {
         if line2 > 0 && line2 <= listcount {
             nvim_qf_set_curlist_idx(qi, line2 - 1);
             nvim_qf_msg(qi, line2 - 1, c"".as_ptr().cast::<u8>());
-            nvim_qf_update_buffer(qi, std::ptr::null());
+            nvim_qf_update_buffer(qi, std::ptr::null_mut());
         } else {
             emsg(c"E16: Invalid range".as_ptr());
         }
@@ -1852,7 +1852,7 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
     // Fill the buffer with quickfix list
     let curbuf_local = curbuf;
     let curwin_handle = nvim_qf_curwin_handle();
-    crate::display::rs_qf_fill_buffer(qfl, curbuf_local, std::ptr::null(), curwin_handle);
+    crate::display::rs_qf_fill_buffer(qfl, curbuf_local, std::ptr::null_mut(), curwin_handle);
 
     nvim_decr_quickfix_busy();
 
@@ -2205,7 +2205,7 @@ extern "C" {
     static mut got_int: bool;
     fn os_breakcheck();
     fn rs_qf_list_entry(
-        qfp: *const c_void,
+        qfp: *mut crate::ffi_types::QfLineRaw,
         qf_idx: c_int,
         cursel: bool,
         qf_file_hl_id: c_int,
@@ -2309,7 +2309,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     let mut i: c_int = 1;
     let mut qfp = crate::nvim_qf_get_start(qfl);
     while !unsafe { got_int } && i <= qf_count && !qfp.is_null() {
-        let valid = crate::nvim_qfline_get_valid(qfp);
+        let valid = (*qfp).qf_valid != 0;
         if (valid || all) && idx1 <= i && i <= idx2 {
             rs_qf_list_entry(
                 qfp,
@@ -2322,6 +2322,6 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
         }
         os_breakcheck();
         i += 1;
-        qfp = crate::nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 }

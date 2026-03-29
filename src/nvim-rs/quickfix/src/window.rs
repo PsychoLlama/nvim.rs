@@ -10,10 +10,8 @@
 use std::ffi::{c_char, c_int};
 
 use crate::{
-    nvim_qf_get_count, nvim_qf_get_index, nvim_qf_get_ptr, nvim_qf_get_start, nvim_qfline_get_col,
-    nvim_qfline_get_end_col, nvim_qfline_get_end_lnum, nvim_qfline_get_fnum, nvim_qfline_get_lnum,
-    nvim_qfline_get_next, nvim_qfline_get_nr, nvim_qfline_get_type, nvim_qfline_get_valid, LinenrT,
-    QfLineHandle, QfListHandle,
+    nvim_qf_get_count, nvim_qf_get_index, nvim_qf_get_ptr, nvim_qf_get_start, LinenrT, QfLinePtr,
+    QfListHandle,
 };
 
 // =============================================================================
@@ -183,21 +181,21 @@ pub struct QfEntryDisplay {
 /// - `qfp` may be null (returns default/empty info)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_display_info(qfp: QfLineHandle) -> QfEntryDisplay {
+pub unsafe extern "C" fn rs_qf_entry_display_info(qfp: QfLinePtr) -> QfEntryDisplay {
     let mut info = QfEntryDisplay::default();
 
     if qfp.is_null() {
         return info;
     }
 
-    info.fnum = nvim_qfline_get_fnum(qfp);
-    info.lnum = nvim_qfline_get_lnum(qfp);
-    info.col = nvim_qfline_get_col(qfp);
-    info.end_lnum = nvim_qfline_get_end_lnum(qfp);
-    info.end_col = nvim_qfline_get_end_col(qfp);
-    info.nr = nvim_qfline_get_nr(qfp);
-    info.entry_type = nvim_qfline_get_type(qfp);
-    info.valid = nvim_qfline_get_valid(qfp);
+    info.fnum = (*qfp).qf_fnum;
+    info.lnum = (*qfp).qf_lnum;
+    info.col = (*qfp).qf_col;
+    info.end_lnum = (*qfp).qf_end_lnum;
+    info.end_col = (*qfp).qf_end_col;
+    info.nr = (*qfp).qf_nr;
+    info.entry_type = (*qfp).qf_type;
+    info.valid = (*qfp).qf_valid != 0;
     info.has_position = info.lnum > 0;
     info.has_range = info.end_lnum > 0 || info.end_col > 0;
 
@@ -416,21 +414,21 @@ pub unsafe extern "C" fn rs_qf_calc_centered_top(
 /// - `qfl` may be null (returns null)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_at_line(qfl: QfListHandle, line: c_int) -> QfLineHandle {
+pub unsafe extern "C" fn rs_qf_entry_at_line(qfl: QfListHandle, line: c_int) -> QfLinePtr {
     if qfl.is_null() || line <= 0 {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
 
     let count = nvim_qf_get_count(qfl);
     if line > count {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
 
     let mut qfp = nvim_qf_get_start(qfl);
     let mut idx = 1;
 
     while !qfp.is_null() && idx < line {
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -453,10 +451,10 @@ pub unsafe extern "C" fn rs_qf_count_with_position(qfl: QfListHandle) -> c_int {
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_lnum(qfp) > 0 {
+        if (*qfp).qf_lnum > 0 {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -478,10 +476,10 @@ pub unsafe extern "C" fn rs_qf_count_with_file(qfl: QfListHandle) -> c_int {
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) > 0 {
+        if (*qfp).qf_fnum > 0 {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -633,7 +631,7 @@ pub unsafe extern "C" fn rs_qf_range_text(
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_format_entry_line(
-    qfp: QfLineHandle,
+    qfp: QfLinePtr,
     fname: *const c_char,
     out: *mut c_char,
     out_size: usize,
@@ -661,20 +659,20 @@ pub unsafe extern "C" fn rs_qf_format_entry_line(
     result.push('|');
 
     // Add position info
-    let lnum = nvim_qfline_get_lnum(qfp);
+    let lnum = (*qfp).qf_lnum;
     if lnum > 0 {
         let _ = write!(result, "{lnum}");
 
-        let end_lnum = nvim_qfline_get_end_lnum(qfp);
+        let end_lnum = (*qfp).qf_end_lnum;
         if end_lnum > 0 && end_lnum != lnum {
             let _ = write!(result, "-{end_lnum}");
         }
 
-        let col = nvim_qfline_get_col(qfp);
+        let col = (*qfp).qf_col;
         if col > 0 {
             let _ = write!(result, " col {col}");
 
-            let end_col = nvim_qfline_get_end_col(qfp);
+            let end_col = (*qfp).qf_end_col;
             if end_col > 0 && end_col != col {
                 let _ = write!(result, "-{end_col}");
             }
@@ -682,7 +680,7 @@ pub unsafe extern "C" fn rs_qf_format_entry_line(
     }
 
     // Add entry type
-    let entry_type = nvim_qfline_get_type(qfp);
+    let entry_type = (*qfp).qf_type;
     if entry_type != 0 && entry_type != b' ' as c_char {
         let _ = write!(result, " {}", entry_type as u8 as char);
     }
@@ -937,13 +935,13 @@ pub unsafe extern "C" fn rs_qf_window_info(qfl: QfListHandle) -> QfWindowInfo {
     let mut idx = 1;
 
     while !qfp.is_null() {
-        if nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_valid != 0 {
             info.valid_count += 1;
             if idx == info.current_idx {
                 info.current_is_valid = true;
             }
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -961,28 +959,28 @@ mod tests {
     #[test]
     fn test_null_safety() {
         unsafe {
-            assert_eq!(rs_qf_cursor_line(std::ptr::null()), 0);
-            assert!(!rs_qf_should_update_cursor(std::ptr::null(), 0));
+            assert_eq!(rs_qf_cursor_line(std::ptr::null_mut()), 0);
+            assert!(!rs_qf_should_update_cursor(std::ptr::null_mut(), 0));
 
-            let range = rs_qf_calc_display_range(std::ptr::null(), 10);
+            let range = rs_qf_calc_display_range(std::ptr::null_mut(), 10);
             assert_eq!(range.total, 0);
             assert_eq!(range.current, 0);
 
-            let info = rs_qf_entry_display_info(std::ptr::null());
+            let info = rs_qf_entry_display_info(std::ptr::null_mut());
             assert_eq!(info.fnum, 0);
             assert!(!info.valid);
 
-            let info = rs_qf_current_entry_display(std::ptr::null());
+            let info = rs_qf_current_entry_display(std::ptr::null_mut());
             assert_eq!(info.fnum, 0);
 
-            let hl = rs_qf_calc_line_highlights(std::ptr::null());
+            let hl = rs_qf_calc_line_highlights(std::ptr::null_mut());
             assert!(!hl.valid);
 
-            assert_eq!(rs_qf_calc_scroll(std::ptr::null(), 1, 10), 0);
-            assert_eq!(rs_qf_calc_centered_top(std::ptr::null(), 10), 1);
-            assert!(rs_qf_entry_at_line(std::ptr::null(), 1).is_null());
-            assert_eq!(rs_qf_count_with_position(std::ptr::null()), 0);
-            assert_eq!(rs_qf_count_with_file(std::ptr::null()), 0);
+            assert_eq!(rs_qf_calc_scroll(std::ptr::null_mut(), 1, 10), 0);
+            assert_eq!(rs_qf_calc_centered_top(std::ptr::null_mut(), 10), 1);
+            assert!(rs_qf_entry_at_line(std::ptr::null_mut(), 1).is_null());
+            assert_eq!(rs_qf_count_with_position(std::ptr::null_mut()), 0);
+            assert_eq!(rs_qf_count_with_file(std::ptr::null_mut()), 0);
         }
     }
 
@@ -1080,7 +1078,7 @@ mod tests {
     fn test_fmt_text_null() {
         unsafe {
             let mut out = [0i8; 256];
-            let len = rs_qf_fmt_text(std::ptr::null(), out.as_mut_ptr(), out.len());
+            let len = rs_qf_fmt_text(std::ptr::null_mut(), out.as_mut_ptr(), out.len());
             assert_eq!(len, 0);
             assert_eq!(out[0], 0);
         }
@@ -1142,7 +1140,7 @@ mod tests {
     #[test]
     fn test_null_calc_window_size() {
         unsafe {
-            let size = rs_qf_calc_window_size(std::ptr::null(), 3, 10);
+            let size = rs_qf_calc_window_size(std::ptr::null_mut(), 3, 10);
             assert_eq!(size.min_height, 3);
             assert_eq!(size.max_height, 10);
             assert_eq!(size.preferred_height, 3);
@@ -1152,49 +1150,49 @@ mod tests {
     #[test]
     fn test_null_should_open_window() {
         unsafe {
-            assert!(!rs_qf_should_open_window(std::ptr::null()));
+            assert!(!rs_qf_should_open_window(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_scroll_to_current() {
         unsafe {
-            assert_eq!(rs_qf_scroll_to_current(std::ptr::null(), 10, 3), 1);
+            assert_eq!(rs_qf_scroll_to_current(std::ptr::null_mut(), 10, 3), 1);
         }
     }
 
     #[test]
     fn test_null_entry_to_buf_line() {
         unsafe {
-            assert_eq!(rs_qf_entry_to_buf_line(std::ptr::null(), 1), 0);
+            assert_eq!(rs_qf_entry_to_buf_line(std::ptr::null_mut(), 1), 0);
         }
     }
 
     #[test]
     fn test_null_buf_line_to_entry() {
         unsafe {
-            assert_eq!(rs_qf_buf_line_to_entry(std::ptr::null(), 1), 0);
+            assert_eq!(rs_qf_buf_line_to_entry(std::ptr::null_mut(), 1), 0);
         }
     }
 
     #[test]
     fn test_null_window_buf_valid() {
         unsafe {
-            assert!(!rs_qf_window_buf_valid(std::ptr::null(), 10));
+            assert!(!rs_qf_window_buf_valid(std::ptr::null_mut(), 10));
         }
     }
 
     #[test]
     fn test_null_window_buf_delta() {
         unsafe {
-            assert_eq!(rs_qf_window_buf_delta(std::ptr::null(), 10), 0);
+            assert_eq!(rs_qf_window_buf_delta(std::ptr::null_mut(), 10), 0);
         }
     }
 
     #[test]
     fn test_null_window_info() {
         unsafe {
-            let info = rs_qf_window_info(std::ptr::null());
+            let info = rs_qf_window_info(std::ptr::null_mut());
             assert!(!info.exists);
             assert_eq!(info.current_idx, 0);
             assert_eq!(info.total_count, 0);

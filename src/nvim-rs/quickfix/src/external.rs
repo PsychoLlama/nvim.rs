@@ -6,17 +6,14 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{QfLineHandle, QfListHandle};
+use crate::{QfLinePtr, QfListHandle};
 
 // =============================================================================
 // External C accessor functions
 // =============================================================================
 
 extern "C" {
-    fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_type(qfp: QfLineHandle) -> c_char;
-    fn nvim_qfline_get_next(qfp: QfLineHandle) -> QfLineHandle;
-    fn nvim_qf_get_start(qfl: QfListHandle) -> QfLineHandle;
+    fn nvim_qf_get_start(qfl: QfListHandle) -> QfLinePtr;
 }
 
 // =============================================================================
@@ -143,7 +140,7 @@ pub unsafe extern "C" fn rs_qf_output_stats(qfl: QfListHandle) -> QfOutputStats 
     while !qfp.is_null() {
         stats.total += 1;
 
-        let type_char = nvim_qfline_get_type(qfp);
+        let type_char = (*qfp).qf_type;
         match rs_qf_classify_type_char(type_char) {
             OutputLineKind::Error => stats.errors += 1,
             OutputLineKind::Warning => stats.warnings += 1,
@@ -151,7 +148,7 @@ pub unsafe extern "C" fn rs_qf_output_stats(qfl: QfListHandle) -> QfOutputStats 
             _ => {}
         }
 
-        let fnum = nvim_qfline_get_fnum(qfp);
+        let fnum = (*qfp).qf_fnum;
         if fnum > 0 && fnum != last_fnum {
             stats.files += 1;
             if stats.first_file == 0 {
@@ -160,7 +157,7 @@ pub unsafe extern "C" fn rs_qf_output_stats(qfl: QfListHandle) -> QfOutputStats 
             last_fnum = fnum;
         }
 
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     stats
@@ -279,7 +276,7 @@ pub unsafe extern "C" fn rs_qf_extract_files(
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        let fnum = nvim_qfline_get_fnum(qfp);
+        let fnum = (*qfp).qf_fnum;
         if fnum > 0 && fnum != last_fnum {
             if !out_fnums.is_null() && count < max_files {
                 #[allow(clippy::cast_possible_wrap)]
@@ -289,7 +286,7 @@ pub unsafe extern "C" fn rs_qf_extract_files(
             count += 1;
             last_fnum = fnum;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -345,14 +342,14 @@ pub unsafe extern "C" fn rs_qf_max_severity(qfl: QfListHandle) -> QfSeverity {
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        let severity = rs_qf_type_severity(nvim_qfline_get_type(qfp));
+        let severity = rs_qf_type_severity((*qfp).qf_type);
         if severity > max {
             max = severity;
             if max == QfSeverity::Error {
                 break; // Can't get higher
             }
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     max

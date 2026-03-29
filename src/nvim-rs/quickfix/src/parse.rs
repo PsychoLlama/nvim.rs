@@ -17,7 +17,7 @@ use std::ffi::{c_char, c_int, c_void};
 type LinenrT = i32;
 
 /// Opaque handle to `qfline_T` (quickfix entry)
-type QfLineHandle = *const c_void;
+type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
 
 // =============================================================================
 // External C accessor functions
@@ -26,16 +26,6 @@ type QfLineHandle = *const c_void;
 #[allow(dead_code)]
 extern "C" {
     // Entry accessors
-    fn nvim_qfline_get_lnum(qfp: QfLineHandle) -> LinenrT;
-    fn nvim_qfline_get_col(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_valid(qfp: QfLineHandle) -> bool;
-    fn nvim_qfline_get_type(qfp: QfLineHandle) -> c_char;
-    fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_end_lnum(qfp: QfLineHandle) -> LinenrT;
-    fn nvim_qfline_get_end_col(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_text(qfp: QfLineHandle) -> *const c_char;
-    fn nvim_qfline_get_nr(qfp: QfLineHandle) -> c_int;
-    fn nvim_qfline_get_module(qfp: QfLineHandle) -> *const c_char;
 }
 
 // =============================================================================
@@ -94,6 +84,11 @@ impl Default for QfParseResult {
 // Entry Validation Functions
 // =============================================================================
 
+extern "C" {
+    fn xfree(ptr: *mut ::std::ffi::c_void);
+    fn xstrdup(s: *const ::std::ffi::c_char) -> *mut ::std::ffi::c_char;
+}
+
 /// Validate a quickfix entry and return detailed validation info.
 ///
 /// This function checks various properties of a quickfix entry to determine
@@ -104,17 +99,17 @@ impl Default for QfParseResult {
 /// - `qfp` may be null (returns default validation with all false)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_validate_entry(qfp: QfLineHandle) -> QfEntryValidation {
+pub unsafe extern "C" fn rs_qf_validate_entry(qfp: QfLinePtr) -> QfEntryValidation {
     if qfp.is_null() {
         return QfEntryValidation::default();
     }
 
-    let lnum = nvim_qfline_get_lnum(qfp);
-    let col = nvim_qfline_get_col(qfp);
-    let fnum = nvim_qfline_get_fnum(qfp);
-    let type_char = nvim_qfline_get_type(qfp);
-    let text = nvim_qfline_get_text(qfp);
-    let valid = nvim_qfline_get_valid(qfp);
+    let lnum = (*qfp).qf_lnum;
+    let col = (*qfp).qf_col;
+    let fnum = (*qfp).qf_fnum;
+    let type_char = (*qfp).qf_type;
+    let text = (*qfp).qf_text;
+    let valid = (*qfp).qf_valid != 0;
 
     let has_lnum = lnum > 0;
     let has_col = col > 0;
@@ -153,7 +148,7 @@ pub unsafe extern "C" fn rs_qf_validate_entry(qfp: QfLineHandle) -> QfEntryValid
 /// - `qfp` may be null (returns false)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_is_complete(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_is_complete(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return false;
     }
@@ -169,12 +164,12 @@ pub unsafe extern "C" fn rs_qf_entry_is_complete(qfp: QfLineHandle) -> bool {
 /// - `qfp` may be null (returns false)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_is_diagnostic(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_is_diagnostic(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return false;
     }
 
-    let type_char = nvim_qfline_get_type(qfp);
+    let type_char = (*qfp).qf_type;
     #[allow(clippy::cast_sign_loss)]
     let type_byte = type_char as u8;
     let type_upper = if type_byte.is_ascii_lowercase() {
@@ -195,12 +190,12 @@ pub unsafe extern "C" fn rs_qf_entry_is_diagnostic(qfp: QfLineHandle) -> bool {
 /// - `qfp` may be null (returns 0)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_severity(qfp: QfLineHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_entry_severity(qfp: QfLinePtr) -> c_int {
     if qfp.is_null() {
         return 0;
     }
 
-    let type_char = nvim_qfline_get_type(qfp);
+    let type_char = (*qfp).qf_type;
     #[allow(clippy::cast_sign_loss)]
     let type_byte = type_char as u8;
     let type_upper = if type_byte.is_ascii_lowercase() {
@@ -343,13 +338,13 @@ pub unsafe extern "C" fn rs_qf_classify_line(
 /// - `qfp` may be null (returns true - null entries are vacuously valid)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_has_valid_range(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_has_valid_range(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return true;
     }
 
-    let lnum = nvim_qfline_get_lnum(qfp);
-    let end_lnum = nvim_qfline_get_end_lnum(qfp);
+    let lnum = (*qfp).qf_lnum;
+    let end_lnum = (*qfp).qf_end_lnum;
 
     // No end line means valid (single line entry)
     if end_lnum == 0 {
@@ -367,15 +362,15 @@ pub unsafe extern "C" fn rs_qf_entry_has_valid_range(qfp: QfLineHandle) -> bool 
 /// - `qfp` may be null (returns true - null entries are vacuously valid)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_has_valid_col_range(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_has_valid_col_range(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return true;
     }
 
-    let col = nvim_qfline_get_col(qfp);
-    let end_col = nvim_qfline_get_end_col(qfp);
-    let lnum = nvim_qfline_get_lnum(qfp);
-    let end_lnum = nvim_qfline_get_end_lnum(qfp);
+    let col = (*qfp).qf_col;
+    let end_col = (*qfp).qf_end_col;
+    let lnum = (*qfp).qf_lnum;
+    let end_lnum = (*qfp).qf_end_lnum;
 
     // No end column means valid
     if end_col == 0 {
@@ -400,13 +395,13 @@ pub unsafe extern "C" fn rs_qf_entry_has_valid_col_range(qfp: QfLineHandle) -> b
 /// - `qfp` may be null (returns 0)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_line_span(qfp: QfLineHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_entry_line_span(qfp: QfLinePtr) -> c_int {
     if qfp.is_null() {
         return 0;
     }
 
-    let lnum = nvim_qfline_get_lnum(qfp);
-    let end_lnum = nvim_qfline_get_end_lnum(qfp);
+    let lnum = (*qfp).qf_lnum;
+    let end_lnum = (*qfp).qf_end_lnum;
 
     if lnum <= 0 {
         return 0;
@@ -479,12 +474,12 @@ pub unsafe extern "C" fn rs_qf_detect_type_from_text(text: *const c_char) -> c_c
 /// - `qfp` may be null (returns false)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_has_module(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_has_module(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return false;
     }
 
-    let module = nvim_qfline_get_module(qfp);
+    let module = (*qfp).qf_module;
     !module.is_null() && *module != 0
 }
 
@@ -495,12 +490,12 @@ pub unsafe extern "C" fn rs_qf_entry_has_module(qfp: QfLineHandle) -> bool {
 /// - `qfp` may be null (returns false)
 /// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_has_nr(qfp: QfLineHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_has_nr(qfp: QfLinePtr) -> bool {
     if qfp.is_null() {
         return false;
     }
 
-    nvim_qfline_get_nr(qfp) != 0
+    (*qfp).qf_nr != 0
 }
 
 // =============================================================================
@@ -2144,7 +2139,7 @@ extern "C" {
     fn nvim_qf_vim_regexec(rm: *mut c_void, line: *const c_char) -> bool;
 
     // qf_list_T accessors
-    fn nvim_qf_get_last(qfl: *const c_void) -> *const c_void;
+    fn nvim_qf_get_last(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
 
     // qf_list_T multi-scan state
     fn nvim_qf_get_multiline(qfl: *const c_void) -> bool;
@@ -2155,17 +2150,7 @@ extern "C" {
     fn nvim_qf_set_multiscan(qfl: *mut c_void, multiscan: bool);
 
     // qfline_T set accessors (get accessors already declared at top of file)
-    fn nvim_qfline_set_nr(qfp: *mut c_void, nr: c_int);
-    fn nvim_qfline_set_type(qfp: *mut c_void, type_char: c_char);
-    fn nvim_qfline_set_lnum(qfp: *mut c_void, lnum: i32);
-    fn nvim_qfline_set_end_lnum(qfp: *mut c_void, end_lnum: i32);
-    fn nvim_qfline_set_col(qfp: *mut c_void, col: c_int);
-    fn nvim_qfline_set_viscol(qfp: *mut c_void, viscol: c_char);
-    fn nvim_qfline_set_end_col(qfp: *mut c_void, end_col: c_int);
-    fn nvim_qfline_set_fnum(qfp: *mut c_void, fnum: c_int);
     // nvim_qfline_replace_text is an alias for nvim_qfline_set_text
-    #[link_name = "nvim_qfline_set_text"]
-    fn nvim_qfline_replace_text(qfp: *mut c_void, text: *const c_char);
 
     // misc
     fn line_breakcheck();
@@ -2891,13 +2876,11 @@ unsafe fn qf_parse_line_nomatch_rs(
 /// All pointers must be valid.
 unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut c_void) -> c_int {
     if !nvim_qf_get_multiignore(qfl) {
-        let qfprev_const = nvim_qf_get_last(qfl);
-        if qfprev_const.is_null() {
+        let qfprev = nvim_qf_get_last(qfl);
+        if qfprev.is_null() {
             return C_QF_FAIL;
         }
-        // The qfline_T setters require *mut c_void; nvim_qf_get_last returns *const c_void.
-        // Safety: we have exclusive access since we hold a mutable reference to qfl.
-        let qfprev = qfprev_const.cast_mut();
+        let qfprev_const = qfprev;
 
         let errmsg = fields_get_errmsg(fields);
         if !errmsg.is_null() && *errmsg != 0 {
@@ -2905,7 +2888,7 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
             // Append errmsg to current qf_text with a newline separator.
             let new_text = std::ffi::CStr::from_ptr(errmsg);
             let new_bytes = new_text.to_bytes();
-            let current = nvim_qfline_get_text(qfprev);
+            let current = (*qfprev).qf_text;
             let combined: std::ffi::CString = if current.is_null() {
                 // No existing text; just use the new message directly.
                 std::ffi::CString::from_vec_unchecked(new_bytes.to_vec())
@@ -2917,42 +2900,45 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
                 buf.extend_from_slice(new_bytes);
                 std::ffi::CString::from_vec_unchecked(buf)
             };
-            nvim_qfline_replace_text(qfprev, combined.as_ptr());
+            {
+                xfree((*qfprev).qf_text.cast());
+                (*qfprev).qf_text = xstrdup(combined.as_ptr());
+            };
         }
 
         // Update nr if not set
-        if nvim_qfline_get_nr(qfprev_const) == -1 {
-            nvim_qfline_set_nr(qfprev, fields_get_enr(fields));
+        if (*qfprev_const).qf_nr == -1 {
+            (*qfprev).qf_nr = fields_get_enr(fields);
         }
 
         // Update type if not set and new type is printable
         let new_type = fields_get_type(fields);
         #[allow(clippy::cast_possible_wrap)]
-        if vim_isprintc(new_type as c_int) && nvim_qfline_get_type(qfprev_const) == 0 {
-            nvim_qfline_set_type(qfprev, new_type);
+        if vim_isprintc(new_type as c_int) && (*qfprev_const).qf_type == 0 {
+            (*qfprev).qf_type = new_type;
         }
 
         // Update lnum if not set
-        if nvim_qfline_get_lnum(qfprev_const) == 0 {
-            nvim_qfline_set_lnum(qfprev, fields_get_lnum(fields));
+        if (*qfprev_const).qf_lnum == 0 {
+            (*qfprev).qf_lnum = fields_get_lnum(fields);
         }
         // Update end_lnum if not set
-        if nvim_qfline_get_end_lnum(qfprev_const) == 0 {
-            nvim_qfline_set_end_lnum(qfprev, fields_get_end_lnum(fields));
+        if (*qfprev_const).qf_end_lnum == 0 {
+            (*qfprev).qf_end_lnum = fields_get_end_lnum(fields);
         }
         // Update col and viscol if not set
-        if nvim_qfline_get_col(qfprev_const) == 0 {
-            nvim_qfline_set_col(qfprev, fields_get_col(fields));
+        if (*qfprev_const).qf_col == 0 {
+            (*qfprev).qf_col = fields_get_col(fields);
             #[allow(clippy::cast_possible_wrap)]
             let viscol = fields_get_use_viscol(fields) as c_char;
-            nvim_qfline_set_viscol(qfprev, viscol);
+            (*qfprev).qf_viscol = viscol;
         }
         // Update end_col if not set
-        if nvim_qfline_get_end_col(qfprev_const) == 0 {
-            nvim_qfline_set_end_col(qfprev, fields_get_end_col(fields));
+        if (*qfprev_const).qf_end_col == 0 {
+            (*qfprev).qf_end_col = fields_get_end_col(fields);
         }
         // Update fnum if not set
-        if nvim_qfline_get_fnum(qfprev_const) == 0 {
+        if (*qfprev_const).qf_fnum == 0 {
             let f = &*fields.cast::<crate::reader::QfAllFields>();
             // Equivalent to C: qf_get_fnum(qfl, qfl->qf_directory,
             //   *namebuf || qfl->qf_directory ? namebuf : qfl->qf_currfile && valid ? qfl->qf_currfile : NULL)
@@ -2967,7 +2953,7 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
                 std::ptr::null_mut()
             };
             let fnum = crate::rs_qf_get_fnum(qfl, dir.cast_mut(), fname);
-            nvim_qfline_set_fnum(qfprev, fnum);
+            (*qfprev).qf_fnum = fnum;
         }
     }
 
@@ -3132,7 +3118,7 @@ mod tests {
     #[test]
     fn test_null_validate_entry() {
         unsafe {
-            let validation = rs_qf_validate_entry(std::ptr::null());
+            let validation = rs_qf_validate_entry(std::ptr::null_mut());
             assert!(!validation.valid);
             assert!(!validation.has_filename);
             assert!(!validation.has_lnum);
@@ -3142,21 +3128,21 @@ mod tests {
     #[test]
     fn test_null_entry_is_complete() {
         unsafe {
-            assert!(!rs_qf_entry_is_complete(std::ptr::null()));
+            assert!(!rs_qf_entry_is_complete(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_entry_is_diagnostic() {
         unsafe {
-            assert!(!rs_qf_entry_is_diagnostic(std::ptr::null()));
+            assert!(!rs_qf_entry_is_diagnostic(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_entry_severity() {
         unsafe {
-            assert_eq!(rs_qf_entry_severity(std::ptr::null()), 0);
+            assert_eq!(rs_qf_entry_severity(std::ptr::null_mut()), 0);
         }
     }
 
@@ -3213,14 +3199,14 @@ mod tests {
     #[test]
     fn test_null_entry_has_valid_range() {
         unsafe {
-            assert!(rs_qf_entry_has_valid_range(std::ptr::null()));
+            assert!(rs_qf_entry_has_valid_range(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_entry_line_span() {
         unsafe {
-            assert_eq!(rs_qf_entry_line_span(std::ptr::null()), 0);
+            assert_eq!(rs_qf_entry_line_span(std::ptr::null_mut()), 0);
         }
     }
 
@@ -3282,14 +3268,14 @@ mod tests {
     #[test]
     fn test_null_entry_has_module() {
         unsafe {
-            assert!(!rs_qf_entry_has_module(std::ptr::null()));
+            assert!(!rs_qf_entry_has_module(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_entry_has_nr() {
         unsafe {
-            assert!(!rs_qf_entry_has_nr(std::ptr::null()));
+            assert!(!rs_qf_entry_has_nr(std::ptr::null_mut()));
         }
     }
 

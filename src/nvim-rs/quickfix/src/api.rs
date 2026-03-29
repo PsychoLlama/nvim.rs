@@ -1225,19 +1225,7 @@ extern "C" {
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_emsg_dictreq deleted: use emsg directly)
 
-    fn nvim_qfline_get_type(qfp: *const c_void) -> std::ffi::c_char;
-    fn nvim_qfline_get_lnum(qfp: *const c_void) -> i32;
-    fn nvim_qfline_get_end_lnum(qfp: *const c_void) -> i32;
-    fn nvim_qfline_get_col(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_end_col(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_viscol(qfp: *const c_void) -> bool;
-    fn nvim_qfline_get_nr(qfp: *const c_void) -> c_int;
-    fn nvim_qfline_get_text(qfp: *const c_void) -> *const std::ffi::c_char;
-    fn nvim_qfline_get_module(qfp: *const c_void) -> *const std::ffi::c_char;
-    fn nvim_qfline_get_pattern(qfp: *const c_void) -> *const std::ffi::c_char;
-    fn nvim_qfline_get_next(qfp: *const c_void) -> *const c_void;
-    fn nvim_qfline_get_valid_bufnr(qfp: *const c_void) -> c_int;
-    fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
+    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
     static mut got_int: bool;
     fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_void;
     fn nvim_qf_free_lists_array(qi: *mut c_void);
@@ -1292,8 +1280,8 @@ extern "C" {
         qfl: *const c_void,
         errornr: c_int,
         new_qfidx: *mut c_int,
-    ) -> *mut c_void;
-    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
+    ) -> *mut crate::ffi_types::QfLineRaw;
+    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *mut crate::ffi_types::QfLineRaw);
     fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
     fn rs_qf_incr_changedtick(qfl: *mut c_void);
     fn nvim_di_get_string(di: *const c_void) -> *const std::ffi::c_char;
@@ -1302,7 +1290,7 @@ extern "C" {
     fn nvim_get_ql_info() -> *mut c_void;
     fn nvim_win_get_loclist(wp: *const c_void) -> *const c_void;
     #[link_name = "rs_qf_update_buffer"]
-    fn nvim_qf_update_buffer(qi: *mut c_void, old_last: *const c_void);
+    fn nvim_qf_update_buffer(qi: *mut c_void, old_last: *mut crate::ffi_types::QfLineRaw);
     fn rs_qf_init_ext(
         qi: *mut c_void,
         qf_idx: c_int,
@@ -1354,37 +1342,41 @@ unsafe fn dict_add_str_or_empty(
 /// # Safety
 /// `qfp` and `list` must be valid non-null pointers.
 #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
-unsafe fn rs_get_qfline_items_impl(qfp: *const c_void, list: *mut c_void) -> c_int {
-    let bufnum = nvim_qfline_get_valid_bufnr(qfp);
+unsafe fn rs_get_qfline_items_impl(qfp_void: *const c_void, list: *mut c_void) -> c_int {
+    let qfp = qfp_void as *mut crate::ffi_types::QfLineRaw;
+    let bufnum = {
+        let qf_bn = (*qfp).qf_fnum;
+        if qf_bn != 0 && buflist_findnr(qf_bn).is_null() {
+            0
+        } else {
+            qf_bn
+        }
+    };
 
     let dict = tv_dict_alloc();
     tv_list_append_dict(list, dict);
 
     // Build type string ("E", "W", etc. or "")
-    let type_ch = nvim_qfline_get_type(qfp) as u8;
+    let type_ch = (*qfp).qf_type as u8;
     let type_buf = [type_ch, 0u8];
 
     // Add numeric fields
     let ok = dict_add_nr(dict, b"bufnr", bufnum.into()) == C_OK
-        && dict_add_nr(dict, b"lnum", nvim_qfline_get_lnum(qfp).into()) == C_OK
-        && dict_add_nr(dict, b"end_lnum", nvim_qfline_get_end_lnum(qfp).into()) == C_OK
-        && dict_add_nr(dict, b"col", nvim_qfline_get_col(qfp).into()) == C_OK
-        && dict_add_nr(dict, b"end_col", nvim_qfline_get_end_col(qfp).into()) == C_OK
-        && dict_add_nr(
-            dict,
-            b"vcol",
-            c_int::from(nvim_qfline_get_viscol(qfp)).into(),
-        ) == C_OK
-        && dict_add_nr(dict, b"nr", nvim_qfline_get_nr(qfp).into()) == C_OK;
+        && dict_add_nr(dict, b"lnum", (*qfp).qf_lnum.into()) == C_OK
+        && dict_add_nr(dict, b"end_lnum", (*qfp).qf_end_lnum.into()) == C_OK
+        && dict_add_nr(dict, b"col", (*qfp).qf_col.into()) == C_OK
+        && dict_add_nr(dict, b"end_col", (*qfp).qf_end_col.into()) == C_OK
+        && dict_add_nr(dict, b"vcol", c_int::from((*qfp).qf_viscol != 0).into()) == C_OK
+        && dict_add_nr(dict, b"nr", (*qfp).qf_nr.into()) == C_OK;
 
     if !ok {
         return C_FAIL;
     }
 
     // Add string fields
-    let ok2 = dict_add_str_or_empty(dict, b"module", nvim_qfline_get_module(qfp)) == C_OK
-        && dict_add_str_or_empty(dict, b"pattern", nvim_qfline_get_pattern(qfp)) == C_OK
-        && dict_add_str_or_empty(dict, b"text", nvim_qfline_get_text(qfp)) == C_OK
+    let ok2 = dict_add_str_or_empty(dict, b"module", (*qfp).qf_module) == C_OK
+        && dict_add_str_or_empty(dict, b"pattern", (*qfp).qf_pattern) == C_OK
+        && dict_add_str_or_empty(dict, b"text", (*qfp).qf_text) == C_OK
         && tv_dict_add_str(
             dict,
             b"type".as_ptr().cast(),
@@ -1409,15 +1401,11 @@ unsafe fn rs_get_qfline_items_impl(qfp: *const c_void, list: *mut c_void) -> c_i
     // with the C macro VAR_UNKNOWN check we need the type value.
     // We skip user_data if its type is VAR_UNKNOWN (0).
 
-    dict_add_nr(
-        dict,
-        b"valid",
-        c_int::from(nvim_qfline_get_valid(qfp)).into(),
-    )
+    dict_add_nr(dict, b"valid", c_int::from((*qfp).qf_valid != 0).into())
 }
 
 extern "C" {
-    fn nvim_qfline_get_valid(qfp: *const c_void) -> bool;
+    fn buflist_findnr(bnr: c_int) -> *mut c_void;
 }
 
 /// Iterate qf list entries and populate `list`.
@@ -1473,12 +1461,12 @@ pub unsafe extern "C" fn rs_get_errorlist(
     while !qfp.is_null() && !unsafe { got_int } && i <= nvim_qf_get_count(qfl) {
         if eidx > 0 {
             if eidx == i {
-                return rs_get_qfline_items_impl(qfp, list);
+                return rs_get_qfline_items_impl(qfp.cast(), list);
             }
-        } else if rs_get_qfline_items_impl(qfp, list) == C_FAIL {
+        } else if rs_get_qfline_items_impl(qfp.cast(), list) == C_FAIL {
             return C_FAIL;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         i += 1;
     }
 
@@ -1965,7 +1953,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
         rs_qf_incr_changedtick(qfl);
     }
     if newlist {
-        nvim_qf_update_buffer(qi, std::ptr::null());
+        nvim_qf_update_buffer(qi, std::ptr::null_mut());
     }
 
     retval

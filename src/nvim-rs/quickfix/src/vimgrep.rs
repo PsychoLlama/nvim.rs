@@ -676,9 +676,9 @@ extern "C" {
 
     // Finalize inlining (Phase 2)
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
-    fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
+    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
     fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
-    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
+    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *mut crate::ffi_types::QfLineRaw);
     fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
 
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;

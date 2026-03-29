@@ -96,24 +96,6 @@ struct qf_info_S {
   int qf_bufnr;                     // quickfix window buffer number
 };
 // Layout assertions for Rust ffi_types.rs repr(C) structs.
-_Static_assert(sizeof(qfline_T) == 104, "qfline_T size changed - update QfLineRaw in ffi_types.rs");
-_Static_assert(offsetof(qfline_T, qf_next) == 0, "qfline_T.qf_next offset");
-_Static_assert(offsetof(qfline_T, qf_prev) == 8, "qfline_T.qf_prev offset");
-_Static_assert(offsetof(qfline_T, qf_lnum) == 16, "qfline_T.qf_lnum offset");
-_Static_assert(offsetof(qfline_T, qf_end_lnum) == 20, "qfline_T.qf_end_lnum offset");
-_Static_assert(offsetof(qfline_T, qf_fnum) == 24, "qfline_T.qf_fnum offset");
-_Static_assert(offsetof(qfline_T, qf_col) == 28, "qfline_T.qf_col offset");
-_Static_assert(offsetof(qfline_T, qf_end_col) == 32, "qfline_T.qf_end_col offset");
-_Static_assert(offsetof(qfline_T, qf_nr) == 36, "qfline_T.qf_nr offset");
-_Static_assert(offsetof(qfline_T, qf_module) == 40, "qfline_T.qf_module offset");
-_Static_assert(offsetof(qfline_T, qf_fname) == 48, "qfline_T.qf_fname offset");
-_Static_assert(offsetof(qfline_T, qf_pattern) == 56, "qfline_T.qf_pattern offset");
-_Static_assert(offsetof(qfline_T, qf_text) == 64, "qfline_T.qf_text offset");
-_Static_assert(offsetof(qfline_T, qf_viscol) == 72, "qfline_T.qf_viscol offset");
-_Static_assert(offsetof(qfline_T, qf_cleared) == 73, "qfline_T.qf_cleared offset");
-_Static_assert(offsetof(qfline_T, qf_type) == 74, "qfline_T.qf_type offset");
-_Static_assert(offsetof(qfline_T, qf_user_data) == 80, "qfline_T.qf_user_data offset");
-_Static_assert(offsetof(qfline_T, qf_valid) == 96, "qfline_T.qf_valid offset");
 _Static_assert(sizeof(qf_list_T) == 120, "qf_list_T size changed - update QfListRaw in ffi_types.rs");
 _Static_assert(offsetof(qf_list_T, qf_id) == 0, "qf_list_T.qf_id offset");
 _Static_assert(offsetof(qf_list_T, qfl_type) == 4, "qf_list_T.qfl_type offset");
@@ -150,27 +132,12 @@ extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 int nvim_qf_get_listcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_listcount; }
 int nvim_qf_get_count(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_count; }
 bool nvim_qf_get_nonevalid(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_nonevalid; }
-linenr_T nvim_qfline_get_lnum(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_lnum; }
-int nvim_qfline_get_col(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_col; }
 void *nvim_qf_get_curlist(const void *qi_void) { return (void *)&((const qf_info_T *)qi_void)->qf_lists[((const qf_info_T *)qi_void)->qf_curlist]; }
 void *nvim_qf_get_list_at(const void *qi_void, int idx) { return (void *)&((const qf_info_T *)qi_void)->qf_lists[idx]; }
 int nvim_qf_get_curlist_idx(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_curlist; }
 int nvim_qf_get_index(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_index; }
 void *nvim_qf_get_ptr(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_ptr; }
 void *nvim_qf_get_start(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_start; }
-void *nvim_qfline_get_next(const void *qfp_void) { return (void *)((const qfline_T *)qfp_void)->qf_next; }
-void *nvim_qfline_get_prev(const void *qfp_void) { return (void *)((const qfline_T *)qfp_void)->qf_prev; }
-bool nvim_qfline_get_valid(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_valid != 0; }
-char nvim_qfline_get_type(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_type; }
-int nvim_qfline_get_fnum(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_fnum; }
-linenr_T nvim_qfline_get_end_lnum(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_end_lnum; }
-int nvim_qfline_get_end_col(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_end_col; }
-int nvim_qfline_get_nr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_nr; }
-const char *nvim_qfline_get_text(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
-const char *nvim_qfline_get_module(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_module; }
-const char *nvim_qfline_get_pattern(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_pattern; }
-bool nvim_qfline_get_cleared(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_cleared != 0; }
-bool nvim_qfline_get_viscol(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_viscol != 0; }
 unsigned nvim_qf_get_id(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_id; }
 int nvim_qf_get_changedtick(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_changedtick; }
 const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_title; }
@@ -182,7 +149,6 @@ void nvim_qf_set_ptr(void *qfl_void, void *ptr) { ((qf_list_T *)qfl_void)->qf_pt
 int nvim_qf_get_qfl_type(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qfl_type; }
 int nvim_qf_get_qi_type(const void *qi_void) { return ((const qf_info_T *)qi_void)->qfl_type; }
 void *nvim_qf_get_last(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_last; }
-const char *nvim_qfline_get_fname(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_fname; }
 bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 void nvim_qf_set_title_dup(void *qfl_void, const char *title) { if (qfl_void == NULL) { return; } XFREE_CLEAR(((qf_list_T *)qfl_void)->qf_title); if (title != NULL) { ((qf_list_T *)qfl_void)->qf_title = xstrdup(title); } }
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
@@ -213,27 +179,8 @@ void nvim_qf_set_last(void *qfl_void, void *last) { if (qfl_void != NULL) ((qf_l
 void nvim_qf_set_count(void *qfl_void, int count) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_count = count; }
 void nvim_qf_increment_count(void *qfl_void) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_count++; }
 void nvim_qf_set_nonevalid(void *qfl_void, bool nonevalid) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_nonevalid = nonevalid; }
-void nvim_qfline_set_next(void *qfp_void, void *next) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_next = (qfline_T *)next; }
-void nvim_qfline_set_prev(void *qfp_void, void *prev) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_prev = (qfline_T *)prev; }
-size_t nvim_qf_sizeof_qfline(void) { return sizeof(qfline_T); }
 size_t nvim_qf_sizeof_qflist(void) { return sizeof(qf_list_T); }
 size_t nvim_qf_sizeof_qfinfo(void) { return sizeof(qf_info_T); }
-void nvim_qfline_free_fields(void *qfp_void) { if (qfp_void != NULL) { qfline_T *qfp = (qfline_T *)qfp_void; xfree(qfp->qf_module); xfree(qfp->qf_fname); xfree(qfp->qf_pattern); xfree(qfp->qf_text); tv_clear(&qfp->qf_user_data); } }
-void nvim_qfline_set_fnum(void *qfp_void, int fnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_fnum = fnum; }
-void nvim_qfline_set_lnum(void *qfp_void, linenr_T lnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_lnum = lnum; }
-void nvim_qfline_set_end_lnum(void *qfp_void, linenr_T end_lnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_end_lnum = end_lnum; }
-void nvim_qfline_set_col(void *qfp_void, int col) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_col = col; }
-void nvim_qfline_set_end_col(void *qfp_void, int end_col) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_end_col = end_col; }
-void nvim_qfline_set_nr(void *qfp_void, int nr) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_nr = nr; }
-void nvim_qfline_set_type(void *qfp_void, char type) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_type = type; }
-void nvim_qfline_set_viscol(void *qfp_void, char viscol) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_viscol = viscol; }
-void nvim_qfline_set_valid(void *qfp_void, char valid) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_valid = valid; }
-void nvim_qfline_set_cleared(void *qfp_void, char cleared) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_cleared = cleared; }
-void nvim_qfline_set_text(void *qfp_void, const char *text) { if (qfp_void != NULL) { xfree(((qfline_T *)qfp_void)->qf_text); ((qfline_T *)qfp_void)->qf_text = (text != NULL) ? xstrdup(text) : NULL; } }
-void nvim_qfline_set_module(void *qfp_void, const char *module) { if (qfp_void != NULL) { xfree(((qfline_T *)qfp_void)->qf_module); ((qfline_T *)qfp_void)->qf_module = (module != NULL && *module != NUL) ? xstrdup(module) : NULL; } }
-void nvim_qfline_set_fname(void *qfp_void, const char *fname) { if (qfp_void != NULL) { xfree(((qfline_T *)qfp_void)->qf_fname); ((qfline_T *)qfp_void)->qf_fname = (fname != NULL && *fname != NUL) ? xstrdup(fname) : NULL; } }
-void nvim_qfline_set_pattern(void *qfp_void, const char *pattern) { if (qfp_void != NULL) { xfree(((qfline_T *)qfp_void)->qf_pattern); ((qfline_T *)qfp_void)->qf_pattern = (pattern != NULL && *pattern != NUL) ? xstrdup(pattern) : NULL; } }
-void nvim_qfline_set_user_data(void *qfp_void, void *qfl_void, const void *user_data_void) { if (qfp_void == NULL) { return; } qfline_T *qfp = (qfline_T *)qfp_void; const typval_T *user_data = (const typval_T *)user_data_void; if (user_data == NULL || user_data->v_type == VAR_UNKNOWN) { qfp->qf_user_data.v_type = VAR_UNKNOWN; } else { tv_copy(user_data, &qfp->qf_user_data); if (qfl_void != NULL) { ((qf_list_T *)qfl_void)->qf_has_user_data = true; } } }
 void nvim_qf_buf_or_has_entry(void *buf_void, bool is_location_list) { if (buf_void != NULL) ((buf_T *)buf_void)->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY; }
 void nvim_qf_set_id(void *qfl_void, unsigned id) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_id = id; }
 void nvim_qf_set_qfl_type(void *qfl_void, int qfl_type) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qfl_type = (qfltype_T)qfl_type; }
@@ -245,7 +192,6 @@ void nvim_qf_free_ctx(void *qfl_void) { if (qfl_void != NULL) { tv_free(((qf_lis
 void nvim_qf_free_callback(void *qfl_void) { if (qfl_void != NULL) callback_free(&((qf_list_T *)qfl_void)->qf_qftf_cb); }
 void nvim_qf_copy_ctx(const void *from_qfl_void, void *to_qfl_void) { if (from_qfl_void == NULL || to_qfl_void == NULL) { return; } const qf_list_T *from = (const qf_list_T *)from_qfl_void; qf_list_T *to = (qf_list_T *)to_qfl_void; if (from->qf_ctx != NULL) { to->qf_ctx = xcalloc(1, sizeof(*to->qf_ctx)); tv_copy(from->qf_ctx, to->qf_ctx); } else { to->qf_ctx = NULL; } }
 void nvim_qf_copy_callback(const void *from_qfl_void, void *to_qfl_void) { if (from_qfl_void != NULL && to_qfl_void != NULL) callback_copy(&((qf_list_T *)to_qfl_void)->qf_qftf_cb, &((const qf_list_T *)from_qfl_void)->qf_qftf_cb); }
-const void *nvim_qfline_get_user_data_ptr(const void *qfp_void) { return qfp_void == NULL ? NULL : (const void *)&((const qfline_T *)qfp_void)->qf_user_data; }
 void nvim_qf_set_changedtick(void *qfl_void, int changedtick) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick = changedtick; }
 void nvim_qf_shift_lists_down(void *qi_void) { if (qi_void == NULL) { return; } qf_info_T *qi = (qf_info_T *)qi_void; for (int i = 1; i < qi->qf_listcount; i++) { qi->qf_lists[i - 1] = qi->qf_lists[i]; } }
 void *nvim_qf_get_dir_stack(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_dir_stack; }
@@ -270,7 +216,6 @@ void *nvim_qf_tv_get_dict(const void *tv) { return (tv == NULL || ((const typval
 void *nvim_qf_tv_get_list(const void *tv) { return (tv == NULL || ((const typval_T *)tv)->v_type != VAR_LIST) ? NULL : ((const typval_T *)tv)->vval.v_list; }
 bool nvim_tv_dict_has_lines_key(const void *dict) { if (dict == NULL) { return false; } const dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("lines")); return di != NULL && di->di_tv.v_type == VAR_LIST && di->di_tv.vval.v_list != NULL; }
 void *nvim_tv_dict_get_lines_di_tv(const void *dict) { if (dict == NULL) { return NULL; } dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("lines")); return (di == NULL || di->di_tv.v_type != VAR_LIST) ? NULL : &di->di_tv; }
-int nvim_qfline_get_valid_bufnr(const void *qfp_void) { if (qfp_void == NULL) { return 0; } int bufnum = ((const qfline_T *)qfp_void)->qf_fnum; return (bufnum != 0 && buflist_findnr(bufnum) == NULL) ? 0 : bufnum; }
 const char *nvim_tv_dict_get_efm_str(const void *dict) { if (dict == NULL) { return NULL; } const dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("efm")); return (di == NULL || di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL) ? NULL : di->di_tv.vval.v_string; }
 bool nvim_tv_dict_efm_wrong_type(const void *dict) { if (dict == NULL) { return false; } const dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("efm")); return di != NULL && (di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL); }
 void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx) { if (qi_void == NULL) { return NULL; } const qf_info_T *qi = (const qf_info_T *)qi_void; return (qf_idx < 0 || qf_idx >= qi->qf_listcount) ? NULL : (void *)&qi->qf_lists[qf_idx]; }

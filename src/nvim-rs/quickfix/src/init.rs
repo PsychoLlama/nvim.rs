@@ -310,7 +310,7 @@ mod init_ext {
     type QfInfoHandleMut = *mut c_void;
     type QfListHandle = *const c_void;
     type QfListHandleMut = *mut c_void;
-    type QfLineHandle = *const c_void;
+    type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
     type BufHandle = *mut c_void;
     type TvHandle = *mut c_void;
     type FieldsHandle = *mut c_void;
@@ -327,9 +327,9 @@ mod init_ext {
         fn nvim_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int;
         fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
         fn nvim_qf_get_count(qfl: QfListHandle) -> c_int;
-        fn nvim_qf_get_last(qfl: QfListHandle) -> QfLineHandle;
+        fn nvim_qf_get_last(qfl: QfListHandle) -> QfLinePtr;
         #[link_name = "rs_qf_update_buffer"]
-        fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
+        fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLinePtr);
 
         // Globals
         fn line_breakcheck();
@@ -350,8 +350,8 @@ mod init_ext {
         // nvim_qf_init_finalize_list deleted: inlined below (Phase 14)
         fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
         fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
-        fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLineHandle);
-        fn nvim_qf_get_start(qfl: QfListHandle) -> QfLineHandle;
+        fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLinePtr);
+        fn nvim_qf_get_start(qfl: QfListHandle) -> QfLinePtr;
         fn nvim_qf_set_nonevalid(qfl: QfListHandleMut, nonevalid: bool);
         fn nvim_qf_init_emsg_readerrf();
         fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
@@ -435,7 +435,7 @@ mod init_ext {
         } else if !currfile.is_null() && valid {
             currfile
         } else {
-            std::ptr::null()
+            std::ptr::null_mut()
         };
 
         rs_qf_add_entry(
@@ -453,7 +453,7 @@ mod init_ext {
             f.pattern.cast_const(),
             f.enr,
             f.type_char,
-            std::ptr::null(), // user_data: always null in Rust-managed path
+            std::ptr::null_mut(), // user_data: always null in Rust-managed path
             valid as c_char,
         )
     }
@@ -493,7 +493,7 @@ mod init_ext {
         // Tracks whether we need to run the error2 cleanup path.
         let mut adding = false;
         let mut qfl: QfListHandleMut = std::ptr::null_mut();
-        let mut old_last: QfLineHandle = std::ptr::null();
+        let mut old_last: QfLinePtr = std::ptr::null_mut();
 
         // Main logic: labeled block replaces C goto error2/qf_init_end.
         let retval = 'init: {

@@ -6,9 +6,7 @@
 use std::ffi::{c_char, c_int};
 
 use crate::{
-    nvim_qf_get_count, nvim_qf_get_nonevalid, nvim_qf_get_start, nvim_qfline_get_fnum,
-    nvim_qfline_get_lnum, nvim_qfline_get_next, nvim_qfline_get_text, nvim_qfline_get_type,
-    nvim_qfline_get_valid, LinenrT, QfLineHandle, QfListHandle,
+    nvim_qf_get_count, nvim_qf_get_nonevalid, nvim_qf_get_start, LinenrT, QfLinePtr, QfListHandle,
 };
 
 extern "C" {
@@ -52,10 +50,10 @@ pub unsafe extern "C" fn rs_qf_count_by_type(qfl: QfListHandle, entry_type: c_ch
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_type(qfp) == entry_type {
+        if (*qfp).qf_type == entry_type {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -94,10 +92,10 @@ pub unsafe extern "C" fn rs_qf_count_in_buffer(qfl: QfListHandle, bnr: c_int) ->
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr {
+        if (*qfp).qf_fnum == bnr {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -119,10 +117,10 @@ pub unsafe extern "C" fn rs_qf_count_valid_in_buffer(qfl: QfListHandle, bnr: c_i
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr && nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_fnum == bnr && ((*qfp).qf_valid != 0) {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -148,10 +146,10 @@ pub unsafe extern "C" fn rs_qf_count_on_line(
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr && nvim_qfline_get_lnum(qfp) == lnum {
+        if (*qfp).qf_fnum == bnr && (*qfp).qf_lnum == lnum {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -170,15 +168,12 @@ pub unsafe extern "C" fn rs_qf_count_on_line(
 /// - `pattern` may be null (returns false)
 /// - If non-null, `pattern` must be a valid null-terminated C string
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_text_contains(
-    qfp: QfLineHandle,
-    pattern: *const c_char,
-) -> bool {
+pub unsafe extern "C" fn rs_qf_entry_text_contains(qfp: QfLinePtr, pattern: *const c_char) -> bool {
     if qfp.is_null() || pattern.is_null() {
         return false;
     }
 
-    let text = nvim_qfline_get_text(qfp);
+    let text = (*qfp).qf_text;
     if text.is_null() {
         return false;
     }
@@ -210,7 +205,7 @@ pub unsafe extern "C" fn rs_qf_find_text(qfl: QfListHandle, pattern: *const c_ch
         if rs_qf_entry_text_contains(qfp, pattern) {
             return idx;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -247,7 +242,7 @@ pub unsafe extern "C" fn rs_qf_find_text_after(
 
     // Skip to start position
     while !qfp.is_null() && idx <= start_idx {
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -256,7 +251,7 @@ pub unsafe extern "C" fn rs_qf_find_text_after(
         if rs_qf_entry_text_contains(qfp, pattern) {
             return idx;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -287,7 +282,7 @@ pub unsafe extern "C" fn rs_qf_count_text_matches(
         if rs_qf_entry_text_contains(qfp, pattern) {
             count += 1;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -312,10 +307,10 @@ pub unsafe extern "C" fn rs_qf_has_valid_in_buffer(qfl: QfListHandle, bnr: c_int
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr && nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_fnum == bnr && ((*qfp).qf_valid != 0) {
             return true;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     false
@@ -358,10 +353,10 @@ pub unsafe extern "C" fn rs_qf_has_valid_type(qfl: QfListHandle, entry_type: c_c
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_valid(qfp) && nvim_qfline_get_type(qfp) == entry_type {
+        if ((*qfp).qf_valid != 0) && (*qfp).qf_type == entry_type {
             return true;
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     false
@@ -410,11 +405,11 @@ pub unsafe extern "C" fn rs_qf_filter_stats(qfl: QfListHandle, bnr: c_int) -> Qf
     while !qfp.is_null() {
         stats.total += 1;
 
-        if nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_valid != 0 {
             stats.valid += 1;
         }
 
-        let entry_type = nvim_qfline_get_type(qfp);
+        let entry_type = (*qfp).qf_type;
         if entry_type == entry_types::TYPE_ERROR {
             stats.errors += 1;
         } else if entry_type == entry_types::TYPE_WARNING {
@@ -423,11 +418,11 @@ pub unsafe extern "C" fn rs_qf_filter_stats(qfl: QfListHandle, bnr: c_int) -> Qf
             stats.info += 1;
         }
 
-        if bnr > 0 && nvim_qfline_get_fnum(qfp) == bnr {
+        if bnr > 0 && (*qfp).qf_fnum == bnr {
             stats.in_buffer += 1;
         }
 
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     stats
@@ -460,15 +455,15 @@ pub unsafe extern "C" fn rs_qf_find_matching(
     let mut idx = 1;
 
     while !qfp.is_null() {
-        let matches = (bnr == 0 || nvim_qfline_get_fnum(qfp) == bnr)
-            && (entry_type == 0 || nvim_qfline_get_type(qfp) == entry_type)
-            && (!valid_only || nvim_qfline_get_valid(qfp));
+        let matches = (bnr == 0 || (*qfp).qf_fnum == bnr)
+            && (entry_type == 0 || (*qfp).qf_type == entry_type)
+            && (!valid_only || ((*qfp).qf_valid != 0));
 
         if matches {
             return idx;
         }
 
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -505,21 +500,21 @@ pub unsafe extern "C" fn rs_qf_find_matching_after(
 
     // Skip to start position
     while !qfp.is_null() && idx <= start_idx {
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
     // Search from there
     while !qfp.is_null() {
-        let matches = (bnr == 0 || nvim_qfline_get_fnum(qfp) == bnr)
-            && (entry_type == 0 || nvim_qfline_get_type(qfp) == entry_type)
-            && (!valid_only || nvim_qfline_get_valid(qfp));
+        let matches = (bnr == 0 || (*qfp).qf_fnum == bnr)
+            && (entry_type == 0 || (*qfp).qf_type == entry_type)
+            && (!valid_only || ((*qfp).qf_valid != 0));
 
         if matches {
             return idx;
         }
 
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -550,13 +545,13 @@ pub unsafe extern "C" fn rs_qf_has_entries_in_range(
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr {
-            let lnum = nvim_qfline_get_lnum(qfp);
+        if (*qfp).qf_fnum == bnr {
+            let lnum = (*qfp).qf_lnum;
             if lnum >= start_lnum && lnum <= end_lnum {
                 return true;
             }
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     false
@@ -583,13 +578,13 @@ pub unsafe extern "C" fn rs_qf_count_in_range(
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr {
-            let lnum = nvim_qfline_get_lnum(qfp);
+        if (*qfp).qf_fnum == bnr {
+            let lnum = (*qfp).qf_lnum;
             if lnum >= start_lnum && lnum <= end_lnum {
                 count += 1;
             }
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     count
@@ -618,13 +613,13 @@ pub unsafe extern "C" fn rs_qf_find_in_range(
     let mut idx = 1;
 
     while !qfp.is_null() {
-        if nvim_qfline_get_fnum(qfp) == bnr {
-            let lnum = nvim_qfline_get_lnum(qfp);
+        if (*qfp).qf_fnum == bnr {
+            let lnum = (*qfp).qf_lnum;
             if lnum >= start_lnum && lnum <= end_lnum {
                 return idx;
             }
         }
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         idx += 1;
     }
 
@@ -674,9 +669,9 @@ pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_do(
     let mut qfp = nvim_qf_get_start(qfl);
 
     while !qfp.is_null() && i <= count {
-        if nvim_qfline_get_valid(qfp) {
+        if (*qfp).qf_valid != 0 {
             if fdo {
-                let fnum = nvim_qfline_get_fnum(qfp);
+                let fnum = (*qfp).qf_fnum;
                 if fnum > 0 && fnum != prev_fnum {
                     eidx += 1;
                     prev_fnum = fnum;
@@ -690,7 +685,7 @@ pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_do(
             break;
         }
 
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
         i += 1;
     }
 
@@ -738,7 +733,7 @@ mod tests {
     fn test_null_safety_text_search() {
         unsafe {
             let pattern = c"test".as_ptr();
-            assert!(!rs_qf_entry_text_contains(std::ptr::null(), pattern));
+            assert!(!rs_qf_entry_text_contains(std::ptr::null_mut(), pattern));
             assert!(!rs_qf_entry_text_contains(
                 std::ptr::null_mut(),
                 std::ptr::null()

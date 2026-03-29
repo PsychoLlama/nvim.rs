@@ -78,7 +78,7 @@ pub unsafe extern "C" fn rs_ll_is_quickfix(qi: QfInfoHandle) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ll_get_for_window(wp: WinHandle) -> QfInfoHandle {
     if wp.is_null() {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
 
     nvim_win_get_loclist(wp)
@@ -363,13 +363,13 @@ pub unsafe extern "C" fn rs_ll_nav_state(wp: WinHandle, qfl: QfListHandle) -> Lo
         let mut qfp = crate::nvim_qf_get_start(qfl);
         let mut idx = 1;
         while !qfp.is_null() {
-            if crate::nvim_qfline_get_valid(qfp) {
+            if (*qfp).qf_valid != 0 {
                 state.valid_entries += 1;
                 if idx == state.current_idx {
                     state.current_is_valid = true;
                 }
             }
-            qfp = crate::nvim_qfline_get_next(qfp);
+            qfp = (*qfp).qf_next;
             idx += 1;
         }
     }
@@ -741,17 +741,12 @@ use crate::{
     nvim_qf_get_nonevalid, nvim_qf_get_ptr, nvim_qf_get_qfl_type, nvim_qf_get_start,
     nvim_qf_get_title, nvim_qf_set_changedtick, nvim_qf_set_count, nvim_qf_set_has_user_data,
     nvim_qf_set_id, nvim_qf_set_index, nvim_qf_set_last, nvim_qf_set_nonevalid, nvim_qf_set_ptr,
-    nvim_qf_set_qfl_type, nvim_qf_set_start, nvim_qf_set_title_dup, nvim_qfline_get_col,
-    nvim_qfline_get_end_col, nvim_qfline_get_end_lnum, nvim_qfline_get_fnum, nvim_qfline_get_lnum,
-    nvim_qfline_get_module, nvim_qfline_get_next, nvim_qfline_get_nr, nvim_qfline_get_pattern,
-    nvim_qfline_get_text, nvim_qfline_get_type, nvim_qfline_get_valid, nvim_qfline_get_viscol,
-    nvim_qfline_set_fnum, nvim_qfline_set_type,
+    nvim_qf_set_qfl_type, nvim_qf_set_start, nvim_qf_set_title_dup,
 };
 
 extern "C" {
     fn nvim_qf_copy_ctx(from_qfl: *const c_void, to_qfl: *mut c_void);
     fn nvim_qf_copy_callback(from_qfl: *const c_void, to_qfl: *mut c_void);
-    fn nvim_qfline_get_user_data_ptr(qfp: *const c_void) -> *const c_void;
 }
 
 const QF_FAIL: c_int = 0;
@@ -784,22 +779,22 @@ pub unsafe extern "C" fn rs_copy_loclist_entries(
     let mut qfp = nvim_qf_get_start(from_qfl);
 
     while !qfp.is_null() {
-        let module = nvim_qfline_get_module(qfp);
-        let text = nvim_qfline_get_text(qfp);
-        let lnum = nvim_qfline_get_lnum(qfp);
-        let end_lnum = nvim_qfline_get_end_lnum(qfp);
-        let col = nvim_qfline_get_col(qfp);
-        let end_col = nvim_qfline_get_end_col(qfp);
-        let viscol: c_char = c_char::from(nvim_qfline_get_viscol(qfp));
-        let pattern = nvim_qfline_get_pattern(qfp);
-        let nr = nvim_qfline_get_nr(qfp);
-        let user_data = nvim_qfline_get_user_data_ptr(qfp);
-        let valid: c_char = c_char::from(nvim_qfline_get_valid(qfp));
+        let module = (*qfp).qf_module;
+        let text = (*qfp).qf_text;
+        let lnum = (*qfp).qf_lnum;
+        let end_lnum = (*qfp).qf_end_lnum;
+        let col = (*qfp).qf_col;
+        let end_col = (*qfp).qf_end_col;
+        let viscol: c_char = c_char::from((*qfp).qf_viscol != 0);
+        let pattern = (*qfp).qf_pattern;
+        let nr = (*qfp).qf_nr;
+        let user_data = (&raw mut (*qfp).qf_user_data).cast::<::std::ffi::c_void>();
+        let valid: c_char = c_char::from((*qfp).qf_valid != 0);
 
         let ret = crate::rs_qf_add_entry(
             to_qfl,
             std::ptr::null_mut(), // dir
-            std::ptr::null(),     // fname
+            std::ptr::null_mut(), // fname
             module,
             0, // bufnum
             text,
@@ -822,16 +817,16 @@ pub unsafe extern "C" fn rs_copy_loclist_entries(
         // Copy fnum and type (not set by rs_qf_add_entry without fname/dir)
         let prevp = nvim_qf_get_last(to_qfl.cast_const());
         if !prevp.is_null() {
-            let prevp_mut = prevp.cast_mut();
-            nvim_qfline_set_fnum(prevp_mut, nvim_qfline_get_fnum(qfp));
-            nvim_qfline_set_type(prevp_mut, nvim_qfline_get_type(qfp));
+            let prevp_mut = prevp;
+            (*prevp_mut).qf_fnum = (*qfp).qf_fnum;
+            (*prevp_mut).qf_type = (*qfp).qf_type;
             // Track current entry pointer
             if std::ptr::eq(qfp, from_ptr) {
                 nvim_qf_set_ptr(to_qfl, prevp);
             }
         }
 
-        qfp = nvim_qfline_get_next(qfp);
+        qfp = (*qfp).qf_next;
     }
 
     OK
@@ -863,9 +858,9 @@ pub unsafe extern "C" fn rs_copy_loclist(from_qfl: *const c_void, to_qfl: *mut c
     nvim_qf_set_has_user_data(to_qfl, nvim_qf_get_has_user_data(from_qfl));
     nvim_qf_set_count(to_qfl, 0);
     nvim_qf_set_index(to_qfl, 0);
-    nvim_qf_set_start(to_qfl, std::ptr::null());
-    nvim_qf_set_last(to_qfl, std::ptr::null());
-    nvim_qf_set_ptr(to_qfl, std::ptr::null());
+    nvim_qf_set_start(to_qfl, std::ptr::null_mut());
+    nvim_qf_set_last(to_qfl, std::ptr::null_mut());
+    nvim_qf_set_ptr(to_qfl, std::ptr::null_mut());
 
     // Copy title
     nvim_qf_set_title_dup(to_qfl, nvim_qf_get_title(from_qfl));
@@ -909,39 +904,39 @@ mod tests {
     #[test]
     fn test_null_safety_detection() {
         unsafe {
-            assert!(!rs_ll_is_loclist(std::ptr::null()));
-            assert!(!rs_ll_is_quickfix(std::ptr::null()));
+            assert!(!rs_ll_is_loclist(std::ptr::null_mut()));
+            assert!(!rs_ll_is_quickfix(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_safety_window() {
         unsafe {
-            assert!(rs_ll_get_for_window(std::ptr::null()).is_null());
-            assert!(!rs_ll_window_has_loclist(std::ptr::null()));
-            assert!(!rs_ll_is_loclist_window(std::ptr::null()));
-            assert!(!rs_ll_window_owns_loclist(std::ptr::null()));
+            assert!(rs_ll_get_for_window(std::ptr::null_mut()).is_null());
+            assert!(!rs_ll_window_has_loclist(std::ptr::null_mut()));
+            assert!(!rs_ll_is_loclist_window(std::ptr::null_mut()));
+            assert!(!rs_ll_window_owns_loclist(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_safety_refcount() {
         unsafe {
-            assert_eq!(rs_ll_refcount(std::ptr::null()), 0);
-            assert!(!rs_ll_is_shared(std::ptr::null()));
-            assert!(rs_ll_can_free(std::ptr::null()));
+            assert_eq!(rs_ll_refcount(std::ptr::null_mut()), 0);
+            assert!(!rs_ll_is_shared(std::ptr::null_mut()));
+            assert!(rs_ll_can_free(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_safety_info() {
         unsafe {
-            let info = rs_ll_info(std::ptr::null());
+            let info = rs_ll_info(std::ptr::null_mut());
             assert!(!info.is_loclist);
             assert_eq!(info.list_count, 0);
             assert_eq!(info.refcount, 0);
 
-            let info = rs_ll_window_info(std::ptr::null());
+            let info = rs_ll_window_info(std::ptr::null_mut());
             assert!(!info.is_loclist);
         }
     }
@@ -949,8 +944,11 @@ mod tests {
     #[test]
     fn test_null_safety_entry_count() {
         unsafe {
-            assert_eq!(rs_ll_entry_count(std::ptr::null(), std::ptr::null()), 0);
-            assert!(rs_ll_window_is_empty(std::ptr::null()));
+            assert_eq!(
+                rs_ll_entry_count(std::ptr::null_mut(), std::ptr::null_mut()),
+                0
+            );
+            assert!(rs_ll_window_is_empty(std::ptr::null_mut()));
         }
     }
 
@@ -969,7 +967,7 @@ mod tests {
     #[test]
     fn test_null_nav_state() {
         unsafe {
-            let state = rs_ll_nav_state(std::ptr::null(), std::ptr::null());
+            let state = rs_ll_nav_state(std::ptr::null_mut(), std::ptr::null_mut());
             assert_eq!(state.current_idx, 0);
             assert_eq!(state.total_entries, 0);
             assert!(!state.can_go_next);
@@ -980,42 +978,42 @@ mod tests {
     #[test]
     fn test_null_can_navigate() {
         unsafe {
-            assert!(!rs_ll_can_navigate(std::ptr::null()));
+            assert!(!rs_ll_can_navigate(std::ptr::null_mut()));
         }
     }
 
     #[test]
     fn test_null_calc_nav_target() {
         unsafe {
-            assert_eq!(rs_ll_calc_nav_target(std::ptr::null(), 1, true), 0);
+            assert_eq!(rs_ll_calc_nav_target(std::ptr::null_mut(), 1, true), 0);
         }
     }
 
     #[test]
     fn test_null_calc_age_target() {
         unsafe {
-            assert_eq!(rs_ll_calc_age_target(std::ptr::null(), 1, true), -1);
+            assert_eq!(rs_ll_calc_age_target(std::ptr::null_mut(), 1, true), -1);
         }
     }
 
     #[test]
     fn test_null_available_nav_steps() {
         unsafe {
-            assert_eq!(rs_ll_available_nav_steps(std::ptr::null(), true), 0);
+            assert_eq!(rs_ll_available_nav_steps(std::ptr::null_mut(), true), 0);
         }
     }
 
     #[test]
     fn test_null_available_age_steps() {
         unsafe {
-            assert_eq!(rs_ll_available_age_steps(std::ptr::null(), true), 0);
+            assert_eq!(rs_ll_available_age_steps(std::ptr::null_mut(), true), 0);
         }
     }
 
     #[test]
     fn test_null_open_info() {
         unsafe {
-            let info = rs_ll_open_info(std::ptr::null(), std::ptr::null(), 3, 10);
+            let info = rs_ll_open_info(std::ptr::null_mut(), std::ptr::null_mut(), 3, 10);
             assert!(!info.should_open);
             assert_eq!(info.entry_count, 0);
         }
@@ -1024,14 +1022,14 @@ mod tests {
     #[test]
     fn test_null_window_needs_update() {
         unsafe {
-            assert!(!rs_ll_window_needs_update(std::ptr::null(), 10));
+            assert!(!rs_ll_window_needs_update(std::ptr::null_mut(), 10));
         }
     }
 
     #[test]
     fn test_null_cmd_ll_result() {
         unsafe {
-            let result = rs_ll_cmd_ll_result(std::ptr::null(), 1);
+            let result = rs_ll_cmd_ll_result(std::ptr::null_mut(), 1);
             assert!(!result.success);
         }
     }
@@ -1039,7 +1037,7 @@ mod tests {
     #[test]
     fn test_null_cmd_nav_result() {
         unsafe {
-            let result = rs_ll_cmd_nav_result(std::ptr::null(), 1, true);
+            let result = rs_ll_cmd_nav_result(std::ptr::null_mut(), 1, true);
             assert!(!result.success);
         }
     }
@@ -1047,7 +1045,7 @@ mod tests {
     #[test]
     fn test_null_cmd_age_result() {
         unsafe {
-            let result = rs_ll_cmd_age_result(std::ptr::null(), 1, true);
+            let result = rs_ll_cmd_age_result(std::ptr::null_mut(), 1, true);
             assert!(!result.success);
         }
     }
