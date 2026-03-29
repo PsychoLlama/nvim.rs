@@ -172,6 +172,7 @@ extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int
 extern void rs_add_banned(void *su, char *word);
 extern void rs_spell_suggest_intern(void *su, bool interactive);
 extern void rs_spell_suggest_file(void *su, char *fname);
+extern void rs_spell_find_cleanup(void *su);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -395,7 +396,7 @@ void spell_suggest(int count)
     curwin->w_cursor = prev_cursor;
   }
 
-  spell_find_cleanup(&sug);
+  rs_spell_find_cleanup(&sug);
   xfree(line);
   curwin->w_p_spell = wo_spell_save;
 }
@@ -425,7 +426,7 @@ void spell_suggest_list(garray_T *gap, char *word, int maxcount, bool need_cap, 
     ((char **)gap->ga_data)[gap->ga_len++] = wcopy;
   }
 
-  spell_find_cleanup(&sug);
+  rs_spell_find_cleanup(&sug);
 }
 
 /// Find spell suggestions for the word at the start of "badptr".
@@ -584,18 +585,6 @@ static void spell_suggest_expr(suginfo_T *su, char *expr)
   rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
   rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
                          su->su_maxscore, su->su_maxcount);
-}
-
-/// Free the info put in "*su" by spell_find_suggest().
-static void spell_find_cleanup(suginfo_T *su)
-{
-#define FREE_SUG_WORD(sug) xfree((sug)->st_word)
-  // Free the suggestions.
-  GA_DEEP_CLEAR(&su->su_ga, suggest_T, FREE_SUG_WORD);
-  GA_DEEP_CLEAR(&su->su_sga, suggest_T, FREE_SUG_WORD);
-
-  // Free the banned words.
-  hash_clear_all(&su->su_banned, 0);
 }
 
 

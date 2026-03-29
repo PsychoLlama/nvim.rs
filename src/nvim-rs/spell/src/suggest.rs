@@ -5596,11 +5596,12 @@ pub unsafe extern "C" fn rs_suggest_try_soundalike_finish() {
 }
 
 // =============================================================================
-// Phase N: spell_suggest_intern and spell_suggest_file migrations
+// Phase N: spell_suggest_intern, spell_suggest_file, spell_find_cleanup migrations
 // =============================================================================
 
 extern "C" {
     fn vgetc() -> c_int;
+    fn hash_clear_all(ht: *mut crate::HashtabRaw, off: std::ffi::c_uint);
     #[link_name = "os_fopen"]
     fn file_os_fopen(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
     #[link_name = "vim_fgets"]
@@ -5821,6 +5822,40 @@ pub unsafe extern "C" fn rs_spell_suggest_file(su: *mut std::ffi::c_void, fname:
     let maxscore = nvim_suginfo_get_maxscore(su);
     let maxcount = nvim_suginfo_get_maxcount(su);
     rs_cleanup_suggestions(data, len_ptr, maxscore, maxcount);
+}
+
+/// Rust implementation of C `spell_find_cleanup`.
+///
+/// Frees all suggestions in su->su_ga and su->su_sga, then clears the
+/// banned word hash table.
+///
+/// # Safety
+/// `su` must be a valid suginfo_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_find_cleanup(su: *mut std::ffi::c_void) {
+    // Free the suggestions in su_ga.
+    let ga = nvim_suginfo_get_ga(su);
+    let len = (*ga).ga_len as usize;
+    let data = (*ga).ga_data.cast::<CSuggestT>();
+    for i in 0..len {
+        let stp = data.add(i);
+        xfree((*stp).st_word.cast::<std::ffi::c_void>());
+    }
+    ga_clear_suggest(ga);
+
+    // Free the suggestions in su_sga.
+    let sga = nvim_suginfo_get_sga(su);
+    let slen = (*sga).ga_len as usize;
+    let sdata = (*sga).ga_data.cast::<CSuggestT>();
+    for i in 0..slen {
+        let stp = sdata.add(i);
+        xfree((*stp).st_word.cast::<std::ffi::c_void>());
+    }
+    ga_clear_suggest(sga);
+
+    // Free the banned words hash table.
+    let banned = nvim_suginfo_get_banned(su);
+    hash_clear_all(banned, 0u32);
 }
 
 // =============================================================================
