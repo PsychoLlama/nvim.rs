@@ -189,7 +189,6 @@ pub type QfInfoPtr = *mut QfInfoRaw;
 // =============================================================================
 
 extern "C" {
-    fn nvim_qf_sizeof_qflist() -> usize;
     fn nvim_qf_sizeof_qfinfo() -> usize;
 }
 
@@ -218,7 +217,7 @@ pub unsafe fn assert_ffi_struct_sizes() {
         "QfLineRaw size mismatch: Rust={rs_qfline}, C={c_qfline}"
     );
 
-    let c_qflist = nvim_qf_sizeof_qflist();
+    let c_qflist = ::std::mem::size_of::<crate::ffi_types::QfListRaw>();
     let rs_qflist = std::mem::size_of::<QfListRaw>();
     assert_eq!(
         rs_qflist, c_qflist,

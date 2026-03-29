@@ -21,6 +21,7 @@
 #![allow(clippy::option_if_let_else)]
 #![allow(clippy::missing_safety_doc)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -164,8 +165,8 @@ extern "C" {
     // Stack accessors
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
     fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
-    fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
-    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> *const c_void;
+    fn nvim_qf_get_curlist(qi: *const c_void) -> QfListPtr;
+    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> QfListPtr;
     fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
     fn nvim_qf_get_bufnr(qi: *const c_void) -> c_int;
     fn nvim_qf_get_qi_type(qi: *const c_void) -> c_int;
@@ -174,20 +175,6 @@ extern "C" {
     fn nvim_qf_is_ll_stack(qi: *const c_void) -> bool;
 
     // List accessors
-    fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_nonevalid(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_ptr(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
-    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
-    fn nvim_qf_get_last(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
-    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
-    fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_title(qfl: *const c_void) -> *const c_char;
-    fn nvim_qf_get_qfl_type(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_has_user_data(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_multiline(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_multiignore(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_multiscan(qfl: *const c_void) -> bool;
 
     // Entry accessors
 
@@ -453,35 +440,35 @@ impl std::fmt::Debug for QfEntryOption {
 /// All field access goes through C accessor functions.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct QfList(NonNull<c_void>);
+pub struct QfList(NonNull<crate::ffi_types::QfListRaw>);
 
 impl QfList {
     /// Create a new list handle from a raw pointer
     ///
     /// # Safety
     /// The pointer must be a valid pointer to a `qf_list_T` struct.
-    pub unsafe fn from_raw(ptr: *mut c_void) -> Option<Self> {
+    pub unsafe fn from_raw(ptr: *mut crate::ffi_types::QfListRaw) -> Option<Self> {
         NonNull::new(ptr).map(Self)
     }
 
     /// Get the raw pointer
-    pub fn as_ptr(self) -> *mut c_void {
+    pub fn as_ptr(self) -> *mut crate::ffi_types::QfListRaw {
         self.0.as_ptr()
     }
 
     /// Get the unique list ID
     pub fn id(self) -> u32 {
-        unsafe { nvim_qf_get_id(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_id }
     }
 
     /// Get the number of entries
     pub fn count(self) -> c_int {
-        unsafe { nvim_qf_get_count(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_count }
     }
 
     /// Get the current entry index (1-based)
     pub fn index(self) -> c_int {
-        unsafe { nvim_qf_get_index(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_index }
     }
 
     /// Check if list is empty
@@ -491,7 +478,7 @@ impl QfList {
 
     /// Check if all entries are invalid
     pub fn is_nonevalid(self) -> bool {
-        unsafe { nvim_qf_get_nonevalid(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_nonevalid }
     }
 
     /// Check if list has valid entries
@@ -501,41 +488,41 @@ impl QfList {
 
     /// Get the changedtick (modification counter)
     pub fn changedtick(self) -> c_int {
-        unsafe { nvim_qf_get_changedtick(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_changedtick }
     }
 
     /// Get the list type
     pub fn list_type(self) -> QfListType {
-        let t = unsafe { nvim_qf_get_qfl_type(self.as_ptr()) };
-        QfListType::from_c_int(t).unwrap_or(QfListType::Quickfix)
+        let t = unsafe { (*self.as_ptr()).qfl_type };
+        QfListType::from_c_int(t as c_int).unwrap_or(QfListType::Quickfix)
     }
 
     /// Check if list has user data
     pub fn has_user_data(self) -> bool {
-        unsafe { nvim_qf_get_has_user_data(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_has_user_data }
     }
 
     /// Get the first entry
     pub fn first_entry(self) -> Option<QfEntry> {
-        let ptr = unsafe { nvim_qf_get_start(self.as_ptr() as *const ::std::ffi::c_void) };
+        let ptr = unsafe { (*self.as_ptr()).qf_start };
         unsafe { QfEntry::from_raw(ptr) }
     }
 
     /// Get the last entry
     pub fn last_entry(self) -> Option<QfEntry> {
-        let ptr = unsafe { nvim_qf_get_last(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_last };
         unsafe { QfEntry::from_raw(ptr) }
     }
 
     /// Get the current entry (qf_ptr)
     pub fn current_entry(self) -> Option<QfEntry> {
-        let ptr = unsafe { nvim_qf_get_ptr(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_ptr };
         unsafe { QfEntry::from_raw(ptr) }
     }
 
     /// Get the list title
     pub fn title(self) -> Option<&'static CStr> {
-        let ptr = unsafe { nvim_qf_get_title(self.as_ptr()) };
+        let ptr = unsafe { (*self.as_ptr()).qf_title };
         if ptr.is_null() {
             None
         } else {
@@ -545,22 +532,22 @@ impl QfList {
 
     /// Check if list has a title
     pub fn has_title(self) -> bool {
-        !unsafe { nvim_qf_get_title(self.as_ptr()) }.is_null()
+        !unsafe { (*self.as_ptr()).qf_title }.is_null()
     }
 
     /// Get multiline parsing flag
     pub fn is_multiline(self) -> bool {
-        unsafe { nvim_qf_get_multiline(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_multiline }
     }
 
     /// Get multiignore parsing flag
     pub fn is_multiignore(self) -> bool {
-        unsafe { nvim_qf_get_multiignore(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_multiignore }
     }
 
     /// Get multiscan parsing flag
     pub fn is_multiscan(self) -> bool {
-        unsafe { nvim_qf_get_multiscan(self.as_ptr()) }
+        unsafe { (*self.as_ptr()).qf_multiscan }
     }
 
     /// Create an iterator over entries
@@ -702,7 +689,7 @@ impl QfStack {
     /// Get the current list
     pub fn current_list(self) -> Option<QfList> {
         let ptr = unsafe { nvim_qf_get_curlist(self.as_ptr()) };
-        unsafe { QfList::from_raw(ptr as *mut c_void) }
+        unsafe { QfList::from_raw(ptr) }
     }
 
     /// Get a list at a specific index
@@ -711,7 +698,7 @@ impl QfStack {
             return None;
         }
         let ptr = unsafe { nvim_qf_get_list_at(self.as_ptr(), idx) };
-        unsafe { QfList::from_raw(ptr as *mut c_void) }
+        unsafe { QfList::from_raw(ptr) }
     }
 
     /// Get stack type
@@ -916,7 +903,7 @@ pub extern "C" fn rs_qf_stack_valid(qi: *const c_void) -> bool {
 
 /// Check if a list handle is valid (non-null)
 #[no_mangle]
-pub extern "C" fn rs_qf_list_valid(qfl: *const c_void) -> bool {
+pub extern "C" fn rs_qf_list_valid(qfl: QfListPtr) -> bool {
     !qfl.is_null()
 }
 
@@ -964,8 +951,8 @@ pub unsafe extern "C" fn rs_qf_entry_get_summary(qfp: *const c_void) -> QfEntryS
 
 /// Get statistics for a quickfix list
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_list_get_stats(qfl: *const c_void) -> QfListStats {
-    if let Some(list) = QfList::from_raw(qfl as *mut c_void) {
+pub unsafe extern "C" fn rs_qf_list_get_stats(qfl: QfListPtr) -> QfListStats {
+    if let Some(list) = QfList::from_raw(qfl) {
         QfListStats::from_list(list)
     } else {
         QfListStats::default()
@@ -974,8 +961,8 @@ pub unsafe extern "C" fn rs_qf_list_get_stats(qfl: *const c_void) -> QfListStats
 
 /// Get list type
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_list_get_type(qfl: *const c_void) -> c_int {
-    if let Some(list) = QfList::from_raw(qfl as *mut c_void) {
+pub unsafe extern "C" fn rs_qf_list_get_type(qfl: QfListPtr) -> c_int {
+    if let Some(list) = QfList::from_raw(qfl) {
         list.list_type().to_c_int()
     } else {
         QfListType::Quickfix.to_c_int()

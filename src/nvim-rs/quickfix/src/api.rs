@@ -10,6 +10,7 @@
 #![allow(clippy::option_if_let_else)]
 #![allow(clippy::derivable_impls)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_int, c_void};
 
 // =============================================================================
@@ -1186,14 +1187,7 @@ const VAR_LIST: c_int = 4;
 
 extern "C" {
     // Phase 8 get-side accessors (qfl field accessors; Phase 15: merged into nvim_qf_get_*)
-    fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
-    fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
-    fn nvim_qf_get_title(qfl: *const c_void) -> *const std::ffi::c_char;
-    #[link_name = "nvim_qf_get_ctx"]
-    fn nvim_qfl_get_ctx(qfl: *const c_void) -> *mut c_void;
-    fn nvim_qf_get_list_handle(qi: *const c_void, qf_idx: c_int) -> *mut c_void;
+    fn nvim_qf_get_list_handle(qi: *const c_void, qf_idx: c_int) -> QfListPtr;
 
     // typval list/dict ops (tv_list_alloc, tv_dict_find, tv_dict_add_list declared above)
     fn tv_list_alloc_ret(rettv: *mut c_void, len: i64) -> *mut c_void;
@@ -1210,7 +1204,6 @@ extern "C" {
     fn tv_dict_add(dict: *mut c_void, item: *mut c_void) -> c_int;
     fn tv_dict_item_free(item: *mut c_void);
     fn tv_copy(from: *const c_void, to: *mut c_void);
-    fn nvim_qf_qftf_cb_put(qfl: *mut c_void, tv_out: *mut c_void) -> bool;
     fn tv_clear(tv: *mut c_void);
     fn nvim_qf_tv_get_type(tv: *const c_void) -> c_int;
     fn nvim_di_get_type(di: *const c_void) -> c_int;
@@ -1225,7 +1218,6 @@ extern "C" {
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_emsg_dictreq deleted: use emsg directly)
 
-    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
     static mut got_int: bool;
     fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_void;
     fn nvim_qf_free_lists_array(qi: *mut c_void);
@@ -1244,12 +1236,6 @@ extern "C" {
     // Phase 8 set-side accessors
     fn tv_get_string_chk(tv: *const c_void) -> *const std::ffi::c_char;
     fn tv_free(tv: *mut c_void);
-    #[link_name = "nvim_qf_free_ctx"]
-    fn nvim_qfl_free_ctx(qfl: *mut c_void);
-    fn nvim_qfl_set_ctx(qfl: *mut c_void, ctx_tv: *mut c_void);
-    #[link_name = "nvim_qf_free_callback"]
-    fn nvim_qfl_free_qftf_cb(qfl: *mut c_void);
-    fn nvim_qfl_set_qftf_cb_from_tv(qfl: *mut c_void, tv: *mut c_void) -> bool;
     fn nvim_qf_set_curlist_idx(qi: *mut c_void, idx: c_int);
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
     // (nvim_emsg_invact, nvim_emsg_listreq, nvim_emsg_au_recursive,
@@ -1260,7 +1246,6 @@ extern "C" {
     fn nvim_qf_tv_is_list_type(tv: *const c_void) -> bool;
 
     // Phase 15 inlined set-properties primitives
-    fn nvim_qf_set_title_dup(qfl: *mut c_void, title: *const std::ffi::c_char);
     fn tv_dict_get_string(
         dict: *const c_void,
         key: *const std::ffi::c_char,
@@ -1274,16 +1259,14 @@ extern "C" {
         title: *const std::ffi::c_char,
         action: c_int,
     ) -> c_int;
-    fn rs_qf_free_items(qfl: *mut c_void);
+    fn rs_qf_free_items(qfl: QfListPtr);
     fn tv_get_number_chk(tv: *const c_void, denote: *mut bool) -> i64;
     fn rs_qf_get_nth_entry(
-        qfl: *const c_void,
+        qfl: QfListPtr,
         errornr: c_int,
         new_qfidx: *mut c_int,
     ) -> *mut crate::ffi_types::QfLineRaw;
-    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *mut crate::ffi_types::QfLineRaw);
-    fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
-    fn rs_qf_incr_changedtick(qfl: *mut c_void);
+    fn rs_qf_incr_changedtick(qfl: QfListPtr);
     fn nvim_di_get_string(di: *const c_void) -> *const std::ffi::c_char;
 
     // Global quickfix / location list accessors
@@ -1304,7 +1287,7 @@ extern "C" {
         qf_title: *const std::ffi::c_char,
         enc2: *const std::ffi::c_char,
     ) -> c_int;
-    fn rs_qf_free_list(qfl: *mut c_void);
+    fn rs_qf_free_list(qfl: QfListPtr);
     fn rs_qf_new_list(qi: *mut c_void, title: *const std::ffi::c_char);
     #[link_name = "set_errorlist"]
     fn rs_set_errorlist(
@@ -1406,6 +1389,9 @@ unsafe fn rs_get_qfline_items_impl(qfp_void: *const c_void, list: *mut c_void) -
 
 extern "C" {
     fn buflist_findnr(bnr: c_int) -> *mut c_void;
+    fn callback_free(cb: *mut ::std::ffi::c_void);
+    fn callback_put(cb: *mut ::std::ffi::c_void, tv: *mut ::std::ffi::c_void);
+    fn rs_callback_from_typval(cb: *mut ::std::ffi::c_void, tv: *const ::std::ffi::c_void) -> bool;
 }
 
 /// Iterate qf list entries and populate `list`.
@@ -1452,13 +1438,13 @@ pub unsafe extern "C" fn rs_get_errorlist(
     }
 
     let qfl = nvim_qf_get_list_handle(qi, resolved_idx);
-    if qfl.is_null() || nvim_qf_get_count(qfl) <= 0 {
+    if qfl.is_null() || (*qfl).qf_count <= 0 {
         return C_FAIL;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut i: c_int = 1;
-    while !qfp.is_null() && !unsafe { got_int } && i <= nvim_qf_get_count(qfl) {
+    while !qfp.is_null() && !unsafe { got_int } && i <= (*qfl).qf_count {
         if eidx > 0 {
             if eidx == i {
                 return rs_get_qfline_items_impl(qfp.cast(), list);
@@ -1608,7 +1594,7 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     let mut status = C_OK;
 
     if (flags & QF_GETLIST_TITLE) != 0 && status == C_OK {
-        let title = nvim_qf_get_title(qfl);
+        let title = (*qfl).qf_title;
         status = if title.is_null() {
             dict_add_str(retdict, b"title", c"".as_ptr())
         } else {
@@ -1633,7 +1619,7 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     }
 
     if (flags & QF_GETLIST_CONTEXT) != 0 && status == C_OK {
-        let ctx = nvim_qfl_get_ctx(qfl);
+        let ctx = (*qfl).qf_ctx;
         if ctx.is_null() {
             status = dict_add_str(retdict, b"context", c"".as_ptr());
         } else {
@@ -1653,15 +1639,15 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     }
 
     if (flags & QF_GETLIST_ID) != 0 && status == C_OK {
-        status = dict_add_nr(retdict, b"id", nvim_qf_get_id(qfl).into());
+        status = dict_add_nr(retdict, b"id", (*qfl).qf_id.into());
     }
 
     if (flags & QF_GETLIST_IDX) != 0 && status == C_OK {
         let idx_val = if eidx == 0 {
-            if nvim_qf_get_count(qfl) == 0 {
+            if (*qfl).qf_count == 0 {
                 0
             } else {
-                nvim_qf_get_index(qfl)
+                (*qfl).qf_index
             }
         } else {
             eidx
@@ -1670,11 +1656,11 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     }
 
     if (flags & QF_GETLIST_SIZE) != 0 && status == C_OK {
-        status = dict_add_nr(retdict, b"size", nvim_qf_get_count(qfl).into());
+        status = dict_add_nr(retdict, b"size", (*qfl).qf_count.into());
     }
 
     if (flags & QF_GETLIST_TICK) != 0 && status == C_OK {
-        status = dict_add_nr(retdict, b"changedtick", nvim_qf_get_changedtick(qfl).into());
+        status = dict_add_nr(retdict, b"changedtick", (*qfl).qf_changedtick.into());
     }
 
     if !wp.is_null() && (flags & QF_GETLIST_FILEWINID) != 0 && status == C_OK {
@@ -1691,7 +1677,13 @@ pub unsafe extern "C" fn rs_qf_get_properties(
         // Allocate inline typval for callback_put output
         // sizeof(typval_T) = 16
         let tv_buf = xcalloc(1, 16).cast::<c_void>();
-        if nvim_qf_qftf_cb_put(qfl, tv_buf) {
+        let has_cb = if (*qfl).qf_qftf_cb[0] == 0 {
+            false
+        } else {
+            callback_put((*qfl).qf_qftf_cb.as_mut_ptr().cast(), tv_buf.cast());
+            true
+        };
+        if has_cb {
             status = tv_dict_add_tv(retdict, c"quickfixtextfunc".as_ptr(), 16, tv_buf);
             tv_clear(tv_buf);
         } else {
@@ -1813,7 +1805,14 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     if !di.is_null() && nvim_di_get_type(di) == VAR_STRING {
         // alloc=false: borrowed pointer into the dict; nvim_qf_set_title_dup makes its own copy
         let title_str = tv_dict_get_string(what, c"title".as_ptr(), false);
-        nvim_qf_set_title_dup(qfl, title_str);
+        {
+            xfree((*qfl).qf_title.cast());
+            (*qfl).qf_title = if (title_str).is_null() {
+                ::std::ptr::null_mut()
+            } else {
+                xstrdup(title_str)
+            };
+        };
         if nvim_qf_get_curlist_idx(qi) == qf_idx {
             rs_qf_update_win_titlevar(qi);
         }
@@ -1824,7 +1823,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     let di = tv_dict_find(what, c"items".as_ptr(), -1);
     if !di.is_null() && nvim_di_get_type(di) == VAR_LIST {
         // Pass borrowed title pointer; rs_qf_add_entries reads it but does not free it
-        let title_borrowed = nvim_qf_get_title(qfl);
+        let title_borrowed = (*qfl).qf_title;
         let eff_action = if action == c_int::from(b' ') {
             c_int::from(b'a')
         } else {
@@ -1888,11 +1887,14 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     if !di.is_null() {
         let ctx_tv_ptr = nvim_qf_di_get_tv(di);
         if !ctx_tv_ptr.is_null() {
-            nvim_qfl_free_ctx(qfl);
+            if !(*qfl).qf_ctx.is_null() {
+                tv_free((*qfl).qf_ctx.cast());
+                (*qfl).qf_ctx = ::std::ptr::null_mut();
+            }
             // sizeof(typval_T) = 16
             let new_ctx = xcalloc(1, 16).cast::<c_void>();
             tv_copy(ctx_tv_ptr, new_ctx);
-            nvim_qfl_set_ctx(qfl, new_ctx);
+            (*qfl).qf_ctx = new_ctx;
             retval = C_OK;
         }
     }
@@ -1909,7 +1911,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
             && *di_str == b'$' as std::ffi::c_char
             && *di_str.add(1) == 0
         {
-            newidx = nvim_qf_get_count(qfl);
+            newidx = (*qfl).qf_count;
             idx_ok = true;
         } else {
             let di_tv = nvim_qf_di_get_tv(di);
@@ -1919,18 +1921,18 @@ pub unsafe extern "C" fn rs_qf_set_properties(
             newidx = n;
         }
         if idx_ok && newidx >= 1 {
-            let clamped = newidx.min(nvim_qf_get_count(qfl));
-            let old_qfidx = nvim_qf_get_index(qfl);
+            let clamped = newidx.min((*qfl).qf_count);
+            let old_qfidx = (*qfl).qf_index;
             let mut new_qfidx: c_int = clamped;
             let qf_ptr = rs_qf_get_nth_entry(qfl, clamped, &raw mut new_qfidx);
             if !qf_ptr.is_null() {
-                nvim_qf_set_ptr(qfl, qf_ptr);
-                nvim_qf_set_index(qfl, new_qfidx);
+                (*qfl).qf_ptr = qf_ptr;
+                (*qfl).qf_index = new_qfidx;
                 let curlist = nvim_qf_get_list_handle(
                     qi.cast_const(),
                     nvim_qf_get_curlist_idx(qi.cast_const()),
                 );
-                if nvim_qf_get_id(curlist.cast_const()) == nvim_qf_get_id(qfl) {
+                if (*curlist.cast_const()).qf_id == (*qfl).qf_id {
                     crate::rs_qf_win_pos_update(qi, old_qfidx);
                 }
                 retval = C_OK;
@@ -1943,8 +1945,13 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     if !di.is_null() {
         let tv_ptr = nvim_qf_di_get_tv(di);
         if !tv_ptr.is_null() {
-            nvim_qfl_free_qftf_cb(qfl);
-            nvim_qfl_set_qftf_cb_from_tv(qfl, tv_ptr);
+            callback_free((*qfl).qf_qftf_cb.as_mut_ptr().cast());
+            {
+                let mut cb_sct = [0u8; crate::ffi_types::CALLBACK_SIZE];
+                if rs_callback_from_typval(cb_sct.as_mut_ptr().cast(), tv_ptr.cast()) {
+                    (*qfl).qf_qftf_cb = cb_sct;
+                }
+            }
             retval = C_OK;
         }
     }

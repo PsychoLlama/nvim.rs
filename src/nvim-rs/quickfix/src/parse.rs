@@ -11,6 +11,7 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::cast_lossless)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void};
 
 /// Line number type (matches `linenr_T` in Neovim)
@@ -2139,15 +2140,8 @@ extern "C" {
     fn nvim_qf_vim_regexec(rm: *mut c_void, line: *const c_char) -> bool;
 
     // qf_list_T accessors
-    fn nvim_qf_get_last(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
 
     // qf_list_T multi-scan state
-    fn nvim_qf_get_multiline(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_multiignore(qfl: *const c_void) -> bool;
-    fn nvim_qf_set_multiline(qfl: *mut c_void, multiline: bool);
-    fn nvim_qf_set_multiignore(qfl: *mut c_void, multiignore: bool);
-    fn nvim_qf_get_multiscan(qfl: *const c_void) -> bool;
-    fn nvim_qf_set_multiscan(qfl: *mut c_void, multiscan: bool);
 
     // qfline_T set accessors (get accessors already declared at top of file)
     // nvim_qfline_replace_text is an alias for nvim_qfline_set_text
@@ -2155,18 +2149,14 @@ extern "C" {
     // misc
     fn line_breakcheck();
     fn vim_isprintc(c: c_int) -> bool;
-    fn nvim_qf_get_directory(qfl: *const c_void) -> *const c_char;
-    fn nvim_qf_get_currfile(qfl: *const c_void) -> *const c_char;
-    fn nvim_qf_set_directory(qfl: *mut c_void, dir: *mut c_char);
-    fn nvim_qf_set_currfile(qfl: *mut c_void, file: *mut c_char);
     static IObuff: *mut c_char;
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_qf_emsg_missing_dir deleted: use emsg directly)
 
     // Dir/file stack helpers (already exist in Rust, but need C side for push/pop)
-    fn rs_qf_push_dir(qfl: *mut c_void, dirbuf: *mut c_char, is_file_stack: bool) -> *const c_char;
-    fn rs_qf_pop_dir(qfl: *mut c_void, is_file_stack: bool) -> *const c_char;
+    fn rs_qf_push_dir(qfl: QfListPtr, dirbuf: *mut c_char, is_file_stack: bool) -> *const c_char;
+    fn rs_qf_pop_dir(qfl: QfListPtr, is_file_stack: bool) -> *const c_char;
 }
 
 // =============================================================================
@@ -2775,7 +2765,7 @@ unsafe fn qf_parse_get_fields_rs(
 ///
 /// # Safety
 /// All pointers must be valid.
-unsafe fn qf_parse_dir_pfx_rs(idx: c_char, fields: *mut c_void, qfl: *mut c_void) -> c_int {
+unsafe fn qf_parse_dir_pfx_rs(idx: c_char, fields: *mut c_void, qfl: QfListPtr) -> c_int {
     #[allow(clippy::cast_sign_loss)]
     match idx as u8 {
         b'D' => {
@@ -2789,12 +2779,12 @@ unsafe fn qf_parse_dir_pfx_rs(idx: c_char, fields: *mut c_void, qfl: *mut c_void
             if dir.is_null() {
                 return C_QF_FAIL;
             }
-            nvim_qf_set_directory(qfl, dir.cast_mut());
+            (*qfl).qf_directory = dir.cast_mut();
         }
         b'X' => {
             // leave directory
             let dir = rs_qf_pop_dir(qfl, false);
-            nvim_qf_set_directory(qfl, dir.cast_mut());
+            (*qfl).qf_directory = dir.cast_mut();
         }
         _ => {}
     }
@@ -2808,7 +2798,7 @@ unsafe fn qf_parse_dir_pfx_rs(idx: c_char, fields: *mut c_void, qfl: *mut c_void
 unsafe fn qf_parse_file_pfx_rs(
     idx: c_char,
     fields: *mut c_void,
-    qfl: *mut c_void,
+    qfl: QfListPtr,
     tail: *mut c_char,
 ) -> c_int {
     fields_set_valid(fields, false);
@@ -2821,12 +2811,12 @@ unsafe fn qf_parse_file_pfx_rs(
         #[allow(clippy::cast_sign_loss)]
         if !namebuf_empty && (idx as u8) == b'P' {
             let file = rs_qf_push_dir(qfl, namebuf, true);
-            nvim_qf_set_currfile(qfl, file.cast_mut());
+            (*qfl).qf_currfile = file.cast_mut();
         } else {
             #[allow(clippy::cast_sign_loss)]
             if (idx as u8) == b'Q' {
                 let file = rs_qf_pop_dir(qfl, true);
-                nvim_qf_set_currfile(qfl, file.cast_mut());
+                (*qfl).qf_currfile = file.cast_mut();
             }
         }
         // Clear namebuf
@@ -2845,7 +2835,7 @@ unsafe fn qf_parse_file_pfx_rs(
                     libc::strlen(skipped.cast_const()) + 1,
                 );
             }
-            nvim_qf_set_multiscan(qfl, true);
+            (*qfl).qf_multiscan = true;
             return C_QF_MULTISCAN;
         }
     }
@@ -2874,9 +2864,9 @@ unsafe fn qf_parse_line_nomatch_rs(
 ///
 /// # Safety
 /// All pointers must be valid.
-unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut c_void) -> c_int {
-    if !nvim_qf_get_multiignore(qfl) {
-        let qfprev = nvim_qf_get_last(qfl);
+unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: QfListPtr, fields: *mut c_void) -> c_int {
+    if !(*qfl).qf_multiignore {
+        let qfprev = (*qfl).qf_last;
         if qfprev.is_null() {
             return C_QF_FAIL;
         }
@@ -2942,25 +2932,25 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
             let f = &*fields.cast::<crate::reader::QfAllFields>();
             // Equivalent to C: qf_get_fnum(qfl, qfl->qf_directory,
             //   *namebuf || qfl->qf_directory ? namebuf : qfl->qf_currfile && valid ? qfl->qf_currfile : NULL)
-            let dir = nvim_qf_get_directory(qfl.cast_const());
-            let currfile = nvim_qf_get_currfile(qfl.cast_const());
+            let dir = (*qfl.cast_const()).qf_directory;
+            let currfile = (*qfl.cast_const()).qf_currfile;
             let namebuf_empty = f.namebuf.is_null() || *f.namebuf == 0;
             let fname: *mut c_char = if !namebuf_empty || !dir.is_null() {
                 f.namebuf
             } else if !currfile.is_null() && f.valid {
-                currfile.cast_mut()
+                currfile
             } else {
                 std::ptr::null_mut()
             };
-            let fnum = crate::rs_qf_get_fnum(qfl, dir.cast_mut(), fname);
+            let fnum = crate::rs_qf_get_fnum(qfl, dir, fname);
             (*qfprev).qf_fnum = fnum;
         }
     }
 
     #[allow(clippy::cast_sign_loss)]
     if (idx as u8) == b'Z' {
-        nvim_qf_set_multiline(qfl, false);
-        nvim_qf_set_multiignore(qfl, false);
+        (*qfl).qf_multiline = false;
+        (*qfl).qf_multiignore = false;
     }
     line_breakcheck();
 
@@ -2993,7 +2983,7 @@ pub unsafe extern "C" fn rs_qf_reset_fmt_start() {
 /// - `fields` must be a valid qffields_T pointer
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_parse_line(
-    qfl: *mut c_void,
+    qfl: QfListPtr,
     linebuf: *mut c_char,
     linelen: usize,
     fmt_first: EfmHandle,
@@ -3024,8 +3014,8 @@ pub unsafe extern "C" fn rs_qf_parse_line(
                 linelen,
                 fmt_ptr,
                 fields,
-                nvim_qf_get_multiline(qfl),
-                nvim_qf_get_multiscan(qfl),
+                (*qfl).qf_multiline,
+                (*qfl).qf_multiscan,
                 &raw mut tail,
             );
             if status == C_QF_NOMEM {
@@ -3036,7 +3026,7 @@ pub unsafe extern "C" fn rs_qf_parse_line(
             }
             fmt_ptr = efm_get_next(fmt_ptr);
         }
-        nvim_qf_set_multiscan(qfl, false);
+        (*qfl).qf_multiscan = false;
 
         #[allow(clippy::cast_sign_loss)]
         if fmt_ptr.is_null() || (idx as u8) == b'D' || (idx as u8) == b'X' {
@@ -3052,8 +3042,8 @@ pub unsafe extern "C" fn rs_qf_parse_line(
                 return nomatch_status;
             }
             if fmt_ptr.is_null() {
-                nvim_qf_set_multiline(qfl, false);
-                nvim_qf_set_multiignore(qfl, false);
+                (*qfl).qf_multiline = false;
+                (*qfl).qf_multiignore = false;
             }
         } else {
             // Honor %> item
@@ -3062,8 +3052,8 @@ pub unsafe extern "C" fn rs_qf_parse_line(
             }
 
             if rs_qf_starts_multiline(idx) {
-                nvim_qf_set_multiline(qfl, true);
-                nvim_qf_set_multiignore(qfl, false);
+                (*qfl).qf_multiline = true;
+                (*qfl).qf_multiignore = false;
             } else if rs_qf_is_continuation(idx) {
                 let ml_status = qf_parse_multiline_pfx_rs(idx, qfl, fields);
                 if ml_status != C_QF_OK {
@@ -3077,8 +3067,8 @@ pub unsafe extern "C" fn rs_qf_parse_line(
                 }
             }
             if rs_qf_should_skip_line(efm_get_flags(fmt_ptr)) {
-                if nvim_qf_get_multiline(qfl) {
-                    nvim_qf_set_multiignore(qfl, true);
+                if (*qfl).qf_multiline {
+                    (*qfl).qf_multiignore = true;
                 }
                 return C_QF_IGNORE_LINE;
             }

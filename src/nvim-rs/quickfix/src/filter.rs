@@ -3,11 +3,10 @@
 //! This module provides functions for filtering entries by various criteria
 //! and searching text within quickfix entries.
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int};
 
-use crate::{
-    nvim_qf_get_count, nvim_qf_get_nonevalid, nvim_qf_get_start, LinenrT, QfLinePtr, QfListHandle,
-};
+use crate::{LinenrT, QfLinePtr};
 
 extern "C" {
     fn strstr(haystack: *const c_char, needle: *const c_char) -> *const c_char;
@@ -41,13 +40,13 @@ pub mod entry_types {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_by_type(qfl: QfListHandle, entry_type: c_char) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_by_type(qfl: QfListPtr, entry_type: c_char) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_type == entry_type {
@@ -68,7 +67,7 @@ pub unsafe extern "C" fn rs_qf_count_by_type(qfl: QfListHandle, entry_type: c_ch
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_info(qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_info(qfl: QfListPtr) -> c_int {
     rs_qf_count_by_type(qfl, entry_types::TYPE_INFO)
 }
 
@@ -83,13 +82,13 @@ pub unsafe extern "C" fn rs_qf_count_info(qfl: QfListHandle) -> c_int {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_in_buffer(qfl: QfListHandle, bnr: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_in_buffer(qfl: QfListPtr, bnr: c_int) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum == bnr {
@@ -108,13 +107,13 @@ pub unsafe extern "C" fn rs_qf_count_in_buffer(qfl: QfListHandle, bnr: c_int) ->
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_valid_in_buffer(qfl: QfListHandle, bnr: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_valid_in_buffer(qfl: QfListPtr, bnr: c_int) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum == bnr && ((*qfp).qf_valid != 0) {
@@ -133,17 +132,13 @@ pub unsafe extern "C" fn rs_qf_count_valid_in_buffer(qfl: QfListHandle, bnr: c_i
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_on_line(
-    qfl: QfListHandle,
-    bnr: c_int,
-    lnum: LinenrT,
-) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_on_line(qfl: QfListPtr, bnr: c_int, lnum: LinenrT) -> c_int {
     if qfl.is_null() || lnum <= 0 {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum == bnr && (*qfp).qf_lnum == lnum {
@@ -193,12 +188,12 @@ pub unsafe extern "C" fn rs_qf_entry_text_contains(qfp: QfLinePtr, pattern: *con
 /// - `pattern` may be null (returns 0)
 /// - If non-null, `pattern` must be a valid null-terminated C string
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_find_text(qfl: QfListHandle, pattern: *const c_char) -> c_int {
+pub unsafe extern "C" fn rs_qf_find_text(qfl: QfListPtr, pattern: *const c_char) -> c_int {
     if qfl.is_null() || pattern.is_null() {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -224,7 +219,7 @@ pub unsafe extern "C" fn rs_qf_find_text(qfl: QfListHandle, pattern: *const c_ch
 /// - If non-null, `pattern` must be a valid null-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_find_text_after(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     pattern: *const c_char,
     start_idx: c_int,
 ) -> c_int {
@@ -232,12 +227,12 @@ pub unsafe extern "C" fn rs_qf_find_text_after(
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if start_idx >= count {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     // Skip to start position
@@ -267,16 +262,13 @@ pub unsafe extern "C" fn rs_qf_find_text_after(
 /// - `pattern` may be null (returns 0)
 /// - If non-null, `pattern` must be a valid null-terminated C string
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_text_matches(
-    qfl: QfListHandle,
-    pattern: *const c_char,
-) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_text_matches(qfl: QfListPtr, pattern: *const c_char) -> c_int {
     if qfl.is_null() || pattern.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if rs_qf_entry_text_contains(qfp, pattern) {
@@ -299,12 +291,12 @@ pub unsafe extern "C" fn rs_qf_count_text_matches(
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_has_valid_in_buffer(qfl: QfListHandle, bnr: c_int) -> bool {
+pub unsafe extern "C" fn rs_qf_has_valid_in_buffer(qfl: QfListPtr, bnr: c_int) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum == bnr && ((*qfp).qf_valid != 0) {
@@ -325,17 +317,17 @@ pub unsafe extern "C" fn rs_qf_has_valid_in_buffer(qfl: QfListHandle, bnr: c_int
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_all_invalid(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_all_invalid(qfl: QfListPtr) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return false;
     }
 
-    nvim_qf_get_nonevalid(qfl)
+    (*qfl).qf_nonevalid
 }
 
 /// Check if a list has at least one valid entry with the specified type.
@@ -345,12 +337,12 @@ pub unsafe extern "C" fn rs_qf_all_invalid(qfl: QfListHandle) -> bool {
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_has_valid_type(qfl: QfListHandle, entry_type: c_char) -> bool {
+pub unsafe extern "C" fn rs_qf_has_valid_type(qfl: QfListPtr, entry_type: c_char) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if ((*qfp).qf_valid != 0) && (*qfp).qf_type == entry_type {
@@ -393,14 +385,14 @@ pub struct QfFilterStats {
 /// - `qfl` may be null (returns zeroed stats)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_filter_stats(qfl: QfListHandle, bnr: c_int) -> QfFilterStats {
+pub unsafe extern "C" fn rs_qf_filter_stats(qfl: QfListPtr, bnr: c_int) -> QfFilterStats {
     let mut stats = QfFilterStats::default();
 
     if qfl.is_null() {
         return stats;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         stats.total += 1;
@@ -442,7 +434,7 @@ pub unsafe extern "C" fn rs_qf_filter_stats(qfl: QfListHandle, bnr: c_int) -> Qf
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_find_matching(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     entry_type: c_char,
     valid_only: bool,
@@ -451,7 +443,7 @@ pub unsafe extern "C" fn rs_qf_find_matching(
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -480,7 +472,7 @@ pub unsafe extern "C" fn rs_qf_find_matching(
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_find_matching_after(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     start_idx: c_int,
     bnr: c_int,
     entry_type: c_char,
@@ -490,12 +482,12 @@ pub unsafe extern "C" fn rs_qf_find_matching_after(
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if start_idx >= count {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     // Skip to start position
@@ -533,7 +525,7 @@ pub unsafe extern "C" fn rs_qf_find_matching_after(
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_has_entries_in_range(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     start_lnum: LinenrT,
     end_lnum: LinenrT,
@@ -542,7 +534,7 @@ pub unsafe extern "C" fn rs_qf_has_entries_in_range(
         return false;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum == bnr {
@@ -565,7 +557,7 @@ pub unsafe extern "C" fn rs_qf_has_entries_in_range(
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_count_in_range(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     start_lnum: LinenrT,
     end_lnum: LinenrT,
@@ -575,7 +567,7 @@ pub unsafe extern "C" fn rs_qf_count_in_range(
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum == bnr {
@@ -600,7 +592,7 @@ pub unsafe extern "C" fn rs_qf_count_in_range(
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_find_in_range(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     start_lnum: LinenrT,
     end_lnum: LinenrT,
@@ -609,7 +601,7 @@ pub unsafe extern "C" fn rs_qf_find_in_range(
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -644,7 +636,7 @@ pub unsafe extern "C" fn rs_qf_find_in_range(
 /// - `qfl` must be a valid pointer to a `qf_list_T`
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_do(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     n: c_int,
     fdo: bool,
 ) -> c_int {
@@ -653,11 +645,11 @@ pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_do(
     }
 
     // Return 1 if the list has no valid entries
-    if nvim_qf_get_nonevalid(qfl) {
+    if (*qfl).qf_nonevalid {
         return 1;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count <= 0 || n <= 0 {
         return 1;
     }
@@ -666,7 +658,7 @@ pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_do(
     let mut prev_fnum: c_int = 0;
     let mut eidx: usize = 0;
     let mut i: c_int = 1;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() && i <= count {
         if (*qfp).qf_valid != 0 {
@@ -718,14 +710,14 @@ mod tests {
     fn test_null_safety_counts() {
         unsafe {
             assert_eq!(
-                rs_qf_count_by_type(std::ptr::null(), entry_types::TYPE_ERROR),
+                rs_qf_count_by_type(std::ptr::null_mut(), entry_types::TYPE_ERROR),
                 0
             );
             // rs_qf_count_errors and rs_qf_count_warnings are in lib.rs
-            assert_eq!(rs_qf_count_info(std::ptr::null()), 0);
-            assert_eq!(rs_qf_count_in_buffer(std::ptr::null(), 1), 0);
-            assert_eq!(rs_qf_count_valid_in_buffer(std::ptr::null(), 1), 0);
-            assert_eq!(rs_qf_count_on_line(std::ptr::null(), 1, 10), 0);
+            assert_eq!(rs_qf_count_info(std::ptr::null_mut()), 0);
+            assert_eq!(rs_qf_count_in_buffer(std::ptr::null_mut(), 1), 0);
+            assert_eq!(rs_qf_count_valid_in_buffer(std::ptr::null_mut(), 1), 0);
+            assert_eq!(rs_qf_count_on_line(std::ptr::null_mut(), 1, 10), 0);
         }
     }
 
@@ -738,20 +730,20 @@ mod tests {
                 std::ptr::null_mut(),
                 std::ptr::null()
             ));
-            assert_eq!(rs_qf_find_text(std::ptr::null(), pattern), 0);
-            assert_eq!(rs_qf_find_text(std::ptr::null(), std::ptr::null()), 0);
-            assert_eq!(rs_qf_find_text_after(std::ptr::null(), pattern, 0), 0);
-            assert_eq!(rs_qf_count_text_matches(std::ptr::null(), pattern), 0);
+            assert_eq!(rs_qf_find_text(std::ptr::null_mut(), pattern), 0);
+            assert_eq!(rs_qf_find_text(std::ptr::null_mut(), std::ptr::null()), 0);
+            assert_eq!(rs_qf_find_text_after(std::ptr::null_mut(), pattern, 0), 0);
+            assert_eq!(rs_qf_count_text_matches(std::ptr::null_mut(), pattern), 0);
         }
     }
 
     #[test]
     fn test_null_safety_validity() {
         unsafe {
-            assert!(!rs_qf_has_valid_in_buffer(std::ptr::null(), 1));
-            assert!(!rs_qf_all_invalid(std::ptr::null()));
+            assert!(!rs_qf_has_valid_in_buffer(std::ptr::null_mut(), 1));
+            assert!(!rs_qf_all_invalid(std::ptr::null_mut()));
             assert!(!rs_qf_has_valid_type(
-                std::ptr::null(),
+                std::ptr::null_mut(),
                 entry_types::TYPE_ERROR
             ));
         }
@@ -760,7 +752,7 @@ mod tests {
     #[test]
     fn test_null_safety_filter_stats() {
         unsafe {
-            let stats = rs_qf_filter_stats(std::ptr::null(), 0);
+            let stats = rs_qf_filter_stats(std::ptr::null_mut(), 0);
             assert_eq!(stats.total, 0);
             assert_eq!(stats.valid, 0);
             assert_eq!(stats.errors, 0);
@@ -773,9 +765,9 @@ mod tests {
     #[test]
     fn test_null_safety_matching() {
         unsafe {
-            assert_eq!(rs_qf_find_matching(std::ptr::null(), 0, 0, false), 0);
+            assert_eq!(rs_qf_find_matching(std::ptr::null_mut(), 0, 0, false), 0);
             assert_eq!(
-                rs_qf_find_matching_after(std::ptr::null(), 0, 0, 0, false),
+                rs_qf_find_matching_after(std::ptr::null_mut(), 0, 0, 0, false),
                 0
             );
         }
@@ -784,9 +776,9 @@ mod tests {
     #[test]
     fn test_null_safety_range() {
         unsafe {
-            assert!(!rs_qf_has_entries_in_range(std::ptr::null(), 1, 1, 10));
-            assert_eq!(rs_qf_count_in_range(std::ptr::null(), 1, 1, 10), 0);
-            assert_eq!(rs_qf_find_in_range(std::ptr::null(), 1, 1, 10), 0);
+            assert!(!rs_qf_has_entries_in_range(std::ptr::null_mut(), 1, 1, 10));
+            assert_eq!(rs_qf_count_in_range(std::ptr::null_mut(), 1, 1, 10), 0);
+            assert_eq!(rs_qf_find_in_range(std::ptr::null_mut(), 1, 1, 10), 0);
         }
     }
 
@@ -794,9 +786,9 @@ mod tests {
     fn test_invalid_range() {
         unsafe {
             // End before start should return 0/false
-            assert!(!rs_qf_has_entries_in_range(std::ptr::null(), 1, 10, 1));
-            assert_eq!(rs_qf_count_in_range(std::ptr::null(), 1, 10, 1), 0);
-            assert_eq!(rs_qf_find_in_range(std::ptr::null(), 1, 10, 1), 0);
+            assert!(!rs_qf_has_entries_in_range(std::ptr::null_mut(), 1, 10, 1));
+            assert_eq!(rs_qf_count_in_range(std::ptr::null_mut(), 1, 10, 1), 0);
+            assert_eq!(rs_qf_find_in_range(std::ptr::null_mut(), 1, 10, 1), 0);
         }
     }
 

@@ -18,6 +18,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clashing_extern_declarations)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
 
@@ -59,10 +60,10 @@ extern "C" {
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
     fn nvim_qf_get_bufnr(qi: *const c_void) -> c_int;
     fn nvim_qf_set_bufnr(qi: *mut c_void, bufnr: c_int);
-    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> *const c_void;
+    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> QfListPtr;
 
     // --- rs_qf_free_list (already in Rust) ---
-    fn rs_qf_free_list(qfl: *mut c_void);
+    fn rs_qf_free_list(qfl: QfListPtr);
 
     // --- Memory management ---
     /// Free the `qf_lists` array inside a `qf_info_T`.
@@ -118,7 +119,7 @@ extern "C" {
     /// Get curlist index (`qi->qf_curlist`).
     fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
     /// Get the mutable curlist pointer.
-    fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
+    fn nvim_qf_get_curlist(qi: *const c_void) -> QfListPtr;
     /// Set `qi->qf_curlist`.
     fn nvim_qf_set_curlist_idx(qi: *mut c_void, idx: c_int);
     /// Set `qi->qf_listcount`.
@@ -285,7 +286,7 @@ pub unsafe extern "C" fn rs_wipe_qf_buffer(qi: *mut c_void) {
 unsafe fn free_lists_and_info(qi: *mut c_void) {
     let count = nvim_qf_get_listcount(qi);
     for i in 0..count {
-        let qfl = nvim_qf_get_list_at(qi, i).cast_mut();
+        let qfl = nvim_qf_get_list_at(qi, i);
         if !qfl.is_null() {
             rs_qf_free_list(qfl);
         }
@@ -355,7 +356,7 @@ pub unsafe extern "C" fn rs_qf_free_all(wp: *mut c_void) {
         }
         let count = nvim_qf_get_listcount(qi);
         for i in 0..count {
-            let qfl = nvim_qf_get_list_at(qi, i).cast_mut();
+            let qfl = nvim_qf_get_list_at(qi, i);
             if !qfl.is_null() {
                 rs_qf_free_list(qfl);
             }
@@ -545,7 +546,7 @@ pub unsafe extern "C" fn rs_qf_free_stack(wp: *mut c_void, qi: *mut c_void) {
         // Quickfix/location window is open: free the current list's items so
         // the buffer gets cleared, then trigger a buffer update.
         if nvim_qf_get_curlist_idx(qi) < nvim_qf_get_listcount(qi) {
-            rs_qf_free_list(nvim_qf_get_curlist(qi).cast_mut());
+            rs_qf_free_list(nvim_qf_get_curlist(qi));
         }
         nvim_qf_update_buffer(qi, std::ptr::null_mut());
     }
@@ -646,7 +647,7 @@ pub unsafe extern "C" fn rs_set_errorlist(
     let retval = if what.is_null() {
         let retval = rs_qf_add_entries(qi, nvim_qf_get_curlist_idx(qi), list, title, action);
         if retval == OK {
-            crate::rs_qf_incr_changedtick(nvim_qf_get_curlist(qi).cast_mut());
+            crate::rs_qf_incr_changedtick(nvim_qf_get_curlist(qi));
         }
         retval
     } else {
@@ -682,15 +683,11 @@ extern "C" {
     fn nvim_qf_win_next(win: *const c_void) -> *mut c_void;
 
     // QFL item iteration (FOR_ALL_QFL_ITEMS)
-    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
 
     // qf_info_T accessors
     fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
 
     // qf_list_T accessors
-    #[link_name = "nvim_qf_get_has_user_data"]
-    fn nvim_qf_has_user_data(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_ctx(qfl: *const c_void) -> *mut c_void;
 
     // qfline_T user_data accessor
 
@@ -709,7 +706,6 @@ extern "C" {
     ) -> bool;
 
     // Per-list callback pointer
-    fn nvim_qfl_get_qftf_cb_ptr(qfl: *mut c_void) -> *mut c_void;
     // Global qftf_cb pointer
     fn nvim_qf_get_global_qftf_cb_ptr() -> *mut c_void;
     // Global ql_info: use existing nvim_get_ql_info (declared above in the main extern block)
@@ -731,11 +727,11 @@ unsafe fn mark_quickfix_user_data(qi: *const c_void, copy_id: c_int) -> bool {
         if qfl.is_null() {
             continue;
         }
-        if !nvim_qf_has_user_data(qfl) {
+        if !(*qfl).qf_has_user_data {
             continue;
         }
         // FOR_ALL_QFL_ITEMS: iterate from qfl_start following qf_next
-        let mut qfp = nvim_qf_get_start(qfl);
+        let mut qfp = (*qfl).qf_start;
         while !qfp.is_null() {
             let user_data_ptr = (&raw mut (*qfp).qf_user_data).cast::<::std::ffi::c_void>();
             if !user_data_ptr.is_null()
@@ -765,13 +761,13 @@ unsafe fn mark_quickfix_ctx(qi: *mut c_void, copy_id: c_int) -> bool {
         if qfl.is_null() {
             continue;
         }
-        let ctx = nvim_qf_get_ctx(qfl);
+        let ctx = (*qfl).qf_ctx;
         if !ctx.is_null()
             && rs_set_ref_in_item(ctx, copy_id, std::ptr::null_mut(), std::ptr::null_mut())
         {
             return true;
         }
-        let cb_ptr = nvim_qfl_get_qftf_cb_ptr(qfl.cast_mut());
+        let cb_ptr: *mut c_void = (*qfl).qf_qftf_cb.as_mut_ptr().cast();
         if !cb_ptr.is_null()
             && rs_set_ref_in_callback(cb_ptr, copy_id, std::ptr::null_mut(), std::ptr::null_mut())
         {

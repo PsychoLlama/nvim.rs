@@ -7,6 +7,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 // =============================================================================
@@ -30,7 +31,6 @@ type LinenrT = i32;
 type ColnrT = c_int;
 
 /// Opaque handle to `qf_list_T`
-type QfListHandleMut = *mut c_void;
 /// Opaque handle to `qf_info_T` (mutable)
 type QfInfoHandleMut = *mut c_void;
 /// Opaque handle to `buf_T`
@@ -84,7 +84,7 @@ extern "C" {
     // Quickfix entry addition (already in Rust, but we call it via FFI
     // since it's in a different module scope within the same crate)
     fn rs_qf_add_entry(
-        qfl: QfListHandleMut,
+        qfl: QfListPtr,
         dir: *mut c_char,
         fname: *const c_char,
         module: *const c_char,
@@ -121,7 +121,7 @@ extern "C" {
 #[no_mangle]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_vgr_match_buflines(
-    qfl: QfListHandleMut,
+    qfl: QfListPtr,
     fname: *const c_char,
     buf: BufHandle,
     spat: *const c_char,
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn rs_vgr_match_buflines(
 /// Handle regex matching for a single line.
 #[allow(clippy::too_many_arguments)]
 unsafe fn vgr_regex_match(
-    qfl: QfListHandleMut,
+    qfl: QfListPtr,
     fname: *const c_char,
     buf: BufHandle,
     regmatch: RegmmatchHandle,
@@ -241,7 +241,7 @@ unsafe fn vgr_regex_match(
 /// Handle fuzzy matching for a single line.
 #[allow(clippy::too_many_arguments)]
 unsafe fn vgr_fuzzy_match(
-    qfl: QfListHandleMut,
+    qfl: QfListPtr,
     fname: *const c_char,
     buf: BufHandle,
     spat: *const c_char,
@@ -319,8 +319,7 @@ const MAXPATHL: usize = 4096;
 
 extern "C" {
     // Existing accessors (QfInfoHandle = *const c_void in lib.rs)
-    fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
-    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
+    fn nvim_qf_get_curlist(qi: *const c_void) -> QfListPtr;
 
     // Phase 3 accessors
     fn path_try_shorten_fname(full_fname: *const c_char) -> *mut c_char;
@@ -505,7 +504,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
     first_match_buf: *mut BufHandle,
     target_dir: *mut *mut c_char,
 ) -> c_int {
-    let mut save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
+    let mut save_qfid = (*nvim_qf_get_curlist(qi)).qf_id;
 
     // Allocate directory name buffers (replaces nvim_vgr_alloc_dirnames)
     let mut dirname_start = vec![0u8; MAXPATHL];
@@ -557,7 +556,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
                 break 'theend;
             }
 
-            save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
+            save_qfid = (*nvim_qf_get_curlist(qi)).qf_id;
 
             if buf.is_null() {
                 if !unsafe { got_int } {
@@ -565,7 +564,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
                 }
             } else {
                 let found_match = rs_vgr_match_buflines(
-                    nvim_qf_get_curlist(qi).cast_mut(),
+                    nvim_qf_get_curlist(qi),
                     fname,
                     buf,
                     spat,
@@ -633,7 +632,7 @@ extern "C" {
     fn rs_qf_cmd_get_or_alloc_stack(eap: EapHandle, pwinp: *mut WinHandle) -> QfInfoHandleMut;
     fn rs_qf_stack_empty(qi: *const c_void) -> bool;
     // rs_qf_new_list, rs_qflist_valid, rs_qf_restore_list: declared in process_files extern block above
-    fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+    fn rs_qf_list_empty(qfl: QfListPtr) -> bool;
     fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
     fn rs_foldUpdateAll(win: WinHandle);
 
@@ -675,11 +674,7 @@ extern "C" {
     // nvim_aborting was a thin C alias for aborting; now replaced by direct aborting() call
 
     // Finalize inlining (Phase 2)
-    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
-    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
-    fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
-    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *mut crate::ffi_types::QfLineRaw);
-    fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
+    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> QfListPtr;
 
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
     // (nvim_semsg_nomatch2 deleted: use semsg directly)
@@ -892,16 +887,16 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     // Phase 2: inline nvim_vgr_finalize_list
     {
         let qfl = nvim_qf_get_curlist_mut(qi);
-        nvim_qf_set_nonevalid(qfl, false);
-        let start = nvim_qf_get_start(qfl);
-        nvim_qf_set_ptr(qfl, start);
-        nvim_qf_set_index(qfl, 1);
+        (*qfl).qf_nonevalid = false;
+        let start = (*qfl).qf_start;
+        (*qfl).qf_ptr = start;
+        (*qfl).qf_index = 1;
         crate::rs_qf_incr_changedtick(qfl.cast());
         rs_qf_update_buffer(qi, std::ptr::null());
     }
 
     // Remember current qfid for validation after autocmd
-    let save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
+    let save_qfid = (*nvim_qf_get_curlist(qi)).qf_id;
 
     // Phase 2: inline nvim_vgr_post_autocmd
     {

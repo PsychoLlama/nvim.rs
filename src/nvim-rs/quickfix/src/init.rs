@@ -308,9 +308,8 @@ mod init_ext {
     /// Opaque handles — must match signatures in lib.rs
     type QfInfoHandle = *const c_void;
     type QfInfoHandleMut = *mut c_void;
-    type QfListHandle = *const c_void;
-    type QfListHandleMut = *mut c_void;
     type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
+    type QfListPtr = *mut crate::ffi_types::QfListRaw;
     type BufHandle = *mut c_void;
     type TvHandle = *mut c_void;
     type FieldsHandle = *mut c_void;
@@ -325,9 +324,7 @@ mod init_ext {
         // Existing accessors (signatures must match lib.rs)
         fn nvim_qf_get_listcount(qi: QfInfoHandle) -> c_int;
         fn nvim_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int;
-        fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
-        fn nvim_qf_get_count(qfl: QfListHandle) -> c_int;
-        fn nvim_qf_get_last(qfl: QfListHandle) -> QfLinePtr;
+        fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListPtr;
         #[link_name = "rs_qf_update_buffer"]
         fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLinePtr);
 
@@ -348,22 +345,15 @@ mod init_ext {
         static mut curbuf: *mut c_void;
 
         // nvim_qf_init_finalize_list deleted: inlined below (Phase 14)
-        fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
-        fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
-        fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLinePtr);
-        fn nvim_qf_get_start(qfl: QfListHandle) -> QfLinePtr;
-        fn nvim_qf_set_nonevalid(qfl: QfListHandleMut, nonevalid: bool);
         fn nvim_qf_init_emsg_readerrf();
         fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
         fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
 
         // qf_list_T directory/currfile accessors
-        fn nvim_qf_get_directory(qfl: *const c_void) -> *const c_char;
-        fn nvim_qf_get_currfile(qfl: *const c_void) -> *const c_char;
 
         // rs_qf_parse_line (already in Rust parse.rs, callable via extern "C")
         fn rs_qf_parse_line(
-            qfl: *mut c_void,
+            qfl: QfListPtr,
             linebuf: *mut c_char,
             linelen: usize,
             fmt_first: EfmHandle,
@@ -372,7 +362,7 @@ mod init_ext {
 
         // rs_qf_add_entry (already in Rust lib.rs, callable via extern "C")
         fn rs_qf_add_entry(
-            qfl: QfListHandleMut,
+            qfl: QfListPtr,
             dir: *mut c_char,
             fname: *const c_char,
             module: *const c_char,
@@ -400,7 +390,7 @@ mod init_ext {
     /// All pointer parameters must be valid.
     #[allow(clippy::too_many_arguments)]
     unsafe fn process_nextline(
-        qfl: QfListHandleMut,
+        qfl: QfListPtr,
         fmt_first: EfmHandle,
         state: *mut crate::reader::QfParserState,
         fields: FieldsHandle,
@@ -422,8 +412,8 @@ mod init_ext {
 
         // Build the rs_qf_add_entry arguments using direct Rust struct field access
         let f = &*fields.cast::<crate::reader::QfAllFields>();
-        let dir = nvim_qf_get_directory(qfl.cast_const()).cast_mut();
-        let currfile = nvim_qf_get_currfile(qfl.cast_const());
+        let dir = (*qfl).qf_directory;
+        let currfile = (*qfl.cast_const()).qf_currfile;
         let valid = f.valid;
 
         // fname selection matches C logic:
@@ -492,7 +482,7 @@ mod init_ext {
 
         // Tracks whether we need to run the error2 cleanup path.
         let mut adding = false;
-        let mut qfl: QfListHandleMut = std::ptr::null_mut();
+        let mut qfl: QfListPtr = std::ptr::null_mut();
         let mut old_last: QfLinePtr = std::ptr::null_mut();
 
         // Main logic: labeled block replaces C goto error2/qf_init_end.
@@ -511,7 +501,7 @@ mod init_ext {
                 adding = true;
                 qfl = nvim_qf_get_list_at_mut(qi, qf_idx);
                 if !crate::rs_qf_list_empty(qfl) {
-                    old_last = nvim_qf_get_last(qfl);
+                    old_last = (*qfl).qf_last;
                 }
             }
 
@@ -562,16 +552,16 @@ mod init_ext {
             if (*state).no_fd_error() {
                 // Inlined nvim_qf_init_finalize_list (Phase 14):
                 // Set qf_ptr/qf_index/qf_nonevalid based on whether valid entries exist.
-                if nvim_qf_get_index(qfl) == 0 {
+                if (*qfl).qf_index == 0 {
                     // no valid entry found
-                    nvim_qf_set_ptr(qfl, nvim_qf_get_start(qfl));
-                    nvim_qf_set_index(qfl, 1);
-                    nvim_qf_set_nonevalid(qfl, true);
+                    (*qfl).qf_ptr = (*qfl).qf_start;
+                    (*qfl).qf_index = 1;
+                    (*qfl).qf_nonevalid = true;
                 } else {
-                    nvim_qf_set_nonevalid(qfl, false);
+                    (*qfl).qf_nonevalid = false;
                     // qf_ptr already set to the first valid entry by rs_qf_add_entry
                 }
-                nvim_qf_get_count(qfl) // success: return number of matches
+                (*qfl).qf_count // success: return number of matches
             } else {
                 nvim_qf_init_emsg_readerrf();
                 -1 // error2 path

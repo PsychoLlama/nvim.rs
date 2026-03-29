@@ -3,14 +3,11 @@
 //! This module provides functions for navigating between quickfix entries,
 //! finding entries by various criteria, and calculating jump targets.
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_int, c_void};
 
 /// Line number type (matches `linenr_T` in Neovim)
 type LinenrT = i32;
-
-/// Opaque handle to `qf_list_T` (quickfix list)
-type QfListHandle = *const c_void;
-type QfListHandleMut = *mut c_void;
 
 /// Opaque handle to `qfline_T` (quickfix entry)
 type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
@@ -25,19 +22,10 @@ type PosHandle = *const c_void;
 #[allow(dead_code)]
 extern "C" {
     // List accessors
-    fn nvim_qf_get_count(qfl: QfListHandle) -> c_int;
-    fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
-    fn nvim_qf_get_start(qfl: QfListHandle) -> QfLinePtr;
-    fn nvim_qf_get_ptr(qfl: QfListHandle) -> QfLinePtr;
-    fn nvim_qf_get_last(qfl: QfListHandle) -> QfLinePtr;
-
-    fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
-    fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLinePtr);
 
     // Entry accessors
 
     // List state accessors
-    fn nvim_qf_get_nonevalid(qfl: QfListHandle) -> bool;
 
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_emsg_e_no_more_items deleted: use emsg directly)
@@ -77,23 +65,23 @@ pub struct QfJumpTarget {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_find_nth_valid(qfl: QfListHandle, n: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_find_nth_valid(qfl: QfListPtr, n: c_int) -> c_int {
     if qfl.is_null() || n == 0 {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return 0;
     }
 
-    let start_idx = nvim_qf_get_index(qfl);
+    let start_idx = (*qfl).qf_index;
     let forward = n > 0;
     #[allow(clippy::cast_possible_wrap)]
     let mut remaining = n.unsigned_abs() as c_int;
 
     // Get current entry pointer
-    let mut qfp = nvim_qf_get_ptr(qfl);
+    let mut qfp = (*qfl).qf_ptr;
     let mut idx = start_idx;
 
     while remaining > 0 && !qfp.is_null() {
@@ -128,18 +116,18 @@ pub unsafe extern "C" fn rs_qf_find_nth_valid(qfl: QfListHandle, n: c_int) -> c_
 /// - `qfl` may be null (returns default target)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_calc_jump_target(qfl: QfListHandle, idx: c_int) -> QfJumpTarget {
+pub unsafe extern "C" fn rs_qf_calc_jump_target(qfl: QfListPtr, idx: c_int) -> QfJumpTarget {
     if qfl.is_null() {
         return QfJumpTarget::default();
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if idx < 1 || idx > count {
         return QfJumpTarget::default();
     }
 
     // Navigate to the entry
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut current_idx = 1;
     while !qfp.is_null() && current_idx < idx {
         qfp = (*qfp).qf_next;
@@ -169,12 +157,12 @@ pub unsafe extern "C" fn rs_qf_calc_jump_target(qfl: QfListHandle, idx: c_int) -
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_idx_for_lnum(qfl: QfListHandle, bnr: c_int, lnum: LinenrT) -> c_int {
+pub unsafe extern "C" fn rs_qf_idx_for_lnum(qfl: QfListPtr, bnr: c_int, lnum: LinenrT) -> c_int {
     if qfl.is_null() || lnum <= 0 {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -207,7 +195,7 @@ pub unsafe extern "C" fn rs_qf_idx_for_lnum(qfl: QfListHandle, bnr: c_int, lnum:
 /// - `pos` may be null (returns 0)
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_closest_entry(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     pos: PosHandle,
     direction: c_int,
@@ -222,7 +210,7 @@ pub unsafe extern "C" fn rs_qf_closest_entry(
     let mut best_idx = 0;
     let mut best_distance = i64::MAX;
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -270,7 +258,7 @@ pub unsafe extern "C" fn rs_qf_closest_entry(
 /// - `pos` may be null (returns 0)
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_entry_after_pos_idx(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     pos: PosHandle,
 ) -> c_int {
@@ -285,7 +273,7 @@ pub unsafe extern "C" fn rs_qf_entry_after_pos_idx(
 /// - `pos` may be null (returns 0)
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_entry_before_pos_idx(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     pos: PosHandle,
 ) -> c_int {
@@ -304,12 +292,12 @@ pub unsafe extern "C" fn rs_qf_entry_before_pos_idx(
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_first_entry_in_file(qfl: QfListHandle, bnr: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_first_entry_in_file(qfl: QfListPtr, bnr: c_int) -> c_int {
     if qfl.is_null() || bnr <= 0 {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -331,13 +319,13 @@ pub unsafe extern "C" fn rs_qf_first_entry_in_file(qfl: QfListHandle, bnr: c_int
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_last_entry_in_file(qfl: QfListHandle, bnr: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_last_entry_in_file(qfl: QfListPtr, bnr: c_int) -> c_int {
     if qfl.is_null() || bnr <= 0 {
         return 0;
     }
 
     let mut last_idx = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -357,7 +345,7 @@ pub unsafe extern "C" fn rs_qf_last_entry_in_file(qfl: QfListHandle, bnr: c_int)
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_unique_file_count(qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_unique_file_count(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
@@ -365,7 +353,7 @@ pub unsafe extern "C" fn rs_qf_unique_file_count(qfl: QfListHandle) -> c_int {
     let mut count = 0;
     let mut last_fnum = -1;
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     while !qfp.is_null() {
         let fnum = (*qfp).qf_fnum;
         if fnum > 0 && fnum != last_fnum {
@@ -386,7 +374,7 @@ pub unsafe extern "C" fn rs_qf_unique_file_count(qfl: QfListHandle) -> c_int {
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_nth_file_fnum(qfl: QfListHandle, n: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_nth_file_fnum(qfl: QfListPtr, n: c_int) -> c_int {
     if qfl.is_null() || n <= 0 {
         return 0;
     }
@@ -394,7 +382,7 @@ pub unsafe extern "C" fn rs_qf_nth_file_fnum(qfl: QfListHandle, n: c_int) -> c_i
     let mut file_count = 0;
     let mut last_fnum = -1;
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     while !qfp.is_null() {
         let fnum = (*qfp).qf_fnum;
         if fnum > 0 && fnum != last_fnum {
@@ -422,17 +410,17 @@ pub unsafe extern "C" fn rs_qf_nth_file_fnum(qfl: QfListHandle, n: c_int) -> c_i
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_move_entry(qfl: QfListHandleMut, offset: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_move_entry(qfl: QfListPtr, offset: c_int) -> c_int {
     if qfl.is_null() || offset == 0 {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return 0;
     }
 
-    let current_idx = nvim_qf_get_index(qfl);
+    let current_idx = (*qfl).qf_index;
     let new_idx = (current_idx + offset).clamp(1, count);
 
     if new_idx == current_idx {
@@ -440,7 +428,7 @@ pub unsafe extern "C" fn rs_qf_move_entry(qfl: QfListHandleMut, offset: c_int) -
     }
 
     // Navigate to new entry
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
     while !qfp.is_null() && idx < new_idx {
         qfp = (*qfp).qf_next;
@@ -451,8 +439,8 @@ pub unsafe extern "C" fn rs_qf_move_entry(qfl: QfListHandleMut, offset: c_int) -
         return 0;
     }
 
-    nvim_qf_set_ptr(qfl, qfp);
-    nvim_qf_set_index(qfl, new_idx);
+    (*qfl).qf_ptr = qfp;
+    (*qfl).qf_index = new_idx;
     new_idx
 }
 
@@ -464,13 +452,13 @@ pub unsafe extern "C" fn rs_qf_move_entry(qfl: QfListHandleMut, offset: c_int) -
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_move_to_valid(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_move_to_valid(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_ptr(qfl);
-    let mut idx = nvim_qf_get_index(qfl);
+    let mut qfp = (*qfl).qf_ptr;
+    let mut idx = (*qfl).qf_index;
 
     // Check if current is valid
     if !qfp.is_null() && ((*qfp).qf_valid != 0) {
@@ -480,8 +468,8 @@ pub unsafe extern "C" fn rs_qf_move_to_valid(qfl: QfListHandleMut) -> c_int {
     // Look forward for valid entry
     while !qfp.is_null() {
         if (*qfp).qf_valid != 0 {
-            nvim_qf_set_ptr(qfl, qfp);
-            nvim_qf_set_index(qfl, idx);
+            (*qfl).qf_ptr = qfp;
+            (*qfl).qf_index = idx;
             return idx;
         }
         qfp = (*qfp).qf_next;
@@ -507,7 +495,7 @@ pub unsafe extern "C" fn rs_qf_move_to_valid(qfl: QfListHandleMut) -> c_int {
 /// - `first_idx` and `last_idx` may be null
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_entries_in_range(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     bnr: c_int,
     start_lnum: LinenrT,
     end_lnum: LinenrT,
@@ -522,7 +510,7 @@ pub unsafe extern "C" fn rs_qf_entries_in_range(
     let mut first = 0;
     let mut last = 0;
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -591,23 +579,23 @@ pub unsafe extern "C" fn rs_qf_entry_overlaps_range(
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_first(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_first(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return 0;
     }
 
-    let first = nvim_qf_get_start(qfl);
+    let first = (*qfl).qf_start;
     if first.is_null() {
         return 0;
     }
 
-    nvim_qf_set_ptr(qfl, first);
-    nvim_qf_set_index(qfl, 1);
+    (*qfl).qf_ptr = first;
+    (*qfl).qf_index = 1;
     1
 }
 
@@ -620,23 +608,23 @@ pub unsafe extern "C" fn rs_qf_goto_first(qfl: QfListHandleMut) -> c_int {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_last(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_last(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return 0;
     }
 
-    let last = nvim_qf_get_last(qfl);
+    let last = (*qfl).qf_last;
     if last.is_null() {
         return 0;
     }
 
-    nvim_qf_set_ptr(qfl, last);
-    nvim_qf_set_index(qfl, count);
+    (*qfl).qf_ptr = last;
+    (*qfl).qf_index = count;
     count
 }
 
@@ -649,18 +637,18 @@ pub unsafe extern "C" fn rs_qf_goto_last(qfl: QfListHandleMut) -> c_int {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_idx(qfl: QfListHandleMut, target_idx: c_int) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_idx(qfl: QfListPtr, target_idx: c_int) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 || target_idx < 1 || target_idx > count {
         return 0;
     }
 
     // Navigate from start to target
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
     while !qfp.is_null() && idx < target_idx {
         qfp = (*qfp).qf_next;
@@ -671,8 +659,8 @@ pub unsafe extern "C" fn rs_qf_goto_idx(qfl: QfListHandleMut, target_idx: c_int)
         return 0;
     }
 
-    nvim_qf_set_ptr(qfl, qfp);
-    nvim_qf_set_index(qfl, target_idx);
+    (*qfl).qf_ptr = qfp;
+    (*qfl).qf_index = target_idx;
     target_idx
 }
 
@@ -685,13 +673,13 @@ pub unsafe extern "C" fn rs_qf_goto_idx(qfl: QfListHandleMut, target_idx: c_int)
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_next_valid(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_next_valid(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_ptr(qfl);
-    let mut idx = nvim_qf_get_index(qfl);
+    let mut qfp = (*qfl).qf_ptr;
+    let mut idx = (*qfl).qf_index;
 
     // Move past current entry
     if !qfp.is_null() {
@@ -702,8 +690,8 @@ pub unsafe extern "C" fn rs_qf_goto_next_valid(qfl: QfListHandleMut) -> c_int {
     // Find next valid
     while !qfp.is_null() {
         if (*qfp).qf_valid != 0 {
-            nvim_qf_set_ptr(qfl, qfp);
-            nvim_qf_set_index(qfl, idx);
+            (*qfl).qf_ptr = qfp;
+            (*qfl).qf_index = idx;
             return idx;
         }
         qfp = (*qfp).qf_next;
@@ -722,13 +710,13 @@ pub unsafe extern "C" fn rs_qf_goto_next_valid(qfl: QfListHandleMut) -> c_int {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_prev_valid(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_prev_valid(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_ptr(qfl);
-    let mut idx = nvim_qf_get_index(qfl);
+    let mut qfp = (*qfl).qf_ptr;
+    let mut idx = (*qfl).qf_index;
 
     // Move before current entry
     if !qfp.is_null() {
@@ -739,8 +727,8 @@ pub unsafe extern "C" fn rs_qf_goto_prev_valid(qfl: QfListHandleMut) -> c_int {
     // Find previous valid
     while !qfp.is_null() && idx > 0 {
         if (*qfp).qf_valid != 0 {
-            nvim_qf_set_ptr(qfl, qfp);
-            nvim_qf_set_index(qfl, idx);
+            (*qfl).qf_ptr = qfp;
+            (*qfl).qf_index = idx;
             return idx;
         }
         qfp = (*qfp).qf_prev;
@@ -759,18 +747,18 @@ pub unsafe extern "C" fn rs_qf_goto_prev_valid(qfl: QfListHandleMut) -> c_int {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_first_valid_entry(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_first_valid_entry(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
         if (*qfp).qf_valid != 0 {
-            nvim_qf_set_ptr(qfl, qfp);
-            nvim_qf_set_index(qfl, idx);
+            (*qfl).qf_ptr = qfp;
+            (*qfl).qf_index = idx;
             return idx;
         }
         qfp = (*qfp).qf_next;
@@ -789,12 +777,12 @@ pub unsafe extern "C" fn rs_qf_goto_first_valid_entry(qfl: QfListHandleMut) -> c
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_goto_last_valid_entry(qfl: QfListHandleMut) -> c_int {
+pub unsafe extern "C" fn rs_qf_goto_last_valid_entry(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return 0;
     }
@@ -803,7 +791,7 @@ pub unsafe extern "C" fn rs_qf_goto_last_valid_entry(qfl: QfListHandleMut) -> c_
     let mut last_valid_ptr: QfLinePtr = std::ptr::null_mut();
     let mut last_valid_idx = 0;
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
@@ -816,8 +804,8 @@ pub unsafe extern "C" fn rs_qf_goto_last_valid_entry(qfl: QfListHandleMut) -> c_
     }
 
     if last_valid_idx > 0 {
-        nvim_qf_set_ptr(qfl, last_valid_ptr);
-        nvim_qf_set_index(qfl, last_valid_idx);
+        (*qfl).qf_ptr = last_valid_ptr;
+        (*qfl).qf_index = last_valid_idx;
         last_valid_idx
     } else {
         0
@@ -831,13 +819,13 @@ pub unsafe extern "C" fn rs_qf_goto_last_valid_entry(qfl: QfListHandleMut) -> c_
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_valid_entry_count(qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_valid_entry_count(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_valid != 0 {
@@ -856,12 +844,12 @@ pub unsafe extern "C" fn rs_qf_valid_entry_count(qfl: QfListHandle) -> c_int {
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_current_is_valid(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_current_is_valid(qfl: QfListPtr) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let qfp = nvim_qf_get_ptr(qfl);
+    let qfp = (*qfl).qf_ptr;
     if qfp.is_null() {
         return false;
     }
@@ -878,13 +866,13 @@ pub unsafe extern "C" fn rs_qf_current_is_valid(qfl: QfListHandle) -> bool {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_current_valid_position(qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_current_valid_position(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let current_idx = nvim_qf_get_index(qfl);
-    let current_ptr = nvim_qf_get_ptr(qfl);
+    let current_idx = (*qfl).qf_index;
+    let current_ptr = (*qfl).qf_ptr;
 
     if current_ptr.is_null() || ((*current_ptr).qf_valid == 0) {
         return 0;
@@ -892,7 +880,7 @@ pub unsafe extern "C" fn rs_qf_current_valid_position(qfl: QfListHandle) -> c_in
 
     // Count valid entries up to and including current
     let mut position = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() && idx <= current_idx {
@@ -949,18 +937,18 @@ impl Default for QfGetEntryResult {
 /// - `qfl` must be a valid pointer to a `qf_list_T` struct
 /// - `qf_ptr` must be a valid pointer to a `qfline_T` struct
 unsafe fn get_next_valid_entry(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     mut qf_ptr: QfLinePtr,
     qf_index: &mut c_int,
     dir: c_int,
 ) -> QfLinePtr {
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     let old_qf_fnum = if qf_ptr.is_null() {
         0
     } else {
         (*qf_ptr).qf_fnum
     };
-    let nonevalid = nvim_qf_get_nonevalid(qfl);
+    let nonevalid = (*qfl).qf_nonevalid;
 
     loop {
         if *qf_index == count || qf_ptr.is_null() {
@@ -1001,7 +989,7 @@ unsafe fn get_next_valid_entry(
 /// - `qfl` must be a valid pointer to a `qf_list_T` struct
 /// - `qf_ptr` must be a valid pointer to a `qfline_T` struct
 unsafe fn get_prev_valid_entry(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     mut qf_ptr: QfLinePtr,
     qf_index: &mut c_int,
     dir: c_int,
@@ -1011,7 +999,7 @@ unsafe fn get_prev_valid_entry(
     } else {
         (*qf_ptr).qf_fnum
     };
-    let nonevalid = nvim_qf_get_nonevalid(qfl);
+    let nonevalid = (*qfl).qf_nonevalid;
 
     loop {
         if *qf_index == 1 || qf_ptr.is_null() {
@@ -1052,13 +1040,13 @@ unsafe fn get_prev_valid_entry(
 ///
 /// - `qfl` must be a valid pointer to a `qf_list_T` struct
 unsafe fn get_nth_valid_entry(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     mut errornr: c_int,
     dir: c_int,
     new_qfidx: &mut c_int,
 ) -> (QfLinePtr, bool) {
-    let mut qf_ptr = nvim_qf_get_ptr(qfl);
-    let mut qf_idx = nvim_qf_get_index(qfl);
+    let mut qf_ptr = (*qfl).qf_ptr;
+    let mut qf_idx = (*qfl).qf_index;
     let mut should_emit_error = true;
 
     while errornr > 0 {
@@ -1098,10 +1086,10 @@ unsafe fn get_nth_valid_entry(
 /// # Safety
 ///
 /// - `qfl` must be a valid pointer to a `qf_list_T` struct
-unsafe fn get_nth_entry(qfl: QfListHandle, errornr: c_int, new_qfidx: &mut c_int) -> QfLinePtr {
-    let mut qf_ptr = nvim_qf_get_ptr(qfl);
-    let mut qf_idx = nvim_qf_get_index(qfl);
-    let count = nvim_qf_get_count(qfl);
+unsafe fn get_nth_entry(qfl: QfListPtr, errornr: c_int, new_qfidx: &mut c_int) -> QfLinePtr {
+    let mut qf_ptr = (*qfl).qf_ptr;
+    let mut qf_idx = (*qfl).qf_index;
+    let count = (*qfl).qf_count;
 
     // New error number is less than the current error number
     while errornr < qf_idx && qf_idx > 1 {
@@ -1143,7 +1131,7 @@ unsafe fn get_nth_entry(qfl: QfListHandle, errornr: c_int, new_qfidx: &mut c_int
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_get_entry_with_msg(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     errornr: c_int,
     dir: c_int,
 ) -> QfGetEntryResult {
@@ -1163,8 +1151,8 @@ pub unsafe extern "C" fn rs_qf_get_entry_with_msg(
         errored = false;
     } else {
         // stay at current entry
-        qf_ptr = nvim_qf_get_ptr(qfl);
-        new_qfidx = nvim_qf_get_index(qfl);
+        qf_ptr = (*qfl).qf_ptr;
+        new_qfidx = (*qfl).qf_index;
         errored = false;
     }
 
@@ -1183,13 +1171,13 @@ pub unsafe extern "C" fn rs_qf_get_entry_with_msg(
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_sign_loss)]
 mod jump_edit {
-    use std::ffi::{c_int, c_uint, c_void};
+    use std::ffi::{c_int, c_void};
 
     /// Opaque handles — match lib.rs signatures
     type QfInfoHandle = *const c_void;
     type QfInfoHandleMut = *mut c_void;
-    type QfListHandle = *const c_void;
     type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
+    type QfListPtr = *mut crate::ffi_types::QfListRaw;
 
     const OK: c_int = 1;
     const FAIL: c_int = 0;
@@ -1202,11 +1190,8 @@ mod jump_edit {
 
     extern "C" {
         // Existing accessors
-        fn nvim_qf_get_curlist(qi: QfInfoHandle) -> QfListHandle;
+        fn nvim_qf_get_curlist(qi: QfInfoHandle) -> QfListPtr;
         fn nvim_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int;
-        fn nvim_qf_get_changedtick(qfl: QfListHandle) -> c_int;
-        fn nvim_qf_get_id(qfl: QfListHandle) -> c_uint;
-        fn nvim_qf_get_qfl_type(qfl: QfListHandle) -> c_int;
 
         // nvim_qflist_valid removed: use crate::qflist_valid_for_qi (Phase 16)
         // nvim_qf_entry_present removed: use crate::rs_qf_entry_present (Phase 16)
@@ -1251,10 +1236,10 @@ mod jump_edit {
         opened_window: *mut bool,
     ) -> c_int {
         let qfl = nvim_qf_get_curlist(qi);
-        let old_changetick = nvim_qf_get_changedtick(qfl);
+        let old_changetick = (*qfl).qf_changedtick;
         let old_qf_curlist = nvim_qf_get_curlist_idx(qi);
-        let qfl_type = nvim_qf_get_qfl_type(qfl);
-        let save_qfid = nvim_qf_get_id(qfl);
+        let qfl_type = (*qfl).qfl_type as c_int;
+        let save_qfid = (*qfl).qf_id;
 
         let fnum = (*qf_ptr).qf_fnum;
         let retval = if (*qf_ptr).qf_type == 1 {
@@ -1311,7 +1296,7 @@ mod jump_edit {
 
         // Check if the list was changed by autocommands.
         if old_qf_curlist != nvim_qf_get_curlist_idx(qi)
-            || old_changetick != nvim_qf_get_changedtick(qfl)
+            || old_changetick != (*qfl).qf_changedtick
             || !crate::rs_qf_entry_present(qfl, qf_ptr)
         {
             if qfl_type == QFLT_QUICKFIX {
@@ -1660,6 +1645,7 @@ pub mod jump_machinery {
 
     // Phase 3 extern declarations
     type QfLinePtr = *mut crate::ffi_types::QfLineRaw;
+    type QfListPtr = *mut crate::ffi_types::QfListRaw;
     type BufHandle = *mut c_void;
     /// Line number type (matches `linenr_T` in Neovim)
     type LinenrT = i32;
@@ -1667,11 +1653,8 @@ pub mod jump_machinery {
     #[allow(clashing_extern_declarations)]
     extern "C" {
         // Phase 4 accessors (for qf_jump_open_window)
-        fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
+        fn nvim_qf_get_curlist(qi: *const c_void) -> QfListPtr;
         fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
-        fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
-        fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
-        fn nvim_qf_get_qfl_type(qfl: *const c_void) -> c_int;
         // nvim_qf_entry_present removed: use crate::rs_qf_entry_present (Phase 16)
         fn emsg(msg: *const std::ffi::c_char) -> bool;
         // (nvim_qf_jump_emsg_qf_changed deleted: use emsg directly)
@@ -1864,7 +1847,7 @@ pub mod jump_machinery {
             ""
         };
 
-        let count = nvim_qf_get_count(nvim_qf_get_curlist(qi).cast());
+        let count = (*nvim_qf_get_curlist(qi)).qf_count;
 
         // Build the header prefix (mirrors C vim_snprintf(IObuff, ...))
         let header = format!("({qf_index} of {count}){cleared_str}{type_str}: ");
@@ -1914,14 +1897,14 @@ pub mod jump_machinery {
     /// Returns `Some(QF_ABORT)` if changed, `None` if unchanged.
     unsafe fn check_list_changed(
         qi: QfInfoHandleMut,
-        qfl: *const c_void,
+        qfl: QfListPtr,
         old_changetick: c_int,
         old_qf_curlist: c_int,
         qf_ptr: QfLinePtr,
         qfl_type: c_int,
     ) -> Option<c_int> {
         if old_qf_curlist != nvim_qf_get_curlist_idx(qi)
-            || old_changetick != nvim_qf_get_changedtick(qfl)
+            || old_changetick != (*qfl).qf_changedtick
             || !crate::rs_qf_entry_present(qfl, qf_ptr)
         {
             if qfl_type == QFLT_QUICKFIX {
@@ -1949,9 +1932,9 @@ pub mod jump_machinery {
         opened_window: *mut bool,
     ) -> c_int {
         let qfl = nvim_qf_get_curlist(qi);
-        let old_changetick = nvim_qf_get_changedtick(qfl);
+        let old_changetick = (*qfl).qf_changedtick;
         let old_qf_curlist = nvim_qf_get_curlist_idx(qi);
-        let qfl_type = nvim_qf_get_qfl_type(qfl);
+        let qfl_type = (*qfl).qfl_type as c_int;
 
         // For ":helpgrep" find a help window or open one.
         if (*qf_ptr).qf_type == 1
@@ -1996,16 +1979,12 @@ pub mod jump_machinery {
     extern "C" {
         fn nvim_get_ql_info() -> QfInfoHandleMut;
         fn rs_qf_stack_empty(qi: *const c_void) -> bool;
-        fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+        fn rs_qf_list_empty(qfl: QfListPtr) -> bool;
         // (nvim_emsg_no_errors deleted: use emsg directly, declared earlier in this module)
         #[link_name = "rs_incr_quickfix_busy"]
         fn nvim_incr_quickfix_busy();
         #[link_name = "rs_decr_quickfix_busy"]
         fn nvim_decr_quickfix_busy();
-        fn nvim_qf_get_ptr(qfl: *const c_void) -> QfLinePtr;
-        fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
-        fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: QfLinePtr);
-        fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
         fn nvim_qf_curwin_handle() -> c_int;
         // win_close already declared above; win_close(curwin, true, false)
         fn nvim_qf_get_p_swb() -> *mut c_void;
@@ -2013,7 +1992,7 @@ pub mod jump_machinery {
         fn nvim_qf_restore_swb(old_swb: *mut c_void, old_swb_flags: u32);
         fn nvim_qf_get_key_typed() -> bool;
         fn rs_qf_get_entry_with_msg(
-            qfl: *const c_void,
+            qfl: QfListPtr,
             errornr: c_int,
             dir: c_int,
         ) -> super::QfGetEntryResult;
@@ -2058,13 +2037,13 @@ pub mod jump_machinery {
 
         nvim_incr_quickfix_busy();
 
-        let qfl = nvim_qf_get_curlist(qi).cast_mut();
+        let qfl = nvim_qf_get_curlist(qi);
         let result = jump_newwin_inner(qi, qfl, dir, errornr, forceit, newwin, old_key_typed);
 
         // Cleanup: restore qfl state and swb
         if !result.qi.is_null() {
-            nvim_qf_set_ptr(qfl, result.qf_ptr);
-            nvim_qf_set_index(qfl, result.qf_index);
+            (*qfl).qf_ptr = result.qf_ptr;
+            (*qfl).qf_index = result.qf_index;
         }
         nvim_qf_restore_swb(old_swb, old_swb_flags);
         nvim_decr_quickfix_busy();
@@ -2074,15 +2053,15 @@ pub mod jump_machinery {
     /// Returns the final state to be applied in the cleanup path.
     unsafe fn jump_newwin_inner(
         qi: QfInfoHandleMut,
-        qfl: *mut c_void,
+        qfl: QfListPtr,
         dir: c_int,
         errornr: c_int,
         forceit: c_int,
         newwin: bool,
         old_key_typed: bool,
     ) -> JumpResult {
-        let old_qf_ptr = nvim_qf_get_ptr(qfl);
-        let old_qf_index = nvim_qf_get_index(qfl);
+        let old_qf_ptr = (*qfl).qf_ptr;
+        let old_qf_index = (*qfl).qf_index;
 
         // Select the entry
         let entry_result = rs_qf_get_entry_with_msg(qfl, errornr, dir);
@@ -2100,8 +2079,8 @@ pub mod jump_machinery {
         let mut qf_index = entry_result.qf_index;
 
         // Set the new index/ptr on the list
-        nvim_qf_set_index(qfl, qf_index);
-        nvim_qf_set_ptr(qfl, qf_ptr);
+        (*qfl).qf_index = qf_index;
+        (*qfl).qf_ptr = qf_ptr;
 
         // No need to print the error message if it's visible in the error window
         let print_message = !crate::rs_qf_win_pos_update_impl(qi, old_qf_index);
@@ -2184,14 +2163,14 @@ const MAXLNUM: LinenrT = i32::MAX;
 extern "C" {
     // qfl list-level accessors (additional to those in the main extern block above)
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
-    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> *const c_void;
+    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> QfListPtr;
     #[link_name = "rs_qf_list_empty"]
-    fn nvim_qf_list_is_empty(qfl: *const c_void) -> bool;
+    fn nvim_qf_list_is_empty(qfl: QfListPtr) -> bool;
 
     // entry setters (mutable variants)
 
     // rs_qf_list_has_valid_entries is in lib.rs but we need it here too
-    fn rs_qf_list_has_valid_entries(qfl: *const c_void) -> bool;
+    fn rs_qf_list_has_valid_entries(qfl: QfListPtr) -> bool;
 }
 
 /// Adjust quickfix entry line numbers when buffer lines are added/deleted.
@@ -2219,8 +2198,8 @@ pub unsafe extern "C" fn rs_qf_mark_adjust(
             continue;
         }
 
-        let count = nvim_qf_get_count(qfl);
-        let mut qfp = nvim_qf_get_start(qfl);
+        let count = (*qfl).qf_count;
+        let mut qfp = (*qfl).qf_start;
         let mut i = 1;
         while i <= count && !qfp.is_null() {
             if (*qfp).qf_fnum == buf_fnum {
@@ -2251,13 +2230,13 @@ pub unsafe extern "C" fn rs_qf_mark_adjust(
 /// # Safety
 /// `qfl` must be a valid non-null `qf_list_T *`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_get_valid_size(qfl: *const c_void, count_files: bool) -> c_int {
+pub unsafe extern "C" fn rs_qf_get_valid_size(qfl: QfListPtr, count_files: bool) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
-    let mut qfp = nvim_qf_get_start(qfl);
+    let count = (*qfl).qf_count;
+    let mut qfp = (*qfl).qf_start;
     let mut sz: c_int = 0;
     let mut prev_fnum: c_int = 0;
     let mut i = 1;
@@ -2294,7 +2273,7 @@ pub unsafe extern "C" fn rs_qf_get_valid_size(qfl: *const c_void, count_files: b
 /// `qfl` must be a valid non-null `qf_list_T *`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_get_cur_valid_idx(
-    qfl: *const c_void,
+    qfl: QfListPtr,
     qf_index: c_int,
     count_files: bool,
 ) -> c_int {
@@ -2309,7 +2288,7 @@ pub unsafe extern "C" fn rs_qf_get_cur_valid_idx(
 
     let mut prev_fnum: c_int = 0;
     let mut eidx: c_int = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut i: c_int = 1;
 
     while i <= qf_index && !qfp.is_null() {
@@ -2354,7 +2333,7 @@ extern "C" {
     fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn nvim_get_ql_info() -> QfInfoHandleMut;
     #[link_name = "nvim_qf_get_curlist"]
-    fn nvim_qf_get_curlist_nav(qi: *const c_void) -> QfListHandle;
+    fn nvim_qf_get_curlist_nav(qi: *const c_void) -> QfListPtr;
 }
 
 /// Entry point for `qf_mark_adjust`: resolves `buf_T`/`win_T` to qi and

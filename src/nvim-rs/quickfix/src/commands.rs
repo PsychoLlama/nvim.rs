@@ -3,12 +3,10 @@
 //! This module provides helper functions for parsing and validating
 //! quickfix command arguments and implementing command logic.
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{
-    nvim_qf_get_count, nvim_qf_get_curlist_idx, nvim_qf_get_index, nvim_qf_get_listcount,
-    nvim_qf_get_title, QfInfoHandle, QfListHandle,
-};
+use crate::{nvim_qf_get_curlist_idx, nvim_qf_get_listcount, QfInfoHandle};
 
 // =============================================================================
 // ex_helpgrep types and FFI declarations
@@ -61,7 +59,7 @@ extern "C" {
     fn nvim_qf_regmatch_create(prog: *mut c_void, ic: bool) -> *mut c_void;
     fn nvim_qf_regmatch_extract_prog(rm: *mut c_void) -> *mut c_void;
     fn vim_regfree(prog: *mut c_void);
-    fn rs_hgr_search_in_rtp(qfl: *mut c_void, regmatch: *mut c_void, lang: *const c_char);
+    fn rs_hgr_search_in_rtp(qfl: QfListPtr, regmatch: *mut c_void, lang: *const c_char);
     // nvim_hgr_restore_cpo renamed to nvim_restore_cpo (Phase 4)
     fn nvim_restore_cpo(saved_cpo: *mut c_void);
     #[link_name = "rs_qf_update_buffer"]
@@ -77,10 +75,6 @@ extern "C" {
     static mut curwin: *mut c_void;
     fn nvim_win_set_llist(win: *mut c_void, qi: *mut c_void);
     // Used for finalization after compile+search (Phase 3)
-    fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
-    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *mut crate::ffi_types::QfLineRaw);
-    fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
-    fn nvim_qf_get_start(qfl: *const c_void) -> *mut crate::ffi_types::QfLineRaw;
 }
 
 // =============================================================================
@@ -220,13 +214,13 @@ pub unsafe extern "C" fn rs_qf_available_age_steps(qi: QfInfoHandle, go_older: b
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_can_go_next(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_can_go_next(qfl: QfListPtr) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let idx = nvim_qf_get_index(qfl);
-    let count = nvim_qf_get_count(qfl);
+    let idx = (*qfl).qf_index;
+    let count = (*qfl).qf_count;
 
     idx < count
 }
@@ -238,12 +232,12 @@ pub unsafe extern "C" fn rs_qf_can_go_next(qfl: QfListHandle) -> bool {
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_can_go_prev(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_can_go_prev(qfl: QfListPtr) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    nvim_qf_get_index(qfl) > 1
+    (*qfl).qf_index > 1
 }
 
 /// Calculate target entry index for navigation.
@@ -257,7 +251,7 @@ pub unsafe extern "C" fn rs_qf_can_go_prev(qfl: QfListHandle) -> bool {
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_calc_nav_target(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     count: c_int,
     forward: bool,
 ) -> c_int {
@@ -265,8 +259,8 @@ pub unsafe extern "C" fn rs_qf_calc_nav_target(
         return 0;
     }
 
-    let current = nvim_qf_get_index(qfl);
-    let total = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let total = (*qfl).qf_count;
 
     if total == 0 {
         return 0;
@@ -289,13 +283,13 @@ pub unsafe extern "C" fn rs_qf_calc_nav_target(
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_available_nav_steps(qfl: QfListHandle, forward: bool) -> c_int {
+pub unsafe extern "C" fn rs_qf_available_nav_steps(qfl: QfListPtr, forward: bool) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let current = nvim_qf_get_index(qfl);
-    let total = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let total = (*qfl).qf_count;
 
     if forward {
         total - current
@@ -329,14 +323,14 @@ pub struct QfCmdResult {
 /// - `qfl` may be null (returns failure result)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_cmd_cc_result(qfl: QfListHandle, target_idx: c_int) -> QfCmdResult {
+pub unsafe extern "C" fn rs_qf_cmd_cc_result(qfl: QfListPtr, target_idx: c_int) -> QfCmdResult {
     let mut result = QfCmdResult::default();
 
     if qfl.is_null() {
         return result;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 || target_idx < 1 || target_idx > count {
         return result;
     }
@@ -357,7 +351,7 @@ pub unsafe extern "C" fn rs_qf_cmd_cc_result(qfl: QfListHandle, target_idx: c_in
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_cmd_nav_result(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     count: c_int,
     forward: bool,
 ) -> QfCmdResult {
@@ -367,8 +361,8 @@ pub unsafe extern "C" fn rs_qf_cmd_nav_result(
         return result;
     }
 
-    let current = nvim_qf_get_index(qfl);
-    let total = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let total = (*qfl).qf_count;
 
     if total == 0 {
         return result;
@@ -448,18 +442,18 @@ pub unsafe extern "C" fn rs_qf_get_list_info(qi: QfInfoHandle, list_idx: c_int) 
 /// - `qfl` may be null (returns default info)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_current_list_info(qfl: QfListHandle) -> QfListInfo {
+pub unsafe extern "C" fn rs_qf_current_list_info(qfl: QfListPtr) -> QfListInfo {
     let mut info = QfListInfo::default();
 
     if qfl.is_null() {
         return info;
     }
 
-    info.count = nvim_qf_get_count(qfl);
-    info.current_idx = nvim_qf_get_index(qfl);
+    info.count = (*qfl).qf_count;
+    info.current_idx = (*qfl).qf_index;
     info.is_current = true;
 
-    let title = nvim_qf_get_title(qfl);
+    let title = (*qfl).qf_title;
     info.has_title = !title.is_null();
 
     info
@@ -478,16 +472,12 @@ pub unsafe extern "C" fn rs_qf_current_list_info(qfl: QfListHandle) -> QfListInf
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_valid_list_range(
-    qfl: QfListHandle,
-    start: c_int,
-    end: c_int,
-) -> bool {
+pub unsafe extern "C" fn rs_qf_valid_list_range(qfl: QfListPtr, start: c_int, end: c_int) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return false;
     }
@@ -504,7 +494,7 @@ pub unsafe extern "C" fn rs_qf_valid_list_range(
 /// - `out_start` and `out_end` must be valid pointers
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_clamp_range(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     start: c_int,
     end: c_int,
     out_start: *mut c_int,
@@ -520,7 +510,7 @@ pub unsafe extern "C" fn rs_qf_clamp_range(
         return;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         *out_start = 0;
         *out_end = 0;
@@ -545,7 +535,7 @@ pub unsafe extern "C" fn rs_qf_clamp_range(
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_calc_window_height(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     min_height: c_int,
     max_height: c_int,
 ) -> c_int {
@@ -553,7 +543,7 @@ pub unsafe extern "C" fn rs_qf_calc_window_height(
         return min_height.max(1);
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     count.clamp(min_height.max(1), max_height)
 }
 
@@ -745,30 +735,30 @@ mod tests {
     #[test]
     fn test_null_safety_stack() {
         unsafe {
-            assert!(!rs_qf_can_go_older(std::ptr::null()));
-            assert!(!rs_qf_can_go_newer(std::ptr::null()));
-            assert_eq!(rs_qf_calc_age_target(std::ptr::null(), 1, true), -1);
-            assert_eq!(rs_qf_available_age_steps(std::ptr::null(), true), 0);
+            assert!(!rs_qf_can_go_older(std::ptr::null_mut()));
+            assert!(!rs_qf_can_go_newer(std::ptr::null_mut()));
+            assert_eq!(rs_qf_calc_age_target(std::ptr::null_mut(), 1, true), -1);
+            assert_eq!(rs_qf_available_age_steps(std::ptr::null_mut(), true), 0);
         }
     }
 
     #[test]
     fn test_null_safety_nav() {
         unsafe {
-            assert!(!rs_qf_can_go_next(std::ptr::null()));
-            assert!(!rs_qf_can_go_prev(std::ptr::null()));
-            assert_eq!(rs_qf_calc_nav_target(std::ptr::null(), 1, true), 0);
-            assert_eq!(rs_qf_available_nav_steps(std::ptr::null(), true), 0);
+            assert!(!rs_qf_can_go_next(std::ptr::null_mut()));
+            assert!(!rs_qf_can_go_prev(std::ptr::null_mut()));
+            assert_eq!(rs_qf_calc_nav_target(std::ptr::null_mut(), 1, true), 0);
+            assert_eq!(rs_qf_available_nav_steps(std::ptr::null_mut(), true), 0);
         }
     }
 
     #[test]
     fn test_null_safety_results() {
         unsafe {
-            let result = rs_qf_cmd_cc_result(std::ptr::null(), 1);
+            let result = rs_qf_cmd_cc_result(std::ptr::null_mut(), 1);
             assert!(!result.success);
 
-            let result = rs_qf_cmd_nav_result(std::ptr::null(), 1, true);
+            let result = rs_qf_cmd_nav_result(std::ptr::null_mut(), 1, true);
             assert!(!result.success);
         }
     }
@@ -776,10 +766,10 @@ mod tests {
     #[test]
     fn test_null_safety_info() {
         unsafe {
-            let info = rs_qf_get_list_info(std::ptr::null(), 0);
+            let info = rs_qf_get_list_info(std::ptr::null_mut(), 0);
             assert!(!info.is_current);
 
-            let info = rs_qf_current_list_info(std::ptr::null());
+            let info = rs_qf_current_list_info(std::ptr::null_mut());
             assert_eq!(info.count, 0);
         }
     }
@@ -787,11 +777,11 @@ mod tests {
     #[test]
     fn test_null_safety_range() {
         unsafe {
-            assert!(!rs_qf_valid_list_range(std::ptr::null(), 1, 10));
+            assert!(!rs_qf_valid_list_range(std::ptr::null_mut(), 1, 10));
 
             let mut start = 0;
             let mut end = 0;
-            rs_qf_clamp_range(std::ptr::null(), 1, 10, &raw mut start, &raw mut end);
+            rs_qf_clamp_range(std::ptr::null_mut(), 1, 10, &raw mut start, &raw mut end);
             assert_eq!(start, 0);
             assert_eq!(end, 0);
         }
@@ -800,8 +790,8 @@ mod tests {
     #[test]
     fn test_null_safety_height() {
         unsafe {
-            assert_eq!(rs_qf_calc_window_height(std::ptr::null(), 3, 10), 3);
-            assert_eq!(rs_qf_calc_window_height(std::ptr::null(), 0, 10), 1);
+            assert_eq!(rs_qf_calc_window_height(std::ptr::null_mut(), 3, 10), 3);
+            assert_eq!(rs_qf_calc_window_height(std::ptr::null_mut(), 0, 10), 1);
         }
     }
 
@@ -1086,7 +1076,7 @@ const QFLT_LOCATION: c_int = 1;
 
 extern "C" {
     fn rs_qf_alloc_stack(qfl_type: c_int, maxcount: c_int) -> *mut c_void;
-    fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+    fn rs_qf_list_empty(qfl: QfListPtr) -> bool;
     fn rs_qf_jump_newwin(qi: *mut c_void, dir: c_int, errornr: c_int, forceit: c_int, newwin: bool);
     fn rs_ll_free_all(pqi: *mut *mut c_void);
 }
@@ -1186,9 +1176,9 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     // 4c. Finalize the list (set ptr/index/nonevalid/changedtick)
     if updated {
         let qfl = nvim_qf_get_curlist_mut(qi);
-        nvim_qf_set_nonevalid(qfl, false);
-        nvim_qf_set_ptr(qfl, nvim_qf_get_start(qfl.cast_const()));
-        nvim_qf_set_index(qfl, 1);
+        (*qfl).qf_nonevalid = false;
+        (*qfl).qf_ptr = (*qfl.cast_const()).qf_start;
+        (*qfl).qf_index = 1;
         crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
@@ -1223,7 +1213,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     // 8. Jump to first match or show "no match" error
     // Inlined from nvim_hgr_jump_or_nomatch.
     let qfl = nvim_qf_get_curlist_mut(qi);
-    if rs_qf_list_empty(qfl.cast_const()) {
+    if rs_qf_list_empty(qfl) {
         semsg(c"E480: No match: %s".as_ptr(), eap_arg.cast_const());
     } else {
         rs_qf_jump_newwin(qi, 0, 0, 0, false);
@@ -1316,12 +1306,12 @@ extern "C" {
     fn do_cmdline_cmd(cmd: *const u8);
 
     // From crate (already declared in lib.rs)
-    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
+    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> QfListPtr;
     fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
 
     fn rs_qf_stack_empty(qi: *const c_void) -> bool;
     fn rs_qf_find_nth_adj_entry(
-        qfl: *const c_void,
+        qfl: QfListPtr,
         bnr: c_int,
         pos: *const c_void,
         n: LinenrT,
@@ -1369,7 +1359,7 @@ pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
         };
         let fdo = cmdidx == CMD_CFDO || cmdidx == CMD_LFDO;
         let qfl = nvim_qf_get_curlist_mut(qi);
-        crate::filter::rs_qf_get_nth_valid_entry_do(qfl.cast_const(), n, fdo)
+        crate::filter::rs_qf_get_nth_valid_entry_do(qfl, n, fdo)
     } else if addr_count > 0 {
         nvim_eap_get_line2(eap) as c_int
     } else {
@@ -1718,8 +1708,8 @@ pub unsafe extern "C" fn rs_ex_cwindow(eap: EapHandle) {
     // If stack is empty, no valid entries, or list is empty -> close window
     // Otherwise if no window exists -> open it
     if crate::rs_qf_stack_empty(qi.cast_const())
-        || crate::nvim_qf_get_nonevalid(qfl.cast_const())
-        || crate::rs_qf_list_empty(qfl.cast_const())
+        || (*qfl.cast_const()).qf_nonevalid
+        || crate::rs_qf_list_empty(qfl)
     {
         if !win.is_null() {
             rs_ex_cclose(eap);
@@ -1819,7 +1809,7 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
         nvim_eap_get_line2(eap) as c_int
     } else {
         let qfl_temp = nvim_qf_get_curlist_mut(qi);
-        rs_qf_calc_window_height(qfl_temp.cast_const(), 3, QF_WINHEIGHT)
+        rs_qf_calc_window_height(qfl_temp, 3, QF_WINHEIGHT)
     };
 
     nvim_qf_reset_visual();
@@ -1841,10 +1831,10 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
     }
 
     let qfl = nvim_qf_get_curlist_mut(qi);
-    crate::rs_qf_set_title_var(qfl.cast_const());
+    crate::rs_qf_set_title_var(qfl);
 
     // Calculate cursor line
-    let mut lnum = crate::window::rs_qf_cursor_line(qfl.cast_const());
+    let mut lnum = crate::window::rs_qf_cursor_line(qfl);
     if lnum == 0 {
         lnum = 1;
     }
@@ -2034,10 +2024,10 @@ pub unsafe extern "C" fn rs_qf_get_size_eap(eap: EapHandle) -> usize {
     if qi.is_null() {
         return 0;
     }
-    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    let qfl = nvim_qf_get_curlist_mut(qi);
     #[allow(clippy::cast_sign_loss)]
     {
-        nvim_qf_get_count(qfl).max(0) as usize
+        (*qfl).qf_count.max(0) as usize
     }
 }
 
@@ -2054,7 +2044,7 @@ pub unsafe extern "C" fn rs_qf_get_valid_size_eap(eap: EapHandle) -> usize {
     }
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let count_files = !(cmdidx == CMD_CDO_P4 || cmdidx == CMD_LDO_P4);
-    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    let qfl = nvim_qf_get_curlist_mut(qi);
     #[allow(clippy::cast_sign_loss)]
     {
         crate::navigate::rs_qf_get_valid_size(qfl, count_files).max(0) as usize
@@ -2072,8 +2062,8 @@ pub unsafe extern "C" fn rs_qf_get_cur_idx_eap(eap: EapHandle) -> usize {
     if qi.is_null() {
         return 0;
     }
-    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
-    let idx = nvim_qf_get_index(qfl);
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    let idx = (*qfl).qf_index;
     debug_assert!(idx >= 0);
     #[allow(clippy::cast_sign_loss)]
     {
@@ -2094,8 +2084,8 @@ pub unsafe extern "C" fn rs_qf_get_cur_valid_idx_eap(eap: EapHandle) -> c_int {
     }
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let count_files = cmdidx == CMD_CFDO_P4 || cmdidx == CMD_LFDO_P4;
-    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
-    let qf_index = nvim_qf_get_index(qfl);
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    let qf_index = (*qfl).qf_index;
     crate::navigate::rs_qf_get_cur_valid_idx(qfl, qf_index, count_files)
 }
 
@@ -2127,8 +2117,8 @@ pub unsafe extern "C" fn rs_qf_current_entry(wp: WinHandle) -> i32 {
         qi = nvim_win_get_llist_ref(wp).cast_mut();
     }
 
-    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
-    nvim_qf_get_index(qfl)
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    (*qfl).qf_index
 }
 
 /// Returns true when using `:vimgrep` for `:grep`
@@ -2257,11 +2247,11 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
 
     // Compute range
     let (idx1, idx2) = if plus {
-        let cur = crate::nvim_qf_get_index(qfl);
+        let cur = (*qfl).qf_index;
         let new_idx2 = cur + idx1;
         (cur, new_idx2)
     } else {
-        let count = crate::nvim_qf_get_count(qfl);
+        let count = (*qfl).qf_count;
         let i1 = if idx1 < 0 {
             if -idx1 > count {
                 0
@@ -2301,13 +2291,13 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     }
 
     // If nonevalid is set, show all entries (forceit is bool from nvim_eap_get_forceit)
-    let all = forceit || crate::nvim_qf_get_nonevalid(qfl);
+    let all = forceit || (*qfl).qf_nonevalid;
 
     // Iterate: FOR_ALL_QFL_ITEMS equivalent
-    let qf_index = crate::nvim_qf_get_index(qfl);
-    let qf_count = crate::nvim_qf_get_count(qfl);
+    let qf_index = (*qfl).qf_index;
+    let qf_count = (*qfl).qf_count;
     let mut i: c_int = 1;
-    let mut qfp = crate::nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     while !unsafe { got_int } && i <= qf_count && !qfp.is_null() {
         let valid = (*qfp).qf_valid != 0;
         if (valid || all) && idx1 <= i && i <= idx2 {

@@ -4,17 +4,14 @@
 //! tools like compilers, grep, make, and other programs that produce
 //! error/warning output.
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int};
-
-use crate::{QfLinePtr, QfListHandle};
 
 // =============================================================================
 // External C accessor functions
 // =============================================================================
 
-extern "C" {
-    fn nvim_qf_get_start(qfl: QfListHandle) -> QfLinePtr;
-}
+extern "C" {}
 
 // =============================================================================
 // Output Source Types
@@ -127,7 +124,7 @@ pub struct QfOutputStats {
 /// - `qfl` may be null (returns zeroed stats)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_output_stats(qfl: QfListHandle) -> QfOutputStats {
+pub unsafe extern "C" fn rs_qf_output_stats(qfl: QfListPtr) -> QfOutputStats {
     let mut stats = QfOutputStats::default();
 
     if qfl.is_null() {
@@ -135,7 +132,7 @@ pub unsafe extern "C" fn rs_qf_output_stats(qfl: QfListHandle) -> QfOutputStats 
     }
 
     let mut last_fnum = -1;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         stats.total += 1;
@@ -263,7 +260,7 @@ pub unsafe extern "C" fn rs_qf_detect_format(line: *const c_char) -> OutputForma
 /// - If non-null, must point to an array of at least `max_files` `c_int`
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_extract_files(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     out_fnums: *mut c_int,
     max_files: c_int,
 ) -> c_int {
@@ -273,7 +270,7 @@ pub unsafe extern "C" fn rs_qf_extract_files(
 
     let mut count = 0;
     let mut last_fnum = -1;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         let fnum = (*qfp).qf_fnum;
@@ -333,13 +330,13 @@ pub const extern "C" fn rs_qf_type_severity(type_char: c_char) -> QfSeverity {
 /// - `qfl` may be null (returns None)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_max_severity(qfl: QfListHandle) -> QfSeverity {
+pub unsafe extern "C" fn rs_qf_max_severity(qfl: QfListPtr) -> QfSeverity {
     if qfl.is_null() {
         return QfSeverity::None;
     }
 
     let mut max = QfSeverity::None;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         let severity = rs_qf_type_severity((*qfp).qf_type);
@@ -362,7 +359,7 @@ pub unsafe extern "C" fn rs_qf_max_severity(qfl: QfListHandle) -> QfSeverity {
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_has_errors(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_has_errors(qfl: QfListPtr) -> bool {
     rs_qf_max_severity(qfl) >= QfSeverity::Error
 }
 
@@ -373,7 +370,7 @@ pub unsafe extern "C" fn rs_qf_has_errors(qfl: QfListHandle) -> bool {
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_has_warnings_or_errors(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_has_warnings_or_errors(qfl: QfListPtr) -> bool {
     rs_qf_max_severity(qfl) >= QfSeverity::Warning
 }
 
@@ -453,18 +450,21 @@ mod tests {
     #[test]
     fn test_null_safety() {
         unsafe {
-            let stats = rs_qf_output_stats(std::ptr::null());
+            let stats = rs_qf_output_stats(std::ptr::null_mut());
             assert_eq!(stats.total, 0);
             assert_eq!(stats.errors, 0);
 
-            assert_eq!(rs_qf_detect_format(std::ptr::null()), OutputFormat::Unknown);
             assert_eq!(
-                rs_qf_extract_files(std::ptr::null(), std::ptr::null_mut(), 10),
+                rs_qf_detect_format(std::ptr::null_mut()),
+                OutputFormat::Unknown
+            );
+            assert_eq!(
+                rs_qf_extract_files(std::ptr::null_mut(), std::ptr::null_mut(), 10),
                 0
             );
-            assert_eq!(rs_qf_max_severity(std::ptr::null()), QfSeverity::None);
-            assert!(!rs_qf_has_errors(std::ptr::null()));
-            assert!(!rs_qf_has_warnings_or_errors(std::ptr::null()));
+            assert_eq!(rs_qf_max_severity(std::ptr::null_mut()), QfSeverity::None);
+            assert!(!rs_qf_has_errors(std::ptr::null_mut()));
+            assert!(!rs_qf_has_warnings_or_errors(std::ptr::null_mut()));
         }
     }
 

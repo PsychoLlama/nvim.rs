@@ -11,6 +11,7 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clashing_extern_declarations)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_int, c_void};
 
 // =============================================================================
@@ -56,9 +57,8 @@ extern "C" {
     fn nvim_qf_get_curlist_idx(qi: QfStackHandle) -> c_int;
     fn nvim_qf_set_curlist_idx(qi: QfStackHandle, idx: c_int);
     fn nvim_qf_set_listcount(qi: QfStackHandle, count: c_int);
-    fn nvim_qf_get_list_at_mut(qi: QfStackHandle, idx: c_int) -> *mut c_void;
+    fn nvim_qf_get_list_at_mut(qi: QfStackHandle, idx: c_int) -> QfListPtr;
     fn memset(ptr: *mut c_void, c: c_int, n: usize) -> *mut c_void;
-    fn nvim_qf_sizeof_qflist() -> usize;
 }
 
 // =============================================================================
@@ -439,7 +439,11 @@ pub unsafe extern "C" fn rs_qf_zero_top_list(qi: QfStackHandle) {
     if listcount > 0 {
         let qfl = nvim_qf_get_list_at_mut(qi, listcount - 1);
         if !qfl.is_null() {
-            memset(qfl, 0, nvim_qf_sizeof_qflist());
+            memset(
+                qfl.cast(),
+                0,
+                ::std::mem::size_of::<crate::ffi_types::QfListRaw>(),
+            );
         }
     }
 }

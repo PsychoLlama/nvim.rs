@@ -10,6 +10,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clashing_extern_declarations)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
 // =============================================================================
@@ -141,7 +142,7 @@ extern "C" {
     fn is_loclist_cmd(cmdidx: c_int) -> bool;
 
     // List management
-    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
+    fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> QfListPtr;
     #[link_name = "rs_incr_quickfix_busy"]
     fn nvim_incr_quickfix_busy();
     #[link_name = "rs_decr_quickfix_busy"]
@@ -149,7 +150,6 @@ extern "C" {
 
     // curlist accessors
     fn nvim_qf_get_curlist_idx(qi: QfInfoHandleMut) -> c_int;
-    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
 
     // set_option_direct for cfile
     fn nvim_set_option_direct_ef(val: *const c_char);
@@ -498,7 +498,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
         crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
-    let save_qfid = nvim_qf_get_id(nvim_qf_get_curlist_mut(qi_post).cast_const());
+    let save_qfid = (*nvim_qf_get_curlist_mut(qi_post).cast_const()).qf_id;
 
     // Inlined nvim_qf_apply_autocmd_post: fire EVENT_QUICKFIXCMDPOST with curbuf->b_fname
     if !au_name.is_null() {
@@ -615,7 +615,7 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
         crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
-    let save_qfid = nvim_qf_get_id(nvim_qf_get_curlist_mut(qi_post).cast_const());
+    let save_qfid = (*nvim_qf_get_curlist_mut(qi_post).cast_const()).qf_id;
 
     // Inlined nvim_qf_apply_autocmd_post_null: fire EVENT_QUICKFIXCMDPOST with NULL fname_io
     if !au_name.is_null() {
@@ -783,7 +783,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
         crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
-    let save_qfid = nvim_qf_get_id(nvim_qf_get_curlist_mut(qi).cast_const());
+    let save_qfid = (*nvim_qf_get_curlist_mut(qi).cast_const()).qf_id;
 
     // Inlined nvim_qf_apply_autocmd_post_track: fire EVENT_QUICKFIXCMDPOST, return true if curbuf changed
     let curbuf_changed = if au_name.is_null() {
@@ -889,7 +889,7 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
             crate::rs_qf_incr_changedtick(qfl.cast());
         }
 
-        let save_qfid = nvim_qf_get_id(nvim_qf_get_curlist_mut(qi).cast_const());
+        let save_qfid = (*nvim_qf_get_curlist_mut(qi).cast_const()).qf_id;
 
         // Inlined nvim_qf_apply_autocmd_post: fire EVENT_QUICKFIXCMDPOST with curbuf->b_fname
         if !au_name.is_null() {

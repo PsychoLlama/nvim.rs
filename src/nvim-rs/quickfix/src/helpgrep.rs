@@ -7,6 +7,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 // =============================================================================
@@ -15,7 +16,6 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 
 type LinenrT = i32;
 /// Opaque handle to `qf_list_T`
-type QfListHandleMut = *mut c_void;
 /// Opaque handle to `regmatch_T` (const for regmatch accessors)
 type RegmatchHandle = *mut c_void;
 /// Opaque const handle to `regmatch_T` (for indexed accessors that take const)
@@ -69,7 +69,7 @@ extern "C" {
 
     // Quickfix entry addition
     fn rs_qf_add_entry(
-        qfl: QfListHandleMut,
+        qfl: QfListPtr,
         dir: *mut c_char,
         fname: *const c_char,
         module: *const c_char,
@@ -101,7 +101,7 @@ const OK: c_int = 1;
 /// - `qfl` must be a valid pointer to a `qf_list_T`
 /// - `fname` must be a valid C string
 /// - `p_regmatch` must be a valid pointer to a `regmatch_T`
-unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch: RegmatchHandle) {
+unsafe fn hgr_search_file(qfl: QfListPtr, fname: *const c_char, p_regmatch: RegmatchHandle) {
     let fd = os_fopen(fname, c"r".as_ptr());
     if fd.is_null() {
         return;
@@ -171,7 +171,7 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
 /// - `p_regmatch` must be a valid pointer to a `regmatch_T`
 /// - `lang` must be a valid C string or NULL
 unsafe fn hgr_search_files_in_dir(
-    qfl: QfListHandleMut,
+    qfl: QfListPtr,
     mut dirname: *mut c_char,
     p_regmatch: RegmatchHandle,
     lang: *const c_char,
@@ -235,7 +235,7 @@ unsafe fn hgr_search_files_in_dir(
 /// - `lang` must be a valid C string or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_hgr_search_in_rtp(
-    qfl: QfListHandleMut,
+    qfl: QfListPtr,
     p_regmatch: RegmatchHandle,
     lang: *const c_char,
 ) {

@@ -10,6 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::derivable_impls)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -25,25 +26,6 @@ pub const QF_TEXT_MAX_WIDTH: usize = 200;
 // =============================================================================
 // Opaque Handles
 // =============================================================================
-
-/// Opaque handle to quickfix list
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct QfListHandle(*mut c_void);
-
-impl QfListHandle {
-    /// Check if the handle is null
-    #[inline]
-    pub const fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Create a null handle
-    #[inline]
-    pub const fn null() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
 
 /// Opaque handle to quickfix entry
 #[repr(transparent)]
@@ -435,8 +417,6 @@ extern "C" {
     fn nvim_qf_delete_all_lines() -> bool;
     fn nvim_qf_zero_skipcol_for_curbuf();
     fn nvim_qf_u_clearallandblockfree();
-    fn nvim_qf_get_start(qfl: *const c_void) -> QfLinePtr;
-    fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     // Phase 11: rs_call_qftf_func accessors (replacing nvim_call_qftf_func)
     fn tv_dict_alloc_lock(scope: c_int) -> *mut c_void;
@@ -448,9 +428,6 @@ extern "C" {
     fn tv_clear(tv: *mut c_void);
     fn tv_dict_add_nr(dict: *mut c_void, key: *const c_char, key_len: usize, nr: i64) -> c_int;
     fn nvim_tv_dict_incr_refcount(dict: *mut c_void);
-    fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
-    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
-    fn nvim_qfl_get_qftf_cb_ptr(qfl: *mut c_void) -> *mut c_void;
     fn nvim_qf_get_global_qftf_cb_ptr() -> *mut c_void;
 
     fn nvim_tv_list_first(list: *const c_void) -> ListItemPtr;
@@ -522,7 +499,7 @@ static QFTF_RECURSIVE: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 /// - `qfl` must be a valid pointer to a `qf_list_T`
 #[no_mangle]
 pub unsafe extern "C" fn rs_call_qftf_func(
-    qfl: *mut c_void,
+    qfl: QfListPtr,
     qf_winid: c_int,
     start_idx: LinenrT,
     end_idx: c_int,
@@ -541,14 +518,14 @@ pub unsafe extern "C" fn rs_call_qftf_func(
 }
 
 unsafe fn call_qftf_func_inner(
-    qfl: *mut c_void,
+    qfl: QfListPtr,
     qf_winid: c_int,
     start_idx: LinenrT,
     end_idx: c_int,
 ) -> ListPtr {
     // Choose the callback: per-list takes precedence over global.
     let cb: *mut c_void = {
-        let local_cb = nvim_qfl_get_qftf_cb_ptr(qfl);
+        let local_cb = (*qfl).qf_qftf_cb.as_mut_ptr().cast();
         if nvim_callback_is_none(local_cb) {
             nvim_qf_get_global_qftf_cb_ptr()
         } else {
@@ -567,8 +544,8 @@ unsafe fn call_qftf_func_inner(
         return std::ptr::null_mut();
     }
 
-    let is_qf = nvim_qf_is_qf_list(qfl);
-    let qf_id = nvim_qf_get_id(qfl);
+    let is_qf = (*qfl).qfl_type == crate::ffi_types::QflTypeRaw::Quickfix;
+    let qf_id = (*qfl).qf_id;
 
     tv_dict_add_nr(dict, c"quickfix".as_ptr(), 8, i64::from(is_qf));
     tv_dict_add_nr(dict, c"winid".as_ptr(), 5, i64::from(qf_winid));
@@ -768,7 +745,7 @@ unsafe fn qf_buf_add_line(
 #[no_mangle]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_qf_fill_buffer(
-    qfl: *mut c_void,
+    qfl: QfListPtr,
     buf: BufHandle,
     old_last: QfLinePtr,
     qf_winid: c_int,
@@ -791,7 +768,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
     }
 
     // Check if there is anything to display
-    let qf_start = nvim_qf_get_start(qfl);
+    let qf_start = (*qfl).qf_start;
     if !qfl.is_null() && !qf_start.is_null() {
         let mut dirname = [0u8; MAXPATHL];
 
@@ -808,7 +785,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
             lnum = nvim_buf_get_line_count(buf);
         }
 
-        let qf_count = nvim_qf_get_count(qfl);
+        let qf_count = (*qfl).qf_count;
         let qftf_list = rs_call_qftf_func(qfl, qf_winid, lnum + 1, qf_count);
         let mut qftf_li = nvim_tv_list_first(qftf_list.cast_const());
 
@@ -895,8 +872,7 @@ type QfInfoHandleConst = *const c_void;
 
 extern "C" {
     fn nvim_qf_get_listcount(qi: QfInfoHandleConst) -> c_int;
-    fn nvim_qf_get_list_at(qi: QfInfoHandleConst, idx: c_int) -> *const c_void;
-    fn nvim_qf_get_title(qfl: *const c_void) -> *const c_char;
+    fn nvim_qf_get_list_at(qi: QfInfoHandleConst, idx: c_int) -> QfListPtr;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
     fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, buflen: c_int);
     fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> bool;
@@ -929,15 +905,11 @@ pub unsafe extern "C" fn rs_qf_msg(qi: QfInfoHandleConst, which: c_int, lead: *c
 
     let listcount = nvim_qf_get_listcount(qi);
     let qfl = nvim_qf_get_list_at(qi, which);
-    let count = if qfl.is_null() {
-        0
-    } else {
-        nvim_qf_get_count(qfl)
-    };
+    let count = if qfl.is_null() { 0 } else { (*qfl).qf_count };
     let title_ptr = if qfl.is_null() {
         std::ptr::null_mut()
     } else {
-        nvim_qf_get_title(qfl)
+        (*qfl).qf_title
     };
 
     // Build the base message: "<lead>error list <n> of <total>; <count> errors "

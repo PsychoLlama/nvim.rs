@@ -7,11 +7,12 @@
 //! - Location lists are freed when the window is closed
 //! - Location list windows can reference another window's location list
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::c_int;
 
 use crate::{
-    nvim_qf_get_count, nvim_qf_get_curlist_idx, nvim_qf_get_listcount, nvim_qf_get_refcount,
-    nvim_win_get_llist_ref, nvim_win_get_loclist, QfInfoHandle, QfListHandle, WinHandle,
+    nvim_qf_get_curlist_idx, nvim_qf_get_listcount, nvim_qf_get_refcount, nvim_win_get_llist_ref,
+    nvim_win_get_loclist, QfInfoHandle, WinHandle,
 };
 
 // =============================================================================
@@ -267,7 +268,7 @@ pub unsafe extern "C" fn rs_ll_window_info(wp: WinHandle) -> LoclistInfo {
 /// - If non-null, `qi` must be a valid pointer to a `qf_info_T` struct
 /// - `qfl` is the current list handle (may be null, returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_ll_entry_count(qi: QfInfoHandle, qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_ll_entry_count(qi: QfInfoHandle, qfl: QfListPtr) -> c_int {
     if qi.is_null() || qfl.is_null() {
         return 0;
     }
@@ -276,7 +277,7 @@ pub unsafe extern "C" fn rs_ll_entry_count(qi: QfInfoHandle, qfl: QfListHandle) 
         return 0;
     }
 
-    nvim_qf_get_count(qfl)
+    (*qfl).qf_count
 }
 
 /// Check if a window's location list is empty.
@@ -336,7 +337,7 @@ pub struct LoclistNavState {
 /// - `wp` may be null (returns defaults)
 /// - `qfl` may be null (returns defaults)
 #[no_mangle]
-pub unsafe extern "C" fn rs_ll_nav_state(wp: WinHandle, qfl: QfListHandle) -> LoclistNavState {
+pub unsafe extern "C" fn rs_ll_nav_state(wp: WinHandle, qfl: QfListPtr) -> LoclistNavState {
     let mut state = LoclistNavState::default();
 
     if wp.is_null() {
@@ -354,13 +355,13 @@ pub unsafe extern "C" fn rs_ll_nav_state(wp: WinHandle, qfl: QfListHandle) -> Lo
     state.can_go_newer = state.list_idx < state.list_count - 1;
 
     if !qfl.is_null() {
-        state.total_entries = nvim_qf_get_count(qfl);
-        state.current_idx = crate::nvim_qf_get_index(qfl);
+        state.total_entries = (*qfl).qf_count;
+        state.current_idx = (*qfl).qf_index;
         state.can_go_next = state.current_idx < state.total_entries;
         state.can_go_prev = state.current_idx > 1;
 
         // Count valid entries and check if current is valid
-        let mut qfp = crate::nvim_qf_get_start(qfl);
+        let mut qfp = (*qfl).qf_start;
         let mut idx = 1;
         while !qfp.is_null() {
             if (*qfp).qf_valid != 0 {
@@ -407,7 +408,7 @@ pub unsafe extern "C" fn rs_ll_can_navigate(wp: WinHandle) -> bool {
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
 pub unsafe extern "C" fn rs_ll_calc_nav_target(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     count: c_int,
     forward: bool,
 ) -> c_int {
@@ -415,8 +416,8 @@ pub unsafe extern "C" fn rs_ll_calc_nav_target(
         return 0;
     }
 
-    let current = crate::nvim_qf_get_index(qfl);
-    let total = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let total = (*qfl).qf_count;
 
     if total == 0 {
         return 0;
@@ -484,13 +485,13 @@ pub unsafe extern "C" fn rs_ll_calc_age_target(
 ///
 /// - `qfl` may be null (returns 0)
 #[no_mangle]
-pub unsafe extern "C" fn rs_ll_available_nav_steps(qfl: QfListHandle, forward: bool) -> c_int {
+pub unsafe extern "C" fn rs_ll_available_nav_steps(qfl: QfListPtr, forward: bool) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let current = crate::nvim_qf_get_index(qfl);
-    let total = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let total = (*qfl).qf_count;
 
     if forward {
         total - current
@@ -552,7 +553,7 @@ pub struct LoclistOpenInfo {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ll_open_info(
     wp: WinHandle,
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     min_height: c_int,
     max_height: c_int,
 ) -> LoclistOpenInfo {
@@ -567,14 +568,14 @@ pub unsafe extern "C" fn rs_ll_open_info(
         return info;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return info;
     }
 
     info.should_open = true;
     info.entry_count = count;
-    info.current_idx = crate::nvim_qf_get_index(qfl);
+    info.current_idx = (*qfl).qf_index;
     info.height = count.clamp(min_height.max(1), max_height);
     info.is_new_list = nvim_qf_get_curlist_idx(qi) == nvim_qf_get_listcount(qi) - 1;
 
@@ -589,15 +590,12 @@ pub unsafe extern "C" fn rs_ll_open_info(
 ///
 /// - `qfl` may be null (returns false)
 #[no_mangle]
-pub unsafe extern "C" fn rs_ll_window_needs_update(
-    qfl: QfListHandle,
-    buf_line_count: c_int,
-) -> bool {
+pub unsafe extern "C" fn rs_ll_window_needs_update(qfl: QfListPtr, buf_line_count: c_int) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     buf_line_count != count
 }
 
@@ -624,7 +622,7 @@ pub struct LoclistCmdResult {
 /// - `qfl` may be null (returns failure result)
 #[no_mangle]
 pub unsafe extern "C" fn rs_ll_cmd_ll_result(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     target_idx: c_int,
 ) -> LoclistCmdResult {
     let mut result = LoclistCmdResult::default();
@@ -633,7 +631,7 @@ pub unsafe extern "C" fn rs_ll_cmd_ll_result(
         return result;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 || target_idx < 1 || target_idx > count {
         return result;
     }
@@ -653,7 +651,7 @@ pub unsafe extern "C" fn rs_ll_cmd_ll_result(
 /// - `qfl` may be null (returns failure result)
 #[no_mangle]
 pub unsafe extern "C" fn rs_ll_cmd_nav_result(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     count: c_int,
     forward: bool,
 ) -> LoclistCmdResult {
@@ -663,8 +661,8 @@ pub unsafe extern "C" fn rs_ll_cmd_nav_result(
         return result;
     }
 
-    let current = crate::nvim_qf_get_index(qfl);
-    let total = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let total = (*qfl).qf_count;
 
     if total == 0 {
         return result;
@@ -734,19 +732,16 @@ pub unsafe extern "C" fn rs_ll_cmd_age_result(
 // Phase 3: copy_loclist_entries, copy_loclist
 // =============================================================================
 
-use std::ffi::{c_char, c_void};
+use std::ffi::c_char;
 
-use crate::{
-    nvim_qf_alloc_next_id, nvim_qf_get_has_user_data, nvim_qf_get_index, nvim_qf_get_last,
-    nvim_qf_get_nonevalid, nvim_qf_get_ptr, nvim_qf_get_qfl_type, nvim_qf_get_start,
-    nvim_qf_get_title, nvim_qf_set_changedtick, nvim_qf_set_count, nvim_qf_set_has_user_data,
-    nvim_qf_set_id, nvim_qf_set_index, nvim_qf_set_last, nvim_qf_set_nonevalid, nvim_qf_set_ptr,
-    nvim_qf_set_qfl_type, nvim_qf_set_start, nvim_qf_set_title_dup,
-};
+use crate::nvim_qf_alloc_next_id;
 
 extern "C" {
-    fn nvim_qf_copy_ctx(from_qfl: *const c_void, to_qfl: *mut c_void);
-    fn nvim_qf_copy_callback(from_qfl: *const c_void, to_qfl: *mut c_void);
+    fn callback_copy(to: *mut ::std::ffi::c_void, from: *const ::std::ffi::c_void);
+    fn xcalloc(count: usize, size: usize) -> *mut ::std::ffi::c_void;
+    fn xfree(ptr: *mut ::std::ffi::c_void);
+    fn xstrdup(s: *const ::std::ffi::c_char) -> *mut ::std::ffi::c_char;
+    fn tv_copy(from: *const ::std::ffi::c_void, to: *mut ::std::ffi::c_void);
 }
 
 const QF_FAIL: c_int = 0;
@@ -767,16 +762,13 @@ const OK: c_int = 1;
 /// - `from_qfl` must be a valid non-null pointer to `qf_list_T`
 /// - `to_qfl` must be a valid non-null pointer to `qf_list_T`
 #[no_mangle]
-pub unsafe extern "C" fn rs_copy_loclist_entries(
-    from_qfl: *const c_void,
-    to_qfl: *mut c_void,
-) -> c_int {
+pub unsafe extern "C" fn rs_copy_loclist_entries(from_qfl: QfListPtr, to_qfl: QfListPtr) -> c_int {
     if from_qfl.is_null() || to_qfl.is_null() {
         return QF_FAIL;
     }
 
-    let from_ptr = nvim_qf_get_ptr(from_qfl);
-    let mut qfp = nvim_qf_get_start(from_qfl);
+    let from_ptr = (*from_qfl).qf_ptr;
+    let mut qfp = (*from_qfl).qf_start;
 
     while !qfp.is_null() {
         let module = (*qfp).qf_module;
@@ -815,14 +807,14 @@ pub unsafe extern "C" fn rs_copy_loclist_entries(
         }
 
         // Copy fnum and type (not set by rs_qf_add_entry without fname/dir)
-        let prevp = nvim_qf_get_last(to_qfl.cast_const());
+        let prevp = (*to_qfl.cast_const()).qf_last;
         if !prevp.is_null() {
             let prevp_mut = prevp;
             (*prevp_mut).qf_fnum = (*qfp).qf_fnum;
             (*prevp_mut).qf_type = (*qfp).qf_type;
             // Track current entry pointer
             if std::ptr::eq(qfp, from_ptr) {
-                nvim_qf_set_ptr(to_qfl, prevp);
+                (*to_qfl).qf_ptr = prevp;
             }
         }
 
@@ -847,47 +839,66 @@ pub unsafe extern "C" fn rs_copy_loclist_entries(
 /// - `from_qfl` must be a valid non-null pointer to `qf_list_T`
 /// - `to_qfl` must be a valid non-null pointer to `qf_list_T`
 #[no_mangle]
-pub unsafe extern "C" fn rs_copy_loclist(from_qfl: *const c_void, to_qfl: *mut c_void) -> c_int {
+pub unsafe extern "C" fn rs_copy_loclist(from_qfl: QfListPtr, to_qfl: QfListPtr) -> c_int {
     if from_qfl.is_null() || to_qfl.is_null() {
         return QF_FAIL;
     }
 
     // Copy metadata fields
-    nvim_qf_set_qfl_type(to_qfl, nvim_qf_get_qfl_type(from_qfl));
-    nvim_qf_set_nonevalid(to_qfl, nvim_qf_get_nonevalid(from_qfl));
-    nvim_qf_set_has_user_data(to_qfl, nvim_qf_get_has_user_data(from_qfl));
-    nvim_qf_set_count(to_qfl, 0);
-    nvim_qf_set_index(to_qfl, 0);
-    nvim_qf_set_start(to_qfl, std::ptr::null_mut());
-    nvim_qf_set_last(to_qfl, std::ptr::null_mut());
-    nvim_qf_set_ptr(to_qfl, std::ptr::null_mut());
+    (*to_qfl).qfl_type = (*from_qfl).qfl_type;
+    (*to_qfl).qf_nonevalid = (*from_qfl).qf_nonevalid;
+    (*to_qfl).qf_has_user_data = (*from_qfl).qf_has_user_data;
+    (*to_qfl).qf_count = 0;
+    (*to_qfl).qf_index = 0;
+    (*to_qfl).qf_start = std::ptr::null_mut();
+    (*to_qfl).qf_last = std::ptr::null_mut();
+    (*to_qfl).qf_ptr = std::ptr::null_mut();
 
     // Copy title
-    nvim_qf_set_title_dup(to_qfl, nvim_qf_get_title(from_qfl));
+    {
+        xfree((*to_qfl).qf_title.cast());
+        (*to_qfl).qf_title = if ((*from_qfl).qf_title).is_null() {
+            ::std::ptr::null_mut()
+        } else {
+            xstrdup((*from_qfl).qf_title)
+        };
+    };
 
     // Copy context (typval)
-    nvim_qf_copy_ctx(from_qfl, to_qfl);
+    if (*from_qfl).qf_ctx.is_null() {
+        (*to_qfl).qf_ctx = ::std::ptr::null_mut();
+    } else {
+        (*to_qfl).qf_ctx = xcalloc(
+            1,
+            ::std::mem::size_of::<[u8; crate::ffi_types::TYPVAL_SIZE]>(),
+        )
+        .cast();
+        tv_copy((*from_qfl).qf_ctx.cast(), (*to_qfl).qf_ctx.cast());
+    }
 
     // Copy callback
-    nvim_qf_copy_callback(from_qfl, to_qfl);
+    callback_copy(
+        (*to_qfl).qf_qftf_cb.as_mut_ptr().cast(),
+        (*from_qfl).qf_qftf_cb.as_ptr().cast(),
+    );
 
     // Copy entries if any
-    if nvim_qf_get_count(from_qfl) > 0 && rs_copy_loclist_entries(from_qfl, to_qfl) == QF_FAIL {
+    if (*from_qfl).qf_count > 0 && rs_copy_loclist_entries(from_qfl, to_qfl) == QF_FAIL {
         return QF_FAIL;
     }
 
     // Restore index (copy_loclist_entries may change it)
-    nvim_qf_set_index(to_qfl, nvim_qf_get_index(from_qfl));
+    (*to_qfl).qf_index = (*from_qfl).qf_index;
 
     // Assign a new ID and reset changedtick
     let new_id = nvim_qf_alloc_next_id();
-    nvim_qf_set_id(to_qfl, new_id);
-    nvim_qf_set_changedtick(to_qfl, 0);
+    (*to_qfl).qf_id = new_id;
+    (*to_qfl).qf_changedtick = 0;
 
     // When no valid entries: ptr -> start, index = 1
-    if nvim_qf_get_nonevalid(to_qfl.cast_const()) {
-        nvim_qf_set_ptr(to_qfl, nvim_qf_get_start(to_qfl.cast_const()));
-        nvim_qf_set_index(to_qfl, 1);
+    if (*to_qfl.cast_const()).qf_nonevalid {
+        (*to_qfl).qf_ptr = (*to_qfl.cast_const()).qf_start;
+        (*to_qfl).qf_index = 1;
     }
 
     OK

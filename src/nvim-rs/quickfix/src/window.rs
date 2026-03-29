@@ -7,12 +7,10 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 
+use crate::ffi_types::QfListPtr;
 use std::ffi::{c_char, c_int};
 
-use crate::{
-    nvim_qf_get_count, nvim_qf_get_index, nvim_qf_get_ptr, nvim_qf_get_start, LinenrT, QfLinePtr,
-    QfListHandle,
-};
+use crate::{LinenrT, QfLinePtr};
 
 // =============================================================================
 // Cursor Positioning
@@ -28,18 +26,18 @@ use crate::{
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_cursor_line(qfl: QfListHandle) -> LinenrT {
+pub unsafe extern "C" fn rs_qf_cursor_line(qfl: QfListPtr) -> LinenrT {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if count == 0 {
         return 0;
     }
 
     // The cursor line in the qf window corresponds to the current index
-    let idx = nvim_qf_get_index(qfl);
+    let idx = (*qfl).qf_index;
     if idx > 0 && idx <= count {
         idx
     } else {
@@ -56,12 +54,12 @@ pub unsafe extern "C" fn rs_qf_cursor_line(qfl: QfListHandle) -> LinenrT {
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_should_update_cursor(qfl: QfListHandle, old_idx: c_int) -> bool {
+pub unsafe extern "C" fn rs_qf_should_update_cursor(qfl: QfListPtr, old_idx: c_int) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let new_idx = nvim_qf_get_index(qfl);
+    let new_idx = (*qfl).qf_index;
     new_idx != old_idx
 }
 
@@ -94,7 +92,7 @@ pub struct QfDisplayRange {
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_calc_display_range(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     window_height: c_int,
 ) -> QfDisplayRange {
     let mut range = QfDisplayRange::default();
@@ -103,8 +101,8 @@ pub unsafe extern "C" fn rs_qf_calc_display_range(
         return range;
     }
 
-    let count = nvim_qf_get_count(qfl);
-    let current = nvim_qf_get_index(qfl);
+    let count = (*qfl).qf_count;
+    let current = (*qfl).qf_index;
 
     range.total = count;
     range.current = current;
@@ -209,12 +207,12 @@ pub unsafe extern "C" fn rs_qf_entry_display_info(qfp: QfLinePtr) -> QfEntryDisp
 /// - `qfl` may be null (returns default/empty info)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_current_entry_display(qfl: QfListHandle) -> QfEntryDisplay {
+pub unsafe extern "C" fn rs_qf_current_entry_display(qfl: QfListPtr) -> QfEntryDisplay {
     if qfl.is_null() {
         return QfEntryDisplay::default();
     }
 
-    let qfp = nvim_qf_get_ptr(qfl);
+    let qfp = (*qfl).qf_ptr;
     rs_qf_entry_display_info(qfp)
 }
 
@@ -335,7 +333,7 @@ pub unsafe extern "C" fn rs_qf_calc_line_highlights(line: *const c_char) -> QfLi
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_calc_scroll(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     top_line: LinenrT,
     window_height: c_int,
 ) -> c_int {
@@ -343,7 +341,7 @@ pub unsafe extern "C" fn rs_qf_calc_scroll(
         return 0;
     }
 
-    let current = nvim_qf_get_index(qfl);
+    let current = (*qfl).qf_index;
     if current <= 0 {
         return 0;
     }
@@ -369,16 +367,13 @@ pub unsafe extern "C" fn rs_qf_calc_scroll(
 /// - `qfl` may be null (returns 1)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_calc_centered_top(
-    qfl: QfListHandle,
-    window_height: c_int,
-) -> LinenrT {
+pub unsafe extern "C" fn rs_qf_calc_centered_top(qfl: QfListPtr, window_height: c_int) -> LinenrT {
     if qfl.is_null() || window_height <= 0 {
         return 1;
     }
 
-    let current = nvim_qf_get_index(qfl);
-    let count = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let count = (*qfl).qf_count;
 
     if current <= 0 || count <= 0 {
         return 1;
@@ -414,17 +409,17 @@ pub unsafe extern "C" fn rs_qf_calc_centered_top(
 /// - `qfl` may be null (returns null)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_at_line(qfl: QfListHandle, line: c_int) -> QfLinePtr {
+pub unsafe extern "C" fn rs_qf_entry_at_line(qfl: QfListPtr, line: c_int) -> QfLinePtr {
     if qfl.is_null() || line <= 0 {
         return std::ptr::null_mut();
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if line > count {
         return std::ptr::null_mut();
     }
 
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() && idx < line {
@@ -442,13 +437,13 @@ pub unsafe extern "C" fn rs_qf_entry_at_line(qfl: QfListHandle, line: c_int) -> 
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_with_position(qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_with_position(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_lnum > 0 {
@@ -467,13 +462,13 @@ pub unsafe extern "C" fn rs_qf_count_with_position(qfl: QfListHandle) -> c_int {
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_count_with_file(qfl: QfListHandle) -> c_int {
+pub unsafe extern "C" fn rs_qf_count_with_file(qfl: QfListPtr) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
     let mut count = 0;
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
 
     while !qfp.is_null() {
         if (*qfp).qf_fnum > 0 {
@@ -734,7 +729,7 @@ impl Default for QfWindowSize {
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_calc_window_size(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     min_height: c_int,
     max_height: c_int,
 ) -> QfWindowSize {
@@ -749,7 +744,7 @@ pub unsafe extern "C" fn rs_qf_calc_window_size(
         return size;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     size.preferred_height = count.clamp(size.min_height, size.max_height);
 
     size
@@ -764,12 +759,12 @@ pub unsafe extern "C" fn rs_qf_calc_window_size(
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_should_open_window(qfl: QfListHandle) -> bool {
+pub unsafe extern "C" fn rs_qf_should_open_window(qfl: QfListPtr) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    nvim_qf_get_count(qfl) > 0
+    (*qfl).qf_count > 0
 }
 
 /// Calculate the line to scroll to after an update.
@@ -782,7 +777,7 @@ pub unsafe extern "C" fn rs_qf_should_open_window(qfl: QfListHandle) -> bool {
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_scroll_to_current(
-    qfl: QfListHandle,
+    qfl: QfListPtr,
     window_height: c_int,
     context_lines: c_int,
 ) -> LinenrT {
@@ -790,8 +785,8 @@ pub unsafe extern "C" fn rs_qf_scroll_to_current(
         return 1;
     }
 
-    let current = nvim_qf_get_index(qfl);
-    let count = nvim_qf_get_count(qfl);
+    let current = (*qfl).qf_index;
+    let count = (*qfl).qf_count;
 
     if current <= 0 || count <= 0 {
         return 1;
@@ -816,12 +811,12 @@ pub unsafe extern "C" fn rs_qf_scroll_to_current(
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_entry_to_buf_line(qfl: QfListHandle, entry_idx: c_int) -> LinenrT {
+pub unsafe extern "C" fn rs_qf_entry_to_buf_line(qfl: QfListPtr, entry_idx: c_int) -> LinenrT {
     if qfl.is_null() || entry_idx <= 0 {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if entry_idx > count {
         return 0;
     }
@@ -838,12 +833,12 @@ pub unsafe extern "C" fn rs_qf_entry_to_buf_line(qfl: QfListHandle, entry_idx: c
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_buf_line_to_entry(qfl: QfListHandle, buf_line: LinenrT) -> c_int {
+pub unsafe extern "C" fn rs_qf_buf_line_to_entry(qfl: QfListPtr, buf_line: LinenrT) -> c_int {
     if qfl.is_null() || buf_line <= 0 {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     if buf_line > count {
         return 0;
     }
@@ -860,15 +855,12 @@ pub unsafe extern "C" fn rs_qf_buf_line_to_entry(qfl: QfListHandle, buf_line: Li
 /// - `qfl` may be null (returns false)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_window_buf_valid(
-    qfl: QfListHandle,
-    buf_line_count: LinenrT,
-) -> bool {
+pub unsafe extern "C" fn rs_qf_window_buf_valid(qfl: QfListPtr, buf_line_count: LinenrT) -> bool {
     if qfl.is_null() {
         return false;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     buf_line_count == count
 }
 
@@ -884,15 +876,12 @@ pub unsafe extern "C" fn rs_qf_window_buf_valid(
 /// - `qfl` may be null (returns 0)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_window_buf_delta(
-    qfl: QfListHandle,
-    buf_line_count: LinenrT,
-) -> c_int {
+pub unsafe extern "C" fn rs_qf_window_buf_delta(qfl: QfListPtr, buf_line_count: LinenrT) -> c_int {
     if qfl.is_null() {
         return 0;
     }
 
-    let count = nvim_qf_get_count(qfl);
+    let count = (*qfl).qf_count;
     count - buf_line_count
 }
 
@@ -919,7 +908,7 @@ pub struct QfWindowInfo {
 /// - `qfl` may be null (returns defaults)
 /// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_window_info(qfl: QfListHandle) -> QfWindowInfo {
+pub unsafe extern "C" fn rs_qf_window_info(qfl: QfListPtr) -> QfWindowInfo {
     let mut info = QfWindowInfo::default();
 
     if qfl.is_null() {
@@ -927,11 +916,11 @@ pub unsafe extern "C" fn rs_qf_window_info(qfl: QfListHandle) -> QfWindowInfo {
     }
 
     info.exists = true;
-    info.current_idx = nvim_qf_get_index(qfl);
-    info.total_count = nvim_qf_get_count(qfl);
+    info.current_idx = (*qfl).qf_index;
+    info.total_count = (*qfl).qf_count;
 
     // Count valid entries and check if current is valid
-    let mut qfp = nvim_qf_get_start(qfl);
+    let mut qfp = (*qfl).qf_start;
     let mut idx = 1;
 
     while !qfp.is_null() {
