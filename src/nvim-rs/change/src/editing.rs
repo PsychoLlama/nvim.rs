@@ -35,6 +35,7 @@ extern "C" {
     // State checks
     #[link_name = "virtual_active"]
     fn nvim_change_virtual_active(win: WinHandle) -> bool;
+    #[link_name = "coladvance_force"]
     fn nvim_coladvance_force(vcol: ColnrT) -> c_int;
     fn nvim_getviscol() -> ColnrT;
     fn nvim_get_state() -> c_int;

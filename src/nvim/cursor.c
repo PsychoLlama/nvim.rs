@@ -213,9 +213,6 @@ void nvim_getvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *
   getvcol(wp, pos, scol, ccol, ecol);
 }
 
-/// Wrapper for set_valid_virtcol() callable from Rust.
-void nvim_set_valid_virtcol(win_T *wp, colnr_T vcol) { set_valid_virtcol(wp, vcol); }
-
 /// Wrapper for virtual_active() callable from Rust.
 bool nvim_virtual_active_win(win_T *wp) { return virtual_active(wp); }
 
@@ -298,14 +295,9 @@ linenr_T nvim_check_folding_at_end(win_T *win)
 /// Set window cursor coladd (for Rust).
 void nvim_win_set_cursor_coladd(win_T *wp, colnr_T coladd) { wp->w_cursor.coladd = coladd; }
 
-/// Wrapper for mark_mb_adjustpos (for Rust).
-void nvim_mark_mb_adjustpos(buf_T *buf, pos_T *lp) { mark_mb_adjustpos(buf, lp); }
-
 /// Get getvcol start and end columns (for check_cursor_col virtualedit).
 void nvim_get_vcol_range(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *end) { getvcol(wp, pos, start, NULL, end); }
 
 /// Wrapper for coladvance2 with addspaces=true, finetune=false (for Rust).
 int nvim_coladvance2_addspaces(win_T *wp, pos_T *pos, colnr_T wcol) { return coladvance2(wp, pos, true, false, wcol); }
 
-/// Wrapper for coladvance_force callable from Rust (for change crate).
-int nvim_coladvance_force(colnr_T wcol) { return coladvance_force(wcol); }

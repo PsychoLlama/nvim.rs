@@ -175,6 +175,7 @@ extern "C" {
     );
 
     /// Wrapper for `set_valid_virtcol`
+    #[link_name = "set_valid_virtcol"]
     fn nvim_set_valid_virtcol(wp: WinHandle, vcol: i32);
 
     /// Wrapper for `virtual_active(win)`
@@ -258,6 +259,7 @@ extern "C" {
     fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: i32);
 
     /// Wrapper for `mark_mb_adjustpos`
+    #[link_name = "mark_mb_adjustpos"]
     fn nvim_mark_mb_adjustpos(buf: BufHandle, lp: *mut CursorPos);
 
     /// Get vcol range (start and end columns) for `virtualedit`

@@ -73,17 +73,6 @@ void tabstop_fromto(colnr_T start_col, colnr_T end_col, int ts_arg, const colnr_
   *nspcs = result.nspcs;
 }
 
-/// Idem, using "pos".
-static int get_sw_value_pos(buf_T *buf, pos_T *pos, bool left)
-{
-  pos_T save_cursor = curwin->w_cursor;
-
-  curwin->w_cursor = *pos;
-  int sw_value = get_sw_value_col(buf, get_nolist_virtcol(), left);
-  curwin->w_cursor = save_cursor;
-  return sw_value;
-}
-
 // Return the indent of the current line after a number.  Return -1 if no
 // number was found.  Used for 'n' in 'formatoptions': numbered list.
 // Since a pattern is used it can actually handle more than numbers.
