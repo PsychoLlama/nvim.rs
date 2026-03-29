@@ -69,6 +69,9 @@ void channel_destroy(Channel *chan);
 void channel_info_changed(Channel *chan, bool new_chan);
 void channel_terminal_open(buf_T *buf, Channel *chan);
 void term_delayed_free(void **argv);
+void f_prompt_setcallback(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_prompt_setinterrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_prompt_setprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 static inline bool callback_reader_set(CallbackReader reader)
 {

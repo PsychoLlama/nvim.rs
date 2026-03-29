@@ -139,6 +139,19 @@ extern "C" {
     fn rs_stream_is_closed(stream: *mut c_void) -> c_int;
     /// Get pending write requests on a stream. Defined in event crate.
     fn rs_stream_get_pending_reqs(stream: *mut c_void) -> usize;
+
+    // --- Phase 5 FFI ---
+
+    /// Check if in secure mode (sandbox). Defined in Rust (ex_cmds crate).
+    fn rs_check_secure() -> c_int;
+    /// Get a buffer from a typval. Defined in eval/funcs.c.
+    fn tv_get_buf(tv: *mut c_void, curtab_only: c_int) -> *mut c_void;
+    /// Get a string from a typval. Defined in eval/typval.c.
+    fn tv_get_string(tv: *const c_void) -> *const std::ffi::c_char;
+    /// Build a Callback from a typval. Defined in Rust (eval crate).
+    fn rs_callback_from_typval(callback: *mut CallbackT, arg: *const c_void) -> bool;
+    /// Duplicate a string. Defined in memory.c.
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
 }
 
 // =============================================================================
@@ -1039,6 +1052,161 @@ unsafe extern "C" fn term_close(data: *mut c_void) {
     proc_stop(proc_ptr);
     let event = make_event(term_delayed_free as _, chan.cast());
     multiqueue_put_event((*chan).events, event);
+}
+
+// =============================================================================
+// Migrated functions (Phase 5): f_prompt_set* VimL functions
+// =============================================================================
+
+// buf_T prompt field offsets (verified by _Static_assert in eval_struct_check.c)
+const BUF_PROMPT_TEXT_OFF: usize = 11152; // char *b_prompt_text
+const BUF_PROMPT_CALLBACK_OFF: usize = 11160; // Callback b_prompt_callback
+const BUF_PROMPT_INTERRUPT_OFF: usize = 11176; // Callback b_prompt_interrupt
+
+// sizeof(typval_T) = 16 (verified by _Static_assert in eval_struct_check.c)
+const TYPVAL_SIZE: usize = 16;
+
+// VAR_STRING = 2
+const VAR_STRING: c_int = 2;
+
+/// Helper: get pointer to buf_T b_prompt_text field.
+#[inline]
+unsafe fn buf_prompt_text(buf: *mut c_void) -> *mut *mut std::ffi::c_char {
+    buf.cast::<u8>().add(BUF_PROMPT_TEXT_OFF).cast()
+}
+
+/// Helper: get pointer to buf_T b_prompt_callback field (CallbackT, 16 bytes).
+#[inline]
+unsafe fn buf_prompt_callback(buf: *mut c_void) -> *mut CallbackT {
+    buf.cast::<u8>().add(BUF_PROMPT_CALLBACK_OFF).cast()
+}
+
+/// Helper: get pointer to buf_T b_prompt_interrupt field (CallbackT, 16 bytes).
+#[inline]
+unsafe fn buf_prompt_interrupt(buf: *mut c_void) -> *mut CallbackT {
+    buf.cast::<u8>().add(BUF_PROMPT_INTERRUPT_OFF).cast()
+}
+
+/// "prompt_setcallback({buffer}, {callback})" VimL function.
+///
+/// # Safety
+///
+/// `argvars` must point to at least 2 valid `typval_T` values.
+#[no_mangle]
+pub unsafe extern "C" fn f_prompt_setcallback(
+    argvars: *mut c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if rs_check_secure() != 0 {
+        return;
+    }
+    let buf = tv_get_buf(argvars, 0);
+    if buf.is_null() {
+        return;
+    }
+
+    // argvars[1] is at offset TYPVAL_SIZE; read fields unaligned to satisfy clippy.
+    let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE);
+    let arg1_vtype = std::ptr::read_unaligned(arg1.cast::<c_int>());
+    // vval is at offset 8 within typval_T; it's a union whose first member is a pointer
+    let arg1_vstring = std::ptr::read_unaligned(arg1.add(8).cast::<*mut std::ffi::c_char>());
+
+    let mut prompt_callback = CallbackT {
+        data: nvim_eval::typval::CallbackData {
+            partial: std::ptr::null_mut(),
+        },
+        cb_type: 0, // kCallbackNone
+        _pad: [0u8; 4],
+    };
+
+    // if argvars[1].v_type != VAR_STRING || *argvars[1].vval.v_string != NUL
+    // (VAR_STRING guarantees v_string is not null in Neovim)
+    if (arg1_vtype != VAR_STRING || *arg1_vstring != 0)
+        && !rs_callback_from_typval(
+            &raw mut prompt_callback,
+            argvars.cast::<u8>().add(TYPVAL_SIZE).cast(),
+        )
+    {
+        return;
+    }
+
+    callback_free(buf_prompt_callback(buf));
+    // Write the callback struct (16 bytes) using write_unaligned
+    std::ptr::write_unaligned(buf_prompt_callback(buf), prompt_callback);
+}
+
+/// "prompt_setinterrupt({buffer}, {callback})" VimL function.
+///
+/// # Safety
+///
+/// `argvars` must point to at least 2 valid `typval_T` values.
+#[no_mangle]
+pub unsafe extern "C" fn f_prompt_setinterrupt(
+    argvars: *mut c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if rs_check_secure() != 0 {
+        return;
+    }
+    let buf = tv_get_buf(argvars, 0);
+    if buf.is_null() {
+        return;
+    }
+
+    let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE);
+    let arg1_vtype = std::ptr::read_unaligned(arg1.cast::<c_int>());
+    let arg1_vstring = std::ptr::read_unaligned(arg1.add(8).cast::<*mut std::ffi::c_char>());
+
+    let mut interrupt_callback = CallbackT {
+        data: nvim_eval::typval::CallbackData {
+            partial: std::ptr::null_mut(),
+        },
+        cb_type: 0, // kCallbackNone
+        _pad: [0u8; 4],
+    };
+
+    if (arg1_vtype != VAR_STRING || *arg1_vstring != 0)
+        && !rs_callback_from_typval(
+            &raw mut interrupt_callback,
+            argvars.cast::<u8>().add(TYPVAL_SIZE).cast(),
+        )
+    {
+        return;
+    }
+
+    callback_free(buf_prompt_interrupt(buf));
+    std::ptr::write_unaligned(buf_prompt_interrupt(buf), interrupt_callback);
+}
+
+/// "prompt_setprompt({buffer}, {text})" VimL function.
+///
+/// # Safety
+///
+/// `argvars` must point to at least 2 valid `typval_T` values.
+#[no_mangle]
+pub unsafe extern "C" fn f_prompt_setprompt(
+    argvars: *mut c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if rs_check_secure() != 0 {
+        return;
+    }
+    let buf = tv_get_buf(argvars, 0);
+    if buf.is_null() {
+        return;
+    }
+
+    let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast();
+    let text = tv_get_string(arg1);
+
+    // xfree(buf->b_prompt_text); buf->b_prompt_text = xstrdup(text);
+    let old_text = std::ptr::read_unaligned(buf_prompt_text(buf));
+    xfree(old_text.cast());
+    let new_text = xstrdup(text);
+    std::ptr::write_unaligned(buf_prompt_text(buf), new_text);
 }
 
 // =============================================================================

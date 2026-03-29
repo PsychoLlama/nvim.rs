@@ -736,65 +736,6 @@ Array channel_all_info(Arena *arena)
   return ret;
 }
 
-/// "prompt_setcallback({buffer}, {callback})" function
-void f_prompt_setcallback(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  Callback prompt_callback = { .type = kCallbackNone };
-
-  if (rs_check_secure()) {
-    return;
-  }
-  buf_T *buf = tv_get_buf(&argvars[0], false);
-  if (buf == NULL) {
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_STRING || *argvars[1].vval.v_string != NUL) {
-    if (!rs_callback_from_typval(&prompt_callback, &argvars[1])) {
-      return;
-    }
-  }
-
-  callback_free(&buf->b_prompt_callback);
-  buf->b_prompt_callback = prompt_callback;
-}
-
-/// "prompt_setinterrupt({buffer}, {callback})" function
-void f_prompt_setinterrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  Callback interrupt_callback = { .type = kCallbackNone };
-
-  if (rs_check_secure()) {
-    return;
-  }
-  buf_T *buf = tv_get_buf(&argvars[0], false);
-  if (buf == NULL) {
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_STRING || *argvars[1].vval.v_string != NUL) {
-    if (!rs_callback_from_typval(&interrupt_callback, &argvars[1])) {
-      return;
-    }
-  }
-
-  callback_free(&buf->b_prompt_interrupt);
-  buf->b_prompt_interrupt = interrupt_callback;
-}
-
-/// "prompt_setprompt({buffer}, {text})" function
-void f_prompt_setprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()) {
-    return;
-  }
-  buf_T *buf = tv_get_buf(&argvars[0], false);
-  if (buf == NULL) {
-    return;
-  }
-
-  const char *text = tv_get_string(&argvars[1]);
-  xfree(buf->b_prompt_text);
-  buf->b_prompt_text = xstrdup(text);
-}
+// f_prompt_setcallback, f_prompt_setinterrupt, f_prompt_setprompt
+// -- all implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
