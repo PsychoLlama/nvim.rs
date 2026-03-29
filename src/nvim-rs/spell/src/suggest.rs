@@ -5596,6 +5596,127 @@ pub unsafe extern "C" fn rs_suggest_try_soundalike_finish() {
 }
 
 // =============================================================================
+// Phase N: spell_suggest_intern migration
+// =============================================================================
+
+extern "C" {
+    fn vgetc() -> c_int;
+}
+
+/// Score constants for soundfold-based suggestion passes.
+const SCORE_SFMAX1: c_int = 200;
+const SCORE_SFMAX2: c_int = 300;
+const SCORE_SFMAX3: c_int = 400;
+
+/// How many suggestions to keep during accumulation.
+/// Matches C macro: SUG_CLEAN_COUNT(su)
+#[inline]
+unsafe fn sug_clean_count(su: *mut std::ffi::c_void) -> c_int {
+    let maxcount = nvim_suginfo_get_maxcount(su);
+    if maxcount < 130 {
+        150
+    } else {
+        maxcount + 20
+    }
+}
+
+/// Rust implementation of C `spell_suggest_intern`.
+///
+/// Orchestrates suggestion generation: loads .sug files, tries special cases,
+/// change-based matching, and sound-alike matching based on `sps_flags`.
+///
+/// # Safety
+/// `su` must be a valid suginfo_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_suggest_intern(su: *mut std::ffi::c_void, interactive: bool) {
+    // Load the .sug file(s) that are available and not done yet.
+    crate::spellfile::rs_suggest_load_files();
+
+    // 1. Try special cases, such as repeating a word: "the the" -> "the".
+    rs_suggest_try_special(su);
+
+    // 2. Try inserting/deleting/swapping/changing a letter, use REP entries
+    //    from the .aff file and inserting a space (split the word).
+    rs_suggest_try_change(su);
+
+    let sps_flags = nvim_spellsug_get_sps_flags();
+
+    // For the resulting top-scorers compute the sound-a-like score.
+    if sps_flags & SPS_DOUBLE != 0 {
+        rs_score_comp_sal(su);
+    }
+
+    // 3. Try finding sound-a-like words.
+    if sps_flags & SPS_FAST == 0 {
+        if sps_flags & SPS_BEST != 0 {
+            // Adjust the word score for the suggestions found so far for how
+            // they sound like.
+            rs_rescore_suggestions(su);
+        }
+
+        // While going through the soundfold tree "su_maxscore" is the score
+        // for the soundfold word, limits the changes that are being tried,
+        // and "su_sfmaxscore" the rescored score, which is set by
+        // cleanup_suggestions().
+        // First find words with a small edit distance, because this is much
+        // faster and often already finds the top-N suggestions.  If we didn't
+        // find enough suggestions try again with a higher edit distance.
+        rs_suggest_try_soundalike_prep();
+        nvim_suginfo_set_maxscore(su, SCORE_SFMAX1);
+        nvim_suginfo_set_sfmaxscore(su, SCORE_MAXINIT * 3);
+        rs_suggest_try_soundalike(su);
+        let ga = nvim_suginfo_get_ga(su);
+        if (*ga).ga_len < sug_clean_count(su) {
+            // We didn't find enough matches, try again, allowing more
+            // changes to the soundfold word.
+            nvim_suginfo_set_maxscore(su, SCORE_SFMAX2);
+            rs_suggest_try_soundalike(su);
+            let ga2 = nvim_suginfo_get_ga(su);
+            if (*ga2).ga_len < sug_clean_count(su) {
+                // Still didn't find enough matches, try again, allowing even
+                // more changes to the soundfold word.
+                nvim_suginfo_set_maxscore(su, SCORE_SFMAX3);
+                rs_suggest_try_soundalike(su);
+            }
+        }
+        let sfmaxscore = nvim_suginfo_get_sfmaxscore(su);
+        nvim_suginfo_set_maxscore(su, sfmaxscore);
+        rs_suggest_try_soundalike_finish();
+    }
+
+    // When CTRL-C was hit while searching do show the results.  Only clear
+    // got_int when using a command, not for spellsuggest().
+    os_breakcheck();
+    if interactive && crate::got_int {
+        vgetc();
+        crate::got_int = false;
+    }
+
+    if sps_flags & SPS_DOUBLE == 0 {
+        let ga = nvim_suginfo_get_ga(su);
+        if (*ga).ga_len != 0 {
+            if sps_flags & SPS_BEST != 0 {
+                // Adjust the word score for how it sounds like.
+                rs_rescore_suggestions(su);
+            }
+
+            // Remove bogus suggestions, sort and truncate at "maxcount".
+            let ga = nvim_suginfo_get_ga(su);
+            let data = (*ga).ga_data.cast::<CSuggestT>();
+            let len_ptr = std::ptr::addr_of_mut!((*ga).ga_len);
+            let su_badptr = nvim_suginfo_get_badptr(su);
+            rs_check_suggestions(data, len_ptr, su_badptr);
+            let ga = nvim_suginfo_get_ga(su);
+            let data = (*ga).ga_data.cast::<CSuggestT>();
+            let len_ptr = std::ptr::addr_of_mut!((*ga).ga_len);
+            let maxscore = nvim_suginfo_get_maxscore(su);
+            let maxcount = nvim_suginfo_get_maxcount(su);
+            rs_cleanup_suggestions(data, len_ptr, maxscore, maxcount);
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

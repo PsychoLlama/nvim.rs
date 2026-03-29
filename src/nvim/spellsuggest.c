@@ -86,11 +86,6 @@ typedef struct {
 
 #define SUG(ga, i) (((suggest_T *)(ga).ga_data)[i])
 
-// Keep more suggestions than displayed; rescore_suggestions() may change scores.
-#define SUG_CLEAN_COUNT(su)    ((su)->su_maxcount < 130 ? 150 : (su)->su_maxcount + 20)
-// Threshold for sorting/cleanup: don't accumulate suggestions beyond this.
-#define SUG_MAX_COUNT(su)       (SUG_CLEAN_COUNT(su) + 50)
-
 // score for various changes
 enum {
   SCORE_SPLIT = 149,     // split bad word
@@ -117,15 +112,6 @@ enum {
   SCORE_FILE = 30,      // suggestion from a file
   SCORE_MAXINIT = 350,  // Initial maximum score: higher == slower.
                         // 350 allows for about three changes.
-};
-
-// When trying changed soundfold words it becomes slow when trying more than
-// two changes.  With less than two changes it's slightly faster but we miss a
-// few good suggestions.  In rare cases we need to try three of four changes.
-enum {
-  SCORE_SFMAX1 = 200,  // maximum score for first try
-  SCORE_SFMAX2 = 300,  // maximum score for second try
-  SCORE_SFMAX3 = 400,  // maximum score for third try
 };
 
 static int spell_suggest_timeout = 5000;
@@ -184,13 +170,7 @@ extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int
                               int score, int altscore, bool had_bonus, slang_T *slang,
                               bool maxsf);
 extern void rs_add_banned(void *su, char *word);
-extern void rs_rescore_suggestions(void *su);
-extern void rs_suggest_try_special(void *su);
-extern void rs_suggest_try_change(void *su);
-extern void rs_suggest_try_soundalike_prep(void);
-extern void rs_suggest_try_soundalike(void *su);
-extern void rs_suggest_try_soundalike_finish(void);
-extern void rs_score_comp_sal(void *su);
+extern void rs_spell_suggest_intern(void *su, bool interactive);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -558,7 +538,7 @@ static void spell_find_suggest(char *badptr, int badlen, suginfo_T *su, int maxc
       spell_suggest_timeout = atoi(buf + 8);
     } else if (!did_intern) {
       // Use internal method once.
-      spell_suggest_intern(su, interactive);
+      rs_spell_suggest_intern(su, interactive);
       if (sps_flags & SPS_DOUBLE) {
         do_combine = true;
       }
@@ -651,84 +631,6 @@ static void spell_suggest_file(suginfo_T *su, char *fname)
   rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
   rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
                          su->su_maxscore, su->su_maxcount);
-}
-
-/// Find suggestions for the internal method indicated by "sps_flags".
-static void spell_suggest_intern(suginfo_T *su, bool interactive)
-{
-  // Load the .sug file(s) that are available and not done yet.
-  suggest_load_files();
-
-  // 1. Try special cases, such as repeating a word: "the the" -> "the".
-  //
-  // Set a maximum score to limit the combination of operations that is
-  // tried.
-  rs_suggest_try_special(su);
-
-  // 2. Try inserting/deleting/swapping/changing a letter, use REP entries
-  //    from the .aff file and inserting a space (split the word).
-  rs_suggest_try_change(su);
-
-  // For the resulting top-scorers compute the sound-a-like score.
-  if (sps_flags & SPS_DOUBLE) {
-    rs_score_comp_sal(su);
-  }
-
-  // 3. Try finding sound-a-like words.
-  if ((sps_flags & SPS_FAST) == 0) {
-    if (sps_flags & SPS_BEST) {
-      // Adjust the word score for the suggestions found so far for how
-      // they sounds like.
-      rs_rescore_suggestions(su);
-    }
-
-    // While going through the soundfold tree "su_maxscore" is the score
-    // for the soundfold word, limits the changes that are being tried,
-    // and "su_sfmaxscore" the rescored score, which is set by
-    // cleanup_suggestions().
-    // First find words with a small edit distance, because this is much
-    // faster and often already finds the top-N suggestions.  If we didn't
-    // find many suggestions try again with a higher edit distance.
-    // "sl_sounddone" is used to avoid doing the same word twice.
-    rs_suggest_try_soundalike_prep();
-    su->su_maxscore = SCORE_SFMAX1;
-    su->su_sfmaxscore = SCORE_MAXINIT * 3;
-    rs_suggest_try_soundalike(su);
-    if (su->su_ga.ga_len < SUG_CLEAN_COUNT(su)) {
-      // We didn't find enough matches, try again, allowing more
-      // changes to the soundfold word.
-      su->su_maxscore = SCORE_SFMAX2;
-      rs_suggest_try_soundalike(su);
-      if (su->su_ga.ga_len < SUG_CLEAN_COUNT(su)) {
-        // Still didn't find enough matches, try again, allowing even
-        // more changes to the soundfold word.
-        su->su_maxscore = SCORE_SFMAX3;
-        rs_suggest_try_soundalike(su);
-      }
-    }
-    su->su_maxscore = su->su_sfmaxscore;
-    rs_suggest_try_soundalike_finish();
-  }
-
-  // When CTRL-C was hit while searching do show the results.  Only clear
-  // got_int when using a command, not for spellsuggest().
-  os_breakcheck();
-  if (interactive && got_int) {
-    vgetc();
-    got_int = false;
-  }
-
-  if ((sps_flags & SPS_DOUBLE) == 0 && su->su_ga.ga_len != 0) {
-    if (sps_flags & SPS_BEST) {
-      // Adjust the word score for how it sounds like.
-      rs_rescore_suggestions(su);
-    }
-
-    // Remove bogus suggestions, sort and truncate at "maxcount".
-    rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
-    rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
-                           su->su_maxscore, su->su_maxcount);
-  }
 }
 
 /// Free the info put in "*su" by spell_find_suggest().
