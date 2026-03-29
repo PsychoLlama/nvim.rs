@@ -250,7 +250,6 @@ extern "C" {
     );
 
     // operators (still in C)
-    fn op_shift(oap: *mut OpargT, curs_top: c_int, amount: c_int);
     fn op_delete(oap: *mut OpargT) -> c_int;
     fn op_yank(oap: *mut OpargT, message: bool);
     fn op_change(oap: *mut OpargT) -> c_int;
@@ -849,7 +848,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             } else {
                 1
             };
-            op_shift(oap, 1, count1);
+            crate::op_shift::rs_op_shift(oap.cast(), 1, count1);
             auto_format(false, true);
         }
 
