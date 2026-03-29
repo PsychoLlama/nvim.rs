@@ -347,72 +347,7 @@ void mb_check_adjust_col(void *win_)
 
 // enc_canonize and enc_alias_search are implemented in Rust.
 
-#ifdef HAVE_LANGINFO_H
-# include <langinfo.h>
-#endif
-
-// Get the canonicalized encoding of the current locale.
-// Returns an allocated string when successful, NULL when not.
-char *enc_locale(void)
-{
-  int i;
-  char buf[50];
-
-  const char *s;
-
-#ifdef HAVE_NL_LANGINFO_CODESET
-  if (!(s = nl_langinfo(CODESET)) || *s == NUL)
-#endif
-  {
-    if (!(s = setlocale(LC_CTYPE, NULL)) || *s == NUL) {
-      if ((s = os_getenv_noalloc("LC_ALL"))) {
-        if ((s = os_getenv_noalloc("LC_CTYPE"))) {
-          s = os_getenv_noalloc("LANG");
-        }
-      }
-    }
-  }
-
-  if (!s) {
-    return NULL;
-  }
-
-  // The most generic locale format is:
-  // language[_territory][.codeset][@modifier][+special][,[sponsor][_revision]]
-  // If there is a '.' remove the part before it.
-  // if there is something after the codeset, remove it.
-  // Make the name lowercase and replace '_' with '-'.
-  // Exception: "ja_JP.EUC" == "euc-jp", "zh_CN.EUC" = "euc-cn",
-  // "ko_KR.EUC" == "euc-kr"
-  const char *p = vim_strchr(s, '.');
-  if (p != NULL) {
-    if (p > s + 2 && !STRNICMP(p + 1, "EUC", 3)
-        && !isalnum((uint8_t)p[4]) && p[4] != '-' && p[-3] == '_') {
-      // Copy "XY.EUC" to "euc-XY" to buf[10].
-      memmove(buf, "euc-", 4);
-      buf[4] = (char)(ASCII_ISALNUM(p[-2]) ? TOLOWER_ASC(p[-2]) : 0);
-      buf[5] = (char)(ASCII_ISALNUM(p[-1]) ? TOLOWER_ASC(p[-1]) : 0);
-      buf[6] = NUL;
-    } else {
-      s = p + 1;
-      goto enc_locale_copy_enc;
-    }
-  } else {
-enc_locale_copy_enc:
-    for (i = 0; i < (int)sizeof(buf) - 1 && s[i] != NUL; i++) {
-      if (s[i] == '_' || s[i] == '-') {
-        buf[i] = '-';
-      } else if (ASCII_ISALNUM((uint8_t)s[i])) {
-        buf[i] = (char)TOLOWER_ASC(s[i]);
-      } else {
-        break;
-      }
-    }
-    buf[i] = NUL;
-  }
-
-  return enc_canonize(buf);
-}
+// enc_locale is implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 // my_iconv_open and iconv_string are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 

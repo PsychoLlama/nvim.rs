@@ -4955,6 +4955,123 @@ const FAIL: c_int = 0;
 const NUL: u8 = 0;
 
 // ============================================================================
+// enc_locale (Phase 3)
+// ============================================================================
+
+extern "C" {
+    /// Get an environment variable without allocating.
+    #[link_name = "os_getenv_noalloc"]
+    fn c_os_getenv_noalloc(name: *const c_char) -> *const c_char;
+}
+
+/// Get the canonicalized encoding of the current locale.
+/// Returns an `xmalloc`'d string when successful, NULL when not.
+/// Mirrors C `enc_locale`.
+///
+/// # Safety
+/// Calls locale/env functions; safe in single-threaded context.
+#[unsafe(export_name = "enc_locale")]
+pub unsafe extern "C" fn rs_enc_locale() -> *mut c_char {
+    let s: *const c_char;
+
+    // Try nl_langinfo(CODESET) first (HAVE_NL_LANGINFO_CODESET is always set on Linux).
+    let codeset = libc::nl_langinfo(libc::CODESET);
+    if !codeset.is_null() && *codeset != 0 {
+        s = codeset;
+    } else {
+        // Fallback: try setlocale(LC_CTYPE, NULL).
+        let locale = libc::setlocale(libc::LC_CTYPE, std::ptr::null());
+        if !locale.is_null() && *locale != 0 {
+            s = locale;
+        } else {
+            // Fallback: try environment variables LC_ALL -> LC_CTYPE -> LANG.
+            let lc_all = c_os_getenv_noalloc(c"LC_ALL".as_ptr());
+            if lc_all.is_null() {
+                return std::ptr::null_mut();
+            }
+            let lc_ctype = c_os_getenv_noalloc(c"LC_CTYPE".as_ptr());
+            if lc_ctype.is_null() {
+                s = lc_all;
+            } else {
+                let lang = c_os_getenv_noalloc(c"LANG".as_ptr());
+                s = lang;
+            }
+        }
+    }
+
+    if s.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Convert C string to byte slice for processing.
+    let s_bytes = std::ffi::CStr::from_ptr(s).to_bytes();
+
+    // Buffer for the result (50 bytes like the C code).
+    let mut buf = [0u8; 50];
+
+    // Look for a '.' in the string.
+    let dot_pos = s_bytes.iter().position(|&b| b == b'.');
+
+    let copy_src: &[u8] = if let Some(dot_idx) = dot_pos {
+        let p_plus_1 = &s_bytes[dot_idx + 1..];
+        // Check for "XY.EUC" special case:
+        //   p > s + 2  =>  dot_idx > 2
+        //   p[-3] == '_'  =>  s_bytes[dot_idx - 3] == '_'
+        //   !STRNICMP(p + 1, "EUC", 3)  =>  p_plus_1 starts with "EUC" (case-insensitive)
+        //   !isalnum(p[4])  =>  s_bytes[dot_idx + 4] is not alnum
+        //   p[4] != '-'     =>  s_bytes[dot_idx + 4] != '-'
+        let euc_special = dot_idx >= 3
+            && s_bytes[dot_idx - 3] == b'_'
+            && p_plus_1.len() >= 3
+            && p_plus_1[..3].eq_ignore_ascii_case(b"EUC")
+            && (p_plus_1.len() < 4
+                || (!p_plus_1[3].is_ascii_alphanumeric() && p_plus_1[3] != b'-'));
+
+        if euc_special {
+            // Build "euc-XY"
+            buf[0] = b'e';
+            buf[1] = b'u';
+            buf[2] = b'c';
+            buf[3] = b'-';
+            buf[4] = if s_bytes[dot_idx - 2].is_ascii_alphanumeric() {
+                s_bytes[dot_idx - 2].to_ascii_lowercase()
+            } else {
+                0
+            };
+            buf[5] = if s_bytes[dot_idx - 1].is_ascii_alphanumeric() {
+                s_bytes[dot_idx - 1].to_ascii_lowercase()
+            } else {
+                0
+            };
+            buf[6] = 0;
+            // Return canonized form of buf.
+            return rs_enc_canonize(buf.as_ptr().cast());
+        }
+        // Use the part after '.'
+        p_plus_1
+    } else {
+        s_bytes
+    };
+
+    // Copy and normalize: lowercase, replace '_'/'-' with '-', stop at non-alnum/non-separator.
+    let mut i = 0usize;
+    while i < buf.len() - 1 && i < copy_src.len() {
+        let b = copy_src[i];
+        if b == b'_' || b == b'-' {
+            buf[i] = b'-';
+        } else if b.is_ascii_alphanumeric() {
+            buf[i] = b.to_ascii_lowercase();
+        } else {
+            break;
+        }
+        i += 1;
+    }
+    buf[i] = 0;
+
+    rs_enc_canonize(buf.as_ptr().cast())
+}
+
+// ============================================================================
 // convert_setup, convert_setup_ext, string_convert, string_convert_ext (Phase 2)
 // ============================================================================
 

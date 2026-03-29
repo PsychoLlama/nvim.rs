@@ -117,6 +117,7 @@ extern schar_T utfc_ptrlen2schar(const char *p, int len, int *firstc);
 extern int rs_utf_is_trail_byte(int byte);
 extern char *enc_canonize(char *enc);
 extern void *my_iconv_open(char *to, char *from);
+extern char *enc_locale(void);
 extern int convert_setup(vimconv_T *vcp, char *from, char *to);
 extern int convert_setup_ext(vimconv_T *vcp, char *from, bool from_unicode_is_utf8, char *to, bool to_unicode_is_utf8);
 extern char *string_convert(const vimconv_T *vcp, char *ptr, size_t *lenp);
