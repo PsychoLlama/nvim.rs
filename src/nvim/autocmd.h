@@ -97,6 +97,7 @@ extern char *old_termresponse; ///< saved value of v:termresponse
 void augroup_del(char *name, bool stupid_legacy_mode);
 void ex_doautoall(exarg_T *eap);
 void do_autocmd_uienter(uint64_t chanid, bool attached);
+void may_trigger_vim_suspend_resume(bool suspend);
 void block_autocmds(void);
 void unblock_autocmds(void);
 bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf);

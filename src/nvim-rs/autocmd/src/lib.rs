@@ -63,6 +63,14 @@ pub struct AutoPatInfo {
     pub pat_id: usize,
 }
 
+/// Mirrors C `Event` struct from `event/defs.h` for passing to `multiqueue_put_event`.
+/// Only used for the vimresume deferred event (no argv needed).
+#[repr(C)]
+pub struct VimResumeEvent {
+    pub handler: Option<unsafe extern "C" fn(*mut *mut c_void)>,
+    pub argv: [*mut c_void; 10],
+}
+
 /// Combined handler info returned by `nvim_autocmd_get_handler_info`.
 /// Matches the C `AutoHandlerInfo` typedef in `autocmd.c`.
 #[repr(C)]
@@ -218,6 +226,11 @@ extern "C" {
     fn rs_augroup_add(name: *const c_char) -> c_int;
     #[link_name = "augroup_name"]
     fn rs_augroup_name(group: c_int) -> *const c_char;
+
+    // Phase 4: may_trigger_vim_suspend_resume dependencies
+    fn multiqueue_put_event(mq: *mut c_void, event: VimResumeEvent);
+    fn rs_loop_get_events(lp: *mut c_void) -> *mut c_void;
+    static main_loop: [u8; 0]; // accessed only as pointer
 
     // Phase 3: do_autocmd_uienter dependencies
     fn nvim_get_starting() -> c_int;
@@ -1822,6 +1835,67 @@ pub unsafe extern "C" fn rs_do_autocmd_uienter(chanid: u64, attached: bool) {
 
     restore_v_event(dict, save_buf.as_mut_ptr().cast::<c_void>());
     UIENTER_RECURSIVE.store(false, Ordering::Relaxed);
+}
+
+// Phase 4: may_trigger_vim_suspend_resume + vimresume_event
+
+const EVENT_VIMRESUME: c_int = 133;
+const EVENT_VIMSUSPEND: c_int = 134;
+
+/// TriState values matching the C `TriState` enum.
+/// kFalse=0: VimSuspend should be triggered next.
+/// kTrue=1:  VimResume should be triggered next.
+/// kNone=2:  Currently triggering VimSuspend or VimResume.
+const TRISTATE_FALSE: u8 = 0;
+const TRISTATE_TRUE: u8 = 1;
+const TRISTATE_NONE: u8 = 2;
+
+static PENDING_VIMRESUME: std::sync::atomic::AtomicU8 =
+    std::sync::atomic::AtomicU8::new(TRISTATE_FALSE);
+
+/// Deferred callback: trigger VimResume autocommand from the event queue.
+///
+/// # Safety
+/// Called from the main event loop. No argv is used.
+unsafe extern "C" fn rs_vimresume_event(_argv: *mut *mut c_void) {
+    rs_apply_autocmds(
+        EVENT_VIMRESUME,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        false,
+        std::ptr::null_mut(),
+    );
+    PENDING_VIMRESUME.store(TRISTATE_FALSE, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Trigger VimSuspend or VimResume autocommand.
+///
+/// # Safety
+/// Calls into C. Must be called from the main Neovim thread.
+#[unsafe(export_name = "may_trigger_vim_suspend_resume")]
+pub unsafe extern "C" fn rs_may_trigger_vim_suspend_resume(suspend: bool) {
+    use std::sync::atomic::Ordering;
+
+    let state = PENDING_VIMRESUME.load(Ordering::Relaxed);
+    if suspend && state == TRISTATE_FALSE {
+        PENDING_VIMRESUME.store(TRISTATE_NONE, Ordering::Relaxed);
+        rs_apply_autocmds(
+            EVENT_VIMSUSPEND,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            false,
+            std::ptr::null_mut(),
+        );
+        PENDING_VIMRESUME.store(TRISTATE_TRUE, Ordering::Relaxed);
+    } else if !suspend && state == TRISTATE_TRUE {
+        PENDING_VIMRESUME.store(TRISTATE_NONE, Ordering::Relaxed);
+        let mq = rs_loop_get_events((&raw const main_loop).cast::<u8>().cast_mut().cast());
+        let event = VimResumeEvent {
+            handler: Some(rs_vimresume_event),
+            argv: [std::ptr::null_mut(); 10],
+        };
+        multiqueue_put_event(mq, event);
+    }
 }
 
 // Phase 3: Migrated event trigger functions
