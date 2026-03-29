@@ -2,6 +2,8 @@
 //!
 //! This module provides helpers for working with autocommand groups,
 //! including group creation, deletion, and membership tracking.
+//!
+//! Group map state (name→id, id→name) is owned entirely in Rust.
 
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_safety_doc)]
@@ -10,22 +12,141 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::if_same_then_else)]
 #![allow(clippy::manual_range_contains)]
+// Neovim is single-threaded; mutable statics are safe in this context.
+#![allow(static_mut_refs)]
 
-use std::ffi::{c_char, c_int};
+use std::collections::HashMap;
+use std::ffi::{c_char, c_int, CString};
+use std::sync::OnceLock;
 
 /// Deleted group sentinel value.
 pub const AUGROUP_DELETED: c_int = -4;
 
-// C accessors for group map operations
+// =============================================================================
+// Rust-owned group map state
+// =============================================================================
+
+/// Name → ID map. Owned by Rust.
+// SAFETY: Neovim is single-threaded; all access is from the main thread.
+static mut AUGROUP_NAME_TO_ID: Option<HashMap<String, c_int>> = None;
+/// ID → name map. CString values have stable heap addresses even when HashMap reallocs.
+/// This is critical: callers receive `*const c_char` pointers that must remain valid.
+static mut AUGROUP_ID_TO_NAME: Option<HashMap<c_int, CString>> = None;
+/// Next group ID counter.
+static mut NEXT_AUGROUP_ID: c_int = 1;
+/// Lazy-init translated "--Deleted--" sentinel.
+static DELETED_AUGROUP: OnceLock<CString> = OnceLock::new();
+
+// C functions needed for map operations
 extern "C" {
-    fn nvim_augroup_name_to_id(name: *const c_char) -> c_int;
-    fn nvim_augroup_id_to_name(id: c_int) -> *const c_char;
-    fn nvim_augroup_put(name: *const c_char, id: c_int);
-    fn nvim_augroup_map_del_c(id: c_int, name: *const c_char);
-    fn nvim_get_next_augroup_id() -> c_int;
-    fn nvim_inc_next_augroup_id() -> c_int;
-    fn nvim_get_deleted_augroup() -> *const c_char;
+    fn gettext(msgid: *const c_char) -> *const c_char;
     static mut current_augroup: c_int;
+    // Messaging
+    fn msg_start();
+    fn msg_end();
+    fn msg_clr_eos();
+    fn msg_puts(s: *const c_char);
+    fn msg_ext_set_kind(kind: *const c_char);
+    // Error/warning reporting
+    fn nvim_autocmd_semsg_str(fmt: *const c_char, arg: *const c_char);
+    #[link_name = "emsg"]
+    fn group_emsg(msg: *const c_char);
+    fn give_warning(message: *const c_char, hl: bool);
+    // Autocmd ops used by augroup_del
+    fn nvim_autocmd_get_pat_info(event: c_int, idx: usize) -> crate::AutoPatInfo;
+    fn nvim_get_autocmds_count(event: c_int) -> usize;
+    fn nvim_autocmd_del_at(event: c_int, idx: usize);
+    // au_cleanup exported from lib.rs under C name
+    #[link_name = "au_cleanup"]
+    fn group_au_cleanup();
+}
+
+#[inline]
+fn name_to_id_map() -> &'static mut HashMap<String, c_int> {
+    // SAFETY: single-threaded
+    unsafe { AUGROUP_NAME_TO_ID.get_or_insert_with(HashMap::new) }
+}
+
+#[inline]
+fn id_to_name_map() -> &'static mut HashMap<c_int, CString> {
+    // SAFETY: single-threaded
+    unsafe { AUGROUP_ID_TO_NAME.get_or_insert_with(HashMap::new) }
+}
+
+/// Look up a group id by name. Returns 0 (not found), AUGROUP_DELETED, or a positive ID.
+pub(crate) fn augroup_name_to_id(name: &str) -> c_int {
+    name_to_id_map().get(name).copied().unwrap_or(0)
+}
+
+/// Look up a group name by id. Returns a stable pointer to the NUL-terminated name, or null.
+///
+/// The returned pointer is stable because CString allocates the string separately on the heap.
+/// Even when the HashMap is reallocated on insertion, the CString's string buffer doesn't move.
+pub(crate) fn augroup_id_to_name_ptr(id: c_int) -> *const c_char {
+    id_to_name_map()
+        .get(&id)
+        .map_or(std::ptr::null(), |s| s.as_ptr())
+}
+
+/// Insert a group into both maps. The name→id map uses String keys (for lookup);
+/// the id→name map uses CString values (for stable pointer returns).
+pub(crate) fn augroup_put(name: &str, id: c_int) {
+    name_to_id_map().insert(name.to_owned(), id);
+    let cname = CString::new(name).unwrap_or_default();
+    id_to_name_map().insert(id, cname);
+}
+
+/// Remove a group from both maps.
+pub(crate) fn augroup_map_del(id: c_int, name: Option<&str>) {
+    if let Some(n) = name {
+        name_to_id_map().remove(n);
+    }
+    if id > 0 {
+        id_to_name_map().remove(&id);
+    }
+}
+
+/// Return and increment the next augroup ID counter.
+pub(crate) fn inc_next_augroup_id() -> c_int {
+    // SAFETY: single-threaded
+    unsafe {
+        let id = NEXT_AUGROUP_ID;
+        NEXT_AUGROUP_ID += 1;
+        id
+    }
+}
+
+/// Return the current next augroup ID without incrementing.
+pub(crate) fn next_augroup_id() -> c_int {
+    // SAFETY: single-threaded
+    unsafe { NEXT_AUGROUP_ID }
+}
+
+/// Return a pointer to the translated "--Deleted--" sentinel.
+/// The CString is lazily initialised on first call.
+pub(crate) fn get_deleted_augroup() -> *const c_char {
+    DELETED_AUGROUP
+        .get_or_init(|| {
+            // SAFETY: gettext returns a pointer to a translated string (static or thread-local).
+            // We copy it into an owned CString so the lifetime is 'static.
+            let translated = unsafe {
+                let raw = gettext(c"--Deleted--".as_ptr());
+                std::ffi::CStr::from_ptr(raw).to_string_lossy().into_owned()
+            };
+            CString::new(translated).unwrap_or_else(|_| CString::new("--Deleted--").unwrap())
+        })
+        .as_ptr()
+}
+
+/// Free all group map state. Called from `free_all_autocmds` during EXITFREE.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_free_augroup_maps() {
+    // SAFETY: single-threaded; called during shutdown
+    unsafe {
+        AUGROUP_NAME_TO_ID = None;
+        AUGROUP_ID_TO_NAME = None;
+        NEXT_AUGROUP_ID = 1;
+    }
 }
 
 // =============================================================================
@@ -418,7 +539,8 @@ pub extern "C" fn rs_is_valid_augroup_char(c: c_int) -> c_int {
 /// `name` must be a valid NUL-terminated C string.
 #[unsafe(export_name = "augroup_find")]
 pub unsafe extern "C" fn rs_augroup_find(name: *const c_char) -> c_int {
-    let existing_id = nvim_augroup_name_to_id(name);
+    let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
+    let existing_id = augroup_name_to_id(name_str.as_ref());
     if existing_id == AUGROUP_DELETED {
         return existing_id;
     }
@@ -437,17 +559,18 @@ pub unsafe extern "C" fn rs_augroup_find(name: *const c_char) -> c_int {
 /// `name` must be a valid NUL-terminated C string, and must not be "end".
 #[unsafe(export_name = "augroup_add")]
 pub unsafe extern "C" fn rs_augroup_add(name: *const c_char) -> c_int {
+    let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
     let existing_id = rs_augroup_find(name);
     if existing_id > 0 {
         return existing_id;
     }
 
     if existing_id == AUGROUP_DELETED {
-        nvim_augroup_map_del_c(existing_id, name);
+        augroup_map_del(existing_id, Some(name_str.as_ref()));
     }
 
-    let next_id = nvim_inc_next_augroup_id();
-    nvim_augroup_put(name, next_id);
+    let next_id = inc_next_augroup_id();
+    augroup_put(name_str.as_ref(), next_id);
 
     next_id
 }
@@ -463,32 +586,32 @@ pub unsafe extern "C" fn rs_augroup_add(name: *const c_char) -> c_int {
 #[unsafe(export_name = "augroup_name")]
 pub unsafe extern "C" fn rs_augroup_name(mut group: c_int) -> *const c_char {
     if group == AUGROUP_DELETED {
-        return nvim_get_deleted_augroup();
+        return get_deleted_augroup();
     }
 
     if group == AUGROUP_ALL {
         group = current_augroup;
     }
 
-    let next_id = nvim_get_next_augroup_id();
+    let nid = next_augroup_id();
 
     // "END" is always considered the last augroup ID
-    if group == next_id {
+    if group == nid {
         return c"END".as_ptr();
     }
 
     // Beyond the valid range
-    if group > next_id {
+    if group > nid {
         return std::ptr::null();
     }
 
-    let name = nvim_augroup_id_to_name(group);
-    if !name.is_null() {
-        return name;
+    let name_ptr = augroup_id_to_name_ptr(group);
+    if !name_ptr.is_null() {
+        return name_ptr;
     }
 
     // Not in the map anymore, must have been deleted
-    nvim_get_deleted_augroup()
+    get_deleted_augroup()
 }
 
 /// Check if an autocmd group name exists.
@@ -500,6 +623,87 @@ pub unsafe extern "C" fn rs_augroup_name(mut group: c_int) -> *const c_char {
 #[export_name = "augroup_exists"]
 pub unsafe extern "C" fn rs_augroup_exists(name: *const c_char) -> bool {
     rs_augroup_find(name) > 0
+}
+
+/// Delete the augroup that matches name.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated mutable C string.
+#[unsafe(export_name = "augroup_del")]
+pub unsafe extern "C" fn rs_augroup_del(name: *mut c_char, stupid_legacy_mode: bool) {
+    use crate::NUM_EVENTS;
+
+    let group = rs_augroup_find(name);
+    if group == AUGROUP_ERROR {
+        nvim_autocmd_semsg_str(c"E367: No such group: \"%s\"".as_ptr(), name);
+        return;
+    }
+    if group == current_augroup {
+        group_emsg(c"E936: Cannot delete the current group".as_ptr());
+        return;
+    }
+
+    if stupid_legacy_mode {
+        'outer: {
+            for event in 0..NUM_EVENTS {
+                let size = nvim_get_autocmds_count(event);
+                for i in 0..size {
+                    let info = nvim_autocmd_get_pat_info(event, i);
+                    if info.is_null == 0 && info.group == group {
+                        give_warning(c"W19: Deleting augroup that is still in use".as_ptr(), true);
+                        // Mark the name entry as AUGROUP_DELETED in name→id map
+                        let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
+                        name_to_id_map().insert(name_str.into_owned(), AUGROUP_DELETED);
+                        // Remove from id→name map only
+                        augroup_map_del(info.group, None);
+                        break 'outer;
+                    }
+                }
+            }
+            // No autocmds found: remove the group entirely
+            let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
+            augroup_map_del(group, Some(name_str.as_ref()));
+        }
+    } else {
+        for event in 0..NUM_EVENTS {
+            let size = nvim_get_autocmds_count(event);
+            for i in 0..size {
+                let info = nvim_autocmd_get_pat_info(event, i);
+                if info.is_null == 0 && info.group == group {
+                    nvim_autocmd_del_at(event, i);
+                }
+            }
+        }
+        let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
+        augroup_map_del(group, Some(name_str.as_ref()));
+        group_au_cleanup();
+    }
+}
+
+/// Iterate the augroup name→id map, calling msg_puts for each entry.
+/// Called by `do_augroup` when arg is empty.
+pub(crate) unsafe fn list_group_names() {
+    msg_start();
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+
+    // Collect names to avoid holding mutable borrow during msg_puts
+    let names: Vec<(c_int, String)> = name_to_id_map()
+        .iter()
+        .map(|(k, &v)| (v, k.clone()))
+        .collect();
+
+    for (value, name) in &names {
+        if *value > 0 {
+            let cname = CString::new(name.as_str()).unwrap_or_default();
+            msg_puts(cname.as_ptr());
+        } else {
+            msg_puts(rs_augroup_name(*value));
+        }
+        msg_puts(c"  ".as_ptr());
+    }
+
+    msg_clr_eos();
+    msg_end();
 }
 
 // =============================================================================

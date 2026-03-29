@@ -121,13 +121,6 @@ static const char e_autocommand_nesting_too_deep[]
 // Code for automatic commands.
 static AutoPatCmd *active_apc_list = NULL;  // stack of active autocommands
 
-// ID for associating autocmds created via nvim_create_autocmd
-// Used to delete autocmds from nvim_del_autocmd
-static int next_augroup_id = 1;
-
-// use get_deleted_augroup() to get this
-static const char *deleted_augroup = NULL;
-
 // The ID of the current group.
 int current_augroup = AUGROUP_DEFAULT;
 
@@ -139,33 +132,6 @@ int autocmd_blocked = 0;  // block all autocmds
 
 static bool autocmd_nested = false;
 char *old_termresponse = NULL;
-
-// Map of autocmd group names and ids.
-//  name -> ID
-//  ID -> name
-static Map(String, int) map_augroup_name_to_id = MAP_INIT;
-static Map(int, String) map_augroup_id_to_name = MAP_INIT;
-
-static void augroup_map_del(int id, const char *name)
-{
-  if (name != NULL) {
-    String key;
-    map_del(String, int)(&map_augroup_name_to_id, cstr_as_string(name), &key);
-    api_free_string(key);
-  }
-  if (id > 0) {
-    String mapped = map_del(int, String)(&map_augroup_id_to_name, id, NULL);
-    api_free_string(mapped);
-  }
-}
-
-static inline const char *get_deleted_augroup(void) FUNC_ATTR_ALWAYS_INLINE
-{
-  if (deleted_augroup == NULL) {
-    deleted_augroup = _("--Deleted--");
-  }
-  return deleted_augroup;
-}
 
 // Delete autocommand.
 static void aucmd_del(AutoCmd *ac)
@@ -192,58 +158,8 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
   return &autocmds[(int)event];
 }
 
-/// Delete the augroup that matches name.
-/// @param stupid_legacy_mode bool: This parameter determines whether to run the augroup
-///     deletion in the same fashion as `:augroup! {name}` where if there are any remaining
-///     autocmds left in the augroup, it will change the name of the augroup to `--- DELETED ---`
-///     but leave the autocmds existing. These are _separate_ augroups, so if you do this for
-///     multiple augroups, you will have a bunch of `--- DELETED ---` augroups at the same time.
-///     There is no way, as far as I could tell, how to actually delete them at this point as a user
-///
-///     I did not consider this good behavior, so now when NOT in stupid_legacy_mode, we actually
-///     delete these groups and their commands, like you would expect (and don't leave hanging
-///     `--- DELETED ---` groups around)
-void augroup_del(char *name, bool stupid_legacy_mode)
-{
-  int group = augroup_find(name);
-  if (group == AUGROUP_ERROR) {  // the group doesn't exist
-    semsg(_("E367: No such group: \"%s\""), name);
-    return;
-  } else if (group == current_augroup) {
-    emsg(_("E936: Cannot delete the current group"));
-    return;
-  }
 
-  if (stupid_legacy_mode) {
-    FOR_ALL_AUEVENTS(event) {
-      AutoCmdVec *const acs = &autocmds[(int)event];
-      for (size_t i = 0; i < kv_size(*acs); i++) {
-        AutoPat *const ap = kv_A(*acs, i).pat;
-        if (ap != NULL && ap->group == group) {
-          give_warning(_("W19: Deleting augroup that is still in use"), true);
-          map_put(String, int)(&map_augroup_name_to_id, cstr_as_string(name), AUGROUP_DELETED);
-          augroup_map_del(ap->group, NULL);
-          return;
-        }
-      }
-    }
-  } else {
-    FOR_ALL_AUEVENTS(event) {
-      AutoCmdVec *const acs = &autocmds[(int)event];
-      for (size_t i = 0; i < kv_size(*acs); i++) {
-        AutoCmd *const ac = &kv_A(*acs, i);
-        if (ac->pat != NULL && ac->pat->group == group) {
-          aucmd_del(ac);
-        }
-      }
-    }
-  }
-
-  // Remove the group because it's not currently in use.
-  augroup_map_del(group, name);
-  au_cleanup();
-}
-
+extern void rs_free_augroup_maps(void);
 
 #if defined(EXITFREE)
 void free_all_autocmds(void)
@@ -257,17 +173,7 @@ void free_all_autocmds(void)
     au_need_clean = false;
   }
 
-  // Delete the augroup_map, including free the data
-  String name;
-  map_foreach_key(&map_augroup_name_to_id, name, {
-    api_free_string(name);
-  })
-  map_destroy(String, &map_augroup_name_to_id);
-
-  map_foreach_value(&map_augroup_id_to_name, name, {
-    api_free_string(name);
-  })
-  map_destroy(int, &map_augroup_id_to_name);
+  rs_free_augroup_maps();
 
   // aucmd_win[] is freed in win_free_all()
 }
@@ -1473,30 +1379,6 @@ int nvim_get_event_sign(int event)
 
 const char *nvim_get_p_ei(void) { return p_ei; }
 void nvim_autocmd_set_option_eventignore(const char *val) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(val), 0, SID_NONE); }
-int nvim_augroup_name_to_id(const char *name) { return map_get(String, int)(&map_augroup_name_to_id, cstr_as_string(name)); }
-
-/// Look up group ID → name. Returns NULL if not found.
-const char *nvim_augroup_id_to_name(int id)
-{
-  String key = map_get(int, String)(&map_augroup_id_to_name, id);
-  return key.data;
-}
-
-/// Insert group into both maps (allocates copies of name).
-void nvim_augroup_put(const char *name, int id)
-{
-  String name_key = cstr_to_string(name);
-  String name_val = cstr_to_string(name);
-  map_put(String, int)(&map_augroup_name_to_id, name_key, id);
-  map_put(int, String)(&map_augroup_id_to_name, id, name_val);
-}
-
-/// Delete group from both maps, freeing allocated strings (used by Rust FFI).
-void nvim_augroup_map_del_c(int id, const char *name) { augroup_map_del(id, name); }
-
-int nvim_get_next_augroup_id(void) { return next_augroup_id; }
-int nvim_inc_next_augroup_id(void) { return next_augroup_id++; }
-const char *nvim_get_deleted_augroup(void) { return get_deleted_augroup(); }
 
 /// Delete the autocmd at index `idx` in event `event` (refcount + free).
 void nvim_autocmd_del_at(int event, size_t idx)
@@ -1582,27 +1464,6 @@ void nvim_verbose_buflocal_remove(int event, int bufnr)
     smsg(0, _("auto-removing autocommand: %s <buffer=%d>"), rs_event_nr2name(event, NUM_EVENTS), bufnr);
     verbose_leave();
   }
-}
-
-/// Iterate the augroup name→id map, calling msg_puts for each entry.
-void nvim_autocmd_list_group_names(void)
-{
-  msg_start();
-  msg_ext_set_kind("list_cmd");
-
-  String name;
-  int value;
-  map_foreach(&map_augroup_name_to_id, name, value, {
-    if (value > 0) {
-      msg_puts(name.data);
-    } else {
-      msg_puts(augroup_name(value));
-    }
-    msg_puts("  ");
-  });
-
-  msg_clr_eos();
-  msg_end();
 }
 
 // nvim_skipwhite exists in fold.c

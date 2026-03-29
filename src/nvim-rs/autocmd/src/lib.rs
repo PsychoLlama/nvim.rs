@@ -76,8 +76,6 @@ extern "C" {
     fn nvim_get_event_name(event: c_int) -> *const c_char;
     fn nvim_get_event_sign(event: c_int) -> c_int;
     fn nvim_get_autocmds_count(event: c_int) -> usize;
-    fn nvim_get_next_augroup_id() -> c_int;
-    fn nvim_get_deleted_augroup() -> *const c_char;
 
     // Accessors for aucmd_win array
     fn nvim_get_aucmd_win_count() -> c_int;
@@ -115,7 +113,6 @@ extern "C" {
     fn nvim_verbose_buflocal_remove(event: c_int, bufnr: c_int);
 
     // Phase 5: :augroup command + arg parsing accessors
-    fn nvim_autocmd_list_group_names();
     #[link_name = "emsg"]
     fn nvim_autocmd_emsg(msg: *const c_char);
     fn nvim_autocmd_semsg_str(fmt: *const c_char, arg: *const c_char);
@@ -640,12 +637,7 @@ pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
         if *arg == 0 {
             nvim_autocmd_emsg(E_ARGREQ.as_ptr());
         } else {
-            // augroup_del is still in C (not yet migrated)
-            // We call it through the C wrapper
-            extern "C" {
-                fn augroup_del(name: *mut c_char, stupid_legacy_mode: bool);
-            }
-            augroup_del(arg, true);
+            group::rs_augroup_del(arg, true);
         }
     } else if strnicmp_3(arg, b"end") && {
         let after = *arg.add(3) as u8;
@@ -658,8 +650,8 @@ pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
         let id = rs_augroup_add(arg);
         current_augroup = id;
     } else {
-        // ":aug": list the group names (msg_start, msg_ext_set_kind, iteration, msg_clr_eos, msg_end all in one C call)
-        nvim_autocmd_list_group_names();
+        // ":aug": list the group names
+        group::list_group_names();
     }
 }
 
@@ -1011,10 +1003,7 @@ unsafe fn show_group_and_event(ac_group: c_int, event: c_int) -> bool {
     // Show group name if not the default group
     if ac_group != group::AUGROUP_DEFAULT {
         if group_name.is_null() {
-            extern "C" {
-                fn nvim_get_deleted_augroup() -> *const c_char;
-            }
-            nvim_autocmd_msg_puts_hl(nvim_get_deleted_augroup(), HLF_E, false);
+            nvim_autocmd_msg_puts_hl(group::get_deleted_augroup(), HLF_E, false);
         } else {
             nvim_autocmd_msg_puts_hl(group_name, HLF_T, false);
         }
@@ -1839,7 +1828,7 @@ pub unsafe extern "C" fn rs_expand_get_event_name(_xp: *mut c_void, idx: c_int) 
     // Try to get a group name at position idx+1
     let name = rs_augroup_name(idx + 1);
     if !name.is_null() {
-        if !AUTOCMD_INCLUDE_GROUPS.load(Ordering::Relaxed) || name == nvim_get_deleted_augroup() {
+        if !AUTOCMD_INCLUDE_GROUPS.load(Ordering::Relaxed) || name == group::get_deleted_augroup() {
             // Return empty string (not NULL) to skip this entry
             return c"".as_ptr().cast_mut().cast();
         }
@@ -1847,7 +1836,7 @@ pub unsafe extern "C" fn rs_expand_get_event_name(_xp: *mut c_void, idx: c_int) 
     }
 
     // Past all groups: compute event index
-    let next_id = nvim_get_next_augroup_id();
+    let next_id = group::next_augroup_id();
     let i = idx - next_id;
     if !(0..NUM_EVENTS).contains(&i) {
         return std::ptr::null_mut();
