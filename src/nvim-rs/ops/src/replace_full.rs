@@ -4,6 +4,7 @@
 //! replacing characters in visual/operator mode.
 //! Phase 4 absorption: nvim_opr_finish ported inline.
 
+use crate::replace_loops::{rs_opr_block_loop, rs_opr_charwise_loop};
 use nvim_normal::types::OpargT;
 use std::ffi::{c_char, c_int, c_void};
 
@@ -22,12 +23,6 @@ extern "C" {
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_u_save(top: c_int, bot: c_int) -> c_int;
-
-    // Block mode: full iteration + replacement delegated to C
-    fn nvim_opr_block_loop(oap: *mut c_void, c: c_int, had_ctrl_v_cr: c_int);
-
-    // Charwise/linewise mode: setup + full loop delegated to C
-    fn nvim_opr_charwise_loop(oap: *mut c_void, c: c_int);
 
     // Finish: restore cursor, changed_lines, set marks (absorbed below)
     fn nvim_curwin_set_cursor_from_oap_start(oap: *mut c_void);
@@ -109,9 +104,9 @@ pub unsafe extern "C" fn rs_op_replace(oap: *mut c_void, c: c_int) -> c_int {
     }
 
     if (*oap.cast::<OpargT>()).motion_type == K_MT_BLOCK_WISE {
-        nvim_opr_block_loop(oap, c, c_int::from(had_ctrl_v_cr));
+        rs_opr_block_loop(oap, c, had_ctrl_v_cr);
     } else {
-        nvim_opr_charwise_loop(oap, c);
+        rs_opr_charwise_loop(oap, c);
     }
 
     opr_finish(oap);

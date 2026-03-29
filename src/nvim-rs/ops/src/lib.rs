@@ -36,6 +36,7 @@ pub mod pending;
 pub mod put;
 pub mod replace;
 pub mod replace_full;
+pub mod replace_loops;
 pub mod shift;
 pub mod shift_full;
 pub mod tilde;
