@@ -55,25 +55,6 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
-// Rust implementations used in this file
-extern int rs_spell_edit_score(slang_T *slang, const char *badword, const char *goodword);
-extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const char *goodword,
-                                     int limit);
-extern int rs_bytes2offset(const uint8_t **pp);
-extern int soundfold_find(slang_T *slang, char *word);
-extern void find_keepcap_word(slang_T *slang, char *fword, char *kword);
-extern int score_wordcount_adj(slang_T *slang, int score, char *word, bool split);
-extern int badword_captype(char *word, char *end);
-extern bool similar_chars(slang_T *slang, int c1, int c2);
-
-// Adjust the final score using the sound-alike score (used when 'best' mode).
-#define RESCORE(word_score, sound_score) ((3 * (word_score) + (sound_score)) / 4)
-// Compute the maximum word score given a maximum end score and a sound score.
-#define MAXSCORE(word_score, sound_score) ((4 * (word_score) - (sound_score)) / 3)
-
-// only used for su_badflags
-#define WF_MIXCAP   0x20        // mix of upper and lower case: macaRONI
-
 /// Information used when looking for suggestions.
 typedef struct {
   garray_T su_ga;                  ///< suggestions, contains "suggest_T"
@@ -104,9 +85,6 @@ typedef struct {
 } suggest_T;
 
 #define SUG(ga, i) (((suggest_T *)(ga).ga_data)[i])
-
-// True if a word appears in the list of banned words.
-#define WAS_BANNED(su, word) (!HASHITEM_EMPTY(hash_find(&(su)->su_banned, word)))
 
 // Keep more suggestions than displayed; rescore_suggestions() may change scores.
 #define SUG_CLEAN_COUNT(su)    ((su)->su_maxcount < 130 ? 150 : (su)->su_maxcount + 20)
@@ -148,86 +126,6 @@ enum {
   SCORE_SFMAX1 = 200,  // maximum score for first try
   SCORE_SFMAX2 = 300,  // maximum score for second try
   SCORE_SFMAX3 = 400,  // maximum score for third try
-};
-
-#define SCORE_BIG       (SCORE_INS * 3)  // big difference
-enum {
-  SCORE_MAXMAX = 999999,  // accept any score
-  SCORE_LIMITMAX = 350,   // for spell_edit_score_limit()
-};
-
-/// For finding suggestions: At each node in the tree these states are tried:
-typedef enum {
-  STATE_START = 0,  ///< At start of node check for NUL bytes (goodword
-                    ///< ends); if badword ends there is a match, otherwise
-                    ///< try splitting word.
-  STATE_NOPREFIX,   ///< try without prefix
-  STATE_SPLITUNDO,  ///< Undo splitting.
-  STATE_ENDNUL,     ///< Past NUL bytes at start of the node.
-  STATE_PLAIN,      ///< Use each byte of the node.
-  STATE_DEL,        ///< Delete a byte from the bad word.
-  STATE_INS_PREP,   ///< Prepare for inserting bytes.
-  STATE_INS,        ///< Insert a byte in the bad word.
-  STATE_SWAP,       ///< Swap two bytes.
-  STATE_UNSWAP,     ///< Undo swap two characters.
-  STATE_SWAP3,      ///< Swap two characters over three.
-  STATE_UNSWAP3,    ///< Undo Swap two characters over three.
-  STATE_UNROT3L,    ///< Undo rotate three characters left
-  STATE_UNROT3R,    ///< Undo rotate three characters right
-  STATE_REP_INI,    ///< Prepare for using REP items.
-  STATE_REP,        ///< Use matching REP items from the .aff file.
-  STATE_REP_UNDO,   ///< Undo a REP item replacement.
-  STATE_FINAL,      ///< End of this node.
-} state_T;
-
-/// Struct to keep the state at each level in suggest_try_change().
-typedef struct {
-  state_T ts_state;          ///< state at this level, STATE_
-  int ts_score;              ///< score
-  idx_T ts_arridx;           ///< index in tree array, start of node
-  int16_t ts_curi;           ///< index in list of child nodes
-  uint8_t ts_fidx;           ///< index in fword[], case-folded bad word
-  uint8_t ts_fidxtry;        ///< ts_fidx at which bytes may be changed
-  uint8_t ts_twordlen;       ///< valid length of tword[]
-  uint8_t ts_prefixdepth;    ///< stack depth for end of prefix or
-                             ///< PFD_PREFIXTREE or PFD_NOPREFIX
-  uint8_t ts_flags;          ///< TSF_ flags
-  uint8_t ts_tcharlen;       ///< number of bytes in tword character
-  uint8_t ts_tcharidx;       ///< current byte index in tword character
-  uint8_t ts_isdiff;         ///< DIFF_ values
-  uint8_t ts_fcharstart;     ///< index in fword where badword char started
-  uint8_t ts_prewordlen;     ///< length of word in "preword[]"
-  uint8_t ts_splitoff;       ///< index in "tword" after last split
-  uint8_t ts_splitfidx;      ///< "ts_fidx" at word split
-  uint8_t ts_complen;        ///< nr of compound words used
-  uint8_t ts_compsplit;      ///< index for "compflags" where word was spit
-  uint8_t ts_save_badflags;  ///< su_badflags saved here
-  uint8_t ts_delidx;         ///< index in fword for char that was deleted,
-                             ///< valid when "ts_flags" has TSF_DIDDEL
-} trystate_T;
-
-extern bool can_be_compound(trystate_T *sp, slang_T *slang, uint8_t *compflags, int flag);
-extern void go_deeper(trystate_T *stack, int depth, int score_add);
-
-// values for ts_isdiff
-enum {
-  DIFF_NONE = 0,    // no different byte (yet)
-  DIFF_YES = 1,     // different byte found
-  DIFF_INSERT = 2,  // inserting character
-};
-
-// values for ts_flags
-enum {
-  TSF_PREFIXOK = 1,  // already checked that prefix is OK
-  TSF_DIDSPLIT = 2,  // tried split at this point
-  TSF_DIDDEL = 4,    // did a delete, "ts_delidx" has index
-};
-
-// special values ts_prefixdepth
-enum {
-  PFD_NOPREFIX = 0xff,    // not using prefixes
-  PFD_PREFIXTREE = 0xfe,  // walking through the prefix tree
-  PFD_NOTSPECIAL = 0xfd,  // highest value that's not special
 };
 
 static int spell_suggest_timeout = 5000;
@@ -277,25 +175,21 @@ void nvim_suginfo_set_badflags(void *su, int v) { ((suginfo_T *)su)->su_badflags
 // Phase 2 accessors
 int nvim_spellsug_get_timeout(void) { return spell_suggest_timeout; }
 
+extern int badword_captype(char *word, char *end);
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
-extern int rs_stp_sal_score(suggest_T *stp, const char *su_badptr, int su_badlen,
-                            slang_T *slang, const char *badsound);
 extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
 extern void rs_score_combine_lists(void *su);
 extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int badlenarg,
                               int score, int altscore, bool had_bonus, slang_T *slang,
                               bool maxsf);
 extern void rs_add_banned(void *su, char *word);
-extern void rs_rescore_one(void *su, suggest_T *stp);
 extern void rs_rescore_suggestions(void *su);
-extern void rs_suggest_trie_walk(void *su, langp_T *lp, char *fword, bool soundfold);
 extern void rs_suggest_try_special(void *su);
 extern void rs_suggest_try_change(void *su);
 extern void rs_suggest_try_soundalike_prep(void);
 extern void rs_suggest_try_soundalike(void *su);
 extern void rs_suggest_try_soundalike_finish(void);
-extern void rs_add_sound_suggest(void *su, char *goodword, int score, langp_T *lp);
 extern void rs_score_comp_sal(void *su);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
