@@ -113,6 +113,32 @@ extern "C" {
     fn has_event(event: c_int) -> c_int;
     /// Deferred autocommand handler for channel info changes. Defined in channel.c (stays in C).
     fn set_info_event(argv: *mut *mut c_void);
+
+    // --- Phase 4 FFI ---
+
+    /// Open a terminal for a buffer. Defined in terminal.c.
+    fn terminal_open(termpp: *mut *mut c_void, buf: *mut c_void, opts: TerminalOptionsT);
+    /// Destroy a terminal. Defined in terminal.c.
+    fn terminal_destroy(termpp: *mut *mut c_void);
+    /// Stop a process. Defined in event/proc.c.
+    fn proc_stop(proc_ptr: *mut c_void);
+    /// Resize a pty process. Defined in os/pty_proc_unix.c.
+    fn pty_proc_resize(ptyproc: *mut c_void, width: u16, height: u16);
+    /// Create a write buffer with a finalizer. Defined in event/wstream.c.
+    fn wstream_new_buffer(
+        data: *mut std::ffi::c_char,
+        size: usize,
+        refcount: usize,
+        cb: Option<unsafe extern "C" fn(*mut c_void)>,
+    ) -> *mut c_void;
+    /// Write a buffer to a stream. Defined in event/wstream.c.
+    fn wstream_write(stream: *mut c_void, buf: *mut c_void) -> bool;
+    /// Duplicate memory. Defined in memory.c.
+    fn xmemdup(data: *const c_void, len: usize) -> *mut c_void;
+    /// Check if a stream is closed. Defined in event crate (rs_stream_is_closed).
+    fn rs_stream_is_closed(stream: *mut c_void) -> c_int;
+    /// Get pending write requests on a stream. Defined in event crate.
+    fn rs_stream_get_pending_reqs(stream: *mut c_void) -> usize;
 }
 
 // =============================================================================
@@ -134,6 +160,38 @@ pub struct EventT {
 
 // SAFETY: EventT contains raw pointers; we only create/pass it on the C event loop thread.
 unsafe impl Send for EventT {}
+
+// =============================================================================
+// Repr(C) TerminalOptionsT struct matching C `TerminalOptions` (48 bytes)
+// =============================================================================
+
+/// Rust mirror of C `TerminalOptions` struct (48 bytes on x86-64).
+///
+/// Layout verified by `_Static_assert` blocks in `eval_struct_check.c`.
+///
+/// ```text
+/// offset  0: data      (*mut c_void, 8 bytes)
+/// offset  8: width     (u16, 2 bytes)
+/// offset 10: height    (u16, 2 bytes)
+/// offset 12: _pad      ([u8; 4])
+/// offset 16: write_cb  (Option<fn>, 8 bytes)
+/// offset 24: resize_cb (Option<fn>, 8 bytes)
+/// offset 32: close_cb  (Option<fn>, 8 bytes)
+/// offset 40: force_crlf (bool, 1 byte)
+/// [7 bytes trailing padding]
+/// sizeof: 48
+/// ```
+#[repr(C)]
+pub struct TerminalOptionsT {
+    pub data: *mut c_void,
+    pub width: u16,
+    pub height: u16,
+    pub _pad: [u8; 4],
+    pub write_cb: Option<unsafe extern "C" fn(*const std::ffi::c_char, usize, *mut c_void)>,
+    pub resize_cb: Option<unsafe extern "C" fn(u16, u16, *mut c_void)>,
+    pub close_cb: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub force_crlf: bool,
+}
 
 // =============================================================================
 // Repr(C) ChannelT struct matching C `Channel` (1928 bytes)
@@ -841,6 +899,149 @@ pub unsafe extern "C" fn channel_proc_exit_cb(
 }
 
 // =============================================================================
+// Migrated functions (Phase 4): terminal helper functions
+// =============================================================================
+
+// Offsets within the Channel.stream union (verified by _Static_assert in eval_struct_check.c)
+//
+// chan.stream.pty.width  = Chan offset 1408 = stream union offset 1376
+// chan.stream.pty.height = Chan offset 1410 = stream union offset 1378
+// chan.stream.proc.in    = Chan offset 112  = stream union offset 80   (Stream, 376 bytes)
+// chan.stream.proc.out.s = Chan offset 488  = stream union offset 456  (Stream, 376 bytes)
+// (RStream.s is at offset 0 within RStream, so proc.out == proc.out.s for the Stream part)
+
+/// Byte offset of PtyProc.width within the Channel.stream union.
+const PTY_WIDTH_OFF: usize = 1376;
+/// Byte offset of PtyProc.height within the Channel.stream union.
+const PTY_HEIGHT_OFF: usize = 1378;
+/// Byte offset of Proc.in (the Stream) within the Channel.stream union.
+const PROC_IN_OFF: usize = 80;
+/// Byte offset of Proc.out.s (the Stream) within the Channel.stream union.
+const PROC_OUT_S_OFF: usize = 456;
+
+/// Open a terminal for a pty channel.
+///
+/// Channel `chan` must be an open pty channel, and `buf` must be a new,
+/// unmodified buffer. Sets `buf->b_p_channel` and calls `terminal_open`.
+///
+/// # Safety
+///
+/// `chan` must be a valid pty Channel. `buf` must be a valid buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn channel_terminal_open(buf: *mut c_void, chan: *mut ChannelT) {
+    // Read pty width/height from the stream union at known offsets (use
+    // read_unaligned to satisfy clippy; the fields are actually aligned in C).
+    let stream_base = (*chan).stream.as_ptr();
+    let width = std::ptr::read_unaligned(stream_base.add(PTY_WIDTH_OFF).cast::<u16>());
+    let height = std::ptr::read_unaligned(stream_base.add(PTY_HEIGHT_OFF).cast::<u16>());
+
+    let topts = TerminalOptionsT {
+        data: chan.cast(),
+        width,
+        height,
+        _pad: [0u8; 4],
+        write_cb: Some(term_write),
+        resize_cb: Some(term_resize),
+        close_cb: Some(term_close),
+        force_crlf: false,
+    };
+
+    // buf->b_p_channel = (OptInt)chan->id   [b_p_channel is i64 at offset 10152]
+    // Use write_unaligned to satisfy clippy; b_p_channel is actually 8-byte aligned in buf_T.
+    #[allow(clippy::cast_possible_wrap)]
+    std::ptr::write_unaligned(buf.cast::<u8>().add(10152).cast::<i64>(), (*chan).id as i64);
+
+    channel_incref(chan);
+    terminal_open(&raw mut (*chan).term, buf, topts);
+}
+
+/// Terminal write callback: forward data to the pty's stdin stream.
+///
+/// # Safety
+///
+/// `data` must be a valid `Channel *`.
+unsafe extern "C" fn term_write(buf: *const std::ffi::c_char, size: usize, data: *mut c_void) {
+    let chan = data.cast::<ChannelT>();
+    // chan->stream.proc.in is at stream union offset PROC_IN_OFF
+    let proc_in = (*chan)
+        .stream
+        .as_mut_ptr()
+        .add(PROC_IN_OFF)
+        .cast::<c_void>();
+    if rs_stream_is_closed(proc_in) != 0 {
+        // ILOG("write failed: stream is closed") -- debug log, omitted in Rust
+        return;
+    }
+    let copy = xmemdup(buf.cast(), size).cast::<std::ffi::c_char>();
+    let wbuf = wstream_new_buffer(copy, size, 1, Some(xfree_cb));
+    wstream_write(proc_in, wbuf);
+}
+
+/// `xfree` trampoline matching `wbuffer_data_finalizer` signature: `fn(*mut c_void)`.
+unsafe extern "C" fn xfree_cb(ptr: *mut c_void) {
+    xfree(ptr);
+}
+
+/// Terminal resize callback: resize the pty process.
+///
+/// # Safety
+///
+/// `data` must be a valid `Channel *`.
+unsafe extern "C" fn term_resize(width: u16, height: u16, data: *mut c_void) {
+    let chan = data.cast::<ChannelT>();
+    // chan->stream.pty starts at same offset as stream union (they share the same base)
+    let pty_ptr = (*chan).stream.as_mut_ptr().cast::<c_void>();
+    pty_proc_resize(pty_ptr, width, height);
+}
+
+/// Deferred terminal cleanup: waits for pending writes before destroying.
+///
+/// # Safety
+///
+/// `argv[0]` must be a valid `Channel *`.
+#[no_mangle]
+pub unsafe extern "C" fn term_delayed_free(argv: *mut *mut c_void) {
+    let chan = (*argv).cast::<ChannelT>();
+
+    // Check for pending write requests on proc.in and proc.out.s
+    let proc_in = (*chan)
+        .stream
+        .as_mut_ptr()
+        .add(PROC_IN_OFF)
+        .cast::<c_void>();
+    let proc_out_s = (*chan)
+        .stream
+        .as_mut_ptr()
+        .add(PROC_OUT_S_OFF)
+        .cast::<c_void>();
+
+    if rs_stream_get_pending_reqs(proc_in) > 0 || rs_stream_get_pending_reqs(proc_out_s) > 0 {
+        let event = make_event(term_delayed_free as _, chan.cast());
+        multiqueue_put_event((*chan).events, event);
+        return;
+    }
+
+    if !(*chan).term.is_null() {
+        terminal_destroy(&raw mut (*chan).term);
+    }
+    channel_decref(chan);
+}
+
+/// Terminal close callback: stop the proc and schedule delayed free.
+///
+/// # Safety
+///
+/// `data` must be a valid `Channel *`.
+unsafe extern "C" fn term_close(data: *mut c_void) {
+    let chan = data.cast::<ChannelT>();
+    // proc is at the start of the stream union (offset 32 in Channel = offset 0 in stream)
+    let proc_ptr = (*chan).stream.as_mut_ptr().cast::<c_void>();
+    proc_stop(proc_ptr);
+    let event = make_event(term_delayed_free as _, chan.cast());
+    multiqueue_put_event((*chan).events, event);
+}
+
+// =============================================================================
 // Internal helpers
 // =============================================================================
 
@@ -967,5 +1168,17 @@ mod tests {
     #[test]
     fn test_event_t_size() {
         assert_eq!(std::mem::size_of::<EventT>(), 88);
+    }
+
+    #[test]
+    fn test_terminal_options_t_layout() {
+        assert_eq!(std::mem::size_of::<TerminalOptionsT>(), 48);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, data), 0);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, width), 8);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, height), 10);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, write_cb), 16);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, resize_cb), 24);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, close_cb), 32);
+        assert_eq!(std::mem::offset_of!(TerminalOptionsT, force_crlf), 40);
     }
 }

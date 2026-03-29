@@ -8,6 +8,10 @@
 
 #include "nvim/buffer_defs.h"
 #include "nvim/channel.h"
+#include "nvim/event/proc.h"
+#include "nvim/event/rstream.h"
+#include "nvim/os/pty_proc.h"
+#include "nvim/terminal.h"
 #include "nvim/channel_defs.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -150,3 +154,42 @@ _Static_assert(offsetof(NvimTimerFields, emsg_count) == 12, "NvimTimerFields.ems
 _Static_assert(offsetof(NvimTimerFields, timeout) == 16, "NvimTimerFields.timeout offset");
 _Static_assert(offsetof(NvimTimerFields, stopped) == 24, "NvimTimerFields.stopped offset");
 _Static_assert(offsetof(NvimTimerFields, paused) == 25, "NvimTimerFields.paused offset");
+
+// --- TerminalOptions layout assertions (Rust TerminalOptionsT must match exactly) ---
+_Static_assert(sizeof(TerminalOptions) == 48, "TerminalOptions size mismatch");
+_Static_assert(offsetof(TerminalOptions, data) == 0, "TerminalOptions.data offset mismatch");
+_Static_assert(offsetof(TerminalOptions, width) == 8, "TerminalOptions.width offset mismatch");
+_Static_assert(offsetof(TerminalOptions, height) == 10, "TerminalOptions.height offset mismatch");
+_Static_assert(offsetof(TerminalOptions, write_cb) == 16, "TerminalOptions.write_cb offset mismatch");
+_Static_assert(offsetof(TerminalOptions, resize_cb) == 24, "TerminalOptions.resize_cb offset mismatch");
+_Static_assert(offsetof(TerminalOptions, close_cb) == 32, "TerminalOptions.close_cb offset mismatch");
+_Static_assert(offsetof(TerminalOptions, force_crlf) == 40, "TerminalOptions.force_crlf offset mismatch");
+
+// --- TerminalOptions layout assertions (Rust TerminalOptionsT must match exactly) ---
+// (already declared above; these cross-check with the actual TerminalOptions struct)
+
+// --- PtyProc / Proc stream field offsets within Channel (for term_write, term_resize) ---
+// Channel.stream.proc.in is at Channel offset 112 = offsetof(Channel,stream) + offsetof(Proc,in)
+_Static_assert(offsetof(Channel, stream) + offsetof(Proc, in) == 112,
+               "Channel.stream.proc.in offset mismatch");
+// Channel.stream.proc.out.s is at Channel offset 488
+_Static_assert(offsetof(Channel, stream) + offsetof(Proc, out) + offsetof(RStream, s) == 488,
+               "Channel.stream.proc.out.s offset mismatch");
+// Channel.stream.pty.width is at Channel offset 1408
+_Static_assert(offsetof(Channel, stream) + offsetof(PtyProc, width) == 1408,
+               "Channel.stream.pty.width offset mismatch");
+// Channel.stream.pty.height is at Channel offset 1410
+_Static_assert(offsetof(Channel, stream) + offsetof(PtyProc, height) == 1410,
+               "Channel.stream.pty.height offset mismatch");
+
+// --- buf_T field offsets needed by channel Rust code ---
+// b_p_channel: set by channel_terminal_open to record which channel owns the buffer
+_Static_assert(offsetof(buf_T, b_p_channel) == 10152, "buf_T.b_p_channel offset mismatch: update Rust");
+
+// --- buf_T prompt field offsets (for f_prompt_set* functions in Phase 5) ---
+_Static_assert(offsetof(buf_T, b_prompt_text) == 11152,
+               "buf_T.b_prompt_text offset mismatch: update Rust");
+_Static_assert(offsetof(buf_T, b_prompt_callback) == 11160,
+               "buf_T.b_prompt_callback offset mismatch: update Rust");
+_Static_assert(offsetof(buf_T, b_prompt_interrupt) == 11176,
+               "buf_T.b_prompt_interrupt offset mismatch: update Rust");

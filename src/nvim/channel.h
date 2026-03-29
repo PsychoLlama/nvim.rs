@@ -67,6 +67,8 @@ size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data,
 void channel_proc_exit_cb(Proc *proc, int status, void *data);
 void channel_destroy(Channel *chan);
 void channel_info_changed(Channel *chan, bool new_chan);
+void channel_terminal_open(buf_T *buf, Channel *chan);
+void term_delayed_free(void **argv);
 
 static inline bool callback_reader_set(CallbackReader reader)
 {

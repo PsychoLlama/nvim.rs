@@ -622,65 +622,9 @@ retfree:
 // channel_proc_exit_cb (static), channel_callback_call (static)
 // -- all implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-/// Open terminal for channel
-///
-/// Channel `chan` is assumed to be an open pty channel,
-/// and `buf` is assumed to be a new, unmodified buffer.
-void channel_terminal_open(buf_T *buf, Channel *chan)
-{
-  TerminalOptions topts = {
-    .data = chan,
-    .width = chan->stream.pty.width,
-    .height = chan->stream.pty.height,
-    .write_cb = term_write,
-    .resize_cb = term_resize,
-    .close_cb = term_close,
-    .force_crlf = false,
-  };
-  buf->b_p_channel = (OptInt)chan->id;  // 'channel' option
-  channel_incref(chan);
-  terminal_open(&chan->term, buf, topts);
-}
-
-static void term_write(const char *buf, size_t size, void *data)
-{
-  Channel *chan = data;
-  if (stream_is_closed(&chan->stream.proc.in)) {
-    // If the backing stream was closed abruptly, there may be write events
-    // ahead of the terminal close event. Just ignore the writes.
-    ILOG("write failed: stream is closed");
-    return;
-  }
-  WBuffer *wbuf = wstream_new_buffer(xmemdup(buf, size), size, 1, xfree);
-  wstream_write(&chan->stream.proc.in, wbuf);
-}
-
-static void term_resize(uint16_t width, uint16_t height, void *data)
-{
-  Channel *chan = data;
-  pty_proc_resize(&chan->stream.pty, width, height);
-}
-
-static inline void term_delayed_free(void **argv)
-{
-  Channel *chan = argv[0];
-  if (stream_get_pending_reqs(&chan->stream.proc.in) || stream_get_pending_reqs(&chan->stream.proc.out.s)) {
-    multiqueue_put(chan->events, term_delayed_free, chan);
-    return;
-  }
-
-  if (chan->term) {
-    terminal_destroy(&chan->term);
-  }
-  channel_decref(chan);
-}
-
-static void term_close(void *data)
-{
-  Channel *chan = data;
-  proc_stop(&chan->stream.proc);
-  multiqueue_put(chan->events, term_delayed_free, data);
-}
+// channel_terminal_open, term_write, term_resize, term_delayed_free, term_close
+// -- all implemented in Rust (src/nvim-rs/channel/src/lib.rs)
+extern void term_delayed_free(void **argv);
 
 // channel_info_changed implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
