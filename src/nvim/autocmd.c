@@ -17,8 +17,6 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/eval/vars.h"
-#include "nvim/event/loop.h"
-#include "nvim/event/multiqueue.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_eval.h"
 #include "nvim/fileio.h"
@@ -32,7 +30,6 @@
 #include "nvim/highlight_defs.h"
 #include "nvim/insexpand.h"
 #include "nvim/lua/executor.h"
-#include "nvim/main.h"
 #include "nvim/map_defs.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
@@ -74,9 +71,6 @@ extern void rs_reset_lnums(void);
 extern int rs_valid_tabpage_win(tabpage_T *tpc);
 extern win_T *rs_win_find_by_handle(int handle);
 
-// Rust implementation in nvim-event crate
-extern MultiQueue *rs_loop_get_events(Loop *loop);
-#define loop_get_events(l) rs_loop_get_events(l)
 
 extern const char *rs_event_nr2name(int event, int num_events);
 extern void rs_aubuflocal_remove(int bufnr);
@@ -103,37 +97,15 @@ size_t nvim_get_autocmds_count(int event)
 static const char e_autocommand_nesting_too_deep[]
   = N_("E218: Autocommand nesting too deep");
 
-// Naming Conventions:
-//  - general autocmd behavior start with au_
-//  - AutoCmd start with aucmd_
-//  - AutoPat start with aupat_
-//  - Groups start with augroup_
-//  - Events start with event_
-
-// The autocommands are stored in a contiguous vector for each event.
-//
-// The order of AutoCmds is important, this is the order in which they
-// were defined and will have to be executed.
-//
-// To avoid having to match the pattern too often, patterns are reference
-// counted and reused for consecutive autocommands.
-
-// Code for automatic commands.
+// Autocommands are stored in a contiguous vector per event, in definition order.
+// Patterns are reference-counted and reused for consecutive autocommands.
 static AutoPatCmd *active_apc_list = NULL;  // stack of active autocommands
-
-// The ID of the current group.
 int current_augroup = AUGROUP_DEFAULT;
-
-// Whether we need to delete marked patterns.
-// While deleting autocmds, they aren't actually remover, just marked.
-static bool au_need_clean = false;
-
+static bool au_need_clean = false;  // pending deletion cleanup needed
 int autocmd_blocked = 0;  // block all autocmds
-
 static bool autocmd_nested = false;
 char *old_termresponse = NULL;
 
-// Delete autocommand.
 static void aucmd_del(AutoCmd *ac)
 {
   if (ac->pat != NULL && --ac->pat->refcount == 0) {
@@ -158,7 +130,6 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
   return &autocmds[(int)event];
 }
 
-
 extern void rs_free_augroup_maps(void);
 
 #if defined(EXITFREE)
@@ -178,47 +149,6 @@ void free_all_autocmds(void)
   // aucmd_win[] is freed in win_free_all()
 }
 #endif
-
-
-// Implements :autocmd.
-// Defines an autocmd (does not execute; cf. apply_autocmds_group).
-//
-// Can be used in the following ways:
-//
-// :autocmd <event> <pat> <cmd>     Add <cmd> to the list of commands that
-//                                  will be automatically executed for <event>
-//                                  when editing a file matching <pat>, in
-//                                  the current group.
-// :autocmd <event> <pat>           Show the autocommands associated with
-//                                  <event> and <pat>.
-// :autocmd <event>                 Show the autocommands associated with
-//                                  <event>.
-// :autocmd                         Show all autocommands.
-// :autocmd! <event> <pat> <cmd>    Remove all autocommands associated with
-//                                  <event> and <pat>, and add the command
-//                                  <cmd>, for the current group.
-// :autocmd! <event> <pat>          Remove all autocommands associated with
-//                                  <event> and <pat> for the current group.
-// :autocmd! <event>                Remove all autocommands associated with
-//                                  <event> for the current group.
-// :autocmd!                        Remove ALL autocommands for the current
-//                                  group.
-//
-//  Multiple events and patterns may be given separated by commas.  Here are
-//  some examples:
-// :autocmd bufread,bufenter *.c,*.h    set tw=0 smartindent noic
-// :autocmd bufleave         *          set tw=79 nosmartindent ic infercase
-//
-// :autocmd * *.c               show all autocommands for *.c files.
-//
-// Mostly a {group} argument can optionally appear before <event>.
-// do_autocmd() for one event.
-// Defines an autocmd (does not execute; cf. apply_autocmds_group).
-//
-// If *pat == NUL: do for all patterns.
-// If *cmd == NUL: show entries.
-// If forceit == true: delete entries.
-// If group is not AUGROUP_ALL: only use this group.
 
 /// Registers an autocmd. The handler may be a Ex command or callback function, decided by
 /// the `handler_cmd` or `handler_fn` args.
@@ -350,8 +280,6 @@ int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int
 
   return OK;
 }
-
-
 
 /// Prepare for executing autocommands for (hidden) buffer `buf`.
 /// If the current buffer is not in any visible window, put it in a temporary
@@ -1157,13 +1085,7 @@ char *getnextac(int c, void *cookie, int indent, bool do_concat)
   return retval;
 }
 
-/// Deletes an autocmd by ID.
-/// Only autocmds created via the API have IDs associated with them. There
-/// is no way to delete a specific autocmd created via :autocmd
-
 /// Gets an (allocated) string representation of an autocmd command/callback.
-/// NOTE: This is kept as the C implementation for internal use by accessors.
-/// The Rust-facing version is nvim_autocmd_get_handler_str(event, idx).
 static char *aucmd_handler_to_string(AutoCmd *ac)
   FUNC_ATTR_PURE
 {
@@ -1172,8 +1094,6 @@ static char *aucmd_handler_to_string(AutoCmd *ac)
   }
   return callback_to_string(&ac->handler_fn, NULL);
 }
-
-// Arg Parsing Functions
 
 void do_filetype_autocmd(buf_T *buf, bool force)
 {
@@ -1203,8 +1123,6 @@ void do_filetype_autocmd(buf_T *buf, bool force)
   }
   secure = secure_save;
 }
-
-// Rust FFI accessor functions
 
 int nvim_get_autocmd_blocked(void) { return autocmd_blocked; }
 int nvim_get_aucmd_win_count(void) { return AUCMD_WIN_COUNT; }
