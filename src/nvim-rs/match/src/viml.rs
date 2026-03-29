@@ -321,8 +321,24 @@ extern "C" {
     fn emsg(s: *const std::ffi::c_char);
     fn semsg(fmt: *const std::ffi::c_char, ...);
     fn nvim_get_curwin() -> *mut WinHandle;
+    // ex_match helpers
+    fn nvim_eap_get_line2(eap: *const std::ffi::c_void) -> i32;
+    fn nvim_eap_get_skip(eap: *const std::ffi::c_void) -> c_int;
+    fn nvim_eap_get_arg(eap: *const std::ffi::c_void) -> *mut std::ffi::c_char;
+    fn nvim_eap_set_nextcmd(eap: *mut std::ffi::c_void, p: *mut std::ffi::c_char);
+    fn nvim_eap_set_errmsg_const(eap: *mut std::ffi::c_void, msg: *const std::ffi::c_char);
+    fn nvim_docmd_errmsg_trailing_arg(arg: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn nvim_excmds_emsg_by_id(id: c_int);
+    fn ends_excmd(c: c_int) -> c_int;
+    fn skiptowhite(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn skipwhite(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn skip_regexp(p: *mut std::ffi::c_char, delim: c_int, magic: c_int) -> *mut std::ffi::c_char;
+    fn find_nextcmd(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn xmemdupz(data: *const std::ffi::c_void, len: usize) -> *mut std::ffi::c_char;
+    fn xfree(ptr: *mut std::ffi::c_void);
     static e_dictreq: [std::ffi::c_char; 0];
     static e_listarg: [std::ffi::c_char; 0];
+    static e_invarg2: [std::ffi::c_char; 0];
 }
 
 // =============================================================================
@@ -659,6 +675,93 @@ pub unsafe extern "C" fn rs_f_matchdelete(
         let result = match_delete(win, id, true);
         nvim_tv_set_number(rettv, i64::from(result));
     }
+}
+
+// =============================================================================
+// Phase 2: ex_match
+// =============================================================================
+
+/// `:[N]match {group} {pattern}` Ex command.
+///
+/// Sets `eap->nextcmd` to the start of the next command if any. Also called
+/// when skipping commands to find the next command.
+///
+/// # Safety
+///
+/// `eap` must be a valid `exarg_T *` pointer.
+#[export_name = "ex_match"]
+pub unsafe extern "C" fn rs_ex_match(eap: *mut std::ffi::c_void) {
+    use std::ffi::c_char;
+
+    let line2 = nvim_eap_get_line2(eap.cast_const());
+    let id: c_int = if line2 <= 3 {
+        line2
+    } else {
+        nvim_excmds_emsg_by_id(5); // e_invcmd
+        return;
+    };
+
+    let skip = nvim_eap_get_skip(eap.cast_const()) != 0;
+    let arg = nvim_eap_get_arg(eap.cast_const());
+
+    // First clear any old pattern.
+    if !skip {
+        match_delete(nvim_get_curwin(), id, false);
+    }
+
+    // STRNICMP(eap->arg, "none", 4) == 0
+    let arg_is_none = {
+        let a = arg.cast::<u8>();
+        ((*a | 0x20) == b'n')
+            && ((*a.add(1) | 0x20) == b'o')
+            && ((*a.add(2) | 0x20) == b'n')
+            && ((*a.add(3) | 0x20) == b'e')
+            && ((*a.add(4) == b' ')
+                || (*a.add(4) == b'\t')
+                || ends_excmd(i32::from(*a.add(4))) != 0)
+    };
+
+    let end: *mut c_char = if ends_excmd(i32::from(*arg as u8)) != 0 {
+        arg
+    } else if arg_is_none {
+        arg.add(4)
+    } else {
+        let p = skiptowhite(arg);
+        let g = if skip {
+            std::ptr::null_mut()
+        } else {
+            xmemdupz(arg.cast(), p.offset_from(arg) as usize)
+        };
+        let p = skipwhite(p);
+        if *p == 0 {
+            // There must be two arguments.
+            xfree(g.cast());
+            semsg(e_invarg2.as_ptr(), arg);
+            return;
+        }
+        let end = skip_regexp(p.add(1), i32::from(*p as u8), 1);
+        if !skip {
+            if *end != 0 && ends_excmd(i32::from(*skipwhite(end.add(1)) as u8)) == 0 {
+                xfree(g.cast());
+                nvim_eap_set_errmsg_const(eap, nvim_docmd_errmsg_trailing_arg(end));
+                return;
+            }
+            if *end != *p {
+                xfree(g.cast());
+                semsg(e_invarg2.as_ptr(), p);
+                return;
+            }
+
+            let c = *end as u8;
+            *end = 0;
+            crate::core::rs_match_add(nvim_get_curwin(), g, p.add(1), 10, id, std::ptr::null());
+            xfree(g.cast());
+            *end = c as c_char;
+        }
+        end
+    };
+
+    nvim_eap_set_nextcmd(eap, find_nextcmd(end));
 }
 
 // =============================================================================

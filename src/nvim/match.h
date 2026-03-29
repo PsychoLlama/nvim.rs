@@ -24,3 +24,4 @@ extern void f_clearmatches(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 extern void f_matchdelete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_matchadd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_matchaddpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void ex_match(exarg_T *eap);
