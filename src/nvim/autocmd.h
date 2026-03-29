@@ -95,6 +95,7 @@ extern char *old_termresponse; ///< saved value of v:termresponse
 // Declarations for functions now implemented in Rust (nvim-autocmd crate).
 // These replace the C thin wrappers that were deleted in Phase 1.
 void augroup_del(char *name, bool stupid_legacy_mode);
+void ex_doautoall(exarg_T *eap);
 void block_autocmds(void);
 void unblock_autocmds(void);
 bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf);

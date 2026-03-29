@@ -216,6 +216,23 @@ extern "C" {
     fn rs_augroup_add(name: *const c_char) -> c_int;
     #[link_name = "augroup_name"]
     fn rs_augroup_name(group: c_int) -> *const c_char;
+
+    // Phase 2: ex_doautoall dependencies
+    fn nvim_get_firstbuf() -> *mut c_void;
+    fn nvim_buf_get_next(buf: *mut c_void) -> *mut c_void;
+    fn nvim_buf_get_ml_mfp_null(buf: *mut c_void) -> c_int;
+    #[link_name = "nvim_ex2_eap_get_arg"]
+    fn nvim_autocmd_eap_get_arg(eap: *mut c_void) -> *mut c_char;
+    fn nvim_bw_aucmd_prepbuf(aco: *mut c_void, buf: *mut c_void);
+    fn nvim_bw_aucmd_restbuf(aco: *mut c_void);
+    fn nvim_bw_set_bufref(bufref: *mut c_void, buf: *mut c_void);
+    fn bufref_valid(bufref: *mut c_void) -> bool;
+    // do_modelines is now in Rust (rs_do_modelines exported as do_modelines)
+    #[link_name = "do_modelines"]
+    fn do_modelines_flags(flags: c_int);
+    fn nvim_bw_sizeof_aco_save() -> usize;
+    fn nvim_bw_sizeof_bufref() -> usize;
+    static mut curwin: *mut c_void;
 }
 
 // Static "Unknown" string for invalid events
@@ -1678,6 +1695,73 @@ pub unsafe extern "C" fn rs_do_doautocmd(
         FAIL
     } else {
         OK
+    }
+}
+
+// Phase 2: ex_doautoall
+
+// OPT_NOWIN flag for do_modelines (from option.h)
+const OPT_NOWIN: c_int = 0x10;
+
+/// Execute `:doautoall` — trigger autocommands for each loaded buffer.
+///
+/// # Safety
+/// Calls into C. Must be called from the main Neovim thread.
+#[unsafe(export_name = "ex_doautoall")]
+pub unsafe extern "C" fn rs_ex_doautoall(eap: *mut c_void) {
+    let mut retval = OK;
+    let mut arg: *const c_char = nvim_autocmd_eap_get_arg(eap).cast_const();
+    let call_do_modelines = c_int::from(rs_check_nomodeline(&raw mut arg));
+    let mut did_aucmd = false;
+
+    let aco_size = nvim_bw_sizeof_aco_save();
+    let bufref_size = nvim_bw_sizeof_bufref();
+
+    // Iterate all loaded buffers except curbuf
+    let curbuf = nvim_autocmd_get_curbuf_ptr();
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        // Only do loaded buffers and skip curbuf (done last)
+        if nvim_buf_get_ml_mfp_null(buf) != 0 || buf == curbuf {
+            buf = nvim_buf_get_next(buf);
+            continue;
+        }
+
+        let mut aco_buf = vec![0u8; aco_size];
+        let mut bufref_buf = vec![0u8; bufref_size];
+        let aco = aco_buf.as_mut_ptr().cast::<c_void>();
+        let bufref = bufref_buf.as_mut_ptr().cast::<c_void>();
+
+        nvim_bw_aucmd_prepbuf(aco, buf);
+        nvim_bw_set_bufref(bufref, buf);
+
+        retval = rs_do_doautocmd(arg.cast_mut(), false, &raw mut did_aucmd);
+
+        if call_do_modelines != 0 && did_aucmd {
+            let flags = if rs_is_aucmd_win(WinHandle(curwin)) {
+                OPT_NOWIN
+            } else {
+                0
+            };
+            do_modelines_flags(flags);
+        }
+
+        nvim_bw_aucmd_restbuf(aco);
+
+        if retval == FAIL || !bufref_valid(bufref) {
+            retval = FAIL;
+            break;
+        }
+
+        buf = nvim_buf_get_next(buf);
+    }
+
+    // Execute autocommands for the current buffer last
+    if retval == OK {
+        rs_do_doautocmd(arg.cast_mut(), false, &raw mut did_aucmd);
+        if call_do_modelines != 0 && did_aucmd {
+            do_modelines_flags(0);
+        }
     }
 }
 
