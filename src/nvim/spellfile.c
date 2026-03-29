@@ -61,56 +61,7 @@
 
 // Rust FFI declarations
 
-// Rust implementations (direct exports)
-extern int offset2bytes(int nr, uint8_t *buf);
-extern bool sal_to_bool(const char *s);
-
-// Section reading functions (Rust implementations)
-// SOFO section parsing
-typedef struct {
-  uint8_t from[512];
-  uint16_t from_len;
-  uint8_t to[512];
-  uint16_t to_len;
-} RsSofoSection;
-
-extern int rs_parse_sofo_section(const uint8_t *buf, size_t buf_len, RsSofoSection *section_out,
-                                 size_t *consumed_out);
-
-// WORDS section parsing
-extern int rs_parse_words_entry(const uint8_t *buf, size_t buf_len, uint8_t *output,
-                                size_t output_len, size_t *consumed_out);
-
-// Tree reading functions
-extern int rs_read_tree(const uint8_t *buf, size_t buf_len, uint8_t *byts, int32_t *idxs,
-                        size_t array_len, bool prefixtree, int prefixcnt,
-                        size_t *bytes_consumed_out, int *node_count_out);
-extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint32_t *nodecount_out);
-
 // Dictionary and wordfile line parsers
-
-typedef struct {
-  uint16_t word_len;       // length of unescaped word written into word_buf
-  uint16_t affix_offset;   // byte offset in original line where affix starts (0xFFFF = absent)
-  uint16_t affix_len;      // length of affix string in original line
-} RsDicLineResult;
-
-extern int rs_parse_dic_line(const uint8_t *line, size_t line_len,
-                              uint8_t *word_buf, size_t word_buf_cap,
-                              RsDicLineResult *result_out);
-
-typedef struct {
-  uint8_t  directive[16];  // "encoding\0" or "regions\0" or empty for word lines
-  uint16_t word_len;       // word length (or directive value length)
-  uint16_t word_end_offset; // byte offset in line where word ends (before '/')
-  int      flags;          // WF_* flags (word lines only)
-  int      regionmask;     // region bitmask (word lines only)
-  uint8_t  region_count;   // for /regions= directives
-} RsWordfileLineResult;
-
-extern int rs_parse_wordfile_line(const uint8_t *line, size_t line_len,
-                                  int region_count,
-                                  RsWordfileLineResult *result_out);
 
 extern int rs_spell_add_word_format(const uint8_t *word, size_t word_len,
                                     int what, uint8_t *buf_out, size_t buf_cap);
@@ -119,258 +70,14 @@ extern bool rs_spell_find_duplicate_word(const uint8_t *file_content, size_t con
                                          const uint8_t *word, size_t word_len,
                                          size_t *offset_out);
 
-// mkspell argument parsing helpers
-
-typedef struct {
-  uint8_t  fname[4096];    // NUL-terminated output filename
-  uint16_t fname_len;      // length of fname (excluding NUL)
-  bool     is_add;         // detected .add.spl output
-  bool     is_ascii;       // detected .ascii.spl output
-} RsMkspellFnameResult;
-
-extern int rs_mkspell_output_fname(const uint8_t *const *fnames, int fcount,
-                                   const uint8_t *enc,
-                                   RsMkspellFnameResult *result_out);
-
-extern int rs_mkspell_validate_args(const uint8_t *const *innames, int incount,
-                                    uint8_t *region_name_out);
-
-// Rust utility replacements
-extern int rs_set_spell_charflags(const uint8_t *flags_in, int cnt, const char *fol);
-extern int *rs_mb_str2wide(const char *s);
-extern void rs_tree_count_words(const uint8_t *byts, int *idxs, int len);
-extern void rs_set_sal_first(slang_T *slang);
-extern void rs_set_map_str(slang_T *slang, const char *map);
-extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
-extern int rs_read_compound(const uint8_t *buf, size_t len, slang_T *slang);
-extern int rs_read_sal_section(const uint8_t *buf, size_t len, slang_T *slang);
-extern int rs_read_prefcond_section(FILE *fd, slang_T *lp);
-extern int rs_read_rep_section(FILE *fd, garray_T *gap, int16_t *first);
+// Rust-implemented spell file I/O.
 extern slang_T *rs_spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent);
-extern void rs_spell_reload_one(char *fname, bool added_word);
 extern void rs_suggest_load_files(void);
 
-// SpellSectionParams is filled from spellinfo_T and passed to rs_write_spell_sections().
-// Rust writes all sections (except SN_CHARFLAGS and SN_WORDS) to a buffer.
-typedef struct {
-  const char *si_info;
-  int si_region_count;
-  const uint8_t *si_region_name;
-  bool si_skip_charflags;
-  const char *si_midword;
-  const uint8_t **si_prefcond_strs;
-  int si_prefcond_count;
-  const uint8_t **si_rep_from;
-  const uint8_t **si_rep_to;
-  int si_rep_count;
-  bool si_use_sal;
-  const uint8_t **si_sal_from;
-  const uint8_t **si_sal_to;
-  int si_sal_count;
-  uint8_t si_sal_flags;
-  const uint8_t **si_repsal_from;
-  const uint8_t **si_repsal_to;
-  int si_repsal_count;
-  const char *si_sofofr;
-  const char *si_sofoto;
-  const uint8_t *si_map_data;
-  int si_map_len;
-  int64_t si_sugtime;
-  bool si_nosplitsugs;
-  bool si_nocompoundsugs;
-  const char *si_compflags;
-  uint8_t si_compmax;
-  uint8_t si_compminlen;
-  uint8_t si_compsylmax;
-  uint16_t si_compoptions;
-  const uint8_t **si_comppat_strs;
-  int si_comppat_count;
-  bool si_nobreak;
-  const char *si_syllable;
-} SpellSectionParams;
 
-extern int rs_write_spell_sections(const SpellSectionParams *params,
-                                   uint8_t *buf, size_t buf_len,
-                                   size_t *written_out);
-
-// rs_put_node writes tree to buffer and returns the nodecount;
-// rs_clear_node resets index/wnode fields.
-extern int rs_put_node(wordnode_T *node, uint8_t *buf, size_t buf_len,
-                       int idx, int regionmask, bool prefixtree, size_t *written_out);
-extern void rs_clear_node(wordnode_T *node);
-
-// rs_node_compress compresses a sibling list (first sibling of root->wn_sibling).
-// Returns compressed node count; sets *tot_out to total nodes visited.
-extern int rs_node_compress(spellinfo_T *spin, wordnode_T *node, int *tot_out);
-
-extern int rs_tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *root, int flags,
-                            int region, int affixID);
-extern int rs_store_word(spellinfo_T *spin, const char *word, int flags, int region,
-                         const char *pfxlist, bool need_affix);
-#define store_word rs_store_word
-#define tree_add_word rs_tree_add_word
-
-// is_aff_rule, spell_info_item, str_equal, rep_compare are implemented in Rust
-// (spellfile.rs) via #[export_name].  Declare for C call sites:
-extern bool is_aff_rule(char **items, int itemcnt, const char *rulename, int mincount);
-extern bool spell_info_item(const char *s);
-extern bool str_equal(const char *s1, const char *s2);
-extern int rep_compare(const void *s1, const void *s2);
-
-// Phase 1 (type-independent functions): small pure helpers -- now in Rust.
-extern unsigned rs_get_affitem(int flagtype, char **pp);
-extern unsigned rs_affitem2flag(int flagtype, char *item, const char *fname, int lnum);
-extern bool rs_flag_in_afflist(int flagtype, char *afflist, unsigned flag);
-extern void rs_aff_check_number(int spinval, int affval, const char *name);
-extern void rs_aff_check_string(const char *spinval, const char *affval, const char *name);
-extern void rs_check_renumber(spellinfo_T *spin);
-#define get_affitem(ft, pp)          rs_get_affitem(ft, pp)
-#define affitem2flag(ft, it, fn, ln) rs_affitem2flag(ft, it, fn, ln)
-#define flag_in_afflist(ft, al, f)   rs_flag_in_afflist(ft, al, f)
-#define aff_check_number(sv, av, n)  rs_aff_check_number(sv, av, n)
-#define aff_check_string(sv, av, n)  rs_aff_check_string(sv, av, n)
-#define check_renumber(s)            rs_check_renumber(s)
-
-// Special byte values for <byte>.  Some are only used in the tree for
-// postponed prefixes, some only in the other trees.  This is a bit messy...
-enum {
-  BY_NOFLAGS = 0,  // end of word without flags or region; for postponed prefix: no <pflags>
-  BY_INDEX = 1,    // child is shared, index follows
-  BY_FLAGS = 2,    // end of word, <flags> byte follows; for postponed prefix: <pflags> follows
-  BY_FLAGS2 = 3,   // end of word, <flags> and <flags2> bytes follow; never used in prefix tree
-  BY_SPECIAL = BY_FLAGS2,  // highest special byte value
-};
-
-#define ZERO_FLAG   65009       // used when flag is zero: "0"
-
-// Flags used in .spl file for soundsalike flags.
-enum {
-  SAL_F0LLOWUP = 1,
-  SAL_COLLAPSE = 2,
-  SAL_REM_ACCENTS = 4,
-};
-
-#define VIMSPELLMAGIC "VIMspell"  // string at start of Vim spell file
-#define VIMSPELLMAGICL (sizeof(VIMSPELLMAGIC) - 1)
-#define VIMSPELLVERSION 50
-
-// Section IDs.  Only renumber them when VIMSPELLVERSION changes!
-enum {
-  SN_REGION = 0,           // <regionname> section
-  SN_CHARFLAGS = 1,        // charflags section
-  SN_MIDWORD = 2,          // <midword> section
-  SN_PREFCOND = 3,         // <prefcond> section
-  SN_REP = 4,              // REP items section
-  SN_SAL = 5,              // SAL items section
-  SN_SOFO = 6,             // soundfolding section
-  SN_MAP = 7,              // MAP items section
-  SN_COMPOUND = 8,         // compound words section
-  SN_SYLLABLE = 9,         // syllable section
-  SN_NOBREAK = 10,         // NOBREAK section
-  SN_SUGFILE = 11,         // timestamp for .sug file
-  SN_REPSAL = 12,          // REPSAL items section
-  SN_WORDS = 13,           // common words
-  SN_NOSPLITSUGS = 14,     // don't split word for suggestions
-  SN_INFO = 15,            // info section
-  SN_NOCOMPOUNDSUGS = 16,  // don't compound for suggestions
-  SN_END = 255,            // end of sections
-};
-
-#define SNF_REQUIRED    1       // <sectionflags>: required section
-
-enum {
-  CF_WORD = 0x01,
-  CF_UPPER = 0x02,
-};
-
-static const char *e_spell_trunc = N_("E758: Truncated spell file");
-static const char e_error_while_reading_sug_file_str[]
-  = N_("E782: Error while reading .sug file: %s");
 static const char *e_illegal_character_in_word = N_("E1280: Illegal character in word");
-static const char *msg_compressing = N_("Compressing word tree...");
 
-#define MAXLINELEN  500         // Maximum length in bytes of a line in a .aff
-                                // and .dic file.
-// Main structure to store the contents of a ".aff" file.
-typedef struct {
-  char *af_enc;                 // "SET", normalized, alloc'ed string or NULL
-  int af_flagtype;              // AFT_CHAR, AFT_LONG, AFT_NUM or AFT_CAPLONG
-  unsigned af_rare;             // RARE ID for rare word
-  unsigned af_keepcase;         // KEEPCASE ID for keep-case word
-  unsigned af_bad;              // BAD ID for banned word
-  unsigned af_needaffix;        // NEEDAFFIX ID
-  unsigned af_circumfix;        // CIRCUMFIX ID
-  unsigned af_needcomp;         // NEEDCOMPOUND ID
-  unsigned af_comproot;         // COMPOUNDROOT ID
-  unsigned af_compforbid;       // COMPOUNDFORBIDFLAG ID
-  unsigned af_comppermit;       // COMPOUNDPERMITFLAG ID
-  unsigned af_nosuggest;        // NOSUGGEST ID
-  int af_pfxpostpone;           // postpone prefixes without chop string and
-                                // without flags
-  bool af_ignoreextra;          // IGNOREEXTRA present
-  hashtab_T af_pref;            // hashtable for prefixes, affheader_T
-  hashtab_T af_suff;            // hashtable for suffixes, affheader_T
-  hashtab_T af_comp;            // hashtable for compound flags, compitem_T
-} afffile_T;
-
-#define AFT_CHAR        0       // flags are one character
-#define AFT_LONG        1       // flags are two characters
-#define AFT_CAPLONG     2       // flags are one or two characters
-#define AFT_NUM         3       // flags are numbers, comma separated
-
-typedef struct affentry_S affentry_T;
-// Affix entry from ".aff" file.  Used for prefixes and suffixes.
-struct affentry_S {
-  affentry_T *ae_next;          // next affix with same name/number
-  char *ae_chop;                // text to chop off basic word (can be NULL)
-  char *ae_add;                 // text to add to basic word (can be NULL)
-  char *ae_flags;               // flags on the affix (can be NULL)
-  char *ae_cond;                // condition (NULL for ".")
-  regprog_T *ae_prog;           // regexp program for ae_cond or NULL
-  char ae_compforbid;           // COMPOUNDFORBIDFLAG found
-  char ae_comppermit;           // COMPOUNDPERMITFLAG found
-};
-
-#define AH_KEY_LEN 17          // 2 x 8 bytes + NUL
-
-// Affix header from ".aff" file.  Used for af_pref and af_suff.
-typedef struct {
-  char ah_key[AH_KEY_LEN];      // key for hashtab == name of affix
-  unsigned ah_flag;             // affix name as number, uses "af_flagtype"
-  int ah_newID;                 // prefix ID after renumbering; 0 if not used
-  int ah_combine;               // suffix may combine with prefix
-  int ah_follows;               // another affix block should be following
-  affentry_T *ah_first;         // first affix entry
-} affheader_T;
-
-#define HI2AH(hi)   ((affheader_T *)(hi)->hi_key)
-
-// Flag used in compound items.
-typedef struct {
-  char ci_key[AH_KEY_LEN];      // key for hashtab == name of compound
-  unsigned ci_flag;             // affix name as number, uses "af_flagtype"
-  int ci_newID;                 // affix ID after renumbering.
-} compitem_T;
-
-#define HI2CI(hi)   ((compitem_T *)(hi)->hi_key)
-
-// Phase 1 (afffile_T/affentry_T-dependent functions): now in Rust.
-extern int rs_get_affix_flags(afffile_T *affile, char *afflist);
-extern int rs_get_pfxlist(afffile_T *affile, char *afflist, char *store_afflist);
-extern void rs_get_compflags(afffile_T *affile, char *afflist, char *store_afflist);
-extern void rs_aff_process_flags(afffile_T *affile, affentry_T *entry);
-#define get_affix_flags(af, al)      rs_get_affix_flags(af, al)
-#define get_pfxlist(af, al, sa)      rs_get_pfxlist(af, al, sa)
-#define get_compflags(af, al, sa)    rs_get_compflags(af, al, sa)
-#define aff_process_flags(af, e)     rs_aff_process_flags(af, e)
-
-// Structure that is used to store the items in the word tree.  This avoids
-// the need to keep track of each allocated thing, everything is freed all at
-// once after ":mkspell" is done.
-// Note: "sb_next" must be just before "sb_data" to make sure the alignment of
-// "sb_data" is correct for systems where pointers must be aligned on
-// pointer-size boundaries and sizeof(pointer) > sizeof(int) (e.g., Sparc).
-#define  SBLOCKSIZE 16000       // size of sb_data
+// Arena block for word tree; full definition required because free_blocks() takes sblock_T*.
 typedef struct sblock_S sblock_T;
 struct sblock_S {
   int sb_used;                  // nr of bytes already in use
@@ -378,32 +85,9 @@ struct sblock_S {
   char sb_data[];            // data
 };
 
-// Phase 2: Arena allocator and memory management -- now in Rust.
+// Arena allocator and memory management -- now in Rust.
 extern void *rs_getroom(spellinfo_T *spin, size_t len, bool align);
-extern char *rs_getroom_save(spellinfo_T *spin, char *s);
 extern void rs_free_blocks(sblock_T *bl);
-extern void rs_add_fromto(spellinfo_T *spin, garray_T *gap, const char *from, const char *to);
-#define getroom_save(sp, s)          rs_getroom_save(sp, s)
-#define add_fromto(sp, g, f, t)      rs_add_fromto(sp, g, f, t)
-
-// Phase 3: process_compflags, spell_free_aff, store_aff_word -- now in Rust.
-extern void rs_process_compflags(spellinfo_T *spin, afffile_T *aff, char *compflags);
-extern void rs_spell_free_aff(afffile_T *aff);
-extern int rs_store_aff_word(spellinfo_T *spin, char *word, char *afflist, afffile_T *affile,
-                             hashtab_T *ht, hashtab_T *xht, int condit, int flags,
-                             char *pfxlist, int pfxlen);
-#define process_compflags(sp, a, c)  rs_process_compflags(sp, a, c)
-#define spell_free_aff(a)            rs_spell_free_aff(a)
-#define store_aff_word(sp, w, al, af, ht, xht, c, f, pl, plen) \
-    rs_store_aff_word(sp, w, al, af, ht, xht, c, f, pl, plen)
-
-// Phase 4: spell_read_dic, spell_read_wordfile, spell_read_aff -- now in Rust.
-extern int rs_spell_read_dic(spellinfo_T *spin, char *fname, afffile_T *affile);
-extern int rs_spell_read_wordfile(spellinfo_T *spin, char *fname);
-extern afffile_T *rs_spell_read_aff(spellinfo_T *spin, char *fname);
-#define spell_read_dic(sp, f, af)    rs_spell_read_dic(sp, f, af)
-#define spell_read_wordfile(sp, f)   rs_spell_read_wordfile(sp, f)
-#define spell_read_aff(sp, f)        rs_spell_read_aff(sp, f)
 
 // A node in the tree.
 // (Forward declaration is in spellfile.h; full definition here.)
@@ -435,11 +119,6 @@ struct wordnode_S {
   int16_t wn_region;            // region mask
 
 };
-
-#define WN_MASK  0xffff         // mask relevant bits of "wn_flags"
-
-#define HI2WN(hi)    (wordnode_T *)((hi)->hi_key)
-
 
 // Info used while reading the spell files.
 // (struct tag spellinfo_S is forward-declared in spellfile.h for opaque access.)
@@ -510,12 +189,7 @@ typedef struct spellinfo_S {
   int si_newcompID;             // current value for compound ID
 } spellinfo_T;
 
-// Rust-implemented functions (use extern linkage, not static).
-extern void spell_message(const spellinfo_T *spin, char *str);
-extern wordnode_T *wordtree_alloc(spellinfo_T *spin);
 extern bool valid_spell_word(const char *word, const char *end);
-extern wordnode_T *get_wordnode(spellinfo_T *spin);
-extern void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name);
 #include "spellfile.c.generated.h"
 
 /// Load one spell file and store the info into a slang_T.
@@ -543,41 +217,7 @@ void suggest_load_files(void)
   rs_suggest_load_files();
 }
 
-// spell_reload_one: migrated to Rust (rs_spell_reload_one).
-
 // Functions for ":mkspell".
-
-// In the postponed prefixes tree wn_flags is used to store the WFP_ flags,
-// but it must be negative to indicate the prefix tree to tree_add_word().
-// Use a negative number with the lower 8 bits zero.
-#define PFX_FLAGS       (-256)
-
-// flags for "condit" argument of store_aff_word()
-#define CONDIT_COMB     1       // affix must combine
-#define CONDIT_CFIX     2       // affix must have CIRCUMFIX flag
-#define CONDIT_SUF      4       // add a suffix for matching flags
-#define CONDIT_AFF      8       // word already has an affix
-
-// spell_read_aff: migrated to Rust (rs_spell_read_aff). Redirected via #define above.
-
-// aff_process_flags, affitem2flag, get_affitem: migrated to Rust (rs_aff_process_flags,
-// rs_affitem2flag, rs_get_affitem). Redirected via #define above.
-
-// process_compflags: migrated to Rust (rs_process_compflags). Redirected via #define above.
-// check_renumber, flag_in_afflist, aff_check_number, aff_check_string:
-// migrated to Rust. Redirected via #define above.
-// add_fromto: migrated to Rust (rs_add_fromto). Redirected via #define above.
-
-// spell_free_aff: migrated to Rust (rs_spell_free_aff). Redirected via #define above.
-
-// spell_read_dic: migrated to Rust (rs_spell_read_dic). Redirected via #define above.
-
-// get_affix_flags, get_pfxlist, get_compflags: migrated to Rust.
-// Redirected via #define above.
-
-// store_aff_word: migrated to Rust (rs_store_aff_word). Redirected via #define above.
-
-// spell_read_wordfile: migrated to Rust (rs_spell_read_wordfile). Redirected via #define above.
 
 /// Thin wrapper: arena allocator delegated to Rust rs_getroom.
 void *getroom(spellinfo_T *spin, size_t len, bool align)
@@ -585,8 +225,6 @@ void *getroom(spellinfo_T *spin, size_t len, bool align)
 {
   return rs_getroom(spin, len, align);
 }
-
-// getroom_save: migrated to Rust (rs_getroom_save). Redirected via #define above.
 
 /// Thin wrapper: free sblock_T list delegated to Rust rs_free_blocks.
 void free_blocks(sblock_T *bl) { rs_free_blocks(bl); }
