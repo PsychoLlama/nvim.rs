@@ -31,7 +31,7 @@
 #![allow(clippy::ptr_cast_constness)]
 #![allow(clippy::as_ptr_cast_mut)]
 
-use std::ffi::{c_char, c_int, c_longlong};
+use std::ffi::{c_char, c_int, c_longlong, c_void};
 
 use nvim_utf8proc::{
     casefold, get_property, grapheme_break, grapheme_break_stateful, Utf8procProperty,
@@ -4759,5 +4759,486 @@ mod mb_off_next_tests {
         // Encoding flags
         assert_eq!(ENC_8BIT, 0x01);
         assert_eq!(ENC_DBCS, 0x02);
+    }
+}
+
+// ============================================================================
+// iconv conversion support (Phase 1)
+// ============================================================================
+
+/// Broken-iconv detection state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WorkingStatus {
+    Unknown,
+    Working,
+    Broken,
+}
+
+static mut ICONV_WORKING: WorkingStatus = WorkingStatus::Unknown;
+
+/// Open an iconv conversion descriptor with a safety check for broken iconv.
+///
+/// Returns `(void *)-1` if iconv_open fails or a broken iconv is detected.
+/// Mirrors C `my_iconv_open`.
+///
+/// # Safety
+/// `to` and `from` must be valid NUL-terminated C strings.
+#[unsafe(export_name = "my_iconv_open")]
+pub unsafe extern "C" fn rs_my_iconv_open(to: *mut c_char, from: *mut c_char) -> *mut c_void {
+    const ICONV_INVALID: *mut c_void = usize::MAX as *mut c_void;
+
+    // SAFETY: single-threaded; reading static is safe.
+    if unsafe { ICONV_WORKING } == WorkingStatus::Broken {
+        return ICONV_INVALID;
+    }
+
+    let to_skip = rs_enc_skip(to);
+    let from_skip = rs_enc_skip(from);
+
+    let fd = unsafe { libc::iconv_open(to_skip, from_skip) };
+    if fd == usize::MAX as libc::iconv_t {
+        return ICONV_INVALID;
+    }
+
+    // SAFETY: single-threaded.
+    if unsafe { ICONV_WORKING } == WorkingStatus::Unknown {
+        // Do a dummy iconv() call to check if it actually works.
+        // There is a version of iconv() on Linux that is broken.
+        const ICONV_TESTLEN: usize = 400;
+        let mut tobuf = [0u8; ICONV_TESTLEN];
+        let mut p: *mut libc::c_char = tobuf.as_mut_ptr().cast();
+        let mut tolen: libc::size_t = ICONV_TESTLEN;
+
+        // Reset the iconv state
+        libc::iconv(
+            fd,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &raw mut p,
+            &raw mut tolen,
+        );
+
+        if p.is_null() {
+            // Broken: after reset the "to" pointer became NULL.
+            unsafe { ICONV_WORKING = WorkingStatus::Broken };
+            libc::iconv_close(fd);
+            return ICONV_INVALID;
+        }
+        unsafe { ICONV_WORKING = WorkingStatus::Working };
+    }
+
+    fd as *mut c_void
+}
+
+/// Convert the string `str[slen]` using the iconv descriptor in `vcp`.
+///
+/// If `unconvlenp` is not NULL, handles the string ending in an incomplete
+/// sequence by setting `*unconvlenp` to the length of the incomplete tail.
+/// Returns the converted string in `xmalloc`'d memory; NULL on error.
+/// If `resultlenp` is not NULL, sets it to the result length in bytes.
+///
+/// This is an internal function (mirrors the `static` C `iconv_string`).
+unsafe fn iconv_string_impl(
+    vcp: *const VimConv,
+    str_ptr: *const c_char,
+    slen: usize,
+    unconvlenp: *mut usize,
+    resultlenp: *mut usize,
+) -> *mut c_char {
+    let mut from: *mut c_char = str_ptr as *mut c_char;
+    let mut fromlen: libc::size_t = slen;
+    let mut result: *mut c_char = std::ptr::null_mut();
+    let mut len: libc::size_t = 0;
+    let mut done: libc::size_t = 0;
+
+    let e2big = libc::E2BIG;
+    let eilseq = libc::EILSEQ;
+    let einval = libc::EINVAL;
+
+    loop {
+        let errno_before = *libc::__errno_location();
+        if len == 0 || errno_before == e2big {
+            // Allocate enough room; grow on re-allocation.
+            len = len + fromlen * 2 + 40;
+            let p: *mut c_char = xmalloc(len);
+            if done > 0 {
+                libc::memmove(p.cast(), result.cast(), done);
+            }
+            xfree(result);
+            result = p;
+        }
+
+        let mut to: *mut c_char = result.add(done);
+        let mut tolen: libc::size_t = len - done - 2;
+
+        let fd = (*vcp).vc_fd;
+        // Clear errno before calling iconv so we can check it after.
+        *libc::__errno_location() = 0;
+        let ret = libc::iconv(
+            fd as libc::iconv_t,
+            &raw mut from,
+            &raw mut fromlen,
+            &raw mut to,
+            &raw mut tolen,
+        );
+
+        let cur_errno = *libc::__errno_location();
+
+        if ret != usize::MAX {
+            // Finished: NUL-terminate at current `to` position.
+            *to = 0;
+            if !resultlenp.is_null() {
+                *resultlenp = (to as usize) - (result as usize);
+            }
+            return result;
+        }
+
+        if !(*vcp).vc_fail && !unconvlenp.is_null() && (cur_errno == einval) {
+            // Incomplete sequence at end.
+            *to = 0;
+            *unconvlenp = fromlen;
+            if !resultlenp.is_null() {
+                *resultlenp = (to as usize) - (result as usize);
+            }
+            return result;
+        } else if !(*vcp).vc_fail && (cur_errno == eilseq || cur_errno == einval) {
+            // Can't convert: insert '?' and skip a character.
+            *to = b'?' as c_char;
+            to = to.add(1);
+            if rs_utf_ptr2cells(from) > 1 {
+                *to = b'?' as c_char;
+                to = to.add(1);
+            }
+            done = (to as usize) - (result as usize);
+            let l = rs_utfc_ptr2len_len(from, fromlen as c_int);
+            from = from.add(l as usize);
+            fromlen -= l as usize;
+        } else if cur_errno != e2big {
+            // Conversion failed.
+            xfree(result);
+            return std::ptr::null_mut();
+        } else {
+            // E2BIG: not enough room -- track done bytes and loop.
+            done = (to as usize) - (result as usize);
+        }
+    }
+}
+
+/// VimConv struct - mirrors C `vimconv_T`.
+///
+/// Must match the C layout exactly (repr(C)).
+#[repr(C)]
+pub struct VimConv {
+    /// Conversion type (ConvFlags value).
+    pub vc_type: c_int,
+    /// Maximal expansion factor.
+    pub vc_factor: c_int,
+    /// iconv descriptor for CONV_ICONV.
+    pub vc_fd: *mut c_void,
+    /// If true, fail on invalid chars; otherwise use '?'.
+    pub vc_fail: bool,
+}
+
+// ConvFlags constants (matching C mbyte_defs.h)
+const CONV_NONE: c_int = 0;
+const CONV_TO_UTF8: c_int = 1;
+const CONV_9_TO_UTF8: c_int = 2;
+const CONV_TO_LATIN1: c_int = 3;
+const CONV_TO_LATIN9: c_int = 4;
+const CONV_ICONV: c_int = 5;
+
+// OK/FAIL return codes (matching C)
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// NUL character
+const NUL: u8 = 0;
+
+// ============================================================================
+// convert_setup, convert_setup_ext, string_convert, string_convert_ext (Phase 2)
+// ============================================================================
+
+/// Setup `vcp` for conversion from `from` to `to`.
+///
+/// Thin wrapper: calls `convert_setup_ext` with `from_unicode_is_utf8=true`
+/// and `to_unicode_is_utf8=true`.
+///
+/// # Safety
+/// `vcp`, `from`, `to` must be valid pointers (NULL allowed for from/to).
+#[unsafe(export_name = "convert_setup")]
+pub unsafe extern "C" fn rs_convert_setup(
+    vcp: *mut VimConv,
+    from: *mut c_char,
+    to: *mut c_char,
+) -> c_int {
+    rs_convert_setup_ext(vcp, from, true, to, true)
+}
+
+/// Setup `vcp` for conversion from `from` to `to`.
+///
+/// `from_unicode_is_utf8`: if true, all "from" unicode charsets are treated as utf-8.
+/// `to_unicode_is_utf8`: if true, all "to" unicode charsets are treated as utf-8.
+///
+/// Returns OK on success, FAIL if no supported conversion is available.
+///
+/// # Safety
+/// `vcp` must be a valid pointer. `from`/`to` may be NULL.
+#[unsafe(export_name = "convert_setup_ext")]
+pub unsafe extern "C" fn rs_convert_setup_ext(
+    vcp: *mut VimConv,
+    from: *mut c_char,
+    from_unicode_is_utf8: bool,
+    to: *mut c_char,
+    to_unicode_is_utf8: bool,
+) -> c_int {
+    // Reset to no conversion: close any existing iconv fd first.
+    if (*vcp).vc_type == CONV_ICONV {
+        let fd = (*vcp).vc_fd as libc::iconv_t;
+        if fd != usize::MAX as libc::iconv_t {
+            libc::iconv_close(fd);
+        }
+    }
+    // Reset to MBYTE_NONE_CONV
+    (*vcp).vc_type = CONV_NONE;
+    (*vcp).vc_factor = 1;
+    (*vcp).vc_fd = std::ptr::null_mut();
+    (*vcp).vc_fail = false;
+
+    // No conversion when one of the names is empty or they are equal.
+    if from.is_null() || *from == 0 || to.is_null() || *to == 0 {
+        return OK;
+    }
+    if libc::strcmp(from, to) == 0 {
+        return OK;
+    }
+
+    let from_prop = rs_enc_canon_props(from);
+    let to_prop = rs_enc_canon_props(to);
+
+    let from_is_utf8: c_int = if from_unicode_is_utf8 {
+        from_prop & ENC_UNICODE
+    } else {
+        c_int::from(from_prop == ENC_UNICODE)
+    };
+    let to_is_utf8: c_int = if to_unicode_is_utf8 {
+        to_prop & ENC_UNICODE
+    } else {
+        c_int::from(to_prop == ENC_UNICODE)
+    };
+
+    if (from_prop & ENC_LATIN1) != 0 && to_is_utf8 != 0 {
+        // Internal latin1 -> utf-8 conversion.
+        (*vcp).vc_type = CONV_TO_UTF8;
+        (*vcp).vc_factor = 2;
+    } else if (from_prop & ENC_LATIN9) != 0 && to_is_utf8 != 0 {
+        // Internal latin9 -> utf-8 conversion.
+        (*vcp).vc_type = CONV_9_TO_UTF8;
+        (*vcp).vc_factor = 3;
+    } else if from_is_utf8 != 0 && (to_prop & ENC_LATIN1) != 0 {
+        // Internal utf-8 -> latin1 conversion.
+        (*vcp).vc_type = CONV_TO_LATIN1;
+    } else if from_is_utf8 != 0 && (to_prop & ENC_LATIN9) != 0 {
+        // Internal utf-8 -> latin9 conversion.
+        (*vcp).vc_type = CONV_TO_LATIN9;
+    } else {
+        // Use iconv() for conversion.
+        let to_enc: *mut c_char = if to_is_utf8 != 0 {
+            c"utf-8".as_ptr() as *mut c_char
+        } else {
+            to
+        };
+        let from_enc: *mut c_char = if from_is_utf8 != 0 {
+            c"utf-8".as_ptr() as *mut c_char
+        } else {
+            from
+        };
+        let fd_ptr = rs_my_iconv_open(to_enc, from_enc);
+        if fd_ptr != usize::MAX as *mut c_void {
+            (*vcp).vc_fd = fd_ptr;
+            (*vcp).vc_type = CONV_ICONV;
+            (*vcp).vc_factor = 4;
+        }
+    }
+
+    if (*vcp).vc_type == CONV_NONE {
+        return FAIL;
+    }
+
+    OK
+}
+
+/// Convert text `ptr[*lenp]` according to `vcp`.
+///
+/// Returns the result in `xmalloc`'d memory and sets `*lenp`.
+/// When `lenp` is NULL, use NUL-terminated strings.
+/// Illegal chars are often changed to "?", unless `vcp->vc_fail` is set.
+/// When something goes wrong, NULL is returned and `*lenp` is unchanged.
+///
+/// # Safety
+/// `vcp` and `ptr` must be valid pointers.
+#[unsafe(export_name = "string_convert")]
+pub unsafe extern "C" fn rs_string_convert(
+    vcp: *const VimConv,
+    ptr: *mut c_char,
+    lenp: *mut usize,
+) -> *mut c_char {
+    rs_string_convert_ext(vcp, ptr, lenp, std::ptr::null_mut())
+}
+
+/// Like `string_convert()`, but when `unconvlenp` is not NULL and there is an
+/// incomplete sequence at the end, it is not converted and `*unconvlenp` is
+/// set to the number of remaining bytes.
+///
+/// # Safety
+/// `vcp` and `ptr` must be valid pointers.
+#[allow(clippy::too_many_lines, clippy::branches_sharing_code)]
+#[unsafe(export_name = "string_convert_ext")]
+pub unsafe extern "C" fn rs_string_convert_ext(
+    vcp: *const VimConv,
+    ptr: *mut c_char,
+    lenp: *mut usize,
+    unconvlenp: *mut usize,
+) -> *mut c_char {
+    let len: usize = if lenp.is_null() {
+        libc::strlen(ptr)
+    } else {
+        *lenp
+    };
+
+    if len == 0 {
+        return xstrdup(c"".as_ptr());
+    }
+
+    let vc_type = (*vcp).vc_type;
+
+    match vc_type {
+        CONV_TO_UTF8 => {
+            // latin1 -> utf-8 conversion
+            let retval: *mut u8 = xmalloc(len * 2 + 1) as *mut u8;
+            let mut d = retval;
+            for i in 0..len {
+                let c = *ptr.add(i) as u8;
+                if c < 0x80 {
+                    *d = c;
+                    d = d.add(1);
+                } else {
+                    *d = 0xc0 | (c >> 6);
+                    d = d.add(1);
+                    *d = 0x80 | (c & 0x3f);
+                    d = d.add(1);
+                }
+            }
+            *d = NUL;
+            if !lenp.is_null() {
+                *lenp = (d as usize) - (retval as usize);
+            }
+            retval as *mut c_char
+        }
+
+        CONV_9_TO_UTF8 => {
+            // latin9 -> utf-8 conversion
+            let retval: *mut u8 = xmalloc(len * 3 + 1) as *mut u8;
+            let mut d = retval;
+            for i in 0..len {
+                let mut c = *ptr.add(i) as u8 as i32;
+                c = match c {
+                    0xa4 => 0x20ac, // euro
+                    0xa6 => 0x0160, // S hat
+                    0xa8 => 0x0161, // S -hat
+                    0xb4 => 0x017d, // Z hat
+                    0xb8 => 0x017e, // Z -hat
+                    0xbc => 0x0152, // OE
+                    0xbd => 0x0153, // oe
+                    0xbe => 0x0178, // Y
+                    other => other,
+                };
+                let mut buf = [0u8; 6];
+                let written = utf_char2bytes(c, &mut buf);
+                for b in &buf[..written] {
+                    *d = *b;
+                    d = d.add(1);
+                }
+            }
+            *d = NUL;
+            if !lenp.is_null() {
+                *lenp = (d as usize) - (retval as usize);
+            }
+            retval as *mut c_char
+        }
+
+        CONV_TO_LATIN1 | CONV_TO_LATIN9 => {
+            // utf-8 -> latin1 or latin9 conversion
+            let retval: *mut u8 = xmalloc(len + 1) as *mut u8;
+            let mut d = retval;
+            let input = std::slice::from_raw_parts(ptr as *const u8, len);
+            let mut i = 0usize;
+            while i < len {
+                let remaining = &input[i..];
+                let l = utf_ptr2len_len(remaining, remaining.len());
+                if l == 0 {
+                    *d = NUL;
+                    d = d.add(1);
+                } else if l == 1 {
+                    let l_w = UTF8LEN_TAB_ZERO[input[i] as usize];
+                    if l_w == 0 {
+                        // Illegal utf-8 byte cannot be converted
+                        xfree(retval as *mut c_char);
+                        return std::ptr::null_mut();
+                    }
+                    if !unconvlenp.is_null() && (l_w as usize) > len - i {
+                        // Incomplete sequence at the end.
+                        *unconvlenp = len - i;
+                        break;
+                    }
+                    *d = input[i];
+                    d = d.add(1);
+                } else {
+                    let mut c = utf_ptr2char(remaining);
+                    if vc_type == CONV_TO_LATIN9 {
+                        c = match c {
+                            0x20ac => 0xa4, // euro
+                            0x0160 => 0xa6, // S hat
+                            0x0161 => 0xa8, // S -hat
+                            0x017d => 0xb4, // Z hat
+                            0x017e => 0xb8, // Z -hat
+                            0x0152 => 0xbc, // OE
+                            0x0153 => 0xbd, // oe
+                            0x0178 => 0xbe, // Y
+                            // These codepoints are latin1 but NOT latin9
+                            0xa4 | 0xa6 | 0xa8 | 0xb4 | 0xb8 | 0xbc | 0xbd | 0xbe => 0x100,
+                            other => other,
+                        };
+                    }
+                    if !utf_iscomposing_legacy(c) {
+                        // skip composing chars
+                        if c < 0x100 {
+                            *d = c as u8;
+                            d = d.add(1);
+                        } else if (*vcp).vc_fail {
+                            xfree(retval as *mut c_char);
+                            return std::ptr::null_mut();
+                        } else {
+                            *d = 0xbf;
+                            d = d.add(1);
+                            if utf_char2cells(c) > 1 {
+                                *d = b'?';
+                                d = d.add(1);
+                            }
+                        }
+                    }
+                    i += l - 1;
+                }
+                i += 1;
+            }
+            *d = NUL;
+            if !lenp.is_null() {
+                *lenp = (d as usize) - (retval as usize);
+            }
+            retval as *mut c_char
+        }
+
+        CONV_ICONV => iconv_string_impl(vcp, ptr, len, unconvlenp, lenp),
+
+        _ => std::ptr::null_mut(),
     }
 }
