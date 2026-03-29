@@ -2262,7 +2262,8 @@ const FAIL: c_int = 0;
 const SPECIAL_WILDCHAR: &[u8] = b"`'{\"";
 
 extern "C" {
-    fn nvim_path_os_isdir(name: *const c_char) -> c_int;
+    #[link_name = "os_isdir"]
+    fn nvim_path_os_isdir(name: *const c_char) -> bool;
     fn nvim_path_xmalloc(size: usize) -> *mut c_char;
     fn nvim_path_xrealloc(ptr: *mut c_char, size: usize) -> *mut c_char;
     fn nvim_path_xfree(ptr: *mut c_char);
@@ -2372,7 +2373,7 @@ pub unsafe extern "C" fn rs_dir_of_file_exists(fname: *mut c_char) -> bool {
     }
     let saved = *p;
     *p = 0; // NUL-terminate at separator
-    let retval = nvim_path_os_isdir(fname) != 0;
+    let retval = nvim_path_os_isdir(fname);
     *p = saved;
     retval
 }
@@ -2618,9 +2619,12 @@ mod phase1_tests {
 // ============================================================================
 
 extern "C" {
+    #[link_name = "os_dirname"]
     fn nvim_path_os_dirname(buf: *mut c_char, len: usize) -> c_int;
+    #[link_name = "os_realpath"]
     fn nvim_path_os_realpath(name: *const c_char, buf: *mut c_char, len: usize) -> *mut c_char;
     fn nvim_path_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xstrlcpy"]
     fn nvim_path_xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
 }
 
@@ -2945,14 +2949,18 @@ const FILE_ID_SIZE: usize = 16;
 type FileIdBuf = [u8; FILE_ID_SIZE];
 
 extern "C" {
-    fn nvim_path_expand_env(src: *const c_char, dst: *mut c_char, dstlen: usize);
-    fn nvim_path_os_fileid(fname: *const c_char, id_out: *mut u8) -> c_int;
-    fn nvim_path_os_fileid_equal(a: *const u8, b: *const u8) -> c_int;
+    #[link_name = "expand_env"]
+    fn nvim_path_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int) -> usize;
+    #[link_name = "os_fileid"]
+    fn nvim_path_os_fileid(fname: *const c_char, id_out: *mut u8) -> bool;
+    #[link_name = "os_fileid_equal"]
+    fn nvim_path_os_fileid_equal(a: *const u8, b: *const u8) -> bool;
     fn nvim_path_file_exists_link(name: *const c_char) -> c_int;
     fn nvim_path_scandir_open(path: *const c_char, dir_out: *mut *mut c_void) -> c_int;
     fn nvim_path_scandir_next(dir: *mut c_void) -> *const c_char;
     fn nvim_path_scandir_close(dir: *mut c_void);
     fn nvim_path_STRICMP(a: *const c_char, b: *const c_char) -> c_int;
+    #[link_name = "copy_option_part"]
     fn nvim_path_copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
@@ -2960,12 +2968,14 @@ extern "C" {
         sep: *const c_char,
     ) -> usize;
     fn nvim_path_get_p_su() -> *const c_char;
+    #[link_name = "os_getenv"]
     fn nvim_path_os_getenv(name: *const c_char) -> *mut c_char;
     fn nvim_path_os_can_exe(
         name: *const c_char,
         abspath: *mut *mut c_char,
         use_path: c_int,
     ) -> c_int;
+    #[link_name = "vim_env_iter"]
     fn nvim_path_vim_env_iter(
         sep: c_char,
         val: *const c_char,
@@ -2975,6 +2985,7 @@ extern "C" {
     ) -> *const c_void;
     fn nvim_path_get_NameBuff() -> *mut c_char;
     fn nvim_path_get_NameBuff_size() -> usize;
+    #[link_name = "xstrlcat"]
     fn nvim_path_xstrlcat(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
     fn nvim_path_xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
     /// Access ga_len field of a garray_T (opaque).
@@ -3011,13 +3022,13 @@ pub unsafe extern "C" fn rs_path_full_compare(
     let mut file_id_2: FileIdBuf = [0u8; FILE_ID_SIZE];
 
     if expandenv {
-        nvim_path_expand_env(s1, exp1.as_mut_ptr(), MAXPATHL);
+        nvim_path_expand_env(s1, exp1.as_mut_ptr(), MAXPATHL as c_int);
     } else {
         nvim_path_xstrlcpy(exp1.as_mut_ptr(), s1, MAXPATHL);
     }
 
-    let id_ok_1 = nvim_path_os_fileid(exp1.as_ptr(), file_id_1.as_mut_ptr()) != 0;
-    let id_ok_2 = nvim_path_os_fileid(s2, file_id_2.as_mut_ptr()) != 0;
+    let id_ok_1 = nvim_path_os_fileid(exp1.as_ptr(), file_id_1.as_mut_ptr());
+    let id_ok_2 = nvim_path_os_fileid(s2, file_id_2.as_mut_ptr());
 
     if !id_ok_1 && !id_ok_2 {
         // If os_fileid() doesn't work, may compare the names.
@@ -3033,7 +3044,7 @@ pub unsafe extern "C" fn rs_path_full_compare(
     if !id_ok_1 || !id_ok_2 {
         return K_ONE_FILE_MISSING;
     }
-    if nvim_path_os_fileid_equal(file_id_1.as_ptr(), file_id_2.as_ptr()) != 0 {
+    if nvim_path_os_fileid_equal(file_id_1.as_ptr(), file_id_2.as_ptr()) {
         return K_EQUAL_FILES;
     }
     K_DIFFERENT_FILES
@@ -3063,7 +3074,7 @@ pub unsafe extern "C" fn rs_path_fix_case(name: *mut c_char) {
 
     // Get the file identity of the original name.
     let mut orig_id: FileIdBuf = [0u8; FILE_ID_SIZE];
-    if nvim_path_os_fileid(name, orig_id.as_mut_ptr()) == 0 {
+    if !nvim_path_os_fileid(name, orig_id.as_mut_ptr()) {
         return;
     }
 
@@ -3109,8 +3120,8 @@ pub unsafe extern "C" fn rs_path_fix_case(name: *mut c_char) {
 
             // Verify the inode is equal.
             let mut new_id: FileIdBuf = [0u8; FILE_ID_SIZE];
-            if nvim_path_os_fileid(newname.as_ptr(), new_id.as_mut_ptr()) != 0
-                && nvim_path_os_fileid_equal(orig_id.as_ptr(), new_id.as_ptr()) != 0
+            if nvim_path_os_fileid(newname.as_ptr(), new_id.as_mut_ptr())
+                && nvim_path_os_fileid_equal(orig_id.as_ptr(), new_id.as_ptr())
             {
                 // Copy the correctly-cased entry name into the tail.
                 let entry_len = libc::strlen(entry);
@@ -3487,7 +3498,8 @@ pub unsafe extern "C" fn rs_get_path_cutoff(
 // ============================================================================
 
 extern "C" {
-    fn nvim_path_os_path_exists(fname: *const c_char) -> c_int;
+    #[link_name = "os_path_exists"]
+    fn nvim_path_os_path_exists(fname: *const c_char) -> bool;
     fn nvim_path_ga_append_string(gap: *mut c_void, s: *mut c_char);
 }
 
@@ -3544,12 +3556,12 @@ pub unsafe extern "C" fn rs_addfile(gap: *mut c_void, f: *const c_char, flags: c
             if nvim_path_file_exists_link(f) == 0 {
                 return;
             }
-        } else if nvim_path_os_path_exists(f) == 0 {
+        } else if !nvim_path_os_path_exists(f) {
             return;
         }
     }
 
-    let isdir = nvim_path_os_isdir(f) != 0;
+    let isdir = nvim_path_os_isdir(f);
     if (isdir && (flags & EW_DIR) == 0) || (!isdir && (flags & EW_FILE) == 0) {
         return;
     }
@@ -3858,17 +3870,22 @@ extern "C" {
     fn nvim_path_get_got_int() -> c_int;
     fn nvim_path_get_p_fic() -> c_int;
     fn nvim_path_os_file_is_readable(fname: *const c_char) -> c_int;
+    #[link_name = "file_pat_to_reg_pat"]
     fn nvim_path_file_pat_to_reg_pat(
         pat: *const c_char,
         pat_end: *const c_char,
         allow_dirs: *mut c_char,
         no_bslash: c_int,
     ) -> *mut c_char;
-    fn nvim_path_rem_backslash(s: *const c_char) -> c_int;
+    #[link_name = "rem_backslash"]
+    fn nvim_path_rem_backslash(s: *const c_char) -> bool;
+    #[link_name = "backslash_halve"]
     fn nvim_path_backslash_halve(s: *mut c_char);
     fn nvim_path_emsg_silent_inc();
     fn nvim_path_emsg_silent_dec();
-    fn nvim_path_mb_isalpha(c: c_int) -> c_int;
+    #[link_name = "mb_isalpha"]
+    fn nvim_path_mb_isalpha(c: c_int) -> bool;
+    #[link_name = "utf_ptr2char"]
     fn nvim_path_utf_ptr2char(p: *const c_char) -> c_int;
     /// Sort `ga_data[start..]` (array of `char *`) using `pstrcmp`.
     fn nvim_path_ga_sort_strings(gap: *mut c_void, start: c_int);
@@ -3981,7 +3998,7 @@ pub unsafe extern "C" fn rs_do_path_expand(
     while *path_end != 0 {
         // May ignore a wildcard that has a backslash before it; it will
         // be removed by rem_backslash() or file_pat_to_reg_pat() below.
-        if path_end >= path.add(wildoff) && nvim_path_rem_backslash(path_end) != 0 {
+        if path_end >= path.add(wildoff) && nvim_path_rem_backslash(path_end) {
             *p = *path_end;
             p = p.add(1);
             path_end = path_end.add(1);
@@ -3996,7 +4013,7 @@ pub unsafe extern "C" fn rs_do_path_expand(
                 is_wild_char(*path_end as u8)
                     || (nvim_path_get_p_fic() == 0
                         && (flags & EW_ICASE) != 0
-                        && nvim_path_mb_isalpha(nvim_path_utf_ptr2char(path_end)) != 0)
+                        && nvim_path_mb_isalpha(nvim_path_utf_ptr2char(path_end)))
             }
             #[cfg(not(unix))]
             {
@@ -4021,7 +4038,7 @@ pub unsafe extern "C" fn rs_do_path_expand(
     // component.
     p = buf.add(wildoff);
     while p < s {
-        if nvim_path_rem_backslash(p.cast_const()) != 0 {
+        if nvim_path_rem_backslash(p.cast_const()) {
             // STRMOVE(p, p + 1): move bytes from p+1..=e to p..=e-1
             let move_len = (e as usize - p.add(1) as usize) + 1; // includes NUL
             std::ptr::copy(p.add(1) as *const u8, p as *mut u8, move_len);
@@ -4181,7 +4198,7 @@ pub unsafe extern "C" fn rs_do_path_expand(
                     if nvim_path_file_exists_link(buf.cast_const()) != 0 {
                         rs_addfile(gap, buf.cast_const(), flags);
                     }
-                } else if nvim_path_os_path_exists(buf.cast_const()) != 0 {
+                } else if nvim_path_os_path_exists(buf.cast_const()) {
                     rs_addfile(gap, buf.cast_const(), flags);
                 }
             }
@@ -4214,17 +4231,20 @@ extern "C" {
     /// Get curbuf->b_ffname (may be NULL)
     fn nvim_path_curbuf_ffname() -> *const c_char;
     /// expand_env_save_opt(src, true) -- may return NULL
-    fn nvim_path_expand_env_save_opt(src: *mut c_char, one: c_int) -> *mut c_char;
+    #[link_name = "expand_env_save_opt"]
+    fn nvim_path_expand_env_save_opt(src: *mut c_char, one: bool) -> *mut c_char;
     /// backslash_halve_save(str) -- allocates copy
+    #[link_name = "backslash_halve_save"]
     fn nvim_path_backslash_halve_save(s: *const c_char) -> *mut c_char;
     /// p_wig option value
     fn nvim_path_get_p_wig() -> *const c_char;
     /// match_file_list(list, fname, ffname)
+    #[link_name = "match_file_list"]
     fn nvim_path_match_file_list(
         list: *const c_char,
         fname: *const c_char,
         ffname: *const c_char,
-    ) -> c_int;
+    ) -> bool;
     /// os_expand_wildcards(num_pat, pat, num_file, file, flags)
     fn nvim_path_os_expand_wildcards(
         num_pat: c_int,
@@ -4596,7 +4616,7 @@ pub unsafe extern "C" fn rs_gen_expand_wildcards(
         } else {
             // First expand environment variables, "~/" and "~user/".
             if (rs_has_env_var(p) != 0 && (flags & EW_NOTENV) == 0) || *p as u8 == b'~' {
-                p = nvim_path_expand_env_save_opt(p, 1);
+                p = nvim_path_expand_env_save_opt(p, true);
                 if p.is_null() {
                     p = *pat.add(i as usize);
                 } else {
@@ -4721,7 +4741,7 @@ pub unsafe extern "C" fn rs_expand_wildcards(
         while i < *num_files {
             let cur_name = *(*files).add(i as usize);
             let full_name = rs_FullName_save(cur_name, false);
-            if !full_name.is_null() && nvim_path_match_file_list(p_wig, cur_name, full_name) != 0 {
+            if !full_name.is_null() && nvim_path_match_file_list(p_wig, cur_name, full_name) {
                 // Remove this matching file from the list.
                 nvim_path_xfree(cur_name);
                 let mut j = i;

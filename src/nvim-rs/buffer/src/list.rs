@@ -892,6 +892,7 @@ pub unsafe extern "C" fn buflist_list_export(eap: *const c_void) {
 
 // Additional accessors for buflist_findpat.
 extern "C" {
+    #[link_name = "file_pat_to_reg_pat"]
     fn nvim_path_file_pat_to_reg_pat(
         pat: *const c_char,
         pat_end: *const c_char,

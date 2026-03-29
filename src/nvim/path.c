@@ -50,10 +50,6 @@ static int expand_backtick(garray_T *gap, char *pat, int flags);
 static int expand_in_path(garray_T *gap, char *pattern, int flags);
 
 // C accessor functions for Rust
-int nvim_path_os_isdir(const char *name) {
-  return os_isdir(name);
-}
-
 void *nvim_path_xmalloc(size_t size) {
   return xmalloc(size);
 }
@@ -66,34 +62,8 @@ void nvim_path_xfree(void *ptr) {
   xfree(ptr);
 }
 
-int nvim_path_os_dirname(char *buf, size_t len) {
-  return os_dirname(buf, len);
-}
-
-char *nvim_path_os_realpath(const char *name, char *buf, size_t len) {
-  return os_realpath(name, buf, len);
-}
-
 char *nvim_path_xstrdup(const char *str) {
   return xstrdup(str);
-}
-
-size_t nvim_path_xstrlcpy(char *dst, const char *src, size_t dsize) {
-  return xstrlcpy(dst, src, dsize);
-}
-
-// Phase 3 C accessor functions for Rust
-void nvim_path_expand_env(const char *src, char *dst, size_t dstlen) {
-  expand_env((char *)src, dst, (int)dstlen);
-}
-
-int nvim_path_os_fileid(const char *fname, uint8_t *id_out) {
-  _Static_assert(sizeof(FileID) == 16, "FileID must be 16 bytes");
-  return os_fileid(fname, (FileID *)id_out) ? 1 : 0;
-}
-
-int nvim_path_os_fileid_equal(const uint8_t *a, const uint8_t *b) {
-  return os_fileid_equal((const FileID *)a, (const FileID *)b) ? 1 : 0;
 }
 
 int nvim_path_file_exists_link(const char *name) {
@@ -125,25 +95,12 @@ int nvim_path_STRICMP(const char *a, const char *b) {
   return STRICMP(a, b);
 }
 
-size_t nvim_path_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep) {
-  return copy_option_part(option, buf, (int)maxlen, (char *)sep);
-}
-
 const char *nvim_path_get_p_su(void) {
   return p_su;
 }
 
-char *nvim_path_os_getenv(const char *name) {
-  return os_getenv(name);
-}
-
 int nvim_path_os_can_exe(const char *name, char **abspath, int use_path) {
   return os_can_exe(name, abspath, use_path != 0) ? 1 : 0;
-}
-
-const void *nvim_path_vim_env_iter(char sep, const char *val, const void *iter,
-                                   const char **dir, size_t *len) {
-  return vim_env_iter(sep, val, iter, dir, len);
 }
 
 char *nvim_path_get_NameBuff(void) {
@@ -152,10 +109,6 @@ char *nvim_path_get_NameBuff(void) {
 
 size_t nvim_path_get_NameBuff_size(void) {
   return sizeof(NameBuff);
-}
-
-size_t nvim_path_xstrlcat(char *dst, const char *src, size_t dstsize) {
-  return xstrlcat(dst, src, dstsize);
 }
 
 void nvim_path_xmemcpyz(char *dst, const char *src, size_t len) {
@@ -168,11 +121,6 @@ int nvim_path_ga_len(const void *gap) {
 
 const char *nvim_path_ga_get_string(const void *gap, int i) {
   return ((const char **)((const garray_T *)gap)->ga_data)[i];
-}
-
-// Phase 4 C accessor functions
-int nvim_path_os_path_exists(const char *fname) {
-  return os_path_exists(fname) ? 1 : 0;
 }
 
 void nvim_path_ga_append_string(void *gap, char *s) {
@@ -233,33 +181,12 @@ int nvim_path_os_file_is_readable(const char *fname) {
   return os_file_is_readable(fname) ? 1 : 0;
 }
 
-char *nvim_path_file_pat_to_reg_pat(const char *pat, const char *pat_end,
-                                     char *allow_dirs, int no_bslash) {
-  return file_pat_to_reg_pat(pat, pat_end, allow_dirs, no_bslash);
-}
-
-int nvim_path_rem_backslash(const char *s) {
-  return rem_backslash(s) ? 1 : 0;
-}
-
-void nvim_path_backslash_halve(char *s) {
-  backslash_halve(s);
-}
-
 void nvim_path_emsg_silent_inc(void) {
   emsg_silent++;
 }
 
 void nvim_path_emsg_silent_dec(void) {
   emsg_silent--;
-}
-
-int nvim_path_mb_isalpha(int c) {
-  return mb_isalpha(c) ? 1 : 0;
-}
-
-int nvim_path_utf_ptr2char(const char *p) {
-  return utf_ptr2char(p);
 }
 
 void nvim_path_ga_sort_strings(void *gap, int start) {
@@ -283,20 +210,8 @@ const char *nvim_path_curbuf_ffname(void) {
   return curbuf->b_ffname;
 }
 
-char *nvim_path_expand_env_save_opt(char *src, int one) {
-  return expand_env_save_opt(src, one != 0);
-}
-
-char *nvim_path_backslash_halve_save(const char *s) {
-  return backslash_halve_save(s);
-}
-
 const char *nvim_path_get_p_wig(void) {
   return p_wig;
-}
-
-int nvim_path_match_file_list(const char *list, const char *fname, const char *ffname) {
-  return match_file_list((char *)list, (char *)fname, (char *)ffname) ? 1 : 0;
 }
 
 int nvim_path_os_expand_wildcards(int num_pat, char **pat, int *num_file,
