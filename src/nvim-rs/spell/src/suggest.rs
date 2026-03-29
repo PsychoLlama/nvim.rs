@@ -5596,11 +5596,25 @@ pub unsafe extern "C" fn rs_suggest_try_soundalike_finish() {
 }
 
 // =============================================================================
-// Phase N: spell_suggest_intern migration
+// Phase N: spell_suggest_intern and spell_suggest_file migrations
 // =============================================================================
 
 extern "C" {
     fn vgetc() -> c_int;
+    #[link_name = "os_fopen"]
+    fn file_os_fopen(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
+    #[link_name = "vim_fgets"]
+    fn file_vim_fgets(buf: *mut c_char, size: c_int, fp: *mut libc::FILE) -> bool;
+    #[link_name = "semsg"]
+    fn file_semsg(fmt: *const c_char, ...) -> bool;
+    #[link_name = "e_notopen"]
+    static file_e_notopen: *const c_char;
+    #[link_name = "line_breakcheck"]
+    fn file_line_breakcheck();
+    #[link_name = "strchr"]
+    fn file_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    #[link_name = "strcasecmp"]
+    fn file_strcasecmp(s1: *const c_char, s2: *const c_char) -> c_int;
 }
 
 /// Score constants for soundfold-based suggestion passes.
@@ -5714,6 +5728,99 @@ pub unsafe extern "C" fn rs_spell_suggest_intern(su: *mut std::ffi::c_void, inte
             rs_cleanup_suggestions(data, len_ptr, maxscore, maxcount);
         }
     }
+}
+
+/// Rust implementation of C `spell_suggest_file`.
+///
+/// Reads suggestions from a file and adds matching ones to the suggestion list.
+/// File format: `badword/goodword` one per line.
+///
+/// # Safety
+/// `su` must be a valid suginfo_T pointer. `fname` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_suggest_file(su: *mut std::ffi::c_void, fname: *mut c_char) {
+    let fd = file_os_fopen(fname, c"r".as_ptr());
+    if fd.is_null() {
+        file_semsg(c"%s: %s".as_ptr(), file_e_notopen, fname);
+        return;
+    }
+
+    let su_badword = nvim_suginfo_get_badword(su);
+    let su_badlen = nvim_suginfo_get_badlen(su);
+    let su_badflags = nvim_suginfo_get_badflags(su);
+    let su_sallang = nvim_suginfo_get_sallang(su);
+
+    let mut line = [0u8; MAXWLEN * 2];
+    let mut cword = [0u8; MAXWLEN];
+
+    while !file_vim_fgets(
+        line.as_mut_ptr().cast::<c_char>(),
+        (MAXWLEN * 2) as c_int,
+        fd,
+    ) && !crate::got_int
+    {
+        file_line_breakcheck();
+
+        // Look for the '/' separator between bad word and good word.
+        let p = file_strchr(line.as_ptr().cast::<c_char>(), c_int::from(b'/'));
+        if p.is_null() {
+            continue; // No '/' found, skip the line.
+        }
+        // NUL-terminate the bad word part and advance past '/'.
+        *p = 0;
+        let good_start = p.add(1);
+
+        // Check if bad word matches.
+        if file_strcasecmp(su_badword, line.as_ptr().cast::<c_char>()) == 0 {
+            // Match! Isolate the good word, until CR or NL.
+            let mut len = 0usize;
+            while *(good_start.add(len) as *const u8) >= b' ' {
+                len += 1;
+            }
+            *good_start.add(len) = 0;
+
+            // If the suggestion doesn't have specific case, duplicate the case
+            // of the bad word.
+            let good_ptr = if crate::rs_captype(good_start, std::ptr::null()) == 0 {
+                crate::rs_make_case_word(
+                    good_start,
+                    cword.as_mut_ptr().cast::<c_char>(),
+                    su_badflags,
+                );
+                cword.as_ptr().cast::<c_char>()
+            } else {
+                good_start
+            };
+
+            let ga = nvim_suginfo_get_ga(su);
+            rs_add_suggestion(
+                su,
+                ga,
+                good_ptr,
+                su_badlen,
+                SCORE_FILE,
+                0,
+                true,
+                su_sallang.cast::<std::ffi::c_void>(),
+                false,
+            );
+        }
+    }
+
+    libc::fclose(fd);
+
+    // Remove bogus suggestions, sort and truncate at "maxcount".
+    let ga = nvim_suginfo_get_ga(su);
+    let data = (*ga).ga_data.cast::<CSuggestT>();
+    let len_ptr = std::ptr::addr_of_mut!((*ga).ga_len);
+    let su_badptr = nvim_suginfo_get_badptr(su);
+    rs_check_suggestions(data, len_ptr, su_badptr);
+    let ga = nvim_suginfo_get_ga(su);
+    let data = (*ga).ga_data.cast::<CSuggestT>();
+    let len_ptr = std::ptr::addr_of_mut!((*ga).ga_len);
+    let maxscore = nvim_suginfo_get_maxscore(su);
+    let maxcount = nvim_suginfo_get_maxcount(su);
+    rs_cleanup_suggestions(data, len_ptr, maxscore, maxcount);
 }
 
 // =============================================================================

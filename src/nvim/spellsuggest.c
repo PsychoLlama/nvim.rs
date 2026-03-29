@@ -171,6 +171,7 @@ extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int
                               bool maxsf);
 extern void rs_add_banned(void *su, char *word);
 extern void rs_spell_suggest_intern(void *su, bool interactive);
+extern void rs_spell_suggest_file(void *su, char *fname);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -532,7 +533,7 @@ static void spell_find_suggest(char *badptr, int badlen, suginfo_T *su, int maxc
       }
     } else if (strncmp(buf, "file:", 5) == 0) {
       // Use list of suggestions in a file.
-      spell_suggest_file(su, buf + 5);
+      rs_spell_suggest_file(su, buf + 5);
     } else if (strncmp(buf, "timeout:", 8) == 0) {
       // Limit the time searching for suggestions.
       spell_suggest_timeout = atoi(buf + 8);
@@ -578,54 +579,6 @@ static void spell_suggest_expr(suginfo_T *su, char *expr)
     });
     tv_list_unref(list);
   }
-
-  // Remove bogus suggestions, sort and truncate at "maxcount".
-  rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
-  rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
-                         su->su_maxscore, su->su_maxcount);
-}
-
-/// Find suggestions in file "fname".  Used for "file:" in 'spellsuggest'.
-static void spell_suggest_file(suginfo_T *su, char *fname)
-{
-  char line[MAXWLEN * 2];
-  int len;
-  char cword[MAXWLEN];
-
-  // Open the file.
-  FILE *fd = os_fopen(fname, "r");
-  if (fd == NULL) {
-    semsg(_(e_notopen), fname);
-    return;
-  }
-
-  // Read it line by line.
-  while (!vim_fgets(line, MAXWLEN * 2, fd) && !got_int) {
-    line_breakcheck();
-
-    char *p = vim_strchr(line, '/');
-    if (p == NULL) {
-      continue;             // No Tab found, just skip the line.
-    }
-    *p++ = NUL;
-    if (STRICMP(su->su_badword, line) == 0) {
-      // Match!  Isolate the good word, until CR or NL.
-      for (len = 0; (uint8_t)p[len] >= ' '; len++) {}
-      p[len] = NUL;
-
-      // If the suggestion doesn't have specific case duplicate the case
-      // of the bad word.
-      if (captype(p, NULL) == 0) {
-        make_case_word(p, cword, su->su_badflags);
-        p = cword;
-      }
-
-      rs_add_suggestion(su, &su->su_ga, p, su->su_badlen,
-                        SCORE_FILE, 0, true, su->su_sallang, false);
-    }
-  }
-
-  fclose(fd);
 
   // Remove bogus suggestions, sort and truncate at "maxcount".
   rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
