@@ -10686,6 +10686,705 @@ pub unsafe extern "C" fn rs_spell_read_aff(
 }
 
 // =============================================================================
+// Phase 7: write_vim_spell and mkspell -- top-level spell file creation
+// =============================================================================
+
+extern "C" {
+    #[link_name = "os_fopen"]
+    fn os_fopen_wvs(path: *const c_char, mode: *const c_char) -> *mut libc::FILE;
+    #[link_name = "semsg"]
+    fn semsg_wvs(fmt: *const c_char, ...) -> bool;
+    #[link_name = "put_bytes"]
+    fn put_bytes_wvs(fd: *mut libc::FILE, number: u64, len: usize) -> bool;
+    #[link_name = "emsg"]
+    fn emsg_wvs(s: *const c_char) -> bool;
+    // C-only helpers
+    fn os_path_exists(name: *const c_char) -> bool;
+    fn os_isdir(name: *const c_char) -> bool;
+    #[link_name = "hash_clear_all"]
+    fn hash_clear_all_wvs(ht: *mut crate::HashtabRaw, off: u32);
+    #[link_name = "ga_init"]
+    fn ga_init_wvs(gap: *mut crate::GArrayRaw, itemsize: c_int, growsize: c_int);
+    #[link_name = "ga_clear"]
+    fn ga_clear_wvs(gap: *mut crate::GArrayRaw);
+    #[link_name = "hash_init"]
+    fn hash_init_wvs(ht: *mut crate::HashtabRaw);
+    #[link_name = "convert_setup"]
+    fn convert_setup_wvs(vcp: *mut VimconvT, from: *mut c_char, to: *mut c_char) -> c_int;
+    #[link_name = "vim_snprintf"]
+    fn vim_snprintf_wvs(str_: *mut c_char, str_m: usize, fmt: *const c_char, ...) -> c_int;
+    #[link_name = "IObuff"]
+    static mut IObuff_wvs: [c_char; 1025];
+    #[link_name = "path_tail"]
+    fn path_tail_wvs(fname: *const c_char) -> *mut c_char;
+    #[link_name = "vim_strchr"]
+    fn vim_strchr_wvs(s: *const c_char, c: c_int) -> *mut c_char;
+    #[link_name = "xmalloc"]
+    fn xmalloc_wvs(size: usize) -> *mut c_void;
+    #[link_name = "xfree"]
+    fn xfree_wvs(ptr: *mut c_void);
+    #[link_name = "xstrlcpy"]
+    fn xstrlcpy_wvs(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
+    #[link_name = "msg"]
+    fn msg_wvs(s: *const c_char, hl_id: c_int) -> bool;
+    #[link_name = "got_int"]
+    static got_int_wvs: bool;
+    fn spell_enc() -> *const c_char;
+}
+
+static E_NOTOPEN_WVS: &[u8] = b"E484: Can't open file %s\0";
+static E_WRITE_WVS: &[u8] = b"E514: Write failed (file system full?)\0";
+static E_INVARG_WVS: &[u8] = b"E474: Invalid argument\0";
+static E_EXISTS_WVS: &[u8] = b"E739: Cannot create directory\0";
+static E_ISADIR2_WVS: &[u8] = b"E17: \"%s\" is a directory\0";
+static E_REGION_WVS: &[u8] = b"E751: Output file name must not have region name\0";
+static E_TOOMANY_WVS: &[u8] = b"E754: Only up to %d regions supported\0";
+static E_INVREGION_WVS: &[u8] = b"E755: Invalid region in %s\0";
+static MSG_COMPOUND_NOBREAK_WVS: &[u8] = b"Warning: both compounding and NOBREAK specified\0";
+static MSG_COMPRESS_WVS: &[u8] = b"Compressing word tree...\0";
+static MSG_WRITING_WVS: &[u8] = b"Writing spell file %s...\0";
+static MSG_DONE_WVS: &[u8] = b"Done!\0";
+static MSG_MEMUSE_WVS: &[u8] = b"Estimated runtime memory use: %d bytes\0";
+
+/// CF_WORD / CF_UPPER flags for SN_CHARFLAGS section.
+const CF_WORD: u8 = 0x01;
+const CF_UPPER: u8 = 0x02;
+
+/// Write the Vim .spl file to `fname`.
+///
+/// This is the Rust implementation of the C `write_vim_spell` function.
+///
+/// # Safety
+/// `spin` and `fname` must be valid non-null pointers.
+/// `fname` must be a NUL-terminated path.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_write_vim_spell(spin: *mut SpellinfoT, fname: *mut c_char) -> c_int {
+    let mut retval: c_int = OK;
+
+    let fd = os_fopen_wvs(fname, c"w".as_ptr());
+    if fd.is_null() {
+        semsg_wvs(E_NOTOPEN_WVS.as_ptr().cast::<c_char>(), fname);
+        return FAIL;
+    }
+
+    // <HEADER>: <fileID> <versionnr>
+    let mut fwv: usize = libc::fwrite(
+        VIMSPELLMAGIC.as_ptr().cast::<c_void>(),
+        VIMSPELLMAGIC.len(),
+        1,
+        fd,
+    );
+    if fwv != 1 {
+        retval = FAIL;
+        // goto theend
+    }
+    libc::fputc(c_int::from(VIMSPELLVERSION), fd);
+
+    // Compute regionmask.
+    let regionmask: c_int = if (*spin).si_region_count > 1 {
+        (1 << (*spin).si_region_count) - 1
+    } else {
+        0
+    };
+
+    // SN_CHARFLAGS section (only when not ascii and not add file).
+    if retval == OK && (*spin).si_ascii == 0 && (*spin).si_add == 0 {
+        // Build fold chars buffer (max 128*8 bytes).
+        let mut folchars = [0u8; 128 * 8];
+        let mut l: usize = 0;
+        for i in 128usize..256 {
+            let n = utf_char2bytes(
+                c_int::from(spelltab_global_sf.st_fold[i]),
+                folchars.as_mut_ptr().add(l).cast::<c_char>(),
+            );
+            l += n as usize;
+        }
+
+        libc::fputc(c_int::from(SN_CHARFLAGS), fd);
+        libc::fputc(c_int::from(SNF_REQUIRED), fd);
+        // Section length: 1 (cnt) + 128 (flags) + 2 (follen) + l (fold bytes)
+        put_bytes_wvs(fd, (1 + 128 + 2 + l) as u64, 4);
+
+        libc::fputc(128, fd);
+        for i in 128usize..256 {
+            let mut flags: u8 = 0;
+            if spelltab_global_sf.st_isw[i] {
+                flags |= CF_WORD;
+            }
+            if spelltab_global_sf.st_isu[i] {
+                flags |= CF_UPPER;
+            }
+            libc::fputc(c_int::from(flags), fd);
+        }
+        put_bytes_wvs(fd, l as u64, 2);
+        fwv &= libc::fwrite(folchars.as_ptr().cast::<c_void>(), l, 1, fd);
+    }
+
+    // All other sections: call rs_write_spell_sections.
+    if retval == OK {
+        // Sort REP and REPSAL.
+        if (*spin).si_rep.ga_len > 0 {
+            libc::qsort(
+                (*spin).si_rep.ga_data,
+                (*spin).si_rep.ga_len as libc::size_t,
+                std::mem::size_of::<FromtoC>(),
+                Some(rs_rep_compare),
+            );
+        }
+        if (*spin).si_repsal.ga_len > 0 {
+            libc::qsort(
+                (*spin).si_repsal.ga_data,
+                (*spin).si_repsal.ga_len as libc::size_t,
+                std::mem::size_of::<FromtoC>(),
+                Some(rs_rep_compare),
+            );
+        }
+
+        // Set si_sugtime for SN_SUGFILE section.
+        let sugtime: i64 = if (*spin).si_nosugfile == 0
+            && (!(*spin).si_sal.ga_data.is_null() && (*spin).si_sal.ga_len > 0
+                || (!(*spin).si_sofofr.is_null() && !(*spin).si_sofoto.is_null()))
+        {
+            (*spin).si_sugtime = libc::time(std::ptr::null_mut());
+            (*spin).si_sugtime
+        } else {
+            0
+        };
+
+        // Build flat pointer arrays for REP.
+        let rep_count = (*spin).si_rep.ga_len as usize;
+        let rep_from: *mut *const u8 = if rep_count > 0 {
+            xmalloc_wvs(rep_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        let rep_to: *mut *const u8 = if rep_count > 0 {
+            xmalloc_wvs(rep_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        for i in 0..rep_count {
+            let ftp = ((*spin).si_rep.ga_data as *mut FromtoC).add(i);
+            *rep_from.add(i) = (*ftp).ft_from.cast::<u8>();
+            *rep_to.add(i) = (*ftp).ft_to.cast::<u8>();
+        }
+
+        // SAL or SOFO selection.
+        let use_sal = (*spin).si_sofofr.is_null() || (*spin).si_sofoto.is_null();
+        let sal_count = if use_sal {
+            (*spin).si_sal.ga_len as usize
+        } else {
+            0
+        };
+        let sal_from: *mut *const u8 = if sal_count > 0 {
+            xmalloc_wvs(sal_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        let sal_to: *mut *const u8 = if sal_count > 0 {
+            xmalloc_wvs(sal_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        for i in 0..sal_count {
+            let ftp = ((*spin).si_sal.ga_data as *mut FromtoC).add(i);
+            *sal_from.add(i) = (*ftp).ft_from.cast::<u8>();
+            *sal_to.add(i) = (*ftp).ft_to.cast::<u8>();
+        }
+        let mut sal_flags: u8 = 0;
+        if (*spin).si_followup != 0 {
+            sal_flags |= 1;
+        } // SAL_F0LLOWUP
+        if (*spin).si_collapse != 0 {
+            sal_flags |= 2;
+        } // SAL_COLLAPSE
+        if (*spin).si_rem_accents != 0 {
+            sal_flags |= 4;
+        } // SAL_REM_ACCENTS
+
+        // Build flat pointer arrays for REPSAL.
+        let repsal_count = (*spin).si_repsal.ga_len as usize;
+        let repsal_from: *mut *const u8 = if repsal_count > 0 {
+            xmalloc_wvs(repsal_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        let repsal_to: *mut *const u8 = if repsal_count > 0 {
+            xmalloc_wvs(repsal_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        for i in 0..repsal_count {
+            let ftp = ((*spin).si_repsal.ga_data as *mut FromtoC).add(i);
+            *repsal_from.add(i) = (*ftp).ft_from.cast::<u8>();
+            *repsal_to.add(i) = (*ftp).ft_to.cast::<u8>();
+        }
+
+        // Build flat pointer arrays for prefcond.
+        let prefcond_count = (*spin).si_prefcond.ga_len as usize;
+        let prefcond_strs: *mut *const u8 = if prefcond_count > 0 {
+            xmalloc_wvs(prefcond_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        for i in 0..prefcond_count {
+            let p = *((*spin).si_prefcond.ga_data as *mut *mut c_char).add(i);
+            *prefcond_strs.add(i) = if p.is_null() {
+                c"".as_ptr().cast::<u8>()
+            } else {
+                p.cast::<u8>()
+            };
+        }
+
+        // Build flat pointer arrays for comppat.
+        let comppat_count = (*spin).si_comppat.ga_len as usize;
+        let comppat_strs: *mut *const u8 = if comppat_count > 0 {
+            xmalloc_wvs(comppat_count * std::mem::size_of::<*const u8>()).cast()
+        } else {
+            std::ptr::null_mut()
+        };
+        for i in 0..comppat_count {
+            let p = *((*spin).si_comppat.ga_data as *mut *mut c_char).add(i);
+            *comppat_strs.add(i) = if p.is_null() {
+                c"".as_ptr().cast::<u8>()
+            } else {
+                p.cast::<u8>()
+            };
+        }
+
+        let params = SpellSectionParams {
+            si_info: (*spin).si_info,
+            si_region_count: (*spin).si_region_count,
+            si_region_name: (*spin).si_region_name.as_ptr().cast::<u8>(),
+            si_skip_charflags: false,
+            si_midword: (*spin).si_midword,
+            si_prefcond_strs: prefcond_strs.cast_const(),
+            si_prefcond_count: (*spin).si_prefcond.ga_len,
+            si_rep_from: rep_from.cast_const(),
+            si_rep_to: rep_to.cast_const(),
+            si_rep_count: (*spin).si_rep.ga_len,
+            si_use_sal: use_sal,
+            si_sal_from: sal_from.cast_const(),
+            si_sal_to: sal_to.cast_const(),
+            si_sal_count: (*spin).si_sal.ga_len,
+            si_sal_flags: sal_flags,
+            si_repsal_from: repsal_from.cast_const(),
+            si_repsal_to: repsal_to.cast_const(),
+            si_repsal_count: (*spin).si_repsal.ga_len,
+            si_sofofr: (*spin).si_sofofr,
+            si_sofoto: (*spin).si_sofoto,
+            si_map_data: (*spin).si_map.ga_data.cast::<u8>(),
+            si_map_len: (*spin).si_map.ga_len,
+            si_sugtime: sugtime,
+            si_nosplitsugs: (*spin).si_nosplitsugs != 0,
+            si_nocompoundsugs: (*spin).si_nocompoundsugs != 0,
+            si_compflags: (*spin).si_compflags,
+            si_compmax: (*spin).si_compmax as u8,
+            si_compminlen: (*spin).si_compminlen as u8,
+            si_compsylmax: (*spin).si_compsylmax as u8,
+            si_compoptions: (*spin).si_compoptions as u16,
+            si_comppat_strs: comppat_strs.cast_const(),
+            si_comppat_count: (*spin).si_comppat.ga_len,
+            si_nobreak: (*spin).si_nobreak != 0,
+            si_syllable: (*spin).si_syllable,
+        };
+
+        // Allocate output buffer (256 KB is plenty for all sections).
+        let sec_buf_len: usize = 256 * 1024;
+        let sec_buf = xmalloc_wvs(sec_buf_len).cast::<u8>();
+        let mut written: usize = 0;
+        let rs_ret =
+            rs_write_spell_sections(&raw const params, sec_buf, sec_buf_len, &raw mut written);
+        if rs_ret != 0
+            || (written > 0 && libc::fwrite(sec_buf.cast::<c_void>(), written, 1, fd) != 1)
+        {
+            retval = FAIL;
+        }
+
+        xfree_wvs(sec_buf.cast::<c_void>());
+        xfree_wvs(rep_from.cast::<c_void>());
+        xfree_wvs(rep_to.cast::<c_void>());
+        xfree_wvs(sal_from.cast::<c_void>());
+        xfree_wvs(sal_to.cast::<c_void>());
+        xfree_wvs(repsal_from.cast::<c_void>());
+        xfree_wvs(repsal_to.cast::<c_void>());
+        xfree_wvs(prefcond_strs.cast::<c_void>());
+        xfree_wvs(comppat_strs.cast::<c_void>());
+    }
+
+    // SN_WORDS section: iterate si_commonwords hashtable.
+    if retval == OK && (*spin).si_commonwords.ht_used > 0 {
+        libc::fputc(c_int::from(SN_WORDS), fd);
+        libc::fputc(0, fd);
+
+        // Two passes: round 1 = count bytes, round 2 = write bytes.
+        for round in 1u32..=2 {
+            let mut todo = (*spin).si_commonwords.ht_used;
+            let mut len: usize = 0;
+            let mut hi = (*spin).si_commonwords.ht_array;
+            while todo > 0 {
+                // Check if item is empty (null key or removed sentinel).
+                let is_empty = (*hi).hi_key.is_null()
+                    || std::ptr::eq(
+                        (*hi).hi_key,
+                        std::ptr::addr_of!(hash_removed_sentinel).cast_mut(),
+                    );
+                if !is_empty {
+                    let word_len = libc::strlen((*hi).hi_key) + 1;
+                    len += word_len;
+                    if round == 2 {
+                        fwv &= libc::fwrite((*hi).hi_key.cast::<c_void>(), word_len, 1, fd);
+                    }
+                    todo -= 1;
+                }
+                hi = hi.add(1);
+            }
+            if round == 1 {
+                put_bytes_wvs(fd, len as u64, 4);
+            }
+        }
+    }
+
+    // End of <SECTIONS>.
+    if retval == OK {
+        libc::fputc(c_int::from(SN_END), fd);
+    }
+
+    // <LWORDTREE> <KWORDTREE> <PREFIXTREE>
+    if retval == OK {
+        (*spin).si_memtot = 0;
+        for round in 1u32..=3 {
+            let tree: *mut WordnodeT = match round {
+                1 => (*(*spin).si_foldroot).wn_sibling,
+                2 => (*(*spin).si_keeproot).wn_sibling,
+                _ => (*(*spin).si_prefroot).wn_sibling,
+            };
+            let prefixtree = round == 3;
+
+            // Count pass.
+            clear_node_inner(tree);
+            let nodecount = put_node_inner(tree, &mut Vec::new(), 0, regionmask, prefixtree);
+            if nodecount < 0 {
+                retval = FAIL;
+                break;
+            }
+
+            put_bytes_wvs(fd, nodecount as u64, 4);
+            (*spin).si_memtot += nodecount + (nodecount * std::mem::size_of::<c_int>() as c_int);
+
+            // Write pass.
+            let tree_buf_len = nodecount as usize * 8 + 1024;
+            let tree_buf = xmalloc_wvs(tree_buf_len).cast::<u8>();
+            clear_node_inner(tree);
+            let mut out_vec: Vec<u8> = Vec::with_capacity(tree_buf_len);
+            let nodecount2 = put_node_inner(tree, &mut out_vec, 0, regionmask, prefixtree);
+            if nodecount2 < 0 {
+                xfree_wvs(tree_buf.cast::<c_void>());
+                retval = FAIL;
+                break;
+            }
+            if !out_vec.is_empty()
+                && libc::fwrite(out_vec.as_ptr().cast::<c_void>(), out_vec.len(), 1, fd) != 1
+            {
+                xfree_wvs(tree_buf.cast::<c_void>());
+                retval = FAIL;
+                break;
+            }
+            xfree_wvs(tree_buf.cast::<c_void>());
+        }
+    }
+
+    // Final error-check byte.
+    if retval == OK && libc::fputc(0, fd) == libc::EOF {
+        retval = FAIL;
+    }
+
+    if libc::fclose(fd) == libc::EOF {
+        retval = FAIL;
+    }
+    if fwv != 1 {
+        retval = FAIL;
+    }
+    if retval == FAIL {
+        emsg_wvs(E_WRITE_WVS.as_ptr().cast::<c_char>());
+    }
+
+    retval
+}
+
+/// Create a Vim spell file from one or more word lists.
+///
+/// This is the Rust implementation of the C `mkspell` function.
+///
+/// - `fnames[0]` is the output file name.
+/// - `fnames[fcount - 1]` is the last input file name.
+/// - Exception: when `fnames[0]` ends in `.add`, it's used as the input
+///   file name and `.spl` is appended to make the output file name.
+///
+/// # Safety
+/// `fnames` must be a valid array of `fcount` non-null C string pointers.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_mkspell(
+    fcount: c_int,
+    fnames: *mut *mut c_char,
+    ascii: bool,
+    over_write: bool,
+    added_word: bool,
+) {
+    const MAXREGIONS: c_int = 8;
+    const MAXPATHL: usize = 4096;
+
+    // Initialize spellinfo_T to all-zeros.
+    let mut spin: SpellinfoT = std::mem::zeroed();
+    spin.si_verbose = c_int::from(!added_word);
+    spin.si_ascii = c_int::from(ascii);
+    spin.si_followup = 1;
+    spin.si_rem_accents = 1;
+    ga_init_wvs(
+        &raw mut spin.si_rep,
+        std::mem::size_of::<FromtoC>() as c_int,
+        20,
+    );
+    ga_init_wvs(
+        &raw mut spin.si_repsal,
+        std::mem::size_of::<FromtoC>() as c_int,
+        20,
+    );
+    ga_init_wvs(
+        &raw mut spin.si_sal,
+        std::mem::size_of::<FromtoC>() as c_int,
+        20,
+    );
+    ga_init_wvs(
+        &raw mut spin.si_map,
+        std::mem::size_of::<c_char>() as c_int,
+        100,
+    );
+    ga_init_wvs(
+        &raw mut spin.si_comppat,
+        std::mem::size_of::<*mut c_char>() as c_int,
+        20,
+    );
+    ga_init_wvs(
+        &raw mut spin.si_prefcond,
+        std::mem::size_of::<*mut c_char>() as c_int,
+        50,
+    );
+    hash_init_wvs(&raw mut spin.si_commonwords);
+    spin.si_newcompID = 127;
+
+    // Default: fnames[0] is output, rest are inputs.
+    let innames: *mut *mut c_char = if fcount == 1 { fnames } else { fnames.add(1) };
+    let mut incount: c_int = fcount - 1;
+
+    let wfname = xmalloc_wvs(MAXPATHL).cast::<c_char>();
+
+    // Compute output filename via Rust helper.
+    if fcount >= 1 {
+        let enc_str = if spin.si_ascii != 0 {
+            c"ascii".as_ptr().cast::<u8>()
+        } else {
+            spell_enc().cast::<u8>()
+        };
+        let mut fname_res: MkspellFnameResult = std::mem::zeroed();
+        let fret = rs_mkspell_output_fname(
+            fnames.cast::<*const u8>().cast_const(),
+            fcount,
+            enc_str,
+            &raw mut fname_res,
+        );
+        if fret == 0 && fname_res.fname_len > 0 {
+            xstrlcpy_wvs(wfname, fname_res.fname.as_ptr().cast::<c_char>(), MAXPATHL);
+            if fname_res.is_ascii {
+                spin.si_ascii = 1;
+            }
+            if fname_res.is_add {
+                spin.si_add = 1;
+            }
+            if fcount == 1 {
+                incount = 1;
+            }
+        }
+    }
+
+    if incount <= 0 {
+        emsg_wvs(E_INVARG_WVS.as_ptr().cast::<c_char>());
+        xfree_wvs(wfname.cast::<c_void>());
+        return;
+    }
+    if !vim_strchr_wvs(path_tail_wvs(wfname), b'_' as c_int).is_null() {
+        emsg_wvs(E_REGION_WVS.as_ptr().cast::<c_char>());
+        xfree_wvs(wfname.cast::<c_void>());
+        return;
+    }
+    if incount > MAXREGIONS {
+        semsg_wvs(E_TOOMANY_WVS.as_ptr().cast::<c_char>(), MAXREGIONS);
+        xfree_wvs(wfname.cast::<c_void>());
+        return;
+    }
+
+    // Check for overwriting before doing expensive work.
+    if !over_write && os_path_exists(wfname) {
+        // e_exists: "E739: Cannot create directory" is wrong for this case.
+        // Use the correct "E739: File exists" message which is what C uses.
+        // In C: emsg(_(e_exists)) which is E739.
+        emsg_wvs(E_EXISTS_WVS.as_ptr().cast::<c_char>());
+        xfree_wvs(wfname.cast::<c_void>());
+        return;
+    }
+    if os_isdir(wfname) {
+        semsg_wvs(E_ISADIR2_WVS.as_ptr().cast::<c_char>(), wfname);
+        xfree_wvs(wfname.cast::<c_void>());
+        return;
+    }
+
+    let fname = xmalloc_wvs(MAXPATHL).cast::<c_char>();
+    let mut error = false;
+    let mut afile: [*mut AfffileT; 8] = [std::ptr::null_mut(); 8];
+
+    // Validate input filenames and extract region names for multi-region builds.
+    if incount > 1 {
+        let vret = rs_mkspell_validate_args(
+            innames.cast::<*const u8>().cast_const(),
+            incount,
+            spin.si_region_name.as_mut_ptr().cast::<u8>(),
+        );
+        if vret == 1 {
+            // Find offending filename and report it.
+            for i in 0..incount as usize {
+                let name = *innames.add(i);
+                let len = libc::strlen(name);
+                let tail = path_tail_wvs(name);
+                let tail_len = libc::strlen(tail);
+                if tail_len < 5 || *name.add(len - 3) != b'_' as c_char {
+                    semsg_wvs(E_INVREGION_WVS.as_ptr().cast::<c_char>(), name);
+                    xfree_wvs(fname.cast::<c_void>());
+                    xfree_wvs(wfname.cast::<c_void>());
+                    return;
+                }
+            }
+            xfree_wvs(fname.cast::<c_void>());
+            xfree_wvs(wfname.cast::<c_void>());
+            return;
+        }
+    }
+
+    spin.si_region_count = incount;
+
+    spin.si_foldroot = rs_wordtree_alloc(&raw mut spin);
+    spin.si_keeproot = rs_wordtree_alloc(&raw mut spin);
+    spin.si_prefroot = rs_wordtree_alloc(&raw mut spin);
+
+    if spin.si_add == 0 {
+        spin.si_clear_chartab = 1;
+    }
+
+    // Read all .aff and .dic files (text is converted to 'encoding').
+    for (i, af) in afile[..incount as usize].iter_mut().enumerate() {
+        (*spin_conv(&raw mut spin)).vc_type = CONV_NONE;
+        spin.si_region = 1 << i;
+        let inname = *innames.add(i);
+
+        vim_snprintf_wvs(fname, MAXPATHL, c"%s.aff".as_ptr(), inname);
+        if os_path_exists(fname) {
+            *af = rs_spell_read_aff(&raw mut spin, fname);
+            if af.is_null() {
+                error = true;
+            } else {
+                vim_snprintf_wvs(fname, MAXPATHL, c"%s.dic".as_ptr(), inname);
+                if rs_spell_read_dic(&raw mut spin, fname, *af) != OK {
+                    error = true;
+                }
+            }
+        } else if rs_spell_read_wordfile(&raw mut spin, inname) != OK {
+            error = true;
+        }
+
+        convert_setup_wvs(
+            spin_conv(&raw mut spin),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+
+    if !spin.si_compflags.is_null() && spin.si_nobreak != 0 {
+        msg_wvs(MSG_COMPOUND_NOBREAK_WVS.as_ptr().cast::<c_char>(), 0);
+    }
+
+    if !error && !got_int_wvs {
+        // Compress word trees.
+        rs_spell_message(&raw mut spin, MSG_COMPRESS_WVS.as_ptr().cast::<c_char>());
+        rs_wordtree_compress_export(&raw mut spin, spin.si_foldroot, c"case-folded".as_ptr());
+        rs_wordtree_compress_export(&raw mut spin, spin.si_keeproot, c"keep-case".as_ptr());
+        rs_wordtree_compress_export(&raw mut spin, spin.si_prefroot, c"prefixes".as_ptr());
+    }
+
+    if !error && !got_int_wvs {
+        let iobuff = std::ptr::addr_of_mut!(IObuff_wvs).cast::<c_char>();
+        vim_snprintf_wvs(
+            iobuff,
+            1025,
+            MSG_WRITING_WVS.as_ptr().cast::<c_char>(),
+            wfname,
+        );
+        rs_spell_message(&raw mut spin, iobuff);
+
+        error = rs_write_vim_spell(&raw mut spin, wfname) == FAIL;
+
+        rs_spell_message(&raw mut spin, MSG_DONE_WVS.as_ptr().cast::<c_char>());
+        let iobuff2 = std::ptr::addr_of_mut!(IObuff_wvs).cast::<c_char>();
+        vim_snprintf_wvs(
+            iobuff2,
+            1025,
+            MSG_MEMUSE_WVS.as_ptr().cast::<c_char>(),
+            spin.si_memtot,
+        );
+        rs_spell_message(&raw mut spin, iobuff2);
+
+        if !error {
+            rs_spell_reload_one(wfname, added_word);
+        }
+    }
+
+    // Free allocated memory.
+    ga_clear_wvs(&raw mut spin.si_rep);
+    ga_clear_wvs(&raw mut spin.si_repsal);
+    ga_clear_wvs(&raw mut spin.si_sal);
+    ga_clear_wvs(&raw mut spin.si_map);
+    ga_clear_wvs(&raw mut spin.si_comppat);
+    ga_clear_wvs(&raw mut spin.si_prefcond);
+    hash_clear_all_wvs(&raw mut spin.si_commonwords, 0);
+
+    for af in &afile[..incount as usize] {
+        if !af.is_null() {
+            rs_spell_free_aff(*af);
+        }
+    }
+
+    rs_free_blocks(spin.si_blocks);
+
+    // Create .sug file if soundfolding info was written.
+    if spin.si_sugtime != 0 && !error && !got_int_wvs {
+        rs_spell_make_sugfile(&raw mut spin, wfname);
+    }
+
+    xfree_wvs(fname.cast::<c_void>());
+    xfree_wvs(wfname.cast::<c_void>());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
