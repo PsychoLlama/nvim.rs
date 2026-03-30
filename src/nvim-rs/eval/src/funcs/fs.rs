@@ -108,6 +108,12 @@ extern "C" {
     #[link_name = "xstrdup"]
     fn xstrdup_c(s: *const c_char) -> *mut c_char;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, dst_len: usize) -> usize;
+    // Phase 4 wrappers (entire function bodies live in funcs_shim.c)
+    fn nvim_f_finddir(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_findfile(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_fnamemodify(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_glob(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_globpath(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
 }
 
 /// Mirror of C garray_T struct (from garray_defs.h).
@@ -1131,4 +1137,69 @@ pub unsafe extern "C" fn rs_f_readdir(
         }
     }
     unsafe { nvim_ga_clear_strings(&raw mut ga) };
+}
+
+// =============================================================================
+// Phase 4: File finding / glob functions (implementations in funcs_shim.c)
+// =============================================================================
+
+/// "finddir({fname}[, {path}[, {count}]])" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_finddir"]
+pub unsafe extern "C" fn rs_f_finddir(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_finddir(argvars, rettv, fptr) };
+}
+
+/// "findfile({fname}[, {path}[, {count}]])" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_findfile"]
+pub unsafe extern "C" fn rs_f_findfile(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_findfile(argvars, rettv, fptr) };
+}
+
+/// "fnamemodify({fname}, {mods})" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_fnamemodify"]
+pub unsafe extern "C" fn rs_f_fnamemodify(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_fnamemodify(argvars, rettv, fptr) };
+}
+
+/// "glob()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_glob"]
+pub unsafe extern "C" fn rs_f_glob(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void) {
+    unsafe { nvim_f_glob(argvars, rettv, fptr) };
+}
+
+/// "globpath()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_globpath"]
+pub unsafe extern "C" fn rs_f_globpath(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_globpath(argvars, rettv, fptr) };
 }

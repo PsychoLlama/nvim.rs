@@ -483,6 +483,13 @@ extern void f_jobstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_jobstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust fs.c Phase 4 VimL function declarations (fs.rs in nvim-eval crate)
+extern void f_finddir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_findfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_fnamemodify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_glob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_globpath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust fs.c Phase 3 VimL function declarations (fs.rs in nvim-eval crate)
 extern void f_chdir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_getcwd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
