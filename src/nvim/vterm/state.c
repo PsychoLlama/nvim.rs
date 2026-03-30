@@ -646,8 +646,6 @@ VTermPos nvim_vterm_state_get_pos(const VTermState *state) { return state->pos; 
 
 void nvim_vterm_state_set_pos(VTermState *state, VTermPos pos) { state->pos = pos; }
 
-int nvim_vterm_state_get_at_phantom(const VTermState *state) { return state->at_phantom; }
-
 void nvim_vterm_state_set_at_phantom(VTermState *state, int at_phantom) { state->at_phantom = at_phantom; }
 
 // --- Scroll region accessors ---
@@ -656,17 +654,6 @@ int nvim_vterm_state_get_scrollregion_top(const VTermState *state) { return stat
 
 void nvim_vterm_state_set_scrollregion_top(VTermState *state, int top) { state->scrollregion_top = top; }
 
-int nvim_vterm_state_get_scrollregion_bottom(const VTermState *state) { return state->scrollregion_bottom; }
-
-void nvim_vterm_state_set_scrollregion_bottom(VTermState *state, int bottom) { state->scrollregion_bottom = bottom; }
-
-int nvim_vterm_state_get_scrollregion_left(const VTermState *state) { return state->scrollregion_left; }
-
-void nvim_vterm_state_set_scrollregion_left(VTermState *state, int left) { state->scrollregion_left = left; }
-
-int nvim_vterm_state_get_scrollregion_right(const VTermState *state) { return state->scrollregion_right; }
-
-void nvim_vterm_state_set_scrollregion_right(VTermState *state, int right) { state->scrollregion_right = right; }
 
 // Computed scroll region bounds (using macros from the header)
 int nvim_vterm_state_scrollregion_bottom(const VTermState *state) { return SCROLLREGION_BOTTOM(state); }
@@ -675,20 +662,12 @@ int nvim_vterm_state_scrollregion_left(const VTermState *state) { return SCROLLR
 
 int nvim_vterm_state_scrollregion_right(const VTermState *state) { return SCROLLREGION_RIGHT(state); }
 
-int nvim_vterm_state_row_width(const VTermState *state, int row) { return ROWWIDTH(state, row); }
 
 int nvim_vterm_state_this_row_width(const VTermState *state) { return THISROWWIDTH(state); }
 
 // --- Line info accessors ---
 
 VTermLineInfo *nvim_vterm_state_get_lineinfo(VTermState *state) { return state->lineinfo; }
-
-VTermLineInfo *nvim_vterm_state_get_lineinfo_at(VTermState *state, int row) { return &state->lineinfo[row]; }
-
-void nvim_vterm_state_set_lineinfo_continuation(VTermState *state, int row, int continuation)
-{
-  state->lineinfo[row].continuation = (unsigned)continuation;
-}
 
 // --- Mode accessors ---
 
@@ -702,10 +681,6 @@ int nvim_vterm_state_mode_origin(const VTermState *state) { return state->mode.o
 
 int nvim_vterm_state_mode_cursor_visible(const VTermState *state) { return state->mode.cursor_visible; }
 
-int nvim_vterm_state_mode_leftrightmargin(const VTermState *state) { return state->mode.leftrightmargin; }
-
-int nvim_vterm_state_mode_alt_screen(const VTermState *state) { return state->mode.alt_screen; }
-
 // --- Protected cell accessor ---
 
 int nvim_vterm_state_get_protected_cell(const VTermState *state) { return state->protected_cell; }
@@ -716,25 +691,6 @@ const VTermStateCallbacks *nvim_vterm_state_get_callbacks(const VTermState *stat
 
 void *nvim_vterm_state_get_cbdata(const VTermState *state) { return state->cbdata; }
 
-// --- VTerm handle accessor ---
-
-VTerm *nvim_vterm_state_get_vt(const VTermState *state) { return state->vt; }
-
-// --- Grapheme buffer accessors ---
-
-char *nvim_vterm_state_get_grapheme_buf(VTermState *state) { return state->grapheme_buf; }
-
-size_t nvim_vterm_state_get_grapheme_len(const VTermState *state) { return state->grapheme_len; }
-
-void nvim_vterm_state_set_grapheme_len(VTermState *state, size_t len) { state->grapheme_len = len; }
-
-int nvim_vterm_state_get_combine_width(const VTermState *state) { return state->combine_width; }
-
-void nvim_vterm_state_set_combine_width(VTermState *state, int width) { state->combine_width = width; }
-
-VTermPos nvim_vterm_state_get_combine_pos(const VTermState *state) { return state->combine_pos; }
-
-void nvim_vterm_state_set_combine_pos(VTermState *state, VTermPos pos) { state->combine_pos = pos; }
 
 // --- Lineinfo scroll helpers ---
 
@@ -768,12 +724,6 @@ void nvim_vterm_state_lineinfo_scroll_up(VTermState *state, int start_row, int e
     state->lineinfo[row] = (VTermLineInfo){ 0 };
   }
 }
-
-void nvim_vterm_state_lineinfo_clear(VTermState *state, int row)
-{
-  state->lineinfo[row] = (VTermLineInfo){ 0 };
-}
-
 
 int nvim_vterm_state_is_col_tabstop(const VTermState *state, int col)
 {
@@ -951,99 +901,6 @@ void nvim_vterm_encoding_call_init(void *enc_ptr, void *data)
 int nvim_vterm_state_row_width_from_ptr(const VTermState *state, int row)
 {
   return ROWWIDTH(state, row);
-}
-
-// --- Phase 6: additional accessors ---
-
-// Mode setters
-void nvim_vterm_state_set_mode_report_focus(VTermState *state, int val)
-{
-  state->mode.report_focus = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mode_cursor_visible(VTermState *state, int val)
-{
-  state->mode.cursor_visible = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mode_cursor_blink(VTermState *state, int val)
-{
-  state->mode.cursor_blink = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mode_cursor_shape(VTermState *state, int val)
-{
-  state->mode.cursor_shape = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mode_screen(VTermState *state, int val)
-{
-  state->mode.screen = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mode_alt_screen(VTermState *state, int val)
-{
-  state->mode.alt_screen = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mode_theme_updates(VTermState *state, int val)
-{
-  state->mode.theme_updates = (unsigned)val;
-}
-
-void nvim_vterm_state_set_mouse_flags(VTermState *state, int val)
-{
-  state->mouse_flags = val;
-}
-
-int nvim_vterm_state_get_mouse_flags(const VTermState *state)
-{
-  return state->mouse_flags;
-}
-
-// Switch lineinfo to primary or altscreen buffer
-void nvim_vterm_state_switch_lineinfo(VTermState *state)
-{
-  state->lineinfo = state->lineinfos[state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY];
-}
-
-// Callbacks setter (sets both callbacks ptr and cbdata atomically)
-void nvim_vterm_state_set_callbacks_ptr(VTermState *state,
-                                         const VTermStateCallbacks *callbacks,
-                                         void *user)
-{
-  state->callbacks = callbacks;
-  state->cbdata = user;
-}
-
-// Fallbacks setter
-void nvim_vterm_state_set_fallbacks_ptr(VTermState *state,
-                                         const VTermStateFallbacks *fallbacks,
-                                         void *user)
-{
-  state->fallbacks = fallbacks;
-  state->fbdata = user;
-}
-
-// Call initpen callback
-void nvim_vterm_state_call_initpen(VTermState *state)
-{
-  if (state->callbacks && state->callbacks->initpen) {
-    (*state->callbacks->initpen)(state->cbdata);
-  }
-}
-
-// Selection info setters
-void nvim_vterm_state_set_selection_callbacks_ptr(VTermState *state,
-                                                   const VTermSelectionCallbacks *callbacks,
-                                                   void *user,
-                                                   char *buffer,
-                                                   size_t buflen)
-{
-  state->selection.callbacks = callbacks;
-  state->selection.user = user;
-  state->selection.buffer = buffer;
-  state->selection.buflen = buflen;
 }
 
 // Allocator helpers

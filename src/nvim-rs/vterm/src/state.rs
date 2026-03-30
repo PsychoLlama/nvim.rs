@@ -1209,33 +1209,17 @@ extern "C" {
     // Cursor position accessors
     fn nvim_vterm_state_get_pos(state: VTermStateHandle) -> VTermPos;
     fn nvim_vterm_state_set_pos(state: VTermStateHandle, pos: VTermPos);
-    fn nvim_vterm_state_get_at_phantom(state: VTermStateHandle) -> c_int;
     fn nvim_vterm_state_set_at_phantom(state: VTermStateHandle, at_phantom: c_int);
 
     // Scroll region accessors
     fn nvim_vterm_state_get_scrollregion_top(state: VTermStateHandle) -> c_int;
     fn nvim_vterm_state_set_scrollregion_top(state: VTermStateHandle, top: c_int);
-    fn nvim_vterm_state_get_scrollregion_bottom(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_set_scrollregion_bottom(state: VTermStateHandle, bottom: c_int);
-    fn nvim_vterm_state_get_scrollregion_left(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_set_scrollregion_left(state: VTermStateHandle, left: c_int);
-    fn nvim_vterm_state_get_scrollregion_right(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_set_scrollregion_right(state: VTermStateHandle, right: c_int);
 
     // Computed scroll region bounds
     fn nvim_vterm_state_scrollregion_bottom(state: VTermStateHandle) -> c_int;
     fn nvim_vterm_state_scrollregion_left(state: VTermStateHandle) -> c_int;
     fn nvim_vterm_state_scrollregion_right(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_row_width(state: VTermStateHandle, row: c_int) -> c_int;
     fn nvim_vterm_state_this_row_width(state: VTermStateHandle) -> c_int;
-
-    // Line info accessors
-    fn nvim_vterm_state_get_lineinfo_at(state: VTermStateHandle, row: c_int) -> *mut VTermLineInfo;
-    fn nvim_vterm_state_set_lineinfo_continuation(
-        state: VTermStateHandle,
-        row: c_int,
-        continuation: c_int,
-    );
 
     // Mode accessors
     fn nvim_vterm_state_mode_autowrap(state: VTermStateHandle) -> c_int;
@@ -1243,27 +1227,12 @@ extern "C" {
     fn nvim_vterm_state_mode_newline(state: VTermStateHandle) -> c_int;
     fn nvim_vterm_state_mode_origin(state: VTermStateHandle) -> c_int;
     fn nvim_vterm_state_mode_cursor_visible(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_mode_leftrightmargin(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_mode_alt_screen(state: VTermStateHandle) -> c_int;
-
     // Protected cell accessor
     fn nvim_vterm_state_get_protected_cell(state: VTermStateHandle) -> c_int;
 
     // Callback accessors
     fn nvim_vterm_state_get_callbacks(state: VTermStateHandle) -> *const VTermStateCallbacks;
     fn nvim_vterm_state_get_cbdata(state: VTermStateHandle) -> *mut c_void;
-
-    // VTerm handle accessor
-    fn nvim_vterm_state_get_vt(state: VTermStateHandle) -> *mut c_void;
-
-    // Grapheme buffer accessors
-    fn nvim_vterm_state_get_grapheme_buf(state: VTermStateHandle) -> *mut i8;
-    fn nvim_vterm_state_get_grapheme_len(state: VTermStateHandle) -> usize;
-    fn nvim_vterm_state_set_grapheme_len(state: VTermStateHandle, len: usize);
-    fn nvim_vterm_state_get_combine_width(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_set_combine_width(state: VTermStateHandle, width: c_int);
-    fn nvim_vterm_state_get_combine_pos(state: VTermStateHandle) -> VTermPos;
-    fn nvim_vterm_state_set_combine_pos(state: VTermStateHandle, pos: VTermPos);
 
     // Lineinfo scroll helpers
     fn nvim_vterm_state_lineinfo_scroll_down(
@@ -1278,8 +1247,6 @@ extern "C" {
         end_row: c_int,
         count: c_int,
     );
-    fn nvim_vterm_state_lineinfo_clear(state: VTermStateHandle, row: c_int);
-
     // Tabstop accessors
     fn nvim_vterm_state_is_col_tabstop(state: VTermStateHandle, col: c_int) -> c_int;
     fn nvim_vterm_state_set_col_tabstop(state: VTermStateHandle, col: c_int);
@@ -2359,6 +2326,17 @@ extern "C" {
     fn vterm_state_setpen(state: VTermStateHandle, args: *const c_long, argcount: c_int);
     /// Primary Device Attributes string (extern global, overridable in tests)
     static vterm_primary_device_attr: [i8; 16];
+    // Allocator helpers
+    fn nvim_vterm_state_malloc(state: VTermStateHandle, size: usize) -> *mut c_void;
+    fn nvim_vterm_state_free_ptr(state: VTermStateHandle, ptr: *mut c_void);
+    // VTerm tmpbuffer and mode accessors
+    fn nvim_vterm_state_get_vt_tmpbuffer(state: VTermStateHandle) -> *mut c_void;
+    fn nvim_vterm_state_get_vt_tmpbuffer_len(state: VTermStateHandle) -> usize;
+    fn nvim_vterm_state_get_vt_mode_utf8(state: VTermStateHandle) -> c_int;
+    // mbyte functions
+    fn utf_iscomposing(c1: c_int, c2: c_int, grapheme_state: *mut c_int) -> bool;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
 }
 
 /// Query kitty keyboard protocol flags and output response.
@@ -3762,48 +3740,6 @@ pub unsafe extern "C" fn rs_vterm_state_on_sos(
 // =============================================================================
 // Phase 6: on_text, on_resize, public API (migrated from C)
 // =============================================================================
-
-// C accessor declarations for Phase 6
-#[allow(dead_code)]
-extern "C" {
-    fn nvim_vterm_state_set_mode_report_focus(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mode_cursor_visible(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mode_cursor_blink(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mode_cursor_shape(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mode_screen(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mode_alt_screen(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mode_theme_updates(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_set_mouse_flags(state: VTermStateHandle, val: c_int);
-    fn nvim_vterm_state_get_mouse_flags(state: VTermStateHandle) -> c_int;
-    fn nvim_vterm_state_switch_lineinfo(state: VTermStateHandle);
-    fn nvim_vterm_state_set_callbacks_ptr(
-        state: VTermStateHandle,
-        callbacks: *const VTermStateCallbacks,
-        user: *mut c_void,
-    );
-    fn nvim_vterm_state_set_fallbacks_ptr(
-        state: VTermStateHandle,
-        fallbacks: *const VTermStateFallbacks,
-        user: *mut c_void,
-    );
-    fn nvim_vterm_state_call_initpen(state: VTermStateHandle);
-    fn nvim_vterm_state_set_selection_callbacks_ptr(
-        state: VTermStateHandle,
-        callbacks: *const VTermSelectionCallbacks,
-        user: *mut c_void,
-        buffer: *mut c_char,
-        buflen: usize,
-    );
-    fn nvim_vterm_state_malloc(state: VTermStateHandle, size: usize) -> *mut c_void;
-    fn nvim_vterm_state_free_ptr(state: VTermStateHandle, ptr: *mut c_void);
-    fn nvim_vterm_state_get_vt_tmpbuffer(state: VTermStateHandle) -> *mut c_void;
-    fn nvim_vterm_state_get_vt_tmpbuffer_len(state: VTermStateHandle) -> usize;
-    fn nvim_vterm_state_get_vt_mode_utf8(state: VTermStateHandle) -> c_int;
-    // mbyte functions
-    fn utf_iscomposing(c1: c_int, c2: c_int, grapheme_state: *mut c_int) -> bool;
-    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
-    fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
-}
 
 /// Internal implementation of `vterm_state_set_termprop`.
 /// Also called by `settermprop_bool/int/string` helpers.
