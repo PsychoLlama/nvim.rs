@@ -156,6 +156,7 @@ const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
 OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
 OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
+OptInt *nvim_get_curbuf_b_p_iminsert_ptr(void) { return &curbuf->b_p_iminsert; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }

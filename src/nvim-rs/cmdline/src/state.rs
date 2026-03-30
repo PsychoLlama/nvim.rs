@@ -1053,11 +1053,9 @@ unsafe extern "C" {
     // Wrappers for wildmenu functions
     fn nvim_wildmenu_translate_key(s: *mut c_void) -> c_int;
     fn nvim_wildmenu_process_key(s: *mut c_void) -> c_int;
-    fn nvim_command_line_end_wildmenu(s: *mut c_void, key_is_wc: bool);
+    // nvim_command_line_end_wildmenu defined in Rust below
 
-    // Wrappers for command_line_not/changed
-    fn nvim_command_line_not_changed(s: *mut c_void) -> c_int;
-    fn nvim_command_line_changed(s: *mut c_void) -> c_int;
+    // nvim_command_line_not_changed and nvim_command_line_changed are defined in Rust below
 
     // Direct C expansion functions (replaces nvim_nextwild/nvim_showmatches wrappers)
     fn nextwild(xp: *mut c_void, wild_type: c_int, options: c_int, escape: bool) -> c_int;
@@ -1717,4 +1715,340 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
     cursorcmd(); // set the cursor on the right spot
     ui_cursor_shape();
     1
+}
+
+// =============================================================================
+// Rust replacements for C command-line handler functions
+// =============================================================================
+
+// Additional FFI needed for the command-line handler functions below.
+unsafe extern "C" {
+    // Autocmd event IDs
+    // EVENT_CURSORMOVEDC = 44 (from auevents_enum.generated.h)
+    // Trigger CmdlineChanged autocmd (public wrapper, callable from Rust)
+    fn nvim_do_autocmd_cmdlinechanged(firstc: c_int);
+
+    // cmdline pum and vim char helpers
+    fn cmdline_pum_remove(skip_redraw: bool);
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+
+    // For browse_history
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // globals for command_line_changed
+    static mut cmdpreview: bool;
+    fn nvim_get_current_sctx_sid() -> c_int;
+    fn nvim_excmds_get_p_icm_first() -> c_int;
+    static mut cmdline_star: c_int;
+    fn vpeekc_any() -> c_int;
+    fn cmdpreview_may_show() -> c_int;
+    fn update_screen();
+    static p_arshape: c_int;
+    static p_tbidi: c_int;
+
+    // for toggle_langmap
+    fn buf_valid(buf: *mut c_void) -> c_int;
+    static mut State: c_int;
+    fn map_to_exists_mode(keys: *const c_char, mode: c_int, abbr: bool) -> c_int;
+    fn set_iminsert_global(buf: *mut c_void);
+    fn set_imsearch_global(buf: *mut c_void);
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn nvim_get_curbuf_b_p_iminsert_ptr() -> *mut i64;
+
+    // for left_right_mouse
+    static mouse_row: c_int;
+    static mouse_col: c_int;
+    static Columns: c_int;
+    fn correct_screencol(idx: c_int, cells: c_int, col: *mut c_int);
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn rs_cmdline_charsize(idx: c_int) -> c_int;
+    fn rs_cmd_startcol() -> c_int;
+
+    // for toggle_langmap and not_changed
+    fn status_redraw_curbuf();
+
+    // for end_wildmenu
+    fn wildmenu_cleanup(cclp: *mut c_void);
+
+    // for left_right_mouse (already declared elsewhere but needed here)
+    static cmdline_row: c_int;
+
+    // for command_line_changed: string comparison
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // for command_line_changed: incsearch highlighting check
+    fn nvim_get_key_typed() -> c_int;
+}
+
+// Autocmd event constant
+const EVENT_CURSORMOVEDC: c_int = 44;
+const MODE_LANGMAP_LOCAL: c_int = 0x8000;
+const B_IMODE_LMAP: i64 = 2;
+const B_IMODE_NONE: i64 = 0;
+
+// Local copy of termcap2key for key constant definitions (matches keys.rs)
+// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))
+const fn termcap2key_local(a: c_int, b: c_int) -> c_int {
+    -(a + (b << 8))
+}
+
+// Key constants used in end_wildmenu / left_right_mouse
+const KS_EXTRA_LOCAL: c_int = 253;
+const KE_KDEL_LOCAL: c_int = 49;
+const K_BS_LOCAL: c_int = termcap2key_local(b'k' as c_int, b'b' as c_int);
+const CTRL_H_LOCAL: c_int = 8;
+const K_DEL_LOCAL: c_int = termcap2key_local(b'k' as c_int, b'D' as c_int);
+const K_KDEL_LOCAL: c_int = termcap2key_local(KS_EXTRA_LOCAL, KE_KDEL_LOCAL);
+const CTRL_W_LOCAL: c_int = 23;
+const CTRL_U_LOCAL: c_int = 21;
+const K_UP_LOCAL: c_int = termcap2key_local(b'k' as c_int, b'u' as c_int);
+const K_DOWN_LOCAL: c_int = termcap2key_local(b'k' as c_int, b'd' as c_int);
+
+/// Safe wrapper for C strcmp.
+unsafe fn strcmp_c(s1: *const c_char, s2: *const c_char) -> c_int {
+    strcmp(s1, s2)
+}
+
+/// Rust replacement for `nvim_command_line_not_changed(void *s)` in ex_getln.c.
+///
+/// Post-key no-change handler: triggers CursorMoveD if position changed,
+/// then falls through to changed handler if incsearch was postponed.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_command_line_not_changed(s: *mut c_void) -> c_int {
+    let ss = s.cast::<crate::command_line_state::CommandLineState>();
+    let cmdpos = nvim_get_ccline_cmdpos();
+    if cmdpos != (*ss).prev_cmdpos {
+        nvim_trigger_cmd_autocmd((*ss).cmdline_type, EVENT_CURSORMOVEDC);
+        // ccline.redraw_state = max(ccline.redraw_state, kCmdRedrawPos=1)
+        let rs = nvim_get_ccline_redraw_state();
+        if rs < 1 {
+            nvim_set_ccline_redraw_state(1);
+        }
+    }
+    (*ss).prev_cmdpos = cmdpos;
+    if !(*ss).is_state.incsearch_postponed {
+        return 1;
+    }
+    nvim_command_line_changed(s)
+}
+
+/// Rust replacement for `nvim_command_line_changed(void *vs)` in ex_getln.c.
+///
+/// Post-key change handler: handles inccommand preview, incsearch, and
+/// triggers CmdlineChanged/CursorMoveD autocmds.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn nvim_command_line_changed(s: *mut c_void) -> c_int {
+    let ss = s.cast::<crate::command_line_state::CommandLineState>();
+    let prev_cmdpreview = cmdpreview;
+    if (*ss).firstc == b':' as c_int
+        && nvim_get_current_sctx_sid() == 0
+        && nvim_excmds_get_p_icm_first() != 0
+        && !exmode_active
+        && cmdline_star == 0
+        && vpeekc_any() == 0
+        && cmdpreview_may_show() != 0
+    {
+        // 'inccommand' preview has been shown.
+    } else {
+        cmdpreview = false;
+        if prev_cmdpreview {
+            update_screen();
+        }
+        if (*ss).xpc.xp_context == EXPAND_NOTHING && (nvim_get_key_typed() != 0 || vpeekc() == 0) {
+            crate::search::rs_may_do_incsearch_highlighting(
+                (*ss).firstc,
+                (*ss).count,
+                std::ptr::addr_of_mut!((*ss).is_state),
+            );
+        }
+    }
+
+    let cmdpos = nvim_get_ccline_cmdpos();
+    let prev_cmdbuff = (*ss).prev_cmdbuff;
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let cmdpos_changed = cmdpos != (*ss).prev_cmdpos;
+    let cmdbuff_changed =
+        !prev_cmdbuff.is_null() && !cmdbuff.is_null() && strcmp_c(prev_cmdbuff, cmdbuff) != 0;
+    if cmdpos_changed || cmdbuff_changed {
+        let effective_firstc = if (*ss).firstc > 0 {
+            (*ss).firstc
+        } else {
+            b'-' as c_int
+        };
+        nvim_do_autocmd_cmdlinechanged(effective_firstc);
+    }
+
+    // trigger CursorMoveD if position changed
+    if cmdpos_changed {
+        nvim_trigger_cmd_autocmd((*ss).cmdline_type, EVENT_CURSORMOVEDC);
+        let rs = nvim_get_ccline_redraw_state();
+        if rs < 1 {
+            nvim_set_ccline_redraw_state(1);
+        }
+    }
+
+    if p_arshape != 0 && p_tbidi == 0 && ui_has(K_UI_CMDLINE) == 0 && vpeekc() == 0 {
+        crate::screen::redrawcmd_rs();
+    }
+
+    1
+}
+
+/// Rust replacement for `nvim_command_line_toggle_langmap(void *vs)` in ex_getln.c.
+///
+/// Toggles the langmap (CTRL-^ key) in command-line mode.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_command_line_toggle_langmap(s: *mut c_void) {
+    let ss = s.cast::<crate::command_line_state::CommandLineState>();
+    let b_im_ptr = if buf_valid((*ss).b_im_ptr_buf) != 0 {
+        (*ss).b_im_ptr
+    } else {
+        std::ptr::null_mut()
+    };
+    if map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP_LOCAL, false) != 0 {
+        State ^= MODE_LANGMAP_LOCAL;
+        if !b_im_ptr.is_null() {
+            if State & MODE_LANGMAP_LOCAL != 0 {
+                *b_im_ptr = B_IMODE_LMAP;
+            } else {
+                *b_im_ptr = B_IMODE_NONE;
+            }
+        }
+    }
+    if !b_im_ptr.is_null() {
+        let curbuf_b_p_iminsert_ptr = nvim_get_curbuf_b_p_iminsert_ptr();
+        if b_im_ptr == curbuf_b_p_iminsert_ptr {
+            set_iminsert_global(nvim_get_curbuf());
+        } else {
+            set_imsearch_global(nvim_get_curbuf());
+        }
+    }
+    ui_cursor_shape();
+    status_redraw_curbuf();
+}
+
+/// Rust replacement for `nvim_command_line_left_right_mouse(void *vs)` in ex_getln.c.
+///
+/// Handles Left/Right mouse clicks in command-line mode.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_command_line_left_right_mouse(s: *mut c_void) {
+    use crate::keys::{K_LEFTRELEASE, K_RIGHTRELEASE};
+    let ss = s.cast::<crate::command_line_state::CommandLineState>();
+    (*ss).ignore_drag_release = (*ss).c == K_LEFTRELEASE || (*ss).c == K_RIGHTRELEASE;
+    let startcol = rs_cmd_startcol();
+    nvim_set_ccline_cmdspos(startcol);
+    let cmdlen = nvim_get_ccline_cmdlen();
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let mut screen_col = startcol;
+    let mut buf_idx = 0i32;
+    while buf_idx < cmdlen {
+        let cells = rs_cmdline_charsize(buf_idx);
+        if mouse_row <= cmdline_row + screen_col / Columns
+            && mouse_col < screen_col % Columns + cells
+        {
+            break;
+        }
+        correct_screencol(buf_idx, cells, &raw mut screen_col);
+        buf_idx += utfc_ptr2len(cmdbuff.add(buf_idx as usize)) - 1;
+        screen_col += cells;
+        buf_idx += 1;
+    }
+    nvim_set_ccline_cmdpos(buf_idx);
+    nvim_set_ccline_cmdspos(screen_col);
+}
+
+/// Rust replacement for `nvim_command_line_browse_history(void *vs)` in ex_getln.c.
+///
+/// Browse command-line history (called from Rust via opaque handle).
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_command_line_browse_history(s: *mut c_void) -> c_int {
+    let ss = s.cast::<crate::command_line_state::CommandLineState>();
+    // Save current command string so it can be restored later.
+    if (*ss).lookfor.is_null() {
+        let cmdpos = nvim_get_ccline_cmdpos();
+        let cmdlen = nvim_get_ccline_cmdlen();
+        let cmdbuff = nvim_get_ccline_cmdbuff();
+        (*ss).lookfor = xstrnsave(cmdbuff, cmdlen as usize);
+        *(*ss).lookfor.add(cmdpos as usize) = 0; // NUL terminate at cmdpos
+        (*ss).lookforlen = cmdpos;
+    }
+    // Pack state for Rust history browsing
+    let mut rs_state = crate::history::HistoryBrowseState {
+        c: (*ss).c,
+        firstc: (*ss).firstc,
+        hiscnt: (*ss).hiscnt,
+        save_hiscnt: (*ss).save_hiscnt,
+        histype: (*ss).histype,
+        lookfor: (*ss).lookfor,
+        lookforlen: (*ss).lookforlen,
+    };
+    // Call Rust implementation
+    let result = crate::history::rs_command_line_browse_history(&raw mut rs_state);
+    // Update state from Rust
+    (*ss).hiscnt = rs_state.hiscnt;
+    (*ss).save_hiscnt = rs_state.save_hiscnt;
+    // Clear xp_context on history change
+    if result == CMDLINE_CHANGED {
+        (*ss).xpc.xp_context = EXPAND_NOTHING;
+    }
+    result
+}
+
+/// Rust replacement for `nvim_command_line_end_wildmenu(void *vs, bool key_is_wc)` in ex_getln.c.
+///
+/// Cleans up wildmenu when a non-wildchar key is pressed.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_command_line_end_wildmenu(s: *mut c_void, key_is_wc: bool) {
+    let ss = s.cast::<crate::command_line_state::CommandLineState>();
+    if cmdline_pum_active() != 0 {
+        let c = (*ss).c;
+        (*ss).skip_pum_redraw = (*ss).skip_pum_redraw
+            && !key_is_wc
+            && rs_ascii_iswhite(c) == 0
+            && (vim_isprintc(c) != 0
+                || c == K_BS_LOCAL
+                || c == CTRL_H_LOCAL
+                || c == K_DEL_LOCAL
+                || c == K_KDEL_LOCAL
+                || c == CTRL_W_LOCAL
+                || c == CTRL_U_LOCAL);
+        cmdline_pum_remove((*ss).skip_pum_redraw);
+    }
+    if (*ss).xpc.xp_numfiles != -1 {
+        let xp = std::ptr::addr_of_mut!((*ss).xpc).cast::<c_void>();
+        ExpandOne(xp, std::ptr::null_mut(), std::ptr::null_mut(), 0, WILD_FREE);
+    }
+    (*ss).did_wild_list = false;
+    if p_wmnu == 0 || ((*ss).c != K_UP_LOCAL && (*ss).c != K_DOWN_LOCAL) {
+        (*ss).xpc.xp_context = EXPAND_NOTHING;
+    }
+    (*ss).wim_index = 0;
+    // wildmenu_cleanup takes CmdlineInfo* but ignores the parameter in its Rust impl
+    wildmenu_cleanup(std::ptr::null_mut());
 }

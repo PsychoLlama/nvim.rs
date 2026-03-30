@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <inttypes.h>
+#include "nvim/assert_defs.h"
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -134,6 +135,25 @@ typedef struct {
   bool event_cmdlineleavepre_triggered;
   bool did_hist_navigate;
 } CommandLineState;
+
+// Verify CommandLineState layout matches Rust repr(C) struct.
+// If these fail, the Rust CommandLineState in command_line_state.rs must be updated.
+_Static_assert(sizeof(CommandLineState) == 640,
+               "CommandLineState size mismatch with Rust");
+_Static_assert(offsetof(CommandLineState, firstc) == 16,
+               "CommandLineState.firstc offset mismatch");
+_Static_assert(offsetof(CommandLineState, lookfor) == 40,
+               "CommandLineState.lookfor offset mismatch");
+_Static_assert(offsetof(CommandLineState, is_state) == 64,
+               "CommandLineState.is_state offset mismatch");
+_Static_assert(offsetof(CommandLineState, did_wild_list) == 180,
+               "CommandLineState.did_wild_list offset mismatch");
+_Static_assert(offsetof(CommandLineState, xpc) == 224,
+               "CommandLineState.xpc offset mismatch");
+_Static_assert(offsetof(CommandLineState, b_im_ptr) == 616,
+               "CommandLineState.b_im_ptr offset mismatch");
+_Static_assert(offsetof(CommandLineState, cmdline_type) == 632,
+               "CommandLineState.cmdline_type offset mismatch");
 
 /// Return value when handling keys in command-line mode.
 enum {
@@ -1320,170 +1340,6 @@ int nvim_get_new_cmdpos(void) { return new_cmdpos; }
 void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
 void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
-
-/// Handle no-change return path for command-line mode (called from Rust).
-int nvim_command_line_not_changed(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  // Inline of nvim_may_trigger_cursormovedc:
-  if (ccline.cmdpos != cs->prev_cmdpos) {
-    trigger_cmd_autocmd(cs->cmdline_type, EVENT_CURSORMOVEDC);
-    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
-  }
-  cs->prev_cmdpos = ccline.cmdpos;
-  // Incremental searches: only search/redraw if something changed in the past.
-  if (!cs->is_state.incsearch_postponed) {
-    return 1;
-  }
-  return nvim_command_line_changed(s);
-}
-
-/// Handle post-key-press command line update (called from Rust via opaque handle).
-int nvim_command_line_changed(void *vs)
-{
-  CommandLineState *s = (CommandLineState *)vs;
-  const bool prev_cmdpreview = cmdpreview;
-  if (s->firstc == ':'
-      && current_sctx.sc_sid == 0    // only if interactive
-      && *p_icm != NUL       // 'inccommand' is set
-      && !exmode_active      // not in ex mode
-      && cmdline_star == 0   // not typing a password
-      && !vpeekc_any()
-      && cmdpreview_may_show()) {
-    // 'inccommand' preview has been shown.
-  } else {
-    cmdpreview = false;
-    if (prev_cmdpreview) {
-      update_screen();  // Clear 'inccommand' preview.
-    }
-    if (s->xpc.xp_context == EXPAND_NOTHING && (KeyTyped || vpeekc() == NUL)) {
-      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
-    }
-  }
-
-  if (ccline.cmdpos != s->prev_cmdpos
-      || (s->prev_cmdbuff != NULL && strcmp(s->prev_cmdbuff, ccline.cmdbuff) != 0)) {
-    do_autocmd_cmdlinechanged(s->firstc > 0 ? s->firstc : '-');
-  }
-
-  // Inline of nvim_may_trigger_cursormovedc:
-  if (ccline.cmdpos != s->prev_cmdpos) {
-    trigger_cmd_autocmd(s->cmdline_type, EVENT_CURSORMOVEDC);
-    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
-  }
-
-  if (p_arshape && !p_tbidi) {
-    if (!ui_has(kUICmdline) && vpeekc() == NUL) {
-      redrawcmd();
-    }
-  }
-
-  return 1;
-}
-
-/// Toggle langmap (CTRL-^ in command-line mode). Called from Rust via opaque handle.
-void nvim_command_line_toggle_langmap(void *vs)
-{
-  CommandLineState *s = (CommandLineState *)vs;
-  OptInt *b_im_ptr = buf_valid(s->b_im_ptr_buf) ? s->b_im_ptr : NULL;
-  if (map_to_exists_mode("", MODE_LANGMAP, false)) {
-    State ^= MODE_LANGMAP;
-    if (b_im_ptr != NULL) {
-      if (State & MODE_LANGMAP) {
-        *b_im_ptr = B_IMODE_LMAP;
-      } else {
-        *b_im_ptr = B_IMODE_NONE;
-      }
-    }
-  }
-  if (b_im_ptr != NULL) {
-    if (b_im_ptr == &curbuf->b_p_iminsert) {
-      set_iminsert_global(curbuf);
-    } else {
-      set_imsearch_global(curbuf);
-    }
-  }
-  ui_cursor_shape();
-  status_redraw_curbuf();
-}
-
-/// Handle Left/Right mouse clicks in command-line mode. Called from Rust via opaque handle.
-void nvim_command_line_left_right_mouse(void *vs)
-{
-  CommandLineState *s = (CommandLineState *)vs;
-  if (s->c == K_LEFTRELEASE || s->c == K_RIGHTRELEASE) {
-    s->ignore_drag_release = true;
-  } else {
-    s->ignore_drag_release = false;
-  }
-  ccline.cmdspos = rs_cmd_startcol();
-  for (ccline.cmdpos = 0; ccline.cmdpos < ccline.cmdlen; ccline.cmdpos++) {
-    int cells = rs_cmdline_charsize(ccline.cmdpos);
-    if (mouse_row <= cmdline_row + ccline.cmdspos / Columns
-        && mouse_col < ccline.cmdspos % Columns + cells) {
-      break;
-    }
-    correct_screencol(ccline.cmdpos, cells, &ccline.cmdspos);
-    ccline.cmdpos += utfc_ptr2len(ccline.cmdbuff + ccline.cmdpos) - 1;
-    ccline.cmdspos += cells;
-  }
-}
-
-/// Browse history (called from Rust via opaque handle).
-/// Inlines the former C static command_line_browse_history.
-int nvim_command_line_browse_history(void *vs)
-{
-  CommandLineState *s = (CommandLineState *)vs;
-  // Save current command string so it can be restored later.
-  if (s->lookfor == NULL) {
-    s->lookfor = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
-    s->lookfor[ccline.cmdpos] = NUL;
-    s->lookforlen = ccline.cmdpos;
-  }
-  // Pack state for Rust
-  HistoryBrowseState rs_state = {
-    .c = s->c,
-    .firstc = s->firstc,
-    .hiscnt = s->hiscnt,
-    .save_hiscnt = s->save_hiscnt,
-    .histype = s->histype,
-    .lookfor = s->lookfor,
-    .lookforlen = s->lookforlen,
-  };
-  // Call Rust implementation
-  int result = rs_command_line_browse_history(&rs_state);
-  // Update state from Rust
-  s->hiscnt = rs_state.hiscnt;
-  s->save_hiscnt = rs_state.save_hiscnt;
-  // Clear xp_context on history change
-  if (result == CMDLINE_CHANGED) {
-    s->xpc.xp_context = EXPAND_NOTHING;
-  }
-  return result;
-}
-
-/// End wildmenu (called from Rust via opaque handle).
-void nvim_command_line_end_wildmenu(void *vs, bool key_is_wc)
-{
-  CommandLineState *s = (CommandLineState *)vs;
-  if (cmdline_pum_active()) {
-    s->skip_pum_redraw = (s->skip_pum_redraw && !key_is_wc
-                          && !ascii_iswhite(s->c)
-                          && (vim_isprintc(s->c)
-                              || s->c == K_BS || s->c == Ctrl_H || s->c == K_DEL
-                              || s->c == K_KDEL || s->c == Ctrl_W || s->c == Ctrl_U));
-    cmdline_pum_remove(s->skip_pum_redraw);
-  }
-  if (s->xpc.xp_numfiles != -1) {
-    ExpandOne(&s->xpc, NULL, NULL, 0, WILD_FREE);
-  }
-  s->did_wild_list = false;
-  if (!p_wmnu || (s->c != K_UP && s->c != K_DOWN)) {
-    s->xpc.xp_context = EXPAND_NOTHING;
-  }
-  s->wim_index = 0;
-  wildmenu_cleanup(&ccline);
-}
 
 // CommandLineState field accessors
 int nvim_cls_get_c(void *s) { return ((CommandLineState *)s)->c; }

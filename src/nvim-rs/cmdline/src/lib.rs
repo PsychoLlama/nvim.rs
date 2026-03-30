@@ -11,6 +11,7 @@
 
 pub mod api;
 pub mod cmdwin;
+pub mod command_line_state;
 pub mod completion;
 pub mod constants;
 pub mod context;
