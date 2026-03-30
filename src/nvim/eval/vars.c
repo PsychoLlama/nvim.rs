@@ -593,24 +593,8 @@ list_T *eval_spell_expr(char *badword, char *expr)
   return list;
 }
 
-/// Get spell word from an entry from spellsuggest=expr:
-///
-/// Entry in question is supposed to be a list (to be checked by the caller)
-/// with two items: a word and a score represented as an unsigned number
-/// (whether it actually is unsigned is not checked).
-///
-/// Used to get the good word and score from the eval_spell_expr() result.
-///
-/// @param[in]  list  List to get values from.
-/// @param[out]  ret_word  Suggested word. Not initialized if return value is
-///                        -1.
-///
-/// @return -1 in case of error, score otherwise.
 int get_spellword(list_T *const list, const char **ret_word) { return rs_get_spellword(list, ret_word); }
 
-/// Prepare v: variable "idx" to be used.
-/// Save the current typeval in "save_tv" and clear it.
-/// When not used yet add the variable to the v: hashtable.
 void prepare_vimvar(int idx, typval_T *save_tv)
 {
   *save_tv = vimvars[idx].vv_tv;
@@ -620,9 +604,6 @@ void prepare_vimvar(int idx, typval_T *save_tv)
   }
 }
 
-/// Restore v: variable "idx" to typeval "save_tv".
-/// Note that the v: variable must have been cleared already.
-/// When no longer defined, remove the variable from the v: hashtable.
 void restore_vimvar(int idx, typval_T *save_tv)
 {
   vimvars[idx].vv_tv = *save_tv;
@@ -638,10 +619,7 @@ void restore_vimvar(int idx, typval_T *save_tv)
   }
 }
 
-/// List Vim variables.
 static void list_vim_vars(int *first) { list_hashtable_vars(&vimvarht, "v:", false, first); }
-
-/// List script-local variables, if there is a script.
 static void list_script_vars(int *first)
 {
   if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len) {
@@ -649,16 +627,7 @@ static void list_script_vars(int *first)
   }
 }
 
-/// Evaluate one Vim expression {expr} in string "p" and append the
-/// resulting string to "gap".  "p" points to the opening "{".
-/// When "evaluate" is false only skip over the expression.
-/// Return a pointer to the character after "}", NULL for an error.
 char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return rs_eval_one_expr_in_str(p, gap, evaluate); }
-
-/// Evaluate all the Vim expressions {expr} in "str" and return the resulting
-/// string in allocated memory.  "{{" is reduced to "{" and "}}" to "}".
-/// Used for a heredoc assignment.
-/// Returns NULL for an error.
 static char *eval_all_expr_in_str(char *str) { return rs_eval_all_expr_in_str(str); }
 
 /// Get a list of lines from a HERE document. The here document is a list of
@@ -1679,60 +1648,20 @@ void del_menutrans_vars(void)
   hash_unlock(&globvarht);
 }
 
-/// @return  global variable dictionary
-dict_T *get_globvar_dict(void)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET
-{
-  return &globvardict;
-}
-
-/// @return  global variable hash table
+dict_T *get_globvar_dict(void) FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET { return &globvardict; }
 hashtab_T *get_globvar_ht(void) { return &globvarht; }
+dict_T *get_vimvar_dict(void) FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET { return &vimvardict; }
 
-/// @return  v: variable dictionary
-dict_T *get_vimvar_dict(void)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET
-{
-  return &vimvardict;
-}
-
-/// Set v:variable to tv.
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  val  Value to set to. Will be copied.
-void set_vim_var_tv(const VimVarIndex idx, typval_T *const tv)
-{ rs_set_vim_var_tv(idx, tv); }
-
-char *get_vim_var_name(const VimVarIndex idx)
-  FUNC_ATTR_NONNULL_RET
+// v: variable get/set wrappers (logic in Rust vimvar_accessors.rs)
+void set_vim_var_tv(const VimVarIndex idx, typval_T *const tv) { rs_set_vim_var_tv(idx, tv); }
+char *get_vim_var_name(const VimVarIndex idx) FUNC_ATTR_NONNULL_RET
 { return rs_get_vim_var_name(idx); }
-
-/// Get typval_T v: variable value.
 typval_T *get_vim_var_tv(const VimVarIndex idx) { return &vimvars[idx].vv_tv; }
-
-/// Get number v: variable value.
-varnumber_T get_vim_var_nr(const VimVarIndex idx) FUNC_ATTR_PURE
-{ return rs_get_vim_var_nr(idx); }
-
-/// Get List v: variable value.  Caller must take care of reference count when
-/// needed.
-list_T *get_vim_var_list(const VimVarIndex idx) FUNC_ATTR_PURE
-{ return rs_get_vim_var_list(idx); }
-
-/// Get Dictionary v: variable value.  Caller must take care of reference count
-/// when needed.
-dict_T *get_vim_var_dict(const VimVarIndex idx) FUNC_ATTR_PURE
-{ return rs_get_vim_var_dict(idx); }
-
-/// Get string v: variable value.  Uses a static buffer, can only be used once.
-/// If the String variable has never been set, return an empty string.
-/// Never returns NULL.
-char *get_vim_var_str(const VimVarIndex idx)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET
+varnumber_T get_vim_var_nr(const VimVarIndex idx) FUNC_ATTR_PURE { return rs_get_vim_var_nr(idx); }
+list_T *get_vim_var_list(const VimVarIndex idx) FUNC_ATTR_PURE { return rs_get_vim_var_list(idx); }
+dict_T *get_vim_var_dict(const VimVarIndex idx) FUNC_ATTR_PURE { return rs_get_vim_var_dict(idx); }
+char *get_vim_var_str(const VimVarIndex idx) FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET
 { return rs_get_vim_var_str(idx); }
-
-/// Get Partial v: variable value.  Caller must take care of reference count
-/// when needed.
 partial_T *get_vim_var_partial(const VimVarIndex idx) FUNC_ATTR_PURE
 { return rs_get_vim_var_partial(idx); }
 
@@ -1845,51 +1774,19 @@ char *get_user_var_name(expand_T *xp, int idx)
   return NULL;
 }
 
-/// Set type of v: variable to the given type.
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  type  Type to set to.
-void set_vim_var_type(const VimVarIndex idx, const VarType type)
-{ rs_set_vim_var_type(idx, type); }
-
-/// Set number v: variable to the given value
-void set_vim_var_nr(const VimVarIndex idx, const varnumber_T val)
-{ rs_set_vim_var_nr(idx, val); }
-
-/// Set boolean v: {true, false} to the given value
-void set_vim_var_bool(const VimVarIndex idx, const BoolVarValue val)
-{ rs_set_vim_var_bool(idx, val); }
-
-/// Set special v: variable to the given value
-void set_vim_var_special(const VimVarIndex idx, const SpecialVarValue val)
-{ rs_set_vim_var_special(idx, val); }
-
-/// Set v:char to character "c".
+// More v: variable set wrappers (logic in Rust)
+void set_vim_var_type(const VimVarIndex idx, const VarType type) { rs_set_vim_var_type(idx, type); }
+void set_vim_var_nr(const VimVarIndex idx, const varnumber_T val) { rs_set_vim_var_nr(idx, val); }
+void set_vim_var_bool(const VimVarIndex idx, const BoolVarValue val) { rs_set_vim_var_bool(idx, val); }
+void set_vim_var_special(const VimVarIndex idx, const SpecialVarValue val) { rs_set_vim_var_special(idx, val); }
 void set_vim_var_char(int c) { rs_set_vim_var_char(c); }
-
-/// Set string v: variable to the given string
 void set_vim_var_string(const VimVarIndex idx, const char *const val, const ptrdiff_t len)
 { rs_set_vim_var_string(idx, val, len); }
-
-/// Set list v: variable to the given list
-void set_vim_var_list(const VimVarIndex idx, list_T *const val)
-{ rs_set_vim_var_list(idx, val); }
-
-/// Set Dictionary v: variable to the given dictionary
-void set_vim_var_dict(const VimVarIndex idx, dict_T *const val)
-{ rs_set_vim_var_dict(idx, val); }
-
-/// Set partial v: variable to the given value
-void set_vim_var_partial(const VimVarIndex idx, partial_T *val)
-{ rs_set_vim_var_partial(idx, val); }
-
-/// Set v:register if needed.
+void set_vim_var_list(const VimVarIndex idx, list_T *const val) { rs_set_vim_var_list(idx, val); }
+void set_vim_var_dict(const VimVarIndex idx, dict_T *const val) { rs_set_vim_var_dict(idx, val); }
+void set_vim_var_partial(const VimVarIndex idx, partial_T *val) { rs_set_vim_var_partial(idx, val); }
 void set_reg_var(int c) { rs_set_reg_var(c); }
 
-/// Get or set v:exception.  If "oldval" == NULL, return the current value.
-/// Otherwise, restore the value to "oldval" and return NULL.
-/// Must always be called in pairs to save and restore v:exception!  Does not
-/// take care of memory allocations.
 char *v_exception(char *oldval) { return rs_v_exception(oldval); }
 
 /// Set v:cmdarg.
@@ -2010,19 +1907,9 @@ error:
   return NULL;
 }
 
-/// Get or set v:throwpoint.  If "oldval" == NULL, return the current value.
-/// Otherwise, restore the value to "oldval" and return NULL.
-/// Must always be called in pairs to save and restore v:throwpoint!  Does not
-/// take care of memory allocations.
 char *v_throwpoint(char *oldval) { return rs_v_throwpoint(oldval); }
-
-/// Set v:count to "count" and v:count1 to "count1".
-///
-/// @param set_prevcount  if true, first set v:prevcount from v:count.
 void set_vcount(int64_t count, int64_t count1, bool set_prevcount)
-{
-  rs_set_vcount(count, count1, set_prevcount);
-}
+{ rs_set_vcount(count, count1, set_prevcount); }
 
 /// Get the value of internal variable "name".
 /// Return OK or FAIL.  If OK is returned "rettv" must be cleared.
@@ -2604,73 +2491,18 @@ void set_var_const(const char *name, const size_t name_len, typval_T *const tv, 
   }
 }
 
-/// Check whether variable is read-only (DI_FLAGS_RO, DI_FLAGS_RO_SBX)
-///
-/// Also gives an error message.
-///
-/// @param[in]  flags  di_flags attribute value.
-/// @param[in]  name  Variable name, for use in error message.
-/// @param[in]  name_len  Variable name length. Use #TV_TRANSLATE to translate
-///                       variable name and compute the length. Use #TV_CSTRING
-///                       to compute the length with strlen() without
-///                       translating.
-///
-///                       Both #TV_… values are used for optimization purposes:
-///                       variable name with its length is needed only in case
-///                       of error, when no error occurs computing them is
-///                       a waste of CPU resources. This especially applies to
-///                       gettext.
-///
-/// @return True if variable is read-only: either always or in sandbox when
-///         sandbox is enabled, false otherwise.
+// Variable check wrappers (logic in Rust checks.rs)
 bool var_check_ro(const int flags, const char *name, size_t name_len)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 { return rs_var_check_ro(flags, name, name_len); }
-
-/// Return true if di_flags "flags" indicates variable "name" is locked.
-/// Also give an error message.
 bool var_check_lock(const int flags, const char *name, size_t name_len)
 { return rs_var_check_lock(flags, name, name_len); }
-
-/// Check whether variable is fixed (DI_FLAGS_FIX)
-///
-/// Also gives an error message.
-///
-/// @param[in]  flags  di_flags attribute value.
-/// @param[in]  name  Variable name, for use in error message.
-/// @param[in]  name_len  Variable name length. Use #TV_TRANSLATE to translate
-///                       variable name and compute the length. Use #TV_CSTRING
-///                       to compute the length with strlen() without
-///                       translating.
-///
-///                       Both #TV_… values are used for optimization purposes:
-///                       variable name with its length is needed only in case
-///                       of error, when no error occurs computing them is
-///                       a waste of CPU resources. This especially applies to
-///                       gettext.
-///
-/// @return True if variable is fixed, false otherwise.
 bool var_check_fixed(const int flags, const char *name, size_t name_len)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 { return rs_var_check_fixed(flags, name, name_len); }
-
-/// Check if name is a valid name to assign funcref to
-///
-/// @param[in]  name  Possible function/funcref name.
-/// @param[in]  new_var  True if it is a name for a variable.
-///
-/// @return false in case of success, true in case of failure. Also gives an
-///         error message if appropriate.
 bool var_wrong_func_name(const char *const name, const bool new_var)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 { return rs_var_wrong_func_name(name, new_var); }
-
-/// Check if a variable name is valid
-///
-/// @param[in]  varname  Variable name to check.
-///
-/// @return false when variable name is not valid, true when it is. Also gives
-///         an error message if appropriate.
 bool valid_varname(const char *varname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 { return rs_valid_varname(varname); }
@@ -2947,11 +2779,7 @@ static void setwinvar(typval_T *argvars, int off)
   }
 }
 
-// reset v:option_new, v:option_old, v:option_oldlocal, v:option_oldglobal,
-// v:option_type, and v:option_command.
 void reset_v_option_vars(void) { rs_reset_v_option_vars(); }
-
-/// Add an assert error to v:errors.
 void assert_error(garray_T *gap) { rs_assert_error(gap->ga_data, gap->ga_len); }
 
 bool var_exists(const char *var)
