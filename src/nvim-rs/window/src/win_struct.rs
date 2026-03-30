@@ -1579,6 +1579,36 @@ pub const unsafe extern "C" fn win_get_float_is_info(wp: WinHandle) -> c_int {
     win_ref(wp).w_float_is_info as c_int
 }
 
+/// Returns `wp->w_old_cursor_fcol`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_old_cursor_fcol"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_old_cursor_fcol(wp: WinHandle) -> ColNr {
+    win_ref(wp).w_old_cursor_fcol
+}
+
+/// Returns `wp->w_old_cursor_lcol`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_old_cursor_lcol"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_old_cursor_lcol(wp: WinHandle) -> ColNr {
+    win_ref(wp).w_old_cursor_lcol
+}
+
+/// Returns `wp->w_botfill`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_botfill"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_botfill(wp: WinHandle) -> c_int {
+    win_ref(wp).w_botfill as c_int
+}
+
 // =============================================================================
 // Phase 3: Simple setter #[export_name] functions replacing C setters.
 //

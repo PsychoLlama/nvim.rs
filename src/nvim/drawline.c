@@ -192,6 +192,92 @@ extern int rs_decor_providers_setup(int rows_to_draw, bool draw_from_line_start,
                                     colnr_T col, win_T *wp);
 extern int rs_invoke_range_next(win_T *wp, int lnum, colnr_T begin_col, colnr_T col_off);
 
+/// State struct returned by rs_win_line_init. Mirrors Rust WinLineState (repr(C)).
+/// Must match the Rust struct layout exactly.
+typedef struct {
+  colnr_T vcol_prev;
+  int fromcol_prev;
+  bool noinvcur;
+  bool lnum_in_visual_area;
+  int char_attr_pri;
+  int char_attr_base;
+  bool area_highlighting;
+  int vi_attr;
+  int area_attr;
+  int search_attr;
+  int vcol_save_attr;
+  int decor_attr;
+  bool has_syntax;
+  int folded_attr;
+  int eol_hl_off;
+  char nextline[300];   // SPWORDLEN*2
+  int nextlinecol;
+  int nextline_idx;
+  int spell_attr;
+  int word_end;
+  int cur_checked_col;
+  bool extra_check;
+  int multi_attr;
+  int mb_l;
+  int mb_c;
+  schar_T mb_schar;
+  int change_start;
+  int change_end;
+  bool in_multispace;
+  int multispace_pos;
+  int n_extra_next;
+  int extra_attr_next;
+  bool search_attr_from_match;
+  bool has_decor;
+  int saved_search_attr;
+  int saved_area_attr;
+  int saved_decor_attr;
+  bool saved_search_attr_from_match;
+  int win_col_offset;
+  bool area_active;
+  bool decor_need_recheck;
+  char buf_fold[51];  // FOLD_TEXT_LEN
+  VirtText fold_vt;
+  char *foldtext_free;
+  bool cul_screenline;
+  int left_curline_col;
+  int right_curline_col;
+  int match_conc;
+  bool on_last_col;
+  int syntax_flags;
+  int syntax_seqnr;
+  int prev_syntax_id;
+  int conceal_attr;
+  bool is_concealing;
+  bool did_wcol;
+  int bg_attr;
+  bool draw_text;
+  bool has_fold;
+  bool has_foldtext;
+  bool is_wrapped;
+  bool in_curline;
+  int view_width;
+  int view_height;
+  int line_attr_save;
+  int line_attr_lowprio_save;
+  bool check_decor_providers;
+  int decor_provider_end_col;
+  int linestatus;
+  int change_index;
+  diffline_T line_changes;
+  VirtLines virt_lines;
+  int saved_attr2;
+  int n_attr3;
+  int saved_attr3;
+} WinLineState;
+
+_Static_assert(sizeof(WinLineState) == 688, "WinLineState size mismatch with Rust");
+
+/// Initialize line state variables for win_line() (lines 232-610).
+extern void rs_win_line_init(win_T *wp, linenr_T lnum, int startrow, int col_rows,
+                             bool concealed, spellvars_T *spv, foldinfo_T foldinfo,
+                             winlinevars_T *wlv, WinLineState *state);
+
 
 // Layout verification: WinLineVars (Rust repr(C)) must match winlinevars_T (C).
 // If any of these fail, update src/nvim-rs/drawline/src/lib.rs accordingly.
@@ -232,94 +318,8 @@ void nvim_win_extmark_push(uint64_t ns_id, uint64_t mark_id, int win_row, int wi
 int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, bool concealed,
              spellvars_T *spv, foldinfo_T foldinfo)
 {
-  colnr_T vcol_prev = -1;             // "wlv.vcol" of previous character
-  GridView *grid = &wp->w_grid;       // grid specific to the window
-  const int view_width = wp->w_view_width;
-  const int view_height = wp->w_view_height;
-
-  const bool in_curline = wp == curwin && lnum == curwin->w_cursor.lnum;
-  const bool has_fold = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
-  const bool has_foldtext = has_fold && *wp->w_p_fdt != NUL;
-
-  const bool is_wrapped = wp->w_p_wrap
-                          && !has_fold;       // Never wrap folded lines
-
-  int saved_attr2 = 0;                  // char_attr saved for n_attr
-  int n_attr3 = 0;                      // chars with overruling special attr
-  int saved_attr3 = 0;                  // char_attr saved for n_attr3
-
-  int fromcol_prev = -2;                // start of inverting after cursor
-  bool noinvcur = false;                // don't invert the cursor
-  bool lnum_in_visual_area = false;
-
-  int char_attr_pri = 0;                // attributes with high priority
-  int char_attr_base = 0;               // attributes with low priority
-  bool area_highlighting = false;       // Visual or incsearch highlighting in this line
-  int vi_attr = 0;                      // attributes for Visual and incsearch highlighting
-  int area_attr = 0;                    // attributes desired by highlighting
-  int search_attr = 0;                  // attributes desired by 'hlsearch' or ComplMatchIns
-  int vcol_save_attr = 0;               // saved attr for 'cursorcolumn'
-  int decor_attr = 0;                   // attributes desired by syntax and extmarks
-  bool has_syntax = false;              // this buffer has syntax highl.
-  int folded_attr = 0;                  // attributes for folded line
-  int eol_hl_off = 0;                   // 1 if highlighted char after EOL
-#define SPWORDLEN 150
-  char nextline[SPWORDLEN * 2];         // text with start of the next line
-  int nextlinecol = 0;                  // column where nextline[] starts
-  int nextline_idx = 0;                 // index in nextline[] where next line
-                                        // starts
-  int spell_attr = 0;                   // attributes desired by spelling
-  int word_end = 0;                     // last byte with same spell_attr
-  int cur_checked_col = 0;              // checked column for current line
-  bool extra_check = false;             // has extra highlighting
-  int multi_attr = 0;                   // attributes desired by multibyte
-  int mb_l = 1;                         // multi-byte byte length
-  int mb_c = 0;                         // decoded multi-byte character
-  schar_T mb_schar = 0;                 // complete screen char
-  int change_start = MAXCOL;            // first col of changed area
-  int change_end = -1;                  // last col of changed area
-  bool in_multispace = false;           // in multiple consecutive spaces
-  int multispace_pos = 0;               // position in lcs-multispace string
-
-  int n_extra_next = 0;                 // n_extra to use after current extra chars
-  int extra_attr_next = -1;             // extra_attr to use after current extra chars
-
-  bool search_attr_from_match = false;  // if search_attr is from :match
-  bool has_decor = false;               // this buffer has decoration
-
-  int saved_search_attr = 0;            // search_attr to be used when n_extra goes to zero
-  int saved_area_attr = 0;              // idem for area_attr
-  int saved_decor_attr = 0;             // idem for decor_attr
-  bool saved_search_attr_from_match = false;
-
-  int win_col_offset = 0;               // offset for window columns
-  bool area_active = false;             // whether in Visual selection, for virtual text
-  bool decor_need_recheck = false;      // call decor_recheck_draw_col() at next char
-
-  char buf_fold[FOLD_TEXT_LEN];         // Hold value returned by get_foldtext
-  VirtText fold_vt = VIRTTEXT_EMPTY;
-  char *foldtext_free = NULL;
-
-  // 'cursorlineopt' has "screenline" and cursor is in this line
-  bool cul_screenline = false;
-  // margin columns for the screen line, needed for when 'cursorlineopt'
-  // contains "screenline"
-  int left_curline_col = 0;
-  int right_curline_col = 0;
-
-  int match_conc = 0;              ///< cchar for match functions
-  bool on_last_col = false;
-  int syntax_flags = 0;
-  int syntax_seqnr = 0;
-  int prev_syntax_id = 0;
-  int conceal_attr = win_hl_attr(wp, HLF_CONCEAL);
-  bool is_concealing = false;
-  bool did_wcol = false;
-#define vcol_hlc(wlv) ((wlv).vcol - (wlv).vcol_off_co)
-
+  // Initialize winlinevars_T
   assert(startrow < endrow);
-
-  // variables passed between functions
   winlinevars_T wlv = {
     .lnum = lnum,
     .foldinfo = foldinfo,
@@ -332,281 +332,102 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
     .prev_num_attr = -1,
   };
 
-  buf_T *buf = wp->w_buffer;
-  // Not drawing text when line is concealed or drawing filler lines beyond last line.
-  const bool draw_text = !concealed && (lnum != buf->b_ml.ml_line_count + 1);
+  // Delegate initialization to Rust (lines 232-610 of original C)
+  WinLineState wls;
+  rs_win_line_init(wp, lnum, startrow, col_rows, concealed, spv, foldinfo, &wlv, &wls);
 
-  int decor_provider_end_col;
-  bool check_decor_providers = false;
+  // Unpack WinLineState into local C variables for the rest of the function
+  GridView *grid = &wp->w_grid;       // grid specific to the window
+  const int view_width = wls.view_width;
+  const int view_height = wls.view_height;
+  const bool in_curline = wls.in_curline;
+  const bool has_fold = wls.has_fold;
+  const bool has_foldtext = wls.has_foldtext;
+  const bool is_wrapped = wls.is_wrapped;
+  const bool draw_text = wls.draw_text;
+  buf_T *buf = wp->w_buffer;  // still need buf for ml_get_buf etc.
 
-  if (col_rows == 0 && draw_text) {
-    // To speed up the loop below, set extra_check when there is linebreak,
-    // trailing white space and/or syntax processing to be done.
-    extra_check = wp->w_p_lbr;
-    if (syntax_present(wp) && !wp->w_s->b_syn_error && !wp->w_s->b_syn_slow && !has_foldtext) {
-      // Prepare for syntax highlighting in this line.  When there is an
-      // error, stop syntax highlighting.
-      int save_did_emsg = did_emsg;
-      did_emsg = false;
-      syntax_start(wp, lnum);
-      if (did_emsg) {
-        wp->w_s->b_syn_error = true;
-      } else {
-        did_emsg = save_did_emsg;
-        if (!wp->w_s->b_syn_slow) {
-          has_syntax = true;
-          extra_check = true;
-        }
-      }
-    }
+#define SPWORDLEN 150
+#define vcol_hlc(wlv) ((wlv).vcol - (wlv).vcol_off_co)
 
-    check_decor_providers = true;
+  colnr_T vcol_prev = wls.vcol_prev;
+  int fromcol_prev = wls.fromcol_prev;
+  bool noinvcur = wls.noinvcur;
+  bool lnum_in_visual_area = wls.lnum_in_visual_area;
+  int char_attr_pri = wls.char_attr_pri;
+  int char_attr_base = wls.char_attr_base;
+  bool area_highlighting = wls.area_highlighting;
+  int vi_attr = wls.vi_attr;
+  int area_attr = wls.area_attr;
+  int search_attr = wls.search_attr;
+  int vcol_save_attr = wls.vcol_save_attr;
+  int decor_attr = wls.decor_attr;
+  bool has_syntax = wls.has_syntax;
+  int folded_attr = wls.folded_attr;
+  int eol_hl_off = wls.eol_hl_off;
+  // nextline[] lives in WinLineState; create a pointer alias for the remaining C code
+  char *nextline = wls.nextline;
+  int nextlinecol = wls.nextlinecol;
+  int nextline_idx = wls.nextline_idx;
+  int spell_attr = wls.spell_attr;
+  int word_end = wls.word_end;
+  int cur_checked_col = wls.cur_checked_col;
+  bool extra_check = wls.extra_check;
+  int multi_attr = wls.multi_attr;
+  int mb_l = wls.mb_l;
+  int mb_c = wls.mb_c;
+  schar_T mb_schar = wls.mb_schar;
+  int change_start = wls.change_start;
+  int change_end = wls.change_end;
+  bool in_multispace = wls.in_multispace;
+  int multispace_pos = wls.multispace_pos;
+  int n_extra_next = wls.n_extra_next;
+  int extra_attr_next = wls.extra_attr_next;
+  bool search_attr_from_match = wls.search_attr_from_match;
+  bool has_decor = wls.has_decor;
+  int saved_search_attr = wls.saved_search_attr;
+  int saved_area_attr = wls.saved_area_attr;
+  int saved_decor_attr = wls.saved_decor_attr;
+  bool saved_search_attr_from_match = wls.saved_search_attr_from_match;
+  int win_col_offset = wls.win_col_offset;
+  bool area_active = wls.area_active;
+  bool decor_need_recheck = wls.decor_need_recheck;
+  // buf_fold[] lives in WinLineState; create a pointer alias for the remaining C code
+  char *buf_fold = wls.buf_fold;
+  VirtText fold_vt = wls.fold_vt;
+  char *foldtext_free = wls.foldtext_free;
+  bool cul_screenline = wls.cul_screenline;
+  int left_curline_col = wls.left_curline_col;
+  int right_curline_col = wls.right_curline_col;
+  int match_conc = wls.match_conc;
+  bool on_last_col = wls.on_last_col;
+  int syntax_flags = wls.syntax_flags;
+  int syntax_seqnr = wls.syntax_seqnr;
+  int prev_syntax_id = wls.prev_syntax_id;
+  int conceal_attr = wls.conceal_attr;
+  bool is_concealing = wls.is_concealing;
+  bool did_wcol = wls.did_wcol;
+  int bg_attr = wls.bg_attr;
+  int saved_attr2 = wls.saved_attr2;
+  int n_attr3 = wls.n_attr3;
+  int saved_attr3 = wls.saved_attr3;
+  int line_attr_save = wls.line_attr_save;
+  int line_attr_lowprio_save = wls.line_attr_lowprio_save;
+  int linestatus = wls.linestatus;
+  diffline_T line_changes = wls.line_changes;
+  int change_index = wls.change_index;
+  VirtLines virt_lines = wls.virt_lines;
+  bool check_decor_providers = wls.check_decor_providers;
+  int decor_provider_end_col = wls.decor_provider_end_col;
 
-    // Check for columns to display for 'colorcolumn'.
-    wlv.color_cols = wp->w_buffer->terminal ? NULL : wp->w_p_cc_cols;
-    advance_color_col(&wlv, vcol_hlc(wlv));
-
-    // handle Visual active in this window
-    if (VIsual_active && wp->w_buffer == curwin->w_buffer) {
-      pos_T *top, *bot;
-
-      if (ltoreq(curwin->w_cursor, VIsual)) {
-        // Visual is after curwin->w_cursor
-        top = &curwin->w_cursor;
-        bot = &VIsual;
-      } else {
-        // Visual is before curwin->w_cursor
-        top = &VIsual;
-        bot = &curwin->w_cursor;
-      }
-      lnum_in_visual_area = (lnum >= top->lnum && lnum <= bot->lnum);
-      if (VIsual_mode == Ctrl_V) {
-        // block mode
-        if (lnum_in_visual_area) {
-          wlv.fromcol = wp->w_old_cursor_fcol;
-          wlv.tocol = wp->w_old_cursor_lcol;
-        }
-      } else {
-        // non-block mode
-        if (lnum > top->lnum && lnum <= bot->lnum) {
-          wlv.fromcol = 0;
-        } else if (lnum == top->lnum) {
-          if (VIsual_mode == 'V') {       // linewise
-            wlv.fromcol = 0;
-          } else {
-            getvvcol(wp, top, (colnr_T *)&wlv.fromcol, NULL, NULL);
-            if (gchar_pos(top) == NUL) {
-              wlv.tocol = wlv.fromcol + 1;
-            }
-          }
-        }
-        if (VIsual_mode != 'V' && lnum == bot->lnum) {
-          if (*p_sel == 'e' && bot->col == 0
-              && bot->coladd == 0) {
-            wlv.fromcol = -10;
-            wlv.tocol = MAXCOL;
-          } else if (bot->col == MAXCOL) {
-            wlv.tocol = MAXCOL;
-          } else {
-            pos_T pos = *bot;
-            if (*p_sel == 'e') {
-              getvvcol(wp, &pos, (colnr_T *)&wlv.tocol, NULL, NULL);
-            } else {
-              getvvcol(wp, &pos, NULL, NULL, (colnr_T *)&wlv.tocol);
-              wlv.tocol++;
-            }
-          }
-        }
-      }
-
-      // Check if the char under the cursor should be inverted (highlighted).
-      if (!highlight_match && in_curline
-          && cursor_is_block_during_visual(*p_sel == 'e')) {
-        noinvcur = true;
-      }
-
-      // if inverting in this line set area_highlighting
-      if (wlv.fromcol >= 0) {
-        area_highlighting = true;
-        vi_attr = win_hl_attr(wp, HLF_V);
-      }
-      // handle 'incsearch' and ":s///c" highlighting
-    } else if (highlight_match
-               && wp == curwin
-               && !has_foldtext
-               && lnum >= curwin->w_cursor.lnum
-               && lnum <= curwin->w_cursor.lnum + search_match_lines) {
-      if (lnum == curwin->w_cursor.lnum) {
-        getvcol(curwin, &(curwin->w_cursor),
-                (colnr_T *)&wlv.fromcol, NULL, NULL);
-      } else {
-        wlv.fromcol = 0;
-      }
-      if (lnum == curwin->w_cursor.lnum + search_match_lines) {
-        pos_T pos = {
-          .lnum = lnum,
-          .col = search_match_endcol,
-        };
-        getvcol(curwin, &pos, (colnr_T *)&wlv.tocol, NULL, NULL);
-      }
-      // do at least one character; happens when past end of line
-      if (wlv.fromcol == wlv.tocol && search_match_endcol) {
-        wlv.tocol = wlv.fromcol + 1;
-      }
-      area_highlighting = true;
-      vi_attr = win_hl_attr(wp, HLF_I);
-    }
-  }
-
-  int bg_attr = win_bg_attr(wp);
-
-  int linestatus = 0;
-  wlv.filler_lines = rs_diff_check_with_linestatus(wp, lnum, &linestatus);
-  diffline_T line_changes = { 0 };
-  int change_index = -1;
-  if (linestatus < 0) {
-    if (linestatus == -1) {
-      if (rs_diff_find_change(wp, lnum, &line_changes)) {
-        wlv.diff_hlf = HLF_ADD;      // added line
-      } else if (line_changes.num_changes > 0) {
-        bool added = rs_diff_change_parse(&line_changes, &line_changes.changes[0],
-                                       &change_start, &change_end);
-        if (change_start == 0) {
-          if (added) {
-            wlv.diff_hlf = HLF_TXA;  // added text on changed line
-          } else {
-            wlv.diff_hlf = HLF_TXD;  // changed text on changed line
-          }
-        } else {
-          wlv.diff_hlf = HLF_CHD;    // unchanged text on changed line
-        }
-        change_index = 0;
-      } else {
-        wlv.diff_hlf = HLF_CHD;      // changed line
-        change_index = 0;
-      }
-    } else {
-      wlv.diff_hlf = HLF_ADD;               // added line
-    }
-    area_highlighting = true;
-  }
-  VirtLines virt_lines = KV_INITIAL_VALUE;
-  wlv.n_virt_lines = decor_virt_lines(wp, lnum - 1, lnum, &wlv.n_virt_below, &virt_lines, true);
-  wlv.filler_lines += wlv.n_virt_lines;
-  if (lnum == wp->w_topline) {
-    wlv.filler_lines = wp->w_topfill;
-    wlv.n_virt_lines = MIN(wlv.n_virt_lines, wlv.filler_lines);
-  }
-  wlv.filler_todo = wlv.filler_lines;
-
-  // Cursor line highlighting for 'cursorline' in the current window.
-  if (wp->w_p_cul && wp->w_p_culopt_flags != kOptCuloptFlagNumber && lnum == wp->w_cursorline
-      // Do not show the cursor line in the text when Visual mode is active,
-      // because it's not clear what is selected then.
-      && !(wp == curwin && VIsual_active)) {
-    cul_screenline = (is_wrapped && (wp->w_p_culopt_flags & kOptCuloptFlagScreenline));
-    if (!cul_screenline) {
-      apply_cursorline_highlight(wp, &wlv);
-    } else {
-      margin_columns_win(wp, &left_curline_col, &right_curline_col);
-    }
-    area_highlighting = true;
-  }
-
-  int sign_line_attr = 0;
-  // TODO(bfredl, vigoux): line_attr should not take priority over decoration!
-  decor_redraw_signs(wp, buf, wlv.lnum - 1, wlv.sattrs,
-                     &sign_line_attr, &wlv.sign_cul_attr, &wlv.sign_num_attr);
-
+  // statuscol initialization (partially done in rs_win_line_init, completed here)
   statuscol_T statuscol = { 0 };
   if (*wp->w_p_stc != NUL) {
-    // Draw the 'statuscolumn' if option is set.
     statuscol.draw = true;
     statuscol.sattrs = wlv.sattrs;
     statuscol.foldinfo = foldinfo;
     statuscol.width = win_col_off(wp) - (wp == cmdwin_win);
     statuscol.sign_cul_id = use_cursor_line_highlight(wp, lnum) ? wlv.sign_cul_attr : 0;
-  } else if (wlv.sign_cul_attr > 0) {
-    wlv.sign_cul_attr = use_cursor_line_highlight(wp, lnum) ? syn_id2attr(wlv.sign_cul_attr) : 0;
-  }
-  if (wlv.sign_num_attr > 0) {
-    wlv.sign_num_attr = syn_id2attr(wlv.sign_num_attr);
-  }
-  if (sign_line_attr > 0) {
-    wlv.line_attr = syn_id2attr(sign_line_attr);
-  }
-
-  // Highlight the current line in the quickfix window.
-  if (bt_quickfix(wp->w_buffer) && qf_current_entry(wp) == lnum) {
-    wlv.line_attr = win_hl_attr(wp, HLF_QFL);
-  }
-
-  if (wlv.line_attr_lowprio || wlv.line_attr) {
-    area_highlighting = true;
-  }
-
-  int line_attr_save = wlv.line_attr;
-  int line_attr_lowprio_save = wlv.line_attr_lowprio;
-
-  if (spv->spv_has_spell && col_rows == 0 && draw_text) {
-    // Prepare for spell checking.
-    extra_check = true;
-
-    // When a word wrapped from the previous line the start of the
-    // current line is valid.
-    if (lnum == spv->spv_checked_lnum) {
-      cur_checked_col = spv->spv_checked_col;
-    }
-    // Previous line was not spell checked, check for capital. This happens
-    // for the first line in an updated region or after a closed fold.
-    if (spv->spv_capcol_lnum == 0 && check_need_cap(wp, lnum, 0)) {
-      spv->spv_cap_col = 0;
-    } else if (lnum != spv->spv_capcol_lnum) {
-      spv->spv_cap_col = -1;
-    }
-    spv->spv_checked_lnum = 0;
-
-    // Get the start of the next line, so that words that wrap to the
-    // next line are found too: "et<line-break>al.".
-    // Trick: skip a few chars for C/shell/Vim comments
-    nextline[SPWORDLEN] = NUL;
-    if (lnum < wp->w_buffer->b_ml.ml_line_count) {
-      char *line = ml_get_buf(wp->w_buffer, lnum + 1);
-      spell_cat_line(nextline + SPWORDLEN, line, SPWORDLEN);
-    }
-    char *line = ml_get_buf(wp->w_buffer, lnum);
-
-    // If current line is empty, check first word in next line for capital.
-    char *ptr = skipwhite(line);
-    if (*ptr == NUL) {
-      spv->spv_cap_col = 0;
-      spv->spv_capcol_lnum = lnum + 1;
-    } else if (spv->spv_cap_col == 0) {
-      // For checking first word with a capital skip white space.
-      spv->spv_cap_col = (int)(ptr - line);
-    }
-
-    // Copy the end of the current line into nextline[].
-    if (nextline[SPWORDLEN] == NUL) {
-      // No next line or it is empty.
-      nextlinecol = MAXCOL;
-      nextline_idx = 0;
-    } else {
-      const colnr_T line_len = ml_get_buf_len(wp->w_buffer, lnum);
-      if (line_len < SPWORDLEN) {
-        // Short line, use it completely and append the start of the
-        // next line.
-        nextlinecol = 0;
-        memmove(nextline, line, (size_t)line_len);
-        STRMOVE(nextline + line_len, nextline + SPWORDLEN);
-        nextline_idx = line_len + 1;
-      } else {
-        // Long line, use only the last SPWORDLEN bytes.
-        nextlinecol = line_len - SPWORDLEN;
-        memmove(nextline, line + nextlinecol, SPWORDLEN);
-        nextline_idx = SPWORDLEN + 1;
-      }
-    }
   }
 
   // current line

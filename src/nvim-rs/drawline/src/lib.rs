@@ -186,6 +186,16 @@ pub const HLF_DED: c_int = 32; // DiffDelete (deleted diff line)
 pub const HLF_SC: c_int = 35; // SignColumn
 pub const HLF_CUL: c_int = 56; // CursorLine
 pub const HLF_MC: c_int = 57; // ColorColumn
+pub const HLF_QFL: c_int = 58; // QuickFixLine
+                               // Highlight groups used by win_line init block:
+pub const HLF_I: c_int = 7; // IncSearch
+pub const HLF_V: c_int = 24; // Visual
+pub const HLF_ADD: c_int = 30; // DiffAdd
+pub const HLF_CHD: c_int = 31; // DiffChange
+pub const HLF_TXD: c_int = 33; // DiffText (changed text)
+pub const HLF_TXA: c_int = 34; // DiffText (added text)
+pub const HLF_CONCEAL: c_int = 36; // Conceal
+pub const MAXCOL: c_int = i32::MAX; // MAXCOL from pos_defs.h
 
 // Cursorlineopt flags (from option_vars.generated.h)
 pub const K_OPT_CULOPT_FLAG_LINE: c_int = 0x01;
@@ -519,7 +529,7 @@ extern "C" {
 
 /// Opaque handle to buffer (buf_T).
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BufHandle(*mut c_void);
 
 use std::ffi::c_char;
@@ -3788,6 +3798,751 @@ pub unsafe extern "C" fn rs_decor_providers_setup(
 ) -> c_int {
     decor_providers_setup_impl(rows_to_draw, draw_from_line_start, lnum, col, wp)
 }
+
+// =============================================================================
+// Phase W1: win_line_init migration
+// =============================================================================
+
+/// pos_T repr(C) -- mirrors the C pos_T struct (lnum, col, coladd).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PosT {
+    pub lnum: LinenrT,
+    pub col: ColnrT,
+    pub coladd: ColnrT,
+}
+
+/// Repr(C) mirror of C diffline_T.
+/// Must match: { diffline_change_T *changes; int num_changes; int bufidx; int lineoff; }
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DifflineStateC {
+    pub changes: *mut c_void,
+    pub num_changes: c_int,
+    pub bufidx: c_int,
+    pub lineoff: c_int,
+}
+
+impl Default for DifflineStateC {
+    fn default() -> Self {
+        Self {
+            changes: std::ptr::null_mut(),
+            num_changes: 0,
+            bufidx: 0,
+            lineoff: 0,
+        }
+    }
+}
+
+/// Local variable state for win_line() that must persist across the main loop.
+///
+/// This holds all the non-WinLineVars local variables of win_line() needed
+/// after the initialization block. The struct is repr(C) so that C code can
+/// take a pointer to it on the stack.
+#[repr(C)]
+pub struct WinLineState {
+    pub vcol_prev: ColnrT,
+    pub fromcol_prev: c_int,
+    pub noinvcur: bool,
+    pub lnum_in_visual_area: bool,
+    pub char_attr_pri: c_int,
+    pub char_attr_base: c_int,
+    pub area_highlighting: bool,
+    pub vi_attr: c_int,
+    pub area_attr: c_int,
+    pub search_attr: c_int,
+    pub vcol_save_attr: c_int,
+    pub decor_attr: c_int,
+    pub has_syntax: bool,
+    pub folded_attr: c_int,
+    pub eol_hl_off: c_int,
+    /// nextline[SPWORDLEN * 2]: text with start of the next line (SPWORDLEN=150)
+    pub nextline: [c_char; 300],
+    pub nextlinecol: c_int,
+    pub nextline_idx: c_int,
+    pub spell_attr: c_int,
+    pub word_end: c_int,
+    pub cur_checked_col: c_int,
+    pub extra_check: bool,
+    pub multi_attr: c_int,
+    pub mb_l: c_int,
+    pub mb_c: c_int,
+    pub mb_schar: ScharT,
+    pub change_start: c_int,
+    pub change_end: c_int,
+    pub in_multispace: bool,
+    pub multispace_pos: c_int,
+    pub n_extra_next: c_int,
+    pub extra_attr_next: c_int,
+    pub search_attr_from_match: bool,
+    pub has_decor: bool,
+    pub saved_search_attr: c_int,
+    pub saved_area_attr: c_int,
+    pub saved_decor_attr: c_int,
+    pub saved_search_attr_from_match: bool,
+    pub win_col_offset: c_int,
+    pub area_active: bool,
+    pub decor_need_recheck: bool,
+    /// buf_fold[FOLD_TEXT_LEN=51] - buffer for fold text
+    pub buf_fold: [c_char; 51],
+    pub fold_vt: KVec<VirtTextChunkC>,
+    pub foldtext_free: *mut c_char,
+    pub cul_screenline: bool,
+    pub left_curline_col: c_int,
+    pub right_curline_col: c_int,
+    pub match_conc: c_int,
+    pub on_last_col: bool,
+    pub syntax_flags: c_int,
+    pub syntax_seqnr: c_int,
+    pub prev_syntax_id: c_int,
+    pub conceal_attr: c_int,
+    pub is_concealing: bool,
+    pub did_wcol: bool,
+    pub bg_attr: c_int,
+    pub draw_text: bool,
+    pub has_fold: bool,
+    pub has_foldtext: bool,
+    pub is_wrapped: bool,
+    pub in_curline: bool,
+    pub view_width: c_int,
+    pub view_height: c_int,
+    pub line_attr_save: c_int,
+    pub line_attr_lowprio_save: c_int,
+    pub check_decor_providers: bool,
+    pub decor_provider_end_col: c_int,
+    pub linestatus: c_int,
+    pub change_index: c_int,
+    /// diffline_T struct containing change info for inline diff.
+    /// The `changes` pointer inside points to long-lived C data.
+    pub line_changes: DifflineStateC,
+    pub virt_lines: KVec<u8>,
+    pub saved_attr2: c_int,
+    pub n_attr3: c_int,
+    pub saved_attr3: c_int,
+}
+
+impl Default for WinLineState {
+    fn default() -> Self {
+        unsafe { std::mem::zeroed() }
+    }
+}
+
+// Additional FFI bindings for win_line_init
+extern "C" {
+    fn nvim_get_VIsual_mode() -> c_int;
+    fn nvim_get_VIsual_lnum() -> LinenrT;
+    fn nvim_get_VIsual_col() -> ColnrT;
+    fn nvim_get_VIsual_coladd() -> ColnrT;
+    fn nvim_get_highlight_match() -> c_int;
+    fn nvim_get_search_match_lines() -> c_int;
+    fn nvim_get_search_match_endcol() -> c_int;
+    fn nvim_get_p_sel_first() -> c_char;
+    fn nvim_getvvcol(
+        wp: WinHandle,
+        pos: *mut PosT,
+        scol: *mut ColnrT,
+        ccol: *mut ColnrT,
+        ecol: *mut ColnrT,
+    );
+    fn nvim_getvcol(
+        wp: WinHandle,
+        pos: *mut PosT,
+        scol: *mut ColnrT,
+        ccol: *mut ColnrT,
+        ecol: *mut ColnrT,
+    );
+    fn nvim_cursor_is_block_during_visual(exclusive: c_int) -> c_int;
+    fn nvim_gchar_pos_lnum_col(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
+    fn nvim_win_get_old_cursor_fcol(wp: WinHandle) -> ColnrT;
+    fn nvim_win_get_old_cursor_lcol(wp: WinHandle) -> ColnrT;
+    fn nvim_get_cmdwin_win() -> WinHandle;
+    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
+    // rs_diff_check_with_linestatus, rs_diff_find_change, rs_diff_change_parse
+    // are already exported by the diff crate; call them via extern.
+    fn rs_diff_check_with_linestatus(wp: WinHandle, lnum: LinenrT, linestatus: *mut c_int)
+        -> c_int;
+    fn rs_diff_find_change(wp: WinHandle, lnum: LinenrT, diffline: *mut c_void) -> bool;
+    fn rs_diff_change_parse(
+        diffline: *mut c_void,
+        change: *mut c_void,
+        change_start: *mut c_int,
+        change_end: *mut c_int,
+    ) -> bool;
+    // nvim_win_get_cursor_col and nvim_win_get_cursor_coladd from win_struct.rs:
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> ColnrT;
+    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> ColnrT;
+    // nvim_win_ml_get_buf already declared above at line ~392
+    // nvim_win_get_cursorline, nvim_win_get_p_cul, nvim_win_get_p_culopt_flags already declared above
+}
+
+// use_cursor_line_highlight: already exported from this crate, but also needed as FFI call
+extern "C" {
+    fn use_cursor_line_highlight(wp: WinHandle, lnum: LinenrT) -> bool;
+}
+
+/// Initialize the line state variables for win_line().
+///
+/// This implements lines 232-610 of the C win_line() function.
+/// Returns the initialized WinLineState via out-pointer.
+///
+/// # Safety
+/// All pointers must be valid. `spv` must point to a valid spellvars_T.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_win_line_init(
+    wp: WinHandle,
+    lnum: LinenrT,
+    _startrow: c_int,
+    col_rows: c_int,
+    concealed: bool,
+    spv: *mut c_void,
+    foldinfo: FoldInfo,
+    wlv: *mut WinLineVars,
+    state_out: *mut WinLineState,
+) {
+    let state = &mut *state_out;
+
+    // Initialize WinLineVars fields that win_line sets up
+    (*wlv).fromcol = -10;
+    (*wlv).tocol = MAXCOL;
+
+    // Grid not used in init (set by win_line body in C), view dimensions:
+    let view_width = nvim_win_get_view_width(wp);
+    let view_height = nvim_win_get_view_height(wp);
+    state.view_width = view_width;
+    state.view_height = view_height;
+
+    // in_curline: wp == curwin && lnum == curwin->w_cursor.lnum
+    let is_curwin = nvim_win_is_curwin(wp) != 0;
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    state.in_curline = is_curwin && lnum == cursor_lnum;
+
+    // has_fold / has_foldtext / is_wrapped
+    let has_fold = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
+    let p_fdt_ptr = nvim_win_get_p_fdt(wp);
+    let has_foldtext = has_fold && !p_fdt_ptr.is_null() && *p_fdt_ptr != 0;
+    let is_wrapped = nvim_win_get_p_wrap(wp) != 0 && !has_fold;
+    state.has_fold = has_fold;
+    state.has_foldtext = has_foldtext;
+    state.is_wrapped = is_wrapped;
+
+    // Initial local vars
+    state.vcol_prev = -1;
+    state.fromcol_prev = -2;
+    state.noinvcur = false;
+    state.lnum_in_visual_area = false;
+    state.char_attr_pri = 0;
+    state.char_attr_base = 0;
+    state.area_highlighting = false;
+    state.vi_attr = 0;
+    state.area_attr = 0;
+    state.search_attr = 0;
+    state.vcol_save_attr = 0;
+    state.decor_attr = 0;
+    state.has_syntax = false;
+    state.folded_attr = 0;
+    state.eol_hl_off = 0;
+    state.nextlinecol = 0;
+    state.nextline_idx = 0;
+    state.spell_attr = 0;
+    state.word_end = 0;
+    state.cur_checked_col = 0;
+    state.extra_check = false;
+    state.multi_attr = 0;
+    state.mb_l = 1;
+    state.mb_c = 0;
+    state.mb_schar = 0;
+    state.change_start = MAXCOL;
+    state.change_end = -1;
+    state.in_multispace = false;
+    state.multispace_pos = 0;
+    state.n_extra_next = 0;
+    state.extra_attr_next = -1;
+    state.search_attr_from_match = false;
+    state.has_decor = false;
+    state.saved_search_attr = 0;
+    state.saved_area_attr = 0;
+    state.saved_decor_attr = 0;
+    state.saved_search_attr_from_match = false;
+    state.win_col_offset = 0;
+    state.area_active = false;
+    state.decor_need_recheck = false;
+    state.fold_vt = KVec::empty();
+    state.foldtext_free = std::ptr::null_mut();
+    state.cul_screenline = false;
+    state.left_curline_col = 0;
+    state.right_curline_col = 0;
+    state.match_conc = 0;
+    state.on_last_col = false;
+    state.syntax_flags = 0;
+    state.syntax_seqnr = 0;
+    state.prev_syntax_id = 0;
+    state.is_concealing = false;
+    state.did_wcol = false;
+    state.saved_attr2 = 0;
+    state.n_attr3 = 0;
+    state.saved_attr3 = 0;
+    state.linestatus = 0;
+    state.change_index = -1;
+    state.check_decor_providers = false;
+    state.decor_provider_end_col = 0;
+
+    // conceal_attr
+    state.conceal_attr = nvim_win_hl_attr(wp, HLF_CONCEAL);
+
+    // draw_text: !concealed && lnum != buf->b_ml.ml_line_count + 1
+    let buf = nvim_win_get_w_buffer(wp);
+    let line_count = nvim_buf_get_line_count(buf);
+    state.draw_text = !concealed && (lnum != line_count + 1);
+
+    // color_cols (set on wlv): buf->terminal ? NULL : wp->w_p_cc_cols
+    // We set this below after the draw_text check.
+
+    if col_rows == 0 && state.draw_text {
+        // extra_check: wp->w_p_lbr
+        state.extra_check = nvim_win_get_p_lbr(wp) != 0;
+
+        // Syntax highlighting setup
+        if syntax_present(wp)
+            && !nvim_win_get_syn_error(wp)
+            && !nvim_win_get_syn_slow(wp)
+            && !has_foldtext
+        {
+            let save_did_emsg = nvim_get_did_emsg();
+            nvim_set_did_emsg(false);
+            syntax_start(wp, lnum);
+            if nvim_get_did_emsg() {
+                nvim_win_set_syn_error(wp, true);
+            } else {
+                nvim_set_did_emsg_int(save_did_emsg);
+                if !nvim_win_get_syn_slow(wp) {
+                    state.has_syntax = true;
+                    state.extra_check = true;
+                }
+            }
+        }
+
+        state.check_decor_providers = true;
+
+        // color_cols setup
+        if nvim_buf_get_terminal(buf) == 0 {
+            (*wlv).color_cols = nvim_win_get_p_cc_cols(wp);
+        } else {
+            (*wlv).color_cols = std::ptr::null_mut();
+        }
+        advance_color_col_impl(wlv, (*wlv).vcol - (*wlv).vcol_off_co);
+
+        // Visual area highlighting
+        if VIsual_active && buf == nvim_curwin_get_buffer() {
+            let vis_lnum = nvim_get_VIsual_lnum();
+            let vis_col = nvim_get_VIsual_col();
+            let vis_coladd = nvim_get_VIsual_coladd();
+            let cursor_lnum2 = nvim_win_get_cursor_lnum(wp);
+            let cursor_col = nvim_win_get_cursor_col(wp);
+            let cursor_coladd = nvim_win_get_cursor_coladd(wp);
+
+            let mut top: PosT;
+            let mut bot: PosT;
+            // ltoreq: cursor <= VIsual means cursor is top, VIsual is bot
+            let cursor_lt_vis =
+                cursor_lnum2 < vis_lnum || (cursor_lnum2 == vis_lnum && cursor_col <= vis_col);
+            if cursor_lt_vis {
+                top = PosT {
+                    lnum: cursor_lnum2,
+                    col: cursor_col,
+                    coladd: cursor_coladd,
+                };
+                bot = PosT {
+                    lnum: vis_lnum,
+                    col: vis_col,
+                    coladd: vis_coladd,
+                };
+            } else {
+                top = PosT {
+                    lnum: vis_lnum,
+                    col: vis_col,
+                    coladd: vis_coladd,
+                };
+                bot = PosT {
+                    lnum: cursor_lnum2,
+                    col: cursor_col,
+                    coladd: cursor_coladd,
+                };
+            }
+
+            state.lnum_in_visual_area = lnum >= top.lnum && lnum <= bot.lnum;
+            let vis_mode = nvim_get_VIsual_mode();
+            if vis_mode == i32::from(b'\x16') {
+                // Ctrl-V block mode
+                if state.lnum_in_visual_area {
+                    (*wlv).fromcol = nvim_win_get_old_cursor_fcol(wp);
+                    (*wlv).tocol = nvim_win_get_old_cursor_lcol(wp);
+                }
+            } else {
+                // non-block mode
+                if lnum > top.lnum && lnum <= bot.lnum {
+                    (*wlv).fromcol = 0;
+                } else if lnum == top.lnum {
+                    if vis_mode == i32::from(b'V') {
+                        // linewise
+                        (*wlv).fromcol = 0;
+                    } else {
+                        let mut scol: ColnrT = 0;
+                        nvim_getvvcol(
+                            wp,
+                            &mut top,
+                            &mut scol,
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                        );
+                        (*wlv).fromcol = scol;
+                        if nvim_gchar_pos_lnum_col(top.lnum, top.col, top.coladd) == 0 {
+                            // NUL char at top pos -> extend tocol
+                            (*wlv).tocol = (*wlv).fromcol + 1;
+                        }
+                    }
+                }
+                if vis_mode != i32::from(b'V') && lnum == bot.lnum {
+                    let p_sel_char = nvim_get_p_sel_first();
+                    if p_sel_char == b'e' as c_char && bot.col == 0 && bot.coladd == 0 {
+                        (*wlv).fromcol = -10;
+                        (*wlv).tocol = MAXCOL;
+                    } else if bot.col == MAXCOL {
+                        (*wlv).tocol = MAXCOL;
+                    } else {
+                        let mut tocol: ColnrT = 0;
+                        if p_sel_char == b'e' as c_char {
+                            nvim_getvvcol(
+                                wp,
+                                &mut bot,
+                                &mut tocol,
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut(),
+                            );
+                        } else {
+                            nvim_getvvcol(
+                                wp,
+                                &mut bot,
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut(),
+                                &mut tocol,
+                            );
+                            tocol += 1;
+                        }
+                        (*wlv).tocol = tocol;
+                    }
+                }
+            }
+
+            // Check if the char under the cursor should be inverted
+            if nvim_get_highlight_match() == 0 && state.in_curline {
+                let p_sel_char = nvim_get_p_sel_first();
+                let exclusive = c_int::from(p_sel_char == b'e' as c_char);
+                if nvim_cursor_is_block_during_visual(exclusive) != 0 {
+                    state.noinvcur = true;
+                }
+            }
+
+            // if inverting in this line set area_highlighting
+            if (*wlv).fromcol >= 0 {
+                state.area_highlighting = true;
+                state.vi_attr = nvim_win_hl_attr(wp, HLF_V);
+            }
+        } else if nvim_get_highlight_match() != 0
+            && is_curwin
+            && !has_foldtext
+            && lnum >= cursor_lnum
+            && lnum <= cursor_lnum + nvim_get_search_match_lines()
+        {
+            // incsearch / :s///c highlighting
+            if lnum == cursor_lnum {
+                let mut cur_pos = PosT {
+                    lnum: cursor_lnum,
+                    col: nvim_win_get_cursor_col(wp),
+                    coladd: nvim_win_get_cursor_coladd(wp),
+                };
+                let mut scol: ColnrT = 0;
+                nvim_getvcol(
+                    wp,
+                    &mut cur_pos,
+                    &mut scol,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+                (*wlv).fromcol = scol;
+            } else {
+                (*wlv).fromcol = 0;
+            }
+            let match_lines = nvim_get_search_match_lines();
+            if lnum == cursor_lnum + match_lines {
+                let endcol = nvim_get_search_match_endcol();
+                let mut pos = PosT {
+                    lnum,
+                    col: endcol,
+                    coladd: 0,
+                };
+                let mut tocol: ColnrT = 0;
+                nvim_getvcol(
+                    wp,
+                    &mut pos,
+                    &mut tocol,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+                (*wlv).tocol = tocol;
+            }
+            // do at least one character; happens when past end of line
+            let endcol = nvim_get_search_match_endcol();
+            if (*wlv).fromcol == (*wlv).tocol && endcol != 0 {
+                (*wlv).tocol = (*wlv).fromcol + 1;
+            }
+            state.area_highlighting = true;
+            state.vi_attr = nvim_win_hl_attr(wp, HLF_I);
+        }
+    }
+
+    // bg_attr
+    state.bg_attr = win_bg_attr(wp);
+
+    // Diff highlighting setup
+    state.linestatus = 0;
+    let filler_lines = rs_diff_check_with_linestatus(wp, lnum, &mut state.linestatus);
+    (*wlv).filler_lines = filler_lines;
+    state.line_changes = DifflineStateC::default();
+    state.change_index = -1;
+    if state.linestatus < 0 {
+        if state.linestatus == -1 {
+            if rs_diff_find_change(wp, lnum, (&raw mut state.line_changes).cast()) {
+                (*wlv).diff_hlf = HLF_ADD;
+            } else if state.line_changes.num_changes > 0 {
+                let added = rs_diff_change_parse(
+                    (&raw mut state.line_changes).cast(),
+                    state.line_changes.changes,
+                    &mut state.change_start,
+                    &mut state.change_end,
+                );
+                if state.change_start == 0 {
+                    if added {
+                        (*wlv).diff_hlf = HLF_TXA;
+                    } else {
+                        (*wlv).diff_hlf = HLF_TXD;
+                    }
+                } else {
+                    (*wlv).diff_hlf = HLF_CHD;
+                }
+                state.change_index = 0;
+            } else {
+                (*wlv).diff_hlf = HLF_CHD;
+                state.change_index = 0;
+            }
+        } else {
+            (*wlv).diff_hlf = HLF_ADD;
+        }
+        state.area_highlighting = true;
+    }
+
+    // Virtual lines / filler setup
+    state.virt_lines = KVec::empty();
+    let n_virt_lines = decor_virt_lines(
+        wp,
+        lnum - 1,
+        lnum,
+        &mut (*wlv).n_virt_below,
+        (&raw mut state.virt_lines).cast(),
+        true,
+    );
+    (*wlv).n_virt_lines = n_virt_lines;
+    (*wlv).filler_lines += n_virt_lines;
+    if lnum == nvim_win_get_topline(wp) {
+        (*wlv).filler_lines = nvim_win_get_topfill(wp);
+        (*wlv).n_virt_lines = (*wlv).n_virt_lines.min((*wlv).filler_lines);
+    }
+    (*wlv).filler_todo = (*wlv).filler_lines;
+
+    // Cursor line highlighting
+    let w_p_cul = nvim_win_get_p_cul(wp) != 0;
+    let culopt_flags = nvim_win_get_p_culopt_flags(wp);
+    let cursorline = nvim_win_get_cursorline(wp);
+    let k_opt_culopt_flag_number = 0x04;
+    if w_p_cul
+        && (culopt_flags & k_opt_culopt_flag_number) == 0
+        && lnum == cursorline
+        && !(is_curwin && VIsual_active)
+    {
+        let k_opt_culopt_flag_screenline = 0x02;
+        state.cul_screenline = is_wrapped && (culopt_flags & k_opt_culopt_flag_screenline) != 0;
+        if !state.cul_screenline {
+            apply_cursorline_highlight_impl(wp, wlv);
+        } else {
+            // margin_columns_win is already in Rust (exported)
+            let (left, right) = margin_columns_win_impl(wp);
+            state.left_curline_col = left;
+            state.right_curline_col = right;
+        }
+        state.area_highlighting = true;
+    }
+
+    // Sign/statuscolumn setup
+    let mut sign_line_attr: c_int = 0;
+    decor_redraw_signs(
+        wp,
+        buf.0,
+        (*wlv).lnum - 1,
+        (*wlv).sattrs.as_mut_ptr().cast(),
+        &mut sign_line_attr,
+        &mut (*wlv).sign_cul_attr,
+        &mut (*wlv).sign_num_attr,
+    );
+
+    // statuscol: handled by the C side (the C win_line calls rs_draw_statuscol separately)
+    // Here we just mirror the sign highlight logic.
+    let stc_ptr = nvim_win_get_p_stc(wp);
+    if stc_ptr.is_null() || *stc_ptr == 0 {
+        // No statuscolumn: apply sign_cul and sign_num attrs directly
+        if (*wlv).sign_cul_attr > 0 {
+            (*wlv).sign_cul_attr = if use_cursor_line_highlight(wp, lnum) {
+                syn_id2attr((*wlv).sign_cul_attr)
+            } else {
+                0
+            };
+        }
+    }
+    if (*wlv).sign_num_attr > 0 {
+        (*wlv).sign_num_attr = syn_id2attr((*wlv).sign_num_attr);
+    }
+    if sign_line_attr > 0 {
+        (*wlv).line_attr = syn_id2attr(sign_line_attr);
+    }
+
+    // Quickfix line highlight
+    if rs_bt_quickfix(buf) && nvim_qf_current_entry(wp) == lnum {
+        (*wlv).line_attr = nvim_win_hl_attr(wp, HLF_QFL);
+    }
+
+    if (*wlv).line_attr_lowprio != 0 || (*wlv).line_attr != 0 {
+        state.area_highlighting = true;
+    }
+
+    // Save line attrs for later restore
+    state.line_attr_save = (*wlv).line_attr;
+    state.line_attr_lowprio_save = (*wlv).line_attr_lowprio;
+
+    // Spell checking preparation
+    let spv_has_spell = nvim_spv_get_has_spell(spv);
+    if spv_has_spell && col_rows == 0 && state.draw_text {
+        state.extra_check = true;
+
+        // When a word wrapped from the previous line the start of the
+        // current line is valid.
+        let spv_checked_lnum = nvim_spv_get_checked_lnum(spv);
+        if lnum == spv_checked_lnum {
+            state.cur_checked_col = nvim_spv_get_checked_col(spv);
+        }
+
+        // Previous line was not spell checked, check for capital.
+        let spv_capcol_lnum = nvim_spv_get_capcol_lnum(spv);
+        if spv_capcol_lnum == 0 && check_need_cap(wp, lnum, 0) {
+            nvim_spv_set_cap_col(spv, 0);
+        } else if lnum != spv_capcol_lnum {
+            nvim_spv_set_cap_col(spv, -1);
+        }
+        nvim_spv_set_checked_lnum(spv, 0);
+
+        // Get the start of the next line for spell checking.
+        // Fill nextline[SPWORDLEN..] from the next line first.
+        let spwordlen = 150_i32;
+        state.nextline[spwordlen as usize] = 0;
+        if lnum < line_count {
+            let next_line = nvim_win_ml_get_buf(wp, lnum + 1);
+            spell_cat_line(
+                state.nextline.as_mut_ptr().add(spwordlen as usize),
+                next_line,
+                spwordlen,
+            );
+        }
+
+        let line_ptr = nvim_win_ml_get_buf(wp, lnum);
+        let ptr = skipwhite(line_ptr);
+
+        if *ptr == 0 {
+            // Empty line: check first word in next line for capital.
+            nvim_spv_set_cap_col(spv, 0);
+            nvim_spv_set_capcol_lnum(spv, lnum + 1);
+        } else {
+            let spv_cap_col = nvim_spv_get_cap_col(spv);
+            if spv_cap_col == 0 {
+                nvim_spv_set_cap_col(spv, (ptr as usize - line_ptr as usize) as c_int);
+            }
+        }
+
+        // Copy the end of the current line into nextline[].
+        if state.nextline[spwordlen as usize] == 0 {
+            // No next line or it is empty.
+            state.nextlinecol = MAXCOL;
+            state.nextline_idx = 0;
+        } else {
+            let line_len = nvim_win_ml_get_buf_len(wp, lnum);
+            if line_len < spwordlen {
+                state.nextlinecol = 0;
+                libc_memmove(
+                    state.nextline.as_mut_ptr().cast(),
+                    line_ptr.cast(),
+                    line_len as usize,
+                );
+                // STRMOVE: move nextline[spwordlen..] to nextline[line_len..]
+                let src = state.nextline.as_ptr().add(spwordlen as usize);
+                let dst = state.nextline.as_mut_ptr().add(line_len as usize);
+                std::ptr::copy(src, dst, 300 - line_len as usize);
+                state.nextline_idx = line_len + 1;
+            } else {
+                state.nextlinecol = line_len - spwordlen;
+                libc_memmove(
+                    state.nextline.as_mut_ptr().cast(),
+                    line_ptr.add(state.nextlinecol as usize).cast(),
+                    spwordlen as usize,
+                );
+                state.nextline_idx = spwordlen + 1;
+            }
+        }
+    }
+}
+
+// Additional FFI for win_line_init
+extern "C" {
+    // spellvars_T opaque accessors
+    fn nvim_spv_get_has_spell(spv: *mut c_void) -> bool;
+    fn nvim_spv_get_checked_lnum(spv: *mut c_void) -> LinenrT;
+    fn nvim_spv_get_checked_col(spv: *mut c_void) -> c_int;
+    fn nvim_spv_get_capcol_lnum(spv: *mut c_void) -> LinenrT;
+    fn nvim_spv_get_cap_col(spv: *mut c_void) -> c_int;
+    fn nvim_spv_set_cap_col(spv: *mut c_void, val: c_int);
+    fn nvim_spv_set_checked_lnum(spv: *mut c_void, val: LinenrT);
+    fn nvim_spv_set_capcol_lnum(spv: *mut c_void, val: LinenrT);
+    // win_T accessors not yet bound
+    fn nvim_win_get_p_fdt(wp: WinHandle) -> *const c_char;
+    fn nvim_win_get_p_lbr(wp: WinHandle) -> c_int;
+    fn nvim_win_get_syn_error(wp: WinHandle) -> bool;
+    fn nvim_win_get_syn_slow(wp: WinHandle) -> bool;
+    fn nvim_win_set_syn_error(wp: WinHandle, val: bool);
+    fn nvim_get_did_emsg() -> bool;
+    fn nvim_set_did_emsg(val: bool);
+    fn nvim_set_did_emsg_int(val: bool);
+    fn nvim_win_get_p_cc_cols(wp: WinHandle) -> *mut c_int;
+    fn nvim_curwin_get_buffer() -> BufHandle;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_fdt_is_null(wp: WinHandle) -> bool;
+}
+
+/// Thin wrapper for memmove from C's libc.
+#[allow(clippy::missing_const_for_fn)]
+unsafe fn libc_memmove(dst: *mut u8, src: *const u8, n: usize) {
+    // SAFETY: Caller ensures dst and src are valid for n bytes
+    unsafe { std::ptr::copy(src, dst, n) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
