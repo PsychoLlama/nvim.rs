@@ -30,6 +30,9 @@ extern void rs_vterm_state_set_key_encoding_flags(VTermState *state, int arg, in
 extern void rs_vterm_state_push_key_encoding_flags(VTermState *state, int arg);
 extern void rs_vterm_state_pop_key_encoding_flags(VTermState *state, int arg);
 
+// Rust FFI declarations (Phase 3)
+extern int rs_vterm_state_on_control(VTermState *state, uint8_t control);
+
 #define strneq(a, b, n) (strncmp(a, b, n) == 0)
 
 // Primary Device Attributes (DA1) response.
@@ -424,105 +427,7 @@ static int on_text(const char bytes[], size_t len, void *user)
 static int on_control(uint8_t control, void *user)
 {
   VTermState *state = user;
-
-  VTermPos oldpos = state->pos;
-
-  switch (control) {
-  case 0x07:  // BEL - ECMA-48 8.3.3
-    if (state->callbacks && state->callbacks->bell) {
-      (*state->callbacks->bell)(state->cbdata);
-    }
-    break;
-
-  case 0x08:  // BS - ECMA-48 8.3.5
-    if (state->pos.col > 0) {
-      state->pos.col--;
-    }
-    break;
-
-  case 0x09:  // HT - ECMA-48 8.3.60
-    tab(state, 1, +1);
-    break;
-
-  case 0x0a:  // LF - ECMA-48 8.3.74
-  case 0x0b:  // VT
-  case 0x0c:  // FF
-    linefeed(state);
-    if (state->mode.newline) {
-      state->pos.col = 0;
-    }
-    break;
-
-  case 0x0d:  // CR - ECMA-48 8.3.15
-    state->pos.col = 0;
-    break;
-
-  case 0x0e:  // LS1 - ECMA-48 8.3.76
-    state->gl_set = 1;
-    break;
-
-  case 0x0f:  // LS0 - ECMA-48 8.3.75
-    state->gl_set = 0;
-    break;
-
-  case 0x84:  // IND - DEPRECATED but implemented for completeness
-    linefeed(state);
-    break;
-
-  case 0x85:  // NEL - ECMA-48 8.3.86
-    linefeed(state);
-    state->pos.col = 0;
-    break;
-
-  case 0x88:  // HTS - ECMA-48 8.3.62
-    set_col_tabstop(state, state->pos.col);
-    break;
-
-  case 0x8d:  // RI - ECMA-48 8.3.104
-    if (state->pos.row == state->scrollregion_top) {
-      VTermRect rect = {
-        .start_row = state->scrollregion_top,
-        .end_row = SCROLLREGION_BOTTOM(state),
-        .start_col = SCROLLREGION_LEFT(state),
-        .end_col = SCROLLREGION_RIGHT(state),
-      };
-
-      scroll(state, rect, -1, 0);
-    } else if (state->pos.row > 0) {
-      state->pos.row--;
-    }
-    break;
-
-  case 0x8e:  // SS2 - ECMA-48 8.3.141
-    state->gsingle_set = 2;
-    break;
-
-  case 0x8f:  // SS3 - ECMA-48 8.3.142
-    state->gsingle_set = 3;
-    break;
-
-  default:
-    if (state->fallbacks && state->fallbacks->control) {
-      if ((*state->fallbacks->control)(control, state->fbdata)) {
-        return 1;
-      }
-    }
-
-    return 0;
-  }
-
-  updatecursor(state, &oldpos, 1);
-
-#ifdef DEBUG
-  if (state->pos.row < 0 || state->pos.row >= state->rows
-      || state->pos.col < 0 || state->pos.col >= state->cols) {
-    fprintf(stderr, "Position out of bounds after Ctrl %02x: (%d,%d)\n",
-            control, state->pos.row, state->pos.col);
-    abort();
-  }
-#endif
-
-  return 1;
+  return rs_vterm_state_on_control(state, control);
 }
 
 static int settermprop_bool(VTermState *state, VTermProp prop, int v)

@@ -2688,6 +2688,133 @@ pub unsafe extern "C" fn rs_vterm_state_on_escape(
 }
 
 // =============================================================================
+// Phase 3: on_control and tab
+// =============================================================================
+
+/// Tab movement helper (replaces C `tab`).
+///
+/// Moves the cursor forward (`direction > 0`) or backward (`direction < 0`) by `count` tab stops.
+unsafe fn tab(state: VTermStateHandle, count: c_int, direction: c_int) {
+    let s = state.0.cast::<State>();
+    let mut count = count;
+    while count > 0 {
+        if direction > 0 {
+            if (*s).pos.col >= nvim_vterm_state_this_row_width(state) - 1 {
+                return;
+            }
+            (*s).pos.col += 1;
+        } else if direction < 0 {
+            if (*s).pos.col < 1 {
+                return;
+            }
+            (*s).pos.col -= 1;
+        }
+        if nvim_vterm_state_is_col_tabstop(state, (*s).pos.col) != 0 {
+            count -= 1;
+        }
+    }
+}
+
+/// Handle C0/C1 control characters (replaces C `on_control`).
+///
+/// Returns 1 if handled, 0 if not recognized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_control(state: VTermStateHandle, control: u8) -> c_int {
+    let s = state.0.cast::<State>();
+    let oldpos = (*s).pos;
+
+    match control {
+        0x07 => {
+            // BEL - ECMA-48 8.3.3
+            let callbacks = (*s).callbacks;
+            if !callbacks.is_null() {
+                if let Some(bell) = (*callbacks).bell {
+                    bell((*s).cbdata);
+                }
+            }
+        }
+        0x08 => {
+            // BS - ECMA-48 8.3.5
+            if (*s).pos.col > 0 {
+                (*s).pos.col -= 1;
+            }
+        }
+        0x09 => {
+            // HT - ECMA-48 8.3.60
+            tab(state, 1, 1);
+        }
+        0x0a..=0x0c => {
+            // LF/VT/FF - ECMA-48 8.3.74
+            rs_vterm_state_linefeed(state);
+            if (*s).mode.newline() {
+                (*s).pos.col = 0;
+            }
+        }
+        0x0d => {
+            // CR - ECMA-48 8.3.15
+            (*s).pos.col = 0;
+        }
+        0x0e => {
+            // LS1 - ECMA-48 8.3.76
+            (*s).gl_set = 1;
+        }
+        0x0f => {
+            // LS0 - ECMA-48 8.3.75
+            (*s).gl_set = 0;
+        }
+        0x84 => {
+            // IND - DEPRECATED but implemented for completeness
+            rs_vterm_state_linefeed(state);
+        }
+        0x85 => {
+            // NEL - ECMA-48 8.3.86
+            rs_vterm_state_linefeed(state);
+            (*s).pos.col = 0;
+        }
+        0x88 => {
+            // HTS - ECMA-48 8.3.62
+            nvim_vterm_state_set_col_tabstop(state, (*s).pos.col);
+        }
+        0x8d => {
+            // RI - ECMA-48 8.3.104
+            if (*s).pos.row == (*s).scrollregion_top {
+                let rect = crate::VTermRect {
+                    start_row: (*s).scrollregion_top,
+                    end_row: (*s).scroll_region_bottom(),
+                    start_col: (*s).scroll_region_left(),
+                    end_col: (*s).scroll_region_right(),
+                };
+                rs_vterm_state_scroll(state, rect, -1, 0);
+            } else if (*s).pos.row > 0 {
+                (*s).pos.row -= 1;
+            }
+        }
+        0x8e => {
+            // SS2 - ECMA-48 8.3.141
+            (*s).gsingle_set = 2;
+        }
+        0x8f => {
+            // SS3 - ECMA-48 8.3.142
+            (*s).gsingle_set = 3;
+        }
+        _ => {
+            let fallbacks = (*s).fallbacks;
+            if !fallbacks.is_null() {
+                if let Some(control_cb) = (*fallbacks).control {
+                    if control_cb(control, (*s).fbdata) != 0 {
+                        return 1;
+                    }
+                }
+            }
+            return 0;
+        }
+    }
+
+    rs_vterm_state_updatecursor(state, &raw const oldpos, 1);
+    1
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
