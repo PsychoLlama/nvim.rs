@@ -220,45 +220,7 @@ typval_T *tv_list_append_owned_tv(list_T *const l, typval_T tv)
 ///
 /// @return Copied list. May be NULL in case original list is NULL or some
 ///         failure happens. The refcount of the new list is set to 1.
-list_T *tv_list_copy(const vimconv_T *const conv, list_T *const orig, const bool deep,
-                     const int copyID)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (orig == NULL) {
-    return NULL;
-  }
-
-  list_T *copy = tv_list_alloc(tv_list_len(orig));
-  tv_list_ref(copy);
-  if (copyID != 0) {
-    // Do this before adding the items, because one of the items may
-    // refer back to this list.
-    orig->lv_copyID = copyID;
-    orig->lv_copylist = copy;
-  }
-  TV_LIST_ITER(orig, item, {
-    if (got_int) {
-      break;
-    }
-    listitem_T *const ni = tv_list_item_alloc();
-    if (deep) {
-      if (var_item_copy(conv, TV_LIST_ITEM_TV(item), TV_LIST_ITEM_TV(ni),
-                        deep, copyID) == FAIL) {
-        xfree(ni);
-        goto tv_list_copy_error;
-      }
-    } else {
-      tv_copy(TV_LIST_ITEM_TV(item), TV_LIST_ITEM_TV(ni));
-    }
-    tv_list_append(copy, ni);
-  });
-
-  return copy;
-
-tv_list_copy_error:
-  tv_list_unref(copy);
-  return NULL;
-}
+// tv_list_copy migrated to Rust (Phase 6e)
 
 // tv_list_check_range_index_one, tv_list_check_range_index_two migrated to Rust (Phase 6c)
 
@@ -273,50 +235,9 @@ tv_list_copy_error:
 
 // tv_list_flatten migrated to Rust (Phase 6c)
 
-/// "items(list)" function
-/// Caller must have already checked that argvars[0] is a List.
-static void tv_list2items(typval_T *argvars, typval_T *rettv)
-{
-  list_T *l = argvars[0].vval.v_list;
+// tv_list2items migrated to Rust (Phase 6e)
 
-  tv_list_alloc_ret(rettv, tv_list_len(l));
-  if (l == NULL) {
-    return;  // null list behaves like an empty list
-  }
-
-  varnumber_T idx = 0;
-  TV_LIST_ITER(l, li, {
-    list_T *l2 = tv_list_alloc(2);
-    tv_list_append_list(rettv->vval.v_list, l2);
-    tv_list_append_number(l2, idx);
-    tv_list_append_tv(l2, TV_LIST_ITEM_TV(li));
-    idx++;
-  });
-}
-
-/// "items(string)" function
-/// Caller must have already checked that argvars[0] is a String.
-static void tv_string2items(typval_T *argvars, typval_T *rettv)
-{
-  const char *p = argvars[0].vval.v_string;
-
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  if (p == NULL) {
-    return;  // null string behaves like an empty string
-  }
-
-  for (varnumber_T idx = 0; *p != NUL; idx++) {
-    int len = utfc_ptr2len(p);
-    if (len == 0) {
-      break;
-    }
-    list_T *l2 = tv_list_alloc(2);
-    tv_list_append_list(rettv->vval.v_list, l2);
-    tv_list_append_number(l2, idx);
-    tv_list_append_string(l2, p, len);
-    p += len;
-  }
-}
+// tv_string2items migrated to Rust (Phase 6e)
 
 // tv_list_extend, tv_list_concat migrated to Rust (Phase 6)
 
@@ -819,22 +740,7 @@ void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { do_sort_uni
 
 //{{{2 Indexing/searching
 
-/// Like tv_list_find() but when a negative index is used that is not found use
-/// zero and set "idx" to zero.  Used for first index of a range.
-static listitem_T *tv_list_find_index(list_T *const l, int *const idx)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  listitem_T *li = tv_list_find(l, *idx);
-  if (li != NULL) {
-    return li;
-  }
-
-  if (*idx < 0) {
-    *idx = 0;
-    li = tv_list_find(l, *idx);
-  }
-  return li;
-}
+// tv_list_find_index deleted (dead code, Phase 6e)
 
 //{{{1 Dictionaries
 //{{{2 Dictionary watchers
@@ -1602,17 +1508,7 @@ static void tv_dict2list(typval_T *const argvars, typval_T *const rettv, const D
   });
 }
 
-/// "items(dict)" function
-void f_items(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (argvars[0].v_type == VAR_STRING) {
-    tv_string2items(argvars, rettv);
-  } else if (argvars[0].v_type == VAR_LIST) {
-    tv_list2items(argvars, rettv);
-  } else {
-    tv_dict2list(argvars, rettv, kDict2ListItems);
-  }
-}
+// f_items migrated to Rust (Phase 6e)
 
 /// "keys()" function
 void f_keys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2list(argvars, rettv, kDict2ListKeys); }
@@ -2693,6 +2589,12 @@ int nvim_list_get_copyid(const list_T *l) { return l->lv_copyID; }
 /// Get lv_copylist from a list (accessor for Rust).
 list_T *nvim_list_get_copylist(const list_T *l) { return l->lv_copylist; }
 
+/// Set lv_copyID on a list (accessor for Rust).
+void nvim_list_set_copyid(list_T *l, int copyid) { l->lv_copyID = copyid; }
+
+/// Set lv_copylist on a list (accessor for Rust).
+void nvim_list_set_copylist(list_T *l, list_T *copy) { l->lv_copylist = copy; }
+
 /// Set lv_first on a list (accessor for Rust).
 void nvim_list_set_first(list_T *l, listitem_T *item) { l->lv_first = item; }
 
@@ -3137,3 +3039,11 @@ void nvim_emsg_list_not_enough_items(void) { emsg(_("E711: List value has not en
 /// Get listitem v_lock field via TV_LIST_ITEM_TV (accessor for Rust).
 /// Needed by tv_list_assign_range lock check.
 int nvim_listitem_get_v_lock(const listitem_T *li) { return TV_LIST_ITEM_TV(li)->v_lock; }
+
+// Phase 6e: tv_list_copy, f_items accessors
+
+/// Call tv_dict2list(argvars, rettv, kDict2ListItems) (accessor for Rust f_items dict case).
+void nvim_tv_dict2list_items(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict2list(argvars, rettv, kDict2ListItems);
+}

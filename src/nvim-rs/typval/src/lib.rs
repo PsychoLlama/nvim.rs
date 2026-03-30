@@ -1213,6 +1213,19 @@ extern "C" {
     fn nvim_emsg_list_not_enough_items();
     fn nvim_listitem_get_v_lock(li: ListItemHandle) -> c_int;
     fn eexe_mod_op(tv1: TypevalHandle, tv2: TypevalHandle, op: *const c_char) -> c_int;
+
+    // Phase 6e: tv_list_copy, tv_list2items, tv_string2items, f_items
+    fn var_item_copy(
+        conv: *const std::ffi::c_void,
+        from: TypevalHandle,
+        to: TypevalHandle,
+        deep: bool,
+        copy_id: c_int,
+    ) -> c_int;
+    fn nvim_list_set_copyid(l: ListHandle, copyid: c_int);
+    fn nvim_list_set_copylist(l: ListHandle, copy: ListHandle);
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_tv_dict2list_items(argvars: TypevalHandle, rettv: TypevalHandle);
 }
 
 // =============================================================================
@@ -2365,6 +2378,139 @@ pub unsafe extern "C" fn rs_f_has_key(
     let key = unsafe { nvim_tv_get_string(arg1, std::ptr::null_mut()) };
     let found = unsafe { nvim_dict_find(d, key, -1) };
     unsafe { nvim_tv_set_number(rettv, i64::from(!found.is_null())) };
+}
+
+// =============================================================================
+// Phase 6e: tv_list_copy, tv_list2items, tv_string2items, f_items
+// =============================================================================
+
+/// FFI export: tv_list_copy - deep or shallow copy of a list.
+///
+/// # Panics
+///
+/// Does not panic under normal usage.
+#[export_name = "tv_list_copy"]
+pub unsafe extern "C" fn rs_tv_list_copy(
+    conv: *const std::ffi::c_void,
+    orig: ListHandle,
+    deep: bool,
+    copy_id: c_int,
+) -> ListHandle {
+    if orig.is_null() {
+        return ListHandle(std::ptr::null());
+    }
+
+    let copy = unsafe { rs_tv_list_alloc(tv_list_len_impl(orig) as isize) };
+    unsafe { nvim_list_ref(copy) };
+
+    if copy_id != 0 {
+        // Record copyID before adding items, so back-references work.
+        unsafe { nvim_list_set_copyid(orig, copy_id) };
+        unsafe { nvim_list_set_copylist(orig, copy) };
+    }
+
+    let mut item = unsafe { nvim_list_get_first(orig) };
+    while !item.is_null() {
+        if unsafe { nvim_got_int() } != 0 {
+            break;
+        }
+        let ni = unsafe { nvim_list_item_alloc() };
+        let item_tv = unsafe { nvim_listitem_get_tv(item) };
+        let ni_tv = unsafe { nvim_listitem_get_tv(ni) };
+        if deep {
+            if unsafe { var_item_copy(conv, item_tv, ni_tv, deep, copy_id) } == FAIL {
+                unsafe { nvim_xfree(ni.0.cast_mut()) };
+                // Unref/free the partial copy
+                unsafe { rs_tv_list_unref(copy) };
+                return ListHandle(std::ptr::null());
+            }
+        } else {
+            unsafe { nvim_tv_copy(item_tv, ni_tv) };
+        }
+        unsafe { rs_tv_list_append(copy, ni) };
+        item = unsafe { nvim_listitem_get_next(item) };
+    }
+
+    copy
+}
+
+/// Helper: "items(list)" implementation.
+///
+/// # Safety
+///
+/// argvars[0] must be a VAR_LIST typval.
+unsafe fn tv_list2items_impl(argvars: TypevalHandle, rettv: TypevalHandle) {
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let l = unsafe { nvim_tv_get_list(arg0) };
+    unsafe { nvim_tv_list_alloc_ret(rettv, tv_list_len_impl(l) as isize) };
+    if l.is_null() {
+        return; // null list behaves like an empty list
+    }
+    let ret_list = unsafe { nvim_tv_get_list(rettv) };
+
+    let mut idx: i64 = 0;
+    let mut li = unsafe { nvim_list_get_first(l) };
+    while !li.is_null() {
+        let l2 = unsafe { rs_tv_list_alloc(2) };
+        unsafe { rs_tv_list_append_list(ret_list, l2) };
+        unsafe { rs_tv_list_append_number(l2, idx) };
+        let item_tv = unsafe { nvim_listitem_get_tv(li) };
+        unsafe { rs_tv_list_append_tv(l2, item_tv) };
+        idx += 1;
+        li = unsafe { nvim_listitem_get_next(li) };
+    }
+}
+
+/// Helper: "items(string)" implementation.
+///
+/// # Safety
+///
+/// argvars[0] must be a VAR_STRING typval.
+unsafe fn tv_string2items_impl(argvars: TypevalHandle, rettv: TypevalHandle) {
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let p_start = unsafe { nvim_tv_get_string_ptr(arg0) };
+    unsafe {
+        nvim_tv_list_alloc_ret(rettv, -3 /* kListLenMayKnow */)
+    };
+    if p_start.is_null() {
+        return; // null string behaves like empty string
+    }
+    let ret_list = unsafe { nvim_tv_get_list(rettv) };
+
+    let mut p = p_start;
+    let mut idx: i64 = 0;
+    loop {
+        // Check for NUL terminator
+        if unsafe { *p } == 0 {
+            break;
+        }
+        let len = unsafe { utfc_ptr2len(p) };
+        if len == 0 {
+            break;
+        }
+        let l2 = unsafe { rs_tv_list_alloc(2) };
+        unsafe { rs_tv_list_append_list(ret_list, l2) };
+        unsafe { rs_tv_list_append_number(l2, idx) };
+        unsafe { rs_tv_list_append_string(l2, p, len as isize) };
+        p = unsafe { p.add(len as usize) };
+        idx += 1;
+    }
+}
+
+/// FFI export: f_items - VimL items() function.
+#[export_name = "f_items"]
+pub unsafe extern "C" fn rs_f_items(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *const std::ffi::c_void,
+) {
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let v_type = tv_type_impl(arg0);
+    match v_type {
+        VarType::String => unsafe { tv_string2items_impl(argvars, rettv) },
+        VarType::List => unsafe { tv_list2items_impl(argvars, rettv) },
+        _ => unsafe { nvim_tv_dict2list_items(argvars, rettv) },
+    }
 }
 
 // =============================================================================
