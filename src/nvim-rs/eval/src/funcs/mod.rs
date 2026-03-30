@@ -31,6 +31,7 @@
 pub mod bitwise;
 pub mod buffer;
 pub mod channel;
+pub mod cmdline;
 pub mod collections;
 pub mod cursor;
 pub mod dict;

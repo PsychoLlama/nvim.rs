@@ -14,6 +14,9 @@
 #include "nvim/eval.h"
 #include "nvim/eval_defs.h"
 #include "nvim/eval/vars.h"
+#include "nvim/ex_getln.h"
+#include "nvim/getchar.h"
+#include "nvim/keycodes.h"
 #include "nvim/message.h"
 #include "nvim/os/os.h"
 #include "nvim/register.h"
@@ -310,4 +313,138 @@ int nvim_eval_has_nvim_version(const char *name)
 int nvim_eval_has_provider(const char *name)
 {
   return eval_has_provider(name, true) ? 1 : 0;
+}
+
+// =============================================================================
+// cmdline f_ function helpers - CmdlineInfo/expand_T field access
+// =============================================================================
+
+// Rust helpers for cmdline functions
+extern int rs_clamp_cmdpos(int pos, int cmdlen);
+
+/// Get cmdline_star (> 0 when in secret/star mode).
+int nvim_eval_get_cmdline_star(void)
+{
+  return (int)nvim_get_cmdline_star();
+}
+
+/// Get xpc pointer from CmdlineInfo (or NULL).
+/// @param p  CmdlineInfo pointer (from nvim_get_ccline_ptr)
+void *nvim_eval_ccline_get_xpc(void *p)
+{
+  return ((CmdlineInfo *)p)->xpc;
+}
+
+/// Get xp_context from expand_T.
+int nvim_eval_xpc_get_context(void *xpc)
+{
+  return ((expand_T *)xpc)->xp_context;
+}
+
+/// Set xp_context in expand_T.
+void nvim_eval_xpc_set_context(void *xpc, int ctx)
+{
+  ((expand_T *)xpc)->xp_context = ctx;
+}
+
+/// Get xp_pattern from expand_T (may be NULL).
+const char *nvim_eval_xpc_get_pattern(void *xpc)
+{
+  return ((expand_T *)xpc)->xp_pattern;
+}
+
+/// Get xp_arg from expand_T (may be NULL).
+const char *nvim_eval_xpc_get_arg(void *xpc)
+{
+  return ((expand_T *)xpc)->xp_arg;
+}
+
+/// Call set_expand_context(xpc) on the expand_T pointer.
+void nvim_eval_xpc_set_expand_context(void *xpc)
+{
+  set_expand_context((expand_T *)xpc);
+}
+
+/// Get xstrdup of xp_pattern from expand_T.
+char *nvim_eval_xpc_dup_pattern(void *xpc)
+{
+  const char *pat = ((expand_T *)xpc)->xp_pattern;
+  return pat != NULL ? xstrdup(pat) : NULL;
+}
+
+/// Get cmdcomplete_type_to_str for the given context and xp_arg.
+char *nvim_eval_cmdcomplete_type_to_str(int ctx, void *xpc)
+{
+  return (char *)nvim_cmdexpand_cmdcomplete_type_to_str(ctx, ((expand_T *)xpc)->xp_arg);
+}
+
+/// Get cmdlen from CmdlineInfo.
+int nvim_eval_ccline_get_cmdlen(void *p)
+{
+  return ((CmdlineInfo *)p)->cmdlen;
+}
+
+/// Get cmdpos from CmdlineInfo.
+int nvim_eval_ccline_get_cmdpos(void *p)
+{
+  return ((CmdlineInfo *)p)->cmdpos;
+}
+
+/// Set cmdlen in CmdlineInfo.
+void nvim_eval_ccline_set_cmdlen(void *p, int len)
+{
+  ((CmdlineInfo *)p)->cmdlen = len;
+}
+
+/// Set cmdpos in CmdlineInfo.
+void nvim_eval_ccline_set_cmdpos(void *p, int pos)
+{
+  ((CmdlineInfo *)p)->cmdpos = pos;
+}
+
+/// Get cmdbuff pointer from CmdlineInfo.
+char *nvim_eval_ccline_get_cmdbuff(void *p)
+{
+  return ((CmdlineInfo *)p)->cmdbuff;
+}
+
+/// Call realloc_cmdbuff and then copy str into CmdlineInfo's cmdbuff.
+/// Sets cmdlen and does STRCPY. Returns new cmdpos clamped to cmdlen.
+int nvim_eval_setcmdline_str(void *p, const char *str, int pos)
+{
+  CmdlineInfo *cc = (CmdlineInfo *)p;
+  int len = (int)strlen(str);
+  realloc_cmdbuff(len + 1);
+  cc->cmdlen = len;
+  STRCPY(cc->cmdbuff, str);
+  cc->cmdpos = rs_clamp_cmdpos(pos, cc->cmdlen);
+  nvim_set_new_cmdpos(cc->cmdpos);
+  redrawcmd();
+  nvim_do_autocmd_cmdlinechanged(nvim_get_cmdline_type());
+  return cc->cmdpos;
+}
+
+/// Check if wildmenu/pum trigger is possible.
+/// Returns 1 if wildtrigger is possible, 0 otherwise.
+int nvim_eval_wildtrigger_possible(void)
+{
+  return (!(State & MODE_CMDLINE) || nvim_cmdexpand_char_avail()
+          || wild_menu_showing || cmdline_pum_active()) ? 0 : 1;
+}
+
+/// Get current cmdline type (wraps nvim_get_cmdline_type).
+int nvim_eval_get_cmdline_type(void)
+{
+  return nvim_get_cmdline_type();
+}
+
+/// Insert the K_WILD key sequence into typeahead buffer.
+void nvim_eval_ins_k_wild(void)
+{
+  uint8_t key_string[4];
+  key_string[0] = K_SPECIAL;
+  key_string[1] = KS_EXTRA;
+  key_string[2] = KE_WILD;
+  key_string[3] = NUL;
+  ins_typebuf((char *)key_string, REMAP_NONE, 0, true, false);
 }
