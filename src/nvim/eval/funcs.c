@@ -4823,16 +4823,7 @@ void nvim_eval_keytrans(typval_T *argvars, typval_T *rettv)
 // nvim_eval_nextnonblank: inlined into Rust (simple.rs)
 // nvim_eval_prevnonblank: inlined into Rust (simple.rs)
 
-void nvim_eval_menu_get(typval_T *argvars, typval_T *rettv)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  int modes = MENU_ALL_MODES;
-  if (argvars[1].v_type == VAR_STRING) {
-    const char *const strmodes = tv_get_string(&argvars[1]);
-    modes = get_menu_cmd_modes(strmodes, false, NULL, NULL);
-  }
-  menu_get((char *)tv_get_string(&argvars[0]), modes, rettv->vval.v_list);
-}
+// nvim_eval_menu_get: inlined into Rust (simple.rs) — menu_get delegation
 
 
 static void screenchar_adjust_inner(ScreenGrid **grid, int *row, int *col)

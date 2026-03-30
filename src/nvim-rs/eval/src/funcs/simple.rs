@@ -23,7 +23,7 @@ extern "C" {
     // nvim_eval_luaeval: inlined into rs_f_luaeval below
     // nvim_eval_pum_getpos: inlined into rs_f_pum_getpos below
     // nvim_eval_wordcount: inlined into rs_f_wordcount below
-    fn nvim_eval_menu_get(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_menu_get: inlined into rs_f_menu_get below
     fn nvim_eval_visualmode(argvars: *const c_void, rettv: *mut c_void);
 }
 
@@ -104,6 +104,15 @@ extern "C" {
         offp: *mut c_int,
         no_ff: c_int,
     ) -> c_int;
+
+    // menu_get inlining
+    fn get_menu_cmd_modes(
+        cmd: *const c_char,
+        force_menu: bool,
+        noremap: *mut c_int,
+        unmenu: *mut c_int,
+    ) -> c_int;
+    fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut c_void);
 }
 
 // =============================================================================
@@ -519,7 +528,26 @@ pub unsafe extern "C" fn rs_f_menu_get(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_menu_get(argvars, rettv);
+    // nvim_eval_menu_get: inlined — menu_get delegation
+    // kListLenMayKnow = -3
+    const K_LIST_LEN_MAY_KNOW: isize = -3;
+    // MENU_ALL_MODES = (1 << 7) - 1 = 127
+    const MENU_ALL_MODES: c_int = 127;
+    let list = nvim_tv_list_alloc_ret(rettv, K_LIST_LEN_MAY_KNOW);
+    let mut modes = MENU_ALL_MODES;
+    let arg1 = arg_at(argvars, 1);
+    if nvim_tv_get_type(arg1) == VAR_STRING {
+        let strmodes = nvim_tv_get_string_ptr(arg1);
+        modes = get_menu_cmd_modes(
+            strmodes.cast::<c_char>(),
+            false,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+    // Cast the string to *mut c_char (menu_get takes non-const)
+    let path = nvim_tv_get_string_ptr(argvars).cast::<c_char>().cast_mut();
+    menu_get(path, modes, list);
 }
 
 /// Size of typval_T in bytes (must match C sizeof(typval_T) = 16).
