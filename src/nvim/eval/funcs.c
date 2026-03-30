@@ -5057,44 +5057,8 @@ void nvim_eval_ctxset(typval_T *argvars, typval_T *rettv)
   did_emsg = save_did_emsg;
 }
 
-void nvim_eval_getcharsearch(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict_alloc_ret(rettv);
-
-  dict_T *dict = rettv->vval.v_dict;
-
-  tv_dict_add_str(dict, S_LEN("char"), last_csearch());
-  tv_dict_add_nr(dict, S_LEN("forward"), last_csearch_forward());
-  tv_dict_add_nr(dict, S_LEN("until"), last_csearch_until());
-}
-
-void nvim_eval_setcharsearch(typval_T *argvars, typval_T *rettv)
-{
-  if (tv_check_for_dict_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  dict_T *d = argvars[0].vval.v_dict;
-  if (d == NULL) {
-    return;
-  }
-
-  char *const csearch = tv_dict_get_string(d, "char", false);
-  if (csearch != NULL) {
-    int c = utf_ptr2char(csearch);
-    set_last_csearch(c, csearch, utfc_ptr2len(csearch));
-  }
-
-  dictitem_T *di = tv_dict_find(d, S_LEN("forward"));
-  if (di != NULL) {
-    set_csearch_direction(tv_get_number(&di->di_tv) ? FORWARD : BACKWARD);
-  }
-
-  di = tv_dict_find(d, S_LEN("until"));
-  if (di != NULL) {
-    set_csearch_until(!!tv_get_number(&di->di_tv));
-  }
-}
+// nvim_eval_getcharsearch: inlined into Rust (misc.rs) — last_csearch/forward/until delegation
+// nvim_eval_setcharsearch: inlined into Rust (misc.rs) — set_last_csearch/direction/until delegation
 
 /// Common between getreg(), getreginfo() and getregtype(): get the register
 /// name from the first argument.

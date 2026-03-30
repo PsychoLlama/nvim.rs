@@ -1226,8 +1226,8 @@ extern "C" {
     fn nvim_eval_ctxget(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_ctxpush(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_ctxset(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_getcharsearch(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_setcharsearch(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_getcharsearch: inlined into rs_f_getcharsearch below
+    // nvim_eval_setcharsearch: inlined into rs_f_setcharsearch below
     fn nvim_eval_getreg(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_getregtype(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_getreginfo(argvars: *const c_void, rettv: *mut c_void);
@@ -1243,6 +1243,28 @@ extern "C" {
         thisblock: bool,
         flags: c_int,
     ) -> bool;
+
+    // getcharsearch / setcharsearch inlining
+    fn last_csearch() -> *const c_char;
+    fn last_csearch_forward() -> bool;
+    fn last_csearch_until() -> bool;
+    fn tv_dict_add_str(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    ) -> c_int;
+    fn tv_dict_add_nr(d: *mut c_void, key: *const c_char, key_len: usize, nr: i64) -> c_int;
+
+    // setcharsearch inlining
+    fn tv_check_for_dict_arg(argvars: *const c_void, idx: c_int) -> c_int;
+    fn tv_dict_get_string(d: *const c_void, key: *const c_char, allocate: bool) -> *mut c_char;
+    fn set_last_csearch(c: c_int, s: *const c_char, len: c_int);
+    fn set_csearch_direction(dir: c_int);
+    fn set_csearch_until(flag: bool);
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn tv_dict_find(d: *const c_void, key: *const c_char, len: isize) -> *mut c_void;
+    fn tv_get_number(tv: *const c_void) -> i64;
 }
 
 // =============================================================================
@@ -1294,11 +1316,21 @@ pub unsafe extern "C" fn rs_f_ctxset(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_getcharsearch"]
 pub unsafe extern "C" fn rs_f_getcharsearch(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_getcharsearch(argvars, rettv);
+    // nvim_eval_getcharsearch: inlined — last_csearch/forward/until delegation
+    p4_tv_dict_alloc_ret(rettv);
+    let dict = p3_misc_tv_get_dict(rettv).cast_mut();
+    tv_dict_add_str(dict, c"char".as_ptr(), 4, last_csearch());
+    tv_dict_add_nr(
+        dict,
+        c"forward".as_ptr(),
+        7,
+        i64::from(last_csearch_forward()),
+    );
+    tv_dict_add_nr(dict, c"until".as_ptr(), 5, i64::from(last_csearch_until()));
 }
 
 /// "setcharsearch()" function - set character search info
@@ -1308,10 +1340,39 @@ pub unsafe extern "C" fn rs_f_getcharsearch(
 #[export_name = "f_setcharsearch"]
 pub unsafe extern "C" fn rs_f_setcharsearch(
     argvars: *const c_void,
-    rettv: *mut c_void,
+    _rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_setcharsearch(argvars, rettv);
+    // nvim_eval_setcharsearch: inlined — set_last_csearch/direction/until delegation
+    const FAIL: c_int = 0;
+    const FORWARD: c_int = 1; // FORWARD direction
+    const BACKWARD: c_int = 0; // BACKWARD direction
+    if tv_check_for_dict_arg(argvars, 0) == FAIL {
+        return;
+    }
+    let d = p3_misc_tv_get_dict(argvars).cast_mut();
+    if d.is_null() {
+        return;
+    }
+    let csearch = tv_dict_get_string(d, c"char".as_ptr(), false);
+    if !csearch.is_null() {
+        let c = utf_ptr2char(csearch.cast::<u8>());
+        set_last_csearch(c, csearch, utfc_ptr2len(csearch));
+    }
+    // dictitem_T has di_tv at offset 0, so the pointer can be used as typval_T*
+    let di = tv_dict_find(d, c"forward".as_ptr(), 7);
+    if !di.is_null() {
+        let dir = if tv_get_number(di) != 0 {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        set_csearch_direction(dir);
+    }
+    let di = tv_dict_find(d, c"until".as_ptr(), 5);
+    if !di.is_null() {
+        set_csearch_until(tv_get_number(di) != 0);
+    }
 }
 
 /// "getreg()" function - get register contents
