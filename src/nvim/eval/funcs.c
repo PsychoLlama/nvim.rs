@@ -469,6 +469,12 @@ extern void f_matchstrlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 extern void f_msgpackdump(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_msgpackparse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// VimL functions moved to funcs_shim.c (Phase 31)
+extern void f_rpcnotify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_rpcrequest(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_sockconnect(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_stdioopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -1694,143 +1700,41 @@ theend:
   return retval;
 }
 
-/// "rpcnotify()" function
-static void f_rpcnotify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_NUMBER;
-  rettv->vval.v_number = 0;
+/// "reltimefloat()" function
 
-  if (rs_check_secure()) {
-    return;
-  }
+/// "soundfold({word})" function
 
-  if (argvars[0].v_type != VAR_NUMBER || argvars[0].vval.v_number < 0) {
-    semsg(_(e_invarg2), "Channel id must be a positive integer");
-    return;
-  }
+/// "spellbadword()" function
 
-  if (argvars[1].v_type != VAR_STRING) {
-    semsg(_(e_invarg2), "Event type must be a string");
-    return;
-  }
+/// "str2float()" function
 
-  MAXSIZE_TEMP_ARRAY(args, MAX_FUNC_ARGS);
-  Arena arena = ARENA_EMPTY;
-
-  for (typval_T *tv = argvars + 2; tv->v_type != VAR_UNKNOWN; tv++) {
-    ADD_C(args, vim_to_object(tv, &arena, true));
-  }
-
-  bool ok = rpc_send_event((uint64_t)argvars[0].vval.v_number,
-                           tv_get_string(&argvars[1]), args);
-
-  arena_mem_free(arena_finish(&arena));
-
-  if (!ok) {
-    semsg(_(e_invarg2), "Channel doesn't exist");
-    return;
-  }
-  rettv->vval.v_number = 1;
-}
-
-/// "rpcrequest()" function
-static void f_rpcrequest(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_NUMBER;
-  rettv->vval.v_number = 0;
-  const int l_provider_call_nesting = provider_call_nesting;
-
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_NUMBER || argvars[0].vval.v_number <= 0) {
-    semsg(_(e_invarg2), "Channel id must be a positive integer");
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_STRING) {
-    semsg(_(e_invarg2), "Method name must be a string");
-    return;
-  }
-
-  MAXSIZE_TEMP_ARRAY(args, MAX_FUNC_ARGS);
-  Arena arena = ARENA_EMPTY;
-
-  for (typval_T *tv = argvars + 2; tv->v_type != VAR_UNKNOWN; tv++) {
-    ADD_C(args, vim_to_object(tv, &arena, true));
-  }
-
-  sctx_T save_current_sctx;
-  char *save_autocmd_fname, *save_autocmd_match;
-  bool save_autocmd_fname_full;
-  int save_autocmd_bufnr;
-  funccal_entry_T funccal_entry;
-
-  if (l_provider_call_nesting) {
-    // If this is called from a provider function, restore the scope
-    // information of the caller.
-    save_current_sctx = current_sctx;
-    save_autocmd_fname = autocmd_fname;
-    save_autocmd_match = autocmd_match;
-    save_autocmd_fname_full = autocmd_fname_full;
-    save_autocmd_bufnr = autocmd_bufnr;
-    save_funccal(&funccal_entry);
-
-    current_sctx = provider_caller_scope.script_ctx;
-    ga_grow(&exestack, 1);
-    ((estack_T *)exestack.ga_data)[exestack.ga_len++] = provider_caller_scope.es_entry;
-    autocmd_fname = provider_caller_scope.autocmd_fname;
-    autocmd_match = provider_caller_scope.autocmd_match;
-    autocmd_fname_full = provider_caller_scope.autocmd_fname_full;
-    autocmd_bufnr = provider_caller_scope.autocmd_bufnr;
-    set_current_funccal((funccall_T *)(provider_caller_scope.funccalp));
-  }
-
-  Error err = ERROR_INIT;
-
-  uint64_t chan_id = (uint64_t)argvars[0].vval.v_number;
-  const char *method = tv_get_string(&argvars[1]);
-
-  ArenaMem res_mem = NULL;
-  Object result = rpc_send_call(chan_id, method, args, &res_mem, &err);
-  arena_mem_free(arena_finish(&arena));
-
-  if (l_provider_call_nesting) {
-    current_sctx = save_current_sctx;
-    exestack.ga_len--;
-    autocmd_fname = save_autocmd_fname;
-    autocmd_match = save_autocmd_match;
-    autocmd_fname_full = save_autocmd_fname_full;
-    autocmd_bufnr = save_autocmd_bufnr;
-    restore_funccal();
-  }
-
-  if (ERROR_SET(&err)) {
-    const char *name = NULL;
-    Channel *chan = find_channel(chan_id);
-    if (chan) {
-      name = get_client_info(chan, "name");
-    }
-    if (name) {
-      semsg_multiline("rpc_error", "Invoking '%s' on channel %" PRIu64 " (%s):\n%s",
-                      method, chan_id, name, err.msg);
-    } else {
-      semsg_multiline("rpc_error", "Invoking '%s' on channel %" PRIu64 ":\n%s",
-                      method, chan_id, err.msg);
-    }
-
-    goto end;
-  }
-
-  object_to_vim(result, rettv, &err);
-
-end:
-  arena_mem_free(res_mem);
-  api_clear_error(&err);
-}
+/// "strftime({format}[, {time}])" function
 
 
+/// "submatch()" function
+
+/// "swapfilelist()" function
+
+
+/// "timer_info([timer])" function
+
+
+
+
+int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
+int nvim_curbuf_get_u_seq_cur(void) { return (int)curbuf->b_u_seq_cur; }
+int nvim_get_reg_recorded(void) { return reg_recorded; }
+// nvim_eval_ui_current_col: inlined into Rust (misc.rs) — direct ui_current_col() call
+// nvim_eval_ui_current_row: inlined into Rust (misc.rs) — direct ui_current_row() call
+// nvim_eval_pum_visible: inlined into Rust (misc.rs) — direct pum_visible() call
+// nvim_eval_os_get_pid: inlined into Rust (misc.rs) — direct os_get_pid() call
+// nvim_eval_get_col: moved to funcs_shim.c
+// nvim_eval_getpos_both: moved to funcs_shim.c
+// nvim_eval_get_windows_version: moved to funcs_shim.c
+
+
+// nvim_eval_find_some_match: moved to funcs_shim.c
+// nvim_eval_max_min: moved to funcs_shim.c
 /// Used by searchpair() and searchpairpos()
 static int searchpair_cmn(typval_T *argvars, pos_T *match_pos)
 {
@@ -2094,127 +1998,7 @@ int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
 /// "shellescape({string})" function
 /// shiftwidth() function
 
-/// "sockconnect()" function
-static void f_sockconnect(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (argvars[0].v_type != VAR_STRING || argvars[1].v_type != VAR_STRING) {
-    emsg(_(e_invarg));
-    return;
-  }
-  if (argvars[2].v_type != VAR_DICT && argvars[2].v_type != VAR_UNKNOWN) {
-    // Wrong argument types
-    semsg(_(e_invarg2), "expected dictionary");
-    return;
-  }
-
-  const char *mode = tv_get_string(&argvars[0]);
-  const char *address = tv_get_string(&argvars[1]);
-
-  bool tcp;
-  if (strcmp(mode, "tcp") == 0) {
-    tcp = true;
-  } else if (strcmp(mode, "pipe") == 0) {
-    tcp = false;
-  } else {
-    semsg(_(e_invarg2), "invalid mode");
-    return;
-  }
-
-  bool rpc = false;
-  CallbackReader on_data = CALLBACK_READER_INIT;
-  if (argvars[2].v_type == VAR_DICT) {
-    dict_T *opts = argvars[2].vval.v_dict;
-    rpc = tv_dict_get_number(opts, "rpc") != 0;
-
-    if (!tv_dict_get_callback(opts, S_LEN("on_data"), &on_data.cb)) {
-      return;
-    }
-    on_data.buffered = tv_dict_get_number(opts, "data_buffered");
-    if (on_data.buffered && on_data.cb.type == kCallbackNone) {
-      on_data.self = opts;
-    }
-  }
-
-  const char *error = NULL;
-  uint64_t id = channel_connect(tcp, address, rpc, on_data, 50, &error);
-
-  if (error) {
-    semsg(_("connection failed: %s"), error);
-  }
-
-  rettv->vval.v_number = (varnumber_T)id;
-  rettv->v_type = VAR_NUMBER;
-}
-
-/// "stdioopen()" function
-static void f_stdioopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (argvars[0].v_type != VAR_DICT) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  CallbackReader on_stdin = CALLBACK_READER_INIT;
-  dict_T *opts = argvars[0].vval.v_dict;
-  bool rpc = tv_dict_get_number(opts, "rpc") != 0;
-
-  if (!tv_dict_get_callback(opts, S_LEN("on_stdin"), &on_stdin.cb)) {
-    return;
-  }
-  if (!tv_dict_get_callback(opts, S_LEN("on_print"), &on_print)) {
-    return;
-  }
-
-  on_stdin.buffered = tv_dict_get_number(opts, "stdin_buffered");
-  if (on_stdin.buffered && on_stdin.cb.type == kCallbackNone) {
-    on_stdin.self = opts;
-  }
-
-  const char *error;
-  uint64_t id = channel_from_stdio(rpc, on_stdin, &error);
-  if (!id) {
-    semsg(e_stdiochan2, error);
-  }
-
-  rettv->vval.v_number = (varnumber_T)id;
-  rettv->v_type = VAR_NUMBER;
-}
-
-/// "reltimefloat()" function
-
-/// "soundfold({word})" function
-
-/// "spellbadword()" function
-
-/// "str2float()" function
-
-/// "strftime({format}[, {time}])" function
-
-
-/// "submatch()" function
-
-/// "swapfilelist()" function
-
-
-/// "timer_info([timer])" function
-
-
-
-
-int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
-int nvim_curbuf_get_u_seq_cur(void) { return (int)curbuf->b_u_seq_cur; }
-int nvim_get_reg_recorded(void) { return reg_recorded; }
-// nvim_eval_ui_current_col: inlined into Rust (misc.rs) — direct ui_current_col() call
-// nvim_eval_ui_current_row: inlined into Rust (misc.rs) — direct ui_current_row() call
-// nvim_eval_pum_visible: inlined into Rust (misc.rs) — direct pum_visible() call
-// nvim_eval_os_get_pid: inlined into Rust (misc.rs) — direct os_get_pid() call
-// nvim_eval_get_col: moved to funcs_shim.c
-// nvim_eval_getpos_both: moved to funcs_shim.c
-// nvim_eval_get_windows_version: moved to funcs_shim.c
-
-
-// nvim_eval_find_some_match: moved to funcs_shim.c
-// nvim_eval_max_min: moved to funcs_shim.c
+// f_sockconnect: moved to funcs_shim.c (Phase 31)
 int nvim_eval_searchpair_cmn(typval_T *argvars) { return (int)searchpair_cmn(argvars, NULL); }
 // nvim_eval_set_position: moved to funcs_shim.c
 // nvim_eval_set_cursorpos: moved to funcs_shim.c
