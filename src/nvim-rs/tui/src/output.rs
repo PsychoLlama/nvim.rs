@@ -2047,6 +2047,12 @@ extern "C" {
     fn nvim_tui_set_showing_mode(tui: *mut TuiHandle, mode: c_int);
     fn nvim_tui_set_is_starting(tui: *mut TuiHandle, val: bool);
     fn nvim_tui_get_verbose(tui: *mut TuiHandle) -> i64;
+    fn nvim_tui_get_mode_theme_updates(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_mode_resize_events(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_mode_grapheme_clusters(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_disable_focus_reporting(tui: *mut TuiHandle) -> *const u8;
+    fn nvim_tui_reset_title(tui: *mut TuiHandle);
+    fn nvim_tui_reset_key_encoding(tui: *mut TuiHandle);
 }
 
 // kTerm enum values for cursor mode (0-based C enum values from terminfo_enum_defs.h)
@@ -2198,6 +2204,73 @@ pub unsafe extern "C" fn rs_tui_mode_change(tui: *mut TuiHandle, mode_idx: i64) 
 
     nvim_tui_set_is_starting(tui, false);
     nvim_tui_set_showing_mode(tui, mode_idx as c_int);
+}
+
+// kTerm enum values for terminfo_disable (0-based, value = line - 6 for pre-#define entries)
+const KTERM_CURSOR_NORMAL: c_int = 10; // kTerm_cursor_normal (line 16)
+const KTERM_RESET_CURSOR_STYLE: c_int = 38; // kTerm_reset_cursor_style (line 45 - 7)
+const KTERM_KEYPAD_LOCAL: c_int = 25; // kTerm_keypad_local (line 31)
+
+// TermMode enum values for terminfo_disable (explicit values from tui_defs.h)
+const TERM_MODE_THEME_UPDATES: c_int = 2031; // kTermModeThemeUpdates
+const TERM_MODE_RESIZE_EVENTS: c_int = 2048; // kTermModeResizeEvents
+const TERM_MODE_GRAPHEME_CLUSTERS: c_int = 2027; // kTermModeGraphemeClusters
+const TERM_MODE_BRACKETED_PASTE: c_int = 2004; // kTermModeBracketedPaste
+
+/// Disable terminal modes and flush output before TUI exit or suspend.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminfo_disable(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Disable theme update notifications first to avoid spurious notifications.
+    if nvim_tui_get_mode_theme_updates(tui) {
+        nvim_tui_set_term_mode(tui, TERM_MODE_THEME_UPDATES, false);
+    }
+
+    // Reset cursor mode to normal (mode index 0 = SHAPE_IDX_N)
+    rs_tui_mode_change(tui, 0);
+    rs_tui_mouse_off(tui);
+    nvim_tui_terminfo_out(tui, KTERM_EXIT_ATTRIBUTE_MODE);
+    // Reset cursor to normal before exiting alternate screen.
+    nvim_tui_terminfo_out(tui, KTERM_CURSOR_NORMAL);
+    nvim_tui_terminfo_out(tui, KTERM_RESET_CURSOR_STYLE);
+    nvim_tui_terminfo_out(tui, KTERM_KEYPAD_LOCAL);
+
+    // Reset the key encoding
+    nvim_tui_reset_key_encoding(tui);
+
+    // Disable terminal modes that we enabled
+    if nvim_tui_get_mode_resize_events(tui) {
+        nvim_tui_set_term_mode(tui, TERM_MODE_RESIZE_EVENTS, false);
+    }
+
+    if nvim_tui_get_mode_grapheme_clusters(tui) {
+        nvim_tui_set_term_mode(tui, TERM_MODE_GRAPHEME_CLUSTERS, false);
+    }
+
+    // May restore old title before exiting alternate screen.
+    nvim_tui_reset_title(tui);
+    if nvim_tui_get_cursor_has_color(tui) {
+        nvim_tui_terminfo_out(tui, TERM_RESET_CURSOR_COLOR);
+    }
+    // Disable bracketed paste
+    nvim_tui_set_term_mode(tui, TERM_MODE_BRACKETED_PASTE, false);
+    // Disable focus reporting
+    let disable_focus = nvim_tui_get_disable_focus_reporting(tui);
+    nvim_tui_out_len(tui, disable_focus);
+
+    // Send a DA1 request. When the terminal responds we know that it has
+    // processed all of our requests and won't be emitting anymore sequences.
+    nvim_tui_out(tui, b"\x1b[c".as_ptr(), 3);
+
+    // Immediately flush the buffer and wait for the DA1 response.
+    nvim_tui_flush_buf(tui);
 }
 
 #[cfg(test)]

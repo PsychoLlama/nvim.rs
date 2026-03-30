@@ -225,6 +225,7 @@ extern void rs_tui_set_size(TUIData *tui, int width, int height);
 extern void rs_tui_set_mode(TUIData *tui, int mode);
 extern void rs_tui_guess_size(TUIData *tui);
 extern void rs_tui_mode_change(TUIData *tui, int64_t mode_idx);
+extern void rs_terminfo_disable(TUIData *tui);
 extern void rs_tui_raw_line(TUIData *tui, int64_t g, int64_t linerow, int64_t startcol,
                              int64_t endcol, int64_t clearcol, int64_t clearattr,
                              int64_t flags, const schar_T *chunk, const sattr_T *attrs);
@@ -663,9 +664,34 @@ int nvim_tui_get_ti_columns(TUIData *tui) { return tui->ti.columns; }
 /// Get stdin_isatty global
 bool nvim_tui_stdin_isatty(void) { return stdin_isatty; }
 
+/// Get modes.theme_updates bit
+bool nvim_tui_get_mode_theme_updates(TUIData *tui) { return tui->modes.theme_updates; }
+
+/// Get modes.resize_events bit
+bool nvim_tui_get_mode_resize_events(TUIData *tui) { return tui->modes.resize_events; }
+
+/// Get modes.grapheme_clusters bit
+bool nvim_tui_get_mode_grapheme_clusters(TUIData *tui) { return tui->modes.grapheme_clusters; }
+
+/// Get disable_focus_reporting string
+const char *nvim_tui_get_disable_focus_reporting(TUIData *tui) { return tui->terminfo_ext.disable_focus_reporting; }
+
+/// Get has_sync_mode flag
+bool nvim_tui_get_has_sync_mode(TUIData *tui) { return tui->has_sync_mode; }
+
+/// Set has_sync_mode flag
+void nvim_tui_set_has_sync_mode(TUIData *tui, bool val) { tui->has_sync_mode = val; }
+
+/// Wrapper for tui_reset_key_encoding (static) callable from Rust
+void nvim_tui_reset_key_encoding(TUIData *tui) { tui_reset_key_encoding(tui); }
+
+/// Wrapper to reset terminal title from Rust (NULL_STRING)
+void nvim_tui_reset_title(TUIData *tui) { tui_set_title(tui, NULL_STRING); }
+
 // Forward declarations for Phase 5c wrappers
 static void show_verbose_terminfo(TUIData *tui);
 static void tui_set_term_mode(TUIData *tui, TermMode mode, bool set);
+static void tui_reset_key_encoding(TUIData *tui);
 
 /// Dump verbose terminfo info to messages (called from Rust for tui_mode_change)
 void nvim_tui_show_verbose_terminfo(TUIData *tui) { show_verbose_terminfo(tui); }
@@ -1126,51 +1152,10 @@ static void terminfo_start(TUIData *tui)
 }
 
 /// Disable various terminal modes and other features.
+/// Disable terminal modes and flush. Rust implementation.
 static void terminfo_disable(TUIData *tui)
 {
-  // Disable theme update notifications. We do this first to avoid getting any
-  // more notifications after we reset the cursor and any color palette changes.
-  if (tui->modes.theme_updates) {
-    tui_set_term_mode(tui, kTermModeThemeUpdates, false);
-  }
-
-  // Destroy output stuff
-  tui_mode_change(tui, NULL_STRING, SHAPE_IDX_N);
-  tui_mouse_off(tui);
-  terminfo_out(tui, kTerm_exit_attribute_mode);
-  // Reset cursor to normal before exiting alternate screen.
-  terminfo_out(tui, kTerm_cursor_normal);
-  terminfo_out(tui, kTerm_reset_cursor_style);
-  terminfo_out(tui, kTerm_keypad_local);
-
-  // Reset the key encoding
-  tui_reset_key_encoding(tui);
-
-  // Disable terminal modes that we enabled
-  if (tui->modes.resize_events) {
-    tui_set_term_mode(tui, kTermModeResizeEvents, false);
-  }
-
-  if (tui->modes.grapheme_clusters) {
-    tui_set_term_mode(tui, kTermModeGraphemeClusters, false);
-  }
-
-  // May restore old title before exiting alternate screen.
-  tui_set_title(tui, NULL_STRING);
-  if (tui->cursor_has_color) {
-    terminfo_out(tui, kTerm_reset_cursor_color);
-  }
-  // Disable bracketed paste
-  tui_set_term_mode(tui, kTermModeBracketedPaste, false);
-  // Disable focus reporting
-  out_len(tui, tui->terminfo_ext.disable_focus_reporting);
-
-  // Send a DA1 request. When the terminal responds we know that it has
-  // processed all of our requests and won't be emitting anymore sequences.
-  out(tui, S_LEN("\x1b[c"));
-
-  // Immediately flush the buffer and wait for the DA1 response.
-  flush_buf(tui);
+  rs_terminfo_disable(tui);
 }
 
 /// Disable the alternate screen and prepare for the TUI to close.
