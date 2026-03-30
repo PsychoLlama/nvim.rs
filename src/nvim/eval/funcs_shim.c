@@ -97,6 +97,7 @@
 #include "nvim/profile.h"
 #include "nvim/search.h"
 #include "nvim/vim_defs.h"
+#include "nvim/fileio.h"
 
 // Error strings used by moved functions
 static const char e_string_list_or_blob_required[]
@@ -5969,6 +5970,166 @@ uint64_t nvim_fileinfo_mode(const FileInfo *info)
 }
 
 // nvim_fileinfo_get_size is defined in buffer_shim.c
+
+// =============================================================================
+// Window/tab/dir accessors for Rust (eval/fs.rs Phase 3: f_chdir, f_getcwd, etc.)
+// =============================================================================
+
+/// Get w_localdir from a window (NULL if no local dir).
+const char *nvim_win_get_localdir(const win_T *wp) { return wp ? wp->w_localdir : NULL; }
+
+/// Get tp_localdir from a tab page (NULL if no local dir).
+const char *nvim_tab_get_localdir(const tabpage_T *tp) { return tp ? tp->tp_localdir : NULL; }
+
+/// Call changedir_func with string scope.
+/// Returns true on success.
+bool nvim_changedir_func(const char *dir, int scope)
+{
+  return changedir_func((char *)dir, (CdScope)scope);
+}
+
+/// Get the string value from the first typval argument (v_string field).
+/// Returns NULL if not a string type.
+const char *nvim_tv_get_vstring(const typval_T *tv)
+{
+  if (tv->v_type == VAR_STRING) {
+    return tv->vval.v_string;
+  }
+  return NULL;
+}
+
+/// os_dirname wrapper: fills buf with current dir, returns OK or FAIL.
+int nvim_os_dirname(char *buf, size_t len)
+{
+  return os_dirname(buf, len);
+}
+
+/// Wrapper for find_win_by_nr: takes number typval and tabpage, returns win_T*.
+win_T *nvim_find_win_by_nr(const typval_T *tv, tabpage_T *tp)
+{
+  return find_win_by_nr(tv, tp);
+}
+
+/// Wrapper for os_mkdir_recurse with created tracking (used by f_mkdir).
+int nvim_fs_mkdir_recurse(const char *dir, uint32_t mode, char **failed_dir, char **created)
+{
+  return os_mkdir_recurse(dir, mode, failed_dir, created);
+}
+
+/// Wrapper for vim_mkdir_emsg.
+int nvim_vim_mkdir_emsg(const char *name, int prot)
+{
+  return vim_mkdir_emsg(name, prot);
+}
+
+/// Check if we can add a defer callback.
+bool nvim_can_add_defer(void) { return can_add_defer(); }
+
+/// Add a defer callback "delete" with args (wraps add_defer).
+/// tv must point to an array of 2 typval_T (for "delete" with 2 args).
+void nvim_add_defer_delete(typval_T *tv, int argc)
+{
+  add_defer("delete", argc, tv);
+}
+
+/// FullName_save wrapper.
+char *nvim_FullName_save(const char *fname, bool force)
+{
+  return FullName_save((char *)fname, force);
+}
+
+/// Wrapper for readdir_core.
+int nvim_readdir_core(garray_T *gap, const char *path, void *context,
+                      varnumber_T (*checkitem)(void *context, const char *name))
+{
+  return readdir_core(gap, path, context, checkitem);
+}
+
+/// Initialize a garray_T for string pointers (element size = sizeof(char *)).
+void nvim_ga_init_str(garray_T *gap)
+{
+  ga_init(gap, (int)sizeof(char *), 20);
+}
+
+/// Clear a garray_T of strings.
+void nvim_ga_clear_strings(garray_T *gap)
+{
+  ga_clear_strings(gap);
+}
+
+/// Get ga_len from a garray_T (fs variant, const).
+int nvim_fs_ga_get_len(const garray_T *gap)
+{
+  return gap->ga_len;
+}
+
+/// Get the i-th string pointer from a garray_T of strings.
+const char *nvim_fs_ga_get_str(const garray_T *gap, int i)
+{
+  return ((const char **)gap->ga_data)[i];
+}
+
+/// Alloc a list return value (fs variant, void return).
+void nvim_fs_tv_list_alloc_ret(typval_T *rettv, ptrdiff_t len)
+{
+  tv_list_alloc_ret(rettv, len);
+}
+
+/// Append a string to a list return value.
+void nvim_tv_list_append_string(list_T *list, const char *s, ssize_t len)
+{
+  tv_list_append_string(list, s, len);
+}
+
+/// Get list from a list return rettv.
+list_T *nvim_tv_get_list_from_rettv(const typval_T *rettv)
+{
+  return rettv->vval.v_list;
+}
+
+/// Eval expr (typval) for readdir filter callback.
+/// Returns: 1 to include, 0 to exclude, -1 on error.
+varnumber_T nvim_eval_readdir_expr(const typval_T *expr, const char *name)
+{
+  if (expr->v_type == VAR_UNKNOWN) {
+    return 1;
+  }
+  typval_T argv[2];
+  varnumber_T retval = 0;
+  bool error = false;
+
+  typval_T save_val;
+  prepare_vimvar(VV_VAL, &save_val);
+  set_vim_var_string(VV_VAL, name, -1);
+  argv[0].v_type = VAR_STRING;
+  argv[0].v_lock = VAR_UNLOCKED;
+  argv[0].vval.v_string = (char *)name;
+
+  typval_T rettv;
+  if (eval_expr_typval((typval_T *)expr, false, argv, 1, &rettv) == FAIL) {
+    goto theend;
+  }
+
+  retval = tv_get_number_chk(&rettv, &error);
+  if (error) {
+    retval = -1;
+  }
+  tv_clear(&rettv);
+
+theend:
+  set_vim_var_string(VV_VAL, NULL, 0);
+  restore_vimvar(VV_VAL, &save_val);
+  return retval;
+}
+
+/// path_tail wrapper for fs module (returns pointer within the string).
+const char *nvim_fs_path_tail(const char *fname) { return path_tail((char *)fname); }
+
+/// path_tail_with_sep wrapper.
+char *nvim_path_tail_with_sep(char *fname) { return path_tail_with_sep(fname); }
+
+/// vim_strchr wrapper for single-byte chars (returns pointer or NULL).
+const char *nvim_vim_strchr(const char *s, int c) { return vim_strchr((char *)s, c); }
 
 void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
 {
