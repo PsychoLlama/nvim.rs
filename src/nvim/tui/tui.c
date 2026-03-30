@@ -423,36 +423,8 @@ size_t nvim_tui_get_buf_capacity(void) { return OUTBUF_SIZE; }
 char *nvim_tui_get_buf_to_flush(TUIData *tui) { return tui->buf_to_flush; }
 void nvim_tui_set_buf_to_flush(TUIData *tui, char *ptr) { tui->buf_to_flush = ptr; }
 
-// Flush state accessors for Rust
-bool nvim_tui_get_is_invisible(TUIData *tui) { return tui->is_invisible; }
-void nvim_tui_set_is_invisible(TUIData *tui, bool val) { tui->is_invisible = val; }
-bool nvim_tui_get_sync_output(TUIData *tui) { return tui->sync_output; }
-bool nvim_tui_get_has_sync_mode(TUIData *tui) { return tui->has_sync_mode; }
-bool nvim_tui_get_want_invisible(TUIData *tui) { return tui->want_invisible; }
-bool nvim_tui_get_busy(TUIData *tui) { return tui->busy; }
-
-// Screenshot accessor for Rust
-FILE *nvim_tui_get_screenshot(TUIData *tui) { return tui->screenshot; }
-
 // Terminfo defs accessor for Rust
 const char *nvim_tui_get_ti_def(TUIData *tui, int idx) { return tui->ti.defs[idx]; }
-
-// uv write wrapper for Rust
-void nvim_tui_uv_write_flush(TUIData *tui, uv_buf_t *bufs, unsigned int nbufs)
-{
-  uv_write_t req;
-  int ret = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, nbufs, NULL);
-  if (ret) {
-    ELOG("uv_write failed: %s", uv_strerror(ret));
-  }
-  uv_run(&tui->write_loop, UV_RUN_DEFAULT);
-}
-
-// Screenshot write wrapper for Rust
-void nvim_tui_screenshot_write(TUIData *tui, const char *data, size_t len)
-{
-  fwrite(data, len, 1, tui->screenshot);
-}
 
 void nvim_tui_set_can_set_underline_color(TUIData *tui, bool val) { tui->can_set_underline_color = val; }
 
@@ -462,11 +434,12 @@ void nvim_tui_terminfo_set_underline_style(TUIData *tui)
   terminfo_set_if_empty(tui, kTerm_set_underline_style, "\x1b[4:%p1%dm");
 }
 
-// Forward declaration for flush_buf (now delegates to Rust)
+// Forward declarations
 static void flush_buf(TUIData *tui);
+static bool should_invisible(TUIData *tui);
 
 /// Wrapper for flush_buf callable from Rust
-void nvim_tui_flush_buf(TUIData *tui) { rs_flush_buf(tui); }
+void nvim_tui_flush_buf(TUIData *tui) { flush_buf(tui); }
 
 /// Wrapper for uv_sleep callable from Rust
 void nvim_tui_uv_sleep(uint64_t ms) { uv_sleep(ms); }
@@ -2090,8 +2063,81 @@ static void terminfo_set_if_empty(TUIData *tui, TerminfoDef str, const char *val
 static void terminfo_set_str(TUIData *tui, TerminfoDef str, const char *val) { tui->ti.defs[str] = val; }
 
 
-/// Flushes the rendered buffer to the TTY. Rust implementation.
-static void flush_buf(TUIData *tui) { rs_flush_buf(tui); }
+static bool should_invisible(TUIData *tui) { return tui->busy || tui->want_invisible; }
+
+static size_t flush_buf_start(TUIData *tui, char *buf, size_t len)
+{
+  if (tui->sync_output && tui->has_sync_mode) {
+    memcpy(buf, S_LEN("\x1b[?2026h"));
+    return sizeof("\x1b[?2026h") - 1;
+  } else if (!tui->is_invisible) {
+    tui->is_invisible = true;
+    const char *str = tui->ti.defs[kTerm_cursor_invisible];
+    if (str) {
+      TPVAR null_params[9] = { 0 };
+      return rs_terminfo_fmt(buf, buf + len, str, null_params);
+    }
+  }
+  return 0;
+}
+
+static size_t flush_buf_end(TUIData *tui, char *buf, size_t len)
+{
+  size_t offset = 0;
+  if (tui->sync_output && tui->has_sync_mode) {
+    memcpy(buf + offset, S_LEN("\x1b[?2026l"));
+    offset += sizeof("\x1b[?2026l") - 1;
+  }
+  const char *str = NULL;
+  if (tui->is_invisible && !should_invisible(tui)) {
+    tui->is_invisible = false;
+    str = tui->ti.defs[kTerm_cursor_normal];
+  } else if (!tui->is_invisible && should_invisible(tui)) {
+    tui->is_invisible = true;
+    str = tui->ti.defs[kTerm_cursor_invisible];
+  }
+  if (str) {
+    TPVAR null_params[9] = { 0 };
+    offset += rs_terminfo_fmt(buf + offset, buf + len, str, null_params);
+  }
+  return offset;
+}
+
+static void flush_buf(TUIData *tui)
+{
+  uv_write_t req;
+  uv_buf_t bufs[3];
+  char pre[32];
+  char post[32];
+
+  if (tui->bufpos <= 0 && tui->is_invisible == should_invisible(tui)) {
+    return;
+  }
+
+  bufs[0].base = pre;
+  bufs[0].len = UV_BUF_LEN(flush_buf_start(tui, pre, sizeof(pre)));
+
+  bufs[1].base = tui->buf_to_flush != NULL ? tui->buf_to_flush : tui->buf;
+  bufs[1].len = UV_BUF_LEN(tui->bufpos);
+
+  bufs[2].base = post;
+  bufs[2].len = UV_BUF_LEN(flush_buf_end(tui, post, sizeof(post)));
+
+  if (tui->screenshot) {
+    for (size_t i = 0; i < ARRAY_SIZE(bufs); i++) {
+      fwrite(bufs[i].base, bufs[i].len, 1, tui->screenshot);
+    }
+  } else {
+    int ret
+      = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs), NULL);
+    if (ret) {
+      ELOG("uv_write failed: %s", uv_strerror(ret));
+    }
+    uv_run(&tui->write_loop, UV_RUN_DEFAULT);
+  }
+  tui->buf_to_flush = NULL;
+  tui->bufpos = 0;
+}
 
 /// Try to get "kbs" code from stty because "the terminfo kbs entry is extremely
 /// unreliable." (Vim, Bash, and tmux also do this.)

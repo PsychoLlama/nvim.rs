@@ -975,32 +975,9 @@ extern "C" {
     fn nvim_tui_set_bufpos(tui: *mut TuiHandle, pos: usize);
     fn nvim_tui_get_buf_ptr(tui: *mut TuiHandle) -> *mut u8;
     fn nvim_tui_get_buf_capacity() -> usize;
-    fn nvim_tui_get_buf_to_flush(tui: *mut TuiHandle) -> *mut u8;
     fn nvim_tui_set_buf_to_flush(tui: *mut TuiHandle, ptr: *mut u8);
-    fn nvim_tui_get_is_invisible(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_set_is_invisible(tui: *mut TuiHandle, val: bool);
-    fn nvim_tui_get_sync_output(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_get_has_sync_mode(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_get_want_invisible(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_get_busy(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_get_screenshot(tui: *mut TuiHandle) -> *mut libc::FILE;
     fn nvim_tui_get_ti_def(tui: *mut TuiHandle, idx: c_int) -> *const u8;
-    fn nvim_tui_uv_write_flush(tui: *mut TuiHandle, bufs: *mut UvBuf, nbufs: libc::c_uint);
-    fn nvim_tui_screenshot_write(tui: *mut TuiHandle, data: *const u8, len: usize);
-    // rs_terminfo_fmt is in lib.rs of the tui crate - we call it via a different mechanism
-    // For now, use the C wrapper for terminfo printing
 }
-
-// uv_buf_t equivalent
-#[repr(C)]
-pub struct UvBuf {
-    pub base: *mut u8,
-    pub len: usize,
-}
-
-// Terminfo cursor constants
-const TERM_CURSOR_INVISIBLE: c_int = 7; // kTerm_cursor_invisible
-const TERM_CURSOR_NORMAL: c_int = 10; // kTerm_cursor_normal
 
 /// Write bytes to the TUI output buffer.
 ///
@@ -1055,101 +1032,6 @@ pub unsafe extern "C" fn rs_out_len(tui: *mut TuiHandle, str_ptr: *const u8) {
     rs_out(tui, str_ptr, len);
 }
 
-/// Check if cursor should be hidden (busy or want_invisible).
-unsafe fn should_invisible(tui: *mut TuiHandle) -> bool {
-    nvim_tui_get_busy(tui) || nvim_tui_get_want_invisible(tui)
-}
-
-/// Write the pre-flush cursor/sync sequence.
-///
-/// Returns the number of bytes written to `buf`.
-unsafe fn flush_buf_start_impl(tui: *mut TuiHandle, buf: *mut u8, len: usize) -> usize {
-    if nvim_tui_get_sync_output(tui) && nvim_tui_get_has_sync_mode(tui) {
-        let seq = b"\x1b[?2026h";
-        let copy_len = seq.len().min(len);
-        std::ptr::copy_nonoverlapping(seq.as_ptr(), buf, copy_len);
-        return copy_len;
-    }
-
-    if !nvim_tui_get_is_invisible(tui) {
-        nvim_tui_set_is_invisible(tui, true);
-        let str_ptr = nvim_tui_get_ti_def(tui, TERM_CURSOR_INVISIBLE);
-        if !str_ptr.is_null() {
-            // Use null params for zero-param terminfo strings
-            let mut null_params = [TpVar {
-                num: 0,
-                string: std::ptr::null_mut(),
-            }; 9];
-            // Call C's rs_terminfo_fmt (from lib.rs exported as C symbol)
-            extern "C" {
-                fn rs_terminfo_fmt(
-                    buf_start: *mut libc::c_char,
-                    buf_end: *const libc::c_char,
-                    str_ptr: *const libc::c_char,
-                    params: *mut TpVar,
-                ) -> usize;
-            }
-            return rs_terminfo_fmt(
-                buf as *mut libc::c_char,
-                buf.add(len) as *const libc::c_char,
-                str_ptr as *const libc::c_char,
-                null_params.as_mut_ptr(),
-            );
-        }
-    }
-    0
-}
-
-/// Write the post-flush cursor/sync sequence.
-///
-/// Returns the number of bytes written to `buf`.
-unsafe fn flush_buf_end_impl(tui: *mut TuiHandle, buf: *mut u8, len: usize) -> usize {
-    extern "C" {
-        fn rs_terminfo_fmt(
-            buf_start: *mut libc::c_char,
-            buf_end: *const libc::c_char,
-            str_ptr: *const libc::c_char,
-            params: *mut TpVar,
-        ) -> usize;
-    }
-
-    let mut offset = 0usize;
-
-    if nvim_tui_get_sync_output(tui) && nvim_tui_get_has_sync_mode(tui) {
-        let seq = b"\x1b[?2026l\0";
-        let copy_len = (seq.len() - 1).min(len - offset);
-        std::ptr::copy_nonoverlapping(seq.as_ptr(), buf.add(offset), copy_len);
-        offset += copy_len;
-    }
-
-    let is_invisible = nvim_tui_get_is_invisible(tui);
-    let want_invis = should_invisible(tui);
-    let str_ptr = if is_invisible && !want_invis {
-        nvim_tui_set_is_invisible(tui, false);
-        nvim_tui_get_ti_def(tui, TERM_CURSOR_NORMAL)
-    } else if !is_invisible && want_invis {
-        nvim_tui_set_is_invisible(tui, true);
-        nvim_tui_get_ti_def(tui, TERM_CURSOR_INVISIBLE)
-    } else {
-        std::ptr::null()
-    };
-
-    if !str_ptr.is_null() {
-        let mut null_params = [TpVar {
-            num: 0,
-            string: std::ptr::null_mut(),
-        }; 9];
-        offset += rs_terminfo_fmt(
-            buf.add(offset) as *mut libc::c_char,
-            buf.add(len) as *const libc::c_char,
-            str_ptr as *const libc::c_char,
-            null_params.as_mut_ptr(),
-        );
-    }
-
-    offset
-}
-
 /// Flush the output buffer to the TTY.
 ///
 /// This writes pre-flush sequences (cursor hiding/sync), the buffered output,
@@ -1164,53 +1046,7 @@ pub unsafe extern "C" fn rs_flush_buf(tui: *mut TuiHandle) {
     if tui.is_null() {
         return;
     }
-
-    let bufpos = nvim_tui_get_bufpos(tui);
-    let is_invisible = nvim_tui_get_is_invisible(tui);
-    if bufpos == 0 && is_invisible == should_invisible(tui) {
-        return;
-    }
-
-    let mut pre = [0u8; 32];
-    let mut post = [0u8; 32];
-
-    let pre_len = flush_buf_start_impl(tui, pre.as_mut_ptr(), pre.len());
-    let post_len = flush_buf_end_impl(tui, post.as_mut_ptr(), post.len());
-
-    let buf_to_flush = nvim_tui_get_buf_to_flush(tui);
-    let main_buf = if !buf_to_flush.is_null() {
-        buf_to_flush
-    } else {
-        nvim_tui_get_buf_ptr(tui)
-    };
-
-    let screenshot = nvim_tui_get_screenshot(tui);
-    if !screenshot.is_null() {
-        // Screenshot mode: write to file
-        nvim_tui_screenshot_write(tui, pre.as_ptr(), pre_len);
-        nvim_tui_screenshot_write(tui, main_buf, bufpos);
-        nvim_tui_screenshot_write(tui, post.as_ptr(), post_len);
-    } else {
-        // Normal mode: write to TTY via uv_write
-        let mut bufs = [
-            UvBuf {
-                base: pre.as_mut_ptr(),
-                len: pre_len,
-            },
-            UvBuf {
-                base: main_buf,
-                len: bufpos,
-            },
-            UvBuf {
-                base: post.as_mut_ptr(),
-                len: post_len,
-            },
-        ];
-        nvim_tui_uv_write_flush(tui, bufs.as_mut_ptr(), bufs.len() as libc::c_uint);
-    }
-
-    nvim_tui_set_buf_to_flush(tui, std::ptr::null_mut());
-    nvim_tui_set_bufpos(tui, 0);
+    nvim_tui_flush_buf(tui);
 }
 
 /// Emit a terminfo sequence with no parameters.
