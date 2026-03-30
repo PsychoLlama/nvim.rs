@@ -473,3 +473,23 @@ int nvim_eval_synIDattr_get_modec(typval_T *argvars)
     return 'c';
   }
 }
+
+// =============================================================================
+// blob accessor helpers
+// =============================================================================
+
+/// Get blob data pointer from a blob typval (argvars[0]).
+/// Returns NULL if v_blob is NULL.
+const uint8_t *nvim_eval_tv_blob_get_data(typval_T *tv)
+{
+  blob_T *b = tv->vval.v_blob;
+  return b != NULL ? (const uint8_t *)b->bv_ga.ga_data : NULL;
+}
+
+/// Get blob length from a blob typval.
+/// Returns 0 if v_blob is NULL.
+int nvim_eval_tv_blob_get_len(typval_T *tv)
+{
+  blob_T *b = tv->vval.v_blob;
+  return b != NULL ? b->bv_ga.ga_len : 0;
+}

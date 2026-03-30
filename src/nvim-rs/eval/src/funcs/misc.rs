@@ -1938,7 +1938,16 @@ extern "C" {
     // nvim_eval_has: inlined below
     fn nvim_eval_json_decode(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_printf(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_sha256(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_sha256: inlined into rs_f_sha256 below
+    // sha256 helpers
+    fn sha256_bytes(
+        buf: *const u8,
+        buf_len: usize,
+        salt: *const u8,
+        salt_len: usize,
+    ) -> *const c_char;
+    fn nvim_eval_tv_blob_get_data(tv: *mut c_void) -> *const u8;
+    fn nvim_eval_tv_blob_get_len(tv: *mut c_void) -> c_int;
 
     // has() inlining
     fn nvim_eval_get_shell_error() -> i64;
@@ -2212,6 +2221,9 @@ pub unsafe extern "C" fn rs_f_printf(
     nvim_eval_printf(argvars, rettv);
 }
 
+// VAR_BLOB constant for sha256 (= 10)
+const VAR_BLOB_P10: c_int = 10;
+
 /// "sha256()" function - compute SHA256 hash
 ///
 /// # Safety
@@ -2222,7 +2234,22 @@ pub unsafe extern "C" fn rs_f_sha256(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_sha256(argvars, rettv);
+    // Initialize rettv to VAR_STRING with NULL
+    nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+
+    let hash: *const c_char = if p3_misc_tv_get_type(argvars) == VAR_BLOB_P10 {
+        let tv0 = argvars.cast_mut();
+        let data = nvim_eval_tv_blob_get_data(tv0);
+        let len = nvim_eval_tv_blob_get_len(tv0);
+        let p = if data.is_null() { b"".as_ptr() } else { data };
+        sha256_bytes(p, len.max(0).unsigned_abs() as usize, std::ptr::null(), 0)
+    } else {
+        let p = p8_tv_get_string(argvars.cast_mut());
+        let len = libc::strlen(p);
+        sha256_bytes(p.cast::<u8>(), len, std::ptr::null(), 0)
+    };
+
+    nvim_tv_set_string_copy(rettv, hash.cast::<u8>(), -1);
 }
 
 // =============================================================================
