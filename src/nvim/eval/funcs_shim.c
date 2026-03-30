@@ -5962,6 +5962,14 @@ int64_t nvim_fileinfo_mtime(const FileInfo *info)
   return (int64_t)info->stat.st_mtim.tv_sec;
 }
 
+/// Get file mode (st_mode) from a FileInfo struct.
+uint64_t nvim_fileinfo_mode(const FileInfo *info)
+{
+  return (uint64_t)info->stat.st_mode;
+}
+
+// nvim_fileinfo_get_size is defined in buffer_shim.c
+
 void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
 {
   pos_T match_pos;

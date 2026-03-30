@@ -45,6 +45,22 @@ extern "C" {
     fn os_file_is_readable(name: *const u8) -> bool;
     fn os_file_is_writable(name: *const u8) -> c_int;
     fn path_is_absolute(fname: *const u8) -> bool;
+    // Phase 2 additions
+    fn os_fileinfo_link(fname: *const u8, info: *mut c_void) -> bool;
+    fn nvim_fileinfo_mode(info: *const c_void) -> u64;
+    fn nvim_fileinfo_get_size(info: *const c_void) -> u64;
+    fn os_remove(name: *const u8) -> c_int;
+    fn os_rmdir(name: *const u8) -> c_int;
+    fn delete_recursive(name: *const u8) -> c_int;
+    fn vim_copyfile(from: *const u8, to: *const u8) -> c_int;
+    fn shorten_dir_len(str: *mut u8, trim_len: c_int);
+    fn nvim_tv_get_number(tv: *const c_void) -> i64;
+    fn nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "emsg"]
+    fn fs_emsg(s: *const c_char) -> c_int;
+    #[allow(clashing_extern_declarations)]
+    #[link_name = "semsg"]
+    fn fs_semsg(fmt: *const c_char, arg: *const c_char) -> c_int;
 }
 
 // NUMBUFLEN from vim_defs.h
@@ -53,6 +69,22 @@ const NUMBUFLEN: usize = 65;
 // FileInfo opaque size: uv_stat_t is 224 bytes on Linux x86_64
 // Use 256 bytes to be safe
 const FILEINFO_SIZE: usize = 256;
+
+// OK/FAIL from nvim/types_defs.h
+const OK: c_int = 1;
+
+// File mode constants (POSIX)
+const S_IFMT: u64 = 0o170_000;
+const S_IFREG: u64 = 0o100_000;
+const S_IFDIR: u64 = 0o040_000;
+const S_IFLNK: u64 = 0o120_000;
+const S_IFBLK: u64 = 0o060_000;
+const S_IFCHR: u64 = 0o020_000;
+const S_IFIFO: u64 = 0o010_000;
+const S_IFSOCK: u64 = 0o140_000;
+
+// VAR_UNKNOWN type value
+const VAR_UNKNOWN: i32 = 0;
 
 // =============================================================================
 // Internal helpers
@@ -337,5 +369,197 @@ pub unsafe extern "C" fn rs_f_getfperm(
     } else {
         std::ptr::null_mut()
     };
+    unsafe { nvim_tv_set_string(rettv, s) };
+}
+
+// =============================================================================
+// Phase 2: File info and stat functions
+// =============================================================================
+
+/// "getfsize({fname})" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getfsize"]
+pub unsafe extern "C" fn rs_f_getfsize(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let buf = unsafe { tv_to_cstring(argvars) };
+    let mut file_info = [0u8; FILEINFO_SIZE];
+    let result = if unsafe { os_fileinfo(buf.as_ptr(), file_info.as_mut_ptr().cast()) } {
+        let filesize = unsafe { nvim_fileinfo_get_size(file_info.as_ptr().cast()) };
+        if unsafe { os_isdir(buf.as_ptr()) } {
+            0i64
+        } else {
+            let n = filesize as i64;
+            // Non-perfect overflow check
+            if n as u64 == filesize {
+                n
+            } else {
+                -2
+            }
+        }
+    } else {
+        -1
+    };
+    rettv_set_number(unsafe { TypevalPtrMut::from_raw(rettv) }, result);
+}
+
+/// "getftype({fname})" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getftype"]
+pub unsafe extern "C" fn rs_f_getftype(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let buf = unsafe { tv_to_cstring(argvars) };
+    let mut file_info = [0u8; FILEINFO_SIZE];
+    let s = if unsafe { os_fileinfo_link(buf.as_ptr(), file_info.as_mut_ptr().cast()) } {
+        let mode = unsafe { nvim_fileinfo_mode(file_info.as_ptr().cast()) };
+        let fmt = mode & S_IFMT;
+        let t: &[u8] = if fmt == S_IFREG {
+            b"file\0"
+        } else if fmt == S_IFDIR {
+            b"dir\0"
+        } else if fmt == S_IFLNK {
+            b"link\0"
+        } else if fmt == S_IFBLK {
+            b"bdev\0"
+        } else if fmt == S_IFCHR {
+            b"cdev\0"
+        } else if fmt == S_IFIFO {
+            b"fifo\0"
+        } else if fmt == S_IFSOCK {
+            b"socket\0"
+        } else {
+            b"other\0"
+        };
+        unsafe { xstrdup_u8(t.as_ptr().cast()).cast() }
+    } else {
+        std::ptr::null_mut()
+    };
+    unsafe { nvim_tv_set_string(rettv, s) };
+}
+
+/// "filecopy()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_filecopy"]
+pub unsafe extern "C" fn rs_f_filecopy(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if unsafe { rs_check_secure() } != 0
+        || unsafe { tv_check_for_string_arg(argvars, 0) } == -1
+        || unsafe { tv_check_for_string_arg(argvars, 1) } == -1
+    {
+        return;
+    }
+    let from_buf = unsafe { tv_to_cstring(argvars) };
+    let mut file_info = [0u8; FILEINFO_SIZE];
+    if unsafe { os_fileinfo_link(from_buf.as_ptr(), file_info.as_mut_ptr().cast()) } {
+        let mode = unsafe { nvim_fileinfo_mode(file_info.as_ptr().cast()) };
+        let fmt = mode & S_IFMT;
+        if fmt == S_IFREG || fmt == S_IFLNK {
+            let tv1 = unsafe { argvar_at(argvars, 1) };
+            let mut nbuf = vec![0u8; NUMBUFLEN];
+            let to_ptr = unsafe { nvim_tv_get_string_buf(tv1.as_ptr(), nbuf.as_mut_ptr()) };
+            let result = unsafe { vim_copyfile(from_buf.as_ptr(), to_ptr) } == OK;
+            rettv_set_bool(unsafe { TypevalPtrMut::from_raw(rettv) }, result);
+        }
+    }
+}
+
+/// "delete()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_delete"]
+pub unsafe extern "C" fn rs_f_delete(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    rettv_set_number(unsafe { TypevalPtrMut::from_raw(rettv) }, -1);
+    if unsafe { rs_check_secure() } != 0 {
+        return;
+    }
+    let name_buf = unsafe { tv_to_cstring(argvars) };
+    if name_buf[0] == 0 {
+        unsafe { fs_emsg(c"E475: Invalid argument".as_ptr()) };
+        return;
+    }
+    let tv1 = unsafe { argvar_at(argvars, 1) };
+    let tv1_type = unsafe { nvim_tv_get_type(tv1.as_ptr()) };
+    let mut nbuf = vec![0u8; NUMBUFLEN];
+    let flags_ptr = if tv1_type == VAR_UNKNOWN {
+        c"".as_ptr()
+    } else {
+        unsafe { nvim_tv_get_string_buf(tv1.as_ptr(), nbuf.as_mut_ptr()).cast() }
+    };
+    let result = if unsafe { *flags_ptr == 0 } {
+        // delete a file
+        if unsafe { os_remove(name_buf.as_ptr()) } == 0 {
+            0
+        } else {
+            -1
+        }
+    } else {
+        let flags_slice = unsafe { std::ffi::CStr::from_ptr(flags_ptr).to_bytes() };
+        if flags_slice == b"d" {
+            // delete an empty directory
+            if unsafe { os_rmdir(name_buf.as_ptr()) } == 0 {
+                0
+            } else {
+                -1
+            }
+        } else if flags_slice == b"rf" {
+            // delete recursively
+            unsafe { delete_recursive(name_buf.as_ptr()) }
+        } else {
+            // Invalid flags - emit error and return current value (-1)
+            unsafe { fs_semsg(c"E475: Invalid argument: %s".as_ptr(), flags_ptr) };
+            return;
+        }
+    };
+    rettv_set_number(unsafe { TypevalPtrMut::from_raw(rettv) }, i64::from(result));
+}
+
+/// "pathshorten()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_pathshorten"]
+pub unsafe extern "C" fn rs_f_pathshorten(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let tv1 = unsafe { argvar_at(argvars, 1) };
+    let tv1_type = unsafe { nvim_tv_get_type(tv1.as_ptr()) };
+    let trim_len = if tv1_type == VAR_UNKNOWN {
+        1
+    } else {
+        let n = unsafe { nvim_tv_get_number(tv1.as_ptr()) };
+        if n < 1 {
+            1
+        } else {
+            n as c_int
+        }
+    };
+    let s = unsafe { tv_to_cstring_chk(argvars) }.map_or(std::ptr::null_mut(), |p| {
+        let dup = unsafe { xstrdup_u8(p.as_ptr().cast()) };
+        if !dup.is_null() {
+            unsafe { shorten_dir_len(dup.cast(), trim_len) };
+        }
+        dup.cast()
+    });
     unsafe { nvim_tv_set_string(rettv, s) };
 }

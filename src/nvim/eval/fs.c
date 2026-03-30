@@ -402,63 +402,6 @@ void f_chdir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "delete()" function
-void f_delete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = -1;
-  if (rs_check_secure()) {
-    return;
-  }
-
-  const char *const name = tv_get_string(&argvars[0]);
-  if (*name == NUL) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  char nbuf[NUMBUFLEN];
-  const char *flags;
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    flags = tv_get_string_buf(&argvars[1], nbuf);
-  } else {
-    flags = "";
-  }
-
-  if (*flags == NUL) {
-    // delete a file
-    rettv->vval.v_number = os_remove(name) == 0 ? 0 : -1;
-  } else if (strcmp(flags, "d") == 0) {
-    // delete an empty directory
-    rettv->vval.v_number = os_rmdir(name) == 0 ? 0 : -1;
-  } else if (strcmp(flags, "rf") == 0) {
-    // delete a directory recursively
-    rettv->vval.v_number = delete_recursive(name);
-  } else {
-    semsg(_(e_invexpr2), flags);
-  }
-}
-
-/// "filecopy()" function
-void f_filecopy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = false;
-
-  if (rs_check_secure()
-      || tv_check_for_string_arg(argvars, 0) == FAIL
-      || tv_check_for_string_arg(argvars, 1) == FAIL) {
-    return;
-  }
-
-  const char *from = tv_get_string(&argvars[0]);
-
-  FileInfo from_info;
-  if (os_fileinfo_link(from, &from_info)
-      && (S_ISREG(from_info.stat.st_mode) || S_ISLNK(from_info.stat.st_mode))) {
-    rettv->vval.v_number
-      = vim_copyfile(tv_get_string(&argvars[0]), tv_get_string(&argvars[1])) == OK;
-  }
-}
-
 static void findfilendir(typval_T *argvars, typval_T *rettv, int find_what)
 {
   char *fresult = NULL;
@@ -677,65 +620,6 @@ void f_getcwd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 #endif
 
   xfree(cwd);
-}
-
-/// "getfsize({fname})" function
-void f_getfsize(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *fname = tv_get_string(&argvars[0]);
-
-  rettv->v_type = VAR_NUMBER;
-
-  FileInfo file_info;
-  if (os_fileinfo(fname, &file_info)) {
-    uint64_t filesize = os_fileinfo_size(&file_info);
-    if (os_isdir(fname)) {
-      rettv->vval.v_number = 0;
-    } else {
-      rettv->vval.v_number = (varnumber_T)filesize;
-
-      // non-perfect check for overflow
-      if ((uint64_t)rettv->vval.v_number != filesize) {
-        rettv->vval.v_number = -2;
-      }
-    }
-  } else {
-    rettv->vval.v_number = -1;
-  }
-}
-
-/// "getftype({fname})" function
-void f_getftype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char *type = NULL;
-  char *t;
-
-  const char *fname = tv_get_string(&argvars[0]);
-
-  rettv->v_type = VAR_STRING;
-  FileInfo file_info;
-  if (os_fileinfo_link(fname, &file_info)) {
-    uint64_t mode = file_info.stat.st_mode;
-    if (S_ISREG(mode)) {
-      t = "file";
-    } else if (S_ISDIR(mode)) {
-      t = "dir";
-    } else if (S_ISLNK(mode)) {
-      t = "link";
-    } else if (S_ISBLK(mode)) {
-      t = "bdev";
-    } else if (S_ISCHR(mode)) {
-      t = "cdev";
-    } else if (S_ISFIFO(mode)) {
-      t = "fifo";
-    } else if (S_ISSOCK(mode)) {
-      t = "socket";
-    } else {
-      t = "other";
-    }
-    type = xstrdup(t);
-  }
-  rettv->vval.v_string = type;
 }
 
 /// "glob()" function
@@ -1005,28 +889,6 @@ void f_mkdir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     tv[1].v_lock = VAR_UNLOCKED;
     tv[1].vval.v_string = xstrdup(defer_recurse ? "rf" : "d");
     add_defer("delete", 2, tv);
-  }
-}
-
-/// "pathshorten()" function
-void f_pathshorten(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int trim_len = 1;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    trim_len = (int)tv_get_number(&argvars[1]);
-    if (trim_len < 1) {
-      trim_len = 1;
-    }
-  }
-
-  rettv->v_type = VAR_STRING;
-  const char *p = tv_get_string_chk(&argvars[0]);
-  if (p == NULL) {
-    rettv->vval.v_string = NULL;
-  } else {
-    rettv->vval.v_string = xstrdup(p);
-    shorten_dir_len(rettv->vval.v_string, trim_len);
   }
 }
 
