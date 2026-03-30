@@ -3982,10 +3982,10 @@ theend:
 int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
 int nvim_curbuf_get_u_seq_cur(void) { return (int)curbuf->b_u_seq_cur; }
 int nvim_get_reg_recorded(void) { return reg_recorded; }
-int nvim_eval_ui_current_col(void) { return (int)ui_current_col(); }
-int nvim_eval_ui_current_row(void) { return (int)ui_current_row(); }
-int nvim_eval_pum_visible(void) { return pum_visible() ? 1 : 0; }
-int nvim_eval_os_get_pid(void) { return (int)os_get_pid(); }
+// nvim_eval_ui_current_col: inlined into Rust (misc.rs) — direct ui_current_col() call
+// nvim_eval_ui_current_row: inlined into Rust (misc.rs) — direct ui_current_row() call
+// nvim_eval_pum_visible: inlined into Rust (misc.rs) — direct pum_visible() call
+// nvim_eval_os_get_pid: inlined into Rust (misc.rs) — direct os_get_pid() call
 void nvim_eval_get_col(typval_T *argvars, typval_T *rettv, bool charcol)
 {
   if (tv_check_for_string_or_list_arg(argvars, 0) == FAIL
@@ -4467,25 +4467,9 @@ void nvim_eval_deepcopy(typval_T *argvars, typval_T *rettv)
   var_item_copy(NULL, &argvars[0], rettv, true, (noref == 0 ? rs_get_copyID() : 0));
 }
 
-// Context functions
-int nvim_eval_ctx_size(void) { return (int)ctx_size(); }
-void nvim_eval_ctxpop(void)
-{
-  if (!ctx_restore(NULL, kCtxAll)) {
-    emsg(_("Context stack is empty"));
-  }
-}
-
-// char2nr / nr2char full-body wrappers (complex logic stays in C)
-void nvim_eval_char2nr(typval_T *argvars, typval_T *rettv)
-{
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    if (!tv_check_num(&argvars[1])) {
-      return;
-    }
-  }
-  rettv->vval.v_number = utf_ptr2char(tv_get_string(&argvars[0]));
-}
+// nvim_eval_ctx_size: inlined into Rust (misc.rs) via nvim_eval_ctx_size_impl shim
+// nvim_eval_ctxpop: inlined into Rust (misc.rs) via nvim_eval_ctxpop_impl shim
+// nvim_eval_char2nr: inlined into Rust (misc.rs) — direct utf_ptr2char() call
 void nvim_eval_nr2char(typval_T *argvars, typval_T *rettv)
 {
   if (argvars[1].v_type != VAR_UNKNOWN) {
@@ -4524,96 +4508,12 @@ void nvim_eval_str2float(typval_T *argvars, typval_T *rettv)
   }
   rettv->v_type = VAR_FLOAT;
 }
-void nvim_eval_escape(typval_T *argvars, typval_T *rettv)
-{
-  char buf[NUMBUFLEN];
-  rettv->vval.v_string = vim_strsave_escaped(tv_get_string(&argvars[0]),
-                                             tv_get_string_buf(&argvars[1], buf));
-  rettv->v_type = VAR_STRING;
-}
-void nvim_eval_shellescape(typval_T *argvars, typval_T *rettv)
-{
-  const bool do_special = non_zero_arg(&argvars[1]);
-  rettv->vval.v_string =
-    vim_strsave_shellescape(tv_get_string(&argvars[0]), do_special, do_special);
-  rettv->v_type = VAR_STRING;
-}
-void nvim_eval_fnameescape(typval_T *argvars, typval_T *rettv)
-{
-  rettv->vval.v_string = vim_strsave_fnameescape(tv_get_string(&argvars[0]), VSE_NONE);
-  rettv->v_type = VAR_STRING;
-}
-void nvim_eval_hostname(typval_T *argvars, typval_T *rettv)
-{
-  char hostname[256];
-  os_get_hostname(hostname, 256);
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xstrdup(hostname);
-}
-void nvim_eval_empty(typval_T *argvars, typval_T *rettv)
-{
-  bool n = true;
-  switch (argvars[0].v_type) {
-  case VAR_STRING:
-  case VAR_FUNC:
-    n = argvars[0].vval.v_string == NULL || *argvars[0].vval.v_string == NUL;
-    break;
-  case VAR_PARTIAL:
-    n = false;
-    break;
-  case VAR_NUMBER:
-    n = argvars[0].vval.v_number == 0;
-    break;
-  case VAR_FLOAT:
-    n = argvars[0].vval.v_float == 0.0;
-    break;
-  case VAR_LIST:
-    n = (tv_list_len(argvars[0].vval.v_list) == 0);
-    break;
-  case VAR_DICT:
-    n = (tv_dict_len(argvars[0].vval.v_dict) == 0);
-    break;
-  case VAR_BOOL:
-    n = (argvars[0].vval.v_bool != kBoolVarTrue);
-    break;
-  case VAR_SPECIAL:
-    n = argvars[0].vval.v_special == kSpecialVarNull;
-    break;
-  case VAR_BLOB:
-    n = (tv_blob_len(argvars[0].vval.v_blob) == 0);
-    break;
-  case VAR_UNKNOWN:
-    internal_error("f_empty(UNKNOWN)");
-    break;
-  }
-  rettv->vval.v_number = n;
-}
-void nvim_eval_len(typval_T *argvars, typval_T *rettv)
-{
-  switch (argvars[0].v_type) {
-  case VAR_STRING:
-  case VAR_NUMBER:
-    rettv->vval.v_number = (varnumber_T)strlen(tv_get_string(&argvars[0]));
-    break;
-  case VAR_BLOB:
-    rettv->vval.v_number = tv_blob_len(argvars[0].vval.v_blob);
-    break;
-  case VAR_LIST:
-    rettv->vval.v_number = tv_list_len(argvars[0].vval.v_list);
-    break;
-  case VAR_DICT:
-    rettv->vval.v_number = tv_dict_len(argvars[0].vval.v_dict);
-    break;
-  case VAR_UNKNOWN:
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-  case VAR_FLOAT:
-  case VAR_PARTIAL:
-  case VAR_FUNC:
-    emsg(_("E701: Invalid type for len()"));
-    break;
-  }
-}
+// nvim_eval_escape: inlined into Rust (misc.rs) — direct vim_strsave_escaped() call
+// nvim_eval_shellescape: inlined into Rust (misc.rs) — direct vim_strsave_shellescape() call
+// nvim_eval_fnameescape: inlined into Rust (misc.rs) — direct vim_strsave_fnameescape() call
+// nvim_eval_hostname: inlined into Rust (misc.rs) — direct os_get_hostname() call
+// nvim_eval_empty: inlined into Rust (misc.rs) — uses typval field accessor shims
+// nvim_eval_len: inlined into Rust (misc.rs) — uses typval field accessor shims
 
 
 void nvim_eval_execute(typval_T *argvars, typval_T *rettv) { execute_common(argvars, rettv, 0); }

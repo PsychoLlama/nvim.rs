@@ -10,6 +10,8 @@
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/cmdexpand.h"
+#include "nvim/context.h"
+#include "nvim/message.h"
 #include "nvim/state.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
@@ -101,6 +103,41 @@ linenr_T nvim_eval_curbuf_ml_line_count(void)
 int32_t nvim_eval_tv_get_lnum(typval_T *argvars)
 {
   return (int32_t)tv_get_lnum(argvars);
+}
+
+// =============================================================================
+// empty() helpers - VAR_BOOL / VAR_SPECIAL field access
+// =============================================================================
+
+/// Returns 1 if tv->vval.v_bool == kBoolVarTrue, 0 otherwise.
+int nvim_eval_tv_bool_is_true(const typval_T *tv)
+{
+  return tv->vval.v_bool == kBoolVarTrue ? 1 : 0;
+}
+
+/// Returns 1 if tv->vval.v_special == kSpecialVarNull, 0 otherwise.
+int nvim_eval_tv_special_is_null(const typval_T *tv)
+{
+  return tv->vval.v_special == kSpecialVarNull ? 1 : 0;
+}
+
+// =============================================================================
+// ctxpop() / ctx_size() helpers
+// =============================================================================
+
+/// Pops the context stack (ctx_restore(NULL, kCtxAll)).
+/// Emits "Context stack is empty" error if the stack is empty.
+void nvim_eval_ctxpop_impl(void)
+{
+  if (!ctx_restore(NULL, kCtxAll)) {
+    emsg(_("Context stack is empty"));
+  }
+}
+
+/// Returns ctx_size() as an int.
+int nvim_eval_ctx_size_impl(void)
+{
+  return (int)ctx_size();
 }
 
 // =============================================================================

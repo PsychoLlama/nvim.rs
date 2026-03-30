@@ -19,10 +19,11 @@ extern "C" {
     fn nvim_get_reg_executing() -> c_int;
     fn nvim_get_reg_recording() -> c_int;
     fn nvim_get_reg_recorded() -> c_int;
-    fn nvim_eval_ui_current_col() -> c_int;
-    fn nvim_eval_ui_current_row() -> c_int;
-    fn nvim_eval_pum_visible() -> c_int;
-    fn nvim_eval_os_get_pid() -> c_int;
+    // Direct underlying functions (replaced nvim_eval_* one-liner wrappers)
+    fn ui_current_col() -> u32;
+    fn ui_current_row() -> u32;
+    fn pum_visible() -> bool;
+    // os_get_pid already declared in Phase 3 extern block below
     fn nvim_eval_get_col(argvars: *const c_void, rettv: *mut c_void, charcol: bool);
     fn nvim_eval_getpos_both(
         argvars: *const c_void,
@@ -97,7 +98,7 @@ pub unsafe extern "C" fn rs_f_getpid(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_eval_os_get_pid()));
+    rettv_set_number(rettv, os_get_pid());
 }
 
 /// "localtime()" function - returns current time in seconds
@@ -127,7 +128,7 @@ pub unsafe extern "C" fn rs_f_screencol(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_eval_ui_current_col()) + 1);
+    rettv_set_number(rettv, i64::from(ui_current_col()) + 1);
 }
 
 /// "screenrow()" function - returns current screen row (1-based)
@@ -141,7 +142,7 @@ pub unsafe extern "C" fn rs_f_screenrow(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_eval_ui_current_row()) + 1);
+    rettv_set_number(rettv, i64::from(ui_current_row()) + 1);
 }
 
 /// "eventhandler()" function - returns true if inside an event handler
@@ -212,7 +213,7 @@ pub unsafe extern "C" fn rs_f_pumvisible(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_eval_pum_visible()));
+    rettv_set_number(rettv, i64::from(pum_visible()));
 }
 
 // =============================================================================
@@ -355,25 +356,77 @@ pub unsafe extern "C" fn rs_f_getpos(
 // =============================================================================
 
 extern "C" {
-    fn nvim_eval_char2nr(argvars: *const c_void, rettv: *mut c_void);
+    // Still-delegated C accessors
     fn nvim_eval_nr2char(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_str2float(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_escape(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_shellescape(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_fnameescape(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_hostname(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_empty(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_copy(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_deepcopy(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_len(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_ctx_size() -> c_int;
-    fn nvim_eval_ctxpop();
     fn nvim_eval_max_min(argvars: *const c_void, rettv: *mut c_void, domax: bool);
     fn nvim_eval_set_position(argvars: *const c_void, rettv: *mut c_void, charpos: bool);
     fn nvim_eval_set_cursorpos(argvars: *const c_void, rettv: *mut c_void, charcol: bool);
     fn nvim_eval_searchpair_cmn(argvars: *const c_void) -> c_int;
     fn nvim_eval_find_some_match(argvars: *const c_void, rettv: *mut c_void, kind: c_int);
+
+    // Direct underlying functions (Phase 2 inlining)
+    fn utf_ptr2char(p: *const u8) -> c_int;
+    fn tv_check_num(tv: *const c_void) -> bool;
+    fn os_get_hostname(hostname: *mut u8, len: usize);
+    fn nvim_eval_ctx_size_impl() -> c_int; // shim for (int)ctx_size()
+    fn nvim_eval_ctxpop_impl(); // shim for ctxpop + error msg
+    fn internal_error(where_: *const u8);
+    fn vim_strsave_escaped(string: *const u8, esc_chars: *const u8) -> *mut u8;
+    fn vim_strsave_shellescape(string: *const u8, do_special: bool, do_newline: bool) -> *mut u8;
+    fn vim_strsave_fnameescape(fname: *const u8, what: c_int) -> *mut u8;
+
+    // typval string get: returns *const u8 (matches dispatch.rs convention)
+    #[link_name = "nvim_tv_get_type"]
+    fn p3_misc_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_number"]
+    fn p3_misc_tv_get_number(tv: *const c_void) -> i64;
+    #[link_name = "nvim_tv_get_float"]
+    fn p3_misc_tv_get_float(tv: *const c_void) -> f64;
+    #[link_name = "nvim_tv_get_string"]
+    fn p3_misc_tv_get_string(tv: *const c_void, out_len: *mut usize) -> *const u8;
+    #[link_name = "nvim_tv_set_number"]
+    fn p3_misc_tv_set_number(tv: *mut c_void, n: i64);
+    #[link_name = "nvim_tv_set_string"]
+    fn p3_misc_tv_set_string(tv: *mut c_void, s: *mut u8);
+    #[link_name = "nvim_tv_get_string_ptr"]
+    fn p3_misc_tv_get_string_ptr(tv: *const c_void) -> *const u8;
+    #[link_name = "nvim_tv_get_list"]
+    fn p3_misc_tv_get_list(tv: *const c_void) -> *const c_void;
+    #[link_name = "nvim_list_get_len"]
+    fn p3_misc_tv_list_len(l: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_dict"]
+    fn p3_misc_tv_get_dict(tv: *const c_void) -> *const c_void;
+    #[link_name = "nvim_dict_get_len"]
+    fn p3_misc_tv_dict_len(d: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_blob_len"]
+    fn p3_misc_tv_blob_len(tv: *const c_void) -> c_int;
+    fn nvim_eval_tv_bool_is_true(tv: *const c_void) -> c_int;
+    fn nvim_eval_tv_special_is_null(tv: *const c_void) -> c_int;
+    fn nvim_eval_non_zero_arg(argvars: *const c_void, idx: c_int) -> c_int;
+    #[link_name = "xstrdup"]
+    fn p3_misc_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "emsg"]
+    fn p3_misc_emsg(msg: *const c_char) -> c_int;
 }
+
+// =============================================================================
+// Phase 2: VarType constants for inlined functions
+// =============================================================================
+
+const VAR_UNKNOWN_P2M: c_int = 0;
+const VAR_NUMBER_P2M: c_int = 1;
+const VAR_STRING_P2M: c_int = 2;
+const VAR_FUNC_P2M: c_int = 3;
+const VAR_FLOAT_P2M: c_int = 6;
+const VAR_BOOL_P2M: c_int = 7;
+const VAR_SPECIAL_P2M: c_int = 8;
+const VAR_PARTIAL_P2M: c_int = 9;
+
+/// VSE_NONE: no special escaping
+const VSE_NONE: c_int = 0;
 
 /// "char2nr()" function - convert UTF-8 character to number
 ///
@@ -385,7 +438,13 @@ pub unsafe extern "C" fn rs_f_char2nr(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_char2nr(argvars, rettv);
+    let arg1 = arg_at_p2(argvars, 1);
+    if p3_misc_tv_get_type(arg1) != VAR_UNKNOWN_P2M && !tv_check_num(arg1) {
+        return;
+    }
+    let s = p3_misc_tv_get_string_ptr(argvars);
+    let result = utf_ptr2char(s);
+    p3_misc_tv_set_number(rettv, i64::from(result));
 }
 
 /// "nr2char()" function - convert number to UTF-8 character string
@@ -424,7 +483,12 @@ pub unsafe extern "C" fn rs_f_escape(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_escape(argvars, rettv);
+    let mut len: usize = 0;
+    let s = p3_misc_tv_get_string(argvars, &raw mut len);
+    let arg1 = arg_at_p2(argvars, 1);
+    let esc_chars = p3_misc_tv_get_string_ptr(arg1);
+    let result = vim_strsave_escaped(s, esc_chars);
+    p3_misc_tv_set_string(rettv, result);
 }
 
 /// "shellescape()" function - shell-escape a string
@@ -437,7 +501,10 @@ pub unsafe extern "C" fn rs_f_shellescape(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_shellescape(argvars, rettv);
+    let do_special = nvim_eval_non_zero_arg(argvars, 1) != 0;
+    let s = p3_misc_tv_get_string_ptr(argvars);
+    let result = vim_strsave_shellescape(s, do_special, do_special);
+    p3_misc_tv_set_string(rettv, result);
 }
 
 /// "fnameescape()" function - escape filename special characters
@@ -450,7 +517,9 @@ pub unsafe extern "C" fn rs_f_fnameescape(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_fnameescape(argvars, rettv);
+    let s = p3_misc_tv_get_string_ptr(argvars);
+    let result = vim_strsave_fnameescape(s, VSE_NONE);
+    p3_misc_tv_set_string(rettv, result);
 }
 
 /// "hostname()" function - get the hostname
@@ -459,11 +528,14 @@ pub unsafe extern "C" fn rs_f_fnameescape(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_hostname"]
 pub unsafe extern "C" fn rs_f_hostname(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_hostname(argvars, rettv);
+    let mut buf = [0u8; 256];
+    os_get_hostname(buf.as_mut_ptr(), 256);
+    let copy = p3_misc_xstrdup(buf.as_ptr().cast::<c_char>());
+    p3_misc_tv_set_string(rettv, copy.cast::<u8>());
 }
 
 /// "empty()" function - check if value is empty
@@ -476,7 +548,37 @@ pub unsafe extern "C" fn rs_f_empty(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_empty(argvars, rettv);
+    let n = match p3_misc_tv_get_type(argvars) {
+        VAR_STRING_P2M | VAR_FUNC_P2M => {
+            // empty if string pointer is null or starts with NUL
+            let s = p3_misc_tv_get_string_ptr(argvars);
+            s.is_null() || *s == 0
+        }
+        VAR_PARTIAL_P2M => false,
+        VAR_NUMBER_P2M => p3_misc_tv_get_number(argvars) == 0,
+        VAR_FLOAT_P2M => p3_misc_tv_get_float(argvars) == 0.0,
+        VAR_LIST_P2 => {
+            let l = p3_misc_tv_get_list(argvars);
+            l.is_null() || p3_misc_tv_list_len(l) == 0
+        }
+        5 => {
+            // VAR_DICT
+            let d = p3_misc_tv_get_dict(argvars);
+            d.is_null() || p3_misc_tv_dict_len(d) == 0
+        }
+        VAR_BOOL_P2M => nvim_eval_tv_bool_is_true(argvars) == 0,
+        VAR_SPECIAL_P2M => nvim_eval_tv_special_is_null(argvars) != 0,
+        10 => {
+            // VAR_BLOB
+            p3_misc_tv_blob_len(argvars) == 0
+        }
+        _ => {
+            // VAR_UNKNOWN: internal error
+            internal_error(c"f_empty(UNKNOWN)".as_ptr().cast::<u8>());
+            true
+        }
+    };
+    p3_misc_tv_set_number(rettv, i64::from(n));
 }
 
 /// "copy()" function - shallow copy a value
@@ -507,7 +609,47 @@ pub unsafe extern "C" fn rs_f_deepcopy(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_len"]
 pub unsafe extern "C" fn rs_f_len(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
-    nvim_eval_len(argvars, rettv);
+    let result: i64 = match p3_misc_tv_get_type(argvars) {
+        VAR_STRING_P2M | VAR_NUMBER_P2M => {
+            let mut len: usize = 0;
+            let s = p3_misc_tv_get_string(argvars, &raw mut len);
+            if s.is_null() {
+                0
+            } else {
+                #[allow(clippy::cast_possible_wrap)]
+                {
+                    len as i64
+                }
+            }
+        }
+        10 => {
+            // VAR_BLOB
+            i64::from(p3_misc_tv_blob_len(argvars))
+        }
+        VAR_LIST_P2 => {
+            let l = p3_misc_tv_get_list(argvars);
+            if l.is_null() {
+                0
+            } else {
+                i64::from(p3_misc_tv_list_len(l))
+            }
+        }
+        5 => {
+            // VAR_DICT
+            let d = p3_misc_tv_get_dict(argvars);
+            if d.is_null() {
+                0
+            } else {
+                i64::from(p3_misc_tv_dict_len(d))
+            }
+        }
+        _ => {
+            // VAR_UNKNOWN, VAR_BOOL, VAR_SPECIAL, VAR_FLOAT, VAR_PARTIAL, VAR_FUNC
+            let _ = p3_misc_emsg(c"E701: Invalid type for len()".as_ptr());
+            return;
+        }
+    };
+    p3_misc_tv_set_number(rettv, result);
 }
 
 /// "ctxsize()" function - context stack size
@@ -521,7 +663,7 @@ pub unsafe extern "C" fn rs_f_ctxsize(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_eval_ctx_size()));
+    rettv_set_number(rettv, i64::from(nvim_eval_ctx_size_impl()));
 }
 
 /// "ctxpop()" function - pop context from stack
@@ -534,7 +676,7 @@ pub unsafe extern "C" fn rs_f_ctxpop(
     _rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_ctxpop();
+    nvim_eval_ctxpop_impl();
 }
 
 /// "max()" function - maximum value in list or dict
