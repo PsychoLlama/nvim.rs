@@ -1159,26 +1159,7 @@ char **tv_dict_to_env(dict_T *denv)
   return env;
 }
 
-/// Get a string item from a dictionary
-///
-/// @param[in]  d  Dictionary to get item from.
-/// @param[in]  key  Dictionary key.
-/// @param[in]  save  If true, returned string will be placed in the allocated
-///                   memory.
-///
-/// @return NULL if key does not exist, empty string in case of type error,
-///         string item value otherwise. If returned value is not NULL, it may
-///         be allocated depending on `save` argument.
-char *tv_dict_get_string(const dict_T *const d, const char *const key, const bool save)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  static char numbuf[NUMBUFLEN];
-  const char *const s = tv_dict_get_string_buf(d, key, numbuf);
-  if (save && s != NULL) {
-    return xstrdup(s);
-  }
-  return (char *)s;
-}
+// tv_dict_get_string migrated to Rust (Phase 6i)
 
 // tv_dict_get_string_buf: migrated to Rust (nvim-rs/typval)
 // tv_dict_get_string_buf_chk: migrated to Rust (nvim-rs/typval)

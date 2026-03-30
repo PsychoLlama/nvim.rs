@@ -2636,6 +2636,30 @@ pub unsafe extern "C" fn rs_f_values(
 }
 
 // =============================================================================
+// Phase 6i: tv_dict_get_string
+// =============================================================================
+
+/// FFI export: tv_dict_get_string - get string from dict, optionally duplicated.
+#[export_name = "tv_dict_get_string"]
+pub unsafe extern "C" fn rs_tv_dict_get_string(
+    d: DictHandle,
+    key: *const c_char,
+    save: bool,
+) -> *mut c_char {
+    use std::cell::UnsafeCell;
+    struct StaticBuf(UnsafeCell<[u8; NUMBUFLEN]>);
+    unsafe impl Sync for StaticBuf {}
+    static NUMBUF: StaticBuf = StaticBuf(UnsafeCell::new([0u8; NUMBUFLEN]));
+    let buf = unsafe { (*NUMBUF.0.get()).as_mut_ptr().cast::<c_char>() };
+    let s = unsafe { rs_tv_dict_get_string_buf(d, key, buf) };
+    if save && !s.is_null() {
+        unsafe { nvim_xstrdup(s) }
+    } else {
+        s.cast_mut()
+    }
+}
+
+// =============================================================================
 // Phase 6h: tv_dict_set_keys_readonly (using hashtab iteration)
 // =============================================================================
 
