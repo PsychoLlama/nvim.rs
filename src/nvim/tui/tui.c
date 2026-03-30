@@ -220,13 +220,22 @@ extern bool rs_cheap_to_print(TUIData *tui, int row, int col, int next);
 extern void rs_cursor_goto(TUIData *tui, int row, int col);
 extern void rs_clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
 extern void rs_invalidate(TUIData *tui, int top, int bot, int left, int right);
+extern void rs_tui_flush(TUIData *tui);
+extern void rs_tui_raw_line(TUIData *tui, int64_t g, int64_t linerow, int64_t startcol,
+                             int64_t endcol, int64_t clearcol, int64_t clearattr,
+                             int64_t flags, const schar_T *chunk, const sattr_T *attrs);
 
 // TUIData Accessor Functions for Rust
 
 
+/// Get cursor row position (target)
+int nvim_tui_get_row(TUIData *tui) { return tui->row; }
+
 /// Set cursor row position
 void nvim_tui_set_row(TUIData *tui, int row) { tui->row = row; }
 
+/// Get cursor col position (target)
+int nvim_tui_get_col(TUIData *tui) { return tui->col; }
 
 /// Set cursor col position
 void nvim_tui_set_col(TUIData *tui, int col) { tui->col = col; }
@@ -477,6 +486,59 @@ const HlAttrs *nvim_tui_get_attrs_ptr(TUIData *tui) { return tui->attrs.items; }
 bool nvim_tui_ti_has_def(TUIData *tui, int idx) { return tui->ti.defs[idx] != NULL; }
 schar_T nvim_tui_get_cell_data(TUIData *tui, int row, int col) { return tui->grid.cells[row][col].data; }
 sattr_T nvim_tui_get_cell_attr(TUIData *tui, int row, int col) { return tui->grid.cells[row][col].attr; }
+
+/// Pop the last invalid region (like kv_pop). Returns false if empty.
+bool nvim_tui_pop_invalid_region(TUIData *tui, int *top, int *bot, int *left, int *right)
+{
+  if (kv_size(tui->invalid_regions) == 0) {
+    return false;
+  }
+  Rect r = kv_pop(tui->invalid_regions);
+  *top = r.top; *bot = r.bot; *left = r.left; *right = r.right;
+  return true;
+}
+
+/// Get loop size (pending events)
+size_t nvim_tui_loop_size(TUIData *tui) { return loop_size(tui->loop); }
+
+/// Purge loop events
+void nvim_tui_loop_purge(TUIData *tui) { loop_purge(tui->loop); }
+
+/// Returns true if loop is flooded and should be purged
+bool nvim_tui_loop_flooded(TUIData *tui) { return loop_size(tui->loop) > TOO_MANY_EVENTS; }
+
+/// Set grid cell data and attr from chunk arrays (for tui_raw_line)
+void nvim_tui_set_grid_cell(TUIData *tui, int row, int col, schar_T data, sattr_T attr)
+{
+  tui->grid.cells[row][col].data = data;
+  tui->grid.cells[row][col].attr = attr;
+}
+
+/// Find the clear_col: last non-trailing-space column in [left, right)
+/// Returns the column where trailing spaces with clear_attr start
+int nvim_tui_find_clear_col(TUIData *tui, int row, int left, int right, sattr_T clear_attr)
+{
+  int clear_col;
+  for (clear_col = right; clear_col > left; clear_col--) {
+    UCell *cell = &tui->grid.cells[row][clear_col - 1];
+    if (!(cell->data == schar_from_ascii(' ') && cell->attr == clear_attr)) {
+      break;
+    }
+  }
+  return clear_col;
+}
+
+/// Check if cell at (row, col+1) has NUL data (for double-width detection)
+bool nvim_tui_next_cell_is_nul(TUIData *tui, int row, int col)
+{
+  return tui->grid.cells[row][col + 1].data == NUL;
+}
+
+/// ugrid_clear_chunk wrapper
+void nvim_tui_ugrid_clear_chunk(TUIData *tui, int row, int col, int endcol, sattr_T attr)
+{
+  ugrid_clear_chunk(&tui->grid, row, col, endcol, attr);
+}
 
 /// Output 3-param terminfo sequence
 void nvim_tui_terminfo_print_num3(TUIData *tui, int what, int n1, int n2, int n3)
@@ -1179,54 +1241,6 @@ static void cursor_goto(TUIData *tui, int row, int col)
   rs_cursor_goto(tui, row, col);
 }
 
-static void print_spaces(TUIData *tui, int width)
-{
-  rs_print_spaces(tui, width);
-  tui->grid.col += width;
-  if (tui->immediate_wrap_after_last_column) {
-    final_column_wrap(tui);
-  }
-}
-
-/// Move cursor to the position given by `row` and `col` and print the char in `cell`.
-/// Allows grid and host terminal to assume different widths of ambiguous-width chars.
-///
-/// @param is_doublewidth  whether the char is double-width on the grid.
-///                        If true and the char is ambiguous-width, clear two cells.
-static void print_cell_at_pos(TUIData *tui, int row, int col, UCell *cell, bool is_doublewidth)
-{
-  UGrid *grid = &tui->grid;
-
-  if (grid->row == -1 && cell->data == NUL) {
-    // If cursor needs repositioning and there is nothing to print, don't move cursor.
-    return;
-  }
-
-  cursor_goto(tui, row, col);
-
-  char buf[MAX_SCHAR_SIZE];
-  schar_get(buf, cell->data);
-  int c = utf_ptr2char(buf);
-  bool is_ambiwidth = utf_ambiguous_width(buf);
-  if (is_doublewidth && (is_ambiwidth || utf_char2cells(c) == 1)) {
-    // If the server used setcellwidths() to treat a single-width char as double-width,
-    // it needs to be treated like an ambiguous-width char.
-    is_ambiwidth = true;
-    // Clear the two screen cells.
-    // If the char is single-width in host terminal it won't change the second cell.
-    update_attrs(tui, cell->attr);
-    print_spaces(tui, 2);
-    cursor_goto(tui, row, col);
-  }
-
-  print_cell(tui, buf, cell->attr);
-
-  if (is_ambiwidth) {
-    // Force repositioning cursor after printing an ambiguous-width char.
-    grid->row = -1;
-  }
-}
-
 /// Clear a rectangular region. Rust implementation.
 static void clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id)
 {
@@ -1465,50 +1479,10 @@ void tui_ui_send(TUIData *tui, String content)
 /// Flushes TUI grid state to a buffer (which is later flushed to the TTY by `flush_buf`).
 ///
 /// @see flush_buf
+/// Flush TUI grid to terminal. Rust implementation.
 void tui_flush(TUIData *tui)
 {
-  UGrid *grid = &tui->grid;
-
-  size_t nrevents = loop_size(tui->loop);
-  if (nrevents > TOO_MANY_EVENTS) {
-    WLOG("TUI event-queue flooded (thread_events=%zu); purging", nrevents);
-    // Back-pressure: UI events may accumulate much faster than the terminal
-    // device can serve them. Even if SIGINT/CTRL-C is received, user must still
-    // wait for the TUI event-queue to drain, and if there are ~millions of
-    // events in the queue, it could take hours. Clearing the queue allows the
-    // UI to recover. #1234 #5396
-    loop_purge(tui->loop);
-    tui_busy_stop(tui);  // avoid hidden cursor
-  }
-
-  while (kv_size(tui->invalid_regions)) {
-    Rect r = kv_pop(tui->invalid_regions);
-    assert(r.bot <= grid->height && r.right <= grid->width);
-
-    for (int row = r.top; row < r.bot; row++) {
-      int clear_attr = grid->cells[row][r.right - 1].attr;
-      int clear_col;
-      for (clear_col = r.right; clear_col > 0; clear_col--) {
-        UCell *cell = &grid->cells[row][clear_col - 1];
-        if (!(cell->data == schar_from_ascii(' ')
-              && cell->attr == clear_attr)) {
-          break;
-        }
-      }
-
-      UGRID_FOREACH_CELL(grid, row, r.left, clear_col, {
-        print_cell_at_pos(tui, row, curcol, cell,
-                          curcol < clear_col - 1 && (cell + 1)->data == NUL);
-      });
-      if (clear_col < r.right) {
-        clear_region(tui, row, row + 1, clear_col, r.right, clear_attr);
-      }
-    }
-  }
-
-  cursor_goto(tui, tui->row, tui->col);
-
-  flush_buf(tui);
+  rs_tui_flush(tui);
 }
 
 /// Dumps termcap info to the messages area, if 'verbose' >= 3.
@@ -1647,44 +1621,13 @@ void tui_chdir(TUIData *tui, String path)
   }
 }
 
+/// Render a raw line. Rust implementation.
 void tui_raw_line(TUIData *tui, Integer g, Integer linerow, Integer startcol, Integer endcol,
                   Integer clearcol, Integer clearattr, LineFlags flags, const schar_T *chunk,
                   const sattr_T *attrs)
 {
-  UGrid *grid = &tui->grid;
-  for (Integer c = startcol; c < endcol; c++) {
-    grid->cells[linerow][c].data = chunk[c - startcol];
-    assert((size_t)attrs[c - startcol] < kv_size(tui->attrs));
-    grid->cells[linerow][c].attr = attrs[c - startcol];
-  }
-  UGRID_FOREACH_CELL(grid, (int)linerow, (int)startcol, (int)endcol, {
-    print_cell_at_pos(tui, (int)linerow, curcol, cell,
-                      curcol < endcol - 1 && (cell + 1)->data == NUL);
-  });
-
-  if (clearcol > endcol) {
-    ugrid_clear_chunk(grid, (int)linerow, (int)endcol, (int)clearcol,
-                      (sattr_T)clearattr);
-    clear_region(tui, (int)linerow, (int)linerow + 1, (int)endcol, (int)clearcol,
-                 (int)clearattr);
-  }
-
-  if (flags & kLineFlagWrap && tui->width == grid->width
-      && linerow + 1 < grid->height) {
-    // Only do line wrapping if the grid width is equal to the terminal
-    // width and the line continuation is within the grid.
-
-    if (endcol != grid->width) {
-      // Print the last char of the row, if we haven't already done so.
-      int size = grid->cells[linerow][grid->width - 1].data == NUL ? 2 : 1;
-      print_cell_at_pos(tui, (int)linerow, grid->width - size,
-                        &grid->cells[linerow][grid->width - size], size == 2);
-    }
-
-    // Wrap the cursor over to the next line. The next line will be
-    // printed immediately without an intervening newline.
-    final_column_wrap(tui);
-  }
+  rs_tui_raw_line(tui, g, linerow, startcol, endcol, clearcol, clearattr,
+                  (int64_t)flags, chunk, attrs);
 }
 
 /// Merge invalidation rect into existing invalid regions. Rust implementation.

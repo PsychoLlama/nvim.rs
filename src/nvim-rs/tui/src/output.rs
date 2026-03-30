@@ -1769,6 +1769,233 @@ pub unsafe extern "C" fn rs_clear_region(
     }
 }
 
+// Phase 4 C accessors
+extern "C" {
+    fn nvim_tui_pop_invalid_region(
+        tui: *mut TuiHandle,
+        top: *mut c_int,
+        bot: *mut c_int,
+        left: *mut c_int,
+        right: *mut c_int,
+    ) -> bool;
+    fn nvim_tui_loop_flooded(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_loop_purge(tui: *mut TuiHandle);
+    fn nvim_tui_find_clear_col(
+        tui: *mut TuiHandle,
+        row: c_int,
+        left: c_int,
+        right: c_int,
+        clear_attr: i32,
+    ) -> c_int;
+    fn nvim_tui_next_cell_is_nul(tui: *mut TuiHandle, row: c_int, col: c_int) -> bool;
+    fn nvim_tui_ugrid_clear_chunk(
+        tui: *mut TuiHandle,
+        row: c_int,
+        col: c_int,
+        endcol: c_int,
+        attr: i32,
+    );
+    fn nvim_tui_set_grid_cell(tui: *mut TuiHandle, row: c_int, col: c_int, data: u32, attr: i32);
+    // UTF/schar functions for print_cell_at_pos
+    fn schar_get(buf_out: *mut libc::c_char, sc: u32) -> usize;
+    fn utf_ptr2char(p: *const libc::c_char) -> c_int;
+    fn utf_ambiguous_width(p: *const libc::c_char) -> bool;
+    fn utf_char2cells(c: c_int) -> c_int;
+    fn nvim_tui_get_row(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_col(tui: *mut TuiHandle) -> c_int;
+}
+
+// schar_T NUL value (schar_from_ascii(0) = 0 on little-endian)
+const SCHAR_NUL: u32 = 0;
+// kLineFlagWrap = 1
+const LINE_FLAG_WRAP: i64 = 1;
+// MAX_SCHAR_SIZE = 32
+const MAX_SCHAR_SIZE: usize = 32;
+
+/// Print a cell at position (row, col). Rust implementation.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+pub unsafe fn rs_print_cell_at_pos_impl(
+    tui: *mut TuiHandle,
+    row: c_int,
+    col: c_int,
+    is_doublewidth: bool,
+) {
+    let cell_data = nvim_tui_get_cell_data(tui, row, col);
+    let cell_attr = nvim_tui_get_cell_attr(tui, row, col);
+
+    // If grid cursor is unknown and cell is NUL, skip (nothing to print)
+    let grid_row = nvim_tui_get_grid_row(tui);
+    if grid_row == -1 && cell_data == SCHAR_NUL {
+        return;
+    }
+
+    rs_cursor_goto(tui, row, col);
+
+    let mut buf = [0i8; MAX_SCHAR_SIZE];
+    schar_get(buf.as_mut_ptr(), cell_data);
+
+    let c = utf_ptr2char(buf.as_ptr());
+    let is_ambiwidth = utf_ambiguous_width(buf.as_ptr());
+    let is_ambiwidth = if is_doublewidth && (is_ambiwidth || utf_char2cells(c) == 1) {
+        // Clear the two screen cells
+        rs_update_attrs(tui, cell_attr);
+        rs_print_spaces(tui, 2);
+        let cur_col = nvim_tui_get_grid_col(tui);
+        nvim_tui_set_grid_col(tui, cur_col + 2);
+        rs_cursor_goto(tui, row, col);
+        true
+    } else {
+        is_ambiwidth
+    };
+
+    rs_print_cell(tui, buf.as_ptr().cast::<u8>(), cell_attr as i16);
+
+    if is_ambiwidth {
+        // Force repositioning cursor after ambiguous-width char
+        nvim_tui_invalidate_grid_cursor(tui);
+    }
+}
+
+/// Flush the TUI: process all invalid regions and write to terminal.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_flush(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Back-pressure: if event queue is flooded, purge it
+    if nvim_tui_loop_flooded(tui) {
+        nvim_tui_loop_purge(tui);
+        rs_tui_busy_stop(tui);
+    }
+
+    let grid_height = nvim_tui_get_grid_height(tui);
+    let grid_width = nvim_tui_get_grid_width(tui);
+
+    loop {
+        let (mut top, mut bot, mut left, mut right) = (0i32, 0i32, 0i32, 0i32);
+        if !nvim_tui_pop_invalid_region(tui, &mut top, &mut bot, &mut left, &mut right) {
+            break;
+        }
+
+        // Clip to grid bounds
+        if bot > grid_height {
+            bot = grid_height;
+        }
+        if right > grid_width {
+            right = grid_width;
+        }
+
+        for row in top..bot {
+            // Find clear_col: where trailing spaces with clear_attr begin
+            let clear_attr = nvim_tui_get_cell_attr(tui, row, right - 1);
+            let clear_col = nvim_tui_find_clear_col(tui, row, left, right, clear_attr);
+
+            // Print each non-trailing cell
+            let mut col = left;
+            while col < clear_col {
+                let is_dw = col < clear_col - 1 && nvim_tui_next_cell_is_nul(tui, row, col);
+                rs_print_cell_at_pos_impl(tui, row, col, is_dw);
+                col += 1;
+            }
+
+            // Clear trailing space region
+            if clear_col < right {
+                rs_clear_region(tui, row, row + 1, clear_col, right, clear_attr);
+            }
+        }
+    }
+
+    // Position cursor at the target position
+    let target_row = nvim_tui_get_row(tui);
+    let target_col = nvim_tui_get_col(tui);
+    rs_cursor_goto(tui, target_row, target_col);
+
+    rs_flush_buf(tui);
+}
+
+/// Render a raw line directly to the terminal.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_raw_line(
+    tui: *mut TuiHandle,
+    _g: i64,
+    linerow: i64,
+    startcol: i64,
+    endcol: i64,
+    clearcol: i64,
+    clearattr: i64,
+    flags: i64,
+    chunk: *const u32,
+    attrs: *const i32,
+) {
+    if tui.is_null() {
+        return;
+    }
+
+    let row = linerow as c_int;
+
+    // Update grid cells from chunk/attrs arrays
+    for c in startcol..endcol {
+        let offset = (c - startcol) as isize;
+        let data = *chunk.offset(offset);
+        let attr = *attrs.offset(offset);
+        nvim_tui_set_grid_cell(tui, row, c as c_int, data, attr);
+    }
+
+    // Print each cell
+    let mut col = startcol as c_int;
+    while col < endcol as c_int {
+        let is_dw = col < endcol as c_int - 1 && nvim_tui_next_cell_is_nul(tui, row, col);
+        rs_print_cell_at_pos_impl(tui, row, col, is_dw);
+        col += 1;
+    }
+
+    // Clear beyond endcol if needed
+    if clearcol > endcol {
+        nvim_tui_ugrid_clear_chunk(
+            tui,
+            row,
+            endcol as c_int,
+            clearcol as c_int,
+            clearattr as i32,
+        );
+        rs_clear_region(
+            tui,
+            row,
+            row + 1,
+            endcol as c_int,
+            clearcol as c_int,
+            clearattr as c_int,
+        );
+    }
+
+    // Handle line wrap at right margin
+    let grid_width = nvim_tui_get_grid_width(tui);
+    let tui_width = nvim_tui_get_width(tui);
+    let grid_height = nvim_tui_get_grid_height(tui);
+    if flags & LINE_FLAG_WRAP != 0 && tui_width == grid_width && row + 1 < grid_height {
+        if endcol as c_int != grid_width {
+            // Print the last char of the row if not already done
+            let last = grid_width - 1;
+            let last_data = nvim_tui_get_cell_data(tui, row, last);
+            let size = if last_data == SCHAR_NUL { 2 } else { 1 };
+            rs_print_cell_at_pos_impl(tui, row, grid_width - size, size == 2);
+        }
+        rs_final_column_wrap(tui);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
