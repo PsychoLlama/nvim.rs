@@ -1807,10 +1807,27 @@ pub unsafe extern "C" fn rs_f_reduce(
 extern "C" {
     fn nvim_eval_eval(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_exists(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_has(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_has: inlined below
     fn nvim_eval_json_decode(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_printf(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_sha256(argvars: *const c_void, rettv: *mut c_void);
+
+    // has() inlining
+    fn nvim_eval_get_shell_error() -> i64;
+    fn nvim_eval_set_shell_error(val: i64);
+    fn nvim_eval_has_wsl() -> c_int;
+    fn nvim_eval_syntax_present() -> c_int;
+    fn nvim_eval_ui_gui_attached() -> c_int;
+    fn nvim_eval_is_starting() -> c_int;
+    fn nvim_eval_has_vim_patch(vp: c_int, v: c_int) -> c_int;
+    fn nvim_eval_has_nvim_version(name: *const c_char) -> c_int;
+    fn nvim_eval_has_provider(name: *const c_char) -> c_int;
+    #[link_name = "tv_get_string"]
+    fn p10_tv_get_string(tv: *mut c_void) -> *const c_char;
+    fn rs_ascii_isdigit(c: c_int) -> c_int;
+
+    static stdin_isatty: bool;
+    static stdout_isatty: bool;
 }
 
 // =============================================================================
@@ -1839,13 +1856,206 @@ pub unsafe extern "C" fn rs_f_exists(
     nvim_eval_exists(argvars, rettv);
 }
 
+/// Static feature list for has() - platform-specific features included per cfg.
+/// Mirrors the has_list[] in nvim_eval_has() in funcs.c.
+static HAS_LIST: &[&[u8]] = &[
+    #[cfg(all(target_os = "linux", not(target_os = "android")))]
+    b"linux",
+    #[cfg(unix)]
+    b"unix",
+    #[cfg(target_os = "macos")]
+    b"mac",
+    #[cfg(target_os = "macos")]
+    b"macunix",
+    #[cfg(target_os = "macos")]
+    b"osx",
+    #[cfg(target_os = "macos")]
+    b"osxdarwin",
+    // Always-present features (unconditional):
+    b"autochdir",
+    b"arabic",
+    b"autocmd",
+    b"browsefilter",
+    b"byte_offset",
+    b"cindent",
+    b"cmdline_compl",
+    b"cmdline_hist",
+    b"cmdwin",
+    b"comments",
+    b"conceal",
+    b"cursorbind",
+    b"cursorshape",
+    b"dialog_con",
+    b"diff",
+    b"digraphs",
+    b"eval",
+    b"ex_extra",
+    b"extra_search",
+    b"file_in_path",
+    b"filterpipe",
+    b"find_in_path",
+    b"float",
+    b"folding",
+    #[cfg(unix)]
+    b"fork",
+    b"fname_case",
+    b"gettext",
+    b"iconv",
+    b"insert_expand",
+    b"jumplist",
+    b"keymap",
+    b"lambda",
+    b"langmap",
+    b"libcall",
+    b"linebreak",
+    b"lispindent",
+    b"listcmds",
+    b"localmap",
+    b"menu",
+    b"mksession",
+    b"modify_fname",
+    b"mouse",
+    b"multi_byte",
+    b"multi_lang",
+    b"nanotime",
+    b"num64",
+    b"packages",
+    b"path_extra",
+    b"persistent_undo",
+    b"profile",
+    b"reltime",
+    b"quickfix",
+    b"rightleft",
+    b"scrollbind",
+    b"showcmd",
+    b"cmdline_info",
+    b"shada",
+    b"signs",
+    b"smartindent",
+    b"startuptime",
+    b"statusline",
+    b"spell",
+    b"syntax",
+    #[cfg(not(unix))]
+    b"system",
+    b"tablineat",
+    b"tag_binary",
+    b"termguicolors",
+    b"termresponse",
+    b"textobjects",
+    b"timers",
+    b"title",
+    b"user-commands",
+    b"user_commands",
+    b"vartabs",
+    b"vertsplit",
+    b"vimscript-1",
+    b"virtualedit",
+    b"visual",
+    b"visualextra",
+    b"vreplace",
+    b"wildignore",
+    b"wildmenu",
+    b"windows",
+    b"winaltkeys",
+    b"writebackup",
+    #[cfg(target_os = "linux")]
+    b"xattr",
+    b"nvim",
+];
+
 /// "has()" function - check if a feature is supported
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_has"]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_f_has(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
-    nvim_eval_has(argvars, rettv);
+    // nvim_eval_has inlined
+    // '.' = 46, safe ASCII char constant for patch version parsing
+    const DOT: c_char = 46_i8;
+    // XXX: eval_has_provider() may shell out, so save/restore v:shell_error
+    let save_shell_error = nvim_eval_get_shell_error();
+    let mut n: bool = false;
+
+    let name_ptr = p10_tv_get_string(argvars.cast_mut());
+    if name_ptr.is_null() {
+        rettv_set_number(TypevalPtrMut::from_raw(rettv), 0);
+        return;
+    }
+    let name_bytes = libc::strlen(name_ptr);
+    let name = std::slice::from_raw_parts(name_ptr.cast::<u8>(), name_bytes);
+
+    // Check the static feature list (case-insensitive comparison)
+    for &feat in HAS_LIST {
+        if feat.eq_ignore_ascii_case(name) {
+            n = true;
+            break;
+        }
+    }
+
+    if !n {
+        // Case-insensitive prefix checks
+        let name_lower: Vec<u8> = name.iter().map(u8::to_ascii_lowercase).collect();
+
+        if name_lower.starts_with(b"gui_running") {
+            n = nvim_eval_ui_gui_attached() != 0;
+        } else if name_lower.starts_with(b"patch") {
+            // patch-X.Y.Z or patchNNNN
+            if name_lower.len() > 5 && name_lower[5] == b'-' && name_lower[6] >= b'1' {
+                // patch-X.Y.Z format: parse major.minor.patch
+                let rest = name_ptr.add(6);
+                let mut end: *mut c_char = std::ptr::null_mut();
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                let major = libc::strtoul(rest, &raw mut end, 10) as c_int;
+                if !end.is_null() && *end == DOT && *end.add(2) == DOT {
+                    // Extract digit checks into separate statements to avoid experimental attr-on-expr
+                    #[allow(clippy::cast_sign_loss)]
+                    let end1_isdigit = rs_ascii_isdigit(c_int::from(*end.add(1) as u8)) != 0;
+                    #[allow(clippy::cast_sign_loss)]
+                    let end3_isdigit = rs_ascii_isdigit(c_int::from(*end.add(3) as u8)) != 0;
+                    if end1_isdigit && end3_isdigit {
+                        let minor = libc::atoi(end.add(1));
+                        n = nvim_eval_has_vim_patch(libc::atoi(end.add(3)), major * 100 + minor)
+                            != 0;
+                    }
+                }
+            } else if name_lower.len() > 5 && rs_ascii_isdigit(c_int::from(name_lower[5])) != 0 {
+                n = nvim_eval_has_vim_patch(libc::atoi(name_ptr.add(5)), 0) != 0;
+            }
+        } else if name_lower.starts_with(b"nvim-") {
+            // nvim-x.y.z
+            n = nvim_eval_has_nvim_version(name_ptr.add(5)) != 0;
+        } else if name_lower == b"vim_starting" {
+            n = nvim_eval_is_starting() != 0;
+        } else if name_lower == b"ttyin" {
+            n = stdin_isatty;
+        } else if name_lower == b"ttyout" {
+            n = stdout_isatty;
+        } else if name_lower == b"multi_byte_encoding" {
+            n = true;
+        } else if name_lower == b"syntax_items" {
+            n = nvim_eval_syntax_present() != 0;
+        } else if name_lower == b"clipboard_working" {
+            n = nvim_eval_has_provider(c"clipboard".as_ptr()) != 0;
+        } else if name_lower == b"pythonx" {
+            n = nvim_eval_has_provider(c"python3".as_ptr()) != 0;
+        } else if name_lower == b"wsl" {
+            n = nvim_eval_has_wsl() != 0;
+        } else if name_lower == b"unnamedplus" {
+            #[cfg(unix)]
+            {
+                n = nvim_eval_has_provider(c"clipboard".as_ptr()) != 0;
+            }
+        }
+    }
+
+    if !n && nvim_eval_has_provider(name_ptr) != 0 {
+        n = true;
+    }
+
+    nvim_eval_set_shell_error(save_shell_error);
+    rettv_set_number(TypevalPtrMut::from_raw(rettv), i64::from(n));
 }
 
 /// "json_decode()" function - decode a JSON string

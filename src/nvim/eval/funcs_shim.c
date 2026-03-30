@@ -11,12 +11,14 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/cmdexpand.h"
 #include "nvim/context.h"
+#include "nvim/eval.h"
 #include "nvim/eval_defs.h"
 #include "nvim/eval/vars.h"
 #include "nvim/message.h"
 #include "nvim/os/os.h"
 #include "nvim/register.h"
 #include "nvim/state.h"
+#include "nvim/syntax.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/globals.h"
@@ -24,6 +26,8 @@
 #include "nvim/memory.h"
 #include "nvim/state_defs.h"
 #include "nvim/types_defs.h"
+#include "nvim/ui.h"
+#include "nvim/version.h"
 
 #include "eval/funcs_shim.c.generated.h"
 
@@ -252,4 +256,58 @@ void nvim_eval_getreg_set_str(typval_T *rettv, int regname, int flags)
 {
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = get_reg_contents(regname, flags);
+}
+
+// =============================================================================
+// has() helpers
+// =============================================================================
+
+/// Get v:shell_error value (save/restore pattern for has()).
+int64_t nvim_eval_get_shell_error(void)
+{
+  return (int64_t)get_vim_var_nr(VV_SHELL_ERROR);
+}
+
+/// Set v:shell_error value.
+void nvim_eval_set_shell_error(int64_t val)
+{
+  set_vim_var_nr(VV_SHELL_ERROR, (varnumber_T)val);
+}
+
+// nvim_eval_has_wsl: defined in funcs.c since has_wsl() is static there
+
+/// Check if syntax is present in curwin.
+int nvim_eval_syntax_present(void)
+{
+  return syntax_present(curwin) ? 1 : 0;
+}
+
+/// Check if GUI is attached.
+int nvim_eval_ui_gui_attached(void)
+{
+  return ui_gui_attached() ? 1 : 0;
+}
+
+/// Check if starting != 0 (vim is starting up).
+int nvim_eval_is_starting(void)
+{
+  return starting != 0 ? 1 : 0;
+}
+
+/// Check for vim patch number: has_vim_patch(vp, 0) or major version: has_vim_patch(vp, major*100+minor).
+int nvim_eval_has_vim_patch(int vp, int v)
+{
+  return has_vim_patch(vp, v) ? 1 : 0;
+}
+
+/// Check nvim version string.
+int nvim_eval_has_nvim_version(const char *name)
+{
+  return has_nvim_version(name) ? 1 : 0;
+}
+
+/// Check provider availability (throw_if_fast=true, as used by has()).
+int nvim_eval_has_provider(const char *name)
+{
+  return eval_has_provider(name, true) ? 1 : 0;
 }
