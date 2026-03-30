@@ -118,6 +118,22 @@ extern int rs_set_ref_in_functions(int copyID);
 extern int rs_set_ref_in_func_args(int copyID);
 extern int rs_set_ref_in_func(char *name, ufunc_T *fp, int copyID);
 
+// Phase 6: Scope Accessors + ex_return (implemented in Rust userfunc/src/scope.rs)
+extern void *rs_get_funccal(void);
+extern void *rs_get_funccal_local_dict(void);
+extern void *rs_get_funccal_local_ht(void);
+extern void *rs_get_funccal_local_var(void);
+extern void *rs_get_funccal_args_dict(void);
+extern void *rs_get_funccal_args_ht(void);
+extern void *rs_get_funccal_args_var(void);
+extern void rs_list_func_vars(int *first);
+extern void *rs_get_current_funccal_dict(hashtab_T *ht);
+extern hashitem_T *rs_find_hi_in_scoped_ht(const char *name, void **pht);
+extern dictitem_T *rs_find_var_in_scoped_ht(const char *name, size_t namelen, int no_autoload);
+extern void rs_ex_return(exarg_T *eap);
+extern bool rs_do_return(exarg_T *eap, int reanimate, int is_cmd, void *rettv);
+extern char *rs_get_return_cmd(void *rettv);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -3008,8 +3024,8 @@ static bool can_free_funccal(funccall_T *fc, int copyID)
   return rs_can_free_funccal(fc, copyID) != 0;
 }
 
-/// ":return [expr]"
-void ex_return(exarg_T *eap)
+/// Phase 6: C implementation shim for ex_return (called from Rust).
+void nvim_ex_return_impl(exarg_T *eap)
 {
   char *arg = eap->arg;
   typval_T rettv;
@@ -3058,6 +3074,12 @@ void ex_return(exarg_T *eap)
     emsg_skip--;
   }
   clear_evalarg(&evalarg, eap);
+}
+
+/// ":return [expr]"
+void ex_return(exarg_T *eap)
+{
+  rs_ex_return(eap);
 }
 
 /// Lower level implementation of "call".  Only called when not skipping.
@@ -3341,7 +3363,8 @@ end:
 ///
 /// @return  true when the return can be carried out,
 ///          false when the return gets pending.
-bool do_return(exarg_T *eap, bool reanimate, bool is_cmd, void *rettv)
+/// Phase 6: C implementation shim for do_return (called from Rust).
+int nvim_do_return_impl(exarg_T *eap, int reanimate, int is_cmd, void *rettv)
 {
   cstack_T *const cstack = eap->cstack;
 
@@ -3406,9 +3429,13 @@ bool do_return(exarg_T *eap, bool reanimate, bool is_cmd, void *rettv)
   return idx < 0;
 }
 
-/// Generate a return command for producing the value of "rettv".  The result
-/// is an allocated string.  Used by report_pending() for verbose messages.
-char *get_return_cmd(void *rettv)
+bool do_return(exarg_T *eap, bool reanimate, bool is_cmd, void *rettv)
+{
+  return (bool)rs_do_return(eap, (int)reanimate, (int)is_cmd, rettv);
+}
+
+/// Phase 6: C implementation shim for get_return_cmd (called from Rust).
+char *nvim_get_return_cmd_impl(void *rettv)
 {
   char *s = NULL;
   char *tofree = NULL;
@@ -3432,6 +3459,13 @@ char *get_return_cmd(void *rettv)
   }
   xfree(tofree);
   return xstrnsave(IObuff, IObufflen);
+}
+
+/// Generate a return command for producing the value of "rettv".  The result
+/// is an allocated string.  Used by report_pending() for verbose messages.
+char *get_return_cmd(void *rettv)
+{
+  return rs_get_return_cmd(rettv);
 }
 
 /// Get next function line.
@@ -3604,8 +3638,8 @@ bool free_unref_funccal(int copyID, int testing)
   return rs_free_unref_funccal(copyID, testing) != 0;
 }
 
-// Get function call environment based on backtrace debug level
-funccall_T *get_funccal(void)
+/// Phase 6: C implementation shim for get_funccal.
+funccall_T *nvim_get_funccal_impl(void)
 {
   funccall_T *funccal = current_funccal;
   if (debug_backtrace_level > 0) {
@@ -3614,18 +3648,17 @@ funccall_T *get_funccal(void)
       if (temp_funccal) {
         funccal = temp_funccal;
       } else {
-        // backtrace level overflow. reset to max
         debug_backtrace_level = i;
       }
     }
   }
-
   return funccal;
 }
 
-/// @return  dict used for local variables in the current funccal or
-///          NULL if there is no current funccal.
-dict_T *get_funccal_local_dict(void)
+funccall_T *get_funccal(void) { return rs_get_funccal(); }
+
+/// Phase 6: C implementation shims for funccal scope accessors.
+dict_T *nvim_get_funccal_local_dict_impl(void)
 {
   if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
     return NULL;
@@ -3633,17 +3666,17 @@ dict_T *get_funccal_local_dict(void)
   return &get_funccal()->fc_l_vars;
 }
 
-/// @return  hashtable used for local variables in the current funccal or
-///          NULL if there is no current funccal.
-hashtab_T *get_funccal_local_ht(void)
+dict_T *get_funccal_local_dict(void) { return rs_get_funccal_local_dict(); }
+
+hashtab_T *nvim_get_funccal_local_ht_impl(void)
 {
   dict_T *d = get_funccal_local_dict();
   return d != NULL ? &d->dv_hashtab : NULL;
 }
 
-/// @return   the l: scope variable or
-///           NULL if there is no current funccal.
-dictitem_T *get_funccal_local_var(void)
+hashtab_T *get_funccal_local_ht(void) { return rs_get_funccal_local_ht(); }
+
+dictitem_T *nvim_get_funccal_local_var_impl(void)
 {
   if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
     return NULL;
@@ -3651,9 +3684,9 @@ dictitem_T *get_funccal_local_var(void)
   return (dictitem_T *)&get_funccal()->fc_l_vars_var;
 }
 
-/// @return  the dict used for argument in the current funccal or
-///          NULL if there is no current funccal.
-dict_T *get_funccal_args_dict(void)
+dictitem_T *get_funccal_local_var(void) { return rs_get_funccal_local_var(); }
+
+dict_T *nvim_get_funccal_args_dict_impl(void)
 {
   if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
     return NULL;
@@ -3661,17 +3694,17 @@ dict_T *get_funccal_args_dict(void)
   return &get_funccal()->fc_l_avars;
 }
 
-/// @return  the hashtable used for argument in the current funccal or
-///          NULL if there is no current funccal.
-hashtab_T *get_funccal_args_ht(void)
+dict_T *get_funccal_args_dict(void) { return rs_get_funccal_args_dict(); }
+
+hashtab_T *nvim_get_funccal_args_ht_impl(void)
 {
   dict_T *d = get_funccal_args_dict();
   return d != NULL ? &d->dv_hashtab : NULL;
 }
 
-/// @return  the a: scope variable or
-///          NULL if there is no current funccal.
-dictitem_T *get_funccal_args_var(void)
+hashtab_T *get_funccal_args_ht(void) { return rs_get_funccal_args_ht(); }
+
+dictitem_T *nvim_get_funccal_args_var_impl(void)
 {
   if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
     return NULL;
@@ -3679,18 +3712,18 @@ dictitem_T *get_funccal_args_var(void)
   return (dictitem_T *)&get_funccal()->fc_l_avars_var;
 }
 
-/// List function variables, if there is a function.
-void list_func_vars(int *first)
+dictitem_T *get_funccal_args_var(void) { return rs_get_funccal_args_var(); }
+
+void nvim_list_func_vars_impl(int *first)
 {
   if (current_funccal != NULL && current_funccal->fc_l_vars.dv_refcount > 0) {
-    list_hashtable_vars(&current_funccal->fc_l_vars.dv_hashtab, "l:", false,
-                        first);
+    list_hashtable_vars(&current_funccal->fc_l_vars.dv_hashtab, "l:", false, first);
   }
 }
 
-/// @return  if "ht" is the hashtable for local variables in the current
-///          funccal, return the dict that contains it. Otherwise return NULL.
-dict_T *get_current_funccal_dict(hashtab_T *ht)
+void list_func_vars(int *first) { rs_list_func_vars(first); }
+
+dict_T *nvim_get_current_funccal_dict_impl(hashtab_T *ht)
 {
   if (current_funccal != NULL && ht == &current_funccal->fc_l_vars.dv_hashtab) {
     return &current_funccal->fc_l_vars;
@@ -3698,19 +3731,17 @@ dict_T *get_current_funccal_dict(hashtab_T *ht)
   return NULL;
 }
 
-/// Search hashitem in parent scope.
-hashitem_T *find_hi_in_scoped_ht(const char *name, hashtab_T **pht)
+dict_T *get_current_funccal_dict(hashtab_T *ht) { return rs_get_current_funccal_dict(ht); }
+
+hashitem_T *nvim_find_hi_in_scoped_ht_impl(const char *name, hashtab_T **pht)
 {
   if (current_funccal == NULL || current_funccal->fc_func->uf_scoped == NULL) {
     return NULL;
   }
-
   funccall_T *old_current_funccal = current_funccal;
   hashitem_T *hi = NULL;
   const size_t namelen = strlen(name);
   const char *varname;
-
-  // Search in parent scope which is possible to reference from lambda
   current_funccal = current_funccal->fc_func->uf_scoped;
   while (current_funccal != NULL) {
     hashtab_T *ht = find_var_ht(name, namelen, &varname);
@@ -3727,28 +3758,28 @@ hashitem_T *find_hi_in_scoped_ht(const char *name, hashtab_T **pht)
     current_funccal = current_funccal->fc_func->uf_scoped;
   }
   current_funccal = old_current_funccal;
-
   return hi;
 }
 
-/// Search variable in parent scope.
-dictitem_T *find_var_in_scoped_ht(const char *name, const size_t namelen, int no_autoload)
+hashitem_T *find_hi_in_scoped_ht(const char *name, hashtab_T **pht)
+{
+  return rs_find_hi_in_scoped_ht(name, (void **)pht);
+}
+
+dictitem_T *nvim_find_var_in_scoped_ht_impl(const char *name, const size_t namelen,
+                                             int no_autoload)
 {
   if (current_funccal == NULL || current_funccal->fc_func->uf_scoped == NULL) {
     return NULL;
   }
-
   dictitem_T *v = NULL;
   funccall_T *old_current_funccal = current_funccal;
   const char *varname;
-
-  // Search in parent scope which is possible to reference from lambda
   current_funccal = current_funccal->fc_func->uf_scoped;
   while (current_funccal) {
     hashtab_T *ht = find_var_ht(name, namelen, &varname);
     if (ht != NULL && *varname != NUL) {
-      v = find_var_in_ht(ht, *name, varname,
-                         namelen - (size_t)(varname - name), no_autoload);
+      v = find_var_in_ht(ht, *name, varname, namelen - (size_t)(varname - name), no_autoload);
       if (v != NULL) {
         break;
       }
@@ -3759,8 +3790,12 @@ dictitem_T *find_var_in_scoped_ht(const char *name, const size_t namelen, int no
     current_funccal = current_funccal->fc_func->uf_scoped;
   }
   current_funccal = old_current_funccal;
-
   return v;
+}
+
+dictitem_T *find_var_in_scoped_ht(const char *name, const size_t namelen, int no_autoload)
+{
+  return rs_find_var_in_scoped_ht(name, namelen, no_autoload);
 }
 
 /// Set "copyID + 1" in previous_funccal and callers.

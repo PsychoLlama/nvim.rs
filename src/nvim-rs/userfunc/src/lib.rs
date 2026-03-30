@@ -31,6 +31,7 @@ pub mod listing;
 pub mod names;
 pub mod params;
 pub mod refcount;
+pub mod scope;
 pub mod types;
 
 pub use call::*;
@@ -42,6 +43,7 @@ pub use listing::*;
 pub use names::*;
 pub use params::*;
 pub use refcount::*;
+pub use scope::*;
 pub use types::*;
 
 use std::ffi::c_int;
