@@ -222,6 +222,8 @@ extern void rs_clear_region(TUIData *tui, int top, int bot, int left, int right,
 extern void rs_invalidate(TUIData *tui, int top, int bot, int left, int right);
 extern void rs_tui_flush(TUIData *tui);
 extern void rs_tui_set_size(TUIData *tui, int width, int height);
+extern void rs_tui_set_mode(TUIData *tui, int mode);
+extern void rs_tui_guess_size(TUIData *tui);
 extern void rs_tui_raw_line(TUIData *tui, int64_t g, int64_t linerow, int64_t startcol,
                              int64_t endcol, int64_t clearcol, int64_t clearattr,
                              int64_t flags, const schar_T *chunk, const sattr_T *attrs);
@@ -586,6 +588,76 @@ void nvim_tui_uv_sleep(uint64_t ms) { uv_sleep(ms); }
 
 /// Wrapper for tui_set_term_mode callable from Rust
 void nvim_tui_set_term_mode(TUIData *tui, int mode, bool set) { tui_set_term_mode(tui, (TermMode)mode, set); }
+
+// Phase 5 accessors for cursor mode and size detection
+
+/// Get cursor_style_enabled (file-static)
+bool nvim_tui_cursor_style_enabled(void) { return cursor_style_enabled; }
+
+/// Set cursor_style_enabled (file-static)
+void nvim_tui_set_cursor_style_enabled(bool val) { cursor_style_enabled = val; }
+
+/// Get cursor shape entry id field
+int nvim_tui_get_cursor_shape_id(TUIData *tui, int mode) { return tui->cursor_shapes[mode].id; }
+
+/// Get cursor shape entry shape field (CursorShape enum as int)
+int nvim_tui_get_cursor_shape_shape(TUIData *tui, int mode) { return (int)tui->cursor_shapes[mode].shape; }
+
+/// Get cursor shape entry blinkon field
+int nvim_tui_get_cursor_shape_blinkon(TUIData *tui, int mode) { return tui->cursor_shapes[mode].blinkon; }
+
+/// Get cursor shape entry blinkoff field
+int nvim_tui_get_cursor_shape_blinkoff(TUIData *tui, int mode) { return tui->cursor_shapes[mode].blinkoff; }
+
+/// Get want_invisible field
+bool nvim_tui_get_want_invisible(TUIData *tui) { return tui->want_invisible; }
+
+/// Set want_invisible field
+void nvim_tui_set_want_invisible(TUIData *tui, bool val) { tui->want_invisible = val; }
+
+/// Get cursor_has_color field
+bool nvim_tui_get_cursor_has_color(TUIData *tui) { return tui->cursor_has_color; }
+
+/// Set cursor_has_color field
+void nvim_tui_set_cursor_has_color(TUIData *tui, bool val) { tui->cursor_has_color = val; }
+
+/// Get set_cursor_color_as_str field
+bool nvim_tui_get_set_cursor_color_as_str(TUIData *tui) { return tui->set_cursor_color_as_str; }
+
+/// Call terminfo_print with a single string parameter
+void nvim_tui_terminfo_print_str(TUIData *tui, int what, const char *str)
+{
+  TPVAR params[9] = { 0 };
+  params[0].string = (char *)str;
+  terminfo_print(tui, (TerminfoDef)what, params);
+}
+
+/// Get showing_mode field
+int nvim_tui_get_showing_mode(TUIData *tui) { return (int)tui->showing_mode; }
+
+/// Set showing_mode field
+void nvim_tui_set_showing_mode(TUIData *tui, int mode) { tui->showing_mode = (ModeShape)mode; }
+
+/// Set is_starting field
+void nvim_tui_set_is_starting(TUIData *tui, bool val) { tui->is_starting = val; }
+
+/// Get verbose field
+int64_t nvim_tui_get_verbose(TUIData *tui) { return tui->verbose; }
+
+/// Get out_isatty field
+bool nvim_tui_get_out_isatty(TUIData *tui) { return tui->out_isatty; }
+
+/// Get terminal window size via uv_tty_get_winsize. Returns true on success.
+bool nvim_tui_uv_tty_get_winsize(TUIData *tui, int *width, int *height)
+{
+  return uv_tty_get_winsize(&tui->output_handle.tty, width, height) == 0;
+}
+
+/// Get terminfo lines field
+int nvim_tui_get_ti_lines(TUIData *tui) { return tui->ti.lines; }
+
+/// Get terminfo columns field
+int nvim_tui_get_ti_columns(TUIData *tui) { return tui->ti.columns; }
 
 // Forward declaration for out_len
 static void out_len(TUIData *tui, const char *str);
@@ -1339,51 +1411,10 @@ void tui_mouse_on(TUIData *tui) { rs_tui_mouse_on(tui); }
 /// Disable mouse tracking. Rust implementation.
 void tui_mouse_off(TUIData *tui) { rs_tui_mouse_off(tui); }
 
+/// Set cursor mode based on mode index. Rust implementation.
 static void tui_set_mode(TUIData *tui, ModeShape mode)
 {
-  if (!cursor_style_enabled) {
-    return;
-  }
-  cursorentry_T c = tui->cursor_shapes[mode];
-
-  if (c.id != 0 && c.id < (int)kv_size(tui->attrs) && tui->rgb) {
-    HlAttrs aep = kv_A(tui->attrs, c.id);
-
-    tui->want_invisible = aep.hl_blend == 100;
-    if (!tui->want_invisible && aep.rgb_ae_attr & HL_INVERSE) {
-      // We interpret "inverse" as "default" (no termcode for "inverse"...).
-      // Hopefully the user's default cursor color is inverse.
-      terminfo_out(tui, kTerm_reset_cursor_color);
-    } else if (!tui->want_invisible && aep.rgb_bg_color >= 0) {
-      TPVAR params[9] = { 0 };
-      char hexbuf[8];
-      if (tui->set_cursor_color_as_str) {
-        snprintf(hexbuf, 7 + 1, "#%06x", aep.rgb_bg_color);
-        params[0].string = hexbuf;
-      } else {
-        params[0].num = aep.rgb_bg_color;
-      }
-      terminfo_print(tui, kTerm_set_cursor_color, params);
-      tui->cursor_has_color = true;
-    }
-  } else if (c.id == 0 && (tui->want_invisible || tui->cursor_has_color)) {
-    // No cursor color for this mode; reset to default.
-    tui->want_invisible = false;
-    tui->cursor_has_color = false;
-    terminfo_out(tui, kTerm_reset_cursor_color);
-  }
-
-  int shape;
-  switch (c.shape) {
-  case SHAPE_BLOCK:
-    shape = 1; break;
-  case SHAPE_HOR:
-    shape = 3; break;
-  case SHAPE_VER:
-    shape = 5; break;
-  }
-  terminfo_print_num1(tui, kTerm_set_cursor_style,
-                      shape + (int)(c.blinkon == 0 || c.blinkoff == 0));
+  rs_tui_set_mode(tui, (int)mode);
 }
 
 /// @param mode editor mode
@@ -1641,45 +1672,10 @@ void tui_set_size(TUIData *tui, int width, int height)
 }
 
 /// Tries to get the user's wanted dimensions (columns and rows) for the entire
-/// application (i.e., the host terminal).
+/// application (i.e., the host terminal). Rust implementation.
 void tui_guess_size(TUIData *tui)
 {
-  int width = 0;
-  int height = 0;
-  char *lines = NULL;
-  char *columns = NULL;
-
-  // 1 - try from a system call (ioctl/TIOCGWINSZ on unix)
-  if (tui->out_isatty
-      && !uv_tty_get_winsize(&tui->output_handle.tty, &width, &height)) {
-    goto end;
-  }
-
-  // 2 - use $LINES/$COLUMNS if available
-  const char *val;
-  int advance;
-  if ((val = os_getenv_noalloc("LINES"))
-      && sscanf(val, "%d%n", &height, &advance) != EOF && advance
-      && (val = os_getenv_noalloc("COLUMNS"))
-      && sscanf(val, "%d%n", &width, &advance) != EOF && advance) {
-    goto end;
-  }
-
-  // 3 - read from terminfo if available
-  height = tui->ti.lines;
-  width = tui->ti.columns;
-
-  end:
-  if (width <= 0 || height <= 0) {
-    // use the defaults
-    width = DFLT_COLS;
-    height = DFLT_ROWS;
-  }
-
-  tui_set_size(tui, width, height);
-
-  xfree(lines);
-  xfree(columns);
+  rs_tui_guess_size(tui);
 }
 
 static void out(TUIData *tui, const char *str, size_t len) { rs_out(tui, str, len); }

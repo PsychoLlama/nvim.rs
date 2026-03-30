@@ -541,9 +541,10 @@ pub unsafe extern "C" fn rs_tui_mouse_off(tui: *mut TuiHandle) {
 // Scroll Region Functions
 // ============================================================================
 
-// Terminfo definition constants
+// Terminfo definition constants (0-based indices into tui->ti.defs[])
+// Values computed as: file_line_number - 6 from terminfo_enum_defs.h
 const TERM_CHANGE_SCROLL_REGION: c_int = 1; // kTerm_change_scroll_region
-const TERM_SET_LR_MARGIN: c_int = 42; // kTerm_set_lr_margin
+const TERM_SET_LR_MARGIN: c_int = 36; // kTerm_set_lr_margin (line 42 in enum file)
 
 // Terminal mode constants for scroll regions
 const TERM_MODE_LEFT_RIGHT_MARGINS: c_int = 69; // kTermModeLeftAndRightMargins
@@ -851,9 +852,9 @@ pub unsafe extern "C" fn rs_tui_is_stopped(tui: *mut TuiHandle) -> bool {
 // Terminal Title
 // ============================================================================
 
-// Terminfo definition constants for title
-const TERM_TO_STATUS_LINE: c_int = 55; // kTerm_to_status_line
-const TERM_FROM_STATUS_LINE: c_int = 19; // kTerm_from_status_line
+// Terminfo definition constants for title (0-based indices, value = line - 6)
+const TERM_TO_STATUS_LINE: c_int = 37; // kTerm_to_status_line (line 43)
+const TERM_FROM_STATUS_LINE: c_int = 23; // kTerm_from_status_line (line 29)
 
 // TERMINFO_SEQ_LIMIT from tui.c
 const TERMINFO_SEQ_LIMIT: usize = 128;
@@ -2016,6 +2017,154 @@ pub unsafe extern "C" fn rs_tui_raw_line(
         }
         rs_final_column_wrap(tui);
     }
+}
+
+// Phase 5b: cursor mode and size detection accessors
+extern "C" {
+    fn nvim_tui_cursor_style_enabled() -> bool;
+    fn nvim_tui_get_cursor_shape_id(tui: *mut TuiHandle, mode: c_int) -> c_int;
+    fn nvim_tui_get_cursor_shape_shape(tui: *mut TuiHandle, mode: c_int) -> c_int;
+    fn nvim_tui_get_cursor_shape_blinkon(tui: *mut TuiHandle, mode: c_int) -> c_int;
+    fn nvim_tui_get_cursor_shape_blinkoff(tui: *mut TuiHandle, mode: c_int) -> c_int;
+    fn nvim_tui_get_want_invisible(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_set_want_invisible(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_get_cursor_has_color(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_set_cursor_has_color(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_get_set_cursor_color_as_str(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_terminfo_print_str(tui: *mut TuiHandle, what: c_int, str: *const u8);
+    fn nvim_tui_get_out_isatty(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_uv_tty_get_winsize(
+        tui: *mut TuiHandle,
+        width: *mut c_int,
+        height: *mut c_int,
+    ) -> bool;
+    fn nvim_tui_get_ti_lines(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_ti_columns(tui: *mut TuiHandle) -> c_int;
+    fn os_getenv_noalloc(name: *const u8) -> *const u8;
+}
+
+// kTerm enum values for cursor mode (0-based C enum values from terminfo_enum_defs.h)
+// Note: #define on line 44 occupies a line but not an enum slot, so post-#define
+// entries use formula: value = line - 7
+const TERM_SET_CURSOR_STYLE: c_int = 39; // kTerm_set_cursor_style (line 46 - 7)
+const TERM_SET_CURSOR_COLOR: c_int = 43; // kTerm_set_cursor_color (line 50 - 7)
+const TERM_RESET_CURSOR_COLOR: c_int = 44; // kTerm_reset_cursor_color (line 51 - 7)
+
+// HL_INVERSE flag
+const HL_INVERSE: i16 = 0x01;
+
+// Default terminal size
+const DFLT_COLS: c_int = 80;
+const DFLT_ROWS: c_int = 24;
+
+/// Set cursor mode based on mode index.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_set_mode(tui: *mut TuiHandle, mode: c_int) {
+    if tui.is_null() {
+        return;
+    }
+    if !nvim_tui_cursor_style_enabled() {
+        return;
+    }
+
+    let c_id = nvim_tui_get_cursor_shape_id(tui, mode);
+    let attrs_size = nvim_tui_get_attrs_size(tui);
+
+    if c_id != 0 && (c_id as usize) < attrs_size && nvim_tui_get_rgb(tui) {
+        let aep = nvim_tui_get_attrs_entry(tui, c_id as usize);
+        nvim_tui_set_want_invisible(tui, aep.hl_blend == 100);
+        if !nvim_tui_get_want_invisible(tui) && (aep.rgb_ae_attr & HL_INVERSE) != 0 {
+            // Interpret "inverse" as "default" -- no termcode for inverse cursor color.
+            nvim_tui_terminfo_out(tui, TERM_RESET_CURSOR_COLOR);
+        } else if !nvim_tui_get_want_invisible(tui) && aep.rgb_bg_color >= 0 {
+            if nvim_tui_get_set_cursor_color_as_str(tui) {
+                let hex = format!("#{:06x}\0", aep.rgb_bg_color);
+                nvim_tui_terminfo_print_str(tui, TERM_SET_CURSOR_COLOR, hex.as_ptr());
+            } else {
+                nvim_tui_terminfo_print_num1(tui, TERM_SET_CURSOR_COLOR, aep.rgb_bg_color);
+            }
+            nvim_tui_set_cursor_has_color(tui, true);
+        }
+    } else if c_id == 0 && (nvim_tui_get_want_invisible(tui) || nvim_tui_get_cursor_has_color(tui))
+    {
+        // No cursor color for this mode; reset to default.
+        nvim_tui_set_want_invisible(tui, false);
+        nvim_tui_set_cursor_has_color(tui, false);
+        nvim_tui_terminfo_out(tui, TERM_RESET_CURSOR_COLOR);
+    }
+
+    // Shape: SHAPE_BLOCK=0 -> 1, SHAPE_HOR=1 -> 3, SHAPE_VER=2 -> 5
+    let c_shape = nvim_tui_get_cursor_shape_shape(tui, mode);
+    let shape = match c_shape {
+        0 => 1, // SHAPE_BLOCK
+        1 => 3, // SHAPE_HOR
+        _ => 5, // SHAPE_VER
+    };
+    let blink_on = nvim_tui_get_cursor_shape_blinkon(tui, mode);
+    let blink_off = nvim_tui_get_cursor_shape_blinkoff(tui, mode);
+    let blink_stop = if blink_on == 0 || blink_off == 0 {
+        1
+    } else {
+        0
+    };
+    nvim_tui_terminfo_print_num1(tui, TERM_SET_CURSOR_STYLE, shape + blink_stop);
+}
+
+/// Detect and set terminal dimensions.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_guess_size(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    let mut width: c_int = 0;
+    let mut height: c_int = 0;
+
+    // 1 - try from a system call (ioctl/TIOCGWINSZ on unix)
+    if nvim_tui_get_out_isatty(tui) && nvim_tui_uv_tty_get_winsize(tui, &mut width, &mut height) {
+        // success
+    } else {
+        // 2 - use $LINES/$COLUMNS if available
+        let parse_env_int = |name: &[u8]| -> Option<c_int> {
+            let ptr = os_getenv_noalloc(name.as_ptr());
+            if ptr.is_null() {
+                return None;
+            }
+            let s = core::ffi::CStr::from_ptr(ptr as *const core::ffi::c_char);
+            s.to_str().ok()?.trim().parse::<c_int>().ok()
+        };
+        let env_lines = parse_env_int(b"LINES\0");
+        let env_cols = parse_env_int(b"COLUMNS\0");
+        if let (Some(h), Some(w)) = (env_lines, env_cols) {
+            if h > 0 && w > 0 {
+                height = h;
+                width = w;
+            } else {
+                // 3 - read from terminfo if available
+                height = nvim_tui_get_ti_lines(tui);
+                width = nvim_tui_get_ti_columns(tui);
+            }
+        } else {
+            // 3 - read from terminfo if available
+            height = nvim_tui_get_ti_lines(tui);
+            width = nvim_tui_get_ti_columns(tui);
+        }
+    }
+
+    if width <= 0 || height <= 0 {
+        width = DFLT_COLS;
+        height = DFLT_ROWS;
+    }
+
+    rs_tui_set_size(tui, width, height);
 }
 
 #[cfg(test)]
