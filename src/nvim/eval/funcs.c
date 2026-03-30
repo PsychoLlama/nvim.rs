@@ -4757,19 +4757,8 @@ void nvim_eval_searchpairpos(typval_T *argvars, typval_T *rettv)
   tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
 }
 
-void nvim_eval_swapfilelist(typval_T *argvars, typval_T *rettv)
-{
-  extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
-                              char **fname_out);
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-  rs_recover_names(NULL, false, rettv->vval.v_list, 0, NULL);
-}
-
-void nvim_eval_swapinfo(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict_alloc_ret(rettv);
-  swapfile_dict(tv_get_string(argvars), rettv->vval.v_dict);
-}
+// nvim_eval_swapfilelist: inlined into Rust (misc.rs) — rs_recover_names delegation
+// nvim_eval_swapinfo: inlined into Rust (misc.rs) — swapfile_dict delegation
 
 
 void nvim_eval_api_info(typval_T *argvars, typval_T *rettv) { object_to_vim(api_metadata(), rettv, NULL); }
@@ -4792,17 +4781,7 @@ void nvim_eval_api_info(typval_T *argvars, typval_T *rettv) { object_to_vim(api_
 // nvim_eval_timer_stopall: inlined into Rust (simple.rs)
 // nvim_eval_synIDtrans: inlined into Rust (simple.rs)
 
-void nvim_eval_keytrans(typval_T *argvars, typval_T *rettv)
-{
-  rettv->v_type = VAR_STRING;
-  if (tv_check_for_string_arg(argvars, 0) == FAIL
-      || argvars[0].vval.v_string == NULL) {
-    return;
-  }
-  char *escaped = vim_strsave_escape_ks(argvars[0].vval.v_string);
-  rettv->vval.v_string = str2special_save(escaped, true, true);
-  xfree(escaped);
-}
+// nvim_eval_keytrans: inlined into Rust (simple.rs) — vim_strsave_escape_ks + str2special_save
 
 // nvim_eval_luaeval: inlined into Rust (simple.rs) — nlua_typval_eval delegation
 

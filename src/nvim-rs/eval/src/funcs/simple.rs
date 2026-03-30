@@ -19,7 +19,7 @@ extern "C" {
     // nvim_eval_byte2line: inlined into rs_f_byte2line below
     // nvim_eval_line2byte: inlined into rs_f_line2byte below
     // nvim_eval_gettext: inlined into rs_f_gettext below
-    fn nvim_eval_keytrans(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_keytrans: inlined into rs_f_keytrans below
     // nvim_eval_luaeval: inlined into rs_f_luaeval below
     // nvim_eval_pum_getpos: inlined into rs_f_pum_getpos below
     // nvim_eval_wordcount: inlined into rs_f_wordcount below
@@ -389,7 +389,20 @@ pub unsafe extern "C" fn rs_f_keytrans(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_keytrans(argvars, rettv);
+    // nvim_eval_keytrans: inlined — vim_strsave_escape_ks + str2special_save
+    const FAIL: c_int = 0;
+    nvim_tv_set_string(rettv, std::ptr::null_mut());
+    if tv_check_for_string_arg(argvars, 0) == FAIL {
+        return;
+    }
+    let s = nvim_tv_get_string_ptr(argvars);
+    if s.is_null() {
+        return;
+    }
+    let escaped = vim_strsave_escape_ks(s.cast_mut().cast::<c_char>());
+    let result = str2special_save(escaped, true, true);
+    xfree(escaped.cast::<c_void>());
+    nvim_tv_set_string(rettv, result.cast::<u8>());
 }
 
 /// "luaeval(expr [, expr])" function - evaluate Lua expression
@@ -636,6 +649,12 @@ extern "C" {
     // e_invarg: C string constant for "invalid argument" error
     #[link_name = "e_invarg"]
     static E_INVARG: c_char;
+
+    // --- keytrans inlining ---
+    fn tv_check_for_string_arg(argvars: *const c_void, idx: c_int) -> c_int;
+    fn vim_strsave_escape_ks(s: *mut c_char) -> *mut c_char;
+    fn str2special_save(s: *const c_char, replace_spaces: bool, replace_lt: bool) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
 }
 
 const VAR_UNKNOWN: c_int = 0;

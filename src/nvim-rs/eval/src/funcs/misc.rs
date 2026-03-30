@@ -923,8 +923,8 @@ extern "C" {
     fn nvim_eval_script_host_eval(name: *const c_char, argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_search(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_searchpairpos(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_swapfilelist(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_swapinfo(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_swapfilelist: inlined into rs_f_swapfilelist below
+    // nvim_eval_swapinfo: inlined into rs_f_swapinfo below
 
     // hlID / hlexists / json_encode inlining
     fn syn_name2id(name: *const c_char) -> c_int;
@@ -936,6 +936,22 @@ extern "C" {
     fn p4_nvim_tv_set_string_h4(tv: *mut c_void, s: *mut u8);
     #[link_name = "nvim_tv_set_number"]
     fn p4_nvim_tv_set_number_h4(tv: *mut c_void, n: i64);
+
+    // swapfilelist / swapinfo inlining
+    #[link_name = "tv_dict_alloc_ret"]
+    fn p4_tv_dict_alloc_ret(rettv: *mut c_void);
+    #[link_name = "tv_list_alloc_ret"]
+    fn p4_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
+    fn rs_recover_names(
+        fname: *const c_char,
+        do_list: c_int,
+        ret_list: *mut c_void,
+        nr: c_int,
+        fname_out: *mut *mut c_char,
+    ) -> c_int;
+    fn swapfile_dict(fname: *const c_char, d: *mut c_void);
+    #[link_name = "tv_get_string"]
+    fn p4_tv_get_string(tv: *mut c_void) -> *const c_char;
 }
 
 // =============================================================================
@@ -1174,11 +1190,15 @@ pub unsafe extern "C" fn rs_f_searchpairpos(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_swapfilelist"]
 pub unsafe extern "C" fn rs_f_swapfilelist(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_swapfilelist(argvars, rettv);
+    // nvim_eval_swapfilelist: inlined — rs_recover_names delegation
+    const K_LIST_LEN_UNKNOWN: isize = -1;
+    p4_tv_list_alloc_ret(rettv, K_LIST_LEN_UNKNOWN);
+    let list = p3_misc_tv_get_list(rettv).cast_mut();
+    rs_recover_names(std::ptr::null(), 0, list, 0, std::ptr::null_mut());
 }
 
 /// "swapinfo()" function - get info about a swap file
@@ -1191,7 +1211,11 @@ pub unsafe extern "C" fn rs_f_swapinfo(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_swapinfo(argvars, rettv);
+    // nvim_eval_swapinfo: inlined — swapfile_dict delegation
+    p4_tv_dict_alloc_ret(rettv);
+    let fname = p4_tv_get_string(argvars.cast_mut());
+    let dict = p3_misc_tv_get_dict(rettv).cast_mut();
+    swapfile_dict(fname, dict);
 }
 
 // =============================================================================
