@@ -553,6 +553,9 @@ extern void tv_dict_set_keys_readonly(dict_T *dict);
 // Phase 6i: tv_dict_get_string (migrated to Rust)
 extern char *tv_dict_get_string(const dict_T *d, const char *key, bool save);
 
+// Phase 6j: tv_dict_to_env (migrated to Rust)
+extern char **tv_dict_to_env(dict_T *denv);
+
 // List append functions (migrated to Rust, Phase 5)
 extern void tv_list_append(list_T *l, listitem_T *item);
 extern void tv_list_append_tv(list_T *l, typval_T *tv);

@@ -1276,6 +1276,11 @@ extern "C" {
     fn nvim_hash_removed_ptr() -> *const c_char;
     fn nvim_hashitem_set_ro_fix(hi: HashItemHandle);
     fn nvim_hashitem_next(hi: HashItemHandle) -> HashItemHandle;
+
+    // Phase 6j: tv_dict_to_env
+    fn nvim_dictitem_format_env(di: DictItemHandle) -> *mut c_char;
+    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn nvim_hashitem_to_dictitem(hi: HashItemHandle) -> DictItemHandle;
 }
 
 // =============================================================================
@@ -2686,6 +2691,53 @@ pub unsafe extern "C" fn rs_tv_dict_set_keys_readonly(dict: DictHandle) {
         }
         hi = unsafe { nvim_hashitem_next(hi) };
     }
+}
+
+// =============================================================================
+// Phase 6j: tv_dict_to_env
+// =============================================================================
+
+/// FFI export: tv_dict_to_env - convert dict to a NULL-terminated env array.
+///
+/// Each entry is "KEY=VALUE" as a freshly allocated C string.
+/// The returned array is also heap-allocated and must be freed by the caller.
+/// Returns NULL if the dict is NULL.
+///
+/// # Safety
+/// `denv` must be a valid DictHandle or null.
+#[export_name = "tv_dict_to_env"]
+pub unsafe extern "C" fn rs_tv_dict_to_env(denv: DictHandle) -> *mut *mut c_char {
+    if denv.is_null() {
+        return std::ptr::null_mut();
+    }
+    let env_size = unsafe { nvim_dict_get_ht_used(denv) } as usize;
+    let alloc_size = (env_size + 1)
+        .checked_mul(std::mem::size_of::<*mut c_char>())
+        .unwrap_or(0);
+    let env = unsafe { nvim_xmalloc(alloc_size) }.cast::<*mut c_char>();
+    if env.is_null() {
+        return std::ptr::null_mut();
+    }
+    let hi_removed = unsafe { nvim_hash_removed_ptr() };
+    let mut hi = unsafe { nvim_dict_get_ht_array(denv) };
+    let mut todo = env_size;
+    let mut i = 0usize;
+    loop {
+        if todo == 0 {
+            break;
+        }
+        let key = unsafe { nvim_hashitem_get_key(hi) };
+        if !key.is_null() && key != hi_removed {
+            let di = unsafe { nvim_hashitem_to_dictitem(hi) };
+            let entry = unsafe { nvim_dictitem_format_env(di) };
+            unsafe { *env.add(i) = entry };
+            i += 1;
+            todo -= 1;
+        }
+        hi = unsafe { nvim_hashitem_next(hi) };
+    }
+    unsafe { *env.add(env_size) = std::ptr::null_mut() };
+    env
 }
 
 // =============================================================================

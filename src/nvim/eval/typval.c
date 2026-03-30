@@ -1134,30 +1134,7 @@ void tv_dict_unref(dict_T *const d)
 // tv_dict_get_number_def: migrated to Rust (nvim-rs/typval)
 // tv_dict_get_bool: migrated to Rust (nvim-rs/typval)
 
-/// Converts a dict to an environment
-char **tv_dict_to_env(dict_T *denv)
-{
-  size_t env_size = (size_t)tv_dict_len(denv);
-
-  size_t i = 0;
-  char **env = NULL;
-
-  // + 1 for NULL
-  env = xmalloc((env_size + 1) * sizeof(*env));
-
-  TV_DICT_ITER(denv, var, {
-    const char *str = tv_get_string(&var->di_tv);
-    assert(str);
-    size_t len = strlen(var->di_key) + strlen(str) + strlen("=") + 1;
-    env[i] = xmalloc(len);
-    snprintf(env[i], len, "%s=%s", var->di_key, str);
-    i++;
-  });
-
-  // must be null terminated
-  env[env_size] = NULL;
-  return env;
-}
+// tv_dict_to_env migrated to Rust (Phase 6j)
 
 // tv_dict_get_string migrated to Rust (Phase 6i)
 
@@ -2991,6 +2968,19 @@ void nvim_tv_dict2list_values(typval_T *argvars, typval_T *rettv)
   tv_dict2list(argvars, rettv, kDict2ListValues);
 }
 
+// Phase 6j: tv_dict_to_env accessor
+
+/// Format a dict item as "key=value" env string (accessor for Rust tv_dict_to_env).
+/// Returns allocated string. Caller must free with xfree.
+char *nvim_dictitem_format_env(const dictitem_T *di)
+{
+  const char *str = tv_get_string(&di->di_tv);
+  size_t len = strlen(di->di_key) + strlen(str) + 2;  // "=" and NUL
+  char *entry = xmalloc(len);
+  snprintf(entry, len, "%s=%s", di->di_key, str);
+  return entry;
+}
+
 // Phase 6f: tv_dict_remove migrated to Rust; accessors in eval_shim.c
 
 // Phase 6h: tv_dict_set_keys_readonly, tv_dict_clear accessors
@@ -3009,3 +2999,6 @@ void nvim_hashitem_set_ro_fix(hashitem_T *hi) { TV_DICT_HI2DI(hi)->di_flags |= D
 
 /// Advance a hashitem pointer by one (sizeof(hashitem_T)) for Rust iteration.
 hashitem_T *nvim_hashitem_next(hashitem_T *hi) { return hi + 1; }
+
+/// Convert hashitem to dictitem via TV_DICT_HI2DI (accessor for Rust dict iteration).
+dictitem_T *nvim_hashitem_to_dictitem(hashitem_T *hi) { return TV_DICT_HI2DI(hi); }
