@@ -181,12 +181,10 @@ extern "C" {
     fn nvim_tui_set_url(tui: *mut TuiHandle, url: c_int);
     fn nvim_tui_get_print_attr_id(tui: *mut TuiHandle) -> c_int;
     fn nvim_tui_get_immediate_wrap(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_cursor_goto(tui: *mut TuiHandle, row: c_int, col: c_int);
     fn nvim_tui_update_attrs(tui: *mut TuiHandle, attr_id: c_int);
     fn nvim_tui_get_can_clear_attr(tui: *mut TuiHandle) -> bool;
     fn nvim_tui_get_can_erase_chars(tui: *mut TuiHandle) -> bool;
     fn nvim_tui_get_set_default_colors(tui: *mut TuiHandle) -> bool;
-    fn nvim_tui_cheap_to_print(tui: *mut TuiHandle, row: c_int, col: c_int, next: c_int) -> bool;
     fn nvim_tui_get_default_attr(tui: *mut TuiHandle) -> bool;
 
     // UGrid goto (already in Rust ugrid crate, called via C wrapper)

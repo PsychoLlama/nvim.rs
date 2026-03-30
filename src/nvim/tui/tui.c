@@ -411,9 +411,6 @@ int nvim_tui_get_print_attr_id(TUIData *tui) { return tui->print_attr_id; }
 /// Get immediate_wrap_after_last_column flag
 bool nvim_tui_get_immediate_wrap(TUIData *tui) { return tui->immediate_wrap_after_last_column; }
 
-/// Wrapper for cursor_goto callable from Rust
-void nvim_tui_cursor_goto(TUIData *tui, int row, int col) { cursor_goto(tui, row, col); }
-
 /// Wrapper for update_attrs callable from Rust
 void nvim_tui_update_attrs(TUIData *tui, int attr_id) { update_attrs(tui, attr_id); }
 
@@ -422,12 +419,6 @@ bool nvim_tui_get_can_clear_attr(TUIData *tui) { return tui->can_clear_attr; }
 bool nvim_tui_get_can_erase_chars(TUIData *tui) { return tui->can_erase_chars; }
 
 bool nvim_tui_get_set_default_colors(TUIData *tui) { return tui->set_default_colors; }
-
-// Forward declaration for cheap_to_print
-static bool cheap_to_print(TUIData *tui, int row, int col, int next);
-
-/// Wrapper for cheap_to_print callable from Rust
-bool nvim_tui_cheap_to_print(TUIData *tui, int row, int col, int next) { return cheap_to_print(tui, row, col, next); }
 
 bool nvim_tui_get_default_attr(TUIData *tui) { return tui->default_attr; }
 
