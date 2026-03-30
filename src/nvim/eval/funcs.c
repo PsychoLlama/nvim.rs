@@ -444,14 +444,8 @@ PRAGMA_DIAG_POP
 static const char *e_invalwindow = N_("E957: Invalid window number");
 // e_string_list_or_blob_required: moved to funcs_shim.c
 // e_missing_function_argument: moved to funcs_shim.c
+// dummy_ap (static va_list): moved to funcs_shim.c as dummy_ap_shim
 
-/// Dummy va_list for passing to vim_snprintf
-///
-/// Used because:
-/// - passing a NULL pointer doesn't work when va_list isn't a pointer
-/// - locally in the function results in a "used before set" warning
-/// - using va_start() to initialize it gives "function with fixed args" error
-static va_list dummy_ap;
 
 /// Function given to ExpandGeneric() to obtain the list of internal
 /// or user defined function names.
@@ -3997,7 +3991,7 @@ int nvim_get_reg_recorded(void) { return reg_recorded; }
 // nvim_eval_os_get_pid: inlined into Rust (misc.rs) — direct os_get_pid() call
 // nvim_eval_get_col: moved to funcs_shim.c
 // nvim_eval_getpos_both: moved to funcs_shim.c
-const char *nvim_eval_get_windows_version(void) { return windowsVersion; }
+// nvim_eval_get_windows_version: moved to funcs_shim.c
 
 
 // nvim_eval_find_some_match: moved to funcs_shim.c
@@ -4038,51 +4032,7 @@ void nvim_eval_input(typval_T *argvars, typval_T *rettv, bool dialog)
 }
 
 // nvim_eval_json_encode: inlined into Rust (misc.rs) — encode_tv2json delegation
-
-void nvim_eval_libcall(typval_T *argvars, typval_T *rettv, bool retstr)
-{
-  int out_type = retstr ? VAR_STRING : VAR_NUMBER;
-
-  rettv->v_type = (VarType)out_type;
-  if (out_type != VAR_NUMBER) {
-    rettv->vval.v_string = NULL;
-  }
-
-  if (rs_check_secure()) {
-    return;
-  }
-
-  // The first two args (libname and funcname) must be strings
-  if (argvars[0].v_type != VAR_STRING || argvars[1].v_type != VAR_STRING) {
-    return;
-  }
-
-  const char *libname = argvars[0].vval.v_string;
-  const char *funcname = argvars[1].vval.v_string;
-
-  VarType in_type = argvars[2].v_type;
-
-  // input variables
-  char *str_in = (in_type == VAR_STRING) ? argvars[2].vval.v_string : NULL;
-  int int_in = (int)argvars[2].vval.v_number;
-
-  // output variables
-  char **str_out = (out_type == VAR_STRING) ? &rettv->vval.v_string : NULL;
-  int int_out = 0;
-
-  bool success = os_libcall(libname, funcname,
-                            str_in, int_in,
-                            str_out, &int_out);
-
-  if (!success) {
-    semsg(_(e_libcall), funcname);
-    return;
-  }
-
-  if (out_type == VAR_NUMBER) {
-    rettv->vval.v_number = (varnumber_T)int_out;
-  }
-}
+// nvim_eval_libcall: moved to funcs_shim.c
 
 // nvim_eval_script_host_eval: inlined into Rust (misc.rs)
 
@@ -4260,27 +4210,7 @@ void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
 // nvim_eval_has: migrated to Rust (rs_f_has in funcs/misc.rs)
 
 // nvim_eval_json_decode: inlined into Rust (misc.rs)
-
-void nvim_eval_printf(typval_T *argvars, typval_T *rettv)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-  {
-    int saved_did_emsg = did_emsg;
-
-    // Get the required length, allocate the buffer and do it for real.
-    did_emsg = false;
-    char buf[NUMBUFLEN];
-    const char *fmt = tv_get_string_buf(&argvars[0], buf);
-    int len = vim_vsnprintf_typval(NULL, 0, fmt, dummy_ap, argvars + 1);
-    if (!did_emsg) {
-      char *s = xmalloc((size_t)len + 1);
-      rettv->vval.v_string = s;
-      vim_vsnprintf_typval(s, (size_t)len + 1, fmt, dummy_ap, argvars + 1);
-    }
-    did_emsg |= saved_did_emsg;
-  }
-}
+// nvim_eval_printf: moved to funcs_shim.c (with dummy_ap_shim)
 
 
 // f_getcmdcomplpat, f_getcmdcompltype, f_setcmdline, f_setcmdpos, f_wildtrigger:

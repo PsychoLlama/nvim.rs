@@ -64,6 +64,7 @@
 #include "nvim/register_defs.h"
 #include "nvim/strings.h"
 #include "nvim/syntax_bridge.h"
+#include "nvim/os/dl.h"
 
 // Error strings used by moved functions
 static const char e_string_list_or_blob_required[]
@@ -2263,4 +2264,85 @@ nvim_eval_spellsuggest_return:
   }
   ga_clear(&ga);
   curwin->w_p_spell = wo_spell_save;
+}
+
+// =============================================================================
+// Phase 22: moved from funcs.c
+// =============================================================================
+
+// nvim_eval_get_windows_version: moved from funcs.c
+const char *nvim_eval_get_windows_version(void) { return windowsVersion; }
+
+// nvim_eval_libcall: moved from funcs.c
+void nvim_eval_libcall(typval_T *argvars, typval_T *rettv, bool retstr)
+{
+  int out_type = retstr ? VAR_STRING : VAR_NUMBER;
+
+  rettv->v_type = (VarType)out_type;
+  if (out_type != VAR_NUMBER) {
+    rettv->vval.v_string = NULL;
+  }
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  // The first two args (libname and funcname) must be strings
+  if (argvars[0].v_type != VAR_STRING || argvars[1].v_type != VAR_STRING) {
+    return;
+  }
+
+  const char *libname = argvars[0].vval.v_string;
+  const char *funcname = argvars[1].vval.v_string;
+
+  VarType in_type = argvars[2].v_type;
+
+  // input variables
+  char *str_in = (in_type == VAR_STRING) ? argvars[2].vval.v_string : NULL;
+  int int_in = (int)argvars[2].vval.v_number;
+
+  // output variables
+  char **str_out = (out_type == VAR_STRING) ? &rettv->vval.v_string : NULL;
+  int int_out = 0;
+
+  bool success = os_libcall(libname, funcname,
+                            str_in, int_in,
+                            str_out, &int_out);
+
+  if (!success) {
+    semsg(_(e_libcall), funcname);
+    return;
+  }
+
+  if (out_type == VAR_NUMBER) {
+    rettv->vval.v_number = (varnumber_T)int_out;
+  }
+}
+
+// dummy_ap + nvim_eval_printf: moved from funcs.c
+/// Used because:
+/// - passing a NULL pointer doesn't work when va_list isn't a pointer
+/// - locally in the function results in a "used before set" warning
+/// - using va_start() to initialize it gives "function with fixed args" error
+static va_list dummy_ap_shim;
+
+void nvim_eval_printf(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+  {
+    int saved_did_emsg = did_emsg;
+
+    // Get the required length, allocate the buffer and do it for real.
+    did_emsg = false;
+    char buf[NUMBUFLEN];
+    const char *fmt = tv_get_string_buf(&argvars[0], buf);
+    int len = vim_vsnprintf_typval(NULL, 0, fmt, dummy_ap_shim, argvars + 1);
+    if (!did_emsg) {
+      char *s = xmalloc((size_t)len + 1);
+      rettv->vval.v_string = s;
+      vim_vsnprintf_typval(s, (size_t)len + 1, fmt, dummy_ap_shim, argvars + 1);
+    }
+    did_emsg |= saved_did_emsg;
+  }
 }
