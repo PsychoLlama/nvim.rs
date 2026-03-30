@@ -6225,10 +6225,6 @@ static void nvim_findfilendir(typval_T *argvars, typval_T *rettv, int find_what)
   }
 }
 
-// Forward declaration (definition moved from eval/fs.c, appears later in this file)
-int modify_fname(char *src, bool tilde_file, size_t *usedlen, char **fnamep, char **bufp,
-                 size_t *fnamelen);
-
 void nvim_f_finddir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   nvim_findfilendir(argvars, rettv, FINDFILE_DIR);
