@@ -21,6 +21,7 @@ pub mod modeline;
 pub mod operations;
 pub mod pattern;
 pub mod read;
+pub mod readfile;
 pub mod reload;
 pub mod rename;
 pub mod sync;
