@@ -43,3 +43,10 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off);
 win_T *get_optional_window(typval_T *argvars, int idx);
 void f_jobstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_jobstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
+// Phase 33: functions moved from funcs.c to funcs_shim.c
+// do_searchpair is used by textobject.c
+// FUNC_ATTR_NONNULL_ARG deliberately omitted (header included without macros_defs.h in some TUs)
+int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
+                  const typval_T *skip, int flags, pos_T *match_pos,
+                  linenr_T lnum_stop, int64_t time_limit);

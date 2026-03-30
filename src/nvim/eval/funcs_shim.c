@@ -87,11 +87,16 @@
 #include "nvim/runtime.h"
 #include "nvim/usercmd.h"
 #include "nvim/event/proc.h"
+#include "nvim/option.h"
+#include "nvim/optionstr.h"
 #include "nvim/os/fs.h"
 #include "nvim/os/pty_proc.h"
 #include "nvim/os/shell.h"
 #include "nvim/os/time.h"
 #include "nvim/path.h"
+#include "nvim/profile.h"
+#include "nvim/search.h"
+#include "nvim/vim_defs.h"
 
 // Error strings used by moved functions
 static const char e_string_list_or_blob_required[]
@@ -125,6 +130,8 @@ extern int rs_proc_get_pid(Proc *proc);
 #define proc_get_pid(p) rs_proc_get_pid(p)
 // f_environ is implemented in Rust (eval/system.rs)
 extern void f_environ(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// rs_eval_expr_valid_arg is implemented in Rust (eval crate)
+extern int rs_eval_expr_valid_arg(const typval_T *tv);
 // f_input is implemented in Rust (eval crate)
 extern void f_input(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // get_user_input is defined later in this file (forward declaration)
@@ -5329,4 +5336,636 @@ void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   tv_list_ref(rv);
   rettv->v_type = VAR_LIST;
   rettv->vval.v_list = rv;
+}
+
+// =============================================================================
+// Phase 33: Search helpers, XDG helpers, and accessors moved from funcs.c
+// =============================================================================
+
+#define SP_NOMOVE       0x01        ///< don't move cursor
+#define SP_REPEAT       0x02        ///< repeat to find outer pair
+#define SP_RETCOUNT     0x04        ///< return matchcount
+#define SP_SETPCMARK    0x08        ///< set previous context mark
+#define SP_START        0x10        ///< accept match at start position
+#define SP_SUBPAT       0x20        ///< return nr of matching sub-pattern
+#define SP_END          0x40        ///< leave cursor at end of match
+#define SP_COLUMN       0x80        ///< start at cursor column
+
+/// Get flags for a search function.
+/// Possibly sets "p_ws".
+///
+/// @return  BACKWARD, FORWARD or zero (for an error).
+static int get_search_arg(typval_T *varp, int *flagsp)
+{
+  int dir = FORWARD;
+
+  if (varp->v_type == VAR_UNKNOWN) {
+    return FORWARD;
+  }
+
+  char nbuf[NUMBUFLEN];
+  const char *flags = tv_get_string_buf_chk(varp, nbuf);
+  if (flags == NULL) {
+    return 0;  // Type error; errmsg already given.
+  }
+  int mask;
+  while (*flags != NUL) {
+    switch (*flags) {
+    case 'b':
+      dir = BACKWARD; break;
+    case 'w':
+      p_ws = true; break;
+    case 'W':
+      p_ws = false; break;
+    default:
+      mask = 0;
+      if (flagsp != NULL) {
+        switch (*flags) {
+        case 'c':
+          mask = SP_START; break;
+        case 'e':
+          mask = SP_END; break;
+        case 'm':
+          mask = SP_RETCOUNT; break;
+        case 'n':
+          mask = SP_NOMOVE; break;
+        case 'p':
+          mask = SP_SUBPAT; break;
+        case 'r':
+          mask = SP_REPEAT; break;
+        case 's':
+          mask = SP_SETPCMARK; break;
+        case 'z':
+          mask = SP_COLUMN; break;
+        }
+      }
+      if (mask == 0) {
+        semsg(_(e_invarg2), flags);
+        dir = 0;
+      } else {
+        *flagsp |= mask;
+      }
+    }
+    if (dir == 0) {
+      break;
+    }
+    flags++;
+  }
+  return dir;
+}
+
+/// Shared by search() and searchpos() functions.
+static int search_cmn(typval_T *argvars, pos_T *match_pos, int *flagsp)
+{
+  bool save_p_ws = p_ws;
+  int retval = 0;               // default: FAIL
+  linenr_T lnum_stop = 0;
+  int64_t time_limit = 0;
+  int options = SEARCH_KEEP;
+  bool use_skip = false;
+
+  const char *const pat = tv_get_string(&argvars[0]);
+  int dir = get_search_arg(&argvars[1], flagsp);  // May set p_ws.
+  if (dir == 0) {
+    goto theend;
+  }
+  int flags = *flagsp;
+  if (flags & SP_START) {
+    options |= SEARCH_START;
+  }
+  if (flags & SP_END) {
+    options |= SEARCH_END;
+  }
+  if (flags & SP_COLUMN) {
+    options |= SEARCH_COL;
+  }
+
+  // Optional arguments: line number to stop searching, timeout and skip.
+  if (argvars[1].v_type != VAR_UNKNOWN && argvars[2].v_type != VAR_UNKNOWN) {
+    lnum_stop = (linenr_T)tv_get_number_chk(&argvars[2], NULL);
+    if (lnum_stop < 0) {
+      goto theend;
+    }
+    if (argvars[3].v_type != VAR_UNKNOWN) {
+      time_limit = tv_get_number_chk(&argvars[3], NULL);
+      if (time_limit < 0) {
+        goto theend;
+      }
+      use_skip = rs_eval_expr_valid_arg(&argvars[4]) != 0;
+    }
+  }
+
+  // Set the time limit, if there is one.
+  proftime_T tm = profile_setlimit(time_limit);
+
+  // This function does not accept SP_REPEAT and SP_RETCOUNT flags.
+  // Check to make sure only those flags are set.
+  // Also, Only the SP_NOMOVE or the SP_SETPCMARK flag can be set. Both
+  // flags cannot be set. Check for that condition also.
+  if (((flags & (SP_REPEAT | SP_RETCOUNT)) != 0)
+      || ((flags & SP_NOMOVE) && (flags & SP_SETPCMARK))) {
+    semsg(_(e_invarg2), tv_get_string(&argvars[1]));
+    goto theend;
+  }
+
+  pos_T save_cursor;
+  pos_T pos = save_cursor = curwin->w_cursor;
+  pos_T firstpos = { 0 };
+  searchit_arg_T sia = {
+    .sa_stop_lnum = lnum_stop,
+    .sa_tm = &tm,
+  };
+
+  const size_t patlen = strlen(pat);
+  int subpatnum;
+
+  // Repeat until {skip} returns false.
+  while (true) {
+    subpatnum = searchit(curwin, curbuf, &pos, NULL, dir, (char *)pat, patlen, 1,
+                         options, RE_SEARCH, &sia);
+    // finding the first match again means there is no match where {skip}
+    // evaluates to zero.
+    if (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
+      subpatnum = FAIL;
+    }
+
+    if (subpatnum == FAIL || !use_skip) {
+      // didn't find it or no skip argument
+      break;
+    }
+    if (firstpos.lnum == 0) {
+      firstpos = pos;
+    }
+
+    // If the skip expression matches, ignore this match.
+    {
+      const pos_T save_pos = curwin->w_cursor;
+
+      curwin->w_cursor = pos;
+      bool err = false;
+      const bool do_skip = eval_expr_to_bool(&argvars[4], &err);
+      curwin->w_cursor = save_pos;
+      if (err) {
+        // Evaluating {skip} caused an error, break here.
+        subpatnum = FAIL;
+        break;
+      }
+      if (!do_skip) {
+        break;
+      }
+    }
+
+    // clear the start flag to avoid getting stuck here
+    options &= ~SEARCH_START;
+  }
+
+  if (subpatnum != FAIL) {
+    if (flags & SP_SUBPAT) {
+      retval = subpatnum;
+    } else {
+      retval = pos.lnum;
+    }
+    if (flags & SP_SETPCMARK) {
+      setpcmark();
+    }
+    curwin->w_cursor = pos;
+    if (match_pos != NULL) {
+      // Store the match cursor position
+      match_pos->lnum = pos.lnum;
+      match_pos->col = pos.col + 1;
+    }
+    // "/$" will put the cursor after the end of the line, may need to
+    // correct that here
+    check_cursor(curwin);
+  }
+
+  // If 'n' flag is used: restore cursor position.
+  if (flags & SP_NOMOVE) {
+    curwin->w_cursor = save_cursor;
+  } else {
+    curwin->w_set_curswant = true;
+  }
+theend:
+  p_ws = save_p_ws;
+
+  return retval;
+}
+
+/// "reltimefloat()" function
+
+/// "soundfold({word})" function
+
+/// "spellbadword()" function
+
+/// "str2float()" function
+
+/// "strftime({format}[, {time}])" function
+
+
+/// "submatch()" function
+
+/// "swapfilelist()" function
+
+
+/// "timer_info([timer])" function
+
+
+
+
+int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
+int nvim_curbuf_get_u_seq_cur(void) { return (int)curbuf->b_u_seq_cur; }
+int nvim_get_reg_recorded(void) { return reg_recorded; }
+
+static int searchpair_cmn(typval_T *argvars, pos_T *match_pos)
+{
+  bool save_p_ws = p_ws;
+  int flags = 0;
+  int retval = 0;  // default: FAIL
+  linenr_T lnum_stop = 0;
+  int64_t time_limit = 0;
+
+  // Get the three pattern arguments: start, middle, end. Will result in an
+  // error if not a valid argument.
+  char nbuf1[NUMBUFLEN];
+  char nbuf2[NUMBUFLEN];
+  const char *spat = tv_get_string_chk(&argvars[0]);
+  const char *mpat = tv_get_string_buf_chk(&argvars[1], nbuf1);
+  const char *epat = tv_get_string_buf_chk(&argvars[2], nbuf2);
+  if (spat == NULL || mpat == NULL || epat == NULL) {
+    goto theend;  // Type error.
+  }
+
+  // Handle the optional fourth argument: flags.
+  int dir = get_search_arg(&argvars[3], &flags);   // may set p_ws.
+  if (dir == 0) {
+    goto theend;
+  }
+
+  // Don't accept SP_END or SP_SUBPAT.
+  // Only one of the SP_NOMOVE or SP_SETPCMARK flags can be set.
+  if ((flags & (SP_END | SP_SUBPAT)) != 0
+      || ((flags & SP_NOMOVE) && (flags & SP_SETPCMARK))) {
+    semsg(_(e_invarg2), tv_get_string(&argvars[3]));
+    goto theend;
+  }
+
+  // Using 'r' implies 'W', otherwise it doesn't work.
+  if (flags & SP_REPEAT) {
+    p_ws = false;
+  }
+
+  // Optional fifth argument: skip expression.
+  const typval_T *skip;
+  if (argvars[3].v_type == VAR_UNKNOWN
+      || argvars[4].v_type == VAR_UNKNOWN) {
+    skip = NULL;
+  } else {
+    // Type is checked later.
+    skip = &argvars[4];
+
+    if (argvars[5].v_type != VAR_UNKNOWN) {
+      lnum_stop = (linenr_T)tv_get_number_chk(&argvars[5], NULL);
+      if (lnum_stop < 0) {
+        semsg(_(e_invarg2), tv_get_string(&argvars[5]));
+        goto theend;
+      }
+      if (argvars[6].v_type != VAR_UNKNOWN) {
+        time_limit = tv_get_number_chk(&argvars[6], NULL);
+        if (time_limit < 0) {
+          semsg(_(e_invarg2), tv_get_string(&argvars[6]));
+          goto theend;
+        }
+      }
+    }
+  }
+
+  retval = do_searchpair(spat, mpat, epat, dir, skip,
+                         flags, match_pos, lnum_stop, time_limit);
+
+theend:
+  p_ws = save_p_ws;
+
+  return retval;
+}
+
+/// "searchpair()" function
+/// Search for a start/middle/end thing.
+/// Used by searchpair(), see its documentation for the details.
+///
+/// @param spat  start pattern
+/// @param mpat  middle pattern
+/// @param epat  end pattern
+/// @param dir  BACKWARD or FORWARD
+/// @param skip  skip expression
+/// @param flags  SP_SETPCMARK and other SP_ values
+/// @param lnum_stop  stop at this line if not zero
+/// @param time_limit  stop after this many msec
+///
+/// @returns  0 or -1 for no match,
+int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
+                  const typval_T *skip, int flags, pos_T *match_pos, linenr_T lnum_stop,
+                  int64_t time_limit)
+  FUNC_ATTR_NONNULL_ARG(1, 2, 3)
+{
+  int retval = 0;
+  int nest = 1;
+  bool use_skip = false;
+  int options = SEARCH_KEEP;
+
+  // Make 'cpoptions' empty, the 'l' flag should not be used here.
+  char *save_cpo = p_cpo;
+  p_cpo = empty_string_option;
+
+  // Set the time limit, if there is one.
+  proftime_T tm = profile_setlimit(time_limit);
+
+  // Make two search patterns: start/end (pat2, for in nested pairs) and
+  // start/middle/end (pat3, for the top pair).
+  const size_t spatlen = strlen(spat);
+  const size_t epatlen = strlen(epat);
+  const size_t pat2size = spatlen + epatlen + 17;
+  char *pat2 = xmalloc(pat2size);
+  const size_t pat3size = spatlen + strlen(mpat) + epatlen + 25;
+  char *pat3 = xmalloc(pat3size);
+  int pat2len = snprintf(pat2, pat2size, "\\m\\(%s\\m\\)\\|\\(%s\\m\\)", spat, epat);
+  int pat3len;
+  if (*mpat == NUL) {
+    STRCPY(pat3, pat2);
+    pat3len = pat2len;
+  } else {
+    pat3len = snprintf(pat3, pat3size,
+                       "\\m\\(%s\\m\\)\\|\\(%s\\m\\)\\|\\(%s\\m\\)", spat, epat, mpat);
+  }
+  if (flags & SP_START) {
+    options |= SEARCH_START;
+  }
+
+  if (skip != NULL) {
+    use_skip = rs_eval_expr_valid_arg(skip) != 0;
+  }
+
+  pos_T save_cursor = curwin->w_cursor;
+  pos_T pos = curwin->w_cursor;
+  pos_T firstpos;
+  clearpos(&firstpos);
+  pos_T foundpos;
+  clearpos(&foundpos);
+  char *pat = pat3;
+  assert(pat3len >= 0);
+  size_t patlen = (size_t)pat3len;
+  while (true) {
+    searchit_arg_T sia = {
+      .sa_stop_lnum = lnum_stop,
+      .sa_tm = &tm,
+    };
+
+    int n = searchit(curwin, curbuf, &pos, NULL, dir, pat, patlen, 1,
+                     options, RE_SEARCH, &sia);
+    if (n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos))) {
+      // didn't find it or found the first match again: FAIL
+      break;
+    }
+
+    if (firstpos.lnum == 0) {
+      firstpos = pos;
+    }
+    if (equalpos(pos, foundpos)) {
+      // Found the same position again.  Can happen with a pattern that
+      // has "\zs" at the end and searching backwards.  Advance one
+      // character and try again.
+      if (dir == BACKWARD) {
+        decl(&pos);
+      } else {
+        incl(&pos);
+      }
+    }
+    foundpos = pos;
+
+    // clear the start flag to avoid getting stuck here
+    options &= ~SEARCH_START;
+
+    // If the skip pattern matches, ignore this match.
+    if (use_skip) {
+      pos_T save_pos = curwin->w_cursor;
+      curwin->w_cursor = pos;
+      bool err = false;
+      const bool r = eval_expr_to_bool(skip, &err);
+      curwin->w_cursor = save_pos;
+      if (err) {
+        // Evaluating {skip} caused an error, break here.
+        curwin->w_cursor = save_cursor;
+        retval = -1;
+        break;
+      }
+      if (r) {
+        continue;
+      }
+    }
+
+    if ((dir == BACKWARD && n == 3) || (dir == FORWARD && n == 2)) {
+      // Found end when searching backwards or start when searching
+      // forward: nested pair.
+      nest++;
+      pat = pat2;               // nested, don't search for middle
+    } else {
+      // Found end when searching forward or start when searching
+      // backward: end of (nested) pair; or found middle in outer pair.
+      if (--nest == 1) {
+        pat = pat3;             // outer level, search for middle
+      }
+    }
+
+    if (nest == 0) {
+      // Found the match: return matchcount or line number.
+      if (flags & SP_RETCOUNT) {
+        retval++;
+      } else {
+        retval = pos.lnum;
+      }
+      if (flags & SP_SETPCMARK) {
+        setpcmark();
+      }
+      curwin->w_cursor = pos;
+      if (!(flags & SP_REPEAT)) {
+        break;
+      }
+      nest = 1;             // search for next unmatched
+    }
+  }
+
+  if (match_pos != NULL) {
+    // Store the match cursor position
+    match_pos->lnum = curwin->w_cursor.lnum;
+    match_pos->col = curwin->w_cursor.col + 1;
+  }
+
+  // If 'n' flag is used or search failed: restore cursor position.
+  if ((flags & SP_NOMOVE) || retval == 0) {
+    curwin->w_cursor = save_cursor;
+  }
+
+  xfree(pat2);
+  xfree(pat3);
+  if (p_cpo == empty_string_option) {
+    p_cpo = save_cpo;
+  } else {
+    // Darn, evaluating the {skip} expression changed the value.
+    // If it's still empty it was changed and restored, need to restore in
+    // the complicated way.
+    if (*p_cpo == NUL) {
+      set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0);
+    }
+    free_string_option(save_cpo);
+  }
+
+  return retval;
+}
+
+/// "searchpos()" function
+
+
+/// "serverstop()" function
+
+/// Set the cursor or mark position.
+/// If "charpos" is true, then use the column number as a character offset.
+/// Otherwise use the column number as a byte offset.
+
+
+/// "setfperm({fname}, {mode})" function
+
+/// "sha256({expr})" function
+
+/// "shellescape({string})" function
+/// shiftwidth() function
+
+// f_sockconnect: moved to funcs_shim.c (Phase 31)
+int nvim_eval_searchpair_cmn(typval_T *argvars) { return (int)searchpair_cmn(argvars, NULL); }
+// nvim_eval_set_position: moved to funcs_shim.c
+// nvim_eval_set_cursorpos: moved to funcs_shim.c
+
+// Full-body wrappers for copy/deepcopy
+// nvim_eval_copy: inlined into Rust (misc.rs) — direct var_item_copy() call
+// nvim_eval_deepcopy: inlined into Rust (misc.rs) — direct var_item_copy() call
+
+// nvim_eval_ctx_size: inlined into Rust (misc.rs) via nvim_eval_ctx_size_impl shim
+// nvim_eval_ctxpop: inlined into Rust (misc.rs) via nvim_eval_ctxpop_impl shim
+// nvim_eval_char2nr: inlined into Rust (misc.rs) — direct utf_ptr2char() call
+// nvim_eval_nr2char: inlined into Rust (misc.rs) — utf_char2bytes delegation
+// nvim_eval_str2float: inlined into Rust (misc.rs) — rs_string2float delegation
+// nvim_eval_escape: inlined into Rust (misc.rs) — direct vim_strsave_escaped() call
+// nvim_eval_shellescape: inlined into Rust (misc.rs) — direct vim_strsave_shellescape() call
+// nvim_eval_fnameescape: inlined into Rust (misc.rs) — direct vim_strsave_fnameescape() call
+// nvim_eval_hostname: inlined into Rust (misc.rs) — direct os_get_hostname() call
+// nvim_eval_empty: inlined into Rust (misc.rs) — uses typval field accessor shims
+// nvim_eval_len: inlined into Rust (misc.rs) — uses typval field accessor shims
+
+
+// nvim_eval_execute: inlined into Rust (misc.rs)
+
+// nvim_eval_flatten: moved to funcs_shim.c
+
+// nvim_eval_common_function: moved to funcs_shim.c
+
+// nvim_eval_hlID: inlined into Rust (misc.rs) — syn_name2id delegation
+// nvim_eval_hlexists: inlined into Rust (misc.rs) — highlight_exists delegation
+
+// nvim_eval_input: moved to funcs_shim.c
+
+// nvim_eval_json_encode: inlined into Rust (misc.rs) — encode_tv2json delegation
+// nvim_eval_libcall: moved to funcs_shim.c
+
+// nvim_eval_script_host_eval: inlined into Rust (misc.rs)
+
+void nvim_eval_search(typval_T *argvars, typval_T *rettv)
+{
+  int flags = 0;
+  rettv->vval.v_number = search_cmn(argvars, NULL, &flags);
+}
+
+void nvim_eval_searchpairpos(typval_T *argvars, typval_T *rettv)
+{
+  pos_T match_pos;
+  int lnum = 0;
+  int col = 0;
+
+  tv_list_alloc_ret(rettv, 2);
+
+  if (searchpair_cmn(argvars, &match_pos) > 0) {
+    lnum = match_pos.lnum;
+    col = match_pos.col;
+  }
+
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)lnum);
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
+}
+
+static void get_xdg_var_list_inner(const XDGVarType xdg, typval_T *rettv)
+  FUNC_ATTR_NONNULL_ALL
+{
+  list_T *const list = tv_list_alloc(kListLenShouldKnow);
+  rettv->v_type = VAR_LIST;
+  rettv->vval.v_list = list;
+  tv_list_ref(list);
+  char *const dirs = stdpaths_get_xdg_var(xdg);
+  if (dirs == NULL) {
+    return;
+  }
+  const void *iter = NULL;
+  const char *appname = get_appname(false);
+  do {
+    size_t dir_len;
+    const char *dir;
+    iter = vim_env_iter(ENV_SEPCHAR, dirs, iter, &dir, &dir_len);
+    if (dir != NULL && dir_len > 0) {
+      char *dir_with_nvim = xmemdupz(dir, dir_len);
+      dir_with_nvim = concat_fnames_realloc(dir_with_nvim, appname, true);
+      tv_list_append_allocated_string(list, dir_with_nvim);
+    }
+  } while (iter != NULL);
+  xfree(dirs);
+}
+
+/// Public wrapper for inlining stdpath() list cases into Rust.
+void nvim_eval_xdg_var_list(int xdg, typval_T *rettv)
+{
+  get_xdg_var_list_inner((XDGVarType)xdg, rettv);
+}
+
+// nvim_eval_ctxget: moved to funcs_shim.c
+
+// nvim_eval_ctxpush: moved to funcs_shim.c
+
+// nvim_eval_ctxset: moved to funcs_shim.c
+
+// nvim_eval_getcharsearch: inlined into Rust (misc.rs) — last_csearch/forward/until delegation
+// nvim_eval_setcharsearch: inlined into Rust (misc.rs) — set_last_csearch/direction/until delegation
+
+/// Common between getreg(), getreginfo() and getregtype(): get the register
+/// name from the first argument.
+/// Returns zero on error.
+// nvim_eval_getreg_get_regname: moved to funcs_shim.c (also non-static there)
+
+// nvim_eval_getreginfo: moved to funcs_shim.c
+
+// nvim_eval_may_add_state_char, nvim_eval_state: moved to funcs_shim.c
+
+// nvim_eval_searchdecl: inlined into Rust (misc.rs) — find_decl delegation
+
+void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
+{
+  pos_T match_pos;
+  int flags = 0;
+
+  const int n = search_cmn(argvars, &match_pos, &flags);
+
+  tv_list_alloc_ret(rettv, 2 + (!!(flags & SP_SUBPAT)));
+
+  const int lnum = (n > 0 ? match_pos.lnum : 0);
+  const int col = (n > 0 ? match_pos.col : 0);
+
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)lnum);
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
+  if (flags & SP_SUBPAT) {
+    tv_list_append_number(rettv->vval.v_list, (varnumber_T)n);
+  }
 }
