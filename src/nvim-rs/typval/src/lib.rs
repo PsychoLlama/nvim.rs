@@ -1121,6 +1121,17 @@ extern "C" {
     fn nvim_emsg_float_unknown();
     fn nvim_value_check_lock(lock: c_int, name: *const c_char, name_len: usize) -> bool;
     fn nvim_tv_get_v_lock(tv: TypevalHandle) -> c_int;
+
+    // Phase 1 accessor helpers for get functions
+    fn nvim_format_number(n: i64, buf: *mut c_char, buflen: c_int);
+    fn nvim_format_float(f: f64, buf: *mut c_char, buflen: c_int);
+    fn nvim_get_bool_var_name(b: c_int) -> *const c_char;
+    fn nvim_get_special_var_name(s: c_int) -> *const c_char;
+    fn nvim_vim_str2nr(s: *const c_char, out: *mut i64);
+    fn nvim_tv_to_lnum_pos(tv: TypevalHandle, ret_fnum: *mut c_int) -> i32;
+    fn nvim_did_emsg_check() -> c_int;
+    fn nvim_buf_get_ml_line_count(buf: *const std::ffi::c_void) -> i32;
+    fn nvim_emsg_get_number_unknown();
 }
 
 // =============================================================================
@@ -2901,6 +2912,276 @@ fn eval_expr_valid_arg_impl(tv: TypevalHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_eval_expr_valid_arg(tv: TypevalHandle) -> c_int {
     c_int::from(eval_expr_valid_arg_impl(tv))
+}
+
+// =============================================================================
+// Phase 1: Get functions (tv_get_number_chk, tv_get_string_buf_chk, etc.)
+// =============================================================================
+
+/// NUMBUFLEN constant matching C's value.
+const NUMBUFLEN: usize = 65;
+
+/// Get the number value of a Vimscript object with error checking.
+///
+/// This is the core implementation that handles all type cases.
+/// Returns a number value; sets *ret_error=true on type error.
+fn tv_get_number_chk_impl(tv: TypevalHandle, ret_error: *mut bool) -> i64 {
+    match tv_type_impl(tv) {
+        VarType::Func | VarType::Partial => {
+            unsafe { nvim_typval_error_using_funcref_as_number() };
+        }
+        VarType::List => {
+            unsafe { nvim_typval_error_using_list_as_number() };
+        }
+        VarType::Dict => {
+            unsafe { nvim_typval_error_using_dict_as_number() };
+        }
+        VarType::Float => {
+            unsafe { nvim_typval_error_using_float_as_number() };
+        }
+        VarType::Blob => {
+            unsafe { nvim_typval_error_using_blob_as_number() };
+        }
+        VarType::Number => {
+            return unsafe { nvim_tv_get_number(tv) };
+        }
+        VarType::String => {
+            let s = unsafe { nvim_tv_get_string_ptr(tv) };
+            let mut n: i64 = 0;
+            unsafe { nvim_vim_str2nr(s, &raw mut n) };
+            return n;
+        }
+        VarType::Bool => {
+            let b = unsafe { nvim_tv_get_bool(tv) };
+            return i64::from(b);
+        }
+        VarType::Special => {
+            return 0;
+        }
+        VarType::Unknown => {
+            unsafe { nvim_emsg_get_number_unknown() };
+        }
+    }
+    // Type error path
+    if !ret_error.is_null() {
+        unsafe { *ret_error = true };
+    }
+    if ret_error.is_null() {
+        -1
+    } else {
+        0
+    }
+}
+
+/// FFI export: tv_get_number_chk - get number from typval with error checking.
+#[export_name = "tv_get_number_chk"]
+pub unsafe extern "C" fn rs_tv_get_number_chk(tv: TypevalHandle, ret_error: *mut bool) -> i64 {
+    tv_get_number_chk_impl(tv, ret_error)
+}
+
+/// FFI export: tv_get_number - get number from typval (no error output).
+#[export_name = "tv_get_number"]
+pub extern "C" fn rs_tv_get_number(tv: TypevalHandle) -> i64 {
+    tv_get_number_chk_impl(tv, std::ptr::null_mut())
+}
+
+/// FFI export: tv_get_bool - get number/bool value from typval.
+#[export_name = "tv_get_bool"]
+pub unsafe extern "C" fn rs_tv_get_bool(tv: TypevalHandle) -> i64 {
+    tv_get_number_chk_impl(tv, std::ptr::null_mut())
+}
+
+/// FFI export: tv_get_bool_chk - get number/bool value with error output.
+#[export_name = "tv_get_bool_chk"]
+pub unsafe extern "C" fn rs_tv_get_bool_chk(tv: TypevalHandle, ret_error: *mut bool) -> i64 {
+    tv_get_number_chk_impl(tv, ret_error)
+}
+
+/// Get string representation of a typval into buf.
+/// Returns NULL on type error, valid string pointer otherwise.
+unsafe fn tv_get_string_buf_chk_impl(tv: TypevalHandle, buf: *mut c_char) -> *const c_char {
+    match tv_type_impl(tv) {
+        VarType::Number => {
+            let n = unsafe { nvim_tv_get_number(tv) };
+            unsafe { nvim_format_number(n, buf, NUMBUFLEN as c_int) };
+            buf
+        }
+        VarType::Float => {
+            let f = unsafe { nvim_tv_get_float(tv) };
+            unsafe { nvim_format_float(f, buf, NUMBUFLEN as c_int) };
+            buf
+        }
+        VarType::String => {
+            let s = unsafe { nvim_tv_get_string_ptr(tv) };
+            if s.is_null() {
+                // Return pointer to empty string literal
+                b"\0".as_ptr().cast::<c_char>()
+            } else {
+                s
+            }
+        }
+        VarType::Bool => {
+            let b = unsafe { nvim_tv_get_bool(tv) };
+            let name = unsafe { nvim_get_bool_var_name(b) };
+            // strcpy into buf
+            let name_len = unsafe { libc_strlen(name) };
+            unsafe {
+                std::ptr::copy_nonoverlapping(name, buf, name_len + 1);
+            }
+            buf
+        }
+        VarType::Special => {
+            let s = unsafe {
+                let sv = nvim_tv_get_special(tv);
+                nvim_get_special_var_name(sv)
+            };
+            let s_len = unsafe { libc_strlen(s) };
+            unsafe {
+                std::ptr::copy_nonoverlapping(s, buf, s_len + 1);
+            }
+            buf
+        }
+        VarType::Partial | VarType::Func => {
+            unsafe { nvim_typval_error_using_funcref_as_string() };
+            std::ptr::null()
+        }
+        VarType::List => {
+            unsafe { nvim_typval_error_using_list_as_string() };
+            std::ptr::null()
+        }
+        VarType::Dict => {
+            unsafe { nvim_typval_error_using_dict_as_string() };
+            std::ptr::null()
+        }
+        VarType::Blob => {
+            unsafe { nvim_typval_error_using_blob_as_string() };
+            std::ptr::null()
+        }
+        VarType::Unknown => {
+            unsafe { nvim_typval_error_using_invalid_as_string() };
+            std::ptr::null()
+        }
+    }
+}
+
+/// FFI export: tv_get_string_buf_chk.
+#[export_name = "tv_get_string_buf_chk"]
+pub unsafe extern "C" fn rs_tv_get_string_buf_chk(
+    tv: TypevalHandle,
+    buf: *mut c_char,
+) -> *const c_char {
+    unsafe { tv_get_string_buf_chk_impl(tv, buf) }
+}
+
+/// FFI export: tv_get_string_chk - get string with error checking using static buffer.
+#[export_name = "tv_get_string_chk"]
+pub unsafe extern "C" fn rs_tv_get_string_chk(tv: TypevalHandle) -> *const c_char {
+    // Use a thread-local static buffer matching C's mybuf[NUMBUFLEN]
+    use std::cell::UnsafeCell;
+    struct StaticBuf(UnsafeCell<[u8; NUMBUFLEN]>);
+    unsafe impl Sync for StaticBuf {}
+    static MYBUF: StaticBuf = StaticBuf(UnsafeCell::new([0u8; NUMBUFLEN]));
+    let buf = unsafe { (*MYBUF.0.get()).as_mut_ptr().cast::<c_char>() };
+    unsafe { tv_get_string_buf_chk_impl(tv, buf) }
+}
+
+/// FFI export: tv_get_string - get string, return empty string on error.
+#[export_name = "tv_get_string"]
+pub unsafe extern "C" fn rs_tv_get_string(tv: TypevalHandle) -> *const c_char {
+    use std::cell::UnsafeCell;
+    struct StaticBuf(UnsafeCell<[u8; NUMBUFLEN]>);
+    unsafe impl Sync for StaticBuf {}
+    static MYBUF: StaticBuf = StaticBuf(UnsafeCell::new([0u8; NUMBUFLEN]));
+    let buf = unsafe { (*MYBUF.0.get()).as_mut_ptr().cast::<c_char>() };
+    let res = unsafe { tv_get_string_buf_chk_impl(tv, buf) };
+    if res.is_null() {
+        b"\0".as_ptr().cast::<c_char>()
+    } else {
+        res
+    }
+}
+
+/// FFI export: tv_get_string_buf - get string with caller-provided buffer.
+#[export_name = "tv_get_string_buf"]
+pub unsafe extern "C" fn rs_tv_get_string_buf(
+    tv: TypevalHandle,
+    buf: *mut c_char,
+) -> *const c_char {
+    let res = unsafe { tv_get_string_buf_chk_impl(tv, buf) };
+    if res.is_null() {
+        b"\0".as_ptr().cast::<c_char>()
+    } else {
+        res
+    }
+}
+
+/// Get line number from a typval (line number or special string like "$", ".", etc.)
+fn tv_get_lnum_impl(tv: TypevalHandle) -> i32 {
+    let did_emsg_before = unsafe { nvim_did_emsg_check() };
+    let lnum = tv_get_number_chk_impl(tv, std::ptr::null_mut()) as i32;
+    if lnum <= 0
+        && unsafe { nvim_did_emsg_check() } == did_emsg_before
+        && tv_type_impl(tv) != VarType::Number
+    {
+        let mut fnum: c_int = 0;
+        let pos_lnum = unsafe { nvim_tv_to_lnum_pos(tv, &raw mut fnum) };
+        if pos_lnum != 0 {
+            return pos_lnum;
+        }
+    }
+    lnum
+}
+
+/// FFI export: tv_get_lnum - get line number from typval.
+#[export_name = "tv_get_lnum"]
+pub extern "C" fn rs_tv_get_lnum(tv: TypevalHandle) -> i32 {
+    tv_get_lnum_impl(tv)
+}
+
+/// Get line number from typval with buffer for "$" handling.
+unsafe fn tv_get_lnum_buf_impl(tv: TypevalHandle, buf: *const std::ffi::c_void) -> i32 {
+    // Check for "$" special string
+    if tv_type_impl(tv) == VarType::String {
+        let s = unsafe { nvim_tv_get_string_ptr(tv) };
+        if !s.is_null() {
+            // Check s == "$\0"
+            let b0 = unsafe { *s as u8 };
+            let b1 = unsafe { *s.offset(1) as u8 };
+            if b0 == b'$' && b1 == b'\0' && !buf.is_null() {
+                return unsafe { nvim_buf_get_ml_line_count(buf) };
+            }
+        }
+    }
+    tv_get_number_chk_impl(tv, std::ptr::null_mut()) as i32
+}
+
+/// FFI export: tv_get_lnum_buf - get line number with buffer for "$".
+#[export_name = "tv_get_lnum_buf"]
+pub unsafe extern "C" fn rs_tv_get_lnum_buf(
+    tv: TypevalHandle,
+    buf: *const std::ffi::c_void,
+) -> i32 {
+    unsafe { tv_get_lnum_buf_impl(tv, buf) }
+}
+
+// Helper: strlen for C strings
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    let mut len = 0usize;
+    while unsafe { *s.add(len) } != 0 {
+        len += 1;
+    }
+    len
+}
+
+// Helper: get v_special field from typval
+unsafe fn nvim_tv_get_special(tv: TypevalHandle) -> c_int {
+    // v_special is an int field at same offset as v_bool (in the vval union)
+    // Reuse the nvim_tv_get_bool accessor (they are the same int in the union)
+    // Note: special values use v_special which is typed like BoolVarValue
+    unsafe { nvim_tv_get_bool(tv) }
 }
 
 #[cfg(test)]

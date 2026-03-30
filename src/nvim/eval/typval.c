@@ -3389,157 +3389,10 @@ bool tv_equal(typval_T *const tv1, typval_T *const tv2, const bool ic)
   return false;
 }
 
-//{{{2 Type checks
-
-#define FUNC_ERROR "E703: Using a Funcref as a Number"
-
-static const char *const num_errors[] = {
-  [VAR_PARTIAL] = N_(FUNC_ERROR),
-  [VAR_FUNC] = N_(FUNC_ERROR),
-  [VAR_LIST] = N_("E745: Using a List as a Number"),
-  [VAR_DICT] = N_("E728: Using a Dictionary as a Number"),
-  [VAR_FLOAT] = N_("E805: Using a Float as a Number"),
-  [VAR_BLOB] = N_("E974: Using a Blob as a Number"),
-  [VAR_UNKNOWN] = N_("E685: using an invalid value as a Number"),
-};
-
-#undef FUNC_ERROR
-
-#define FUNC_ERROR "E729: Using a Funcref as a String"
-
-static const char *const str_errors[] = {
-  [VAR_PARTIAL] = N_(FUNC_ERROR),
-  [VAR_FUNC] = N_(FUNC_ERROR),
-  [VAR_LIST] = N_("E730: Using a List as a String"),
-  [VAR_DICT] = N_("E731: Using a Dictionary as a String"),
-  [VAR_BLOB] = N_("E976: Using a Blob as a String"),
-  [VAR_UNKNOWN] = e_using_invalid_value_as_string,
-};
-
-#undef FUNC_ERROR
-
 //{{{2 Get
 
-/// Get the number value of a Vimscript object
-///
-/// @note Use tv_get_number_chk() if you need to determine whether there was an
-///       error.
-///
-/// @param[in]  tv  Object to get value from.
-///
-/// @return Number value: vim_str2nr() output for VAR_STRING objects, value
-///         for VAR_NUMBER objects, -1 for other types.
-varnumber_T tv_get_number(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  bool error = false;
-  return tv_get_number_chk(tv, &error);
-}
-
-/// Get the number value of a Vimscript object
-///
-/// @param[in]  tv  Object to get value from.
-/// @param[out]  ret_error  If type error occurred then `true` will be written
-///                         to this location. Otherwise it is not touched.
-///
-///                         @note Needs to be initialized to `false` to be
-///                               useful.
-///
-/// @return Number value: vim_str2nr() output for VAR_STRING objects, value
-///         for VAR_NUMBER objects, -1 (ret_error == NULL) or 0 (otherwise) for
-///         other types.
-varnumber_T tv_get_number_chk(const typval_T *const tv, bool *const ret_error)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  switch (tv->v_type) {
-  case VAR_FUNC:
-  case VAR_PARTIAL:
-  case VAR_LIST:
-  case VAR_DICT:
-  case VAR_BLOB:
-  case VAR_FLOAT:
-    emsg(_(num_errors[tv->v_type]));
-    break;
-  case VAR_NUMBER:
-    return tv->vval.v_number;
-  case VAR_STRING: {
-    varnumber_T n = 0;
-    if (tv->vval.v_string != NULL) {
-      vim_str2nr(tv->vval.v_string, NULL, NULL, STR2NR_ALL, &n, NULL, 0, false, NULL);
-    }
-    return n;
-  }
-  case VAR_BOOL:
-    return tv->vval.v_bool == kBoolVarTrue ? 1 : 0;
-  case VAR_SPECIAL:
-    return 0;
-  case VAR_UNKNOWN:
-    semsg(_(e_intern2), "tv_get_number(UNKNOWN)");
-    break;
-  }
-  if (ret_error != NULL) {
-    *ret_error = true;
-  }
-  return (ret_error == NULL ? -1 : 0);
-}
-
-varnumber_T tv_get_bool(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return tv_get_number_chk(tv, NULL);
-}
-
-varnumber_T tv_get_bool_chk(const typval_T *const tv, bool *const ret_error)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  return tv_get_number_chk(tv, ret_error);
-}
-
-/// Get the line number from Vimscript object
-///
-/// @param[in]  tv  Object to get value from. Is expected to be a number or
-///                 a special string like ".", "$", … (works with current buffer
-///                 only).
-///
-/// @return Line number or -1 or 0.
-linenr_T tv_get_lnum(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const int did_emsg_before = did_emsg;
-  linenr_T lnum = (linenr_T)tv_get_number_chk(tv, NULL);
-  if (lnum <= 0 && did_emsg_before == did_emsg && tv->v_type != VAR_NUMBER) {
-    int fnum;
-    // No valid number, try using same function as line() does.
-    pos_T *const fp = var2fpos(tv, true, &fnum, false);
-    if (fp != NULL) {
-      lnum = fp->lnum;
-    }
-  }
-  return lnum;
-}
-
-/// Get the line number from Vimscript object
-///
-/// @note Unlike tv_get_lnum(), this one supports only "$" special string.
-///
-/// @param[in] tv   Object to get value from. Is expected to be a number or
-///                 a special string "$".
-/// @param[in] buf  Buffer to take last line number from in case tv is "$". May
-///                 be NULL, in this case "$" results in zero return.
-///
-/// @return  Line number or 0 in case of error.
-linenr_T tv_get_lnum_buf(const typval_T *const tv, const buf_T *const buf)
-  FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (tv->v_type == VAR_STRING
-      && tv->vval.v_string != NULL
-      && tv->vval.v_string[0] == '$'
-      && tv->vval.v_string[1] == NUL
-      && buf != NULL) {
-    return buf->b_ml.ml_line_count;
-  }
-  return (linenr_T)tv_get_number_chk(tv, NULL);
-}
+// tv_get_number, tv_get_number_chk, tv_get_bool, tv_get_bool_chk migrated to Rust (Phase 1)
+// tv_get_lnum, tv_get_lnum_buf migrated to Rust (Phase 1)
 
 // tv_get_float migrated to Rust (nvim-rs/typval); declared in typval.h
 
@@ -3636,114 +3489,8 @@ void nvim_typval_error_str_or_nr_special(void) { emsg(_("E5300: Expected a Numbe
 
 void nvim_typval_error_str_or_nr_unknown(void) { semsg(_(e_intern2), "tv_check_str_or_nr(UNKNOWN)"); }
 
-/// Get the string value of a "stringish" Vimscript object.
-///
-/// @param[in]  tv  Object to get value of.
-/// @param  buf  Buffer used to hold numbers and special variables converted to
-///              string. When function encounters one of these stringified value
-///              will be written to buf and buf will be returned.
-///
-///              Buffer must have NUMBUFLEN size.
-///
-/// @return Object value if it is VAR_STRING object, number converted to
-///         a string for VAR_NUMBER, v: variable name for VAR_SPECIAL or NULL.
-const char *tv_get_string_buf_chk(const typval_T *const tv, char *const buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  switch (tv->v_type) {
-  case VAR_NUMBER:
-    snprintf(buf, NUMBUFLEN, "%" PRIdVARNUMBER, tv->vval.v_number);
-    return buf;
-  case VAR_FLOAT:
-    vim_snprintf(buf, NUMBUFLEN, "%g", tv->vval.v_float);
-    return buf;
-  case VAR_STRING:
-    if (tv->vval.v_string != NULL) {
-      return tv->vval.v_string;
-    }
-    return "";
-  case VAR_BOOL:
-    STRCPY(buf, encode_bool_var_names[tv->vval.v_bool]);
-    return buf;
-  case VAR_SPECIAL:
-    STRCPY(buf, encode_special_var_names[tv->vval.v_special]);
-    return buf;
-  case VAR_PARTIAL:
-  case VAR_FUNC:
-  case VAR_LIST:
-  case VAR_DICT:
-  case VAR_BLOB:
-  case VAR_UNKNOWN:
-    emsg(_(str_errors[tv->v_type]));
-    return NULL;
-  }
-  abort();
-  return NULL;
-}
-
-/// Get the string value of a "stringish" Vimscript object.
-///
-/// @warning For number and special values it uses a single, static buffer. It
-///          may be used only once, next call to tv_get_string may reuse it. Use
-///          tv_get_string_buf() if you need to use tv_get_string() output after
-///          calling it again.
-///
-/// @param[in]  tv  Object to get value of.
-///
-/// @return Object value if it is VAR_STRING object, number converted to
-///         a string for VAR_NUMBER, v: variable name for VAR_SPECIAL or NULL.
-const char *tv_get_string_chk(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  static char mybuf[NUMBUFLEN];
-
-  return tv_get_string_buf_chk(tv, mybuf);
-}
-
-/// Get the string value of a "stringish" Vimscript object.
-///
-/// @warning For number and special values it uses a single, static buffer. It
-///          may be used only once, next call to tv_get_string may reuse it. Use
-///          tv_get_string_buf() if you need to use tv_get_string() output after
-///          calling it again.
-///
-/// @note tv_get_string_chk() and tv_get_string_buf_chk() are similar, but
-///       return NULL on error.
-///
-/// @param[in]  tv  Object to get value of.
-///
-/// @return Object value if it is VAR_STRING object, number converted to
-///         a string for VAR_NUMBER, v: variable name for VAR_SPECIAL or empty
-///         string.
-const char *tv_get_string(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  static char mybuf[NUMBUFLEN];
-  return tv_get_string_buf((typval_T *)tv, mybuf);
-}
-
-/// Get the string value of a "stringish" Vimscript object.
-///
-/// @note tv_get_string_chk() and tv_get_string_buf_chk() are similar, but
-///       return NULL on error.
-///
-/// @param[in]  tv  Object to get value of.
-/// @param  buf  Buffer used to hold numbers and special variables converted to
-///              string. When function encounters one of these stringified value
-///              will be written to buf and buf will be returned.
-///
-///              Buffer must have NUMBUFLEN size.
-///
-/// @return Object value if it is VAR_STRING object, number converted to
-///         a string for VAR_NUMBER, v: variable name for VAR_SPECIAL or empty
-///         string.
-const char *tv_get_string_buf(const typval_T *const tv, char *const buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const char *const res = tv_get_string_buf_chk(tv, buf);
-
-  return res != NULL ? res : "";
-}
+// tv_get_string_buf_chk, tv_get_string_chk, tv_get_string, tv_get_string_buf
+// migrated to Rust (Phase 1)
 
 // tv2bool migrated to Rust (Phase 2)
 
@@ -4110,3 +3857,48 @@ void nvim_listitem_set_prev(listitem_T *li, listitem_T *prev) { li->li_prev = pr
 
 /// Index into a typval_T array (accessor for Rust).
 typval_T *nvim_tv_idx(typval_T *argvars, int i) { return &argvars[i]; }
+
+// Phase 1 accessor helpers for Rust get functions
+
+/// Format a VimL number into buf (snprintf wrapper for Rust).
+void nvim_format_number(int64_t n, char *buf, int buflen)
+{
+  snprintf(buf, (size_t)buflen, "%" PRId64, n);
+}
+
+/// Format a float into buf using Vim's %g format (vim_snprintf wrapper for Rust).
+void nvim_format_float(double f, char *buf, int buflen)
+{
+  vim_snprintf(buf, (size_t)buflen, "%g", f);
+}
+
+/// Return the name string for a bool variable value (0=false, 1=true).
+const char *nvim_get_bool_var_name(int b) { return encode_bool_var_names[b]; }
+
+/// Return the name string for a special variable value (0=v:null).
+const char *nvim_get_special_var_name(int s) { return encode_special_var_names[s]; }
+
+/// Call vim_str2nr with STR2NR_ALL to parse a Vim number string.
+/// Writes result to *out. Returns 0 if s is NULL, parsed value otherwise.
+void nvim_vim_str2nr(const char *s, int64_t *out)
+{
+  varnumber_T n = 0;
+  if (s != NULL) {
+    vim_str2nr(s, NULL, NULL, STR2NR_ALL, &n, NULL, 0, false, NULL);
+  }
+  *out = (int64_t)n;
+}
+
+/// Call var2fpos on a typval, return lnum, 0 if not a position.
+int32_t nvim_tv_to_lnum_pos(const typval_T *tv, int *ret_fnum)
+{
+  pos_T *fp = var2fpos(tv, true, ret_fnum, false);
+  if (fp == NULL) {
+    return 0;
+  }
+  return (int32_t)fp->lnum;
+}
+
+
+/// Emit the E685 intern2 error for tv_get_number(UNKNOWN).
+void nvim_emsg_get_number_unknown(void) { semsg(_(e_intern2), "tv_get_number(UNKNOWN)"); }

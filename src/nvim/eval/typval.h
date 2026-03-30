@@ -491,6 +491,18 @@ extern bool tv_islocked(const typval_T *tv);
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);
 
+// Get functions (migrated to Rust, Phase 1)
+extern varnumber_T tv_get_number(const typval_T *tv);
+extern varnumber_T tv_get_number_chk(const typval_T *tv, bool *ret_error);
+extern varnumber_T tv_get_bool(const typval_T *tv);
+extern varnumber_T tv_get_bool_chk(const typval_T *tv, bool *ret_error);
+extern linenr_T tv_get_lnum(const typval_T *tv);
+extern linenr_T tv_get_lnum_buf(const typval_T *tv, const buf_T *buf);
+extern const char *tv_get_string_buf_chk(const typval_T *tv, char *buf);
+extern const char *tv_get_string_chk(const typval_T *tv);
+extern const char *tv_get_string(const typval_T *tv);
+extern const char *tv_get_string_buf(const typval_T *tv, char *buf);
+
 // Dict lookup functions (migrated to Rust, Phase 4)
 extern bool tv_dict_has_key(const dict_T *d, const char *key);
 extern int tv_dict_get_tv(dict_T *d, const char *key, typval_T *rettv);
