@@ -37,6 +37,14 @@ extern int rs_vterm_state_on_control(VTermState *state, uint8_t control);
 extern int rs_vterm_state_on_csi(VTermState *state, const char *leader, const long args[],
                                   int argcount, const char *intermed, char command);
 
+// Rust FFI declarations (Phase 5)
+extern int rs_vterm_state_on_osc(VTermState *state, int command, VTermStringFragment frag);
+extern int rs_vterm_state_on_dcs(VTermState *state, const char *command, size_t commandlen,
+                                  VTermStringFragment frag);
+extern int rs_vterm_state_on_apc(VTermState *state, VTermStringFragment frag);
+extern int rs_vterm_state_on_pm(VTermState *state, VTermStringFragment frag);
+extern int rs_vterm_state_on_sos(VTermState *state, VTermStringFragment frag);
+
 #define strneq(a, b, n) (strncmp(a, b, n) == 0)
 
 #define LBOUND(v, min) if ((v) < (min))(v) = (min)
@@ -696,35 +704,7 @@ static void osc_selection(VTermState *state, VTermStringFragment frag)
 static int on_osc(int command, VTermStringFragment frag, void *user)
 {
   VTermState *state = user;
-
-  switch (command) {
-  case 0:
-    settermprop_string(state, VTERM_PROP_ICONNAME, frag);
-    settermprop_string(state, VTERM_PROP_TITLE, frag);
-    break;
-
-  case 1:
-    settermprop_string(state, VTERM_PROP_ICONNAME, frag);
-    break;
-
-  case 2:
-    settermprop_string(state, VTERM_PROP_TITLE, frag);
-    break;
-
-  case 52:
-    if (state->selection.callbacks) {
-      osc_selection(state, frag);
-    }
-    break;
-  }
-
-  if (state->fallbacks && state->fallbacks->osc) {
-    if ((*state->fallbacks->osc)(command, frag, state->fbdata)) {
-      return 1;
-    }
-  }
-
-  return 0;
+  return rs_vterm_state_on_osc(state, command, frag);
 }
 
 static void request_status_string(VTermState *state, VTermStringFragment frag)
@@ -827,63 +807,38 @@ static void request_status_string(VTermState *state, VTermStringFragment frag)
   vterm_push_output_sprintf_str(state->vt, C1_DCS, true, "0$r");
 }
 
+void nvim_vterm_state_request_status_string(VTermState *state, VTermStringFragment frag)
+{
+  request_status_string(state, frag);
+}
+
+void nvim_vterm_state_osc_selection(VTermState *state, VTermStringFragment frag)
+{
+  osc_selection(state, frag);
+}
+
 static int on_dcs(const char *command, size_t commandlen, VTermStringFragment frag, void *user)
 {
   VTermState *state = user;
-
-  if (commandlen == 2 && strneq(command, "$q", 2)) {
-    request_status_string(state, frag);
-    return 1;
-  } else if (state->fallbacks && state->fallbacks->dcs) {
-    if ((*state->fallbacks->dcs)(command, commandlen, frag, state->fbdata)) {
-      return 1;
-    }
-  }
-
-  DEBUG_LOG("libvterm: Unhandled DCS %.*s\n", (int)commandlen, command);
-  return 0;
+  return rs_vterm_state_on_dcs(state, command, commandlen, frag);
 }
 
 static int on_apc(VTermStringFragment frag, void *user)
 {
   VTermState *state = user;
-
-  if (state->fallbacks && state->fallbacks->apc) {
-    if ((*state->fallbacks->apc)(frag, state->fbdata)) {
-      return 1;
-    }
-  }
-
-  // No DEBUG_LOG because all APCs are unhandled
-  return 0;
+  return rs_vterm_state_on_apc(state, frag);
 }
 
 static int on_pm(VTermStringFragment frag, void *user)
 {
   VTermState *state = user;
-
-  if (state->fallbacks && state->fallbacks->pm) {
-    if ((*state->fallbacks->pm)(frag, state->fbdata)) {
-      return 1;
-    }
-  }
-
-  // No DEBUG_LOG because all PMs are unhandled
-  return 0;
+  return rs_vterm_state_on_pm(state, frag);
 }
 
 static int on_sos(VTermStringFragment frag, void *user)
 {
   VTermState *state = user;
-
-  if (state->fallbacks && state->fallbacks->sos) {
-    if ((*state->fallbacks->sos)(frag, state->fbdata)) {
-      return 1;
-    }
-  }
-
-  // No DEBUG_LOG because all SOSs are unhandled
-  return 0;
+  return rs_vterm_state_on_sos(state, frag);
 }
 
 static int on_resize(int rows, int cols, void *user)

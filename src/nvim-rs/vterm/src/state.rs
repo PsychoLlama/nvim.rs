@@ -3599,6 +3599,166 @@ pub unsafe extern "C" fn rs_vterm_state_on_csi(
 }
 
 // =============================================================================
+// Phase 5: OSC, DCS, and string handlers
+// =============================================================================
+
+// VTERM_PROP string props
+const VTERM_PROP_TITLE: c_int = 4;
+const VTERM_PROP_ICONNAME: c_int = 5;
+
+extern "C" {
+    fn nvim_vterm_state_osc_selection(state: VTermStateHandle, frag: crate::VTermStringFragment);
+    fn nvim_vterm_state_request_status_string(
+        state: VTermStateHandle,
+        frag: crate::VTermStringFragment,
+    );
+}
+
+/// Set a string termprop via `vterm_state_set_termprop`.
+unsafe fn settermprop_string(
+    state: VTermStateHandle,
+    prop: c_int,
+    frag: crate::VTermStringFragment,
+) -> c_int {
+    let val = crate::VTermValue { string: frag };
+    vterm_state_set_termprop(state, prop, &raw const val)
+}
+
+/// Handle OSC sequences (replaces C `on_osc`).
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_osc(
+    state: VTermStateHandle,
+    command: c_int,
+    frag: crate::VTermStringFragment,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    match command {
+        0 => {
+            settermprop_string(state, VTERM_PROP_ICONNAME, frag);
+            settermprop_string(state, VTERM_PROP_TITLE, frag);
+        }
+        1 => {
+            settermprop_string(state, VTERM_PROP_ICONNAME, frag);
+        }
+        2 => {
+            settermprop_string(state, VTERM_PROP_TITLE, frag);
+        }
+        52 => {
+            if !(*s).selection.callbacks.is_null() {
+                nvim_vterm_state_osc_selection(state, frag);
+            }
+        }
+        _ => {}
+    }
+    let fallbacks = (*s).fallbacks;
+    if !fallbacks.is_null() {
+        if let Some(osc_cb) = (*fallbacks).osc {
+            if osc_cb(command, frag, (*s).fbdata) != 0 {
+                return 1;
+            }
+        }
+    }
+    0
+}
+
+/// Handle DCS string sequences (replaces C `on_dcs`).
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_dcs(
+    state: VTermStateHandle,
+    command: *const c_char,
+    commandlen: usize,
+    frag: crate::VTermStringFragment,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    #[allow(clippy::cast_possible_wrap)]
+    let dollar = b'$' as c_char;
+    #[allow(clippy::cast_possible_wrap)]
+    let q = b'q' as c_char;
+    if commandlen == 2 && *command == dollar && *command.add(1) == q {
+        nvim_vterm_state_request_status_string(state, frag);
+        return 1;
+    }
+    let fallbacks = (*s).fallbacks;
+    if !fallbacks.is_null() {
+        if let Some(dcs_cb) = (*fallbacks).dcs {
+            if dcs_cb(command, commandlen, frag, (*s).fbdata) != 0 {
+                return 1;
+            }
+        }
+    }
+    0
+}
+
+/// Handle APC sequences (replaces C `on_apc`).
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_apc(
+    state: VTermStateHandle,
+    frag: crate::VTermStringFragment,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    let fallbacks = (*s).fallbacks;
+    if !fallbacks.is_null() {
+        if let Some(apc_cb) = (*fallbacks).apc {
+            if apc_cb(frag, (*s).fbdata) != 0 {
+                return 1;
+            }
+        }
+    }
+    0
+}
+
+/// Handle PM sequences (replaces C `on_pm`).
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_pm(
+    state: VTermStateHandle,
+    frag: crate::VTermStringFragment,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    let fallbacks = (*s).fallbacks;
+    if !fallbacks.is_null() {
+        if let Some(pm_cb) = (*fallbacks).pm {
+            if pm_cb(frag, (*s).fbdata) != 0 {
+                return 1;
+            }
+        }
+    }
+    0
+}
+
+/// Handle SOS sequences (replaces C `on_sos`).
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_sos(
+    state: VTermStateHandle,
+    frag: crate::VTermStringFragment,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    let fallbacks = (*s).fallbacks;
+    if !fallbacks.is_null() {
+        if let Some(sos_cb) = (*fallbacks).sos {
+            if sos_cb(frag, (*s).fbdata) != 0 {
+                return 1;
+            }
+        }
+    }
+    0
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
