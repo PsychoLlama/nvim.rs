@@ -1518,31 +1518,7 @@ void f_values(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2l
 
 // f_has_key migrated to Rust (Phase 6)
 
-/// "remove({dict})" function
-void tv_dict_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg)
-{
-  dict_T *d;
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    semsg(_(e_toomanyarg), "remove()");
-  } else if ((d = argvars[0].vval.v_dict) != NULL
-             && !value_check_lock(d->dv_lock, arg_errmsg, TV_TRANSLATE)) {
-    const char *key = tv_get_string_chk(&argvars[1]);
-    if (key != NULL) {
-      dictitem_T *di = tv_dict_find(d, key, -1);
-      if (di == NULL) {
-        semsg(_(e_dictkey), key);
-      } else if (!var_check_fixed(di->di_flags, arg_errmsg, TV_TRANSLATE)
-                 && !var_check_ro(di->di_flags, arg_errmsg, TV_TRANSLATE)) {
-        *rettv = di->di_tv;
-        di->di_tv = TV_INITIAL_VALUE;
-        tv_dict_item_remove(d, di);
-        if (tv_dict_is_watched(d)) {
-          tv_dict_watcher_notify(d, key, NULL, rettv);
-        }
-      }
-    }
-  }
-}
+// tv_dict_remove migrated to Rust (Phase 6f)
 
 // tv_blob_alloc_ret, tv_blob_copy migrated to Rust (Phase 2)
 
@@ -3047,3 +3023,5 @@ void nvim_tv_dict2list_items(typval_T *argvars, typval_T *rettv)
 {
   tv_dict2list(argvars, rettv, kDict2ListItems);
 }
+
+// Phase 6f: tv_dict_remove migrated to Rust; accessors in eval_shim.c

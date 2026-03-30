@@ -1226,6 +1226,19 @@ extern "C" {
     fn nvim_list_set_copylist(l: ListHandle, copy: ListHandle);
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_tv_dict2list_items(argvars: TypevalHandle, rettv: TypevalHandle);
+
+    // Phase 6f: tv_dict_remove
+    fn nvim_di_check_fixed_translate(di: DictItemHandle, name: *const c_char) -> bool;
+    fn nvim_di_check_ro_translate(di: DictItemHandle, name: *const c_char) -> bool;
+    fn nvim_dictitem_move_tv_to_rettv(rettv: TypevalHandle, di: DictItemHandle);
+    fn nvim_semsg_dictkey(key: *const c_char);
+    fn nvim_semsg_toomanyarg(fname: *const c_char);
+    fn nvim_tv_dict_watcher_notify(
+        dict: DictHandle,
+        key: *const c_char,
+        newtv: *mut std::ffi::c_void,
+        oldtv: *mut std::ffi::c_void,
+    );
 }
 
 // =============================================================================
@@ -2510,6 +2523,54 @@ pub unsafe extern "C" fn rs_f_items(
         VarType::String => unsafe { tv_string2items_impl(argvars, rettv) },
         VarType::List => unsafe { tv_list2items_impl(argvars, rettv) },
         _ => unsafe { nvim_tv_dict2list_items(argvars, rettv) },
+    }
+}
+
+// =============================================================================
+// Phase 6f: tv_dict_remove
+// =============================================================================
+
+/// FFI export: tv_dict_remove - VimL remove() for dicts.
+#[export_name = "tv_dict_remove"]
+pub unsafe extern "C" fn rs_tv_dict_remove(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    arg_errmsg: *const c_char,
+) {
+    let arg2 = unsafe { nvim_typval_array_get(argvars, 2) };
+    if tv_type_impl(arg2) != VarType::Unknown {
+        let remove_str = b"remove()\0";
+        unsafe { nvim_semsg_toomanyarg(remove_str.as_ptr().cast::<c_char>()) };
+        return;
+    }
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let d = unsafe { nvim_tv_get_dict(arg0) };
+    if d.is_null() {
+        return;
+    }
+    let dv_lock = unsafe { nvim_dict_get_lock(d) };
+    if unsafe { nvim_value_check_lock(dv_lock, arg_errmsg, usize::MAX) } {
+        return;
+    }
+    let arg1 = unsafe { nvim_typval_array_get(argvars, 1) };
+    let key = unsafe { rs_tv_get_string_chk(arg1) };
+    if key.is_null() {
+        return;
+    }
+    let di = unsafe { nvim_dict_find(d, key, -1) };
+    if di.is_null() {
+        unsafe { nvim_semsg_dictkey(key) };
+        return;
+    }
+    if unsafe { nvim_di_check_fixed_translate(di, arg_errmsg) }
+        || unsafe { nvim_di_check_ro_translate(di, arg_errmsg) }
+    {
+        return;
+    }
+    unsafe { nvim_dictitem_move_tv_to_rettv(rettv, di) };
+    unsafe { rs_tv_dict_item_remove(d, di) };
+    if tv_dict_is_watched_impl(d) {
+        unsafe { nvim_tv_dict_watcher_notify(d, key, std::ptr::null_mut(), rettv.0.cast_mut()) };
     }
 }
 

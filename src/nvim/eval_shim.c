@@ -7,6 +7,7 @@
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/autocmd.h"
+#include "nvim/errors.h"
 #include "nvim/buffer.h"
 #include "nvim/channel.h"
 #include "nvim/cursor.h"
@@ -373,3 +374,10 @@ char *nvim_docmd_fmt_exception_not_caught(const char *value)
 { vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value); return xstrdup(IObuff); }
 
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear) { msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear); }
+
+// Phase 6f: tv_dict_remove accessors (Rust FFI helpers)
+bool nvim_di_check_fixed_translate(const dictitem_T *di, const char *name) { return var_check_fixed(di->di_flags, name, TV_TRANSLATE); }
+bool nvim_di_check_ro_translate(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_TRANSLATE); }
+void nvim_dictitem_move_tv_to_rettv(typval_T *rettv, dictitem_T *di) { *rettv = di->di_tv; di->di_tv = TV_INITIAL_VALUE; }
+void nvim_semsg_dictkey(const char *key) { semsg(_(e_dictkey), key); }
+void nvim_semsg_toomanyarg(const char *fname) { semsg(_(e_toomanyarg), fname); }

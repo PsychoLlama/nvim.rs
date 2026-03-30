@@ -540,6 +540,9 @@ extern int tv_list_assign_range(list_T *dest, list_T *src, int idx1_arg, int idx
 extern list_T *tv_list_copy(const vimconv_T *conv, list_T *orig, bool deep, int copyID);
 extern void f_items(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Phase 6f: dict remove (migrated to Rust)
+extern void tv_dict_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg);
+
 // List append functions (migrated to Rust, Phase 5)
 extern void tv_list_append(list_T *l, listitem_T *item);
 extern void tv_list_append_tv(list_T *l, typval_T *tv);
