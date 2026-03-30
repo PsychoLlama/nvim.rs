@@ -2041,6 +2041,12 @@ extern "C" {
     fn nvim_tui_get_ti_lines(tui: *mut TuiHandle) -> c_int;
     fn nvim_tui_get_ti_columns(tui: *mut TuiHandle) -> c_int;
     fn os_getenv_noalloc(name: *const u8) -> *const u8;
+    fn nvim_tui_stdin_isatty() -> bool;
+    fn nvim_tui_tty_reset_mode_hack(tui: *mut TuiHandle);
+    fn nvim_tui_show_verbose_terminfo(tui: *mut TuiHandle);
+    fn nvim_tui_set_showing_mode(tui: *mut TuiHandle, mode: c_int);
+    fn nvim_tui_set_is_starting(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_get_verbose(tui: *mut TuiHandle) -> i64;
 }
 
 // kTerm enum values for cursor mode (0-based C enum values from terminfo_enum_defs.h)
@@ -2165,6 +2171,33 @@ pub unsafe extern "C" fn rs_tui_guess_size(tui: *mut TuiHandle) {
     }
 
     rs_tui_set_size(tui, width, height);
+}
+
+/// Handle mode change: TTY reset hack, set cursor mode, verbose info, update state.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_mode_change(tui: *mut TuiHandle, mode_idx: i64) {
+    if tui.is_null() {
+        return;
+    }
+
+    // On UNIX: If stdin is not a TTY, reset TTY modes to handle piped input
+    // correctly (#13073).
+    if nvim_tui_get_is_starting(tui) && !nvim_tui_stdin_isatty() {
+        nvim_tui_tty_reset_mode_hack(tui);
+    }
+
+    rs_tui_set_mode(tui, mode_idx as c_int);
+
+    if nvim_tui_get_is_starting(tui) && nvim_tui_get_verbose(tui) >= 3 {
+        nvim_tui_show_verbose_terminfo(tui);
+    }
+
+    nvim_tui_set_is_starting(tui, false);
+    nvim_tui_set_showing_mode(tui, mode_idx as c_int);
 }
 
 #[cfg(test)]

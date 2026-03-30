@@ -224,6 +224,7 @@ extern void rs_tui_flush(TUIData *tui);
 extern void rs_tui_set_size(TUIData *tui, int width, int height);
 extern void rs_tui_set_mode(TUIData *tui, int mode);
 extern void rs_tui_guess_size(TUIData *tui);
+extern void rs_tui_mode_change(TUIData *tui, int64_t mode_idx);
 extern void rs_tui_raw_line(TUIData *tui, int64_t g, int64_t linerow, int64_t startcol,
                              int64_t endcol, int64_t clearcol, int64_t clearattr,
                              int64_t flags, const schar_T *chunk, const sattr_T *attrs);
@@ -658,6 +659,31 @@ int nvim_tui_get_ti_lines(TUIData *tui) { return tui->ti.lines; }
 
 /// Get terminfo columns field
 int nvim_tui_get_ti_columns(TUIData *tui) { return tui->ti.columns; }
+
+/// Get stdin_isatty global
+bool nvim_tui_stdin_isatty(void) { return stdin_isatty; }
+
+// Forward declarations for Phase 5c wrappers
+static void show_verbose_terminfo(TUIData *tui);
+static void tui_set_term_mode(TUIData *tui, TermMode mode, bool set);
+
+/// Dump verbose terminfo info to messages (called from Rust for tui_mode_change)
+void nvim_tui_show_verbose_terminfo(TUIData *tui) { show_verbose_terminfo(tui); }
+
+/// Reset TTY modes on UNIX when is_starting and not a TTY stdin
+void nvim_tui_tty_reset_mode_hack(TUIData *tui)
+{
+#ifdef UNIX
+  int ret = uv_tty_set_mode(&tui->output_handle.tty, UV_TTY_MODE_NORMAL);
+  if (ret) {
+    ELOG("uv_tty_set_mode failed: %s", uv_strerror(ret));
+  }
+  ret = uv_tty_set_mode(&tui->output_handle.tty, UV_TTY_MODE_IO);
+  if (ret) {
+    ELOG("uv_tty_set_mode failed: %s", uv_strerror(ret));
+  }
+#endif
+}
 
 // Forward declaration for out_len
 static void out_len(TUIData *tui, const char *str);
@@ -1418,31 +1444,10 @@ static void tui_set_mode(TUIData *tui, ModeShape mode)
 }
 
 /// @param mode editor mode
+/// Handle mode change events. Rust implementation.
 void tui_mode_change(TUIData *tui, String mode, Integer mode_idx)
 {
-#ifdef UNIX
-  // If stdin is not a TTY, the LHS of pipe may change the state of the TTY
-  // after calling uv_tty_set_mode. So, set the mode of the TTY again here.
-  // #13073
-  if (tui->is_starting && !stdin_isatty) {
-    int ret = uv_tty_set_mode(&tui->output_handle.tty, UV_TTY_MODE_NORMAL);
-    if (ret) {
-      ELOG("uv_tty_set_mode failed: %s", uv_strerror(ret));
-    }
-    ret = uv_tty_set_mode(&tui->output_handle.tty, UV_TTY_MODE_IO);
-    if (ret) {
-      ELOG("uv_tty_set_mode failed: %s", uv_strerror(ret));
-    }
-  }
-#endif
-  tui_set_mode(tui, (ModeShape)mode_idx);
-  if (tui->is_starting) {
-    if (tui->verbose >= 3) {
-      show_verbose_terminfo(tui);
-    }
-  }
-  tui->is_starting = false;  // mode entered, no longer starting
-  tui->showing_mode = (ModeShape)mode_idx;
+  rs_tui_mode_change(tui, (int64_t)mode_idx);
 }
 
 /// Scroll a region of the grid. Rust implementation.
