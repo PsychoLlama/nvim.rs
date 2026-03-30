@@ -16,8 +16,8 @@ use std::ffi::{c_char, c_int, c_void};
 
 extern "C" {
     fn nvim_eval_api_info(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_byte2line(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_line2byte(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_byte2line: inlined into rs_f_byte2line below
+    // nvim_eval_line2byte: inlined into rs_f_line2byte below
     // nvim_eval_gettext: inlined into rs_f_gettext below
     fn nvim_eval_keytrans(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_luaeval: inlined into rs_f_luaeval below
@@ -95,6 +95,15 @@ extern "C" {
     #[link_name = "tv_get_string_chk"]
     fn s_tv_get_string_chk(tv: *mut c_void) -> *const c_char;
     fn nlua_typval_eval(str: NvimApiString, arg: *const c_void, rettv: *mut c_void);
+
+    // byte2line / line2byte inlining
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn rs_ml_find_line_or_offset(
+        buf: *mut c_void,
+        lnum: i64,
+        offp: *mut c_int,
+        no_ff: c_int,
+    ) -> c_int;
 }
 
 // =============================================================================
@@ -124,7 +133,16 @@ pub unsafe extern "C" fn rs_f_byte2line(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_byte2line(argvars, rettv);
+    // nvim_eval_byte2line: inlined — rs_ml_find_line_or_offset delegation
+    #[allow(clippy::cast_possible_truncation)]
+    let mut boff = nvim_tv_get_number(argvars) as c_int - 1;
+    let result = if boff < 0 {
+        -1i64
+    } else {
+        let curbuf = nvim_get_curbuf();
+        i64::from(rs_ml_find_line_or_offset(curbuf, 0, &raw mut boff, 0))
+    };
+    nvim_tv_set_number(rettv, result);
 }
 
 /// "line2byte(lnum)" function - convert line number to byte offset
@@ -137,7 +155,24 @@ pub unsafe extern "C" fn rs_f_line2byte(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_line2byte(argvars, rettv);
+    // nvim_eval_line2byte: inlined — rs_ml_find_line_or_offset delegation
+    let lnum = nvim_eval_tv_get_lnum(argvars);
+    let ml_count = nvim_eval_curbuf_ml_line_count();
+    let mut result = if lnum < 1 || lnum > ml_count + 1 {
+        -1i64
+    } else {
+        let curbuf = nvim_get_curbuf();
+        i64::from(rs_ml_find_line_or_offset(
+            curbuf,
+            i64::from(lnum),
+            std::ptr::null_mut(),
+            0,
+        ))
+    };
+    if result >= 0 {
+        result += 1;
+    }
+    nvim_tv_set_number(rettv, result);
 }
 
 /// "gettext(text)" function - translate a string

@@ -4785,28 +4785,8 @@ void nvim_eval_swapinfo(typval_T *argvars, typval_T *rettv)
 
 void nvim_eval_api_info(typval_T *argvars, typval_T *rettv) { object_to_vim(api_metadata(), rettv, NULL); }
 
-void nvim_eval_byte2line(typval_T *argvars, typval_T *rettv)
-{
-  int boff = (int)tv_get_number(&argvars[0]) - 1;
-  if (boff < 0) {
-    rettv->vval.v_number = -1;
-  } else {
-    rettv->vval.v_number = (varnumber_T)rs_ml_find_line_or_offset(curbuf, 0, &boff, false);
-  }
-}
-
-void nvim_eval_line2byte(typval_T *argvars, typval_T *rettv)
-{
-  const linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count + 1) {
-    rettv->vval.v_number = -1;
-  } else {
-    rettv->vval.v_number = rs_ml_find_line_or_offset(curbuf, lnum, NULL, false);
-  }
-  if (rettv->vval.v_number >= 0) {
-    rettv->vval.v_number++;
-  }
-}
+// nvim_eval_byte2line: inlined into Rust (simple.rs) — rs_ml_find_line_or_offset delegation
+// nvim_eval_line2byte: inlined into Rust (simple.rs) — rs_ml_find_line_or_offset delegation
 
 // nvim_eval_gettext: inlined into Rust (simple.rs) — gettext() delegation
 
