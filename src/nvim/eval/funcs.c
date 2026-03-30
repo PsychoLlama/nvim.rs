@@ -430,6 +430,14 @@ extern void f_swapname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_virtcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// VimL functions moved to funcs_shim.c (Phase 24)
+extern void f_getchangelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getjumplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getmarklist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_gettagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_prompt_getprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -1208,107 +1216,6 @@ static void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "getchangelist()" function
-static void f_getchangelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, 2);
-
-  const buf_T *buf;
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    buf = curbuf;
-  } else {
-    vim_ignored = (int)tv_get_number(&argvars[0]);  // issue errmsg if type error
-    emsg_off++;
-    buf = tv_get_buf(&argvars[0], false);
-    emsg_off--;
-  }
-  if (buf == NULL) {
-    return;
-  }
-
-  list_T *const l = tv_list_alloc(buf->b_changelistlen);
-  tv_list_append_list(rettv->vval.v_list, l);
-  // The current window change list index tracks only the position for the
-  // current buffer. For other buffers use the stored index for the current
-  // window, or, if that's not available, the change list length.
-  int changelistindex;
-  if (buf == curwin->w_buffer) {
-    changelistindex = curwin->w_changelistidx;
-  } else {
-    changelistindex = buf->b_changelistlen;
-
-    for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
-      WinInfo *wip = kv_A(buf->b_wininfo, i);
-      if (wip->wi_win == curwin) {
-        changelistindex = wip->wi_changelistidx;
-        break;
-      }
-    }
-  }
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)changelistindex);
-
-  for (int i = 0; i < buf->b_changelistlen; i++) {
-    if (buf->b_changelist[i].mark.lnum == 0) {
-      continue;
-    }
-    dict_T *const d = tv_dict_alloc();
-    tv_list_append_dict(l, d);
-    tv_dict_add_nr(d, S_LEN("lnum"), buf->b_changelist[i].mark.lnum);
-    tv_dict_add_nr(d, S_LEN("col"), buf->b_changelist[i].mark.col);
-    tv_dict_add_nr(d, S_LEN("coladd"), buf->b_changelist[i].mark.coladd);
-  }
-}
-
-
-/// "getjumplist()" function
-static void f_getjumplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  win_T *const wp = find_tabwin(&argvars[0], &argvars[1]);
-  if (wp == NULL) {
-    return;
-  }
-
-  cleanup_jumplist(wp, true);
-
-  list_T *const l = tv_list_alloc(wp->w_jumplistlen);
-  tv_list_append_list(rettv->vval.v_list, l);
-  tv_list_append_number(rettv->vval.v_list, wp->w_jumplistidx);
-
-  for (int i = 0; i < wp->w_jumplistlen; i++) {
-    if (wp->w_jumplist[i].fmark.mark.lnum == 0) {
-      continue;
-    }
-    dict_T *const d = tv_dict_alloc();
-    tv_list_append_dict(l, d);
-    tv_dict_add_nr(d, S_LEN("lnum"), wp->w_jumplist[i].fmark.mark.lnum);
-    tv_dict_add_nr(d, S_LEN("col"), wp->w_jumplist[i].fmark.mark.col);
-    tv_dict_add_nr(d, S_LEN("coladd"), wp->w_jumplist[i].fmark.mark.coladd);
-    tv_dict_add_nr(d, S_LEN("bufnr"), wp->w_jumplist[i].fmark.fnum);
-    if (wp->w_jumplist[i].fname != NULL) {
-      tv_dict_add_str(d, S_LEN("filename"), wp->w_jumplist[i].fname);
-    }
-  }
-}
-
-/// "getmarklist()" function
-static void f_getmarklist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    get_global_marks(rettv->vval.v_list);
-    return;
-  }
-
-  buf_T *buf = tv_get_buf(&argvars[0], false);
-  if (buf == NULL) {
-    return;
-  }
-
-  get_buf_local_marks(buf, rettv->vval.v_list);
-}
-
 /// Convert from block_def to string
 static char *block_def2str(struct block_def *bd)
 {
@@ -1618,23 +1525,6 @@ static void f_getregionpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   virtual_op = save_virtual;
 }
 
-
-/// "gettagstack()" function
-static void f_gettagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  win_T *wp = curwin;                  // default is current window
-
-  tv_dict_alloc_ret(rettv);
-
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    wp = find_win_by_nr_or_id(&argvars[0]);
-    if (wp == NULL) {
-      return;
-    }
-  }
-
-  rs_get_tagstack(wp, rettv->vval.v_dict);
-}
 
 /// Dummy timer callback. Used by f_wait().
 static void dummy_timer_due_cb(TimeWatcher *tw, void *data)
@@ -2747,48 +2637,6 @@ static void f_msgpackparse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 
 
 /// "printf()" function
-
-/// "prompt_getprompt({buffer})" function
-static void f_prompt_getprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // return an empty string by default, e.g. it's not a prompt buffer
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  buf_T *const buf = tv_get_buf_from_arg(&argvars[0]);
-  if (buf == NULL) {
-    return;
-  }
-
-  if (!bt_prompt(buf)) {
-    return;
-  }
-
-  rettv->vval.v_string = xstrdup(buf_prompt_text(buf));
-}
-
-/// "prompt_getinput({buffer})" function
-static void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // return an empty string by default, e.g. it's not a prompt buffer
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  buf_T *const buf = tv_get_buf_from_arg(&argvars[0]);
-  if (buf == NULL) {
-    return;
-  }
-
-  if (!bt_prompt(buf)) {
-    return;
-  }
-
-  rettv->vval.v_string = prompt_get_input(buf);
-}
-
-
 /// "py3eval()" and "pyxeval()" functions (always python3)
 
 
