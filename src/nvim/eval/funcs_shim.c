@@ -32,7 +32,10 @@
 #include "nvim/state_defs.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
+#include "nvim/ui_compositor.h"
 #include "nvim/version.h"
+#include "nvim/grid.h"
+#include "nvim/mbyte.h"
 
 #include "eval/funcs_shim.c.generated.h"
 
@@ -577,4 +580,77 @@ void nvim_eval_repeat_blob(typval_T *argvars, typval_T *rettv, varnumber_T n)
   for (i = 0; i < n; i++) {
     tv_blob_set_range(rettv->vval.v_blob, i * slen, (i + 1) * slen - 1, argvars);
   }
+}
+
+// =============================================================================
+// Screen cell accessor functions (moved from funcs.c)
+// =============================================================================
+
+static void screenchar_adjust_inner(ScreenGrid **grid, int *row, int *col)
+{
+  msg_scroll_flush();
+  *grid = ui_comp_get_grid_at_coord(*row, *col);
+  *row -= (*grid)->comp_row;
+  *col -= (*grid)->comp_col;
+}
+
+void nvim_eval_screenattr(typval_T *argvars, typval_T *rettv)
+{
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  int c;
+  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
+    c = -1;
+  } else {
+    c = grid->attrs[grid->line_offset[row] + (size_t)col];
+  }
+  rettv->vval.v_number = c;
+}
+
+void nvim_eval_screenchar(typval_T *argvars, typval_T *rettv)
+{
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  rettv->vval.v_number = (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols)
+    ? -1 : schar_get_first_codepoint(grid_getchar(grid, row, col, NULL));
+}
+
+void nvim_eval_screenchars(typval_T *argvars, typval_T *rettv)
+{
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  tv_list_alloc_ret(rettv, kListLenMayKnow);
+  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
+    return;
+  }
+  char buf[MAX_SCHAR_SIZE + 1];
+  schar_get(buf, grid_getchar(grid, row, col, NULL));
+  size_t i = 0;
+  do {
+    int c = utf_ptr2char(buf + i);
+    tv_list_append_number(rettv->vval.v_list, c);
+    i += (size_t)utf_ptr2len(buf + i);
+  } while (buf[i] != NUL);
+}
+
+void nvim_eval_screenstring(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_string = NULL;
+  rettv->v_type = VAR_STRING;
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
+    return;
+  }
+  char buf[MAX_SCHAR_SIZE + 1];
+  schar_get(buf, grid_getchar(grid, row, col, NULL));
+  rettv->vval.v_string = xstrdup(buf);
 }

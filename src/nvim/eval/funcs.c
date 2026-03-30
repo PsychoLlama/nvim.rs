@@ -4740,10 +4740,7 @@ void nvim_eval_libcall(typval_T *argvars, typval_T *rettv, bool retstr)
   }
 }
 
-void nvim_eval_script_host_eval(const char *name, typval_T *argvars, typval_T *rettv)
-{
-  script_host_eval(name, argvars, rettv);
-}
+// nvim_eval_script_host_eval: inlined into Rust (misc.rs)
 
 void nvim_eval_search(typval_T *argvars, typval_T *rettv)
 {
@@ -4805,74 +4802,9 @@ void nvim_eval_api_info(typval_T *argvars, typval_T *rettv) { object_to_vim(api_
 // nvim_eval_menu_get: inlined into Rust (simple.rs) — menu_get delegation
 
 
-static void screenchar_adjust_inner(ScreenGrid **grid, int *row, int *col)
-{
-  msg_scroll_flush();
-  *grid = ui_comp_get_grid_at_coord(*row, *col);
-  *row -= (*grid)->comp_row;
-  *col -= (*grid)->comp_col;
-}
-
-void nvim_eval_screenattr(typval_T *argvars, typval_T *rettv)
-{
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-  ScreenGrid *grid;
-  screenchar_adjust_inner(&grid, &row, &col);
-  int c;
-  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
-    c = -1;
-  } else {
-    c = grid->attrs[grid->line_offset[row] + (size_t)col];
-  }
-  rettv->vval.v_number = c;
-}
-
-void nvim_eval_screenchar(typval_T *argvars, typval_T *rettv)
-{
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-  ScreenGrid *grid;
-  screenchar_adjust_inner(&grid, &row, &col);
-  rettv->vval.v_number = (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols)
-    ? -1 : schar_get_first_codepoint(grid_getchar(grid, row, col, NULL));
-}
-
-void nvim_eval_screenchars(typval_T *argvars, typval_T *rettv)
-{
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-  ScreenGrid *grid;
-  screenchar_adjust_inner(&grid, &row, &col);
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
-    return;
-  }
-  char buf[MAX_SCHAR_SIZE + 1];
-  schar_get(buf, grid_getchar(grid, row, col, NULL));
-  size_t i = 0;
-  do {
-    int c = utf_ptr2char(buf + i);
-    tv_list_append_number(rettv->vval.v_list, c);
-    i += (size_t)utf_ptr2len(buf + i);
-  } while (buf[i] != NUL);
-}
-
-void nvim_eval_screenstring(typval_T *argvars, typval_T *rettv)
-{
-  rettv->vval.v_string = NULL;
-  rettv->v_type = VAR_STRING;
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-  ScreenGrid *grid;
-  screenchar_adjust_inner(&grid, &row, &col);
-  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
-    return;
-  }
-  char buf[MAX_SCHAR_SIZE + 1];
-  schar_get(buf, grid_getchar(grid, row, col, NULL));
-  rettv->vval.v_string = xstrdup(buf);
-}
+// screenchar_adjust_inner, nvim_eval_screenattr, nvim_eval_screenchar,
+// nvim_eval_screenchars, nvim_eval_screenstring:
+// moved to funcs_shim.c
 
 
 // nvim_eval_environ: inlined into Rust (system.rs) — os_get_fullenv_size + os_copy_fullenv delegation

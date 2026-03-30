@@ -921,7 +921,8 @@ extern "C" {
     fn nvim_eval_input(argvars: *const c_void, rettv: *mut c_void, dialog: bool);
     // nvim_eval_json_encode: inlined into rs_f_json_encode below
     fn nvim_eval_libcall(argvars: *const c_void, rettv: *mut c_void, retstr: bool);
-    fn nvim_eval_script_host_eval(name: *const c_char, argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_script_host_eval: inlined — calls script_host_eval directly
+    fn script_host_eval(name: *mut c_char, argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_search(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_searchpairpos(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_swapfilelist: inlined into rs_f_swapfilelist below
@@ -1130,7 +1131,7 @@ pub unsafe extern "C" fn rs_f_py3eval(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_script_host_eval(c"python3".as_ptr(), argvars, rettv);
+    script_host_eval(c"python3".as_ptr().cast_mut(), argvars, rettv);
 }
 
 /// "perleval()" function - evaluate a Perl expression
@@ -1143,7 +1144,7 @@ pub unsafe extern "C" fn rs_f_perleval(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_script_host_eval(c"perl".as_ptr(), argvars, rettv);
+    script_host_eval(c"perl".as_ptr().cast_mut(), argvars, rettv);
 }
 
 /// "rubyeval()" function - evaluate a Ruby expression
@@ -1156,7 +1157,7 @@ pub unsafe extern "C" fn rs_f_rubyeval(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_script_host_eval(c"ruby".as_ptr(), argvars, rettv);
+    script_host_eval(c"ruby".as_ptr().cast_mut(), argvars, rettv);
 }
 
 /// "search()" function - search for a pattern
