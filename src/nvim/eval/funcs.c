@@ -423,6 +423,13 @@ extern void f_setcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_setcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_wildtrigger(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// VimL functions moved to funcs_shim.c (Phase 23)
+extern void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_serverlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_swapname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_virtcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -2354,43 +2361,6 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 
 /// "libcall()" function
-/// "line(string, [winid])" function
-static void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  linenr_T lnum = 0;
-  pos_T *fp = NULL;
-  int fnum;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    // use window specified in the second argument
-    int id = (int)tv_get_number(&argvars[1]);
-    tabpage_T *tp;
-    win_T *wp = win_id2wp_tp(id, &tp);
-    if (wp != NULL && tp != NULL) {
-      switchwin_T switchwin;
-      if (switch_win_noblock(&switchwin, wp, tp, true) == OK) {
-        // With 'splitkeep' != cursor and in diff mode, prevent that the
-        // window scrolls and keep the topline.
-        if (*p_spk != 'c' || (curwin->w_p_diff && switchwin.sw_curwin->w_p_diff)) {
-          skip_update_topline = true;
-        }
-        check_cursor(curwin);
-        fp = var2fpos(&argvars[0], true, &fnum, false);
-      }
-      skip_update_topline = false;
-      restore_win_noblock(&switchwin, true);
-    }
-  } else {
-    // use current window
-    fp = var2fpos(&argvars[0], true, &fnum, false);
-  }
-
-  if (fp != NULL) {
-    lnum = fp->lnum;
-  }
-  rettv->vval.v_number = lnum;
-}
-
 
 /// Return all the matches in string "str" for pattern "rmp".
 /// The matches are returned in the List "mlist".
@@ -3425,50 +3395,6 @@ int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
 
 /// "searchpos()" function
 
-/// "serverlist()" function
-static void f_serverlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  size_t n;
-  char **addrs = server_address_list(&n);
-
-  Arena arena = ARENA_EMPTY;
-  // Passed to vim._core.server.serverlist() to avoid duplicates
-  Array addrs_arr = arena_array(&arena, n);
-
-  // Copy addrs into a linked list.
-  list_T *const l = tv_list_alloc_ret(rettv, (ptrdiff_t)n);
-  for (size_t i = 0; i < n; i++) {
-    tv_list_append_allocated_string(l, addrs[i]);
-    ADD_C(addrs_arr, CSTR_AS_OBJ(addrs[i]));
-  }
-
-  if (!(argvars[0].v_type == VAR_DICT && tv_dict_get_bool(argvars[0].vval.v_dict, "peer", false))) {
-    goto cleanup;
-  }
-
-  MAXSIZE_TEMP_ARRAY(args, 1);
-  ADD_C(args, ARRAY_OBJ(addrs_arr));
-
-  Error err = ERROR_INIT;
-  Object rv = NLUA_EXEC_STATIC("return require('vim._core.server').serverlist(...)",
-                               args, kRetObject,
-                               &arena, &err);
-
-  if (ERROR_SET(&err)) {
-    ELOG("vim._core.serverlist failed: %s", err.msg);
-    goto cleanup;
-  }
-
-  for (size_t i = 0; i < rv.data.array.size; i++) {
-    char *curr_server = rv.data.array.items[i].data.string.data;
-    tv_list_append_string(l, curr_server, -1);
-  }
-
-cleanup:
-  xfree(addrs);
-  arena_mem_free(arena_finish(&arena));
-}
-
 
 /// "serverstop()" function
 
@@ -3884,102 +3810,11 @@ theend:
 /// "submatch()" function
 
 /// "swapfilelist()" function
-/// "swapname(expr)" function
-static void f_swapname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  buf_T *buf = tv_get_buf(&argvars[0], false);
-  if (buf == NULL
-      || buf->b_ml.ml_mfp == NULL
-      || buf->b_ml.ml_mfp->mf_fname == NULL) {
-    rettv->vval.v_string = NULL;
-  } else {
-    rettv->vval.v_string = xstrdup(buf->b_ml.ml_mfp->mf_fname);
-  }
-}
-
-
-/// "tabpagebuflist()" function
-static void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  win_T *wp = NULL;
-
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    wp = firstwin;
-  } else {
-    tabpage_T *const tp = rs_find_tabpage((int)tv_get_number(&argvars[0]));
-    if (tp != NULL) {
-      wp = (tp == curtab) ? firstwin : tp->tp_firstwin;
-    }
-  }
-  if (wp != NULL) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow);
-    while (wp != NULL) {
-      tv_list_append_number(rettv->vval.v_list, wp->w_buffer->b_fnum);
-      wp = wp->w_next;
-    }
-  }
-}
 
 
 /// "timer_info([timer])" function
 
 
-/// "virtcol({expr}, [, {list} [, {winid}]])" function
-static void f_virtcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  colnr_T vcol_start = 0;
-  colnr_T vcol_end = 0;
-  switchwin_T switchwin;
-  bool winchanged = false;
-
-  if (argvars[1].v_type != VAR_UNKNOWN && argvars[2].v_type != VAR_UNKNOWN) {
-    // use the window specified in the third argument
-    tabpage_T *tp;
-    win_T *wp = win_id2wp_tp((int)tv_get_number(&argvars[2]), &tp);
-    if (wp == NULL || tp == NULL) {
-      goto theend;
-    }
-
-    if (switch_win_noblock(&switchwin, wp, tp, true) != OK) {
-      goto theend;
-    }
-
-    check_cursor(curwin);
-    winchanged = true;
-  }
-
-  int fnum = curbuf->b_fnum;
-  pos_T *fp = var2fpos(&argvars[0], false, &fnum, false);
-  if (fp != NULL && fp->lnum <= curbuf->b_ml.ml_line_count
-      && fnum == curbuf->b_fnum) {
-    // Limit the column to a valid value, getvvcol() doesn't check.
-    if (fp->col < 0) {
-      fp->col = 0;
-    } else {
-      const colnr_T len = ml_get_len(fp->lnum);
-      if (fp->col > len) {
-        fp->col = len;
-      }
-    }
-    getvvcol(curwin, fp, &vcol_start, NULL, &vcol_end);
-    vcol_start++;
-    vcol_end++;
-  }
-
-theend:
-  if (argvars[1].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[1])) {
-    tv_list_alloc_ret(rettv, 2);
-    tv_list_append_number(rettv->vval.v_list, vcol_start);
-    tv_list_append_number(rettv->vval.v_list, vcol_end);
-  } else {
-    rettv->vval.v_number = vcol_end;
-  }
-
-  if (winchanged) {
-    restore_win_noblock(&switchwin, true);
-  }
-}
 
 
 int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
