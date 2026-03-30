@@ -442,8 +442,6 @@ PRAGMA_DIAG_POP
 PRAGMA_DIAG_POP
 
 static const char *e_invalwindow = N_("E957: Invalid window number");
-static const char e_invalid_submatch_number_nr[]
-  = N_("E935: Invalid submatch number: %d");
 static const char e_string_list_or_blob_required[]
   = N_("E1098: String, List or Blob required");
 static const char e_missing_function_argument[]
@@ -5334,63 +5332,6 @@ nvim_eval_spellsuggest_return:
   curwin->w_p_spell = wo_spell_save;
 }
 
-void nvim_eval_submatch(typval_T *argvars, typval_T *rettv)
-{
-  bool error = false;
-  int no = (int)tv_get_number_chk(&argvars[0], &error);
-  if (error) {
-    return;
-  }
-
-  if (no < 0 || no >= NSUBEXP) {
-    semsg(_(e_invalid_submatch_number_nr), no);
-    return;
-  }
-  int retList = 0;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    retList = (int)tv_get_number_chk(&argvars[1], &error);
-    if (error) {
-      return;
-    }
-  }
-
-  if (retList == 0) {
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = reg_submatch(no);
-  } else {
-    rettv->v_type = VAR_LIST;
-    rettv->vval.v_list = reg_submatch_list(no);
-  }
-}
-
-void nvim_eval_substitute(typval_T *argvars, typval_T *rettv)
-{
-  char patbuf[NUMBUFLEN];
-  char subbuf[NUMBUFLEN];
-  char flagsbuf[NUMBUFLEN];
-
-  const char *const str = tv_get_string_chk(&argvars[0]);
-  const char *const pat = tv_get_string_buf_chk(&argvars[1], patbuf);
-  const char *sub = NULL;
-  const char *const flg = tv_get_string_buf_chk(&argvars[3], flagsbuf);
-
-  typval_T *expr = NULL;
-  if (tv_is_func(argvars[2])) {
-    expr = &argvars[2];
-  } else {
-    sub = tv_get_string_buf_chk(&argvars[2], subbuf);
-  }
-
-  rettv->v_type = VAR_STRING;
-  if (str == NULL || pat == NULL || (sub == NULL && expr == NULL)
-      || flg == NULL) {
-    rettv->vval.v_string = NULL;
-  } else {
-    rettv->vval.v_string = do_string_sub((char *)str, strlen(str), (char *)pat,
-                                         (char *)sub, expr, (char *)flg, NULL);
-  }
-}
 
 void nvim_eval_synID(typval_T *argvars, typval_T *rettv)
 {

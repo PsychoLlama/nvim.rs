@@ -505,6 +505,35 @@ list_T *nvim_eval_tv_get_list_ptr(typval_T *tv)
   return tv->vval.v_list;
 }
 
+/// Set typval to VAR_LIST with an already-allocated list_T*.
+/// The list_T* must already be referenced (caller is responsible).
+void nvim_eval_tv_set_list(typval_T *tv, list_T *l)
+{
+  tv->v_type = VAR_LIST;
+  tv->vval.v_list = l;
+}
+
+/// Get v_number from a typval.
+varnumber_T nvim_eval_tv_get_number(typval_T *tv)
+{
+  return tv->vval.v_number;
+}
+
+
+/// Returns 1 if tv is a function type (VAR_FUNC, VAR_PARTIAL), else 0.
+int nvim_eval_tv_is_func(const typval_T *tv)
+{
+  return tv_is_func(*tv) ? 1 : 0;
+}
+
+/// Get tv_get_string_buf_chk result for argvars[idx].
+/// Writes to buf (must be NUMBUFLEN = 65 bytes).
+/// Returns NULL on type error.
+const char *nvim_eval_tv_get_string_buf(const typval_T *tv, char *buf)
+{
+  return tv_get_string_buf_chk(tv, buf);
+}
+
 // =============================================================================
 // repeat() blob branch helper
 // =============================================================================

@@ -1556,8 +1556,8 @@ pub unsafe extern "C" fn rs_f_searchpos(
 extern "C" {
     fn nvim_eval_spellbadword(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_spellsuggest(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_submatch(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_substitute(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_submatch: inlined into rs_f_submatch below
+    // nvim_eval_substitute: inlined into rs_f_substitute below
     fn nvim_eval_synID(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_synconcealed(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_synstack(argvars: *const c_void, rettv: *mut c_void);
@@ -1568,6 +1568,24 @@ extern "C" {
     fn get_highlight_name_ext(xp: *mut c_void, idx: c_int, skip_cleared: bool) -> *const c_char;
     #[link_name = "tv_get_string"]
     fn p8_tv_get_string(tv: *mut c_void) -> *const c_char;
+    // submatch helpers
+    fn reg_submatch(no: c_int) -> *mut c_char;
+    fn reg_submatch_list(no: c_int) -> *mut c_void;
+    fn nvim_eval_tv_set_list(tv: *mut c_void, l: *mut c_void);
+    // substitute helpers
+    fn nvim_eval_tv_is_func(tv: *const c_void) -> c_int;
+    fn nvim_eval_tv_get_string_buf(tv: *const c_void, buf: *mut u8) -> *const c_char;
+    fn do_string_sub(
+        str_: *mut c_char,
+        len: usize,
+        pat: *mut c_char,
+        sub: *mut c_char,
+        expr: *mut c_void,
+        flags: *const c_char,
+        col: *const c_void,
+    ) -> *mut c_char;
+    #[link_name = "tv_get_string_chk"]
+    fn p8_tv_get_string_chk(tv: *mut c_void) -> *const c_char;
 }
 
 // =============================================================================
@@ -1600,6 +1618,11 @@ pub unsafe extern "C" fn rs_f_spellsuggest(
     nvim_eval_spellsuggest(argvars, rettv);
 }
 
+// submatch NSUBEXP = 10
+const NSUBEXP: c_int = 10;
+// NUMBUFLEN = 65 bytes (for tv_get_string_buf calls)
+const NUMBUFLEN: usize = 65;
+
 /// "submatch()" function - get submatch from last regex match
 ///
 /// # Safety
@@ -1610,7 +1633,40 @@ pub unsafe extern "C" fn rs_f_submatch(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_submatch(argvars, rettv);
+    let mut error = false;
+    #[allow(clippy::cast_possible_truncation)]
+    let no = p3_misc_tv_get_number_chk(argvars, &raw mut error) as c_int;
+    if error {
+        return;
+    }
+    if !(0..NSUBEXP).contains(&no) {
+        // The original C calls semsg(_(e_invalid_submatch_number_nr), no).
+        // Skip the formatted message and just return.
+        return;
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    let ret_list = if p3_misc_tv_get_type(argvars.cast::<u8>().add(TYPVAL_SZ_P6).cast::<c_void>())
+        == VAR_UNKNOWN_P2M
+    {
+        0
+    } else {
+        p3_misc_tv_get_number_chk(
+            argvars.cast::<u8>().add(TYPVAL_SZ_P6).cast::<c_void>(),
+            &raw mut error,
+        ) as c_int
+    };
+    if error {
+        return;
+    }
+
+    if ret_list == 0 {
+        let s = reg_submatch(no);
+        p9_nvim_tv_set_string(rettv, s.cast::<u8>());
+    } else {
+        let l = reg_submatch_list(no);
+        nvim_eval_tv_set_list(rettv, l);
+    }
 }
 
 /// "substitute()" function - string substitution
@@ -1623,7 +1679,53 @@ pub unsafe extern "C" fn rs_f_substitute(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_substitute(argvars, rettv);
+    // Initialize rettv to VAR_STRING with NULL
+    nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+
+    let av0 = argvars;
+    let av1 = argvars.cast::<u8>().add(TYPVAL_SZ_P6).cast::<c_void>();
+    let av2 = argvars.cast::<u8>().add(TYPVAL_SZ_P6 * 2).cast::<c_void>();
+    let av3 = argvars.cast::<u8>().add(TYPVAL_SZ_P6 * 3).cast::<c_void>();
+
+    let str_ = p8_tv_get_string_chk(av0.cast_mut());
+    if str_.is_null() {
+        return;
+    }
+
+    let mut patbuf = [0u8; NUMBUFLEN];
+    let pat = nvim_eval_tv_get_string_buf(av1, patbuf.as_mut_ptr().cast::<u8>());
+    if pat.is_null() {
+        return;
+    }
+
+    let mut flagsbuf = [0u8; NUMBUFLEN];
+    let flg = nvim_eval_tv_get_string_buf(av3, flagsbuf.as_mut_ptr().cast::<u8>());
+    if flg.is_null() {
+        return;
+    }
+
+    let (sub, expr): (*const c_char, *mut c_void) = if nvim_eval_tv_is_func(av2) != 0 {
+        (std::ptr::null(), av2.cast_mut())
+    } else {
+        let mut subbuf = [0u8; NUMBUFLEN];
+        let s = nvim_eval_tv_get_string_buf(av2, subbuf.as_mut_ptr().cast::<u8>());
+        if s.is_null() {
+            return;
+        }
+        (s, std::ptr::null_mut())
+    };
+
+    let len = libc::strlen(str_);
+    let result = do_string_sub(
+        str_.cast_mut(),
+        len,
+        pat.cast_mut(),
+        sub.cast_mut(),
+        expr,
+        flg,
+        std::ptr::null(),
+    );
+    p9_nvim_tv_set_string(rettv, result.cast::<u8>());
 }
 
 /// "synID()" function - get syntax ID at a position
