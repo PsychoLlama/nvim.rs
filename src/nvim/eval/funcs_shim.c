@@ -13,6 +13,7 @@
 #include "nvim/context.h"
 #include "nvim/eval.h"
 #include "nvim/eval_defs.h"
+#include "nvim/highlight_group.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_getln.h"
 #include "nvim/getchar.h"
@@ -447,4 +448,28 @@ void nvim_eval_ins_k_wild(void)
   key_string[2] = KE_WILD;
   key_string[3] = NUL;
   ins_typebuf((char *)key_string, REMAP_NONE, 0, true, false);
+}
+
+// =============================================================================
+// synIDattr() modec helper
+// =============================================================================
+
+/// Get the 'modec' (mode character) for synIDattr() from argvars[2].
+/// Returns 'g' for GUI mode, 'c' for terminal mode, or the user-specified char.
+/// @param argvars  pointer to typval_T array (argvars[2] is the optional mode arg)
+int nvim_eval_synIDattr_get_modec(typval_T *argvars)
+{
+  if (argvars[2].v_type != VAR_UNKNOWN) {
+    char modebuf[NUMBUFLEN];
+    const char *mode = tv_get_string_buf(&argvars[2], modebuf);
+    int modec = TOLOWER_ASC(mode[0]);
+    if (modec != 'c' && modec != 'g') {
+      modec = 0;
+    }
+    return modec;
+  } else if (ui_rgb_attached()) {
+    return 'g';
+  } else {
+    return 'c';
+  }
 }

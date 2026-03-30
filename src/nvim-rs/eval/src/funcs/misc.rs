@@ -1559,9 +1559,15 @@ extern "C" {
     fn nvim_eval_submatch(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_substitute(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_synID(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_synIDattr(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_synconcealed(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_synstack(argvars: *const c_void, rettv: *mut c_void);
+    // synIDattr helpers
+    fn nvim_eval_synIDattr_get_modec(argvars: *mut c_void) -> c_int;
+    fn highlight_color(id: c_int, what: *const c_char, modec: c_int) -> *const c_char;
+    fn highlight_has_attr(id: c_int, flag: c_int, modec: c_int) -> *const c_char;
+    fn get_highlight_name_ext(xp: *mut c_void, idx: c_int, skip_cleared: bool) -> *const c_char;
+    #[link_name = "tv_get_string"]
+    fn p8_tv_get_string(tv: *mut c_void) -> *const c_char;
 }
 
 // =============================================================================
@@ -1634,6 +1640,19 @@ pub unsafe extern "C" fn rs_f_synID(
     nvim_eval_synID(argvars, rettv);
 }
 
+// HL_ flag constants (from highlight_defs.h)
+const HL_INVERSE: c_int = 0x01;
+const HL_BOLD: c_int = 0x02;
+const HL_ITALIC: c_int = 0x04;
+const HL_UNDERLINE: c_int = 0x08;
+const HL_UNDERCURL: c_int = 0x10;
+const HL_UNDERDOUBLE: c_int = 0x18;
+const HL_UNDERDOTTED: c_int = 0x20;
+const HL_UNDERDASHED: c_int = 0x28;
+const HL_STANDOUT: c_int = 0x0040;
+const HL_STRIKETHROUGH: c_int = 0x0080;
+const HL_NOCOMBINE: c_int = 0x0400;
+
 /// "synIDattr()" function - get attribute of a syntax ID
 ///
 /// # Safety
@@ -1645,7 +1664,116 @@ pub unsafe extern "C" fn rs_f_synIDattr(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_synIDattr(argvars, rettv);
+    #[allow(clippy::cast_possible_truncation)]
+    let id = tv_get_number(argvars) as c_int;
+    let what = p8_tv_get_string(
+        argvars
+            .cast::<u8>()
+            .add(TYPVAL_SZ_P6)
+            .cast::<c_void>()
+            .cast_mut(),
+    );
+    let modec = nvim_eval_synIDattr_get_modec(argvars.cast_mut());
+
+    if what.is_null() {
+        nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+        return;
+    }
+
+    // SAFETY: what is a valid NUL-terminated C string from tv_get_string.
+    // Cast to *const u8 for byte-level indexing without sign-loss issues.
+    let wb = what.cast::<u8>();
+    let w0 = (*wb).to_ascii_lowercase();
+    let w1 = if *wb.add(1) != 0 {
+        (*wb.add(1)).to_ascii_lowercase()
+    } else {
+        0u8
+    };
+
+    let p: *const c_char = match w0 {
+        b'b' => {
+            if w1 == b'g' {
+                // bg[#]
+                highlight_color(id, what, modec)
+            } else {
+                // bold
+                highlight_has_attr(id, HL_BOLD, modec)
+            }
+        }
+        b'f' => {
+            // fg[#] or font
+            highlight_color(id, what, modec)
+        }
+        b'i' => {
+            if w1 == b'n' {
+                // inverse
+                highlight_has_attr(id, HL_INVERSE, modec)
+            } else {
+                // italic
+                highlight_has_attr(id, HL_ITALIC, modec)
+            }
+        }
+        b'n' => {
+            if w1 == b'o' {
+                // nocombine
+                highlight_has_attr(id, HL_NOCOMBINE, modec)
+            } else {
+                // name
+                get_highlight_name_ext(std::ptr::null_mut(), id - 1, false)
+            }
+        }
+        b'r' => {
+            // reverse
+            highlight_has_attr(id, HL_INVERSE, modec)
+        }
+        b's' => {
+            let w2 = if *wb.add(2) != 0 {
+                (*wb.add(2)).to_ascii_lowercase()
+            } else {
+                0u8
+            };
+            if w1 == b'p' {
+                // sp[#]
+                highlight_color(id, what, modec)
+            } else if w1 == b't' && w2 == b'r' {
+                // strikethrough
+                highlight_has_attr(id, HL_STRIKETHROUGH, modec)
+            } else {
+                // standout
+                highlight_has_attr(id, HL_STANDOUT, modec)
+            }
+        }
+        b'u' => {
+            let len = libc::strlen(what);
+            if len >= 9 {
+                let w5 = (*wb.add(5)).to_ascii_lowercase();
+                let w6 = (*wb.add(6)).to_ascii_lowercase();
+                let w7 = (*wb.add(7)).to_ascii_lowercase();
+                if w5 == b'l' {
+                    // underline
+                    highlight_has_attr(id, HL_UNDERLINE, modec)
+                } else if w5 != b'd' {
+                    // undercurl
+                    highlight_has_attr(id, HL_UNDERCURL, modec)
+                } else if w6 != b'o' {
+                    // underdashed
+                    highlight_has_attr(id, HL_UNDERDASHED, modec)
+                } else if w7 == b'u' {
+                    // underdouble
+                    highlight_has_attr(id, HL_UNDERDOUBLE, modec)
+                } else {
+                    // underdotted
+                    highlight_has_attr(id, HL_UNDERDOTTED, modec)
+                }
+            } else {
+                // ul
+                highlight_color(id, what, modec)
+            }
+        }
+        _ => std::ptr::null(),
+    };
+
+    nvim_tv_set_string_copy(rettv, p.cast::<u8>(), if p.is_null() { 0 } else { -1 });
 }
 
 /// "synconcealed()" function - check if position is concealed
