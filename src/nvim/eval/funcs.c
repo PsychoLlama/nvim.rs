@@ -483,6 +483,22 @@ extern void f_jobstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_jobstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust fs.c Phase 1 VimL function declarations (fs.rs in nvim-eval crate)
+extern void f_browse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_browsedir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_isabsolutepath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_isdirectory(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_filereadable(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_filewritable(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_executable(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_tempname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_simplify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_rename(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getftime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_glob2regpat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_exepath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getfperm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"

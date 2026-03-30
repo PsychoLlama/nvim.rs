@@ -5951,6 +5951,17 @@ void nvim_eval_xdg_var_list(int xdg, typval_T *rettv)
 
 // nvim_eval_searchdecl: inlined into Rust (misc.rs) — find_decl delegation
 
+// =============================================================================
+// FileInfo accessors for Rust (eval/fs.rs migration)
+// =============================================================================
+
+/// Get modification time (mtime) from a FileInfo struct.
+/// Returns seconds since epoch.
+int64_t nvim_fileinfo_mtime(const FileInfo *info)
+{
+  return (int64_t)info->stat.st_mtim.tv_sec;
+}
+
 void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
 {
   pos_T match_pos;

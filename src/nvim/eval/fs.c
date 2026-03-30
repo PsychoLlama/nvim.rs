@@ -438,38 +438,6 @@ void f_delete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "executable()" function
-void f_executable(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_string_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  // Check in $PATH and also check directly if there is a directory name
-  rettv->vval.v_number = os_can_exe(tv_get_string(&argvars[0]), NULL, true);
-}
-
-/// "exepath()" function
-void f_exepath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_nonempty_string_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  char *path = NULL;
-
-  os_can_exe(tv_get_string(&argvars[0]), &path, true);
-
-#ifdef BACKSLASH_IN_FILENAME
-  if (path != NULL) {
-    slash_adjust(path);
-  }
-#endif
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = path;
-}
-
 /// "filecopy()" function
 void f_filecopy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -489,22 +457,6 @@ void f_filecopy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     rettv->vval.v_number
       = vim_copyfile(tv_get_string(&argvars[0]), tv_get_string(&argvars[1])) == OK;
   }
-}
-
-/// "filereadable()" function
-void f_filereadable(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *const p = tv_get_string(&argvars[0]);
-  rettv->vval.v_number = (*p && !os_isdir(p) && os_file_is_readable(p));
-}
-
-/// @return  0 for not writable
-///          1 for writable file
-///          2 for a dir which we have rights to write into.
-void f_filewritable(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *filename = tv_get_string(&argvars[0]);
-  rettv->vval.v_number = os_file_is_writable(filename);
 }
 
 static void findfilendir(typval_T *argvars, typval_T *rettv, int find_what)
@@ -727,26 +679,6 @@ void f_getcwd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   xfree(cwd);
 }
 
-/// "getfperm({fname})" function
-void f_getfperm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char *perm = NULL;
-  char flags[] = "rwx";
-
-  const char *filename = tv_get_string(&argvars[0]);
-  int32_t file_perm = os_getperm(filename);
-  if (file_perm >= 0) {
-    perm = xstrdup("---------");
-    for (int i = 0; i < 9; i++) {
-      if (file_perm & (1 << (8 - i))) {
-        perm[i] = flags[i % 3];
-      }
-    }
-  }
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = perm;
-}
-
 /// "getfsize({fname})" function
 void f_getfsize(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -767,19 +699,6 @@ void f_getfsize(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
         rettv->vval.v_number = -2;
       }
     }
-  } else {
-    rettv->vval.v_number = -1;
-  }
-}
-
-/// "getftime({fname})" function
-void f_getftime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *fname = tv_get_string(&argvars[0]);
-
-  FileInfo file_info;
-  if (os_fileinfo(fname, &file_info)) {
-    rettv->vval.v_number = (varnumber_T)file_info.stat.st_mtim.tv_sec;
   } else {
     rettv->vval.v_number = -1;
   }
@@ -917,15 +836,6 @@ void f_globpath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "glob2regpat()" function
-void f_glob2regpat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *const pat = tv_get_string_chk(&argvars[0]);  // NULL on type error
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = pat == NULL ? NULL : file_pat_to_reg_pat(pat, NULL, NULL, false);
-}
-
 /// `haslocaldir([{win}[, {tab}]])` function
 ///
 /// Returns `1` if the scope object has a local directory, `0` otherwise. If a
@@ -1024,18 +934,6 @@ void f_haslocaldir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     // We should never get here
     abort();
   }
-}
-
-/// "isabsolutepath()" function
-void f_isabsolutepath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = path_is_absolute(tv_get_string(&argvars[0]));
-}
-
-/// "isdirectory()" function
-void f_isdirectory(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = os_isdir(tv_get_string(&argvars[0]));
 }
 
 /// "mkdir()" function
@@ -1446,18 +1344,6 @@ void f_readblob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { read_fi
 /// "readfile()" function
 void f_readfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { read_file_or_blob(argvars, rettv, false); }
 
-/// "rename({from}, {to})" function
-void f_rename(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()) {
-    rettv->vval.v_number = -1;
-  } else {
-    char buf[NUMBUFLEN];
-    rettv->vval.v_number = vim_rename(tv_get_string(&argvars[0]),
-                                      tv_get_string_buf(&argvars[1], buf));
-  }
-}
-
 /// "resolve()" function
 void f_resolve(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -1623,22 +1509,6 @@ void f_resolve(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 #endif
 
   simplify_filename(rettv->vval.v_string);
-}
-
-/// "simplify()" function
-void f_simplify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *const p = tv_get_string(&argvars[0]);
-  rettv->vval.v_string = xstrdup(p);
-  simplify_filename(rettv->vval.v_string);  // Simplify in place.
-  rettv->v_type = VAR_STRING;
-}
-
-/// "tempname()" function
-void f_tempname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = vim_tempname();
 }
 
 /// Write "list" of strings to file "fd".
@@ -1823,12 +1693,3 @@ void f_writefile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "browse(save, title, initdir, default)" function
-void f_browse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_string = NULL;
-  rettv->v_type = VAR_STRING;
-}
-
-/// "browsedir(title, initdir)" function
-void f_browsedir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { f_browse(argvars, rettv, fptr); }
