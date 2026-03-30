@@ -732,264 +732,244 @@ enum { MAX_CB_ERRORS = 1, };
 /// Caches results: if prompt_id and cmdbuff are unchanged, returns immediately.
 ///
 /// @return true if draw_cmdline may proceed, false if nothing to do.
-bool nvim_color_cmdline(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
+// nvim_color_cmdline: implemented in Rust (cmdline crate, color.rs).
+// The following C helpers expose C-specific functionality to the Rust implementation.
+
+/// State shared between color_cmdline C helper functions.
+typedef struct {
+  Callback color_cb;
+  bool can_free_cb;
+  Error err;
+  const char *err_errmsg;
+  bool dgc_ret;
+  typval_T arg;
+  bool arg_allocated;
+  typval_T tv;
+} ColorCmdlineHelperState;
+static ColorCmdlineHelperState ccs;
+
+/// Returns 1 if the color cache for the current cmdline is still valid.
+int nvim_color_cache_valid(void)
 {
-  bool printed_errmsg = false;
+  ColoredCmdline *cc = &ccline.last_colors;
+  return (cc->prompt_id == ccline.prompt_id
+          && cc->cmdbuff != NULL
+          && ccline.cmdbuff != NULL
+          && strcmp(cc->cmdbuff, ccline.cmdbuff) == 0) ? 1 : 0;
+}
 
-#define PRINT_ERRMSG(...) \
-  do { \
-    msg_scroll = true; \
-    msg_putchar('\n'); \
-    smsg(HLF_E, __VA_ARGS__); \
-    printed_errmsg = true; \
-  } while (0)
-  bool ret = true;
-
-  ColoredCmdline *ccline_colors = &ccline.last_colors;
-
-  // Check whether result of the previous call is still valid.
-  if (ccline_colors->prompt_id == ccline.prompt_id
-      && ccline_colors->cmdbuff != NULL
-      && strcmp(ccline_colors->cmdbuff, ccline.cmdbuff) == 0) {
-    return ret;
-  }
-
-  kv_size(ccline_colors->colors) = 0;
-
-  if (ccline.cmdbuff == NULL || *ccline.cmdbuff == NUL) {
-    // Nothing to do, exiting.
-    XFREE_CLEAR(ccline_colors->cmdbuff);
-    return ret;
-  }
-
-  bool arg_allocated = false;
-  typval_T arg = {
-    .v_type = VAR_STRING,
-    .vval.v_string = ccline.cmdbuff,
+/// Reset ccline.last_colors.colors kvec to size 0 and reset helper state.
+void nvim_ccline_reset_colors(void)
+{
+  kv_size(ccline.last_colors.colors) = 0;
+  // Reset helper state for a fresh call.
+  ccs = (ColorCmdlineHelperState){
+    .color_cb = CALLBACK_NONE,
+    .can_free_cb = false,
+    .err = ERROR_INIT,
+    .err_errmsg = "",
+    .dgc_ret = true,
+    .arg = { .v_type = VAR_UNKNOWN },
+    .arg_allocated = false,
+    .tv = { .v_type = VAR_UNKNOWN },
   };
-  typval_T tv = { .v_type = VAR_UNKNOWN };
+}
 
-  static unsigned prev_prompt_id = UINT_MAX;
-  static int prev_prompt_errors = 0;
-  Callback color_cb = CALLBACK_NONE;
-  bool can_free_cb = false;
-  Error err = ERROR_INIT;
-  const char *err_errmsg = e_intern2;
-  bool dgc_ret = true;
-
-  // Use Rust helper to check if callback errors should be reset.
-  if (rs_should_reset_callback_errors(ccline.prompt_id, prev_prompt_id)) {
-    prev_prompt_errors = 0;
-    prev_prompt_id = ccline.prompt_id;
-  } else if (rs_should_skip_coloring(ccline.prompt_id, prev_prompt_id, prev_prompt_errors)) {
-    // Skip coloring due to too many previous errors.
-    goto color_cmdline_end;
+/// Returns 1 if ccline.cmdbuff is NULL or empty (nothing to color).
+int nvim_color_is_empty(void)
+{
+  if (ccline.cmdbuff == NULL || *ccline.cmdbuff == NUL) {
+    XFREE_CLEAR(ccline.last_colors.cmdbuff);
+    return 1;
   }
+  return 0;
+}
+
+/// Acquire the coloring callback.
+/// Returns: 0=none, 1=highlight_callback, 2=ex callback(':'), 3=expr path('=').
+/// -1 on error (check nvim_color_has_acquire_err).
+int nvim_color_acquire_callback(void)
+{
+  ccs.color_cb = CALLBACK_NONE;
+  ccs.can_free_cb = false;
+  ccs.err = ERROR_INIT;
+  ccs.err_errmsg = e_intern2;
+  ccs.dgc_ret = true;
+  ccs.arg = (typval_T){ .v_type = VAR_STRING, .vval.v_string = ccline.cmdbuff };
+  ccs.arg_allocated = false;
+  ccs.tv = (typval_T){ .v_type = VAR_UNKNOWN };
+
   if (ccline.highlight_callback.type != kCallbackNone) {
-    // Currently this should only happen while processing input() prompts.
     assert(ccline.input_fn);
-    color_cb = ccline.highlight_callback;
+    ccs.color_cb = ccline.highlight_callback;
+    return 1;
   } else if (ccline.cmdfirstc == ':') {
-    TRY_WRAP(&err, {
-      err_errmsg = N_("E5408: Unable to get g:Nvim_color_cmdline callback: %s");
-      dgc_ret = tv_dict_get_callback(get_globvar_dict(), S_LEN("Nvim_color_cmdline"),
-                                     &color_cb);
+    TRY_WRAP(&ccs.err, {
+      ccs.err_errmsg = N_("E5408: Unable to get g:Nvim_color_cmdline callback: %s");
+      ccs.dgc_ret = tv_dict_get_callback(get_globvar_dict(), S_LEN("Nvim_color_cmdline"),
+                                         &ccs.color_cb);
     });
-    can_free_cb = true;
-  } else if (ccline.cmdfirstc == '=') {
-    // Inline color_expr_cmdline: parse expression and build highlight chunks.
-    ParserLine parser_lines[] = {
-      {
-        .data = ccline.cmdbuff,
-        .size = strlen(ccline.cmdbuff),
-        .allocated = false,
-      },
-      { NULL, 0, false },
-    };
-    ParserLine *plines_p = parser_lines;
-    ParserHighlight expr_colors;
-    kvi_init(expr_colors);
-    ParserState pstate;
-    viml_parser_init(&pstate, parser_simple_get_line, &plines_p, &expr_colors);
-    ExprAST east = viml_pexpr_parse(&pstate, kExprFlagsDisallowEOC);
-    viml_pexpr_free_ast(east);
-    viml_parser_destroy(&pstate);
-    kv_resize(ccline_colors->colors, kv_size(expr_colors));
-    size_t expr_prev_end = 0;
-    for (size_t ei = 0; ei < kv_size(expr_colors); ei++) {
-      const ParserHighlightChunk chunk = kv_A(expr_colors, ei);
-      assert(chunk.start.col < INT_MAX);
-      assert(chunk.end_col < INT_MAX);
-      if (chunk.start.col != expr_prev_end) {
-        kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
-          .start = (int)expr_prev_end,
-          .end = (int)chunk.start.col,
-          .hl_id = 0,
-        }));
-      }
-      kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
-        .start = (int)chunk.start.col,
-        .end = (int)chunk.end_col,
-        .hl_id = syn_name2id(chunk.group),
-      }));
-      expr_prev_end = chunk.end_col;
+    ccs.can_free_cb = true;
+    if (ERROR_SET(&ccs.err) || !ccs.dgc_ret) {
+      return -1;
     }
-    if (expr_prev_end < (size_t)ccline.cmdlen) {
+    return 2;
+  } else if (ccline.cmdfirstc == '=') {
+    return 3;
+  }
+  return 0;
+}
+
+/// Run the full VimL expression coloring path ('=' firstc).
+void nvim_color_do_expr_path(void)
+{
+  ColoredCmdline *ccline_colors = &ccline.last_colors;
+  ParserLine parser_lines[] = {
+    { .data = ccline.cmdbuff, .size = strlen(ccline.cmdbuff), .allocated = false },
+    { NULL, 0, false },
+  };
+  ParserLine *plines_p = parser_lines;
+  ParserHighlight expr_colors;
+  kvi_init(expr_colors);
+  ParserState pstate;
+  viml_parser_init(&pstate, parser_simple_get_line, &plines_p, &expr_colors);
+  ExprAST east = viml_pexpr_parse(&pstate, kExprFlagsDisallowEOC);
+  viml_pexpr_free_ast(east);
+  viml_parser_destroy(&pstate);
+  kv_resize(ccline_colors->colors, kv_size(expr_colors));
+  size_t expr_prev_end = 0;
+  for (size_t ei = 0; ei < kv_size(expr_colors); ei++) {
+    const ParserHighlightChunk chunk = kv_A(expr_colors, ei);
+    assert(chunk.start.col < INT_MAX);
+    assert(chunk.end_col < INT_MAX);
+    if (chunk.start.col != expr_prev_end) {
       kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
         .start = (int)expr_prev_end,
-        .end = ccline.cmdlen,
+        .end = (int)chunk.start.col,
         .hl_id = 0,
       }));
     }
-    kvi_destroy(expr_colors);
+    kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
+      .start = (int)chunk.start.col,
+      .end = (int)chunk.end_col,
+      .hl_id = syn_name2id(chunk.group),
+    }));
+    expr_prev_end = chunk.end_col;
   }
-  if (ERROR_SET(&err) || !dgc_ret) {
-    goto color_cmdline_error;
+  if (expr_prev_end < (size_t)ccline.cmdlen) {
+    kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
+      .start = (int)expr_prev_end,
+      .end = ccline.cmdlen,
+      .hl_id = 0,
+    }));
   }
+  kvi_destroy(expr_colors);
+}
 
-  if (color_cb.type == kCallbackNone) {
-    goto color_cmdline_end;
-  }
+/// Invoke the acquired callback. Returns 1=ok, 0=failed.
+int nvim_color_invoke_callback(void)
+{
   if (ccline.cmdbuff[ccline.cmdlen] != NUL) {
-    arg_allocated = true;
-    arg.vval.v_string = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
+    ccs.arg_allocated = true;
+    ccs.arg.vval.v_string = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
   }
-  // msg_start() called by e.g. :echo may shift command-line to the first column
-  // even though msg_silent is here. Two ways to workaround this problem without
-  // altering message.c: use full_screen or save and restore msg_col.
-  //
-  // Saving and restoring full_screen does not work well with :redraw!. Saving
-  // and restoring msg_col is neither ideal, but while with full_screen it
-  // appears shifted one character to the right and cursor position is no longer
-  // correct, with msg_col it just misses leading `:`. Since `redraw!` in
-  // callback lags this is least of the user problems.
-  //
-  // Also using TRY_WRAP because error messages may overwrite typed
-  // command-line which is not expected.
   getln_interrupted_highlight = false;
   bool cbcall_ret = true;
-  TRY_WRAP(&err, {
-    err_errmsg = N_("E5407: Callback has thrown an exception: %s");
+  ccs.err = ERROR_INIT;
+  TRY_WRAP(&ccs.err, {
+    ccs.err_errmsg = N_("E5407: Callback has thrown an exception: %s");
     const int saved_msg_col = msg_col;
     msg_silent++;
-    cbcall_ret = callback_call(&color_cb, 1, &arg, &tv);
+    cbcall_ret = callback_call(&ccs.color_cb, 1, &ccs.arg, &ccs.tv);
     msg_silent--;
     msg_col = saved_msg_col;
     if (got_int) {
       getln_interrupted_highlight = true;
     }
   });
-  if (ERROR_SET(&err) || !cbcall_ret) {
-    goto color_cmdline_error;
-  }
-  if (tv.v_type != VAR_LIST) {
-    PRINT_ERRMSG("%s", _("E5400: Callback should return list"));
-    goto color_cmdline_error;
-  }
-  if (tv.vval.v_list == NULL) {
-    goto color_cmdline_end;
-  }
-  varnumber_T prev_end = 0;
-  int i = 0;
-  TV_LIST_ITER_CONST(tv.vval.v_list, li, {
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_LIST) {
-      PRINT_ERRMSG(_("E5401: List item %i is not a List"), i);
-      goto color_cmdline_error;
-    }
-    const list_T *const l = TV_LIST_ITEM_TV(li)->vval.v_list;
-    if (tv_list_len(l) != 3) {
-      PRINT_ERRMSG(_("E5402: List item %i has incorrect length: %d /= 3"),
-                   i, tv_list_len(l));
-      goto color_cmdline_error;
-    }
-    bool error = false;
-    const varnumber_T start = (
-                               tv_get_number_chk(TV_LIST_ITEM_TV(tv_list_first(l)), &error));
-    if (error) {
-      goto color_cmdline_error;
-    } else if (!(prev_end <= start && start < ccline.cmdlen)) {
-      PRINT_ERRMSG(_("E5403: Chunk %i start %" PRIdVARNUMBER " not in range "
-                     "[%" PRIdVARNUMBER ", %i)"),
-                   i, start, prev_end, ccline.cmdlen);
-      goto color_cmdline_error;
-    } else if (utf8len_tab_zero[(uint8_t)ccline.cmdbuff[start]] == 0) {
-      PRINT_ERRMSG(_("E5405: Chunk %i start %" PRIdVARNUMBER " splits "
-                     "multibyte character"), i, start);
-      goto color_cmdline_error;
-    }
-    if (start != prev_end) {
-      kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
-        .start = (int)prev_end,
-        .end = (int)start,
-        .hl_id = 0,
-      }));
-    }
-    const varnumber_T end =
-      tv_get_number_chk(TV_LIST_ITEM_TV(TV_LIST_ITEM_NEXT(l, tv_list_first(l))), &error);
-    if (error) {
-      goto color_cmdline_error;
-    } else if (!(start < end && end <= ccline.cmdlen)) {
-      PRINT_ERRMSG(_("E5404: Chunk %i end %" PRIdVARNUMBER " not in range "
-                     "(%" PRIdVARNUMBER ", %i]"),
-                   i, end, start, ccline.cmdlen);
-      goto color_cmdline_error;
-    } else if (end < ccline.cmdlen
-               && (utf8len_tab_zero[(uint8_t)ccline.cmdbuff[end]]
-                   == 0)) {
-      PRINT_ERRMSG(_("E5406: Chunk %i end %" PRIdVARNUMBER " splits multibyte "
-                     "character"), i, end);
-      goto color_cmdline_error;
-    }
-    prev_end = end;
-    const char *const group = tv_get_string_chk(TV_LIST_ITEM_TV(tv_list_last(l)));
-    if (group == NULL) {
-      goto color_cmdline_error;
-    }
-    kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
-      .start = (int)start,
-      .end = (int)end,
-      .hl_id = syn_name2id(group),
-    }));
-    i++;
-  });
-  if (prev_end < ccline.cmdlen) {
-    kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
-      .start = (int)prev_end,
-      .end = ccline.cmdlen,
-      .hl_id = 0,
-    }));
-  }
-  prev_prompt_errors = 0;
-color_cmdline_end:
-  assert(!ERROR_SET(&err));
-  if (can_free_cb) {
-    callback_free(&color_cb);
-  }
-  xfree(ccline_colors->cmdbuff);
-  // Note: errors “output” is cached just as well as regular results.
-  ccline_colors->prompt_id = ccline.prompt_id;
-  if (arg_allocated) {
-    ccline_colors->cmdbuff = arg.vval.v_string;
-  } else {
-    ccline_colors->cmdbuff = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
-  }
-  tv_clear(&tv);
-  return ret;
-color_cmdline_error:
-  if (ERROR_SET(&err)) {
-    PRINT_ERRMSG(_(err_errmsg), err.msg);
-    api_clear_error(&err);
-  }
-  assert(printed_errmsg);
-  (void)printed_errmsg;
+  return (ERROR_SET(&ccs.err) || !cbcall_ret) ? 0 : 1;
+}
 
-  prev_prompt_errors++;
-  kv_size(ccline_colors->colors) = 0;
+/// Get v_type of the result typval.
+int nvim_color_result_tv_type(void) { return (int)ccs.tv.v_type; }
+
+/// Get v_list of the result typval (NULL if not a list).
+void *nvim_color_result_tv_list(void) { return (void *)ccs.tv.vval.v_list; }
+
+/// Print an error message (PRINT_ERRMSG style: scroll + newline + smsg).
+void nvim_color_errmsg(const char *msg)
+{
+  msg_scroll = true;
+  msg_putchar('\n');
+  smsg(HLF_E, "%s", msg);
+}
+
+/// Push a color chunk to ccline.last_colors.colors.
+void nvim_ccline_colors_push(int start, int end, int hl_id)
+{
+  kv_push(ccline.last_colors.colors, ((CmdlineColorChunk) {
+    .start = start, .end = end, .hl_id = hl_id,
+  }));
+}
+
+/// Common finalization: update cmdbuff cache, prompt_id, tv_clear, free callback.
+static void color_finalize_common(void)
+{
+  if (ccs.can_free_cb) {
+    callback_free(&ccs.color_cb);
+  }
+  xfree(ccline.last_colors.cmdbuff);
+  ccline.last_colors.prompt_id = ccline.prompt_id;
+  if (ccs.arg_allocated) {
+    ccline.last_colors.cmdbuff = ccs.arg.vval.v_string;
+  } else {
+    ccline.last_colors.cmdbuff = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
+  }
+  tv_clear(&ccs.tv);
+}
+
+/// Finalize success path.
+void nvim_color_finalize_success(void)
+{
+  color_finalize_common();
+}
+
+/// Finalize error path: clear colors, print error if set, call redrawcmdline.
+void nvim_color_finalize_error(void)
+{
+  if (ERROR_SET(&ccs.err)) {
+    msg_putchar('\n');
+    msg_scroll = true;
+    smsg(HLF_E, _(ccs.err_errmsg), ccs.err.msg);
+    api_clear_error(&ccs.err);
+  }
+  kv_size(ccline.last_colors.colors) = 0;
+  color_finalize_common();
   redrawcmdline();
-  ret = false;
-  goto color_cmdline_end;
-#undef PRINT_ERRMSG
+}
+
+/// Get ccline.cmdlen.
+int nvim_color_cmdlen(void) { return ccline.cmdlen; }
+
+/// Get one byte from ccline.cmdbuff at the given index.
+unsigned char nvim_color_cmdbuff_at(int idx) { return (unsigned char)ccline.cmdbuff[idx]; }
+
+/// Wrapper for tv_list_len (inline) called from Rust color.rs.
+int nvim_color_tv_list_len(const list_T *l)
+{
+  return tv_list_len(l);
+}
+
+/// Wrapper for tv_get_number_chk (inline) called from Rust color.rs.
+int64_t nvim_color_tv_get_number_chk(const typval_T *tv, bool *error)
+{
+  return tv_get_number_chk(tv, error);
+}
+
+/// Wrapper for tv_get_string_chk (inline) called from Rust color.rs.
+const char *nvim_color_tv_get_string_chk(const typval_T *tv)
+{
+  return tv_get_string_chk(tv);
 }
 
 void ui_ext_cmdline_block_append(size_t indent, const char *line)

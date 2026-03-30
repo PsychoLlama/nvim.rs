@@ -12,6 +12,8 @@
 pub mod api;
 pub mod cmdbuff;
 pub mod cmdwin;
+pub mod color;
+
 pub mod command_line_state;
 pub mod completion;
 pub mod constants;
