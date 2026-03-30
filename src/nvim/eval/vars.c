@@ -115,6 +115,14 @@ extern void rs_set_vim_var_list(VimVarIndex idx, list_T *val);
 extern void rs_set_vim_var_dict(VimVarIndex idx, dict_T *val);
 extern void rs_set_vim_var_partial(VimVarIndex idx, partial_T *val);
 
+// Phase 5: helper and utility functions migrated to Rust
+extern void rs_set_reg_var(int c);
+extern char *rs_v_exception(char *oldval);
+extern char *rs_v_throwpoint(char *oldval);
+extern void rs_set_vcount(int64_t count, int64_t count1, bool set_prevcount);
+extern void rs_reset_v_option_vars(void);
+extern void rs_assert_error(const char *ga_data, int ga_len);
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -1876,36 +1884,13 @@ void set_vim_var_partial(const VimVarIndex idx, partial_T *val)
 { rs_set_vim_var_partial(idx, val); }
 
 /// Set v:register if needed.
-void set_reg_var(int c)
-{
-  char regname;
-
-  if (c == 0 || c == ' ') {
-    regname = '"';
-  } else {
-    regname = (char)c;
-  }
-  // Avoid free/alloc when the value is already right.
-  typval_T *tv = get_vim_var_tv(VV_REG);
-  if (tv->vval.v_string == NULL || tv->vval.v_string[0] != c) {
-    set_vim_var_string(VV_REG, &regname, 1);
-  }
-}
+void set_reg_var(int c) { rs_set_reg_var(c); }
 
 /// Get or set v:exception.  If "oldval" == NULL, return the current value.
 /// Otherwise, restore the value to "oldval" and return NULL.
 /// Must always be called in pairs to save and restore v:exception!  Does not
 /// take care of memory allocations.
-char *v_exception(char *oldval)
-{
-  typval_T *tv = get_vim_var_tv(VV_EXCEPTION);
-  if (oldval == NULL) {
-    return tv->vval.v_string;
-  }
-
-  tv->vval.v_string = oldval;
-  return NULL;
-}
+char *v_exception(char *oldval) { return rs_v_exception(oldval); }
 
 /// Set v:cmdarg.
 /// If "eap" != NULL, use "eap" to generate the value and return the old value.
@@ -2029,27 +2014,14 @@ error:
 /// Otherwise, restore the value to "oldval" and return NULL.
 /// Must always be called in pairs to save and restore v:throwpoint!  Does not
 /// take care of memory allocations.
-char *v_throwpoint(char *oldval)
-{
-  typval_T *tv = get_vim_var_tv(VV_THROWPOINT);
-  if (oldval == NULL) {
-    return tv->vval.v_string;
-  }
-
-  tv->vval.v_string = oldval;
-  return NULL;
-}
+char *v_throwpoint(char *oldval) { return rs_v_throwpoint(oldval); }
 
 /// Set v:count to "count" and v:count1 to "count1".
 ///
 /// @param set_prevcount  if true, first set v:prevcount from v:count.
 void set_vcount(int64_t count, int64_t count1, bool set_prevcount)
 {
-  if (set_prevcount) {
-    get_vim_var_tv(VV_PREVCOUNT)->vval.v_number = get_vim_var_nr(VV_COUNT);
-  }
-  get_vim_var_tv(VV_COUNT)->vval.v_number = count;
-  get_vim_var_tv(VV_COUNT1)->vval.v_number = count1;
+  rs_set_vcount(count, count1, set_prevcount);
 }
 
 /// Get the value of internal variable "name".
@@ -2977,27 +2949,10 @@ static void setwinvar(typval_T *argvars, int off)
 
 // reset v:option_new, v:option_old, v:option_oldlocal, v:option_oldglobal,
 // v:option_type, and v:option_command.
-void reset_v_option_vars(void)
-{
-  set_vim_var_string(VV_OPTION_NEW, NULL, -1);
-  set_vim_var_string(VV_OPTION_OLD, NULL, -1);
-  set_vim_var_string(VV_OPTION_OLDLOCAL, NULL, -1);
-  set_vim_var_string(VV_OPTION_OLDGLOBAL, NULL, -1);
-  set_vim_var_string(VV_OPTION_COMMAND, NULL, -1);
-  set_vim_var_string(VV_OPTION_TYPE, NULL, -1);
-}
+void reset_v_option_vars(void) { rs_reset_v_option_vars(); }
 
 /// Add an assert error to v:errors.
-void assert_error(garray_T *gap)
-{
-  typval_T *tv = get_vim_var_tv(VV_ERRORS);
-
-  if (tv->v_type != VAR_LIST || tv->vval.v_list == NULL) {
-    // Make sure v:errors is a list.
-    set_vim_var_list(VV_ERRORS, tv_list_alloc(1));
-  }
-  tv_list_append_string(get_vim_var_list(VV_ERRORS), gap->ga_data, (ptrdiff_t)gap->ga_len);
-}
+void assert_error(garray_T *gap) { rs_assert_error(gap->ga_data, gap->ga_len); }
 
 bool var_exists(const char *var)
   FUNC_ATTR_NONNULL_ALL

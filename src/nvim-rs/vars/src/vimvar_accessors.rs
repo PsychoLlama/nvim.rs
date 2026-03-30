@@ -1,6 +1,6 @@
 //! v: variable accessor functions (get_vim_var_*, set_vim_var_*).
 //!
-//! Phase 4: Migrated from `src/nvim/eval/vars.c`.
+//! Phase 4 & 5: Migrated from `src/nvim/eval/vars.c`.
 //!
 //! These functions access the `vimvars[]` static C array via the
 //! `get_vim_var_tv()` C accessor function, then manipulate typval_T fields
@@ -73,13 +73,36 @@ extern "C" {
 
     // ── misc helpers ───────────────────────────────────────────────────────
     fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+
+    // ── typval_T string/type accessors (vars.c) ───────────────────────────
+    fn nvim_tv_get_type(tv: TvPtr) -> c_int;
+    fn nvim_tv_get_string_val(tv: TvPtr) -> *mut c_char;
+    fn nvim_tv_set_string_val(tv: TvPtr, s: *mut c_char);
+
+    // ── list helpers ──────────────────────────────────────────────────────
+    fn tv_list_alloc(len: i64) -> ListPtr;
+    fn tv_list_append_string(l: ListPtr, s: *const c_char, len: i64);
 }
 
 // VarType values (matching C enum)
+const VAR_LIST: c_int = 4;
 const VAR_BOOL: c_int = 7;
 const VAR_SPECIAL: c_int = 8;
 
-// VV_CHAR index (matches VimVarIndex::Char = 50)
+// VV_* index constants (matching C enum VimVarIndex in eval_defs.h)
+const VV_COUNT: VimVarIndex = 0;
+const VV_COUNT1: VimVarIndex = 1;
+const VV_PREVCOUNT: VimVarIndex = 2;
+const VV_EXCEPTION: VimVarIndex = 30;
+const VV_THROWPOINT: VimVarIndex = 31;
+const VV_REG: VimVarIndex = 32;
+const VV_OPTION_NEW: VimVarIndex = 62;
+const VV_OPTION_OLD: VimVarIndex = 63;
+const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
+const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
+const VV_OPTION_COMMAND: VimVarIndex = 66;
+const VV_OPTION_TYPE: VimVarIndex = 67;
+const VV_ERRORS: VimVarIndex = 68;
 const VV_CHAR: VimVarIndex = 50;
 
 // =============================================================================
@@ -268,4 +291,104 @@ pub unsafe extern "C" fn rs_set_vim_var_dict(idx: VimVarIndex, val: DictPtr) {
 pub unsafe extern "C" fn rs_set_vim_var_partial(idx: VimVarIndex, val: PartialPtr) {
     let tv = get_vim_var_tv(idx);
     nvim_tv_set_partial(tv, val);
+}
+
+// =============================================================================
+// Phase 5: Helper and Utility Functions
+// =============================================================================
+
+/// Set v:register to register name character `c`.
+///
+/// Matches C `set_reg_var`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_reg_var(c: c_int) {
+    let regname: c_char = if c == 0 || c == c_int::from(b' ') {
+        b'"' as c_char
+    } else {
+        c as c_char
+    };
+    // Only update if necessary (avoid free/alloc when already correct).
+    let tv = get_vim_var_tv(VV_REG);
+    let s = nvim_tv_get_string_val(tv);
+    if s.is_null() || *s != regname {
+        rs_set_vim_var_string(VV_REG, &raw const regname, 1);
+    }
+}
+
+/// Get or set v:exception.
+///
+/// If `oldval` is NULL, return the current value.
+/// Otherwise, restore the value to `oldval` and return NULL.
+///
+/// Matches C `v_exception`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_v_exception(oldval: *mut c_char) -> *mut c_char {
+    let tv = get_vim_var_tv(VV_EXCEPTION);
+    if oldval.is_null() {
+        nvim_tv_get_string_val(tv)
+    } else {
+        nvim_tv_set_string_val(tv, oldval);
+        std::ptr::null_mut()
+    }
+}
+
+/// Get or set v:throwpoint.
+///
+/// If `oldval` is NULL, return the current value.
+/// Otherwise, restore the value to `oldval` and return NULL.
+///
+/// Matches C `v_throwpoint`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_v_throwpoint(oldval: *mut c_char) -> *mut c_char {
+    let tv = get_vim_var_tv(VV_THROWPOINT);
+    if oldval.is_null() {
+        nvim_tv_get_string_val(tv)
+    } else {
+        nvim_tv_set_string_val(tv, oldval);
+        std::ptr::null_mut()
+    }
+}
+
+/// Set v:count and v:count1. If `set_prevcount` is true, first copy v:count to v:prevcount.
+///
+/// Matches C `set_vcount`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_vcount(count: i64, count1: i64, set_prevcount: bool) {
+    if set_prevcount {
+        let prevcount_tv = get_vim_var_tv(VV_PREVCOUNT);
+        let cur_count = nvim_tv_get_number(get_vim_var_tv(VV_COUNT));
+        nvim_tv_set_number(prevcount_tv, cur_count);
+    }
+    nvim_tv_set_number(get_vim_var_tv(VV_COUNT), count);
+    nvim_tv_set_number(get_vim_var_tv(VV_COUNT1), count1);
+}
+
+/// Reset all v:option_* variables to NULL.
+///
+/// Matches C `reset_v_option_vars`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_v_option_vars() {
+    rs_set_vim_var_string(VV_OPTION_NEW, std::ptr::null(), -1);
+    rs_set_vim_var_string(VV_OPTION_OLD, std::ptr::null(), -1);
+    rs_set_vim_var_string(VV_OPTION_OLDLOCAL, std::ptr::null(), -1);
+    rs_set_vim_var_string(VV_OPTION_OLDGLOBAL, std::ptr::null(), -1);
+    rs_set_vim_var_string(VV_OPTION_COMMAND, std::ptr::null(), -1);
+    rs_set_vim_var_string(VV_OPTION_TYPE, std::ptr::null(), -1);
+}
+
+/// Add an assert error (from a garray) to v:errors.
+///
+/// Matches C `assert_error`.
+///
+/// # Safety
+/// `gap` must be a valid pointer to a garray_T with ga_data pointing to a
+/// valid byte buffer of at least ga_len bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_assert_error(ga_data: *const c_char, ga_len: c_int) {
+    let tv = get_vim_var_tv(VV_ERRORS);
+    if nvim_tv_get_type(tv) != VAR_LIST || nvim_tv_get_list(tv).is_null() {
+        // Make sure v:errors is a list.
+        rs_set_vim_var_list(VV_ERRORS, tv_list_alloc(1));
+    }
+    tv_list_append_string(rs_get_vim_var_list(VV_ERRORS), ga_data, i64::from(ga_len));
 }
