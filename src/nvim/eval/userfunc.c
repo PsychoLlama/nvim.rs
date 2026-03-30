@@ -134,6 +134,19 @@ extern void rs_ex_return(exarg_T *eap);
 extern bool rs_do_return(exarg_T *eap, int reanimate, int is_cmd, void *rettv);
 extern char *rs_get_return_cmd(void *rettv);
 
+// Phase 7: Funccal Management + Helpers (implemented in Rust userfunc/src/funccal.rs)
+extern void rs_free_funccal(funccall_T *fc);
+extern void rs_free_funccal_contents(funccall_T *fc);
+extern void rs_cleanup_function_call(funccall_T *fc);
+extern void rs_funccal_unref(funccall_T *fc, ufunc_T *fp, int force);
+extern funccall_T *rs_create_funccal(ufunc_T *fp, typval_T *rettv);
+extern void rs_remove_funccal(void);
+extern void rs_save_funccal(funccal_entry_T *entry);
+extern void rs_restore_funccal(void);
+extern void rs_ex_delfunction(exarg_T *eap);
+extern void rs_emsg_funcname(const char *errmsg, const char *name);
+extern void rs_user_func_error(int error, const char *name, int found_var);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -557,11 +570,8 @@ char *deref_func_name(const char *name, int *lenp, partial_T **const partialp, b
   return (char *)name;
 }
 
-/// Give an error message with a function name.  Handle <SNR> things.
-///
-/// @param errmsg must be passed without translation (use N_() instead of _()).
-/// @param name function name
-void emsg_funcname(const char *errmsg, const char *name)
+/// Phase 7: C implementation shim for emsg_funcname (called from Rust).
+void nvim_emsg_funcname_impl(const char *errmsg, const char *name)
 {
   char *p = (char *)name;
 
@@ -574,6 +584,15 @@ void emsg_funcname(const char *errmsg, const char *name)
   if (p != name) {
     xfree(p);
   }
+}
+
+/// Give an error message with a function name.  Handle <SNR> things.
+///
+/// @param errmsg must be passed without translation (use N_() instead of _()).
+/// @param name function name
+void emsg_funcname(const char *errmsg, const char *name)
+{
+  rs_emsg_funcname(errmsg, name);
 }
 
 /// Get function arguments at "*arg" and advance it.
@@ -759,8 +778,8 @@ static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
   v->di_tv.vval.v_number = nr;
 }
 
-/// Free "fc"
-static void free_funccal(funccall_T *fc)
+/// Phase 7: C implementation shim for free_funccal (called from Rust).
+void nvim_free_funccal_impl(funccall_T *fc)
 {
   for (int i = 0; i < fc->fc_ufuncs.ga_len; i++) {
     ufunc_T *fp = ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i];
@@ -779,10 +798,14 @@ static void free_funccal(funccall_T *fc)
   xfree(fc);
 }
 
-/// Free "fc" and what it contains.
-/// Can be called only when "fc" is kept beyond the period of it called,
-/// i.e. after cleanup_function_call(fc).
-static void free_funccal_contents(funccall_T *fc)
+/// Free "fc"
+static void free_funccal(funccall_T *fc)
+{
+  rs_free_funccal(fc);
+}
+
+/// Phase 7: C implementation shim for free_funccal_contents (called from Rust).
+void nvim_free_funccal_contents_impl(funccall_T *fc)
 {
   // Free all l: variables.
   vars_clear(&fc->fc_l_vars.dv_hashtab);
@@ -798,9 +821,16 @@ static void free_funccal_contents(funccall_T *fc)
   free_funccal(fc);
 }
 
-/// Handle the last part of returning from a function: free the local hashtable.
-/// Unless it is still in use by a closure.
-static void cleanup_function_call(funccall_T *fc)
+/// Free "fc" and what it contains.
+/// Can be called only when "fc" is kept beyond the period of it called,
+/// i.e. after cleanup_function_call(fc).
+static void free_funccal_contents(funccall_T *fc)
+{
+  rs_free_funccal_contents(fc);
+}
+
+/// Phase 7: C implementation shim for cleanup_function_call (called from Rust).
+void nvim_cleanup_function_call_impl(funccall_T *fc)
 {
   bool may_free_fc = fc->fc_refcount <= 0;
   bool free_fc = true;
@@ -865,11 +895,15 @@ static void cleanup_function_call(funccall_T *fc)
   }
 }
 
-/// Unreference "fc": decrement the reference count and free it when it
-/// becomes zero.  "fp" is detached from "fc".
-///
-/// @param[in]   force   When true, we are exiting.
-static void funccal_unref(funccall_T *fc, ufunc_T *fp, bool force)
+/// Handle the last part of returning from a function: free the local hashtable.
+/// Unless it is still in use by a closure.
+static void cleanup_function_call(funccall_T *fc)
+{
+  rs_cleanup_function_call(fc);
+}
+
+/// Phase 7: C implementation shim for funccal_unref (called from Rust).
+void nvim_funccal_unref_impl(funccall_T *fc, ufunc_T *fp, int force)
 {
   if (fc == NULL) {
     return;
@@ -890,6 +924,15 @@ static void funccal_unref(funccall_T *fc, ufunc_T *fp, bool force)
       ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] = NULL;
     }
   }
+}
+
+/// Unreference "fc": decrement the reference count and free it when it
+/// becomes zero.  "fp" is detached from "fc".
+///
+/// @param[in]   force   When true, we are exiting.
+static void funccal_unref(funccall_T *fc, ufunc_T *fp, bool force)
+{
+  rs_funccal_unref(fc, fp, force ? 1 : 0);
 }
 
 /// Phase 4: C implementation shim for func_remove (called from Rust).
@@ -975,9 +1018,8 @@ static void func_clear_free(ufunc_T *fp, bool force)
   rs_func_clear_free(fp, force ? 1 : 0);
 }
 
-/// Allocate a funccall_T, link it in current_funccal and fill in "fp" and "rettv".
-/// Must be followed by one call to remove_funccal() or cleanup_function_call().
-funccall_T *create_funccal(ufunc_T *fp, typval_T *rettv)
+/// Phase 7: C implementation shim for create_funccal (called from Rust).
+funccall_T *nvim_create_funccal_impl(ufunc_T *fp, typval_T *rettv)
 {
   funccall_T *fc = xcalloc(1, sizeof(funccall_T));
   fc->fc_caller = current_funccal;
@@ -988,12 +1030,25 @@ funccall_T *create_funccal(ufunc_T *fp, typval_T *rettv)
   return fc;
 }
 
-/// Restore current_funccal.
-void remove_funccal(void)
+/// Allocate a funccall_T, link it in current_funccal and fill in "fp" and "rettv".
+/// Must be followed by one call to remove_funccal() or cleanup_function_call().
+funccall_T *create_funccal(ufunc_T *fp, typval_T *rettv)
+{
+  return rs_create_funccal(fp, rettv);
+}
+
+/// Phase 7: C implementation shim for remove_funccal (called from Rust).
+void nvim_remove_funccal_impl(void)
 {
   funccall_T *fc = current_funccal;
   current_funccal = fc->fc_caller;
   free_funccal(fc);
+}
+
+/// Restore current_funccal.
+void remove_funccal(void)
+{
+  rs_remove_funccal();
 }
 
 /// Call a user function
@@ -1436,9 +1491,8 @@ static int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, ty
 
 static funccal_entry_T *funccal_stack = NULL;
 
-/// Save the current function call pointer, and set it to NULL.
-/// Used when executing autocommands and for ":source".
-void save_funccal(funccal_entry_T *entry)
+/// Phase 7: C implementation shim for save_funccal (called from Rust).
+void nvim_save_funccal_impl(funccal_entry_T *entry)
 {
   entry->top_funccal = current_funccal;
   entry->next = funccal_stack;
@@ -1446,7 +1500,15 @@ void save_funccal(funccal_entry_T *entry)
   current_funccal = NULL;
 }
 
-void restore_funccal(void)
+/// Save the current function call pointer, and set it to NULL.
+/// Used when executing autocommands and for ":source".
+void save_funccal(funccal_entry_T *entry)
+{
+  rs_save_funccal(entry);
+}
+
+/// Phase 7: C implementation shim for restore_funccal (called from Rust).
+void nvim_restore_funccal_impl(void)
 {
   if (funccal_stack == NULL) {
     iemsg("INTERNAL: restore_funccal()");
@@ -1454,6 +1516,11 @@ void restore_funccal(void)
     current_funccal = funccal_stack->top_funccal;
     funccal_stack = funccal_stack->next;
   }
+}
+
+void restore_funccal(void)
+{
+  rs_restore_funccal();
 }
 
 funccall_T *get_current_funccal(void) { return current_funccal; }
@@ -1589,10 +1656,8 @@ varnumber_T callback_call_retnr(Callback *callback, int argcount, typval_T *argv
   return retval;
 }
 
-/// Give an error message for the result of a function.
-/// Nothing if "error" is FCERR_NONE.
-static void user_func_error(int error, const char *name, bool found_var)
-  FUNC_ATTR_NONNULL_ARG(2)
+/// Phase 7: C implementation shim for user_func_error (called from Rust).
+void nvim_user_func_error_impl(int error, const char *name, int found_var)
 {
   switch (error) {
   case FCERR_UNKNOWN:
@@ -1621,6 +1686,14 @@ static void user_func_error(int error, const char *name, bool found_var)
     emsg_funcname(N_("E725: Calling dict function without Dictionary: %s"), name);
     break;
   }
+}
+
+/// Give an error message for the result of a function.
+/// Nothing if "error" is FCERR_NONE.
+static void user_func_error(int error, const char *name, bool found_var)
+  FUNC_ATTR_NONNULL_ARG(2)
+{
+  rs_user_func_error(error, name, found_var ? 1 : 0);
 }
 
 /// Used by call_func to add a method base (if any) to a function argument list
@@ -2883,8 +2956,8 @@ char *get_user_func_name(expand_T *xp, int idx)
   return NULL;
 }
 
-/// ":delfunction {name}"
-void ex_delfunction(exarg_T *eap)
+/// Phase 7: C implementation shim for ex_delfunction (called from Rust).
+void nvim_ex_delfunction_impl(exarg_T *eap)
 {
   ufunc_T *fp = NULL;
   funcdict_T fudi;
@@ -2961,6 +3034,12 @@ void ex_delfunction(exarg_T *eap)
       }
     }
   }
+}
+
+/// ":delfunction {name}"
+void ex_delfunction(exarg_T *eap)
+{
+  rs_ex_delfunction(eap);
 }
 
 /// Unreference a Function: decrement the reference count and free it when it

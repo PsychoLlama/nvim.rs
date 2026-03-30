@@ -25,6 +25,7 @@
 pub mod call;
 pub mod closure;
 pub mod defer;
+pub mod funccal;
 pub mod funcref;
 pub mod gc;
 pub mod listing;
@@ -37,6 +38,7 @@ pub mod types;
 pub use call::*;
 pub use closure::*;
 pub use defer::*;
+pub use funccal::*;
 pub use funcref::*;
 pub use gc::*;
 pub use listing::*;
