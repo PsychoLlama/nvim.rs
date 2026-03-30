@@ -107,6 +107,17 @@ extern void rs_func_clear(ufunc_T *fp, int force);
 extern void rs_func_free(ufunc_T *fp);
 extern void rs_func_clear_free(ufunc_T *fp, int force);
 
+// Phase 5: GC Support (implemented in Rust userfunc/src/gc.rs)
+extern int rs_fc_referenced(const funccall_T *fc);
+extern int rs_can_free_funccal(funccall_T *fc, int copyID);
+extern int rs_free_unref_funccal(int copyID, int testing);
+extern int rs_set_ref_in_previous_funccal(int copyID);
+extern int rs_set_ref_in_funccal(funccall_T *fc, int copyID);
+extern int rs_set_ref_in_call_stack(int copyID);
+extern int rs_set_ref_in_functions(int copyID);
+extern int rs_set_ref_in_func_args(int copyID);
+extern int rs_set_ref_in_func(char *name, ufunc_T *fp, int copyID);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -2966,25 +2977,35 @@ void func_ptr_ref(ufunc_T *fp)
 /// It is supposed to be referenced if either it is referenced itself or if l:,
 /// a: or a:000 are referenced as all these are statically allocated within
 /// funccall structure.
+/// Phase 5: C implementation shim for fc_referenced.
+int nvim_fc_referenced_impl(const funccall_T *fc)
+{
+  return (fc->fc_l_varlist.lv_refcount != DO_NOT_FREE_CNT)
+         || fc->fc_l_vars.dv_refcount != DO_NOT_FREE_CNT
+         || fc->fc_l_avars.dv_refcount != DO_NOT_FREE_CNT
+         || fc->fc_refcount > 0;
+}
+
 static inline bool fc_referenced(const funccall_T *const fc)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
   FUNC_ATTR_NONNULL_ALL
 {
-  return ((fc->fc_l_varlist.lv_refcount  // NOLINT(runtime/deprecated)
-           != DO_NOT_FREE_CNT)
-          || fc->fc_l_vars.dv_refcount != DO_NOT_FREE_CNT
-          || fc->fc_l_avars.dv_refcount != DO_NOT_FREE_CNT
-          || fc->fc_refcount > 0);
+  return rs_fc_referenced(fc) != 0;
 }
 
-/// @return true if items in "fc" do not have "copyID".  That means they are not
-/// referenced from anywhere that is in use.
-static bool can_free_funccal(funccall_T *fc, int copyID)
+/// Phase 5: C implementation shim for can_free_funccal.
+int nvim_can_free_funccal_impl(funccall_T *fc, int copyID)
 {
   return fc->fc_l_varlist.lv_copyID != copyID
          && fc->fc_l_vars.dv_copyID != copyID
          && fc->fc_l_avars.dv_copyID != copyID
          && fc->fc_copyID != copyID;
+}
+
+/// @return true if items in "fc" do not have "copyID".
+static bool can_free_funccal(funccall_T *fc, int copyID)
+{
+  return rs_can_free_funccal(fc, copyID) != 0;
 }
 
 /// ":return [expr]"
@@ -3556,11 +3577,11 @@ int nvim_get_current_funccal_fc_returned(void) { return current_funccal->fc_retu
 // Implemented in Rust (nvim-eval crate)
 extern int current_func_returned(void);
 
-bool free_unref_funccal(int copyID, int testing)
+/// Phase 5: C implementation shim for free_unref_funccal.
+int nvim_free_unref_funccal_impl(int copyID, int testing)
 {
   bool did_free = false;
   bool did_free_funccal = false;
-
   for (funccall_T **pfc = &previous_funccal; *pfc != NULL;) {
     if (can_free_funccal(*pfc, copyID)) {
       funccall_T *fc = *pfc;
@@ -3573,11 +3594,14 @@ bool free_unref_funccal(int copyID, int testing)
     }
   }
   if (did_free_funccal) {
-    // When a funccal was freed some more items might be garbage
-    // collected, so run again.
     garbage_collect(testing);
   }
   return did_free;
+}
+
+bool free_unref_funccal(int copyID, int testing)
+{
+  return rs_free_unref_funccal(copyID, testing) != 0;
 }
 
 // Get function call environment based on backtrace debug level
@@ -3740,10 +3764,10 @@ dictitem_T *find_var_in_scoped_ht(const char *name, const size_t namelen, int no
 }
 
 /// Set "copyID + 1" in previous_funccal and callers.
-bool set_ref_in_previous_funccal(int copyID)
+/// Phase 5: C implementation shim for set_ref_in_previous_funccal.
+int nvim_set_ref_in_previous_funccal_impl(int copyID)
 {
-  for (funccall_T *fc = previous_funccal; fc != NULL;
-       fc = fc->fc_caller) {
+  for (funccall_T *fc = previous_funccal; fc != NULL; fc = fc->fc_caller) {
     fc->fc_copyID = copyID + 1;
     if (rs_set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID + 1, NULL)
         || rs_set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID + 1, NULL)
@@ -3754,7 +3778,13 @@ bool set_ref_in_previous_funccal(int copyID)
   return false;
 }
 
-static bool set_ref_in_funccal(funccall_T *fc, int copyID)
+bool set_ref_in_previous_funccal(int copyID)
+{
+  return rs_set_ref_in_previous_funccal(copyID) != 0;
+}
+
+/// Phase 5: C implementation shim for set_ref_in_funccal.
+int nvim_set_ref_in_funccal_impl(funccall_T *fc, int copyID)
 {
   if (fc->fc_copyID != copyID) {
     fc->fc_copyID = copyID;
@@ -3768,40 +3798,43 @@ static bool set_ref_in_funccal(funccall_T *fc, int copyID)
   return false;
 }
 
-/// Set "copyID" in all local vars and arguments in the call stack.
-bool set_ref_in_call_stack(int copyID)
+static bool set_ref_in_funccal(funccall_T *fc, int copyID)
 {
-  for (funccall_T *fc = current_funccal; fc != NULL;
-       fc = fc->fc_caller) {
+  return rs_set_ref_in_funccal(fc, copyID) != 0;
+}
+
+/// Phase 5: C implementation shim for set_ref_in_call_stack.
+int nvim_set_ref_in_call_stack_impl(int copyID)
+{
+  for (funccall_T *fc = current_funccal; fc != NULL; fc = fc->fc_caller) {
     if (set_ref_in_funccal(fc, copyID)) {
       return true;
     }
   }
-
-  // Also go through the funccal_stack.
-  for (funccal_entry_T *entry = funccal_stack; entry != NULL;
-       entry = entry->next) {
-    for (funccall_T *fc = entry->top_funccal; fc != NULL;
-         fc = fc->fc_caller) {
+  for (funccal_entry_T *entry = funccal_stack; entry != NULL; entry = entry->next) {
+    for (funccall_T *fc = entry->top_funccal; fc != NULL; fc = fc->fc_caller) {
       if (set_ref_in_funccal(fc, copyID)) {
         return true;
       }
     }
   }
-
   return false;
 }
 
-/// Set "copyID" in all functions available by name.
-bool set_ref_in_functions(int copyID)
+bool set_ref_in_call_stack(int copyID)
+{
+  return rs_set_ref_in_call_stack(copyID) != 0;
+}
+
+/// Phase 5: C implementation shim for set_ref_in_functions.
+int nvim_set_ref_in_functions_impl(int copyID)
 {
   int todo = (int)func_hashtab.ht_used;
   for (hashitem_T *hi = func_hashtab.ht_array; todo > 0 && !got_int; hi++) {
     if (!HASHITEM_EMPTY(hi)) {
       todo--;
       ufunc_T *fp = HI2UF(hi);
-      if (!func_name_refcount(fp->uf_name)
-          && set_ref_in_func(NULL, fp, copyID)) {
+      if (!func_name_refcount(fp->uf_name) && set_ref_in_func(NULL, fp, copyID)) {
         return true;
       }
     }
@@ -3809,24 +3842,29 @@ bool set_ref_in_functions(int copyID)
   return false;
 }
 
-/// Set "copyID" in all function arguments.
-bool set_ref_in_func_args(int copyID)
+bool set_ref_in_functions(int copyID)
+{
+  return rs_set_ref_in_functions(copyID) != 0;
+}
+
+/// Phase 5: C implementation shim for set_ref_in_func_args.
+int nvim_set_ref_in_func_args_impl(int copyID)
 {
   for (int i = 0; i < funcargs.ga_len; i++) {
-    if (rs_set_ref_in_item(((typval_T **)funcargs.ga_data)[i],
-                        copyID, NULL, NULL)) {
+    if (rs_set_ref_in_item(((typval_T **)funcargs.ga_data)[i], copyID, NULL, NULL)) {
       return true;
     }
   }
   return false;
 }
 
-/// Mark all lists and dicts referenced through function "name" with "copyID".
-/// "list_stack" is used to add lists to be marked.  Can be NULL.
-/// "ht_stack" is used to add hashtabs to be marked.  Can be NULL.
-///
-/// @return  true if setting references failed somehow.
-bool set_ref_in_func(char *name, ufunc_T *fp_in, int copyID)
+bool set_ref_in_func_args(int copyID)
+{
+  return rs_set_ref_in_func_args(copyID) != 0;
+}
+
+/// Phase 5: C implementation shim for set_ref_in_func.
+int nvim_set_ref_in_func_impl(char *name, ufunc_T *fp_in, int copyID)
 {
   ufunc_T *fp = fp_in;
   int error = FCERR_NONE;
@@ -3836,7 +3874,6 @@ bool set_ref_in_func(char *name, ufunc_T *fp_in, int copyID)
   if (name == NULL && fp_in == NULL) {
     return false;
   }
-
   if (fp_in == NULL) {
     char *fname = fname_trans_sid(name, fname_buf, &tofree, &error);
     fp = find_func(fname);
@@ -3848,6 +3885,11 @@ bool set_ref_in_func(char *name, ufunc_T *fp_in, int copyID)
   }
   xfree(tofree);
   return abort;
+}
+
+bool set_ref_in_func(char *name, ufunc_T *fp_in, int copyID)
+{
+  return rs_set_ref_in_func(name, fp_in, copyID) != 0;
 }
 
 /// Registers a luaref as a lambda.
