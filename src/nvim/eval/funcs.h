@@ -37,3 +37,9 @@ pos_T *var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charco
 
 // Phase 29: get_user_input moved from funcs.c to funcs_shim.c
 void get_user_input(const typval_T *argvars, typval_T *rettv, bool inputdialog, bool secret);
+
+// Phase 32: functions moved from funcs.c to funcs_shim.c
+void execute_common(typval_T *argvars, typval_T *rettv, int arg_off);
+win_T *get_optional_window(typval_T *argvars, int idx);
+void f_jobstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_jobstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

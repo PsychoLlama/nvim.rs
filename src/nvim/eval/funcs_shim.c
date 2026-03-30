@@ -86,6 +86,12 @@
 #include "nvim/ops.h"
 #include "nvim/runtime.h"
 #include "nvim/usercmd.h"
+#include "nvim/event/proc.h"
+#include "nvim/os/fs.h"
+#include "nvim/os/pty_proc.h"
+#include "nvim/os/shell.h"
+#include "nvim/os/time.h"
+#include "nvim/path.h"
 
 // Error strings used by moved functions
 static const char e_string_list_or_blob_required[]
@@ -110,9 +116,15 @@ extern tabpage_T *rs_find_tabpage(int n);
 extern void rs_get_tagstack(void *wp, void *retdict);
 // Rust tag stack set used by settagstack
 extern int rs_set_tagstack(void *wp, const void *d, int action);
-// Rust event loop helper used by f_wait
+// Rust event loop helper used by f_wait and f_jobwait
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define shim_loop_get_events(l) rs_loop_get_events(l)
+#define loop_get_events(l) rs_loop_get_events(l)
+// proc_get_pid is implemented in Rust
+extern int rs_proc_get_pid(Proc *proc);
+#define proc_get_pid(p) rs_proc_get_pid(p)
+// f_environ is implemented in Rust (eval/system.rs)
+extern void f_environ(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // f_input is implemented in Rust (eval crate)
 extern void f_input(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // get_user_input is defined later in this file (forward declaration)
@@ -4598,3 +4610,723 @@ void f_stdioopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_NUMBER;
 }
 
+
+// =============================================================================
+// Phase 32: Channel and job functions moved from funcs.c
+// =============================================================================
+
+static const char *e_invalwindow = N_("E957: Invalid window number");
+
+void f_chansend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_NUMBER || argvars[1].v_type == VAR_UNKNOWN) {
+    // First argument is the channel id and second is the data to write
+    emsg(_(e_invarg));
+    return;
+  }
+
+  ptrdiff_t input_len = 0;
+  char *input = NULL;
+  uint64_t id = (uint64_t)argvars[0].vval.v_number;
+#ifdef UNIX
+  bool crlf = false;
+#else
+  Channel *chan = find_channel(id);
+  bool crlf = (chan != NULL && chan->term) ? true : false;
+#endif
+
+  if (argvars[1].v_type == VAR_BLOB) {
+    const blob_T *const b = argvars[1].vval.v_blob;
+    input_len = tv_blob_len(b);
+    if (input_len > 0) {
+      input = xmemdup(b->bv_ga.ga_data, (size_t)input_len);
+    }
+  } else {
+    input = save_tv_as_string(&argvars[1], &input_len, false, crlf);
+  }
+
+  if (!input) {
+    // Either the error has been handled by save_tv_as_string(),
+    // or there is no input to send.
+    return;
+  }
+  const char *error = NULL;
+  rettv->vval.v_number = (varnumber_T)channel_send(id, input, (size_t)input_len, true, &error);
+  if (error) {
+    emsg(error);
+  }
+}
+
+/// Get the current cursor column and store it in 'rettv'.
+///
+/// @return  the character index of the column if 'charcol' is true,
+///          otherwise the byte index of the column.
+
+
+win_T *get_optional_window(typval_T *argvars, int idx)
+{
+  if (argvars[idx].v_type == VAR_UNKNOWN) {
+    return curwin;
+  }
+
+  win_T *win = find_win_by_nr_or_id(&argvars[idx]);
+  if (win == NULL) {
+    emsg(_(e_invalwindow));
+    return NULL;
+  }
+  return win;
+}
+
+/// "confirm(message, buttons[, default [, type]])" function
+
+
+/// Set the cursor position.
+/// If "charcol" is true, then use the column number as a character offset.
+/// Otherwise use the column number as a byte offset.
+
+
+/// "cursor(lnum, col)" function, or
+/// "cursor(list)"
+///
+/// Moves the cursor to the specified line and column.
+///
+/// @return  0 when the position could be set, -1 otherwise.
+/// "debugbreak()" function
+
+/// dictwatcheradd(dict, key, funcref) function
+
+
+/// "eval()" function
+
+
+typedef struct {
+  const list_T *const l;
+  const listitem_T *li;
+} GetListLineCookie;
+
+static char *get_list_line(int c, void *cookie, int indent, bool do_concat)
+{
+  GetListLineCookie *const p = (GetListLineCookie *)cookie;
+
+  const listitem_T *const item = p->li;
+  if (item == NULL) {
+    return NULL;
+  }
+  char buf[NUMBUFLEN];
+  const char *const s = tv_get_string_buf_chk(TV_LIST_ITEM_TV(item), buf);
+  p->li = TV_LIST_ITEM_NEXT(p->l, item);
+  return s == NULL ? NULL : xstrdup(s);
+}
+
+void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
+{
+  const int save_msg_silent = msg_silent;
+  const int save_emsg_silent = emsg_silent;
+  const bool save_emsg_noredir = emsg_noredir;
+  const bool save_redir_off = redir_off;
+  garray_T *const save_capture_ga = capture_ga;
+  const int save_msg_col = msg_col;
+  bool echo_output = false;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[arg_off + 1].v_type != VAR_UNKNOWN) {
+    char buf[NUMBUFLEN];
+    const char *const s = tv_get_string_buf_chk(&argvars[arg_off + 1], buf);
+
+    if (s == NULL) {
+      return;
+    }
+    if (*s == NUL) {
+      echo_output = true;
+    }
+    if (strncmp(s, "silent", 6) == 0) {
+      msg_silent++;
+    }
+    if (strcmp(s, "silent!") == 0) {
+      emsg_silent = true;
+      emsg_noredir = true;
+    }
+  } else {
+    msg_silent++;
+  }
+
+  garray_T capture_local;
+  ga_init(&capture_local, (int)sizeof(char), 80);
+  capture_ga = &capture_local;
+  redir_off = false;
+  if (!echo_output) {
+    msg_col = 0;  // prevent leading spaces
+  }
+
+  if (argvars[arg_off].v_type != VAR_LIST) {
+    do_cmdline_cmd(tv_get_string(&argvars[arg_off]));
+  } else if (argvars[arg_off].vval.v_list != NULL) {
+    list_T *const list = argvars[arg_off].vval.v_list;
+    tv_list_ref(list);
+    GetListLineCookie cookie = {
+      .l = list,
+      .li = tv_list_first(list),
+    };
+    do_cmdline(NULL, get_list_line, (void *)&cookie,
+               DOCMD_NOWAIT|DOCMD_VERBOSE|DOCMD_REPEAT|DOCMD_KEYTYPED);
+    tv_list_unref(list);
+  }
+  msg_silent = save_msg_silent;
+  emsg_silent = save_emsg_silent;
+  emsg_noredir = save_emsg_noredir;
+  redir_off = save_redir_off;
+  // "silent reg" or "silent echo x" leaves msg_col somewhere in the line.
+  if (echo_output) {
+    // When not working silently: put it in column zero.  A following
+    // "echon" will overwrite the message, unavoidably.
+    msg_col = 0;
+  } else {
+    // When working silently: Put it back where it was, since nothing
+    // should have been written.
+    msg_col = save_msg_col;
+  }
+
+  ga_append(capture_ga, NUL);
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = capture_ga->ga_data;
+
+  capture_ga = save_capture_ga;
+}
+
+
+/// "menu_get(path [, modes])" function
+
+
+
+/// "flatten(list[, {maxdepth}])" function
+/// "feedkeys()" function
+
+/// "function()" function
+/// "funcref()" function
+
+
+/// "garbagecollect()" function
+
+/// "id()" function
+
+/// "jobpid(id)" function
+void f_jobpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_NUMBER) {
+    emsg(_(e_invarg));
+    return;
+  }
+
+  Channel *data = find_job((uint64_t)argvars[0].vval.v_number, true);
+  if (!data) {
+    return;
+  }
+
+  Proc *proc = &data->stream.proc;
+  rettv->vval.v_number = proc_get_pid(proc);
+}
+
+/// "jobresize(job, width, height)" function
+void f_jobresize(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_NUMBER || argvars[1].v_type != VAR_NUMBER
+      || argvars[2].v_type != VAR_NUMBER) {
+    // job id, width, height
+    emsg(_(e_invarg));
+    return;
+  }
+
+  Channel *data = find_job((uint64_t)argvars[0].vval.v_number, true);
+  if (!data) {
+    return;
+  }
+
+  if (data->stream.proc.type != kProcTypePty) {
+    emsg(_(e_channotpty));
+    return;
+  }
+
+  pty_proc_resize(&data->stream.pty, (uint16_t)argvars[1].vval.v_number,
+                  (uint16_t)argvars[2].vval.v_number);
+  rettv->vval.v_number = 1;
+}
+
+static const char *pty_ignored_env_vars[] = {
+#ifndef MSWIN
+  "COLUMNS",
+  "LINES",
+  "TERMCAP",
+  "COLORFGBG",
+  "COLORTERM",
+#endif
+  // Nvim-owned env vars. #6764
+  "VIM",
+  "VIMRUNTIME",
+  NULL
+};
+
+/// According to comments in src/win/process.c of libuv, Windows has a few
+/// "essential" environment variables.
+static const char *required_env_vars[] = {
+#ifdef MSWIN
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "LOGONSERVER",
+  "PATH",
+  "SYSTEMDRIVE",
+  "SYSTEMROOT",
+  "TEMP",
+  "USERDOMAIN",
+  "USERNAME",
+  "USERPROFILE",
+  "WINDIR",
+#endif
+  NULL
+};
+
+dict_T *create_environment(const dictitem_T *job_env, const bool clear_env, const bool pty,
+                           const char * const pty_term_name)
+{
+  dict_T *env = tv_dict_alloc();
+
+  if (!clear_env) {
+    typval_T temp_env = TV_INITIAL_VALUE;
+    f_environ(NULL, &temp_env, (EvalFuncData){ .null = NULL });
+    tv_dict_extend(env, temp_env.vval.v_dict, "force");
+    tv_dict_free(temp_env.vval.v_dict);
+
+    if (pty) {
+      // These env vars shouldn't propagate to the child process. #6764
+      // Remove them here, then the user may decide to explicitly set them below.
+      for (size_t i = 0;
+           i < ARRAY_SIZE(pty_ignored_env_vars) && pty_ignored_env_vars[i];
+           i++) {
+        dictitem_T *dv = tv_dict_find(env, pty_ignored_env_vars[i], -1);
+        if (dv) {
+          tv_dict_item_remove(env, dv);
+        }
+      }
+#ifndef MSWIN
+      // Set COLORTERM to "truecolor" if termguicolors is set
+      if (p_tgc) {
+        tv_dict_add_str(env, S_LEN("COLORTERM"), "truecolor");
+      }
+#endif
+    }
+  }
+
+  // For a pty, we need a sane $TERM set.  We can't rely on nvim's environment,
+  // because the child process is going to be communicating with nvim, not the
+  // parent terminal.  Set a sane default, but let the user override it in the
+  // job's environment if they want.
+  if (pty) {
+    dictitem_T *dv = tv_dict_find(env, S_LEN("TERM"));
+    if (dv) {
+      tv_dict_item_remove(env, dv);
+    }
+    tv_dict_add_str(env, S_LEN("TERM"), pty_term_name);
+  }
+
+  // Set $NVIM (in the child process) to v:servername. #3118
+  char *nvim_addr = get_vim_var_str(VV_SEND_SERVER);
+  if (nvim_addr[0] != NUL) {
+    dictitem_T *dv = tv_dict_find(env, S_LEN("NVIM"));
+    if (dv) {
+      tv_dict_item_remove(env, dv);
+    }
+    tv_dict_add_str(env, S_LEN("NVIM"), nvim_addr);
+  }
+
+  if (job_env) {
+#ifdef MSWIN
+    TV_DICT_ITER(job_env->di_tv.vval.v_dict, var, {
+      // Always use upper-case keys for Windows so we detect duplicate keys
+      char *const key = strcase_save(var->di_key, true);
+      size_t len = strlen(key);
+      dictitem_T *dv = tv_dict_find(env, key, len);
+      if (dv) {
+        tv_dict_item_remove(env, dv);
+      }
+      tv_dict_add_str(env, key, len, tv_get_string(&var->di_tv));
+      xfree(key);
+    });
+#else
+    tv_dict_extend(env, job_env->di_tv.vval.v_dict, "force");
+#endif
+  }
+
+  if (pty) {
+    // Now that the custom environment is configured, we need to ensure certain
+    // environment variables are present.
+    for (size_t i = 0;
+         i < ARRAY_SIZE(required_env_vars) && required_env_vars[i];
+         i++) {
+      size_t len = strlen(required_env_vars[i]);
+      dictitem_T *dv = tv_dict_find(env, required_env_vars[i], (ptrdiff_t)len);
+      if (!dv) {
+        char *env_var = os_getenv(required_env_vars[i]);
+        if (env_var) {
+          tv_dict_add_allocated_str(env, required_env_vars[i], len, env_var);
+        }
+      }
+    }
+  }
+
+  return env;
+}
+
+/// "jobstart()" function
+void f_jobstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  const char *cmd;
+  bool executable = true;
+  char **argv = tv_to_argv(&argvars[0], &cmd, &executable);
+  if (!argv) {
+    rettv->vval.v_number = executable ? 0 : -1;
+    return;  // Did error message in tv_to_argv.
+  }
+
+  if (argvars[1].v_type != VAR_DICT && argvars[1].v_type != VAR_UNKNOWN) {
+    // Wrong argument types
+    semsg(_(e_invarg2), "expected dictionary");
+    shell_free_argv(argv);
+    return;
+  }
+
+  dict_T *job_opts = NULL;
+  bool detach = false;
+  bool rpc = false;
+  bool pty = false;
+  bool term = false;
+  bool clear_env = false;
+  bool overlapped = false;
+  ChannelStdinMode stdin_mode = kChannelStdinPipe;
+  CallbackReader on_stdout = CALLBACK_READER_INIT;
+  CallbackReader on_stderr = CALLBACK_READER_INIT;
+  Callback on_exit = CALLBACK_NONE;
+  char *cwd = NULL;
+  dictitem_T *job_env = NULL;
+  if (argvars[1].v_type == VAR_DICT) {
+    job_opts = argvars[1].vval.v_dict;
+
+    detach = tv_dict_get_number(job_opts, "detach") != 0;
+    rpc = tv_dict_get_number(job_opts, "rpc") != 0;
+    term = tv_dict_get_number(job_opts, "term") != 0;
+    pty = term || tv_dict_get_number(job_opts, "pty") != 0;
+    clear_env = tv_dict_get_number(job_opts, "clear_env") != 0;
+    overlapped = tv_dict_get_number(job_opts, "overlapped") != 0;
+
+    char *s = tv_dict_get_string(job_opts, "stdin", false);
+    if (s) {
+      if (!strncmp(s, "null", NUMBUFLEN)) {
+        stdin_mode = kChannelStdinNull;
+      } else if (!strncmp(s, "pipe", NUMBUFLEN)) {
+        // Nothing to do, default value
+      } else {
+        semsg(_(e_invargNval), "stdin", s);
+      }
+    }
+
+    dictitem_T *const job_term = tv_dict_find(job_opts, S_LEN("term"));
+    if (job_term && VAR_BOOL != job_term->di_tv.v_type) {
+      // Restrict "term" field to boolean, in case we want to allow buffer numbers in the future.
+      semsg(_(e_invarg2), "'term' must be Boolean");
+      shell_free_argv(argv);
+      return;
+    }
+
+    if (pty && rpc) {
+      semsg(_(e_invarg2), "job cannot have both 'pty' and 'rpc' options set");
+      shell_free_argv(argv);
+      return;
+    }
+
+#ifdef MSWIN
+    if (pty && overlapped) {
+      semsg(_(e_invarg2),
+            "job cannot have both 'pty' and 'overlapped' options set");
+      shell_free_argv(argv);
+      return;
+    }
+#endif
+
+    char *new_cwd = tv_dict_get_string(job_opts, "cwd", false);
+    if (new_cwd && *new_cwd != NUL) {
+      cwd = new_cwd;
+      // The new cwd must be a directory.
+      if (!os_isdir(cwd)) {
+        semsg(_(e_invarg2), "expected valid directory");
+        shell_free_argv(argv);
+        return;
+      }
+    }
+
+    job_env = tv_dict_find(job_opts, S_LEN("env"));
+    if (job_env && job_env->di_tv.v_type != VAR_DICT) {
+      semsg(_(e_invarg2), "env");
+      shell_free_argv(argv);
+      return;
+    }
+
+    if (!common_job_callbacks(job_opts, &on_stdout, &on_stderr, &on_exit)) {
+      shell_free_argv(argv);
+      return;
+    }
+  }
+
+  uint16_t width = (uint16_t)tv_dict_get_number(job_opts, "width");
+  uint16_t height = (uint16_t)tv_dict_get_number(job_opts, "height");
+  char *term_name = NULL;
+
+  if (term) {
+    if (text_locked()) {
+      text_locked_msg();
+      shell_free_argv(argv);
+      return;
+    }
+    if (curbuf->b_changed) {
+      emsg(_("jobstart(...,{term=true}) requires unmodified buffer"));
+      shell_free_argv(argv);
+      return;
+    }
+    assert(!rpc);
+    term_name = "xterm-256color";
+    cwd = cwd ? cwd : ".";
+    overlapped = false;
+    detach = false;
+    stdin_mode = kChannelStdinPipe;
+    width = width ? width : (uint16_t)MAX(0, curwin->w_view_width - win_col_off(curwin));
+    height = height ? height : (uint16_t)curwin->w_view_height;
+  }
+
+  if (pty) {
+    // Deprecated TERM field is from before `env` option existed.
+    term_name = term_name ? term_name : tv_dict_get_string(job_opts, "TERM", false);
+    term_name = term_name ? term_name : "ansi";
+  }
+
+  dict_T *env = create_environment(job_env, clear_env, pty, term_name);
+  Channel *chan = channel_job_start(argv, NULL, on_stdout, on_stderr, on_exit, pty,
+                                    rpc, overlapped, detach, stdin_mode, cwd,
+                                    width, height, env, &rettv->vval.v_number);
+  if (!chan) {
+    return;
+  } else if (!term) {
+    channel_create_event(chan, NULL);
+  } else {
+    if (rettv->vval.v_number <= 0) {
+      return;
+    }
+
+    int pid = chan->stream.pty.proc.pid;
+
+    // "./…" => "/home/foo/…"
+    vim_FullName(cwd, NameBuff, sizeof(NameBuff), false);
+    // "/home/foo/…" => "~/…"
+    size_t len = home_replace(NULL, NameBuff, IObuff, sizeof(IObuff), true);
+    // Trim slash.
+    if (len != 1 && (IObuff[len - 1] == '\\' || IObuff[len - 1] == '/')) {
+      IObuff[len - 1] = NUL;
+    }
+
+    if (len == 1 && IObuff[0] == '/') {
+      // Avoid ambiguity in the URI when CWD is root directory.
+      IObuff[1] = '.';
+      IObuff[2] = NUL;
+    }
+
+    // Terminal URI: "term://$CWD//$PID:$CMD"
+    snprintf(NameBuff, sizeof(NameBuff), "term://%s//%d:%s", IObuff, pid, cmd);
+    // Buffer has no terminal associated yet; unset 'swapfile' to ensure no swapfile is created.
+    curbuf->b_p_swf = false;
+
+    apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
+    setfname(curbuf, NameBuff, NULL, true);
+    apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
+
+    Error err = ERROR_INIT;
+    // Set (deprecated) buffer-local vars (prefer 'channel' buffer-local option).
+    dict_set_var(curbuf->b_vars, cstr_as_string("terminal_job_id"),
+                 INTEGER_OBJ((Integer)chan->id), false, false, NULL, &err);
+    api_clear_error(&err);
+    dict_set_var(curbuf->b_vars, cstr_as_string("terminal_job_pid"),
+                 INTEGER_OBJ(pid), false, false, NULL, &err);
+    api_clear_error(&err);
+
+    channel_incref(chan);
+    channel_terminal_open(curbuf, chan);
+    channel_create_event(chan, NULL);
+    channel_decref(chan);
+  }
+}
+
+/// "jobstop()" function
+void f_jobstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_NUMBER) {
+    // Only argument is the job id
+    emsg(_(e_invarg));
+    return;
+  }
+
+  Channel *data = find_job((uint64_t)argvars[0].vval.v_number, false);
+  if (!data) {
+    return;
+  }
+
+  const char *error = NULL;
+  if (data->is_rpc) {
+    // Ignore return code, but show error later.
+    channel_close(data->id, kChannelPartRpc, &error);
+  }
+  proc_stop(&data->stream.proc);
+  rettv->vval.v_number = 1;
+  if (error) {
+    emsg(error);
+  }
+}
+
+/// "jobwait(ids[, timeout])" function
+void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (rs_check_secure()) {
+    return;
+  }
+  if (argvars[0].v_type != VAR_LIST || (argvars[1].v_type != VAR_NUMBER
+                                        && argvars[1].v_type != VAR_UNKNOWN)) {
+    emsg(_(e_invarg));
+    return;
+  }
+
+  list_T *args = argvars[0].vval.v_list;
+  Channel **jobs = xcalloc((size_t)tv_list_len(args), sizeof(*jobs));
+  MultiQueue *waiting_jobs = multiqueue_new(loop_on_put, &main_loop);
+
+  // Validate, prepare jobs for waiting.
+  int i = 0;
+  TV_LIST_ITER_CONST(args, arg, {
+    Channel *chan = NULL;
+    if (TV_LIST_ITEM_TV(arg)->v_type != VAR_NUMBER
+        || !(chan = find_channel((uint64_t)TV_LIST_ITEM_TV(arg)->vval.v_number))
+        || chan->streamtype != kChannelStreamProc) {
+      jobs[i] = NULL;  // Invalid job.
+    } else if (proc_is_stopped(&chan->stream.proc)) {
+      // Job is stopped but not fully destroyed.
+      // Ensure all callbacks on its event queue are executed. #15402
+      proc_wait(&chan->stream.proc, -1, NULL);
+      jobs[i] = NULL;  // Invalid job.
+    } else {
+      jobs[i] = chan;
+      channel_incref(chan);
+      if (chan->stream.proc.status < 0) {
+        // Flush any events in the job's queue before temporarily replacing it.
+        multiqueue_process_events(chan->events);
+        multiqueue_replace_parent(chan->events, waiting_jobs);
+      }
+    }
+    i++;
+  });
+
+  int remaining = -1;
+  uint64_t before = 0;
+  if (argvars[1].v_type == VAR_NUMBER && argvars[1].vval.v_number >= 0) {
+    remaining = (int)argvars[1].vval.v_number;
+    before = os_hrtime();
+  }
+
+  // Only mark the UI as busy when jobwait() blocks
+  const bool busy = remaining != 0;
+  if (busy) {
+    ui_busy_start();
+    ui_flush();
+  }
+
+  for (i = 0; i < tv_list_len(args); i++) {
+    if (remaining == 0) {
+      break;  // Timeout.
+    }
+    if (jobs[i] == NULL) {
+      continue;  // Invalid job, will assign status=-3 below.
+    }
+    int status = proc_wait(&jobs[i]->stream.proc, remaining,
+                           waiting_jobs);
+    if (status < 0) {
+      break;  // Interrupted (CTRL-C) or timeout, skip remaining jobs.
+    }
+    if (remaining > 0) {
+      uint64_t now = os_hrtime();
+      remaining = MIN(0, remaining - (int)((now - before) / 1000000));
+      before = now;
+    }
+  }
+
+  list_T *const rv = tv_list_alloc(tv_list_len(args));
+
+  // For each job:
+  //  * Restore its parent queue if the job is still alive.
+  //  * Append its status to the output list, or:
+  //       -3 for "invalid job id"
+  //       -2 for "interrupted" (user hit CTRL-C)
+  //       -1 for jobs that were skipped or timed out
+  for (i = 0; i < tv_list_len(args); i++) {
+    if (jobs[i] == NULL) {
+      tv_list_append_number(rv, -3);
+      continue;
+    }
+    multiqueue_process_events(jobs[i]->events);
+    multiqueue_replace_parent(jobs[i]->events, loop_get_events(&main_loop));
+
+    tv_list_append_number(rv, jobs[i]->stream.proc.status);
+    channel_decref(jobs[i]);
+  }
+
+  multiqueue_free(waiting_jobs);
+  xfree(jobs);
+  if (busy) {
+    ui_busy_stop();
+  }
+  tv_list_ref(rv);
+  rettv->v_type = VAR_LIST;
+  rettv->vval.v_list = rv;
+}
