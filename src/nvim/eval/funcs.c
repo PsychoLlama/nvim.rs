@@ -438,6 +438,11 @@ extern void f_gettagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 extern void f_prompt_getprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// VimL functions moved to funcs_shim.c (Phase 25)
+extern void f_expandcmd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_settagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -1037,46 +1042,6 @@ static void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 /// "menu_get(path [, modes])" function
 
-/// "expandcmd()" function
-/// Expand all the special characters in a command string.
-static void f_expandcmd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *errormsg = NULL;
-  bool emsgoff = true;
-
-  if (argvars[1].v_type == VAR_DICT
-      && tv_dict_get_bool(argvars[1].vval.v_dict, "errmsg", kBoolVarFalse)) {
-    emsgoff = false;
-  }
-
-  rettv->v_type = VAR_STRING;
-  char *cmdstr = xstrdup(tv_get_string(&argvars[0]));
-
-  exarg_T eap = {
-    .cmd = cmdstr,
-    .arg = cmdstr,
-    .usefilter = false,
-    .nextcmd = NULL,
-    .cmdidx = CMD_USER,
-  };
-  eap.argt |= EX_NOSPC;
-
-  if (emsgoff) {
-    emsg_off++;
-  }
-  if (expand_filename(&eap, &cmdstr, &errormsg) == FAIL) {
-    if (!emsgoff && errormsg != NULL && *errormsg != NUL) {
-      emsg(errormsg);
-    }
-  }
-  if (emsgoff) {
-    emsg_off--;
-  }
-
-  rettv->vval.v_string = cmdstr;
-}
-
-/// "flatten()" and "flattennew()" functions
 
 
 /// "flatten(list[, {maxdepth}])" function
@@ -1686,48 +1651,6 @@ static void f_inputsecret(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   f_input(argvars, rettv, fptr);
   cmdline_star--;
   inputsecret_flag = false;
-}
-
-/// "islocked()" function
-static void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  lval_T lv;
-
-  rettv->vval.v_number = -1;
-  const char *const end = get_lval((char *)tv_get_string(&argvars[0]),
-                                   NULL,
-                                   &lv, false, false,
-                                   GLV_NO_AUTOLOAD|GLV_READ_ONLY,
-                                   FNE_CHECK_START);
-  if (end != NULL && lv.ll_name != NULL) {
-    if (*end != NUL) {
-      semsg(_(lv.ll_name_len == 0 ? e_invarg2 : e_trailing_arg), end);
-    } else {
-      if (lv.ll_tv == NULL) {
-        dictitem_T *di = find_var(lv.ll_name, lv.ll_name_len, NULL, true);
-        if (di != NULL) {
-          // Consider a variable locked when:
-          // 1. the variable itself is locked
-          // 2. the value of the variable is locked.
-          // 3. the List or Dict value is locked.
-          rettv->vval.v_number = ((di->di_flags & DI_FLAGS_LOCK)
-                                  || tv_islocked(&di->di_tv));
-        }
-      } else if (lv.ll_range) {
-        emsg(_("E786: Range not allowed"));
-      } else if (lv.ll_newkey != NULL) {
-        semsg(_(e_dictkey), lv.ll_newkey);
-      } else if (lv.ll_list != NULL) {
-        // List item.
-        rettv->vval.v_number = tv_islocked(TV_LIST_ITEM_TV(lv.ll_li));
-      } else {
-        // Dictionary item.
-        rettv->vval.v_number = tv_islocked(&lv.ll_di->di_tv);
-      }
-    }
-  }
-
-  clear_lval(&lv);
 }
 
 /// "id()" function
@@ -3422,55 +3345,6 @@ free_lstval:
   if (set_unnamed) {
     // Discard the result. We already handle the error case.
     op_reg_set_previous(regname);
-  }
-}
-
-/// "settagstack()" function
-static void f_settagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  static const char *e_invact2 = N_("E962: Invalid action: '%s'");
-  char action = 'r';
-
-  rettv->vval.v_number = -1;
-
-  // first argument: window number or id
-  win_T *wp = find_win_by_nr_or_id(&argvars[0]);
-  if (wp == NULL) {
-    return;
-  }
-
-  // second argument: dict with items to set in the tag stack
-  if (tv_check_for_dict_arg(argvars, 1) == FAIL) {
-    return;
-  }
-  dict_T *d = argvars[1].vval.v_dict;
-  if (d == NULL) {
-    return;
-  }
-
-  // third argument: action - 'a' for append and 'r' for replace.
-  // default is to replace the stack.
-  if (argvars[2].v_type == VAR_UNKNOWN) {
-    // action = 'r';
-  } else if (tv_check_for_string_arg(argvars, 2) == FAIL) {
-    return;
-  } else {
-    const char *actstr;
-    actstr = tv_get_string_chk(&argvars[2]);
-    if (actstr == NULL) {
-      return;
-    }
-    if ((*actstr == 'r' || *actstr == 'a' || *actstr == 't')
-        && actstr[1] == NUL) {
-      action = *actstr;
-    } else {
-      semsg(_(e_invact2), actstr);
-      return;
-    }
-  }
-
-  if (rs_set_tagstack(wp, d, action) == OK) {
-    rettv->vval.v_number = 0;
   }
 }
 
