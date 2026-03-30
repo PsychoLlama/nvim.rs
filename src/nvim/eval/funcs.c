@@ -5262,26 +5262,7 @@ void nvim_eval_state(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_string = ga.ga_data;
 }
 
-void nvim_eval_searchdecl(typval_T *argvars, typval_T *rettv)
-{
-  int locally = 1;
-  int thisblock = 0;
-  bool error = false;
-
-  rettv->vval.v_number = 1;     // default: FAIL
-
-  const char *const name = tv_get_string_chk(&argvars[0]);
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    locally = tv_get_number_chk(&argvars[1], &error) == 0;
-    if (!error && argvars[2].v_type != VAR_UNKNOWN) {
-      thisblock = tv_get_number_chk(&argvars[2], &error) != 0;
-    }
-  }
-  if (!error && name != NULL) {
-    rettv->vval.v_number = find_decl((char *)name, strlen(name), locally,
-                                     thisblock, SEARCH_KEEP) == FAIL;
-  }
-}
+// nvim_eval_searchdecl: inlined into Rust (misc.rs) — find_decl delegation
 
 void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
 {

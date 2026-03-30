@@ -1232,8 +1232,17 @@ extern "C" {
     fn nvim_eval_getregtype(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_getreginfo(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_state(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_searchdecl(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_searchdecl: inlined into rs_f_searchdecl below
     fn nvim_eval_searchpos(argvars: *const c_void, rettv: *mut c_void);
+
+    // searchdecl inlining
+    fn find_decl(
+        ptr: *mut c_char,
+        len: usize,
+        locally: bool,
+        thisblock: bool,
+        flags: c_int,
+    ) -> bool;
 }
 
 // =============================================================================
@@ -1367,7 +1376,38 @@ pub unsafe extern "C" fn rs_f_searchdecl(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_searchdecl(argvars, rettv);
+    // nvim_eval_searchdecl: inlined — find_decl delegation
+    const SEARCH_KEEP: c_int = 0x400;
+    const TYPVAL_SZ: usize = 16;
+    let mut locally: bool = true;
+    let mut thisblock: bool = false;
+    let mut error = false;
+
+    p4_nvim_tv_set_number_h4(rettv, 1); // default: FAIL
+
+    let name = p4_tv_get_string_chk(argvars.cast_mut());
+    if name.is_null() {
+        return;
+    }
+
+    let arg1 = argvars.cast::<u8>().add(TYPVAL_SZ).cast::<c_void>();
+    if p3_misc_tv_get_type(arg1) != 0 {
+        // VAR_UNKNOWN = 0
+        locally = p3_misc_tv_get_number_chk(arg1, &raw mut error) == 0;
+        if !error {
+            let arg2 = argvars.cast::<u8>().add(2 * TYPVAL_SZ).cast::<c_void>();
+            if p3_misc_tv_get_type(arg2) != 0 {
+                thisblock = p3_misc_tv_get_number_chk(arg2, &raw mut error) != 0;
+            }
+        }
+    }
+
+    if !error {
+        let len = libc::strlen(name);
+        let found = find_decl(name.cast_mut(), len, locally, thisblock, SEARCH_KEEP);
+        // find_decl returns true on success; rettv = !found (1 = FAIL)
+        p4_nvim_tv_set_number_h4(rettv, i64::from(!found));
+    }
 }
 
 /// "searchpos()" function - search for pattern, return position
