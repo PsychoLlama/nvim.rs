@@ -503,6 +503,28 @@ extern const char *tv_get_string_chk(const typval_T *tv);
 extern const char *tv_get_string(const typval_T *tv);
 extern const char *tv_get_string_buf(const typval_T *tv, char *buf);
 
+// Dict item and dict alloc/add functions (migrated to Rust, Phase 3)
+extern dictitem_T *tv_dict_item_alloc_len(const char *key, size_t key_len);
+extern dictitem_T *tv_dict_item_alloc(const char *key);
+extern void tv_dict_item_free(dictitem_T *item);
+extern dictitem_T *tv_dict_item_copy(dictitem_T *di);
+extern void tv_dict_item_remove(dict_T *dict, dictitem_T *item);
+extern dict_T *tv_dict_alloc(void);
+extern dict_T *tv_dict_alloc_lock(VarLockStatus lock);
+extern void tv_dict_alloc_ret(typval_T *ret_tv);
+extern dictitem_T *tv_dict_find(const dict_T *d, const char *key, ptrdiff_t len);
+extern int tv_dict_add(dict_T *d, dictitem_T *item);
+extern int tv_dict_add_list(dict_T *d, const char *key, size_t key_len, list_T *list);
+extern int tv_dict_add_tv(dict_T *d, const char *key, size_t key_len, typval_T *tv);
+extern int tv_dict_add_dict(dict_T *d, const char *key, size_t key_len, dict_T *dict);
+extern int tv_dict_add_nr(dict_T *d, const char *key, size_t key_len, varnumber_T nr);
+extern int tv_dict_add_float(dict_T *d, const char *key, size_t key_len, float_T nr);
+extern int tv_dict_add_bool(dict_T *d, const char *key, size_t key_len, BoolVarValue val);
+extern int tv_dict_add_str(dict_T *d, const char *key, size_t key_len, const char *val);
+extern int tv_dict_add_str_len(dict_T *d, const char *key, size_t key_len, const char *val, int len);
+extern int tv_dict_add_allocated_str(dict_T *d, const char *key, size_t key_len, char *val);
+extern int tv_dict_add_func(dict_T *d, const char *key, size_t key_len, ufunc_T *fp);
+
 // Blob functions (migrated to Rust, Phase 2)
 extern blob_T *tv_blob_alloc(void);
 extern void tv_blob_free(blob_T *blob);

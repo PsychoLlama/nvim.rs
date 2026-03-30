@@ -1146,6 +1146,34 @@ extern "C" {
     fn nvim_blob_ga_clear_only(b: BlobHandle);
     fn nvim_semsg_blob_invalid_value(n: i64);
     fn nvim_tv_set_lock(tv: TypevalHandle, lock: c_int);
+
+    // Phase 3 accessor helpers for dict item alloc/free/add
+    fn nvim_dict_item_alloc_len(key: *const c_char, key_len: usize) -> DictItemHandle;
+    fn nvim_dict_item_free(item: DictItemHandle);
+    fn nvim_dictitem_di_tv(di: DictItemHandle) -> TypevalHandle;
+    fn nvim_dict_add_item(d: DictHandle, item: DictItemHandle) -> c_int;
+    fn nvim_dict_alloc_impl() -> DictHandle;
+    fn nvim_dict_inc_refcount(d: DictHandle);
+    fn nvim_tv_set_dict(tv: TypevalHandle, d: DictHandle);
+    fn nvim_tv_dict_alloc_ret(ret_tv: TypevalHandle);
+    fn nvim_list_ref(l: ListHandle);
+    fn nvim_func_ref(name: *mut c_char);
+    fn nvim_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_ufunc_get_name(fp: *const std::ffi::c_void) -> *const c_char;
+    fn nvim_ufunc_get_namelen(fp: *const std::ffi::c_void) -> usize;
+    fn nvim_tv_copy(from: TypevalHandle, to: TypevalHandle);
+    fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_xstrndup(s: *const c_char, len: usize) -> *mut c_char;
+
+    // Phase 3 additional setters
+    fn nvim_tv_set_type(tv: TypevalHandle, v_type: c_int);
+    fn nvim_tv_set_list(tv: TypevalHandle, l: ListHandle);
+    fn nvim_tv_set_bool(tv: TypevalHandle, val: c_int);
+    fn nvim_tv_set_float(tv: TypevalHandle, f: f64);
+    fn nvim_dict_set_lock(d: DictHandle, lock: c_int);
+    fn nvim_dict_remove_key(d: DictHandle, key: *const c_char);
+    fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
+    fn nvim_dictitem_get_key(di: DictItemHandle) -> *const c_char;
 }
 
 // =============================================================================
@@ -1527,6 +1555,283 @@ fn tv_dict_is_watched_impl(d: DictHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_tv_dict_is_watched(d: DictHandle) -> c_int {
     c_int::from(tv_dict_is_watched_impl(d))
+}
+
+// =============================================================================
+// Dict item alloc/free/add (Phase 3)
+// =============================================================================
+
+// VarType integer constants for use with nvim_tv_set_type.
+const VAR_LIST: c_int = VarType::List as c_int;
+const VAR_DICT: c_int = VarType::Dict as c_int;
+const VAR_NUMBER: c_int = VarType::Number as c_int;
+const VAR_FLOAT: c_int = VarType::Float as c_int;
+const VAR_BOOL: c_int = VarType::Bool as c_int;
+const VAR_STRING: c_int = VarType::String as c_int;
+const VAR_FUNC: c_int = VarType::Func as c_int;
+
+/// Allocate a dict item, set its value, add to dict.
+/// Returns OK(1) on success, FAIL(0) on duplicate key.
+unsafe fn dict_add_item_with_tv_setup(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    setup: impl FnOnce(TypevalHandle),
+) -> c_int {
+    let item = unsafe { nvim_dict_item_alloc_len(key, key_len) };
+    setup(unsafe { nvim_dictitem_di_tv(item) });
+    if unsafe { nvim_dict_add_item(d, item) } == 0 {
+        unsafe { nvim_dict_item_free(item) };
+        return 0; // FAIL
+    }
+    1 // OK
+}
+
+/// FFI export: tv_dict_item_alloc_len - allocate dict item with key.
+#[export_name = "tv_dict_item_alloc_len"]
+pub unsafe extern "C" fn rs_tv_dict_item_alloc_len(
+    key: *const c_char,
+    key_len: usize,
+) -> DictItemHandle {
+    unsafe { nvim_dict_item_alloc_len(key, key_len) }
+}
+
+/// FFI export: tv_dict_item_alloc - allocate dict item (NUL-terminated key).
+#[export_name = "tv_dict_item_alloc"]
+pub unsafe extern "C" fn rs_tv_dict_item_alloc(key: *const c_char) -> DictItemHandle {
+    let key_len = unsafe { libc_strlen(key) };
+    unsafe { nvim_dict_item_alloc_len(key, key_len) }
+}
+
+/// FFI export: tv_dict_item_free - free a dict item.
+#[export_name = "tv_dict_item_free"]
+pub unsafe extern "C" fn rs_tv_dict_item_free(item: DictItemHandle) {
+    unsafe { nvim_dict_item_free(item) };
+}
+
+/// FFI export: tv_dict_item_copy - make a copy of a dict item.
+#[export_name = "tv_dict_item_copy"]
+pub unsafe extern "C" fn rs_tv_dict_item_copy(di: DictItemHandle) -> DictItemHandle {
+    let di_key = unsafe { nvim_dictitem_get_key(di) };
+    let key_len = unsafe { libc_strlen(di_key) };
+    let new_di = unsafe { nvim_dict_item_alloc_len(di_key, key_len) };
+    let src_tv = unsafe { nvim_dictitem_get_tv(di) };
+    let dst_tv = unsafe { nvim_dictitem_di_tv(new_di) };
+    unsafe { nvim_tv_copy(src_tv, dst_tv) };
+    new_di
+}
+
+/// FFI export: tv_dict_item_remove - remove and free a dict item.
+#[export_name = "tv_dict_item_remove"]
+pub unsafe extern "C" fn rs_tv_dict_item_remove(dict: DictHandle, item: DictItemHandle) {
+    // Find the hash item and remove it from the hash table.
+    let key = unsafe { nvim_dictitem_get_key(item) };
+    // Use tv_dict_find to check if item is present (needed to get hashitem for removal).
+    // We delegate the hash removal to nvim_dict_remove_key wrapper.
+    unsafe { nvim_dict_remove_key(dict, key) };
+    unsafe { nvim_dict_item_free(item) };
+}
+
+/// FFI export: tv_dict_alloc - allocate an empty dict.
+#[export_name = "tv_dict_alloc"]
+pub unsafe extern "C" fn rs_tv_dict_alloc() -> DictHandle {
+    unsafe { nvim_dict_alloc_impl() }
+}
+
+/// FFI export: tv_dict_alloc_lock - allocate dict with given lock status.
+#[export_name = "tv_dict_alloc_lock"]
+pub unsafe extern "C" fn rs_tv_dict_alloc_lock(lock: c_int) -> DictHandle {
+    let d = unsafe { nvim_dict_alloc_impl() };
+    unsafe { nvim_dict_set_lock(d, lock) };
+    d
+}
+
+/// FFI export: tv_dict_alloc_ret - allocate dict for return value.
+#[export_name = "tv_dict_alloc_ret"]
+pub unsafe extern "C" fn rs_tv_dict_alloc_ret(ret_tv: TypevalHandle) {
+    unsafe { nvim_tv_dict_alloc_ret(ret_tv) };
+}
+
+/// FFI export: tv_dict_find - find item in dict by key.
+#[export_name = "tv_dict_find"]
+pub unsafe extern "C" fn rs_tv_dict_find(
+    d: DictHandle,
+    key: *const c_char,
+    len: isize,
+) -> DictItemHandle {
+    unsafe { nvim_dict_find(d, key, len) }
+}
+
+/// FFI export: tv_dict_add - add item to dict.
+#[export_name = "tv_dict_add"]
+pub unsafe extern "C" fn rs_tv_dict_add(d: DictHandle, item: DictItemHandle) -> c_int {
+    unsafe { nvim_dict_add_item(d, item) }
+}
+
+/// FFI export: tv_dict_add_list - add list entry to dict.
+#[export_name = "tv_dict_add_list"]
+pub unsafe extern "C" fn rs_tv_dict_add_list(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    list: ListHandle,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |tv| {
+            nvim_tv_set_type(tv, VAR_LIST);
+            nvim_tv_set_list(tv, list);
+            nvim_list_ref(list);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_tv - add typval entry to dict.
+#[export_name = "tv_dict_add_tv"]
+pub unsafe extern "C" fn rs_tv_dict_add_tv(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    tv: TypevalHandle,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |item_tv| {
+            nvim_tv_copy(tv, item_tv);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_dict - add dict entry to dict.
+#[export_name = "tv_dict_add_dict"]
+pub unsafe extern "C" fn rs_tv_dict_add_dict(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    dict: DictHandle,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |tv| {
+            nvim_tv_set_type(tv, VAR_DICT);
+            nvim_tv_set_dict(tv, dict);
+            nvim_dict_inc_refcount(dict);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_nr - add number entry to dict.
+#[export_name = "tv_dict_add_nr"]
+pub unsafe extern "C" fn rs_tv_dict_add_nr(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    nr: i64,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |tv| {
+            nvim_tv_set_type(tv, VAR_NUMBER);
+            nvim_tv_set_number(tv, nr);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_float - add float entry to dict.
+#[export_name = "tv_dict_add_float"]
+pub unsafe extern "C" fn rs_tv_dict_add_float(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    nr: f64,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |tv| {
+            nvim_tv_set_type(tv, VAR_FLOAT);
+            nvim_tv_set_float(tv, nr);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_bool - add bool entry to dict.
+#[export_name = "tv_dict_add_bool"]
+pub unsafe extern "C" fn rs_tv_dict_add_bool(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    val: c_int,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |tv| {
+            nvim_tv_set_type(tv, VAR_BOOL);
+            nvim_tv_set_bool(tv, val);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_str - add string entry to dict.
+#[export_name = "tv_dict_add_str"]
+pub unsafe extern "C" fn rs_tv_dict_add_str(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    val: *const c_char,
+) -> c_int {
+    unsafe { rs_tv_dict_add_str_len(d, key, key_len, val, -1) }
+}
+
+/// FFI export: tv_dict_add_str_len - add string entry with length to dict.
+#[export_name = "tv_dict_add_str_len"]
+pub unsafe extern "C" fn rs_tv_dict_add_str_len(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    val: *const c_char,
+    len: c_int,
+) -> c_int {
+    let s: *mut c_char = if val.is_null() {
+        std::ptr::null_mut()
+    } else if len < 0 {
+        unsafe { nvim_xstrdup(val) }
+    } else {
+        unsafe { nvim_xstrndup(val, len as usize) }
+    };
+    unsafe { rs_tv_dict_add_allocated_str(d, key, key_len, s) }
+}
+
+/// FFI export: tv_dict_add_allocated_str - add pre-allocated string to dict.
+#[export_name = "tv_dict_add_allocated_str"]
+pub unsafe extern "C" fn rs_tv_dict_add_allocated_str(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    val: *mut c_char,
+) -> c_int {
+    unsafe {
+        dict_add_item_with_tv_setup(d, key, key_len, |tv| {
+            nvim_tv_set_type(tv, VAR_STRING);
+            nvim_tv_set_string(tv, val);
+        })
+    }
+}
+
+/// FFI export: tv_dict_add_func - add function entry to dict.
+#[export_name = "tv_dict_add_func"]
+pub unsafe extern "C" fn rs_tv_dict_add_func(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: usize,
+    fp: *const std::ffi::c_void,
+) -> c_int {
+    let name = unsafe { nvim_ufunc_get_name(fp) };
+    let namelen = unsafe { nvim_ufunc_get_namelen(fp) };
+    let s = unsafe { nvim_xmemdupz(name, namelen) };
+    let item = unsafe { nvim_dict_item_alloc_len(key, key_len) };
+    let tv = unsafe { nvim_dictitem_di_tv(item) };
+    unsafe { nvim_tv_set_type(tv, VAR_FUNC) };
+    unsafe { nvim_tv_set_string(tv, s) };
+    if unsafe { nvim_dict_add_item(d, item) } == 0 {
+        unsafe { nvim_dict_item_free(item) };
+        return 0; // FAIL
+    }
+    unsafe { nvim_func_ref(s) };
+    1 // OK
 }
 
 // =============================================================================

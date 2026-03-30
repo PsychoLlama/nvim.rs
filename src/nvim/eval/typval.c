@@ -1821,115 +1821,12 @@ void tv_dict_watcher_notify(dict_T *const dict, const char *const key, typval_T 
 }
 
 //{{{2 Dictionary item
-
-/// Allocate a dictionary item
-///
-/// @note that the type and value of the item (->di_tv) still needs to
-///       be initialized.
-///
-/// @param[in]  key  Key, is copied to the new item.
-/// @param[in]  key_len  Key length.
-///
-/// @return [allocated] new dictionary item.
-dictitem_T *tv_dict_item_alloc_len(const char *const key, const size_t key_len)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-  FUNC_ATTR_MALLOC
-{
-  dictitem_T *const di = xmalloc(offsetof(dictitem_T, di_key) + key_len + 1);
-  memcpy(di->di_key, key, key_len);
-  di->di_key[key_len] = NUL;
-  di->di_flags = DI_FLAGS_ALLOC;
-  di->di_tv.v_lock = VAR_UNLOCKED;
-  di->di_tv.v_type = VAR_UNKNOWN;
-  return di;
-}
-
-/// Allocate a dictionary item
-///
-/// @note that the type and value of the item (->di_tv) still needs to
-///       be initialized.
-///
-/// @param[in]  key  Key, is copied to the new item.
-///
-/// @return [allocated] new dictionary item.
-dictitem_T *tv_dict_item_alloc(const char *const key)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-  FUNC_ATTR_MALLOC
-{
-  return tv_dict_item_alloc_len(key, strlen(key));
-}
-
-/// Free a dictionary item, also clearing the value
-///
-/// @param  item  Item to free.
-void tv_dict_item_free(dictitem_T *const item)
-  FUNC_ATTR_NONNULL_ALL
-{
-  tv_clear(&item->di_tv);
-  if (item->di_flags & DI_FLAGS_ALLOC) {
-    xfree(item);
-  }
-}
-
-/// Make a copy of a dictionary item
-///
-/// @param[in]  di  Item to copy.
-///
-/// @return [allocated] new dictionary item.
-dictitem_T *tv_dict_item_copy(dictitem_T *const di)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  dictitem_T *const new_di = tv_dict_item_alloc(di->di_key);
-  tv_copy(&di->di_tv, &new_di->di_tv);
-  return new_di;
-}
-
-/// Remove item from dictionary and free it
-///
-/// @param  dict  Dictionary to remove item from.
-/// @param  item  Item to remove.
-void tv_dict_item_remove(dict_T *const dict, dictitem_T *const item)
-  FUNC_ATTR_NONNULL_ALL
-{
-  hashitem_T *const hi = hash_find(&dict->dv_hashtab, item->di_key);
-  if (HASHITEM_EMPTY(hi)) {
-    semsg(_(e_intern2), "tv_dict_item_remove()");
-  } else {
-    hash_remove(&dict->dv_hashtab, hi);
-  }
-  tv_dict_item_free(item);
-}
+// tv_dict_item_alloc_len, tv_dict_item_alloc, tv_dict_item_free,
+// tv_dict_item_copy, tv_dict_item_remove migrated to Rust (Phase 3)
 
 //{{{2 Alloc/free
 
-/// Allocate an empty dictionary.
-/// Caller should take care of the reference count.
-///
-/// @return [allocated] new dictionary.
-dict_T *tv_dict_alloc(void)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  dict_T *const d = xcalloc(1, sizeof(dict_T));
-
-  // Add the dict to the list of dicts for garbage collection.
-  if (gc_first_dict != NULL) {
-    gc_first_dict->dv_used_prev = d;
-  }
-  d->dv_used_next = gc_first_dict;
-  d->dv_used_prev = NULL;
-  gc_first_dict = d;
-
-  hash_init(&d->dv_hashtab);
-  d->dv_lock = VAR_UNLOCKED;
-  d->dv_scope = VAR_NO_SCOPE;
-  d->dv_refcount = 0;
-  d->dv_copyID = 0;
-  QUEUE_INIT(&d->watchers);
-
-  d->lua_table_ref = LUA_NOREF;
-
-  return d;
-}
+// tv_dict_alloc migrated to Rust (Phase 3)
 
 /// Free items contained in a dictionary
 ///
@@ -2012,27 +1909,7 @@ void tv_dict_unref(dict_T *const d)
 
 //{{{2 Indexing/searching
 
-/// Find item in dictionary
-///
-/// @param[in]  d  Dictionary to check.
-/// @param[in]  key  Dictionary key.
-/// @param[in]  len  Key length. If negative, then strlen(key) is used.
-///
-/// @return found item or NULL if nothing was found.
-dictitem_T *tv_dict_find(const dict_T *const d, const char *const key, const ptrdiff_t len)
-  FUNC_ATTR_NONNULL_ARG(2) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (d == NULL) {
-    return NULL;
-  }
-  hashitem_T *const hi = (len < 0
-                          ? hash_find(&d->dv_hashtab, key)
-                          : hash_find_len(&d->dv_hashtab, key, (size_t)len));
-  if (HASHITEM_EMPTY(hi)) {
-    return NULL;
-  }
-  return TV_DICT_HI2DI(hi);
-}
+// tv_dict_find migrated to Rust (Phase 3)
 
 // tv_dict_has_key: migrated to Rust (nvim-rs/typval)
 // tv_dict_get_tv: migrated to Rust (nvim-rs/typval)
@@ -2133,235 +2010,10 @@ int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name)
 }
 
 //{{{2 dict_add*
-
-/// Add item to dictionary
-///
-/// @param[out]  d  Dictionary to add to.
-/// @param[in]  item  Item to add.
-///
-/// @return FAIL if key already exists.
-int tv_dict_add(dict_T *const d, dictitem_T *const item)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (tv_dict_wrong_func_name(d, &item->di_tv, item->di_key)) {
-    return FAIL;
-  }
-  return hash_add(&d->dv_hashtab, item->di_key);
-}
-
-/// Add a list entry to dictionary
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param  list  List to add. Will have reference count incremented.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_list(dict_T *const d, const char *const key, const size_t key_len,
-                     list_T *const list)
-  FUNC_ATTR_NONNULL_ALL
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_LIST;
-  item->di_tv.vval.v_list = list;
-  tv_list_ref(list);
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a typval entry to dictionary.
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-///
-/// @return FAIL if out of memory or key already exists.
-int tv_dict_add_tv(dict_T *d, const char *key, const size_t key_len, typval_T *tv)
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  tv_copy(tv, &item->di_tv);
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a dictionary entry to dictionary
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param  dict  Dictionary to add. Will have reference count incremented.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_dict(dict_T *const d, const char *const key, const size_t key_len,
-                     dict_T *const dict)
-  FUNC_ATTR_NONNULL_ALL
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_DICT;
-  item->di_tv.vval.v_dict = dict;
-  dict->dv_refcount++;
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a number entry to dictionary
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param[in]  nr  Number to add.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_nr(dict_T *const d, const char *const key, const size_t key_len,
-                   const varnumber_T nr)
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_NUMBER;
-  item->di_tv.vval.v_number = nr;
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a floating point number entry to dictionary
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param[in]  nr  Floating point number to add.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_float(dict_T *const d, const char *const key, const size_t key_len,
-                      const float_T nr)
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_FLOAT;
-  item->di_tv.vval.v_float = nr;
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a boolean entry to dictionary
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param[in]  val BoolVarValue to add.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_bool(dict_T *const d, const char *const key, const size_t key_len, BoolVarValue val)
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_BOOL;
-  item->di_tv.vval.v_bool = val;
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a string entry to dictionary
-///
-/// @see tv_dict_add_allocated_str
-int tv_dict_add_str(dict_T *const d, const char *const key, const size_t key_len,
-                    const char *const val)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return tv_dict_add_str_len(d, key, key_len, val, -1);
-}
-
-/// Add a string entry to dictionary
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param[in]  val  String to add. NULL adds empty string.
-/// @param[in]  len  Use this many bytes from `val`, or -1 for whole string.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_str_len(dict_T *const d, const char *const key, const size_t key_len,
-                        const char *const val, int len)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  char *s = NULL;
-  if (val != NULL) {
-    s = (len < 0) ? xstrdup(val) : xstrndup(val, (size_t)len);
-  }
-  return tv_dict_add_allocated_str(d, key, key_len, s);
-}
-
-/// Add a string entry to dictionary
-///
-/// Unlike tv_dict_add_str() saves val to the new dictionary item in place of
-/// creating a new copy.
-///
-/// @warning String will be freed even in case addition fails.
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param[in]  val  String to add.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_allocated_str(dict_T *const d, const char *const key, const size_t key_len,
-                              char *const val)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_STRING;
-  item->di_tv.vval.v_string = val;
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Add a function entry to dictionary.
-///
-/// @param[out]  d  Dictionary to add entry to.
-/// @param[in]  key  Key to add.
-/// @param[in]  key_len  Key length.
-/// @param[in]  fp  Function to add.
-///
-/// @return OK in case of success, FAIL when key already exists.
-int tv_dict_add_func(dict_T *const d, const char *const key, const size_t key_len,
-                     ufunc_T *const fp)
-  FUNC_ATTR_NONNULL_ARG(1, 2, 4)
-{
-  dictitem_T *const item = tv_dict_item_alloc_len(key, key_len);
-
-  item->di_tv.v_type = VAR_FUNC;
-  item->di_tv.vval.v_string = xmemdupz(fp->uf_name, fp->uf_namelen);
-  if (tv_dict_add(d, item) == FAIL) {
-    tv_dict_item_free(item);
-    return FAIL;
-  }
-  func_ref(item->di_tv.vval.v_string);
-  return OK;
-}
+// tv_dict_add, tv_dict_add_list, tv_dict_add_tv, tv_dict_add_dict,
+// tv_dict_add_nr, tv_dict_add_float, tv_dict_add_bool, tv_dict_add_str,
+// tv_dict_add_str_len, tv_dict_add_allocated_str, tv_dict_add_func
+// migrated to Rust (Phase 3)
 
 //{{{2 Operations on the whole dict
 
@@ -2606,25 +2258,7 @@ list_T *tv_list_alloc_ret(typval_T *const ret_tv, const ptrdiff_t len)
   return l;
 }
 
-dict_T *tv_dict_alloc_lock(VarLockStatus lock)
-  FUNC_ATTR_NONNULL_RET
-{
-  dict_T *const d = tv_dict_alloc();
-  d->dv_lock = lock;
-  return d;
-}
-
-/// Allocate an empty dictionary for a return value
-///
-/// Also sets reference count.
-///
-/// @param[out]  ret_tv  Structure where dictionary is saved.
-void tv_dict_alloc_ret(typval_T *const ret_tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  dict_T *const d = tv_dict_alloc_lock(VAR_UNLOCKED);
-  tv_dict_set_ret(ret_tv, d);
-}
+// tv_dict_alloc_lock, tv_dict_alloc_ret migrated to Rust (Phase 3)
 
 /// Turn a dictionary into a list
 ///
@@ -3574,7 +3208,20 @@ dict_T *nvim_dict_get_used_next(const dict_T *d) { return d->dv_used_next; }
 const char *nvim_dictitem_get_key(const dictitem_T *di) { return di->di_key; }
 
 /// Look up a key in a dict, returning a dictitem pointer or NULL (accessor for Rust).
-dictitem_T *nvim_dict_find(const dict_T *d, const char *key, ptrdiff_t len) { return tv_dict_find(d, key, len); }
+/// Directly uses hash table to avoid circular dependency with Rust tv_dict_find.
+dictitem_T *nvim_dict_find(const dict_T *d, const char *key, ptrdiff_t len)
+{
+  if (d == NULL) {
+    return NULL;
+  }
+  hashitem_T *const hi = (len < 0
+                          ? hash_find(&d->dv_hashtab, key)
+                          : hash_find_len(&d->dv_hashtab, key, (size_t)len));
+  if (HASHITEM_EMPTY(hi)) {
+    return NULL;
+  }
+  return TV_DICT_HI2DI(hi);
+}
 
 /// Get string representation of a typval into buf (accessor for Rust).
 /// Returns NULL on type error, empty string for empty string.
@@ -3856,5 +3503,149 @@ void nvim_semsg_blob_invalid_value(int64_t n)
   semsg(_(e_invalid_value_for_blob_nr), (int)n);
 }
 
+// Dict item accessor functions for Rust (Phase 3)
+// These are self-contained to avoid circular calls with Rust exports.
+
+/// Allocate a dict item with given key (accessor for Rust).
+/// Direct implementation to avoid circular call with Rust tv_dict_item_alloc_len.
+dictitem_T *nvim_dict_item_alloc_len(const char *key, size_t key_len)
+{
+  dictitem_T *const di = xmalloc(offsetof(dictitem_T, di_key) + key_len + 1);
+  memcpy(di->di_key, key, key_len);
+  di->di_key[key_len] = NUL;
+  di->di_flags = DI_FLAGS_ALLOC;
+  di->di_tv.v_lock = VAR_UNLOCKED;
+  di->di_tv.v_type = VAR_UNKNOWN;
+  return di;
+}
+
+/// Free a dict item (accessor for Rust).
+/// Direct implementation to avoid circular call with Rust tv_dict_item_free.
+void nvim_dict_item_free(dictitem_T *item)
+{
+  tv_clear(&item->di_tv);
+  if (item->di_flags & DI_FLAGS_ALLOC) {
+    xfree(item);
+  }
+}
+
+/// Get a pointer to di_tv (accessor for Rust).
+typval_T *nvim_dictitem_di_tv(dictitem_T *di) { return &di->di_tv; }
+
+/// Add a dict item to a dict (accessor for Rust).
+/// Direct implementation to avoid circular call with Rust tv_dict_add.
+int nvim_dict_add_item(dict_T *d, dictitem_T *item)
+{
+  if (tv_dict_wrong_func_name(d, &item->di_tv, item->di_key)) {
+    return FAIL;
+  }
+  return hash_add(&d->dv_hashtab, item->di_key);
+}
+
+/// Allocate an empty dict (accessor for Rust).
+/// Self-contained to avoid circular call with Rust tv_dict_alloc.
+dict_T *nvim_dict_alloc_impl(void)
+{
+  dict_T *const d = xcalloc(1, sizeof(dict_T));
+  if (gc_first_dict != NULL) {
+    gc_first_dict->dv_used_prev = d;
+  }
+  d->dv_used_next = gc_first_dict;
+  d->dv_used_prev = NULL;
+  gc_first_dict = d;
+  hash_init(&d->dv_hashtab);
+  d->dv_lock = VAR_UNLOCKED;
+  d->dv_scope = VAR_NO_SCOPE;
+  d->dv_refcount = 0;
+  d->dv_copyID = 0;
+  QUEUE_INIT(&d->watchers);
+  d->lua_table_ref = LUA_NOREF;
+  return d;
+}
+
+/// Free a dict completely (accessor for Rust).
+/// Delegates to C tv_dict_free (before migration).
+void nvim_dict_free_impl(dict_T *d) { tv_dict_free(d); }
+
+/// Decrement dict refcount and free if zero (accessor for Rust).
+/// Delegates to C tv_dict_unref (before migration).
+void nvim_dict_unref_impl(dict_T *d) { tv_dict_unref(d); }
+
+/// Increment dict refcount (accessor for Rust).
+void nvim_dict_inc_refcount(dict_T *d) { d->dv_refcount++; }
+
+/// Get dict refcount (accessor for Rust).
+int nvim_dict_get_refcount(const dict_T *d) { return d->dv_refcount; }
+
+/// Get dv_used_prev from a dict (accessor for Rust).
+dict_T *nvim_dict_get_used_prev(const dict_T *d) { return d->dv_used_prev; }
+
+/// Set v_type to VAR_DICT and vval.v_dict (accessor for Rust).
+void nvim_tv_set_dict(typval_T *tv, dict_T *d)
+{
+  tv->v_type = VAR_DICT;
+  tv->v_lock = VAR_UNLOCKED;
+  tv->vval.v_dict = d;
+}
+
+/// tv_dict_alloc_ret wrapper for Rust.
+/// Self-contained implementation using tv_dict_alloc_lock and tv_dict_set_ret.
+void nvim_tv_dict_alloc_ret(typval_T *ret_tv)
+{
+  dict_T *const d = nvim_dict_alloc_impl();
+  d->dv_lock = VAR_UNLOCKED;
+  tv_dict_set_ret(ret_tv, d);
+}
+
+/// Get v_lock from a typval (accessor for Rust).
+int nvim_tv_get_lock(const typval_T *tv) { return (int)tv->v_lock; }
+
+/// Get dv_scope from a dict (accessor for Rust).
+int nvim_dict_get_scope(const dict_T *d) { return (int)d->dv_scope; }
+
+/// tv_list_ref wrapper - increment list refcount (accessor for Rust).
+void nvim_list_ref(list_T *l) { tv_list_ref(l); }
+
+/// func_ref wrapper for Rust.
+void nvim_func_ref(char *name) { func_ref(name); }
+
+// nvim_xmemdupz: already defined in shada_shim.c
+// nvim_ufunc_get_name, nvim_ufunc_get_namelen: already defined in runtime_ffi.c and userfunc.c
+
+/// tv_copy wrapper for Rust.
+void nvim_tv_copy(const typval_T *from, typval_T *to) { tv_copy(from, to); }
+
+// nvim_xstrdup: already defined in register.c
+
+/// xstrndup wrapper for Rust.
+char *nvim_xstrndup(const char *s, size_t len) { return xstrndup(s, len); }
+
 /// Set v_lock on a typval (accessor for Rust).
 void nvim_tv_set_lock(typval_T *tv, int lock) { tv->v_lock = (VarLockStatus)lock; }
+
+/// Set v_type on a typval (accessor for Rust).
+void nvim_tv_set_type(typval_T *tv, int v_type) { tv->v_type = (VarType)v_type; }
+
+/// Set vval.v_list on a typval (accessor for Rust).
+void nvim_tv_set_list(typval_T *tv, list_T *l)
+{
+  tv->v_type = VAR_LIST;
+  tv->v_lock = VAR_UNLOCKED;
+  tv->vval.v_list = l;
+}
+
+/// Set vval.v_bool on a typval (accessor for Rust).
+void nvim_tv_set_bool(typval_T *tv, int val) { tv->vval.v_bool = (BoolVarValue)val; }
+
+/// Set dv_lock on a dict (accessor for Rust).
+void nvim_dict_set_lock(dict_T *d, int lock) { d->dv_lock = (VarLockStatus)lock; }
+
+/// Remove a hash item for key from dict's hashtab (accessor for Rust).
+/// Only removes from hash, does NOT free the dictitem.
+void nvim_dict_remove_key(dict_T *d, const char *key)
+{
+  hashitem_T *hi = hash_find(&d->dv_hashtab, key);
+  if (!HASHITEM_EMPTY(hi)) {
+    hash_remove(&d->dv_hashtab, hi);
+  }
+}
