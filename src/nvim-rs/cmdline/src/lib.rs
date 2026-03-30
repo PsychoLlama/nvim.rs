@@ -10,6 +10,7 @@
 #![allow(clippy::cast_lossless)]
 
 pub mod api;
+pub mod cmdbuff;
 pub mod cmdwin;
 pub mod command_line_state;
 pub mod completion;

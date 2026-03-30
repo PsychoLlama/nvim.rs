@@ -84,6 +84,11 @@ int rs_command_line_erase_chars(int c, int indent, void *is_state);
 // Phase 2 (ex_getln migration): cmdline_screen_cleared implemented in Rust
 void cmdline_screen_cleared(void);
 
+// Phase 4 (ex_getln migration): buffer management implemented in Rust
+void alloc_cmdbuff(int len);
+void dealloc_cmdbuff(void);
+void realloc_cmdbuff(int len);
+
 #ifdef __cplusplus
 }
 #endif

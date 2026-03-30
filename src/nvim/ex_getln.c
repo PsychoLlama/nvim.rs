@@ -707,57 +707,21 @@ char *getexline(int c, void *cookie, int indent, bool do_concat)
   return getcmdline(c, 1, indent, do_concat);
 }
 
-/// Deallocate a command line buffer, updating the buffer size and length.
-void dealloc_cmdbuff(void)
+// alloc_cmdbuff, dealloc_cmdbuff, realloc_cmdbuff: implemented in Rust (cmdline crate, cmdbuff.rs).
+
+/// Adjust ccline.xpc->xp_pattern after buffer reallocation.
+/// Called from Rust realloc_cmdbuff after the new buffer is installed.
+void nvim_realloc_cmdbuff_xp_fixup(const char *old_buff)
 {
-  XFREE_CLEAR(ccline.cmdbuff);
-  ccline.cmdlen = ccline.cmdbufflen = 0;
-}
-
-/// Allocate a new command line buffer.
-/// Assigns the new buffer to ccline.cmdbuff and ccline.cmdbufflen.
-void alloc_cmdbuff(int len)
-{
-  // give some extra space to avoid having to allocate all the time
-  if (len < 80) {
-    len = 100;
-  } else {
-    len += 20;
-  }
-
-  ccline.cmdbuff = xmalloc((size_t)len);
-  ccline.cmdbufflen = len;
-}
-
-/// Re-allocate the command line to length len + something extra.
-void realloc_cmdbuff(int len)
-{
-  if (len < ccline.cmdbufflen) {
-    return;  // no need to resize
-  }
-
-  char *p = ccline.cmdbuff;
-
-  alloc_cmdbuff(len);                   // will get some more
-  // There isn't always a NUL after the command, but it may need to be
-  // there, thus copy up to the NUL and add a NUL.
-  memmove(ccline.cmdbuff, p, (size_t)ccline.cmdlen);
-  ccline.cmdbuff[ccline.cmdlen] = NUL;
-
   if (ccline.xpc != NULL
       && ccline.xpc->xp_pattern != NULL
       && ccline.xpc->xp_context != EXPAND_NOTHING
       && ccline.xpc->xp_context != EXPAND_UNSUCCESSFUL) {
-    int i = (int)(ccline.xpc->xp_pattern - p);
-
-    // If xp_pattern points inside the old cmdbuff it needs to be adjusted
-    // to point into the newly allocated memory.
+    int i = (int)(ccline.xpc->xp_pattern - old_buff);
     if (i >= 0 && i <= ccline.cmdlen) {
       ccline.xpc->xp_pattern = ccline.cmdbuff + i;
     }
   }
-
-  xfree(p);
 }
 
 enum { MAX_CB_ERRORS = 1, };
