@@ -13,6 +13,7 @@
 #include "nvim/context.h"
 #include "nvim/eval.h"
 #include "nvim/eval_defs.h"
+#include "nvim/garray.h"
 #include "nvim/highlight_group.h"
 #include "nvim/eval/vars.h"
 #include "nvim/ex_getln.h"
@@ -492,4 +493,59 @@ int nvim_eval_tv_blob_get_len(typval_T *tv)
 {
   blob_T *b = tv->vval.v_blob;
   return b != NULL ? b->bv_ga.ga_len : 0;
+}
+
+// =============================================================================
+// typval list/blob pointer accessors for repeat() inline
+// =============================================================================
+
+/// Get the list_T* pointer from a typval (argvars[0] of type VAR_LIST).
+list_T *nvim_eval_tv_get_list_ptr(typval_T *tv)
+{
+  return tv->vval.v_list;
+}
+
+// =============================================================================
+// repeat() blob branch helper
+// =============================================================================
+
+// tv_blob_set_range is a Rust-side function (migrated in Phase 1 of blob migration)
+extern int tv_blob_set_range(blob_T *dest, varnumber_T n1, varnumber_T n2, typval_T *src);
+
+/// Handle the blob branch of repeat(blob, n).
+/// Allocates the result blob in rettv and copies blob n times.
+/// @param argvars  typval array; argvars[0] must be VAR_BLOB
+/// @param rettv    destination typval
+/// @param n        repeat count (already retrieved)
+void nvim_eval_repeat_blob(typval_T *argvars, typval_T *rettv, varnumber_T n)
+{
+  tv_blob_alloc_ret(rettv);
+  if (argvars[0].vval.v_blob == NULL || n <= 0) {
+    return;
+  }
+
+  const int slen = argvars[0].vval.v_blob->bv_ga.ga_len;
+  const int len = (int)(slen * n);
+  if (len <= 0) {
+    return;
+  }
+
+  ga_grow(&rettv->vval.v_blob->bv_ga, len);
+  rettv->vval.v_blob->bv_ga.ga_len = len;
+
+  int i;
+  for (i = 0; i < slen; i++) {
+    if (tv_blob_get(argvars[0].vval.v_blob, i) != 0) {
+      break;
+    }
+  }
+
+  if (i == slen) {
+    // No need to copy since all bytes are already zero
+    return;
+  }
+
+  for (i = 0; i < n; i++) {
+    tv_blob_set_range(rettv->vval.v_blob, i * slen, (i + 1) * slen - 1, argvars);
+  }
 }

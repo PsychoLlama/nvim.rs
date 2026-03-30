@@ -1810,9 +1810,20 @@ extern "C" {
     fn nvim_eval_index(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_indexof(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_range: inlined into rs_f_range below
-    fn nvim_eval_repeat(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_repeat: inlined into rs_f_repeat below
     fn nvim_eval_reduce(argvars: *const c_void, rettv: *mut c_void);
+    // repeat() helpers
+    fn nvim_eval_tv_get_list_ptr(tv: *mut c_void) -> *mut c_void;
+    fn nvim_eval_repeat_blob(argvars: *mut c_void, rettv: *mut c_void, n: i64);
+    fn tv_list_extend(l1: *mut c_void, l2: *mut c_void, bef: *mut c_void);
+    fn xmallocz(size: usize) -> *mut c_void;
+    #[link_name = "nvim_tv_set_string"]
+    fn p9_nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
 }
+
+// VAR type constants for Phase 9
+const VAR_LIST_P9: c_int = 4;
+const VAR_BLOB_P9: c_int = 10;
 
 // =============================================================================
 // Phase 9: Data structure functions
@@ -1912,7 +1923,63 @@ pub unsafe extern "C" fn rs_f_repeat(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_repeat(argvars, rettv);
+    let n = tv_get_number(argvars.cast::<u8>().add(TYPVAL_SZ_P6).cast::<c_void>());
+    let arg0_type = p3_misc_tv_get_type(argvars);
+
+    if arg0_type == VAR_LIST_P9 {
+        // List case
+        let src_list = nvim_eval_tv_get_list_ptr(argvars.cast_mut());
+        let src_len = if src_list.is_null() {
+            0i64
+        } else {
+            i64::from(p3_misc_tv_list_len(src_list))
+        };
+        let count_hint: isize = if n > 0 {
+            n.saturating_mul(src_len).try_into().unwrap_or(isize::MAX)
+        } else {
+            0
+        };
+        let dst_list = p4_tv_list_alloc_ret(rettv, count_hint);
+        let mut rem = n;
+        while rem > 0 {
+            tv_list_extend(dst_list, src_list, std::ptr::null_mut());
+            rem -= 1;
+        }
+    } else if arg0_type == VAR_BLOB_P9 {
+        // Blob case: delegate to C shim (complex struct manipulation)
+        nvim_eval_repeat_blob(argvars.cast_mut(), rettv, n);
+    } else {
+        // String case: initialize to VAR_STRING with NULL
+        nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+        if n <= 0 {
+            return;
+        }
+        let p = p8_tv_get_string(argvars.cast_mut());
+        if p.is_null() {
+            return;
+        }
+        let slen = libc::strlen(p);
+        if slen == 0 {
+            return;
+        }
+        // Detect overflow: len = slen * n; n > 0 so safe to convert
+        let Ok(n_usize) = usize::try_from(n) else {
+            return;
+        };
+        let Some(len) = slen.checked_mul(n_usize) else {
+            return;
+        };
+        // Extra overflow check from C: len / n == slen
+        if len / n_usize != slen {
+            return;
+        }
+        let r = xmallocz(len).cast::<u8>();
+        for i in 0..n_usize {
+            libc::memcpy(r.add(i * slen).cast::<c_void>(), p.cast::<c_void>(), slen);
+        }
+        // r is now an xmalloc'd NUL-terminated string; transfer ownership to rettv
+        p9_nvim_tv_set_string(rettv, r);
+    }
 }
 
 /// "reduce()" function - reduce a list/blob/string with a function
