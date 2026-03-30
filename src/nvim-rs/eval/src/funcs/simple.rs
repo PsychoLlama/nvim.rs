@@ -20,9 +20,9 @@ extern "C" {
     fn nvim_eval_line2byte(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_gettext: inlined into rs_f_gettext below
     fn nvim_eval_keytrans(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_luaeval(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_pum_getpos(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_wordcount(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_luaeval: inlined into rs_f_luaeval below
+    // nvim_eval_pum_getpos: inlined into rs_f_pum_getpos below
+    // nvim_eval_wordcount: inlined into rs_f_wordcount below
     fn nvim_eval_menu_get(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_visualmode(argvars: *const c_void, rettv: *mut c_void);
 }
@@ -83,6 +83,18 @@ extern "C" {
     fn gettext(msgid: *const c_char) -> *const c_char;
     // tv_check_for_nonempty_string_arg: validate arg is non-empty string
     fn tv_check_for_nonempty_string_arg(argvars: *const c_void, idx: c_int) -> c_int;
+
+    // pum_getpos / wordcount inlining
+    fn tv_dict_alloc_ret(rettv: *mut c_void);
+    #[link_name = "nvim_tv_get_dict"]
+    fn nvim_tv_get_dict_ptr(tv: *const c_void) -> *const c_void;
+    fn pum_set_event_info(dict: *mut c_void);
+    fn cursor_pos_info(dict: *mut c_void);
+
+    // luaeval inlining
+    #[link_name = "tv_get_string_chk"]
+    fn s_tv_get_string_chk(tv: *mut c_void) -> *const c_char;
+    fn nlua_typval_eval(str: NvimApiString, arg: *const c_void, rettv: *mut c_void);
 }
 
 // =============================================================================
@@ -240,11 +252,14 @@ pub unsafe extern "C" fn rs_f_setenv(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_pum_getpos"]
 pub unsafe extern "C" fn rs_f_pum_getpos(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_pum_getpos(argvars, rettv);
+    // nvim_eval_pum_getpos: inlined — pum_set_event_info delegation
+    tv_dict_alloc_ret(rettv);
+    let dict = nvim_tv_get_dict_ptr(rettv).cast_mut();
+    pum_set_event_info(dict);
 }
 
 /// "wordcount()" function - word count information dict
@@ -253,11 +268,14 @@ pub unsafe extern "C" fn rs_f_pum_getpos(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_wordcount"]
 pub unsafe extern "C" fn rs_f_wordcount(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_wordcount(argvars, rettv);
+    // nvim_eval_wordcount: inlined — cursor_pos_info delegation
+    tv_dict_alloc_ret(rettv);
+    let dict = nvim_tv_get_dict_ptr(rettv).cast_mut();
+    cursor_pos_info(dict);
 }
 
 /// "soundfold(word)" function - fold a word using 'spelllang' soundfold
@@ -340,7 +358,14 @@ pub unsafe extern "C" fn rs_f_luaeval(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_luaeval(argvars, rettv);
+    // nvim_eval_luaeval: inlined — nlua_typval_eval delegation
+    let str_ptr = s_tv_get_string_chk(argvars.cast_mut());
+    if str_ptr.is_null() {
+        return;
+    }
+    let api_str = NvimApiString::from_cstr(str_ptr.cast::<u8>());
+    let arg1 = arg_at(argvars, 1);
+    nlua_typval_eval(api_str, arg1, rettv);
 }
 
 /// "shiftwidth([col])" function - effective value of 'shiftwidth'

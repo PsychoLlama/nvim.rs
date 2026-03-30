@@ -4815,17 +4815,8 @@ void nvim_eval_line2byte(typval_T *argvars, typval_T *rettv)
 // nvim_eval_getenv: inlined into Rust (simple.rs)
 // nvim_eval_setenv: inlined into Rust (simple.rs)
 
-void nvim_eval_pum_getpos(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict_alloc_ret(rettv);
-  pum_set_event_info(rettv->vval.v_dict);
-}
-
-void nvim_eval_wordcount(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict_alloc_ret(rettv);
-  cursor_pos_info(rettv->vval.v_dict);
-}
+// nvim_eval_pum_getpos: inlined into Rust (simple.rs) — pum_set_event_info delegation
+// nvim_eval_wordcount: inlined into Rust (simple.rs) — cursor_pos_info delegation
 
 // nvim_eval_soundfold: inlined into Rust (simple.rs)
 // nvim_eval_wildmenumode: inlined into Rust (simple.rs)
@@ -4844,14 +4835,7 @@ void nvim_eval_keytrans(typval_T *argvars, typval_T *rettv)
   xfree(escaped);
 }
 
-void nvim_eval_luaeval(typval_T *argvars, typval_T *rettv)
-{
-  const char *const str = tv_get_string_chk(&argvars[0]);
-  if (str == NULL) {
-    return;
-  }
-  nlua_typval_eval(cstr_as_string(str), &argvars[1], rettv);
-}
+// nvim_eval_luaeval: inlined into Rust (simple.rs) — nlua_typval_eval delegation
 
 // nvim_eval_shiftwidth: inlined into Rust (simple.rs)
 // nvim_eval_mode: inlined into Rust (simple.rs)
