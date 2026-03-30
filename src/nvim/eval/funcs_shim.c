@@ -11,8 +11,11 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/cmdexpand.h"
 #include "nvim/context.h"
+#include "nvim/eval_defs.h"
+#include "nvim/eval/vars.h"
 #include "nvim/message.h"
 #include "nvim/os/os.h"
+#include "nvim/register.h"
 #include "nvim/state.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
@@ -177,4 +180,76 @@ void nvim_eval_visualmode(typval_T *argvars, typval_T *rettv)
   if (nvim_eval_non_zero_arg(argvars, 0)) {
     curbuf->b_visual_mode_eval = NUL;
   }
+}
+
+// =============================================================================
+// getreg() / getregtype() helpers
+// =============================================================================
+
+/// Get register name from argvars[0], defaulting to v:register.
+/// Returns the register name char, or 0 on error.
+int nvim_eval_getreg_get_regname(typval_T *argvars)
+{
+  const char *strregname;
+
+  if (argvars[0].v_type != VAR_UNKNOWN) {
+    strregname = tv_get_string_chk(&argvars[0]);
+    if (strregname == NULL) {
+      return 0;
+    }
+  } else {
+    strregname = get_vim_var_str(VV_REG);
+  }
+
+  return *strregname == 0 ? '"' : (uint8_t)(*strregname);
+}
+
+/// Get register type as int (MotionType enum value), with block width.
+/// Returns the MotionType integer value.
+int nvim_eval_get_reg_type(int regname, int *reg_width)
+{
+  colnr_T w = 0;
+  MotionType t = get_reg_type(regname, &w);
+  *reg_width = (int)w;
+  return (int)t;
+}
+
+/// Format register type to buf (at least NUMBUFLEN+2 = 67 bytes).
+void nvim_eval_format_reg_type(int reg_type, int reg_width, char *buf, size_t buf_len)
+{
+  format_reg_type((MotionType)reg_type, (colnr_T)reg_width, buf, buf_len);
+}
+
+/// Get unnamedregister name char.
+int nvim_eval_get_unname_register(void)
+{
+  return get_unname_register();
+}
+
+/// Get register name char for register number num.
+int nvim_eval_get_register_name(int num)
+{
+  return rs_get_register_name(num);
+}
+
+/// Set rettv to VAR_LIST with list from get_reg_contents.
+/// @param regname   register name char
+/// @param flags     get_reg_contents flags (kGReg*)
+void nvim_eval_getreg_set_list(typval_T *rettv, int regname, int flags)
+{
+  rettv->v_type = VAR_LIST;
+  rettv->vval.v_list = get_reg_contents(regname, flags);
+  if (rettv->vval.v_list == NULL) {
+    rettv->vval.v_list = tv_list_alloc(0);
+  }
+  tv_list_ref(rettv->vval.v_list);
+}
+
+/// Set rettv to VAR_STRING with string from get_reg_contents.
+/// @param regname   register name char
+/// @param flags     get_reg_contents flags (kGReg*)
+void nvim_eval_getreg_set_str(typval_T *rettv, int regname, int flags)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = get_reg_contents(regname, flags);
 }

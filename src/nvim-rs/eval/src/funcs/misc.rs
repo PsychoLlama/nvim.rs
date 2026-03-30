@@ -1228,9 +1228,18 @@ extern "C" {
     fn nvim_eval_ctxset(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_getcharsearch: inlined into rs_f_getcharsearch below
     // nvim_eval_setcharsearch: inlined into rs_f_setcharsearch below
-    fn nvim_eval_getreg(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_getregtype(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_getreg: inlined below
+    // nvim_eval_getregtype: inlined below
     fn nvim_eval_getreginfo(argvars: *const c_void, rettv: *mut c_void);
+
+    // getreg / getregtype inlining
+    fn nvim_eval_getreg_get_regname(argvars: *mut c_void) -> c_int;
+    fn nvim_eval_getreg_set_list(rettv: *mut c_void, regname: c_int, flags: c_int);
+    fn nvim_eval_getreg_set_str(rettv: *mut c_void, regname: c_int, flags: c_int);
+    fn nvim_eval_get_reg_type(regname: c_int, reg_width: *mut c_int) -> c_int;
+    fn nvim_eval_format_reg_type(reg_type: c_int, reg_width: c_int, buf: *mut u8, buf_len: usize);
+    #[link_name = "nvim_tv_set_string_copy"]
+    fn p6_nvim_tv_set_string_copy(tv: *mut c_void, s: *const u8, len: c_int);
     fn nvim_eval_state(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_searchdecl: inlined into rs_f_searchdecl below
     fn nvim_eval_searchpos(argvars: *const c_void, rettv: *mut c_void);
@@ -1375,6 +1384,11 @@ pub unsafe extern "C" fn rs_f_setcharsearch(
     }
 }
 
+// getreg / getregtype constants (kGReg* flags from register_defs.h)
+const K_G_REG_EXPR_SRC: c_int = 2;
+const K_G_REG_LIST: c_int = 4;
+const TYPVAL_SZ_P6: usize = 16;
+
 /// "getreg()" function - get register contents
 ///
 /// # Safety
@@ -1385,7 +1399,44 @@ pub unsafe extern "C" fn rs_f_getreg(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_getreg(argvars, rettv);
+    // nvim_eval_getreg inlined
+    let regname = nvim_eval_getreg_get_regname(argvars.cast_mut());
+    if regname == 0 {
+        return;
+    }
+
+    let mut arg2: c_int = 0;
+    let mut return_list = false;
+
+    // Check if argvars[0].v_type != VAR_UNKNOWN (arg0 is the register name arg)
+    if p3_misc_tv_get_type(argvars) != VAR_UNKNOWN_P2M {
+        // argvars[1]
+        let arg1 = argvars.cast::<u8>().add(TYPVAL_SZ_P6).cast::<c_void>();
+        if p3_misc_tv_get_type(arg1) != VAR_UNKNOWN_P2M {
+            let mut error = false;
+            #[allow(clippy::cast_possible_truncation)]
+            let truncated = p3_misc_tv_get_number_chk(arg1, &raw mut error) as c_int;
+            arg2 = truncated;
+            if !error {
+                // argvars[2]
+                let arg2_tv = argvars.cast::<u8>().add(2 * TYPVAL_SZ_P6).cast::<c_void>();
+                if p3_misc_tv_get_type(arg2_tv) != VAR_UNKNOWN_P2M {
+                    return_list = p3_misc_tv_get_number_chk(arg2_tv, &raw mut error) != 0;
+                }
+            }
+            if error {
+                return;
+            }
+        }
+    }
+
+    if return_list {
+        let flags = (if arg2 != 0 { K_G_REG_EXPR_SRC } else { 0 }) | K_G_REG_LIST;
+        nvim_eval_getreg_set_list(rettv, regname, flags);
+    } else {
+        let flags = if arg2 != 0 { K_G_REG_EXPR_SRC } else { 0 };
+        nvim_eval_getreg_set_str(rettv, regname, flags);
+    }
 }
 
 /// "getregtype()" function - get register type
@@ -1398,7 +1449,21 @@ pub unsafe extern "C" fn rs_f_getregtype(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_getregtype(argvars, rettv);
+    // nvim_eval_getregtype inlined
+    // On error returns empty string
+    p6_nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+
+    let regname = nvim_eval_getreg_get_regname(argvars.cast_mut());
+    if regname == 0 {
+        return;
+    }
+
+    let mut reg_width: c_int = 0;
+    let reg_type = nvim_eval_get_reg_type(regname, &raw mut reg_width);
+    // NUMBUFLEN=65, +2 = 67
+    let mut buf = [0u8; 67];
+    nvim_eval_format_reg_type(reg_type, reg_width, buf.as_mut_ptr(), buf.len());
+    p6_nvim_tv_set_string_copy(rettv, buf.as_ptr(), -1);
 }
 
 /// "getreginfo()" function - get register info dict

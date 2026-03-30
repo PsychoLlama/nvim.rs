@@ -4892,37 +4892,11 @@ static void get_xdg_var_list_inner(const XDGVarType xdg, typval_T *rettv)
   xfree(dirs);
 }
 
-void nvim_eval_stdpath(typval_T *argvars, typval_T *rettv)
+/// Public wrapper for inlining stdpath() list cases into Rust.
+void nvim_eval_xdg_var_list(int xdg, typval_T *rettv)
 {
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  const char *const p = tv_get_string_chk(&argvars[0]);
-  if (p == NULL) {
-    return;
-  }
-
-  if (strequal(p, "config")) {
-    rettv->vval.v_string = get_xdg_home(kXDGConfigHome);
-  } else if (strequal(p, "data")) {
-    rettv->vval.v_string = get_xdg_home(kXDGDataHome);
-  } else if (strequal(p, "cache")) {
-    rettv->vval.v_string = get_xdg_home(kXDGCacheHome);
-  } else if (strequal(p, "state")) {
-    rettv->vval.v_string = get_xdg_home(kXDGStateHome);
-  } else if (strequal(p, "log")) {
-    rettv->vval.v_string = get_xdg_home(kXDGStateHome);
-  } else if (strequal(p, "run")) {
-    rettv->vval.v_string = stdpaths_get_xdg_var(kXDGRuntimeDir);
-  } else if (strequal(p, "config_dirs")) {
-    get_xdg_var_list_inner(kXDGConfigDirs, rettv);
-  } else if (strequal(p, "data_dirs")) {
-    get_xdg_var_list_inner(kXDGDataDirs, rettv);
-  } else {
-    semsg(_("E6100: \"%s\" is not a valid stdpath"), p);
-  }
+  get_xdg_var_list_inner((XDGVarType)xdg, rettv);
 }
-
 
 void nvim_eval_ctxget(typval_T *argvars, typval_T *rettv)
 {
@@ -5044,59 +5018,8 @@ static int nvim_eval_getreg_get_regname(typval_T *argvars)
   return *strregname == 0 ? '"' : (uint8_t)(*strregname);
 }
 
-void nvim_eval_getreg(typval_T *argvars, typval_T *rettv)
-{
-  int arg2 = false;
-  bool return_list = false;
-
-  int regname = nvim_eval_getreg_get_regname(argvars);
-  if (regname == 0) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_UNKNOWN && argvars[1].v_type != VAR_UNKNOWN) {
-    bool error = false;
-    arg2 = (int)tv_get_number_chk(&argvars[1], &error);
-    if (!error && argvars[2].v_type != VAR_UNKNOWN) {
-      return_list = (bool)tv_get_number_chk(&argvars[2], &error);
-    }
-    if (error) {
-      return;
-    }
-  }
-
-  if (return_list) {
-    rettv->v_type = VAR_LIST;
-    rettv->vval.v_list =
-      get_reg_contents(regname, (arg2 ? kGRegExprSrc : 0) | kGRegList);
-    if (rettv->vval.v_list == NULL) {
-      rettv->vval.v_list = tv_list_alloc(0);
-    }
-    tv_list_ref(rettv->vval.v_list);
-  } else {
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = get_reg_contents(regname, arg2 ? kGRegExprSrc : 0);
-  }
-}
-
-void nvim_eval_getregtype(typval_T *argvars, typval_T *rettv)
-{
-  // on error return an empty string
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  int regname = nvim_eval_getreg_get_regname(argvars);
-  if (regname == 0) {
-    return;
-  }
-
-  colnr_T reglen = 0;
-  char buf[NUMBUFLEN + 2];
-  MotionType reg_type = get_reg_type(regname, &reglen);
-  format_reg_type(reg_type, reglen, buf, ARRAY_SIZE(buf));
-
-  rettv->vval.v_string = xstrdup(buf);
-}
+// nvim_eval_getreg: inlined into Rust (misc.rs) — get_reg_contents delegation
+// nvim_eval_getregtype: inlined into Rust (misc.rs) — get_reg_type/format_reg_type delegation
 
 void nvim_eval_getreginfo(typval_T *argvars, typval_T *rettv)
 {
