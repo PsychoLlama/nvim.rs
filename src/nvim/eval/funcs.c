@@ -5952,40 +5952,7 @@ void nvim_eval_indexof(typval_T *argvars, typval_T *rettv)
   did_emsg |= save_did_emsg;
 }
 
-void nvim_eval_range(typval_T *argvars, typval_T *rettv)
-{
-  varnumber_T end;
-  varnumber_T stride = 1;
-  bool error = false;
-
-  varnumber_T start = tv_get_number_chk(&argvars[0], &error);
-  if (argvars[1].v_type == VAR_UNKNOWN) {
-    end = start - 1;
-    start = 0;
-  } else {
-    end = tv_get_number_chk(&argvars[1], &error);
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      stride = tv_get_number_chk(&argvars[2], &error);
-    }
-  }
-
-  if (error) {
-    return;  // Type error; errmsg already given.
-  }
-  if (stride == 0) {
-    emsg(_("E726: Stride is zero"));
-    return;
-  }
-  if (stride > 0 ? end + 1 < start : end - 1 > start) {
-    emsg(_("E727: Start past end"));
-    return;
-  }
-
-  tv_list_alloc_ret(rettv, (end - start) / stride);
-  for (varnumber_T i = start; stride > 0 ? i <= end : i >= end; i += stride) {
-    tv_list_append_number(rettv->vval.v_list, i);
-  }
-}
+// nvim_eval_range: inlined into Rust (misc.rs) — list construction
 
 void nvim_eval_repeat(typval_T *argvars, typval_T *rettv)
 {

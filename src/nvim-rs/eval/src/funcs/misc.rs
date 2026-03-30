@@ -1472,7 +1472,7 @@ pub unsafe extern "C" fn rs_f_synstack(
 extern "C" {
     fn nvim_eval_index(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_indexof(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_range(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_range: inlined into rs_f_range below
     fn nvim_eval_repeat(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_reduce(argvars: *const c_void, rettv: *mut c_void);
 }
@@ -1517,7 +1517,52 @@ pub unsafe extern "C" fn rs_f_range(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_range(argvars, rettv);
+    // nvim_eval_range: inlined — list of integers from start to end with stride
+    let mut error = false;
+    let mut start = p3_misc_tv_get_number_chk(argvars, &raw mut error);
+    let (end, stride) = if p3_misc_tv_get_type(arg_at_p2(argvars, 1)) == VAR_UNKNOWN_P2M {
+        // range(n) → 0..n-1
+        let end = start - 1;
+        start = 0;
+        (end, 1i64)
+    } else {
+        let end = p3_misc_tv_get_number_chk(arg_at_p2(argvars, 1), &raw mut error);
+        let stride = if p3_misc_tv_get_type(arg_at_p2(argvars, 2)) == VAR_UNKNOWN_P2M {
+            1
+        } else {
+            p3_misc_tv_get_number_chk(arg_at_p2(argvars, 2), &raw mut error)
+        };
+        (end, stride)
+    };
+    if error {
+        return;
+    }
+    if stride == 0 {
+        let _ = p3_misc_emsg(gettext(c"E726: Stride is zero".as_ptr()));
+        return;
+    }
+    if if stride > 0 {
+        end + 1 < start
+    } else {
+        end - 1 > start
+    } {
+        let _ = p3_misc_emsg(gettext(c"E727: Start past end".as_ptr()));
+        return;
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let count_hint = ((end - start) / stride) as isize;
+    let list = nvim_tv_list_alloc_ret(rettv, count_hint);
+    let mut i = start;
+    loop {
+        if stride > 0 && i > end {
+            break;
+        }
+        if stride < 0 && i < end {
+            break;
+        }
+        tv_list_append_number(list, i);
+        i += stride;
+    }
 }
 
 /// "repeat()" function - repeat a string/list/blob
