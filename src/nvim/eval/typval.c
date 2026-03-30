@@ -1510,11 +1510,7 @@ static void tv_dict2list(typval_T *const argvars, typval_T *const rettv, const D
 
 // f_items migrated to Rust (Phase 6e)
 
-/// "keys()" function
-void f_keys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2list(argvars, rettv, kDict2ListKeys); }
-
-/// "values(dict)" function
-void f_values(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2list(argvars, rettv, kDict2ListValues); }
+// f_keys, f_values migrated to Rust (Phase 6g)
 
 // f_has_key migrated to Rust (Phase 6)
 
@@ -3022,6 +3018,20 @@ int nvim_listitem_get_v_lock(const listitem_T *li) { return TV_LIST_ITEM_TV(li)-
 void nvim_tv_dict2list_items(typval_T *argvars, typval_T *rettv)
 {
   tv_dict2list(argvars, rettv, kDict2ListItems);
+}
+
+// Phase 6g: f_keys, f_values accessors
+
+/// Call tv_dict2list(argvars, rettv, kDict2ListKeys) (accessor for Rust f_keys).
+void nvim_tv_dict2list_keys(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict2list(argvars, rettv, kDict2ListKeys);
+}
+
+/// Call tv_dict2list(argvars, rettv, kDict2ListValues) (accessor for Rust f_values).
+void nvim_tv_dict2list_values(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict2list(argvars, rettv, kDict2ListValues);
 }
 
 // Phase 6f: tv_dict_remove migrated to Rust; accessors in eval_shim.c

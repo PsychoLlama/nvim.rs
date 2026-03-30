@@ -543,6 +543,10 @@ extern void f_items(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // Phase 6f: dict remove (migrated to Rust)
 extern void tv_dict_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg);
 
+// Phase 6g: f_keys, f_values (migrated to Rust)
+extern void f_keys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_values(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // List append functions (migrated to Rust, Phase 5)
 extern void tv_list_append(list_T *l, listitem_T *item);
 extern void tv_list_append_tv(list_T *l, typval_T *tv);

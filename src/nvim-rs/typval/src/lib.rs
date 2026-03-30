@@ -1239,6 +1239,10 @@ extern "C" {
         newtv: *mut std::ffi::c_void,
         oldtv: *mut std::ffi::c_void,
     );
+
+    // Phase 6g: f_keys, f_values
+    fn nvim_tv_dict2list_keys(argvars: TypevalHandle, rettv: TypevalHandle);
+    fn nvim_tv_dict2list_values(argvars: TypevalHandle, rettv: TypevalHandle);
 }
 
 // =============================================================================
@@ -2572,6 +2576,30 @@ pub unsafe extern "C" fn rs_tv_dict_remove(
     if tv_dict_is_watched_impl(d) {
         unsafe { nvim_tv_dict_watcher_notify(d, key, std::ptr::null_mut(), rettv.0.cast_mut()) };
     }
+}
+
+// =============================================================================
+// Phase 6g: f_keys, f_values
+// =============================================================================
+
+/// FFI export: f_keys - VimL keys() function.
+#[export_name = "f_keys"]
+pub unsafe extern "C" fn rs_f_keys(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *const std::ffi::c_void,
+) {
+    unsafe { nvim_tv_dict2list_keys(argvars, rettv) };
+}
+
+/// FFI export: f_values - VimL values() function.
+#[export_name = "f_values"]
+pub unsafe extern "C" fn rs_f_values(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *const std::ffi::c_void,
+) {
+    unsafe { nvim_tv_dict2list_values(argvars, rettv) };
 }
 
 // =============================================================================
