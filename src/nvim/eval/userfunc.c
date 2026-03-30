@@ -96,6 +96,17 @@ extern void rs_handle_defer_one(funccall_T *funccal);
 extern void rs_invoke_all_defer(void);
 extern int rs_ex_defer_inner(char *name, char **arg, const partial_T *partial, evalarg_T *evalarg);
 
+// Phase 4: Function Reference Counting (implemented in Rust userfunc/src/refcount.rs)
+extern void rs_func_ptr_unref(ufunc_T *fp);
+extern void rs_func_ptr_ref(ufunc_T *fp);
+extern void rs_func_unref(char *name);
+extern void rs_func_ref(char *name);
+extern int rs_func_remove(ufunc_T *fp);
+extern void rs_func_clear_items(ufunc_T *fp);
+extern void rs_func_clear(ufunc_T *fp, int force);
+extern void rs_func_free(ufunc_T *fp);
+extern void rs_func_clear_free(ufunc_T *fp, int force);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -854,76 +865,87 @@ static void funccal_unref(funccall_T *fc, ufunc_T *fp, bool force)
   }
 }
 
-/// Remove the function from the function hashtable.  If the function was
-/// deleted while it still has references this was already done.
-///
-/// @return true if the entry was deleted, false if it wasn't found.
-static bool func_remove(ufunc_T *fp)
+/// Phase 4: C implementation shim for func_remove (called from Rust).
+int nvim_func_remove_impl(ufunc_T *fp)
 {
   hashitem_T *hi = hash_find(&func_hashtab, UF2HIKEY(fp));
   if (HASHITEM_EMPTY(hi)) {
     return false;
   }
-
   hash_remove(&func_hashtab, hi);
   return true;
 }
 
-static void func_clear_items(ufunc_T *fp)
+/// Remove function from hashtable. Thin wrapper — logic lives in Rust.
+static bool func_remove(ufunc_T *fp)
+{
+  return rs_func_remove(fp) != 0;
+}
+
+/// Phase 4: C implementation shim for func_clear_items.
+void nvim_func_clear_items_impl(ufunc_T *fp)
 {
   ga_clear_strings(&(fp->uf_args));
   ga_clear_strings(&(fp->uf_def_args));
   ga_clear_strings(&(fp->uf_lines));
-
   if (fp->uf_flags & FC_LUAREF) {
     api_free_luaref(fp->uf_luaref);
     fp->uf_luaref = LUA_NOREF;
   }
-
   XFREE_CLEAR(fp->uf_tml_count);
   XFREE_CLEAR(fp->uf_tml_total);
   XFREE_CLEAR(fp->uf_tml_self);
 }
 
-/// Free all things that a function contains. Does not free the function
-/// itself, use func_free() for that.
-///
-/// @param[in] force  When true, we are exiting.
-static void func_clear(ufunc_T *fp, bool force)
+static void func_clear_items(ufunc_T *fp)
+{
+  rs_func_clear_items(fp);
+}
+
+/// Phase 4: C implementation shim for func_clear.
+void nvim_func_clear_impl(ufunc_T *fp, int force)
 {
   if (fp->uf_cleared) {
     return;
   }
   fp->uf_cleared = true;
-
-  // clear this function
   func_clear_items(fp);
-  funccal_unref(fp->uf_scoped, fp, force);
+  funccal_unref(fp->uf_scoped, fp, force != 0);
 }
 
-/// Free a function and remove it from the list of functions. Does not free
-/// what a function contains, call func_clear() first.
-///
-/// @param[in] fp  The function to free.
-static void func_free(ufunc_T *fp)
+/// Clear all things a function contains. Thin wrapper — logic lives in Rust.
+static void func_clear(ufunc_T *fp, bool force)
 {
-  // only remove it when not done already, otherwise we would remove a newer
-  // version of the function
+  rs_func_clear(fp, force ? 1 : 0);
+}
+
+/// Phase 4: C implementation shim for func_free.
+void nvim_func_free_impl(ufunc_T *fp)
+{
   if ((fp->uf_flags & (FC_DELETED | FC_REMOVED)) == 0) {
     func_remove(fp);
   }
-
   XFREE_CLEAR(fp->uf_name_exp);
   xfree(fp);
 }
 
-/// Free all things that a function contains and free the function itself.
-///
-/// @param[in] force  When true, we are exiting.
+/// Free a function and remove from the list. Thin wrapper — logic lives in Rust.
+static void func_free(ufunc_T *fp)
+{
+  rs_func_free(fp);
+}
+
+/// Phase 4: C implementation shim for func_clear_free.
+void nvim_func_clear_free_impl(ufunc_T *fp, int force)
+{
+  func_clear(fp, force != 0);
+  func_free(fp);
+}
+
+/// Clear and free a function. Thin wrapper — logic lives in Rust.
 static void func_clear_free(ufunc_T *fp, bool force)
 {
-  func_clear(fp, force);
-  func_free(fp);
+  rs_func_clear_free(fp, force ? 1 : 0);
 }
 
 /// Allocate a funccall_T, link it in current_funccal and fill in "fp" and "rettv".
@@ -2918,65 +2940,25 @@ void ex_delfunction(exarg_T *eap)
 /// becomes zero.
 void func_unref(char *name)
 {
-  if (name == NULL || !func_name_refcount(name)) {
-    return;
-  }
-
-  ufunc_T *fp = find_func(name);
-  if (fp == NULL && isdigit((uint8_t)(*name))) {
-#ifdef EXITFREE
-    if (!entered_free_all_mem) {
-      internal_error("func_unref()");
-      abort();
-    }
-#else
-    internal_error("func_unref()");
-    abort();
-#endif
-  }
-  func_ptr_unref(fp);
+  rs_func_unref(name);
 }
 
-/// Unreference a Function: decrement the reference count and free it when it
-/// becomes zero.
-/// Unreference user function, freeing it if needed
-///
-/// Decrements the reference count and frees when it becomes zero.
-///
-/// @param  fp  Function to unreference.
+/// Unreference a Function by pointer. Thin wrapper — logic lives in Rust.
 void func_ptr_unref(ufunc_T *fp)
 {
-  if (fp != NULL && --fp->uf_refcount <= 0) {
-    // Only delete it when it's not being used. Otherwise it's done
-    // when "uf_calls" becomes zero.
-    if (fp->uf_calls == 0) {
-      func_clear_free(fp, false);
-    }
-  }
+  rs_func_ptr_unref(fp);
 }
 
-/// Count a reference to a Function.
+/// Count a reference to a Function. Thin wrapper — logic lives in Rust.
 void func_ref(char *name)
 {
-  if (name == NULL || !func_name_refcount(name)) {
-    return;
-  }
-  ufunc_T *fp = find_func(name);
-  if (fp != NULL) {
-    (fp->uf_refcount)++;
-  } else if (isdigit((uint8_t)(*name))) {
-    // Only give an error for a numbered function.
-    // Fail silently, when named or lambda function isn't found.
-    internal_error("func_ref()");
-  }
+  rs_func_ref(name);
 }
 
-/// Count a reference to a Function.
+/// Count a reference to a Function. Thin wrapper — logic lives in Rust.
 void func_ptr_ref(ufunc_T *fp)
 {
-  if (fp != NULL) {
-    (fp->uf_refcount)++;
-  }
+  rs_func_ptr_ref(fp);
 }
 
 /// Check whether funccall is still referenced outside
@@ -4148,3 +4130,9 @@ void nvim_emsg_defer_not_in_function(void)
 {
   semsg(_(e_str_not_inside_function), "defer");
 }
+
+// Phase 4: Function Reference Counting Accessors
+int nvim_ufunc_get_refcount(const ufunc_T *fp) { return fp ? fp->uf_refcount : 0; }
+int nvim_ufunc_decrement_refcount(ufunc_T *fp) { return fp ? --fp->uf_refcount : 0; }
+void nvim_ufunc_increment_refcount(ufunc_T *fp) { if (fp) { fp->uf_refcount++; } }
+int nvim_ufunc_get_calls(const ufunc_T *fp) { return fp ? fp->uf_calls : 0; }

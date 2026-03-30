@@ -29,6 +29,7 @@ pub mod funcref;
 pub mod listing;
 pub mod names;
 pub mod params;
+pub mod refcount;
 pub mod types;
 
 pub use call::*;
@@ -38,6 +39,7 @@ pub use funcref::*;
 pub use listing::*;
 pub use names::*;
 pub use params::*;
+pub use refcount::*;
 pub use types::*;
 
 use std::ffi::c_int;
