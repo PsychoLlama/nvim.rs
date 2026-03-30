@@ -1234,22 +1234,7 @@ int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name)
 
 //{{{2 Operations on the whole dict
 
-/// Clear all the keys of a Dictionary. "d" remains a valid empty Dictionary.
-///
-/// @param  d  The Dictionary to clear
-void tv_dict_clear(dict_T *const d)
-  FUNC_ATTR_NONNULL_ALL
-{
-  hash_lock(&d->dv_hashtab);
-  assert(d->dv_hashtab.ht_locked > 0);
-
-  HASHTAB_ITER(&d->dv_hashtab, hi, {
-    tv_dict_item_free(TV_DICT_HI2DI(hi));
-    hash_remove(&d->dv_hashtab, hi);
-  });
-
-  hash_unlock(&d->dv_hashtab);
-}
+// tv_dict_clear deleted (dead code, Phase 6h)
 
 /// Extend dictionary with items from another dictionary
 ///
@@ -1430,16 +1415,7 @@ dict_T *tv_dict_copy(const vimconv_T *const conv, dict_T *const orig, const bool
 
 /// Set all existing keys in "dict" as read-only.
 ///
-/// This does not protect against adding new keys to the Dictionary.
-///
-/// @param  dict  The dict whose keys should be frozen.
-void tv_dict_set_keys_readonly(dict_T *const dict)
-  FUNC_ATTR_NONNULL_ALL
-{
-  TV_DICT_ITER(dict, di, {
-    di->di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
-  });
-}
+// tv_dict_set_keys_readonly migrated to Rust (Phase 6h)
 
 //{{{1 Blobs
 //{{{2 Alloc/free
@@ -3035,3 +3011,20 @@ void nvim_tv_dict2list_values(typval_T *argvars, typval_T *rettv)
 }
 
 // Phase 6f: tv_dict_remove migrated to Rust; accessors in eval_shim.c
+
+// Phase 6h: tv_dict_set_keys_readonly, tv_dict_clear accessors
+
+/// Get ht_array pointer for a dict's hashtab (accessor for Rust hashtab iteration).
+hashitem_T *nvim_dict_get_ht_array(const dict_T *d) { return d->dv_hashtab.ht_array; }
+
+/// Get hi_key from a hashitem (accessor for Rust).
+const char *nvim_hashitem_get_key(const hashitem_T *hi) { return hi->hi_key; }
+
+/// Get the address of hash_removed sentinel (accessor for Rust).
+const char *nvim_hash_removed_ptr(void) { return HI_KEY_REMOVED; }
+
+/// Convert hashitem to dictitem via TV_DICT_HI2DI and set DI_FLAGS_RO|DI_FLAGS_FIX.
+void nvim_hashitem_set_ro_fix(hashitem_T *hi) { TV_DICT_HI2DI(hi)->di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX; }
+
+/// Advance a hashitem pointer by one (sizeof(hashitem_T)) for Rust iteration.
+hashitem_T *nvim_hashitem_next(hashitem_T *hi) { return hi + 1; }

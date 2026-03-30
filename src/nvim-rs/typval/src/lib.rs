@@ -1032,6 +1032,32 @@ impl ListItemHandle {
     }
 }
 
+/// Opaque handle for `hashitem_T*` (hashtab item).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HashItemHandle(*const std::ffi::c_void);
+
+impl HashItemHandle {
+    /// Create a new hash item handle from a raw pointer.
+    #[inline]
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // C accessor functions for list_T, dict_T, blob_T
 extern "C" {
     // Typval -> container getters
@@ -1243,6 +1269,13 @@ extern "C" {
     // Phase 6g: f_keys, f_values
     fn nvim_tv_dict2list_keys(argvars: TypevalHandle, rettv: TypevalHandle);
     fn nvim_tv_dict2list_values(argvars: TypevalHandle, rettv: TypevalHandle);
+
+    // Phase 6h: tv_dict_set_keys_readonly hashtab iteration
+    fn nvim_dict_get_ht_array(d: DictHandle) -> HashItemHandle;
+    fn nvim_hashitem_get_key(hi: HashItemHandle) -> *const c_char;
+    fn nvim_hash_removed_ptr() -> *const c_char;
+    fn nvim_hashitem_set_ro_fix(hi: HashItemHandle);
+    fn nvim_hashitem_next(hi: HashItemHandle) -> HashItemHandle;
 }
 
 // =============================================================================
@@ -2600,6 +2633,35 @@ pub unsafe extern "C" fn rs_f_values(
     _fptr: *const std::ffi::c_void,
 ) {
     unsafe { nvim_tv_dict2list_values(argvars, rettv) };
+}
+
+// =============================================================================
+// Phase 6h: tv_dict_set_keys_readonly (using hashtab iteration)
+// =============================================================================
+
+/// FFI export: tv_dict_set_keys_readonly - set all keys read-only and fixed.
+#[export_name = "tv_dict_set_keys_readonly"]
+pub unsafe extern "C" fn rs_tv_dict_set_keys_readonly(dict: DictHandle) {
+    let ht_used = unsafe { nvim_dict_get_ht_used(dict) };
+    if ht_used == 0 {
+        return;
+    }
+    let hi_removed = unsafe { nvim_hash_removed_ptr() };
+    let mut hi = unsafe { nvim_dict_get_ht_array(dict) };
+    let mut todo = ht_used;
+    // Replicate HASHTAB_ITER: iterate ht_array, skip empty/removed items.
+    loop {
+        if todo == 0 {
+            break;
+        }
+        let key = unsafe { nvim_hashitem_get_key(hi) };
+        if !key.is_null() && key != hi_removed {
+            // Item is live - set RO+FIX flags via C accessor (TV_DICT_HI2DI + |=)
+            unsafe { nvim_hashitem_set_ro_fix(hi) };
+            todo -= 1;
+        }
+        hi = unsafe { nvim_hashitem_next(hi) };
+    }
 }
 
 // =============================================================================
