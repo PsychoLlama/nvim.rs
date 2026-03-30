@@ -89,6 +89,13 @@ extern char *rs_ex_let_env(char *arg, typval_T *tv, bool is_const,
 extern char *rs_ex_let_register(char *arg, typval_T *tv, bool is_const,
                                  const char *endchars, const char *op);
 
+// Phase 1: variable validation/check functions migrated to Rust
+extern bool rs_var_check_ro(int flags, const char *name, size_t name_len);
+extern bool rs_var_check_lock(int flags, const char *name, size_t name_len);
+extern bool rs_var_check_fixed(int flags, const char *name, size_t name_len);
+extern bool rs_var_wrong_func_name(const char *name, bool new_var);
+extern bool rs_valid_varname(const char *varname);
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -2730,48 +2737,12 @@ void set_var_const(const char *name, const size_t name_len, typval_T *const tv, 
 ///         sandbox is enabled, false otherwise.
 bool var_check_ro(const int flags, const char *name, size_t name_len)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  const char *error_message = NULL;
-  if (flags & DI_FLAGS_RO) {
-    error_message = _(e_readonlyvar);
-  } else if ((flags & DI_FLAGS_RO_SBX) && sandbox) {
-    error_message = N_("E794: Cannot set variable in the sandbox: \"%.*s\"");
-  }
-
-  if (error_message == NULL) {
-    return false;
-  }
-  if (name_len == TV_TRANSLATE) {
-    name = _(name);
-    name_len = strlen(name);
-  } else if (name_len == TV_CSTRING) {
-    name_len = strlen(name);
-  }
-
-  semsg(_(error_message), (int)name_len, name);
-
-  return true;
-}
+{ return rs_var_check_ro(flags, name, name_len); }
 
 /// Return true if di_flags "flags" indicates variable "name" is locked.
 /// Also give an error message.
 bool var_check_lock(const int flags, const char *name, size_t name_len)
-{
-  if (!(flags & DI_FLAGS_LOCK)) {
-    return false;
-  }
-
-  if (name_len == TV_TRANSLATE) {
-    name = _(name);
-    name_len = strlen(name);
-  } else if (name_len == TV_CSTRING) {
-    name_len = strlen(name);
-  }
-
-  semsg(_("E1122: Variable is locked: %*s"), (int)name_len, name);
-
-  return true;
-}
+{ return rs_var_check_lock(flags, name, name_len); }
 
 /// Check whether variable is fixed (DI_FLAGS_FIX)
 ///
@@ -2793,19 +2764,7 @@ bool var_check_lock(const int flags, const char *name, size_t name_len)
 /// @return True if variable is fixed, false otherwise.
 bool var_check_fixed(const int flags, const char *name, size_t name_len)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  if (flags & DI_FLAGS_FIX) {
-    if (name_len == TV_TRANSLATE) {
-      name = _(name);
-      name_len = strlen(name);
-    } else if (name_len == TV_CSTRING) {
-      name_len = strlen(name);
-    }
-    semsg(_("E795: Cannot delete variable %.*s"), (int)name_len, name);
-    return true;
-  }
-  return false;
-}
+{ return rs_var_check_fixed(flags, name, name_len); }
 
 /// Check if name is a valid name to assign funcref to
 ///
@@ -2816,24 +2775,7 @@ bool var_check_fixed(const int flags, const char *name, size_t name_len)
 ///         error message if appropriate.
 bool var_wrong_func_name(const char *const name, const bool new_var)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  // Allow for w: b: s: and t:.
-  // Allow autoload variable.
-  if (!(vim_strchr("wbst", (uint8_t)name[0]) != NULL && name[1] == ':')
-      && !ASCII_ISUPPER((name[0] != NUL && name[1] == ':') ? name[2] : name[0])
-      && vim_strchr(name, '#') == NULL) {
-    semsg(_("E704: Funcref variable name must start with a capital: %s"), name);
-    return true;
-  }
-  // Don't allow hiding a function.  When "v" is not NULL we might be
-  // assigning another function to the same var, the type is checked
-  // below.
-  if (new_var && function_exists(name, false)) {
-    semsg(_("E705: Variable name conflicts with existing function: %s"), name);
-    return true;
-  }
-  return false;
-}
+{ return rs_var_wrong_func_name(name, new_var); }
 
 /// Check if a variable name is valid
 ///
@@ -2843,17 +2785,7 @@ bool var_wrong_func_name(const char *const name, const bool new_var)
 ///         an error message if appropriate.
 bool valid_varname(const char *varname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  for (const char *p = varname; *p != NUL; p++) {
-    if (!rs_eval_isnamec1((int)(uint8_t)(*p))
-        && (p == varname || !ascii_isdigit(*p))
-        && *p != AUTOLOAD_CHAR) {
-      semsg(_(e_illvar), varname);
-      return false;
-    }
-  }
-  return true;
-}
+{ return rs_valid_varname(varname); }
 
 /// Implements the logic to retrieve local variable and option values.
 /// Used by "getwinvar()" "gettabvar()" "gettabwinvar()" "getbufvar()".
