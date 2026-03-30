@@ -532,6 +532,13 @@ static int on_control(uint8_t control, void *user)
   return 1;
 }
 
+// Rust FFI declarations for Phase 1
+extern void rs_vterm_state_set_mode(VTermState *state, int num, int val);
+extern void rs_vterm_state_set_dec_mode(VTermState *state, int num, int val);
+extern void rs_vterm_state_request_dec_mode(VTermState *state, int num);
+extern void rs_vterm_state_request_version_string(VTermState *state);
+extern void rs_vterm_state_savecursor(VTermState *state, int save);
+
 static int settermprop_bool(VTermState *state, VTermProp prop, int v)
 {
   VTermValue val = { .boolean = v };
@@ -552,26 +559,7 @@ static int settermprop_string(VTermState *state, VTermProp prop, VTermStringFrag
 
 static void savecursor(VTermState *state, int save)
 {
-  if (save) {
-    state->saved.pos = state->pos;
-    state->saved.mode.cursor_visible = state->mode.cursor_visible;
-    state->saved.mode.cursor_blink = state->mode.cursor_blink;
-    state->saved.mode.cursor_shape = state->mode.cursor_shape;
-
-    vterm_state_savepen(state, 1);
-  } else {
-    VTermPos oldpos = state->pos;
-
-    state->pos = state->saved.pos;
-
-    settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, state->saved.mode.cursor_visible);
-    settermprop_bool(state, VTERM_PROP_CURSORBLINK,   state->saved.mode.cursor_blink);
-    settermprop_int(state, VTERM_PROP_CURSORSHAPE,   state->saved.mode.cursor_shape);
-
-    vterm_state_savepen(state, 0);
-
-    updatecursor(state, &oldpos, 1);
-  }
+  rs_vterm_state_savecursor(state, save);
 }
 
 static int on_escape(const char *bytes, size_t len, void *user)
@@ -730,205 +718,22 @@ static int on_escape(const char *bytes, size_t len, void *user)
 
 static void set_mode(VTermState *state, int num, int val)
 {
-  switch (num) {
-  case 4:  // IRM - ECMA-48 7.2.10
-    state->mode.insert = (unsigned)val;
-    break;
-
-  case 20:  // LNM - ANSI X3.4-1977
-    state->mode.newline = (unsigned)val;
-    break;
-
-  default:
-    DEBUG_LOG("libvterm: Unknown mode %d\n", num);
-    return;
-  }
+  rs_vterm_state_set_mode(state, num, val);
 }
 
 static void set_dec_mode(VTermState *state, int num, int val)
 {
-  switch (num) {
-  case 1:
-    state->mode.cursor = (unsigned)val;
-    break;
-
-  case 5:  // DECSCNM - screen mode
-    settermprop_bool(state, VTERM_PROP_REVERSE, val);
-    break;
-
-  case 6:  // DECOM - origin mode
-  {
-    VTermPos oldpos = state->pos;
-    state->mode.origin = (unsigned)val;
-    state->pos.row = state->mode.origin ? state->scrollregion_top : 0;
-    state->pos.col = state->mode.origin ? SCROLLREGION_LEFT(state) : 0;
-    updatecursor(state, &oldpos, 1);
-  }
-  break;
-
-  case 7:
-    state->mode.autowrap = (unsigned)val;
-    break;
-
-  case 12:
-    settermprop_bool(state, VTERM_PROP_CURSORBLINK, val);
-    break;
-
-  case 25:
-    settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, val);
-    break;
-
-  case 69:  // DECVSSM - vertical split screen mode
-            // DECLRMM - left/right margin mode
-    state->mode.leftrightmargin = (unsigned)val;
-    if (val) {
-      // Setting DECVSSM must clear doublewidth/doubleheight state of every line
-      for (int row = 0; row < state->rows; row++) {
-        set_lineinfo(state, row, FORCE, DWL_OFF, DHL_OFF);
-      }
-    }
-
-    break;
-
-  case 1000:
-  case 1002:
-  case 1003:
-    settermprop_int(state, VTERM_PROP_MOUSE,
-                    !val ? VTERM_PROP_MOUSE_NONE
-                         : (num == 1000) ? VTERM_PROP_MOUSE_CLICK
-                                         : (num == 1002) ? VTERM_PROP_MOUSE_DRAG
-                                                         : VTERM_PROP_MOUSE_MOVE);
-    break;
-
-  case 1004:
-    settermprop_bool(state, VTERM_PROP_FOCUSREPORT, val);
-    state->mode.report_focus = (unsigned)val;
-    break;
-
-  case 1005:
-    state->mouse_protocol = val ? MOUSE_UTF8 : MOUSE_X10;
-    break;
-
-  case 1006:
-    state->mouse_protocol = val ? MOUSE_SGR : MOUSE_X10;
-    break;
-
-  case 1015:
-    state->mouse_protocol = val ? MOUSE_RXVT : MOUSE_X10;
-    break;
-
-  case 1047:
-    settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
-    break;
-
-  case 1048:
-    savecursor(state, val);
-    break;
-
-  case 1049:
-    settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
-    savecursor(state, val);
-    break;
-
-  case 2004:
-    state->mode.bracketpaste = (unsigned)val;
-    break;
-
-  case 2031:
-    settermprop_bool(state, VTERM_PROP_THEMEUPDATES, val);
-    break;
-
-  default:
-    DEBUG_LOG("libvterm: Unknown DEC mode %d\n", num);
-    return;
-  }
+  rs_vterm_state_set_dec_mode(state, num, val);
 }
 
 static void request_dec_mode(VTermState *state, int num)
 {
-  int reply;
-
-  switch (num) {
-  case 1:
-    reply = state->mode.cursor;
-    break;
-
-  case 5:
-    reply = state->mode.screen;
-    break;
-
-  case 6:
-    reply = state->mode.origin;
-    break;
-
-  case 7:
-    reply = state->mode.autowrap;
-    break;
-
-  case 12:
-    reply = state->mode.cursor_blink;
-    break;
-
-  case 25:
-    reply = state->mode.cursor_visible;
-    break;
-
-  case 69:
-    reply = state->mode.leftrightmargin;
-    break;
-
-  case 1000:
-    reply = state->mouse_flags == MOUSE_WANT_CLICK;
-    break;
-
-  case 1002:
-    reply = state->mouse_flags == (MOUSE_WANT_CLICK|MOUSE_WANT_DRAG);
-    break;
-
-  case 1003:
-    reply = state->mouse_flags == (MOUSE_WANT_CLICK|MOUSE_WANT_MOVE);
-    break;
-
-  case 1004:
-    reply = state->mode.report_focus;
-    break;
-
-  case 1005:
-    reply = state->mouse_protocol == MOUSE_UTF8;
-    break;
-
-  case 1006:
-    reply = state->mouse_protocol == MOUSE_SGR;
-    break;
-
-  case 1015:
-    reply = state->mouse_protocol == MOUSE_RXVT;
-    break;
-
-  case 1047:
-    reply = state->mode.alt_screen;
-    break;
-
-  case 2004:
-    reply = state->mode.bracketpaste;
-    break;
-
-  case 2031:
-    reply = state->mode.theme_updates;
-    break;
-
-  default:
-    vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d$y", num, 0);
-    return;
-  }
-
-  vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d$y", num, reply ? 1 : 2);
+  rs_vterm_state_request_dec_mode(state, num);
 }
 
 static void request_version_string(VTermState *state)
 {
-  vterm_push_output_sprintf_str(state->vt, C1_DCS, true, ">|libvterm(%d.%d)",
-                                VTERM_VERSION_MAJOR, VTERM_VERSION_MINOR);
+  rs_vterm_state_request_version_string(state);
 }
 
 static void request_key_encoding_flags(VTermState *state)

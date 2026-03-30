@@ -1936,6 +1936,371 @@ pub unsafe extern "C" fn rs_vterm_state_csi_hvp(state: VTermStateHandle, row: c_
 }
 
 // =============================================================================
+// Additional C extern declarations for Phase 1
+// =============================================================================
+
+extern "C" {
+    fn vterm_state_set_termprop(
+        state: VTermStateHandle,
+        prop: c_int,
+        val: *const crate::VTermValue,
+    ) -> c_int;
+    fn vterm_state_savepen(state: VTermStateHandle, save: c_int);
+    fn vterm_push_output_sprintf_str(vt: *mut c_void, c1: u8, is_final: bool, fmt: *const i8, ...);
+}
+
+// =============================================================================
+// Phase 1: Helper functions and mode management (migrated from C)
+// =============================================================================
+
+// Constants matching C defines
+const FORCE: c_int = 1;
+const DWL_OFF: c_int = 0;
+const DWL_ON: c_int = 1;
+const DHL_OFF: c_int = 0;
+const DHL_TOP: c_int = 1;
+const DHL_BOTTOM: c_int = 2;
+
+// VTERM_PROP constants (matching C enum values)
+const VTERM_PROP_CURSORVISIBLE: c_int = 1;
+const VTERM_PROP_CURSORBLINK: c_int = 2;
+const VTERM_PROP_ALTSCREEN: c_int = 3;
+const VTERM_PROP_REVERSE: c_int = 6;
+const VTERM_PROP_CURSORSHAPE: c_int = 7;
+const VTERM_PROP_MOUSE: c_int = 8;
+const VTERM_PROP_FOCUSREPORT: c_int = 9;
+const VTERM_PROP_THEMEUPDATES: c_int = 10;
+
+// VTERM_PROP_MOUSE_* values
+const VTERM_PROP_MOUSE_NONE: c_int = 0;
+const VTERM_PROP_MOUSE_CLICK: c_int = 1;
+const VTERM_PROP_MOUSE_DRAG: c_int = 2;
+const VTERM_PROP_MOUSE_MOVE: c_int = 3;
+
+// Mouse flags (matching C defines)
+const MOUSE_WANT_CLICK: c_int = 0x01;
+const MOUSE_WANT_DRAG: c_int = 0x02;
+const MOUSE_WANT_MOVE: c_int = 0x04;
+
+// C1 control byte values
+const C1_CSI: u8 = 0x9b;
+const C1_DCS: u8 = 0x90;
+
+/// Helper: set boolean termprop via `vterm_state_set_termprop`.
+///
+/// # Safety
+/// state must be valid.
+unsafe fn settermprop_bool(state: VTermStateHandle, prop: c_int, v: c_int) -> c_int {
+    let val = crate::VTermValue { boolean: v };
+    vterm_state_set_termprop(state, prop, &raw const val)
+}
+
+/// Helper: set integer termprop via `vterm_state_set_termprop`.
+///
+/// # Safety
+/// state must be valid.
+unsafe fn settermprop_int(state: VTermStateHandle, prop: c_int, v: c_int) -> c_int {
+    let val = crate::VTermValue { number: v };
+    vterm_state_set_termprop(state, prop, &raw const val)
+}
+
+/// Implement `set_lineinfo` in Rust.
+///
+/// Updates line doublewidth/doubleheight info and calls the setlineinfo callback.
+/// `dwl`: -1=ignore, 0=off, 1=on
+/// `dhl`: -1=ignore, 0=off, 1=top, 2=bottom
+///
+/// # Safety
+/// state must be valid.
+unsafe fn set_lineinfo_rust(
+    state: VTermStateHandle,
+    row: c_int,
+    force: c_int,
+    dwl: c_int,
+    dhl: c_int,
+) {
+    let s = state.0.cast::<State>();
+
+    let lineinfo_ptr = (*s).lineinfo;
+    let mut info = *lineinfo_ptr.add(row as usize);
+
+    if dwl == DWL_OFF {
+        info.set_doublewidth(false);
+    } else if dwl == DWL_ON {
+        info.set_doublewidth(true);
+    }
+    // else -1: ignore
+
+    if dhl == DHL_OFF {
+        info.set_doubleheight(0);
+    } else if dhl == DHL_TOP {
+        info.set_doubleheight(1);
+    } else if dhl == DHL_BOTTOM {
+        info.set_doubleheight(2);
+    }
+    // else -1: ignore
+
+    let mut did_callback = false;
+    let callbacks = (*s).callbacks;
+    if !callbacks.is_null() {
+        if let Some(setlineinfo_cb) = (*callbacks).setlineinfo {
+            let old_info_ptr = lineinfo_ptr.add(row as usize);
+            if setlineinfo_cb(row, &raw const info, old_info_ptr, (*s).cbdata) != 0 {
+                did_callback = true;
+            }
+        }
+    }
+
+    if did_callback || force != 0 {
+        *lineinfo_ptr.add(row as usize) = info;
+    }
+}
+
+/// Set ANSI terminal modes (IRM, LNM).
+///
+/// Replaces C `set_mode`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_mode(state: VTermStateHandle, num: c_int, val: c_int) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    match num {
+        4 => (*s).mode.set_insert(val != 0),   // IRM
+        20 => (*s).mode.set_newline(val != 0), // LNM
+        _ => { /* Unknown mode */ }
+    }
+}
+
+/// Set DEC private terminal modes.
+///
+/// Replaces C `set_dec_mode`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_dec_mode(
+    state: VTermStateHandle,
+    num: c_int,
+    val: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    match num {
+        1 => {
+            (*s).mode.set_cursor(val != 0);
+        }
+        5 => {
+            // DECSCNM - screen mode
+            settermprop_bool(state, VTERM_PROP_REVERSE, val);
+        }
+        6 => {
+            // DECOM - origin mode
+            let oldpos = (*s).pos;
+            (*s).mode.set_origin(val != 0);
+            (*s).pos.row = if val != 0 { (*s).scrollregion_top } else { 0 };
+            (*s).pos.col = if val != 0 {
+                nvim_vterm_state_scrollregion_left(state)
+            } else {
+                0
+            };
+            rs_vterm_state_updatecursor(state, &raw const oldpos, 1);
+        }
+        7 => {
+            (*s).mode.set_autowrap(val != 0);
+        }
+        12 => {
+            settermprop_bool(state, VTERM_PROP_CURSORBLINK, val);
+        }
+        25 => {
+            settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, val);
+        }
+        69 => {
+            // DECVSSM/DECLRMM - left/right margin mode
+            (*s).mode.set_leftrightmargin(val != 0);
+            if val != 0 {
+                // Setting must clear doublewidth/doubleheight state of every line
+                for row in 0..(*s).rows {
+                    set_lineinfo_rust(state, row, FORCE, DWL_OFF, DHL_OFF);
+                }
+            }
+        }
+        1000 | 1002 | 1003 => {
+            let mouse_val = if val == 0 {
+                VTERM_PROP_MOUSE_NONE
+            } else if num == 1000 {
+                VTERM_PROP_MOUSE_CLICK
+            } else if num == 1002 {
+                VTERM_PROP_MOUSE_DRAG
+            } else {
+                VTERM_PROP_MOUSE_MOVE
+            };
+            settermprop_int(state, VTERM_PROP_MOUSE, mouse_val);
+        }
+        1004 => {
+            settermprop_bool(state, VTERM_PROP_FOCUSREPORT, val);
+            (*s).mode.set_report_focus(val != 0);
+        }
+        1005 => {
+            (*s).mouse_protocol = if val != 0 {
+                MouseProtocol::Utf8
+            } else {
+                MouseProtocol::X10
+            };
+        }
+        1006 => {
+            (*s).mouse_protocol = if val != 0 {
+                MouseProtocol::Sgr
+            } else {
+                MouseProtocol::X10
+            };
+        }
+        1015 => {
+            (*s).mouse_protocol = if val != 0 {
+                MouseProtocol::Rxvt
+            } else {
+                MouseProtocol::X10
+            };
+        }
+        1047 => {
+            settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
+        }
+        1048 => {
+            rs_vterm_state_savecursor(state, val);
+        }
+        1049 => {
+            settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
+            rs_vterm_state_savecursor(state, val);
+        }
+        2004 => {
+            (*s).mode.set_bracketpaste(val != 0);
+        }
+        2031 => {
+            settermprop_bool(state, VTERM_PROP_THEMEUPDATES, val);
+        }
+        _ => { /* Unknown DEC mode */ }
+    }
+}
+
+/// Query DEC mode state and output response.
+///
+/// Replaces C `request_dec_mode`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_request_dec_mode(state: VTermStateHandle, num: c_int) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    let vt = (*s).vt;
+
+    let reply: Option<bool> = match num {
+        1 => Some((*s).mode.cursor()),
+        5 => Some((*s).mode.screen()),
+        6 => Some((*s).mode.origin()),
+        7 => Some((*s).mode.autowrap()),
+        12 => Some((*s).mode.cursor_blink()),
+        25 => Some((*s).mode.cursor_visible()),
+        69 => Some((*s).mode.leftrightmargin()),
+        1000 => Some((*s).mouse_flags == MOUSE_WANT_CLICK),
+        1002 => Some((*s).mouse_flags == (MOUSE_WANT_CLICK | MOUSE_WANT_DRAG)),
+        1003 => Some((*s).mouse_flags == (MOUSE_WANT_CLICK | MOUSE_WANT_MOVE)),
+        1004 => Some((*s).mode.report_focus()),
+        1005 => Some((*s).mouse_protocol == MouseProtocol::Utf8),
+        1006 => Some((*s).mouse_protocol == MouseProtocol::Sgr),
+        1015 => Some((*s).mouse_protocol == MouseProtocol::Rxvt),
+        1047 => Some((*s).mode.alt_screen()),
+        2004 => Some((*s).mode.bracketpaste()),
+        2031 => Some((*s).mode.theme_updates()),
+        _ => None,
+    };
+
+    let fmt = c"?%d;%d$y".as_ptr();
+    match reply {
+        None => {
+            vterm_push_output_sprintf_ctrl(vt, C1_CSI, fmt, num, 0i32);
+        }
+        Some(r) => {
+            let reply_val: i32 = if r { 1 } else { 2 };
+            vterm_push_output_sprintf_ctrl(vt, C1_CSI, fmt, num, reply_val);
+        }
+    }
+}
+
+/// Output version string DCS response.
+///
+/// Replaces C `request_version_string`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_request_version_string(state: VTermStateHandle) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    let vt = (*s).vt;
+    vterm_push_output_sprintf_str(
+        vt,
+        C1_DCS,
+        true,
+        c">|libvterm(%d.%d)".as_ptr(),
+        crate::VTERM_VERSION_MAJOR,
+        crate::VTERM_VERSION_MINOR,
+    );
+}
+
+/// Save or restore cursor state (DEC 1048/1049 / DECSC/DECRC).
+///
+/// Replaces C `savecursor`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_savecursor(state: VTermStateHandle, save: c_int) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    if save != 0 {
+        (*s).saved.pos = (*s).pos;
+        (*s).saved
+            .mode
+            .set_cursor_visible((*s).mode.cursor_visible());
+        (*s).saved.mode.set_cursor_blink((*s).mode.cursor_blink());
+        (*s).saved.mode.set_cursor_shape((*s).mode.cursor_shape());
+        vterm_state_savepen(state, 1);
+    } else {
+        let oldpos = (*s).pos;
+        (*s).pos = (*s).saved.pos;
+        settermprop_bool(
+            state,
+            VTERM_PROP_CURSORVISIBLE,
+            c_int::from((*s).saved.mode.cursor_visible()),
+        );
+        settermprop_bool(
+            state,
+            VTERM_PROP_CURSORBLINK,
+            c_int::from((*s).saved.mode.cursor_blink()),
+        );
+        settermprop_int(
+            state,
+            VTERM_PROP_CURSORSHAPE,
+            c_int::from((*s).saved.mode.cursor_shape()),
+        );
+        vterm_state_savepen(state, 0);
+        rs_vterm_state_updatecursor(state, &raw const oldpos, 1);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
