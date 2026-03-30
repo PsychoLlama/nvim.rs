@@ -456,7 +456,7 @@ extern "C" {
 /// # Safety
 /// - `buf` must be a valid non-null pointer to a buf_T.
 /// - `file_info` must be a valid non-null pointer to a FileInfo.
-#[no_mangle]
+#[export_name = "buf_store_file_info"]
 pub unsafe extern "C" fn rs_buf_store_file_info(buf: *mut c_void, file_info: *const c_void) {
     let mtime = unsafe { nvim_fileinfo_get_mtime(file_info) };
     let mtime_ns = unsafe { nvim_fileinfo_get_mtime_ns(file_info) };
@@ -533,7 +533,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls into C. The C globals are accessed only on the main thread.
-#[no_mangle]
+#[export_name = "check_timestamps"]
 pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
     // Don't check while system() or another low-level function may cause
     // us to lose and gain focus.
@@ -786,7 +786,7 @@ static BUF_CHECK_BUSY: AtomicBool = AtomicBool::new(false);
 ///
 /// # Safety
 /// Calls into C. Must be called from the main thread only.
-#[no_mangle]
+#[export_name = "buf_check_timestamp"]
 pub unsafe extern "C" fn rs_buf_check_timestamp(buf: *mut c_void) -> c_int {
     // Re-entrancy guard: set busy = true while we run
     if BUF_CHECK_BUSY.swap(true, Ordering::Relaxed) {

@@ -695,7 +695,7 @@ pub unsafe extern "C" fn rs_check_for_bom(
 ///
 /// # Safety
 /// - `fname` must be a valid pointer to a NUL-terminated, mutable C string.
-#[no_mangle]
+#[export_name = "forward_slash"]
 pub unsafe extern "C" fn rs_forward_slash(fname: *mut c_char) {
     #[cfg(target_os = "windows")]
     {

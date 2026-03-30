@@ -505,7 +505,7 @@ extern "C" {
 ///
 /// # Safety
 /// - `eap` must be a valid non-null pointer to an exarg_T.
-#[no_mangle]
+#[export_name = "set_forced_fenc"]
 pub unsafe extern "C" fn rs_set_forced_fenc(eap: *const c_void) {
     let force_enc = unsafe { nvim_exarg_get_force_enc(eap) };
     if force_enc == 0 {

@@ -823,7 +823,7 @@ const FORCE_NOBIN: c_int = 2;
 /// # Safety
 /// - `eap` must be a valid non-null pointer to an exarg_T.
 /// - `buf` must be a valid non-null pointer to a buf_T.
-#[no_mangle]
+#[export_name = "prep_exarg"]
 pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
     let fenc = unsafe { nvim_buf_get_b_p_fenc(buf) };
     // cmd_len = 15 + strlen(buf->b_p_fenc)
@@ -929,7 +929,7 @@ const OPT_LOCAL: c_int = 0x02;
 ///
 /// # Safety
 /// Accesses global curbuf and eap fields via FFI.
-#[no_mangle]
+#[export_name = "set_file_options"]
 pub unsafe extern "C" fn rs_set_file_options(set_options: c_int, eap: *mut c_void) {
     if set_options != 0 {
         let force_ff = if eap.is_null() {
@@ -971,7 +971,7 @@ pub unsafe extern "C" fn rs_set_file_options(set_options: c_int, eap: *mut c_voi
 ///
 /// # Safety
 /// Accesses global curbuf and fires autocmds via FFI.
-#[no_mangle]
+#[export_name = "set_rw_fname"]
 pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
     let buf = unsafe { nvim_get_curbuf() };
 
@@ -1090,7 +1090,7 @@ extern "C" {
 ///
 /// # Safety
 /// All pointer arguments must be valid for their documented lifetimes.
-#[no_mangle]
+#[export_name = "shorten_buf_fname"]
 pub unsafe extern "C" fn rs_shorten_buf_fname(
     buf: *mut c_void,
     dirname: *const c_char,
@@ -1135,7 +1135,7 @@ pub unsafe extern "C" fn rs_shorten_buf_fname(
 ///
 /// # Safety
 /// Accesses global buffer list and global state.
-#[no_mangle]
+#[export_name = "shorten_fnames"]
 pub unsafe extern "C" fn rs_shorten_fnames(force: c_int) {
     let mut dirname = vec![0u8; MAXPATHL];
     unsafe { os_dirname(dirname.as_mut_ptr() as *mut c_char, MAXPATHL) };

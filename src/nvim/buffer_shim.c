@@ -628,9 +628,8 @@ void nvim_u_write_undo(const char *name, int forceit, buf_T *buf, uint8_t *hash)
   u_write_undo((char *)name, (bool)forceit, buf, hash);
 }
 // buf_reload caller wrapper for use from Rust (Phase 5)
-extern void buf_reload(buf_T *buf, int orig_mode, bool reload_options);
 void nvim_buf_reload(buf_T *buf, int orig_mode, int reload_options) {
-  buf_reload(buf, orig_mode, reload_options != 0);
+  buf_reload(buf, orig_mode, reload_options);
 }
 
 // Phase 6: buf_reload / move_lines accessors

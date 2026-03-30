@@ -1684,12 +1684,15 @@ pub unsafe extern "C" fn rs_readfile(
             }
 
             // Process lines
+            // pp_end will hold the position one past the last processed byte (C's `ptr` after the loop)
+            let mut pp_end: *mut u8 = ptr; // initialized to something; overwritten in each branch
             if fileformat == eol_mac {
                 let mut pp = ptr.sub(1);
                 loop {
                     pp = pp.add(1);
                     size -= 1;
                     if size < 0 {
+                        pp_end = pp;
                         break;
                     }
                     let c = *pp;
@@ -1711,6 +1714,7 @@ pub unsafe extern "C" fn rs_readfile(
                             ) == nvim_fileio_FAIL()
                             {
                                 error = true;
+                                pp_end = pp;
                                 break;
                             }
                             if read_undo_file {
@@ -1721,6 +1725,7 @@ pub unsafe extern "C" fn rs_readfile(
                             if read_count == 0 {
                                 error = true;
                                 line_start = pp;
+                                pp_end = pp;
                                 break;
                             }
                         } else {
@@ -1736,6 +1741,7 @@ pub unsafe extern "C" fn rs_readfile(
                     pp = pp.add(1);
                     size -= 1;
                     if size < 0 {
+                        pp_end = pp;
                         break;
                     }
                     let c = *pp;
@@ -1780,6 +1786,7 @@ pub unsafe extern "C" fn rs_readfile(
                         ) == nvim_fileio_FAIL()
                         {
                             error = true;
+                            pp_end = pp;
                             break;
                         }
                         if read_undo_file {
@@ -1790,6 +1797,7 @@ pub unsafe extern "C" fn rs_readfile(
                         if read_count == 0 {
                             error = true;
                             line_start = pp;
+                            pp_end = pp;
                             break;
                         }
                     } else {
@@ -1799,7 +1807,10 @@ pub unsafe extern "C" fn rs_readfile(
                 }
             }
 
-            linerest = ptr.add(size as usize + 1) as isize - line_start as isize;
+            // linerest = bytes remaining in unprocessed partial last line.
+            // pp_end is the position one past the last processed byte (set in each loop branch).
+            // In C: linerest = (char_u *)ptr - line_start (where ptr advanced through the loop).
+            linerest = pp_end as isize - line_start as isize;
             nvim_fileio_os_breakcheck();
         } // end 'read_loop
 

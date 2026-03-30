@@ -89,4 +89,17 @@ void filemess(buf_T *buf, char *name, char *s);
 int readdir_core(garray_T *gap, const char *path, void *context, CheckItem checkitem);
 int delete_recursive(const char *name);
 
+// Phase 6 migrations: wrapper functions replaced by Rust (exported via #[export_name])
+void prep_exarg(exarg_T *eap, const buf_T *buf);
+void set_file_options(int set_options, exarg_T *eap);
+void set_forced_fenc(exarg_T *eap);
+int set_rw_fname(char *fname, char *sfname);
+void shorten_buf_fname(buf_T *buf, char *dirname, int force);
+void shorten_fnames(int force);
+int check_timestamps(int focus);
+int buf_check_timestamp(buf_T *buf);
+void buf_reload(buf_T *buf, int orig_mode, int reload_options);
+void buf_store_file_info(buf_T *buf, FileInfo *file_info);
+void forward_slash(char *fname);
+
 #include "fileio.h.generated.h"

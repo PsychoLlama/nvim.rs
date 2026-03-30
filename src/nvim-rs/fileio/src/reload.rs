@@ -22,8 +22,8 @@ extern "C" {
     /// Frees ea->cmd then frees ea itself.
     fn nvim_exarg_free(ea: *mut c_void);
 
-    // --- prep_exarg (fileio/src/operations.rs) ---
-    fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void);
+    // --- prep_exarg (fileio/src/operations.rs, exported as "prep_exarg") ---
+    fn prep_exarg(eap: *mut c_void, buf: *const c_void);
 
     // --- undo ---
     fn nvim_u_savecommon_reload_ok(buf: *mut c_void) -> c_int;
@@ -189,7 +189,7 @@ unsafe fn move_lines(frombuf: *mut c_void, tobuf: *mut c_void) -> c_int {
 ///
 /// # Safety
 /// `buf` must be a valid non-null buffer pointer.
-#[no_mangle]
+#[export_name = "buf_reload"]
 pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int) {
     let old_ro = nvim_buf_get_b_p_ro(buf);
 
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
 
     if reload_options == 0 {
         // Force the fileformat and encoding to be the same.
-        rs_prep_exarg(ea, buf);
+        prep_exarg(ea, buf);
     }
     // If reload_options != 0, ea is already zero-initialised (CLEAR_FIELD equivalent).
 
