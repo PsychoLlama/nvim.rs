@@ -915,16 +915,27 @@ extern "C" {
     fn nvim_eval_execute(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_flatten(argvars: *const c_void, rettv: *mut c_void, make_copy: bool);
     fn nvim_eval_common_function(argvars: *const c_void, rettv: *mut c_void, is_funcref: bool);
-    fn nvim_eval_hlID(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_hlexists(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_hlID: inlined into rs_f_hlID below
+    // nvim_eval_hlexists: inlined into rs_f_hlexists below
     fn nvim_eval_input(argvars: *const c_void, rettv: *mut c_void, dialog: bool);
-    fn nvim_eval_json_encode(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_json_encode: inlined into rs_f_json_encode below
     fn nvim_eval_libcall(argvars: *const c_void, rettv: *mut c_void, retstr: bool);
     fn nvim_eval_script_host_eval(name: *const c_char, argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_search(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_searchpairpos(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_swapfilelist(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_swapinfo(argvars: *const c_void, rettv: *mut c_void);
+
+    // hlID / hlexists / json_encode inlining
+    fn syn_name2id(name: *const c_char) -> c_int;
+    fn highlight_exists(name: *const c_char) -> bool;
+    fn encode_tv2json(tv: *const c_void, lenp: *mut usize) -> *mut c_char;
+    #[link_name = "nvim_tv_get_string_ptr"]
+    fn p4_nvim_tv_get_string_ptr_h4(tv: *const c_void) -> *const u8;
+    #[link_name = "nvim_tv_set_string"]
+    fn p4_nvim_tv_set_string_h4(tv: *mut c_void, s: *mut u8);
+    #[link_name = "nvim_tv_set_number"]
+    fn p4_nvim_tv_set_number_h4(tv: *mut c_void, n: i64);
 }
 
 // =============================================================================
@@ -1003,7 +1014,10 @@ pub unsafe extern "C" fn rs_f_function(
 #[allow(non_snake_case)]
 #[export_name = "f_hlID"]
 pub unsafe extern "C" fn rs_f_hlID(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
-    nvim_eval_hlID(argvars, rettv);
+    // nvim_eval_hlID: inlined — syn_name2id delegation
+    let name = p4_nvim_tv_get_string_ptr_h4(argvars);
+    let id = syn_name2id(name.cast::<c_char>());
+    p4_nvim_tv_set_number_h4(rettv, i64::from(id));
 }
 
 /// "hlexists()" function - check if highlight group exists
@@ -1016,7 +1030,10 @@ pub unsafe extern "C" fn rs_f_hlexists(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_hlexists(argvars, rettv);
+    // nvim_eval_hlexists: inlined — highlight_exists delegation
+    let name = p4_nvim_tv_get_string_ptr_h4(argvars);
+    let exists = highlight_exists(name.cast::<c_char>());
+    p4_nvim_tv_set_number_h4(rettv, i64::from(exists));
 }
 
 /// "input()" function - prompt the user for input
@@ -1055,7 +1072,9 @@ pub unsafe extern "C" fn rs_f_json_encode(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_json_encode(argvars, rettv);
+    // nvim_eval_json_encode: inlined — encode_tv2json delegation
+    let s = encode_tv2json(argvars, std::ptr::null_mut());
+    p4_nvim_tv_set_string_h4(rettv, s.cast::<u8>());
 }
 
 /// "libcall()" function - call a function in an external library (returns string)

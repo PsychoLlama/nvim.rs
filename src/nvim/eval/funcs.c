@@ -4674,26 +4674,15 @@ theend:
   xfree(trans_name);
 }
 
-void nvim_eval_hlID(typval_T *argvars, typval_T *rettv)
-{
-  rettv->vval.v_number = syn_name2id(tv_get_string(&argvars[0]));
-}
-
-void nvim_eval_hlexists(typval_T *argvars, typval_T *rettv)
-{
-  rettv->vval.v_number = highlight_exists(tv_get_string(&argvars[0]));
-}
+// nvim_eval_hlID: inlined into Rust (misc.rs) — syn_name2id delegation
+// nvim_eval_hlexists: inlined into Rust (misc.rs) — highlight_exists delegation
 
 void nvim_eval_input(typval_T *argvars, typval_T *rettv, bool dialog)
 {
   get_user_input(argvars, rettv, dialog, inputsecret_flag);
 }
 
-void nvim_eval_json_encode(typval_T *argvars, typval_T *rettv)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = encode_tv2json(&argvars[0], NULL);
-}
+// nvim_eval_json_encode: inlined into Rust (misc.rs) — encode_tv2json delegation
 
 void nvim_eval_libcall(typval_T *argvars, typval_T *rettv, bool retstr)
 {
