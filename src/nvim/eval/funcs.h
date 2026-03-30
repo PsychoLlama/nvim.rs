@@ -34,3 +34,6 @@ typedef struct {
 // FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL deliberately omitted here
 // since this header is included without macros_defs.h in some TUs.
 pos_T *var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol);
+
+// Phase 29: get_user_input moved from funcs.c to funcs_shim.c
+void get_user_input(const typval_T *argvars, typval_T *rettv, bool inputdialog, bool secret);

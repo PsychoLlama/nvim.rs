@@ -72,8 +72,13 @@
 #include "nvim/edit.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/charset.h"
+#include "nvim/event/loop.h"
+#include "nvim/event/multiqueue.h"
+#include "nvim/input.h"
+#include "nvim/main.h"
 #include "nvim/normal.h"
 #include "nvim/ops.h"
+#include "nvim/usercmd.h"
 
 // Error strings used by moved functions
 static const char e_string_list_or_blob_required[]
@@ -98,6 +103,14 @@ extern tabpage_T *rs_find_tabpage(int n);
 extern void rs_get_tagstack(void *wp, void *retdict);
 // Rust tag stack set used by settagstack
 extern int rs_set_tagstack(void *wp, const void *d, int action);
+// Rust event loop helper used by f_wait
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define shim_loop_get_events(l) rs_loop_get_events(l)
+// f_input is implemented in Rust (eval crate)
+extern void f_input(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// get_user_input is defined later in this file (forward declaration)
+void get_user_input(const typval_T *const argvars, typval_T *const rettv,
+                    const bool inputdialog, const bool secret);
 
 #include "eval/funcs_shim.c.generated.h"
 
@@ -3663,4 +3676,302 @@ void f_getregionpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   curbuf = save_curbuf;
   curwin->w_buffer = curbuf;
   virtual_op = save_virtual;
+}
+
+// =============================================================================
+// Phase 29: f_wait, has_wsl, input functions (moved from funcs.c)
+// =============================================================================
+
+/// Dummy timer callback. Used by f_wait().
+static void dummy_timer_due_cb(TimeWatcher *tw, void *data)
+{
+}
+
+/// Dummy timer close callback. Used by f_wait().
+static void dummy_timer_close_cb(TimeWatcher *tw, void *data) { xfree(tw); }
+
+/// "wait(timeout, condition[, interval])" function
+void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = -1;
+
+  if (argvars[0].v_type != VAR_NUMBER) {
+    semsg(_(e_invargval), "1");
+    return;
+  }
+  if ((argvars[2].v_type != VAR_NUMBER && argvars[2].v_type != VAR_UNKNOWN)
+      || (argvars[2].v_type == VAR_NUMBER && argvars[2].vval.v_number <= 0)) {
+    semsg(_(e_invargval), "3");
+    return;
+  }
+
+  int timeout = (int)argvars[0].vval.v_number;
+  typval_T expr = argvars[1];
+  int interval = argvars[2].v_type == VAR_NUMBER
+                 ? (int)argvars[2].vval.v_number
+                 : 200;  // Default.
+  TimeWatcher *tw = xmalloc(sizeof(TimeWatcher));
+
+  // Start dummy timer.
+  time_watcher_init(&main_loop, tw, NULL);
+  tw->events = shim_loop_get_events(&main_loop);
+  tw->blockable = true;
+  time_watcher_start(tw, dummy_timer_due_cb, (uint64_t)interval, (uint64_t)interval);
+
+  typval_T argv = TV_INITIAL_VALUE;
+  typval_T exprval = TV_INITIAL_VALUE;
+  bool error = false;
+  const int called_emsg_before = called_emsg;
+
+  // Flush screen updates before blocking.
+  ui_flush();
+
+  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, shim_loop_get_events(&main_loop), timeout,
+                            eval_expr_typval(&expr, false, &argv, 0, &exprval) != OK
+                            || tv_get_number_chk(&exprval, &error)
+                            || called_emsg > called_emsg_before || error || got_int);
+
+  if (called_emsg > called_emsg_before || error) {
+    rettv->vval.v_number = -3;
+  } else if (got_int) {
+    got_int = false;
+    vgetc();
+    rettv->vval.v_number = -2;
+  } else if (tv_get_number_chk(&exprval, &error)) {
+    rettv->vval.v_number = 0;
+  }
+
+  // Stop dummy timer
+  time_watcher_stop(tw);
+  time_watcher_close(tw, dummy_timer_close_cb);
+}
+
+static bool has_wsl(void)
+{
+  static TriState has_wsl = kNone;
+  if (has_wsl == kNone) {
+    Error err = ERROR_INIT;
+    Object o = NLUA_EXEC_STATIC("return vim.uv.os_uname()['release']:lower()"
+                                ":match('microsoft')",
+                                (Array)ARRAY_DICT_INIT, kRetNilBool, NULL, &err);
+    assert(!ERROR_SET(&err));
+    has_wsl = LUARET_TRUTHY(o) ? kTrue : kFalse;
+  }
+  return has_wsl == kTrue;
+}
+
+/// Public wrapper for has_wsl() used by Rust has() implementation.
+int nvim_eval_has_wsl(void)
+{
+  return has_wsl() ? 1 : 0;
+}
+
+static bool inputsecret_flag = false;
+
+/// "input()" function
+///     Also handles inputsecret() when inputsecret is set.
+/// "inputlist()" function
+void f_inputlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  if (argvars[0].v_type != VAR_LIST) {
+    semsg(_(e_listarg), "inputlist()");
+    return;
+  }
+
+  msg_ext_set_kind("confirm");
+  msg_start();
+  msg_row = Rows - 1;   // for when 'cmdheight' > 1
+  lines_left = Rows;    // avoid more prompt
+  msg_scroll = true;
+  msg_clr_eos();
+
+  list_T *l = argvars[0].vval.v_list;
+  TV_LIST_ITER_CONST(l, li, {
+    msg_puts(tv_get_string(TV_LIST_ITEM_TV(li)));
+    if (!ui_has(kUIMessages) || TV_LIST_ITEM_NEXT(l, li) != NULL) {
+      msg_putchar('\n');
+    }
+  });
+
+  // Ask for choice.
+  bool mouse_used = false;
+  int selected = prompt_for_input(NULL, 0, false, &mouse_used);
+  if (mouse_used) {
+    selected = tv_list_len(l) - (cmdline_row - mouse_row);
+  }
+
+  rettv->vval.v_number = selected;
+}
+
+static garray_T ga_userinput = { 0, 0, sizeof(tasave_T), 4, NULL };
+
+/// "inputrestore()" function
+void f_inputrestore(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  if (!GA_EMPTY(&ga_userinput)) {
+    ga_userinput.ga_len--;
+    restore_typeahead((tasave_T *)(ga_userinput.ga_data)
+                      + ga_userinput.ga_len);
+    // default return is zero == OK
+  } else if (p_verbose > 1) {
+    verb_msg(_("called inputrestore() more often than inputsave()"));
+    rettv->vval.v_number = 1;  // Failed
+  }
+}
+
+/// "inputsave()" function
+void f_inputsave(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  // Add an entry to the stack of typeahead storage.
+  tasave_T *p = GA_APPEND_VIA_PTR(tasave_T, &ga_userinput);
+  save_typeahead(p);
+}
+
+/// "inputsecret()" function
+void f_inputsecret(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  cmdline_star++;
+  inputsecret_flag = true;
+  f_input(argvars, rettv, fptr);
+  cmdline_star--;
+  inputsecret_flag = false;
+}
+
+void nvim_eval_input(typval_T *argvars, typval_T *rettv, bool dialog)
+{
+  get_user_input(argvars, rettv, dialog, inputsecret_flag);
+}
+
+// Rust helper used by get_user_input
+extern int rs_get_echo_hl_id(void);
+
+/// This function is used by f_input() and f_inputdialog() functions. The third
+/// argument to f_input() specifies the type of completion to use at the
+/// prompt. The third argument to f_inputdialog() specifies the value to return
+/// when the user cancels the prompt.
+void get_user_input(const typval_T *const argvars, typval_T *const rettv, const bool inputdialog,
+                    const bool secret)
+  FUNC_ATTR_NONNULL_ALL
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+
+  if (cmdpreview) {
+    return;
+  }
+
+  const char *prompt;
+  const char *defstr = "";
+  typval_T *cancelreturn = NULL;
+  typval_T cancelreturn_strarg2 = TV_INITIAL_VALUE;
+  const char *xp_name = NULL;
+  Callback input_callback = { .type = kCallbackNone };
+  char prompt_buf[NUMBUFLEN];
+  char defstr_buf[NUMBUFLEN];
+  char cancelreturn_buf[NUMBUFLEN];
+  char xp_name_buf[NUMBUFLEN];
+  char def[1] = { 0 };
+  if (argvars[0].v_type == VAR_DICT) {
+    if (argvars[1].v_type != VAR_UNKNOWN) {
+      emsg(_("E5050: {opts} must be the only argument"));
+      return;
+    }
+    dict_T *const dict = argvars[0].vval.v_dict;
+    prompt = tv_dict_get_string_buf_chk(dict, S_LEN("prompt"), prompt_buf, "");
+    if (prompt == NULL) {
+      return;
+    }
+    defstr = tv_dict_get_string_buf_chk(dict, S_LEN("default"), defstr_buf, "");
+    if (defstr == NULL) {
+      return;
+    }
+    dictitem_T *cancelreturn_di = tv_dict_find(dict, S_LEN("cancelreturn"));
+    if (cancelreturn_di != NULL) {
+      cancelreturn = &cancelreturn_di->di_tv;
+    }
+    xp_name = tv_dict_get_string_buf_chk(dict, S_LEN("completion"),
+                                         xp_name_buf, def);
+    if (xp_name == NULL) {  // error
+      return;
+    }
+    if (xp_name == def) {  // default to NULL
+      xp_name = NULL;
+    }
+    if (!tv_dict_get_callback(dict, S_LEN("highlight"), &input_callback)) {
+      return;
+    }
+  } else {
+    prompt = tv_get_string_buf_chk(&argvars[0], prompt_buf);
+    if (prompt == NULL) {
+      return;
+    }
+    if (argvars[1].v_type != VAR_UNKNOWN) {
+      defstr = tv_get_string_buf_chk(&argvars[1], defstr_buf);
+      if (defstr == NULL) {
+        return;
+      }
+      if (argvars[2].v_type != VAR_UNKNOWN) {
+        const char *const strarg2 = tv_get_string_buf_chk(&argvars[2], cancelreturn_buf);
+        if (strarg2 == NULL) {
+          return;
+        }
+        if (inputdialog) {
+          cancelreturn_strarg2.v_type = VAR_STRING;
+          cancelreturn_strarg2.vval.v_string = (char *)strarg2;
+          cancelreturn = &cancelreturn_strarg2;
+        } else {
+          xp_name = strarg2;
+        }
+      }
+    }
+  }
+
+  int xp_type = EXPAND_NOTHING;
+  char *xp_arg = NULL;
+  if (xp_name != NULL) {
+    // input() with a third argument: completion
+    const int xp_namelen = (int)strlen(xp_name);
+
+    uint32_t argt = 0;
+    if (parse_compl_arg(xp_name, xp_namelen, &xp_type,
+                        &argt, &xp_arg) == FAIL) {
+      return;
+    }
+  }
+
+  // Only the part of the message after the last NL is considered as
+  // prompt for the command line, unlsess cmdline is externalized
+  const char *p = prompt;
+  if (!ui_has(kUICmdline)) {
+    const char *lastnl = strrchr(prompt, '\n');
+    if (lastnl != NULL) {
+      p = lastnl + 1;
+      msg_start();
+      msg_clr_eos();
+      msg_puts_len(prompt, p - prompt, rs_get_echo_hl_id(), false);
+      msg_didout = false;
+      msg_starthere();
+    }
+  }
+  cmdline_row = msg_row;
+
+  stuffReadbuffSpec(defstr);
+
+  const int save_ex_normal_busy = ex_normal_busy;
+  ex_normal_busy = 0;
+  rettv->vval.v_string = getcmdline_prompt(secret ? NUL : '@', p, rs_get_echo_hl_id(),
+                                           xp_type, xp_arg, input_callback, false, NULL);
+  ex_normal_busy = save_ex_normal_busy;
+  callback_free(&input_callback);
+
+  if (rettv->vval.v_string == NULL && cancelreturn != NULL) {
+    tv_copy(cancelreturn, rettv);
+  }
+
+  xfree(xp_arg);
+
+  // Since the user typed this, no need to wait for return.
+  need_wait_return = false;
+  msg_didout = false;
 }
