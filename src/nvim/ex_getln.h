@@ -81,6 +81,9 @@ int rs_command_line_handle_ctrl_bsl(int *c, bool *gotesc);
 int rs_command_line_insert_reg(int *c, bool *gotesc);
 int rs_command_line_erase_chars(int c, int indent, void *is_state);
 
+// Phase 2 (ex_getln migration): cmdline_screen_cleared implemented in Rust
+void cmdline_screen_cleared(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -590,3 +590,57 @@ mod tests {
         assert!(!should_draw(false, 0, -1, 20));
     }
 }
+
+// =============================================================================
+// Phase 2: cmdline_screen_cleared and cmdline_ui_flush in Rust
+// =============================================================================
+
+#[allow(unsafe_code)]
+mod phase2 {
+    use std::ffi::{c_int, c_void};
+
+    // kUICmdline enum value from ui_defs.h
+    const K_UI_CMDLINE: c_int = 24;
+
+    unsafe extern "C" {
+        fn ui_has(what: c_int) -> c_int;
+        fn nvim_get_cmdline_block_size() -> usize;
+        fn nvim_ui_call_cmdline_block_show_all();
+        fn nvim_get_ccline_prev_ptr() -> *mut c_void;
+        fn nvim_ccline_ptr_get_level(p: *mut c_void) -> c_int;
+        fn nvim_ccline_ptr_set_redraw_all(p: *mut c_void);
+        fn nvim_ccline_ptr_get_prev(p: *mut c_void) -> *mut c_void;
+        fn nvim_get_cmdwin_level() -> c_int;
+        fn nvim_get_ccline_level() -> c_int;
+    }
+
+    /// Rust replacement for `cmdline_screen_cleared` in ex_getln.c.
+    ///
+    /// Extra redrawing needed for redraw! and on ui_attach.
+    ///
+    /// # Safety
+    ///
+    /// Must only be called when Neovim's cmdline state is valid.
+    #[no_mangle]
+    pub unsafe extern "C" fn cmdline_screen_cleared() {
+        if ui_has(K_UI_CMDLINE) == 0 {
+            return;
+        }
+        if nvim_get_cmdline_block_size() > 0 {
+            nvim_ui_call_cmdline_block_show_all();
+        }
+        let mut prev_level = nvim_get_ccline_level() - 1;
+        let mut line = nvim_get_ccline_prev_ptr();
+        while prev_level > 0 && !line.is_null() {
+            if nvim_ccline_ptr_get_level(line) == prev_level {
+                // don't redraw a cmdline already shown in the cmdline window
+                if prev_level != nvim_get_cmdwin_level() {
+                    nvim_ccline_ptr_set_redraw_all(line);
+                }
+                prev_level -= 1;
+            }
+            line = nvim_ccline_ptr_get_prev(line);
+        }
+        crate::screen::redrawcmd_rs();
+    }
+}

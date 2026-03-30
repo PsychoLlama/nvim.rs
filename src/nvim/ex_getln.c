@@ -1060,31 +1060,7 @@ void ui_ext_cmdline_block_leave(void)
   ui_call_cmdline_block_hide();
 }
 
-/// Extra redrawing needed for redraw! and on ui_attach.
-void cmdline_screen_cleared(void)
-{
-  if (!ui_has(kUICmdline)) {
-    return;
-  }
-
-  if (cmdline_block.size) {
-    ui_call_cmdline_block_show(cmdline_block);
-  }
-
-  int prev_level = ccline.level - 1;
-  CmdlineInfo *line = ccline.prev_ccline;
-  while (prev_level > 0 && line) {
-    if (line->level == prev_level) {
-      // don't redraw a cmdline already shown in the cmdline window
-      if (prev_level != cmdwin_level) {
-        line->redraw_state = kCmdRedrawAll;
-      }
-      prev_level--;
-    }
-    line = line->prev_ccline;
-  }
-  redrawcmd();
-}
+// cmdline_screen_cleared: implemented in Rust (cmdline crate, ui.rs)
 
 /// called by ui_flush, do what redraws necessary to keep cmdline updated.
 void cmdline_ui_flush(void)
@@ -1438,4 +1414,33 @@ int nvim_cls_get_is_state_did_incsearch(void *s) { return ((CommandLineState *)s
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
 void nvim_cmdline_do_cmdline_nowait(void) { do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT); }
+
+// =============================================================================
+// Helpers for Rust implementations of cmdline_screen_cleared / cmdline_ui_flush
+// =============================================================================
+
+/// Get cmdline_block.size (for Rust cmdline_screen_cleared).
+size_t nvim_get_cmdline_block_size(void) { return cmdline_block.size; }
+
+/// Call ui_call_cmdline_block_show(cmdline_block) (macro wrapper for Rust).
+void nvim_ui_call_cmdline_block_show_all(void) { ui_call_cmdline_block_show(cmdline_block); }
+
+/// Call ui_call_cmdline_block_hide() (macro wrapper for Rust).
+void nvim_ui_call_cmdline_block_hide(void) { ui_call_cmdline_block_hide(); }
+
+/// Get ccline.prev_ccline as opaque pointer (for Rust iteration).
+void *nvim_get_ccline_prev_ptr(void) { return (void *)ccline.prev_ccline; }
+
+/// Get a CmdlineInfo node's level field (for Rust iteration).
+int nvim_ccline_ptr_get_level(void *p) { return ((CmdlineInfo *)p)->level; }
+
+/// Set a CmdlineInfo node's redraw_state to kCmdRedrawAll (for Rust).
+void nvim_ccline_ptr_set_redraw_all(void *p) { ((CmdlineInfo *)p)->redraw_state = kCmdRedrawAll; }
+
+/// Get a CmdlineInfo node's prev_ccline field (for Rust iteration).
+void *nvim_ccline_ptr_get_prev(void *p) { return (void *)((CmdlineInfo *)p)->prev_ccline; }
+
+/// Get cmdwin_level value.
+int nvim_get_cmdwin_level(void) { return cmdwin_level; }
+
 
