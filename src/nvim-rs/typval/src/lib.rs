@@ -1198,6 +1198,15 @@ extern "C" {
     fn nvim_list_init_static_impl(l: ListHandle);
     fn nvim_list_copy_shallow(l: ListHandle) -> ListHandle;
     fn nvim_tv_set_list_vval(tv: TypevalHandle, l: ListHandle);
+
+    // Phase 6c accessor helpers for slice/range/flatten/remove
+    fn nvim_tv_list_set_ret(tv: TypevalHandle, l: ListHandle);
+    fn nvim_xfree(ptr: *mut std::ffi::c_void);
+    fn nvim_got_int() -> c_int;
+    fn nvim_fast_breakcheck();
+    fn nvim_emsg_invrange();
+    fn nvim_tv_list_index_into_rettv(rettv: TypevalHandle, item: ListItemHandle);
+    fn nvim_tv_listitem_move_to_rettv(rettv: TypevalHandle, item: ListItemHandle);
 }
 
 // =============================================================================
@@ -1947,6 +1956,304 @@ pub unsafe extern "C" fn rs_tv_list_concat(
     OK
 }
 
+// =============================================================================
+// Phase 6c: list range/slice/flatten/remove operations
+// =============================================================================
+
+/// Find list item with index fixup: if negative index not found, try index 0.
+/// Used as first index of a range.
+fn tv_list_find_index_impl(l: ListHandle, idx: &mut c_int) -> ListItemHandle {
+    let li = tv_list_find_impl(l, *idx);
+    if !li.is_null() {
+        return li;
+    }
+    if *idx < 0 {
+        *idx = 0;
+        return tv_list_find_impl(l, *idx);
+    }
+    ListItemHandle::null()
+}
+
+/// FFI export: tv_list_check_range_index_one - validate first range index.
+#[export_name = "tv_list_check_range_index_one"]
+pub unsafe extern "C" fn rs_tv_list_check_range_index_one(
+    l: ListHandle,
+    n1: *mut c_int,
+    quiet: bool,
+) -> ListItemHandle {
+    let mut idx = unsafe { *n1 };
+    let li = tv_list_find_index_impl(l, &mut idx);
+    unsafe { *n1 = idx };
+    if !li.is_null() {
+        return li;
+    }
+    if !quiet {
+        unsafe {
+            semsg_typval(
+                e_list_index_out_of_range_nr_tv.as_ptr().cast(),
+                i64::from(idx),
+            )
+        };
+    }
+    ListItemHandle::null()
+}
+
+/// FFI export: tv_list_check_range_index_two - validate second range index.
+#[export_name = "tv_list_check_range_index_two"]
+pub unsafe extern "C" fn rs_tv_list_check_range_index_two(
+    l: ListHandle,
+    n1: *mut c_int,
+    li1: ListItemHandle,
+    n2: *mut c_int,
+    quiet: bool,
+) -> c_int {
+    let mut n2_val = unsafe { *n2 };
+    if n2_val < 0 {
+        let ni = tv_list_find_impl(l, n2_val);
+        if ni.is_null() {
+            if !quiet {
+                unsafe {
+                    semsg_typval(
+                        e_list_index_out_of_range_nr_tv.as_ptr().cast(),
+                        i64::from(n2_val),
+                    )
+                };
+            }
+            return FAIL;
+        }
+        n2_val = tv_list_idx_of_item_impl(l, ni);
+    }
+    unsafe { *n2 = n2_val };
+
+    // Fix up n1 if negative.
+    let mut n1_val = unsafe { *n1 };
+    if n1_val < 0 {
+        n1_val = tv_list_idx_of_item_impl(l, li1);
+        unsafe { *n1 = n1_val };
+    }
+
+    if n2_val < n1_val {
+        if !quiet {
+            unsafe {
+                semsg_typval(
+                    e_list_index_out_of_range_nr_tv.as_ptr().cast(),
+                    i64::from(n2_val),
+                )
+            };
+        }
+        return FAIL;
+    }
+    OK
+}
+
+/// Build a new list from items [n1..=n2] of ol.
+unsafe fn tv_list_slice_impl(ol: ListHandle, n1: i64, n2: i64) -> ListHandle {
+    let l = unsafe { nvim_list_alloc_impl() };
+    if l.is_null() {
+        return l;
+    }
+    unsafe { nvim_list_set_len(l, 0) };
+    let mut item = tv_list_find_impl(ol, n1 as c_int);
+    let mut i = n1;
+    while i <= n2 && !item.is_null() {
+        let tv = unsafe { nvim_listitem_get_tv(item) };
+        unsafe { rs_tv_list_append_tv(l, tv) };
+        item = unsafe { nvim_listitem_get_next(item) };
+        i += 1;
+    }
+    l
+}
+
+/// FFI export: tv_list_slice_or_index - slice or index into a list.
+#[export_name = "tv_list_slice_or_index"]
+pub unsafe extern "C" fn rs_tv_list_slice_or_index(
+    _list: ListHandle,
+    range: bool,
+    n1_arg: i64,
+    n2_arg: i64,
+    exclusive: bool,
+    rettv: TypevalHandle,
+    verbose: bool,
+) -> c_int {
+    // NOTE: The C function ignores the `list` parameter and reads from rettv->vval.v_list.
+    // We do the same via nvim_tv_get_list.
+    let list = unsafe { nvim_tv_get_list(rettv) };
+    let len = i64::from(tv_list_len_impl(list));
+    let mut n1 = n1_arg;
+    let mut n2 = n2_arg;
+
+    if n1 < 0 {
+        n1 += len;
+    }
+    if n1 < 0 || n1 >= len {
+        if !range {
+            if verbose {
+                unsafe { semsg_typval(e_list_index_out_of_range_nr_tv.as_ptr().cast(), n1_arg) };
+            }
+            return FAIL;
+        }
+        n1 = len;
+    }
+
+    if range {
+        if n2 < 0 {
+            n2 += len;
+        } else if n2 >= len {
+            n2 = len - i64::from(!exclusive);
+        }
+        if exclusive {
+            n2 -= 1;
+        }
+        if n2 < 0 || n2 + 1 < n1 {
+            n2 = -1;
+        }
+        let l = unsafe { tv_list_slice_impl(list, n1, n2) };
+        unsafe { nvim_tv_clear(rettv) };
+        unsafe { nvim_tv_list_set_ret(rettv, l) };
+    } else {
+        // Copy item[n1]'s TV into rettv via C accessor (handles stack alloc and clear).
+        let item = tv_list_find_impl(list, n1 as c_int);
+        unsafe { nvim_tv_list_index_into_rettv(rettv, item) };
+    }
+    OK
+}
+
+/// FFI export: tv_list_flatten - flatten nested lists in-place.
+#[export_name = "tv_list_flatten"]
+pub unsafe extern "C" fn rs_tv_list_flatten(
+    list: ListHandle,
+    first: ListItemHandle,
+    maxitems: i64,
+    maxdepth: i64,
+) {
+    if maxdepth == 0 {
+        return;
+    }
+
+    let mut item = if first.is_null() {
+        unsafe { nvim_list_get_first(list) }
+    } else {
+        first
+    };
+
+    let mut done: i64 = 0;
+    while !item.is_null() && done < maxitems {
+        let next = unsafe { nvim_listitem_get_next(item) };
+
+        unsafe { nvim_fast_breakcheck() };
+        if unsafe { nvim_got_int() } != 0 {
+            return;
+        }
+
+        let item_tv = unsafe { nvim_listitem_get_tv(item) };
+        let item_type = unsafe { nvim_tv_get_type(item_tv) };
+        if item_type == VAR_LIST {
+            let itemlist = unsafe { nvim_tv_get_list(item_tv) };
+            let itemlist_len = i64::from(tv_list_len_impl(itemlist));
+
+            // Unlink item from list.
+            unsafe { rs_tv_list_drop_items(list, item, item) };
+            // Insert itemlist's contents before `next`.
+            unsafe { rs_tv_list_extend(list, itemlist, next) };
+
+            // Recursively flatten the newly inserted items.
+            if maxdepth > 0 {
+                let prev_of_next = if next.is_null() {
+                    unsafe { nvim_list_get_last(list) }
+                } else {
+                    unsafe { nvim_listitem_get_prev(next) }
+                };
+                let recurse_start = if prev_of_next.is_null() {
+                    unsafe { nvim_list_get_first(list) }
+                } else {
+                    unsafe { nvim_listitem_get_next(prev_of_next) }
+                };
+                unsafe {
+                    rs_tv_list_flatten(list, recurse_start, itemlist_len, maxdepth - 1);
+                };
+            }
+
+            // Free the item (its tv was a list, extended above).
+            unsafe { nvim_tv_clear(item_tv) };
+            unsafe { nvim_xfree(item.as_ptr().cast_mut()) };
+        }
+
+        done += 1;
+        item = next;
+    }
+}
+
+/// FFI export: tv_list_remove - VimL remove() for lists.
+#[export_name = "tv_list_remove"]
+pub unsafe extern "C" fn rs_tv_list_remove(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    arg_errmsg: *const c_char,
+) {
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let l = unsafe { nvim_tv_get_list(arg0) };
+    let lock = tv_list_locked_impl(l);
+    if unsafe { nvim_value_check_lock_translated(lock, arg_errmsg) } {
+        return;
+    }
+
+    let arg1 = unsafe { nvim_typval_array_get(argvars, 1) };
+    let mut error = false;
+    let idx = unsafe { tv_get_number_chk(arg1, &raw mut error) };
+
+    if error {
+        // Type error: do nothing, errmsg already given.
+        return;
+    }
+
+    let item = tv_list_find_impl(l, idx as c_int);
+    if item.is_null() {
+        unsafe { semsg_typval(e_list_index_out_of_range_nr_tv.as_ptr().cast(), idx) };
+        return;
+    }
+
+    let arg2 = unsafe { nvim_typval_array_get(argvars, 2) };
+    let arg2_type = unsafe { nvim_tv_get_type(arg2) };
+    if arg2_type == VAR_UNKNOWN {
+        // Remove one item, return its value (bitwise move via C accessor).
+        unsafe { rs_tv_list_drop_items(l, item, item) };
+        unsafe { nvim_tv_listitem_move_to_rettv(rettv, item) };
+    } else {
+        // Remove range of items, return list with values.
+        let end = unsafe { tv_get_number_chk(arg2, &raw mut error) };
+        if error {
+            return;
+        }
+        let item2 = tv_list_find_impl(l, end as c_int);
+        if item2.is_null() {
+            unsafe { semsg_typval(e_list_index_out_of_range_nr_tv.as_ptr().cast(), end) };
+            return;
+        }
+
+        // Count items from item to item2 inclusive.
+        let mut cnt: c_int = 0;
+        let mut li = item;
+        loop {
+            cnt += 1;
+            if std::ptr::eq(li.as_ptr(), item2.as_ptr()) {
+                break;
+            }
+            li = unsafe { nvim_listitem_get_next(li) };
+            if li.is_null() {
+                break;
+            }
+        }
+
+        if li.is_null() {
+            // item2 not found after item.
+            unsafe { nvim_emsg_invrange() };
+        } else {
+            let ret_list = unsafe { rs_tv_list_alloc_ret(rettv, cnt as isize) };
+            unsafe { rs_tv_list_move_items(l, item, item2, ret_list, cnt) };
+        }
+    }
+}
+
 /// FFI export: f_has_key - VimL has_key() function.
 #[export_name = "f_has_key"]
 pub unsafe extern "C" fn rs_f_has_key(
@@ -2027,6 +2334,7 @@ pub extern "C" fn rs_tv_dict_is_watched(d: DictHandle) -> c_int {
 // =============================================================================
 
 // VarType integer constants for use with nvim_tv_set_type.
+const VAR_UNKNOWN: c_int = VarType::Unknown as c_int;
 const VAR_LIST: c_int = VarType::List as c_int;
 const VAR_DICT: c_int = VarType::Dict as c_int;
 const VAR_NUMBER: c_int = VarType::Number as c_int;

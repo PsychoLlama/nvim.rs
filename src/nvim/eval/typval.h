@@ -525,6 +525,13 @@ extern void tv_list_extend(list_T *l1, list_T *l2, listitem_T *bef);
 extern int tv_list_concat(list_T *l1, list_T *l2, typval_T *tv);
 extern void f_has_key(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Phase 6c: range/slice/flatten/remove (migrated to Rust)
+extern listitem_T *tv_list_check_range_index_one(list_T *l, int *n1, bool quiet);
+extern int tv_list_check_range_index_two(list_T *l, int *n1, const listitem_T *li1, int *n2, bool quiet);
+extern int tv_list_slice_or_index(list_T *list, bool range, varnumber_T n1_arg, varnumber_T n2_arg, bool exclusive, typval_T *rettv, bool verbose);
+extern void tv_list_flatten(list_T *list, listitem_T *first, int64_t maxitems, int64_t maxdepth);
+extern void tv_list_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg);
+
 // List append functions (migrated to Rust, Phase 5)
 extern void tv_list_append(list_T *l, listitem_T *item);
 extern void tv_list_append_tv(list_T *l, typval_T *tv);

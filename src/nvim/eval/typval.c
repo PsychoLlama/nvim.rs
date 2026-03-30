@@ -260,51 +260,7 @@ tv_list_copy_error:
   return NULL;
 }
 
-/// Get the list item in "l" with index "n1".  "n1" is adjusted if needed.
-/// Return NULL if there is no such item.
-listitem_T *tv_list_check_range_index_one(list_T *const l, int *const n1, const bool quiet)
-{
-  listitem_T *li = tv_list_find_index(l, n1);
-  if (li != NULL) {
-    return li;
-  }
-
-  if (!quiet) {
-    semsg(_(e_list_index_out_of_range_nr), (int64_t)(*n1));
-  }
-  return NULL;
-}
-
-/// Check that "n2" can be used as the second index in a range of list "l".
-/// If "n1" or "n2" is negative it is changed to the positive index.
-/// "li1" is the item for item "n1".
-/// Return OK or FAIL.
-int tv_list_check_range_index_two(list_T *const l, int *const n1, const listitem_T *const li1,
-                                  int *const n2, const bool quiet)
-{
-  if (*n2 < 0) {
-    listitem_T *ni = tv_list_find(l, *n2);
-    if (ni == NULL) {
-      if (!quiet) {
-        semsg(_(e_list_index_out_of_range_nr), (int64_t)(*n2));
-      }
-      return FAIL;
-    }
-    *n2 = tv_list_idx_of_item(l, ni);
-  }
-
-  // Check that n2 isn't before n1.
-  if (*n1 < 0) {
-    *n1 = tv_list_idx_of_item(l, li1);
-  }
-  if (*n2 < *n1) {
-    if (!quiet) {
-      semsg(_(e_list_index_out_of_range_nr), (int64_t)(*n2));
-    }
-    return FAIL;
-  }
-  return OK;
-}
+// tv_list_check_range_index_one, tv_list_check_range_index_two migrated to Rust (Phase 6c)
 
 /// Assign values from list "src" into a range of "dest".
 /// "idx1_arg" is the index of the first item in "dest" to be replaced.
@@ -373,55 +329,7 @@ int tv_list_assign_range(list_T *const dest, list_T *const src, const int idx1_a
   return OK;
 }
 
-/// Flatten up to "maxitems" in "list", starting at "first" to depth "maxdepth".
-/// When "first" is NULL use the first item.
-/// Does nothing if "maxdepth" is 0.
-///
-/// @param[in,out] list   List to flatten
-/// @param[in] maxdepth   Maximum depth that will be flattened
-///
-/// @return OK or FAIL
-void tv_list_flatten(list_T *list, listitem_T *first, int64_t maxitems, int64_t maxdepth)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  listitem_T *item;
-  int done = 0;
-  if (maxdepth == 0) {
-    return;
-  }
-
-  if (first == NULL) {
-    item = list->lv_first;
-  } else {
-    item = first;
-  }
-
-  while (item != NULL && done < maxitems) {
-    listitem_T *next = item->li_next;
-
-    fast_breakcheck();
-    if (got_int) {
-      return;
-    }
-    if (item->li_tv.v_type == VAR_LIST) {
-      list_T *itemlist = item->li_tv.vval.v_list;
-
-      tv_list_drop_items(list, item, item);
-      tv_list_extend(list, itemlist, next);
-
-      if (maxdepth > 0) {
-        tv_list_flatten(list,
-                        item->li_prev == NULL ? list->lv_first : item->li_prev->li_next,
-                        itemlist->lv_len, maxdepth - 1);
-      }
-      tv_clear(&item->li_tv);
-      xfree(item);
-    }
-
-    done++;
-    item = next;
-  }
-}
+// tv_list_flatten migrated to Rust (Phase 6c)
 
 /// "items(list)" function
 /// Caller must have already checked that argvars[0] is a List.
@@ -470,63 +378,7 @@ static void tv_string2items(typval_T *argvars, typval_T *rettv)
 
 // tv_list_extend, tv_list_concat migrated to Rust (Phase 6)
 
-static list_T *tv_list_slice(list_T *ol, varnumber_T n1, varnumber_T n2)
-{
-  list_T *l = tv_list_alloc(n2 - n1 + 1);
-  listitem_T *item = tv_list_find(ol, (int)n1);
-  for (; n1 <= n2; n1++) {
-    tv_list_append_tv(l, TV_LIST_ITEM_TV(item));
-    item = TV_LIST_ITEM_NEXT(rettv->vval.v_list, item);
-  }
-  return l;
-}
-
-int tv_list_slice_or_index(list_T *list, bool range, varnumber_T n1_arg, varnumber_T n2_arg,
-                           bool exclusive, typval_T *rettv, bool verbose)
-{
-  int len = tv_list_len(rettv->vval.v_list);
-  varnumber_T n1 = n1_arg;
-  varnumber_T n2 = n2_arg;
-
-  if (n1 < 0) {
-    n1 = len + n1;
-  }
-  if (n1 < 0 || n1 >= len) {
-    // For a range we allow invalid values and return an empty list.
-    // A list index out of range is an error.
-    if (!range) {
-      if (verbose) {
-        semsg(_(e_list_index_out_of_range_nr), (int64_t)n1_arg);
-      }
-      return FAIL;
-    }
-    n1 = len;
-  }
-  if (range) {
-    if (n2 < 0) {
-      n2 = len + n2;
-    } else if (n2 >= len) {
-      n2 = len - (exclusive ? 0 : 1);
-    }
-    if (exclusive) {
-      n2--;
-    }
-    if (n2 < 0 || n2 + 1 < n1) {
-      n2 = -1;
-    }
-    list_T *l = tv_list_slice(rettv->vval.v_list, n1, n2);
-    tv_clear(rettv);
-    tv_list_set_ret(rettv, l);
-  } else {
-    // copy the item to "var1" to avoid that freeing the list makes it
-    // invalid.
-    typval_T var1;
-    tv_copy(TV_LIST_ITEM_TV(tv_list_find(rettv->vval.v_list, (int)n1)), &var1);
-    tv_clear(rettv);
-    *rettv = var1;
-  }
-  return OK;
-}
+// tv_list_slice, tv_list_slice_or_index migrated to Rust (Phase 6c)
 
 typedef struct {
   char *s;
@@ -672,59 +524,7 @@ void f_list2str(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_string = ga.ga_data;
 }
 
-/// "remove({list})" function
-void tv_list_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg)
-{
-  list_T *l;
-  bool error = false;
-
-  if (value_check_lock(tv_list_locked((l = argvars[0].vval.v_list)),
-                       arg_errmsg, TV_TRANSLATE)) {
-    return;
-  }
-
-  int64_t idx = tv_get_number_chk(&argvars[1], &error);
-
-  listitem_T *item;
-
-  if (error) {
-    // Type error: do nothing, errmsg already given.
-  } else if ((item = tv_list_find(l, (int)idx)) == NULL) {
-    semsg(_(e_list_index_out_of_range_nr), idx);
-  } else {
-    if (argvars[2].v_type == VAR_UNKNOWN) {
-      // Remove one item, return its value.
-      tv_list_drop_items(l, item, item);
-      *rettv = *TV_LIST_ITEM_TV(item);
-      xfree(item);
-    } else {
-      listitem_T *item2;
-      // Remove range of items, return list with values.
-      int64_t end = tv_get_number_chk(&argvars[2], &error);
-      if (error) {
-        // Type error: do nothing.
-      } else if ((item2 = tv_list_find(l, (int)end)) == NULL) {
-        semsg(_(e_list_index_out_of_range_nr), end);
-      } else {
-        int cnt = 0;
-
-        listitem_T *li;
-        for (li = item; li != NULL; li = TV_LIST_ITEM_NEXT(l, li)) {
-          cnt++;
-          if (li == item2) {
-            break;
-          }
-        }
-        if (li == NULL) {  // Didn't find "item2" after "item".
-          emsg(_(e_invrange));
-        } else {
-          tv_list_move_items(l, item, item2, tv_list_alloc_ret(rettv, cnt),
-                             cnt);
-        }
-      }
-    }
-  }
-}
+// tv_list_remove migrated to Rust (Phase 6c)
 
 static sortinfo_T *sortinfo = NULL;
 
@@ -3346,4 +3146,40 @@ list_T *nvim_list_copy_shallow(list_T *l)
 void nvim_tv_set_list_vval(typval_T *tv, list_T *l)
 {
   tv->vval.v_list = l;
+}
+
+// Phase 6c accessor functions for list slice/range/flatten/remove
+
+/// Set list as return value of typval (tv_list_set_ret) for Rust.
+/// Sets type to VAR_LIST, increments refcount.
+void nvim_tv_list_set_ret(typval_T *tv, list_T *l)
+{
+  tv_list_set_ret(tv, l);
+}
+
+/// Check if got_int is set (accessor for Rust).
+int nvim_got_int(void) { return got_int; }
+
+/// Call fast_breakcheck() (accessor for Rust).
+void nvim_fast_breakcheck(void) { fast_breakcheck(); }
+
+/// Emit e_invrange error (accessor for Rust).
+void nvim_emsg_invrange(void) { emsg(_(e_invrange)); }
+
+/// tv_list_slice_or_index index case: copy item[n1] into rettv (for Rust).
+/// Copies item TV to stack, clears rettv (freeing the list), then assigns.
+void nvim_tv_list_index_into_rettv(typval_T *rettv, listitem_T *item)
+{
+  typval_T var1;
+  tv_copy(TV_LIST_ITEM_TV(item), &var1);
+  tv_clear(rettv);
+  *rettv = var1;
+}
+
+/// tv_list_remove single-item case: move item's TV into rettv (for Rust).
+/// This is a bitwise move (no refcount change), then frees the listitem struct.
+void nvim_tv_listitem_move_to_rettv(typval_T *rettv, listitem_T *item)
+{
+  *rettv = *TV_LIST_ITEM_TV(item);
+  xfree(item);
 }
