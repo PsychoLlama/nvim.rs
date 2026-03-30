@@ -503,6 +503,15 @@ extern const char *tv_get_string_chk(const typval_T *tv);
 extern const char *tv_get_string(const typval_T *tv);
 extern const char *tv_get_string_buf(const typval_T *tv, char *buf);
 
+// List append functions (migrated to Rust, Phase 5)
+extern void tv_list_append(list_T *l, listitem_T *item);
+extern void tv_list_append_tv(list_T *l, typval_T *tv);
+extern void tv_list_append_list(list_T *l, list_T *itemlist);
+extern void tv_list_append_dict(list_T *l, dict_T *dict);
+extern void tv_list_append_string(list_T *l, const char *str, ssize_t len);
+extern void tv_list_append_allocated_string(list_T *l, char *str);
+extern void tv_list_append_number(list_T *l, varnumber_T n);
+
 // Dict item and dict alloc/add functions (migrated to Rust, Phase 3)
 extern dictitem_T *tv_dict_item_alloc_len(const char *key, size_t key_len);
 extern dictitem_T *tv_dict_item_alloc(const char *key);

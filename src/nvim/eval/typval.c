@@ -459,39 +459,7 @@ void tv_list_insert_tv(list_T *const l, typval_T *const tv, listitem_T *const it
   tv_list_insert(l, ni, item);
 }
 
-/// Append item to the end of list
-///
-/// @param[out]  l  List to append to.
-/// @param[in,out]  item  Item to append.
-void tv_list_append(list_T *const l, listitem_T *const item)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (l->lv_last == NULL) {
-    // empty list
-    l->lv_first = item;
-    l->lv_last = item;
-    item->li_prev = NULL;
-  } else {
-    l->lv_last->li_next = item;
-    item->li_prev = l->lv_last;
-    l->lv_last = item;
-  }
-  l->lv_len++;
-  item->li_next = NULL;
-}
-
-/// Append Vimscript value to the end of list
-///
-/// @param[out]  l  List to append to.
-/// @param[in,out]  tv  Value to append. Is copied (@see tv_copy()) to an
-///                     allocated listitem_T.
-void tv_list_append_tv(list_T *const l, typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  listitem_T *const li = tv_list_item_alloc();
-  tv_copy(tv, TV_LIST_ITEM_TV(li));
-  tv_list_append(l, li);
-}
+// tv_list_append, tv_list_append_tv migrated to Rust (Phase 5)
 
 /// Like tv_list_append_tv(), but tv is moved to a list
 ///
@@ -506,88 +474,8 @@ typval_T *tv_list_append_owned_tv(list_T *const l, typval_T tv)
   return TV_LIST_ITEM_TV(li);
 }
 
-/// Append a list to a list as one item
-///
-/// @param[out]  l  List to append to.
-/// @param[in,out]  itemlist  List to append. Reference count is increased.
-void tv_list_append_list(list_T *const l, list_T *const itemlist)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  tv_list_append_owned_tv(l, (typval_T) {
-    .v_type = VAR_LIST,
-    .v_lock = VAR_UNLOCKED,
-    .vval.v_list = itemlist,
-  });
-  tv_list_ref(itemlist);
-}
-
-/// Append a dictionary to a list
-///
-/// @param[out]  l  List to append to.
-/// @param[in,out]  dict  Dictionary to append. Reference count is increased.
-void tv_list_append_dict(list_T *const l, dict_T *const dict)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  tv_list_append_owned_tv(l, (typval_T) {
-    .v_type = VAR_DICT,
-    .v_lock = VAR_UNLOCKED,
-    .vval.v_dict = dict,
-  });
-  if (dict != NULL) {
-    dict->dv_refcount++;
-  }
-}
-
-/// Make a copy of "str" and append it as an item to list "l"
-///
-/// @param[out]  l  List to append to.
-/// @param[in]  str  String to append.
-/// @param[in]  len  Length of the appended string. May be -1, in this
-///                  case string is considered to be usual zero-terminated
-///                  string or NULL “empty” string.
-void tv_list_append_string(list_T *const l, const char *const str, const ssize_t len)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  tv_list_append_owned_tv(l, (typval_T) {
-    .v_type = VAR_STRING,
-    .v_lock = VAR_UNLOCKED,
-    .vval.v_string = (str == NULL
-                      ? NULL
-                      : (len >= 0
-                         ? xmemdupz(str, (size_t)len)
-                         : xstrdup(str))),
-  });
-}
-
-/// Append given string to the list
-///
-/// Unlike list_append_string this function does not copy the string.
-///
-/// @param[out]  l    List to append to.
-/// @param[in]   str  String to append.
-void tv_list_append_allocated_string(list_T *const l, char *const str)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  tv_list_append_owned_tv(l, (typval_T) {
-    .v_type = VAR_STRING,
-    .v_lock = VAR_UNLOCKED,
-    .vval.v_string = str,
-  });
-}
-
-/// Append number to the list
-///
-/// @param[out]  l  List to append to.
-/// @param[in]  n  Number to append. Will be recorded in the allocated
-///                listitem_T.
-void tv_list_append_number(list_T *const l, const varnumber_T n)
-{
-  tv_list_append_owned_tv(l, (typval_T) {
-    .v_type = VAR_NUMBER,
-    .v_lock = VAR_UNLOCKED,
-    .vval.v_number = n,
-  });
-}
+// tv_list_append_list, tv_list_append_dict, tv_list_append_string,
+// tv_list_append_allocated_string, tv_list_append_number migrated to Rust (Phase 5)
 
 //{{{2 Operations on the whole list
 
@@ -3161,6 +3049,40 @@ char *nvim_tv_alloc_string(typval_T *tv, size_t len)
 
 // List accessor functions for Rust
 
+/// Allocate a new list item (accessor for Rust, wraps static tv_list_item_alloc).
+listitem_T *nvim_list_item_alloc(void) { return xmalloc(sizeof(listitem_T)); }
+
+/// Increment lv_len on a list (accessor for Rust).
+void nvim_list_inc_len(list_T *l) { l->lv_len++; }
+
+/// Decrement lv_len on a list (accessor for Rust).
+void nvim_list_dec_len(list_T *l) { l->lv_len--; }
+
+/// Set lv_len on a list (accessor for Rust).
+void nvim_list_set_len(list_T *l, int len) { l->lv_len = len; }
+
+/// Clear a typval (tv_clear wrapper for Rust).
+void nvim_tv_clear(typval_T *tv) { tv_clear(tv); }
+
+/// Free a list item (xfree wrapper for Rust).
+void nvim_list_item_free(listitem_T *li) { xfree(li); }
+
+/// Append wrapper: tv_list_append (self-contained for Rust, avoids circular call).
+void nvim_tv_list_append_item(list_T *l, listitem_T *item)
+{
+  if (l->lv_last == NULL) {
+    l->lv_first = item;
+    l->lv_last = item;
+    item->li_prev = NULL;
+  } else {
+    l->lv_last->li_next = item;
+    item->li_prev = l->lv_last;
+    l->lv_last = item;
+  }
+  l->lv_len++;
+  item->li_next = NULL;
+}
+
 /// Get lv_len from a list (accessor for Rust).
 int nvim_list_get_len(const list_T *l) { return l->lv_len; }
 
@@ -3639,6 +3561,12 @@ void nvim_tv_set_bool(typval_T *tv, int val) { tv->vval.v_bool = (BoolVarValue)v
 
 /// Set dv_lock on a dict (accessor for Rust).
 void nvim_dict_set_lock(dict_T *d, int lock) { d->dv_lock = (VarLockStatus)lock; }
+
+/// Get lv_refcount from a list (accessor for Rust).
+int nvim_list_get_refcount(const list_T *l) { return l->lv_refcount; }
+
+/// Decrement lv_refcount from a list and return new value (accessor for Rust).
+int nvim_list_dec_refcount(list_T *l) { return --l->lv_refcount; }
 
 /// Remove a hash item for key from dict's hashtab (accessor for Rust).
 /// Only removes from hash, does NOT free the dictitem.

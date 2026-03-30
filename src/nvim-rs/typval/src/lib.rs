@@ -1174,6 +1174,10 @@ extern "C" {
     fn nvim_dict_remove_key(d: DictHandle, key: *const c_char);
     fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
     fn nvim_dictitem_get_key(di: DictItemHandle) -> *const c_char;
+
+    // Phase 5: list item alloc/append infrastructure
+    fn nvim_list_item_alloc() -> ListItemHandle;
+    fn nvim_tv_list_append_item(l: ListHandle, item: ListItemHandle);
 }
 
 // =============================================================================
@@ -1505,6 +1509,95 @@ fn tv_list_reverse_impl(l: ListHandle) {
 #[export_name = "tv_list_reverse"]
 pub extern "C" fn rs_tv_list_reverse(l: ListHandle) {
     tv_list_reverse_impl(l);
+}
+
+// =============================================================================
+// List append operations (Phase 5)
+// =============================================================================
+
+/// FFI export: tv_list_append - append item to end of list.
+#[export_name = "tv_list_append"]
+pub unsafe extern "C" fn rs_tv_list_append(l: ListHandle, item: ListItemHandle) {
+    unsafe { nvim_tv_list_append_item(l, item) };
+}
+
+/// FFI export: tv_list_append_tv - append a copy of typval to list.
+#[export_name = "tv_list_append_tv"]
+pub unsafe extern "C" fn rs_tv_list_append_tv(l: ListHandle, tv: TypevalHandle) {
+    let li = unsafe { nvim_list_item_alloc() };
+    let li_tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { nvim_tv_copy(tv, li_tv) };
+    unsafe { nvim_tv_list_append_item(l, li) };
+}
+
+/// FFI export: tv_list_append_list - append a list as one item.
+#[export_name = "tv_list_append_list"]
+pub unsafe extern "C" fn rs_tv_list_append_list(l: ListHandle, itemlist: ListHandle) {
+    let li = unsafe { nvim_list_item_alloc() };
+    let li_tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { nvim_tv_set_type(li_tv, VAR_LIST) };
+    unsafe { nvim_tv_set_lock(li_tv, VarLockStatus::Unlocked as c_int) };
+    unsafe { nvim_tv_set_list(li_tv, itemlist) };
+    unsafe { nvim_list_ref(itemlist) };
+    unsafe { nvim_tv_list_append_item(l, li) };
+}
+
+/// FFI export: tv_list_append_dict - append a dict as one item.
+#[export_name = "tv_list_append_dict"]
+pub unsafe extern "C" fn rs_tv_list_append_dict(l: ListHandle, dict: DictHandle) {
+    let li = unsafe { nvim_list_item_alloc() };
+    let li_tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { nvim_tv_set_type(li_tv, VAR_DICT) };
+    unsafe { nvim_tv_set_lock(li_tv, VarLockStatus::Unlocked as c_int) };
+    unsafe { nvim_tv_set_dict(li_tv, dict) };
+    if !dict.is_null() {
+        unsafe { nvim_dict_inc_refcount(dict) };
+    }
+    unsafe { nvim_tv_list_append_item(l, li) };
+}
+
+/// FFI export: tv_list_append_string - append a copy of string to list.
+#[export_name = "tv_list_append_string"]
+pub unsafe extern "C" fn rs_tv_list_append_string(
+    l: ListHandle,
+    str_ptr: *const c_char,
+    len: isize,
+) {
+    let s: *mut c_char = if str_ptr.is_null() {
+        std::ptr::null_mut()
+    } else if len >= 0 {
+        unsafe { nvim_xmemdupz(str_ptr, len as usize) }
+    } else {
+        unsafe { nvim_xstrdup(str_ptr) }
+    };
+    let li = unsafe { nvim_list_item_alloc() };
+    let li_tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { nvim_tv_set_type(li_tv, VAR_STRING) };
+    unsafe { nvim_tv_set_lock(li_tv, VarLockStatus::Unlocked as c_int) };
+    unsafe { nvim_tv_set_string(li_tv, s) };
+    unsafe { nvim_tv_list_append_item(l, li) };
+}
+
+/// FFI export: tv_list_append_allocated_string - append owned string to list.
+#[export_name = "tv_list_append_allocated_string"]
+pub unsafe extern "C" fn rs_tv_list_append_allocated_string(l: ListHandle, str_ptr: *mut c_char) {
+    let li = unsafe { nvim_list_item_alloc() };
+    let li_tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { nvim_tv_set_type(li_tv, VAR_STRING) };
+    unsafe { nvim_tv_set_lock(li_tv, VarLockStatus::Unlocked as c_int) };
+    unsafe { nvim_tv_set_string(li_tv, str_ptr) };
+    unsafe { nvim_tv_list_append_item(l, li) };
+}
+
+/// FFI export: tv_list_append_number - append number to list.
+#[export_name = "tv_list_append_number"]
+pub unsafe extern "C" fn rs_tv_list_append_number(l: ListHandle, n: i64) {
+    let li = unsafe { nvim_list_item_alloc() };
+    let li_tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { nvim_tv_set_type(li_tv, VAR_NUMBER) };
+    unsafe { nvim_tv_set_lock(li_tv, VarLockStatus::Unlocked as c_int) };
+    unsafe { nvim_tv_set_number(li_tv, n) };
+    unsafe { nvim_tv_list_append_item(l, li) };
 }
 
 // =============================================================================
