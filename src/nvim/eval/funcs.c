@@ -4454,60 +4454,14 @@ void nvim_eval_set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 }
 
 // Full-body wrappers for copy/deepcopy
-void nvim_eval_copy(typval_T *argvars, typval_T *rettv) { var_item_copy(NULL, &argvars[0], rettv, false, 0); }
-void nvim_eval_deepcopy(typval_T *argvars, typval_T *rettv)
-{
-  if (tv_check_for_opt_bool_arg(argvars, 1) == FAIL) {
-    return;
-  }
-  varnumber_T noref = 0;
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    noref = tv_get_bool_chk(&argvars[1], NULL);
-  }
-  var_item_copy(NULL, &argvars[0], rettv, true, (noref == 0 ? rs_get_copyID() : 0));
-}
+// nvim_eval_copy: inlined into Rust (misc.rs) — direct var_item_copy() call
+// nvim_eval_deepcopy: inlined into Rust (misc.rs) — direct var_item_copy() call
 
 // nvim_eval_ctx_size: inlined into Rust (misc.rs) via nvim_eval_ctx_size_impl shim
 // nvim_eval_ctxpop: inlined into Rust (misc.rs) via nvim_eval_ctxpop_impl shim
 // nvim_eval_char2nr: inlined into Rust (misc.rs) — direct utf_ptr2char() call
-void nvim_eval_nr2char(typval_T *argvars, typval_T *rettv)
-{
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    if (!tv_check_num(&argvars[1])) {
-      return;
-    }
-  }
-  bool error = false;
-  const varnumber_T num = tv_get_number_chk(&argvars[0], &error);
-  if (error) {
-    return;
-  }
-  if (num < 0) {
-    emsg(_("E5070: Character number must not be less than zero"));
-    return;
-  }
-  if (num > INT_MAX) {
-    semsg(_("E5071: Character number must not be greater than INT_MAX (%i)"), INT_MAX);
-    return;
-  }
-  char buf[MB_MAXCHAR];
-  const int len = utf_char2bytes((int)num, buf);
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xmemdupz(buf, (size_t)len);
-}
-void nvim_eval_str2float(typval_T *argvars, typval_T *rettv)
-{
-  char *p = skipwhite(tv_get_string(&argvars[0]));
-  bool isneg = (*p == '-');
-  if (*p == '+' || *p == '-') {
-    p = skipwhite(p + 1);
-  }
-  rs_string2float(p, &rettv->vval.v_float);
-  if (isneg) {
-    rettv->vval.v_float *= -1;
-  }
-  rettv->v_type = VAR_FLOAT;
-}
+// nvim_eval_nr2char: inlined into Rust (misc.rs) — utf_char2bytes delegation
+// nvim_eval_str2float: inlined into Rust (misc.rs) — rs_string2float delegation
 // nvim_eval_escape: inlined into Rust (misc.rs) — direct vim_strsave_escaped() call
 // nvim_eval_shellescape: inlined into Rust (misc.rs) — direct vim_strsave_shellescape() call
 // nvim_eval_fnameescape: inlined into Rust (misc.rs) — direct vim_strsave_fnameescape() call
@@ -4854,14 +4808,7 @@ void nvim_eval_line2byte(typval_T *argvars, typval_T *rettv)
   }
 }
 
-void nvim_eval_gettext(typval_T *argvars, typval_T *rettv)
-{
-  if (tv_check_for_nonempty_string_arg(argvars, 0) == FAIL) {
-    return;
-  }
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xstrdup(_(argvars[0].vval.v_string));
-}
+// nvim_eval_gettext: inlined into Rust (simple.rs) — gettext() delegation
 
 // nvim_eval_garbagecollect: inlined into Rust (simple.rs)
 // nvim_eval_debugbreak: inlined into Rust (simple.rs)

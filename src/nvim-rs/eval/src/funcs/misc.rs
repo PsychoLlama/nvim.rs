@@ -357,10 +357,6 @@ pub unsafe extern "C" fn rs_f_getpos(
 
 extern "C" {
     // Still-delegated C accessors
-    fn nvim_eval_nr2char(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_str2float(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_copy(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_deepcopy(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_max_min(argvars: *const c_void, rettv: *mut c_void, domax: bool);
     fn nvim_eval_set_position(argvars: *const c_void, rettv: *mut c_void, charpos: bool);
     fn nvim_eval_set_cursorpos(argvars: *const c_void, rettv: *mut c_void, charcol: bool);
@@ -377,6 +373,24 @@ extern "C" {
     fn vim_strsave_escaped(string: *const u8, esc_chars: *const u8) -> *mut u8;
     fn vim_strsave_shellescape(string: *const u8, do_special: bool, do_newline: bool) -> *mut u8;
     fn vim_strsave_fnameescape(fname: *const u8, what: c_int) -> *mut u8;
+
+    // Phase 3 inlining: nr2char, str2float, copy, deepcopy, gettext
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn xmemdupz(data: *const c_void, len: usize) -> *mut c_char;
+    fn gettext(msgid: *const c_char) -> *const c_char;
+    #[link_name = "skipwhite"]
+    fn p3_misc_skipwhite(p: *const c_char) -> *const c_char;
+    fn var_item_copy(
+        ht: *const c_void,
+        from: *const c_void,
+        to: *mut c_void,
+        deep: bool,
+        copyid: c_int,
+    ) -> c_int;
+    fn tv_check_for_opt_bool_arg(argvars: *const c_void, idx: c_int) -> c_int;
+    fn tv_get_bool_chk(tv: *const c_void, error: *mut bool) -> i64;
+    #[link_name = "nvim_tv_get_number_chk"]
+    fn p3_misc_tv_get_number_chk(tv: *const c_void, error: *mut bool) -> i64;
 
     // typval string get: returns *const u8 (matches dispatch.rs convention)
     #[link_name = "nvim_tv_get_type"]
@@ -457,7 +471,36 @@ pub unsafe extern "C" fn rs_f_nr2char(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_nr2char(argvars, rettv);
+    // nvim_eval_nr2char: inlined — utf_char2bytes delegation
+    let arg1 = arg_at_p2(argvars, 1);
+    if p3_misc_tv_get_type(arg1) != VAR_UNKNOWN_P2M && !tv_check_num(arg1) {
+        return;
+    }
+    let mut error = false;
+    let num = p3_misc_tv_get_number_chk(argvars, &raw mut error);
+    if error {
+        return;
+    }
+    if num < 0 {
+        let _ = p3_misc_emsg(gettext(
+            c"E5070: Character number must not be less than zero".as_ptr(),
+        ));
+        return;
+    }
+    if num > i64::from(c_int::MAX) {
+        let _ = p3_semsg(
+            gettext(c"E5071: Character number must not be greater than INT_MAX (%i)".as_ptr()),
+            c_int::MAX,
+        );
+        return;
+    }
+    // MB_MAXCHAR = 6 (max UTF-8 bytes per character)
+    let mut buf = [0u8; 6];
+    #[allow(clippy::cast_possible_truncation)]
+    let len = utf_char2bytes(num as c_int, buf.as_mut_ptr().cast::<c_char>());
+    #[allow(clippy::cast_sign_loss)]
+    let dup = xmemdupz(buf.as_ptr().cast::<c_void>(), len as usize);
+    p3_misc_tv_set_string(rettv, dup.cast::<u8>());
 }
 
 /// "str2float()" function - convert string to float
@@ -470,7 +513,26 @@ pub unsafe extern "C" fn rs_f_str2float(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_str2float(argvars, rettv);
+    // nvim_eval_str2float: inlined — rs_string2float delegation
+    let raw = p3_misc_tv_get_string_ptr(argvars).cast::<c_char>();
+    let p = p3_misc_skipwhite(raw);
+    #[allow(clippy::cast_possible_wrap)]
+    let minus: c_char = b'-' as c_char;
+    #[allow(clippy::cast_possible_wrap)]
+    let plus: c_char = b'+' as c_char;
+    let isneg = !p.is_null() && *p == minus;
+    // advance past +/-
+    let p = if !p.is_null() && (*p == plus || *p == minus) {
+        p3_misc_skipwhite(p.add(1))
+    } else {
+        p
+    };
+    let mut fval: f64 = 0.0;
+    crate::strutil::rs_string2float(p, &raw mut fval);
+    if isneg {
+        fval = -fval;
+    }
+    p2_nvim_tv_set_float(rettv, fval);
 }
 
 /// "escape()" function - escape special characters in string
@@ -587,7 +649,8 @@ pub unsafe extern "C" fn rs_f_empty(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_copy"]
 pub unsafe extern "C" fn rs_f_copy(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
-    nvim_eval_copy(argvars, rettv);
+    // nvim_eval_copy: inlined — var_item_copy delegation
+    var_item_copy(std::ptr::null(), argvars, rettv, false, 0);
 }
 
 /// "deepcopy()" function - deep copy a value
@@ -600,7 +663,23 @@ pub unsafe extern "C" fn rs_f_deepcopy(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_deepcopy(argvars, rettv);
+    // nvim_eval_deepcopy: inlined — var_item_copy delegation
+    if tv_check_for_opt_bool_arg(argvars, 1) == 0 {
+        // FAIL
+        return;
+    }
+    let noref = if p3_misc_tv_get_type(arg_at_p2(argvars, 1)) == VAR_UNKNOWN_P2M {
+        0
+    } else {
+        let mut error = false;
+        tv_get_bool_chk(arg_at_p2(argvars, 1), &raw mut error)
+    };
+    let copyid = if noref == 0 {
+        crate::rs_get_copyID()
+    } else {
+        0
+    };
+    var_item_copy(std::ptr::null(), argvars, rettv, true, copyid);
 }
 
 /// "len()" function - length of string/list/dict/blob

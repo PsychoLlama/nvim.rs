@@ -18,7 +18,7 @@ extern "C" {
     fn nvim_eval_api_info(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_byte2line(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_line2byte(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_gettext(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_gettext: inlined into rs_f_gettext below
     fn nvim_eval_keytrans(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_luaeval(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_pum_getpos(argvars: *const c_void, rettv: *mut c_void);
@@ -78,6 +78,11 @@ extern "C" {
 
     // set_special_null for getenv
     fn nvim_tv_set_special_null(tv: *mut c_void);
+
+    // gettext: translate a string (gettext() / _() macro)
+    fn gettext(msgid: *const c_char) -> *const c_char;
+    // tv_check_for_nonempty_string_arg: validate arg is non-empty string
+    fn tv_check_for_nonempty_string_arg(argvars: *const c_void, idx: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -133,7 +138,15 @@ pub unsafe extern "C" fn rs_f_gettext(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_gettext(argvars, rettv);
+    // nvim_eval_gettext: inlined — gettext delegation
+    const FAIL: c_int = 0;
+    if tv_check_for_nonempty_string_arg(argvars, 0) == FAIL {
+        return;
+    }
+    let s = nvim_tv_get_string_ptr(argvars);
+    let translated = gettext(s.cast::<c_char>());
+    let copy = xstrdup(translated);
+    nvim_tv_set_string(rettv, copy.cast::<u8>());
 }
 
 /// "garbagecollect([atexit])" function - trigger garbage collection
