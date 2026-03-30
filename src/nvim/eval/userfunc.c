@@ -70,6 +70,15 @@ extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stac
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 
+// Phase 1: Function Listing (implemented in Rust userfunc/src/listing.rs)
+extern const char *rs_printable_func_name(ufunc_T *fp);
+extern int rs_cat_func_name(char *buf, size_t bufsize, ufunc_T *fp);
+extern int rs_function_list_modified(int prev_ht_changed);
+extern int rs_list_func_head(ufunc_T *fp, int indent, int force);
+extern void rs_list_functions(void);
+extern char *rs_list_functions_matching_pat(exarg_T *eap);
+extern ufunc_T *rs_list_one_function(exarg_T *eap, const char *name, char *p);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -730,18 +739,7 @@ ufunc_T *find_func(const char *name)
 /// Takes care of script-local function names.
 static int cat_func_name(char *buf, size_t bufsize, ufunc_T *fp)
 {
-  int len = -1;
-  size_t uflen = fp->uf_namelen;
-  assert(uflen > 0);
-
-  if ((uint8_t)fp->uf_name[0] == K_SPECIAL && uflen > 3) {
-    len = snprintf(buf, bufsize, "<SNR>%s", fp->uf_name + 3);
-  } else {
-    len = snprintf(buf, bufsize, "%s", fp->uf_name);
-  }
-
-  assert(len > 0);
-  return (len >= (int)bufsize) ? (int)bufsize - 1 : len;
+  return rs_cat_func_name(buf, bufsize, fp);
 }
 
 /// Add a number variable "name" to dict "dp" with value "nr".
@@ -1868,17 +1866,13 @@ int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
   return ret;
 }
 
-char *printable_func_name(ufunc_T *fp) { return fp->uf_name_exp != NULL ? fp->uf_name_exp : fp->uf_name; }
+char *printable_func_name(ufunc_T *fp) { return (char *)rs_printable_func_name(fp); }
 
 /// When "prev_ht_changed" does not equal "ht_changed" give an error and return
 /// true.  Otherwise return false.
 static int function_list_modified(const int prev_ht_changed)
 {
-  if (prev_ht_changed != func_hashtab.ht_changed) {
-    emsg(_(e_function_list_was_modified));
-    return true;
-  }
-  return false;
+  return rs_function_list_modified(prev_ht_changed);
 }
 
 /// List the head of the function: "name(arg1, arg2)".
@@ -1888,62 +1882,8 @@ static int function_list_modified(const int prev_ht_changed)
 /// @param[in]  force   Include bang "!" (i.e.: "function!").
 static int list_func_head(ufunc_T *fp, bool indent, bool force)
 {
-  const int prev_ht_changed = func_hashtab.ht_changed;
-
-  msg_start();
-
-  // a callback at the more prompt may have deleted the function
-  if (function_list_modified(prev_ht_changed)) {
-    return FAIL;
-  }
-
-  if (indent) {
-    msg_puts("   ");
-  }
-  msg_puts(force ? "function! " : "function ");
-  if (fp->uf_name_exp != NULL) {
-    msg_puts(fp->uf_name_exp);
-  } else {
-    msg_puts(fp->uf_name);
-  }
-  msg_putchar('(');
-  int j;
-  for (j = 0; j < fp->uf_args.ga_len; j++) {
-    if (j) {
-      msg_puts(", ");
-    }
-    msg_puts(FUNCARG(fp, j));
-    if (j >= fp->uf_args.ga_len - fp->uf_def_args.ga_len) {
-      msg_puts(" = ");
-      msg_puts(((char **)(fp->uf_def_args.ga_data))
-               [j - fp->uf_args.ga_len + fp->uf_def_args.ga_len]);
-    }
-  }
-  if (fp->uf_varargs) {
-    if (j) {
-      msg_puts(", ");
-    }
-    msg_puts("...");
-  }
-  msg_putchar(')');
-  if (fp->uf_flags & FC_ABORT) {
-    msg_puts(" abort");
-  }
-  if (fp->uf_flags & FC_RANGE) {
-    msg_puts(" range");
-  }
-  if (fp->uf_flags & FC_DICT) {
-    msg_puts(" dict");
-  }
-  if (fp->uf_flags & FC_CLOSURE) {
-    msg_puts(" closure");
-  }
-  msg_clr_eos();
-  if (p_verbose > 0) {
-    last_set_msg(fp->uf_script_ctx);
-  }
-
-  return OK;
+  int result = rs_list_func_head(fp, indent ? 1 : 0, force ? 1 : 0);
+  return result != 0 ? FAIL : OK;
 }
 
 /// Get a function name, translating "<SID>" and "<SNR>".
@@ -2219,24 +2159,28 @@ char *save_function_name(char **name, bool skip, int flags, funcdict_T *fudi)
 ///                  Otherwise functions matching "regmatch".
 static void list_functions(regmatch_T *regmatch)
 {
-  const int prev_ht_changed = func_hashtab.ht_changed;
-  size_t todo = func_hashtab.ht_used;
-  const hashitem_T *const ht_array = func_hashtab.ht_array;
+  if (regmatch == NULL) {
+    rs_list_functions();
+  } else {
+    // For pattern-based listing, use Rust via the hash iteration callback
+    // but we need to pass regmatch -- call list_functions_matching_pat path
+    // which uses C's regmatch. Iterate directly here with C regmatch.
+    const int prev_ht_changed = func_hashtab.ht_changed;
+    size_t todo = func_hashtab.ht_used;
+    const hashitem_T *const ht_array = func_hashtab.ht_array;
 
-  for (const hashitem_T *hi = ht_array; todo > 0 && !got_int; hi++) {
-    if (!HASHITEM_EMPTY(hi)) {
-      ufunc_T *fp = HI2UF(hi);
-      todo--;
-      if (regmatch == NULL
-          ? (!message_filtered(fp->uf_name)
-             && !func_name_refcount(fp->uf_name))
-          : (!isdigit((uint8_t)(*fp->uf_name))
-             && vim_regexec(regmatch, fp->uf_name, 0))) {
-        if (list_func_head(fp, false, false) == FAIL) {
-          return;
-        }
-        if (function_list_modified(prev_ht_changed)) {
-          return;
+    for (const hashitem_T *hi = ht_array; todo > 0 && !got_int; hi++) {
+      if (!HASHITEM_EMPTY(hi)) {
+        ufunc_T *fp = HI2UF(hi);
+        todo--;
+        if (!isdigit((uint8_t)(*fp->uf_name))
+            && vim_regexec(regmatch, fp->uf_name, 0)) {
+          if (list_func_head(fp, false, false) == FAIL) {
+            return;
+          }
+          if (function_list_modified(prev_ht_changed)) {
+            return;
+          }
         }
       }
     }
@@ -2246,25 +2190,7 @@ static void list_functions(regmatch_T *regmatch)
 /// ":function /pat": list functions matching pattern.
 static char *list_functions_matching_pat(exarg_T *eap)
 {
-  char *p = skip_regexp(eap->arg + 1, '/', true);
-  if (!eap->skip) {
-    regmatch_T regmatch;
-
-    char c = *p;
-    *p = NUL;
-    regmatch.regprog = vim_regcomp(eap->arg + 1, RE_MAGIC);
-    *p = c;
-    if (regmatch.regprog != NULL) {
-      regmatch.rm_ic = p_ic;
-      list_functions(&regmatch);
-      vim_regfree(regmatch.regprog);
-    }
-  }
-  if (*p == '/') {
-    p++;
-  }
-
-  return p;
+  return rs_list_functions_matching_pat(eap);
 }
 
 /// List function "name".
@@ -2274,65 +2200,7 @@ static char *list_functions_matching_pat(exarg_T *eap)
 /// Returns the function pointer or NULL on failure.
 static ufunc_T *list_one_function(exarg_T *eap, char *name, char *p)
 {
-  if (!ends_excmd(*skipwhite(p))) {
-    semsg(_(e_trailing_arg), p);
-    return NULL;
-  }
-
-  eap->nextcmd = check_nextcmd(p);
-
-  if (eap->nextcmd != NULL) {
-    *p = NUL;
-  }
-
-  if (eap->skip || got_int) {
-    return NULL;
-  }
-
-  ufunc_T *fp = find_func(name);
-
-  if (fp == NULL) {
-    emsg_funcname(N_("E123: Undefined function: %s"), name);
-    return NULL;
-  }
-
-  // Check no function was added or removed from a callback, e.g. at
-  // the more prompt.  "fp" may then be invalid.
-  const int prev_ht_changed = func_hashtab.ht_changed;
-
-  if (list_func_head(fp, !eap->forceit, eap->forceit) != OK) {
-    return fp;
-  }
-
-  for (int j = 0; j < fp->uf_lines.ga_len && !got_int; j++) {
-    if (FUNCLINE(fp, j) == NULL) {
-      continue;
-    }
-    msg_putchar('\n');
-    if (!eap->forceit) {
-      msg_outnum(j + 1);
-      if (j < 9) {
-        msg_putchar(' ');
-      }
-      if (j < 99) {
-        msg_putchar(' ');
-      }
-      if (function_list_modified(prev_ht_changed)) {
-        break;
-      }
-    }
-    msg_prt_line(FUNCLINE(fp, j), false);
-    line_breakcheck();  // show multiple lines at a time!
-  }
-
-  if (!got_int) {
-    msg_putchar('\n');
-    if (!function_list_modified(prev_ht_changed)) {
-      msg_puts(eap->forceit ? "endfunction" : "   endfunction");
-    }
-  }
-
-  return fp;
+  return rs_list_one_function(eap, name, p);
 }
 
 #define MAX_FUNC_NESTING 50
@@ -4290,3 +4158,103 @@ void nvim_fc_set_prof_child(funccall_T *fc, proftime_T val) { fc->fc_prof_child 
 proftime_T nvim_ufunc_get_tm_children(const ufunc_T *fp) { return fp->uf_tm_children; }
 
 void nvim_ufunc_set_tm_children(ufunc_T *fp, proftime_T val) { fp->uf_tm_children = val; }
+
+// Phase 1: Function Listing Accessors
+// (nvim_ufunc_get_name and nvim_ufunc_get_name_exp already exist in runtime_ffi.c)
+
+size_t nvim_ufunc_get_namelen(const ufunc_T *fp) { return fp ? fp->uf_namelen : 0; }
+
+int nvim_ufunc_get_args_len(const ufunc_T *fp)
+{
+  return fp ? fp->uf_args.ga_len : 0;
+}
+
+const char *nvim_ufunc_get_arg(const ufunc_T *fp, int i)
+{
+  if (fp == NULL || i < 0 || i >= fp->uf_args.ga_len) {
+    return NULL;
+  }
+  return ((char **)(fp->uf_args.ga_data))[i];
+}
+
+int nvim_ufunc_get_def_args_len(const ufunc_T *fp)
+{
+  return fp ? fp->uf_def_args.ga_len : 0;
+}
+
+const char *nvim_ufunc_get_def_arg(const ufunc_T *fp, int i)
+{
+  if (fp == NULL || i < 0 || i >= fp->uf_def_args.ga_len) {
+    return NULL;
+  }
+  return ((char **)(fp->uf_def_args.ga_data))[i];
+}
+
+int nvim_ufunc_get_varargs(const ufunc_T *fp) { return fp ? fp->uf_varargs : 0; }
+
+sctx_T nvim_ufunc_get_script_ctx(const ufunc_T *fp)
+{
+  if (fp == NULL) {
+    sctx_T empty = { 0, 0, 0, 0 };
+    return empty;
+  }
+  return fp->uf_script_ctx;
+}
+
+const char *nvim_ufunc_get_funcline(const ufunc_T *fp, int i)
+{
+  if (fp == NULL || i < 0 || i >= fp->uf_lines.ga_len) {
+    return NULL;
+  }
+  return FUNCLINE(fp, i);
+}
+
+size_t nvim_func_ht_used(void) { return func_hashtab.ht_used; }
+
+const hashitem_T *nvim_func_ht_array(void) { return func_hashtab.ht_array; }
+
+int nvim_func_ht_changed(void) { return func_hashtab.ht_changed; }
+
+int nvim_ufunc_name_refcount(const char *name)
+{
+  return func_name_refcount(name) ? 1 : 0;
+}
+
+ufunc_T *nvim_func_hi_to_uf(const hashitem_T *hi)
+{
+  if (hi == NULL) {
+    return NULL;
+  }
+  return HI2UF(hi);
+}
+
+void nvim_func_ht_foreach(void (*cb)(ufunc_T *fp, void *ctx), void *ctx)
+{
+  size_t todo = func_hashtab.ht_used;
+  for (const hashitem_T *hi = func_hashtab.ht_array; todo > 0; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      cb(HI2UF(hi), ctx);
+      todo--;
+    }
+  }
+}
+
+/// List functions matching regexp pattern string (for rs_list_functions_matching_pat).
+void nvim_list_functions_matching_pat(const char *pat, bool ic)
+{
+  regmatch_T regmatch;
+  regmatch.regprog = vim_regcomp(pat, RE_MAGIC);
+  if (regmatch.regprog != NULL) {
+    regmatch.rm_ic = ic;
+    list_functions(&regmatch);
+    vim_regfree(regmatch.regprog);
+  }
+}
+
+// exarg_T field accessors: nvim_eap_get_arg, nvim_eap_get_skip, nvim_eap_get_forceit,
+// nvim_eap_set_nextcmd already defined in ex_docmd.c and indent_ffi.c.
+
+// Translated error messages for Rust (emsg wrappers with _(...)  gettext)
+void nvim_emsg_function_list_modified(void) { emsg(_(e_function_list_was_modified)); }
+void nvim_emsg_undefined_function(const char *name) { emsg_funcname(N_("E123: Undefined function: %s"), name); }
+void nvim_emsg_trailing_arg(const char *name) { semsg(_(e_trailing_arg), name); }

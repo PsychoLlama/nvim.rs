@@ -25,12 +25,14 @@
 pub mod call;
 pub mod closure;
 pub mod funcref;
+pub mod listing;
 pub mod params;
 pub mod types;
 
 pub use call::*;
 pub use closure::*;
 pub use funcref::*;
+pub use listing::*;
 pub use params::*;
 pub use types::*;
 
