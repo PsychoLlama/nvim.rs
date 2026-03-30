@@ -79,6 +79,16 @@ extern void rs_list_functions(void);
 extern char *rs_list_functions_matching_pat(exarg_T *eap);
 extern ufunc_T *rs_list_one_function(exarg_T *eap, const char *name, char *p);
 
+// Phase 2: Function Name Translation (implemented in Rust userfunc/src/names.rs)
+extern int rs_eval_fname_script(const char *p);
+extern char *rs_fname_trans_sid(const char *name, char *fname_buf, char **tofree, int *error);
+extern int rs_func_name_refcount(const char *name);
+extern int rs_builtin_function(const char *name, int len);
+extern int rs_translated_function_exists(const char *name);
+extern int rs_function_exists(const char *name, int no_deref);
+extern char *rs_get_scriptlocal_funcname(char *funcname);
+extern char *rs_save_function_name(char **name, int skip, int flags, funcdict_T *fudi);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -619,10 +629,6 @@ int get_func_tv(const char *name, int len, typval_T *rettv, char **arg, evalarg_
 ///
 /// @warning Only works for names previously checked by eval_fname_script(), if
 ///          it returned non-zero.
-///
-/// @param[in]  name  Name to check.
-///
-/// @return true if it starts with <SID> or s:, false otherwise.
 static inline bool eval_fname_sid(const char *const name)
   FUNC_ATTR_PURE FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_WARN_UNUSED_RESULT
   FUNC_ATTR_NONNULL_ALL
@@ -630,58 +636,13 @@ static inline bool eval_fname_sid(const char *const name)
   return *name == 's' || TOUPPER_ASC(name[2]) == 'I';
 }
 
-/// In a script transform script-local names into actually used names
-///
-/// Transforms "<SID>" and "s:" prefixes to `K_SNR {N}` (e.g. K_SNR "123") and
-/// "<SNR>" prefix to `K_SNR`. Uses `fname_buf` buffer that is supposed to have
-/// #FLEN_FIXED + 1 length when it fits, otherwise it allocates memory.
-///
-/// @param[in]  name  Name to transform.
-/// @param  fname_buf  Buffer to save resulting function name to, if it fits.
-///                    Must have at least #FLEN_FIXED + 1 length.
-/// @param[out]  tofree  Location where pointer to an allocated memory is saved
-///                      in case result does not fit into fname_buf.
-/// @param[out]  error  Location where error type is saved, @see
-///                     FnameTransError.
-///
-/// @return transformed name: either `fname_buf` or a pointer to an allocated
-///         memory.
+/// In a script transform script-local names into actually used names.
+/// Thin wrapper — logic lives in Rust (names.rs).
 static char *fname_trans_sid(const char *const name, char *const fname_buf, char **const tofree,
                              int *const error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  const char *script_name = name + eval_fname_script(name);
-  if (script_name == name) {
-    return (char *)name;  // no prefix
-  }
-
-  fname_buf[0] = (char)K_SPECIAL;
-  fname_buf[1] = (char)KS_EXTRA;
-  fname_buf[2] = KE_SNR;
-  size_t fname_buflen = 3;
-  if (!eval_fname_sid(name)) {  // "<SID>" or "s:"
-    fname_buf[fname_buflen] = NUL;
-  } else {
-    if (current_sctx.sc_sid <= 0) {
-      *error = FCERR_SCRIPT;
-    } else {
-      fname_buflen += (size_t)snprintf(fname_buf + fname_buflen,
-                                       FLEN_FIXED + 1 - fname_buflen,
-                                       "%" PRIdSCID "_",
-                                       current_sctx.sc_sid);
-    }
-  }
-  size_t fnamelen = fname_buflen + strlen(script_name);
-  char *fname;
-  if (fnamelen < FLEN_FIXED) {
-    STRCPY(fname_buf + fname_buflen, script_name);
-    fname = fname_buf;
-  } else {
-    fname = xmalloc(fnamelen + 1);
-    *tofree = fname;
-    snprintf(fname, fnamelen + 1, "%s%s", fname_buf, script_name);
-  }
-  return fname;
+  return rs_fname_trans_sid(name, fname_buf, tofree, error);
 }
 
 int get_func_arity(const char *name, int *required, int *optional, bool *varargs)
@@ -1373,7 +1334,7 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
 /// For the first we only count the name stored in func_hashtab as a reference,
 /// using function() does not count as a reference, because the function is
 /// looked up by name.
-static bool func_name_refcount(const char *name) { return isdigit((uint8_t)(*name)) || *name == '<'; }
+static bool func_name_refcount(const char *name) { return rs_func_name_refcount(name) != 0; }
 
 /// Check the argument count for user function "fp".
 /// @return  FCERR_UNKNOWN if OK, FCERR_TOOFEW or FCERR_TOOMANY otherwise.
@@ -1515,23 +1476,10 @@ void free_all_functions(void)
 #endif
 
 /// Checks if a builtin function with the given name exists.
-///
-/// @param[in]   name   name of the builtin function to check.
-/// @param[in]   len    length of "name", or -1 for NUL terminated.
-///
-/// @return true if "name" looks like a builtin function name: starts with a
-/// lower case letter and doesn't contain AUTOLOAD_CHAR or ':'.
+/// Thin wrapper — logic lives in Rust (names.rs).
 static bool builtin_function(const char *name, int len)
 {
-  if (!ASCII_ISLOWER(name[0]) || name[1] == ':') {
-    return false;
-  }
-
-  const char *p = (len == -1
-                   ? strchr(name, AUTOLOAD_CHAR)
-                   : memchr(name, AUTOLOAD_CHAR, (size_t)len));
-
-  return p == NULL;
+  return rs_builtin_function(name, len) != 0;
 }
 
 int func_call(char *name, typval_T *args, partial_T *partial, dict_T *selfdict, typval_T *rettv)
@@ -2098,59 +2046,18 @@ theend:
   return name;
 }
 
-/// If the "funcname" starts with "s:" or "<SID>", then expands it to the
-/// current script ID and returns the expanded function name. The caller should
-/// free the returned name. If not called from a script context or the function
-/// name doesn't start with these prefixes, then returns NULL.
-/// This doesn't check whether the script-local function exists or not.
+/// If the "funcname" starts with "s:" or "<SID>", expands it to the current
+/// script ID. Thin wrapper — logic lives in Rust (names.rs).
 char *get_scriptlocal_funcname(char *funcname)
 {
-  if (funcname == NULL) {
-    return NULL;
-  }
-
-  if (strncmp(funcname, "s:", 2) != 0
-      && strncmp(funcname, "<SID>", 5) != 0) {
-    // The function name does not have a script-local prefix.
-    return NULL;
-  }
-
-  if (!SCRIPT_ID_VALID(current_sctx.sc_sid)) {
-    emsg(_(e_usingsid));
-    return NULL;
-  }
-
-  char sid_buf[25];
-  // Expand s: and <SID> prefix into <SNR>nr_<name>
-  size_t sid_buflen = (size_t)snprintf(sid_buf, sizeof(sid_buf), "<SNR>%" PRIdSCID "_",
-                                       current_sctx.sc_sid);
-  const int off = *funcname == 's' ? 2 : 5;
-  size_t newnamesize = sid_buflen + strlen(funcname + off) + 1;
-  char *newname = xmalloc(newnamesize);
-  snprintf(newname, newnamesize, "%s%s", sid_buf, funcname + off);
-
-  return newname;
+  return rs_get_scriptlocal_funcname(funcname);
 }
 
 /// Call trans_function_name(), except that a lambda is returned as-is.
-/// Returns the name in allocated memory.
+/// Thin wrapper — logic lives in Rust (names.rs).
 char *save_function_name(char **name, bool skip, int flags, funcdict_T *fudi)
 {
-  char *p = *name;
-  char *saved;
-
-  if (strncmp(p, "<lambda>", 8) == 0) {
-    p += 8;
-    getdigits(&p, false, 0);
-    saved = xmemdupz(*name, (size_t)(p - *name));
-    if (fudi != NULL) {
-      CLEAR_POINTER(fudi);
-    }
-  } else {
-    saved = trans_function_name(&p, skip, flags, fudi, NULL);
-  }
-  *name = p;
-  return saved;
+  return rs_save_function_name(name, skip ? 1 : 0, flags, fudi);
 }
 
 /// List functions.
@@ -2860,52 +2767,19 @@ ret_free:
 ///          0 otherwise.
 int eval_fname_script(const char *const p)
 {
-  // Use mb_strnicmp() because in Turkish comparing the "I" may not work with
-  // the standard library function.
-  if (p[0] == '<'
-      && (mb_strnicmp(p + 1, "SID>", 4) == 0
-          || mb_strnicmp(p + 1, "SNR>", 4) == 0)) {
-    return 5;
-  }
-  if (p[0] == 's' && p[1] == ':') {
-    return 2;
-  }
-  return 0;
+  return rs_eval_fname_script(p);
 }
 
 bool translated_function_exists(const char *name)
 {
-  if (builtin_function(name, -1)) {
-    return find_internal_func(name) != NULL;
-  }
-  return find_func(name) != NULL;
+  return rs_translated_function_exists(name) != 0;
 }
 
-/// Check whether function with the given name exists
-///
-/// @param[in] name  Function name.
-/// @param[in] no_deref  Whether to dereference a Funcref.
-///
-/// @return  true if it exists, false otherwise.
+/// Check whether function with the given name exists.
+/// Thin wrapper — logic lives in Rust (names.rs).
 bool function_exists(const char *const name, bool no_deref)
 {
-  const char *nm = name;
-  bool n = false;
-  int flag = TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD;
-
-  if (no_deref) {
-    flag |= TFN_NO_DEREF;
-  }
-  char *const p = trans_function_name((char **)&nm, false, flag, NULL, NULL);
-  nm = skipwhite(nm);
-
-  // Only accept "funcname", "funcname ", "funcname (..." and
-  // "funcname(...", not "funcname!...".
-  if (p != NULL && (*nm == NUL || *nm == '(')) {
-    n = translated_function_exists(p);
-  }
-  xfree(p);
-  return n;
+  return rs_function_exists(name, no_deref ? 1 : 0) != 0;
 }
 
 /// Function given to ExpandGeneric() to obtain the list of user defined
@@ -4258,3 +4132,7 @@ void nvim_list_functions_matching_pat(const char *pat, bool ic)
 void nvim_emsg_function_list_modified(void) { emsg(_(e_function_list_was_modified)); }
 void nvim_emsg_undefined_function(const char *name) { emsg_funcname(N_("E123: Undefined function: %s"), name); }
 void nvim_emsg_trailing_arg(const char *name) { semsg(_(e_trailing_arg), name); }
+
+// Phase 2: Function Name Translation Accessors
+int nvim_script_id_valid(int sid) { return sid > 0 && sid <= script_items.ga_len; }
+void nvim_emsg_usingsid(void) { emsg(_(e_usingsid)); }
