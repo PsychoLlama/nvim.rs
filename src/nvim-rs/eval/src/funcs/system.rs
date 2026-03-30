@@ -426,7 +426,7 @@ use std::ffi::{c_char, c_void};
 
 extern "C" {
     // nvim_eval_environ: inlined below
-    fn nvim_eval_stdpath(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_stdpath: inlined below
 
     // environ inlining
     fn os_get_fullenv_size() -> usize;
@@ -444,6 +444,15 @@ extern "C" {
     fn xmalloc(size: usize) -> *mut c_void;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
+
+    // stdpath inlining
+    fn nvim_eval_get_xdg_home(xdg: c_int) -> *mut c_char;
+    fn nvim_eval_stdpaths_get_xdg_var(xdg: c_int) -> *mut c_char;
+    fn nvim_eval_xdg_var_list(xdg: c_int, rettv: *mut c_void);
+    #[link_name = "tv_get_string_chk"]
+    fn sys_tv_get_string_chk(tv: *mut c_void) -> *const c_char;
+    fn nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
+    fn semsg(fmt: *const c_char, ...) -> c_int;
 }
 
 /// "environ()" function - get all environment variables as dict
@@ -500,6 +509,15 @@ pub unsafe extern "C" fn rs_f_environ(
     os_free_fullenv(env);
 }
 
+// XDG type constants matching XDGVarType enum in C
+const XDG_CONFIG_HOME: c_int = 0;
+const XDG_DATA_HOME: c_int = 1;
+const XDG_CACHE_HOME: c_int = 2;
+const XDG_STATE_HOME: c_int = 3;
+const XDG_RUNTIME_DIR: c_int = 4;
+const XDG_CONFIG_DIRS: c_int = 5;
+const XDG_DATA_DIRS: c_int = 6;
+
 /// "stdpath(type)" function - get standard path for given type
 ///
 /// # Safety
@@ -510,7 +528,44 @@ pub unsafe extern "C" fn rs_f_stdpath(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_stdpath(argvars, rettv);
+    // Initialize return value to VAR_STRING/NULL
+    nvim_tv_set_string(rettv, std::ptr::null_mut());
+
+    let p = sys_tv_get_string_chk(argvars.cast_mut());
+    if p.is_null() {
+        return;
+    }
+
+    // Compare the string argument and dispatch
+    macro_rules! streq {
+        ($p:expr, $lit:expr) => {{
+            libc::strcmp($p, $lit.as_ptr().cast::<c_char>()) == 0
+        }};
+    }
+
+    if streq!(p, b"config\0") {
+        let s = nvim_eval_get_xdg_home(XDG_CONFIG_HOME);
+        nvim_tv_set_string(rettv, s.cast::<u8>());
+    } else if streq!(p, b"data\0") {
+        let s = nvim_eval_get_xdg_home(XDG_DATA_HOME);
+        nvim_tv_set_string(rettv, s.cast::<u8>());
+    } else if streq!(p, b"cache\0") {
+        let s = nvim_eval_get_xdg_home(XDG_CACHE_HOME);
+        nvim_tv_set_string(rettv, s.cast::<u8>());
+    } else if streq!(p, b"state\0") || streq!(p, b"log\0") {
+        // Both "state" and "log" map to kXDGStateHome
+        let s = nvim_eval_get_xdg_home(XDG_STATE_HOME);
+        nvim_tv_set_string(rettv, s.cast::<u8>());
+    } else if streq!(p, b"run\0") {
+        let s = nvim_eval_stdpaths_get_xdg_var(XDG_RUNTIME_DIR);
+        nvim_tv_set_string(rettv, s.cast::<u8>());
+    } else if streq!(p, b"config_dirs\0") {
+        nvim_eval_xdg_var_list(XDG_CONFIG_DIRS, rettv);
+    } else if streq!(p, b"data_dirs\0") {
+        nvim_eval_xdg_var_list(XDG_DATA_DIRS, rettv);
+    } else {
+        semsg(c"E6100: \"%s\" is not a valid stdpath".as_ptr(), p);
+    }
 }
 
 // =============================================================================

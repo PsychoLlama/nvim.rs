@@ -12,6 +12,7 @@
 #include "nvim/cmdexpand.h"
 #include "nvim/context.h"
 #include "nvim/message.h"
+#include "nvim/os/os.h"
 #include "nvim/state.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
@@ -138,6 +139,26 @@ void nvim_eval_ctxpop_impl(void)
 int nvim_eval_ctx_size_impl(void)
 {
   return (int)ctx_size();
+}
+
+// =============================================================================
+// stdpath() helpers
+// =============================================================================
+
+/// Get XDG home directory for the given XDG type.
+/// Returns allocated string or NULL.
+/// @param xdg  XDGVarType cast to int
+char *nvim_eval_get_xdg_home(int xdg)
+{
+  return get_xdg_home((XDGVarType)xdg);
+}
+
+/// Get XDG variable path for the given XDG type (raw variable, not home).
+/// Returns allocated string or NULL.
+/// @param xdg  XDGVarType cast to int
+char *nvim_eval_stdpaths_get_xdg_var(int xdg)
+{
+  return stdpaths_get_xdg_var((XDGVarType)xdg);
 }
 
 // =============================================================================
