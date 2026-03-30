@@ -269,65 +269,7 @@ tv_list_copy_error:
 /// "op" is the operator, normally "=" but can be "+=" and the like.
 /// "varname" is used for error messages.
 /// Returns OK or FAIL.
-int tv_list_assign_range(list_T *const dest, list_T *const src, const int idx1_arg, const int idx2,
-                         const bool empty_idx2, const char *const op, const char *const varname)
-{
-  int idx1 = idx1_arg;
-  listitem_T *const first_li = tv_list_find_index(dest, &idx1);
-  listitem_T *src_li;
-
-  // Check whether any of the list items is locked before making any changes.
-  int idx = idx1;
-  listitem_T *dest_li = first_li;
-  for (src_li = tv_list_first(src); src_li != NULL && dest_li != NULL;) {
-    if (value_check_lock(TV_LIST_ITEM_TV(dest_li)->v_lock, varname, TV_CSTRING)) {
-      return FAIL;
-    }
-    src_li = TV_LIST_ITEM_NEXT(src, src_li);
-    if (src_li == NULL || (!empty_idx2 && idx2 == idx)) {
-      break;
-    }
-    dest_li = TV_LIST_ITEM_NEXT(dest, dest_li);
-    idx++;
-  }
-
-  // Assign the List values to the list items.
-  idx = idx1;
-  dest_li = first_li;
-  for (src_li = tv_list_first(src); src_li != NULL;) {
-    assert(dest_li != NULL);
-    if (op != NULL && *op != '=') {
-      eexe_mod_op(TV_LIST_ITEM_TV(dest_li), TV_LIST_ITEM_TV(src_li), op);
-    } else {
-      tv_clear(TV_LIST_ITEM_TV(dest_li));
-      tv_copy(TV_LIST_ITEM_TV(src_li), TV_LIST_ITEM_TV(dest_li));
-    }
-    src_li = TV_LIST_ITEM_NEXT(src, src_li);
-    if (src_li == NULL || (!empty_idx2 && idx2 == idx)) {
-      break;
-    }
-    if (TV_LIST_ITEM_NEXT(dest, dest_li) == NULL) {
-      // Need to add an empty item.
-      tv_list_append_number(dest, 0);
-      // "dest_li" may have become invalid after append, don’t use it.
-      dest_li = tv_list_last(dest);  // Valid again.
-    } else {
-      dest_li = TV_LIST_ITEM_NEXT(dest, dest_li);
-    }
-    idx++;
-  }
-  if (src_li != NULL) {
-    emsg(_("E710: List value has more items than target"));
-    return FAIL;
-  }
-  if (empty_idx2
-      ? (dest_li != NULL && TV_LIST_ITEM_NEXT(dest, dest_li) != NULL)
-      : idx != idx2) {
-    emsg(_("E711: List value has not enough items"));
-    return FAIL;
-  }
-  return OK;
-}
+// tv_list_assign_range migrated to Rust (Phase 6d)
 
 // tv_list_flatten migrated to Rust (Phase 6c)
 
@@ -3183,3 +3125,15 @@ void nvim_tv_listitem_move_to_rettv(typval_T *rettv, listitem_T *item)
   *rettv = *TV_LIST_ITEM_TV(item);
   xfree(item);
 }
+
+// Phase 6d: tv_list_assign_range accessors
+
+/// Emit "E710: List value has more items than target" (accessor for Rust).
+void nvim_emsg_list_more_items(void) { emsg(_("E710: List value has more items than target")); }
+
+/// Emit "E711: List value has not enough items" (accessor for Rust).
+void nvim_emsg_list_not_enough_items(void) { emsg(_("E711: List value has not enough items")); }
+
+/// Get listitem v_lock field via TV_LIST_ITEM_TV (accessor for Rust).
+/// Needed by tv_list_assign_range lock check.
+int nvim_listitem_get_v_lock(const listitem_T *li) { return TV_LIST_ITEM_TV(li)->v_lock; }

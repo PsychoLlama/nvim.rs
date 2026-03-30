@@ -532,6 +532,10 @@ extern int tv_list_slice_or_index(list_T *list, bool range, varnumber_T n1_arg, 
 extern void tv_list_flatten(list_T *list, listitem_T *first, int64_t maxitems, int64_t maxdepth);
 extern void tv_list_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg);
 
+// Phase 6d: assign range (migrated to Rust)
+extern int tv_list_assign_range(list_T *dest, list_T *src, int idx1_arg, int idx2, bool empty_idx2,
+                                const char *op, const char *varname);
+
 // List append functions (migrated to Rust, Phase 5)
 extern void tv_list_append(list_T *l, listitem_T *item);
 extern void tv_list_append_tv(list_T *l, typval_T *tv);

@@ -1207,6 +1207,12 @@ extern "C" {
     fn nvim_emsg_invrange();
     fn nvim_tv_list_index_into_rettv(rettv: TypevalHandle, item: ListItemHandle);
     fn nvim_tv_listitem_move_to_rettv(rettv: TypevalHandle, item: ListItemHandle);
+
+    // Phase 6d: tv_list_assign_range
+    fn nvim_emsg_list_more_items();
+    fn nvim_emsg_list_not_enough_items();
+    fn nvim_listitem_get_v_lock(li: ListItemHandle) -> c_int;
+    fn eexe_mod_op(tv1: TypevalHandle, tv2: TypevalHandle, op: *const c_char) -> c_int;
 }
 
 // =============================================================================
@@ -2252,6 +2258,88 @@ pub unsafe extern "C" fn rs_tv_list_remove(
             unsafe { rs_tv_list_move_items(l, item, item2, ret_list, cnt) };
         }
     }
+}
+
+// =============================================================================
+// Phase 6d: tv_list_assign_range and sort/uniq
+// =============================================================================
+
+/// FFI export: tv_list_assign_range - assign src list values into dest range.
+///
+/// # Panics
+///
+/// Panics if the src list has items but dest range is exhausted (logic error in caller).
+#[export_name = "tv_list_assign_range"]
+pub unsafe extern "C" fn rs_tv_list_assign_range(
+    dest: ListHandle,
+    src: ListHandle,
+    idx1_arg: c_int,
+    idx2: c_int,
+    empty_idx2: bool,
+    op: *const c_char,
+    varname: *const c_char,
+) -> c_int {
+    let mut idx1 = idx1_arg;
+    let first_li = tv_list_find_index_impl(dest, &mut idx1);
+
+    // Check whether any of the list items is locked before making any changes.
+    let mut idx = idx1;
+    let mut dest_li = first_li;
+    let mut src_li = unsafe { nvim_list_get_first(src) };
+    while !src_li.is_null() && !dest_li.is_null() {
+        let v_lock = unsafe { nvim_listitem_get_v_lock(dest_li) };
+        if unsafe { nvim_value_check_lock(v_lock, varname, usize::MAX - 1) } {
+            return FAIL;
+        }
+        src_li = unsafe { nvim_listitem_get_next(src_li) };
+        if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
+            break;
+        }
+        dest_li = unsafe { nvim_listitem_get_next(dest_li) };
+        idx += 1;
+    }
+
+    // Assign the list values to the list items.
+    idx = idx1;
+    dest_li = first_li;
+    src_li = unsafe { nvim_list_get_first(src) };
+    while !src_li.is_null() {
+        assert!(!dest_li.is_null());
+        let dest_tv = unsafe { nvim_listitem_get_tv(dest_li) };
+        let src_tv = unsafe { nvim_listitem_get_tv(src_li) };
+        if !op.is_null() && unsafe { *op != b'=' as c_char } {
+            unsafe { eexe_mod_op(dest_tv, src_tv, op) };
+        } else {
+            unsafe { nvim_tv_clear(dest_tv) };
+            unsafe { nvim_tv_copy(src_tv, dest_tv) };
+        }
+        src_li = unsafe { nvim_listitem_get_next(src_li) };
+        if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
+            break;
+        }
+        if unsafe { nvim_listitem_get_next(dest_li) }.is_null() {
+            // Need to add an empty item.
+            unsafe { rs_tv_list_append_number(dest, 0) };
+            dest_li = unsafe { nvim_list_get_last(dest) };
+        } else {
+            dest_li = unsafe { nvim_listitem_get_next(dest_li) };
+        }
+        idx += 1;
+    }
+
+    if !src_li.is_null() {
+        unsafe { nvim_emsg_list_more_items() };
+        return FAIL;
+    }
+    if if empty_idx2 {
+        !dest_li.is_null() && !unsafe { nvim_listitem_get_next(dest_li) }.is_null()
+    } else {
+        idx != idx2
+    } {
+        unsafe { nvim_emsg_list_not_enough_items() };
+        return FAIL;
+    }
+    OK
 }
 
 /// FFI export: f_has_key - VimL has_key() function.
