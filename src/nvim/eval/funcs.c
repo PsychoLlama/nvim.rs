@@ -443,6 +443,11 @@ extern void f_expandcmd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_settagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// VimL functions moved to funcs_shim.c (Phase 26)
+extern void f_call(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_split(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -718,63 +723,6 @@ buf_T *get_buf_arg(typval_T *arg)
 }
 
 
-/// "call(func, arglist [, dict])" function
-static void f_call(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_list_arg(argvars, 1) == FAIL) {
-    return;
-  }
-  if (argvars[1].vval.v_list == NULL) {
-    return;
-  }
-
-  bool owned = false;
-  char *func;
-  partial_T *partial = NULL;
-  if (argvars[0].v_type == VAR_FUNC) {
-    func = argvars[0].vval.v_string;
-  } else if (argvars[0].v_type == VAR_PARTIAL) {
-    partial = argvars[0].vval.v_partial;
-    func = rs_partial_name(partial);
-  } else if (nlua_is_table_from_lua(&argvars[0])) {
-    // TODO(tjdevries): UnifiedCallback
-    func = nlua_register_table_as_callable(&argvars[0]);
-    owned = true;
-  } else {
-    func = (char *)tv_get_string(&argvars[0]);
-  }
-
-  if (func == NULL || *func == NUL) {
-    return;         // type error, empty name or null function
-  }
-  char *tofree = NULL;
-  if (argvars[0].v_type == VAR_STRING) {
-    char *p = func;
-    tofree = trans_function_name(&p, false, TFN_INT|TFN_QUIET, NULL, NULL);
-    if (tofree == NULL) {
-      emsg_funcname(e_unknown_function_str, func);
-      return;
-    }
-    func = tofree;
-  }
-
-  dict_T *selfdict = NULL;
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    if (tv_check_for_dict_arg(argvars, 2) == FAIL) {
-      goto done;
-    }
-    selfdict = argvars[2].vval.v_dict;
-  }
-
-  func_call(func, &argvars[1], partial, selfdict, rettv);
-
-done:
-  if (owned) {
-    func_unref(func);
-  }
-  xfree(tofree);
-}
-
 /// "chanclose(id[, stream])" function
 
 /// "chansend(id, data)" function
@@ -964,81 +912,6 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
   capture_ga = save_capture_ga;
 }
 
-
-/// "expand()" function
-static void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int options = WILD_SILENT|WILD_USE_NL|WILD_LIST_NOTFOUND;
-  bool error = false;
-#ifdef BACKSLASH_IN_FILENAME
-  char *p_csl_save = p_csl;
-
-  // avoid using 'completeslash' here
-  p_csl = empty_string_option;
-#endif
-
-  rettv->v_type = VAR_STRING;
-  if (argvars[1].v_type != VAR_UNKNOWN
-      && argvars[2].v_type != VAR_UNKNOWN
-      && tv_get_number_chk(&argvars[2], &error)
-      && !error) {
-    tv_list_set_ret(rettv, NULL);
-  }
-
-  const char *s = tv_get_string(&argvars[0]);
-  if (*s == '%' || *s == '#' || *s == '<') {
-    if (p_verbose == 0) {
-      emsg_off++;
-    }
-    size_t len;
-    const char *errormsg = NULL;
-    char *result = eval_vars((char *)s, s, &len, NULL, &errormsg, NULL, false);
-    if (p_verbose == 0) {
-      emsg_off--;
-    } else if (errormsg != NULL) {
-      emsg(errormsg);
-    }
-    if (rettv->v_type == VAR_LIST) {
-      tv_list_alloc_ret(rettv, (result != NULL));
-      if (result != NULL) {
-        tv_list_append_string(rettv->vval.v_list, result, -1);
-      }
-      XFREE_CLEAR(result);
-    } else {
-      rettv->vval.v_string = result;
-    }
-  } else {
-    // When the optional second argument is non-zero, don't remove matches
-    // for 'wildignore' and don't put matches for 'suffixes' at the end.
-    if (argvars[1].v_type != VAR_UNKNOWN
-        && tv_get_number_chk(&argvars[1], &error)) {
-      options |= WILD_KEEP_ALL;
-    }
-    if (!error) {
-      expand_T xpc;
-      ExpandInit(&xpc);
-      xpc.xp_context = EXPAND_FILES;
-      if (p_wic) {
-        options += WILD_ICASE;
-      }
-      if (rettv->v_type == VAR_STRING) {
-        rettv->vval.v_string = ExpandOne(&xpc, (char *)s, NULL, options, WILD_ALL);
-      } else {
-        ExpandOne(&xpc, (char *)s, NULL, options, WILD_ALL_KEEP);
-        tv_list_alloc_ret(rettv, xpc.xp_numfiles);
-        for (int i = 0; i < xpc.xp_numfiles; i++) {
-          tv_list_append_string(rettv->vval.v_list, xpc.xp_files[i], -1);
-        }
-        ExpandCleanup(&xpc);
-      }
-    } else {
-      rettv->vval.v_string = NULL;
-    }
-  }
-#ifdef BACKSLASH_IN_FILENAME
-  p_csl = p_csl_save;
-#endif
-}
 
 /// "menu_get(path [, modes])" function
 
@@ -3444,85 +3317,6 @@ static void f_stdioopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "soundfold({word})" function
 
 /// "spellbadword()" function
-
-static void f_split(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  colnr_T col = 0;
-  bool keepempty = false;
-  bool typeerr = false;
-
-  // Make 'cpoptions' empty, the 'l' flag should not be used here.
-  char *save_cpo = p_cpo;
-  p_cpo = empty_string_option;
-
-  const char *str = tv_get_string(&argvars[0]);
-  const char *pat = NULL;
-  char patbuf[NUMBUFLEN];
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    pat = tv_get_string_buf_chk(&argvars[1], patbuf);
-    if (pat == NULL) {
-      typeerr = true;
-    }
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      keepempty = (bool)tv_get_bool_chk(&argvars[2], &typeerr);
-    }
-  }
-  if (pat == NULL || *pat == NUL) {
-    pat = "[\\x01- ]\\+";
-  }
-
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-
-  if (typeerr) {
-    goto theend;
-  }
-
-  regmatch_T regmatch = {
-    .regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING),
-    .startp = { NULL },
-    .endp = { NULL },
-    .rm_ic = false,
-  };
-  if (regmatch.regprog != NULL) {
-    while (*str != NUL || keepempty) {
-      bool match;
-      if (*str == NUL) {
-        match = false;  // Empty item at the end.
-      } else {
-        match = vim_regexec_nl(&regmatch, str, col);
-      }
-      const char *end;
-      if (match) {
-        end = regmatch.startp[0];
-      } else {
-        end = str + strlen(str);
-      }
-      if (keepempty || end > str || (tv_list_len(rettv->vval.v_list) > 0
-                                     && *str != NUL
-                                     && match
-                                     && end < regmatch.endp[0])) {
-        tv_list_append_string(rettv->vval.v_list, str, end - str);
-      }
-      if (!match) {
-        break;
-      }
-      // Advance to just after the match.
-      if (regmatch.endp[0] > str) {
-        col = 0;
-      } else {
-        // Don't get stuck at the same match.
-        col = utfc_ptr2len(regmatch.endp[0]);
-      }
-      str = regmatch.endp[0];
-    }
-
-    vim_regfree(regmatch.regprog);
-  }
-
-theend:
-  p_cpo = save_cpo;
-}
-
 
 /// "str2float()" function
 
