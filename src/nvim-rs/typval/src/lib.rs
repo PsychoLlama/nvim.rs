@@ -1196,6 +1196,8 @@ extern "C" {
     fn nvim_tv_clear(tv: TypevalHandle);
     fn nvim_list_item_free(li: ListItemHandle);
     fn nvim_list_init_static_impl(l: ListHandle);
+    fn nvim_list_copy_shallow(l: ListHandle) -> ListHandle;
+    fn nvim_tv_set_list_vval(tv: TypevalHandle, l: ListHandle);
 }
 
 // =============================================================================
@@ -1873,8 +1875,77 @@ pub unsafe extern "C" fn rs_tv_list_alloc_ret(ret_tv: TypevalHandle, len: isize)
 }
 
 // =============================================================================
-// Phase 6: VimL functions (f_has_key)
+// Phase 6: List operations and VimL functions
 // =============================================================================
+
+/// FFI export: tv_list_extend - extend l1 with items from l2, inserting before bef.
+///
+/// If bef is NULL, items are appended at the end.
+/// Stops after the original item count of l2 to prevent infinite loop if l1 == l2.
+#[export_name = "tv_list_extend"]
+pub unsafe extern "C" fn rs_tv_list_extend(l1: ListHandle, l2: ListHandle, bef: ListItemHandle) {
+    let mut todo = unsafe { nvim_list_get_len(l2) };
+    // Save the item just before `bef` and its next pointer to handle the case
+    // where we're inserting into the middle of l1 and l2 == l1 (self-extend).
+    let befbef = if bef.is_null() {
+        ListItemHandle::null()
+    } else {
+        unsafe { nvim_listitem_get_prev(bef) }
+    };
+    let saved_next = if befbef.is_null() {
+        ListItemHandle::null()
+    } else {
+        unsafe { nvim_listitem_get_next(befbef) }
+    };
+
+    let mut item = unsafe { nvim_list_get_first(l2) };
+    while !item.is_null() && todo > 0 {
+        todo -= 1;
+        let li_tv = unsafe { nvim_listitem_get_tv(item) };
+        unsafe { rs_tv_list_insert_tv(l1, li_tv, bef) };
+        // Advance: if item == befbef, skip to saved_next to avoid re-visiting
+        // already-inserted items (relevant when extending list with itself).
+        item = if std::ptr::eq(item.as_ptr(), befbef.as_ptr()) {
+            saved_next
+        } else {
+            unsafe { nvim_listitem_get_next(item) }
+        };
+    }
+}
+
+/// FFI export: tv_list_concat - concatenate two lists into a new list stored in tv.
+#[export_name = "tv_list_concat"]
+pub unsafe extern "C" fn rs_tv_list_concat(
+    l1: ListHandle,
+    l2: ListHandle,
+    tv: TypevalHandle,
+) -> c_int {
+    // Set return type up front.
+    unsafe { nvim_tv_set_type(tv, VAR_LIST) };
+    unsafe { nvim_tv_set_lock(tv, VarLockStatus::Unlocked as c_int) };
+
+    let l = if l1.is_null() && l2.is_null() {
+        ListHandle::null()
+    } else if l1.is_null() {
+        // Shallow copy of l2 (tv_list_copy(NULL, l2, false, 0)).
+        unsafe { nvim_list_copy_shallow(l2) }
+    } else {
+        // Shallow copy of l1, then extend with l2.
+        let copy = unsafe { nvim_list_copy_shallow(l1) };
+        if !copy.is_null() && !l2.is_null() {
+            unsafe { rs_tv_list_extend(copy, l2, ListItemHandle::null()) };
+        }
+        copy
+    };
+
+    if l.is_null() && !(l1.is_null() && l2.is_null()) {
+        return FAIL;
+    }
+
+    // Store the list pointer directly (type/lock already set above).
+    unsafe { nvim_tv_set_list_vval(tv, l) };
+    OK
+}
 
 /// FFI export: f_has_key - VimL has_key() function.
 #[export_name = "f_has_key"]

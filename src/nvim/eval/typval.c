@@ -468,57 +468,7 @@ static void tv_string2items(typval_T *argvars, typval_T *rettv)
   }
 }
 
-/// Extend first list with the second
-///
-/// @param[out]  l1  List to extend.
-/// @param[in]  l2  List to extend with.
-/// @param[in]  bef  If not NULL, extends before this item.
-void tv_list_extend(list_T *const l1, list_T *const l2, listitem_T *const bef)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  int todo = tv_list_len(l2);
-  listitem_T *const befbef = (bef == NULL ? NULL : bef->li_prev);
-  listitem_T *const saved_next = (befbef == NULL ? NULL : befbef->li_next);
-  // We also quit the loop when we have inserted the original item count of
-  // the list, avoid a hang when we extend a list with itself.
-  for (listitem_T *item = tv_list_first(l2)
-       ; item != NULL && todo--
-       ; item = (item == befbef ? saved_next : item->li_next)) {
-    tv_list_insert_tv(l1, TV_LIST_ITEM_TV(item), bef);
-  }
-}
-
-/// Concatenate lists into a new list
-///
-/// @param[in]  l1  First list.
-/// @param[in]  l2  Second list.
-/// @param[out]  ret_tv  Location where new list is saved.
-///
-/// @return OK or FAIL.
-int tv_list_concat(list_T *const l1, list_T *const l2, typval_T *const tv)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  list_T *l;
-
-  tv->v_type = VAR_LIST;
-  tv->v_lock = VAR_UNLOCKED;
-  if (l1 == NULL && l2 == NULL) {
-    l = NULL;
-  } else if (l1 == NULL) {
-    l = tv_list_copy(NULL, l2, false, 0);
-  } else {
-    l = tv_list_copy(NULL, l1, false, 0);
-    if (l != NULL && l2 != NULL) {
-      tv_list_extend(l, l2, NULL);
-    }
-  }
-  if (l == NULL && !(l1 == NULL && l2 == NULL)) {
-    return FAIL;
-  }
-
-  tv->vval.v_list = l;
-  return OK;
-}
+// tv_list_extend, tv_list_concat migrated to Rust (Phase 6)
 
 static list_T *tv_list_slice(list_T *ol, varnumber_T n1, varnumber_T n2)
 {
@@ -3382,4 +3332,18 @@ void nvim_list_item_clear_free(listitem_T *li)
 {
   tv_clear(&li->li_tv);
   xfree(li);
+}
+
+/// Shallow copy of a list (tv_list_copy(NULL, l, false, 0)) for Rust.
+/// Returns a new list with refcount=1, or NULL on alloc failure.
+list_T *nvim_list_copy_shallow(list_T *l)
+{
+  return tv_list_copy(NULL, l, false, 0);
+}
+
+/// Set vval.v_list on a typval WITHOUT touching type/lock (raw field write for Rust).
+/// Use only when type/lock have already been set.
+void nvim_tv_set_list_vval(typval_T *tv, list_T *l)
+{
+  tv->vval.v_list = l;
 }

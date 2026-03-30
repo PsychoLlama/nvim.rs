@@ -520,7 +520,9 @@ extern void tv_list_insert(list_T *l, listitem_T *ni, listitem_T *item);
 extern void tv_list_insert_tv(list_T *l, typval_T *tv, listitem_T *item);
 extern list_T *tv_list_alloc_ret(typval_T *ret_tv, ptrdiff_t len);
 
-// f_has_key (migrated to Rust, Phase 6)
+// Phase 6: list operations and VimL functions (migrated to Rust)
+extern void tv_list_extend(list_T *l1, list_T *l2, listitem_T *bef);
+extern int tv_list_concat(list_T *l1, list_T *l2, typval_T *tv);
 extern void f_has_key(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 // List append functions (migrated to Rust, Phase 5)
