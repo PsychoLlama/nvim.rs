@@ -89,6 +89,13 @@ extern int rs_function_exists(const char *name, int no_deref);
 extern char *rs_get_scriptlocal_funcname(char *funcname);
 extern char *rs_save_function_name(char **name, int skip, int flags, funcdict_T *fudi);
 
+// Phase 3: Defer Infrastructure (implemented in Rust userfunc/src/defer.rs)
+extern int rs_can_add_defer(void);
+extern void rs_add_defer(char *name, int argcount, typval_T *argvars);
+extern void rs_handle_defer_one(funccall_T *funccal);
+extern void rs_invoke_all_defer(void);
+extern int rs_ex_defer_inner(char *name, char **arg, const partial_T *partial, evalarg_T *evalarg);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -3103,15 +3110,13 @@ static int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
   return failed;
 }
 
-/// Core part of ":defer func(arg)".  "arg" points to the "(" and is advanced.
-///
-/// @return  FAIL or OK.
-static int ex_defer_inner(char *name, char **arg, const partial_T *const partial,
-                          evalarg_T *const evalarg)
+/// Phase 3: C implementation shim for ex_defer_inner (called from Rust).
+int nvim_ex_defer_inner_impl(char *name, char **arg, const partial_T *const partial,
+                             evalarg_T *const evalarg)
 {
-  typval_T argvars[MAX_FUNC_ARGS + 1];  // vars for arguments
-  int partial_argc = 0;  // number of partial arguments
-  int argcount = 0;  // number of arguments found
+  typval_T argvars[MAX_FUNC_ARGS + 1];
+  int partial_argc = 0;
+  int argcount = 0;
 
   if (current_funccal == NULL) {
     semsg(_(e_str_not_inside_function), "defer");
@@ -3143,7 +3148,6 @@ static int ex_defer_inner(char *name, char **arg, const partial_T *const partial
       }
     } else {
       ufunc_T *ufunc = find_func(name);
-      // we tolerate an unknown function here, it might be defined later
       if (ufunc != NULL) {
         int error = check_user_func_argcount(ufunc, argcount);
         if (error != FCERR_UNKNOWN) {
@@ -3164,39 +3168,31 @@ static int ex_defer_inner(char *name, char **arg, const partial_T *const partial
   return OK;
 }
 
+/// Core part of ":defer func(arg)".
+/// Thin wrapper — logic lives in Rust (defer.rs).
+static int ex_defer_inner(char *name, char **arg, const partial_T *const partial,
+                          evalarg_T *const evalarg)
+{
+  return rs_ex_defer_inner(name, arg, partial, evalarg);
+}
+
 /// Return true if currently inside a function call.
 /// Give an error message and return false when not.
 bool can_add_defer(void)
 {
-  if (get_current_funccal() == NULL) {
-    semsg(_(e_str_not_inside_function), "defer");
-    return false;
-  }
-  return true;
+  return rs_can_add_defer() != 0;
 }
 
 /// Add a deferred call for "name" with arguments "argvars[argcount]".
-/// Consumes "argvars[]".
-/// Caller must check that current_funccal is not NULL.
+/// Consumes "argvars[]". Caller must check that current_funccal is not NULL.
+/// Thin wrapper — logic lives in Rust (defer.rs).
 void add_defer(char *name, int argcount_arg, typval_T *argvars)
 {
-  char *saved_name = xstrdup(name);
-  int argcount = argcount_arg;
-
-  if (current_funccal->fc_defer.ga_itemsize == 0) {
-    ga_init(&current_funccal->fc_defer, sizeof(defer_T), 10);
-  }
-  defer_T *dr = GA_APPEND_VIA_PTR(defer_T, &current_funccal->fc_defer);
-  dr->dr_name = saved_name;
-  dr->dr_argcount = argcount;
-  while (argcount > 0) {
-    argcount--;
-    dr->dr_argvars[argcount] = argvars[argcount];
-  }
+  rs_add_defer(name, argcount_arg, argvars);
 }
 
-/// Invoked after a function has finished: invoke ":defer" functions.
-static void handle_defer_one(funccall_T *funccal)
+/// Phase 3: C implementation shim for handle_defer_one (called from Rust).
+void nvim_handle_defer_one_impl(funccall_T *funccal)
 {
   for (int idx = funccal->fc_defer.ga_len - 1; idx >= 0; idx--) {
     defer_T *dr = ((defer_T *)funccal->fc_defer.ga_data) + idx;
@@ -3207,23 +3203,15 @@ static void handle_defer_one(funccall_T *funccal)
     }
 
     funcexe_T funcexe = { .fe_evaluate = true };
-
     typval_T rettv;
-    rettv.v_type = VAR_UNKNOWN;     // tv_clear() uses this
-
+    rettv.v_type = VAR_UNKNOWN;
     char *name = dr->dr_name;
     dr->dr_name = NULL;
 
-    // If the deferred function is called after an exception, then only the
-    // first statement in the function will be executed (because of the
-    // exception).  So save and restore the try/catch/throw exception
-    // state.
     exception_state_T estate;
     exception_state_save(&estate);
     exception_state_clear();
-
     call_func(name, -1, &rettv, dr->dr_argcount, dr->dr_argvars, &funcexe);
-
     exception_state_restore(&estate);
 
     tv_clear(&rettv);
@@ -3235,18 +3223,18 @@ static void handle_defer_one(funccall_T *funccal)
   ga_clear(&funccal->fc_defer);
 }
 
+/// Invoked after a function has finished: invoke ":defer" functions.
+/// Thin wrapper — logic lives in Rust (defer.rs).
+static void handle_defer_one(funccall_T *funccal)
+{
+  rs_handle_defer_one(funccal);
+}
+
 /// Called when exiting: call all defer functions.
+/// Thin wrapper — logic lives in Rust (defer.rs).
 void invoke_all_defer(void)
 {
-  for (funccall_T *fc = current_funccal; fc != NULL; fc = fc->fc_caller) {
-    handle_defer_one(fc);
-  }
-
-  for (funccal_entry_T *fce = funccal_stack; fce != NULL; fce = fce->next) {
-    for (funccall_T *fc = fce->top_funccal; fc != NULL; fc = fc->fc_caller) {
-      handle_defer_one(fc);
-    }
-  }
+  rs_invoke_all_defer();
 }
 
 /// ":1,25call func(arg1, arg2)" function call.
@@ -4136,3 +4124,27 @@ void nvim_emsg_trailing_arg(const char *name) { semsg(_(e_trailing_arg), name); 
 // Phase 2: Function Name Translation Accessors
 int nvim_script_id_valid(int sid) { return sid > 0 && sid <= script_items.ga_len; }
 void nvim_emsg_usingsid(void) { emsg(_(e_usingsid)); }
+
+// Phase 3: Defer Infrastructure Accessors
+funccall_T *nvim_fc_get_caller(funccall_T *fc) { return fc ? fc->fc_caller : NULL; }
+funccal_entry_T *nvim_funccal_stack_head(void) { return funccal_stack; }
+funccall_T *nvim_funccal_entry_top(funccal_entry_T *fce) { return fce ? fce->top_funccal : NULL; }
+funccal_entry_T *nvim_funccal_entry_next(funccal_entry_T *fce) { return fce ? fce->next : NULL; }
+
+void nvim_fc_defer_append(funccall_T *fc, char *name, int argcount, typval_T *argvars)
+{
+  if (fc->fc_defer.ga_itemsize == 0) {
+    ga_init(&fc->fc_defer, sizeof(defer_T), 10);
+  }
+  defer_T *dr = GA_APPEND_VIA_PTR(defer_T, &fc->fc_defer);
+  dr->dr_name = name;
+  dr->dr_argcount = argcount;
+  for (int i = 0; i < argcount; i++) {
+    dr->dr_argvars[i] = argvars[i];
+  }
+}
+
+void nvim_emsg_defer_not_in_function(void)
+{
+  semsg(_(e_str_not_inside_function), "defer");
+}

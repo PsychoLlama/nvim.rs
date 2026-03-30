@@ -24,6 +24,7 @@
 
 pub mod call;
 pub mod closure;
+pub mod defer;
 pub mod funcref;
 pub mod listing;
 pub mod names;
@@ -32,6 +33,7 @@ pub mod types;
 
 pub use call::*;
 pub use closure::*;
+pub use defer::*;
 pub use funcref::*;
 pub use listing::*;
 pub use names::*;
