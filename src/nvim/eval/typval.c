@@ -142,101 +142,12 @@ static listitem_T *tv_list_item_alloc(void)
   return xmalloc(sizeof(listitem_T));
 }
 
-/// Remove a list item from a List and free it
-///
-/// Also clears the value.
-///
-/// @param[out]  l  List to remove item from.
-/// @param[in,out]  item  Item to remove.
-///
-/// @return Pointer to the list item just after removed one, NULL if removed
-///         item was the last one.
-listitem_T *tv_list_item_remove(list_T *const l, listitem_T *const item)
-  FUNC_ATTR_NONNULL_ALL
-{
-  listitem_T *const next_item = TV_LIST_ITEM_NEXT(l, item);
-  tv_list_drop_items(l, item, item);
-  tv_clear(TV_LIST_ITEM_TV(item));
-  xfree(item);
-  return next_item;
-}
-
-//{{{2 List watchers
-
-/// Add a watcher to a list
-///
-/// @param[out]  l  List to add watcher to.
-/// @param[in]  lw  Watcher to add.
-void tv_list_watch_add(list_T *const l, listwatch_T *const lw)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lw->lw_next = l->lv_watch;
-  l->lv_watch = lw;
-}
-
-/// Remove a watcher from a list
-///
-/// Does not give a warning if watcher was not found.
-///
-/// @param[out]  l  List to remove watcher from.
-/// @param[in]  lwrem  Watcher to remove.
-void tv_list_watch_remove(list_T *const l, listwatch_T *const lwrem)
-  FUNC_ATTR_NONNULL_ALL
-{
-  listwatch_T **lwp = &l->lv_watch;
-  for (listwatch_T *lw = l->lv_watch; lw != NULL; lw = lw->lw_next) {
-    if (lw == lwrem) {
-      *lwp = lw->lw_next;
-      break;
-    }
-    lwp = &lw->lw_next;
-  }
-}
-
-/// Advance watchers to the next item
-///
-/// Used just before removing an item from a list.
-///
-/// @param[out]  l  List from which item is removed.
-/// @param[in]  item  List item being removed.
-static void tv_list_watch_fix(list_T *const l, const listitem_T *const item)
-  FUNC_ATTR_NONNULL_ALL
-{
-  for (listwatch_T *lw = l->lv_watch; lw != NULL; lw = lw->lw_next) {
-    if (lw->lw_item == item) {
-      lw->lw_item = item->li_next;
-    }
-  }
-}
+// tv_list_item_remove, tv_list_watch_add, tv_list_watch_remove, tv_list_watch_fix
+// migrated to Rust (Phase 5)
 
 //{{{2 Alloc/free
 
-/// Allocate an empty list
-///
-/// Caller should take care of the reference count.
-///
-/// @param[in]  len  Expected number of items to be populated before list
-///                  becomes accessible from Vimscript. It is still valid to
-///                  underpopulate a list, value only controls how many elements
-///                  will be allocated in advance. Currently does nothing.
-///                  @see ListLenSpecials.
-///
-/// @return [allocated] new list.
-list_T *tv_list_alloc(const ptrdiff_t len)
-  FUNC_ATTR_NONNULL_RET
-{
-  list_T *const list = xcalloc(1, sizeof(list_T));
-
-  // Prepend the list to the list of lists for garbage collection.
-  if (gc_first_list != NULL) {
-    gc_first_list->lv_used_prev = list;
-  }
-  list->lv_used_prev = NULL;
-  list->lv_used_next = gc_first_list;
-  gc_first_list = list;
-  list->lua_table_ref = LUA_NOREF;
-  return list;
-}
+// tv_list_alloc migrated to Rust (Phase 5)
 
 /// Initialize a static list with 10 items
 ///
@@ -267,197 +178,17 @@ void tv_list_init_static10(staticList10_T *const sl)
 #undef SL_SIZE
 }
 
-/// Initialize static list with undefined number of elements
-///
-/// @param[out]  l  List to initialize.
-void tv_list_init_static(list_T *const l)
-  FUNC_ATTR_NONNULL_ALL
-{
-  CLEAR_POINTER(l);
-  l->lv_refcount = DO_NOT_FREE_CNT;
-}
+// tv_list_init_static migrated to Rust (Phase 5)
 
-/// Free items contained in a list
-///
-/// @param[in,out]  l  List to clear.
-void tv_list_free_contents(list_T *const l)
-  FUNC_ATTR_NONNULL_ALL
-{
-  for (listitem_T *item = l->lv_first; item != NULL; item = l->lv_first) {
-    // Remove the item before deleting it.
-    l->lv_first = item->li_next;
-    tv_clear(&item->li_tv);
-    xfree(item);
-  }
-  l->lv_len = 0;
-  l->lv_idx_item = NULL;
-  l->lv_last = NULL;
-  assert(l->lv_watch == NULL);
-}
-
-/// Free a list itself, ignoring items it contains
-///
-/// Ignores the reference count.
-///
-/// @param[in,out]  l  List to free.
-void tv_list_free_list(list_T *const l)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Remove the list from the list of lists for garbage collection.
-  if (l->lv_used_prev == NULL) {
-    gc_first_list = l->lv_used_next;
-  } else {
-    l->lv_used_prev->lv_used_next = l->lv_used_next;
-  }
-  if (l->lv_used_next != NULL) {
-    l->lv_used_next->lv_used_prev = l->lv_used_prev;
-  }
-
-  NLUA_CLEAR_REF(l->lua_table_ref);
-  xfree(l);
-}
-
-/// Free a list, including all items it points to
-///
-/// Ignores the reference count. Does not do anything if
-/// tv_in_free_unref_items is true.
-///
-/// @param[in,out]  l  List to free.
-void tv_list_free(list_T *const l)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (tv_in_free_unref_items) {
-    return;
-  }
-
-  tv_list_free_contents(l);
-  tv_list_free_list(l);
-}
-
-/// Unreference a list
-///
-/// Decrements the reference count and frees when it becomes zero or less.
-///
-/// @param[in,out]  l  List to unreference.
-void tv_list_unref(list_T *const l)
-{
-  if (l != NULL && --l->lv_refcount <= 0) {
-    tv_list_free(l);
-  }
-}
+// tv_list_free_contents, tv_list_free_list, tv_list_free, tv_list_unref
+// migrated to Rust (Phase 5)
 
 //{{{2 Add/remove
 
-/// Remove items "item" to "item2" from list "l"
-///
-/// @warning Does not free the listitem or the value!
-///
-/// @param[out]  l  List to remove from.
-/// @param[in]  item  First item to remove.
-/// @param[in]  item2  Last item to remove.
-void tv_list_drop_items(list_T *const l, listitem_T *const item, listitem_T *const item2)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Notify watchers.
-  for (listitem_T *ip = item; ip != item2->li_next; ip = ip->li_next) {
-    l->lv_len--;
-    tv_list_watch_fix(l, ip);
-  }
+// tv_list_drop_items, tv_list_remove_items, tv_list_move_items
+// migrated to Rust (Phase 5)
 
-  if (item2->li_next == NULL) {
-    l->lv_last = item->li_prev;
-  } else {
-    item2->li_next->li_prev = item->li_prev;
-  }
-  if (item->li_prev == NULL) {
-    l->lv_first = item2->li_next;
-  } else {
-    item->li_prev->li_next = item2->li_next;
-  }
-  l->lv_idx_item = NULL;
-}
-
-/// Like tv_list_drop_items, but also frees all removed items
-void tv_list_remove_items(list_T *const l, listitem_T *const item, listitem_T *const item2)
-  FUNC_ATTR_NONNULL_ALL
-{
-  tv_list_drop_items(l, item, item2);
-  for (listitem_T *li = item;;) {
-    tv_clear(TV_LIST_ITEM_TV(li));
-    listitem_T *const nli = li->li_next;
-    xfree(li);
-    if (li == item2) {
-      break;
-    }
-    li = nli;
-  }
-}
-
-/// Move items "item" to "item2" from list "l" to the end of the list "tgt_l"
-///
-/// @param[out]  l  List to move from.
-/// @param[in]  item  First item to move.
-/// @param[in]  item2  Last item to move.
-/// @param[out]  tgt_l  List to move to.
-/// @param[in]  cnt  Number of items moved.
-void tv_list_move_items(list_T *const l, listitem_T *const item, listitem_T *const item2,
-                        list_T *const tgt_l, const int cnt)
-  FUNC_ATTR_NONNULL_ALL
-{
-  tv_list_drop_items(l, item, item2);
-  item->li_prev = tgt_l->lv_last;
-  item2->li_next = NULL;
-  if (tgt_l->lv_last == NULL) {
-    tgt_l->lv_first = item;
-  } else {
-    tgt_l->lv_last->li_next = item;
-  }
-  tgt_l->lv_last = item2;
-  tgt_l->lv_len += cnt;
-}
-
-/// Insert list item
-///
-/// @param[out]  l  List to insert to.
-/// @param[in,out]  ni  Item to insert.
-/// @param[in]  item  Item to insert before. If NULL, inserts at the end of the
-///                   list.
-void tv_list_insert(list_T *const l, listitem_T *const ni, listitem_T *const item)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  if (item == NULL) {
-    // Append new item at end of list.
-    tv_list_append(l, ni);
-  } else {
-    // Insert new item before existing item.
-    ni->li_prev = item->li_prev;
-    ni->li_next = item;
-    if (item->li_prev == NULL) {
-      l->lv_first = ni;
-      l->lv_idx++;
-    } else {
-      item->li_prev->li_next = ni;
-      l->lv_idx_item = NULL;
-    }
-    item->li_prev = ni;
-    l->lv_len++;
-  }
-}
-
-/// Insert Vimscript value into a list
-///
-/// @param[out]  l  List to insert to.
-/// @param[in,out]  tv  Value to insert. Is copied (@see tv_copy()) to an
-///                     allocated listitem_T and inserted.
-/// @param[in]  item  Item to insert before. If NULL, inserts at the end of the
-///                   list.
-void tv_list_insert_tv(list_T *const l, typval_T *const tv, listitem_T *const item)
-{
-  listitem_T *const ni = tv_list_item_alloc();
-
-  tv_copy(tv, &ni->li_tv);
-  tv_list_insert(l, ni, item);
-}
+// tv_list_insert, tv_list_insert_tv migrated to Rust (Phase 5)
 
 // tv_list_append, tv_list_append_tv migrated to Rust (Phase 5)
 
@@ -2126,25 +1857,7 @@ void tv_dict_set_keys_readonly(dict_T *const dict)
 //{{{2 Init/alloc/clear
 //{{{3 Alloc
 
-/// Allocate an empty list for a return value
-///
-/// Also sets reference count.
-///
-/// @param[out]  ret_tv  Structure where list is saved.
-/// @param[in]  len  Expected number of items to be populated before list
-///                  becomes accessible from Vimscript. It is still valid to
-///                  underpopulate a list, value only controls how many elements
-///                  will be allocated in advance. @see ListLenSpecials.
-///
-/// @return [allocated] pointer to the created list.
-list_T *tv_list_alloc_ret(typval_T *const ret_tv, const ptrdiff_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  list_T *const l = tv_list_alloc(len);
-  tv_list_set_ret(ret_tv, l);
-  ret_tv->v_lock = VAR_UNLOCKED;
-  return l;
-}
+// tv_list_alloc_ret migrated to Rust (Phase 5)
 
 // tv_dict_alloc_lock, tv_dict_alloc_ret migrated to Rust (Phase 3)
 
@@ -2215,21 +1928,7 @@ void f_keys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2lis
 /// "values(dict)" function
 void f_values(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2list(argvars, rettv, kDict2ListValues); }
 
-/// "has_key()" function
-void f_has_key(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_dict_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  if (argvars[0].vval.v_dict == NULL) {
-    return;
-  }
-
-  rettv->vval.v_number = tv_dict_find(argvars[0].vval.v_dict,
-                                      tv_get_string(&argvars[1]),
-                                      -1) != NULL;
-}
+// f_has_key migrated to Rust (Phase 6)
 
 /// "remove({dict})" function
 void tv_dict_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg)
@@ -3400,10 +3099,13 @@ uint8_t *nvim_blob_xmemdup_ga_data(const blob_T *from, int len)
 /// Set ga_data of a blob (accessor for Rust).
 void nvim_blob_set_ga_data(blob_T *b, uint8_t *data) { b->bv_ga.ga_data = data; }
 
-/// tv_list_alloc_ret wrapper for Rust (returns list pointer).
+/// tv_list_alloc_ret self-contained impl for Rust (avoids circular call).
 list_T *nvim_tv_list_alloc_ret(typval_T *ret_tv, ptrdiff_t len)
 {
-  return tv_list_alloc_ret(ret_tv, len);
+  list_T *const l = nvim_list_alloc_impl();
+  tv_list_set_ret(ret_tv, l);
+  ret_tv->v_lock = VAR_UNLOCKED;
+  return l;
 }
 
 
@@ -3576,4 +3278,108 @@ void nvim_dict_remove_key(dict_T *d, const char *key)
   if (!HASHITEM_EMPTY(hi)) {
     hash_remove(&d->dv_hashtab, hi);
   }
+}
+
+// Phase 5 accessor functions for Rust list infrastructure migration
+
+/// Get gc_first_list global (accessor for Rust).
+list_T *nvim_gc_first_list_get(void) { return gc_first_list; }
+
+/// Set gc_first_list global (accessor for Rust).
+void nvim_gc_first_list_set(list_T *l) { gc_first_list = l; }
+
+/// Set lv_used_prev on a list (accessor for Rust).
+void nvim_list_set_used_prev(list_T *l, list_T *prev) { l->lv_used_prev = prev; }
+
+/// Set lv_used_next on a list (accessor for Rust).
+void nvim_list_set_used_next(list_T *l, list_T *next) { l->lv_used_next = next; }
+
+/// Get lv_used_prev from a list (accessor for Rust).
+list_T *nvim_list_get_used_prev(const list_T *l) { return l->lv_used_prev; }
+
+/// Initialize lua_table_ref on a list to LUA_NOREF (accessor for Rust).
+void nvim_list_init_lua_ref(list_T *l) { l->lua_table_ref = LUA_NOREF; }
+
+/// Clear lua_table_ref on a list using NLUA_CLEAR_REF (accessor for Rust).
+void nvim_list_clear_lua_ref(list_T *l) { NLUA_CLEAR_REF(l->lua_table_ref); }
+
+/// Get lv_watch from a list (accessor for Rust).
+listwatch_T *nvim_list_get_watch(const list_T *l) { return l->lv_watch; }
+
+/// Set lv_watch on a list (accessor for Rust).
+void nvim_list_set_watch(list_T *l, listwatch_T *lw) { l->lv_watch = lw; }
+
+/// Get lw_next from a listwatch (accessor for Rust).
+listwatch_T *nvim_listwatch_get_next(const listwatch_T *lw) { return lw->lw_next; }
+
+/// Set lw_next on a listwatch (accessor for Rust).
+void nvim_listwatch_set_next(listwatch_T *lw, listwatch_T *next) { lw->lw_next = next; }
+
+/// Get lw_item from a listwatch (accessor for Rust).
+listitem_T *nvim_listwatch_get_item(const listwatch_T *lw) { return lw->lw_item; }
+
+/// Set lw_item on a listwatch (accessor for Rust).
+void nvim_listwatch_set_item(listwatch_T *lw, listitem_T *item) { lw->lw_item = item; }
+
+/// Get tv_in_free_unref_items global (accessor for Rust).
+int nvim_get_tv_in_free_unref_items(void) { return (int)tv_in_free_unref_items; }
+
+/// Set lv_refcount on a list (accessor for Rust).
+void nvim_list_set_refcount(list_T *l, int rc) { l->lv_refcount = rc; }
+
+/// Initialize a static list with DO_NOT_FREE_CNT (accessor for Rust).
+/// CLEAR_POINTER zeros the struct, then sets refcount.
+void nvim_list_init_static_impl(list_T *l)
+{
+  CLEAR_POINTER(l);
+  l->lv_refcount = DO_NOT_FREE_CNT;
+}
+
+/// Self-contained list alloc (accessor for Rust).
+/// Avoids circular call with Rust tv_list_alloc.
+list_T *nvim_list_alloc_impl(void)
+{
+  list_T *const list = xcalloc(1, sizeof(list_T));
+  if (gc_first_list != NULL) {
+    gc_first_list->lv_used_prev = list;
+  }
+  list->lv_used_prev = NULL;
+  list->lv_used_next = gc_first_list;
+  gc_first_list = list;
+  list->lua_table_ref = LUA_NOREF;
+  return list;
+}
+
+/// Self-contained list free_list (accessor for Rust).
+/// Avoids circular call with Rust tv_list_free_list.
+void nvim_list_free_list_impl(list_T *l)
+{
+  if (l->lv_used_prev == NULL) {
+    gc_first_list = l->lv_used_next;
+  } else {
+    l->lv_used_prev->lv_used_next = l->lv_used_next;
+  }
+  if (l->lv_used_next != NULL) {
+    l->lv_used_next->lv_used_prev = l->lv_used_prev;
+  }
+  NLUA_CLEAR_REF(l->lua_table_ref);
+  xfree(l);
+}
+
+/// Self-contained list watch_fix (accessor for Rust).
+/// Avoids circular call: advances watchers past the removed item.
+void nvim_list_watch_fix(list_T *l, const listitem_T *item)
+{
+  for (listwatch_T *lw = l->lv_watch; lw != NULL; lw = lw->lw_next) {
+    if (lw->lw_item == item) {
+      lw->lw_item = item->li_next;
+    }
+  }
+}
+
+/// Clear a list item's tv and free it (accessor for Rust).
+void nvim_list_item_clear_free(listitem_T *li)
+{
+  tv_clear(&li->li_tv);
+  xfree(li);
 }

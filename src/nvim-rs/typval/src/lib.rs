@@ -1178,6 +1178,24 @@ extern "C" {
     // Phase 5: list item alloc/append infrastructure
     fn nvim_list_item_alloc() -> ListItemHandle;
     fn nvim_tv_list_append_item(l: ListHandle, item: ListItemHandle);
+    fn nvim_list_inc_len(l: ListHandle);
+    fn nvim_list_dec_len(l: ListHandle);
+    fn nvim_list_set_len(l: ListHandle, len: c_int);
+    fn nvim_list_dec_refcount(l: ListHandle) -> c_int;
+
+    // Phase 5: list alloc/free/watcher infrastructure
+    fn nvim_list_get_watch(l: ListHandle) -> *mut std::ffi::c_void;
+    fn nvim_list_set_watch(l: ListHandle, lw: *mut std::ffi::c_void);
+    fn nvim_listwatch_get_next(lw: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn nvim_listwatch_set_next(lw: *mut std::ffi::c_void, next: *mut std::ffi::c_void);
+    fn nvim_get_tv_in_free_unref_items() -> c_int;
+    fn nvim_list_alloc_impl() -> ListHandle;
+    fn nvim_list_free_list_impl(l: ListHandle);
+    fn nvim_list_watch_fix(l: ListHandle, item: ListItemHandle);
+    fn nvim_list_item_clear_free(li: ListItemHandle);
+    fn nvim_tv_clear(tv: TypevalHandle);
+    fn nvim_list_item_free(li: ListItemHandle);
+    fn nvim_list_init_static_impl(l: ListHandle);
 }
 
 // =============================================================================
@@ -1598,6 +1616,289 @@ pub unsafe extern "C" fn rs_tv_list_append_number(l: ListHandle, n: i64) {
     unsafe { nvim_tv_set_lock(li_tv, VarLockStatus::Unlocked as c_int) };
     unsafe { nvim_tv_set_number(li_tv, n) };
     unsafe { nvim_tv_list_append_item(l, li) };
+}
+
+// =============================================================================
+// Phase 5: List infrastructure (alloc, free, watch, item remove, insert)
+// =============================================================================
+
+/// FFI export: tv_list_item_remove - remove and free list item.
+/// Returns the item that was after the removed one, or NULL.
+#[export_name = "tv_list_item_remove"]
+pub unsafe extern "C" fn rs_tv_list_item_remove(
+    l: ListHandle,
+    item: ListItemHandle,
+) -> ListItemHandle {
+    let next_item = unsafe { nvim_listitem_get_next(item) };
+    rs_tv_list_drop_items(l, item, item);
+    unsafe { nvim_list_item_clear_free(item) };
+    next_item
+}
+
+/// FFI export: tv_list_watch_add - prepend a watcher to the list's watch list.
+#[export_name = "tv_list_watch_add"]
+pub unsafe extern "C" fn rs_tv_list_watch_add(l: ListHandle, lw: *mut std::ffi::c_void) {
+    let old_watch = unsafe { nvim_list_get_watch(l) };
+    unsafe { nvim_listwatch_set_next(lw, old_watch) };
+    unsafe { nvim_list_set_watch(l, lw) };
+}
+
+/// FFI export: tv_list_watch_remove - remove a watcher from the list's watch list.
+#[export_name = "tv_list_watch_remove"]
+pub unsafe extern "C" fn rs_tv_list_watch_remove(l: ListHandle, lwrem: *mut std::ffi::c_void) {
+    // We walk via raw pointer equality: scan lv_watch chain looking for lwrem.
+    // Use a pointer to the pointer: start with &l->lv_watch.
+    // Since we can't take a Rust reference to C-allocated memory easily,
+    // we track prev and current.
+    let mut prev: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut lw = unsafe { nvim_list_get_watch(l) };
+    while !lw.is_null() {
+        if std::ptr::eq(lw, lwrem) {
+            let next = unsafe { nvim_listwatch_get_next(lw) };
+            if prev.is_null() {
+                unsafe { nvim_list_set_watch(l, next) };
+            } else {
+                unsafe { nvim_listwatch_set_next(prev, next) };
+            }
+            break;
+        }
+        prev = lw;
+        lw = unsafe { nvim_listwatch_get_next(lw) };
+    }
+}
+
+/// FFI export: tv_list_alloc - allocate an empty list.
+#[export_name = "tv_list_alloc"]
+pub unsafe extern "C" fn rs_tv_list_alloc(_len: isize) -> ListHandle {
+    unsafe { nvim_list_alloc_impl() }
+}
+
+/// FFI export: tv_list_init_static - initialize a static list (DO_NOT_FREE_CNT).
+#[export_name = "tv_list_init_static"]
+pub unsafe extern "C" fn rs_tv_list_init_static(l: ListHandle) {
+    unsafe { nvim_list_init_static_impl(l) };
+}
+
+/// FFI export: tv_list_free_contents - free all items in a list.
+#[export_name = "tv_list_free_contents"]
+pub unsafe extern "C" fn rs_tv_list_free_contents(l: ListHandle) {
+    loop {
+        let item = unsafe { nvim_list_get_first(l) };
+        if item.is_null() {
+            break;
+        }
+        let next = unsafe { nvim_listitem_get_next(item) };
+        unsafe { nvim_list_set_first(l, next) };
+        let li_tv = unsafe { nvim_listitem_get_tv(item) };
+        unsafe { nvim_tv_clear(li_tv) };
+        unsafe { nvim_list_item_free(item) };
+    }
+    unsafe { nvim_list_set_len(l, 0) };
+    unsafe { nvim_list_set_idx_item(l, ListItemHandle::null()) };
+    unsafe { nvim_list_set_last(l, ListItemHandle::null()) };
+}
+
+/// FFI export: tv_list_free_list - free the list struct itself (removes from GC).
+#[export_name = "tv_list_free_list"]
+pub unsafe extern "C" fn rs_tv_list_free_list(l: ListHandle) {
+    unsafe { nvim_list_free_list_impl(l) };
+}
+
+/// FFI export: tv_list_free - free a list including its contents.
+#[export_name = "tv_list_free"]
+pub unsafe extern "C" fn rs_tv_list_free(l: ListHandle) {
+    if unsafe { nvim_get_tv_in_free_unref_items() } != 0 {
+        return;
+    }
+    unsafe { rs_tv_list_free_contents(l) };
+    unsafe { rs_tv_list_free_list(l) };
+}
+
+/// FFI export: tv_list_unref - decrement refcount and free if <= 0.
+#[export_name = "tv_list_unref"]
+pub unsafe extern "C" fn rs_tv_list_unref(l: ListHandle) {
+    if l.is_null() {
+        return;
+    }
+    let new_rc = unsafe { nvim_list_dec_refcount(l) };
+    if new_rc <= 0 {
+        unsafe { rs_tv_list_free(l) };
+    }
+}
+
+/// FFI export: tv_list_drop_items - unlink items item..item2 from list (does NOT free).
+#[export_name = "tv_list_drop_items"]
+pub unsafe extern "C" fn rs_tv_list_drop_items(
+    l: ListHandle,
+    item: ListItemHandle,
+    item2: ListItemHandle,
+) {
+    // Notify watchers and decrement len for each item being dropped.
+    let mut ip = item;
+    loop {
+        unsafe { nvim_list_dec_len(l) };
+        unsafe { nvim_list_watch_fix(l, ip) };
+        let next_ip = unsafe { nvim_listitem_get_next(ip) };
+        let next_item2 = unsafe { nvim_listitem_get_next(item2) };
+        if std::ptr::eq(ip.as_ptr(), item2.as_ptr()) {
+            break;
+        }
+        // Advance: ip = ip->li_next (but stop when ip == item2)
+        // The loop condition is ip != item2->li_next
+        // Actually we need: for ip in item..=item2
+        // The C does: for ip = item; ip != item2->li_next; ip = ip->li_next
+        // We already handle ip == item2 case above, so advance to next.
+        let _ = next_item2; // not used here
+        ip = next_ip;
+    }
+
+    let next_item2 = unsafe { nvim_listitem_get_next(item2) };
+    let prev_item = unsafe { nvim_listitem_get_prev(item) };
+
+    if next_item2.is_null() {
+        // item2 was last; update lv_last to item->li_prev
+        unsafe { nvim_list_set_last(l, prev_item) };
+    } else {
+        // item2->li_next->li_prev = item->li_prev
+        unsafe { nvim_listitem_set_prev(next_item2, prev_item) };
+    }
+
+    if prev_item.is_null() {
+        // item was first; update lv_first to item2->li_next
+        unsafe { nvim_list_set_first(l, next_item2) };
+    } else {
+        // item->li_prev->li_next = item2->li_next
+        unsafe { nvim_listitem_set_next(prev_item, next_item2) };
+    }
+
+    unsafe { nvim_list_set_idx_item(l, ListItemHandle::null()) };
+}
+
+/// FFI export: tv_list_remove_items - unlink and free items item..item2.
+#[export_name = "tv_list_remove_items"]
+pub unsafe extern "C" fn rs_tv_list_remove_items(
+    l: ListHandle,
+    item: ListItemHandle,
+    item2: ListItemHandle,
+) {
+    unsafe { rs_tv_list_drop_items(l, item, item2) };
+    let mut li = item;
+    loop {
+        let li_tv = unsafe { nvim_listitem_get_tv(li) };
+        unsafe { nvim_tv_clear(li_tv) };
+        let nli = unsafe { nvim_listitem_get_next(li) };
+        if std::ptr::eq(li.as_ptr(), item2.as_ptr()) {
+            unsafe { nvim_list_item_free(li) };
+            break;
+        }
+        unsafe { nvim_list_item_free(li) };
+        li = nli;
+    }
+}
+
+/// FFI export: tv_list_move_items - move items from l to end of tgt_l.
+#[export_name = "tv_list_move_items"]
+pub unsafe extern "C" fn rs_tv_list_move_items(
+    l: ListHandle,
+    item: ListItemHandle,
+    item2: ListItemHandle,
+    tgt_l: ListHandle,
+    cnt: c_int,
+) {
+    unsafe { rs_tv_list_drop_items(l, item, item2) };
+
+    let tgt_last = unsafe { nvim_list_get_last(tgt_l) };
+    unsafe { nvim_listitem_set_prev(item, tgt_last) };
+    unsafe { nvim_listitem_set_next(item2, ListItemHandle::null()) };
+
+    if tgt_last.is_null() {
+        unsafe { nvim_list_set_first(tgt_l, item) };
+    } else {
+        unsafe { nvim_listitem_set_next(tgt_last, item) };
+    }
+    unsafe { nvim_list_set_last(tgt_l, item2) };
+
+    let tgt_len = unsafe { nvim_list_get_len(tgt_l) };
+    unsafe { nvim_list_set_len(tgt_l, tgt_len + cnt) };
+}
+
+/// FFI export: tv_list_insert - insert item before another item (NULL = append).
+#[export_name = "tv_list_insert"]
+pub unsafe extern "C" fn rs_tv_list_insert(
+    l: ListHandle,
+    ni: ListItemHandle,
+    item: ListItemHandle,
+) {
+    if item.is_null() {
+        // Append at end.
+        unsafe { rs_tv_list_append(l, ni) };
+    } else {
+        // Insert before item.
+        let prev = unsafe { nvim_listitem_get_prev(item) };
+        unsafe { nvim_listitem_set_prev(ni, prev) };
+        unsafe { nvim_listitem_set_next(ni, item) };
+        if prev.is_null() {
+            unsafe { nvim_list_set_first(l, ni) };
+            let idx = unsafe { nvim_list_get_idx(l) };
+            unsafe { nvim_list_set_idx(l, idx + 1) };
+        } else {
+            unsafe { nvim_listitem_set_next(prev, ni) };
+            unsafe { nvim_list_set_idx_item(l, ListItemHandle::null()) };
+        }
+        unsafe { nvim_listitem_set_prev(item, ni) };
+        unsafe { nvim_list_inc_len(l) };
+    }
+}
+
+/// FFI export: tv_list_insert_tv - insert a copy of tv before item.
+#[export_name = "tv_list_insert_tv"]
+pub unsafe extern "C" fn rs_tv_list_insert_tv(
+    l: ListHandle,
+    tv: TypevalHandle,
+    item: ListItemHandle,
+) {
+    let ni = unsafe { nvim_list_item_alloc() };
+    let ni_tv = unsafe { nvim_listitem_get_tv(ni) };
+    unsafe { nvim_tv_copy(tv, ni_tv) };
+    unsafe { rs_tv_list_insert(l, ni, item) };
+}
+
+/// FFI export: tv_list_alloc_ret - alloc list and set as return value.
+#[export_name = "tv_list_alloc_ret"]
+pub unsafe extern "C" fn rs_tv_list_alloc_ret(ret_tv: TypevalHandle, len: isize) -> ListHandle {
+    let l = unsafe { rs_tv_list_alloc(len) };
+    unsafe { nvim_list_ref(l) };
+    unsafe { nvim_tv_set_list(ret_tv, l) };
+    l
+}
+
+// =============================================================================
+// Phase 6: VimL functions (f_has_key)
+// =============================================================================
+
+/// FFI export: f_has_key - VimL has_key() function.
+#[export_name = "f_has_key"]
+pub unsafe extern "C" fn rs_f_has_key(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *const std::ffi::c_void,
+) {
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    if tv_check_for_dict_arg_impl(argvars, 0) == FAIL {
+        return;
+    }
+    let d = unsafe { nvim_tv_get_dict(arg0) };
+    if d.is_null() {
+        return;
+    }
+    let arg1 = unsafe { nvim_typval_array_get(argvars, 1) };
+    // Use nvim_tv_get_string (wraps tv_get_string) so numbers are converted
+    // to their string representation via the static buffer. tv_get_string_ptr_impl
+    // only handles VAR_STRING and returns NULL otherwise, which would crash
+    // hash_find on a numeric key like has_key(d, 1).
+    let key = unsafe { nvim_tv_get_string(arg1, std::ptr::null_mut()) };
+    let found = unsafe { nvim_dict_find(d, key, -1) };
+    unsafe { nvim_tv_set_number(rettv, i64::from(!found.is_null())) };
 }
 
 // =============================================================================

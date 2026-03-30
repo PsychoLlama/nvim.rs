@@ -503,6 +503,26 @@ extern const char *tv_get_string_chk(const typval_T *tv);
 extern const char *tv_get_string(const typval_T *tv);
 extern const char *tv_get_string_buf(const typval_T *tv, char *buf);
 
+// List infrastructure functions (migrated to Rust, Phase 5)
+extern listitem_T *tv_list_item_remove(list_T *l, listitem_T *item);
+extern void tv_list_watch_add(list_T *l, listwatch_T *lw);
+extern void tv_list_watch_remove(list_T *l, listwatch_T *lwrem);
+extern list_T *tv_list_alloc(ptrdiff_t len);
+extern void tv_list_init_static(list_T *l);
+extern void tv_list_free_contents(list_T *l);
+extern void tv_list_free_list(list_T *l);
+extern void tv_list_free(list_T *l);
+extern void tv_list_unref(list_T *l);
+extern void tv_list_drop_items(list_T *l, listitem_T *item, listitem_T *item2);
+extern void tv_list_remove_items(list_T *l, listitem_T *item, listitem_T *item2);
+extern void tv_list_move_items(list_T *l, listitem_T *item, listitem_T *item2, list_T *tgt_l, int cnt);
+extern void tv_list_insert(list_T *l, listitem_T *ni, listitem_T *item);
+extern void tv_list_insert_tv(list_T *l, typval_T *tv, listitem_T *item);
+extern list_T *tv_list_alloc_ret(typval_T *ret_tv, ptrdiff_t len);
+
+// f_has_key (migrated to Rust, Phase 6)
+extern void f_has_key(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // List append functions (migrated to Rust, Phase 5)
 extern void tv_list_append(list_T *l, listitem_T *item);
 extern void tv_list_append_tv(list_T *l, typval_T *tv);
