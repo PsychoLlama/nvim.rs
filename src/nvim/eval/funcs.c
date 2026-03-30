@@ -4481,7 +4481,7 @@ void nvim_eval_set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 // nvim_eval_len: inlined into Rust (misc.rs) — uses typval field accessor shims
 
 
-void nvim_eval_execute(typval_T *argvars, typval_T *rettv) { execute_common(argvars, rettv, 0); }
+// nvim_eval_execute: inlined into Rust (misc.rs)
 
 void nvim_eval_flatten(typval_T *argvars, typval_T *rettv, bool make_copy)
 {
@@ -5808,77 +5808,11 @@ void nvim_eval_eval(typval_T *argvars, typval_T *rettv)
   }
 }
 
-void nvim_eval_exists(typval_T *argvars, typval_T *rettv)
-{
-  int n = false;
-
-  const char *p = tv_get_string(&argvars[0]);
-  if (*p == '$') {  // Environment variable.
-    if (os_env_exists(p + 1, false)) {
-      n = true;
-    } else {
-      char *const exp = expand_env_save((char *)p);
-      if (exp != NULL && *exp != '$') {
-        n = true;
-      }
-      xfree(exp);
-    }
-  } else if (*p == '&' || *p == '+') {  // Option.
-    n = (eval_option(&p, NULL, true) == OK);
-    if (*skipwhite(p) != NUL) {
-      n = false;  // Trailing garbage.
-    }
-  } else if (*p == '*') {  // Internal or user defined function.
-    n = strnequal(p, "*v:lua.", 7) ? nlua_func_exists(p + 7) : function_exists(p + 1, false);
-  } else if (*p == ':') {
-    n = cmd_exists(p + 1);
-  } else if (*p == '#') {
-    if (p[1] == '#') {
-      n = autocmd_supported(p + 2);
-    } else {
-      n = au_exists(p + 1);
-    }
-  } else {  // Internal variable.
-    n = var_exists(p);
-  }
-
-  rettv->vval.v_number = n;
-}
+// nvim_eval_exists: inlined into Rust (misc.rs)
 
 // nvim_eval_has: migrated to Rust (rs_f_has in funcs/misc.rs)
 
-void nvim_eval_json_decode(typval_T *argvars, typval_T *rettv)
-{
-  char numbuf[NUMBUFLEN];
-  const char *s = NULL;
-  char *tofree = NULL;
-  size_t len;
-  if (argvars[0].v_type == VAR_LIST) {
-    if (!encode_vim_list_to_buf(argvars[0].vval.v_list, &len, &tofree)) {
-      emsg(_("E474: Failed to convert list to string"));
-      return;
-    }
-    s = tofree;
-    if (s == NULL) {
-      assert(len == 0);
-      s = "";
-    }
-  } else {
-    s = tv_get_string_buf_chk(&argvars[0], numbuf);
-    if (s) {
-      len = strlen(s);
-    } else {
-      return;
-    }
-  }
-  if (json_decode_string(s, len, rettv) == FAIL) {
-    semsg(_("E474: Failed to parse %.*s"), (int)len, s);
-    rettv->v_type = VAR_NUMBER;
-    rettv->vval.v_number = 0;
-  }
-  assert(rettv->v_type != VAR_UNKNOWN);
-  xfree(tofree);
-}
+// nvim_eval_json_decode: inlined into Rust (misc.rs)
 
 void nvim_eval_printf(typval_T *argvars, typval_T *rettv)
 {

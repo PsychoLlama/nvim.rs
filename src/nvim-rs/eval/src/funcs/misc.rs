@@ -912,7 +912,8 @@ pub unsafe extern "C" fn rs_f_matchstrpos(
 // =============================================================================
 
 extern "C" {
-    fn nvim_eval_execute(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_execute: inlined — calls execute_common directly
+    fn execute_common(argvars: *const c_void, rettv: *mut c_void, arg_off: c_int);
     fn nvim_eval_flatten(argvars: *const c_void, rettv: *mut c_void, make_copy: bool);
     fn nvim_eval_common_function(argvars: *const c_void, rettv: *mut c_void, is_funcref: bool);
     // nvim_eval_hlID: inlined into rs_f_hlID below
@@ -968,7 +969,7 @@ pub unsafe extern "C" fn rs_f_execute(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_execute(argvars, rettv);
+    execute_common(argvars, rettv, 0);
 }
 
 /// "flatten()" function - flatten a list in-place
@@ -2103,11 +2104,30 @@ pub unsafe extern "C" fn rs_f_reduce(
 
 extern "C" {
     fn nvim_eval_eval(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_exists(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_exists: inlined into rs_f_exists below
     // nvim_eval_has: inlined below
-    fn nvim_eval_json_decode(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_json_decode: inlined into rs_f_json_decode below
     fn nvim_eval_printf(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_sha256: inlined into rs_f_sha256 below
+    // exists() inlining helpers
+    fn skipwhite(q: *const c_char) -> *const c_char;
+    fn os_env_exists(name: *const c_char, case_sensitive: bool) -> bool;
+    fn expand_env_save(src: *const c_char) -> *mut c_char;
+    fn eval_option(arg: *mut *const c_char, rettv: *mut c_void, evaluate: bool) -> c_int;
+    fn function_exists(name: *const c_char, no_deref: bool) -> c_int;
+    fn nlua_func_exists(funcname: *const c_char) -> c_int;
+    fn cmd_exists(name: *const c_char) -> c_int;
+    fn autocmd_supported(event: *const c_char) -> c_int;
+    fn au_exists(arg: *const c_char) -> bool;
+    fn var_exists(var: *const c_char) -> c_int;
+    fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool;
+    // json_decode() inlining helpers
+    fn encode_vim_list_to_buf(
+        list: *const c_void,
+        ret_len: *mut usize,
+        ret_buf: *mut *mut c_char,
+    ) -> bool;
+    fn json_decode_string(buf: *const c_char, buf_len: usize, rettv: *mut c_void) -> c_int;
     // sha256 helpers
     fn sha256_bytes(
         buf: *const u8,
@@ -2134,6 +2154,8 @@ extern "C" {
 
     static stdin_isatty: bool;
     static stdout_isatty: bool;
+    #[link_name = "emsg"]
+    fn p10_emsg(s: *const c_char) -> c_int;
 }
 
 // =============================================================================
@@ -2159,7 +2181,55 @@ pub unsafe extern "C" fn rs_f_exists(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_exists(argvars, rettv);
+    const OK: c_int = 1;
+    let p_raw = p10_tv_get_string(argvars.cast_mut());
+    let mut n: c_int = 0;
+    let p = p_raw.cast::<u8>();
+    if p.is_null() {
+        p3_misc_tv_set_number(rettv, 0);
+        return;
+    }
+    let first = *p;
+    if first == b'$' {
+        // Environment variable
+        let name = p_raw.add(1);
+        if os_env_exists(name, false) {
+            n = 1;
+        } else {
+            let exp = expand_env_save(p_raw);
+            if !exp.is_null() && *exp.cast::<u8>() != b'$' {
+                n = 1;
+            }
+            libc::free(exp.cast::<libc::c_void>());
+        }
+    } else if first == b'&' || first == b'+' {
+        // Option
+        let mut q: *const c_char = p_raw;
+        n = i32::from(eval_option(&raw mut q, std::ptr::null_mut(), true) == OK);
+        if n == 1 && *skipwhite(q).cast::<u8>() != b'\0' {
+            n = 0; // trailing garbage
+        }
+    } else if first == b'*' {
+        // Internal or user defined function
+        n = if strnequal(p_raw, c"*v:lua.".as_ptr(), 7) {
+            nlua_func_exists(p_raw.add(7))
+        } else {
+            function_exists(p_raw.add(1), false)
+        };
+    } else if first == b':' {
+        n = cmd_exists(p_raw.add(1));
+    } else if first == b'#' {
+        let p2 = *p.add(1);
+        n = if p2 == b'#' {
+            autocmd_supported(p_raw.add(2))
+        } else {
+            i32::from(au_exists(p_raw.add(1)))
+        };
+    } else {
+        // Internal variable
+        n = var_exists(p_raw);
+    }
+    p3_misc_tv_set_number(rettv, i64::from(n));
 }
 
 /// Static feature list for has() - platform-specific features included per cfg.
@@ -2374,7 +2444,42 @@ pub unsafe extern "C" fn rs_f_json_decode(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_json_decode(argvars, rettv);
+    const FAIL: c_int = 0;
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let (s, len): (*const c_char, usize);
+
+    if p3_misc_tv_get_type(argvars) == VAR_LIST_P2 {
+        let list = nvim_eval_tv_get_list_ptr(argvars.cast_mut());
+        let mut list_len: usize = 0;
+        if !encode_vim_list_to_buf(list, &raw mut list_len, &raw mut tofree) {
+            p10_emsg(c"E474: Failed to convert list to string".as_ptr());
+            return;
+        }
+        s = if tofree.is_null() {
+            c"".as_ptr()
+        } else {
+            tofree
+        };
+        len = list_len;
+    } else {
+        let mut buf = [0u8; NUMBUFLEN];
+        let tmp = nvim_eval_tv_get_string_buf(argvars, buf.as_mut_ptr());
+        if tmp.is_null() {
+            return;
+        }
+        s = tmp.cast::<c_char>();
+        len = libc::strlen(s);
+    }
+
+    if json_decode_string(s, len, rettv) == FAIL {
+        semsg(
+            c"E474: Failed to parse %.*s".as_ptr(),
+            c_int::try_from(len).unwrap_or(c_int::MAX),
+            s,
+        );
+        p3_misc_tv_set_number(rettv, 0);
+    }
+    libc::free(tofree.cast::<libc::c_void>());
 }
 
 /// "printf()" function - format a string
