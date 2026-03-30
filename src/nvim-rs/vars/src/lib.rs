@@ -41,6 +41,7 @@ use std::ffi::{c_char, c_int};
 pub mod checks;
 pub mod eval_helpers;
 pub mod lookup;
+pub mod vimvar_accessors;
 
 // Re-export typval types for convenience
 pub use nvim_typval::{VarLockStatus, VarType};

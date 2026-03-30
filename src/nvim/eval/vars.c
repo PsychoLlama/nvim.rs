@@ -96,6 +96,25 @@ extern bool rs_var_check_fixed(int flags, const char *name, size_t name_len);
 extern bool rs_var_wrong_func_name(const char *name, bool new_var);
 extern bool rs_valid_varname(const char *varname);
 
+// Phase 4: v: variable accessor functions migrated to Rust
+extern typval_T *rs_get_vim_var_tv(VimVarIndex idx);
+extern char *rs_get_vim_var_name(VimVarIndex idx);
+extern varnumber_T rs_get_vim_var_nr(VimVarIndex idx);
+extern list_T *rs_get_vim_var_list(VimVarIndex idx);
+extern dict_T *rs_get_vim_var_dict(VimVarIndex idx);
+extern char *rs_get_vim_var_str(VimVarIndex idx);
+extern partial_T *rs_get_vim_var_partial(VimVarIndex idx);
+extern void rs_set_vim_var_tv(VimVarIndex idx, typval_T *tv);
+extern void rs_set_vim_var_type(VimVarIndex idx, VarType type);
+extern void rs_set_vim_var_nr(VimVarIndex idx, varnumber_T val);
+extern void rs_set_vim_var_bool(VimVarIndex idx, BoolVarValue val);
+extern void rs_set_vim_var_special(VimVarIndex idx, SpecialVarValue val);
+extern void rs_set_vim_var_char(int c);
+extern void rs_set_vim_var_string(VimVarIndex idx, const char *val, ptrdiff_t len);
+extern void rs_set_vim_var_list(VimVarIndex idx, list_T *val);
+extern void rs_set_vim_var_dict(VimVarIndex idx, dict_T *val);
+extern void rs_set_vim_var_partial(VimVarIndex idx, partial_T *val);
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -1674,60 +1693,40 @@ dict_T *get_vimvar_dict(void)
 /// @param[in]  idx  Index of variable to set.
 /// @param[in]  val  Value to set to. Will be copied.
 void set_vim_var_tv(const VimVarIndex idx, typval_T *const tv)
-{
-  typval_T *tv_out = get_vim_var_tv(idx);
-  tv_clear(tv_out);
-  tv_copy(tv, tv_out);
-}
+{ rs_set_vim_var_tv(idx, tv); }
 
 char *get_vim_var_name(const VimVarIndex idx)
   FUNC_ATTR_NONNULL_RET
-{
-  return vimvars[idx].vv_name;
-}
+{ return rs_get_vim_var_name(idx); }
 
 /// Get typval_T v: variable value.
 typval_T *get_vim_var_tv(const VimVarIndex idx) { return &vimvars[idx].vv_tv; }
 
 /// Get number v: variable value.
 varnumber_T get_vim_var_nr(const VimVarIndex idx) FUNC_ATTR_PURE
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  return tv->vval.v_number;
-}
+{ return rs_get_vim_var_nr(idx); }
 
 /// Get List v: variable value.  Caller must take care of reference count when
 /// needed.
 list_T *get_vim_var_list(const VimVarIndex idx) FUNC_ATTR_PURE
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  return tv->vval.v_list;
-}
+{ return rs_get_vim_var_list(idx); }
 
 /// Get Dictionary v: variable value.  Caller must take care of reference count
 /// when needed.
 dict_T *get_vim_var_dict(const VimVarIndex idx) FUNC_ATTR_PURE
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  return tv->vval.v_dict;
-}
+{ return rs_get_vim_var_dict(idx); }
 
 /// Get string v: variable value.  Uses a static buffer, can only be used once.
 /// If the String variable has never been set, return an empty string.
 /// Never returns NULL.
 char *get_vim_var_str(const VimVarIndex idx)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET
-{
-  return (char *)tv_get_string(get_vim_var_tv(idx));
-}
+{ return rs_get_vim_var_str(idx); }
 
 /// Get Partial v: variable value.  Caller must take care of reference count
 /// when needed.
 partial_T *get_vim_var_partial(const VimVarIndex idx) FUNC_ATTR_PURE
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  return tv->vval.v_partial;
-}
+{ return rs_get_vim_var_partial(idx); }
 
 /// Local string buffer for the next two functions to store a variable name
 /// with its prefix. Allocated in cat_prefix_varname(), freed later in
@@ -1843,121 +1842,38 @@ char *get_user_var_name(expand_T *xp, int idx)
 /// @param[in]  idx  Index of variable to set.
 /// @param[in]  type  Type to set to.
 void set_vim_var_type(const VimVarIndex idx, const VarType type)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv->v_type = type;
-}
+{ rs_set_vim_var_type(idx, type); }
 
 /// Set number v: variable to the given value
-/// Note that this does not set the type, use set_vim_var_type() for that.
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  val  Value to set to.
 void set_vim_var_nr(const VimVarIndex idx, const varnumber_T val)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv_clear(tv);
-  tv->vval.v_number = val;
-}
+{ rs_set_vim_var_nr(idx, val); }
 
 /// Set boolean v: {true, false} to the given value
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  val  Value to set to.
 void set_vim_var_bool(const VimVarIndex idx, const BoolVarValue val)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv_clear(tv);
-  tv->v_type = VAR_BOOL;
-  tv->vval.v_bool = val;
-}
+{ rs_set_vim_var_bool(idx, val); }
 
 /// Set special v: variable to the given value
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  val  Value to set to.
 void set_vim_var_special(const VimVarIndex idx, const SpecialVarValue val)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv_clear(tv);
-  tv->v_type = VAR_SPECIAL;
-  tv->vval.v_special = val;
-}
+{ rs_set_vim_var_special(idx, val); }
 
 /// Set v:char to character "c".
-void set_vim_var_char(int c)
-{
-  char buf[MB_MAXCHAR + 1];
-
-  buf[utf_char2bytes(c, buf)] = NUL;
-  set_vim_var_string(VV_CHAR, buf, -1);
-}
+void set_vim_var_char(int c) { rs_set_vim_var_char(c); }
 
 /// Set string v: variable to the given string
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  val  Value to set to. Will be copied.
-/// @param[in]  len  Length of that value or -1 in which case strlen() will be
-///                  used.
 void set_vim_var_string(const VimVarIndex idx, const char *const val, const ptrdiff_t len)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv_clear(tv);
-  tv->v_type = VAR_STRING;
-  if (val == NULL) {
-    tv->vval.v_string = NULL;
-  } else if (len == -1) {
-    tv->vval.v_string = xstrdup(val);
-  } else {
-    tv->vval.v_string = xstrndup(val, (size_t)len);
-  }
-}
+{ rs_set_vim_var_string(idx, val, len); }
 
 /// Set list v: variable to the given list
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in,out]  val  Value to set to. Reference count will be incremented.
 void set_vim_var_list(const VimVarIndex idx, list_T *const val)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv_clear(tv);
-  tv->v_type = VAR_LIST;
-  tv->vval.v_list = val;
-  if (val != NULL) {
-    tv_list_ref(val);
-  }
-}
+{ rs_set_vim_var_list(idx, val); }
 
 /// Set Dictionary v: variable to the given dictionary
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in,out]  val  Value to set to. Reference count will be incremented.
-///                      Also keys of the dictionary will be made read-only.
 void set_vim_var_dict(const VimVarIndex idx, dict_T *const val)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv_clear(tv);
-  tv->v_type = VAR_DICT;
-  tv->vval.v_dict = val;
-  if (val == NULL) {
-    return;
-  }
-
-  val->dv_refcount++;
-  // Set readonly
-  tv_dict_set_keys_readonly(val);
-}
+{ rs_set_vim_var_dict(idx, val); }
 
 /// Set partial v: variable to the given value
-/// Note that this does not set the type, use set_vim_var_type() for that.
-///
-/// @param[in]  idx  Index of variable to set.
-/// @param[in]  val  Value to set to.
 void set_vim_var_partial(const VimVarIndex idx, partial_T *val)
-{
-  typval_T *tv = get_vim_var_tv(idx);
-  tv->vval.v_partial = val;
-}
+{ rs_set_vim_var_partial(idx, val); }
 
 /// Set v:register if needed.
 void set_reg_var(int c)
@@ -3392,6 +3308,51 @@ typval_T *nvim_dictitem_get_tv(dictitem_T *di)
   }
   return &di->di_tv;
 }
+
+// Phase 4: typval_T field accessor functions for Rust FFI
+// (nvim_tv_get_type, nvim_tv_set_type, nvim_tv_get/set_number, nvim_tv_get/set_bool,
+//  nvim_tv_get/set_list, nvim_tv_get/set_dict, nvim_tv_get_lock already in typval.c)
+
+/// Get vval.v_special from typval_T.
+int nvim_tv_get_special(const typval_T *tv) { return (int)tv->vval.v_special; }
+
+/// Set vval.v_special in typval_T.
+void nvim_tv_set_special(typval_T *tv, int val) { tv->vval.v_special = (SpecialVarValue)val; }
+
+/// Get vval.v_string from typval_T.
+char *nvim_tv_get_string_val(const typval_T *tv) { return tv->vval.v_string; }
+
+/// Set vval.v_string in typval_T (raw pointer assignment, no copy).
+void nvim_tv_set_string_val(typval_T *tv, char *s) { tv->vval.v_string = s; }
+
+/// Get vval.v_partial from typval_T.
+partial_T *nvim_tv_get_partial(const typval_T *tv) { return tv->vval.v_partial; }
+
+/// Set vval.v_partial in typval_T.
+void nvim_tv_set_partial(typval_T *tv, partial_T *p) { tv->vval.v_partial = p; }
+
+/// Get vimvars[idx].vv_name.
+char *nvim_vimvar_get_name(int idx) { return vimvars[idx].vv_name; }
+
+/// Get vimvars[idx].vv_flags.
+int nvim_vimvar_get_flags(int idx) { return (int)vimvars[idx].vv_flags; }
+
+/// Set vimvars[idx].vv_type to VAR_UNKNOWN (used in prepare_vimvar).
+void nvim_vimvar_set_str_null(int idx) { vimvars[idx].vv_str = NULL; }
+
+/// Get vimvarht pointer (for prepare_vimvar/restore_vimvar).
+hashtab_T *nvim_get_vimvarht(void) { return &vimvarht; }
+
+/// Get globvarht pointer (for del_menutrans_vars).
+hashtab_T *nvim_get_globvarht(void) { return &globvarht; }
+
+/// Increment a dict_T refcount (for set_vim_var_dict).
+/// nvim_dict_incr_refcount is not in any other shim file, so define it here.
+void nvim_dict_incr_refcount(dict_T *d) { if (d != NULL) { d->dv_refcount++; } }
+
+/// Make all dict keys read-only (for set_vim_var_dict).
+/// nvim_dict_set_keys_readonly is not in any other shim file, so define here.
+void nvim_dict_set_keys_readonly(dict_T *d) { tv_dict_set_keys_readonly(d); }
 
 /// Emit E5700 error for invalid spellsuggest expression result.
 void nvim_vars_emsg_e5700(void)
