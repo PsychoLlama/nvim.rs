@@ -12,7 +12,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::trivially_copy_pass_by_ref)] // Consistency with C API and Rust conventions
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::{
     VTermColor, VTermGlyphInfo, VTermKeyEncodingStack, VTermLineInfo, VTermPos, VTermRect,
@@ -2297,6 +2297,393 @@ pub unsafe extern "C" fn rs_vterm_state_savecursor(state: VTermStateHandle, save
         );
         vterm_state_savepen(state, 0);
         rs_vterm_state_updatecursor(state, &raw const oldpos, 1);
+    }
+}
+
+// =============================================================================
+// Phase 2: Key encoding stack and escape handler (migrated from C)
+// =============================================================================
+
+// Encoding type constants (matching C defines in vterm_internal_defs.h)
+#[allow(dead_code)]
+const ENC_UTF8: c_int = 0;
+const ENC_SINGLE_94: c_int = 1;
+
+// Key encoding bit flags (matching C defines in vterm_internal_defs.h)
+const KEY_ENCODING_DISAMBIGUATE: c_int = 0x1;
+const KEY_ENCODING_REPORT_EVENTS: c_int = 0x2;
+const KEY_ENCODING_REPORT_ALTERNATE: c_int = 0x4;
+const KEY_ENCODING_REPORT_ALL_KEYS: c_int = 0x8;
+const KEY_ENCODING_REPORT_ASSOCIATED: c_int = 0x10;
+
+// schar_from_ascii equivalent for little-endian (x86_64): schar_T is uint32_t, = (uint32_t)(c)
+#[inline]
+fn schar_from_ascii(c: u8) -> u32 {
+    u32::from(c)
+}
+
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_vterm_state_get_vt_ctrl8bit(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_vt_ctrl8bit(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_call_putglyph(
+        state: VTermStateHandle,
+        schar: u32,
+        width: c_int,
+        pos: VTermPos,
+    );
+    fn nvim_vterm_encoding_call_init(enc: *mut c_void, data: *mut c_void);
+    fn nvim_vterm_state_row_width_from_ptr(state: VTermStateHandle, row: c_int) -> c_int;
+    fn vterm_state_reset(state: VTermStateHandle, hard: c_int);
+    fn rs_vterm_lookup_encoding_ptr(
+        enc_type: c_int,
+        designation: c_char,
+    ) -> *const crate::VTermEncoding;
+}
+
+/// Query kitty keyboard protocol flags and output response.
+///
+/// Replaces C `request_key_encoding_flags`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_request_key_encoding_flags(state: VTermStateHandle) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    let screen = if (*s).mode.alt_screen() {
+        VTERM_BUFIDX_ALTSCREEN
+    } else {
+        VTERM_BUFIDX_PRIMARY
+    };
+    let stack = &(*s).key_encoding_stacks[screen];
+    let flags = stack.current();
+
+    let mut reply: c_int = 0;
+    if flags.disambiguate() {
+        reply |= KEY_ENCODING_DISAMBIGUATE;
+    }
+    if flags.report_events() {
+        reply |= KEY_ENCODING_REPORT_EVENTS;
+    }
+    if flags.report_alternate() {
+        reply |= KEY_ENCODING_REPORT_ALTERNATE;
+    }
+    if flags.report_all_keys() {
+        reply |= KEY_ENCODING_REPORT_ALL_KEYS;
+    }
+    if flags.report_associated() {
+        reply |= KEY_ENCODING_REPORT_ASSOCIATED;
+    }
+
+    let vt = (*s).vt;
+    vterm_push_output_sprintf_ctrl(vt, C1_CSI, c"?%du".as_ptr(), reply);
+}
+
+/// Set kitty keyboard protocol flags.
+///
+/// Replaces C `set_key_encoding_flags`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_key_encoding_flags(
+    state: VTermStateHandle,
+    arg: c_int,
+    mode: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    // When mode is 3, bits set in arg reset the corresponding mode
+    let set = mode != 3;
+    // When mode is 1, unset bits are reset
+    let reset_unset = mode == 1;
+
+    let screen = if (*s).mode.alt_screen() {
+        VTERM_BUFIDX_ALTSCREEN
+    } else {
+        VTERM_BUFIDX_PRIMARY
+    };
+    let stack = &mut (*s).key_encoding_stacks[screen];
+    let flags = stack.current_mut();
+
+    if arg & KEY_ENCODING_DISAMBIGUATE != 0 {
+        flags.set_disambiguate(set);
+    } else if reset_unset {
+        flags.set_disambiguate(false);
+    }
+
+    if arg & KEY_ENCODING_REPORT_EVENTS != 0 {
+        flags.set_report_events(set);
+    } else if reset_unset {
+        flags.set_report_events(false);
+    }
+
+    if arg & KEY_ENCODING_REPORT_ALTERNATE != 0 {
+        flags.set_report_alternate(set);
+    } else if reset_unset {
+        flags.set_report_alternate(false);
+    }
+
+    if arg & KEY_ENCODING_REPORT_ALL_KEYS != 0 {
+        flags.set_report_all_keys(set);
+    } else if reset_unset {
+        flags.set_report_all_keys(false);
+    }
+
+    if arg & KEY_ENCODING_REPORT_ASSOCIATED != 0 {
+        flags.set_report_associated(set);
+    } else if reset_unset {
+        flags.set_report_associated(false);
+    }
+}
+
+/// Push kitty keyboard flags onto stack.
+///
+/// Replaces C `push_key_encoding_flags`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_push_key_encoding_flags(
+    state: VTermStateHandle,
+    arg: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    let screen = if (*s).mode.alt_screen() {
+        VTERM_BUFIDX_ALTSCREEN
+    } else {
+        VTERM_BUFIDX_PRIMARY
+    };
+    let stack = &mut (*s).key_encoding_stacks[screen];
+    stack.push_evict();
+    // Now set the top entry with mode=1 (reset_unset=true, set=true for set bits)
+    rs_vterm_state_set_key_encoding_flags(state, arg, 1);
+}
+
+/// Pop kitty keyboard flags from stack.
+///
+/// Replaces C `pop_key_encoding_flags`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_pop_key_encoding_flags(
+    state: VTermStateHandle,
+    arg: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+    let s = state.0.cast::<State>();
+    let screen = if (*s).mode.alt_screen() {
+        VTERM_BUFIDX_ALTSCREEN
+    } else {
+        VTERM_BUFIDX_PRIMARY
+    };
+    let stack = &mut (*s).key_encoding_stacks[screen];
+    let n = u8::try_from(arg).unwrap_or(u8::MAX);
+    stack.pop_n(n);
+}
+
+/// Public wrapper for `set_lineinfo_rust` - called from C thin wrapper.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_lineinfo(
+    state: VTermStateHandle,
+    row: c_int,
+    force: c_int,
+    dwl: c_int,
+    dhl: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+    set_lineinfo_rust(state, row, force, dwl, dhl);
+}
+
+/// Handle escape sequences.
+///
+/// Replaces C `on_escape`.
+///
+/// # Safety
+/// state must be valid, bytes must be valid for len bytes.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_vterm_state_on_escape(
+    state: VTermStateHandle,
+    bytes: *const c_char,
+    len: usize,
+) -> c_int {
+    if state.is_null() || bytes.is_null() {
+        return 0;
+    }
+    let s = state.0.cast::<State>();
+
+    let b0 = *bytes as u8;
+    match b0 {
+        b' ' => {
+            if len != 2 {
+                return 0;
+            }
+            let b1 = *bytes.add(1) as u8;
+            match b1 {
+                b'F' => {
+                    // S7C1T
+                    nvim_vterm_state_set_vt_ctrl8bit(state, 0);
+                }
+                b'G' => {
+                    // S8C1T
+                    nvim_vterm_state_set_vt_ctrl8bit(state, 1);
+                }
+                _ => return 0,
+            }
+            2
+        }
+        b'#' => {
+            if len != 2 {
+                return 0;
+            }
+            let b1 = *bytes.add(1) as u8;
+            match b1 {
+                b'3' => {
+                    // DECDHL top
+                    if (*s).mode.leftrightmargin() {
+                        // ignore
+                    } else {
+                        set_lineinfo_rust(state, (*s).pos.row, 0, DWL_ON, DHL_TOP);
+                    }
+                }
+                b'4' => {
+                    // DECDHL bottom
+                    if (*s).mode.leftrightmargin() {
+                        // ignore
+                    } else {
+                        set_lineinfo_rust(state, (*s).pos.row, 0, DWL_ON, DHL_BOTTOM);
+                    }
+                }
+                b'5' => {
+                    // DECSWL
+                    if (*s).mode.leftrightmargin() {
+                        // ignore
+                    } else {
+                        set_lineinfo_rust(state, (*s).pos.row, 0, DWL_OFF, DHL_OFF);
+                    }
+                }
+                b'6' => {
+                    // DECDWL
+                    if (*s).mode.leftrightmargin() {
+                        // ignore
+                    } else {
+                        set_lineinfo_rust(state, (*s).pos.row, 0, DWL_ON, DHL_OFF);
+                    }
+                }
+                b'8' => {
+                    // DECALN - fill screen with 'E'
+                    let e_char = schar_from_ascii(b'E');
+                    for row in 0..(*s).rows {
+                        let width = nvim_vterm_state_row_width_from_ptr(state, row);
+                        for col in 0..width {
+                            let pos = VTermPos { row, col };
+                            nvim_vterm_state_call_putglyph(state, e_char, 1, pos);
+                        }
+                    }
+                }
+                _ => return 0,
+            }
+            2
+        }
+        b'(' | b')' | b'*' | b'+' => {
+            // SCS - Set Character Set
+            if len != 2 {
+                return 0;
+            }
+            let setnum = (b0 - 0x28) as usize;
+            let designation = *bytes.add(1);
+            let newenc = rs_vterm_lookup_encoding_ptr(ENC_SINGLE_94, designation);
+            if !newenc.is_null() {
+                (*s).encoding[setnum].enc = newenc.cast_mut().cast::<c_void>();
+                let data_ptr = (*s).encoding[setnum].data.as_mut_ptr().cast::<c_void>();
+                nvim_vterm_encoding_call_init(newenc.cast_mut().cast::<c_void>(), data_ptr);
+            }
+            2
+        }
+        b'7' => {
+            // DECSC
+            rs_vterm_state_savecursor(state, 1);
+            1
+        }
+        b'8' => {
+            // DECRC
+            rs_vterm_state_savecursor(state, 0);
+            1
+        }
+        b'<' => {
+            // Ignored by VT100
+            1
+        }
+        b'=' => {
+            // DECKPAM
+            (*s).mode.set_keypad(true);
+            1
+        }
+        b'>' => {
+            // DECKPNM
+            (*s).mode.set_keypad(false);
+            1
+        }
+        b'c' => {
+            // RIS - Reset to Initial State
+            let oldpos = (*s).pos;
+            vterm_state_reset(state, 1);
+            let callbacks = (*s).callbacks;
+            if !callbacks.is_null() {
+                if let Some(movecursor) = (*callbacks).movecursor {
+                    movecursor(
+                        (*s).pos,
+                        oldpos,
+                        c_int::from((*s).mode.cursor_visible()),
+                        (*s).cbdata,
+                    );
+                }
+            }
+            1
+        }
+        b'n' => {
+            // LS2
+            (*s).gl_set = 2;
+            1
+        }
+        b'o' => {
+            // LS3
+            (*s).gl_set = 3;
+            1
+        }
+        b'~' => {
+            // LS1R
+            (*s).gr_set = 1;
+            1
+        }
+        b'}' => {
+            // LS2R
+            (*s).gr_set = 2;
+            1
+        }
+        b'|' => {
+            // LS3R
+            (*s).gr_set = 3;
+            1
+        }
+        _ => 0,
     }
 }
 

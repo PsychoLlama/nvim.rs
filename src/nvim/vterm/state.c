@@ -15,6 +15,21 @@
 // Rust FFI: encoding lookup returning VTermEncoding*
 extern VTermEncoding *rs_vterm_lookup_encoding_ptr(int enc_type, char designation);
 
+// Rust FFI declarations (Phase 1)
+extern void rs_vterm_state_set_mode(VTermState *state, int num, int val);
+extern void rs_vterm_state_set_dec_mode(VTermState *state, int num, int val);
+extern void rs_vterm_state_request_dec_mode(VTermState *state, int num);
+extern void rs_vterm_state_request_version_string(VTermState *state);
+extern void rs_vterm_state_savecursor(VTermState *state, int save);
+
+// Rust FFI declarations (Phase 2)
+extern void rs_vterm_state_set_lineinfo(VTermState *state, int row, int force, int dwl, int dhl);
+extern int rs_vterm_state_on_escape(VTermState *state, const char *bytes, size_t len);
+extern void rs_vterm_state_request_key_encoding_flags(VTermState *state);
+extern void rs_vterm_state_set_key_encoding_flags(VTermState *state, int arg, int mode);
+extern void rs_vterm_state_push_key_encoding_flags(VTermState *state, int arg);
+extern void rs_vterm_state_pop_key_encoding_flags(VTermState *state, int arg);
+
 #define strneq(a, b, n) (strncmp(a, b, n) == 0)
 
 // Primary Device Attributes (DA1) response.
@@ -280,29 +295,7 @@ static void tab(VTermState *state, int count, int direction)
 
 static void set_lineinfo(VTermState *state, int row, int force, int dwl, int dhl)
 {
-  VTermLineInfo info = state->lineinfo[row];
-
-  if (dwl == DWL_OFF) {
-    info.doublewidth = DWL_OFF;
-  } else if (dwl == DWL_ON) {
-    info.doublewidth = DWL_ON;
-  }
-  // else -1 to ignore
-
-  if (dhl == DHL_OFF) {
-    info.doubleheight = DHL_OFF;
-  } else if (dhl == DHL_TOP) {
-    info.doubleheight = DHL_TOP;
-  } else if (dhl == DHL_BOTTOM) {
-    info.doubleheight = DHL_BOTTOM;
-  }
-
-  if ((state->callbacks
-       && state->callbacks->setlineinfo
-       && (*state->callbacks->setlineinfo)(row, &info, state->lineinfo + row, state->cbdata))
-      || force) {
-    state->lineinfo[row] = info;
-  }
+  rs_vterm_state_set_lineinfo(state, row, force, dwl, dhl);
 }
 
 static int on_text(const char bytes[], size_t len, void *user)
@@ -532,13 +525,6 @@ static int on_control(uint8_t control, void *user)
   return 1;
 }
 
-// Rust FFI declarations for Phase 1
-extern void rs_vterm_state_set_mode(VTermState *state, int num, int val);
-extern void rs_vterm_state_set_dec_mode(VTermState *state, int num, int val);
-extern void rs_vterm_state_request_dec_mode(VTermState *state, int num);
-extern void rs_vterm_state_request_version_string(VTermState *state);
-extern void rs_vterm_state_savecursor(VTermState *state, int save);
-
 static int settermprop_bool(VTermState *state, VTermProp prop, int v)
 {
   VTermValue val = { .boolean = v };
@@ -565,155 +551,7 @@ static void savecursor(VTermState *state, int save)
 static int on_escape(const char *bytes, size_t len, void *user)
 {
   VTermState *state = user;
-
-  // Easier to decode this from the first byte, even though the final byte terminates it
-  switch (bytes[0]) {
-  case ' ':
-    if (len != 2) {
-      return 0;
-    }
-
-    switch (bytes[1]) {
-    case 'F':  // S7C1T
-      state->vt->mode.ctrl8bit = 0;
-      break;
-
-    case 'G':  // S8C1T
-      state->vt->mode.ctrl8bit = 1;
-      break;
-
-    default:
-      return 0;
-    }
-    return 2;
-
-  case '#':
-    if (len != 2) {
-      return 0;
-    }
-
-    switch (bytes[1]) {
-    case '3':  // DECDHL top
-      if (state->mode.leftrightmargin) {
-        break;
-      }
-      set_lineinfo(state, state->pos.row, NO_FORCE, DWL_ON, DHL_TOP);
-      break;
-
-    case '4':  // DECDHL bottom
-      if (state->mode.leftrightmargin) {
-        break;
-      }
-      set_lineinfo(state, state->pos.row, NO_FORCE, DWL_ON, DHL_BOTTOM);
-      break;
-
-    case '5':  // DECSWL
-      if (state->mode.leftrightmargin) {
-        break;
-      }
-      set_lineinfo(state, state->pos.row, NO_FORCE, DWL_OFF, DHL_OFF);
-      break;
-
-    case '6':  // DECDWL
-      if (state->mode.leftrightmargin) {
-        break;
-      }
-      set_lineinfo(state, state->pos.row, NO_FORCE, DWL_ON, DHL_OFF);
-      break;
-
-    case '8':  // DECALN
-    {
-      VTermPos pos;
-      schar_T E = schar_from_ascii('E');  // E
-      for (pos.row = 0; pos.row < state->rows; pos.row++) {
-        for (pos.col = 0; pos.col < ROWWIDTH(state, pos.row); pos.col++) {
-          putglyph(state, E, 1, pos);
-        }
-      }
-      break;
-    }
-
-    default:
-      return 0;
-    }
-    return 2;
-
-  case '(':
-  case ')':
-  case '*':
-  case '+':  // SCS
-    if (len != 2) {
-      return 0;
-    }
-
-    {
-      int setnum = bytes[0] - 0x28;
-      VTermEncoding *newenc = rs_vterm_lookup_encoding_ptr(ENC_SINGLE_94, bytes[1]);
-
-      if (newenc) {
-        state->encoding[setnum].enc = newenc;
-
-        if (newenc->init) {
-          (*newenc->init)(newenc, state->encoding[setnum].data);
-        }
-      }
-    }
-
-    return 2;
-
-  case '7':  // DECSC
-    savecursor(state, 1);
-    return 1;
-
-  case '8':  // DECRC
-    savecursor(state, 0);
-    return 1;
-
-  case '<':  // Ignored by VT100. Used in VT52 mode to switch up to VT100
-    return 1;
-
-  case '=':  // DECKPAM
-    state->mode.keypad = 1;
-    return 1;
-
-  case '>':  // DECKPNM
-    state->mode.keypad = 0;
-    return 1;
-
-  case 'c':  // RIS - ECMA-48 8.3.105
-  {
-    VTermPos oldpos = state->pos;
-    vterm_state_reset(state, 1);
-    if (state->callbacks && state->callbacks->movecursor) {
-      (*state->callbacks->movecursor)(state->pos, oldpos, state->mode.cursor_visible,
-                                      state->cbdata);
-    }
-    return 1;
-  }
-
-  case 'n':  // LS2 - ECMA-48 8.3.78
-    state->gl_set = 2;
-    return 1;
-
-  case 'o':  // LS3 - ECMA-48 8.3.80
-    state->gl_set = 3;
-    return 1;
-
-  case '~':  // LS1R - ECMA-48 8.3.77
-    state->gr_set = 1;
-    return 1;
-
-  case '}':  // LS2R - ECMA-48 8.3.79
-    state->gr_set = 2;
-    return 1;
-
-  case '|':  // LS3R - ECMA-48 8.3.81
-    state->gr_set = 3;
-    return 1;
-
-  default:
-    return 0;
-  }
+  return rs_vterm_state_on_escape(state, bytes, len);
 }
 
 static void set_mode(VTermState *state, int num, int val)
@@ -738,111 +576,22 @@ static void request_version_string(VTermState *state)
 
 static void request_key_encoding_flags(VTermState *state)
 {
-  int screen = state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY;
-  struct VTermKeyEncodingStack *stack = &state->key_encoding_stacks[screen];
-
-  int reply = 0;
-
-  assert(stack->size > 0);
-  VTermKeyEncodingFlags flags = stack->items[stack->size - 1];
-
-  if (flags.disambiguate) {
-    reply |= KEY_ENCODING_DISAMBIGUATE;
-  }
-
-  if (flags.report_events) {
-    reply |= KEY_ENCODING_REPORT_EVENTS;
-  }
-
-  if (flags.report_alternate) {
-    reply |= KEY_ENCODING_REPORT_ALTERNATE;
-  }
-
-  if (flags.report_all_keys) {
-    reply |= KEY_ENCODING_REPORT_ALL_KEYS;
-  }
-
-  if (flags.report_associated) {
-    reply |= KEY_ENCODING_REPORT_ASSOCIATED;
-  }
-
-  vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%du", reply);
+  rs_vterm_state_request_key_encoding_flags(state);
 }
 
 static void set_key_encoding_flags(VTermState *state, int arg, int mode)
 {
-  // When mode is 3, bits set in arg reset the corresponding mode
-  bool set = mode != 3;
-
-  // When mode is 1, unset bits are reset
-  bool reset_unset = mode == 1;
-
-  struct VTermKeyEncodingFlags flags = { 0 };
-  if (arg & KEY_ENCODING_DISAMBIGUATE) {
-    flags.disambiguate = set;
-  } else if (reset_unset) {
-    flags.disambiguate = false;
-  }
-
-  if (arg & KEY_ENCODING_REPORT_EVENTS) {
-    flags.report_events = set;
-  } else if (reset_unset) {
-    flags.report_events = false;
-  }
-
-  if (arg & KEY_ENCODING_REPORT_ALTERNATE) {
-    flags.report_alternate = set;
-  } else if (reset_unset) {
-    flags.report_alternate = false;
-  }
-  if (arg & KEY_ENCODING_REPORT_ALL_KEYS) {
-    flags.report_all_keys = set;
-  } else if (reset_unset) {
-    flags.report_all_keys = false;
-  }
-
-  if (arg & KEY_ENCODING_REPORT_ASSOCIATED) {
-    flags.report_associated = set;
-  } else if (reset_unset) {
-    flags.report_associated = false;
-  }
-
-  int screen = state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY;
-  struct VTermKeyEncodingStack *stack = &state->key_encoding_stacks[screen];
-  assert(stack->size > 0);
-  stack->items[stack->size - 1] = flags;
+  rs_vterm_state_set_key_encoding_flags(state, arg, mode);
 }
 
 static void push_key_encoding_flags(VTermState *state, int arg)
 {
-  int screen = state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY;
-  struct VTermKeyEncodingStack *stack = &state->key_encoding_stacks[screen];
-  assert(stack->size <= ARRAY_SIZE(stack->items));
-
-  if (stack->size == ARRAY_SIZE(stack->items)) {
-    // Evict oldest entry when stack is full
-    for (size_t i = 0; i < ARRAY_SIZE(stack->items) - 1; i++) {
-      stack->items[i] = stack->items[i + 1];
-    }
-  } else {
-    stack->size++;
-  }
-
-  set_key_encoding_flags(state, arg, 1);
+  rs_vterm_state_push_key_encoding_flags(state, arg);
 }
 
 static void pop_key_encoding_flags(VTermState *state, int arg)
 {
-  int screen = state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY;
-  struct VTermKeyEncodingStack *stack = &state->key_encoding_stacks[screen];
-  if (arg >= stack->size) {
-    stack->size = 1;
-
-    // If a pop request is received that empties the stack, all flags are reset.
-    memset(&stack->items[0], 0, sizeof(stack->items[0]));
-  } else if (arg > 0) {
-    stack->size -= arg;
-  }
+  rs_vterm_state_pop_key_encoding_flags(state, arg);
 }
 
 static int on_csi(const char *leader, const long args[], int argcount, const char *intermed,
@@ -2563,6 +2312,36 @@ void nvim_vterm_state_call_setpenattr(VTermState *state, int attr, VTermValue *v
   if (state->callbacks && state->callbacks->setpenattr) {
     (*state->callbacks->setpenattr)(attr, val, state->cbdata);
   }
+}
+
+// --- Phase 2: VTerm ctrl8bit accessor ---
+
+int nvim_vterm_state_get_vt_ctrl8bit(const VTermState *state) { return state->vt->mode.ctrl8bit; }
+
+void nvim_vterm_state_set_vt_ctrl8bit(VTermState *state, int val) { state->vt->mode.ctrl8bit = (unsigned)val; }
+
+// --- Phase 2: putglyph helper (wraps static putglyph) ---
+
+void nvim_vterm_state_call_putglyph(VTermState *state, schar_T schar, int width, VTermPos pos)
+{
+  putglyph(state, schar, width, pos);
+}
+
+// --- Phase 2: encoding init helper ---
+
+void nvim_vterm_encoding_call_init(void *enc_ptr, void *data)
+{
+  VTermEncoding *enc = (VTermEncoding *)enc_ptr;
+  if (enc && enc->init) {
+    (*enc->init)(enc, data);
+  }
+}
+
+// --- Phase 2: ROWWIDTH helper ---
+
+int nvim_vterm_state_row_width_from_ptr(const VTermState *state, int row)
+{
+  return ROWWIDTH(state, row);
 }
 
 // Thin C wrappers for Rust pen.rs FFI exports (moved from pen.c)

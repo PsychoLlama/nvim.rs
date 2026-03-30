@@ -1143,6 +1143,59 @@ impl VTermKeyEncodingStack {
         self.size -= 1;
         true
     }
+
+    /// Get the number of items in the stack
+    #[inline]
+    pub fn stack_size(&self) -> u8 {
+        self.size
+    }
+
+    /// Get the capacity of the stack
+    #[inline]
+    pub fn stack_capacity(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Get item at index (for eviction)
+    #[inline]
+    pub fn item_at(&self, i: usize) -> VTermKeyEncodingFlags {
+        self.items[i]
+    }
+
+    /// Set item at index (for eviction)
+    #[inline]
+    pub fn set_item_at(&mut self, i: usize, flags: VTermKeyEncodingFlags) {
+        self.items[i] = flags;
+    }
+
+    /// Set the stack size
+    #[inline]
+    pub fn set_size(&mut self, size: u8) {
+        self.size = size;
+    }
+
+    /// Push with eviction: if full, evict oldest entry (matching C `push_key_encoding_flags`)
+    #[inline]
+    pub fn push_evict(&mut self) {
+        if self.size as usize >= self.items.len() {
+            // Evict oldest entry (shift items left)
+            self.items.copy_within(1.., 0);
+            // size stays the same
+        } else {
+            self.size += 1;
+        }
+    }
+
+    /// Pop n entries, resetting to 1 if emptied (matching C `pop_key_encoding_flags`)
+    #[inline]
+    pub fn pop_n(&mut self, n: u8) {
+        if n >= self.size {
+            self.size = 1;
+            self.items[0] = VTermKeyEncodingFlags::default();
+        } else if n > 0 {
+            self.size -= n;
+        }
+    }
 }
 
 // =============================================================================
