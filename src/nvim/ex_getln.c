@@ -180,6 +180,7 @@ static Array cmdline_block = ARRAY_DICT_INIT;
 static bool getln_interrupted_highlight = false;
 
 static int cedit_key = -1;  ///< key value of 'cedit' option
+static int cmdline_enter_level = 0;  ///< nesting level of command_line_enter() calls
 
 #include "ex_getln.c.generated.h"
 extern int rs_get_echo_hl_id(void);
@@ -239,8 +240,7 @@ void nvim_trigger_cmd_autocmd(int typechar, int evt)
 static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear_ccline)
 {
   // can be invoked recursively, identify each level
-  static int cmdline_level = 0;
-  cmdline_level++;
+  cmdline_enter_level++;
 
   bool save_cmdpreview = cmdpreview;
   cmdpreview = false;
@@ -300,9 +300,9 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
     ccline.cmdlen = s->indent;
   }
   ccline.prompt_id = last_prompt_id++;
-  ccline.level = cmdline_level;
+  ccline.level = cmdline_enter_level;
 
-  if (cmdline_level == 50) {
+  if (cmdline_enter_level == 50) {
     // Somehow got into a loop recursively calling getcmdline(), bail out.
     emsg(_(e_command_too_recursive));
     goto theend;
@@ -555,7 +555,7 @@ theend:
     status_redraw_all();  // redraw to show mode change
   }
 
-  cmdline_level--;
+  cmdline_enter_level--;
 
   if (did_save_ccline) {
     ccline = save_ccline;
@@ -1382,4 +1382,357 @@ void *nvim_ccline_ptr_get_prev(void *p) { return (void *)((CmdlineInfo *)p)->pre
 /// Get cmdwin_level value.
 int nvim_get_cmdwin_level(void) { return cmdwin_level; }
 
+// =============================================================================
+// Helpers for Rust command_line_enter (Phase 1)
+// =============================================================================
+
+/// Increment and return cmdline_enter_level.
+int nvim_cmdline_enter_level_inc(void) { return ++cmdline_enter_level; }
+
+/// Decrement cmdline_enter_level.
+void nvim_cmdline_enter_level_dec(void) { cmdline_enter_level--; }
+
+/// Get cmdline_enter_level.
+int nvim_cmdline_enter_level_get(void) { return cmdline_enter_level; }
+
+/// Get and save cmdpreview, then set it to false.
+bool nvim_cmdpreview_save_and_clear(void)
+{
+  bool saved = cmdpreview;
+  cmdpreview = false;
+  return saved;
+}
+
+/// Restore cmdpreview and optionally trigger a full redraw.
+void nvim_cmdpreview_restore(bool saved, bool current)
+{
+  if (current != saved) {
+    cmdpreview = saved;
+    redraw_all_later(UPD_SOME_VALID);
+  }
+}
+
+/// Get msg_scroll (global bool).
+int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
+
+/// Set msg_scroll.
+void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
+
+/// Set State global.
+void nvim_set_State(int val) { State = val; }
+
+/// Set need_wait_return to false.
+void nvim_clear_need_wait_return(void) { need_wait_return = false; }
+
+/// Set got_int to false.
+void nvim_clear_got_int(void) { got_int = false; }
+
+/// Set did_emsg to false.
+void nvim_clear_did_emsg(void) { did_emsg = false; }
+
+/// Check did_emsg (for redrawcmd after error).
+int nvim_get_did_emsg_for_redraw(void) { return did_emsg ? 1 : 0; }
+
+/// Get p_icm as newly allocated string (caller must xfree).
+char *nvim_get_p_icm_dup(void) { return xstrdup(p_icm); }
+
+/// Set p_icm option via set_option_direct with SID_NONE.
+void nvim_set_p_icm_option(const char *val)
+{
+  set_option_direct(kOptInccommand, CSTR_AS_OPTVAL((char *)val), 0, SID_NONE);
+}
+
+/// Clear ccline completely (CLEAR_FIELD(ccline)).
+void nvim_clear_ccline(void) { CLEAR_FIELD(ccline); }
+
+/// Setup ccline.prev_ccline link and save current ccline.
+/// Saves ccline to *save_out and clears ccline.
+/// Returns true if ccline was in use (cmdbuff != NULL).
+bool nvim_ccline_save_and_clear(CmdlineInfo *save_out)
+{
+  if (ccline.cmdbuff != NULL) {
+    *save_out = ccline;
+    CLEAR_FIELD(ccline);
+    ccline.prev_ccline = save_out;
+    ccline.cmdbuff = NULL;
+    return true;
+  }
+  CLEAR_FIELD(ccline);
+  return false;
+}
+
+/// Restore ccline from save_out (undo nvim_ccline_save_and_clear).
+void nvim_ccline_restore(const CmdlineInfo *save_out)
+{
+  ccline = *save_out;
+}
+
+/// Initialize ccline fields for command_line_enter (called after allocation).
+void nvim_ccline_enter_init(int firstc, int indent)
+{
+  ccline.overstrike = false;
+  ccline.cmdfirstc = (firstc == '@' ? 0 : firstc);
+  ccline.cmdindent = (firstc > 0 ? indent : 0);
+  ccline.cmdlen = ccline.cmdpos = 0;
+  ccline.cmdbuff[0] = NUL;
+  ccline.last_colors = (ColoredCmdline){ .cmdbuff = NULL, .colors = KV_INITIAL_VALUE };
+  ccline.prompt_id = last_prompt_id++;
+}
+
+/// Set ccline.level from cmdline_enter_level_out (already incremented).
+void nvim_ccline_set_level(int level) { ccline.level = level; }
+
+/// Apply autoindent spaces to cmdbuff for :insert/:append (firstc <= 0).
+void nvim_ccline_apply_indent(int indent)
+{
+  memset(ccline.cmdbuff, ' ', (size_t)indent);
+  ccline.cmdbuff[indent] = NUL;
+  ccline.cmdpos = indent;
+  ccline.cmdspos = indent;
+  ccline.cmdlen = indent;
+}
+
+/// Init xpc and bind it to ccline.
+void nvim_ccline_init_xpc(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  ExpandInit(&cs->xpc);
+  ccline.xpc = &cs->xpc;
+  clear_cmdline_orig();
+  cs->xpc.xp_context = EXPAND_NOTHING;
+  cs->xpc.xp_backslash = XP_BS_NONE;
+#ifndef BACKSLASH_IN_FILENAME
+  cs->xpc.xp_shell = false;
+#endif
+  if (ccline.input_fn) {
+    cs->xpc.xp_context = ccline.xp_context;
+    cs->xpc.xp_pattern = ccline.cmdbuff;
+    cs->xpc.xp_arg = ccline.xp_arg;
+  }
+}
+
+/// Set langmap mode based on firstc and b_p_imsearch/b_p_iminsert.
+/// Returns 1 if langmap was set.
+int nvim_cmdline_setup_langmap(void *s, int firstc)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  if (firstc == '/' || firstc == '?' || firstc == '@') {
+    if (curbuf->b_p_imsearch == B_IMODE_USE_INSERT) {
+      cs->b_im_ptr = &curbuf->b_p_iminsert;
+    } else {
+      cs->b_im_ptr = &curbuf->b_p_imsearch;
+    }
+    cs->b_im_ptr_buf = curbuf;
+    if (*cs->b_im_ptr == B_IMODE_LMAP) {
+      State |= MODE_LANGMAP;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/// Redraw statuslines for all windows where applicable.
+void nvim_cmdline_redraw_statuslines(void)
+{
+  bool found_one = false;
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (*p_stl != NUL || *wp->w_p_stl != NUL || *p_wbr != NUL || *wp->w_p_wbr != NUL) {
+      wp->w_redr_status = true;
+      found_one = true;
+    }
+  }
+  if (*p_tal != NUL) {
+    redraw_tabline = true;
+    found_one = true;
+  }
+  if (redraw_custom_title_later()) {
+    found_one = true;
+  }
+  if (found_one) {
+    redraw_statuslines();
+  }
+}
+
+/// Fire CmdlineEnter autocmd with TRY_WRAP.
+/// firstcbuf: 2-byte buffer with [typechar, NUL].
+/// Sets v:event dict fields and calls apply_autocmds.
+/// Returns 1 if an error was set.
+int nvim_cmdline_fire_enter_autocmd(const char *firstcbuf, Error *err)
+{
+  if (!has_event(EVENT_CMDLINEENTER)) {
+    return 0;
+  }
+  save_v_event_T save_v_event;
+  dict_T *dict = get_v_event(&save_v_event);
+  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
+  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
+  tv_dict_set_keys_readonly(dict);
+  TRY_WRAP(err, {
+    apply_autocmds(EVENT_CMDLINEENTER, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
+    restore_v_event(dict, &save_v_event);
+  });
+  return ERROR_SET(err) ? 1 : 0;
+}
+
+/// Print error from CmdlineEnter and clear it.
+void nvim_cmdline_print_enter_error(Error *err)
+{
+  msg_putchar('\n');
+  msg_scroll = true;
+  msg_puts_hl(err->msg, HLF_E, true);
+  api_clear_error(err);
+}
+
+/// Fire CmdlineLeave autocmd with TRY_WRAP.
+/// Returns 1 if user set abort=true in v:event.
+int nvim_cmdline_fire_leave_autocmd(const char *firstcbuf, bool *gotesc_out, Error *err)
+{
+  if (!has_event(EVENT_CMDLINELEAVE)) {
+    return 0;
+  }
+  save_v_event_T save_v_event;
+  dict_T *dict = get_v_event(&save_v_event);
+  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
+  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
+  tv_dict_set_keys_readonly(dict);
+  tv_dict_add_bool(dict, S_LEN("abort"),
+                   *gotesc_out ? kBoolVarTrue : kBoolVarFalse);
+  TRY_WRAP(err, {
+    apply_autocmds(EVENT_CMDLINELEAVE, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
+  });
+  if (tv_dict_get_number(dict, "abort") != 0) {
+    *gotesc_out = true;
+  }
+  restore_v_event(dict, &save_v_event);
+  return 0;
+}
+
+/// Post-leave cleanup: pum, expand, incsearch, history.
+/// Returns allocated command line string (the result), or NULL.
+uint8_t *nvim_cmdline_leave_cleanup(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+
+  // PUM cleanup
+  if (cmdline_pum_active()) {
+    cmdline_pum_remove(false);
+  } else {
+    pum_check_clear();
+  }
+  wildmenu_cleanup(&ccline);
+  cs->did_wild_list = false;
+  cs->wim_index = 0;
+
+  ExpandCleanup(&cs->xpc);
+  ccline.xpc = NULL;
+  clear_cmdline_orig();
+
+  rs_finish_incsearch_highlighting(cs->gotesc ? 1 : 0, &cs->is_state, 0);
+
+  // History
+  if (ccline.cmdbuff != NULL) {
+    if (rs_entry_should_add_to_history(cs->histype, ccline.cmdlen, cs->firstc,
+                                       cs->some_key_typed)) {
+      add_to_history(cs->histype, ccline.cmdbuff, (size_t)ccline.cmdlen, true,
+                     cs->histype == HIST_SEARCH ? cs->firstc : NUL);
+      if (rs_entry_should_save_last_cmdline(cs->firstc)) {
+        xfree(new_last_cmdline);
+        new_last_cmdline = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
+      }
+    }
+
+    if (cs->gotesc) {
+      dealloc_cmdbuff();
+      if (msg_scrolled == 0) {
+        compute_cmdrow();
+      }
+      if (!ccline.one_key) {
+        msg("", 0);
+        redraw_cmdline = true;
+      }
+    }
+  }
+
+  msg_check();
+  if (p_ch == 0 && !ui_has(kUIMessages)) {
+    set_must_redraw(UPD_VALID);
+  }
+
+  return (uint8_t *)ccline.cmdbuff;
+}
+
+/// Final teardown: hide cmdline UI, restore ccline, free.
+void nvim_cmdline_final_teardown(void *s, bool did_save_ccline, CmdlineInfo *save_ccline,
+                                 int save_msg_scroll, int save_State,
+                                 bool save_cmdpreview, Error *err)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  msg_scroll = save_msg_scroll;
+  redir_off = false;
+
+  if (ERROR_SET(err)) {
+    msg_putchar('\n');
+    emsg(err->msg);
+    did_emsg = false;
+    api_clear_error(err);
+  }
+
+  if (cs->some_key_typed && !ERROR_SET(err)) {
+    need_wait_return = false;
+  }
+
+  set_option_direct(kOptInccommand, CSTR_AS_OPTVAL(cs->save_p_icm), 0, SID_NONE);
+  State = save_State;
+  if (cmdpreview != save_cmdpreview) {
+    cmdpreview = save_cmdpreview;
+    redraw_all_later(UPD_SOME_VALID);
+  }
+  may_trigger_modechanged();
+  setmouse();
+  sb_text_end_cmdline();
+
+  xfree(cs->save_p_icm);
+  xfree(ccline.last_colors.cmdbuff);
+  kv_destroy(ccline.last_colors.colors);
+
+  if (ui_has(kUICmdline)) {
+    cmdline_was_last_drawn = false;
+    ccline.redraw_state = kCmdRedrawNone;
+    ui_call_cmdline_hide(ccline.level, cs->gotesc);
+  }
+  if (!cmd_silent) {
+    redraw_custom_title_later();
+    status_redraw_all();
+  }
+
+  cmdline_enter_level--;
+
+  if (did_save_ccline) {
+    ccline = *save_ccline;
+  } else {
+    ccline.cmdbuff = NULL;
+  }
+
+  xfree(cs->prev_cmdbuff);
+}
+
+/// Get b_p_imsearch or b_p_iminsert based on cs->b_im_ptr.
+/// Returns the value to restore when leaving.
+int nvim_cls_get_b_im_ptr_val(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  if (cs->b_im_ptr == NULL) {
+    return -1;
+  }
+  return *cs->b_im_ptr;
+}
+
+/// Set *cs->b_im_ptr = val (for restore on leave).
+void nvim_cls_set_b_im_ptr_val(void *s, int val)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  if (cs->b_im_ptr != NULL && cs->b_im_ptr_buf == curbuf) {
+    *cs->b_im_ptr = val;
+  }
+}
 
