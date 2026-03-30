@@ -1767,6 +1767,30 @@ pub unsafe extern "C" fn rs_clear_region(
     }
 }
 
+// Phase 5 C accessors
+extern "C" {
+    fn nvim_tui_ui_client_set_size(tui: *mut TuiHandle, width: c_int, height: c_int);
+    fn nvim_tui_inc_pending_resize_events(tui: *mut TuiHandle);
+    fn nvim_tui_set_width(tui: *mut TuiHandle, width: c_int);
+    fn nvim_tui_set_height(tui: *mut TuiHandle, height: c_int);
+}
+
+/// Set terminal size and notify UI client.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_set_size(tui: *mut TuiHandle, width: c_int, height: c_int) {
+    if tui.is_null() {
+        return;
+    }
+    nvim_tui_inc_pending_resize_events(tui);
+    nvim_tui_set_width(tui, width);
+    nvim_tui_set_height(tui, height);
+    nvim_tui_ui_client_set_size(tui, width, height);
+}
+
 // Phase 4 C accessors
 extern "C" {
     fn nvim_tui_pop_invalid_region(

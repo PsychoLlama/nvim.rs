@@ -221,6 +221,7 @@ extern void rs_cursor_goto(TUIData *tui, int row, int col);
 extern void rs_clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
 extern void rs_invalidate(TUIData *tui, int top, int bot, int left, int right);
 extern void rs_tui_flush(TUIData *tui);
+extern void rs_tui_set_size(TUIData *tui, int width, int height);
 extern void rs_tui_raw_line(TUIData *tui, int64_t g, int64_t linerow, int64_t startcol,
                              int64_t endcol, int64_t clearcol, int64_t clearattr,
                              int64_t flags, const schar_T *chunk, const sattr_T *attrs);
@@ -323,8 +324,10 @@ UGrid *nvim_tui_get_grid(TUIData *tui) { return &tui->grid; }
 void nvim_tui_invalidate_grid_cursor(TUIData *tui) { tui->grid.row = -1; }
 
 int nvim_tui_get_width(TUIData *tui) { return tui->width; }
+void nvim_tui_set_width(TUIData *tui, int width) { tui->width = width; }
 
 int nvim_tui_get_height(TUIData *tui) { return tui->height; }
+void nvim_tui_set_height(TUIData *tui, int height) { tui->height = height; }
 
 // Forward declaration for clear_region
 static void clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
@@ -477,6 +480,9 @@ const HlAttrs *nvim_tui_get_attrs_ptr(TUIData *tui) { return tui->attrs.items; }
 bool nvim_tui_ti_has_def(TUIData *tui, int idx) { return tui->ti.defs[idx] != NULL; }
 schar_T nvim_tui_get_cell_data(TUIData *tui, int row, int col) { return tui->grid.cells[row][col].data; }
 sattr_T nvim_tui_get_cell_attr(TUIData *tui, int row, int col) { return tui->grid.cells[row][col].attr; }
+
+void nvim_tui_ui_client_set_size(TUIData *tui, int width, int height) { ui_client_set_size(width, height); }
+void nvim_tui_inc_pending_resize_events(TUIData *tui) { tui->pending_resize_events++; }
 
 /// Pop the last invalid region (like kv_pop). Returns false if empty.
 bool nvim_tui_pop_invalid_region(TUIData *tui, int *top, int *bot, int *left, int *right)
@@ -1627,13 +1633,11 @@ static void invalidate(TUIData *tui, int top, int bot, int left, int right)
   rs_invalidate(tui, top, bot, left, right);
 }
 
+/// Set terminal size. Rust implementation.
 void tui_set_size(TUIData *tui, int width, int height)
   FUNC_ATTR_NONNULL_ALL
 {
-  tui->pending_resize_events++;
-  tui->width = width;
-  tui->height = height;
-  ui_client_set_size(width, height);
+  rs_tui_set_size(tui, width, height);
 }
 
 /// Tries to get the user's wanted dimensions (columns and rows) for the entire
