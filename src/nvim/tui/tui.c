@@ -215,6 +215,11 @@ extern void rs_flush_buf(TUIData *tui);
 extern void rs_terminfo_out(TUIData *tui, int what);
 extern void rs_terminfo_print_num(TUIData *tui, int what, int num1, int num2, int num3);
 extern void rs_print_spaces(TUIData *tui, int width);
+extern void rs_update_attrs(TUIData *tui, int attr_id);
+extern bool rs_cheap_to_print(TUIData *tui, int row, int col, int next);
+extern void rs_cursor_goto(TUIData *tui, int row, int col);
+extern void rs_clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
+extern void rs_invalidate(TUIData *tui, int top, int bot, int left, int right);
 
 // TUIData Accessor Functions for Rust
 
@@ -271,6 +276,37 @@ void nvim_tui_clip_invalid_region(TUIData *tui, size_t idx, int max_height, int 
   }
 }
 
+/// Get an invalid region by index
+void nvim_tui_get_invalid_region(TUIData *tui, size_t idx,
+                                  int *top, int *bot, int *left, int *right)
+{
+  if (idx < kv_size(tui->invalid_regions)) {
+    Rect r = kv_A(tui->invalid_regions, idx);
+    *top = r.top;
+    *bot = r.bot;
+    *left = r.left;
+    *right = r.right;
+  }
+}
+
+/// Set an invalid region by index
+void nvim_tui_set_invalid_region(TUIData *tui, size_t idx,
+                                  int top, int bot, int left, int right)
+{
+  if (idx < kv_size(tui->invalid_regions)) {
+    kv_A(tui->invalid_regions, idx) = (Rect) { top, bot, left, right };
+  }
+}
+
+/// Push a new invalid region
+void nvim_tui_push_invalid_region(TUIData *tui, int top, int bot, int left, int right)
+{
+  kv_push(tui->invalid_regions, ((Rect) { top, bot, left, right }));
+}
+
+/// Set grid col position
+void nvim_tui_set_grid_col(TUIData *tui, int col) { tui->grid.col = col; }
+
 /// Get pointer to UGrid
 UGrid *nvim_tui_get_grid(TUIData *tui) { return &tui->grid; }
 
@@ -302,8 +338,10 @@ void nvim_tui_out_resize(TUIData *tui, int height, int width)
 
 // Forward declarations for output functions defined later
 static void out(TUIData *tui, const char *str, size_t len);
+static void out_len(TUIData *tui, const char *str);
 static void terminfo_out(TUIData *tui, TerminfoDef what);
 static void terminfo_print_num(TUIData *tui, TerminfoDef what, int num1, int num2, int num3);
+static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params);
 static void cursor_goto(TUIData *tui, int row, int col);
 static void update_attrs(TUIData *tui, int attr_id);
 static void invalidate(TUIData *tui, int top, int bot, int left, int right);
@@ -426,6 +464,49 @@ void nvim_tui_set_buf_to_flush(TUIData *tui, char *ptr) { tui->buf_to_flush = pt
 // Terminfo defs accessor for Rust
 const char *nvim_tui_get_ti_def(TUIData *tui, int idx) { return tui->ti.defs[idx]; }
 
+// Phase 3: Core rendering accessors
+bool nvim_tui_get_rgb(TUIData *tui) { return tui->rgb; }
+bool nvim_tui_get_bce(TUIData *tui) { return tui->bce; }
+bool nvim_tui_get_can_set_underline_color(TUIData *tui) { return tui->can_set_underline_color; }
+HlAttrs nvim_tui_get_clear_attrs(TUIData *tui) { return tui->clear_attrs; }
+void nvim_tui_set_default_attr(TUIData *tui, bool val) { tui->default_attr = val; }
+void nvim_tui_set_can_clear_attr(TUIData *tui, bool val) { tui->can_clear_attr = val; }
+HlAttrs nvim_tui_get_attrs_entry(TUIData *tui, size_t idx) { return kv_A(tui->attrs, idx); }
+size_t nvim_tui_get_attrs_size(TUIData *tui) { return kv_size(tui->attrs); }
+const HlAttrs *nvim_tui_get_attrs_ptr(TUIData *tui) { return tui->attrs.items; }
+bool nvim_tui_ti_has_def(TUIData *tui, int idx) { return tui->ti.defs[idx] != NULL; }
+schar_T nvim_tui_get_cell_data(TUIData *tui, int row, int col) { return tui->grid.cells[row][col].data; }
+sattr_T nvim_tui_get_cell_attr(TUIData *tui, int row, int col) { return tui->grid.cells[row][col].attr; }
+
+/// Output 3-param terminfo sequence
+void nvim_tui_terminfo_print_num3(TUIData *tui, int what, int n1, int n2, int n3)
+{
+  terminfo_print_num(tui, (TerminfoDef)what, n1, n2, n3);
+}
+
+/// Output kTerm_set_attributes with 9 params
+void nvim_tui_terminfo_print_attrs(TUIData *tui, int standout, int underline, int reverse,
+                                    int blink, int dim, int bold, int blank, int protect, int acs)
+{
+  TPVAR params[9] = { 0 };
+  params[0].num = standout;
+  params[1].num = underline;
+  params[2].num = reverse;
+  params[3].num = blink;
+  params[4].num = dim;
+  params[5].num = bold;
+  params[6].num = blank;
+  params[7].num = protect;
+  params[8].num = acs;
+  terminfo_print(tui, kTerm_set_attributes, params);
+}
+
+/// Output altfont mode sequence
+void nvim_tui_out_altfont(TUIData *tui)
+{
+  out_len(tui, tui->terminfo_ext.enter_altfont_mode);
+}
+
 void nvim_tui_set_can_set_underline_color(TUIData *tui, bool val) { tui->can_set_underline_color = val; }
 
 /// Wrapper for terminfo_set_if_empty (set underline style)
@@ -463,6 +544,25 @@ void nvim_tui_out_len(TUIData *tui, const char *str) { out_len(tui, str); }
 #define terminfo_print_num3 terminfo_print_num
 
 static Set(cstr_t) urls = SET_INIT;
+
+/// Get URL key string from global urls set
+const char *nvim_tui_get_url_key(int idx) { return urls.keys[idx]; }
+
+/// URL buffer operations
+void nvim_tui_urlbuf_reset(TUIData *tui) { kv_size(tui->urlbuf) = 0; }
+void nvim_tui_urlbuf_append_fmt(TUIData *tui, uint64_t id, const char *url)
+{
+  kv_printf(tui->urlbuf, "\x1b]8;id=%" PRIu64 ";%s\x1b\\", id, url);
+}
+const char *nvim_tui_urlbuf_ptr(TUIData *tui) { return tui->urlbuf.items; }
+size_t nvim_tui_urlbuf_size(TUIData *tui) { return kv_size(tui->urlbuf); }
+
+/// Output RGB underline color sequence
+void nvim_tui_out_underline_color(TUIData *tui, int r, int g, int b)
+{
+  extern void out_printf(TUIData *tui, size_t limit, const char *fmt, ...);
+  out_printf(tui, 128, "\x1b[58:2::%d:%d:%dm", r, g, b);
+}
 
 void tui_start(TUIData **tui_p, int *width, int *height, char **term, bool *rgb)
   FUNC_ATTR_NONNULL_ALL
@@ -1057,174 +1157,7 @@ static bool attrs_differ(TUIData *tui, int id1, int id2, bool rgb)
 
 static void update_attrs(TUIData *tui, int attr_id)
 {
-  if (!attrs_differ(tui, attr_id, tui->print_attr_id, tui->rgb)) {
-    tui->print_attr_id = attr_id;
-    return;
-  }
-  tui->print_attr_id = attr_id;
-  HlAttrs attrs = kv_A(tui->attrs, (size_t)attr_id);
-  int attr = tui->rgb ? attrs.rgb_ae_attr : attrs.cterm_ae_attr;
-
-  bool bold = attr & HL_BOLD;
-  bool italic = attr & HL_ITALIC;
-  bool reverse = attr & HL_INVERSE;
-  bool standout = attr & HL_STANDOUT;
-  bool strikethrough = attr & HL_STRIKETHROUGH;
-  bool altfont = attr & HL_ALTFONT;
-
-  bool underline;
-  bool undercurl;
-  bool underdouble;
-  bool underdotted;
-  bool underdashed;
-  if (tui->ti.defs[kTerm_set_underline_style]) {
-    int ul = attr & HL_UNDERLINE_MASK;
-    underline = ul == HL_UNDERLINE;
-    undercurl = ul == HL_UNDERCURL;
-    underdouble = ul == HL_UNDERDOUBLE;
-    underdashed = ul == HL_UNDERDASHED;
-    underdotted = ul == HL_UNDERDOTTED;
-  } else {
-    underline = attr & HL_UNDERLINE_MASK;
-    undercurl = false;
-    underdouble = false;
-    underdotted = false;
-    underdashed = false;
-  }
-
-  bool has_any_underline = undercurl || underline
-                           || underdouble || underdotted || underdashed;
-
-  if (tui->ti.defs[kTerm_set_attributes] != NULL) {
-    if (bold || reverse || underline || standout) {
-      TPVAR params[9] = { 0 };
-      params[0].num = standout;
-      params[1].num = underline;
-      params[2].num = reverse;
-      params[3].num = 0;   // blink
-      params[4].num = 0;   // dim
-      params[5].num = bold;
-      params[6].num = 0;   // blank
-      params[7].num = 0;   // protect
-      params[8].num = 0;   // alternate character set
-      terminfo_print(tui, kTerm_set_attributes, params);
-    } else if (!tui->default_attr) {
-      terminfo_out(tui, kTerm_exit_attribute_mode);
-    }
-  } else {
-    if (!tui->default_attr) {
-      terminfo_out(tui, kTerm_exit_attribute_mode);
-    }
-    if (bold) {
-      terminfo_out(tui, kTerm_enter_bold_mode);
-    }
-    if (underline) {
-      terminfo_out(tui, kTerm_enter_underline_mode);
-    }
-    if (standout) {
-      terminfo_out(tui, kTerm_enter_standout_mode);
-    }
-    if (reverse) {
-      terminfo_out(tui, kTerm_enter_reverse_mode);
-    }
-  }
-  if (italic) {
-    terminfo_out(tui, kTerm_enter_italics_mode);
-  }
-  if (altfont) {
-    out_len(tui, tui->terminfo_ext.enter_altfont_mode);
-  }
-  if (strikethrough) {
-    terminfo_out(tui, kTerm_enter_strikethrough_mode);
-  }
-  if (tui->ti.defs[kTerm_set_underline_style]) {
-    if (undercurl) {
-      terminfo_print_num1(tui, kTerm_set_underline_style, 3);
-    }
-    if (underdouble) {
-      terminfo_print_num1(tui, kTerm_set_underline_style, 2);
-    }
-    if (underdotted) {
-      terminfo_print_num1(tui, kTerm_set_underline_style, 4);
-    }
-    if (underdashed) {
-      terminfo_print_num1(tui, kTerm_set_underline_style, 5);
-    }
-  }
-
-  if (has_any_underline && tui->can_set_underline_color) {
-    int color = attrs.rgb_sp_color;
-    if (color != -1) {
-      // Only support colon syntax. #9270
-      out_printf(tui, 128, "\x1b[58:2::%d:%d:%dm",
-                 (color >> 16) & 0xff,  // red
-                 (color >> 8) & 0xff,   // green
-                 color & 0xff);         // blue
-    }
-  }
-
-  int fg, bg;
-  if (tui->rgb && !(attr & HL_FG_INDEXED)) {
-    fg = ((attrs.rgb_fg_color != -1)
-          ? attrs.rgb_fg_color : tui->clear_attrs.rgb_fg_color);
-    if (fg != -1) {
-      terminfo_print_num3(tui, kTerm_set_rgb_foreground,
-                          (fg >> 16) & 0xff,  // red
-                          (fg >> 8) & 0xff,   // green
-                          fg & 0xff);         // blue
-    }
-  } else {
-    fg = (attrs.cterm_fg_color
-          ? attrs.cterm_fg_color - 1 : (tui->clear_attrs.cterm_fg_color - 1));
-    if (fg != -1) {
-      terminfo_print_num1(tui, kTerm_set_a_foreground, fg);
-    }
-  }
-
-  if (tui->rgb && !(attr & HL_BG_INDEXED)) {
-    bg = ((attrs.rgb_bg_color != -1)
-          ? attrs.rgb_bg_color : tui->clear_attrs.rgb_bg_color);
-    if (bg != -1) {
-      terminfo_print_num3(tui, kTerm_set_rgb_background,
-                          (bg >> 16) & 0xff,  // red
-                          (bg >> 8) & 0xff,   // green
-                          bg & 0xff);         // blue
-    }
-  } else {
-    bg = (attrs.cterm_bg_color
-          ? attrs.cterm_bg_color - 1 : (tui->clear_attrs.cterm_bg_color - 1));
-    if (bg != -1) {
-      terminfo_print_num1(tui, kTerm_set_a_background, bg);
-    }
-  }
-
-  if (tui->url != attrs.url) {
-    if (attrs.url >= 0) {
-      const char *url = urls.keys[attrs.url];
-      kv_size(tui->urlbuf) = 0;
-
-      // Add some fixed offset to the URL ID to deconflict with other
-      // applications which may set their own IDs
-      const uint64_t id = 0xE1EA0000U + (uint32_t)attrs.url;
-
-      kv_printf(tui->urlbuf, "\x1b]8;id=%" PRIu64 ";%s\x1b\\", id, url);
-      out(tui, tui->urlbuf.items, kv_size(tui->urlbuf));
-    } else {
-      out(tui, S_LEN("\x1b]8;;\x1b\\"));
-    }
-
-    tui->url = attrs.url;
-  }
-
-  tui->default_attr = fg == -1 && bg == -1
-                      && !bold && !italic && !has_any_underline && !reverse && !standout
-                      && !strikethrough;
-
-  // Non-BCE terminals can't clear with non-default background color. Some BCE
-  // terminals don't support attributes either, so don't rely on it. But assume
-  // italic and bold has no effect if there is no text.
-  tui->can_clear_attr = !reverse && !standout && !has_any_underline
-                        && !strikethrough && (tui->bce || bg == -1);
+  rs_update_attrs(tui, attr_id);
 }
 
 /// Handle cursor wrapping at the final column. Rust implementation.
@@ -1237,129 +1170,13 @@ static void print_cell(TUIData *tui, char *buf, sattr_T attr) { rs_print_cell(tu
 
 static bool cheap_to_print(TUIData *tui, int row, int col, int next)
 {
-  UGrid *grid = &tui->grid;
-  UCell *cell = grid->cells[row] + col;
-  while (next) {
-    next--;
-    if (attrs_differ(tui, cell->attr,
-                     tui->print_attr_id, tui->rgb)) {
-      if (tui->default_attr) {
-        return false;
-      }
-    }
-    if (schar_get_ascii(cell->data) == 0) {
-      return false;  // not ascii
-    }
-    cell++;
-  }
-  return true;
+  return rs_cheap_to_print(tui, row, col, next);
 }
 
-/// This optimizes several cases where it is cheaper to do something other
-/// than send a full cursor positioning control sequence.  However, there are
-/// some further optimizations that may seem obvious but that will not work.
-///
-/// We cannot use VT (ASCII 0/11) for moving the cursor up, because VT means
-/// move the cursor down on a DEC terminal.  Similarly, on a DEC terminal FF
-/// (ASCII 0/12) means the same thing and does not mean home.  VT, CVT, and
-/// TAB also stop at software-defined tabulation stops, not at a fixed set
-/// of row/column positions.
+/// Optimized cursor positioning. Rust implementation.
 static void cursor_goto(TUIData *tui, int row, int col)
 {
-  UGrid *grid = &tui->grid;
-  if (row == grid->row && col == grid->col) {
-    return;
-  }
-
-  // If an OSC 8 sequence is active terminate it before moving the cursor
-  if (tui->url >= 0) {
-    out(tui, S_LEN("\x1b]8;;\x1b\\"));
-    tui->url = -1;
-    tui->print_attr_id = -1;
-  }
-
-  if (0 == row && 0 == col) {
-    terminfo_out(tui, kTerm_cursor_home);
-    ugrid_goto(grid, row, col);
-    return;
-  }
-  if (grid->row == -1) {
-    goto safe_move;
-  }
-  if (0 == col
-      ? col != grid->col
-      : (row != grid->row
-         ? false
-         : (1 == col
-            ? (2 < grid->col && cheap_to_print(tui, grid->row, 0, col))
-            : (2 == col
-               ? (5 < grid->col && cheap_to_print(tui, grid->row, 0, col))
-               : false)))) {
-    // Motion to left margin from anywhere else, or CR + printing chars is
-    // even less expensive than using BSes or CUB.
-    terminfo_out(tui, kTerm_carriage_return);
-    ugrid_goto(grid, grid->row, 0);
-  }
-  if (row == grid->row) {
-    if (col < grid->col
-        // Deferred right margin wrap terminals have inconsistent ideas about
-        // where the cursor actually is during a deferred wrap.  Relative
-        // motion calculations have OBOEs that cannot be compensated for,
-        // because two terminals that claim to be the same will implement
-        // different cursor positioning rules.
-        && (tui->immediate_wrap_after_last_column || grid->col < tui->width)) {
-      int n = grid->col - col;
-      if (n <= 4) {  // This might be just BS, so it is considered really cheap.
-        while (n--) {
-          terminfo_out(tui, kTerm_cursor_left);
-        }
-      } else {
-        terminfo_print_num1(tui, kTerm_parm_left_cursor, n);
-      }
-      ugrid_goto(grid, row, col);
-      return;
-    } else if (col > grid->col) {
-      int n = col - grid->col;
-      if (n <= 2) {
-        while (n--) {
-          terminfo_out(tui, kTerm_cursor_right);
-        }
-      } else {
-        terminfo_print_num1(tui, kTerm_parm_right_cursor, n);
-      }
-      ugrid_goto(grid, row, col);
-      return;
-    }
-  }
-  if (col == grid->col) {
-    if (row > grid->row) {
-      int n = row - grid->row;
-      if (n <= 4) {  // This might be just LF, so it is considered really cheap.
-        while (n--) {
-          terminfo_out(tui, kTerm_cursor_down);
-        }
-      } else {
-        terminfo_print_num1(tui, kTerm_parm_down_cursor, n);
-      }
-      ugrid_goto(grid, row, col);
-      return;
-    } else if (row < grid->row) {
-      int n = grid->row - row;
-      if (n <= 2) {
-        while (n--) {
-          terminfo_out(tui, kTerm_cursor_up);
-        }
-      } else {
-        terminfo_print_num1(tui, kTerm_parm_up_cursor, n);
-      }
-      ugrid_goto(grid, row, col);
-      return;
-    }
-  }
-
-safe_move:
-  terminfo_print_num2(tui, kTerm_cursor_address, row, col);
-  ugrid_goto(grid, row, col);
+  rs_cursor_goto(tui, row, col);
 }
 
 static void print_spaces(TUIData *tui, int width)
@@ -1410,47 +1227,10 @@ static void print_cell_at_pos(TUIData *tui, int row, int col, UCell *cell, bool 
   }
 }
 
+/// Clear a rectangular region. Rust implementation.
 static void clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id)
 {
-  UGrid *grid = &tui->grid;
-
-  // Setting the default colors is delayed until after startup to avoid flickering
-  // with the default colorscheme background. Consequently, any flush that happens
-  // during startup would result in clearing invalidated regions with zeroed
-  // clear_attrs, perceived as a black flicker. Reset attributes to clear with
-  // current terminal background instead (#28667, #28668).
-  if (tui->set_default_colors) {
-    update_attrs(tui, attr_id);
-  } else {
-    terminfo_out(tui, kTerm_exit_attribute_mode);
-  }
-
-  // Background is set to the default color and the right edge matches the
-  // screen end, try to use terminal codes for clearing the requested area.
-  if (tui->can_clear_attr
-      && left == 0 && right == tui->width && bot == tui->height) {
-    if (top == 0) {
-      terminfo_out(tui, kTerm_clear_screen);
-      ugrid_goto(grid, top, left);
-    } else {
-      cursor_goto(tui, top, 0);
-      terminfo_out(tui, kTerm_clr_eos);
-    }
-  } else {
-    int width = right - left;
-
-    // iterate through each line and clear
-    for (int row = top; row < bot; row++) {
-      cursor_goto(tui, row, left);
-      if (tui->can_clear_attr && right == tui->width) {
-        terminfo_out(tui, kTerm_clr_eol);
-      } else if (tui->can_erase_chars && tui->can_clear_attr && width >= 5) {
-        terminfo_print_num1(tui, kTerm_erase_chars, width);
-      } else {
-        print_spaces(tui, width);
-      }
-    }
-  }
+  rs_clear_region(tui, top, bot, left, right, attr_id);
 }
 
 /// Set scroll region for scrolling operations. Rust implementation.
@@ -1907,31 +1687,10 @@ void tui_raw_line(TUIData *tui, Integer g, Integer linerow, Integer startcol, In
   }
 }
 
+/// Merge invalidation rect into existing invalid regions. Rust implementation.
 static void invalidate(TUIData *tui, int top, int bot, int left, int right)
 {
-  Rect *intersects = NULL;
-
-  for (size_t i = 0; i < kv_size(tui->invalid_regions); i++) {
-    Rect *r = &kv_A(tui->invalid_regions, i);
-    // adjacent regions are treated as overlapping
-    if (!(top > r->bot || bot < r->top)
-        && !(left > r->right || right < r->left)) {
-      intersects = r;
-      break;
-    }
-  }
-
-  if (intersects) {
-    // If top/bot/left/right intersects with a invalid rect, we replace it
-    // by the union
-    intersects->top = MIN(top, intersects->top);
-    intersects->bot = MAX(bot, intersects->bot);
-    intersects->left = MIN(left, intersects->left);
-    intersects->right = MAX(right, intersects->right);
-  } else {
-    // Else just add a new entry;
-    kv_push(tui->invalid_regions, ((Rect) { top, bot, left, right }));
-  }
+  rs_invalidate(tui, top, bot, left, right);
 }
 
 void tui_set_size(TUIData *tui, int width, int height)

@@ -1183,6 +1183,592 @@ pub unsafe extern "C" fn rs_print_spaces(tui: *mut TuiHandle, width: c_int) {
     // Note: grid->col += width and final_column_wrap are handled by caller
 }
 
+// ============================================================================
+// Phase 3: Core Rendering Functions
+// ============================================================================
+
+use nvim_highlight::hl_attr_flags::*;
+
+// Phase 3 C accessors (new, not yet declared above)
+extern "C" {
+    fn nvim_tui_get_rgb(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_bce(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_can_set_underline_color(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_clear_attrs(tui: *mut TuiHandle) -> HlAttrs;
+    fn nvim_tui_set_default_attr(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_can_clear_attr(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_get_attrs_entry(tui: *mut TuiHandle, idx: usize) -> HlAttrs;
+    fn nvim_tui_get_attrs_size(tui: *mut TuiHandle) -> usize;
+    fn nvim_tui_get_attrs_ptr(tui: *mut TuiHandle) -> *const HlAttrs;
+    fn nvim_tui_ti_has_def(tui: *mut TuiHandle, idx: c_int) -> bool;
+    fn nvim_tui_get_cell_data(tui: *mut TuiHandle, row: c_int, col: c_int) -> u32;
+    fn nvim_tui_get_cell_attr(tui: *mut TuiHandle, row: c_int, col: c_int) -> i32;
+    fn nvim_tui_get_url_key(idx: c_int) -> *const libc::c_char;
+    fn nvim_tui_urlbuf_reset(tui: *mut TuiHandle);
+    fn nvim_tui_urlbuf_append_fmt(tui: *mut TuiHandle, id: u64, url: *const libc::c_char);
+    fn nvim_tui_urlbuf_ptr(tui: *mut TuiHandle) -> *const u8;
+    fn nvim_tui_urlbuf_size(tui: *mut TuiHandle) -> usize;
+    fn nvim_tui_terminfo_print_num3(
+        tui: *mut TuiHandle,
+        what: c_int,
+        n1: c_int,
+        n2: c_int,
+        n3: c_int,
+    );
+    fn nvim_tui_out_underline_color(tui: *mut TuiHandle, r: c_int, g: c_int, b: c_int);
+    fn nvim_tui_get_invalid_region(
+        tui: *mut TuiHandle,
+        idx: usize,
+        top: *mut c_int,
+        bot: *mut c_int,
+        left: *mut c_int,
+        right: *mut c_int,
+    );
+    fn nvim_tui_set_invalid_region(
+        tui: *mut TuiHandle,
+        idx: usize,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+    );
+    fn nvim_tui_push_invalid_region(
+        tui: *mut TuiHandle,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+    );
+    fn nvim_tui_set_grid_col(tui: *mut TuiHandle, col: c_int);
+    fn nvim_tui_terminfo_print_attrs(
+        tui: *mut TuiHandle,
+        standout: c_int,
+        underline: c_int,
+        reverse: c_int,
+        blink: c_int,
+        dim: c_int,
+        bold: c_int,
+        blank: c_int,
+        protect: c_int,
+        acs: c_int,
+    );
+    fn nvim_tui_out_altfont(tui: *mut TuiHandle);
+}
+
+// Terminfo enum constants (from terminfo_enum_defs.h)
+const KTERM_CARRIAGE_RETURN: c_int = 0;
+const KTERM_CLEAR_SCREEN: c_int = 2;
+const KTERM_CLR_EOL: c_int = 3;
+const KTERM_CLR_EOS: c_int = 4;
+const KTERM_CURSOR_DOWN: c_int = 6;
+const KTERM_CURSOR_LEFT: c_int = 8;
+const KTERM_CURSOR_HOME: c_int = 9;
+const KTERM_CURSOR_UP: c_int = 11;
+const KTERM_CURSOR_RIGHT: c_int = 12;
+const KTERM_ENTER_BOLD_MODE: c_int = 14;
+const KTERM_ENTER_ITALICS_MODE: c_int = 16;
+const KTERM_ENTER_REVERSE_MODE: c_int = 17;
+const KTERM_ENTER_STANDOUT_MODE: c_int = 18;
+const KTERM_ENTER_UNDERLINE_MODE: c_int = 19;
+const KTERM_ERASE_CHARS: c_int = 20;
+const KTERM_EXIT_ATTRIBUTE_MODE: c_int = 21;
+const KTERM_SET_A_BACKGROUND: c_int = 33;
+const KTERM_SET_A_FOREGROUND: c_int = 34;
+const KTERM_SET_ATTRIBUTES: c_int = 35;
+const KTERM_ENTER_STRIKETHROUGH_MODE: c_int = 40;
+const KTERM_SET_RGB_FOREGROUND: c_int = 41;
+const KTERM_SET_RGB_BACKGROUND: c_int = 42;
+const KTERM_SET_UNDERLINE_STYLE: c_int = 45;
+const KTERM_PARM_LEFT_CURSOR: c_int = 30;
+const KTERM_PARM_RIGHT_CURSOR: c_int = 31;
+const KTERM_PARM_DOWN_CURSOR: c_int = 28;
+const KTERM_PARM_UP_CURSOR: c_int = 32;
+const KTERM_CURSOR_ADDRESS: c_int = 5;
+
+/// Mark a region of the grid as needing redraw.
+///
+/// If the region intersects an existing invalid region, they are merged.
+/// Otherwise, a new entry is added.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate(
+    tui: *mut TuiHandle,
+    top: c_int,
+    bot: c_int,
+    left: c_int,
+    right: c_int,
+) {
+    let n = nvim_tui_get_invalid_regions_size(tui);
+    let mut intersect_idx: Option<usize> = None;
+
+    for i in 0..n {
+        let (mut r_top, mut r_bot, mut r_left, mut r_right) = (0i32, 0i32, 0i32, 0i32);
+        nvim_tui_get_invalid_region(tui, i, &mut r_top, &mut r_bot, &mut r_left, &mut r_right);
+        // Adjacent regions are treated as overlapping
+        let overlaps_vert = !(top > r_bot || bot < r_top);
+        let overlaps_horiz = !(left > r_right || right < r_left);
+        if overlaps_vert && overlaps_horiz {
+            intersect_idx = Some(i);
+            break;
+        }
+    }
+
+    if let Some(idx) = intersect_idx {
+        let (mut r_top, mut r_bot, mut r_left, mut r_right) = (0i32, 0i32, 0i32, 0i32);
+        nvim_tui_get_invalid_region(tui, idx, &mut r_top, &mut r_bot, &mut r_left, &mut r_right);
+        nvim_tui_set_invalid_region(
+            tui,
+            idx,
+            top.min(r_top),
+            bot.max(r_bot),
+            left.min(r_left),
+            right.max(r_right),
+        );
+    } else {
+        nvim_tui_push_invalid_region(tui, top, bot, left, right);
+    }
+}
+
+/// Check if printing from `col` to `col+next` cells on `row` is cheap.
+///
+/// Cheap means no attribute changes are required (or only default attrs needed)
+/// and all characters are ASCII.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_cheap_to_print(
+    tui: *mut TuiHandle,
+    row: c_int,
+    col: c_int,
+    mut next: c_int,
+) -> bool {
+    let attrs_ptr = nvim_tui_get_attrs_ptr(tui);
+    let attrs_size = nvim_tui_get_attrs_size(tui);
+    let print_attr_id = nvim_tui_get_print_attr_id(tui);
+    let rgb = nvim_tui_get_rgb(tui);
+    let default_attr = nvim_tui_get_default_attr(tui);
+
+    let mut c = col;
+    while next > 0 {
+        next -= 1;
+        let cell_attr = nvim_tui_get_cell_attr(tui, row, c);
+        let cell_data = nvim_tui_get_cell_data(tui, row, c);
+        c += 1;
+
+        if attrs_differ_impl(cell_attr, print_attr_id, rgb, attrs_ptr, attrs_size) {
+            if default_attr {
+                return false;
+            }
+        }
+        // schar_get_ascii returns 0 for non-ASCII characters
+        extern "C" {
+            fn schar_get_ascii(sc: u32) -> i8;
+        }
+        if schar_get_ascii(cell_data) == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Update terminal attributes to match the given highlight ID.
+///
+/// Emits terminfo sequences for bold, italic, underline, colors, etc.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_attrs(tui: *mut TuiHandle, attr_id: c_int) {
+    let attrs_ptr = nvim_tui_get_attrs_ptr(tui);
+    let attrs_size = nvim_tui_get_attrs_size(tui);
+    let print_attr_id = nvim_tui_get_print_attr_id(tui);
+    let rgb = nvim_tui_get_rgb(tui);
+
+    if !attrs_differ_impl(attr_id, print_attr_id, rgb, attrs_ptr, attrs_size) {
+        nvim_tui_set_print_attr_id(tui, attr_id);
+        return;
+    }
+    nvim_tui_set_print_attr_id(tui, attr_id);
+
+    let attrs = nvim_tui_get_attrs_entry(tui, attr_id as usize);
+    let attr: i16 = if rgb {
+        attrs.rgb_ae_attr
+    } else {
+        attrs.cterm_ae_attr
+    };
+
+    let bold = (attr & HL_BOLD) != 0;
+    let italic = (attr & HL_ITALIC) != 0;
+    let reverse = (attr & HL_INVERSE) != 0;
+    let standout = (attr & HL_STANDOUT) != 0;
+    let strikethrough = (attr & HL_STRIKETHROUGH) != 0;
+    let altfont = (attr & HL_ALTFONT) != 0;
+
+    let has_underline_style = nvim_tui_ti_has_def(tui, KTERM_SET_UNDERLINE_STYLE);
+    let (underline, undercurl, underdouble, underdotted, underdashed) = if has_underline_style {
+        let ul = attr & HL_UNDERLINE_MASK;
+        (
+            ul == HL_UNDERLINE,
+            ul == HL_UNDERCURL,
+            ul == HL_UNDERDOUBLE,
+            ul == HL_UNDERDOTTED,
+            ul == HL_UNDERDASHED,
+        )
+    } else {
+        ((attr & HL_UNDERLINE_MASK) != 0, false, false, false, false)
+    };
+
+    let has_any_underline = undercurl || underline || underdouble || underdotted || underdashed;
+
+    if nvim_tui_ti_has_def(tui, KTERM_SET_ATTRIBUTES) {
+        if bold || reverse || underline || standout {
+            // terminfo set_attributes: standout, underline, reverse, blink, dim, bold, blank, protect, acs
+            nvim_tui_terminfo_print_attrs(
+                tui,
+                standout as c_int,
+                underline as c_int,
+                reverse as c_int,
+                0,
+                0,
+                bold as c_int,
+                0,
+                0,
+                0,
+            );
+        } else if !nvim_tui_get_default_attr(tui) {
+            nvim_tui_terminfo_out(tui, KTERM_EXIT_ATTRIBUTE_MODE);
+        }
+    } else {
+        if !nvim_tui_get_default_attr(tui) {
+            nvim_tui_terminfo_out(tui, KTERM_EXIT_ATTRIBUTE_MODE);
+        }
+        if bold {
+            nvim_tui_terminfo_out(tui, KTERM_ENTER_BOLD_MODE);
+        }
+        if underline {
+            nvim_tui_terminfo_out(tui, KTERM_ENTER_UNDERLINE_MODE);
+        }
+        if standout {
+            nvim_tui_terminfo_out(tui, KTERM_ENTER_STANDOUT_MODE);
+        }
+        if reverse {
+            nvim_tui_terminfo_out(tui, KTERM_ENTER_REVERSE_MODE);
+        }
+    }
+
+    if italic {
+        nvim_tui_terminfo_out(tui, KTERM_ENTER_ITALICS_MODE);
+    }
+    if altfont {
+        nvim_tui_out_altfont(tui);
+    }
+    if strikethrough {
+        nvim_tui_terminfo_out(tui, KTERM_ENTER_STRIKETHROUGH_MODE);
+    }
+
+    if has_underline_style {
+        if undercurl {
+            nvim_tui_terminfo_print_num1(tui, KTERM_SET_UNDERLINE_STYLE, 3);
+        }
+        if underdouble {
+            nvim_tui_terminfo_print_num1(tui, KTERM_SET_UNDERLINE_STYLE, 2);
+        }
+        if underdotted {
+            nvim_tui_terminfo_print_num1(tui, KTERM_SET_UNDERLINE_STYLE, 4);
+        }
+        if underdashed {
+            nvim_tui_terminfo_print_num1(tui, KTERM_SET_UNDERLINE_STYLE, 5);
+        }
+    }
+
+    if has_any_underline && nvim_tui_get_can_set_underline_color(tui) {
+        let color = attrs.rgb_sp_color;
+        if color != -1 {
+            let r = (color >> 16) & 0xff;
+            let g = (color >> 8) & 0xff;
+            let b = color & 0xff;
+            nvim_tui_out_underline_color(tui, r, g, b);
+        }
+    }
+
+    let clear_attrs = nvim_tui_get_clear_attrs(tui);
+
+    // Foreground color
+    let fg: i32 = if rgb && (attr & HL_FG_INDEXED) == 0 {
+        let c = if attrs.rgb_fg_color != -1 {
+            attrs.rgb_fg_color
+        } else {
+            clear_attrs.rgb_fg_color
+        };
+        if c != -1 {
+            nvim_tui_terminfo_print_num3(
+                tui,
+                KTERM_SET_RGB_FOREGROUND,
+                (c >> 16) & 0xff,
+                (c >> 8) & 0xff,
+                c & 0xff,
+            );
+        }
+        c
+    } else {
+        let c = if attrs.cterm_fg_color != 0 {
+            attrs.cterm_fg_color as i32 - 1
+        } else {
+            clear_attrs.cterm_fg_color as i32 - 1
+        };
+        if c != -1 {
+            nvim_tui_terminfo_print_num1(tui, KTERM_SET_A_FOREGROUND, c);
+        }
+        c
+    };
+
+    // Background color
+    let bg: i32 = if rgb && (attr & HL_BG_INDEXED) == 0 {
+        let c = if attrs.rgb_bg_color != -1 {
+            attrs.rgb_bg_color
+        } else {
+            clear_attrs.rgb_bg_color
+        };
+        if c != -1 {
+            nvim_tui_terminfo_print_num3(
+                tui,
+                KTERM_SET_RGB_BACKGROUND,
+                (c >> 16) & 0xff,
+                (c >> 8) & 0xff,
+                c & 0xff,
+            );
+        }
+        c
+    } else {
+        let c = if attrs.cterm_bg_color != 0 {
+            attrs.cterm_bg_color as i32 - 1
+        } else {
+            clear_attrs.cterm_bg_color as i32 - 1
+        };
+        if c != -1 {
+            nvim_tui_terminfo_print_num1(tui, KTERM_SET_A_BACKGROUND, c);
+        }
+        c
+    };
+
+    // URL handling
+    let url = nvim_tui_get_url(tui);
+    if url != attrs.url {
+        if attrs.url >= 0 {
+            let url_str = nvim_tui_get_url_key(attrs.url);
+            let id = 0xE1EA0000u64 + attrs.url as u64;
+            nvim_tui_urlbuf_reset(tui);
+            nvim_tui_urlbuf_append_fmt(tui, id, url_str);
+            let ptr = nvim_tui_urlbuf_ptr(tui);
+            let size = nvim_tui_urlbuf_size(tui);
+            nvim_tui_out(tui, ptr, size);
+        } else {
+            nvim_tui_out(tui, b"\x1b]8;;\x1b\\".as_ptr(), 6);
+        }
+        nvim_tui_set_url(tui, attrs.url);
+    }
+
+    nvim_tui_set_default_attr(
+        tui,
+        fg == -1
+            && bg == -1
+            && !bold
+            && !italic
+            && !has_any_underline
+            && !reverse
+            && !standout
+            && !strikethrough,
+    );
+
+    let bce = nvim_tui_get_bce(tui);
+    nvim_tui_set_can_clear_attr(
+        tui,
+        !reverse && !standout && !has_any_underline && !strikethrough && (bce || bg == -1),
+    );
+}
+
+/// Optimized cursor positioning with relative motion.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_goto(tui: *mut TuiHandle, row: c_int, col: c_int) {
+    let grid_row = nvim_tui_get_grid_row(tui);
+    let grid_col = nvim_tui_get_grid_col(tui);
+
+    if row == grid_row && col == grid_col {
+        return;
+    }
+
+    // If an OSC 8 sequence is active, terminate it before moving the cursor
+    let url = nvim_tui_get_url(tui);
+    if url >= 0 {
+        nvim_tui_out(tui, b"\x1b]8;;\x1b\\".as_ptr(), 6);
+        nvim_tui_set_url(tui, -1);
+        nvim_tui_set_print_attr_id(tui, -1);
+    }
+
+    if row == 0 && col == 0 {
+        nvim_tui_terminfo_out(tui, KTERM_CURSOR_HOME);
+        let grid = nvim_tui_get_grid(tui);
+        ugrid_goto(grid, row, col);
+        return;
+    }
+
+    let grid = nvim_tui_get_grid(tui);
+    if grid_row == -1 {
+        // Unknown cursor position — use absolute positioning
+        rs_cursor_goto_safe(tui, row, col);
+        return;
+    }
+
+    // Try carriage return optimization: motion to left margin
+    let needs_cr = if col == 0 {
+        col != grid_col
+    } else if row != grid_row {
+        false
+    } else if col == 1 {
+        2 < grid_col && rs_cheap_to_print(tui, grid_row, 0, col)
+    } else if col == 2 {
+        5 < grid_col && rs_cheap_to_print(tui, grid_row, 0, col)
+    } else {
+        false
+    };
+
+    if needs_cr {
+        nvim_tui_terminfo_out(tui, KTERM_CARRIAGE_RETURN);
+        ugrid_goto(grid, grid_row, 0);
+    }
+
+    let grid_row = nvim_tui_get_grid_row(tui);
+    let grid_col = nvim_tui_get_grid_col(tui);
+
+    if row == grid_row {
+        if col < grid_col
+            && (nvim_tui_get_immediate_wrap(tui) || grid_col < nvim_tui_get_width(tui))
+        {
+            let n = grid_col - col;
+            if n <= 4 {
+                for _ in 0..n {
+                    nvim_tui_terminfo_out(tui, KTERM_CURSOR_LEFT);
+                }
+            } else {
+                nvim_tui_terminfo_print_num1(tui, KTERM_PARM_LEFT_CURSOR, n);
+            }
+            ugrid_goto(grid, row, col);
+            return;
+        } else if col > grid_col {
+            let n = col - grid_col;
+            if n <= 2 {
+                for _ in 0..n {
+                    nvim_tui_terminfo_out(tui, KTERM_CURSOR_RIGHT);
+                }
+            } else {
+                nvim_tui_terminfo_print_num1(tui, KTERM_PARM_RIGHT_CURSOR, n);
+            }
+            ugrid_goto(grid, row, col);
+            return;
+        }
+    }
+    if col == grid_col {
+        if row > grid_row {
+            let n = row - grid_row;
+            if n <= 4 {
+                for _ in 0..n {
+                    nvim_tui_terminfo_out(tui, KTERM_CURSOR_DOWN);
+                }
+            } else {
+                nvim_tui_terminfo_print_num1(tui, KTERM_PARM_DOWN_CURSOR, n);
+            }
+            ugrid_goto(grid, row, col);
+            return;
+        } else if row < grid_row {
+            let n = grid_row - row;
+            if n <= 2 {
+                for _ in 0..n {
+                    nvim_tui_terminfo_out(tui, KTERM_CURSOR_UP);
+                }
+            } else {
+                nvim_tui_terminfo_print_num1(tui, KTERM_PARM_UP_CURSOR, n);
+            }
+            ugrid_goto(grid, row, col);
+            return;
+        }
+    }
+
+    rs_cursor_goto_safe(tui, row, col);
+}
+
+/// Emit a cursor_address (absolute position) sequence.
+unsafe fn rs_cursor_goto_safe(tui: *mut TuiHandle, row: c_int, col: c_int) {
+    nvim_tui_terminfo_print_num2(tui, KTERM_CURSOR_ADDRESS, row, col);
+    let grid = nvim_tui_get_grid(tui);
+    ugrid_goto(grid, row, col);
+}
+
+/// Clear a rectangular region of the screen.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_region(
+    tui: *mut TuiHandle,
+    top: c_int,
+    bot: c_int,
+    left: c_int,
+    right: c_int,
+    attr_id: c_int,
+) {
+    let grid = nvim_tui_get_grid(tui);
+    if nvim_tui_get_set_default_colors(tui) {
+        rs_update_attrs(tui, attr_id);
+    } else {
+        nvim_tui_terminfo_out(tui, KTERM_EXIT_ATTRIBUTE_MODE);
+    }
+
+    let width_val = nvim_tui_get_width(tui);
+    let height_val = nvim_tui_get_height(tui);
+
+    if nvim_tui_get_can_clear_attr(tui) && left == 0 && right == width_val && bot == height_val {
+        if top == 0 {
+            nvim_tui_terminfo_out(tui, KTERM_CLEAR_SCREEN);
+            ugrid_goto(grid, top, left);
+        } else {
+            rs_cursor_goto(tui, top, 0);
+            nvim_tui_terminfo_out(tui, KTERM_CLR_EOS);
+        }
+    } else {
+        let width = right - left;
+        for row in top..bot {
+            rs_cursor_goto(tui, row, left);
+            if nvim_tui_get_can_clear_attr(tui) && right == width_val {
+                nvim_tui_terminfo_out(tui, KTERM_CLR_EOL);
+            } else if nvim_tui_get_can_erase_chars(tui)
+                && nvim_tui_get_can_clear_attr(tui)
+                && width >= 5
+            {
+                nvim_tui_terminfo_print_num1(tui, KTERM_ERASE_CHARS, width);
+            } else {
+                rs_print_spaces(tui, width);
+                // Advance grid column manually after printing spaces
+                let cur_col = nvim_tui_get_grid_col(tui);
+                nvim_tui_set_grid_col(tui, cur_col + width);
+                if nvim_tui_get_immediate_wrap(tui) {
+                    rs_final_column_wrap(tui);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
