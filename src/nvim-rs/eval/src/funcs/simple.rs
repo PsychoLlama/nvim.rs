@@ -1,7 +1,7 @@
 //! Simple self-contained VimL built-in functions (Phase 1).
 //!
 //! These are trivially self-contained functions migrated from `src/nvim/eval/funcs.c`.
-//! Each delegates to a thin C accessor.
+//! Phase 1 inlines the C accessor body into Rust, calling underlying C APIs directly.
 
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::cast_sign_loss)]
@@ -11,7 +11,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
-// C accessor declarations
+// C accessor declarations (still-delegated functions)
 // =============================================================================
 
 extern "C" {
@@ -19,24 +19,65 @@ extern "C" {
     fn nvim_eval_byte2line(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_line2byte(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_gettext(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_garbagecollect(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_debugbreak(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_getenv(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_setenv(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_pum_getpos(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_wordcount(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_soundfold(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_wildmenumode(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_timer_stopall(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_synIDtrans(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_keytrans(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_luaeval(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_shiftwidth(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_mode(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_visualmode(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_nextnonblank(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_prevnonblank(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_pum_getpos(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_wordcount(argvars: *const c_void, rettv: *mut c_void);
     fn nvim_eval_menu_get(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_visualmode(argvars: *const c_void, rettv: *mut c_void);
+}
+
+// =============================================================================
+// Direct underlying C function declarations (inlined Phase 1 functions)
+// =============================================================================
+
+extern "C" {
+    // timer_stopall
+    fn timer_stop_all();
+
+    // soundfold / getenv / visualmode - string ownership
+    fn eval_soundfold(word: *const u8) -> *mut u8;
+    fn nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
+
+    // synIDtrans
+    fn nvim_tv_get_number(tv: *const c_void) -> i64;
+    fn syn_get_final_id(id: c_int) -> c_int;
+
+    // garbagecollect
+    static mut want_garbage_collect: bool;
+    static mut garbage_collect_at_exit: bool;
+    fn nvim_tv_get_number_chk(tv: *const c_void, error: *mut bool) -> i64;
+
+    // getenv / setenv
+    fn vim_getenv(name: *const u8) -> *mut u8;
+    fn vim_setenv_ext(name: *const u8, val: *const u8);
+    fn vim_unsetenv_ext(var: *const u8);
+
+    // setenv: get string with buf (buf must be NUMBUFLEN bytes)
+    fn nvim_tv_get_string_buf(tv: *const c_void, buf: *mut u8) -> *const u8;
+    // mode: duplicate a C string (uses nvim allocator)
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+
+    // shiftwidth
+    fn nvim_eval_get_sw_value_col(col: c_int) -> c_int;
+    fn nvim_eval_get_sw_value() -> c_int;
+
+    // mode
+    fn nvim_eval_get_mode(buf: *mut u8);
+    fn nvim_eval_non_zero_arg(argvars: *const c_void, idx: c_int) -> c_int;
+
+    // nextnonblank / prevnonblank
+    fn nvim_eval_tv_get_lnum(argvars: *const c_void) -> i32;
+    fn nvim_eval_curbuf_ml_line_count() -> i32;
+    fn ml_get(lnum: i32) -> *const c_char;
+    #[link_name = "skipwhite"]
+    fn nvim_skipwhite(p: *const c_char) -> *const c_char;
+
+    // wildmenumode
+    fn nvim_eval_wildmenumode_check() -> c_int;
+
+    // set_special_null for getenv
+    fn nvim_tv_set_special_null(tv: *mut c_void);
 }
 
 // =============================================================================
@@ -102,10 +143,14 @@ pub unsafe extern "C" fn rs_f_gettext(
 #[export_name = "f_garbagecollect"]
 pub unsafe extern "C" fn rs_f_garbagecollect(
     argvars: *const c_void,
-    rettv: *mut c_void,
+    _rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_garbagecollect(argvars, rettv);
+    // VAR_UNKNOWN = 0
+    want_garbage_collect = true;
+    if nvim_tv_get_type(argvars) != 0 && nvim_tv_get_number(argvars) == 1 {
+        garbage_collect_at_exit = true;
+    }
 }
 
 /// "debugbreak(pid)" function - send SIGINT to process
@@ -118,7 +163,14 @@ pub unsafe extern "C" fn rs_f_debugbreak(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_debugbreak(argvars, rettv);
+    nvim_tv_set_number(rettv, 0); // FAIL
+    let pid = nvim_tv_get_number(argvars);
+    if pid == 0 {
+        let _ = emsg((&raw const E_INVARG).cast::<c_char>());
+        return;
+    }
+    // SIGINT on Linux/Unix (matches C code's #ifndef MSWIN branch)
+    libc::kill(pid as libc::pid_t, libc::SIGINT);
 }
 
 /// "getenv(name)" function - get environment variable
@@ -131,7 +183,13 @@ pub unsafe extern "C" fn rs_f_getenv(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_getenv(argvars, rettv);
+    let name = nvim_tv_get_string_ptr(argvars); // returns *const u8
+    let p = vim_getenv(name); // takes *const u8, returns *mut u8
+    if p.is_null() {
+        nvim_tv_set_special_null(rettv);
+        return;
+    }
+    nvim_tv_set_string(rettv, p); // takes ownership of *mut u8
 }
 
 /// "setenv(name, value)" function - set environment variable
@@ -141,10 +199,26 @@ pub unsafe extern "C" fn rs_f_getenv(
 #[export_name = "f_setenv"]
 pub unsafe extern "C" fn rs_f_setenv(
     argvars: *const c_void,
-    rettv: *mut c_void,
+    _rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_setenv(argvars, rettv);
+    // NUMBUFLEN = 65
+    const NUMBUFLEN: usize = 65;
+    if rs_check_secure() != 0 {
+        return;
+    }
+    let mut namebuf = [0u8; NUMBUFLEN];
+    let mut valbuf = [0u8; NUMBUFLEN];
+    let name = nvim_tv_get_string_buf(argvars, namebuf.as_mut_ptr());
+    // argvars[1] is at offset TYPVAL_SZ bytes
+    let arg1 = argvars.cast::<u8>().add(TYPVAL_SZ).cast::<c_void>();
+    // VAR_SPECIAL = 8 means null special
+    if nvim_tv_get_type(arg1) == 8 {
+        vim_unsetenv_ext(name);
+    } else {
+        let val = nvim_tv_get_string_buf(arg1, valbuf.as_mut_ptr());
+        vim_setenv_ext(name, val);
+    }
 }
 
 /// "pum_getpos()" function - get popup menu position
@@ -183,7 +257,9 @@ pub unsafe extern "C" fn rs_f_soundfold(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_soundfold(argvars, rettv);
+    let s = nvim_tv_get_string_ptr(argvars);
+    let folded = eval_soundfold(s);
+    nvim_tv_set_string(rettv, folded);
 }
 
 /// "wildmenumode()" function - check if wildmenu is active
@@ -192,11 +268,11 @@ pub unsafe extern "C" fn rs_f_soundfold(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_wildmenumode"]
 pub unsafe extern "C" fn rs_f_wildmenumode(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_wildmenumode(argvars, rettv);
+    nvim_tv_set_number(rettv, i64::from(nvim_eval_wildmenumode_check()));
 }
 
 /// "timer_stopall()" function - stop all timers
@@ -205,11 +281,11 @@ pub unsafe extern "C" fn rs_f_wildmenumode(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_timer_stopall"]
 pub unsafe extern "C" fn rs_f_timer_stopall(
-    argvars: *const c_void,
-    rettv: *mut c_void,
+    _argvars: *const c_void,
+    _rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_timer_stopall(argvars, rettv);
+    timer_stop_all();
 }
 
 /// "synIDtrans(id)" function - get final syntax ID (following links)
@@ -223,7 +299,9 @@ pub unsafe extern "C" fn rs_f_synIDtrans(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_synIDtrans(argvars, rettv);
+    let id = nvim_tv_get_number(argvars) as c_int;
+    let result = if id > 0 { syn_get_final_id(id) } else { 0 };
+    nvim_tv_set_number(rettv, i64::from(result));
 }
 
 /// "keytrans(string)" function - translate key notation to printable form
@@ -262,7 +340,18 @@ pub unsafe extern "C" fn rs_f_shiftwidth(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_shiftwidth(argvars, rettv);
+    nvim_tv_set_number(rettv, 0);
+    // VAR_UNKNOWN = 0
+    if nvim_tv_get_type(argvars) != 0 {
+        let mut error = false;
+        let col = nvim_tv_get_number_chk(argvars, &raw mut error);
+        if error || col < 0 {
+            return;
+        }
+        nvim_tv_set_number(rettv, i64::from(nvim_eval_get_sw_value_col(col as c_int)));
+        return;
+    }
+    nvim_tv_set_number(rettv, i64::from(nvim_eval_get_sw_value()));
 }
 
 /// "mode([expr])" function - current editing mode
@@ -271,7 +360,13 @@ pub unsafe extern "C" fn rs_f_shiftwidth(
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_mode"]
 pub unsafe extern "C" fn rs_f_mode(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
-    nvim_eval_mode(argvars, rettv);
+    let mut buf = [0u8; 4]; // MODE_MAX_LENGTH = 4
+    nvim_eval_get_mode(buf.as_mut_ptr());
+    if nvim_eval_non_zero_arg(argvars, 0) == 0 {
+        buf[1] = 0; // NUL-terminate at index 1 (like C: buf[1] = NUL)
+    }
+    let copy = xstrdup(buf.as_ptr().cast::<c_char>());
+    nvim_tv_set_string(rettv, copy.cast::<u8>());
 }
 
 /// "visualmode([expr])" function - last visual mode used
@@ -297,7 +392,21 @@ pub unsafe extern "C" fn rs_f_nextnonblank(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_nextnonblank(argvars, rettv);
+    let max_lnum = nvim_eval_curbuf_ml_line_count();
+    let mut lnum = nvim_eval_tv_get_lnum(argvars);
+    loop {
+        if lnum < 0 || lnum > max_lnum {
+            lnum = 0;
+            break;
+        }
+        let line = ml_get(lnum);
+        let after_ws = nvim_skipwhite(line);
+        if !after_ws.is_null() && *after_ws != 0 {
+            break;
+        }
+        lnum += 1;
+    }
+    nvim_tv_set_number(rettv, i64::from(lnum));
 }
 
 /// "prevnonblank(lnum)" function - find previous non-blank line
@@ -310,7 +419,21 @@ pub unsafe extern "C" fn rs_f_prevnonblank(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_prevnonblank(argvars, rettv);
+    let max_lnum = nvim_eval_curbuf_ml_line_count();
+    let mut lnum = nvim_eval_tv_get_lnum(argvars);
+    if lnum < 1 || lnum > max_lnum {
+        lnum = 0;
+    } else {
+        while lnum >= 1 {
+            let line = ml_get(lnum);
+            let after_ws = nvim_skipwhite(line);
+            if !after_ws.is_null() && *after_ws != 0 {
+                break;
+            }
+            lnum -= 1;
+        }
+    }
+    nvim_tv_set_number(rettv, i64::from(lnum));
 }
 
 /// "menu_get(path [, modes])" function - get menu items
@@ -325,6 +448,9 @@ pub unsafe extern "C" fn rs_f_menu_get(
 ) {
     nvim_eval_menu_get(argvars, rettv);
 }
+
+/// Size of typval_T in bytes (must match C sizeof(typval_T) = 16).
+const TYPVAL_SZ: usize = 16;
 
 // =============================================================================
 // Phase 1: Trivial delegation wrappers (plan 40f0fb72)
