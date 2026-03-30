@@ -307,6 +307,7 @@ pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> bool
 
 /// Terminfo parameter variable (matches C TPVAR struct)
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct TpVar {
     pub num: c_long,
     pub string: *mut c_char,

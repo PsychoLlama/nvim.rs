@@ -209,6 +209,12 @@ extern bool tui_is_stopped(TUIData *tui);
 extern void rs_tui_set_title(TUIData *tui, const char *data, size_t size);
 extern void rs_tui_enable_extended_underline(TUIData *tui);
 extern void rs_tui_query_bg_color(TUIData *tui);
+extern void rs_out(TUIData *tui, const char *str, size_t len);
+extern void rs_out_len(TUIData *tui, const char *str);
+extern void rs_flush_buf(TUIData *tui);
+extern void rs_terminfo_out(TUIData *tui, int what);
+extern void rs_terminfo_print_num(TUIData *tui, int what, int num1, int num2, int num3);
+extern void rs_print_spaces(TUIData *tui, int width);
 
 // TUIData Accessor Functions for Rust
 
@@ -321,7 +327,7 @@ void nvim_tui_ugrid_scroll(TUIData *tui, int top, int bot, int left, int right, 
 }
 
 /// Write raw bytes to output buffer
-void nvim_tui_out(TUIData *tui, const char *str, size_t len) { out(tui, str, len); }
+void nvim_tui_out(TUIData *tui, const char *str, size_t len) { rs_out(tui, str, len); }
 
 /// Output a terminfo escape sequence
 void nvim_tui_terminfo_out(TUIData *tui, int what) { terminfo_out(tui, (TerminfoDef)what); }
@@ -409,6 +415,45 @@ void nvim_tui_set_title_enabled(TUIData *tui, bool enabled) { tui->title_enabled
 /// Get available buffer space for title
 size_t nvim_tui_get_buf_space(TUIData *tui) { return sizeof(tui->buf) - tui->bufpos; }
 
+// Buffer management accessors for Rust
+size_t nvim_tui_get_bufpos(TUIData *tui) { return tui->bufpos; }
+void nvim_tui_set_bufpos(TUIData *tui, size_t pos) { tui->bufpos = pos; }
+char *nvim_tui_get_buf_ptr(TUIData *tui) { return tui->buf; }
+size_t nvim_tui_get_buf_capacity(void) { return OUTBUF_SIZE; }
+char *nvim_tui_get_buf_to_flush(TUIData *tui) { return tui->buf_to_flush; }
+void nvim_tui_set_buf_to_flush(TUIData *tui, char *ptr) { tui->buf_to_flush = ptr; }
+
+// Flush state accessors for Rust
+bool nvim_tui_get_is_invisible(TUIData *tui) { return tui->is_invisible; }
+void nvim_tui_set_is_invisible(TUIData *tui, bool val) { tui->is_invisible = val; }
+bool nvim_tui_get_sync_output(TUIData *tui) { return tui->sync_output; }
+bool nvim_tui_get_has_sync_mode(TUIData *tui) { return tui->has_sync_mode; }
+bool nvim_tui_get_want_invisible(TUIData *tui) { return tui->want_invisible; }
+bool nvim_tui_get_busy(TUIData *tui) { return tui->busy; }
+
+// Screenshot accessor for Rust
+FILE *nvim_tui_get_screenshot(TUIData *tui) { return tui->screenshot; }
+
+// Terminfo defs accessor for Rust
+const char *nvim_tui_get_ti_def(TUIData *tui, int idx) { return tui->ti.defs[idx]; }
+
+// uv write wrapper for Rust
+void nvim_tui_uv_write_flush(TUIData *tui, uv_buf_t *bufs, unsigned int nbufs)
+{
+  uv_write_t req;
+  int ret = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, nbufs, NULL);
+  if (ret) {
+    ELOG("uv_write failed: %s", uv_strerror(ret));
+  }
+  uv_run(&tui->write_loop, UV_RUN_DEFAULT);
+}
+
+// Screenshot write wrapper for Rust
+void nvim_tui_screenshot_write(TUIData *tui, const char *data, size_t len)
+{
+  fwrite(data, len, 1, tui->screenshot);
+}
+
 void nvim_tui_set_can_set_underline_color(TUIData *tui, bool val) { tui->can_set_underline_color = val; }
 
 /// Wrapper for terminfo_set_if_empty (set underline style)
@@ -417,11 +462,11 @@ void nvim_tui_terminfo_set_underline_style(TUIData *tui)
   terminfo_set_if_empty(tui, kTerm_set_underline_style, "\x1b[4:%p1%dm");
 }
 
-// Forward declaration for flush_buf
+// Forward declaration for flush_buf (now delegates to Rust)
 static void flush_buf(TUIData *tui);
 
 /// Wrapper for flush_buf callable from Rust
-void nvim_tui_flush_buf(TUIData *tui) { flush_buf(tui); }
+void nvim_tui_flush_buf(TUIData *tui) { rs_flush_buf(tui); }
 
 /// Wrapper for uv_sleep callable from Rust
 void nvim_tui_uv_sleep(uint64_t ms) { uv_sleep(ms); }
@@ -1346,25 +1391,9 @@ safe_move:
 
 static void print_spaces(TUIData *tui, int width)
 {
-  UGrid *grid = &tui->grid;
-  size_t left = (size_t)width;
-
-  // spaces are not a sequence, we can squeeze whatever's left of the buffer
-  while (true) {
-    size_t buf_fit = MIN(left, sizeof tui->buf - tui->bufpos);
-    memset(tui->buf + tui->bufpos, ' ', buf_fit);
-    tui->bufpos += buf_fit;
-    left -= buf_fit;
-
-    if (left == 0) {
-      break;  // likely: didn't need to flush for sm0l spaces
-    }
-    flush_buf(tui);
-  }
-
-  grid->col += width;
+  rs_print_spaces(tui, width);
+  tui->grid.col += width;
   if (tui->immediate_wrap_after_last_column) {
-    // Printing at the right margin immediately advances the cursor.
     final_column_wrap(tui);
   }
 }
@@ -1983,31 +2012,9 @@ void tui_guess_size(TUIData *tui)
   xfree(columns);
 }
 
-static void out(TUIData *tui, const char *str, size_t len)
-{
-  size_t available = sizeof(tui->buf) - tui->bufpos;
+static void out(TUIData *tui, const char *str, size_t len) { rs_out(tui, str, len); }
 
-  if (len > available) {
-    flush_buf(tui);
-    if (len > sizeof(tui->buf)) {
-      // Don't use tui->buf[] when the string to output is too long. #30794
-      tui->buf_to_flush = (char *)str;
-      tui->bufpos = len;
-      flush_buf(tui);
-      return;
-    }
-  }
-
-  memcpy(tui->buf + tui->bufpos, str, len);
-  tui->bufpos += len;
-}
-
-static void out_len(TUIData *tui, const char *str)
-{
-  if (str != NULL) {
-    out(tui, str, strlen(str));
-  }
-}
+static void out_len(TUIData *tui, const char *str) { rs_out_len(tui, str); }
 
 /// drops the entire message if it doesn't fit in "limit"
 void out_printf(TUIData *tui, size_t limit, const char *fmt, ...)
@@ -2083,104 +2090,8 @@ static void terminfo_set_if_empty(TUIData *tui, TerminfoDef str, const char *val
 static void terminfo_set_str(TUIData *tui, TerminfoDef str, const char *val) { tui->ti.defs[str] = val; }
 
 
-static bool should_invisible(TUIData *tui) { return tui->busy || tui->want_invisible; }
-
-/// Write the sequence to begin flushing output to `buf`.
-/// If 'termsync' is set and the terminal supports synchronized output, begin synchronized update.
-/// Otherwise, hide the cursor to avoid cursor jumping.
-///
-/// @param buf  the buffer to write the sequence to
-/// @param len  the length of `buf`
-static size_t flush_buf_start(TUIData *tui, char *buf, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (tui->sync_output && tui->has_sync_mode) {
-    return xstrlcpy(buf, "\x1b[?2026h", len);
-  } else if (!tui->is_invisible) {
-    tui->is_invisible = true;
-
-    // TODO(bfredl): zero-param terminfo strings should be pre-filtered so we can just
-    // return a cached string here
-    TPVAR null_params[9] = { 0 };
-    const char *str = tui->ti.defs[kTerm_cursor_invisible];
-    if (str != NULL) {
-      return rs_terminfo_fmt(buf, buf + len, str, null_params);
-    }
-  }
-
-  return 0;
-}
-
-/// Write the sequence to end flushing output to `buf`.
-/// If 'termsync' is set and the terminal supports synchronized output, end synchronized update.
-/// Otherwise, make the cursor visible again.
-///
-/// @param buf  the buffer to write the sequence to
-/// @param len  the length of `buf`
-static size_t flush_buf_end(TUIData *tui, char *buf, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  size_t offset = 0;
-  if (tui->sync_output && tui->has_sync_mode) {
-#define SYNC_END "\x1b[?2026l"
-    memcpy(buf, SYNC_END, sizeof SYNC_END);
-    offset += sizeof SYNC_END - 1;
-  }
-
-  const char *str = NULL;
-  if (tui->is_invisible && !should_invisible(tui)) {
-    str = tui->ti.defs[kTerm_cursor_normal];
-    tui->is_invisible = false;
-  } else if (!tui->is_invisible && should_invisible(tui)) {
-    str = tui->ti.defs[kTerm_cursor_invisible];
-    tui->is_invisible = true;
-  }
-  TPVAR null_params[9] = { 0 };
-  if (str != NULL) {
-    offset += rs_terminfo_fmt(buf + offset, buf + len, str, null_params);
-  }
-
-  return offset;
-}
-
-/// Flushes the rendered buffer to the TTY.
-///
-/// @see tui_flush
-static void flush_buf(TUIData *tui)
-{
-  uv_write_t req;
-  uv_buf_t bufs[3];
-  char pre[32];
-  char post[32];
-
-  if (tui->bufpos <= 0 && tui->is_invisible == should_invisible(tui)) {
-    return;
-  }
-
-  bufs[0].base = pre;
-  bufs[0].len = UV_BUF_LEN(flush_buf_start(tui, pre, sizeof(pre)));
-
-  bufs[1].base = tui->buf_to_flush != NULL ? tui->buf_to_flush : tui->buf;
-  bufs[1].len = UV_BUF_LEN(tui->bufpos);
-
-  bufs[2].base = post;
-  bufs[2].len = UV_BUF_LEN(flush_buf_end(tui, post, sizeof(post)));
-
-  if (tui->screenshot) {
-    for (size_t i = 0; i < ARRAY_SIZE(bufs); i++) {
-      fwrite(bufs[i].base, bufs[i].len, 1, tui->screenshot);
-    }
-  } else {
-    int ret
-      = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs), NULL);
-    if (ret) {
-      ELOG("uv_write failed: %s", uv_strerror(ret));
-    }
-    uv_run(&tui->write_loop, UV_RUN_DEFAULT);
-  }
-  tui->buf_to_flush = NULL;
-  tui->bufpos = 0;
-}
+/// Flushes the rendered buffer to the TTY. Rust implementation.
+static void flush_buf(TUIData *tui) { rs_flush_buf(tui); }
 
 /// Try to get "kbs" code from stty because "the terminfo kbs entry is extremely
 /// unreliable." (Vim, Bash, and tmux also do this.)
