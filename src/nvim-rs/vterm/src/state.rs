@@ -1956,6 +1956,7 @@ extern "C" {
         val: *const crate::VTermValue,
     ) -> c_int;
     fn vterm_state_savepen(state: VTermStateHandle, save: c_int);
+    fn vterm_state_resetpen(state: VTermStateHandle);
     fn vterm_push_output_sprintf_str(vt: *mut c_void, c1: u8, is_final: bool, fmt: *const i8, ...);
 }
 
@@ -3756,6 +3757,564 @@ pub unsafe extern "C" fn rs_vterm_state_on_sos(
         }
     }
     0
+}
+
+// =============================================================================
+// Phase 6: on_text, on_resize, public API (migrated from C)
+// =============================================================================
+
+// C accessor declarations for Phase 6
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_vterm_state_set_mode_report_focus(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mode_cursor_visible(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mode_cursor_blink(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mode_cursor_shape(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mode_screen(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mode_alt_screen(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mode_theme_updates(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_set_mouse_flags(state: VTermStateHandle, val: c_int);
+    fn nvim_vterm_state_get_mouse_flags(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_switch_lineinfo(state: VTermStateHandle);
+    fn nvim_vterm_state_set_callbacks_ptr(
+        state: VTermStateHandle,
+        callbacks: *const VTermStateCallbacks,
+        user: *mut c_void,
+    );
+    fn nvim_vterm_state_set_fallbacks_ptr(
+        state: VTermStateHandle,
+        fallbacks: *const VTermStateFallbacks,
+        user: *mut c_void,
+    );
+    fn nvim_vterm_state_call_initpen(state: VTermStateHandle);
+    fn nvim_vterm_state_set_selection_callbacks_ptr(
+        state: VTermStateHandle,
+        callbacks: *const VTermSelectionCallbacks,
+        user: *mut c_void,
+        buffer: *mut c_char,
+        buflen: usize,
+    );
+    fn nvim_vterm_state_malloc(state: VTermStateHandle, size: usize) -> *mut c_void;
+    fn nvim_vterm_state_free_ptr(state: VTermStateHandle, ptr: *mut c_void);
+    fn nvim_vterm_state_get_vt_tmpbuffer(state: VTermStateHandle) -> *mut c_void;
+    fn nvim_vterm_state_get_vt_tmpbuffer_len(state: VTermStateHandle) -> usize;
+    fn nvim_vterm_state_get_vt_mode_utf8(state: VTermStateHandle) -> c_int;
+    // mbyte functions
+    fn utf_iscomposing(c1: c_int, c2: c_int, grapheme_state: *mut c_int) -> bool;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
+}
+
+/// Internal implementation of `vterm_state_set_termprop`.
+/// Also called by `settermprop_bool/int/string` helpers.
+///
+/// # Safety
+/// state and val must be valid.
+unsafe fn set_termprop_impl(
+    state: VTermStateHandle,
+    prop: c_int,
+    val: *const crate::VTermValue,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    // Only store the new value if the callback was happy
+    let callbacks = (*s).callbacks;
+    if !callbacks.is_null() {
+        if let Some(set_cb) = (*callbacks).settermprop {
+            if set_cb(prop, val, (*s).cbdata) == 0 {
+                return 0;
+            }
+        }
+    }
+    match prop {
+        VTERM_PROP_TITLE | VTERM_PROP_ICONNAME => {
+            // transparently pass through, don't store
+            1
+        }
+        VTERM_PROP_CURSORVISIBLE => {
+            (*s).mode.set_cursor_visible((*val).boolean != 0);
+            1
+        }
+        VTERM_PROP_CURSORBLINK => {
+            (*s).mode.set_cursor_blink((*val).boolean != 0);
+            1
+        }
+        VTERM_PROP_CURSORSHAPE => {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            (*s).mode.set_cursor_shape((*val).number as u8);
+            1
+        }
+        VTERM_PROP_REVERSE => {
+            (*s).mode.set_screen((*val).boolean != 0);
+            1
+        }
+        VTERM_PROP_ALTSCREEN => {
+            (*s).mode.set_alt_screen((*val).boolean != 0);
+            (*s).lineinfo = (*s).lineinfos[usize::from((*s).mode.alt_screen())];
+            if (*s).mode.alt_screen() {
+                let rect = crate::VTermRect {
+                    start_row: 0,
+                    end_row: (*s).rows,
+                    start_col: 0,
+                    end_col: (*s).cols,
+                };
+                erase_rect(state, rect, 0);
+            }
+            1
+        }
+        VTERM_PROP_MOUSE => {
+            let num = (*val).number;
+            let mut flags = 0;
+            if num != VTERM_PROP_MOUSE_NONE {
+                flags |= MOUSE_WANT_CLICK;
+            }
+            if num == VTERM_PROP_MOUSE_DRAG {
+                flags |= MOUSE_WANT_DRAG;
+            }
+            if num == VTERM_PROP_MOUSE_MOVE {
+                flags |= MOUSE_WANT_MOVE;
+            }
+            (*s).mouse_flags = flags;
+            1
+        }
+        VTERM_PROP_FOCUSREPORT => {
+            (*s).mode.set_report_focus((*val).boolean != 0);
+            1
+        }
+        VTERM_PROP_THEMEUPDATES => {
+            (*s).mode.set_theme_updates((*val).boolean != 0);
+            1
+        }
+        _ => 0,
+    }
+}
+
+/// Replace C `vterm_state_set_termprop`.
+///
+/// # Safety
+/// state and val must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_termprop(
+    state: VTermStateHandle,
+    prop: c_int,
+    val: *mut crate::VTermValue,
+) -> c_int {
+    set_termprop_impl(state, prop, val.cast_const())
+}
+
+/// Replace C `vterm_state_set_unrecognised_fallbacks`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_unrecognised_fallbacks(
+    state: VTermStateHandle,
+    fallbacks: *const VTermStateFallbacks,
+    user: *mut c_void,
+) {
+    let s = state.0.cast::<State>();
+    if fallbacks.is_null() {
+        (*s).fallbacks = std::ptr::null();
+        (*s).fbdata = std::ptr::null_mut();
+    } else {
+        (*s).fallbacks = fallbacks;
+        (*s).fbdata = user;
+    }
+}
+
+/// Replace C `vterm_state_focus_in`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_focus_in(state: VTermStateHandle) {
+    let s = state.0.cast::<State>();
+    if (*s).mode.report_focus() {
+        vterm_push_output_sprintf_ctrl((*s).vt, C1_CSI, c"I".as_ptr());
+    }
+}
+
+/// Replace C `vterm_state_focus_out`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_focus_out(state: VTermStateHandle) {
+    let s = state.0.cast::<State>();
+    if (*s).mode.report_focus() {
+        vterm_push_output_sprintf_ctrl((*s).vt, C1_CSI, c"O".as_ptr());
+    }
+}
+
+/// Replace C `vterm_state_set_selection_callbacks`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_selection_callbacks(
+    state: VTermStateHandle,
+    callbacks: *const VTermSelectionCallbacks,
+    user: *mut c_void,
+    mut buffer: *mut c_char,
+    buflen: usize,
+) {
+    let s = state.0.cast::<State>();
+    if buflen > 0 && buffer.is_null() {
+        buffer = nvim_vterm_state_malloc(state, buflen).cast::<c_char>();
+    }
+    (*s).selection.callbacks = callbacks;
+    (*s).selection.user = user;
+    (*s).selection.buffer = buffer;
+    (*s).selection.buflen = buflen;
+}
+
+/// Replace C `vterm_state_reset`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_reset(state: VTermStateHandle, hard: c_int) {
+    let s = state.0.cast::<State>();
+
+    (*s).scrollregion_top = 0;
+    (*s).scrollregion_bottom = -1;
+    (*s).scrollregion_left = 0;
+    (*s).scrollregion_right = -1;
+
+    (*s).mode.set_keypad(false);
+    (*s).mode.set_cursor(false);
+    (*s).mode.set_autowrap(true);
+    (*s).mode.set_insert(false);
+    (*s).mode.set_newline(false);
+    (*s).mode.set_alt_screen(false);
+    (*s).mode.set_origin(false);
+    (*s).mode.set_leftrightmargin(false);
+    (*s).mode.set_bracketpaste(false);
+    (*s).mode.set_report_focus(false);
+
+    (*s).mouse_flags = 0;
+    nvim_vterm_state_set_vt_ctrl8bit(state, 0);
+
+    let cols = (*s).cols;
+    for col in 0..cols {
+        if col % 8 == 0 {
+            nvim_vterm_state_set_col_tabstop(state, col);
+        } else {
+            nvim_vterm_state_clear_col_tabstop(state, col);
+        }
+    }
+
+    let rows = (*s).rows;
+    for row in 0..rows {
+        rs_vterm_state_set_lineinfo(state, row, FORCE, DWL_OFF, DHL_OFF);
+    }
+
+    // Call initpen callback
+    let callbacks = (*s).callbacks;
+    if !callbacks.is_null() {
+        if let Some(initpen) = (*callbacks).initpen {
+            initpen((*s).cbdata);
+        }
+    }
+
+    vterm_state_resetpen(state);
+
+    let vt_utf8 = nvim_vterm_state_get_vt_ctrl8bit(state);
+    #[allow(clippy::cast_possible_wrap)]
+    let default_enc = if vt_utf8 != 0 || nvim_vterm_state_get_vt_mode_utf8(state) != 0 {
+        rs_vterm_lookup_encoding_ptr(ENC_UTF8, b'u' as c_char)
+    } else {
+        rs_vterm_lookup_encoding_ptr(ENC_SINGLE_94, b'B' as c_char)
+    };
+
+    for i in 0..4usize {
+        (*s).encoding[i].enc = default_enc.cast_mut().cast::<c_void>();
+        let data_ptr = (*s).encoding[i].data.as_mut_ptr().cast::<c_void>();
+        nvim_vterm_encoding_call_init(default_enc.cast_mut().cast::<c_void>(), data_ptr);
+    }
+
+    (*s).gl_set = 0;
+    (*s).gr_set = 1;
+    (*s).gsingle_set = 0;
+    (*s).protected_cell = 0;
+
+    // Initialise props
+    let val_true = crate::VTermValue { boolean: 1 };
+    let val_block = crate::VTermValue {
+        number: VTERM_PROP_CURSORSHAPE_BLOCK,
+    };
+    set_termprop_impl(state, VTERM_PROP_CURSORVISIBLE, &raw const val_true);
+    set_termprop_impl(state, VTERM_PROP_CURSORBLINK, &raw const val_true);
+    set_termprop_impl(state, VTERM_PROP_CURSORSHAPE, &raw const val_block);
+
+    if hard != 0 {
+        (*s).pos.row = 0;
+        (*s).pos.col = 0;
+        (*s).at_phantom = 0;
+        let rect = crate::VTermRect {
+            start_row: 0,
+            end_row: (*s).rows,
+            start_col: 0,
+            end_col: (*s).cols,
+        };
+        erase_rect(state, rect, 0);
+    }
+}
+
+/// Replace C `on_resize`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_on_resize(
+    state: VTermStateHandle,
+    rows: c_int,
+    cols: c_int,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    let oldpos = (*s).pos;
+
+    if cols != (*s).cols {
+        let newsize = (cols as usize).div_ceil(8);
+        let newtabstops = nvim_vterm_state_malloc(state, newsize).cast::<u8>();
+        // Clear new tabstops buffer
+        std::ptr::write_bytes(newtabstops, 0, newsize);
+
+        // Copy existing tabstops for columns that remain
+        let old_cols = (*s).cols;
+        for col in 0..old_cols.min(cols) {
+            let mask = 1u8 << (col & 7);
+            if *(*s).tabstops.add((col >> 3) as usize) & mask != 0 {
+                *newtabstops.add((col >> 3) as usize) |= mask;
+            }
+        }
+
+        // Set default tabstops for new columns (every 8)
+        for col in old_cols..cols {
+            let mask = 1u8 << (col & 7);
+            if col % 8 == 0 {
+                *newtabstops.add((col >> 3) as usize) |= mask;
+            }
+        }
+
+        nvim_vterm_state_free_ptr(state, (*s).tabstops.cast::<c_void>());
+        (*s).tabstops = newtabstops;
+    }
+
+    (*s).rows = rows;
+    (*s).cols = cols;
+
+    if (*s).scrollregion_bottom > -1 && (*s).scrollregion_bottom > rows {
+        (*s).scrollregion_bottom = rows;
+    }
+    if (*s).scrollregion_right > -1 && (*s).scrollregion_right > cols {
+        (*s).scrollregion_right = cols;
+    }
+
+    let mut fields = crate::VTermStateFields {
+        pos: (*s).pos,
+        lineinfos: [(*s).lineinfos[0], (*s).lineinfos[1]],
+    };
+
+    let callbacks = (*s).callbacks;
+    if callbacks.is_null() {
+        // No callbacks: no-op (replicate C behavior where lineinfo realloc
+        // is guarded by `rows != state->rows` which is always false after the update)
+        let _ = fields;
+    } else if let Some(resize_cb) = (*callbacks).resize {
+        resize_cb(rows, cols, &raw mut fields, (*s).cbdata);
+        (*s).pos = fields.pos;
+        (*s).lineinfos[0] = fields.lineinfos[0];
+        (*s).lineinfos[1] = fields.lineinfos[1];
+    } else {
+        // No resize callback, no lineinfo realloc (same C behavior)
+        let _ = fields;
+    }
+
+    (*s).lineinfo = (*s).lineinfos[usize::from((*s).mode.alt_screen())];
+
+    if (*s).at_phantom != 0 && (*s).pos.col < cols - 1 {
+        (*s).at_phantom = 0;
+        (*s).pos.col += 1;
+    }
+
+    if (*s).pos.row < 0 {
+        (*s).pos.row = 0;
+    }
+    if (*s).pos.row >= rows {
+        (*s).pos.row = rows - 1;
+    }
+    if (*s).pos.col < 0 {
+        (*s).pos.col = 0;
+    }
+    if (*s).pos.col >= cols {
+        (*s).pos.col = cols - 1;
+    }
+
+    rs_vterm_state_updatecursor(state, &raw const oldpos, 1);
+    1
+}
+
+/// Replace C `on_text`.
+///
+/// # Safety
+/// state must be valid.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_vterm_state_on_text(
+    state: VTermStateHandle,
+    bytes: *const c_char,
+    len: usize,
+) -> c_int {
+    let s = state.0.cast::<State>();
+    let oldpos = (*s).pos;
+
+    let tmpbuffer = nvim_vterm_state_get_vt_tmpbuffer(state).cast::<u32>();
+    let tmpbuffer_len = nvim_vterm_state_get_vt_tmpbuffer_len(state);
+    let maxpoints = tmpbuffer_len / std::mem::size_of::<u32>();
+
+    let mut npoints: c_int = 0;
+    let mut eaten: usize = 0;
+
+    // Select encoding instance
+    let enc: *mut EncodingInstance = if (*s).gsingle_set != 0 {
+        &raw mut (*s).encoding[(*s).gsingle_set as usize]
+    } else if (*bytes.add(eaten) as u8) & 0x80 == 0 {
+        &raw mut (*s).encoding[(*s).gl_set as usize]
+    } else if nvim_vterm_state_get_vt_mode_utf8(state) != 0 {
+        &raw mut (*s).encoding_utf8
+    } else {
+        &raw mut (*s).encoding[(*s).gr_set as usize]
+    };
+
+    // Call the encoding's decode function
+    let enc_ptr = (*enc).enc.cast::<crate::VTermEncoding>();
+    if enc_ptr.is_null() {
+        return 0;
+    }
+    let decode_fn = (*enc_ptr).decode;
+    if let Some(decode) = decode_fn {
+        let data_ptr = (*enc).data.as_mut_ptr().cast::<c_void>();
+        decode(
+            enc_ptr,
+            data_ptr,
+            tmpbuffer,
+            &raw mut npoints,
+            if (*s).gsingle_set != 0 {
+                1
+            } else {
+                maxpoints as c_int
+            },
+            bytes,
+            &raw mut eaten,
+            len,
+        );
+    }
+
+    // If no codepoints decoded, return bytes eaten
+    if npoints == 0 {
+        return eaten as c_int;
+    }
+
+    if (*s).gsingle_set != 0 {
+        (*s).gsingle_set = 0;
+    }
+
+    let mut i: c_int = 0;
+    let mut grapheme_state: c_int = GraphemeState::Initial as c_int;
+    let mut grapheme_len: usize = 0;
+    let mut recombine = false;
+
+    // Check if cursor moved to combining position
+    let combine_pos = (*s).combine_pos;
+    let combine_width = (*s).combine_width;
+    if (*s).pos.row == combine_pos.row && (*s).pos.col == combine_pos.col + combine_width {
+        // Potentially combining char
+        let last = (*s).grapheme_last as c_int;
+        let current = *tmpbuffer.add(i as usize) as c_int;
+        let gs = (*s).grapheme_state as c_int;
+        let mut gs_copy = gs;
+        if utf_iscomposing(last, current, &raw mut gs_copy) {
+            grapheme_len = (*s).grapheme_len;
+            grapheme_state = (*s).grapheme_state as c_int;
+            (*s).pos.col = combine_pos.col;
+            recombine = true;
+        }
+        let _ = gs_copy;
+    }
+
+    while i < npoints {
+        // Accumulate combining characters
+        loop {
+            if grapheme_len < VTERM_MAX_SCHAR_SIZE - 4 {
+                let cp = *tmpbuffer.add(i as usize) as c_int;
+                let added = utf_char2bytes(cp, (*s).grapheme_buf.as_mut_ptr().add(grapheme_len));
+                grapheme_len += added as usize;
+            }
+            i += 1;
+            if i >= npoints {
+                break;
+            }
+            let prev_cp = *tmpbuffer.add((i - 1) as usize) as c_int;
+            let next_cp = *tmpbuffer.add(i as usize) as c_int;
+            if !utf_iscomposing(prev_cp, next_cp, &raw mut grapheme_state) {
+                break;
+            }
+        }
+
+        let width = utf_ptr2cells_len((*s).grapheme_buf.as_ptr(), grapheme_len as c_int);
+        let this_row_width = (*s).this_row_width();
+
+        // Handle autowrap: linefeed if at phantom or past end
+        if (*s).at_phantom != 0 || (*s).pos.col + width > this_row_width {
+            rs_vterm_state_linefeed(state);
+            (*s).pos.col = 0;
+            (*s).at_phantom = 0;
+            (*(*s).lineinfo.add((*s).pos.row as usize)).set_continuation(true);
+        }
+
+        // Insert mode: scroll to make room
+        if (*s).mode.insert() && !recombine {
+            let rect = crate::VTermRect {
+                start_row: (*s).pos.row,
+                end_row: (*s).pos.row + 1,
+                start_col: (*s).pos.col,
+                end_col: (*s).this_row_width(),
+            };
+            rs_vterm_state_scroll(state, rect, 0, -1);
+        }
+
+        let sc = schar_from_buf((*s).grapheme_buf.as_ptr(), grapheme_len);
+        nvim_vterm_state_call_putglyph(state, sc, width, (*s).pos);
+
+        if i == npoints {
+            // End of buffer: save state for combining on next call
+            (*s).grapheme_len = grapheme_len;
+            (*s).grapheme_last = *tmpbuffer.add((i - 1) as usize);
+            (*s).grapheme_state = std::mem::transmute::<c_int, GraphemeState>(grapheme_state);
+            (*s).combine_width = width;
+            (*s).combine_pos = (*s).pos;
+        } else {
+            grapheme_len = 0;
+            recombine = false;
+        }
+
+        let this_row_width = (*s).this_row_width();
+        if (*s).pos.col + width >= this_row_width {
+            if (*s).mode.autowrap() {
+                (*s).at_phantom = 1;
+            }
+        } else {
+            (*s).pos.col += width;
+        }
+    }
+
+    rs_vterm_state_updatecursor(state, &raw const oldpos, 0);
+    eaten as c_int
 }
 
 // =============================================================================

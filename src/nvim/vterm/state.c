@@ -45,6 +45,22 @@ extern int rs_vterm_state_on_apc(VTermState *state, VTermStringFragment frag);
 extern int rs_vterm_state_on_pm(VTermState *state, VTermStringFragment frag);
 extern int rs_vterm_state_on_sos(VTermState *state, VTermStringFragment frag);
 
+// Rust FFI declarations (Phase 6)
+extern int rs_vterm_state_set_termprop(VTermState *state, int prop, VTermValue *val);
+extern int rs_vterm_state_on_text(VTermState *state, const char bytes[], size_t len);
+extern int rs_vterm_state_on_resize(VTermState *state, int rows, int cols);
+extern void rs_vterm_state_reset(VTermState *state, int hard);
+extern void rs_vterm_state_set_unrecognised_fallbacks(VTermState *state,
+                                                       const VTermStateFallbacks *fallbacks,
+                                                       void *user);
+extern void rs_vterm_state_focus_in(VTermState *state);
+extern void rs_vterm_state_focus_out(VTermState *state);
+extern void rs_vterm_state_set_selection_callbacks(VTermState *state,
+                                                    const VTermSelectionCallbacks *callbacks,
+                                                    void *user,
+                                                    char *buffer,
+                                                    size_t buflen);
+
 #define strneq(a, b, n) (strncmp(a, b, n) == 0)
 
 #define LBOUND(v, min) if ((v) < (min))(v) = (min)
@@ -319,124 +335,7 @@ static void set_lineinfo(VTermState *state, int row, int force, int dwl, int dhl
 static int on_text(const char bytes[], size_t len, void *user)
 {
   VTermState *state = user;
-
-  VTermPos oldpos = state->pos;
-
-  uint32_t *codepoints = (uint32_t *)(state->vt->tmpbuffer);
-  size_t maxpoints = (state->vt->tmpbuffer_len) / sizeof(uint32_t);
-
-  int npoints = 0;
-  size_t eaten = 0;
-
-  VTermEncodingInstance *encoding =
-    state->gsingle_set ? &state->encoding[state->gsingle_set]
-                       : !(bytes[eaten] & 0x80) ? &state->encoding[state->gl_set]
-                                                : state->vt->mode.utf8 ? &state->encoding_utf8
-                                                                       : &state->encoding[state->
-                                                                                          gr_set];
-
-  (*encoding->enc->decode)(encoding->enc, encoding->data,
-                           codepoints, &npoints, state->gsingle_set ? 1 : (int)maxpoints,
-                           bytes, &eaten, len);
-
-  // There's a chance an encoding (e.g. UTF-8) hasn't found enough bytes yet for even a single codepoint
-  if (!npoints) {
-    return (int)eaten;
-  }
-
-  if (state->gsingle_set && npoints) {
-    state->gsingle_set = 0;
-  }
-
-  int i = 0;
-  GraphemeState grapheme_state = GRAPHEME_STATE_INIT;
-  size_t grapheme_len = 0;
-  bool recombine = false;
-
-  // See if the cursor has moved since
-  if (state->pos.row == state->combine_pos.row
-      && state->pos.col == state->combine_pos.col + state->combine_width) {
-    // This is a combining char. that needs to be merged with the previous glyph output
-    if (utf_iscomposing((int)state->grapheme_last, (int)codepoints[i], &state->grapheme_state)) {
-      // Find where we need to append these combining chars
-      grapheme_len = state->grapheme_len;
-      grapheme_state = state->grapheme_state;
-      state->pos.col = state->combine_pos.col;
-      recombine = true;
-    } else {
-      DEBUG_LOG("libvterm: TODO: Skip over split char+combining\n");
-    }
-  }
-
-  while (i < npoints) {
-    // Try to find combining characters following this
-    do {
-      if (grapheme_len < sizeof(state->grapheme_buf) - 4) {
-        grapheme_len += (size_t)utf_char2bytes((int)codepoints[i],
-                                               state->grapheme_buf + grapheme_len);
-      }
-      i++;
-    } while (i < npoints && utf_iscomposing((int)codepoints[i - 1], (int)codepoints[i],
-                                            &grapheme_state));
-
-    int width = utf_ptr2cells_len(state->grapheme_buf, (int)grapheme_len);
-
-    if (state->at_phantom || state->pos.col + width > THISROWWIDTH(state)) {
-      linefeed(state);
-      state->pos.col = 0;
-      state->at_phantom = 0;
-      state->lineinfo[state->pos.row].continuation = 1;
-    }
-
-    if (state->mode.insert && !recombine) {
-      // TODO(vterm): This will be a little inefficient for large bodies of text, as it'll have to
-      // 'ICH' effectively before every glyph. We should scan ahead and ICH as many times as
-      // required
-      VTermRect rect = {
-        .start_row = state->pos.row,
-        .end_row = state->pos.row + 1,
-        .start_col = state->pos.col,
-        .end_col = THISROWWIDTH(state),
-      };
-      scroll(state, rect, 0, -1);
-    }
-
-    schar_T sc = schar_from_buf(state->grapheme_buf, grapheme_len);
-    putglyph(state, sc, width, state->pos);
-
-    if (i == npoints) {
-      // End of the buffer. Save the chars in case we have to combine with more on the next call
-      state->grapheme_len = grapheme_len;
-      state->grapheme_last = codepoints[i - 1];
-      state->grapheme_state = grapheme_state;
-      state->combine_width = width;
-      state->combine_pos = state->pos;
-    } else {
-      grapheme_len = 0;
-      recombine = false;
-    }
-
-    if (state->pos.col + width >= THISROWWIDTH(state)) {
-      if (state->mode.autowrap) {
-        state->at_phantom = 1;
-      }
-    } else {
-      state->pos.col += width;
-    }
-  }
-
-  updatecursor(state, &oldpos, 0);
-
-#ifdef DEBUG
-  if (state->pos.row < 0 || state->pos.row >= state->rows
-      || state->pos.col < 0 || state->pos.col >= state->cols) {
-    fprintf(stderr, "Position out of bounds after text: (%d,%d)\n",
-            state->pos.row, state->pos.col);
-    abort();
-  }
-#endif
-
-  return (int)eaten;
+  return rs_vterm_state_on_text(state, bytes, len);
 }
 
 static int on_control(uint8_t control, void *user)
@@ -844,107 +743,7 @@ static int on_sos(VTermStringFragment frag, void *user)
 static int on_resize(int rows, int cols, void *user)
 {
   VTermState *state = user;
-  VTermPos oldpos = state->pos;
-
-  if (cols != state->cols) {
-    uint8_t *newtabstops = vterm_allocator_malloc(state->vt, ((size_t)cols + 7) / 8);
-
-    // TODO(vterm): This can all be done much more efficiently bytewise
-    int col;
-    for (col = 0; col < state->cols && col < cols; col++) {
-      uint8_t mask = (uint8_t)(1 << (col & 7));
-      if (state->tabstops[col >> 3] & mask) {
-        newtabstops[col >> 3] |= mask;
-      } else {
-        newtabstops[col >> 3] &= ~mask;
-      }
-    }
-
-    for (; col < cols; col++) {
-      uint8_t mask = (uint8_t)(1 << (col & 7));
-      if (col % 8 == 0) {
-        newtabstops[col >> 3] |= mask;
-      } else {
-        newtabstops[col >> 3] &= ~mask;
-      }
-    }
-
-    vterm_allocator_free(state->vt, state->tabstops);
-    state->tabstops = newtabstops;
-  }
-
-  state->rows = rows;
-  state->cols = cols;
-
-  if (state->scrollregion_bottom > -1) {
-    UBOUND(state->scrollregion_bottom, state->rows);
-  }
-  if (state->scrollregion_right > -1) {
-    UBOUND(state->scrollregion_right, state->cols);
-  }
-
-  VTermStateFields fields = {
-    .pos = state->pos,
-    .lineinfos = {[0] = state->lineinfos[0], [1] = state->lineinfos[1] },
-  };
-
-  if (state->callbacks && state->callbacks->resize) {
-    (*state->callbacks->resize)(rows, cols, &fields, state->cbdata);
-    state->pos = fields.pos;
-
-    state->lineinfos[0] = fields.lineinfos[0];
-    state->lineinfos[1] = fields.lineinfos[1];
-  } else {
-    if (rows != state->rows) {
-      for (int bufidx = BUFIDX_PRIMARY; bufidx <= BUFIDX_ALTSCREEN; bufidx++) {
-        VTermLineInfo *oldlineinfo = state->lineinfos[bufidx];
-        if (!oldlineinfo) {
-          continue;
-        }
-
-        VTermLineInfo *newlineinfo = vterm_allocator_malloc(state->vt,
-                                                            (size_t)rows * sizeof(VTermLineInfo));
-
-        int row;
-        for (row = 0; row < state->rows && row < rows; row++) {
-          newlineinfo[row] = oldlineinfo[row];
-        }
-
-        for (; row < rows; row++) {
-          newlineinfo[row] = (VTermLineInfo){
-            .doublewidth = 0,
-          };
-        }
-
-        vterm_allocator_free(state->vt, state->lineinfos[bufidx]);
-        state->lineinfos[bufidx] = newlineinfo;
-      }
-    }
-  }
-
-  state->lineinfo = state->lineinfos[state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY];
-
-  if (state->at_phantom && state->pos.col < cols - 1) {
-    state->at_phantom = 0;
-    state->pos.col++;
-  }
-
-  if (state->pos.row < 0) {
-    state->pos.row = 0;
-  }
-  if (state->pos.row >= rows) {
-    state->pos.row = rows - 1;
-  }
-  if (state->pos.col < 0) {
-    state->pos.col = 0;
-  }
-  if (state->pos.col >= cols) {
-    state->pos.col = cols - 1;
-  }
-
-  updatecursor(state, &oldpos, 1);
-
-  return 1;
+  return rs_vterm_state_on_resize(state, rows, cols);
 }
 
 static const VTermParserCallbacks parser_callbacks = {
@@ -976,74 +775,7 @@ VTermState *vterm_obtain_state(VTerm *vt)
 
 void vterm_state_reset(VTermState *state, int hard)
 {
-  state->scrollregion_top = 0;
-  state->scrollregion_bottom = -1;
-  state->scrollregion_left = 0;
-  state->scrollregion_right = -1;
-
-  state->mode.keypad = 0;
-  state->mode.cursor = 0;
-  state->mode.autowrap = 1;
-  state->mode.insert = 0;
-  state->mode.newline = 0;
-  state->mode.alt_screen = 0;
-  state->mode.origin = 0;
-  state->mode.leftrightmargin = 0;
-  state->mode.bracketpaste = 0;
-  state->mode.report_focus = 0;
-
-  state->mouse_flags = 0;
-
-  state->vt->mode.ctrl8bit = 0;
-
-  for (int col = 0; col < state->cols; col++) {
-    if (col % 8 == 0) {
-      set_col_tabstop(state, col);
-    } else {
-      clear_col_tabstop(state, col);
-    }
-  }
-
-  for (int row = 0; row < state->rows; row++) {
-    set_lineinfo(state, row, FORCE, DWL_OFF, DHL_OFF);
-  }
-
-  if (state->callbacks && state->callbacks->initpen) {
-    (*state->callbacks->initpen)(state->cbdata);
-  }
-
-  vterm_state_resetpen(state);
-
-  VTermEncoding *default_enc = state->vt->mode.utf8
-                               ? rs_vterm_lookup_encoding_ptr(ENC_UTF8,      'u')
-                               : rs_vterm_lookup_encoding_ptr(ENC_SINGLE_94, 'B');
-
-  for (int i = 0; i < 4; i++) {
-    state->encoding[i].enc = default_enc;
-    if (default_enc->init) {
-      (*default_enc->init)(default_enc, state->encoding[i].data);
-    }
-  }
-
-  state->gl_set = 0;
-  state->gr_set = 1;
-  state->gsingle_set = 0;
-
-  state->protected_cell = 0;
-
-  // Initialise the props
-  settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, 1);
-  settermprop_bool(state, VTERM_PROP_CURSORBLINK,   1);
-  settermprop_int(state, VTERM_PROP_CURSORSHAPE,   VTERM_PROP_CURSORSHAPE_BLOCK);
-
-  if (hard) {
-    state->pos.row = 0;
-    state->pos.col = 0;
-    state->at_phantom = 0;
-
-    VTermRect rect = { 0, state->rows, 0, state->cols };
-    erase(state, rect, 0);
-  }
+  rs_vterm_state_reset(state, hard);
 }
 
 void vterm_state_set_callbacks(VTermState *state, const VTermStateCallbacks *callbacks, void *user)
@@ -1051,7 +783,6 @@ void vterm_state_set_callbacks(VTermState *state, const VTermStateCallbacks *cal
   if (callbacks) {
     state->callbacks = callbacks;
     state->cbdata = user;
-
     if (state->callbacks && state->callbacks->initpen) {
       (*state->callbacks->initpen)(state->cbdata);
     }
@@ -1064,109 +795,34 @@ void vterm_state_set_callbacks(VTermState *state, const VTermStateCallbacks *cal
 void vterm_state_set_unrecognised_fallbacks(VTermState *state, const VTermStateFallbacks *fallbacks,
                                             void *user)
 {
-  if (fallbacks) {
-    state->fallbacks = fallbacks;
-    state->fbdata = user;
-  } else {
-    state->fallbacks = NULL;
-    state->fbdata = NULL;
-  }
+  rs_vterm_state_set_unrecognised_fallbacks(state, fallbacks, user);
 }
 
 int vterm_state_set_termprop(VTermState *state, VTermProp prop, VTermValue *val)
 {
-  // Only store the new value of the property if usercode said it was happy. This is especially
-  // important for altscreen switching
-  if (state->callbacks && state->callbacks->settermprop) {
-    if (!(*state->callbacks->settermprop)(prop, val, state->cbdata)) {
-      return 0;
-    }
-  }
-
-  switch (prop) {
-  case VTERM_PROP_TITLE:
-  case VTERM_PROP_ICONNAME:
-    // we don't store these, just transparently pass through
-    return 1;
-  case VTERM_PROP_CURSORVISIBLE:
-    state->mode.cursor_visible = (unsigned)val->boolean;
-    return 1;
-  case VTERM_PROP_CURSORBLINK:
-    state->mode.cursor_blink = (unsigned)val->boolean;
-    return 1;
-  case VTERM_PROP_CURSORSHAPE:
-    state->mode.cursor_shape = (unsigned)val->number;
-    return 1;
-  case VTERM_PROP_REVERSE:
-    state->mode.screen = (unsigned)val->boolean;
-    return 1;
-  case VTERM_PROP_ALTSCREEN:
-    state->mode.alt_screen = (unsigned)val->boolean;
-    state->lineinfo = state->lineinfos[state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY];
-    if (state->mode.alt_screen) {
-      VTermRect rect = {
-        .start_row = 0,
-        .start_col = 0,
-        .end_row = state->rows,
-        .end_col = state->cols,
-      };
-      erase(state, rect, 0);
-    }
-    return 1;
-  case VTERM_PROP_MOUSE:
-    state->mouse_flags = 0;
-    if (val->number) {
-      state->mouse_flags |= MOUSE_WANT_CLICK;
-    }
-    if (val->number == VTERM_PROP_MOUSE_DRAG) {
-      state->mouse_flags |= MOUSE_WANT_DRAG;
-    }
-    if (val->number == VTERM_PROP_MOUSE_MOVE) {
-      state->mouse_flags |= MOUSE_WANT_MOVE;
-    }
-    return 1;
-  case VTERM_PROP_FOCUSREPORT:
-    state->mode.report_focus = (unsigned)val->boolean;
-    return 1;
-  case VTERM_PROP_THEMEUPDATES:
-    state->mode.theme_updates = (unsigned)val->boolean;
-    return 1;
-
-  case VTERM_N_PROPS:
-    return 0;
-  }
-
-  return 0;
+  return rs_vterm_state_set_termprop(state, (int)prop, val);
 }
 
 void vterm_state_focus_in(VTermState *state)
 {
-  if (state->mode.report_focus) {
-    vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "I");
-  }
+  rs_vterm_state_focus_in(state);
 }
 
 void vterm_state_focus_out(VTermState *state)
 {
-  if (state->mode.report_focus) {
-    vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "O");
-  }
+  rs_vterm_state_focus_out(state);
 }
 
-const VTermLineInfo *vterm_state_get_lineinfo(const VTermState *state, int row) { return state->lineinfo + row; }
+const VTermLineInfo *vterm_state_get_lineinfo(const VTermState *state, int row)
+{
+  return state->lineinfo + row;
+}
 
 void vterm_state_set_selection_callbacks(VTermState *state,
                                          const VTermSelectionCallbacks *callbacks, void *user,
                                          char *buffer, size_t buflen)
 {
-  if (buflen && !buffer) {
-    buffer = vterm_allocator_malloc(state->vt, buflen);
-  }
-
-  state->selection.callbacks = callbacks;
-  state->selection.user = user;
-  state->selection.buffer = buffer;
-  state->selection.buflen = buflen;
+  rs_vterm_state_set_selection_callbacks(state, callbacks, user, buffer, buflen);
 }
 
 // C Accessor Functions for Rust FFI
@@ -1491,6 +1147,126 @@ void nvim_vterm_encoding_call_init(void *enc_ptr, void *data)
 int nvim_vterm_state_row_width_from_ptr(const VTermState *state, int row)
 {
   return ROWWIDTH(state, row);
+}
+
+// --- Phase 6: additional accessors ---
+
+// Mode setters
+void nvim_vterm_state_set_mode_report_focus(VTermState *state, int val)
+{
+  state->mode.report_focus = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mode_cursor_visible(VTermState *state, int val)
+{
+  state->mode.cursor_visible = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mode_cursor_blink(VTermState *state, int val)
+{
+  state->mode.cursor_blink = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mode_cursor_shape(VTermState *state, int val)
+{
+  state->mode.cursor_shape = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mode_screen(VTermState *state, int val)
+{
+  state->mode.screen = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mode_alt_screen(VTermState *state, int val)
+{
+  state->mode.alt_screen = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mode_theme_updates(VTermState *state, int val)
+{
+  state->mode.theme_updates = (unsigned)val;
+}
+
+void nvim_vterm_state_set_mouse_flags(VTermState *state, int val)
+{
+  state->mouse_flags = val;
+}
+
+int nvim_vterm_state_get_mouse_flags(const VTermState *state)
+{
+  return state->mouse_flags;
+}
+
+// Switch lineinfo to primary or altscreen buffer
+void nvim_vterm_state_switch_lineinfo(VTermState *state)
+{
+  state->lineinfo = state->lineinfos[state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY];
+}
+
+// Callbacks setter (sets both callbacks ptr and cbdata atomically)
+void nvim_vterm_state_set_callbacks_ptr(VTermState *state,
+                                         const VTermStateCallbacks *callbacks,
+                                         void *user)
+{
+  state->callbacks = callbacks;
+  state->cbdata = user;
+}
+
+// Fallbacks setter
+void nvim_vterm_state_set_fallbacks_ptr(VTermState *state,
+                                         const VTermStateFallbacks *fallbacks,
+                                         void *user)
+{
+  state->fallbacks = fallbacks;
+  state->fbdata = user;
+}
+
+// Call initpen callback
+void nvim_vterm_state_call_initpen(VTermState *state)
+{
+  if (state->callbacks && state->callbacks->initpen) {
+    (*state->callbacks->initpen)(state->cbdata);
+  }
+}
+
+// Selection info setters
+void nvim_vterm_state_set_selection_callbacks_ptr(VTermState *state,
+                                                   const VTermSelectionCallbacks *callbacks,
+                                                   void *user,
+                                                   char *buffer,
+                                                   size_t buflen)
+{
+  state->selection.callbacks = callbacks;
+  state->selection.user = user;
+  state->selection.buffer = buffer;
+  state->selection.buflen = buflen;
+}
+
+// Allocator helpers
+void *nvim_vterm_state_malloc(VTermState *state, size_t size)
+{
+  return vterm_allocator_malloc(state->vt, size);
+}
+
+void nvim_vterm_state_free_ptr(VTermState *state, void *ptr)
+{
+  vterm_allocator_free(state->vt, ptr);
+}
+
+// VTerm tmpbuffer accessor
+void *nvim_vterm_state_get_vt_tmpbuffer(const VTermState *state)
+{
+  return state->vt->tmpbuffer;
+}
+
+size_t nvim_vterm_state_get_vt_tmpbuffer_len(const VTermState *state)
+{
+  return state->vt->tmpbuffer_len;
+}
+
+int nvim_vterm_state_get_vt_mode_utf8(const VTermState *state)
+{
+  return state->vt->mode.utf8;
 }
 
 // Thin C wrappers for Rust pen.rs FFI exports (moved from pen.c)
