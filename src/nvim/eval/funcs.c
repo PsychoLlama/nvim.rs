@@ -5788,26 +5788,7 @@ void nvim_eval_reduce(typval_T *argvars, typval_T *rettv)
 }
 
 
-void nvim_eval_eval(typval_T *argvars, typval_T *rettv)
-{
-  const char *s = tv_get_string_chk(&argvars[0]);
-  if (s != NULL) {
-    s = skipwhite(s);
-  }
-
-  const char *const expr_start = s;
-  if (s == NULL || eval1((char **)&s, rettv, &EVALARG_EVALUATE) == FAIL) {
-    if (expr_start != NULL && !aborting()) {
-      semsg(_(e_invexpr2), expr_start);
-    }
-    need_clr_eos = false;
-    rettv->v_type = VAR_NUMBER;
-    rettv->vval.v_number = 0;
-  } else if (*s != NUL) {
-    semsg(_(e_trailing_arg), s);
-  }
-}
-
+// nvim_eval_eval: inlined into Rust (misc.rs)
 // nvim_eval_exists: inlined into Rust (misc.rs)
 
 // nvim_eval_has: migrated to Rust (rs_f_has in funcs/misc.rs)

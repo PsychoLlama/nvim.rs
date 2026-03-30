@@ -2103,11 +2103,16 @@ pub unsafe extern "C" fn rs_f_reduce(
 // =============================================================================
 
 extern "C" {
-    fn nvim_eval_eval(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_eval: inlined into rs_f_eval below
     // nvim_eval_exists: inlined into rs_f_exists below
     // nvim_eval_has: inlined below
     // nvim_eval_json_decode: inlined into rs_f_json_decode below
     fn nvim_eval_printf(argvars: *const c_void, rettv: *mut c_void);
+    // eval() inlining helpers
+    fn eval1(arg: *mut *const c_char, rettv: *mut c_void, evalarg: *mut c_void) -> c_int;
+    fn aborting() -> c_int;
+    static mut need_clr_eos: bool;
+    static mut EVALARG_EVALUATE: c_void;
     // nvim_eval_sha256: inlined into rs_f_sha256 below
     // exists() inlining helpers
     fn skipwhite(q: *const c_char) -> *const c_char;
@@ -2168,7 +2173,30 @@ extern "C" {
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_eval"]
 pub unsafe extern "C" fn rs_f_eval(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
-    nvim_eval_eval(argvars, rettv);
+    const FAIL: c_int = 0;
+    let s = p8_tv_get_string_chk(argvars.cast_mut());
+    let s = if s.is_null() {
+        std::ptr::null()
+    } else {
+        skipwhite(s)
+    };
+    let expr_start = s;
+    let mut s_mut = s;
+    if s.is_null()
+        || eval1(
+            &raw mut s_mut,
+            rettv,
+            std::ptr::addr_of_mut!(EVALARG_EVALUATE),
+        ) == FAIL
+    {
+        if !expr_start.is_null() && aborting() == 0 {
+            semsg(c"E15: Invalid expression: \"%s\"".as_ptr(), expr_start);
+        }
+        need_clr_eos = false;
+        p3_misc_tv_set_number(rettv, 0);
+    } else if !s_mut.is_null() && *s_mut.cast::<u8>() != b'\0' {
+        semsg(c"E488: Trailing characters: %s".as_ptr(), s_mut);
+    }
 }
 
 /// "exists()" function - check if a variable/function/option exists
