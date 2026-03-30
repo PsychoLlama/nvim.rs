@@ -422,11 +422,28 @@ pub unsafe extern "C" fn rs_output_has_null(output: *const u8, len: c_int) -> bo
 // Environment and path VimL functions (Phase 3)
 // =============================================================================
 
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void};
 
 extern "C" {
-    fn nvim_eval_environ(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_environ: inlined below
     fn nvim_eval_stdpath(argvars: *const c_void, rettv: *mut c_void);
+
+    // environ inlining
+    fn os_get_fullenv_size() -> usize;
+    fn os_copy_fullenv(env: *mut *mut c_char, size: usize);
+    fn os_free_fullenv(env: *mut *mut c_char);
+    fn tv_dict_alloc_ret(rettv: *mut c_void);
+    fn tv_dict_find(d: *const c_void, key: *const c_char, len: isize) -> *mut c_void;
+    fn tv_dict_add_str(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    ) -> c_int;
+    fn nvim_tv_get_dict(tv: *const c_void) -> *const c_void;
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
 }
 
 /// "environ()" function - get all environment variables as dict
@@ -435,11 +452,52 @@ extern "C" {
 /// Caller must provide valid pointers to typval_T arrays.
 #[export_name = "f_environ"]
 pub unsafe extern "C" fn rs_f_environ(
-    argvars: *const c_void,
+    _argvars: *const c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_environ(argvars, rettv);
+    // nvim_eval_environ: inlined — os_get_fullenv_size + os_copy_fullenv delegation
+    tv_dict_alloc_ret(rettv);
+
+    let env_size = os_get_fullenv_size();
+    // Allocate array of char* pointers (env_size + 1 for null terminator)
+    let env: *mut *mut c_char = xmalloc((env_size + 1) * std::mem::size_of::<*mut c_char>()).cast();
+    *env.add(env_size) = std::ptr::null_mut();
+    os_copy_fullenv(env, env_size);
+
+    let dict = nvim_tv_get_dict(rettv).cast_mut();
+    let mut i = env_size as isize - 1;
+    while i >= 0 {
+        let str_ptr = *env.add(i as usize);
+        // Find '=' separator, skipping leading '=' for env vars like "=C:=C:\"
+        let skip = usize::from(*str_ptr == b'=' as c_char);
+        let end = libc::strchr(str_ptr.add(skip), c_int::from(b'='));
+        if end.is_null() {
+            i -= 1;
+            continue;
+        }
+        let len = end.offset_from(str_ptr);
+        if len <= 0 {
+            i -= 1;
+            continue;
+        }
+        let value = end.add(1);
+
+        // Temporarily null-terminate at '='
+        let saved = *str_ptr.add(len as usize);
+        *str_ptr.add(len as usize) = 0;
+        let key = xstrdup(str_ptr);
+        *str_ptr.add(len as usize) = saved;
+
+        // Skip duplicates (first occurrence wins - we iterate in reverse)
+        if tv_dict_find(dict, key, len).is_null() {
+            #[allow(clippy::cast_sign_loss)]
+            tv_dict_add_str(dict, key, len as usize, value);
+        }
+        xfree(key.cast::<c_void>());
+        i -= 1;
+    }
+    os_free_fullenv(env);
 }
 
 /// "stdpath(type)" function - get standard path for given type

@@ -4864,43 +4864,7 @@ void nvim_eval_screenstring(typval_T *argvars, typval_T *rettv)
 }
 
 
-void nvim_eval_environ(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict_alloc_ret(rettv);
-
-  size_t env_size = os_get_fullenv_size();
-  char **env = xmalloc(sizeof(*env) * (env_size + 1));
-  env[env_size] = NULL;
-  os_copy_fullenv(env, env_size);
-
-  for (ssize_t i = (ssize_t)env_size - 1; i >= 0; i--) {
-    const char *str = env[i];
-    const char *const end = strchr(str + (str[0] == '=' ? 1 : 0), '=');
-    assert(end != NULL);
-    ptrdiff_t len = end - str;
-    assert(len > 0);
-    const char *value = str + len + 1;
-
-    char c = env[i][len];
-    env[i][len] = NUL;
-
-#ifdef MSWIN
-    char *const key = strcase_save(str, true);
-#else
-    char *const key = xstrdup(str);
-#endif
-
-    env[i][len] = c;
-
-    if (tv_dict_find(rettv->vval.v_dict, key, len) != NULL) {
-      xfree(key);
-      continue;
-    }
-    tv_dict_add_str(rettv->vval.v_dict, key, (size_t)len, value);
-    xfree(key);
-  }
-  os_free_fullenv(env);
-}
+// nvim_eval_environ: inlined into Rust (system.rs) — os_get_fullenv_size + os_copy_fullenv delegation
 
 static void get_xdg_var_list_inner(const XDGVarType xdg, typval_T *rettv)
   FUNC_ATTR_NONNULL_ALL
