@@ -1132,6 +1132,20 @@ extern "C" {
     fn nvim_did_emsg_check() -> c_int;
     fn nvim_buf_get_ml_line_count(buf: *const std::ffi::c_void) -> i32;
     fn nvim_emsg_get_number_unknown();
+
+    // Phase 2 accessor helpers for blob alloc/free/copy/f_blob2list/f_list2blob
+    fn nvim_blob_alloc_impl() -> BlobHandle;
+    fn nvim_blob_free_impl(b: BlobHandle);
+    fn nvim_blob_dec_refcount(b: BlobHandle) -> c_int;
+    fn nvim_blob_set_ga_maxlen(b: BlobHandle, n: c_int);
+    fn nvim_blob_xmemdup_ga_data(from: BlobHandle, len: c_int) -> *mut u8;
+    fn nvim_blob_set_ga_data(b: BlobHandle, data: *mut u8);
+    fn nvim_tv_list_alloc_ret(ret_tv: TypevalHandle, len: isize) -> ListHandle;
+    fn nvim_tv_list_append_number(l: *mut std::ffi::c_void, n: c_int);
+    fn nvim_blob_ga_append(b: BlobHandle, c: u8);
+    fn nvim_blob_ga_clear_only(b: BlobHandle);
+    fn nvim_semsg_blob_invalid_value(n: i64);
+    fn nvim_tv_set_lock(tv: TypevalHandle, lock: c_int);
 }
 
 // =============================================================================
@@ -2912,6 +2926,122 @@ fn eval_expr_valid_arg_impl(tv: TypevalHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_eval_expr_valid_arg(tv: TypevalHandle) -> c_int {
     c_int::from(eval_expr_valid_arg_impl(tv))
+}
+
+// =============================================================================
+// Phase 2: Blob alloc/free/unref/alloc_ret/copy and f_blob2list/f_list2blob
+// =============================================================================
+
+/// FFI export: tv_blob_alloc - allocate an empty blob.
+#[export_name = "tv_blob_alloc"]
+pub extern "C" fn rs_tv_blob_alloc() -> BlobHandle {
+    unsafe { nvim_blob_alloc_impl() }
+}
+
+/// FFI export: tv_blob_free - free a blob (ignore refcount).
+#[export_name = "tv_blob_free"]
+pub unsafe extern "C" fn rs_tv_blob_free(b: BlobHandle) {
+    unsafe { nvim_blob_free_impl(b) };
+}
+
+/// FFI export: tv_blob_unref - decrement refcount and free if zero.
+#[export_name = "tv_blob_unref"]
+pub unsafe extern "C" fn rs_tv_blob_unref(b: BlobHandle) {
+    if !b.is_null() && unsafe { nvim_blob_dec_refcount(b) } <= 0 {
+        unsafe { nvim_blob_free_impl(b) };
+    }
+}
+
+/// FFI export: tv_blob_alloc_ret - allocate a blob and set as return value.
+#[export_name = "tv_blob_alloc_ret"]
+pub unsafe extern "C" fn rs_tv_blob_alloc_ret(ret_tv: TypevalHandle) -> BlobHandle {
+    let b = unsafe { nvim_blob_alloc_impl() };
+    unsafe { nvim_tv_set_blob(ret_tv, b) };
+    b
+}
+
+/// FFI export: tv_blob_copy - copy a blob typval to a new typval.
+#[export_name = "tv_blob_copy"]
+pub unsafe extern "C" fn rs_tv_blob_copy(from: BlobHandle, to: TypevalHandle) {
+    // Set v_type=VAR_BLOB, v_lock=VAR_UNLOCKED
+    unsafe { nvim_tv_set_blob(to, BlobHandle::null()) }; // sets type=VAR_BLOB, v_blob=NULL
+    unsafe { nvim_tv_set_lock(to, 0) }; // VAR_UNLOCKED = 0
+    if !from.is_null() {
+        let new_b = unsafe { nvim_blob_alloc_impl() };
+        let len = unsafe { nvim_blob_get_len(from) };
+        if len > 0 {
+            let data = unsafe { nvim_blob_xmemdup_ga_data(from, len) };
+            unsafe { nvim_blob_set_ga_data(new_b, data) };
+        }
+        unsafe { nvim_blob_set_ga_len(new_b, len) };
+        unsafe { nvim_blob_set_ga_maxlen(new_b, len) };
+        // Increment new_b refcount and set it in 'to'
+        unsafe { nvim_tv_set_blob(to, new_b) };
+    }
+}
+
+/// FFI export: f_blob2list - VimL blob2list() function.
+#[export_name = "f_blob2list"]
+pub unsafe extern "C" fn rs_f_blob2list(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *const std::ffi::c_void,
+) {
+    let l = unsafe { nvim_tv_list_alloc_ret(rettv, -3) }; // kListLenMayKnow = -3
+
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    if tv_check_for_blob_arg_impl(argvars, 0) == FAIL {
+        return;
+    }
+
+    let blob = unsafe { nvim_tv_get_blob(arg0) };
+    let len = tv_blob_len_impl(blob);
+    for i in 0..len {
+        let byte = i64::from(unsafe { nvim_blob_get_byte(blob, i) });
+        unsafe { nvim_tv_list_append_number(l.0.cast_mut(), byte as c_int) };
+    }
+}
+
+/// FFI export: f_list2blob - VimL list2blob() function.
+#[export_name = "f_list2blob"]
+pub unsafe extern "C" fn rs_f_list2blob(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *const std::ffi::c_void,
+) {
+    let blob = unsafe { nvim_tv_blob_alloc_ret_handle(rettv) };
+
+    if tv_check_for_list_arg_impl(argvars, 0) == FAIL {
+        return;
+    }
+
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let l = unsafe { nvim_tv_get_list(arg0) };
+    if l.is_null() {
+        return;
+    }
+
+    // Iterate list items
+    let mut li = tv_list_first_impl(l);
+    while !li.is_null() {
+        let item_tv = tv_listitem_tv_impl(li);
+        let mut error = false;
+        let n = tv_get_number_chk_impl(item_tv, &raw mut error);
+        if error || !(0..=255).contains(&n) {
+            if !error {
+                unsafe { nvim_semsg_blob_invalid_value(n) };
+            }
+            unsafe { nvim_blob_ga_clear_only(blob) };
+            return;
+        }
+        unsafe { nvim_blob_ga_append(blob, n as u8) };
+        li = tv_listitem_next_impl(li);
+    }
+}
+
+/// Helper: call tv_blob_alloc_ret and return the BlobHandle.
+unsafe fn nvim_tv_blob_alloc_ret_handle(ret_tv: TypevalHandle) -> BlobHandle {
+    unsafe { rs_tv_blob_alloc_ret(ret_tv) }
 }
 
 // =============================================================================

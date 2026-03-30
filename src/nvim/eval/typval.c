@@ -2574,89 +2574,13 @@ void tv_dict_set_keys_readonly(dict_T *const dict)
 
 //{{{1 Blobs
 //{{{2 Alloc/free
-
-/// Allocate an empty blob.
-///
-/// Caller should take care of the reference count.
-///
-/// @return [allocated] new blob.
-blob_T *tv_blob_alloc(void)
-  FUNC_ATTR_NONNULL_RET
-{
-  blob_T *const blob = xcalloc(1, sizeof(blob_T));
-  ga_init(&blob->bv_ga, 1, 100);
-  return blob;
-}
-
-/// Free a blob. Ignores the reference count.
-///
-/// @param[in,out]  b  Blob to free.
-void tv_blob_free(blob_T *const b)
-  FUNC_ATTR_NONNULL_ALL
-{
-  ga_clear(&b->bv_ga);
-  xfree(b);
-}
-
-/// Unreference a blob.
-///
-/// Decrements the reference count and frees blob when it becomes zero.
-///
-/// @param[in,out]  b  Blob to operate on.
-void tv_blob_unref(blob_T *const b)
-{
-  if (b != NULL && --b->bv_refcount <= 0) {
-    tv_blob_free(b);
-  }
-}
+// tv_blob_alloc, tv_blob_free, tv_blob_unref migrated to Rust (Phase 2)
 
 //{{{2 Operations on the whole blob
 // tv_blob_slice_or_index, tv_blob_check_index, tv_blob_check_range,
 // tv_blob_set_range, tv_blob_set_append, tv_blob_remove migrated to Rust (Phase 1)
 
-/// blob2list() function
-void f_blob2list(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-
-  if (tv_check_for_blob_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  blob_T *const blob = argvars->vval.v_blob;
-  list_T *const l = rettv->vval.v_list;
-  for (int i = 0; i < tv_blob_len(blob); i++) {
-    tv_list_append_number(l, tv_blob_get(blob, i));
-  }
-}
-
-/// list2blob() function
-void f_list2blob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  blob_T *blob = tv_blob_alloc_ret(rettv);
-
-  if (tv_check_for_list_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  list_T *const l = argvars->vval.v_list;
-  if (l == NULL) {
-    return;
-  }
-
-  TV_LIST_ITER_CONST(l, li, {
-    bool error = false;
-    varnumber_T n = tv_get_number_chk(TV_LIST_ITEM_TV(li), &error);
-    if (error || n < 0 || n > 255) {
-      if (!error) {
-        semsg(_(e_invalid_value_for_blob_nr), (int)n);
-      }
-      ga_clear(&blob->bv_ga);
-      return;
-    }
-    ga_append(&blob->bv_ga, (uint8_t)n);
-  });
-}
+// f_blob2list, f_list2blob migrated to Rust (Phase 2)
 
 //{{{1 Generic typval operations
 //{{{2 Init/alloc/clear
@@ -2811,41 +2735,7 @@ void tv_dict_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg)
   }
 }
 
-/// Allocate an empty blob for a return value.
-///
-/// Also sets reference count.
-///
-/// @param[out]  ret_tv  Structure where blob is saved.
-blob_T *tv_blob_alloc_ret(typval_T *const ret_tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  blob_T *const b = tv_blob_alloc();
-  tv_blob_set_ret(ret_tv, b);
-  return b;
-}
-
-/// Copy a blob typval to a different typval.
-///
-/// @param[in]  from  Blob object to copy from.
-/// @param[out]  to  Blob object to copy to.
-void tv_blob_copy(blob_T *const from, typval_T *const to)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  to->v_type = VAR_BLOB;
-  to->v_lock = VAR_UNLOCKED;
-  if (from == NULL) {
-    to->vval.v_blob = NULL;
-  } else {
-    tv_blob_alloc_ret(to);
-    int len = from->bv_ga.ga_len;
-
-    if (len > 0) {
-      to->vval.v_blob->bv_ga.ga_data = xmemdup(from->bv_ga.ga_data, (size_t)len);
-    }
-    to->vval.v_blob->bv_ga.ga_len = len;
-    to->vval.v_blob->bv_ga.ga_maxlen = len;
-  }
-}
+// tv_blob_alloc_ret, tv_blob_copy migrated to Rust (Phase 2)
 
 //{{{3 Clear
 #define TYPVAL_ENCODE_ALLOW_SPECIALS false
@@ -3902,3 +3792,69 @@ int32_t nvim_tv_to_lnum_pos(const typval_T *tv, int *ret_fnum)
 
 /// Emit the E685 intern2 error for tv_get_number(UNKNOWN).
 void nvim_emsg_get_number_unknown(void) { semsg(_(e_intern2), "tv_get_number(UNKNOWN)"); }
+
+// Phase 2 accessor helpers for Rust blob operations
+
+/// Allocate a new empty blob_T (wrapper for Rust).
+blob_T *nvim_blob_alloc_impl(void)
+{
+  blob_T *b = xcalloc(1, sizeof(blob_T));
+  ga_init(&b->bv_ga, 1, 100);
+  return b;
+}
+
+/// Free a blob_T (clear ga + xfree). Does NOT check refcount (wrapper for Rust).
+void nvim_blob_free_impl(blob_T *b)
+{
+  ga_clear(&b->bv_ga);
+  xfree(b);
+}
+
+/// Get the refcount of a blob (accessor for Rust).
+int nvim_blob_get_refcount(const blob_T *b) { return b->bv_refcount; }
+
+/// Decrement blob refcount and return new value (accessor for Rust).
+int nvim_blob_dec_refcount(blob_T *b) { return --b->bv_refcount; }
+
+/// Set ga_maxlen of a blob (accessor for Rust).
+void nvim_blob_set_ga_maxlen(blob_T *b, int n) { b->bv_ga.ga_maxlen = n; }
+
+/// Get ga_maxlen of a blob (accessor for Rust).
+int nvim_blob_get_ga_maxlen(const blob_T *b) { return b->bv_ga.ga_maxlen; }
+
+/// Duplicate ga_data of blob (xmemdup wrapper for Rust).
+uint8_t *nvim_blob_xmemdup_ga_data(const blob_T *from, int len)
+{
+  return (uint8_t *)xmemdup(from->bv_ga.ga_data, (size_t)len);
+}
+
+/// Set ga_data of a blob (accessor for Rust).
+void nvim_blob_set_ga_data(blob_T *b, uint8_t *data) { b->bv_ga.ga_data = data; }
+
+/// tv_list_alloc_ret wrapper for Rust (returns list pointer).
+list_T *nvim_tv_list_alloc_ret(typval_T *ret_tv, ptrdiff_t len)
+{
+  return tv_list_alloc_ret(ret_tv, len);
+}
+
+
+/// ga_append on a blob's garray (wrapper for Rust).
+void nvim_blob_ga_append(blob_T *b, uint8_t c)
+{
+  ga_append(&b->bv_ga, c);
+}
+
+/// ga_clear on a blob's garray (wrapper for Rust).
+void nvim_blob_ga_clear_only(blob_T *b)
+{
+  ga_clear(&b->bv_ga);
+}
+
+/// Emit e_invalid_value_for_blob_nr error (accessor for Rust).
+void nvim_semsg_blob_invalid_value(int64_t n)
+{
+  semsg(_(e_invalid_value_for_blob_nr), (int)n);
+}
+
+/// Set v_lock on a typval (accessor for Rust).
+void nvim_tv_set_lock(typval_T *tv, int lock) { tv->v_lock = (VarLockStatus)lock; }

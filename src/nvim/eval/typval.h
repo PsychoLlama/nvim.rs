@@ -503,6 +503,15 @@ extern const char *tv_get_string_chk(const typval_T *tv);
 extern const char *tv_get_string(const typval_T *tv);
 extern const char *tv_get_string_buf(const typval_T *tv, char *buf);
 
+// Blob functions (migrated to Rust, Phase 2)
+extern blob_T *tv_blob_alloc(void);
+extern void tv_blob_free(blob_T *blob);
+extern void tv_blob_unref(blob_T *blob);
+extern blob_T *tv_blob_alloc_ret(typval_T *ret_tv);
+extern void tv_blob_copy(blob_T *from, typval_T *to);
+extern void f_blob2list(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_list2blob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Dict lookup functions (migrated to Rust, Phase 4)
 extern bool tv_dict_has_key(const dict_T *d, const char *key);
 extern int tv_dict_get_tv(dict_T *d, const char *key, typval_T *rettv);
