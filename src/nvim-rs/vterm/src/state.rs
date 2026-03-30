@@ -12,7 +12,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::trivially_copy_pass_by_ref)] // Consistency with C API and Rust conventions
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_long, c_void};
 
 use crate::{
     VTermColor, VTermGlyphInfo, VTermKeyEncodingStack, VTermLineInfo, VTermPos, VTermRect,
@@ -676,7 +676,15 @@ pub type StateSetlineinfoCallback = unsafe extern "C" fn(
     user: *mut c_void,
 ) -> c_int;
 
+/// Theme callback: query light/dark mode. Returns 1 if the theme was determined.
+pub type StateThemeCallback = unsafe extern "C" fn(dark: *mut bool, user: *mut c_void) -> c_int;
+
+/// `sb_clear` callback: clear the scrollback buffer.
+pub type StateSbClearCallback = unsafe extern "C" fn(user: *mut c_void) -> c_int;
+
 /// State callback function table
+///
+/// Layout must match `VTermStateCallbacks` in `vterm_defs.h` exactly.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct VTermStateCallbacks {
@@ -690,7 +698,9 @@ pub struct VTermStateCallbacks {
     pub settermprop: Option<StateSettermrpopCallback>,
     pub bell: Option<StateBellCallback>,
     pub resize: Option<StateResizeCallback>,
+    pub theme: Option<StateThemeCallback>,
     pub setlineinfo: Option<StateSetlineinfoCallback>,
+    pub sb_clear: Option<StateSbClearCallback>,
 }
 
 /// State fallback callbacks
@@ -1967,6 +1977,9 @@ const VTERM_PROP_CURSORBLINK: c_int = 2;
 const VTERM_PROP_ALTSCREEN: c_int = 3;
 const VTERM_PROP_REVERSE: c_int = 6;
 const VTERM_PROP_CURSORSHAPE: c_int = 7;
+const VTERM_PROP_CURSORSHAPE_BLOCK: c_int = 1;
+const VTERM_PROP_CURSORSHAPE_UNDERLINE: c_int = 2;
+const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
 const VTERM_PROP_MOUSE: c_int = 8;
 const VTERM_PROP_FOCUSREPORT: c_int = 9;
 const VTERM_PROP_THEMEUPDATES: c_int = 10;
@@ -2339,6 +2352,12 @@ extern "C" {
         enc_type: c_int,
         designation: c_char,
     ) -> *const crate::VTermEncoding;
+    /// Convert a grapheme buffer to an `schar_T`
+    fn schar_from_buf(buf: *const i8, len: usize) -> u32;
+    /// Process SGR and other pen attributes from CSI args
+    fn vterm_state_setpen(state: VTermStateHandle, args: *const c_long, argcount: c_int);
+    /// Primary Device Attributes string (extern global, overridable in tests)
+    static vterm_primary_device_attr: [i8; 16];
 }
 
 /// Query kitty keyboard protocol flags and output response.
@@ -2811,6 +2830,771 @@ pub unsafe extern "C" fn rs_vterm_state_on_control(state: VTermStateHandle, cont
     }
 
     rs_vterm_state_updatecursor(state, &raw const oldpos, 1);
+    1
+}
+
+// =============================================================================
+// Phase 4: on_csi handler
+// =============================================================================
+
+/// Erase a rectangular region and cancel continuation markers (replaces C `erase`).
+unsafe fn erase_rect(state: VTermStateHandle, rect: crate::VTermRect, selective: c_int) {
+    let s = state.0.cast::<State>();
+    if rect.end_col == (*s).cols {
+        // Cancel continuation markers on subsequent lines
+        let mut row = rect.start_row + 1;
+        while row < rect.end_row + 1 && row < (*s).rows {
+            if let Some(li) = (*s).lineinfo.add(row as usize).as_mut() {
+                li.set_continuation(false);
+            }
+            row += 1;
+        }
+    }
+    let callbacks = (*s).callbacks;
+    if !callbacks.is_null() {
+        if let Some(erase_cb) = (*callbacks).erase {
+            erase_cb(rect, selective, (*s).cbdata);
+        }
+    }
+}
+
+/// Handle CSI escape sequences (replaces C `on_csi`).
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_vterm_state_on_csi(
+    state: VTermStateHandle,
+    leader: *const c_char,
+    args: *const c_long,
+    argcount: c_int,
+    intermed: *const c_char,
+    command: c_char,
+) -> c_int {
+    use crate::{csi_arg, csi_arg_count, csi_arg_is_missing, csi_arg_or};
+
+    let s = state.0.cast::<State>();
+
+    let mut leader_byte: c_int = 0;
+    let mut intermed_byte: c_int = 0;
+    let mut cancel_phantom: c_int = 1;
+
+    if !leader.is_null() && *leader != 0 {
+        if *leader.add(1) != 0 {
+            return 0; // leader longer than 1 char
+        }
+        match *leader as u8 {
+            b'?' | b'>' | b'<' | b'=' => {
+                leader_byte = c_int::from(*leader);
+            }
+            _ => return 0,
+        }
+    }
+
+    if !intermed.is_null() && *intermed != 0 {
+        if *intermed.add(1) != 0 {
+            return 0; // intermed longer than 1 char
+        }
+        match *intermed as u8 {
+            b' ' | b'!' | b'"' | b'$' | b'\'' => {
+                intermed_byte = c_int::from(*intermed);
+            }
+            _ => return 0,
+        }
+    }
+
+    let oldpos = (*s).pos;
+
+    // CSI command dispatch key: (intermed << 16) | (leader << 8) | command
+    let cmd_key = (intermed_byte << 16) | (leader_byte << 8) | c_int::from(command as u8);
+
+    // Inline arg helpers
+    macro_rules! arg {
+        ($i:expr) => {
+            if $i < argcount {
+                *args.add($i as usize)
+            } else {
+                crate::CSI_ARG_MISSING
+            }
+        };
+    }
+
+    match cmd_key {
+        0x40 => {
+            // ICH - ECMA-48 8.3.64
+            let count = csi_arg_count(arg!(0));
+            if rs_vterm_state_cursor_in_scrollregion(state) == 0 {
+                // handled below
+            } else {
+                let rect = crate::VTermRect {
+                    start_row: (*s).pos.row,
+                    end_row: (*s).pos.row + 1,
+                    start_col: (*s).pos.col,
+                    end_col: if (*s).mode.leftrightmargin() {
+                        (*s).scroll_region_right()
+                    } else {
+                        nvim_vterm_state_this_row_width(state)
+                    },
+                };
+                rs_vterm_state_scroll(state, rect, 0, -count as c_int);
+            }
+        }
+        0x41 => {
+            // CUU - ECMA-48 8.3.22
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.row -= count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x42 => {
+            // CUD - ECMA-48 8.3.19
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.row += count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x43 => {
+            // CUF - ECMA-48 8.3.20
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.col += count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x44 => {
+            // CUB - ECMA-48 8.3.18
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.col -= count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x45 => {
+            // CNL - ECMA-48 8.3.12
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.col = 0;
+            (*s).pos.row += count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x46 => {
+            // CPL - ECMA-48 8.3.13
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.col = 0;
+            (*s).pos.row -= count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x47 => {
+            // CHA - ECMA-48 8.3.9
+            let val = csi_arg_or(arg!(0), 1);
+            (*s).pos.col = val as c_int - 1;
+            (*s).at_phantom = 0;
+        }
+        0x48 => {
+            // CUP - ECMA-48 8.3.21
+            let row = csi_arg_or(arg!(0), 1);
+            let col = if argcount < 2 || csi_arg_is_missing(arg!(1)) {
+                1
+            } else {
+                csi_arg(arg!(1))
+            };
+            (*s).pos.row = row as c_int - 1;
+            (*s).pos.col = col as c_int - 1;
+            if (*s).mode.origin() {
+                (*s).pos.row += (*s).scrollregion_top;
+                (*s).pos.col += (*s).scroll_region_left();
+            }
+            (*s).at_phantom = 0;
+        }
+        0x49 => {
+            // CHT - ECMA-48 8.3.10
+            let count = csi_arg_count(arg!(0));
+            tab(state, count as c_int, 1);
+        }
+        // ED / DECSED
+        _ if cmd_key == 0x4a || cmd_key == (('?' as c_int) << 8) | 0x4a => {
+            let selective = c_int::from(leader_byte == '?' as c_int);
+            match csi_arg(arg!(0)) {
+                crate::CSI_ARG_MISSING | 0 => {
+                    let mut rect = crate::VTermRect {
+                        start_row: (*s).pos.row,
+                        end_row: (*s).pos.row + 1,
+                        start_col: (*s).pos.col,
+                        end_col: (*s).cols,
+                    };
+                    if rect.end_col > rect.start_col {
+                        erase_rect(state, rect, selective);
+                    }
+                    rect.start_row = (*s).pos.row + 1;
+                    rect.end_row = (*s).rows;
+                    rect.start_col = 0;
+                    for r in rect.start_row..rect.end_row {
+                        rs_vterm_state_set_lineinfo(state, r, FORCE, DWL_OFF, DHL_OFF);
+                    }
+                    if rect.end_row > rect.start_row {
+                        erase_rect(state, rect, selective);
+                    }
+                }
+                1 => {
+                    let mut rect = crate::VTermRect {
+                        start_row: 0,
+                        end_row: (*s).pos.row,
+                        start_col: 0,
+                        end_col: (*s).cols,
+                    };
+                    for r in rect.start_row..rect.end_row {
+                        rs_vterm_state_set_lineinfo(state, r, FORCE, DWL_OFF, DHL_OFF);
+                    }
+                    if rect.end_col > rect.start_col {
+                        erase_rect(state, rect, selective);
+                    }
+                    rect.start_row = (*s).pos.row;
+                    rect.end_row = (*s).pos.row + 1;
+                    rect.end_col = (*s).pos.col + 1;
+                    if rect.end_row > rect.start_row {
+                        erase_rect(state, rect, selective);
+                    }
+                }
+                2 => {
+                    let rect = crate::VTermRect {
+                        start_row: 0,
+                        end_row: (*s).rows,
+                        start_col: 0,
+                        end_col: (*s).cols,
+                    };
+                    for r in 0..(*s).rows {
+                        rs_vterm_state_set_lineinfo(state, r, FORCE, DWL_OFF, DHL_OFF);
+                    }
+                    erase_rect(state, rect, selective);
+                }
+                3 => {
+                    let callbacks = (*s).callbacks;
+                    if !callbacks.is_null() {
+                        if let Some(sb_clear) = (*callbacks).sb_clear {
+                            if sb_clear((*s).cbdata) != 0 {
+                                return 1;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        // EL / DECSEL
+        _ if cmd_key == 0x4b || cmd_key == (('?' as c_int) << 8) | 0x4b => {
+            let selective = c_int::from(leader_byte == '?' as c_int);
+            let row_width = nvim_vterm_state_this_row_width(state);
+            let (start_col, end_col) = match csi_arg(arg!(0)) {
+                crate::CSI_ARG_MISSING | 0 => ((*s).pos.col, row_width),
+                1 => (0, (*s).pos.col + 1),
+                2 => (0, row_width),
+                _ => return 0,
+            };
+            if end_col > start_col {
+                let rect = crate::VTermRect {
+                    start_row: (*s).pos.row,
+                    end_row: (*s).pos.row + 1,
+                    start_col,
+                    end_col,
+                };
+                erase_rect(state, rect, selective);
+            }
+        }
+        0x4c => {
+            // IL - ECMA-48 8.3.67
+            let count = csi_arg_count(arg!(0));
+            if rs_vterm_state_cursor_in_scrollregion(state) != 0 {
+                let rect = crate::VTermRect {
+                    start_row: (*s).pos.row,
+                    end_row: (*s).scroll_region_bottom(),
+                    start_col: (*s).scroll_region_left(),
+                    end_col: (*s).scroll_region_right(),
+                };
+                rs_vterm_state_scroll(state, rect, -(count as c_int), 0);
+            }
+        }
+        0x4d => {
+            // DL - ECMA-48 8.3.32
+            let count = csi_arg_count(arg!(0));
+            if rs_vterm_state_cursor_in_scrollregion(state) != 0 {
+                let rect = crate::VTermRect {
+                    start_row: (*s).pos.row,
+                    end_row: (*s).scroll_region_bottom(),
+                    start_col: (*s).scroll_region_left(),
+                    end_col: (*s).scroll_region_right(),
+                };
+                rs_vterm_state_scroll(state, rect, count as c_int, 0);
+            }
+        }
+        0x50 => {
+            // DCH - ECMA-48 8.3.26
+            let count = csi_arg_count(arg!(0));
+            if rs_vterm_state_cursor_in_scrollregion(state) != 0 {
+                let rect = crate::VTermRect {
+                    start_row: (*s).pos.row,
+                    end_row: (*s).pos.row + 1,
+                    start_col: (*s).pos.col,
+                    end_col: if (*s).mode.leftrightmargin() {
+                        (*s).scroll_region_right()
+                    } else {
+                        nvim_vterm_state_this_row_width(state)
+                    },
+                };
+                rs_vterm_state_scroll(state, rect, 0, count as c_int);
+            }
+        }
+        0x53 => {
+            // SU - ECMA-48 8.3.147
+            let count = csi_arg_count(arg!(0));
+            let rect = crate::VTermRect {
+                start_row: (*s).scrollregion_top,
+                end_row: (*s).scroll_region_bottom(),
+                start_col: (*s).scroll_region_left(),
+                end_col: (*s).scroll_region_right(),
+            };
+            rs_vterm_state_scroll(state, rect, count as c_int, 0);
+        }
+        0x54 => {
+            // SD - ECMA-48 8.3.113
+            let count = csi_arg_count(arg!(0));
+            let rect = crate::VTermRect {
+                start_row: (*s).scrollregion_top,
+                end_row: (*s).scroll_region_bottom(),
+                start_col: (*s).scroll_region_left(),
+                end_col: (*s).scroll_region_right(),
+            };
+            rs_vterm_state_scroll(state, rect, -(count as c_int), 0);
+        }
+        0x58 => {
+            // ECH - ECMA-48 8.3.38
+            let count = csi_arg_count(arg!(0)) as c_int;
+            let row_width = nvim_vterm_state_this_row_width(state);
+            let end_col = ((*s).pos.col + count).min(row_width);
+            let rect = crate::VTermRect {
+                start_row: (*s).pos.row,
+                end_row: (*s).pos.row + 1,
+                start_col: (*s).pos.col,
+                end_col,
+            };
+            erase_rect(state, rect, 0);
+        }
+        0x5a => {
+            // CBT - ECMA-48 8.3.7
+            let count = csi_arg_count(arg!(0));
+            tab(state, count as c_int, -1);
+        }
+        0x60 => {
+            // HPA - ECMA-48 8.3.57
+            let col = csi_arg_or(arg!(0), 1);
+            (*s).pos.col = col as c_int - 1;
+            (*s).at_phantom = 0;
+        }
+        0x61 => {
+            // HPR - ECMA-48 8.3.59
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.col += count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x62 => {
+            // REP - ECMA-48 8.3.103
+            let row_width = nvim_vterm_state_this_row_width(state);
+            let count = csi_arg_count(arg!(0)) as c_int;
+            let mut end_col = (*s).pos.col + count;
+            if end_col > row_width {
+                end_col = row_width;
+            }
+            let sc = schar_from_buf((*s).grapheme_buf.as_ptr(), (*s).grapheme_len);
+            while (*s).pos.col < end_col {
+                nvim_vterm_state_call_putglyph(state, sc, (*s).combine_width, (*s).pos);
+                (*s).pos.col += (*s).combine_width;
+            }
+            if (*s).pos.col + (*s).combine_width >= row_width && (*s).mode.autowrap() {
+                (*s).at_phantom = 1;
+                cancel_phantom = 0;
+            }
+        }
+        0x63 => {
+            // DA - ECMA-48 8.3.24
+            let val = csi_arg_or(arg!(0), 0);
+            if val == 0 {
+                let vt = (*s).vt;
+                vterm_push_output_sprintf_ctrl(
+                    vt,
+                    C1_CSI,
+                    c"?%sc".as_ptr(),
+                    vterm_primary_device_attr.as_ptr(),
+                );
+            }
+        }
+        x if x == (('>' as c_int) << 8) | 0x63 => {
+            // DEC secondary Device Attributes
+            let vt = (*s).vt;
+            vterm_push_output_sprintf_ctrl(vt, C1_CSI, c">%d;%d;%dc".as_ptr(), 0i32, 100i32, 0i32);
+        }
+        0x64 => {
+            // VPA - ECMA-48 8.3.158
+            let row = csi_arg_or(arg!(0), 1);
+            (*s).pos.row = row as c_int - 1;
+            if (*s).mode.origin() {
+                (*s).pos.row += (*s).scrollregion_top;
+            }
+            (*s).at_phantom = 0;
+        }
+        0x65 => {
+            // VPR - ECMA-48 8.3.160
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.row += count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x66 => {
+            // HVP - ECMA-48 8.3.63
+            let row = csi_arg_or(arg!(0), 1);
+            let col = if argcount < 2 || csi_arg_is_missing(arg!(1)) {
+                1
+            } else {
+                csi_arg(arg!(1))
+            };
+            (*s).pos.row = row as c_int - 1;
+            (*s).pos.col = col as c_int - 1;
+            if (*s).mode.origin() {
+                (*s).pos.row += (*s).scrollregion_top;
+                (*s).pos.col += (*s).scroll_region_left();
+            }
+            (*s).at_phantom = 0;
+        }
+        0x67 => {
+            // TBC - ECMA-48 8.3.154
+            let val = csi_arg_or(arg!(0), 0);
+            match val {
+                0 => {
+                    nvim_vterm_state_clear_col_tabstop(state, (*s).pos.col);
+                }
+                3 | 5 => {
+                    for col in 0..(*s).cols {
+                        nvim_vterm_state_clear_col_tabstop(state, col);
+                    }
+                }
+                1 | 2 | 4 => {}
+                _ => return 0,
+            }
+        }
+        0x68 => {
+            // SM - ECMA-48 8.3.125
+            if !csi_arg_is_missing(arg!(0)) {
+                rs_vterm_state_set_mode(state, csi_arg(arg!(0)) as c_int, 1);
+            }
+        }
+        x if x == (('?' as c_int) << 8) | 0x68 => {
+            // DEC private mode set
+            for i in 0..argcount {
+                if !csi_arg_is_missing(arg!(i)) {
+                    rs_vterm_state_set_dec_mode(state, csi_arg(arg!(i)) as c_int, 1);
+                }
+            }
+        }
+        0x6a => {
+            // HPB - ECMA-48 8.3.58
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.col -= count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x6b => {
+            // VPB - ECMA-48 8.3.159
+            let count = csi_arg_count(arg!(0));
+            (*s).pos.row -= count as c_int;
+            (*s).at_phantom = 0;
+        }
+        0x6c => {
+            // RM - ECMA-48 8.3.106
+            if !csi_arg_is_missing(arg!(0)) {
+                rs_vterm_state_set_mode(state, csi_arg(arg!(0)) as c_int, 0);
+            }
+        }
+        x if x == (('?' as c_int) << 8) | 0x6c => {
+            // DEC private mode reset
+            for i in 0..argcount {
+                if !csi_arg_is_missing(arg!(i)) {
+                    rs_vterm_state_set_dec_mode(state, csi_arg(arg!(i)) as c_int, 0);
+                }
+            }
+        }
+        0x6d => {
+            // SGR - ECMA-48 8.3.117
+            vterm_state_setpen(state, args, argcount);
+        }
+        x if x == (('?' as c_int) << 8) | 0x6d => {
+            // DECSGR - alternate superscript/subscript
+            for argi in 0..argcount {
+                let mut a = csi_arg(arg!(argi));
+                match a {
+                    4 => {
+                        a = 73;
+                        vterm_state_setpen(state, &raw const a, 1);
+                    }
+                    5 => {
+                        a = 74;
+                        vterm_state_setpen(state, &raw const a, 1);
+                    }
+                    24 => {
+                        a = 75;
+                        vterm_state_setpen(state, &raw const a, 1);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // DSR / DECDSR
+        _ if cmd_key == 0x6e || cmd_key == (('?' as c_int) << 8) | 0x6e => {
+            let val = csi_arg_or(arg!(0), 0);
+            let qmark: *const i8 = if leader_byte == '?' as c_int {
+                c"?".as_ptr()
+            } else {
+                c"".as_ptr()
+            };
+            let vt = (*s).vt;
+            match val {
+                5 => {
+                    vterm_push_output_sprintf_ctrl(vt, C1_CSI, c"%s0n".as_ptr(), qmark);
+                }
+                6 => {
+                    // CPR
+                    vterm_push_output_sprintf_ctrl(
+                        vt,
+                        C1_CSI,
+                        c"%s%d;%dR".as_ptr(),
+                        qmark,
+                        (*s).pos.row + 1,
+                        (*s).pos.col + 1,
+                    );
+                }
+                996 => {
+                    let callbacks = (*s).callbacks;
+                    if !callbacks.is_null() {
+                        if let Some(theme_cb) = (*callbacks).theme {
+                            let mut dark = false;
+                            if theme_cb(&raw mut dark, (*s).cbdata) != 0 {
+                                vterm_push_output_sprintf_ctrl(
+                                    vt,
+                                    C1_CSI,
+                                    c"?997;%cn".as_ptr(),
+                                    if dark {
+                                        c_int::from(b'1')
+                                    } else {
+                                        c_int::from(b'2')
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        x if x == (('!' as c_int) << 16) | 0x70 => {
+            // DECSTR - DEC soft terminal reset
+            vterm_state_reset(state, 0);
+        }
+        x if x == (('?' as c_int) << 8) | (('$' as c_int) << 16) | 0x70 => {
+            // DECRQM
+            rs_vterm_state_request_dec_mode(state, csi_arg(arg!(0)) as c_int);
+        }
+        x if x == (('>' as c_int) << 8) | 0x71 => {
+            // XTVERSION
+            rs_vterm_state_request_version_string(state);
+        }
+        x if x == ((' ' as c_int) << 16) | 0x71 => {
+            // DECSCUSR - DEC set cursor shape
+            let val = csi_arg_or(arg!(0), 1);
+            match val {
+                0 | 1 => {
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 1);
+                    settermprop_int(state, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BLOCK);
+                }
+                2 => {
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 0);
+                    settermprop_int(state, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BLOCK);
+                }
+                3 => {
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 1);
+                    settermprop_int(
+                        state,
+                        VTERM_PROP_CURSORSHAPE,
+                        VTERM_PROP_CURSORSHAPE_UNDERLINE,
+                    );
+                }
+                4 => {
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 0);
+                    settermprop_int(
+                        state,
+                        VTERM_PROP_CURSORSHAPE,
+                        VTERM_PROP_CURSORSHAPE_UNDERLINE,
+                    );
+                }
+                5 => {
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 1);
+                    settermprop_int(
+                        state,
+                        VTERM_PROP_CURSORSHAPE,
+                        VTERM_PROP_CURSORSHAPE_BAR_LEFT,
+                    );
+                }
+                6 => {
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 0);
+                    settermprop_int(
+                        state,
+                        VTERM_PROP_CURSORSHAPE,
+                        VTERM_PROP_CURSORSHAPE_BAR_LEFT,
+                    );
+                }
+                _ => {}
+            }
+        }
+        x if x == (('"' as c_int) << 16) | 0x71 => {
+            // DECSCA - DEC select character protection attribute
+            let val = csi_arg_or(arg!(0), 0);
+            match val {
+                0 | 2 => (*s).protected_cell = 0,
+                1 => (*s).protected_cell = 1,
+                _ => {}
+            }
+        }
+        0x72 => {
+            // DECSTBM
+            let top = csi_arg_or(arg!(0), 1) as c_int - 1;
+            let bottom = if argcount < 2 || csi_arg_is_missing(arg!(1)) {
+                -1i64
+            } else {
+                csi_arg(arg!(1))
+            } as c_int;
+            (*s).scrollregion_top = top.max(0).min((*s).rows);
+            (*s).scrollregion_bottom = bottom.max(-1);
+            if (*s).scrollregion_top == 0 && (*s).scrollregion_bottom == (*s).rows {
+                (*s).scrollregion_bottom = -1;
+            } else {
+                (*s).scrollregion_bottom = (*s).scrollregion_bottom.min((*s).rows);
+            }
+            if (*s).scroll_region_bottom() <= (*s).scrollregion_top {
+                (*s).scrollregion_top = 0;
+                (*s).scrollregion_bottom = -1;
+            }
+            (*s).pos.row = 0;
+            (*s).pos.col = 0;
+            if (*s).mode.origin() {
+                (*s).pos.row += (*s).scrollregion_top;
+                (*s).pos.col += (*s).scroll_region_left();
+            }
+        }
+        0x73 => {
+            // DECSLRM
+            let left = csi_arg_or(arg!(0), 1) as c_int - 1;
+            let right = if argcount < 2 || csi_arg_is_missing(arg!(1)) {
+                -1i64
+            } else {
+                csi_arg(arg!(1))
+            } as c_int;
+            (*s).scrollregion_left = left.max(0).min((*s).cols);
+            (*s).scrollregion_right = right.max(-1);
+            if (*s).scrollregion_left == 0 && (*s).scrollregion_right == (*s).cols {
+                (*s).scrollregion_right = -1;
+            } else {
+                (*s).scrollregion_right = (*s).scrollregion_right.min((*s).cols);
+            }
+            if (*s).scrollregion_right > -1 && (*s).scrollregion_right <= (*s).scrollregion_left {
+                (*s).scrollregion_left = 0;
+                (*s).scrollregion_right = -1;
+            }
+            (*s).pos.row = 0;
+            (*s).pos.col = 0;
+            if (*s).mode.origin() {
+                (*s).pos.row += (*s).scrollregion_top;
+                (*s).pos.col += (*s).scroll_region_left();
+            }
+        }
+        x if x == (('?' as c_int) << 8) | 0x75 => {
+            // Kitty query
+            rs_vterm_state_request_key_encoding_flags(state);
+        }
+        x if x == (('>' as c_int) << 8) | 0x75 => {
+            // Kitty push flags
+            rs_vterm_state_push_key_encoding_flags(state, csi_arg_or(arg!(0), 0) as c_int);
+        }
+        x if x == (('<' as c_int) << 8) | 0x75 => {
+            // Kitty pop flags
+            rs_vterm_state_pop_key_encoding_flags(state, csi_arg_or(arg!(0), 1) as c_int);
+        }
+        x if x == (('=' as c_int) << 8) | 0x75 => {
+            // Kitty set flags
+            let mode = if argcount < 2 || csi_arg_is_missing(arg!(1)) {
+                1
+            } else {
+                csi_arg(arg!(1)) as c_int
+            };
+            rs_vterm_state_set_key_encoding_flags(state, csi_arg_or(arg!(0), 0) as c_int, mode);
+        }
+        x if x == (('\'' as c_int) << 16) | 0x7d => {
+            // DECIC
+            let count = csi_arg_count(arg!(0));
+            if rs_vterm_state_cursor_in_scrollregion(state) != 0 {
+                let rect = crate::VTermRect {
+                    start_row: (*s).scrollregion_top,
+                    end_row: (*s).scroll_region_bottom(),
+                    start_col: (*s).pos.col,
+                    end_col: (*s).scroll_region_right(),
+                };
+                rs_vterm_state_scroll(state, rect, 0, -(count as c_int));
+            }
+        }
+        x if x == (('\'' as c_int) << 16) | 0x7e => {
+            // DECDC
+            let count = csi_arg_count(arg!(0));
+            if rs_vterm_state_cursor_in_scrollregion(state) != 0 {
+                let rect = crate::VTermRect {
+                    start_row: (*s).scrollregion_top,
+                    end_row: (*s).scroll_region_bottom(),
+                    start_col: (*s).pos.col,
+                    end_col: (*s).scroll_region_right(),
+                };
+                rs_vterm_state_scroll(state, rect, 0, count as c_int);
+            }
+        }
+        _ => {
+            let fallbacks = (*s).fallbacks;
+            if !fallbacks.is_null() {
+                if let Some(csi_cb) = (*fallbacks).csi {
+                    if csi_cb(leader, args, argcount, intermed, command, (*s).fbdata) != 0 {
+                        return 1;
+                    }
+                }
+            }
+            return 0;
+        }
+    }
+
+    // Clamp position
+    if (*s).mode.origin() {
+        if (*s).pos.row < (*s).scrollregion_top {
+            (*s).pos.row = (*s).scrollregion_top;
+        }
+        if (*s).pos.row > (*s).scroll_region_bottom() - 1 {
+            (*s).pos.row = (*s).scroll_region_bottom() - 1;
+        }
+        if (*s).pos.col < (*s).scroll_region_left() {
+            (*s).pos.col = (*s).scroll_region_left();
+        }
+        if (*s).pos.col > (*s).scroll_region_right() - 1 {
+            (*s).pos.col = (*s).scroll_region_right() - 1;
+        }
+    } else {
+        if (*s).pos.row < 0 {
+            (*s).pos.row = 0;
+        }
+        if (*s).pos.row > (*s).rows - 1 {
+            (*s).pos.row = (*s).rows - 1;
+        }
+        if (*s).pos.col < 0 {
+            (*s).pos.col = 0;
+        }
+        if (*s).pos.col > nvim_vterm_state_this_row_width(state) - 1 {
+            (*s).pos.col = nvim_vterm_state_this_row_width(state) - 1;
+        }
+    }
+
+    rs_vterm_state_updatecursor(state, &raw const oldpos, cancel_phantom);
     1
 }
 
