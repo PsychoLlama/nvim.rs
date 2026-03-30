@@ -224,16 +224,11 @@ typedef struct {
 } HistoryBrowseState;
 extern int rs_command_line_browse_history(HistoryBrowseState *state);
 
-static void trigger_cmd_autocmd(int typechar, event_T evt)
-{
-  char typestr[2] = { (char)typechar, NUL };
-  apply_autocmds(evt, typestr, typestr, false, curbuf);
-}
-
 /// Thin wrapper for Rust: trigger autocmd with int event (avoids event_T in public header).
 void nvim_trigger_cmd_autocmd(int typechar, int evt)
 {
-  trigger_cmd_autocmd(typechar, (event_T)evt);
+  char typestr[2] = { (char)typechar, NUL };
+  apply_autocmds((event_T)evt, typestr, typestr, false, curbuf);
 }
 
 /// Internal entry point for cmdline mode.
@@ -440,7 +435,7 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
   // Trigger CmdlineLeavePre autocommands if not already triggered.
   if (!s->event_cmdlineleavepre_triggered) {
     set_vim_var_char(s->c);  // Set v:char
-    trigger_cmd_autocmd(s->cmdline_type, EVENT_CMDLINELEAVEPRE);
+    nvim_trigger_cmd_autocmd(s->cmdline_type, EVENT_CMDLINELEAVEPRE);
   }
 
   if (has_event(EVENT_CMDLINELEAVE)) {
