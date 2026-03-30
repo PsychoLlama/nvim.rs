@@ -184,7 +184,6 @@ extern void rs_augment_terminfo(const TermDetectContext *ctx, TerminfoState *sta
 extern int rs_term_has_truecolor(const char *colorterm, int has_tc_or_rgb, const char **defs);
 
 // Rust TUI output functions
-extern bool rs_attrs_differ(int id1, int id2, bool rgb, const HlAttrs *attrs, size_t attrs_size);
 extern void rs_tui_grid_cursor_goto(TUIData *tui, int64_t row, int64_t col);
 extern void rs_tui_hl_attr_define(TUIData *tui, int64_t id, HlAttrs attrs, HlAttrs cterm_attrs);
 extern void rs_tui_default_colors_set(TUIData *tui, int64_t rgb_fg, int64_t rgb_bg,
@@ -198,10 +197,6 @@ extern void rs_tui_set_icon(TUIData *tui);
 extern void rs_tui_mouse_on(TUIData *tui);
 extern void rs_tui_mouse_off(TUIData *tui);
 extern void rs_tui_update_menu(TUIData *tui);
-extern void rs_final_column_wrap(TUIData *tui);
-extern void rs_set_scroll_region(TUIData *tui, int top, int bot, int left, int right);
-extern void rs_reset_scroll_region(TUIData *tui, bool fullwidth);
-extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
 extern void rs_tui_visual_bell(TUIData *tui);
 extern void rs_tui_grid_scroll(TUIData *tui, int64_t g, int64_t startrow, int64_t endrow,
                                int64_t startcol, int64_t endcol, int64_t rows, int64_t cols);
@@ -211,12 +206,8 @@ extern void rs_tui_enable_extended_underline(TUIData *tui);
 extern void rs_tui_query_bg_color(TUIData *tui);
 extern void rs_out(TUIData *tui, const char *str, size_t len);
 extern void rs_out_len(TUIData *tui, const char *str);
-extern void rs_flush_buf(TUIData *tui);
-extern void rs_terminfo_out(TUIData *tui, int what);
-extern void rs_terminfo_print_num(TUIData *tui, int what, int num1, int num2, int num3);
-extern void rs_print_spaces(TUIData *tui, int width);
+extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
 extern void rs_update_attrs(TUIData *tui, int attr_id);
-extern bool rs_cheap_to_print(TUIData *tui, int row, int col, int next);
 extern void rs_cursor_goto(TUIData *tui, int row, int col);
 extern void rs_clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
 extern void rs_invalidate(TUIData *tui, int top, int bot, int left, int right);
@@ -359,14 +350,13 @@ static void terminfo_out(TUIData *tui, TerminfoDef what);
 static void terminfo_print_num(TUIData *tui, TerminfoDef what, int num1, int num2, int num3);
 static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params);
 static void cursor_goto(TUIData *tui, int row, int col);
-static void update_attrs(TUIData *tui, int attr_id);
 static void invalidate(TUIData *tui, int top, int bot, int left, int right);
 
 /// Wrapper for cursor_goto callable from Rust
 void nvim_tui_cursor_goto_internal(TUIData *tui, int row, int col) { cursor_goto(tui, row, col); }
 
 /// Wrapper for update_attrs callable from Rust
-void nvim_tui_update_attrs_internal(TUIData *tui, int attr_id) { update_attrs(tui, attr_id); }
+void nvim_tui_update_attrs_internal(TUIData *tui, int attr_id) { rs_update_attrs(tui, attr_id); }
 
 /// Wrapper for invalidate callable from Rust
 void nvim_tui_invalidate_region(TUIData *tui, int top, int bot, int left, int right)
@@ -419,7 +409,7 @@ int nvim_tui_get_print_attr_id(TUIData *tui) { return tui->print_attr_id; }
 bool nvim_tui_get_immediate_wrap(TUIData *tui) { return tui->immediate_wrap_after_last_column; }
 
 /// Wrapper for update_attrs callable from Rust
-void nvim_tui_update_attrs(TUIData *tui, int attr_id) { update_attrs(tui, attr_id); }
+void nvim_tui_update_attrs(TUIData *tui, int attr_id) { rs_update_attrs(tui, attr_id); }
 
 bool nvim_tui_get_can_clear_attr(TUIData *tui) { return tui->can_clear_attr; }
 
@@ -465,7 +455,6 @@ size_t nvim_tui_get_bufpos(TUIData *tui) { return tui->bufpos; }
 void nvim_tui_set_bufpos(TUIData *tui, size_t pos) { tui->bufpos = pos; }
 char *nvim_tui_get_buf_ptr(TUIData *tui) { return tui->buf; }
 size_t nvim_tui_get_buf_capacity(void) { return OUTBUF_SIZE; }
-char *nvim_tui_get_buf_to_flush(TUIData *tui) { return tui->buf_to_flush; }
 void nvim_tui_set_buf_to_flush(TUIData *tui, char *ptr) { tui->buf_to_flush = ptr; }
 
 // Terminfo defs accessor for Rust
@@ -498,9 +487,6 @@ bool nvim_tui_pop_invalid_region(TUIData *tui, int *top, int *bot, int *left, in
   *top = r.top; *bot = r.bot; *left = r.left; *right = r.right;
   return true;
 }
-
-/// Get loop size (pending events)
-size_t nvim_tui_loop_size(TUIData *tui) { return loop_size(tui->loop); }
 
 /// Purge loop events
 void nvim_tui_loop_purge(TUIData *tui) { loop_purge(tui->loop); }
@@ -596,9 +582,6 @@ void nvim_tui_set_term_mode(TUIData *tui, int mode, bool set) { tui_set_term_mod
 /// Get cursor_style_enabled (file-static)
 bool nvim_tui_cursor_style_enabled(void) { return cursor_style_enabled; }
 
-/// Set cursor_style_enabled (file-static)
-void nvim_tui_set_cursor_style_enabled(bool val) { cursor_style_enabled = val; }
-
 /// Get cursor shape entry id field
 int nvim_tui_get_cursor_shape_id(TUIData *tui, int mode) { return tui->cursor_shapes[mode].id; }
 
@@ -633,9 +616,6 @@ void nvim_tui_terminfo_print_str(TUIData *tui, int what, const char *str)
   params[0].string = (char *)str;
   terminfo_print(tui, (TerminfoDef)what, params);
 }
-
-/// Get showing_mode field
-int nvim_tui_get_showing_mode(TUIData *tui) { return (int)tui->showing_mode; }
 
 /// Set showing_mode field
 void nvim_tui_set_showing_mode(TUIData *tui, int mode) { tui->showing_mode = (ModeShape)mode; }
@@ -710,9 +690,6 @@ void nvim_tui_tty_reset_mode_hack(TUIData *tui)
   }
 #endif
 }
-
-// Forward declaration for out_len
-static void out_len(TUIData *tui, const char *str);
 
 /// Get reset_scroll_region string from terminfo_ext
 const char *nvim_tui_get_reset_scroll_region(TUIData *tui) { return tui->terminfo_ext.reset_scroll_region; }
@@ -1290,31 +1267,6 @@ static void sigwinch_cb(SignalWatcher *watcher, int signum, void *cbdata)
   tui_guess_size(tui);
 }
 
-/// Check if two attribute IDs have different visual attributes.
-/// Rust implementation in nvim-tui crate.
-static bool attrs_differ(TUIData *tui, int id1, int id2, bool rgb)
-{
-  return rs_attrs_differ(id1, id2, rgb, tui->attrs.items, kv_size(tui->attrs));
-}
-
-static void update_attrs(TUIData *tui, int attr_id)
-{
-  rs_update_attrs(tui, attr_id);
-}
-
-/// Handle cursor wrapping at the final column. Rust implementation.
-static void final_column_wrap(TUIData *tui) { rs_final_column_wrap(tui); }
-
-/// It is undocumented, but in the majority of terminals and terminal emulators
-/// printing at the right margin does not cause an automatic wrap until the
-/// next character is printed, holding the cursor in place until then. Rust implementation.
-static void print_cell(TUIData *tui, char *buf, sattr_T attr) { rs_print_cell(tui, buf, attr); }
-
-static bool cheap_to_print(TUIData *tui, int row, int col, int next)
-{
-  return rs_cheap_to_print(tui, row, col, next);
-}
-
 /// Optimized cursor positioning. Rust implementation.
 static void cursor_goto(TUIData *tui, int row, int col)
 {
@@ -1326,15 +1278,6 @@ static void clear_region(TUIData *tui, int top, int bot, int left, int right, in
 {
   rs_clear_region(tui, top, bot, left, right, attr_id);
 }
-
-/// Set scroll region for scrolling operations. Rust implementation.
-static void set_scroll_region(TUIData *tui, int top, int bot, int left, int right)
-{
-  rs_set_scroll_region(tui, top, bot, left, right);
-}
-
-/// Reset scroll region to full screen. Rust implementation.
-static void reset_scroll_region(TUIData *tui, bool fullwidth) { rs_reset_scroll_region(tui, fullwidth); }
 
 /// Resize the TUI grid. Rust implementation in nvim-tui crate.
 void tui_grid_resize(TUIData *tui, Integer g, Integer width, Integer height)
@@ -1588,7 +1531,7 @@ void tui_screenshot(TUIData *tui, String path)
       UCell cell = grid->cells[i][j];
       char buf[MAX_SCHAR_SIZE];
       schar_get(buf, cell.data);
-      print_cell(tui, buf, cell.attr);
+      rs_print_cell(tui, buf, cell.attr);
     }
   }
   flush_buf(tui);
