@@ -100,6 +100,10 @@
 #include "nvim/fileio.h"
 #include "nvim/file_search.h"
 #include "nvim/eval/fs.h"
+#include "nvim/os/fileio.h"
+#include "nvim/os/fileio_defs.h"
+#include "nvim/cmdexpand_defs.h"
+#include "nvim/pos_defs.h"
 
 // Error strings used by moved functions
 static const char e_string_list_or_blob_required[]
@@ -6347,3 +6351,617 @@ void nvim_f_globpath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     rettv->vval.v_string = NULL;
   }
 }
+
+// =============================================================================
+// Phase 5+6: Read/write file functions (moved from eval/fs.c)
+// =============================================================================
+
+static const char nvim_e_error_while_writing_str[] = N_("E80: Error while writing: %s");
+/// Read blob from file "fd".
+/// Caller has allocated a blob in "rettv".
+///
+/// @param[in]  fd  File to read from.
+/// @param[in,out]  rettv  Blob to write to.
+/// @param[in]  offset  Read the file from the specified offset.
+/// @param[in]  size  Read the specified size, or -1 if no limit.
+///
+/// @return  OK on success, or FAIL on failure.
+static int read_blob(FILE *const fd, typval_T *rettv, off_T offset, off_T size_arg)
+  FUNC_ATTR_NONNULL_ALL
+{
+  blob_T *const blob = rettv->vval.v_blob;
+  FileInfo file_info;
+  if (!os_fileinfo_fd(fileno(fd), &file_info)) {
+    return FAIL;  // can't read the file, error
+  }
+
+  int whence;
+  off_T size = size_arg;
+  const off_T file_size = (off_T)os_fileinfo_size(&file_info);
+  if (offset >= 0) {
+    // The size defaults to the whole file.  If a size is given it is
+    // limited to not go past the end of the file.
+    if (size == -1 || (size > file_size - offset && !S_ISCHR(file_info.stat.st_mode))) {
+      // size may become negative, checked below
+      size = (off_T)os_fileinfo_size(&file_info) - offset;
+    }
+    whence = SEEK_SET;
+  } else {
+    // limit the offset to not go before the start of the file
+    if (-offset > file_size && !S_ISCHR(file_info.stat.st_mode)) {
+      offset = -file_size;
+    }
+    // Size defaults to reading until the end of the file.
+    if (size == -1 || size > -offset) {
+      size = -offset;
+    }
+    whence = SEEK_END;
+  }
+  if (size <= 0) {
+    return OK;
+  }
+  if (offset != 0 && vim_fseek(fd, offset, whence) != 0) {
+    return OK;
+  }
+
+  ga_grow(&blob->bv_ga, (int)size);
+  blob->bv_ga.ga_len = (int)size;
+  if (fread(blob->bv_ga.ga_data, 1, (size_t)blob->bv_ga.ga_len, fd)
+      < (size_t)blob->bv_ga.ga_len) {
+    // An empty blob is returned on error.
+    tv_blob_free(rettv->vval.v_blob);
+    rettv->vval.v_blob = NULL;
+    return FAIL;
+  }
+  return OK;
+}
+
+/// "readfile()" or "readblob()" function
+static void read_file_or_blob(typval_T *argvars, typval_T *rettv, bool always_blob)
+{
+  bool binary = false;
+  bool blob = always_blob;
+  FILE *fd;
+  char buf[(IOSIZE/256) * 256];    // rounded to avoid odd + 1
+  int io_size = sizeof(buf);
+  char *prev = NULL;               // previously read bytes, if any
+  ptrdiff_t prevlen = 0;               // length of data in prev
+  ptrdiff_t prevsize = 0;               // size of prev buffer
+  int64_t maxline = MAXLNUM;
+  off_T offset = 0;
+  off_T size = -1;
+
+  if (argvars[1].v_type != VAR_UNKNOWN) {
+    if (always_blob) {
+      offset = (off_T)tv_get_number(&argvars[1]);
+      if (argvars[2].v_type != VAR_UNKNOWN) {
+        size = (off_T)tv_get_number(&argvars[2]);
+      }
+    } else {
+      if (strcmp(tv_get_string(&argvars[1]), "b") == 0) {
+        binary = true;
+      } else if (strcmp(tv_get_string(&argvars[1]), "B") == 0) {
+        blob = true;
+      }
+      if (argvars[2].v_type != VAR_UNKNOWN) {
+        maxline = tv_get_number(&argvars[2]);
+      }
+    }
+  }
+
+  if (blob) {
+    tv_blob_alloc_ret(rettv);
+  } else {
+    tv_list_alloc_ret(rettv, kListLenUnknown);
+  }
+
+  // Always open the file in binary mode, library functions have a mind of
+  // their own about CR-LF conversion.
+  const char *const fname = tv_get_string(&argvars[0]);
+
+  if (os_isdir(fname)) {
+    semsg(_(e_isadir2), fname);
+    return;
+  }
+  if (*fname == NUL || (fd = os_fopen(fname, READBIN)) == NULL) {
+    semsg(_(e_notopen), *fname == NUL ? _("<empty>") : fname);
+    return;
+  }
+
+  if (blob) {
+    if (read_blob(fd, rettv, offset, size) == FAIL) {
+      semsg(_(e_notread), fname);
+    }
+    fclose(fd);
+    return;
+  }
+
+  list_T *const l = rettv->vval.v_list;
+
+  while (maxline < 0 || tv_list_len(l) < maxline) {
+    int readlen = (int)fread(buf, 1, (size_t)io_size, fd);
+
+    // This for loop processes what was read, but is also entered at end
+    // of file so that either:
+    // - an incomplete line gets written
+    // - a "binary" file gets an empty line at the end if it ends in a
+    //   newline.
+    char *p;  // Position in buf.
+    char *start;  // Start of current line.
+    for (p = buf, start = buf;
+         p < buf + readlen || (readlen <= 0 && (prevlen > 0 || binary));
+         p++) {
+      if (readlen <= 0 || *p == '\n') {
+        char *s = NULL;
+        size_t len = (size_t)(p - start);
+
+        // Finished a line.  Remove CRs before NL.
+        if (readlen > 0 && !binary) {
+          while (len > 0 && start[len - 1] == '\r') {
+            len--;
+          }
+          // removal may cross back to the "prev" string
+          if (len == 0) {
+            while (prevlen > 0 && prev[prevlen - 1] == '\r') {
+              prevlen--;
+            }
+          }
+        }
+        if (prevlen == 0) {
+          assert(len < INT_MAX);
+          s = xmemdupz(start, len);
+        } else {
+          // Change "prev" buffer to be the right size.  This way
+          // the bytes are only copied once, and very long lines are
+          // allocated only once.
+          s = xrealloc(prev, (size_t)prevlen + len + 1);
+          memcpy(s + prevlen, start, len);
+          s[(size_t)prevlen + len] = NUL;
+          prev = NULL;             // the list will own the string
+          prevlen = prevsize = 0;
+        }
+
+        tv_list_append_owned_tv(l, (typval_T) {
+          .v_type = VAR_STRING,
+          .v_lock = VAR_UNLOCKED,
+          .vval.v_string = s,
+        });
+
+        start = p + 1;  // Step over newline.
+        if (maxline < 0) {
+          if (tv_list_len(l) > -maxline) {
+            assert(tv_list_len(l) == 1 + (-maxline));
+            tv_list_item_remove(l, tv_list_first(l));
+          }
+        } else if (tv_list_len(l) >= maxline) {
+          assert(tv_list_len(l) == maxline);
+          break;
+        }
+        if (readlen <= 0) {
+          break;
+        }
+      } else if (*p == NUL) {
+        *p = '\n';
+        // Check for utf8 "bom"; U+FEFF is encoded as EF BB BF.  Do this
+        // when finding the BF and check the previous two bytes.
+      } else if ((uint8_t)(*p) == 0xbf && !binary) {
+        // Find the two bytes before the 0xbf.  If p is at buf, or buf + 1,
+        // these may be in the "prev" string.
+        char back1 = p >= buf + 1 ? p[-1]
+                                  : prevlen >= 1 ? prev[prevlen - 1] : NUL;
+        char back2 = p >= buf + 2 ? p[-2]
+                                  : (p == buf + 1 && prevlen >= 1
+                                     ? prev[prevlen - 1]
+                                     : prevlen >= 2 ? prev[prevlen - 2] : NUL);
+
+        if ((uint8_t)back2 == 0xef && (uint8_t)back1 == 0xbb) {
+          char *dest = p - 2;
+
+          // Usually a BOM is at the beginning of a file, and so at
+          // the beginning of a line; then we can just step over it.
+          if (start == dest) {
+            start = p + 1;
+          } else {
+            // have to shuffle buf to close gap
+            int adjust_prevlen = 0;
+
+            if (dest < buf) {
+              // adjust_prevlen must be 1 or 2.
+              adjust_prevlen = (int)(buf - dest);
+              dest = buf;
+            }
+            if (readlen > p - buf + 1) {
+              memmove(dest, p + 1, (size_t)readlen - (size_t)(p - buf) - 1);
+            }
+            readlen -= 3 - adjust_prevlen;
+            prevlen -= adjust_prevlen;
+            p = dest - 1;
+          }
+        }
+      }
+    }     // for
+
+    if ((maxline >= 0 && tv_list_len(l) >= maxline) || readlen <= 0) {
+      break;
+    }
+    if (start < p) {
+      // There's part of a line in buf, store it in "prev".
+      if (p - start + prevlen >= prevsize) {
+        // A common use case is ordinary text files and "prev" gets a
+        // fragment of a line, so the first allocation is made
+        // small, to avoid repeatedly 'allocing' large and
+        // 'reallocing' small.
+        if (prevsize == 0) {
+          prevsize = p - start;
+        } else {
+          ptrdiff_t grow50pc = (prevsize * 3) / 2;
+          ptrdiff_t growmin = (p - start) * 2 + prevlen;
+          prevsize = grow50pc > growmin ? grow50pc : growmin;
+        }
+        prev = xrealloc(prev, (size_t)prevsize);
+      }
+      // Add the line part to end of "prev".
+      memmove(prev + prevlen, start, (size_t)(p - start));
+      prevlen += p - start;
+    }
+  }   // while
+
+  xfree(prev);
+  fclose(fd);
+}
+
+/// "readblob()" function
+void nvim_f_readblob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { read_file_or_blob(argvars, rettv, true); }
+
+/// "readfile()" function
+void nvim_f_readfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { read_file_or_blob(argvars, rettv, false); }
+
+/// "resolve()" function
+void nvim_f_resolve(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_STRING;
+  const char *fname = tv_get_string(&argvars[0]);
+#ifdef MSWIN
+  char *v = os_resolve_shortcut(fname);
+  if (v == NULL) {
+    if (os_is_reparse_point_include(fname)) {
+      v = os_realpath(fname, NULL, MAXPATHL + 1);
+    }
+  }
+  rettv->vval.v_string = (v == NULL ? xstrdup(fname) : v);
+#else
+# ifdef HAVE_READLINK
+  {
+    bool is_relative_to_current = false;
+    bool has_trailing_pathsep = false;
+    int limit = 100;
+
+    char *p = xstrdup(fname);
+
+    if (p[0] == '.' && (vim_ispathsep(p[1])
+                        || (p[1] == '.' && (vim_ispathsep(p[2]))))) {
+      is_relative_to_current = true;
+    }
+
+    ptrdiff_t len = (ptrdiff_t)strlen(p);
+    if (len > 1 && after_pathsep(p, p + len)) {
+      has_trailing_pathsep = true;
+      p[len - 1] = NUL;  // The trailing slash breaks readlink().
+    }
+
+    char *q = (char *)path_next_component(p);
+    char *remain = NULL;
+    if (*q != NUL) {
+      // Separate the first path component in "p", and keep the
+      // remainder (beginning with the path separator).
+      remain = xstrdup(q - 1);
+      q[-1] = NUL;
+    }
+
+    char *const buf = xmallocz(MAXPATHL);
+
+    char *cpy;
+    while (true) {
+      while (true) {
+        len = readlink(p, buf, MAXPATHL);
+        if (len <= 0) {
+          break;
+        }
+        buf[len] = NUL;
+
+        if (limit-- == 0) {
+          xfree(p);
+          xfree(remain);
+          emsg(_("E655: Too many symbolic links (cycle?)"));
+          rettv->vval.v_string = NULL;
+          xfree(buf);
+          return;
+        }
+
+        // Ensure that the result will have a trailing path separator
+        // if the argument has one.
+        if (remain == NULL && has_trailing_pathsep) {
+          add_pathsep(buf);
+        }
+
+        // Separate the first path component in the link value and
+        // concatenate the remainders.
+        q = (char *)path_next_component(vim_ispathsep(*buf) ? buf + 1 : buf);
+        if (*q != NUL) {
+          cpy = remain;
+          remain = remain != NULL ? concat_str(q - 1, remain) : xstrdup(q - 1);
+          xfree(cpy);
+          q[-1] = NUL;
+        }
+
+        q = path_tail(p);
+        if (q > p && *q == NUL) {
+          // Ignore trailing path separator.
+          p[q - p - 1] = NUL;
+          q = path_tail(p);
+        }
+        if (q > p && !path_is_absolute(buf)) {
+          // Symlink is relative to directory of argument. Replace the
+          // symlink with the resolved name in the same directory.
+          const size_t p_len = strlen(p);
+          const size_t buf_len = strlen(buf);
+          p = xrealloc(p, p_len + buf_len + 1);
+          memcpy(path_tail(p), buf, buf_len + 1);
+        } else {
+          xfree(p);
+          p = xstrdup(buf);
+        }
+      }
+
+      if (remain == NULL) {
+        break;
+      }
+
+      // Append the first path component of "remain" to "p".
+      q = (char *)path_next_component(remain + 1);
+      len = q - remain - (*q != NUL);
+      const size_t p_len = strlen(p);
+      cpy = xmallocz(p_len + (size_t)len);
+      memcpy(cpy, p, p_len + 1);
+      xstrlcat(cpy + p_len, remain, (size_t)len + 1);
+      xfree(p);
+      p = cpy;
+
+      // Shorten "remain".
+      if (*q != NUL) {
+        STRMOVE(remain, q - 1);
+      } else {
+        XFREE_CLEAR(remain);
+      }
+    }
+
+    // If the result is a relative path name, make it explicitly relative to
+    // the current directory if and only if the argument had this form.
+    if (!vim_ispathsep(*p)) {
+      if (is_relative_to_current
+          && *p != NUL
+          && !(p[0] == '.'
+               && (p[1] == NUL
+                   || vim_ispathsep(p[1])
+                   || (p[1] == '.'
+                       && (p[2] == NUL
+                           || vim_ispathsep(p[2])))))) {
+        // Prepend "./".
+        cpy = concat_str("./", p);
+        xfree(p);
+        p = cpy;
+      } else if (!is_relative_to_current) {
+        // Strip leading "./".
+        q = p;
+        while (q[0] == '.' && vim_ispathsep(q[1])) {
+          q += 2;
+        }
+        if (q > p) {
+          STRMOVE(p, p + 2);
+        }
+      }
+    }
+
+    // Ensure that the result will have no trailing path separator
+    // if the argument had none.  But keep "/" or "//".
+    if (!has_trailing_pathsep) {
+      q = p + strlen(p);
+      if (after_pathsep(p, q)) {
+        *path_tail_with_sep(p) = NUL;
+      }
+    }
+
+    rettv->vval.v_string = p;
+    xfree(buf);
+  }
+# else
+  char *v = os_realpath(fname, NULL, MAXPATHL + 1);
+  rettv->vval.v_string = v == NULL ? xstrdup(fname) : v;
+# endif
+#endif
+
+  simplify_filename(rettv->vval.v_string);
+}
+
+/// Write "list" of strings to file "fd".
+///
+/// @param  fp  File to write to.
+/// @param[in]  list  List to write.
+/// @param[in]  binary  Whether to write in binary mode.
+///
+/// @return true in case of success, false otherwise.
+static bool write_list(FileDescriptor *const fp, const list_T *const list, const bool binary)
+  FUNC_ATTR_NONNULL_ARG(1)
+{
+  int error = 0;
+  TV_LIST_ITER_CONST(list, li, {
+    const char *const s = tv_get_string_chk(TV_LIST_ITEM_TV(li));
+    if (s == NULL) {
+      return false;
+    }
+    const char *hunk_start = s;
+    for (const char *p = hunk_start;; p++) {
+      if (*p == NUL || *p == NL) {
+        if (p != hunk_start) {
+          const ptrdiff_t written = file_write(fp, hunk_start,
+                                               (size_t)(p - hunk_start));
+          if (written < 0) {
+            error = (int)written;
+            goto write_list_error;
+          }
+        }
+        if (*p == NUL) {
+          break;
+        } else {
+          hunk_start = p + 1;
+          const ptrdiff_t written = file_write(fp, (char[]){ NUL }, 1);
+          if (written < 0) {
+            error = (int)written;
+            break;
+          }
+        }
+      }
+    }
+    if (!binary || TV_LIST_ITEM_NEXT(list, li) != NULL) {
+      const ptrdiff_t written = file_write(fp, "\n", 1);
+      if (written < 0) {
+        error = (int)written;
+        goto write_list_error;
+      }
+    }
+  });
+  if ((error = file_flush(fp)) != 0) {
+    goto write_list_error;
+  }
+  return true;
+write_list_error:
+  semsg(_(nvim_e_error_while_writing_str), os_strerror(error));
+  return false;
+}
+
+/// Write a blob to file with descriptor `fp`.
+///
+/// @param[in]  fp  File to write to.
+/// @param[in]  blob  Blob to write.
+///
+/// @return true on success, or false on failure.
+static bool write_blob(FileDescriptor *const fp, const blob_T *const blob)
+  FUNC_ATTR_NONNULL_ARG(1)
+{
+  int error = 0;
+  const int len = tv_blob_len(blob);
+  if (len > 0) {
+    const ptrdiff_t written = file_write(fp, blob->bv_ga.ga_data, (size_t)len);
+    if (written < (ptrdiff_t)len) {
+      error = (int)written;
+      goto write_blob_error;
+    }
+  }
+  error = file_flush(fp);
+  if (error != 0) {
+    goto write_blob_error;
+  }
+  return true;
+write_blob_error:
+  semsg(_(nvim_e_error_while_writing_str), os_strerror(error));
+  return false;
+}
+
+/// "writefile()" function
+void nvim_f_writefile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->vval.v_number = -1;
+
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type == VAR_LIST) {
+    TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
+      if (!tv_check_str_or_nr(TV_LIST_ITEM_TV(li))) {
+        return;
+      }
+    });
+  } else if (argvars[0].v_type != VAR_BLOB) {
+    semsg(_(e_invarg2),
+          _("writefile() first argument must be a List or a Blob"));
+    return;
+  }
+
+  bool binary = false;
+  bool append = false;
+  bool defer = false;
+  bool do_fsync = !!p_fs;
+  bool mkdir_p = false;
+  if (argvars[2].v_type != VAR_UNKNOWN) {
+    const char *const flags = tv_get_string_chk(&argvars[2]);
+    if (flags == NULL) {
+      return;
+    }
+    for (const char *p = flags; *p; p++) {
+      switch (*p) {
+      case 'b':
+        binary = true; break;
+      case 'a':
+        append = true; break;
+      case 'D':
+        defer = true; break;
+      case 's':
+        do_fsync = true; break;
+      case 'S':
+        do_fsync = false; break;
+      case 'p':
+        mkdir_p = true; break;
+      default:
+        // Using %s, p and not %c, *p to preserve multibyte characters
+        semsg(_("E5060: Unknown flag: %s"), p);
+        return;
+      }
+    }
+  }
+
+  char buf[NUMBUFLEN];
+  const char *const fname = tv_get_string_buf_chk(&argvars[1], buf);
+  if (fname == NULL) {
+    return;
+  }
+
+  if (defer && !can_add_defer()) {
+    return;
+  }
+
+  FileDescriptor fp;
+  int error;
+  if (*fname == NUL) {
+    emsg(_("E482: Can't open file with an empty name"));
+  } else if ((error = file_open(&fp, fname,
+                                ((append ? kFileAppend : kFileTruncate)
+                                 | (mkdir_p ? kFileMkDir : kFileCreate)
+                                 | kFileCreate), 0666)) != 0) {
+    semsg(_("E482: Can't open file %s for writing: %s"), fname, os_strerror(error));
+  } else {
+    if (defer) {
+      typval_T tv = {
+        .v_type = VAR_STRING,
+        .v_lock = VAR_UNLOCKED,
+        .vval.v_string = FullName_save(fname, false),
+      };
+      add_defer("delete", 1, &tv);
+    }
+
+    bool write_ok;
+    if (argvars[0].v_type == VAR_BLOB) {
+      write_ok = write_blob(&fp, argvars[0].vval.v_blob);
+    } else {
+      write_ok = write_list(&fp, argvars[0].vval.v_list, binary);
+    }
+    if (write_ok) {
+      rettv->vval.v_number = 0;
+    }
+    if ((error = file_close(&fp, do_fsync)) != 0) {
+      semsg(_("E80: Error when closing file %s: %s"),
+            fname, os_strerror(error));
+    }
+  }
+}
+

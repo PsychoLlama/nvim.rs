@@ -1203,3 +1203,66 @@ pub unsafe extern "C" fn rs_f_globpath(
 ) {
     unsafe { nvim_f_globpath(argvars, rettv, fptr) };
 }
+
+// =============================================================================
+// Phase 5+6: Read/write file and resolve functions (implementations in funcs_shim.c)
+// =============================================================================
+
+extern "C" {
+    fn nvim_f_readblob(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_readfile(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_resolve(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    fn nvim_f_writefile(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+}
+
+/// "readblob()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_readblob"]
+pub unsafe extern "C" fn rs_f_readblob(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_readblob(argvars, rettv, fptr) };
+}
+
+/// "readfile()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_readfile"]
+pub unsafe extern "C" fn rs_f_readfile(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_readfile(argvars, rettv, fptr) };
+}
+
+/// "resolve()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_resolve"]
+pub unsafe extern "C" fn rs_f_resolve(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_resolve(argvars, rettv, fptr) };
+}
+
+/// "writefile()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_writefile"]
+pub unsafe extern "C" fn rs_f_writefile(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    fptr: *mut c_void,
+) {
+    unsafe { nvim_f_writefile(argvars, rettv, fptr) };
+}
