@@ -238,9 +238,6 @@ extern "C" {
     fn gettext(s: *const c_char) -> *const c_char;
     fn emsg(s: *const c_char);
     fn aborting() -> bool;
-    fn nvim_docmd_PROF_YES() -> c_int;
-    fn nvim_docmd_end_of_sourced_file_msg() -> *const c_char;
-    fn nvim_docmd_end_of_function_msg() -> *const c_char;
 
     // do_one_cmd (already in Rust, same crate -- called via extern for clarity)
     fn do_one_cmd(
@@ -629,14 +626,15 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
             // Check if a function has returned or aborted.
             if getline_is_func {
-                if unsafe { do_profiling == nvim_docmd_PROF_YES() } {
+                if unsafe { do_profiling == 1 } {
+                    // PROF_YES = 1
                     unsafe { nvim_docmd_func_line_end(real_cookie) };
                 }
                 if unsafe { nvim_docmd_func_has_ended(real_cookie) } != 0 {
                     retval = FAIL;
                     break;
                 }
-            } else if unsafe { do_profiling == nvim_docmd_PROF_YES() }
+            } else if unsafe { do_profiling == 1 } // PROF_YES = 1
                 && unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) }
             {
                 unsafe { nvim_docmd_script_line_end() };
@@ -683,7 +681,8 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     *dbg_tick = debug_tick;
                 }
             }
-            if unsafe { do_profiling == nvim_docmd_PROF_YES() } {
+            if unsafe { do_profiling == 1 } {
+                // PROF_YES = 1
                 if getline_is_func {
                     unsafe { nvim_docmd_func_line_start(real_cookie) };
                 } else if unsafe {
@@ -1080,9 +1079,9 @@ pub unsafe extern "C" fn rs_do_cmdline(
         {
             let msg =
                 if unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) } {
-                    unsafe { nvim_docmd_end_of_sourced_file_msg() }
+                    unsafe { gettext(c"End of sourced file".as_ptr()) }
                 } else {
-                    unsafe { nvim_docmd_end_of_function_msg() }
+                    unsafe { gettext(c"End of function".as_ptr()) }
                 };
             unsafe { nvim_docmd_do_debug(msg as *mut c_char) };
         }

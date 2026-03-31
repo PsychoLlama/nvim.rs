@@ -753,13 +753,6 @@ int nvim_docmd_get_filetype_plugin(void) { return (int)filetype_plugin; }
 void nvim_docmd_set_filetype_plugin(int val) { filetype_plugin = (TriState)val; }
 int nvim_docmd_get_filetype_indent(void) { return (int)filetype_indent; }
 void nvim_docmd_set_filetype_indent(int val) { filetype_indent = (TriState)val; }
-const char *nvim_docmd_get_filetype_file(void) { return FILETYPE_FILE; }
-const char *nvim_docmd_get_ftplugin_file(void) { return FTPLUGIN_FILE; }
-const char *nvim_docmd_get_indent_file(void) { return INDENT_FILE; }
-const char *nvim_docmd_get_ftplugof_file(void) { return FTPLUGOF_FILE; }
-const char *nvim_docmd_get_indoff_file(void) { return INDOFF_FILE; }
-const char *nvim_docmd_get_ftoff_file(void) { return FTOFF_FILE; }
-int nvim_docmd_get_dip_all(void) { return DIP_ALL; }
 int nvim_docmd_curbuf_file_id_valid(void) { return curbuf->file_id_valid ? 1 : 0; }
 const char *nvim_docmd_get_curbuf_sfname(void) { return curbuf->b_sfname; }
 void nvim_docmd_do_cmdline_getexline_noflags(void) { do_cmdline(NULL, getexline, NULL, 0); }
@@ -1291,10 +1284,8 @@ bool nvim_docmd_ascii_isalnum(char c) { return ASCII_ISALNUM(c); }
 bool nvim_docmd_is_user_cmdidx_i(int cmdidx) { return IS_USER_CMDIDX(cmdidx); }
 char nvim_docmd_ask_yesno_backwards(void) { return (char)ask_yesno(_("Backwards range given, OK to swap")); }
 const char *nvim_docmd_invalid_range(exarg_T *eap) { return (const char *)invalid_range(eap); }
-int nvim_docmd_ADDR_OTHER(void) { return (int)ADDR_OTHER; }
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
 char *nvim_docmd_ex_errmsg_trailing(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
-int nvim_docmd_get_event_cmdundefined(void) { return (int)EVENT_CMDUNDEFINED; }
 void nvim_docmd_fix_cursor_if_zero(void) { if (curwin->w_cursor.lnum == 0) { curwin->w_cursor.lnum = 1; curwin->w_cursor.col = 0; } }
 /// Format an error message with arg into buf.
 /// Wraps vim_snprintf(buf, buflen, _(msg), arg).
@@ -1337,9 +1328,6 @@ char *nvim_docmd_getcmdline_colon(int firstc, int indent, bool do_concat) { retu
 void nvim_docmd_set_sourcing_lnum(linenr_T lnum) { if (exestack.ga_data != NULL && exestack.ga_len > 0) { SOURCING_LNUM = lnum; } }
 char *nvim_docmd_v_exception(char *newval) { return v_exception(newval); }
 char *nvim_docmd_v_throwpoint(char *newval) { return v_throwpoint(newval); }
-int nvim_docmd_PROF_YES(void) { return PROF_YES; }
-const char *nvim_docmd_end_of_sourced_file_msg(void) { return _("End of sourced file"); }
-const char *nvim_docmd_end_of_function_msg(void) { return _("End of function"); }
 void nvim_docmd_ga_deep_clear_lines(garray_T *gap) { GA_DEEP_CLEAR(gap, wcmd_T, FREE_WCMD); }
 const char *nvim_docmd_get_sourcing_name_raw(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? NULL : SOURCING_NAME; }
 

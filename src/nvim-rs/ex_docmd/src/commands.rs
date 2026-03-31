@@ -236,13 +236,6 @@ extern "C" {
     fn source_runtime(fname: *const c_char, flags: c_int) -> c_int;
     fn do_doautocmd(eap_arg: *mut c_char, do_msg: bool, did_something: *mut bool) -> c_int;
     fn do_modelines(flags: c_int);
-    fn nvim_docmd_get_filetype_file() -> *const c_char;
-    fn nvim_docmd_get_ftplugin_file() -> *const c_char;
-    fn nvim_docmd_get_indent_file() -> *const c_char;
-    fn nvim_docmd_get_ftplugof_file() -> *const c_char;
-    fn nvim_docmd_get_indoff_file() -> *const c_char;
-    fn nvim_docmd_get_ftoff_file() -> *const c_char;
-    fn nvim_docmd_get_dip_all() -> c_int;
 
     // ex_quit helpers
     fn text_locked() -> bool;
@@ -1119,19 +1112,19 @@ pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
     }
 
     let p_bytes = std::ffi::CStr::from_ptr(p).to_bytes();
-    let dip_all = nvim_docmd_get_dip_all();
+    const DIP_ALL: c_int = 0x01;
 
     if p_bytes == b"on" || p_bytes == b"detect" {
         let first_byte = p_bytes[0];
         if first_byte == b'o' || nvim_docmd_get_filetype_detect() != K_TRUE {
-            source_runtime(nvim_docmd_get_filetype_file(), dip_all);
+            source_runtime(c"filetype.lua filetype.vim".as_ptr(), DIP_ALL);
             nvim_docmd_set_filetype_detect(K_TRUE);
             if plugin {
-                source_runtime(nvim_docmd_get_ftplugin_file(), dip_all);
+                source_runtime(c"ftplugin.vim".as_ptr(), DIP_ALL);
                 nvim_docmd_set_filetype_plugin(K_TRUE);
             }
             if indent {
-                source_runtime(nvim_docmd_get_indent_file(), dip_all);
+                source_runtime(c"indent.vim".as_ptr(), DIP_ALL);
                 nvim_docmd_set_filetype_indent(K_TRUE);
             }
         }
@@ -1146,15 +1139,15 @@ pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
     } else if p_bytes == b"off" {
         if plugin || indent {
             if plugin {
-                source_runtime(nvim_docmd_get_ftplugof_file(), dip_all);
+                source_runtime(c"ftplugof.vim".as_ptr(), DIP_ALL);
                 nvim_docmd_set_filetype_plugin(K_FALSE);
             }
             if indent {
-                source_runtime(nvim_docmd_get_indoff_file(), dip_all);
+                source_runtime(c"indoff.vim".as_ptr(), DIP_ALL);
                 nvim_docmd_set_filetype_indent(K_FALSE);
             }
         } else {
-            source_runtime(nvim_docmd_get_ftoff_file(), dip_all);
+            source_runtime(c"ftoff.vim".as_ptr(), DIP_ALL);
             nvim_docmd_set_filetype_detect(K_FALSE);
         }
     } else {

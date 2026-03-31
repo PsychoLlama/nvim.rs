@@ -152,7 +152,6 @@ extern "C" {
     // Range validation
     fn nvim_docmd_ask_yesno_backwards() -> c_char;
     fn nvim_docmd_invalid_range(eap: ExArgHandle) -> *const c_char;
-    fn nvim_docmd_ADDR_OTHER() -> c_int;
 
     fn nvim_get_eap_addr_type_lines(eap: ExArgHandle) -> c_int;
     fn nvim_hasFolding_line1(lnum: i32, line1_out: *mut i32);
@@ -210,9 +209,6 @@ extern "C" {
 
     // skipwhite
     fn skipwhite(p: *const c_char) -> *mut c_char;
-
-    // EVENT_CMDUNDEFINED constant
-    fn nvim_docmd_get_event_cmdundefined() -> c_int;
 
     // find_ex_command (already in Rust but need for do_one_cmd retry)
     fn find_ex_command(eap: ExArgHandle, full: *mut c_int) -> *mut c_char;
@@ -468,7 +464,7 @@ pub unsafe extern "C" fn do_one_cmd(
             let c = *(*eap).cmd as u8;
             c.is_ascii_uppercase()
         }
-        && has_event(nvim_docmd_get_event_cmdundefined())
+        && has_event(29)
     {
         // Build cmdname as copy up to first non-alnum.
         let mut cmdname_end = (*eap).cmd;
@@ -729,7 +725,7 @@ pub unsafe extern "C" fn do_one_cmd(
         }
     }
 
-    if (*eap).addr_type == nvim_docmd_ADDR_OTHER() && (*eap).addr_count == 0 {
+    if (*eap).addr_type == crate::address::ADDR_OTHER && (*eap).addr_count == 0 {
         (*eap).line2 = 1;
     }
 
