@@ -556,7 +556,7 @@ pub unsafe extern "C" fn do_one_cmd(
     p = p_mut;
     (*eap).forceit = forceit as c_int;
     // 6. Parse arguments. Then check for errors.
-    if !((*eap).cmdidx < 0) {
+    if (*eap).cmdidx >= 0 {
         let argt = nvim_docmd_get_argt_for_idx((*eap).cmdidx);
         (*eap).argt = argt;
     }
@@ -596,7 +596,7 @@ pub unsafe extern "C" fn do_one_cmd(
             return ea_cleanup_and_return(eap, None);
         }
 
-        if !((*eap).cmdidx < 0) {
+        if (*eap).cmdidx >= 0 {
             if cmdwin_type != 0 && !((*eap).argt & 0x40000u32) != 0 {
                 // Use EX_CMDWIN check via argt
                 if ((*eap).argt & 0x80000) == 0 {
@@ -637,7 +637,7 @@ pub unsafe extern "C" fn do_one_cmd(
             && (*eap).cmdidx != crate::cmd_idx::CMD_checktime
             && (*eap).cmdidx != crate::cmd_idx::CMD_edit
             && (*eap).cmdidx != crate::cmd_idx::CMD_file
-            && !((*eap).cmdidx < 0)
+            && (*eap).cmdidx >= 0
             && curbuf_locked() != 0
         {
             do_one_cmd_doend(

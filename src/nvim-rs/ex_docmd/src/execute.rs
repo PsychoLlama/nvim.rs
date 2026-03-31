@@ -598,7 +598,7 @@ pub unsafe extern "C" fn rs_execute_cmd0(
     if (argt & EX_BUFNAME_P2) != 0
         && *(*eap).arg != 0
         && (*eap).addr_count == 0
-        && !((*eap).cmdidx < 0)
+        && (*eap).cmdidx >= 0
     {
         let args = (*eap).args;
         let cmdidx = (*eap).cmdidx;
@@ -656,7 +656,7 @@ pub unsafe extern "C" fn rs_execute_cmd0(
     }
 
     // Execute the command.
-    if ((*eap).cmdidx < 0) {
+    if (*eap).cmdidx < 0 {
         *retv = do_ucmd(eap, preview);
     } else {
         (*eap).errmsg = std::ptr::null_mut();
@@ -718,7 +718,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
         return retv;
     }
 
-    if !((*eap).cmdidx < 0) {
+    if (*eap).cmdidx >= 0 {
         if cmdwin_type != 0 && (argt & EX_CMDWIN_P2) == 0 {
             errormsg = nvim_get_e_cmdwin();
             goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
@@ -736,7 +736,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
         && (*eap).cmdidx != crate::commands::CMD_CHECKTIME
         && (*eap).cmdidx != crate::commands::CMD_EDIT
         && !((*eap).cmdidx == crate::commands::CMD_FILE && *(*eap).arg == 0)
-        && !((*eap).cmdidx < 0)
+        && (*eap).cmdidx >= 0
         && curbuf_locked() != 0
     {
         goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
@@ -918,7 +918,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     let forceit = parse_bang(eap, &mut p_mut);
     (*eap).forceit = forceit as c_int;
     // Parse arguments.
-    if !((*eap).cmdidx < 0) {
+    if (*eap).cmdidx >= 0 {
         // argt is already set by parse_cmd_address
     }
 

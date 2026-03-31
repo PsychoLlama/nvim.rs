@@ -1620,7 +1620,7 @@ pub unsafe extern "C" fn rs_expand_filename(
 
 extern "C" {
     // Phase 1 C accessors
-    fn nvim_docmd_not_restarting();
+    static mut restarting: bool;
     fn nvim_docmd_set_no_hlsearch(flag: bool);
     fn nvim_docmd_clear_restart_edit();
     fn nvim_docmd_set_stop_insert_mode();
@@ -1694,7 +1694,7 @@ pub unsafe extern "C" fn rs_ex_highlight(eap: ExArgHandle) {
 /// not_restarting -- clear restarting flag.
 #[export_name = "not_restarting"]
 pub unsafe extern "C" fn rs_not_restarting() {
-    nvim_docmd_not_restarting();
+    restarting = false;
 }
 
 /// ":preserve" -- call ml_preserve.

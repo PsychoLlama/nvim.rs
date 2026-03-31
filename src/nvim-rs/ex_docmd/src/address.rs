@@ -1206,7 +1206,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                         (*eap).line2 = nvim_docmd_lastbuf_fnum() as i32;
                     }
                     ADDR_WINDOWS | ADDR_TABS => {
-                        if ((*eap).cmdidx < 0) {
+                        if (*eap).cmdidx < 0 {
                             (*eap).line1 = 1;
                             let last = if addr_type == ADDR_WINDOWS {
                                 nvim_docmd_last_win_nr()

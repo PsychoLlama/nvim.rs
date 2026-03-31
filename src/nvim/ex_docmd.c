@@ -287,7 +287,6 @@ list_T *nvim_docmd_call_findfunc(char *pat, bool cmdcomplete)
 }
 
 int nvim_docmd_tv_list_len(const list_T *l) { return tv_list_len(l); }
-void nvim_docmd_tv_list_free(list_T *l) { tv_list_free(l); }
 const char *nvim_docmd_e_cant_find_file_str_in_path(void) { return _(e_cant_find_file_str_in_path); }
 const char *nvim_docmd_e_no_more_file_str_found_in_path(void) { return _(e_no_more_file_str_found_in_path); }
 extern int expand_findfunc(char *pat, char ***files, int *numMatches);
@@ -781,8 +780,6 @@ bool nvim_has_dollar_or_tilde(const char *s) { return vim_strchr(s, '$') != NULL
 bool nvim_is_expand_char(int c) { return vim_strchr("%#<", (uint8_t)c) != NULL; }
 /// Set eap->errmsg from a const string (for Rust FFI const safety).
 
-/// Wrapper for not_restarting() -- sets restarting = false.
-void nvim_docmd_not_restarting(void) { restarting = false; }
 void nvim_docmd_set_no_hlsearch(bool flag) { no_hlsearch = flag; set_vim_var_nr(VV_HLSEARCH, !no_hlsearch && p_hls); }
 
 /// Set restart_edit to 0.
@@ -947,9 +944,6 @@ int nvim_docmd_check_more_dialog(int n)
 // nvim_get_p_confirm and nvim_get_cmdmod_confirm are defined in window_shim.c
 
 void nvim_docmd_tabpage_new_body(void) { exarg_T ea = { .cmdidx = CMD_tabnew, .cmd = "tabn", .arg = "" }; nvim_docmd_ex_splitview_impl(&ea); }
-void nvim_docmd_set_exmode_active(int v) { exmode_active = (bool)v; }
-void nvim_docmd_set_pending_exmode_active(int v) { pending_exmode_active = (bool)v; }
-void nvim_docmd_normal_enter_false_true(void) { normal_enter(false, true); }
 int nvim_docmd_curbuf_b_nwindows(void) { return curbuf->b_nwindows; }
 int nvim_docmd_curbuf_ml_has_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0; }
 void nvim_docmd_do_bang_read(exarg_T *eap) { do_bang(1, eap, false, false, true); }
@@ -1014,7 +1008,6 @@ void nvim_docmd_restart_patch_argv(const char *arg)
   });
   set_vim_var_list(VV_ARGV, argv_cpy);
 }
-void nvim_docmd_set_restarting(void) { restarting = true; }
 int nvim_docmd_run_quit_cmd(const char *cmd)
 {
   Error err = ERROR_INIT;

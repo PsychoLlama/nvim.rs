@@ -70,7 +70,7 @@ extern "C" {
     fn nvim_docmd_tabpage_new_body();
 
     // --- do_exedit_handle_exmode helpers ---
-    fn nvim_docmd_set_exmode_active(v: c_int);
+    static mut exmode_active: bool;
     fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_get_global_busy() -> bool;
     fn stuffReadbuff(s: *const c_char);
@@ -79,8 +79,8 @@ extern "C" {
     static mut need_wait_return: bool;
     static mut msg_scroll: c_int;
     fn redraw_all_later(type_: c_int);
-    fn nvim_docmd_set_pending_exmode_active(v: c_int);
-    fn nvim_docmd_normal_enter_false_true();
+    static mut pending_exmode_active: bool;
+    fn normal_enter(cmdwin: bool, noexmode: bool);
     // CMD_visual and CMD_view use crate::cmd_idx::{CMD_visual, CMD_view}.
 
     // --- do_exedit_split_fail_cleanup helpers ---
@@ -151,9 +151,8 @@ extern "C" {
 
     // --- ex_restart helpers ---
     fn nvim_docmd_restart_patch_argv(arg: *const c_char);
-    fn nvim_docmd_set_restarting();
+    static mut restarting: bool;
     fn nvim_docmd_run_quit_cmd(cmd: *const c_char) -> c_int;
-    fn nvim_docmd_not_restarting();
     fn concat_str(a: *const c_char, b: *const c_char) -> *mut c_char;
     fn nvim_docmd_get_cmod_confirm_prefix() -> *const c_char;
 
@@ -279,7 +278,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
     let cmdidx = (*eap).cmdidx;
 
     if crate::exmode_active && (cmdidx == cmd_visual || cmdidx == cmd_view) {
-        nvim_docmd_set_exmode_active(0);
+        exmode_active = false;
         nvim_set_ex_pressedreturn(false);
 
         let arg = (*eap).arg;
@@ -298,9 +297,9 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
                 let save_ms = msg_scroll;
                 msg_scroll = 0;
                 redraw_all_later(UPD_NOT_VALID);
-                nvim_docmd_set_pending_exmode_active(1);
-                nvim_docmd_normal_enter_false_true();
-                nvim_docmd_set_pending_exmode_active(0);
+                pending_exmode_active = true;
+                normal_enter(false, true);
+                pending_exmode_active = false;
                 RedrawingDisabled = save_rd;
                 no_wait_return = save_nwr;
                 msg_scroll = save_ms;
@@ -576,7 +575,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_restart_impl(eap: ExArgHandle) {
         quit_cmd = quit_cmd_base;
     }
 
-    nvim_docmd_set_restarting();
+    restarting = true;
     let ok = nvim_docmd_run_quit_cmd(quit_cmd);
 
     if !quit_cmd_copy.is_null() {
@@ -584,13 +583,13 @@ pub unsafe extern "C" fn nvim_docmd_ex_restart_impl(eap: ExArgHandle) {
     }
 
     if ok == 0 {
-        nvim_docmd_not_restarting();
+        restarting = false;
         return;
     }
 
     if !crate::exiting {
         emsg(c"restart failed: +cmd did not quit the server".as_ptr());
-        nvim_docmd_not_restarting();
+        restarting = false;
     }
 }
 

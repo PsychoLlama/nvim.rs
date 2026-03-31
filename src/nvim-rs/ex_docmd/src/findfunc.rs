@@ -20,12 +20,12 @@ const FAIL: c_int = 0;
 extern "C" {
     // --- call_findfunc C wrapper ---
     // Calls call_findfunc() in C (which manages typval_T, Callback, sctx_T internals).
-    // Returns an owned list_T* (caller must free with nvim_docmd_tv_list_free).
+    // Returns an owned list_T* (caller must free with tv_list_free).
     fn nvim_docmd_call_findfunc(pat: *mut c_char, cmdcomplete: bool) -> ListHandle;
 
     // --- list accessors ---
     fn nvim_docmd_tv_list_len(l: ListHandle) -> c_int;
-    fn nvim_docmd_tv_list_free(l: ListHandle);
+    fn tv_list_free(l: ListHandle);
     // tv_list_find_str: Rust export from typval crate - get item as string
     fn tv_list_find_str(l: ListHandle, n: c_int) -> *const c_char;
 
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn expand_findfunc(
 
     let len = nvim_docmd_tv_list_len(l);
     if len == 0 {
-        nvim_docmd_tv_list_free(l);
+        tv_list_free(l);
         return FAIL;
     }
 
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn expand_findfunc(
     *num_matches = idx;
     *files = arr;
 
-    nvim_docmd_tv_list_free(l);
+    tv_list_free(l);
 
     OK
 }
@@ -140,7 +140,7 @@ pub unsafe extern "C" fn nvim_docmd_findfunc_find_file(
     }
 
     if !fname_list.is_null() {
-        nvim_docmd_tv_list_free(fname_list);
+        tv_list_free(fname_list);
     }
 
     // Restore original character
