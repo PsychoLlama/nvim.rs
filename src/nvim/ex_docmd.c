@@ -896,11 +896,6 @@ int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
 char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
-char *nvim_docmd_get_autocmd_fname(void) { return autocmd_fname; }
-int nvim_docmd_get_autocmd_fname_full(void) { return autocmd_fname_full ? 1 : 0; }
-void nvim_docmd_set_autocmd_fname_full(int v) { autocmd_fname_full = (v != 0); }
-void nvim_docmd_set_autocmd_fname(const char *new_fname) { xstrlcpy(autocmd_fname, new_fname, MAXPATHL); }
-const char *nvim_docmd_get_autocmd_match(void) { return autocmd_match; }
 int nvim_docmd_get_quitmore(void) { return quitmore; }
 void nvim_docmd_set_quitmore(int n) { quitmore = n; }
 void nvim_docmd_check_more_semsg(int n) { semsg(NGETTEXT("E173: %" PRId64 " more file to edit", "E173: %" PRId64 " more files to edit", (unsigned)n), (int64_t)n); }

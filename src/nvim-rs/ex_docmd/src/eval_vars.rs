@@ -105,13 +105,13 @@ extern "C" {
     // FullName_save
     fn FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
 
-    // autocmd variable accessors
-    fn nvim_docmd_get_autocmd_fname() -> *mut c_char;
-    fn nvim_docmd_get_autocmd_fname_full() -> c_int;
-    fn nvim_docmd_set_autocmd_fname_full(v: c_int);
-    fn nvim_docmd_set_autocmd_fname(new_fname: *const c_char);
+    // autocmd variable accessors (EXTERN globals)
+    static mut autocmd_fname: *mut c_char;
+    static mut autocmd_fname_full: bool;
+    static autocmd_match: *const c_char;
     fn nvim_get_autocmd_bufnr() -> c_int;
-    fn nvim_docmd_get_autocmd_match() -> *const c_char;
+    // xstrlcpy (Rust-exported from strings crate)
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
 
     // estack_sfile
     fn estack_sfile(which: c_int) -> *mut c_char;
@@ -304,17 +304,17 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_AFILE => {
             // file name for autocommand
-            let fname = nvim_docmd_get_autocmd_fname();
-            if !fname.is_null() && nvim_docmd_get_autocmd_fname_full() == 0 {
+            let fname = autocmd_fname;
+            if !fname.is_null() && !autocmd_fname_full {
                 // Still need to turn the fname into a full path.
                 // Postponed to avoid a delay when <afile> is not used.
-                nvim_docmd_set_autocmd_fname_full(1);
+                autocmd_fname_full = true;
                 let full = FullName_save(fname, false);
                 // Copy into autocmd_fname, don't reassign it. #8165
-                nvim_docmd_set_autocmd_fname(full);
+                xstrlcpy(fname, full, 4096); // MAXPATHL
                 xfree(full as *mut c_void);
             }
-            result = nvim_docmd_get_autocmd_fname();
+            result = autocmd_fname;
             if result.is_null() {
                 *errormsg = crate::gt(crate::E_NO_AFILE_STR.as_ptr());
                 return ptr::null_mut();
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_AMATCH => {
             // match name for autocommand
-            result = nvim_docmd_get_autocmd_match() as *mut c_char;
+            result = autocmd_match as *mut c_char;
             if result.is_null() {
                 *errormsg = crate::gt(crate::E_NO_AMATCH_STR.as_ptr());
                 return ptr::null_mut();
