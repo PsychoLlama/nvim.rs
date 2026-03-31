@@ -188,19 +188,15 @@ extern "C" {
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_curbuf_locked() -> c_int;
 
-    // Redir accessors (redir_fd/reg/vname are in globals.h)
-    fn nvim_docmd_get_redir_fd() -> *mut c_void;
-    fn nvim_docmd_set_redir_fd(fd: *mut c_void);
+    // Redir globals (in globals.h via EXTERN)
+    static mut redir_fd: *mut c_void;
     static mut redir_reg: c_int;
-    fn nvim_docmd_set_redir_reg(reg: c_int);
     static mut redir_vname: bool;
-    fn nvim_docmd_set_redir_vname(val: c_int);
     static mut redir_off: bool;
 
     // Redir helpers
     fn nvim_docmd_close_redir();
-    fn nvim_docmd_fclose_redir_fd();
-    fn nvim_docmd_get_redir_vname() -> c_int;
+    fn fclose(fd: *mut c_void) -> c_int;
     fn var_redir_stop();
     fn open_exfile(fname: *const c_char, forceit: c_int, mode: *const c_char) -> *mut c_void;
     fn expand_env_save(arg: *const c_char) -> *mut c_char;
@@ -808,7 +804,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         let forceit = c_int::from((*eap).forceit);
         let fd = open_exfile(fname, forceit, mode);
         xfree(fname as *mut c_void);
-        nvim_docmd_set_redir_fd(fd);
+        redir_fd = fd;
     } else if *arg == b'@' as c_char {
         // redirect to a register a-z (resp. A-Z for appending)
         nvim_docmd_close_redir();
@@ -821,13 +817,13 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
             if *arg == b'>' as c_char && *arg.add(1) == b'>' as c_char {
                 // append
                 arg = arg.add(2);
-                nvim_docmd_set_redir_reg(reg);
+                redir_reg = reg;
             } else {
                 // Can use both "@a" and "@a>".
                 if *arg == b'>' as c_char {
                     arg = arg.add(1);
                 }
-                nvim_docmd_set_redir_reg(reg);
+                redir_reg = reg;
                 // Make register empty when not using @A-@Z and the command is valid.
                 if *arg == 0 && isupper(reg) == 0 {
                     write_reg_contents(reg, c"".as_ptr(), 0, 0i32);
@@ -836,7 +832,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         }
 
         if *arg != 0 {
-            nvim_docmd_set_redir_reg(0);
+            redir_reg = 0;
             semsg(crate::errors::E_INVARG2_STR.as_ptr(), arg_start);
         }
     } else if *arg == b'=' as c_char && *arg.add(1) == b'>' as c_char {
@@ -852,7 +848,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         };
 
         if var_redir_start(skipwhite(arg), append != 0) == OK {
-            nvim_docmd_set_redir_vname(1);
+            redir_vname = true;
         }
     } else {
         // TODO: redirect to a buffer
@@ -860,7 +856,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
     }
 
     // Make sure redirection is not off.
-    if !nvim_docmd_get_redir_fd().is_null() || redir_reg != 0 || redir_vname {
+    if !redir_fd.is_null() || redir_reg != 0 || redir_vname {
         redir_off = false;
     }
 }
@@ -873,13 +869,16 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
 /// Accesses C globals (redir_fd, redir_reg, redir_vname). Must be called from C context.
 #[export_name = "nvim_docmd_close_redir"]
 pub unsafe extern "C" fn rs_close_redir_impl() {
-    if !nvim_docmd_get_redir_fd().is_null() {
-        nvim_docmd_fclose_redir_fd();
+    if !redir_fd.is_null() {
+        {
+            fclose(redir_fd);
+            redir_fd = std::ptr::null_mut();
+        };
     }
-    nvim_docmd_set_redir_reg(0);
-    if nvim_docmd_get_redir_vname() != 0 {
+    redir_reg = 0;
+    if redir_vname {
         var_redir_stop();
-        nvim_docmd_set_redir_vname(0);
+        redir_vname = false;
     }
 }
 
