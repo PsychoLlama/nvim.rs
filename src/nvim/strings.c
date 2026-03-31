@@ -7,7 +7,6 @@
 
 #include "auto/config.h"
 #include "nvim/ascii_defs.h"
-#include "nvim/assert_defs.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
@@ -200,7 +199,7 @@ int vim_vsnprintf_typval(char *str, size_t str_m, const char *fmt, va_list ap_st
   const char **ap_types = NULL;
   int num_posarg = 0;
 
-  if (rs_parse_fmt_types(&ap_types, &num_posarg, fmt, tvs) == FAIL) {
+  if (rs_parse_fmt_types(&ap_types, &num_posarg, fmt, tvs) != OK) {
     return 0;
   }
 
