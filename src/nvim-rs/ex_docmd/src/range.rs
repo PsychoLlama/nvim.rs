@@ -31,7 +31,7 @@ extern "C" {
     // Buffer/window/tab navigation
     fn nvim_get_curbuf() -> *mut c_void;
     fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
-    fn nvim_docmd_get_argcount() -> c_int;
+    fn nvim_get_argcount() -> c_int;
     fn rs_get_highest_fnum() -> c_int;
     fn nvim_docmd_first_loaded_fnum_or_fail() -> c_int;
     fn nvim_docmd_last_loaded_fnum_or_fail() -> c_int;
@@ -719,7 +719,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 }
             }
             x if x == ADDR_ARGUMENTS => {
-                let argcount = nvim_docmd_get_argcount();
+                let argcount = nvim_get_argcount();
                 // add 1 if ARGCOUNT is 0
                 let limit = argcount + c_int::from(argcount == 0);
                 if line2 > limit as i32 {

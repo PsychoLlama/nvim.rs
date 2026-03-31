@@ -477,8 +477,6 @@ int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
 int nvim_docmd_current_tab_nr(void) { return CURRENT_TAB_NR; }
 int nvim_docmd_last_tab_nr(void) { return LAST_TAB_NR; }
 int nvim_docmd_get_curwin_arg_idx(void) { return curwin->w_arg_idx; }
-int nvim_docmd_get_argcount(void) { return ARGCOUNT; }
-int nvim_docmd_get_curbuf_fnum(void) { return curbuf->b_fnum; }
 /// Walk forward from firstbuf to find first loaded buffer.
 /// Returns fnum of first loaded buffer, or -1 if none found.
 int nvim_docmd_first_loaded_buf_fnum(void)
@@ -501,8 +499,6 @@ int nvim_docmd_last_loaded_buf_fnum(void)
   return buf->b_fnum;
 }
 
-int nvim_docmd_firstbuf_fnum(void) { return firstbuf->b_fnum; }
-int nvim_docmd_lastbuf_fnum(void) { return lastbuf->b_fnum; }
 void nvim_docmd_iemsg_dflall(void) { iemsg(_("INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX")); }
 
 /// Walk forward from firstbuf: find first loaded buffer fnum.

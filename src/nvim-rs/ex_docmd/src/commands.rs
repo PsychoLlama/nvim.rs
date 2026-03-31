@@ -260,7 +260,7 @@ extern "C" {
     fn nvim_skip_expr_arg(arg: *mut *mut c_char);
 
     // is_other_file helpers
-    fn nvim_docmd_get_curbuf_fnum() -> c_int;
+    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
     fn nvim_docmd_curbuf_file_id_valid() -> c_int;
     fn nvim_docmd_get_curbuf_sfname() -> *const c_char;
     fn path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -729,7 +729,7 @@ pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
 #[export_name = "is_other_file"]
 pub unsafe extern "C" fn rs_is_other_file(fnum: c_int, ffname: *const c_char) -> c_int {
     if fnum != 0 {
-        if fnum == nvim_docmd_get_curbuf_fnum() {
+        if fnum == nvim_buf_get_fnum(nvim_get_curbuf()) {
             return 0;
         }
         return 1;
