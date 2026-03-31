@@ -22,7 +22,8 @@ extern "C" {
     // Phase 4: helper function wrappers
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
-    fn nvim_docmd_set_expr_line(arg: *const c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn set_expr_line(new_line: *mut c_char);
     fn check_ff_value(p: *mut c_char) -> c_int;
     fn strlen(s: *const c_char) -> usize;
     #[link_name = "utfc_ptr2len"]
@@ -477,7 +478,7 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
         // For '=' register: accept rest of line as expression
         if reg_char == b'=' && *new_arg as u8 != 0 {
             if (*eap).skip == 0 {
-                nvim_docmd_set_expr_line(new_arg as *const c_char);
+                set_expr_line(xstrdup(new_arg as *const c_char));
             }
             nvim_docmd_arg_skip_to_end(eap);
         }

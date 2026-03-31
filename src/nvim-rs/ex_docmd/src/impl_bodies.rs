@@ -96,7 +96,7 @@ extern "C" {
     // --- do_exedit_split_fallback helpers ---
     fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
     fn nvim_docmd_curwin_w_arg_idx_invalid() -> c_int;
-    fn nvim_docmd_check_arg_idx_curwin();
+    fn nvim_al_check_arg_idx(wp: *mut c_void);
     fn maketitle();
 
     // --- ex_read helpers ---
@@ -346,7 +346,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
         do_cmdline_cmd(do_ecmd_cmd);
     }
     let n = nvim_docmd_curwin_w_arg_idx_invalid();
-    nvim_docmd_check_arg_idx_curwin();
+    nvim_al_check_arg_idx(nvim_get_curwin());
     if n != nvim_docmd_curwin_w_arg_idx_invalid() {
         maketitle();
     }

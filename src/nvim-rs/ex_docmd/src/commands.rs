@@ -2381,7 +2381,9 @@ pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mu
 extern "C" {
     // Phase 23: ex_at helpers
     fn nvim_docmd_typebuf_tb_len() -> c_int;
-    fn nvim_docmd_p_cpo_has_execbuf() -> bool;
+    static p_cpo: *const c_char;
+    #[link_name = "vim_strchr"]
+    fn cmd_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_docmd_do_cmdline_getexline();
     fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
     fn stuff_empty() -> c_int;
@@ -2778,7 +2780,8 @@ pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     };
 
     // Put the register in the typeahead buffer with the "silent" flag.
-    if do_execreg(c, 1, nvim_docmd_p_cpo_has_execbuf() as c_int, 1) == 0 {
+    let cpo_execbuf = !cmd_vim_strchr(p_cpo, b'e' as c_int).is_null();
+    if do_execreg(c, 1, cpo_execbuf as c_int, 1) == 0 {
         beep_flush();
         return;
     }

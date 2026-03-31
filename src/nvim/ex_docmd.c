@@ -450,7 +450,6 @@ char *nvim_docmd_tv_get_string(const void *argvars) { return (char *)tv_get_stri
 void nvim_docmd_rettv_init_string(void *rettv) { typval_T *tv = (typval_T *)rettv; tv->v_type = VAR_STRING; tv->vval.v_string = NULL; }
 void nvim_docmd_rettv_set_string(void *rettv, const char *s) { ((typval_T *)rettv)->vval.v_string = xstrdup(s); }
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_user_command_name(useridx, (cmdidx_T)cmdidx); }
-void nvim_docmd_set_expr_line(const char *arg) { set_expr_line(xstrdup(arg)); }
 char *nvim_docmd_get_dollar_command(void) { return dollar_command; }
 /// Parse digits from eap->arg, advance eap->arg, return the number.
 /// Also handles eap->args/arglens/argc adjustment.
@@ -814,7 +813,6 @@ const char *nvim_docmd_get_last_chdir_reason(void) { return last_chdir_reason; }
 bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
 bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
 int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
-bool nvim_docmd_p_cpo_has_execbuf(void) { return vim_strchr(p_cpo, CPO_EXECBUF) != NULL; }
 void nvim_docmd_do_cmdline_getexline(void) { do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE); }
 void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
 void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val; }
@@ -919,7 +917,6 @@ const char *nvim_docmd_e_notopen_str(void) { return _(e_notopen); }
 linenr_T nvim_docmd_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 void nvim_docmd_curwin_cursor_lnum_maybe_dec(linenr_T lnum) { if (curwin->w_cursor.lnum > 1 && curwin->w_cursor.lnum >= lnum) { curwin->w_cursor.lnum--; } }
 int nvim_docmd_curwin_w_arg_idx_invalid(void) { return curwin->w_arg_idx_invalid ? 1 : 0; }
-void nvim_docmd_check_arg_idx_curwin(void) { check_arg_idx(curwin); }
 size_t nvim_docmd_add_win_cmd_modifiers_global(char *buf, size_t bufsize)
 {
   bool multi_mods = false;
