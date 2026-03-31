@@ -3,6 +3,7 @@ name = "nvim-ex-docmd"
 version = "0.1.0"
 edition = "2021"
 description = "Ex command utilities for Neovim"
+build = "build.rs"
 
 [dependencies]
 nvim-normal = { path = "../normal" }

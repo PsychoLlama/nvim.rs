@@ -157,3 +157,36 @@ pub type CmdModHandle = *mut CmdMod;
 
 /// Typed pointer to a `CmdParseInfo` C struct.
 pub type CmdParseInfoHandle = *mut CmdParseInfo;
+
+/// Opaque blob matching `tasave_T` layout (192 bytes, 8-byte aligned).
+#[repr(C, align(8))]
+#[derive(Default)]
+pub struct TasaveBlob {
+    /// Raw storage matching `tasave_T` layout (192 bytes).
+    pub data: [u64; 24],
+}
+
+/// Rust representation of C `save_state_T`.
+///
+/// Layout must exactly match the C struct definition in `ex_docmd.h`.
+/// The `tabuf` field (`tasave_T`) is represented as an opaque blob since
+/// Rust only needs to pass it through `save_typeahead`/`restore_typeahead`.
+#[repr(C)]
+pub struct SaveState {
+    pub save_msg_scroll: c_int,
+    pub save_restart_edit: c_int,
+    pub save_msg_didout: bool,
+    pub save_state: c_int,
+    pub save_finish_op: bool,
+    pub save_opcount: c_int,
+    pub save_reg_executing: c_int,
+    pub save_pending_end_reg_executing: bool,
+    // 3 bytes padding then tasave_T at offset 32
+    pub tabuf: TasaveBlob,
+}
+
+unsafe impl Send for SaveState {}
+unsafe impl Sync for SaveState {}
+
+/// Typed pointer to a `save_state_T` C struct.
+pub type SaveStateHandle = *mut SaveState;

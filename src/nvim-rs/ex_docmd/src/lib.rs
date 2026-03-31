@@ -34,10 +34,17 @@ pub mod table;
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
-// Re-export shared ExArg and CmdMod types from the ex_cmds_types crate.
+/// Rust constants for `cmdidx_T` enum values, generated from the C header.
+#[allow(non_upper_case_globals)]
+#[allow(dead_code)]
+pub mod cmd_idx {
+    include!(concat!(env!("OUT_DIR"), "/cmd_enum.rs"));
+}
+
+// Re-export shared ExArg, CmdMod, and SaveState types from the ex_cmds_types crate.
 pub use nvim_ex_cmds_types::{
     CmdMod, CmdModHandle, CmdParseInfo, CmdParseInfoHandle, ExArg, ExArgHandle, LineGetterFn,
-    RegMatchBlob,
+    RegMatchBlob, SaveState, SaveStateHandle, TasaveBlob,
 };
 
 pub use address::*;

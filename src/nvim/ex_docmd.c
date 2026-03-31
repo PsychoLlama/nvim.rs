@@ -1079,40 +1079,10 @@ void nvim_set_restart_edit(int val) { restart_edit = val; }
 int nvim_get_force_restart_edit(void) { return force_restart_edit ? 1 : 0; }
 void nvim_set_force_restart_edit(int val) { force_restart_edit = (bool)val; }
 void nvim_set_current_State(int val) { State = val; }
-void nvim_docmd_sst_set_msg_scroll(save_state_T *sst, int v) { sst->save_msg_scroll = v; }
-void nvim_docmd_sst_set_restart_edit(save_state_T *sst, int v) { sst->save_restart_edit = v; }
-void nvim_docmd_sst_set_msg_didout(save_state_T *sst, int v) { sst->save_msg_didout = (bool)v; }
-void nvim_docmd_sst_set_State(save_state_T *sst, int v) { sst->save_State = v; }
-void nvim_docmd_sst_set_finish_op(save_state_T *sst, int v) { sst->save_finish_op = (bool)v; }
-void nvim_docmd_sst_set_opcount(save_state_T *sst, int v) { sst->save_opcount = v; }
-void nvim_docmd_sst_set_reg_executing(save_state_T *sst, int v) { sst->save_reg_executing = v; }
-void nvim_docmd_sst_set_pending_end_reg_executing(save_state_T *sst, int v) { sst->save_pending_end_reg_executing = (bool)v; }
-int nvim_docmd_sst_get_msg_scroll(save_state_T *sst) { return sst->save_msg_scroll; }
-int nvim_docmd_sst_get_restart_edit(save_state_T *sst) { return sst->save_restart_edit; }
-int nvim_docmd_sst_get_State(save_state_T *sst) { return sst->save_State; }
-int nvim_docmd_sst_get_finish_op(save_state_T *sst) { return sst->save_finish_op ? 1 : 0; }
-int nvim_docmd_sst_get_opcount(save_state_T *sst) { return sst->save_opcount; }
-int nvim_docmd_sst_get_reg_executing(save_state_T *sst) { return sst->save_reg_executing; }
-int nvim_docmd_sst_get_pending_end_reg_executing(save_state_T *sst) { return sst->save_pending_end_reg_executing ? 1 : 0; }
-int nvim_docmd_sst_get_msg_didout(save_state_T *sst) { return sst->save_msg_didout ? 1 : 0; }
 int nvim_docmd_sst_save_typeahead(save_state_T *sst) { save_typeahead(&sst->tabuf); return sst->tabuf.typebuf_valid ? 1 : 0; }
 void nvim_docmd_sst_restore_typeahead(save_state_T *sst) { restore_typeahead(&sst->tabuf); }
-int nvim_docmd_get_CMD_tabedit(void) { return (int)CMD_tabedit; }
-int nvim_docmd_get_CMD_tabfind(void) { return (int)CMD_tabfind; }
-int nvim_docmd_get_CMD_tabnew(void) { return (int)CMD_tabnew; }
-int nvim_docmd_get_CMD_split(void) { return (int)CMD_split; }
-int nvim_docmd_get_CMD_vsplit(void) { return (int)CMD_vsplit; }
-int nvim_docmd_get_CMD_new(void) { return (int)CMD_new; }
-int nvim_docmd_get_CMD_vnew(void) { return (int)CMD_vnew; }
-int nvim_docmd_get_CMD_sfind(void) { return (int)CMD_sfind; }
 void nvim_docmd_win_set_alt_fnum(win_T *wp, int fnum) { wp->w_alt_fnum = fnum; }
 int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
-int nvim_docmd_get_CMD_visual(void) { return (int)CMD_visual; }
-int nvim_docmd_get_CMD_view(void) { return (int)CMD_view; }
-int nvim_docmd_get_CMD_enew(void) { return (int)CMD_enew; }
-int nvim_docmd_get_CMD_sview(void) { return (int)CMD_sview; }
-int nvim_docmd_get_CMD_balt(void) { return (int)CMD_balt; }
-int nvim_docmd_get_CMD_badd(void) { return (int)CMD_badd; }
 int nvim_docmd_get_readonlymode(void) { return readonlymode ? 1 : 0; }
 void nvim_docmd_set_readonlymode(int v) { readonlymode = (v != 0); }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
@@ -1333,17 +1303,6 @@ void nvim_eap_scan_newline_nextcmd(exarg_T *eap)
     }
   }
 }
-/// CMD_bang cmdidx constant.
-int nvim_docmd_CMD_bang(void) { return (int)CMD_bang; }
-int nvim_docmd_CMD_terminal(void) { return (int)CMD_terminal; }
-int nvim_docmd_CMD_global(void) { return (int)CMD_global; }
-int nvim_docmd_CMD_vglobal(void) { return (int)CMD_vglobal; }
-int nvim_docmd_CMD_write(void) { return (int)CMD_write; }
-int nvim_docmd_CMD_update(void) { return (int)CMD_update; }
-int nvim_docmd_CMD_read(void) { return (int)CMD_read; }
-int nvim_docmd_CMD_lshift(void) { return (int)CMD_lshift; }
-int nvim_docmd_CMD_rshift(void) { return (int)CMD_rshift; }
-int nvim_docmd_CMD_file(void) { return (int)CMD_file; }
 
 /// Emit error and do_errthrow cleanup for do_one_cmd doend.
 void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
@@ -1376,10 +1335,6 @@ const char *nvim_docmd_invalid_range(exarg_T *eap) { return (const char *)invali
 int nvim_docmd_ADDR_OTHER(void) { return (int)ADDR_OTHER; }
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
 char *nvim_docmd_ex_errmsg_trailing(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
-int nvim_docmd_CMD_put(void) { return (int)CMD_put; }
-int nvim_docmd_CMD_iput(void) { return (int)CMD_iput; }
-int nvim_docmd_CMD_checktime(void) { return (int)CMD_checktime; }
-int nvim_docmd_CMD_edit(void) { return (int)CMD_edit; }
 int nvim_docmd_get_event_cmdundefined(void) { return (int)EVENT_CMDUNDEFINED; }
 void nvim_docmd_fix_cursor_if_zero(void) { if (curwin->w_cursor.lnum == 0) { curwin->w_cursor.lnum = 1; curwin->w_cursor.col = 0; } }
 /// Format an error message with arg into buf.

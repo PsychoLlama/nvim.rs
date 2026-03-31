@@ -191,17 +191,7 @@ extern "C" {
 
     // arg helpers
 
-    // CMD_* index accessors
-    fn nvim_docmd_CMD_bang() -> c_int;
-    fn nvim_docmd_CMD_terminal() -> c_int;
-    fn nvim_docmd_CMD_global() -> c_int;
-    fn nvim_docmd_CMD_vglobal() -> c_int;
-    fn nvim_docmd_CMD_write() -> c_int;
-    fn nvim_docmd_CMD_update() -> c_int;
-    fn nvim_docmd_CMD_read() -> c_int;
-    fn nvim_docmd_CMD_lshift() -> c_int;
-    fn nvim_docmd_CMD_rshift() -> c_int;
-    fn nvim_docmd_CMD_file() -> c_int;
+    // CMD_* constants now use crate::cmd_idx::{CMD_*} from build.rs-generated file.
 
     // +command
 
@@ -603,8 +593,8 @@ pub unsafe extern "C" fn do_one_cmd(
         if !nvim_docmd_curbuf_modifiable()
             && ((*eap).argt & 0x100000u32) != 0
             && !(nvim_curbuf_is_terminal() != 0
-                && ((*eap).cmdidx == nvim_docmd_CMD_put()
-                    || (*eap).cmdidx == nvim_docmd_CMD_iput()))
+                && ((*eap).cmdidx == crate::cmd_idx::CMD_put
+                    || (*eap).cmdidx == crate::cmd_idx::CMD_iput))
         {
             errormsg = nvim_get_e_modifiable();
             do_one_cmd_doend(
@@ -658,9 +648,9 @@ pub unsafe extern "C" fn do_one_cmd(
 
         // Disallow editing another buffer when curbuf_locked.
         if ((*eap).argt & 0x80000) == 0  // not EX_CMDWIN
-            && (*eap).cmdidx != nvim_docmd_CMD_checktime()
-            && (*eap).cmdidx != nvim_docmd_CMD_edit()
-            && (*eap).cmdidx != nvim_docmd_CMD_file()
+            && (*eap).cmdidx != crate::cmd_idx::CMD_checktime
+            && (*eap).cmdidx != crate::cmd_idx::CMD_edit
+            && (*eap).cmdidx != crate::cmd_idx::CMD_file
             && !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx)
             && curbuf_locked() != 0
         {
@@ -796,14 +786,14 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     // Skip to start of argument.
-    let arg = if (*eap).cmdidx == nvim_docmd_CMD_bang() {
+    let arg = if (*eap).cmdidx == crate::cmd_idx::CMD_bang {
         p
     } else {
         skipwhite(p)
     };
     (*eap).arg = arg;
     // ":file" cannot be run with an argument when curbuf_locked.
-    if (*eap).cmdidx == nvim_docmd_CMD_file() && *(*eap).arg != 0 && curbuf_locked() != 0 {
+    if (*eap).cmdidx == crate::cmd_idx::CMD_file && *(*eap).arg != 0 && curbuf_locked() != 0 {
         do_one_cmd_doend(
             eap,
             cstack,
@@ -841,7 +831,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Handle write/update, read, lshift/rshift special cases.
     let cmdidx = (*eap).cmdidx;
-    if cmdidx == nvim_docmd_CMD_write() || cmdidx == nvim_docmd_CMD_update() {
+    if cmdidx == crate::cmd_idx::CMD_write || cmdidx == crate::cmd_idx::CMD_update {
         let arg0 = (*eap).arg.read();
         if arg0 == b'>' as c_char {
             let arg1 = *(*eap).arg.add(1);
@@ -862,11 +852,11 @@ pub unsafe extern "C" fn do_one_cmd(
             (*eap).arg = (*eap).arg.add(2);
             (*eap).arg = skipwhite((*eap).arg);
             (*eap).append = (true) as c_int;
-        } else if arg0 == b'!' as c_char && cmdidx == nvim_docmd_CMD_write() {
+        } else if arg0 == b'!' as c_char && cmdidx == crate::cmd_idx::CMD_write {
             (*eap).arg = (*eap).arg.add(1);
             (*eap).usefilter = (true) as c_int;
         }
-    } else if cmdidx == nvim_docmd_CMD_read() {
+    } else if cmdidx == crate::cmd_idx::CMD_read {
         if (*eap).forceit != 0 {
             (*eap).usefilter = (true) as c_int;
             (*eap).forceit = (false) as c_int;
@@ -874,7 +864,7 @@ pub unsafe extern "C" fn do_one_cmd(
             (*eap).arg = (*eap).arg.add(1);
             (*eap).usefilter = (true) as c_int;
         }
-    } else if cmdidx == nvim_docmd_CMD_lshift() || cmdidx == nvim_docmd_CMD_rshift() {
+    } else if cmdidx == crate::cmd_idx::CMD_lshift || cmdidx == crate::cmd_idx::CMD_rshift {
         (*eap).amount = 1;
         let cmd_char = (*eap).cmd.read();
         let mut arg_ptr = (*eap).arg;
@@ -894,10 +884,10 @@ pub unsafe extern "C" fn do_one_cmd(
     // Check for '|' separator.
     if ((*eap).argt & 0x100u32) != 0 && ((*eap).usefilter == 0) {
         crate::args::rs_separate_nextcmd(eap);
-    } else if cmdidx == nvim_docmd_CMD_bang()
-        || cmdidx == nvim_docmd_CMD_terminal()
-        || cmdidx == nvim_docmd_CMD_global()
-        || cmdidx == nvim_docmd_CMD_vglobal()
+    } else if cmdidx == crate::cmd_idx::CMD_bang
+        || cmdidx == crate::cmd_idx::CMD_terminal
+        || cmdidx == crate::cmd_idx::CMD_global
+        || cmdidx == crate::cmd_idx::CMD_vglobal
         || (*eap).usefilter != 0
     {
         // Scan arg for newline: set nextcmd, NUL-terminate, handle backslash-newline.
@@ -1038,13 +1028,7 @@ pub unsafe extern "C" fn do_one_cmd(
     ea_cleanup_and_return(eap, Some(nextcmd))
 }
 
-// Additional CMD_* constants needed
-extern "C" {
-    fn nvim_docmd_CMD_put() -> c_int;
-    fn nvim_docmd_CMD_iput() -> c_int;
-    fn nvim_docmd_CMD_checktime() -> c_int;
-    fn nvim_docmd_CMD_edit() -> c_int;
-}
+// CMD_* constants use crate::cmd_idx::{CMD_*} from build.rs-generated file.
 
 /// Perform the doend cleanup in do_one_cmd.
 /// Calls nvim_docmd_do_one_cmd_doend and then restores cmdmod and register state.

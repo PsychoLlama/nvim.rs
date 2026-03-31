@@ -972,7 +972,8 @@ type CmodHandle = *mut CmdMod;
 // Phase N+15: save_current_state_impl / restore_current_state_impl
 // =============================================================================
 
-type SstHandle = *mut c_void;
+use crate::SaveState;
+type SstHandle = *mut SaveState;
 
 extern "C" {
     // Global accessors for save/restore state
@@ -991,25 +992,7 @@ extern "C" {
     fn nvim_set_pending_end_reg_executing(val: c_int);
     fn nvim_get_force_restart_edit() -> c_int;
     fn nvim_set_force_restart_edit(val: c_int);
-    // sst field setters
-    fn nvim_docmd_sst_set_msg_scroll(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_restart_edit(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_msg_didout(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_State(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_finish_op(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_opcount(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_reg_executing(sst: SstHandle, v: c_int);
-    fn nvim_docmd_sst_set_pending_end_reg_executing(sst: SstHandle, v: c_int);
-    // sst field getters
-    fn nvim_docmd_sst_get_msg_scroll(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_restart_edit(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_State(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_finish_op(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_opcount(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_reg_executing(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_pending_end_reg_executing(sst: SstHandle) -> c_int;
-    fn nvim_docmd_sst_get_msg_didout(sst: SstHandle) -> c_int;
-    // typeahead
+    // typeahead - kept as C wrappers since they call save_typeahead/restore_typeahead
     fn nvim_docmd_sst_save_typeahead(sst: SstHandle) -> c_int;
     fn nvim_docmd_sst_restore_typeahead(sst: SstHandle);
     // ui_cursor_shape
@@ -1022,14 +1005,14 @@ extern "C" {
 /// `sst` must be a valid save_state_T pointer.
 #[export_name = "save_current_state"]
 pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
-    nvim_docmd_sst_set_msg_scroll(sst, msg_scroll);
-    nvim_docmd_sst_set_restart_edit(sst, nvim_get_restart_edit());
-    nvim_docmd_sst_set_msg_didout(sst, c_int::from(msg_didout));
-    nvim_docmd_sst_set_State(sst, nvim_get_current_State());
-    nvim_docmd_sst_set_finish_op(sst, nvim_get_finish_op());
-    nvim_docmd_sst_set_opcount(sst, nvim_get_opcount());
-    nvim_docmd_sst_set_reg_executing(sst, nvim_get_reg_executing());
-    nvim_docmd_sst_set_pending_end_reg_executing(sst, nvim_get_pending_end_reg_executing());
+    (*sst).save_msg_scroll = msg_scroll;
+    (*sst).save_restart_edit = nvim_get_restart_edit();
+    (*sst).save_msg_didout = msg_didout;
+    (*sst).save_state = nvim_get_current_State();
+    (*sst).save_finish_op = nvim_get_finish_op() != 0;
+    (*sst).save_opcount = nvim_get_opcount();
+    (*sst).save_reg_executing = nvim_get_reg_executing();
+    (*sst).save_pending_end_reg_executing = nvim_get_pending_end_reg_executing() != 0;
 
     msg_scroll = 0; // no msg scrolling in Normal mode
     nvim_set_restart_edit(0); // don't go to Insert mode
@@ -1046,24 +1029,24 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
 pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
     nvim_docmd_sst_restore_typeahead(sst);
 
-    msg_scroll = nvim_docmd_sst_get_msg_scroll(sst);
+    msg_scroll = (*sst).save_msg_scroll;
     if nvim_get_force_restart_edit() != 0 {
         nvim_set_force_restart_edit(0);
     } else {
         // Some function (terminal_enter()) may have overridden restart_edit.
-        nvim_set_restart_edit(nvim_docmd_sst_get_restart_edit(sst));
+        nvim_set_restart_edit((*sst).save_restart_edit);
     }
-    nvim_set_finish_op(nvim_docmd_sst_get_finish_op(sst) != 0);
-    nvim_set_opcount(nvim_docmd_sst_get_opcount(sst));
-    nvim_set_reg_executing(nvim_docmd_sst_get_reg_executing(sst));
-    nvim_set_pending_end_reg_executing(nvim_docmd_sst_get_pending_end_reg_executing(sst));
+    nvim_set_finish_op((*sst).save_finish_op);
+    nvim_set_opcount((*sst).save_opcount);
+    nvim_set_reg_executing((*sst).save_reg_executing);
+    nvim_set_pending_end_reg_executing(c_int::from((*sst).save_pending_end_reg_executing));
 
     // Don't reset msg_didout now; OR in the saved value.
-    msg_didout = (c_int::from(msg_didout) | nvim_docmd_sst_get_msg_didout(sst)) != 0;
+    msg_didout = msg_didout || (*sst).save_msg_didout;
 
     // Restore the state (needed when called from a function executed for
     // 'indentexpr'). Update the mouse and cursor.
-    nvim_set_current_State(nvim_docmd_sst_get_State(sst));
+    nvim_set_current_State((*sst).save_state);
     ui_cursor_shape();
 }
 
@@ -2011,15 +1994,7 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
 extern "C" {
     // eap cmdidx setter (for splitview quickfix adjustment)
 
-    // CMD constant accessors (ex_splitview)
-    fn nvim_docmd_get_CMD_tabedit() -> c_int;
-    fn nvim_docmd_get_CMD_tabfind() -> c_int;
-    fn nvim_docmd_get_CMD_tabnew() -> c_int;
-    fn nvim_docmd_get_CMD_split() -> c_int;
-    fn nvim_docmd_get_CMD_vsplit() -> c_int;
-    fn nvim_docmd_get_CMD_new() -> c_int;
-    fn nvim_docmd_get_CMD_vnew() -> c_int;
-    fn nvim_docmd_get_CMD_sfind() -> c_int;
+    // CMD constants now use crate::cmd_idx::{CMD_*} from build.rs-generated file.
 
     // curbuf quickfix check
     fn nvim_bt_quickfix_curbuf() -> c_int;
@@ -2065,14 +2040,14 @@ const WSP_VERT: c_int = 0x02;
 pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
     let old_curwin = nvim_get_curwin();
 
-    let cmd_tabedit = nvim_docmd_get_CMD_tabedit();
-    let cmd_tabfind = nvim_docmd_get_CMD_tabfind();
-    let cmd_tabnew = nvim_docmd_get_CMD_tabnew();
-    let cmd_split = nvim_docmd_get_CMD_split();
-    let cmd_vsplit = nvim_docmd_get_CMD_vsplit();
-    let cmd_new = nvim_docmd_get_CMD_new();
-    let cmd_vnew = nvim_docmd_get_CMD_vnew();
-    let cmd_sfind = nvim_docmd_get_CMD_sfind();
+    let cmd_tabedit = crate::cmd_idx::CMD_tabedit;
+    let cmd_tabfind = crate::cmd_idx::CMD_tabfind;
+    let cmd_tabnew = crate::cmd_idx::CMD_tabnew;
+    let cmd_split = crate::cmd_idx::CMD_split;
+    let cmd_vsplit = crate::cmd_idx::CMD_vsplit;
+    let cmd_new = crate::cmd_idx::CMD_new;
+    let cmd_vnew = crate::cmd_idx::CMD_vnew;
+    let cmd_sfind = crate::cmd_idx::CMD_sfind;
 
     let mut cmdidx = (*eap).cmdidx;
     let use_tab = cmdidx == cmd_tabedit || cmdidx == cmd_tabfind || cmdidx == cmd_tabnew;
@@ -2182,11 +2157,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_docmd_get_CMD_view() -> c_int;
-    fn nvim_docmd_get_CMD_enew() -> c_int;
-    fn nvim_docmd_get_CMD_sview() -> c_int;
-    fn nvim_docmd_get_CMD_balt() -> c_int;
-    fn nvim_docmd_get_CMD_badd() -> c_int;
+    // CMD_view/enew/sview/balt/badd use crate::cmd_idx::{CMD_*}.
     fn nvim_docmd_get_readonlymode() -> c_int;
     fn nvim_docmd_set_readonlymode(v: c_int);
     fn buf_hide(buf: BufHandle) -> bool;
@@ -2217,17 +2188,17 @@ const ECMD_ONE: LinenrT = 1;
 
 #[export_name = "nvim_docmd_do_exedit_impl"]
 pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle) {
-    let cmd_new = nvim_docmd_get_CMD_new();
-    let cmd_tabnew = nvim_docmd_get_CMD_tabnew();
-    let cmd_tabedit = nvim_docmd_get_CMD_tabedit();
-    let cmd_vnew = nvim_docmd_get_CMD_vnew();
-    let cmd_split = nvim_docmd_get_CMD_split();
-    let cmd_vsplit = nvim_docmd_get_CMD_vsplit();
-    let cmd_view = nvim_docmd_get_CMD_view();
-    let cmd_enew = nvim_docmd_get_CMD_enew();
-    let cmd_sview = nvim_docmd_get_CMD_sview();
-    let cmd_balt = nvim_docmd_get_CMD_balt();
-    let cmd_badd = nvim_docmd_get_CMD_badd();
+    let cmd_new = crate::cmd_idx::CMD_new;
+    let cmd_tabnew = crate::cmd_idx::CMD_tabnew;
+    let cmd_tabedit = crate::cmd_idx::CMD_tabedit;
+    let cmd_vnew = crate::cmd_idx::CMD_vnew;
+    let cmd_split = crate::cmd_idx::CMD_split;
+    let cmd_vsplit = crate::cmd_idx::CMD_vsplit;
+    let cmd_view = crate::cmd_idx::CMD_view;
+    let cmd_enew = crate::cmd_idx::CMD_enew;
+    let cmd_sview = crate::cmd_idx::CMD_sview;
+    let cmd_balt = crate::cmd_idx::CMD_balt;
+    let cmd_badd = crate::cmd_idx::CMD_badd;
     let cmdidx = (*eap).cmdidx;
     let arg = (*eap).arg;
     let forceit = (*eap).forceit != 0;

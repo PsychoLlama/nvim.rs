@@ -82,8 +82,7 @@ extern "C" {
     fn redraw_all_later(type_: c_int);
     fn nvim_docmd_set_pending_exmode_active(v: c_int);
     fn nvim_docmd_normal_enter_false_true();
-    fn nvim_docmd_get_CMD_visual() -> c_int;
-    fn nvim_docmd_get_CMD_view() -> c_int;
+    // CMD_visual and CMD_view use crate::cmd_idx::{CMD_visual, CMD_view}.
 
     // --- do_exedit_split_fail_cleanup helpers ---
     fn curbufIsChanged() -> bool;
@@ -279,8 +278,8 @@ pub unsafe extern "C" fn nvim_docmd_tabpage_new_impl() {
 /// Accesses and modifies global state (exmode_active, ex_pressedreturn, etc.).
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) -> c_int {
-    let cmd_visual = nvim_docmd_get_CMD_visual();
-    let cmd_view = nvim_docmd_get_CMD_view();
+    let cmd_visual = crate::cmd_idx::CMD_visual;
+    let cmd_view = crate::cmd_idx::CMD_view;
     let cmdidx = (*eap).cmdidx;
 
     if nvim_docmd_get_exmode_active() != 0 && (cmdidx == cmd_visual || cmdidx == cmd_view) {
