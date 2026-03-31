@@ -518,13 +518,13 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
 
             let spname = nvim_docmd_buf_spname(buf);
             if !spname.is_null() {
-                let iobuff = nvim_docmd_get_iobuff();
+                let iobuff = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
                 nvim_xstrlcpy(iobuff, spname, nvim_iosize());
             } else {
                 let fname = nvim_buf_get_b_fname(buf);
                 nvim_docmd_home_replace(buf, fname);
             }
-            let iobuff = nvim_docmd_get_iobuff();
+            let iobuff = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
             nvim_docmd_msg_outtrans_attr(iobuff, 0);
             os_breakcheck();
 
@@ -853,7 +853,7 @@ extern "C" {
     #[link_name = "buf_spname"]
     fn nvim_docmd_buf_spname(buf: BufHandle) -> *mut c_char;
     fn nvim_docmd_home_replace(buf: BufHandle, src: *const c_char);
-    fn nvim_docmd_get_iobuff() -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
     fn nvim_win_get_focusable(wp: WinHandle) -> c_int;
     fn nvim_ex2_win_get_w_config_hide(wp: WinHandle) -> bool;
     fn nvim_tabpage_get_curwin(tp: *mut c_void) -> WinHandle;

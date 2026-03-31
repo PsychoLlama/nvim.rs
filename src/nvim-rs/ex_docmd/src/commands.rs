@@ -319,8 +319,8 @@ extern "C" {
     ) -> *mut c_char;
 
     // Phase 8: ex_sleep / do_sleep helpers
-    fn nvim_docmd_cursor_valid_curwin() -> c_int;
-    fn nvim_docmd_setcursor_mayforce_curwin();
+    fn cursor_valid(wp: WinHandle) -> c_int;
+    fn setcursor_mayforce(wp: WinHandle, force: bool);
     fn ui_busy_start();
     fn ui_busy_stop();
     fn nvim_docmd_loop_sleep(msec: i64);
@@ -3285,8 +3285,9 @@ pub unsafe extern "C" fn rs_do_sleep(msec: i64, hide_cursor: bool) {
 /// Matches C `ex_sleep()`.
 #[export_name = "ex_sleep"]
 pub unsafe extern "C" fn rs_ex_sleep(eap: ExArgHandle) {
-    if nvim_docmd_cursor_valid_curwin() != 0 {
-        nvim_docmd_setcursor_mayforce_curwin();
+    let curwin = nvim_get_curwin();
+    if cursor_valid(curwin) != 0 {
+        setcursor_mayforce(curwin, true);
     }
     let len_base = (*eap).line2 as i64;
     let arg = (*eap).arg;

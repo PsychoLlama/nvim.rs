@@ -102,16 +102,15 @@ extern "C" {
 
     fn nvim_emsg(s: *const c_char);
 
-    // IObuff accessors for append_command
-    fn nvim_docmd_get_iobuff() -> *mut c_char;
-    fn nvim_docmd_get_iosize() -> c_int;
+    // Direct IObuff access
+    static mut IObuff: [c_char; 1025];
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
     #[link_name = "utf_head_off"]
     fn nvim_docmd_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
     #[link_name = "mb_copy_char"]
     fn nvim_docmd_mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char);
-    fn nvim_docmd_xstrlcat_iobuff(src: *const c_char);
 }
 
 /// Translate a null-terminated C string via gettext at runtime.
@@ -372,8 +371,8 @@ pub unsafe extern "C" fn rs_append_command(cmd: *const c_char) {
         return;
     }
 
-    let iobuff = nvim_docmd_get_iobuff();
-    let iosize = nvim_docmd_get_iosize() as usize;
+    let iobuff = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
+    let iosize: usize = 1025;
 
     let len = c_strlen(iobuff as *const c_char);
 
@@ -390,7 +389,7 @@ pub unsafe extern "C" fn rs_append_command(cmd: *const c_char) {
     }
 
     // Append ": "
-    nvim_docmd_xstrlcat_iobuff(c": ".as_ptr());
+    xstrlcat(iobuff, c": ".as_ptr(), iosize);
 
     let mut d = iobuff.add(c_strlen(iobuff as *const c_char));
     let mut s = cmd;

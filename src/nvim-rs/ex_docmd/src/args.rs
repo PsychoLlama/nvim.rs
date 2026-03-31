@@ -27,11 +27,12 @@ extern "C" {
     fn nvim_docmd_strmove(dst: *mut c_char, src: *const c_char);
     #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_mb_ptr_adv_len(p: *const c_char) -> c_int;
-    fn nvim_docmd_mb_byte2len(b: c_int) -> c_int;
+    static utf8len_tab: [u8; 256];
+    static mut p_cpo: *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     #[link_name = "rs_ascii_tolower"]
     fn nvim_docmd_tolower_asc(c: c_int) -> c_int;
     fn skip_expr(pp: *mut *mut c_char, evalarg: *mut c_void) -> c_int;
-    fn nvim_docmd_cpo_has_bar() -> c_int;
     #[link_name = "del_trailing_spaces"]
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
     fn nvim_docmd_get_dollar_command() -> *mut c_char;
@@ -563,7 +564,7 @@ pub unsafe extern "C" fn rs_get_bad_opt(p: *const c_char, eap: ExArgHandle) -> c
 
     // Single-byte character: MB_BYTE2LEN(*p) == 1 && p[1] == NUL
     let b = *p as u8;
-    if nvim_docmd_mb_byte2len(b as c_int) == 1 && *p.add(1) as u8 == 0 {
+    if utf8len_tab[b as usize] == 1 && *p.add(1) as u8 == 0 {
         (*eap).bad_char = b as c_int;
         return OK;
     }
@@ -854,7 +855,8 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
 
             if is_comment || is_pipe || is_newline {
                 // Remove '\' before '|' unless EX_CTRLV and CPO_BAR
-                if (nvim_docmd_cpo_has_bar() == 0 || (argt & crate::table::EX_CTRLV) == 0)
+                if (vim_strchr(p_cpo, b'b' as c_int).is_null()
+                    || (argt & crate::table::EX_CTRLV) == 0)
                     && p > eap_arg
                     && *p.sub(1) as u8 == b'\\'
                 {

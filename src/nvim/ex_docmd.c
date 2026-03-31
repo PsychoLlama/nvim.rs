@@ -387,8 +387,6 @@ int nvim_docmd_undo_count_steps(linenr_T step, int *found)
   return count;
 }
 
-int nvim_docmd_cursor_valid_curwin(void) { return cursor_valid(curwin) ? 1 : 0; }
-void nvim_docmd_setcursor_mayforce_curwin(void) { setcursor_mayforce(curwin, true); }
 void nvim_docmd_loop_sleep(int64_t msec) { LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int); }
 /// Check if a command is a :map/:abbrev command.
 bool is_map_cmd(cmdidx_T cmdidx)
@@ -406,9 +404,6 @@ bool is_map_cmd(cmdidx_T cmdidx)
 }
 
 
-char *nvim_docmd_get_iobuff(void) { return IObuff; }
-int nvim_docmd_get_iosize(void) { return IOSIZE; }
-void nvim_docmd_xstrlcat_iobuff(const char *src) { xstrlcat(IObuff, src, IOSIZE); }
 /// Inner helper for cmd_exists / f_fullcommand: look up built-in and user commands.
 ///
 /// Creates a temporary exarg_T, calls find_ex_command, and returns:
@@ -457,8 +452,6 @@ void nvim_docmd_rettv_set_string(void *rettv, const char *s) { ((typval_T *)rett
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_user_command_name(useridx, (cmdidx_T)cmdidx); }
 void nvim_docmd_set_expr_line(const char *arg) { set_expr_line(xstrdup(arg)); }
 void nvim_docmd_strmove(char *dst, const char *src) { STRMOVE(dst, src); }
-int nvim_docmd_mb_byte2len(int b) { return MB_BYTE2LEN((uint8_t)b); }
-int nvim_docmd_cpo_has_bar(void) { return vim_strchr(p_cpo, CPO_BAR) != NULL; }
 char *nvim_docmd_get_dollar_command(void) { return dollar_command; }
 /// Parse digits from eap->arg, advance eap->arg, return the number.
 /// Also handles eap->args/arglens/argc adjustment.
