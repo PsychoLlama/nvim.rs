@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdarg.h>  // IWYU pragma: keep
+#include <stddef.h>  // IWYU pragma: keep
 #include <string.h>
 
 #include "auto/config.h"
@@ -67,6 +68,30 @@ void rs_format_overflow_error(const char *pstart);
 int rs_get_unsigned_int(const char *pstart, const char **p, unsigned *uj, bool overflow_err);
 int rs_adjust_types(const char ***ap_types, int arg, int *num_posarg, const char *type);
 int rs_parse_fmt_types(const char ***ap_types, int *num_posarg, const char *fmt, const void *tvs);
+
+// FmtArg: pre-extracted printf argument (defined in strings.h, used by strings.c and Rust engine)
+typedef struct {
+  int tag;
+  union {
+    int i;
+    long l;
+    long long ll;   // NOLINT(runtime/int)
+    ptrdiff_t z;
+    unsigned u;
+    unsigned long ul;         // NOLINT(runtime/int)
+    unsigned long long ull;   // NOLINT(runtime/int)
+    size_t uz;
+    double f;
+    const char *s;
+    const void *p;
+  } val;
+} FmtArg;
+
+// Rust printf engine (full implementation)
+int rs_vim_vsnprintf_extracted(char *str, size_t str_m, const char *fmt,
+                               const FmtArg *args, int num_args,
+                               const char **ap_types, int num_posarg,
+                               const void *tvs);
 
 // Rust-implemented keyvalue comparators (exported via #[export_name])
 int cmp_keyvalue_value(const void *a, const void *b);
