@@ -268,14 +268,15 @@ extern "C" {
     fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
     #[link_name = "rs_valid_tabpage"]
     fn nvim_rs_valid_tabpage(tp: *mut std::ffi::c_void) -> c_int;
-    fn nvim_docmd_getdigits(pp: *mut *mut c_char, def: c_int) -> c_int;
-    fn nvim_docmd_ex_errmsg_invargval(arg: *const c_char) -> *mut c_char;
-    fn nvim_docmd_ex_errmsg_invarg2(arg: *const c_char) -> *mut c_char;
     fn nvim_docmd_last_win_nr() -> c_int;
     #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
     #[link_name = "rs_ascii_isdigit"]
     fn nvim_docmd_ascii_isdigit(c: c_int) -> c_int;
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+    fn ex_errmsg(msg: *const c_char, arg: *const c_char) -> *mut c_char;
+    static e_invargval: [c_char; 1];
+    static e_invarg2: [c_char; 1];
 }
 
 // =============================================================================
@@ -503,7 +504,7 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
         }
 
         let p_save = p;
-        let mut tab_number = nvim_docmd_getdigits(&mut p, 0);
+        let mut tab_number = getdigits_int(&mut p, false, 0);
 
         if relative == 0 {
             if *p as u8 == b'$' && *p.add(1) == 0 {
@@ -512,18 +513,18 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
                 if nvim_rs_valid_tabpage(nvim_get_lastused_tabpage()) != 0 {
                     tab_number = nvim_rs_tabpage_index(nvim_get_lastused_tabpage());
                 } else {
-                    (*eap).errmsg = nvim_docmd_ex_errmsg_invargval(arg);
+                    (*eap).errmsg = ex_errmsg(e_invargval.as_ptr(), arg);
                     return 0;
                 }
             } else if p == p_save || *p_save as u8 == b'-' || *p != 0 || tab_number > last_tab_nr {
-                (*eap).errmsg = nvim_docmd_ex_errmsg_invarg2(arg);
+                (*eap).errmsg = ex_errmsg(e_invarg2.as_ptr(), arg);
                 return 0;
             }
         } else {
             if *p_save == 0 {
                 tab_number = 1;
             } else if p == p_save || *p_save as u8 == b'-' || *p != 0 || tab_number == 0 {
-                (*eap).errmsg = nvim_docmd_ex_errmsg_invarg2(arg);
+                (*eap).errmsg = ex_errmsg(e_invarg2.as_ptr(), arg);
                 return 0;
             }
             tab_number = tab_number * relative + nvim_rs_tabpage_index(nvim_get_curtab());
@@ -533,7 +534,7 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
         }
 
         if tab_number < unaccept_arg0 || tab_number > last_tab_nr {
-            (*eap).errmsg = nvim_docmd_ex_errmsg_invarg2(arg);
+            (*eap).errmsg = ex_errmsg(e_invarg2.as_ptr(), arg);
         }
         tab_number
     } else if (*eap).addr_count > 0 {
@@ -602,7 +603,8 @@ extern "C" {
     // Cursor state (set)
     fn nvim_win_set_cursor_lnum(wp: *mut c_void, lnum: i32);
     fn nvim_win_set_cursor_col(wp: *mut c_void, col: i32);
-    fn nvim_docmd_get_curwin_cursor_col() -> i32;
+    fn nvim_win_get_cursor_col(wp: *mut c_void) -> i32;
+    static mut searchcmdlen: c_int;
 
     // Buffer handle
     fn nvim_docmd_get_curbuf_handle() -> c_int;
@@ -611,8 +613,6 @@ extern "C" {
     fn qf_get_size(eap: ExArgHandle) -> usize;
 
     // Search
-    fn nvim_docmd_set_searchcmdlen(v: c_int);
-    fn nvim_docmd_get_searchcmdlen() -> c_int;
     fn nvim_docmd_do_search(
         eap: ExArgHandle,
         search_type: c_int,
@@ -908,7 +908,7 @@ pub unsafe fn get_address_impl(
                 } else {
                     // Save curwin->w_cursor
                     let save_lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
-                    let save_col = nvim_docmd_get_curwin_cursor_col();
+                    let save_col = nvim_win_get_cursor_col(nvim_get_curwin());
 
                     // When '/' or '?' follows another address, start from there.
                     if lnum > 0 && lnum != MAXLNUM {
@@ -927,7 +927,7 @@ pub unsafe fn get_address_impl(
                             0
                         };
                     nvim_win_set_cursor_col(nvim_get_curwin(), col);
-                    nvim_docmd_set_searchcmdlen(0);
+                    searchcmdlen = 0;
                     let flags = if silent {
                         SEARCH_KEEP
                     } else {
@@ -946,7 +946,7 @@ pub unsafe fn get_address_impl(
                     nvim_win_set_cursor_lnum(nvim_get_curwin(), save_lnum);
                     nvim_win_set_cursor_col(nvim_get_curwin(), save_col);
                     // adjust command string pointer
-                    cmd = cmd.offset(nvim_docmd_get_searchcmdlen() as isize);
+                    cmd = cmd.offset(searchcmdlen as isize);
                 }
             }
 
@@ -1000,7 +1000,7 @@ pub unsafe fn get_address_impl(
             // default: absolute line number
             _ => {
                 if nvim_docmd_ascii_isdigit(*cmd as u8 as c_int) != 0 {
-                    lnum = nvim_docmd_getdigits(&mut cmd, 0) as i32;
+                    lnum = getdigits_int(&mut cmd, false, 0) as i32;
                 }
             }
         }

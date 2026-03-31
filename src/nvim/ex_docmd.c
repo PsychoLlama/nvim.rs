@@ -533,9 +533,6 @@ int nvim_docmd_last_loaded_fnum_or_fail(void)
   return buf->b_fnum;
 }
 
-int nvim_docmd_getdigits(char **pp, int def) { return (int)getdigits(pp, false, def); }
-char *nvim_docmd_ex_errmsg_invargval(const char *arg) { return (char *)ex_errmsg(e_invargval, arg); }
-char *nvim_docmd_ex_errmsg_invarg2(const char *arg) { return (char *)ex_errmsg(e_invarg2, arg); }
 void nvim_cmod_capture_msg_scroll(cmdmod_T *cmod) { cmod->cmod_save_msg_scroll = msg_scroll; }
 void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_regmatch.regprog); cmod->cmod_filter_regmatch.regprog = NULL; }
 void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
@@ -543,9 +540,6 @@ void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, S
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
 char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
-colnr_T nvim_docmd_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
-int nvim_docmd_get_searchcmdlen(void) { return (int)searchcmdlen; }
-void nvim_docmd_set_searchcmdlen(int v) { searchcmdlen = (ptrdiff_t)v; }
 
 /// Wrap do_search for Rust.
 int nvim_docmd_do_search(exarg_T *eap, int type, int dirc, const char *pat,
@@ -679,7 +673,6 @@ void nvim_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n)
 void nvim_docmd_goto_buffer_current(exarg_T *eap) { goto_buffer(eap, DOBUF_CURRENT, FORWARD, 0); }
 void nvim_docmd_goto_buffer_first(exarg_T *eap, int n) { goto_buffer(eap, DOBUF_FIRST, FORWARD, n); }
 char *nvim_docmd_eap_get_do_ecmd_cmd(const exarg_T *eap) { return eap->do_ecmd_cmd; }
-char *nvim_docmd_errmsg_trailing_arg(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
 bool nvim_docmd_get_findfunc_nonempty(void) { return *get_findfunc() != NUL; }
 const char *nvim_docmd_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 void nvim_docmd_free_sourcing_name_and_pop(void) { xfree(SOURCING_NAME); estack_pop(); }
@@ -1095,7 +1088,6 @@ void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
 }
 char nvim_docmd_ask_yesno_backwards(void) { return (char)ask_yesno(_("Backwards range given, OK to swap")); }
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
-char *nvim_docmd_ex_errmsg_trailing(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
 void nvim_docmd_fix_cursor_if_zero(void) { if (curwin->w_cursor.lnum == 0) { curwin->w_cursor.lnum = 1; curwin->w_cursor.col = 0; } }
 /// Format an error message with arg into buf.
 /// Wraps vim_snprintf(buf, buflen, _(msg), arg).

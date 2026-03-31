@@ -869,7 +869,8 @@ extern "C" {
     fn nvim_docmd_goto_buffer_current(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_first(eap: ExArgHandle, n: c_int);
     fn nvim_docmd_eap_get_do_ecmd_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_docmd_errmsg_trailing_arg(arg: *const c_char) -> *mut c_char;
+    fn ex_errmsg(msg: *const c_char, arg: *const c_char) -> *mut c_char;
+    static e_trailing_arg: [c_char; 1];
 
     // handle_did_throw globals (Phase 4)
     static mut current_exception: *mut ExceptT;
@@ -1379,7 +1380,7 @@ pub unsafe extern "C" fn tabpage_new() {
 pub unsafe extern "C" fn rs_do_exbuffer_impl(eap: ExArgHandle) {
     let arg = (*eap).arg;
     if !arg.is_null() && *arg != 0 {
-        let errmsg = nvim_docmd_errmsg_trailing_arg(arg);
+        let errmsg = ex_errmsg(e_trailing_arg.as_ptr(), arg);
         (*eap).errmsg = errmsg;
     } else {
         if (*eap).addr_count == 0 {

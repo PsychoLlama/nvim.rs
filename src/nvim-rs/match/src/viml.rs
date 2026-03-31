@@ -323,7 +323,11 @@ extern "C" {
     fn semsg(fmt: *const std::ffi::c_char, ...);
     fn nvim_get_curwin() -> *mut WinHandle;
     // ex_match helpers
-    fn nvim_docmd_errmsg_trailing_arg(arg: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn ex_errmsg(
+        msg: *const std::ffi::c_char,
+        arg: *const std::ffi::c_char,
+    ) -> *mut std::ffi::c_char;
+    static e_trailing_arg: [std::ffi::c_char; 0];
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn ends_excmd(c: c_int) -> c_int;
     fn skiptowhite(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
@@ -739,7 +743,7 @@ pub unsafe extern "C" fn rs_ex_match(eap: *mut ExArg) {
         if !skip {
             if *end != 0 && ends_excmd(i32::from(*skipwhite(end.add(1)) as u8)) == 0 {
                 xfree(g.cast());
-                (*eap).errmsg = nvim_docmd_errmsg_trailing_arg(end).cast();
+                (*eap).errmsg = ex_errmsg(e_trailing_arg.as_ptr(), end).cast();
                 return;
             }
             if *end != *p {

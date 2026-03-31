@@ -183,7 +183,8 @@ extern "C" {
     fn parse_register(eap: ExArgHandle);
 
     // trailing / needarg
-    fn nvim_docmd_ex_errmsg_trailing(arg: *const c_char) -> *mut c_char;
+    fn ex_errmsg(msg: *const c_char, arg: *const c_char) -> *mut c_char;
+    static e_trailing_arg: [c_char; 1];
 
     // skip_cmd / execute_cmd0
 
@@ -927,7 +928,7 @@ pub unsafe extern "C" fn do_one_cmd(
         && arg_char != b'"'
         && !(arg_char == b'|' && ((*eap).argt & 0x100u32) != 0)
     {
-        errormsg = nvim_docmd_ex_errmsg_trailing((*eap).arg) as *const c_char;
+        errormsg = ex_errmsg(e_trailing_arg.as_ptr(), (*eap).arg) as *const c_char;
         do_one_cmd_doend(
             eap,
             cstack,
