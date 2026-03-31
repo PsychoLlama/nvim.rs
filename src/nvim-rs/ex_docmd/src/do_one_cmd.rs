@@ -147,10 +147,6 @@ extern "C" {
     fn nvim_docmd_ascii_isalnum(c: c_char) -> bool;
     fn xfree(p: *mut c_void);
 
-    // Error strings
-    fn nvim_get_e_ambiguous_use_of_user_defined_command() -> *const c_char;
-    fn nvim_get_e_not_an_editor_command() -> *const c_char;
-
     // CMD_SIZE constant
     fn nvim_docmd_get_command_count() -> c_int; // CMD_SIZE is command_count - 1
 
@@ -163,7 +159,6 @@ extern "C" {
     // Security checks
     fn nvim_get_sandbox() -> c_int;
     fn nvim_docmd_curbuf_modifiable() -> bool;
-    fn nvim_get_e_modifiable() -> *const c_char;
     fn nvim_curbuf_is_terminal() -> c_int;
     static cmdwin_type: c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
@@ -231,9 +226,6 @@ extern "C" {
     fn nvim_iosize() -> usize;
 
     // argt bit checks
-
-    // e_nobang
-    fn nvim_get_e_nobang() -> *const c_char;
 
     // skipwhite
     fn skipwhite(p: *const c_char) -> *mut c_char;
@@ -516,7 +508,9 @@ pub unsafe extern "C" fn do_one_cmd(
 
     if p.is_null() {
         if !(*eap).skip != 0 {
-            errormsg = nvim_get_e_ambiguous_use_of_user_defined_command();
+            errormsg = crate::errors::gt(
+                crate::errors::E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND_STR.as_ptr(),
+            );
         }
         do_one_cmd_doend(
             eap,
@@ -535,7 +529,11 @@ pub unsafe extern "C" fn do_one_cmd(
     if (*eap).cmdidx == cmd_size {
         if !(*eap).skip != 0 {
             let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
-            nvim_xstrlcpy(iobuff, nvim_get_e_not_an_editor_command(), nvim_iosize());
+            nvim_xstrlcpy(
+                iobuff,
+                crate::errors::gt(crate::errors::E_NOT_AN_EDITOR_COMMAND_STR.as_ptr()),
+                nvim_iosize(),
+            );
             let cmdname = if !after_modifier.is_null() {
                 after_modifier
             } else {
@@ -596,7 +594,7 @@ pub unsafe extern "C" fn do_one_cmd(
                 && ((*eap).cmdidx == crate::cmd_idx::CMD_put
                     || (*eap).cmdidx == crate::cmd_idx::CMD_iput))
         {
-            errormsg = nvim_get_e_modifiable();
+            errormsg = crate::errors::gt(crate::errors::E_MODIFIABLE_STR.as_ptr());
             do_one_cmd_doend(
                 eap,
                 cstack,
@@ -684,7 +682,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     if !ni && !((*eap).argt & 0x002u32) != 0 && (*eap).forceit != 0 {
-        errormsg = nvim_get_e_nobang();
+        errormsg = crate::errors::gt(crate::errors::E_NOBANG_STR.as_ptr());
         do_one_cmd_doend(
             eap,
             cstack,

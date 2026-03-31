@@ -462,15 +462,6 @@ static TriState filetype_indent = kNone;
 int nvim_get_ex_pressedreturn(void) { return ex_pressedreturn ? 1 : 0; }
 int nvim_get_expr_map_lock(void) { return expr_map_lock; }
 int nvim_curbuf_is_dummy(void) { return (curbuf->b_flags & BF_DUMMY) != 0; }
-const char *nvim_get_e_invarg(void) { return e_invarg; }
-const char *nvim_get_e_invarg2(void) { return e_invarg2; }
-const char *nvim_get_e_invargval(void) { return e_invargval; }
-const char *nvim_get_e_invrange(void) { return e_invrange; }
-const char *nvim_get_e_norange(void) { return e_norange; }
-const char *nvim_get_e_trailing_arg(void) { return e_trailing_arg; }
-const char *nvim_get_e_curdir(void) { return e_curdir; }
-const char *nvim_get_e_sandbox(void) { return e_sandbox; }
-const char *nvim_get_e_using_number_as_bool_nr(void) { return _(e_using_number_as_bool_nr); }
 int nvim_get_secure(void) { return secure; }
 void nvim_set_secure(int val) { secure = val; }
 // C accessors for Rust sourcing info access
@@ -479,8 +470,6 @@ int nvim_get_sourcing_lnum(void) { return (exestack.ga_data == NULL || exestack.
 int nvim_get_exestack_len(void) { return exestack.ga_len; }
 void nvim_docmd_set_must_redraw(int val) { must_redraw = val; }
 const char *nvim_docmd_get_curbuf_swapname(void) { return (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) ? NULL : curbuf->b_ml.ml_mfp->mf_fname; }
-const char *nvim_docmd_no_swap_file_msg(void) { return _("No swap file"); }
-
 // Returns the parsed count, or 0 on error (sets *errmsg_set = 1).
 int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
 {
@@ -529,7 +518,6 @@ bool is_map_cmd(cmdidx_T cmdidx)
 }
 
 
-const char *nvim_docmd_e319_msg(void) { return _("E319: The command is not available in this version"); }
 char *nvim_docmd_get_iobuff(void) { return IObuff; }
 int nvim_docmd_get_iosize(void) { return IOSIZE; }
 void nvim_docmd_xstrlcat_iobuff(const char *src) { xstrlcat(IObuff, src, IOSIZE); }
@@ -800,7 +788,6 @@ size_t nvim_sizeof_cmdmod_T(void) { return sizeof(cmdmod_T); }
 // execute_cmd helpers
 cstack_T *nvim_cstack_alloc(void) { cstack_T *cs = xcalloc(1, sizeof(cstack_T)); cs->cs_idx = -1; return cs; }
 int nvim_curbuf_is_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
-const char *nvim_get_e_modifiable(void) { return _(e_modifiable); }
 int nvim_get_eap_addr_type_lines(const exarg_T *eap) { return eap->addr_type == ADDR_LINES ? 1 : 0; }
 void nvim_hasFolding_line1(linenr_T lnum, linenr_T *line1_out) { hasFolding(curwin, lnum, line1_out, NULL); }
 void nvim_hasFolding_line2(linenr_T lnum, linenr_T *line2_out) { hasFolding(curwin, lnum, NULL, line2_out); }
@@ -842,16 +829,12 @@ char *nvim_find_excmd_after_range(exarg_T *eap)
   eap->cmd = cmd;
   return p;
 }
-const char *nvim_get_e_ambiguous_use_of_user_defined_command(void) {
-  return _(e_ambiguous_use_of_user_defined_command);
-}
 char *nvim_skip_colon_white(const char *p, bool skipleadingwhite) { return skip_colon_white(p, skipleadingwhite); }
 void nvim_set_eap_arg_from_p(exarg_T *eap, char *p) { eap->arg = (eap->cmdidx == CMD_bang) ? p : skipwhite(p); }
 void nvim_skip_expr_arg(char **arg) { skip_expr(arg, NULL); }
 void nvim_clear_cmdinfo(CmdParseInfo *cmdinfo) { CLEAR_POINTER(cmdinfo); }
 size_t nvim_iosize(void) { return IOSIZE; }
 void nvim_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n); }
-const char *nvim_get_e_not_an_editor_command(void) { return _(e_not_an_editor_command); }
 void nvim_docmd_goto_buffer_current(exarg_T *eap) { goto_buffer(eap, DOBUF_CURRENT, FORWARD, 0); }
 void nvim_docmd_goto_buffer_first(exarg_T *eap, int n) { goto_buffer(eap, DOBUF_FIRST, FORWARD, n); }
 char *nvim_docmd_eap_get_do_ecmd_cmd(const exarg_T *eap) { return eap->do_ecmd_cmd; }
@@ -864,8 +847,6 @@ char *nvim_docmd_tab_page_fmt(int n) { vim_snprintf(IObuff, IOSIZE, _("Tab page 
 void nvim_docmd_msg_outtrans_attr(const char *s, int attr) { msg_outtrans((char *)s, attr, false); }
 /// home_replace into IObuff.
 void nvim_docmd_home_replace(buf_T *buf, const char *src) { home_replace(buf, src, IObuff, IOSIZE, true); }
-void *nvim_get_cmdinfo_cmdmod_ptr(CmdParseInfo *cmdinfo) { return &cmdinfo->cmdmod; }
-const char *nvim_get_e_nobang(void) { return _(e_nobang); }
 int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
 bool nvim_allbuf_locked(void) { return allbuf_locked(); }
 
@@ -904,7 +885,6 @@ int nvim_get_p_cdh(void) { return p_cdh ? 1 : 0; }
 int nvim_vim_chdir(const char *dir) { return vim_chdir(dir); }
 void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope) { do_autocmd_dirchanged(new_dir, (CdScope)scope, kCdCauseManual, true); }
 void nvim_post_chdir(int scope, bool dir_differs) { nvim_docmd_post_chdir_impl((CdScope)scope, dir_differs); }
-const char *nvim_get_e_failed(void) { return _(e_failed); }
 char *nvim_docmd_get_do_ecmd_cmd_dollar(void) { return dollar_command; }
 
 // eval_vars wrapper that returns the result and updates src/escaped via out-params.

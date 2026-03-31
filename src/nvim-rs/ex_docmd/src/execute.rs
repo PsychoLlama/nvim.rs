@@ -84,8 +84,6 @@ extern "C" {
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
     fn nvim_emsg(s: *const c_char);
-    fn nvim_get_e_curdir() -> *const c_char;
-    fn nvim_get_e_sandbox() -> *const c_char;
 
     fn skipwhite(p: *const c_char) -> *mut c_char;
 }
@@ -139,13 +137,13 @@ pub unsafe extern "C" fn rs_check_secure() -> c_int {
     // Check secure flag first
     if nvim_get_secure() != 0 {
         nvim_set_secure(2);
-        nvim_emsg(nvim_get_e_curdir());
+        nvim_emsg(crate::errors::E_CURDIR_STR.as_ptr());
         return 1;
     }
 
     // Check sandbox mode
     if nvim_get_sandbox() != 0 {
-        nvim_emsg(nvim_get_e_sandbox());
+        nvim_emsg(crate::errors::E_SANDBOX_STR.as_ptr());
         return 1;
     }
 
@@ -353,7 +351,6 @@ extern "C" {
     fn undo_cmdmod(cmod: *mut c_void);
     static mut cmdmod: u8;
     fn nvim_curbuf_modifiable() -> bool;
-    fn nvim_get_e_modifiable() -> *const c_char;
     fn curbuf_locked() -> c_int;
     static cmdwin_type: c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
@@ -395,20 +392,16 @@ extern "C" {
         silent: bool,
     ) -> c_int;
     fn nvim_find_excmd_after_range(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_get_e_ambiguous_use_of_user_defined_command() -> *const c_char;
     fn set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char);
     fn parse_cmd_address(eap: ExArgHandle, errormsg: *mut *const c_char, silent: bool) -> c_int;
     fn nvim_skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
     static mut IObuff: [c_char; 1025];
-    fn nvim_get_e_not_an_editor_command() -> *const c_char;
     fn parse_bang(eap: ExArgHandle, p_ptr: *mut *mut c_char) -> bool;
     fn nvim_set_eap_arg_from_p(eap: ExArgHandle, p: *mut c_char);
     fn cmd_has_expr_args(cmdidx: c_int) -> bool;
     fn nvim_skip_expr_arg(arg: *mut *mut c_char);
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
-    fn nvim_get_e_nobang() -> *const c_char;
-    fn nvim_get_e_norange() -> *const c_char;
     fn set_cmd_dflall_range(eap: ExArgHandle);
     fn parse_register(eap: ExArgHandle);
     fn nvim_iosize() -> usize;
@@ -718,7 +711,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
             && ((*eap).cmdidx == crate::commands::CMD_PUT
                 || (*eap).cmdidx == crate::commands::CMD_IPUT))
     {
-        errormsg = nvim_get_e_modifiable();
+        errormsg = crate::errors::gt(crate::errors::E_MODIFIABLE_STR.as_ptr());
         goto_end(errormsg, save_buf, eap, cmdinfo, retv);
         return retv;
     }
@@ -860,7 +853,8 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Find command name to know what kind of range it uses.
     let p = nvim_find_excmd_after_range(eap);
     if p.is_null() {
-        *errormsg = nvim_get_e_ambiguous_use_of_user_defined_command();
+        *errormsg =
+            crate::errors::gt(crate::errors::E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND_STR.as_ptr());
         undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
@@ -897,7 +891,11 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     let cmd_size = crate::commands::CMD_SIZE;
     if (*eap).cmdidx == cmd_size {
         let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
-        nvim_xstrlcpy(iobuff, nvim_get_e_not_an_editor_command(), nvim_iosize());
+        nvim_xstrlcpy(
+            iobuff,
+            crate::errors::gt(crate::errors::E_NOT_AN_EDITOR_COMMAND_STR.as_ptr()),
+            nvim_iosize(),
+        );
         let cmdname = if !after_modifier.is_null() {
             after_modifier
         } else {
@@ -953,7 +951,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
 
     // Fail if command doesn't support bang but is used with a bang.
     if !((*eap).argt & 0x002u32) != 0 && (*eap).forceit != 0 {
-        *errormsg = nvim_get_e_nobang();
+        *errormsg = crate::errors::gt(crate::errors::E_NOBANG_STR.as_ptr());
         undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
@@ -964,7 +962,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
 
     // Fail if command doesn't support a range but is given one.
     if !((*eap).argt & 0x001u32) != 0 && (*eap).addr_count > 0 {
-        *errormsg = nvim_get_e_norange();
+        *errormsg = crate::errors::E_NORANGE_STR.as_ptr();
         undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);

@@ -210,7 +210,6 @@ extern "C" {
     fn nvim_docmd_findfunc_set_global() -> c_int;
     fn nvim_docmd_findfunc_set_local(buf: BufHandle) -> c_int;
     fn nvim_docmd_findfunc_free_local_cb(buf: BufHandle);
-    fn nvim_get_e_invarg() -> *const c_char;
     fn nvim_docmd_optset_varp_deref(args: *mut c_void) -> *mut c_char;
     fn nvim_docmd_optset_varp_set(args: *mut c_void, name: *mut c_char);
     fn get_scriptlocal_funcname(name: *const c_char) -> *mut c_char;
@@ -788,7 +787,7 @@ pub unsafe extern "C" fn nvim_docmd_did_set_findfunc_impl(args: *mut c_void) -> 
     };
 
     if retval == FAIL {
-        return nvim_get_e_invarg();
+        return crate::errors::E_INVARG_STR.as_ptr();
     }
 
     // Replace <SID>/s: prefix with the script identifier if needed.

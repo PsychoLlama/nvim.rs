@@ -65,7 +65,6 @@ extern "C" {
     fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
     fn ngettext(s1: *const c_char, s2: *const c_char, n: c_ulong) -> *const c_char;
     fn ex_errmsg(msg: *const c_char, arg: *const c_char) -> *mut c_char;
-    fn nvim_get_e_trailing_arg() -> *const c_char;
 
     // Global statics for do_bufdel
     static mut IObuff: [c_char; 1025];
@@ -318,7 +317,7 @@ pub unsafe extern "C" fn do_bufdel(
         let mut bnr = if addr_count == 2 {
             if !arg.is_null() && *arg != 0 {
                 // Both range and argument is not allowed
-                return ex_errmsg(nvim_get_e_trailing_arg(), arg);
+                return ex_errmsg(c"E488: Trailing characters: %s".as_ptr(), arg);
             }
             start_bnr
         } else {

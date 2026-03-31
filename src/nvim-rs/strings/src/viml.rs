@@ -170,10 +170,7 @@ extern "C" {
     #[link_name = "strcase_save"]
     fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char;
 
-    // error strings
-    fn nvim_get_e_invarg() -> *const c_char;
-    fn nvim_get_e_invarg2() -> *const c_char;
-    fn nvim_get_e_using_number_as_bool_nr() -> *const c_char;
+    fn gettext(s: *const c_char) -> *const c_char;
 }
 
 // =============================================================================
@@ -187,14 +184,14 @@ extern "C" {
 /// Helper: emit "E475: Invalid argument: %s" via semsg.
 unsafe fn semsg_invarg2(s: *const c_char) {
     unsafe {
-        semsg(nvim_get_e_invarg2(), s);
+        semsg(c"E475: Invalid argument: %s".as_ptr(), s);
     }
 }
 
 /// Helper: emit "E805: Using a Number as a Bool: ..." via semsg.
 unsafe fn semsg_number_as_bool(n: VarNumber) {
     unsafe {
-        semsg(nvim_get_e_using_number_as_bool_nr(), n);
+        semsg(gettext(c"E1023: Using a Number as a Bool: %d".as_ptr()), n);
     }
 }
 
@@ -448,7 +445,7 @@ pub unsafe extern "C" fn rs_f_str2nr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
         if nvim_tv_get_type(tv1) != VAR_UNKNOWN {
             base = tv_get_number(tv1) as c_int;
             if base != 2 && base != 8 && base != 10 && base != 16 {
-                emsg(nvim_get_e_invarg());
+                emsg(c"E474: Invalid argument".as_ptr());
                 return;
             }
             let tv2 = nvim_tv_idx(argvars, 2);

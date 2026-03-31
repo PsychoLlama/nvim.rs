@@ -82,18 +82,22 @@ pub const E_ENDTRY_STR: &std::ffi::CStr = c"E600: Missing :endtry";
 pub const E_ENDWHILE_STR: &std::ffi::CStr = c"E170: Missing :endwhile";
 pub const E_ENDFOR_STR: &std::ffi::CStr = c"E170: Missing :endfor";
 pub const E_ENDIF_STR: &std::ffi::CStr = c"E171: Missing :endif";
+// Gettext-translated error strings (use with gt() / gettext() at runtime):
+pub const E_USING_NUMBER_AS_BOOL_NR_STR: &std::ffi::CStr = c"E1023: Using a Number as a Bool: %d";
+pub const E_NO_SWAP_FILE_STR: &std::ffi::CStr = c"No swap file";
+pub const E319_MSG_STR: &std::ffi::CStr = c"E319: The command is not available in this version";
+pub const E_MODIFIABLE_STR: &std::ffi::CStr = c"E21: Cannot make changes, 'modifiable' is off";
+pub const E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND_STR: &std::ffi::CStr =
+    c"E464: Ambiguous use of user-defined command";
+pub const E_NOT_AN_EDITOR_COMMAND_STR: &std::ffi::CStr = c"E492: Not an editor command";
+pub const E_NOBANG_STR: &std::ffi::CStr = c"E477: No ! allowed";
+pub const E_FAILED_STR: &std::ffi::CStr = c"E472: Command failed";
 
 // =============================================================================
 // FFI declarations for C error strings and functions
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_e_invarg() -> *const c_char;
-    fn nvim_get_e_invarg2() -> *const c_char;
-    fn nvim_get_e_invargval() -> *const c_char;
-    fn nvim_get_e_invrange() -> *const c_char;
-    fn nvim_get_e_norange() -> *const c_char;
-    fn nvim_get_e_trailing_arg() -> *const c_char;
     pub fn gettext(s: *const c_char) -> *const c_char;
 
     fn nvim_emsg(s: *const c_char);
@@ -126,73 +130,49 @@ pub unsafe fn gt(s: *const c_char) -> *const c_char {
 /// Get the "Invalid argument" error message string.
 ///
 /// Returns the C string for E474.
-///
-/// # Safety
-///
-/// Returns a pointer to a static C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_e_invarg() -> *const c_char {
-    nvim_get_e_invarg()
+pub extern "C" fn rs_get_e_invarg() -> *const c_char {
+    E_INVARG_STR.as_ptr()
 }
 
 /// Get the "Invalid argument: %s" error message string.
 ///
 /// Returns the C string for E475 (format string).
-///
-/// # Safety
-///
-/// Returns a pointer to a static C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_e_invarg2() -> *const c_char {
-    nvim_get_e_invarg2()
+pub extern "C" fn rs_get_e_invarg2() -> *const c_char {
+    E_INVARG2_STR.as_ptr()
 }
 
 /// Get the "Invalid value for argument %s" error message string.
 ///
 /// Returns the C string for E475 (format string for values).
-///
-/// # Safety
-///
-/// Returns a pointer to a static C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_e_invargval() -> *const c_char {
-    nvim_get_e_invargval()
+pub extern "C" fn rs_get_e_invargval() -> *const c_char {
+    E_INVARGVAL_STR.as_ptr()
 }
 
 /// Get the "Invalid range" error message string.
 ///
 /// Returns the C string for E16.
-///
-/// # Safety
-///
-/// Returns a pointer to a static C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_e_invrange() -> *const c_char {
-    nvim_get_e_invrange()
+pub extern "C" fn rs_get_e_invrange() -> *const c_char {
+    E_INVRANGE_STR.as_ptr()
 }
 
 /// Get the "No range allowed" error message string.
 ///
 /// Returns the C string for E481.
-///
-/// # Safety
-///
-/// Returns a pointer to a static C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_e_norange() -> *const c_char {
-    nvim_get_e_norange()
+pub extern "C" fn rs_get_e_norange() -> *const c_char {
+    E_NORANGE_STR.as_ptr()
 }
 
 /// Get the "Trailing characters: %s" error message string.
 ///
 /// Returns the C string for E488 (format string).
-///
-/// # Safety
-///
-/// Returns a pointer to a static C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_e_trailing_arg() -> *const c_char {
-    nvim_get_e_trailing_arg()
+pub extern "C" fn rs_get_e_trailing_arg() -> *const c_char {
+    E_TRAILING_ARG_STR.as_ptr()
 }
 
 // =============================================================================
@@ -206,7 +186,7 @@ pub unsafe extern "C" fn rs_get_e_trailing_arg() -> *const c_char {
 /// Calls external C functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_invrange() {
-    nvim_emsg(nvim_get_e_invrange());
+    nvim_emsg(E_INVRANGE_STR.as_ptr());
 }
 
 /// Emit the "Invalid argument" error message (E474).
@@ -216,7 +196,7 @@ pub unsafe extern "C" fn rs_emsg_invrange() {
 /// Calls external C functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_invarg() {
-    nvim_emsg(nvim_get_e_invarg());
+    nvim_emsg(E_INVARG_STR.as_ptr());
 }
 
 /// Emit the "No range allowed" error message (E481).
@@ -226,7 +206,7 @@ pub unsafe extern "C" fn rs_emsg_invarg() {
 /// Calls external C functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_norange() {
-    nvim_emsg(nvim_get_e_norange());
+    nvim_emsg(E_NORANGE_STR.as_ptr());
 }
 
 // =============================================================================

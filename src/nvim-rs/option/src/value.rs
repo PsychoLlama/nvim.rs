@@ -771,7 +771,6 @@ extern "C" {
     fn rs_option_is_hidden(opt_idx: c_int) -> c_int;
     fn rs_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_sandbox() -> c_int;
-    fn nvim_get_e_sandbox() -> *const c_char;
     static e_unknown_option2: c_char;
     fn emsg(msg: *const c_char) -> c_int;
     fn gettext(s: *const c_char) -> *const c_char;
@@ -1123,7 +1122,7 @@ pub unsafe extern "C" fn rs_set_option_value(
 
     // Disallow changing some options in the sandbox
     if nvim_get_sandbox() > 0 && (flags & K_OPT_FLAG_SECURE) != 0 {
-        return nvim_get_e_sandbox();
+        return c"E48: Not allowed in sandbox".as_ptr();
     }
 
     let mut errbuf = [0i8; IOSIZE];

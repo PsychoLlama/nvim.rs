@@ -104,9 +104,6 @@ extern "C" {
     static e_stray_closing_curly_str: c_char;
     static e_missing_close_curly_str: c_char;
 
-    // nvim_get_e_invarg2: returns e_invarg2 pointer (from ex_docmd.c)
-    fn nvim_get_e_invarg2() -> *const c_char;
-
     // nvim_vars_emsg_e5700: emit E5700 error for spellsuggest
     fn nvim_vars_emsg_e5700();
 }
@@ -180,7 +177,7 @@ pub unsafe extern "C" fn rs_skip_var_list(
             let s = skip_var_one_impl(p);
             if s == p {
                 if !silent {
-                    semsg(nvim_get_e_invarg2(), p);
+                    semsg(c"E475: Invalid argument: %s".as_ptr(), p);
                 }
                 return std::ptr::null();
             }
@@ -200,7 +197,7 @@ pub unsafe extern "C" fn rs_skip_var_list(
                 *semicolon = 1;
             } else if pc != b',' {
                 if !silent {
-                    semsg(nvim_get_e_invarg2(), p);
+                    semsg(c"E475: Invalid argument: %s".as_ptr(), p);
                 }
                 return std::ptr::null();
             }
@@ -465,7 +462,7 @@ pub unsafe extern "C" fn rs_ex_let_env(
     let len = rs_get_env_len(&mut name_ptr);
     // name_ptr now points just past the name; name_start..name_ptr is the name
     if len == 0 {
-        semsg(nvim_get_e_invarg2(), arg);
+        semsg(c"E475: Invalid argument: %s".as_ptr(), arg);
     } else {
         let name_end = name_ptr.cast_mut();
         if !op.is_null() && !vim_strchr(c"+-*/%".as_ptr(), c_int::from(*op)).is_null() {

@@ -33,9 +33,6 @@ extern "C" {
     /// Set wp->w_p_cc_cols.
     fn nvim_win_set_p_cc_cols(wp: WinHandle, cols: *mut c_int);
 
-    /// Get the e_invarg error string pointer.
-    fn nvim_get_e_invarg() -> *const c_char;
-
     /// Get the empty_string_option pointer.
     fn nvim_get_empty_string_option() -> *const c_char;
 }
@@ -113,7 +110,7 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
             let sign: i64 = if first == b'-' { -1 } else { 1 };
             s = &s[1..]; // consume sign
             if s.is_empty() || !is_ascii_digit(s[0]) {
-                return nvim_get_e_invarg();
+                return c"E474: Invalid argument".as_ptr();
             }
             let n = i64::from(parse_digits(&mut s));
             let offset = sign * n;
@@ -134,7 +131,7 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
             // Convert from 1-based to 0-based.
             col = Some(n - 1);
         } else {
-            return nvim_get_e_invarg();
+            return c"E474: Invalid argument".as_ptr();
         }
 
         if let Some(c) = col {
@@ -145,12 +142,12 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
             break;
         }
         if s[0] != b',' {
-            return nvim_get_e_invarg();
+            return c"E474: Invalid argument".as_ptr();
         }
         s = &s[1..]; // consume comma
         if s.is_empty() {
             // Trailing comma is illegal (e.g., "set cc=80,").
-            return nvim_get_e_invarg();
+            return c"E474: Invalid argument".as_ptr();
         }
     }
 
