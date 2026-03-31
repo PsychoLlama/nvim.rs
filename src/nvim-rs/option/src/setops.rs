@@ -14,7 +14,6 @@ use crate::{OptScope, FAIL, OK};
 
 extern "C" {
     // State accessors
-    fn nvim_get_secure() -> c_int;
     fn nvim_get_sandbox() -> c_int;
 }
 
@@ -455,7 +454,7 @@ pub unsafe extern "C" fn rs_compute_insecure_flag_change(
 ) -> c_int {
     // If value wasn't checked and (secure or sandbox or modeline), add insecure flag
     if value_checked == 0
-        && (nvim_get_secure() != 0 || nvim_get_sandbox() != 0 || (opt_flags & OPT_MODELINE) != 0)
+        && (crate::secure != 0 || nvim_get_sandbox() != 0 || (opt_flags & OPT_MODELINE) != 0)
     {
         return 1;
     }

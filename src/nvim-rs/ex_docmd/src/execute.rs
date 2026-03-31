@@ -81,8 +81,6 @@ pub const EXFLAG_PRINT: c_int = 0x04;
 extern "C" {
     static mut got_int: bool;
     fn nvim_get_sandbox() -> c_int;
-    fn nvim_get_secure() -> c_int;
-    fn nvim_set_secure(val: c_int);
     fn nvim_emsg(s: *const c_char);
 
     fn skipwhite(p: *const c_char) -> *mut c_char;
@@ -113,7 +111,7 @@ pub extern "C" fn rs_in_sandbox() -> c_int {
 /// access files or run commands are restricted.
 #[inline]
 pub fn is_secure() -> bool {
-    unsafe { nvim_get_secure() != 0 }
+    unsafe { crate::secure != 0 }
 }
 
 /// FFI wrapper for secure mode check.
@@ -135,8 +133,8 @@ pub extern "C" fn rs_is_secure() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_secure() -> c_int {
     // Check secure flag first
-    if nvim_get_secure() != 0 {
-        nvim_set_secure(2);
+    if crate::secure != 0 {
+        crate::secure = 2;
         nvim_emsg(crate::errors::E_CURDIR_STR.as_ptr());
         return 1;
     }

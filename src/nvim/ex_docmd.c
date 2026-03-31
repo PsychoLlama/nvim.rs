@@ -462,8 +462,6 @@ static TriState filetype_indent = kNone;
 int nvim_get_ex_pressedreturn(void) { return ex_pressedreturn ? 1 : 0; }
 int nvim_get_expr_map_lock(void) { return expr_map_lock; }
 int nvim_curbuf_is_dummy(void) { return (curbuf->b_flags & BF_DUMMY) != 0; }
-int nvim_get_secure(void) { return secure; }
-void nvim_set_secure(int val) { secure = val; }
 // C accessors for Rust sourcing info access
 const char *nvim_get_sourcing_name(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? NULL : SOURCING_NAME; }
 int nvim_get_sourcing_lnum(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? 0 : (int)SOURCING_LNUM; }

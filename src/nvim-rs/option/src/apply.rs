@@ -49,7 +49,6 @@ extern "C" {
     fn nvim_option_get_flags_ptr(opt_idx: c_int) -> *mut c_uint;
 
     // Security/sandbox state
-    fn nvim_get_secure() -> c_int;
     fn nvim_get_sandbox() -> c_int;
 
     // OptVal value operations (already in Rust but called from C side via FFI)
@@ -124,7 +123,6 @@ extern "C" {
 
     // set_option support
     fn nvim_get_starting() -> c_int;
-    fn nvim_set_secure(val: c_int);
     fn nvim_apply_optionset_autocmd(
         opt_idx: c_int,
         opt_flags: c_int,
@@ -178,7 +176,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     {
         // Disallow changing immutable options.
         errmsg = (&raw const crate::e_unsupportedoption).cast::<c_char>();
-    } else if (nvim_get_secure() != 0 || nvim_get_sandbox() != 0)
+    } else if (crate::secure != 0 || nvim_get_sandbox() != 0)
         && (opt_flags_val & K_OPT_FLAG_SECURE) != 0
     {
         // Disallow changing some options from secure mode.
@@ -295,9 +293,7 @@ pub unsafe extern "C" fn rs_did_set_option(
         };
 
         if value_checked == 0
-            && (nvim_get_secure() != 0
-                || nvim_get_sandbox() != 0
-                || (opt_flags & OPT_MODELINE) != 0)
+            && (crate::secure != 0 || nvim_get_sandbox() != 0 || (opt_flags & OPT_MODELINE) != 0)
         {
             *flagsp |= K_OPT_FLAG_INSECURE;
             if !flagsp_local.is_null() {
@@ -383,14 +379,14 @@ pub unsafe extern "C" fn rs_set_option_impl(
     let saved_new_value = rs_optval_copy(value);
 
     let p = rs_insecure_flag(curwin, opt_idx, opt_flags);
-    let secure_saved = nvim_get_secure();
+    let secure_saved = crate::secure;
 
     // Enable secure mode if needed.
     if (opt_flags & OPT_MODELINE) != 0
         || nvim_get_sandbox() != 0
         || (value_replaced == 0 && (*p & K_OPT_FLAG_INSECURE) != 0)
     {
-        nvim_set_secure(1);
+        crate::secure = 1;
     }
 
     // Set option through its variable pointer.
@@ -409,7 +405,7 @@ pub unsafe extern "C" fn rs_set_option_impl(
         errbuflen,
     );
 
-    nvim_set_secure(secure_saved);
+    crate::secure = secure_saved;
 
     if errmsg.is_null() && direct == 0 {
         if nvim_get_starting() == 0 {

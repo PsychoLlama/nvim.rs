@@ -19,9 +19,6 @@ extern "C" {
     // From charset.c
     fn transchar(c: c_int) -> *const c_char;
 
-    // Global variable accessors (nvim_get_secure defined in ex_docmd.c)
-    #[link_name = "nvim_get_secure"]
-    fn nvim_option_get_secure() -> c_int;
 }
 
 // =============================================================================
@@ -48,11 +45,6 @@ unsafe fn rs_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char {
 // Note: rs_vim_snprintf and transchar are not mocked for tests because:
 // - rs_illegal_char and rs_illegal_char_after are not tested directly
 // - They require C linkage for variadic functions which doesn't work in test mode
-
-#[cfg(test)]
-unsafe fn nvim_option_get_secure() -> c_int {
-    0 // Not in secure mode for tests
-}
 
 // =============================================================================
 // Constants (only used when not testing)
@@ -235,7 +227,7 @@ pub unsafe extern "C" fn rs_check_illegal_path_names(val: *const c_char, flags: 
         return 0;
     }
 
-    let secure = nvim_option_get_secure() != 0;
+    let secure = crate::secure != 0;
 
     // kOptFlagNFname = (1 << 17) - only normal file name chars allowed
     let check_file = (flags & (1 << 17)) != 0;

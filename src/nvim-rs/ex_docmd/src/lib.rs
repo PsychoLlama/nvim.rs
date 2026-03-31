@@ -97,6 +97,7 @@ extern "C" {
     #[link_name = "ex_normal_busy"]
     pub static mut ex_normal_busy: c_int;
     pub static p_awa: bool;
+    pub static mut secure: c_int;
 
     // Character classification from charset crate
     #[link_name = "vim_isIDc"]

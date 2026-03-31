@@ -57,10 +57,7 @@ extern "C" {
     fn nvim_modeline_sctx_save_and_set(lnum: c_int) -> *mut c_void;
     /// Restore `current_sctx` from pointer returned by `nvim_modeline_sctx_save_and_set()` and free it.
     fn nvim_modeline_sctx_restore(saved: *mut c_void);
-    /// Get the `secure` global.
-    fn nvim_get_secure() -> c_int;
-    /// Set the `secure` global.
-    fn nvim_set_secure(val: c_int);
+    static mut secure: c_int;
 
     fn nvim_xfree(p: *mut c_void);
 }
@@ -265,11 +262,11 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
 
         if *s != 0 {
             // skip over empty "::"
-            let secure_save = nvim_get_secure();
+            let secure_save = secure;
             let saved_sctx = nvim_modeline_sctx_save_and_set(lnum);
-            nvim_set_secure(1);
+            secure = 1;
             retval = nvim_do_set(s, OPT_MODELINE | OPT_LOCAL | flags);
-            nvim_set_secure(secure_save);
+            secure = secure_save;
             nvim_modeline_sctx_restore(saved_sctx);
             if retval == FAIL {
                 break;

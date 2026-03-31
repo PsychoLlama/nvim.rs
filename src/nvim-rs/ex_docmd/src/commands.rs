@@ -1832,8 +1832,6 @@ extern "C" {
     ) -> *mut c_char;
     fn nvim_docmd_do_autocmd(eap: ExArgHandle, arg: *const c_char, forceit: c_int);
     fn nvim_docmd_do_augroup(arg: *const c_char, forceit: c_int);
-    fn nvim_get_secure() -> c_int;
-    fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
     // Phase 22: before_quit_all, ex_range_without_command helpers
     fn nvim_docmd_get_exmode_plus() -> *mut c_char;
@@ -1897,9 +1895,9 @@ pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
 /// ":autocmd" / ":augroup".
 #[export_name = "ex_autocmd"]
 pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
-    let secure = nvim_get_secure();
+    let secure = crate::secure;
     if secure != 0 {
-        nvim_set_secure(2);
+        crate::secure = 2;
         (*eap).errmsg = crate::gt(crate::E_CURDIR_STR.as_ptr()) as *mut c_char;
     } else {
         let cmdidx = (*eap).cmdidx;
