@@ -159,10 +159,6 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    // Loop cookie field accessors
-    fn nvim_docmd_loop_cookie_get_lc_getline(lc: *mut c_void) -> LineGetter;
-    fn nvim_docmd_loop_cookie_get_cookie(lc: *mut c_void) -> *mut c_void;
-
     // Underlying C functions (declared directly, replacing nvim_docmd_* wrappers)
     fn get_func_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
     fn get_loop_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
@@ -186,10 +182,10 @@ extern "C" {
     // has_loop_cmd (Rust export from ex_eval crate)
     fn has_loop_cmd(p: *mut c_char) -> bool;
 
-    // UI helpers
-    fn nvim_docmd_ui_has_cmdline() -> c_int;
-    fn nvim_docmd_ui_ext_cmdline_block_append(indent: usize, s: *const c_char);
-    fn nvim_docmd_ui_ext_cmdline_block_leave();
+    // UI helpers (directly exported)
+    fn ui_has(extui: c_int) -> bool;
+    fn ui_ext_cmdline_block_append(indent: usize, s: *const c_char);
+    fn ui_ext_cmdline_block_leave();
 
     // Message helpers
     fn msg_verbose_cmd(lnum: LinenrT, s: *const c_char);
@@ -215,16 +211,14 @@ extern "C" {
 
     // Misc helpers
     fn line_breakcheck();
-    fn nvim_docmd_getcmdline_colon(firstc: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
+    fn getcmdline(firstc: c_int, count: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
     fn nvim_docmd_set_sourcing_lnum(lnum: LinenrT);
     fn nvim_get_sourcing_lnum_direct() -> LinenrT;
     fn nvim_get_sourcing_name() -> *const c_char;
 
-    // v_exception / v_throwpoint
-    fn nvim_docmd_v_exception(newval: *mut c_char) -> *mut c_char;
-    fn nvim_docmd_v_throwpoint(newval: *mut c_char) -> *mut c_char;
-
-    // do_cmdline_start / do_cmdline_end wrappers
+    // v_exception / v_throwpoint (directly exported)
+    fn v_exception(newval: *mut c_char) -> *mut c_char;
+    fn v_throwpoint(newval: *mut c_char) -> *mut c_char;
 
     // Memory
     fn xfree(ptr: *mut c_void);
@@ -258,7 +252,6 @@ extern "C" {
     fn nvim_docmd_ga_deep_clear_lines(gap: *mut c_void);
     fn nvim_docmd_strmove(dst: *mut c_char, src: *const c_char);
     fn nvim_docmd_free_emsg_silent_list(cstack: *mut c_void);
-    fn nvim_docmd_get_sourcing_name_raw() -> *const c_char;
 }
 
 // =============================================================================
@@ -294,8 +287,9 @@ pub unsafe extern "C" fn getline_equal(
     let mut cp = cookie;
 
     while linegetter_eq(gp, loop_line_ptr) {
-        let new_gp = unsafe { nvim_docmd_loop_cookie_get_lc_getline(cp) };
-        let new_cp = unsafe { nvim_docmd_loop_cookie_get_cookie(cp) };
+        let lc = cp as *mut LoopCookie;
+        let new_gp = unsafe { (*lc).lc_getline };
+        let new_cp = unsafe { (*lc).cookie };
         gp = new_gp;
         cp = new_cp;
     }
@@ -315,8 +309,9 @@ pub unsafe extern "C" fn getline_cookie(fgetline: LineGetter, cookie: *mut c_voi
     let mut cp = cookie;
 
     while linegetter_eq(gp, loop_line_ptr) {
-        let new_gp = unsafe { nvim_docmd_loop_cookie_get_lc_getline(cp) };
-        let new_cp = unsafe { nvim_docmd_loop_cookie_get_cookie(cp) };
+        let lc = cp as *mut LoopCookie;
+        let new_gp = unsafe { (*lc).lc_getline };
+        let new_cp = unsafe { (*lc).cookie };
         gp = new_gp;
         cp = new_cp;
     }
@@ -342,8 +337,8 @@ pub unsafe extern "C" fn save_dbg_stuff(dsp: *mut DbgStuff) {
         force_abort = false;
         (*dsp).caught_stack = caught_stack;
         caught_stack = std::ptr::null_mut();
-        (*dsp).vv_exception = nvim_docmd_v_exception(std::ptr::null_mut());
-        (*dsp).vv_throwpoint = nvim_docmd_v_throwpoint(std::ptr::null_mut());
+        (*dsp).vv_exception = v_exception(std::ptr::null_mut());
+        (*dsp).vv_throwpoint = v_throwpoint(std::ptr::null_mut());
 
         // Necessary for debugging an inactive ":catch", ":finally", ":endtry".
         (*dsp).did_emsg = did_emsg;
@@ -375,8 +370,8 @@ pub unsafe extern "C" fn restore_dbg_stuff(dsp: *mut DbgStuff) {
         trylevel = (*dsp).trylevel;
         force_abort = (*dsp).force_abort != 0;
         caught_stack = (*dsp).caught_stack;
-        nvim_docmd_v_exception((*dsp).vv_exception);
-        nvim_docmd_v_throwpoint((*dsp).vv_throwpoint);
+        v_exception((*dsp).vv_exception);
+        v_throwpoint((*dsp).vv_throwpoint);
         did_emsg = (*dsp).did_emsg;
         got_int = (*dsp).got_int != 0;
         did_throw = (*dsp).did_throw;
@@ -431,7 +426,7 @@ pub unsafe extern "C" fn rs_get_loop_line(
 
         // First time inside the ":while"/":for": get line normally.
         let line = if unsafe { (*cp).lc_getline }.is_none() {
-            unsafe { nvim_docmd_getcmdline_colon(c, indent, do_concat) }
+            unsafe { getcmdline(c, 0, indent, do_concat) }
         } else {
             let f = unsafe { (*cp).lc_getline.unwrap() };
             unsafe { f(c, (*cp).cookie, indent, do_concat) }
@@ -703,10 +698,10 @@ pub unsafe extern "C" fn rs_do_cmdline(
             if count == 1
                 && unsafe { getline_equal(fgetline, cookie, Some(getexline as LineGetterFn)) }
             {
-                if unsafe { nvim_docmd_ui_has_cmdline() } != 0 {
+                if unsafe { ui_has(0) } {
                     // Emit cmdline_block event for loop/conditional block.
                     unsafe {
-                        nvim_docmd_ui_ext_cmdline_block_append(0, last_cmdline);
+                        ui_ext_cmdline_block_append(0, last_cmdline);
                     }
                     did_block = true;
                 }
@@ -730,12 +725,12 @@ pub unsafe extern "C" fn rs_do_cmdline(
             used_getline = true;
 
             // Emit all but the first cmdline_block event immediately.
-            if unsafe { nvim_docmd_ui_has_cmdline() } != 0
+            if unsafe { ui_has(0) }
                 && count > 0
                 && unsafe { getline_equal(fgetline, cookie, Some(getexline as LineGetterFn)) }
             {
                 unsafe {
-                    nvim_docmd_ui_ext_cmdline_block_append(indent as usize, next_cmdline);
+                    ui_ext_cmdline_block_append(indent as usize, next_cmdline);
                 }
             }
 
@@ -800,7 +795,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         }
         count += 1;
 
-        if (unsafe { p_verbose } >= 15 && !unsafe { nvim_docmd_get_sourcing_name_raw() }.is_null())
+        if (unsafe { p_verbose } >= 15 && !unsafe { nvim_get_sourcing_name() }.is_null())
             || unsafe { p_verbose } >= 16
         {
             unsafe {
@@ -1127,7 +1122,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
     }
 
     if did_block {
-        unsafe { nvim_docmd_ui_ext_cmdline_block_leave() };
+        unsafe { ui_ext_cmdline_block_leave() };
     }
 
     unsafe { did_endif = false }; // in case do_cmdline used recursively

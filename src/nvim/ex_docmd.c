@@ -146,10 +146,8 @@ struct loop_cookie {
 };
 
 // restore_dbg_stuff, get_loop_line, store_loop_line are all now in Rust
-// (do_cmdline.rs). struct loop_cookie and wcmd_T remain here to support the
-// C accessor wrappers nvim_docmd_loop_cookie_get_* and
+// (do_cmdline.rs). struct loop_cookie and wcmd_T remain here to support
 // nvim_docmd_ga_deep_clear_lines used by Rust.
-// get_loop_line is still referenced by nvim_docmd_get_loop_line_ptr below.
 extern char *get_loop_line(int c, void *cookie, int indent, bool do_concat);
 
 #include "ex_docmd.c.generated.h"
@@ -1294,12 +1292,6 @@ char *nvim_docmd_ex_errmsg_format(const char *msg, const char *arg,
 }
 uint32_t nvim_docmd_get_argt_for_idx(int idx) { return cmdnames[idx].cmd_argt; }
 int nvim_docmd_parse_command_modifiers_global(exarg_T *eap, const char **errormsg) { return parse_command_modifiers(eap, errormsg, &cmdmod, false); }
-LineGetter nvim_docmd_get_loop_line_ptr(void) { return get_loop_line; }
-LineGetter nvim_docmd_loop_cookie_get_lc_getline(void *lc) { return ((struct loop_cookie *)lc)->lc_getline; }
-void *nvim_docmd_loop_cookie_get_cookie(void *lc) { return ((struct loop_cookie *)lc)->cookie; }
-int nvim_docmd_ui_has_cmdline(void) { return ui_has(kUICmdline) ? 1 : 0; }
-void nvim_docmd_ui_ext_cmdline_block_append(size_t indent, const char *s) { ui_ext_cmdline_block_append(indent, s); }
-void nvim_docmd_ui_ext_cmdline_block_leave(void) { ui_ext_cmdline_block_leave(); }
 linenr_T nvim_docmd_dbg_find_breakpoint(bool file, char *fname, linenr_T after) { return dbg_find_breakpoint(file, fname, after); }
 void nvim_docmd_dbg_breakpoint(char *name, linenr_T lnum) { dbg_breakpoint(name, lnum); }
 void nvim_docmd_do_debug(char *cmd) { do_debug(cmd); }
@@ -1308,12 +1300,8 @@ void nvim_docmd_report_make_pending(int pending, void *value) { report_make_pend
 void nvim_docmd_rewind_conditionals(cstack_T *cstack, int idx, int cond_type, int *cond_level) { rewind_conditionals(cstack, idx, cond_type, cond_level); }
 void nvim_docmd_script_line_start(void) { script_line_start(); }
 void nvim_docmd_script_line_end(void) { script_line_end(); }
-char *nvim_docmd_getcmdline_colon(int firstc, int indent, bool do_concat) { return getcmdline(firstc, 0, indent, do_concat); }
 void nvim_docmd_set_sourcing_lnum(linenr_T lnum) { if (exestack.ga_data != NULL && exestack.ga_len > 0) { SOURCING_LNUM = lnum; } }
-char *nvim_docmd_v_exception(char *newval) { return v_exception(newval); }
-char *nvim_docmd_v_throwpoint(char *newval) { return v_throwpoint(newval); }
 void nvim_docmd_ga_deep_clear_lines(garray_T *gap) { GA_DEEP_CLEAR(gap, wcmd_T, FREE_WCMD); }
-const char *nvim_docmd_get_sourcing_name_raw(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? NULL : SOURCING_NAME; }
 
 /// Free the cs_emsg_silent_list from a cstack.
 /// Called from Rust do_cmdline after the cstack goes out of scope.
