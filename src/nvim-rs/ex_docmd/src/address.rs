@@ -246,10 +246,10 @@ extern "C" {
     fn nvim_docmd_get_curbuf_line_count() -> i32;
     fn nvim_docmd_get_curbuf_fnum() -> c_int;
 
-    // Quickfix accessors
-    fn nvim_docmd_qf_get_cur_idx(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_qf_get_cur_valid_idx(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_qf_get_valid_size(eap: ExArgHandle) -> usize;
+    // Quickfix accessors (directly exported)
+    fn qf_get_cur_idx(eap: ExArgHandle) -> usize;
+    fn qf_get_cur_valid_idx(eap: ExArgHandle) -> c_int;
+    fn qf_get_valid_size(eap: ExArgHandle) -> usize;
 
     // Buffer list walking
     fn nvim_docmd_first_loaded_buf_fnum() -> c_int;
@@ -409,8 +409,8 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
         x if x == ADDR_LOADED_BUFFERS || x == ADDR_BUFFERS => nvim_docmd_get_curbuf_fnum() as i32,
         x if x == ADDR_TABS => nvim_docmd_current_tab_nr() as i32,
         x if x == ADDR_TABS_RELATIVE || x == ADDR_UNSIGNED => 1,
-        x if x == ADDR_QUICKFIX => nvim_docmd_qf_get_cur_idx(eap) as i32,
-        x if x == ADDR_QUICKFIX_VALID => nvim_docmd_qf_get_cur_valid_idx(eap) as i32,
+        x if x == ADDR_QUICKFIX => qf_get_cur_idx(eap) as i32,
+        x if x == ADDR_QUICKFIX_VALID => qf_get_cur_valid_idx(eap) as i32,
         _ => 0,
     }
 }
@@ -460,7 +460,7 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
             }
         }
         x if x == ADDR_QUICKFIX_VALID => {
-            let size = nvim_docmd_qf_get_valid_size(eap) as i32;
+            let size = qf_get_valid_size(eap) as i32;
             (*eap).line2 = if size == 0 { 1 } else { size };
         }
         x if x == ADDR_NONE || x == ADDR_UNSIGNED || x == ADDR_QUICKFIX => {
@@ -606,8 +606,8 @@ extern "C" {
     // Buffer handle
     fn nvim_docmd_get_curbuf_handle() -> c_int;
 
-    // Quickfix (qf_get_size returns c_int from wrapper)
-    fn nvim_docmd_qf_get_size(eap: ExArgHandle) -> c_int;
+    // Quickfix (qf_get_size, directly exported, returns usize)
+    fn qf_get_size(eap: ExArgHandle) -> usize;
 
     // Search
     fn nvim_docmd_set_searchcmdlen(v: c_int);
@@ -794,10 +794,10 @@ pub unsafe fn get_address_impl(
                         return lnum;
                     }
                     ADDR_QUICKFIX => {
-                        lnum = nvim_docmd_qf_get_cur_idx(eap) as i32;
+                        lnum = qf_get_cur_idx(eap) as i32;
                     }
                     ADDR_QUICKFIX_VALID => {
-                        lnum = nvim_docmd_qf_get_cur_valid_idx(eap) as i32;
+                        lnum = qf_get_cur_valid_idx(eap) as i32;
                     }
                     _ => {}
                 }
@@ -832,13 +832,13 @@ pub unsafe fn get_address_impl(
                         return lnum;
                     }
                     ADDR_QUICKFIX => {
-                        lnum = nvim_docmd_qf_get_size(eap) as i32;
+                        lnum = qf_get_size(eap) as i32;
                         if lnum == 0 {
                             lnum = 1;
                         }
                     }
                     ADDR_QUICKFIX_VALID => {
-                        lnum = nvim_docmd_qf_get_valid_size(eap) as i32;
+                        lnum = qf_get_valid_size(eap) as i32;
                         if lnum == 0 {
                             lnum = 1;
                         }
@@ -1036,10 +1036,10 @@ pub unsafe fn get_address_impl(
                         lnum = 1;
                     }
                     ADDR_QUICKFIX => {
-                        lnum = nvim_docmd_qf_get_cur_idx(eap) as i32;
+                        lnum = qf_get_cur_idx(eap) as i32;
                     }
                     ADDR_QUICKFIX_VALID => {
-                        lnum = nvim_docmd_qf_get_cur_valid_idx(eap) as i32;
+                        lnum = qf_get_cur_valid_idx(eap) as i32;
                     }
                     ADDR_NONE | ADDR_UNSIGNED => {
                         lnum = 0;
@@ -1244,7 +1244,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     }
                     ADDR_QUICKFIX_VALID => {
                         (*eap).line1 = 1;
-                        let mut size = nvim_docmd_qf_get_valid_size(eap) as i32;
+                        let mut size = qf_get_valid_size(eap) as i32;
                         if size == 0 {
                             size = 1;
                         }

@@ -16,7 +16,7 @@ extern "C" {
 
     // Phase 4: additional eap field accessors
 
-    fn nvim_docmd_grep_internal(cmdidx: c_int) -> c_int;
+    fn grep_internal(cmdidx: c_int) -> c_int;
     fn nvim_docmd_get_curbuf_line_count() -> i32;
 
     // Phase 4: helper function wrappers
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char {
         || cmdidx == crate::commands::CMD_LVIMGREP
         || cmdidx == crate::commands::CMD_VIMGREPADD
         || cmdidx == crate::commands::CMD_LVIMGREPADD
-        || nvim_docmd_grep_internal(cmdidx) != 0
+        || grep_internal(cmdidx) != 0
     {
         let p = rs_skip_vimgrep_pat(arg, ptr::null_mut(), ptr::null_mut());
         if p.is_null() {
@@ -908,7 +908,7 @@ pub unsafe extern "C" fn rs_replace_makeprg(
         || cmdidx == CMD_LGREP
         || cmdidx == CMD_GREPADD
         || cmdidx == CMD_LGREPADD)
-        && nvim_docmd_grep_internal(cmdidx) == 0
+        && grep_internal(cmdidx) == 0
     {
         let program = nvim_docmd_get_grep_or_make_program(isgrep);
         let arg = skipwhite(arg as *const c_char);

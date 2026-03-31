@@ -36,7 +36,7 @@ extern "C" {
     fn nvim_docmd_last_loaded_fnum_or_fail() -> c_int;
     fn nvim_docmd_last_win_nr() -> c_int;
     fn nvim_docmd_last_tab_nr() -> c_int;
-    fn nvim_docmd_qf_get_valid_size(eap: ExArgHandle) -> usize;
+    fn qf_get_valid_size(eap: ExArgHandle) -> usize;
 
     // Error messages
 }
@@ -769,8 +769,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 }
             }
             x if x == ADDR_QUICKFIX_VALID => {
-                if (line2 != 1 && (line2 as usize) > nvim_docmd_qf_get_valid_size(eap)) || line2 < 0
-                {
+                if (line2 != 1 && (line2 as usize) > qf_get_valid_size(eap)) || line2 < 0 {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }

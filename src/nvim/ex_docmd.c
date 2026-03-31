@@ -541,7 +541,6 @@ char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_fu
 }
 
 int nvim_docmd_cmdnames_func_is_ni(int cmdidx) { return IS_USER_CMDIDX((cmdidx_T)cmdidx) ? 0 : (cmdnames[cmdidx].cmd_func == ex_ni || cmdnames[cmdidx].cmd_func == ex_script_ni); }
-int nvim_docmd_grep_internal(int cmdidx) { return grep_internal((cmdidx_T)cmdidx); }
 linenr_T nvim_docmd_get_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 int nvim_docmd_get_command_count(void) { return command_count; }
 int nvim_docmd_get_cmdidxs1(int c) { return (int)cmdidxs1[CHAR_ORD_LOW(c)]; }
@@ -605,9 +604,6 @@ linenr_T nvim_docmd_get_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum;
 int nvim_docmd_get_curwin_arg_idx(void) { return curwin->w_arg_idx; }
 int nvim_docmd_get_argcount(void) { return ARGCOUNT; }
 int nvim_docmd_get_curbuf_fnum(void) { return curbuf->b_fnum; }
-int nvim_docmd_qf_get_cur_idx(const exarg_T *eap) { return (int)qf_get_cur_idx(eap); }
-int nvim_docmd_qf_get_cur_valid_idx(const exarg_T *eap) { return (int)qf_get_cur_valid_idx(eap); }
-size_t nvim_docmd_qf_get_valid_size(const exarg_T *eap) { return qf_get_valid_size(eap); }
 /// Walk forward from firstbuf to find first loaded buffer.
 /// Returns fnum of first loaded buffer, or -1 if none found.
 int nvim_docmd_first_loaded_buf_fnum(void)
@@ -730,7 +726,6 @@ linenr_T nvim_docmd_hasFolding(linenr_T lnum)
 /// Wrap getdigits_int32 for Rust.
 int nvim_docmd_getdigits_int32(char **pp) { return (int)getdigits_int32(pp, false, MAXLNUM); }
 /// Wrap qf_get_size for Rust.
-int nvim_docmd_qf_get_size(exarg_T *eap) { return (int)qf_get_size(eap); }
 /// Wrap mark_get_visual for Rust.
 void *nvim_docmd_mark_get_visual(int ch) { return mark_get_visual(curbuf, (uint8_t)ch); }
 // (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
@@ -740,7 +735,6 @@ void nvim_docmd_set_redir_reg(int reg) { redir_reg = (uint8_t)reg; }
 void nvim_docmd_set_redir_vname(int val) { redir_vname = (bool)val; }
 int nvim_docmd_get_redir_vname(void) { return redir_vname ? 1 : 0; }
 void nvim_docmd_fclose_redir_fd(void) { fclose(redir_fd); redir_fd = NULL; }
-void nvim_docmd_var_redir_stop(void) { var_redir_stop(); }
 int nvim_docmd_get_p_mmd(void) { return (int)p_mmd; }
 int nvim_docmd_curbuf_has_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
 int nvim_docmd_curwin_in_terminal_mode(void) { return (State & MODE_TERMINAL) ? 1 : 0; }

@@ -201,7 +201,7 @@ extern "C" {
     fn nvim_docmd_close_redir();
     fn nvim_docmd_fclose_redir_fd();
     fn nvim_docmd_get_redir_vname() -> c_int;
-    fn nvim_docmd_var_redir_stop();
+    fn var_redir_stop();
     fn open_exfile(fname: *const c_char, forceit: c_int, mode: *const c_char) -> *mut c_void;
     fn expand_env_save(arg: *const c_char) -> *mut c_char;
     fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
@@ -879,7 +879,7 @@ pub unsafe extern "C" fn rs_close_redir_impl() {
     }
     nvim_docmd_set_redir_reg(0);
     if nvim_docmd_get_redir_vname() != 0 {
-        nvim_docmd_var_redir_stop();
+        var_redir_stop();
         nvim_docmd_set_redir_vname(0);
     }
 }
