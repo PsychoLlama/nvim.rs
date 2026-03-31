@@ -2151,8 +2151,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
 
 extern "C" {
     // CMD_view/enew/sview/balt/badd use crate::cmd_idx::{CMD_*}.
-    fn nvim_docmd_get_readonlymode() -> c_int;
-    fn nvim_docmd_set_readonlymode(v: c_int);
+    // readonlymode now via crate::readonlymode
     fn buf_hide(buf: BufHandle) -> bool;
     fn nvim_docmd_set_curbuf_b_p_ro(v: c_int);
     fn nvim_docmd_eap_get_do_ecmd_lnum(eap: ExArgHandle) -> LinenrT;
@@ -2220,11 +2219,11 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
         if *arg != 0 && nvim_text_or_buf_locked() != 0 {
             return;
         }
-        let n = nvim_docmd_get_readonlymode();
+        let n = crate::readonlymode;
         if cmdidx == cmd_view || cmdidx == cmd_sview {
-            nvim_docmd_set_readonlymode(1);
+            crate::readonlymode = true;
         } else if cmdidx == cmd_enew {
-            nvim_docmd_set_readonlymode(0);
+            crate::readonlymode = false;
         }
         if cmdidx != cmd_balt && cmdidx != cmd_badd {
             setpcmark();
@@ -2255,12 +2254,10 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
             if !old_curwin.is_null() {
                 nvim_docmd_do_exedit_split_fail_cleanup();
             }
-        } else if nvim_docmd_get_readonlymode() != 0
-            && nvim_buf_get_nwindows(nvim_get_curbuf()) == 1
-        {
+        } else if crate::readonlymode && nvim_buf_get_nwindows(nvim_get_curbuf()) == 1 {
             nvim_docmd_set_curbuf_b_p_ro(1);
         }
-        nvim_docmd_set_readonlymode(n);
+        crate::readonlymode = n;
     } else {
         nvim_docmd_do_exedit_split_fallback(eap);
     }

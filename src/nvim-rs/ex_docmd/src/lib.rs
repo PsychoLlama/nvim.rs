@@ -104,6 +104,12 @@ extern "C" {
     pub static mut did_emsg_syntax: bool;
     pub static mut global_busy: c_int;
     pub static mut msg_silent: c_int;
+    pub static mut stop_insert_mode: bool;
+    pub static mut must_redraw: c_int;
+    pub static mut readonlymode: bool;
+
+    // Direct C functions (avoid nvim_docmd_ wrappers)
+    pub fn clearmode();
 
     // Character classification from charset crate
     #[link_name = "vim_isIDc"]

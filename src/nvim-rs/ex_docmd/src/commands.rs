@@ -294,8 +294,7 @@ extern "C" {
     fn putdigraph(str: *mut c_char);
     fn rs_listdigraphs(use_headers: c_int);
 
-    // Phase 5: ex_mode helpers
-    fn nvim_docmd_set_must_redraw(val: c_int);
+    // Phase 5: ex_mode helpers (must_redraw now via crate::must_redraw)
     // Phase 5: ex_swapname helpers
     fn nvim_docmd_get_curbuf_swapname() -> *const c_char;
     // Phase 6: ex_tabnext helpers
@@ -1622,9 +1621,7 @@ extern "C" {
     // Phase 1 C accessors
     static mut restarting: bool;
     fn nvim_docmd_set_no_hlsearch(flag: bool);
-    fn nvim_docmd_clear_restart_edit();
-    fn nvim_docmd_set_stop_insert_mode();
-    fn nvim_docmd_clearmode();
+    // restart_edit, stop_insert_mode, clearmode now accessed via crate globals/fn
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_mod(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_next(eap: ExArgHandle);
@@ -1782,9 +1779,9 @@ pub unsafe extern "C" fn rs_ex_nohlsearch(eap: ExArgHandle) {
 #[export_name = "ex_stopinsert"]
 pub unsafe extern "C" fn rs_ex_stopinsert(eap: ExArgHandle) {
     let _ = eap;
-    nvim_docmd_clear_restart_edit();
-    nvim_docmd_set_stop_insert_mode();
-    nvim_docmd_clearmode();
+    crate::restart_edit = 0;
+    crate::stop_insert_mode = true;
+    crate::clearmode();
 }
 
 /// ":checkpath" -- find pattern in path.
@@ -3158,7 +3155,7 @@ pub unsafe extern "C" fn rs_ex_digraphs(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_mode(eap: ExArgHandle) {
     let arg = (*eap).arg;
     if arg.is_null() || *arg == 0 {
-        nvim_docmd_set_must_redraw(UPD_CLEAR);
+        crate::must_redraw = UPD_CLEAR;
         rs_ex_redraw(eap);
     } else {
         emsg(crate::gt(crate::E_SCREENMODE_STR.as_ptr()));

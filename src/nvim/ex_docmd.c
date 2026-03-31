@@ -357,7 +357,6 @@ int nvim_curbuf_is_dummy(void) { return (curbuf->b_flags & BF_DUMMY) != 0; }
 const char *nvim_get_sourcing_name(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? NULL : SOURCING_NAME; }
 int nvim_get_sourcing_lnum(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? 0 : (int)SOURCING_LNUM; }
 int nvim_get_exestack_len(void) { return exestack.ga_len; }
-void nvim_docmd_set_must_redraw(int val) { must_redraw = val; }
 const char *nvim_docmd_get_curbuf_swapname(void) { return (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) ? NULL : curbuf->b_ml.ml_mfp->mf_fname; }
 // Returns the parsed count, or 0 on error (sets *errmsg_set = 1).
 int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
@@ -782,12 +781,6 @@ bool nvim_is_expand_char(int c) { return vim_strchr("%#<", (uint8_t)c) != NULL; 
 
 void nvim_docmd_set_no_hlsearch(bool flag) { no_hlsearch = flag; set_vim_var_nr(VV_HLSEARCH, !no_hlsearch && p_hls); }
 
-/// Set restart_edit to 0.
-void nvim_docmd_clear_restart_edit(void) { restart_edit = 0; }
-
-/// Set stop_insert_mode = true.
-void nvim_docmd_set_stop_insert_mode(void) { stop_insert_mode = true; }
-void nvim_docmd_clearmode(void) { clearmode(); }
 void nvim_docmd_goto_buffer_mod(exarg_T *eap) { goto_buffer(eap, DOBUF_MOD, FORWARD, (int)eap->line2); if (eap->do_ecmd_cmd != NULL) { do_cmdline_cmd(eap->do_ecmd_cmd); } }
 void nvim_docmd_goto_buffer_next(exarg_T *eap) { goto_buffer(eap, DOBUF_CURRENT, FORWARD, (int)eap->line2); if (eap->do_ecmd_cmd != NULL) { do_cmdline_cmd(eap->do_ecmd_cmd); } }
 void nvim_docmd_goto_buffer_prev(exarg_T *eap) { goto_buffer(eap, DOBUF_CURRENT, BACKWARD, (int)eap->line2); if (eap->do_ecmd_cmd != NULL) { do_cmdline_cmd(eap->do_ecmd_cmd); } }
@@ -916,8 +909,6 @@ int nvim_docmd_sst_save_typeahead(save_state_T *sst) { save_typeahead(&sst->tabu
 void nvim_docmd_sst_restore_typeahead(save_state_T *sst) { restore_typeahead(&sst->tabuf); }
 void nvim_docmd_win_set_alt_fnum(win_T *wp, int fnum) { wp->w_alt_fnum = fnum; }
 int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
-int nvim_docmd_get_readonlymode(void) { return readonlymode ? 1 : 0; }
-void nvim_docmd_set_readonlymode(int v) { readonlymode = (v != 0); }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
 char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
