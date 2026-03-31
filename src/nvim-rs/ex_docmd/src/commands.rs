@@ -2122,8 +2122,8 @@ pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
 extern "C" {
     fn nvim_docmd_get_argopt_name(idx: c_int) -> *mut c_char;
     // Phase 23: ex_edit helpers
-    fn nvim_docmd_check_can_set_curbuf_forceit(forceit: bool) -> bool;
-    fn nvim_docmd_bt_prompt_curbuf() -> bool;
+    fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+    fn rs_bt_prompt(buf: *mut c_void) -> bool;
 
     // Phase 21 helpers
     fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
@@ -2276,13 +2276,12 @@ pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
     // Exclude commands which keep the window's current buffer
     if cmdidx != CMD_BADD
         && cmdidx != CMD_BALT
-        && (rs_is_other_file(0, ffname) != 0
-            && !nvim_docmd_check_can_set_curbuf_forceit((*eap).forceit != 0))
+        && (rs_is_other_file(0, ffname) != 0 && !check_can_set_curbuf_forceit((*eap).forceit))
     {
         return;
     }
     // prevent use of :edit on prompt-buffers
-    if nvim_docmd_bt_prompt_curbuf()
+    if rs_bt_prompt(nvim_get_curbuf())
         && cmdidx == CMD_EDIT
         && (arg.is_null() || *(arg as *const u8) == 0)
     {

@@ -921,8 +921,7 @@ extern "C" {
     ) -> *mut c_char;
     #[link_name = "nvim_vim_findfile_cleanup"]
     fn nvim_docmd_vim_findfile_cleanup(search_ctx: *mut c_void);
-    #[link_name = "check_can_set_curbuf_forceit"]
-    fn nvim_docmd_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+    fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
 
     // exec_normal helpers
     #[link_name = "ins_typebuf"]
@@ -1072,7 +1071,7 @@ pub unsafe extern "C" fn rs_ex_splitview(eap: ExArgHandle) {
 #[export_name = "nvim_docmd_ex_find_impl"]
 pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
     let forceit = (*eap).forceit as c_int;
-    if !nvim_docmd_check_can_set_curbuf_forceit(forceit) {
+    if !check_can_set_curbuf_forceit(forceit) {
         return;
     }
 

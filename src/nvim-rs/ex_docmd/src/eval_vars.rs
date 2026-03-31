@@ -119,8 +119,8 @@ extern "C" {
     // arg_all
     fn arg_all() -> *mut c_char;
 
-    // getdigits_int wrapper (advances *pp and returns the int)
-    fn nvim_docmd_getdigits_int(pp: *mut *mut c_char) -> c_int;
+    // getdigits_int (direct C function)
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
 
 }
 
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
                 if use_oldfiles {
                     s = s.add(1);
                 }
-                let i = nvim_docmd_getdigits_int(&raw mut s);
+                let i = getdigits_int(&raw mut s, false, 0);
                 // If s == src+2 and src[1] == '-': just a minus sign, don't skip over it
                 if s == src.add(2) && *src.add(1) as u8 == b'-' {
                     s = s.sub(1);

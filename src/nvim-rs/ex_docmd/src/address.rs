@@ -229,8 +229,9 @@ extern "C" {
     // cmdnames table accessor
     fn nvim_docmd_cmdnames_addr_type(idx: c_int) -> c_int;
 
-    // bt_quickfix check
-    fn nvim_docmd_bt_quickfix_curbuf() -> c_int;
+    // bt_quickfix check (via rs_bt_quickfix since bt_quickfix is inline)
+    fn rs_bt_quickfix(buf: *mut c_void) -> bool;
+    fn nvim_get_curbuf() -> *mut c_void;
 
     // Window/tab navigation
     fn nvim_docmd_current_win_nr() -> c_int;
@@ -370,7 +371,7 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
 
     // :.cc in quickfix window uses line number
     if (cmdidx == crate::commands::CMD_CC || cmdidx == crate::commands::CMD_LL)
-        && nvim_docmd_bt_quickfix_curbuf() != 0
+        && rs_bt_quickfix(nvim_get_curbuf())
     {
         (*eap).addr_type = ADDR_OTHER;
     }
@@ -635,7 +636,7 @@ extern "C" {
 
     // Mark
     fn nvim_docmd_mark_get(flag: c_int, ch: c_int) -> *mut c_void;
-    fn nvim_docmd_mark_check(fm: *mut c_void, errormsg: *mut *const c_char) -> c_int;
+    fn mark_check(fm: *mut c_void, errormsg: *mut *const c_char) -> bool;
     fn nvim_docmd_mark_fnum(fm: *const c_void) -> c_int;
     fn nvim_docmd_mark_lnum(fm: *const c_void) -> i32;
     fn mark_move_to(fm: *mut c_void, flags: c_int) -> c_int;
@@ -650,8 +651,8 @@ extern "C" {
     fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
     fn nvim_buf_get_ml_mfp_null(buf: *mut c_void) -> c_int;
 
-    // Digit parsing (getdigits_int32 not in the existing block)
-    fn nvim_docmd_getdigits_int32(pp: *mut *mut c_char) -> c_int;
+    // Digit parsing (direct C function)
+    fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
 
     // Error messages
 
@@ -877,7 +878,7 @@ pub unsafe fn get_address_impl(
                         // Jumped to another file.
                         lnum = nvim_docmd_get_curwin_cursor_lnum();
                     } else {
-                        if nvim_docmd_mark_check(fm, errormsg) == 0 {
+                        if !mark_check(fm, errormsg) {
                             cmd = std::ptr::null_mut();
                             *ptr = cmd;
                             return lnum;
@@ -1060,7 +1061,7 @@ pub unsafe fn get_address_impl(
                 n = 1; // '+' is '+1'
             } else {
                 // "number", "+number" or "-number"
-                n = nvim_docmd_getdigits_int32(&mut cmd);
+                n = getdigits_int32(&mut cmd, false, i32::MAX);
                 if n == MAXLNUM {
                     *errormsg = crate::gt(crate::E_LINE_NUMBER_OUT_OF_RANGE_STR.as_ptr());
                     cmd = std::ptr::null_mut();
@@ -1270,7 +1271,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                 (*eap).cmd = cmd.add(1);
                 if (*eap).skip == 0 {
                     let fm = nvim_docmd_mark_get_visual(b'<' as c_int);
-                    if nvim_docmd_mark_check(fm, errormsg) == 0 {
+                    if !mark_check(fm, errormsg) {
                         if need_check_cursor {
                             check_cursor(nvim_get_curwin());
                         }
@@ -1279,7 +1280,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     // assert(fm != NULL) — mark_check succeeded
                     (*eap).line1 = nvim_docmd_mark_lnum(fm);
                     let fm = nvim_docmd_mark_get_visual(b'>' as c_int);
-                    if nvim_docmd_mark_check(fm, errormsg) == 0 {
+                    if !mark_check(fm, errormsg) {
                         if need_check_cursor {
                             check_cursor(nvim_get_curwin());
                         }

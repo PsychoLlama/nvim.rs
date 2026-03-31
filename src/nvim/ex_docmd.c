@@ -482,7 +482,6 @@ int nvim_docmd_parse_count_digits(exarg_T *eap)
 void nvim_docmd_arg_skip_to_end(exarg_T *eap) { eap->arg += strlen(eap->arg); }
 int nvim_docmd_count_buf_check(exarg_T *eap) { char *p = skipdigits(eap->arg + 1); return *p == NUL || ascii_iswhite(*p); }
 int nvim_docmd_cmdnames_addr_type(int idx) { return (int)cmdnames[idx].cmd_addr_type; }
-int nvim_docmd_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf); }
 int nvim_docmd_current_win_nr(void) { return CURRENT_WIN_NR; }
 int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
 int nvim_docmd_current_tab_nr(void) { return CURRENT_TAB_NR; }
@@ -586,8 +585,6 @@ linenr_T nvim_docmd_searchit(int dir, int re_pat, linenr_T start_lnum,
 
 /// Returns opaque fmark_T pointer (NULL on failure).
 void *nvim_docmd_mark_get(int flag, int ch) { return mark_get(curbuf, curwin, NULL, (MarkGet)flag, (uint8_t)ch); }
-/// Check a mark and set errormsg if invalid.
-int nvim_docmd_mark_check(void *fm, const char **errormsg) { return mark_check((fmark_T *)fm, errormsg); }
 /// Get fmark_T->fnum.
 int nvim_docmd_mark_fnum(const void *fm) { return ((const fmark_T *)fm)->fnum; }
 /// Get fmark_T->mark.lnum.
@@ -608,7 +605,6 @@ linenr_T nvim_docmd_hasFolding(linenr_T lnum)
 }
 
 /// Wrap getdigits_int32 for Rust.
-int nvim_docmd_getdigits_int32(char **pp) { return (int)getdigits_int32(pp, false, MAXLNUM); }
 /// Wrap qf_get_size for Rust.
 /// Wrap mark_get_visual for Rust.
 void *nvim_docmd_mark_get_visual(int ch) { return mark_get_visual(curbuf, (uint8_t)ch); }
@@ -825,8 +821,6 @@ void nvim_docmd_set_curwin_cursor_pos(int lnum, int col, int coladd) { curwin->w
 const char *nvim_docmd_get_last_chdir_reason(void) { return last_chdir_reason; }
 bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
 bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
-bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit) { return check_can_set_curbuf_forceit(forceit); }
-bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
 bool nvim_docmd_p_cpo_has_execbuf(void) { return vim_strchr(p_cpo, CPO_EXECBUF) != NULL; }
 void nvim_docmd_do_cmdline_getexline(void) { do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE); }
@@ -919,7 +913,6 @@ void nvim_docmd_set_autocmd_fname(const char *new_fname) { xstrlcpy(autocmd_fnam
 const char *nvim_docmd_get_autocmd_match(void) { return autocmd_match; }
 int nvim_docmd_get_current_sctx_lnum(void) { return (int)current_sctx.sc_lnum; }
 int nvim_docmd_get_current_sctx_sid(void) { return (int)current_sctx.sc_sid; }
-int nvim_docmd_getdigits_int(char **pp) { return getdigits_int(pp, false, 0); }
 int nvim_docmd_get_quitmore(void) { return quitmore; }
 void nvim_docmd_set_quitmore(int n) { quitmore = n; }
 void nvim_docmd_check_more_semsg(int n) { semsg(NGETTEXT("E173: %" PRId64 " more file to edit", "E173: %" PRId64 " more files to edit", (unsigned)n), (int64_t)n); }
