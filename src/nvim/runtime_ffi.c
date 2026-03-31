@@ -11,7 +11,15 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
+#include "nvim/debugger.h"
+#include "nvim/buffer_defs.h"
+#include "nvim/charset.h"
+#include "nvim/getchar.h"
+#include "nvim/lua/executor.h"
+#include "nvim/memline.h"
+#include "nvim/usercmd.h"
 #include "nvim/cmdexpand_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
@@ -619,3 +627,336 @@ void nvim_rt_emsg_scriptencoding_outside(void) { emsg(_("E167: :scriptencoding u
 
 /// emsg for E168.
 void nvim_rt_emsg_finish_outside(void) { emsg(_("E168: :finish used outside of a sourced file")); }
+
+// =============================================================================
+// Phase 4: Accessors for do_source_ext and related functions
+// =============================================================================
+
+/// expand_env_save: expand environment variables and return allocated copy.
+char *nvim_rt_expand_env_save(const char *fname) { return expand_env_save((char *)fname); }
+
+/// os_isdir wrapper.
+bool nvim_rt_src_os_isdir(const char *fname) { return os_isdir(fname); }
+
+/// path_tail wrapper.
+char *nvim_rt_src_path_tail(char *fname) { return path_tail(fname); }
+
+/// apply_autocmds wrapper for source events.
+bool nvim_rt_apply_autocmds(int event, const char *fname_exp, const char *fname, bool force, void *buf)
+{
+  return apply_autocmds((event_T)event, (char *)fname_exp, (char *)fname, force, (buf_T *)buf);
+}
+
+/// Get EVENT_SOURCECMD value.
+int nvim_rt_EVENT_SOURCECMD(void) { return EVENT_SOURCECMD; }
+/// Get EVENT_SOURCEPRE value.
+int nvim_rt_EVENT_SOURCEPRE(void) { return EVENT_SOURCEPRE; }
+/// Get EVENT_SOURCEPOST value.
+int nvim_rt_EVENT_SOURCEPOST(void) { return EVENT_SOURCEPOST; }
+
+/// aborting() wrapper.
+bool nvim_rt_aborting(void) { return aborting(); }
+
+/// vimrc_found wrapper.
+void nvim_rt_vimrc_found(const char *fname_exp, const char *env) { vimrc_found((char *)fname_exp, (char *)env); }
+
+/// fclose wrapper.
+int nvim_rt_fclose(void *fp) { return fclose((FILE *)fp); }
+
+/// smsg wrapper for do_source verbose messages.
+void nvim_rt_smsg_cannot_source(const char *fname) { smsg(0, _("Cannot source a directory: \"%s\""), fname); }
+void nvim_rt_smsg_could_not_source(const char *fname) { smsg(0, _("could not source \"%s\""), fname); }
+void nvim_rt_smsg_could_not_source_lnum(int64_t lnum, const char *fname)
+{
+  smsg(0, _("line %" PRId64 ": could not source \"%s\""), lnum, fname);
+}
+void nvim_rt_smsg_sourcing(const char *fname) { smsg(0, _("sourcing \"%s\""), fname); }
+void nvim_rt_smsg_sourcing_lnum(int64_t lnum, const char *fname)
+{
+  smsg(0, _("line %" PRId64 ": sourcing \"%s\""), lnum, fname);
+}
+void nvim_rt_smsg_finished_sourcing(const char *fname) { smsg(0, _("finished sourcing %s"), fname); }
+void nvim_rt_smsg_continuing_in(const char *name) { smsg(0, _("continuing in %s"), name); }
+
+/// verbose_enter/leave wrappers.
+void nvim_rt_verbose_enter(void) { verbose_enter(); }
+void nvim_rt_verbose_leave(void) { verbose_leave(); }
+
+/// Get SOURCING_NAME (can be NULL).
+const char *nvim_rt_get_sourcing_name(void) { return HAVE_SOURCING_INFO ? SOURCING_NAME : NULL; }
+
+/// Get SOURCING_LNUM.
+int nvim_rt_get_sourcing_lnum(void) { return SOURCING_LNUM; }
+
+/// Get p_verbose.
+int nvim_rt_get_p_verbose(void) { return (int)p_verbose; }
+
+/// Get current_sctx fields.
+int nvim_rt_get_current_sctx_sid(void) { return current_sctx.sc_sid; }
+int nvim_rt_get_current_sctx_seq(void) { return current_sctx.sc_seq; }
+int nvim_rt_get_current_sctx_lnum(void) { return current_sctx.sc_lnum; }
+uint64_t nvim_rt_get_current_sctx_chan(void) { return current_sctx.sc_chan; }
+
+/// Set current_sctx fields.
+void nvim_rt_set_current_sctx_sid(int sid) { current_sctx.sc_sid = sid; }
+void nvim_rt_set_current_sctx_seq(int seq) { current_sctx.sc_seq = seq; }
+void nvim_rt_set_current_sctx_lnum(int lnum) { current_sctx.sc_lnum = lnum; }
+
+/// Save and restore current_sctx (returns allocated copy, call xfree when done).
+sctx_T *nvim_rt_save_current_sctx(void)
+{
+  sctx_T *saved = xmalloc(sizeof(sctx_T));
+  *saved = current_sctx;
+  return saved;
+}
+void nvim_rt_restore_current_sctx(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
+
+/// Get debug_break_level.
+int nvim_rt_get_debug_break_level(void) { return debug_break_level; }
+/// Set debug_break_level.
+void nvim_rt_set_debug_break_level(int val) { debug_break_level = val; }
+/// Increment debug_break_level.
+void nvim_rt_inc_debug_break_level(void) { debug_break_level++; }
+
+/// Get debug_tick.
+int nvim_rt_get_debug_tick(void) { return debug_tick; }
+
+/// Get ex_nesting_level.
+int nvim_rt_get_ex_nesting_level(void) { return ex_nesting_level; }
+
+/// Get do_profiling.
+int nvim_rt_get_do_profiling(void) { return do_profiling; }
+
+/// Get PROF_YES value.
+int nvim_rt_PROF_YES(void) { return PROF_YES; }
+
+/// Get time_fd.
+void *nvim_rt_get_time_fd(void) { return time_fd; }
+
+/// time_push/pop/msg wrappers.
+void nvim_rt_time_push(uint64_t *rel_time, uint64_t *start_time) { time_push((proftime_T *)rel_time, (proftime_T *)start_time); }
+void nvim_rt_time_pop(uint64_t rel_time) { time_pop((proftime_T)rel_time); }
+void nvim_rt_time_msg_iobuff(const char *fname)
+{
+  vim_snprintf(IObuff, (size_t)IOSIZE, "sourcing %s", fname);
+  time_msg(IObuff, NULL);
+}
+
+/// prof_child_enter/exit wrappers.
+void nvim_rt_prof_child_enter(uint64_t *wait_start) { prof_child_enter((proftime_T *)wait_start); }
+void nvim_rt_prof_child_exit(uint64_t *wait_start) { prof_child_exit((proftime_T *)wait_start); }
+
+/// save_funccal / restore_funccal wrappers.
+void *nvim_rt_save_funccal(void)
+{
+  funccal_entry_T *entry = xmalloc(sizeof(funccal_entry_T));
+  save_funccal(entry);
+  return entry;
+}
+void nvim_rt_restore_funccal(void *entry) { restore_funccal(); xfree(entry); }
+
+/// SCRIPT_ITEM accessor.
+void *nvim_rt_script_item_get(int sid) { return SCRIPT_ID_VALID(sid) ? SCRIPT_ITEM(sid) : NULL; }
+
+/// scriptitem profiling accessors.
+bool nvim_rt_si_get_sn_prof_on(void *si) { return ((scriptitem_T *)si)->sn_prof_on; }
+void nvim_rt_si_set_sn_prof_on(void *si, bool val) { ((scriptitem_T *)si)->sn_prof_on = val; }
+bool nvim_rt_si_get_sn_pr_force(void *si) { return ((scriptitem_T *)si)->sn_pr_force; }
+void nvim_rt_si_set_sn_pr_force(void *si, bool val) { ((scriptitem_T *)si)->sn_pr_force = val; }
+void nvim_rt_si_inc_pr_count(void *si) { ((scriptitem_T *)si)->sn_pr_count++; }
+uint64_t nvim_rt_si_get_pr_children(void *si) { return (uint64_t)((scriptitem_T *)si)->sn_pr_children; }
+const char *nvim_rt_si_get_sn_name(void *si) { return ((scriptitem_T *)si)->sn_name; }
+bool nvim_rt_si_get_sn_lua(void *si) { return ((scriptitem_T *)si)->sn_lua; }
+
+/// has_profiling wrapper.
+bool nvim_rt_has_profiling(bool file, const char *name, bool *forceit) { return has_profiling(file, name, forceit); }
+
+/// profile_init wrapper.
+void nvim_rt_profile_init(void *si) { profile_init((scriptitem_T *)si); }
+
+/// profile_start/end/zero/sub_wait/add/self wrappers.
+uint64_t nvim_rt_profile_start(void) { return (uint64_t)profile_start(); }
+uint64_t nvim_rt_profile_end(uint64_t tm) { return (uint64_t)profile_end((proftime_T)tm); }
+uint64_t nvim_rt_profile_zero(void) { return (uint64_t)profile_zero(); }
+uint64_t nvim_rt_profile_sub_wait(uint64_t wait_start, uint64_t tm) { return (uint64_t)profile_sub_wait((proftime_T)wait_start, (proftime_T)tm); }
+uint64_t nvim_rt_profile_add(uint64_t tm1, uint64_t tm2) { return (uint64_t)profile_add((proftime_T)tm1, (proftime_T)tm2); }
+uint64_t nvim_rt_profile_self(uint64_t self, uint64_t total, uint64_t children) { return (uint64_t)profile_self((proftime_T)self, (proftime_T)total, (proftime_T)children); }
+
+/// Set si profiling fields after source.
+void nvim_rt_si_update_profile(void *si, uint64_t wait_start)
+{
+  scriptitem_T *sip = (scriptitem_T *)si;
+  sip->sn_pr_start = profile_end(sip->sn_pr_start);
+  sip->sn_pr_start = profile_sub_wait((proftime_T)wait_start, sip->sn_pr_start);
+  sip->sn_pr_total = profile_add(sip->sn_pr_total, sip->sn_pr_start);
+  sip->sn_pr_self = profile_self(sip->sn_pr_self, sip->sn_pr_start, sip->sn_pr_children);
+}
+
+/// si_set_pr_start (from profile_start()).
+void nvim_rt_si_set_pr_start(void *si, uint64_t tm)
+{
+  ((scriptitem_T *)si)->sn_pr_start = (proftime_T)tm;
+  ((scriptitem_T *)si)->sn_pr_children = profile_zero();
+}
+
+/// Set si->sn_lua.
+void nvim_rt_si_set_sn_lua(void *si, bool val) { ((scriptitem_T *)si)->sn_lua = val; }
+
+/// Set si->sn_name (takes ownership).
+void nvim_rt_si_set_sn_name(void *si, char *name) { ((scriptitem_T *)si)->sn_name = name; }
+
+/// emsg for E_INTERR.
+void nvim_rt_emsg_interr(void) { emsg(_(e_interr)); }
+
+/// Get got_int.
+bool nvim_rt_src_got_int(void) { return got_int; }
+
+/// curbuf accessor.
+void *nvim_rt_get_curbuf(void) { return curbuf; }
+
+/// curbuf->b_ffname accessor.
+const char *nvim_rt_curbuf_get_ffname(void) { return curbuf ? curbuf->b_ffname : NULL; }
+
+/// curbuf->b_fnum accessor.
+int nvim_rt_curbuf_get_fnum(void) { return curbuf ? curbuf->b_fnum : 0; }
+
+/// curbuf->b_fname accessor.
+const char *nvim_rt_curbuf_get_fname(void) { return curbuf ? curbuf->b_fname : NULL; }
+
+/// curbuf->b_p_ft accessor (filetype).
+const char *nvim_rt_curbuf_get_ft(void) { return curbuf ? curbuf->b_p_ft : NULL; }
+
+/// IObuff accessor.
+char *nvim_rt_src_get_iobuff(void) { return IObuff; }
+
+/// IOSIZE constant.
+int nvim_rt_src_iosize(void) { return IOSIZE; }
+
+/// DOCMD flags constants.
+int nvim_rt_DOCMD_VERBOSE(void) { return DOCMD_VERBOSE; }
+int nvim_rt_DOCMD_NOWAIT(void) { return DOCMD_NOWAIT; }
+int nvim_rt_DOCMD_REPEAT(void) { return DOCMD_REPEAT; }
+
+/// SID_STR constant.
+int nvim_rt_SID_STR(void) { return SID_STR; }
+
+/// DOSO_VIMRC constant.
+int nvim_rt_DOSO_VIMRC(void) { return DOSO_VIMRC; }
+
+/// get_scriptname wrapper (from runtime.c, used by FFI).
+char *nvim_rt_src_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
+{
+  sctx_T ctx = { .sc_sid = sc_sid, .sc_chan = sc_chan };
+  return get_scriptname(ctx, should_free);
+}
+
+/// nlua_exec_file wrapper.
+void nvim_rt_nlua_exec_file(const char *fname) { nlua_exec_file(fname); }
+
+/// nlua_exec_ga wrapper (executes buflines from a garray_T*).
+void nvim_rt_nlua_exec_ga(void *ga, const char *fname)
+{
+  nlua_exec_ga((garray_T *)ga, (char *)fname);
+}
+
+/// string_convert wrapper.
+char *nvim_rt_string_convert(void *vcp, char *s, size_t *len) { return string_convert((vimconv_T *)vcp, s, len); }
+
+/// Check BOM: firstline[0..2] == {0xef, 0xbb, 0xbf}.
+bool nvim_rt_check_utf8_bom(const uint8_t *line, size_t len)
+{
+  return len >= 3 && line[0] == 0xef && line[1] == 0xbb && line[2] == 0xbf;
+}
+
+/// add_win_cmd_modifiers wrapper.
+void nvim_rt_add_win_cmd_modifiers(char *buf, bool *multi_mods)
+{
+  add_win_cmd_modifiers(buf, &cmdmod, multi_mods);
+}
+
+/// os_setenv wrapper.
+void nvim_rt_os_setenv(const char *name, const char *val, int overwrite) { os_setenv(name, val, overwrite); }
+
+/// SYS_OPTWIN_FILE constant.
+const char *nvim_rt_SYS_OPTWIN_FILE(void) { return SYS_OPTWIN_FILE; }
+
+/// openscript wrapper.
+void nvim_rt_openscript(const char *fname, bool directly) { openscript((char *)fname, directly); }
+
+/// global_busy / listcmd_busy accessors.
+int nvim_rt_get_global_busy(void) { return global_busy; }
+int nvim_rt_get_listcmd_busy(void) { return listcmd_busy; }
+
+/// exarg_T: get eap->nextcmd.
+const char *nvim_rt_exarg_get_nextcmd(const void *eap) { return ((exarg_T *)eap)->nextcmd; }
+
+/// exarg_T: get eap->cstack->cs_idx.
+int nvim_rt_exarg_get_cstack_idx(const void *eap) { return ((exarg_T *)eap)->cstack->cs_idx; }
+
+/// eap->forceit accessor.
+bool nvim_rt_exarg_get_forceit(const void *eap) { return ((exarg_T *)eap)->forceit; }
+
+/// eap->line1 accessor.
+int nvim_rt_exarg_get_line1(const void *eap) { return (int)((exarg_T *)eap)->line1; }
+
+/// eap->line2 accessor (already exists as nvim_rt_exarg_get_line2 for linenr_T).
+
+/// ml_get wrapper.
+const char *nvim_rt_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
+
+/// snprintf IObuff: ":{range}lua buffer=N" or ":source buffer=N".
+void nvim_rt_snprintf_source_buffer_name(char *buf, int size, bool ex_lua, int fnum)
+{
+  if (ex_lua) {
+    snprintf(buf, (size_t)size, ":{range}lua buffer=%d", fnum);
+  } else {
+    snprintf(buf, (size_t)size, ":source buffer=%d", fnum);
+  }
+}
+
+/// ga_init wrapper for buflines.
+void nvim_rt_ga_init_strptrs(void *ga) { ga_init((garray_T *)ga, (int)sizeof(char *), 100); }
+
+/// ga_append for buflines.
+void nvim_rt_ga_append_str(void *ga, char *str) { GA_APPEND(char *, (garray_T *)ga, str); }
+
+/// skip_to_newline wrapper.
+const char *nvim_rt_skip_to_newline(const char *str) { return skip_to_newline(str); }
+
+/// xmemdupz wrapper.
+char *nvim_rt_xmemdupz(const char *str, size_t len) { return xmemdupz(str, len); }
+
+/// emsg_norange: signal "E16: Invalid range" for :source with range+file.
+void nvim_rt_emsg_norange(void) { emsg(_(e_norange)); }
+
+/// semsg for "can't open file".
+void nvim_rt_semsg_notopen(const char *fname) { semsg(_(e_notopen), fname); }
+
+/// emsg_argreq: "E471: Argument required".
+void nvim_rt_emsg_argreq(void) { emsg(_(e_argreq)); }
+
+/// do_source: trampoline to avoid circular dependency.
+int nvim_rt_do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid)
+{
+  return do_source(fname, check_other, is_vimrc, ret_sid);
+}
+
+/// SOURCING_NAME check: if not NULL, return it.
+const char *nvim_rt_get_sourcing_name_if_set(void)
+{
+  return (HAVE_SOURCING_INFO && SOURCING_NAME != NULL) ? SOURCING_NAME : NULL;
+}
+
+/// SOURCING_LNUM value.
+int nvim_rt_get_sourcing_lnum_value(void) { return HAVE_SOURCING_INFO ? SOURCING_LNUM : 0; }
+
+/// vim_snprintf for traceback name.
+void nvim_rt_snprintf_traceback(char *buf, int size, const char *traceback_name,
+                                 const char *sourcing_name, int sourcing_lnum)
+{
+  vim_snprintf(buf, (size_t)size, "%s called at %s:%" PRId64,
+               traceback_name, sourcing_name, (int64_t)sourcing_lnum);
+}
+
+/// STRICMP wrapper (case-insensitive string compare).
+int nvim_rt_STRICMP(const char *a, const char *b) { return STRICMP(a, b); }
