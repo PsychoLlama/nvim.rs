@@ -6,14 +6,15 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use crate::{CmdModHandle, ExArgHandle};
+use crate::CmdModHandle;
+use crate::ExArgHandle;
 
 // =============================================================================
 // Command modifier table
 // =============================================================================
 
 /// Entry in the command modifier table.
-struct CmdMod {
+struct CmdModEntry {
     name: &'static [u8],
     minlen: i32,
     has_count: bool,
@@ -21,123 +22,123 @@ struct CmdMod {
 
 /// The command modifier table, matching `cmdmods[]` in ex_docmd.c.
 /// Values verified against ex_docmd.c lines 3214-3239.
-const CMDMODS: &[CmdMod] = &[
-    CmdMod {
+const CMDMODS: &[CmdModEntry] = &[
+    CmdModEntry {
         name: b"aboveleft",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"belowright",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"botright",
         minlen: 2,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"browse",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"confirm",
         minlen: 4,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"filter",
         minlen: 4,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"hide",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"horizontal",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"keepalt",
         minlen: 5,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"keepjumps",
         minlen: 5,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"keepmarks",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"keeppatterns",
         minlen: 5,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"leftabove",
         minlen: 5,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"lockmarks",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"noautocmd",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"noswapfile",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"rightbelow",
         minlen: 6,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"sandbox",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"silent",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"tab",
         minlen: 3,
         has_count: true,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"topleft",
         minlen: 2,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"unsilent",
         minlen: 3,
         has_count: false,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"verbose",
         minlen: 4,
         has_count: true,
     },
-    CmdMod {
+    CmdModEntry {
         name: b"vertical",
         minlen: 4,
         has_count: false,
@@ -259,18 +260,6 @@ extern "C" {
     #[link_name = "checkforcmd"]
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;
 
-    // eap field accessors
-
-    // cmdmod_T field accessors
-    fn nvim_cmod_clear(cmod: CmdModHandle);
-    fn nvim_cmod_or_flags(cmod: CmdModHandle, f: c_int);
-    fn nvim_cmod_or_split(cmod: CmdModHandle, f: c_int);
-    fn nvim_cmod_set_tab(cmod: CmdModHandle, v: c_int);
-    fn nvim_cmod_set_verbose(cmod: CmdModHandle, v: c_int);
-    fn nvim_cmod_set_filter_force(cmod: CmdModHandle, v: c_int);
-    fn nvim_cmod_set_filter_pat(cmod: CmdModHandle, s: *mut c_char);
-    fn nvim_cmod_set_filter_regprog(cmod: CmdModHandle, prog: *mut c_void);
-
     // Global state accessors
     fn nvim_docmd_get_exmode_active() -> c_int;
     fn nvim_docmd_getline_is_getexline(eap: ExArgHandle) -> c_int;
@@ -327,7 +316,8 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
 ) -> c_int {
     let skip_only = skip_only != 0;
 
-    nvim_cmod_clear(cmod);
+    // Clear cmod by zeroing all its bytes.
+    std::ptr::write_bytes(cmod, 0, 1);
 
     // Repeat until no more command modifiers are found.
     loop {
@@ -382,7 +372,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"aboveleft".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_split(cmod, WSP_ABOVE);
+                    (*cmod).cmod_split |= WSP_ABOVE;
                     matched = true;
                 }
             }
@@ -391,19 +381,19 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"belowright".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_split(cmod, WSP_BELOW);
+                    (*cmod).cmod_split |= WSP_BELOW;
                     matched = true;
                 } else {
                     cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"browse".as_ptr(), 3) {
                         (*eap).cmd = cmd_ptr;
-                        nvim_cmod_or_flags(cmod, CMOD_BROWSE);
+                        (*cmod).cmod_flags |= CMOD_BROWSE;
                         matched = true;
                     } else {
                         cmd_ptr = (*eap).cmd;
                         if rs_checkforcmd(&mut cmd_ptr, c"botright".as_ptr(), 2) {
                             (*eap).cmd = cmd_ptr;
-                            nvim_cmod_or_split(cmod, WSP_BOT);
+                            (*cmod).cmod_split |= WSP_BOT;
                             matched = true;
                         }
                     }
@@ -414,7 +404,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"confirm".as_ptr(), 4) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_flags(cmod, CMOD_CONFIRM);
+                    (*cmod).cmod_flags |= CMOD_CONFIRM;
                     matched = true;
                 }
             }
@@ -423,25 +413,25 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"keepmarks".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_flags(cmod, CMOD_KEEPMARKS);
+                    (*cmod).cmod_flags |= CMOD_KEEPMARKS;
                     matched = true;
                 } else {
                     cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"keepalt".as_ptr(), 5) {
                         (*eap).cmd = cmd_ptr;
-                        nvim_cmod_or_flags(cmod, CMOD_KEEPALT);
+                        (*cmod).cmod_flags |= CMOD_KEEPALT;
                         matched = true;
                     } else {
                         cmd_ptr = (*eap).cmd;
                         if rs_checkforcmd(&mut cmd_ptr, c"keeppatterns".as_ptr(), 5) {
                             (*eap).cmd = cmd_ptr;
-                            nvim_cmod_or_flags(cmod, CMOD_KEEPPATTERNS);
+                            (*cmod).cmod_flags |= CMOD_KEEPPATTERNS;
                             matched = true;
                         } else {
                             cmd_ptr = (*eap).cmd;
                             if rs_checkforcmd(&mut cmd_ptr, c"keepjumps".as_ptr(), 5) {
                                 (*eap).cmd = cmd_ptr;
-                                nvim_cmod_or_flags(cmod, CMOD_KEEPJUMPS);
+                                (*cmod).cmod_flags |= CMOD_KEEPJUMPS;
                                 matched = true;
                             }
                         }
@@ -456,7 +446,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                     && rs_ends_excmd(*p as c_int) == 0
                 {
                     if *p as u8 == b'!' {
-                        nvim_cmod_set_filter_force(cmod, 1);
+                        (*cmod).cmod_filter_force = true;
                         p = nvim_docmd_skipwhite(p.add(1));
                         if *p == 0 || rs_ends_excmd(*p as c_int) != 0 {
                             // break out — not matched
@@ -470,10 +460,11 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             let mut reg_pat: *mut c_char = ptr::null_mut();
                             p = crate::rs_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
                             if !p.is_null() && *p != 0 {
-                                nvim_cmod_set_filter_pat(cmod, nvim_docmd_xstrdup(reg_pat));
+                                (*cmod).cmod_filter_pat = nvim_docmd_xstrdup(reg_pat);
+                                // Store regprog into first pointer slot of regmatch blob.
                                 let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
                                 if !regprog.is_null() {
-                                    nvim_cmod_set_filter_regprog(cmod, regprog);
+                                    (*cmod).cmod_filter_regmatch.data[0] = regprog as u64;
                                     (*eap).cmd = p;
                                     matched = true;
                                 }
@@ -489,10 +480,11 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         let mut reg_pat: *mut c_char = ptr::null_mut();
                         p = crate::rs_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
                         if !p.is_null() && *p != 0 {
-                            nvim_cmod_set_filter_pat(cmod, nvim_docmd_xstrdup(reg_pat));
+                            (*cmod).cmod_filter_pat = nvim_docmd_xstrdup(reg_pat);
+                            // Store regprog into first pointer slot of regmatch blob.
                             let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
                             if !regprog.is_null() {
-                                nvim_cmod_set_filter_regprog(cmod, regprog);
+                                (*cmod).cmod_filter_regmatch.data[0] = regprog as u64;
                                 (*eap).cmd = p;
                                 matched = true;
                             }
@@ -505,7 +497,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"horizontal".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_split(cmod, WSP_HOR);
+                    (*cmod).cmod_split |= WSP_HOR;
                     matched = true;
                 } else {
                     // ":hide" and ":hide | cmd" are not modifiers
@@ -516,7 +508,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         && rs_ends_excmd(*p as c_int) == 0
                     {
                         (*eap).cmd = p;
-                        nvim_cmod_or_flags(cmod, CMOD_HIDE);
+                        (*cmod).cmod_flags |= CMOD_HIDE;
                         matched = true;
                     }
                 }
@@ -526,13 +518,13 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"lockmarks".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_flags(cmod, CMOD_LOCKMARKS);
+                    (*cmod).cmod_flags |= CMOD_LOCKMARKS;
                     matched = true;
                 } else {
                     cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"leftabove".as_ptr(), 5) {
                         (*eap).cmd = cmd_ptr;
-                        nvim_cmod_or_split(cmod, WSP_ABOVE);
+                        (*cmod).cmod_split |= WSP_ABOVE;
                         matched = true;
                     }
                 }
@@ -542,13 +534,13 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"noautocmd".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_flags(cmod, CMOD_NOAUTOCMD);
+                    (*cmod).cmod_flags |= CMOD_NOAUTOCMD;
                     matched = true;
                 } else {
                     cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"noswapfile".as_ptr(), 3) {
                         (*eap).cmd = cmd_ptr;
-                        nvim_cmod_or_flags(cmod, CMOD_NOSWAPFILE);
+                        (*cmod).cmod_flags |= CMOD_NOSWAPFILE;
                         matched = true;
                     }
                 }
@@ -558,7 +550,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"rightbelow".as_ptr(), 6) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_split(cmod, WSP_BELOW);
+                    (*cmod).cmod_split |= WSP_BELOW;
                     matched = true;
                 }
             }
@@ -567,13 +559,13 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"sandbox".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_flags(cmod, CMOD_SANDBOX);
+                    (*cmod).cmod_flags |= CMOD_SANDBOX;
                     matched = true;
                 } else {
                     cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"silent".as_ptr(), 3) {
                         (*eap).cmd = cmd_ptr;
-                        nvim_cmod_or_flags(cmod, CMOD_SILENT);
+                        (*cmod).cmod_flags |= CMOD_SILENT;
                         cmd_ptr = (*eap).cmd;
                         if *cmd_ptr as u8 == b'!'
                             && nvim_docmd_ascii_iswhite(*cmd_ptr.sub(1) as c_int) == 0
@@ -581,7 +573,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             // ":silent!", but not "silent !cmd"
                             let new_cmd = nvim_docmd_skipwhite(cmd_ptr.add(1));
                             (*eap).cmd = new_cmd;
-                            nvim_cmod_or_flags(cmod, CMOD_ERRSILENT);
+                            (*cmod).cmod_flags |= CMOD_ERRSILENT;
                         }
                         matched = true;
                     }
@@ -609,14 +601,14 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         }
 
                         if tabnr == MAXLNUM {
-                            nvim_cmod_set_tab(cmod, nvim_rs_tabpage_index(nvim_get_curtab()) + 1);
+                            (*cmod).cmod_tab = nvim_rs_tabpage_index(nvim_get_curtab()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > nvim_docmd_last_tab_nr() as i32 {
                                 *errormsg =
                                     crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                                 return 0; // false
                             }
-                            nvim_cmod_set_tab(cmod, tabnr as c_int + 1);
+                            (*cmod).cmod_tab = tabnr as c_int + 1;
                         }
                     }
                     (*eap).cmd = p;
@@ -625,7 +617,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                     let mut cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"topleft".as_ptr(), 2) {
                         (*eap).cmd = cmd_ptr;
-                        nvim_cmod_or_split(cmod, WSP_TOP);
+                        (*cmod).cmod_split |= WSP_TOP;
                         matched = true;
                     }
                 }
@@ -635,7 +627,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"unsilent".as_ptr(), 3) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_flags(cmod, CMOD_UNSILENT);
+                    (*cmod).cmod_flags |= CMOD_UNSILENT;
                     matched = true;
                 }
             }
@@ -644,15 +636,15 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"vertical".as_ptr(), 4) {
                     (*eap).cmd = cmd_ptr;
-                    nvim_cmod_or_split(cmod, WSP_VERT);
+                    (*cmod).cmod_split |= WSP_VERT;
                     matched = true;
                 } else if rs_checkforcmd(&mut p, c"verbose".as_ptr(), 4) {
                     cmd = (*eap).cmd;
                     if nvim_docmd_ascii_isdigit(*cmd as c_int) != 0 {
                         // zero means not set, one is verbose == 0, etc.
-                        nvim_cmod_set_verbose(cmod, nvim_docmd_atoi(cmd) + 1);
+                        (*cmod).cmod_verbose = nvim_docmd_atoi(cmd) + 1;
                     } else {
-                        nvim_cmod_set_verbose(cmod, 2); // default: verbose == 1
+                        (*cmod).cmod_verbose = 2; // default: verbose == 1
                     }
                     (*eap).cmd = p;
                     matched = true;

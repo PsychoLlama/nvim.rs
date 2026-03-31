@@ -1,8 +1,9 @@
 //! Shared FFI types for Ex command argument structs.
 //!
-//! This crate provides `ExArg` (a `repr(C)` mirror of C's `exarg_T`) so that
-//! multiple Rust crates can access Ex command argument fields directly without
-//! going through C accessor functions.
+//! This crate provides `ExArg` (a `repr(C)` mirror of C's `exarg_T`) and
+//! `CmdMod` (a `repr(C)` mirror of C's `cmdmod_T`) so that multiple Rust
+//! crates can access Ex command argument fields directly without going through
+//! C accessor functions.
 
 #![allow(unsafe_code)]
 #![allow(clippy::missing_safety_doc)]
@@ -87,3 +88,72 @@ extern "C" {
 
 /// Typed pointer to an `exarg_T` C struct.
 pub type ExArgHandle = *mut ExArg;
+
+/// Opaque blob matching `regmatch_T` layout (176 bytes, 8-byte aligned).
+///
+/// C definition (`regexp_defs.h`):
+/// - `regprog_T *regprog`: 8 bytes
+/// - `char *startp[NSUBEXP]`: 10 * 8 = 80 bytes
+/// - `char *endp[NSUBEXP]`: 10 * 8 = 80 bytes
+/// - `colnr_T rm_matchcol`: 4 bytes (int)
+/// - `bool rm_ic`: 1 byte + 3 padding
+///
+/// Total = 176 bytes
+#[repr(C, align(8))]
+#[derive(Default)]
+pub struct RegMatchBlob {
+    /// Raw storage matching `regmatch_T` layout; element 0 holds the `regprog_T *` pointer.
+    pub data: [u64; 22],
+}
+
+/// Rust representation of C `cmdmod_T` (command modifiers struct).
+///
+/// Layout must exactly match the C struct definition in `ex_cmds_defs.h`.
+/// `cmod_filter_regmatch` is represented as an opaque blob since Rust does
+/// not need to access `regprog_T` fields directly.
+#[repr(C)]
+pub struct CmdMod {
+    pub cmod_flags: c_int,
+    pub cmod_split: c_int,
+    pub cmod_tab: c_int,
+    // 4 bytes padding before pointer
+    pub cmod_filter_pat: *mut c_char,
+    pub cmod_filter_regmatch: RegMatchBlob,
+    pub cmod_filter_force: bool,
+    // 3 bytes padding before c_int
+    pub cmod_verbose: c_int,
+    // 4 bytes padding before pointer (on 64-bit: pointer follows int+padding)
+    pub cmod_save_ei: *mut c_char,
+    pub cmod_did_sandbox: c_int,
+    // 4 bytes padding before i64
+    pub cmod_verbose_save: i64,
+    pub cmod_save_msg_silent: c_int,
+    pub cmod_save_msg_scroll: c_int,
+    pub cmod_did_esilent: c_int,
+}
+
+unsafe impl Send for CmdMod {}
+unsafe impl Sync for CmdMod {}
+
+/// Magic flags for `CmdParseInfo`.
+#[repr(C)]
+pub struct CmdParseInfoMagic {
+    pub file: bool,
+    pub bar: bool,
+}
+
+/// Rust representation of C `CmdParseInfo`.
+#[repr(C)]
+pub struct CmdParseInfo {
+    pub cmdmod: CmdMod,
+    pub magic: CmdParseInfoMagic,
+}
+
+unsafe impl Send for CmdParseInfo {}
+unsafe impl Sync for CmdParseInfo {}
+
+/// Typed pointer to a `cmdmod_T` C struct.
+pub type CmdModHandle = *mut CmdMod;
+
+/// Typed pointer to a `CmdParseInfo` C struct.
+pub type CmdParseInfoHandle = *mut CmdParseInfo;

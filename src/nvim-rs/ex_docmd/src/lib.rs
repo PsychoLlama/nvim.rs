@@ -31,17 +31,14 @@ pub mod range;
 pub mod source;
 pub mod table;
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 use std::ptr;
 
-// Re-export shared ExArg types from the ex_cmds_types crate.
-pub use nvim_ex_cmds_types::{ExArg, ExArgHandle, LineGetterFn};
-
-/// Opaque handle to a C `cmdmod_T` struct.
-///
-/// Rust code never dereferences this directly — all field access goes through
-/// C accessor functions (`nvim_cmod_*`).
-pub type CmdModHandle = *mut c_void;
+// Re-export shared ExArg and CmdMod types from the ex_cmds_types crate.
+pub use nvim_ex_cmds_types::{
+    CmdMod, CmdModHandle, CmdParseInfo, CmdParseInfoHandle, ExArg, ExArgHandle, LineGetterFn,
+    RegMatchBlob,
+};
 
 pub use address::*;
 pub use args::*;

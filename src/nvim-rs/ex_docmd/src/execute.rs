@@ -297,8 +297,9 @@ use std::ffi::c_void;
 /// Line-getter callback type (matches C's LineGetter typedef).
 type LineGetter = Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char>;
 
-/// CmdParseInfo opaque handle.
-type CmdParseInfoHandle = *mut c_void;
+use crate::CmdParseInfo;
+/// CmdParseInfo typed handle.
+type CmdParseInfoHandle = *mut CmdParseInfo;
 
 /// cstack_T opaque handle.
 type CstackHandle = *mut c_void;
@@ -365,7 +366,6 @@ extern "C" {
     fn nvim_hasFolding_line2(lnum: LinenrT, line2_out: *mut LinenrT);
     fn nvim_cstack_alloc() -> CstackHandle;
     fn nvim_curbuf_is_terminal() -> c_int;
-    fn nvim_get_cmdinfo_cmdmod_ptr(cmdinfo: CmdParseInfoHandle) -> *mut c_void;
 
     // profile_cmd helpers
     fn nvim_do_profiling_active() -> bool;
@@ -391,7 +391,7 @@ extern "C" {
     fn parse_command_modifiers(
         eap: ExArgHandle,
         errormsg: *mut *const c_char,
-        cmdmod: *mut c_void,
+        cmdmod: CmdParseInfoHandle,
         silent: bool,
     ) -> c_int;
     fn nvim_find_excmd_after_range(eap: ExArgHandle) -> *mut c_char;
@@ -848,7 +848,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Parse command modifiers.
     // parse_command_modifiers takes a pointer to CmdParseInfo.cmdmod (first field).
     if parse_command_modifiers(eap, errormsg, cmdinfo, false) == FAIL_P2 {
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -861,7 +861,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     let p = nvim_find_excmd_after_range(eap);
     if p.is_null() {
         *errormsg = nvim_get_e_ambiguous_use_of_user_defined_command();
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -872,7 +872,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Set command address type and parse command range.
     set_cmd_addr_type(eap, p);
     if parse_cmd_address(eap, errormsg, true) == FAIL_P2 {
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -885,7 +885,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     (*eap).cmd = cmd;
     // Fail if command is a comment or doesn't exist.
     if (*eap).cmd.read() == 0 || (*eap).cmd.read() == b'"' as c_char {
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -905,7 +905,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
         };
         crate::errors::rs_append_command(cmdname);
         *errormsg = iobuff as *const c_char;
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -954,7 +954,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Fail if command doesn't support bang but is used with a bang.
     if !((*eap).argt & 0x002u32) != 0 && (*eap).forceit != 0 {
         *errormsg = nvim_get_e_nobang();
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -965,7 +965,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Fail if command doesn't support a range but is given one.
     if !((*eap).argt & 0x001u32) != 0 && (*eap).addr_count > 0 {
         *errormsg = nvim_get_e_norange();
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
@@ -981,7 +981,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Parse register and count.
     parse_register(eap);
     if crate::args::rs_parse_count_ex(eap, errormsg, 0) == FAIL_P2 {
-        undo_cmdmod(nvim_get_cmdinfo_cmdmod_ptr(cmdinfo));
+        undo_cmdmod(cmdinfo.cast::<c_void>());
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();

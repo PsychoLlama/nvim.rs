@@ -682,33 +682,11 @@ int nvim_docmd_last_loaded_fnum_or_fail(void)
 int nvim_docmd_getdigits(char **pp, int def) { return (int)getdigits(pp, false, def); }
 char *nvim_docmd_ex_errmsg_invargval(const char *arg) { return (char *)ex_errmsg(e_invargval, arg); }
 char *nvim_docmd_ex_errmsg_invarg2(const char *arg) { return (char *)ex_errmsg(e_invarg2, arg); }
-void nvim_cmod_clear(cmdmod_T *cmod) { CLEAR_POINTER(cmod); }
-void nvim_cmod_or_flags(cmdmod_T *cmod, int f) { cmod->cmod_flags |= f; }
-void nvim_cmod_or_split(cmdmod_T *cmod, int f) { cmod->cmod_split |= f; }
-void nvim_cmod_set_tab(cmdmod_T *cmod, int v) { cmod->cmod_tab = v; }
-void nvim_cmod_set_verbose(cmdmod_T *cmod, int v) { cmod->cmod_verbose = v; }
-void nvim_cmod_set_filter_force(cmdmod_T *cmod, int v) { cmod->cmod_filter_force = (bool)v; }
-void nvim_cmod_set_filter_pat(cmdmod_T *cmod, char *s) { cmod->cmod_filter_pat = s; }
-void nvim_cmod_set_filter_regprog(cmdmod_T *cmod, void *prog) { cmod->cmod_filter_regmatch.regprog = (regprog_T *)prog; }
-int nvim_cmod_get_flags(cmdmod_T *cmod) { return cmod->cmod_flags; }
-int nvim_cmod_get_did_sandbox(cmdmod_T *cmod) { return cmod->cmod_did_sandbox ? 1 : 0; }
-void nvim_cmod_set_did_sandbox(cmdmod_T *cmod, int v) { cmod->cmod_did_sandbox = (bool)v; }
-int nvim_cmod_get_verbose(cmdmod_T *cmod) { return cmod->cmod_verbose; }
-int nvim_cmod_get_verbose_save(cmdmod_T *cmod) { return cmod->cmod_verbose_save; }
-void nvim_cmod_set_verbose_save(cmdmod_T *cmod, int v) { cmod->cmod_verbose_save = v; }
-int nvim_cmod_get_save_msg_silent(cmdmod_T *cmod) { return cmod->cmod_save_msg_silent; }
-void nvim_cmod_set_save_msg_silent(cmdmod_T *cmod, int v) { cmod->cmod_save_msg_silent = v; }
 void nvim_cmod_capture_msg_scroll(cmdmod_T *cmod) { cmod->cmod_save_msg_scroll = msg_scroll; }
-void nvim_cmod_inc_did_esilent(cmdmod_T *cmod) { cmod->cmod_did_esilent++; }
-int nvim_cmod_get_did_esilent(cmdmod_T *cmod) { return cmod->cmod_did_esilent; }
-void nvim_cmod_set_did_esilent(cmdmod_T *cmod, int v) { cmod->cmod_did_esilent = v; }
-char *nvim_cmod_get_save_ei(cmdmod_T *cmod) { return cmod->cmod_save_ei; }
-void nvim_cmod_set_save_ei(cmdmod_T *cmod, char *s) { cmod->cmod_save_ei = s; }
+void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_regmatch.regprog); cmod->cmod_filter_regmatch.regprog = NULL; }
+void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
 void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, STATIC_CSTR_AS_OPTVAL("all"), 0, SID_NONE); }
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
-void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_regmatch.regprog); cmod->cmod_filter_regmatch.regprog = NULL; }
-char *nvim_cmod_get_filter_pat(cmdmod_T *cmod) { return cmod->cmod_filter_pat; }
-void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
 int nvim_docmd_get_exmode_active(void) { return (int)exmode_active; }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
 char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
