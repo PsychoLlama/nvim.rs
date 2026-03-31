@@ -292,6 +292,8 @@ use std::ffi::c_void;
 
 /// Line-getter callback type (matches C's LineGetter typedef).
 type LineGetter = Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char>;
+/// The underlying function pointer type for LineGetter.
+type LineGetterFn = unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
 
 use crate::CmdParseInfo;
 /// CmdParseInfo typed handle.
@@ -368,9 +370,8 @@ extern "C" {
     fn nvim_cstack_get_flags(cs: CstackHandle, idx: c_int) -> c_int;
     static mut did_emsg: c_int;
     static mut did_throw: bool;
-    fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
-    fn nvim_getline_equal_getsourceline(fgetline: LineGetter, cookie: *mut c_void) -> bool;
-    fn nvim_getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void;
+    fn get_func_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
+    fn getsourceline(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
     fn nvim_func_line_exec(cookie: *mut c_void);
     fn nvim_script_line_exec();
 
@@ -542,10 +543,14 @@ pub unsafe extern "C" fn rs_profile_cmd(
     };
 
     if !skip {
-        if nvim_getline_equal_func_line(fgetline, cookie) {
-            let real_cookie = nvim_getline_cookie(fgetline, cookie);
+        if crate::do_cmdline::getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) {
+            let real_cookie = crate::do_cmdline::getline_cookie(fgetline, cookie);
             nvim_func_line_exec(real_cookie);
-        } else if nvim_getline_equal_getsourceline(fgetline, cookie) {
+        } else if crate::do_cmdline::getline_equal(
+            fgetline,
+            cookie,
+            Some(getsourceline as LineGetterFn),
+        ) {
             nvim_script_line_exec();
         }
     }

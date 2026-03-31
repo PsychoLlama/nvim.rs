@@ -190,7 +190,7 @@ extern "C" {
     fn do_return(eap: ExArgHandle, reanimate: bool, is_cmd: bool, rettv: *mut c_void) -> bool;
     fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn current_func_returned() -> c_int;
-    fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
+    fn get_func_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
     fn getnextac(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
 
     // doend: error message + do_errthrow
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn do_one_cmd(
     // When the last file has not been edited :q has to be typed twice.
     if nvim_docmd_get_quitmore() != 0
         // avoid function call in 'statusline'
-        && !nvim_getline_equal_func_line(fgetline, cookie)
+        && !crate::do_cmdline::getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn))
         // avoid autocommand (e.g. QuitPre)
         && !crate::do_cmdline::getline_equal(fgetline, cookie, Some(getnextac as LineGetterFn))
     {
@@ -982,7 +982,12 @@ pub unsafe extern "C" fn do_one_cmd(
     } else if crate::check_cstack {
         if source_finished(fgetline, cookie) {
             nvim_docmd_do_finish(eap);
-        } else if nvim_getline_equal_func_line(fgetline, cookie) && current_func_returned() != 0 {
+        } else if crate::do_cmdline::getline_equal(
+            fgetline,
+            cookie,
+            Some(get_func_line as LineGetterFn),
+        ) && current_func_returned() != 0
+        {
             do_return(eap, true, false, std::ptr::null_mut());
         }
     }

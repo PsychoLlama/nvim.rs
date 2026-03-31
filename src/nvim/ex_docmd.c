@@ -778,9 +778,6 @@ int nvim_cstack_get_idx(const cstack_T *cs) { return cs->cs_idx; }
 int nvim_cstack_get_flags(const cstack_T *cs, int idx) { return cs->cs_flags[idx]; }
 
 // profile_cmd helpers
-bool nvim_getline_equal_func_line(LineGetter fgetline, void *cookie) { return getline_equal(fgetline, cookie, get_func_line); }
-bool nvim_getline_equal_getsourceline(LineGetter fgetline, void *cookie) { return getline_equal(fgetline, cookie, getsourceline); }
-void *nvim_getline_cookie(LineGetter fgetline, void *cookie) { return getline_cookie(fgetline, cookie); }
 void nvim_func_line_exec(void *cookie) { func_line_exec(cookie); }
 void nvim_script_line_exec(void) { script_line_exec(); }
 
