@@ -659,7 +659,6 @@ extern "C" {
     fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 
     // parse_cmd_address helpers
-    fn nvim_docmd_is_user_cmdidx_i(cmdidx: c_int) -> bool;
     fn nvim_docmd_mark_get_visual(ch: c_int) -> *mut c_void;
     fn check_cursor(win: *mut c_void);
     fn check_cursor_col(win: *mut c_void);
@@ -1207,7 +1206,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                         (*eap).line2 = nvim_docmd_lastbuf_fnum() as i32;
                     }
                     ADDR_WINDOWS | ADDR_TABS => {
-                        if nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+                        if ((*eap).cmdidx < 0) {
                             (*eap).line1 = 1;
                             let last = if addr_type == ADDR_WINDOWS {
                                 nvim_docmd_last_win_nr()

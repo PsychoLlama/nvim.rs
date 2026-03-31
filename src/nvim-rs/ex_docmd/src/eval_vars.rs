@@ -67,10 +67,10 @@ extern "C" {
 
     // path helpers
     fn path_tail(p: *const c_char) -> *const c_char;
-    fn nvim_docmd_path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char;
+    fn path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char;
 
     // modify_fname
-    fn nvim_docmd_modify_fname(
+    fn modify_fname(
         src: *mut c_char,
         tilde_file: bool,
         usedlen: *mut usize,
@@ -88,11 +88,11 @@ extern "C" {
     // buf_T->b_fname accessor
     fn nvim_buf_get_b_fname(buf: *mut c_void) -> *const c_char;
 
-    // file_name_at_cursor (FNAME_MESS|FNAME_HYP, count=1)
-    fn nvim_docmd_file_name_at_cursor() -> *mut c_char;
+    // file_name_at_cursor (FNAME_MESS|FNAME_HYP=5, count=1, lnum=NULL)
+    fn file_name_at_cursor(options: c_int, count: c_int, file_lnum: *mut c_void) -> *mut c_char;
 
     // FullName_save
-    fn nvim_docmd_fullname_save(fname: *const c_char, force: bool) -> *mut c_char;
+    fn FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
 
     // autocmd variable accessors
     fn nvim_docmd_get_autocmd_fname() -> *mut c_char;
@@ -284,7 +284,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_CFILE => {
             // file name under cursor
-            result = nvim_docmd_file_name_at_cursor();
+            result = file_name_at_cursor(5, 1, std::ptr::null_mut());
             if result.is_null() {
                 *errormsg = c"".as_ptr();
                 return ptr::null_mut();
@@ -299,7 +299,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
                 // Still need to turn the fname into a full path.
                 // Postponed to avoid a delay when <afile> is not used.
                 nvim_docmd_set_autocmd_fname_full(1);
-                let full = nvim_docmd_fullname_save(fname, false);
+                let full = FullName_save(fname, false);
                 // Copy into autocmd_fname, don't reassign it. #8165
                 nvim_docmd_set_autocmd_fname(full);
                 xfree(full as *mut c_void);
@@ -309,7 +309,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
                 *errormsg = crate::gt(crate::E_NO_AFILE_STR.as_ptr());
                 return ptr::null_mut();
             }
-            result = nvim_docmd_path_try_shorten_fname(result);
+            result = path_try_shorten_fname(result);
         }
 
         SPEC_ABUF => {
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
             resultlen = (dot as usize) - (result as usize);
         }
     } else if !skip_mod {
-        valid |= nvim_docmd_modify_fname(
+        valid |= modify_fname(
             src,
             tilde_file,
             usedlen,

@@ -126,10 +126,15 @@ extern "C" {
 
     // has_event / EVENT_CMDUNDEFINED
     fn has_event(event: c_int) -> bool;
-    fn nvim_docmd_apply_autocmds_cmdundefined(cmdname: *const c_char) -> bool;
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
     fn aborting() -> bool;
     fn xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
-    fn nvim_docmd_ascii_isalnum(c: c_char) -> bool;
     fn xfree(p: *mut c_void);
 
     // CMD_SIZE constant
@@ -147,12 +152,10 @@ extern "C" {
     fn nvim_curbuf_is_terminal() -> c_int;
     static cmdwin_type: c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
-    fn nvim_docmd_is_user_cmdidx_i(cmdidx: c_int) -> bool;
     fn curbuf_locked() -> c_int;
 
     // Range validation
     fn nvim_docmd_ask_yesno_backwards() -> c_char;
-    fn nvim_docmd_invalid_range(eap: ExArgHandle) -> *const c_char;
 
     fn nvim_get_eap_addr_type_lines(eap: ExArgHandle) -> c_int;
     fn nvim_hasFolding_line1(lnum: i32, line1_out: *mut i32);
@@ -469,12 +472,19 @@ pub unsafe extern "C" fn do_one_cmd(
     {
         // Build cmdname as copy up to first non-alnum.
         let mut cmdname_end = (*eap).cmd;
-        while nvim_docmd_ascii_isalnum(*cmdname_end) {
+        while (*cmdname_end as u8).is_ascii_alphanumeric() {
             cmdname_end = cmdname_end.add(1);
         }
         let cmdname_len = cmdname_end.offset_from((*eap).cmd) as usize;
         let cmdname = xmemdupz((*eap).cmd, cmdname_len);
-        let ret = nvim_docmd_apply_autocmds_cmdundefined(cmdname);
+        const EVENT_CMDUNDEFINED: c_int = 29;
+        let ret = apply_autocmds(
+            EVENT_CMDUNDEFINED,
+            cmdname,
+            cmdname,
+            true,
+            std::ptr::null_mut(),
+        );
         xfree(cmdname as *mut c_void);
         // Retry if autocommand succeeded and didn't abort.
         p = if ret && !aborting() {
@@ -546,7 +556,7 @@ pub unsafe extern "C" fn do_one_cmd(
     p = p_mut;
     (*eap).forceit = forceit as c_int;
     // 6. Parse arguments. Then check for errors.
-    if !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+    if !((*eap).cmdidx < 0) {
         let argt = nvim_docmd_get_argt_for_idx((*eap).cmdidx);
         (*eap).argt = argt;
     }
@@ -586,7 +596,7 @@ pub unsafe extern "C" fn do_one_cmd(
             return ea_cleanup_and_return(eap, None);
         }
 
-        if !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+        if !((*eap).cmdidx < 0) {
             if cmdwin_type != 0 && !((*eap).argt & 0x40000u32) != 0 {
                 // Use EX_CMDWIN check via argt
                 if ((*eap).argt & 0x80000) == 0 {
@@ -627,7 +637,7 @@ pub unsafe extern "C" fn do_one_cmd(
             && (*eap).cmdidx != crate::cmd_idx::CMD_checktime
             && (*eap).cmdidx != crate::cmd_idx::CMD_edit
             && (*eap).cmdidx != crate::cmd_idx::CMD_file
-            && !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx)
+            && !((*eap).cmdidx < 0)
             && curbuf_locked() != 0
         {
             do_one_cmd_doend(
@@ -709,7 +719,7 @@ pub unsafe extern "C" fn do_one_cmd(
             // Swap line1 and line2.
             std::mem::swap(&mut (*eap).line1, &mut (*eap).line2);
         }
-        let inv_err = nvim_docmd_invalid_range(eap);
+        let inv_err = crate::range::rs_invalid_range(eap);
         if !inv_err.is_null() {
             errormsg = inv_err;
             do_one_cmd_doend(

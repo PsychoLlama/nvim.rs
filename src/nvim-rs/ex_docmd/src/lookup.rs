@@ -22,8 +22,14 @@ extern "C" {
     fn nvim_docmd_cmdnames_prefix_match(idx: c_int, cmd: *const c_char, len: c_int) -> c_int;
     fn nvim_docmd_cmdnames_name_complete(idx: c_int, len: c_int) -> c_int;
     fn nvim_docmd_cmdnames_name(idx: c_int) -> *mut c_char;
-    fn nvim_docmd_find_ucmd(eap: ExArgHandle, p: *mut c_char, full: *mut c_int) -> *mut c_char;
-    fn nvim_docmd_expand_user_cmd_name(idx: c_int) -> *mut c_char;
+    fn find_ucmd(
+        eap: ExArgHandle,
+        p: *mut c_char,
+        full: *mut c_int,
+        xp: *mut c_void,
+        complp: *mut c_int,
+    ) -> *mut c_char;
+    fn expand_user_command_name(idx: c_int) -> *mut c_char;
     fn nvim_docmd_e943_abort();
 
     // Phase 3: f_fullcommand helpers
@@ -501,7 +507,7 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             while (*p as u8).is_ascii_alphanumeric() {
                 p = p.add(1);
             }
-            p = nvim_docmd_find_ucmd(eap, p, full);
+            p = find_ucmd(eap, p, full, std::ptr::null_mut(), std::ptr::null_mut());
         }
         if p == cmd {
             (*eap).cmdidx = crate::commands::CMD_SIZE;
@@ -566,7 +572,7 @@ pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> 
 #[export_name = "get_command_name"]
 pub unsafe extern "C" fn rs_get_command_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     if idx >= crate::commands::CMD_SIZE {
-        return nvim_docmd_expand_user_cmd_name(idx);
+        return expand_user_command_name(idx);
     }
     nvim_docmd_cmdnames_name(idx)
 }

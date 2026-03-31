@@ -266,20 +266,14 @@ extern "C" {
     fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_docmd_get_curwin_cursor_lnum() -> i32;
     fn nvim_docmd_get_curbuf_line_count() -> i32;
-    #[link_name = "vim_strchr"]
-    fn nvim_docmd_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
-    fn nvim_docmd_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
-    #[link_name = "xstrdup"]
-    fn nvim_docmd_xstrdup(s: *const c_char) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
     #[link_name = "rs_tabpage_index"]
     fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
     fn nvim_docmd_last_tab_nr() -> c_int;
-    #[link_name = "atoi"]
-    fn nvim_docmd_atoi(s: *const c_char) -> c_int;
-    fn nvim_docmd_skip_range(cmd: *const c_char) -> *mut c_char;
-    #[link_name = "skipwhite"]
-    fn nvim_docmd_skipwhite(p: *const c_char) -> *mut c_char;
+    fn atoi(s: *const c_char) -> c_int;
     #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
     #[link_name = "rs_ascii_isdigit"]
@@ -342,7 +336,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         cmd = (*eap).cmd;
         if *cmd as u8 == b'"' {
             // A comment ends at a NL
-            let nl = nvim_docmd_vim_strchr(cmd, b'\n' as c_int);
+            let nl = vim_strchr(cmd, b'\n' as c_int);
             if !nl.is_null() {
                 (*eap).nextcmd = nl.add(1);
             } else {
@@ -361,7 +355,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             return FAIL;
         }
 
-        let mut p = nvim_docmd_skip_range(cmd);
+        let mut p = crate::range::rs_skip_range(cmd, std::ptr::null_mut()) as *mut c_char;
         let switch_char = *p as u8;
 
         let mut matched = false;
@@ -446,7 +440,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                 {
                     if *p as u8 == b'!' {
                         (*cmod).cmod_filter_force = true;
-                        p = nvim_docmd_skipwhite(p.add(1));
+                        p = skipwhite(p.add(1));
                         if *p == 0 || rs_ends_excmd(*p as c_int) != 0 {
                             // break out — not matched
                         } else if skip_only {
@@ -459,9 +453,9 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             let mut reg_pat: *mut c_char = ptr::null_mut();
                             p = crate::rs_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
                             if !p.is_null() && *p != 0 {
-                                (*cmod).cmod_filter_pat = nvim_docmd_xstrdup(reg_pat);
+                                (*cmod).cmod_filter_pat = xstrdup(reg_pat);
                                 // Store regprog into first pointer slot of regmatch blob.
-                                let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
+                                let regprog = vim_regcomp(reg_pat, RE_MAGIC);
                                 if !regprog.is_null() {
                                     (*cmod).cmod_filter_regmatch.data[0] = regprog as u64;
                                     (*eap).cmd = p;
@@ -479,9 +473,9 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         let mut reg_pat: *mut c_char = ptr::null_mut();
                         p = crate::rs_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
                         if !p.is_null() && *p != 0 {
-                            (*cmod).cmod_filter_pat = nvim_docmd_xstrdup(reg_pat);
+                            (*cmod).cmod_filter_pat = xstrdup(reg_pat);
                             // Store regprog into first pointer slot of regmatch blob.
-                            let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
+                            let regprog = vim_regcomp(reg_pat, RE_MAGIC);
                             if !regprog.is_null() {
                                 (*cmod).cmod_filter_regmatch.data[0] = regprog as u64;
                                 (*eap).cmd = p;
@@ -570,7 +564,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             && nvim_docmd_ascii_iswhite(*cmd_ptr.sub(1) as c_int) == 0
                         {
                             // ":silent!", but not "silent !cmd"
-                            let new_cmd = nvim_docmd_skipwhite(cmd_ptr.add(1));
+                            let new_cmd = skipwhite(cmd_ptr.add(1));
                             (*eap).cmd = new_cmd;
                             (*cmod).cmod_flags |= CMOD_ERRSILENT;
                         }
@@ -641,7 +635,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                     cmd = (*eap).cmd;
                     if nvim_docmd_ascii_isdigit(*cmd as c_int) != 0 {
                         // zero means not set, one is verbose == 0, etc.
-                        (*cmod).cmod_verbose = nvim_docmd_atoi(cmd) + 1;
+                        (*cmod).cmod_verbose = atoi(cmd) + 1;
                     } else {
                         (*cmod).cmod_verbose = 2; // default: verbose == 1
                     }

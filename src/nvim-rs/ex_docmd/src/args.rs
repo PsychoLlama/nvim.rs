@@ -21,16 +21,16 @@ extern "C" {
 
     // Phase 4: helper function wrappers
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_docmd_valid_yank_reg(regname: c_int, writing: c_int) -> c_int;
+    fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn nvim_docmd_set_expr_line(arg: *const c_char);
-    fn nvim_docmd_check_ff_value(p: *const c_char) -> c_int;
+    fn check_ff_value(p: *mut c_char) -> c_int;
     fn nvim_docmd_strmove(dst: *mut c_char, src: *const c_char);
     #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_mb_ptr_adv_len(p: *const c_char) -> c_int;
     fn nvim_docmd_mb_byte2len(b: c_int) -> c_int;
     #[link_name = "rs_ascii_tolower"]
     fn nvim_docmd_tolower_asc(c: c_int) -> c_int;
-    fn nvim_docmd_skip_expr(pp: *mut *mut c_char);
+    fn skip_expr(pp: *mut *mut c_char, evalarg: *mut c_void) -> c_int;
     fn nvim_docmd_cpo_has_bar() -> c_int;
     #[link_name = "del_trailing_spaces"]
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
@@ -458,7 +458,7 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
         0
     };
 
-    if nvim_docmd_valid_yank_reg(*arg as c_int, writing) != 0 {
+    if valid_yank_reg(*arg as c_int, writing != 0) {
         let reg_char = *arg as u8;
         // Advance arg past the register name
         let new_arg = arg.add(1);
@@ -678,7 +678,7 @@ pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
 
     match opt_kind {
         OptKind::Ff => {
-            if nvim_docmd_check_ff_value(cmd.add(val_offset as usize) as *const c_char) == FAIL {
+            if check_ff_value(cmd.add(val_offset as usize)) == FAIL {
                 return FAIL;
             }
             (*eap).force_ff = *cmd.add(val_offset as usize) as u8 as c_int;
@@ -832,7 +832,7 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
         } else if c == b'`' && *p.add(1) as u8 == b'=' && (argt & crate::table::EX_XFILE) != 0 {
             // Skip over `=expr` when wildcards are expanded.
             p = p.add(2);
-            nvim_docmd_skip_expr(&mut p);
+            skip_expr(&mut p, std::ptr::null_mut());
             if *p as u8 == 0 {
                 break;
             }

@@ -446,8 +446,6 @@ int nvim_docmd_cmdnames_prefix_match(int idx, const char *cmd, int len)
 }
 int nvim_docmd_cmdnames_name_complete(int idx, int len) { return cmdnames[idx].cmd_name[len] == NUL; }
 char *nvim_docmd_cmdnames_name(int idx) { return cmdnames[idx].cmd_name; }
-char *nvim_docmd_find_ucmd(exarg_T *eap, char *p, int *full) { return find_ucmd(eap, p, full, NULL, NULL); }
-char *nvim_docmd_expand_user_cmd_name(int idx) { return expand_user_command_name(idx); }
 /// Report E943 and exit (command table mismatch).
 void nvim_docmd_e943_abort(void)
 {
@@ -459,12 +457,9 @@ char *nvim_docmd_tv_get_string(const void *argvars) { return (char *)tv_get_stri
 void nvim_docmd_rettv_init_string(void *rettv) { typval_T *tv = (typval_T *)rettv; tv->v_type = VAR_STRING; tv->vval.v_string = NULL; }
 void nvim_docmd_rettv_set_string(void *rettv, const char *s) { ((typval_T *)rettv)->vval.v_string = xstrdup(s); }
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_user_command_name(useridx, (cmdidx_T)cmdidx); }
-int nvim_docmd_valid_yank_reg(int regname, int writing) { return valid_yank_reg(regname, writing); }
 void nvim_docmd_set_expr_line(const char *arg) { set_expr_line(xstrdup(arg)); }
-int nvim_docmd_check_ff_value(const char *p) { return check_ff_value((char *)p); }
 void nvim_docmd_strmove(char *dst, const char *src) { STRMOVE(dst, src); }
 int nvim_docmd_mb_byte2len(int b) { return MB_BYTE2LEN((uint8_t)b); }
-void nvim_docmd_skip_expr(char **pp) { skip_expr(pp, NULL); }
 int nvim_docmd_cpo_has_bar(void) { return vim_strchr(p_cpo, CPO_BAR) != NULL; }
 char *nvim_docmd_get_dollar_command(void) { return dollar_command; }
 /// Parse digits from eap->arg, advance eap->arg, return the number.
@@ -523,7 +518,6 @@ int nvim_docmd_last_loaded_buf_fnum(void)
 int nvim_docmd_firstbuf_fnum(void) { return firstbuf->b_fnum; }
 int nvim_docmd_lastbuf_fnum(void) { return lastbuf->b_fnum; }
 void nvim_docmd_iemsg_dflall(void) { iemsg(_("INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX")); }
-int nvim_docmd_get_highest_fnum(void) { return get_highest_fnum(); }
 
 /// Walk forward from firstbuf: find first loaded buffer fnum.
 /// Returns -1 if all buffers walked to end and none loaded.
@@ -563,8 +557,6 @@ void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, S
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
 char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
-void *nvim_docmd_vim_regcomp(const char *pat, int flags) { return vim_regcomp((char *)pat, flags); }
-char *nvim_docmd_skip_range(const char *cmd) { return skip_range(cmd, NULL); }
 void nvim_docmd_set_curwin_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
 void nvim_docmd_set_curwin_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 colnr_T nvim_docmd_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
@@ -817,9 +809,6 @@ char *nvim_docmd_do_bufdel(int command, const char *arg, int addr_count, int sta
 {
   return do_bufdel(command, (char *)arg, addr_count, start_bnr, end_bnr, forceit);
 }
-void nvim_docmd_do_autocmd(exarg_T *eap, const char *arg, int forceit) { do_autocmd(eap, (char *)arg, forceit); }
-void nvim_docmd_do_augroup(const char *arg, int forceit) { do_augroup((char *)arg, forceit); }
-int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1 : 0; }
 bool nvim_docmd_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
 void nvim_docmd_curbuf_set_did_filetype(bool val) { curbuf->b_did_filetype = val; }
 
@@ -935,15 +924,11 @@ void nvim_docmd_set_readonlymode(int v) { readonlymode = (v != 0); }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
 char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
-char *nvim_docmd_file_name_at_cursor(void) { return file_name_at_cursor(FNAME_MESS | FNAME_HYP, 1, NULL); }
-char *nvim_docmd_fullname_save(const char *fname, bool force) { return FullName_save(fname, force); }
 char *nvim_docmd_get_autocmd_fname(void) { return autocmd_fname; }
 int nvim_docmd_get_autocmd_fname_full(void) { return autocmd_fname_full ? 1 : 0; }
 void nvim_docmd_set_autocmd_fname_full(int v) { autocmd_fname_full = (v != 0); }
 void nvim_docmd_set_autocmd_fname(const char *new_fname) { xstrlcpy(autocmd_fname, new_fname, MAXPATHL); }
 const char *nvim_docmd_get_autocmd_match(void) { return autocmd_match; }
-int nvim_docmd_modify_fname(char *src, bool tilde_file, size_t *usedlen, char **fnamep, char **bufp, size_t *fnamelen) { return modify_fname(src, tilde_file, usedlen, fnamep, bufp, fnamelen); }
-char *nvim_docmd_path_try_shorten_fname(char *full_path) { return path_try_shorten_fname(full_path); }
 int nvim_docmd_get_current_sctx_lnum(void) { return (int)current_sctx.sc_lnum; }
 int nvim_docmd_get_current_sctx_sid(void) { return (int)current_sctx.sc_sid; }
 int nvim_docmd_getdigits_int(char **pp) { return getdigits_int(pp, false, 0); }
@@ -1159,11 +1144,7 @@ void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
   }
   do_errthrow(cstack, (char *)cmd_name);
 }
-bool nvim_docmd_apply_autocmds_cmdundefined(const char *cmdname) { return apply_autocmds(EVENT_CMDUNDEFINED, (char *)cmdname, (char *)cmdname, true, NULL); }
-bool nvim_docmd_ascii_isalnum(char c) { return ASCII_ISALNUM(c); }
-bool nvim_docmd_is_user_cmdidx_i(int cmdidx) { return IS_USER_CMDIDX(cmdidx); }
 char nvim_docmd_ask_yesno_backwards(void) { return (char)ask_yesno(_("Backwards range given, OK to swap")); }
-const char *nvim_docmd_invalid_range(exarg_T *eap) { return (const char *)invalid_range(eap); }
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
 char *nvim_docmd_ex_errmsg_trailing(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
 void nvim_docmd_fix_cursor_if_zero(void) { if (curwin->w_cursor.lnum == 0) { curwin->w_cursor.lnum = 1; curwin->w_cursor.col = 0; } }
@@ -1177,14 +1158,6 @@ char *nvim_docmd_ex_errmsg_format(const char *msg, const char *arg,
 }
 uint32_t nvim_docmd_get_argt_for_idx(int idx) { return cmdnames[idx].cmd_argt; }
 int nvim_docmd_parse_command_modifiers_global(exarg_T *eap, const char **errormsg) { return parse_command_modifiers(eap, errormsg, &cmdmod, false); }
-linenr_T nvim_docmd_dbg_find_breakpoint(bool file, char *fname, linenr_T after) { return dbg_find_breakpoint(file, fname, after); }
-void nvim_docmd_dbg_breakpoint(char *name, linenr_T lnum) { dbg_breakpoint(name, lnum); }
-void nvim_docmd_do_debug(char *cmd) { do_debug(cmd); }
-void nvim_docmd_c_do_errthrow(cstack_T *cstack, const char *cmdname) { do_errthrow(cstack, (char *)cmdname); }
-void nvim_docmd_report_make_pending(int pending, void *value) { report_make_pending(pending, value); }
-void nvim_docmd_rewind_conditionals(cstack_T *cstack, int idx, int cond_type, int *cond_level) { rewind_conditionals(cstack, idx, cond_type, cond_level); }
-void nvim_docmd_script_line_start(void) { script_line_start(); }
-void nvim_docmd_script_line_end(void) { script_line_end(); }
 void nvim_docmd_set_sourcing_lnum(linenr_T lnum) { if (exestack.ga_data != NULL && exestack.ga_len > 0) { SOURCING_LNUM = lnum; } }
 void nvim_docmd_ga_deep_clear_lines(garray_T *gap) { GA_DEEP_CLEAR(gap, wcmd_T, FREE_WCMD); }
 

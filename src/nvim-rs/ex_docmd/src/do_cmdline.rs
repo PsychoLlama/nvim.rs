@@ -176,8 +176,8 @@ extern "C" {
     fn source_breakpoint(cookie: *mut c_void) -> *mut LinenrT;
     fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int;
     fn source_level(cookie: *mut c_void) -> c_int;
-    fn nvim_docmd_script_line_start();
-    fn nvim_docmd_script_line_end();
+    fn script_line_start();
+    fn script_line_end();
 
     // has_loop_cmd (Rust export from ex_eval crate)
     fn has_loop_cmd(p: *mut c_char) -> bool;
@@ -193,16 +193,16 @@ extern "C" {
     fn wait_return(redraw: c_int);
 
     // Debug helpers
-    fn nvim_docmd_dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
-    fn nvim_docmd_dbg_breakpoint(name: *mut c_char, lnum: LinenrT);
-    fn nvim_docmd_do_debug(cmd: *mut c_char);
+    fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
+    fn dbg_breakpoint(name: *mut c_char, lnum: LinenrT);
+    fn do_debug(cmd: *mut c_char);
 
     // Exception helpers
-    fn nvim_docmd_c_do_errthrow(cstack: *mut c_void, cmdname: *const c_char);
+    fn do_errthrow(cstack: *mut c_void, cmdname: *mut c_char);
     fn do_intthrow(cstack: *mut c_void) -> bool;
-    fn nvim_docmd_report_make_pending(pending: c_int, value: *mut c_void);
+    fn report_make_pending(pending: c_int, value: *mut c_void);
     fn cleanup_conditionals(cstack: *mut c_void, searched_cond: c_int, inclusive: c_int) -> c_int;
-    fn nvim_docmd_rewind_conditionals(
+    fn rewind_conditionals(
         cstack: *mut c_void,
         idx: c_int,
         cond_type: c_int,
@@ -523,7 +523,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
     if unsafe { crate::execute::rs_do_cmdline_start() } == FAIL {
         unsafe {
             emsg(gettext(crate::E_COMMAND_TOO_RECURSIVE_STR.as_ptr()));
-            nvim_docmd_c_do_errthrow(std::ptr::null_mut(), std::ptr::null());
+            do_errthrow(std::ptr::null_mut(), std::ptr::null_mut());
             msg_list = saved_msg_list;
         }
         return FAIL;
@@ -631,7 +631,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             } else if unsafe { do_profiling == 1 } // PROF_YES = 1
                 && unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) }
             {
-                unsafe { nvim_docmd_script_line_end() };
+                unsafe { script_line_end() };
             }
 
             // Check if a sourced file hit a ":finish" command.
@@ -643,7 +643,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             // If breakpoints have been added/deleted need to check for it.
             if !breakpoint.is_null() && !dbg_tick.is_null() && unsafe { *dbg_tick != debug_tick } {
                 unsafe {
-                    *breakpoint = nvim_docmd_dbg_find_breakpoint(
+                    *breakpoint = dbg_find_breakpoint(
                         getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)),
                         fname,
                         nvim_get_sourcing_lnum_direct(),
@@ -665,9 +665,9 @@ pub unsafe extern "C" fn rs_do_cmdline(
                 && unsafe { *breakpoint <= nvim_get_sourcing_lnum_direct() }
             {
                 unsafe {
-                    nvim_docmd_dbg_breakpoint(fname, nvim_get_sourcing_lnum_direct());
+                    dbg_breakpoint(fname, nvim_get_sourcing_lnum_direct());
                     // Find next breakpoint.
-                    *breakpoint = nvim_docmd_dbg_find_breakpoint(
+                    *breakpoint = dbg_find_breakpoint(
                         getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)),
                         fname,
                         nvim_get_sourcing_lnum_direct(),
@@ -682,7 +682,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                 } else if unsafe {
                     getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn))
                 } {
-                    unsafe { nvim_docmd_script_line_start() };
+                    unsafe { script_line_start() };
                 }
             }
         }
@@ -879,7 +879,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     // Check for the next breakpoint at or after the ":while"/":for".
                     if !breakpoint.is_null() && lines_ga.ga_len > current_line {
                         unsafe {
-                            *breakpoint = nvim_docmd_dbg_find_breakpoint(
+                            *breakpoint = dbg_find_breakpoint(
                                 getline_equal(
                                     fgetline,
                                     cookie,
@@ -896,7 +896,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     // can only get here with ":endwhile" or ":endfor"
                     if cstack.cs_idx >= 0 {
                         unsafe {
-                            nvim_docmd_rewind_conditionals(
+                            rewind_conditionals(
                                 std::ptr::addr_of_mut!(cstack).cast(),
                                 cstack.cs_idx - 1,
                                 CSF_WHILE | CSF_FOR,
@@ -936,7 +936,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                 std::ptr::null_mut()
             };
             unsafe {
-                nvim_docmd_report_make_pending(
+                report_make_pending(
                     pending & (CSTP_ERROR | CSTP_INTERRUPT | CSTP_THROW),
                     exc_val,
                 );
@@ -1016,7 +1016,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             let idx = unsafe { cleanup_conditionals(std::ptr::addr_of_mut!(cstack).cast(), 0, 1) };
             let idx_adj = if idx >= 0 { idx - 1 } else { idx };
             unsafe {
-                nvim_docmd_rewind_conditionals(
+                rewind_conditionals(
                     std::ptr::addr_of_mut!(cstack).cast(),
                     idx_adj,
                     CSF_WHILE | CSF_FOR,
@@ -1031,14 +1031,14 @@ pub unsafe extern "C" fn rs_do_cmdline(
     }
 
     // do_errthrow after rewinding the cstack.
-    let errthrow_cmd =
+    let errthrow_cmd: *mut c_char =
         if unsafe { getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) } {
-            c"endfunction".as_ptr()
+            c"endfunction".as_ptr() as *mut c_char
         } else {
-            std::ptr::null()
+            std::ptr::null_mut()
         };
     unsafe {
-        nvim_docmd_c_do_errthrow(std::ptr::addr_of_mut!(cstack).cast(), errthrow_cmd);
+        do_errthrow(std::ptr::addr_of_mut!(cstack).cast(), errthrow_cmd);
     }
 
     if unsafe { trylevel } == 0 {
@@ -1083,7 +1083,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             } else {
                 unsafe { gettext(c"End of function".as_ptr()) }
             };
-            unsafe { nvim_docmd_do_debug(msg as *mut c_char) };
+            unsafe { do_debug(msg as *mut c_char) };
         }
     }
 

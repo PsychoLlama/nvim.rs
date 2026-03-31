@@ -31,7 +31,7 @@ extern "C" {
     // Buffer/window/tab navigation
     fn nvim_docmd_get_curbuf_line_count() -> i32;
     fn nvim_docmd_get_argcount() -> c_int;
-    fn nvim_docmd_get_highest_fnum() -> c_int;
+    fn rs_get_highest_fnum() -> c_int;
     fn nvim_docmd_first_loaded_fnum_or_fail() -> c_int;
     fn nvim_docmd_last_loaded_fnum_or_fail() -> c_int;
     fn nvim_docmd_last_win_nr() -> c_int;
@@ -726,7 +726,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 }
             }
             x if x == ADDR_BUFFERS => {
-                if line1 < 1 || line2 > nvim_docmd_get_highest_fnum() as i32 {
+                if line1 < 1 || line2 > rs_get_highest_fnum() as i32 {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }

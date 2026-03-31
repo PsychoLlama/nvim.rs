@@ -308,7 +308,6 @@ type LinenrT = i32;
 extern "C" {
     // eap args/arglens/argc (Phase 2 new)
     // nvim_eap_get_arg / nvim_eap_set_arg / skipwhite already declared above
-    fn nvim_docmd_is_user_cmdidx_i(cmdidx: c_int) -> bool;
 
     // Memory
     fn xcalloc(nmemb: usize, size: usize) -> *mut c_void;
@@ -599,7 +598,7 @@ pub unsafe extern "C" fn rs_execute_cmd0(
     if (argt & EX_BUFNAME_P2) != 0
         && *(*eap).arg != 0
         && (*eap).addr_count == 0
-        && !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx)
+        && !((*eap).cmdidx < 0)
     {
         let args = (*eap).args;
         let cmdidx = (*eap).cmdidx;
@@ -657,7 +656,7 @@ pub unsafe extern "C" fn rs_execute_cmd0(
     }
 
     // Execute the command.
-    if nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+    if ((*eap).cmdidx < 0) {
         *retv = do_ucmd(eap, preview);
     } else {
         (*eap).errmsg = std::ptr::null_mut();
@@ -719,7 +718,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
         return retv;
     }
 
-    if !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+    if !((*eap).cmdidx < 0) {
         if cmdwin_type != 0 && (argt & EX_CMDWIN_P2) == 0 {
             errormsg = nvim_get_e_cmdwin();
             goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
@@ -737,7 +736,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
         && (*eap).cmdidx != crate::commands::CMD_CHECKTIME
         && (*eap).cmdidx != crate::commands::CMD_EDIT
         && !((*eap).cmdidx == crate::commands::CMD_FILE && *(*eap).arg == 0)
-        && !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx)
+        && !((*eap).cmdidx < 0)
         && curbuf_locked() != 0
     {
         goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
@@ -919,7 +918,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     let forceit = parse_bang(eap, &mut p_mut);
     (*eap).forceit = forceit as c_int;
     // Parse arguments.
-    if !nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+    if !((*eap).cmdidx < 0) {
         // argt is already set by parse_cmd_address
     }
 

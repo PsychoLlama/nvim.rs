@@ -1823,9 +1823,9 @@ extern "C" {
         end_bnr: c_int,
         forceit: c_int,
     ) -> *mut c_char;
-    fn nvim_docmd_do_autocmd(eap: ExArgHandle, arg: *const c_char, forceit: c_int);
-    fn nvim_docmd_do_augroup(arg: *const c_char, forceit: c_int);
-    fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
+    fn do_autocmd(eap: ExArgHandle, arg: *mut c_char, forceit: c_int);
+    fn do_augroup(arg: *mut c_char, del_group: c_int);
+    fn check_nomodeline(argp: *mut *mut c_char) -> bool;
     // Phase 22: before_quit_all, ex_range_without_command helpers
     fn nvim_docmd_get_exmode_plus() -> *mut c_char;
     static mut exmode_active: bool;
@@ -1897,9 +1897,9 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
         let arg = (*eap).arg;
         let forceit = (*eap).forceit != 0;
         if cmdidx == CMD_AUTOCMD {
-            nvim_docmd_do_autocmd(eap, arg as *const c_char, forceit as c_int);
+            do_autocmd(eap, arg, forceit as c_int);
         } else {
-            nvim_docmd_do_augroup(arg as *const c_char, forceit as c_int);
+            do_augroup(arg, forceit as c_int);
         }
     }
 }
@@ -1908,7 +1908,7 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
 #[export_name = "ex_doautocmd"]
 pub unsafe extern "C" fn rs_ex_doautocmd(eap: ExArgHandle) {
     let mut arg = (*eap).arg;
-    let call_do_modelines = nvim_docmd_check_nomodeline(&mut arg);
+    let call_do_modelines = check_nomodeline(&mut arg) as c_int;
     let mut did_aucmd = false;
     do_doautocmd(arg, false, &mut did_aucmd);
     if call_do_modelines != 0 && did_aucmd {

@@ -85,7 +85,7 @@ extern "C" {
     fn nvim_rt_smsg_continuing_in(name: *const c_char);
 
     // Debug/breakpoints
-    fn nvim_docmd_dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
+    fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
     fn nvim_rt_get_debug_tick() -> c_int;
     fn nvim_rt_get_debug_break_level() -> c_int;
     fn nvim_rt_inc_debug_break_level();
@@ -470,7 +470,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     // Set cookie fields
-    let breakpoint = nvim_docmd_dbg_find_breakpoint(true, fname_exp, 0);
+    let breakpoint = dbg_find_breakpoint(true, fname_exp, 0);
     nvim_rt_cookie_set_breakpoint(cookie, breakpoint);
     nvim_rt_cookie_set_fname(cookie, fname_exp);
     // Note: fname_exp is now owned by cookie, don't free it separately
