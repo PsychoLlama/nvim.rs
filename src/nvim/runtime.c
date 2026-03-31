@@ -753,11 +753,6 @@ static void runtime_search_path_free(RuntimeSearchPath path)
   kv_destroy(path);
 }
 
-// Phase 3: strcpy_comma_escaped, compute_double_env_sep_len, add_env_sep_dirs,
-// and add_dir have been migrated to Rust as internal helpers of
-// rs_runtimepath_default. They are no longer needed in C.
-
-
 /// ":source [{fname}]"
 void ex_source(exarg_T *eap) { rs_ex_source(eap); }
 
@@ -833,13 +828,6 @@ static bool concat_continued_line(garray_T *const ga, const int init_growsize, c
   ga_concat_len(ga, line + 1, len - 1);
   return true;
 }
-
-/// Create a new script item and allocate script-local vars. @see new_script_vars
-///
-/// @param  name  File name of the script. NULL for anonymous :source.
-/// @param[out]  sid_out  SID of the new item.
-///
-/// @return  pointer to the created script item.
 
 void cmd_source_buffer(const exarg_T *const eap, bool ex_lua) { rs_cmd_source_buffer(eap, ex_lua); }
 
