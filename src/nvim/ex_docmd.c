@@ -843,8 +843,6 @@ win_T *nvim_docmd_nth_window(int nr)
   return lastwin;
 }
 
-int nvim_docmd_get_cmdmod_cmod_split(void) { return cmdmod.cmod_split; }
-int nvim_docmd_get_cmdmod_cmod_tab(void) { return cmdmod.cmod_tab; }
 linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg) { return get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, errormsg); }
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
 int nvim_docmd_curwin_p_wrap(void) { return curwin->w_p_wrap ? 1 : 0; }

@@ -107,6 +107,7 @@ extern "C" {
     pub static mut stop_insert_mode: bool;
     pub static mut must_redraw: c_int;
     pub static mut readonlymode: bool;
+    pub static mut cmdmod: nvim_ex_cmds_types::CmdMod;
 
     // Direct C functions (avoid nvim_docmd_ wrappers)
     pub fn clearmode();

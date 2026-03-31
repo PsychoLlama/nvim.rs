@@ -2000,9 +2000,8 @@ extern "C" {
     fn nvim_al_autowrite(buf: BufHandle, eap_forceit: c_int) -> c_int;
     fn nvim_al_get_Columns() -> c_int;
 
-    // cmdmod split flag (ex_docmd)
-    fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
-    fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
+    // Direct cmdmod access
+    static mut cmdmod: nvim_ex_cmds_types::CmdMod;
 
     // screen geometry (window globals)
     fn nvim_get_rows_avail() -> c_int;
@@ -2039,7 +2038,7 @@ const WSP_BELOW: c_int = 0x40;
 pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
     let mut split_ret = OK;
     let mut open_wins: c_int = 0;
-    let had_tab = nvim_docmd_get_cmdmod_cmod_tab();
+    let had_tab = cmdmod.cmod_tab;
 
     // Maximum number of windows to open.
     let count: c_int = if (*eap).addr_count == 0 {
@@ -2091,7 +2090,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             };
 
             let wp_buf = nvim_win_get_buffer(wp);
-            let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
+            let cmod_split = cmdmod.cmod_split;
             let rows_avail = nvim_get_rows_avail();
             let height_too_small = if (cmod_split & WSP_VERT) != 0 {
                 nvim_win_get_w_height(wp)

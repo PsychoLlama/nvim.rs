@@ -2413,8 +2413,6 @@ extern "C" {
     fn nvim_docmd_tabpage_close_impl(forceit: c_int);
     fn nvim_docmd_tabpage_close_other_impl(tp: *mut c_void, forceit: c_int);
     fn nvim_docmd_tabpage_is_current(tp: *mut c_void) -> c_int;
-    fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
-    fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
     fn nvim_docmd_get_address_for_copymove(
         eap: ExArgHandle,
         errormsg: *mut *const c_char,
@@ -2634,7 +2632,7 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
 
     let arg = (*eap).arg;
     let n_raw = atol(arg) as c_int;
-    let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
+    let cmod_split = crate::cmdmod.cmod_split;
     if cmod_split & WSP_VERT != 0 {
         let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
             n_raw + nvim_win_get_w_width(wp)
@@ -2712,8 +2710,8 @@ pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
     if *(p2 as *const u8) != 0 && *(p2 as *const u8) != b'"' && nextcmd.is_null() {
         emsg(crate::errors::E_INVARG_STR.as_ptr());
     } else if (*eap).skip == 0 {
-        postponed_split_flags = nvim_docmd_get_cmdmod_cmod_split();
-        postponed_split_tab = nvim_docmd_get_cmdmod_cmod_tab();
+        postponed_split_flags = crate::cmdmod.cmod_split;
+        postponed_split_tab = crate::cmdmod.cmod_tab;
         let count = if (*eap).addr_count > 0 {
             (*eap).line2
         } else {

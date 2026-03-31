@@ -131,8 +131,6 @@ extern "C" {
 
     // --- ex_terminal helpers ---
     fn nvim_docmd_add_win_cmd_modifiers_global(buf: *mut c_char, bufsize: usize) -> usize;
-    fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
-    fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
     fn nvim_docmd_p_sh_is_empty() -> c_int;
     fn nvim_docmd_e_shellempty_str() -> *const c_char;
     fn nvim_docmd_terminal_get_shell_argv_str(buf: *mut c_char, buflen: usize);
@@ -436,8 +434,8 @@ pub unsafe extern "C" fn nvim_docmd_ex_checkhealth_impl(eap: ExArgHandle) {
     let mods_ptr = mods.as_mut_ptr() as *mut c_char;
     let mut mods_len: usize = 0;
 
-    let cmod_tab = nvim_docmd_get_cmdmod_cmod_tab();
-    let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
+    let cmod_tab = crate::cmdmod.cmod_tab;
+    let cmod_split = crate::cmdmod.cmod_split;
     if cmod_tab > 0 || cmod_split != 0 {
         mods_len = nvim_docmd_add_win_cmd_modifiers_global(mods_ptr, mods.len());
     }
@@ -481,8 +479,8 @@ pub unsafe extern "C" fn nvim_docmd_ex_terminal_impl(eap: ExArgHandle) {
     let mut ex_cmd = [0u8; 1024];
     let ex_cmd_ptr = ex_cmd.as_mut_ptr() as *mut c_char;
 
-    let cmod_tab = nvim_docmd_get_cmdmod_cmod_tab();
-    let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
+    let cmod_tab = crate::cmdmod.cmod_tab;
+    let cmod_split = crate::cmdmod.cmod_split;
 
     let len: usize;
     if cmod_tab > 0 || cmod_split != 0 {

@@ -114,10 +114,6 @@ extern "C" {
     static mut postponed_split_flags: c_int;
     static mut postponed_split_tab: c_int;
 
-    // cmdmod accessors
-    fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
-    fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
-
     // Window iteration (firstwin-based, for curtab)
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
@@ -309,8 +305,8 @@ pub unsafe extern "C" fn rs_ex_ptag(eap: ExArgHandle) {
 #[export_name = "ex_stag"]
 pub unsafe extern "C" fn rs_ex_stag(eap: ExArgHandle) {
     postponed_split = -1;
-    postponed_split_flags = nvim_docmd_get_cmdmod_cmod_split();
-    postponed_split_tab = nvim_docmd_get_cmdmod_cmod_tab();
+    postponed_split_flags = crate::cmdmod.cmod_split;
+    postponed_split_tab = crate::cmdmod.cmod_tab;
     let cmdidx = (*eap).cmdidx;
     let name = nvim_docmd_cmdnames_name(cmdidx);
     // Use name + 1 (skip leading 's')
