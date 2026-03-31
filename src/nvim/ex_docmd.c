@@ -469,8 +469,7 @@ int nvim_docmd_parse_count_digits(exarg_T *eap)
   return (int)n;
 }
 
-void nvim_docmd_arg_skip_to_end(exarg_T *eap) { eap->arg += strlen(eap->arg); }
-int nvim_docmd_count_buf_check(exarg_T *eap) { char *p = skipdigits(eap->arg + 1); return *p == NUL || ascii_iswhite(*p); }
+
 int nvim_docmd_cmdnames_addr_type(int idx) { return (int)cmdnames[idx].cmd_addr_type; }
 int nvim_docmd_current_win_nr(void) { return CURRENT_WIN_NR; }
 int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
@@ -586,10 +585,6 @@ linenr_T nvim_docmd_hasFolding(linenr_T lnum)
 /// Wrap mark_get_visual for Rust.
 void *nvim_docmd_mark_get_visual(int ch) { return mark_get_visual(curbuf, (uint8_t)ch); }
 // (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
-int nvim_docmd_get_p_mmd(void) { return (int)p_mmd; }
-int nvim_docmd_curbuf_has_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
-int nvim_docmd_curwin_in_terminal_mode(void) { return (State & MODE_TERMINAL) ? 1 : 0; }
-int nvim_docmd_one_window_p(int addr_count) { return (ONE_WINDOW || addr_count == 0) ? 1 : 0; }
 int nvim_docmd_get_filetype_detect(void) { return (int)filetype_detect; }
 void nvim_docmd_set_filetype_detect(int val) { filetype_detect = (TriState)val; }
 int nvim_docmd_get_filetype_plugin(void) { return (int)filetype_plugin; }
@@ -841,7 +836,7 @@ bool nvim_docmd_dialog_changed_still_dirty(buf_T *buf)
   return bufref_valid(&bufref) && bufIsChanged(buf);
 }
 int nvim_docmd_curwin_is_floating(void) { return curwin->w_floating ? 1 : 0; }
-int nvim_docmd_is_one_window(void) { return ONE_WINDOW ? 1 : 0; }
+
 void nvim_docmd_ex_win_close_curwin(int forceit) { ex_win_close(forceit, curwin, NULL); }
 win_T *nvim_docmd_tabpage_get_lastwin(void *tp) { return ((tabpage_T *)tp)->tp_lastwin; }
 int nvim_docmd_tabpage_lastwin_eq(void *tp, void *wp) { return ((tabpage_T *)tp)->tp_lastwin == (win_T *)wp ? 1 : 0; }

@@ -205,9 +205,7 @@ extern "C" {
     fn var_redir_start(name: *const c_char, append: bool) -> c_int;
 
     // ex_normal helpers
-    fn nvim_docmd_get_p_mmd() -> c_int;
-    fn nvim_docmd_curbuf_has_terminal() -> c_int;
-    fn nvim_docmd_curwin_in_terminal_mode() -> c_int;
+    fn nvim_buf_get_terminal(buf: *mut c_void) -> c_int;
     fn expr_map_locked() -> bool;
     fn save_current_state(save: *mut c_void) -> bool;
     fn restore_current_state(save: *mut c_void);
@@ -247,7 +245,7 @@ extern "C" {
     fn check_changed_any(hidden: bool, unload: bool) -> bool;
     fn getout(exitval: c_int);
     fn win_close(wp: WinHandle, free_buf: bool, force: bool) -> c_int;
-    fn nvim_docmd_one_window_p(addr_count: c_int) -> c_int;
+    fn nvim_get_lastwin() -> WinHandle;
 
     // memory allocation
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
@@ -387,6 +385,8 @@ const UPD_INVERTED: c_int = 20;
 const MODE_CMDLINE: c_int = 0x08;
 /// MODE_INSERT = 0x10
 const MODE_INSERT: c_int = 0x10;
+/// MODE_TERMINAL = 0x80
+const MODE_TERMINAL: c_int = 0x80;
 
 /// CMD_startinsert = 431, CMD_startgreplace = 432, CMD_startreplace = 433
 pub(crate) const CMD_STARTINSERT: c_int = 431;
@@ -905,7 +905,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     }
 
     // Check if we're in terminal mode
-    if nvim_docmd_curbuf_has_terminal() != 0 && nvim_docmd_curwin_in_terminal_mode() != 0 {
+    if nvim_buf_get_terminal(nvim_get_curbuf()) != 0 && (State & MODE_TERMINAL) != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
         return;
     }
@@ -915,7 +915,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
         return;
     }
 
-    if crate::ex_normal_busy >= nvim_docmd_get_p_mmd() {
+    if crate::ex_normal_busy as i64 >= p_mmd {
         emsg(c"E192: Recursive use of :normal too deep".as_ptr());
         return;
     }
@@ -1241,7 +1241,9 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         crate::exiting = false;
     } else {
         // quit last window
-        if rs_only_one_window() != 0 && nvim_docmd_one_window_p(addr_count) != 0 {
+        if rs_only_one_window() != 0
+            && (nvim_get_firstwin() == nvim_get_lastwin() || addr_count == 0)
+        {
             getout(0);
         }
         crate::exiting = false;
@@ -2440,6 +2442,7 @@ extern "C" {
     static mut need_wait_return: bool;
     static mut need_maketitle: bool;
     static mut State: c_int;
+    static mut p_mmd: i64;
 
     fn draw_tabline();
     fn validate_cursor(wp: WinHandle);

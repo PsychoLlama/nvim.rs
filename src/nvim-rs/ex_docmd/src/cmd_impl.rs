@@ -895,7 +895,7 @@ extern "C" {
 
     // tabpage_close helpers (for Rust implementations)
     fn nvim_docmd_curwin_is_floating() -> c_int;
-    fn nvim_docmd_is_one_window() -> c_int;
+    fn nvim_get_lastwin() -> WinHandle;
     fn nvim_docmd_ex_win_close_curwin(forceit: c_int);
     fn close_others(message: c_int, forceit: c_int);
     fn nvim_docmd_tabpage_get_lastwin(tp: *mut c_void) -> WinHandle;
@@ -1316,11 +1316,11 @@ pub unsafe extern "C" fn rs_tabpage_close_impl(forceit: c_int) {
         nvim_docmd_ex_win_close_curwin(forceit);
     }
     // Close all other non-floating windows.
-    if nvim_docmd_is_one_window() == 0 {
+    if nvim_get_firstwin() != nvim_get_lastwin() {
         close_others(1, (forceit != 0) as c_int);
     }
     // If only one window left, close it too (which closes the tab).
-    if nvim_docmd_is_one_window() != 0 {
+    if nvim_get_firstwin() == nvim_get_lastwin() {
         nvim_docmd_ex_win_close_curwin(forceit);
     }
 }

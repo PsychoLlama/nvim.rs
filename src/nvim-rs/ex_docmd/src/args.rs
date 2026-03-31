@@ -39,7 +39,6 @@ extern "C" {
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
     fn nvim_docmd_get_dollar_command() -> *mut c_char;
     fn nvim_docmd_parse_count_digits(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_count_buf_check(eap: ExArgHandle) -> c_int;
 
     fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
     #[link_name = "checkforcmd"]
@@ -481,14 +480,10 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
             if (*eap).skip == 0 {
                 set_expr_line(xstrdup(new_arg as *const c_char));
             }
-            nvim_docmd_arg_skip_to_end(eap);
+            (*eap).arg = (*eap).arg.add(strlen((*eap).arg as *const c_char));
         }
         (*eap).arg = skipwhite((*eap).arg as *const c_char);
     }
-}
-
-extern "C" {
-    fn nvim_docmd_arg_skip_to_end(eap: ExArgHandle);
 }
 
 // =============================================================================
@@ -523,7 +518,15 @@ pub unsafe extern "C" fn rs_parse_count_ex(
     }
 
     // When accepting EX_BUFNAME, don't use "123foo" as a count
-    if (argt & crate::table::EX_BUFNAME) != 0 && nvim_docmd_count_buf_check(eap) == 0 {
+    // Mirrors C: { char *p = skipdigits(eap->arg + 1); *p == NUL || ascii_iswhite(*p) }
+    if (argt & crate::table::EX_BUFNAME) != 0 && {
+        let mut p = (*eap).arg.add(1);
+        while (*p as u8).is_ascii_digit() {
+            p = p.add(1);
+        }
+        let ch = *p as u8;
+        !(ch == 0 || ch == b' ' || ch == b'\t')
+    } {
         return OK;
     }
 

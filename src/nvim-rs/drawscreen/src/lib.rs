@@ -2746,7 +2746,7 @@ extern "C" {
     static mut g_edit_submode_highl: c_int;
     fn vim_strsize(s: *const c_char) -> c_int;
     fn nvim_get_p_ri() -> c_int;
-    fn nvim_docmd_curbuf_has_terminal() -> c_int;
+    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_get_p_paste() -> c_int;
     fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
@@ -2841,7 +2841,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
                 || re == c_int::from(b'a')
                 || re == c_int::from(b'A')
             {
-                if nvim_docmd_curbuf_has_terminal() != 0 {
+                if nvim_buf_get_terminal(nvim_get_curbuf()) != 0 {
                     msg_puts_hl(c" (terminal)".as_ptr(), hl_id, false);
                 } else {
                     msg_puts_hl(c" (insert)".as_ptr(), hl_id, false);
