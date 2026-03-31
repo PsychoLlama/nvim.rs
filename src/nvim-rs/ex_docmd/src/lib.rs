@@ -98,6 +98,12 @@ extern "C" {
     pub static mut ex_normal_busy: c_int;
     pub static p_awa: bool;
     pub static mut secure: c_int;
+    pub static mut ex_nesting_level: c_int;
+    pub static mut need_rethrow: bool;
+    pub static mut check_cstack: bool;
+    pub static mut did_emsg_syntax: bool;
+    pub static mut global_busy: c_int;
+    pub static mut msg_silent: c_int;
 
     // Character classification from charset crate
     #[link_name = "vim_isIDc"]

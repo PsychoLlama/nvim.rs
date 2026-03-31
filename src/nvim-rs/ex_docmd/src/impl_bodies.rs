@@ -153,7 +153,6 @@ extern "C" {
     fn nvim_docmd_restart_patch_argv(arg: *const c_char);
     fn nvim_docmd_set_restarting();
     fn nvim_docmd_run_quit_cmd(cmd: *const c_char) -> c_int;
-    fn nvim_docmd_get_exiting() -> c_int;
     fn nvim_docmd_not_restarting();
     fn concat_str(a: *const c_char, b: *const c_char) -> *mut c_char;
     fn nvim_docmd_get_cmod_confirm_prefix() -> *const c_char;
@@ -589,7 +588,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_restart_impl(eap: ExArgHandle) {
         return;
     }
 
-    if nvim_docmd_get_exiting() == 0 {
+    if !crate::exiting {
         emsg(c"restart failed: +cmd did not quit the server".as_ptr());
         nvim_docmd_not_restarting();
     }

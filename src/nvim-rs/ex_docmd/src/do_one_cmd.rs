@@ -61,25 +61,9 @@ extern "C" {
     fn nvim_get_pending_end_reg_executing() -> c_int;
     fn nvim_set_pending_end_reg_executing(val: c_int);
 
-    // ex_nesting_level
-    fn nvim_docmd_inc_ex_nesting_level();
-    fn nvim_docmd_dec_ex_nesting_level();
-
     // quitmore
     fn nvim_docmd_get_quitmore() -> c_int;
     fn nvim_docmd_dec_quitmore();
-
-    // exiting
-    fn nvim_docmd_get_exiting() -> c_int;
-
-    // need_rethrow / check_cstack
-    fn nvim_docmd_get_need_rethrow() -> bool;
-    fn nvim_docmd_set_need_rethrow(val: bool);
-    fn nvim_docmd_get_check_cstack() -> bool;
-    fn nvim_docmd_set_check_cstack(val: bool);
-
-    // did_emsg_syntax
-    fn nvim_docmd_set_did_emsg_syntax();
 
     // did_throw
     static mut did_throw: bool;
@@ -166,9 +150,6 @@ extern "C" {
     fn curbuf_locked() -> c_int;
 
     // Range validation
-    fn nvim_docmd_global_busy() -> bool;
-    fn nvim_docmd_msg_silent() -> c_int;
-    fn nvim_docmd_exmode_active() -> bool;
     fn nvim_docmd_ask_yesno_backwards() -> c_char;
     fn nvim_docmd_invalid_range(eap: ExArgHandle) -> *const c_char;
     fn nvim_docmd_ADDR_OTHER() -> c_int;
@@ -342,7 +323,7 @@ pub unsafe extern "C" fn do_one_cmd(
     // Allocate exarg_T on the heap (line1=1, line2=1).
     let eap = crate::ExArg::alloc();
 
-    nvim_docmd_inc_ex_nesting_level();
+    crate::ex_nesting_level += 1;
 
     // When the last file has not been edited :q has to be typed twice.
     if nvim_docmd_get_quitmore() != 0
@@ -410,7 +391,7 @@ pub unsafe extern "C" fn do_one_cmd(
     let mut p = nvim_find_excmd_after_range(eap);
     profile_cmd(eap, cstack, fgetline, cookie);
 
-    if nvim_docmd_get_exiting() == 0 {
+    if !crate::exiting {
         dbg_check_breakpoint(eap);
     }
     if !(*eap).skip != 0 && got_int {
@@ -543,7 +524,7 @@ pub unsafe extern "C" fn do_one_cmd(
                 crate::errors::rs_append_command(cmdname);
             }
             errormsg = iobuff as *const c_char;
-            nvim_docmd_set_did_emsg_syntax();
+            crate::did_emsg_syntax = true;
             crate::commands::rs_verify_command(cmdname);
         }
         do_one_cmd_doend(
@@ -698,9 +679,9 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Don't complain about range if not used.
     if !(*eap).skip != 0 && !ni && ((*eap).argt & 0x001u32) != 0 {
-        if !nvim_docmd_global_busy() && (*eap).line1 > (*eap).line2 {
-            if nvim_docmd_msg_silent() == 0 {
-                if (flags & DOCMD_VERBOSE) != 0 || nvim_docmd_exmode_active() {
+        if crate::global_busy == 0 && (*eap).line1 > (*eap).line2 {
+            if crate::msg_silent == 0 {
+                if (flags & DOCMD_VERBOSE) != 0 || crate::exmode_active {
                     errormsg = crate::gt(crate::E_BACKWARDS_RANGE_STR.as_ptr());
                     do_one_cmd_doend(
                         eap,
@@ -755,7 +736,7 @@ pub unsafe extern "C" fn do_one_cmd(
     crate::range::rs_correct_range(eap);
 
     if (((*eap).argt & 0x040u32) != 0 || (*eap).addr_count >= 2)
-        && !nvim_docmd_global_busy()
+        && crate::global_busy == 0
         && nvim_get_eap_addr_type_lines(eap) != 0
     {
         let mut line1 = (*eap).line1;
@@ -999,17 +980,17 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     // Post-execute: rethrow/return/finish.
-    if nvim_docmd_get_need_rethrow() {
+    if crate::need_rethrow {
         do_throw(cstack);
-    } else if nvim_docmd_get_check_cstack() {
+    } else if crate::check_cstack {
         if nvim_docmd_source_finished(fgetline, cookie) {
             nvim_docmd_do_finish(eap);
         } else if nvim_getline_equal_func_line(fgetline, cookie) && current_func_returned() != 0 {
             do_return(eap, true, false, std::ptr::null_mut());
         }
     }
-    nvim_docmd_set_need_rethrow(false);
-    nvim_docmd_set_check_cstack(false);
+    crate::need_rethrow = false;
+    crate::check_cstack = false;
 
     // doend: cleanup and return.
     let nextcmd = (*eap).nextcmd;
@@ -1080,7 +1061,7 @@ unsafe fn ea_cleanup_and_return(eap: ExArgHandle, nextcmd: Option<*mut c_char>) 
         }
     };
 
-    nvim_docmd_dec_ex_nesting_level();
+    crate::ex_nesting_level -= 1;
 
     // Free cmdline_tofree.
     let tofree = (*eap).cmdline_tofree;

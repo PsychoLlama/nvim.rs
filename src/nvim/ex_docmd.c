@@ -1165,7 +1165,6 @@ int nvim_docmd_run_quit_cmd(const char *cmd)
   }
   return 1;
 }
-int nvim_docmd_get_exiting(void) { return exiting ? 1 : 0; }
 const char *nvim_docmd_get_cmod_confirm_prefix(void) { return (cmdmod.cmod_flags & CMOD_CONFIRM) ? "confirm " : NULL; }
 uint64_t nvim_docmd_get_current_ui(void) { return (uint64_t)current_ui; }
 int nvim_docmd_detach_set_chan_detach(uint64_t id)
@@ -1238,13 +1237,6 @@ char *nvim_docmd_optset_varp_deref(optset_T *args) { return *(char **)args->os_v
 void nvim_docmd_optset_varp_set(optset_T *args, char *name) { *(char **)args->os_varp = name; }
 size_t nvim_xp_get_pattern_len(expand_T *xp) { return xp->xp_pattern_len; }
 void nvim_docmd_dec_quitmore(void) { quitmore--; }
-void nvim_docmd_inc_ex_nesting_level(void) { ex_nesting_level++; }
-void nvim_docmd_dec_ex_nesting_level(void) { ex_nesting_level--; }
-bool nvim_docmd_get_need_rethrow(void) { return need_rethrow; }
-void nvim_docmd_set_need_rethrow(bool val) { need_rethrow = val; }
-bool nvim_docmd_get_check_cstack(void) { return check_cstack; }
-void nvim_docmd_set_check_cstack(bool val) { check_cstack = val; }
-void nvim_docmd_set_did_emsg_syntax(void) { did_emsg_syntax = true; }
 /// Allocate a zeroed exarg_T on the heap (line1=1, line2=1).
 exarg_T *nvim_eap_alloc(void)
 {
@@ -1297,9 +1289,6 @@ void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
 bool nvim_docmd_apply_autocmds_cmdundefined(const char *cmdname) { return apply_autocmds(EVENT_CMDUNDEFINED, (char *)cmdname, (char *)cmdname, true, NULL); }
 bool nvim_docmd_ascii_isalnum(char c) { return ASCII_ISALNUM(c); }
 bool nvim_docmd_is_user_cmdidx_i(int cmdidx) { return IS_USER_CMDIDX(cmdidx); }
-bool nvim_docmd_global_busy(void) { return global_busy != 0; }
-int nvim_docmd_msg_silent(void) { return msg_silent; }
-bool nvim_docmd_exmode_active(void) { return exmode_active; }
 char nvim_docmd_ask_yesno_backwards(void) { return (char)ask_yesno(_("Backwards range given, OK to swap")); }
 const char *nvim_docmd_invalid_range(exarg_T *eap) { return (const char *)invalid_range(eap); }
 int nvim_docmd_ADDR_OTHER(void) { return (int)ADDR_OTHER; }
