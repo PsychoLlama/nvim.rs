@@ -94,6 +94,9 @@ extern "C" {
     pub static mut exmode_active: bool;
     pub static mut VIsual_active: bool;
     pub static mut restart_edit: c_int;
+    #[link_name = "ex_normal_busy"]
+    pub static mut ex_normal_busy: c_int;
+    pub static p_awa: bool;
 
     // Character classification from charset crate
     #[link_name = "vim_isIDc"]

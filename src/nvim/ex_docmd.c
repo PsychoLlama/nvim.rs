@@ -745,12 +745,9 @@ void nvim_docmd_set_redir_vname(int val) { redir_vname = (bool)val; }
 int nvim_docmd_get_redir_vname(void) { return redir_vname ? 1 : 0; }
 void nvim_docmd_fclose_redir_fd(void) { fclose(redir_fd); redir_fd = NULL; }
 void nvim_docmd_var_redir_stop(void) { var_redir_stop(); }
-int nvim_docmd_get_ex_normal_busy(void) { return ex_normal_busy; }
-void nvim_docmd_set_ex_normal_busy(int val) { ex_normal_busy = val; }
 int nvim_docmd_get_p_mmd(void) { return (int)p_mmd; }
 int nvim_docmd_curbuf_has_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
 int nvim_docmd_curwin_in_terminal_mode(void) { return (State & MODE_TERMINAL) ? 1 : 0; }
-int nvim_docmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 int nvim_docmd_one_window_p(int addr_count) { return (ONE_WINDOW || addr_count == 0) ? 1 : 0; }
 int nvim_docmd_get_filetype_detect(void) { return (int)filetype_detect; }
 void nvim_docmd_set_filetype_detect(int val) { filetype_detect = (TriState)val; }

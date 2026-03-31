@@ -187,7 +187,6 @@ extern "C" {
     static cmdwin_type: c_int;
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_curbuf_locked() -> c_int;
-    fn nvim_docmd_get_p_awa() -> c_int;
 
     // Redir accessors (redir_fd/reg/vname are in globals.h)
     fn nvim_docmd_get_redir_fd() -> *mut c_void;
@@ -210,8 +209,6 @@ extern "C" {
     fn var_redir_start(name: *const c_char, append: bool) -> c_int;
 
     // ex_normal helpers
-    fn nvim_docmd_get_ex_normal_busy() -> c_int;
-    fn nvim_docmd_set_ex_normal_busy(val: c_int);
     fn nvim_docmd_get_p_mmd() -> c_int;
     fn nvim_docmd_curbuf_has_terminal() -> c_int;
     fn nvim_docmd_curwin_in_terminal_mode() -> c_int;
@@ -927,7 +924,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
         return;
     }
 
-    if nvim_docmd_get_ex_normal_busy() >= nvim_docmd_get_p_mmd() {
+    if crate::ex_normal_busy >= nvim_docmd_get_p_mmd() {
         emsg(c"E192: Recursive use of :normal too deep".as_ptr());
         return;
     }
@@ -992,8 +989,8 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
         }
     }
 
-    let busy = nvim_docmd_get_ex_normal_busy();
-    nvim_docmd_set_ex_normal_busy(busy + 1);
+    let busy = crate::ex_normal_busy;
+    crate::ex_normal_busy = busy + 1;
 
     // Allocate save_state_T on the stack
     let mut save_state_buf = [0u8; SAVE_STATE_SIZE];
@@ -1031,8 +1028,8 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     update_topline_cursor();
     restore_current_state(save_state);
 
-    let busy = nvim_docmd_get_ex_normal_busy();
-    nvim_docmd_set_ex_normal_busy(busy - 1);
+    let busy = crate::ex_normal_busy;
+    crate::ex_normal_busy = busy - 1;
 
     setmouse();
     ui_cursor_shape();
@@ -1238,7 +1235,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
 
     let buf = nvim_win_get_buffer(wp);
     let buf_hidden = nvim_ex2_buf_hide(buf);
-    let p_awa = nvim_docmd_get_p_awa();
+    let p_awa = crate::p_awa as c_int;
 
     let check_flags = (if p_awa != 0 { CCGD_AW } else { 0 })
         | (if forceit_bool { CCGD_FORCEIT } else { 0 })
@@ -2117,7 +2114,7 @@ pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
     recoverymode = true;
     let curbuf = nvim_get_curbuf();
-    let p_awa = nvim_docmd_get_p_awa();
+    let p_awa = crate::p_awa as c_int;
     let forceit = (*eap).forceit != 0;
     let flags = (if p_awa != 0 { CCGD_AW } else { 0 })
         | CCGD_MULTWIN
