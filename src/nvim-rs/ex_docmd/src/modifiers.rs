@@ -264,8 +264,10 @@ extern "C" {
     fn nvim_docmd_getline_is_getexline(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_get_exmode_plus() -> *mut c_char;
     fn nvim_set_ex_pressedreturn(val: bool);
-    fn nvim_docmd_get_curwin_cursor_lnum() -> i32;
-    fn nvim_docmd_get_curbuf_line_count() -> i32;
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_win_get_cursor_lnum(wp: *mut c_void) -> i32;
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
     fn xstrdup(s: *const c_char) -> *mut c_char;
@@ -324,7 +326,8 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         if *cmd == 0
             && crate::exmode_active
             && nvim_docmd_getline_is_getexline(eap) != 0
-            && nvim_docmd_get_curwin_cursor_lnum() < nvim_docmd_get_curbuf_line_count()
+            && nvim_win_get_cursor_lnum(nvim_get_curwin())
+                < nvim_buf_get_line_count(nvim_get_curbuf())
         {
             (*eap).cmd = nvim_docmd_get_exmode_plus();
             if !skip_only {

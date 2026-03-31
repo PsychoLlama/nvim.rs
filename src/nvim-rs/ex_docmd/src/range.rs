@@ -3,7 +3,7 @@
 //! This module provides functions for parsing and manipulating line ranges
 //! in Ex commands, such as `1,5`, `%`, `'a,'b`, `.,$`, etc.
 
-use std::ffi::{c_char, c_int, c_long};
+use std::ffi::{c_char, c_int, c_long, c_void};
 use std::ptr;
 
 use crate::address::{
@@ -29,7 +29,8 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
 
     // Buffer/window/tab navigation
-    fn nvim_docmd_get_curbuf_line_count() -> i32;
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn nvim_docmd_get_argcount() -> c_int;
     fn rs_get_highest_fnum() -> c_int;
     fn nvim_docmd_first_loaded_fnum_or_fail() -> c_int;
@@ -713,7 +714,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 } else {
                     0
                 };
-                if line2 > nvim_docmd_get_curbuf_line_count() + diff_extra {
+                if line2 > nvim_buf_get_line_count(nvim_get_curbuf()) + diff_extra {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }

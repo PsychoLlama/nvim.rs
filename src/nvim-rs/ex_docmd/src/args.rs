@@ -17,7 +17,8 @@ extern "C" {
     // Phase 4: additional eap field accessors
 
     fn grep_internal(cmdidx: c_int) -> c_int;
-    fn nvim_docmd_get_curbuf_line_count() -> i32;
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
 
     // Phase 4: helper function wrappers
     fn skipwhite(p: *const c_char) -> *mut c_char;
@@ -411,7 +412,7 @@ pub unsafe extern "C" fn rs_set_cmd_count(eap: ExArgHandle, count: c_int, valida
         (*eap).addr_count += 1;
         // Be vi compatible: no error message for out of range.
         if validate != 0 {
-            let line_count = nvim_docmd_get_curbuf_line_count();
+            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
             let new_line2 = (*eap).line2;
             if new_line2 > line_count {
                 (*eap).line2 = line_count;

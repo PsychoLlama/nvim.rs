@@ -239,12 +239,12 @@ extern "C" {
     fn nvim_docmd_last_tab_nr() -> c_int;
 
     // Cursor and arg accessors
-    fn nvim_docmd_get_curwin_cursor_lnum() -> i32;
+    fn nvim_win_get_cursor_lnum(wp: *mut c_void) -> i32;
     fn nvim_docmd_get_curwin_arg_idx() -> c_int;
     fn nvim_docmd_get_argcount() -> c_int;
 
     // Buffer accessors
-    fn nvim_docmd_get_curbuf_line_count() -> i32;
+    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn nvim_docmd_get_curbuf_fnum() -> c_int;
 
     // Quickfix accessors (directly exported)
@@ -389,8 +389,8 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
     let addr_type = (*eap).addr_type;
     match addr_type {
         x if x == ADDR_LINES || x == ADDR_OTHER => {
-            let cursor_lnum = nvim_docmd_get_curwin_cursor_lnum();
-            let line_count = nvim_docmd_get_curbuf_line_count();
+            let cursor_lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
+            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
             if cursor_lnum < line_count {
                 cursor_lnum
             } else {
@@ -430,7 +430,7 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
 
     match addr_type {
         x if x == ADDR_LINES || x == ADDR_OTHER => {
-            (*eap).line2 = nvim_docmd_get_curbuf_line_count();
+            (*eap).line2 = nvim_buf_get_line_count(nvim_get_curbuf());
         }
         x if x == ADDR_LOADED_BUFFERS => {
             let first_fnum = nvim_docmd_first_loaded_buf_fnum();
@@ -773,7 +773,7 @@ pub unsafe fn get_address_impl(
                 cmd = cmd.add(1);
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
-                        lnum = nvim_docmd_get_curwin_cursor_lnum();
+                        lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
                     }
                     ADDR_WINDOWS => {
                         lnum = nvim_docmd_current_win_nr() as i32;
@@ -808,7 +808,7 @@ pub unsafe fn get_address_impl(
                 cmd = cmd.add(1);
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
-                        lnum = nvim_docmd_get_curbuf_line_count();
+                        lnum = nvim_buf_get_line_count(nvim_get_curbuf());
                     }
                     ADDR_WINDOWS => {
                         lnum = nvim_docmd_last_win_nr() as i32;
@@ -876,7 +876,7 @@ pub unsafe fn get_address_impl(
                     if !fm.is_null() && nvim_docmd_mark_fnum(fm) != nvim_docmd_get_curbuf_handle() {
                         mark_move_to(fm, 0);
                         // Jumped to another file.
-                        lnum = nvim_docmd_get_curwin_cursor_lnum();
+                        lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
                     } else {
                         if !mark_check(fm, errormsg) {
                             cmd = std::ptr::null_mut();
@@ -907,12 +907,12 @@ pub unsafe fn get_address_impl(
                     }
                 } else {
                     // Save curwin->w_cursor
-                    let save_lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    let save_lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
                     let save_col = nvim_docmd_get_curwin_cursor_col();
 
                     // When '/' or '?' follows another address, start from there.
                     if lnum > 0 && lnum != MAXLNUM {
-                        let line_count = nvim_docmd_get_curbuf_line_count();
+                        let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
                         let set_lnum = if lnum > line_count { line_count } else { lnum };
                         nvim_win_set_cursor_lnum(nvim_get_curwin(), set_lnum);
                     }
@@ -920,11 +920,12 @@ pub unsafe fn get_address_impl(
                     // Start a forward search at the end of the line (unless
                     // before the first line).
                     // Start a backward search at the start of the line.
-                    let col = if c == b'/' as c_int && nvim_docmd_get_curwin_cursor_lnum() > 0 {
-                        MAXCOL
-                    } else {
-                        0
-                    };
+                    let col =
+                        if c == b'/' as c_int && nvim_win_get_cursor_lnum(nvim_get_curwin()) > 0 {
+                            MAXCOL
+                        } else {
+                            0
+                        };
                     nvim_win_set_cursor_col(nvim_get_curwin(), col);
                     nvim_docmd_set_searchcmdlen(0);
                     let flags = if silent {
@@ -941,7 +942,7 @@ pub unsafe fn get_address_impl(
                         *ptr = cmd;
                         return lnum;
                     }
-                    lnum = nvim_docmd_get_curwin_cursor_lnum();
+                    lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
                     nvim_win_set_cursor_lnum(nvim_get_curwin(), save_lnum);
                     nvim_win_set_cursor_col(nvim_get_curwin(), save_col);
                     // adjust command string pointer
@@ -975,7 +976,7 @@ pub unsafe fn get_address_impl(
                     let start_lnum = if lnum != MAXLNUM {
                         lnum
                     } else {
-                        nvim_docmd_get_curwin_cursor_lnum()
+                        nvim_win_get_cursor_lnum(nvim_get_curwin())
                     };
                     // Start the search just like for the above do_search().
                     let start_col = if *cmd as u8 != b'?' { MAXCOL } else { 0 };
@@ -1018,7 +1019,7 @@ pub unsafe fn get_address_impl(
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
                         // "+1" is same as ".+1"
-                        lnum = nvim_docmd_get_curwin_cursor_lnum();
+                        lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
                     }
                     ADDR_WINDOWS => {
                         lnum = nvim_docmd_current_win_nr() as i32;
@@ -1196,7 +1197,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
                         (*eap).line1 = 1;
-                        (*eap).line2 = nvim_docmd_get_curbuf_line_count();
+                        (*eap).line2 = nvim_buf_get_line_count(nvim_get_curbuf());
                     }
                     ADDR_LOADED_BUFFERS => {
                         (*eap).line1 = nvim_docmd_first_loaded_buf_fnum() as i32;

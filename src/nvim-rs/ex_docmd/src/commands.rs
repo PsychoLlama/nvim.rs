@@ -181,7 +181,7 @@ extern "C" {
     fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
 
     // eap accessors
-    fn nvim_docmd_get_curbuf_line_count() -> LinenrT;
+    fn nvim_buf_get_line_count(buf: *mut c_void) -> LinenrT;
 
     // Global state accessors
     static cmdwin_type: c_int;
@@ -2014,7 +2014,7 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
         if (*eap).addr_count >= 2 {
             return;
         }
-        if line2 == nvim_docmd_get_curbuf_line_count() {
+        if line2 == nvim_buf_get_line_count(nvim_get_curbuf()) {
             beep_flush();
             return;
         }
@@ -2516,7 +2516,7 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
             errormsg = err;
         }
     } else if (*eap).addr_count != 0 {
-        let line_count = nvim_docmd_get_curbuf_line_count();
+        let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
         let line2 = (*eap).line2.min(line_count);
         (*eap).line2 = line2;
         if line2 < 0 {
@@ -2745,7 +2745,7 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
     get_flags(eap);
 
     const MAXLNUM: LinenrT = 0x7fffffff;
-    let line_count = nvim_docmd_get_curbuf_line_count();
+    let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
     if n == MAXLNUM || n < 0 || n > line_count {
         emsg(crate::errors::E_INVRANGE_STR.as_ptr());
         return;

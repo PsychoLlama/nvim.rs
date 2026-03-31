@@ -428,7 +428,6 @@ char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_fu
 }
 
 int nvim_docmd_cmdnames_func_is_ni(int cmdidx) { return IS_USER_CMDIDX((cmdidx_T)cmdidx) ? 0 : (cmdnames[cmdidx].cmd_func == ex_ni || cmdnames[cmdidx].cmd_func == ex_script_ni); }
-linenr_T nvim_docmd_get_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 int nvim_docmd_get_command_count(void) { return command_count; }
 int nvim_docmd_get_cmdidxs1(int c) { return (int)cmdidxs1[CHAR_ORD_LOW(c)]; }
 int nvim_docmd_get_cmdidxs2(int c1, int c2) { return (int)cmdidxs2[CHAR_ORD_LOW(c1)][CHAR_ORD_LOW(c2)]; }
@@ -477,7 +476,6 @@ int nvim_docmd_current_win_nr(void) { return CURRENT_WIN_NR; }
 int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
 int nvim_docmd_current_tab_nr(void) { return CURRENT_TAB_NR; }
 int nvim_docmd_last_tab_nr(void) { return LAST_TAB_NR; }
-linenr_T nvim_docmd_get_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 int nvim_docmd_get_curwin_arg_idx(void) { return curwin->w_arg_idx; }
 int nvim_docmd_get_argcount(void) { return ARGCOUNT; }
 int nvim_docmd_get_curbuf_fnum(void) { return curbuf->b_fnum; }
@@ -909,7 +907,6 @@ int nvim_docmd_curbuf_ml_has_empty(void) { return (curbuf->b_ml.ml_flags & ML_EM
 void nvim_docmd_do_bang_read(exarg_T *eap) { do_bang(1, eap, false, false, true); }
 const char *nvim_docmd_curbuf_b_fname(void) { return curbuf->b_fname; }
 const char *nvim_docmd_e_notopen_str(void) { return _(e_notopen); }
-linenr_T nvim_docmd_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 void nvim_docmd_curwin_cursor_lnum_maybe_dec(linenr_T lnum) { if (curwin->w_cursor.lnum > 1 && curwin->w_cursor.lnum >= lnum) { curwin->w_cursor.lnum--; } }
 int nvim_docmd_curwin_w_arg_idx_invalid(void) { return curwin->w_arg_idx_invalid ? 1 : 0; }
 size_t nvim_docmd_add_win_cmd_modifiers_global(char *buf, size_t bufsize)

@@ -121,7 +121,7 @@ extern "C" {
     fn setaltfname(ffname: *const c_char, fname: *const c_char, lnum: LinenrT);
     fn aborting() -> bool;
     fn nvim_docmd_e_notopen_str() -> *const c_char;
-    fn nvim_docmd_curbuf_ml_line_count() -> LinenrT;
+    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     fn ml_get(lnum: LinenrT) -> *const c_char;
     fn u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int;
     fn ml_delete(lnum: LinenrT) -> c_int;
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
         if empty != 0 && crate::exmode_active {
             // Delete the empty line that remains (ex behavior, not vi).
             let lnum = if line2 == 0 {
-                nvim_docmd_curbuf_ml_line_count()
+                nvim_buf_get_line_count(nvim_get_curbuf())
             } else {
                 1
             };
