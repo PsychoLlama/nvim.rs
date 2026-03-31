@@ -47,6 +47,17 @@ const ESTACK_SCRIPT: c_int = 2;
 // FFI declarations
 // ---------------------------------------------------------------------------
 
+/// Rust mirror of C `sctx_T`.
+///
+/// Layout matches: { int sc_sid; int sc_seq; int32_t sc_lnum; uint64_t sc_chan; }
+#[repr(C)]
+struct SctxT {
+    sc_sid: c_int,
+    sc_seq: c_int,
+    sc_lnum: i32,
+    _sc_chan: u64,
+}
+
 extern "C" {
     /// find_cmdline_var — exported from Rust (commands.rs)
     fn find_cmdline_var(src: *const c_char, usedlen: *mut usize) -> isize;
@@ -109,9 +120,8 @@ extern "C" {
     fn nvim_get_sourcing_name() -> *const c_char;
     fn nvim_get_sourcing_lnum() -> c_int;
 
-    // current_sctx field accessors
-    fn nvim_docmd_get_current_sctx_lnum() -> c_int;
-    fn nvim_docmd_get_current_sctx_sid() -> c_int;
+    // current_sctx (direct access)
+    static current_sctx: SctxT;
 
     // oldfiles (wraps tv_list_find_str(get_vim_var_list(VV_OLDFILES), idx))
     fn nvim_excmds_oldfiles_find_str(idx: c_int) -> *const c_char;
@@ -386,7 +396,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
 
         SPEC_SFLNUM => {
             // line in script file
-            let sc_lnum = nvim_docmd_get_current_sctx_lnum();
+            let sc_lnum = current_sctx.sc_lnum;
             let sourcing_lnum = nvim_get_sourcing_lnum();
             if sc_lnum + sourcing_lnum == 0 {
                 *errormsg = crate::gt(crate::E_NO_SFLNUM_STR.as_ptr());
@@ -402,7 +412,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
         }
 
         SPEC_SID => {
-            let sc_sid = nvim_docmd_get_current_sctx_sid();
+            let sc_sid = current_sctx.sc_sid;
             if sc_sid <= 0 {
                 *errormsg = crate::gt(crate::E_USINGSID_STR.as_ptr());
                 return ptr::null_mut();

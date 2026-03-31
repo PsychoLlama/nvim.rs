@@ -24,7 +24,7 @@ extern "C" {
     fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn nvim_docmd_set_expr_line(arg: *const c_char);
     fn check_ff_value(p: *mut c_char) -> c_int;
-    fn nvim_docmd_strmove(dst: *mut c_char, src: *const c_char);
+    fn strlen(s: *const c_char) -> usize;
     #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_mb_ptr_adv_len(p: *const c_char) -> c_int;
     static utf8len_tab: [u8; 256];
@@ -53,6 +53,15 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     #[link_name = "strlen"]
     fn c_strlen(s: *const c_char) -> usize;
+}
+
+/// Equivalent to STRMOVE: memmove(dst, src, strlen(src) + 1).
+///
+/// # Safety
+/// `dst` and `src` must be valid pointers to null-terminated C strings.
+unsafe fn strmove(dst: *mut c_char, src: *const c_char) {
+    let len = strlen(src) + 1;
+    std::ptr::copy(src, dst, len);
 }
 
 /// Address type: lines in current buffer (matches ADDR_LINES in C).
@@ -780,7 +789,7 @@ pub unsafe extern "C" fn rs_skip_cmd_arg(p: *mut c_char, rembs: c_int) -> *mut c
     while *ptr as u8 != 0 && !(*ptr as u8).is_ascii_whitespace() {
         if *ptr as u8 == b'\\' && *ptr.add(1) as u8 != 0 {
             if rembs != 0 {
-                nvim_docmd_strmove(ptr, ptr.add(1) as *const c_char);
+                strmove(ptr, ptr.add(1) as *const c_char);
             } else {
                 ptr = ptr.add(1);
             }
@@ -825,7 +834,7 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
                 p = p.add(1); // skip CTRL-V and next char
             } else {
                 // remove CTRL-V and skip next char
-                nvim_docmd_strmove(p, p.add(1) as *const c_char);
+                strmove(p, p.add(1) as *const c_char);
             }
             if *p as u8 == 0 {
                 break;
@@ -860,7 +869,7 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
                     && p > eap_arg
                     && *p.sub(1) as u8 == b'\\'
                 {
-                    nvim_docmd_strmove(p.sub(1), p as *const c_char);
+                    strmove(p.sub(1), p as *const c_char);
                     p = p.sub(1);
                 } else {
                     (*eap).nextcmd = rs_check_nextcmd(p as *const c_char);

@@ -250,7 +250,7 @@ extern "C" {
 
     // lines_ga deep clear helper
     fn nvim_docmd_ga_deep_clear_lines(gap: *mut c_void);
-    fn nvim_docmd_strmove(dst: *mut c_char, src: *const c_char);
+    fn strlen(s: *const c_char) -> usize;
     fn nvim_docmd_free_emsg_silent_list(cstack: *mut c_void);
 }
 
@@ -842,7 +842,10 @@ pub unsafe extern "C" fn rs_do_cmdline(
         } else {
             // need to copy the command after the '|' to cmdline_copy
             // STRMOVE(cmdline_copy, next_cmdline)
-            unsafe { nvim_docmd_strmove(cmdline_copy, next_cmdline) };
+            unsafe {
+                let len = strlen(next_cmdline as *const c_char) + 1;
+                std::ptr::copy(next_cmdline as *const c_char, cmdline_copy, len);
+            };
             next_cmdline = cmdline_copy;
         }
 

@@ -451,7 +451,6 @@ void nvim_docmd_rettv_init_string(void *rettv) { typval_T *tv = (typval_T *)rett
 void nvim_docmd_rettv_set_string(void *rettv, const char *s) { ((typval_T *)rettv)->vval.v_string = xstrdup(s); }
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_user_command_name(useridx, (cmdidx_T)cmdidx); }
 void nvim_docmd_set_expr_line(const char *arg) { set_expr_line(xstrdup(arg)); }
-void nvim_docmd_strmove(char *dst, const char *src) { STRMOVE(dst, src); }
 char *nvim_docmd_get_dollar_command(void) { return dollar_command; }
 /// Parse digits from eap->arg, advance eap->arg, return the number.
 /// Also handles eap->args/arglens/argc adjustment.
@@ -902,8 +901,6 @@ int nvim_docmd_get_autocmd_fname_full(void) { return autocmd_fname_full ? 1 : 0;
 void nvim_docmd_set_autocmd_fname_full(int v) { autocmd_fname_full = (v != 0); }
 void nvim_docmd_set_autocmd_fname(const char *new_fname) { xstrlcpy(autocmd_fname, new_fname, MAXPATHL); }
 const char *nvim_docmd_get_autocmd_match(void) { return autocmd_match; }
-int nvim_docmd_get_current_sctx_lnum(void) { return (int)current_sctx.sc_lnum; }
-int nvim_docmd_get_current_sctx_sid(void) { return (int)current_sctx.sc_sid; }
 int nvim_docmd_get_quitmore(void) { return quitmore; }
 void nvim_docmd_set_quitmore(int n) { quitmore = n; }
 void nvim_docmd_check_more_semsg(int n) { semsg(NGETTEXT("E173: %" PRId64 " more file to edit", "E173: %" PRId64 " more files to edit", (unsigned)n), (int64_t)n); }
