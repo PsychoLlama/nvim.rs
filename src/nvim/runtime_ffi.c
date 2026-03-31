@@ -20,7 +20,9 @@
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/ex_docmd.h"
+#include "nvim/ex_eval.h"
 #include "nvim/ex_eval_defs.h"
+#include "nvim/mbyte_defs.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/globals.h"
@@ -559,3 +561,61 @@ char *nvim_rt_get_past_head(const char *path) { return get_past_head((char *)pat
 
 /// fix_fname: canonicalize path (resolve symlinks, etc).
 char *nvim_rt_fix_fname(const char *fname) { return fix_fname((char *)fname); }
+
+// =============================================================================
+// Phase 2: Accessors for ex_finish / ex_scriptencoding / source_finished
+// =============================================================================
+
+/// Get eap->ea_getline as a void* (LineGetter is a function pointer).
+void *nvim_rt_exarg_get_getline_fn(void *eap) { return (void *)(uintptr_t)((exarg_T *)eap)->ea_getline; }
+
+/// Get eap->cookie.
+void *nvim_rt_exarg_get_cookie(void *eap) { return ((exarg_T *)eap)->cookie; }
+
+/// Get eap->cstack.
+void *nvim_rt_exarg_get_cstack(void *eap) { return ((exarg_T *)eap)->cstack; }
+
+/// Check if eap->ea_getline is getsourceline.
+bool nvim_rt_exarg_is_sourcing(void *eap) { return getline_equal(((exarg_T *)eap)->ea_getline, ((exarg_T *)eap)->cookie, getsourceline); }
+
+/// Get the source_cookie from eap (via getline_cookie).
+void *nvim_rt_exarg_get_source_cookie(void *eap) { return getline_equal(((exarg_T *)eap)->ea_getline, ((exarg_T *)eap)->cookie, getsourceline) ? getline_cookie(((exarg_T *)eap)->ea_getline, ((exarg_T *)eap)->cookie) : NULL; }
+
+/// Check if fgetline/cookie pair is sourcing (getline_equal getsourceline).
+bool nvim_rt_getline_is_sourcing(void *fgetline, void *cookie) { return getline_equal((LineGetter)(uintptr_t)fgetline, cookie, getsourceline); }
+
+/// Get source_cookie from fgetline/cookie pair.
+void *nvim_rt_getline_get_source_cookie(void *fgetline, void *cookie) { return getline_cookie((LineGetter)(uintptr_t)fgetline, cookie); }
+
+/// Canonicalize an encoding name.
+char *nvim_rt_enc_canonize(char *enc) { return enc_canonize(enc); }
+
+/// Setup encoding conversion.
+int nvim_rt_convert_setup(void *vcp, char *from, const char *to) { return convert_setup((vimconv_T *)vcp, from, (char *)to); }
+
+/// Get p_enc (the 'encoding' option value).
+const char *nvim_rt_get_p_enc(void) { return p_enc; }
+
+/// cleanup_conditionals wrapper.
+int nvim_rt_cleanup_conditionals(void *cstack, int searched_cond, int inclusive)
+{
+  return cleanup_conditionals((cstack_T *)cstack, searched_cond, inclusive);
+}
+
+/// Set cs_pending at index.
+void nvim_rt_cstack_set_pending(void *cstack, int idx, int val)
+{
+  ((cstack_T *)cstack)->cs_pending[idx] = (char)val;
+}
+
+/// report_make_pending wrapper (for CSTP_FINISH).
+void nvim_rt_report_make_pending_finish(void) { report_make_pending(CSTP_FINISH, NULL); }
+
+/// CSTP_FINISH value.
+int nvim_rt_CSTP_FINISH(void) { return CSTP_FINISH; }
+
+/// emsg for E167.
+void nvim_rt_emsg_scriptencoding_outside(void) { emsg(_("E167: :scriptencoding used outside of a sourced file")); }
+
+/// emsg for E168.
+void nvim_rt_emsg_finish_outside(void) { emsg(_("E168: :finish used outside of a sourced file")); }

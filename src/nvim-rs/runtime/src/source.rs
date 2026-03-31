@@ -2,9 +2,173 @@
 //!
 //! This module handles sourcing Vim and Lua scripts.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::{doso, LinenrT, ScidT};
+
+// =============================================================================
+// C FFI for Phase 2 functions
+// =============================================================================
+
+extern "C" {
+    // source_cookie_T field accessors (defined in runtime.c)
+    fn nvim_rt_cookie_get_breakpoint_ptr(cookie: *mut c_void) -> *mut LinenrT;
+    fn nvim_rt_cookie_get_dbg_tick_ptr(cookie: *mut c_void) -> *mut c_int;
+    fn nvim_rt_cookie_get_level(cookie: *mut c_void) -> c_int;
+    fn nvim_rt_cookie_get_finished(cookie: *mut c_void) -> bool;
+    fn nvim_rt_cookie_set_finished(cookie: *mut c_void, val: bool);
+
+    // exarg_T accessors (defined in runtime_ffi.c)
+    fn nvim_rt_exarg_is_sourcing(eap: *mut c_void) -> bool;
+    fn nvim_rt_exarg_get_source_cookie(eap: *mut c_void) -> *mut c_void;
+    fn nvim_rt_getline_is_sourcing(fgetline: *mut c_void, cookie: *mut c_void) -> bool;
+    fn nvim_rt_getline_get_source_cookie(fgetline: *mut c_void, cookie: *mut c_void)
+        -> *mut c_void;
+    fn nvim_rt_exarg_get_cstack(eap: *mut c_void) -> *mut c_void;
+
+    // Encoding functions
+    fn nvim_rt_enc_canonize(enc: *mut c_char) -> *mut c_char;
+    fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;
+    fn nvim_rt_cookie_get_conv(cookie: *mut c_void) -> *mut c_void;
+    fn nvim_rt_get_p_enc() -> *const c_char;
+
+    // Conditional cleanup
+    fn nvim_rt_cleanup_conditionals(
+        cstack: *mut c_void,
+        searched_cond: c_int,
+        inclusive: c_int,
+    ) -> c_int;
+    fn nvim_rt_cstack_set_pending(cstack: *mut c_void, idx: c_int, val: c_int);
+    fn nvim_rt_report_make_pending_finish();
+    fn nvim_rt_CSTP_FINISH() -> c_int;
+
+    // Error messages
+    fn nvim_rt_emsg_scriptencoding_outside();
+    fn nvim_rt_emsg_finish_outside();
+
+    // exarg_T helpers
+    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
+
+    // Memory management
+    fn xfree(ptr: *mut c_void);
+}
+
+// =============================================================================
+// Phase 2: source cookie / finish / scriptencoding functions
+// =============================================================================
+
+/// Returns a pointer to the breakpoint field of the source cookie.
+///
+/// # Safety
+/// cookie must be a valid source_cookie_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_source_breakpoint(cookie: *mut c_void) -> *mut LinenrT {
+    nvim_rt_cookie_get_breakpoint_ptr(cookie)
+}
+
+/// Returns a pointer to the dbg_tick field of the source cookie.
+///
+/// # Safety
+/// cookie must be a valid source_cookie_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
+    nvim_rt_cookie_get_dbg_tick_ptr(cookie)
+}
+
+/// Returns the nesting level from the source cookie.
+///
+/// # Safety
+/// cookie must be a valid source_cookie_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_source_level(cookie: *mut c_void) -> c_int {
+    nvim_rt_cookie_get_level(cookie)
+}
+
+/// Returns true if the current getline function is getsourceline (i.e., we are sourcing).
+///
+/// # Safety
+/// eap must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sourcing_a_script(eap: *mut c_void) -> c_int {
+    c_int::from(nvim_rt_exarg_is_sourcing(eap))
+}
+
+/// `:scriptencoding` command: set encoding conversion for a sourced script.
+///
+/// # Safety
+/// eap must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_scriptencoding(eap: *mut c_void) {
+    if !nvim_rt_exarg_is_sourcing(eap) {
+        nvim_rt_emsg_scriptencoding_outside();
+        return;
+    }
+
+    let arg = nvim_rt_exarg_get_arg(eap);
+    let name = if !arg.is_null() && *arg != 0 {
+        nvim_rt_enc_canonize(arg)
+    } else {
+        arg
+    };
+
+    let sp = nvim_rt_exarg_get_source_cookie(eap);
+    let vcp = nvim_rt_cookie_get_conv(sp);
+    let p_enc = nvim_rt_get_p_enc();
+    nvim_rt_convert_setup(vcp, name, p_enc);
+
+    if !name.is_null() && name != arg {
+        xfree(name.cast::<c_void>());
+    }
+}
+
+/// `:finish` command: mark a sourced file as finished.
+///
+/// # Safety
+/// eap must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_finish(eap: *mut c_void) {
+    if nvim_rt_exarg_is_sourcing(eap) {
+        rs_do_finish(eap, false);
+    } else {
+        nvim_rt_emsg_finish_outside();
+    }
+}
+
+/// Mark a sourced file as finished; handle pending `:finish` in try/finally.
+///
+/// # Safety
+/// eap must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_finish(eap: *mut c_void, reanimate: bool) {
+    if reanimate {
+        let sp = nvim_rt_exarg_get_source_cookie(eap);
+        nvim_rt_cookie_set_finished(sp, false);
+    }
+
+    let cstack = nvim_rt_exarg_get_cstack(eap);
+    let idx = nvim_rt_cleanup_conditionals(cstack, 0, 1);
+    if idx >= 0 {
+        let cstp_finish = nvim_rt_CSTP_FINISH();
+        nvim_rt_cstack_set_pending(cstack, idx, cstp_finish);
+        nvim_rt_report_make_pending_finish();
+    } else {
+        let sp = nvim_rt_exarg_get_source_cookie(eap);
+        nvim_rt_cookie_set_finished(sp, true);
+    }
+}
+
+/// Returns true when a sourced file had the `:finish` command.
+///
+/// # Safety
+/// fgetline and cookie must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_source_finished(fgetline: *mut c_void, cookie: *mut c_void) -> bool {
+    if !nvim_rt_getline_is_sourcing(fgetline, cookie) {
+        return false;
+    }
+    let sp = nvim_rt_getline_get_source_cookie(fgetline, cookie);
+    nvim_rt_cookie_get_finished(sp)
+}
 
 // =============================================================================
 // Source Flags

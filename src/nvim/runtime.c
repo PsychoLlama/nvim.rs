@@ -124,6 +124,16 @@ extern linenr_T rs_get_sourced_lnum(void *fgetline, void *cookie);
 extern void *rs_get_script_local_funcs(scid_T sid);
 extern void rs_f_getscriptinfo(void *argvars, void *rettv, void *fptr);
 
+// Phase 2: Rust implementations of source cookie / finish functions
+extern linenr_T *rs_source_breakpoint(void *cookie);
+extern int *rs_source_dbg_tick(void *cookie);
+extern int rs_source_level(void *cookie);
+extern int rs_sourcing_a_script(void *eap);
+extern void rs_ex_scriptencoding(void *eap);
+extern void rs_ex_finish(void *eap);
+extern void rs_do_finish(void *eap, bool reanimate);
+extern bool rs_source_finished(void *fgetline, void *cookie);
+
 // C helpers called by Rust for functions that access static variables.
 // These live here (not in runtime_ffi.c) because ga_loaded is static.
 
@@ -737,17 +747,21 @@ void ex_options(exarg_T *eap)
 /// ":source" and associated commands.
 ///
 /// @return address holding the next breakpoint line for a source cookie
-linenr_T *source_breakpoint(void *cookie) { return &((source_cookie_T *)cookie)->breakpoint; }
+linenr_T *source_breakpoint(void *cookie) { return rs_source_breakpoint(cookie); }
 
 /// @return  the address holding the debug tick for a source cookie.
-int *source_dbg_tick(void *cookie) { return &((source_cookie_T *)cookie)->dbg_tick; }
+int *source_dbg_tick(void *cookie) { return rs_source_dbg_tick(cookie); }
 
 /// @return  the nesting level for a source cookie.
-int source_level(void *cookie)
-  FUNC_ATTR_PURE
-{
-  return ((source_cookie_T *)cookie)->level;
-}
+int source_level(void *cookie) { return rs_source_level(cookie); }
+
+// source_cookie_T field accessors (for Rust FFI)
+linenr_T *nvim_rt_cookie_get_breakpoint_ptr(void *cookie) { return &((source_cookie_T *)cookie)->breakpoint; }
+int *nvim_rt_cookie_get_dbg_tick_ptr(void *cookie) { return &((source_cookie_T *)cookie)->dbg_tick; }
+int nvim_rt_cookie_get_level(void *cookie) { return ((source_cookie_T *)cookie)->level; }
+bool nvim_rt_cookie_get_finished(void *cookie) { return ((source_cookie_T *)cookie)->finished; }
+void nvim_rt_cookie_set_finished(void *cookie, bool val) { ((source_cookie_T *)cookie)->finished = val; }
+void *nvim_rt_cookie_get_conv(void *cookie) { return &((source_cookie_T *)cookie)->conv; }
 
 /// Special function to open a file without handle inheritance.
 /// If possible the handle is closed on exec().
@@ -1416,66 +1430,22 @@ retry:
 
 /// Returns true if sourcing a script either from a file or a buffer or a string.
 /// Otherwise returns false.
-int sourcing_a_script(exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getsourceline); }
+int sourcing_a_script(exarg_T *eap) { return rs_sourcing_a_script(eap); }
 
 /// ":scriptencoding": Set encoding conversion for a sourced script.
 /// Without the multi-byte feature it's simply ignored.
-void ex_scriptencoding(exarg_T *eap)
-{
-  if (!sourcing_a_script(eap)) {
-    emsg(_("E167: :scriptencoding used outside of a sourced file"));
-    return;
-  }
-
-  char *name = (*eap->arg != NUL) ? enc_canonize(eap->arg) : eap->arg;
-
-  // Setup for conversion from the specified encoding to 'encoding'.
-  source_cookie_T *sp = (source_cookie_T *)getline_cookie(eap->ea_getline, eap->cookie);
-  convert_setup(&sp->conv, name, p_enc);
-
-  if (name != eap->arg) {
-    xfree(name);
-  }
-}
+void ex_scriptencoding(exarg_T *eap) { rs_ex_scriptencoding(eap); }
 
 /// ":finish": Mark a sourced file as finished.
-void ex_finish(exarg_T *eap)
-{
-  if (sourcing_a_script(eap)) {
-    do_finish(eap, false);
-  } else {
-    emsg(_("E168: :finish used outside of a sourced file"));
-  }
-}
+void ex_finish(exarg_T *eap) { rs_ex_finish(eap); }
 
 /// Mark a sourced file as finished.  Possibly makes the ":finish" pending.
 /// Also called for a pending finish at the ":endtry" or after returning from
 /// an extra do_cmdline().  "reanimate" is used in the latter case.
-void do_finish(exarg_T *eap, bool reanimate)
-{
-  if (reanimate) {
-    ((source_cookie_T *)getline_cookie(eap->ea_getline, eap->cookie))->finished = false;
-  }
-
-  // Cleanup (and deactivate) conditionals, but stop when a try conditional
-  // not in its finally clause (which then is to be executed next) is found.
-  // In this case, make the ":finish" pending for execution at the ":endtry".
-  // Otherwise, finish normally.
-  int idx = cleanup_conditionals(eap->cstack, 0, true);
-  if (idx >= 0) {
-    eap->cstack->cs_pending[idx] = CSTP_FINISH;
-    report_make_pending(CSTP_FINISH, NULL);
-  } else {
-    ((source_cookie_T *)getline_cookie(eap->ea_getline, eap->cookie))->finished = true;
-  }
-}
+void do_finish(exarg_T *eap, bool reanimate) { rs_do_finish(eap, reanimate); }
 
 /// @return  true when a sourced file had the ":finish" command: Don't give error
 ///          message for missing ":endif".
 ///          false when not sourcing a file.
-bool source_finished(LineGetter fgetline, void *cookie)
-{
-  return getline_equal(fgetline, cookie, getsourceline)
-         && ((source_cookie_T *)getline_cookie(fgetline, cookie))->finished;
-}
+bool source_finished(LineGetter fgetline, void *cookie) { return rs_source_finished(fgetline, cookie); }
 
