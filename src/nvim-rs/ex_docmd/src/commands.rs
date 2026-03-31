@@ -182,16 +182,6 @@ extern "C" {
     fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
 
     // eap accessors
-    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_forceit(eap: ExArgHandle) -> bool;
-    fn nvim_eap_set_forceit(eap: ExArgHandle, forceit: bool);
-    fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_line1(eap: ExArgHandle) -> LinenrT;
-    fn nvim_eap_get_line2(eap: ExArgHandle) -> LinenrT;
-    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_line1(eap: ExArgHandle, line: LinenrT);
-    fn nvim_eap_set_line2(eap: ExArgHandle, line: LinenrT);
     fn nvim_docmd_get_curbuf_line_count() -> LinenrT;
 
     // Global state accessors
@@ -280,7 +270,6 @@ extern "C" {
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // eap argt and other needed accessors
-    fn nvim_eap_get_argt(eap: ExArgHandle) -> u32;
     fn nvim_skip_expr_arg(arg: *mut *mut c_char);
 
     // is_other_file helpers
@@ -356,8 +345,6 @@ extern "C" {
     fn vpeekc() -> c_int;
 
     // Phase 10: ex_operators helpers
-    fn nvim_eap_get_regname(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_amount(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_get_VIsual_active() -> c_int;
     fn nvim_set_virtual_op_false();
     fn nvim_set_virtual_op_none();
@@ -613,12 +600,12 @@ pub unsafe extern "C" fn rs_skip_cmd(eap: ExArgHandle) -> c_int {
         return 0;
     }
 
-    let skip = nvim_eap_get_skip(eap);
-    if skip == 0 {
+    let skip = (*eap).skip != 0;
+    if !skip {
         return 0;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     // Commands that need evaluation even when skipping
     let needs_eval = matches!(
@@ -803,7 +790,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         return;
     }
 
-    let arg_start = nvim_eap_get_arg(eap);
+    let arg_start = (*eap).arg;
     if arg_start.is_null() {
         return;
     }
@@ -837,7 +824,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
             return;
         }
 
-        let forceit = c_int::from(nvim_eap_get_forceit(eap));
+        let forceit = c_int::from((*eap).forceit);
         let fd = open_exfile(fname, forceit, mode);
         xfree(fname as *mut c_void);
         nvim_docmd_set_redir_fd(fd);
@@ -954,7 +941,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     }
 
     // vgetc() expects K_SPECIAL to have been escaped. Count extra bytes needed.
-    let eap_arg = nvim_eap_get_arg(eap);
+    let eap_arg = (*eap).arg;
     let mut arg: *mut c_char = std::ptr::null_mut();
 
     {
@@ -1021,27 +1008,27 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     let save_state = save_state_buf.as_mut_ptr() as *mut c_void;
 
     if save_current_state(save_state) {
-        let addr_count = nvim_eap_get_addr_count(eap);
+        let addr_count = (*eap).addr_count;
         loop {
             if addr_count != 0 {
-                let line1 = nvim_eap_get_line1(eap);
+                let line1 = (*eap).line1;
                 let curwin = nvim_get_curwin();
                 nvim_docmd_set_curwin_cursor_lnum(line1);
                 nvim_docmd_set_curwin_cursor_col(0);
                 check_cursor_moved(curwin);
-                nvim_eap_set_line1(eap, line1 + 1);
+                (*eap).line1 = line1 + 1;
             }
 
             let cmd_to_run = if !arg.is_null() { arg } else { eap_arg };
-            let forceit = nvim_eap_get_forceit(eap);
+            let forceit = (*eap).forceit != 0;
             let remap = if forceit { REMAP_NONE } else { REMAP_YES };
             exec_normal_cmd(cmd_to_run, remap, false);
 
             if addr_count == 0 {
                 break;
             }
-            let line1 = nvim_eap_get_line1(eap);
-            let line2 = nvim_eap_get_line2(eap);
+            let line1 = (*eap).line1;
+            let line2 = (*eap).line2;
             if line1 > line2 || nvim_docmd_get_got_int() != 0 {
                 break;
             }
@@ -1080,7 +1067,7 @@ pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
         return;
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if arg.is_null() {
         return;
     }
@@ -1224,8 +1211,8 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
     }
 
     // Find the target window.
-    let wp = if nvim_eap_get_addr_count(eap) > 0 {
-        let mut wnr = nvim_eap_get_line2(eap);
+    let wp = if (*eap).addr_count > 0 {
+        let mut wnr = (*eap).line2;
         let mut wp = nvim_get_firstwin();
         while !nvim_win_get_next(wp).is_null() {
             wnr -= 1;
@@ -1244,7 +1231,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         return;
     }
 
-    let forceit_bool = nvim_eap_get_forceit(eap);
+    let forceit_bool = (*eap).forceit != 0;
     let forceit = c_int::from(forceit_bool);
 
     // Trigger QuitPre and maybe ExitPre
@@ -1265,7 +1252,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         | (if forceit_bool { CCGD_FORCEIT } else { 0 })
         | CCGD_EXCMD;
 
-    let addr_count = nvim_eap_get_addr_count(eap);
+    let addr_count = (*eap).addr_count;
 
     if (!buf_hidden && check_changed(buf, check_flags))
         || nvim_docmd_check_more(1, forceit) != OK
@@ -1370,17 +1357,7 @@ extern "C" {
     fn nvim_has_dollar_or_tilde(s: *const c_char) -> bool;
     #[link_name = "expand_env_save"]
     fn nvim_expand_env_save(s: *const c_char) -> *mut c_char;
-    fn nvim_eap_get_usefilter(eap: ExArgHandle) -> bool;
     // repl_cmdline accessors
-    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_cmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_set_arg(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_get_nextcmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_get_argc(eap: ExArgHandle) -> usize;
-    fn nvim_eap_get_args(eap: ExArgHandle) -> *mut *mut c_char;
-    fn nvim_eap_get_do_ecmd_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_do_ecmd_cmd(eap: ExArgHandle, p: *mut c_char);
     fn nvim_docmd_get_do_ecmd_cmd_dollar() -> *mut c_char;
     fn nvim_repl_has_exclaim(s: *const c_char) -> bool;
     fn nvim_vim_strsave_escaped_shell(s: *const c_char) -> *mut c_char;
@@ -1426,7 +1403,7 @@ pub unsafe extern "C" fn rs_repl_cmdline(
     let tail_len = strlen(tail_start as *const c_char);
 
     // Allocate new buffer: prefix + repl + tail + NUL + optional nextcmd + NUL
-    let nextcmd = nvim_eap_get_nextcmd(eap);
+    let nextcmd = (*eap).nextcmd;
     let nextcmd_extra = if !nextcmd.is_null() {
         strlen(nextcmd as *const c_char) + 1
     } else {
@@ -1454,22 +1431,20 @@ pub unsafe extern "C" fn rs_repl_cmdline(
         let nc_dst = new_cmdline.add(nc_offset);
         let nc_len = nextcmd_extra - 1;
         std::ptr::copy_nonoverlapping(nextcmd, nc_dst, nc_len + 1);
-        nvim_eap_set_nextcmd(eap, nc_dst);
+        (*eap).nextcmd = nc_dst;
     }
 
     // Fix up eap->cmd
-    let old_cmd = nvim_eap_get_cmd(eap);
+    let old_cmd = (*eap).cmd;
     let cmd_offset = (old_cmd as usize).wrapping_sub(old_cmdline as usize);
-    nvim_eap_set_cmd(eap, new_cmdline.add(cmd_offset));
-
+    (*eap).cmd = new_cmdline.add(cmd_offset);
     // Fix up eap->arg
-    let old_arg = nvim_eap_get_arg(eap);
+    let old_arg = (*eap).arg;
     let arg_offset = (old_arg as usize).wrapping_sub(old_cmdline as usize);
-    nvim_eap_set_arg(eap, new_cmdline.add(arg_offset));
-
+    (*eap).arg = new_cmdline.add(arg_offset);
     // Fix up eap->args[j]
-    let argc = nvim_eap_get_argc(eap);
-    let args = nvim_eap_get_args(eap);
+    let argc = (*eap).argc;
+    let args = (*eap).args;
     for j in 0..argc {
         let arg_j = *args.add(j);
         let arg_j_offset = (arg_j as usize).wrapping_sub(old_cmdline as usize);
@@ -1484,11 +1459,11 @@ pub unsafe extern "C" fn rs_repl_cmdline(
     }
 
     // Fix up eap->do_ecmd_cmd (if set and not dollar_command)
-    let do_ecmd_cmd = nvim_eap_get_do_ecmd_cmd(eap);
+    let do_ecmd_cmd = (*eap).do_ecmd_cmd;
     let dollar_cmd = nvim_docmd_get_do_ecmd_cmd_dollar();
     if !do_ecmd_cmd.is_null() && do_ecmd_cmd != dollar_cmd {
         let dec_offset = (do_ecmd_cmd as usize).wrapping_sub(old_cmdline as usize);
-        nvim_eap_set_do_ecmd_cmd(eap, new_cmdline.add(dec_offset));
+        (*eap).do_ecmd_cmd = new_cmdline.add(dec_offset);
     }
 
     // Free old command line and update cmdlinep
@@ -1569,9 +1544,9 @@ pub unsafe extern "C" fn rs_expand_filename(
             repl
         };
 
-        let cmdidx = nvim_eap_get_cmdidx(eap);
-        let usefilter = nvim_eap_get_usefilter(eap);
-        let argt = nvim_eap_get_argt(eap);
+        let cmdidx = (*eap).cmdidx;
+        let usefilter = (*eap).usefilter != 0;
+        let argt = (*eap).argt;
 
         // Escape whitespace for non-shell commands.
         let repl = if !usefilter
@@ -1610,13 +1585,13 @@ pub unsafe extern "C" fn rs_expand_filename(
 
     // One file argument: Expand wildcards.
     // Don't do this with ":r !command" or ":w !command".
-    let argt = nvim_eap_get_argt(eap);
-    if (argt & EX_NOSPC) != 0 && !nvim_eap_get_usefilter(eap) {
+    let argt = (*eap).argt;
+    if (argt & EX_NOSPC) != 0 && ((*eap).usefilter == 0) {
         let mut has_wildcards = has_wildcards;
 
         // May expand environment variables.
         if has_wildcards {
-            let arg = nvim_eap_get_arg(eap);
+            let arg = (*eap).arg;
             if nvim_has_dollar_or_tilde(arg as *const c_char) {
                 nvim_expand_env_esc_namebuff_notilde(arg as *const c_char);
                 let nb = nvim_get_namebuff();
@@ -1627,7 +1602,7 @@ pub unsafe extern "C" fn rs_expand_filename(
         }
 
         // Halve backslashes (Vi compatible). On Unix: only if no wildcards.
-        let arg = nvim_eap_get_arg(eap);
+        let arg = (*eap).arg;
         #[cfg(unix)]
         if !has_wildcards {
             nvim_backslash_halve(arg);
@@ -1641,7 +1616,7 @@ pub unsafe extern "C" fn rs_expand_filename(
             let xpc_size = nvim_ExpandT_size();
             let xpc = xcalloc(1, xpc_size) as ExpandTHandle;
             nvim_ExpandInit(xpc);
-            let arg = nvim_eap_get_arg(eap);
+            let arg = (*eap).arg;
             let p_result = nvim_ExpandOne_files(xpc, arg as *const c_char, wildflags, icase);
             xfree(xpc);
 
@@ -1668,8 +1643,6 @@ extern "C" {
     fn nvim_docmd_clear_restart_edit();
     fn nvim_docmd_set_stop_insert_mode();
     fn nvim_docmd_clearmode();
-    fn nvim_eap_set_errmsg_const(eap: ExArgHandle, msg: *const c_char);
-    fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_mod(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_next(eap: ExArgHandle);
@@ -1727,12 +1700,12 @@ pub unsafe extern "C" fn rs_ex_blast(eap: ExArgHandle) {
 /// ":highlight" -- call do_highlight (including easter egg).
 #[export_name = "ex_highlight"]
 pub unsafe extern "C" fn rs_ex_highlight(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
-    let cmd = nvim_eap_get_cmd(eap);
+    let arg = (*eap).arg;
+    let cmd = (*eap).cmd;
     if !arg.is_null() && *arg == 0 && !cmd.is_null() && *cmd.add(2) == b'!' as c_char {
         msg(c"Greetings, Vim user!".as_ptr(), 0);
     }
-    do_highlight(arg, nvim_eap_get_forceit(eap), false);
+    do_highlight(arg, (*eap).forceit != 0, false);
 }
 
 /// not_exiting -- clear exiting flag (already exists as C function, not migrated).
@@ -1759,43 +1732,43 @@ pub unsafe extern "C" fn rs_ex_redo(eap: ExArgHandle) {
 /// ":!" -- call do_bang.
 #[export_name = "ex_bang"]
 pub unsafe extern "C" fn rs_ex_bang(eap: ExArgHandle) {
-    let addr_count = nvim_eap_get_addr_count(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let addr_count = (*eap).addr_count;
+    let forceit = (*eap).forceit != 0;
     nvim_docmd_do_bang(addr_count, eap, forceit);
 }
 
 /// Command modifier used in the wrong context.
 #[export_name = "ex_wrongmodifier"]
 pub unsafe extern "C" fn rs_ex_wrongmodifier(eap: ExArgHandle) {
-    nvim_eap_set_errmsg_const(eap, crate::gt(crate::E_INVCMD_STR.as_ptr()));
+    (*eap).errmsg = crate::gt(crate::E_INVCMD_STR.as_ptr()) as *mut c_char;
 }
 
 /// ":nogui" -- set error message (Nvim has no built-in GUI).
 #[export_name = "ex_nogui"]
 pub unsafe extern "C" fn rs_ex_nogui(eap: ExArgHandle) {
-    nvim_eap_set_errmsg_const(eap, crate::gt(crate::E_NOGVIM_STR.as_ptr()));
+    (*eap).errmsg = crate::gt(crate::E_NOGVIM_STR.as_ptr()) as *mut c_char;
 }
 
 /// ":popup" -- call pum_make_popup.
 #[export_name = "ex_popup"]
 pub unsafe extern "C" fn rs_ex_popup(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let arg = (*eap).arg;
+    let forceit = (*eap).forceit != 0;
     nvim_docmd_pum_make_popup(arg as *const c_char, forceit);
 }
 
 /// ":wundo" -- write undo file.
 #[export_name = "ex_wundo"]
 pub unsafe extern "C" fn rs_ex_wundo(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let arg = (*eap).arg;
+    let forceit = (*eap).forceit != 0;
     nvim_docmd_wundo(arg as *const c_char, forceit);
 }
 
 /// ":rundo" -- read undo file.
 #[export_name = "ex_rundo"]
 pub unsafe extern "C" fn rs_ex_rundo(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     nvim_docmd_rundo(arg as *const c_char);
 }
 
@@ -1803,7 +1776,7 @@ pub unsafe extern "C" fn rs_ex_rundo(eap: ExArgHandle) {
 #[export_name = "ex_tabmove"]
 pub unsafe extern "C" fn rs_ex_tabmove(eap: ExArgHandle) {
     let tab_number = crate::address::rs_get_tabpage_arg(eap);
-    let errmsg = nvim_eap_get_errmsg(eap);
+    let errmsg = (*eap).errmsg;
     if errmsg.is_null() {
         tabpage_move(tab_number);
     }
@@ -1835,7 +1808,7 @@ pub unsafe extern "C" fn rs_ex_stopinsert(eap: ExArgHandle) {
 /// ":checkpath" -- find pattern in path.
 #[export_name = "ex_checkpath"]
 pub unsafe extern "C" fn rs_ex_checkpath(eap: ExArgHandle) {
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     nvim_docmd_checkpath(forceit);
 }
 
@@ -1874,8 +1847,6 @@ extern "C" {
     fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
     // Phase 22: before_quit_all, ex_range_without_command helpers
-    fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
-    fn nvim_eap_set_argt(eap: ExArgHandle, argt: u32);
     fn nvim_docmd_get_exmode_plus() -> *mut c_char;
     static mut exmode_active: bool;
     fn invalid_range(eap: ExArgHandle) -> *mut c_char;
@@ -1889,7 +1860,6 @@ extern "C" {
     fn nvim_docmd_curbuf_get_did_filetype() -> bool;
     fn nvim_docmd_curbuf_set_did_filetype(val: bool);
     fn nvim_docmd_set_filetype_option(arg: *const c_char);
-    fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
     // Phase 19: psearch, shada, folddo helpers
     static mut g_do_tagpreview: c_int;
     static mut p_pvh: std::ffi::c_long;
@@ -1911,7 +1881,7 @@ const DOBUF_WIPE: c_int = 4;
 /// ":bunload" / ":bdelete" / ":bwipeout".
 #[export_name = "ex_bunload"]
 pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let command = if cmdidx == CMD_BDELETE {
         DOBUF_DEL
     } else if cmdidx == CMD_BWIPEOUT {
@@ -1919,11 +1889,11 @@ pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
     } else {
         DOBUF_UNLOAD
     };
-    let arg = nvim_eap_get_arg(eap);
-    let addr_count = nvim_eap_get_addr_count(eap);
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let arg = (*eap).arg;
+    let addr_count = (*eap).addr_count;
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
+    let forceit = (*eap).forceit != 0;
     let errmsg = nvim_docmd_do_bufdel(
         command,
         arg as *const c_char,
@@ -1932,7 +1902,7 @@ pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
         line2,
         forceit as c_int,
     );
-    nvim_eap_set_errmsg(eap, errmsg);
+    (*eap).errmsg = errmsg;
 }
 
 /// ":autocmd" / ":augroup".
@@ -1941,11 +1911,11 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
     let secure = nvim_get_secure();
     if secure != 0 {
         nvim_set_secure(2);
-        nvim_eap_set_errmsg_const(eap, crate::gt(crate::E_CURDIR_STR.as_ptr()));
+        (*eap).errmsg = crate::gt(crate::E_CURDIR_STR.as_ptr()) as *mut c_char;
     } else {
-        let cmdidx = nvim_eap_get_cmdidx(eap);
-        let arg = nvim_eap_get_arg(eap);
-        let forceit = nvim_eap_get_forceit(eap);
+        let cmdidx = (*eap).cmdidx;
+        let arg = (*eap).arg;
+        let forceit = (*eap).forceit != 0;
         if cmdidx == CMD_AUTOCMD {
             nvim_docmd_do_autocmd(eap, arg as *const c_char, forceit as c_int);
         } else {
@@ -1957,7 +1927,7 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
 /// ":doautocmd".
 #[export_name = "ex_doautocmd"]
 pub unsafe extern "C" fn rs_ex_doautocmd(eap: ExArgHandle) {
-    let mut arg = nvim_eap_get_arg(eap);
+    let mut arg = (*eap).arg;
     let call_do_modelines = nvim_docmd_check_nomodeline(&mut arg);
     let mut did_aucmd = false;
     do_doautocmd(arg, false, &mut did_aucmd);
@@ -1974,7 +1944,7 @@ pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
         return;
     }
     nvim_docmd_set_exiting(1);
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     if !forceit && check_changed_any(false, false) {
         nvim_docmd_set_exiting(0);
         return;
@@ -1988,7 +1958,7 @@ pub unsafe extern "C" fn rs_ex_setfiletype(eap: ExArgHandle) {
     if nvim_docmd_curbuf_get_did_filetype() {
         return;
     }
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     const FALLBACK: &[u8] = b"FALLBACK ";
     // Check if arg starts with "FALLBACK "
     let (arg_to_set, is_fallback) = if !arg.is_null() && {
@@ -2012,9 +1982,9 @@ pub unsafe extern "C" fn rs_ex_shada(eap: ExArgHandle) {
     if p_shada.is_null() || *p_shada == 0 {
         p_shada = c"'100".as_ptr() as *mut c_char;
     }
-    let cmdidx = nvim_eap_get_cmdidx(eap);
-    let arg = nvim_eap_get_arg(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let cmdidx = (*eap).cmdidx;
+    let arg = (*eap).arg;
+    let forceit = (*eap).forceit != 0;
     if cmdidx == CMD_RVIMINFO || cmdidx == CMD_RSHADA {
         rs_shada_read_everything(arg as *const c_char, forceit, false);
     } else {
@@ -2026,9 +1996,9 @@ pub unsafe extern "C" fn rs_ex_shada(eap: ExArgHandle) {
 /// ":folddo" / ":folddoclosed".
 #[export_name = "ex_folddo"]
 pub unsafe extern "C" fn rs_ex_folddo(eap: ExArgHandle) {
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
+    let cmdidx = (*eap).cmdidx;
     let win = nvim_get_curwin();
     let mut lnum = line1;
     while lnum <= line2 {
@@ -2039,7 +2009,7 @@ pub unsafe extern "C" fn rs_ex_folddo(eap: ExArgHandle) {
         }
         lnum += 1;
     }
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     global_exe(arg);
     ml_clearmarked();
 }
@@ -2060,11 +2030,11 @@ pub unsafe extern "C" fn rs_ex_redrawtabline(_eap: ExArgHandle) {
 /// ":join".
 #[export_name = "ex_join"]
 pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
     nvim_docmd_set_curwin_cursor_lnum(line1);
     let line2 = if line1 == line2 {
-        if nvim_eap_get_addr_count(eap) >= 2 {
+        if (*eap).addr_count >= 2 {
             return;
         }
         if line2 == nvim_docmd_get_curbuf_line_count() {
@@ -2072,14 +2042,14 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
             return;
         }
         let new_line2 = line2 + 1;
-        nvim_eap_set_line2(eap, new_line2);
+        (*eap).line2 = new_line2;
         new_line2
     } else {
         line2
     };
     do_join(
         (line2 - line1 + 1) as usize,
-        !nvim_eap_get_forceit(eap),
+        (*eap).forceit == 0,
         true,
         true,
         true,
@@ -2091,17 +2061,17 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
 /// ":put".
 #[export_name = "ex_put"]
 pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
-    let mut line2 = nvim_eap_get_line2(eap);
-    let mut forceit = nvim_eap_get_forceit(eap);
+    let mut line2 = (*eap).line2;
+    let mut forceit = (*eap).forceit != 0;
     if line2 == 0 {
         line2 = 1;
-        nvim_eap_set_line2(eap, line2);
+        (*eap).line2 = line2;
         forceit = true;
-        nvim_eap_set_forceit(eap, true);
+        (*eap).forceit = (true) as c_int;
     }
     nvim_docmd_set_curwin_cursor_lnum(line2);
     check_cursor_col(nvim_get_curwin());
-    let regname = nvim_eap_get_regname(eap);
+    let regname = (*eap).regname;
     let dir = if forceit { BACKWARD } else { FORWARD };
     do_put(
         regname,
@@ -2115,17 +2085,17 @@ pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
 /// ":iput".
 #[export_name = "ex_iput"]
 pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
-    let mut line2 = nvim_eap_get_line2(eap);
-    let mut forceit = nvim_eap_get_forceit(eap);
+    let mut line2 = (*eap).line2;
+    let mut forceit = (*eap).forceit != 0;
     if line2 == 0 {
         line2 = 1;
-        nvim_eap_set_line2(eap, line2);
+        (*eap).line2 = line2;
         forceit = true;
-        nvim_eap_set_forceit(eap, true);
+        (*eap).forceit = (true) as c_int;
     }
     nvim_docmd_set_curwin_cursor_lnum(line2);
     check_cursor_col(nvim_get_curwin());
-    let regname = nvim_eap_get_regname(eap);
+    let regname = (*eap).regname;
     let dir = if forceit { BACKWARD } else { FORWARD };
     do_put(
         regname,
@@ -2139,13 +2109,13 @@ pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
 /// ":=" (equal).
 #[export_name = "ex_equal"]
 pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if !arg.is_null() && (*arg != 0 && *arg as u8 != b'|') {
         ex_lua(eap);
     } else {
         let nextcmd = find_nextcmd(arg as *const c_char);
-        nvim_eap_set_nextcmd(eap, nextcmd);
-        let line2 = nvim_eap_get_line2(eap);
+        (*eap).nextcmd = nextcmd;
+        let line2 = (*eap).line2;
         smsg(0, c"%ld".as_ptr(), line2 as std::ffi::c_long);
     }
 }
@@ -2156,13 +2126,13 @@ pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
     recoverymode = true;
     let curbuf = nvim_get_curbuf();
     let p_awa = nvim_docmd_get_p_awa();
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     let flags = (if p_awa != 0 { CCGD_AW } else { 0 })
         | CCGD_MULTWIN
         | (if forceit { CCGD_FORCEIT } else { 0 })
         | CCGD_EXCMD;
     if !check_changed(curbuf, flags) {
-        let arg = nvim_eap_get_arg(eap);
+        let arg = (*eap).arg;
         if arg.is_null() || *arg == 0 || nvim_docmd_setfname_curbuf(arg as *const c_char) == OK {
             ml_recover(true);
         }
@@ -2194,7 +2164,6 @@ extern "C" {
     fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
     fn setmark(name: c_int) -> c_int;
     fn rs_print_line(lnum: LinenrT, use_number: c_int, list: c_int, first: c_int);
-    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
     static mut got_int: bool;
     static mut ex_no_reprint: bool;
     static e_argreq: c_char;
@@ -2205,7 +2174,7 @@ extern "C" {
 /// ":winsize" (obsolete).
 #[export_name = "ex_winsize"]
 pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
-    let mut arg = nvim_eap_get_arg(eap);
+    let mut arg = (*eap).arg;
     if rs_ascii_isdigit(*(arg as *const u8) as c_int) == 0 {
         semsg(nvim_get_e_invarg2() as *const c_char, arg as *const c_char);
         return;
@@ -2224,7 +2193,7 @@ pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
 /// ":colorscheme".
 #[export_name = "ex_colorscheme"]
 pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if arg.is_null() || *(arg as *const u8) == 0 {
         let p = nvim_docmd_eval_to_string_g_colors_name();
         if !p.is_null() {
@@ -2245,7 +2214,7 @@ pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
 /// ":mark" / ":k".
 #[export_name = "ex_mark"]
 pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if arg.is_null() || *(arg as *const u8) == 0 {
         emsg(&e_argreq as *const c_char);
         return;
@@ -2258,7 +2227,7 @@ pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
     let mut saved_col: c_int = 0;
     let mut saved_coladd: c_int = 0;
     nvim_docmd_get_curwin_cursor_pos(&mut saved_lnum, &mut saved_col, &mut saved_coladd);
-    nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
+    nvim_docmd_set_curwin_cursor_lnum((*eap).line2);
     beginline(BL_WHITE | BL_FIX);
     if setmark(*(arg as *const u8) as c_int) == 0 {
         emsg(c"E191: Argument must be a letter or forward/backward quote".as_ptr());
@@ -2272,10 +2241,10 @@ pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
     if nvim_docmd_curbuf_ml_empty() {
         emsg(&e_empty_buffer as *const c_char);
     } else {
-        let line1 = nvim_eap_get_line1(eap);
-        let line2 = nvim_eap_get_line2(eap);
-        let cmdidx = nvim_eap_get_cmdidx(eap);
-        let flags = nvim_eap_get_flags(eap);
+        let line1 = (*eap).line1;
+        let line2 = (*eap).line2;
+        let cmdidx = (*eap).cmdidx;
+        let flags = (*eap).flags;
         let mut line = line1;
         while line <= line2 && !unsafe { got_int } {
             rs_print_line(
@@ -2320,8 +2289,8 @@ unsafe fn do_ex_pwd() {
 /// ":edit" / ":badd" / ":balt" / ":visual" / ":enew".
 #[export_name = "ex_edit"]
 pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
-    let arg = nvim_eap_get_arg(eap);
+    let cmdidx = (*eap).cmdidx;
+    let arg = (*eap).arg;
     let ffname = if cmdidx == CMD_ENEW {
         std::ptr::null()
     } else {
@@ -2331,7 +2300,7 @@ pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
     if cmdidx != CMD_BADD
         && cmdidx != CMD_BALT
         && (rs_is_other_file(0, ffname) != 0
-            && !nvim_docmd_check_can_set_curbuf_forceit(nvim_eap_get_forceit(eap)))
+            && !nvim_docmd_check_can_set_curbuf_forceit((*eap).forceit != 0))
     {
         return;
     }
@@ -2355,8 +2324,8 @@ pub unsafe extern "C" fn rs_ex_pwd(_eap: ExArgHandle) {
 /// ":only".
 #[export_name = "ex_only"]
 pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
-    let wp = if nvim_eap_get_addr_count(eap) > 0 {
-        let line2 = nvim_eap_get_line2(eap) as c_int;
+    let wp = if (*eap).addr_count > 0 {
+        let line2 = (*eap).line2 as c_int;
         let mut wnr = line2;
         let mut wp = nvim_get_firstwin();
         while wnr > 1 {
@@ -2375,7 +2344,7 @@ pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
     if wp != curwin {
         win_goto(wp);
     }
-    close_others(1, nvim_eap_get_forceit(eap) as c_int);
+    close_others(1, (*eap).forceit as c_int);
 }
 
 /// ":close".
@@ -2388,19 +2357,15 @@ pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
     if text_locked() || nvim_curbuf_locked() != 0 {
         return;
     }
-    if nvim_eap_get_addr_count(eap) == 0 {
+    if (*eap).addr_count == 0 {
         nvim_docmd_ex_win_close_impl(
-            c_int::from(nvim_eap_get_forceit(eap)),
+            c_int::from((*eap).forceit),
             nvim_get_curwin(),
             std::ptr::null_mut(),
         );
     } else {
-        let win = nvim_docmd_nth_window(nvim_eap_get_line2(eap) as c_int);
-        nvim_docmd_ex_win_close_impl(
-            c_int::from(nvim_eap_get_forceit(eap)),
-            win,
-            std::ptr::null_mut(),
-        );
+        let win = nvim_docmd_nth_window((*eap).line2 as c_int);
+        nvim_docmd_ex_win_close_impl(c_int::from((*eap).forceit), win, std::ptr::null_mut());
     }
 }
 
@@ -2414,7 +2379,7 @@ pub unsafe extern "C" fn rs_check_more(message: c_int, forceit: c_int) -> c_int 
 #[export_name = "before_quit_all"]
 pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
     if cmdwin_type != 0 {
-        let forceit = nvim_eap_get_forceit(eap);
+        let forceit = (*eap).forceit != 0;
         nvim_set_cmdwin_result(if forceit { K_XF1 } else { K_XF2 });
         return 0; // FAIL
     }
@@ -2422,7 +2387,7 @@ pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
         text_locked_msg();
         return 0; // FAIL
     }
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     if before_quit_autocmds(nvim_get_curwin(), true, forceit) {
         return 0; // FAIL
     }
@@ -2559,11 +2524,11 @@ const K_XF2: c_int = -15101;
 #[export_name = "ex_range_without_command"]
 pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c_char {
     let mut errormsg: *mut c_char = std::ptr::null_mut();
-    let cmd = nvim_eap_get_cmd(eap);
+    let cmd = (*eap).cmd;
     let exmode_plus_p1 = nvim_docmd_get_exmode_plus().add(1);
     if !cmd.is_null() && *(cmd as *const u8) == b'|' || (exmode_active && cmd != exmode_plus_p1) {
-        nvim_eap_set_cmdidx(eap, CMD_PRINT);
-        nvim_eap_set_argt(eap, EX_RANGE | EX_COUNT | EX_TRLBAR);
+        (*eap).cmdidx = CMD_PRINT;
+        (*eap).argt = EX_RANGE | EX_COUNT | EX_TRLBAR;
         let err = invalid_range(eap);
         if err.is_null() {
             correct_range(eap);
@@ -2571,10 +2536,10 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
         } else {
             errormsg = err;
         }
-    } else if nvim_eap_get_addr_count(eap) != 0 {
+    } else if (*eap).addr_count != 0 {
         let line_count = nvim_docmd_get_curbuf_line_count();
-        let line2 = nvim_eap_get_line2(eap).min(line_count);
-        nvim_eap_set_line2(eap, line2);
+        let line2 = (*eap).line2.min(line_count);
+        (*eap).line2 = line2;
         if line2 < 0 {
             errormsg = nvim_get_e_invrange() as *mut c_char;
         } else {
@@ -2601,7 +2566,7 @@ pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
     }
 
     let tab_number = crate::address::rs_get_tabpage_arg(eap);
-    if !nvim_eap_get_errmsg(eap).is_null() {
+    if !(*eap).errmsg.is_null() {
         return;
     }
 
@@ -2611,7 +2576,7 @@ pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
         return;
     }
 
-    let forceit = nvim_eap_get_forceit(eap) as c_int;
+    let forceit = (*eap).forceit as c_int;
     if nvim_docmd_tabpage_is_current(tp) == 0 {
         nvim_docmd_tabpage_close_other_impl(tp, forceit);
     } else if !text_locked() && nvim_curbuf_locked() == 0 {
@@ -2622,14 +2587,14 @@ pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
 /// ":hide".
 #[export_name = "ex_hide"]
 pub unsafe extern "C" fn rs_ex_hide(eap: ExArgHandle) {
-    if nvim_eap_get_skip(eap) != 0 {
+    if (*eap).skip != 0 {
         return;
     }
-    let forceit = nvim_eap_get_forceit(eap);
-    if nvim_eap_get_addr_count(eap) == 0 {
+    let forceit = (*eap).forceit != 0;
+    if (*eap).addr_count == 0 {
         win_close(nvim_get_curwin(), false, forceit);
     } else {
-        let win = nvim_docmd_nth_window(nvim_eap_get_line2(eap) as c_int);
+        let win = nvim_docmd_nth_window((*eap).line2 as c_int);
         win_close(win, false, forceit);
     }
 }
@@ -2651,12 +2616,12 @@ pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
         return;
     }
 
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     // we plan to exit if there is only one relevant window
     if nvim_docmd_check_more(0, forceit as c_int) == OK && rs_only_one_window() != 0 {
         nvim_docmd_set_exiting(1);
     }
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     if ((cmdidx == CMD_WQ || curbufIsChanged()) && do_write(eap) == FAIL)
         || before_quit_autocmds(nvim_get_curwin(), false, forceit)
         || nvim_docmd_check_more(1, forceit as c_int) == FAIL
@@ -2680,8 +2645,8 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
 
     let mut wp = nvim_get_curwin();
 
-    if nvim_eap_get_addr_count(eap) > 0 {
-        let mut n = nvim_eap_get_line2(eap);
+    if (*eap).addr_count > 0 {
+        let mut n = (*eap).line2;
         wp = nvim_get_firstwin();
         while !nvim_win_get_next(wp).is_null() {
             n -= 1;
@@ -2692,7 +2657,7 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
         }
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let n_raw = atol(arg) as c_int;
     let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
     if cmod_split & WSP_VERT != 0 {
@@ -2723,13 +2688,13 @@ pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
     const CD_SCOPE_TABPAGE: c_int = 1;
     const CD_SCOPE_GLOBAL: c_int = 2;
 
-    let new_dir = nvim_eap_get_arg(eap);
+    let new_dir = (*eap).arg;
     if new_dir.is_null() || (*(new_dir as *const u8) == 0 && !p_cdh) {
         do_ex_pwd();
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let scope = if cmdidx == CMD_TCD || cmdidx == CMD_TCHDIR {
         CD_SCOPE_TABPAGE
     } else if cmdidx == CMD_LCD || cmdidx == CMD_LCHDIR {
@@ -2746,7 +2711,7 @@ pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
 /// ":wincmd".
 #[export_name = "ex_wincmd"]
 pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if arg.is_null() {
         return;
     }
@@ -2767,15 +2732,15 @@ pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
     }
 
     let nextcmd = check_nextcmd(p);
-    nvim_eap_set_nextcmd(eap, nextcmd as *mut c_char);
+    (*eap).nextcmd = nextcmd as *mut c_char;
     let p2 = skipwhite(p);
     if *(p2 as *const u8) != 0 && *(p2 as *const u8) != b'"' && nextcmd.is_null() {
         emsg(nvim_get_e_invarg());
-    } else if nvim_eap_get_skip(eap) == 0 {
+    } else if (*eap).skip == 0 {
         postponed_split_flags = nvim_docmd_get_cmdmod_cmod_split();
         postponed_split_tab = nvim_docmd_get_cmdmod_cmod_tab();
-        let count = if nvim_eap_get_addr_count(eap) > 0 {
-            nvim_eap_get_line2(eap)
+        let count = if (*eap).addr_count > 0 {
+            (*eap).line2
         } else {
             0
         };
@@ -2790,12 +2755,12 @@ pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
     let mut errormsg: *const c_char = std::ptr::null();
     let n = nvim_docmd_get_address_for_copymove(eap, &mut errormsg);
-    if nvim_eap_get_arg(eap).is_null() {
+    if (*eap).arg.is_null() {
         // error detected
         if !errormsg.is_null() {
             emsg(errormsg);
         }
-        nvim_eap_set_nextcmd(eap, std::ptr::null_mut());
+        (*eap).nextcmd = std::ptr::null_mut();
         return;
     }
     get_flags(eap);
@@ -2807,9 +2772,9 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
         return;
     }
 
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
+    let cmdidx = (*eap).cmdidx;
     if cmdidx == CMD_MOVE {
         if rs_do_move(line1, line2, n) == 0 {
             // FAIL
@@ -2828,11 +2793,11 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     let prev_len = nvim_docmd_typebuf_tb_len();
 
-    nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
+    nvim_docmd_set_curwin_cursor_lnum((*eap).line2);
     check_cursor_col(nvim_get_curwin());
 
     // Get the register name. No name means use the previous one.
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let c = if arg.is_null() || *(arg as *const u8) == 0 {
         b'@' as c_int
     } else {
@@ -2864,7 +2829,7 @@ pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
     let mut count = 0i32;
     let mut sec = false;
     let mut file = false;
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let mut p = arg;
     if p.is_null() || *p == 0 {
         count = 1;
@@ -2902,7 +2867,7 @@ pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
     if !p.is_null() && *p != 0 {
         semsg(nvim_get_e_invarg2() as *const c_char, arg);
     } else {
-        let step = if nvim_eap_get_cmdidx(eap) == CMD_EARLIER {
+        let step = if (*eap).cmdidx == CMD_EARLIER {
             -count
         } else {
             count
@@ -2923,7 +2888,7 @@ pub unsafe extern "C" fn rs_ex_redraw(eap: ExArgHandle) {
     p_lz = false;
     validate_cursor(nvim_get_curwin());
     update_topline(nvim_get_curwin());
-    if nvim_eap_get_forceit(eap) {
+    if (*eap).forceit != 0 {
         redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline = true;
     } else if VIsual_active {
@@ -2951,7 +2916,7 @@ pub unsafe extern "C" fn rs_ex_redrawstatus(eap: ExArgHandle) {
     }
     let r = RedrawingDisabled;
     let p = p_lz;
-    if nvim_eap_get_forceit(eap) {
+    if (*eap).forceit != 0 {
         status_redraw_all();
     } else {
         status_redraw_curbuf();
@@ -2979,10 +2944,10 @@ pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
     const CMD_STARTGREPLACE: c_int = CMD_STARTINSERT + 1; // 432
                                                           // CMD_startreplace = 433
 
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     if forceit {
         // cursor line can be zero on startup
-        let lnum = nvim_eap_get_line1(eap);
+        let lnum = (*eap).line1;
         if lnum == 0 {
             nvim_docmd_set_curwin_cursor_lnum(1);
         }
@@ -2994,7 +2959,7 @@ pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     // First assignment (matches the if/elseif/else in C)
     let restart_char = if cmdidx == CMD_STARTINSERT {
         b'a' as c_int
@@ -3054,8 +3019,8 @@ pub unsafe extern "C" fn rs_not_exiting() {
 /// ":cquit" -- quit with error code.
 #[export_name = "ex_cquit"]
 pub unsafe extern "C" fn rs_ex_cquit(eap: ExArgHandle) {
-    let status = if nvim_eap_get_addr_count(eap) > 0 {
-        nvim_eap_get_line2(eap)
+    let status = if (*eap).addr_count > 0 {
+        (*eap).line2
     } else {
         1 // EXIT_FAILURE
     };
@@ -3066,21 +3031,21 @@ pub unsafe extern "C" fn rs_ex_cquit(eap: ExArgHandle) {
 /// ":fclose" -- remove floating window.
 #[export_name = "ex_fclose"]
 pub unsafe extern "C" fn rs_ex_fclose(eap: ExArgHandle) {
-    win_float_remove(nvim_eap_get_forceit(eap), nvim_eap_get_line1(eap));
+    win_float_remove((*eap).forceit != 0, (*eap).line1);
 }
 
 /// ex_ni -- command is not available in this version.
 #[export_name = "ex_ni"]
 pub unsafe extern "C" fn rs_ex_ni(eap: ExArgHandle) {
-    if nvim_eap_get_skip(eap) == 0 {
-        nvim_eap_set_errmsg_const(eap, nvim_docmd_e319_msg());
+    if (*eap).skip == 0 {
+        (*eap).errmsg = nvim_docmd_e319_msg() as *mut c_char;
     }
 }
 
 /// ex_script_ni -- not-implemented stub for script commands (skips <<EOF blocks).
 #[export_name = "ex_script_ni"]
 pub unsafe extern "C" fn rs_ex_script_ni(eap: ExArgHandle) {
-    if nvim_eap_get_skip(eap) == 0 {
+    if (*eap).skip == 0 {
         rs_ex_ni(eap);
     } else {
         xfree(script_get(eap, std::ptr::null_mut()) as *mut c_void);
@@ -3090,7 +3055,7 @@ pub unsafe extern "C" fn rs_ex_script_ni(eap: ExArgHandle) {
 /// ":stop" -- suspend Neovim.
 #[export_name = "ex_stop"]
 pub unsafe extern "C" fn rs_ex_stop(eap: ExArgHandle) {
-    if !nvim_eap_get_forceit(eap) {
+    if (*eap).forceit == 0 {
         autowrite_all();
     }
     may_trigger_vim_suspend_resume(true);
@@ -3103,11 +3068,7 @@ pub unsafe extern "C" fn rs_ex_stop(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_submagic(eap: ExArgHandle) {
     let saved = nvim_tag_get_magic_overruled();
     // OPTION_MAGIC_ON = 1, OPTION_MAGIC_OFF = 2
-    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC {
-        1
-    } else {
-        2
-    };
+    let new_val = if (*eap).cmdidx == CMD_SMAGIC { 1 } else { 2 };
     nvim_tag_set_magic_overruled(new_val);
     ex_substitute(eap);
     nvim_tag_set_magic_overruled(saved);
@@ -3121,11 +3082,7 @@ pub unsafe extern "C" fn rs_ex_submagic_preview(
     cmdpreview_bufnr: c_int,
 ) -> c_int {
     let saved = nvim_tag_get_magic_overruled();
-    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC {
-        1
-    } else {
-        2
-    };
+    let new_val = if (*eap).cmdidx == CMD_SMAGIC { 1 } else { 2 };
     nvim_tag_set_magic_overruled(new_val);
     let retv = ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
     nvim_tag_set_magic_overruled(saved);
@@ -3189,11 +3146,7 @@ pub unsafe extern "C" fn rs_find_cmdline_var(src: *const c_char, usedlen: *mut u
 #[export_name = "ex_fold"]
 pub unsafe extern "C" fn rs_ex_fold(eap: ExArgHandle) {
     if rs_foldManualAllowed(true) != 0 {
-        rs_foldCreate(
-            nvim_get_curwin(),
-            nvim_eap_get_line1(eap),
-            nvim_eap_get_line2(eap),
-        );
+        rs_foldCreate(nvim_get_curwin(), (*eap).line1, (*eap).line2);
     }
 }
 
@@ -3202,15 +3155,9 @@ pub unsafe extern "C" fn rs_ex_fold(eap: ExArgHandle) {
 /// Matches C `ex_foldopen()`.
 #[export_name = "ex_foldopen"]
 pub unsafe extern "C" fn rs_ex_foldopen(eap: ExArgHandle) {
-    let opening = c_int::from(nvim_eap_get_cmdidx(eap) == CMD_FOLDOPEN);
-    let recurse = c_int::from(nvim_eap_get_forceit(eap));
-    rs_opFoldRange(
-        nvim_eap_get_line1(eap),
-        nvim_eap_get_line2(eap),
-        opening,
-        recurse,
-        false,
-    );
+    let opening = c_int::from((*eap).cmdidx == CMD_FOLDOPEN);
+    let recurse = c_int::from((*eap).forceit);
+    rs_opFoldRange((*eap).line1, (*eap).line2, opening, recurse, false);
 }
 
 /// `:digraphs`: List or add digraphs.
@@ -3218,11 +3165,11 @@ pub unsafe extern "C" fn rs_ex_foldopen(eap: ExArgHandle) {
 /// Matches C `ex_digraphs()`.
 #[export_name = "ex_digraphs"]
 pub unsafe extern "C" fn rs_ex_digraphs(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if !arg.is_null() && *arg != 0 {
         putdigraph(arg);
     } else {
-        rs_listdigraphs(c_int::from(nvim_eap_get_forceit(eap)));
+        rs_listdigraphs(c_int::from((*eap).forceit));
     }
 }
 
@@ -3231,7 +3178,7 @@ pub unsafe extern "C" fn rs_ex_digraphs(eap: ExArgHandle) {
 /// Matches C `ex_mode()`.
 #[export_name = "ex_mode"]
 pub unsafe extern "C" fn rs_ex_mode(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if arg.is_null() || *arg == 0 {
         nvim_docmd_set_must_redraw(UPD_CLEAR);
         rs_ex_redraw(eap);
@@ -3262,13 +3209,13 @@ pub unsafe extern "C" fn rs_ex_swapname(_eap: ExArgHandle) {
 /// Matches C `ex_tabnext()`.
 #[export_name = "ex_tabnext"]
 pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     if cmdidx == CMD_TABFIRST || cmdidx == CMD_TABREWIND {
         goto_tabpage(1);
     } else if cmdidx == CMD_TABLAST {
         goto_tabpage(9999);
     } else if cmdidx == CMD_TABPREVIOUS || cmdidx == CMD_TABNEXT_BACKWARD {
-        let arg = nvim_eap_get_arg(eap);
+        let arg = (*eap).arg;
         let tab_number = if !arg.is_null() && *arg != 0 {
             let mut errmsg_set: c_int = 0;
             let n = nvim_docmd_parse_tabnext_count(eap, &mut errmsg_set);
@@ -3276,12 +3223,12 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
                 return;
             }
             n
-        } else if nvim_eap_get_addr_count(eap) == 0 {
+        } else if (*eap).addr_count == 0 {
             1
         } else {
-            let n = nvim_eap_get_line2(eap) as c_int;
+            let n = (*eap).line2 as c_int;
             if n < 1 {
-                nvim_eap_set_errmsg_const(eap, nvim_get_e_invrange());
+                (*eap).errmsg = nvim_get_e_invrange() as *mut c_char;
                 return;
             }
             n
@@ -3290,7 +3237,7 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
     } else {
         // CMD_tabnext and everything else
         let tab_number = crate::address::rs_get_tabpage_arg(eap);
-        if nvim_eap_get_errmsg(eap).is_null() {
+        if (*eap).errmsg.is_null() {
             goto_tabpage(tab_number);
         }
     }
@@ -3305,8 +3252,8 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
 /// Matches C `ex_undo()`.
 #[export_name = "ex_undo"]
 pub unsafe extern "C" fn rs_ex_undo(eap: ExArgHandle) {
-    if nvim_eap_get_addr_count(eap) != 1 {
-        if nvim_eap_get_forceit(eap) {
+    if (*eap).addr_count != 1 {
+        if (*eap).forceit != 0 {
             let _ = u_undo_and_forget(1, true); // :undo!
         } else {
             u_undo(1); // :undo
@@ -3314,9 +3261,9 @@ pub unsafe extern "C" fn rs_ex_undo(eap: ExArgHandle) {
         return;
     }
 
-    let step = nvim_eap_get_line2(eap);
+    let step = (*eap).line2;
 
-    if nvim_eap_get_forceit(eap) {
+    if (*eap).forceit != 0 {
         // :undo! N -- must go to an earlier change in the same branch
         if step >= nvim_curbuf_get_u_seq_cur() as LinenrT {
             emsg(crate::gt(crate::E_UNDOBANG_STR.as_ptr()));
@@ -3366,8 +3313,8 @@ pub unsafe extern "C" fn rs_ex_sleep(eap: ExArgHandle) {
     if nvim_docmd_cursor_valid_curwin() != 0 {
         nvim_docmd_setcursor_mayforce_curwin();
     }
-    let len_base = nvim_eap_get_line2(eap) as i64;
-    let arg = nvim_eap_get_arg(eap);
+    let len_base = (*eap).line2 as i64;
+    let arg = (*eap).arg;
     let len = if arg.is_null() || *arg == 0 {
         // No suffix: interpret as seconds
         len_base * 1000
@@ -3378,7 +3325,7 @@ pub unsafe extern "C" fn rs_ex_sleep(eap: ExArgHandle) {
         semsg(nvim_get_e_invarg2(), arg as *const c_char);
         return;
     };
-    rs_do_sleep(len, nvim_eap_get_forceit(eap));
+    rs_do_sleep(len, (*eap).forceit != 0);
 }
 
 // =============================================================================
@@ -3406,18 +3353,18 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
     let mut oa = OpargT::default();
 
     clear_oparg(&raw mut oa);
-    oa.regname = nvim_eap_get_regname(eap);
-    oa.start.lnum = nvim_eap_get_line1(eap);
-    oa.end.lnum = nvim_eap_get_line2(eap);
-    oa.line_count = nvim_eap_get_line2(eap) - nvim_eap_get_line1(eap) + 1;
+    oa.regname = (*eap).regname;
+    oa.start.lnum = (*eap).line1;
+    oa.end.lnum = (*eap).line2;
+    oa.line_count = (*eap).line2 - (*eap).line1 + 1;
     oa.motion_type = K_MT_LINEWISE;
     nvim_set_virtual_op_false();
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     if cmdidx != CMD_YANK {
         // position cursor for undo
         setpcmark();
-        nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line1(eap));
+        nvim_docmd_set_curwin_cursor_lnum((*eap).line1);
         beginline(BL_SOL | BL_FIX);
     }
 
@@ -3439,7 +3386,7 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
         } else {
             oa.op_type = OP_LSHIFT;
         }
-        op_shift(&raw mut oa, false, nvim_eap_get_amount(eap));
+        op_shift(&raw mut oa, false, (*eap).amount);
     }
     nvim_set_virtual_op_none();
     nvim_docmd_ex_may_print_impl(eap);

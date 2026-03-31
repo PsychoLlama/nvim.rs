@@ -260,10 +260,6 @@ extern "C" {
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;
 
     // eap field accessors
-    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_cmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
 
     // cmdmod_T field accessors
     fn nvim_cmod_clear(cmod: CmdModHandle);
@@ -336,39 +332,37 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
     // Repeat until no more command modifiers are found.
     loop {
         // Skip whitespace and colons
-        let mut cmd = nvim_eap_get_cmd(eap);
+        let mut cmd = (*eap).cmd;
         while *cmd as u8 == b' ' || *cmd as u8 == b'\t' || *cmd as u8 == b':' {
             cmd = cmd.add(1);
         }
-        nvim_eap_set_cmd(eap, cmd);
-
+        (*eap).cmd = cmd;
         // In ex mode, an empty line works like :+
-        cmd = nvim_eap_get_cmd(eap);
         if *cmd == 0
             && nvim_docmd_get_exmode_active() != 0
             && nvim_docmd_getline_is_getexline(eap) != 0
             && nvim_docmd_get_curwin_cursor_lnum() < nvim_docmd_get_curbuf_line_count()
         {
-            nvim_eap_set_cmd(eap, nvim_docmd_get_exmode_plus());
+            (*eap).cmd = nvim_docmd_get_exmode_plus();
             if !skip_only {
                 nvim_set_ex_pressedreturn(true);
             }
         }
 
         // Ignore comment and empty lines
-        cmd = nvim_eap_get_cmd(eap);
+        cmd = (*eap).cmd;
         if *cmd as u8 == b'"' {
             // A comment ends at a NL
             let nl = nvim_docmd_vim_strchr(cmd, b'\n' as c_int);
             if !nl.is_null() {
-                nvim_eap_set_nextcmd(eap, nl.add(1));
+                (*eap).nextcmd = nl.add(1);
             } else {
-                nvim_eap_set_nextcmd(eap, ptr::null_mut());
+                (*eap).nextcmd = ptr::null_mut();
             }
             return FAIL;
         }
         if *cmd as u8 == b'\n' {
-            nvim_eap_set_nextcmd(eap, cmd.add(1));
+            (*eap).nextcmd = cmd.add(1);
             return FAIL;
         }
         if *cmd == 0 {
@@ -385,30 +379,30 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
 
         match switch_char {
             b'a' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"aboveleft".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_split(cmod, WSP_ABOVE);
                     matched = true;
                 }
             }
 
             b'b' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"belowright".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_split(cmod, WSP_BELOW);
                     matched = true;
                 } else {
-                    cmd_ptr = nvim_eap_get_cmd(eap);
+                    cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"browse".as_ptr(), 3) {
-                        nvim_eap_set_cmd(eap, cmd_ptr);
+                        (*eap).cmd = cmd_ptr;
                         nvim_cmod_or_flags(cmod, CMOD_BROWSE);
                         matched = true;
                     } else {
-                        cmd_ptr = nvim_eap_get_cmd(eap);
+                        cmd_ptr = (*eap).cmd;
                         if rs_checkforcmd(&mut cmd_ptr, c"botright".as_ptr(), 2) {
-                            nvim_eap_set_cmd(eap, cmd_ptr);
+                            (*eap).cmd = cmd_ptr;
                             nvim_cmod_or_split(cmod, WSP_BOT);
                             matched = true;
                         }
@@ -417,36 +411,36 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             }
 
             b'c' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"confirm".as_ptr(), 4) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_flags(cmod, CMOD_CONFIRM);
                     matched = true;
                 }
             }
 
             b'k' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"keepmarks".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_flags(cmod, CMOD_KEEPMARKS);
                     matched = true;
                 } else {
-                    cmd_ptr = nvim_eap_get_cmd(eap);
+                    cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"keepalt".as_ptr(), 5) {
-                        nvim_eap_set_cmd(eap, cmd_ptr);
+                        (*eap).cmd = cmd_ptr;
                         nvim_cmod_or_flags(cmod, CMOD_KEEPALT);
                         matched = true;
                     } else {
-                        cmd_ptr = nvim_eap_get_cmd(eap);
+                        cmd_ptr = (*eap).cmd;
                         if rs_checkforcmd(&mut cmd_ptr, c"keeppatterns".as_ptr(), 5) {
-                            nvim_eap_set_cmd(eap, cmd_ptr);
+                            (*eap).cmd = cmd_ptr;
                             nvim_cmod_or_flags(cmod, CMOD_KEEPPATTERNS);
                             matched = true;
                         } else {
-                            cmd_ptr = nvim_eap_get_cmd(eap);
+                            cmd_ptr = (*eap).cmd;
                             if rs_checkforcmd(&mut cmd_ptr, c"keepjumps".as_ptr(), 5) {
-                                nvim_eap_set_cmd(eap, cmd_ptr);
+                                (*eap).cmd = cmd_ptr;
                                 nvim_cmod_or_flags(cmod, CMOD_KEEPJUMPS);
                                 matched = true;
                             }
@@ -469,7 +463,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         } else if skip_only {
                             p = crate::rs_skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut());
                             if !p.is_null() && *p != 0 {
-                                nvim_eap_set_cmd(eap, p);
+                                (*eap).cmd = p;
                                 matched = true;
                             }
                         } else {
@@ -480,7 +474,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                                 let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
                                 if !regprog.is_null() {
                                     nvim_cmod_set_filter_regprog(cmod, regprog);
-                                    nvim_eap_set_cmd(eap, p);
+                                    (*eap).cmd = p;
                                     matched = true;
                                 }
                             }
@@ -488,7 +482,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                     } else if skip_only {
                         p = crate::rs_skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut());
                         if !p.is_null() && *p != 0 {
-                            nvim_eap_set_cmd(eap, p);
+                            (*eap).cmd = p;
                             matched = true;
                         }
                     } else {
@@ -499,7 +493,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
                             if !regprog.is_null() {
                                 nvim_cmod_set_filter_regprog(cmod, regprog);
-                                nvim_eap_set_cmd(eap, p);
+                                (*eap).cmd = p;
                                 matched = true;
                             }
                         }
@@ -508,20 +502,20 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             }
 
             b'h' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"horizontal".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_split(cmod, WSP_HOR);
                     matched = true;
                 } else {
                     // ":hide" and ":hide | cmd" are not modifiers
-                    cmd = nvim_eap_get_cmd(eap);
+                    cmd = (*eap).cmd;
                     if p == cmd
                         && rs_checkforcmd(&mut p, c"hide".as_ptr(), 3)
                         && *p != 0
                         && rs_ends_excmd(*p as c_int) == 0
                     {
-                        nvim_eap_set_cmd(eap, p);
+                        (*eap).cmd = p;
                         nvim_cmod_or_flags(cmod, CMOD_HIDE);
                         matched = true;
                     }
@@ -529,15 +523,15 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             }
 
             b'l' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"lockmarks".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_flags(cmod, CMOD_LOCKMARKS);
                     matched = true;
                 } else {
-                    cmd_ptr = nvim_eap_get_cmd(eap);
+                    cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"leftabove".as_ptr(), 5) {
-                        nvim_eap_set_cmd(eap, cmd_ptr);
+                        (*eap).cmd = cmd_ptr;
                         nvim_cmod_or_split(cmod, WSP_ABOVE);
                         matched = true;
                     }
@@ -545,15 +539,15 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             }
 
             b'n' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"noautocmd".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_flags(cmod, CMOD_NOAUTOCMD);
                     matched = true;
                 } else {
-                    cmd_ptr = nvim_eap_get_cmd(eap);
+                    cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"noswapfile".as_ptr(), 3) {
-                        nvim_eap_set_cmd(eap, cmd_ptr);
+                        (*eap).cmd = cmd_ptr;
                         nvim_cmod_or_flags(cmod, CMOD_NOSWAPFILE);
                         matched = true;
                     }
@@ -561,32 +555,32 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             }
 
             b'r' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"rightbelow".as_ptr(), 6) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_split(cmod, WSP_BELOW);
                     matched = true;
                 }
             }
 
             b's' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"sandbox".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_flags(cmod, CMOD_SANDBOX);
                     matched = true;
                 } else {
-                    cmd_ptr = nvim_eap_get_cmd(eap);
+                    cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"silent".as_ptr(), 3) {
-                        nvim_eap_set_cmd(eap, cmd_ptr);
+                        (*eap).cmd = cmd_ptr;
                         nvim_cmod_or_flags(cmod, CMOD_SILENT);
-                        cmd_ptr = nvim_eap_get_cmd(eap);
+                        cmd_ptr = (*eap).cmd;
                         if *cmd_ptr as u8 == b'!'
                             && nvim_docmd_ascii_iswhite(*cmd_ptr.sub(1) as c_int) == 0
                         {
                             // ":silent!", but not "silent !cmd"
                             let new_cmd = nvim_docmd_skipwhite(cmd_ptr.add(1));
-                            nvim_eap_set_cmd(eap, new_cmd);
+                            (*eap).cmd = new_cmd;
                             nvim_cmod_or_flags(cmod, CMOD_ERRSILENT);
                         }
                         matched = true;
@@ -597,8 +591,8 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             b't' => {
                 if rs_checkforcmd(&mut p, c"tab".as_ptr(), 3) {
                     if !skip_only {
-                        let eap_skip = nvim_eap_get_skip(eap) != 0;
-                        let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                        let eap_skip = (*eap).skip != 0;
+                        let mut cmd_ptr = (*eap).cmd;
                         let tabnr = crate::address::get_address_impl(
                             eap,
                             &mut cmd_ptr,
@@ -609,9 +603,8 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             1,
                             errormsg,
                         );
-                        nvim_eap_set_cmd(eap, cmd_ptr);
-
-                        if nvim_eap_get_cmd(eap).is_null() {
+                        (*eap).cmd = cmd_ptr;
+                        if (*eap).cmd.is_null() {
                             return 0; // false
                         }
 
@@ -626,12 +619,12 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             nvim_cmod_set_tab(cmod, tabnr as c_int + 1);
                         }
                     }
-                    nvim_eap_set_cmd(eap, p);
+                    (*eap).cmd = p;
                     matched = true;
                 } else {
-                    let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                    let mut cmd_ptr = (*eap).cmd;
                     if rs_checkforcmd(&mut cmd_ptr, c"topleft".as_ptr(), 2) {
-                        nvim_eap_set_cmd(eap, cmd_ptr);
+                        (*eap).cmd = cmd_ptr;
                         nvim_cmod_or_split(cmod, WSP_TOP);
                         matched = true;
                     }
@@ -639,29 +632,29 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             }
 
             b'u' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"unsilent".as_ptr(), 3) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_flags(cmod, CMOD_UNSILENT);
                     matched = true;
                 }
             }
 
             b'v' => {
-                let mut cmd_ptr = nvim_eap_get_cmd(eap);
+                let mut cmd_ptr = (*eap).cmd;
                 if rs_checkforcmd(&mut cmd_ptr, c"vertical".as_ptr(), 4) {
-                    nvim_eap_set_cmd(eap, cmd_ptr);
+                    (*eap).cmd = cmd_ptr;
                     nvim_cmod_or_split(cmod, WSP_VERT);
                     matched = true;
                 } else if rs_checkforcmd(&mut p, c"verbose".as_ptr(), 4) {
-                    cmd = nvim_eap_get_cmd(eap);
+                    cmd = (*eap).cmd;
                     if nvim_docmd_ascii_isdigit(*cmd as c_int) != 0 {
                         // zero means not set, one is verbose == 0, etc.
                         nvim_cmod_set_verbose(cmod, nvim_docmd_atoi(cmd) + 1);
                     } else {
                         nvim_cmod_set_verbose(cmod, 2); // default: verbose == 1
                     }
-                    nvim_eap_set_cmd(eap, p);
+                    (*eap).cmd = p;
                     matched = true;
                 }
             }

@@ -19,6 +19,7 @@
 #![allow(clashing_extern_declarations)]
 
 use crate::ffi_types::QfListPtr;
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
 
@@ -105,7 +106,6 @@ extern "C" {
     fn nvim_get_curwin() -> *mut c_void;
     fn nvim_qf_curwin_get_loclist() -> *mut c_void;
     fn is_loclist_cmd(cmdidx: c_int) -> bool;
-    fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_emsg_loclist deleted: use emsg directly)
 
@@ -473,10 +473,10 @@ pub unsafe extern "C" fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> *mut c_void
 ///
 /// `eap` must be a valid non-null `*const exarg_T`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_cmd_get_stack(eap: *mut c_void, print_emsg: bool) -> *mut c_void {
+pub unsafe extern "C" fn rs_qf_cmd_get_stack(eap: *mut ExArg, print_emsg: bool) -> *mut c_void {
     let mut qi = nvim_get_ql_info();
 
-    if is_loclist_cmd(nvim_eap_get_cmdidx(eap)) {
+    if is_loclist_cmd((*eap).cmdidx) {
         qi = nvim_qf_curwin_get_loclist();
         if qi.is_null() {
             if print_emsg {
@@ -505,12 +505,12 @@ pub unsafe extern "C" fn rs_qf_cmd_get_stack(eap: *mut c_void, print_emsg: bool)
 /// Panics if the internal mutex is poisoned (should never happen in practice).
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_cmd_get_or_alloc_stack(
-    eap: *const c_void,
+    eap: *const ExArg,
     pwinp: *mut *mut c_void,
 ) -> *mut c_void {
     let mut qi = nvim_get_ql_info();
 
-    if is_loclist_cmd(nvim_eap_get_cmdidx(eap)) {
+    if is_loclist_cmd((*eap).cmdidx) {
         let curwin = nvim_get_curwin();
         qi = rs_ll_get_or_alloc_list(curwin);
         *pwinp = curwin;

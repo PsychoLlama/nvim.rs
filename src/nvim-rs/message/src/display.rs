@@ -4,6 +4,7 @@
 //! ext_messages UI protocol handling, scrolling coordination, and
 //! display state management.
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 
 use nvim_api::{Array, NvimString, Object, ObjectData};
@@ -171,10 +172,6 @@ extern "C" {
     #[link_name = "e_invarg"]
     static e_invarg: [c_char; 0];
     fn gettext(s: *const c_char) -> *const c_char;
-    fn nvim_eap_get_arg(eap: *const c_void) -> *mut c_char;
-    fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_line2(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_skip(eap: *const c_void) -> c_int;
     fn msg_hist_clear(keep: c_int);
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
 }
@@ -879,12 +876,12 @@ pub unsafe extern "C" fn rs_msg_multihl(
 /// Accesses global message history state.
 #[allow(clippy::too_many_lines)]
 #[export_name = "ex_messages"]
-pub unsafe extern "C" fn rs_ex_messages(eap: *const c_void) {
-    let arg = nvim_eap_get_arg(eap);
+pub unsafe extern "C" fn rs_ex_messages(eap: *const ExArg) {
+    let arg = (*eap).arg;
     // Check for "clear" argument
     if strcmp(arg, c"clear".as_ptr()) == 0 {
-        let keep = if nvim_eap_get_addr_count(eap) != 0 {
-            nvim_eap_get_line2(eap)
+        let keep = if (*eap).addr_count != 0 {
+            (*eap).line2
         } else {
             0
         };
@@ -904,14 +901,14 @@ pub unsafe extern "C" fn rs_ex_messages(eap: *const c_void) {
         items: std::ptr::null_mut(),
     };
 
-    let p_start: *mut crate::history::MessageHistoryEntry = if nvim_eap_get_skip(eap) != 0 {
+    let p_start: *mut crate::history::MessageHistoryEntry = if (*eap).skip != 0 {
         crate::history::msg_hist_temp
     } else {
         crate::history::msg_hist_first
     };
 
-    let mut skip = if nvim_eap_get_addr_count(eap) != 0 {
-        crate::history::msg_hist_len - nvim_eap_get_line2(eap)
+    let mut skip = if (*eap).addr_count != 0 {
+        crate::history::msg_hist_len - (*eap).line2
     } else {
         0
     };
@@ -925,7 +922,7 @@ pub unsafe extern "C" fn rs_ex_messages(eap: *const c_void) {
             skip -= 1;
             s > 0
         };
-        if (entry.temp && nvim_eap_get_skip(eap) == 0) || do_skip {
+        if (entry.temp && (*eap).skip == 0) || do_skip {
             p = entry.next;
             continue;
         }
@@ -1052,7 +1049,7 @@ pub unsafe extern "C" fn rs_ex_messages(eap: *const c_void) {
     }
 
     if entries.size > 0 {
-        ui_call_msg_history_show(entries, nvim_eap_get_skip(eap) != 0);
+        ui_call_msg_history_show(entries, (*eap).skip != 0);
         api_free_array(entries);
     }
 }

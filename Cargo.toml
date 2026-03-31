@@ -28,6 +28,7 @@ members = [
     "src/nvim-rs/encoding",
     "src/nvim-rs/eval_codec",
     "src/nvim-rs/event",
+    "src/nvim-rs/ex_cmds_types",
     "src/nvim-rs/ex_docmd",
     "src/nvim-rs/edit",
     "src/nvim-rs/ex_eval",

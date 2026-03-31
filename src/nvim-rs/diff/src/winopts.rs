@@ -7,6 +7,7 @@
 
 #![allow(clippy::must_use_candidate)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_char;
 use std::os::raw::c_int;
 
@@ -239,8 +240,8 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
 /// # Safety
 /// Calls C functions that access global Neovim state.
 #[export_name = "ex_diffoff"]
-pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
-    let forceit = nvim_eap_forceit(eap);
+pub unsafe extern "C" fn rs_ex_diffoff(eap: *const ExArg) {
+    let forceit = nvim_eap_forceit(eap.cast::<std::ffi::c_void>());
     let curtab = nvim_get_curtab();
     let mut diffwin = false;
 
@@ -342,7 +343,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
 /// # Safety
 /// Calls C functions that access global Neovim state.
 #[export_name = "ex_diffsplit"]
-pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut ExArg) {
     let old_curwin = nvim_diff_get_curwin();
 
     // Allocate a heap bufref to track old_curbuf across the split
@@ -368,7 +369,7 @@ pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
 
     // Pretend it was a ":split fname" command
     let cmd_split = nvim_diff_get_CMD_split();
-    nvim_eap_set_cmdidx(eap, cmd_split);
+    (*eap).cmdidx = cmd_split;
     nvim_diff_set_curwin_w_p_diff(true);
     nvim_diff_do_exedit_with_old_curwin(eap, old_curwin);
 
@@ -415,8 +416,7 @@ extern "C" {
     fn validate_cursor(wp: WinHandle);
     fn nvim_diff_set_cmdmod_tab_zero();
     fn rs_win_split(size: c_int, flags: c_int) -> c_int; // in window_shim.c
-    fn nvim_diff_do_exedit_with_old_curwin(eap: *mut std::ffi::c_void, old_curwin: WinHandle);
-    fn nvim_eap_set_cmdidx(eap: *mut std::ffi::c_void, idx: c_int); // in ex_docmd.c
+    fn nvim_diff_do_exedit_with_old_curwin(eap: *mut ExArg, old_curwin: WinHandle);
     fn nvim_diff_get_CMD_split() -> c_int;
     fn nvim_diff_set_curwin_w_p_diff(val: bool);
     fn nvim_diff_bufref_alloc() -> *mut std::ffi::c_void;

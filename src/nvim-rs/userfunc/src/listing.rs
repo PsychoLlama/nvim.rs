@@ -10,6 +10,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -20,7 +21,7 @@ use std::ffi::{c_char, c_int, c_void};
 pub type UfuncHandle = *mut c_void;
 
 /// Opaque handle for exarg_T (C type).
-pub type ExargHandle = *mut c_void;
+pub type ExargHandle = *mut ExArg;
 
 /// Rust mirror of C `sctx_T` (24 bytes, matches eval/display.rs SctxT).
 #[repr(C)]
@@ -90,10 +91,7 @@ extern "C" {
     fn nvim_emsg_trailing_arg(name: *const c_char);
 
     // exarg_T accessors (already in ex_docmd.c / indent_ffi.c)
-    fn nvim_eap_get_arg(eap: ExargHandle) -> *mut c_char;
-    fn nvim_eap_get_skip(eap: ExargHandle) -> c_int;
     fn nvim_eap_get_forceit(eap: ExargHandle) -> c_int;
-    fn nvim_eap_set_nextcmd(eap: ExargHandle, p: *mut c_char);
 
     // globals
     static mut got_int: c_int;
@@ -355,11 +353,11 @@ pub unsafe extern "C" fn rs_list_functions() {
 /// `eap` must be a valid exarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_list_functions_matching_pat(eap: ExargHandle) -> *mut c_char {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     // arg+1 to skip the leading '/'
     let p = skip_regexp(arg.add(1), c_int::from(b'/'), 1);
 
-    if nvim_eap_get_skip(eap) == 0 {
+    if (*eap).skip == 0 {
         // Temporarily NUL-terminate the pattern
         let c = *p;
         *p = 0i8;
@@ -397,13 +395,13 @@ pub unsafe extern "C" fn rs_list_one_function(
     }
 
     let next = check_nextcmd(p);
-    nvim_eap_set_nextcmd(eap, next);
+    (*eap).nextcmd = next;
 
     if !next.is_null() {
         *p = 0i8; // NUL terminate before nextcmd
     }
 
-    let skip = nvim_eap_get_skip(eap);
+    let skip = (*eap).skip;
     if skip != 0 || got_int != 0 {
         return std::ptr::null_mut();
     }

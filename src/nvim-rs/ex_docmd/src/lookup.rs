@@ -16,11 +16,6 @@ extern "C" {
     fn nvim_docmd_cmdnames_func_is_ni(cmdidx: c_int) -> c_int;
 
     // Phase 3: command table accessors
-    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
-    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_flags(eap: ExArgHandle, flags: c_int);
     fn nvim_docmd_get_command_count() -> c_int;
     fn nvim_docmd_get_cmdidxs1(c: c_int) -> c_int;
     fn nvim_docmd_get_cmdidxs2(c1: c_int, c2: c_int) -> c_int;
@@ -384,13 +379,13 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
         return std::ptr::null_mut();
     }
 
-    let cmd = nvim_eap_get_cmd(eap);
+    let cmd = (*eap).cmd;
     let mut p = cmd;
 
     // Try one-letter command first.
     let mut idx_val: c_int = 0;
     if rs_one_letter_cmd(cmd as *const c_char, &mut idx_val) != 0 {
-        nvim_eap_set_cmdidx(eap, idx_val);
+        (*eap).cmdidx = idx_val;
         p = p.add(1);
         if !full.is_null() {
             *full = 1;
@@ -441,11 +436,11 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
                 }
                 if i == len - 1 {
                     effective_len -= 1;
-                    let flags = nvim_eap_get_flags(eap);
+                    let flags = (*eap).flags;
                     if last_char == b'l' {
-                        nvim_eap_set_flags(eap, flags | crate::execute::EXFLAG_LIST);
+                        (*eap).flags = flags | crate::execute::EXFLAG_LIST;
                     } else {
-                        nvim_eap_set_flags(eap, flags | crate::execute::EXFLAG_PRINT);
+                        (*eap).flags = flags | crate::execute::EXFLAG_PRINT;
                     }
                 }
             }
@@ -469,11 +464,11 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             if (c2 as u8).is_ascii_lowercase() {
                 start_idx += nvim_docmd_get_cmdidxs2(c1, c2);
             }
-            nvim_eap_set_cmdidx(eap, start_idx);
+            (*eap).cmdidx = start_idx;
         } else if c0.is_ascii_uppercase() {
-            nvim_eap_set_cmdidx(eap, crate::commands::CMD_NEXT);
+            (*eap).cmdidx = crate::commands::CMD_NEXT;
         } else {
-            nvim_eap_set_cmdidx(eap, crate::commands::CMD_BANG);
+            (*eap).cmdidx = crate::commands::CMD_BANG;
         }
 
         // Make :def an unknown command (#23149).
@@ -482,11 +477,11 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             && *cmd.add(1) as u8 == b'e'
             && *cmd.add(2) as u8 == b'f'
         {
-            nvim_eap_set_cmdidx(eap, crate::commands::CMD_SIZE);
+            (*eap).cmdidx = crate::commands::CMD_SIZE;
         }
 
         // Iterate cmdnames[] for prefix match.
-        let mut cidx = nvim_eap_get_cmdidx(eap);
+        let mut cidx = (*eap).cmdidx;
         while cidx < crate::commands::CMD_SIZE {
             if nvim_docmd_cmdnames_prefix_match(cidx, cmd as *const c_char, effective_len) != 0 {
                 if !full.is_null() && nvim_docmd_cmdnames_name_complete(cidx, effective_len) != 0 {
@@ -496,10 +491,9 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             }
             cidx += 1;
         }
-        nvim_eap_set_cmdidx(eap, cidx);
-
+        (*eap).cmdidx = cidx;
         // Look for a user defined command as a last resort.
-        if nvim_eap_get_cmdidx(eap) == crate::commands::CMD_SIZE
+        if (*eap).cmdidx == crate::commands::CMD_SIZE
             && (*cmd as u8) >= b'A'
             && (*cmd as u8) <= b'Z'
         {
@@ -510,7 +504,7 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             p = nvim_docmd_find_ucmd(eap, p, full);
         }
         if p == cmd {
-            nvim_eap_set_cmdidx(eap, crate::commands::CMD_SIZE);
+            (*eap).cmdidx = crate::commands::CMD_SIZE;
         }
     }
 

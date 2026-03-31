@@ -4,6 +4,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
@@ -59,7 +60,6 @@ extern "C" {
     fn nvim_eap_get_arg_local(eap: ExargHandle) -> *mut c_char;
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
     // (nvim_eap_set_nextcmd_checked inlined via ExargNextcmdAccess.nextcmd + check_nextcmd)
-    fn nvim_eap_get_cmdidx(eap: ExargHandle) -> c_int;
     fn nvim_eap_get_getline(eap: ExargHandle) -> LineGetter;
     fn nvim_eap_get_cookie(eap: ExargHandle) -> *mut c_void;
 
@@ -207,7 +207,7 @@ unsafe fn cstr_len(s: *const c_char) -> usize {
 pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     let mut arg = nvim_eap_get_arg_local(eap);
     let skip = nvim_eap_get_skip_local(eap) != 0;
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*(eap.as_ptr() as *const ExArg)).cmdidx;
     let cmd_echo = CMD_ECHO;
 
     let mut atstart = true;
@@ -319,7 +319,7 @@ pub unsafe extern "C" fn rs_ex_echo(eap: ExargHandle) {
 pub unsafe fn ex_execute_impl(eap: ExargHandle) {
     let mut arg = nvim_eap_get_arg_local(eap);
     let skip = nvim_eap_get_skip_local(eap) != 0;
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*(eap.as_ptr() as *const ExArg)).cmdidx;
     let cmd_execute = CMD_EXECUTE;
     let cmd_echomsg = CMD_ECHOMSG;
     let cmd_echoerr = CMD_ECHOERR;

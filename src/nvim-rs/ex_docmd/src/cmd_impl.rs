@@ -94,15 +94,6 @@ const DT_LTAG: c_int = 11;
 
 extern "C" {
     // eap accessors (already in commands.rs but we need them locally)
-    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_forceit(eap: ExArgHandle) -> bool;
-    fn nvim_eap_get_line1(eap: ExArgHandle) -> LinenrT;
-    fn nvim_eap_get_line2(eap: ExArgHandle) -> LinenrT;
-    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_errmsg_const(eap: ExArgHandle, msg: *const c_char);
-    fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
 
     // cmdnames accessor
     fn nvim_docmd_cmdnames_name(idx: c_int) -> *mut c_char;
@@ -219,7 +210,6 @@ extern "C" {
     fn goto_tabpage(n: c_int);
     #[link_name = "rs_valid_tabpage"]
     fn rs_valid_tabpage(tp: *mut c_void) -> c_int;
-    fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
     fn nvim_set_cmdwin_result(val: c_int);
 }
 
@@ -239,7 +229,7 @@ fn ends_excmd(c: i32) -> bool {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_goto"]
 pub unsafe extern "C" fn rs_ex_goto(eap: ExArgHandle) {
-    let line2 = nvim_eap_get_line2(eap);
+    let line2 = (*eap).line2;
     nvim_cmd_goto_byte(line2);
 }
 
@@ -278,13 +268,13 @@ unsafe fn rs_ex_tag_cmd(eap: ExArgHandle, name: *const c_char) {
     let c0 = if name.is_null() { 0u8 } else { *name as u8 };
     let final_cmd = if c0 == b'l' { DT_LTAG } else { cmd };
 
-    let arg = nvim_eap_get_arg(eap);
-    let count = if nvim_eap_get_addr_count(eap) > 0 {
-        nvim_eap_get_line2(eap)
+    let arg = (*eap).arg;
+    let count = if (*eap).addr_count > 0 {
+        (*eap).line2
     } else {
         1
     };
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     rs_do_tag(arg, final_cmd, count, forceit as c_int, true);
 }
 
@@ -294,7 +284,7 @@ unsafe fn rs_ex_tag_cmd(eap: ExArgHandle, name: *const c_char) {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_tag"]
 pub unsafe extern "C" fn rs_ex_tag(eap: ExArgHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let name = nvim_docmd_cmdnames_name(cmdidx);
     rs_ex_tag_cmd(eap, name);
 }
@@ -306,7 +296,7 @@ pub unsafe extern "C" fn rs_ex_tag(eap: ExArgHandle) {
 #[export_name = "ex_ptag"]
 pub unsafe extern "C" fn rs_ex_ptag(eap: ExArgHandle) {
     g_do_tagpreview = p_pvh as c_int; // will be reset in ex_tag_cmd()
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let name = nvim_docmd_cmdnames_name(cmdidx);
     // Use name + 1 (skip leading 'p')
     rs_ex_tag_cmd(eap, name.add(1));
@@ -321,7 +311,7 @@ pub unsafe extern "C" fn rs_ex_stag(eap: ExArgHandle) {
     postponed_split = -1;
     postponed_split_flags = nvim_docmd_get_cmdmod_cmod_split();
     postponed_split_tab = nvim_docmd_get_cmdmod_cmod_tab();
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let name = nvim_docmd_cmdnames_name(cmdidx);
     // Use name + 1 (skip leading 's')
     rs_ex_tag_cmd(eap, name.add(1));
@@ -335,7 +325,7 @@ pub unsafe extern "C" fn rs_ex_stag(eap: ExArgHandle) {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_pclose"]
 pub unsafe extern "C" fn rs_ex_pclose(eap: ExArgHandle) {
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
         if nvim_win_get_p_pvw(wp) != 0 {
@@ -376,7 +366,7 @@ pub unsafe extern "C" fn rs_ex_pbuffer(eap: ExArgHandle) {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_findpat"]
 pub unsafe extern "C" fn rs_ex_findpat(eap: ExArgHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let cmd_name = nvim_docmd_cmdnames_name(cmdidx);
 
     let mut whole = true;
@@ -406,8 +396,8 @@ pub unsafe extern "C" fn rs_ex_findpat(eap: ExArgHandle) {
         _ => ACTION_SPLIT,      // ":isplit", ":dsplit"
     };
 
-    let mut eap_arg = nvim_eap_get_arg(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let mut eap_arg = (*eap).arg;
+    let forceit = (*eap).forceit != 0;
 
     let mut n = 1;
     if !eap_arg.is_null() && *eap_arg != 0 && {
@@ -431,24 +421,24 @@ pub unsafe extern "C" fn rs_ex_findpat(eap: ExArgHandle) {
             let p_after = skipwhite(p_after);
             // Check for trailing illegal characters
             if !ends_excmd(*p_after as i32) {
-                nvim_eap_set_errmsg_const(eap, c"E488: Trailing characters: %s".as_ptr());
+                (*eap).errmsg = c"E488: Trailing characters: %s".as_ptr() as *mut c_char;
             } else {
                 let nextcmd = check_nextcmd(p_after);
-                nvim_eap_set_nextcmd(eap, nextcmd);
+                (*eap).nextcmd = nextcmd;
             }
         }
     }
 
     // Only execute if not skipping
-    if nvim_eap_get_skip(eap) == 0 {
+    if (*eap).skip == 0 {
         let len = strlen(eap_arg as *const c_char);
         let type_ = if !cmd_name.is_null() && *cmd_name == b'd' as c_char {
             FIND_DEFINE
         } else {
             FIND_ANY
         };
-        let line1 = nvim_eap_get_line1(eap);
-        let line2 = nvim_eap_get_line2(eap);
+        let line1 = (*eap).line1;
+        let line2 = (*eap).line2;
         nvim_cmd_find_pattern_in_path(
             eap_arg as *const c_char,
             0,
@@ -703,14 +693,14 @@ pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
     }
 
     let tab_number = crate::address::rs_get_tabpage_arg(eap);
-    if !nvim_eap_get_errmsg(eap).is_null() {
+    if !(*eap).errmsg.is_null() {
         return;
     }
 
     goto_tabpage(tab_number);
 
     // Repeat up to 1000 times: autocommands may mess up the lists.
-    let forceit = nvim_eap_get_forceit(eap) as c_int;
+    let forceit = (*eap).forceit as c_int;
     'outer: for _ in 0..1000 {
         let mut tp = nvim_get_first_tabpage();
         while !tp.is_null() {
@@ -742,7 +732,7 @@ const EXFLAG_LIST: c_int = 0x01;
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "nvim_docmd_ex_may_print_impl"]
 pub unsafe extern "C" fn rs_nvim_docmd_ex_may_print_impl(eap: ExArgHandle) {
-    let flags = nvim_eap_get_flags(eap);
+    let flags = (*eap).flags;
     if flags != 0 {
         rs_print_line(
             nvim_get_curwin_cursor_lnum(),
@@ -885,7 +875,6 @@ extern "C" {
     fn nvim_docmd_goto_buffer_first(eap: ExArgHandle, n: c_int);
     fn nvim_docmd_eap_get_do_ecmd_cmd(eap: ExArgHandle) -> *mut c_char;
     fn nvim_docmd_errmsg_trailing_arg(arg: *const c_char) -> *mut c_char;
-    fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
 
     // handle_did_throw globals (Phase 4)
     static mut current_exception: *mut ExceptT;
@@ -918,7 +907,6 @@ extern "C" {
     fn nvim_docmd_ex_win_close_in_tab(forceit: c_int, wp: WinHandle, tp: *mut c_void);
 
     // ex_find helpers
-    fn nvim_eap_set_arg(eap: ExArgHandle, arg: *mut c_char);
     fn nvim_docmd_get_findfunc_nonempty() -> bool;
     fn nvim_docmd_findfunc_find_file(arg: *mut c_char, len: usize, count: c_int) -> *mut c_char;
     fn nvim_docmd_curbuf_b_ffname() -> *const c_char;
@@ -1117,17 +1105,17 @@ pub unsafe extern "C" fn rs_ex_splitview(eap: ExArgHandle) {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "nvim_docmd_ex_find_impl"]
 pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
-    let forceit = nvim_eap_get_forceit(eap) as c_int;
+    let forceit = (*eap).forceit as c_int;
     if !nvim_docmd_check_can_set_curbuf_forceit(forceit) {
         return;
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let len = std::ffi::CStr::from_ptr(arg).to_bytes().len();
 
     let fname: *mut c_char = if nvim_docmd_get_findfunc_nonempty() {
-        let count = if nvim_eap_get_addr_count(eap) > 0 {
-            nvim_eap_get_line2(eap) as c_int
+        let count = if (*eap).addr_count > 0 {
+            (*eap).line2 as c_int
         } else {
             1
         };
@@ -1146,8 +1134,8 @@ pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
             &mut file_to_find,
             &mut search_ctx,
         );
-        if nvim_eap_get_addr_count(eap) > 0 {
-            let mut count = nvim_eap_get_line2(eap) as c_int;
+        if (*eap).addr_count > 0 {
+            let mut count = (*eap).line2 as c_int;
             while !fname.is_null() && {
                 count -= 1;
                 count > 0
@@ -1173,7 +1161,7 @@ pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
         return;
     }
 
-    nvim_eap_set_arg(eap, fname);
+    (*eap).arg = fname;
     rs_do_exedit_impl(eap, std::ptr::null_mut());
     xfree(fname as *mut c_void);
 }
@@ -1428,15 +1416,15 @@ pub unsafe extern "C" fn tabpage_new() {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "nvim_docmd_do_exbuffer_impl"]
 pub unsafe extern "C" fn rs_do_exbuffer_impl(eap: ExArgHandle) {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if !arg.is_null() && *arg != 0 {
         let errmsg = nvim_docmd_errmsg_trailing_arg(arg);
-        nvim_eap_set_errmsg(eap, errmsg);
+        (*eap).errmsg = errmsg;
     } else {
-        if nvim_eap_get_addr_count(eap) == 0 {
+        if (*eap).addr_count == 0 {
             nvim_docmd_goto_buffer_current(eap);
         } else {
-            nvim_docmd_goto_buffer_first(eap, nvim_eap_get_line2(eap));
+            nvim_docmd_goto_buffer_first(eap, (*eap).line2);
         }
         let do_ecmd_cmd = nvim_docmd_eap_get_do_ecmd_cmd(eap);
         if !do_ecmd_cmd.is_null() {
@@ -1653,7 +1641,6 @@ extern "C" {
     // rs_print_line (for ex_may_print)
     fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int);
     // nvim_eap_get_flags (for ex_may_print)
-    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
 
     // Helpers for vim_mkdir_emsg and open_exfile (migrated to Rust)
     fn nvim_docmd_semsg_mkdir_err(name: *const c_char, errcode: c_int);
@@ -2037,7 +2024,6 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
 
 extern "C" {
     // eap cmdidx setter (for splitview quickfix adjustment)
-    fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
 
     // CMD constant accessors (ex_splitview)
     fn nvim_docmd_get_CMD_tabedit() -> c_int;
@@ -2074,7 +2060,6 @@ extern "C" {
     fn win_split(size: c_int, flags: c_int) -> c_int;
 
     // eap->cmd[0] accessor
-    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
 
     // scrollbind reset/check
     fn nvim_reset_binding_curwin();
@@ -2103,7 +2088,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
     let cmd_vnew = nvim_docmd_get_CMD_vnew();
     let cmd_sfind = nvim_docmd_get_CMD_sfind();
 
-    let mut cmdidx = nvim_eap_get_cmdidx(eap);
+    let mut cmdidx = (*eap).cmdidx;
     let use_tab = cmdidx == cmd_tabedit || cmdidx == cmd_tabfind || cmdidx == cmd_tabnew;
 
     // A ":split" in the quickfix window works like ":new". Don't want two
@@ -2111,22 +2096,22 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
     if nvim_bt_quickfix_curbuf() != 0 && nvim_get_cmdmod_tab() == 0 {
         if cmdidx == cmd_split {
             cmdidx = cmd_new;
-            nvim_eap_set_cmdidx(eap, cmdidx);
+            (*eap).cmdidx = cmdidx;
         }
         if cmdidx == cmd_vsplit {
             cmdidx = cmd_vnew;
-            nvim_eap_set_cmdidx(eap, cmdidx);
+            (*eap).cmdidx = cmdidx;
         }
     }
 
     let mut fname: *mut c_char = std::ptr::null_mut();
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
 
     if cmdidx == cmd_sfind || cmdidx == cmd_tabfind {
         let len = std::ffi::CStr::from_ptr(arg).to_bytes().len();
         if nvim_docmd_get_findfunc_nonempty() {
-            let count = if nvim_eap_get_addr_count(eap) > 0 {
-                nvim_eap_get_line2(eap) as c_int
+            let count = if (*eap).addr_count > 0 {
+                (*eap).line2 as c_int
             } else {
                 1
             };
@@ -2151,7 +2136,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
         if fname.is_null() {
             return;
         }
-        nvim_eap_set_arg(eap, fname);
+        (*eap).arg = fname;
     }
 
     // Either open new tab page or split the window.
@@ -2159,12 +2144,12 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
         let cmod_tab = nvim_get_cmdmod_tab();
         let after = if cmod_tab != 0 {
             cmod_tab
-        } else if nvim_eap_get_addr_count(eap) == 0 {
+        } else if (*eap).addr_count == 0 {
             0
         } else {
-            nvim_eap_get_line2(eap) as c_int + 1
+            (*eap).line2 as c_int + 1
         };
-        if nvim_docmd_win_new_tabpage(after, nvim_eap_get_arg(eap) as *const u8) != FAIL {
+        if nvim_docmd_win_new_tabpage(after, (*eap).arg as *const u8) != FAIL {
             rs_do_exedit_impl(eap, old_curwin);
             nvim_apply_autocmds_tabnewentered();
 
@@ -2179,12 +2164,12 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
             }
         }
     } else {
-        let size = if nvim_eap_get_addr_count(eap) > 0 {
-            nvim_eap_get_line2(eap) as c_int
+        let size = if (*eap).addr_count > 0 {
+            (*eap).line2 as c_int
         } else {
             0
         };
-        let cmd_ptr = nvim_eap_get_cmd(eap);
+        let cmd_ptr = (*eap).cmd;
         let flags = if !cmd_ptr.is_null() && *cmd_ptr == b'v' as c_char {
             WSP_VERT
         } else {
@@ -2193,7 +2178,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
         if win_split(size, flags) != FAIL {
             // Reset 'scrollbind' when editing another file, but keep it when
             // doing ":split" without arguments.
-            let arg2 = nvim_eap_get_arg(eap);
+            let arg2 = (*eap).arg;
             if !arg2.is_null() && *arg2 != 0 {
                 nvim_reset_binding_curwin();
             } else {
@@ -2257,9 +2242,9 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
     let cmd_sview = nvim_docmd_get_CMD_sview();
     let cmd_balt = nvim_docmd_get_CMD_balt();
     let cmd_badd = nvim_docmd_get_CMD_badd();
-    let cmdidx = nvim_eap_get_cmdidx(eap);
-    let arg = nvim_eap_get_arg(eap);
-    let forceit = nvim_eap_get_forceit(eap);
+    let cmdidx = (*eap).cmdidx;
+    let arg = (*eap).arg;
+    let forceit = (*eap).forceit != 0;
     if nvim_docmd_do_exedit_handle_exmode(eap) != 0 {
         return;
     }

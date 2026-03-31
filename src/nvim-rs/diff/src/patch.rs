@@ -3,6 +3,7 @@
 //! This module provides the Rust implementation of the `:diffpatch` ex command,
 //! which creates a new version of a file from the current buffer and a diff file.
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_char;
 use std::os::raw::c_int;
 
@@ -74,15 +75,12 @@ extern "C" {
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_diff_get_curwin() -> WinHandle;
     fn nvim_diff_set_cmdmod_tab_zero();
-    fn nvim_eap_set_cmdidx(eap: *mut std::ffi::c_void, idx: c_int);
-    fn nvim_eap_set_arg(eap: *mut std::ffi::c_void, arg: *mut c_char);
-    fn nvim_eap_get_arg(eap: *const std::ffi::c_void) -> *mut c_char;
-    fn nvim_diff_do_exedit_with_old_curwin(eap: *mut std::ffi::c_void, old_curwin: WinHandle);
+    fn nvim_diff_do_exedit_with_old_curwin(eap: *mut ExArg, old_curwin: WinHandle);
     fn nvim_diff_get_CMD_split() -> c_int;
     fn rs_win_valid(wp: WinHandle) -> c_int;
     #[link_name = "diff_win_options"]
     fn rs_diff_win_options(wp: WinHandle, addbuf: bool);
-    fn nvim_diff_ex_file(eap: *mut std::ffi::c_void);
+    fn nvim_diff_ex_file(eap: *mut ExArg);
     fn nvim_diff_augroup_exists_filetypedetect() -> bool;
     fn do_cmdline_cmd(cmd: *const c_char);
 }
@@ -95,7 +93,7 @@ extern "C" {
 /// Cleanup of `tmp_orig`/`tmp_new` is handled by the caller (`ex_diffpatch_impl`).
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 unsafe fn ex_diffpatch_body(
-    eap: *mut std::ffi::c_void,
+    eap: *mut ExArg,
     old_curwin: WinHandle,
     tmp_orig: *mut c_char,
     tmp_new: *mut c_char,
@@ -110,7 +108,7 @@ unsafe fn ex_diffpatch_body(
     }
 
     // Get the absolute path of the patchfile.
-    let eap_arg = nvim_eap_get_arg(eap);
+    let eap_arg = (*eap).arg;
     let fullname = nvim_diff_FullName_save(eap_arg);
     let diff_path: *const c_char = if fullname.is_null() {
         eap_arg
@@ -245,8 +243,8 @@ unsafe fn ex_diffpatch_body(
     if rs_win_split(0, split_flags) != FAIL {
         // Pretend it was a ":split fname" command.
         let cmd_split = nvim_diff_get_CMD_split();
-        nvim_eap_set_cmdidx(eap, cmd_split);
-        nvim_eap_set_arg(eap, tmp_new);
+        (*eap).cmdidx = cmd_split;
+        (*eap).arg = tmp_new;
         nvim_diff_do_exedit_with_old_curwin(eap, old_curwin);
 
         // Check that split worked.
@@ -258,7 +256,7 @@ unsafe fn ex_diffpatch_body(
 
             if !newname.is_null() {
                 // Do ":file filename.new" on the patched buffer.
-                nvim_eap_set_arg(eap, newname);
+                (*eap).arg = newname;
                 nvim_diff_ex_file(eap);
 
                 // Do filetype detection with the new name.
@@ -280,7 +278,7 @@ unsafe fn ex_diffpatch_body(
 ///
 /// # Safety
 /// `eap` must be a valid pointer to an `exarg_T`.
-unsafe fn ex_diffpatch_impl(eap: *mut std::ffi::c_void, old_curwin: WinHandle) {
+unsafe fn ex_diffpatch_impl(eap: *mut ExArg, old_curwin: WinHandle) {
     let tmp_orig = vim_tempname();
     let tmp_new = vim_tempname();
 
@@ -307,7 +305,7 @@ unsafe fn ex_diffpatch_impl(eap: *mut std::ffi::c_void, old_curwin: WinHandle) {
 /// # Safety
 /// `eap` must be a valid pointer to an `exarg_T`.
 #[export_name = "ex_diffpatch"]
-pub unsafe extern "C" fn rs_ex_diffpatch(eap: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_ex_diffpatch(eap: *mut ExArg) {
     let old_curwin = nvim_diff_get_curwin();
     ex_diffpatch_impl(eap, old_curwin);
 }

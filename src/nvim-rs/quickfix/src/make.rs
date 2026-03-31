@@ -11,13 +11,14 @@
 #![allow(clashing_extern_declarations)]
 
 use crate::ffi_types::QfListPtr;
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
 // =============================================================================
 // Type aliases
 // =============================================================================
 
-type EapHandle = *mut c_void;
+type EapHandle = *mut ExArg;
 type QfInfoHandleMut = *mut c_void;
 type WinHandle = *mut c_void;
 type BufHandle = *mut c_void;
@@ -99,12 +100,7 @@ extern "C" {
 
     // qf_cmdtitle / eap accessors
     fn nvim_eap_get_cmdlinep_deref_make(eap: EapHandle) -> *mut c_char;
-    fn nvim_eap_get_cmdidx(eap: EapHandle) -> c_int;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
-    fn nvim_eap_get_arg(eap: EapHandle) -> *mut c_char;
-    fn nvim_eap_get_addr_count(eap: EapHandle) -> c_int;
-    fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
-    fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
 
     // rs_qf_cmdtitle
     fn rs_qf_cmdtitle(cmd: *const c_char, buf: *mut c_char, bufsz: usize) -> usize;
@@ -163,8 +159,6 @@ extern "C" {
     fn skipdigits(s: *const c_char) -> *mut c_char;
     // (nvim_emsg_invarg, nvim_emsg_buf_not_loaded, nvim_emsg_invrange deleted: use emsg directly)
     // emsg declared earlier in this file
-    fn nvim_eap_set_line1(eap: EapHandle, lnum: LinenrT);
-    fn nvim_eap_set_line2(eap: EapHandle, lnum: LinenrT);
 
     // eval_expr / tv_free for ex_cexpr
     fn nvim_eval_expr(arg: *const c_char, eap: EapHandle) -> *mut c_void;
@@ -384,12 +378,12 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
 #[export_name = "ex_make"]
 pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
-    if rs_grep_internal(nvim_eap_get_cmdidx(eap)) != 0 {
+    if rs_grep_internal((*eap).cmdidx) != 0 {
         rs_ex_vimgrep(eap);
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let au_name = rs_make_get_auname(cmdidx);
 
     // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
@@ -420,7 +414,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     }
     nvim_os_remove(fname); // in case it's not unique
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let cmd = rs_make_get_fullcmd(arg, fname);
 
     do_shell(cmd, 0);
@@ -533,7 +527,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
 /// `eap` must be a valid pointer to a C `exarg_T`.
 #[export_name = "ex_cfile"]
 pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let au_name = rs_cfile_get_auname(cmdidx);
 
     // Inlined nvim_qf_apply_autocmd_pre_null: fire EVENT_QUICKFIXCMDPRE with NULL fname_io
@@ -551,7 +545,7 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     }
 
     // If argument given, set 'errorfile' option to it.
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if !arg.is_null() && *arg != 0 {
         nvim_set_option_direct_ef(arg);
     }
@@ -647,7 +641,7 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
 ///
 /// `eap` and `bufp` must be valid pointers.
 unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let buf: BufHandle;
 
     if arg.is_null() || *arg == 0 {
@@ -675,14 +669,14 @@ unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
 
     let ml_line_count = nvim_buf_get_ml_line_count_void(buf);
 
-    let addr_count = nvim_eap_get_addr_count(eap);
+    let addr_count = (*eap).addr_count;
     if addr_count == 0 {
-        nvim_eap_set_line1(eap, 1);
-        nvim_eap_set_line2(eap, ml_line_count);
+        (*eap).line1 = 1;
+        (*eap).line2 = ml_line_count;
     }
 
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
 
     if line1 < 1 || line1 > ml_line_count || line2 < 1 || line2 > ml_line_count {
         emsg(c"E16: Invalid range".as_ptr());
@@ -712,7 +706,7 @@ const unsafe fn skip_nul_whitespace(p: *const c_char) -> *const c_char {
 /// `eap` must be a valid pointer to a C `exarg_T`.
 #[export_name = "ex_cbuffer"]
 pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let au_name = rs_cbuffer_get_auname(cmdidx);
 
     // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
@@ -756,8 +750,8 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
 
     let qi_idx = nvim_qf_get_curlist_idx(qi);
     let newlist = cmdidx != CMD_CADDBUFFER && cmdidx != CMD_LADDBUFFER;
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
 
     let res = rs_qf_init_ext(
         qi,
@@ -822,7 +816,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
 /// `eap` must be a valid pointer to a C `exarg_T`.
 #[export_name = "ex_cexpr"]
 pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let au_name = rs_cexpr_get_auname(cmdidx);
 
     // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
@@ -844,7 +838,7 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
 
     // Evaluate the expression. When the result is a string or a list we can
     // use it to fill the errorlist.
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let tv = nvim_eval_expr(arg, eap);
     if tv.is_null() {
         return;

@@ -9,3 +9,4 @@ description = "User-defined function support for Neovim"
 crate-type = ["rlib"]
 
 [dependencies]
+nvim-ex-cmds-types = { path = "../ex_cmds_types" }

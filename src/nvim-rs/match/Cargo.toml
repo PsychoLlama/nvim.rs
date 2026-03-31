@@ -10,6 +10,7 @@ repository.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
+nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 libc = "0.2"
 
 [lints]

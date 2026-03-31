@@ -10,6 +10,7 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::useless_let_if_seq)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::opt_index::K_OPT_MODIFIABLE;
@@ -417,8 +418,6 @@ extern "C" {
     fn nvim_ex2_source_runtime_vim_lua(name: *const c_char, flags: c_int) -> c_int;
 
     // get_fileformat_force (nvim_eap_get_force_ff/bin are in ex_docmd.c)
-    fn nvim_eap_get_force_ff(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_force_bin(eap: *const c_void) -> c_int;
     fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_p_ff_first(buf: BufHandle) -> c_int;
 }
@@ -517,12 +516,12 @@ pub unsafe extern "C" fn rs_do_spelllang_source(win: WinHandle) {
 /// Translation of C `get_fileformat_force`. Returns EOL_UNIX, EOL_DOS, or EOL_MAC.
 #[allow(clippy::must_use_candidate)]
 #[export_name = "get_fileformat_force"]
-pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const c_void) -> c_int {
-    let force_ff = nvim_eap_get_force_ff(eap);
+pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const ExArg) -> c_int {
+    let force_ff = (*eap).force_ff;
     let c = if force_ff != 0 {
         force_ff
     } else {
-        let force_bin = nvim_eap_get_force_bin(eap);
+        let force_bin = (*eap).force_bin;
         let b_p_bin = nvim_option_buf_get_b_p_bin(buf);
         let is_bin = if force_bin != 0 {
             force_bin == FORCE_BIN

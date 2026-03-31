@@ -5,6 +5,7 @@
 #![allow(clippy::too_many_lines, non_upper_case_globals)]
 
 use libc::{c_char, c_int, c_uint};
+use nvim_ex_cmds_types::ExArg;
 
 use crate::context::ExpandContext;
 use crate::ExpandHandle;
@@ -281,7 +282,7 @@ extern "C" {
     // Functions needed for set_cmd_index
     fn excmd_get_cmdidx(cmd: *const c_char, len: usize) -> c_int;
     fn find_ucmd(
-        eap: *mut libc::c_void,
+        eap: *mut ExArg,
         p: *mut c_char,
         full: *mut c_int,
         xp: ExpandHandle,
@@ -289,8 +290,6 @@ extern "C" {
     ) -> *mut c_char;
     fn xcalloc(count: usize, size: usize) -> *mut libc::c_void;
     fn xfree(ptr: *mut libc::c_void);
-    fn nvim_eap_set_cmd(eap: *mut libc::c_void, p: *mut c_char);
-    fn nvim_eap_get_cmdidx(eap: *const libc::c_void) -> c_int;
 
     // Context-setting functions still in C
     fn set_context_in_user_cmd(xp: ExpandHandle, arg: *const c_char) -> *const c_char;
@@ -910,15 +909,14 @@ unsafe fn set_cmd_index(
     };
     let xp_ref = &mut *xp;
 
-    // Allocate a zeroed exarg_T on the heap (opaque handle).
-    // Size is accessed only through C accessor functions.
-    let eap = xcalloc(1, 4096); // 4096 bytes is more than enough for exarg_T
+    // Allocate a zeroed exarg_T on the heap.
+    let eap = xcalloc(1, std::mem::size_of::<ExArg>()).cast::<ExArg>();
 
     // Early return helper that also frees eap.
     macro_rules! fail {
         ($cidx:expr) => {{
             xp_ref.xp_context = ExpandContext::Unsuccessful as c_int;
-            xfree(eap);
+            xfree(eap.cast::<libc::c_void>());
             *cmdidx_out = $cidx;
             return std::ptr::null();
         }};
@@ -927,7 +925,7 @@ unsafe fn set_cmd_index(
     let p = if !fuzzy && (*cmd == b'k' as c_char) && (*cmd.add(1) != b'e' as c_char) {
         // 'k' command can be followed directly by any character (except "keep*").
         *cmdidx_out = CMD_k;
-        nvim_eap_set_cmd(eap, cmd.cast_mut());
+        (*eap).cmd = cmd.cast_mut();
         cmd.add(1)
     } else {
         let mut pp = cmd;
@@ -962,7 +960,7 @@ unsafe fn set_cmd_index(
         }
 
         let mut cidx = excmd_get_cmdidx(cmd, len);
-        nvim_eap_set_cmd(eap, cmd.cast_mut());
+        (*eap).cmd = cmd.cast_mut();
 
         // User-defined or fuzzy: allow alphanumeric after the command.
         if ascii_isupper(*cmd as u8) || (fuzzy && cidx != CMD_bang && *pp != 0) {
@@ -973,7 +971,7 @@ unsafe fn set_cmd_index(
 
         // If cursor touches the end of an alphanumeric command, complete name.
         if *pp == 0 && ascii_isalnum(*pp.sub(1) as u8) {
-            xfree(eap);
+            xfree(eap.cast::<libc::c_void>());
             *cmdidx_out = cidx;
             return std::ptr::null();
         }
@@ -991,7 +989,7 @@ unsafe fn set_cmd_index(
                     cidx = CMD_SIZE; // Ambiguous user command.
                 } else {
                     pp = res;
-                    cidx = nvim_eap_get_cmdidx(eap);
+                    cidx = (*eap).cmdidx;
                 }
             }
         }
@@ -1006,11 +1004,11 @@ unsafe fn set_cmd_index(
 
     // If the cursor is touching the command and it ends in alphanumeric, complete name.
     if *p == 0 && ascii_isalnum(*p.sub(1) as u8) {
-        xfree(eap);
+        xfree(eap.cast::<libc::c_void>());
         return std::ptr::null();
     }
 
-    xfree(eap);
+    xfree(eap.cast::<libc::c_void>());
     p
 }
 

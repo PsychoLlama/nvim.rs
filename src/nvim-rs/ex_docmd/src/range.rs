@@ -27,14 +27,6 @@ const EX_RANGE: u32 = 0x001;
 
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_eap_get_argt(eap: ExArgHandle) -> u32;
-    fn nvim_eap_get_line1(eap: ExArgHandle) -> i32;
-    fn nvim_eap_set_line1(eap: ExArgHandle, line: i32);
-    fn nvim_eap_get_line2(eap: ExArgHandle) -> i32;
-    fn nvim_eap_set_line2(eap: ExArgHandle, line: i32);
-    fn nvim_eap_get_addr_type(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
 
     // Buffer/window/tab navigation
     fn nvim_docmd_get_curbuf_line_count() -> i32;
@@ -586,13 +578,13 @@ pub unsafe extern "C" fn rs_correct_range(eap: ExArgHandle) {
         return;
     }
 
-    let argt = nvim_eap_get_argt(eap);
+    let argt = (*eap).argt;
     if (argt & EX_ZEROR) == 0 {
-        if nvim_eap_get_line1(eap) == 0 {
-            nvim_eap_set_line1(eap, 1);
+        if (*eap).line1 == 0 {
+            (*eap).line1 = 1;
         }
-        if nvim_eap_get_line2(eap) == 0 {
-            nvim_eap_set_line2(eap, 1);
+        if (*eap).line2 == 0 {
+            (*eap).line2 = 1;
         }
     }
 }
@@ -701,19 +693,19 @@ pub unsafe extern "C" fn rs_skip_range(cmd: *const c_char, ctx: *mut c_int) -> *
 /// Replaces C `invalid_range()`.
 #[export_name = "invalid_range"]
 pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
 
     if line1 < 0 || line2 < 0 || line1 > line2 {
         return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
     }
 
-    let argt = nvim_eap_get_argt(eap);
+    let argt = (*eap).argt;
     if (argt & EX_RANGE) != 0 {
-        let addr_type = nvim_eap_get_addr_type(eap);
+        let addr_type = (*eap).addr_type;
         match addr_type {
             x if x == ADDR_LINES => {
-                let cmdidx = nvim_eap_get_cmdidx(eap);
+                let cmdidx = (*eap).cmdidx;
                 let diff_extra = if cmdidx == crate::commands::CMD_DIFFGET
                     || cmdidx == crate::commands::CMD_DIFFPUT
                 {
@@ -770,7 +762,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
             x if x == ADDR_QUICKFIX => {
                 debug_assert!(line2 >= 0);
                 if line2 <= 0 {
-                    if nvim_eap_get_addr_count(eap) == 0 {
+                    if (*eap).addr_count == 0 {
                         return crate::gt(crate::E_NO_ERRORS_STR.as_ptr()) as *mut c_char;
                     }
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;

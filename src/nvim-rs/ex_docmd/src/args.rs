@@ -13,28 +13,8 @@ use crate::ExArgHandle;
 // =============================================================================
 
 extern "C" {
-    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_arg(eap: ExArgHandle, arg: *mut c_char);
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_get_argt(eap: ExArgHandle) -> u32;
-    fn nvim_eap_set_line1(eap: ExArgHandle, line: i32);
-    fn nvim_eap_get_line2(eap: ExArgHandle) -> i32;
-    fn nvim_eap_set_line2(eap: ExArgHandle, line: i32);
-    fn nvim_eap_get_addr_type(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_addr_count(eap: ExArgHandle, count: c_int);
 
     // Phase 4: additional eap field accessors
-    fn nvim_eap_set_regname(eap: ExArgHandle, r: c_int);
-    fn nvim_eap_set_bad_char(eap: ExArgHandle, c: c_int);
-    fn nvim_eap_set_force_bin(eap: ExArgHandle, v: c_int);
-    fn nvim_eap_set_force_ff(eap: ExArgHandle, v: c_int);
-    fn nvim_eap_set_force_enc(eap: ExArgHandle, v: c_int);
-    fn nvim_eap_set_read_edit(eap: ExArgHandle, v: c_int);
-    fn nvim_eap_set_mkdir_p(eap: ExArgHandle, v: c_int);
-    fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
 
     fn nvim_docmd_grep_internal(cmdidx: c_int) -> c_int;
     fn nvim_docmd_get_curbuf_line_count() -> i32;
@@ -329,7 +309,7 @@ pub unsafe extern "C" fn rs_parse_bang(eap: ExArgHandle, p: *mut *mut c_char) ->
         return false;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     if *(*p) as u8 == b'!'
         && cmdidx != crate::commands::CMD_SUBSTITUTE
@@ -359,12 +339,12 @@ pub unsafe extern "C" fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char {
         return ptr::null_mut();
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if arg.is_null() || *arg as u8 == 0 {
         return arg;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     if cmdidx == crate::commands::CMD_VIMGREP
         || cmdidx == crate::commands::CMD_LVIMGREP
@@ -400,32 +380,30 @@ pub unsafe extern "C" fn rs_set_cmd_count(eap: ExArgHandle, count: c_int, valida
         return;
     }
 
-    let addr_type = nvim_eap_get_addr_type(eap);
+    let addr_type = (*eap).addr_type;
 
     if addr_type != ADDR_LINES {
         // e.g. :buffer 2, :sleep 3
-        nvim_eap_set_line2(eap, count);
-        if nvim_eap_get_addr_count(eap) == 0 {
-            nvim_eap_set_addr_count(eap, 1);
+        (*eap).line2 = count;
+        if (*eap).addr_count == 0 {
+            (*eap).addr_count = 1;
         }
     } else {
-        let line2 = nvim_eap_get_line2(eap);
-        nvim_eap_set_line1(eap, line2);
-
+        let line2 = (*eap).line2;
+        (*eap).line1 = line2;
         if line2 >= i32::MAX - (count - 1) {
-            nvim_eap_set_line2(eap, i32::MAX);
+            (*eap).line2 = i32::MAX;
         } else {
-            nvim_eap_set_line2(eap, line2 + count - 1);
+            (*eap).line2 = line2 + count - 1;
         }
 
-        nvim_eap_set_addr_count(eap, nvim_eap_get_addr_count(eap) + 1);
-
+        (*eap).addr_count += 1;
         // Be vi compatible: no error message for out of range.
         if validate != 0 {
             let line_count = nvim_docmd_get_curbuf_line_count();
-            let new_line2 = nvim_eap_get_line2(eap);
+            let new_line2 = (*eap).line2;
             if new_line2 > line_count {
-                nvim_eap_set_line2(eap, line_count);
+                (*eap).line2 = line_count;
             }
         }
     }
@@ -448,9 +426,9 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
         return;
     }
 
-    let argt = nvim_eap_get_argt(eap);
-    let arg = nvim_eap_get_arg(eap);
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let argt = (*eap).argt;
+    let arg = (*eap).arg;
+    let cmdidx = (*eap).cmdidx;
 
     // EX_REGSTR must be set, arg must not be NUL
     if (argt & crate::table::EX_REGSTR) == 0 || *arg as u8 == 0 {
@@ -484,17 +462,16 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
         let reg_char = *arg as u8;
         // Advance arg past the register name
         let new_arg = arg.add(1);
-        nvim_eap_set_arg(eap, new_arg);
-        nvim_eap_set_regname(eap, reg_char as c_int);
-
+        (*eap).arg = new_arg;
+        (*eap).regname = reg_char as c_int;
         // For '=' register: accept rest of line as expression
         if reg_char == b'=' && *new_arg as u8 != 0 {
-            if nvim_eap_get_skip(eap) == 0 {
+            if (*eap).skip == 0 {
                 nvim_docmd_set_expr_line(new_arg as *const c_char);
             }
             nvim_docmd_arg_skip_to_end(eap);
         }
-        nvim_eap_set_arg(eap, skipwhite(nvim_eap_get_arg(eap) as *const c_char));
+        (*eap).arg = skipwhite((*eap).arg as *const c_char);
     }
 }
 
@@ -525,8 +502,8 @@ pub unsafe extern "C" fn rs_parse_count_ex(
         return OK;
     }
 
-    let argt = nvim_eap_get_argt(eap);
-    let arg = nvim_eap_get_arg(eap);
+    let argt = (*eap).argt;
+    let arg = (*eap).arg;
 
     // Check for a count: EX_COUNT must be set, first char must be digit
     if (argt & crate::table::EX_COUNT) == 0 || !(*arg as u8).is_ascii_digit() {
@@ -574,20 +551,20 @@ pub unsafe extern "C" fn rs_get_bad_opt(p: *const c_char, eap: ExArgHandle) -> c
 
     // Check "keep"
     if stricmp_matches(p, b"keep") {
-        nvim_eap_set_bad_char(eap, BAD_KEEP);
+        (*eap).bad_char = BAD_KEEP;
         return OK;
     }
 
     // Check "drop"
     if stricmp_matches(p, b"drop") {
-        nvim_eap_set_bad_char(eap, BAD_DROP);
+        (*eap).bad_char = BAD_DROP;
         return OK;
     }
 
     // Single-byte character: MB_BYTE2LEN(*p) == 1 && p[1] == NUL
     let b = *p as u8;
     if nvim_docmd_mb_byte2len(b as c_int) == 1 && *p.add(1) as u8 == 0 {
-        nvim_eap_set_bad_char(eap, b as c_int);
+        (*eap).bad_char = b as c_int;
         return OK;
     }
 
@@ -628,35 +605,35 @@ pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
         return FAIL;
     }
 
-    let eap_arg = nvim_eap_get_arg(eap);
+    let eap_arg = (*eap).arg;
     let mut arg = eap_arg.add(2); // skip "++"
 
     // ":edit ++[no]bin[ary] file"
     if strncmp_prefix(arg, b"bin") || strncmp_prefix(arg, b"nobin") {
         if *arg as u8 == b'n' {
             arg = arg.add(2); // skip "no"
-            nvim_eap_set_force_bin(eap, FORCE_NOBIN as c_int);
+            (*eap).force_bin = FORCE_NOBIN as c_int;
         } else {
-            nvim_eap_set_force_bin(eap, FORCE_BIN as c_int);
+            (*eap).force_bin = FORCE_BIN as c_int;
         }
         if !rs_checkforcmd(&mut arg, c"binary".as_ptr(), 3) {
             return FAIL;
         }
-        nvim_eap_set_arg(eap, skipwhite(arg as *const c_char));
+        (*eap).arg = skipwhite(arg as *const c_char);
         return OK;
     }
 
     // ":read ++edit file"
     if strncmp_prefix(arg, b"edit") {
-        nvim_eap_set_read_edit(eap, 1);
-        nvim_eap_set_arg(eap, skipwhite(arg.add(4) as *const c_char));
+        (*eap).read_edit = 1;
+        (*eap).arg = skipwhite(arg.add(4) as *const c_char);
         return OK;
     }
 
     // ":write ++p foo/bar/file"
     if *arg as u8 == b'p' {
-        nvim_eap_set_mkdir_p(eap, 1);
-        nvim_eap_set_arg(eap, skipwhite(arg.add(1) as *const c_char));
+        (*eap).mkdir_p = 1;
+        (*eap).arg = skipwhite(arg.add(1) as *const c_char);
         return OK;
     }
 
@@ -693,10 +670,10 @@ pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
     }
     arg = arg.add(1); // skip '='
 
-    let cmd = nvim_eap_get_cmd(eap);
+    let cmd = (*eap).cmd;
     let val_offset = arg.offset_from(cmd) as c_int;
     arg = rs_skip_cmd_arg(arg, 0);
-    nvim_eap_set_arg(eap, skipwhite(arg as *const c_char));
+    (*eap).arg = skipwhite(arg as *const c_char);
     *arg = 0; // NUL-terminate the value
 
     match opt_kind {
@@ -704,7 +681,7 @@ pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
             if nvim_docmd_check_ff_value(cmd.add(val_offset as usize) as *const c_char) == FAIL {
                 return FAIL;
             }
-            nvim_eap_set_force_ff(eap, *cmd.add(val_offset as usize) as u8 as c_int);
+            (*eap).force_ff = *cmd.add(val_offset as usize) as u8 as c_int;
         }
         OptKind::Enc => {
             // Make 'fileencoding' lower case
@@ -713,7 +690,7 @@ pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
                 *p = nvim_docmd_tolower_asc(*p as c_int) as c_char;
                 p = p.add(1);
             }
-            nvim_eap_set_force_enc(eap, val_offset);
+            (*eap).force_enc = val_offset;
         }
         OptKind::Bad => {
             if rs_get_bad_opt(cmd.add(val_offset as usize) as *const c_char, eap) == FAIL {
@@ -830,9 +807,9 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
         return;
     }
 
-    let argt = nvim_eap_get_argt(eap);
-    let cmdidx = nvim_eap_get_cmdidx(eap);
-    let eap_arg = nvim_eap_get_arg(eap);
+    let argt = (*eap).argt;
+    let cmdidx = (*eap).cmdidx;
+    let eap_arg = (*eap).arg;
 
     let mut p = rs_skip_grep_pat(eap);
 
@@ -884,7 +861,7 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
                     nvim_docmd_strmove(p.sub(1), p as *const c_char);
                     p = p.sub(1);
                 } else {
-                    nvim_eap_set_nextcmd(eap, rs_check_nextcmd(p as *const c_char));
+                    (*eap).nextcmd = rs_check_nextcmd(p as *const c_char);
                     *p = 0;
                     break;
                 }
@@ -898,7 +875,7 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
 
     // Remove trailing spaces if not EX_NOTRLCOM
     if (argt & crate::table::EX_NOTRLCOM) == 0 {
-        nvim_docmd_del_trailing_spaces(nvim_eap_get_arg(eap));
+        nvim_docmd_del_trailing_spaces((*eap).arg);
     }
 }
 
@@ -918,7 +895,7 @@ pub unsafe extern "C" fn rs_replace_makeprg(
 ) -> *mut c_char {
     use crate::commands::{CMD_GREP, CMD_GREPADD, CMD_LGREP, CMD_LGREPADD, CMD_LMAKE, CMD_MAKE};
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let isgrep = (cmdidx == CMD_GREP
         || cmdidx == CMD_LGREP
         || cmdidx == CMD_GREPADD

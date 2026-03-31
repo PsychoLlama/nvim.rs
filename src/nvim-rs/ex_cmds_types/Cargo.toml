@@ -1,0 +1,10 @@
+[package]
+name = "nvim-ex-cmds-types"
+version = "0.1.0"
+edition = "2021"
+description = "Shared FFI types for Ex command argument structs"
+
+[dependencies]
+
+[lints]
+workspace = true

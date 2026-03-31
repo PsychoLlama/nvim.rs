@@ -12,6 +12,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(dead_code)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::{errors, messages, BufHandle};
@@ -634,8 +635,7 @@ extern "C" {
     fn nvim_win_get_cursor_lnum(wp: crate::WinHandle) -> c_int;
     fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
     fn msg_ext_set_kind(kind: *const c_char);
-    fn nvim_eap_get_arg(eap: *const c_void) -> *const c_char;
-    fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
+    fn nvim_eap_get_forceit(eap: *const ExArg) -> bool;
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
@@ -680,8 +680,8 @@ const MAXPATHL: usize = 4096;
 /// # Safety
 ///
 /// Calls external C functions. `eap` must be a valid `exarg_T*`.
-pub unsafe fn buflist_list_impl(eap: *const c_void) {
-    let eap_arg = nvim_eap_get_arg(eap);
+pub unsafe fn buflist_list_impl(eap: *const ExArg) {
+    let eap_arg = (*eap).arg;
     let forceit = nvim_eap_get_forceit(eap);
     let curbuf = nvim_get_curbuf();
     let curwin = nvim_get_curwin();
@@ -876,13 +876,13 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
 ///
 /// Must be called on the Neovim main thread with valid `eap`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_buflist_list(eap: *const c_void) {
+pub unsafe extern "C" fn rs_buflist_list(eap: *const ExArg) {
     buflist_list_impl(eap);
 }
 
 /// C export: `buflist_list`.
 #[unsafe(export_name = "buflist_list")]
-pub unsafe extern "C" fn buflist_list_export(eap: *const c_void) {
+pub unsafe extern "C" fn buflist_list_export(eap: *const ExArg) {
     buflist_list_impl(eap);
 }
 

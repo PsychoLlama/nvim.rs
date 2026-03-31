@@ -4,6 +4,7 @@
 //! quickfix command arguments and implementing command logic.
 
 use crate::ffi_types::QfListPtr;
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::{nvim_qf_get_curlist_idx, nvim_qf_get_listcount, QfInfoHandle};
@@ -13,7 +14,7 @@ use crate::{nvim_qf_get_curlist_idx, nvim_qf_get_listcount, QfInfoHandle};
 // =============================================================================
 
 /// Opaque handle to `exarg_T`
-type EapHandle = *mut c_void;
+type EapHandle = *mut ExArg;
 
 /// Opaque handle to `qf_info_T` (mutable)
 type QfInfoHandleMut = *mut c_void;
@@ -1098,7 +1099,7 @@ const fn hgr_au_name(cmdidx: c_int) -> Option<&'static std::ffi::CStr> {
 /// `eap` must be a valid pointer to a C `exarg_T`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     // 1. Pre-check: fire EVENT_QUICKFIXCMDPRE, check aborting()
     // Inlined from nvim_hgr_pre_check.
@@ -1151,7 +1152,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     nvim_incr_quickfix_busy();
 
     // 4a. Build command title and create new quickfix list
-    let eap_arg = nvim_eap_get_arg(eap);
+    let eap_arg = (*eap).arg;
     let cmdline = nvim_eap_get_cmdlinep_deref_make(eap);
     let mut title_buf = [0i8; 1024];
     rs_qf_cmdtitle(cmdline, title_buf.as_mut_ptr(), title_buf.len());
@@ -1289,10 +1290,6 @@ type LinenrT = i64;
 extern "C" {
     #[link_name = "rs_qf_cmd_get_stack"]
     fn nvim_qf_cmd_get_stack(eap: EapHandle, print_emsg: bool) -> QfInfoHandleMut;
-    fn nvim_eap_get_cmdidx(eap: EapHandle) -> c_int;
-    fn nvim_eap_get_addr_count(eap: EapHandle) -> c_int;
-    fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
-    fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
     #[link_name = "rs_qf_msg"]
     fn nvim_qf_msg(qi: QfInfoHandleMut, which: c_int, lead: *const u8);
@@ -1339,8 +1336,8 @@ pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
-    let addr_count = nvim_eap_get_addr_count(eap);
+    let cmdidx = (*eap).cmdidx;
+    let addr_count = (*eap).addr_count;
     let is_do_cmd =
         cmdidx == CMD_CDO || cmdidx == CMD_LDO || cmdidx == CMD_CFDO || cmdidx == CMD_LFDO;
 
@@ -1348,7 +1345,7 @@ pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
     // For other commands, compute the target error number from the address or command type.
     let errornr = if is_do_cmd {
         let n = if addr_count > 0 {
-            let line1 = nvim_eap_get_line1(eap);
+            let line1 = (*eap).line1;
             if line1 >= 0 {
                 line1 as c_int
             } else {
@@ -1361,7 +1358,7 @@ pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
         let qfl = nvim_qf_get_curlist_mut(qi);
         crate::filter::rs_qf_get_nth_valid_entry_do(qfl, n, fdo)
     } else if addr_count > 0 {
-        nvim_eap_get_line2(eap) as c_int
+        (*eap).line2 as c_int
     } else {
         match cmdidx {
             CMD_CC | CMD_LL => 0,
@@ -1394,8 +1391,8 @@ pub unsafe extern "C" fn rs_ex_cnext(eap: EapHandle) {
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
-    let addr_count = nvim_eap_get_addr_count(eap);
+    let cmdidx = (*eap).cmdidx;
+    let addr_count = (*eap).addr_count;
 
     let errornr: c_int = if addr_count > 0
         && cmdidx != CMD_CDO
@@ -1403,7 +1400,7 @@ pub unsafe extern "C" fn rs_ex_cnext(eap: EapHandle) {
         && cmdidx != CMD_CFDO
         && cmdidx != CMD_LFDO
     {
-        nvim_eap_get_line2(eap) as c_int
+        (*eap).line2 as c_int
     } else {
         1
     };
@@ -1438,11 +1435,11 @@ pub unsafe extern "C" fn rs_qf_age(eap: EapHandle) {
         return;
     }
 
-    let addr_count = nvim_eap_get_addr_count(eap);
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let addr_count = (*eap).addr_count;
+    let cmdidx = (*eap).cmdidx;
 
     let mut count = if addr_count != 0 {
-        nvim_eap_get_line2(eap) as c_int
+        (*eap).line2 as c_int
     } else {
         1
     };
@@ -1482,14 +1479,14 @@ pub unsafe extern "C" fn rs_qf_age(eap: EapHandle) {
 pub unsafe extern "C" fn rs_qf_history(eap: EapHandle) {
     let qi = nvim_qf_cmd_get_stack(eap, false);
 
-    if nvim_eap_get_addr_count(eap) > 0 {
+    if (*eap).addr_count > 0 {
         if qi.is_null() {
             emsg(c"E776: No location list".as_ptr());
             return;
         }
 
         // Jump to the specified quickfix list
-        let line2 = nvim_eap_get_line2(eap) as c_int;
+        let line2 = (*eap).line2 as c_int;
         let listcount = nvim_qf_get_listcount(qi);
         if line2 > 0 && line2 <= listcount {
             nvim_qf_set_curlist_idx(qi, line2 - 1);
@@ -1562,13 +1559,13 @@ pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
 /// `eap` must be a valid pointer to a C `exarg_T`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
-    let addr_count = nvim_eap_get_addr_count(eap);
-    if addr_count > 0 && nvim_eap_get_line2(eap) <= 0 {
+    let addr_count = (*eap).addr_count;
+    if addr_count > 0 && (*eap).line2 <= 0 {
         emsg(c"E16: Invalid range".as_ptr());
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     // Check whether the current buffer has any quickfix entries
     let buf_has_flag = if cmdidx == CMD_CABOVE
@@ -1597,11 +1594,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
         return;
     }
 
-    let n = if addr_count > 0 {
-        nvim_eap_get_line2(eap)
-    } else {
-        0
-    };
+    let n = if addr_count > 0 { (*eap).line2 } else { 0 };
 
     let dir: c_int = if cmdidx == CMD_CABOVE || cmdidx == CMD_LABOVE {
         BACKWARD
@@ -1620,7 +1613,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
 
     let bnr = nvim_qf_curbuf_fnum();
     let pos = nvim_qf_curwin_pos_adj();
-    let errornr = rs_qf_find_nth_adj_entry(qfl, bnr, pos, n, dir, linewise);
+    let errornr = rs_qf_find_nth_adj_entry(qfl, bnr, pos, n.into(), dir, linewise);
     if errornr > 0 {
         crate::navigate::jump_machinery::rs_qf_jump_newwin(qi, 0, errornr, 0, false);
     } else {
@@ -1804,9 +1797,9 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
 
     nvim_incr_quickfix_busy();
 
-    let addr_count = nvim_eap_get_addr_count(eap);
+    let addr_count = (*eap).addr_count;
     let height = if addr_count != 0 {
-        nvim_eap_get_line2(eap) as c_int
+        (*eap).line2 as c_int
     } else {
         let qfl_temp = nvim_qf_get_curlist_mut(qi);
         rs_qf_calc_window_height(qfl_temp, 3, QF_WINHEIGHT)
@@ -2042,7 +2035,7 @@ pub unsafe extern "C" fn rs_qf_get_valid_size_eap(eap: EapHandle) -> usize {
     if qi.is_null() {
         return 0;
     }
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let count_files = !(cmdidx == CMD_CDO_P4 || cmdidx == CMD_LDO_P4);
     let qfl = nvim_qf_get_curlist_mut(qi);
     #[allow(clippy::cast_sign_loss)]
@@ -2082,7 +2075,7 @@ pub unsafe extern "C" fn rs_qf_get_cur_valid_idx_eap(eap: EapHandle) -> c_int {
     if qi.is_null() {
         return 1;
     }
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let count_files = cmdidx == CMD_CFDO_P4 || cmdidx == CMD_LFDO_P4;
     let qfl = nvim_qf_get_curlist_mut(qi);
     let qf_index = (*qfl).qf_index;
@@ -2185,7 +2178,6 @@ pub unsafe extern "C" fn rs_qf_cmdtitle(
 
 extern "C" {
     // nvim_eap_get_arg from ex_docmd.c — returns mut char* (we only read)
-    fn nvim_eap_get_arg(eap: EapHandle) -> *mut std::ffi::c_char;
     // nvim_eap_get_forceit from indent_ffi.c — returns bool
     // (already declared in the existing extern block above)
     fn get_list_range(arg: *mut *mut std::ffi::c_char, idx1: *mut c_int, idx2: *mut c_int) -> bool;
@@ -2224,7 +2216,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     }
 
     // Get the arg pointer (mutable C string for get_list_range)
-    let mut arg = nvim_eap_get_arg(eap);
+    let mut arg = (*eap).arg;
     let forceit = nvim_eap_get_forceit(eap);
 
     // Handle '+' prefix: list from current entry

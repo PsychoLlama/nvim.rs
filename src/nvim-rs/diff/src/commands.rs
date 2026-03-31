@@ -5,6 +5,7 @@
 
 #![allow(clippy::must_use_candidate)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_void;
 use std::os::raw::c_int;
 
@@ -107,14 +108,7 @@ extern "C" {
     #[link_name = "diff_redraw"]
     fn rs_diff_redraw(dofold: bool);
     #[link_name = "ex_diffupdate"]
-    fn rs_diff_ex_diffupdate(eap: *const c_void);
-    fn nvim_eap_get_arg(eap: *const c_void) -> *mut c_char;
-    fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_line1(eap: *const c_void) -> LinenrT;
-    fn nvim_eap_get_line2(eap: *const c_void) -> LinenrT;
-    fn nvim_eap_set_line1(eap: *mut c_void, line: LinenrT);
-    fn nvim_eap_set_line2(eap: *mut c_void, line: LinenrT);
+    fn rs_diff_ex_diffupdate(eap: *const ExArg);
     fn nvim_diff_call_nv_ex_diffgetput(
         cmdidx: c_int,
         arg: *const c_char,
@@ -627,7 +621,7 @@ fn format_usize_to_buf(mut n: usize, buf: &mut [u8; 32]) -> &[u8] {
 /// # Safety
 /// Calls C functions that access global state.
 #[export_name = "ex_diffthis"]
-pub unsafe extern "C" fn rs_ex_diffthis(_eap: *mut c_void) {
+pub unsafe extern "C" fn rs_ex_diffthis(_eap: *mut ExArg) {
     let curwin = nvim_get_curwin();
     crate::winopts::rs_diff_win_options(curwin, true);
 }
@@ -777,10 +771,10 @@ unsafe fn diffgetput_resolve_arg(
 /// # Safety
 /// `eap` must be a valid pointer. Calls C functions.
 #[allow(clippy::cast_possible_wrap)]
-unsafe fn diffgetput_adjust_range(eap: *mut c_void) {
+unsafe fn diffgetput_adjust_range(eap: *mut ExArg) {
     use crate::buffer::rs_diff_check_with_linestatus;
 
-    let line1 = nvim_eap_get_line1(eap);
+    let line1 = (*eap).line1;
     let curwin = nvim_get_curwin();
     let line_count = nvim_diff_curbuf_ml_line_count();
 
@@ -805,9 +799,9 @@ unsafe fn diffgetput_adjust_range(eap: *mut c_void) {
     };
 
     if do_increment {
-        nvim_eap_set_line2(eap, nvim_eap_get_line2(eap) + 1);
+        (*eap).line2 += 1;
     } else if line1 > 0 {
-        nvim_eap_set_line1(eap, line1 - 1);
+        (*eap).line1 = line1 - 1;
     }
 }
 
@@ -1080,7 +1074,7 @@ pub unsafe extern "C" fn rs_diffgetput(
 /// # Safety
 /// Calls C functions that access global state (curbuf, curwin, curtab).
 #[export_name = "ex_diffgetput"]
-pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
+pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut ExArg) {
     use crate::buffer::rs_diff_buf_idx_tp;
 
     let curtab = nvim_get_curtab();
@@ -1093,12 +1087,12 @@ pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
         return;
     }
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let cmd_diffput = nvim_diff_get_CMD_diffput();
     let cmd_diffget = nvim_diff_get_CMD_diffget();
 
     // Resolve the "other" buffer index.
-    let arg_ptr = nvim_eap_get_arg(eap);
+    let arg_ptr = (*eap).arg;
     let arg_empty = arg_ptr.is_null() || *arg_ptr == 0;
 
     let idx_other = if arg_empty {
@@ -1116,7 +1110,7 @@ pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
     nvim_diff_set_busy(true);
 
     // When no range given, include the line above or below the cursor.
-    if nvim_eap_get_addr_count(eap) == 0 {
+    if (*eap).addr_count == 0 {
         diffgetput_adjust_range(eap);
     }
 
@@ -1153,12 +1147,12 @@ pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
     }
 
     rs_diffgetput(
-        nvim_eap_get_addr_count(eap),
+        (*eap).addr_count,
         idx_cur,
         idx_from,
         idx_to,
-        nvim_eap_get_line1(eap),
-        nvim_eap_get_line2(eap),
+        (*eap).line1,
+        (*eap).line2,
     );
 
     // Restore curwin/curbuf and a few other things.

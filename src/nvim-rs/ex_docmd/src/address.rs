@@ -225,20 +225,6 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
 
     // eap field accessors
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_addr_type(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_addr_type(eap: ExArgHandle, t: c_int);
-    fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_set_line1(eap: ExArgHandle, line: i32);
-    fn nvim_eap_get_line2(eap: ExArgHandle) -> i32;
-    fn nvim_eap_set_line2(eap: ExArgHandle, line: i32);
-    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
-    fn nvim_eap_get_cmdlinep(eap: ExArgHandle) -> *mut *mut c_char;
-    fn nvim_eap_set_cmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_set_addr_count(eap: ExArgHandle, count: c_int);
-    fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
 
     // cmdnames table accessor
     fn nvim_docmd_cmdnames_addr_type(idx: c_int) -> c_int;
@@ -305,7 +291,7 @@ unsafe fn get_wincmd_addr_type(arg: *const c_char, eap: ExArgHandle) {
         b'S' | b's' | b'n' | b'j' | b'k' | b'T' | b'r' | b'R' | b'K' | b'J' | b'+' | b'-'
         | b'_' | b'|' | b']' | b'g' | b'v' | b'h' | b'l' | b'H' | b'L' | b'>' | b'<' | b'}'
         | b'f' | b'F' | b'i' | b'd' => {
-            nvim_eap_set_addr_type(eap, ADDR_OTHER);
+            (*eap).addr_type = ADDR_OTHER;
         }
         x if x == CTRL_S
             || x == CTRL_N
@@ -322,31 +308,31 @@ unsafe fn get_wincmd_addr_type(arg: *const c_char, eap: ExArgHandle) {
             || x == CTRL_I
             || x == CTRL_D =>
         {
-            nvim_eap_set_addr_type(eap, ADDR_OTHER);
+            (*eap).addr_type = ADDR_OTHER;
         }
 
         // buffer number → ADDR_BUFFERS
         b'^' => {
-            nvim_eap_set_addr_type(eap, ADDR_BUFFERS);
+            (*eap).addr_type = ADDR_BUFFERS;
         }
         x if x == CTRL_HAT => {
-            nvim_eap_set_addr_type(eap, ADDR_BUFFERS);
+            (*eap).addr_type = ADDR_BUFFERS;
         }
 
         // window number → ADDR_WINDOWS
         b'q' | b'c' | b'o' | b'w' | b'W' | b'x' => {
-            nvim_eap_set_addr_type(eap, ADDR_WINDOWS);
+            (*eap).addr_type = ADDR_WINDOWS;
         }
         x if x == CTRL_Q || x == CTRL_C || x == CTRL_O || x == CTRL_W || x == CTRL_X => {
-            nvim_eap_set_addr_type(eap, ADDR_WINDOWS);
+            (*eap).addr_type = ADDR_WINDOWS;
         }
 
         // no count → ADDR_NONE
         b'z' | b'P' | b't' | b'b' | b'p' | b'=' => {
-            nvim_eap_set_addr_type(eap, ADDR_NONE);
+            (*eap).addr_type = ADDR_NONE;
         }
         x if x == CTRL_Z || x == CTRL_T || x == CTRL_B || x == CTRL_P || x == CAR => {
-            nvim_eap_set_addr_type(eap, ADDR_NONE);
+            (*eap).addr_type = ADDR_NONE;
         }
 
         _ => {}
@@ -362,7 +348,7 @@ unsafe fn get_wincmd_addr_type(arg: *const c_char, eap: ExArgHandle) {
 /// Replaces C `set_cmd_addr_type()`.
 #[export_name = "set_cmd_addr_type"]
 pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     // User commands have addr_type set by find_ucmd
     if cmdidx < 0 {
@@ -371,9 +357,9 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
 
     if cmdidx != crate::commands::CMD_SIZE {
         let addr_type = nvim_docmd_cmdnames_addr_type(cmdidx);
-        nvim_eap_set_addr_type(eap, addr_type);
+        (*eap).addr_type = addr_type;
     } else {
-        nvim_eap_set_addr_type(eap, ADDR_LINES);
+        (*eap).addr_type = ADDR_LINES;
     }
 
     // :wincmd range depends on the argument
@@ -386,7 +372,7 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
     if (cmdidx == crate::commands::CMD_CC || cmdidx == crate::commands::CMD_LL)
         && nvim_docmd_bt_quickfix_curbuf() != 0
     {
-        nvim_eap_set_addr_type(eap, ADDR_OTHER);
+        (*eap).addr_type = ADDR_OTHER;
     }
 }
 
@@ -399,7 +385,7 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
 /// Replaces C `get_cmd_default_range()`.
 #[export_name = "get_cmd_default_range"]
 pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
-    let addr_type = nvim_eap_get_addr_type(eap);
+    let addr_type = (*eap).addr_type;
     match addr_type {
         x if x == ADDR_LINES || x == ADDR_OTHER => {
             let cursor_lnum = nvim_docmd_get_curwin_cursor_lnum();
@@ -438,44 +424,44 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
 /// Replaces C `set_cmd_dflall_range()`.
 #[export_name = "set_cmd_dflall_range"]
 pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
-    nvim_eap_set_line1(eap, 1);
-    let addr_type = nvim_eap_get_addr_type(eap);
+    (*eap).line1 = 1;
+    let addr_type = (*eap).addr_type;
 
     match addr_type {
         x if x == ADDR_LINES || x == ADDR_OTHER => {
-            nvim_eap_set_line2(eap, nvim_docmd_get_curbuf_line_count());
+            (*eap).line2 = nvim_docmd_get_curbuf_line_count();
         }
         x if x == ADDR_LOADED_BUFFERS => {
             let first_fnum = nvim_docmd_first_loaded_buf_fnum();
-            nvim_eap_set_line1(eap, first_fnum);
+            (*eap).line1 = first_fnum;
             let last_fnum = nvim_docmd_last_loaded_buf_fnum();
-            nvim_eap_set_line2(eap, last_fnum);
+            (*eap).line2 = last_fnum;
         }
         x if x == ADDR_BUFFERS => {
-            nvim_eap_set_line1(eap, nvim_docmd_firstbuf_fnum());
-            nvim_eap_set_line2(eap, nvim_docmd_lastbuf_fnum());
+            (*eap).line1 = nvim_docmd_firstbuf_fnum();
+            (*eap).line2 = nvim_docmd_lastbuf_fnum();
         }
         x if x == ADDR_WINDOWS => {
-            nvim_eap_set_line2(eap, nvim_docmd_last_win_nr() as i32);
+            (*eap).line2 = nvim_docmd_last_win_nr() as i32;
         }
         x if x == ADDR_TABS => {
-            nvim_eap_set_line2(eap, nvim_docmd_last_tab_nr() as i32);
+            (*eap).line2 = nvim_docmd_last_tab_nr() as i32;
         }
         x if x == ADDR_TABS_RELATIVE => {
-            nvim_eap_set_line2(eap, 1);
+            (*eap).line2 = 1;
         }
         x if x == ADDR_ARGUMENTS => {
             let argcount = nvim_docmd_get_argcount();
             if argcount == 0 {
-                nvim_eap_set_line1(eap, 0);
-                nvim_eap_set_line2(eap, 0);
+                (*eap).line1 = 0;
+                (*eap).line2 = 0;
             } else {
-                nvim_eap_set_line2(eap, argcount as i32);
+                (*eap).line2 = argcount as i32;
             }
         }
         x if x == ADDR_QUICKFIX_VALID => {
             let size = nvim_docmd_qf_get_valid_size(eap) as i32;
-            nvim_eap_set_line2(eap, if size == 0 { 1 } else { size });
+            (*eap).line2 = if size == 0 { 1 } else { size };
         }
         x if x == ADDR_NONE || x == ADDR_UNSIGNED || x == ADDR_QUICKFIX => {
             nvim_docmd_iemsg_dflall();
@@ -493,14 +479,14 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
 /// Replaces C `get_tabpage_arg()`.
 #[export_name = "get_tabpage_arg"]
 pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let unaccept_arg0: c_int = if cmdidx == crate::commands::CMD_TABMOVE {
         0
     } else {
         1
     };
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let last_tab_nr = nvim_docmd_last_tab_nr();
 
     if !arg.is_null() && *arg != 0 {
@@ -525,18 +511,18 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
                 if nvim_rs_valid_tabpage(nvim_get_lastused_tabpage()) != 0 {
                     tab_number = nvim_rs_tabpage_index(nvim_get_lastused_tabpage());
                 } else {
-                    nvim_eap_set_errmsg(eap, nvim_docmd_ex_errmsg_invargval(arg));
+                    (*eap).errmsg = nvim_docmd_ex_errmsg_invargval(arg);
                     return 0;
                 }
             } else if p == p_save || *p_save as u8 == b'-' || *p != 0 || tab_number > last_tab_nr {
-                nvim_eap_set_errmsg(eap, nvim_docmd_ex_errmsg_invarg2(arg));
+                (*eap).errmsg = nvim_docmd_ex_errmsg_invarg2(arg);
                 return 0;
             }
         } else {
             if *p_save == 0 {
                 tab_number = 1;
             } else if p == p_save || *p_save as u8 == b'-' || *p != 0 || tab_number == 0 {
-                nvim_eap_set_errmsg(eap, nvim_docmd_ex_errmsg_invarg2(arg));
+                (*eap).errmsg = nvim_docmd_ex_errmsg_invarg2(arg);
                 return 0;
             }
             tab_number = tab_number * relative + nvim_rs_tabpage_index(nvim_get_curtab());
@@ -546,21 +532,18 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
         }
 
         if tab_number < unaccept_arg0 || tab_number > last_tab_nr {
-            nvim_eap_set_errmsg(eap, nvim_docmd_ex_errmsg_invarg2(arg));
+            (*eap).errmsg = nvim_docmd_ex_errmsg_invarg2(arg);
         }
         tab_number
-    } else if nvim_eap_get_addr_count(eap) > 0 {
-        if unaccept_arg0 != 0 && nvim_eap_get_line2(eap) == 0 {
-            nvim_eap_set_errmsg(
-                eap,
-                crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char,
-            );
+    } else if (*eap).addr_count > 0 {
+        if unaccept_arg0 != 0 && (*eap).line2 == 0 {
+            (*eap).errmsg = crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
             return 0;
         }
-        let mut tab_number = nvim_eap_get_line2(eap);
+        let mut tab_number = (*eap).line2;
         if unaccept_arg0 == 0 {
-            let mut cmdp = nvim_eap_get_cmd(eap);
-            let cmdlinep = nvim_eap_get_cmdlinep(eap);
+            let mut cmdp = (*eap).cmd;
+            let cmdlinep = (*eap).cmdlinep;
             let cmdline_start = *cmdlinep;
             loop {
                 cmdp = cmdp.sub(1);
@@ -577,10 +560,7 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
             if *cmdp as u8 == b'-' {
                 tab_number -= 1;
                 if tab_number < unaccept_arg0 as i32 {
-                    nvim_eap_set_errmsg(
-                        eap,
-                        crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char,
-                    );
+                    (*eap).errmsg = crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }
         }
@@ -679,7 +659,7 @@ extern "C" {
     fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 
     // parse_cmd_address helpers
-    fn nvim_eap_is_user_cmdidx(eap: ExArgHandle) -> bool;
+    fn nvim_docmd_is_user_cmdidx_i(cmdidx: c_int) -> bool;
     fn nvim_docmd_mark_get_visual(ch: c_int) -> *mut c_void;
     fn check_cursor(win: *mut c_void);
     fn check_cursor_col(win: *mut c_void);
@@ -1179,19 +1159,13 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
 
     // Repeat for all ',' or ';' separated addresses.
     loop {
-        nvim_eap_set_line1(eap, nvim_eap_get_line2(eap));
-        nvim_eap_set_line2(eap, rs_get_cmd_default_range(eap));
-
-        let mut cmd = skipwhite(nvim_eap_get_cmd(eap));
-        nvim_eap_set_cmd(eap, cmd);
-
-        let addr_type = nvim_eap_get_addr_type(eap);
-        let skip = nvim_eap_get_skip(eap) != 0;
-        let to_other_file = if nvim_eap_get_addr_count(eap) == 0 {
-            1
-        } else {
-            0
-        };
+        (*eap).line1 = (*eap).line2;
+        (*eap).line2 = rs_get_cmd_default_range(eap);
+        let mut cmd = skipwhite((*eap).cmd);
+        (*eap).cmd = cmd;
+        let addr_type = (*eap).addr_type;
+        let skip = (*eap).skip != 0;
+        let to_other_file = if (*eap).addr_count == 0 { 1 } else { 0 };
         lnum = get_address_impl(
             eap,
             &mut cmd,
@@ -1202,10 +1176,10 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
             address_count,
             errormsg,
         );
-        nvim_eap_set_cmd(eap, cmd);
+        (*eap).cmd = cmd;
         address_count += 1;
 
-        if nvim_eap_get_cmd(eap).is_null() {
+        if (*eap).cmd.is_null() {
             // error detected
             if need_check_cursor {
                 check_cursor(nvim_get_curwin());
@@ -1214,33 +1188,33 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
         }
 
         if lnum == MAXLNUM {
-            let cmd = nvim_eap_get_cmd(eap);
+            let cmd = (*eap).cmd;
             if *cmd as u8 == b'%' {
                 // '%' - all lines
-                nvim_eap_set_cmd(eap, cmd.add(1));
-                let addr_type = nvim_eap_get_addr_type(eap);
+                (*eap).cmd = cmd.add(1);
+                let addr_type = (*eap).addr_type;
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
-                        nvim_eap_set_line1(eap, 1);
-                        nvim_eap_set_line2(eap, nvim_docmd_get_curbuf_line_count());
+                        (*eap).line1 = 1;
+                        (*eap).line2 = nvim_docmd_get_curbuf_line_count();
                     }
                     ADDR_LOADED_BUFFERS => {
-                        nvim_eap_set_line1(eap, nvim_docmd_first_loaded_buf_fnum() as i32);
-                        nvim_eap_set_line2(eap, nvim_docmd_last_loaded_buf_fnum() as i32);
+                        (*eap).line1 = nvim_docmd_first_loaded_buf_fnum() as i32;
+                        (*eap).line2 = nvim_docmd_last_loaded_buf_fnum() as i32;
                     }
                     ADDR_BUFFERS => {
-                        nvim_eap_set_line1(eap, nvim_docmd_firstbuf_fnum() as i32);
-                        nvim_eap_set_line2(eap, nvim_docmd_lastbuf_fnum() as i32);
+                        (*eap).line1 = nvim_docmd_firstbuf_fnum() as i32;
+                        (*eap).line2 = nvim_docmd_lastbuf_fnum() as i32;
                     }
                     ADDR_WINDOWS | ADDR_TABS => {
-                        if nvim_eap_is_user_cmdidx(eap) {
-                            nvim_eap_set_line1(eap, 1);
+                        if nvim_docmd_is_user_cmdidx_i((*eap).cmdidx) {
+                            (*eap).line1 = 1;
                             let last = if addr_type == ADDR_WINDOWS {
                                 nvim_docmd_last_win_nr()
                             } else {
                                 nvim_docmd_last_tab_nr()
                             };
-                            nvim_eap_set_line2(eap, last as i32);
+                            (*eap).line2 = last as i32;
                         } else {
                             // there is no Vim command which uses '%' and
                             // ADDR_WINDOWS or ADDR_TABS
@@ -1261,31 +1235,31 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     ADDR_ARGUMENTS => {
                         let argcount = nvim_docmd_get_argcount();
                         if argcount == 0 {
-                            nvim_eap_set_line1(eap, 0);
-                            nvim_eap_set_line2(eap, 0);
+                            (*eap).line1 = 0;
+                            (*eap).line2 = 0;
                         } else {
-                            nvim_eap_set_line1(eap, 1);
-                            nvim_eap_set_line2(eap, argcount as i32);
+                            (*eap).line1 = 1;
+                            (*eap).line2 = argcount as i32;
                         }
                     }
                     ADDR_QUICKFIX_VALID => {
-                        nvim_eap_set_line1(eap, 1);
+                        (*eap).line1 = 1;
                         let mut size = nvim_docmd_qf_get_valid_size(eap) as i32;
                         if size == 0 {
                             size = 1;
                         }
-                        nvim_eap_set_line2(eap, size);
+                        (*eap).line2 = size;
                     }
                     ADDR_NONE => {
                         // Will give an error later if a range is found.
                     }
                     _ => {}
                 }
-                let count = nvim_eap_get_addr_count(eap) + 1;
-                nvim_eap_set_addr_count(eap, count);
+                let count = (*eap).addr_count + 1;
+                (*eap).addr_count = count;
             } else if *cmd as u8 == b'*' {
                 // '*' - visual area
-                let addr_type = nvim_eap_get_addr_type(eap);
+                let addr_type = (*eap).addr_type;
                 if addr_type != ADDR_LINES {
                     *errormsg = crate::gt(crate::E_INVRANGE_STR.as_ptr());
                     if need_check_cursor {
@@ -1294,8 +1268,8 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     return 0; // FAIL
                 }
 
-                nvim_eap_set_cmd(eap, cmd.add(1));
-                if nvim_eap_get_skip(eap) == 0 {
+                (*eap).cmd = cmd.add(1);
+                if (*eap).skip == 0 {
                     let fm = nvim_docmd_mark_get_visual(b'<' as c_int);
                     if nvim_docmd_mark_check(fm, errormsg) == 0 {
                         if need_check_cursor {
@@ -1304,7 +1278,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                         return 0; // FAIL
                     }
                     // assert(fm != NULL) — mark_check succeeded
-                    nvim_eap_set_line1(eap, nvim_docmd_mark_lnum(fm));
+                    (*eap).line1 = nvim_docmd_mark_lnum(fm);
                     let fm = nvim_docmd_mark_get_visual(b'>' as c_int);
                     if nvim_docmd_mark_check(fm, errormsg) == 0 {
                         if need_check_cursor {
@@ -1313,25 +1287,24 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                         return 0; // FAIL
                     }
                     // assert(fm != NULL)
-                    nvim_eap_set_line2(eap, nvim_docmd_mark_lnum(fm));
-                    let count = nvim_eap_get_addr_count(eap) + 1;
-                    nvim_eap_set_addr_count(eap, count);
+                    (*eap).line2 = nvim_docmd_mark_lnum(fm);
+                    let count = (*eap).addr_count + 1;
+                    (*eap).addr_count = count;
                 }
             }
         } else {
-            nvim_eap_set_line2(eap, lnum);
+            (*eap).line2 = lnum;
         }
 
-        let count = nvim_eap_get_addr_count(eap) + 1;
-        nvim_eap_set_addr_count(eap, count);
-
-        let cmd = nvim_eap_get_cmd(eap);
+        let count = (*eap).addr_count + 1;
+        (*eap).addr_count = count;
+        let cmd = (*eap).cmd;
         if *cmd as u8 == b';' {
-            if nvim_eap_get_skip(eap) == 0 {
-                nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
+            if (*eap).skip == 0 {
+                nvim_docmd_set_curwin_cursor_lnum((*eap).line2);
                 // Don't leave the cursor on an illegal line or column, but do
                 // accept zero as address, so 0;/PATTERN/ works correctly.
-                if nvim_eap_get_line2(eap) > 0 {
+                if (*eap).line2 > 0 {
                     check_cursor(nvim_get_curwin());
                 } else {
                     check_cursor_col(nvim_get_curwin());
@@ -1341,15 +1314,14 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
         } else if *cmd as u8 != b',' {
             break;
         }
-        nvim_eap_set_cmd(eap, cmd.add(1));
+        (*eap).cmd = cmd.add(1);
     }
 
     // One address given: set start and end lines.
-    if nvim_eap_get_addr_count(eap) == 1 {
-        nvim_eap_set_line1(eap, nvim_eap_get_line2(eap));
-        // ... but only implicit: really no address given
+    if (*eap).addr_count == 1 {
+        (*eap).line1 = (*eap).line2; // ... but only implicit: really no address given
         if lnum == MAXLNUM {
-            nvim_eap_set_addr_count(eap, 0);
+            (*eap).addr_count = 0;
         }
     }
 

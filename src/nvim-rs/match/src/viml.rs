@@ -12,6 +12,7 @@
 //! Note: The actual typval handling stays in C; this module provides
 //! validation and computation helpers.
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_int;
 
 use crate::add::{is_reserved_id, is_valid_matchadd_id, is_valid_matchaddpos_id};
@@ -322,11 +323,6 @@ extern "C" {
     fn semsg(fmt: *const std::ffi::c_char, ...);
     fn nvim_get_curwin() -> *mut WinHandle;
     // ex_match helpers
-    fn nvim_eap_get_line2(eap: *const std::ffi::c_void) -> i32;
-    fn nvim_eap_get_skip(eap: *const std::ffi::c_void) -> c_int;
-    fn nvim_eap_get_arg(eap: *const std::ffi::c_void) -> *mut std::ffi::c_char;
-    fn nvim_eap_set_nextcmd(eap: *mut std::ffi::c_void, p: *mut std::ffi::c_char);
-    fn nvim_eap_set_errmsg_const(eap: *mut std::ffi::c_void, msg: *const std::ffi::c_char);
     fn nvim_docmd_errmsg_trailing_arg(arg: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn ends_excmd(c: c_int) -> c_int;
@@ -690,10 +686,10 @@ pub unsafe extern "C" fn rs_f_matchdelete(
 ///
 /// `eap` must be a valid `exarg_T *` pointer.
 #[export_name = "ex_match"]
-pub unsafe extern "C" fn rs_ex_match(eap: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_ex_match(eap: *mut ExArg) {
     use std::ffi::c_char;
 
-    let line2 = nvim_eap_get_line2(eap.cast_const());
+    let line2 = (*eap.cast_const()).line2;
     let id: c_int = if line2 <= 3 {
         line2
     } else {
@@ -701,8 +697,8 @@ pub unsafe extern "C" fn rs_ex_match(eap: *mut std::ffi::c_void) {
         return;
     };
 
-    let skip = nvim_eap_get_skip(eap.cast_const()) != 0;
-    let arg = nvim_eap_get_arg(eap.cast_const());
+    let skip = (*eap.cast_const()).skip != 0;
+    let arg = (*eap.cast_const()).arg;
 
     // First clear any old pattern.
     if !skip {
@@ -743,7 +739,7 @@ pub unsafe extern "C" fn rs_ex_match(eap: *mut std::ffi::c_void) {
         if !skip {
             if *end != 0 && ends_excmd(i32::from(*skipwhite(end.add(1)) as u8)) == 0 {
                 xfree(g.cast());
-                nvim_eap_set_errmsg_const(eap, nvim_docmd_errmsg_trailing_arg(end));
+                (*eap).errmsg = nvim_docmd_errmsg_trailing_arg(end).cast();
                 return;
             }
             if *end != *p {
@@ -761,7 +757,7 @@ pub unsafe extern "C" fn rs_ex_match(eap: *mut std::ffi::c_void) {
         end
     };
 
-    nvim_eap_set_nextcmd(eap, find_nextcmd(end));
+    (*eap).nextcmd = find_nextcmd(end);
 }
 
 // =============================================================================

@@ -49,14 +49,6 @@ const MAXLNUM: LinenrT = 0x7FFF_FFFF;
 
 extern "C" {
     // eap accessors
-    fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_get_forceit(eap: ExArgHandle) -> bool;
-    fn nvim_eap_get_line2(eap: ExArgHandle) -> LinenrT;
-    fn nvim_eap_get_usefilter(eap: ExArgHandle) -> bool;
-    fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
-    fn nvim_eap_get_nextcmd(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_get_do_ecmd_cmd(eap: ExArgHandle) -> *mut c_char;
 
     // message functions
     fn emsg(s: *const c_char);
@@ -289,19 +281,19 @@ pub unsafe extern "C" fn nvim_docmd_tabpage_new_impl() {
 pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) -> c_int {
     let cmd_visual = nvim_docmd_get_CMD_visual();
     let cmd_view = nvim_docmd_get_CMD_view();
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
 
     if nvim_docmd_get_exmode_active() != 0 && (cmdidx == cmd_visual || cmdidx == cmd_view) {
         nvim_docmd_set_exmode_active(0);
         nvim_set_ex_pressedreturn(false);
 
-        let arg = nvim_eap_get_arg(eap);
+        let arg = (*eap).arg;
         if arg.is_null() || *arg as u8 == 0 {
             if nvim_get_global_busy() {
-                let nextcmd = nvim_eap_get_nextcmd(eap);
+                let nextcmd = (*eap).nextcmd;
                 if !nextcmd.is_null() {
                     stuffReadbuff(nextcmd);
-                    nvim_eap_set_nextcmd(eap, ptr::null_mut());
+                    (*eap).nextcmd = ptr::null_mut();
                 }
                 let save_rd = RedrawingDisabled;
                 RedrawingDisabled = 0;
@@ -357,7 +349,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fail_cleanup() {
 /// Accesses global window state.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
-    let do_ecmd_cmd = nvim_eap_get_do_ecmd_cmd(eap);
+    let do_ecmd_cmd = (*eap).do_ecmd_cmd;
     if !do_ecmd_cmd.is_null() {
         do_cmdline_cmd(do_ecmd_cmd);
     }
@@ -380,18 +372,18 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
 pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
     let empty = nvim_docmd_curbuf_ml_has_empty();
 
-    if nvim_eap_get_usefilter(eap) {
+    if (*eap).usefilter != 0 {
         // :r!cmd
         nvim_docmd_do_bang_read(eap);
         return;
     }
 
-    let line2 = nvim_eap_get_line2(eap);
+    let line2 = (*eap).line2;
     if u_save(line2, line2 + 1) == FAIL {
         return;
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let i = if arg.is_null() || *arg as u8 == 0 {
         if check_fname() == FAIL {
             return;
@@ -456,7 +448,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_checkhealth_impl(eap: ExArgHandle) {
         mods_len = nvim_docmd_add_win_cmd_modifiers_global(mods_ptr, mods.len());
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     let mut err_msg: *mut c_char = ptr::null_mut();
     let ok = nvim_docmd_checkhealth_exec_lua(mods_ptr, mods_len, arg, &mut err_msg);
     if ok != 0 {
@@ -515,13 +507,13 @@ pub unsafe extern "C" fn nvim_docmd_ex_terminal_impl(eap: ExArgHandle) {
             len = mods_len;
         }
     } else {
-        let forceit = nvim_eap_get_forceit(eap);
+        let forceit = (*eap).forceit != 0;
         let base: &[u8] = if forceit { b"enew!\0" } else { b"enew\0" };
         ptr::copy_nonoverlapping(base.as_ptr(), ex_cmd.as_mut_ptr(), base.len());
         len = base.len() - 1;
     }
 
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if !arg.is_null() && *arg as u8 != 0 {
         // Run {cmd} in 'shell'.
         let name = vim_strsave_escaped(arg, c"\"\\".as_ptr());
@@ -565,12 +557,12 @@ pub unsafe extern "C" fn nvim_docmd_ex_terminal_impl(eap: ExArgHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_ex_restart_impl(eap: ExArgHandle) {
     // Patch v:argv to include "-c <arg>" when it restarts.
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
     if !arg.is_null() && *arg as u8 != 0 {
         nvim_docmd_restart_patch_argv(arg);
     }
 
-    let do_ecmd_cmd = nvim_eap_get_do_ecmd_cmd(eap);
+    let do_ecmd_cmd = (*eap).do_ecmd_cmd;
     let quit_cmd_base: *const c_char = if !do_ecmd_cmd.is_null() {
         do_ecmd_cmd
     } else {
@@ -617,7 +609,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_restart_impl(eap: ExArgHandle) {
 /// Modifies global UI/channel state.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_ex_detach_impl(eap: ExArgHandle) {
-    if !eap.is_null() && nvim_eap_get_forceit(eap) {
+    if !eap.is_null() && (*eap).forceit != 0 {
         emsg(c"bang (!) not supported yet".as_ptr());
         return;
     }
@@ -653,11 +645,11 @@ pub unsafe extern "C" fn nvim_docmd_ex_detach_impl(eap: ExArgHandle) {
 /// Modifies global UI/channel state.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_ex_connect_impl(eap: ExArgHandle) {
-    let forceit = nvim_eap_get_forceit(eap);
+    let forceit = (*eap).forceit != 0;
     let stop_server = forceit && nvim_docmd_ui_active_count() == 1;
 
     let current_ui = nvim_docmd_get_current_ui();
-    let arg = nvim_eap_get_arg(eap);
+    let arg = (*eap).arg;
 
     if nvim_docmd_remote_ui_connect(current_ui, arg) == 0 {
         return;

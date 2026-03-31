@@ -1,5 +1,6 @@
 //! Implementation of `ex_retab()` — the `:retab` command.
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::{rs_tabstop_count, rs_tabstop_eq, rs_tabstop_first, rs_tabstop_fromto, rs_tabstop_set};
@@ -14,8 +15,8 @@ const UPD_NOT_VALID: c_int = 40;
 const MAXCOL: c_int = 0x7fffffff;
 const KEXTMARK_UNDO: c_int = 1;
 
-/// Opaque handle for exarg_T.
-type EapHandle = *mut c_void;
+/// Handle for exarg_T.
+type EapHandle = *mut ExArg;
 /// Opaque handle for buf_T.
 type BufHandle = *mut c_void;
 
@@ -33,9 +34,6 @@ unsafe fn ascii_isdigit(c: c_char) -> bool {
 extern "C" {
     static mut got_int: bool;
     // exarg_T field accessors
-    fn nvim_eap_get_arg(eap: EapHandle) -> *mut c_char;
-    fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
-    fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
 
     // Buffer operations
@@ -112,7 +110,7 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
     let save_list = nvim_curwin_w_p_list();
     nvim_curwin_set_w_p_list(0); // don't want list mode here
 
-    let mut ptr = nvim_eap_get_arg(eap);
+    let mut ptr = (*eap).arg;
 
     // Check for "-indentonly" flag
     if starts_with_indentonly(ptr) && is_whitespace_or_nul(*ptr.add(11)) {
@@ -139,8 +137,8 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
         new_ts_str = xmemdupz(new_ts_str_start, len);
     }
 
-    let line1 = nvim_eap_get_line1(eap);
-    let line2 = nvim_eap_get_line2(eap);
+    let line1 = (*eap).line1;
+    let line2 = (*eap).line2;
     let forceit = nvim_eap_get_forceit(eap);
 
     let mut lnum = line1;

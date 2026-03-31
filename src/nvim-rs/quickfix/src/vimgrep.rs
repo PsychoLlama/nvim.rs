@@ -8,6 +8,7 @@
 #![allow(clippy::cast_sign_loss)]
 
 use crate::ffi_types::QfListPtr;
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 // =============================================================================
@@ -600,7 +601,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
 // =============================================================================
 
 /// Opaque handle to `exarg_T`
-type EapHandle = *mut c_void;
+type EapHandle = *mut ExArg;
 
 // CMD constants for vimgrep command variants (verified by _Static_assert in quickfix_shim.c)
 const CMD_GREPADD: c_int = 173;
@@ -615,11 +616,7 @@ const VGR_NOJUMP: c_int = 2;
 extern "C" {
     // eap accessors
     fn nvim_eap_get_cmdlinep_deref_make(eap: EapHandle) -> *mut c_char;
-    fn nvim_eap_get_addr_count(eap: EapHandle) -> c_int;
     // linenr_T = int32_t = c_int; commands.rs incorrectly declares as i64
-    fn nvim_eap_get_line2(eap: EapHandle) -> c_int;
-    fn nvim_eap_get_arg(eap: EapHandle) -> *mut c_char;
-    fn nvim_eap_get_cmdidx(eap: EapHandle) -> c_int;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
 
     // Pattern parsing
@@ -723,14 +720,14 @@ impl VgrArgs {
         let qf_title = xstrdup(title_buf.as_ptr().cast::<c_char>());
 
         // tomatch: line2 if addr_count > 0, else MAXLNUM
-        let tomatch: c_int = if nvim_eap_get_addr_count(eap) > 0 {
-            nvim_eap_get_line2(eap)
+        let tomatch: c_int = if (*eap).addr_count > 0 {
+            (*eap).line2
         } else {
             0x7fff_ffff // MAXLNUM
         };
 
         // Parse pattern and flags from eap->arg
-        let arg = nvim_eap_get_arg(eap);
+        let arg = (*eap).arg;
         let mut spat: *mut c_char = std::ptr::null_mut();
         let mut flags: c_int = 0;
         let p = rs_skip_vimgrep_pat(arg, &raw mut spat, &raw mut flags);
@@ -818,7 +815,7 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     if !nvim_check_can_set_curbuf_forceit(c_int::from(forceit)) {
         return;
     }
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let au_name = rs_vgr_get_auname(cmdidx);
     if !au_name.is_null()
         && apply_autocmds(

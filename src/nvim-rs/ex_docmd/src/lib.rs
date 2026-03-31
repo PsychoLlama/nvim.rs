@@ -34,11 +34,8 @@ pub mod table;
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-/// Opaque handle to a C `exarg_T` struct.
-///
-/// Rust code never dereferences this directly — all field access goes through
-/// C accessor functions (`nvim_eap_get_*`/`nvim_eap_set_*`).
-pub type ExArgHandle = *mut c_void;
+// Re-export shared ExArg types from the ex_cmds_types crate.
+pub use nvim_ex_cmds_types::{ExArg, ExArgHandle, LineGetterFn};
 
 /// Opaque handle to a C `cmdmod_T` struct.
 ///

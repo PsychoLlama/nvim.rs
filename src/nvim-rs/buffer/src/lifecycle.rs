@@ -8,6 +8,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(dead_code)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::{errors, BufHandle};
@@ -947,9 +948,7 @@ extern "C" {
     static mut swap_exists_did_quit: bool;
 
     fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c_int) -> c_int;
-    fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_cmd(eap: *const c_void) -> *const c_char;
-    fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
+    fn nvim_eap_get_forceit(eap: *const ExArg) -> bool;
     fn win_close(win: *mut c_void, free_buf: bool, free_tabpage: bool) -> c_int;
     fn enter_cleanup(csp: *mut CleanupT);
     fn leave_cleanup(csp: *mut CleanupT);
@@ -1080,10 +1079,10 @@ const SEA_QUIT: c_int = 2;
 /// # Safety
 /// Accesses global Neovim state. `eap` must be a valid `exarg_T*`.
 #[no_mangle]
-pub unsafe extern "C" fn goto_buffer(eap: *const c_void, start: c_int, dir: c_int, count: c_int) {
+pub unsafe extern "C" fn goto_buffer(eap: *const ExArg, start: c_int, dir: c_int, count: c_int) {
     let save_sea = swap_exists_action;
 
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let skip_help_buf = matches!(
         cmdidx,
         CMD_BNEXT
@@ -1106,7 +1105,7 @@ pub unsafe extern "C" fn goto_buffer(eap: *const c_void, start: c_int, dir: c_in
         swap_exists_action = SEA_DIALOG;
     }
 
-    let cmd_ptr = nvim_eap_get_cmd(eap);
+    let cmd_ptr = (*eap).cmd;
     let is_split = !cmd_ptr.is_null() && *cmd_ptr == b's' as c_char;
     let action = if is_split { DOBUF_SPLIT } else { DOBUF_GOTO };
     let flags = (if nvim_eap_get_forceit(eap) {
@@ -1155,7 +1154,7 @@ extern "C" {
         fnum: c_int,
         ffname: *const c_char,
         sfname: *const c_char,
-        eap: *mut c_void,
+        eap: *mut ExArg,
         newlnum: c_int,
         flags: c_int,
         oldwin: *mut c_void,
@@ -1758,7 +1757,7 @@ extern "C" {
     fn nvim_excmds_buf_ft_is_empty(buf: BufHandle) -> c_int;
     fn shortmess(x: c_int) -> bool;
     fn nvim_ecmd_curbuf_set_did_filetype(val: c_int);
-    fn open_buffer(read_stdin: bool, eap: *mut c_void, flags: c_int) -> c_int;
+    fn open_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> c_int;
     static msg_silent: c_int;
     fn buf_check_timestamp(buf: BufHandle);
     fn nvim_win_get_topline(wp: *mut c_void) -> c_int;
@@ -1964,8 +1963,6 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
 
 extern "C" {
     // eap accessors (ex_docmd.c)
-    fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
-    fn nvim_eap_get_line2(eap: *const c_void) -> c_int;
 
     // tabpage traversal (window globals)
     fn nvim_get_curtab() -> *mut c_void;
@@ -2039,20 +2036,20 @@ const WSP_BELOW: c_int = 0x40;
 /// Accesses global Neovim state. Must be called on the main thread.
 #[unsafe(export_name = "ex_buffer_all")]
 #[allow(clippy::too_many_lines)]
-pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut c_void) {
+pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
     let mut split_ret = OK;
     let mut open_wins: c_int = 0;
     let had_tab = nvim_docmd_get_cmdmod_cmod_tab();
 
     // Maximum number of windows to open.
-    let count: c_int = if nvim_eap_get_addr_count(eap) == 0 {
+    let count: c_int = if (*eap).addr_count == 0 {
         9999 // make as many windows as possible
     } else {
-        nvim_eap_get_line2(eap)
+        (*eap).line2
     };
 
     // When true also load inactive buffers.
-    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmdidx = (*eap).cmdidx;
     let all = cmdidx != CMD_UNHIDE && cmdidx != CMD_SUNHIDE;
 
     // Stop Visual mode; cursor and "VIsual" may be invalid after switching buffers.
