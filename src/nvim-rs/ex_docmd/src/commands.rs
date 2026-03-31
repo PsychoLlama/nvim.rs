@@ -2135,9 +2135,9 @@ extern "C" {
     fn nvim_win_get_cursor_col(wp: WinHandle) -> i32;
     fn nvim_win_get_cursor_coladd(wp: WinHandle) -> i32;
     fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: i32);
-    fn nvim_docmd_get_last_chdir_reason() -> *const c_char;
-    fn nvim_docmd_curwin_has_localdir() -> bool;
-    fn nvim_docmd_curtab_has_localdir() -> bool;
+    static mut last_chdir_reason: *const c_char;
+    fn nvim_curwin_get_localdir() -> *const c_char;
+    fn nvim_curtab_get_localdir() -> *const c_char;
     fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
     fn win_goto(wp: WinHandle);
     fn close_others(message: c_int, forceit: c_int);
@@ -2250,11 +2250,11 @@ unsafe fn do_ex_pwd() {
     if nvim_os_dirname_namebuff() == 1 {
         let namebuff = nvim_get_namebuff();
         if p_verbose > 0 {
-            let context: *const c_char = if !nvim_docmd_get_last_chdir_reason().is_null() {
-                nvim_docmd_get_last_chdir_reason()
-            } else if nvim_docmd_curwin_has_localdir() {
+            let context: *const c_char = if !last_chdir_reason.is_null() {
+                last_chdir_reason
+            } else if !nvim_curwin_get_localdir().is_null() {
                 c"window".as_ptr()
-            } else if nvim_docmd_curtab_has_localdir() {
+            } else if !nvim_curtab_get_localdir().is_null() {
                 c"tabpage".as_ptr()
             } else {
                 c"global".as_ptr()

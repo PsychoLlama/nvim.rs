@@ -86,7 +86,7 @@ extern "C" {
     // Directory
     fn os_dirname(buf: *mut c_char, size: usize);
     fn nvim_ex_cd_arg(arg: *mut c_char, is_lcd: bool);
-    fn nvim_docmd_curwin_has_localdir() -> bool;
+    fn nvim_curwin_get_localdir() -> *const c_char;
 
     // OptInt p_mls (modeline setting)
     static mut p_mls: i64;
@@ -105,7 +105,7 @@ unsafe fn restore_start_dir(dirname_start: *mut c_char) {
     let now = now_cstr.to_bytes();
 
     if start != now {
-        nvim_ex_cd_arg(dirname_start, nvim_docmd_curwin_has_localdir());
+        nvim_ex_cd_arg(dirname_start, !nvim_curwin_get_localdir().is_null());
     }
 }
 

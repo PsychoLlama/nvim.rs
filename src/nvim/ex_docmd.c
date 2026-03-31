@@ -777,9 +777,7 @@ char *nvim_docmd_eval_to_string_g_colors_name(void)
 }
 
 
-const char *nvim_docmd_get_last_chdir_reason(void) { return last_chdir_reason; }
-bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
-bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
+
 int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
 void nvim_docmd_do_cmdline_getexline(void) { do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE); }
 void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
