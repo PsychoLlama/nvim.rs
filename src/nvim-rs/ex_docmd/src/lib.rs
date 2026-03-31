@@ -88,6 +88,13 @@ extern "C" {
     fn nvim_get_e_cmdwin() -> *const c_char;
     fn nvim_get_e_textlock() -> *const c_char;
 
+    // Direct global state (avoid C accessor wrappers)
+    pub static mut exiting: bool;
+    pub static mut got_int: bool;
+    pub static mut exmode_active: bool;
+    pub static mut VIsual_active: bool;
+    pub static mut restart_edit: c_int;
+
     // Character classification from charset crate
     #[link_name = "vim_isIDc"]
     fn rs_vim_isIDc(c: c_int) -> bool;

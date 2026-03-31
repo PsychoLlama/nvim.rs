@@ -483,7 +483,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
     let mut tabcount: c_int = 1;
     let mut tp = nvim_get_first_tabpage();
     while !tp.is_null() {
-        if nvim_docmd_get_got_int() != 0 {
+        if crate::got_int {
             break;
         }
 
@@ -495,7 +495,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
 
         let mut wp = nvim_tabpage_get_firstwin(tp);
         while !wp.is_null() {
-            if nvim_docmd_get_got_int() != 0 {
+            if crate::got_int {
                 break;
             }
             if nvim_win_get_focusable(wp) == 0 || nvim_ex2_win_get_w_config_hide(wp) {
@@ -865,7 +865,6 @@ extern "C" {
     fn nvim_tabpage_get_firstwin(tp: *mut c_void) -> WinHandle;
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     fn msg_putchar(c: c_int);
-    fn nvim_docmd_get_got_int() -> c_int;
     fn os_breakcheck();
     fn nvim_iosize() -> usize;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
@@ -978,8 +977,6 @@ type SstHandle = *mut SaveState;
 extern "C" {
     // Global accessors for save/restore state
     static mut msg_scroll: c_int;
-    fn nvim_get_restart_edit() -> c_int;
-    fn nvim_set_restart_edit(val: c_int);
     static mut msg_didout: bool;
     fn nvim_get_current_State() -> c_int;
     fn nvim_set_current_State(val: c_int);
@@ -1006,7 +1003,7 @@ extern "C" {
 #[export_name = "save_current_state"]
 pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     (*sst).save_msg_scroll = msg_scroll;
-    (*sst).save_restart_edit = nvim_get_restart_edit();
+    (*sst).save_restart_edit = crate::restart_edit;
     (*sst).save_msg_didout = msg_didout;
     (*sst).save_state = nvim_get_current_State();
     (*sst).save_finish_op = nvim_get_finish_op() != 0;
@@ -1015,7 +1012,7 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     (*sst).save_pending_end_reg_executing = nvim_get_pending_end_reg_executing() != 0;
 
     msg_scroll = 0; // no msg scrolling in Normal mode
-    nvim_set_restart_edit(0); // don't go to Insert mode
+    crate::restart_edit = 0; // don't go to Insert mode
 
     // Save typeahead; return typebuf_valid.
     nvim_docmd_sst_save_typeahead(sst) != 0
@@ -1034,7 +1031,7 @@ pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
         nvim_set_force_restart_edit(0);
     } else {
         // Some function (terminal_enter()) may have overridden restart_edit.
-        nvim_set_restart_edit((*sst).save_restart_edit);
+        crate::restart_edit = (*sst).save_restart_edit;
     }
     nvim_set_finish_op((*sst).save_finish_op);
     nvim_set_opcount((*sst).save_opcount);
@@ -1173,7 +1170,7 @@ pub unsafe extern "C" fn rs_exec_normal_impl(was_typed: bool, use_vpeekc: bool) 
             // stuff buffer NOT empty → continue
             true
         };
-        if !cont || nvim_docmd_get_got_int() != 0 {
+        if !cont || crate::got_int {
             break;
         }
         rs_update_topline_cursor_impl();

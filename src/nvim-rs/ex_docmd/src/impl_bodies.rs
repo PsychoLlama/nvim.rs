@@ -70,7 +70,6 @@ extern "C" {
     fn nvim_docmd_tabpage_new_body();
 
     // --- do_exedit_handle_exmode helpers ---
-    fn nvim_docmd_get_exmode_active() -> c_int;
     fn nvim_docmd_set_exmode_active(v: c_int);
     fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_get_global_busy() -> bool;
@@ -168,7 +167,6 @@ extern "C" {
     // --- ex_connect helpers ---
     fn nvim_docmd_ui_active_count() -> c_int;
     fn nvim_docmd_remote_ui_connect(id: u64, addr: *const c_char) -> c_int;
-    fn nvim_docmd_set_exiting_true();
     fn getout(exitval: c_int);
 
     // --- ex_checkhealth helpers ---
@@ -281,7 +279,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
     let cmd_view = crate::cmd_idx::CMD_view;
     let cmdidx = (*eap).cmdidx;
 
-    if nvim_docmd_get_exmode_active() != 0 && (cmdidx == cmd_visual || cmdidx == cmd_view) {
+    if crate::exmode_active && (cmdidx == cmd_visual || cmdidx == cmd_view) {
         nvim_docmd_set_exmode_active(0);
         nvim_set_ex_pressedreturn(false);
 
@@ -408,7 +406,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
             semsg(nvim_docmd_e_notopen_str(), arg);
         }
     } else {
-        if empty != 0 && nvim_docmd_get_exmode_active() != 0 {
+        if empty != 0 && crate::exmode_active {
             // Delete the empty line that remains (ex behavior, not vi).
             let lnum = if line2 == 0 {
                 nvim_docmd_curbuf_ml_line_count()
@@ -656,7 +654,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_connect_impl(eap: ExArgHandle) {
     nvim_docmd_ex_detach_impl(ptr::null_mut());
 
     if stop_server {
-        nvim_docmd_set_exiting_true();
+        crate::exiting = true;
         getout(0);
     }
 }

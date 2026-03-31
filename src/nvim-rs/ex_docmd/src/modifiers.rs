@@ -261,7 +261,6 @@ extern "C" {
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;
 
     // Global state accessors
-    fn nvim_docmd_get_exmode_active() -> c_int;
     fn nvim_docmd_getline_is_getexline(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_get_exmode_plus() -> *mut c_char;
     fn nvim_set_ex_pressedreturn(val: bool);
@@ -329,7 +328,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         (*eap).cmd = cmd;
         // In ex mode, an empty line works like :+
         if *cmd == 0
-            && nvim_docmd_get_exmode_active() != 0
+            && crate::exmode_active
             && nvim_docmd_getline_is_getexline(eap) != 0
             && nvim_docmd_get_curwin_cursor_lnum() < nvim_docmd_get_curbuf_line_count()
         {

@@ -675,7 +675,6 @@ void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_re
 void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
 void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, STATIC_CSTR_AS_OPTVAL("all"), 0, SID_NONE); }
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
-int nvim_docmd_get_exmode_active(void) { return (int)exmode_active; }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
 char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
 void *nvim_docmd_vim_regcomp(const char *pat, int flags) { return vim_regcomp((char *)pat, flags); }
@@ -749,10 +748,8 @@ void nvim_docmd_var_redir_stop(void) { var_redir_stop(); }
 int nvim_docmd_get_ex_normal_busy(void) { return ex_normal_busy; }
 void nvim_docmd_set_ex_normal_busy(int val) { ex_normal_busy = val; }
 int nvim_docmd_get_p_mmd(void) { return (int)p_mmd; }
-int nvim_docmd_get_got_int(void) { return got_int ? 1 : 0; }
 int nvim_docmd_curbuf_has_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
 int nvim_docmd_curwin_in_terminal_mode(void) { return (State & MODE_TERMINAL) ? 1 : 0; }
-void nvim_docmd_set_exiting(int val) { exiting = (bool)val; }
 int nvim_docmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 int nvim_docmd_one_window_p(int addr_count) { return (ONE_WINDOW || addr_count == 0) ? 1 : 0; }
 int nvim_docmd_get_filetype_detect(void) { return (int)filetype_detect; }
@@ -983,7 +980,6 @@ bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
 bool nvim_docmd_p_cpo_has_execbuf(void) { return vim_strchr(p_cpo, CPO_EXECBUF) != NULL; }
 void nvim_docmd_do_cmdline_getexline(void) { do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE); }
-int nvim_docmd_get_VIsual_active(void) { return VIsual_active ? 1 : 0; }
 void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
 void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val; }
 int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1 : 0; }
@@ -1222,7 +1218,6 @@ int nvim_docmd_remote_ui_connect(uint64_t id, const char *addr)
   }
   return 1;
 }
-void nvim_docmd_set_exiting_true(void) { exiting = true; }
 int nvim_docmd_checkhealth_exec_lua(const char *mods, size_t mlen, const char *arg,
                                     char **err_msg_out)
 {

@@ -186,7 +186,6 @@ extern "C" {
     // Global state accessors
     static cmdwin_type: c_int;
     fn nvim_set_cmdwin_result(val: c_int);
-    fn nvim_docmd_set_exiting(val: c_int);
     fn nvim_curbuf_locked() -> c_int;
     fn nvim_docmd_get_p_awa() -> c_int;
 
@@ -214,7 +213,6 @@ extern "C" {
     fn nvim_docmd_get_ex_normal_busy() -> c_int;
     fn nvim_docmd_set_ex_normal_busy(val: c_int);
     fn nvim_docmd_get_p_mmd() -> c_int;
-    fn nvim_docmd_get_got_int() -> c_int;
     fn nvim_docmd_curbuf_has_terminal() -> c_int;
     fn nvim_docmd_curwin_in_terminal_mode() -> c_int;
     fn expr_map_locked() -> bool;
@@ -340,7 +338,6 @@ extern "C" {
     fn vpeekc() -> c_int;
 
     // Phase 10: ex_operators helpers
-    fn nvim_docmd_get_VIsual_active() -> c_int;
     fn nvim_set_virtual_op_false();
     fn nvim_set_virtual_op_none();
     fn setpcmark();
@@ -1024,7 +1021,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
             }
             let line1 = (*eap).line1;
             let line2 = (*eap).line2;
-            if line1 > line2 || nvim_docmd_get_got_int() != 0 {
+            if line1 > line2 || got_int {
                 break;
             }
         }
@@ -1236,7 +1233,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
 
     // If there is only one relevant window we will exit.
     if nvim_docmd_check_more(0, forceit) == OK && rs_only_one_window() != 0 {
-        nvim_docmd_set_exiting(1);
+        crate::exiting = true;
     }
 
     let buf = nvim_win_get_buffer(wp);
@@ -1253,13 +1250,13 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         || nvim_docmd_check_more(1, forceit) != OK
         || (rs_only_one_window() != 0 && check_changed_any(forceit_bool, true))
     {
-        nvim_docmd_set_exiting(0);
+        crate::exiting = false;
     } else {
         // quit last window
         if rs_only_one_window() != 0 && nvim_docmd_one_window_p(addr_count) != 0 {
             getout(0);
         }
-        nvim_docmd_set_exiting(0);
+        crate::exiting = false;
         // close window; may free buffer
         let free_buf = !buf_hidden || forceit_bool;
         win_close(wp, free_buf, forceit_bool);
@@ -1938,10 +1935,10 @@ pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
         // FAIL
         return;
     }
-    nvim_docmd_set_exiting(1);
+    crate::exiting = true;
     let forceit = (*eap).forceit != 0;
     if !forceit && check_changed_any(false, false) {
-        nvim_docmd_set_exiting(0);
+        crate::exiting = false;
         return;
     }
     getout(0);
@@ -2613,7 +2610,7 @@ pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
     let forceit = (*eap).forceit != 0;
     // we plan to exit if there is only one relevant window
     if nvim_docmd_check_more(0, forceit as c_int) == OK && rs_only_one_window() != 0 {
-        nvim_docmd_set_exiting(1);
+        crate::exiting = true;
     }
     let cmdidx = (*eap).cmdidx;
     if ((cmdidx == CMD_WQ || curbufIsChanged()) && do_write(eap) == FAIL)
@@ -3006,7 +3003,7 @@ extern "C" {
 /// not_exiting -- clear exiting flag.
 #[export_name = "not_exiting"]
 pub unsafe extern "C" fn rs_not_exiting() {
-    nvim_docmd_set_exiting(0);
+    crate::exiting = false;
 }
 
 /// ":cquit" -- quit with error code.
@@ -3293,7 +3290,7 @@ pub unsafe extern "C" fn rs_do_sleep(msec: i64, hide_cursor: bool) {
     ui_flush(); // flush before waiting
     nvim_docmd_loop_sleep(msec);
     // If CTRL-C interrupted the sleep, drop it from the input buffer.
-    if nvim_docmd_get_got_int() != 0 {
+    if got_int {
         vpeekc();
     }
     if hide_cursor {
@@ -3364,7 +3361,7 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
         beginline(BL_SOL | BL_FIX);
     }
 
-    if nvim_docmd_get_VIsual_active() != 0 {
+    if VIsual_active {
         end_visual_mode();
     }
 
