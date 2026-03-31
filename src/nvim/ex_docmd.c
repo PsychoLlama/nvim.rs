@@ -776,7 +776,7 @@ char *nvim_docmd_eval_to_string_g_colors_name(void)
   return p;
 }
 
-bool nvim_docmd_curbuf_ml_empty(void) { return curbuf->b_ml.ml_flags & ML_EMPTY; }
+
 const char *nvim_docmd_get_last_chdir_reason(void) { return last_chdir_reason; }
 bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
 bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
@@ -876,13 +876,12 @@ int nvim_docmd_check_more_dialog(int n)
 // nvim_get_p_confirm and nvim_get_cmdmod_confirm are defined in window_shim.c
 
 void nvim_docmd_tabpage_new_body(void) { exarg_T ea = { .cmdidx = CMD_tabnew, .cmd = "tabn", .arg = "" }; nvim_docmd_ex_splitview_impl(&ea); }
-int nvim_docmd_curbuf_b_nwindows(void) { return curbuf->b_nwindows; }
-int nvim_docmd_curbuf_ml_has_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0; }
+
 void nvim_docmd_do_bang_read(exarg_T *eap) { do_bang(1, eap, false, false, true); }
 const char *nvim_docmd_curbuf_b_fname(void) { return curbuf->b_fname; }
 const char *nvim_docmd_e_notopen_str(void) { return _(e_notopen); }
 void nvim_docmd_curwin_cursor_lnum_maybe_dec(linenr_T lnum) { if (curwin->w_cursor.lnum > 1 && curwin->w_cursor.lnum >= lnum) { curwin->w_cursor.lnum--; } }
-int nvim_docmd_curwin_w_arg_idx_invalid(void) { return curwin->w_arg_idx_invalid ? 1 : 0; }
+
 size_t nvim_docmd_add_win_cmd_modifiers_global(char *buf, size_t bufsize)
 {
   bool multi_mods = false;

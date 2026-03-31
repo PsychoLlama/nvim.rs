@@ -2129,7 +2129,7 @@ extern "C" {
     // Phase 21 helpers
     fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
     fn load_colors(name: *mut c_char) -> c_int;
-    fn nvim_docmd_curbuf_ml_empty() -> bool;
+    fn nvim_buf_get_ml_empty(buf: *mut c_void) -> bool;
     fn os_breakcheck();
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> i32;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> i32;
@@ -2220,7 +2220,7 @@ pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
 /// ":print" / ":list" / ":number".
 #[export_name = "ex_print"]
 pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
-    if nvim_docmd_curbuf_ml_empty() {
+    if nvim_buf_get_ml_empty(nvim_get_curbuf()) {
         emsg(&e_empty_buffer as *const c_char);
     } else {
         let line1 = (*eap).line1;

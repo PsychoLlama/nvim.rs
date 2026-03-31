@@ -85,7 +85,7 @@ extern "C" {
 
     // --- do_exedit_split_fail_cleanup helpers ---
     fn curbufIsChanged() -> bool;
-    fn nvim_docmd_curbuf_b_nwindows() -> c_int;
+    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
     fn buf_hide(buf: BufHandle) -> bool;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> *mut c_void;
@@ -95,12 +95,12 @@ extern "C" {
 
     // --- do_exedit_split_fallback helpers ---
     fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
-    fn nvim_docmd_curwin_w_arg_idx_invalid() -> c_int;
+    fn nvim_win_get_arg_idx_invalid(wp: *mut c_void) -> c_int;
     fn nvim_al_check_arg_idx(wp: *mut c_void);
     fn maketitle();
 
     // --- ex_read helpers ---
-    fn nvim_docmd_curbuf_ml_has_empty() -> c_int;
+    fn nvim_buf_get_ml_empty(buf: BufHandle) -> bool;
     fn nvim_docmd_do_bang_read(eap: ExArgHandle);
     fn u_save(top: LinenrT, bot: LinenrT) -> c_int;
     fn check_fname() -> c_int;
@@ -319,7 +319,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fail_cleanup() {
     let curbuf = nvim_get_curbuf();
-    let need_hide = curbufIsChanged() && nvim_docmd_curbuf_b_nwindows() <= 1;
+    let need_hide = curbufIsChanged() && nvim_buf_get_nwindows(nvim_get_curbuf()) <= 1;
     if !need_hide || buf_hide(curbuf) {
         // cleanup_T is an opaque C struct; 64 bytes is sufficient on all platforms.
         let mut cs = [0u8; 64];
@@ -345,9 +345,9 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
     if !do_ecmd_cmd.is_null() {
         do_cmdline_cmd(do_ecmd_cmd);
     }
-    let n = nvim_docmd_curwin_w_arg_idx_invalid();
+    let n = nvim_win_get_arg_idx_invalid(nvim_get_curwin());
     nvim_al_check_arg_idx(nvim_get_curwin());
-    if n != nvim_docmd_curwin_w_arg_idx_invalid() {
+    if n != nvim_win_get_arg_idx_invalid(nvim_get_curwin()) {
         maketitle();
     }
 }
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
 /// Accesses global buffer and window state.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
-    let empty = nvim_docmd_curbuf_ml_has_empty();
+    let empty = nvim_buf_get_ml_empty(nvim_get_curbuf()) as c_int;
 
     if (*eap).usefilter != 0 {
         // :r!cmd
