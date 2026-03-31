@@ -475,7 +475,7 @@ int nvim_docmd_current_win_nr(void) { return CURRENT_WIN_NR; }
 int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
 int nvim_docmd_current_tab_nr(void) { return CURRENT_TAB_NR; }
 int nvim_docmd_last_tab_nr(void) { return LAST_TAB_NR; }
-int nvim_docmd_get_curwin_arg_idx(void) { return curwin->w_arg_idx; }
+
 /// Walk forward from firstbuf to find first loaded buffer.
 /// Returns fnum of first loaded buffer, or -1 if none found.
 int nvim_docmd_first_loaded_buf_fnum(void)
@@ -498,7 +498,6 @@ int nvim_docmd_last_loaded_buf_fnum(void)
   return buf->b_fnum;
 }
 
-void nvim_docmd_iemsg_dflall(void) { iemsg(_("INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX")); }
 
 /// Walk forward from firstbuf: find first loaded buffer fnum.
 /// Returns -1 if all buffers walked to end and none loaded.
@@ -530,7 +529,6 @@ int nvim_docmd_last_loaded_fnum_or_fail(void)
 
 void nvim_cmod_capture_msg_scroll(cmdmod_T *cmod) { cmod->cmod_save_msg_scroll = msg_scroll; }
 void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_regmatch.regprog); cmod->cmod_filter_regmatch.regprog = NULL; }
-void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
 void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, STATIC_CSTR_AS_OPTVAL("all"), 0, SID_NONE); }
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
@@ -566,8 +564,6 @@ int nvim_docmd_mark_fnum(const void *fm) { return ((const fmark_T *)fm)->fnum; }
 /// Get fmark_T->mark.lnum.
 linenr_T nvim_docmd_mark_lnum(const void *fm) { return ((const fmark_T *)fm)->mark.lnum; }
 
-/// Get curbuf->handle.
-int nvim_docmd_get_curbuf_handle(void) { return curbuf->handle; }
 
 /// Wrap hasFolding for Rust.
 /// Returns last line of fold containing lnum, or lnum if not folded.

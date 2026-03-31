@@ -240,7 +240,7 @@ extern "C" {
 
     // Cursor and arg accessors
     fn nvim_win_get_cursor_lnum(wp: *mut c_void) -> i32;
-    fn nvim_docmd_get_curwin_arg_idx() -> c_int;
+    fn nvim_win_get_arg_idx(wp: *mut c_void) -> c_int;
     fn nvim_get_argcount() -> c_int;
 
     // Buffer accessors
@@ -257,7 +257,7 @@ extern "C" {
     fn nvim_docmd_last_loaded_buf_fnum() -> c_int;
 
     // dflall error
-    fn nvim_docmd_iemsg_dflall();
+    fn iemsg(s: *const c_char);
 
     // Tabpage accessors
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
@@ -398,7 +398,7 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
         }
         x if x == ADDR_WINDOWS => nvim_docmd_current_win_nr() as i32,
         x if x == ADDR_ARGUMENTS => {
-            let arg_idx = nvim_docmd_get_curwin_arg_idx() + 1;
+            let arg_idx = nvim_win_get_arg_idx(nvim_get_curwin()) + 1;
             let argcount = nvim_get_argcount();
             if arg_idx < argcount {
                 arg_idx as i32
@@ -466,7 +466,10 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
             (*eap).line2 = if size == 0 { 1 } else { size };
         }
         x if x == ADDR_NONE || x == ADDR_UNSIGNED || x == ADDR_QUICKFIX => {
-            nvim_docmd_iemsg_dflall();
+            iemsg(
+                c"INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX"
+                    .as_ptr(),
+            );
         }
         _ => {}
     }
@@ -605,9 +608,6 @@ extern "C" {
     fn nvim_win_set_cursor_col(wp: *mut c_void, col: i32);
     fn nvim_win_get_cursor_col(wp: *mut c_void) -> i32;
     static mut searchcmdlen: c_int;
-
-    // Buffer handle
-    fn nvim_docmd_get_curbuf_handle() -> c_int;
 
     // Quickfix (qf_get_size, directly exported, returns usize)
     fn qf_get_size(eap: ExArgHandle) -> usize;
@@ -779,7 +779,7 @@ pub unsafe fn get_address_impl(
                         lnum = nvim_docmd_current_win_nr() as i32;
                     }
                     ADDR_ARGUMENTS => {
-                        lnum = nvim_docmd_get_curwin_arg_idx() as i32 + 1;
+                        lnum = nvim_win_get_arg_idx(nvim_get_curwin()) as i32 + 1;
                     }
                     ADDR_LOADED_BUFFERS | ADDR_BUFFERS => {
                         lnum = nvim_buf_get_fnum(nvim_get_curbuf()) as i32;
@@ -873,7 +873,9 @@ pub unsafe fn get_address_impl(
                     };
                     let fm = nvim_docmd_mark_get(flag, *cmd as u8 as c_int);
                     cmd = cmd.add(1);
-                    if !fm.is_null() && nvim_docmd_mark_fnum(fm) != nvim_docmd_get_curbuf_handle() {
+                    if !fm.is_null()
+                        && nvim_docmd_mark_fnum(fm) != nvim_buf_get_fnum(nvim_get_curbuf())
+                    {
                         mark_move_to(fm, 0);
                         // Jumped to another file.
                         lnum = nvim_win_get_cursor_lnum(nvim_get_curwin());
@@ -1025,7 +1027,7 @@ pub unsafe fn get_address_impl(
                         lnum = nvim_docmd_current_win_nr() as i32;
                     }
                     ADDR_ARGUMENTS => {
-                        lnum = nvim_docmd_get_curwin_arg_idx() as i32 + 1;
+                        lnum = nvim_win_get_arg_idx(nvim_get_curwin()) as i32 + 1;
                     }
                     ADDR_LOADED_BUFFERS | ADDR_BUFFERS => {
                         lnum = nvim_buf_get_fnum(nvim_get_curbuf()) as i32;

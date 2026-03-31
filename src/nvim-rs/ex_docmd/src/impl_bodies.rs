@@ -60,7 +60,7 @@ extern "C" {
     fn nvim_docmd_check_more_semsg(n: c_int);
     fn nvim_docmd_check_more_dialog(n: c_int) -> c_int;
     fn nvim_get_argcount() -> c_int;
-    fn nvim_docmd_get_curwin_arg_idx() -> c_int;
+    fn nvim_win_get_arg_idx(wp: *mut c_void) -> c_int;
     fn nvim_al_get_arg_had_last() -> c_int;
     fn rs_only_one_window() -> c_int;
     fn nvim_get_p_confirm() -> c_int;
@@ -222,7 +222,7 @@ extern "C" {
 /// Accesses global state (ARGCOUNT, curwin, quitmore, cmdmod).
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_check_more(message: c_int, forceit: c_int) -> c_int {
-    let n = nvim_get_argcount() - nvim_docmd_get_curwin_arg_idx() - 1;
+    let n = nvim_get_argcount() - nvim_win_get_arg_idx(nvim_get_curwin()) - 1;
 
     if forceit == 0
         && rs_only_one_window() != 0

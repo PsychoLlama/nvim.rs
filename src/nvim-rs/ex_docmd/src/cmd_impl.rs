@@ -942,7 +942,6 @@ extern "C" {
     // Wrappers that call C globals/functions - kept as thin C shims.
     fn nvim_cmod_capture_msg_scroll(cmod: CmodHandle);
     fn nvim_cmod_regfree_filter(cmod: CmodHandle);
-    fn nvim_docmd_restore_msg_scroll(cmod: CmodHandle);
     fn nvim_docmd_set_eventignore_all();
     fn nvim_docmd_set_eventignore_str(s: *mut c_char);
     static mut msg_silent: c_int;
@@ -1966,7 +1965,7 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
             new_emsg_silent
         };
         // Restore msg_scroll (set by file I/O commands even with no message).
-        nvim_docmd_restore_msg_scroll(cmod);
+        msg_scroll = (*cmod).cmod_save_msg_scroll;
         // Restore msg_col if redirecting.
         if redirecting() != 0 {
             msg_col = 0;
