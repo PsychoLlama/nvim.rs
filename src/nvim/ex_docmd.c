@@ -1239,11 +1239,8 @@ exarg_T *nvim_eap_alloc(void)
   return eap;
 }
 void nvim_docmd_do_finish(exarg_T *eap) { do_finish(eap, true); }
-bool nvim_docmd_source_finished(LineGetter fgetline, void *cookie) { return source_finished(fgetline, cookie); }
-bool nvim_getline_equal_getnextac(LineGetter fgetline, void *cookie) { return getline_equal(fgetline, cookie, getnextac); }
 cmdmod_T *nvim_docmd_save_cmdmod(void) { cmdmod_T *save = xmalloc(sizeof(cmdmod_T)); *save = cmdmod; return save; }
 void nvim_docmd_restore_cmdmod(cmdmod_T *save) { cmdmod = *save; xfree(save); }
-LineGetter nvim_docmd_get_func_line_ptr(void) { return get_func_line; }
 /// Newline-scan for shell cmd args in do_one_cmd (CMD_bang/terminal/global/vglobal/usefilter).
 /// Sets eap->nextcmd and NUL-terminates at newline, handling backslash-newline.
 void nvim_eap_scan_newline_nextcmd(exarg_T *eap)
@@ -1300,17 +1297,6 @@ int nvim_docmd_parse_command_modifiers_global(exarg_T *eap, const char **errorms
 LineGetter nvim_docmd_get_loop_line_ptr(void) { return get_loop_line; }
 LineGetter nvim_docmd_loop_cookie_get_lc_getline(void *lc) { return ((struct loop_cookie *)lc)->lc_getline; }
 void *nvim_docmd_loop_cookie_get_cookie(void *lc) { return ((struct loop_cookie *)lc)->cookie; }
-LineGetter nvim_docmd_get_getsourceline_ptr(void) { return getsourceline; }
-LineGetter nvim_docmd_get_getexline_ptr(void) { return getexline; }
-char *nvim_docmd_func_name(void *cookie) { return func_name(cookie); }
-linenr_T *nvim_docmd_func_breakpoint(void *cookie) { return func_breakpoint(cookie); }
-int *nvim_docmd_func_dbg_tick(void *cookie) { return func_dbg_tick(cookie); }
-int nvim_docmd_func_has_abort(void *cookie) { return func_has_abort(cookie); }
-int nvim_docmd_func_has_ended(void *cookie) { return func_has_ended(cookie); }
-int nvim_docmd_func_level(void *cookie) { return func_level(cookie); }
-linenr_T *nvim_docmd_source_breakpoint(void *cookie) { return source_breakpoint(cookie); }
-int *nvim_docmd_source_dbg_tick(void *cookie) { return source_dbg_tick(cookie); }
-int nvim_docmd_source_level(void *cookie) { return source_level(cookie); }
 int nvim_docmd_ui_has_cmdline(void) { return ui_has(kUICmdline) ? 1 : 0; }
 void nvim_docmd_ui_ext_cmdline_block_append(size_t indent, const char *s) { ui_ext_cmdline_block_append(indent, s); }
 void nvim_docmd_ui_ext_cmdline_block_leave(void) { ui_ext_cmdline_block_leave(); }
@@ -1320,8 +1306,6 @@ void nvim_docmd_do_debug(char *cmd) { do_debug(cmd); }
 void nvim_docmd_c_do_errthrow(cstack_T *cstack, const char *cmdname) { do_errthrow(cstack, (char *)cmdname); }
 void nvim_docmd_report_make_pending(int pending, void *value) { report_make_pending(pending, value); }
 void nvim_docmd_rewind_conditionals(cstack_T *cstack, int idx, int cond_type, int *cond_level) { rewind_conditionals(cstack, idx, cond_type, cond_level); }
-void nvim_docmd_func_line_start(void *cookie) { func_line_start(cookie); }
-void nvim_docmd_func_line_end(void *cookie) { func_line_end(cookie); }
 void nvim_docmd_script_line_start(void) { script_line_start(); }
 void nvim_docmd_script_line_end(void) { script_line_end(); }
 char *nvim_docmd_getcmdline_colon(int firstc, int indent, bool do_concat) { return getcmdline(firstc, 0, indent, do_concat); }

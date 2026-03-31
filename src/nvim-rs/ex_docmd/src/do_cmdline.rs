@@ -15,6 +15,9 @@ use std::ffi::{c_char, c_int, c_void};
 use crate::do_one_cmd::LineGetter;
 use nvim_ex_eval::CstackT;
 
+/// The underlying function pointer type for LineGetter.
+type LineGetterFn = unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
+
 // =============================================================================
 // DOCMD_ flag constants (from ex_docmd.h)
 // =============================================================================
@@ -156,31 +159,27 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    // Function pointer accessors
-    fn nvim_docmd_get_loop_line_ptr() -> LineGetter;
-    fn nvim_docmd_get_getsourceline_ptr() -> LineGetter;
-    fn nvim_docmd_get_getexline_ptr() -> LineGetter;
-    fn nvim_docmd_get_func_line_ptr() -> LineGetter;
-
     // Loop cookie field accessors
     fn nvim_docmd_loop_cookie_get_lc_getline(lc: *mut c_void) -> LineGetter;
     fn nvim_docmd_loop_cookie_get_cookie(lc: *mut c_void) -> *mut c_void;
 
-    // userfunc helpers
-    fn nvim_docmd_func_name(cookie: *mut c_void) -> *mut c_char;
-    fn nvim_docmd_func_breakpoint(cookie: *mut c_void) -> *mut LinenrT;
-    fn nvim_docmd_func_dbg_tick(cookie: *mut c_void) -> *mut c_int;
-    fn nvim_docmd_func_has_abort(cookie: *mut c_void) -> c_int;
-    fn nvim_docmd_func_has_ended(cookie: *mut c_void) -> c_int;
-    fn nvim_docmd_func_level(cookie: *mut c_void) -> c_int;
-    fn nvim_docmd_func_line_start(cookie: *mut c_void);
-    fn nvim_docmd_func_line_end(cookie: *mut c_void);
-
-    // runtime/source helpers
-    fn nvim_docmd_source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
-    fn nvim_docmd_source_breakpoint(cookie: *mut c_void) -> *mut LinenrT;
-    fn nvim_docmd_source_dbg_tick(cookie: *mut c_void) -> *mut c_int;
-    fn nvim_docmd_source_level(cookie: *mut c_void) -> c_int;
+    // Underlying C functions (declared directly, replacing nvim_docmd_* wrappers)
+    fn get_func_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
+    fn get_loop_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
+    fn getsourceline(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
+    fn getexline(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
+    fn func_name(cookie: *mut c_void) -> *mut c_char;
+    fn func_breakpoint(cookie: *mut c_void) -> *mut LinenrT;
+    fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int;
+    fn func_has_abort(cookie: *mut c_void) -> c_int;
+    fn func_has_ended(cookie: *mut c_void) -> c_int;
+    fn func_level(cookie: *mut c_void) -> c_int;
+    fn func_line_start(cookie: *mut c_void);
+    fn func_line_end(cookie: *mut c_void);
+    fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
+    fn source_breakpoint(cookie: *mut c_void) -> *mut LinenrT;
+    fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int;
+    fn source_level(cookie: *mut c_void) -> c_int;
     fn nvim_docmd_script_line_start();
     fn nvim_docmd_script_line_end();
 
@@ -290,7 +289,7 @@ pub unsafe extern "C" fn getline_equal(
     cookie: *mut c_void,
     func: LineGetter,
 ) -> bool {
-    let loop_line_ptr = unsafe { nvim_docmd_get_loop_line_ptr() };
+    let loop_line_ptr = Some(get_loop_line as LineGetterFn);
     let mut gp = fgetline;
     let mut cp = cookie;
 
@@ -311,7 +310,7 @@ pub unsafe extern "C" fn getline_equal(
 /// All pointers must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void {
-    let loop_line_ptr = unsafe { nvim_docmd_get_loop_line_ptr() };
+    let loop_line_ptr = Some(get_loop_line as LineGetterFn);
     let mut gp = fgetline;
     let mut cp = cookie;
 
@@ -548,23 +547,23 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
     // Inside a function use a higher nesting level.
     let mut getline_is_func =
-        unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) };
-    if getline_is_func && unsafe { ex_nesting_level == nvim_docmd_func_level(real_cookie) } {
+        unsafe { getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) };
+    if getline_is_func && unsafe { ex_nesting_level == func_level(real_cookie) } {
         unsafe { ex_nesting_level += 1 };
     }
 
     // Get the function or script name and debug breakpoint info.
     if getline_is_func {
         unsafe {
-            fname = nvim_docmd_func_name(real_cookie);
-            breakpoint = nvim_docmd_func_breakpoint(real_cookie);
-            dbg_tick = nvim_docmd_func_dbg_tick(real_cookie);
+            fname = func_name(real_cookie);
+            breakpoint = func_breakpoint(real_cookie);
+            dbg_tick = func_dbg_tick(real_cookie);
         }
-    } else if unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) } {
+    } else if unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) } {
         unsafe {
             fname = nvim_get_sourcing_name() as *mut c_char;
-            breakpoint = nvim_docmd_source_breakpoint(real_cookie);
-            dbg_tick = nvim_docmd_source_dbg_tick(real_cookie);
+            breakpoint = source_breakpoint(real_cookie);
+            dbg_tick = source_dbg_tick(real_cookie);
         }
     }
 
@@ -595,7 +594,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
     // KeyTyped is only set when calling vgetc(). Reset it here when not
     // calling vgetc() (sourced command lines).
     if flags & DOCMD_KEYTYPED == 0
-        && !unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getexline_ptr()) }
+        && !unsafe { getline_equal(fgetline, cookie, Some(getexline as LineGetterFn)) }
     {
         unsafe { KeyTyped = false };
     }
@@ -604,13 +603,13 @@ pub unsafe extern "C" fn rs_do_cmdline(
     next_cmdline = cmdline;
     loop {
         getline_is_func =
-            unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) };
+            unsafe { getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) };
 
         // stop skipping cmds for an error msg after all endif/while/for
         if next_cmdline.is_null()
             && !unsafe { force_abort }
             && cstack.cs_idx < 0
-            && !(getline_is_func && unsafe { nvim_docmd_func_has_abort(real_cookie) } != 0)
+            && !(getline_is_func && unsafe { func_has_abort(real_cookie) } != 0)
         {
             unsafe { did_emsg = 0 };
         }
@@ -628,20 +627,20 @@ pub unsafe extern "C" fn rs_do_cmdline(
             if getline_is_func {
                 if unsafe { do_profiling == 1 } {
                     // PROF_YES = 1
-                    unsafe { nvim_docmd_func_line_end(real_cookie) };
+                    unsafe { func_line_end(real_cookie) };
                 }
-                if unsafe { nvim_docmd_func_has_ended(real_cookie) } != 0 {
+                if unsafe { func_has_ended(real_cookie) } != 0 {
                     retval = FAIL;
                     break;
                 }
             } else if unsafe { do_profiling == 1 } // PROF_YES = 1
-                && unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) }
+                && unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) }
             {
                 unsafe { nvim_docmd_script_line_end() };
             }
 
             // Check if a sourced file hit a ":finish" command.
-            if unsafe { nvim_docmd_source_finished(fgetline, cookie) } {
+            if unsafe { source_finished(fgetline, cookie) } {
                 retval = FAIL;
                 break;
             }
@@ -650,7 +649,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             if !breakpoint.is_null() && !dbg_tick.is_null() && unsafe { *dbg_tick != debug_tick } {
                 unsafe {
                     *breakpoint = nvim_docmd_dbg_find_breakpoint(
-                        getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()),
+                        getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)),
                         fname,
                         nvim_get_sourcing_lnum_direct(),
                     );
@@ -674,7 +673,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     nvim_docmd_dbg_breakpoint(fname, nvim_get_sourcing_lnum_direct());
                     // Find next breakpoint.
                     *breakpoint = nvim_docmd_dbg_find_breakpoint(
-                        getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()),
+                        getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)),
                         fname,
                         nvim_get_sourcing_lnum_direct(),
                     );
@@ -684,9 +683,9 @@ pub unsafe extern "C" fn rs_do_cmdline(
             if unsafe { do_profiling == 1 } {
                 // PROF_YES = 1
                 if getline_is_func {
-                    unsafe { nvim_docmd_func_line_start(real_cookie) };
+                    unsafe { func_line_start(real_cookie) };
                 } else if unsafe {
-                    getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr())
+                    getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn))
                 } {
                     unsafe { nvim_docmd_script_line_start() };
                 }
@@ -702,7 +701,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             };
 
             if count == 1
-                && unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getexline_ptr()) }
+                && unsafe { getline_equal(fgetline, cookie, Some(getexline as LineGetterFn)) }
             {
                 if unsafe { nvim_docmd_ui_has_cmdline() } != 0 {
                     // Emit cmdline_block event for loop/conditional block.
@@ -733,7 +732,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
             // Emit all but the first cmdline_block event immediately.
             if unsafe { nvim_docmd_ui_has_cmdline() } != 0
                 && count > 0
-                && unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getexline_ptr()) }
+                && unsafe { getline_equal(fgetline, cookie, Some(getexline as LineGetterFn)) }
             {
                 unsafe {
                     nvim_docmd_ui_ext_cmdline_block_append(indent as usize, next_cmdline);
@@ -763,7 +762,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         // the line is stored.
         if cstack.cs_looplevel > 0 || unsafe { has_loop_cmd(next_cmdline as *mut c_char) } {
             // Set up get_loop_line
-            cmd_getline = unsafe { nvim_docmd_get_loop_line_ptr() };
+            cmd_getline = Some(get_loop_line as LineGetterFn);
             cmd_cookie = std::ptr::addr_of_mut!(cmd_loop_cookie).cast();
             cmd_loop_cookie.lines_gap = std::ptr::addr_of_mut!(lines_ga);
             cmd_loop_cookie.current_line = current_line;
@@ -836,7 +835,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
 
             // If the command was typed, remember it for the ':' register.
             if unsafe {
-                getline_equal(fgetline, cookie, nvim_docmd_get_getexline_ptr())
+                getline_equal(fgetline, cookie, Some(getexline as LineGetterFn))
                     && !new_last_cmdline.is_null()
             } {
                 unsafe {
@@ -855,8 +854,8 @@ pub unsafe extern "C" fn rs_do_cmdline(
         // reset did_emsg for a function that is not aborted by an error
         if unsafe { did_emsg } != 0
             && !unsafe { force_abort }
-            && unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) }
-            && unsafe { nvim_docmd_func_has_abort(real_cookie) } == 0
+            && unsafe { getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) }
+            && unsafe { func_has_abort(real_cookie) } == 0
         {
             unsafe { did_emsg = 0 };
         }
@@ -886,7 +885,11 @@ pub unsafe extern "C" fn rs_do_cmdline(
                     if !breakpoint.is_null() && lines_ga.ga_len > current_line {
                         unsafe {
                             *breakpoint = nvim_docmd_dbg_find_breakpoint(
-                                getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()),
+                                getline_equal(
+                                    fgetline,
+                                    cookie,
+                                    Some(getsourceline as LineGetterFn),
+                                ),
                                 fname,
                                 (*(lines_ga.ga_data as *mut WcmdT).add(current_line as usize)).lnum
                                     - 1,
@@ -974,7 +977,7 @@ pub unsafe extern "C" fn rs_do_cmdline(
         let getexline_err = unsafe { did_emsg } != 0
             && (cstack.cs_trylevel == 0 || unsafe { did_emsg_syntax })
             && used_getline
-            && unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getexline_ptr()) };
+            && unsafe { getline_equal(fgetline, cookie, Some(getexline as LineGetterFn)) };
         let has_more = !next_cmdline.is_null() || cstack.cs_idx >= 0 || flags & DOCMD_REPEAT != 0;
 
         if abort_cond || getexline_err || !has_more {
@@ -995,10 +998,11 @@ pub unsafe extern "C" fn rs_do_cmdline(
         if !unsafe { got_int }
             && !unsafe { did_throw }
             && !unsafe { aborting() }
-            && ((unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) }
-                && !unsafe { nvim_docmd_source_finished(fgetline, cookie) })
-                || (unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) }
-                    && unsafe { nvim_docmd_func_has_ended(real_cookie) } == 0))
+            && ((unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) }
+                && !unsafe { source_finished(fgetline, cookie) })
+                || (unsafe {
+                    getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn))
+                } && unsafe { func_has_ended(real_cookie) } == 0))
         {
             if cstack.cs_flags[cstack.cs_idx as usize] & CSF_TRY != 0 {
                 unsafe { emsg(gettext(crate::E_ENDTRY_STR.as_ptr())) };
@@ -1032,12 +1036,12 @@ pub unsafe extern "C" fn rs_do_cmdline(
     }
 
     // do_errthrow after rewinding the cstack.
-    let errthrow_cmd = if unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) }
-    {
-        c"endfunction".as_ptr()
-    } else {
-        std::ptr::null()
-    };
+    let errthrow_cmd =
+        if unsafe { getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) } {
+            c"endfunction".as_ptr()
+        } else {
+            std::ptr::null()
+        };
     unsafe {
         nvim_docmd_c_do_errthrow(std::ptr::addr_of_mut!(cstack).cast(), errthrow_cmd);
     }
@@ -1056,33 +1060,34 @@ pub unsafe extern "C" fn rs_do_cmdline(
     }
 
     if (unsafe {
-        getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr())
-            && ex_nesting_level > nvim_docmd_source_level(real_cookie)
+        getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn))
+            && ex_nesting_level > source_level(real_cookie)
     }) || (unsafe {
-        getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr())
-            && ex_nesting_level > nvim_docmd_func_level(real_cookie) + 1
+        getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn))
+            && ex_nesting_level > func_level(real_cookie) + 1
     }) {
         if !unsafe { did_throw } {
             unsafe { check_cstack = true };
         }
     } else {
         // When leaving a function, reduce nesting level.
-        if unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr()) } {
+        if unsafe { getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn)) } {
             unsafe { ex_nesting_level -= 1 };
         }
         // Go to debug mode when returning from a function in which we are
         // single-stepping.
         if (unsafe {
-            getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr())
-                || getline_equal(fgetline, cookie, nvim_docmd_get_func_line_ptr())
+            getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn))
+                || getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn))
         }) && unsafe { ex_nesting_level < debug_break_level }
         {
-            let msg =
-                if unsafe { getline_equal(fgetline, cookie, nvim_docmd_get_getsourceline_ptr()) } {
-                    unsafe { gettext(c"End of sourced file".as_ptr()) }
-                } else {
-                    unsafe { gettext(c"End of function".as_ptr()) }
-                };
+            let msg = if unsafe {
+                getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn))
+            } {
+                unsafe { gettext(c"End of sourced file".as_ptr()) }
+            } else {
+                unsafe { gettext(c"End of function".as_ptr()) }
+            };
             unsafe { nvim_docmd_do_debug(msg as *mut c_char) };
         }
     }

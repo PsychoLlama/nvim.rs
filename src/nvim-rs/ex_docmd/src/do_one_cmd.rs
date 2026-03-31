@@ -21,6 +21,7 @@ pub type LineGetter = Option<
     ) -> *mut c_char,
 >;
 pub type CstackHandle = *mut c_void;
+type LineGetterFn = unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
 
 // =============================================================================
 // FAIL constant
@@ -187,10 +188,10 @@ extern "C" {
     fn do_throw(cstack: CstackHandle);
     fn nvim_docmd_do_finish(eap: ExArgHandle);
     fn do_return(eap: ExArgHandle, reanimate: bool, is_cmd: bool, rettv: *mut c_void) -> bool;
-    fn nvim_docmd_source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
+    fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn current_func_returned() -> c_int;
     fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
-    fn nvim_getline_equal_getnextac(fgetline: LineGetter, cookie: *mut c_void) -> bool;
+    fn getnextac(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
 
     // doend: error message + do_errthrow
     fn nvim_docmd_do_one_cmd_doend(
@@ -326,7 +327,7 @@ pub unsafe extern "C" fn do_one_cmd(
         // avoid function call in 'statusline'
         && !nvim_getline_equal_func_line(fgetline, cookie)
         // avoid autocommand (e.g. QuitPre)
-        && !nvim_getline_equal_getnextac(fgetline, cookie)
+        && !crate::do_cmdline::getline_equal(fgetline, cookie, Some(getnextac as LineGetterFn))
     {
         nvim_docmd_dec_quitmore();
     }
@@ -979,7 +980,7 @@ pub unsafe extern "C" fn do_one_cmd(
     if crate::need_rethrow {
         do_throw(cstack);
     } else if crate::check_cstack {
-        if nvim_docmd_source_finished(fgetline, cookie) {
+        if source_finished(fgetline, cookie) {
             nvim_docmd_do_finish(eap);
         } else if nvim_getline_equal_func_line(fgetline, cookie) && current_func_returned() != 0 {
             do_return(eap, true, false, std::ptr::null_mut());

@@ -1625,11 +1625,6 @@ extern "C" {
     fn validate_cursor(win: WinHandle);
     fn update_curswant();
 
-    // filetype constants
-    fn nvim_docmd_get_ftplugin_file() -> *const c_char;
-    fn nvim_docmd_get_indent_file() -> *const c_char;
-    fn nvim_docmd_get_filetype_file() -> *const c_char;
-    fn nvim_docmd_get_dip_all() -> c_int;
 }
 
 /// DOCMD flags for do_cmdline_cmd.
@@ -1671,12 +1666,13 @@ pub unsafe extern "C" fn do_cmdline_cmd(cmd: *const c_char) -> c_int {
 /// Calls C functions that source runtime files.
 #[no_mangle]
 pub unsafe extern "C" fn filetype_plugin_enable() {
+    const DIP_ALL: c_int = 0x01;
     if nvim_docmd_get_filetype_plugin() == K_NONE {
-        source_runtime(nvim_docmd_get_ftplugin_file(), nvim_docmd_get_dip_all());
+        source_runtime(c"ftplugin.vim".as_ptr(), DIP_ALL);
         nvim_docmd_set_filetype_plugin(K_TRUE);
     }
     if nvim_docmd_get_filetype_indent() == K_NONE {
-        source_runtime(nvim_docmd_get_indent_file(), nvim_docmd_get_dip_all());
+        source_runtime(c"indent.vim".as_ptr(), DIP_ALL);
         nvim_docmd_set_filetype_indent(K_TRUE);
     }
 }
@@ -1693,7 +1689,7 @@ pub unsafe extern "C" fn filetype_maybe_enable() {
         // Normally .vim files are sourced before .lua files when both are
         // supported, but we reverse the order here because we want the Lua
         // autocommand to be defined first so that it runs first
-        source_runtime(nvim_docmd_get_filetype_file(), nvim_docmd_get_dip_all());
+        source_runtime(c"filetype.lua filetype.vim".as_ptr(), 0x01); // DIP_ALL
         nvim_docmd_set_filetype_detect(K_TRUE);
     }
 }
