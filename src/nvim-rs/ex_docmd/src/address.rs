@@ -600,8 +600,8 @@ const NUL: c_char = 0;
 
 extern "C" {
     // Cursor state (set)
-    fn nvim_docmd_set_curwin_cursor_lnum(lnum: i32);
-    fn nvim_docmd_set_curwin_cursor_col(col: i32);
+    fn nvim_win_set_cursor_lnum(wp: *mut c_void, lnum: i32);
+    fn nvim_win_set_cursor_col(wp: *mut c_void, col: i32);
     fn nvim_docmd_get_curwin_cursor_col() -> i32;
 
     // Buffer handle
@@ -914,7 +914,7 @@ pub unsafe fn get_address_impl(
                     if lnum > 0 && lnum != MAXLNUM {
                         let line_count = nvim_docmd_get_curbuf_line_count();
                         let set_lnum = if lnum > line_count { line_count } else { lnum };
-                        nvim_docmd_set_curwin_cursor_lnum(set_lnum);
+                        nvim_win_set_cursor_lnum(nvim_get_curwin(), set_lnum);
                     }
 
                     // Start a forward search at the end of the line (unless
@@ -925,7 +925,7 @@ pub unsafe fn get_address_impl(
                     } else {
                         0
                     };
-                    nvim_docmd_set_curwin_cursor_col(col);
+                    nvim_win_set_cursor_col(nvim_get_curwin(), col);
                     nvim_docmd_set_searchcmdlen(0);
                     let flags = if silent {
                         SEARCH_KEEP
@@ -935,15 +935,15 @@ pub unsafe fn get_address_impl(
                     let patlen = nvim_docmd_strlen(cmd);
                     if nvim_docmd_do_search(std::ptr::null_mut(), c, c, cmd, patlen, 1, flags) == 0
                     {
-                        nvim_docmd_set_curwin_cursor_lnum(save_lnum);
-                        nvim_docmd_set_curwin_cursor_col(save_col);
+                        nvim_win_set_cursor_lnum(nvim_get_curwin(), save_lnum);
+                        nvim_win_set_cursor_col(nvim_get_curwin(), save_col);
                         cmd = std::ptr::null_mut();
                         *ptr = cmd;
                         return lnum;
                     }
                     lnum = nvim_docmd_get_curwin_cursor_lnum();
-                    nvim_docmd_set_curwin_cursor_lnum(save_lnum);
-                    nvim_docmd_set_curwin_cursor_col(save_col);
+                    nvim_win_set_cursor_lnum(nvim_get_curwin(), save_lnum);
+                    nvim_win_set_cursor_col(nvim_get_curwin(), save_col);
                     // adjust command string pointer
                     cmd = cmd.offset(nvim_docmd_get_searchcmdlen() as isize);
                 }
@@ -1301,7 +1301,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
         let cmd = (*eap).cmd;
         if *cmd as u8 == b';' {
             if (*eap).skip == 0 {
-                nvim_docmd_set_curwin_cursor_lnum((*eap).line2);
+                nvim_win_set_cursor_lnum(nvim_get_curwin(), (*eap).line2);
                 // Don't leave the cursor on an illegal line or column, but do
                 // accept zero as address, so 0;/PATTERN/ works correctly.
                 if (*eap).line2 > 0 {

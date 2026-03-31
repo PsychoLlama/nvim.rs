@@ -545,8 +545,6 @@ void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, S
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
 char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
-void nvim_docmd_set_curwin_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
-void nvim_docmd_set_curwin_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 colnr_T nvim_docmd_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 int nvim_docmd_get_searchcmdlen(void) { return (int)searchcmdlen; }
 void nvim_docmd_set_searchcmdlen(int v) { searchcmdlen = (ptrdiff_t)v; }
@@ -807,15 +805,12 @@ char *nvim_docmd_eval_to_string_g_colors_name(void)
 }
 
 bool nvim_docmd_curbuf_ml_empty(void) { return curbuf->b_ml.ml_flags & ML_EMPTY; }
-void nvim_docmd_get_curwin_cursor_pos(int *lnum, int *col, int *coladd) { *lnum = (int)curwin->w_cursor.lnum; *col = (int)curwin->w_cursor.col; *coladd = (int)curwin->w_cursor.coladd; }
-void nvim_docmd_set_curwin_cursor_pos(int lnum, int col, int coladd) { curwin->w_cursor.lnum = (linenr_T)lnum; curwin->w_cursor.col = (colnr_T)col; curwin->w_cursor.coladd = (colnr_T)coladd; }
 const char *nvim_docmd_get_last_chdir_reason(void) { return last_chdir_reason; }
 bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
 bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
 int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
 void nvim_docmd_do_cmdline_getexline(void) { do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE); }
 void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
-void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val; }
 int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1 : 0; }
 int nvim_docmd_tabpage_is_current(void *tp) { return tp == curtab ? 1 : 0; }
 int nvim_docmd_tabpage_is_curtopframe(void *tp) { return ((tabpage_T *)tp)->tp_topframe == topframe ? 1 : 0; }
