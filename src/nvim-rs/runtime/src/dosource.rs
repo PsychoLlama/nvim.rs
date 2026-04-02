@@ -514,7 +514,9 @@ pub unsafe extern "C" fn rs_do_source_ext(
         sid = new_sid;
         let is_lua = path_with_extension(nvim_rt_si_get_sn_name(si), c"lua".as_ptr());
         nvim_rt_si_set_sn_lua(si, is_lua);
-        // fname_exp for autocmd - now use si->sn_name
+        // Make a separate copy for cookie/fname_exp -- si->sn_name now owns the original.
+        fname_exp = xstrdup(nvim_rt_si_get_sn_name(si));
+        nvim_rt_cookie_set_fname(cookie, fname_exp);
         if !ret_sid.is_null() {
             *ret_sid = sid;
         }
@@ -584,14 +586,14 @@ pub unsafe extern "C" fn rs_do_source_ext(
                 let vcp = nvim_rt_cookie_get_conv(cookie);
                 nvim_rt_convert_setup(vcp, c"utf-8".as_ptr().cast_mut(), p_enc);
                 let converted = nvim_rt_string_convert(vcp, firstline.add(3), ptr::null_mut());
-                let new_first = if converted.is_null() {
-                    xstrdup(firstline.add(3))
+                if converted.is_null() {
+                    let new_first = xstrdup(firstline.add(3));
+                    xfree(firstline.cast());
+                    firstline = new_first;
                 } else {
                     xfree(firstline.cast());
-                    converted
-                };
-                xfree(firstline.cast());
-                firstline = new_first;
+                    firstline = converted;
+                }
             }
         }
         let flags = nvim_rt_DOCMD_VERBOSE() | nvim_rt_DOCMD_NOWAIT() | nvim_rt_DOCMD_REPEAT();
