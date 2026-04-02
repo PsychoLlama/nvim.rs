@@ -395,7 +395,7 @@ pub unsafe extern "C" fn do_one_cmd(
     if !crate::exiting {
         dbg_check_breakpoint(eap);
     }
-    if !(*eap).skip != 0 && got_int {
+    if (*eap).skip == 0 && got_int {
         (*eap).skip = (true) as c_int;
         do_intthrow(cstack);
     }
@@ -424,7 +424,7 @@ pub unsafe extern "C" fn do_one_cmd(
         let cmd_ptr = (*eap).cmd;
         let first = *cmd_ptr as u8;
         if first == 0 || first == b'"' {
-            if !(*eap).skip != 0 {
+            if (*eap).skip == 0 {
                 errormsg = ex_range_without_command(eap);
             }
             do_one_cmd_doend(
@@ -443,7 +443,7 @@ pub unsafe extern "C" fn do_one_cmd(
         let next = check_nextcmd(cmd_ptr);
         if !next.is_null() {
             (*eap).nextcmd = next;
-            if !(*eap).skip != 0 {
+            if (*eap).skip == 0 {
                 errormsg = ex_range_without_command(eap);
             }
             do_one_cmd_doend(
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn do_one_cmd(
     let cmd_size = nvim_docmd_get_command_count() - 1; // CMD_SIZE
     if !p.is_null()
         && (*eap).cmdidx == cmd_size
-        && !(*eap).skip != 0
+        && (*eap).skip == 0
         && {
             let c = *(*eap).cmd as u8;
             c.is_ascii_uppercase()
@@ -496,7 +496,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     if p.is_null() {
-        if !(*eap).skip != 0 {
+        if (*eap).skip == 0 {
             errormsg = crate::errors::gt(
                 crate::errors::E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND_STR.as_ptr(),
             );
@@ -516,7 +516,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Check for wrong commands.
     if (*eap).cmdidx == cmd_size {
-        if !(*eap).skip != 0 {
+        if (*eap).skip == 0 {
             let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
             nvim_xstrlcpy(
                 iobuff,
@@ -562,8 +562,8 @@ pub unsafe extern "C" fn do_one_cmd(
         (*eap).argt = argt;
     }
 
-    if !(*eap).skip != 0 {
-        if nvim_get_sandbox() != 0 && !((*eap).argt & 0x40000u32) != 0 {
+    if (*eap).skip == 0 {
+        if nvim_get_sandbox() != 0 && ((*eap).argt & 0x40000u32) == 0 {
             errormsg = crate::gt(crate::E_SANDBOX_STR.as_ptr());
             do_one_cmd_doend(
                 eap,
@@ -598,23 +598,20 @@ pub unsafe extern "C" fn do_one_cmd(
         }
 
         if (*eap).cmdidx >= 0 {
-            if cmdwin_type != 0 && !((*eap).argt & 0x40000u32) != 0 {
-                // Use EX_CMDWIN check via argt
-                if ((*eap).argt & 0x80000) == 0 {
-                    // EX_CMDWIN = 0x80000
-                    errormsg = nvim_get_e_cmdwin();
-                    do_one_cmd_doend(
-                        eap,
-                        cstack,
-                        errormsg,
-                        flags,
-                        save_cmdmod,
-                        save_reg_executing,
-                        save_pending_end_reg_executing,
-                        cmdlinep,
-                    );
-                    return ea_cleanup_and_return(eap, None);
-                }
+            if cmdwin_type != 0 && ((*eap).argt & 0x80000u32) == 0 {
+                // EX_CMDWIN = 0x80000: command not allowed in cmdline window
+                errormsg = nvim_get_e_cmdwin();
+                do_one_cmd_doend(
+                    eap,
+                    cstack,
+                    errormsg,
+                    flags,
+                    save_cmdmod,
+                    save_reg_executing,
+                    save_pending_end_reg_executing,
+                    cmdlinep,
+                );
+                return ea_cleanup_and_return(eap, None);
             }
             if crate::rs_text_locked() != 0 && ((*eap).argt & 0x1000000) == 0 {
                 // EX_LOCK_OK = 0x1000000
@@ -654,7 +651,7 @@ pub unsafe extern "C" fn do_one_cmd(
             return ea_cleanup_and_return(eap, None);
         }
 
-        if !ni && !((*eap).argt & 0x001u32) != 0 && (*eap).addr_count > 0 {
+        if !ni && ((*eap).argt & 0x001u32) == 0 && (*eap).addr_count > 0 {
             errormsg = crate::gt(crate::E_NORANGE_STR.as_ptr());
             do_one_cmd_doend(
                 eap,
@@ -670,7 +667,7 @@ pub unsafe extern "C" fn do_one_cmd(
         }
     }
 
-    if !ni && !((*eap).argt & 0x002u32) != 0 && (*eap).forceit != 0 {
+    if !ni && ((*eap).argt & 0x002u32) == 0 && (*eap).forceit != 0 {
         errormsg = crate::errors::gt(crate::errors::E_NOBANG_STR.as_ptr());
         do_one_cmd_doend(
             eap,
@@ -686,7 +683,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     // Don't complain about range if not used.
-    if !(*eap).skip != 0 && !ni && ((*eap).argt & 0x001u32) != 0 {
+    if (*eap).skip == 0 && !ni && ((*eap).argt & 0x001u32) != 0 {
         if crate::global_busy == 0 && (*eap).line1 > (*eap).line2 {
             if crate::msg_silent == 0 {
                 if (flags & DOCMD_VERBOSE) != 0 || crate::exmode_active {
@@ -923,7 +920,7 @@ pub unsafe extern "C" fn do_one_cmd(
     // Check for trailing arguments.
     let arg_char = *(*eap).arg as u8;
     if !ni
-        && !((*eap).argt & 0x004u32) != 0
+        && ((*eap).argt & 0x004u32) == 0
         && arg_char != 0
         && arg_char != b'"'
         && !(arg_char == b'|' && ((*eap).argt & 0x100u32) != 0)

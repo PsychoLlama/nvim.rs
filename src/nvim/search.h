@@ -181,4 +181,4 @@ void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool
                           int type, int count, int action, linenr_T start_lnum, linenr_T end_lnum,
                           bool forceit, bool silent);
 
-#include "search.h.generated.h"
+#include "search_shim.h.generated.h"
