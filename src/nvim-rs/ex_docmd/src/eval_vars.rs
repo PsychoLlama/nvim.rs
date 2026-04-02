@@ -38,10 +38,10 @@ const FIND_IDENT: c_int = 1;
 const FIND_STRING: c_int = 2;
 const FIND_EVAL: c_int = 4;
 
-// ESTACK_* from runtime_defs.h
-const ESTACK_SFILE: c_int = 0;
-const ESTACK_STACK: c_int = 1;
-const ESTACK_SCRIPT: c_int = 2;
+// ESTACK_* from runtime_defs.h (estack_arg_T enum: NONE=0, SFILE=1, STACK=2, SCRIPT=3)
+const ESTACK_SFILE: c_int = 1;
+const ESTACK_STACK: c_int = 2;
+const ESTACK_SCRIPT: c_int = 3;
 
 // ---------------------------------------------------------------------------
 // FFI declarations
