@@ -506,6 +506,7 @@ pub unsafe extern "C" fn rs_parse_fmt_types(
         let mut p = fmt as *const u8;
         let mut any_pos: c_int = 0;
         let mut any_arg: c_int = 0;
+        let mut seq_arg: c_int = 0;
 
         macro_rules! check_pos_arg {
             () => {
@@ -599,8 +600,12 @@ pub unsafe extern "C" fn rs_parse_fmt_types(
                             return error(ap_types, num_posarg);
                         }
                     } else {
+                        seq_arg += 1;
                         any_arg = 1;
                         check_pos_arg!();
+                        if rs_adjust_types(ap_types, seq_arg, num_posarg, arg) == FAIL {
+                            return error(ap_types, num_posarg);
+                        }
                     }
                 } else if (*p).is_ascii_digit() {
                     let digstart = p as *const c_char;
@@ -651,8 +656,12 @@ pub unsafe extern "C" fn rs_parse_fmt_types(
                                 return error(ap_types, num_posarg);
                             }
                         } else {
+                            seq_arg += 1;
                             any_arg = 1;
                             check_pos_arg!();
+                            if rs_adjust_types(ap_types, seq_arg, num_posarg, arg2) == FAIL {
+                                return error(ap_types, num_posarg);
+                            }
                         }
                     } else if (*p).is_ascii_digit() {
                         let digstart = p as *const c_char;
@@ -670,10 +679,10 @@ pub unsafe extern "C" fn rs_parse_fmt_types(
                     }
                 }
 
+                ptype = p; // Save position before length modifiers for type resolution
                 if pos_arg != -1 {
                     any_pos = 1;
                     check_pos_arg!();
-                    ptype = p;
                 }
 
                 // parse 'h', 'l', 'll' and 'z' length modifiers
@@ -700,8 +709,18 @@ pub unsafe extern "C" fn rs_parse_fmt_types(
                                 return error(ap_types, num_posarg);
                             }
                         } else {
+                            seq_arg += 1;
                             any_arg = 1;
                             check_pos_arg!();
+                            if rs_adjust_types(
+                                ap_types,
+                                seq_arg,
+                                num_posarg,
+                                ptype as *const c_char,
+                            ) == FAIL
+                            {
+                                return error(ap_types, num_posarg);
+                            }
                         }
                     }
                     _ => {
