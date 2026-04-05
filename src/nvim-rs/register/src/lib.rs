@@ -42,6 +42,22 @@ impl Default for NvimString {
     }
 }
 
+/// Position in file or buffer, matching C's `pos_T` exactly (12 bytes).
+///
+/// Layout matches `pos_defs.h`:
+/// ```c
+/// typedef struct { linenr_T lnum; colnr_T col; colnr_T coladd; } pos_T;
+/// ```
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PosT {
+    pub lnum: i32,
+    pub col: i32,
+    pub coladd: i32,
+}
+
+const _: () = assert!(std::mem::size_of::<PosT>() == 12);
+
 /// Register struct matching C's `yankreg_T` exactly (40 bytes on 64-bit).
 ///
 /// Layout matches `register_defs.h`:
@@ -181,16 +197,33 @@ extern "C" {
     fn tv_list_append_string(list: *mut c_void, s: *const c_char, len: isize);
     fn tv_list_append_allocated_string(list: *mut c_void, s: *mut c_char);
 
-    // Special register contents (Phase 1)
-    fn get_spec_reg(
-        regname: c_int,
-        argp: *mut *mut c_char,
-        allocated: *mut bool,
-        errmsg: bool,
-    ) -> bool;
-
     // Global variables (Phase 1)
     static mut got_int: bool;
+
+    // Accessors for get_spec_reg (Phase 1)
+    fn check_fname() -> c_int;
+    fn rs_getaltfname(errmsg: bool) -> *mut c_char;
+    fn file_name_at_cursor(options: c_int, count: c_int, file_lnum: *mut c_int) -> *mut c_char;
+    fn nvim_register_get_curbuf_fname() -> *mut c_char;
+    fn nvim_register_ml_get_buf_curwin_lnum() -> *mut c_char;
+    fn nvim_emsg_nolastcmd();
+    fn nvim_emsg_noprevre();
+    fn nvim_emsg_noinstext();
+    fn rs_find_ident_under_cursor(text: *mut *mut c_char, find_type: c_int) -> usize;
+
+    // Accessors for insert_reg (Phase 1)
+    fn stuffescaped(arg: *const c_char, literally: bool);
+    fn stuff_inserted(c: c_int, count: i64, no_esc: bool) -> c_int;
+    fn stuffcharReadbuff(c: c_int);
+    fn AppendCharToRedobuff(c: c_int);
+    fn del_chars(count: c_int, fixpos: bool) -> c_int;
+    fn mb_charlen(str: *const c_char) -> c_int;
+    fn oneright() -> c_int;
+    fn u_save_cursor() -> c_int;
+    fn nvim_register_get_State() -> c_int;
+    fn nvim_register_get_curwin_cursor(pos: *mut PosT);
+    fn nvim_register_set_curwin_cursor(pos: *const PosT);
+    fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int, flags: c_int);
 
     // Typeahead buffer (Phase 2)
     fn ins_typebuf(
@@ -867,12 +900,31 @@ pub unsafe extern "C" fn rs_finish_write_reg(
 // Control key constants from ascii_defs.h
 const CTRL_A: c_int = 1;
 const CTRL_F: c_int = 6;
+const CTRL_L: c_int = 12;
 const CTRL_P: c_int = 16;
-#[allow(dead_code)]
 const CTRL_R: c_int = 18;
 #[allow(dead_code)]
 const CTRL_U: c_int = 21;
 const CTRL_W: c_int = 23;
+
+/// FNAME_MESS|FNAME_HYP|FNAME_EXP constants from file_search.h.
+const FNAME_MESS: c_int = 1;
+const FNAME_EXP: c_int = 2;
+const FNAME_HYP: c_int = 4;
+
+/// FIND_IDENT|FIND_STRING constants from normal.h.
+const FIND_IDENT: c_int = 1;
+const FIND_STRING: c_int = 2;
+
+/// REPLACE_FLAG from state_defs.h.
+const REPLACE_FLAG: c_int = 0x100;
+
+/// Direction constants from vim_defs.h.
+const BACKWARD: c_int = -1;
+const FORWARD: c_int = 1;
+
+/// PUT_CURSEND flag from register_defs.h.
+const PUT_CURSEND: c_int = 2;
 
 /// Return values.
 const OK: c_int = 1;
@@ -1640,6 +1692,205 @@ impl GArray {
 }
 
 // ---------------------------------------------------------------------------
+// get_spec_reg and insert_reg (Phase 1 migration)
+// ---------------------------------------------------------------------------
+
+/// If `regname` is a special register, return true and set *argp to its value.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[unsafe(export_name = "get_spec_reg")]
+pub unsafe extern "C" fn rs_get_spec_reg(
+    regname: c_int,
+    argp: *mut *mut c_char,
+    allocated: *mut bool,
+    errmsg: bool,
+) -> bool {
+    *argp = std::ptr::null_mut();
+    *allocated = false;
+
+    match regname {
+        r if r == c_int::from(b'%') => {
+            // file name
+            if errmsg {
+                check_fname(); // gives emsg if not set
+            }
+            *argp = nvim_register_get_curbuf_fname();
+            true
+        }
+        r if r == c_int::from(b'#') => {
+            // alternate file name
+            *argp = rs_getaltfname(errmsg); // may give emsg if not set
+            true
+        }
+        r if r == c_int::from(b'=') => {
+            // result of expression
+            *argp = rs_get_expr_line();
+            *allocated = true;
+            true
+        }
+        r if r == c_int::from(b':') => {
+            // last command line
+            if last_cmdline.is_null() && errmsg {
+                nvim_emsg_nolastcmd();
+            }
+            *argp = last_cmdline;
+            true
+        }
+        r if r == c_int::from(b'/') => {
+            // last search-pattern
+            let sp = last_search_pat();
+            if sp.is_null() && errmsg {
+                nvim_emsg_noprevre();
+            }
+            *argp = sp as *mut c_char;
+            true
+        }
+        r if r == c_int::from(b'.') => {
+            // last inserted text
+            *argp = get_last_insert_save();
+            *allocated = true;
+            if (*argp).is_null() && errmsg {
+                nvim_emsg_noinstext();
+            }
+            true
+        }
+        r if r == CTRL_F || r == CTRL_P => {
+            // Filename/path under cursor
+            if !errmsg {
+                return false;
+            }
+            let opts = FNAME_MESS | FNAME_HYP | if regname == CTRL_P { FNAME_EXP } else { 0 };
+            *argp = file_name_at_cursor(opts, 1, std::ptr::null_mut());
+            *allocated = true;
+            true
+        }
+        r if r == CTRL_W || r == CTRL_A => {
+            // word/WORD under cursor
+            if !errmsg {
+                return false;
+            }
+            let find_type = if regname == CTRL_W {
+                FIND_IDENT | FIND_STRING
+            } else {
+                FIND_STRING
+            };
+            let cnt = rs_find_ident_under_cursor(argp, find_type);
+            *argp = if cnt > 0 {
+                xmemdupz(*argp as *const c_void, cnt) as *mut c_char
+            } else {
+                std::ptr::null_mut()
+            };
+            *allocated = true;
+            true
+        }
+        r if r == CTRL_L => {
+            // Line under cursor
+            if !errmsg {
+                return false;
+            }
+            *argp = nvim_register_ml_get_buf_curwin_lnum();
+            true
+        }
+        r if r == c_int::from(b'_') => {
+            // black hole: always empty
+            *argp = c"".as_ptr() as *mut c_char;
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Insert a yank register: copy it into the Read buffer.
+/// Used by CTRL-R command and middle mouse button in insert mode.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[unsafe(export_name = "insert_reg")]
+pub unsafe extern "C" fn rs_insert_reg(
+    regname: c_int,
+    reg: *mut YankReg,
+    literally_arg: bool,
+) -> c_int {
+    let mut retval = OK;
+    let literally = literally_arg || rs_is_literal_register(regname) != 0;
+
+    // It is possible to get into an endless loop by having CTRL-R a in
+    // register a and then, in insert mode, doing CTRL-R a.
+    // If you hit CTRL-C, the loop will be broken here.
+    os_breakcheck();
+    if got_int {
+        return FAIL;
+    }
+
+    // check for valid regname
+    if regname != NUL && !rs_valid_yank_reg(regname, false) {
+        return FAIL;
+    }
+
+    let mut arg: *mut c_char = std::ptr::null_mut();
+    let mut allocated = false;
+
+    if regname == c_int::from(b'.') {
+        // Insert last inserted text.
+        retval = stuff_inserted(NUL, 1, true);
+    } else if rs_get_spec_reg(regname, &raw mut arg, &raw mut allocated, true) {
+        if arg.is_null() {
+            return FAIL;
+        }
+        stuffescaped(arg, literally);
+        if allocated {
+            xfree(arg as *mut c_void);
+        }
+    } else {
+        // Name or number register.
+        let reg = if reg.is_null() {
+            rs_get_yank_register(regname, 0 /* YREG_PASTE */)
+        } else {
+            reg
+        };
+        if (*reg).y_array.is_null() {
+            retval = FAIL;
+        } else {
+            let size = (*reg).y_size;
+            for i in 0..size {
+                if regname == c_int::from(b'-') && (*reg).y_type == K_MT_CHAR_WISE {
+                    let mut dir = BACKWARD;
+                    let state = nvim_register_get_State();
+                    if (state & REPLACE_FLAG) != 0 {
+                        let mut curpos = PosT::default();
+                        if u_save_cursor() == FAIL {
+                            return FAIL;
+                        }
+                        del_chars(mb_charlen((*(*reg).y_array).data), true);
+                        nvim_register_get_curwin_cursor(&raw mut curpos);
+                        if oneright() == FAIL {
+                            // hit end of line, need to put forward
+                            dir = FORWARD;
+                        }
+                        nvim_register_set_curwin_cursor(&raw const curpos);
+                    }
+                    AppendCharToRedobuff(CTRL_R);
+                    AppendCharToRedobuff(regname);
+                    do_put(regname, std::ptr::null_mut(), dir, 1, PUT_CURSEND);
+                } else {
+                    stuffescaped((*(*reg).y_array.add(i)).data, literally);
+                    // Insert a newline between lines and after last line if
+                    // y_type is kMTLineWise.
+                    if (*reg).y_type == K_MT_LINE_WISE || i < size - 1 {
+                        stuffcharReadbuff(c_int::from(b'\n'));
+                    }
+                }
+            }
+        }
+    }
+
+    retval
+}
+
+// ---------------------------------------------------------------------------
 // Phase 1: Register Contents and Command-Line Paste
 // ---------------------------------------------------------------------------
 
@@ -1738,7 +1989,7 @@ pub unsafe extern "C" fn rs_get_reg_contents(regname: c_int, flags: c_int) -> *m
 
     let mut retval: *mut c_char = std::ptr::null_mut();
     let mut allocated = false;
-    if get_spec_reg(regname, &raw mut retval, &raw mut allocated, false) {
+    if rs_get_spec_reg(regname, &raw mut retval, &raw mut allocated, false) {
         if retval.is_null() {
             return std::ptr::null_mut();
         }

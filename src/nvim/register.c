@@ -92,177 +92,35 @@ void nvim_emsg_noprevre(void) { emsg(_(e_noprevre)); }
 /// Emit "E29: No inserted text yet" error.
 void nvim_emsg_noinstext(void) { emsg(_(e_noinstext)); }
 
+/// Emit "E30: No previous command line" error.
+void nvim_emsg_nolastcmd(void) { emsg(_(e_nolastcmd)); }
+
+/// Return curbuf->b_fname (for Rust get_spec_reg).
+char *nvim_register_get_curbuf_fname(void) { return curbuf->b_fname; }
+
+/// Copy curwin->w_cursor into *pos (for Rust insert_reg).
+void nvim_register_get_curwin_cursor(pos_T *pos) { *pos = curwin->w_cursor; }
+
+/// Set curwin->w_cursor from *pos (for Rust insert_reg).
+void nvim_register_set_curwin_cursor(const pos_T *pos) { curwin->w_cursor = *pos; }
+
+/// Return the global State variable (for Rust insert_reg).
+int nvim_register_get_State(void) { return State; }
+
+/// Return ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) (for Rust get_spec_reg).
+char *nvim_register_ml_get_buf_curwin_lnum(void)
+{
+  return ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum);
+}
+
 // do_record is implemented in Rust (src/nvim-rs/register/src/lib.rs).
 
 // put_in_typebuf, put_reedit_in_typebuf, execreg_line_continuation are
 // private helpers implemented in Rust (src/nvim-rs/register/src/lib.rs).
 // do_execreg is implemented in Rust with export_name = "do_execreg".
 
-/// Insert a yank register: copy it into the Read buffer.
-/// Used by CTRL-R command and middle mouse button in insert mode.
-///
-/// @param literally_arg  insert literally, not as if typed
-///
-/// @return FAIL for failure, OK otherwise
-int insert_reg(int regname, yankreg_T *reg, bool literally_arg)
-{
-  int retval = OK;
-  bool allocated;
-  const bool literally = literally_arg || is_literal_register(regname);
-
-  // It is possible to get into an endless loop by having CTRL-R a in
-  // register a and then, in insert mode, doing CTRL-R a.
-  // If you hit CTRL-C, the loop will be broken here.
-  os_breakcheck();
-  if (got_int) {
-    return FAIL;
-  }
-
-  // check for valid regname
-  if (regname != NUL && !valid_yank_reg(regname, false)) {
-    return FAIL;
-  }
-
-  char *arg;
-  if (regname == '.') {  // Insert last inserted text.
-    retval = stuff_inserted(NUL, 1, true);
-  } else if (get_spec_reg(regname, &arg, &allocated, true)) {
-    if (arg == NULL) {
-      return FAIL;
-    }
-    stuffescaped(arg, literally);
-    if (allocated) {
-      xfree(arg);
-    }
-  } else {  // Name or number register.
-    if (reg == NULL) {
-      reg = get_yank_register(regname, YREG_PASTE);
-    }
-    if (reg->y_array == NULL) {
-      retval = FAIL;
-    } else {
-      for (size_t i = 0; i < reg->y_size; i++) {
-        if (regname == '-' && reg->y_type == kMTCharWise) {
-          Direction dir = BACKWARD;
-          if ((State & REPLACE_FLAG) != 0) {
-            pos_T curpos;
-            if (u_save_cursor() == FAIL) {
-              return FAIL;
-            }
-            del_chars(mb_charlen(reg->y_array[0].data), true);
-            curpos = curwin->w_cursor;
-            if (oneright() == FAIL) {
-              // hit end of line, need to put forward (after the current position)
-              dir = FORWARD;
-            }
-            curwin->w_cursor = curpos;
-          }
-
-          AppendCharToRedobuff(Ctrl_R);
-          AppendCharToRedobuff(regname);
-          do_put(regname, NULL, dir, 1, PUT_CURSEND);
-        } else {
-          stuffescaped(reg->y_array[i].data, literally);
-          // Insert a newline between lines and after last line if
-          // y_type is kMTLineWise.
-          if (reg->y_type == kMTLineWise || i < reg->y_size - 1) {
-            stuffcharReadbuff('\n');
-          }
-        }
-      }
-    }
-  }
-
-  return retval;
-}
-
-/// If "regname" is a special register, return true and store a pointer to its
-/// value in "argp".
-///
-/// @param allocated  return: true when value was allocated
-/// @param errmsg     give error message when failing
-///
-/// @return  true if "regname" is a special register,
-bool get_spec_reg(int regname, char **argp, bool *allocated, bool errmsg)
-{
-  *argp = NULL;
-  *allocated = false;
-  switch (regname) {
-  case '%':                     // file name
-    if (errmsg) {
-      check_fname();            // will give emsg if not set
-    }
-    *argp = curbuf->b_fname;
-    return true;
-
-  case '#':                       // alternate file name
-    *argp = getaltfname(errmsg);  // may give emsg if not set
-    return true;
-
-  case '=':                     // result of expression
-    *argp = get_expr_line();
-    *allocated = true;
-    return true;
-
-  case ':':                     // last command line
-    if (last_cmdline == NULL && errmsg) {
-      emsg(_(e_nolastcmd));
-    }
-    *argp = last_cmdline;
-    return true;
-
-  case '/':                     // last search-pattern
-    if (last_search_pat() == NULL && errmsg) {
-      emsg(_(e_noprevre));
-    }
-    *argp = last_search_pat();
-    return true;
-
-  case '.':                     // last inserted text
-    *argp = get_last_insert_save();
-    *allocated = true;
-    if (*argp == NULL && errmsg) {
-      emsg(_(e_noinstext));
-    }
-    return true;
-
-  case Ctrl_F:                  // Filename under cursor
-  case Ctrl_P:                  // Path under cursor, expand via "path"
-    if (!errmsg) {
-      return false;
-    }
-    *argp = file_name_at_cursor(FNAME_MESS | FNAME_HYP | (regname == Ctrl_P ? FNAME_EXP : 0),
-                                1, NULL);
-    *allocated = true;
-    return true;
-
-  case Ctrl_W:                  // word under cursor
-  case Ctrl_A:                  // WORD (mnemonic All) under cursor
-    if (!errmsg) {
-      return false;
-    }
-    size_t cnt = rs_find_ident_under_cursor(argp, (regname == Ctrl_W
-                                                   ? (FIND_IDENT|FIND_STRING)
-                                                   : FIND_STRING));
-    *argp = cnt ? xmemdupz(*argp, cnt) : NULL;
-    *allocated = true;
-    return true;
-
-  case Ctrl_L:                  // Line under cursor
-    if (!errmsg) {
-      return false;
-    }
-
-    *argp = ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum);
-    return true;
-
-  case '_':                     // black hole: always empty
-    *argp = "";
-    return true;
-  }
-
-  return false;
-}
+// insert_reg and get_spec_reg are implemented in Rust
+// (src/nvim-rs/register/src/lib.rs) with export_name.
 
 /// Copy a block range into a register.
 ///

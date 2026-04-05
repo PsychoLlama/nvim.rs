@@ -15,6 +15,8 @@ extern int rs_get_register_name(int num);
 
 // Functions implemented in Rust (src/nvim-rs/register/src/lib.rs) with #[export_name].
 // These replace the former C implementations that have been deleted.
+extern int insert_reg(int regname, yankreg_T *reg, bool literally_arg);
+extern bool get_spec_reg(int regname, char **argp, bool *allocated, bool errmsg);
 extern bool cmdline_paste_reg(int regname, bool literally_arg, bool remcr);
 extern void *get_reg_contents(int regname, int flags);
 extern int do_execreg(int regname, int colon, int addcr, int silent);
