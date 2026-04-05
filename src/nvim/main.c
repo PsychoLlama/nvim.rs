@@ -181,6 +181,26 @@ extern void rs_handle_tag(char *tagname);
 // Thin helper: set 'errorfile' option from Rust (avoids OptVal complexity)
 void nvim_set_errorfile_opt(const char *val) { set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(val), 0, SID_CARG); }
 
+// Rust implementations (Phase 1: lifecycle)
+extern uint64_t rs_server_connect(char *server_addr, const char **errmsg);
+extern void rs_os_exit(int r) FUNC_ATTR_NORETURN;
+
+// C helpers for rs_server_connect / rs_os_exit (Phase 1)
+uint64_t nvim_channel_connect(bool is_tcp, const char *server_addr, const char **error)
+{
+  CallbackReader on_data = CALLBACK_READER_INIT;
+  return channel_connect(is_tcp, server_addr, true, on_data, 500, error);
+}
+
+bool nvim_event_teardown(void) { return event_teardown(); }
+
+void nvim_free_all_mem_if_exitfree(void)
+{
+#ifdef EXITFREE
+  free_all_mem();
+#endif
+}
+
 Loop main_loop;
 
 char *nvim_argv0 = NULL;
@@ -714,35 +734,7 @@ int main(int argc, char **argv)
 void os_exit(int r)
   FUNC_ATTR_NORETURN
 {
-  exiting = true;
-
-  if (ui_client_channel_id) {
-    ui_client_stop();
-    if (r == 0) {
-      r = ui_client_exit_status;
-    }
-  } else {
-    ui_flush();
-    ui_call_stop();
-  }
-
-  if (!event_teardown() && r == 0) {
-    r = 1;  // Exit with error if main_loop did not teardown gracefully.
-  }
-  if (!ui_client_channel_id) {
-    ml_close_all(true);  // remove all memfiles
-  }
-  if (used_stdin) {
-    stream_set_blocking(STDIN_FILENO, true);  // normalize stream (#2598)
-  }
-
-  ILOG("Nvim exit: %d", r);
-
-#ifdef EXITFREE
-  free_all_mem();
-#endif
-
-  exit(r);
+  rs_os_exit(r);
 }
 
 /// Exit properly
@@ -943,20 +935,7 @@ void preserve_exit(const char *errmsg)
 
 static uint64_t server_connect(char *server_addr, const char **errmsg)
 {
-  if (server_addr == NULL) {
-    *errmsg = "no address specified";
-    return 0;
-  }
-  CallbackReader on_data = CALLBACK_READER_INIT;
-  const char *error = NULL;
-  bool is_tcp = strrchr(server_addr, ':') ? true : false;
-  // connected to channel
-  uint64_t chan = channel_connect(is_tcp, server_addr, true, on_data, 500, &error);
-  if (error) {
-    *errmsg = error;
-    return 0;
-  }
-  return chan;
+  return rs_server_connect(server_addr, errmsg);
 }
 
 /// Handle remote subcommands

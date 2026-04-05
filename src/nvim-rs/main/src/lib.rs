@@ -19,6 +19,7 @@ pub mod config;
 pub mod exit;
 pub mod helpers;
 pub mod init;
+pub mod lifecycle;
 pub mod output;
 pub mod scan;
 pub mod setup;
