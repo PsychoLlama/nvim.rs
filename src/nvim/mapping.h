@@ -35,6 +35,11 @@ char *check_map(char *keys, int mode, int exact, int ign_mod, int abbr, mapblock
 int langmap_adjust_mb(int c);
 void langmap_init(void);
 void f_hasmapto(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void ex_map(exarg_T *eap);
+void ex_abbreviate(exarg_T *eap);
+void ex_unmap(exarg_T *eap);
+void ex_mapclear(exarg_T *eap);
+void ex_abclear(exarg_T *eap);
 
 /// Used for the first argument of do_map()
 enum {

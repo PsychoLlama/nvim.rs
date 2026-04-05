@@ -623,78 +623,6 @@ void f_maparg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_mapar
 /// "mapcheck()" function
 void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_maparg(argvars, rettv, false); }
 
-/// Add a mapping. Unlike @ref do_map this copies the string arguments, so
-/// static or read-only strings can be used.
-///
-/// @param lhs  C-string containing the lhs of the mapping
-/// @param rhs  C-string containing the rhs of the mapping
-/// @param mode  Bitflags representing the mode in which to set the mapping.
-///              See @ref rs_get_map_mode.
-/// @param buffer  If true, make a buffer-local mapping for curbuf
-static void do_exmap(exarg_T *eap, int isabbrev)
-{
-  char *cmdp = eap->cmd;
-  int mode = rs_get_map_mode(&cmdp, eap->forceit || isabbrev);
-
-  int maptype = rs_get_maptype(*cmdp);
-  MapArguments parsed_args;
-  int result = rs_str_to_mapargs(eap->arg, maptype == MAPTYPE_UNMAP ? 1 : 0, &parsed_args);
-  switch (result) {
-  case 0:
-    break;
-  case 1:
-    emsg(_(e_invarg));
-    goto free_rhs;
-    break;
-  default:
-    assert(false && "Unknown return code from rs_str_to_mapargs!");
-    goto free_rhs;
-  }
-  switch (rs_buf_do_map(maptype, &parsed_args, mode, isabbrev, curbuf)) {
-  case 1:
-    emsg(_(e_invarg));
-    break;
-  case 2:
-    emsg(isabbrev ? _(e_noabbr) : _(e_nomap));
-    break;
-  case 5:
-    semsg(isabbrev ? _(e_abbreviation_already_exists_for_str)
-                   : _(e_mapping_already_exists_for_str),
-          parsed_args.lhs);
-    break;
-  case 6:
-    semsg(isabbrev ? _(e_global_abbreviation_already_exists_for_str)
-                   : _(e_global_mapping_already_exists_for_str),
-          parsed_args.lhs);
-  }
-free_rhs:
-  xfree(parsed_args.rhs);
-  xfree(parsed_args.orig_rhs);
-}
-
-/// ":abbreviate" and friends.
-void ex_abbreviate(exarg_T *eap) { do_exmap(eap, true); }  // almost the same as mapping
-
-/// ":map" and friends.
-void ex_map(exarg_T *eap)
-{
-  // If we are in a secure mode we print the mappings for security reasons.
-  if (secure) {
-    secure = 2;
-    msg_outtrans(eap->cmd, 0, false);
-    msg_putchar('\n');
-  }
-  do_exmap(eap, false);
-}
-
-/// ":unmap" and friends.
-void ex_unmap(exarg_T *eap) { do_exmap(eap, false); }
-
-/// ":mapclear" and friends.
-void ex_mapclear(exarg_T *eap) { rs_do_mapclear(eap->cmd, eap->arg, eap->forceit, false); }
-
-/// ":abclear" and friends.
-void ex_abclear(exarg_T *eap) { rs_do_mapclear(eap->cmd, eap->arg, true, true); }
 
 /// Set, tweak, or remove a mapping in a mode. Acts as the implementation for
 /// functions like @ref nvim_buf_set_keymap.
@@ -891,6 +819,18 @@ mapblock_T *nvim_get_first_abbr(void) { return first_abbr; }
 mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index) { return (buf && index >= 0 && index < MAX_MAPHASH) ? buf->b_maphash[index] : NULL; }
 mapblock_T *nvim_buf_get_first_abbr(buf_T *buf) { return buf ? buf->b_first_abbr : NULL; }
 const char *nvim_mapping_get_p_cpo(void) { return p_cpo; }
+
+// Error string accessors for Rust (local static strings not accessible from Rust)
+const char *nvim_mapping_e_abbr_exists(int abbr)
+{
+  return abbr ? _(e_abbreviation_already_exists_for_str)
+              : _(e_mapping_already_exists_for_str);
+}
+const char *nvim_mapping_e_global_abbr_exists(int abbr)
+{
+  return abbr ? _(e_global_abbreviation_already_exists_for_str)
+              : _(e_global_mapping_already_exists_for_str);
+}
 
 // Static assertions for MapArguments struct layout (Rust #[repr(C)] must match)
 _Static_assert(sizeof(MapArguments) == 184, "MapArguments size mismatch with Rust");
