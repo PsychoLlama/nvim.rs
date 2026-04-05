@@ -54,12 +54,8 @@
 #include "nvim/vim_defs.h"
 
 // Rust FFI declarations
-extern int rs_langmap_parse(const char *langmap_str, char *errbuf, size_t errbuflen);
-extern void rs_do_mapclear(char *cmdp, char *arg, int forceit, int abbr);
 extern int rs_get_map_mode(char **cmdp, int forceit);
 extern int rs_get_map_mode_string(const char *mode_string, int abbr);
-extern int rs_get_maptype(int cmdchar);
-extern mapblock_T *rs_find_matching_abbr(const char *ptr, int len);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
