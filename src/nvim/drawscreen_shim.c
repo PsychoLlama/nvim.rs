@@ -13,10 +13,13 @@
 #include "nvim/grid_defs.h"
 #include "nvim/highlight.h"
 #include "nvim/insexpand.h"
+#include "nvim/memline.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
+#include "nvim/option.h"
 #include "nvim/option_vars.h"
+#include "nvim/plines.h"
 #include "nvim/popupmenu.h"
 #include "nvim/profile.h"
 #include "nvim/regexp.h"
@@ -382,4 +385,78 @@ void nvim_win_draw_border(win_T *wp)
 void nvim_win_grid_alloc_invalidate(win_T *wp)
 {
   grid_invalidate(&wp->w_grid_alloc);
+}
+
+// =============================================================================
+// Phase 2: nvim_win_visual_region_impl accessors
+// =============================================================================
+
+/// Return wp->w_lines[idx].wl_size.
+int nvim_win_wlines_get_size(win_T *wp, int idx)
+{
+  return wp->w_lines[idx].wl_size;
+}
+
+/// Return curwin->w_p_lbr.
+int nvim_curwin_get_w_p_lbr(void) { return curwin->w_p_lbr; }
+
+/// Return curwin->w_ve_flags.
+unsigned nvim_curwin_get_w_ve_flags(void) { return curwin->w_ve_flags; }
+
+/// Set curwin->w_ve_flags.
+void nvim_curwin_set_w_ve_flags(unsigned val) { curwin->w_ve_flags = val; }
+
+/// Return curwin->w_curswant.
+colnr_T nvim_curwin_get_curswant(void) { return curwin->w_curswant; }
+
+/// Return true if buf == curwin->w_buffer.
+bool nvim_buf_is_curwin_buf(buf_T *buf) { return buf == curwin->w_buffer; }
+
+/// Return ml_get_buf_len(buf, lnum).
+colnr_T nvim_buf_ml_get_len(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf_len(buf, lnum);
+}
+
+/// Compute getvcols(&VIsual, &curwin->w_cursor) for block visual mode.
+/// Returns fromc via *fromc_out and pre-incremented toc via *toc_out.
+/// Also handles MAXCOL curswant block expansion.
+/// This is the core of the block-visual column range calculation.
+void nvim_win_visual_block_cols(win_T *wp, colnr_T *fromc_out, colnr_T *toc_out)
+{
+  colnr_T fromc, toc;
+  unsigned save_ve_flags = curwin->w_ve_flags;
+
+  if (curwin->w_p_lbr) {
+    curwin->w_ve_flags = kOptVeFlagAll;
+  }
+
+  getvcols(wp, &VIsual, &curwin->w_cursor, &fromc, &toc);
+  toc++;
+  curwin->w_ve_flags = save_ve_flags;
+
+  if (curwin->w_curswant == MAXCOL) {
+    if (get_ve_flags(curwin) & kOptVeFlagBlock) {
+      pos_T pos;
+      int cursor_above = curwin->w_cursor.lnum < VIsual.lnum;
+
+      toc = 0;
+      pos.coladd = 0;
+      for (pos.lnum = curwin->w_cursor.lnum;
+           cursor_above ? pos.lnum <= VIsual.lnum : pos.lnum >= VIsual.lnum;
+           pos.lnum += cursor_above ? 1 : -1) {
+        colnr_T t;
+
+        pos.col = ml_get_buf_len(wp->w_buffer, pos.lnum);
+        getvvcol(wp, &pos, NULL, NULL, &t);
+        toc = MAX(toc, t);
+      }
+      toc++;
+    } else {
+      toc = MAXCOL;
+    }
+  }
+
+  *fromc_out = fromc;
+  *toc_out = toc;
 }

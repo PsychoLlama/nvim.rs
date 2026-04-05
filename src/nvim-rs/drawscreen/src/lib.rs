@@ -2973,26 +2973,239 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
 }
 
 // =============================================================================
-// Phase 6: win_update visual region extraction
+// Phase 6 (plan eec0896b): migrate nvim_win_visual_region_impl to Rust
 // =============================================================================
 
+/// VALID_BOTLINE flag: w_botline and w_empty_rows are valid.
+const VALID_BOTLINE: c_int = 0x20;
+
+/// MAXCOL: maximal column number.
+const MAXCOL: c_int = 0x7fff_ffff;
+
 extern "C" {
-    /// C batch helper implementing the visual region update section of win_update().
-    fn nvim_win_visual_region_impl(
-        wp: WinHandle,
-        buf: BufHandle,
-        type_: c_int,
-        top_end: c_int,
-        scrolled_down: bool,
-        mid_start: *mut c_int,
-        mid_end: *mut c_int,
-    );
+    /// Get wp->w_old_cursor_lnum.
+    fn nvim_win_get_old_cursor_lnum(wp: WinHandle) -> LinenrT;
+    /// Get wp->w_old_visual_lnum.
+    fn nvim_win_get_old_visual_lnum(wp: WinHandle) -> LinenrT;
+    /// Get wp->w_old_visual_col.
+    fn nvim_win_get_old_visual_col(wp: WinHandle) -> ColnrT;
+    /// Get wp->w_old_cursor_fcol.
+    fn nvim_win_get_old_cursor_fcol(wp: WinHandle) -> ColnrT;
+    /// Get wp->w_old_cursor_lcol.
+    fn nvim_win_get_old_cursor_lcol(wp: WinHandle) -> ColnrT;
+    /// Get wp->w_old_curswant.
+    fn nvim_win_get_old_curswant(wp: WinHandle) -> ColnrT;
+    /// Set wp->w_old_cursor_fcol.
+    fn nvim_win_set_old_cursor_fcol(wp: WinHandle, val: ColnrT);
+    /// Set wp->w_old_cursor_lcol.
+    fn nvim_win_set_old_cursor_lcol(wp: WinHandle, val: ColnrT);
+    /// Set wp->w_old_curswant.
+    fn nvim_win_set_old_curswant(wp: WinHandle, val: ColnrT);
+
+    /// Get wp->w_valid flags.
+    fn nvim_win_get_valid(wp: WinHandle) -> c_int;
+    /// Get wp->w_lines[idx].wl_size.
+    fn nvim_win_wlines_get_size(wp: WinHandle, idx: c_int) -> c_int;
+    /// Get wp->w_lines[idx].wl_valid.
+    fn nvim_win_get_lines_wl_valid(wp: WinHandle, idx: c_int) -> bool;
+    /// Get wp->w_lines[idx].wl_lnum.
+    fn nvim_win_get_lines_wl_lnum(wp: WinHandle, idx: c_int) -> LinenrT;
+
+    /// Get curwin->w_p_lbr.
+    fn nvim_curwin_get_w_p_lbr() -> c_int;
+    /// Get curwin->w_curswant.
+    fn nvim_curwin_get_curswant() -> ColnrT;
+    /// Get curwin->w_ve_flags.
+    fn nvim_curwin_get_w_ve_flags() -> u32;
+    /// Set curwin->w_ve_flags.
+    fn nvim_curwin_set_w_ve_flags(val: u32);
+    /// Get curwin->w_cursor.lnum.
+    fn nvim_curwin_get_cursor_lnum() -> LinenrT;
+    /// Return true if buf == curwin->w_buffer.
+    fn nvim_buf_is_curwin_buf(buf: BufHandle) -> bool;
+
+    /// Get VIsual.lnum.
+    fn nvim_get_VIsual_lnum() -> c_int;
+    /// Get VIsual.col.
+    fn nvim_get_VIsual_col() -> c_int;
+
+    /// Compute block-visual column range: getvcols(&VIsual, &curwin->w_cursor),
+    /// handles MAXCOL curswant, returns fromc and toc (post-increment).
+    fn nvim_win_visual_block_cols(wp: WinHandle, fromc: *mut ColnrT, toc: *mut ColnrT);
 }
 
 /// Visual mode region update section extracted from `win_update()`.
 ///
 /// Computes which screen rows need redrawing due to Visual selection changes,
 /// updates mid_start/mid_end, and saves old visual state into window fields.
+///
+/// Rust equivalent of `nvim_win_visual_region_impl()` in drawscreen.c.
+///
+/// # Safety
+/// Must be called from within the win_update() context with valid wp/buf.
+#[allow(clippy::too_many_lines)]
+unsafe fn win_update_visual_region_impl(
+    wp: WinHandle,
+    buf: BufHandle,
+    type_: c_int,
+    top_end: c_int,
+    scrolled_down: bool,
+    mid_start: *mut c_int,
+    mid_end: *mut c_int,
+) {
+    let visual_active = VIsual_active;
+    let buf_is_curwin = nvim_buf_is_curwin_buf(buf);
+    let old_cursor_lnum = nvim_win_get_old_cursor_lnum(wp);
+
+    // check if we are updating or removing the inverted part
+    if (visual_active && buf_is_curwin) || (old_cursor_lnum != 0 && type_ != UPD_NOT_VALID) {
+        let old_visual_lnum = nvim_win_get_old_visual_lnum(wp);
+        let old_visual_col = nvim_win_get_old_visual_col(wp);
+
+        let (from, to) = if visual_active {
+            let cursor_lnum = nvim_curwin_get_cursor_lnum();
+            let visual_lnum = nvim_get_VIsual_lnum();
+            let visual_mode = VIsual_mode;
+            let old_visual_mode = nvim_win_get_old_visual_mode(wp);
+
+            let (from, to) = if visual_mode != old_visual_mode || type_ == UPD_INVERTED_ALL {
+                let (f, t) = if cursor_lnum < visual_lnum {
+                    (cursor_lnum, visual_lnum)
+                } else {
+                    (visual_lnum, cursor_lnum)
+                };
+                let f = f.min(old_cursor_lnum).min(old_visual_lnum);
+                let t = t.max(old_cursor_lnum).max(old_visual_lnum);
+                (f, t)
+            } else {
+                let (mut f, mut t) = if cursor_lnum < old_cursor_lnum {
+                    (cursor_lnum, old_cursor_lnum)
+                } else {
+                    let f2 = old_cursor_lnum;
+                    let t2 = cursor_lnum;
+                    let f2 = if f2 == 0 { t2 } else { f2 };
+                    (f2, t2)
+                };
+
+                let visual_col = nvim_get_VIsual_col();
+                if visual_lnum != old_visual_lnum || visual_col != old_visual_col {
+                    if old_visual_lnum < f && old_visual_lnum != 0 {
+                        f = old_visual_lnum;
+                    }
+                    t = t.max(old_visual_lnum).max(visual_lnum);
+                    f = f.min(visual_lnum);
+                }
+                (f, t)
+            };
+
+            // Handle block visual column tracking
+            let ctrl_v: c_int = 0x16; // Ctrl-V character
+            let (from, to) = if visual_mode == ctrl_v {
+                let mut fromc: ColnrT = 0;
+                let mut toc: ColnrT = 0;
+                nvim_win_visual_block_cols(wp, &raw mut fromc, &raw mut toc);
+
+                let prev_first_col = nvim_win_get_old_cursor_fcol(wp);
+                let prev_last_col = nvim_win_get_old_cursor_lcol(wp);
+                let (f, t) = if fromc != prev_first_col || toc != prev_last_col {
+                    let visual_lnum2 = nvim_get_VIsual_lnum();
+                    (from.min(visual_lnum2), to.max(visual_lnum2))
+                } else {
+                    (from, to)
+                };
+                nvim_win_set_old_cursor_fcol(wp, fromc);
+                nvim_win_set_old_cursor_lcol(wp, toc);
+                (f, t)
+            } else {
+                (from, to)
+            };
+
+            (from, to)
+        } else {
+            // Visual mode no longer active: use old saved lnums
+            let (f, t) = if old_cursor_lnum < old_visual_lnum {
+                (old_cursor_lnum, old_visual_lnum)
+            } else {
+                (old_visual_lnum, old_cursor_lnum)
+            };
+            (f, t)
+        };
+
+        let topline = nvim_win_get_topline(wp);
+        let from = from.max(topline);
+
+        let (from, to) = if (nvim_win_get_valid(wp) & VALID_BOTLINE) != 0 {
+            let botline = nvim_win_get_botline(wp);
+            (from.min(botline - 1), to.min(botline - 1))
+        } else {
+            (from, to)
+        };
+
+        let ms = *mid_start;
+        if ms > 0 {
+            let mut lnum = nvim_win_get_topline(wp);
+            let mut idx: c_int = 0;
+            let mut srow: c_int = 0;
+            let lines_valid = nvim_win_get_lines_valid(wp);
+
+            if scrolled_down {
+                *mid_start = top_end;
+            } else {
+                *mid_start = 0;
+            }
+
+            while lnum < from && idx < lines_valid {
+                let wl_valid = nvim_win_get_lines_wl_valid(wp, idx);
+                let wl_size = nvim_win_wlines_get_size(wp, idx);
+                if wl_valid {
+                    *mid_start += wl_size;
+                } else if !scrolled_down {
+                    srow += wl_size;
+                }
+                idx += 1;
+                if idx < lines_valid && nvim_win_get_lines_wl_valid(wp, idx) {
+                    lnum = nvim_win_get_lines_wl_lnum(wp, idx);
+                } else {
+                    lnum += 1;
+                }
+            }
+
+            srow += *mid_start;
+            *mid_end = nvim_win_get_view_height(wp);
+
+            while idx < lines_valid {
+                let wl_valid = nvim_win_get_lines_wl_valid(wp, idx);
+                let wl_lnum = nvim_win_get_lines_wl_lnum(wp, idx);
+                if wl_valid && wl_lnum > to {
+                    *mid_end = srow;
+                    break;
+                }
+                srow += nvim_win_wlines_get_size(wp, idx);
+                idx += 1;
+            }
+        }
+    }
+
+    // Save visual state for next iteration
+    if visual_active && nvim_buf_is_curwin_buf(buf) {
+        let cursor_lnum = nvim_curwin_get_cursor_lnum();
+        let visual_lnum = nvim_get_VIsual_lnum();
+        let visual_col = nvim_get_VIsual_col();
+        let curswant = nvim_curwin_get_curswant();
+        nvim_win_set_old_visual_mode(wp, VIsual_mode);
+        nvim_win_set_old_cursor_lnum(wp, cursor_lnum);
+        nvim_win_set_old_visual_lnum(wp, visual_lnum);
+        nvim_win_set_old_visual_col(wp, visual_col);
+        nvim_win_set_old_curswant(wp, curswant);
+    } else {
+        nvim_win_set_old_visual_mode(wp, 0);
+        nvim_win_set_old_cursor_lnum(wp, 0);
+        nvim_win_set_old_visual_lnum(wp, 0);
+        nvim_win_set_old_visual_col(wp, 0);
+    }
+}
+
+/// Visual mode region update. Replaces C `nvim_win_visual_region_impl`.
 ///
 /// # Safety
 /// Must be called from within the win_update() context with valid wp/buf.
@@ -3006,7 +3219,7 @@ pub unsafe extern "C" fn rs_win_update_visual_region(
     mid_start: *mut c_int,
     mid_end: *mut c_int,
 ) {
-    nvim_win_visual_region_impl(wp, buf, type_, top_end, scrolled_down, mid_start, mid_end);
+    win_update_visual_region_impl(wp, buf, type_, top_end, scrolled_down, mid_start, mid_end);
 }
 
 // =============================================================================

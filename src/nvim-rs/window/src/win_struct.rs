@@ -1599,6 +1599,46 @@ pub const unsafe extern "C" fn win_get_old_cursor_lcol(wp: WinHandle) -> ColNr {
     win_ref(wp).w_old_cursor_lcol
 }
 
+/// Returns `wp->w_old_cursor_lnum`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_old_cursor_lnum"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_old_cursor_lnum(wp: WinHandle) -> LineNr {
+    win_ref(wp).w_old_cursor_lnum
+}
+
+/// Returns `wp->w_old_visual_lnum`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_old_visual_lnum"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_old_visual_lnum(wp: WinHandle) -> LineNr {
+    win_ref(wp).w_old_visual_lnum
+}
+
+/// Returns `wp->w_old_visual_col`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_old_visual_col"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_old_visual_col(wp: WinHandle) -> ColNr {
+    win_ref(wp).w_old_visual_col
+}
+
+/// Returns `wp->w_old_curswant`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_old_curswant"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_old_curswant(wp: WinHandle) -> ColNr {
+    win_ref(wp).w_old_curswant
+}
+
 /// Returns `wp->w_botfill`.
 ///
 /// # Safety
@@ -2393,6 +2433,33 @@ pub unsafe extern "C" fn win_set_old_visual_lnum(wp: WinHandle, val: LineNr) {
 #[export_name = "nvim_win_set_old_visual_col"]
 pub unsafe extern "C" fn win_set_old_visual_col(wp: WinHandle, val: ColNr) {
     win_mut(wp).w_old_visual_col = val;
+}
+
+/// Sets `wp->w_old_cursor_fcol`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_set_old_cursor_fcol"]
+pub unsafe extern "C" fn win_set_old_cursor_fcol(wp: WinHandle, val: ColNr) {
+    win_mut(wp).w_old_cursor_fcol = val;
+}
+
+/// Sets `wp->w_old_cursor_lcol`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_set_old_cursor_lcol"]
+pub unsafe extern "C" fn win_set_old_cursor_lcol(wp: WinHandle, val: ColNr) {
+    win_mut(wp).w_old_cursor_lcol = val;
+}
+
+/// Sets `wp->w_old_curswant`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_set_old_curswant"]
+pub unsafe extern "C" fn win_set_old_curswant(wp: WinHandle, val: ColNr) {
+    win_mut(wp).w_old_curswant = val;
 }
 
 /// Sets `wp->w_cursorline`. Does nothing if wp is null.
