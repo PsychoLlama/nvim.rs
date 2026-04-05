@@ -17,6 +17,7 @@
 pub mod abbrev;
 pub mod args;
 pub mod completion;
+pub mod display;
 pub mod do_map;
 pub mod exmap;
 pub mod flags;

@@ -107,6 +107,9 @@ extern void rs_set_maparg_rhs(const char *orig_rhs, size_t orig_rhs_len,
                                LuaRef rhs_lua, int sid, const char *cpo_val,
                                MapArguments *mapargs);
 extern int rs_buf_do_map(int maptype, MapArguments *args, int mode, int is_abbrev, buf_T *buf);
+extern mapblock_T *rs_map_add(buf_T *buf, int is_buf_local, const char *keys,
+                              MapArguments *args, int noremap, int mode,
+                              int is_abbr, int sid, int lnum, int simplified);
 
 #define MAP_ARGUMENTS_INIT { false, false, false, false, false, false, false, false, \
                              { 0 }, 0, { 0 }, 0, NULL, 0, LUA_NOREF, false, NULL, 0, NULL }
@@ -126,126 +129,6 @@ static const char e_entries_missing_in_mapset_dict_argument[]
 static const char e_illegal_map_mode_string_str[]
   = N_("E1276: Illegal map mode string: '%s'");
 
-/// @param local  true for buffer-local map
-static void showmap(mapblock_T *mp, bool local)
-{
-  if (message_filtered(mp->m_keys) && message_filtered(mp->m_str)
-      && (mp->m_desc == NULL || message_filtered(mp->m_desc))) {
-    return;
-  }
-
-  // When ext_messages is active, msg_didout is never set.
-  if (msg_didout || msg_silent != 0 || ui_has(kUIMessages)) {
-    msg_putchar('\n');
-    if (got_int) {          // 'q' typed at MORE prompt
-      return;
-    }
-  }
-
-  char mapchars[7];
-  map_mode_to_chars(mp->m_mode, mapchars);
-  msg_puts(mapchars);
-  size_t len = strlen(mapchars);
-
-  while (++len <= 3) {
-    msg_putchar(' ');
-  }
-
-  // Display the LHS.  Get length of what we write.
-  len = (size_t)msg_outtrans_special(mp->m_keys, true, 0);
-  do {
-    msg_putchar(' ');                   // pad with blanks
-    len++;
-  } while (len < 12);
-
-  if (mp->m_noremap == REMAP_NONE) {
-    msg_puts_hl("*", HLF_8, false);
-  } else if (mp->m_noremap == REMAP_SCRIPT) {
-    msg_puts_hl("&", HLF_8, false);
-  } else {
-    msg_putchar(' ');
-  }
-
-  if (local) {
-    msg_putchar('@');
-  } else {
-    msg_putchar(' ');
-  }
-
-  // Use false below if we only want things like <Up> to show up as such on
-  // the rhs, and not M-x etc, true gets both -- webb
-  if (mp->m_luaref != LUA_NOREF) {
-    char *str = nlua_funcref_str(mp->m_luaref, NULL);
-    msg_puts_hl(str, HLF_8, false);
-    xfree(str);
-  } else if (mp->m_str[0] == NUL) {
-    msg_puts_hl("<Nop>", HLF_8, false);
-  } else {
-    msg_outtrans_special(mp->m_str, false, 0);
-  }
-
-  if (mp->m_desc != NULL) {
-    msg_puts("\n                 ");  // Shift line to same level as rhs.
-    msg_puts(mp->m_desc);
-  }
-  if (p_verbose > 0) {
-    last_set_msg(mp->m_script_ctx);
-  }
-  msg_clr_eos();
-}
-
-/// @param args  "rhs", "rhs_lua", "orig_rhs", "expr", "silent", "nowait",
-///              "replace_keycodes" and "desc" fields are used.
-/// @param sid  0 to use current_sctx
-static mapblock_T *map_add(buf_T *buf, mapblock_T **map_table, mapblock_T **abbr_table,
-                           const char *keys, MapArguments *args, int noremap, int mode,
-                           bool is_abbr, scid_T sid, linenr_T lnum, bool simplified)
-  FUNC_ATTR_NONNULL_RET
-{
-  mapblock_T *mp = xcalloc(1, sizeof(mapblock_T));
-
-  // If CTRL-C has been mapped, don't always use it for Interrupting.
-  if (*keys == Ctrl_C) {
-    if (map_table == buf->b_maphash) {
-      buf->b_mapped_ctrl_c |= mode;
-    } else {
-      mapped_ctrl_c |= mode;
-    }
-  }
-
-  mp->m_keys = xstrdup(keys);
-  mp->m_str = args->rhs;
-  mp->m_orig_str = args->orig_rhs;
-  mp->m_luaref = args->rhs_lua;
-  mp->m_keylen = (int)strlen(mp->m_keys);
-  mp->m_noremap = noremap;
-  mp->m_nowait = args->nowait;
-  mp->m_silent = args->silent;
-  mp->m_mode = mode;
-  mp->m_simplified = simplified;
-  mp->m_expr = args->expr;
-  mp->m_replace_keycodes = args->replace_keycodes;
-  if (sid != 0) {
-    mp->m_script_ctx.sc_sid = sid;
-    mp->m_script_ctx.sc_lnum = lnum;
-  } else {
-    mp->m_script_ctx = current_sctx;
-    mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
-    nlua_set_sctx(&mp->m_script_ctx);
-  }
-  mp->m_desc = args->desc;
-
-  // add the new entry in front of the abbrlist or maphash[] list
-  if (is_abbr) {
-    mp->m_next = *abbr_table;
-    *abbr_table = mp;
-  } else {
-    const int n = MAP_HASH(mp->m_mode, (uint8_t)mp->m_keys[0]);
-    mp->m_next = map_table[n];
-    map_table[n] = mp;
-  }
-  return mp;
-}
 
 // Check for an abbreviation. Cursor is at ptr[col].
 // When inserting, mincol is where insert started.
@@ -448,24 +331,6 @@ char *eval_map_expr(mapblock_T *mp, int c)
   return res;
 }
 
-/// "hasmapto()" function
-void f_hasmapto(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *mode;
-  const char *const name = tv_get_string(&argvars[0]);
-  bool abbr = false;
-  char buf[NUMBUFLEN];
-  if (argvars[1].v_type == VAR_UNKNOWN) {
-    mode = "nvo";
-  } else {
-    mode = tv_get_string_buf(&argvars[1], buf);
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      abbr = tv_get_number(&argvars[2]);
-    }
-  }
-
-  rettv->vval.v_number = map_to_exists(name, mode, abbr);
-}
 
 /// Fill a Dict with all applicable maparg() like dictionaries.
 static Dict mapblock_fill_dict(const mapblock_T *const mp, const char *lhsrawalt,
@@ -677,9 +542,6 @@ void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   rs_set_maparg_rhs(orig_rhs, strlen(orig_rhs), rhs_lua, sid, p_cpo, &args);
 
-  mapblock_T **map_table = buffer ? curbuf->b_maphash : maphash;
-  mapblock_T **abbr_table = buffer ? &curbuf->b_first_abbr : &first_abbr;
-
   // Delete any existing mapping for this lhs and mode.
   MapArguments unmap_args = MAP_ARGUMENTS_INIT;
   rs_set_maparg_lhs_rhs(lhs, strlen(lhs), "", 0, LUA_NOREF, p_cpo, &unmap_args);
@@ -690,11 +552,11 @@ void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   mapblock_T *mp_result[2] = { NULL, NULL };
 
-  mp_result[0] = map_add(curbuf, map_table, abbr_table, lhsraw, &args,
-                         noremap, mode, is_abbr, sid, lnum, false);
+  mp_result[0] = rs_map_add(curbuf, buffer ? 1 : 0, lhsraw, &args,
+                            noremap, mode, is_abbr, sid, lnum, 0);
   if (lhsrawalt != NULL) {
-    mp_result[1] = map_add(curbuf, map_table, abbr_table, lhsrawalt, &args,
-                           noremap, mode, is_abbr, sid, lnum, true);
+    mp_result[1] = rs_map_add(curbuf, buffer ? 1 : 0, lhsrawalt, &args,
+                              noremap, mode, is_abbr, sid, lnum, 1);
   }
 
   if (mp_result[0] != NULL && mp_result[1] != NULL) {
@@ -1066,18 +928,7 @@ void nvim_set_maphash_entry(int index, mapblock_T *mp) { if (index >= 0 && index
 void nvim_set_first_abbr(mapblock_T *mp) { first_abbr = mp; }
 void nvim_buf_set_maphash_entry(buf_T *buf, int index, mapblock_T *mp) { if (buf && index >= 0 && index < MAX_MAPHASH) { buf->b_maphash[index] = mp; } }
 void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp) { if (buf) { buf->b_first_abbr = mp; } }
-void nvim_showmap(mapblock_T *mp, int local) { showmap(mp, local != 0); }
 
-mapblock_T *nvim_map_add(buf_T *buf, int is_buf_local, const char *keys,
-                         void *args_ptr, int noremap, int mode,
-                         int is_abbr, int sid, int lnum, int simplified)
-{
-  MapArguments *args = (MapArguments *)args_ptr;
-  mapblock_T **mt = is_buf_local ? buf->b_maphash : maphash;
-  mapblock_T **at = is_buf_local ? &buf->b_first_abbr : &first_abbr;
-  return map_add(buf, mt, at, keys, args, noremap, mode,
-                 is_abbr != 0, (scid_T)sid, (linenr_T)lnum, simplified != 0);
-}
 void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
                          int noremap, int mode, int simplified)
 {

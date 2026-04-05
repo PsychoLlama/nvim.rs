@@ -43,20 +43,6 @@ extern "C" {
     fn nvim_buf_get_first_abbr(buf: BufHandle) -> MapblockHandle;
     fn nvim_get_curbuf() -> BufHandle;
 
-    // Phase 6 C accessors
-    fn nvim_showmap(mp: MapblockHandle, local: c_int);
-    fn nvim_map_add(
-        buf: BufHandle,
-        is_buf_local: c_int,
-        keys: *const c_char,
-        args: *mut MapArguments,
-        noremap: c_int,
-        mode: c_int,
-        is_abbr: c_int,
-        sid: c_int,
-        lnum: c_int,
-        simplified: c_int,
-    ) -> MapblockHandle;
     fn nvim_mapblock_reuse(
         mp: MapblockHandle,
         args: *mut MapArguments,
@@ -498,7 +484,7 @@ pub unsafe extern "C" fn rs_buf_do_map(
         }
 
         // Add a new entry to the maphash[] list or abbrlist.
-        mp_result[keyround as usize - 1] = nvim_map_add(
+        mp_result[keyround as usize - 1] = crate::display::rs_map_add(
             buf,
             c_int::from(is_buf_local),
             lhs,
@@ -620,11 +606,11 @@ unsafe fn list_buf_local_mappings(
                     let n = mapblock_keylen(mp);
                     let minlen = if n < len { n } else { len };
                     if libc::strncmp(mapblock_keys(mp), lhs, minlen as usize) == 0 {
-                        nvim_showmap(mp, 1);
+                        crate::display::rs_showmap(mp, true);
                         did_local = true;
                     }
                 } else {
-                    nvim_showmap(mp, 1);
+                    crate::display::rs_showmap(mp, true);
                     did_local = true;
                 }
             }
@@ -700,7 +686,7 @@ unsafe fn process_matching_entries(
                 if !has_lhs {
                     // Show all entries
                     if !mapblock_simplified(mp) {
-                        nvim_showmap(mp, c_int::from(is_buf_local));
+                        crate::display::rs_showmap(mp, is_buf_local);
                         *did_it = true;
                     }
                     mp = mapblock_next(mp);
@@ -752,7 +738,7 @@ unsafe fn process_matching_entries(
                 } else if !has_rhs {
                     // Show matching entry
                     if !mapblock_simplified(mp) {
-                        nvim_showmap(mp, c_int::from(is_buf_local));
+                        crate::display::rs_showmap(mp, is_buf_local);
                         *did_it = true;
                     }
                 } else if n != len {

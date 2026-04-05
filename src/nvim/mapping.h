@@ -15,7 +15,7 @@
 
 #include "mapping.h.generated.h"
 
-// Declarations for functions migrated to Rust (via #[export_name]).
+// Declarations for functions migrated to Rust (via #[export_name] or #[no_mangle]).
 // These were previously auto-generated from mapping.c definitions.
 // NOTE: bool parameters are declared as int to match Rust c_int ABI.
 
@@ -34,6 +34,7 @@ char *check_map(char *keys, int mode, int exact, int ign_mod, int abbr, mapblock
                 int *local_ptr, int *rhs_lua);
 int langmap_adjust_mb(int c);
 void langmap_init(void);
+void f_hasmapto(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 /// Used for the first argument of do_map()
 enum {
