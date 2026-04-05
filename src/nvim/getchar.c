@@ -394,21 +394,8 @@ int nvim_get_typebuf_maplen(void) { return typebuf.tb_maplen; }
 int nvim_get_typebuf_len(void) { return typebuf.tb_len; }
 // nvim_get_curscript, nvim_get_keynoremap deleted: curscript, KeyNoremap now non-static
 // nvim_get_rm_none, nvim_get_rm_script, nvim_get_maxmaplen deleted: Rust uses constants directly
-uint8_t *nvim_get_typebuf_buf(void) { return typebuf.tb_buf; }
-uint8_t *nvim_get_typebuf_noremap(void) { return typebuf.tb_noremap; }
-int nvim_get_typebuf_buflen(void) { return typebuf.tb_buflen; }
-int nvim_get_typebuf_off(void) { return typebuf.tb_off; }
-void nvim_set_typebuf_off(int val) { typebuf.tb_off = val; }
-void nvim_set_typebuf_len(int val) { typebuf.tb_len = val; }
-void nvim_set_typebuf_maplen(int val) { typebuf.tb_maplen = val; }
-void nvim_set_typebuf_silent(int val) { typebuf.tb_silent = val; }
-void nvim_set_typebuf_no_abbr_cnt(int val) { typebuf.tb_no_abbr_cnt = val; }
-void nvim_set_typebuf_change_cnt(int val) { typebuf.tb_change_cnt = val; }
-void nvim_set_typebuf_was_filled(int val) { typebuf_was_filled = val != 0; }
-// nvim_get/set_old_char, nvim_get/set_old_mod_mask deleted: moved to Rust (input.rs)
-int nvim_get_typebuf_silent(void) { return typebuf.tb_silent; }
-int nvim_get_typebuf_no_abbr_cnt(void) { return typebuf.tb_no_abbr_cnt; }
-void nvim_init_typebuf(void) { rs_init_typebuf(); }
+// nvim_get_typebuf_buf/noremap/buflen/off, nvim_set_typebuf_* deleted: Rust uses typebuf_ptr() directly (Phase 4)
+// nvim_get_typebuf_silent/no_abbr_cnt, nvim_init_typebuf deleted: Rust uses typebuf_ptr() directly (Phase 4)
 
 // nvim_get/set/add_last_recorded_len deleted: moved to Rust (macro_recording.rs)
 void nvim_set_keynoremap(int val) { KeyNoremap = val; }
@@ -418,21 +405,13 @@ int nvim_get_allow_keys(void) { return allow_keys; }
 void nvim_set_allow_keys(int val) { allow_keys = val; }
 int nvim_get_mapped_ctrl_c(void) { return mapped_ctrl_c; }
 void nvim_set_mapped_ctrl_c(int val) { mapped_ctrl_c = val; }
-int nvim_get_keytyped(void) { return KeyTyped ? 1 : 0; }
-void nvim_set_keytyped(int val) { KeyTyped = val != 0; }
+// nvim_get/set_keytyped deleted: no Rust callers (Phase 4)
 int nvim_get_keystuffed(void) { return KeyStuffed; }
 void nvim_set_keystuffed(int val) { KeyStuffed = val; }
 int nvim_get_vgetc_busy(void) { return vgetc_busy; }
-void nvim_inc_vgetc_busy(void) { vgetc_busy++; }
-void nvim_dec_vgetc_busy(void)
-{
-  if (vgetc_busy > 0) {
-    vgetc_busy--;
-  }
-}
+// nvim_inc/dec_vgetc_busy deleted: no callers (Phase 4)
 int nvim_get_ex_normal_busy(void) { return ex_normal_busy; }
-int nvim_get_maptick(void) { return maptick; }
-void nvim_inc_maptick(void) { maptick++; }
+// nvim_get_maptick, nvim_inc_maptick deleted: no callers (Phase 4)
 int nvim_get_mod_mask(void) { return mod_mask; }
 void nvim_set_mod_mask(int val) { mod_mask = val; }
 int nvim_get_cmd_silent(void) { return cmd_silent ? 1 : 0; }
