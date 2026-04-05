@@ -4543,6 +4543,974 @@ unsafe fn libc_memmove(dst: *mut u8, src: *const u8, n: usize) {
     unsafe { std::ptr::copy(src, dst, n) };
 }
 
+// ============================================================================
+// win_line migration phases: helper constants and FFI
+// ============================================================================
+
+/// SLF_WRAP flag from grid.h.
+const SLF_WRAP: c_int = 2;
+/// SLF_INC_VCOL flag from grid.h.
+const SLF_INC_VCOL: c_int = 4;
+
+/// HLF_CUC: 'cursorcolumn' highlight group (index 55).
+const HLF_CUC: c_int = 55;
+
+/// Ctrl-V codepoint for visual block mode check.
+const CTRL_V: c_int = 0x16;
+
+/// TERM_ATTRS_MAX: maximum columns for terminal highlight attributes.
+const TERM_ATTRS_MAX: c_int = 1024;
+
+/// MB_FILLER_CHAR: character used when a double-width character doesn't fit.
+const MB_FILLER_CHAR: c_int = b'<' as c_int;
+
+/// VALID_WCOL | VALID_WROW | VALID_VIRTCOL bits.
+const VALID_WCOL_WROW_VIRTCOL: c_int = 0x07;
+
+/// kVLLeftcol flag: start at left window edge.
+const K_VL_LEFTCOL: c_int = 1;
+/// kVLScroll flag: can scroll horizontally.
+const K_VL_SCROLL: c_int = 2;
+
+// Phase-functions FFI (new C accessors added to drawscreen_shim.c / drawline.c)
+extern "C" {
+    /// Get pointer to global screen_search_hl (match_T*).
+    fn nvim_get_screen_search_hl_ptr() -> *mut c_void;
+    /// Update curwin->w_cline_{row,height,folded} and w_valid.
+    fn nvim_curwin_update_cline(startrow: c_int, row: c_int, has_fold: bool);
+    /// Invalidate first column of next row in grid after a line wrap.
+    fn nvim_grid_invalidate_next_row(grid: *mut c_void, row: c_int);
+    /// wp->w_grid.target->cols
+    fn nvim_win_get_w_grid_target_cols(wp: WinHandle) -> c_int;
+    /// Get pointer to virt_lines[idx].line (VirtText*) as void*.
+    fn nvim_virt_lines_get_line(virt_lines: *mut c_void, idx: c_int) -> *mut c_void;
+    /// conceal_cursor_line: true if cursor line conceal should apply.
+    fn conceal_cursor_line(wp: WinHandle) -> bool;
+    /// wp->w_botfill
+    fn nvim_win_get_botfill(wp: WinHandle) -> bool;
+    /// schar_from_char
+    fn schar_from_char(c: c_int) -> ScharT;
+    /// wp->w_p_cole
+    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
+    /// wp->w_leftcol
+    fn nvim_win_get_leftcol(wp: WinHandle) -> ColnrT;
+    /// wp->w_virtcol (alias for nvim_win_get_virtcol which already exists)
+    // (already declared above as nvim_win_get_virtcol)
+    /// wp->w_wcol
+    fn nvim_win_get_wcol(wp: WinHandle) -> ColnrT;
+    /// Set wp->w_wcol
+    fn nvim_win_set_wcol(wp: WinHandle, val: c_int);
+    /// wp->w_wrow
+    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
+    /// Set wp->w_wrow
+    fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
+    /// wp->w_valid |= bits
+    fn nvim_win_set_valid_bits(wp: WinHandle, bits: c_int);
+    /// Check p_cpo for character c
+    fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
+    // nvim_win_get_p_list already declared above
+    // nvim_win_get_skipcol already declared above
+    // nvim_win_get_p_wrap already declared above
+    // nvim_win_get_lcs_prec already declared above (returns u32=ScharT)
+    // nvim_win_get_lcs_eol already declared above
+    // nvim_win_get_view_height already declared in separate extern block
+    // nvim_win_get_p_rl already declared above
+}
+
+// ============================================================================
+// Phase 1: EOL highlight, EOL fill, cursorcolumn
+// ============================================================================
+
+/// Handle highlighting at end of text line (C win_line lines 1728-1779).
+///
+/// Called when `mb_schar == NUL && eol_hl_off == 0`.
+/// Returns new `eol_hl_off` (1 if highlight was placed, 0 otherwise).
+///
+/// # Safety
+/// All pointers must be valid. `screen_search_hl` must point to a valid `match_T`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_win_line_eol_highlight(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *const WinLineState,
+    lcs_eol_todo: bool,
+    area_attr: c_int,
+    ptr_col: ColnrT,
+    screen_search_hl: *mut c_void,
+) -> c_int {
+    let has_fold = (*state).has_fold;
+    let view_width = (*state).view_width;
+    let lnum = (*wlv).lnum;
+
+    let prevcol_hl_flag = get_prevcol_hl_flag(wp, screen_search_hl, ptr_col - 1);
+
+    let visual_check = {
+        let vis_mode = nvim_get_VIsual_mode();
+        let vis_lnum = nvim_get_VIsual_lnum();
+        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        vis_mode != CTRL_V || lnum == vis_lnum || lnum == cursor_lnum
+    };
+
+    if lcs_eol_todo
+        && ((area_attr != 0 && (*wlv).vcol == (*wlv).fromcol && visual_check) || prevcol_hl_flag)
+    {
+        let linebuf_char = nvim_get_linebuf_char();
+        let linebuf_attr = nvim_get_linebuf_attr();
+        let linebuf_vcol = nvim_get_linebuf_vcol();
+
+        let n = if (*wlv).col >= view_width { -1 } else { 0 };
+
+        if n != 0 {
+            (*wlv).off += n;
+            (*wlv).col += n;
+        } else {
+            *linebuf_char.add((*wlv).off as usize) = schar_from_char(c_int::from(b' '));
+        }
+
+        if area_attr == 0 && !has_fold {
+            get_search_match_hl(wp, screen_search_hl, ptr_col, &mut (*wlv).char_attr);
+        }
+
+        let eol_attr = if (*wlv).cul_attr != 0 {
+            hl_combine_attr((*wlv).cul_attr, (*wlv).char_attr)
+        } else {
+            (*wlv).char_attr
+        };
+
+        *linebuf_attr.add((*wlv).off as usize) = eol_attr;
+        *linebuf_vcol.add((*wlv).off as usize) = (*wlv).vcol;
+        (*wlv).col += 1;
+        (*wlv).off += 1;
+        (*wlv).vcol += 1;
+        1
+    } else {
+        0
+    }
+}
+
+/// Fill past end-of-line with column/diff/terminal highlights and virtual text
+/// (C win_line lines 1782-1881).
+///
+/// Called when `mb_schar == NUL`.
+/// Returns `true` to signal the caller's while loop to `break`.
+///
+/// # Safety
+/// All pointers must be valid. `term_attrs` must be at least `TERM_ATTRS_MAX` ints.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_line_eol_fill(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    start_vcol: c_int,
+    lcs_eol_todo: bool,
+    eol_hl_off: c_int,
+    term_attrs: *const c_int,
+    has_decor: bool,
+) -> bool {
+    let view_width = (*state).view_width;
+    let win_col_offset = (*state).win_col_offset;
+    let in_curline = (*state).in_curline;
+    let has_fold = (*state).has_fold;
+    let bg_attr = (*state).bg_attr;
+    let startrow = (*wlv).startrow;
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    // check if line ends before left margin
+    let col_off_val = rs_win_col_off(wp);
+    let new_vcol = (start_vcol + (*wlv).col - col_off_val).max((*wlv).vcol);
+    (*wlv).vcol = new_vcol;
+    // Get rid of boguscols.
+    (*wlv).col -= (*wlv).boguscols;
+    (*wlv).boguscols = 0;
+
+    advance_color_col_impl(wlv, (*wlv).vcol - (*wlv).vcol_off_co);
+
+    let eol_skip = c_int::from(lcs_eol_todo && eol_hl_off == 0);
+
+    if has_decor {
+        let decor_state = nvim_get_decor_state();
+        decor_redraw_eol(
+            wp,
+            decor_state,
+            &mut (*wlv).line_attr,
+            (*wlv).col + eol_skip,
+        );
+    }
+
+    for i in (*wlv).col..view_width {
+        *linebuf_vcol.add(((*wlv).off + (i - (*wlv).col)) as usize) =
+            (*wlv).vcol + (i - (*wlv).col);
+    }
+
+    let buf = nvim_win_get_buffer(wp);
+    let terminal = nvim_buf_get_terminal(BufHandle(buf));
+    let lnum = (*wlv).lnum;
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let virtcol = nvim_win_get_virtcol(wp);
+    let vcol_hlc = (*wlv).vcol - (*wlv).vcol_off_co;
+    let view_width_isize = view_width as isize;
+    let row_factor = ((*wlv).row - startrow + 1) as isize;
+
+    let need_fill = (nvim_win_get_p_cuc(wp) != 0
+        && virtcol >= vcol_hlc - eol_hl_off
+        && (virtcol as isize) < view_width_isize * row_factor + start_vcol as isize
+        && lnum != cursor_lnum)
+        || !(*wlv).color_cols.is_null()
+        || (*wlv).line_attr_lowprio != 0
+        || (*wlv).line_attr != 0
+        || (*wlv).diff_hlf != 0
+        || terminal != 0;
+
+    if need_fill {
+        let mut rightmost_vcol = get_rightmost_vcol_impl(wp, (*wlv).color_cols);
+        let cuc_attr = nvim_win_hl_attr(wp, HLF_CUC);
+        let mc_attr = nvim_win_hl_attr(wp, HLF_MC);
+
+        if (*wlv).diff_hlf == HLF_TXD || (*wlv).diff_hlf == HLF_TXA {
+            (*wlv).diff_hlf = HLF_CHD;
+            set_line_attr_for_diff_impl(wp, wlv);
+        }
+
+        let diff_attr = if (*wlv).diff_hlf != 0 {
+            nvim_win_hl_attr(wp, (*wlv).diff_hlf)
+        } else {
+            0
+        };
+
+        let base_attr = hl_combine_attr((*wlv).line_attr_lowprio, diff_attr);
+        if base_attr != 0 || (*wlv).line_attr != 0 || terminal != 0 {
+            rightmost_vcol = c_int::MAX;
+        }
+
+        while (*wlv).col < view_width {
+            *linebuf_char.add((*wlv).off as usize) = schar_from_char(c_int::from(b' '));
+
+            advance_color_col_impl(wlv, (*wlv).vcol - (*wlv).vcol_off_co);
+
+            let cur_vcol_hlc = (*wlv).vcol - (*wlv).vcol_off_co;
+            let mut col_attr = base_attr;
+
+            if nvim_win_get_p_cuc(wp) != 0 && cur_vcol_hlc == virtcol && lnum != cursor_lnum {
+                col_attr = hl_combine_attr(col_attr, cuc_attr);
+            } else if !(*wlv).color_cols.is_null() && cur_vcol_hlc == *(*wlv).color_cols {
+                col_attr = hl_combine_attr(col_attr, mc_attr);
+            }
+
+            if terminal != 0 && (*wlv).vcol < TERM_ATTRS_MAX {
+                col_attr = hl_combine_attr(col_attr, *term_attrs.add((*wlv).vcol as usize));
+            }
+
+            col_attr = hl_combine_attr(col_attr, (*wlv).line_attr);
+
+            *linebuf_attr.add((*wlv).off as usize) = col_attr;
+            (*wlv).off += 1;
+            (*wlv).col += 1;
+            (*wlv).vcol += 1;
+
+            if ((*wlv).vcol - (*wlv).vcol_off_co) > rightmost_vcol {
+                break;
+            }
+        }
+    }
+
+    // Draw fold virtual text if any.
+    let fold_vt_ptr =
+        std::ptr::from_mut::<KVec<VirtTextChunkC>>(&mut (*state).fold_vt).cast::<c_void>();
+    if (*state).fold_vt.size > 0 {
+        draw_virt_text_item_impl(
+            BufHandle(buf),
+            win_col_offset,
+            fold_vt_ptr,
+            HL_MODE_COMBINE,
+            view_width,
+            0,
+            0,
+        );
+    }
+
+    draw_virt_text_impl(
+        wp,
+        BufHandle(buf),
+        win_col_offset,
+        &mut (*wlv).col,
+        (*wlv).row,
+    );
+    wlv_put_linebuf_impl(wp, wlv, (*wlv).col, true, bg_attr, SLF_INC_VCOL);
+    (*wlv).row += 1;
+
+    if in_curline {
+        nvim_curwin_update_cline(startrow, (*wlv).row, has_fold);
+    }
+
+    true // caller should break
+}
+
+/// Highlight cursorcolumn and colorcolumn for current character position
+/// (C win_line lines 1903-1927, including the `advance_color_col` at line 1903).
+///
+/// Returns the new `vcol_save_attr` (-1 if no override was applied).
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_line_cursorcolumn(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    lnum_in_visual_area: bool,
+    search_attr: c_int,
+    area_attr: c_int,
+) -> c_int {
+    advance_color_col_impl(wlv, (*wlv).vcol - (*wlv).vcol_off_co);
+
+    let mut vcol_save_attr: c_int = -1;
+
+    if !lnum_in_visual_area && search_attr == 0 && area_attr == 0 && (*wlv).filler_todo <= 0 {
+        let virtcol = nvim_win_get_virtcol(wp);
+        let lnum = (*wlv).lnum;
+        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let vcol_hlc = (*wlv).vcol - (*wlv).vcol_off_co;
+
+        if nvim_win_get_p_cuc(wp) != 0 && vcol_hlc == virtcol && lnum != cursor_lnum {
+            vcol_save_attr = (*wlv).char_attr;
+            (*wlv).char_attr = hl_combine_attr(nvim_win_hl_attr(wp, HLF_CUC), (*wlv).char_attr);
+        } else if !(*wlv).color_cols.is_null() && vcol_hlc == *(*wlv).color_cols {
+            vcol_save_attr = (*wlv).char_attr;
+            (*wlv).char_attr = hl_combine_attr(nvim_win_hl_attr(wp, HLF_MC), (*wlv).char_attr);
+        }
+    }
+
+    // Apply lowest-priority line attr (lines 1924-1927).
+    if (*wlv).filler_todo <= 0 {
+        (*wlv).char_attr = hl_combine_attr((*wlv).line_attr_lowprio, (*wlv).char_attr);
+    }
+
+    vcol_save_attr
+}
+
+// ============================================================================
+// Phase 2: Store character and post-store
+// ============================================================================
+
+/// Store character to linebuf and handle skip/conceal logic
+/// (C win_line lines 1933-2021).
+///
+/// `mb_schar`, `multi_attr`, `is_concealing` are C local variables passed directly.
+/// `is_wrapped` is read from `state` (it is const throughout the loop).
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_line_store_char(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *const WinLineState,
+    mb_schar: ScharT,
+    multi_attr: c_int,
+    is_concealing: bool,
+) {
+    let is_wrapped = (*state).is_wrapped;
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    if (*wlv).filler_todo > 0 {
+        // No-op: wait for filler lines to finish.
+    } else if (*wlv).skip_cells <= 0 {
+        *linebuf_char.add((*wlv).off as usize) = mb_schar;
+        if multi_attr != 0 {
+            *linebuf_attr.add((*wlv).off as usize) = multi_attr;
+        } else {
+            *linebuf_attr.add((*wlv).off as usize) = (*wlv).char_attr;
+        }
+        *linebuf_vcol.add((*wlv).off as usize) = (*wlv).vcol;
+
+        if schar_cells(mb_schar) > 1 {
+            (*wlv).off += 1;
+            (*wlv).col += 1;
+            *linebuf_char.add((*wlv).off as usize) = 0;
+            *linebuf_attr.add((*wlv).off as usize) = *linebuf_attr.add((*wlv).off as usize - 1);
+            (*wlv).vcol += 1;
+            *linebuf_vcol.add((*wlv).off as usize) = (*wlv).vcol;
+            if (*wlv).tocol == (*wlv).vcol {
+                (*wlv).tocol += 1;
+            }
+        }
+        (*wlv).off += 1;
+        (*wlv).col += 1;
+    } else if nvim_win_get_p_cole(wp) > 0 && is_concealing {
+        let concealed_wide = schar_cells(mb_schar) > 1;
+        (*wlv).skip_cells -= 1;
+        (*wlv).vcol_off_co += 1;
+        if concealed_wide {
+            (*wlv).vcol += 1;
+            (*wlv).vcol_off_co += 1;
+        }
+        if (*wlv).n_extra > 0 {
+            (*wlv).vcol_off_co += (*wlv).n_extra;
+        }
+        if is_wrapped {
+            if (*wlv).n_extra > 0 {
+                (*wlv).vcol += (*wlv).n_extra;
+                (*wlv).col += (*wlv).n_extra;
+                (*wlv).boguscols += (*wlv).n_extra;
+                (*wlv).n_extra = 0;
+                (*wlv).n_attr = 0;
+            }
+            if concealed_wide {
+                (*wlv).boguscols += 1;
+                (*wlv).col += 1;
+            }
+            (*wlv).boguscols += 1;
+            (*wlv).col += 1;
+        } else if (*wlv).n_extra > 0 {
+            (*wlv).vcol += (*wlv).n_extra;
+            (*wlv).n_extra = 0;
+            (*wlv).n_attr = 0;
+        }
+    } else {
+        (*wlv).skip_cells -= 1;
+    }
+}
+
+/// Post-store: advance vcol, restore attributes, peek decorations
+/// (C win_line lines 2023-2062).
+///
+/// `vcol_save_attr` is from `rs_win_line_cursorcolumn`.
+/// `ptr_col` is `(colnr_T)(ptr - line)`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_line_post_store(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    vcol_save_attr: c_int,
+    ptr_col: ColnrT,
+) {
+    if (*wlv).skipped_cells > 0 {
+        (*wlv).vcol += (*wlv).skipped_cells;
+        (*wlv).skipped_cells = 0;
+    }
+    if (*wlv).filler_todo <= 0 {
+        (*wlv).vcol += 1;
+    }
+    if vcol_save_attr >= 0 {
+        (*wlv).char_attr = vcol_save_attr;
+    }
+    if (*state).n_attr3 > 0 {
+        (*state).n_attr3 -= 1;
+        if (*state).n_attr3 == 0 {
+            (*wlv).char_attr = (*state).saved_attr3;
+        }
+    }
+    if (*wlv).n_attr > 0 {
+        (*wlv).n_attr -= 1;
+        if (*wlv).n_attr == 0 {
+            (*wlv).char_attr = (*state).saved_attr2;
+        }
+    }
+
+    let view_width = (*state).view_width;
+    let is_wrapped = (*state).is_wrapped;
+
+    if (*state).has_decor && (*wlv).filler_todo <= 0 && (*wlv).col >= view_width {
+        let decor_state = nvim_get_decor_state();
+        if is_wrapped && (*wlv).n_extra == 0 {
+            decor_redraw_col_impl(wp, ptr_col, -3, false, decor_state);
+            (*state).decor_need_recheck = true;
+        } else if !is_wrapped {
+            decor_recheck_draw_col(-1, true, decor_state);
+            decor_redraw_col_impl(wp, MAXCOL, -1, true, decor_state);
+        }
+    }
+}
+
+// ============================================================================
+// Phase 3: End-check and line wrapping
+// ============================================================================
+
+/// At end of screen line: handle line wrapping, virt_line rendering, etc.
+/// (C win_line lines 2064-2163).
+///
+/// This is called after the outer `if` condition has already been checked.
+///
+/// Returns `true` if the C while loop should `break`.
+/// `draw_cols_out` is set to `true` to signal the caller to set `draw_cols = true`.
+/// `virt_line_index_out` and `virt_line_flags_out` are reset to -1/0.
+/// `lcs_prec_todo_out` is set from `wp->w_p_lcs_chars.prec`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_line_end_check(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    endrow: c_int,
+    leftcols_width: c_int,
+    virt_line_index: c_int,
+    virt_line_flags: c_int,
+    _ptr_is_nul: bool,
+    lcs_eol_todo: bool,
+    virt_lines_ptr: *mut c_void,
+    bg_attr: c_int,
+    statuscol_draw: *mut bool,
+    draw_cols_out: *mut bool,
+    virt_line_index_out: *mut c_int,
+    virt_line_flags_out: *mut c_int,
+    lcs_prec_todo_out: *mut ScharT,
+) -> bool {
+    let view_width = (*state).view_width;
+    let is_wrapped = (*state).is_wrapped;
+    // has_foldtext is checked externally before calling this function
+    let win_col_offset = (*state).win_col_offset;
+    let buf = nvim_win_get_buffer(wp);
+    let startrow = (*wlv).startrow;
+
+    let grid_width = nvim_win_get_w_grid_target_cols(wp);
+    let wrap = is_wrapped
+        && (*wlv).filler_todo <= 0
+        && lcs_eol_todo
+        && (*wlv).row != endrow - 1
+        && view_width == grid_width
+        && nvim_win_get_p_rl(wp) == 0;
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+    let _ = linebuf_vcol; // already filled
+
+    let mut draw_col = (*wlv).col - (*wlv).boguscols;
+
+    for i in draw_col..view_width {
+        *linebuf_vcol.add(((*wlv).off + (i - draw_col)) as usize) = (*wlv).vcol - 1;
+    }
+
+    if (*wlv).boguscols != 0 && ((*wlv).line_attr_lowprio != 0 || (*wlv).line_attr != 0) {
+        let attr = hl_combine_attr((*wlv).line_attr_lowprio, (*wlv).line_attr);
+        while draw_col < view_width {
+            *linebuf_char.add((*wlv).off as usize) = schar_from_char(c_int::from(b' '));
+            *linebuf_attr.add((*wlv).off as usize) = attr;
+            (*wlv).off += 1;
+            draw_col += 1;
+        }
+    }
+
+    if virt_line_index >= 0 {
+        let leftcol = if virt_line_flags & K_VL_LEFTCOL != 0 {
+            0
+        } else {
+            win_col_offset
+        };
+        let scroll_left = if virt_line_flags & K_VL_SCROLL != 0 {
+            nvim_win_get_leftcol(wp)
+        } else {
+            0
+        };
+        let line_vt = nvim_virt_lines_get_line(virt_lines_ptr, virt_line_index);
+        draw_virt_text_item_impl(
+            BufHandle(buf),
+            leftcol,
+            line_vt,
+            HL_MODE_REPLACE,
+            view_width,
+            0,
+            scroll_left,
+        );
+    } else if (*wlv).filler_todo <= 0 {
+        draw_virt_text_impl(
+            wp,
+            BufHandle(buf),
+            win_col_offset,
+            &mut draw_col,
+            (*wlv).row,
+        );
+    }
+
+    wlv_put_linebuf_impl(
+        wp,
+        wlv,
+        draw_col,
+        true,
+        bg_attr,
+        if wrap { SLF_WRAP } else { 0 },
+    );
+
+    if wrap {
+        let grid_ptr = nvim_win_get_w_grid(wp);
+        nvim_grid_invalidate_next_row(grid_ptr, (*wlv).row);
+    }
+
+    (*wlv).boguscols = 0;
+    (*wlv).vcol_off_co = 0;
+    (*wlv).row += 1;
+
+    if !is_wrapped && (*wlv).filler_todo <= 0 {
+        return true;
+    }
+
+    if (*wlv).col <= leftcols_width {
+        let view_height = (*state).view_height;
+        win_draw_end(
+            wp,
+            schar_from_char(c_int::from(b'@')),
+            true,
+            (*wlv).row,
+            view_height,
+            HLF_AT,
+        );
+        set_empty_rows(wp, (*wlv).row);
+        (*wlv).row = endrow;
+    }
+
+    if (*wlv).row == endrow {
+        (*wlv).row += 1;
+        return true;
+    }
+
+    rs_win_line_start(wp, wlv);
+    if !draw_cols_out.is_null() {
+        *draw_cols_out = true;
+    }
+
+    if !lcs_prec_todo_out.is_null() {
+        *lcs_prec_todo_out = nvim_win_get_lcs_prec(wp);
+    }
+
+    if (*wlv).filler_todo <= 0 {
+        (*wlv).need_showbreak = true;
+    }
+
+    if !statuscol_draw.is_null()
+        && *statuscol_draw
+        && nvim_vim_strchr_p_cpo(c_int::from(b'n'))
+        && (*wlv).row > startrow + (*wlv).filler_lines
+    {
+        *statuscol_draw = false;
+    }
+
+    (*wlv).filler_todo -= 1;
+
+    if !virt_line_index_out.is_null() {
+        *virt_line_index_out = -1;
+    }
+    if !virt_line_flags_out.is_null() {
+        *virt_line_flags_out = 0;
+    }
+
+    let botfill = nvim_win_get_botfill(wp);
+    let draw_text = (*state).draw_text;
+    if (*wlv).filler_todo == 0 && (botfill || !draw_text) {
+        return true;
+    }
+
+    false // continue
+}
+
+// ============================================================================
+// Phase 4: Extra attr restore, extends char, cursor conceal correct
+// ============================================================================
+
+/// Restore char_attr after special characters and handle precedes listchar
+/// (C win_line lines 1678-1725).
+///
+/// Returns updated `lcs_prec_todo`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_win_line_extra_attr_restore(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    lcs_prec_todo: ScharT,
+) -> ScharT {
+    if (*wlv).n_attr > 0 && !(*state).search_attr_from_match {
+        (*wlv).char_attr = hl_combine_attr((*wlv).char_attr, (*wlv).extra_attr);
+        if (*wlv).reset_extra_attr {
+            (*wlv).reset_extra_attr = false;
+            if (*state).extra_attr_next >= 0 {
+                (*wlv).extra_attr = (*state).extra_attr_next;
+                (*state).extra_attr_next = -1;
+            } else {
+                (*wlv).extra_attr = 0;
+                (*state).search_attr_from_match = (*state).saved_search_attr_from_match;
+            }
+        }
+    }
+
+    let mut new_lcs_prec_todo = lcs_prec_todo;
+    let mb_schar = (*state).mb_schar;
+
+    if lcs_prec_todo != 0
+        && nvim_win_get_p_list(wp) != 0
+        && (if nvim_win_get_p_wrap(wp) != 0 {
+            nvim_win_get_skipcol(wp) > 0 && (*wlv).row == 0
+        } else {
+            nvim_win_get_leftcol(wp) > 0
+        })
+        && (*wlv).filler_todo <= 0
+        && (*wlv).skip_cells <= 0
+        && mb_schar != 0
+    {
+        new_lcs_prec_todo = 0;
+        if schar_cells(mb_schar) > 1 {
+            (*wlv).sc_extra = schar_from_char(MB_FILLER_CHAR);
+            (*wlv).sc_final = 0;
+            if (*wlv).n_extra > 0 {
+                (*state).n_extra_next = (*wlv).n_extra;
+                (*state).extra_attr_next = (*wlv).extra_attr;
+                (*wlv).n_attr = 2.max((*wlv).n_attr + 1);
+            } else {
+                (*wlv).n_attr = 2;
+            }
+            (*wlv).n_extra = 1;
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_AT);
+        }
+        let prec_char = nvim_win_get_lcs_prec(wp);
+        (*state).mb_schar = prec_char;
+        (*state).mb_c = schar_get_first_codepoint(prec_char);
+        (*state).saved_attr3 = (*wlv).char_attr;
+        (*wlv).char_attr = nvim_win_hl_attr(wp, HLF_AT);
+        (*state).n_attr3 = 1;
+    }
+
+    new_lcs_prec_todo
+}
+
+/// Show 'extends' character from 'listchars' if beyond the line end
+/// (C win_line lines 1883-1901).
+///
+/// Updates `state->mb_schar`, `state->mb_c`, and `wlv->char_attr` if extends
+/// character should be shown.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_win_line_extends_char(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    ptr_col: ColnrT,
+    ptr_is_nul: bool,
+    lcs_eol: ScharT,
+    lcs_eol_todo: bool,
+    may_have_inline_virt: bool,
+) {
+    let lcs_ext = get_lcs_ext_impl(wp);
+    if lcs_ext == 0 {
+        return;
+    }
+    if (*wlv).filler_todo > 0 {
+        return;
+    }
+    if (*wlv).col != (*state).view_width - 1 {
+        return;
+    }
+    if (*state).has_foldtext {
+        return;
+    }
+
+    if (*state).has_decor && ptr_is_nul && lcs_eol == 0 && lcs_eol_todo {
+        let decor_state = nvim_get_decor_state();
+        decor_redraw_col_impl(wp, ptr_col, -1, false, decor_state);
+    }
+
+    if !ptr_is_nul
+        || (lcs_eol > 0 && lcs_eol_todo)
+        || ((*wlv).n_extra > 0
+            && ((*wlv).sc_extra != 0 || (!(*wlv).p_extra.is_null() && *(*wlv).p_extra != 0)))
+        || (may_have_inline_virt && has_more_inline_virt_impl(wlv, ptr_col as isize))
+    {
+        (*state).mb_schar = lcs_ext;
+        (*wlv).char_attr = nvim_win_hl_attr(wp, HLF_AT);
+        (*state).mb_c = schar_get_first_codepoint(lcs_ext);
+    }
+}
+
+/// Correct cursor column when concealing characters (C win_line lines 1661-1676).
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_line_cursor_conceal_correct(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    in_curline: bool,
+    ptr_col: ColnrT,
+) {
+    let _ = ptr_col; // not used in this section
+    if (*state).did_wcol {
+        return;
+    }
+    if (*wlv).filler_todo > 0 {
+        return;
+    }
+    if !in_curline {
+        return;
+    }
+    if !conceal_cursor_line(wp) {
+        return;
+    }
+    let mb_schar = (*state).mb_schar;
+    let virtcol = nvim_win_get_virtcol(wp);
+    if (*wlv).vcol + (*wlv).skip_cells < virtcol && mb_schar != 0 {
+        return;
+    }
+
+    let wcol = (*wlv).col - (*wlv).boguscols;
+    let wrow = nvim_win_get_wrow(wp); // use row from wlv
+    let wrow_val = (*wlv).row;
+    nvim_win_set_wcol(wp, wcol);
+    nvim_win_set_wrow(wp, wrow_val);
+    let _ = wrow;
+    nvim_win_set_valid_bits(wp, VALID_WCOL_WROW_VIRTCOL);
+
+    if (*wlv).vcol + (*wlv).skip_cells < virtcol {
+        let extra = virtcol - (*wlv).vcol - (*wlv).skip_cells;
+        let new_wcol = nvim_win_get_wcol(wp) + extra;
+        nvim_win_set_wcol(wp, new_wcol);
+    }
+
+    (*state).did_wcol = true;
+}
+
+// ============================================================================
+// Phase 5: N_extra processing
+// ============================================================================
+
+/// Return values from rs_win_line_process_n_extra.
+#[repr(C)]
+pub struct NExtraResult {
+    /// Updated mb_schar value.
+    pub mb_schar: ScharT,
+    /// Updated mb_c value.
+    pub mb_c: c_int,
+    /// Updated mb_l value.
+    pub mb_l: c_int,
+}
+
+/// Process n_extra chars (C win_line lines 1019-1102).
+///
+/// Called when `wlv->n_extra > 0`.
+/// Returns updated `(mb_schar, mb_c, mb_l)`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_line_process_n_extra(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    ptr_is_nul: bool,
+) -> NExtraResult {
+    let view_width = (*state).view_width;
+
+    let (mb_schar, mb_c, mb_l) =
+        if (*wlv).sc_extra != 0 || ((*wlv).n_extra == 1 && (*wlv).sc_final != 0) {
+            let sc = if (*wlv).n_extra == 1 && (*wlv).sc_final != 0 {
+                (*wlv).sc_final
+            } else {
+                (*wlv).sc_extra
+            };
+            (*wlv).n_extra -= 1;
+            (sc, schar_get_first_codepoint(sc), 1)
+        } else {
+            debug_assert!(!(*wlv).p_extra.is_null());
+            let p = (*wlv).p_extra.cast_const();
+            let mut firstc: c_int = 0;
+            let sc = rs_utfc_ptr2schar(p, &mut firstc);
+            let raw_l = utfc_ptr2len(p);
+            let l = if raw_l > (*wlv).n_extra || raw_l == 0 {
+                1
+            } else {
+                raw_l
+            };
+
+            if (*wlv).col >= view_width - 1 && schar_cells(sc) == 2 {
+                let mc = c_int::from(b'>');
+                let mat = nvim_win_hl_attr(wp, HLF_AT);
+                let combined = if (*wlv).cul_attr != 0 {
+                    if (*wlv).line_attr_lowprio != 0 {
+                        hl_combine_attr((*wlv).cul_attr, mat)
+                    } else {
+                        hl_combine_attr(mat, (*wlv).cul_attr)
+                    }
+                } else {
+                    mat
+                };
+                (*state).multi_attr = combined;
+                (schar_from_char(mc), mc, 1)
+            } else {
+                (*wlv).n_extra -= l;
+                (*wlv).p_extra = (*wlv).p_extra.add(l as usize);
+
+                if (*wlv).filler_todo <= 0 && (*wlv).skip_cells > 0 && l > 1 {
+                    if (*wlv).n_extra > 0 {
+                        (*state).n_extra_next = (*wlv).n_extra;
+                        (*state).extra_attr_next = (*wlv).extra_attr;
+                    }
+                    (*wlv).n_extra = 1;
+                    (*wlv).sc_extra = schar_from_char(MB_FILLER_CHAR);
+                    (*wlv).sc_final = 0;
+                    (*wlv).n_attr += 1;
+                    (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_AT);
+                    (schar_from_char(c_int::from(b' ')), c_int::from(b' '), 1)
+                } else {
+                    (sc, firstc, l)
+                }
+            }
+        };
+
+    if (*wlv).n_extra <= 0 {
+        if (*state).n_extra_next <= 0 {
+            if (*state).search_attr == 0 {
+                (*state).search_attr = (*state).saved_search_attr;
+                (*state).saved_search_attr = 0;
+            }
+            if (*state).area_attr == 0 && !ptr_is_nul {
+                (*state).area_attr = (*state).saved_area_attr;
+                (*state).saved_area_attr = 0;
+            }
+            if (*state).decor_attr == 0 {
+                (*state).decor_attr = (*state).saved_decor_attr;
+                (*state).saved_decor_attr = 0;
+            }
+            if (*wlv).extra_for_extmark {
+                (*wlv).reset_extra_attr = true;
+                (*state).extra_attr_next = -1;
+            }
+            (*wlv).extra_for_extmark = false;
+        } else {
+            (*wlv).sc_extra = 0;
+            (*wlv).sc_final = 0;
+            (*wlv).n_extra = (*state).n_extra_next;
+            (*state).n_extra_next = 0;
+            (*wlv).reset_extra_attr = true;
+        }
+    }
+
+    NExtraResult {
+        mb_schar,
+        mb_c,
+        mb_l,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

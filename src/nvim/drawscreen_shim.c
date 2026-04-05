@@ -4,6 +4,7 @@
 
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
+#include "nvim/decoration_defs.h"
 #include "nvim/cmdexpand.h"
 #include "nvim/drawscreen.h"
 #include "nvim/ex_getln.h"
@@ -302,4 +303,50 @@ void nvim_search_hl_end(void)
 {
   vim_regfree(screen_search_hl.rm.regprog);
   screen_search_hl.rm.regprog = NULL;
+}
+
+/// Return a pointer to the global screen_search_hl (as void*).
+/// Used by Rust win_line phase functions to pass to get_prevcol_hl_flag
+/// and get_search_match_hl.
+void *nvim_get_screen_search_hl_ptr(void)
+{
+  return &screen_search_hl;
+}
+
+/// Update curwin w_cline_row/height/folded after drawing the cursor line.
+/// Called by rs_win_line_eol_fill when in_curline is true.
+void nvim_curwin_update_cline(int startrow, int row, bool has_fold)
+{
+  curwin->w_cline_row = startrow;
+  curwin->w_cline_height = row - startrow;
+  curwin->w_cline_folded = has_fold;
+  curwin->w_valid |= VALID_CHEIGHT | VALID_CROW;
+}
+
+/// Invalidate the first column of the next row after a wrapped line.
+/// Called by rs_win_line_end_check after wlv_put_linebuf with SLF_WRAP.
+/// @param grid  GridView pointer (wp->w_grid)
+/// @param row   current row (before wrap increment)
+void nvim_grid_invalidate_next_row(void *grid, int row)
+{
+  int dummy_col = 0;
+  ScreenGrid *g = grid_adjust((GridView *)grid, &row, &dummy_col);
+  g->attrs[g->line_offset[row + 1]] = -1;
+}
+
+/// Get wp->w_grid.target->cols (the width of the grid target).
+/// Used by rs_win_line_end_check to determine if wrapping applies.
+int nvim_win_get_w_grid_target_cols(win_T *wp)
+{
+  return wp->w_grid.target->cols;
+}
+
+/// Get a pointer to virt_lines[idx].line (VirtText*) as void*.
+/// Used by rs_win_line_end_check to pass to draw_virt_text_item.
+/// @param virt_lines  pointer to VirtLines KVec
+/// @param idx         index into virt_lines
+void *nvim_virt_lines_get_line(void *virt_lines, int idx)
+{
+  VirtLines *vl = (VirtLines *)virt_lines;
+  return &kv_A(*vl, (size_t)idx).line;
 }
