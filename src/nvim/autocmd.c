@@ -1095,34 +1095,8 @@ static char *aucmd_handler_to_string(AutoCmd *ac)
   return callback_to_string(&ac->handler_fn, NULL);
 }
 
-void do_filetype_autocmd(buf_T *buf, bool force)
-{
-  static int ft_recursive = 0;
-
-  if (ft_recursive > 0 && !force) {
-    return;  // disallow recursion
-  }
-
-  char **varp = &buf->b_p_ft;
-  int secure_save = secure;
-
-  // Reset the secure flag, since the value of 'filetype' has
-  // been checked to be safe.
-  secure = 0;
-
-  ft_recursive++;
-  buf->b_did_filetype = true;
-  // Only pass true for "force" when it is true or
-  // used recursively, to avoid endless recurrence.
-  apply_autocmds(EVENT_FILETYPE, buf->b_p_ft, buf->b_fname, force || ft_recursive == 1, buf);
-  ft_recursive--;
-
-  // Just in case the old "buf" is now invalid
-  if (varp != &(buf->b_p_ft)) {
-    varp = NULL;
-  }
-  secure = secure_save;
-}
+// do_filetype_autocmd is implemented in Rust (rs_do_filetype_autocmd in autocmd/src/lib.rs)
+// and exported directly under the name "do_filetype_autocmd" via #[unsafe(export_name)].
 
 int nvim_get_autocmd_blocked(void) { return autocmd_blocked; }
 int nvim_get_aucmd_win_count(void) { return AUCMD_WIN_COUNT; }

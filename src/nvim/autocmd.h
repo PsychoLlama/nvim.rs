@@ -137,3 +137,4 @@ int do_autocmd_event(event_T event, const char *pat, bool once, int nested, cons
                      bool del, int group);
 bool autocmd_supported(const char *event);
 bool aupat_is_buflocal(const char *pat, int patlen);
+void do_filetype_autocmd(buf_T *buf, bool force);

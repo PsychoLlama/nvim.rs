@@ -257,6 +257,15 @@ extern "C" {
     fn nvim_bw_sizeof_aco_save() -> usize;
     fn nvim_bw_sizeof_bufref() -> usize;
     static mut curwin: *mut c_void;
+
+    // Phase 1: do_filetype_autocmd accessors
+    fn nvim_buf_get_b_p_ft(buf: *mut c_void) -> *const c_char;
+    fn nvim_buf_get_b_fname(buf: *mut c_void) -> *const c_char;
+    fn nvim_buf_set_b_did_filetype(buf: *mut c_void, val: c_int);
+    #[link_name = "nvim_tag_get_secure"]
+    fn nvim_get_secure() -> c_int;
+    #[link_name = "nvim_tag_set_secure"]
+    fn nvim_set_secure(val: c_int);
 }
 
 // Static "Unknown" string for invalid events
@@ -2128,6 +2137,48 @@ pub unsafe extern "C" fn rs_get_event_name_no_group(
         }
     }
     std::ptr::null_mut()
+}
+
+// Phase 1: EVENT_FILETYPE constant
+const EVENT_FILETYPE: c_int = 58;
+
+/// Trigger EVENT_FILETYPE autocommands for the given buffer.
+///
+/// Implements the recursion guard and secure flag management from the original C code.
+/// Exported as `do_filetype_autocmd` (replaces C implementation).
+///
+/// # Safety
+/// `buf` must be a valid non-null `buf_T *`.
+#[unsafe(export_name = "do_filetype_autocmd")]
+pub unsafe extern "C" fn rs_do_filetype_autocmd(buf: *mut c_void, force: bool) {
+    static FT_RECURSIVE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+    let ft_recursive = FT_RECURSIVE.load(std::sync::atomic::Ordering::Relaxed);
+    if ft_recursive > 0 && !force {
+        return; // disallow recursion
+    }
+
+    let secure_save = nvim_get_secure();
+
+    // Reset the secure flag, since the value of 'filetype' has
+    // been checked to be safe.
+    nvim_set_secure(0);
+
+    let new_recursive = ft_recursive + 1;
+    FT_RECURSIVE.store(new_recursive, std::sync::atomic::Ordering::Relaxed);
+    nvim_buf_set_b_did_filetype(buf, 1);
+
+    // Only pass true for "force" when it is true or
+    // used recursively, to avoid endless recurrence.
+    let apply_force = force || new_recursive == 1;
+    let ft = nvim_buf_get_b_p_ft(buf).cast_mut();
+    let fname = nvim_buf_get_b_fname(buf).cast_mut();
+    rs_apply_autocmds(EVENT_FILETYPE, ft, fname, apply_force, buf);
+
+    FT_RECURSIVE.store(ft_recursive, std::sync::atomic::Ordering::Relaxed);
+
+    // Restore secure flag
+    nvim_set_secure(secure_save);
 }
 
 #[cfg(test)]

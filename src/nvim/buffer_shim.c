@@ -723,3 +723,7 @@ int nvim_BF_CHECK_RO(void) { return BF_CHECK_RO; }
 // READ_NEW and READ_KEEP_UNDO constants
 int nvim_READ_NEW(void) { return READ_NEW; }
 int nvim_READ_KEEP_UNDO(void) { return READ_KEEP_UNDO; }
+
+// Accessor for b_did_filetype (used by rs_do_filetype_autocmd)
+void nvim_buf_set_b_did_filetype(buf_T *buf, int val) { buf->b_did_filetype = (bool)val; }
+int nvim_buf_get_b_did_filetype(buf_T *buf) { return (int)buf->b_did_filetype; }
