@@ -66,6 +66,10 @@ int inchar(uint8_t *buf, int maxlen, long wait_time);
 void close_all_scripts(void);
 bool open_scriptin(char *scriptin_name) FUNC_ATTR_NONNULL_ALL;
 
+// Lua mapping + paste (implemented in Rust, Phase 3)
+bool map_execute_lua(bool may_repeat, bool discard);
+void paste_repeat(int count);
+
 // Orchestrator functions (implemented in Rust, src/nvim-rs/getchar/src/orchestrator.rs)
 void before_blocking(void);
 int vgetc(void);

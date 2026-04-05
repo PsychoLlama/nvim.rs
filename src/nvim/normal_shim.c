@@ -457,6 +457,7 @@ void nvim_dpo_save_visual_state(void) { curbuf->b_visual.vi_start = VIsual; curb
 bool nvim_oap_end_is_NUL(oparg_T *oap) { return oap ? (*ml_get_pos(&oap->end) == NUL) : false; }
 bool nvim_p_sel_is_old(void) { return *p_sel == 'o'; }
 void nvim_sync_curbuf_last_changedtick_i(void) { curbuf->b_last_changedtick_i = (varnumber_T)buf_get_changedtick(curbuf); }
+void nvim_getchar_semsg_lua_err(char *msg) { semsg_multiline("emsg", "E5108: %s", msg); }
 bool nvim_hasFolding_oap_start_up(oparg_T *oap) { return oap ? hasFolding(curwin, oap->start.lnum, &oap->start.lnum, NULL) : false; }
 bool nvim_hasFolding_cursor_end_of_fold(void) { return hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum); }
 bool nvim_hasFolding_cursor_start_of_fold(void) { return hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL); }

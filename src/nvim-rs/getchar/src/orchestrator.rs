@@ -14,7 +14,9 @@
     clippy::branches_sharing_code
 )]
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
+
+use nvim_api::{Array, Error as NvimError, NvimString};
 
 // =============================================================================
 // C FFI Declarations
@@ -89,12 +91,6 @@ extern "C" {
     /// xfree: free memory allocated by C allocator
     fn xfree(ptr: *mut c_void);
 
-    /// map_execute_lua: execute Lua mapping
-    fn map_execute_lua(may_repeat: bool, discard: bool) -> bool;
-
-    /// paste_repeat: repeat paste (count=0 means discard)
-    fn paste_repeat(count: c_int);
-
     /// may_garbage_collect: set after garbagecollect() is called
     static may_garbage_collect: bool;
 
@@ -120,6 +116,74 @@ extern "C" {
 
     // (on_key_buf wrappers removed - now pure Rust state)
 }
+
+// =============================================================================
+// Phase 3: map_execute_lua + paste_repeat
+// =============================================================================
+
+extern "C" {
+    /// nlua_call_ref: call a Lua function by registry reference
+    fn nlua_call_ref(
+        ref_: c_int,
+        name: *const c_char,
+        args: Array,
+        mode: c_int,
+        arena: *mut c_void,
+        err: *mut NvimError,
+    ) -> nvim_api::Object;
+
+    /// nvim_paste: paste text into the current buffer
+    fn nvim_paste(
+        channel_id: u64,
+        data: NvimString,
+        crlf: bool,
+        phase: i64,
+        arena: *mut CArena,
+        err: *mut NvimError,
+    ) -> bool;
+
+    /// arena_finish: finish arena allocations and return ArenaMem
+    fn arena_finish(arena: *mut CArena) -> *mut c_void;
+
+    /// arena_mem_free: free arena memory block
+    fn arena_mem_free(mem: *mut c_void);
+
+    /// api_clear_error: clear an Error struct
+    fn api_clear_error(err: *mut NvimError);
+
+    /// nvim_getchar_semsg_lua_err: display "E5108: <msg>" error (C shim)
+    fn nvim_getchar_semsg_lua_err(msg: *mut c_char);
+
+    /// repeat_luaref: LuaRef for "." (dot-repeat)
+    static mut repeat_luaref: c_int;
+
+    /// atoi: convert ASCII string to integer
+    fn atoi(s: *const c_char) -> c_int;
+}
+
+/// Arena layout (matches C struct in memory_defs.h: cur_blk, pos, size).
+#[repr(C)]
+struct CArena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+impl CArena {
+    const fn empty() -> Self {
+        Self {
+            cur_blk: std::ptr::null_mut(),
+            pos: 0,
+            size: 0,
+        }
+    }
+}
+
+/// LUA_INTERNAL_CALL channel_id value (bit 63 set + 1)
+const LUA_INTERNAL_CALL: u64 = (1u64 << 63) + 1;
+
+/// kRetNilBool = 1 (NIL preserved, other values: booleanness)
+const K_RET_NIL_BOOL: c_int = 1;
 
 // =============================================================================
 // GArray type (must match C garray_T struct layout exactly)
@@ -647,9 +711,9 @@ pub unsafe extern "C" fn rs_vgetc() -> c_int {
             let s = getcmdkeycmd(NUL, std::ptr::null_mut(), 0, false);
             xfree(s.cast::<c_void>());
         } else if c == K_LUA {
-            map_execute_lua(false, true);
+            rs_map_execute_lua(false, true);
         } else if c == K_PASTE_START {
-            paste_repeat(0);
+            rs_paste_repeat(0);
         }
         // Discard the current key.
         K_IGNORE
@@ -855,8 +919,6 @@ const SHOWCMD_COLS_V: c_int = 10;
 const KEYLEN_PART_KEY_V: c_int = -1;
 const FLUSH_INPUT_V: c_int = 2;
 const RM_YES_V: u8 = 0;
-
-use std::ffi::c_char;
 
 /// Gets a byte from the stuffbuffer, typeahead buffer, or user input.
 ///
@@ -1324,4 +1386,171 @@ unsafe fn normalize_keypad(c: c_int, mm: *mut c_int) -> c_int {
         K_KRIGHT | K_XRIGHT => K_RIGHT,
         _ => c,
     }
+}
+
+// =============================================================================
+// Phase 3: map_execute_lua + paste_repeat implementations
+// =============================================================================
+
+// K_SPECIAL = 0x80
+const K_SPECIAL_P3: c_int = 0x80;
+// K_PASTE_END = TERMCAP2KEY('P', 'E') = -('P' + 'E' << 8) = -(80 + 69*256)
+const K_PASTE_END: c_int = -(80 + (69 << 8));
+// KS_SPECIAL = 254, KS_ZERO = 255
+const KS_SPECIAL_P3: c_int = 254;
+const KS_ZERO_P3: c_int = 255;
+
+/// Handle a Lua mapping: get its LuaRef from typeahead and execute it.
+///
+/// @param may_repeat  save the LuaRef for redoing with "." later
+/// @param discard     discard the keys instead of executing the LuaRef
+///
+/// @return  false if getting the LuaRef was aborted, true otherwise
+///
+/// Replaces C `map_execute_lua()` from getchar.c (Phase 3).
+///
+/// # Safety
+/// Calls C functions and accesses global state.
+#[export_name = "map_execute_lua"]
+pub unsafe extern "C" fn rs_map_execute_lua(may_repeat: bool, discard: bool) -> bool {
+    let mut line_ga = GarrayT::new(1, 32);
+    let ga_ptr = std::ptr::addr_of_mut!(line_ga);
+    ga_init(ga_ptr, 1, 32);
+
+    let mut c1: c_int = -1;
+    let mut aborted = false;
+
+    no_mapping += 1;
+
+    got_int = false;
+    while c1 != NUL && !aborted {
+        ga_grow(ga_ptr, 32);
+        // Get one character at a time.
+        c1 = rs_vgetorpeek(true);
+        if got_int {
+            aborted = true;
+        } else if c1 == c_int::from(b'\r') || c1 == c_int::from(b'\n') {
+            c1 = NUL; // end the line
+        } else {
+            ga_append(ga_ptr, c1 as u8);
+        }
+    }
+
+    no_mapping -= 1;
+
+    if aborted || discard {
+        ga_clear(ga_ptr);
+        return !aborted;
+    }
+
+    let ref_val = atoi(line_ga.ga_data.cast::<c_char>());
+    if may_repeat {
+        repeat_luaref = ref_val;
+    }
+
+    let mut err = NvimError {
+        err_type: 0,
+        msg: std::ptr::null_mut(),
+    };
+    let args = Array {
+        size: 0,
+        capacity: 0,
+        items: std::ptr::null_mut(),
+    };
+    nlua_call_ref(
+        ref_val,
+        std::ptr::null(),
+        args,
+        K_RET_NIL_BOOL,
+        std::ptr::null_mut(),
+        &raw mut err,
+    );
+    if !err.msg.is_null() {
+        nvim_getchar_semsg_lua_err(err.msg);
+        api_clear_error(&raw mut err);
+    }
+
+    ga_clear(ga_ptr);
+    true
+}
+
+/// Gets a paste stored by paste_store() from typeahead and repeats it.
+///
+/// Replaces C `paste_repeat()` from getchar.c (Phase 3).
+///
+/// # Safety
+/// Calls C functions and accesses global state.
+#[export_name = "paste_repeat"]
+pub unsafe extern "C" fn rs_paste_repeat(count: c_int) {
+    let mut ga = GarrayT::new(1, 32);
+    let ga_ptr = std::ptr::addr_of_mut!(ga);
+    ga_init(ga_ptr, 1, 32);
+
+    let mut aborted = false;
+
+    no_mapping += 1;
+
+    got_int = false;
+    loop {
+        ga_grow(ga_ptr, 32);
+        let c1 = rs_vgetorpeek(true) as u8;
+        if c1 == K_SPECIAL_P3 as u8 {
+            let b1 = rs_vgetorpeek(true);
+            let b2 = rs_vgetorpeek(true);
+            let c = if b1 == KS_SPECIAL_P3 {
+                K_SPECIAL_P3
+            } else if b1 == KS_ZERO_P3 {
+                NUL
+            } else {
+                termcap2key(b1, b2)
+            };
+            if c == K_PASTE_END {
+                break;
+            } else if c == NUL {
+                // K_ZERO maps to NUL
+                ga_append(ga_ptr, 0u8);
+            } else if c == K_SPECIAL_P3 {
+                ga_append(ga_ptr, K_SPECIAL_P3 as u8);
+            } else {
+                ga_append(ga_ptr, K_SPECIAL_P3 as u8);
+                ga_append(ga_ptr, b1 as u8);
+                ga_append(ga_ptr, b2 as u8);
+            }
+        } else {
+            ga_append(ga_ptr, c1);
+        }
+        aborted = got_int;
+        if aborted {
+            break;
+        }
+    }
+
+    no_mapping -= 1;
+
+    // cbuf_as_string is a C macro: { .data = buf, .size = len }
+    let str_val = NvimString {
+        data: ga.ga_data.cast::<c_char>(),
+        size: ga.ga_len as usize,
+    };
+    let mut arena = CArena::empty();
+    let mut err = NvimError {
+        err_type: 0,
+        msg: std::ptr::null_mut(),
+    };
+    let mut i = 0;
+    while !aborted && i < count {
+        nvim_paste(
+            LUA_INTERNAL_CALL,
+            str_val,
+            false,
+            -1,
+            &raw mut arena,
+            &raw mut err,
+        );
+        aborted = !err.msg.is_null();
+        i += 1;
+    }
+    api_clear_error(&raw mut err);
+    arena_mem_free(arena_finish(&raw mut arena));
+    ga_clear(ga_ptr);
 }
