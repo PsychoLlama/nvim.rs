@@ -98,6 +98,15 @@ void nvim_emsg_nolastcmd(void) { emsg(_(e_nolastcmd)); }
 /// Return curbuf->b_fname (for Rust get_spec_reg).
 char *nvim_register_get_curbuf_fname(void) { return curbuf->b_fname; }
 
+/// Return curwin (for Rust op_yank_reg update_topline call).
+void *nvim_register_get_curwin(void) { return curwin; }
+
+/// cbuf_as_string is a macro; provide a real function for Rust FFI.
+String nvim_register_cbuf_as_string(char *buf, size_t len)
+{
+  return cbuf_as_string(buf, len);
+}
+
 /// Copy curwin->w_cursor into *pos (for Rust insert_reg).
 void nvim_register_get_curwin_cursor(pos_T *pos) { *pos = curwin->w_cursor; }
 
@@ -122,287 +131,71 @@ char *nvim_register_ml_get_buf_curwin_lnum(void)
 // insert_reg and get_spec_reg are implemented in Rust
 // (src/nvim-rs/register/src/lib.rs) with export_name.
 
-/// Copy a block range into a register.
-///
-/// @param exclude_trailing_space  if true, do not copy trailing whitespaces.
-static void yank_copy_line(yankreg_T *reg, struct block_def *bd, size_t y_idx,
-                           bool exclude_trailing_space)
-  FUNC_ATTR_NONNULL_ALL
+// op_yank, op_yank_reg, yank_copy_line, do_autocmd_textyankpost are implemented
+// in Rust (src/nvim-rs/register/src/lib.rs) with export_name.
+
+// --- oparg_T accessors for Rust op_yank_reg ---
+int nvim_oap_get_motion_type(oparg_T *oap) { return (int)oap->motion_type; }
+void nvim_oap_get_start(oparg_T *oap, pos_T *pos) { *pos = oap->start; }
+void nvim_oap_get_end(oparg_T *oap, pos_T *pos) { *pos = oap->end; }
+bool nvim_oap_get_inclusive(oparg_T *oap) { return oap->inclusive; }
+bool nvim_oap_get_is_VIsual(oparg_T *oap) { return oap->is_VIsual; }
+int nvim_oap_get_line_count(oparg_T *oap) { return (int)oap->line_count; }
+int nvim_oap_get_start_vcol(oparg_T *oap) { return (int)oap->start_vcol; }
+int nvim_oap_get_end_vcol(oparg_T *oap) { return (int)oap->end_vcol; }
+int nvim_oap_get_regname(oparg_T *oap) { return oap->regname; }
+bool nvim_oap_get_excl_tr_ws(oparg_T *oap) { return oap->excl_tr_ws; }
+int nvim_oap_get_op_type(oparg_T *oap) { return oap->op_type; }
+
+// --- Yank message (NGETTEXT cannot be used from Rust) ---
+void nvim_register_yank_msg(size_t yanklines, const char *namebuf, bool is_block)
 {
-  if (exclude_trailing_space) {
-    bd->endspaces = 0;
-  }
-  int size = bd->startspaces + bd->endspaces + bd->textlen;
-  assert(size >= 0);
-  char *pnew = xmallocz((size_t)size);
-  reg->y_array[y_idx].data = pnew;
-  memset(pnew, ' ', (size_t)bd->startspaces);
-  pnew += bd->startspaces;
-  memmove(pnew, bd->textstart, (size_t)bd->textlen);
-  pnew += bd->textlen;
-  memset(pnew, ' ', (size_t)bd->endspaces);
-  pnew += bd->endspaces;
-  if (exclude_trailing_space) {
-    int s = bd->textlen + bd->endspaces;
-
-    while (s > 0 && ascii_iswhite(*(bd->textstart + s - 1))) {
-      s = s - utf_head_off(bd->textstart, bd->textstart + s - 1) - 1;
-      pnew--;
-    }
-  }
-  *pnew = NUL;
-  reg->y_array[y_idx].size = (size_t)(pnew - reg->y_array[y_idx].data);
-}
-
-void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append)
-{
-  yankreg_T newreg;  // new yank register when appending
-  MotionType yank_type = oap->motion_type;
-  size_t yanklines = (size_t)oap->line_count;
-  linenr_T yankendlnum = oap->end.lnum;
-  struct block_def bd;
-
-  yankreg_T *curr = reg;  // copy of current register
-  // append to existing contents
-  if (append && reg->y_array != NULL) {
-    reg = &newreg;
+  if (is_block) {
+    smsg(0, NGETTEXT("block of %" PRId64 " line yanked%s",
+                     "block of %" PRId64 " lines yanked%s", yanklines),
+         (int64_t)yanklines, namebuf);
   } else {
-    free_register(reg);  // free previously yanked lines
-  }
-
-  // If the cursor was in column 1 before and after the movement, and the
-  // operator is not inclusive, the yank is always linewise.
-  if (oap->motion_type == kMTCharWise
-      && oap->start.col == 0
-      && !oap->inclusive
-      && (!oap->is_VIsual || *p_sel == 'o')
-      && oap->end.col == 0
-      && yanklines > 1) {
-    yank_type = kMTLineWise;
-    yankendlnum--;
-    yanklines--;
-  }
-
-  reg->y_size = yanklines;
-  reg->y_type = yank_type;  // set the yank register type
-  reg->y_width = 0;
-  reg->y_array = xcalloc(yanklines, sizeof(String));
-  reg->additional_data = NULL;
-  reg->timestamp = os_time();
-
-  size_t y_idx = 0;  // index in y_array[]
-  linenr_T lnum = oap->start.lnum;  // current line number
-
-  if (yank_type == kMTBlockWise) {
-    // Visual block mode
-    reg->y_width = oap->end_vcol - oap->start_vcol;
-
-    if (curwin->w_curswant == MAXCOL && reg->y_width > 0) {
-      reg->y_width--;
-    }
-  }
-
-  for (; lnum <= yankendlnum; lnum++, y_idx++) {
-    switch (reg->y_type) {
-    case kMTBlockWise:
-      block_prep(oap, &bd, lnum, false);
-      yank_copy_line(reg, &bd, y_idx, oap->excl_tr_ws);
-      break;
-
-    case kMTLineWise:
-      reg->y_array[y_idx] = cbuf_to_string(ml_get(lnum), (size_t)ml_get_len(lnum));
-      break;
-
-    case kMTCharWise:
-      charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
-      // make sure bd.textlen is not longer than the text
-      int tmp = (int)strlen(bd.textstart);
-      if (tmp < bd.textlen) {
-        bd.textlen = tmp;
-      }
-      yank_copy_line(reg, &bd, y_idx, false);
-      break;
-
-    // NOTREACHED
-    case kMTUnknown:
-      abort();
-    }
-  }
-
-  if (curr != reg) {      // append the new block to the old block
-    size_t j;
-    String *new_ptr = xmalloc(sizeof(String) * (curr->y_size + reg->y_size));
-    for (j = 0; j < curr->y_size; j++) {
-      new_ptr[j] = curr->y_array[j];
-    }
-    xfree(curr->y_array);
-    curr->y_array = new_ptr;
-
-    if (yank_type == kMTLineWise) {
-      // kMTLineWise overrides kMTCharWise and kMTBlockWise
-      curr->y_type = kMTLineWise;
-    }
-
-    // Concatenate the last line of the old block with the first line of
-    // the new block, unless being Vi compatible.
-    if (curr->y_type == kMTCharWise
-        && vim_strchr(p_cpo, CPO_REGAPPEND) == NULL) {
-      char *pnew = xmalloc(curr->y_array[curr->y_size - 1].size
-                           + reg->y_array[0].size + 1);
-      j--;
-      STRCPY(pnew, curr->y_array[j].data);
-      STRCPY(pnew + curr->y_array[j].size, reg->y_array[0].data);
-      xfree(curr->y_array[j].data);
-      curr->y_array[j] = cbuf_as_string(pnew,
-                                        curr->y_array[j].size + reg->y_array[0].size);
-      j++;
-      API_CLEAR_STRING(reg->y_array[0]);
-      y_idx = 1;
-    } else {
-      y_idx = 0;
-    }
-    while (y_idx < reg->y_size) {
-      curr->y_array[j++] = reg->y_array[y_idx++];
-    }
-    curr->y_size = j;
-    xfree(reg->y_array);
-  }
-
-  if (message) {  // Display message about yank?
-    if (yank_type == kMTCharWise && yanklines == 1) {
-      yanklines = 0;
-    }
-    // Some versions of Vi use ">=" here, some don't...
-    if (yanklines > (size_t)p_report) {
-      char namebuf[100];
-
-      if (oap->regname == NUL) {
-        *namebuf = NUL;
-      } else {
-        vim_snprintf(namebuf, sizeof(namebuf), _(" into \"%c"), oap->regname);
-      }
-
-      // redisplay now, so message is not deleted
-      update_topline(curwin);
-      if (must_redraw) {
-        update_screen();
-      }
-      if (yank_type == kMTBlockWise) {
-        smsg(0, NGETTEXT("block of %" PRId64 " line yanked%s",
-                         "block of %" PRId64 " lines yanked%s", yanklines),
-             (int64_t)yanklines, namebuf);
-      } else {
-        smsg(0, NGETTEXT("%" PRId64 " line yanked%s",
-                         "%" PRId64 " lines yanked%s", yanklines),
-             (int64_t)yanklines, namebuf);
-      }
-    }
-  }
-
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    // Set "'[" and "']" marks.
-    curbuf->b_op_start = oap->start;
-    curbuf->b_op_end = oap->end;
-    if (yank_type == kMTLineWise) {
-      curbuf->b_op_start.col = 0;
-      curbuf->b_op_end.col = MAXCOL;
-    }
-    if (yank_type != kMTLineWise && !oap->inclusive) {
-      // Exclude the end position.
-      decl(&curbuf->b_op_end);
-    }
+    smsg(0, NGETTEXT("%" PRId64 " line yanked%s",
+                     "%" PRId64 " lines yanked%s", yanklines),
+         (int64_t)yanklines, namebuf);
   }
 }
 
-/// Format the register type as a string.
-///
-/// @param reg_type The register type.
-/// Execute autocommands for TextYankPost.
-///
-/// @param oap Operator arguments.
-/// @param reg The yank register used.
-void do_autocmd_textyankpost(oparg_T *oap, yankreg_T *reg)
-  FUNC_ATTR_NONNULL_ALL
+// --- Yank name buffer: fills buf with " into "regname or empty string ---
+void nvim_register_yank_namebuf(int regname, char *buf, size_t bufsz)
 {
-  static bool recursive = false;
-
-  if (recursive || !has_event(EVENT_TEXTYANKPOST)) {
-    // No autocommand was defined, or we yanked from this autocommand.
-    return;
+  if (regname == NUL) {
+    buf[0] = NUL;
+  } else {
+    vim_snprintf(buf, bufsz, _(" into \"%c"), regname);
   }
-
-  recursive = true;
-
-  save_v_event_T save_v_event;
-  // Set the v:event dictionary with information about the yank.
-  dict_T *dict = get_v_event(&save_v_event);
-
-  // The yanked text contents.
-  list_T *const list = tv_list_alloc((ptrdiff_t)reg->y_size);
-  for (size_t i = 0; i < reg->y_size; i++) {
-    tv_list_append_string(list, reg->y_array[i].data, -1);
-  }
-  tv_list_set_lock(list, VAR_FIXED);
-  tv_dict_add_list(dict, S_LEN("regcontents"), list);
-
-  // Register type.
-  char buf[NUMBUFLEN + 2];
-  format_reg_type(reg->y_type, reg->y_width, buf, ARRAY_SIZE(buf));
-  tv_dict_add_str(dict, S_LEN("regtype"), buf);
-
-  // Name of requested register, or empty string for unnamed operation.
-  buf[0] = (char)oap->regname;
-  buf[1] = NUL;
-  tv_dict_add_str(dict, S_LEN("regname"), buf);
-
-  // Motion type: inclusive or exclusive.
-  tv_dict_add_bool(dict, S_LEN("inclusive"),
-                   oap->inclusive ? kBoolVarTrue : kBoolVarFalse);
-
-  // Kind of operation: yank, delete, change).
-  buf[0] = (char)get_op_char(oap->op_type);
-  buf[1] = NUL;
-  tv_dict_add_str(dict, S_LEN("operator"), buf);
-
-  // Selection type: visual or not.
-  tv_dict_add_bool(dict, S_LEN("visual"),
-                   oap->is_VIsual ? kBoolVarTrue : kBoolVarFalse);
-
-  tv_dict_set_keys_readonly(dict);
-  textlock++;
-  apply_autocmds(EVENT_TEXTYANKPOST, NULL, NULL, false, curbuf);
-  textlock--;
-  restore_v_event(dict, &save_v_event);
-
-  recursive = false;
 }
 
-/// Yanks the text between "oap->start" and "oap->end" into a yank register.
-/// If we are to append (uppercase register), we first yank into a new yank
-/// register and then concatenate the old and the new one.
-/// Do not call this from a delete operation. Use op_yank_reg() instead.
-///
-/// @param oap operator arguments
-/// @param message show message when more than `&report` lines are yanked.
-/// @returns whether the operation register was writable.
-bool op_yank(oparg_T *oap, bool message)
-  FUNC_ATTR_NONNULL_ALL
+// --- Option accessors ---
+int nvim_register_get_p_sel_char(void) { return *p_sel; }
+int64_t nvim_register_get_p_report(void) { return p_report; }
+bool nvim_register_p_cpo_has_regappend(void)
 {
-  // check for read-only register
-  if (oap->regname != 0 && !valid_yank_reg(oap->regname, true)) {
-    beep_flush();
-    return false;
-  }
-  if (oap->regname == '_') {
-    return true;  // black hole: nothing to do
-  }
-
-  yankreg_T *reg = get_yank_register(oap->regname, YREG_YANK);
-  op_yank_reg(oap, message, reg, is_append_register(oap->regname));
-  set_clipboard(oap->regname, reg);
-  do_autocmd_textyankpost(oap, reg);
-  return true;
+  return vim_strchr(p_cpo, CPO_REGAPPEND) != NULL;
 }
+bool nvim_register_cmod_lockmarks(void)
+{
+  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0;
+}
+
+// --- curwin/curbuf accessors ---
+int nvim_register_get_curwin_curswant(void) { return (int)curwin->w_curswant; }
+void nvim_register_curbuf_set_op_start(const pos_T *pos) { curbuf->b_op_start = *pos; }
+void nvim_register_curbuf_set_op_end(const pos_T *pos) { curbuf->b_op_end = *pos; }
+void nvim_register_curbuf_set_op_start_col(int col) { curbuf->b_op_start.col = (colnr_T)col; }
+void nvim_register_curbuf_set_op_end_col(int col) { curbuf->b_op_end.col = (colnr_T)col; }
+void nvim_register_curbuf_decl_op_end(void) { decl(&curbuf->b_op_end); }
+
+// --- tv_list_set_lock wrapper (inline in C, needs wrapper for Rust) ---
+void nvim_register_tv_list_set_lock_fixed(list_T *list) { tv_list_set_lock(list, VAR_FIXED); }
+
+// --- textlock inc/dec for do_autocmd_textyankpost ---
+// (already exist as nvim_inc_textlock / nvim_dec_textlock in ex_getln.c)
 
 /// Put contents of register "regname" into the text.
 /// Caller must check "regname" to be valid!

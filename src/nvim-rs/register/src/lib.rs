@@ -1692,6 +1692,165 @@ impl GArray {
 }
 
 // ---------------------------------------------------------------------------
+// BlockDef struct – matches C's `struct block_def` (register_defs.h), 64 bytes.
+// ---------------------------------------------------------------------------
+
+/// Blockwise operation data, matching C's `struct block_def` (64 bytes on 64-bit).
+///
+/// Layout (verified by static assertion below):
+/// ```c
+/// struct block_def {
+///   int startspaces;     // 0
+///   int endspaces;       // 4
+///   int textlen;         // 8
+///   // 4 bytes padding
+///   char *textstart;     // 16
+///   colnr_T textcol;     // 24
+///   colnr_T start_vcol;  // 28
+///   colnr_T end_vcol;    // 32
+///   int is_short;        // 36
+///   int is_MAX;          // 40
+///   int is_oneChar;      // 44
+///   int pre_whitesp;     // 48
+///   int pre_whitesp_c;   // 52
+///   colnr_T end_char_vcols;    // 56
+///   colnr_T start_char_vcols;  // 60
+/// };  // total = 64
+/// ```
+#[repr(C)]
+struct BlockDef {
+    startspaces: c_int,
+    endspaces: c_int,
+    textlen: c_int,
+    _pad: c_int,
+    textstart: *mut c_char,
+    textcol: c_int,
+    start_vcol: c_int,
+    end_vcol: c_int,
+    is_short: c_int,
+    is_max: c_int,
+    is_one_char: c_int,
+    pre_whitesp: c_int,
+    pre_whitesp_c: c_int,
+    end_char_vcols: c_int,
+    start_char_vcols: c_int,
+}
+
+const _: () = assert!(std::mem::size_of::<BlockDef>() == 64);
+
+impl BlockDef {
+    fn zeroed() -> Self {
+        Self {
+            startspaces: 0,
+            endspaces: 0,
+            textlen: 0,
+            _pad: 0,
+            textstart: std::ptr::null_mut(),
+            textcol: 0,
+            start_vcol: 0,
+            end_vcol: 0,
+            is_short: 0,
+            is_max: 0,
+            is_one_char: 0,
+            pre_whitesp: 0,
+            pre_whitesp_c: 0,
+            end_char_vcols: 0,
+            start_char_vcols: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Yank group FFI declarations
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    // oparg_T accessors
+    fn nvim_oap_get_motion_type(oap: *mut c_void) -> c_int;
+    fn nvim_oap_get_start(oap: *mut c_void, pos: *mut PosT);
+    fn nvim_oap_get_end(oap: *mut c_void, pos: *mut PosT);
+    fn nvim_oap_get_inclusive(oap: *mut c_void) -> bool;
+    fn nvim_oap_get_is_VIsual(oap: *mut c_void) -> bool;
+    fn nvim_oap_get_line_count(oap: *mut c_void) -> c_int;
+    fn nvim_oap_get_start_vcol(oap: *mut c_void) -> c_int;
+    fn nvim_oap_get_end_vcol(oap: *mut c_void) -> c_int;
+    fn nvim_oap_get_regname(oap: *mut c_void) -> c_int;
+    fn nvim_oap_get_excl_tr_ws(oap: *mut c_void) -> bool;
+    fn nvim_oap_get_op_type(oap: *mut c_void) -> c_int;
+
+    // Block ops
+    fn block_prep(oap: *mut c_void, bd: *mut BlockDef, lnum: i32, cflag: bool);
+    fn charwise_block_prep(start: PosT, end: PosT, bd: *mut BlockDef, lnum: i32, inclusive: bool);
+
+    // memline
+    fn ml_get(lnum: i32) -> *mut c_char;
+    fn ml_get_len(lnum: i32) -> c_int;
+
+    // String construction
+    fn cbuf_to_string(buf: *const c_char, len: usize) -> NvimString;
+    fn nvim_register_cbuf_as_string(buf: *mut c_char, len: usize) -> NvimString;
+
+    // Display
+    fn update_topline(wp: *mut c_void);
+    fn update_screen();
+
+    // Autocmd helpers
+    fn has_event(event: c_int) -> c_int;
+    fn tv_dict_add_bool(d: *mut c_void, key: *const c_char, key_len: usize, val: c_int) -> c_int;
+    fn tv_dict_add_list(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        list: *mut c_void,
+    ) -> c_int;
+    fn nvim_register_tv_list_set_lock_fixed(list: *mut c_void);
+    fn get_op_char(optype: c_int) -> c_int;
+
+    // Multibyte / ascii for yank_copy_line
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+
+    // op_yank helpers
+    fn beep_flush();
+
+    // Options (Phase 2)
+    fn nvim_get_p_sel() -> *const c_char;
+    fn nvim_get_p_report() -> i64;
+    fn nvim_register_p_cpo_has_regappend() -> bool;
+    fn nvim_register_cmod_lockmarks() -> bool;
+    fn nvim_must_redraw() -> c_int;
+
+    // curwin/curbuf accessors (Phase 2)
+    fn nvim_register_get_curwin_curswant() -> c_int;
+    fn nvim_register_curbuf_set_op_start(pos: *const PosT);
+    fn nvim_register_curbuf_set_op_end(pos: *const PosT);
+    fn nvim_register_curbuf_set_op_start_col(col: c_int);
+    fn nvim_register_curbuf_set_op_end_col(col: c_int);
+    fn nvim_register_curbuf_decl_op_end();
+
+    // Yank message (NGETTEXT wrapper)
+    fn nvim_register_yank_msg(yanklines: usize, namebuf: *const c_char, is_block: bool);
+    fn nvim_register_yank_namebuf(regname: c_int, buf: *mut c_char, bufsz: usize);
+
+    // textlock inc/dec
+    fn nvim_inc_textlock();
+    fn nvim_dec_textlock();
+
+    // curwin ptr (for update_topline)
+    fn nvim_register_get_curwin() -> *mut c_void;
+}
+
+/// EVENT_TEXTYANKPOST value (from autocmd/src/event.rs: TextYankPost = 125).
+const EVENT_TEXTYANKPOST: c_int = 125;
+
+/// kBoolVarTrue/kBoolVarFalse values from eval/typval_defs.h.
+const K_BOOL_VAR_FALSE: c_int = 0;
+const K_BOOL_VAR_TRUE: c_int = 1;
+
+// MAXCOL constant from pos_defs.h.
+const MAXCOL: c_int = 0x7fff_ffff_u32 as c_int;
+
+// ---------------------------------------------------------------------------
 // get_spec_reg and insert_reg (Phase 1 migration)
 // ---------------------------------------------------------------------------
 
@@ -1888,6 +2047,357 @@ pub unsafe extern "C" fn rs_insert_reg(
     }
 
     retval
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Yank group – yank_copy_line, op_yank_reg, do_autocmd_textyankpost, op_yank
+// ---------------------------------------------------------------------------
+
+/// Copy a block range line into a register, handling trailing space exclusion.
+///
+/// # Safety
+///
+/// `reg` and `bd` must be valid. `reg->y_array[y_idx]` must be writable.
+unsafe fn rs_yank_copy_line(
+    reg: *mut YankReg,
+    bd: *mut BlockDef,
+    y_idx: usize,
+    exclude_trailing_space: bool,
+) {
+    if exclude_trailing_space {
+        (*bd).endspaces = 0;
+    }
+    let size = (*bd).startspaces + (*bd).endspaces + (*bd).textlen;
+    assert!(size >= 0);
+    let pnew_start = xmallocz(size as usize);
+    (*(*reg).y_array.add(y_idx)).data = pnew_start;
+
+    let mut pnew = pnew_start;
+    // Fill startspaces.
+    std::ptr::write_bytes(pnew, b' ', (*bd).startspaces as usize);
+    pnew = pnew.add((*bd).startspaces as usize);
+    // Copy text.
+    std::ptr::copy((*bd).textstart, pnew, (*bd).textlen as usize);
+    pnew = pnew.add((*bd).textlen as usize);
+    // Fill endspaces.
+    std::ptr::write_bytes(pnew, b' ', (*bd).endspaces as usize);
+    pnew = pnew.add((*bd).endspaces as usize);
+
+    if exclude_trailing_space {
+        let mut s = (*bd).textlen + (*bd).endspaces;
+        while s > 0
+            && rs_ascii_iswhite(c_int::from(*(*bd).textstart.add(s as usize - 1) as u8)) != 0
+        {
+            s -= utf_head_off((*bd).textstart, (*bd).textstart.add(s as usize - 1)) + 1;
+            pnew = pnew.sub(1);
+        }
+    }
+    *pnew = 0; // NUL terminator
+    (*(*reg).y_array.add(y_idx)).size = pnew.offset_from(pnew_start) as usize;
+}
+
+/// Core yank logic: fills register from oap, handles append, displays message, sets marks.
+///
+/// # Safety
+///
+/// `oap` and `reg` must be valid.
+#[unsafe(export_name = "op_yank_reg")]
+pub unsafe extern "C" fn rs_op_yank_reg(
+    oap: *mut c_void,
+    message: bool,
+    reg: *mut YankReg,
+    append: bool,
+) {
+    let mut newreg = YankReg::ZERO;
+    let mut yank_type = nvim_oap_get_motion_type(oap);
+
+    // Read oap fields.
+    let mut start = PosT::default();
+    let mut end = PosT::default();
+    nvim_oap_get_start(oap, &raw mut start);
+    nvim_oap_get_end(oap, &raw mut end);
+    let inclusive = nvim_oap_get_inclusive(oap);
+    let is_visual = nvim_oap_get_is_VIsual(oap);
+    let line_count = nvim_oap_get_line_count(oap);
+    let start_vcol = nvim_oap_get_start_vcol(oap);
+    let end_vcol = nvim_oap_get_end_vcol(oap);
+    let regname = nvim_oap_get_regname(oap);
+    let excl_tr_ws = nvim_oap_get_excl_tr_ws(oap);
+
+    let mut yanklines = line_count as usize;
+    let mut yankendlnum = end.lnum;
+
+    let curr = reg; // copy of current register
+                    // Decide whether to append or free.
+    let reg = if append && !(*reg).y_array.is_null() {
+        // Append to existing: fill newreg first.
+        &raw mut newreg
+    } else {
+        rs_free_register(reg);
+        reg
+    };
+
+    // If the cursor was in column 1 before and after the movement, and the
+    // operator is not inclusive, the yank is always linewise.
+    let p_sel_char = *nvim_get_p_sel() as u8;
+    if yank_type == K_MT_CHAR_WISE
+        && start.col == 0
+        && !inclusive
+        && (!is_visual || p_sel_char == b'o')
+        && end.col == 0
+        && yanklines > 1
+    {
+        yank_type = K_MT_LINE_WISE;
+        yankendlnum -= 1;
+        yanklines -= 1;
+    }
+
+    (*reg).y_size = yanklines;
+    (*reg).y_type = yank_type;
+    (*reg).y_width = 0;
+    (*reg).y_array = xcalloc(yanklines, std::mem::size_of::<NvimString>()) as *mut NvimString;
+    (*reg).additional_data = std::ptr::null_mut();
+    (*reg).timestamp = os_time();
+
+    let mut y_idx: usize = 0;
+    let mut lnum = start.lnum;
+
+    if yank_type == K_MT_BLOCK_WISE {
+        (*reg).y_width = end_vcol - start_vcol;
+        let curswant = nvim_register_get_curwin_curswant();
+        if curswant == MAXCOL && (*reg).y_width > 0 {
+            (*reg).y_width -= 1;
+        }
+    }
+
+    while lnum <= yankendlnum {
+        let mut bd = BlockDef::zeroed();
+        match yank_type {
+            K_MT_BLOCK_WISE => {
+                block_prep(oap, &raw mut bd, lnum, false);
+                rs_yank_copy_line(reg, &raw mut bd, y_idx, excl_tr_ws);
+            }
+            K_MT_LINE_WISE => {
+                *(*reg).y_array.add(y_idx) =
+                    cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as usize);
+            }
+            K_MT_CHAR_WISE => {
+                charwise_block_prep(start, end, &raw mut bd, lnum, inclusive);
+                // make sure bd.textlen is not longer than the text
+                let tmp = libc::strlen(bd.textstart) as c_int;
+                if tmp < bd.textlen {
+                    bd.textlen = tmp;
+                }
+                rs_yank_copy_line(reg, &raw mut bd, y_idx, false);
+            }
+            _ => {
+                libc::abort();
+            }
+        }
+        lnum += 1;
+        y_idx += 1;
+    }
+
+    if !std::ptr::eq(curr, reg) {
+        // append the new block to the old block
+        let new_ptr = xmalloc(std::mem::size_of::<NvimString>() * ((*curr).y_size + (*reg).y_size))
+            as *mut NvimString;
+        for j in 0..(*curr).y_size {
+            *new_ptr.add(j) = *(*curr).y_array.add(j);
+        }
+        xfree((*curr).y_array as *mut c_void);
+        (*curr).y_array = new_ptr;
+
+        if yank_type == K_MT_LINE_WISE {
+            // kMTLineWise overrides kMTCharWise and kMTBlockWise
+            (*curr).y_type = K_MT_LINE_WISE;
+        }
+
+        // Concatenate the last line of the old block with the first line of the new block,
+        // unless being Vi compatible.
+        let mut concat_start_idx: usize;
+        if (*curr).y_type == K_MT_CHAR_WISE && !nvim_register_p_cpo_has_regappend() {
+            let j = (*curr).y_size - 1;
+            let old_last = &*(*curr).y_array.add(j);
+            let new_first = &*(*reg).y_array;
+            let pnew = xmalloc(old_last.size + new_first.size + 1) as *mut c_char;
+            std::ptr::copy_nonoverlapping(old_last.data, pnew, old_last.size);
+            std::ptr::copy_nonoverlapping(new_first.data, pnew.add(old_last.size), new_first.size);
+            *pnew.add(old_last.size + new_first.size) = 0;
+            xfree(old_last.data as *mut c_void);
+            let new_size = old_last.size + new_first.size;
+            *(*curr).y_array.add(j) = nvim_register_cbuf_as_string(pnew, new_size);
+            // Clear reg->y_array[0].
+            if !(*(*reg).y_array).data.is_null() {
+                xfree((*(*reg).y_array).data as *mut c_void);
+                (*(*reg).y_array).data = std::ptr::null_mut();
+                (*(*reg).y_array).size = 0;
+            }
+            concat_start_idx = 1;
+        } else {
+            concat_start_idx = 0;
+        }
+        let mut j = (*curr).y_size;
+        while concat_start_idx < (*reg).y_size {
+            *(*curr).y_array.add(j) = *(*reg).y_array.add(concat_start_idx);
+            j += 1;
+            concat_start_idx += 1;
+        }
+        (*curr).y_size = j;
+        xfree((*reg).y_array as *mut c_void);
+    }
+
+    if message {
+        // Display message about yank?
+        if yank_type == K_MT_CHAR_WISE && yanklines == 1 {
+            yanklines = 0;
+        }
+        // Some versions of Vi use ">=" here, some don't...
+        if yanklines > nvim_get_p_report() as usize {
+            // Fill name buffer.
+            let mut namebuf = [0u8; 100];
+            nvim_register_yank_namebuf(regname, namebuf.as_mut_ptr() as *mut c_char, 100);
+
+            // Redisplay now, so message is not deleted.
+            update_topline(nvim_register_get_curwin());
+            if nvim_must_redraw() != 0 {
+                update_screen();
+            }
+            nvim_register_yank_msg(
+                yanklines,
+                namebuf.as_ptr() as *const c_char,
+                yank_type == K_MT_BLOCK_WISE,
+            );
+        }
+    }
+
+    if !nvim_register_cmod_lockmarks() {
+        // Set "'[" and "']" marks.
+        nvim_register_curbuf_set_op_start(&raw const start);
+        nvim_register_curbuf_set_op_end(&raw const end);
+        if yank_type == K_MT_LINE_WISE {
+            nvim_register_curbuf_set_op_start_col(0);
+            nvim_register_curbuf_set_op_end_col(MAXCOL);
+        }
+        if yank_type != K_MT_LINE_WISE && !inclusive {
+            // Exclude the end position.
+            nvim_register_curbuf_decl_op_end();
+        }
+    }
+}
+
+/// Execute autocommands for TextYankPost.
+///
+/// # Safety
+///
+/// `oap` and `reg` must be valid.
+#[unsafe(export_name = "do_autocmd_textyankpost")]
+pub unsafe extern "C" fn rs_do_autocmd_textyankpost(oap: *mut c_void, reg: *mut YankReg) {
+    static mut RECURSIVE: bool = false;
+
+    if RECURSIVE || has_event(EVENT_TEXTYANKPOST) == 0 {
+        return;
+    }
+
+    RECURSIVE = true;
+
+    let mut save_v_event = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::uninit();
+    let dict = get_v_event(save_v_event.as_mut_ptr() as *mut c_void);
+
+    // The yanked text contents.
+    let list = tv_list_alloc((*reg).y_size as isize);
+    for i in 0..(*reg).y_size {
+        tv_list_append_string(list, (*(*reg).y_array.add(i)).data, -1);
+    }
+    nvim_register_tv_list_set_lock_fixed(list);
+    tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list);
+
+    // Register type.
+    let mut buf = [0u8; NUMBUFLEN + 2];
+    rs_format_reg_type(
+        (*reg).y_type,
+        (*reg).y_width,
+        buf.as_mut_ptr() as *mut c_char,
+        NUMBUFLEN + 2,
+    );
+    tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_ptr() as *const c_char);
+
+    // Name of requested register, or empty string for unnamed operation.
+    let regname = nvim_oap_get_regname(oap);
+    buf[0] = regname as u8;
+    buf[1] = 0;
+    tv_dict_add_str(dict, c"regname".as_ptr(), 7, buf.as_ptr() as *const c_char);
+
+    // Motion type: inclusive or exclusive.
+    let inclusive = nvim_oap_get_inclusive(oap);
+    tv_dict_add_bool(
+        dict,
+        c"inclusive".as_ptr(),
+        9,
+        if inclusive {
+            K_BOOL_VAR_TRUE
+        } else {
+            K_BOOL_VAR_FALSE
+        },
+    );
+
+    // Kind of operation: yank, delete, change.
+    let op_type = nvim_oap_get_op_type(oap);
+    buf[0] = get_op_char(op_type) as u8;
+    buf[1] = 0;
+    tv_dict_add_str(dict, c"operator".as_ptr(), 8, buf.as_ptr() as *const c_char);
+
+    // Selection type: visual or not.
+    let is_visual = nvim_oap_get_is_VIsual(oap);
+    tv_dict_add_bool(
+        dict,
+        c"visual".as_ptr(),
+        6,
+        if is_visual {
+            K_BOOL_VAR_TRUE
+        } else {
+            K_BOOL_VAR_FALSE
+        },
+    );
+
+    tv_dict_set_keys_readonly(dict);
+    nvim_inc_textlock();
+    apply_autocmds(
+        EVENT_TEXTYANKPOST,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        curbuf,
+    );
+    nvim_dec_textlock();
+    restore_v_event(dict, save_v_event.as_mut_ptr() as *mut c_void);
+
+    RECURSIVE = false;
+}
+
+/// Thin wrapper: validates register, calls op_yank_reg, clipboard, autocmd.
+///
+/// # Safety
+///
+/// `oap` must be valid.
+#[unsafe(export_name = "op_yank")]
+pub unsafe extern "C" fn rs_op_yank(oap: *mut c_void, message: bool) -> bool {
+    let regname = nvim_oap_get_regname(oap);
+
+    // check for read-only register
+    if regname != NUL && !rs_valid_yank_reg(regname, true) {
+        beep_flush();
+        return false;
+    }
+    if regname == c_int::from(b'_') {
+        return true; // black hole: nothing to do
+    }
+
+    let reg = rs_get_yank_register(regname, 1 /* YREG_YANK */);
+    rs_op_yank_reg(oap, message, reg, rs_is_append_register(regname) != 0);
+    set_clipboard(regname, reg);
+    rs_do_autocmd_textyankpost(oap, reg);
+    true
 }
 
 // ---------------------------------------------------------------------------

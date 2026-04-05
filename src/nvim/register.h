@@ -17,6 +17,9 @@ extern int rs_get_register_name(int num);
 // These replace the former C implementations that have been deleted.
 extern int insert_reg(int regname, yankreg_T *reg, bool literally_arg);
 extern bool get_spec_reg(int regname, char **argp, bool *allocated, bool errmsg);
+extern void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append);
+extern void do_autocmd_textyankpost(oparg_T *oap, yankreg_T *reg);
+extern bool op_yank(oparg_T *oap, bool message);
 extern bool cmdline_paste_reg(int regname, bool literally_arg, bool remcr);
 extern void *get_reg_contents(int regname, int flags);
 extern int do_execreg(int regname, int colon, int addcr, int silent);
