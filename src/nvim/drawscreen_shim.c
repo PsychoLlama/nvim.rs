@@ -32,10 +32,10 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// file-static variables owned in drawscreen.c, used in these helpers
-extern bool redraw_popupmenu;
-extern bool msg_grid_invalid;
-extern bool resizing_autocmd;
+// Global variables used across drawscreen and shim code
+bool redraw_popupmenu = false;
+bool msg_grid_invalid = false;
+bool resizing_autocmd = false;
 
 // Rust FFI declarations used in shim helpers
 extern void rs_ins_compl_show_pum(void);
@@ -417,6 +417,13 @@ colnr_T nvim_buf_ml_get_len(buf_T *buf, linenr_T lnum)
 {
   return ml_get_buf_len(buf, lnum);
 }
+
+// =============================================================================
+// Phase 3: win_redraw_signcols accessors
+// =============================================================================
+
+/// Return true if *wp->w_p_stc != NUL (statuscolumn option is set).
+bool nvim_win_get_w_p_stc_nul(win_T *wp) { return *wp->w_p_stc != NUL; }
 
 /// Compute getvcols(&VIsual, &curwin->w_cursor) for block visual mode.
 /// Returns fromc via *fromc_out and pre-incremented toc via *toc_out.

@@ -123,57 +123,18 @@
 #include "drawscreen.c.generated.h"
 
 // Rust FFI declarations
-extern int rs_global_stl_height(void);
-extern int rs_min_rows(tabpage_T *tp);
-extern int rs_cmdline_number_prompt(void);
 extern int rs_hasAnyFolding(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
-extern void rs_clear_showcmd(void);
 extern void rs_draw_vsep_win(win_T *wp);
 extern void rs_draw_hsep_win(win_T *wp);
 extern void rs_draw_sep_connectors_win(win_T *wp);
 extern void rs_win_update_visual_region(win_T *wp, buf_T *buf, int type,
                                         int top_end, bool scrolled_down,
                                         int *mid_start, int *mid_end);
-extern void rs_ins_compl_show_pum(void);
+extern bool rs_win_redraw_signcols(win_T *wp);
 extern void nvim_set_conceal_cursor_used(int val);
 
-bool redraw_popupmenu = false;
-bool msg_grid_invalid = false;
-bool resizing_autocmd = false;
-
 static void win_update(win_T *wp);  // forward declaration
-
-#define COL_RULER 17        // columns needed by standard ruler
-
-/// Redraw entire window "wp" if "auto" 'signcolumn' width has changed.
-static bool win_redraw_signcols(win_T *wp)
-{
-  buf_T *buf = wp->w_buffer;
-
-  if (!buf->b_signcols.autom
-      && (*wp->w_p_stc != NUL || (wp->w_maxscwidth > 1 && wp->w_minscwidth != wp->w_maxscwidth))) {
-    buf->b_signcols.autom = true;
-    buf_signcols_count_range(buf, 0, buf->b_ml.ml_line_count - 1, MAXLNUM, kFalse);
-  }
-
-  while (buf->b_signcols.max > 0 && buf->b_signcols.count[buf->b_signcols.max - 1] == 0) {
-    buf->b_signcols.max--;
-  }
-
-  int width = MIN(wp->w_maxscwidth, buf->b_signcols.max);
-  bool rebuild_stc = buf->b_signcols.max != buf->b_signcols.last_max && *wp->w_p_stc != NUL;
-
-  if (rebuild_stc) {
-    wp->w_nrwidth_line_count = 0;
-  } else if (wp->w_minscwidth == 0 && wp->w_maxscwidth == 1) {
-    width = buf_meta_total(buf, kMTMetaSignText) > 0;
-  }
-
-  int scwidth = wp->w_scwidth;
-  wp->w_scwidth = MAX(MAX(0, wp->w_minscwidth), width);
-  return (wp->w_scwidth != scwidth || rebuild_stc);
-}
 
 
 /// Update a single window.
@@ -271,7 +232,7 @@ static void win_update(win_T *wp)
   decor_providers_invoke_win(wp);
 
   FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (win->w_buffer == wp->w_buffer && win_redraw_signcols(win)) {
+    if (win->w_buffer == wp->w_buffer && rs_win_redraw_signcols(win)) {
       changed_line_abv_curs_win(win);
       redraw_later(win, UPD_NOT_VALID);
     }

@@ -3223,6 +3223,89 @@ pub unsafe extern "C" fn rs_win_update_visual_region(
 }
 
 // =============================================================================
+// Phase 3 (plan eec0896b): migrate win_redraw_signcols to Rust
+// =============================================================================
+
+/// kMTMetaSignText value from marktree_defs.h.
+const K_MT_META_SIGN_TEXT: c_int = 3;
+
+/// MAXLNUM: maximal (invalid) line number.
+const MAXLNUM: LinenrT = 0x7fff_ffff;
+
+extern "C" {
+    fn nvim_win_get_maxscwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_get_minscwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_set_scwidth(wp: WinHandle, val: c_int);
+    fn nvim_win_get_w_p_stc_nul(wp: WinHandle) -> bool;
+    fn nvim_win_get_nrwidth_line_count(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_nrwidth_line_count(wp: WinHandle, val: LinenrT);
+
+    fn nvim_buf_signcols_get_autom(buf: BufHandle) -> bool;
+    fn nvim_buf_signcols_set_autom(buf: BufHandle, val: bool);
+    fn nvim_buf_signcols_get_max(buf: BufHandle) -> c_int;
+    fn nvim_buf_signcols_set_max(buf: BufHandle, val: c_int);
+    fn nvim_buf_signcols_get_last_max(buf: BufHandle) -> c_int;
+    fn nvim_buf_signcols_set_last_max(buf: BufHandle, val: c_int);
+    fn nvim_buf_signcols_get_count(buf: BufHandle, idx: c_int) -> c_int;
+
+    /// buf_signcols_count_range wrapper: count sign columns in range.
+    fn nvim_buf_signcols_count_range(
+        buf: BufHandle,
+        row1: c_int,
+        row2: c_int,
+        add: c_int,
+        clear: c_int,
+    );
+    /// buf_meta_total wrapper: return total meta count for given type.
+    fn nvim_buf_meta_total(buf: BufHandle, meta_type: c_int) -> c_int;
+}
+
+/// Recalculate sign column width for window `wp`.
+///
+/// Returns true if the sign column width changed or the statuscolumn needs rebuild.
+///
+/// Rust equivalent of `win_redraw_signcols()` in drawscreen.c.
+///
+/// # Safety
+/// `wp` must be a valid non-null window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
+    let buf = nvim_win_get_buffer(wp);
+    let maxscwidth = nvim_win_get_maxscwidth(wp);
+    let minscwidth = nvim_win_get_minscwidth(wp);
+    let has_stc = nvim_win_get_w_p_stc_nul(wp);
+
+    if !nvim_buf_signcols_get_autom(buf)
+        && (has_stc || (maxscwidth > 1 && minscwidth != maxscwidth))
+    {
+        nvim_buf_signcols_set_autom(buf, true);
+        let line_count = nvim_buf_get_ml_line_count(buf);
+        nvim_buf_signcols_count_range(buf, 0, line_count - 1, MAXLNUM, 0 /* kFalse */);
+    }
+
+    let mut max = nvim_buf_signcols_get_max(buf);
+    while max > 0 && nvim_buf_signcols_get_count(buf, max - 1) == 0 {
+        max -= 1;
+    }
+    nvim_buf_signcols_set_max(buf, max);
+
+    let last_max = nvim_buf_signcols_get_last_max(buf);
+    let mut width = maxscwidth.min(max);
+    let rebuild_stc = max != last_max && has_stc;
+
+    if rebuild_stc {
+        nvim_win_set_nrwidth_line_count(wp, 0);
+    } else if minscwidth == 0 && maxscwidth == 1 {
+        width = c_int::from(nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) > 0);
+    }
+
+    let scwidth = nvim_win_get_scwidth(wp);
+    nvim_win_set_scwidth(wp, 0.max(minscwidth).max(width));
+    nvim_win_get_scwidth(wp) != scwidth || rebuild_stc
+}
+
+// =============================================================================
 // Phase 1 (plan eec0896b): win_loop migration
 // =============================================================================
 

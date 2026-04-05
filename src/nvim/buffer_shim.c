@@ -350,6 +350,12 @@ void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val) { buf->deleted_bytes2
 int nvim_buf_get_prev_line_count(buf_T *buf) { return buf->b_prev_line_count; }
 void nvim_buf_set_prev_line_count(buf_T *buf, int val) { buf->b_prev_line_count = val; }
 bool nvim_buf_signcols_get_autom(buf_T *buf) { return buf->b_signcols.autom; }
+void nvim_buf_signcols_set_autom(buf_T *buf, bool val) { buf->b_signcols.autom = val; }
+int nvim_buf_signcols_get_max(buf_T *buf) { return buf->b_signcols.max; }
+void nvim_buf_signcols_set_max(buf_T *buf, int val) { buf->b_signcols.max = val; }
+int nvim_buf_signcols_get_last_max(buf_T *buf) { return buf->b_signcols.last_max; }
+void nvim_buf_signcols_set_last_max(buf_T *buf, int val) { buf->b_signcols.last_max = val; }
+int nvim_buf_signcols_get_count(buf_T *buf, int idx) { return buf->b_signcols.count[idx]; }
 void nvim_buf_signcols_clear(buf_T *buf) { buf->b_signcols.max = 0; CLEAR_FIELD(buf->b_signcols.count); }
 size_t nvim_buf_wininfo_count(buf_T *buf) { return kv_size(buf->b_wininfo); }
 WinInfo *nvim_buf_wininfo_get(buf_T *buf, size_t i) { return kv_A(buf->b_wininfo, i); }

@@ -1536,6 +1536,16 @@ pub const unsafe extern "C" fn win_get_minscwidth(wp: WinHandle) -> c_int {
     win_ref(wp).w_minscwidth
 }
 
+/// Returns `wp->w_maxscwidth`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_maxscwidth"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_maxscwidth(wp: WinHandle) -> c_int {
+    win_ref(wp).w_maxscwidth
+}
+
 /// Returns `wp->w_nrwidth_width`.
 ///
 /// # Safety
@@ -2235,6 +2245,15 @@ pub unsafe extern "C" fn win_set_nrwidth_width(wp: WinHandle, val: c_int) {
 #[export_name = "nvim_win_set_nrwidth_line_count"]
 pub unsafe extern "C" fn win_set_nrwidth_line_count(wp: WinHandle, val: LineNr) {
     win_mut(wp).w_nrwidth_line_count = val;
+}
+
+/// Sets `wp->w_scwidth`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_set_scwidth"]
+pub unsafe extern "C" fn win_set_scwidth(wp: WinHandle, val: c_int) {
+    win_mut(wp).w_scwidth = val;
 }
 
 /// Sets `wp->w_statuscol_line_count`.
