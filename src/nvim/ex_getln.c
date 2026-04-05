@@ -86,6 +86,10 @@
 /// Last value of prompt_id, incremented when doing new prompt
 static unsigned last_prompt_id = 0;
 
+/// Pending highlight callback for getcmdline_prompt (passed through static to
+/// avoid crossing the FFI boundary with the complex Callback union type).
+static Callback pending_prompt_hl_callback = CALLBACK_INIT;
+
 // Struct to store the state of 'incsearch' highlighting.
 typedef struct {
   pos_T search_start;   // where 'incsearch' starts searching
@@ -311,48 +315,10 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
                         const Callback highlight_callback, bool one_key, bool *mouse_used)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
 {
-  const int msg_col_save = msg_col;
-
-  CmdlineInfo save_ccline;
-  bool did_save_ccline = false;
-  if (ccline.cmdbuff != NULL) {
-    save_ccline = ccline;
-    CLEAR_FIELD(ccline);
-    ccline.prev_ccline = &save_ccline;
-    ccline.cmdbuff = NULL;
-    did_save_ccline = true;
-  } else {
-    CLEAR_FIELD(ccline);
-  }
-  ccline.prompt_id = last_prompt_id++;
-  ccline.cmdprompt = (char *)prompt;
-  ccline.hl_id = hl_id;
-  ccline.xp_context = xp_context;
-  ccline.xp_arg = (char *)xp_arg;
-  ccline.input_fn = (firstc == '@');
-  ccline.highlight_callback = highlight_callback;
-  ccline.one_key = one_key;
-  ccline.mouse_used = mouse_used;
-
-  const bool cmd_silent_saved = cmd_silent;
-  int msg_silent_saved = msg_silent;
-  msg_silent = 0;
-  cmd_silent = false;
-
-  // Call Rust entry point with clear_ccline=0 (fields already set above)
-  char *const ret = (char *)rs_command_line_enter(firstc, 1, 0, 0);
-  ccline.redraw_state = kCmdRedrawNone;
-
-  if (did_save_ccline) {
-    ccline = save_ccline;
-  }
-  msg_silent = msg_silent_saved;
-  cmd_silent = cmd_silent_saved;
-  if (ccline.cmdbuff != NULL) {
-    msg_col = msg_col_save;
-  }
-
-  return ret;
+  // Store highlight_callback in static so Rust rs_getcmdline_prompt can apply
+  // it after clearing ccline (Callback union cannot cross the FFI boundary).
+  pending_prompt_hl_callback = highlight_callback;
+  return rs_getcmdline_prompt(firstc, prompt, hl_id, xp_context, xp_arg, (int)one_key, mouse_used);
 }
 
 // check_opt_wim() is implemented in Rust (cmdline crate, wildmenu.rs).
@@ -868,6 +834,15 @@ void nvim_set_ccline_input_fn(int val) { ccline.input_fn = (val != 0); }
 /// Set ccline.mouse_used pointer (for getcmdline_prompt setup from Rust).
 void nvim_set_ccline_mouse_used_ptr(bool *ptr) { ccline.mouse_used = ptr; }
 
+/// Apply pending_prompt_hl_callback to ccline.highlight_callback.
+/// Called from Rust rs_getcmdline_prompt after ccline fields are set.
+/// Resets pending_prompt_hl_callback to CALLBACK_NONE after copying.
+void nvim_apply_pending_hl_callback(void)
+{
+  ccline.highlight_callback = pending_prompt_hl_callback;
+  pending_prompt_hl_callback = (Callback)CALLBACK_INIT;
+}
+
 /// Increment last_prompt_id and return new value.
 unsigned int nvim_get_ccline_prompt_id_inc(void) { return ++last_prompt_id; }
 
@@ -877,13 +852,12 @@ int nvim_cmdline_win_is_active(void) { return cmdline_win != NULL; }
 int nvim_cmdline_win_width(void) { return cmdline_win ? cmdline_win->w_view_width : 0; }
 int nvim_cmdline_win_height(void) { return cmdline_win ? cmdline_win->w_view_height : 0; }
 
-/// Simplified wrapper around getcmdline_prompt for FFI use.
+/// Simplified wrapper around rs_getcmdline_prompt for FFI use.
 /// Avoids passing the complex Callback union across FFI boundary.
 char *nvim_getcmdline_prompt_simple(int firstc, const char *prompt, int hl_id,
                                     int xp_context, bool one_key, bool *mouse_used)
 {
-  return getcmdline_prompt(firstc, prompt, hl_id, xp_context, NULL,
-                           CALLBACK_NONE, one_key, mouse_used);
+  return rs_getcmdline_prompt(firstc, prompt, hl_id, xp_context, NULL, (int)one_key, mouse_used);
 }
 
 /// Increment textlock.

@@ -96,6 +96,9 @@ uint8_t *rs_command_line_enter(int firstc, int count, int indent, int clear_ccli
 char *rs_getcmdline_prompt(int firstc, const char *prompt, int hl_id, int xp_context,
                            const char *xp_arg, int one_key, bool *mouse_used);
 
+// Phase 2 helper: apply pending highlight callback from C static to ccline.
+void nvim_apply_pending_hl_callback(void);
+
 #ifdef __cplusplus
 }
 #endif

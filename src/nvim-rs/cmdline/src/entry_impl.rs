@@ -416,6 +416,7 @@ unsafe extern "C" {
     fn nvim_set_ccline_mouse_used_ptr(ptr: *mut bool);
     fn nvim_set_ccline_redraw_state(state: c_int);
     fn nvim_get_ccline_cmdbuff() -> *mut c_char;
+    fn nvim_apply_pending_hl_callback();
 }
 
 /// Rust implementation of `getcmdline_prompt`.
@@ -455,6 +456,11 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     // highlight_callback = CALLBACK_NONE (not passed across FFI; handled by C wrapper)
     nvim_set_ccline_one_key(one_key);
     nvim_set_ccline_mouse_used_ptr(mouse_used);
+
+    // Apply pending highlight callback (set by C getcmdline_prompt before calling us).
+    // The Callback union cannot cross the FFI boundary; C stores it in a static,
+    // and we apply it here after ccline fields are initialized.
+    nvim_apply_pending_hl_callback();
 
     let cmd_silent_saved = nvim_get_cmd_silent();
     let msg_silent_saved = nvim_get_msg_silent();

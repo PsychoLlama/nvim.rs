@@ -219,8 +219,7 @@ void nvim_dbg_tv_free(typval_T *tv) { tv_free(tv); }
 
 char *nvim_dbg_getcmdline_prompt(void)
 {
-  return getcmdline_prompt('>', NULL, 0, EXPAND_NOTHING, NULL, CALLBACK_NONE,
-                           false, NULL);
+  return rs_getcmdline_prompt('>', NULL, 0, EXPAND_NOTHING, NULL, 0, NULL);
 }
 
 void nvim_dbg_do_cmdline(const char *cmd) { do_cmdline((char *)cmd, getexline, NULL, DOCMD_VERBOSE|DOCMD_EXCRESET); }
