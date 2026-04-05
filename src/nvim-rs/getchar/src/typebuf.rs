@@ -257,6 +257,15 @@ pub unsafe extern "C" fn rs_close_typebuf() {
     rs_close_typebuf_impl();
 }
 
+/// Get a raw pointer to the C `typebuf` global (for intra-crate use).
+///
+/// # Safety
+/// Returns a raw mutable pointer to the C global. Must only be used from the main thread.
+#[inline]
+pub unsafe fn typebuf_ptr() -> *mut TypebufT {
+    &raw mut typebuf
+}
+
 /// Exported C-callable `init_typebuf()`.
 ///
 /// # Safety

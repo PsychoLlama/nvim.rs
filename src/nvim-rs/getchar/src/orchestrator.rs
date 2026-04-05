@@ -6,7 +6,12 @@
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::too_many_lines,
+    clippy::doc_lazy_continuation,
+    clippy::needless_continue,
+    clippy::redundant_else,
+    clippy::branches_sharing_code
 )]
 
 use std::ffi::{c_int, c_void};
@@ -16,9 +21,6 @@ use std::ffi::{c_int, c_void};
 // =============================================================================
 
 extern "C" {
-    /// vgetorpeek: get next character from typeahead or keyboard
-    fn vgetorpeek(advance: bool) -> c_int;
-
     /// get_keystroke: get a keystroke directly from the user
     fn get_keystroke(argvars: *mut c_void) -> c_int;
 
@@ -373,7 +375,7 @@ pub unsafe extern "C" fn rs_vpeekc() -> c_int {
     if rs_can_get_old_char() != 0 {
         return rs_get_old_char();
     }
-    vgetorpeek(false)
+    rs_vgetorpeek(false)
 }
 
 /// Check if any character is available, also half an escape sequence.
@@ -461,7 +463,7 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
     while c1 != NUL && !aborted {
         ga_grow(ga_ptr, 32);
 
-        if vgetorpeek(false) == NUL {
+        if rs_vgetorpeek(false) == NUL {
             // incomplete <Cmd> is an error
             emsg(gettext(E_CMD_MAPPING_MUST_END_WITH_CR.as_ptr()));
             aborted = true;
@@ -469,12 +471,12 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
         }
 
         // Get one character at a time.
-        c1 = vgetorpeek(true);
+        c1 = rs_vgetorpeek(true);
 
         // Get two extra bytes for special keys
         if c1 == K_SPECIAL_BYTE {
-            c1 = vgetorpeek(true);
-            let c2 = vgetorpeek(true);
+            c1 = rs_vgetorpeek(true);
+            let c2 = rs_vgetorpeek(true);
             if c1 == KS_MODIFIER {
                 cmod = c2;
                 continue;
@@ -679,7 +681,7 @@ unsafe fn vgetc_inner_loop() -> c_int {
         } else {
             false
         };
-        let mut c = vgetorpeek(true);
+        let mut c = rs_vgetorpeek(true);
         if did_inc {
             no_mapping -= 1;
             allow_keys -= 1;
@@ -690,8 +692,8 @@ unsafe fn vgetc_inner_loop() -> c_int {
             let save_allow_keys = allow_keys;
             no_mapping += 1;
             allow_keys = 0; // make sure BS is not found
-            let c2 = vgetorpeek(true); // no mapping for these chars
-            c = vgetorpeek(true);
+            let c2 = rs_vgetorpeek(true); // no mapping for these chars
+            c = rs_vgetorpeek(true);
             no_mapping -= 1;
             allow_keys = save_allow_keys;
             if c2 == KS_MODIFIER {
@@ -710,12 +712,12 @@ unsafe fn vgetc_inner_loop() -> c_int {
             buf[0] = c as u8;
             #[allow(clippy::needless_range_loop)]
             for i in 1..(n as usize) {
-                buf[i] = vgetorpeek(true) as u8;
+                buf[i] = rs_vgetorpeek(true) as u8;
                 if buf[i] == K_SPECIAL_BYTE as u8 {
                     // Must be a K_SPECIAL - KS_SPECIAL - KE_FILLER sequence,
                     // which represents a K_SPECIAL (0x80).
-                    vgetorpeek(true); // skip KS_SPECIAL
-                    vgetorpeek(true); // skip KE_FILLER
+                    rs_vgetorpeek(true); // skip KS_SPECIAL
+                    rs_vgetorpeek(true); // skip KE_FILLER
                 }
             }
             no_mapping -= 1;
@@ -755,6 +757,516 @@ unsafe fn vgetc_inner_loop() -> c_int {
 
         break c;
     }
+}
+
+// =============================================================================
+// Phase 5: vgetorpeek
+// =============================================================================
+
+extern "C" {
+    /// line_breakcheck: check for CTRL-C in a loop
+    fn line_breakcheck();
+    /// os_breakcheck: check for CTRL-C from OS
+    fn os_breakcheck();
+    /// update_screen: redraw the screen
+    fn update_screen();
+    /// setcursor: set the cursor position
+    fn setcursor();
+    /// push_showcmd: save and reset the showcmd display
+    fn push_showcmd();
+    /// pop_showcmd: restore the showcmd display
+    fn pop_showcmd();
+    /// edit_putchar: display char in Insert mode
+    fn edit_putchar(c: c_int, highlight: bool);
+    /// edit_unputchar: remove char put by edit_putchar
+    fn edit_unputchar();
+    /// putcmdline: display a char in the command line
+    fn putcmdline(c: c_char, shift: bool);
+    /// unputcmdline: remove char put by putcmdline
+    fn unputcmdline();
+    /// ptr2cells: number of display cells for a string
+    fn ptr2cells(p: *const c_char) -> c_int;
+    /// showmode: display mode indicator
+    fn showmode() -> c_int;
+    /// unshowmode: remove mode indicator
+    fn unshowmode(clear: bool);
+    /// get_real_state: get current mode (for mapping)
+    fn get_real_state() -> c_int;
+
+    // Shim accessors for curwin/curbuf fields
+    fn nvim_curwin_get_wcol() -> c_int;
+    fn nvim_curwin_set_wcol(val: c_int);
+    fn nvim_curwin_get_wrow() -> c_int;
+    fn nvim_curwin_set_wrow(val: c_int);
+    fn nvim_curbuf_get_mapped_ctrl_c() -> c_int;
+    /// ESC cursor-left optimization helper
+    fn nvim_vgetorpeek_esc_cursor_left(new_wcol: *mut c_int, new_wrow: *mut c_int);
+    /// Check if get_cmdline_info()->cmdbuff is non-NULL
+    fn nvim_cmdline_info_has_cmdbuff() -> bool;
+
+    // Global state needed by vgetorpeek
+    static mut vgetc_busy: c_int;
+    static mut ex_normal_busy: c_int;
+    static mut KeyStuffed: c_int;
+    static mut typebuf_was_empty: bool;
+    static mut typeahead_char: c_int;
+    static mut KeyNoremap: c_int;
+    static mut mapped_ctrl_c: c_int;
+    static mut ctrl_c_interrupts: bool;
+    static mut State: c_int;
+    static mut cmd_silent: bool;
+
+    // Mode-display options and state
+    static mut mode_displayed: bool;
+    static mut redraw_cmdline: bool;
+    static mut exmode_active: bool;
+    static mut pending_exmode_active: bool;
+    static mut cmdwin_type: c_int;
+    static mut cmdline_star: c_int;
+
+    // Option values
+    static p_timeout: c_int;
+    static p_ttimeout: c_int;
+    static p_tm: i64;
+    static p_ttm: i64;
+    static p_lz: c_int;
+    static p_smd: c_int;
+    static msg_silent: c_int;
+    static mut must_redraw: c_int;
+    static need_wait_return: bool;
+
+    // gotchars_ignore: record an <Ignore> key for timing purposes
+    fn gotchars_ignore();
+}
+
+// Mode constants for vgetorpeek (must match state_defs.h)
+const MODE_INSERT_VGETORPEEK: c_int = 0x10;
+const MODE_CMDLINE_VGETORPEEK: c_int = 0x08;
+const MODE_HITRETURN_VGETORPEEK: c_int = 0x2001; // 0x2000 | MODE_NORMAL
+const MODE_NORMAL_VGETORPEEK: c_int = 0x01;
+const MODE_LANGMAP_VGETORPEEK: c_int = 0x20;
+
+// Constant aliases for vgetorpeek
+const NUL_C: c_int = 0;
+const ESC_C: c_int = 0x1b;
+const CTRL_C: c_int = 3;
+const MAXMAPLEN_V: c_int = 50;
+const SHOWCMD_COLS_V: c_int = 10;
+const KEYLEN_PART_KEY_V: c_int = -1;
+const FLUSH_INPUT_V: c_int = 2;
+const RM_YES_V: u8 = 0;
+
+use std::ffi::c_char;
+
+/// Gets a byte from the stuffbuffer, typeahead buffer, or user input.
+///
+/// If `advance` is true (vgetc()):
+///   - Really gets the character; sets KeyTyped and KeyStuffed.
+/// If `advance` is false (vpeekc()):
+///   - Just checks if a character is available; returns NUL if not.
+///
+/// # Safety
+/// Accesses C globals and calls C functions. Must be called from the main thread.
+#[export_name = "vgetorpeek"]
+pub unsafe extern "C" fn rs_vgetorpeek(advance: bool) -> c_int {
+    // Guard against recursive calls (except when inside :normal)
+    if vgetc_busy > 0 && ex_normal_busy == 0 {
+        return NUL_C;
+    }
+
+    vgetc_busy += 1;
+
+    if advance {
+        KeyStuffed = 0;
+        typebuf_was_empty = false;
+    }
+
+    crate::typebuf::rs_init_typebuf_impl();
+    crate::buffheader::rs_start_stuff();
+    crate::macro_recording::check_end_reg_executing_export(advance);
+
+    let mut c: c_int;
+    let mut timedout = false;
+    let mut mapdepth: c_int = 0;
+    let mut mode_deleted = false;
+
+    // Outer do-while loop: repeats if c < 0 or (advance && c == NUL)
+    loop {
+        // get a character: 1. from the stuffbuffer / typeahead_char
+        c = if typeahead_char != 0 {
+            let ch = typeahead_char;
+            if advance {
+                typeahead_char = 0;
+            }
+            ch
+        } else {
+            crate::buffheader::rs_read_readbuffers(c_int::from(advance))
+        };
+
+        if c != NUL_C && !got_int {
+            // Got character from stuffbuf
+            if advance {
+                KeyStuffed = 1;
+            }
+            let tb = crate::typebuf::typebuf_ptr();
+            if (*tb).tb_no_abbr_cnt == 0 {
+                (*tb).tb_no_abbr_cnt = 1; // no abbreviations now
+            }
+        } else {
+            // Loop until we find a matching mapped key or know it's not mapped.
+            'mapping_loop: loop {
+                crate::macro_recording::check_end_reg_executing_export(advance);
+
+                // Breakcheck - slower for mapped keys
+                {
+                    let tb = crate::typebuf::typebuf_ptr();
+                    if (*tb).tb_maplen != 0 {
+                        line_breakcheck();
+                    } else {
+                        if (mapped_ctrl_c | nvim_curbuf_get_mapped_ctrl_c()) & get_real_state() != 0
+                        {
+                            ctrl_c_interrupts = false;
+                        }
+                        os_breakcheck();
+                        ctrl_c_interrupts = true;
+                    }
+                }
+
+                let mut keylen: c_int = 0;
+                if got_int {
+                    // flush all input
+                    let tb = crate::typebuf::typebuf_ptr();
+                    c = crate::typebuf::inchar((*tb).tb_buf, (*tb).tb_buflen - 1, 0);
+
+                    if (c != 0 || (*tb).tb_maplen != 0)
+                        && (State & (MODE_INSERT_VGETORPEEK | MODE_CMDLINE_VGETORPEEK)) != 0
+                    {
+                        c = ESC_C;
+                    } else {
+                        c = CTRL_C;
+                    }
+                    crate::typebuf::flush_buffers_export(FLUSH_INPUT_V);
+
+                    if advance {
+                        *(*tb).tb_buf = c as u8;
+                        crate::macro_recording::rs_gotchars((*tb).tb_buf, 1);
+                    }
+                    cmd_silent = false;
+                    break 'mapping_loop;
+                } else {
+                    let tb = crate::typebuf::typebuf_ptr();
+                    if (*tb).tb_len > 0 {
+                        // Check for a mapping in typebuf
+                        let result = crate::mapping::handle_mapping(
+                            &raw mut keylen,
+                            &raw const timedout,
+                            &raw mut mapdepth,
+                        );
+
+                        if result == 2 {
+                            // map_result_retry: try mapping again
+                            continue 'mapping_loop;
+                        }
+                        if result == 0 {
+                            // map_result_fail: failed, use outer loop
+                            c = -1;
+                            break 'mapping_loop;
+                        }
+                        if result == 1 {
+                            // map_result_get: get char from typeahead
+                            c = c_int::from(*(*tb).tb_buf.add((*tb).tb_off as usize));
+                            if advance {
+                                cmd_silent = (*tb).tb_silent > 0;
+                                if (*tb).tb_maplen > 0 {
+                                    KeyTyped = false;
+                                } else {
+                                    KeyTyped = true;
+                                    crate::macro_recording::rs_gotchars(
+                                        (*tb).tb_buf.add((*tb).tb_off as usize),
+                                        1,
+                                    );
+                                }
+                                KeyNoremap =
+                                    c_int::from(*(*tb).tb_noremap.add((*tb).tb_off as usize));
+                                crate::typebuf::rs_del_typebuf(1, 0);
+                            }
+                            break 'mapping_loop; // got character
+                        }
+                        // map_result_nomatch (3): not enough chars, get more
+                    }
+                }
+
+                // get a character: 3. from the user - handle <Esc> in Insert mode
+                c = 0;
+                let mut new_wcol = nvim_curwin_get_wcol();
+                let mut new_wrow = nvim_curwin_get_wrow();
+
+                {
+                    let tb = crate::typebuf::typebuf_ptr();
+                    if advance
+                        && (*tb).tb_len == 1
+                        && *(*tb).tb_buf.add((*tb).tb_off as usize) == ESC_C as u8
+                        && no_mapping == 0
+                        && ex_normal_busy == 0
+                        && (*tb).tb_maplen == 0
+                        && (State & MODE_INSERT_VGETORPEEK) != 0
+                        && (p_timeout != 0 || (keylen == KEYLEN_PART_KEY_V && p_ttimeout != 0))
+                    {
+                        let inchar_result = crate::typebuf::inchar(
+                            (*tb)
+                                .tb_buf
+                                .add((*tb).tb_off as usize + (*tb).tb_len as usize),
+                            3,
+                            25,
+                        );
+                        if inchar_result == 0 {
+                            c = 0; // ESC optimization: no more chars
+                            if mode_displayed {
+                                unshowmode(true);
+                                mode_deleted = true;
+                            }
+                            nvim_vgetorpeek_esc_cursor_left(&raw mut new_wcol, &raw mut new_wrow);
+                        } else {
+                            c = inchar_result;
+                        }
+                    }
+                }
+
+                if c < 0 {
+                    continue 'mapping_loop; // end of input script
+                }
+
+                // Allow mapping for just typed characters.
+                {
+                    let tb = crate::typebuf::typebuf_ptr();
+                    let mut n: c_int = 1;
+                    while n <= c {
+                        *(*tb).tb_noremap.add((*tb).tb_off as usize + n as usize) = RM_YES_V;
+                        n += 1;
+                    }
+                    (*tb).tb_len += c;
+
+                    // buffer full, don't map
+                    if (*tb).tb_len >= (*tb).tb_maplen + MAXMAPLEN_V {
+                        timedout = true;
+                        continue 'mapping_loop;
+                    }
+                }
+
+                if ex_normal_busy > 0 {
+                    static mut TC: c_int = 0;
+                    let tb = crate::typebuf::typebuf_ptr();
+
+                    if (*tb).tb_len > 0 {
+                        timedout = true;
+                        continue 'mapping_loop;
+                    }
+
+                    // No typeahead inside :normal -- generate ESC or CTRL-C
+                    c = if (State & MODE_CMDLINE_VGETORPEEK) != 0
+                        || (cmdwin_type > 0 && TC == ESC_C)
+                    {
+                        CTRL_C
+                    } else {
+                        ESC_C
+                    };
+                    TC = c;
+
+                    if advance {
+                        typebuf_was_empty = true;
+                    }
+                    if pending_exmode_active {
+                        exmode_active = true;
+                    }
+                    (*tb).tb_no_abbr_cnt = 0;
+
+                    break 'mapping_loop;
+                }
+
+                // get a character: 3. from the user - update display
+                {
+                    if ((State & MODE_INSERT_VGETORPEEK) != 0 || p_lz != 0)
+                        && (State & MODE_CMDLINE_VGETORPEEK) == 0
+                        && advance
+                        && must_redraw != 0
+                        && !need_wait_return
+                    {
+                        update_screen();
+                        setcursor();
+                    }
+                }
+
+                // Show partial match in showcmd
+                let mut showcmd_idx: c_int = 0;
+                let mut showing_partial = false;
+                {
+                    let tb = crate::typebuf::typebuf_ptr();
+                    if (*tb).tb_len > 0 && advance && !exmode_active {
+                        if ((State & (MODE_NORMAL_VGETORPEEK | MODE_INSERT_VGETORPEEK)) != 0
+                            || State == MODE_LANGMAP_VGETORPEEK)
+                            && State != MODE_HITRETURN_VGETORPEEK
+                        {
+                            // Show last typed char in insert mode
+                            if State & MODE_INSERT_VGETORPEEK != 0 {
+                                let last_byte = *(*tb)
+                                    .tb_buf
+                                    .add((*tb).tb_off as usize + (*tb).tb_len as usize - 1);
+                                if ptr2cells(
+                                    ((*tb)
+                                        .tb_buf
+                                        .add((*tb).tb_off as usize + (*tb).tb_len as usize - 1))
+                                    .cast::<c_char>(),
+                                ) == 1
+                                {
+                                    edit_putchar(c_int::from(last_byte), false);
+                                    setcursor();
+                                    showing_partial = true;
+                                }
+                            }
+                            // Show partial key sequence with showcmd
+                            let old_wcol = nvim_curwin_get_wcol();
+                            let old_wrow = nvim_curwin_get_wrow();
+                            nvim_curwin_set_wcol(new_wcol);
+                            nvim_curwin_set_wrow(new_wrow);
+                            push_showcmd();
+                            if (*tb).tb_len > SHOWCMD_COLS_V {
+                                showcmd_idx = (*tb).tb_len - SHOWCMD_COLS_V;
+                            }
+                            while showcmd_idx < (*tb).tb_len {
+                                crate::macro_recording::rs_add_byte_to_showcmd(
+                                    *(*tb)
+                                        .tb_buf
+                                        .add((*tb).tb_off as usize + showcmd_idx as usize),
+                                );
+                                showcmd_idx += 1;
+                            }
+                            nvim_curwin_set_wcol(old_wcol);
+                            nvim_curwin_set_wrow(old_wrow);
+                        }
+
+                        if (State & MODE_CMDLINE_VGETORPEEK) != 0
+                            && nvim_cmdline_info_has_cmdbuff()
+                            && cmdline_star == 0
+                        {
+                            let p = (*tb)
+                                .tb_buf
+                                .add((*tb).tb_off as usize + (*tb).tb_len as usize - 1);
+                            let pch = *p as c_char;
+                            if ptr2cells(p.cast::<c_char>()) == 1 && (*p as u8) < 128 {
+                                putcmdline(pch, false);
+                                showing_partial = true;
+                            }
+                        }
+                    }
+                }
+
+                // get a character: 3. from the user - get it
+                {
+                    let tb = crate::typebuf::typebuf_ptr();
+                    if (*tb).tb_len == 0 {
+                        timedout = false;
+                    }
+
+                    let wait_time: i64 = if advance {
+                        if (*tb).tb_len == 0
+                            || !(p_timeout != 0 || (p_ttimeout != 0 && keylen == KEYLEN_PART_KEY_V))
+                        {
+                            -1 // blocking wait
+                        } else if keylen == KEYLEN_PART_KEY_V && p_ttm >= 0 {
+                            p_ttm
+                        } else {
+                            p_tm
+                        }
+                    } else {
+                        0
+                    };
+
+                    let wait_tb_len = (*tb).tb_len;
+                    c = crate::typebuf::inchar(
+                        (*tb)
+                            .tb_buf
+                            .add((*tb).tb_off as usize + (*tb).tb_len as usize),
+                        (*tb).tb_buflen - (*tb).tb_off - (*tb).tb_len - 1,
+                        wait_time,
+                    );
+
+                    if showcmd_idx != 0 {
+                        pop_showcmd();
+                    }
+                    if showing_partial {
+                        if State & MODE_INSERT_VGETORPEEK != 0 {
+                            edit_unputchar();
+                        }
+                        if (State & MODE_CMDLINE_VGETORPEEK) != 0 && nvim_cmdline_info_has_cmdbuff()
+                        {
+                            unputcmdline();
+                        } else {
+                            setcursor();
+                        }
+                    }
+
+                    if c < 0 {
+                        continue 'mapping_loop; // end of input script
+                    }
+                    if c == NUL_C {
+                        // no character available
+                        if !advance {
+                            break 'mapping_loop;
+                        }
+                        if wait_tb_len > 0 {
+                            timedout = true;
+                            continue 'mapping_loop;
+                        }
+                    } else {
+                        // allow mapping for just typed characters
+                        while *(*tb)
+                            .tb_buf
+                            .add((*tb).tb_off as usize + (*tb).tb_len as usize)
+                            != 0
+                        {
+                            *(*tb)
+                                .tb_noremap
+                                .add((*tb).tb_off as usize + (*tb).tb_len as usize) = RM_YES_V;
+                            (*tb).tb_len += 1;
+                        }
+                    }
+                }
+            } // 'mapping_loop
+        } // if c == NUL && got_int
+
+        // Check loop condition: c < 0 || (advance && c == NUL)
+        if !(c < 0 || (advance && c == NUL_C)) {
+            break;
+        }
+    } // outer loop
+
+    // Handle INSERT mode display message
+    {
+        let tb = crate::typebuf::typebuf_ptr();
+        if advance && p_smd != 0 && msg_silent == 0 && (State & MODE_INSERT_VGETORPEEK) != 0 {
+            if c == ESC_C && !mode_deleted && no_mapping == 0 && mode_displayed {
+                if (*tb).tb_len != 0 && !KeyTyped {
+                    redraw_cmdline = true;
+                } else {
+                    unshowmode(false);
+                }
+            } else if c != ESC_C && mode_deleted {
+                if (*tb).tb_len != 0 && !KeyTyped {
+                    redraw_cmdline = true;
+                } else {
+                    showmode();
+                }
+            }
+        }
+    }
+
+    if timedout && c == ESC_C {
+        gotchars_ignore();
+    }
+
+    vgetc_busy -= 1;
+
+    c
 }
 
 /// Normalize keypad keys to their ASCII equivalents.

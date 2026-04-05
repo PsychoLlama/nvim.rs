@@ -488,3 +488,77 @@ void nvim_curwin_set_curswant_flag(bool val) { curwin->w_set_curswant = val; }
 int nvim_has_mod_mask_ctrl(void) { return (mod_mask & MOD_MASK_CTRL) ? 1 : 0; }
 bool nvim_has_ve_flag_onemore(void) { return (get_ve_flags(curwin) & kOptVeFlagOnemore) != 0; }
 bool nvim_fdo_hor_and_key_typed(void) { return (fdo_flags & kOptFdoFlagHor) && KeyTyped; }
+
+// Accessors for vgetorpeek (Phase 2 migration)
+int nvim_curwin_get_wcol(void) { return curwin->w_wcol; }
+void nvim_curwin_set_wcol(int val) { curwin->w_wcol = val; }
+int nvim_curwin_get_wrow(void) { return curwin->w_wrow; }
+void nvim_curwin_set_wrow(int val) { curwin->w_wrow = val; }
+int nvim_curwin_get_cline_row(void) { return curwin->w_cline_row; }
+bool nvim_curwin_get_p_wrap(void) { return curwin->w_p_wrap; }
+int nvim_curbuf_get_mapped_ctrl_c(void) { return curbuf->b_mapped_ctrl_c; }
+
+/// Check if get_cmdline_info()->cmdbuff is non-NULL (for showcmd display).
+bool nvim_cmdline_info_has_cmdbuff(void) {
+  return get_cmdline_info()->cmdbuff != NULL;
+}
+
+/// Helper for vgetorpeek ESC-in-insert-mode cursor optimization.
+/// Moves the cursor left visually (for display purposes only), updating
+/// w_wcol/w_wrow based on cursor position.
+/// Returns new_wcol and new_wrow via out-parameters.
+void nvim_vgetorpeek_esc_cursor_left(int *new_wcol, int *new_wrow)
+{
+  validate_cursor(curwin);
+  int old_wcol = curwin->w_wcol;
+  int old_wrow = curwin->w_wrow;
+
+  if (curwin->w_cursor.col != 0) {
+    colnr_T col = 0;
+    char *ptr;
+    if (curwin->w_wcol > 0) {
+      if (did_ai && *skipwhite(get_cursor_line_ptr() + curwin->w_cursor.col) == NUL) {
+        curwin->w_wcol = 0;
+        ptr = get_cursor_line_ptr();
+        char *endptr = ptr + curwin->w_cursor.col;
+
+        CharsizeArg csarg;
+        CSType cstype = init_charsize_arg(&csarg, curwin, curwin->w_cursor.lnum, ptr);
+        StrCharInfo ci = utf_ptr2StrCharInfo(ptr);
+        int vcol = 0;
+        while (ci.ptr < endptr) {
+          if (!ascii_iswhite(ci.chr.value)) {
+            curwin->w_wcol = vcol;
+          }
+          vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &csarg).width;
+          ci = utfc_next(ci);
+        }
+
+        curwin->w_wrow = curwin->w_cline_row + curwin->w_wcol / curwin->w_view_width;
+        curwin->w_wcol %= curwin->w_view_width;
+        curwin->w_wcol += win_col_off(curwin);
+        col = 0;
+      } else {
+        curwin->w_wcol--;
+        col = curwin->w_cursor.col - 1;
+      }
+    } else if (curwin->w_p_wrap && curwin->w_wrow) {
+      curwin->w_wrow--;
+      curwin->w_wcol = curwin->w_view_width - 1;
+      col = curwin->w_cursor.col - 1;
+    }
+    if (col > 0 && curwin->w_wcol > 0) {
+      ptr = get_cursor_line_ptr();
+      col -= utf_head_off(ptr, ptr + col);
+      if (utf_ptr2cells(ptr + col) > 1) {
+        curwin->w_wcol--;
+      }
+    }
+  }
+  setcursor();
+  ui_flush();
+  *new_wcol = curwin->w_wcol;
+  *new_wrow = curwin->w_wrow;
+  curwin->w_wcol = old_wcol;
+  curwin->w_wrow = old_wrow;
+}
