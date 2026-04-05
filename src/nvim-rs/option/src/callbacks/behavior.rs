@@ -211,8 +211,8 @@ extern "C" {
     fn did_set_shada(args: *mut c_void) -> CallbackResult;
     fn did_set_complete(args: *mut c_void) -> CallbackResult;
 
-    // Phase 106: cedit / operatorfunc / findfunc / completeitemalign
-    fn did_set_cedit(args: *mut c_void) -> CallbackResult;
+    // Phase 106: operatorfunc / findfunc / completeitemalign
+    // Note: did_set_cedit is now implemented in Rust (rs_did_set_cedit below)
     fn did_set_operatorfunc(args: *mut c_void) -> CallbackResult;
     fn nvim_docmd_did_set_findfunc_impl(args: *mut c_void) -> CallbackResult;
     fn did_set_completeitemalign(args: *mut c_void) -> CallbackResult;
@@ -234,6 +234,13 @@ extern "C" {
     // showbreak: ptr2cells and utfc_ptr2len for Rust implementation
     fn ptr2cells(p: *const std::ffi::c_char) -> c_int;
     fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+
+    // Phase 4 (ex_getln migration): cedit accessors
+    fn nvim_get_p_cedit() -> *const c_char;
+    fn nvim_set_cedit_key(val: c_int);
+    fn string_to_key(arg: *mut c_char) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+    static e_invarg: [c_char; 0];
 }
 
 // =============================================================================
@@ -1291,10 +1298,33 @@ pub unsafe extern "C" fn rs_did_set_complete(args: *mut c_void) -> CallbackResul
     did_set_complete(args)
 }
 
-/// Callback for 'cedit' option (Phase 106).
+/// Callback for 'cedit' option (Phase 106 / Phase 4 ex_getln migration).
+///
+/// Validates the 'cedit' option value and sets cedit_key.
+/// Returns NULL if value is OK, error message (*const c_char) otherwise.
+///
+/// Replaces C `did_set_cedit` in ex_getln.c.
+///
+/// # Safety
+///
+/// Accesses C globals p_cedit and cedit_key.
 #[no_mangle]
-pub unsafe extern "C" fn rs_did_set_cedit(args: *mut c_void) -> CallbackResult {
-    did_set_cedit(args)
+pub unsafe extern "C" fn rs_did_set_cedit(_args: *mut c_void) -> CallbackResult {
+    let p = nvim_get_p_cedit();
+    if p.is_null() || *p == 0 {
+        // Empty p_cedit: disable cedit key
+        nvim_set_cedit_key(-1);
+        std::ptr::null()
+    } else {
+        let n = string_to_key(p.cast_mut());
+        if n == 0 || vim_isprintc(n) != 0 {
+            // Invalid key: return e_invarg
+            e_invarg.as_ptr()
+        } else {
+            nvim_set_cedit_key(n);
+            std::ptr::null()
+        }
+    }
 }
 
 /// Callback for 'operatorfunc' option (Phase 106).

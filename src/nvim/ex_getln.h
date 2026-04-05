@@ -100,6 +100,10 @@ char *rs_getcmdline_prompt(int firstc, const char *prompt, int hl_id, int xp_con
 // Phase 2 helper: apply pending highlight callback from C static to ccline.
 void nvim_apply_pending_hl_callback(void);
 
+// Phase 4: Functions implemented in Rust (ex_getln migration)
+void rs_do_autocmd_cmdlinechanged(int firstc);
+const char *rs_did_set_cedit(optset_T *args);
+
 #ifdef __cplusplus
 }
 #endif

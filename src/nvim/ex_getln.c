@@ -239,35 +239,40 @@ void nvim_trigger_cmd_autocmd(int typechar, int evt)
 // command_line_enter migrated to Rust (entry_impl.rs as rs_command_line_enter).
 
 
-/// Trigger CmdlineChanged autocommands.
-static void do_autocmd_cmdlinechanged(int firstc)
+/// Fire CmdlineChanged autocmd (called from Rust; skip has_event check since Rust does it).
+void nvim_fire_cmdlinechanged_autocmd(int firstc)
 {
-  if (has_event(EVENT_CMDLINECHANGED)) {
-    Error err = ERROR_INIT;
-    save_v_event_T save_v_event;
-    dict_T *dict = get_v_event(&save_v_event);
+  Error err = ERROR_INIT;
+  save_v_event_T save_v_event;
+  dict_T *dict = get_v_event(&save_v_event);
 
-    char firstcbuf[2];
-    firstcbuf[0] = (char)firstc;
-    firstcbuf[1] = 0;
+  char firstcbuf[2];
+  firstcbuf[0] = (char)firstc;
+  firstcbuf[1] = 0;
 
-    // set v:event to a dictionary with information about the commandline
-    tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-    tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-    tv_dict_set_keys_readonly(dict);
-    TRY_WRAP(&err, {
-      apply_autocmds(EVENT_CMDLINECHANGED, firstcbuf, firstcbuf, false, curbuf);
-      restore_v_event(dict, &save_v_event);
-    });
-    if (ERROR_SET(&err)) {
-      msg_putchar('\n');
-      msg_scroll = true;
-      msg_puts_hl(err.msg, HLF_E, true);
-      api_clear_error(&err);
-      redrawcmd();
-    }
+  // set v:event to a dictionary with information about the commandline
+  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
+  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
+  tv_dict_set_keys_readonly(dict);
+  TRY_WRAP(&err, {
+    apply_autocmds(EVENT_CMDLINECHANGED, firstcbuf, firstcbuf, false, curbuf);
+    restore_v_event(dict, &save_v_event);
+  });
+  if (ERROR_SET(&err)) {
+    msg_putchar('\n');
+    msg_scroll = true;
+    msg_puts_hl(err.msg, HLF_E, true);
+    api_clear_error(&err);
+    redrawcmd();
   }
 }
+
+/// Check if CmdlineChanged event has any listeners (for Rust).
+int nvim_has_event_cmdlinechanged(void) { return has_event(EVENT_CMDLINECHANGED) ? 1 : 0; }
+
+// do_autocmd_cmdlinechanged: implemented in Rust (cmdline crate, state.rs).
+// Thin C wrapper delegates to Rust.
+static void do_autocmd_cmdlinechanged(int firstc) { rs_do_autocmd_cmdlinechanged(firstc); }
 
 /// Abandon the command line.
 /// getcmdline() - accept a command line starting with firstc.
@@ -700,18 +705,10 @@ void cmdline_init(void) { CLEAR_FIELD(ccline); }
 
 /// Check value of 'cedit' and set cedit_key.
 /// Returns NULL if value is OK, error message otherwise.
+/// Delegates to Rust rs_did_set_cedit (implemented in option crate).
 const char *did_set_cedit(optset_T *args)
 {
-  if (*p_cedit == NUL) {
-    cedit_key = -1;
-  } else {
-    int n = string_to_key(p_cedit);
-    if (n == 0 || vim_isprintc(n)) {
-      return e_invarg;
-    }
-    cedit_key = n;
-  }
-  return NULL;
+  return rs_did_set_cedit(args);
 }
 // C accessors for Rust to read/write ccline fields
 int nvim_get_ccline_overstrike(void) { return ccline.overstrike; }
@@ -904,6 +901,12 @@ void nvim_set_getln_interrupted_highlight(int val) { getln_interrupted_highlight
 
 /// Get cedit_key value (static variable, exposed for Rust).
 int nvim_get_cedit_key(void) { return cedit_key; }
+
+/// Set cedit_key value (for Rust did_set_cedit implementation).
+void nvim_set_cedit_key(int val) { cedit_key = val; }
+
+/// Get p_cedit option string (for Rust did_set_cedit implementation).
+const char *nvim_get_p_cedit(void) { return p_cedit; }
 
 /// Get s->lookfor field (may be NULL).
 char *nvim_cls_get_lookfor(void *s) { return ((CommandLineState *)s)->lookfor; }

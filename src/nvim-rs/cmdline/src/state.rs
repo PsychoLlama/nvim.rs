@@ -2052,3 +2052,24 @@ pub unsafe extern "C" fn nvim_command_line_end_wildmenu(s: *mut c_void, key_is_w
     // wildmenu_cleanup takes CmdlineInfo* but ignores the parameter in its Rust impl
     wildmenu_cleanup(std::ptr::null_mut());
 }
+
+// =============================================================================
+// Phase 4: do_autocmd_cmdlinechanged migrated to Rust
+// =============================================================================
+
+unsafe extern "C" {
+    fn nvim_has_event_cmdlinechanged() -> c_int;
+    fn nvim_fire_cmdlinechanged_autocmd(firstc: c_int);
+}
+
+/// Rust replacement for `do_autocmd_cmdlinechanged` in ex_getln.c.
+///
+/// # Safety
+///
+/// Calls C autocmd/dict functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_autocmd_cmdlinechanged(firstc: c_int) {
+    if nvim_has_event_cmdlinechanged() != 0 {
+        nvim_fire_cmdlinechanged_autocmd(firstc);
+    }
+}

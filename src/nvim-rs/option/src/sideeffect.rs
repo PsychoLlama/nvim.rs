@@ -450,7 +450,7 @@ extern "C" {
     fn rs_spell_check_sps_full(p_sps_val: *const std::ffi::c_char) -> c_int;
     fn nvim_compile_cap_prog_win(win: crate::WinHandle) -> *const std::ffi::c_char;
     fn did_set_spell_option() -> *const std::ffi::c_char;
-    fn did_set_cedit(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
+    // Note: did_set_cedit is now Rust (rs_did_set_cedit); call it directly below.
     fn did_set_breakat(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
     fn didset_window_options(win: crate::WinHandle, valid_cursor: bool);
     static mut curwin: crate::WinHandle;
@@ -483,7 +483,7 @@ pub unsafe extern "C" fn rs_didset_options() {
     rs_spell_check_sps_full(p_sps);
     nvim_compile_cap_prog_win(curwin);
     did_set_spell_option();
-    did_set_cedit(std::ptr::null_mut());
+    crate::callbacks::behavior::rs_did_set_cedit(std::ptr::null_mut());
     did_set_breakat(std::ptr::null_mut());
     didset_window_options(curwin, true);
 }
