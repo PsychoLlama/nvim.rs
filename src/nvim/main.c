@@ -137,6 +137,12 @@ enum {
   EDIT_QF = 4,     // start in quickfix mode
 };
 
+// Result struct for cs_remote_call (must be before main.c.generated.h)
+typedef struct {
+  int should_exit;  // -1=kNone, 0=kFalse, 1=kTrue
+  int tabbed;       // -1=kNone, 0=kFalse, 1=kTrue
+} CsRemoteResult;
+
 #include "main.c.generated.h"
 extern int rs_only_one_window(void);
 
@@ -191,6 +197,91 @@ extern void rs_read_stdin(void);
 // Rust implementations (Phase 3+4: windows and buffers)
 extern void rs_create_windows(mparm_T *parmp);
 extern void rs_edit_buffers(mparm_T *parmp, char *cwd);
+
+// Rust implementation (Phase 5: remote_request)
+extern void rs_remote_request(mparm_T *params, int remote_args, char *server_addr, int argc,
+                               char **argv, bool ui_only);
+
+// C helper: builds API types, calls vim._cs_remote via nlua_exec.
+// Calls os_exit on error. Returns result for Rust to process.
+static CsRemoteResult cs_remote_call(uint64_t chan, const char *server_addr,
+                                     const char *connect_error,
+                                     int argc, char **argv, int remote_args)
+{
+  Array args = ARRAY_DICT_INIT;
+  kv_resize(args, (size_t)(argc - remote_args));
+  for (int t_argc = remote_args; t_argc < argc; t_argc++) {
+    ADD_C(args, CSTR_AS_OBJ(argv[t_argc]));
+  }
+
+  Error err = ERROR_INIT;
+  MAXSIZE_TEMP_ARRAY(a, 4);
+  ADD_C(a, INTEGER_OBJ((int)chan));
+  ADD_C(a, CSTR_AS_OBJ(server_addr));
+  ADD_C(a, CSTR_AS_OBJ(connect_error));
+  ADD_C(a, ARRAY_OBJ(args));
+  String s = STATIC_CSTR_AS_STRING("return vim._cs_remote(...)");
+  Object o = nlua_exec(s, NULL, a, kRetObject, NULL, &err);
+  kv_destroy(args);
+  if (ERROR_SET(&err)) {
+    fprintf(stderr, "%s\n", err.msg);
+    os_exit(2);
+  }
+
+  if (o.type != kObjectTypeDict) {
+    fprintf(stderr, "vim._cs_remote returned unexpected value\n");
+    os_exit(2);
+  }
+
+  CsRemoteResult result = { .should_exit = -1, .tabbed = -1 };
+  Dict rvdict = o.data.dict;
+
+  for (size_t i = 0; i < rvdict.size; i++) {
+    if (strequal(rvdict.items[i].key.data, "errmsg")) {
+      if (rvdict.items[i].value.type != kObjectTypeString) {
+        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'errmsg'\n");
+        os_exit(2);
+      }
+      fprintf(stderr, "%s\n", rvdict.items[i].value.data.string.data);
+      os_exit(2);
+    } else if (strequal(rvdict.items[i].key.data, "result")) {
+      if (rvdict.items[i].value.type != kObjectTypeString) {
+        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'result'\n");
+        os_exit(2);
+      }
+      printf("%s", rvdict.items[i].value.data.string.data);
+    } else if (strequal(rvdict.items[i].key.data, "tabbed")) {
+      if (rvdict.items[i].value.type != kObjectTypeBoolean) {
+        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'tabbed'\n");
+        os_exit(2);
+      }
+      result.tabbed = rvdict.items[i].value.data.boolean ? 1 : 0;
+    } else if (strequal(rvdict.items[i].key.data, "should_exit")) {
+      if (rvdict.items[i].value.type != kObjectTypeBoolean) {
+        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'should_exit'\n");
+        os_exit(2);
+      }
+      result.should_exit = rvdict.items[i].value.data.boolean ? 1 : 0;
+    }
+  }
+
+  if (result.should_exit == -1 || result.tabbed == -1) {
+    fprintf(stderr, "vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n");
+    os_exit(2);
+  }
+  api_free_object(o);
+  return result;
+}
+
+// Non-static wrapper for Rust: packs {should_exit, tabbed} into int64_t.
+// High 32 bits = should_exit (-1/0/1), low 32 bits = tabbed (-1/0/1).
+int64_t nvim_call_cs_remote(uint64_t chan, const char *server_addr,
+                             const char *connect_error, int argc, char **argv,
+                             int remote_args)
+{
+  CsRemoteResult r = cs_remote_call(chan, server_addr, connect_error, argc, argv, remote_args);
+  return ((int64_t)r.should_exit << 32) | (uint32_t)r.tabbed;
+}
 
 // C helper: set 'shortmess' option from Rust (avoids OptVal complexity)
 void nvim_set_shortmess_opt(const char *val)
@@ -955,101 +1046,7 @@ static uint64_t server_connect(char *server_addr, const char **errmsg)
 static void remote_request(mparm_T *params, int remote_args, char *server_addr, int argc,
                            char **argv, bool ui_only)
 {
-  bool is_ui = strequal(argv[remote_args], "--remote-ui");
-  if (ui_only && !is_ui) {
-    // TODO(bfredl): this implies always starting the TUI.
-    // if we be smart we could delay this past should_exit
-    return;
-  }
-
-  const char *connect_error = NULL;
-  uint64_t chan = server_connect(server_addr, &connect_error);
-  Object rvobj = OBJECT_INIT;
-
-  if (is_ui) {
-    if (!chan) {
-      fprintf(stderr, "Remote ui failed to start: %s\n", connect_error);
-      os_exit(1);
-    } else if (strequal(server_addr, os_getenv_noalloc("NVIM"))) {
-      fprintf(stderr, "%s", "Cannot attach UI of :terminal child to its parent. ");
-      fprintf(stderr, "%s\n", "(Unset $NVIM to skip this check)");
-      os_exit(1);
-    }
-    ui_client_channel_id = chan;
-    return;
-  }
-
-  Array args = ARRAY_DICT_INIT;
-  kv_resize(args, (size_t)(argc - remote_args));
-  for (int t_argc = remote_args; t_argc < argc; t_argc++) {
-    ADD_C(args, CSTR_AS_OBJ(argv[t_argc]));
-  }
-
-  Error err = ERROR_INIT;
-  MAXSIZE_TEMP_ARRAY(a, 4);
-  ADD_C(a, INTEGER_OBJ((int)chan));
-  ADD_C(a, CSTR_AS_OBJ(server_addr));
-  ADD_C(a, CSTR_AS_OBJ(connect_error));
-  ADD_C(a, ARRAY_OBJ(args));
-  String s = STATIC_CSTR_AS_STRING("return vim._cs_remote(...)");
-  Object o = nlua_exec(s, NULL, a, kRetObject, NULL, &err);
-  kv_destroy(args);
-  if (ERROR_SET(&err)) {
-    fprintf(stderr, "%s\n", err.msg);
-    os_exit(2);
-  }
-
-  if (o.type == kObjectTypeDict) {
-    rvobj.data.dict = o.data.dict;
-  } else {
-    fprintf(stderr, "vim._cs_remote returned unexpected value\n");
-    os_exit(2);
-  }
-
-  TriState should_exit = kNone;
-  TriState tabbed = kNone;
-
-  for (size_t i = 0; i < rvobj.data.dict.size; i++) {
-    if (strequal(rvobj.data.dict.items[i].key.data, "errmsg")) {
-      if (rvobj.data.dict.items[i].value.type != kObjectTypeString) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'errmsg'\n");
-        os_exit(2);
-      }
-      fprintf(stderr, "%s\n", rvobj.data.dict.items[i].value.data.string.data);
-      os_exit(2);
-    } else if (strequal(rvobj.data.dict.items[i].key.data, "result")) {
-      if (rvobj.data.dict.items[i].value.type != kObjectTypeString) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'result'\n");
-        os_exit(2);
-      }
-      printf("%s", rvobj.data.dict.items[i].value.data.string.data);
-    } else if (strequal(rvobj.data.dict.items[i].key.data, "tabbed")) {
-      if (rvobj.data.dict.items[i].value.type != kObjectTypeBoolean) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'tabbed'\n");
-        os_exit(2);
-      }
-      tabbed = rvobj.data.dict.items[i].value.data.boolean ? kTrue : kFalse;
-    } else if (strequal(rvobj.data.dict.items[i].key.data, "should_exit")) {
-      if (rvobj.data.dict.items[i].value.type != kObjectTypeBoolean) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'should_exit'\n");
-        os_exit(2);
-      }
-      should_exit = rvobj.data.dict.items[i].value.data.boolean ? kTrue : kFalse;
-    }
-  }
-  if (should_exit == kNone || tabbed == kNone) {
-    fprintf(stderr, "vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n");
-    os_exit(2);
-  }
-  api_free_object(o);
-
-  if (should_exit == kTrue) {
-    os_exit(0);
-  }
-  if (tabbed == kTrue) {
-    params->window_count = argc - remote_args - 1;
-    params->window_layout = WIN_TABS;
-  }
+  rs_remote_request(params, remote_args, server_addr, argc, argv, ui_only);
 }
 
 
