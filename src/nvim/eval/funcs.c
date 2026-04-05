@@ -373,6 +373,7 @@ extern void f_getenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_setenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_pum_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_wordcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getmousepos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_soundfold(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_wildmenumode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_timer_stopall(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

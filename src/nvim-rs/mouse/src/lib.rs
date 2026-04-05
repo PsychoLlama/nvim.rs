@@ -2436,6 +2436,106 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
 }
 
 // =============================================================================
+// Phase 4 — f_getmousepos
+// =============================================================================
+
+extern "C" {
+    /// Initialize `rettv` as a dict and return its `dict_T*`.
+    fn tv_dict_alloc_ret(rettv: *mut std::ffi::c_void);
+
+    /// Get dict pointer from a typval (reads `tv->vval.v_dict`).
+    #[link_name = "nvim_tv_get_dict"]
+    fn nvim_tv_get_dict_ptr(tv: *const std::ffi::c_void) -> *const std::ffi::c_void;
+
+    /// Add a number entry to a dict.
+    fn tv_dict_add_nr(
+        d: *mut std::ffi::c_void,
+        key: *const c_char,
+        key_len: usize,
+        nr: i64,
+    ) -> c_int;
+
+    /// Get `w_handle` (window ID) from a window.
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+
+    /// Get `w_hsep_height` from a window.
+    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
+
+    /// Get `w_border_adj[idx]` from a window.
+    fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
+}
+
+/// `getmousepos()` function.
+///
+/// Returns a dict with mouse position fields: `screenrow`, `screencol`,
+/// `winid`, `winrow`, `wincol`, `line`, `column`, `coladd`.
+///
+/// # Safety
+/// `argvars`, `rettv`, and `fptr` must be valid typval pointers.
+#[export_name = "f_getmousepos"]
+pub unsafe extern "C" fn rs_f_getmousepos(
+    _argvars: *const std::ffi::c_void,
+    rettv: *mut std::ffi::c_void,
+    _fptr: *mut std::ffi::c_void,
+) {
+    let mouse_row = nvim_get_mouse_row();
+    let mouse_col = nvim_get_mouse_col();
+    let mut grid = nvim_get_mouse_grid();
+    let mut row = mouse_row;
+    let mut col = mouse_col;
+    let mut winid: i64 = 0;
+    let mut winrow: i64 = 0;
+    let mut wincol: i64 = 0;
+    let mut lnum: linenr_T = 0;
+    let mut column: i64 = 0;
+    let mut coladd: colnr_T = 0;
+
+    tv_dict_alloc_ret(rettv);
+    let dict = nvim_tv_get_dict_ptr(rettv).cast_mut();
+
+    tv_dict_add_nr(dict, c"screenrow".as_ptr(), 9, i64::from(mouse_row) + 1);
+    tv_dict_add_nr(dict, c"screencol".as_ptr(), 9, i64::from(mouse_col) + 1);
+
+    let wp = rs_mouse_find_win_inner(
+        std::ptr::addr_of_mut!(grid),
+        std::ptr::addr_of_mut!(row),
+        std::ptr::addr_of_mut!(col),
+    );
+    if !wp.is_null() {
+        let height = nvim_win_get_w_height(wp)
+            + nvim_win_get_hsep_height(wp)
+            + nvim_win_get_status_height(wp);
+        // The height is adjusted by 1 when there is a bottom border.
+        if row < height + nvim_win_get_border_adj(wp, 2) {
+            winid = i64::from(nvim_win_get_handle(wp));
+            winrow = i64::from(row) + 1 + i64::from(nvim_win_get_winrow_off(wp));
+            wincol = i64::from(col) + 1 + i64::from(nvim_win_get_wincol_off(wp));
+            if row >= 0
+                && row < nvim_win_get_w_height(wp)
+                && col >= 0
+                && col < nvim_win_get_w_width(wp)
+            {
+                rs_mouse_comp_pos(
+                    wp,
+                    std::ptr::addr_of_mut!(row),
+                    std::ptr::addr_of_mut!(col),
+                    std::ptr::addr_of_mut!(lnum),
+                );
+                col = rs_vcol2col(wp, lnum, col, std::ptr::addr_of_mut!(coladd));
+                column = i64::from(col) + 1;
+            }
+        }
+    }
+
+    tv_dict_add_nr(dict, c"winid".as_ptr(), 5, winid);
+    tv_dict_add_nr(dict, c"winrow".as_ptr(), 6, winrow);
+    tv_dict_add_nr(dict, c"wincol".as_ptr(), 6, wincol);
+    tv_dict_add_nr(dict, c"line".as_ptr(), 4, i64::from(lnum));
+    tv_dict_add_nr(dict, c"column".as_ptr(), 6, column);
+    tv_dict_add_nr(dict, c"coladd".as_ptr(), 6, i64::from(coladd));
+}
+
+// =============================================================================
 // Phase 7 — do_mouse and nv_mouse
 // =============================================================================
 
