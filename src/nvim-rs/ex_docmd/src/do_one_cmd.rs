@@ -461,7 +461,7 @@ pub unsafe extern "C" fn do_one_cmd(
     }
 
     // If looks like undefined user command, trigger CmdUndefined autocmds.
-    let cmd_size = nvim_docmd_get_command_count() - 1; // CMD_SIZE
+    let cmd_size = nvim_docmd_get_command_count(); // CMD_SIZE
     if !p.is_null()
         && (*eap).cmdidx == cmd_size
         && (*eap).skip == 0

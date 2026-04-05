@@ -2567,7 +2567,7 @@ pub unsafe extern "C" fn rs_shada_check_buffer(packer: *mut ShadaPackerBuffer) {
     let endptr = (*packer).endptr.cast::<u8>();
     let remaining = (endptr as usize).saturating_sub(ptr as usize);
 
-    if remaining < 2 * SHADA_PACK_ITEM_SIZE {
+    if remaining < 3 * SHADA_PACK_ITEM_SIZE {
         if let Some(flush) = (*packer).packer_flush {
             flush(packer);
         }
@@ -4444,8 +4444,11 @@ unsafe fn shada_read_when_writing(
                     continue;
                 }
                 if is_new {
-                    // Key was copied by put_ref; fname key is now owned by the map.
-                    // The key was xstrdup'd inside nvim_shada_wms_file_marks_put_ref.
+                    // pmap_put_ref stores the pointer directly (no xstrdup).
+                    // Replace with an owned copy so the map can free it later.
+                    #[allow(clippy::cast_ptr_alignment)]
+                    let key_slot = out_key as *mut *const c_char;
+                    *key_slot = nvim_xstrdup(fm_fname);
                 }
                 if (*val_slot).is_null() {
                     *val_slot = nvim_xcalloc(1, std::mem::size_of::<FileMarks>());
@@ -4925,7 +4928,11 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                     continue;
                 }
                 if is_new {
-                    // key was xstrdup'd inside put_ref
+                    // pmap_put_ref stores the pointer directly (no xstrdup).
+                    // Replace with an owned copy so the map can free it later.
+                    #[allow(clippy::cast_ptr_alignment)]
+                    let key_slot = out_key as *mut *const c_char;
+                    *key_slot = nvim_xstrdup(fname);
                 }
                 if (*val_slot).is_null() {
                     *val_slot = nvim_xcalloc(1, std::mem::size_of::<FileMarks>());

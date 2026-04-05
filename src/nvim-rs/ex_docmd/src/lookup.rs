@@ -265,20 +265,23 @@ pub unsafe extern "C" fn rs_one_letter_cmd(p: *const c_char, idx: *mut c_int) ->
     }
 
     let p0 = *p as u8;
+    if p0 == 0 {
+        return 0;
+    }
     let p1 = *p.add(1) as u8;
-    let p2 = *p.add(2) as u8;
 
     // 'k' command - mark
     // Match: k followed by anything except "ee" (which would be :keepXXX)
-    if p0 == b'k' && !(p1 == b'e' && p2 == b'e') {
+    if p0 == b'k' && !(p1 == b'e' && p1 != 0 && *p.add(2) as u8 == b'e') {
         *idx = crate::commands::CMD_K;
         return 1;
     }
 
     // 's' command - substitute
     if p0 == b's' {
-        let p3 = *p.add(3) as u8;
-        let p4 = *p.add(4) as u8;
+        let p2 = if p1 != 0 { *p.add(2) as u8 } else { 0 };
+        let p3 = if p2 != 0 { *p.add(3) as u8 } else { 0 };
+        let p4 = if p3 != 0 { *p.add(4) as u8 } else { 0 };
 
         if (p1 == b'c'
             && (p2 == 0 || (p2 != b's' && p2 != b'r' && (p3 == 0 || (p3 != b'i' && p4 != b'p')))))

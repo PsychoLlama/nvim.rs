@@ -322,8 +322,12 @@ pub unsafe extern "C" fn rs_parse_signcolumn(val: *const c_char) -> SigncolumnRe
                 };
             } else if c0 == b'y' && c1 == b'e' {
                 // "yes" or "yes:N"
-                let c4 = *val.add(4) as u8;
-                let width = if c4 == 0 { 1 } else { i32::from(c4 - b'0') };
+                let c3 = *val.add(3) as u8;
+                let width = if c3 == 0 {
+                    1
+                } else {
+                    i32::from(*val.add(4) as u8 - b'0')
+                };
                 return SigncolumnResult {
                     min_width: width,
                     max_width: width,
@@ -331,8 +335,12 @@ pub unsafe extern "C" fn rs_parse_signcolumn(val: *const c_char) -> SigncolumnRe
                 };
             } else if c0 == b'a' && c1 == b'u' {
                 // "auto" or "auto:N"
-                let c5 = *val.add(5) as u8;
-                let max = if c5 == 0 { 1 } else { i32::from(c5 - b'0') };
+                let c4 = *val.add(4) as u8;
+                let max = if c4 == 0 {
+                    1
+                } else {
+                    i32::from(*val.add(5) as u8 - b'0')
+                };
                 return SigncolumnResult {
                     min_width: 0,
                     max_width: max,

@@ -1535,6 +1535,10 @@ unsafe fn do_ucmd_impl(eap: ExargHandle, preview: bool) -> c_int {
         nvim_uc_prevwin_curwin_buf_ucmd(useridx)
     };
 
+    if cmd.is_null() {
+        return 0;
+    }
+
     // Preview path
     if preview {
         debug_assert!(unsafe { (*cmd).uc_preview_luaref } > 0);

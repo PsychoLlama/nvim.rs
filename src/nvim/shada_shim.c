@@ -220,7 +220,7 @@ const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
                                 String **out_contents, size_t *out_size,
                                 size_t *out_width, int *out_is_unnamed,
                                 Timestamp *out_ts, void **out_additional_data)
-{ yankreg_T reg; bool is_unnamed = false; const void *ret = op_global_reg_iter(iter, out_name, &reg, &is_unnamed);
+{ yankreg_T reg = { 0 }; bool is_unnamed = false; const void *ret = op_global_reg_iter(iter, out_name, &reg, &is_unnamed);
   *out_type = reg.y_type; *out_contents = reg.y_array; *out_size = reg.y_size;
   *out_width = (size_t)(reg.y_type == kMTBlockWise ? reg.y_width : 0);
   *out_is_unnamed = is_unnamed; *out_ts = reg.timestamp; *out_additional_data = reg.additional_data; return ret; }
