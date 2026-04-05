@@ -65,6 +65,12 @@ extern void rs_clearop(oparg_T *oap);
 extern void rs_clearopbeep(oparg_T *oap);
 extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
 extern void rs_may_start_select(int c);
+// Static state accessors (state owned in Rust)
+extern bool rs_get_got_click(void);
+extern void rs_set_got_click(bool val);
+extern win_T *rs_get_dragwin(void);
+extern void rs_set_dragwin(win_T *wp);
+extern bool rs_is_dragging(void);
 
 /// Get the mouse_dragging global value.
 int nvim_get_mouse_dragging(void) { return mouse_dragging; }
@@ -86,13 +92,7 @@ extern int rs_get_fpos_of_mouse(pos_T *mpos);
 extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
 extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int which_button);
 
-static bool got_click = false;  // got a click some time back
-
-/// Get whether a click was received.
-bool nvim_get_got_click(void) { return got_click; }
-
-/// Set whether a click was received.
-void nvim_set_got_click(bool val) { got_click = val; }
+// got_click state is now owned by Rust; use rs_get_got_click()/rs_set_got_click().
 
 /// Bridge for Rust-computed click arguments to VimL function call.
 /// Builds typval_T args from pre-computed strings and calls the VimL callback.
@@ -171,13 +171,13 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 
   // Ignore drag and release events if we didn't get a click.
   if (is_click) {
-    got_click = true;
+    rs_set_got_click(true);
   } else {
-    if (!got_click) {                   // didn't get click, ignore
+    if (!rs_get_got_click()) {          // didn't get click, ignore
       return false;
     }
     if (!is_drag) {                     // release, reset got_click
-      got_click = false;
+      rs_set_got_click(false);
       if (in_tab_line) {
         in_tab_line = false;
         return false;
@@ -194,7 +194,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       stuffnumReadbuff(count);
     }
     stuffcharReadbuff(Ctrl_T);
-    got_click = false;            // ignore drag&release now
+    rs_set_got_click(false);      // ignore drag&release now
     return false;
   }
 
@@ -389,7 +389,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 
   // If an operator is pending, ignore all drags and releases until the next mouse click.
   if (!is_drag && oap != NULL && oap->op_type != OP_NOP) {
-    got_click = false;
+    rs_set_got_click(false);
     oap->motion_type = kMTCharWise;
   }
 
@@ -608,7 +608,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
     } else {                                    // location list window
       do_cmdline_cmd(".ll");
     }
-    got_click = false;                          // ignore drag&release now
+    rs_set_got_click(false);                    // ignore drag&release now
   } else if ((mod_mask & MOD_MASK_CTRL)
              || (curbuf->b_help && (mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK)) {
     // Ctrl-Mouse click (or double click in a help window) jumps to the tag
@@ -617,7 +617,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       stuffcharReadbuff(Ctrl_O);
     }
     stuffcharReadbuff(Ctrl_RSB);
-    got_click = false;                          // ignore drag&release now
+    rs_set_got_click(false);                    // ignore drag&release now
   } else if ((mod_mask & MOD_MASK_SHIFT)) {
     // Shift-Mouse click searches for the next occurrence of the word under
     // the mouse pointer
@@ -729,16 +729,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   return moved;
 }
 
-static win_T *dragwin = NULL;  ///< window being dragged
-
-/// Get the window being dragged.
-win_T *nvim_get_dragwin(void) { return dragwin; }
-
-/// Set the window being dragged.
-void nvim_set_dragwin(win_T *wp) { dragwin = wp; }
-
-/// Check if a window is being dragged.
-bool nvim_is_dragging(void) { return dragwin != NULL; }
+// dragwin state is now owned by Rust; use rs_get_dragwin()/rs_set_dragwin()/rs_is_dragging().
 
 /// C accessor: the actual jump_to_mouse logic — entry point called from rs_jump_to_mouse.
 int nvim_jump_to_mouse_impl(int flags, bool *inclusive, int which_button)
@@ -767,10 +758,10 @@ int nvim_jump_to_mouse_impl(int flags, bool *inclusive, int which_button)
   if (flags & MOUSE_RELEASED) {
     // On button release we may change window focus if positioned on a
     // status line and no dragging happened.
-    if (dragwin != NULL && !did_drag) {
+    if (rs_is_dragging() && !did_drag) {
       flags &= ~(MOUSE_FOCUS | MOUSE_DID_MOVE);
     }
-    dragwin = NULL;
+    rs_set_dragwin(NULL);
     did_drag = false;
   }
 
@@ -851,12 +842,12 @@ retnomove:
     }
 
     fdc = rs_win_fdccol_count(wp);
-    dragwin = NULL;
+    rs_set_dragwin(NULL);
 
     if (below_window) {
       // In (or below) status line
       status_line_offset = row + wp->w_winbar_height - wp->w_height + 1;
-      dragwin = wp;
+      rs_set_dragwin(wp);
     } else {
       status_line_offset = 0;
     }
@@ -864,7 +855,7 @@ retnomove:
     if (grid == DEFAULT_GRID_HANDLE && col >= wp->w_width) {
       // In separator line
       sep_line_offset = col - wp->w_width + 1;
-      dragwin = wp;
+      rs_set_dragwin(wp);
     } else {
       sep_line_offset = 0;
     }
@@ -903,7 +894,7 @@ retnomove:
     // Only change window focus when not clicking on or dragging the
     // status line.  Do change focus when releasing the mouse button
     // (MOUSE_FOCUS was set above if we dragged first).
-    if (dragwin == NULL || (flags & MOUSE_RELEASED)) {
+    if (!rs_is_dragging() || (flags & MOUSE_RELEASED)) {
       win_enter(wp, true);                      // can make wp invalid!
     }
     if (curwin != old_curwin) {
@@ -926,20 +917,22 @@ retnomove:
 
     curwin->w_cursor.lnum = curwin->w_topline;
   } else if (status_line_offset) {
-    if (which_button == MOUSE_LEFT && dragwin != NULL) {
+    win_T *dw = rs_get_dragwin();
+    if (which_button == MOUSE_LEFT && dw != NULL) {
       // Drag the status line
-      count = row - dragwin->w_winrow - dragwin->w_height + 1
+      count = row - dw->w_winrow - dw->w_height + 1
               - status_line_offset;
-      rs_win_drag_status_line(dragwin, count);
+      rs_win_drag_status_line(dw, count);
       did_drag |= count;
     }
     return IN_STATUS_LINE;                      // Cursor didn't move
   } else if (sep_line_offset && which_button == MOUSE_LEFT) {
-    if (dragwin != NULL) {
+    win_T *dw = rs_get_dragwin();
+    if (dw != NULL) {
       // Drag the separator column
-      count = col - dragwin->w_wincol - dragwin->w_width + 1
+      count = col - dw->w_wincol - dw->w_width + 1
               - sep_line_offset;
-      rs_win_drag_vsep_line(dragwin, count);
+      rs_win_drag_vsep_line(dw, count);
       did_drag |= count;
     }
     return IN_SEP_LINE;                         // Cursor didn't move

@@ -1929,8 +1929,8 @@ extern "C" {
     fn nvim_win_set_filler_rows(wp: WinHandle, val: c_int);
     fn nvim_win_set_botfill(wp: WinHandle, val: c_int);
 
-    // Mouse dragging state
-    fn nvim_get_mouse_dragging() -> c_int;
+    // Mouse dragging state (implemented in mouse crate)
+    fn rs_get_mouse_dragging() -> c_int;
 
     fn validate_botline(wp: WinHandle);
 }
@@ -2180,7 +2180,7 @@ pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, 
     let view_height = nvim_win_get_view_height(wp);
 
     let mut off = rs_get_scrolloff_value(wp);
-    let mouse_dragging = nvim_get_mouse_dragging();
+    let mouse_dragging = rs_get_mouse_dragging();
     if mouse_dragging > 0 {
         off = mouse_dragging - 1;
     }
@@ -2535,7 +2535,7 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
 
     let mut extra = 0;
     let so = rs_get_scrolloff_value(wp);
-    let mouse_dragging = nvim_get_mouse_dragging();
+    let mouse_dragging = rs_get_mouse_dragging();
 
     // Stop counting lines to scroll when
     // - hitting start of the file
@@ -3159,7 +3159,7 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
     let mut above_wanted = rs_get_scrolloff_value(wp);
     let mut below_wanted = rs_get_scrolloff_value(wp);
 
-    let mouse_dragging = nvim_get_mouse_dragging();
+    let mouse_dragging = rs_get_mouse_dragging();
     if mouse_dragging > 0 {
         above_wanted = mouse_dragging - 1;
         below_wanted = mouse_dragging - 1;
@@ -4673,7 +4673,7 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
     }
 
     // Get scrolloff value - when dragging with the mouse, don't scroll that quickly
-    let mouse_dragging = nvim_get_mouse_dragging();
+    let mouse_dragging = rs_get_mouse_dragging();
     let so = if mouse_dragging > 0 {
         mouse_dragging - 1
     } else {

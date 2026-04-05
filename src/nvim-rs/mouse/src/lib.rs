@@ -157,6 +157,52 @@ static mut MOUSE_SAVED_TPOS: PosT = PosT {
     coladd: 0,
 };
 
+/// Whether a mouse click has been received (was `got_click` static in mouse.c).
+static mut GOT_CLICK: bool = false;
+
+/// Window currently being dragged, or null (was `dragwin` static in mouse.c).
+static mut DRAGWIN: WinHandle = std::ptr::null_mut();
+
+// =============================================================================
+// Rust-owned mouse state accessors (exported for C callers)
+// =============================================================================
+
+/// Get whether a click was received.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_got_click() -> bool {
+    GOT_CLICK
+}
+
+/// Set whether a click was received.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_got_click(val: bool) {
+    GOT_CLICK = val;
+}
+
+/// Get the window being dragged (opaque handle, may be null).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_dragwin() -> WinHandle {
+    DRAGWIN
+}
+
+/// Set the window being dragged.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_dragwin(wp: WinHandle) {
+    DRAGWIN = wp;
+}
+
+/// Return true if a window is currently being dragged.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_dragging() -> bool {
+    !DRAGWIN.is_null()
+}
+
+/// Get the `mouse_dragging` global value from C.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_mouse_dragging() -> c_int {
+    nvim_get_mouse_dragging()
+}
+
 // =============================================================================
 // C accessors for mouse state
 // =============================================================================
@@ -169,23 +215,11 @@ extern "C" {
     /// `p_mousescroll_vert` option value (`OptInt` = `int64_t`).
     static p_mousescroll_vert: i64;
 
+    /// Get `mouse_dragging` global value from C.
+    fn nvim_get_mouse_dragging() -> c_int;
+
     /// `p_mousescroll_hor` option value (`OptInt` = `int64_t`).
     static p_mousescroll_hor: i64;
-
-    /// Get whether a click was received.
-    fn nvim_get_got_click() -> bool;
-
-    /// Set whether a click was received.
-    fn nvim_set_got_click(val: bool);
-
-    /// Get the window being dragged.
-    fn nvim_get_dragwin() -> WinHandle;
-
-    /// Set the window being dragged.
-    fn nvim_set_dragwin(wp: WinHandle);
-
-    /// Check if a window is being dragged.
-    fn nvim_is_dragging() -> bool;
 
     // --- Window field accessors ---
 
@@ -650,7 +684,7 @@ pub unsafe extern "C" fn rs_setmouse() {
 /// Called when switching tab page.
 #[export_name = "reset_dragwin"]
 pub unsafe extern "C" fn rs_reset_dragwin() {
-    nvim_set_dragwin(std::ptr::null_mut());
+    DRAGWIN = std::ptr::null_mut();
 }
 
 /// Move the current tab to the tab in the same column as the mouse,
@@ -1453,7 +1487,7 @@ pub unsafe extern "C" fn rs_do_popup(
     }
 
     show_popupmenu();
-    nvim_set_got_click(false); // ignore release events
+    GOT_CLICK = false; // ignore release events
     jump_flags
 }
 
@@ -1860,7 +1894,7 @@ pub unsafe extern "C" fn rs_call_click_def_func(
     );
 
     // Ensure the next click is not treated as a drag.
-    nvim_set_got_click(false);
+    GOT_CLICK = false;
 }
 
 // =============================================================================
