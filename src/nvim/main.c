@@ -185,6 +185,9 @@ void nvim_set_errorfile_opt(const char *val) { set_option_direct(kOptErrorfile, 
 extern uint64_t rs_server_connect(char *server_addr, const char **errmsg);
 extern void rs_os_exit(int r) FUNC_ATTR_NORETURN;
 
+// Rust implementations (Phase 2: stdin)
+extern void rs_read_stdin(void);
+
 // C helpers for rs_server_connect / rs_os_exit (Phase 1)
 uint64_t nvim_channel_connect(bool is_tcp, const char *server_addr, const char **error)
 {
@@ -1043,57 +1046,7 @@ static void remote_request(mparm_T *params, int remote_args, char *server_addr, 
 /// Read text from stdin.
 static void read_stdin(void)
 {
-  // When getting the ATTENTION prompt here, use a dialog.
-  swap_exists_action = SEA_DIALOG;
-  no_wait_return = true;
-  bool save_msg_didany = msg_didany;
-
-  if (curbuf->b_ffname) {
-    // curbuf is already opened for a file, create a new buffer for stdin. #35269
-    buf_T *stdin_buf = buflist_new(NULL, NULL, 0, BLN_LISTED);
-    if (stdin_buf == NULL) {
-      semsg("Failed to create buffer for stdin");
-      return;
-    }
-
-    // remember the current buffer number so we can go back to it
-    handle_T initial_buf_handle = curbuf->handle;
-
-    // set the buffer we just created as curbuf so we can read stdin into it
-    set_curbuf(stdin_buf, 0, false);
-    readfile(NULL, NULL, 0, 0, (linenr_T)MAXLNUM, NULL, READ_NEW + READ_STDIN, true);
-
-    // remember stdin_buf_handle so we can close it if stdin_buf ends up empty
-    handle_T stdin_buf_handle = stdin_buf->handle;
-    bool stdin_buf_empty = buf_is_empty(curbuf);
-
-    // switch back to the original starting buffer
-    char buf[100];
-    vim_snprintf(buf, sizeof(buf), "silent! buffer %d", initial_buf_handle);
-    do_cmdline_cmd(buf);
-
-    if (stdin_buf_empty) {
-      // stdin buffer may be first or last ("echo foo | nvim file1 -"). #35269
-      // only wipe buffer after having switched to original starting buffer. #35681
-      vim_snprintf(buf, sizeof(buf), "silent! bwipeout! %d", stdin_buf_handle);
-      do_cmdline_cmd(buf);
-    }
-  } else {
-    // stdin buffer is first so we can just use curbuf
-    set_buflisted(true);
-    // Create memfile and read from stdin.
-    open_buffer(true, NULL, 0);
-    // stdin was empty so we should wipe it (e.g. "echo file1 | xargs nvim"). #8561
-    if (buf_is_empty(curbuf) && curbuf->b_next != NULL) {
-      do_cmdline_cmd("silent! bnext");
-      do_cmdline_cmd("silent! bwipeout 1");
-    }
-  }
-
-  no_wait_return = false;
-  msg_didany = save_msg_didany;
-  TIME_MSG("reading stdin");
-  rs_check_swap_exists_action();
+  rs_read_stdin();
 }
 
 // Create the requested number of windows and edit buffers in them.

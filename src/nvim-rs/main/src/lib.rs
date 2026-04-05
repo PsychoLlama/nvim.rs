@@ -24,6 +24,7 @@ pub mod output;
 pub mod scan;
 pub mod setup;
 pub mod signals;
+pub mod stdin;
 
 use std::ffi::c_int;
 

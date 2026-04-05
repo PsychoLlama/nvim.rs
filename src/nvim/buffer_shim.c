@@ -105,6 +105,9 @@ int nvim_buf_get_flags(buf_T *buf) { return buf->b_flags; }
 int nvim_buf_get_changed(buf_T *buf) { return buf->b_changed; }
 int nvim_buf_get_b_p_bl(buf_T *buf) { return buf->b_p_bl; }
 const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
+int nvim_curbuf_get_handle(void) { return curbuf->handle; }
+int nvim_curbuf_has_ffname(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
+int nvim_curbuf_b_next_null(void) { return curbuf->b_next == NULL ? 1 : 0; }
 const char *nvim_curbuf_get_path(void) { return curbuf->b_p_path; }
 const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
 char *nvim_get_namebuff(void) { return NameBuff; }
