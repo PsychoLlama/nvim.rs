@@ -585,3 +585,13 @@ void nvim_copy_winopt_scalars(winopt_T *from, winopt_T *to)
 void nvim_copy_winopt_save_strs(winopt_T *from, winopt_T *to) { to->wo_fdc_save = from->wo_diff_saved ? xstrdup(from->wo_fdc_save) : empty_string_option; to->wo_fdm_save = from->wo_diff_saved ? xstrdup(from->wo_fdm_save) : empty_string_option; }
 void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to) { memmove(to->wo_script_ctx, from->wo_script_ctx, sizeof(to->wo_script_ctx)); }
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
+
+
+/// Get curwin->w_p_rl (right-to-left mode) for Rust FFI.
+int nvim_get_curwin_p_rl(void) { return curwin->w_p_rl ? 1 : 0; }
+
+/// Get whether curwin->w_p_rlc contains 's' for Rust FFI.
+int nvim_get_curwin_p_rlc_has_s(void)
+{
+  return (curwin->w_p_rlc != NULL && *curwin->w_p_rlc == 's') ? 1 : 0;
+}

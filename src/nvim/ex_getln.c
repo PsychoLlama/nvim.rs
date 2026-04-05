@@ -232,340 +232,8 @@ void nvim_trigger_cmd_autocmd(int typechar, int evt)
   apply_autocmds((event_T)evt, typestr, typestr, false, curbuf);
 }
 
-/// Internal entry point for cmdline mode.
-///
-/// @param count  only used for incremental search
-/// @param indent  indent for inside conditionals
-/// @param clear_ccline  clear ccline first
-static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear_ccline)
-{
-  // can be invoked recursively, identify each level
-  cmdline_enter_level++;
+// command_line_enter migrated to Rust (entry_impl.rs as rs_command_line_enter).
 
-  bool save_cmdpreview = cmdpreview;
-  cmdpreview = false;
-  CommandLineState state = {
-    .firstc = firstc,
-    .count = count,
-    .indent = indent,
-    .save_msg_scroll = msg_scroll,
-    .save_State = State,
-    .prev_cmdpos = -1,
-    .ignore_drag_release = true,
-  };
-  CommandLineState *s = &state;
-  s->save_p_icm = xstrdup(p_icm);
-  rs_init_incsearch_state(&s->is_state);
-  CmdlineInfo save_ccline;
-  bool did_save_ccline = false;
-
-  if (ccline.cmdbuff != NULL) {
-    // Currently ccline can never be in use if clear_ccline is false.
-    // Some changes will be needed if this is no longer the case.
-    assert(clear_ccline);
-    // Being called recursively.  Since ccline is global, we need to save
-    // the current buffer and restore it when returning.
-    save_ccline = ccline;
-    CLEAR_FIELD(ccline);
-    ccline.prev_ccline = &save_ccline;
-    ccline.cmdbuff = NULL;  // signal that ccline is not in use
-    did_save_ccline = true;
-  } else if (clear_ccline) {
-    CLEAR_FIELD(ccline);
-  }
-
-  if (s->firstc == -1) {
-    s->firstc = NUL;
-    s->break_ctrl_c = true;
-  }
-
-  ccline.overstrike = false;                // always start in insert mode
-  assert(s->indent >= 0);
-  // set some variables for redrawcmd()
-  ccline.cmdfirstc = (s->firstc == '@' ? 0 : s->firstc);
-  ccline.cmdindent = (s->firstc > 0 ? s->indent : 0);
-  // alloc initial ccline.cmdbuff
-  alloc_cmdbuff(s->indent + 50);
-  ccline.cmdlen = ccline.cmdpos = 0;
-  ccline.cmdbuff[0] = NUL;
-  ccline.last_colors = (ColoredCmdline){ .cmdbuff = NULL,
-                                         .colors = KV_INITIAL_VALUE };
-  sb_text_start_cmdline();
-  // autoindent for :insert and :append
-  if (s->firstc <= 0) {
-    memset(ccline.cmdbuff, ' ', (size_t)s->indent);
-    ccline.cmdbuff[s->indent] = NUL;
-    ccline.cmdpos = s->indent;
-    ccline.cmdspos = s->indent;
-    ccline.cmdlen = s->indent;
-  }
-  ccline.prompt_id = last_prompt_id++;
-  ccline.level = cmdline_enter_level;
-
-  if (cmdline_enter_level == 50) {
-    // Somehow got into a loop recursively calling getcmdline(), bail out.
-    emsg(_(e_command_too_recursive));
-    goto theend;
-  }
-
-  ExpandInit(&s->xpc);
-  ccline.xpc = &s->xpc;
-  clear_cmdline_orig();
-
-  // Use Rust helper to determine RTL command line mode
-  cmdmsg_rl = rs_entry_should_use_cmdmsg_rl(s->firstc, curwin->w_p_rl,
-                                            *curwin->w_p_rlc == 's');
-
-  msg_grid_validate();
-
-  redir_off = true;             // don't redirect the typed command
-  if (!cmd_silent) {
-    gotocmdline(true);
-    rs_redrawcmdprompt();          // draw prompt or indent
-    ccline.cmdspos = rs_cmd_startcol();
-  }
-  s->xpc.xp_context = EXPAND_NOTHING;
-  s->xpc.xp_backslash = XP_BS_NONE;
-#ifndef BACKSLASH_IN_FILENAME
-  s->xpc.xp_shell = false;
-#endif
-
-  if (ccline.input_fn) {
-    s->xpc.xp_context = ccline.xp_context;
-    s->xpc.xp_pattern = ccline.cmdbuff;
-    s->xpc.xp_arg = ccline.xp_arg;
-  }
-
-  // Avoid scrolling when called by a recursive do_cmdline(), e.g. when
-  // doing ":@0" when register 0 doesn't contain a CR.
-  msg_scroll = false;
-
-  State = MODE_CMDLINE;
-
-  if (s->firstc == '/' || s->firstc == '?' || s->firstc == '@') {
-    // Use ":lmap" mappings for search pattern and input().
-    if (curbuf->b_p_imsearch == B_IMODE_USE_INSERT) {
-      s->b_im_ptr = &curbuf->b_p_iminsert;
-    } else {
-      s->b_im_ptr = &curbuf->b_p_imsearch;
-    }
-    s->b_im_ptr_buf = curbuf;
-    if (*s->b_im_ptr == B_IMODE_LMAP) {
-      State |= MODE_LANGMAP;
-    }
-  }
-
-  setmouse();
-
-  // Use Rust helper to get the cmdline type for events
-  s->cmdline_type = rs_entry_cmdline_type(firstc);
-  Error err = ERROR_INIT;
-  char firstcbuf[2];
-  firstcbuf[0] = (char)s->cmdline_type;
-  firstcbuf[1] = 0;
-
-  if (has_event(EVENT_CMDLINEENTER)) {
-    save_v_event_T save_v_event;
-    dict_T *dict = get_v_event(&save_v_event);
-
-    // set v:event to a dictionary with information about the commandline
-    tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-    tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-    tv_dict_set_keys_readonly(dict);
-    TRY_WRAP(&err, {
-      apply_autocmds(EVENT_CMDLINEENTER, firstcbuf, firstcbuf, false, curbuf);
-      restore_v_event(dict, &save_v_event);
-    });
-
-    if (ERROR_SET(&err)) {
-      msg_putchar('\n');
-      msg_scroll = true;
-      msg_puts_hl(err.msg, HLF_E, true);
-      api_clear_error(&err);
-      redrawcmd();
-    }
-    err = ERROR_INIT;
-  }
-  may_trigger_modechanged();
-
-  init_history();
-  s->hiscnt = get_hislen();  // set hiscnt to impossible history value
-  s->histype = rs_entry_hist_char2type(s->firstc);
-  do_digraph(-1);                       // init digraph typeahead
-
-  // If something above caused an error, reset the flags, we do want to type
-  // and execute commands. Display may be messed up a bit.
-  if (did_emsg) {
-    redrawcmd();
-  }
-
-  // Redraw the statusline in case it uses the current mode using the mode()
-  // function.
-  if (!cmd_silent && !exmode_active) {
-    bool found_one = false;
-
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (*p_stl != NUL || *wp->w_p_stl != NUL || *p_wbr != NUL || *wp->w_p_wbr != NUL) {
-        wp->w_redr_status = true;
-        found_one = true;
-      }
-    }
-
-    if (*p_tal != NUL) {
-      redraw_tabline = true;
-      found_one = true;
-    }
-
-    if (redraw_custom_title_later()) {
-      found_one = true;
-    }
-
-    if (found_one) {
-      redraw_statuslines();
-    }
-  }
-
-  did_emsg = false;
-  got_int = false;
-  s->state.check = command_line_check;
-  s->state.execute = command_line_execute;
-
-  state_enter(&s->state);
-
-  // Trigger CmdlineLeavePre autocommands if not already triggered.
-  if (!s->event_cmdlineleavepre_triggered) {
-    set_vim_var_char(s->c);  // Set v:char
-    nvim_trigger_cmd_autocmd(s->cmdline_type, EVENT_CMDLINELEAVEPRE);
-  }
-
-  if (has_event(EVENT_CMDLINELEAVE)) {
-    save_v_event_T save_v_event;
-    dict_T *dict = get_v_event(&save_v_event);
-
-    tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-    tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-    tv_dict_set_keys_readonly(dict);
-    // not readonly:
-    tv_dict_add_bool(dict, S_LEN("abort"),
-                     s->gotesc ? kBoolVarTrue : kBoolVarFalse);
-    set_vim_var_char(s->c);  // Set v:char
-    TRY_WRAP(&err, {
-      apply_autocmds(EVENT_CMDLINELEAVE, firstcbuf, firstcbuf, false, curbuf);
-      // error printed below, to avoid redraw issues
-    });
-    if (tv_dict_get_number(dict, "abort") != 0) {
-      s->gotesc = true;
-    }
-    restore_v_event(dict, &save_v_event);
-  }
-
-  cmdmsg_rl = false;
-
-  // We could have reached here without having a chance to clean up wild menu
-  // if certain special keys like <Esc> or <C-\> were used as wildchar. Make
-  // sure to still clean up to avoid memory corruption.
-  if (cmdline_pum_active()) {
-    cmdline_pum_remove(false);
-  } else {
-    // A previous cmdline_pum_remove() may have deferred redraw.
-    pum_check_clear();
-  }
-  wildmenu_cleanup(&ccline);
-  s->did_wild_list = false;
-  s->wim_index = 0;
-
-  ExpandCleanup(&s->xpc);
-  ccline.xpc = NULL;
-  clear_cmdline_orig();
-
-  rs_finish_incsearch_highlighting(s->gotesc ? 1 : 0, &s->is_state, 0);
-
-  if (ccline.cmdbuff != NULL) {
-    // Put line in history buffer (":" and "=" only when it was typed).
-    // Use Rust helper to determine if we should add to history.
-    if (rs_entry_should_add_to_history(s->histype, ccline.cmdlen, s->firstc,
-                                       s->some_key_typed)) {
-      add_to_history(s->histype, ccline.cmdbuff, (size_t)ccline.cmdlen, true,
-                     s->histype == HIST_SEARCH ? s->firstc : NUL);
-      if (rs_entry_should_save_last_cmdline(s->firstc)) {
-        xfree(new_last_cmdline);
-        new_last_cmdline = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
-      }
-    }
-
-    if (s->gotesc) {
-      dealloc_cmdbuff();
-      if (msg_scrolled == 0) {
-        compute_cmdrow();
-      }
-      // Avoid overwriting key prompt
-      if (!ccline.one_key) {
-        msg("", 0);
-        redraw_cmdline = true;
-      }
-    }
-  }
-
-  // If the screen was shifted up, redraw the whole screen (later).
-  // If the line is too long, clear it, so ruler and shown command do
-  // not get printed in the middle of it.
-  msg_check();
-  if (p_ch == 0 && !ui_has(kUIMessages)) {
-    set_must_redraw(UPD_VALID);
-  }
-  msg_scroll = s->save_msg_scroll;
-  redir_off = false;
-
-  if (ERROR_SET(&err)) {
-    msg_putchar('\n');
-    emsg(err.msg);
-    did_emsg = false;
-    api_clear_error(&err);
-  }
-
-  // When the command line was typed, no need for a wait-return prompt.
-  if (s->some_key_typed && !ERROR_SET(&err)) {
-    need_wait_return = false;
-  }
-
-  set_option_direct(kOptInccommand, CSTR_AS_OPTVAL(s->save_p_icm), 0, SID_NONE);
-  State = s->save_State;
-  if (cmdpreview != save_cmdpreview) {
-    cmdpreview = save_cmdpreview;  // restore preview state
-    redraw_all_later(UPD_SOME_VALID);
-  }
-  may_trigger_modechanged();
-  setmouse();
-  sb_text_end_cmdline();
-
-theend:
-  xfree(s->save_p_icm);
-  xfree(ccline.last_colors.cmdbuff);
-  kv_destroy(ccline.last_colors.colors);
-
-  char *p = ccline.cmdbuff;
-
-  if (ui_has(kUICmdline)) {
-    cmdline_was_last_drawn = false;
-    ccline.redraw_state = kCmdRedrawNone;
-    ui_call_cmdline_hide(ccline.level, s->gotesc);
-  }
-  if (!cmd_silent) {
-    redraw_custom_title_later();
-    status_redraw_all();  // redraw to show mode change
-  }
-
-  cmdline_enter_level--;
-
-  if (did_save_ccline) {
-    ccline = save_ccline;
-  } else {
-    ccline.cmdbuff = NULL;
-  }
-
-  xfree(s->prev_cmdbuff);
-  return (uint8_t *)p;
-}
 
 /// Trigger CmdlineChanged autocommands.
 static void do_autocmd_cmdlinechanged(int firstc)
@@ -620,7 +288,7 @@ static void do_autocmd_cmdlinechanged(int firstc)
 /// @param indent  indent for inside conditionals
 char *getcmdline(int firstc, int count, int indent, bool do_concat FUNC_ATTR_UNUSED)
 {
-  return (char *)command_line_enter(firstc, count, indent, true);
+  return (char *)rs_command_line_enter(firstc, count, indent, 1);
 }
 
 /// Get a command line with a prompt
@@ -648,11 +316,10 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
   CmdlineInfo save_ccline;
   bool did_save_ccline = false;
   if (ccline.cmdbuff != NULL) {
-    // Save the values of the current cmdline and restore them below.
     save_ccline = ccline;
     CLEAR_FIELD(ccline);
     ccline.prev_ccline = &save_ccline;
-    ccline.cmdbuff = NULL;  // signal that ccline is not in use
+    ccline.cmdbuff = NULL;
     did_save_ccline = true;
   } else {
     CLEAR_FIELD(ccline);
@@ -670,9 +337,10 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
   const bool cmd_silent_saved = cmd_silent;
   int msg_silent_saved = msg_silent;
   msg_silent = 0;
-  cmd_silent = false;  // Want to see the prompt.
+  cmd_silent = false;
 
-  char *const ret = (char *)command_line_enter(firstc, 1, 0, false);
+  // Call Rust entry point with clear_ccline=0 (fields already set above)
+  char *const ret = (char *)rs_command_line_enter(firstc, 1, 0, 0);
   ccline.redraw_state = kCmdRedrawNone;
 
   if (did_save_ccline) {
@@ -680,10 +348,6 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
   }
   msg_silent = msg_silent_saved;
   cmd_silent = cmd_silent_saved;
-  // Restore msg_col, the prompt from input() may have changed it.
-  // But only if called recursively and the commandline is therefore being
-  // restored to an old one; if not, the input() prompt stays on the screen,
-  // so we need its modified msg_col left intact.
   if (ccline.cmdbuff != NULL) {
     msg_col = msg_col_save;
   }
@@ -1195,6 +859,18 @@ void nvim_strcpy_cmdbuff(const char *src)
   }
 }
 
+/// Set ccline.xp_arg (for getcmdline_prompt setup from Rust).
+void nvim_set_ccline_xp_arg(const char *arg) { ccline.xp_arg = (char *)arg; }
+
+/// Set ccline.input_fn (for getcmdline_prompt setup from Rust).
+void nvim_set_ccline_input_fn(int val) { ccline.input_fn = (val != 0); }
+
+/// Set ccline.mouse_used pointer (for getcmdline_prompt setup from Rust).
+void nvim_set_ccline_mouse_used_ptr(bool *ptr) { ccline.mouse_used = ptr; }
+
+/// Increment last_prompt_id and return new value.
+unsigned int nvim_get_ccline_prompt_id_inc(void) { return ++last_prompt_id; }
+
 int nvim_get_key_typed(void) { return KeyTyped; }
 int nvim_get_cmdline_star(void) { return cmdline_star; }
 int nvim_cmdline_win_is_active(void) { return cmdline_win != NULL; }
@@ -1446,25 +1122,33 @@ void nvim_set_p_icm_option(const char *val)
 void nvim_clear_ccline(void) { CLEAR_FIELD(ccline); }
 
 /// Setup ccline.prev_ccline link and save current ccline.
-/// Saves ccline to *save_out and clears ccline.
-/// Returns true if ccline was in use (cmdbuff != NULL).
-bool nvim_ccline_save_and_clear(CmdlineInfo *save_out)
+/// If ccline.cmdbuff != NULL (recursive call): saves ccline to *save_out and clears.
+/// If ccline.cmdbuff == NULL and clear_ccline: clears ccline.
+/// If ccline.cmdbuff == NULL and !clear_ccline: leaves ccline untouched.
+/// Returns true if ccline was saved (recursive call).
+/// save_out must point to CmdlineInfo-sized, 8-byte-aligned storage.
+bool nvim_ccline_save_and_clear(void *save_out, bool clear_ccline_flag)
 {
+  CmdlineInfo *out = (CmdlineInfo *)save_out;
   if (ccline.cmdbuff != NULL) {
-    *save_out = ccline;
+    // Recursive call: save current ccline and start fresh
+    *out = ccline;
     CLEAR_FIELD(ccline);
-    ccline.prev_ccline = save_out;
+    ccline.prev_ccline = out;
     ccline.cmdbuff = NULL;
     return true;
   }
-  CLEAR_FIELD(ccline);
+  if (clear_ccline_flag) {
+    CLEAR_FIELD(ccline);
+  }
   return false;
 }
 
 /// Restore ccline from save_out (undo nvim_ccline_save_and_clear).
-void nvim_ccline_restore(const CmdlineInfo *save_out)
+/// save_out must point to CmdlineInfo-sized, 8-byte-aligned storage.
+void nvim_ccline_restore(const void *save_out)
 {
-  ccline = *save_out;
+  ccline = *(const CmdlineInfo *)save_out;
 }
 
 /// Initialize ccline fields for command_line_enter (called after allocation).
@@ -1662,22 +1346,19 @@ uint8_t *nvim_cmdline_leave_cleanup(void *s)
 }
 
 /// Final teardown: hide cmdline UI, restore ccline, free.
-void nvim_cmdline_final_teardown(void *s, bool did_save_ccline, CmdlineInfo *save_ccline,
+/// save_ccline_in must point to CmdlineInfo-sized, 8-byte-aligned storage (or NULL).
+/// err must be NULL (error handling is done in the autocmd wrappers from Rust).
+void nvim_cmdline_final_teardown(void *s, bool did_save_ccline, void *save_ccline_in,
                                  int save_msg_scroll, int save_State,
-                                 bool save_cmdpreview, Error *err)
+                                 bool save_cmdpreview, void *err_unused)
 {
   CommandLineState *cs = (CommandLineState *)s;
+  const CmdlineInfo *save_ccline = (const CmdlineInfo *)save_ccline_in;
+  (void)err_unused;  // error handling done before calling this
   msg_scroll = save_msg_scroll;
   redir_off = false;
 
-  if (ERROR_SET(err)) {
-    msg_putchar('\n');
-    emsg(err->msg);
-    did_emsg = false;
-    api_clear_error(err);
-  }
-
-  if (cs->some_key_typed && !ERROR_SET(err)) {
+  if (cs->some_key_typed) {
     need_wait_return = false;
   }
 
@@ -1735,4 +1416,134 @@ void nvim_cls_set_b_im_ptr_val(void *s, int val)
     *cs->b_im_ptr = val;
   }
 }
+
+// =============================================================================
+// Additional C helpers for rs_command_line_enter (Phase 1 new wrappers)
+// =============================================================================
+
+/// Wrapper for sb_text_start_cmdline().
+void nvim_sb_text_start_cmdline(void) { sb_text_start_cmdline(); }
+
+/// Wrapper for sb_text_end_cmdline().
+void nvim_sb_text_end_cmdline(void) { sb_text_end_cmdline(); }
+
+/// Set cmdmsg_rl global.
+void nvim_set_cmdmsg_rl(int val) { cmdmsg_rl = (val != 0); }
+
+/// Wrapper for msg_grid_validate().
+void nvim_msg_grid_validate(void) { msg_grid_validate(); }
+
+/// Set redir_off global.
+void nvim_set_redir_off(int val) { redir_off = (val != 0); }
+
+/// Get redir_off global.
+int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
+
+/// Wrapper for gotocmdline(true).
+void nvim_gotocmdline(void) { gotocmdline(true); }
+
+/// Wrapper for setmouse().
+void nvim_setmouse(void) { setmouse(); }
+
+/// Wrapper for may_trigger_modechanged().
+void nvim_may_trigger_modechanged(void) { may_trigger_modechanged(); }
+
+/// Initialize history and return hislen.
+int nvim_init_history_and_get_hislen(void)
+{
+  init_history();
+  return get_hislen();
+}
+
+/// Wrapper for do_digraph(-1) (init digraph typeahead).
+void nvim_do_digraph_init(void) { do_digraph(-1); }
+
+/// Get exmode_active global.
+int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
+
+/// Set v:char to a single character value (for CmdlineLeavePre/CmdlineLeave).
+void nvim_set_vim_var_char_int(int c) { set_vim_var_char(c); }
+
+/// Fire CmdlineLeavePre autocmd if not already triggered.
+/// Sets v:char to c_val first. Returns 1 if triggered, 0 if already done.
+int nvim_cmdline_fire_leavepre_autocmd(void *s, int c_val)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  if (cs->event_cmdlineleavepre_triggered) {
+    return 0;
+  }
+  set_vim_var_char(c_val);
+  nvim_trigger_cmd_autocmd(cs->cmdline_type, EVENT_CMDLINELEAVEPRE);
+  cs->event_cmdlineleavepre_triggered = true;
+  return 1;
+}
+
+/// Fire CmdlineLeave autocmd (with v:char and abort handling).
+/// Sets v:char to c_val, fires autocmd, checks abort flag.
+/// Returns 1 if user set abort, 0 otherwise. Handles error printing.
+int nvim_cmdline_fire_leave_full(void *s, int c_val)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  if (!has_event(EVENT_CMDLINELEAVE)) {
+    return 0;
+  }
+  Error err = ERROR_INIT;
+  save_v_event_T save_v_event;
+  dict_T *dict = get_v_event(&save_v_event);
+  char firstcbuf[2] = { (char)cs->cmdline_type, 0 };
+  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
+  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
+  tv_dict_set_keys_readonly(dict);
+  tv_dict_add_bool(dict, S_LEN("abort"),
+                   cs->gotesc ? kBoolVarTrue : kBoolVarFalse);
+  set_vim_var_char(c_val);
+  TRY_WRAP(&err, {
+    apply_autocmds(EVENT_CMDLINELEAVE, firstcbuf, firstcbuf, false, curbuf);
+  });
+  int abort = 0;
+  if (tv_dict_get_number(dict, "abort") != 0) {
+    cs->gotesc = true;
+    abort = 1;
+  }
+  restore_v_event(dict, &save_v_event);
+  if (ERROR_SET(&err)) {
+    msg_putchar('\n');
+    emsg(err.msg);
+    did_emsg = false;
+    api_clear_error(&err);
+  }
+  return abort;
+}
+
+/// Combined CmdlineEnter autocmd with error handling.
+/// Returns error message string if error occurred (static buffer), NULL if ok.
+/// Prints error to cmdline and calls redrawcmd() if needed.
+int nvim_cmdline_fire_enter_full(const char *firstcbuf, int level)
+{
+  if (!has_event(EVENT_CMDLINEENTER)) {
+    return 0;
+  }
+  Error err = ERROR_INIT;
+  save_v_event_T save_v_event;
+  dict_T *dict = get_v_event(&save_v_event);
+  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
+  tv_dict_add_nr(dict, S_LEN("cmdlevel"), level);
+  tv_dict_set_keys_readonly(dict);
+  TRY_WRAP(&err, {
+    apply_autocmds(EVENT_CMDLINEENTER, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
+    restore_v_event(dict, &save_v_event);
+  });
+  if (ERROR_SET(&err)) {
+    msg_putchar('\n');
+    msg_scroll = true;
+    msg_puts_hl(err.msg, HLF_E, true);
+    api_clear_error(&err);
+    redrawcmd();
+    return 1;
+  }
+  return 0;
+}
+
+/// Wrapper to emit e_command_too_recursive error.
+void nvim_emsg_command_too_recursive(void) { emsg(_(e_command_too_recursive)); }
 

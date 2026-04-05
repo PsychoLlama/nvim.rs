@@ -20,6 +20,7 @@ pub mod constants;
 pub mod context;
 pub mod edit;
 pub mod entry;
+pub mod entry_impl;
 pub mod expand;
 pub mod expr;
 pub mod fname;

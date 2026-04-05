@@ -780,3 +780,15 @@ void swmsg(bool hl, const char *const fmt, ...)
 // migrated to Rust (dialog.rs) as rs_msg_show_console_dialog
 // display_confirm_msg, vim_dialog_yesno, vim_dialog_yesnocancel, vim_dialog_yesnoallcancel
 // migrated to Rust (dialog.rs)
+
+/// Get msg_col global (for Rust FFI).
+int nvim_get_msg_col(void) { return msg_col; }
+
+/// Set msg_col global (for Rust FFI).
+void nvim_set_msg_col(int val) { msg_col = val; }
+
+/// Get msg_silent global (for Rust FFI).
+int nvim_get_msg_silent(void) { return msg_silent; }
+
+/// Set msg_silent global (for Rust FFI).
+void nvim_set_msg_silent(int val) { msg_silent = val; }

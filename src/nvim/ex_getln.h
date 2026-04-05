@@ -89,6 +89,13 @@ void alloc_cmdbuff(int len);
 void dealloc_cmdbuff(void);
 void realloc_cmdbuff(int len);
 
+// Phase 1 (command_line_enter migration): implemented in Rust (entry_impl.rs)
+uint8_t *rs_command_line_enter(int firstc, int count, int indent, int clear_ccline);
+
+// Phase 2 (getcmdline_prompt migration): implemented in Rust (entry_impl.rs)
+char *rs_getcmdline_prompt(int firstc, const char *prompt, int hl_id, int xp_context,
+                           const char *xp_arg, int one_key, bool *mouse_used);
+
 #ifdef __cplusplus
 }
 #endif

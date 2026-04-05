@@ -105,6 +105,18 @@ pub struct CommandLineState {
     pub did_hist_navigate: bool, // @637
 }
 
+impl CommandLineState {
+    /// Create a zeroed CommandLineState.
+    ///
+    /// # Safety
+    ///
+    /// All pointer fields will be null. Caller must initialize them before use.
+    #[must_use]
+    pub unsafe fn zeroed() -> Self {
+        std::mem::zeroed()
+    }
+}
+
 // Compile-time size check: must match C static_asserts.
 const _: () = {
     assert!(std::mem::size_of::<CommandLineState>() == 640);
