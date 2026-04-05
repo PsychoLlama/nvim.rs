@@ -612,7 +612,20 @@ mod phase2 {
         fn nvim_ccline_ptr_get_prev(p: *mut c_void) -> *mut c_void;
         fn nvim_get_cmdwin_level() -> c_int;
         fn nvim_get_ccline_level() -> c_int;
+
+        // Helpers for rs_cmdline_ui_flush
+        fn nvim_get_ccline_self_ptr() -> *mut c_void;
+        fn nvim_get_cmdline_was_last_drawn() -> c_int;
+        fn nvim_set_cmdline_was_last_drawn(val: c_int);
+        fn nvim_ccline_ptr_get_redraw_state(p: *mut c_void) -> c_int;
+        fn nvim_ccline_ptr_set_redraw_none(p: *mut c_void);
+        fn nvim_cmdline_ui_show_for_level(p: *mut c_void);
+        fn nvim_cmdline_ui_pos_for_level(p: *mut c_void);
     }
+
+    // CmdRedraw enum values (from ex_getln_defs.h)
+    const K_CMD_REDRAW_POS: c_int = 1;
+    const K_CMD_REDRAW_ALL: c_int = 2;
 
     /// Rust replacement for `cmdline_screen_cleared` in ex_getln.c.
     ///
@@ -642,5 +655,36 @@ mod phase2 {
             line = nvim_ccline_ptr_get_prev(line);
         }
         crate::screen::redrawcmd_rs();
+    }
+
+    /// Rust replacement for `cmdline_ui_flush` in ex_getln.c.
+    ///
+    /// Called by ui_flush to flush pending cmdline UI events to external UIs.
+    ///
+    /// # Safety
+    ///
+    /// Must only be called when Neovim's cmdline state is valid.
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn rs_cmdline_ui_flush() {
+        if ui_has(K_UI_CMDLINE) == 0 {
+            return;
+        }
+        let mut level = nvim_get_ccline_level();
+        let mut line = nvim_get_ccline_self_ptr();
+        while level > 0 && !line.is_null() {
+            if nvim_ccline_ptr_get_level(line) == level {
+                let redraw_state = nvim_ccline_ptr_get_redraw_state(line);
+                nvim_ccline_ptr_set_redraw_none(line);
+                if redraw_state == K_CMD_REDRAW_ALL {
+                    nvim_set_cmdline_was_last_drawn(1);
+                    nvim_cmdline_ui_show_for_level(line);
+                } else if redraw_state == K_CMD_REDRAW_POS && nvim_get_cmdline_was_last_drawn() != 0
+                {
+                    nvim_cmdline_ui_pos_for_level(line);
+                }
+                level -= 1;
+            }
+            line = nvim_ccline_ptr_get_prev(line);
+        }
     }
 }

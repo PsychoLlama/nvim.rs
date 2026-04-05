@@ -631,77 +631,12 @@ void ui_ext_cmdline_block_leave(void)
 
 // cmdline_screen_cleared: implemented in Rust (cmdline crate, ui.rs)
 
-/// called by ui_flush, do what redraws necessary to keep cmdline updated.
-void cmdline_ui_flush(void)
-{
-  if (!ui_has(kUICmdline)) {
-    return;
-  }
-  int level = ccline.level;
-  CmdlineInfo *line = &ccline;
-  while (level > 0 && line) {
-    if (line->level == level) {
-      CmdRedraw redraw_state = line->redraw_state;
-      line->redraw_state = kCmdRedrawNone;
-      if (redraw_state == kCmdRedrawAll) {
-        cmdline_was_last_drawn = true;
-        {
-          Arena arena = ARENA_EMPTY;
-          Array content;
-          if (cmdline_star) {
-            content = arena_array(&arena, 1);
-            size_t len = 0;
-            for (char *p = ccline.cmdbuff; *p; MB_PTR_ADV(p)) {
-              len++;
-            }
-            char *buf = arena_alloc(&arena, len, false);
-            memset(buf, '*', len);
-            Array item = arena_array(&arena, 3);
-            ADD_C(item, INTEGER_OBJ(0));
-            ADD_C(item, STRING_OBJ(cbuf_as_string(buf, len)));
-            ADD_C(item, INTEGER_OBJ(0));
-            ADD_C(content, ARRAY_OBJ(item));
-          } else if (kv_size(line->last_colors.colors)) {
-            content = arena_array(&arena, kv_size(line->last_colors.colors));
-            for (size_t i = 0; i < kv_size(line->last_colors.colors); i++) {
-              CmdlineColorChunk chunk = kv_A(line->last_colors.colors, i);
-              Array item = arena_array(&arena, 3);
-              ADD_C(item, INTEGER_OBJ(chunk.hl_id == 0 ? 0 : syn_id2attr(chunk.hl_id)));
-              assert(chunk.end >= chunk.start);
-              ADD_C(item, STRING_OBJ(cbuf_as_string(line->cmdbuff + chunk.start,
-                                                    (size_t)(chunk.end - chunk.start))));
-              ADD_C(item, INTEGER_OBJ(chunk.hl_id));
-              ADD_C(content, ARRAY_OBJ(item));
-            }
-          } else {
-            Array item = arena_array(&arena, 3);
-            ADD_C(item, INTEGER_OBJ(0));
-            ADD_C(item, CSTR_AS_OBJ(line->cmdbuff));
-            ADD_C(item, INTEGER_OBJ(0));
-            content = arena_array(&arena, 1);
-            ADD_C(content, ARRAY_OBJ(item));
-          }
-          char charbuf[2] = { (char)line->cmdfirstc, 0 };
-          ui_call_cmdline_show(content, line->cmdpos,
-                               cstr_as_string(charbuf),
-                               cstr_as_string((line->cmdprompt)),
-                               line->cmdindent, line->level, line->hl_id);
-          if (line->special_char) {
-            charbuf[0] = line->special_char;
-            ui_call_cmdline_special_char(cstr_as_string(charbuf),
-                                         line->special_shift,
-                                         line->level);
-          }
-          arena_mem_free(arena_finish(&arena));
-        }
-      } else if (redraw_state == kCmdRedrawPos && cmdline_was_last_drawn) {
-        ui_call_cmdline_pos(line->cmdpos, line->level);
-      }
-      level--;
-    }
-    line = line->prev_ccline;
-  }
-}
+// cmdline_ui_flush: implemented in Rust (cmdline crate, ui.rs).
+// See rs_cmdline_ui_flush exported by Rust and the thin C wrapper below.
+
+/// Thin C wrapper for Rust rs_cmdline_ui_flush.
+/// Called by ui_flush to keep cmdline updated for external UIs.
+void cmdline_ui_flush(void) { rs_cmdline_ui_flush(); }
 
 /// Thin C wrapper: emit kUICmdline special_char event (for Rust FFI).
 void nvim_ui_cmdline_special_char(int c, bool shift, int level)
@@ -1031,6 +966,84 @@ void *nvim_ccline_ptr_get_prev(void *p) { return (void *)((CmdlineInfo *)p)->pre
 
 /// Get cmdwin_level value.
 int nvim_get_cmdwin_level(void) { return cmdwin_level; }
+
+// Additional helpers for Rust cmdline_ui_flush implementation.
+
+/// Get &ccline as opaque pointer (starting point for cmdline_ui_flush iteration).
+void *nvim_get_ccline_self_ptr(void) { return (void *)&ccline; }
+
+/// Set cmdline_was_last_drawn global.
+void nvim_set_cmdline_was_last_drawn(int val) { cmdline_was_last_drawn = (val != 0); }
+
+/// Get a CmdlineInfo node's redraw_state as int (kCmdRedrawNone=0, kCmdRedrawPos=1, kCmdRedrawAll=2).
+int nvim_ccline_ptr_get_redraw_state(void *p) { return (int)((CmdlineInfo *)p)->redraw_state; }
+
+/// Set a CmdlineInfo node's redraw_state to kCmdRedrawNone (for Rust).
+void nvim_ccline_ptr_set_redraw_none(void *p) { ((CmdlineInfo *)p)->redraw_state = kCmdRedrawNone; }
+
+/// Get a CmdlineInfo node's cmdpos field (for Rust cmdline_ui_flush).
+int nvim_ccline_ptr_get_cmdpos(void *p) { return ((CmdlineInfo *)p)->cmdpos; }
+
+/// Build content Array and call ui_call_cmdline_show for the given CmdlineInfo node.
+/// Handles star-masking, color chunks, and plain text cases.
+/// Also fires ui_call_cmdline_special_char if special_char is set.
+/// Uses arena allocation internally.
+void nvim_cmdline_ui_show_for_level(void *p)
+{
+  CmdlineInfo *line = (CmdlineInfo *)p;
+  Arena arena = ARENA_EMPTY;
+  Array content;
+  if (cmdline_star) {
+    content = arena_array(&arena, 1);
+    size_t len = 0;
+    for (char *q = ccline.cmdbuff; *q; MB_PTR_ADV(q)) {
+      len++;
+    }
+    char *buf = arena_alloc(&arena, len, false);
+    memset(buf, '*', len);
+    Array item = arena_array(&arena, 3);
+    ADD_C(item, INTEGER_OBJ(0));
+    ADD_C(item, STRING_OBJ(cbuf_as_string(buf, len)));
+    ADD_C(item, INTEGER_OBJ(0));
+    ADD_C(content, ARRAY_OBJ(item));
+  } else if (kv_size(line->last_colors.colors)) {
+    content = arena_array(&arena, kv_size(line->last_colors.colors));
+    for (size_t i = 0; i < kv_size(line->last_colors.colors); i++) {
+      CmdlineColorChunk chunk = kv_A(line->last_colors.colors, i);
+      Array item = arena_array(&arena, 3);
+      ADD_C(item, INTEGER_OBJ(chunk.hl_id == 0 ? 0 : syn_id2attr(chunk.hl_id)));
+      assert(chunk.end >= chunk.start);
+      ADD_C(item, STRING_OBJ(cbuf_as_string(line->cmdbuff + chunk.start,
+                                            (size_t)(chunk.end - chunk.start))));
+      ADD_C(item, INTEGER_OBJ(chunk.hl_id));
+      ADD_C(content, ARRAY_OBJ(item));
+    }
+  } else {
+    Array item = arena_array(&arena, 3);
+    ADD_C(item, INTEGER_OBJ(0));
+    ADD_C(item, CSTR_AS_OBJ(line->cmdbuff));
+    ADD_C(item, INTEGER_OBJ(0));
+    content = arena_array(&arena, 1);
+    ADD_C(content, ARRAY_OBJ(item));
+  }
+  char charbuf[2] = { (char)line->cmdfirstc, 0 };
+  ui_call_cmdline_show(content, line->cmdpos,
+                       cstr_as_string(charbuf),
+                       cstr_as_string((line->cmdprompt)),
+                       line->cmdindent, line->level, line->hl_id);
+  if (line->special_char) {
+    charbuf[0] = line->special_char;
+    ui_call_cmdline_special_char(cstr_as_string(charbuf), line->special_shift, line->level);
+  }
+  arena_mem_free(arena_finish(&arena));
+}
+
+/// Call ui_call_cmdline_pos for the given CmdlineInfo node.
+void nvim_cmdline_ui_pos_for_level(void *p)
+{
+  CmdlineInfo *line = (CmdlineInfo *)p;
+  ui_call_cmdline_pos(line->cmdpos, line->level);
+}
 
 // =============================================================================
 // Helpers for Rust command_line_enter (Phase 1)

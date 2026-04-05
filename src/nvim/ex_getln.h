@@ -58,6 +58,7 @@ void tilde_replace(char *orig_pat, int num_files, char **files);
 void compute_cmdrow(void);
 void cursorcmd(void);
 void gotocmdline(bool clr);
+void rs_cmdline_ui_flush(void);
 
 // Phase 4+5+6: Functions implemented in Rust
 int get_list_range(char **str, int *num1, int *num2);
