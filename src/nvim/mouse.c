@@ -1172,49 +1172,7 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
   return (colnr_T)(ci.ptr - line);
 }
 
-/// C accessor: perform grid-based vcol/flags lookup for mouse click.
-void nvim_mouse_check_grid_impl(colnr_T *vcolp, int *flagsp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int click_grid = mouse_grid;
-  int click_row = mouse_row;
-  int click_col = mouse_col;
-
-  // XXX: this doesn't change click_grid if it is 1, even with multigrid
-  if (mouse_find_win_inner(&click_grid, &click_row, &click_col) != curwin
-      // Only use vcols[] after the window was redrawn.  Mainly matters
-      // for tests, a user would not click before redrawing.
-      || curwin->w_redr_type != 0) {
-    return;
-  }
-  int start_row = 0;
-  int start_col = 0;
-  ScreenGrid *gp = grid_adjust(&curwin->w_grid, &start_row, &start_col);
-  if (gp->handle != click_grid || gp->chars == NULL) {
-    return;
-  }
-  click_row += start_row;
-  click_col += start_col;
-  if (click_row < 0 || click_row >= gp->rows
-      || click_col < 0 || click_col >= gp->cols) {
-    return;
-  }
-
-  const size_t off = gp->line_offset[click_row] + (size_t)click_col;
-  colnr_T col_from_screen = gp->vcols[off];
-
-  if (col_from_screen >= 0) {
-    // Use the virtual column from vcols[], it is accurate also after
-    // concealed characters.
-    *vcolp = col_from_screen;
-  }
-
-  if (col_from_screen == -2) {
-    *flagsp |= MOUSE_FOLD_OPEN;
-  } else if (col_from_screen == -3) {
-    *flagsp |= MOUSE_FOLD_CLOSE;
-  }
-}
+// nvim_mouse_check_grid_impl migrated to Rust (rs_mouse_check_grid in mouse crate).
 
 /// "getmousepos()" function
 void f_getmousepos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

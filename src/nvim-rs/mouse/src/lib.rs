@@ -1179,8 +1179,38 @@ extern "C" {
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 
-    /// C accessor: grid-based vcol/flags lookup for mouse click.
-    fn nvim_mouse_check_grid_impl(vcolp: *mut colnr_T, flagsp: *mut c_int);
+    // --- Phase 2 grid accessors ---
+
+    /// Get `w_redr_type` from a window.
+    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
+
+    /// Get `&wp->w_grid` (`GridView` pointer).
+    fn nvim_win_get_grid(wp: WinHandle) -> *mut std::ffi::c_void;
+
+    /// Adjust `GridView` and return target `ScreenGrid`.
+    fn rs_grid_adjust(
+        view: *mut std::ffi::c_void,
+        row_off: *mut c_int,
+        col_off: *mut c_int,
+    ) -> *mut std::ffi::c_void;
+
+    /// Get `grid->handle`.
+    fn nvim_screengrid_get_handle(grid: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `grid->chars` (null means no cells).
+    fn nvim_screengrid_get_chars(grid: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+
+    /// Get `grid->rows`.
+    fn nvim_screengrid_get_rows(grid: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `grid->cols`.
+    fn nvim_screengrid_get_cols(grid: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `grid->line_offset` array pointer.
+    fn nvim_screengrid_get_line_offset(grid: *mut std::ffi::c_void) -> *const usize;
+
+    /// Get `grid->vcols` array pointer.
+    fn nvim_screengrid_get_vcols(grid: *mut std::ffi::c_void) -> *const colnr_T;
 
     // --- Phase 2 accessors ---
 
@@ -1307,11 +1337,73 @@ fn pos_ltoreq(a: PosT, b: PosT) -> bool {
 
 /// Check the mouse click grid for virtual column and fold flags.
 ///
+/// Port of `nvim_mouse_check_grid_impl` from mouse.c. Looks up the virtual
+/// column (`vcols[]`) at the mouse click position using the current window's
+/// grid, and sets fold-open/close flags if appropriate.
+///
 /// # Safety
 /// All pointers must be valid.
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_mouse_check_grid(vcolp: *mut colnr_T, flagsp: *mut c_int) {
-    nvim_mouse_check_grid_impl(vcolp, flagsp);
+    let mut click_grid = nvim_get_mouse_grid();
+    let mut click_row = nvim_get_mouse_row();
+    let mut click_col = nvim_get_mouse_col();
+
+    let curwin = nvim_get_curwin();
+
+    // Only act when the grid corresponds to curwin and it has been redrawn.
+    if rs_mouse_find_win_inner(
+        std::ptr::addr_of_mut!(click_grid),
+        std::ptr::addr_of_mut!(click_row),
+        std::ptr::addr_of_mut!(click_col),
+    ) != curwin
+        || nvim_win_get_redr_type(curwin) != 0
+    {
+        return;
+    }
+
+    let mut start_row: c_int = 0;
+    let mut start_col: c_int = 0;
+    let gp = rs_grid_adjust(
+        nvim_win_get_grid(curwin),
+        std::ptr::addr_of_mut!(start_row),
+        std::ptr::addr_of_mut!(start_col),
+    );
+
+    if gp.is_null()
+        || nvim_screengrid_get_handle(gp) != click_grid
+        || nvim_screengrid_get_chars(gp).is_null()
+    {
+        return;
+    }
+
+    click_row += start_row;
+    click_col += start_col;
+
+    let rows = nvim_screengrid_get_rows(gp);
+    let cols = nvim_screengrid_get_cols(gp);
+    if click_row < 0 || click_row >= rows || click_col < 0 || click_col >= cols {
+        return;
+    }
+
+    let line_offset = nvim_screengrid_get_line_offset(gp);
+    let vcol_arr = nvim_screengrid_get_vcols(gp);
+    if line_offset.is_null() || vcol_arr.is_null() {
+        return;
+    }
+
+    let off = *line_offset.add(click_row as usize) + click_col as usize;
+    let col_from_screen = *vcol_arr.add(off);
+
+    if col_from_screen >= 0 {
+        *vcolp = col_from_screen;
+    }
+    if col_from_screen == -2 {
+        *flagsp |= MOUSE_FOLD_OPEN;
+    } else if col_from_screen == -3 {
+        *flagsp |= MOUSE_FOLD_CLOSE;
+    }
 }
 
 /// Get the file position of the mouse click.
