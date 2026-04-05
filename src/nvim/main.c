@@ -188,6 +188,16 @@ extern void rs_os_exit(int r) FUNC_ATTR_NORETURN;
 // Rust implementations (Phase 2: stdin)
 extern void rs_read_stdin(void);
 
+// Rust implementations (Phase 3+4: windows and buffers)
+extern void rs_create_windows(mparm_T *parmp);
+extern void rs_edit_buffers(mparm_T *parmp, char *cwd);
+
+// C helper: set 'shortmess' option from Rust (avoids OptVal complexity)
+void nvim_set_shortmess_opt(const char *val)
+{
+  set_option_value_give_err(kOptShortmess, CSTR_AS_OPTVAL(val), 0);
+}
+
 // C helpers for rs_server_connect / rs_os_exit (Phase 1)
 uint64_t nvim_channel_connect(bool is_tcp, const char *server_addr, const char **error)
 {
@@ -1053,233 +1063,14 @@ static void read_stdin(void)
 // Also does recovery if "recoverymode" set.
 static void create_windows(mparm_T *parmp)
 {
-  // Create the number of windows that was requested.
-  if (parmp->window_count == -1) {      // was not set
-    parmp->window_count = 1;
-  }
-  if (parmp->window_count == 0) {
-    parmp->window_count = GARGCOUNT;
-  }
-  if (parmp->window_count > 1) {
-    // Don't change the windows if there was a command in vimrc that
-    // already split some windows
-    if (parmp->window_layout == 0) {
-      parmp->window_layout = WIN_HOR;
-    }
-    if (parmp->window_layout == WIN_TABS) {
-      parmp->window_count = make_tabpages(parmp->window_count);
-      TIME_MSG("making tab pages");
-    } else if (firstwin->w_next == NULL || firstwin->w_next->w_floating) {
-      parmp->window_count = make_windows(parmp->window_count, parmp->window_layout == WIN_VER);
-      TIME_MSG("making windows");
-    } else {
-      parmp->window_count = rs_win_count();
-    }
-  } else {
-    parmp->window_count = 1;
-  }
-
-  if (recoverymode) {                   // do recover
-    msg_scroll = true;                  // scroll message up
-    ml_recover(true);
-    if (curbuf->b_ml.ml_mfp == NULL) {   // failed
-      getout(1);
-    }
-    do_modelines(0);                    // do modelines
-  } else {
-    int done = 0;
-    // Open a buffer for windows that don't have one yet.
-    // Commands in the vimrc might have loaded a file or split the window.
-    // Watch out for autocommands that delete a window.
-    //
-    // Don't execute Win/Buf Enter/Leave autocommands here
-    autocmd_no_enter++;
-    autocmd_no_leave++;
-    bool dorewind = true;
-    while (done++ < 1000) {
-      if (dorewind) {
-        if (parmp->window_layout == WIN_TABS) {
-          goto_tabpage(1);
-        } else {
-          curwin = firstwin;
-        }
-      } else if (parmp->window_layout == WIN_TABS) {
-        if (curtab->tp_next == NULL) {
-          break;
-        }
-        goto_tabpage(0);
-      } else {
-        if (curwin->w_next == NULL) {
-          break;
-        }
-        curwin = curwin->w_next;
-      }
-      dorewind = false;
-      curbuf = curwin->w_buffer;
-      if (curbuf->b_ml.ml_mfp == NULL) {
-        // Set 'foldlevel' to 'foldlevelstart' if it's not negative..
-        if (p_fdls >= 0) {
-          curwin->w_p_fdl = p_fdls;
-        }
-        // When getting the ATTENTION prompt here, use a dialog.
-        swap_exists_action = SEA_DIALOG;
-        set_buflisted(true);
-
-        // create memfile, read file
-        open_buffer(false, NULL, 0);
-
-        if (swap_exists_action == SEA_QUIT) {
-          if (got_int || rs_only_one_window()) {
-            // abort selected or quit and only one window
-            did_emsg = false;               // avoid hit-enter prompt
-            ui_call_error_exit(1);
-            getout(1);
-          }
-          // We can't close the window, it would disturb what
-          // happens next.  Clear the file name and set the arg
-          // index to -1 to delete it later.
-          setfname(curbuf, NULL, NULL, false);
-          curwin->w_arg_idx = -1;
-          swap_exists_action = SEA_NONE;
-        } else {
-          handle_swap_exists(NULL);
-        }
-        dorewind = true;                        // start again
-      }
-      os_breakcheck();
-      if (got_int) {
-        vgetc();          // only break the file loading, not the rest
-        break;
-      }
-    }
-    if (parmp->window_layout == WIN_TABS) {
-      goto_tabpage(1);
-    } else {
-      curwin = firstwin;
-    }
-    curbuf = curwin->w_buffer;
-    autocmd_no_enter--;
-    autocmd_no_leave--;
-  }
+  rs_create_windows(parmp);
 }
 
 /// If opened more than one window, start editing files in the other
 /// windows. make_windows() has already opened the windows.
 static void edit_buffers(mparm_T *parmp, char *cwd)
 {
-  int arg_idx;                          // index in argument list
-  bool advance = true;
-  win_T *win;
-  char *p_shm_save = NULL;
-
-  // Don't execute Win/Buf Enter/Leave autocommands here
-  autocmd_no_enter++;
-  autocmd_no_leave++;
-
-  // When w_arg_idx is -1 remove the window (see create_windows()).
-  if (curwin->w_arg_idx == -1) {
-    win_close(curwin, true, false);
-    advance = false;
-  }
-
-  arg_idx = 1;
-  for (int i = 1; i < parmp->window_count; i++) {
-    if (cwd != NULL) {
-      os_chdir(cwd);
-    }
-    // When w_arg_idx is -1 remove the window (see create_windows()).
-    if (curwin->w_arg_idx == -1) {
-      arg_idx++;
-      win_close(curwin, true, false);
-      advance = false;
-      continue;
-    }
-
-    if (advance) {
-      if (parmp->window_layout == WIN_TABS) {
-        if (curtab->tp_next == NULL) {          // just checking
-          break;
-        }
-        goto_tabpage(0);
-        // Temporarily reset 'shm' option to not print fileinfo when
-        // loading the other buffers. This would overwrite the already
-        // existing fileinfo for the first tab.
-        if (i == 1) {
-          char buf[100];
-
-          p_shm_save = xstrdup(p_shm);
-          snprintf(buf, sizeof(buf), "F%s", p_shm);
-          set_option_value_give_err(kOptShortmess, CSTR_AS_OPTVAL(buf), 0);
-        }
-      } else {
-        if (curwin->w_next == NULL) {           // just checking
-          break;
-        }
-        win_enter(curwin->w_next, false);
-      }
-    }
-    advance = true;
-
-    // Only open the file if there is no file in this window yet (that can
-    // happen when vimrc contains ":sall").
-    if (curbuf == firstwin->w_buffer || curbuf->b_ffname == NULL) {
-      curwin->w_arg_idx = arg_idx;
-      // Edit file from arg list, if there is one.  When "Quit" selected
-      // at the ATTENTION prompt close the window.
-      swap_exists_did_quit = false;
-      do_ecmd(0, arg_idx < GARGCOUNT
-              ? alist_name(&GARGLIST[arg_idx])
-              : NULL, NULL, NULL, ECMD_LASTL, ECMD_HIDE, curwin);
-      if (swap_exists_did_quit) {
-        // abort or quit selected
-        if (got_int || rs_only_one_window()) {
-          // abort selected and only one window
-          did_emsg = false;             // avoid hit-enter prompt
-          ui_call_error_exit(1);
-          getout(1);
-        }
-        win_close(curwin, true, false);
-        advance = false;
-      }
-      if (arg_idx == GARGCOUNT - 1) {
-        arg_had_last = true;
-      }
-      arg_idx++;
-    }
-    os_breakcheck();
-    if (got_int) {
-      vgetc();            // only break the file loading, not the rest
-      break;
-    }
-  }
-
-  if (p_shm_save != NULL) {
-    set_option_value_give_err(kOptShortmess, CSTR_AS_OPTVAL(p_shm_save), 0);
-    xfree(p_shm_save);
-  }
-
-  if (parmp->window_layout == WIN_TABS) {
-    goto_tabpage(1);
-  }
-  autocmd_no_enter--;
-
-  // make the first window the current window
-  win = firstwin;
-  // Avoid making a preview window the current window.
-  while (win->w_p_pvw) {
-    win = win->w_next;
-    if (win == NULL) {
-      win = firstwin;
-      break;
-    }
-  }
-  win_enter(win, false);
-
-  autocmd_no_leave--;
-  TIME_MSG("editing files in windows");
-  if (parmp->window_count > 1 && parmp->window_layout != WIN_TABS) {
-    rs_win_equal(curwin, 0, 'b');      // adjust heights
-  }
+  rs_edit_buffers(parmp, cwd);
 }
 
 

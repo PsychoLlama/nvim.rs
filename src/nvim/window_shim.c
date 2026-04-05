@@ -595,3 +595,22 @@ int nvim_get_curwin_p_rlc_has_s(void)
 {
   return (curwin->w_p_rlc != NULL && *curwin->w_p_rlc == 's') ? 1 : 0;
 }
+
+// Accessors for create_windows / edit_buffers (Phase 3+4)
+int nvim_firstwin_next_null_or_floating(void)
+{ return firstwin->w_next == NULL || firstwin->w_next->w_floating ? 1 : 0; }
+void nvim_set_curwin_to_firstwin(void) { curwin = firstwin; curbuf = firstwin->w_buffer; }
+int nvim_curtab_get_tp_next_null(void) { return curtab->tp_next == NULL ? 1 : 0; }
+int nvim_curwin_get_next_null(void) { return curwin->w_next == NULL ? 1 : 0; }
+void nvim_advance_curwin_to_next(void) { curwin = curwin->w_next; }
+// nvim_set_curbuf_from_curwin is exported from Rust (nvim-window crate)
+int nvim_curbuf_get_ml_mfp_null(void) { return curbuf->b_ml.ml_mfp == NULL ? 1 : 0; }
+int64_t nvim_get_p_fdls(void) { return p_fdls; }
+// nvim_curwin_set_p_fdl already exists in buffer_shim.c
+int nvim_curwin_get_arg_idx(void) { return curwin->w_arg_idx; }
+void nvim_curwin_set_arg_idx(int val) { curwin->w_arg_idx = val; }
+void nvim_curbuf_setfname_null(void) { setfname(curbuf, NULL, NULL, false); }
+win_T *nvim_get_curwin_ptr(void) { return curwin; }
+win_T *nvim_get_firstwin_ptr(void) { return firstwin; }
+win_T *nvim_curwin_get_next(void) { return curwin->w_next; }
+buf_T *nvim_firstwin_get_buffer(void) { return firstwin->w_buffer; }
