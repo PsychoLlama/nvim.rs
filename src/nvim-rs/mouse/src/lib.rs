@@ -1335,6 +1335,133 @@ fn pos_ltoreq(a: PosT, b: PosT) -> bool {
     a.lnum < b.lnum || (a.lnum == b.lnum && a.col <= b.col)
 }
 
+// =============================================================================
+// Phase 6 — jump_to_mouse_impl extern declarations
+// =============================================================================
+
+extern "C" {
+    /// Set `mouse_past_bottom` global.
+    fn nvim_set_mouse_past_bottom(val: bool);
+
+    /// Set `mouse_past_eol` global.
+    fn nvim_set_mouse_past_eol(val: bool);
+
+    /// Exit Visual mode.
+    fn end_visual_mode();
+
+    /// Mark the current window for later redraw.
+    fn redraw_later(wp: WinHandle, upd: c_int);
+
+    /// Enter a window (possibly changing `curwin`/`curbuf`).
+    fn win_enter(wp: WinHandle, undo_sync: bool);
+
+    /// Check and fix `w_topfill`.
+    fn check_topfill(wp: WinHandle, down: c_int);
+
+    /// Get physical line count (`plines_win` without filler lines).
+    fn plines_win(wp: WinHandle, lnum: linenr_T, winheight: bool) -> c_int;
+
+    /// Get filler line count for `lnum` in `wp` (`win_get_fill`).
+    fn win_get_fill(wp: WinHandle, lnum: linenr_T) -> c_int;
+
+    /// Advance the cursor column.
+    fn coladvance(wp: WinHandle, col: c_int) -> c_int;
+
+    /// Get `w_buffer` for curwin (the current buffer handle).
+    fn nvim_get_curbuf() -> *mut std::ffi::c_void;
+
+    /// Get the line count of a buffer.
+    fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> linenr_T;
+
+    /// Get `w_topline` (already in earlier block, re-declared for clarity).
+    // fn nvim_win_get_topline(wp: WinHandle) -> linenr_T;  // Already declared
+
+    /// Set `w_topline`.
+    fn nvim_win_set_topline(wp: WinHandle, lnum: linenr_T);
+
+    /// Set `w_topfill`.
+    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
+
+    /// Get `w_wincol`.
+    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
+
+    /// Get `w_height`.
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
+
+    /// Get `w_width`.
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
+
+    /// Set `w_curswant`.
+    fn nvim_win_set_curswant(wp: WinHandle, val: colnr_T);
+
+    /// Set `w_set_curswant`.
+    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
+
+    /// Clear valid bits: `w_valid &= ~bits`.
+    fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
+
+    /// Get `cmdwin_type` global.
+    fn nvim_get_cmdwin_type() -> c_int;
+
+    /// Get `cmdwin_win` global.
+    fn nvim_get_cmdwin_win() -> WinHandle;
+
+    /// Set `VIsual_reselect`.
+    fn nvim_set_VIsual_reselect(val: bool);
+
+    /// Check `stl_connected(wp)`.
+    fn stl_connected(wp: WinHandle) -> c_int;
+
+    /// Get `GridView::comp_row` for `w_grid_alloc`.
+    fn nvim_screengrid_get_comp_row(gp: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `GridView::comp_col` for `w_grid_alloc`.
+    fn nvim_screengrid_get_comp_col(gp: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `GridView::row_offset` from a `GridView*`.
+    fn nvim_gridview_get_row_offset(view: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `GridView::col_offset` from a `GridView*`.
+    fn nvim_gridview_get_col_offset(view: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `msg_silent` global.
+    fn nvim_get_msg_silent() -> c_int;
+
+    /// Set `redraw_cmdline = true`.
+    fn nvim_set_redraw_cmdline(val: bool);
+
+    /// `setmouse()` — update UI mouse state.
+    #[link_name = "setmouse"]
+    fn setmouse_global();
+
+    /// `rs_may_start_select(c)` — check if we may start Select mode.
+    fn rs_may_start_select(c: c_int);
+
+    /// Set `VIsual_active`.
+    fn nvim_set_VIsual_active(val: bool);
+
+    /// Set `VIsual` position fields.
+    fn nvim_set_VIsual_pos(lnum: linenr_T, col: c_int, coladd: c_int);
+
+    /// `p_smd` option (showmode).
+    static p_smd: c_int;
+
+    // static VIsual: PosT;  — already declared in Phase 3 block
+    // static VIsual_active: bool;  — already declared in Phase 3 block
+}
+
+/// Valid-bits masks (from `buffer_defs.h`).
+const VALID_WROW: c_int = 0x01;
+const VALID_CROW: c_int = 0x10;
+const VALID_BOTLINE: c_int = 0x20;
+const VALID_BOTLINE_AP: c_int = 0x40;
+const VALID_TOPLINE: c_int = 0x80;
+
+/// `DEFAULT_GRID_HANDLE` from `grid.h`
+const DEFAULT_GRID_HANDLE: c_int = 1;
+
+// `IN_OTHER_WIN` is already defined above as `IN_OTHER_WIN: c_int = 8`.
+
 /// Check the mouse click grid for virtual column and fold flags.
 ///
 /// Port of `nvim_mouse_check_grid_impl` from mouse.c. Looks up the virtual
@@ -1828,8 +1955,59 @@ pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
 // =============================================================================
 
 extern "C" {
-    /// C accessor: the actual `jump_to_mouse` logic with static state.
-    fn nvim_jump_to_mouse_impl(flags: c_int, inclusive: *mut bool, which_button: c_int) -> c_int;
+    /// Get `w_grid_alloc` pointer (`ScreenGrid`\*) from a window.
+    fn nvim_win_get_w_grid_alloc(wp: WinHandle) -> *mut std::ffi::c_void;
+
+    /// Get `w_winrow` field.
+    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
+
+    /// Count foldcolumn characters for window `wp`.
+    fn rs_win_fdccol_count(wp: WinHandle) -> c_int;
+
+    /// Drag the status line for `dragwin` by `offset` rows.
+    fn rs_win_drag_status_line(dragwin: WinHandle, offset: c_int);
+
+    /// Drag the vertical separator for `dragwin` by `offset` columns.
+    fn rs_win_drag_vsep_line(dragwin: WinHandle, offset: c_int);
+}
+
+// FAIL / OK return codes (from vim.h).
+const FAIL: c_int = 0;
+
+// Static locals for jump_to_mouse — preserved across calls.
+static mut STATUS_LINE_OFFSET: c_int = 0;
+static mut SEP_LINE_OFFSET: c_int = 0;
+static mut ON_STATUS_LINE: bool = false;
+static mut ON_SEP_LINE: bool = false;
+static mut ON_WINBAR: bool = false;
+static mut ON_STATUSCOL: bool = false;
+static mut PREV_ROW: c_int = -1;
+static mut PREV_COL: c_int = -1;
+static mut DID_DRAG: c_int = 0;
+
+/// Handle the `goto retnomove` case: return the appropriate IN_* constant
+/// without moving the cursor. May stop Visual mode if needed.
+///
+/// # Safety
+/// Reads static state; must only be called from `rs_jump_to_mouse`.
+unsafe fn retnomove(flags: c_int) -> c_int {
+    if STATUS_LINE_OFFSET != 0 {
+        return IN_STATUS_LINE;
+    }
+    if SEP_LINE_OFFSET != 0 {
+        return IN_SEP_LINE;
+    }
+    if ON_WINBAR {
+        return IN_OTHER_WIN | MOUSE_WINBAR;
+    }
+    if ON_STATUSCOL {
+        return IN_OTHER_WIN | MOUSE_STATUSCOL;
+    }
+    if (flags & MOUSE_MAY_STOP_VIS) != 0 {
+        end_visual_mode();
+        redraw_curbuf_later(UPD_INVERTED);
+    }
+    IN_BUFFER
 }
 
 /// Move the cursor to the specified row and column on the screen.
@@ -1840,12 +2018,421 @@ extern "C" {
 /// # Safety
 /// `inclusive` may be null. Otherwise must be a valid pointer.
 #[export_name = "jump_to_mouse"]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_jump_to_mouse(
-    flags: c_int,
+    mut flags: c_int,
     inclusive: *mut bool,
     which_button: c_int,
 ) -> c_int {
-    nvim_jump_to_mouse_impl(flags, inclusive, which_button)
+    let mut row = nvim_get_mouse_row();
+    let mut col = nvim_get_mouse_col();
+    let mut grid = nvim_get_mouse_grid();
+    #[allow(unused_assignments)]
+    let mut fdc: c_int = 0;
+    let keep_focus = (flags & MOUSE_FOCUS) != 0;
+
+    nvim_set_mouse_past_bottom(false);
+    nvim_set_mouse_past_eol(false);
+
+    if (flags & MOUSE_RELEASED) != 0 {
+        // On button release we may change window focus if positioned on a
+        // status line and no dragging happened.
+        if rs_is_dragging() && DID_DRAG == 0 {
+            flags &= !(MOUSE_FOCUS | MOUSE_DID_MOVE);
+        }
+        rs_set_dragwin(std::ptr::null_mut());
+        DID_DRAG = 0;
+    }
+
+    if (flags & MOUSE_DID_MOVE) != 0
+        && PREV_ROW == nvim_get_mouse_row()
+        && PREV_COL == nvim_get_mouse_col()
+    {
+        return retnomove(flags);
+    }
+
+    PREV_ROW = nvim_get_mouse_row();
+    PREV_COL = nvim_get_mouse_col();
+
+    if (flags & MOUSE_SETPOS) != 0 {
+        return retnomove(flags);
+    }
+
+    if row < 0 || col < 0 {
+        return IN_UNKNOWN;
+    }
+
+    let wp = rs_mouse_find_win_inner(
+        std::ptr::addr_of_mut!(grid),
+        std::ptr::addr_of_mut!(row),
+        std::ptr::addr_of_mut!(col),
+    );
+    if wp.is_null() {
+        return IN_UNKNOWN;
+    }
+
+    let winbar_height = nvim_win_get_winbar_height(wp);
+    let w_height = nvim_win_get_w_height(wp);
+    let w_width = nvim_win_get_w_width(wp);
+    let w_view_width = nvim_win_get_view_width(wp);
+    let w_p_rl = nvim_win_get_p_rl(wp) != 0;
+    let p_stc = nvim_win_get_p_stc(wp);
+    let col_off = nvim_win_col_off(wp);
+
+    let below_window = grid == DEFAULT_GRID_HANDLE && row + winbar_height >= w_height;
+    ON_STATUS_LINE = below_window && row + winbar_height - w_height + 1 == 1;
+    ON_SEP_LINE = grid == DEFAULT_GRID_HANDLE && col >= w_width && col - w_width + 1 == 1;
+    ON_WINBAR = row < 0 && row + winbar_height >= 0;
+    ON_STATUSCOL = !below_window
+        && !ON_STATUS_LINE
+        && !ON_SEP_LINE
+        && !ON_WINBAR
+        && !p_stc.is_null()
+        && *p_stc != 0
+        && (if w_p_rl {
+            col >= w_view_width - col_off
+        } else {
+            col < col_off
+        });
+
+    // The rightmost character of the status line might be a vertical
+    // separator character if there is no connecting window to the right.
+    if ON_STATUS_LINE && ON_SEP_LINE {
+        if stl_connected(wp) != 0 {
+            ON_SEP_LINE = false;
+        } else {
+            ON_STATUS_LINE = false;
+        }
+    }
+
+    if keep_focus {
+        row = nvim_get_mouse_row();
+        col = nvim_get_mouse_col();
+        grid = nvim_get_mouse_grid();
+    }
+
+    let curwin = nvim_get_curwin();
+    let old_curwin = curwin;
+    let old_cursor = *nvim_win_get_cursor_ptr(curwin);
+
+    // `do_foldclick` tracks whether we should jump directly to the foldclick
+    // section without the normal cursor movement logic.
+    let do_foldclick: bool;
+
+    if !keep_focus {
+        if ON_WINBAR {
+            return IN_OTHER_WIN | MOUSE_WINBAR;
+        }
+
+        if ON_STATUSCOL {
+            do_foldclick = true;
+        } else {
+            fdc = rs_win_fdccol_count(wp);
+            rs_set_dragwin(std::ptr::null_mut());
+
+            if below_window {
+                // In (or below) status line
+                STATUS_LINE_OFFSET = row + winbar_height - w_height + 1;
+                rs_set_dragwin(wp);
+            } else {
+                STATUS_LINE_OFFSET = 0;
+            }
+
+            if grid == DEFAULT_GRID_HANDLE && col >= w_width {
+                // In separator line
+                SEP_LINE_OFFSET = col - w_width + 1;
+                rs_set_dragwin(wp);
+            } else {
+                SEP_LINE_OFFSET = 0;
+            }
+
+            // The rightmost character of the status line might be a vertical
+            // separator character if there is no connecting window to the right.
+            if STATUS_LINE_OFFSET != 0 && SEP_LINE_OFFSET != 0 {
+                if stl_connected(wp) != 0 {
+                    SEP_LINE_OFFSET = 0;
+                } else {
+                    STATUS_LINE_OFFSET = 0;
+                }
+            }
+
+            // Before jumping to another buffer, or moving the cursor for a left
+            // click, stop Visual mode.
+            if VIsual_active
+                && (nvim_win_get_w_buffer(wp) != nvim_win_get_w_buffer(curwin)
+                    || (STATUS_LINE_OFFSET == 0
+                        && SEP_LINE_OFFSET == 0
+                        && (if w_p_rl {
+                            col < w_view_width - fdc
+                        } else {
+                            let cmdwin_win = nvim_get_cmdwin_win();
+                            col >= fdc + i32::from(wp == cmdwin_win)
+                        })
+                        && (flags & MOUSE_MAY_STOP_VIS) != 0))
+            {
+                end_visual_mode();
+                redraw_curbuf_later(UPD_INVERTED);
+            }
+
+            if nvim_get_cmdwin_type() != 0 && wp != nvim_get_cmdwin_win() {
+                // A click outside the command-line window: Use modeless
+                // selection if possible. Allow dragging the status lines.
+                SEP_LINE_OFFSET = 0;
+                row = 0;
+                col += nvim_win_get_wincol(wp);
+                // wp = cmdwin_win (win_enter will handle this)
+            }
+
+            // Only change window focus when not clicking on or dragging the
+            // status line. Do change focus when releasing the mouse button
+            // (MOUSE_FOCUS was set above if we dragged first).
+            if !rs_is_dragging() || (flags & MOUSE_RELEASED) != 0 {
+                win_enter(wp, true); // can make wp invalid!
+            }
+            let curwin = nvim_get_curwin();
+            if curwin != old_curwin {
+                rs_set_mouse_topline(curwin);
+            }
+            if STATUS_LINE_OFFSET != 0 {
+                // In (or below) status line
+                // Don't use start_arrow() if we're in the same window
+                if curwin == old_curwin {
+                    return IN_STATUS_LINE;
+                }
+                return IN_STATUS_LINE | CURSOR_MOVED;
+            }
+            if SEP_LINE_OFFSET != 0 {
+                // In (or below) status line
+                // Don't use start_arrow() if we're in the same window
+                if curwin == old_curwin {
+                    return IN_SEP_LINE;
+                }
+                return IN_SEP_LINE | CURSOR_MOVED;
+            }
+
+            let curwin = nvim_get_curwin();
+            let topline = nvim_win_get_topline(curwin);
+            nvim_win_set_cursor_lnum(curwin, topline);
+            do_foldclick = false;
+        }
+    } else if STATUS_LINE_OFFSET != 0 {
+        let dw = rs_get_dragwin();
+        if which_button == MOUSE_LEFT && !dw.is_null() {
+            // Drag the status line
+            let count =
+                row - nvim_win_get_winrow(dw) - nvim_win_get_w_height(dw) + 1 - STATUS_LINE_OFFSET;
+            rs_win_drag_status_line(dw, count);
+            DID_DRAG |= count;
+        }
+        return IN_STATUS_LINE; // Cursor didn't move
+    } else if SEP_LINE_OFFSET != 0 && which_button == MOUSE_LEFT {
+        let dw = rs_get_dragwin();
+        if !dw.is_null() {
+            // Drag the separator column
+            let count =
+                col - nvim_win_get_wincol(dw) - nvim_win_get_w_width(dw) + 1 - SEP_LINE_OFFSET;
+            rs_win_drag_vsep_line(dw, count);
+            DID_DRAG |= count;
+        }
+        return IN_SEP_LINE; // Cursor didn't move
+    } else if ON_STATUS_LINE && which_button == MOUSE_RIGHT {
+        return IN_STATUS_LINE;
+    } else if ON_WINBAR && which_button == MOUSE_RIGHT {
+        // After a click on the window bar don't start Visual mode.
+        return IN_OTHER_WIN | MOUSE_WINBAR;
+    } else if ON_STATUSCOL && which_button == MOUSE_RIGHT {
+        // After a click on the status column don't start Visual mode.
+        return IN_OTHER_WIN | MOUSE_STATUSCOL;
+    } else {
+        if (flags & MOUSE_MAY_STOP_VIS) != 0 {
+            end_visual_mode();
+            redraw_curbuf_later(UPD_INVERTED);
+        }
+
+        let curwin = nvim_get_curwin();
+        let grid_alloc = nvim_win_get_w_grid_alloc(curwin);
+        let w_grid = nvim_win_get_grid(curwin);
+
+        if grid == 0 {
+            row -= nvim_screengrid_get_comp_row(grid_alloc) + nvim_gridview_get_row_offset(w_grid);
+            col -= nvim_screengrid_get_comp_col(grid_alloc) + nvim_gridview_get_col_offset(w_grid);
+        } else if grid != DEFAULT_GRID_HANDLE {
+            row -= nvim_gridview_get_row_offset(w_grid);
+            col -= nvim_gridview_get_col_offset(w_grid);
+        }
+
+        let view_height = nvim_win_get_view_height(curwin);
+        let topline = nvim_win_get_topline(curwin);
+        let topfill = nvim_win_get_topfill(curwin);
+
+        if row < 0 {
+            let mut count: c_int = 0;
+            let mut first = true;
+            let mut tline = topline;
+            let mut tfill = topfill;
+            while tline > 1 {
+                if tfill < win_get_fill(curwin, tline) {
+                    count += 1;
+                } else {
+                    count += plines_win(curwin, tline - 1, true);
+                }
+                if !first && count > -row {
+                    break;
+                }
+                first = false;
+                // hasFolding may update tline
+                let mut tline_out = tline;
+                nvim_hasFolding(
+                    curwin,
+                    tline,
+                    std::ptr::addr_of_mut!(tline_out),
+                    std::ptr::null_mut(),
+                );
+                tline = tline_out;
+                if tfill < win_get_fill(curwin, tline) {
+                    tfill += 1;
+                } else {
+                    tline -= 1;
+                    tfill = 0;
+                }
+                nvim_win_set_topline(curwin, tline);
+                nvim_win_set_topfill(curwin, tfill);
+            }
+            // Final sync: write back topline/topfill in case loop didn't run
+            nvim_win_set_topline(curwin, tline);
+            nvim_win_set_topfill(curwin, tfill);
+            check_topfill(curwin, 0);
+            nvim_win_clear_valid_bits(
+                curwin,
+                VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP,
+            );
+            redraw_later(curwin, UPD_VALID);
+            row = 0;
+        } else if row >= view_height {
+            let mut count: c_int = 0;
+            let mut first = true;
+            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+            let mut tline = topline;
+            let mut tfill = topfill;
+            while tline < line_count {
+                if tfill > 0 {
+                    count += 1;
+                } else {
+                    count += plines_win(curwin, tline, true);
+                }
+                if !first && count > row - view_height + 1 {
+                    break;
+                }
+                first = false;
+                if tfill > 0 {
+                    tfill -= 1;
+                } else {
+                    let mut tline_end = tline;
+                    nvim_hasFolding(
+                        curwin,
+                        tline,
+                        std::ptr::null_mut(),
+                        std::ptr::addr_of_mut!(tline_end),
+                    );
+                    tline = tline_end;
+                    if tline == line_count {
+                        break;
+                    }
+                    tline += 1;
+                    tfill = win_get_fill(curwin, tline);
+                }
+            }
+            nvim_win_set_topline(curwin, tline);
+            nvim_win_set_topfill(curwin, tfill);
+            check_topfill(curwin, 0);
+            redraw_later(curwin, UPD_VALID);
+            nvim_win_clear_valid_bits(
+                curwin,
+                VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP,
+            );
+            row = view_height - 1;
+        } else if row == 0 {
+            // When dragging the mouse, while the text has been scrolled up as
+            // far as it goes, moving the mouse in the top line should scroll
+            // the text down (done later when recomputing w_topline).
+            let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+            if rs_get_mouse_dragging() > 0 && cursor_lnum == line_count && cursor_lnum == topline {
+                nvim_win_clear_valid_bits(curwin, VALID_TOPLINE);
+            }
+        }
+
+        do_foldclick = false;
+    }
+
+    // === foldclick section ===
+    let curwin = nvim_get_curwin();
+    let mut col_from_screen: colnr_T = -1;
+    let mut mouse_fold_flags: c_int = 0;
+    rs_mouse_check_grid(
+        std::ptr::addr_of_mut!(col_from_screen),
+        std::ptr::addr_of_mut!(mouse_fold_flags),
+    );
+
+    let cursor_ptr = nvim_win_get_cursor_ptr(curwin);
+    if rs_mouse_comp_pos(
+        curwin,
+        std::ptr::addr_of_mut!(row),
+        std::ptr::addr_of_mut!(col),
+        std::ptr::addr_of_mut!((*cursor_ptr).lnum),
+    ) {
+        nvim_set_mouse_past_bottom(true);
+    }
+
+    if (flags & MOUSE_MAY_VIS) != 0 && !VIsual_active {
+        // VIsual = old_cursor
+        nvim_set_VIsual_pos(
+            old_cursor.lnum,
+            old_cursor.col as c_int,
+            old_cursor.coladd as c_int,
+        );
+        nvim_set_VIsual_active(true);
+        nvim_set_VIsual_reselect(true);
+        rs_may_start_select(c_int::from(b'o'));
+        setmouse_global();
+        if p_smd != 0 && nvim_get_msg_silent() == 0 {
+            nvim_set_redraw_cmdline(true); // show visual mode later
+        }
+    }
+
+    if col_from_screen >= 0 {
+        col = col_from_screen;
+    }
+
+    nvim_win_set_curswant(curwin, col);
+    nvim_win_set_set_curswant(curwin, 0); // May still have been true
+    if coladvance(curwin, col) == FAIL {
+        // Mouse click beyond end of line
+        if !inclusive.is_null() {
+            *inclusive = true;
+        }
+        nvim_set_mouse_past_eol(true);
+    } else if !inclusive.is_null() {
+        *inclusive = false;
+    }
+
+    let _ = do_foldclick; // used to control flow only; ON_STATUSCOL captures the same condition
+    let mut count = if ON_STATUSCOL {
+        IN_OTHER_WIN | MOUSE_STATUSCOL
+    } else {
+        IN_BUFFER
+    };
+
+    let new_cursor = *nvim_win_get_cursor_ptr(curwin);
+    if curwin != old_curwin
+        || new_cursor.lnum != old_cursor.lnum
+        || new_cursor.col != old_cursor.col
+    {
+        count |= CURSOR_MOVED; // Cursor has moved
+    }
+
+    count |= mouse_fold_flags;
+    count
 }
 
 // =============================================================================

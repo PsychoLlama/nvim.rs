@@ -92,6 +92,7 @@ colnr_T nvim_win_get_valid_leftcol(win_T *wp) { return wp->w_valid_leftcol; }
 colnr_T nvim_win_get_valid_skipcol(win_T *wp) { return wp->w_valid_skipcol; }
 int nvim_win_get_viewport_invalid(win_T *wp) { return wp->w_viewport_invalid ? 1 : 0; }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
+ScreenGrid *nvim_win_get_w_grid_alloc(win_T *wp) { return wp ? &wp->w_grid_alloc : NULL; }
 bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }
 int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
