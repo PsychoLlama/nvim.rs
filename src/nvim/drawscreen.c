@@ -1265,70 +1265,10 @@ redr_statuscol:
   }
 }
 
-/// Handle the three window iteration loops of update_screen.
-/// Defined here (not in drawscreen_shim.c) because win_update() is static.
-/// Called from rs_update_screen() in Rust.
-void nvim_update_screen_win_loop(int type, int hl_changed)
+/// Non-static wrapper for win_update() so Rust can call it via FFI.
+/// Called from rs_update_screen_win_loop() in Rust.
+void nvim_win_update(win_T *wp)
 {
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    update_window_hl(wp, type >= UPD_NOT_VALID || hl_changed);
-
-    buf_T *buf = wp->w_buffer;
-    if (buf->b_mod_set) {
-      if (buf->b_mod_tick_syn < display_tick && syntax_present(wp)) {
-        syn_stack_apply_changes(buf);
-        buf->b_mod_tick_syn = display_tick;
-      }
-
-      if (buf->b_mod_tick_decor < display_tick) {
-        decor_providers_invoke_buf(buf);
-        buf->b_mod_tick_decor = display_tick;
-      }
-    }
-  }
-
-  screen_search_hl.rm.regprog = NULL;
-  bool did_one = false;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_redr_type == UPD_CLEAR && wp->w_floating && wp->w_grid_alloc.chars) {
-      grid_invalidate(&wp->w_grid_alloc);
-      wp->w_redr_type = UPD_NOT_VALID;
-    }
-
-    win_check_ns_hl(wp);
-    win_grid_alloc(wp);
-
-    if (wp->w_redr_border || wp->w_redr_type >= UPD_NOT_VALID) {
-      grid_draw_border(&wp->w_grid_alloc, &wp->w_config, wp->w_border_adj, (int)wp->w_p_winbl,
-                       wp->w_ns_hl_attr);
-    }
-
-    if (wp->w_redr_type != 0) {
-      if (!did_one) {
-        did_one = true;
-        start_search_hl();
-      }
-      win_update(wp);
-    }
-
-    if (wp->w_redr_status) {
-      win_redr_winbar(wp);
-      win_redr_status(wp);
-    }
-  }
-
-  end_search_hl();
-
-  if (pum_drawn() && must_redraw_pum) {
-    win_check_ns_hl(curwin);
-    pum_redraw();
-  }
-
-  win_check_ns_hl(NULL);
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    wp->w_buffer->b_mod_set = false;
-  }
+  win_update(wp);
 }
 

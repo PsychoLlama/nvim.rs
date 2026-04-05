@@ -3010,6 +3010,155 @@ pub unsafe extern "C" fn rs_win_update_visual_region(
 }
 
 // =============================================================================
+// Phase 1 (plan eec0896b): win_loop migration
+// =============================================================================
+
+extern "C" {
+    /// Non-static wrapper for win_update() in drawscreen.c.
+    fn nvim_win_update(wp: WinHandle);
+
+    /// update_window_hl: update highlight attributes for a window.
+    fn update_window_hl(wp: WinHandle, invalid: bool);
+
+    /// syntax_present: returns true if syntax highlighting is active for wp.
+    fn syntax_present(wp: WinHandle) -> bool;
+
+    /// syn_stack_apply_changes: apply syntax stack changes for buf.
+    fn syn_stack_apply_changes(buf: BufHandle);
+
+    /// decor_providers_invoke_buf: invoke decoration providers for buf.
+    fn decor_providers_invoke_buf(buf: BufHandle);
+
+    /// win_grid_alloc: allocate/resize the window grid.
+    fn win_grid_alloc(wp: WinHandle);
+
+    /// pum_drawn: returns true if popup menu is currently drawn.
+    fn pum_drawn() -> bool;
+
+    /// pum_redraw: redraw the popup menu.
+    fn pum_redraw();
+
+    /// nvim_win_draw_border: call grid_draw_border for wp's grid_alloc + config.
+    fn nvim_win_draw_border(wp: WinHandle);
+
+    /// nvim_win_grid_alloc_invalidate: call grid_invalidate(&wp->w_grid_alloc).
+    fn nvim_win_grid_alloc_invalidate(wp: WinHandle);
+
+    /// nvim_win_get_grid_alloc_chars: returns true if wp->w_grid_alloc.chars is non-NULL.
+    fn nvim_win_get_grid_alloc_chars(wp: WinHandle) -> bool;
+
+    /// nvim_buf_get_mod_tick_syn: get buf->b_mod_tick_syn.
+    fn nvim_buf_get_mod_tick_syn(buf: BufHandle) -> u64;
+    /// nvim_buf_set_mod_tick_syn: set buf->b_mod_tick_syn.
+    fn nvim_buf_set_mod_tick_syn(buf: BufHandle, val: u64);
+    /// nvim_buf_get_mod_tick_decor: get buf->b_mod_tick_decor.
+    fn nvim_buf_get_mod_tick_decor(buf: BufHandle) -> u64;
+    /// nvim_buf_set_mod_tick_decor: set buf->b_mod_tick_decor.
+    fn nvim_buf_set_mod_tick_decor(buf: BufHandle, val: u64);
+
+}
+
+/// Handle the three window iteration loops of update_screen.
+///
+/// Rust equivalent of `nvim_update_screen_win_loop()` in drawscreen.c.
+/// Called from `rs_update_screen()`.
+///
+/// # Safety
+/// Must be called from within the update_screen() context with screen/windows valid.
+unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
+    // display_tick is declared as u32 in Rust (existing binding); use u64 for comparison
+    // with b_mod_tick_syn/decor (uint64_t in C). Values stay well within 32-bit range.
+    let tick = u64::from(display_tick);
+
+    // Pass 1: update highlights + syntax/decor
+    let mut wp = nvim_get_firstwin();
+    while !wp.is_null() {
+        update_window_hl(wp, type_ >= UPD_NOT_VALID || hl_changed != 0);
+
+        let buf = nvim_win_get_buffer(wp);
+        if nvim_buf_get_mod_set(buf) != 0 {
+            if nvim_buf_get_mod_tick_syn(buf) < tick && syntax_present(wp) {
+                syn_stack_apply_changes(buf);
+                nvim_buf_set_mod_tick_syn(buf, tick);
+            }
+            if nvim_buf_get_mod_tick_decor(buf) < tick {
+                decor_providers_invoke_buf(buf);
+                nvim_buf_set_mod_tick_decor(buf, tick);
+            }
+        }
+        wp = nvim_win_get_next(wp);
+    }
+
+    // Clear any stale search hl state before the draw pass
+    // (equivalent to screen_search_hl.rm.regprog = NULL in C).
+    rs_end_search_hl();
+    let mut did_one = false;
+
+    // Pass 2: grid alloc + border + win_update + status
+    let mut wp = nvim_get_firstwin();
+    while !wp.is_null() {
+        let redr_type = nvim_win_get_redr_type(wp);
+        if redr_type == UPD_CLEAR
+            && nvim_win_get_floating(wp) != 0
+            && nvim_win_get_grid_alloc_chars(wp)
+        {
+            nvim_win_grid_alloc_invalidate(wp);
+            nvim_win_set_redr_type(wp, UPD_NOT_VALID);
+        }
+
+        nvim_win_check_ns_hl(wp);
+        win_grid_alloc(wp);
+
+        let redr_type = nvim_win_get_redr_type(wp);
+        let redr_border = nvim_win_get_redr_border(wp);
+        if redr_border != 0 || redr_type >= UPD_NOT_VALID {
+            nvim_win_draw_border(wp);
+        }
+
+        if redr_type != 0 {
+            if !did_one {
+                did_one = true;
+                rs_start_search_hl();
+            }
+            nvim_win_update(wp);
+        }
+
+        if nvim_win_get_redr_status(wp) != 0 {
+            nvim_win_redr_winbar(wp);
+            nvim_win_redr_status(wp);
+        }
+
+        wp = nvim_win_get_next(wp);
+    }
+
+    rs_end_search_hl();
+
+    if pum_drawn() && must_redraw_pum {
+        nvim_win_check_ns_hl(nvim_get_curwin());
+        pum_redraw();
+    }
+
+    nvim_win_check_ns_hl(WinHandle::null());
+
+    // Pass 3: reset b_mod_set
+    let mut wp = nvim_get_firstwin();
+    while !wp.is_null() {
+        let buf = nvim_win_get_buffer(wp);
+        nvim_buf_set_mod_set(buf, 0);
+        wp = nvim_win_get_next(wp);
+    }
+}
+
+/// Handle the three window iteration loops of update_screen.
+///
+/// Exported as `rs_update_screen_win_loop` for future direct calls.
+/// Called internally by `rs_update_screen`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_screen_win_loop(type_: c_int, hl_changed: c_int) {
+    update_screen_win_loop_impl(type_, hl_changed);
+}
+
+// =============================================================================
 // Phase 5: update_screen
 // =============================================================================
 
@@ -3027,8 +3176,6 @@ extern "C" {
     fn nvim_update_screen_msg_scroll(type_: c_int, is_stl_global: c_int) -> c_int;
     /// Handle curwin nrwidth check and tabline redraw (lines 691-709).
     fn nvim_update_screen_nrwidth_check(type_: c_int);
-    /// Handle the three window loops (lines 711-771).
-    fn nvim_update_screen_win_loop(type_: c_int, hl_changed: c_int);
 
     /// resizing_autocmd: true during screen resize autocmds.
     static mut resizing_autocmd: bool;
@@ -3212,8 +3359,8 @@ pub unsafe extern "C" fn rs_update_screen() -> c_int {
     // Handle nrwidth check and tabline (struct-heavy, delegated to C).
     nvim_update_screen_nrwidth_check(type_);
 
-    // Handle the three window loops (struct-heavy, delegated to C).
-    nvim_update_screen_win_loop(type_, hl_changed);
+    // Handle the three window loops (now in Rust).
+    update_screen_win_loop_impl(type_, hl_changed);
 
     updating_screen = false;
 
