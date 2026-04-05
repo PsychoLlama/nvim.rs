@@ -19,6 +19,7 @@ pub mod args;
 pub mod completion;
 pub mod display;
 pub mod do_map;
+pub mod eval;
 pub mod exmap;
 pub mod flags;
 pub mod langmap;

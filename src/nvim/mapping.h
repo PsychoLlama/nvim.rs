@@ -40,6 +40,8 @@ void ex_abbreviate(exarg_T *eap);
 void ex_unmap(exarg_T *eap);
 void ex_mapclear(exarg_T *eap);
 void ex_abclear(exarg_T *eap);
+bool check_abbr(int c, char *ptr, int col, int mincol);
+char *eval_map_expr(mapblock_T *mp, int c);
 
 /// Used for the first argument of do_map()
 enum {

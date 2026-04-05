@@ -130,208 +130,6 @@ static const char e_illegal_map_mode_string_str[]
   = N_("E1276: Illegal map mode string: '%s'");
 
 
-// Check for an abbreviation. Cursor is at ptr[col].
-// When inserting, mincol is where insert started.
-// For the command line, mincol is what is to be skipped over.
-// "c" is the character typed before check_abbr was called.  It may have
-// ABBR_OFF added to avoid prepending a CTRL-V to it.
-// Return true if there is an abbreviation, false if not.
-bool check_abbr(int c, char *ptr, int col, int mincol)
-{
-  uint8_t tb[MB_MAXBYTES + 4];
-  int clen = 0;                 // length in characters
-
-  if (typebuf.tb_no_abbr_cnt) {  // abbrev. are not recursive
-    return false;
-  }
-
-  // no remapping implies no abbreviation, except for CTRL-]
-  if (noremap_keys() && c != Ctrl_RSB) {
-    return false;
-  }
-
-  // Check for word before the cursor: If it ends in a keyword char all
-  // chars before it must be keyword chars or non-keyword chars, but not
-  // white space. If it ends in a non-keyword char we accept any characters
-  // before it except white space.
-  if (col == 0) {  // cannot be an abbr.
-    return false;
-  }
-
-  int scol;  // starting column of the abbr.
-
-  {
-    bool is_id = true;
-    bool vim_abbr;
-    char *p = mb_prevptr(ptr, ptr + col);
-    if (!vim_iswordp(p)) {
-      vim_abbr = true;    // Vim added abbr.
-    } else {
-      vim_abbr = false;   // vi compatible abbr.
-      if (p > ptr) {
-        is_id = vim_iswordp(mb_prevptr(ptr, p));
-      }
-    }
-    clen = 1;
-    while (p > ptr + mincol) {
-      p = mb_prevptr(ptr, p);
-      if (ascii_isspace(*p) || (!vim_abbr && is_id != vim_iswordp(p))) {
-        p += utfc_ptr2len(p);
-        break;
-      }
-      clen++;
-    }
-    scol = (int)(p - ptr);
-  }
-
-  if (scol < mincol) {
-    scol = mincol;
-  }
-  if (scol < col) {             // there is a word in front of the cursor
-    ptr += scol;
-    int len = col - scol;
-    mapblock_T *mp = rs_find_matching_abbr(ptr, len);
-    if (mp != NULL) {
-      // Found a match:
-      // Insert the rest of the abbreviation in typebuf.tb_buf[].
-      // This goes from end to start.
-      //
-      // Characters 0x000 - 0x100: normal chars, may need CTRL-V,
-      // except K_SPECIAL: Becomes K_SPECIAL KS_SPECIAL KE_FILLER
-      // Characters where IS_SPECIAL() == true: key codes, need
-      // K_SPECIAL. Other characters (with ABBR_OFF): don't use CTRL-V.
-      //
-      // Character CTRL-] is treated specially - it completes the
-      // abbreviation, but is not inserted into the input stream.
-      int j = 0;
-      if (c != Ctrl_RSB) {
-        // special key code, split up
-        if (IS_SPECIAL(c) || c == K_SPECIAL) {
-          tb[j++] = K_SPECIAL;
-          tb[j++] = (uint8_t)K_SECOND(c);
-          tb[j++] = (uint8_t)K_THIRD(c);
-        } else {
-          if (c < ABBR_OFF && (c < ' ' || c > '~')) {
-            tb[j++] = Ctrl_V;                   // special char needs CTRL-V
-          }
-          // if ABBR_OFF has been added, remove it here.
-          if (c >= ABBR_OFF) {
-            c -= ABBR_OFF;
-          }
-          int newlen = utf_char2bytes(c, (char *)tb + j);
-          tb[j + newlen] = NUL;
-          // Need to escape K_SPECIAL.
-          char *escaped = vim_strsave_escape_ks((char *)tb + j);
-          if (escaped != NULL) {
-            newlen = (int)strlen(escaped);
-            memmove(tb + j, escaped, (size_t)newlen);
-            j += newlen;
-            xfree(escaped);
-          }
-        }
-        tb[j] = NUL;
-        // insert the last typed char
-        ins_typebuf((char *)tb, 1, 0, true, mp->m_silent);
-      }
-
-      // copy values here, calling eval_map_expr() may make "mp" invalid!
-      const int noremap = mp->m_noremap;
-      const bool silent = mp->m_silent;
-      const bool expr = mp->m_expr;
-
-      char *s;
-      if (expr) {
-        s = eval_map_expr(mp, c);
-      } else {
-        s = mp->m_str;
-      }
-      if (s != NULL) {
-        // insert the to string
-        ins_typebuf(s, noremap, 0, true, silent);
-        // no abbrev. for these chars
-        typebuf.tb_no_abbr_cnt += (int)strlen(s) + j + 1;
-        if (expr) {
-          xfree(s);
-        }
-      }
-
-      tb[0] = Ctrl_H;
-      tb[1] = NUL;
-      len = clen;  // Delete characters instead of bytes
-      while (len-- > 0) {  // delete the from string
-        ins_typebuf((char *)tb, 1, 0, true, silent);
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Evaluate the RHS of a mapping or abbreviations and take care of escaping
-/// special characters.
-/// Careful: after this "mp" will be invalid if the mapping was deleted.
-///
-/// @param c  NUL or typed character for abbreviation
-char *eval_map_expr(mapblock_T *mp, int c)
-{
-  char *p = NULL;
-  char *expr = NULL;
-
-  // Remove escaping of K_SPECIAL, because "str" is in a format to be used as
-  // typeahead.
-  if (mp->m_luaref == LUA_NOREF) {
-    expr = xstrdup(mp->m_str);
-    vim_unescape_ks(expr);
-  }
-
-  const bool replace_keycodes = mp->m_replace_keycodes;
-
-  // Forbid changing text or using ":normal" to avoid most of the bad side
-  // effects.  Also restore the cursor position.
-  expr_map_lock++;
-  set_vim_var_char(c);    // set v:char to the typed character
-  const pos_T save_cursor = curwin->w_cursor;
-  const int save_msg_col = msg_col;
-  const int save_msg_row = msg_row;
-  if (mp->m_luaref != LUA_NOREF) {
-    Error err = ERROR_INIT;
-    Array args = ARRAY_DICT_INIT;
-    Object ret = nlua_call_ref(mp->m_luaref, NULL, args, kRetObject, NULL, &err);
-    if (ret.type == kObjectTypeString) {
-      p = string_to_cstr(ret.data.string);
-    }
-    api_free_object(ret);
-    if (ERROR_SET(&err)) {
-      semsg_multiline("emsg", "E5108: %s", err.msg);
-      api_clear_error(&err);
-    }
-  } else {
-    p = eval_to_string(expr, false, false);
-    xfree(expr);
-  }
-  expr_map_lock--;
-  curwin->w_cursor = save_cursor;
-  msg_col = save_msg_col;
-  msg_row = save_msg_row;
-
-  if (p == NULL) {
-    return NULL;
-  }
-
-  char *res = NULL;
-
-  if (replace_keycodes) {
-    replace_termcodes(p, strlen(p), &res, 0, REPTERM_DO_LT, NULL, p_cpo);
-  } else {
-    // Escape K_SPECIAL in the result to be able to use the string as typeahead.
-    res = vim_strsave_escape_ks(p);
-  }
-  xfree(p);
-
-  return res;
-}
-
-
 /// Fill a Dict with all applicable maparg() like dictionaries.
 static Dict mapblock_fill_dict(const mapblock_T *const mp, const char *lhsrawalt,
                                const int buffer_value, const bool abbr, const bool compatible,
@@ -919,3 +717,23 @@ void nvim_langmap_format_error(char *buf, size_t buflen, int msgid, const char *
 }
 void nvim_mapping_vim_unescape_ks(char *s) { vim_unescape_ks(s); }
 int nvim_mapping_get_state(void) { return State; }
+
+// Accessors for eval_map_expr / check_abbr (Phase 3)
+int nvim_mapping_get_typebuf_no_abbr_cnt(void) { return typebuf.tb_no_abbr_cnt; }
+void nvim_mapping_add_typebuf_no_abbr_cnt(int delta) { typebuf.tb_no_abbr_cnt += delta; }
+void nvim_mapping_get_curwin_cursor(int32_t *lnum, int *col, int *coladd)
+{
+  *lnum = curwin->w_cursor.lnum;
+  *col = curwin->w_cursor.col;
+  *coladd = curwin->w_cursor.coladd;
+}
+void nvim_mapping_set_curwin_cursor(int32_t lnum, int col, int coladd)
+{
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+  curwin->w_cursor.coladd = coladd;
+}
+void nvim_mapping_semsg_lua_err(char *msg)
+{
+  semsg_multiline("emsg", "E5108: %s", msg);
+}

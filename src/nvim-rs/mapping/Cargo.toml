@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 libc = "0.2"
+nvim-api = { path = "../api" }
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 
 [dev-dependencies]
