@@ -497,7 +497,6 @@ void nvim_terminal_apply_termrequest_autocmd(void *buf, int64_t row, int64_t col
   PUT_C(data, "cursor", ARRAY_OBJ(cursor));
   apply_autocmds_group(EVENT_TERMREQUEST, NULL, NULL, true, AUGROUP_ALL, (buf_T *)buf, NULL, &DICT_OBJ(data));
 }
-typedef void (*emit_termrequest_fn_t)(void **);
 void nvim_terminal_pending_put_termrequest(void *term, emit_termrequest_fn_t fn,
                                            char *sequence, size_t seqlen,
                                            void *pending_send, intptr_t row, intptr_t col,
