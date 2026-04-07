@@ -778,3 +778,635 @@ pub unsafe extern "C" fn did_set_titleiconstring(
 
     std::ptr::null()
 }
+
+// =============================================================================
+// Phase 1: Simple did_set_* Callbacks
+// =============================================================================
+
+extern "C" {
+    /// optset_T field: args->os_buf
+    fn nvim_optset_get_buf(args: *const c_void) -> *mut c_void;
+
+    /// optset_T field: args->os_flags
+    fn nvim_optset_get_flags(args: *const c_void) -> c_int;
+
+    /// optset_T field: args->os_oldval.string.data
+    fn nvim_optset_get_oldval_str(args: *const c_void) -> *const c_char;
+
+    /// Set os_restore_chartab
+    fn nvim_optset_set_restore_chartab(args: *mut c_void, val: c_int);
+
+    /// Set os_value_checked
+    #[allow(dead_code)]
+    fn nvim_optset_set_value_checked(args: *mut c_void, val: c_int);
+
+    /// buf->b_p_cot (local completeopt)
+    fn nvim_buf_get_p_cot(buf: *mut c_void) -> *mut c_char;
+
+    /// &buf->b_cot_flags
+    fn nvim_buf_get_cot_flags_ptr(buf: *mut c_void) -> *mut c_uint;
+
+    /// buf->b_p_tc (local tagcase)
+    fn nvim_buf_get_p_tc(buf: *mut c_void) -> *mut c_char;
+
+    /// &buf->b_tc_flags
+    fn nvim_buf_get_tc_flags_ptr(buf: *mut c_void) -> *mut c_uint;
+
+    /// win->w_p_ve (local virtualedit)
+    fn nvim_win_get_p_ve(wp: *mut c_void) -> *mut c_char;
+
+    /// &win->w_ve_flags
+    fn nvim_win_get_ve_flags_ptr(wp: *mut c_void) -> *mut c_uint;
+
+    /// &win->w_virtcol (colnr_T = c_int)
+    fn nvim_win_get_virtcol(wp: *mut c_void) -> *mut c_int;
+
+    /// &buf->b_p_vsts_array (colnr_T**)
+    fn nvim_buf_get_vsts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
+
+    /// &buf->b_p_vts_array (colnr_T**)
+    fn nvim_buf_get_vts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
+
+    // Cursor utilities
+    fn validate_virtcol(wp: *mut c_void);
+    fn coladvance(wp: *mut c_void, virtcol: c_int) -> c_int;
+
+    // Chartab utilities
+    fn buf_init_chartab(buf: *mut c_void, global: bool) -> c_int;
+    fn check_isopt(var: *mut c_char) -> c_int;
+
+    // Memory + markup
+    fn ml_setflags(buf: *mut c_void);
+    fn redraw_buf_later(buf: *mut c_void, kind: c_int);
+    fn redraw_titles();
+
+    // Tabstop utilities
+    fn tabstop_set(var: *const c_char, array: *mut *mut c_int) -> bool;
+    fn rs_foldmethodIsIndent(wp: *mut c_void) -> c_int;
+    fn rs_foldUpdateAll(wp: *mut c_void);
+
+    // Completion
+    fn set_cpt_callbacks(args: *const c_void) -> c_int;
+
+    // Fileformat
+    fn rs_get_fileformat(buf: *mut c_void) -> c_int;
+
+    // Buffer modifiable check
+    fn nvim_buf_get_b_p_ma(buf: *mut c_void) -> c_int;
+
+    // Memory
+    fn xfree(ptr: *mut c_void);
+}
+
+// OPT_LOCAL / OPT_GLOBAL flags (from nvim/option.h)
+const OPT_GLOBAL: c_int = 0x01;
+const OPT_LOCAL: c_int = 0x02;
+// UPD_NOT_VALID (from nvim/drawscreen.h)
+const UPD_NOT_VALID: c_int = 40;
+// OK/FAIL (from nvim/vim_defs.h)
+const OK: c_int = 1;
+// FAIL = 0, not needed explicitly
+
+// C globals accessed via link_name
+extern "C" {
+    #[link_name = "p_ve"]
+    static p_ve: *const c_char;
+    #[link_name = "ve_flags"]
+    static mut ve_flags: c_uint;
+    #[link_name = "p_tc"]
+    static p_tc: *const c_char;
+    #[link_name = "tc_flags"]
+    static mut tc_flags: c_uint;
+    #[link_name = "p_cot"]
+    static p_cot: *const c_char;
+    #[link_name = "cot_flags"]
+    static mut cot_flags: c_uint;
+    // values arrays (extern pointers to array data)
+    #[link_name = "opt_ve_values"]
+    static opt_ve_values: *const *const c_char;
+    #[link_name = "opt_tc_values"]
+    static opt_tc_values: *const *const c_char;
+    #[link_name = "opt_cot_values"]
+    static opt_cot_values: *const *const c_char;
+    #[link_name = "e_invarg"]
+    static e_invarg: *const c_char;
+    #[link_name = "e_modifiable"]
+    static e_modifiable: *const c_char;
+}
+
+// =============================================================================
+// did_set_completeopt
+// =============================================================================
+
+/// The 'completeopt' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_completeopt"]
+pub unsafe extern "C" fn did_set_completeopt(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let opt_flags = nvim_optset_get_flags(args);
+
+    let (cot, flags): (*const c_char, *mut c_uint) = if opt_flags & OPT_LOCAL != 0 {
+        (nvim_buf_get_p_cot(buf), nvim_buf_get_cot_flags_ptr(buf))
+    } else if opt_flags & OPT_GLOBAL != 0 {
+        (p_cot, std::ptr::addr_of_mut!(cot_flags))
+    } else {
+        // :set clears local flags
+        if !buf.is_null() {
+            let local_flags = nvim_buf_get_cot_flags_ptr(buf);
+            if !local_flags.is_null() {
+                *local_flags = 0;
+            }
+        }
+        (p_cot, std::ptr::addr_of_mut!(cot_flags))
+    };
+
+    let result = rs_opt_strings_flags(cot, opt_cot_values, true);
+    if !result.ok {
+        return e_invarg;
+    }
+    if !flags.is_null() {
+        *flags = result.flags;
+    }
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_tagcase
+// =============================================================================
+
+/// The 'tagcase' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_tagcase"]
+pub unsafe extern "C" fn did_set_tagcase(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let opt_flags = nvim_optset_get_flags(args);
+
+    let (p, flags): (*const c_char, *mut c_uint) = if opt_flags & OPT_LOCAL != 0 {
+        (nvim_buf_get_p_tc(buf), nvim_buf_get_tc_flags_ptr(buf))
+    } else {
+        (p_tc, std::ptr::addr_of_mut!(tc_flags))
+    };
+
+    // local empty value: use global flags
+    if opt_flags & OPT_LOCAL != 0 && !p.is_null() && *p == 0 {
+        if !flags.is_null() {
+            *flags = 0;
+        }
+        return std::ptr::null();
+    }
+
+    let result = rs_opt_strings_flags(p, opt_tc_values, false);
+    if !result.ok {
+        return e_invarg;
+    }
+    if !flags.is_null() {
+        *flags = result.flags;
+    }
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_virtualedit
+// =============================================================================
+
+/// The 'virtualedit' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_virtualedit"]
+pub unsafe extern "C" fn did_set_virtualedit(args: *const c_void) -> *const c_char {
+    let win = nvim_optset_get_win(args);
+    let opt_flags = nvim_optset_get_flags(args);
+    let oldval = nvim_optset_get_oldval_str(args);
+
+    let (ve, flags): (*const c_char, *mut c_uint) = if opt_flags & OPT_LOCAL != 0 {
+        (nvim_win_get_p_ve(win), nvim_win_get_ve_flags_ptr(win))
+    } else {
+        (p_ve, std::ptr::addr_of_mut!(ve_flags))
+    };
+
+    // local empty value: use global flags
+    if opt_flags & OPT_LOCAL != 0 && !ve.is_null() && *ve == 0 {
+        if !flags.is_null() {
+            *flags = 0;
+        }
+        return std::ptr::null();
+    }
+
+    let result = rs_opt_strings_flags(ve, opt_ve_values, true);
+    if !result.ok {
+        return e_invarg;
+    }
+    if !flags.is_null() {
+        *flags = result.flags;
+    }
+
+    // Recompute cursor position if value changed
+    if !cstr_eq(ve, oldval) {
+        validate_virtcol(win);
+        let virtcol_ptr = nvim_win_get_virtcol(win);
+        let virtcol = if virtcol_ptr.is_null() {
+            0
+        } else {
+            *virtcol_ptr
+        };
+        coladvance(win, virtcol);
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_signcolumn
+// =============================================================================
+
+extern "C" {
+    fn check_signcolumn(scl: *mut c_char, wp: *mut c_void) -> c_int;
+}
+
+extern "C" {
+    fn nvim_win_get_p_scl(wp: *mut c_void) -> *mut c_char;
+    fn nvim_win_set_nrwidth_line_count(wp: *mut c_void, val: c_int);
+    fn nvim_win_get_minscwidth(wp: *mut c_void) -> c_int;
+}
+
+/// The 'signcolumn' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_signcolumn"]
+pub unsafe extern "C" fn did_set_signcolumn(args: *const c_void) -> *const c_char {
+    let win = nvim_optset_get_win(args);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let oldval = nvim_optset_get_oldval_str(args);
+
+    let scl_ptr = *varp;
+    let is_win_local = !win.is_null() && scl_ptr == nvim_win_get_p_scl(win);
+
+    if check_signcolumn(
+        scl_ptr,
+        if is_win_local {
+            win
+        } else {
+            std::ptr::null_mut()
+        },
+    ) != OK
+    {
+        return e_invarg;
+    }
+
+    // When changing to/from 'number', recompute the width of the number column
+    let oldval_nu =
+        !oldval.is_null() && *oldval == b'n' as c_char && *oldval.add(1) == b'u' as c_char;
+    let scl_num: c_int = -2; // SCL_NUM from nvim/sign_defs.h
+    let minscwidth = if win.is_null() {
+        0
+    } else {
+        nvim_win_get_minscwidth(win)
+    };
+    if oldval_nu || minscwidth == scl_num {
+        nvim_win_set_nrwidth_line_count(win, 0);
+    }
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_iskeyword
+// =============================================================================
+
+/// The 'iskeyword' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_iskeyword"]
+pub unsafe extern "C" fn did_set_iskeyword(args: *const c_void) -> *const c_char {
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let val = *varp;
+
+    // p_isk is the global 'iskeyword' pointer, obtained via varp comparison
+    // We use the C function check_isopt for the global case
+    // and did_set_isopt for the local case
+    // The plan: varp == &p_isk checks if it's global; we replicate with the existing
+    // C accessor. Since we can't compare pointer addresses directly from Rust without
+    // the actual global address, we use the pattern: if check_isopt succeeds, it's OK.
+    // For the global case (varp == &p_isk), call check_isopt.
+    // For the local case (varp != &p_isk), fall through to did_set_isopt.
+    // We use a C helper to determine this.
+
+    // Simplified approach: if varp is the global iskeyword, check_isopt is enough
+    // Otherwise delegate to did_set_isopt logic inline.
+    // To distinguish, we call check_isopt on the value and if it succeeds, do nothing more.
+    // If varp is local (not global), the buf_init_chartab path is needed.
+    // We call the C check_isopt to validate, then try buf_init_chartab always.
+    // The original code: if varp == &p_isk -> check_isopt only; else -> did_set_isopt
+    // We replicate this by having a C shim expose whether varp is global.
+
+    // For simplicity, implement the full logic: check_isopt for validation,
+    // then conditionally call did_set_isopt if needed.
+    // The safest approach: delegate to the C implementations via accessors.
+    // Actually, the plan says to implement both did_set_iskeyword and did_set_isopt in Rust.
+    // We use nvim_optset_is_global_iskeyword to distinguish.
+
+    // Since we cannot compare `varp` to `&p_isk` without knowing p_isk address,
+    // we add a C helper. For now, implement as: always validate with check_isopt,
+    // then if it's a local varp, also run buf_init_chartab.
+    // We add nvim_optset_varp_is_p_isk as a helper to option_shim.c.
+    // But that's extra complexity. Simplest: implement did_set_iskeyword using the
+    // C check_isopt for validation and call did_set_isopt_impl for the buffer case.
+
+    if nvim_optset_varp_is_global_isk(args) != 0 {
+        // Global case: only check_isopt
+        if check_isopt(val) == 0 {
+            return e_invarg;
+        }
+    } else {
+        // Local case: delegate to did_set_isopt logic
+        return did_set_isopt(args);
+    }
+
+    std::ptr::null()
+}
+
+extern "C" {
+    /// Returns 1 if args->os_varp == &p_isk (global 'iskeyword')
+    fn nvim_optset_varp_is_global_isk(args: *const c_void) -> c_int;
+}
+
+// =============================================================================
+// did_set_isopt
+// =============================================================================
+
+/// The 'isident', 'iskeyword', 'isprint', or 'isfname' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_isopt"]
+pub unsafe extern "C" fn did_set_isopt(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    if buf_init_chartab(buf, true) == 0 {
+        // FAIL = 0: need to restore chartab
+        nvim_optset_set_restore_chartab(args.cast_mut(), 1);
+        return e_invarg;
+    }
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_fileformat
+// =============================================================================
+
+/// The 'fileformat' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_fileformat"]
+pub unsafe extern "C" fn did_set_fileformat(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let opt_flags = nvim_optset_get_flags(args);
+    let oldval = nvim_optset_get_oldval_str(args);
+
+    // Check modifiable when not setting global
+    if nvim_buf_get_b_p_ma(buf) == 0 && (opt_flags & OPT_GLOBAL == 0) {
+        return e_modifiable;
+    }
+
+    let errmsg = did_set_str_generic(args);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+
+    redraw_titles();
+    ml_setflags(buf);
+
+    // Redraw needed when switching to/from "mac"
+    let fmt = rs_get_fileformat(buf);
+    let old_is_mac = !oldval.is_null() && *oldval == b'm' as c_char;
+    // EOL_MAC = 2 (from nvim/fileio.h)
+    if fmt == 2 || old_is_mac {
+        redraw_buf_later(buf, UPD_NOT_VALID);
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_varsofttabstop
+// =============================================================================
+
+/// The 'varsofttabstop' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_varsofttabstop"]
+pub unsafe extern "C" fn did_set_varsofttabstop(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let val = *varp;
+
+    // Empty or "0": clear the array
+    if *val == 0 || (*val == b'0' as c_char && *val.add(1) == 0) {
+        let arr_pp = nvim_buf_get_vsts_array_ptr(buf);
+        if !arr_pp.is_null() {
+            xfree((*arr_pp).cast::<c_void>());
+            *arr_pp = std::ptr::null_mut();
+        }
+        return std::ptr::null();
+    }
+
+    // Validate: only digits and commas (no leading/trailing commas)
+    let mut cp = val;
+    loop {
+        let c = *cp as u8;
+        if c == 0 {
+            break;
+        }
+        if c.is_ascii_digit() {
+            cp = cp.add(1);
+            continue;
+        }
+        if c == b',' && cp > val && *cp.sub(1) as u8 != b',' {
+            cp = cp.add(1);
+            continue;
+        }
+        return e_invarg;
+    }
+
+    let arr_pp = nvim_buf_get_vsts_array_ptr(buf);
+    if arr_pp.is_null() {
+        return e_invarg;
+    }
+    let oldarray = *arr_pp;
+    if tabstop_set(val, arr_pp) {
+        xfree(oldarray.cast::<c_void>());
+    } else {
+        return e_invarg;
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_vartabstop
+// =============================================================================
+
+/// The 'vartabstop' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_vartabstop"]
+pub unsafe extern "C" fn did_set_vartabstop(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let win = nvim_optset_get_win(args);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let val = *varp;
+
+    // Empty or "0": clear the array
+    if *val == 0 || (*val == b'0' as c_char && *val.add(1) == 0) {
+        let arr_pp = nvim_buf_get_vts_array_ptr(buf);
+        if !arr_pp.is_null() {
+            xfree((*arr_pp).cast::<c_void>());
+            *arr_pp = std::ptr::null_mut();
+        }
+        return std::ptr::null();
+    }
+
+    // Validate: only digits and commas
+    let mut cp = val;
+    loop {
+        let c = *cp as u8;
+        if c == 0 {
+            break;
+        }
+        if c.is_ascii_digit() {
+            cp = cp.add(1);
+            continue;
+        }
+        if c == b',' && cp > val && *cp.sub(1) as u8 != b',' {
+            cp = cp.add(1);
+            continue;
+        }
+        return e_invarg;
+    }
+
+    let arr_pp = nvim_buf_get_vts_array_ptr(buf);
+    if arr_pp.is_null() {
+        return e_invarg;
+    }
+    let oldarray = *arr_pp;
+    if tabstop_set(val, arr_pp) {
+        xfree(oldarray.cast::<c_void>());
+        if rs_foldmethodIsIndent(win) != 0 {
+            rs_foldUpdateAll(win);
+        }
+    } else {
+        return e_invarg;
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
+// did_set_complete
+// =============================================================================
+
+#[inline]
+fn is_ascii_digit_char(c: u8) -> bool {
+    c.is_ascii_digit()
+}
+
+/// Check if value for 'complete' is valid when 'complete' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_complete"]
+pub unsafe extern "C" fn did_set_complete(args: *const c_void) -> *const c_char {
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let errbuf = nvim_optset_get_errbuf(args);
+    let errbuflen = nvim_optset_get_errbuflen(args);
+
+    let mut p = *varp;
+    while *p != 0 {
+        // Buffer for current item (LSIZE = 512)
+        const LSIZE: usize = 512;
+        let mut buffer = [0u8; LSIZE];
+        let mut buf_ptr: usize = 0;
+        let mut escape = false;
+
+        // Extract substring, handling escaped commas
+        while *p != 0 && (*p as u8 != b',' || escape) && buf_ptr < LSIZE - 1 {
+            if *p as u8 == b'\\' && *p.add(1) as u8 == b',' {
+                escape = true;
+                p = p.add(1); // skip '\'
+            } else {
+                escape = false;
+                buffer[buf_ptr] = *p as u8;
+                buf_ptr += 1;
+            }
+            p = p.add(1);
+        }
+        buffer[buf_ptr] = 0;
+
+        let first = buffer[0];
+
+        // Check first char is valid
+        if vim_strchr(c".wbuksid]tUfFo".as_ptr(), c_int::from(first)).is_null() {
+            return crate::errors::illegal_char(errbuf, errbuflen, c_int::from(first));
+        }
+
+        // Determine which character (if any) caused a validation error.
+        // char_before != 0 means an illegal character follows that character.
+        #[allow(clippy::useless_let_if_seq)]
+        let mut char_before: u8 = 0;
+        if vim_strchr(c"ksF".as_ptr(), c_int::from(first)).is_null()
+            && buffer[1] != 0
+            && buffer[1] != b'^'
+        {
+            char_before = first;
+        } else {
+            // Test for a number after '^'
+            let caret_pos = buffer[..buf_ptr].iter().position(|&b| b == b'^');
+            if let Some(caret_pos) = caret_pos {
+                let t = caret_pos + 1;
+                if t >= buf_ptr || buffer[t] == 0 {
+                    char_before = b'^';
+                } else {
+                    for &b in &buffer[t..buf_ptr] {
+                        if b == 0 {
+                            break;
+                        }
+                        if !is_ascii_digit_char(b) {
+                            char_before = b'^';
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if char_before != 0 {
+            if !errbuf.is_null() {
+                return crate::errors::illegal_char_after_chr(
+                    errbuf,
+                    errbuflen,
+                    c_int::from(char_before),
+                );
+            }
+            return std::ptr::null();
+        }
+
+        // Skip comma and spaces
+        while *p as u8 == b',' || *p as u8 == b' ' {
+            p = p.add(1);
+        }
+    }
+
+    if set_cpt_callbacks(args) != OK {
+        return crate::errors::illegal_char_after_chr(errbuf, errbuflen, b'F' as c_int);
+    }
+
+    std::ptr::null()
+}

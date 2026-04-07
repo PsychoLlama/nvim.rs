@@ -26,6 +26,17 @@ const char *did_set_shada(optset_T *args);
 const char *did_set_completeitemalign(optset_T *args);
 const char *did_set_titleiconstring(optset_T *args, int flagval);
 const char *did_set_colorcolumn(optset_T *args);
+// Phase 1: Simple did_set_* callbacks (Rust)
+const char *did_set_completeopt(optset_T *args);
+const char *did_set_tagcase(optset_T *args);
+const char *did_set_virtualedit(optset_T *args);
+const char *did_set_signcolumn(optset_T *args);
+const char *did_set_iskeyword(optset_T *args);
+const char *did_set_isopt(optset_T *args);
+const char *did_set_fileformat(optset_T *args);
+const char *did_set_varsofttabstop(optset_T *args);
+const char *did_set_vartabstop(optset_T *args);
+const char *did_set_complete(optset_T *args);
 
 // Implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
 char *illegal_char(char *errbuf, size_t errbuflen, int c);

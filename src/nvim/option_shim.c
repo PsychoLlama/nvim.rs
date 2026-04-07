@@ -237,6 +237,21 @@ int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 int nvim_option_has_expand_cb(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? 0 : (options[opt_idx].opt_expand_cb != NULL ? 1 : 0); }
+// Phase 1: os_restore_chartab accessor for did_set_isopt
+void nvim_optset_set_restore_chartab(void *args, int val) { ((optset_T *)args)->os_restore_chartab = (val != 0); }
+// buf field accessors for did_set_* callbacks
+char *nvim_buf_get_p_cot(buf_T *buf) { return buf ? buf->b_p_cot : NULL; }
+unsigned *nvim_buf_get_cot_flags_ptr(buf_T *buf) { return buf ? &buf->b_cot_flags : NULL; }
+char *nvim_buf_get_p_tc(buf_T *buf) { return buf ? buf->b_p_tc : NULL; }
+unsigned *nvim_buf_get_tc_flags_ptr(buf_T *buf) { return buf ? &buf->b_tc_flags : NULL; }
+char *nvim_win_get_p_ve(win_T *wp) { return wp ? wp->w_p_ve : NULL; }
+unsigned *nvim_win_get_ve_flags_ptr(win_T *wp) { return wp ? &wp->w_ve_flags : NULL; }
+colnr_T **nvim_buf_get_vsts_array_ptr(buf_T *buf) { return buf ? &buf->b_p_vsts_array : NULL; }
+colnr_T **nvim_buf_get_vts_array_ptr(buf_T *buf) { return buf ? &buf->b_p_vts_array : NULL; }
+// signcolumn helpers (nvim_win_get_virtcol, nvim_win_get_minscwidth, nvim_win_set_nrwidth_line_count are in window/src/win_struct.rs)
+char *nvim_win_get_p_scl(win_T *wp) { return wp ? wp->w_p_scl : NULL; }
+// iskeyword: check if os_varp points to global p_isk
+int nvim_optset_varp_is_global_isk(const void *args) { return ((const optset_T *)args)->os_varp == (void *)&p_isk ? 1 : 0; }
 int option_set_callback_func(char *optval, Callback *optcb)
 {
   if (optval == NULL || *optval == NUL) {

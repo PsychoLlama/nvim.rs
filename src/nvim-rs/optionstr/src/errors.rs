@@ -67,6 +67,28 @@ pub unsafe extern "C" fn illegal_char(
     errbuf
 }
 
+/// Format "E535: Illegal character after <%c>" error into errbuf.
+/// Returns errbuf on success, or empty string if errbuf is NULL.
+///
+/// # Safety
+/// errbuf must be either NULL or a valid writable buffer of errbuflen bytes.
+pub unsafe extern "C" fn illegal_char_after_chr(
+    errbuf: *mut c_char,
+    errbuflen: usize,
+    c: c_int,
+) -> *const c_char {
+    if errbuf.is_null() {
+        return c"".as_ptr();
+    }
+    vim_snprintf(
+        errbuf,
+        errbuflen,
+        c"E535: Illegal character after <%c>".as_ptr(),
+        c,
+    );
+    errbuf
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -387,99 +387,11 @@ const char *did_set_chars_option(optset_T *args)
 
 // did_set_colorcolumn is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
-/// Check if value for 'complete' is valid when 'complete' option is changed.
-const char *did_set_complete(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-  char buffer[LSIZE];
-  uint8_t char_before = NUL;
-
-  for (char *p = *varp; *p;) {
-    memset(buffer, 0, LSIZE);
-    char *buf_ptr = buffer;
-    int escape = 0;
-
-    // Extract substring while handling escaped commas
-    while (*p && (*p != ',' || escape) && buf_ptr < (buffer + LSIZE - 1)) {
-      if (*p == '\\' && *(p + 1) == ',') {
-        escape = 1;  // Mark escape mode
-        p++;         // Skip '\'
-      } else {
-        escape = 0;
-        *buf_ptr++ = *p;
-      }
-      p++;
-    }
-    *buf_ptr = NUL;
-
-    if (vim_strchr(".wbuksid]tUfFo", (uint8_t)(*buffer)) == NULL) {
-      return illegal_char(args->os_errbuf, args->os_errbuflen, (uint8_t)(*buffer));
-    }
-
-    if (vim_strchr("ksF", (uint8_t)(*buffer)) == NULL && *(buffer + 1) != NUL
-        && *(buffer + 1) != '^') {
-      char_before = (uint8_t)(*buffer);
-    } else {
-      char *t;
-      // Test for a number after '^'
-      if ((t = vim_strchr(buffer, '^')) != NULL) {
-        *t++ = NUL;
-        if (!*t) {
-          char_before = '^';
-        } else {
-          for (; *t; t++) {
-            if (!ascii_isdigit(*t)) {
-              char_before = '^';
-              break;
-            }
-          }
-        }
-      }
-    }
-    if (char_before != NUL) {
-      if (args->os_errbuf != NULL) {
-        return illegal_char_after_chr(args->os_errbuf, args->os_errbuflen,
-                                      char_before);
-      }
-      return NULL;
-    }
-    // Skip comma and spaces
-    while (*p == ',' || *p == ' ') {
-      p++;
-    }
-  }
-
-  if (set_cpt_callbacks(args) != OK) {
-    return illegal_char_after_chr(args->os_errbuf, args->os_errbuflen, 'F');
-  }
-  return NULL;
-}
+// did_set_complete is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // did_set_completeitemalign is implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
-/// The 'completeopt' option is changed.
-const char *did_set_completeopt(optset_T *args FUNC_ATTR_UNUSED)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  char *cot = p_cot;
-  unsigned *flags = &cot_flags;
-
-  if (args->os_flags & OPT_LOCAL) {
-    cot = buf->b_p_cot;
-    flags = &buf->b_cot_flags;
-  } else if (!(args->os_flags & OPT_GLOBAL)) {
-    // When using :set, clear the local flags.
-    buf->b_cot_flags = 0;
-  }
-
-  OptStringsFlagsResult cot_result = rs_opt_strings_flags(cot, opt_cot_values, true);
-  if (!cot_result.ok) {
-    return e_invarg;
-  }
-  *flags = cot_result.flags;
-
-  return NULL;
-}
+// did_set_completeopt is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 #ifdef BACKSLASH_IN_FILENAME
 /// The 'completeslash' option is changed.
@@ -541,31 +453,7 @@ const char *did_set_encoding(optset_T *args)
 // expand_set_encoding, expand_set_eventignore, get_eventignore_name, and
 // expand_eiw static are implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
-/// The 'fileformat' option is changed.
-const char *did_set_fileformat(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  const char *oldval = args->os_oldval.string.data;
-  int opt_flags = args->os_flags;
-  if (!MODIFIABLE(buf) && !(opt_flags & OPT_GLOBAL)) {
-    return e_modifiable;
-  }
-
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-
-  redraw_titles();
-  // update flag in swap file
-  ml_setflags(buf);
-  // Redraw needed when switching to/from "mac": a CR in the text
-  // will be displayed differently.
-  if (rs_get_fileformat((buf_T *)buf) == EOL_MAC || *oldval == 'm') {
-    redraw_buf_later(buf, UPD_NOT_VALID);
-  }
-  return NULL;
-}
+// did_set_fileformat is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // get_fileformat_name is implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
@@ -577,36 +465,8 @@ const char *did_set_fileformat(optset_T *args)
 
 
 
-/// The 'iskeyword' option is changed.
-const char *did_set_iskeyword(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  if (varp == &p_isk) {       // only check for global-value
-    if (check_isopt(*varp) == FAIL) {
-      return e_invarg;
-    }
-  } else {                    // fallthrough for local-value
-    return did_set_isopt(args);
-  }
-
-  return NULL;
-}
-
-/// The 'isident' or the 'iskeyword' or the 'isprint' or the 'isfname' option is
-/// changed.
-const char *did_set_isopt(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  // 'isident', 'iskeyword', 'isprint' or 'isfname' option: refill g_chartab[]
-  // If the new option is invalid, use old value.
-  // 'lisp' option: refill g_chartab[] for '-' char
-  if (buf_init_chartab(buf, true) == FAIL) {
-    args->os_restore_chartab = true;  // need to restore it below
-    return e_invarg;                  // error in value
-  }
-  return NULL;
-}
+// did_set_iskeyword is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
+// did_set_isopt is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 /// The 'keymap' option has changed.
 const char *did_set_keymap(optset_T *args)
@@ -673,22 +533,7 @@ const char *did_set_keymap(optset_T *args)
 
 /// The 'showbreak' option is changed.
 
-/// The 'signcolumn' option is changed.
-const char *did_set_signcolumn(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-  const char *oldval = args->os_oldval.string.data;
-  if (check_signcolumn(*varp, varp == &win->w_p_scl ? win : NULL) != OK) {
-    return e_invarg;
-  }
-  // When changing the 'signcolumn' to or from 'number', recompute the
-  // width of the number column if 'number' or 'relativenumber' is set.
-  if ((*oldval == 'n' && *(oldval + 1) == 'u') || win->w_minscwidth == SCL_NUM) {
-    win->w_nrwidth_line_count = 0;
-  }
-  return NULL;
-}
+// did_set_signcolumn is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 
 
@@ -752,135 +597,14 @@ const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat,
 }
 
 
-/// The 'tagcase' option is changed.
-const char *did_set_tagcase(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  int opt_flags = args->os_flags;
-
-  unsigned *flags;
-  char *p;
-
-  if (opt_flags & OPT_LOCAL) {
-    p = buf->b_p_tc;
-    flags = &buf->b_tc_flags;
-  } else {
-    p = p_tc;
-    flags = &tc_flags;
-  }
-
-  if ((opt_flags & OPT_LOCAL) && *p == NUL) {
-    // make the local value empty: use the global value
-    *flags = 0;
-  } else {
-    OptStringsFlagsResult tc_result = rs_opt_strings_flags(p, opt_tc_values, false);
-    if (!tc_result.ok) {
-      return e_invarg;
-    }
-    *flags = tc_result.flags;
-  }
-  return NULL;
-}
+// did_set_tagcase is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // did_set_titleiconstring is implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 
-/// The 'varsofttabstop' option is changed.
-const char *did_set_varsofttabstop(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  char **varp = (char **)args->os_varp;
-
-  if (!(*varp)[0] || ((*varp)[0] == '0' && !(*varp)[1])) {
-    XFREE_CLEAR(buf->b_p_vsts_array);
-    return NULL;
-  }
-
-  for (char *cp = *varp; *cp; cp++) {
-    if (ascii_isdigit(*cp)) {
-      continue;
-    }
-    if (*cp == ',' && cp > *varp && *(cp - 1) != ',') {
-      continue;
-    }
-    return e_invarg;
-  }
-
-  colnr_T *oldarray = buf->b_p_vsts_array;
-  if (tabstop_set(*varp, &(buf->b_p_vsts_array))) {
-    xfree(oldarray);
-  } else {
-    return e_invarg;
-  }
-  return NULL;
-}
-
-/// The 'varstabstop' option is changed.
-const char *did_set_vartabstop(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-
-  if (!(*varp)[0] || ((*varp)[0] == '0' && !(*varp)[1])) {
-    XFREE_CLEAR(buf->b_p_vts_array);
-    return NULL;
-  }
-
-  for (char *cp = *varp; *cp; cp++) {
-    if (ascii_isdigit(*cp)) {
-      continue;
-    }
-    if (*cp == ',' && cp > *varp && *(cp - 1) != ',') {
-      continue;
-    }
-    return e_invarg;
-  }
-
-  colnr_T *oldarray = buf->b_p_vts_array;
-  if (tabstop_set(*varp, &(buf->b_p_vts_array))) {
-    xfree(oldarray);
-    if (rs_foldmethodIsIndent(win)) {
-      rs_foldUpdateAll(win);
-    }
-  } else {
-    return e_invarg;
-  }
-  return NULL;
-}
-
-
-/// The 'virtualedit' option is changed.
-const char *did_set_virtualedit(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-
-  char *ve = p_ve;
-  unsigned *flags = &ve_flags;
-
-  if (args->os_flags & OPT_LOCAL) {
-    ve = win->w_p_ve;
-    flags = &win->w_ve_flags;
-  }
-
-  if ((args->os_flags & OPT_LOCAL) && *ve == NUL) {
-    // make the local value empty: use the global value
-    *flags = 0;
-  } else {
-    OptStringsFlagsResult ve_result = rs_opt_strings_flags(ve, opt_ve_values, true);
-    if (!ve_result.ok) {
-      return e_invarg;
-    }
-    *flags = ve_result.flags;
-    if (strcmp(ve, args->os_oldval.string.data) != 0) {
-      // Recompute cursor position in case the new 've' setting
-      // changes something.
-      validate_virtcol(win);
-      coladvance(win, win->w_virtcol);
-    }
-  }
-  return NULL;
-}
+// did_set_varsofttabstop is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
+// did_set_vartabstop is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
+// did_set_virtualedit is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // expand_set_whichwrap moved to Rust
 
