@@ -130,14 +130,6 @@ static const char e_undo_line_missing[]
 static const char e_write_error_in_undo_file_str[]
   = N_("E829: Write error in undo file: %s");
 
-// used in undo_end() to report number of added and deleted lines
-static int u_newcount, u_oldcount;
-
-// When 'u' flag included in 'cpoptions', we behave like vi.  Need to remember
-// the action that "u" should do.
-static bool undo_undoes = false;
-
-static int lastmark = 0;
 
 /// Get the 'undolevels' value for the current buffer.
 static OptInt get_undolevel(buf_T *buf)
@@ -260,10 +252,6 @@ void nvim_emsg_undojoin_after_undo(void) { emsg(_("E790: undojoin is not allowed
 
 bool nvim_has_cpo_undo(void) { return vim_strchr(p_cpo, CPO_UNDO) != NULL; }
 
-bool nvim_get_undo_undoes(void) { return undo_undoes; }
-
-void nvim_set_undo_undoes(bool val) { undo_undoes = val; }
-
 int nvim_buf_get_b_u_seq_cur(buf_T *buf) { return buf->b_u_seq_cur; }
 
 void nvim_buf_set_b_u_seq_cur(buf_T *buf, int val) { buf->b_u_seq_cur = val; }
@@ -274,27 +262,11 @@ void nvim_buf_set_b_u_seq_last(buf_T *buf, int val) { buf->b_u_seq_last = val; }
 
 bool nvim_buf_ml_is_empty(buf_T *buf) { return buf->b_ml.ml_flags & ML_EMPTY; }
 
-int nvim_get_u_newcount(void) { return u_newcount; }
-
-void nvim_set_u_newcount(int val) { u_newcount = val; }
-
-int nvim_get_u_oldcount(void) { return u_oldcount; }
-
-void nvim_set_u_oldcount(int val) { u_oldcount = val; }
-
-void nvim_msg_ext_set_kind_undo(void) { msg_ext_set_kind("undo"); }
-
 void nvim_change_warning_curbuf(void) { change_warning(curbuf, 0); }
 
 void nvim_msg_oldest_change(void) { msg(_("Already at oldest change"), 0); }
 
 void nvim_msg_newest_change(void) { msg(_("Already at newest change"), 0); }
-
-char *nvim_ml_get_buf_copy(buf_T *buf, linenr_T lnum) { return xstrdup(ml_get_buf(buf, lnum)); }
-
-bool nvim_undo_got_int(void) { return got_int; }
-
-time_t nvim_time_now(void) { return time(NULL); }
 
 void nvim_get_curwin_cursor(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
 {
@@ -373,10 +345,6 @@ const char *nvim_undo_time(int64_t seconds)
                seconds);
   return buf;
 }
-
-int nvim_inc_lastmark(void) { return ++lastmark; }
-
-void nvim_internal_error_undo_time(void) { internal_error("undo_time()"); }
 
 void nvim_semsg_undo_number_not_found(int64_t step) { semsg(_("E830: Undo number %" PRId64 " not found"), step); }
 

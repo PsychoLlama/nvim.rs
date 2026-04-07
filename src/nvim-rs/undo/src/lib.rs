@@ -363,6 +363,69 @@ const UH_EMPTYBUF: c_int = 0x02;
 const UH_RELOAD: c_int = 0x04;
 
 // =============================================================================
+// Undo Module Static State (moved from C undo.c statics)
+// =============================================================================
+
+/// Whether "u" should undo (true) or redo (false). When 'u' is in 'cpoptions',
+/// this alternates between undo and redo. Mirrors C static `undo_undoes`.
+static mut UNDO_UNDOES: bool = false;
+
+/// Number of new lines added during last undo/redo. Mirrors C static `u_newcount`.
+static mut U_NEWCOUNT: c_int = 0;
+
+/// Number of old lines removed during last undo/redo. Mirrors C static `u_oldcount`.
+static mut U_OLDCOUNT: c_int = 0;
+
+/// Counter for mark names used in undo tree traversal. Mirrors C static `lastmark`.
+static mut LASTMARK: c_int = 0;
+
+// Inline accessors for the Rust statics above.
+// These replace the C `nvim_get_*/nvim_set_*/nvim_inc_*` wrapper functions.
+
+#[inline]
+unsafe fn get_undo_undoes() -> bool {
+    UNDO_UNDOES
+}
+
+#[inline]
+unsafe fn set_undo_undoes(val: bool) {
+    UNDO_UNDOES = val;
+}
+
+#[inline]
+unsafe fn get_u_newcount() -> c_int {
+    U_NEWCOUNT
+}
+
+#[inline]
+unsafe fn set_u_newcount(val: c_int) {
+    U_NEWCOUNT = val;
+}
+
+#[inline]
+unsafe fn get_u_oldcount() -> c_int {
+    U_OLDCOUNT
+}
+
+#[inline]
+unsafe fn set_u_oldcount(val: c_int) {
+    U_OLDCOUNT = val;
+}
+
+#[inline]
+unsafe fn inc_lastmark() -> c_int {
+    LASTMARK += 1;
+    LASTMARK
+}
+
+/// Read the C `got_int` global. Uses a volatile read to prevent the compiler
+/// from optimizing away repeated reads in loop conditions.
+#[inline]
+unsafe fn got_int() -> bool {
+    std::ptr::read_volatile(std::ptr::addr_of!(nvim_got_int_global))
+}
+
+// =============================================================================
 // Undo File Format Constants
 // =============================================================================
 
@@ -493,8 +556,6 @@ extern "C" {
 
     // u_undo/u_redo accessors
     fn nvim_has_cpo_undo() -> bool;
-    fn nvim_get_undo_undoes() -> bool;
-    fn nvim_set_undo_undoes(val: bool);
 
     // u_undo_and_forget accessors
     fn nvim_buf_get_b_u_seq_cur(buf: BufHandle) -> c_int;
@@ -504,11 +565,6 @@ extern "C" {
 
     // u_doit accessors
     fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
-    fn nvim_get_u_newcount() -> c_int;
-    fn nvim_set_u_newcount(val: c_int);
-    fn nvim_get_u_oldcount() -> c_int;
-    fn nvim_set_u_oldcount(val: c_int);
-    fn nvim_msg_ext_set_kind_undo();
     fn nvim_change_warning_curbuf();
     #[link_name = "beep_flush"]
     fn nvim_beep_flush();
@@ -516,15 +572,21 @@ extern "C" {
     fn nvim_msg_newest_change();
 
     // Infrastructure for future migration (u_savecommon, etc.)
-    fn nvim_ml_get_buf_copy(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
     #[link_name = "fast_breakcheck"]
     fn nvim_fast_breakcheck();
-    fn nvim_undo_got_int() -> bool;
-    fn nvim_time_now() -> TimeT;
+    /// got_int global (interrupt flag)
+    #[link_name = "got_int"]
+    static nvim_got_int_global: bool;
     fn nvim_get_curwin_cursor(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
     fn nvim_curwin_virtual_active() -> bool;
     #[link_name = "getviscol"]
     fn nvim_getviscol() -> ColnrT;
+    /// msg_ext_set_kind (direct)
+    #[link_name = "msg_ext_set_kind"]
+    fn nvim_msg_ext_set_kind(kind: *const c_char);
+    /// internal_error (direct)
+    #[link_name = "internal_error"]
+    fn nvim_internal_error(where_: *const c_char);
 
     // u_savecommon infrastructure
     fn nvim_buf_set_b_new_change(buf: BufHandle, val: bool);
@@ -554,8 +616,6 @@ extern "C" {
     fn nvim_text_locked_msg();
     #[link_name = "os_time"]
     fn nvim_undo_os_time() -> TimeT;
-    fn nvim_inc_lastmark() -> c_int;
-    fn nvim_internal_error_undo_time();
     fn nvim_semsg_undo_number_not_found(step: i64);
 
     // ==========================================================================
@@ -992,7 +1052,7 @@ unsafe fn u_saveline(buf: BufHandle, lnum: LinenrT) {
     } else {
         nvim_buf_set_b_u_line_colnr(buf, 0);
     }
-    nvim_buf_set_b_u_line_ptr(buf, nvim_ml_get_buf_copy(buf, lnum));
+    nvim_buf_set_b_u_line_ptr(buf, nvim_undo_xstrdup(nvim_ml_get_buf_line(buf, lnum)));
 }
 
 /// Free entry 'uep' and 'n' lines in uep->ue_array[].
@@ -1453,9 +1513,9 @@ pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
     }
 
     if !nvim_has_cpo_undo() {
-        nvim_set_undo_undoes(true);
+        set_undo_undoes(true);
     } else {
-        nvim_set_undo_undoes(!nvim_get_undo_undoes());
+        set_undo_undoes(!get_undo_undoes());
     }
 
     rs_u_doit(count, false, true);
@@ -1470,7 +1530,7 @@ pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
 #[export_name = "u_redo"]
 pub unsafe extern "C" fn rs_u_redo(count: c_int) {
     if !nvim_has_cpo_undo() {
-        nvim_set_undo_undoes(false);
+        set_undo_undoes(false);
     }
 
     rs_u_doit(count, false, true);
@@ -1491,7 +1551,7 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
         count = 1;
     }
 
-    nvim_set_undo_undoes(true);
+    set_undo_undoes(true);
     rs_u_doit(count, true, do_buf_event);
 
     let curhead = nvim_buf_get_b_u_curhead(buf);
@@ -1725,8 +1785,8 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
             nvim_buf_set_op_end_lnum(buf, top + newsize);
         }
 
-        nvim_set_u_newcount(nvim_get_u_newcount() + newsize as c_int);
-        nvim_set_u_oldcount(nvim_get_u_oldcount() + oldsize as c_int);
+        set_u_newcount(get_u_newcount() + newsize as c_int);
+        set_u_oldcount(get_u_oldcount() + oldsize as c_int);
         (*uep).ue_size = oldsize;
         (*uep).ue_array = newarray;
         (*uep).ue_bot = top + newsize + 1;
@@ -1835,8 +1895,8 @@ unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
         return;
     }
 
-    let mut u_newcount = nvim_get_u_newcount();
-    let mut u_oldcount = nvim_get_u_oldcount();
+    let mut u_newcount = get_u_newcount();
+    let mut u_oldcount = get_u_oldcount();
 
     if nvim_buf_ml_is_empty(buf) {
         u_newcount -= 1;
@@ -1944,10 +2004,10 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
         return;
     }
 
-    nvim_set_u_newcount(0);
-    nvim_set_u_oldcount(if nvim_buf_ml_is_empty(buf) { -1 } else { 0 });
+    set_u_newcount(0);
+    set_u_oldcount(if nvim_buf_ml_is_empty(buf) { -1 } else { 0 });
 
-    nvim_msg_ext_set_kind_undo();
+    nvim_msg_ext_set_kind(c"undo".as_ptr());
     let mut count = startcount;
 
     while count > 0 {
@@ -1959,7 +2019,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
         // and more.
         nvim_change_warning_curbuf();
 
-        let undo_undoes = nvim_get_undo_undoes();
+        let undo_undoes = get_undo_undoes();
 
         if undo_undoes {
             let curhead = nvim_buf_get_b_u_curhead(buf);
@@ -2014,7 +2074,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
         }
     }
 
-    let undo_undoes = nvim_get_undo_undoes();
+    let undo_undoes = get_undo_undoes();
     u_undo_end(undo_undoes, false, quiet);
 }
 
@@ -2153,7 +2213,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
         (*uhp).uh_seq = seq_last + 1;
         nvim_buf_set_b_u_seq_cur(buf, seq_last + 1);
 
-        let now = nvim_time_now();
+        let now = libc::time(ptr::null_mut());
         (*uhp).uh_time = now;
         (*uhp).uh_save_nr = 0;
         nvim_buf_set_b_u_time_cur(buf, now + 1);
@@ -2293,11 +2353,12 @@ pub unsafe extern "C" fn rs_u_savecommon(
         let mut lnum = top + 1;
         for i in 0..size {
             nvim_fast_breakcheck();
-            if nvim_undo_got_int() {
+            if got_int() {
                 rs_u_freeentry(uep, i as c_int);
                 return FAIL;
             }
-            *(*uep).ue_array.offset(i as isize) = nvim_ml_get_buf_copy(buf, lnum);
+            *(*uep).ue_array.offset(i as isize) =
+                nvim_undo_xstrdup(nvim_ml_get_buf_line(buf, lnum));
             lnum += 1;
         }
     } else {
@@ -2318,7 +2379,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
     }
 
     nvim_buf_set_b_u_synced(buf, false);
-    nvim_set_undo_undoes(false);
+    set_undo_undoes(false);
 
     OK
 }
@@ -2557,8 +2618,8 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
         rs_u_sync(true);
     }
 
-    nvim_set_u_newcount(0);
-    nvim_set_u_oldcount(if nvim_buf_ml_is_empty(buf) { -1 } else { 0 });
+    set_u_newcount(0);
+    set_u_oldcount(if nvim_buf_ml_is_empty(buf) { -1 } else { 0 });
 
     let mut dosec = sec;
     let mut dofile = file;
@@ -2684,8 +2745,8 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
         // desired state can be anywhere in the undo tree, need to go all over
         // it. We put "nomark" in uh_walk where we have been without success,
         // "mark" where it could possibly be.
-        let mark = nvim_inc_lastmark();
-        let nomark = nvim_inc_lastmark();
+        let mark = inc_lastmark();
+        let nomark = inc_lastmark();
 
         let curhead = nvim_buf_get_b_u_curhead(buf);
         let mut uhp = if curhead.is_null() {
@@ -2828,8 +2889,8 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
     undo_time_to_target(
         buf,
         target,
-        nvim_inc_lastmark() - 2,
-        nvim_inc_lastmark() - 2,
+        inc_lastmark() - 2,
+        inc_lastmark() - 2,
         above,
         &mut did_undo,
     );
@@ -2851,7 +2912,7 @@ unsafe fn undo_time_to_target(
     did_undo: &mut bool,
 ) {
     // First go up the tree as much as needed.
-    while !nvim_undo_got_int() {
+    while !got_int() {
         // Do the change warning now, for the same reason as above.
         nvim_change_warning_curbuf();
 
@@ -2879,7 +2940,7 @@ unsafe fn undo_time_to_target(
     // When back to origin, redo is not needed.
     if target > 0 {
         // And now go down the tree (redo), branching off where needed.
-        while !nvim_undo_got_int() {
+        while !got_int() {
             // Do the change warning now, for the same reason as above.
             nvim_change_warning_curbuf();
 
@@ -2969,7 +3030,7 @@ unsafe fn undo_time_to_target(
             let prev = (*uhp).uh_prev.ptr;
             if prev.is_null() || (*prev).uh_walk != mark {
                 // Need to redo more but can't find it...
-                nvim_internal_error_undo_time();
+                nvim_internal_error(c"undo_time()".as_ptr());
                 break;
             }
         }
@@ -4382,7 +4443,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
     }
 
     // Iteratively serialize UHPs and their UEPs from the top down.
-    let mark = nvim_inc_lastmark();
+    let mark = inc_lastmark();
     let mut uhp = nvim_buf_get_b_u_oldhead(buf);
     while !uhp.is_null() {
         // Serialize current UHP if we haven't seen it
@@ -5143,8 +5204,8 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
     // 1: walk the tree to find all leafs, put the info in "ga".
     // 2: sort the lines
     // 3: display the list
-    let mark = nvim_inc_lastmark();
-    let nomark = nvim_inc_lastmark();
+    let mark = inc_lastmark();
+    let nomark = inc_lastmark();
 
     // We'll collect strings directly in a Vec and then sort and display
     let mut entries: Vec<(*mut c_char, c_int)> = Vec::new();
@@ -5236,7 +5297,7 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
         nvim_msg_start();
         nvim_undo_msg_puts_hl_title(c"number changes  when               saved".as_ptr());
         for (entry, _seq) in &entries {
-            if nvim_undo_got_int() {
+            if got_int() {
                 break;
             }
             nvim_undo_msg_putchar(b'\n' as c_int);
