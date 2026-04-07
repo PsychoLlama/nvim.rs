@@ -476,3 +476,53 @@ sctx_T *nvim_modeline_sctx_save_and_set(int lnum) {
   current_sctx = (sctx_T){ .sc_sid = SID_MODELINE, .sc_lnum = lnum }; return saved;
 }
 void nvim_modeline_sctx_restore(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
+
+// Phase 3: chars option and signcolumn helpers
+#include "nvim/api/private/helpers.h"
+#include "nvim/api/win_config.h"
+#include "nvim/charset.h"
+#include "nvim/drawscreen.h"
+#include "nvim/grid.h"
+#include "nvim/optionstr.h"
+const char *nvim_win_get_p_fcs(const win_T *win) { return win ? win->w_p_fcs : NULL; }
+const void *nvim_win_get_p_lcs_addr(const win_T *win) { return win ? (const void *)&win->w_p_lcs : NULL; }
+const void *nvim_win_get_p_fcs_addr(const win_T *win) { return win ? (const void *)&win->w_p_fcs : NULL; }
+const void *nvim_get_p_lcs_addr(void) { return (const void *)&p_lcs; }
+const void *nvim_get_p_fcs_addr(void) { return (const void *)&p_fcs; }
+lcs_chars_T *nvim_win_get_lcs_chars_ptr(win_T *win) { return win ? &win->w_p_lcs_chars : NULL; }
+void nvim_win_set_lcs_chars(win_T *win, const lcs_chars_T *val) { if (win && val) { win->w_p_lcs_chars = *val; } }
+void nvim_win_set_fcs_chars(win_T *win, const fcs_chars_T *val) { if (win && val) { win->w_p_fcs_chars = *val; } }
+schar_T nvim_schar_from_str(const char *str) { return schar_from_str(str); }
+bool nvim_parse_border_opt(char *border_opt) {
+  WinConfig fconfig = WIN_CONFIG_INIT;
+  Error err = ERROR_INIT;
+  bool result = parse_winborder(&fconfig, border_opt, &err);
+  api_clear_error(&err);
+  return result;
+}
+void nvim_redraw_all_later_not_valid(void) { redraw_all_later(UPD_NOT_VALID); }
+// Iterate all tab windows with empty local value, call set_chars_option
+const char *nvim_for_all_tab_windows_set_chars(int what, char *errbuf, size_t errbuflen) {
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    char *opt = (what == kListchars) ? wp->w_p_lcs : wp->w_p_fcs;
+    if (*opt == NUL) {
+      const char *errmsg = set_chars_option(wp, opt, (CharsOption)what, true, errbuf, errbuflen);
+      if (errmsg != NULL) {
+        return errmsg;
+      }
+    }
+  }
+  return NULL;
+}
+// Check all tab windows, apply both lcs and fcs for each window
+const char *nvim_for_all_tab_windows_check_impl(void) {
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (set_chars_option(wp, wp->w_p_lcs, kListchars, true, NULL, 0) != NULL) {
+      return "E834: Conflicts with value of 'listchars'";
+    }
+    if (set_chars_option(wp, wp->w_p_fcs, kFillchars, true, NULL, 0) != NULL) {
+      return "E835: Conflicts with value of 'fillchars'";
+    }
+  }
+  return NULL;
+}

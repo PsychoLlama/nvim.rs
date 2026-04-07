@@ -45,6 +45,15 @@ const char *did_set_encoding(optset_T *args);
 const char *did_set_keymap(optset_T *args);
 const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat, bool statuscolumn);
 
+// Phase 3: Chars, signcolumn, border (Rust)
+#include "nvim/buffer_defs.h"  // win_T
+const char *set_chars_option(win_T *wp, const char *value, CharsOption what, bool apply,
+                             char *errbuf, size_t errbuflen);
+const char *did_set_chars_option(optset_T *args);
+const char *check_chars_options(void);
+int check_signcolumn(char *scl, win_T *wp);
+bool parse_border_opt(char *border_opt);
+
 // Implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
 char *illegal_char(char *errbuf, size_t errbuflen, int c);
 

@@ -87,7 +87,7 @@ extern "C" {
     fn nvim_option_get_values_len(opt: *mut c_void) -> usize;
 
     // Window handle (defined in window_shim)
-    fn nvim_get_curwin() -> *const c_void;
+    fn nvim_get_curwin() -> *mut c_void;
 
     // autocmd event names
     fn get_event_name_no_group(xp: *mut ExpandT, idx: c_int, win: bool) -> *mut c_char;

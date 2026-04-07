@@ -719,6 +719,552 @@ pub unsafe extern "C" fn rs_is_valid_chars_option(
     result.error == CharsParseError::Ok
 }
 
+// =============================================================================
+// set_chars_option and check_chars_options (Phase 3)
+// =============================================================================
+
+/// Listchars struct matching C's lcs_chars_T layout exactly.
+/// Must stay in sync with buffer_defs.h lcs_chars_T.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LcsChars {
+    pub eol: ScharT,
+    pub ext: ScharT,
+    pub prec: ScharT,
+    pub nbsp: ScharT,
+    pub space: ScharT,
+    pub tab1: ScharT,
+    pub tab2: ScharT,
+    pub tab3: ScharT,
+    pub lead: ScharT,
+    pub trail: ScharT,
+    pub multispace: *mut ScharT,
+    pub leadmultispace: *mut ScharT,
+    pub conceal: ScharT,
+}
+
+/// Fillchars struct matching C's fcs_chars_T layout exactly.
+/// Must stay in sync with buffer_defs.h fcs_chars_T.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FcsChars {
+    pub stl: ScharT,
+    pub stlnc: ScharT,
+    pub wbr: ScharT,
+    pub horiz: ScharT,
+    pub horizup: ScharT,
+    pub horizdown: ScharT,
+    pub vert: ScharT,
+    pub vertleft: ScharT,
+    pub vertright: ScharT,
+    pub verthoriz: ScharT,
+    pub fold: ScharT,
+    pub foldopen: ScharT,
+    pub foldclosed: ScharT,
+    pub foldsep: ScharT,
+    pub foldinner: ScharT,
+    pub diff: ScharT,
+    pub msgsep: ScharT,
+    pub eob: ScharT,
+    pub lastline: ScharT,
+    pub trunc: ScharT,
+    pub truncrl: ScharT,
+}
+
+/// fcs_tab field names in order (matching C's fcs_tab[])
+const FCS_NAMES: &[&str] = &[
+    "stl",
+    "stlnc",
+    "wbr",
+    "horiz",
+    "horizup",
+    "horizdown",
+    "vert",
+    "vertleft",
+    "vertright",
+    "verthoriz",
+    "fold",
+    "foldopen",
+    "foldclose",
+    "foldsep",
+    "foldinner",
+    "diff",
+    "msgsep",
+    "eob",
+    "lastline",
+    "trunc",
+    "truncrl",
+];
+
+/// lcs_tab field names in order (matching C's lcs_tab[])
+const LCS_NAMES: &[&str] = &[
+    "eol",
+    "extends",
+    "nbsp",
+    "precedes",
+    "space",
+    "tab",
+    "lead",
+    "trail",
+    "conceal",
+    "multispace",
+    "leadmultispace",
+];
+
+/// Index of "tab" in LCS_NAMES
+const LCS_TAB_NAME_IDX: usize = 5;
+/// Index of "multispace" in LCS_NAMES
+const LCS_MULTISPACE_NAME_IDX: usize = 9;
+/// Index of "leadmultispace" in LCS_NAMES
+const LCS_LEADMULTISPACE_NAME_IDX: usize = 10;
+
+// External functions for set_chars_option
+extern "C" {
+    fn nvim_schar_from_str(str: *const c_char) -> ScharT;
+    fn nvim_ptr2cells(p: *const c_char) -> c_int;
+    fn nvim_xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    fn nvim_win_get_p_lcs(win: *const c_void) -> *const c_char;
+    fn nvim_win_get_p_fcs(win: *const c_void) -> *const c_char;
+    fn nvim_win_set_lcs_chars(win: *mut c_void, val: *const LcsChars);
+    fn nvim_win_set_fcs_chars(win: *mut c_void, val: *const FcsChars);
+    fn nvim_win_get_lcs_chars_ptr(win: *mut c_void) -> *mut LcsChars;
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_for_all_tab_windows_check_impl() -> *const c_char;
+    #[link_name = "p_lcs"]
+    static p_lcs_global: *const c_char;
+    #[link_name = "p_fcs"]
+    static p_fcs_global: *const c_char;
+    #[link_name = "e_invarg"]
+    static e_invarg: *const c_char;
+}
+
+/// Format a field error message into errbuf.
+/// Returns errbuf if non-null, otherwise empty string literal.
+unsafe fn field_value_err(
+    errbuf: *mut c_char,
+    errbuflen: usize,
+    is_width_err: bool,
+    field_name: &str,
+) -> *const c_char {
+    if errbuf.is_null() {
+        return c"".as_ptr();
+    }
+    let prefix = if is_width_err {
+        "E1512: Wrong character width for field \""
+    } else {
+        "E1511: Wrong number of characters for field \""
+    };
+    let suffix = "\"";
+    let name_bytes = field_name.as_bytes();
+    let mut out_pos = 0usize;
+    let max_out = errbuflen.saturating_sub(1);
+
+    for &b in prefix.as_bytes() {
+        if out_pos >= max_out {
+            break;
+        }
+        *errbuf.add(out_pos) = b as c_char;
+        out_pos += 1;
+    }
+    for &b in name_bytes {
+        if out_pos >= max_out {
+            break;
+        }
+        *errbuf.add(out_pos) = b as c_char;
+        out_pos += 1;
+    }
+    for &b in suffix.as_bytes() {
+        if out_pos >= max_out {
+            break;
+        }
+        *errbuf.add(out_pos) = b as c_char;
+        out_pos += 1;
+    }
+    *errbuf.add(out_pos) = 0;
+    errbuf
+}
+
+/// Set fillchar at field index in FcsChars struct.
+fn fcs_set_field(chars: &mut FcsChars, idx: usize, val: ScharT) {
+    match idx {
+        0 => chars.stl = val,
+        1 => chars.stlnc = val,
+        2 => chars.wbr = val,
+        3 => chars.horiz = val,
+        4 => chars.horizup = val,
+        5 => chars.horizdown = val,
+        6 => chars.vert = val,
+        7 => chars.vertleft = val,
+        8 => chars.vertright = val,
+        9 => chars.verthoriz = val,
+        10 => chars.fold = val,
+        11 => chars.foldopen = val,
+        12 => chars.foldclosed = val,
+        13 => chars.foldsep = val,
+        14 => chars.foldinner = val,
+        15 => chars.diff = val,
+        16 => chars.msgsep = val,
+        17 => chars.eob = val,
+        18 => chars.lastline = val,
+        19 => chars.trunc = val,
+        20 => chars.truncrl = val,
+        _ => {}
+    }
+}
+
+/// Set listchar at field index in LcsChars struct (lcs_tab order, excluding tab/multispace).
+fn lcs_set_field(chars: &mut LcsChars, idx: usize, val: ScharT) {
+    match idx {
+        0 => chars.eol = val,
+        1 => chars.ext = val,
+        2 => chars.nbsp = val,
+        3 => chars.prec = val,
+        4 => chars.space = val,
+        // 5 = "tab" handled separately (tab1/tab2/tab3)
+        6 => chars.lead = val,
+        7 => chars.trail = val,
+        8 => chars.conceal = val,
+        // 9 = multispace, 10 = leadmultispace handled separately
+        _ => {}
+    }
+}
+
+/// Handle setting 'listchars' or 'fillchars'.
+/// `what`: 0 = kFillchars, 1 = kListchars (matching C's CharsOption enum)
+///
+/// # Safety
+/// All pointers must be valid. `wp` is the window handle (opaque *mut c_void).
+#[allow(clippy::too_many_lines)]
+#[export_name = "set_chars_option"]
+pub unsafe extern "C" fn set_chars_option(
+    wp: *mut c_void,
+    value: *const c_char,
+    what: c_int,
+    apply: bool,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    let is_listchars = what != 0; // kListchars = 1, kFillchars = 0
+
+    // Use global value if local is empty (matching C's behavior)
+    let effective_value = if is_listchars {
+        if wp.is_null() {
+            value
+        } else {
+            let local = nvim_win_get_p_lcs(wp);
+            if !local.is_null() && *local == 0 {
+                p_lcs_global
+            } else {
+                value
+            }
+        }
+    } else if wp.is_null() {
+        value
+    } else {
+        let local = nvim_win_get_p_fcs(wp);
+        if !local.is_null() && *local == 0 {
+            p_fcs_global
+        } else {
+            value
+        }
+    };
+
+    // Pass 1: validate and count multispace lengths
+    let mut last_multispace: *const c_char = std::ptr::null();
+    let mut last_leadmultispace: *const c_char = std::ptr::null();
+    let mut multispace_len: c_int = 0;
+    let mut lead_multispace_len: c_int = 0;
+
+    {
+        let err = parse_chars_value(
+            effective_value,
+            is_listchars,
+            false,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut last_multispace,
+            &mut last_leadmultispace,
+            &mut multispace_len,
+            &mut lead_multispace_len,
+            errbuf,
+            errbuflen,
+        );
+        if !err.is_null() {
+            return err;
+        }
+    }
+
+    if !apply {
+        return std::ptr::null();
+    }
+
+    // Pass 2: set defaults, then apply values
+    let mut fcs: FcsChars = std::mem::zeroed();
+    let mut lcs: LcsChars = std::mem::zeroed();
+
+    if is_listchars {
+        // Allocate multispace buffers
+        lcs.multispace = if multispace_len > 0 {
+            let buf = nvim_xmalloc(((multispace_len as usize) + 1) * std::mem::size_of::<ScharT>())
+                .cast::<ScharT>();
+            *buf.add(multispace_len as usize) = 0;
+            buf
+        } else {
+            std::ptr::null_mut()
+        };
+        lcs.leadmultispace = if lead_multispace_len > 0 {
+            let buf =
+                nvim_xmalloc(((lead_multispace_len as usize) + 1) * std::mem::size_of::<ScharT>())
+                    .cast::<ScharT>();
+            *buf.add(lead_multispace_len as usize) = 0;
+            buf
+        } else {
+            std::ptr::null_mut()
+        };
+    } else {
+        // fillchars defaults (from fcs_tab)
+        for i in 0..FCS_NAMES.len() {
+            let def_ptr = rs_fcs_default(i as c_int);
+            let fallback_ptr = rs_fcs_fallback(i as c_int);
+            let c = if !def_ptr.is_null() && nvim_ptr2cells(def_ptr) == 1 {
+                nvim_schar_from_str(def_ptr)
+            } else if !fallback_ptr.is_null() {
+                nvim_schar_from_str(fallback_ptr)
+            } else {
+                0
+            };
+            fcs_set_field(&mut fcs, i, c);
+        }
+    }
+
+    // Pass 2: apply parsed values into scratch structs
+    {
+        let err = parse_chars_value(
+            effective_value,
+            is_listchars,
+            true,
+            &mut lcs,
+            &mut fcs,
+            &mut last_multispace,
+            &mut last_leadmultispace,
+            &mut multispace_len,
+            &mut lead_multispace_len,
+            errbuf,
+            errbuflen,
+        );
+        if !err.is_null() {
+            if is_listchars {
+                xfree(lcs.multispace.cast::<c_void>());
+                xfree(lcs.leadmultispace.cast::<c_void>());
+            }
+            return err;
+        }
+    }
+
+    // Apply to window struct
+    if is_listchars {
+        // Free old multispace arrays first
+        let old_lcs = nvim_win_get_lcs_chars_ptr(wp);
+        if !old_lcs.is_null() {
+            xfree((*old_lcs).multispace.cast::<c_void>());
+            xfree((*old_lcs).leadmultispace.cast::<c_void>());
+        }
+        nvim_win_set_lcs_chars(wp, &lcs);
+    } else {
+        nvim_win_set_fcs_chars(wp, &fcs);
+    }
+
+    std::ptr::null()
+}
+
+/// Inner parse loop for set_chars_option.
+/// Pass 1 (apply_mode=false): validates and counts multispace lengths.
+/// Pass 2 (apply_mode=true): fills lcs/fcs structs with parsed values.
+///
+/// # Safety
+/// All pointers must be valid.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+unsafe fn parse_chars_value(
+    value: *const c_char,
+    is_listchars: bool,
+    apply_mode: bool,
+    lcs: *mut LcsChars,
+    fcs: *mut FcsChars,
+    last_multispace: &mut *const c_char,
+    last_leadmultispace: &mut *const c_char,
+    multispace_len: &mut c_int,
+    lead_multispace_len: &mut c_int,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    if value.is_null() || *value == 0 {
+        return std::ptr::null();
+    }
+
+    let names: &[&str] = if is_listchars { LCS_NAMES } else { FCS_NAMES };
+    let mut p = value;
+
+    while *p != 0 {
+        // Find which field name matches at position p
+        let mut matched_idx = None;
+        for (i, name) in names.iter().enumerate() {
+            let name_len = name.len();
+            let mut ok = true;
+            for (j, &nb) in name.as_bytes().iter().enumerate() {
+                if *p.add(j) as u8 != nb {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok && *p.add(name_len) == b':' as c_char {
+                matched_idx = Some(i);
+                break;
+            }
+        }
+
+        let Some(idx) = matched_idx else {
+            return e_invarg;
+        };
+
+        let name = names[idx];
+        let name_len = name.len();
+        let mut s = p.add(name_len + 1); // advance past "name:"
+
+        if is_listchars && idx == LCS_MULTISPACE_NAME_IDX {
+            if apply_mode {
+                let mut pos = 0usize;
+                while *s != 0 && *s != b',' as c_char {
+                    let c = rs_get_encoded_char_adv(&mut s);
+                    if p == *last_multispace && !lcs.is_null() {
+                        *(*lcs).multispace.add(pos) = c;
+                        pos += 1;
+                    }
+                }
+            } else {
+                *last_multispace = p;
+                *multispace_len = 0;
+                while *s != 0 && *s != b',' as c_char {
+                    let c = rs_get_encoded_char_adv(&mut s);
+                    if c == 0 {
+                        return field_value_err(errbuf, errbuflen, true, name);
+                    }
+                    *multispace_len += 1;
+                }
+                if *multispace_len == 0 {
+                    return field_value_err(errbuf, errbuflen, false, name);
+                }
+            }
+        } else if is_listchars && idx == LCS_LEADMULTISPACE_NAME_IDX {
+            if apply_mode {
+                let mut pos = 0usize;
+                while *s != 0 && *s != b',' as c_char {
+                    let c = rs_get_encoded_char_adv(&mut s);
+                    if p == *last_leadmultispace && !lcs.is_null() {
+                        *(*lcs).leadmultispace.add(pos) = c;
+                        pos += 1;
+                    }
+                }
+            } else {
+                *last_leadmultispace = p;
+                *lead_multispace_len = 0;
+                while *s != 0 && *s != b',' as c_char {
+                    let c = rs_get_encoded_char_adv(&mut s);
+                    if c == 0 {
+                        return field_value_err(errbuf, errbuflen, true, name);
+                    }
+                    *lead_multispace_len += 1;
+                }
+                if *lead_multispace_len == 0 {
+                    return field_value_err(errbuf, errbuflen, false, name);
+                }
+            }
+        } else {
+            // Regular single-char field (or tab which has 2-3 chars)
+            if *s == 0 {
+                return field_value_err(errbuf, errbuflen, false, name);
+            }
+            let c1 = rs_get_encoded_char_adv(&mut s);
+            if c1 == 0 {
+                return field_value_err(errbuf, errbuflen, true, name);
+            }
+
+            let is_tab = is_listchars && idx == LCS_TAB_NAME_IDX;
+            let mut c2: ScharT = 0;
+            let mut c3: ScharT = 0;
+
+            if is_tab {
+                if *s == 0 {
+                    return field_value_err(errbuf, errbuflen, false, name);
+                }
+                c2 = rs_get_encoded_char_adv(&mut s);
+                if c2 == 0 {
+                    return field_value_err(errbuf, errbuflen, true, name);
+                }
+                // Optional 3rd character
+                if *s != 0 && *s != b',' as c_char {
+                    c3 = rs_get_encoded_char_adv(&mut s);
+                    if c3 == 0 {
+                        return field_value_err(errbuf, errbuflen, true, name);
+                    }
+                }
+            }
+
+            if *s != 0 && *s != b',' as c_char {
+                return field_value_err(errbuf, errbuflen, false, name);
+            }
+
+            if apply_mode {
+                if is_tab && !lcs.is_null() {
+                    (*lcs).tab1 = c1;
+                    (*lcs).tab2 = c2;
+                    (*lcs).tab3 = c3;
+                } else if is_listchars && !lcs.is_null() {
+                    lcs_set_field(&mut *lcs, idx, c1);
+                } else if !is_listchars && !fcs.is_null() {
+                    fcs_set_field(&mut *fcs, idx, c1);
+                }
+            }
+        }
+        p = s;
+
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+
+    std::ptr::null()
+}
+
+/// Check all global and local values of 'listchars' and 'fillchars'.
+/// Returns an untranslated error message if any of them is invalid, NULL otherwise.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "check_chars_options"]
+pub unsafe extern "C" fn check_chars_options() -> *const c_char {
+    let curwin = nvim_get_curwin();
+
+    let err = set_chars_option(curwin, p_lcs_global, 1, false, std::ptr::null_mut(), 0);
+    if !err.is_null() {
+        return c"E834: Conflicts with value of 'listchars'".as_ptr();
+    }
+
+    let err = set_chars_option(curwin, p_fcs_global, 0, false, std::ptr::null_mut(), 0);
+    if !err.is_null() {
+        return c"E835: Conflicts with value of 'fillchars'".as_ptr();
+    }
+
+    let err = nvim_for_all_tab_windows_check_impl();
+    if !err.is_null() {
+        return err;
+    }
+
+    std::ptr::null()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

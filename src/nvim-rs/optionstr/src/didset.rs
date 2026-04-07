@@ -865,7 +865,7 @@ const OPT_LOCAL: c_int = 0x02;
 const UPD_NOT_VALID: c_int = 40;
 // OK/FAIL (from nvim/vim_defs.h)
 const OK: c_int = 1;
-// FAIL = 0, not needed explicitly
+const FAIL: c_int = 0;
 
 // C globals accessed via link_name
 extern "C" {
@@ -1021,17 +1021,85 @@ pub unsafe extern "C" fn did_set_virtualedit(args: *const c_void) -> *const c_ch
 }
 
 // =============================================================================
-// did_set_signcolumn
+// check_signcolumn and did_set_signcolumn
 // =============================================================================
-
-extern "C" {
-    fn check_signcolumn(scl: *mut c_char, wp: *mut c_void) -> c_int;
-}
 
 extern "C" {
     fn nvim_win_get_p_scl(wp: *mut c_void) -> *mut c_char;
     fn nvim_win_set_nrwidth_line_count(wp: *mut c_void, val: c_int);
     fn nvim_win_get_minscwidth(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_maxscwidth(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_scwidth(wp: *mut c_void) -> c_int;
+    fn nvim_win_set_scwidth(wp: *mut c_void, val: c_int);
+    fn nvim_win_set_minscwidth(wp: *mut c_void, val: c_int);
+    fn nvim_win_set_maxscwidth(wp: *mut c_void, val: c_int);
+    fn nvim_win_get_p_nu(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_p_rnu(wp: *mut c_void) -> c_int;
+    fn rs_parse_signcolumn(val: *const c_char) -> SigncolumnResult;
+}
+
+/// Result of parsing a signcolumn value (matches C's SigncolumnResult / validate.rs)
+#[repr(C)]
+struct SigncolumnResult {
+    min_width: c_int,
+    max_width: c_int,
+    valid: c_int,
+}
+
+/// SCL_NUM value: "number" mode width indicator
+const SCL_NUM: c_int = -2;
+
+/// Validate 'signcolumn' value and optionally apply to window.
+///
+/// When `scl` is non-null, uses that value; otherwise uses `wp->w_p_scl`.
+/// When `wp` is null, only validates without setting.
+/// Returns OK (0) when valid, FAIL (-1) otherwise.
+///
+/// # Safety
+/// `scl` must be a valid C string pointer or null. `wp` must be a valid win_T* or null.
+#[export_name = "check_signcolumn"]
+pub unsafe extern "C" fn check_signcolumn(scl: *mut c_char, wp: *mut c_void) -> c_int {
+    let val = if !scl.is_null() {
+        scl.cast_const()
+    } else if !wp.is_null() {
+        nvim_win_get_p_scl(wp).cast_const()
+    } else {
+        return FAIL;
+    };
+
+    if val.is_null() || *val == 0 {
+        return FAIL;
+    }
+
+    let r = rs_parse_signcolumn(val);
+    if r.valid == 0 {
+        return FAIL;
+    }
+
+    if wp.is_null() {
+        return OK;
+    }
+
+    // "number" mode only applies when 'number' or 'relativenumber' is set
+    if r.min_width == SCL_NUM && nvim_win_get_p_nu(wp) == 0 && nvim_win_get_p_rnu(wp) == 0 {
+        nvim_win_set_minscwidth(wp, 0);
+        nvim_win_set_maxscwidth(wp, 1);
+    } else {
+        nvim_win_set_minscwidth(wp, r.min_width);
+        nvim_win_set_maxscwidth(wp, r.max_width);
+    }
+
+    let minscwidth = nvim_win_get_minscwidth(wp);
+    let maxscwidth = nvim_win_get_maxscwidth(wp);
+    let scwidth = nvim_win_get_scwidth(wp);
+    let new_scwidth = if minscwidth <= 0 {
+        0
+    } else {
+        maxscwidth.min(scwidth)
+    };
+    nvim_win_set_scwidth(wp, minscwidth.max(new_scwidth));
+
+    OK
 }
 
 /// The 'signcolumn' option is changed.
@@ -1062,13 +1130,12 @@ pub unsafe extern "C" fn did_set_signcolumn(args: *const c_void) -> *const c_cha
     // When changing to/from 'number', recompute the width of the number column
     let oldval_nu =
         !oldval.is_null() && *oldval == b'n' as c_char && *oldval.add(1) == b'u' as c_char;
-    let scl_num: c_int = -2; // SCL_NUM from nvim/sign_defs.h
     let minscwidth = if win.is_null() {
         0
     } else {
         nvim_win_get_minscwidth(win)
     };
-    if oldval_nu || minscwidth == scl_num {
+    if oldval_nu || minscwidth == SCL_NUM {
         nvim_win_set_nrwidth_line_count(win, 0);
     }
     std::ptr::null()
@@ -1724,4 +1791,153 @@ pub unsafe extern "C" fn did_set_statustabline_rulerformat(
     }
 
     errmsg
+}
+
+// =============================================================================
+// parse_border_opt (Phase 3)
+// =============================================================================
+
+extern "C" {
+    fn nvim_parse_border_opt(border_opt: *mut c_char) -> bool;
+}
+
+/// Validate the 'border' option value.
+///
+/// Calls the C helper `nvim_parse_border_opt` which wraps `parse_winborder`.
+///
+/// # Safety
+/// `border_opt` must be a valid mutable C string pointer.
+#[export_name = "parse_border_opt"]
+pub unsafe extern "C" fn parse_border_opt(border_opt: *mut c_char) -> bool {
+    nvim_parse_border_opt(border_opt)
+}
+
+// =============================================================================
+// did_set_chars_option (Phase 3)
+// =============================================================================
+
+extern "C" {
+    fn set_chars_option(
+        wp: *mut c_void,
+        value: *const c_char,
+        what: c_int,
+        apply: bool,
+        errbuf: *mut c_char,
+        errbuflen: usize,
+    ) -> *const c_char;
+    fn clear_string_option(pp: *mut *mut c_char);
+    fn nvim_win_get_p_lcs_addr(win: *const c_void) -> *const c_void;
+    fn nvim_win_get_p_fcs_addr(win: *const c_void) -> *const c_void;
+    fn nvim_get_p_lcs_addr() -> *const c_void;
+    fn nvim_get_p_fcs_addr() -> *const c_void;
+    fn nvim_for_all_tab_windows_set_chars(
+        what: c_int,
+        errbuf: *mut c_char,
+        errbuflen: usize,
+    ) -> *const c_char;
+    fn nvim_redraw_all_later_not_valid();
+}
+
+/// kListchars (from optionstr.h CharsOption enum)
+const K_LISTCHARS: c_int = 1;
+/// kFillchars (from optionstr.h CharsOption enum)
+const K_FILLCHARS: c_int = 0;
+
+/// Handle a global chars option change (global 'listchars' or 'fillchars').
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn did_set_global_chars_option_impl(
+    win: *mut c_void,
+    val: *const c_char,
+    what: c_int,
+    opt_flags: c_int,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    // Get pointer to the window-local option string
+    let local_addr = if what == K_LISTCHARS {
+        nvim_win_get_p_lcs_addr(win)
+            .cast_mut()
+            .cast::<*mut c_char>()
+    } else {
+        nvim_win_get_p_fcs_addr(win)
+            .cast_mut()
+            .cast::<*mut c_char>()
+    };
+
+    // Determine whether to apply: apply when local is empty OR not global-only change
+    let local_empty = if local_addr.is_null() {
+        true
+    } else {
+        let local = *local_addr;
+        !local.is_null() && *local == 0
+    };
+    let apply = local_empty || (opt_flags & OPT_GLOBAL) == 0;
+
+    let errmsg = set_chars_option(win, val, what, apply, errbuf, errbuflen);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+
+    // If not global-only, clear the window-local value
+    if (opt_flags & OPT_GLOBAL) == 0 && !local_addr.is_null() {
+        clear_string_option(local_addr);
+    }
+
+    // Apply to all other tab windows with empty local value
+    let errmsg = nvim_for_all_tab_windows_set_chars(what, errbuf, errbuflen);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+
+    nvim_redraw_all_later_not_valid();
+    std::ptr::null()
+}
+
+/// The 'fillchars' option or the 'listchars' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[allow(clippy::similar_names)]
+#[export_name = "did_set_chars_option"]
+pub unsafe extern "C" fn did_set_chars_option(args: *const c_void) -> *const c_char {
+    let win = nvim_optset_get_win(args);
+    let varp = nvim_optset_get_varp(args);
+    let opt_flags = nvim_optset_get_flags(args);
+    let errbuf = nvim_optset_get_errbuf(args);
+    let errbuflen = nvim_optset_get_errbuflen(args);
+
+    // Get the string value from varp
+    let val = *(varp as *const *const c_char);
+
+    // Determine which option changed by comparing varp addresses
+    let global_lcs = nvim_get_p_lcs_addr();
+    let global_fcs = nvim_get_p_fcs_addr();
+    let local_lcs = if win.is_null() {
+        std::ptr::null()
+    } else {
+        nvim_win_get_p_lcs_addr(win)
+    };
+    let local_fcs = if win.is_null() {
+        std::ptr::null()
+    } else {
+        nvim_win_get_p_fcs_addr(win)
+    };
+
+    if varp == global_lcs.cast_mut() {
+        // global 'listchars'
+        did_set_global_chars_option_impl(win, val, K_LISTCHARS, opt_flags, errbuf, errbuflen)
+    } else if varp == global_fcs.cast_mut() {
+        // global 'fillchars'
+        did_set_global_chars_option_impl(win, val, K_FILLCHARS, opt_flags, errbuf, errbuflen)
+    } else if !local_lcs.is_null() && varp == local_lcs.cast_mut() {
+        // local 'listchars'
+        set_chars_option(win, val, K_LISTCHARS, true, errbuf, errbuflen)
+    } else if !local_fcs.is_null() && varp == local_fcs.cast_mut() {
+        // local 'fillchars'
+        set_chars_option(win, val, K_FILLCHARS, true, errbuf, errbuflen)
+    } else {
+        std::ptr::null()
+    }
 }
