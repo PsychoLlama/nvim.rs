@@ -71,5 +71,7 @@ bcount_t get_region_bytecount(buf_T *buf, linenr_T start_lnum, linenr_T end_lnum
 char *skip_comment(char *line, bool process, bool include_space, bool *is_comment);
 int do_join(size_t count, bool insert_space, bool save_undo, bool use_formatoptions, bool setmark);
 void rs_shift_block(oparg_T *oap, int amount);
+void block_prep(oparg_T *oap, struct block_def *bdp, linenr_T lnum, bool is_del);
+void charwise_block_prep(pos_T start, pos_T end, struct block_def *bdp, linenr_T lnum, bool inclusive);
 
 EXTERN LuaRef repeat_luaref INIT( = LUA_NOREF);  ///< LuaRef for "."
