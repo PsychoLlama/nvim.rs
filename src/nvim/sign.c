@@ -121,6 +121,34 @@ void nvim_sign_ns_push(Integer ns) { kv_push(sign_ns, ns); }
 int nvim_sign_create_namespace_cstr(const char *name) { return (int)nvim_create_namespace(cstr_as_string(name)); }
 int nvim_sign_namespace_exists(const char *name) { return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0; }
 
+// typval_T / list_T / dict_T accessor shims for Rust FFI
+// These let Rust access C typval internals without knowing the struct layout.
+// Note: nvim_tv_get_type, nvim_tv_get_dict, nvim_tv_get_list are in typval.c
+// Note: nvim_tv_list_len is in eval_shim.c
+varnumber_T nvim_tv_get_number_val(const typval_T *tv) { return tv->vval.v_number; }
+void nvim_rettv_set_number(typval_T *rettv, varnumber_T num)
+{ rettv->v_type = VAR_NUMBER; rettv->vval.v_number = num; }
+void nvim_rettv_alloc_list(typval_T *rettv, int len) { tv_list_alloc_ret(rettv, len); }
+list_T *nvim_rettv_get_list(typval_T *rettv) { return rettv->vval.v_list; }
+// Indexed access to argvars / rettv (pointer arithmetic as C shim)
+typval_T *nvim_argvars_at(typval_T *argvars, int idx) { return &argvars[idx]; }
+// sign_map iteration by value (for getdefined)
+sign_T *nvim_sign_map_get_nth_value(int idx)
+{
+  sign_T *sp; int current_idx = 0;
+  map_foreach_value(&sign_map, sp, { if (current_idx++ == idx) { return sp; } });
+  return NULL;
+}
+// TV list indexed item typval access
+typval_T *nvim_tv_list_item_tv_at(list_T *l, int idx)
+{
+  int i = 0;
+  TV_LIST_ITER_CONST(l, li, { if (i++ == idx) { return (typval_T *)TV_LIST_ITEM_TV(li); } });
+  return NULL;
+}
+// sign_map iteration size (for free_all)
+int nvim_sign_map_size(void) { return (int)map_size(&sign_map); }
+
 int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char *text, const char *linehl, const char *texthl, const char *culhl, const char *numhl, int prio)
 {
   cstr_t *key;
@@ -202,13 +230,6 @@ linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
   }
   rs_foldOpenCursor();
   return lnum;
-}
-void nvim_sign_free_all_impl(void)
-{
-  cstr_t name; kvec_t(cstr_t) names = KV_INITIAL_VALUE;
-  map_foreach_key(&sign_map, name, { kv_push(names, name); });
-  for (size_t i = 0; i < kv_size(names); i++) { nvim_sign_undefine_by_name_impl(kv_A(names, i)); }
-  kv_destroy(names);
 }
 int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
 {
@@ -340,31 +361,6 @@ void nvim_sign_list_defined_impl(sign_T *sp)
     }
   }
 }
-dict_T *nvim_sign_get_info_dict_impl(sign_T *sp)
-{
-  dict_T *d = tv_dict_alloc();
-  tv_dict_add_str(d, S_LEN("name"), sp->sn_name);
-  if (sp->sn_icon != NULL) {
-    tv_dict_add_str(d, S_LEN("icon"), sp->sn_icon);
-  }
-  if (sp->sn_text[0]) {
-    char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
-    rs_describe_sign_text(buf, SIGN_WIDTH * MAX_SCHAR_SIZE, sp->sn_text);
-    tv_dict_add_str(d, S_LEN("text"), buf);
-  }
-  if (sp->sn_priority > 0) {
-    tv_dict_add_nr(d, S_LEN("priority"), sp->sn_priority);
-  }
-  static char *arg[] = { "linehl", "texthl", "culhl", "numhl" };
-  int hl[] = { sp->sn_line_hl, sp->sn_text_hl, sp->sn_cul_hl, sp->sn_num_hl };
-  for (int i = 0; i < 4; i++) {
-    if (hl[i] > 0) {
-      const char *p = get_highlight_name_ext(NULL, hl[i] - 1, false);
-      tv_dict_add_str(d, arg[i], strlen(arg[i]), p ? p : "NONE");
-    }
-  }
-  return d;
-}
 dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark)
 {
   dict_T *d = tv_dict_alloc();
@@ -429,304 +425,4 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
     kv_destroy(signs);
   }
 }
-int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
-{
-  if (name == NULL) {
-    name = tv_dict_get_string(dict, "name", false);
-    if (name == NULL || name[0] == NUL) {
-      return -1;
-    }
-  }
-  char *icon = NULL;
-  char *linehl = NULL;
-  char *text = NULL;
-  char *texthl = NULL;
-  char *culhl = NULL;
-  char *numhl = NULL;
-  int prio = -1;
-  if (dict != NULL) {
-    icon = tv_dict_get_string(dict, "icon", false);
-    linehl = tv_dict_get_string(dict, "linehl", false);
-    text = tv_dict_get_string(dict, "text", false);
-    texthl = tv_dict_get_string(dict, "texthl", false);
-    culhl = tv_dict_get_string(dict, "culhl", false);
-    numhl = tv_dict_get_string(dict, "numhl", false);
-    prio = (int)tv_dict_get_number_def(dict, "priority", -1);
-  }
-  return rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1;
-}
-void nvim_sign_define_multiple_impl(list_T *l, list_T *retlist)
-{
-  TV_LIST_ITER_CONST(l, li, {
-    int retval = TV_LIST_ITEM_TV(li)->v_type == VAR_DICT
-                 ? nvim_sign_define_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict)
-                 : (emsg(_(e_dictreq)), -1);
-    tv_list_append_number(retlist, retval);
-  });
-}
-int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T *name_tv, typval_T *buf_tv, dict_T *dict)
-{
-  dictitem_T *di;
-  int id = 0;
-  bool notanum = false;
-  if (id_tv == NULL) {
-    di = tv_dict_find(dict, "id", -1);
-    if (di != NULL) {
-      id_tv = &di->di_tv;
-    }
-  }
-  if (id_tv != NULL) {
-    id = (int)tv_get_number_chk(id_tv, &notanum);
-    if (notanum) {
-      return -1;
-    }
-    if (id < 0) {
-      emsg(_(e_invarg));
-      return -1;
-    }
-  }
-  char *group = NULL;
-  if (group_tv == NULL) {
-    di = tv_dict_find(dict, "group", -1);
-    if (di != NULL) {
-      group_tv = &di->di_tv;
-    }
-  }
-  if (group_tv != NULL) {
-    group = (char *)tv_get_string_chk(group_tv);
-    if (group == NULL) {
-      return -1;
-    }
-    if (group[0] == NUL) {
-      group = NULL;
-    }
-  }
-  char *name = NULL;
-  if (name_tv == NULL) {
-    di = tv_dict_find(dict, "name", -1);
-    if (di != NULL) {
-      name_tv = &di->di_tv;
-    }
-  }
-  if (name_tv == NULL) {
-    return -1;
-  }
-  name = (char *)tv_get_string_chk(name_tv);
-  if (name == NULL) {
-    return -1;
-  }
-  if (buf_tv == NULL) {
-    di = tv_dict_find(dict, "buffer", -1);
-    if (di != NULL) {
-      buf_tv = &di->di_tv;
-    }
-  }
-  if (buf_tv == NULL) {
-    return -1;
-  }
-  buf_T *buf = get_buf_arg(buf_tv);
-  if (buf == NULL) {
-    return -1;
-  }
-  linenr_T lnum = 0;
-  di = tv_dict_find(dict, "lnum", -1);
-  if (di != NULL) {
-    lnum = tv_get_lnum(&di->di_tv);
-    if (lnum <= 0) {
-      emsg(_(e_invarg));
-      return -1;
-    }
-  }
-  int prio = -1;
-  di = tv_dict_find(dict, "priority", -1);
-  if (di != NULL) {
-    prio = (int)tv_get_number_chk(&di->di_tv, &notanum);
-    if (notanum) {
-      return -1;
-    }
-  }
-  uint32_t uid = (uint32_t)id;
-  if (rs_sign_place(&uid, group, name, buf, lnum, prio) == OK) {
-    return (int)uid;
-  }
-  return -1;
-}
-int nvim_sign_unplace_from_dict_impl(typval_T *group_tv, dict_T *dict)
-{
-  dictitem_T *di;
-  int id = 0;
-  buf_T *buf = NULL;
-  char *group = (group_tv != NULL) ? (char *)tv_get_string(group_tv)
-                                   : tv_dict_get_string(dict, "group", false);
-  if (group != NULL && group[0] == NUL) {
-    group = NULL;
-  }
-  if (dict != NULL) {
-    if ((di = tv_dict_find(dict, "buffer", -1)) != NULL) {
-      buf = get_buf_arg(&di->di_tv);
-      if (buf == NULL) {
-        return -1;
-      }
-    }
-    if (tv_dict_find(dict, "id", -1) != NULL) {
-      id = (int)tv_dict_get_number(dict, "id");
-      if (id <= 0) {
-        emsg(_(e_invarg));
-        return -1;
-      }
-    }
-  }
-  return rs_sign_unplace(buf, id, group, 0) - 1;
-}
-void nvim_sign_undefine_multiple_impl(list_T *l, list_T *retlist)
-{
-  TV_LIST_ITER_CONST(l, li, {
-    char *name = (char *)tv_get_string_chk(TV_LIST_ITEM_TV(li));
-    tv_list_append_number(retlist, name && rs_sign_undefine_by_name(name) == OK ? 0 : -1);
-  });
-}
-void nvim_f_sign_define_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  if (argvars[0].v_type == VAR_LIST && argvars[1].v_type == VAR_UNKNOWN) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow);
-    nvim_sign_define_multiple_impl(argvars[0].vval.v_list, rettv->vval.v_list);
-    return;
-  }
-  rettv->vval.v_number = -1;
-  char *name = (char *)tv_get_string_chk(&argvars[0]);
-  if (name == NULL) { return; }
-  if (tv_check_for_opt_dict_arg(argvars, 1) == FAIL) { return; }
-  dict_T *d = argvars[1].v_type == VAR_DICT ? argvars[1].vval.v_dict : NULL;
-  rettv->vval.v_number = nvim_sign_define_from_dict_impl(name, d);
-}
-void nvim_f_sign_getdefined_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  tv_list_alloc_ret(rettv, 0);
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    sign_T *sp;
-    map_foreach_value(&sign_map, sp, {
-      tv_list_append_dict(rettv->vval.v_list, nvim_sign_get_info_dict_impl(sp));
-    });
-  } else {
-    sign_T *sp = pmap_get(cstr_t)(&sign_map, tv_get_string(&argvars[0]));
-    if (sp != NULL) {
-      tv_list_append_dict(rettv->vval.v_list, nvim_sign_get_info_dict_impl(sp));
-    }
-  }
-}
-void nvim_f_sign_getplaced_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  buf_T *buf = NULL;
-  linenr_T lnum = 0;
-  int sign_id = 0;
-  const char *group = NULL;
-  bool notanum = false;
-  tv_list_alloc_ret(rettv, 0);
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    buf = get_buf_arg(&argvars[0]);
-    if (buf == NULL) {
-      return;
-    }
-    if (argvars[1].v_type != VAR_UNKNOWN) {
-      if (tv_check_for_nonnull_dict_arg(argvars, 1) == FAIL) {
-        return;
-      }
-      dictitem_T *di;
-      dict_T *dict = argvars[1].vval.v_dict;
-      if ((di = tv_dict_find(dict, "lnum", -1)) != NULL) {
-        lnum = tv_get_lnum(&di->di_tv);
-        if (lnum <= 0) {
-          return;
-        }
-      }
-      if ((di = tv_dict_find(dict, "id", -1)) != NULL) {
-        sign_id = (int)tv_get_number_chk(&di->di_tv, &notanum);
-        if (notanum) {
-          return;
-        }
-      }
-      if ((di = tv_dict_find(dict, "group", -1)) != NULL) {
-        group = tv_get_string_chk(&di->di_tv);
-        if (group == NULL) {
-          return;
-        }
-        if (*group == NUL) {
-          group = NULL;
-        }
-      }
-    }
-  }
-  sign_get_placed(buf, lnum, sign_id, group, rettv->vval.v_list);
-}
-void nvim_f_sign_jump_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  rettv->vval.v_number = -1;
-  bool notanum = false;
-  int id = (int)tv_get_number_chk(&argvars[0], &notanum);
-  if (notanum) { return; }
-  if (id <= 0) { emsg(_(e_invarg)); return; }
-  char *group = (char *)tv_get_string_chk(&argvars[1]);
-  if (group == NULL) { return; }
-  if (group[0] == NUL) { group = NULL; }
-  buf_T *buf = get_buf_arg(&argvars[2]);
-  if (buf == NULL) { return; }
-  rettv->vval.v_number = nvim_sign_jump_impl(id, group, buf);
-}
-void nvim_f_sign_place_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  dict_T *dict = NULL;
-  rettv->vval.v_number = -1;
-  if (argvars[4].v_type != VAR_UNKNOWN) {
-    if (tv_check_for_nonnull_dict_arg(argvars, 4) == FAIL) {
-      return;
-    }
-    dict = argvars[4].vval.v_dict;
-  }
-  rettv->vval.v_number = nvim_sign_place_from_dict_impl(&argvars[0], &argvars[1], &argvars[2], &argvars[3], dict);
-}
-void nvim_f_sign_placelist_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  if (argvars[0].v_type != VAR_LIST) { emsg(_(e_listreq)); return; }
-  TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
-    int sign_id = TV_LIST_ITEM_TV(li)->v_type == VAR_DICT
-                  ? nvim_sign_place_from_dict_impl(NULL, NULL, NULL, NULL, TV_LIST_ITEM_TV(li)->vval.v_dict)
-                  : (emsg(_(e_dictreq)), -1);
-    tv_list_append_number(rettv->vval.v_list, sign_id);
-  });
-}
-void nvim_f_sign_undefine_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  if (argvars[0].v_type == VAR_LIST && argvars[1].v_type == VAR_UNKNOWN) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow);
-    nvim_sign_undefine_multiple_impl(argvars[0].vval.v_list, rettv->vval.v_list);
-    return;
-  }
-  rettv->vval.v_number = -1;
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    nvim_sign_free_all_impl(); rettv->vval.v_number = 0;
-  } else {
-    const char *name = tv_get_string_chk(&argvars[0]);
-    if (name == NULL) { return; }
-    if (rs_sign_undefine_by_name(name) == OK) { rettv->vval.v_number = 0; }
-  }
-}
-void nvim_f_sign_unplace_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  dict_T *dict = NULL;
-  rettv->vval.v_number = -1;
-  if (tv_check_for_string_arg(argvars, 0) == FAIL || tv_check_for_opt_dict_arg(argvars, 1) == FAIL) { return; }
-  if (argvars[1].v_type != VAR_UNKNOWN) { dict = argvars[1].vval.v_dict; }
-  rettv->vval.v_number = nvim_sign_unplace_from_dict_impl(&argvars[0], dict);
-}
-void nvim_f_sign_unplacelist_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  if (argvars[0].v_type != VAR_LIST) { emsg(_(e_listreq)); return; }
-  TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
-    int retval = TV_LIST_ITEM_TV(li)->v_type == VAR_DICT
-                 ? nvim_sign_unplace_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict)
-                 : (emsg(_(e_dictreq)), -1);
-    tv_list_append_number(rettv->vval.v_list, retval);
-  });
-}
+

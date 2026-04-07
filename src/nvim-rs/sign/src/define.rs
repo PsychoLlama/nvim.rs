@@ -415,7 +415,10 @@ extern "C" {
         prio: c_int,
     ) -> c_int;
     fn nvim_sign_undefine_by_name_impl(name: *const c_char) -> c_int;
-    fn nvim_sign_free_all_impl();
+
+    // Sign map iteration (for free_all)
+    fn nvim_sign_map_size() -> c_int;
+    fn nvim_sign_map_get_nth_key(idx: c_int) -> *mut c_char;
 }
 
 /// Resolve a highlight group name to its ID.
@@ -539,7 +542,19 @@ pub unsafe extern "C" fn rs_sign_undefine_by_name_wrapper(name: *const c_char) -
 /// Must be called during cleanup only.
 #[unsafe(export_name = "free_signs")]
 pub unsafe extern "C" fn rs_free_signs() {
-    nvim_sign_free_all_impl();
+    // Collect all keys first to avoid mutation-during-iteration
+    let size = nvim_sign_map_size();
+    #[allow(clippy::cast_sign_loss)]
+    let mut names = std::vec::Vec::with_capacity(size as usize);
+    for i in 0..size {
+        let k = nvim_sign_map_get_nth_key(i);
+        if !k.is_null() {
+            names.push(k);
+        }
+    }
+    for name in names {
+        nvim_sign_undefine_by_name_impl(name);
+    }
 }
 
 // =============================================================================
