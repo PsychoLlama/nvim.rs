@@ -30,12 +30,16 @@
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
 #include "nvim/register.h"
+#include "nvim/popupmenu.h"
 #include "nvim/state.h"
+#include "nvim/undo.h"
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
+#include "nvim/syntax_bridge.h"
 #include "nvim/textformat.h"
 #include "nvim/ui.h"
 #include "edit_shim.c.generated.h"
+extern int ins_apply_autocmds(event_T event);
 bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
 bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
 bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
@@ -327,4 +331,99 @@ void nvim_ins_bs_softtabstop_want_col(bool in_indent, colnr_T *want_col_out,
   // Insertion loop starts at space_vcol and inserts until want_vcol
   *start_vcol_out = space_vcol;
   *want_vcol_out = want_vcol;
+}
+
+// ============================================================================
+// ins_redraw accessors for Rust redraw.rs
+// ============================================================================
+
+/// True when CursorMovedI should fire (cursor moved and popup not visible).
+bool nvim_ins_redraw_cursormoved_pending(void)
+{
+  return has_event(EVENT_CURSORMOVEDI)
+    && (last_cursormoved_win != curwin
+        || !equalpos(last_cursormoved, curwin->w_cursor))
+    && !pum_visible();
+}
+
+/// True when syntax highlighting is present in curwin and must_redraw is set.
+bool nvim_ins_redraw_syntax_must_redraw(void) { return syntax_present(curwin) && must_redraw; }
+
+/// Trigger CursorMovedI and update last_cursormoved tracking.
+void nvim_ins_redraw_trigger_cursormovedi(void)
+{
+  update_curswant();
+  ins_apply_autocmds(EVENT_CURSORMOVEDI);
+  last_cursormoved_win = curwin;
+  last_cursormoved = curwin->w_cursor;
+}
+
+/// True when b_last_changedtick_i differs from current changedtick (not popup).
+bool nvim_curbuf_textchangedi_pending(void)
+{
+  return curbuf->b_last_changedtick_i != buf_get_changedtick(curbuf) && !pum_visible();
+}
+
+/// Apply TextChangedI autocmds, sync changedtick, u_save if tick changed.
+void nvim_edit_apply_textchangedi(void)
+{
+  aco_save_T aco;
+  varnumber_T tick = buf_get_changedtick(curbuf);
+  aucmd_prepbuf(&aco, curbuf);
+  apply_autocmds(EVENT_TEXTCHANGEDI, NULL, NULL, false, curbuf);
+  aucmd_restbuf(&aco);
+  curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
+  if (tick != buf_get_changedtick(curbuf)) {
+    u_save(curwin->w_cursor.lnum, (linenr_T)(curwin->w_cursor.lnum + 1));
+  }
+}
+
+/// True when b_last_changedtick_pum differs from current changedtick (popup visible).
+bool nvim_curbuf_textchangedp_pending(void)
+{
+  return curbuf->b_last_changedtick_pum != buf_get_changedtick(curbuf) && pum_visible();
+}
+
+/// Apply TextChangedP autocmds, sync changedtick, u_save if tick changed.
+void nvim_edit_apply_textchangedp(void)
+{
+  aco_save_T aco;
+  varnumber_T tick = buf_get_changedtick(curbuf);
+  aucmd_prepbuf(&aco, curbuf);
+  apply_autocmds(EVENT_TEXTCHANGEDP, NULL, NULL, false, curbuf);
+  aucmd_restbuf(&aco);
+  curbuf->b_last_changedtick_pum = buf_get_changedtick(curbuf);
+  if (tick != buf_get_changedtick(curbuf)) {
+    u_save(curwin->w_cursor.lnum, (linenr_T)(curwin->w_cursor.lnum + 1));
+  }
+}
+
+/// True when BufModifiedSet should fire (b_changed_invalid set, popup not visible).
+bool nvim_curbuf_bufmodifiedset_pending(void)
+{
+  return has_event(EVENT_BUFMODIFIEDSET) && curbuf->b_changed_invalid && !pum_visible();
+}
+
+/// Apply BufModifiedSet autocmds and clear b_changed_invalid.
+void nvim_edit_apply_bufmodifiedset(void)
+{
+  apply_autocmds(EVENT_BUFMODIFIEDSET, NULL, NULL, false, curbuf);
+  curbuf->b_changed_invalid = false;
+}
+
+/// Final screen-update sequence for ins_redraw (after all autocmd triggers).
+void nvim_ins_redraw_screen_update(void)
+{
+  pum_check_clear();
+  show_cursor_info_later(false);
+  if (must_redraw) {
+    update_screen();
+  } else {
+    redraw_statuslines();
+    if (clear_cmdline || redraw_cmdline || redraw_mode) {
+      showmode();
+    }
+  }
+  setcursor();
+  emsg_on_display = false;
 }

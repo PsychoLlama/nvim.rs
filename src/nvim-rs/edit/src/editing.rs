@@ -30,7 +30,6 @@ extern "C" {
     fn nvim_ins_copychar(lnum: LinenrT) -> c_int;
     fn nvim_edit_ins_ctrl_ey(tc: c_int) -> c_int;
     // -- ins_ctrl_v / ins_digraph dependencies --
-    fn nvim_edit_ins_redraw_impl(ready: c_int);
     fn nvim_redrawing() -> c_int;
     fn char_avail() -> bool;
     fn nvim_putchar(c: c_int, highlight: c_int);
@@ -158,7 +157,7 @@ const CTRL_V_STR: &[u8; 2] = b"\x16\0";
 unsafe fn ins_ctrl_v_impl() {
     let mut did_putchar = false;
 
-    nvim_edit_ins_redraw_impl(0);
+    crate::redraw::ins_redraw_impl(false);
 
     if nvim_redrawing() != 0 && !char_avail() {
         nvim_putchar(c_int::from(b'^'), 1);
@@ -217,7 +216,7 @@ unsafe fn ins_digraph_impl() -> c_int {
 
     nvim_set_pc_status_unset();
     if nvim_redrawing() != 0 && !char_avail() {
-        nvim_edit_ins_redraw_impl(0);
+        crate::redraw::ins_redraw_impl(false);
         nvim_putchar(c_int::from(b'?'), 1);
         did_putchar = true;
         add_to_showcmd_c(c_int::from(b'\x0b')); // Ctrl_K = 0x0b
@@ -240,9 +239,9 @@ unsafe fn ins_digraph_impl() -> c_int {
     if c != c_int::from(ESC) {
         did_putchar = false;
         if nvim_redrawing() != 0 && !char_avail() {
-            nvim_edit_ins_redraw_impl(0);
+            crate::redraw::ins_redraw_impl(false);
             if char2cells(c) == 1 {
-                nvim_edit_ins_redraw_impl(0);
+                crate::redraw::ins_redraw_impl(false);
                 nvim_putchar(c, 1);
                 did_putchar = true;
             }

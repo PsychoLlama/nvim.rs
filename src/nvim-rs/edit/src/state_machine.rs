@@ -114,9 +114,6 @@ extern "C" {
     // --- validate cursor ---
     fn nvim_validate_cursor_curwin_wrapper();
 
-    // --- ins_redraw (delegate to C composite to avoid same-crate FFI loop) ---
-    fn nvim_edit_ins_redraw_impl(ready: c_int);
-
     // --- scroll bind ---
     fn nvim_curwin_get_p_scb() -> bool;
     fn do_check_scrollbind(flag: bool);
@@ -285,7 +282,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     // Redraw when no chars waiting
-    unsafe { nvim_edit_ins_redraw_impl(1) };
+    unsafe { crate::redraw::ins_redraw_impl(true) };
 
     if unsafe { nvim_curwin_get_p_scb() } {
         unsafe { do_check_scrollbind(true) };
@@ -461,7 +458,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
 
     // CTRL-\ CTRL-N/O/G: normal mode or CTRL-O without cursor move
     if unsafe { (*s).c } == CTRL_BSL {
-        unsafe { nvim_edit_ins_redraw_impl(0) };
+        unsafe { crate::redraw::ins_redraw_impl(false) };
         let c2 = unsafe {
             no_mapping += 1;
             allow_keys += 1;

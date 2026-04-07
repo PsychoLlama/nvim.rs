@@ -37,7 +37,6 @@ const K_OPT_BO_FLAG_REGISTER: c_int = 0x40;
 extern "C" {
     fn nvim_redrawing() -> c_int;
     fn char_avail() -> bool;
-    fn nvim_edit_ins_redraw_impl(ready: c_int);
     fn nvim_putchar(c: c_int, highlight: c_int);
     fn edit_unputchar();
     fn nvim_set_pc_status_unset();
@@ -94,7 +93,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
     // If we are going to wait for a character, show a `"`.
     nvim_set_pc_status_unset();
     if nvim_redrawing() != 0 && !char_avail() {
-        nvim_edit_ins_redraw_impl(0);
+        crate::redraw::ins_redraw_impl(false);
         nvim_putchar(c_int::from(b'"'), 1);
         add_to_showcmd_c(CTRL_R);
     }
