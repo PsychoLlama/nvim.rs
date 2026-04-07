@@ -373,6 +373,8 @@ extern "C" {
     fn vim_strsave_escaped(string: *const u8, esc_chars: *const u8) -> *mut u8;
     fn vim_strsave_shellescape(string: *const u8, do_special: bool, do_newline: bool) -> *mut u8;
     fn vim_strsave_fnameescape(fname: *const u8, what: c_int) -> *mut u8;
+    #[allow(clashing_extern_declarations)]
+    fn tv_get_string(tv: *const c_void) -> *const u8;
 
     // Phase 3 inlining: nr2char, str2float, copy, deepcopy, gettext
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
@@ -548,7 +550,7 @@ pub unsafe extern "C" fn rs_f_escape(
     let mut len: usize = 0;
     let s = p3_misc_tv_get_string(argvars, &raw mut len);
     let arg1 = arg_at_p2(argvars, 1);
-    let esc_chars = p3_misc_tv_get_string_ptr(arg1);
+    let esc_chars = tv_get_string(arg1);
     let result = vim_strsave_escaped(s, esc_chars);
     p3_misc_tv_set_string(rettv, result);
 }
@@ -564,7 +566,7 @@ pub unsafe extern "C" fn rs_f_shellescape(
     _fptr: *mut c_void,
 ) {
     let do_special = nvim_eval_non_zero_arg(argvars, 1) != 0;
-    let s = p3_misc_tv_get_string_ptr(argvars);
+    let s = tv_get_string(argvars);
     let result = vim_strsave_shellescape(s, do_special, do_special);
     p3_misc_tv_set_string(rettv, result);
 }
@@ -579,7 +581,7 @@ pub unsafe extern "C" fn rs_f_fnameescape(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    let s = p3_misc_tv_get_string_ptr(argvars);
+    let s = tv_get_string(argvars);
     let result = vim_strsave_fnameescape(s, VSE_NONE);
     p3_misc_tv_set_string(rettv, result);
 }

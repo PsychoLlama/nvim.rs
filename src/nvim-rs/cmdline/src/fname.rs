@@ -352,13 +352,23 @@ pub unsafe extern "C" fn vim_strsave_fnameescape_rs(
         _ => c" \t\n*?[{`$\\%#'\"|!<".as_ptr(),
     };
 
+    if fname.is_null() {
+        return std::ptr::null_mut();
+    }
+
     let mut p = vim_strsave_escaped(fname, esc_chars);
+    if p.is_null() {
+        return std::ptr::null_mut();
+    }
 
     // For csh-like shells, also escape '!' with an extra backslash.
     if what == 1 && rs_csh_like_shell() != 0 {
         let s = vim_strsave_escaped(p, c"!".as_ptr());
         xfree(p);
         p = s;
+        if p.is_null() {
+            return std::ptr::null_mut();
+        }
     }
 
     // '>' and '+' are special at the start of some commands (:edit, :write).
