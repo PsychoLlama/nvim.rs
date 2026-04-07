@@ -38,6 +38,13 @@ const char *did_set_varsofttabstop(optset_T *args);
 const char *did_set_vartabstop(optset_T *args);
 const char *did_set_complete(optset_T *args);
 
+// Phase 2: Complex did_set_* callbacks (Rust)
+const char *did_set_background(optset_T *args);
+const char *did_set_buftype(optset_T *args);
+const char *did_set_encoding(optset_T *args);
+const char *did_set_keymap(optset_T *args);
+const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat, bool statuscolumn);
+
 // Implemented in Rust (src/nvim-rs/optionstr/src/errors.rs)
 char *illegal_char(char *errbuf, size_t errbuflen, int c);
 

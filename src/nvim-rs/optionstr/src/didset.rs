@@ -883,11 +883,11 @@ extern "C" {
     static mut cot_flags: c_uint;
     // values arrays (extern pointers to array data)
     #[link_name = "opt_ve_values"]
-    static opt_ve_values: *const *const c_char;
+    static opt_ve_values: [*const c_char; 7];
     #[link_name = "opt_tc_values"]
-    static opt_tc_values: *const *const c_char;
+    static opt_tc_values: [*const c_char; 6];
     #[link_name = "opt_cot_values"]
-    static opt_cot_values: *const *const c_char;
+    static opt_cot_values: [*const c_char; 12];
     #[link_name = "e_invarg"]
     static e_invarg: *const c_char;
     #[link_name = "e_modifiable"]
@@ -922,7 +922,7 @@ pub unsafe extern "C" fn did_set_completeopt(args: *const c_void) -> *const c_ch
         (p_cot, std::ptr::addr_of_mut!(cot_flags))
     };
 
-    let result = rs_opt_strings_flags(cot, opt_cot_values, true);
+    let result = rs_opt_strings_flags(cot, opt_cot_values.as_ptr(), true);
     if !result.ok {
         return e_invarg;
     }
@@ -959,7 +959,7 @@ pub unsafe extern "C" fn did_set_tagcase(args: *const c_void) -> *const c_char {
         return std::ptr::null();
     }
 
-    let result = rs_opt_strings_flags(p, opt_tc_values, false);
+    let result = rs_opt_strings_flags(p, opt_tc_values.as_ptr(), false);
     if !result.ok {
         return e_invarg;
     }
@@ -997,7 +997,7 @@ pub unsafe extern "C" fn did_set_virtualedit(args: *const c_void) -> *const c_ch
         return std::ptr::null();
     }
 
-    let result = rs_opt_strings_flags(ve, opt_ve_values, true);
+    let result = rs_opt_strings_flags(ve, opt_ve_values.as_ptr(), true);
     if !result.ok {
         return e_invarg;
     }
@@ -1409,4 +1409,319 @@ pub unsafe extern "C" fn did_set_complete(args: *const c_void) -> *const c_char 
     }
 
     std::ptr::null()
+}
+
+// =============================================================================
+// Phase 2: Complex did_set_* Callbacks
+// =============================================================================
+
+extern "C" {
+    // Background
+    fn init_highlight(both: bool, reset: bool);
+    fn get_var_value(name: *const c_char) -> *mut c_void;
+    fn do_unlet(name: *const c_char, len: usize, forceit: bool) -> c_int;
+    fn free_string_option(p: *mut c_char);
+    fn check_string_option(pp: *mut *mut c_char);
+    fn xstrdup(str_: *const c_char) -> *mut c_char;
+    fn nvim_notify_all_terminals_theme(dark: c_int);
+    fn nvim_optset_oldval_first_char(args: *const c_void) -> c_int;
+
+    // Buftype
+    fn nvim_buf_get_b_p_bt(buf: *mut c_void) -> *mut c_char;
+    fn nvim_buf_get_terminal(buf: *mut c_void) -> c_int;
+    fn nvim_buf_buftype_prompt_init(buf: *mut c_void);
+    fn nvim_win_get_status_height(wp: *mut c_void) -> c_int;
+    fn nvim_win_set_redr_status(wp: *mut c_void, val: c_int);
+    fn redraw_later(wp: *mut c_void, kind: c_int);
+    fn nvim_buf_set_b_help(buf: *mut c_void, val: c_int);
+    #[link_name = "rs_global_stl_height"]
+    fn nvim_global_stl_height() -> c_int;
+
+    // Keymap
+    fn nvim_get_secure() -> c_int;
+    fn nvim_set_secure(val: c_int);
+    fn keymap_init() -> *const c_char;
+    fn nvim_buf_get_b_p_keymap(buf: *mut c_void) -> *mut c_char;
+    fn nvim_buf_get_b_p_iminsert(buf: *mut c_void) -> i64;
+    fn nvim_buf_get_b_p_imsearch(buf: *mut c_void) -> i64;
+    fn nvim_buf_set_b_p_iminsert(buf: *mut c_void, val: c_int);
+    fn nvim_buf_set_b_p_imsearch(buf: *mut c_void, val: c_int);
+    fn set_iminsert_global(buf: *mut c_void);
+    fn set_imsearch_global(buf: *mut c_void);
+    fn status_redraw_buf(buf: *mut c_void);
+    fn rs_valid_name(val: *const c_char, allowed: *const c_char) -> c_int;
+
+    // Encoding
+    fn nvim_optset_varp_is_p_fenc(args: *const c_void) -> c_int;
+    fn nvim_optset_varp_is_p_enc(args: *const c_void) -> c_int;
+    fn nvim_enc_canonize(enc: *mut c_char) -> *mut c_char;
+    fn nvim_spell_reload();
+
+    // Statusline/rulerformat
+    #[allow(dead_code)]
+    fn nvim_get_ru_wid() -> c_int;
+    fn nvim_set_ru_wid(val: c_int);
+    fn nvim_win_get_floating_win(wp: *mut c_void) -> c_int;
+    fn nvim_win_config_float(wp: *mut c_void);
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def_val: c_int) -> c_int;
+    fn nvim_optset_stl_get_default(args: *const c_void) -> *const c_char;
+    fn nvim_get_kOptStatusline() -> c_int;
+    fn comp_col();
+}
+
+extern "C" {
+    #[link_name = "e_unsupportedoption"]
+    static e_unsupportedoption: *const c_char;
+    #[link_name = "p_bg"]
+    static mut p_bg: *mut c_char;
+    #[link_name = "p_ruf"]
+    static p_ruf: *const c_char;
+    #[link_name = "opt_bt_values"]
+    static opt_bt_values: [*const c_char; 9];
+}
+
+// UPD_VALID from drawscreen.h
+const UPD_VALID: c_int = 10;
+// B_IMODE constants
+const B_IMODE_USE_INSERT: i64 = -1;
+const B_IMODE_NONE: i64 = 0;
+const B_IMODE_LMAP: i64 = 1;
+
+/// The 'background' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_background"]
+pub unsafe extern "C" fn did_set_background(args: *const c_void) -> *const c_char {
+    let errmsg = did_set_str_generic(args);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+
+    let old_first = nvim_optset_oldval_first_char(args) as u8;
+    if !p_bg.is_null() && old_first == *p_bg as u8 {
+        return std::ptr::null();
+    }
+
+    let dark = !p_bg.is_null() && *p_bg == b'd' as c_char;
+    init_highlight(false, false);
+
+    let new_dark = !p_bg.is_null() && *p_bg == b'd' as c_char;
+    if dark != new_dark && !get_var_value(c"g:colors_name".as_ptr()).is_null() {
+        do_unlet(c"g:colors_name".as_ptr(), b"g:colors_name".len(), true);
+        free_string_option(p_bg);
+        p_bg = xstrdup(if dark {
+            c"dark".as_ptr()
+        } else {
+            c"light".as_ptr()
+        });
+        check_string_option(&raw mut p_bg);
+        init_highlight(false, false);
+    }
+
+    nvim_notify_all_terminals_theme(c_int::from(dark));
+    std::ptr::null()
+}
+
+/// The 'buftype' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_buftype"]
+pub unsafe extern "C" fn did_set_buftype(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let win = nvim_optset_get_win(args);
+
+    let bt = nvim_buf_get_b_p_bt(buf);
+    let has_terminal = nvim_buf_get_terminal(buf) != 0;
+    let bt0 = if bt.is_null() { 0u8 } else { *bt as u8 };
+
+    if (has_terminal && bt0 != b't')
+        || (!has_terminal && bt0 == b't')
+        || !rs_opt_strings_flags(bt, opt_bt_values.as_ptr(), false).ok
+    {
+        return e_invarg;
+    }
+
+    if bt0 == b'p' {
+        nvim_buf_buftype_prompt_init(buf);
+    }
+
+    if nvim_win_get_status_height(win) != 0 || nvim_global_stl_height() != 0 {
+        nvim_win_set_redr_status(win, 1);
+        redraw_later(win, UPD_VALID);
+    }
+
+    nvim_buf_set_b_help(buf, c_int::from(bt0 == b'h'));
+    redraw_titles();
+    std::ptr::null()
+}
+
+/// One of the 'encoding', 'fileencoding', or 'makeencoding' options is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_encoding"]
+pub unsafe extern "C" fn did_set_encoding(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let opt_flags = nvim_optset_get_flags(args);
+
+    if nvim_optset_varp_is_p_fenc(args) != 0 {
+        if nvim_buf_get_b_p_ma(buf) == 0 && opt_flags != OPT_GLOBAL {
+            return e_modifiable;
+        }
+        if !vim_strchr(*varp, b',' as c_int).is_null() {
+            return e_invarg;
+        }
+        redraw_titles();
+        ml_setflags(buf);
+    }
+
+    let p = nvim_enc_canonize(*varp);
+    xfree((*varp).cast::<c_void>());
+    *varp = p;
+
+    if nvim_optset_varp_is_p_enc(args) != 0 {
+        // Only utf-8 allowed for 'encoding'
+        let enc_utf8 = c"utf-8".as_ptr();
+        if !p_enc_is_utf8(enc_utf8) {
+            return e_unsupportedoption;
+        }
+        nvim_spell_reload();
+    }
+
+    std::ptr::null()
+}
+
+unsafe fn p_enc_is_utf8(expected: *const c_char) -> bool {
+    extern "C" {
+        #[link_name = "p_enc"]
+        static p_enc_global: *const c_char;
+    }
+    if p_enc_global.is_null() {
+        return false;
+    }
+    let mut a = p_enc_global;
+    let mut b = expected;
+    while *a != 0 && *b != 0 {
+        if *a != *b {
+            return false;
+        }
+        a = a.add(1);
+        b = b.add(1);
+    }
+    *a == 0 && *b == 0
+}
+
+/// The 'keymap' option has changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_keymap"]
+pub unsafe extern "C" fn did_set_keymap(args: *const c_void) -> *const c_char {
+    let buf = nvim_optset_get_buf(args);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let opt_flags = nvim_optset_get_flags(args);
+
+    if rs_valid_name(*varp, c".-_".as_ptr()) == 0 {
+        return e_invarg;
+    }
+
+    let secure_save = nvim_get_secure();
+    nvim_set_secure(0);
+    let errmsg = keymap_init();
+    nvim_set_secure(secure_save);
+
+    nvim_optset_set_value_checked(args.cast_mut(), 1);
+
+    if errmsg.is_null() {
+        let keymap = nvim_buf_get_b_p_keymap(buf);
+        let keymap_set = !keymap.is_null() && *keymap != 0;
+
+        if keymap_set {
+            nvim_buf_set_b_p_iminsert(buf, B_IMODE_LMAP as c_int);
+            if nvim_buf_get_b_p_imsearch(buf) != B_IMODE_USE_INSERT {
+                nvim_buf_set_b_p_imsearch(buf, B_IMODE_LMAP as c_int);
+            }
+        } else {
+            if nvim_buf_get_b_p_iminsert(buf) == B_IMODE_LMAP {
+                nvim_buf_set_b_p_iminsert(buf, B_IMODE_NONE as c_int);
+            }
+            if nvim_buf_get_b_p_imsearch(buf) == B_IMODE_LMAP {
+                nvim_buf_set_b_p_imsearch(buf, B_IMODE_USE_INSERT as c_int);
+            }
+        }
+
+        if opt_flags & OPT_LOCAL == 0 {
+            set_iminsert_global(buf);
+            set_imsearch_global(buf);
+        }
+        status_redraw_buf(buf);
+    }
+
+    errmsg
+}
+
+/// The 'statusline', 'winbar', 'tabline', 'rulerformat', or 'statuscolumn' option is changed.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "did_set_statustabline_rulerformat"]
+pub unsafe extern "C" fn did_set_statustabline_rulerformat(
+    args: *const c_void,
+    rulerformat: bool,
+    statuscolumn: bool,
+) -> *const c_char {
+    let win = nvim_optset_get_win(args);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let opt_flags = nvim_optset_get_flags(args);
+    let opt_idx = nvim_optset_get_idx(args);
+
+    if rulerformat {
+        nvim_set_ru_wid(0);
+    } else if statuscolumn {
+        nvim_win_set_nrwidth_line_count(win, 0);
+    }
+
+    let mut s = *varp;
+    let kopt_stl = nvim_get_kOptStatusline();
+    let is_stl = opt_idx == kopt_stl;
+
+    if is_stl && (opt_flags & OPT_GLOBAL != 0 || opt_flags & OPT_LOCAL == 0) && *s == 0 {
+        xfree((*varp).cast::<c_void>());
+        let def = nvim_optset_stl_get_default(args);
+        *varp = xstrdup(def);
+        s = *varp;
+    }
+
+    if is_stl && !win.is_null() && nvim_win_get_floating_win(win) != 0 {
+        nvim_win_config_float(win);
+    }
+
+    let mut errmsg: *const c_char = std::ptr::null();
+
+    if rulerformat && *s == b'%' as c_char {
+        let mut sp = s.add(1);
+        if *sp == b'-' as c_char {
+            sp = sp.add(1);
+        }
+        let wid = getdigits_int(&mut sp, true, 0);
+        if wid != 0 && *sp == b'(' as c_char {
+            errmsg = check_stl_option(p_ruf.cast_mut());
+            if errmsg.is_null() {
+                nvim_set_ru_wid(wid);
+            }
+        } else if *(*varp).add(1) != b'!' as c_char {
+            errmsg = check_stl_option(p_ruf.cast_mut());
+        }
+    } else if rulerformat || *s != b'%' as c_char || *s.add(1) != b'!' as c_char {
+        errmsg = check_stl_option(s);
+    }
+
+    if rulerformat && errmsg.is_null() {
+        comp_col();
+    }
+
+    errmsg
 }

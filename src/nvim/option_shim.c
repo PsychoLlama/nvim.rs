@@ -14,6 +14,8 @@
 #include "nvim/highlight.h"
 #include "nvim/indent.h"
 #include "nvim/log.h"
+#include "nvim/mark.h"
+#include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
@@ -21,6 +23,7 @@
 #include "nvim/regexp.h"
 #include "nvim/spell.h"
 #include "nvim/strings.h"
+#include "nvim/terminal.h"
 #include "nvim/ui.h"
 #include "nvim/undo.h"
 #include "nvim/window.h"
@@ -252,6 +255,30 @@ colnr_T **nvim_buf_get_vts_array_ptr(buf_T *buf) { return buf ? &buf->b_p_vts_ar
 char *nvim_win_get_p_scl(win_T *wp) { return wp ? wp->w_p_scl : NULL; }
 // iskeyword: check if os_varp points to global p_isk
 int nvim_optset_varp_is_global_isk(const void *args) { return ((const optset_T *)args)->os_varp == (void *)&p_isk ? 1 : 0; }
+// Phase 2: helpers for complex did_set_* callbacks
+// Notify all terminal buffers of theme change
+void nvim_notify_all_terminals_theme(int dark) { FOR_ALL_BUFFERS(buf) { if (buf->terminal) { terminal_notify_theme(buf->terminal, dark); } } }
+// optset oldval first char (for background comparison)
+int nvim_optset_oldval_first_char(const void *args) { const char *s = ((const optset_T *)args)->os_oldval.string.data; return s ? (int)(unsigned char)s[0] : 0; }
+// did_set_buftype helpers
+char *nvim_buf_get_b_p_bt(buf_T *buf) { return buf ? buf->b_p_bt : NULL; }
+void nvim_buf_buftype_prompt_init(buf_T *buf) { set_option_direct(kOptComments, STATIC_CSTR_AS_OPTVAL(""), OPT_LOCAL, SID_NONE); pos_T next_prompt = { .lnum = buf->b_ml.ml_line_count, .col = 1, .coladd = 0 }; RESET_FMARK(&buf->b_prompt_start, next_prompt, 0, ((fmarkv_T)INIT_FMARKV)); }
+// nvim_win_get_status_height and nvim_win_set_redr_status are in window/src/win_struct.rs
+// keymap helpers
+int nvim_get_secure(void) { return secure; }
+void nvim_set_secure(int val) { secure = val; }
+char *nvim_buf_get_b_p_keymap(buf_T *buf) { return buf ? buf->b_p_keymap : NULL; }
+// get/set ru_wid (for rulerformat)
+int nvim_get_ru_wid(void) { return ru_wid; }
+void nvim_set_ru_wid(int val) { ru_wid = val; }
+// encoding helpers
+int nvim_optset_varp_is_p_fenc(const void *args) { char **gvarp = (char **)get_option_varp_scope_from(((const optset_T *)args)->os_idx, OPT_GLOBAL, (buf_T *)((const optset_T *)args)->os_buf, NULL); return gvarp == &p_fenc ? 1 : 0; }
+int nvim_optset_varp_is_p_enc(const void *args) { return ((const optset_T *)args)->os_varp == (void *)&p_enc ? 1 : 0; }
+char *nvim_enc_canonize(char *enc) { return enc_canonize(enc); }
+void nvim_spell_reload(void) { spell_reload(); }
+// statusline default value helper
+const char *nvim_optset_stl_get_default(const void *args) { return get_option_default(((const optset_T *)args)->os_idx, ((const optset_T *)args)->os_flags).data.string.data; }
+int nvim_get_kOptStatusline(void) { return (int)kOptStatusline; }
 int option_set_callback_func(char *optval, Callback *optcb)
 {
   if (optval == NULL || *optval == NUL) {

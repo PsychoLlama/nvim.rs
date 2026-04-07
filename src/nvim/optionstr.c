@@ -251,75 +251,12 @@ int check_signcolumn(char *scl, win_T *wp)
 
 /// The 'ambiwidth' option is changed.
 
-/// The 'background' option is changed.
-const char *did_set_background(optset_T *args)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-
-  if (args->os_oldval.string.data[0] == *p_bg) {
-    // Value was not changed
-    return NULL;
-  }
-
-  int dark = (*p_bg == 'd');
-
-  init_highlight(false, false);
-
-  if (dark != (*p_bg == 'd') && get_var_value("g:colors_name") != NULL) {
-    // The color scheme must have set 'background' back to another
-    // value, that's not what we want here.  Disable the color
-    // scheme and set the colors again.
-    do_unlet(S_LEN("g:colors_name"), true);
-    free_string_option(p_bg);
-    p_bg = xstrdup((dark ? "dark" : "light"));
-    check_string_option(&p_bg);
-    init_highlight(false, false);
-  }
-
-  // Notify all terminal buffers that the background color changed so they can
-  // send a theme update notification
-  FOR_ALL_BUFFERS(buf) {
-    if (buf->terminal) {
-      terminal_notify_theme(buf->terminal, dark);
-    }
-  }
-
-  return NULL;
-}
+// did_set_background is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 
 
 
-/// The 'buftype' option is changed.
-const char *did_set_buftype(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  win_T *win = (win_T *)args->os_win;
-  // When 'buftype' is set, check for valid value.
-  if ((buf->terminal && buf->b_p_bt[0] != 't')
-      || (!buf->terminal && buf->b_p_bt[0] == 't')
-      || !rs_opt_strings_flags(buf->b_p_bt, opt_bt_values, false).ok) {
-    return e_invarg;
-  }
-  // buftype=prompt:
-  if (buf->b_p_bt[0] == 'p') {
-    // Set default value for 'comments'
-    set_option_direct(kOptComments, STATIC_CSTR_AS_OPTVAL(""), OPT_LOCAL, SID_NONE);
-    // set the prompt start position to lastline.
-    pos_T next_prompt = { .lnum = buf->b_ml.ml_line_count, .col = 1, .coladd = 0 };
-    RESET_FMARK(&buf->b_prompt_start, next_prompt, 0, ((fmarkv_T)INIT_FMARKV));
-  }
-  if (win->w_status_height || rs_global_stl_height()) {
-    win->w_redr_status = true;
-    redraw_later(win, UPD_VALID);
-  }
-  buf->b_help = (buf->b_p_bt[0] == 'h');
-  redraw_titles();
-  return NULL;
-}
+// did_set_buftype is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 /// The global 'listchars' or 'fillchars' option is changed.
 static const char *did_set_global_chars_option(win_T *win, char *val, CharsOption what,
@@ -408,47 +345,7 @@ const char *did_set_completeslash(optset_T *args)
 
 // expand_set_concealcursor, expand_set_cpoptions, and expand_set_diffopt moved to Rust
 
-/// One of the 'encoding', 'fileencoding' or 'makeencoding'
-/// options is changed.
-const char *did_set_encoding(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  char **varp = (char **)args->os_varp;
-  int opt_flags = args->os_flags;
-  // Get the global option to compare with, otherwise we would have to check
-  // two values for all local options.
-  char **gvarp = (char **)get_option_varp_scope_from(args->os_idx, OPT_GLOBAL, buf, NULL);
-
-  if (gvarp == &p_fenc) {
-    if (!MODIFIABLE(buf) && opt_flags != OPT_GLOBAL) {
-      return e_modifiable;
-    }
-
-    if (vim_strchr(*varp, ',') != NULL) {
-      // No comma allowed in 'fileencoding'; catches confusing it
-      // with 'fileencodings'.
-      return e_invarg;
-    }
-
-    // May show a "+" in the title now.
-    redraw_titles();
-    // Add 'fileencoding' to the swap file.
-    ml_setflags(buf);
-  }
-
-  // canonize the value, so that strcmp() can be used on it
-  char *p = enc_canonize(*varp);
-  xfree(*varp);
-  *varp = p;
-  if (varp == &p_enc) {
-    // only encoding=utf-8 allowed
-    if (strcmp(p_enc, "utf-8") != 0) {
-      return e_unsupportedoption;
-    }
-    spell_reload();
-  }
-  return NULL;
-}
+// did_set_encoding is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 // expand_set_encoding, expand_set_eventignore, get_eventignore_name, and
 // expand_eiw static are implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
@@ -468,57 +365,7 @@ const char *did_set_encoding(optset_T *args)
 // did_set_iskeyword is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 // did_set_isopt is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
-/// The 'keymap' option has changed.
-const char *did_set_keymap(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  char **varp = (char **)args->os_varp;
-  int opt_flags = args->os_flags;
-
-  if (!rs_valid_name(*varp, ".-_")) {
-    return e_invarg;
-  }
-
-  int secure_save = secure;
-
-  // Reset the secure flag, since the value of 'keymap' has
-  // been checked to be safe.
-  secure = 0;
-
-  // load or unload key mapping tables
-  const char *errmsg = keymap_init();
-
-  secure = secure_save;
-
-  // Since we check the value, there is no need to set kOptFlagInsecure,
-  // even when the value comes from a modeline.
-  args->os_value_checked = true;
-
-  if (errmsg == NULL) {
-    if (*buf->b_p_keymap != NUL) {
-      // Installed a new keymap, switch on using it.
-      buf->b_p_iminsert = B_IMODE_LMAP;
-      if (buf->b_p_imsearch != B_IMODE_USE_INSERT) {
-        buf->b_p_imsearch = B_IMODE_LMAP;
-      }
-    } else {
-      // Cleared the keymap, may reset 'iminsert' and 'imsearch'.
-      if (buf->b_p_iminsert == B_IMODE_LMAP) {
-        buf->b_p_iminsert = B_IMODE_NONE;
-      }
-      if (buf->b_p_imsearch == B_IMODE_LMAP) {
-        buf->b_p_imsearch = B_IMODE_USE_INSERT;
-      }
-    }
-    if ((opt_flags & OPT_LOCAL) == 0) {
-      set_iminsert_global(buf);
-      set_imsearch_global(buf);
-    }
-    status_redraw_buf(buf);
-  }
-
-  return errmsg;
-}
+// did_set_keymap is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 
 // expand_set_mouse moved to Rust
@@ -537,64 +384,7 @@ const char *did_set_keymap(optset_T *args)
 
 
 
-/// The 'statusline', 'winbar', 'tabline', 'rulerformat' or 'statuscolumn' option is changed.
-///
-/// @param rulerformat  true if the 'rulerformat' option is changed
-/// @param statuscolumn  true if the 'statuscolumn' option is changed
-const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat,
-                                              bool statuscolumn)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-  if (rulerformat) {       // reset ru_wid first
-    ru_wid = 0;
-  } else if (statuscolumn) {
-    // reset 'statuscolumn' width
-    win->w_nrwidth_line_count = 0;
-  }
-  const char *errmsg = NULL;
-  char *s = *varp;
-  bool is_stl = args->os_idx == kOptStatusline;
-
-  // reset statusline to default when setting global option and empty string is being set
-  if (is_stl
-      && ((args->os_flags & OPT_GLOBAL) || !(args->os_flags & OPT_LOCAL))
-      && s[0] == NUL) {
-    xfree(*varp);
-    *varp = xstrdup(get_option_default(args->os_idx, args->os_flags).data.string.data);
-    s = *varp;
-  }
-
-  // handle floating window statusline changes
-  if (is_stl && win && win->w_floating) {
-    win_config_float(win, win->w_config);
-  }
-
-  if (rulerformat && *s == '%') {
-    // set ru_wid if 'ruf' starts with "%99("
-    if (*++s == '-') {        // ignore a '-'
-      s++;
-    }
-    int wid = getdigits_int(&s, true, 0);
-    if (wid && *s == '(' && (errmsg = check_stl_option(p_ruf)) == NULL) {
-      ru_wid = wid;
-    } else {
-      // Validate the flags in 'rulerformat' only if it doesn't point to
-      // a custom function ("%!" flag).
-      if ((*varp)[1] != '!') {
-        errmsg = check_stl_option(p_ruf);
-      }
-    }
-  } else if (rulerformat || s[0] != '%' || s[1] != '!') {
-    // check 'statusline', 'winbar', 'tabline' or 'statuscolumn'
-    // only if it doesn't start with "%!"
-    errmsg = check_stl_option(s);
-  }
-  if (rulerformat && errmsg == NULL) {
-    comp_col();
-  }
-  return errmsg;
-}
+// did_set_statustabline_rulerformat is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 
 // did_set_tagcase is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
