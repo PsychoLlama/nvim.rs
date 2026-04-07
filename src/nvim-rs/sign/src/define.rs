@@ -3,7 +3,7 @@
 //! This module handles creating, updating, and removing sign definitions.
 //! Sign definitions specify the visual properties of signs (text, highlights, icons).
 
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::{DecorSignHighlightHandle, SignHandle, SIGN_DEF_PRIO};
 
@@ -403,18 +403,14 @@ extern "C" {
     /// Look up a highlight group by name, creating if necessary.
     fn syn_check_group(name: *const c_char, len: usize) -> c_int;
 
-    // Composite C accessors for sign definition management
-    fn nvim_sign_define_by_name_impl(
-        name: *const c_char,
-        icon: *const c_char,
-        text: *const c_char,
-        linehl: *const c_char,
-        texthl: *const c_char,
-        culhl: *const c_char,
-        numhl: *const c_char,
-        prio: c_int,
-    ) -> c_int;
-    fn nvim_sign_undefine_by_name_impl(name: *const c_char) -> c_int;
+    // Sign map management (Phase 3 accessors)
+    fn nvim_sign_map_get_or_create(name: *const c_char, is_new: *mut bool) -> SignHandle;
+    fn nvim_sign_map_del(name: *const c_char) -> SignHandle;
+    fn nvim_init_sign_text(sp: SignHandle, out: *mut u32, text: *const c_char) -> c_int;
+    fn nvim_backslash_halve(path: *mut c_char);
+    fn nvim_sign_define_update_placed(name: *const c_char, sp: SignHandle);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
 
     // Sign map iteration (for free_all)
     fn nvim_sign_map_size() -> c_int;
@@ -484,6 +480,18 @@ pub unsafe extern "C" fn rs_sign_resolve_highlights(
 // Core Sign Definition Management
 // =============================================================================
 
+/// Resolve a highlight group: if name is null or empty return 0, else syn_check_group.
+unsafe fn resolve_hl(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return -1; // -1 = not set, don't update
+    }
+    if *name.cast::<u8>() == 0 {
+        return 0; // empty string = clear the highlight
+    }
+    let cstr = CStr::from_ptr(name);
+    syn_check_group(name, cstr.to_bytes().len())
+}
+
 /// Define a new sign or update an existing sign.
 ///
 /// Returns OK (1) on success, FAIL (0) on failure.
@@ -491,6 +499,7 @@ pub unsafe extern "C" fn rs_sign_resolve_highlights(
 /// # Safety
 /// All string pointers must be valid null-terminated C strings or null.
 #[no_mangle]
+#[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn rs_sign_define_by_name(
     name: *const c_char,
     icon: *const c_char,
@@ -501,7 +510,48 @@ pub unsafe extern "C" fn rs_sign_define_by_name(
     numhl: *const c_char,
     prio: c_int,
 ) -> c_int {
-    nvim_sign_define_by_name_impl(name, icon, text, linehl, texthl, culhl, numhl, prio)
+    let mut is_new = false;
+    #[allow(clippy::borrow_as_ptr)]
+    let sp = nvim_sign_map_get_or_create(name, &raw mut is_new);
+    if sp.is_null() {
+        return 0; // FAIL
+    }
+    // Update icon
+    if !icon.is_null() {
+        xfree((*sp).sn_icon.cast::<c_void>());
+        (*sp).sn_icon = xstrdup(icon);
+        nvim_backslash_halve((*sp).sn_icon);
+    }
+    // Update text
+    if !text.is_null() {
+        let ok = nvim_init_sign_text(sp, (*sp).sn_text.as_mut_ptr(), text);
+        if ok == 0 {
+            // FAIL — init_sign_text returned FAIL
+            return 0;
+        }
+    }
+    // Update priority
+    (*sp).sn_priority = prio;
+    // Update highlights
+    let hl_args = [linehl, texthl, culhl, numhl];
+    #[allow(clippy::borrow_as_ptr)]
+    let hl_fields: [*mut c_int; 4] = [
+        &raw mut (*sp).sn_line_hl,
+        &raw mut (*sp).sn_text_hl,
+        &raw mut (*sp).sn_cul_hl,
+        &raw mut (*sp).sn_num_hl,
+    ];
+    for (arg, field) in hl_args.iter().zip(hl_fields.iter()) {
+        let resolved = resolve_hl(*arg);
+        if resolved >= 0 {
+            **field = resolved;
+        }
+    }
+    // Update placed signs and redraw if modifying an existing sign
+    if !is_new {
+        nvim_sign_define_update_placed(name, sp);
+    }
+    1 // OK
 }
 
 /// Undefine a sign by name.
@@ -513,7 +563,14 @@ pub unsafe extern "C" fn rs_sign_define_by_name(
 /// `name` must be a valid null-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sign_undefine_by_name(name: *const c_char) -> c_int {
-    nvim_sign_undefine_by_name_impl(name)
+    let sp = nvim_sign_map_del(name);
+    if sp.is_null() {
+        return 0; // FAIL
+    }
+    xfree((*sp).sn_name.cast::<c_void>());
+    xfree((*sp).sn_icon.cast::<c_void>());
+    xfree(sp.cast::<c_void>());
+    1 // OK
 }
 
 /// Undefine a sign by name with E155 error message on failure.
@@ -527,7 +584,7 @@ pub unsafe extern "C" fn rs_sign_undefine_by_name_wrapper(name: *const c_char) -
     extern "C" {
         fn semsg(s: *const c_char, ...);
     }
-    let result = nvim_sign_undefine_by_name_impl(name);
+    let result = rs_sign_undefine_by_name(name);
     if result == 0 {
         // FAIL — emit E155
         static E155_FMT: &[u8] = b"E155: Unknown sign: %s\0";
@@ -553,7 +610,7 @@ pub unsafe extern "C" fn rs_free_signs() {
         }
     }
     for name in names {
-        nvim_sign_undefine_by_name_impl(name);
+        rs_sign_undefine_by_name(name);
     }
 }
 

@@ -149,88 +149,85 @@ typval_T *nvim_tv_list_item_tv_at(list_T *l, int idx)
 // sign_map iteration size (for free_all)
 int nvim_sign_map_size(void) { return (int)map_size(&sign_map); }
 
-int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char *text, const char *linehl, const char *texthl, const char *culhl, const char *numhl, int prio)
+// Phase 3 accessors: sign_map insert/delete
+sign_T *nvim_sign_map_del(const char *name)
+{
+  sign_T *sp = pmap_del(cstr_t)(&sign_map, name, NULL);
+  return sp;
+}
+// Get or create sign entry in sign_map. Returns sign_T*, sets *is_new if created.
+// If new, also allocates and initializes the sign_T and copies the name.
+sign_T *nvim_sign_map_get_or_create(const char *name, bool *is_new)
 {
   cstr_t *key;
   bool new_sign = false;
-  sign_T **sp = (sign_T **)pmap_put_ref(cstr_t)(&sign_map, name, &key, &new_sign);
+  sign_T **sp_ptr = (sign_T **)pmap_put_ref(cstr_t)(&sign_map, name, &key, &new_sign);
   if (new_sign) {
     *key = xstrdup(name);
-    *sp = xcalloc(1, sizeof(sign_T));
-    (*sp)->sn_name = (char *)(*key);
+    *sp_ptr = xcalloc(1, sizeof(sign_T));
+    (*sp_ptr)->sn_name = (char *)(*key);
   }
-  if (icon != NULL) {
-    xfree((*sp)->sn_icon);
-    (*sp)->sn_icon = xstrdup(icon);
-    backslash_halve((*sp)->sn_icon);
-  }
-  if (text != NULL && (init_sign_text(*sp, (*sp)->sn_text, (char *)text) == FAIL)) {
-    return FAIL;
-  }
-  (*sp)->sn_priority = prio;
-  const char *arg[] = { linehl, texthl, culhl, numhl };
-  int *hl[] = { &(*sp)->sn_line_hl, &(*sp)->sn_text_hl, &(*sp)->sn_cul_hl, &(*sp)->sn_num_hl };
-  for (int i = 0; i < 4; i++) {
-    if (arg[i] != NULL) {
-      *hl[i] = *arg[i] ? syn_check_group(arg[i], strlen(arg[i])) : 0;
-    }
-  }
-  // Update already placed signs and redraw if necessary when modifying a sign.
-  if (!new_sign) {
-    bool did_redraw = false;
-    for (size_t i = 0; i < kv_size(decor_items); i++) {
-      DecorSignHighlight *sh = &kv_A(decor_items, i);
-      if (sh->sign_name && strcmp(sh->sign_name, name) == 0) {
-        memcpy(sh->text, (*sp)->sn_text, SIGN_WIDTH * sizeof(schar_T));
-        sh->hl_id = (*sp)->sn_text_hl;
-        sh->line_hl_id = (*sp)->sn_line_hl;
-        sh->number_hl_id = (*sp)->sn_num_hl;
-        sh->cursorline_hl_id = (*sp)->sn_cul_hl;
-        if (!did_redraw) {
-          FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-            if (rs_sign_buffer_has_signs(wp->w_buffer)) {
-              redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
-            }
+  *is_new = new_sign;
+  return *sp_ptr;
+}
+// init_sign_text wrapper (expose to Rust)
+int nvim_init_sign_text(sign_T *sp, schar_T *out, const char *text)
+{ return (int)init_sign_text(sp, out, (char *)text); }
+// nvim_backslash_halve is in ex_docmd.c
+// Update placed signs and redraw when sign definition is modified
+void nvim_sign_define_update_placed(const char *name, sign_T *sp)
+{
+  bool did_redraw = false;
+  for (size_t i = 0; i < kv_size(decor_items); i++) {
+    DecorSignHighlight *sh = &kv_A(decor_items, i);
+    if (sh->sign_name && strcmp(sh->sign_name, name) == 0) {
+      memcpy(sh->text, sp->sn_text, SIGN_WIDTH * sizeof(schar_T));
+      sh->hl_id = sp->sn_text_hl;
+      sh->line_hl_id = sp->sn_line_hl;
+      sh->number_hl_id = sp->sn_num_hl;
+      sh->cursorline_hl_id = sp->sn_cul_hl;
+      if (!did_redraw) {
+        FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+          if (rs_sign_buffer_has_signs(wp->w_buffer)) {
+            redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
           }
-          did_redraw = true;
         }
+        did_redraw = true;
       }
     }
   }
-  return OK;
 }
-int nvim_sign_undefine_by_name_impl(const char *name)
-{
-  sign_T *sp = pmap_del(cstr_t)(&sign_map, name, NULL);
-  if (sp == NULL) { return FAIL; }
-  xfree(sp->sn_name); xfree(sp->sn_icon); xfree(sp);
-  return OK;
+// Phase 3: jump accessors
+win_T *nvim_buf_jump_open_win(buf_T *buf) { return buf_jump_open_win(buf); }
+// nvim_curwin_set_cursor_lnum is in ex_cmds_shim.c
+void nvim_curwin_check_and_beginline(void) { check_cursor_lnum(curwin); beginline(BL_WHITE); }
+const char *nvim_buf_get_fname(buf_T *buf) { return buf ? buf->b_fname : NULL; }
+void nvim_do_cmdline_cmd_str(const char *cmd) { do_cmdline_cmd((char *)cmd); }
+// Phase 3: list_defined message accessors
+void nvim_smsg0(const char *msg) { smsg(0, "%s", msg); }
+void nvim_msg_puts(const char *s) { msg_puts(s); }
+void nvim_msg_outtrans(const char *s) { msg_outtrans((char *)s, 0, false); }
+void nvim_msg_putchar_nl(void) { msg_putchar('\n'); }
+// Format a number into a buffer for list_defined priority
+void nvim_msg_puts_priority(int prio) {
+  char lbuf[MSG_BUF_LEN];
+  vim_snprintf(lbuf, MSG_BUF_LEN, " priority=%d", prio);
+  msg_puts(lbuf);
 }
-linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
-{
-  linenr_T lnum = rs_buf_findsign(buf, id, group);
-  if (lnum <= 0) {
-    semsg(_("E157: Invalid sign ID: %" PRId32), id);
-    return -1;
-  }
-  if (buf_jump_open_win(buf) != NULL) {
-    curwin->w_cursor.lnum = lnum;
-    check_cursor_lnum(curwin);
-    beginline(BL_WHITE);
-  } else {
-    if (buf->b_fname == NULL) {
-      emsg(_("E934: Cannot jump to a buffer that does not have a name"));
-      return -1;
-    }
-    size_t cmdlen = strlen(buf->b_fname) + 24;
-    char *cmd = xmallocz(cmdlen);
-    snprintf(cmd, cmdlen, "e +%" PRId64 " %s", (int64_t)lnum, buf->b_fname);
-    do_cmdline_cmd(cmd);
-    xfree(cmd);
-  }
-  rs_foldOpenCursor();
-  return lnum;
-}
+// Phase 3: delete_signs (marktree iteration from Rust)
+void nvim_marktree_free_itr(MarkTreeIter *itr) { xfree(itr); }
+bool nvim_mtitr_has_x(const MarkTreeIter *itr) { return itr->x != NULL; }
+MTKey nvim_mtitr_current_key(MarkTreeIter *itr) { return rs_marktree_itr_current(itr); }
+bool nvim_mtitr_next(buf_T *buf, MarkTreeIter *itr) { return rs_marktree_itr_next(buf->b_marktree, itr); }
+bool nvim_mt_end(MTKey key) { return mt_end(key); }
+bool nvim_mt_decor_sign(MTKey key) { return mt_decor_sign(key); }
+bool nvim_mtitr_get_overlap(buf_T *buf, int row, int col, MarkTreeIter *itr) { return rs_marktree_itr_get_overlap(buf->b_marktree, row, col, itr); }
+bool nvim_mtitr_step_overlap(buf_T *buf, MarkTreeIter *itr, MTPair *pair) { return rs_marktree_itr_step_overlap(buf->b_marktree, itr, pair); }
+void nvim_mtitr_get(buf_T *buf, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get(buf->b_marktree, row, col, itr); }
+void nvim_extmark_del(buf_T *buf, MarkTreeIter *itr, MTKey mark, bool end) { extmark_del(buf, itr, mark, end); }
+MTKey nvim_mtpair_start(MTPair pair) { return pair.start; }
+uint32_t nvim_ns_all(void) { return UINT32_MAX; }
+
 int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
 {
   MarkTreeIter itr[1];
@@ -330,35 +327,6 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
       return;
     }
     buf = buf->b_next;
-  }
-}
-void nvim_sign_list_defined_impl(sign_T *sp)
-{
-  smsg(0, "sign %s", sp->sn_name);
-  if (sp->sn_icon != NULL) {
-    msg_puts(" icon=");
-    msg_outtrans(sp->sn_icon, 0, false);
-    msg_puts(_(" (not supported)"));
-  }
-  if (sp->sn_text[0]) {
-    msg_puts(" text=");
-    char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
-    rs_describe_sign_text(buf, SIGN_WIDTH * MAX_SCHAR_SIZE, sp->sn_text);
-    msg_outtrans(buf, 0, false);
-  }
-  if (sp->sn_priority > 0) {
-    char lbuf[MSG_BUF_LEN];
-    vim_snprintf(lbuf, MSG_BUF_LEN, " priority=%d", sp->sn_priority);
-    msg_puts(lbuf);
-  }
-  static char *arg[] = { " linehl=", " texthl=", " culhl=", " numhl=" };
-  int hl[] = { sp->sn_line_hl, sp->sn_text_hl, sp->sn_cul_hl, sp->sn_num_hl };
-  for (int i = 0; i < 4; i++) {
-    if (hl[i] > 0) {
-      msg_puts(arg[i]);
-      const char *p = get_highlight_name_ext(NULL, hl[i] - 1, false);
-      msg_puts(p ? p : "NONE");
-    }
   }
 }
 dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark)

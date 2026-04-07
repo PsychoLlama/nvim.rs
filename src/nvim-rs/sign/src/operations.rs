@@ -21,6 +21,7 @@ extern "C" {
 
     // Error reporting
     fn semsg(fmt: *const c_char, ...);
+    fn emsg(msg: *const c_char) -> c_int;
 
     // Sign placement helpers
     fn rs_buf_set_sign(
@@ -55,8 +56,17 @@ extern "C" {
     fn nvim_get_firstbuf() -> crate::SignBufHandle;
     fn nvim_buf_get_next(buf: crate::SignBufHandle) -> crate::SignBufHandle;
 
-    // Composite C accessor still used until Phase 3
-    fn nvim_sign_jump_impl(id: c_int, group: *const c_char, buf: crate::SignBufHandle) -> LinenrT;
+    // Jump accessors (Phase 3)
+    fn rs_buf_findsign(buf: crate::SignBufHandle, id: c_int, group: *const c_char) -> LinenrT;
+    fn rs_foldOpenCursor();
+    fn nvim_buf_jump_open_win(buf: crate::SignBufHandle) -> *mut std::ffi::c_void; // win_T*
+    fn nvim_curwin_check_and_beginline();
+    fn nvim_curwin_set_cursor_lnum(lnum: LinenrT); // from ex_cmds_shim.c
+    fn nvim_buf_get_fname(buf: crate::SignBufHandle) -> *const c_char;
+    fn nvim_do_cmdline_cmd_str(cmd: *const c_char);
+    fn xmallocz(size: usize) -> *mut c_char;
+    fn xfree(ptr: *mut std::ffi::c_void);
+    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 // Error format strings
@@ -671,12 +681,55 @@ pub unsafe extern "C" fn rs_sign_unplace(
 /// # Safety
 /// All pointer parameters must be valid.
 #[no_mangle]
+#[allow(clippy::manual_c_str_literals)]
 pub unsafe extern "C" fn rs_sign_jump(
     id: c_int,
     group: *const c_char,
     buf: crate::SignBufHandle,
 ) -> LinenrT {
-    nvim_sign_jump_impl(id, group, buf)
+    let lnum = rs_buf_findsign(buf, id, group);
+    if lnum <= 0 {
+        static E157_FMT: &[u8] = b"E157: Invalid sign ID: %d\0";
+        semsg(E157_FMT.as_ptr().cast(), id);
+        return -1;
+    }
+    if nvim_buf_jump_open_win(buf).is_null() {
+        // Need to open buffer
+        let fname = nvim_buf_get_fname(buf);
+        if fname.is_null() {
+            emsg(
+                b"E934: Cannot jump to a buffer that does not have a name\0"
+                    .as_ptr()
+                    .cast(),
+            );
+            return -1;
+        }
+        // Calculate command length: "e +<lnum> <fname>\0"
+        let fname_len = {
+            let mut len = 0usize;
+            while *fname.add(len) != 0 {
+                len += 1;
+            }
+            len
+        };
+        let cmd_len = fname_len + 24;
+        let cmd = xmallocz(cmd_len);
+        snprintf(
+            cmd,
+            cmd_len,
+            b"e +%lld %s\0".as_ptr().cast(),
+            i64::from(lnum),
+            fname,
+        );
+        nvim_do_cmdline_cmd_str(cmd);
+        xfree(cmd.cast());
+    } else {
+        // Jumped to existing window
+        nvim_curwin_set_cursor_lnum(lnum);
+        nvim_curwin_check_and_beginline();
+    }
+    rs_foldOpenCursor();
+    lnum
 }
 
 // =============================================================================

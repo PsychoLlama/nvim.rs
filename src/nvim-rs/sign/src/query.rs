@@ -5,7 +5,8 @@
 use std::ffi::{c_char, c_int};
 
 use crate::{
-    DecorSignHighlightHandle, LinenrT, MTKeyHandle, SignBufHandle, NS_ALL, NS_GLOBAL, NS_INVALID,
+    text::describe_sign_text_impl, DecorSignHighlightHandle, LinenrT, MTKeyHandle, SignBufHandle,
+    NS_ALL, NS_GLOBAL, NS_INVALID,
 };
 
 // =============================================================================
@@ -39,7 +40,17 @@ extern "C" {
 
     // Display/listing composite accessors
     fn nvim_sign_list_placed_impl(rbuf: SignBufHandle, group: *const c_char);
-    fn nvim_sign_list_defined_impl(sp: crate::SignHandle);
+
+    // Message functions for sign_list_defined
+    fn nvim_smsg0(msg: *const c_char);
+    fn nvim_msg_puts(s: *const c_char);
+    fn nvim_msg_outtrans(s: *const c_char);
+    fn nvim_msg_puts_priority(prio: c_int);
+    fn get_highlight_name_ext(
+        xp: *mut std::ffi::c_void,
+        idx: c_int,
+        skip_cleared: bool,
+    ) -> *const c_char;
 }
 
 const E155_FMT: &[u8] = b"E155: Unknown sign: %s\0";
@@ -312,17 +323,77 @@ pub unsafe extern "C" fn rs_sign_list_placed(rbuf: SignBufHandle, group: *const 
 
 /// List a single sign definition.
 ///
-/// Delegates to C composite accessor for message formatting and output.
+/// Outputs sign attributes via message functions.
 ///
 /// # Safety
 ///
 /// `sp` must be a valid sign handle.
 #[no_mangle]
+#[allow(clippy::manual_c_str_literals)]
 pub unsafe extern "C" fn rs_sign_list_defined(sp: crate::SignHandle) {
     if sp.is_null() {
         return;
     }
-    nvim_sign_list_defined_impl(sp);
+    let s = &*sp;
+    // "sign <name>"
+    // Build "sign %s" message
+    let mut msg_buf = [0u8; 512];
+    let name_bytes = if s.sn_name.is_null() {
+        b"(unnamed)\0".as_slice()
+    } else {
+        std::slice::from_raw_parts(s.sn_name.cast::<u8>(), libc_strlen(s.sn_name) + 1)
+    };
+    let prefix = b"sign \0";
+    let plen = prefix.len() - 1;
+    let nlen = name_bytes.len() - 1; // exclude null terminator
+    let total = plen + nlen;
+    if total < msg_buf.len() {
+        msg_buf[..plen].copy_from_slice(&prefix[..plen]);
+        msg_buf[plen..total].copy_from_slice(&name_bytes[..nlen]);
+        msg_buf[total] = 0;
+    }
+    nvim_smsg0(msg_buf.as_ptr().cast());
+
+    // icon
+    if !s.sn_icon.is_null() {
+        nvim_msg_puts(b" icon=\0".as_ptr().cast());
+        nvim_msg_outtrans(s.sn_icon);
+        nvim_msg_puts(b" (not supported)\0".as_ptr().cast());
+    }
+    // text
+    if s.sn_text[0] != 0 {
+        nvim_msg_puts(b" text=\0".as_ptr().cast());
+        let mut buf = [0u8; crate::SIGN_WIDTH * crate::text::MAX_SCHAR_SIZE];
+        describe_sign_text_impl(&mut buf, &s.sn_text);
+        nvim_msg_outtrans(buf.as_ptr().cast());
+    }
+    // priority
+    if s.sn_priority > 0 {
+        nvim_msg_puts_priority(s.sn_priority);
+    }
+    // highlights
+    let hl_prefixes: [&[u8]; 4] = [b" linehl=\0", b" texthl=\0", b" culhl=\0", b" numhl=\0"];
+    let hl_ids = [s.sn_line_hl, s.sn_text_hl, s.sn_cul_hl, s.sn_num_hl];
+    for (prefix, &hl_id) in hl_prefixes.iter().zip(hl_ids.iter()) {
+        if hl_id > 0 {
+            nvim_msg_puts(prefix.as_ptr().cast());
+            let p = get_highlight_name_ext(std::ptr::null_mut(), hl_id - 1, false);
+            let name_ptr = if p.is_null() {
+                b"NONE\0".as_ptr().cast()
+            } else {
+                p
+            };
+            nvim_msg_puts(name_ptr);
+        }
+    }
+}
+
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
 }
 
 /// List the sign matching a given name.
@@ -342,7 +413,7 @@ pub unsafe extern "C" fn rs_sign_list_by_name(name: *const c_char) {
     if sp.is_null() {
         semsg(E155_FMT.as_ptr().cast(), name);
     } else {
-        nvim_sign_list_defined_impl(sp);
+        rs_sign_list_defined(sp);
     }
 }
 
