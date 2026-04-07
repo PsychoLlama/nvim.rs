@@ -48,9 +48,6 @@ extern "C" {
     );
     fn nvim_redraw_buf_range_later(buf: BufHandle, first: c_int, last: c_int);
     fn nvim_decor_buf_get_line_count(buf: BufHandle) -> c_int;
-    fn nvim_decor_vt_ptr_get_pos(vt: DecorVtHandle) -> c_int;
-    fn nvim_decor_vt_ptr_get_flags(vt: DecorVtHandle) -> u8;
-    fn nvim_decor_vt_ptr_get_next(vt: DecorVtHandle) -> DecorVtHandle;
     fn nvim_decor_items_get_next(idx: u32) -> u32;
     fn nvim_decor_items_get_ptr(idx: u32) -> *mut c_void;
     fn decor_redraw_sh(
@@ -352,19 +349,20 @@ pub unsafe extern "C" fn rs_decor_redraw(
         // Walk virtual text linked list
         let mut cur_vt = vt;
         while !cur_vt.is_null() {
-            let flags = nvim_decor_vt_ptr_get_flags(cur_vt);
+            let vt_typed = cur_vt.0.cast::<DecorVirtText>();
+            let flags = (*vt_typed).flags;
             let is_lines = flags & KVT_IS_LINES != 0;
             let is_lines_above = flags & KVT_LINES_ABOVE != 0;
             let below = is_lines && !is_lines_above;
             let vt_lnum = row1 + 1 + c_int::from(below);
             nvim_redraw_buf_line_later(buf, vt_lnum, true);
 
-            let pos = nvim_decor_vt_ptr_get_pos(cur_vt);
+            let pos = (*vt_typed).pos;
             if is_lines || pos == VirtTextPos::Inline as c_int {
                 let vt_col = if is_lines { 0 } else { col1 };
                 nvim_changed_lines_invalidate_buf(buf, vt_lnum, vt_col, vt_lnum + 1, 0);
             }
-            cur_vt = nvim_decor_vt_ptr_get_next(cur_vt);
+            cur_vt = DecorVtHandle((*vt_typed).next.cast::<c_void>());
         }
 
         // Walk sign/highlight linked list

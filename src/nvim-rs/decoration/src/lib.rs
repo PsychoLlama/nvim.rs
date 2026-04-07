@@ -50,7 +50,7 @@ pub type DecorVirtTextHandle = *mut DecorVirtText;
 /// since we still use C for next_virt_text_chunk iteration.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct VirtTextHandle(*mut c_void);
+pub struct VirtTextHandle(pub *mut c_void);
 
 impl VirtTextHandle {
     pub fn is_null(self) -> bool {

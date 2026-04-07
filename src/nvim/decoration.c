@@ -725,15 +725,6 @@ void nvim_decor_state_itr_get(void *state_ptr, void *buf_ptr, int row, int col)
   rs_marktree_itr_get(buf->b_marktree, row, col, state->itr);
 }
 
-uint16_t nvim_decor_sh_get_flags(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->flags; }
-uint16_t nvim_decor_sh_ptr_get_priority(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->priority; }
-int nvim_decor_sh_ptr_get_hl_id(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->hl_id; }
-const char *nvim_decor_sh_ptr_get_url(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->url; }
-uint32_t nvim_decor_sh_ptr_get_next(void *sh_ptr) { return ((DecorSignHighlight *)sh_ptr)->next; }
-uint8_t nvim_decor_vt_ptr_get_flags(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->flags; }
-uint16_t nvim_decor_vt_ptr_get_priority(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->priority; }
-void *nvim_decor_vt_ptr_get_next(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->next; }
-
 // Redraw Dispatch and Buffer Operations helpers
 
 void nvim_redraw_buf_line_later(void *buf_ptr, int lnum, bool redraw) { redraw_buf_line_later((buf_T *)buf_ptr, lnum, redraw); }
@@ -741,71 +732,6 @@ void nvim_changed_lines_invalidate_buf(void *buf_ptr, int lnum1, int col1, int l
 void nvim_redraw_buf_range_later(void *buf_ptr, int first, int last) { redraw_buf_range_later((buf_T *)buf_ptr, first, last); }
 
 int nvim_decor_buf_get_line_count(void *buf_ptr) { return ((buf_T *)buf_ptr)->b_ml.ml_line_count; }
-
-int nvim_decor_vt_ptr_get_pos(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->pos; }
-
-int nvim_decor_state_get_row(void *state_ptr) { return ((DecorState *)state_ptr)->row; }
-int nvim_decor_state_get_eol_col(void *state_ptr) { return ((DecorState *)state_ptr)->eol_col; }
-void nvim_decor_state_set_eol_col(void *state_ptr, int val) { ((DecorState *)state_ptr)->eol_col = val; }
-int nvim_decor_state_get_current_end(void *state_ptr) { return ((DecorState *)state_ptr)->current_end; }
-int nvim_decor_state_get_future_begin(void *state_ptr) { return ((DecorState *)state_ptr)->future_begin; }
-int nvim_decor_state_get_ranges_count(void *state_ptr) { return (int)kv_size(((DecorState *)state_ptr)->ranges_i); }
-
-/// Get a DecorRange by slot index from the ranges_i/slots arrays.
-/// This accesses ranges_i[idx] to get the slot index, then returns slots[slot_idx].range.
-/// Returns NULL if index is out of bounds.
-void *nvim_decor_state_get_range_by_idx(void *state_ptr, int idx)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  if (idx < 0 || idx >= (int)kv_size(state->ranges_i)) {
-    return NULL;
-  }
-  int slot_idx = kv_A(state->ranges_i, idx);
-  return &kv_A(state->slots, slot_idx).range;
-}
-
-int nvim_decor_state_get_current(void *state_ptr) { return ((DecorState *)state_ptr)->current; }
-int nvim_decor_range_get_start_row(void *range_ptr) { return ((DecorRange *)range_ptr)->start_row; }
-int nvim_decor_range_get_start_col(void *range_ptr) { return ((DecorRange *)range_ptr)->start_col; }
-int nvim_decor_range_get_draw_col(void *range_ptr) { return ((DecorRange *)range_ptr)->draw_col; }
-void nvim_decor_range_set_draw_col(void *range_ptr, int val) { ((DecorRange *)range_ptr)->draw_col = val; }
-int nvim_decor_range_get_kind(void *range_ptr) { return ((DecorRange *)range_ptr)->kind; }
-
-
-/// Check if a DecorRange has virtual text position set.
-bool nvim_decor_range_has_virt_pos(void *range_ptr)
-{
-  DecorRange *range = (DecorRange *)range_ptr;
-  return decor_virt_pos(range);
-}
-
-/// Get the virtual text position kind from a DecorRange.
-int nvim_decor_range_get_virt_pos_kind(void *range_ptr)
-{
-  DecorRange *range = (DecorRange *)range_ptr;
-  return decor_virt_pos_kind(range);
-}
-
-/// Get the DecorVirtText pointer from a DecorRange (for kDecorKindVirtText).
-void *nvim_decor_range_get_virt_text(void *range_ptr)
-{
-  DecorRange *range = (DecorRange *)range_ptr;
-  if (range->kind == kDecorKindVirtText) {
-    return range->data.vt;
-  }
-  return NULL;
-}
-
-int nvim_decor_virt_text_get_hl_mode(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->hl_mode; }
-int nvim_decor_virt_text_get_pos(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->pos; }
-int nvim_decor_virt_text_get_width(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->width; }
-int nvim_decor_virt_text_get_col(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->col; }
-int nvim_decor_virt_text_get_flags(void *vt_ptr) { return ((DecorVirtText *)vt_ptr)->flags; }
-
-
-// Additional accessor functions for draw_virt_text migration
-
-void *nvim_decor_virt_text_get_virt_text(void *vt_ptr) { return &((DecorVirtText *)vt_ptr)->data.virt_text; }
 
 /// Iterator for VirtText chunks - returns text and advances position.
 /// This wraps next_virt_text_chunk for FFI use.
@@ -818,60 +744,6 @@ const char *nvim_next_virt_text_chunk(void *vt_ptr, size_t *pos, int *attr)
   // VirtText is a kvec_t(VirtTextChunk)
   VirtText *vt = (VirtText *)vt_ptr;
   return next_virt_text_chunk(*vt, pos, attr);
-}
-
-/// Get UIWatched data ns_id from a DecorRange.
-uint64_t nvim_decor_range_get_ui_ns_id(void *range_ptr)
-{
-  DecorRange *r = (DecorRange *)range_ptr;
-  if (r->kind == kDecorKindUIWatched) {
-    return r->data.ui.ns_id;
-  }
-  return 0;
-}
-
-/// Get UIWatched data mark_id from a DecorRange.
-uint32_t nvim_decor_range_get_ui_mark_id(void *range_ptr)
-{
-  DecorRange *r = (DecorRange *)range_ptr;
-  if (r->kind == kDecorKindUIWatched) {
-    return r->data.ui.mark_id;
-  }
-  return 0;
-}
-
-// draw_virt_text helper: high-level iteration over active ranges
-
-/// Get an active DecorRange by iteration index.
-/// This uses the sorted ranges_i array to get the actual range.
-void *nvim_decor_state_get_active_range(void *state_ptr, int i)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  if (i < 0 || i >= (int)kv_size(state->ranges_i)) {
-    return NULL;
-  }
-  int idx = kv_A(state->ranges_i, i);
-  return &kv_A(state->slots, idx).range;
-}
-
-/// Get data.vt->data.virt_text pointer from a DecorRange (for inline virtual text).
-void *nvim_decor_range_get_virt_inline_data(void *range_ptr)
-{
-  DecorRange *r = (DecorRange *)range_ptr;
-  if (r->kind == kDecorKindVirtText && r->data.vt != NULL) {
-    return &r->data.vt->data.virt_text;
-  }
-  return NULL;
-}
-
-/// Get data.vt->hl_mode from a DecorRange.
-int nvim_decor_range_get_virt_inline_hl_mode(void *range_ptr)
-{
-  DecorRange *r = (DecorRange *)range_ptr;
-  if (r->kind == kDecorKindVirtText && r->data.vt != NULL) {
-    return r->data.vt->hl_mode;
-  }
-  return 0;  // HL_MODE_UNKNOWN
 }
 
 // Extmark Decoration Accessor Functions (for Rust FFI - extmark crate)

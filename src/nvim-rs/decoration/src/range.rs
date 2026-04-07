@@ -9,7 +9,7 @@ use crate::decor::{
     DECOR_ID_INVALID, DECOR_PRIORITY_BASE, KSH_CONCEAL, KSH_IS_SIGN, KSH_SPELL_OFF, KSH_SPELL_ON,
     KSH_UI_WATCHED, KSH_UI_WATCHED_OVERLAY,
 };
-use crate::types::{DecorRangeData, DecorRangeUiData, DecorSignHighlight};
+use crate::types::{DecorRangeData, DecorRangeUiData, DecorSignHighlight, DecorVirtText};
 use crate::{DecorKind, DecorStateHandle, VirtTextPos, KVT_IS_LINES};
 
 // =============================================================================
@@ -528,20 +528,8 @@ impl DecorVtHandle {
 }
 
 extern "C" {
-    // DecorSignHighlight field accessors
-    fn nvim_decor_sh_get_flags(sh: DecorShHandle) -> u16;
-    fn nvim_decor_sh_ptr_get_priority(sh: DecorShHandle) -> u16;
-    fn nvim_decor_sh_ptr_get_hl_id(sh: DecorShHandle) -> c_int;
-    fn nvim_decor_sh_ptr_get_url(sh: DecorShHandle) -> *const std::ffi::c_char;
-    fn nvim_decor_sh_ptr_get_next(sh: DecorShHandle) -> u32;
-
-    // DecorVirtText field accessors
-    fn nvim_decor_vt_ptr_get_flags(vt: DecorVtHandle) -> u8;
-    fn nvim_decor_vt_ptr_get_priority(vt: DecorVtHandle) -> u16;
-    fn nvim_decor_vt_ptr_get_next(vt: DecorVtHandle) -> DecorVtHandle;
-
-    // decor_items global accessors
-    fn nvim_decor_items_get(idx: u32) -> DecorShHandle;
+    // decor_items global accessor (still needed for index-to-pointer lookup)
+    fn nvim_decor_items_get(idx: u32) -> *mut crate::types::DecorSignHighlight;
 
     // syn_id2attr
     fn syn_id2attr(hl_id: c_int) -> c_int;
@@ -570,14 +558,15 @@ pub unsafe extern "C" fn rs_decor_range_add_virt(
         return;
     }
 
-    let vt_flags = nvim_decor_vt_ptr_get_flags(vt);
+    let vt_typed = vt.0.cast::<DecorVirtText>();
+    let vt_flags = (*vt_typed).flags;
     let is_lines = vt_flags & KVT_IS_LINES != 0;
     let kind = if is_lines {
         DecorKind::VirtLines as c_int
     } else {
         DecorKind::VirtText as c_int
     };
-    let priority = nvim_decor_vt_ptr_get_priority(vt);
+    let priority = (*vt_typed).priority;
     let priority_internal = u32::from(priority) << 16;
 
     nvim_decor_range_insert_vt(
@@ -616,17 +605,18 @@ pub unsafe extern "C" fn rs_decor_range_add_sh(
         return;
     }
 
-    let flags = nvim_decor_sh_get_flags(sh);
+    let sh_typed = sh.0.cast::<crate::types::DecorSignHighlight>();
+    let flags = (*sh_typed).flags;
 
     // Skip signs
     if flags & KSH_IS_SIGN != 0 {
         return;
     }
 
-    let priority = nvim_decor_sh_ptr_get_priority(sh);
+    let priority = (*sh_typed).priority;
     let priority_internal = (u32::from(priority) << 16) + u32::from(subpriority);
-    let hl_id = nvim_decor_sh_ptr_get_hl_id(sh);
-    let url = nvim_decor_sh_ptr_get_url(sh);
+    let hl_id = (*sh_typed).hl_id;
+    let url = (*sh_typed).url;
 
     // Insert highlight range if there's something to highlight
     let has_hl = hl_id != 0;
@@ -710,17 +700,27 @@ pub unsafe extern "C" fn rs_decor_range_add_from_inline(
         let mut cur_vt = vt;
         while !cur_vt.is_null() {
             rs_decor_range_add_virt(state, start_row, start_col, end_row, end_col, cur_vt, owned);
-            cur_vt = nvim_decor_vt_ptr_get_next(cur_vt);
+            let next = (*cur_vt.0.cast::<DecorVirtText>()).next;
+            cur_vt = DecorVtHandle(next.cast::<c_void>());
         }
 
         // Walk sign/highlight linked list
         let mut idx = sh_idx;
         while idx != DECOR_ID_INVALID {
-            let sh = nvim_decor_items_get(idx);
+            let sh_ptr = nvim_decor_items_get(idx);
             rs_decor_range_add_sh(
-                state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
+                state,
+                start_row,
+                start_col,
+                end_row,
+                end_col,
+                DecorShHandle(sh_ptr.cast::<c_void>()),
+                owned,
+                ns,
+                mark_id,
+                0,
             );
-            idx = nvim_decor_sh_ptr_get_next(sh);
+            idx = (*sh_ptr).next;
         }
     } else {
         // Inline highlight: build types::DecorSignHighlight directly and add the range.
