@@ -403,7 +403,12 @@ void nvim_cmdexpand_set_context_for_expression(expand_T *xp, char *str, int cmdi
   set_context_for_expression(xp, str, (cmdidx_T)cmdidx);
 }
 
-void nvim_cmdexpand_cmdline_del(int from) { cmdline_del(get_cmdline_info(), from); }
+void nvim_cmdexpand_set_cmdlen(int val) { get_cmdline_info()->cmdlen = val; }
+void nvim_cmdexpand_set_cmdpos(int val) { get_cmdline_info()->cmdpos = val; }
+int nvim_cmdexpand_get_cmdbufflen(void) { return get_cmdline_info()->cmdbufflen; }
+// nvim_cmdexpand_cmdline_del: calls Rust rs_cmdexpand_cmdline_del
+extern void rs_cmdexpand_cmdline_del(int from);
+void nvim_cmdexpand_cmdline_del(int from) { rs_cmdexpand_cmdline_del(from); }
 void nvim_cmdexpand_set_key_typed(int val) { KeyTyped = (bool)val; }
 int nvim_cmdexpand_get_key_typed(void) { return (int)KeyTyped; }
 void nvim_cmdexpand_put_on_cmdline(const char *str, int len, int redraw) { put_on_cmdline(str, len, (bool)redraw); }
@@ -545,21 +550,11 @@ void nvim_cmdexpand_save_cmdline_orig(void)
   cmdline_orig = xstrnsave(ccline->cmdbuff, (size_t)ccline->cmdlen);
 }
 
+// nvim_cmdexpand_apply_expansion: implemented in Rust (helpers.rs)
+extern void rs_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen);
 void nvim_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen)
 {
-  CmdlineInfo *ccline = get_cmdline_info();
-  int difflen = plen - (int)xp->xp_pattern_len;
-  if (ccline->cmdlen + difflen + 4 > ccline->cmdbufflen) {
-    realloc_cmdbuff(ccline->cmdlen + difflen + 4);
-    xp->xp_pattern = ccline->cmdbuff + i;
-  }
-  assert(ccline->cmdpos <= ccline->cmdlen);
-  memmove(&ccline->cmdbuff[ccline->cmdpos + difflen],
-          &ccline->cmdbuff[ccline->cmdpos],
-          (size_t)ccline->cmdlen - (size_t)ccline->cmdpos + 1);
-  memmove(&ccline->cmdbuff[i], p, (size_t)plen);
-  ccline->cmdlen += difflen;
-  ccline->cmdpos += difflen;
+  rs_cmdexpand_apply_expansion(xp, i, p, plen);
 }
 
 void nvim_cmdexpand_nlua_expand_pat(expand_T *xp) { nlua_expand_pat(xp); }
@@ -843,15 +838,5 @@ static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T
   return ret;
 }
 
-// cmdline_del -- used by nvim_cmdexpand_cmdline_del accessor only (kept for now)
-static void cmdline_del(CmdlineInfo *cclp, int from)
-{
-  assert(cclp->cmdpos <= cclp->cmdlen);
-  memmove(cclp->cmdbuff + from, cclp->cmdbuff + cclp->cmdpos,
-          (size_t)cclp->cmdlen - (size_t)cclp->cmdpos + 1);
-  cclp->cmdlen -= cclp->cmdpos - from;
-  cclp->cmdpos = from;
-}
-
-// parse_pattern_and_range is now implemented in Rust (cmdexpand/src/incsearch.rs)
+// cmdline_del and parse_pattern_and_range are now implemented in Rust (cmdexpand/src/incsearch.rs)
 // and exported with the same C symbol name via #[unsafe(export_name = "parse_pattern_and_range")].

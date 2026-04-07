@@ -18,6 +18,15 @@ extern "C" {
     fn nvim_cmdexpand_rem_backslash(p: *const c_char) -> c_int;
     fn nvim_cmdexpand_mb_ptr_adv_len(p: *const c_char) -> c_int;
 
+    // CmdlineInfo accessors (from cmdexpand.c / ex_getln.c)
+    fn nvim_cmdexpand_get_cmdbuff() -> *mut c_char;
+    fn nvim_cmdexpand_get_cmdlen() -> c_int;
+    fn nvim_cmdexpand_get_cmdpos() -> c_int;
+    fn nvim_cmdexpand_set_cmdlen(val: c_int);
+    fn nvim_cmdexpand_set_cmdpos(val: c_int);
+    fn nvim_cmdexpand_get_cmdbufflen() -> c_int;
+    fn realloc_cmdbuff(len: c_int) -> c_int;
+
     // String manipulation (these are existing C functions)
     fn vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
     fn vim_strsave_fnameescape(s: *const c_char, what: c_int) -> *mut c_char;
@@ -276,3 +285,83 @@ pub extern "C" fn rs_clear_cmdline_orig() {
 
 /// `XP_PREFIX_NONE` value (0).
 const XP_PREFIX_NONE: c_int = 0;
+
+// =============================================================================
+// Phase 2: cmdline_del
+// =============================================================================
+
+/// Delete text from the cmdline buffer between `from` and the current cursor.
+///
+/// Rust replacement for C `cmdline_del`.
+/// Equivalent to: shift bytes from `cmdpos` to `from`, update `cmdlen`/`cmdpos`.
+///
+/// # Safety
+///
+/// Must be called from cmdline context where `get_cmdline_info()` is valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdexpand_cmdline_del(from: c_int) {
+    let cmdbuff = nvim_cmdexpand_get_cmdbuff();
+    let cmdlen = nvim_cmdexpand_get_cmdlen();
+    let cmdpos = nvim_cmdexpand_get_cmdpos();
+
+    debug_assert!(cmdpos <= cmdlen, "cmdpos ({cmdpos}) > cmdlen ({cmdlen})");
+
+    // memmove(cmdbuff + from, cmdbuff + cmdpos, cmdlen - cmdpos + 1)
+    let src = cmdbuff.add(cmdpos as usize);
+    let dst = cmdbuff.add(from as usize);
+    let n = (cmdlen - cmdpos + 1) as usize;
+    std::ptr::copy(src, dst, n);
+
+    nvim_cmdexpand_set_cmdlen(cmdlen - (cmdpos - from));
+    nvim_cmdexpand_set_cmdpos(from);
+}
+
+// =============================================================================
+// Phase 2: apply_expansion
+// =============================================================================
+
+/// Apply a completion match to the cmdline buffer.
+///
+/// Rust replacement for C `nvim_cmdexpand_apply_expansion`.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T`. `p` must be a valid C string of `plen` bytes.
+/// Must be called from cmdline context where `get_cmdline_info()` is valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdexpand_apply_expansion(
+    xp: ExpandHandle,
+    i: c_int,
+    p: *const c_char,
+    plen: c_int,
+) {
+    let cmdlen = nvim_cmdexpand_get_cmdlen();
+    let cmdpos = nvim_cmdexpand_get_cmdpos();
+    let cmdbufflen = nvim_cmdexpand_get_cmdbufflen();
+    let difflen = plen - (*xp).xp_pattern_len as c_int;
+
+    let cmdbuff = if cmdlen + difflen + 4 > cmdbufflen {
+        realloc_cmdbuff(cmdlen + difflen + 4);
+        let buf = nvim_cmdexpand_get_cmdbuff();
+        // Update xp_pattern to point into the new buffer
+        (*xp).xp_pattern = buf.add(i as usize);
+        buf
+    } else {
+        nvim_cmdexpand_get_cmdbuff()
+    };
+
+    debug_assert!(cmdpos <= cmdlen, "cmdpos ({cmdpos}) > cmdlen ({cmdlen})");
+
+    // Shift existing content right to make room for the new pattern
+    // memmove(&cmdbuff[cmdpos + difflen], &cmdbuff[cmdpos], cmdlen - cmdpos + 1)
+    let src = cmdbuff.add(cmdpos as usize);
+    let dst = cmdbuff.add((cmdpos + difflen) as usize);
+    let n = (cmdlen - cmdpos + 1) as usize;
+    std::ptr::copy(src, dst, n);
+
+    // Copy new pattern into position i
+    std::ptr::copy_nonoverlapping(p, cmdbuff.add(i as usize), plen as usize);
+
+    nvim_cmdexpand_set_cmdlen(cmdlen + difflen);
+    nvim_cmdexpand_set_cmdpos(cmdpos + difflen);
+}
