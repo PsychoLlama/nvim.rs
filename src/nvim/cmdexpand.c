@@ -544,7 +544,6 @@ void nvim_cmdexpand_msg_putchar(int c) { msg_putchar(c); }
 void nvim_cmdexpand_msg_ext_set_kind(const char *kind) { msg_ext_set_kind(kind); }
 void nvim_cmdexpand_free_wild(int count, char **files) { FreeWild(count, files); }
 void nvim_cmdexpand_pum_clear(void) { pum_clear(); }
-void nvim_cmdexpand_set_compl_selected(int val) { compl_selected = val; }
 void nvim_cmdexpand_pum_create_from_matches(expand_T *xp, char **matches, int num_matches,
                                             int showtail, int noselect)
 {

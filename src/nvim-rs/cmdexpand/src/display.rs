@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_cmdexpand_pum_clear();
 
     /// Set `compl_selected`.
-    fn nvim_cmdexpand_set_compl_selected(val: c_int);
+    fn nvim_set_compl_selected(val: c_int);
 
     /// Create cmdline PUM from matches and display it.
     fn nvim_cmdexpand_pum_create_from_matches(
@@ -425,7 +425,7 @@ pub unsafe extern "C" fn rs_showmatches(
             c_int::from(showtail),
             c_int::from(noselect),
         );
-        nvim_cmdexpand_set_compl_selected(if noselect { -1 } else { 0 });
+        nvim_set_compl_selected(if noselect { -1 } else { 0 });
         nvim_cmdexpand_pum_clear();
         nvim_cmdexpand_pum_display(1);
         return EXPAND_OK;
