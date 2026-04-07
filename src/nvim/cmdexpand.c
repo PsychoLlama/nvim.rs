@@ -179,7 +179,6 @@ void nvim_expand_clear_orig(expand_T *xp)
 }
 
 void nvim_clear_cmdline_orig(void) { XFREE_CLEAR(cmdline_orig); }
-int nvim_get_compl_selected(void) { return compl_selected; }
 void nvim_set_compl_selected(int val) { compl_selected = val; }
 int nvim_get_cmd_showtail(void) { return cmd_showtail; }
 void nvim_cmdexpand_pum_display(int changed_array) { cmdline_pum_display(changed_array != 0); }
@@ -327,9 +326,7 @@ void nvim_cmdexpand_do_pum_cleanup(void)
   wildmenu_cleanup(get_cmdline_info());
 }
 
-int nvim_cmdexpand_get_compl_startcol(void) { return compl_startcol; }
 void nvim_cmdexpand_set_compl_startcol(int val) { compl_startcol = val; }
-int nvim_cmdexpand_get_compl_match_arraysize(void) { return compl_match_arraysize; }
 void nvim_cmdexpand_set_compl_match_arraysize(int val) { compl_match_arraysize = val; }
 void *nvim_cmdexpand_alloc_compl_match_array(int numMatches)
 {
@@ -361,7 +358,6 @@ int nvim_cmdexpand_ccline_xpc_supports_fuzzy(void)
   return xp != NULL && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
 }
 
-expand_T *nvim_cmdexpand_get_ccline_xpc(void) { return get_cmdline_info()->xpc; }
 int nvim_cmdexpand_get_cmdfirstc(void) { return get_cmdline_info()->cmdfirstc; }
 int nvim_cmdexpand_get_input_fn(void) { return get_cmdline_info()->input_fn ? 1 : 0; }
 int nvim_cmdexpand_get_cmdlen(void) { return get_cmdline_info()->cmdlen; }
