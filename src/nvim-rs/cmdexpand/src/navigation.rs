@@ -73,8 +73,7 @@ extern "C" {
     fn utf_ptr2char(p: *const c_char) -> c_int;
     fn mb_tolower(c: c_int) -> c_int;
 
-    // ExpandOne orchestrator helpers
-    fn nvim_expand_free_old_matches(xp: ExpandHandle);
+    // ExpandOne orchestrator helpers (nvim_expand_free_old_matches is in Rust helpers.rs)
     fn nvim_cmdexpand_xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut libc::c_void);
     fn xmalloc(size: usize) -> *mut c_char;
@@ -394,7 +393,7 @@ pub unsafe extern "C" fn rs_expand_one(
 
     // Free old names (skipped for WILD_ALL and WILD_LONGEST modes)
     if mode != WILD_ALL && mode != WILD_LONGEST {
-        nvim_expand_free_old_matches(xp);
+        crate::helpers::rs_expand_free_old_matches(xp);
     }
     let new_selected = if options & WILD_NOSELECT != 0 { -1 } else { 0 };
     (*xp).xp_selected = new_selected;

@@ -240,21 +240,7 @@ _Static_assert(offsetof(expand_T, xp_pre_incsearch_pos) == 380, "xp_pre_incsearc
 _Static_assert(offsetof(expand_T, xp_shell) == 76, "xp_shell offset mismatch");
 #endif
 
-void nvim_expand_free_old_matches(expand_T *xp)
-{
-  if (!xp) {
-    return;
-  }
-  if (xp->xp_numfiles != -1) {
-    FreeWild(xp->xp_numfiles, xp->xp_files);
-    xp->xp_numfiles = -1;
-    XFREE_CLEAR(xp->xp_orig);
-
-    if (compl_match_array != NULL) {
-      cmdline_pum_remove(false);
-    }
-  }
-}
+// nvim_expand_free_old_matches is implemented in Rust (helpers.rs)
 
 // nvim_get_got_int already exists in ex_eval.c
 

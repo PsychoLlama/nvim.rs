@@ -45,6 +45,12 @@ extern "C" {
 
     // Static `cmdline_orig` management
     fn nvim_clear_cmdline_orig();
+
+    // compl_match_array check
+    fn nvim_get_compl_match_array_not_null() -> c_int;
+
+    // cmdline_pum_remove (implemented in pum.rs)
+    fn cmdline_pum_remove(defer_redraw: bool);
 }
 
 // =============================================================================
@@ -285,6 +291,33 @@ pub extern "C" fn rs_clear_cmdline_orig() {
 
 /// `XP_PREFIX_NONE` value (0).
 const XP_PREFIX_NONE: c_int = 0;
+
+// =============================================================================
+// Phase 3: free_old_matches
+// =============================================================================
+
+/// Free old completion matches and remove the popup menu if active.
+///
+/// Rust replacement for C `nvim_expand_free_old_matches`.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` handle or null.
+#[unsafe(export_name = "nvim_expand_free_old_matches")]
+pub unsafe extern "C" fn rs_expand_free_old_matches(xp: ExpandHandle) {
+    if xp.is_null() {
+        return;
+    }
+    if (*xp).xp_numfiles != -1 {
+        nvim_expand_free_wild(xp);
+        (*xp).xp_numfiles = -1;
+        nvim_expand_clear_orig(xp);
+
+        if nvim_get_compl_match_array_not_null() != 0 {
+            cmdline_pum_remove(false);
+        }
+    }
+}
 
 // =============================================================================
 // Phase 2: cmdline_del
