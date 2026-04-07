@@ -55,20 +55,46 @@ typedef struct {
 static RemoteUI *uis[MAX_UI_COUNT];
 static bool ui_ext[kUIExtCount] = { 0 };
 static size_t ui_count = 0;
-static int ui_mode_idx = SHAPE_IDX_N;
-static int cursor_row = 0, cursor_col = 0;
-static bool pending_cursor_update = false;
-static int busy = 0;
-static bool pending_mode_info_update = false;
-static bool pending_mode_update = false;
-static handle_T cursor_grid_handle = DEFAULT_GRID_HANDLE;
 
 static PMap(uint32_t) ui_event_cbs = MAP_INIT;
 bool ui_cb_ext[kUIExtCount];  ///< Internalized UI capabilities.
 
-static bool has_mouse = false;
-static int pending_has_mouse = -1;
-static bool pending_default_colors = false;
+// Rust FFI: state accessors (state moved to Rust in Phase 1)
+extern bool rs_ui_get_pending_cursor_update(void);
+extern void rs_ui_set_pending_cursor_update(bool val);
+extern int rs_ui_get_cursor_row(void);
+extern int rs_ui_get_cursor_col(void);
+extern int rs_ui_get_cursor_grid_handle(void);
+extern void rs_ui_set_cursor_pos(int row, int col);
+extern bool rs_ui_get_pending_mode_info_update(void);
+extern void rs_ui_set_pending_mode_info_update(bool val);
+extern bool rs_ui_get_pending_mode_update(void);
+extern void rs_ui_set_pending_mode_update(bool val);
+extern int rs_ui_get_mode_idx(void);
+extern int rs_ui_get_busy(void);
+extern bool rs_ui_get_has_mouse(void);
+extern void rs_ui_set_has_mouse(bool val);
+extern int rs_ui_get_pending_has_mouse(void);
+extern void rs_ui_set_pending_has_mouse(int val);
+extern bool rs_ui_get_pending_default_colors(void);
+extern void rs_ui_set_pending_default_colors(bool val);
+// Rust implementations of migrated functions
+extern bool rs_ui_rgb_attached(void);
+extern bool rs_ui_gui_attached(void);
+extern bool rs_ui_override(void);
+extern size_t rs_ui_active(void);
+extern int rs_ui_pum_get_height(void);
+extern bool rs_ui_pum_get_pos(double *pwidth, double *pheight, double *prow, double *pcol);
+extern void rs_ui_cursor_goto(int new_row, int new_col);
+extern void rs_ui_grid_cursor_goto(handle_T grid_handle, int new_row, int new_col);
+extern void rs_ui_check_cursor_grid(handle_T grid_handle);
+extern void rs_ui_mode_info_set(void);
+extern void rs_ui_cursor_shape_no_check_conceal(void);
+extern void rs_ui_cursor_shape(void);
+extern void rs_ui_default_colors_set(void);
+extern void rs_ui_may_set_default_colors(void);
+extern void rs_ui_busy_start(void);
+extern void rs_ui_busy_stop(void);
 
 #ifdef NVIM_LOG_DEBUG
 static size_t uilog_seen = 0;
@@ -139,48 +165,16 @@ void ui_free_all_mem(void)
 #endif
 
 /// Returns true if any `rgb=true` UI is attached.
-bool ui_rgb_attached(void)
-{
-  if (p_tgc) {
-    return true;
-  }
-  for (size_t i = 0; i < ui_count; i++) {
-    // We do not consider the TUI in this loop because we already checked for 'termguicolors' at the
-    // beginning of this function. In this loop, we are checking to see if any _other_ UIs which
-    // support RGB are attached.
-    bool tui = uis[i]->stdin_tty || uis[i]->stdout_tty;
-    if (!tui && uis[i]->rgb) {
-      return true;
-    }
-  }
-  return false;
-}
+bool ui_rgb_attached(void) { return rs_ui_rgb_attached(); }
 
 /// Returns true if a GUI is attached.
-bool ui_gui_attached(void)
-{
-  for (size_t i = 0; i < ui_count; i++) {
-    bool tui = uis[i]->stdin_tty || uis[i]->stdout_tty;
-    if (!tui) {
-      return true;
-    }
-  }
-  return false;
-}
+bool ui_gui_attached(void) { return rs_ui_gui_attached(); }
 
 /// Returns true if any UI requested `override=true`.
-bool ui_override(void)
-{
-  for (size_t i = 0; i < ui_count; i++) {
-    if (uis[i]->override) {
-      return true;
-    }
-  }
-  return false;
-}
+bool ui_override(void) { return rs_ui_override(); }
 
 /// Gets the number of UIs connected to this server.
-size_t ui_active(void) { return ui_count; }
+size_t ui_active(void) { return rs_ui_active(); }
 
 void ui_refresh(void)
 {
@@ -203,8 +197,8 @@ void ui_refresh(void)
     }
   }
 
-  cursor_row = cursor_col = 0;
-  pending_cursor_update = true;
+  rs_ui_set_cursor_pos(0, 0);
+  rs_ui_set_pending_cursor_update(true);
 
   bool had_message = ui_ext[kUIMessages];
   for (UIExtension i = 0; (int)i < kUIExtCount; i++) {
@@ -243,75 +237,29 @@ void ui_refresh(void)
   p_lz = save_p_lz;
 
   ui_mode_info_set();
-  pending_mode_update = true;
+  rs_ui_set_pending_mode_update(true);
   ui_cursor_shape();
-  pending_has_mouse = -1;
+  rs_ui_set_pending_has_mouse(-1);
 }
 
-int ui_pum_get_height(void)
-{
-  int pum_height = 0;
-  for (size_t i = 0; i < ui_count; i++) {
-    int ui_pum_height = uis[i]->pum_nlines;
-    if (ui_pum_height) {
-      pum_height =
-        pum_height != 0 ? MIN(pum_height, ui_pum_height) : ui_pum_height;
-    }
-  }
-  return pum_height;
-}
+int ui_pum_get_height(void) { return rs_ui_pum_get_height(); }
 
 bool ui_pum_get_pos(double *pwidth, double *pheight, double *prow, double *pcol)
 {
-  for (size_t i = 0; i < ui_count; i++) {
-    if (!uis[i]->pum_pos) {
-      continue;
-    }
-    *pwidth = uis[i]->pum_width;
-    *pheight = uis[i]->pum_height;
-    *prow = uis[i]->pum_row;
-    *pcol = uis[i]->pum_col;
-    return true;
-  }
-  return false;
+  return rs_ui_pum_get_pos(pwidth, pheight, prow, pcol);
 }
 
 static void ui_refresh_event(void **argv) { ui_refresh(); }
 
 void ui_schedule_refresh(void) { multiqueue_put(resize_events, ui_refresh_event, NULL); }
 
-void ui_default_colors_set(void)
-{
-  // Throttle setting of default colors at startup, so it only happens once
-  // if the user sets the colorscheme in startup.
-  pending_default_colors = true;
-  if (starting == 0) {
-    ui_may_set_default_colors();
-  }
-}
+void ui_default_colors_set(void) { rs_ui_default_colors_set(); }
 
-static void ui_may_set_default_colors(void)
-{
-  if (pending_default_colors) {
-    pending_default_colors = false;
-    ui_call_default_colors_set(normal_fg, normal_bg, normal_sp,
-                               cterm_normal_fg_color, cterm_normal_bg_color);
-  }
-}
+static void ui_may_set_default_colors(void) { rs_ui_may_set_default_colors(); }
 
-void ui_busy_start(void)
-{
-  if (!(busy++)) {
-    ui_call_busy_start();
-  }
-}
+void ui_busy_start(void) { rs_ui_busy_start(); }
 
-void ui_busy_stop(void)
-{
-  if (!(--busy)) {
-    ui_call_busy_stop();
-  }
-}
+void ui_busy_stop(void) { rs_ui_busy_stop(); }
 
 /// Emit a bell or visualbell as a warning
 ///
@@ -474,39 +422,25 @@ void ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endc
     ui_call_flush();
     uint64_t wd = (uint64_t)llabs(p_wd);
     os_sleep(wd);
-    pending_cursor_update = true;  // restore the cursor later
+    rs_ui_set_pending_cursor_update(true);  // restore the cursor later
   }
 }
 
-void ui_cursor_goto(int new_row, int new_col) { ui_grid_cursor_goto(DEFAULT_GRID_HANDLE, new_row, new_col); }
+void ui_cursor_goto(int new_row, int new_col) { rs_ui_cursor_goto(new_row, new_col); }
 
 void ui_grid_cursor_goto(handle_T grid_handle, int new_row, int new_col)
 {
-  if (new_row == cursor_row
-      && new_col == cursor_col
-      && grid_handle == cursor_grid_handle) {
-    return;
-  }
-
-  cursor_row = new_row;
-  cursor_col = new_col;
-  cursor_grid_handle = grid_handle;
-  pending_cursor_update = true;
+  rs_ui_grid_cursor_goto(grid_handle, new_row, new_col);
 }
 
 /// moving the cursor grid will implicitly move the cursor
-void ui_check_cursor_grid(handle_T grid_handle)
-{
-  if (cursor_grid_handle == grid_handle) {
-    pending_cursor_update = true;
-  }
-}
+void ui_check_cursor_grid(handle_T grid_handle) { rs_ui_check_cursor_grid(grid_handle); }
 
-void ui_mode_info_set(void) { pending_mode_info_update = true; }
+void ui_mode_info_set(void) { rs_ui_mode_info_set(); }
 
-// C accessors for cursor position (used by Rust)
-int nvim_get_ui_cursor_row(void) { return cursor_row; }
-int nvim_get_ui_cursor_col(void) { return cursor_col; }
+// C accessors for cursor position (delegates to Rust-owned state)
+int nvim_get_ui_cursor_row(void) { return rs_ui_get_cursor_row(); }
+int nvim_get_ui_cursor_col(void) { return rs_ui_get_cursor_col(); }
 
 void ui_flush(void)
 {
@@ -535,9 +469,10 @@ void ui_flush(void)
   }
   msg_scroll_flush();
 
-  if (pending_cursor_update) {
-    ui_call_grid_cursor_goto(cursor_grid_handle, cursor_row, cursor_col);
-    pending_cursor_update = false;
+  if (rs_ui_get_pending_cursor_update()) {
+    ui_call_grid_cursor_goto(rs_ui_get_cursor_grid_handle(), rs_ui_get_cursor_row(),
+                             rs_ui_get_cursor_col());
+    rs_ui_set_pending_cursor_update(false);
     // The cursor move might change the composition order,
     // so flush again to update the windows that changed
     // TODO(bfredl): refactor the flow of information so that win_ui_flush()
@@ -545,22 +480,22 @@ void ui_flush(void)
     // by nvim core, not the compositor)
     win_ui_flush(false);
   }
-  if (pending_mode_info_update) {
+  if (rs_ui_get_pending_mode_info_update()) {
     Arena arena = ARENA_EMPTY;
     Array style = mode_style_array(&arena);
     bool enabled = (*p_guicursor != NUL);
     ui_call_mode_info_set(enabled, style);
     arena_mem_free(arena_finish(&arena));
-    pending_mode_info_update = false;
+    rs_ui_set_pending_mode_info_update(false);
   }
-  if (pending_mode_update && !starting) {
-    char *full_name = shape_table[ui_mode_idx].full_name;
-    ui_call_mode_change(cstr_as_string(full_name), ui_mode_idx);
-    pending_mode_update = false;
+  if (rs_ui_get_pending_mode_update() && !starting) {
+    char *full_name = shape_table[rs_ui_get_mode_idx()].full_name;
+    ui_call_mode_change(cstr_as_string(full_name), rs_ui_get_mode_idx());
+    rs_ui_set_pending_mode_update(false);
   }
-  if (pending_has_mouse != has_mouse) {
-    (has_mouse ? ui_call_mouse_on : ui_call_mouse_off)();
-    pending_has_mouse = has_mouse;
+  if (rs_ui_get_pending_has_mouse() != rs_ui_get_has_mouse()) {
+    (rs_ui_get_has_mouse() ? ui_call_mouse_on : ui_call_mouse_off)();
+    rs_ui_set_pending_has_mouse(rs_ui_get_has_mouse());
   }
   ui_call_flush();
 
@@ -575,9 +510,10 @@ void ui_flush(void)
 /// then this can be checked directly in ui_flush()
 void ui_check_mouse(void)
 {
-  has_mouse = false;
+  bool new_has_mouse = false;
   // Be quick when mouse is off.
   if (*p_mouse == NUL) {
+    rs_ui_set_has_mouse(false);
     return;
   }
 
@@ -603,50 +539,38 @@ void ui_check_mouse(void)
     switch (*p) {
     case 'a':
       if (vim_strchr(MOUSE_A, checkfor) != NULL) {
-        has_mouse = true;
-        return;
+        new_has_mouse = true;
+        goto done;
       }
       break;
     case MOUSE_HELP:
       if (checkfor != MOUSE_RETURN && curbuf->b_help) {
-        has_mouse = true;
-        return;
+        new_has_mouse = true;
+        goto done;
       }
       break;
     default:
       if (checkfor == *p) {
-        has_mouse = true;
-        return;
+        new_has_mouse = true;
+        goto done;
       }
     }
   }
+
+done:
+  rs_ui_set_has_mouse(new_has_mouse);
 }
 
 /// Check if current mode has changed.
 ///
 /// May update the shape of the cursor.
-void ui_cursor_shape_no_check_conceal(void)
-{
-  if (!full_screen) {
-    return;
-  }
-  int new_mode_idx = cursor_get_mode_idx();
-
-  if (new_mode_idx != ui_mode_idx) {
-    ui_mode_idx = new_mode_idx;
-    pending_mode_update = true;
-  }
-}
+void ui_cursor_shape_no_check_conceal(void) { rs_ui_cursor_shape_no_check_conceal(); }
 
 /// Check if current mode has changed.
 ///
 /// May update the shape of the cursor.
 /// With concealing on, may conceal or unconceal the cursor line.
-void ui_cursor_shape(void)
-{
-  ui_cursor_shape_no_check_conceal();
-  conceal_check_cursor_line();
-}
+void ui_cursor_shape(void) { rs_ui_cursor_shape(); }
 
 // C accessor for ui_ext array (used by Rust)
 int nvim_get_ui_ext(int ext) { return ui_ext[ext] ? 1 : 0; }
@@ -802,4 +726,45 @@ void ui_remove_cb(uint32_t ns_id, bool checkerr)
 
 /// Get number of active UIs (used by Rust FFI)
 size_t nvim_ui_active(void) { return ui_count; }
+
+// =============================================================================
+// C accessors for Rust (Phase 1)
+// =============================================================================
+
+/// Get uis[i] as opaque pointer (used by Rust)
+void *nvim_ui_get_uis_ptr(size_t i) { return (void *)uis[i]; }
+
+/// Get rgb field of RemoteUI (used by Rust)
+bool nvim_remoteui_get_rgb(void *ui) { return ((RemoteUI *)ui)->rgb; }
+
+/// Get stdin_tty field of RemoteUI (used by Rust)
+bool nvim_remoteui_get_stdin_tty(void *ui) { return ((RemoteUI *)ui)->stdin_tty; }
+
+/// Get stdout_tty field of RemoteUI (used by Rust)
+bool nvim_remoteui_get_stdout_tty(void *ui) { return ((RemoteUI *)ui)->stdout_tty; }
+
+/// Get override field of RemoteUI (used by Rust)
+bool nvim_remoteui_get_override(void *ui) { return ((RemoteUI *)ui)->override; }
+
+/// Get pum_nlines field of RemoteUI (used by Rust)
+int nvim_remoteui_get_pum_nlines(void *ui) { return ((RemoteUI *)ui)->pum_nlines; }
+
+/// Get pum_pos field of RemoteUI (used by Rust)
+bool nvim_remoteui_get_pum_pos(void *ui) { return ((RemoteUI *)ui)->pum_pos; }
+
+/// Get pum_width field of RemoteUI (used by Rust)
+double nvim_remoteui_get_pum_width(void *ui) { return ((RemoteUI *)ui)->pum_width; }
+
+/// Get pum_height field of RemoteUI (used by Rust)
+double nvim_remoteui_get_pum_height(void *ui) { return ((RemoteUI *)ui)->pum_height; }
+
+/// Get pum_row field of RemoteUI (used by Rust)
+double nvim_remoteui_get_pum_row(void *ui) { return ((RemoteUI *)ui)->pum_row; }
+
+/// Get pum_col field of RemoteUI (used by Rust)
+double nvim_remoteui_get_pum_col(void *ui) { return ((RemoteUI *)ui)->pum_col; }
+
+/// Get p_tgc option value (used by Rust)
+int nvim_get_p_tgc(void) { return p_tgc; }
+
 
