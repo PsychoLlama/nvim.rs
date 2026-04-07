@@ -10,7 +10,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::too_many_lines)]
 
-use std::ffi::{c_int, c_uint};
+use std::ffi::{c_char, c_int, c_long, c_uint};
 
 /// Column number type (matches `colnr_T` in Neovim).
 type ColnrT = i32;
@@ -123,9 +123,25 @@ extern "C" {
     fn vim_iswordc(c: c_int) -> bool;
     fn nvim_cursor_has_composing() -> c_int;
 
-    // Softtabstop helpers
-    fn nvim_edit_ins_bs_check_sts(inserted_space_p: *mut c_int, in_indent: bool) -> bool;
-    fn nvim_edit_ins_bs_softtabstop(inserted_space_p: *mut c_int, in_indent: bool) -> bool;
+    // Softtabstop -- option accessors
+    static mut p_sta: c_int;
+    fn nvim_get_sts_value() -> c_long;
+    fn nvim_curbuf_tabstop_count_vsts() -> c_int;
+    fn nvim_get_Insstart_col() -> ColnrT;
+    fn nvim_get_cursor_pos_ptr() -> *const c_char;
+
+    // Character insertion (for softtabstop insert loop)
+    fn ins_char(c: c_int);
+    fn nvim_ins_str(s: *const c_char, len: usize);
+    fn replace_push_nul();
+
+    // Composite: compute want_col / start_vcol / want_vcol for softtabstop bs
+    fn nvim_ins_bs_softtabstop_want_col(
+        in_indent: bool,
+        want_col_out: *mut ColnrT,
+        start_vcol_out: *mut ColnrT,
+        want_vcol_out: *mut ColnrT,
+    );
 
     // vim_beep
     fn vim_beep(val: c_uint);
@@ -185,6 +201,105 @@ const FO_AUTO: c_int = b'a' as c_int;
 
 /// `FO_WHITE_PAR`
 const FO_WHITE_PAR: c_int = b'w' as c_int;
+
+// ============================================================================
+// ins_bs_check_sts implementation (ported from edit.c)
+// ============================================================================
+
+/// Returns true when the `BACKSPACE_CHAR` softtabstop path should be taken.
+///
+/// Mirrors `nvim_edit_ins_bs_check_sts` from C.
+///
+/// # Safety
+/// Reads global Neovim state.
+unsafe fn ins_bs_check_sts(inserted_space_p: *mut c_int, in_indent: bool) -> bool {
+    let col = nvim_curwin_get_cursor_col();
+    if col == 0 {
+        return false;
+    }
+    let arrow_used = nvim_get_arrow_used() != 0;
+    let sts_value = nvim_get_sts_value();
+    let vsts_count = nvim_curbuf_tabstop_count_vsts();
+    let sta = p_sta != 0;
+
+    // Read the byte just before the cursor
+    // nvim_get_cursor_pos_ptr() points at the cursor; subtract 1 to get prev byte
+    let prev_byte = {
+        let p = nvim_get_cursor_pos_ptr();
+        if p.is_null() {
+            return false;
+        }
+        *p.offset(-1) as u8
+    };
+
+    (sta && in_indent)
+        || ((sts_value != 0 || vsts_count != 0)
+            && col > 0
+            && (prev_byte == b'\t'
+                || (prev_byte == b' ' && (*inserted_space_p == 0 || arrow_used))))
+}
+
+// ============================================================================
+// ins_bs_softtabstop implementation (ported from edit.c)
+// ============================================================================
+
+/// Handle softtabstop-aware backspace alignment.
+///
+/// Mirrors `nvim_edit_ins_bs_softtabstop` from C: finds the target column and
+/// deletes/inserts spaces to align the cursor properly.
+///
+/// # Safety
+/// Accesses global Neovim state via C accessors.
+unsafe fn ins_bs_softtabstop(in_indent: bool) {
+    let state = State;
+
+    // Ask C to compute the target column triplet
+    let mut want_col: ColnrT = 0;
+    let mut start_vcol: ColnrT = 0;
+    let mut target_vcol: ColnrT = 0;
+    nvim_ins_bs_softtabstop_want_col(
+        in_indent,
+        &raw mut want_col,
+        &raw mut start_vcol,
+        &raw mut target_vcol,
+    );
+
+    // Delete characters until we are at or before want_col.
+    while nvim_curwin_get_cursor_col() > want_col {
+        dec_cursor();
+        if state & REPLACE_FLAG != 0 {
+            let cur_lnum = nvim_curwin_get_cursor_lnum();
+            let insstart_lnum = nvim_get_Insstart_lnum();
+            let insstart_col = nvim_get_Insstart_col();
+            if cur_lnum != insstart_lnum || nvim_curwin_get_cursor_col() >= insstart_col {
+                replace_do_bs(-1);
+            }
+        } else {
+            del_char(0);
+        }
+    }
+
+    // Insert extra spaces until we are at target_vcol.
+    let mut vcol = start_vcol;
+    while vcol < target_vcol {
+        let cursor_lnum = nvim_curwin_get_cursor_lnum();
+        let cursor_col = nvim_curwin_get_cursor_col();
+        let insstart_orig_lnum = nvim_get_Insstart_orig_lnum();
+        let insstart_orig_col = nvim_get_Insstart_orig_col();
+        if cursor_lnum == insstart_orig_lnum && cursor_col < insstart_orig_col {
+            nvim_set_Insstart_orig(cursor_lnum, cursor_col);
+        }
+        if state & VREPLACE_FLAG != 0 {
+            ins_char(c_int::from(b' '));
+        } else {
+            nvim_ins_str(c" ".as_ptr(), 1);
+            if state & REPLACE_FLAG != 0 {
+                replace_push_nul();
+            }
+        }
+        vcol += 1;
+    }
+}
 
 // ============================================================================
 // ins_bs implementation
@@ -328,9 +443,9 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         }
 
         // Handle softtabstop or smarttab backspace
-        if mode == BACKSPACE_CHAR && nvim_edit_ins_bs_check_sts(inserted_space_p, in_indent) {
+        if mode == BACKSPACE_CHAR && ins_bs_check_sts(inserted_space_p, in_indent) {
             *inserted_space_p = 0;
-            nvim_edit_ins_bs_softtabstop(inserted_space_p, in_indent);
+            ins_bs_softtabstop(in_indent);
         } else {
             // Delete up to starting point, start of line or previous word.
             let mut cur_mode = mode;

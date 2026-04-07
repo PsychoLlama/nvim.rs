@@ -272,3 +272,59 @@ void nvim_ui_cursor_shape_and_clear_digraph(void) { ui_cursor_shape(); do_digrap
 void nvim_clear_where_paste_started(void) { where_paste_started.lnum = 0; }
 void nvim_update_o_lnum_if_at_eol(void) { if (ins_at_eol) { nvim_set_o_lnum(curwin->w_cursor.lnum); } }
 const char *nvim_get_vim_var_char(void) { return get_vim_var_str(VV_CHAR); }
+
+/// Compute the target columns for softtabstop backspace.
+///
+/// Iterates the current line up to the cursor, tracking virtual columns, and
+/// returns:
+///   want_col_out  -- the buffer column to delete back to
+///   start_vcol_out -- the virtual column at want_col (start of insert loop)
+///   want_vcol_out  -- the target virtual column (end of insert loop)
+///
+/// Used by the Rust ins_bs_softtabstop implementation.
+void nvim_ins_bs_softtabstop_want_col(bool in_indent, colnr_T *want_col_out,
+                                       colnr_T *start_vcol_out,
+                                       colnr_T *want_vcol_out)
+{
+  bool const use_ts = !curwin->w_p_list || curwin->w_p_lcs_chars.tab1;
+  char *const line = get_cursor_line_ptr();
+  char *const cursor_ptr = line + curwin->w_cursor.col;
+
+  colnr_T vcol = 0;
+  colnr_T space_vcol = 0;
+  StrCharInfo sci = utf_ptr2StrCharInfo(line);
+  StrCharInfo space_sci = sci;
+  bool prev_space = false;
+
+  while (sci.ptr < cursor_ptr) {
+    bool cur_space = ascii_iswhite(sci.chr.value);
+    if (!prev_space && cur_space) {
+      space_sci = sci;
+      space_vcol = vcol;
+    }
+    vcol += charsize_nowrap(curbuf, sci.ptr, use_ts, vcol, sci.chr.value);
+    sci = utfc_next(sci);
+    prev_space = cur_space;
+  }
+
+  colnr_T want_vcol = vcol > 0 ? vcol - 1 : 0;
+  if (p_sta && in_indent) {
+    want_vcol -= want_vcol % get_sw_value(curbuf);
+  } else {
+    want_vcol = tabstop_start(want_vcol, get_sts_value(), curbuf->b_p_vsts_array);
+  }
+
+  while (true) {
+    int size = charsize_nowrap(curbuf, space_sci.ptr, use_ts, space_vcol, space_sci.chr.value);
+    if (space_vcol + size > want_vcol) {
+      break;
+    }
+    space_vcol += size;
+    space_sci = utfc_next(space_sci);
+  }
+
+  *want_col_out = (colnr_T)(space_sci.ptr - line);
+  // Insertion loop starts at space_vcol and inserts until want_vcol
+  *start_vcol_out = space_vcol;
+  *want_vcol_out = want_vcol;
+}
