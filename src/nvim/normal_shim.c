@@ -563,3 +563,52 @@ void nvim_vgetorpeek_esc_cursor_left(int *new_wcol, int *new_wrow)
   curwin->w_wcol = old_wcol;
   curwin->w_wrow = old_wrow;
 }
+
+// =============================================================================
+// op_colon / op_function accessors (Phase 1 migration)
+// =============================================================================
+#include "nvim/eval/typval.h"
+
+/// set virtual_op to a specific TriState value (as c_int).
+void nvim_set_virtual_op(int val) { virtual_op = (TriState)val; }
+
+/// Call hasFolding(curwin, lnum, NULL, end_out).
+/// Returns true if lnum is in a closed fold.
+bool nvim_hasFolding_lnum_end_out(int lnum, int *end_out)
+{
+  linenr_T end = (linenr_T)lnum;
+  bool r = hasFolding(curwin, (linenr_T)lnum, NULL, &end);
+  if (end_out != NULL) { *end_out = (int)end; }
+  return r;
+}
+
+/// Set curbuf->b_op_start and b_op_end from oap->start and oap->end.
+/// If not lockmarks and oap->motion_type != kMTLineWise and !inclusive,
+/// also call decl(&curbuf->b_op_end).
+void nvim_opfunc_set_op_marks(oparg_T *oap)
+{
+  curbuf->b_op_start = oap->start;
+  curbuf->b_op_end = oap->end;
+  if (oap->motion_type != kMTLineWise && !oap->inclusive) {
+    decl(&curbuf->b_op_end);
+  }
+}
+
+/// Restore curbuf->b_op_start and b_op_end from saved values (for lockmarks).
+void nvim_opfunc_restore_op_marks(oparg_T *oap, int s_lnum, int s_col, int e_lnum, int e_col)
+{
+  curbuf->b_op_start.lnum = (linenr_T)s_lnum;
+  curbuf->b_op_start.col = (colnr_T)s_col;
+  curbuf->b_op_end.lnum = (linenr_T)e_lnum;
+  curbuf->b_op_end.col = (colnr_T)e_col;
+  (void)oap;
+}
+
+/// Emit "E774: 'operatorfunc' is empty" error.
+void nvim_emsg_e774_operatorfunc(void) { emsg(_("E774: 'operatorfunc' is empty")); }
+
+/// Return curbuf->b_p_fp string pointer (format program).
+const char *nvim_get_curbuf_b_p_fp(void) { return curbuf->b_p_fp; }
+
+/// Return p_fp string pointer (global format program).
+const char *nvim_get_p_fp(void) { return p_fp; }

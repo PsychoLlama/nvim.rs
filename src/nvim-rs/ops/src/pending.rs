@@ -260,7 +260,6 @@ extern "C" {
     fn op_format(oap: *mut OpargT, keep_cursor: bool);
     fn op_formatexpr(oap: *mut OpargT);
     fn op_reindent(oap: *mut OpargT, get_indent: *const c_void);
-    fn nvim_dpo_call_op_function(oap: *mut OpargT);
     fn do_join(
         count: usize,
         join_spaces: bool,
@@ -962,7 +961,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             // Save and restore dpo_redo_VIsual around op_function
             let saved = DPO_REDO_VISUAL;
             restore_lbr(lbr_saved);
-            nvim_dpo_call_op_function(oap);
+            crate::op_function::rs_op_function_impl(oap);
             DPO_REDO_VISUAL = saved;
         }
 
@@ -1079,12 +1078,7 @@ unsafe fn dpo_dispatch_indent_colon(oap: *mut OpargT, _gui_yank: bool) {
 
 /// op_colon(oap) -- stuffs ':' command into read buffer.
 unsafe fn dpo_dispatch_op_colon(oap: *mut OpargT) {
-    // This is the static op_colon() from ops.c -- it remains in C for now.
-    // We call it via a shim.
-    extern "C" {
-        fn nvim_dpo_call_op_colon(oap: *mut OpargT);
-    }
-    nvim_dpo_call_op_colon(oap);
+    crate::op_colon::rs_op_colon_impl(oap);
 }
 
 // =============================================================================

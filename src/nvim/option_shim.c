@@ -526,3 +526,37 @@ const char *nvim_for_all_tab_windows_check_impl(void) {
   }
   return NULL;
 }
+
+// =============================================================================
+// operatorfunc management (moved from ops.c Phase 1 migration)
+// =============================================================================
+#include "nvim/errors.h"
+
+extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
+                                    list_stack_T **list_stack);
+
+/// callback function for 'operatorfunc'
+static Callback opfunc_cb;
+
+/// Process the 'operatorfunc' option value.
+const char *did_set_operatorfunc(optset_T *args FUNC_ATTR_UNUSED)
+{
+  if (option_set_callback_func(p_opfunc, &opfunc_cb) == FAIL) {
+    return e_invarg;
+  }
+  return NULL;
+}
+
+#if defined(EXITFREE)
+void free_operatorfunc_option(void) { callback_free(&opfunc_cb); }
+#endif
+
+/// Mark the global 'operatorfunc' callback with "copyID" so that it is not
+/// garbage collected.
+bool set_ref_in_opfunc(int copyID) { return rs_set_ref_in_callback(&opfunc_cb, copyID, NULL, NULL); }
+
+/// Return a pointer to the opfunc_cb for Rust FFI use.
+Callback *nvim_get_opfunc_cb(void) { return &opfunc_cb; }
+
+/// Return true if p_opfunc is non-empty.
+bool nvim_get_p_opfunc_nonempty(void) { return *p_opfunc != NUL; }
