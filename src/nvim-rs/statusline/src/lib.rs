@@ -2080,16 +2080,6 @@ extern "C" {
     #[link_name = "rs_set_vim_var_nr"]
     fn nvim_stl_set_vim_var_nr(idx: c_int, val: i64);
     fn nvim_stl_win_get_p_stc(wp: WinHandle) -> *const c_char;
-    fn nvim_stl_build_stl_str_hl(
-        wp: WinHandle,
-        buf: *mut c_char,
-        buflen: c_int,
-        stc: *const c_char,
-        maxwidth: c_int,
-        hlrec: HlrecPtrPtr,
-        clickrec: *mut *mut c_void,
-        stcp: StatuscolHandle,
-    ) -> c_int;
     fn nvim_stl_win_get_statuscol_click_defs(wp: WinHandle) -> *mut c_void;
     fn nvim_stl_win_get_statuscol_click_defs_size(wp: WinHandle) -> usize;
     fn nvim_stl_win_set_statuscol_click_defs(wp: WinHandle, defs: *mut c_void);
@@ -2098,6 +2088,10 @@ extern "C" {
     fn nvim_stl_stcp_get_hlrec_ptr(stcp: StatuscolHandle) -> HlrecPtrPtr;
     #[link_name = "nvim_win_get_topline"]
     fn nvim_stl_win_get_topline(wp: WinHandle) -> c_int;
+    #[link_name = "xstrdup"]
+    fn nvim_stl_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xfree"]
+    fn nvim_stl_xfree(ptr: *mut c_void);
 }
 
 /// MAXPATHL constant (matches C definition in os_defs.h).
@@ -2187,13 +2181,19 @@ pub unsafe extern "C" fn rs_build_statuscol_str(
 
     let mut clickrec: *mut c_void = std::ptr::null_mut();
 
-    let width = nvim_stl_build_stl_str_hl(
+    // Duplicate the format string since build_stl_str_hl needs a mutable copy.
+    let stc_copy = nvim_stl_xstrdup(stc);
+    let width = crate::stl_build::build_stl_str_hl(
         wp,
         buf,
-        MAXPATHL as c_int,
-        stc,
+        MAXPATHL,
+        stc_copy,
+        293,  // kOptStatuscolumn
+        0x02, // OPT_LOCAL
+        0,    // fillchar (default)
         stcp_width,
-        hlrec_ptr,
+        hlrec_ptr.cast::<*mut c_void>(),
+        std::ptr::null_mut(), // hltab_len
         if fillclick {
             &raw mut clickrec
         } else {
@@ -2201,6 +2201,7 @@ pub unsafe extern "C" fn rs_build_statuscol_str(
         },
         stcp,
     );
+    nvim_stl_xfree(stc_copy.cast());
 
     if fillclick {
         // Clear existing click defs

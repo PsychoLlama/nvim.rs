@@ -202,19 +202,6 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 /// Get wp->w_p_stc (statuscolumn option).
 const char *nvim_stl_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 
-/// Call build_stl_str_hl for statuscolumn rendering.
-/// Returns width.
-int nvim_stl_build_stl_str_hl(win_T *wp, char *buf, int buflen, const char *stc,
-                               int maxwidth, stl_hlrec_t **hlrec, StlClickRecord **clickrec,
-                               statuscol_T *stcp)
-{
-  // build_stl_str_hl requires a mutable copy of the format string
-  char *stc_copy = xstrdup(stc);
-  int width = build_stl_str_hl(wp, buf, (size_t)buflen, stc_copy, (OptIndex)kOptStatuscolumn,
-                                OPT_LOCAL, 0, maxwidth, hlrec, NULL, clickrec, stcp);
-  xfree(stc_copy);
-  return width;
-}
 
 /// Get window statuscol click defs pointer.
 StlClickDefinition *nvim_stl_win_get_statuscol_click_defs(win_T *wp) { return wp->w_statuscol_click_defs; }
