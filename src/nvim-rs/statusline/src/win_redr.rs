@@ -69,18 +69,18 @@ extern "C" {
 
     // Global state
     static mut p_ch: i64;
-    fn nvim_stl_get_ru_col() -> c_int;
+    static mut ru_col: c_int;
+    static mut p_tal: *mut c_char;
+    static mut p_ruf: *mut c_char;
+    static mut p_stl: *const c_char;
+    static mut p_wbr: *const c_char;
     #[link_name = "nvim_get_curwin"]
     fn nvim_stl_get_curwin() -> WinHandle;
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 
-    // Option strings
-    fn nvim_stl_get_p_tal() -> *mut c_char;
-    fn nvim_stl_get_p_ruf() -> *mut c_char;
-    fn nvim_stl_get_p_stl() -> *const c_char;
+    // Option strings (window-local)
     fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
-    fn nvim_stl_get_p_wbr() -> *const c_char;
     #[link_name = "nvim_win_get_p_wbr"]
     fn nvim_stl_win_get_p_wbr(wp: WinHandle) -> *const c_char;
 
@@ -267,7 +267,7 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
     // Setup environment based on mode
     if wp.is_null() {
         // Tabline mode
-        stl = nvim_stl_get_p_tal();
+        stl = p_tal;
         row = 0;
         fillchar = nvim_stl_schar_from_ascii_char(b' ' as c_char);
         group = HLF_TPF;
@@ -331,7 +331,6 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         // Winbar mode
         opt_idx = K_OPT_WINBAR;
         let w_p_wbr = nvim_stl_win_get_p_wbr(wp);
-        let p_wbr = nvim_stl_get_p_wbr();
         if !w_p_wbr.is_null() && *w_p_wbr != NUL as c_char {
             stl = w_p_wbr as *mut c_char;
             opt_scope = OPT_LOCAL;
@@ -394,7 +393,7 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         nvim_stl_win_set_status_click_defs_size(wp, new_size);
 
         if draw_ruler {
-            stl = nvim_stl_get_p_ruf();
+            stl = p_ruf;
             opt_idx = K_OPT_RULERFORMAT;
             // Advance past leading group spec - implicit in ru_col
             if !stl.is_null() && *stl as u8 == b'%' {
@@ -407,13 +406,12 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
                     stl = stl.add(1);
                 }
                 if *stl as u8 != b'(' {
-                    stl = nvim_stl_get_p_ruf();
+                    stl = p_ruf;
                 } else {
                     stl = stl.add(1);
                 }
             }
             let columns = Columns;
-            let ru_col = nvim_stl_get_ru_col();
             let offset = ru_col - (columns - maxwidth);
             let half = (maxwidth + 1) / 2;
             col = if offset > half { offset } else { half };
@@ -428,7 +426,6 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         } else {
             opt_idx = K_OPT_STATUSLINE;
             let w_p_stl = nvim_stl_win_get_p_stl(wp);
-            let p_stl = nvim_stl_get_p_stl();
             if !w_p_stl.is_null() && *w_p_stl != NUL as c_char {
                 stl = w_p_stl as *mut c_char;
                 opt_scope = OPT_LOCAL;

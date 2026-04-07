@@ -151,12 +151,10 @@ extern "C" {
     fn nvim_stl_clamp_cursor(wp: WinHandle);
     fn nvim_stl_win_get_clamped_lnum(wp: WinHandle) -> c_int;
 
-    // Global state
-    fn nvim_stl_get_updating_screen() -> c_int;
-    fn nvim_stl_set_redraw_not_allowed(val: c_int);
-    fn nvim_stl_get_redraw_not_allowed() -> c_int;
-    fn nvim_stl_get_KeyTyped() -> c_int;
-    fn nvim_stl_set_KeyTyped(val: c_int);
+    // Global state (direct static access instead of C shims)
+    static mut updating_screen: bool;
+    static mut redraw_not_allowed: bool;
+    static mut KeyTyped: bool;
     static mut did_emsg: c_int;
     fn nvim_stl_set_option_empty(opt_idx: c_int, opt_scope: c_int);
     static mut State: c_int;
@@ -542,12 +540,12 @@ pub unsafe fn build_stl_str_hl(
     let buf = nvim_win_get_buffer(wp);
 
     // Save global state
-    let save_redraw_not_allowed = nvim_stl_get_redraw_not_allowed();
-    let save_key_typed = nvim_stl_get_KeyTyped();
+    let save_redraw_not_allowed = redraw_not_allowed;
+    let save_key_typed = KeyTyped;
     let did_emsg_before = did_emsg;
 
-    if nvim_stl_get_updating_screen() != 0 {
-        nvim_stl_set_redraw_not_allowed(1);
+    if updating_screen {
+        redraw_not_allowed = true;
     }
 
     // Sandbox check
@@ -1783,13 +1781,13 @@ pub unsafe fn build_stl_str_hl(
     }
 
     // Restore global state
-    nvim_stl_set_redraw_not_allowed(save_redraw_not_allowed);
+    redraw_not_allowed = save_redraw_not_allowed;
 
     if opt_idx != K_OPT_INVALID && did_emsg > did_emsg_before {
         nvim_stl_set_option_empty(opt_idx, opt_scope);
     }
 
-    nvim_stl_set_KeyTyped(save_key_typed);
+    KeyTyped = save_key_typed;
 
     width
 }

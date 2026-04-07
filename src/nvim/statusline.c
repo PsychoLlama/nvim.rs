@@ -309,19 +309,6 @@ void nvim_stl_clamp_cursor(win_T *wp)
   }
 }
 
-/// Get global state: updating_screen flag.
-int nvim_stl_get_updating_screen(void) { return updating_screen ? 1 : 0; }
-
-/// Set global state: redraw_not_allowed flag.
-void nvim_stl_set_redraw_not_allowed(int val) { redraw_not_allowed = val ? true : false; }
-
-/// Get global state: redraw_not_allowed flag.
-int nvim_stl_get_redraw_not_allowed(void) { return redraw_not_allowed ? 1 : 0; }
-
-/// Save and get KeyTyped value.
-int nvim_stl_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
-
-void nvim_stl_set_KeyTyped(int val) { KeyTyped = val ? true : false; }
 
 
 /// Set an option to empty string on error (SID_ERROR).
@@ -442,14 +429,8 @@ _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 /// Returns true if statusline redraw should be blocked.
 int nvim_stl_wildmenu_blocking(void) { return wild_menu_showing != 0 && !ui_has(kUIWildmenu); }
 
-/// Get global p_wbr (winbar) option string.
-const char *nvim_stl_get_p_wbr(void) { return p_wbr; }
-
 /// Get wp->w_p_stl (window-local statusline option).
 const char *nvim_stl_win_get_p_stl(win_T *wp) { return wp->w_p_stl; }
-
-/// Get global p_stl (statusline option).
-const char *nvim_stl_get_p_stl(void) { return p_stl; }
 
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 _Static_assert(HLF_C == 21, "HLF_C must be 21");
@@ -486,16 +467,6 @@ void nvim_stl_emit_tabline_update(int *tab_handles, const char **tab_names,
 
 /// Get window winbar fill character (w_p_fcs_chars.wbr).
 schar_T nvim_stl_win_get_fcs_wbr(win_T *wp) { return wp->w_p_fcs_chars.wbr; }
-
-
-/// Get global ru_col.
-int nvim_stl_get_ru_col(void) { return ru_col; }
-
-/// Get global p_tal (tabline option).
-char *nvim_stl_get_p_tal(void) { return p_tal; }
-
-/// Get global p_ruf (ruler format option).
-char *nvim_stl_get_p_ruf(void) { return p_ruf; }
 
 
 
@@ -557,9 +528,6 @@ size_t nvim_stl_win_get_winbar_click_defs_size(win_T *wp) { return wp->w_winbar_
 void nvim_stl_win_set_winbar_click_defs(win_T *wp, void *defs) { wp->w_winbar_click_defs = defs; }
 void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_winbar_click_defs_size = size; }
 
-
-/// Get p_ru (ruler option).
-int nvim_stl_get_p_ru(void) { return p_ru ? 1 : 0; }
 
 
 

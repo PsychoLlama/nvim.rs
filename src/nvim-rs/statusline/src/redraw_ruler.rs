@@ -69,10 +69,10 @@ extern "C" {
     fn nvim_stl_lastwin_nofloating() -> WinHandle;
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
-    fn nvim_stl_get_p_ru() -> c_int;
+    static mut p_ru: c_int;
     static mut p_ch: i64;
-    fn nvim_stl_get_p_ruf() -> *mut c_char;
-    fn nvim_stl_get_ru_col() -> c_int;
+    static mut p_ruf: *mut c_char;
+    static mut ru_col: c_int;
     static mut State: c_int;
     fn nvim_stl_edit_submode_not_null() -> c_int;
     fn ui_has(ext: c_int) -> bool;
@@ -153,12 +153,12 @@ pub unsafe fn redraw_ruler() {
     };
     let is_stl_global = nvim_global_stl_height() > 0;
 
-    let p_ru = nvim_stl_get_p_ru() != 0;
+    let ruler_enabled = p_ru != 0;
     let status_height = nvim_stl_win_get_status_height(wp);
     let ui_has_messages = ui_has(K_UI_MESSAGES);
 
     // Check if ruler should be drawn, clear if it was drawn before.
-    if !p_ru || status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has_messages) {
+    if !ruler_enabled || status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has_messages) {
         let did_ruler_col = DID_RULER_COL.get();
         if did_ruler_col > 0 && ui_has_messages {
             nvim_stl_ui_call_msg_ruler_empty();
@@ -183,7 +183,6 @@ pub unsafe fn redraw_ruler() {
     }
 
     let part_of_status = status_height != 0 || is_stl_global;
-    let p_ruf = nvim_stl_get_p_ruf();
     if !p_ruf.is_null() && *p_ruf != 0 && (p_ch > 0 || (ui_has_messages && !part_of_status)) {
         rs_win_redr_custom(wp, false, true, ui_has_messages);
         return;
@@ -273,7 +272,6 @@ pub unsafe fn redraw_ruler() {
     }
 
     let columns = Columns;
-    let ru_col = nvim_stl_get_ru_col();
     let mut this_ru_col = ru_col - (columns - width);
     // Never use more than half the window/screen width
     let n2 = (width + 1) / 2;

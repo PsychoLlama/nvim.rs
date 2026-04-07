@@ -2239,7 +2239,7 @@ extern "C" {
     fn nvim_set_redraw_cmdline(val: bool);
     fn nvim_redrawing() -> c_int;
     fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
-    fn nvim_stl_get_p_stl() -> *const c_char;
+    static mut p_stl: *const c_char;
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_fcs_vert(wp: WinHandle) -> ScharT;
@@ -2251,7 +2251,7 @@ extern "C" {
     fn rs_grid_line_put_schar(col: c_int, schar: ScharT, attr: c_int);
     fn rs_grid_line_flush();
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-    fn nvim_stl_get_p_wbr() -> *const c_char;
+    static mut p_wbr: *const c_char;
     fn nvim_win_get_p_wbr(wp: WinHandle) -> *const c_char;
 }
 
@@ -2295,7 +2295,6 @@ pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
         nvim_win_set_redr_status(wp, 1);
     } else {
         let w_p_stl = nvim_stl_win_get_p_stl(wp);
-        let p_stl = nvim_stl_get_p_stl();
         let has_custom_stl = !w_p_stl.is_null() && *w_p_stl != 0;
         let has_global_stl = !p_stl.is_null() && *p_stl != 0;
         let is_floating = nvim_win_get_floating(wp) != 0;
@@ -2358,7 +2357,6 @@ pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
     }
 
     if nvim_win_get_winbar_height(wp) != 0 && nvim_redrawing() != 0 {
-        let p_wbr = nvim_stl_get_p_wbr();
         let w_p_wbr = nvim_win_get_p_wbr(wp);
         let has_global_wbr = !p_wbr.is_null() && *p_wbr != 0;
         let has_win_wbr = !w_p_wbr.is_null() && *w_p_wbr != 0;

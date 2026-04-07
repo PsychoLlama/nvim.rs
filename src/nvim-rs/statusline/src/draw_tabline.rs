@@ -78,7 +78,7 @@ extern "C" {
     fn nvim_stl_ui_has_tabline() -> c_int;
     #[link_name = "rs_tabline_height"]
     fn nvim_stl_tabline_height() -> c_int;
-    fn nvim_stl_get_p_tal() -> *mut c_char;
+    static mut p_tal: *mut c_char;
     fn nvim_stl_get_p_sc() -> c_int;
     fn nvim_stl_showcmd_loc_is_tabline() -> c_int;
     fn nvim_stl_get_showcmd_buf() -> *const c_char;
@@ -172,7 +172,6 @@ pub unsafe fn draw_tabline() {
     nvim_stl_clear_click_defs_wrap(click_defs, click_defs_size);
 
     // Use the 'tabline' option if it's set.
-    let p_tal = nvim_stl_get_p_tal();
     if !p_tal.is_null() && *p_tal != 0 {
         rs_win_redr_custom(WinHandle::null(), false, false, false);
     } else {
