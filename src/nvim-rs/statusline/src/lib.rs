@@ -2077,8 +2077,8 @@ extern "C" {
         draw_ruler: bool,
         ui_event: bool,
     );
-    fn nvim_stl_set_vv_lnum(lnum: i64);
-    fn nvim_stl_set_vv_relnum(relnum: i64);
+    #[link_name = "rs_set_vim_var_nr"]
+    fn nvim_stl_set_vim_var_nr(idx: c_int, val: i64);
     fn nvim_stl_win_get_p_stc(wp: WinHandle) -> *const c_char;
     fn nvim_stl_build_stl_str_hl(
         wp: WinHandle,
@@ -2178,8 +2178,8 @@ pub unsafe extern "C" fn rs_build_statuscol_str(
     let fillclick = relnum >= 0 && stcp_width > 0 && lnum == topline;
 
     if relnum >= 0 {
-        nvim_stl_set_vv_lnum(i64::from(lnum));
-        nvim_stl_set_vv_relnum(i64::from(relnum));
+        nvim_stl_set_vim_var_nr(9, i64::from(lnum)); // VV_LNUM == 9
+        nvim_stl_set_vim_var_nr(101, i64::from(relnum)); // VV_RELNUM == 101
     }
 
     let stc = nvim_stl_win_get_p_stc(wp);

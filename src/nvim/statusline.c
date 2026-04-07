@@ -199,12 +199,6 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 }
 
 
-/// Set v:lnum variable.
-void nvim_stl_set_vv_lnum(int64_t lnum) { set_vim_var_nr(VV_LNUM, lnum); }
-
-/// Set v:relnum variable.
-void nvim_stl_set_vv_relnum(int64_t relnum) { set_vim_var_nr(VV_RELNUM, relnum); }
-
 /// Get wp->w_p_stc (statuscolumn option).
 const char *nvim_stl_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 
@@ -289,17 +283,6 @@ char *nvim_stl_eval_fmt_expr(win_T *wp, char *expr, bool use_sandbox)
   return result;
 }
 
-/// Check if the option was set insecurely.
-int nvim_stl_was_set_insecurely(win_T *wp, int opt_idx, int opt_scope)
-{
-  if (opt_idx < 0) {
-    return 0;
-  }
-  return was_set_insecurely(wp, (OptIndex)opt_idx, opt_scope) ? 1 : 0;
-}
-
-/// Get buf_spname result, or NULL.
-const char *nvim_stl_buf_spname(buf_T *buf) { return buf_spname(buf); }
 
 /// Call home_replace + trans_characters to fill the provided buffer.
 void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dstlen)
@@ -376,19 +359,6 @@ int nvim_stl_win_get_clamped_lnum(win_T *wp)
 
 
 
-/// Get the relative position string ("Top", "Bot", "All", or "NN%").
-int nvim_stl_get_rel_pos(win_T *wp, char *buf, int buflen)
-{
-  get_rel_pos(wp, buf, buflen);
-  return (int)strlen(buf);
-}
-
-/// Get argument number string (e.g. "(2 of 5)").
-int nvim_stl_append_arg_number(win_T *wp, char *buf, int buflen)
-{
-  buf[0] = NUL;
-  return append_arg_number(wp, buf, (size_t)buflen);
-}
 
 /// Find option index by 'showcmdloc' value.
 int nvim_stl_showcmd_matches_opt(int opt_idx)
@@ -402,9 +372,6 @@ int nvim_stl_showcmd_matches_opt(int opt_idx)
 /// Get showcmd_buf contents.
 const char *nvim_stl_get_showcmd_buf(void) { return showcmd_buf; }
 
-int64_t nvim_stl_get_vim_var_nr(int vv_idx) { return get_vim_var_nr(vv_idx); }
-
-
 /// Get wp->w_maxscwidth (sign column setting).
 int nvim_stl_win_get_maxscwidth(win_T *wp) { return (int)wp->w_maxscwidth; }
 
@@ -415,8 +382,6 @@ int nvim_stl_stcp_has_sign_text(statuscol_T *stcp)
   return stcp->sattrs[0].text[0] ? 1 : 0;
 }
 
-/// Compute fold column width.
-int nvim_stl_compute_foldcolumn(win_T *wp) { return compute_foldcolumn(wp, 0); }
 
 /// Fill fold column into buf. Returns bytes written.
 int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, char *buf, int buflen)
@@ -434,8 +399,6 @@ int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, ch
   return (int)written;
 }
 
-/// Check use_cursor_line_highlight for a line.
-int nvim_stl_use_cursor_line_hl(win_T *wp, int lnum) { return use_cursor_line_highlight(wp, (linenr_T)lnum) ? 1 : 0; }
 
 /// Describe sign text into a buffer. Returns bytes written.
 int nvim_stl_describe_sign_text(char *buf, schar_T *text) { return (int)describe_sign_text(buf, text); }
@@ -566,9 +529,6 @@ void *nvim_stl_grid_adjust_msg(int *row, int *col)
 }
 
 
-
-/// Call win_hl_attr.
-int nvim_stl_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 
 
 /// Get HL_ATTR value.

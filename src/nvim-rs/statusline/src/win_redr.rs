@@ -112,6 +112,7 @@ extern "C" {
     fn nvim_stl_grid_line_flush();
 
     // Highlight
+    #[link_name = "rs_win_hl_attr"]
     fn nvim_stl_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
     #[link_name = "hl_combine_attr"]
     fn nvim_stl_hl_combine_attr(a: c_int, b: c_int) -> c_int;

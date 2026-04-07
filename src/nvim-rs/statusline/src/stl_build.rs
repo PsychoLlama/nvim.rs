@@ -113,6 +113,7 @@ extern "C" {
     // Expression evaluation
     fn nvim_stl_eval_expr_full(wp: WinHandle, expr: *mut c_char, use_sandbox: bool) -> *mut c_char;
     fn nvim_stl_eval_fmt_expr(wp: WinHandle, expr: *mut c_char, use_sandbox: bool) -> *mut c_char;
+    #[link_name = "was_set_insecurely"]
     fn nvim_stl_was_set_insecurely(wp: WinHandle, opt_idx: c_int, opt_scope: c_int) -> c_int;
 
     // String operations (direct link to Rust/C implementations)
@@ -130,6 +131,7 @@ extern "C" {
     fn nvim_stl_schar_from_ascii(c: c_char) -> ScharT;
 
     // Buffer / path (direct link to Rust/C implementations)
+    #[link_name = "rs_buf_spname"]
     fn nvim_stl_buf_spname(buf: BufHandle) -> *const c_char;
     fn nvim_stl_home_replace_trans(
         buf: BufHandle,
@@ -167,14 +169,17 @@ extern "C" {
     fn nvim_stl_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
     // Position / arg list
+    #[link_name = "rs_get_rel_pos"]
     fn nvim_stl_get_rel_pos(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-    fn nvim_stl_append_arg_number(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
+    #[link_name = "rs_append_arg_number"]
+    fn nvim_stl_append_arg_number(wp: WinHandle, buf: *mut c_char, buflen: usize) -> c_int;
 
     // Showcmd
     fn nvim_stl_showcmd_matches_opt(opt_idx: c_int) -> c_int;
     fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
 
     // Vim variables
+    #[link_name = "rs_get_vim_var_nr"]
     fn nvim_stl_get_vim_var_nr(vv_idx: c_int) -> i64;
 
     // Window accessors (direct link to window_shim.c where available)
@@ -194,7 +199,8 @@ extern "C" {
 
     // Statuscolumn accessors
     fn nvim_stl_stcp_has_sign_text(stcp: StatuscolHandle) -> c_int;
-    fn nvim_stl_compute_foldcolumn(wp: WinHandle) -> c_int;
+    #[link_name = "compute_foldcolumn"]
+    fn nvim_stl_compute_foldcolumn(wp: WinHandle, col: c_int) -> c_int;
     fn nvim_stl_fill_foldcolumn(
         wp: WinHandle,
         stcp: StatuscolHandle,
@@ -203,7 +209,8 @@ extern "C" {
         buf: *mut c_char,
         buflen: c_int,
     ) -> c_int;
-    fn nvim_stl_use_cursor_line_hl(wp: WinHandle, lnum: c_int) -> c_int;
+    #[link_name = "use_cursor_line_highlight"]
+    fn nvim_stl_use_cursor_line_hl(wp: WinHandle, lnum: c_int) -> bool;
     fn nvim_stl_describe_sign_text(buf: *mut c_char, text: *mut ScharT) -> c_int;
     fn nvim_stl_stcp_get_sign_cul_id(stcp: StatuscolHandle) -> c_int;
     fn nvim_stl_stcp_get_sattr_hl_id(stcp: StatuscolHandle, idx: c_int) -> c_int;
@@ -1086,7 +1093,7 @@ pub unsafe fn build_stl_str_hl(
             STL_ARGLISTSTAT => {
                 fillable = false;
                 buf_tmp[0] = NUL as c_char;
-                if nvim_stl_append_arg_number(wp, buf_tmp.as_mut_ptr(), TMPLEN as c_int) > 0 {
+                if nvim_stl_append_arg_number(wp, buf_tmp.as_mut_ptr(), TMPLEN) > 0 {
                     str_ptr = buf_tmp.as_ptr();
                 }
             }
@@ -1960,7 +1967,7 @@ unsafe fn handle_stcsign(
     _lnum: c_int,
 ) {
     let lnum = nvim_stl_get_vim_var_nr(VV_LNUM) as c_int;
-    let fdc = nvim_stl_compute_foldcolumn(wp);
+    let fdc = nvim_stl_compute_foldcolumn(wp, 0);
     let w_scwidth = nvim_stl_win_get_scwidth(wp);
     let width = if fdc > 0 {
         if fdc > 0 {
@@ -1982,7 +1989,7 @@ unsafe fn handle_stcsign(
     if fdc > 0 {
         let n =
             nvim_stl_fill_foldcolumn(wp, stcp, lnum, fdc, buf_tmp.as_mut_ptr(), TMPLEN as c_int);
-        let hl = if nvim_stl_use_cursor_line_hl(wp, lnum) != 0 {
+        let hl = if nvim_stl_use_cursor_line_hl(wp, lnum) {
             -HLF_CLF
         } else {
             -HLF_FC

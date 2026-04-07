@@ -84,6 +84,7 @@ extern "C" {
     fn nvim_stl_fillchar_status(group: *mut c_int, wp: WinHandle) -> ScharT;
     #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;
+    #[link_name = "rs_win_hl_attr"]
     fn nvim_stl_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
     fn nvim_stl_HL_ATTR(hlf: c_int) -> c_int;
 
@@ -97,7 +98,8 @@ extern "C" {
     #[link_name = "ptr2cells"]
     fn nvim_stl_ptr2cells(s: *const c_char) -> c_int;
 
-    // Relative position (C wrapper that calls get_rel_pos)
+    // Relative position
+    #[link_name = "rs_get_rel_pos"]
     fn nvim_stl_get_rel_pos(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
 
     // Grid operations
