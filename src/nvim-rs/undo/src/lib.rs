@@ -5366,6 +5366,12 @@ extern "C" {
     );
     #[link_name = "FullName_save"]
     fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
+
+    // f_undotree support
+    fn nvim_tv_dict_alloc_ret(ret_tv: *mut c_void);
+    fn nvim_tv_get_type(tv: *const c_void) -> c_int;
+    fn nvim_tv_get_dict(tv: *const c_void) -> DictHandle;
+    fn get_buf_arg(tv: *mut c_void) -> BufHandle;
 }
 
 /// Build the undo tree as a VimL list for undotree().
@@ -5424,6 +5430,78 @@ pub unsafe extern "C" fn rs_u_eval_tree(buf: BufHandle, first_uhp: UHeaderHandle
     }
 
     list
+}
+
+/// VAR_UNKNOWN = 0 (from typval_defs.h)
+const VAR_UNKNOWN: c_int = 0;
+
+/// "undotree(expr)" function - Rust implementation replacing the C version.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid typval_T pointers (treated as *mut c_void).
+/// `fptr` is unused.
+#[export_name = "f_undotree"]
+pub unsafe extern "C" fn rs_f_undotree(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_tv_dict_alloc_ret(rettv);
+
+    // argvars[0] is a typval_T: check if it's VAR_UNKNOWN (no argument given)
+    let tv = argvars as *const c_void;
+    let buf = if nvim_tv_get_type(tv) == VAR_UNKNOWN {
+        nvim_get_curbuf()
+    } else {
+        get_buf_arg(argvars)
+    };
+
+    if buf.0.is_null() {
+        return;
+    }
+
+    let dict = nvim_tv_get_dict(rettv as *const c_void);
+
+    nvim_tv_dict_add_nr(
+        dict,
+        c"synced".as_ptr(),
+        6,
+        nvim_buf_get_b_u_synced(buf) as i64,
+    );
+    nvim_tv_dict_add_nr(
+        dict,
+        c"seq_last".as_ptr(),
+        8,
+        nvim_buf_get_b_u_seq_last(buf) as i64,
+    );
+    nvim_tv_dict_add_nr(
+        dict,
+        c"save_last".as_ptr(),
+        9,
+        nvim_buf_get_b_u_save_nr_last(buf) as i64,
+    );
+    nvim_tv_dict_add_nr(
+        dict,
+        c"seq_cur".as_ptr(),
+        7,
+        nvim_buf_get_b_u_seq_cur(buf) as i64,
+    );
+    nvim_tv_dict_add_nr(
+        dict,
+        c"time_cur".as_ptr(),
+        8,
+        nvim_buf_get_b_u_time_cur(buf),
+    );
+    nvim_tv_dict_add_nr(
+        dict,
+        c"save_cur".as_ptr(),
+        8,
+        nvim_buf_get_b_u_save_nr_cur(buf) as i64,
+    );
+
+    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    nvim_tv_dict_add_list(dict, c"entries".as_ptr(), 7, rs_u_eval_tree(buf, oldhead));
 }
 
 /// Get the name of the undo file for a buffer's file name.

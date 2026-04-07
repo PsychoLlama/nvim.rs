@@ -117,7 +117,6 @@
 #include "nvim/undo_defs.h"
 #include "nvim/vim_defs.h"
 
-extern list_T *rs_u_eval_tree(buf_T *buf, const u_header_T *first_uhp);
 extern char *rs_f_undofile(const char *fname);
 extern void rs_foldOpenCursor(void);
 
@@ -153,29 +152,6 @@ void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->v_type = VAR_STRING;
   const char *const fname = tv_get_string(&argvars[0]);
   rettv->vval.v_string = rs_f_undofile(fname);
-}
-
-/// "undotree(expr)" function
-void f_undotree(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-
-  typval_T *const tv = &argvars[0];
-  buf_T *const buf = tv->v_type == VAR_UNKNOWN ? curbuf : get_buf_arg(tv);
-  if (buf == NULL) {
-    return;
-  }
-
-  dict_T *dict = rettv->vval.v_dict;
-
-  tv_dict_add_nr(dict, S_LEN("synced"), (varnumber_T)buf->b_u_synced);
-  tv_dict_add_nr(dict, S_LEN("seq_last"), (varnumber_T)buf->b_u_seq_last);
-  tv_dict_add_nr(dict, S_LEN("save_last"), (varnumber_T)buf->b_u_save_nr_last);
-  tv_dict_add_nr(dict, S_LEN("seq_cur"), (varnumber_T)buf->b_u_seq_cur);
-  tv_dict_add_nr(dict, S_LEN("time_cur"), (varnumber_T)buf->b_u_time_cur);
-  tv_dict_add_nr(dict, S_LEN("save_cur"), (varnumber_T)buf->b_u_save_nr_cur);
-
-  tv_dict_add_list(dict, S_LEN("entries"), rs_u_eval_tree(buf, buf->b_u_oldhead));
 }
 
 // Buffer undo field accessors

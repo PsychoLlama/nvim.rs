@@ -11,6 +11,7 @@
 #include "nvim/undo_defs.h"  // IWYU pragma: keep
 
 // Functions implemented in Rust (nvim-undo crate), exported directly.
+void f_undotree(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 int u_save_cursor(void);
 int u_save(linenr_T top, linenr_T bot);
 int u_save_buf(buf_T *buf, linenr_T top, linenr_T bot);
