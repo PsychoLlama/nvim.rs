@@ -812,16 +812,6 @@ pub extern "C" fn rs_range_iterator_current(
 // Phase 6: Core Column Rendering
 // =============================================================================
 
-/// Result from the C marktree advance + future-to-active promotion.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DecorColAdvanceResult {
-    pub col_until: c_int,
-    pub cur_end: c_int,
-    pub fut_beg: c_int,
-    pub count: c_int,
-}
-
 /// Flat view of a DecorRange, returned by batch accessor.
 /// All fields needed by the attribute computation loop in one FFI call.
 #[repr(C)]
@@ -846,11 +836,7 @@ pub struct DecorRangeFlatView {
 
 extern "C" {
     // Phase 6: C helpers
-    fn nvim_decor_col_advance(
-        wp: WinHandle,
-        col: c_int,
-        state: DecorStateHandle,
-    ) -> DecorColAdvanceResult;
+    fn nvim_decor_col_iter_marks(wp: WinHandle, col: c_int, state: DecorStateHandle) -> c_int;
 
     #[link_name = "hl_combine_attr"]
     fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
@@ -1034,14 +1020,82 @@ unsafe fn col_update_state(
     s.spell = spell;
 }
 
+/// Promote future ranges that start at or before (row, col) into the active set.
+///
+/// This is Part 2 of the former `nvim_decor_col_advance` C function.
+/// Returns (col_until, cur_end, fut_beg, count).
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+unsafe fn promote_future_ranges(
+    state: DecorStateHandle,
+    col: c_int,
+    col_until_in: c_int,
+) -> (c_int, c_int, c_int, c_int) {
+    let s = &mut *state;
+    let row = s.row;
+    let indices = s.ranges_i.items;
+    let slots = s.slots.items;
+
+    let count = s.ranges_i.size as c_int;
+    let mut cur_end = s.current_end;
+    let mut fut_beg = s.future_begin;
+    let mut col_until = col_until_in;
+
+    // Promote future ranges before the cursor to active.
+    while fut_beg < count {
+        let index = *indices.add(fut_beg as usize);
+        let r = &(*slots.add(index as usize)).range;
+        if r.start_row > row || (r.start_row == row && r.start_col > col) {
+            break;
+        }
+        let ordering = r.ordering;
+        let priority = r.priority_internal;
+
+        // Binary search for insertion position by (priority, ordering) descending
+        let mut begin = 0;
+        let mut end = cur_end;
+        while begin < end {
+            let mid = begin + ((end - begin) >> 1);
+            let mi = *indices.add(mid as usize);
+            let mr = &(*slots.add(mi as usize)).range;
+            if mr.priority_internal < priority
+                || (mr.priority_internal == priority && mr.ordering < ordering)
+            {
+                begin = mid + 1;
+            } else {
+                end = mid;
+            }
+        }
+
+        // Shift right and insert
+        let item = indices.add(begin as usize);
+        std::ptr::copy(item, item.add(1), (cur_end - begin) as usize);
+        item.write(index);
+        cur_end += 1;
+        fut_beg += 1;
+    }
+
+    // Update col_until from the next future range
+    if fut_beg < count {
+        let r = &(*slots.add(*indices.add(fut_beg as usize) as usize)).range;
+        if r.start_row == row {
+            col_until = col_until.min(r.start_col - 1);
+        }
+    }
+
+    (col_until, cur_end, fut_beg, count)
+}
+
 /// Core column rendering implementation.
 ///
 /// This is the hot-path function called for each column during line rendering.
 /// It:
-/// 1. Advances the marktree iterator and promotes future ranges (via C helper)
-/// 2. Computes highlight, conceal, and spell attributes for active ranges
-/// 3. Retires expired ranges
-/// 4. Updates DecorState output fields
+/// 1. Advances the marktree iterator (via thin C stub)
+/// 2. Promotes future ranges to active (Rust)
+/// 3. Computes highlight, conceal, and spell attributes for active ranges
+/// 4. Retires expired ranges
+/// 5. Updates DecorState output fields
 ///
 /// Rust implementation of `decor_redraw_col_impl()`.
 #[export_name = "decor_redraw_col_impl"]
@@ -1052,16 +1106,16 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     hidden: bool,
     state: DecorStateHandle,
 ) -> c_int {
-    // Part 1: Advance marktree + promote future ranges (done in C)
-    let adv = nvim_decor_col_advance(wp, col, state);
-    let mut col_until = adv.col_until;
-    let cur_end = adv.cur_end;
-    let fut_beg = adv.fut_beg;
-    let count = adv.count;
+    // Part 1: Advance marktree iterator (thin C stub), get initial col_until
+    let col_until_from_itr = nvim_decor_col_iter_marks(wp, col, state);
+
+    // Part 2: Promote future ranges to active (Rust)
+    let (mut col_until, cur_end, fut_beg, count) =
+        promote_future_ranges(state, col, col_until_from_itr);
 
     let row = (*state).row;
 
-    // Part 2: Attribute computation loop
+    // Part 3: Attribute computation loop
     let mut new_cur_end: c_int = 0;
     let mut attr: c_int = 0;
     let mut conceal: c_int = 0;

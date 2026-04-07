@@ -104,15 +104,6 @@ EXTERN DecorState decor_state INIT( = { 0 });
 // associated with a buffer can be freed when the buffer is unloaded.
 EXTERN kvec_t(DecorSignHighlight) decor_items INIT( = KV_INITIAL_VALUE);
 
-/// Result struct for nvim_decor_col_advance.
-typedef struct {
-  int col_until;
-  int cur_end;
-  int fut_beg;
-  int count;
-} DecorColAdvanceResult;
-
-
 // Functions implemented in Rust (nvim-decoration crate)
 void clear_virttext(VirtText *text);
 void clear_virtlines(VirtLines *lines);

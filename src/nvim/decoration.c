@@ -806,20 +806,16 @@ uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)
 
 // Core Column Rendering helpers
 
-/// Advance the marktree iterator and promote future ranges to active.
+/// Advance the marktree iterator to position (row, col), adding inline decorations.
 ///
-/// This handles the first two loops of decor_redraw_col_impl:
-/// 1. Marktree iteration: advance iterator, add inline decorations
-/// 2. Future-to-active promotion: binary search insertion of promoted ranges
-///
-/// Returns updated state via DecorColAdvanceResult.
-DecorColAdvanceResult nvim_decor_col_advance(win_T *wp, int col, DecorState *state)
+/// Returns the col_until value from the marktree (next mark column - 1, or MAXCOL).
+/// The future-to-active promotion loop (Part 2) is done in Rust (promote_future_ranges).
+int nvim_decor_col_iter_marks(win_T *wp, int col, DecorState *state)
 {
   buf_T *const buf = wp->w_buffer;
   int const row = state->row;
   int col_until = MAXCOL;
 
-  // Part 1: Advance marktree iterator, adding inline decorations
   while (true) {
     MTKey mark = rs_marktree_itr_current(state->itr);
     if (mark.pos.row < 0 || mark.pos.row > row) {
@@ -845,55 +841,6 @@ next_mark:
     rs_marktree_itr_next(buf->b_marktree, state->itr);
   }
 
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  int count = (int)kv_size(state->ranges_i);
-  int cur_end = state->current_end;
-  int fut_beg = state->future_begin;
-
-  // Part 2: Promote future ranges before the cursor to active.
-  for (; fut_beg < count; fut_beg++) {
-    int const index = indices[fut_beg];
-    DecorRange *const r = &slots[index].range;
-    if (r->start_row > row || (r->start_row == row && r->start_col > col)) {
-      break;
-    }
-    int const ordering = r->ordering;
-    DecorPriorityInternal const priority = r->priority_internal;
-
-    int begin = 0;
-    int end = cur_end;
-    while (begin < end) {
-      int mid = begin + ((end - begin) >> 1);
-      int mi = indices[mid];
-      DecorRange *mr = &slots[mi].range;
-      if (mr->priority_internal < priority
-          || (mr->priority_internal == priority && mr->ordering < ordering)) {
-        begin = mid + 1;
-      } else {
-        end = mid;
-      }
-    }
-
-    int *const item = indices + begin;
-    memmove(item + 1, item, (size_t)(cur_end - begin) * sizeof(*item));
-    *item = index;
-    cur_end++;
-  }
-
-  if (fut_beg < count) {
-    DecorRange *r = &slots[indices[fut_beg]].range;
-    if (r->start_row == row) {
-      col_until = MIN(col_until, r->start_col - 1);
-    }
-  }
-
-  return (DecorColAdvanceResult){
-    .col_until = col_until,
-    .cur_end = cur_end,
-    .fut_beg = fut_beg,
-    .count = count,
-  };
+  return col_until;
 }
 
