@@ -483,9 +483,10 @@ pub unsafe extern "C" fn rs_schar_get(buf_out: *mut c_char, sc: ScharT) -> usize
     // SAFETY: caller guarantees buf_out is valid for MAX_SCHAR_SIZE bytes
     let buf = std::slice::from_raw_parts_mut(buf_out.cast::<u8>(), MAX_SCHAR_SIZE);
     let len = schar_get_bytes(sc, buf);
-    // Set final NUL
-    buf[len] = 0;
-    len
+    // Set final NUL: cap at MAX_SCHAR_SIZE - 1 to avoid OOB write
+    let nul_pos = len.min(MAX_SCHAR_SIZE - 1);
+    buf[nul_pos] = 0;
+    nul_pos
 }
 
 #[no_mangle]
