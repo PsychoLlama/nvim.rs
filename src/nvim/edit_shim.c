@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <ctype.h>
+#include "nvim/api/private/defs.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
@@ -40,6 +42,24 @@
 #include "nvim/ui.h"
 #include "edit_shim.c.generated.h"
 extern int ins_apply_autocmds(event_T event);
+extern int echeck_abbr(int c);
+extern void rs_replace_stack_clear(void);
+extern int rs_ctrl_x_mode_scroll(void);
+extern void insert_special(int c, int allow_modmask, int ctrlv);
+// Rust-owned statics used by stop_insert / ins_eol
+extern int nvim_get_new_insert_skip(void);
+extern int nvim_get_did_restart_edit(void);
+extern void nvim_set_last_insert_skip(int val);
+extern int nvim_get_ins_need_undo(void);
+extern void nvim_clear_last_insert(void);
+extern void nvim_set_last_insert(char *data, size_t size);
+extern void nvim_set_can_cindent(int val);
+extern void rs_foldOpenCursor(void);
+extern int nvim_get_revins_on(void);
+extern int nvim_get_revins_chars(void);
+extern void nvim_set_revins_chars(int val);
+extern int nvim_get_revins_legal(void);
+extern void nvim_set_revins_legal(int val);
 bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
 bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
 bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
@@ -276,6 +296,170 @@ void nvim_ui_cursor_shape_and_clear_digraph(void) { ui_cursor_shape(); do_digrap
 void nvim_clear_where_paste_started(void) { where_paste_started.lnum = 0; }
 void nvim_update_o_lnum_if_at_eol(void) { if (ins_at_eol) { nvim_set_o_lnum(curwin->w_cursor.lnum); } }
 const char *nvim_get_vim_var_char(void) { return get_vim_var_str(VV_CHAR); }
+
+// ============================================================================
+// Phase 3: functions moved from edit.c
+// ============================================================================
+
+/// Stop insert mode: save inserted text, auto-format, strip trailing whitespace.
+/// Moved from edit.c; identical logic.
+void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
+{
+  pos_T *pos = (pos_T *)end_insert_pos;
+  stop_redo_ins();
+  rs_replace_stack_clear();
+
+  // Save inserted text for redo (^@ / CTRL-A).
+  String inserted = get_inserted();
+  int added = inserted.data == NULL ? 0 : (int)inserted.size - nvim_get_new_insert_skip();
+  if (nvim_get_did_restart_edit() == 0 || added > 0) {
+    nvim_clear_last_insert();
+    nvim_set_last_insert(inserted.data, inserted.size);
+    nvim_set_last_insert_skip(added < 0 ? 0 : nvim_get_new_insert_skip());
+  } else {
+    xfree(inserted.data);
+  }
+
+  if (!arrow_used && pos != NULL) {
+    int cc;
+    if (!nvim_get_ins_need_undo() && has_format_option(FO_AUTO)) {
+      pos_T tpos = curwin->w_cursor;
+      cc = 'x';
+      if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
+        dec_cursor();
+        cc = gchar_cursor();
+        if (!ascii_iswhite(cc)) {
+          curwin->w_cursor = tpos;
+        }
+      }
+      auto_format(true, false);
+      if (ascii_iswhite(cc)) {
+        if (gchar_cursor() != NUL) {
+          inc_cursor();
+        }
+        if (gchar_cursor() == NUL
+            && curwin->w_cursor.lnum == tpos.lnum
+            && curwin->w_cursor.col == tpos.col) {
+          curwin->w_cursor.coladd = tpos.coladd;
+        }
+      }
+    }
+    check_auto_format(true);
+    if (!nomove && did_ai && (esc || (vim_strchr(p_cpo, CPO_INDENT) == NULL
+                                      && curwin->w_cursor.lnum != pos->lnum))
+        && pos->lnum <= curbuf->b_ml.ml_line_count) {
+      pos_T tpos = curwin->w_cursor;
+      colnr_T prev_col = pos->col;
+      curwin->w_cursor = *pos;
+      check_cursor_col(curwin);
+      while (true) {
+        if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
+          curwin->w_cursor.col--;
+        }
+        cc = gchar_cursor();
+        if (!ascii_iswhite(cc)) {
+          break;
+        }
+        if (del_char(true) == FAIL) {
+          break;
+        }
+      }
+      if (curwin->w_cursor.lnum != tpos.lnum) {
+        curwin->w_cursor = tpos;
+      } else if (curwin->w_cursor.col < prev_col) {
+        tpos = curwin->w_cursor;
+        tpos.col++;
+        if (cc != NUL && gchar_pos(&tpos) == NUL) {
+          curwin->w_cursor.col++;
+        }
+      }
+      if (VIsual_active) {
+        check_visual_pos();
+      }
+    }
+  }
+
+  did_ai = false;
+  did_si = false;
+  can_si = false;
+  can_si_back = false;
+  if (pos != NULL) {
+    curbuf->b_op_start = Insstart;
+    curbuf->b_op_start_orig = Insstart_orig;
+    curbuf->b_op_end = *pos;
+  }
+}
+
+/// Handle CR/NL insertion in insert mode.  Moved from edit.c.
+int nvim_edit_ins_eol(int c)
+{
+  if (echeck_abbr(c + ABBR_OFF)) {
+    return true;
+  }
+  if (stop_arrow() == FAIL) {
+    return false;
+  }
+  undisplay_dollar();
+
+  if ((State & REPLACE_FLAG) && !(State & VREPLACE_FLAG)) {
+    replace_push_nul();
+  }
+
+  if (virtual_active(curwin) && curwin->w_cursor.coladd > 0) {
+    coladvance(curwin, getviscol());
+  }
+
+  if (nvim_get_revins_on()) {
+    curwin->w_cursor.col += get_cursor_pos_len();
+  }
+
+  AppendToRedobuff(NL_STR);
+  bool i = open_line(FORWARD,
+                     has_format_option(FO_RET_COMS) ? OPENLINE_DO_COM : 0,
+                     old_indent, NULL);
+  old_indent = 0;
+  nvim_set_can_cindent(1);
+  rs_foldOpenCursor();
+
+  return i;
+}
+
+/// Handle Ctrl-Y/Ctrl-E (copy char above/below) in insert mode.  Moved from edit.c.
+int nvim_edit_ins_ctrl_ey(int tc)
+{
+  int c = tc;
+
+  if (rs_ctrl_x_mode_scroll()) {
+    if (c == Ctrl_Y) {
+      scrolldown_clamp();
+    } else {
+      scrollup_clamp();
+    }
+    redraw_later(curwin, UPD_VALID);
+  } else {
+    c = ins_copychar(curwin->w_cursor.lnum + (c == Ctrl_Y ? -1 : 1));
+    if (c != NUL) {
+      if (c < 256 && !isalnum(c)) {
+        AppendToRedobuff(CTRL_V_STR);
+      }
+      OptInt tw_save = curbuf->b_p_tw;
+      curbuf->b_p_tw = -1;
+      insert_special(c, true, false);
+      curbuf->b_p_tw = tw_save;
+      nvim_set_revins_chars(nvim_get_revins_chars() + 1);
+      nvim_set_revins_legal(nvim_get_revins_legal() + 1);
+      c = Ctrl_V;
+      auto_format(false, true);
+    }
+  }
+  return c;
+}
+
+/// Toggle p_ri (reverse insert) and return the new value.
+void nvim_toggle_p_ri(void) { p_ri = !p_ri; }
+
+/// Advance cursor column by 1 (curwin->w_cursor.col++).
+void nvim_curwin_cursor_col_inc(void) { curwin->w_cursor.col++; }
 
 /// Compute the target columns for softtabstop backspace.
 ///

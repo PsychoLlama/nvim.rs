@@ -92,8 +92,15 @@ extern "C" {
     fn nvim_ins_insert(replace_state: c_int);
     fn nvim_ins_ctrl_o();
     fn nvim_ins_ctrl_hat();
-    fn nvim_edit_ins_ctrl_(revins_on: c_int);
     fn nvim_ins_start_select(c: c_int) -> c_int;
+
+    // -- ins_ctrl_ dependencies (Phase 3 migration) --
+    fn nvim_get_revins_on() -> c_int;
+    fn nvim_toggle_p_ri();
+    fn nvim_edit_set_revins_on(val: c_int);
+    fn nvim_set_revins_scol(val: c_int);
+    fn nvim_curwin_cursor_col_inc();
+    fn showmode() -> c_int;
 
     // -- for inlining nvim_ins_ctrl_g_get_key --
     fn setcursor();
@@ -532,9 +539,33 @@ pub unsafe extern "C" fn rs_ins_ctrl_hat() {
 // ============================================================================
 
 /// Handle Ctrl-_ in Insert mode (toggle reverse insert).
+///
+/// Ported from `nvim_edit_ins_ctrl_` in edit.c.
 unsafe fn ins_ctrl__impl() {
-    let revins_on_val = nvim_get_p_ri() != 0 && State == MODE_INSERT;
-    nvim_edit_ins_ctrl_(c_int::from(revins_on_val));
+    // Advance cursor past any inserted chars if toggling off revins
+    if nvim_get_revins_on() != 0 && nvim_get_revins_chars() != 0 && nvim_get_revins_scol() >= 0 {
+        let mut rc = nvim_get_revins_chars();
+        while nvim_gchar_cursor() != NUL && rc > 0 {
+            nvim_curwin_cursor_col_inc();
+            rc -= 1;
+        }
+        nvim_set_revins_chars(rc);
+    }
+
+    nvim_toggle_p_ri();
+
+    let new_revins_on = nvim_get_p_ri() != 0 && State == MODE_INSERT;
+    nvim_edit_set_revins_on(c_int::from(new_revins_on));
+
+    if new_revins_on {
+        nvim_set_revins_scol(nvim_curwin_get_cursor_col());
+        nvim_set_revins_legal(nvim_get_revins_legal() + 1);
+        nvim_set_revins_chars(0);
+        undisplay_dollar();
+    } else {
+        nvim_set_revins_scol(-1);
+    }
+    showmode();
 }
 
 #[unsafe(export_name = "ins_ctrl_")]
