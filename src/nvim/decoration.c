@@ -66,55 +66,29 @@ extern void rs_decor_range_add_from_inline(void *state, int start_row, int start
 
 // clear_virttext and clear_virtlines are declared in decoration.h
 
-/// Add highlighting to a buffer, bounded by two cursor positions,
-/// with an offset.
-///
-/// TODO(bfredl): make decoration powerful enough so that this
-/// can be done with a single ephemeral decoration.
-///
-/// @param buf Buffer to add highlights to
-/// @param src_id src_id to use or 0 to use a new src_id group,
-///               or -1 for ungrouped highlight.
-/// @param hl_id Highlight group id
-/// @param pos_start Cursor position to start the highlighting at
-/// @param pos_end Cursor position to end the highlighting at
-/// @param offset Move the whole highlighting this many columns to the right
+// Rust implementation of bufhl_add_hl_pos_offset
+extern void rs_bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id,
+                                       linenr_T start_lnum, colnr_T start_col,
+                                       linenr_T end_lnum, colnr_T end_col,
+                                       colnr_T offset);
+
+/// C helper: set a single highlight range via extmark_set, for Rust FFI.
+void nvim_extmark_set_hl(buf_T *buf, int ns_id, int row, int col, int end_row, int end_col,
+                         int hl_id)
+{
+  DecorInline decor = DECOR_INLINE_INIT;
+  decor.data.hl.hl_id = hl_id;
+  extmark_set(buf, (uint32_t)ns_id, NULL, row, col, end_row, end_col,
+              decor, MT_FLAG_DECOR_HL, true, false, true, false, NULL);
+}
+
+/// Add highlighting to a buffer, bounded by two cursor positions, with an offset.
 void bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id, lpos_T pos_start, lpos_T pos_end,
                              colnr_T offset)
 {
-  colnr_T hl_start = 0;
-  colnr_T hl_end = 0;
-  DecorInline decor = DECOR_INLINE_INIT;
-  decor.data.hl.hl_id = hl_id;
-
-  // TODO(bfredl): if decoration had blocky mode, we could avoid this loop
-  for (linenr_T lnum = pos_start.lnum; lnum <= pos_end.lnum; lnum++) {
-    int end_off = 0;
-    if (pos_start.lnum < lnum && lnum < pos_end.lnum) {
-      // TODO(bfredl): This is quite ad-hoc, but the space between |num| and
-      // text being highlighted is the indication of \n being part of the
-      // substituted text. But it would be more consistent to highlight
-      // a space _after_ the previous line instead (like highlight EOL list
-      // char)
-      hl_start = MAX(offset - 1, 0);
-      end_off = 1;
-      hl_end = 0;
-    } else if (lnum == pos_start.lnum && lnum < pos_end.lnum) {
-      hl_start = pos_start.col + offset;
-      end_off = 1;
-      hl_end = 0;
-    } else if (pos_start.lnum < lnum && lnum == pos_end.lnum) {
-      hl_start = MAX(offset - 1, 0);
-      hl_end = pos_end.col + offset;
-    } else if (pos_start.lnum == lnum && pos_end.lnum == lnum) {
-      hl_start = pos_start.col + offset;
-      hl_end = pos_end.col + offset;
-    }
-
-    extmark_set(buf, (uint32_t)src_id, NULL,
-                (int)lnum - 1, hl_start, (int)lnum - 1 + end_off, hl_end,
-                decor, MT_FLAG_DECOR_HL, true, false, true, false, NULL);
-  }
+  rs_bufhl_add_hl_pos_offset(buf, src_id, hl_id,
+                             pos_start.lnum, pos_start.col,
+                             pos_end.lnum, pos_end.col, offset);
 }
 
 
@@ -710,26 +684,12 @@ void nvim_decor_redraw(buf_T *buf, int row_start, int row_end, int col_start,
                (DecorInline){ .ext = decor_ext, .data = decor_data });
 }
 
-/// Invalidate decor state for buffer.
-void nvim_decor_state_invalidate(buf_T *buf) { decor_state_invalidate(buf); }
-
 /// Count sign columns in a range (wrapper for Rust FFI).
 void nvim_buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, int clear)
 {
   buf_signcols_count_range(buf, row1, row2, add, (TriState)clear);
 }
 
-/// Get sign name from DecorSignHighlight (for Rust sign crate).
-char *nvim_decor_sh_get_sign_name(DecorSignHighlight *sh) { return sh ? sh->sign_name : NULL; }
-
-/// Get highlight ID from DecorSignHighlight (for Rust sign crate).
-int nvim_decor_sh_get_hl_id(DecorSignHighlight *sh) { return sh ? sh->hl_id : 0; }
-
-/// Get priority from DecorSignHighlight (for Rust sign crate).
-int nvim_decor_sh_get_priority(DecorSignHighlight *sh) { return sh ? sh->priority : 0; }
-
-/// Get sign_add_id from DecorSignHighlight (for Rust sign crate).
-int nvim_decor_sh_get_sign_add_id(DecorSignHighlight *sh) { return sh ? sh->sign_add_id : 0; }
 
 /// Get type flags for decoration data (for Rust extmark FFI).
 uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)

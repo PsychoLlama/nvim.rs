@@ -224,12 +224,8 @@ pub type LinenrT = i32;
 
 #[allow(dead_code)]
 extern "C" {
-    // DecorSignHighlight accessors
+    // DecorSignHighlight accessors (flags only - others use direct typed access via nvim-decoration)
     fn nvim_decor_sh_get_flags(sh: DecorSignHighlightHandle) -> u16;
-    fn nvim_decor_sh_get_priority(sh: DecorSignHighlightHandle) -> u16;
-    fn nvim_decor_sh_get_hl_id(sh: DecorSignHighlightHandle) -> c_int;
-    fn nvim_decor_sh_get_sign_name(sh: DecorSignHighlightHandle) -> *const c_char;
-    fn nvim_decor_sh_get_sign_add_id(sh: DecorSignHighlightHandle) -> c_int;
     fn nvim_decor_sh_get_number_hl_id(sh: DecorSignHighlightHandle) -> c_int;
     fn nvim_decor_sh_get_line_hl_id(sh: DecorSignHighlightHandle) -> c_int;
     fn nvim_decor_sh_get_cursorline_hl_id(sh: DecorSignHighlightHandle) -> c_int;

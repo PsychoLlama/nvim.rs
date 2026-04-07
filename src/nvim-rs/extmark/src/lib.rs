@@ -497,7 +497,8 @@ extern "C" {
         decor_ext: bool,
     );
 
-    /// Invalidate decoration state.
+    /// Invalidate decoration state (calls Rust decor_state_invalidate directly).
+    #[link_name = "decor_state_invalidate"]
     fn nvim_decor_state_invalidate(buf: BufHandle);
 
     /// Get type flags for decoration data.

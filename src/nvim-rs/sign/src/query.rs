@@ -32,9 +32,6 @@ extern "C" {
     fn nvim_mtkey_get_ns(key: MTKeyHandle) -> u32;
     fn nvim_mtkey_get_id(key: MTKeyHandle) -> u32;
 
-    // DecorSignHighlight accessors
-    fn nvim_decor_sh_get_sign_name(sh: DecorSignHighlightHandle) -> *const c_char;
-
     // Error reporting
     fn semsg(fmt: *const c_char, ...);
 
@@ -78,7 +75,7 @@ pub unsafe extern "C" fn rs_sign_get_display_name(sh: DecorSignHighlightHandle) 
         return EMPTY.as_ptr().cast::<c_char>();
     }
 
-    let name = nvim_decor_sh_get_sign_name(sh);
+    let name = (*sh.0.cast::<nvim_decoration::types::DecorSignHighlight>()).sign_name;
     if name.is_null() {
         return EMPTY.as_ptr().cast::<c_char>();
     }

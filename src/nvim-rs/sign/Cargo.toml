@@ -13,3 +13,4 @@ crate-type = ["staticlib", "rlib"]
 workspace = true
 
 [dependencies]
+nvim-decoration = { path = "../decoration" }

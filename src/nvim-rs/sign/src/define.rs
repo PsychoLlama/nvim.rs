@@ -172,13 +172,6 @@ pub unsafe extern "C" fn rs_sign_def_has_highlight(sp: SignHandle) -> bool {
 // DecorSignHighlight Properties
 // =============================================================================
 
-extern "C" {
-    fn nvim_decor_sh_get_priority(sh: DecorSignHighlightHandle) -> u16;
-    fn nvim_decor_sh_get_hl_id(sh: DecorSignHighlightHandle) -> c_int;
-    fn nvim_decor_sh_get_sign_name(sh: DecorSignHighlightHandle) -> *const c_char;
-    fn nvim_decor_sh_get_sign_add_id(sh: DecorSignHighlightHandle) -> c_int;
-}
-
 /// Get the priority of a placed sign (from DecorSignHighlight).
 ///
 /// # Safety
@@ -189,7 +182,7 @@ pub unsafe extern "C" fn rs_decor_sh_get_priority(sh: DecorSignHighlightHandle) 
     if sh.is_null() {
         return SIGN_DEF_PRIO;
     }
-    c_int::from(nvim_decor_sh_get_priority(sh))
+    c_int::from((*sh.0.cast::<nvim_decoration::types::DecorSignHighlight>()).priority)
 }
 
 /// Get the sign name from a placed sign (from DecorSignHighlight).
@@ -202,7 +195,7 @@ pub unsafe extern "C" fn rs_decor_sh_get_sign_name(sh: DecorSignHighlightHandle)
     if sh.is_null() {
         return std::ptr::null();
     }
-    nvim_decor_sh_get_sign_name(sh)
+    (*sh.0.cast::<nvim_decoration::types::DecorSignHighlight>()).sign_name
 }
 
 /// Get the text highlight ID from a placed sign.
@@ -215,7 +208,7 @@ pub unsafe extern "C" fn rs_decor_sh_get_hl_id(sh: DecorSignHighlightHandle) -> 
     if sh.is_null() {
         return 0;
     }
-    nvim_decor_sh_get_hl_id(sh)
+    (*sh.0.cast::<nvim_decoration::types::DecorSignHighlight>()).hl_id
 }
 
 /// Get the sign_add_id from a placed sign (used for sorting recency).
@@ -228,7 +221,7 @@ pub unsafe extern "C" fn rs_decor_sh_get_sign_add_id(sh: DecorSignHighlightHandl
     if sh.is_null() {
         return 0;
     }
-    nvim_decor_sh_get_sign_add_id(sh)
+    (*sh.0.cast::<nvim_decoration::types::DecorSignHighlight>()).sign_add_id
 }
 
 // =============================================================================

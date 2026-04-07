@@ -220,7 +220,7 @@ void nvim_excmds_do_cmdline_global(const char *cmd) { if (cmd == NULL || *cmd ==
 char *nvim_excmds_save_set_shortmess_F(void) { char *saved = xstrdup(p_shm); set_option_direct(kOptShortmess, STATIC_CSTR_AS_OPTVAL("F"), 0, SID_NONE); return saved; }
 void nvim_excmds_restore_shortmess(char *saved) { set_option_direct(kOptShortmess, CSTR_AS_OPTVAL(saved), 0, SID_NONE); xfree(saved); }
 int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
-void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id, linenr_T start_lnum, colnr_T start_col, linenr_T end_lnum, colnr_T end_col, colnr_T offset) { lpos_T start = { start_lnum, start_col }; lpos_T end = { end_lnum, end_col }; bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start, end, offset); }
+void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id, linenr_T start_lnum, colnr_T start_col, linenr_T end_lnum, colnr_T end_col, colnr_T offset) { rs_bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start_lnum, start_col, end_lnum, end_col, offset); }
 size_t nvim_excmds_preview_lines_size(const void *pl) { return ((const PreviewLines *)pl)->subresults.size; }
 void nvim_excmds_preview_lines_item(const void *pl, size_t idx, linenr_T *start_lnum, colnr_T *start_col, linenr_T *end_lnum, colnr_T *end_col, linenr_T *pre_match) { SubResult item = ((const PreviewLines *)pl)->subresults.items[idx]; *start_lnum = item.start.lnum; *start_col = item.start.col; *end_lnum = item.end.lnum; *end_col = item.end.col; *pre_match = item.pre_match; }
 const char *nvim_exarg_get_cmd(const exarg_T *eap) { return eap->cmd; }

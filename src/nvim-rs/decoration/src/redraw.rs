@@ -50,6 +50,17 @@ extern "C" {
     fn nvim_decor_buf_get_line_count(buf: BufHandle) -> c_int;
     fn nvim_decor_items_get_next(idx: u32) -> u32;
     fn nvim_decor_items_get_ptr(idx: u32) -> *mut c_void;
+    // Phase 4: bufhl helpers
+    fn nvim_extmark_set_hl(
+        buf: BufHandle,
+        ns_id: c_int,
+        row: c_int,
+        col: c_int,
+        end_row: c_int,
+        end_col: c_int,
+        hl_id: c_int,
+    );
+
     // Phase 3: Sign buffer operation C accessors
     fn nvim_changed_window_setting(wp: WinHandle);
     fn nvim_may_force_numberwidth_recompute(buf: BufHandle, unplace: bool);
@@ -1600,6 +1611,50 @@ pub unsafe extern "C" fn rs_buf_remove_decor_sh(
             nvim_buf_signcols_set_count0(buf, 0);
             nvim_buf_signcols_set_max(buf, 0);
         }
+    }
+}
+
+// =============================================================================
+// Phase 4: bufhl_add_hl_pos_offset migrated from C
+// =============================================================================
+
+/// Add highlighting to a buffer, bounded by two cursor positions, with an offset.
+///
+/// Rust implementation of `bufhl_add_hl_pos_offset()`.
+///
+/// # Safety
+/// `buf` must be a valid buf_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bufhl_add_hl_pos_offset(
+    buf: BufHandle,
+    src_id: c_int,
+    hl_id: c_int,
+    pos_start_lnum: c_int,
+    pos_start_col: c_int,
+    pos_end_lnum: c_int,
+    pos_end_col: c_int,
+    offset: c_int,
+) {
+    for lnum in pos_start_lnum..=pos_end_lnum {
+        let (hl_start, hl_end, end_off) = if pos_start_lnum < lnum && lnum < pos_end_lnum {
+            (c_int::max(offset - 1, 0), 0, 1)
+        } else if lnum == pos_start_lnum && lnum < pos_end_lnum {
+            (pos_start_col + offset, 0, 1)
+        } else if pos_start_lnum < lnum && lnum == pos_end_lnum {
+            (c_int::max(offset - 1, 0), pos_end_col + offset, 0)
+        } else {
+            // pos_start_lnum == lnum == pos_end_lnum
+            (pos_start_col + offset, pos_end_col + offset, 0)
+        };
+        nvim_extmark_set_hl(
+            buf,
+            src_id,
+            lnum - 1,
+            hl_start,
+            lnum - 1 + end_off,
+            hl_end,
+            hl_id,
+        );
     }
 }
 

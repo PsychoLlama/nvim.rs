@@ -127,6 +127,11 @@ bool decor_redraw_eol(win_T *wp, DecorState *state, int *eol_attr, int eol_col);
 char *next_virt_text_chunk(VirtText vt, size_t *pos, int *attr);
 uint16_t decor_type_flags(DecorInline decor);
 
+// Phase 4: Rust exports
+void rs_bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id, linenr_T start_lnum,
+                                colnr_T start_col, linenr_T end_lnum, colnr_T end_col,
+                                colnr_T offset);
+
 // Forward declarations for functions migrated to Rust (no longer in generated header)
 bool decor_virt_pos(const DecorRange *decor);
 VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
