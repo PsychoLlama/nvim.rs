@@ -15,7 +15,7 @@ use crate::{
 
 /// Opaque handle to buf_T.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BufHandle(pub *mut c_void);
 
 // =============================================================================
@@ -50,24 +50,26 @@ extern "C" {
     fn nvim_decor_buf_get_line_count(buf: BufHandle) -> c_int;
     fn nvim_decor_items_get_next(idx: u32) -> u32;
     fn nvim_decor_items_get_ptr(idx: u32) -> *mut c_void;
-    fn decor_redraw_sh(
+    // Phase 3: Sign buffer operation C accessors
+    fn nvim_changed_window_setting(wp: WinHandle);
+    fn nvim_may_force_numberwidth_recompute(buf: BufHandle, unplace: bool);
+    fn nvim_buf_meta_total(buf: BufHandle, key: c_int) -> c_int;
+    fn nvim_buf_signcols_get_count0(buf: BufHandle) -> c_int;
+    fn nvim_buf_signcols_set_count0(buf: BufHandle, val: c_int);
+    fn nvim_buf_signcols_get_max(buf: BufHandle) -> c_int;
+    fn nvim_buf_signcols_set_max(buf: BufHandle, val: c_int);
+    fn nvim_get_sign_add_id() -> c_int;
+    fn nvim_incr_sign_add_id() -> c_int;
+    fn nvim_buf_signcols_count_range(
         buf: BufHandle,
         row1: c_int,
         row2: c_int,
-        sh: crate::types::DecorSignHighlight,
+        add: c_int,
+        clear: c_int,
     );
-    fn buf_put_decor_sh(
-        buf: BufHandle,
-        sh: *mut crate::types::DecorSignHighlight,
-        row1: c_int,
-        row2: c_int,
-    );
-    fn buf_remove_decor_sh(
-        buf: BufHandle,
-        row1: c_int,
-        row2: c_int,
-        sh: *mut crate::types::DecorSignHighlight,
-    );
+    fn nvim_curtab_first_win() -> WinHandle;
+    fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 }
 
 // =============================================================================
@@ -370,7 +372,7 @@ pub unsafe extern "C" fn rs_decor_redraw(
         while idx != DECOR_ID_INVALID {
             let next = nvim_decor_items_get_next(idx);
             let sh = std::ptr::read(nvim_decor_items_get_ptr(idx).cast::<DecorSignHighlight>());
-            decor_redraw_sh(buf, row1, row2, sh);
+            rs_decor_redraw_sh(buf, row1, row2, sh);
             idx = next;
         }
     } else {
@@ -389,7 +391,7 @@ pub unsafe extern "C" fn rs_decor_redraw(
             _pad_next: 0,
             url: std::ptr::null(),
         };
-        decor_redraw_sh(buf, row1, row2, sh);
+        rs_decor_redraw_sh(buf, row1, row2, sh);
     }
 }
 
@@ -424,7 +426,7 @@ pub unsafe extern "C" fn rs_buf_put_decor(
     let mut idx = sh_idx;
     while idx != DECOR_ID_INVALID {
         let next = nvim_decor_items_get_next(idx);
-        buf_put_decor_sh(
+        rs_buf_put_decor_sh(
             buf,
             nvim_decor_items_get_ptr(idx).cast::<DecorSignHighlight>(),
             row,
@@ -482,7 +484,7 @@ pub unsafe extern "C" fn rs_buf_decor_remove(
             let mut idx = sh_idx;
             while idx != DECOR_ID_INVALID {
                 let next = nvim_decor_items_get_next(idx);
-                buf_remove_decor_sh(
+                rs_buf_remove_decor_sh(
                     buf,
                     row1,
                     clamped_row2,
@@ -1487,6 +1489,118 @@ pub unsafe extern "C" fn nvim_decor_state_get_eol_right_width(
         total_width -= 1;
     }
     total_width
+}
+
+// =============================================================================
+// Phase 3: Sign buffer operations migrated from C
+// =============================================================================
+
+/// kMTMetaSignText value from marktree_defs.h.
+const K_MT_META_SIGN_TEXT: c_int = 3;
+
+/// kFalse from tristate (TriState is 0=kFalse, 1=kTrue, -1=kNone).
+const K_FALSE: c_int = 0;
+
+/// Trigger redraw for sign/hl/spell/conceal decoration changes.
+///
+/// Rust implementation of `decor_redraw_sh()`.
+///
+/// # Safety
+/// `buf` must be a valid buf_T pointer.
+#[export_name = "decor_redraw_sh"]
+pub unsafe extern "C" fn rs_decor_redraw_sh(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    sh: DecorSignHighlight,
+) {
+    use crate::decor::{KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
+    use crate::decor::{KSH_CONCEAL_LINES, KSH_IS_SIGN, KSH_UI_WATCHED};
+
+    let flags = sh.flags;
+
+    if row2 >= row1
+        && (sh.hl_id != 0
+            || !sh.url.is_null()
+            || (flags & KSH_IS_SIGN != 0)
+            || (flags & KSH_SPELL_ON != 0)
+            || (flags & KSH_SPELL_OFF != 0)
+            || (flags & KSH_CONCEAL != 0))
+    {
+        nvim_redraw_buf_range_later(buf, row1 + 1, row2 + 1);
+    }
+
+    if flags & KSH_CONCEAL_LINES != 0 {
+        let mut wp = nvim_curtab_first_win();
+        while !wp.is_null() {
+            if nvim_win_get_buffer(wp) == buf {
+                nvim_changed_window_setting(wp);
+            }
+            wp = nvim_win_get_next_in_tab(wp);
+        }
+    }
+
+    if flags & KSH_UI_WATCHED != 0 {
+        nvim_redraw_buf_line_later(buf, row1 + 1, false);
+    }
+}
+
+/// Place sign decoration in buffer.
+///
+/// Rust implementation of `buf_put_decor_sh()`.
+///
+/// # Safety
+/// `buf` and `sh` must be valid pointers.
+#[export_name = "buf_put_decor_sh"]
+pub unsafe extern "C" fn rs_buf_put_decor_sh(
+    buf: BufHandle,
+    sh: *mut DecorSignHighlight,
+    row1: c_int,
+    row2: c_int,
+) {
+    use crate::decor::KSH_IS_SIGN;
+
+    if sh.is_null() {
+        return;
+    }
+    let flags = (*sh).flags;
+    if flags & KSH_IS_SIGN != 0 {
+        (*sh).sign_add_id = nvim_incr_sign_add_id();
+        if (*sh).text[0] != 0 {
+            nvim_buf_signcols_count_range(buf, row1, row2, 1, K_FALSE);
+            nvim_may_force_numberwidth_recompute(buf, false);
+        }
+    }
+}
+
+/// Remove sign decoration from buffer.
+///
+/// Rust implementation of `buf_remove_decor_sh()`.
+///
+/// # Safety
+/// `buf` and `sh` must be valid pointers.
+#[export_name = "buf_remove_decor_sh"]
+pub unsafe extern "C" fn rs_buf_remove_decor_sh(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    sh: *mut DecorSignHighlight,
+) {
+    use crate::decor::KSH_IS_SIGN;
+
+    if sh.is_null() {
+        return;
+    }
+    let flags = (*sh).flags;
+    if flags & KSH_IS_SIGN != 0 && (*sh).text[0] != 0 {
+        if nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) != 0 {
+            nvim_buf_signcols_count_range(buf, row1, row2, -1, K_FALSE);
+        } else {
+            nvim_may_force_numberwidth_recompute(buf, true);
+            nvim_buf_signcols_set_count0(buf, 0);
+            nvim_buf_signcols_set_max(buf, 0);
+        }
+    }
 }
 
 // =============================================================================

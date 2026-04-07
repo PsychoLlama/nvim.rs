@@ -118,73 +118,6 @@ void bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id, lpos_T pos_start
 }
 
 
-void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
-{
-  if (sh.hl_id || (sh.url != NULL)
-      || rs_sh_is_sign(sh.flags) || rs_sh_is_spell_on(sh.flags)
-      || rs_sh_is_spell_off(sh.flags) || rs_sh_is_conceal(sh.flags)) {
-    if (row2 >= row1) {
-      redraw_buf_range_later(buf, row1 + 1, row2 + 1);
-    }
-  }
-  if (rs_sh_is_conceal_lines(sh.flags)) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      // TODO(luukvbaal): redraw only unconcealed lines, and scroll lines below
-      // it up or down. Also when opening/closing a fold.
-      if (wp->w_buffer == buf) {
-        changed_window_setting(wp);
-      }
-    }
-  }
-  if (rs_sh_is_ui_watched(sh.flags)) {
-    redraw_buf_line_later(buf, row1 + 1, false);
-  }
-}
-
-/// When displaying signs in the 'number' column, if the width of the number
-/// column is less than 2, then force recomputing the width after placing or
-/// unplacing the first sign in "buf".
-static void may_force_numberwidth_recompute(buf_T *buf, bool unplace)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer == buf
-        && wp->w_minscwidth == SCL_NUM
-        && (wp->w_p_nu || wp->w_p_rnu)
-        && (unplace || wp->w_nrwidth_width < 2)) {
-      wp->w_nrwidth_line_count = 0;
-    }
-  }
-}
-
-static int sign_add_id = 0;
-void buf_put_decor_sh(buf_T *buf, DecorSignHighlight *sh, int row1, int row2)
-{
-  if (rs_sh_is_sign(sh->flags)) {
-    sh->sign_add_id = sign_add_id++;
-    if (sh->text[0]) {
-      buf_signcols_count_range(buf, row1, row2, 1, kFalse);
-      may_force_numberwidth_recompute(buf, false);
-    }
-  }
-}
-
-
-void buf_remove_decor_sh(buf_T *buf, int row1, int row2, DecorSignHighlight *sh)
-{
-  if (rs_sh_is_sign(sh->flags)) {
-    if (sh->text[0]) {
-      if (buf_meta_total(buf, kMTMetaSignText)) {
-        buf_signcols_count_range(buf, row1, row2, -1, kFalse);
-      } else {
-        may_force_numberwidth_recompute(buf, true);
-        buf->b_signcols.count[0] = 0;
-        buf->b_signcols.max = 0;
-      }
-    }
-  }
-}
-
-
 DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id)
 {
   MarkTreeIter itr[1] = { 0 };
@@ -803,6 +736,37 @@ uint16_t nvim_decor_type_flags(DecorInlineData data, bool ext)
 {
   return decor_type_flags((DecorInline){ .ext = ext, .data = data });
 }
+
+/// Counter for sign placement order.
+static int sign_add_id = 0;
+
+// Phase 3: Sign buffer operation helpers for Rust FFI
+
+/// Trigger window setting change for Rust FFI.
+void nvim_changed_window_setting(win_T *wp) { changed_window_setting(wp); }
+
+/// Recompute number column width if needed (FOR_ALL_TAB_WINDOWS loop stays in C).
+void nvim_may_force_numberwidth_recompute(buf_T *buf, bool unplace)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (wp->w_buffer == buf
+        && wp->w_minscwidth == SCL_NUM
+        && (wp->w_p_nu || wp->w_p_rnu)
+        && (unplace || wp->w_nrwidth_width < 2)) {
+      wp->w_nrwidth_line_count = 0;
+    }
+  }
+}
+
+/// Get b_signcols.count[0] for Rust FFI.
+int nvim_buf_signcols_get_count0(buf_T *buf) { return buf->b_signcols.count[0]; }
+/// Set b_signcols.count[0] for Rust FFI.
+void nvim_buf_signcols_set_count0(buf_T *buf, int val) { buf->b_signcols.count[0] = val; }
+
+/// Get current sign_add_id for Rust FFI.
+int nvim_get_sign_add_id(void) { return sign_add_id; }
+/// Post-increment sign_add_id, return old value for Rust FFI.
+int nvim_incr_sign_add_id(void) { return sign_add_id++; }
 
 // Core Column Rendering helpers
 
