@@ -636,91 +636,11 @@ int nvim_stl_get_p_sc(void) { return p_sc; }
 /// Check if showcmdloc == "tabline".
 int nvim_stl_showcmd_loc_is_tabline(void) { return *p_sloc == 't' ? 1 : 0; }
 
-/// Per-tab info for Rust draw_tabline.
-typedef struct {
-  win_T *cwp;          // current window in this tab
-  int wincount;        // number of focusable, non-hidden windows
-  bool modified;       // any buffer changed?
-  bool is_curtab;      // is this the active tab?
-  bool topframe_match; // tp->tp_topframe == topframe
-  char name[MAXPATHL]; // shortened buffer name
-  int name_len;        // display width of name
-} TabInfo;
+/// Check if tp is the current tab page.
+int nvim_stl_tabpage_is_curtab(tabpage_T *tp) { return tp == curtab ? 1 : 0; }
 
-/// Collect all tab page info into a flat array.
-/// Returns the number of tabs (written to *out_count).
-/// The caller must free the result with xfree().
-void *nvim_stl_collect_tab_info(int *out_count)
-{
-  int tabcount = 0;
-  FOR_ALL_TABS(tp) {
-    tabcount++;
-  }
-  *out_count = tabcount;
-  if (tabcount == 0) {
-    return NULL;
-  }
-
-  TabInfo *tabs = xcalloc((size_t)tabcount, sizeof(TabInfo));
-  int idx = 0;
-  FOR_ALL_TABS(tp) {
-    TabInfo *t = &tabs[idx++];
-    t->is_curtab = (tp == curtab);
-    t->topframe_match = (tp->tp_topframe == topframe);
-
-    if (tp == curtab) {
-      t->cwp = curwin;
-    } else {
-      t->cwp = tp->tp_curwin;
-    }
-
-    win_T *wp = t->is_curtab ? firstwin : tp->tp_firstwin;
-    t->wincount = 0;
-    t->modified = false;
-    for (; wp != NULL; wp = wp->w_next) {
-      if (!wp->w_config.focusable || wp->w_config.hide) {
-        // skip non-focusable/hidden windows
-      } else {
-        t->wincount++;
-        if (bufIsChanged(wp->w_buffer)) {
-          t->modified = true;
-        }
-      }
-    }
-
-    // Get buffer name
-    get_trans_bufname(t->cwp->w_buffer);
-    shorten_dir(NameBuff);
-    xstrlcpy(t->name, NameBuff, sizeof(t->name));
-    t->name_len = vim_strsize(t->name);
-  }
-
-  return tabs;
-}
-
-/// Get cwp from TabInfo (opaque pointer).
-win_T *nvim_stl_tab_info_get_cwp(void *ptr) { return ((TabInfo *)ptr)->cwp; }
-
-/// Get wincount from TabInfo.
-int nvim_stl_tab_info_get_wincount(void *ptr) { return ((TabInfo *)ptr)->wincount; }
-
-/// Get modified from TabInfo.
-int nvim_stl_tab_info_get_modified(void *ptr) { return ((TabInfo *)ptr)->modified ? 1 : 0; }
-
-/// Get is_curtab from TabInfo.
-int nvim_stl_tab_info_get_is_curtab(void *ptr) { return ((TabInfo *)ptr)->is_curtab ? 1 : 0; }
-
-/// Get topframe_match from TabInfo.
-int nvim_stl_tab_info_get_topframe_match(void *ptr) { return ((TabInfo *)ptr)->topframe_match ? 1 : 0; }
-
-/// Get name from TabInfo.
-const char *nvim_stl_tab_info_get_name(void *ptr) { return ((TabInfo *)ptr)->name; }
-
-/// Get name display width from TabInfo.
-int nvim_stl_tab_info_get_name_len(void *ptr) { return ((TabInfo *)ptr)->name_len; }
-
-/// Get size of TabInfo struct for Rust array iteration.
-size_t nvim_stl_tab_info_size(void) { return sizeof(TabInfo); }
+/// Check if tp->tp_topframe == topframe.
+int nvim_stl_tabpage_topframe_matches(tabpage_T *tp) { return tp->tp_topframe == topframe ? 1 : 0; }
 
 
 _Static_assert(HLF_T == 23, "HLF_T must be 23");

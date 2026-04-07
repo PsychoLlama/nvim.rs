@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use nvim_window::WinHandle;
+use nvim_window::{BufHandle, TabpageHandle, WinHandle};
 
 use crate::ScharT;
 
@@ -19,6 +19,21 @@ const HLF_TPS: c_int = 53;
 const HLF_TPF: c_int = 54;
 const K_STL_CLICK_TAB_SWITCH: c_int = 1;
 const K_STL_CLICK_TAB_CLOSE: c_int = 2;
+
+const MAXPATHL: usize = 4096;
+
+// =============================================================================
+// Tab info (collected in Rust, replacing the C TabInfo struct)
+// =============================================================================
+
+struct TabData {
+    cwp: WinHandle,
+    wincount: c_int,
+    modified: bool,
+    topframe_match: bool,
+    name_buf: [u8; MAXPATHL],
+    name_len: c_int,
+}
 
 // =============================================================================
 // C FFI declarations
@@ -75,16 +90,36 @@ extern "C" {
     fn nvim_stl_get_tab_page_click_defs() -> *mut c_void;
     fn nvim_stl_set_tab_click_def(col: c_int, click_type: c_int, tabnr: c_int);
 
-    // Tab info collection
-    fn nvim_stl_collect_tab_info(out_count: *mut c_int) -> *mut c_void;
-    fn nvim_stl_tab_info_size() -> usize;
-    fn nvim_stl_tab_info_get_cwp(ptr: *mut c_void) -> WinHandle;
-    fn nvim_stl_tab_info_get_wincount(ptr: *mut c_void) -> c_int;
-    fn nvim_stl_tab_info_get_modified(ptr: *mut c_void) -> c_int;
-    fn nvim_stl_tab_info_get_is_curtab(ptr: *mut c_void) -> c_int;
-    fn nvim_stl_tab_info_get_topframe_match(ptr: *mut c_void) -> c_int;
-    fn nvim_stl_tab_info_get_name(ptr: *mut c_void) -> *const c_char;
-    fn nvim_stl_tab_info_get_name_len(ptr: *mut c_void) -> c_int;
+    // Tab / window iteration (implemented in nvim-window Rust crate)
+    #[link_name = "nvim_get_first_tabpage"]
+    fn nvim_stl_get_first_tabpage() -> TabpageHandle;
+    #[link_name = "nvim_tabpage_get_next"]
+    fn nvim_stl_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
+    #[link_name = "nvim_tabpage_get_curwin"]
+    fn nvim_stl_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
+    #[link_name = "nvim_tabpage_get_firstwin"]
+    fn nvim_stl_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
+    #[link_name = "nvim_win_get_next"]
+    fn nvim_stl_win_get_next(wp: WinHandle) -> WinHandle;
+    #[link_name = "nvim_get_curwin"]
+    fn nvim_stl_get_curwin() -> WinHandle;
+    // firstwin for current tab
+    fn nvim_curtab_first_win() -> WinHandle;
+    // window focusable/hidden check accessors
+    fn nvim_win_get_focusable(wp: WinHandle) -> c_int;
+    fn nvim_ex2_win_get_w_config_hide(wp: WinHandle) -> bool;
+    // bufIsChanged via accessor
+    fn nvim_win_bufIsChanged(wp: WinHandle) -> c_int;
+    // tabpage topframe comparison
+    fn nvim_stl_tabpage_is_curtab(tp: TabpageHandle) -> c_int;
+    fn nvim_stl_tabpage_topframe_matches(tp: TabpageHandle) -> c_int;
+    // buffer name
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    #[link_name = "get_trans_bufname"]
+    fn nvim_stl_get_trans_bufname(buf: BufHandle);
+    #[link_name = "shorten_dir"]
+    fn nvim_stl_shorten_dir(s: *mut c_char);
+    fn nvim_get_namebuff() -> *mut c_char;
 
     // String (direct link to Rust/C implementations)
     #[link_name = "vim_strsize"]
@@ -100,10 +135,6 @@ extern "C" {
     // Delegated functions (already in Rust)
     fn rs_ui_ext_tabline_update();
     fn rs_win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool, ui_event: bool);
-
-    // Memory (direct link to C)
-    #[link_name = "xfree"]
-    fn nvim_stl_xfree(ptr: *mut c_void);
 }
 
 // =============================================================================
@@ -152,6 +183,76 @@ pub unsafe fn draw_tabline() {
     nvim_stl_set_redraw_tabline(0);
 }
 
+/// Collect per-tab info in Rust, replacing the C nvim_stl_collect_tab_info.
+unsafe fn collect_tab_data() -> Vec<TabData> {
+    let mut tabs: Vec<TabData> = Vec::new();
+    let curwin = nvim_stl_get_curwin();
+
+    let mut tp = nvim_stl_get_first_tabpage();
+    while !tp.is_null() {
+        let is_curtab = nvim_stl_tabpage_is_curtab(tp) != 0;
+        let topframe_match = nvim_stl_tabpage_topframe_matches(tp) != 0;
+
+        // Current window for this tab
+        let cwp = if is_curtab {
+            curwin
+        } else {
+            nvim_stl_tabpage_get_curwin(tp)
+        };
+
+        // Iterate windows to count focusable, non-hidden and check modified
+        let firstwin = if is_curtab {
+            nvim_curtab_first_win()
+        } else {
+            nvim_stl_tabpage_get_firstwin(tp)
+        };
+
+        let mut wincount: c_int = 0;
+        let mut modified = false;
+        let mut wp = firstwin;
+        while !wp.is_null() {
+            let focusable = nvim_win_get_focusable(wp) != 0;
+            let hidden = nvim_ex2_win_get_w_config_hide(wp);
+            if focusable && !hidden {
+                wincount += 1;
+                if nvim_win_bufIsChanged(wp) != 0 {
+                    modified = true;
+                }
+            }
+            wp = nvim_stl_win_get_next(wp);
+        }
+
+        // Get buffer name via get_trans_bufname + shorten_dir
+        let buf = nvim_win_get_buffer(cwp);
+        let mut name_buf = [0u8; MAXPATHL];
+        if !buf.is_null() {
+            nvim_stl_get_trans_bufname(buf);
+            let namebuff = nvim_get_namebuff();
+            nvim_stl_shorten_dir(namebuff);
+            // Copy NameBuff into our local buffer
+            let namebuff_slice = std::ffi::CStr::from_ptr(namebuff);
+            let bytes = namebuff_slice.to_bytes();
+            let copy_len = bytes.len().min(MAXPATHL - 1);
+            name_buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+            name_buf[copy_len] = 0;
+        }
+        let name_len = nvim_stl_vim_strsize(name_buf.as_ptr().cast());
+
+        tabs.push(TabData {
+            cwp,
+            wincount,
+            modified,
+            topframe_match,
+            name_buf,
+            name_len,
+        });
+
+        tp = nvim_stl_tabpage_get_next(tp);
+    }
+
+    tabs
+}
+
 /// Draw the built-in tabline (when no custom 'tabline' is set).
 unsafe fn draw_builtin_tabline(
     columns: c_int,
@@ -163,10 +264,11 @@ unsafe fn draw_builtin_tabline(
 
     nvim_stl_default_grid_line_start(0);
 
-    // Collect tab info from C
-    let mut tabcount: c_int = 0;
-    let tab_info_arr = nvim_stl_collect_tab_info(&mut tabcount);
-    if tab_info_arr.is_null() || tabcount == 0 {
+    // Collect tab info in Rust
+    let tabs = collect_tab_data();
+    let tabcount = tabs.len() as c_int;
+
+    if tabcount == 0 {
         // No tabs - just fill
         let c = if use_sep_chars { b'_' } else { b' ' };
         nvim_stl_grid_line_fill(
@@ -176,28 +278,23 @@ unsafe fn draw_builtin_tabline(
             attr_fill,
         );
         nvim_stl_grid_line_flush();
-        if !tab_info_arr.is_null() {
-            nvim_stl_xfree(tab_info_arr);
-        }
         return;
     }
 
-    let tab_info_size = nvim_stl_tab_info_size();
     let tabwidth = rs_tabwidth_calc(columns, tabcount);
 
     let mut attr = attr_nosel;
     let mut drawn_tabcount = 0;
 
-    for i in 0..tabcount {
+    for tab in &tabs {
         if col >= columns - 4 {
             break;
         }
 
-        let tab_ptr = (tab_info_arr as *mut u8).add(i as usize * tab_info_size) as *mut c_void;
-        let cwp = nvim_stl_tab_info_get_cwp(tab_ptr);
-        let wincount = nvim_stl_tab_info_get_wincount(tab_ptr);
-        let modified = nvim_stl_tab_info_get_modified(tab_ptr) != 0;
-        let topframe_match = nvim_stl_tab_info_get_topframe_match(tab_ptr) != 0;
+        let cwp = tab.cwp;
+        let wincount = tab.wincount;
+        let modified = tab.modified;
+        let topframe_match = tab.topframe_match;
 
         let scol = col;
 
@@ -247,8 +344,8 @@ unsafe fn draw_builtin_tabline(
         // Draw buffer name
         let room = scol - col + tabwidth - 1;
         if room > 0 {
-            let name_ptr = nvim_stl_tab_info_get_name(tab_ptr);
-            let mut name_display_len = nvim_stl_tab_info_get_name_len(tab_ptr);
+            let name_ptr = tab.name_buf.as_ptr().cast::<c_char>();
+            let mut name_display_len = tab.name_len;
 
             // Skip leading chars that don't fit
             let mut p = name_ptr;
@@ -315,7 +412,6 @@ unsafe fn draw_builtin_tabline(
     }
 
     nvim_stl_grid_line_flush();
-    nvim_stl_xfree(tab_info_arr);
 }
 
 /// Set click definitions for a range of columns.
