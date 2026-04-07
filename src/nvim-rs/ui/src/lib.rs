@@ -202,6 +202,49 @@ impl UIClientHandlerHandle {
 }
 
 // =============================================================================
+// C API types needed for Phase 3
+// =============================================================================
+
+/// Arena type matching C's Arena struct (memory_defs.h: {cur_blk, pos, size})
+#[repr(C)]
+struct Arena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+impl Arena {
+    const fn empty() -> Self {
+        Self {
+            cur_blk: std::ptr::null_mut(),
+            pos: 0,
+            size: 0,
+        }
+    }
+}
+
+/// NvimString matching C's String struct (api/private/defs.h: {data, size})
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvimString {
+    data: *mut c_char,
+    size: usize,
+}
+
+/// Array matching C's Array/kvec_t (api/private/defs.h: {size, capacity, items})
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Array {
+    size: usize,
+    capacity: usize,
+    items: *mut c_void,
+}
+
+/// schar_T and sattr_T are opaque in Rust - we just pass raw pointers
+type ScharPtr = *const c_void;
+type SattrPtr = *const c_void;
+
+// =============================================================================
 // Module-level state (moved from C statics)
 // =============================================================================
 
@@ -225,6 +268,8 @@ static mut PENDING_MODE_UPDATE: bool = false;
 static mut HAS_MOUSE: bool = false;
 static mut PENDING_HAS_MOUSE: c_int = -1;
 static mut PENDING_DEFAULT_COLORS: bool = false;
+/// Was ui_flush in "busy hiding float" mode last call
+static mut UI_FLUSH_WAS_BUSY: bool = false;
 
 // =============================================================================
 // FFI declarations: C accessors and ui_call_* functions
@@ -287,6 +332,80 @@ extern "C" {
     fn nvim_get_cterm_normal_fg_color() -> c_int;
     /// Get cterm_normal_bg_color global
     fn nvim_get_cterm_normal_bg_color() -> c_int;
+
+    // Phase 3 FFI declarations
+    /// Get curwin->w_floating
+    fn nvim_get_curwin_floating() -> bool;
+    /// Get curwin->w_config.hide
+    fn nvim_get_curwin_config_hide() -> bool;
+    /// Get textlock global
+    fn nvim_get_textlock() -> c_int;
+    /// Get p_wd (writedelay) option
+    fn nvim_get_p_wd() -> i64;
+    /// Get rdb_flags global
+    fn nvim_get_rdb_flags() -> u32;
+    /// Flush window UI state
+    fn win_ui_flush(validate: bool);
+    /// Flush cmdline UI state
+    fn rs_cmdline_ui_flush();
+    /// Flush ext message UI state
+    fn msg_ext_ui_flush();
+    /// Flush scroll message UI state
+    fn msg_scroll_flush();
+    /// UI call: mode_info_set
+    fn ui_call_mode_info_set(enabled: bool, cursor_styles: Array);
+    /// Get mode style array (allocates into arena)
+    fn mode_style_array(arena: *mut Arena) -> Array;
+    /// Finish arena allocations and return ArenaMem (opaque pointer)
+    fn arena_finish(arena: *mut Arena) -> *mut c_void;
+    /// Free arena memory
+    fn arena_mem_free(mem: *mut c_void);
+    /// Create NvimString from C string (no copy)
+    fn cstr_as_string(s: *const c_char) -> NvimString;
+    /// UI call: mode_change
+    fn ui_call_mode_change(mode: NvimString, mode_idx: i64);
+    /// UI call: mouse_on
+    fn ui_call_mouse_on();
+    /// UI call: mouse_off
+    fn ui_call_mouse_off();
+    /// UI call: flush
+    fn ui_call_flush();
+    /// UI call: grid_cursor_goto
+    fn ui_call_grid_cursor_goto(grid: i64, row: i64, col: i64);
+    /// Get shape table name for mode index
+    fn nvim_get_shape_table_name(idx: c_int) -> *const c_char;
+    /// Get p_guicursor option string
+    fn nvim_get_p_guicursor() -> *const c_char;
+    /// Sleep for ms milliseconds
+    fn os_sleep(ms: u64);
+    /// UI call: raw_line
+    fn ui_call_raw_line(
+        grid: i64,
+        row: i64,
+        startcol: i64,
+        endcol: i64,
+        clearcol: i64,
+        clearattr: i64,
+        flags: c_int,
+        chunk: ScharPtr,
+        attrs: SattrPtr,
+    );
+    /// Get ScreenGrid handle
+    fn nvim_grid_get_handle(grid: *const c_void) -> c_int;
+    /// Get ScreenGrid cols
+    fn nvim_grid_get_cols(grid: *const c_void) -> c_int;
+    /// Get ScreenGrid line_offset for row
+    fn nvim_grid_get_line_offset(grid: *const c_void, row: c_int) -> usize;
+    /// Get pointer to ScreenGrid chars at offset
+    fn nvim_grid_get_chars_at(grid: *const c_void, off: usize) -> ScharPtr;
+    /// Get pointer to ScreenGrid attrs at offset
+    fn nvim_grid_get_attrs_at(grid: *const c_void, off: usize) -> SattrPtr;
+    /// Get RemoteUI channel_id
+    fn nvim_remoteui_get_channel_id(ui: *mut c_void) -> u64;
+    /// Trigger UIEnter autocmd for a channel
+    fn do_autocmd_uienter(chanid: u64, attached: bool);
+    /// Get ui_client_channel_id global
+    fn nvim_get_ui_client_channel_id() -> u64;
 
     // Phase 2 FFI declarations
     /// Get emsg_silent global
@@ -805,6 +924,147 @@ pub unsafe extern "C" fn rs_ui_check_mouse() {
             return;
         }
         p = p.add(1);
+    }
+}
+
+// =============================================================================
+// Migrated functions: Phase 3
+// =============================================================================
+
+/// kOptRdbFlagLine flag (from generated option_vars.generated.h)
+const K_OPT_RDB_FLAG_LINE: u32 = 0x10;
+/// kOptRdbFlagFlush flag
+const K_OPT_RDB_FLAG_FLUSH: u32 = 0x20;
+
+/// Flush pending UI state updates to all attached UIs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_flush() {
+    debug_assert!(nvim_get_ui_client_channel_id() == 0);
+    if nvim_ui_active() == 0 {
+        return;
+    }
+
+    let state = nvim_get_state();
+    if (state & MODE_CMDLINE) == 0 && nvim_get_curwin_floating() && nvim_get_curwin_config_hide() {
+        if !UI_FLUSH_WAS_BUSY {
+            ui_call_busy_start();
+            UI_FLUSH_WAS_BUSY = true;
+        }
+    } else if UI_FLUSH_WAS_BUSY {
+        ui_call_busy_stop();
+        UI_FLUSH_WAS_BUSY = false;
+    }
+
+    win_ui_flush(false);
+    // Avoid flushing callbacks expected to change text during textlock.
+    if nvim_get_textlock() == 0 {
+        rs_cmdline_ui_flush();
+        msg_ext_ui_flush();
+    }
+    msg_scroll_flush();
+
+    if PENDING_CURSOR_UPDATE {
+        ui_call_grid_cursor_goto(
+            i64::from(CURSOR_GRID_HANDLE),
+            i64::from(CURSOR_ROW),
+            i64::from(CURSOR_COL),
+        );
+        PENDING_CURSOR_UPDATE = false;
+        // The cursor move might change the composition order,
+        // so flush again to update the windows that changed
+        win_ui_flush(false);
+    }
+    if PENDING_MODE_INFO_UPDATE {
+        let mut arena = Arena::empty();
+        let style = mode_style_array(std::ptr::addr_of_mut!(arena));
+        let p_guicursor = nvim_get_p_guicursor();
+        let enabled = !p_guicursor.is_null() && *p_guicursor != 0;
+        ui_call_mode_info_set(enabled, style);
+        arena_mem_free(arena_finish(std::ptr::addr_of_mut!(arena)));
+        PENDING_MODE_INFO_UPDATE = false;
+    }
+    if PENDING_MODE_UPDATE && nvim_get_starting() == 0 {
+        let full_name = nvim_get_shape_table_name(UI_MODE_IDX);
+        let name_str = cstr_as_string(full_name);
+        ui_call_mode_change(name_str, i64::from(UI_MODE_IDX));
+        PENDING_MODE_UPDATE = false;
+    }
+    if PENDING_HAS_MOUSE != c_int::from(HAS_MOUSE) {
+        if HAS_MOUSE {
+            ui_call_mouse_on();
+        } else {
+            ui_call_mouse_off();
+        }
+        PENDING_HAS_MOUSE = c_int::from(HAS_MOUSE);
+    }
+    ui_call_flush();
+
+    let p_wd = nvim_get_p_wd();
+    if p_wd != 0 && (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_FLUSH) != 0 {
+        os_sleep(p_wd.unsigned_abs());
+    }
+}
+
+/// Send a grid line to UIs, with optional writedelay.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_line(
+    grid: *const c_void,
+    row: c_int,
+    invalid_row: bool,
+    startcol: c_int,
+    endcol: c_int,
+    clearcol: c_int,
+    clearattr: c_int,
+    wrap: bool,
+) {
+    let mut flags: c_int = c_int::from(wrap); // kLineFlagWrap = 1 when true
+    if startcol == 0 && invalid_row {
+        flags |= 2; // kLineFlagInvalid = 2
+    }
+
+    // set default colors now so that text won't have to be repainted later
+    rs_ui_may_set_default_colors();
+
+    // startcol is always >= 0 (validated by caller's assert)
+    #[allow(clippy::cast_sign_loss)]
+    let off = nvim_grid_get_line_offset(grid, row) + startcol as usize;
+    let handle = nvim_grid_get_handle(grid);
+    let chars_ptr = nvim_grid_get_chars_at(grid, off);
+    let attrs_ptr = nvim_grid_get_attrs_at(grid, off);
+
+    ui_call_raw_line(
+        i64::from(handle),
+        i64::from(row),
+        i64::from(startcol),
+        i64::from(endcol),
+        i64::from(clearcol),
+        i64::from(clearattr),
+        flags,
+        chars_ptr,
+        attrs_ptr,
+    );
+
+    // 'writedelay': flush & delay each time.
+    let p_wd = nvim_get_p_wd();
+    if p_wd != 0 && (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_LINE) != 0 {
+        // set the cursor to indicate what was drawn
+        let cols = nvim_grid_get_cols(grid);
+        let cursor_col = clearcol.min(cols - 1);
+        ui_call_grid_cursor_goto(i64::from(handle), i64::from(row), i64::from(cursor_col));
+        ui_call_flush();
+        os_sleep(p_wd.unsigned_abs());
+        PENDING_CURSOR_UPDATE = true; // restore the cursor later
+    }
+}
+
+/// Trigger UIEnter autocmd for all attached UIs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_autocmd_uienter_all() {
+    let count = nvim_ui_active();
+    for i in 0..count {
+        let ui = nvim_ui_get_uis_ptr(i);
+        let chanid = nvim_remoteui_get_channel_id(ui);
+        do_autocmd_uienter(chanid, true);
     }
 }
 

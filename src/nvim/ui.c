@@ -97,6 +97,10 @@ extern void rs_ui_busy_start(void);
 extern void rs_ui_busy_stop(void);
 extern void rs_vim_beep(unsigned val);
 extern void rs_ui_check_mouse(void);
+extern void rs_ui_flush(void);
+extern void rs_ui_line(const void *grid, int row, bool invalid_row, int startcol, int endcol,
+                       int clearcol, int clearattr, bool wrap);
+extern void rs_do_autocmd_uienter_all(void);
 
 #ifdef NVIM_LOG_DEBUG
 static size_t uilog_seen = 0;
@@ -270,12 +274,7 @@ void vim_beep(unsigned val) { rs_vim_beep(val); }
 
 /// Trigger UIEnter for all attached UIs.
 /// Used on startup after VimEnter.
-void do_autocmd_uienter_all(void)
-{
-  for (size_t i = 0; i < ui_count; i++) {
-    do_autocmd_uienter(uis[i]->channel_id, true);
-  }
-}
+void do_autocmd_uienter_all(void) { rs_do_autocmd_uienter_all(); }
 
 void ui_attach_impl(RemoteUI *ui, uint64_t chanid)
 {
@@ -367,30 +366,7 @@ void ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endc
              int clearattr, bool wrap)
 {
   assert(0 <= row && row < grid->rows);
-  LineFlags flags = wrap ? kLineFlagWrap : 0;
-  if (startcol == 0 && invalid_row) {
-    flags |= kLineFlagInvalid;
-  }
-
-  // set default colors now so that that text won't have to be repainted later
-  ui_may_set_default_colors();
-
-  size_t off = grid->line_offset[row] + (size_t)startcol;
-
-  ui_call_raw_line(grid->handle, row, startcol, endcol, clearcol, clearattr,
-                   flags, (const schar_T *)grid->chars + off,
-                   (const sattr_T *)grid->attrs + off);
-
-  // 'writedelay': flush & delay each time.
-  if (p_wd && (rdb_flags & kOptRdbFlagLine)) {
-    // If 'writedelay' is active, set the cursor to indicate what was drawn.
-    ui_call_grid_cursor_goto(grid->handle, row,
-                             MIN(clearcol, (int)grid->cols - 1));
-    ui_call_flush();
-    uint64_t wd = (uint64_t)llabs(p_wd);
-    os_sleep(wd);
-    rs_ui_set_pending_cursor_update(true);  // restore the cursor later
-  }
+  rs_ui_line((const void *)grid, row, invalid_row, startcol, endcol, clearcol, clearattr, wrap);
 }
 
 void ui_cursor_goto(int new_row, int new_col) { rs_ui_cursor_goto(new_row, new_col); }
@@ -409,67 +385,7 @@ void ui_mode_info_set(void) { rs_ui_mode_info_set(); }
 int nvim_get_ui_cursor_row(void) { return rs_ui_get_cursor_row(); }
 int nvim_get_ui_cursor_col(void) { return rs_ui_get_cursor_col(); }
 
-void ui_flush(void)
-{
-  assert(!ui_client_channel_id);
-  if (!ui_active()) {
-    return;
-  }
-
-  static bool was_busy = false;
-
-  if (!(State & MODE_CMDLINE) && curwin->w_floating && curwin->w_config.hide) {
-    if (!was_busy) {
-      ui_call_busy_start();
-      was_busy = true;
-    }
-  } else if (was_busy) {
-    ui_call_busy_stop();
-    was_busy = false;
-  }
-
-  win_ui_flush(false);
-  // Avoid flushing callbacks expected to change text during textlock.
-  if (textlock == 0) {
-    cmdline_ui_flush();
-    msg_ext_ui_flush();
-  }
-  msg_scroll_flush();
-
-  if (rs_ui_get_pending_cursor_update()) {
-    ui_call_grid_cursor_goto(rs_ui_get_cursor_grid_handle(), rs_ui_get_cursor_row(),
-                             rs_ui_get_cursor_col());
-    rs_ui_set_pending_cursor_update(false);
-    // The cursor move might change the composition order,
-    // so flush again to update the windows that changed
-    // TODO(bfredl): refactor the flow of information so that win_ui_flush()
-    // only is called once. (as order state is exposed, it should be owned
-    // by nvim core, not the compositor)
-    win_ui_flush(false);
-  }
-  if (rs_ui_get_pending_mode_info_update()) {
-    Arena arena = ARENA_EMPTY;
-    Array style = mode_style_array(&arena);
-    bool enabled = (*p_guicursor != NUL);
-    ui_call_mode_info_set(enabled, style);
-    arena_mem_free(arena_finish(&arena));
-    rs_ui_set_pending_mode_info_update(false);
-  }
-  if (rs_ui_get_pending_mode_update() && !starting) {
-    char *full_name = shape_table[rs_ui_get_mode_idx()].full_name;
-    ui_call_mode_change(cstr_as_string(full_name), rs_ui_get_mode_idx());
-    rs_ui_set_pending_mode_update(false);
-  }
-  if (rs_ui_get_pending_has_mouse() != rs_ui_get_has_mouse()) {
-    (rs_ui_get_has_mouse() ? ui_call_mouse_on : ui_call_mouse_off)();
-    rs_ui_set_pending_has_mouse(rs_ui_get_has_mouse());
-  }
-  ui_call_flush();
-
-  if (p_wd && (rdb_flags & kOptRdbFlagFlush)) {
-    os_sleep((uint64_t)llabs(p_wd));
-  }
-}
+void ui_flush(void) { rs_ui_flush(); }
 
 /// Check if 'mouse' is active for the current mode
 ///
@@ -704,5 +620,48 @@ const char *nvim_get_p_mouse(void) { return p_mouse; }
 
 /// Get curbuf->b_help field (used by Rust)
 bool nvim_get_curbuf_help(void) { return curbuf->b_help; }
+
+// =============================================================================
+// C accessors for Rust (Phase 3)
+// =============================================================================
+
+/// Get curwin->w_floating field (used by Rust)
+bool nvim_get_curwin_floating(void) { return curwin->w_floating; }
+
+/// Get curwin->w_config.hide field (used by Rust)
+bool nvim_get_curwin_config_hide(void) { return curwin->w_config.hide; }
+
+/// Get RemoteUI channel_id field (used by Rust)
+uint64_t nvim_remoteui_get_channel_id(void *ui) { return ((RemoteUI *)ui)->channel_id; }
+
+/// Get ScreenGrid handle field (used by Rust)
+int nvim_grid_get_handle(const void *grid) { return ((const ScreenGrid *)grid)->handle; }
+
+/// Get ScreenGrid rows field (used by Rust)
+int nvim_grid_get_rows(const void *grid) { return ((const ScreenGrid *)grid)->rows; }
+
+/// Get ScreenGrid cols field (used by Rust)
+int nvim_grid_get_cols(const void *grid) { return ((const ScreenGrid *)grid)->cols; }
+
+/// Get ScreenGrid line_offset for a given row (used by Rust)
+size_t nvim_grid_get_line_offset(const void *grid, int row)
+{
+  return ((const ScreenGrid *)grid)->line_offset[row];
+}
+
+/// Get pointer to ScreenGrid chars array + offset (used by Rust)
+const void *nvim_grid_get_chars_at(const void *grid, size_t off)
+{
+  return (const void *)(((const ScreenGrid *)grid)->chars + off);
+}
+
+/// Get pointer to ScreenGrid attrs array + offset (used by Rust)
+const void *nvim_grid_get_attrs_at(const void *grid, size_t off)
+{
+  return (const void *)(((const ScreenGrid *)grid)->attrs + off);
+}
+
+/// Get ui_client_channel_id global (used by Rust)
+uint64_t nvim_get_ui_client_channel_id(void) { return ui_client_channel_id; }
 
 
