@@ -5,7 +5,9 @@ _:
 build:
     @# Generate the ex_cmds enum header before Rust build (Rust build.rs needs it)
     @mkdir -p build/include build/src/nvim/auto
-    @luajit src/gen/gen_ex_cmds.lua build/include/ex_cmds_enum.generated.h build/src/nvim/auto/ex_cmds_defs.generated.h src/nvim/ex_cmds.lua
+    @luajit src/gen/gen_ex_cmds.lua /tmp/_ex_cmds_enum.h /tmp/_ex_cmds_defs.h src/nvim/ex_cmds.lua
+    @cmp -s /tmp/_ex_cmds_enum.h build/include/ex_cmds_enum.generated.h || cp /tmp/_ex_cmds_enum.h build/include/ex_cmds_enum.generated.h
+    @cmp -s /tmp/_ex_cmds_defs.h build/src/nvim/auto/ex_cmds_defs.generated.h || cp /tmp/_ex_cmds_defs.h build/src/nvim/auto/ex_cmds_defs.generated.h
     timeout -s 9 1800 cargo build --release
     @test -f build/build.ninja || cmake -B build -G Ninja -DUSE_BUNDLED=OFF
     @# Force relink when Rust library is newer than the binary (cmake doesn't track imported libs)
