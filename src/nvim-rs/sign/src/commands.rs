@@ -10,13 +10,32 @@ use crate::{LinenrT, SignBufHandle, SignCmd, SIGN_DEF_PRIO};
 // C Accessor Extern Declarations
 // =============================================================================
 
+// Expand context constants from cmdexpand_defs.h
+mod expand_ctx {
+    use std::ffi::c_int;
+    pub const EXPAND_NOTHING: c_int = 0;
+    pub const EXPAND_FILES: c_int = 2;
+    pub const EXPAND_BUFFERS: c_int = 9;
+    pub const EXPAND_HIGHLIGHT: c_int = 13;
+    pub const EXPAND_SIGN: c_int = 34;
+}
+
+// expand_what values (mirrors the C static enum)
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ExpandWhat {
+    Subcmd,
+    Define,
+    Place,
+    List,
+    Unplace,
+    SignNames,
+    SignGroups,
+}
+
+// SAFETY: single-threaded Vim event loop; no concurrent mutation.
+static mut EXPAND_WHAT: ExpandWhat = ExpandWhat::Subcmd;
+
 extern "C" {
-    fn nvim_ex_sign_impl(eap: *mut c_void);
-
-    // Command completion composite accessors
-    fn nvim_get_sign_name_impl(xp: *mut c_void, idx: c_int) -> *mut c_char;
-    fn nvim_set_context_in_sign_cmd_impl(xp: *mut c_void, arg: *mut c_char);
-
     // String utilities (Rust exports, linked as C symbols)
     fn skipwhite(p: *const c_char) -> *mut c_char;
     #[link_name = "skiptowhite_esc"]
@@ -62,6 +81,21 @@ extern "C" {
 
     // getdigits_int: advances pointer through digits, returns parsed int
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+
+    // expand_T accessors
+    fn nvim_xp_set_context(xp: *mut c_void, ctx: c_int);
+    fn nvim_xp_set_pattern(xp: *mut c_void, pat: *mut c_char);
+
+    // exarg_T accessor
+    fn nvim_eap_get_arg_local(eap: *const c_void) -> *mut c_char;
+
+    // sign_map/sign_ns iteration
+    fn nvim_sign_map_get_nth_key(idx: c_int) -> *mut c_char;
+    fn nvim_sign_ns_get_name(idx: c_int) -> *mut c_char;
+
+    // skiptowhite (not escaped) for subcommand parsing
+    fn skiptowhite(p: *const c_char) -> *mut c_char;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
 }
 
 // Error message constants
@@ -895,7 +929,16 @@ pub unsafe extern "C" fn rs_parse_sign_cmd_args(
     parse_sign_cmd_args_impl(cmd, arg, name, id, group, prio, buf, lnum)
 }
 
-/// ":sign" command — top-level dispatcher.
+// SIGNCMD_LAST = SignCmd::COUNT (= 6)
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+const SIGNCMD_LAST: c_int = SignCmd::COUNT as c_int;
+
+// Static C string constants for ex_sign messages
+static E_UNKNOWN_SIGN_CMD: &[u8] = b"E160: Unknown sign command: %s\0";
+static E_MISSING_SIGN_NAME: &[u8] = b"E156: Missing sign name\0";
+static E_UNKNOWN_SIGN: &[u8] = b"E155: Unknown sign: %s\0";
+
+/// ":sign" command — top-level dispatcher. Migrated from C nvim_ex_sign_impl.
 ///
 /// # Safety
 ///
@@ -905,24 +948,191 @@ pub unsafe extern "C" fn rs_ex_sign(eap: *mut c_void) {
     if eap.is_null() {
         return;
     }
-    nvim_ex_sign_impl(eap);
+
+    let arg = nvim_eap_get_arg_local(eap);
+    if arg.is_null() {
+        return;
+    }
+
+    // Parse subcommand: NUL-terminate at first whitespace
+    let p = skiptowhite(arg);
+    let save_p = *p;
+    *p = 0;
+    let idx = crate::rs_sign_cmd_idx(arg);
+    *p = save_p;
+
+    if idx == SIGNCMD_LAST {
+        semsg(E_UNKNOWN_SIGN_CMD.as_ptr().cast(), arg);
+        return;
+    }
+
+    let arg = skipwhite(p);
+
+    if idx <= SignCmd::List as c_int {
+        // Define, undefine, or list signs.
+        if idx == SignCmd::List as c_int && *arg == 0 {
+            // ":sign list" — list all defined signs
+            // Iterate sign_map by index
+            let mut i = 0;
+            loop {
+                let key = nvim_sign_map_get_nth_key(i);
+                if key.is_null() {
+                    break;
+                }
+                crate::query::rs_sign_list_by_name(key);
+                i += 1;
+            }
+        } else if *arg == 0 {
+            emsg(E_MISSING_SIGN_NAME.as_ptr().cast());
+        } else {
+            // Isolate the sign name. Skip leading zeros (but keep "0").
+            let p = skiptowhite(arg);
+            let at_end = *p == 0;
+            if !at_end {
+                *p = 0;
+            }
+            // Skip leading zeros
+            let mut name = arg;
+            while *name.cast::<u8>() == b'0' && *name.add(1) != 0 {
+                name = name.add(1);
+            }
+            let rest = if at_end { p } else { p.add(1) };
+
+            if idx == SignCmd::Define as c_int {
+                sign_define_cmd_impl(name, rest);
+            } else if idx == SignCmd::List as c_int {
+                crate::query::rs_sign_list_by_name(name);
+            } else {
+                // undefine
+                if crate::define::rs_sign_undefine_by_name(name) == FAIL {
+                    semsg(E_UNKNOWN_SIGN.as_ptr().cast(), name);
+                }
+            }
+        }
+    } else {
+        let mut id: c_int = -1;
+        let mut lnum: LinenrT = -1;
+        let mut name: *mut c_char = std::ptr::null_mut();
+        let mut group: *mut c_char = std::ptr::null_mut();
+        let mut prio: c_int = -1;
+        let mut buf: SignBufHandle = SignBufHandle::null();
+
+        if parse_sign_cmd_args_impl(
+            idx,
+            arg,
+            std::ptr::addr_of_mut!(name),
+            std::ptr::addr_of_mut!(id),
+            std::ptr::addr_of_mut!(group),
+            std::ptr::addr_of_mut!(prio),
+            std::ptr::addr_of_mut!(buf),
+            std::ptr::addr_of_mut!(lnum),
+        ) == FAIL
+        {
+            return;
+        }
+
+        if idx == SignCmd::Place as c_int {
+            sign_place_cmd_impl(buf, lnum, name, id, group, prio);
+        } else if idx == SignCmd::Unplace as c_int {
+            sign_unplace_cmd_impl(buf, lnum, name, id, group);
+        } else if idx == SignCmd::Jump as c_int {
+            sign_jump_cmd_impl(buf, lnum, name, id, group);
+        }
+    }
 }
 
 // =============================================================================
 // Command Completion FFI Wrappers
 // =============================================================================
 
+// Static lists used by get_sign_name completion (NUL-terminated C strings)
+static SIGN_SUBCMDS: &[&[u8]] = &[
+    b"define\0",
+    b"undefine\0",
+    b"list\0",
+    b"place\0",
+    b"unplace\0",
+    b"jump\0",
+];
+static SIGN_DEFINE_ARGS: &[&[u8]] = &[
+    b"culhl=\0",
+    b"icon=\0",
+    b"linehl=\0",
+    b"numhl=\0",
+    b"text=\0",
+    b"texthl=\0",
+    b"priority=\0",
+];
+static SIGN_PLACE_ARGS: &[&[u8]] = &[
+    b"line=\0",
+    b"name=\0",
+    b"group=\0",
+    b"priority=\0",
+    b"file=\0",
+    b"buffer=\0",
+];
+static SIGN_LIST_ARGS: &[&[u8]] = &[b"group=\0", b"file=\0", b"buffer=\0"];
+static SIGN_UNPLACE_ARGS: &[&[u8]] = &[b"group=\0", b"file=\0", b"buffer=\0"];
+
 /// Get sign command expansion string for command line completion.
+/// Migrated from C nvim_get_sign_name_impl.
 ///
 /// # Safety
 ///
 /// `xp` must be a valid expand_T pointer.
 #[unsafe(export_name = "get_sign_name")]
-pub unsafe extern "C" fn rs_get_sign_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
-    nvim_get_sign_name_impl(xp, idx)
+pub unsafe extern "C" fn rs_get_sign_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
+    if idx < 0 {
+        return std::ptr::null_mut();
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let idx = idx as usize;
+
+    match EXPAND_WHAT {
+        ExpandWhat::Subcmd => {
+            if idx < SIGN_SUBCMDS.len() {
+                static_str(SIGN_SUBCMDS[idx])
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        ExpandWhat::Define => {
+            if idx < SIGN_DEFINE_ARGS.len() {
+                static_str(SIGN_DEFINE_ARGS[idx])
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        ExpandWhat::Place => {
+            if idx < SIGN_PLACE_ARGS.len() {
+                static_str(SIGN_PLACE_ARGS[idx])
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        ExpandWhat::List => {
+            if idx < SIGN_LIST_ARGS.len() {
+                static_str(SIGN_LIST_ARGS[idx])
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        ExpandWhat::Unplace => {
+            if idx < SIGN_UNPLACE_ARGS.len() {
+                static_str(SIGN_UNPLACE_ARGS[idx])
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        ExpandWhat::SignNames => nvim_sign_map_get_nth_key(idx as c_int),
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        ExpandWhat::SignGroups => nvim_sign_ns_get_name(idx as c_int),
+    }
 }
 
 /// Set command line completion context for :sign command.
+/// Migrated from C nvim_set_context_in_sign_cmd_impl.
 ///
 /// # Safety
 ///
@@ -933,7 +1143,120 @@ pub unsafe extern "C" fn rs_set_context_in_sign_cmd(xp: *mut c_void, arg: *mut c
     if xp.is_null() || arg.is_null() {
         return;
     }
-    nvim_set_context_in_sign_cmd_impl(xp, arg);
+
+    nvim_xp_set_context(xp, expand_ctx::EXPAND_SIGN);
+    EXPAND_WHAT = ExpandWhat::Subcmd;
+    nvim_xp_set_pattern(xp, arg);
+
+    let end_subcmd = skiptowhite(arg);
+    if *end_subcmd == 0 {
+        return;
+    }
+
+    let save_end = *end_subcmd;
+    *end_subcmd = 0;
+    let cmd_idx = crate::rs_sign_cmd_idx(arg);
+    *end_subcmd = save_end;
+
+    let begin_subcmd_args = skipwhite(end_subcmd);
+
+    // Loop to find the last whitespace-separated token (mirrors C do-while):
+    // each iteration: skip whitespace → save as `last` → skip non-whitespace → check.
+    let mut p = begin_subcmd_args;
+    // Do the first iteration manually to satisfy Rust's definite initialization.
+    p = skipwhite(p);
+    let mut last = p;
+    p = skiptowhite(p);
+    while *p != 0 {
+        p = skipwhite(p);
+        last = p;
+        p = skiptowhite(p);
+    }
+
+    // Check if last token contains '='
+    if vim_strchr(last, c_int::from(b'=')).is_null() {
+        // No '=' — completing a keyword
+        nvim_xp_set_pattern(xp, last);
+        match SignCmd::from_int(cmd_idx) {
+            Some(SignCmd::Define) => {
+                EXPAND_WHAT = ExpandWhat::Define;
+            }
+            Some(SignCmd::Place) => {
+                if ascii_isdigit(*begin_subcmd_args.cast::<u8>()) {
+                    EXPAND_WHAT = ExpandWhat::Place;
+                } else {
+                    EXPAND_WHAT = ExpandWhat::List;
+                }
+            }
+            Some(SignCmd::List | SignCmd::Undefine) => {
+                EXPAND_WHAT = ExpandWhat::SignNames;
+            }
+            Some(SignCmd::Jump | SignCmd::Unplace) => {
+                EXPAND_WHAT = ExpandWhat::Unplace;
+            }
+            _ => {
+                nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+            }
+        }
+    } else {
+        // Has '=' — completing a value; xp_pattern is after the '='
+        let eq_pos = vim_strchr(last, c_int::from(b'='));
+        nvim_xp_set_pattern(xp, eq_pos.add(1));
+
+        match SignCmd::from_int(cmd_idx) {
+            Some(SignCmd::Define) => {
+                if starts_with_cstr(last, b"texthl")
+                    || starts_with_cstr(last, b"linehl")
+                    || starts_with_cstr(last, b"culhl")
+                    || starts_with_cstr(last, b"numhl")
+                {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_HIGHLIGHT);
+                } else if starts_with_cstr(last, b"icon") {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_FILES);
+                } else {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+                }
+            }
+            Some(SignCmd::Place) => {
+                if starts_with_cstr(last, b"name") {
+                    EXPAND_WHAT = ExpandWhat::SignNames;
+                } else if starts_with_cstr(last, b"group") {
+                    EXPAND_WHAT = ExpandWhat::SignGroups;
+                } else if starts_with_cstr(last, b"file") {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_BUFFERS);
+                } else {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+                }
+            }
+            Some(SignCmd::Unplace | SignCmd::Jump) => {
+                if starts_with_cstr(last, b"group") {
+                    EXPAND_WHAT = ExpandWhat::SignGroups;
+                } else if starts_with_cstr(last, b"file") {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_BUFFERS);
+                } else {
+                    nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+                }
+            }
+            _ => {
+                nvim_xp_set_context(xp, expand_ctx::EXPAND_NOTHING);
+            }
+        }
+    }
+}
+
+/// Check if a C string starts with the given prefix bytes (no NUL needed in prefix).
+#[inline]
+unsafe fn starts_with_cstr(s: *const c_char, prefix: &[u8]) -> bool {
+    starts_with_bytes(s.cast::<u8>(), prefix)
+}
+
+/// Return a static byte string as a mutable *mut c_char.
+///
+/// SAFETY: Vim's completion code treats this as immutable; the pointer
+/// is valid for the lifetime of the static data.
+#[inline]
+fn static_str(s: &'static [u8]) -> *mut c_char {
+    s.as_ptr().cast::<c_char>().cast_mut()
 }
 
 // =============================================================================

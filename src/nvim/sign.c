@@ -63,31 +63,9 @@ extern int rs_sign_undefine_by_name(const char *name);
 extern size_t rs_describe_sign_text(char *buf, size_t buf_len, schar_T *sign_text);
 extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf, linenr_T lnum, int prio);
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
-extern void sign_define_cmd(char *name, char *cmdline);
-extern int parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group, int *prio, buf_T **buf, linenr_T *lnum);
-extern void sign_place_cmd(buf_T *buf, linenr_T lnum, char *name, int id, char *group, int prio);
-extern void sign_unplace_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
-extern void sign_jump_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
-
-static char *cmds[] = {
-  "define",
-#define SIGNCMD_DEFINE  0
-  "undefine",
-#define SIGNCMD_UNDEFINE 1
-  "list",
-#define SIGNCMD_LIST    2
-  "place",
-#define SIGNCMD_PLACE   3
-  "unplace",
-#define SIGNCMD_UNPLACE 4
-  "jump",
-#define SIGNCMD_JUMP    5
-  NULL
-#define SIGNCMD_LAST    6
-};
 
 static int sign_row_cmp(const void *p1, const void *p2)
 {
@@ -105,20 +83,20 @@ static int sign_row_cmp(const void *p1, const void *p2)
   return sign_item_cmp(&si1, &si2);
 }
 
-static enum {
-  EXP_SUBCMD,   // expand :sign sub-commands
-  EXP_DEFINE,   // expand :sign define {name} args
-  EXP_PLACE,    // expand :sign place {id} args
-  EXP_LIST,     // expand :sign place args
-  EXP_UNPLACE,  // expand :sign unplace"
-  EXP_SIGN_NAMES,   // expand with name of placed signs
-  EXP_SIGN_GROUPS,  // expand with name of placed sign groups
-} expand_what;
-
 sign_T *nvim_sign_map_get(const char *name)
 { return name ? pmap_get(cstr_t)(&sign_map, name) : NULL; }
 int nvim_sign_map_has(const char *name)
 { return name ? (map_has(cstr_t, &sign_map, name) ? 1 : 0) : 0; }
+char *nvim_sign_map_get_nth_key(int idx)
+{
+  cstr_t name; int current_idx = 0;
+  map_foreach_key(&sign_map, name, { if (current_idx++ == idx) { return (char *)name; } });
+  return NULL;
+}
+int nvim_sign_ns_size(void) { return (int)kv_size(sign_ns); }
+Integer nvim_sign_ns_get(int idx) { return idx < (int)kv_size(sign_ns) ? kv_A(sign_ns, idx) : -1; }
+char *nvim_sign_ns_get_name(int idx)
+{ return idx < (int)kv_size(sign_ns) ? (char *)describe_ns((NS)kv_A(sign_ns, idx), "") : NULL; }
 void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row, sign_T *sp, int prio)
 {
   DecorSignHighlight sign = DECOR_SIGN_HIGHLIGHT_INIT;
@@ -359,199 +337,6 @@ void nvim_sign_list_defined_impl(sign_T *sp)
       msg_puts(arg[i]);
       const char *p = get_highlight_name_ext(NULL, hl[i] - 1, false);
       msg_puts(p ? p : "NONE");
-    }
-  }
-}
-void nvim_ex_sign_impl(exarg_T *eap)
-{
-  char *arg = eap->arg;
-  // Parse the subcommand.
-  char *p = skiptowhite(arg);
-  char save_p = *p;
-  *p = NUL;
-  int idx = rs_sign_cmd_idx(arg);
-  *p = save_p;
-  if (idx == SIGNCMD_LAST) {
-    semsg(_("E160: Unknown sign command: %s"), arg);
-    return;
-  }
-  arg = skipwhite(p);
-  if (idx <= SIGNCMD_LIST) {
-    // Define, undefine or list signs.
-    if (idx == SIGNCMD_LIST && *arg == NUL) {
-      // ":sign list": list all defined signs
-      sign_T *sp;
-      map_foreach_value(&sign_map, sp, {
-        rs_sign_list_defined(sp);
-      });
-    } else if (*arg == NUL) {
-      emsg(_("E156: Missing sign name"));
-    } else {
-      // Isolate the sign name.  If it's a number skip leading zeroes,
-      // so that "099" and "99" are the same sign.  But keep "0".
-      p = skiptowhite(arg);
-      if (*p != NUL) {
-        *p++ = NUL;
-      }
-      while (arg[0] == '0' && arg[1] != NUL) {
-        arg++;
-      }
-      if (idx == SIGNCMD_DEFINE) {
-        sign_define_cmd(arg, p);
-      } else if (idx == SIGNCMD_LIST) {
-        // ":sign list {name}"
-        rs_sign_list_by_name(arg);
-      } else {
-        // ":sign undefine {name}"
-        if (rs_sign_undefine_by_name(arg) == FAIL) {
-          semsg(_("E155: Unknown sign: %s"), arg);
-        }
-      }
-      return;
-    }
-  } else {
-    int id = -1;
-    linenr_T lnum = -1;
-    char *name = NULL;
-    char *group = NULL;
-    int prio = -1;
-    buf_T *buf = NULL;
-    // Parse command line arguments
-    if (parse_sign_cmd_args(idx, arg, &name, &id, &group, &prio, &buf, &lnum) == FAIL) {
-      return;
-    }
-    if (idx == SIGNCMD_PLACE) {
-      sign_place_cmd(buf, lnum, name, id, group, prio);
-    } else if (idx == SIGNCMD_UNPLACE) {
-      sign_unplace_cmd(buf, lnum, name, id, group);
-    } else if (idx == SIGNCMD_JUMP) {
-      sign_jump_cmd(buf, lnum, name, id, group);
-    }
-  }
-}
-char *nvim_sign_get_nth_name(int idx)
-{
-  cstr_t name; int current_idx = 0;
-  map_foreach_key(&sign_map, name, { if (current_idx++ == idx) { return (char *)name; } });
-  return NULL;
-}
-char *nvim_sign_get_nth_group_name(int idx)
-{ return idx < (int)kv_size(sign_ns) ? (char *)describe_ns((NS)kv_A(sign_ns, idx), "") : NULL; }
-char *nvim_get_sign_name_impl(expand_T *xp, int idx)
-{
-  switch (expand_what) {
-  case EXP_SUBCMD:
-    return cmds[idx];
-  case EXP_DEFINE: {
-    char *define_arg[] = { "culhl=", "icon=", "linehl=", "numhl=", "text=", "texthl=",
-                           "priority=", NULL };
-    return define_arg[idx];
-  }
-  case EXP_PLACE: {
-    char *place_arg[] = { "line=", "name=", "group=", "priority=", "file=", "buffer=", NULL };
-    return place_arg[idx];
-  }
-  case EXP_LIST: {
-    char *list_arg[] = { "group=", "file=", "buffer=", NULL };
-    return list_arg[idx];
-  }
-  case EXP_UNPLACE: {
-    char *unplace_arg[] = { "group=", "file=", "buffer=", NULL };
-    return unplace_arg[idx];
-  }
-  case EXP_SIGN_NAMES:
-    return nvim_sign_get_nth_name(idx);
-  case EXP_SIGN_GROUPS:
-    return nvim_sign_get_nth_group_name(idx);
-  default:
-    return NULL;
-  }
-}
-void nvim_set_context_in_sign_cmd_impl(expand_T *xp, char *arg)
-{
-  xp->xp_context = EXPAND_SIGN;
-  expand_what = EXP_SUBCMD;
-  xp->xp_pattern = arg;
-  char *end_subcmd = skiptowhite(arg);
-  if (*end_subcmd == NUL) {
-    return;
-  }
-  char save_end = *end_subcmd;
-  *end_subcmd = NUL;
-  int cmd_idx = rs_sign_cmd_idx(arg);
-  *end_subcmd = save_end;
-  char *begin_subcmd_args = skipwhite(end_subcmd);
-  // Loop until reaching last argument.
-  char *last;
-  char *p = begin_subcmd_args;
-  do {
-    p = skipwhite(p);
-    last = p;
-    p = skiptowhite(p);
-  } while (*p != NUL);
-  p = vim_strchr(last, '=');
-  if (p == NULL) {
-    xp->xp_pattern = last;
-    switch (cmd_idx) {
-    case SIGNCMD_DEFINE:
-      expand_what = EXP_DEFINE;
-      break;
-    case SIGNCMD_PLACE:
-      if (ascii_isdigit(*begin_subcmd_args)) {
-        expand_what = EXP_PLACE;
-      } else {
-        expand_what = EXP_LIST;
-      }
-      break;
-    case SIGNCMD_LIST:
-    case SIGNCMD_UNDEFINE:
-      expand_what = EXP_SIGN_NAMES;
-      break;
-    case SIGNCMD_JUMP:
-    case SIGNCMD_UNPLACE:
-      expand_what = EXP_UNPLACE;
-      break;
-    default:
-      xp->xp_context = EXPAND_NOTHING;
-    }
-  } else {
-    xp->xp_pattern = p + 1;
-    switch (cmd_idx) {
-    case SIGNCMD_DEFINE:
-      if (strncmp(last, "texthl", 6) == 0
-          || strncmp(last, "linehl", 6) == 0
-          || strncmp(last, "culhl", 5) == 0
-          || strncmp(last, "numhl", 5) == 0) {
-        xp->xp_context = EXPAND_HIGHLIGHT;
-      } else if (strncmp(last, "icon", 4) == 0) {
-        xp->xp_context = EXPAND_FILES;
-      } else {
-        xp->xp_context = EXPAND_NOTHING;
-      }
-      break;
-    case SIGNCMD_PLACE:
-      if (strncmp(last, "name", 4) == 0) {
-        expand_what = EXP_SIGN_NAMES;
-      } else if (strncmp(last, "group", 5) == 0) {
-        expand_what = EXP_SIGN_GROUPS;
-      } else if (strncmp(last, "file", 4) == 0) {
-        xp->xp_context = EXPAND_BUFFERS;
-      } else {
-        xp->xp_context = EXPAND_NOTHING;
-      }
-      break;
-    case SIGNCMD_UNPLACE:
-    case SIGNCMD_JUMP:
-      if (strncmp(last, "group", 5) == 0) {
-        expand_what = EXP_SIGN_GROUPS;
-      } else if (strncmp(last, "file", 4) == 0) {
-        xp->xp_context = EXPAND_BUFFERS;
-      } else {
-        xp->xp_context = EXPAND_NOTHING;
-      }
-      break;
-    default:
-      xp->xp_context = EXPAND_NOTHING;
     }
   }
 }
