@@ -95,6 +95,8 @@ extern void rs_ui_default_colors_set(void);
 extern void rs_ui_may_set_default_colors(void);
 extern void rs_ui_busy_start(void);
 extern void rs_ui_busy_stop(void);
+extern void rs_vim_beep(unsigned val);
+extern void rs_ui_check_mouse(void);
 
 #ifdef NVIM_LOG_DEBUG
 static size_t uilog_seen = 0;
@@ -264,42 +266,7 @@ void ui_busy_stop(void) { rs_ui_busy_stop(); }
 /// Emit a bell or visualbell as a warning
 ///
 /// val is one of the OptBoFlags values, e.g., kOptBoFlagOperator
-void vim_beep(unsigned val)
-{
-  called_vim_beep = true;
-
-  if (emsg_silent != 0 || in_assert_fails) {
-    return;
-  }
-
-  if (!((bo_flags & val) || (bo_flags & kOptBoFlagAll))) {
-    static int beeps = 0;
-    static uint64_t start_time = 0;
-
-    // Only beep up to three times per half a second,
-    // otherwise a sequence of beeps would freeze Vim.
-    if (start_time == 0 || os_hrtime() - start_time > 500000000U) {
-      beeps = 0;
-      start_time = os_hrtime();
-    }
-    beeps++;
-    if (beeps <= 3) {
-      if (p_vb) {
-        ui_call_visual_bell();
-      } else {
-        ui_call_bell();
-      }
-    }
-  }
-
-  // When 'debug' contains "beep" produce a message.  If we are sourcing
-  // a script or executing a function give the user a hint where the beep
-  // comes from.
-  if (vim_strchr(p_debug, 'e') != NULL) {
-    msg_source(HLF_W);
-    msg(_("Beep!"), HLF_W);
-  }
-}
+void vim_beep(unsigned val) { rs_vim_beep(val); }
 
 /// Trigger UIEnter for all attached UIs.
 /// Used on startup after VimEnter.
@@ -508,58 +475,7 @@ void ui_flush(void)
 ///
 /// TODO(bfredl): precompute the State -> active mapping when 'mouse' changes,
 /// then this can be checked directly in ui_flush()
-void ui_check_mouse(void)
-{
-  bool new_has_mouse = false;
-  // Be quick when mouse is off.
-  if (*p_mouse == NUL) {
-    rs_ui_set_has_mouse(false);
-    return;
-  }
-
-  int checkfor = MOUSE_NORMAL;  // assume normal mode
-  if (VIsual_active) {
-    checkfor = MOUSE_VISUAL;
-  } else if (State == MODE_HITRETURN || State == MODE_ASKMORE || State == MODE_SETWSIZE) {
-    checkfor = MOUSE_RETURN;
-  } else if (State & MODE_INSERT) {
-    checkfor = MOUSE_INSERT;
-  } else if (State & MODE_CMDLINE) {
-    checkfor = MOUSE_COMMAND;
-  } else if (State == MODE_EXTERNCMD) {
-    checkfor = ' ';  // don't use mouse for ":!cmd"
-  }
-
-  // mouse should be active if at least one of the following is true:
-  // - "c" is in 'mouse', or
-  // - 'a' is in 'mouse' and "c" is in MOUSE_A, or
-  // - the current buffer is a help file and 'h' is in 'mouse' and we are in a
-  //   normal editing mode (not at hit-return message).
-  for (char *p = p_mouse; *p; p++) {
-    switch (*p) {
-    case 'a':
-      if (vim_strchr(MOUSE_A, checkfor) != NULL) {
-        new_has_mouse = true;
-        goto done;
-      }
-      break;
-    case MOUSE_HELP:
-      if (checkfor != MOUSE_RETURN && curbuf->b_help) {
-        new_has_mouse = true;
-        goto done;
-      }
-      break;
-    default:
-      if (checkfor == *p) {
-        new_has_mouse = true;
-        goto done;
-      }
-    }
-  }
-
-done:
-  rs_ui_set_has_mouse(new_has_mouse);
-}
+void ui_check_mouse(void) { rs_ui_check_mouse(); }
 
 /// Check if current mode has changed.
 ///
@@ -766,5 +682,27 @@ double nvim_remoteui_get_pum_col(void *ui) { return ((RemoteUI *)ui)->pum_col; }
 
 /// Get p_tgc option value (used by Rust)
 int nvim_get_p_tgc(void) { return p_tgc; }
+
+// =============================================================================
+// C accessors for Rust (Phase 2)
+// =============================================================================
+
+/// Get bo_flags global (used by Rust)
+unsigned nvim_get_bo_flags(void) { return bo_flags; }
+
+/// Get p_vb option value (used by Rust)
+int nvim_get_p_vb(void) { return p_vb; }
+
+/// Get p_debug option string (used by Rust)
+const char *nvim_get_p_debug(void) { return p_debug; }
+
+/// Set called_vim_beep global (used by Rust)
+void nvim_set_called_vim_beep(int val) { called_vim_beep = (bool)val; }
+
+/// Get p_mouse option string (used by Rust)
+const char *nvim_get_p_mouse(void) { return p_mouse; }
+
+/// Get curbuf->b_help field (used by Rust)
+bool nvim_get_curbuf_help(void) { return curbuf->b_help; }
 
 

@@ -31,7 +31,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_double, c_int, c_void};
+use std::ffi::{c_char, c_double, c_int, c_void};
 
 // =============================================================================
 // Constants
@@ -287,6 +287,40 @@ extern "C" {
     fn nvim_get_cterm_normal_fg_color() -> c_int;
     /// Get cterm_normal_bg_color global
     fn nvim_get_cterm_normal_bg_color() -> c_int;
+
+    // Phase 2 FFI declarations
+    /// Get emsg_silent global
+    fn nvim_get_emsg_silent() -> c_int;
+    /// Get in_assert_fails global
+    fn nvim_get_in_assert_fails() -> bool;
+    /// Get bo_flags global (bitmask of 'belloff' flags)
+    fn nvim_get_bo_flags() -> u32;
+    /// Get p_vb option (visualbell)
+    fn nvim_get_p_vb() -> c_int;
+    /// Get p_debug option string
+    fn nvim_get_p_debug() -> *const c_char;
+    /// Set called_vim_beep global
+    fn nvim_set_called_vim_beep(val: c_int);
+    /// Get p_mouse option string
+    fn nvim_get_p_mouse() -> *const c_char;
+    /// Get curbuf->b_help field
+    fn nvim_get_curbuf_help() -> bool;
+    /// Get current State global
+    fn nvim_get_state() -> c_int;
+    /// Get VIsual_active global
+    fn nvim_get_visual_active() -> c_int;
+    /// Get current time in nanoseconds
+    fn os_hrtime() -> u64;
+    /// Search for character in string (returns pointer or NULL)
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+    /// Message source (for Beep! warning location)
+    fn msg_source(attr: c_int);
+    /// Display a message with highlight
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
+    /// UI call: bell
+    fn ui_call_bell();
+    /// UI call: visual_bell
+    fn ui_call_visual_bell();
 }
 
 // =============================================================================
@@ -641,6 +675,136 @@ pub unsafe extern "C" fn rs_ui_busy_stop() {
     BUSY -= 1;
     if BUSY == 0 {
         ui_call_busy_stop();
+    }
+}
+
+// =============================================================================
+// Migrated functions: Phase 2
+// =============================================================================
+
+/// kOptBoFlagAll flag value (from generated option_vars.generated.h)
+const K_OPT_BO_FLAG_ALL: u32 = 0x01;
+
+/// HLF_W highlight id (WarningMsg, from highlight_defs.h)
+const HLF_W: c_int = 26;
+
+/// Mode flags (from state_defs.h)
+const MODE_CMDLINE: c_int = 0x08;
+const MODE_INSERT: c_int = 0x10;
+const MODE_HITRETURN: c_int = 0x2001; // 0x2000 | MODE_NORMAL(0x01)
+const MODE_ASKMORE: c_int = 0x3000;
+const MODE_SETWSIZE: c_int = 0x4000;
+const MODE_EXTERNCMD: c_int = 0x5000;
+
+/// Mouse mode constants (from option_vars.h) - ASCII values
+const MOUSE_NORMAL: c_int = 110; // 'n'
+const MOUSE_VISUAL: c_int = 118; // 'v'
+const MOUSE_INSERT: c_int = 105; // 'i'
+const MOUSE_COMMAND: c_int = 99; // 'c'
+const MOUSE_RETURN: c_int = 114; // 'r'
+const MOUSE_HELP: c_int = 104; // 'h'
+/// MOUSE_A = "nvich" (used for 'a' flag)
+const MOUSE_A: &[u8] = b"nvich";
+
+/// Beep message string (NUL-terminated)
+static BEEP_MSG: &[u8] = b"Beep!\0";
+
+/// Emit a bell or visualbell as a warning.
+/// val is one of the OptBoFlags values, e.g., kOptBoFlagOperator.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_beep(val: u32) {
+    nvim_set_called_vim_beep(1);
+
+    if nvim_get_emsg_silent() != 0 || nvim_get_in_assert_fails() {
+        return;
+    }
+
+    let bo = nvim_get_bo_flags();
+    if !((bo & val) != 0 || (bo & K_OPT_BO_FLAG_ALL) != 0) {
+        // Only beep up to three times per half a second,
+        // otherwise a sequence of beeps would freeze Vim.
+        static mut BEEPS: c_int = 0;
+        static mut START_TIME: u64 = 0;
+
+        let now = os_hrtime();
+        if START_TIME == 0 || now - START_TIME > 500_000_000u64 {
+            BEEPS = 0;
+            START_TIME = now;
+        }
+        BEEPS += 1;
+        if BEEPS <= 3 {
+            if nvim_get_p_vb() != 0 {
+                ui_call_visual_bell();
+            } else {
+                ui_call_bell();
+            }
+        }
+    }
+
+    // When 'debug' contains "e" produce a message.
+    let debug_str = nvim_get_p_debug();
+    let e_char = c_int::from(b'e');
+    if !debug_str.is_null() && !vim_strchr(debug_str, e_char).is_null() {
+        msg_source(HLF_W);
+        msg(BEEP_MSG.as_ptr().cast::<c_char>(), HLF_W);
+    }
+}
+
+/// Check if 'mouse' is active for the current mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_check_mouse() {
+    HAS_MOUSE = false;
+
+    let p_mouse = nvim_get_p_mouse();
+    if p_mouse.is_null() || *p_mouse == 0 {
+        return;
+    }
+
+    let state = nvim_get_state();
+    let visual_active = nvim_get_visual_active() != 0;
+
+    let checkfor: c_int = if visual_active {
+        MOUSE_VISUAL
+    } else if state == MODE_HITRETURN || state == MODE_ASKMORE || state == MODE_SETWSIZE {
+        MOUSE_RETURN
+    } else if (state & MODE_INSERT) != 0 {
+        MOUSE_INSERT
+    } else if (state & MODE_CMDLINE) != 0 {
+        MOUSE_COMMAND
+    } else if state == MODE_EXTERNCMD {
+        c_int::from(b' ') // don't use mouse for ":!cmd"
+    } else {
+        MOUSE_NORMAL
+    };
+
+    // Mouse should be active if at least one of the following is true:
+    // - "c" is in 'mouse', or
+    // - 'a' is in 'mouse' and "c" is in MOUSE_A, or
+    // - the current buffer is a help file and 'h' is in 'mouse' and we are
+    //   in a normal editing mode (not at hit-return message).
+    let mut p = p_mouse;
+    while *p != 0 {
+        // p_mouse contains ASCII option chars. c_char is i8 on Linux, but
+        // all mouse option chars are 7-bit ASCII so the value fits in both.
+        let ch: c_int = c_int::from(*p);
+        if ch == c_int::from(b'a') {
+            // checkfor is one of our ASCII constants (all <= 127), safe to cast
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let checkfor_byte = checkfor as u8;
+            if MOUSE_A.contains(&checkfor_byte) {
+                HAS_MOUSE = true;
+                return;
+            }
+        } else if ch == MOUSE_HELP {
+            if checkfor != MOUSE_RETURN && nvim_get_curbuf_help() {
+                HAS_MOUSE = true;
+                return;
+            }
+        } else if ch == checkfor {
+            HAS_MOUSE = true;
+            return;
+        }
+        p = p.add(1);
     }
 }
 
