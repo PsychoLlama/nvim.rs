@@ -18,6 +18,7 @@ pub mod display;
 pub mod expand;
 pub mod files;
 pub mod helpers;
+pub mod incsearch;
 pub mod navigation;
 pub mod pattern;
 pub mod pum;

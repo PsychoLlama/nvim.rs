@@ -292,6 +292,10 @@ int nvim_cmdexpand_vim_isfilec_or_wc(int c) { return vim_isfilec_or_wc(c); }
 int nvim_cmdexpand_vim_isIDc(int c) { return vim_isIDc((uint8_t)c); }
 int nvim_cmdexpand_get_cmdpos(void) { return get_cmdline_info()->cmdpos; }
 char *nvim_cmdexpand_get_cmdbuff(void) { return get_cmdline_info()->cmdbuff; }
+// parse_pattern_and_range is implemented in Rust (cmdexpand/src/incsearch.rs)
+extern bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim,
+                                    int *skiplen, int *patlen);
+
 int nvim_cmdexpand_parse_pattern_and_range(int *skiplen, int *patlen)
 {
   int dummy;
@@ -849,132 +853,5 @@ static void cmdline_del(CmdlineInfo *cclp, int from)
   cclp->cmdpos = from;
 }
 
-// Rust helper for empty pattern check
-extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
-
-/// Parse the command pattern and range for incsearch highlighting.
-/// Sets search_first_line, search_last_line, and the skip/pat lengths.
-/// Returns true if a valid non-empty pattern was found, false otherwise.
-bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *skiplen,
-                             int *patlen)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *p;
-  bool delim_optional = false;
-  const char *dummy;
-  magic_T magic = 0;
-
-  *skiplen = 0;
-  *patlen = nvim_get_ccline_cmdlen();
-
-  // Default range
-  search_first_line = 0;
-  search_last_line = MAXLNUM;
-
-  exarg_T ea = {
-    .line1 = 1,
-    .line2 = 1,
-    .cmd = nvim_get_ccline_cmdbuff(),
-    .addr_type = ADDR_LINES,
-  };
-
-  cmdmod_T dummy_cmdmod;
-  // Skip over command modifiers
-  parse_command_modifiers(&ea, &dummy, &dummy_cmdmod, true);
-
-  // Skip over the range to find the command.
-  char *cmd = skip_range(ea.cmd, NULL);
-  if (vim_strchr("sgvl", (uint8_t)(*cmd)) == NULL) {
-    return false;
-  }
-
-  // Skip over command name to find pattern separator
-  for (p = cmd; ASCII_ISALPHA(*p); p++) {}
-  if (*skipwhite(p) == NUL) {
-    return false;
-  }
-
-  if (strncmp(cmd, "substitute", (size_t)(p - cmd)) == 0
-      || strncmp(cmd, "smagic", (size_t)(p - cmd)) == 0
-      || strncmp(cmd, "snomagic", (size_t)MAX(p - cmd, 3)) == 0
-      || strncmp(cmd, "vglobal", (size_t)(p - cmd)) == 0) {
-    if (*cmd == 's' && cmd[1] == 'm') {
-      magic_overruled = OPTION_MAGIC_ON;
-    } else if (*cmd == 's' && cmd[1] == 'n') {
-      magic_overruled = OPTION_MAGIC_OFF;
-    }
-  } else if (strncmp(cmd, "sort", (size_t)MAX(p - cmd, 3)) == 0
-             || strncmp(cmd, "uniq", (size_t)MAX(p - cmd, 3)) == 0) {
-    // skip over ! and flags
-    if (*p == '!') {
-      p = skipwhite(p + 1);
-    }
-    while (ASCII_ISALPHA(*(p = skipwhite(p)))) {
-      p++;
-    }
-    if (*p == NUL) {
-      return false;
-    }
-  } else if (strncmp(cmd, "vimgrep", (size_t)MAX(p - cmd, 3)) == 0
-             || strncmp(cmd, "vimgrepadd", (size_t)MAX(p - cmd, 8)) == 0
-             || strncmp(cmd, "lvimgrep", (size_t)MAX(p - cmd, 2)) == 0
-             || strncmp(cmd, "lvimgrepadd", (size_t)MAX(p - cmd, 9)) == 0
-             || strncmp(cmd, "global", (size_t)(p - cmd)) == 0) {
-    // skip optional "!"
-    if (*p == '!') {
-      p++;
-      if (*skipwhite(p) == NUL) {
-        return false;
-      }
-    }
-    if (*cmd != 'g') {
-      delim_optional = true;
-    }
-  } else {
-    return false;
-  }
-
-  p = skipwhite(p);
-  int delim = (delim_optional && vim_isIDc((uint8_t)(*p))) ? ' ' : *p++;
-  *search_delim = delim;
-
-  char *end = skip_regexp_ex(p, delim, rs_magic_isset(), NULL, NULL, &magic);
-  bool use_last_pat = end == p && *end == delim;
-
-  if (end == p && !use_last_pat) {
-    return false;
-  }
-
-  // Skip if the pattern matches everything (e.g., for 'hlsearch')
-  if (!use_last_pat) {
-    char c = *end;
-    *end = NUL;
-    bool empty = (bool)rs_empty_pattern_magic(p, (size_t)(end - p), (int)magic);
-    *end = c;
-    if (empty) {
-      return false;
-    }
-  }
-
-  // Found a non-empty pattern or //
-  *skiplen = (int)(p - nvim_get_ccline_cmdbuff());
-  *patlen = (int)(end - p);
-
-  // Parse the address range
-  pos_T save_cursor = curwin->w_cursor;
-  curwin->w_cursor = *incsearch_start;
-
-  parse_cmd_address(&ea, &dummy, true);
-
-  if (ea.addr_count > 0) {
-    // Allow for reverse match.
-    search_first_line = MIN(ea.line2, ea.line1);
-    search_last_line = MAX(ea.line2, ea.line1);
-  } else if (cmd[0] == 's' && cmd[1] != 'o') {
-    // :s defaults to the current line
-    search_first_line = search_last_line = curwin->w_cursor.lnum;
-  }
-
-  curwin->w_cursor = save_cursor;
-  return true;
-}
+// parse_pattern_and_range is now implemented in Rust (cmdexpand/src/incsearch.rs)
+// and exported with the same C symbol name via #[unsafe(export_name = "parse_pattern_and_range")].
