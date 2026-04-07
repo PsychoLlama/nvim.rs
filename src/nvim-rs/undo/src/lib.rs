@@ -676,8 +676,15 @@ extern "C" {
     #[link_name = "check_cursor_lnum"]
     fn nvim_undo_check_cursor_lnum(win: WinHandle);
 
-    /// Mark adjust for undo
-    fn nvim_undo_mark_adjust(top: LinenrT, bot: LinenrT, amount: LinenrT, amount_after: LinenrT);
+    /// Mark adjust for undo (mark_adjust direct, ExtmarkOp = 0 for kExtmarkNOOP)
+    #[link_name = "mark_adjust"]
+    fn nvim_undo_mark_adjust(
+        top: LinenrT,
+        bot: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+        op: c_int,
+    );
 
     /// Changed lines notification
     #[link_name = "changed_lines"]
@@ -706,8 +713,9 @@ extern "C" {
     #[link_name = "redrawWinline"]
     fn nvim_redrawWinline(win: WinHandle, lnum: LinenrT);
 
-    /// Apply extmark undo
-    fn nvim_extmark_apply_undo(uhp: UHeaderHandle, idx: usize, undo: bool);
+    /// Apply extmark undo (extmark_apply_undo direct, takes ExtmarkUndoObject by value)
+    #[link_name = "extmark_apply_undo"]
+    fn nvim_extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool);
 
     /// Buffer updates unload
     #[link_name = "buf_updates_unload"]
@@ -724,9 +732,6 @@ extern "C" {
 
     /// Get window cursor line
     fn nvim_undo_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
-
-    /// Save line for undo (returns allocated string)
-    fn nvim_u_save_line_for_undo(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
 
     /// Get global_busy flag
     fn nvim_get_global_busy() -> bool;
@@ -792,9 +797,6 @@ extern "C" {
     /// Adjust b_op_end.lnum by delta
     fn nvim_buf_adjust_op_end_lnum(buf: BufHandle, delta: LinenrT);
 
-    /// Clamp op marks to ml_line_count
-    fn nvim_undoredo_clamp_op_marks(buf: BufHandle);
-
     /// Set ML_EMPTY flag if needed
     fn nvim_undoredo_set_ml_empty(buf: BufHandle, old_flags: c_int);
 
@@ -845,25 +847,18 @@ extern "C" {
     /// Get p_udir option value
     fn nvim_undo_get_p_udir() -> *const c_char;
 
-    /// copy_option_part wrapper
-    fn nvim_undo_copy_option_part(
-        dirp: *mut *const c_char,
-        buf: *mut c_char,
-        maxlen: usize,
-    ) -> usize;
-
     /// Check if path is a directory
     #[link_name = "os_isdir"]
     fn nvim_undo_os_isdir(path: *const c_char) -> bool;
 
-    /// Create directory recursively
-    fn nvim_undo_mkdir_recurse(dir: *const c_char, failed_dir: *mut *mut c_char) -> c_int;
-
-    /// E5003 error message
-    fn nvim_undo_semsg_mkdir(failed_dir: *const c_char, err: c_int);
-
-    /// path_tail offset
-    fn nvim_undo_path_tail_offset(path: *const c_char) -> usize;
+    /// Create directory recursively (os_mkdir_recurse directly)
+    #[link_name = "os_mkdir_recurse"]
+    fn nvim_undo_mkdir_recurse(
+        dir: *const c_char,
+        mode: i32,
+        failed_dir: *mut *mut c_char,
+        created: *mut *mut c_char,
+    ) -> c_int;
 
     /// vim_ispathsep check
     #[link_name = "vim_ispathsep"]
@@ -873,8 +868,25 @@ extern "C" {
     #[link_name = "utfc_ptr2len"]
     fn nvim_undo_mb_ptr_len(ptr: *const c_char) -> c_int;
 
-    /// concat_fnames wrapper
-    fn nvim_undo_concat_fnames(dir: *const c_char, fname: *const c_char) -> *mut c_char;
+    /// concat_fnames (direct)
+    #[link_name = "concat_fnames"]
+    fn nvim_undo_concat_fnames(dir: *const c_char, fname: *const c_char, sep: bool) -> *mut c_char;
+
+    /// path_tail (direct)
+    #[link_name = "path_tail"]
+    fn nvim_undo_path_tail(path: *const c_char) -> *mut c_char;
+
+    /// E5003 error message (retained: uses uv_strerror)
+    fn nvim_undo_semsg_mkdir(failed_dir: *const c_char, err: c_int);
+
+    /// copy_option_part (direct)
+    #[link_name = "copy_option_part"]
+    fn nvim_undo_copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
 
     /// Get MAXPATHL value
     fn nvim_undo_get_maxpathl() -> usize;
@@ -1646,7 +1658,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
                 i -= 1;
                 i >= 0
             } {
-                *newarray.offset(i as isize) = nvim_u_save_line_for_undo(buf, lnum);
+                *newarray.offset(i as isize) = nvim_undo_xstrdup(nvim_ml_get_buf_line(buf, lnum));
                 if nvim_buf_get_ml_line_count(buf) == 1 {
                     empty_buffer = true;
                 }
@@ -1681,7 +1693,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         // Adjust marks
         if oldsize != newsize {
             // kExtmarkNOOP = 0
-            nvim_undo_mark_adjust(top + 1, top + oldsize, MAXLNUM, newsize - oldsize);
+            nvim_undo_mark_adjust(top + 1, top + oldsize, MAXLNUM, newsize - oldsize, 0);
             let op_start = nvim_buf_get_op_start_lnum(buf);
             if op_start > top + oldsize {
                 nvim_buf_adjust_op_start_lnum(buf, newsize - oldsize);
@@ -1727,20 +1739,26 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     }
 
     // Ensure the '[ and '] marks are within bounds.
-    nvim_undoredo_clamp_op_marks(buf);
+    {
+        let line_count = nvim_buf_get_ml_line_count(buf);
+        let op_start = nvim_buf_get_op_start_lnum(buf).min(line_count);
+        nvim_buf_set_op_start_lnum(buf, op_start);
+        let op_end = nvim_buf_get_op_end_lnum(buf).min(line_count);
+        nvim_buf_set_op_end_lnum(buf, op_end);
+    }
 
-    // Adjust Extmarks (inlined from nvim_undoredo_apply_extmarks)
+    // Adjust Extmarks
     {
         let extmark_size = (*curhead).uh_extmark.size;
         if undo {
             let mut i = extmark_size as isize - 1;
             while i >= 0 {
-                nvim_extmark_apply_undo(curhead, i as usize, undo);
+                nvim_extmark_apply_undo((*curhead).uh_extmark.items.add(i as usize).read(), undo);
                 i -= 1;
             }
         } else {
             for i in 0..extmark_size {
-                nvim_extmark_apply_undo(curhead, i, undo);
+                nvim_extmark_apply_undo((*curhead).uh_extmark.items.add(i).read(), undo);
             }
         }
         if (*curhead).uh_flags & UH_RELOAD != 0 {
@@ -5374,8 +5392,14 @@ unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> *mut
     let mut dirp = p_udir;
 
     while *dirp != 0 {
-        let dir_len =
-            nvim_undo_copy_option_part(&mut dirp, dir_name.as_mut_ptr() as *mut c_char, maxpathl);
+        let mut dirp_mut = dirp as *mut c_char;
+        let dir_len = nvim_undo_copy_option_part(
+            &mut dirp_mut,
+            dir_name.as_mut_ptr() as *mut c_char,
+            maxpathl,
+            c",".as_ptr(),
+        );
+        dirp = dirp_mut as *const c_char;
 
         if dir_len == 1 && dir_name[0] == b'.' {
             // Use same directory as the ffname: "dir/name" -> "dir/.name.un~"
@@ -5386,7 +5410,7 @@ unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> *mut
                 ffname as *const c_void,
                 ffname_len + 1,
             );
-            let tail_off = nvim_undo_path_tail_offset(undo_file_name);
+            let tail_off = nvim_undo_path_tail(undo_file_name).offset_from(undo_file_name) as usize;
             let tail = undo_file_name.add(tail_off);
             let tail_len = libc::strlen(tail);
             // Shift tail right by 1 to make room for '.'
@@ -5416,8 +5440,12 @@ unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> *mut
             if !has_directory && *dirp == 0 && !reading {
                 // Last directory in the list does not exist, create it.
                 let mut failed_dir: *mut c_char = ptr::null_mut();
-                let ret =
-                    nvim_undo_mkdir_recurse(dir_name.as_ptr() as *const c_char, &mut failed_dir);
+                let ret = nvim_undo_mkdir_recurse(
+                    dir_name.as_ptr() as *const c_char,
+                    0o755,
+                    &mut failed_dir,
+                    ptr::null_mut(),
+                );
                 if ret != 0 {
                     nvim_undo_semsg_mkdir(failed_dir, ret);
                     nvim_xfree(failed_dir as *mut c_void);
@@ -5437,7 +5465,7 @@ unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> *mut
                     }
                 }
                 undo_file_name =
-                    nvim_undo_concat_fnames(dir_name.as_ptr() as *const c_char, munged_name);
+                    nvim_undo_concat_fnames(dir_name.as_ptr() as *const c_char, munged_name, true);
             }
         }
 

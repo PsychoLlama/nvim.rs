@@ -546,12 +546,6 @@ void nvim_buf_set_op_end_lnum(buf_T *buf, linenr_T lnum) { buf->b_op_end.lnum = 
 
 void nvim_buf_adjust_op_end_lnum(buf_T *buf, linenr_T delta) { buf->b_op_end.lnum += delta; }
 
-void nvim_undoredo_clamp_op_marks(buf_T *buf)
-{
-  buf->b_op_start.lnum = MIN(buf->b_op_start.lnum, buf->b_ml.ml_line_count);
-  buf->b_op_end.lnum = MIN(buf->b_op_end.lnum, buf->b_ml.ml_line_count);
-}
-
 void nvim_undoredo_set_ml_empty(buf_T *buf, int old_flags)
 {
   if ((old_flags & UH_EMPTYBUF) && buf_is_empty(buf)) {
@@ -632,18 +626,6 @@ char *nvim_undo_resolve_symlink(const char *ffname)
 
 const char *nvim_undo_get_p_udir(void) { return p_udir; }
 
-size_t nvim_undo_copy_option_part(const char **dirp, char *buf, size_t maxlen)
-{
-  return copy_option_part((char **)dirp, buf, maxlen, ",");
-}
-
-// Create directory recursively. Returns 0 on success, error code on failure.
-// On failure, *failed_dir is set to the directory that failed.
-int nvim_undo_mkdir_recurse(const char *dir, char **failed_dir)
-{
-  return os_mkdir_recurse(dir, 0755, failed_dir, NULL);
-}
-
 // Emit a semsg with one string argument (used from Rust undo code)
 void nvim_undo_semsg(const char *msg, const char *arg) { semsg(msg, arg); }
 
@@ -653,12 +635,6 @@ void nvim_undo_semsg_mkdir(const char *failed_dir, int err)
   semsg(_("E5003: Unable to create directory \"%s\" for undo file: %s"),
         failed_dir, os_strerror(err));
 }
-
-// Get path_tail for a string (returns offset into the string)
-size_t nvim_undo_path_tail_offset(const char *path) { return (size_t)(path_tail(path) - path); }
-
-// concat_fnames wrapper
-char *nvim_undo_concat_fnames(const char *dir, const char *fname) { return concat_fnames(dir, fname, true); }
 
 size_t nvim_undo_get_maxpathl(void) { return MAXPATHL; }
 
@@ -671,25 +647,6 @@ list_T *nvim_tv_list_alloc(void) { return tv_list_alloc(kListLenMayKnow); }
 void nvim_tv_dict_add_nr(dict_T *dict, const char *key, size_t key_len, varnumber_T nr)
 {
   tv_dict_add_nr(dict, key, key_len, nr);
-}
-
-void nvim_tv_dict_add_list(dict_T *dict, const char *key, size_t key_len, list_T *list)
-{
-  tv_dict_add_list(dict, key, key_len, list);
-}
-
-/// Mark adjust for undo
-void nvim_undo_mark_adjust(linenr_T top, linenr_T bot, linenr_T amount, linenr_T amount_after)
-{
-  mark_adjust(top, bot, amount, amount_after, kExtmarkNOOP);
-}
-
-/// Apply extmark undo
-void nvim_extmark_apply_undo(u_header_T *uhp, size_t idx, bool undo)
-{
-  if (idx < kv_size(uhp->uh_extmark)) {
-    extmark_apply_undo(kv_A(uhp->uh_extmark, idx), undo);
-  }
 }
 
 /// Check position validity
@@ -711,13 +668,6 @@ void nvim_undo_win_set_cursor_pos(win_T *win, linenr_T lnum, colnr_T col, colnr_
 
 /// Get window cursor line
 linenr_T nvim_undo_win_get_cursor_lnum(win_T *win) { return win->w_cursor.lnum; }
-
-/// Save line for undo (returns allocated string)
-char *nvim_u_save_line_for_undo(buf_T *buf, linenr_T lnum)
-{
-  (void)buf;
-  return xstrdup(ml_get_buf(curbuf, lnum));
-}
 
 bool nvim_get_global_busy(void) { return global_busy; }
 
