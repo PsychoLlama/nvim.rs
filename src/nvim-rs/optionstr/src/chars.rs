@@ -193,41 +193,42 @@ pub unsafe extern "C" fn rs_is_valid_lcs_field(name: *const c_char, len: usize) 
 
 /// Default fillchars values
 pub mod fcs_defaults {
-    pub const STL: &str = " ";
-    pub const STLNC: &str = " ";
-    pub const WBR: &str = " ";
-    pub const HORIZ: &str = "─";
-    pub const HORIZ_FALLBACK: &str = "-";
-    pub const HORIZUP: &str = "┴";
-    pub const HORIZUP_FALLBACK: &str = "-";
-    pub const HORIZDOWN: &str = "┬";
-    pub const HORIZDOWN_FALLBACK: &str = "-";
-    pub const VERT: &str = "│";
-    pub const VERT_FALLBACK: &str = "|";
-    pub const VERTLEFT: &str = "┤";
-    pub const VERTLEFT_FALLBACK: &str = "|";
-    pub const VERTRIGHT: &str = "├";
-    pub const VERTRIGHT_FALLBACK: &str = "|";
-    pub const VERTHORIZ: &str = "┼";
-    pub const VERTHORIZ_FALLBACK: &str = "+";
-    pub const FOLD: &str = "·";
-    pub const FOLD_FALLBACK: &str = "-";
-    pub const FOLDOPEN: &str = "-";
-    pub const FOLDCLOSED: &str = "+";
-    pub const FOLDSEP: &str = "│";
-    pub const FOLDSEP_FALLBACK: &str = "|";
-    pub const DIFF: &str = "-";
-    pub const MSGSEP: &str = " ";
-    pub const EOB: &str = "~";
-    pub const LASTLINE: &str = "@";
-    pub const TRUNC: &str = ">";
-    pub const TRUNCRL: &str = "<";
+    use std::ffi::CStr;
+    pub const STL: &CStr = c" ";
+    pub const STLNC: &CStr = c" ";
+    pub const WBR: &CStr = c" ";
+    pub const HORIZ: &CStr = c"─";
+    pub const HORIZ_FALLBACK: &CStr = c"-";
+    pub const HORIZUP: &CStr = c"┴";
+    pub const HORIZUP_FALLBACK: &CStr = c"-";
+    pub const HORIZDOWN: &CStr = c"┬";
+    pub const HORIZDOWN_FALLBACK: &CStr = c"-";
+    pub const VERT: &CStr = c"│";
+    pub const VERT_FALLBACK: &CStr = c"|";
+    pub const VERTLEFT: &CStr = c"┤";
+    pub const VERTLEFT_FALLBACK: &CStr = c"|";
+    pub const VERTRIGHT: &CStr = c"├";
+    pub const VERTRIGHT_FALLBACK: &CStr = c"|";
+    pub const VERTHORIZ: &CStr = c"┼";
+    pub const VERTHORIZ_FALLBACK: &CStr = c"+";
+    pub const FOLD: &CStr = c"·";
+    pub const FOLD_FALLBACK: &CStr = c"-";
+    pub const FOLDOPEN: &CStr = c"-";
+    pub const FOLDCLOSED: &CStr = c"+";
+    pub const FOLDSEP: &CStr = c"│";
+    pub const FOLDSEP_FALLBACK: &CStr = c"|";
+    pub const DIFF: &CStr = c"-";
+    pub const MSGSEP: &CStr = c" ";
+    pub const EOB: &CStr = c"~";
+    pub const LASTLINE: &CStr = c"@";
+    pub const TRUNC: &CStr = c">";
+    pub const TRUNCRL: &CStr = c"<";
 }
 
 /// Get default fillchar value for a field
 #[no_mangle]
 pub extern "C" fn rs_fcs_default(idx: c_int) -> *const c_char {
-    let default: &str = match idx {
+    let default: &std::ffi::CStr = match idx {
         0 => fcs_defaults::STL,
         1 => fcs_defaults::STLNC,
         2 => fcs_defaults::WBR,
@@ -257,7 +258,7 @@ pub extern "C" fn rs_fcs_default(idx: c_int) -> *const c_char {
 /// Get fallback fillchar value for a field
 #[no_mangle]
 pub extern "C" fn rs_fcs_fallback(idx: c_int) -> *const c_char {
-    let fallback: &str = match idx {
+    let fallback: &std::ffi::CStr = match idx {
         3 => fcs_defaults::HORIZ_FALLBACK,
         4 => fcs_defaults::HORIZUP_FALLBACK,
         5 => fcs_defaults::HORIZDOWN_FALLBACK,
