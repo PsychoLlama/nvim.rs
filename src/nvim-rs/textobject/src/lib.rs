@@ -2193,23 +2193,28 @@ extern "C" {
     /// Decrement a position. Returns -1 at start, 1 at line start, 0 otherwise.
     #[link_name = "dec"]
     fn c_dec(pos: PosHandle) -> c_int;
+
+    /// Returns curbuf->b_p_qe (the 'quoteescape' option string).
+    fn nvim_textobj_get_curbuf_qe() -> *const std::ffi::c_char;
 }
 
 /// Find quote text object under cursor.
 ///
 /// Handles `i"`, `a"`, `i'`, `a'`, etc.
 ///
+/// Replaces the C `current_quote` thin wrapper: fetches the escape string
+/// (`b_p_qe`) internally via accessor.
+///
 /// # Safety
 /// - `oap` must be a valid oparg_T pointer.
-/// - `escape` must be a valid pointer to a NUL-terminated string, or null.
-#[no_mangle]
+#[unsafe(export_name = "current_quote")]
 pub unsafe extern "C" fn rs_current_quote(
     oap: OapHandle,
     count: c_int,
     include: bool,
     quotechar: c_int,
-    escape: *const std::ffi::c_char,
 ) -> bool {
+    let escape = nvim_textobj_get_curbuf_qe();
     current_quote_impl(oap, count, include, quotechar, escape)
 }
 
