@@ -412,6 +412,12 @@ void nvim_chan_rpc_close(Channel *chan) { rpc_close(chan); }
 // api_free_luaref wrapper
 void nvim_chan_api_free_luaref(int ref) { api_free_luaref((LuaRef)ref); }
 
+// channel_send error strings (translated)
+#include "nvim/gettext_defs.h"
+const char *nvim_chan_send_err_invchan(void) { return _(e_invchan); }
+const char *nvim_chan_send_err_closed_stream(void) { return _("Can't send data to closed stream"); }
+const char *nvim_chan_send_err_raw_rpc(void) { return _("Can't send raw data to rpc channel"); }
+
 // channel_send helpers: instream pointer and os_write wrapper
 Stream *nvim_chan_instream(Channel *chan)
 {

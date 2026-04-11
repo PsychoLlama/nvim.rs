@@ -206,6 +206,12 @@ extern "C" {
 
     /// Iterate channels and close all (for channel_teardown). Defined in eval_shim.c.
     fn nvim_chan_foreach_close_all();
+    /// Translated e_invchan for channel_send. Defined in eval_shim.c.
+    fn nvim_chan_send_err_invchan() -> *const std::ffi::c_char;
+    /// Translated "Can't send data to closed stream". Defined in eval_shim.c.
+    fn nvim_chan_send_err_closed_stream() -> *const std::ffi::c_char;
+    /// Translated "Can't send raw data to rpc channel". Defined in eval_shim.c.
+    fn nvim_chan_send_err_raw_rpc() -> *const std::ffi::c_char;
 
     // --- Phase 5 FFI ---
 
@@ -835,6 +841,131 @@ pub unsafe extern "C" fn channel_close(
     }
 
     true
+}
+
+// =============================================================================
+// Migrated functions (Phase 3): channel_send, channel_teardown
+// =============================================================================
+
+// STDERR_FILENO = 2 (POSIX standard)
+const STDERR_FILENO: c_int = 2;
+
+/// Send data to a channel.
+///
+/// `data` may be consumed (freed) if `data_owned` is true.
+///
+/// Returns the number of bytes actually written.
+///
+/// # Safety
+///
+/// `data` must be a valid pointer to `len` bytes. `error` must be a valid
+/// pointer to a `*const c_char` (may be null).
+#[no_mangle]
+pub unsafe extern "C" fn channel_send(
+    id: u64,
+    data: *mut std::ffi::c_char,
+    len: usize,
+    data_owned: bool,
+    error: *mut *const std::ffi::c_char,
+) -> usize {
+    let chan = nvim_find_channel(id);
+    let mut written: usize = 0;
+
+    if chan.is_null() {
+        *error = nvim_chan_send_err_invchan();
+        if data_owned {
+            xfree(data.cast());
+        }
+        return written;
+    }
+    let chan_t = chan.cast::<ChannelT>();
+
+    // kChannelStreamStderr = 3
+    if (*chan_t).streamtype == 3 {
+        if nvim_chan_get_err_closed(chan) != 0 {
+            *error = nvim_chan_send_err_closed_stream();
+            if data_owned {
+                xfree(data.cast());
+            }
+            return written;
+        }
+        // unbuffered write to STDERR_FILENO
+        let wres = os_write(STDERR_FILENO, data, len, false);
+        if wres >= 0 {
+            written = wres.unsigned_abs();
+        }
+        if data_owned {
+            xfree(data.cast());
+        }
+        return written;
+    }
+
+    // kChannelStreamInternal = 4
+    if (*chan_t).streamtype == 4 {
+        if (*chan_t).is_rpc {
+            *error = nvim_chan_send_err_raw_rpc();
+            if data_owned {
+                xfree(data.cast());
+            }
+            return written;
+        }
+        if (*chan_t).term.is_null() || nvim_chan_get_internal_closed(chan) != 0 {
+            *error = nvim_chan_send_err_closed_stream();
+            if data_owned {
+                xfree(data.cast());
+            }
+            return written;
+        }
+        terminal_receive((*chan_t).term, data, len);
+        written = len;
+        if data_owned {
+            xfree(data.cast());
+        }
+        return written;
+    }
+
+    // Other stream types: get the instream and write
+    let in_stream = nvim_chan_instream(chan);
+    if rs_stream_is_closed(in_stream) != 0 {
+        *error = nvim_chan_send_err_closed_stream();
+        if data_owned {
+            xfree(data.cast());
+        }
+        return written;
+    }
+
+    if (*chan_t).is_rpc {
+        *error = nvim_chan_send_err_raw_rpc();
+        if data_owned {
+            xfree(data.cast());
+        }
+        return written;
+    }
+
+    // write can be delayed indefinitely, so always use an allocated buffer
+    let buf_data = if data_owned {
+        data
+    } else {
+        xmemdup(data.cast(), len).cast::<std::ffi::c_char>()
+    };
+    let wbuf = wstream_new_buffer(buf_data, len, 1, Some(xfree_cb));
+    if wstream_write(in_stream, wbuf) {
+        len
+    } else {
+        0
+    }
+}
+
+/// Tear down all channels by closing them.
+///
+/// Called during Nvim exit before the main loop shuts down.
+///
+/// # Safety
+///
+/// Must be called from the main thread during shutdown.
+#[no_mangle]
+pub unsafe extern "C" fn channel_teardown() {
+    nvim_chan_foreach_close_all();
 }
 
 // =============================================================================

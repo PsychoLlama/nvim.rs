@@ -53,6 +53,9 @@ struct Channel {
 Channel *channel_alloc(ChannelStreamType type) FUNC_ATTR_NONNULL_RET;
 void channel_destroy_early(Channel *chan);
 bool channel_close(uint64_t id, ChannelPart part, const char **error);
+size_t channel_send(uint64_t id, char *data, size_t len, bool data_owned,
+                    const char **error) FUNC_ATTR_NONNULL_ALL;
+void channel_teardown(void);
 bool channel_job_running(uint64_t id);
 void channel_init(void);
 void channel_incref(Channel *chan);

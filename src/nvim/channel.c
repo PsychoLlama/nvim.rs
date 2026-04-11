@@ -106,14 +106,7 @@ extern size_t rs_stream_get_pending_reqs(Stream *stream);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
-/// Teardown the module
-void channel_teardown(void)
-{
-  Channel *chan;
-  map_foreach_value(&channels, chan, {
-    channel_close(chan->id, kChannelPartAll, NULL);
-  });
-}
+// channel_teardown implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 #ifdef EXITFREE
 void channel_free_all_mem(void)
@@ -415,66 +408,7 @@ uint64_t channel_from_stdio(bool rpc, CallbackReader on_output, const char **err
   return channel->id;
 }
 
-/// @param data will be consumed
-size_t channel_send(uint64_t id, char *data, size_t len, bool data_owned, const char **error)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Channel *chan = find_channel(id);
-  size_t written = 0;
-  if (!chan) {
-    *error = _(e_invchan);
-    goto retfree;
-  }
-
-  if (chan->streamtype == kChannelStreamStderr) {
-    if (chan->stream.err.closed) {
-      *error = _("Can't send data to closed stream");
-      goto retfree;
-    }
-    // unbuffered write
-    ptrdiff_t wres = os_write(STDERR_FILENO, data, len, false);
-    if (wres >= 0) {
-      written = (size_t)wres;
-    }
-    goto retfree;
-  }
-
-  if (chan->streamtype == kChannelStreamInternal) {
-    if (chan->is_rpc) {
-      *error = _("Can't send raw data to rpc channel");
-      goto retfree;
-    }
-    if (!chan->term || chan->stream.internal.closed) {
-      *error = _("Can't send data to closed stream");
-      goto retfree;
-    }
-    terminal_receive(chan->term, data, len);
-    written = len;
-    goto retfree;
-  }
-
-  Stream *in = channel_instream(chan);
-  if (stream_is_closed(in)) {
-    *error = _("Can't send data to closed stream");
-    goto retfree;
-  }
-
-  if (chan->is_rpc) {
-    *error = _("Can't send raw data to rpc channel");
-    goto retfree;
-  }
-
-  // write can be delayed indefinitely, so always use an allocated buffer
-  WBuffer *buf = wstream_new_buffer(data_owned ? data : xmemdup(data, len),
-                                    len, 1, xfree);
-  return wstream_write(in, buf) ? len : 0;
-
-retfree:
-  if (data_owned) {
-    xfree(data);
-  }
-  return written;
-}
+// channel_send implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 // buffer_to_tv_list, on_channel_data, on_job_stderr, on_channel_output (static),
 // schedule_channel_event (static), on_channel_event (static), channel_reader_callbacks,
