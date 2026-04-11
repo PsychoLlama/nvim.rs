@@ -1040,6 +1040,185 @@ pub unsafe extern "C" fn rs_cmdpreview_restore_state(state: *mut c_void) {
 }
 
 // =============================================================================
+// Phase 4: cmdpreview_may_show Implementation
+// =============================================================================
+
+extern "C" {
+    // ccline cmdbuff
+    fn nvim_get_ccline_cmdbuff() -> *mut std::ffi::c_char;
+
+    // xstrdup / xfree (C memory)
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn xfree(ptr: *mut std::ffi::c_char);
+
+    // emsg_off
+    fn rs_emsg_off_enter();
+    fn rs_emsg_off_leave();
+
+    // emsg_silent
+    fn rs_emsg_silent_enter();
+    fn rs_emsg_silent_leave();
+
+    // msg_silent
+    fn rs_msg_silent_enter();
+    fn rs_msg_silent_leave();
+
+    // autocmds
+    fn block_autocmds();
+    fn unblock_autocmds();
+
+    // screen
+    fn cursorcmd();
+    fn rs_cmdline_ui_flush();
+    fn update_screen();
+    fn redrawcmdline();
+    fn nvim_get_RedrawingDisabled() -> c_int;
+    fn nvim_set_RedrawingDisabled(val: c_int);
+
+    // parse context (heap exarg_T + CmdParseInfo)
+    fn nvim_cmdpreview_alloc_parse_ctx() -> *mut c_void;
+    fn nvim_cmdpreview_free_parse_ctx(ctx: *mut c_void);
+    fn nvim_cmdpreview_do_parse(ctx: *mut c_void, cmdline: *mut *mut std::ffi::c_char) -> bool;
+    fn nvim_cmdpreview_ctx_has_preview(ctx: *mut c_void) -> bool;
+    fn nvim_cmdpreview_ctx_has_range(ctx: *mut c_void) -> bool;
+    fn nvim_cmdpreview_ctx_get_line1(ctx: *mut c_void) -> c_int;
+    fn nvim_cmdpreview_ctx_get_line2(ctx: *mut c_void) -> c_int;
+    fn nvim_cmdpreview_ctx_set_line1(ctx: *mut c_void, val: c_int);
+    fn nvim_cmdpreview_ctx_set_line2(ctx: *mut c_void, val: c_int);
+    fn nvim_cmdpreview_ctx_undo_cmdmod(ctx: *mut c_void);
+    fn nvim_cmdpreview_try_execute(ctx: *mut c_void) -> c_int;
+
+    // cmdpreview global and options
+    fn nvim_set_cmdpreview_global(val: bool);
+    fn nvim_get_p_icm_is_split() -> bool;
+    fn nvim_set_option_icm_nosplit();
+    fn nvim_cmdpreview_ensure_ns() -> c_int;
+}
+
+/// Implementation of cmdpreview_may_show.
+///
+/// # Safety
+///
+/// Must be called on the main Neovim thread.
+unsafe fn cmdpreview_may_show_impl() -> bool {
+    // Copy the command line so we can modify it.
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let mut cmdline: *mut std::ffi::c_char = xstrdup(cmdbuff);
+
+    // Allocate parse context (heap exarg_T + CmdParseInfo).
+    let ctx = nvim_cmdpreview_alloc_parse_ctx();
+
+    // Block errors when parsing; don't update v:errmsg.
+    rs_emsg_off_enter();
+    let parse_ok = nvim_cmdpreview_do_parse(ctx, std::ptr::addr_of_mut!(cmdline));
+    rs_emsg_off_leave();
+
+    if !parse_ok {
+        nvim_cmdpreview_free_parse_ctx(ctx);
+        xfree(cmdline);
+        return false;
+    }
+
+    // Check if command is previewable; if not, bail.
+    if !nvim_cmdpreview_ctx_has_preview(ctx) {
+        nvim_cmdpreview_ctx_undo_cmdmod(ctx);
+        nvim_cmdpreview_free_parse_ctx(ctx);
+        xfree(cmdline);
+        return false;
+    }
+
+    // Cursor may be at the end of the message grid rather than at cmdspos.
+    // Place it there in case preview callback flushes it. #30696
+    cursorcmd();
+    // Flush now: external cmdline may itself wish to update the screen.
+    rs_cmdline_ui_flush();
+
+    // Swap invalid command range if needed.
+    if nvim_cmdpreview_ctx_has_range(ctx) {
+        let line1 = nvim_cmdpreview_ctx_get_line1(ctx);
+        let line2 = nvim_cmdpreview_ctx_get_line2(ctx);
+        if line1 > line2 {
+            nvim_cmdpreview_ctx_set_line1(ctx, line2);
+            nvim_cmdpreview_ctx_set_line2(ctx, line1);
+        }
+    }
+
+    let mut icm_split = nvim_get_p_icm_is_split();
+    let mut cmdpreview_buf: BufHandle = std::ptr::null_mut();
+    let mut cmdpreview_win: WinHandle = std::ptr::null_mut();
+
+    // Block error reporting, messages, and events.
+    rs_emsg_silent_enter();
+    rs_msg_silent_enter();
+    block_autocmds();
+
+    // Save current state and prepare for command preview.
+    let cpstate = rs_cmdpreview_prepare();
+
+    // Open preview buffer if inccommand=split.
+    if icm_split {
+        cmdpreview_buf = rs_cmdpreview_open_buf();
+        if cmdpreview_buf.is_null() {
+            nvim_set_option_icm_nosplit();
+            icm_split = false;
+        }
+    }
+
+    // Ensure cmdpreview namespace is set.
+    nvim_cmdpreview_ensure_ns();
+
+    // Set cmdpreview flag.
+    nvim_set_cmdpreview_global(true);
+
+    // Execute the preview callback (via TRY_WRAP in C helper).
+    let mut cmdpreview_type = nvim_cmdpreview_try_execute(ctx);
+
+    // If inccommand=split and preview callback returns 2, open preview window.
+    if icm_split && cmdpreview_type == 2 {
+        cmdpreview_win = rs_cmdpreview_open_win(cmdpreview_buf);
+        if cmdpreview_win.is_null() {
+            cmdpreview_type = 1;
+        }
+    }
+
+    // If preview callback return value is nonzero, update screen now.
+    if cmdpreview_type != 0 {
+        let save_rd = nvim_get_RedrawingDisabled();
+        nvim_set_RedrawingDisabled(0);
+        update_screen();
+        nvim_set_RedrawingDisabled(save_rd);
+    }
+
+    // Close preview window if it's open.
+    if icm_split && cmdpreview_type == 2 && !cmdpreview_win.is_null() {
+        rs_cmdpreview_close_win();
+    }
+
+    // Restore state.
+    rs_cmdpreview_restore_state(cpstate);
+
+    unblock_autocmds();
+    rs_msg_silent_leave();
+    rs_emsg_silent_leave();
+    redrawcmdline();
+
+    nvim_cmdpreview_free_parse_ctx(ctx);
+    xfree(cmdline);
+    cmdpreview_type != 0
+}
+
+/// Show 'inccommand' preview if command is previewable (FFI, replaces C symbol).
+///
+/// # Safety
+///
+/// Must be called on the main Neovim thread.
+#[allow(clippy::must_use_candidate)]
+#[export_name = "rs_cmdpreview_may_show"]
+pub unsafe extern "C" fn rs_cmdpreview_may_show_export() -> bool {
+    cmdpreview_may_show_impl()
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

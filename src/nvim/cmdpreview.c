@@ -188,151 +188,123 @@ extern void *rs_cmdpreview_prepare(void);
 /// Restore Rust-managed cmdpreview state and free it.
 extern void rs_cmdpreview_restore_state(void *state);
 
-/// Sets up command preview buffer. Implemented in Rust.
-///
-/// @return Pointer to command preview buffer if succeeded, NULL if failed.
-static buf_T *cmdpreview_open_buf(void)
-{
-  return rs_cmdpreview_open_buf();
-}
-
-/// Open command preview window if it's not already open. Implemented in Rust.
-///
-/// @param cmdpreview_buf Pointer to command preview buffer
-///
-/// @return Pointer to command preview window if succeeded, NULL if failed.
-static win_T *cmdpreview_open_win(buf_T *cmdpreview_buf)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_cmdpreview_open_win(cmdpreview_buf);
-}
-
-/// Closes any open command preview windows. Implemented in Rust.
-static void cmdpreview_close_win(void)
-{
-  rs_cmdpreview_close_win();
-}
-
-// cmdpreview_prepare and cmdpreview_restore_state are implemented in Rust
-// (src/nvim-rs/cmdline/src/preview.rs).
-
-/// Show 'inccommand' preview if command is previewable. It works like this:
-///    1. Store current undo information so we can revert to current state later.
-///    2. Execute the preview callback with the parsed command, preview buffer number and preview
-///       namespace number as arguments. The preview callback sets the highlight and does the
-///       changes required for the preview if needed.
-///    3. Preview callback returns 0, 1 or 2. 0 means no preview is shown. 1 means preview is shown
-///       but preview window doesn't need to be opened. 2 means preview is shown and preview window
-///       needs to be opened if inccommand=split.
-///    4. Use the return value of the preview callback to determine whether to
-///       open the preview window or not and open preview window if needed.
-///    5. If the return value of the preview callback is not 0, update the screen while the effects
-///       of the preview are still in place.
-///    6. Revert all changes made by the preview callback.
-///
-/// @return whether preview is shown or not.
-bool cmdpreview_may_show(void)
-{
-  // Parse the command line and return if it fails.
+/// Heap-allocated context combining exarg_T + CmdParseInfo for Rust FFI.
+typedef struct {
   exarg_T ea;
   CmdParseInfo cmdinfo;
-  // Copy the command line so we can modify it.
-  int cmdpreview_type = 0;
-  char *cmdline = xstrdup(nvim_get_ccline_cmdbuff());
-  const char *errormsg = NULL;
-  emsg_off++;  // Block errors when parsing the command line, and don't update v:errmsg
-  if (!parse_cmdline(&cmdline, &ea, &cmdinfo, &errormsg)) {
-    emsg_off--;
-    goto end;
-  }
-  emsg_off--;
+  const char *errormsg;
+} CpParseCtx;
 
-  // Check if command is previewable, if not, don't attempt to show preview
-  if (!(ea.argt & EX_PREVIEW)) {
-    undo_cmdmod(&cmdinfo.cmdmod);
-    goto end;
-  }
+/// Allocate a zeroed CpParseCtx. Returns opaque pointer.
+void *nvim_cmdpreview_alloc_parse_ctx(void)
+{
+  return xcalloc(1, sizeof(CpParseCtx));
+}
 
-  // Cursor may be at the end of the message grid rather than at cmdspos.
-  // Place it there in case preview callback flushes it. #30696
-  cursorcmd();
-  // Flush now: external cmdline may itself wish to update the screen which is
-  // currently disallowed during cmdpreview (no longer needed in case that changes).
-  cmdline_ui_flush();
+/// Free a CpParseCtx. (exarg_T / CmdParseInfo do not own heap data
+/// after parse_cmdline; the cmdline pointer is caller-owned.)
+void nvim_cmdpreview_free_parse_ctx(void *ctx)
+{
+  xfree(ctx);
+}
 
-  // Swap invalid command range if needed
-  if ((ea.argt & EX_RANGE) && ea.line1 > ea.line2) {
-    linenr_T lnum = ea.line1;
-    ea.line1 = ea.line2;
-    ea.line2 = lnum;
-  }
+/// Run parse_cmdline on a copy of the cmdline. Returns true on success.
+bool nvim_cmdpreview_do_parse(void *ctx_void, char **cmdline)
+{
+  CpParseCtx *ctx = (CpParseCtx *)ctx_void;
+  return parse_cmdline(cmdline, &ctx->ea, &ctx->cmdinfo, &ctx->errormsg);
+}
 
-  bool icm_split = *p_icm == 's';  // inccommand=split
-  buf_T *cmdpreview_buf = NULL;
-  win_T *cmdpreview_win = NULL;
+/// Return true if the parsed command has EX_PREVIEW set.
+bool nvim_cmdpreview_ctx_has_preview(void *ctx_void)
+{
+  return ((CpParseCtx *)ctx_void)->ea.argt & EX_PREVIEW;
+}
 
-  emsg_silent++;                 // Block error reporting as the command may be incomplete,
-                                 // but still update v:errmsg
-  msg_silent++;                  // Block messages, namely ones that prompt
-  block_autocmds();              // Block events
+/// Return true if the parsed command has EX_RANGE set.
+bool nvim_cmdpreview_ctx_has_range(void *ctx_void)
+{
+  return ((CpParseCtx *)ctx_void)->ea.argt & EX_RANGE;
+}
 
-  // Save current state and prepare for command preview. Implemented in Rust.
-  void *cpstate = rs_cmdpreview_prepare();
+/// Get ea.line1.
+linenr_T nvim_cmdpreview_ctx_get_line1(void *ctx_void)
+{
+  return ((CpParseCtx *)ctx_void)->ea.line1;
+}
 
-  // Open preview buffer if inccommand=split.
-  if (icm_split && (cmdpreview_buf = cmdpreview_open_buf()) == NULL) {
-    // Failed to create preview buffer, so disable preview.
-    set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL("nosplit"), 0, SID_NONE);
-    icm_split = false;
-  }
-  // Setup preview namespace if it's not already set.
-  if (!cmdpreview_ns) {
-    cmdpreview_ns = (int)nvim_create_namespace((String)STRING_INIT);
-  }
+/// Get ea.line2.
+linenr_T nvim_cmdpreview_ctx_get_line2(void *ctx_void)
+{
+  return ((CpParseCtx *)ctx_void)->ea.line2;
+}
 
-  // Set cmdpreview state.
-  cmdpreview = true;
+/// Set ea.line1.
+void nvim_cmdpreview_ctx_set_line1(void *ctx_void, linenr_T val)
+{
+  ((CpParseCtx *)ctx_void)->ea.line1 = val;
+}
 
-  // Execute the preview callback and use its return value to determine whether to show preview or
-  // open the preview window. The preview callback also handles doing the changes and highlights for
-  // the preview.
+/// Set ea.line2.
+void nvim_cmdpreview_ctx_set_line2(void *ctx_void, linenr_T val)
+{
+  ((CpParseCtx *)ctx_void)->ea.line2 = val;
+}
+
+/// Call undo_cmdmod on the parsed cmdinfo.cmdmod.
+void nvim_cmdpreview_ctx_undo_cmdmod(void *ctx_void)
+{
+  undo_cmdmod(&((CpParseCtx *)ctx_void)->cmdinfo.cmdmod);
+}
+
+/// Execute the preview command via TRY_WRAP. Returns cmdpreview_type (0/1/2).
+int nvim_cmdpreview_try_execute(void *ctx_void)
+{
+  CpParseCtx *ctx = (CpParseCtx *)ctx_void;
   Error err = ERROR_INIT;
+  int cmdpreview_type = 0;
   TRY_WRAP(&err, {
-    cmdpreview_type = execute_cmd(&ea, &cmdinfo, true);
+    cmdpreview_type = execute_cmd(&ctx->ea, &ctx->cmdinfo, true);
   });
   if (ERROR_SET(&err)) {
     api_clear_error(&err);
     cmdpreview_type = 0;
   }
+  return cmdpreview_type;
+}
 
-  // If inccommand=split and preview callback returns 2, open preview window.
-  if (icm_split && cmdpreview_type == 2
-      && (cmdpreview_win = cmdpreview_open_win(cmdpreview_buf)) == NULL) {
-    // If there's not enough room to open the preview window, just preview without the window.
-    cmdpreview_type = 1;
+/// Get the cmdpreview global bool.
+bool nvim_get_cmdpreview_global(void) { return cmdpreview; }
+
+/// Set the cmdpreview global bool.
+void nvim_set_cmdpreview_global(bool val) { cmdpreview = val; }
+
+/// Return true if p_icm starts with 's' (inccommand=split).
+bool nvim_get_p_icm_is_split(void) { return *p_icm == 's'; }
+
+/// Set inccommand option to "nosplit".
+void nvim_set_option_icm_nosplit(void)
+{
+  set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL("nosplit"), 0, SID_NONE);
+}
+
+/// Ensure cmdpreview_ns is set; return the ns value.
+int nvim_cmdpreview_ensure_ns(void)
+{
+  if (!cmdpreview_ns) {
+    cmdpreview_ns = (int)nvim_create_namespace((String)STRING_INIT);
   }
+  return cmdpreview_ns;
+}
 
-  // If preview callback return value is nonzero, update screen now.
-  if (cmdpreview_type != 0) {
-    int save_rd = RedrawingDisabled;
-    RedrawingDisabled = 0;
-    update_screen();
-    RedrawingDisabled = save_rd;
-  }
+/// main cmdpreview_may_show implementation, implemented in Rust.
+extern bool rs_cmdpreview_may_show(void);
 
-  // Close preview window if it's open.
-  if (icm_split && cmdpreview_type == 2 && cmdpreview_win != NULL) {
-    cmdpreview_close_win();
-  }
-
-  // Restore state. Implemented in Rust.
-  rs_cmdpreview_restore_state(cpstate);
-
-  unblock_autocmds();                  // Unblock events
-  msg_silent--;                        // Unblock messages
-  emsg_silent--;                       // Unblock error reporting
-  redrawcmdline();
-end:
-  xfree(cmdline);
-  return cmdpreview_type != 0;
+/// Show 'inccommand' preview if command is previewable.
+/// Implementation is in Rust (src/nvim-rs/cmdline/src/preview.rs).
+///
+/// @return whether preview is shown or not.
+bool cmdpreview_may_show(void)
+{
+  return rs_cmdpreview_may_show();
 }
