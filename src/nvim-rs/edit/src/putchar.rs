@@ -207,7 +207,7 @@ pub extern "C" fn rs_set_pc_status_unset() {
 // display_dollar
 // ============================================================================
 
-/// Additional C accessors for display_dollar.
+// Additional C accessors for display_dollar.
 extern "C" {
     /// redrawing() -> bool (window_shim.c).
     fn nvim_redrawing() -> c_int;
@@ -221,8 +221,6 @@ extern "C" {
     fn nvim_curs_columns_curwin_no_scroll();
     /// curwin->w_virtcol (edit.c).
     fn nvim_curwin_get_w_virtcol() -> c_int;
-    /// dollar_vcol getter (edit.c).
-    fn nvim_get_dollar_vcol() -> c_int;
     /// dollar_vcol setter (edit.c).
     fn nvim_set_dollar_vcol(val: c_int);
 }

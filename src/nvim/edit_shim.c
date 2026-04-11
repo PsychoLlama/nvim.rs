@@ -656,3 +656,34 @@ void nvim_redrawwinline_cursor(void) { redrawWinline(curwin, curwin->w_cursor.ln
 
 /// schar_from_ascii(' ') -- space character as schar_T.
 uint32_t nvim_schar_space(void) { return (uint32_t)schar_from_ascii(' '); }
+
+// ---- Phase 2 accessors: display_dollar, nvim_trim_eol_space, restart_edit ----
+
+/// Get ins_at_eol global.
+bool nvim_get_ins_at_eol(void) { return ins_at_eol; }
+
+/// Get where_paste_started.lnum.
+linenr_T nvim_get_where_paste_started_lnum(void) { return where_paste_started.lnum; }
+
+/// Call update_curswant().
+void nvim_update_curswant(void) { update_curswant(); }
+
+/// Decrement curbuf->b_ml.ml_line_len by 1.
+void nvim_curbuf_dec_ml_line_len(void) { curbuf->b_ml.ml_line_len--; }
+
+/// Call ml_get_buf_mut(curbuf, curwin->w_cursor.lnum).
+char *nvim_curbuf_get_cursor_line_mut(void)
+{
+  return ml_get_buf_mut(curbuf, curwin->w_cursor.lnum);
+}
+
+/// Compute utf_head_off(line, line + col) for the cursor line.
+/// Used by display_dollar to adjust col to first byte of multi-byte char.
+int nvim_edit_utf_head_off_cursor_col(int col)
+{
+  const char *p = get_cursor_line_ptr();
+  return utf_head_off(p, p + col);
+}
+
+/// Call curs_columns(curwin, false) -- recompute w_wrow and w_wcol.
+void nvim_curs_columns_curwin_no_scroll(void) { curs_columns(curwin, false); }

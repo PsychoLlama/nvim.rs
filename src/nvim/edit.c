@@ -255,34 +255,8 @@ void nvim_curbuf_sync_changedtick_after_insert(void)
   }
 }
 
-/// Returns: 0=arrow_used=false path, 1=restart_edit path (arrow_used set from paste).
-int nvim_edit_handle_restart_edit_cursor(void)
-{
-  if (restart_edit != 0 && stuff_empty()) {
-    arrow_used = where_paste_started.lnum == 0;
-    restart_edit = 0;
-
-    validate_virtcol(curwin);
-    update_curswant();
-    const char *ptr;
-    if (((ins_at_eol && curwin->w_cursor.lnum == nvim_get_o_lnum())
-         || curwin->w_curswant > curwin->w_virtcol)
-        && *(ptr = get_cursor_line_ptr() + curwin->w_cursor.col) != NUL) {
-      if (ptr[1] == NUL) {
-        curwin->w_cursor.col++;
-      } else {
-        int i = utfc_ptr2len(ptr);
-        if (ptr[i] == NUL) {
-          curwin->w_cursor.col += i;
-        }
-      }
-    }
-    ins_at_eol = false;
-    return 1;
-  }
-  arrow_used = false;
-  return 0;
-}
+// nvim_edit_handle_restart_edit_cursor is implemented in Rust (enter.rs).
+extern int nvim_edit_handle_restart_edit_cursor(void);
 
 /// Set Insstart_orig to Insstart (accessor for Rust state_machine).
 void nvim_set_Insstart_orig_from_Insstart(void) { Insstart_orig = Insstart; }
@@ -380,29 +354,8 @@ extern void edit_putchar(int c, bool highlight);
 extern void edit_unputchar(void);
 // Rust symbol: nvim_set_pc_status_unset (resets pc_status static in Rust).
 
-/// Called when "$" is in 'cpoptions': display a '$' at the end of the changed
-/// text.  Only works when cursor is in the line that changes.
-void display_dollar(colnr_T col_arg)
-{
-  colnr_T col = MAX(col_arg, 0);
-
-  if (!redrawing()) {
-    return;
-  }
-
-  colnr_T save_col = curwin->w_cursor.col;
-  curwin->w_cursor.col = col;
-
-  // If on the last byte of a multi-byte move to the first byte.
-  char *p = get_cursor_line_ptr();
-  curwin->w_cursor.col -= utf_head_off(p, p + col);
-  curs_columns(curwin, false);              // Recompute w_wrow and w_wcol
-  if (curwin->w_wcol < curwin->w_view_width) {
-    edit_putchar('$', false);
-    dollar_vcol = curwin->w_virtcol;
-  }
-  curwin->w_cursor.col = save_col;
-}
+// display_dollar is implemented in Rust (putchar.rs).
+extern void display_dollar(colnr_T col_arg);
 
 
 void set_can_cindent(bool val) { nvim_set_can_cindent(val ? 1 : 0); }
@@ -577,16 +530,8 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
   return false;
 }
 
-/// Trim last char of previous line if space (FO_WHITE_PAR helper).
-void nvim_trim_eol_space(void)
-{
-  char *ptr = ml_get_buf_mut(curbuf, curwin->w_cursor.lnum);
-  int len = get_cursor_line_len();
-  if (len > 0 && ptr[len - 1] == ' ') {
-    ptr[len - 1] = NUL;
-    curbuf->b_ml.ml_line_len--;
-  }
-}
+// nvim_trim_eol_space is implemented in Rust (helpers.rs).
+extern void nvim_trim_eol_space(void);
 
 /// Call ins_apply_autocmds(EVENT_INSERTLEAVEPRE) (accessor for Rust).
 void nvim_ins_apply_autocmds_insertleavepre(void) { ins_apply_autocmds(EVENT_INSERTLEAVEPRE); }

@@ -134,7 +134,6 @@ extern "C" {
     fn nvim_state_enter(state: *mut c_void);
     fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
     fn nvim_get_inserted_size() -> c_int;
-    fn nvim_edit_handle_restart_edit_cursor() -> c_int;
     fn nvim_update_o_lnum_if_at_eol();
     fn nvim_curbuf_sync_changedtick_after_insert();
 
@@ -279,7 +278,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     nvim_set_revins_scol(-1);
 
     // Handle restarting Insert mode.
-    nvim_edit_handle_restart_edit_cursor();
+    handle_restart_edit_cursor_impl();
 
     // We are in insert mode now, don't need to start it anymore
     nvim_set_need_start_insertmode(0);
@@ -356,6 +355,83 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
 extern "C" {
     fn nvim_ui_cursor_shape_and_clear_digraph();
+}
+
+// ============================================================================
+// nvim_edit_handle_restart_edit_cursor -- Phase 2
+// ============================================================================
+
+extern "C" {
+    // These are needed for handle_restart_edit_cursor
+    fn nvim_stuff_empty() -> c_int;
+    fn nvim_get_where_paste_started_lnum() -> LinenrT;
+    fn nvim_validate_virtcol_curwin();
+    fn nvim_update_curswant();
+    fn nvim_get_ins_at_eol() -> bool;
+    fn nvim_curwin_get_curswant() -> ColnrT;
+    fn nvim_curwin_get_w_virtcol() -> ColnrT;
+    fn nvim_get_cursor_line_ptr() -> *const std::ffi::c_char;
+    fn nvim_utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+    fn nvim_curwin_set_cursor_col(col: ColnrT);
+}
+
+/// Handle cursor positioning when `restart_edit` is set at insert mode entry.
+///
+/// Returns 0 if arrow_used was set to false (no restart_edit),
+///         1 if restart_edit was handled (arrow_used set from paste position).
+///
+/// # Safety
+/// Accesses multiple global variables via C accessor functions.
+unsafe fn handle_restart_edit_cursor_impl() -> c_int {
+    if restart_edit != 0 && nvim_stuff_empty() != 0 {
+        let paste_lnum = nvim_get_where_paste_started_lnum();
+        nvim_set_arrow_used(c_int::from(paste_lnum == 0));
+        restart_edit = 0;
+
+        nvim_validate_virtcol_curwin();
+        nvim_update_curswant();
+
+        let cursor_lnum = nvim_curwin_get_cursor_lnum();
+        let cursor_col = nvim_curwin_get_cursor_col();
+        let ins_at_eol = nvim_get_ins_at_eol();
+        let o_lnum = nvim_get_o_lnum();
+        let curswant = nvim_curwin_get_curswant();
+        let virtcol = nvim_curwin_get_w_virtcol();
+
+        if (ins_at_eol && cursor_lnum == o_lnum) || curswant > virtcol {
+            // Check character at current position
+            let line_ptr = nvim_get_cursor_line_ptr();
+            if !line_ptr.is_null() {
+                let ptr = line_ptr.add(cursor_col as usize);
+                if *ptr != 0 {
+                    // Not at NUL
+                    if *ptr.add(1) == 0 {
+                        nvim_curwin_set_cursor_col(cursor_col + 1);
+                    } else {
+                        let char_len = nvim_utfc_ptr2len(ptr);
+                        if *ptr.add(char_len as usize) == 0 {
+                            nvim_curwin_set_cursor_col(cursor_col + char_len);
+                        }
+                    }
+                }
+            }
+        }
+
+        nvim_set_ins_at_eol(false);
+        return 1;
+    }
+
+    nvim_set_arrow_used(0);
+    0
+}
+
+/// Exported as `nvim_edit_handle_restart_edit_cursor` (replaces C function).
+///
+/// # Safety
+/// Accesses global state via C accessor functions.
+#[unsafe(export_name = "nvim_edit_handle_restart_edit_cursor")]
+pub unsafe extern "C" fn rs_handle_restart_edit_cursor() -> c_int {
+    handle_restart_edit_cursor_impl()
 }
 
 // ============================================================================
