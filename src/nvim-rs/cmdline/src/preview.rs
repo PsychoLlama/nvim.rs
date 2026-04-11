@@ -6,16 +6,65 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 // =============================================================================
 // C Function Declarations
 // =============================================================================
 
+/// Opaque handle to a buffer (buf_T*)
+type BufHandle = *mut c_void;
+/// Opaque handle to a window (win_T*)
+type WinHandle = *mut c_void;
+
 extern "C" {
     /// Get the cmdpreview_bufnr static variable from C.
     fn nvim_get_cmdpreview_bufnr() -> c_int;
+
+    // Phase 2: buffer/window manipulation
+
+    /// Get the handle (b_fnum) of a buffer.
+    fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
+    /// Find buffer by number.
+    fn buflist_findnr(nr: c_int) -> BufHandle;
+    /// Get pointer to curbuf.
+    fn nvim_get_curbuf_ptr() -> BufHandle;
+    /// Get pointer to curwin.
+    fn nvim_get_curwin() -> WinHandle;
+    /// Heap-allocate aco_save_T and call aucmd_prepbuf.
+    fn nvim_buf_aucmd_prepbuf_alloc(buf: BufHandle) -> *mut c_void;
+    /// Restore buf from aco and free the aco.
+    fn nvim_buf_aucmd_restbuf_free(aco: *mut c_void);
+    /// rename_buffer("[Preview]") -- returns FAIL or OK.
+    fn rename_buffer(new_fname: *const u8) -> c_int;
+    /// buf_clear() -- clear current buffer content.
+    fn buf_clear();
+    /// Set curbuf->b_p_ma.
+    fn nvim_buf_set_b_p_ma(buf: BufHandle, val: c_int);
+    /// Set buf->b_p_ul.
+    fn nvim_buf_set_b_p_ul(buf: BufHandle, val: i64);
+    /// Set buf->b_p_tw.
+    fn nvim_buf_set_b_p_tw(buf: BufHandle, val: i64);
+    /// Set cmdpreview_bufnr static.
+    fn nvim_set_cmdpreview_bufnr(val: c_int);
+    /// win_split(size, flags): split a window. Returns OK or FAIL.
+    fn win_split(size: c_int, flags: c_int) -> c_int;
+    /// TRY_WRAP + do_buffer_ext(GOTO, FIRST, FORWARD, buf_handle, 0).
+    fn nvim_cmdpreview_try_do_buffer(buf_handle: c_int) -> c_int;
+    /// Set preview window options (cul, cuc, spell, fen = false).
+    fn nvim_win_set_preview_options(win: WinHandle);
+    /// win_enter(win, false).
+    fn nvim_win_enter(wp: WinHandle, undo_sync: c_int);
+    /// close_windows(buf, false).
+    fn close_windows(buf: BufHandle, keep_curwin: c_int);
+    /// Get p_cwh option (cmdwinheight).
+    fn nvim_get_p_cwh() -> c_int;
 }
+
+// WSP_BOT flag for win_split
+const WSP_BOT: c_int = 0x10;
+// FAIL return value
+const FAIL: c_int = 0;
 
 // =============================================================================
 // Preview Mode
@@ -345,6 +394,115 @@ pub mod cmdmod_flags {
 }
 
 // =============================================================================
+// Phase 2: Buffer/Window Open/Close Implementations
+// =============================================================================
+
+/// Open or create the command preview buffer.
+///
+/// Returns the buffer pointer on success, null on failure.
+///
+/// # Safety
+///
+/// Calls multiple C functions that manipulate global state.
+unsafe fn cmdpreview_open_buf_impl() -> BufHandle {
+    // Find existing preview buffer, or NULL if not yet created.
+    let preview_bufnr = nvim_get_cmdpreview_bufnr();
+    let mut cmdpreview_buf: BufHandle = if preview_bufnr != 0 {
+        buflist_findnr(preview_bufnr)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    // If preview buffer doesn't exist, create one.
+    if cmdpreview_buf.is_null() {
+        let bufnr = nvim_cmdpreview_create_buf();
+        if bufnr < 0 {
+            return std::ptr::null_mut();
+        }
+        cmdpreview_buf = buflist_findnr(bufnr);
+    }
+
+    // Preview buffer cannot preview itself!
+    if cmdpreview_buf == nvim_get_curbuf_ptr() {
+        return std::ptr::null_mut();
+    }
+
+    // Rename preview buffer.
+    let name = b"[Preview]\0";
+    let aco = nvim_buf_aucmd_prepbuf_alloc(cmdpreview_buf);
+    let retv = rename_buffer(name.as_ptr());
+    nvim_buf_aucmd_restbuf_free(aco);
+
+    if retv == FAIL {
+        return std::ptr::null_mut();
+    }
+
+    // Temporarily switch to preview buffer to set it up for previewing.
+    let aco = nvim_buf_aucmd_prepbuf_alloc(cmdpreview_buf);
+    buf_clear();
+    let curbuf = nvim_get_curbuf_ptr();
+    nvim_buf_set_b_p_ma(curbuf, 1); // true
+    nvim_buf_set_b_p_ul(curbuf, -1);
+    nvim_buf_set_b_p_tw(curbuf, 0); // Reset 'textwidth'
+    nvim_buf_aucmd_restbuf_free(aco);
+    nvim_set_cmdpreview_bufnr(nvim_buf_get_handle(cmdpreview_buf));
+
+    cmdpreview_buf
+}
+
+/// Open the command preview window.
+///
+/// Returns the window pointer on success, null on failure.
+/// The caller must have obtained `cmdpreview_buf` from `cmdpreview_open_buf`.
+///
+/// # Safety
+///
+/// Calls C functions that manipulate global window state.
+unsafe fn cmdpreview_open_win_impl(cmdpreview_buf: BufHandle) -> WinHandle {
+    let save_curwin = nvim_get_curwin();
+
+    // Open preview window at the bottom.
+    if win_split(nvim_get_p_cwh(), WSP_BOT) == FAIL {
+        return std::ptr::null_mut();
+    }
+
+    let preview_win = nvim_get_curwin();
+
+    // Switch to preview buffer using TRY_WRAP wrapper.
+    let buf_handle = nvim_buf_get_handle(cmdpreview_buf);
+    if nvim_cmdpreview_try_do_buffer(buf_handle) == FAIL {
+        return std::ptr::null_mut();
+    }
+
+    // Disable distracting options in preview window.
+    nvim_win_set_preview_options(nvim_get_curwin());
+
+    // Return to original window.
+    nvim_win_enter(save_curwin, 0);
+    preview_win
+}
+
+/// Close any open command preview windows.
+///
+/// # Safety
+///
+/// Calls C functions that manipulate global window state.
+unsafe fn cmdpreview_close_win_impl() {
+    let preview_bufnr = nvim_get_cmdpreview_bufnr();
+    if preview_bufnr != 0 {
+        let buf = buflist_findnr(preview_bufnr);
+        if !buf.is_null() {
+            close_windows(buf, 0); // keep_curwin = false
+        }
+    }
+}
+
+extern "C" {
+    /// Create an unlisted scratch buffer. Returns handle or -1 on error.
+    fn nvim_cmdpreview_create_buf() -> c_int;
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -359,6 +517,40 @@ pub mod cmdmod_flags {
 #[export_name = "cmdpreview_get_bufnr"]
 pub unsafe extern "C" fn cmdpreview_get_bufnr_rs() -> c_int {
     nvim_get_cmdpreview_bufnr()
+}
+
+/// Open or create the command preview buffer (FFI, called from C).
+///
+/// Returns a non-null buf_T* on success, null on failure.
+///
+/// # Safety
+///
+/// Calls C functions manipulating global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdpreview_open_buf() -> BufHandle {
+    cmdpreview_open_buf_impl()
+}
+
+/// Open the command preview window (FFI, called from C).
+///
+/// Returns a non-null win_T* on success, null on failure.
+///
+/// # Safety
+///
+/// Calls C functions manipulating global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdpreview_open_win(cmdpreview_buf: BufHandle) -> WinHandle {
+    cmdpreview_open_win_impl(cmdpreview_buf)
+}
+
+/// Close command preview windows (FFI, called from C).
+///
+/// # Safety
+///
+/// Calls C functions manipulating global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdpreview_close_win() {
+    cmdpreview_close_win_impl();
 }
 
 /// Set preview namespace (FFI).
