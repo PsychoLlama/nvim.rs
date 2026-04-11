@@ -97,13 +97,8 @@ static bool cmd_showtail;  ///< Only show path tail in lists ?
 static bool may_expand_pattern = false;
 static pos_T pre_incsearch_pos;  ///< Cursor position when incsearch started
 
-/// "compl_match_array" points the currently displayed list of entries in the
-/// popup menu.  It is NULL when there is no popup menu.
-static pumitem_T *compl_match_array = NULL;
-static int compl_match_arraysize;
-/// First column in cmdline of the matched item for completion.
-static int compl_startcol;
-static int compl_selected;
+// compl_match_array, compl_match_arraysize, compl_startcol, compl_selected
+// are now owned by Rust (pum.rs) as COMPL_MATCH_ARRAY etc.
 /// cmdline before expansion
 static char *cmdline_orig = NULL;
 
@@ -138,7 +133,7 @@ extern const char *rs_set_one_cmd_context(expand_T *xp, const char *buff);
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void) { return wop_flags; }
-int nvim_get_compl_match_array_not_null(void) { return compl_match_array != NULL; }
+// nvim_get_compl_match_array_not_null: now exported from Rust (pum.rs)
 int nvim_cmdexpand_get_may_expand_pattern(void) { return may_expand_pattern ? 1 : 0; }
 // C accessors for expand_T fields (Rust FFI)
 
@@ -179,7 +174,7 @@ void nvim_expand_clear_orig(expand_T *xp)
 }
 
 void nvim_clear_cmdline_orig(void) { XFREE_CLEAR(cmdline_orig); }
-void nvim_set_compl_selected(int val) { compl_selected = val; }
+// nvim_set_compl_selected: now exported from Rust (pum.rs)
 int nvim_get_cmd_showtail(void) { return cmd_showtail; }
 void nvim_cmdexpand_pum_display(int changed_array) { cmdline_pum_display(changed_array != 0); }
 void nvim_cmdexpand_pum_create_for_nav(expand_T *xp, int showtail, int noselect)
@@ -299,41 +294,15 @@ int nvim_cmdexpand_vpeekc(void) { return vpeekc(); }
 int nvim_cmdexpand_get_search_first_line(void) { return search_first_line; }
 int nvim_cmdexpand_get_search_last_line(void) { return search_last_line; }
 pos_T nvim_cmdexpand_get_pre_incsearch_pos(void) { return pre_incsearch_pos; }
-void nvim_cmdexpand_do_pum_display(int changed_array)
-{
-  pum_display(compl_match_array, compl_match_arraysize, compl_selected,
-              changed_array != 0, compl_startcol);
-}
-
-void nvim_cmdexpand_do_pum_remove(int defer_redraw)
-{
-  pum_undisplay(defer_redraw == 0);
-  XFREE_CLEAR(compl_match_array);
-  compl_match_arraysize = 0;
-}
+// nvim_cmdexpand_do_pum_display, nvim_cmdexpand_do_pum_remove,
+// nvim_cmdexpand_set_compl_startcol, nvim_cmdexpand_set_compl_match_arraysize,
+// nvim_cmdexpand_alloc_compl_match_array, nvim_cmdexpand_set_pum_text:
+// now implemented in Rust (pum.rs) using COMPL_MATCH_ARRAY etc.
 
 void nvim_cmdexpand_do_pum_cleanup(void)
 {
   cmdline_pum_remove(false);
   wildmenu_cleanup(get_cmdline_info());
-}
-
-void nvim_cmdexpand_set_compl_startcol(int val) { compl_startcol = val; }
-void nvim_cmdexpand_set_compl_match_arraysize(int val) { compl_match_arraysize = val; }
-void *nvim_cmdexpand_alloc_compl_match_array(int numMatches)
-{
-  compl_match_array = xmalloc(sizeof(pumitem_T) * (size_t)numMatches);
-  return compl_match_array;
-}
-
-void nvim_cmdexpand_set_pum_text(int i, char *text)
-{
-  compl_match_array[i].pum_text = text;
-  compl_match_array[i].pum_info = NULL;
-  compl_match_array[i].pum_extra = NULL;
-  compl_match_array[i].pum_kind = NULL;
-  compl_match_array[i].pum_user_abbr_hlattr = -1;
-  compl_match_array[i].pum_user_kind_hlattr = -1;
 }
 
 void *nvim_cmdexpand_get_msg_grid_adj_ptr(void) { return &msg_grid_adj; }

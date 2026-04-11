@@ -6,16 +6,44 @@
 use libc::{c_char, c_int};
 
 // =============================================================================
+// pumitem_T repr(C) (matches C layout, sizeof=48)
+// =============================================================================
+
+/// Popup menu item matching `pumitem_T` from `popupmenu.h` (sizeof=48).
+///
+/// Layout verified in `popupmenu/src/item.rs`:
+/// - `pum_text`@0, `pum_kind`@8, `pum_extra`@16, `pum_info`@24 (pointers)
+/// - `pum_cpt_source_idx`@32, `pum_user_abbr_hlattr`@36, `pum_user_kind_hlattr`@40, pad@44
+#[repr(C)]
+struct PumItem {
+    pum_text: *mut c_char,
+    pum_kind: *mut c_char,
+    pum_extra: *mut c_char,
+    pum_info: *mut c_char,
+    pum_cpt_source_idx: c_int,
+    pum_user_abbr_hlattr: c_int,
+    pum_user_kind_hlattr: c_int,
+    _pad: c_int,
+}
+
+// =============================================================================
+// Rust-owned compl_* statics (formerly in cmdexpand.c)
+// =============================================================================
+
+/// Currently displayed list of entries in the popup menu (NULL when not shown).
+static mut COMPL_MATCH_ARRAY: *mut PumItem = std::ptr::null_mut();
+/// Number of entries in `COMPL_MATCH_ARRAY`.
+static mut COMPL_MATCH_ARRAYSIZE: c_int = 0;
+/// First column in cmdline of the matched item for completion.
+static mut COMPL_STARTCOL: c_int = 0;
+/// Currently selected completion item index.
+static mut COMPL_SELECTED: c_int = 0;
+
+// =============================================================================
 // External C functions
 // =============================================================================
 
 extern "C" {
-    /// Run `pum_display` with the current `compl_*` statics (avoids exporting them).
-    fn nvim_cmdexpand_do_pum_display(changed_array: c_int);
-
-    /// Run `pum_undisplay` + free `compl_match_array` + reset arraysize.
-    fn nvim_cmdexpand_do_pum_remove(defer_redraw: c_int);
-
     /// Run `cmdline_pum_remove(false)` + `wildmenu_cleanup(get_cmdline_info())`.
     fn nvim_cmdexpand_do_pum_cleanup();
 
@@ -24,18 +52,6 @@ extern "C" {
 
     /// Return `get_cmdline_info()->xpc` if non-null and context supports fuzzy, else 0.
     fn nvim_cmdexpand_ccline_xpc_supports_fuzzy() -> c_int;
-
-    /// Allocate `compl_match_array` with `numMatches` entries, return pointer.
-    fn nvim_cmdexpand_alloc_compl_match_array(num_matches: c_int) -> *mut libc::c_void;
-
-    /// Set `compl_match_array[i]` to all-NULL + `pum_text`=text, user attrs=-1.
-    fn nvim_cmdexpand_set_pum_text(i: c_int, text: *mut c_char);
-
-    /// Set `compl_match_arraysize`.
-    fn nvim_cmdexpand_set_compl_match_arraysize(val: c_int);
-
-    /// Set `compl_startcol`.
-    fn nvim_cmdexpand_set_compl_startcol(val: c_int);
 
     /// Get `cmdbuff` from `get_cmdline_info()`.
     fn nvim_cmdexpand_get_cmdbuff() -> *mut c_char;
@@ -48,6 +64,42 @@ extern "C" {
 
     /// `cmd_screencol(bytepos)` — screen column for given byte position.
     fn cmd_screencol(bytepos: c_int) -> c_int;
+
+    /// `pum_display(array, size, selected, array_changed, cmd_startcol)`.
+    fn pum_display(
+        array: *mut PumItem,
+        size: c_int,
+        selected: c_int,
+        array_changed: bool,
+        cmd_startcol: c_int,
+    );
+
+    /// `pum_undisplay(force_redraw)`.
+    fn pum_undisplay(force_redraw: bool);
+
+    /// `xfree(ptr)`.
+    fn xfree(ptr: *mut libc::c_void);
+
+    /// `xmalloc(size)` — allocate memory (aborts on failure).
+    fn xmalloc(size: usize) -> *mut c_char;
+}
+
+// =============================================================================
+// Accessors for Rust-owned compl_* statics (called from navigation.rs, display.rs)
+// =============================================================================
+
+/// Returns non-zero if `COMPL_MATCH_ARRAY` is non-null.
+#[unsafe(export_name = "nvim_get_compl_match_array_not_null")]
+pub extern "C" fn rs_get_compl_match_array_not_null() -> c_int {
+    // SAFETY: read of atomic-like static (single-threaded Neovim).
+    c_int::from(unsafe { !COMPL_MATCH_ARRAY.is_null() })
+}
+
+/// Set `COMPL_SELECTED`.
+#[unsafe(export_name = "nvim_set_compl_selected")]
+pub extern "C" fn rs_set_compl_selected(val: c_int) {
+    // SAFETY: single-threaded Neovim.
+    unsafe { COMPL_SELECTED = val };
 }
 
 // =============================================================================
@@ -56,14 +108,20 @@ extern "C" {
 
 /// Display the cmdline completion popup menu.
 ///
-/// Delegates to `pum_display` with the cached `compl_*` statics.
+/// Calls `pum_display` with the Rust-owned `COMPL_*` statics.
 ///
 /// # Safety
 ///
-/// Must only be called when `compl_match_array` is not NULL.
+/// Must only be called when `COMPL_MATCH_ARRAY` is not NULL.
 #[unsafe(export_name = "cmdline_pum_display")]
 pub unsafe extern "C" fn rs_cmdline_pum_display(changed_array: bool) {
-    nvim_cmdexpand_do_pum_display(c_int::from(changed_array));
+    pum_display(
+        COMPL_MATCH_ARRAY,
+        COMPL_MATCH_ARRAYSIZE,
+        COMPL_SELECTED,
+        changed_array,
+        COMPL_STARTCOL,
+    );
 }
 
 // =============================================================================
@@ -74,10 +132,13 @@ pub unsafe extern "C" fn rs_cmdline_pum_display(changed_array: bool) {
 ///
 /// # Safety
 ///
-/// Safe to call even when no PUM is displayed (the C wrapper is a no-op then).
+/// Safe to call even when no PUM is displayed.
 #[unsafe(export_name = "cmdline_pum_remove")]
 pub unsafe extern "C" fn rs_cmdline_pum_remove(defer_redraw: bool) {
-    nvim_cmdexpand_do_pum_remove(c_int::from(defer_redraw));
+    pum_undisplay(!defer_redraw);
+    xfree(COMPL_MATCH_ARRAY.cast::<libc::c_void>());
+    COMPL_MATCH_ARRAY = std::ptr::null_mut();
+    COMPL_MATCH_ARRAYSIZE = 0;
 }
 
 // =============================================================================
@@ -135,7 +196,7 @@ const K_UI_CMDLINE: c_int = 0;
 
 /// Create completion popup menu with items from `matches`.
 ///
-/// Allocates and populates `compl_match_array`, then computes `compl_startcol`
+/// Allocates and populates `COMPL_MATCH_ARRAY`, then computes `COMPL_STARTCOL`
 /// based on the pattern position in the cmdline buffer.
 ///
 /// # Panics
@@ -158,9 +219,10 @@ pub unsafe extern "C" fn rs_cmdline_pum_create(
 ) {
     assert!(num_matches >= 0);
 
-    // Allocate and fill compl_match_array
-    nvim_cmdexpand_alloc_compl_match_array(num_matches);
-    nvim_cmdexpand_set_compl_match_arraysize(num_matches);
+    // Allocate and fill COMPL_MATCH_ARRAY
+    let arr = xmalloc(std::mem::size_of::<PumItem>() * num_matches as usize).cast::<PumItem>();
+    COMPL_MATCH_ARRAY = arr;
+    COMPL_MATCH_ARRAYSIZE = num_matches;
 
     for i in 0..num_matches {
         let text = if showtail {
@@ -168,7 +230,16 @@ pub unsafe extern "C" fn rs_cmdline_pum_create(
         } else {
             *matches.add(i as usize)
         };
-        nvim_cmdexpand_set_pum_text(i, text);
+        arr.add(i as usize).write(PumItem {
+            pum_text: text,
+            pum_info: std::ptr::null_mut(),
+            pum_extra: std::ptr::null_mut(),
+            pum_kind: std::ptr::null_mut(),
+            pum_cpt_source_idx: 0,
+            pum_user_abbr_hlattr: -1,
+            pum_user_kind_hlattr: -1,
+            _pad: 0,
+        });
     }
 
     // Compute popup menu starting column
@@ -185,10 +256,9 @@ pub unsafe extern "C" fn rs_cmdline_pum_create(
         (endpos as usize).wrapping_sub(cmdbuff as usize) as c_int
     };
 
-    let startcol = if ui_has(K_UI_CMDLINE) && nvim_get_cmdline_win_is_null() != 0 {
+    COMPL_STARTCOL = if ui_has(K_UI_CMDLINE) && nvim_get_cmdline_win_is_null() != 0 {
         byte_offset
     } else {
         cmd_screencol(byte_offset)
     };
-    nvim_cmdexpand_set_compl_startcol(startcol);
 }
