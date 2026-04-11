@@ -377,8 +377,8 @@ extern "C" {
 
 /// Handle cursor positioning when `restart_edit` is set at insert mode entry.
 ///
-/// Returns 0 if arrow_used was set to false (no restart_edit),
-///         1 if restart_edit was handled (arrow_used set from paste position).
+/// Returns 0 if `arrow_used` was set to false (no `restart_edit`),
+///         1 if `restart_edit` was handled (`arrow_used` set from paste position).
 ///
 /// # Safety
 /// Accesses multiple global variables via C accessor functions.
@@ -430,6 +430,7 @@ unsafe fn handle_restart_edit_cursor_impl() -> c_int {
 /// # Safety
 /// Accesses global state via C accessor functions.
 #[unsafe(export_name = "nvim_edit_handle_restart_edit_cursor")]
+#[must_use]
 pub unsafe extern "C" fn rs_handle_restart_edit_cursor() -> c_int {
     handle_restart_edit_cursor_impl()
 }

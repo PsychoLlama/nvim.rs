@@ -209,19 +209,19 @@ pub extern "C" fn rs_set_pc_status_unset() {
 
 // Additional C accessors for display_dollar.
 extern "C" {
-    /// redrawing() -> bool (window_shim.c).
+    /// `redrawing()` -> bool (`window_shim.c`).
     fn nvim_redrawing() -> c_int;
-    /// curwin->w_cursor.col (cursor_shim.c).
+    /// curwin->w_cursor.col (`cursor_shim.c`).
     fn nvim_curwin_get_cursor_col() -> c_int;
-    /// Set curwin->w_cursor.col (cursor_shim.c).
+    /// Set curwin->w_cursor.col (`cursor_shim.c`).
     fn nvim_curwin_set_cursor_col(col: c_int);
-    /// utf_head_off(cursor_line, cursor_line+col) (edit_shim.c).
+    /// `utf_head_off(cursor_line`, `cursor_line+col`) (`edit_shim.c`).
     fn nvim_edit_utf_head_off_cursor_col(col: c_int) -> c_int;
-    /// curs_columns(curwin, false) (edit_shim.c).
+    /// `curs_columns(curwin`, false) (`edit_shim.c`).
     fn nvim_curs_columns_curwin_no_scroll();
     /// curwin->w_virtcol (edit.c).
     fn nvim_curwin_get_w_virtcol() -> c_int;
-    /// dollar_vcol setter (edit.c).
+    /// `dollar_vcol` setter (edit.c).
     fn nvim_set_dollar_vcol(val: c_int);
 }
 

@@ -423,15 +423,15 @@ pub unsafe extern "C" fn rs_check_spell_redraw() {
 
 // Additional C accessors for nvim_trim_eol_space.
 extern "C" {
-    /// ml_get_buf_mut(curbuf, curwin->w_cursor.lnum) (edit_shim.c).
+    /// `ml_get_buf_mut(curbuf`, curwin->w_cursor.lnum) (`edit_shim.c`).
     fn nvim_curbuf_get_cursor_line_mut() -> *mut c_char;
-    /// get_cursor_line_len() (normal_shim.c).
+    /// `get_cursor_line_len()` (`normal_shim.c`).
     fn nvim_get_cursor_line_len() -> c_int;
-    /// curbuf->b_ml.ml_line_len-- (edit_shim.c).
+    /// curbuf->b_ml.ml_line_len-- (`edit_shim.c`).
     fn nvim_curbuf_dec_ml_line_len();
 }
 
-/// Trim the last character of the current line if it is a space (FO_WHITE_PAR helper).
+/// Trim the last character of the current line if it is a space (`FO_WHITE_PAR` helper).
 ///
 /// # Safety
 /// Accesses global curbuf and curwin state via C accessor functions.
