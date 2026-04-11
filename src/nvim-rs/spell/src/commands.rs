@@ -1007,6 +1007,280 @@ pub unsafe extern "C" fn spell_dump_compl(
 }
 
 // =============================================================================
+// Phase 2: check_need_cap and ex_spellrepall (migrated from spell.c)
+// =============================================================================
+
+extern "C" {
+    // Memory and string functions
+    fn xmalloc(size: usize) -> *mut c_void;
+    #[link_name = "xfree"]
+    fn xfree_p2(ptr: *mut c_void);
+    // String functions
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn getwhitecols(p: *const c_char) -> isize;
+    fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char;
+    // Multibyte
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    #[link_name = "ml_get_buf"]
+    fn ml_get_buf_p2(buf: *mut c_void, lnum: i32) -> *mut c_char;
+    // Spell word check
+    fn spell_iswordp_nmw(p: *const c_char, wp: *const c_void) -> bool;
+    // Regex for cap check (handles regprog lifecycle)
+    fn nvim_win_spell_capcol_regexec(wp: *mut c_void, ptr: *mut c_char) -> c_int;
+    fn nvim_win_cap_prog_is_null(wp: *const c_void) -> c_int;
+    // Search/replace for spellrepall
+    fn nvim_spell_do_search(frompat: *mut c_char, frompatlen: usize) -> c_int;
+    fn u_save_cursor() -> c_int;
+    fn ml_replace(lnum: i32, line: *mut c_char, copy: bool) -> c_int;
+    fn inserted_bytes(lnum: i32, start_col: c_int, old_col: c_int, new_col: c_int);
+    fn do_sub_msg(count_only: bool) -> bool;
+    fn nvim_spell_emsg_e752();
+    fn nvim_spell_semsg_e753(word: *const c_char);
+    // Cursor access for spellrepall
+    fn nvim_curwin_save_pos(lnum: *mut i32, col: *mut i32);
+    fn nvim_curwin_restore_pos(lnum: i32, col: i32);
+    fn nvim_curwin_set_lnum(lnum: i32);
+    fn nvim_curwin_col_add(n: i32);
+    fn nvim_curwin_get_lnum() -> i32;
+    fn nvim_curwin_get_col() -> i32;
+    fn nvim_win_get_buf_ptr_void(wp: *const c_void) -> *mut c_void;
+    fn nvim_get_p_ws() -> c_int;
+    fn nvim_set_p_ws(val: c_int);
+    fn nvim_sub_nsubs_inc();
+    fn nvim_sub_nsubs_reset();
+    fn nvim_sub_nsubs_get() -> c_int;
+    fn nvim_sub_nlines_inc();
+    fn nvim_sub_nlines_reset();
+    fn nvim_get_cursor_line_ptr() -> *mut c_char;
+    fn nvim_get_cursor_line_len() -> c_int;
+    // Globals
+    #[link_name = "repl_from"]
+    static repl_from_ext: *mut c_char;
+    #[link_name = "repl_to"]
+    static repl_to_ext: *mut c_char;
+}
+
+/// Check if the word at line `lnum` column `col` needs to start with a capital.
+/// Uses 'spellcapcheck' of the buffer in window `wp`.
+/// Implements C: check_need_cap()
+///
+/// # Safety
+/// `wp` must be a valid window pointer.
+#[export_name = "check_need_cap"]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::borrow_as_ptr)]
+pub unsafe extern "C" fn rs_check_need_cap(wp: *mut c_void, lnum: i32, col: i32) -> bool {
+    if nvim_win_cap_prog_is_null(wp) != 0 {
+        return false;
+    }
+
+    let buf = nvim_win_get_buf_ptr_void(wp);
+    let mut need_cap = false;
+    let line: *mut c_char = if col != 0 {
+        ml_get_buf_p2(buf, lnum)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    let mut line_copy: *mut c_char = std::ptr::null_mut();
+    let mut endcol: i32 = 0;
+
+    if col == 0 || getwhitecols(line) >= col as isize {
+        // At start of line: check if previous line is empty or sentence ends there
+        if lnum == 1 {
+            need_cap = true;
+        } else {
+            let prev_line = ml_get_buf_p2(buf, lnum - 1);
+            let sw = skipwhite(prev_line);
+            if *sw == 0 {
+                // Empty line (skipwhite reaches NUL)
+                need_cap = true;
+            } else {
+                // Append a space in place of the line break
+                let space = b" \0";
+                line_copy = concat_str(prev_line, space.as_ptr().cast::<c_char>());
+                endcol = strlen(line_copy) as i32;
+            }
+        }
+    } else {
+        endcol = col;
+    }
+
+    if endcol > 0 {
+        let the_line = if line_copy.is_null() { line } else { line_copy };
+        // Walk backwards from the_line + endcol checking for sentence end
+        let mut p = the_line.add(endcol as usize);
+        loop {
+            // MB_PTR_BACK: p -= utf_head_off(the_line, p-1) + 1
+            let off = utf_head_off(the_line, p.sub(1));
+            p = p.sub(off as usize + 1);
+            if std::ptr::eq(p, the_line) || spell_iswordp_nmw(p, wp) {
+                break;
+            }
+            // Check regex match: nvim_win_spell_capcol_regexec returns (endp[0] - p) or -1
+            let match_end = nvim_win_spell_capcol_regexec(wp, p);
+            if match_end >= 0 {
+                // endp[0] == p + match_end
+                // need: endp[0] == the_line + endcol
+                // i.e., (p - the_line) + match_end == endcol
+                let p_off = p.offset_from(the_line) as i32;
+                if p_off + match_end == endcol {
+                    need_cap = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if !line_copy.is_null() {
+        xfree_p2(line_copy.cast::<c_void>());
+    }
+
+    need_cap
+}
+
+/// `:spellrepall` - Replace all instances of the last spell replacement.
+/// Implements C: ex_spellrepall()
+///
+/// # Safety
+/// Called from C with a valid exarg_T pointer (unused).
+#[export_name = "ex_spellrepall"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::borrow_as_ptr)]
+pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
+    let repl_from = repl_from_ext;
+    let repl_to = repl_to_ext;
+
+    if repl_from.is_null() || repl_to.is_null() {
+        nvim_spell_emsg_e752();
+        return;
+    }
+
+    let repl_from_len = strlen(repl_from);
+    let repl_to_len = strlen(repl_to);
+    let addlen = repl_to_len as i32 - repl_from_len as i32;
+
+    // Build pattern: "\V\<" + repl_from + "\>" (size = repl_from_len + 6 + NUL)
+    let frompatsize = repl_from_len + 7;
+    let frompat = xmalloc(frompatsize).cast::<u8>();
+    {
+        let p = frompat;
+        let mut pos = 0usize;
+        for &b in b"\\V\\<" {
+            *p.add(pos) = b;
+            pos += 1;
+        }
+        let rf = std::slice::from_raw_parts(repl_from.cast::<u8>(), repl_from_len);
+        for &b in rf {
+            *p.add(pos) = b;
+            pos += 1;
+        }
+        for &b in b"\\>" {
+            *p.add(pos) = b;
+            pos += 1;
+        }
+        *p.add(pos) = 0u8;
+    }
+    let frompatlen = repl_from_len + 6; // "\V\<" (4) + repl_from + "\>" (2)
+
+    let save_ws = nvim_get_p_ws();
+    nvim_set_p_ws(0); // p_ws = false
+
+    nvim_sub_nsubs_reset();
+    nvim_sub_nlines_reset();
+
+    // Save cursor position
+    let mut saved_lnum: i32 = 0;
+    let mut saved_col: i32 = 0;
+    nvim_curwin_save_pos(
+        std::ptr::addr_of_mut!(saved_lnum),
+        std::ptr::addr_of_mut!(saved_col),
+    );
+
+    // Start from line 0 (beginning of buffer)
+    nvim_curwin_set_lnum(0);
+
+    let mut prev_lnum: i32 = 0;
+
+    while !got_int {
+        if nvim_spell_do_search(frompat.cast::<c_char>(), frompatlen) == 0 {
+            break;
+        }
+        // u_save_cursor: OK=1, FAIL=0
+        if u_save_cursor() == 0 {
+            break;
+        }
+
+        // Only replace when the right word isn't there yet
+        let cur_line = nvim_get_cursor_line_ptr();
+        #[allow(clippy::cast_sign_loss)]
+        let cur_col = nvim_curwin_get_col() as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let cur_line_len = nvim_get_cursor_line_len() as usize;
+
+        let should_replace = if addlen <= 0 {
+            true
+        } else {
+            // Check if repl_to is not already there
+            let at_cursor = cur_line.add(cur_col);
+            strncmp(at_cursor, repl_to, repl_to_len) != 0
+        };
+
+        if should_replace {
+            // Build new line: line[..col] + repl_to + line[col + repl_from_len..]
+            let suffix_start = cur_col + repl_from_len;
+            let suffix_len = cur_line_len.saturating_sub(suffix_start);
+            let new_len = cur_col + repl_to_len + suffix_len + 1;
+            let new_line = xmalloc(new_len).cast::<u8>();
+            let src = cur_line.cast::<u8>();
+            let rt = repl_to.cast::<u8>();
+
+            // Copy prefix
+            std::ptr::copy_nonoverlapping(src, new_line, cur_col);
+            // Copy repl_to
+            std::ptr::copy_nonoverlapping(rt, new_line.add(cur_col), repl_to_len);
+            // Copy suffix
+            std::ptr::copy_nonoverlapping(
+                src.add(suffix_start),
+                new_line.add(cur_col + repl_to_len),
+                suffix_len,
+            );
+            *new_line.add(cur_col + repl_to_len + suffix_len) = 0;
+
+            let cur_lnum = nvim_curwin_get_lnum();
+            ml_replace(cur_lnum, new_line.cast::<c_char>(), false);
+            inserted_bytes(
+                cur_lnum,
+                cur_col as c_int,
+                repl_from_len as c_int,
+                repl_to_len as c_int,
+            );
+
+            if cur_lnum != prev_lnum {
+                nvim_sub_nlines_inc();
+                prev_lnum = cur_lnum;
+            }
+            nvim_sub_nsubs_inc();
+        }
+
+        nvim_curwin_col_add(repl_to_len as i32);
+    }
+
+    nvim_set_p_ws(save_ws);
+    nvim_curwin_restore_pos(saved_lnum, saved_col);
+    xfree_p2(frompat.cast::<c_void>());
+
+    if nvim_sub_nsubs_get() == 0 {
+        nvim_spell_semsg_e753(repl_from);
+    } else {
+        do_sub_msg(false);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

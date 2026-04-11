@@ -617,10 +617,13 @@ win_T *nvim_curwin_get_next(void) { return curwin->w_next; }
 buf_T *nvim_firstwin_get_buffer(void) { return firstwin->w_buffer; }
 
 // =============================================================================
-// Spell lifecycle helpers for Rust (Phase 1 spell migration)
+// Spell lifecycle + command helpers for Rust (Phase 1+2 spell migration)
 // =============================================================================
 #include "nvim/spell.h"
 #include "nvim/spellfile.h"
+#include "nvim/change.h"
+#include "nvim/search.h"
+#include "nvim/undo.h"
 
 /// Clear b_langp for all buffers (FOR_ALL_BUFFERS loop helper for spell_free_all).
 void nvim_for_all_bufs_clear_langp(void)
@@ -643,4 +646,82 @@ void nvim_for_all_wins_spell_reload(void)
     }
   }
 }
+
+// =============================================================================
+// Spell command helpers for Rust (Phase 2)
+// =============================================================================
+
+/// Run do_search for spellrepall: search forward for the given pattern.
+/// Returns 0 if not found, non-zero if found (do_search return value).
+int nvim_spell_do_search(char *frompat, size_t frompatlen)
+{
+  return do_search(NULL, '/', '/', frompat, frompatlen, 1, SEARCH_KEEP, NULL);
+}
+
+/// Save curwin->w_cursor position.
+void nvim_curwin_save_pos(int32_t *lnum, int32_t *col)
+{
+  *lnum = (int32_t)curwin->w_cursor.lnum;
+  *col = (int32_t)curwin->w_cursor.col;
+}
+
+/// Restore curwin->w_cursor position.
+void nvim_curwin_restore_pos(int32_t lnum, int32_t col)
+{
+  curwin->w_cursor.lnum = (linenr_T)lnum;
+  curwin->w_cursor.col = (colnr_T)col;
+  curwin->w_cursor.coladd = 0;
+}
+
+/// Set curwin->w_cursor.lnum.
+void nvim_curwin_set_lnum(int32_t lnum)
+{
+  curwin->w_cursor.lnum = (linenr_T)lnum;
+}
+
+/// Add n to curwin->w_cursor.col.
+void nvim_curwin_col_add(int32_t n)
+{
+  curwin->w_cursor.col += (colnr_T)n;
+}
+
+/// Get curwin->w_cursor.lnum.
+int32_t nvim_curwin_get_lnum(void)
+{
+  return (int32_t)curwin->w_cursor.lnum;
+}
+
+/// Get curwin->w_cursor.col.
+int32_t nvim_curwin_get_col(void)
+{
+  return (int32_t)curwin->w_cursor.col;
+}
+
+/// Get current window's buffer pointer (for ml_get_buf etc.)
+void *nvim_curwin_get_buf(void)
+{
+  return (void *)curwin->w_buffer;
+}
+
+/// Get the window's buffer pointer for spell check_need_cap use.
+void *nvim_win_get_buf_ptr_void(const win_T *wp)
+{
+  return (void *)wp->w_buffer;
+}
+
+/// sub_nsubs global access.
+void nvim_sub_nsubs_inc(void) { sub_nsubs++; }
+void nvim_sub_nsubs_reset(void) { sub_nsubs = 0; }
+int nvim_sub_nsubs_get(void) { return sub_nsubs; }
+
+/// sub_nlines global access.
+void nvim_sub_nlines_inc(void) { sub_nlines++; }
+void nvim_sub_nlines_reset(void) { sub_nlines = 0; }
+
+/// Check if the window's b_cap_prog is NULL.
+int nvim_win_cap_prog_is_null(const win_T *wp) { return wp->w_s->b_cap_prog == NULL ? 1 : 0; }
+
+/// Spell-specific error messages for Rust FFI.
+void nvim_spell_emsg_e752(void) { emsg(_("E752: No previous spell replacement")); }
+void nvim_spell_semsg_e753(const char *word) { semsg(_("E753: Not found: %s"), word); }
 
