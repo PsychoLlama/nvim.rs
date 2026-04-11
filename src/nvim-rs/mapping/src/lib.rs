@@ -15,6 +15,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)] // Safe wrappers that null-check before deref
 
 pub mod abbrev;
+pub mod api;
 pub mod args;
 pub mod completion;
 pub mod display;
