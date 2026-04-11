@@ -9,6 +9,15 @@
 use std::ffi::c_int;
 
 // =============================================================================
+// C Function Declarations
+// =============================================================================
+
+extern "C" {
+    /// Get the cmdpreview_bufnr static variable from C.
+    fn nvim_get_cmdpreview_bufnr() -> c_int;
+}
+
+// =============================================================================
 // Preview Mode
 // =============================================================================
 
@@ -340,6 +349,17 @@ pub mod cmdmod_flags {
 // =============================================================================
 
 // Note: rs_cmdpreview_get_ns is defined in lib.rs to avoid duplication
+
+/// Get the cmdpreview buffer number (direct C symbol replacement).
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdpreview_get_bufnr"]
+pub unsafe extern "C" fn cmdpreview_get_bufnr_rs() -> c_int {
+    nvim_get_cmdpreview_bufnr()
+}
 
 /// Set preview namespace (FFI).
 #[no_mangle]
