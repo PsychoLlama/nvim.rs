@@ -160,19 +160,67 @@ int nvim_suginfo_get_badflags(void *su) { return ((suginfo_T *)su)->su_badflags;
 void nvim_suginfo_set_badflags(void *su, int v) { ((suginfo_T *)su)->su_badflags = v; }
 // Phase 2 accessors
 int nvim_spellsug_get_timeout(void) { return spell_suggest_timeout; }
+void nvim_spellsug_set_timeout(int t) { spell_suggest_timeout = t; }
+// Write accessors for spell_find_suggest migration
+void nvim_suginfo_set_badptr(void *su, char *ptr) { ((suginfo_T *)su)->su_badptr = ptr; }
+void nvim_suginfo_set_badlen(void *su, int len) { ((suginfo_T *)su)->su_badlen = len; }
+void nvim_suginfo_set_maxcount(void *su, int count) { ((suginfo_T *)su)->su_maxcount = count; }
+void nvim_suginfo_set_sallang(void *su, void *sallang) { ((suginfo_T *)su)->su_sallang = sallang; }
+// Clear the suginfo_T struct (CLEAR_POINTER equivalent)
+void nvim_suginfo_clear(void *su) { CLEAR_POINTER((suginfo_T *)su); }
+
+// Accessor for curbuf->b_s.b_langp (used by rs_spell_find_suggest)
+garray_T *nvim_curbuf_get_b_langp(void) { return &curbuf->b_s.b_langp; }
+
+// Accessor for p_sps option string (used by rs_spell_find_suggest)
+const char *nvim_get_p_sps(void) { return p_sps; }
+
+// Wrapper for copy_option_part (used by rs_spell_find_suggest)
+size_t nvim_copy_option_part(char **pp, char *buf, size_t maxlen, char *sep_chars)
+{
+  return copy_option_part(pp, buf, maxlen, sep_chars);
+}
+
+// C helper: evaluate VimL expr for spell suggestions and iterate the result
+// list, calling rs_add_suggestion for each valid item.
+// This keeps VimL list types out of Rust FFI.
+extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int badlenarg,
+                              int score, int altscore, bool had_bonus, slang_T *slang,
+                              bool maxsf);
+void nvim_spell_suggest_expr_eval(void *su, char *expr)
+{
+  const char *p;
+  const char *su_badword = nvim_suginfo_get_badword(su);
+  int su_maxscore = nvim_suginfo_get_maxscore(su);
+  int su_badlen = nvim_suginfo_get_badlen(su);
+  slang_T *su_sallang = nvim_suginfo_get_sallang(su);
+
+  list_T *const list = eval_spell_expr((char *)su_badword, expr);
+  if (list != NULL) {
+    TV_LIST_ITER(list, li, {
+      if (TV_LIST_ITEM_TV(li)->v_type == VAR_LIST) {
+        int score = get_spellword(TV_LIST_ITEM_TV(li)->vval.v_list, &p);
+        if (score >= 0 && score <= su_maxscore) {
+          rs_add_suggestion(su, nvim_suginfo_get_ga(su), p, su_badlen,
+                            score, 0, true, su_sallang, false);
+        }
+      }
+    });
+    tv_list_unref(list);
+  }
+}
 
 extern int badword_captype(char *word, char *end);
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
 extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
 extern void rs_score_combine_lists(void *su);
-extern void rs_add_suggestion(void *su, garray_T *gap, const char *goodword, int badlenarg,
-                              int score, int altscore, bool had_bonus, slang_T *slang,
-                              bool maxsf);
 extern void rs_add_banned(void *su, char *word);
 extern void rs_spell_suggest_intern(void *su, bool interactive);
 extern void rs_spell_suggest_file(void *su, char *fname);
 extern void rs_spell_find_cleanup(void *su);
+extern void rs_spell_find_suggest(char *badptr, int badlen, void *su, int maxcount,
+                                  bool banbadword, bool need_cap, bool interactive);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -260,8 +308,8 @@ void spell_suggest(int count)
   // Get the list of suggestions.  Limit to 'lines' - 2 or the number in
   // 'spellsuggest', whatever is smaller.
   int limit = MIN(sps_limit, Rows - 2);
-  spell_find_suggest(line + curwin->w_cursor.col, badlen, &sug, limit,
-                     true, need_cap, true);
+  rs_spell_find_suggest(line + curwin->w_cursor.col, badlen, &sug, limit,
+                        true, need_cap, true);
 
   msg_ext_set_kind("confirm");
   if (GA_EMPTY(&sug.su_ga)) {
@@ -410,7 +458,7 @@ void spell_suggest_list(garray_T *gap, char *word, int maxcount, bool need_cap, 
 {
   suginfo_T sug;
 
-  spell_find_suggest(word, 0, &sug, maxcount, false, need_cap, interactive);
+  rs_spell_find_suggest(word, 0, &sug, maxcount, false, need_cap, interactive);
 
   // Make room in "gap".
   ga_init(gap, sizeof(char *), sug.su_ga.ga_len + 1);
@@ -429,162 +477,5 @@ void spell_suggest_list(garray_T *gap, char *word, int maxcount, bool need_cap, 
   rs_spell_find_cleanup(&sug);
 }
 
-/// Find spell suggestions for the word at the start of "badptr".
-/// Return the suggestions in "su->su_ga".
-/// The maximum number of suggestions is "maxcount".
-/// Note: does use info for the current window.
-/// This is based on the mechanisms of Aspell, but completely reimplemented.
-///
-/// @param badlen  length of bad word or 0 if unknown
-/// @param banbadword  don't include badword in suggestions
-/// @param need_cap  word should start with capital
-static void spell_find_suggest(char *badptr, int badlen, suginfo_T *su, int maxcount,
-                               bool banbadword, bool need_cap, bool interactive)
-{
-  hlf_T attr = HLF_COUNT;
-  char buf[MAXPATHL];
-  bool do_combine = false;
-  static bool expr_busy = false;
-  bool did_intern = false;
-
-  // Set the info in "*su".
-  CLEAR_POINTER(su);
-  ga_init(&su->su_ga, (int)sizeof(suggest_T), 10);
-  ga_init(&su->su_sga, (int)sizeof(suggest_T), 10);
-  if (*badptr == NUL) {
-    return;
-  }
-  hash_init(&su->su_banned);
-
-  su->su_badptr = badptr;
-  if (badlen != 0) {
-    su->su_badlen = badlen;
-  } else {
-    size_t tmplen = spell_check(curwin, su->su_badptr, &attr, NULL, false);
-    assert(tmplen <= INT_MAX);
-    su->su_badlen = (int)tmplen;
-  }
-  su->su_maxcount = maxcount;
-  su->su_maxscore = SCORE_MAXINIT;
-  su->su_badlen = MIN(su->su_badlen, MAXWLEN - 1);  // just in case
-  xmemcpyz(su->su_badword, su->su_badptr, (size_t)su->su_badlen);
-  spell_casefold(curwin, su->su_badptr, su->su_badlen, su->su_fbadword,
-                 MAXWLEN);
-
-  // TODO(vim): make this work if the case-folded text is longer than the
-  // original text. Currently an illegal byte causes wrong pointer
-  // computations.
-  su->su_fbadword[su->su_badlen] = NUL;
-
-  // get caps flags for bad word
-  su->su_badflags = badword_captype(su->su_badptr,
-                                    su->su_badptr + su->su_badlen);
-  if (need_cap) {
-    su->su_badflags |= WF_ONECAP;
-  }
-
-  // Find the default language for sound folding.  We simply use the first
-  // one in 'spelllang' that supports sound folding.  That's good for when
-  // using multiple files for one language, it's not that bad when mixing
-  // languages (e.g., "pl,en").
-  for (int i = 0; i < curbuf->b_s.b_langp.ga_len; i++) {
-    langp_T *lp = LANGP_ENTRY(curbuf->b_s.b_langp, i);
-    if (lp->lp_sallang != NULL) {
-      su->su_sallang = lp->lp_sallang;
-      break;
-    }
-  }
-
-  // Soundfold the bad word with the default sound folding, so that we don't
-  // have to do this many times.
-  if (su->su_sallang != NULL) {
-    spell_soundfold(su->su_sallang, su->su_fbadword, true,
-                    su->su_sal_badword);
-  }
-
-  // If the word is not capitalised and spell_check() doesn't consider the
-  // word to be bad then it might need to be capitalised.  Add a suggestion
-  // for that.
-  int c = utf_ptr2char(su->su_badptr);
-  if (!SPELL_ISUPPER(c) && attr == HLF_COUNT) {
-    make_case_word(su->su_badword, buf, WF_ONECAP);
-    rs_add_suggestion(su, &su->su_ga, buf, su->su_badlen, SCORE_ICASE,
-                      0, true, su->su_sallang, false);
-  }
-
-  // Ban the bad word itself.  It may appear in another region.
-  if (banbadword) {
-    rs_add_banned(su, su->su_badword);
-  }
-
-  // Make a copy of 'spellsuggest', because the expression may change it.
-  char *sps_copy = xstrdup(p_sps);
-
-  // Loop over the items in 'spellsuggest'.
-  for (char *p = sps_copy; *p != NUL;) {
-    copy_option_part(&p, buf, MAXPATHL, ",");
-
-    if (strncmp(buf, "expr:", 5) == 0) {
-      // Evaluate an expression.  Skip this when called recursively,
-      // when using spellsuggest() in the expression.
-      if (!expr_busy) {
-        expr_busy = true;
-        spell_suggest_expr(su, buf + 5);
-        expr_busy = false;
-      }
-    } else if (strncmp(buf, "file:", 5) == 0) {
-      // Use list of suggestions in a file.
-      rs_spell_suggest_file(su, buf + 5);
-    } else if (strncmp(buf, "timeout:", 8) == 0) {
-      // Limit the time searching for suggestions.
-      spell_suggest_timeout = atoi(buf + 8);
-    } else if (!did_intern) {
-      // Use internal method once.
-      rs_spell_suggest_intern(su, interactive);
-      if (sps_flags & SPS_DOUBLE) {
-        do_combine = true;
-      }
-      did_intern = true;
-    }
-  }
-
-  xfree(sps_copy);
-
-  if (do_combine) {
-    // Combine the two list of suggestions.  This must be done last,
-    // because sorting changes the order again.
-    rs_score_combine_lists(su);
-  }
-}
-
-/// Find suggestions by evaluating expression "expr".
-static void spell_suggest_expr(suginfo_T *su, char *expr)
-{
-  const char *p;
-
-  // The work is split up in a few parts to avoid having to export
-  // suginfo_T.
-  // First evaluate the expression and get the resulting list.
-  list_T *const list = eval_spell_expr(su->su_badword, expr);
-  if (list != NULL) {
-    // Loop over the items in the list.
-    TV_LIST_ITER(list, li, {
-      if (TV_LIST_ITEM_TV(li)->v_type == VAR_LIST) {
-        // Get the word and the score from the items.
-        int score = get_spellword(TV_LIST_ITEM_TV(li)->vval.v_list, &p);
-        if (score >= 0 && score <= su->su_maxscore) {
-          rs_add_suggestion(su, &su->su_ga, p, su->su_badlen,
-                            score, 0, true, su->su_sallang, false);
-        }
-      }
-    });
-    tv_list_unref(list);
-  }
-
-  // Remove bogus suggestions, sort and truncate at "maxcount".
-  rs_check_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len, su->su_badptr);
-  rs_cleanup_suggestions((suggest_T *)su->su_ga.ga_data, &su->su_ga.ga_len,
-                         su->su_maxscore, su->su_maxcount);
-}
 
 

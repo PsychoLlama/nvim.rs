@@ -5859,6 +5859,257 @@ pub unsafe extern "C" fn rs_spell_find_cleanup(su: *mut std::ffi::c_void) {
 }
 
 // =============================================================================
+// Phase 8: spell_find_suggest + spell_suggest_expr (migrated from C)
+// =============================================================================
+
+// Guard to prevent recursive calls from spellsuggest() VimL expression
+static SPELL_EXPR_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+extern "C" {
+    // Accessor for curbuf->b_s.b_langp
+    fn nvim_curbuf_get_b_langp() -> *const crate::GArrayRaw;
+    // Accessor for p_sps option string
+    fn nvim_get_p_sps() -> *const c_char;
+    // Wrapper for copy_option_part(pp, buf, maxlen, sep_chars)
+    fn nvim_copy_option_part(
+        pp: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *mut c_char,
+    ) -> usize;
+    // Set spell_suggest_timeout C global
+    fn nvim_spellsug_set_timeout(t: c_int);
+    // C helper: evaluate VimL expr and add suggestions (handles list iteration)
+    fn nvim_spell_suggest_expr_eval(su: *mut std::ffi::c_void, expr: *mut c_char);
+    // xmemcpyz: copy len bytes from src to dst and append NUL
+    #[link_name = "xmemcpyz"]
+    fn xmemcpyz_suggest(dst: *mut std::ffi::c_void, src: *const std::ffi::c_void, len: usize);
+    // xstrdup
+    #[link_name = "xstrdup"]
+    fn find_xstrdup(s: *const c_char) -> *mut c_char;
+    // xfree
+    #[link_name = "xfree"]
+    fn find_xfree(ptr: *mut std::ffi::c_void);
+    // spell_casefold(wp, str, len, buf, buflen) -> int
+    fn spell_casefold(
+        wp: *const std::ffi::c_void,
+        str_: *const c_char,
+        len: c_int,
+        buf: *mut c_char,
+        buflen: c_int,
+    ) -> c_int;
+    // hash_init
+    #[link_name = "hash_init"]
+    fn find_hash_init(ht: *mut crate::HashtabRaw);
+    // Clear the suginfo_T struct
+    fn nvim_suginfo_clear(su: *mut std::ffi::c_void);
+    // Write accessors for suginfo_T fields
+    fn nvim_suginfo_set_badptr(su: *mut std::ffi::c_void, ptr: *mut c_char);
+    fn nvim_suginfo_set_badlen(su: *mut std::ffi::c_void, len: c_int);
+    fn nvim_suginfo_set_maxcount(su: *mut std::ffi::c_void, count: c_int);
+    fn nvim_suginfo_set_sallang(su: *mut std::ffi::c_void, sallang: *mut std::ffi::c_void);
+}
+
+/// Rust implementation of C `spell_find_suggest`.
+///
+/// Finds spell suggestions for the word at the start of "badptr".
+/// Fills su->su_ga with results; caller must call rs_spell_find_cleanup when done.
+///
+/// # Safety
+/// - `badptr` must be a valid null-terminated C string.
+/// - `su` must be a valid pointer to a stack-allocated suginfo_T.
+///
+/// # Panics
+/// Panics if the bad word length from `spell_check` exceeds `i32::MAX`.
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_spell_find_suggest(
+    badptr: *mut c_char,
+    badlen: c_int,
+    su: *mut std::ffi::c_void,
+    maxcount: c_int,
+    banbadword: bool,
+    need_cap: bool,
+    interactive: bool,
+) {
+    const MAXPATHL: usize = 4096;
+    const NUL: u8 = 0;
+    const WF_ONECAP_LOCAL: c_int = 0x02;
+
+    // Clear the suginfo_T struct (CLEAR_POINTER equivalent)
+    nvim_suginfo_clear(su);
+
+    // Initialize garrays
+    ga_init_suggest(
+        nvim_suginfo_get_ga(su),
+        std::mem::size_of::<CSuggestT>() as c_int,
+        10,
+    );
+    ga_init_suggest(
+        nvim_suginfo_get_sga(su),
+        std::mem::size_of::<CSuggestT>() as c_int,
+        10,
+    );
+
+    // Bail if bad word is empty
+    if *(badptr as *const u8) == NUL {
+        return;
+    }
+
+    find_hash_init(nvim_suginfo_get_banned(su));
+    nvim_suginfo_set_badptr(su, badptr);
+
+    // Determine bad word length
+    let attr_hlf_count = nvim_hlf_count();
+    let (actual_badlen, attr_from_spell_check) = if badlen != 0 {
+        (badlen, attr_hlf_count)
+    } else {
+        let mut attr = attr_hlf_count;
+        let tmplen = spell_check(
+            stp_sal_curwin,
+            badptr,
+            &raw mut attr,
+            std::ptr::null_mut(),
+            false,
+        );
+        (c_int::try_from(tmplen).unwrap_or(c_int::MAX), attr)
+    };
+
+    let clamped_badlen = actual_badlen.min(MAXWLEN as c_int - 1);
+    nvim_suginfo_set_badlen(su, clamped_badlen);
+    nvim_suginfo_set_maxcount(su, maxcount);
+    nvim_suginfo_set_maxscore(su, SCORE_MAXINIT);
+
+    let su_badlen = nvim_suginfo_get_badlen(su);
+    let su_badptr = nvim_suginfo_get_badptr(su);
+    let su_badword = nvim_suginfo_get_badword(su);
+
+    // Copy bad word (truncated at badlen)
+    xmemcpyz_suggest(
+        su_badword.cast::<std::ffi::c_void>().cast_mut(),
+        su_badptr.cast::<std::ffi::c_void>(),
+        su_badlen as usize,
+    );
+
+    // Case-fold the bad word
+    let su_fbadword = nvim_suginfo_get_fbadword(su);
+    spell_casefold(
+        stp_sal_curwin,
+        su_badptr,
+        su_badlen,
+        su_fbadword.cast_mut(),
+        MAXWLEN as c_int,
+    );
+    // Truncate fbadword at badlen (handles illegal bytes with different folded len)
+    *su_fbadword.add(su_badlen as usize).cast_mut() = 0i8;
+
+    // Get caps flags for bad word
+    let mut badflags = rs_badword_captype(su_badptr, su_badptr.add(su_badlen as usize));
+    if need_cap {
+        badflags |= WF_ONECAP_LOCAL;
+    }
+    nvim_suginfo_set_badflags(su, badflags);
+
+    // Find default language for sound folding from curbuf->b_s.b_langp
+    let langp_ga = nvim_curbuf_get_b_langp();
+    let langp_len = (*langp_ga).ga_len;
+    for i in 0..langp_len {
+        let lp = crate::langp_entry(langp_ga, i);
+        if !(*lp).lp_sallang.is_null() {
+            nvim_suginfo_set_sallang(su, (*lp).lp_sallang.cast());
+            break;
+        }
+    }
+
+    // Soundfold the bad word with the default sound folding
+    let su_sallang = nvim_suginfo_get_sallang(su);
+    if !su_sallang.is_null() {
+        let su_sal_badword = nvim_suginfo_get_sal_badword(su);
+        crate::rs_spell_soundfold(
+            su_sallang.cast::<crate::SlangRaw>(),
+            su_fbadword.cast_mut(),
+            true,
+            su_sal_badword.cast_mut(),
+        );
+    }
+
+    // If word is not capitalised and spell_check doesn't consider it bad,
+    // add a suggestion to capitalise it.
+    let c = utf_ptr2char(su_badptr);
+    if !crate::spell_isupper(c) && attr_from_spell_check == attr_hlf_count {
+        let mut cap_buf = [0i8; MAXWLEN + 2];
+        crate::rs_make_case_word(su_badword, cap_buf.as_mut_ptr(), WF_ONECAP_LOCAL);
+        let su_ga = nvim_suginfo_get_ga(su);
+        rs_add_suggestion(
+            su,
+            su_ga,
+            cap_buf.as_ptr(),
+            su_badlen,
+            SCORES.icase,
+            0,
+            true,
+            su_sallang
+                .cast::<crate::SlangRaw>()
+                .cast::<std::ffi::c_void>(),
+            false,
+        );
+    }
+
+    // Ban the bad word itself (it may appear in another region)
+    if banbadword {
+        rs_add_banned(su, su_badword.cast_mut());
+    }
+
+    // Make a copy of 'spellsuggest', because the expression may change it
+    let p_sps = nvim_get_p_sps();
+    let sps_copy = find_xstrdup(p_sps);
+    let mut did_intern = false;
+    let mut do_combine = false;
+    let mut p = sps_copy;
+
+    while *(p as *const u8) != NUL {
+        let mut buf = [0i8; MAXPATHL];
+        nvim_copy_option_part(
+            &raw mut p,
+            buf.as_mut_ptr(),
+            MAXPATHL,
+            c",".as_ptr().cast_mut(),
+        );
+
+        // Check prefixes using safe byte comparison
+        let buf_u8 = std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), MAXPATHL);
+        let buf_len = buf_u8.iter().position(|&b| b == 0).unwrap_or(MAXPATHL);
+        let buf_str = &buf_u8[..buf_len];
+
+        if buf_str.starts_with(b"expr:") {
+            // Evaluate expression; skip if called recursively
+            if !SPELL_EXPR_BUSY.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                nvim_spell_suggest_expr_eval(su, buf.as_mut_ptr().add(5));
+                SPELL_EXPR_BUSY.store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+        } else if buf_str.starts_with(b"file:") {
+            rs_spell_suggest_file(su, buf.as_mut_ptr().add(5));
+        } else if buf_str.starts_with(b"timeout:") {
+            // Parse integer after "timeout:"
+            let timeout_val = libc::atoi(buf.as_ptr().add(8));
+            nvim_spellsug_set_timeout(timeout_val);
+        } else if !did_intern {
+            rs_spell_suggest_intern(su, interactive);
+            if nvim_spellsug_get_sps_flags() & SPS_DOUBLE != 0 {
+                do_combine = true;
+            }
+            did_intern = true;
+        }
+    }
+
+    find_xfree(sps_copy.cast::<std::ffi::c_void>());
+
+    if do_combine {
+        rs_score_combine_lists(su);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
