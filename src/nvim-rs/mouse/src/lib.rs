@@ -1424,8 +1424,8 @@ extern "C" {
     /// Get `GridView::col_offset` from a `GridView*`.
     fn nvim_gridview_get_col_offset(view: *mut std::ffi::c_void) -> c_int;
 
-    /// Get `msg_silent` global.
-    fn nvim_get_msg_silent() -> c_int;
+    /// `msg_silent` global — direct static access.
+    static mut msg_silent: c_int;
 
     /// Set `redraw_cmdline = true`.
     fn nvim_set_redraw_cmdline(val: bool);
@@ -2395,7 +2395,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
         nvim_set_VIsual_reselect(true);
         rs_may_start_select(c_int::from(b'o'));
         setmouse_global();
-        if p_smd != 0 && nvim_get_msg_silent() == 0 {
+        if p_smd != 0 && msg_silent == 0 {
             nvim_set_redraw_cmdline(true); // show visual mode later
         }
     }

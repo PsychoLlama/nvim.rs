@@ -103,7 +103,7 @@ extern int msg_grid_pos_at_flush;  // owned by Rust (misc.rs)
 
 extern int64_t msg_id_next;  // owned by Rust (display.rs)
 
-static void ui_ext_msg_set_pos(int row, bool scrolled)
+void nvim_ui_ext_msg_set_pos(int row, bool scrolled)
 {
   char buf[MAX_SCHAR_SIZE];
   size_t size = schar_get(buf, curwin->w_p_fcs_chars.msgsep);
@@ -123,7 +123,7 @@ extern int rs_emsg_not_now(void);
 extern char *rs_msg_show_console_dialog(const char *message, const char *buttons, int dfltbutton);
 
 // Forward declarations (non-static functions accessible from Rust via extern "C")
-void msg_puts_printf(const char *str, ptrdiff_t maxlen);
+void msg_puts_printf(const char *str, ptrdiff_t maxlen);  // defined in Rust (output.rs) with #[export_name]
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);  // defined in Rust (output.rs) with #[export_name]
 void hit_return_msg(bool newline_sb);  // defined in Rust (misc.rs) with #[export_name]
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
@@ -135,7 +135,7 @@ msgchunk_T *msg_sb_start(msgchunk_T *mps);
 void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb_col, int finish);
 void inc_msg_scrolled(void);
 
-void nvim_msg_set_pos_for_scroll(int pos, bool scrolled) { ui_ext_msg_set_pos(pos, scrolled); }
+// nvim_msg_set_pos_for_scroll migrated to Rust (misc.rs) — calls nvim_ui_ext_msg_set_pos
 
 // nvim_msg_show_empty() migrated to Rust (display.rs) with #[export_name]
 
@@ -702,53 +702,8 @@ void msg_prt_line(const char *s, bool list)
 
 // msg_sb_start() migrated to Rust: src/nvim-rs/message/src/chunk.rs (rs_msg_sb_start)
 
-/// Print a message when there is no valid screen.
-void msg_puts_printf(const char *str, const ptrdiff_t maxlen)
-{
-  const char *s = str;
-  char buf[7];
-  char *p;
-
-  if (on_print.type != kCallbackNone) {
-    typval_T argv[1];
-    argv[0].v_type = VAR_STRING;
-    argv[0].v_lock = VAR_UNLOCKED;
-    argv[0].vval.v_string = (char *)str;
-    typval_T rettv = TV_INITIAL_VALUE;
-    callback_call(&on_print, 1, argv, &rettv);
-    tv_clear(&rettv);
-    return;
-  }
-
-  while ((maxlen < 0 || s - str < maxlen) && *s != NUL) {
-    int len = utf_ptr2len(s);
-    if (!(silent_mode && p_verbose == 0)) {
-      // NL --> CR NL translation (for Unix, not for "--version")
-      p = &buf[0];
-      if (*s == '\n' && !info_message) {
-        *p++ = '\r';
-      }
-      memcpy(p, s, (size_t)len);
-      *(p + len) = NUL;
-      if (info_message) {
-        printf("%s", buf);
-      } else {
-        fprintf(stderr, "%s", buf);
-      }
-    }
-
-    int cw = utf_char2cells(utf_ptr2char(s));
-    // primitive way to compute the current column
-    if (*s == '\r' || *s == '\n') {
-      msg_col = 0;
-      msg_didout = false;
-    } else {
-      msg_col += cw;
-      msg_didout = true;
-    }
-    s += len;
-  }
-}
+// msg_puts_printf migrated to Rust (output.rs) with #[export_name = "msg_puts_printf"]
+// C helpers: nvim_on_print_active, nvim_on_print_call (see below)
 
 // do_more_prompt migrated to Rust (scrollback.rs) with #[export_name]
 // DELETED: static bool do_more_prompt(int typed_char) {
@@ -781,14 +736,26 @@ void swmsg(bool hl, const char *const fmt, ...)
 // display_confirm_msg, vim_dialog_yesno, vim_dialog_yesnocancel, vim_dialog_yesnoallcancel
 // migrated to Rust (dialog.rs)
 
-/// Get msg_col global (for Rust FFI).
-int nvim_get_msg_col(void) { return msg_col; }
+// nvim_get_msg_col, nvim_set_msg_col, nvim_get_msg_silent, nvim_set_msg_silent removed:
+// Rust callers now access msg_col and msg_silent directly as extern statics.
 
-/// Set msg_col global (for Rust FFI).
-void nvim_set_msg_col(int val) { msg_col = val; }
+/// Check if on_print callback is active (for Rust FFI).
+int nvim_on_print_active(void) { return on_print.type != kCallbackNone; }
 
-/// Get msg_silent global (for Rust FFI).
-int nvim_get_msg_silent(void) { return msg_silent; }
+/// Call the on_print callback with a string (for Rust FFI).
+void nvim_on_print_call(const char *str)
+{
+  typval_T argv[1];
+  argv[0].v_type = VAR_STRING;
+  argv[0].v_lock = VAR_UNLOCKED;
+  argv[0].vval.v_string = (char *)str;
+  typval_T rettv = TV_INITIAL_VALUE;
+  callback_call(&on_print, 1, argv, &rettv);
+  tv_clear(&rettv);
+}
 
-/// Set msg_silent global (for Rust FFI).
-void nvim_set_msg_silent(int val) { msg_silent = val; }
+/// stdout printf helper for Rust FFI (avoids Rust depending on libc directly).
+void nvim_printf_stdout(const char *s) { printf("%s", s); }
+
+/// stderr fprintf helper for Rust FFI (avoids Rust depending on libc directly).
+void nvim_fprintf_stderr(const char *s) { fprintf(stderr, "%s", s); }

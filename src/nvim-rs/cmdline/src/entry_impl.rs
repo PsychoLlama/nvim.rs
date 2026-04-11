@@ -397,11 +397,9 @@ unsafe extern "C" fn command_line_execute_trampoline(
 // =============================================================================
 
 unsafe extern "C" {
-    // msg_col / msg_silent accessors
-    fn nvim_get_msg_col() -> c_int;
-    fn nvim_set_msg_col(val: c_int);
-    fn nvim_get_msg_silent() -> c_int;
-    fn nvim_set_msg_silent(val: c_int);
+    // msg_col / msg_silent — direct static access
+    static mut msg_col: c_int;
+    static mut msg_silent: c_int;
     fn nvim_set_cmd_silent(val: c_int);
 
     // ccline field setters for prompt
@@ -436,7 +434,7 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     one_key: c_int,
     mouse_used: *mut bool,
 ) -> *mut c_char {
-    let msg_col_save = nvim_get_msg_col();
+    let msg_col_save = msg_col;
 
     // Save ccline if in use (8-byte-aligned storage for CmdlineInfo)
     let mut save_ccline_buf = CmdlineInfoStorage::new();
@@ -463,8 +461,8 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     nvim_apply_pending_hl_callback();
 
     let cmd_silent_saved = nvim_get_cmd_silent();
-    let msg_silent_saved = nvim_get_msg_silent();
-    nvim_set_msg_silent(0);
+    let msg_silent_saved = msg_silent;
+    msg_silent = 0;
     nvim_set_cmd_silent(0); // Want to see the prompt
 
     // Call command_line_enter with clear_ccline=false (0)
@@ -476,12 +474,12 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
         nvim_ccline_restore(save_ccline_ptr);
     }
 
-    nvim_set_msg_silent(msg_silent_saved);
+    msg_silent = msg_silent_saved;
     nvim_set_cmd_silent(cmd_silent_saved);
 
     // Restore msg_col only if we're in a recursive cmdline
     if !nvim_get_ccline_cmdbuff().is_null() {
-        nvim_set_msg_col(msg_col_save);
+        msg_col = msg_col_save;
     }
 
     ret.cast::<c_char>()

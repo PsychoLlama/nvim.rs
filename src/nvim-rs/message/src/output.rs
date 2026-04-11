@@ -376,11 +376,21 @@ extern "C" {
     fn redir_write(str_: *const std::ffi::c_char, maxlen: isize);
     fn msg_hist_add(s: *const std::ffi::c_char, len: c_int, hl_id: c_int);
     fn msg_use_printf() -> c_int;
-    fn msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
     fn nvim_msg_show_empty();
     static mut headless_mode: bool;
     static mut default_grid: crate::ScreenGrid;
     static mut msg_col: c_int;
+    // C helpers for msg_puts_printf on_print callback
+    fn nvim_on_print_active() -> c_int;
+    fn nvim_on_print_call(str_: *const std::ffi::c_char);
+    // For msg_puts_printf
+    fn utf_ptr2len(s: *const std::ffi::c_char) -> c_int;
+    fn utf_char2cells(c: c_int) -> c_int;
+    fn utf_ptr2char(s: *const std::ffi::c_char) -> c_int;
+    static mut silent_mode: bool;
+    static p_verbose: i64;
+    static mut info_message: bool;
+    // msg_didout already declared above
 }
 
 // ============================================================================
@@ -494,7 +504,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
 
     if msg_use_printf() != 0 {
         let saved_msg_col = msg_col;
-        msg_puts_printf(str_, len);
+        rs_msg_puts_printf(str_, len);
         if headless_mode {
             msg_col = saved_msg_col;
         }
@@ -788,6 +798,70 @@ const unsafe fn mpd_strnlen(s: *const std::ffi::c_char, max: usize) -> usize {
         len += 1;
     }
     len
+}
+
+// ============================================================================
+// Phase 1: msg_puts_printf migrated to Rust
+// ============================================================================
+
+/// Print a message when there is no valid screen.
+///
+/// This is called when `msg_use_printf()` is true (no grid/UI available).
+/// Handles the `on_print` callback for embedded/headless mode, and outputs
+/// to stderr or stdout depending on `info_message`.
+///
+/// # Safety
+/// - `str_` must be a valid pointer to at least `maxlen` bytes (or NUL-terminated if maxlen < 0)
+#[export_name = "msg_puts_printf"]
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_msg_puts_printf(str_: *const std::ffi::c_char, maxlen: isize) {
+    if nvim_on_print_active() != 0 {
+        nvim_on_print_call(str_);
+        return;
+    }
+
+    let mut s = str_;
+    while (maxlen < 0 || (s as isize - str_ as isize) < maxlen) && *s != 0 {
+        let len = utf_ptr2len(s);
+
+        if !(silent_mode && p_verbose == 0) {
+            // NL -> CR NL translation (for Unix, not for "--version")
+            let mut buf = [0u8; 8];
+            let mut p_idx = 0usize;
+            if *s == b'\n' as i8 && !info_message {
+                buf[p_idx] = b'\r';
+                p_idx += 1;
+            }
+            let slice = std::slice::from_raw_parts(s.cast::<u8>(), len as usize);
+            buf[p_idx..p_idx + len as usize].copy_from_slice(slice);
+            buf[p_idx + len as usize] = 0;
+
+            let buf_ptr = buf.as_ptr().cast::<std::ffi::c_char>();
+            if info_message {
+                libc_printf(buf_ptr);
+            } else {
+                libc_fprintf_stderr(buf_ptr);
+            }
+        }
+
+        let cw = utf_char2cells(utf_ptr2char(s));
+        if *s == b'\r' as i8 || *s == b'\n' as i8 {
+            msg_col = 0;
+            msg_didout = false;
+        } else {
+            msg_col += cw;
+            msg_didout = true;
+        }
+        s = s.add(len as usize);
+    }
+}
+
+// Thin C-callable wrappers for stdio (avoids linking against libc directly).
+extern "C" {
+    #[link_name = "nvim_printf_stdout"]
+    fn libc_printf(s: *const std::ffi::c_char);
+    #[link_name = "nvim_fprintf_stderr"]
+    fn libc_fprintf_stderr(s: *const std::ffi::c_char);
 }
 
 #[cfg(test)]
