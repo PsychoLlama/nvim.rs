@@ -436,6 +436,135 @@ pub unsafe extern "C" fn rs_handle_restart_edit_cursor() -> c_int {
 }
 
 // ============================================================================
+// nvim_edit_init_prompt_impl -- Phase 3
+// ============================================================================
+
+extern "C" {
+    // Phase 3: init_prompt_impl dependencies (not already declared above)
+    fn nvim_ml_replace(lnum: LinenrT, line: *const std::ffi::c_char, copy: bool) -> c_int;
+    fn nvim_ml_append(
+        lnum: LinenrT,
+        line: *const std::ffi::c_char,
+        len: c_int,
+        newfile: bool,
+    ) -> c_int;
+    fn nvim_curbuf_get_b_prompt_start_lnum() -> LinenrT;
+    fn nvim_curbuf_inc_prompt_start_lnum();
+    fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
+    fn nvim_curwin_set_cursor_lnum_to_line_count();
+    fn nvim_coladvance(col: ColnrT);
+    fn nvim_inserted_bytes_prompt(lnum: LinenrT, new_col: ColnrT);
+    fn nvim_get_Insstart_orig_lnum() -> LinenrT;
+    fn nvim_get_Insstart_orig_col() -> ColnrT;
+    fn nvim_set_Insstart(lnum: LinenrT, col: ColnrT);
+    fn nvim_set_Insstart_orig(lnum: LinenrT, col: ColnrT);
+    fn nvim_set_Insstart_textlen(val: ColnrT);
+    fn nvim_set_Insstart_blank_vcol(val: ColnrT);
+    fn nvim_check_cursor_curwin();
+}
+
+/// Maximum column value (from pos_defs.h).
+const MAXCOL: ColnrT = 0x7fff_ffff;
+
+/// Compute byte length of a NUL-terminated C string.
+unsafe fn c_strlen_bytes(s: *const std::ffi::c_char) -> usize {
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Prepare the prompt buffer for insert mode.
+///
+/// Ensures the last line has prompt text and positions the cursor.
+/// Called from the insert mode entry path when editing a prompt buffer.
+///
+/// # Safety
+/// Accesses multiple global variables (curwin, curbuf, Insstart*) via C accessors.
+unsafe fn init_prompt_impl(cmdchar_todo: c_int) {
+    // prompt_text() is implemented in Rust (lib.rs).
+    let prompt = crate::rs_prompt_text();
+    if prompt.is_null() {
+        return;
+    }
+    let prompt_len = c_strlen_bytes(prompt) as ColnrT;
+
+    let prompt_start_lnum = nvim_curbuf_get_b_prompt_start_lnum();
+    let cursor_lnum = nvim_curwin_get_cursor_lnum();
+
+    // Ensure cursor is at or after prompt start line.
+    if cursor_lnum < prompt_start_lnum {
+        nvim_curwin_set_cursor_lnum(prompt_start_lnum);
+    }
+
+    let text = nvim_get_cursor_line_ptr();
+    let cursor_lnum = nvim_curwin_get_cursor_lnum(); // re-read after potential update
+
+    let need_insert = if prompt_start_lnum == cursor_lnum {
+        // Prompt start is on cursor line: check if prompt text matches
+        let text_slice =
+            std::slice::from_raw_parts(text.cast::<u8>(), prompt_len as usize);
+        let prompt_slice =
+            std::slice::from_raw_parts(prompt.cast::<u8>(), prompt_len as usize);
+        text_slice != prompt_slice
+    } else {
+        prompt_start_lnum > cursor_lnum
+    };
+
+    if need_insert {
+        let line_count = nvim_get_curbuf_ml_line_count();
+        if *text == 0 {
+            // Empty line: replace it with the prompt
+            nvim_ml_replace(line_count, prompt, true);
+        } else {
+            // Non-empty line: append a new line with the prompt
+            nvim_ml_append(line_count, prompt, 0, false);
+            nvim_curbuf_inc_prompt_start_lnum();
+        }
+        nvim_curwin_set_cursor_lnum_to_line_count();
+        nvim_coladvance(MAXCOL);
+        let new_line_count = nvim_get_curbuf_ml_line_count();
+        nvim_inserted_bytes_prompt(new_line_count, prompt_len);
+    }
+
+    // Update Insstart / Insstart_orig if needed.
+    let prompt_start_lnum = nvim_curbuf_get_b_prompt_start_lnum();
+    if nvim_get_Insstart_orig_lnum() != prompt_start_lnum
+        || nvim_get_Insstart_orig_col() != prompt_len
+    {
+        nvim_set_Insstart(prompt_start_lnum, prompt_len);
+        nvim_set_Insstart_orig(prompt_start_lnum, prompt_len);
+        nvim_set_Insstart_textlen(prompt_len);
+        nvim_set_Insstart_blank_vcol(MAXCOL);
+        nvim_set_arrow_used(0);
+    }
+
+    if cmdchar_todo == c_int::from(b'A') {
+        nvim_coladvance(MAXCOL);
+    }
+
+    let cursor_lnum = nvim_curwin_get_cursor_lnum();
+    let prompt_start_lnum = nvim_curbuf_get_b_prompt_start_lnum();
+    if prompt_start_lnum == cursor_lnum {
+        let cursor_col = nvim_curwin_get_cursor_col();
+        let new_col = cursor_col.max(prompt_len);
+        nvim_curwin_set_cursor_col(new_col);
+    }
+
+    nvim_check_cursor_curwin();
+}
+
+/// Exported as `nvim_edit_init_prompt_impl` (replaces C function).
+///
+/// # Safety
+/// Accesses global state via C accessor functions.
+#[unsafe(export_name = "nvim_edit_init_prompt_impl")]
+pub unsafe extern "C" fn rs_init_prompt_impl(cmdchar_todo: c_int) {
+    init_prompt_impl(cmdchar_todo);
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

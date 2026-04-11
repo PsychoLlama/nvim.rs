@@ -687,3 +687,20 @@ int nvim_edit_utf_head_off_cursor_col(int col)
 
 /// Call curs_columns(curwin, false) -- recompute w_wrow and w_wcol.
 void nvim_curs_columns_curwin_no_scroll(void) { curs_columns(curwin, false); }
+
+// ---- Phase 3 accessors: nvim_edit_init_prompt_impl ----
+
+/// Increment curbuf->b_prompt_start.mark.lnum by 1.
+void nvim_curbuf_inc_prompt_start_lnum(void) { curbuf->b_prompt_start.mark.lnum++; }
+
+/// Set curwin->w_cursor.lnum to curbuf->b_ml.ml_line_count.
+void nvim_curwin_set_cursor_lnum_to_line_count(void)
+{
+  curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
+}
+
+/// Call inserted_bytes(lnum, 0, 0, new_col) for prompt text insertion.
+void nvim_inserted_bytes_prompt(linenr_T lnum, colnr_T new_col)
+{
+  inserted_bytes(lnum, 0, 0, new_col);
+}

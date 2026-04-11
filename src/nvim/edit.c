@@ -261,46 +261,8 @@ extern int nvim_edit_handle_restart_edit_cursor(void);
 /// Set Insstart_orig to Insstart (accessor for Rust state_machine).
 void nvim_set_Insstart_orig_from_Insstart(void) { Insstart_orig = Insstart; }
 
-/// Composite: prepare prompt buffer for insert mode (for Rust redraw.rs).
-/// Ensures the last line has prompt text and positions the cursor.
-void nvim_edit_init_prompt_impl(int cmdchar_todo)
-{
-  char *prompt = prompt_text();
-
-  if (curwin->w_cursor.lnum < curbuf->b_prompt_start.mark.lnum) {
-    curwin->w_cursor.lnum = curbuf->b_prompt_start.mark.lnum;
-  }
-  char *text = get_cursor_line_ptr();
-  if ((curbuf->b_prompt_start.mark.lnum == curwin->w_cursor.lnum
-       && strncmp(text, prompt, strlen(prompt)) != 0)
-      || curbuf->b_prompt_start.mark.lnum > curwin->w_cursor.lnum) {
-    if (*text == NUL) {
-      ml_replace(curbuf->b_ml.ml_line_count, prompt, true);
-    } else {
-      ml_append(curbuf->b_ml.ml_line_count, prompt, 0, false);
-      curbuf->b_prompt_start.mark.lnum += 1;
-    }
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-    coladvance(curwin, MAXCOL);
-    inserted_bytes(curbuf->b_ml.ml_line_count, 0, 0, (colnr_T)strlen(prompt));
-  }
-  if (Insstart_orig.lnum != curbuf->b_prompt_start.mark.lnum
-      || Insstart_orig.col != (colnr_T)strlen(prompt)) {
-    Insstart.lnum = curbuf->b_prompt_start.mark.lnum;
-    Insstart.col = (colnr_T)strlen(prompt);
-    Insstart_orig = Insstart;
-    nvim_set_Insstart_textlen(Insstart.col);
-    nvim_set_Insstart_blank_vcol(MAXCOL);
-    arrow_used = false;
-  }
-  if (cmdchar_todo == 'A') {
-    coladvance(curwin, MAXCOL);
-  }
-  if (curbuf->b_prompt_start.mark.lnum == curwin->w_cursor.lnum) {
-    curwin->w_cursor.col = MAX(curwin->w_cursor.col, (colnr_T)strlen(prompt));
-  }
-  check_cursor(curwin);
-}
+// nvim_edit_init_prompt_impl is implemented in Rust (enter.rs).
+extern void nvim_edit_init_prompt_impl(int cmdchar_todo);
 
 // edit() is implemented in Rust (src/nvim-rs/edit/src/enter.rs).
 // nvim_edit_edit_entry provides the InsertState setup entry point.
