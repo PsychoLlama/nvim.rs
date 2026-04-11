@@ -362,7 +362,7 @@ pub unsafe extern "C" fn rs_free_autoload_scriptnames() {
 ///
 /// Delegates entirely to C since comparing function pointers across FFI is
 /// unreliable.
-#[no_mangle]
+#[unsafe(export_name = "get_sourced_lnum")]
 pub unsafe extern "C" fn rs_get_sourced_lnum(
     fgetline: *mut c_void,
     cookie: *mut c_void,

@@ -274,7 +274,7 @@ unsafe fn get_one_sourceline(cookie: *mut c_void) -> *mut c_char {
 /// # Panics
 /// Panics if `size_of::<c_char>()` does not fit in `c_int` (impossible on all
 /// supported platforms).
-#[no_mangle]
+#[unsafe(export_name = "getsourceline")]
 pub unsafe extern "C" fn rs_getsourceline(
     _c: c_int,
     cookie: *mut c_void,

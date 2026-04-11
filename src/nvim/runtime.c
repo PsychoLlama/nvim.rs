@@ -120,37 +120,8 @@ static int last_current_SID_seq = 0;
 // Rust implementations (still needed by C)
 extern void rs_f_getstacktrace(typval_T *argvars, typval_T *rettv, void *fptr);
 extern char *rs_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free);
-extern linenr_T rs_get_sourced_lnum(void *fgetline, void *cookie);
 extern void *rs_get_script_local_funcs(scid_T sid);
 extern void rs_f_getscriptinfo(void *argvars, void *rettv, void *fptr);
-
-// Phase 2: Rust implementations of source cookie / finish functions
-extern linenr_T *rs_source_breakpoint(void *cookie);
-extern int *rs_source_dbg_tick(void *cookie);
-extern int rs_source_level(void *cookie);
-extern int rs_sourcing_a_script(void *eap);
-extern void rs_ex_scriptencoding(void *eap);
-extern void rs_ex_finish(void *eap);
-extern void rs_do_finish(void *eap, bool reanimate);
-extern bool rs_source_finished(void *fgetline, void *cookie);
-
-// Phase 5: Rust implementations of do_in_path / do_in_cached_path
-extern int rs_do_in_path(const char *path, const char *prefix, char *name, int flags,
-                         DoInRuntimepathCB callback, void *cookie);
-extern int rs_do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie);
-
-// Phase 5 (getsourceline): Rust implementations of sourced-line reading
-extern char *rs_getsourceline(int c, void *cookie, int indent, bool do_concat);
-
-// Phase 4: Rust implementations of sourcing entry points
-extern int rs_do_source_ext(char *fname, bool check_other, int is_vimrc, int *ret_sid,
-                            const void *eap, bool ex_lua, const char *str);
-extern int rs_do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid);
-extern void rs_cmd_source(char *fname, void *eap);
-extern void rs_ex_source(void *eap);
-extern void rs_ex_options(void *eap);
-extern void rs_cmd_source_buffer(const void *eap, bool ex_lua);
-extern int rs_do_source_str(const char *str, char *traceback_name);
 
 // C helpers called by Rust for functions that access static variables.
 // These live here (not in runtime_ffi.c) because ga_loaded is static.
@@ -480,21 +451,6 @@ void nvim_rt_rsp_set_thread_item_has_lua(size_t idx, int val)
 const char *nvim_rt_get_p_rtp(void) { return p_rtp; }
 
 
-/// Find the patterns in "name" in all directories in "path" and invoke
-/// "callback(fname, cookie)".
-/// "prefix" is prepended to each pattern in "name".
-/// When "flags" has DIP_ALL: source all files, otherwise only the first one.
-/// When "flags" has DIP_DIR: find directories instead of files.
-/// When "flags" has DIP_ERR: give an error message if there is no match.
-///
-/// Return FAIL when no file could be sourced, OK otherwise.
-int do_in_path(const char *path, const char *prefix, char *name, int flags,
-               DoInRuntimepathCB callback, void *cookie)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_do_in_path(path, prefix, name, flags, callback, cookie);
-}
-
 static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src)
 {
   RuntimeSearchPath dst = KV_INITIAL_VALUE;
@@ -504,19 +460,6 @@ static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src)
   }
 
   return dst;
-}
-
-/// Find the file "name" in all directories in "path" and invoke
-/// "callback(fname, cookie)".
-/// "name" can contain wildcards.
-/// When "flags" has DIP_ALL: source all files, otherwise only the first one.
-/// When "flags" has DIP_DIR: find directories instead of files.
-/// When "flags" has DIP_ERR: give an error message if there is no match.
-///
-/// return FAIL when no file could be sourced, OK otherwise.
-int do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie)
-{
-  return rs_do_in_cached_path(name, flags, callback, cookie);
 }
 
 Array runtime_inspect(Arena *arena) { return rs_runtime_inspect(arena); }
@@ -670,23 +613,6 @@ static void runtime_search_path_free(RuntimeSearchPath path)
   kv_destroy(path);
 }
 
-/// ":source [{fname}]"
-void ex_source(exarg_T *eap) { rs_ex_source(eap); }
-
-/// ":options"
-void ex_options(exarg_T *eap) { rs_ex_options(eap); }
-
-/// ":source" and associated commands.
-///
-/// @return address holding the next breakpoint line for a source cookie
-linenr_T *source_breakpoint(void *cookie) { return rs_source_breakpoint(cookie); }
-
-/// @return  the address holding the debug tick for a source cookie.
-int *source_dbg_tick(void *cookie) { return rs_source_dbg_tick(cookie); }
-
-/// @return  the nesting level for a source cookie.
-int source_level(void *cookie) { return rs_source_level(cookie); }
-
 // source_cookie_T field accessors (for Rust FFI)
 linenr_T *nvim_rt_cookie_get_breakpoint_ptr(void *cookie) { return &((source_cookie_T *)cookie)->breakpoint; }
 int *nvim_rt_cookie_get_dbg_tick_ptr(void *cookie) { return &((source_cookie_T *)cookie)->dbg_tick; }
@@ -696,29 +622,6 @@ void nvim_rt_cookie_set_finished(void *cookie, bool val) { ((source_cookie_T *)c
 void *nvim_rt_cookie_get_conv(void *cookie) { return &((source_cookie_T *)cookie)->conv; }
 
 
-
-void cmd_source_buffer(const exarg_T *const eap, bool ex_lua) { rs_cmd_source_buffer(eap, ex_lua); }
-
-/// Executes lines in `str` as Ex commands.
-///
-/// @see do_source_ext()
-int do_source_str(const char *str, char *traceback_name) { return rs_do_source_str(str, traceback_name); }
-
-/// @param check_other  check for .vimrc and _vimrc
-/// @param is_vimrc     DOSO_ value
-int do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid)
-{
-  return rs_do_source(fname, check_other, is_vimrc, ret_sid);
-}
-
-/// Checks if the script with the given script ID is a Lua script.
-linenr_T get_sourced_lnum(LineGetter fgetline, void *cookie)
-  FUNC_ATTR_PURE
-{
-  return fgetline == getsourceline
-         ? ((source_cookie_T *)cookie)->sourcing_lnum
-         : SOURCING_LNUM;
-}
 
 /// Get a pointer to a script name.  Used for ":verbose set".
 /// Message appended to "Last set from "
@@ -735,36 +638,4 @@ void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rs_f_getscriptinfo(argvars, rettv, &fptr);
 }
-
-/// Get one full line from a sourced file.
-/// Called by do_cmdline() when it's called from do_source().
-///
-/// @return pointer to the line in allocated memory, or NULL for end-of-file or
-///         some error.
-char *getsourceline(int c, void *cookie, int indent, bool do_concat)
-{
-  return rs_getsourceline(c, cookie, indent, do_concat);
-}
-
-
-/// Returns true if sourcing a script either from a file or a buffer or a string.
-/// Otherwise returns false.
-int sourcing_a_script(exarg_T *eap) { return rs_sourcing_a_script(eap); }
-
-/// ":scriptencoding": Set encoding conversion for a sourced script.
-/// Without the multi-byte feature it's simply ignored.
-void ex_scriptencoding(exarg_T *eap) { rs_ex_scriptencoding(eap); }
-
-/// ":finish": Mark a sourced file as finished.
-void ex_finish(exarg_T *eap) { rs_ex_finish(eap); }
-
-/// Mark a sourced file as finished.  Possibly makes the ":finish" pending.
-/// Also called for a pending finish at the ":endtry" or after returning from
-/// an extra do_cmdline().  "reanimate" is used in the latter case.
-void do_finish(exarg_T *eap, bool reanimate) { rs_do_finish(eap, reanimate); }
-
-/// @return  true when a sourced file had the ":finish" command: Don't give error
-///          message for missing ":endif".
-///          false when not sourcing a file.
-bool source_finished(LineGetter fgetline, void *cookie) { return rs_source_finished(fgetline, cookie); }
 

@@ -91,4 +91,24 @@ int load_pack_plugin(bool opt, char *fname);
 void ex_runtime(exarg_T *eap);
 void set_context_in_runtime_cmd(expand_T *xp, const char *arg);
 
+/// Phase 3: Functions migrated to Rust via export_name (removed from runtime.c)
+int do_in_path(const char *path, const char *prefix, char *name, int flags,
+               DoInRuntimepathCB callback, void *cookie);
+int do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie);
+void ex_source(exarg_T *eap);
+void ex_options(exarg_T *eap);
+linenr_T *source_breakpoint(void *cookie);
+int *source_dbg_tick(void *cookie);
+int source_level(void *cookie);
+void cmd_source_buffer(const exarg_T *eap, bool ex_lua);
+int do_source_str(const char *str, char *traceback_name);
+int do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid);
+linenr_T get_sourced_lnum(LineGetter fgetline, void *cookie);
+char *getsourceline(int c, void *cookie, int indent, bool do_concat);
+int sourcing_a_script(exarg_T *eap);
+void ex_scriptencoding(exarg_T *eap);
+void ex_finish(exarg_T *eap);
+void do_finish(exarg_T *eap, bool reanimate);
+bool source_finished(LineGetter fgetline, void *cookie);
+
 #include "runtime.h.generated.h"

@@ -110,7 +110,7 @@ const OK: c_int = 1;
 ///
 /// # Safety
 /// This function is called from C and manipulates raw pointers.
-#[no_mangle]
+#[unsafe(export_name = "do_in_path")]
 pub unsafe extern "C" fn rs_do_in_path(
     path: *const c_char,
     prefix: *const c_char,
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn rs_do_in_path(
 ///
 /// # Safety
 /// This function is called from C and manipulates raw pointers.
-#[no_mangle]
+#[unsafe(export_name = "do_in_cached_path")]
 pub unsafe extern "C" fn rs_do_in_cached_path(
     name: *mut c_char,
     flags: c_int,

@@ -715,7 +715,7 @@ unsafe fn libc_strlen(s: *const u8) -> usize {
 ///
 /// # Safety
 /// fname must be a valid C string or NULL.
-#[no_mangle]
+#[unsafe(export_name = "do_source")]
 pub unsafe extern "C" fn rs_do_source(
     fname: *mut c_char,
     check_other: bool,
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "ex_source")]
 pub unsafe extern "C" fn rs_ex_source(eap: *mut c_void) {
     rs_cmd_source(nvim_rt_exarg_get_arg(eap), eap);
 }
@@ -780,7 +780,7 @@ pub unsafe extern "C" fn rs_ex_source(eap: *mut c_void) {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "ex_options")]
 pub unsafe extern "C" fn rs_ex_options(eap: *mut c_void) {
     let _ = eap;
     let mut buf = [0u8; 500];
@@ -794,7 +794,7 @@ pub unsafe extern "C" fn rs_ex_options(eap: *mut c_void) {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "cmd_source_buffer")]
 pub unsafe extern "C" fn rs_cmd_source_buffer(eap: *const c_void, ex_lua: bool) {
     rs_do_source_ext(
         ptr::null_mut(),
@@ -811,7 +811,7 @@ pub unsafe extern "C" fn rs_cmd_source_buffer(eap: *const c_void, ex_lua: bool) 
 ///
 /// # Safety
 /// str_arg and traceback_name must be valid C strings.
-#[no_mangle]
+#[unsafe(export_name = "do_source_str")]
 pub unsafe extern "C" fn rs_do_source_str(
     str_arg: *const c_char,
     traceback_name: *mut c_char,

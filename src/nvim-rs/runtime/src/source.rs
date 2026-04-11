@@ -61,7 +61,7 @@ extern "C" {
 ///
 /// # Safety
 /// cookie must be a valid source_cookie_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "source_breakpoint")]
 pub unsafe extern "C" fn rs_source_breakpoint(cookie: *mut c_void) -> *mut LinenrT {
     nvim_rt_cookie_get_breakpoint_ptr(cookie)
 }
@@ -70,7 +70,7 @@ pub unsafe extern "C" fn rs_source_breakpoint(cookie: *mut c_void) -> *mut Linen
 ///
 /// # Safety
 /// cookie must be a valid source_cookie_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "source_dbg_tick")]
 pub unsafe extern "C" fn rs_source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
     nvim_rt_cookie_get_dbg_tick_ptr(cookie)
 }
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn rs_source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
 ///
 /// # Safety
 /// cookie must be a valid source_cookie_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "source_level")]
 pub unsafe extern "C" fn rs_source_level(cookie: *mut c_void) -> c_int {
     nvim_rt_cookie_get_level(cookie)
 }
@@ -88,7 +88,7 @@ pub unsafe extern "C" fn rs_source_level(cookie: *mut c_void) -> c_int {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "sourcing_a_script")]
 pub unsafe extern "C" fn rs_sourcing_a_script(eap: *mut c_void) -> c_int {
     c_int::from(nvim_rt_exarg_is_sourcing(eap))
 }
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn rs_sourcing_a_script(eap: *mut c_void) -> c_int {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "ex_scriptencoding")]
 pub unsafe extern "C" fn rs_ex_scriptencoding(eap: *mut c_void) {
     if !nvim_rt_exarg_is_sourcing(eap) {
         nvim_rt_emsg_scriptencoding_outside();
@@ -125,7 +125,7 @@ pub unsafe extern "C" fn rs_ex_scriptencoding(eap: *mut c_void) {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "ex_finish")]
 pub unsafe extern "C" fn rs_ex_finish(eap: *mut c_void) {
     if nvim_rt_exarg_is_sourcing(eap) {
         rs_do_finish(eap, false);
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn rs_ex_finish(eap: *mut c_void) {
 ///
 /// # Safety
 /// eap must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "do_finish")]
 pub unsafe extern "C" fn rs_do_finish(eap: *mut c_void, reanimate: bool) {
     if reanimate {
         let sp = nvim_rt_exarg_get_source_cookie(eap);
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn rs_do_finish(eap: *mut c_void, reanimate: bool) {
 ///
 /// # Safety
 /// fgetline and cookie must be valid pointers.
-#[no_mangle]
+#[unsafe(export_name = "source_finished")]
 pub unsafe extern "C" fn rs_source_finished(fgetline: *mut c_void, cookie: *mut c_void) -> bool {
     if !nvim_rt_getline_is_sourcing(fgetline, cookie) {
         return false;
