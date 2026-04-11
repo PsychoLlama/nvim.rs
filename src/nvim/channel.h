@@ -52,6 +52,7 @@ struct Channel {
 // Implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 Channel *channel_alloc(ChannelStreamType type) FUNC_ATTR_NONNULL_RET;
 void channel_destroy_early(Channel *chan);
+bool channel_close(uint64_t id, ChannelPart part, const char **error);
 bool channel_job_running(uint64_t id);
 void channel_init(void);
 void channel_incref(Channel *chan);

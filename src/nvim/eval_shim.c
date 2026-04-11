@@ -375,6 +375,76 @@ char *nvim_docmd_fmt_exception_not_caught(const char *value)
 
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear) { msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear); }
 
+// Phase 6 (channel): stream sub-member accessors for channel_close / channel_send in Rust
+
+#include <stdio.h>
+#include "nvim/event/rstream.h"
+#include "nvim/event/stream.h"
+#include "nvim/os/pty_proc.h"
+#include "nvim/msgpack_rpc/channel.h"
+
+// stderr accessor for Rust channel_close (stderr is a macro in C)
+void *nvim_get_stderr(void) { return (void *)stderr; }
+
+// rstream_may_close on socket stream
+void nvim_chan_socket_rstream_may_close(Channel *chan) { rstream_may_close(&chan->stream.socket); }
+// stream_may_close / rstream_may_close on proc sub-streams
+void nvim_chan_proc_stream_may_close_in(Channel *chan) { stream_may_close(&chan->stream.proc.in); }
+void nvim_chan_proc_rstream_may_close_out(Channel *chan) { rstream_may_close(&chan->stream.proc.out); }
+void nvim_chan_proc_rstream_may_close_err(Channel *chan) { rstream_may_close(&chan->stream.proc.err); }
+// pty_proc_close_master on pty stream
+void nvim_chan_pty_close_master(Channel *chan) { pty_proc_close_master(&chan->stream.pty); }
+// stream accessors for stdio
+void nvim_chan_stdio_rstream_may_close_in(Channel *chan) { rstream_may_close(&chan->stream.stdio.in); }
+void nvim_chan_stdio_stream_may_close_out(Channel *chan) { stream_may_close(&chan->stream.stdio.out); }
+// stderr stream err.closed field
+int nvim_chan_get_err_closed(Channel *chan) { return chan->stream.err.closed ? 1 : 0; }
+void nvim_chan_set_err_closed(Channel *chan, int v) { chan->stream.err.closed = v != 0; }
+// internal stream field accessors
+int nvim_chan_get_internal_cb(Channel *chan) { return chan->stream.internal.cb; }
+void nvim_chan_set_internal_cb(Channel *chan, int v) { chan->stream.internal.cb = (LuaRef)v; }
+int nvim_chan_get_internal_closed(Channel *chan) { return chan->stream.internal.closed ? 1 : 0; }
+void nvim_chan_set_internal_closed(Channel *chan, int v) { chan->stream.internal.closed = v != 0; }
+// proc type accessor (kProcTypePty detection)
+int nvim_chan_get_proc_type(Channel *chan) { return (int)chan->stream.proc.type; }
+// rpc_close wrapper (rpc_close is declared in nvim/msgpack_rpc/channel.h, included via channel.h)
+void nvim_chan_rpc_close(Channel *chan) { rpc_close(chan); }
+// api_free_luaref wrapper
+void nvim_chan_api_free_luaref(int ref) { api_free_luaref((LuaRef)ref); }
+
+// channel_send helpers: instream pointer and os_write wrapper
+Stream *nvim_chan_instream(Channel *chan)
+{
+  switch (chan->streamtype) {
+  case kChannelStreamProc:   return &chan->stream.proc.in;
+  case kChannelStreamSocket: return &chan->stream.socket.s;
+  case kChannelStreamStdio:  return &chan->stream.stdio.out;
+  default: abort();
+  }
+}
+
+// channel_teardown helper: iterate channels, close all
+void nvim_chan_foreach_close_all(void)
+{
+  Channel *chan;
+  map_foreach_value(&channels, chan, {
+    channel_close(chan->id, kChannelPartAll, NULL);
+  });
+}
+
+// channel_free_all_mem helper: destroy all channels, clear map, free on_print
+#ifdef EXITFREE
+void nvim_chan_foreach_destroy_all(void)
+{
+  Channel *chan;
+  map_foreach_value(&channels, chan, {
+    channel_destroy(chan);
+  });
+  map_destroy(uint64_t, &channels);
+  callback_free(&on_print);
+}
+#endif
+
 // Phase 6f: tv_dict_remove accessors (Rust FFI helpers)
 bool nvim_di_check_fixed_translate(const dictitem_T *di, const char *name) { return var_check_fixed(di->di_flags, name, TV_TRANSLATE); }
 bool nvim_di_check_ro_translate(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_TRANSLATE); }

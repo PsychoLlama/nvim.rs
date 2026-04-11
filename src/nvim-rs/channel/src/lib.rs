@@ -148,6 +148,65 @@ extern "C" {
     /// Get pending write requests on a stream. Defined in event crate.
     fn rs_stream_get_pending_reqs(stream: *mut c_void) -> usize;
 
+    // --- Phase 6 FFI: channel_close ---
+
+    /// Close the socket RStream. Defined in eval_shim.c.
+    fn nvim_chan_socket_rstream_may_close(chan: *mut c_void);
+    /// Close proc stdin stream. Defined in eval_shim.c.
+    fn nvim_chan_proc_stream_may_close_in(chan: *mut c_void);
+    /// Close proc stdout RStream. Defined in eval_shim.c.
+    fn nvim_chan_proc_rstream_may_close_out(chan: *mut c_void);
+    /// Close proc stderr RStream. Defined in eval_shim.c.
+    fn nvim_chan_proc_rstream_may_close_err(chan: *mut c_void);
+    /// Close pty master fd. Defined in eval_shim.c.
+    fn nvim_chan_pty_close_master(chan: *mut c_void);
+    /// Close stdio RStream (in). Defined in eval_shim.c.
+    fn nvim_chan_stdio_rstream_may_close_in(chan: *mut c_void);
+    /// Close stdio Stream (out). Defined in eval_shim.c.
+    fn nvim_chan_stdio_stream_may_close_out(chan: *mut c_void);
+    /// Get err.closed field. Defined in eval_shim.c.
+    fn nvim_chan_get_err_closed(chan: *mut c_void) -> c_int;
+    /// Set err.closed field. Defined in eval_shim.c.
+    fn nvim_chan_set_err_closed(chan: *mut c_void, v: c_int);
+    /// Get internal.cb field (LuaRef). Defined in eval_shim.c.
+    fn nvim_chan_get_internal_cb(chan: *mut c_void) -> c_int;
+    /// Set internal.cb field (LuaRef). Defined in eval_shim.c.
+    fn nvim_chan_set_internal_cb(chan: *mut c_void, v: c_int);
+    /// Get internal.closed field. Defined in eval_shim.c.
+    fn nvim_chan_get_internal_closed(chan: *mut c_void) -> c_int;
+    /// Set internal.closed field. Defined in eval_shim.c.
+    fn nvim_chan_set_internal_closed(chan: *mut c_void, v: c_int);
+    /// Get proc type (kProcTypePty detection). Defined in eval_shim.c.
+    fn nvim_chan_get_proc_type(chan: *mut c_void) -> c_int;
+    /// Close RPC layer for channel. Defined in eval_shim.c.
+    fn nvim_chan_rpc_close(chan: *mut c_void);
+    /// Free a Lua reference. Defined in eval_shim.c.
+    fn nvim_chan_api_free_luaref(luaref: c_int);
+    /// C fclose. From libc.
+    fn fclose(stream: *mut c_void) -> c_int;
+    /// The global exiting flag. Defined in globals.h.
+    static exiting: bool;
+    /// Get the C stderr FILE pointer. Defined in eval_shim.c.
+    fn nvim_get_stderr() -> *mut c_void;
+    /// e_invchan error string. Defined in errors.h.
+    static e_invchan: std::ffi::c_char;
+    /// e_invstream error string. Defined in errors.h.
+    static e_invstream: std::ffi::c_char;
+    /// e_invstreamrpc error string. Defined in errors.h.
+    static e_invstreamrpc: std::ffi::c_char;
+
+    // --- Phase 6 FFI: channel_send ---
+
+    /// Get the instream pointer for a channel. Defined in eval_shim.c.
+    fn nvim_chan_instream(chan: *mut c_void) -> *mut c_void;
+    /// Write bytes to a file descriptor. Defined in os/fs.c.
+    fn os_write(fd: c_int, buf: *const std::ffi::c_char, size: usize, non_blocking: bool) -> isize;
+
+    // --- Phase 6 FFI: teardown ---
+
+    /// Iterate channels and close all (for channel_teardown). Defined in eval_shim.c.
+    fn nvim_chan_foreach_close_all();
+
     // --- Phase 5 FFI ---
 
     /// Check if in secure mode (sandbox). Defined in Rust (ex_cmds crate).
@@ -635,6 +694,147 @@ pub unsafe extern "C" fn channel_destroy_early(chan: *mut ChannelT) {
     // uv will keep a reference to handles until next loop tick, so delay free
     let event = make_event(free_channel_event as _, chan.cast());
     multiqueue_put_event(rs_loop_get_events(main_loop_ptr()), event);
+}
+
+// =============================================================================
+// Migrated functions (Phase 2): channel_close
+// =============================================================================
+
+// kProcTypePty = 1 (from ProcType enum in event/defs.h)
+const K_PROC_TYPE_PTY: c_int = 1;
+
+// LUA_NOREF = -2 (from lua.h)
+const LUA_NOREF: c_int = -2;
+
+/// Close a channel (or part of it).
+///
+/// # Safety
+///
+/// Accesses global channel state.
+#[no_mangle]
+pub unsafe extern "C" fn channel_close(
+    id: u64,
+    part: c_int,
+    error: *mut *const std::ffi::c_char,
+) -> bool {
+    let mut dummy: *const std::ffi::c_char = std::ptr::null();
+    let error = if error.is_null() {
+        &raw mut dummy
+    } else {
+        error
+    };
+
+    let chan = nvim_find_channel(id);
+    if chan.is_null() {
+        if id < nvim_chan_get_next_chan_id() {
+            // allow double close
+            return true;
+        }
+        *error = &raw const e_invchan;
+        return false;
+    }
+    let chan_t = chan.cast::<ChannelT>();
+
+    // kChannelPartRpc = 3, kChannelPartAll = 4
+    let mut close_main = false;
+    if part == 3 || part == 4 {
+        close_main = true;
+        if (*chan_t).is_rpc {
+            nvim_chan_rpc_close(chan);
+        } else if part == 3 {
+            *error = &raw const e_invstream;
+            return false;
+        }
+    } else if (part == 0 || part == 1) && (*chan_t).is_rpc {
+        // kChannelPartStdin = 0, kChannelPartStdout = 1
+        *error = &raw const e_invstreamrpc;
+        return false;
+    }
+
+    let streamtype = (*chan_t).streamtype;
+    match streamtype {
+        // kChannelStreamSocket = 1
+        1 => {
+            if !close_main {
+                *error = &raw const e_invstream;
+                return false;
+            }
+            nvim_chan_socket_rstream_may_close(chan);
+        }
+
+        // kChannelStreamProc = 0
+        0 => {
+            if part == 0 || close_main {
+                // kChannelPartStdin = 0
+                nvim_chan_proc_stream_may_close_in(chan);
+            }
+            if part == 1 || close_main {
+                // kChannelPartStdout = 1
+                nvim_chan_proc_rstream_may_close_out(chan);
+            }
+            if part == 2 || part == 4 {
+                // kChannelPartStderr = 2, kChannelPartAll = 4
+                nvim_chan_proc_rstream_may_close_err(chan);
+            }
+            if nvim_chan_get_proc_type(chan) == K_PROC_TYPE_PTY && part == 4 {
+                nvim_chan_pty_close_master(chan);
+            }
+        }
+
+        // kChannelStreamStdio = 2
+        2 => {
+            if part == 0 || close_main {
+                nvim_chan_stdio_rstream_may_close_in(chan);
+            }
+            if part == 1 || close_main {
+                nvim_chan_stdio_stream_may_close_out(chan);
+            }
+            if part == 2 {
+                // kChannelPartStderr = 2
+                *error = &raw const e_invstream;
+                return false;
+            }
+        }
+
+        // kChannelStreamStderr = 3
+        3 => {
+            if part != 4 && part != 2 {
+                // kChannelPartAll = 4, kChannelPartStderr = 2
+                *error = &raw const e_invstream;
+                return false;
+            }
+            if nvim_chan_get_err_closed(chan) == 0 {
+                nvim_chan_set_err_closed(chan, 1);
+                // Don't close on exit, in case late error messages
+                if !exiting {
+                    fclose(nvim_get_stderr());
+                }
+                channel_decref(chan_t);
+            }
+        }
+
+        // kChannelStreamInternal = 4
+        4 => {
+            if !close_main {
+                *error = &raw const e_invstream;
+                return false;
+            }
+            if (*chan_t).term.is_null() {
+                channel_decref(chan_t);
+            } else {
+                nvim_chan_api_free_luaref(nvim_chan_get_internal_cb(chan));
+                nvim_chan_set_internal_cb(chan, LUA_NOREF);
+                nvim_chan_set_internal_closed(chan, 1);
+                terminal_close(&raw mut (*chan_t).term, 0);
+            }
+        }
+
+        _ => {
+            // Unknown stream type - should not happen
+        }
+    }
+
+    true
 }
 
 // =============================================================================
