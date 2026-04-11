@@ -346,19 +346,121 @@ extern "C" {
     fn nvim_testing_tv_get_type(tv: TypevalHandle) -> c_int;
     fn nvim_testing_tv_string_is_empty(tv: TypevalHandle) -> c_int;
 
-    // Dictionary diffing (keep complex logic in C for now)
-    fn nvim_testing_fill_dict_diff(
-        gap: *mut GArray,
+    // Dictionary diffing: compute diffs via hashtab iteration (hashtab macros stay in C)
+    fn nvim_testing_dict_diff_compute(
         exp_tv: TypevalHandle,
         got_tv: TypevalHandle,
-        omitted: *mut c_int,
+        exp_diff_out: TypevalHandleMut,
+        got_diff_out: TypevalHandleMut,
+        omitted_out: *mut c_int,
     );
+
+    // Typval memory management
+    fn tv_clear(tv: TypevalHandleMut);
 }
 
 // VAR_UNKNOWN constant
 const VAR_UNKNOWN: c_int = 0;
 const VAR_STRING: c_int = 2;
 const VAR_DICT: c_int = 5;
+
+/// Stack-allocated buffer sized and aligned to hold a typval_T.
+/// sizeof(typval_T) == 16, alignment 8 (verified by _Static_assert in C).
+#[repr(C, align(8))]
+struct TypevalBuf([u8; TYPVAL_SIZE]);
+
+impl TypevalBuf {
+    fn zeroed() -> Self {
+        Self([0u8; TYPVAL_SIZE])
+    }
+
+    fn as_mut_ptr(&mut self) -> TypevalHandleMut {
+        self.0.as_mut_ptr().cast()
+    }
+
+    fn as_ptr(&self) -> TypevalHandle {
+        self.0.as_ptr().cast()
+    }
+}
+
+/// Implement dict diff logic in Rust using `nvim_testing_dict_diff_compute` for
+/// hashtab iteration (which requires C macros).
+///
+/// Encodes the expected diff to `gap`, encodes the got diff to `gap` separated by
+/// " but got ", appends the omitted count message if any.
+///
+/// Returns the omitted count so the caller does not append "but got" again.
+///
+/// When the inputs are not both VAR_DICT (compute returns VAR_UNKNOWN outputs),
+/// returns -1 to indicate the caller should fall back to normal encoding.
+fn fill_dict_diff(gap: *mut GArray, exp_tv: TypevalHandle, got_tv: TypevalHandle) -> c_int {
+    unsafe {
+        let mut exp_diff = TypevalBuf::zeroed();
+        let mut got_diff = TypevalBuf::zeroed();
+        let mut omitted: c_int = 0;
+
+        nvim_testing_dict_diff_compute(
+            exp_tv,
+            got_tv,
+            exp_diff.as_mut_ptr(),
+            got_diff.as_mut_ptr(),
+            &raw mut omitted,
+        );
+
+        // If inputs were not both VAR_DICT, compute leaves outputs as VAR_UNKNOWN
+        if nvim_testing_tv_get_type(exp_diff.as_ptr()) == VAR_UNKNOWN {
+            return -1;
+        }
+
+        // Encode expected diff
+        let tofree = encode_tv2string(exp_diff.as_ptr(), std::ptr::null_mut());
+        ga_concat_shorten_esc(gap, tofree);
+        if !tofree.is_null() {
+            xfree(tofree.cast());
+        }
+
+        // "but got" separator
+        ga_concat(gap, c" but got ".as_ptr());
+
+        // Encode got diff
+        let tofree = encode_tv2string(got_diff.as_ptr(), std::ptr::null_mut());
+        ga_concat_shorten_esc(gap, tofree);
+        if !tofree.is_null() {
+            xfree(tofree.cast());
+        }
+
+        // Clean up the temporary dicts
+        tv_clear(exp_diff.as_mut_ptr());
+        tv_clear(got_diff.as_mut_ptr());
+
+        // Append omitted count message
+        if omitted != 0 {
+            let mut buf = [0u8; 64];
+            let prefix = b" - ";
+            buf[..prefix.len()].copy_from_slice(prefix);
+            let mut pos = prefix.len();
+
+            let mut num_buf = [0u8; 16];
+            format_int(&mut num_buf, omitted);
+            let num_len = num_buf.iter().position(|&c| c == 0).unwrap_or(0);
+            buf[pos..pos + num_len].copy_from_slice(&num_buf[..num_len]);
+            pos += num_len;
+
+            let suffix: &[u8] = if omitted == 1 {
+                b" equal item omitted"
+            } else {
+                b" equal items omitted"
+            };
+            buf[pos..pos + suffix.len()].copy_from_slice(suffix);
+            pos += suffix.len();
+            buf[pos] = 0;
+
+            ga_concat(gap, buf.as_ptr().cast());
+        }
+
+        omitted
+    }
+}
 
 /// Fill a GArray with information about an assert error.
 ///
@@ -372,8 +474,6 @@ fn fill_assert_error(
     atype: AssertType,
 ) {
     unsafe {
-        let mut omitted: c_int = 0;
-
         // Add optional message prefix
         let opt_type = nvim_testing_tv_get_type(opt_msg_tv);
         if opt_type != VAR_UNKNOWN
@@ -401,14 +501,29 @@ fn fill_assert_error(
         }
 
         // Add expected value
+        // Track whether the dict diff path handled the full "exp ... but got ..." output.
+        let mut dict_diff_handled_got = false;
+
         if exp_str.is_null() {
             // Check if both are dicts for diffing
             let exp_type = nvim_testing_tv_get_type(exp_tv);
             let got_type = nvim_testing_tv_get_type(got_tv);
 
             if atype != AssertType::NotEqual && exp_type == VAR_DICT && got_type == VAR_DICT {
-                // Use C helper for dictionary diffing
-                nvim_testing_fill_dict_diff(gap, exp_tv, got_tv, &raw mut omitted);
+                // fill_dict_diff encodes exp_diff, " but got ", got_diff, and omitted message
+                // all in one call. It returns -1 if inputs were not both VAR_DICT (shouldn't
+                // happen here since we checked), or the omitted count otherwise.
+                let result = fill_dict_diff(gap, exp_tv, got_tv);
+                if result >= 0 {
+                    dict_diff_handled_got = true;
+                } else {
+                    // Fallback: encode exp_tv directly
+                    let tofree = encode_tv2string(exp_tv, std::ptr::null_mut());
+                    ga_concat_shorten_esc(gap, tofree);
+                    if !tofree.is_null() {
+                        xfree(tofree.cast());
+                    }
+                }
             } else {
                 let tofree = encode_tv2string(exp_tv, std::ptr::null_mut());
                 ga_concat_shorten_esc(gap, tofree);
@@ -426,8 +541,8 @@ fn fill_assert_error(
             }
         }
 
-        // Add "but got" and actual value
-        if atype != AssertType::NotEqual {
+        // Add "but got" and actual value (skip if dict diff already handled this)
+        if atype != AssertType::NotEqual && !dict_diff_handled_got {
             match atype {
                 AssertType::Match => {
                     ga_concat(gap, c" does not match ".as_ptr());
@@ -444,32 +559,6 @@ fn fill_assert_error(
             ga_concat_shorten_esc(gap, tofree);
             if !tofree.is_null() {
                 xfree(tofree.cast());
-            }
-
-            if omitted != 0 {
-                // Format " - N equal item(s) omitted"
-                let mut buf = [0u8; 64];
-                let prefix = b" - ";
-                buf[..prefix.len()].copy_from_slice(prefix);
-                let mut pos = prefix.len();
-
-                // Format the number
-                let mut num_buf = [0u8; 16];
-                format_int(&mut num_buf, omitted);
-                let num_len = num_buf.iter().position(|&c| c == 0).unwrap_or(0);
-                buf[pos..pos + num_len].copy_from_slice(&num_buf[..num_len]);
-                pos += num_len;
-
-                let suffix: &[u8] = if omitted == 1 {
-                    b" equal item omitted"
-                } else {
-                    b" equal items omitted"
-                };
-                buf[pos..pos + suffix.len()].copy_from_slice(suffix);
-                pos += suffix.len();
-                buf[pos] = 0;
-
-                ga_concat(gap, buf.as_ptr().cast());
             }
         }
     }

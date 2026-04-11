@@ -1,38 +1,24 @@
-// testing.c: Support for tests
+// testing_shim.c: Rust FFI accessors for testing crate.
 
-#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "nvim/ascii_defs.h"
-#include "nvim/errors.h"
 #include "nvim/eval.h"
-#include "nvim/eval/encode.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
-#include "nvim/eval/vars.h"
-#include "nvim/ex_docmd.h"
-#include "nvim/garray.h"
-#include "nvim/garray_defs.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/hashtab.h"
 #include "nvim/hashtab_defs.h"
 #include "nvim/macros_defs.h"
-#include "nvim/mbyte.h"
 #include "nvim/memory.h"
-#include "nvim/message.h"
-#include "nvim/os/fs.h"
 #include "nvim/runtime.h"
 #include "nvim/runtime_defs.h"
-#include "nvim/strings.h"
-#include "nvim/testing.h"
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-#include "testing.c.generated.h"
+#include "testing_shim.c.generated.h"
 
 // Rust code hard-codes sizeof(typval_T) for pointer arithmetic on argvar arrays.
 // If this changes, update TYPVAL_SIZE in:
@@ -160,28 +146,35 @@ const char *nvim_testing_tv_get_vstring(const typval_T *tv)
   return tv->vval.v_string;
 }
 
-/// Fill the gap with dict diff info (keep complex diffing logic in C for now).
-/// This handles the dictionary comparison and writes the encoded expected value.
-void nvim_testing_fill_dict_diff(garray_T *gap, typval_T *exp_tv, typval_T *got_tv, int *omitted)
+/// Compute the dictionary diff between two typval_T dicts.
+/// Fills exp_diff_out and got_diff_out with dicts containing only the items that differ.
+/// omitted_out receives the count of equal items that were omitted from the diff.
+///
+/// The caller is responsible for calling tv_clear on exp_diff_out and got_diff_out
+/// after use (even if they are empty dicts).
+///
+/// If exp_tv or got_tv is not a VAR_DICT, both outputs are set to VAR_UNKNOWN and
+/// omitted_out is set to 0; the caller should fall back to encoding exp_tv directly.
+void nvim_testing_dict_diff_compute(const typval_T *exp_tv, const typval_T *got_tv,
+                                    typval_T *exp_diff_out, typval_T *got_diff_out,
+                                    int *omitted_out)
 {
-  *omitted = 0;
+  *omitted_out = 0;
+  exp_diff_out->v_type = VAR_UNKNOWN;
+  got_diff_out->v_type = VAR_UNKNOWN;
 
-  // Only diff if both are non-NULL dicts
   if (exp_tv->v_type != VAR_DICT || got_tv->v_type != VAR_DICT
       || exp_tv->vval.v_dict == NULL || got_tv->vval.v_dict == NULL) {
-    // Just encode the expected value
-    char *tofree = encode_tv2string(exp_tv, NULL);
-    ga_concat_shorten_esc(gap, tofree);
-    xfree(tofree);
     return;
   }
 
   dict_T *exp_d = exp_tv->vval.v_dict;
   dict_T *got_d = got_tv->vval.v_dict;
 
-  // Create temporary dicts to hold only differing items
-  typval_T exp_diff = { .v_type = VAR_DICT, .vval.v_dict = tv_dict_alloc() };
-  typval_T got_diff = { .v_type = VAR_DICT, .vval.v_dict = tv_dict_alloc() };
+  exp_diff_out->v_type = VAR_DICT;
+  exp_diff_out->vval.v_dict = tv_dict_alloc();
+  got_diff_out->v_type = VAR_DICT;
+  got_diff_out->vval.v_dict = tv_dict_alloc();
 
   // Find items in exp_d that differ from got_d
   int todo = (int)exp_d->dv_hashtab.ht_used;
@@ -191,12 +184,14 @@ void nvim_testing_fill_dict_diff(garray_T *gap, typval_T *exp_tv, typval_T *got_
       if (item2 == NULL
           || !tv_equal(&TV_DICT_HI2DI(hi)->di_tv, &item2->di_tv, false)) {
         const size_t key_len = strlen(hi->hi_key);
-        tv_dict_add_tv(exp_diff.vval.v_dict, hi->hi_key, key_len, &TV_DICT_HI2DI(hi)->di_tv);
+        tv_dict_add_tv(exp_diff_out->vval.v_dict, hi->hi_key, key_len,
+                       &TV_DICT_HI2DI(hi)->di_tv);
         if (item2 != NULL) {
-          tv_dict_add_tv(got_diff.vval.v_dict, hi->hi_key, key_len, &item2->di_tv);
+          tv_dict_add_tv(got_diff_out->vval.v_dict, hi->hi_key, key_len,
+                         &item2->di_tv);
         }
       } else {
-        (*omitted)++;
+        (*omitted_out)++;
       }
       todo--;
     }
@@ -209,102 +204,10 @@ void nvim_testing_fill_dict_diff(garray_T *gap, typval_T *exp_tv, typval_T *got_
       dictitem_T *item2 = tv_dict_find(exp_d, hi->hi_key, -1);
       if (item2 == NULL) {
         const size_t key_len = strlen(hi->hi_key);
-        tv_dict_add_tv(got_diff.vval.v_dict, hi->hi_key, key_len, &TV_DICT_HI2DI(hi)->di_tv);
+        tv_dict_add_tv(got_diff_out->vval.v_dict, hi->hi_key, key_len,
+                       &TV_DICT_HI2DI(hi)->di_tv);
       }
       todo--;
     }
   }
-
-  // Encode and append the diff
-  char *tofree = encode_tv2string(&exp_diff, NULL);
-  ga_concat_shorten_esc(gap, tofree);
-  xfree(tofree);
-
-  // Store the got_diff for later use (will be encoded in Rust)
-  // For now, we'll encode it here and let Rust handle the rest
-  tv_clear(&exp_diff);
-
-  // We need to pass got_diff back to Rust somehow
-  // Actually, let's simplify: we'll encode got_diff here and store it in got_tv temporarily
-  // This is a bit hacky but avoids major restructuring
-  tv_clear(got_tv);
-  *got_tv = got_diff;
 }
-
-
-/// Append "p[clen]" to "gap", escaping unprintable characters.
-/// Changes NL to \n, CR to \r, etc.
-static void ga_concat_esc(garray_T *gap, const char *p, int clen)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char buf[NUMBUFLEN];
-
-  if (clen > 1) {
-    memmove(buf, p, (size_t)clen);
-    buf[clen] = NUL;
-    ga_concat(gap, buf);
-    return;
-  }
-
-  switch (*p) {
-  case BS:
-    ga_concat(gap, "\\b"); break;
-  case ESC:
-    ga_concat(gap, "\\e"); break;
-  case FF:
-    ga_concat(gap, "\\f"); break;
-  case NL:
-    ga_concat(gap, "\\n"); break;
-  case TAB:
-    ga_concat(gap, "\\t"); break;
-  case CAR:
-    ga_concat(gap, "\\r"); break;
-  case '\\':
-    ga_concat(gap, "\\\\"); break;
-  default:
-    if ((uint8_t)(*p) < ' ' || *p == 0x7f) {
-      vim_snprintf(buf, NUMBUFLEN, "\\x%02x", *p);
-      ga_concat(gap, buf);
-    } else {
-      ga_append(gap, (uint8_t)(*p));
-    }
-    break;
-  }
-}
-
-/// Append "str" to "gap", escaping unprintable characters.
-/// Changes NL to \n, CR to \r, etc.
-static void ga_concat_shorten_esc(garray_T *gap, const char *str)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  char buf[NUMBUFLEN];
-
-  if (str == NULL) {
-    ga_concat(gap, "NULL");
-    return;
-  }
-
-  for (const char *p = str; *p != NUL;) {
-    int same_len = 1;
-    const char *s = p;
-    const int c = mb_cptr2char_adv(&s);
-    const int clen = (int)(s - p);
-    while (*s != NUL && c == utf_ptr2char(s)) {
-      same_len++;
-      s += clen;
-    }
-    if (same_len > 20) {
-      ga_concat(gap, "\\[");
-      ga_concat_esc(gap, p, clen);
-      ga_concat(gap, " occurs ");
-      vim_snprintf(buf, NUMBUFLEN, "%d", same_len);
-      ga_concat(gap, buf);
-      ga_concat(gap, " times]");
-      p = s;
-    } else {
-      ga_concat_esc(gap, p, clen);
-      p += clen;
-    }
-  }
-}
-

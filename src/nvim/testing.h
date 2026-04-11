@@ -20,4 +20,4 @@ void f_assert_true(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_test_garbagecollect_now(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_test_write_list_log(typval_T *const argvars, typval_T *const rettv, EvalFuncData fptr);
 
-#include "testing.h.generated.h"
+#include "testing_shim.h.generated.h"
