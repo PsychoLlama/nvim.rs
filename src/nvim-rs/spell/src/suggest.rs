@@ -6241,8 +6241,10 @@ extern "C" {
     fn nvim_ss_get_iosize() -> c_int;
     // p_verbose
     fn nvim_ss_get_p_verbose() -> libc::c_long;
-    // sps_flags/sps_limit
+    // sps_flags/sps_limit (alias to the nvim_spellsug_* accessors)
+    #[link_name = "nvim_spellsug_get_sps_flags"]
     fn nvim_ss_get_sps_flags() -> c_int;
+    #[link_name = "nvim_spellsug_get_sps_limit"]
     fn nvim_ss_get_sps_limit() -> c_int;
     // repl_from / repl_to management
     fn nvim_ss_clear_repl();

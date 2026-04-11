@@ -1,58 +1,31 @@
 // spellsuggest.c: functions for spelling suggestions
 
-#include <stdint.h>
-
-#include <assert.h>
-#include <inttypes.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/change.h"
-#include "nvim/charset.h"
-#include "nvim/cursor.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
-#include "nvim/fileio.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
-#include "nvim/getchar.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/hashtab.h"
 #include "nvim/hashtab_defs.h"
 #include "nvim/highlight_defs.h"
-#include "nvim/input.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
-#include "nvim/memline.h"
 #include "nvim/memory.h"
-#include "nvim/message.h"
-#include "nvim/normal.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/fs.h"
-#include "nvim/os/input.h"
-#include "nvim/os/os_defs.h"
 #include "nvim/pos_defs.h"
-#include "nvim/profile.h"
 #include "nvim/spell.h"
 #include "nvim/spell_defs.h"
 #include "nvim/spellfile.h"
 #include "nvim/spellsuggest.h"
 #include "nvim/strings.h"
 #include "nvim/types_defs.h"
-#include "nvim/ui.h"
-#include "nvim/ui_defs.h"
-#include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
 /// Information used when looking for suggestions.
@@ -71,48 +44,6 @@ typedef struct {
   hashtab_T su_banned;             ///< table with banned words
   slang_T *su_sallang;             ///< default language for sound folding
 } suginfo_T;
-
-/// One word suggestion.  Used in "si_ga".
-typedef struct {
-  char *st_word;      ///< suggested word, allocated string
-  int st_wordlen;     ///< strlen(st_word)
-  int st_orglen;      ///< length of replaced text
-  int st_score;       ///< lower is better
-  int st_altscore;    ///< used when st_score compares equal
-  bool st_salscore;   ///< st_score is for soundalike
-  bool st_had_bonus;  ///< bonus already included in score
-  slang_T *st_slang;  ///< language used for sound folding
-} suggest_T;
-
-#define SUG(ga, i) (((suggest_T *)(ga).ga_data)[i])
-
-// score for various changes
-enum {
-  SCORE_SPLIT = 149,     // split bad word
-  SCORE_SPLIT_NO = 249,  // split bad word with NOSPLITSUGS
-  SCORE_ICASE = 52,      // slightly different case
-  SCORE_REGION = 200,    // word is for different region
-  SCORE_RARE = 180,      // rare word
-  SCORE_SWAP = 75,       // swap two characters
-  SCORE_SWAP3 = 110,     // swap two characters in three
-  SCORE_REP = 65,        // REP replacement
-  SCORE_SUBST = 93,      // substitute a character
-  SCORE_SIMILAR = 33,    // substitute a similar character
-  SCORE_SUBCOMP = 33,    // substitute a composing character
-  SCORE_DEL = 94,        // delete a character
-  SCORE_DELDUP = 66,     // delete a duplicated character
-  SCORE_DELCOMP = 28,    // delete a composing character
-  SCORE_INS = 96,        // insert a character
-  SCORE_INSDUP = 67,     // insert a duplicate character
-  SCORE_INSCOMP = 30,    // insert a composing character
-  SCORE_NONWORD = 103,   // change non-word to word char
-};
-
-enum {
-  SCORE_FILE = 30,      // suggestion from a file
-  SCORE_MAXINIT = 350,  // Initial maximum score: higher == slower.
-                        // 350 allows for about three changes.
-};
 
 static int spell_suggest_timeout = 5000;
 
@@ -149,7 +80,6 @@ int nvim_suginfo_get_maxscore(void *su) { return ((suginfo_T *)su)->su_maxscore;
 int nvim_suginfo_get_maxcount(void *su) { return ((suginfo_T *)su)->su_maxcount; }
 void nvim_suginfo_set_ga(void *su, garray_T ga) { ((suginfo_T *)su)->su_ga = ga; }
 int nvim_suginfo_get_badlen(void *su) { return ((suginfo_T *)su)->su_badlen; }
-// Phase 1 accessors
 int nvim_suginfo_get_sfmaxscore(void *su) { return ((suginfo_T *)su)->su_sfmaxscore; }
 void nvim_suginfo_set_sfmaxscore(void *su, int v) { ((suginfo_T *)su)->su_sfmaxscore = v; }
 void nvim_suginfo_set_maxscore(void *su, int v) { ((suginfo_T *)su)->su_maxscore = v; }
@@ -158,10 +88,8 @@ const char *nvim_suginfo_get_sal_badword(void *su) { return ((suginfo_T *)su)->s
 slang_T *nvim_suginfo_get_sallang(void *su) { return ((suginfo_T *)su)->su_sallang; }
 int nvim_suginfo_get_badflags(void *su) { return ((suginfo_T *)su)->su_badflags; }
 void nvim_suginfo_set_badflags(void *su, int v) { ((suginfo_T *)su)->su_badflags = v; }
-// Phase 2 accessors
 int nvim_spellsug_get_timeout(void) { return spell_suggest_timeout; }
 void nvim_spellsug_set_timeout(int t) { spell_suggest_timeout = t; }
-// Write accessors for spell_find_suggest migration
 void nvim_suginfo_set_badptr(void *su, char *ptr) { ((suginfo_T *)su)->su_badptr = ptr; }
 void nvim_suginfo_set_badlen(void *su, int len) { ((suginfo_T *)su)->su_badlen = len; }
 void nvim_suginfo_set_maxcount(void *su, int count) { ((suginfo_T *)su)->su_maxcount = count; }
@@ -212,19 +140,6 @@ void nvim_spell_suggest_expr_eval(void *su, char *expr)
     tv_list_unref(list);
   }
 }
-
-extern int badword_captype(char *word, char *end);
-extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
-extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
-extern void rs_score_combine_lists(void *su);
-extern void rs_add_banned(void *su, char *word);
-extern void rs_spell_suggest_intern(void *su, bool interactive);
-extern void rs_spell_suggest_file(void *su, char *fname);
-extern void rs_spell_find_cleanup(void *su);
-extern void rs_spell_find_suggest(char *badptr, int badlen, void *su, int maxcount,
-                                  bool banbadword, bool need_cap, bool interactive);
-
-// C accessors for spell_suggest migration
 
 // Macro wrappers (macros can't be used directly in Rust)
 void nvim_ss_mb_ptr_back(const char *line, char **p)
@@ -292,17 +207,9 @@ int nvim_ss_get_iosize(void) { return IOSIZE; }
 // p_verbose
 long nvim_ss_get_p_verbose(void) { return p_verbose; }
 
-// sps_flags / sps_limit (Phase 3 needs direct read)
-int nvim_ss_get_sps_flags(void) { return sps_flags; }
-int nvim_ss_get_sps_limit(void) { return sps_limit; }
-
 // Reset spell_suggest_timeout to default
 void nvim_ss_reset_timeout(void) { spell_suggest_timeout = 5000; }
 
 // e_no_spell error string
 const char *nvim_ss_e_no_spell(void) { return e_no_spell; }
-
-
-
-
 
