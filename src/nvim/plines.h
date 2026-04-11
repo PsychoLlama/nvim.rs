@@ -50,6 +50,12 @@ colnr_T getvcol_nolist(pos_T *posp);
 bool win_may_fill(win_T *wp);
 int64_t win_text_height(win_T *const wp, const linenr_T start_lnum, const int64_t start_vcol, linenr_T *const end_lnum, int64_t *const end_vcol, int64_t *const fill, int64_t const max);
 
+// Rust-implemented plines functions (plines crate, export_name)
+int plines_win(win_T *wp, linenr_T lnum, int limit_winheight);
+int plines_win_nofill(win_T *wp, linenr_T lnum, int limit_winheight);
+int plines_win_full(win_T *wp, linenr_T lnum, linenr_T *nextp, int *foldedp, int cache, int limit_winheight);
+int plines_m_win(win_T *wp, linenr_T first, linenr_T last, int max);
+
 /// Get the number of cells taken up on the screen by the given character at vcol.
 /// "csarg->cur_text_width_left" and "csarg->cur_text_width_right" are set
 /// to the extra size for inline virtual text.

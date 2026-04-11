@@ -131,10 +131,10 @@ void f_virtcol2col(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 int nvim_plines_win_full(win_T *wp, linenr_T lnum, linenr_T *nextp, int *foldedp,
                          int cache, int limit_winheight)
 {
-  bool folded = false;
+  int folded = 0;
   int result = plines_win_full(wp, lnum, nextp, &folded, cache != 0, limit_winheight != 0);
   if (foldedp) {
-    *foldedp = folded ? 1 : 0;
+    *foldedp = folded;
   }
   return result;
 }

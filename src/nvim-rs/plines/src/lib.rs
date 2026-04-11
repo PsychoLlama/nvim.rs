@@ -2170,7 +2170,6 @@ extern "C" {
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
     fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
-    fn nvim_plines_win_nofill(wp: WinHandle, lnum: c_int, winheight: c_int) -> c_int;
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
     fn nvim_buf_get_line_len(buf: *mut c_void, lnum: c_int) -> c_int;
     fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
@@ -2470,7 +2469,7 @@ pub unsafe extern "C" fn rs_getvcols(
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[unsafe(export_name = "plines_win")]
 pub extern "C" fn rs_plines_win(wp: WinHandle, lnum: c_int, limit_winheight: c_int) -> c_int {
     if wp.is_null() {
         return 1;
@@ -2478,7 +2477,7 @@ pub extern "C" fn rs_plines_win(wp: WinHandle, lnum: c_int, limit_winheight: c_i
 
     unsafe {
         // Check for filler lines above this buffer line.
-        let nofill = nvim_plines_win_nofill(wp, lnum, limit_winheight);
+        let nofill = plines_win_nofill_impl(wp, lnum, limit_winheight);
         let fill = nvim_win_get_fill(wp, lnum);
         nofill + fill
     }
@@ -2488,17 +2487,11 @@ pub extern "C" fn rs_plines_win(wp: WinHandle, lnum: c_int, limit_winheight: c_i
 // plines_win_nofill - Screen lines without filler
 // ============================================================================
 
-/// Return the number of window lines occupied by buffer line "lnum".
-/// Does not include filler lines.
+/// Internal implementation of plines_win_nofill, called directly from Rust.
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
-pub extern "C" fn rs_plines_win_nofill(
-    wp: WinHandle,
-    lnum: c_int,
-    limit_winheight: c_int,
-) -> c_int {
+unsafe fn plines_win_nofill_impl(wp: WinHandle, lnum: c_int, limit_winheight: c_int) -> c_int {
     if wp.is_null() {
         return 1;
     }
@@ -2536,6 +2529,20 @@ pub extern "C" fn rs_plines_win_nofill(
     }
 }
 
+/// Return the number of window lines occupied by buffer line "lnum".
+/// Does not include filler lines.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[unsafe(export_name = "plines_win_nofill")]
+pub extern "C" fn rs_plines_win_nofill(
+    wp: WinHandle,
+    lnum: c_int,
+    limit_winheight: c_int,
+) -> c_int {
+    unsafe { plines_win_nofill_impl(wp, lnum, limit_winheight) }
+}
+
 extern "C" {
     fn plines_win_nofold(wp: WinHandle, lnum: c_int) -> c_int;
 }
@@ -2549,7 +2556,7 @@ extern "C" {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[unsafe(export_name = "plines_win_full")]
 pub unsafe extern "C" fn rs_plines_win_full(
     wp: WinHandle,
     lnum: c_int,
@@ -2610,7 +2617,7 @@ pub unsafe extern "C" fn rs_plines_win_full(
         let nofill = if folded {
             1
         } else {
-            nvim_plines_win_nofill(wp, actual_lnum, limit_winheight)
+            plines_win_nofill_impl(wp, actual_lnum, limit_winheight)
         };
 
         nofill + filler_lines
@@ -2635,7 +2642,7 @@ extern "C" {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[unsafe(export_name = "plines_m_win")]
 pub extern "C" fn rs_plines_m_win(wp: WinHandle, first: c_int, last: c_int, max: c_int) -> c_int {
     if wp.is_null() {
         return 0;
@@ -2790,7 +2797,7 @@ pub unsafe extern "C" fn rs_win_text_height(
             ) != 0;
             lnum = lnum_first;
 
-            height_cur_nofill = i64::from(nvim_plines_win_nofill(wp, lnum, 0));
+            height_cur_nofill = i64::from(plines_win_nofill_impl(wp, lnum, 0));
             height_sum_nofill += height_cur_nofill;
 
             let row_off: i64 = if start_vcol < i64::from(width1) || width2 <= 0 {
@@ -2816,7 +2823,7 @@ pub unsafe extern "C" fn rs_win_text_height(
             lnum = lnum_first;
 
             height_sum_fill += i64::from(nvim_win_get_fill(wp, lnum));
-            height_cur_nofill = i64::from(nvim_plines_win_nofill(wp, lnum, 0));
+            height_cur_nofill = i64::from(plines_win_nofill_impl(wp, lnum, 0));
             height_sum_nofill += height_cur_nofill;
             cur_lnum = lnum;
             lnum = lnum_next + 1;

@@ -376,6 +376,8 @@ void getvcols(win_T *wp, pos_T *pos1, pos_T *pos2, colnr_T *left, colnr_T *right
 /// Calls horizontal size functions defined above.
 
 
+// plines_win, plines_win_nofill: implemented in Rust (plines crate)
+
 /// Return the number of filler lines above "lnum".
 ///
 /// @param wp
@@ -395,46 +397,6 @@ int win_get_fill(win_T *wp, linenr_T lnum)
     }
   }
   return virt_lines;
-}
-
-/// Return the number of window lines occupied by buffer line "lnum".
-/// Includes any filler lines.
-///
-/// @param limit_winheight  when true limit to window height
-int plines_win(win_T *wp, linenr_T lnum, bool limit_winheight)
-{
-  // Check for filler lines above this buffer line.
-  return plines_win_nofill(wp, lnum, limit_winheight) + win_get_fill(wp, lnum);
-}
-
-/// Return the number of window lines occupied by buffer line "lnum".
-/// Does not include filler lines.
-///
-/// @param limit_winheight  when true limit to window height
-int plines_win_nofill(win_T *wp, linenr_T lnum, bool limit_winheight)
-{
-  if (decor_conceal_line(wp, lnum - 1, false)) {
-    return 0;
-  }
-
-  if (!wp->w_p_wrap) {
-    return 1;
-  }
-
-  if (wp->w_view_width == 0) {
-    return 1;
-  }
-
-  // Folded lines are handled just like an empty line.
-  if (rs_lineFolded(wp, lnum)) {
-    return 1;
-  }
-
-  const int lines = plines_win_nofold(wp, lnum);
-  if (limit_winheight && lines > wp->w_view_height) {
-    return wp->w_view_height;
-  }
-  return lines;
 }
 
 /// Get number of window lines physical line "lnum" will occupy in window "wp".
@@ -462,60 +424,7 @@ int plines_win_col(win_T *wp, linenr_T lnum, long column)
   return rs_plines_win_col(&csarg, line, (int)column, (int)cstype, fill_lines);
 }
 
-/// Get the number of screen lines buffer line "lnum" will take in window "wp".
-/// This takes care of both folds and topfill.
-///
-/// XXX: Because of topfill, this only makes sense when lnum >= wp->w_topline.
-///
-/// @param[in]  wp               window the line is in
-/// @param[in]  lnum             line number
-/// @param[out] nextp            if not NULL, the last line of a fold
-/// @param[out] foldedp          if not NULL, whether lnum is on a fold
-/// @param[in]  cache            whether to use the window's cache for folds
-/// @param[in]  limit_winheight  when true limit to window height
-///
-/// @return the total number of screen lines
-int plines_win_full(win_T *wp, linenr_T lnum, linenr_T *const nextp, bool *const foldedp,
-                    const bool cache, const bool limit_winheight)
-{
-  bool folded = hasFoldingWin(wp, lnum, &lnum, nextp, cache, NULL);
-  if (foldedp != NULL) {
-    *foldedp = folded;
-  }
-
-  int filler_lines = lnum == wp->w_topline ? wp->w_topfill : win_get_fill(wp, lnum);
-
-  if (decor_conceal_line(wp, lnum - 1, false)) {
-    return filler_lines;
-  }
-
-  return (folded ? 1 : plines_win_nofill(wp, lnum, limit_winheight)) + filler_lines;
-}
-
-/// Return number of window lines a physical line range will occupy in window "wp".
-/// Takes into account folding, 'wrap', topfill and filler lines beyond the end of the buffer.
-///
-/// XXX: Because of topfill, this only makes sense when first >= wp->w_topline.
-///
-/// @param first  first line number
-/// @param last   last line number
-/// @param max    number of lines to limit the height to
-///
-/// @see win_text_height
-int plines_m_win(win_T *wp, linenr_T first, linenr_T last, int max)
-{
-  int count = 0;
-
-  while (first <= last && count < max) {
-    linenr_T next = first;
-    count += plines_win_full(wp, first, &next, NULL, false, false);
-    first = next + 1;
-  }
-  if (first == wp->w_buffer->b_ml.ml_line_count + 1) {
-    count += win_get_fill(wp, first);
-  }
-  return MIN(max, count);
-}
+// plines_win_full, plines_m_win: implemented in Rust (plines crate)
 
 /// Return total number of physical and filler lines in a physical line range.
 /// Doesn't treat a fold as a single line or consider a wrapped line multiple lines,
