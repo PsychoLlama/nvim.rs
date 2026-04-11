@@ -115,17 +115,12 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-
-
 // First language that is loaded, start of the linked list of loaded
 // languages.
 slang_T *first_lang = NULL;
 
 // file used for "zG" and "zW"
 char *int_wordlist = NULL;
-
-// Structure to store info for word matching.
-
 
 // Structure used for the cookie argument of do_in_runtimepath().
 typedef struct {
@@ -139,19 +134,8 @@ bool did_set_spelltab;
 
 #include "spell.c.generated.h"
 extern int rs_win_valid_any_tab(win_T *win);
-extern int rs_ins_compl_interrupted(void);
-
-extern void rs_optval_free(OptVal o);
-
 // Rust implementations of spell functions
 extern int rs_find_region(const char *rp, const char *region);
-// Phase 2+3: dump functions now implemented in Rust
-extern void spell_dump_compl(char *pat, int ic, Direction *dir, int dumpflags_arg);
-// spell_iswordp_w was static in C but is now exported from Rust
-extern bool spell_iswordp_w(const int *p, const win_T *wp);
-// Phase 5: functions now implemented in Rust (were static in C)
-extern char *advance_camelcase_word(char *str, win_T *wp, bool *is_camel_case);
-extern int count_syllables(slang_T *slang, const char *word);
 
 // Static assertions to validate Rust repr(C) struct layout matches C struct layout.
 // These catch layout mismatches at compile time before they cause silent bugs.
@@ -173,23 +157,11 @@ _Static_assert(offsetof(slang_T, sl_sounddone) == 4048, "sl_sounddone offset mis
 _Static_assert(offsetof(slang_T, sl_sbyts) == 2696, "sl_sbyts offset mismatch");
 _Static_assert(offsetof(slang_T, sl_sidxs) == 2704, "sl_sidxs offset mismatch");
 
-
-
-/// type values for get_char_type
-enum {
-  CHAR_OTHER = 0,
-  CHAR_UPPER = 1,
-  CHAR_DIGIT = 2,
-};
-
 char *e_format = N_("E759: Format error in spell file");
 
 // Remember what "z?" replaced.
 char *repl_from = NULL;
 char *repl_to = NULL;
-
-
-
 
 
 
@@ -948,9 +920,3 @@ void close_spellbuf(buf_T *buf)
   ml_close(buf, true);
   xfree(buf);
 }
-
-
-
-
-
-// ex_spelldump, spell_dump_compl, dump_word, and dump_prefixes are now implemented in Rust.
