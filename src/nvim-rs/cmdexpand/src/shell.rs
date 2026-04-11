@@ -70,6 +70,7 @@ impl TypvalT {
     /// # Safety
     ///
     /// `s` must remain valid for the lifetime of this `TypvalT`.
+    #[allow(clippy::missing_const_for_fn)]
     unsafe fn from_string_ptr(s: *mut c_char) -> Self {
         let mut tv = Self::initial();
         tv.v_type = 2; // VAR_STRING
@@ -82,6 +83,7 @@ impl TypvalT {
     }
 
     /// Create a `VAR_NUMBER` typval (`v_type=1`) with the given `i64` value.
+    #[allow(clippy::missing_const_for_fn)]
     fn from_number(n: i64) -> Self {
         let mut tv = Self::initial();
         tv.v_type = 1; // VAR_NUMBER
@@ -207,7 +209,7 @@ unsafe fn call_user_expand_core<T>(
     ret
 }
 
-/// Call a user-defined VimL expand function, returning the result as a list.
+/// Call a user-defined `VimL` expand function, returning the result as a list.
 ///
 /// Exported as `rs_call_user_expand_retlist` (called from C wrappers in
 /// `cmdexpand.c` which forward `nvim_cmdexpand_call_user_expand_retlist`).
@@ -224,7 +226,7 @@ pub unsafe extern "C" fn rs_call_user_expand_retlist(xp: *mut ExpandT) -> ListHa
     )
 }
 
-/// Call a user-defined VimL expand function, returning the result as a string.
+/// Call a user-defined `VimL` expand function, returning the result as a string.
 ///
 /// Exported as `rs_call_user_expand_retstr` (called from C wrappers in
 /// `cmdexpand.c` which forward `nvim_cmdexpand_call_user_expand_retstr`).

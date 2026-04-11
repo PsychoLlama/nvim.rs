@@ -223,8 +223,6 @@ extern "C" {
     fn nvim_register_get_State() -> c_int;
     fn nvim_register_get_curwin_cursor(pos: *mut PosT);
     fn nvim_register_set_curwin_cursor(pos: *const PosT);
-    fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int, flags: c_int);
-
     // Typeahead buffer (Phase 2)
     fn ins_typebuf(
         str: *const c_char,
@@ -2033,7 +2031,7 @@ pub unsafe extern "C" fn rs_insert_reg(
                     }
                     AppendCharToRedobuff(CTRL_R);
                     AppendCharToRedobuff(regname);
-                    do_put(regname, std::ptr::null_mut(), dir, 1, PUT_CURSEND);
+                    rs_do_put(regname, std::ptr::null_mut(), dir, 1, PUT_CURSEND);
                 } else {
                     stuffescaped((*(*reg).y_array.add(i)).data, literally);
                     // Insert a newline between lines and after last line if
@@ -3152,6 +3150,1246 @@ pub unsafe extern "C" fn rs_do_record(c: c_int) -> c_int {
         }
     }
     retval
+}
+
+// ---------------------------------------------------------------------------
+// do_put FFI declarations and implementation (Phase 1)
+// ---------------------------------------------------------------------------
+
+/// Mirror of C `CharSize` from `plines.h`: `{int width; int head;}`.
+#[repr(C)]
+struct DpCharSize {
+    width: c_int,
+    head: c_int,
+}
+
+/// Mirror of C `CharInfo` from `mbyte_defs.h`: `{int32_t value; int len;}`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct DpCharInfo {
+    value: i32,
+    len: c_int,
+}
+
+/// Mirror of C `StrCharInfo` from `mbyte_defs.h`: `{char *ptr; CharInfo chr;}`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct DpStrCharInfo {
+    ptr: *mut c_char,
+    chr: DpCharInfo,
+}
+
+/// Opaque stack buffer for `CharsizeArg` (320 bytes, align 8 -- same as cursor crate).
+#[repr(C, align(8))]
+struct DpCharsizeArgBuf([u8; 320]);
+
+extern "C" {
+    // --- charsize FFI (same functions as cursor crate uses) ---
+    fn charsize_fast(
+        csarg: *mut c_void,
+        cur: *const c_char,
+        vcol: c_int,
+        cur_char: i32,
+    ) -> DpCharSize;
+    fn charsize_regular(
+        csarg: *mut c_void,
+        cur: *const c_char,
+        vcol: c_int,
+        cur_char: i32,
+    ) -> DpCharSize;
+    fn utfc_next_impl(cur: DpStrCharInfo) -> DpStrCharInfo;
+    fn utf_ptr2CharInfo_impl(p: *const u8, len: usize) -> i32;
+    static utf8len_tab: [u8; 256];
+
+    // --- do_put accessor wrappers (added to register.c) ---
+    fn nvim_dp_get_op_start(pos: *mut PosT);
+    fn nvim_dp_get_op_end(pos: *mut PosT);
+    fn nvim_dp_set_op_start_lnum(lnum: c_int);
+    fn nvim_dp_set_op_end_lnum(lnum: c_int);
+    fn nvim_dp_set_op_end_col(col: c_int);
+    fn nvim_dp_set_op_end_coladd(coladd: c_int);
+    fn nvim_dp_set_cursor_to_b_visual_vi_end();
+    fn nvim_dp_get_ml_line_count() -> c_int;
+    fn nvim_dp_getvcol_cursor(start: *mut c_int, endcol2: *mut c_int);
+    fn nvim_dp_getvcol_cursor_end_only(col: *mut c_int);
+    fn nvim_dp_getvcol_pos(lnum: c_int, col: c_int, coladd: c_int, vcol_mid: *mut c_int) -> c_int;
+    fn nvim_dp_getvpos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int, wcol: c_int)
+        -> c_int;
+    fn nvim_dp_buf_updates_send_changes(lnum: c_int, num_added: i64, num_removed: i64);
+    fn nvim_dp_changed_lines(lnum: c_int, col: c_int, lnume: c_int, xtra: c_int);
+    fn nvim_dp_changed_bytes(lnum: c_int, col: c_int);
+    fn nvim_dp_mark_adjust(line1: c_int, nr_lines: c_int, kind: c_int);
+    fn nvim_dp_extmark_splice(
+        start_row: c_int,
+        start_col: c_int,
+        old_row: c_int,
+        old_col: c_int,
+        new_row: c_int,
+        new_col: c_int,
+        totsize: c_long,
+        kind: c_int,
+    );
+    fn nvim_dp_extmark_splice_cols(
+        start_row: c_int,
+        start_col: c_int,
+        old_col: c_int,
+        new_col: c_int,
+        lines_appended: c_int,
+        kind: c_int,
+    );
+    fn nvim_dp_terminal_paste(count: c_int, y_array: *mut NvimString, y_size: usize);
+    fn nvim_dp_get_b_p_ts() -> i64;
+    fn nvim_dp_get_b_p_vts_array() -> *const c_int;
+    fn nvim_dp_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
+    fn nvim_dp_set_indent(size: c_int) -> bool;
+    fn nvim_dp_get_indent() -> c_int;
+    fn nvim_dp_preprocs_left() -> bool;
+    fn nvim_dp_beginline();
+    fn nvim_dp_u_save(top: c_int, bot: c_int) -> c_int;
+    fn nvim_dp_hasFolding_backward(lnum: *mut c_int);
+    fn nvim_dp_hasFolding_forward(lnum: *mut c_int);
+    fn nvim_dp_buf_is_empty() -> bool;
+    fn nvim_dp_get_cursor_line_len() -> c_int;
+    fn nvim_dp_get_cursor_line_ptr() -> *mut c_char;
+    fn nvim_dp_changed_cline_bef_curs();
+    fn nvim_dp_invalidate_botline();
+    fn nvim_dp_msgmore(n: c_int);
+    fn nvim_dp_gchar_cursor() -> c_int;
+    fn nvim_dp_get_restart_edit() -> c_int;
+    fn nvim_dp_get_cursor_lnum() -> c_int;
+    fn nvim_dp_set_cursor_lnum(lnum: c_int);
+    fn nvim_dp_get_cursor_col() -> c_int;
+    fn nvim_dp_set_cursor_col(col: c_int);
+    fn nvim_dp_set_cursor_coladd(coladd: c_int);
+    fn nvim_dp_get_cursor_coladd() -> c_int;
+    fn nvim_dp_set_curswant();
+    fn nvim_dp_get_cursor(pos: *mut PosT);
+    fn nvim_dp_set_cursor(pos: *const PosT);
+    fn nvim_dp_ml_append(lnum: c_int, line: *mut c_char) -> c_int;
+    fn nvim_dp_ml_replace(lnum: c_int, line: *mut c_char) -> c_int;
+    fn nvim_dp_get_VIsual_mode() -> c_int;
+    fn nvim_dp_get_b_visual_vi_start_lnum() -> c_int;
+    fn nvim_dp_get_b_visual_vi_end_lnum() -> c_int;
+    fn nvim_dp_set_VIsual_active_false();
+    fn nvim_dp_init_charsize_arg(csarg: *mut c_void, lnum: c_int, line: *const c_char) -> bool;
+    fn nvim_dp_init_charsize_arg_lnum0(csarg: *mut c_void, line: *const c_char) -> bool;
+    fn nvim_dp_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_dp_get_op_start_lnum() -> c_int;
+    fn nvim_dp_get_e_resulting_text_too_long() -> *const c_char;
+    fn nvim_dp_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_dp_ml_get(lnum: c_int) -> *mut c_char;
+    fn nvim_dp_ml_get_len(lnum: c_int) -> c_int;
+    fn nvim_dp_cursor_col_add(delta: c_int);
+    fn nvim_dp_op_end_col_add(delta: c_int);
+    fn nvim_dp_set_op_start_cursor();
+    fn nvim_dp_set_op_end_cursor();
+    fn nvim_dp_adjust_cursor_eol();
+    fn nvim_dp_getviscol() -> c_int;
+    fn nvim_dp_coladvance_force(viscol: c_int) -> c_int;
+    fn nvim_dp_get_ve_flags() -> c_uint;
+    fn nvim_dp_get_cursor_pos_ptr() -> *mut c_char;
+    fn nvim_dp_get_cursor_pos_len() -> c_int;
+    fn nvim_dp_semsg_E353(regname: c_int);
+
+    // already declared above but need here too
+    // fn xfree -- already declared
+    // fn xmalloc -- already declared
+    // fn u_save_cursor -- already declared
+    // fn emsg -- already declared
+    // fn semsg -- already declared
+    // fn utf_head_off -- already declared
+    // fn ml_get -- already declared
+    // fn ml_get_len -- already declared
+}
+
+use std::ffi::c_long;
+use std::ffi::c_uint;
+
+/// PUT_* flag constants from `register_defs.h`.
+const PUT_FIXINDENT: c_int = 1;
+// PUT_CURSEND = 2 already defined above
+const PUT_CURSLINE: c_int = 4;
+const PUT_LINE: c_int = 8;
+const PUT_LINE_SPLIT: c_int = 16;
+const PUT_LINE_FORWARD: c_int = 32;
+const PUT_BLOCK_INNER: c_int = 64;
+
+/// MotionType constants (matches K_MT_* and kMT*).
+const K_MT_CHAR_WISE_V: c_int = K_MT_CHAR_WISE;
+const K_MT_LINE_WISE_V: c_int = K_MT_LINE_WISE;
+const K_MT_BLOCK_WISE_V: c_int = K_MT_BLOCK_WISE;
+
+/// kOptVeFlagAll from option_vars.generated.h.
+const K_OPT_VE_FLAG_ALL: c_uint = 0x04;
+/// kOptVeFlagOnemore from option_vars.generated.h.
+const K_OPT_VE_FLAG_ONEMORE: c_uint = 0x08;
+
+/// kExtmarkUndo = 1, kExtmarkNOOP = 0.
+const K_EXTMARK_UNDO: c_int = 1;
+const K_EXTMARK_NOOP: c_int = 0;
+
+#[allow(dead_code)]
+/// MAXLNUM from pos_defs.h.
+const MAXLNUM: c_int = 0x7fff_ffff_u32 as c_int;
+
+/// TAB character.
+const TAB: c_int = 9;
+
+/// Dispatch to `charsize_fast` or `charsize_regular`.
+#[inline]
+unsafe fn dp_win_charsize(
+    cstype: bool,
+    vcol: c_int,
+    ptr: *const c_char,
+    chr: i32,
+    csarg: *mut c_void,
+) -> DpCharSize {
+    if cstype {
+        charsize_regular(csarg, ptr, vcol, chr)
+    } else {
+        charsize_fast(csarg, ptr, vcol, chr)
+    }
+}
+
+/// Inline `utf_ptr2StrCharInfo`: construct `DpStrCharInfo` for the character at `ptr`.
+#[inline]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+unsafe fn dp_utf_ptr2str_char_info(ptr: *mut c_char) -> DpStrCharInfo {
+    let p = ptr.cast::<u8>();
+    let first = *p;
+    if first < 0x80 {
+        DpStrCharInfo {
+            ptr,
+            chr: DpCharInfo {
+                value: i32::from(first),
+                len: 1,
+            },
+        }
+    } else {
+        let len = utf8len_tab[first as usize] as usize;
+        let code_point = utf_ptr2CharInfo_impl(p, len);
+        let (code_point, len) = if code_point < 0 {
+            (code_point, 1)
+        } else {
+            (code_point, len as c_int)
+        };
+        DpStrCharInfo {
+            ptr,
+            chr: DpCharInfo {
+                value: code_point,
+                len,
+            },
+        }
+    }
+}
+
+/// Inline `utfc_next`: advance to the next character in a string.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn dp_utfc_next(cur: DpStrCharInfo) -> DpStrCharInfo {
+    let first = *cur.ptr as u8;
+    if first < 0x80 {
+        let next_ptr = cur.ptr.add(1);
+        let next_first = *next_ptr as u8;
+        if next_first < 0x80 {
+            return DpStrCharInfo {
+                ptr: next_ptr,
+                chr: DpCharInfo {
+                    value: i32::from(next_first),
+                    len: 1,
+                },
+            };
+        }
+    }
+    utfc_next_impl(cur)
+}
+
+/// Put contents of register `regname` into the text.
+///
+/// Caller must check `regname` to be valid.
+///
+/// # Safety
+///
+/// Reads/writes global Neovim state via FFI.
+#[unsafe(export_name = "do_put")]
+#[allow(unused_assignments, unused_mut, dead_code)]
+pub unsafe extern "C" fn rs_do_put(
+    regname: c_int,
+    reg: *mut YankReg,
+    dir: c_int,
+    count: c_int,
+    flags: c_int,
+) {
+    let mut totlen: usize = 0;
+    let mut lnum: c_int = 0;
+    let mut y_type: c_int;
+    let mut y_size: usize;
+    let mut y_width: c_int = 0;
+    let mut vcol: c_int = 0;
+    let mut y_array: *mut NvimString = std::ptr::null_mut();
+    let mut nr_lines: c_int = 0;
+    let mut allocated = false;
+    let mut orig_start = PosT::default();
+    let mut orig_end = PosT::default();
+    nvim_dp_get_op_start(&raw mut orig_start);
+    nvim_dp_get_op_end(&raw mut orig_end);
+    let cur_ve_flags = nvim_dp_get_ve_flags();
+
+    // default for '[ and '] marks
+    nvim_dp_set_op_start_cursor();
+    nvim_dp_set_op_end_cursor();
+
+    // Using inserted text works differently, because the register includes
+    // special characters (newlines, etc.).
+    if regname == c_int::from(b'.') && reg.is_null() {
+        let visual_active = VIsual_active;
+        let non_linewise_vis = visual_active && nvim_dp_get_VIsual_mode() != c_int::from(b'V');
+
+        // PUT_LINE has special handling below which means we use 'i' to start.
+        let command_start_char: c_int = if non_linewise_vis {
+            c_int::from(b'c')
+        } else if flags & PUT_LINE != 0 {
+            c_int::from(b'i')
+        } else if dir == FORWARD {
+            c_int::from(b'a')
+        } else {
+            c_int::from(b'i')
+        };
+
+        // To avoid 'autoindent' on linewise puts, create a new line with `:put _`.
+        if flags & PUT_LINE != 0 {
+            rs_do_put(c_int::from(b'_'), std::ptr::null_mut(), dir, 1, PUT_LINE);
+        }
+
+        // If given a count when putting linewise, we stuff the readbuf with the
+        // dot register 'count' times split by newlines.
+        if flags & PUT_LINE != 0 {
+            stuffcharReadbuff(command_start_char);
+            let mut cnt = count;
+            while cnt > 0 {
+                stuff_inserted(NUL, 1, cnt != 1);
+                if cnt != 1 {
+                    stuffReadbuff(c"\n ".as_ptr());
+                    stuffcharReadbuff(CTRL_U);
+                }
+                cnt -= 1;
+            }
+        } else {
+            stuff_inserted(command_start_char, count as i64, false);
+        }
+
+        // Putting the text is done later, so can't move the cursor to the next
+        // character. Simulate it with motion commands after the insert.
+        if flags & PUT_CURSEND != 0 {
+            if flags & PUT_LINE != 0 {
+                stuffReadbuff(c"j0".as_ptr());
+            } else {
+                let cursor_pos = nvim_dp_get_cursor_pos_ptr();
+                let one_past_line = *cursor_pos == 0;
+                let mut eol = false;
+                if !one_past_line {
+                    let len = nvim_dp_utfc_ptr2len(cursor_pos);
+                    eol = *cursor_pos.add(len as usize) == 0;
+                }
+                let ve_allows =
+                    cur_ve_flags == K_OPT_VE_FLAG_ALL || cur_ve_flags == K_OPT_VE_FLAG_ONEMORE;
+                let eof = nvim_dp_get_ml_line_count() == nvim_dp_get_cursor_lnum() && one_past_line;
+                if ve_allows || !(eol || eof) {
+                    stuffcharReadbuff(c_int::from(b'l'));
+                }
+            }
+        } else if flags & PUT_LINE != 0 {
+            stuffReadbuff(c"g'[".as_ptr());
+        }
+
+        // So the 'u' command restores cursor position after ".p, save the cursor
+        // position now (though not saving any text).
+        if command_start_char == c_int::from(b'a') {
+            let lnum_now = nvim_dp_get_cursor_lnum();
+            if nvim_dp_u_save(lnum_now, lnum_now + 1) == FAIL {
+                return;
+            }
+        }
+        return;
+    }
+
+    // For special registers '%', '#', ':', etc. we have to create a fake yank register.
+    let mut insert_string = NvimString::default();
+    if reg.is_null()
+        && rs_get_spec_reg(
+            regname,
+            &raw mut insert_string.data,
+            &raw mut allocated,
+            true,
+        )
+        && insert_string.data.is_null()
+    {
+        return;
+    }
+
+    // Autocommands may be executed when saving lines for undo. This might
+    // make y_array invalid, so we start undo now to avoid that.
+    // (but only if not a terminal buffer)
+    // We check terminal status separately:
+    let is_terminal = nvim_dp_curbuf_is_terminal();
+    if !is_terminal {
+        let cursor_lnum = nvim_dp_get_cursor_lnum();
+        if nvim_dp_u_save(cursor_lnum, cursor_lnum + 1) == FAIL {
+            return;
+        }
+    }
+
+    if !insert_string.data.is_null() {
+        insert_string.size = libc_strlen(insert_string.data);
+        y_type = K_MT_CHAR_WISE_V;
+        if regname == c_int::from(b'=') {
+            // For the = register we need to split the string at NL characters.
+            // Loop twice: count the number of lines and save them.
+            loop {
+                y_size = 0;
+                let mut ptr = insert_string.data;
+                let mut ptrlen = insert_string.size;
+                while !ptr.is_null() {
+                    if !y_array.is_null() {
+                        (*y_array.add(y_size)).data = ptr;
+                    }
+                    y_size += 1;
+                    let tmp = libc_strchr(ptr, b'\n');
+                    if tmp.is_null() {
+                        if !y_array.is_null() {
+                            (*y_array.add(y_size - 1)).size = ptrlen;
+                        }
+                    } else {
+                        if !y_array.is_null() {
+                            *tmp = 0;
+                            (*y_array.add(y_size - 1)).size = tmp.offset_from(ptr) as usize;
+                            ptrlen -= (*y_array.add(y_size - 1)).size + 1;
+                        }
+                        let tmp_next = tmp.add(1);
+                        // A trailing '\n' makes the register linewise.
+                        if *tmp_next == 0 {
+                            y_type = K_MT_LINE_WISE_V;
+                            break;
+                        }
+                        ptr = tmp_next;
+                        continue;
+                    }
+                    break;
+                }
+                if !y_array.is_null() {
+                    break;
+                }
+                y_array = xmalloc(y_size * std::mem::size_of::<NvimString>()) as *mut NvimString;
+            }
+        } else {
+            y_size = 1; // use fake one-line yank register
+            y_array = &raw mut insert_string;
+        }
+    } else {
+        // in case of replacing visually selected text
+        // the yankreg might already have been saved to avoid
+        // just restoring the deleted text.
+        let effective_reg = if reg.is_null() {
+            rs_get_yank_register(regname, 0 /* YREG_PASTE */)
+        } else {
+            reg
+        };
+
+        y_type = (*effective_reg).y_type;
+        y_width = (*effective_reg).y_width;
+        y_size = (*effective_reg).y_size;
+        y_array = (*effective_reg).y_array;
+    }
+
+    if is_terminal {
+        nvim_dp_terminal_paste(count, y_array, y_size);
+        return;
+    }
+
+    // We need a 'cleanup' section -- use a closure that always runs
+    // after the main body (to replicate C's 'goto end' cleanup).
+    // We use a labeled block approach.
+    let mut split_pos: c_int = 0;
+
+    // The 'error' and 'end' labels in C become early returns from this inner block.
+    // We collect whether we reached the normal path or an error.
+    let _: () = 'do_put_body: {
+        if y_type == K_MT_LINE_WISE_V {
+            if flags & PUT_LINE_SPLIT != 0 {
+                // "p" or "P" in Visual mode: split the lines to put the text in between.
+                if u_save_cursor() == FAIL {
+                    break 'do_put_body;
+                }
+                let curline = nvim_dp_get_cursor_line_ptr();
+                let p_orig = nvim_dp_get_cursor_pos_ptr();
+                let mut p = p_orig;
+                let plen = nvim_dp_get_cursor_pos_len() as usize;
+                if dir == FORWARD && *p != 0 {
+                    // MB_PTR_ADV
+                    let adv = nvim_dp_utfc_ptr2len(p);
+                    p = p.add(adv as usize);
+                }
+                // split_pos = p - curline
+                split_pos = p.offset_from(curline) as c_int;
+
+                let part_len = plen - p.offset_from(p_orig) as usize;
+                let ptr = xmemdupz(p as *const c_void, part_len) as *mut c_char;
+                let cursor_lnum = nvim_dp_get_cursor_lnum();
+                nvim_dp_ml_append(cursor_lnum, ptr);
+                xfree(ptr as *mut c_void);
+
+                // After ml_append, re-fetch line ptr (may have been reallocated).
+                let curline2 = nvim_dp_get_cursor_line_ptr();
+                let ptr2 = xmemdupz(curline2 as *const c_void, split_pos as usize) as *mut c_char;
+                nvim_dp_ml_replace(cursor_lnum, ptr2);
+                nr_lines += 1;
+                // C: dir = FORWARD; -- handled via effective_dir above
+                nvim_dp_buf_updates_send_changes(cursor_lnum, 1, 1);
+            }
+            if flags & PUT_LINE_FORWARD != 0 {
+                // Must be "p" for a Visual block, put lines below the block.
+                nvim_dp_set_cursor_to_b_visual_vi_end();
+            }
+            nvim_dp_set_op_start_cursor(); // for mark_adjust()
+            nvim_dp_set_op_end_cursor();
+        }
+
+        // Effective direction after linewise adjustments.
+        // C mutates `dir = FORWARD` for both PUT_LINE_SPLIT and PUT_LINE_FORWARD.
+        let effective_dir = if y_type == K_MT_LINE_WISE_V
+            && (flags & PUT_LINE_SPLIT != 0 || flags & PUT_LINE_FORWARD != 0)
+        {
+            FORWARD
+        } else {
+            dir
+        };
+
+        if flags & PUT_LINE != 0 {
+            // :put command or "p" in Visual line mode.
+            y_type = K_MT_LINE_WISE_V;
+        }
+
+        if y_size == 0 || y_array.is_null() {
+            nvim_dp_semsg_E353(regname);
+            break 'do_put_body;
+        }
+
+        if y_type == K_MT_BLOCK_WISE_V {
+            lnum = nvim_dp_get_cursor_lnum() + y_size as c_int + 1;
+            lnum = lnum.min(nvim_dp_get_ml_line_count() + 1);
+            let cursor_lnum = nvim_dp_get_cursor_lnum();
+            if nvim_dp_u_save(cursor_lnum - 1, lnum) == FAIL {
+                break 'do_put_body;
+            }
+        } else if y_type == K_MT_LINE_WISE_V {
+            lnum = nvim_dp_get_cursor_lnum();
+            // Correct line number for closed fold. Don't move the cursor yet.
+            if effective_dir == BACKWARD {
+                nvim_dp_hasFolding_backward(&raw mut lnum);
+            } else {
+                nvim_dp_hasFolding_forward(&raw mut lnum);
+            }
+            if effective_dir == FORWARD {
+                lnum += 1;
+            }
+            // In an empty buffer the empty line is going to be replaced.
+            let save_failed = if nvim_dp_buf_is_empty() {
+                nvim_dp_u_save(0, 2) == FAIL
+            } else {
+                nvim_dp_u_save(lnum - 1, lnum) == FAIL
+            };
+            if save_failed {
+                break 'do_put_body;
+            }
+            if effective_dir == FORWARD {
+                nvim_dp_set_cursor_lnum(lnum - 1);
+            } else {
+                nvim_dp_set_cursor_lnum(lnum);
+            }
+            nvim_dp_set_op_start_cursor(); // for mark_adjust()
+        } else if u_save_cursor() == FAIL {
+            break 'do_put_body;
+        }
+
+        if cur_ve_flags == K_OPT_VE_FLAG_ALL && y_type == K_MT_CHAR_WISE_V {
+            if nvim_dp_gchar_cursor() == TAB {
+                let viscol = nvim_dp_getviscol();
+                let ts = nvim_dp_get_b_p_ts();
+                let vts = nvim_dp_get_b_p_vts_array();
+                // Don't need to insert spaces when "p" on the last position of a
+                // tab or "P" on the first position.
+                if if dir == FORWARD {
+                    nvim_dp_tabstop_padding(viscol, ts, vts) != 1
+                } else {
+                    nvim_dp_get_cursor_coladd() > 0
+                } {
+                    nvim_dp_coladvance_force(viscol);
+                } else {
+                    nvim_dp_set_cursor_coladd(0);
+                }
+            } else if nvim_dp_get_cursor_coladd() > 0 || nvim_dp_gchar_cursor() == NUL {
+                nvim_dp_coladvance_force(nvim_dp_getviscol() + if dir == FORWARD { 1 } else { 0 });
+            }
+        }
+
+        lnum = nvim_dp_get_cursor_lnum();
+        let mut col = nvim_dp_get_cursor_col();
+
+        // Block mode
+        if y_type == K_MT_BLOCK_WISE_V {
+            let mut incr: c_int = 0;
+            let mut bd = BlockDef::zeroed();
+            let c = nvim_dp_gchar_cursor();
+            let mut endcol2: c_int = 0;
+
+            if dir == FORWARD && c != NUL {
+                if cur_ve_flags == K_OPT_VE_FLAG_ALL {
+                    nvim_dp_getvcol_cursor(&raw mut col, &raw mut endcol2);
+                } else {
+                    nvim_dp_getvcol_cursor_end_only(&raw mut col);
+                }
+                // move to start of next multi-byte character
+                let adv = nvim_dp_utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
+                nvim_dp_cursor_col_add(adv);
+                col += 1;
+            } else {
+                nvim_dp_getvcol_cursor(&raw mut col, &raw mut endcol2);
+            }
+
+            col += nvim_dp_get_cursor_coladd();
+            if cur_ve_flags == K_OPT_VE_FLAG_ALL
+                && (nvim_dp_get_cursor_coladd() > 0 || endcol2 == nvim_dp_get_cursor_col())
+            {
+                if dir == FORWARD && c == NUL {
+                    col += 1;
+                }
+                if dir != FORWARD && c != NUL && nvim_dp_get_cursor_coladd() > 0 {
+                    nvim_dp_cursor_col_add(1);
+                }
+                if c == TAB {
+                    if dir == BACKWARD && nvim_dp_get_cursor_col() != 0 {
+                        nvim_dp_cursor_col_add(-1);
+                    }
+                    if dir == FORWARD && col - 1 == endcol2 {
+                        nvim_dp_cursor_col_add(1);
+                    }
+                }
+            }
+            nvim_dp_set_cursor_coladd(0);
+            bd.textcol = 0;
+
+            let mut i = 0usize;
+            while i < y_size {
+                let mut spaces: c_int = 0;
+                let mut lines_appended: c_int = 0;
+
+                bd.startspaces = 0;
+                bd.endspaces = 0;
+                vcol = 0;
+                let mut delcount: c_int = 0;
+
+                // add a new line if necessary
+                if nvim_dp_get_cursor_lnum() > nvim_dp_get_ml_line_count() {
+                    if nvim_dp_ml_append(nvim_dp_get_ml_line_count(), c"".as_ptr() as *mut c_char)
+                        == FAIL
+                    {
+                        break;
+                    }
+                    nr_lines += 1;
+                    lines_appended = 1;
+                }
+
+                // get the old line and advance to the position to insert at
+                let oldp = nvim_dp_get_cursor_line_ptr();
+                let oldlen = nvim_dp_get_cursor_line_len();
+
+                let mut csarg_buf = DpCharsizeArgBuf([0u8; 320]);
+                let csarg = csarg_buf.0.as_mut_ptr() as *mut c_void;
+                let cursor_lnum = nvim_dp_get_cursor_lnum();
+                let cstype = nvim_dp_init_charsize_arg(csarg, cursor_lnum, oldp);
+                let mut ci = dp_utf_ptr2str_char_info(oldp);
+                vcol = 0;
+                while vcol < col && *ci.ptr != 0 {
+                    incr = dp_win_charsize(cstype, vcol, ci.ptr, ci.chr.value, csarg).width;
+                    vcol += incr;
+                    ci = dp_utfc_next(ci);
+                }
+                let ptr = ci.ptr;
+                bd.textcol = ptr.offset_from(oldp) as c_int;
+
+                let shortline = vcol < col || (vcol == col && *ptr == 0);
+
+                if vcol < col {
+                    // line too short, pad with spaces
+                    bd.startspaces = col - vcol;
+                } else if vcol > col {
+                    bd.endspaces = vcol - col;
+                    bd.startspaces = incr - bd.endspaces;
+                    bd.textcol -= 1;
+                    delcount = 1;
+                    bd.textcol -= nvim_dp_utf_head_off(oldp, oldp.add(bd.textcol as usize));
+                    if *oldp.add(bd.textcol as usize) != b'\t' as c_char {
+                        // Only a Tab can be split into spaces.
+                        delcount = 0;
+                        bd.endspaces = 0;
+                    }
+                }
+
+                let yanklen = (*y_array.add(i)).size as c_int;
+
+                if flags & PUT_BLOCK_INNER == 0 {
+                    // calculate number of spaces required to fill right side of block
+                    spaces = y_width + 1;
+
+                    let mut csarg_buf2 = DpCharsizeArgBuf([0u8; 320]);
+                    let csarg2 = csarg_buf2.0.as_mut_ptr() as *mut c_void;
+                    let yline = (*y_array.add(i)).data;
+                    nvim_dp_init_charsize_arg_lnum0(csarg2, yline);
+                    let mut ci2 = dp_utf_ptr2str_char_info(yline);
+                    while *ci2.ptr != 0 {
+                        spaces -= dp_win_charsize(cstype, 0, ci2.ptr, ci2.chr.value, csarg2).width;
+                        ci2 = dp_utfc_next(ci2);
+                    }
+                    spaces = spaces.max(0);
+                }
+
+                // Insert the new text.
+                // First check for multiplication overflow.
+                if yanklen + spaces != 0
+                    && count > ((c_int::MAX - (bd.startspaces + bd.endspaces)) / (yanklen + spaces))
+                {
+                    emsg(nvim_dp_get_e_resulting_text_too_long());
+                    break;
+                }
+
+                totlen = count as usize * (yanklen + spaces) as usize
+                    + bd.startspaces as usize
+                    + bd.endspaces as usize;
+                let newp = xmalloc(totlen + oldlen as usize + 1) as *mut c_char;
+
+                // copy part up to cursor to new line
+                let mut out_ptr = newp;
+                std::ptr::copy_nonoverlapping(oldp, out_ptr, bd.textcol as usize);
+                out_ptr = out_ptr.add(bd.textcol as usize);
+
+                // may insert some spaces before the new text
+                std::ptr::write_bytes(out_ptr, b' ', bd.startspaces as usize);
+                out_ptr = out_ptr.add(bd.startspaces as usize);
+
+                // insert the new text
+                for j in 0..count {
+                    let ydata = (*y_array.add(i)).data;
+                    std::ptr::copy_nonoverlapping(ydata, out_ptr, yanklen as usize);
+                    out_ptr = out_ptr.add(yanklen as usize);
+
+                    // insert block's trailing spaces only if there's text behind
+                    if (j < count - 1 || !shortline) && spaces > 0 {
+                        std::ptr::write_bytes(out_ptr, b' ', spaces as usize);
+                        out_ptr = out_ptr.add(spaces as usize);
+                    } else {
+                        totlen -= spaces as usize; // didn't use these spaces
+                    }
+                }
+
+                // may insert some spaces after the new text
+                std::ptr::write_bytes(out_ptr, b' ', bd.endspaces as usize);
+                out_ptr = out_ptr.add(bd.endspaces as usize);
+
+                // move the text after the cursor to the end of the line.
+                let columns = oldlen - bd.textcol - delcount + 1;
+                std::ptr::copy_nonoverlapping(
+                    oldp.add((bd.textcol + delcount) as usize),
+                    out_ptr,
+                    columns as usize,
+                );
+                nvim_dp_ml_replace(nvim_dp_get_cursor_lnum(), newp);
+                nvim_dp_extmark_splice_cols(
+                    nvim_dp_get_cursor_lnum() - 1,
+                    bd.textcol,
+                    delcount,
+                    totlen as c_int,
+                    lines_appended,
+                    K_EXTMARK_UNDO,
+                );
+
+                nvim_dp_set_cursor_lnum(nvim_dp_get_cursor_lnum() + 1);
+                if i == 0 {
+                    nvim_dp_cursor_col_add(bd.startspaces);
+                }
+
+                i += 1;
+            }
+
+            nvim_dp_changed_lines(
+                lnum,
+                0,
+                nvim_dp_get_op_start_lnum() + y_size as c_int - nr_lines,
+                nr_lines,
+            );
+
+            // Set '[ mark.
+            let cursor_lnum_end = nvim_dp_get_cursor_lnum();
+            nvim_dp_set_op_start_cursor();
+            nvim_dp_set_op_start_lnum(lnum);
+
+            // adjust '] mark
+            nvim_dp_set_op_end_lnum(cursor_lnum_end - 1);
+            nvim_dp_set_op_end_col(0.max(bd.textcol + totlen as c_int - 1));
+            nvim_dp_set_op_end_coladd(0);
+
+            if flags & PUT_CURSEND != 0 {
+                let mut op_end = PosT::default();
+                nvim_dp_get_op_end(&raw mut op_end);
+                nvim_dp_set_cursor(&raw const op_end);
+                nvim_dp_cursor_col_add(1);
+
+                // in Insert mode we might be after the NUL, correct for that
+                let len = nvim_dp_get_cursor_line_len();
+                let cur_col = nvim_dp_get_cursor_col();
+                if cur_col > len {
+                    nvim_dp_set_cursor_col(len);
+                }
+            } else {
+                nvim_dp_set_cursor_lnum(lnum);
+            }
+        } else {
+            let yanklen = (*y_array).size as c_int;
+
+            // Character or Line mode
+            if y_type == K_MT_CHAR_WISE_V {
+                // if type is kMTCharWise, FORWARD is the same as BACKWARD on the next char
+                if effective_dir == FORWARD && nvim_dp_gchar_cursor() != NUL {
+                    let bytelen = nvim_dp_utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
+                    // put it on the next of the multi-byte character.
+                    col += bytelen;
+                    if yanklen != 0 {
+                        nvim_dp_cursor_col_add(bytelen);
+                        nvim_dp_op_end_col_add(bytelen);
+                    }
+                }
+                nvim_dp_set_op_start_cursor();
+            } else if effective_dir == BACKWARD {
+                // Line mode: BACKWARD is the same as FORWARD on the previous line
+                lnum -= 1;
+            }
+
+            // save cursor position for multi-line insert
+            let mut new_cursor = PosT::default();
+            nvim_dp_get_cursor(&raw mut new_cursor);
+
+            // simple case: insert into one line at a time
+            if y_type == K_MT_CHAR_WISE_V && y_size == 1 {
+                let mut end_lnum: c_int = 0;
+                let start_lnum = lnum;
+                let mut first_byte_off: c_int = 0;
+
+                let visual_active_charwise = VIsual_active;
+                if visual_active_charwise {
+                    let vi_end_lnum = nvim_dp_get_b_visual_vi_end_lnum();
+                    let vi_start_lnum = nvim_dp_get_b_visual_vi_start_lnum();
+                    end_lnum = vi_end_lnum.max(vi_start_lnum);
+                    if end_lnum > start_lnum {
+                        // "col" is valid for the first line, in following lines
+                        // the virtual column needs to be used.
+                        let mut vcol_mid = 0;
+                        nvim_dp_getvcol_pos(lnum, col, 0, &raw mut vcol_mid);
+                        vcol = vcol_mid;
+                    }
+                }
+
+                if count == 0 || yanklen == 0 {
+                    if visual_active_charwise {
+                        lnum = end_lnum;
+                    }
+                } else if count > c_int::MAX / yanklen {
+                    // multiplication overflow
+                    emsg(nvim_dp_get_e_resulting_text_too_long());
+                } else {
+                    totlen = count as usize * yanklen as usize;
+                    loop {
+                        let oldp = nvim_dp_ml_get(lnum);
+                        let oldlen = nvim_dp_ml_get_len(lnum);
+                        if lnum > start_lnum {
+                            let mut pos_lnum = lnum;
+                            let mut pos_col = 0;
+                            let mut pos_coladd = 0;
+                            if nvim_dp_getvpos(
+                                &raw mut pos_lnum,
+                                &raw mut pos_col,
+                                &raw mut pos_coladd,
+                                vcol,
+                            ) == OK
+                            {
+                                col = pos_col;
+                            } else {
+                                col = MAXCOL;
+                            }
+                        }
+                        if visual_active_charwise && col > oldlen {
+                            lnum += 1;
+                            if !visual_active_charwise || lnum > end_lnum {
+                                break;
+                            }
+                            continue;
+                        }
+                        let newp = xmalloc(totlen + oldlen as usize + 1) as *mut c_char;
+                        std::ptr::copy_nonoverlapping(oldp, newp, col as usize);
+                        let mut out_ptr = newp.add(col as usize);
+                        for _ in 0..count {
+                            let ydata = (*y_array).data;
+                            std::ptr::copy_nonoverlapping(ydata, out_ptr, yanklen as usize);
+                            out_ptr = out_ptr.add(yanklen as usize);
+                        }
+                        std::ptr::copy_nonoverlapping(
+                            oldp.add(col as usize),
+                            out_ptr,
+                            (oldlen - col + 1) as usize, // +1 for NUL
+                        );
+                        nvim_dp_ml_replace(lnum, newp);
+
+                        // compute the byte offset for the last character
+                        first_byte_off = nvim_dp_utf_head_off(newp, out_ptr.sub(1));
+
+                        // Place cursor on last putted char.
+                        if lnum == nvim_dp_get_cursor_lnum() {
+                            // make sure curwin->w_virtcol is updated
+                            nvim_dp_changed_cline_bef_curs();
+                            nvim_dp_invalidate_botline();
+                            nvim_dp_cursor_col_add(totlen as c_int - 1);
+                        }
+                        nvim_dp_changed_bytes(lnum, col);
+                        nvim_dp_extmark_splice_cols(
+                            lnum - 1,
+                            col,
+                            0,
+                            totlen as c_int,
+                            0,
+                            K_EXTMARK_UNDO,
+                        );
+                        if visual_active_charwise {
+                            lnum += 1;
+                        }
+
+                        if !visual_active_charwise || lnum > end_lnum {
+                            break;
+                        }
+                    }
+
+                    if visual_active_charwise {
+                        // reset lnum to the last visual line
+                        lnum -= 1;
+                    }
+                }
+
+                // put '] at the first byte of the last character
+                nvim_dp_set_op_end_cursor();
+                nvim_dp_op_end_col_add(-first_byte_off);
+
+                // For "CTRL-O p" in Insert mode, put cursor after last char
+                if totlen != 0 && (nvim_dp_get_restart_edit() != 0 || flags & PUT_CURSEND != 0) {
+                    nvim_dp_cursor_col_add(1);
+                } else {
+                    nvim_dp_cursor_col_add(-first_byte_off);
+                }
+            } else {
+                // Multi-line charwise or linewise insert
+                let mut new_lnum = new_cursor.lnum;
+                let mut indent: c_int;
+                let mut orig_indent: c_int = 0;
+                let mut indent_diff: c_int = 0;
+                let mut first_indent = true;
+                let mut lendiff: c_int = 0;
+
+                if flags & PUT_FIXINDENT != 0 {
+                    orig_indent = nvim_dp_get_indent();
+                }
+
+                // Insert at least one line. When y_type is kMTCharWise, break the first
+                // line in two.
+                let mut cnt = 1;
+                let mut error_break = false;
+                while cnt <= count {
+                    let mut i = 0usize;
+                    if y_type == K_MT_CHAR_WISE_V {
+                        // Split the current line in two at the insert position.
+                        // First insert y_array[size - 1] in front of second line.
+                        // Then append y_array[0] to first line.
+                        lnum = new_cursor.lnum;
+                        let cur_line_ptr = nvim_dp_ml_get(lnum);
+                        let ptr = cur_line_ptr.add(col as usize);
+                        let ptrlen = (nvim_dp_ml_get_len(lnum) - col) as usize;
+                        let last_entry = y_array.add(y_size - 1);
+                        totlen = (*last_entry).size;
+                        let newp = xmalloc(ptrlen + totlen + 1) as *mut c_char;
+                        // STRCPY(newp, y_array[y_size - 1].data)
+                        std::ptr::copy_nonoverlapping((*last_entry).data, newp, totlen);
+                        // STRCPY(newp + totlen, ptr)
+                        std::ptr::copy_nonoverlapping(ptr, newp.add(totlen), ptrlen + 1);
+                        // insert second line
+                        nvim_dp_ml_append(lnum, newp);
+                        new_lnum += 1;
+                        xfree(newp as *mut c_void);
+
+                        let oldp = nvim_dp_ml_get(lnum);
+                        let newp2 = xmalloc(col as usize + yanklen as usize + 1) as *mut c_char;
+                        // copy first part of line
+                        std::ptr::copy_nonoverlapping(oldp, newp2, col as usize);
+                        // append to first line
+                        std::ptr::copy_nonoverlapping(
+                            (*y_array).data,
+                            newp2.add(col as usize),
+                            yanklen as usize + 1,
+                        );
+                        nvim_dp_ml_replace(lnum, newp2);
+
+                        nvim_dp_set_cursor_lnum(lnum);
+                        i = 1;
+                    }
+
+                    while i < y_size {
+                        if y_type != K_MT_CHAR_WISE_V || i < y_size - 1 {
+                            if nvim_dp_ml_append(lnum, (*y_array.add(i)).data) == FAIL {
+                                error_break = true;
+                                break;
+                            }
+                            new_lnum += 1;
+                        }
+                        lnum += 1;
+                        nr_lines += 1;
+                        if flags & PUT_FIXINDENT != 0 {
+                            let old_lnum = nvim_dp_get_cursor_lnum();
+                            let old_col = nvim_dp_get_cursor_col();
+                            let old_coladd = nvim_dp_get_cursor_coladd();
+                            nvim_dp_set_cursor_lnum(lnum);
+                            let line_ptr = nvim_dp_ml_get(lnum);
+                            if cnt == count && i == y_size - 1 {
+                                lendiff = nvim_dp_ml_get_len(lnum);
+                            }
+                            if *line_ptr == b'#' as c_char && nvim_dp_preprocs_left() {
+                                indent = 0; // Leave # lines at start
+                            } else if *line_ptr == 0 {
+                                indent = 0; // Ignore empty lines
+                            } else if first_indent {
+                                indent_diff = orig_indent - nvim_dp_get_indent();
+                                indent = orig_indent;
+                                first_indent = false;
+                            } else {
+                                indent = nvim_dp_get_indent() + indent_diff;
+                                if indent < 0 {
+                                    indent = 0;
+                                }
+                            }
+                            nvim_dp_set_indent(indent);
+                            // restore cursor
+                            nvim_dp_set_cursor_lnum(old_lnum);
+                            nvim_dp_set_cursor_col(old_col);
+                            nvim_dp_set_cursor_coladd(old_coladd);
+                            // remember how many chars were removed
+                            if cnt == count && i == y_size - 1 {
+                                lendiff -= nvim_dp_ml_get_len(lnum);
+                            }
+                        }
+                        i += 1;
+                    }
+                    if error_break {
+                        break;
+                    }
+
+                    // extmark splice
+                    let mut totsize: i64 = 0;
+                    let mut lastsize: c_int = 0;
+                    if y_type == K_MT_CHAR_WISE_V
+                        || (y_type == K_MT_LINE_WISE_V && flags & PUT_LINE_SPLIT != 0)
+                    {
+                        for ii in 0..y_size - 1 {
+                            totsize += (*y_array.add(ii)).size as i64 + 1;
+                        }
+                        lastsize = (*y_array.add(y_size - 1)).size as c_int;
+                        totsize += lastsize as i64;
+                    }
+                    if y_type == K_MT_CHAR_WISE_V {
+                        nvim_dp_extmark_splice(
+                            new_cursor.lnum - 1,
+                            col,
+                            0,
+                            0,
+                            y_size as c_int - 1,
+                            lastsize,
+                            totsize,
+                            K_EXTMARK_UNDO,
+                        );
+                    } else if y_type == K_MT_LINE_WISE_V && flags & PUT_LINE_SPLIT != 0 {
+                        // Account for last pasted NL + last NL
+                        nvim_dp_extmark_splice(
+                            new_cursor.lnum - 1,
+                            split_pos,
+                            0,
+                            0,
+                            y_size as c_int + 1,
+                            0,
+                            totsize + 2,
+                            K_EXTMARK_UNDO,
+                        );
+                    }
+
+                    if cnt == 1 {
+                        new_lnum = lnum;
+                    }
+
+                    cnt += 1;
+                }
+
+                // error: label in C -- Adjust marks.
+                if y_type == K_MT_LINE_WISE_V {
+                    nvim_dp_set_op_start_lnum(nvim_dp_get_op_start_lnum()); // no-op if already set
+                                                                            // curbuf->b_op_start.col = 0
+                    nvim_dp_set_op_start_cursor(); // this sets from curwin which isn't right
+                                                   // We need to set col=0 explicitly
+                                                   // We'll set via nvim_register_curbuf_set_op_start_col
+                    nvim_register_curbuf_set_op_start_col(0);
+                    if effective_dir == FORWARD {
+                        nvim_dp_set_op_start_lnum(nvim_dp_get_op_start_lnum() + 1);
+                    }
+                }
+
+                let kind = if y_type == K_MT_LINE_WISE_V && flags & PUT_LINE_SPLIT == 0 {
+                    K_EXTMARK_UNDO
+                } else {
+                    K_EXTMARK_NOOP
+                };
+                let mark_lnum1 =
+                    nvim_dp_get_op_start_lnum() + if y_type == K_MT_CHAR_WISE_V { 1 } else { 0 };
+                nvim_dp_mark_adjust(mark_lnum1, nr_lines, kind);
+
+                // note changed text for displaying and folding
+                if y_type == K_MT_CHAR_WISE_V {
+                    nvim_dp_changed_lines(
+                        nvim_dp_get_cursor_lnum(),
+                        col,
+                        nvim_dp_get_cursor_lnum() + 1,
+                        nr_lines,
+                    );
+                } else {
+                    nvim_dp_changed_lines(
+                        nvim_dp_get_op_start_lnum(),
+                        0,
+                        nvim_dp_get_op_start_lnum(),
+                        nr_lines,
+                    );
+                }
+
+                // Put the '] mark on the first byte of the last inserted character.
+                // Correct the length for change in indent.
+                nvim_dp_set_op_end_lnum(new_lnum);
+                let last_entry_size = (*y_array.add(y_size - 1)).size as c_int;
+                let raw_col = 0.max(last_entry_size - lendiff);
+                if raw_col > 1 {
+                    nvim_dp_set_op_end_col(raw_col - 1);
+                    if (*y_array.add(y_size - 1)).size > 0 {
+                        let last_data = (*y_array.add(y_size - 1)).data;
+                        let last_size = (*y_array.add(y_size - 1)).size;
+                        nvim_dp_set_op_end_col(
+                            (raw_col - 1)
+                                - nvim_dp_utf_head_off(last_data, last_data.add(last_size - 1)),
+                        );
+                    }
+                } else {
+                    nvim_dp_set_op_end_col(0);
+                }
+
+                if flags & PUT_CURSLINE != 0 {
+                    // ":put": put cursor on last inserted line
+                    nvim_dp_set_cursor_lnum(lnum);
+                    nvim_dp_beginline();
+                } else if flags & PUT_CURSEND != 0 {
+                    // put cursor after inserted text
+                    if y_type == K_MT_LINE_WISE_V {
+                        if lnum >= nvim_dp_get_ml_line_count() {
+                            nvim_dp_set_cursor_lnum(nvim_dp_get_ml_line_count());
+                        } else {
+                            nvim_dp_set_cursor_lnum(lnum + 1);
+                        }
+                        nvim_dp_set_cursor_col(0);
+                    } else {
+                        nvim_dp_set_cursor_lnum(new_lnum);
+                        nvim_dp_set_cursor_col(raw_col);
+                        nvim_dp_set_op_end_cursor();
+                        if raw_col > 1 {
+                            nvim_dp_set_op_end_col(raw_col - 1);
+                        }
+                    }
+                } else if y_type == K_MT_LINE_WISE_V {
+                    // put cursor on first non-blank in first inserted line
+                    nvim_dp_set_cursor_col(0);
+                    if effective_dir == FORWARD {
+                        nvim_dp_set_cursor_lnum(nvim_dp_get_cursor_lnum() + 1);
+                    }
+                    nvim_dp_beginline();
+                } else {
+                    // put cursor on first inserted character
+                    nvim_dp_set_cursor(&raw const new_cursor);
+                }
+            }
+        }
+
+        nvim_dp_msgmore(nr_lines);
+        nvim_dp_set_curswant();
+
+        // Make sure the cursor is not after the NUL.
+        let len = nvim_dp_get_cursor_line_len();
+        let cur_col = nvim_dp_get_cursor_col();
+        if cur_col > len {
+            if cur_ve_flags == K_OPT_VE_FLAG_ALL {
+                nvim_dp_set_cursor_coladd(cur_col - len);
+            }
+            nvim_dp_set_cursor_col(len);
+        }
+    }; // end 'do_put_body
+
+    // Cleanup (corresponds to C's "end:" label -- always runs).
+    if nvim_register_cmod_lockmarks() {
+        nvim_register_curbuf_set_op_start(&raw const orig_start);
+        nvim_register_curbuf_set_op_end(&raw const orig_end);
+    }
+    if allocated {
+        xfree(insert_string.data as *mut c_void);
+    }
+    if regname == c_int::from(b'=') {
+        xfree(y_array as *mut c_void);
+    }
+
+    nvim_dp_set_VIsual_active_false();
+
+    // If the cursor is past the end of the line put it at the end.
+    nvim_dp_adjust_cursor_eol();
+}
+
+extern "C" {
+    fn nvim_dp_curbuf_is_terminal() -> bool;
+    fn stuffReadbuff(s: *const c_char);
+}
+
+/// Compute the byte length of a C string using the libc strlen convention.
+#[inline]
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Find the first occurrence of `ch` in the C string `s`.
+#[inline]
+unsafe fn libc_strchr(s: *mut c_char, ch: u8) -> *mut c_char {
+    let mut p = s;
+    while *p != 0 {
+        if *p == ch as c_char {
+            return p;
+        }
+        p = p.add(1);
+    }
+    std::ptr::null_mut()
 }
 
 // ---------------------------------------------------------------------------
