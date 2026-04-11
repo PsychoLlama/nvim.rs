@@ -79,8 +79,8 @@ extern "C" {
     static got_int: bool;
 }
 
-// HLF_* values matching C enum
-const HLF_COUNT: c_int = 42; // MUST be last (counted from highlight_defs.h)
+// HLF_* values matching C enum (from highlight_defs.h)
+const HLF_COUNT: c_int = 76; // MUST be last
 const HLF_SPB: c_int = 37; // SpellBad
 const HLF_SPR: c_int = 39; // SpellRare
 

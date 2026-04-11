@@ -39,6 +39,7 @@
 pub mod check;
 pub mod commands;
 pub mod compress;
+pub mod navigate;
 pub mod soundfold;
 pub mod spellfile;
 pub mod suggest;
