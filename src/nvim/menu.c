@@ -56,13 +56,6 @@ typedef struct {
 } MenuCmdResult;
 extern MenuCmdResult rs_get_menu_cmd_modes(const char *cmd, bool forceit);
 
-typedef struct {
-  char *text;
-  int mnemonic;
-  char *actext;
-} MenuTextResult;
-extern MenuTextResult rs_menu_text(const char *str);
-
 // Forward declarations for Rust-exported static functions used by remaining C code.
 extern bool menu_is_hidden(char *name);
 extern char *get_menu_mode_str(int modes);
@@ -194,33 +187,6 @@ int get_menu_cmd_modes(const char *cmd, bool forceit, int *noremap, bool *unmenu
     *unmenu = result.unmenu;
   }
   return result.modes;
-}
-
-/// Duplicate the menu item text and then process to see if a mnemonic key
-/// and/or accelerator text has been identified.
-///
-/// @param str The menu item text.
-/// @param[out] mnemonic If non-NULL, *mnemonic is set to the character after
-///             the first '&'.
-/// @param[out] actext If non-NULL, *actext is set to the text after the first
-///             TAB, but only if a TAB was found. Memory pointed to is newly
-///             allocated.
-///
-/// @return a pointer to allocated memory.
-static char *menu_text(const char *str, int *mnemonic, char **actext)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  MenuTextResult result = rs_menu_text(str);
-  if (mnemonic != NULL) {
-    *mnemonic = result.mnemonic;
-  }
-  if (actext != NULL && result.actext != NULL) {
-    *actext = result.actext;
-  } else {
-    xfree(result.actext);
-  }
-  return result.text;
 }
 
 /// Execute "menu".  Use by ":emenu" and the window toolbar.
