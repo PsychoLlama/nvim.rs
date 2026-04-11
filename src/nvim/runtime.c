@@ -134,6 +134,11 @@ extern void rs_ex_finish(void *eap);
 extern void rs_do_finish(void *eap, bool reanimate);
 extern bool rs_source_finished(void *fgetline, void *cookie);
 
+// Phase 5: Rust implementations of do_in_path / do_in_cached_path
+extern int rs_do_in_path(const char *path, const char *prefix, char *name, int flags,
+                         DoInRuntimepathCB callback, void *cookie);
+extern int rs_do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie);
+
 // Phase 4: Rust implementations of sourcing entry points
 extern int rs_do_source_ext(char *fname, bool check_other, int is_vimrc, int *ret_sid,
                             const void *eap, bool ex_lua, const char *str);
@@ -237,6 +242,24 @@ void nvim_rt_cookie_clear_buflines(void *cookie) { ga_clear_strings(&((source_co
 void nvim_rt_cookie_free_nextline(void *cookie) { xfree(((source_cookie_T *)cookie)->nextline); ((source_cookie_T *)cookie)->nextline = NULL; }
 void nvim_rt_cookie_teardown_conv(void *cookie) { convert_setup(&((source_cookie_T *)cookie)->conv, NULL, NULL); }
 
+/// cookie sourcing_lnum getter.
+int nvim_rt_cookie_get_sourcing_lnum(void *cookie) { return ((source_cookie_T *)cookie)->sourcing_lnum; }
+
+/// cookie sourcing_lnum incrementor.
+void nvim_rt_cookie_inc_sourcing_lnum(void *cookie) { ((source_cookie_T *)cookie)->sourcing_lnum++; }
+
+/// cookie sourcing_lnum decrement (for continuation line handling).
+void nvim_rt_cookie_dec_sourcing_lnum(void *cookie) { ((source_cookie_T *)cookie)->sourcing_lnum--; }
+
+/// cookie buflines.ga_len getter.
+int nvim_rt_cookie_get_buflines_len(void *cookie) { return ((source_cookie_T *)cookie)->buflines.ga_len; }
+
+/// Get a line from cookie->buflines at index.
+const char *nvim_rt_cookie_get_bufline(void *cookie, int idx)
+{
+  return ((char **)((source_cookie_T *)cookie)->buflines.ga_data)[idx];
+}
+
 /// do_cmdline via getsourceline (accesses static getsourceline).
 int nvim_rt_do_cmdline_source(char *firstline, void *cookie, int flags)
 {
@@ -328,6 +351,44 @@ void nvim_rt_sp_copy_to_thread(void)
   runtime_search_path_thread = copy_runtime_search_path(runtime_search_path);
 }
 
+// Phase 5: RuntimeSearchPath accessors for do_in_cached_path in Rust.
+// These expose the cached RuntimeSearchPath kvec to Rust via an opaque ref.
+
+/// Get the cached runtime search path and return its size.
+/// @param ref  output: reference token (pass to nvim_rt_rsp_unref when done)
+/// @return     number of entries in the cached path
+size_t nvim_rt_rsp_get_cached_size(int *ref)
+{
+  runtime_search_path_get_cached(ref);
+  return kv_size(runtime_search_path);
+}
+
+/// Get the path string of item at index in the cached runtime search path.
+/// Must be called between nvim_rt_rsp_get_cached_size and nvim_rt_rsp_unref.
+const char *nvim_rt_rsp_get_item_path(size_t idx)
+{
+  return kv_A(runtime_search_path, idx).path;
+}
+
+/// Get the 'after' flag of item at index in the cached runtime search path.
+bool nvim_rt_rsp_get_item_after(size_t idx)
+{
+  return kv_A(runtime_search_path, idx).after;
+}
+
+/// Unref the cached runtime search path (mirrors runtime_search_path_unref).
+void nvim_rt_rsp_unref(const int *ref)
+{
+  // We pass the global path but we only free it if unref says so.
+  if (rs_runtime_search_path_unref(ref)) {
+    runtime_search_path_free(runtime_search_path);
+    runtime_search_path = (RuntimeSearchPath)KV_INITIAL_VALUE;
+  }
+}
+
+/// Get p_rtp pointer value (for pointer comparison in do_in_path).
+const char *nvim_rt_get_p_rtp(void) { return p_rtp; }
+
 
 /// Find the patterns in "name" in all directories in "path" and invoke
 /// "callback(fname, cookie)".
@@ -341,88 +402,7 @@ int do_in_path(const char *path, const char *prefix, char *name, int flags,
                DoInRuntimepathCB callback, void *cookie)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  bool did_one = false;
-
-  // Make a copy of 'runtimepath'.  Invoking the callback may change the
-  // value.
-  char *rtp_copy = xstrdup(path);
-  char *buf = xmallocz(MAXPATHL);
-  {
-    char *tail;
-    if (p_verbose > 10 && name != NULL) {
-      verbose_enter();
-      if (*prefix != NUL) {
-        smsg(0, _("Searching for \"%s\" under \"%s\" in \"%s\""), name, prefix, path);
-      } else {
-        smsg(0, _("Searching for \"%s\" in \"%s\""), name, path);
-      }
-      verbose_leave();
-    }
-
-    bool do_all = (flags & DIP_ALL) != 0;
-
-    // Loop over all entries in 'runtimepath'.
-    char *rtp = rtp_copy;
-    while (*rtp != NUL && (do_all || !did_one)) {
-      // Copy the path from 'runtimepath' to buf[].
-      copy_option_part(&rtp, buf, MAXPATHL, ",");
-      size_t buflen = strlen(buf);
-
-      // Skip after or non-after directories.
-      if (flags & (DIP_NOAFTER | DIP_AFTER)) {
-        bool is_after = path_is_after(buf, buflen);
-
-        if ((is_after && (flags & DIP_NOAFTER))
-            || (!is_after && (flags & DIP_AFTER))) {
-          continue;
-        }
-      }
-
-      if (name == NULL) {
-        (*callback)(1, &buf, do_all, cookie);
-        did_one = true;
-      } else if (buflen + 2 + strlen(prefix) + strlen(name) < MAXPATHL) {
-        add_pathsep(buf);
-        strcat(buf, prefix);
-        tail = buf + strlen(buf);
-
-        // Loop over all patterns in "name"
-        char *np = name;
-        while (*np != NUL && (do_all || !did_one)) {
-          // Append the pattern from "name" to buf[].
-          assert(MAXPATHL >= (tail - buf));
-          copy_option_part(&np, tail, (size_t)(MAXPATHL - (tail - buf)), "\t ");
-
-          if (p_verbose > 10) {
-            verbose_enter();
-            smsg(0, _("Searching for \"%s\""), buf);
-            verbose_leave();
-          }
-
-          int ew_flags = ((flags & DIP_DIR) ? EW_DIR : EW_FILE)
-                         | ((flags & DIP_DIRFILE) ? (EW_DIR|EW_FILE) : 0);
-
-          did_one |= gen_expand_wildcards_and_cb(1, &buf, ew_flags, do_all, callback,
-                                                 cookie) == OK;
-        }
-      }
-    }
-  }
-  xfree(buf);
-  xfree(rtp_copy);
-  if (!did_one && name != NULL) {
-    char *basepath = path == p_rtp ? "runtimepath" : "packpath";
-
-    if (flags & DIP_ERR) {
-      semsg(_(e_dirnotf), basepath, name);
-    } else if (p_verbose > 1) {
-      verbose_enter();
-      smsg(0, _("not found in '%s': \"%s\""), basepath, name);
-      verbose_leave();
-    }
-  }
-
-  return did_one ? OK : FAIL;
+  return rs_do_in_path(path, prefix, name, flags, callback, cookie);
 }
 
 static RuntimeSearchPath runtime_search_path_get_cached(int *ref)
@@ -461,79 +441,7 @@ static void runtime_search_path_unref(RuntimeSearchPath path, const int *ref)
 /// return FAIL when no file could be sourced, OK otherwise.
 int do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie)
 {
-  bool did_one = false;
-
-  char buf[MAXPATHL];
-
-  if (p_verbose > 10 && name != NULL) {
-    verbose_enter();
-    smsg(0, _("Searching for \"%s\" in runtime path"), name);
-    verbose_leave();
-  }
-
-  int ref;
-  RuntimeSearchPath path = runtime_search_path_get_cached(&ref);
-
-  bool do_all = (flags & DIP_ALL) != 0;
-
-  // Loop over all entries in cached path
-  for (size_t j = 0; j < kv_size(path); j++) {
-    SearchPathItem item = kv_A(path, j);
-    size_t buflen = strlen(item.path);
-
-    // Skip after or non-after directories.
-    if (flags & (DIP_NOAFTER | DIP_AFTER)) {
-      if ((item.after && (flags & DIP_NOAFTER))
-          || (!item.after && (flags & DIP_AFTER))) {
-        continue;
-      }
-    }
-
-    if (name == NULL) {
-      (*callback)(1, &item.path, do_all, cookie);
-    } else if (buflen + strlen(name) + 2 < MAXPATHL) {
-      STRCPY(buf, item.path);
-      add_pathsep(buf);
-      char *tail = buf + strlen(buf);
-
-      // Loop over all patterns in "name"
-      char *np = name;
-
-      while (*np != NUL && (do_all || !did_one)) {
-        // Append the pattern from "name" to buf[].
-        assert(MAXPATHL >= (tail - buf));
-        copy_option_part(&np, tail, (size_t)(MAXPATHL - (tail - buf)), "\t ");
-
-        if (p_verbose > 10) {
-          verbose_enter();
-          smsg(0, _("Searching for \"%s\""), buf);
-          verbose_leave();
-        }
-
-        int ew_flags = ((flags & DIP_DIR) ? EW_DIR : EW_FILE)
-                       | ((flags & DIP_DIRFILE) ? (EW_DIR|EW_FILE) : 0)
-                       | EW_NOBREAK;
-
-        // Expand wildcards, invoke the callback for each match.
-        char *(pat[]) = { buf };
-        did_one |= gen_expand_wildcards_and_cb(1, pat, ew_flags, do_all, callback, cookie) == OK;
-      }
-    }
-  }
-
-  if (!did_one && name != NULL) {
-    if (flags & DIP_ERR) {
-      semsg(_(e_dirnotf), "runtime path", name);
-    } else if (p_verbose > 1) {
-      verbose_enter();
-      smsg(0, _("not found in runtime path: \"%s\""), name);
-      verbose_leave();
-    }
-  }
-
-  runtime_search_path_unref(path, &ref);
-
-  return did_one ? OK : FAIL;
+  return rs_do_in_cached_path(name, flags, callback, cookie);
 }
 
 Array runtime_inspect(Arena *arena)

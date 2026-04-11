@@ -6,6 +6,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::dip;
+use crate::do_in_path::rs_do_in_path;
 
 // =============================================================================
 // External C functions
@@ -21,16 +22,6 @@ extern "C" {
         flags: c_int,
     ) -> c_int;
     fn FreeWild(count: c_int, files: *mut *mut c_char);
-
-    // Path searching (remains in C)
-    fn do_in_path(
-        path: *const c_char,
-        prefix: *const c_char,
-        name: *mut c_char,
-        flags: c_int,
-        callback: Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>,
-        cookie: *mut c_void,
-    ) -> c_int;
 
     // path_fnamecmp: compare two paths (platform-correct; no add_pack_dir_to_rtp here, it's Rust now)
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
@@ -697,7 +688,7 @@ pub unsafe extern "C" fn rs_load_pack_plugin(opt: bool, fname: *mut c_char) -> c
 /// Accesses global C state (p_pp, callbacks).
 #[export_name = "add_pack_start_dirs"]
 pub unsafe extern "C" fn rs_add_pack_start_dirs() {
-    do_in_path(
+    rs_do_in_path(
         p_pp,
         c"".as_ptr(),
         ptr::null_mut(),
@@ -718,7 +709,7 @@ pub unsafe extern "C" fn rs_load_start_packages() {
 
     let app_load = (&raw const APP_LOAD).cast_mut().cast::<c_void>();
 
-    do_in_path(
+    rs_do_in_path(
         p_pp,
         c"".as_ptr(),
         c"pack/*/start/*".as_ptr().cast_mut(),
@@ -726,7 +717,7 @@ pub unsafe extern "C" fn rs_load_start_packages() {
         Some(rs_add_start_pack_plugins),
         app_load,
     );
-    do_in_path(
+    rs_do_in_path(
         p_pp,
         c"".as_ptr(),
         c"start/*".as_ptr().cast_mut(),
@@ -819,7 +810,7 @@ pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
     if !nvim_rt_pkg_get_did_source_packages() {
         build_packadd_pattern(pat, len, c"start".as_ptr(), arg);
 
-        res = do_in_path(
+        res = rs_do_in_path(
             p_pp,
             c"".as_ptr(),
             pat,
@@ -833,7 +824,7 @@ pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
     build_packadd_pattern(pat, len, c"opt".as_ptr(), arg);
 
     let err_flag = if res == FAIL { dip::ERR } else { 0 };
-    do_in_path(
+    rs_do_in_path(
         p_pp,
         c"".as_ptr(),
         pat,

@@ -960,3 +960,164 @@ void nvim_rt_snprintf_traceback(char *buf, int size, const char *traceback_name,
 
 /// STRICMP wrapper (case-insensitive string compare).
 int nvim_rt_STRICMP(const char *a, const char *b) { return STRICMP(a, b); }
+
+// =============================================================================
+// Phase 5: Accessors for rs_do_in_path / rs_do_in_cached_path
+// =============================================================================
+
+/// path_is_after: check if a path is in an "after" directory.
+bool nvim_rt_path_is_after(const char *buf, size_t buflen) { return path_is_after(buf, buflen); }
+
+/// smsg wrapper: "Searching for %s under %s in %s".
+void nvim_rt_smsg_searching_prefix(const char *name, const char *prefix, const char *path)
+{
+  smsg(0, _("Searching for \"%s\" under \"%s\" in \"%s\""), name, prefix, path);
+}
+
+/// smsg wrapper: "Searching for %s in %s".
+void nvim_rt_smsg_searching_in(const char *name, const char *path)
+{
+  smsg(0, _("Searching for \"%s\" in \"%s\""), name, path);
+}
+
+/// smsg wrapper: "Searching for %s".
+void nvim_rt_smsg_searching(const char *buf)
+{
+  smsg(0, _("Searching for \"%s\""), buf);
+}
+
+/// semsg wrapper for e_dirnotf: "not found in '%s': \"%s\"".
+void nvim_rt_semsg_dirnotf(const char *basepath, const char *name)
+{
+  semsg(_(e_dirnotf), basepath, name);
+}
+
+/// smsg wrapper: "not found in '%s': \"%s\"".
+void nvim_rt_smsg_notfound_in(const char *basepath, const char *name)
+{
+  smsg(0, _("not found in '%s': \"%s\""), basepath, name);
+}
+
+/// smsg wrapper: "not found in runtime path: \"%s\"".
+void nvim_rt_smsg_notfound_rtp(const char *name)
+{
+  smsg(0, _("not found in runtime path: \"%s\""), name);
+}
+
+/// smsg wrapper: "Searching for \"%s\" in runtime path".
+void nvim_rt_smsg_searching_rtp(const char *name)
+{
+  smsg(0, _("Searching for \"%s\" in runtime path"), name);
+}
+
+/// copy_option_part wrapper.
+void nvim_rt_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep_chars)
+{
+  copy_option_part(option, buf, maxlen, sep_chars);
+}
+
+/// strlen wrapper.
+size_t nvim_rt_strlen(const char *s) { return strlen(s); }
+
+/// strcat wrapper (for buf + prefix + name construction).
+void nvim_rt_strcat(char *dst, const char *src) { strcat(dst, src); }
+
+/// EW_DIR constant.
+int nvim_rt_EW_DIR(void) { return EW_DIR; }
+/// EW_FILE constant.
+int nvim_rt_EW_FILE(void) { return EW_FILE; }
+/// EW_NOBREAK constant.
+int nvim_rt_EW_NOBREAK(void) { return EW_NOBREAK; }
+/// DIP_DIR constant.
+int nvim_rt_DIP_DIR(void) { return DIP_DIR; }
+/// DIP_DIRFILE constant.
+int nvim_rt_DIP_DIRFILE(void) { return DIP_DIRFILE; }
+/// STRCPY wrapper.
+void nvim_rt_strcpy(char *dst, const char *src) { STRCPY(dst, src); }
+
+/// vim_strchr wrapper.
+char *nvim_rt_vim_strchr(const char *buf, int c) { return vim_strchr(buf, c); }
+
+/// p_cpo accessor.
+const char *nvim_rt_get_p_cpo(void) { return p_cpo; }
+
+/// CPO_CONCAT constant.
+int nvim_rt_CPO_CONCAT(void) { return CPO_CONCAT; }
+
+/// skipwhite wrapper.
+char *nvim_rt_skipwhite(const char *p) { return skipwhite(p); }
+
+/// ga_init wrapper (for growarray).
+void nvim_rt_ga_init(void *ga, int itemsize, int growsize)
+{
+  ga_init((garray_T *)ga, itemsize, growsize);
+}
+
+/// ga_grow wrapper.
+void nvim_rt_ga_grow(void *ga, int n)
+{
+  ga_grow((garray_T *)ga, n);
+}
+
+/// ga_concat wrapper.
+void nvim_rt_ga_concat(void *ga, const char *s)
+{
+  ga_concat((garray_T *)ga, s);
+}
+
+/// ga_concat_len wrapper.
+void nvim_rt_ga_concat_len(void *ga, const char *s, size_t len)
+{
+  ga_concat_len((garray_T *)ga, s, len);
+}
+
+/// ga_append wrapper (appends a single byte).
+void nvim_rt_ga_append_byte(void *ga, char byte)
+{
+  ga_append((garray_T *)ga, byte);
+}
+
+/// ga_set_growsize wrapper.
+void nvim_rt_ga_set_growsize(void *ga, int size)
+{
+  ga_set_growsize((garray_T *)ga, size);
+}
+
+/// ga_get_len wrapper.
+int nvim_rt_ga_get_len(const void *ga) { return ((garray_T *)ga)->ga_len; }
+
+/// ga_get_data wrapper.
+void *nvim_rt_ga_get_data(const void *ga) { return ((garray_T *)ga)->ga_data; }
+
+/// dbg_breakpoint wrapper.
+void nvim_rt_dbg_breakpoint(const char *fname, int lnum)
+{
+  dbg_breakpoint((char *)fname, (linenr_T)lnum);
+}
+
+/// dbg_find_breakpoint wrapper.
+int nvim_rt_dbg_find_breakpoint(bool file, const char *fname, int after)
+{
+  return (int)dbg_find_breakpoint(file, (char *)fname, (linenr_T)after);
+}
+
+/// script_line_start wrapper.
+void nvim_rt_script_line_start(void) { script_line_start(); }
+
+/// script_line_end wrapper.
+void nvim_rt_script_line_end(void) { script_line_end(); }
+
+/// CONV_NONE constant.
+int nvim_rt_CONV_NONE(void) { return CONV_NONE; }
+
+/// Get vc_type from vimconv_T*.
+int nvim_rt_conv_get_type(const void *vcp) { return ((vimconv_T *)vcp)->vc_type; }
+
+/// Get sizeof garray_T (for stack allocation from Rust).
+size_t nvim_rt_sizeof_garray(void) { return sizeof(garray_T); }
+
+/// skipwhite_len wrapper.
+const char *nvim_rt_skipwhite_len(const char *p, size_t len) { return skipwhite_len(p, len); }
+
+/// NUL constant.
+char nvim_rt_NUL(void) { return NUL; }

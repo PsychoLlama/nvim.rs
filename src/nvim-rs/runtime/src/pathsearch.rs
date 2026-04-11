@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::dip;
+use crate::do_in_path::{rs_do_in_cached_path, rs_do_in_path};
 use crate::doso;
 
 // =============================================================================
@@ -34,23 +35,6 @@ extern "C" {
         flags: c_int,
     ) -> c_int;
     fn FreeWild(count: c_int, files: *mut *mut c_char);
-
-    // Path searching (remains in C)
-    fn do_in_path(
-        path: *const c_char,
-        prefix: *const c_char,
-        name: *mut c_char,
-        flags: c_int,
-        callback: Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>,
-        cookie: *mut c_void,
-    ) -> c_int;
-
-    fn do_in_cached_path(
-        name: *mut c_char,
-        flags: c_int,
-        callback: Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>,
-        cookie: *mut c_void,
-    ) -> c_int;
 
     // Global options
     static p_pp: *mut c_char; // packpath
@@ -210,7 +194,7 @@ pub unsafe extern "C" fn rs_do_in_path_and_pp(
         } else {
             name
         };
-        done |= do_in_path(path, c"".as_ptr(), search_name, flags, callback, cookie);
+        done |= rs_do_in_path(path, c"".as_ptr(), search_name, flags, callback, cookie);
     }
 
     if (done == FAIL || (flags & dip::ALL) != 0) && (flags & dip::START) != 0 {
@@ -219,7 +203,7 @@ pub unsafe extern "C" fn rs_do_in_path_and_pp(
         } else {
             c"pack/*/start/*/".as_ptr()
         };
-        done |= do_in_path(p_pp, prefix, name, flags & !dip::AFTER, callback, cookie);
+        done |= rs_do_in_path(p_pp, prefix, name, flags & !dip::AFTER, callback, cookie);
 
         if done == FAIL || (flags & dip::ALL) != 0 {
             let prefix = if (flags & dip::AFTER) != 0 {
@@ -227,12 +211,12 @@ pub unsafe extern "C" fn rs_do_in_path_and_pp(
             } else {
                 c"start/*/".as_ptr()
             };
-            done |= do_in_path(p_pp, prefix, name, flags & !dip::AFTER, callback, cookie);
+            done |= rs_do_in_path(p_pp, prefix, name, flags & !dip::AFTER, callback, cookie);
         }
     }
 
     if (done == FAIL || (flags & dip::ALL) != 0) && (flags & dip::OPT) != 0 {
-        done |= do_in_path(
+        done |= rs_do_in_path(
             p_pp,
             c"pack/*/opt/*/".as_ptr(),
             name,
@@ -242,7 +226,7 @@ pub unsafe extern "C" fn rs_do_in_path_and_pp(
         );
 
         if done == FAIL || (flags & dip::ALL) != 0 {
-            done |= do_in_path(p_pp, c"opt/*/".as_ptr(), name, flags, callback, cookie);
+            done |= rs_do_in_path(p_pp, c"opt/*/".as_ptr(), name, flags, callback, cookie);
         }
     }
 
@@ -272,7 +256,7 @@ pub unsafe extern "C" fn rs_do_in_runtimepath(
         } else {
             name
         };
-        success |= do_in_cached_path(search_name, flags, callback, cookie);
+        success |= rs_do_in_cached_path(search_name, flags, callback, cookie);
         (flags & !dip::START) | dip::NORTP
     } else {
         flags
