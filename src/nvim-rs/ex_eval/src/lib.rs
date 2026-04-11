@@ -114,6 +114,14 @@ pub struct ExargT {
 /// Number of entries in the conditional stack.
 const CSTACK_LEN: c_int = 50;
 
+// Globals used for regex matching in ex_catch
+extern "C" {
+    static mut emsg_off: c_int;
+    static mut p_cpo: *mut c_char;
+    static empty_string_option: [c_char; 1];
+    static e_invarg2: *const c_char;
+}
+
 // Direct access to C globals for exception state variables
 extern "C" {
     static mut force_abort: bool;
@@ -167,6 +175,10 @@ extern "C" {
         evalarg: *mut c_void,
     ) -> *mut c_void;
     fn next_for_item(fi: *mut c_void, arg: *mut c_char) -> bool;
+    fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: bool) -> *mut c_char;
+    fn vim_regcomp(expr: *const c_char, re_flags: c_int) -> *mut c_void;
+    fn vim_regexec_nl(rmp: *mut c_void, line: *const c_char, col: c_int) -> bool;
+    fn vim_regfree(prog: *mut c_void);
 }
 
 // C functions callable from Rust
@@ -1693,6 +1705,153 @@ pub unsafe extern "C" fn ex_while_impl(eap: *mut ExargT) {
                 (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_TRUE;
             }
         }
+    }
+}
+
+/// Handle ":catch /{pattern}/" and ":catch"
+#[export_name = "ex_catch"]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn ex_catch_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    let mut idx: c_int = 0;
+    let mut give_up = false;
+    let mut skip = false;
+
+    if (*cstack).cs_trylevel <= 0 || (*cstack).cs_idx < 0 {
+        (*eap).errmsg = gettext(c"E603: :catch without :try".as_ptr()).cast_mut();
+        give_up = true;
+    } else {
+        if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY == 0 {
+            // Report what's missing if the matching ":try" is not in its finally clause.
+            (*eap).errmsg = get_end_emsg(cstack);
+            skip = true;
+        }
+        idx = (*cstack).cs_idx;
+        while idx > 0 {
+            if (*cstack).cs_flags[idx as usize] & CSF_TRY != 0 {
+                break;
+            }
+            idx -= 1;
+        }
+        if (*cstack).cs_flags[idx as usize] & CSF_FINALLY != 0 {
+            // Give up for a ":catch" after ":finally" and ignore it. Just parse.
+            (*eap).errmsg = gettext(c"E604: :catch after :finally".as_ptr()).cast_mut();
+            give_up = true;
+        } else {
+            rewind_conditionals(
+                cstack,
+                idx,
+                CSF_WHILE | CSF_FOR,
+                std::ptr::addr_of_mut!((*cstack).cs_looplevel),
+            );
+        }
+    }
+
+    let pat: *const c_char;
+    let end: *mut c_char;
+    if ends_excmd(c_int::from(*(*eap).arg)) != 0 {
+        // no argument, catch all errors
+        pat = c".*".as_ptr();
+        end = std::ptr::null_mut();
+        (*eap).nextcmd = find_nextcmd((*eap).arg);
+    } else {
+        pat = (*eap).arg.add(1);
+        end = skip_regexp_err((*eap).arg.add(1), c_int::from(*(*eap).arg), true);
+        if end.is_null() {
+            give_up = true;
+        }
+    }
+
+    if !give_up {
+        let mut caught = false;
+        // Don't do something when no exception has been thrown or when the
+        // corresponding try block never got active.
+        if !did_throw || (*cstack).cs_flags[idx as usize] & CSF_TRUE == 0 {
+            skip = true;
+        }
+
+        // Check for a match only if an exception is thrown but not caught by
+        // a previous ":catch".
+        if !skip
+            && (*cstack).cs_flags[idx as usize] & CSF_THROWN != 0
+            && (*cstack).cs_flags[idx as usize] & CSF_CAUGHT == 0
+        {
+            if !end.is_null() && *end != 0 && ends_excmd(c_int::from(*skipwhite(end.add(1)))) == 0 {
+                semsg(e_trailing_arg, end);
+                return;
+            }
+
+            // When debugging, display the debug prompt before checking for a match.
+            if !dbg_check_skipped(eap) || !do_intthrow(cstack) {
+                // Terminate the pattern and avoid the 'l' flag in 'cpoptions'
+                // while compiling it.
+                let save_char = if end.is_null() { 0 } else { *end };
+                if !end.is_null() {
+                    *end = 0;
+                }
+                let save_cpo = p_cpo;
+                p_cpo = empty_string_option.as_ptr().cast_mut();
+                // Disable error messages; it will make current exception invalid
+                emsg_off += 1;
+
+                // regmatch_T is 176 bytes opaque; regprog at offset 0, rm_ic at offset 172.
+                // Use unaligned write to store the regprog pointer.
+                let mut regmatch = [0u8; 176];
+                let regprog = vim_regcomp(pat, 1 + 2); // RE_MAGIC + RE_STRING
+                std::ptr::copy_nonoverlapping(
+                    std::ptr::addr_of!(regprog).cast::<u8>(),
+                    regmatch.as_mut_ptr(),
+                    std::mem::size_of::<*mut c_void>(),
+                );
+
+                emsg_off -= 1;
+                if !end.is_null() {
+                    *end = save_char;
+                }
+                p_cpo = save_cpo;
+
+                if regprog.is_null() {
+                    semsg(e_invarg2, pat);
+                } else {
+                    // rm_ic (bool) is at offset 172, leave it false (0)
+                    // Save and reset got_int.
+                    let prev_got_int = got_int;
+                    got_int = false;
+                    let exc = current_exception.cast::<ExceptT>();
+                    caught =
+                        vim_regexec_nl(regmatch.as_mut_ptr().cast::<c_void>(), (*exc).value, 0);
+                    got_int |= prev_got_int;
+                    vim_regfree(regprog);
+                }
+            }
+        }
+
+        if caught {
+            // Make this ":catch" clause active and reset did_emsg, got_int, did_throw.
+            // Put the exception on the caught stack.
+            (*cstack).cs_flags[idx as usize] |= CSF_ACTIVE | CSF_CAUGHT;
+            did_emsg = 0;
+            got_int = false;
+            did_throw = false;
+            catch_exception((*cstack).cs_pend.csp_ex[idx as usize].cast::<ExceptT>());
+            // It's mandatory that the current exception is stored in the cstack.
+            if (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize] != current_exception {
+                internal_error(c"ex_catch()".as_ptr());
+            }
+        } else {
+            // If there is a preceding catch clause and it caught the exception,
+            // finish the exception now.
+            cleanup_conditionals(cstack, CSF_TRY, 1);
+        }
+    }
+
+    if !end.is_null() {
+        (*eap).nextcmd = find_nextcmd(end);
     }
 }
 
