@@ -220,12 +220,6 @@ void nvim_dp_set_op_end_col(int col) { curbuf->b_op_end.col = (colnr_T)col; }
 /// Set curbuf->b_op_end.coladd (for Rust do_put).
 void nvim_dp_set_op_end_coladd(int coladd) { curbuf->b_op_end.coladd = (colnr_T)coladd; }
 
-/// Get curbuf->b_visual.vi_end (for Rust do_put).
-void nvim_dp_get_b_visual_vi_end(pos_T *pos)
-{
-  *pos = curbuf->b_visual.vi_end;
-}
-
 /// Set curwin->w_cursor = curbuf->b_visual.vi_end (for Rust do_put linewise).
 void nvim_dp_set_cursor_to_b_visual_vi_end(void)
 {
@@ -379,9 +373,6 @@ void nvim_dp_invalidate_botline(void) { invalidate_botline(curwin); }
 /// Call msgmore(n).
 void nvim_dp_msgmore(int n) { msgmore(n); }
 
-/// Return transchar(c) -- for error message in do_put.
-char *nvim_dp_transchar(int c) { return transchar(c); }
-
 /// Return gchar_cursor() (UTF codepoint at cursor position).
 int nvim_dp_gchar_cursor(void) { return gchar_cursor(); }
 
@@ -415,11 +406,7 @@ void nvim_dp_get_cursor(pos_T *pos) { *pos = curwin->w_cursor; }
 /// Set curwin->w_cursor (full pos_T).
 void nvim_dp_set_cursor(const pos_T *pos) { curwin->w_cursor = *pos; }
 
-/// Return curbuf as opaque handle.
-void *nvim_dp_get_curbuf(void) { return curbuf; }
 
-/// Return curwin as opaque handle.
-void *nvim_dp_get_curwin(void) { return curwin; }
 
 /// Call ml_append(lnum, line, 0, false).
 int nvim_dp_ml_append(int lnum, char *line) { return ml_append((linenr_T)lnum, line, 0, false); }
@@ -460,12 +447,6 @@ int nvim_dp_utfc_ptr2len(const char *p)
 /// Return curbuf->b_op_start.lnum.
 int nvim_dp_get_op_start_lnum(void) { return (int)curbuf->b_op_start.lnum; }
 
-/// Return curbuf->b_op_end.lnum.
-int nvim_dp_get_op_end_lnum(void) { return (int)curbuf->b_op_end.lnum; }
-
-/// Return curbuf->b_op_end.col.
-int nvim_dp_get_op_end_col(void) { return (int)curbuf->b_op_end.col; }
-
 /// Return e_resulting_text_too_long string.
 const char *nvim_dp_get_e_resulting_text_too_long(void) { return e_resulting_text_too_long; }
 
@@ -493,8 +474,7 @@ void nvim_dp_set_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 /// Call adjust_cursor_eol().
 void nvim_dp_adjust_cursor_eol(void) { adjust_cursor_eol(); }
 
-/// Return curwin handle (for u_save calls).
-win_T *nvim_dp_get_curwin_ptr(void) { return curwin; }
+
 
 /// Call getviscol() for do_put virtual edit.
 int nvim_dp_getviscol(void) { return getviscol(); }
