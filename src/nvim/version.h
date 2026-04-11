@@ -20,7 +20,6 @@ bool may_show_intro(void);
 void intro_message(bool colon);
 void ex_intro(exarg_T *eap);
 
-#include "version.h.generated.h"
 bool has_nvim_version(const char *version_str);
 int min_vim_version(void);
 int highest_patch(void);

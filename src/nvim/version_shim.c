@@ -1,10 +1,10 @@
-/// @file version.c
+/// @file version_shim.c
 ///
-/// Nvim was forked from Vim 7.4.160.
-/// Vim originated from Stevie version 3.6 (Fish disk 217) by GRWalter (Fred).
+/// Global variable definitions and C accessor functions for the version Rust crate.
+/// The function implementations (version_msg, list_version, ex_version, intro_message, etc.)
+/// have been migrated to src/nvim-rs/version/src/lib.rs.
 
 #include <assert.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,22 +16,16 @@
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/charset.h"
-#include "nvim/drawscreen.h"
 #include "nvim/ex_cmds_defs.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/grid.h"
 #include "nvim/grid_defs.h"
 #include "nvim/highlight.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/lua/executor.h"
-#include "nvim/mbyte.h"
 #include "nvim/memory.h"
-#include "nvim/message.h"
-#include "nvim/option_vars.h"
-#include "nvim/os/os.h"
 #include "nvim/strings.h"
+#include "nvim/os/os.h"
 #include "nvim/ui.h"
 #include "nvim/ui_defs.h"
 #include "nvim/version.h"
@@ -54,7 +48,6 @@ char *version_buildtype = "Build type: " NVIM_VERSION_BUILD_TYPE;
 char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
 #endif
 
-#include "version.c.generated.h"
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 
 // =============================================================================
@@ -108,11 +101,6 @@ int nvim_version_versions_count(void) { return (int)ARRAY_SIZE(Versions); }
 /// Return Versions[idx].
 const char *nvim_version_versions_get(int idx) { return Versions[idx]; }
 
-
-
-// ex_version, list_lua_version, list_version migrated to Rust (version crate)
-// version_msg_wrap, version_msg, list_in_columns migrated to Rust (version crate)
-
 // =============================================================================
 // C accessors for Rust Phase 3 (may_show_intro, intro_message, do_intro_line, ex_intro)
 // =============================================================================
@@ -153,6 +141,3 @@ void nvim_version_intro_grid_line_start(int colon, int row)
 {
   grid_line_start((!colon && ui_has(kUIMultigrid)) ? &firstwin->w_grid : &default_gridview, row);
 }
-
-// may_show_intro, intro_message, do_intro_line, ex_intro migrated to Rust (version crate)
-
