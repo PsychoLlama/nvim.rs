@@ -30,6 +30,13 @@ typedef enum {
 } smt_T;
 
 // Functions implemented in Rust (nvim-spell crate) and exported via #[export_name].
+slang_T *slang_alloc(char *lang);
+void slang_free(slang_T *lp);
+void slang_clear(slang_T *lp);
+void slang_clear_sug(slang_T *lp);
+void spell_delete_wordlist(void);
+void spell_free_all(void);
+void spell_reload(void);
 size_t spell_check(win_T *wp, char *ptr, hlf_T *attrp, int *capcol, bool docount);
 void count_common_word(slang_T *lp, char *word, int len, uint8_t count);
 int init_syl_tab(slang_T *slang);

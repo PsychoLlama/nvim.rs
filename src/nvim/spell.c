@@ -145,11 +145,6 @@ extern void rs_optval_free(OptVal o);
 
 // Rust implementations of spell functions
 extern int rs_find_region(const char *rp, const char *region);
-// Phase 1: slang lifecycle functions now implemented in Rust
-extern slang_T *rs_slang_alloc(char *lang);
-extern void rs_slang_free(slang_T *lp);
-extern void rs_slang_clear(slang_T *lp);
-extern void rs_slang_clear_sug(slang_T *lp);
 // Phase 2+3: dump functions now implemented in Rust
 extern void spell_dump_compl(char *pat, int ic, Direction *dir, int dumpflags_arg);
 // spell_iswordp_w was static in C but is now exported from Rust
@@ -552,7 +547,6 @@ static void spell_load_lang(char *lang)
   curbuf->b_locked--;
 }
 
-
 // Get the name of the .spl file for the internal wordlist into
 // "fname[MAXPATHL]".
 static void int_wordlist_spl(char *fname)
@@ -560,24 +554,6 @@ static void int_wordlist_spl(char *fname)
   vim_snprintf(fname, MAXPATHL, SPL_FNAME_TMPL,
                int_wordlist, spell_enc());
 }
-
-/// Allocate a new slang_T for language "lang".  "lang" can be NULL.
-/// Caller must fill "sl_next".
-slang_T *slang_alloc(char *lang)
-  FUNC_ATTR_NONNULL_RET
-{ return rs_slang_alloc(lang); }
-
-// Free the contents of an slang_T and the structure itself.
-void slang_free(slang_T *lp)
-{ rs_slang_free(lp); }
-
-// Clear an slang_T so that the file can be reloaded.
-void slang_clear(slang_T *lp)
-{ rs_slang_clear(lp); }
-
-// Clear the info from the .sug file in "lp".
-void slang_clear_sug(slang_T *lp)
-{ rs_slang_clear_sug(lp); }
 
 // Load one spell file and store the info into a slang_T.
 // Invoked through do_in_runtimepath().
@@ -942,62 +918,6 @@ static void use_midword(slang_T *lp, win_T *wp)
 
 
 
-// Delete the internal wordlist and its .spl file.
-void spell_delete_wordlist(void)
-{
-  if (int_wordlist == NULL) {
-    return;
-  }
-
-  char fname[MAXPATHL] = { 0 };
-  os_remove(int_wordlist);
-  int_wordlist_spl(fname);
-  os_remove(fname);
-  XFREE_CLEAR(int_wordlist);
-}
-
-// Free all languages.
-void spell_free_all(void)
-{
-  // Go through all buffers and handle 'spelllang'. <VN>
-  FOR_ALL_BUFFERS(buf) {
-    ga_clear(&buf->b_s.b_langp);
-  }
-
-  while (first_lang != NULL) {
-    slang_T *slang = first_lang;
-    first_lang = slang->sl_next;
-    slang_free(slang);
-  }
-
-  spell_delete_wordlist();
-
-  XFREE_CLEAR(repl_to);
-  XFREE_CLEAR(repl_from);
-}
-
-// Clear all spelling tables and reload them.
-// Used after 'encoding' is set and when ":mkspell" was used.
-void spell_reload(void)
-{
-  // Initialize the table for spell_iswordp().
-  init_spell_chartab();
-
-  // Unload all allocated memory.
-  spell_free_all();
-
-  // Go through all buffers and handle 'spelllang'.
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    // Only load the wordlists when 'spelllang' is set and there is a
-    // window for this buffer in which 'spell' is set.
-    if (*wp->w_s->b_p_spl != NUL) {
-      if (wp->w_p_spell) {
-        parse_spelllang(wp);
-        break;
-      }
-    }
-  }
-}
 
 // Open a spell buffer.  This is a nameless buffer that is not in the buffer
 // list and only contains text lines.  Can use a swapfile to reduce memory

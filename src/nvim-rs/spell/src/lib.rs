@@ -252,9 +252,25 @@ extern "C" {
     #[link_name = "first_lang"]
     static first_lang_global: *mut SlangRaw;
 
+    /// Mutable first_lang for lifecycle management
+    #[link_name = "first_lang"]
+    static mut first_lang_mut: *mut SlangRaw;
+
     /// The global spell character table (C global: spelltab)
     #[link_name = "spelltab"]
     static spelltab_global: SpelltabT;
+
+    /// C global: int_wordlist (path to internal wordlist file, NULL when not set)
+    #[link_name = "int_wordlist"]
+    static mut int_wordlist_global: *mut c_char;
+
+    /// C global: repl_from (what "z?" replaced from)
+    #[link_name = "repl_from"]
+    static mut repl_from_global: *mut c_char;
+
+    /// C global: repl_to (what "z?" replaced to)
+    #[link_name = "repl_to"]
+    static mut repl_to_global: *mut c_char;
 }
 
 // =============================================================================
@@ -4253,6 +4269,11 @@ extern "C" {
     fn hash_clear_all(ht: *mut HashtabRaw, off: c_uint);
     fn vim_regfree(prog: *mut c_void);
     fn close_spellbuf(buf: *mut c_void);
+    // Spell lifecycle helpers (Phase 1)
+    fn os_remove(path: *const c_char) -> c_int;
+    fn nvim_for_all_bufs_clear_langp();
+    fn nvim_for_all_wins_spell_reload();
+    fn init_spell_chartab();
 }
 
 /// Frees a fromto_T item (internal helper).
@@ -4310,7 +4331,7 @@ unsafe fn ga_deep_clear_ptr(gap: *mut GArrayRaw) {
 ///
 /// # Safety
 /// `lp` must be a valid pointer to a SlangRaw.
-#[no_mangle]
+#[export_name = "slang_clear_sug"]
 #[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_slang_clear_sug(lp: *mut SlangRaw) {
     // XFREE_CLEAR: free and set to null
@@ -4329,7 +4350,7 @@ pub unsafe extern "C" fn rs_slang_clear_sug(lp: *mut SlangRaw) {
 ///
 /// # Safety
 /// `lp` must be a valid pointer to a SlangRaw.
-#[no_mangle]
+#[export_name = "slang_clear"]
 #[allow(clippy::cast_sign_loss)]
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_possible_truncation)]
@@ -4420,7 +4441,7 @@ pub unsafe extern "C" fn rs_slang_clear(lp: *mut SlangRaw) {
 ///
 /// # Safety
 /// `lp` must be a valid pointer to a heap-allocated SlangRaw. After this call `lp` is invalid.
-#[no_mangle]
+#[export_name = "slang_free"]
 pub unsafe extern "C" fn rs_slang_free(lp: *mut SlangRaw) {
     xfree((*lp).sl_name.cast::<c_void>());
     xfree((*lp).sl_fname.cast::<c_void>());
@@ -4433,9 +4454,10 @@ pub unsafe extern "C" fn rs_slang_free(lp: *mut SlangRaw) {
 ///
 /// # Safety
 /// `lang` must be NULL or a valid NUL-terminated C string. Returns a valid non-null pointer.
-#[no_mangle]
+#[export_name = "slang_alloc"]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_slang_alloc(lang: *const c_char) -> *mut SlangRaw {
     let lp = xcalloc(1, std::mem::size_of::<SlangRaw>()).cast::<SlangRaw>();
     if !lang.is_null() {
@@ -4456,6 +4478,80 @@ pub unsafe extern "C" fn rs_slang_alloc(lang: *const c_char) -> *mut SlangRaw {
     (*lp).sl_compsylmax = MAXWLEN as c_int;
     hash_init(std::ptr::addr_of_mut!((*lp).sl_wordcount));
     lp
+}
+
+// =============================================================================
+// Spell Lifecycle Functions (Phase 1 migration from spell.c)
+// =============================================================================
+
+/// MAXPATHL constant (path buffer size, matching C MAXPATHL = 4096)
+const MAXPATHL: usize = 4096;
+
+/// Delete the internal wordlist and its .spl file.
+/// Implements C: spell_delete_wordlist()
+#[export_name = "spell_delete_wordlist"]
+pub unsafe extern "C" fn rs_spell_delete_wordlist() {
+    if int_wordlist_global.is_null() {
+        return;
+    }
+    os_remove(int_wordlist_global.cast::<c_char>());
+    // Build the .spl filename: SPL_FNAME_TMPL = "%s.%s.spl"
+    let enc = rs_spell_enc(); // spell_enc() exported from Rust
+    let wordlist_str = std::ffi::CStr::from_ptr(int_wordlist_global).to_bytes();
+    let enc_str = std::ffi::CStr::from_ptr(enc).to_bytes();
+    let mut fname = [0u8; MAXPATHL];
+    let total_len = wordlist_str.len() + 1 + enc_str.len() + 4; // "." + enc + ".spl"
+    if total_len < MAXPATHL {
+        let mut pos = 0;
+        fname[pos..pos + wordlist_str.len()].copy_from_slice(wordlist_str);
+        pos += wordlist_str.len();
+        fname[pos] = b'.';
+        pos += 1;
+        fname[pos..pos + enc_str.len()].copy_from_slice(enc_str);
+        pos += enc_str.len();
+        fname[pos..pos + 4].copy_from_slice(b".spl");
+        pos += 4;
+        fname[pos] = 0;
+    }
+    os_remove(fname.as_ptr().cast::<c_char>());
+    // XFREE_CLEAR: free and set to null
+    xfree(int_wordlist_global.cast::<c_void>());
+    int_wordlist_global = std::ptr::null_mut();
+}
+
+/// Free all spell languages.
+/// Implements C: spell_free_all()
+#[export_name = "spell_free_all"]
+pub unsafe extern "C" fn rs_spell_free_all() {
+    // FOR_ALL_BUFFERS: clear b_langp for each buffer
+    nvim_for_all_bufs_clear_langp();
+
+    // Free all loaded languages via first_lang linked list
+    while !first_lang_mut.is_null() {
+        let slang = first_lang_mut;
+        first_lang_mut = (*slang).sl_next;
+        rs_slang_free(slang);
+    }
+
+    rs_spell_delete_wordlist();
+
+    // XFREE_CLEAR repl_to and repl_from
+    xfree(repl_to_global.cast::<c_void>());
+    repl_to_global = std::ptr::null_mut();
+    xfree(repl_from_global.cast::<c_void>());
+    repl_from_global = std::ptr::null_mut();
+}
+
+/// Reload all spelling tables.
+/// Implements C: spell_reload()
+#[export_name = "spell_reload"]
+pub unsafe extern "C" fn rs_spell_reload() {
+    // Initialize the table for spell_iswordp()
+    init_spell_chartab();
+    // Unload all allocated memory
+    rs_spell_free_all();
+    // Reload for first window in curtab with spell enabled
+    nvim_for_all_wins_spell_reload();
 }
 
 #[cfg(test)]

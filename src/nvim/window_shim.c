@@ -615,3 +615,32 @@ win_T *nvim_get_curwin_ptr(void) { return curwin; }
 win_T *nvim_get_firstwin_ptr(void) { return firstwin; }
 win_T *nvim_curwin_get_next(void) { return curwin->w_next; }
 buf_T *nvim_firstwin_get_buffer(void) { return firstwin->w_buffer; }
+
+// =============================================================================
+// Spell lifecycle helpers for Rust (Phase 1 spell migration)
+// =============================================================================
+#include "nvim/spell.h"
+#include "nvim/spellfile.h"
+
+/// Clear b_langp for all buffers (FOR_ALL_BUFFERS loop helper for spell_free_all).
+void nvim_for_all_bufs_clear_langp(void)
+{
+  FOR_ALL_BUFFERS(buf) {
+    ga_clear(&buf->b_s.b_langp);
+  }
+}
+
+/// Reload spell for the first matching window in curtab (FOR_ALL_WINDOWS_IN_TAB helper).
+/// Calls parse_spelllang on first window with spell enabled and non-empty spelllang.
+void nvim_for_all_wins_spell_reload(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (*wp->w_s->b_p_spl != NUL) {
+      if (wp->w_p_spell) {
+        parse_spelllang(wp);
+        break;
+      }
+    }
+  }
+}
+
