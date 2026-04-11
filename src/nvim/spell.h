@@ -39,6 +39,7 @@ void spell_free_all(void);
 void spell_reload(void);
 bool check_need_cap(win_T *wp, linenr_T lnum, colnr_T col);
 void ex_spellrepall(exarg_T *eap);
+void ex_spelldump(exarg_T *eap);
 size_t spell_check(win_T *wp, char *ptr, hlf_T *attrp, int *capcol, bool docount);
 void count_common_word(slang_T *lp, char *word, int len, uint8_t count);
 int init_syl_tab(slang_T *slang);

@@ -1281,6 +1281,44 @@ pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
 }
 
 // =============================================================================
+// Phase 3: ex_spelldump (migrated from spell.c)
+// =============================================================================
+
+extern "C" {
+    fn nvim_spelldump_setup() -> c_int;
+    fn nvim_curbuf_line_count() -> i32;
+    fn nvim_curbuf_ml_delete_last();
+    fn nvim_redraw_later_not_valid();
+    fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
+}
+
+/// `:spelldump` - Dump all spell words to a new buffer.
+/// Implements C: ex_spelldump()
+///
+/// # Safety
+/// Called from C with a valid exarg_T pointer.
+#[export_name = "ex_spelldump"]
+pub unsafe extern "C" fn rs_ex_spelldump(eap: *mut c_void) {
+    if crate::rs_no_spell_checking(curwin_global) {
+        return;
+    }
+    if nvim_spelldump_setup() == 0 {
+        return;
+    }
+    let forceit = nvim_eap_get_forceit(eap.cast_const());
+    spell_dump_compl(
+        std::ptr::null_mut(),
+        0,
+        std::ptr::null_mut(),
+        if forceit { DUMPFLAG_COUNT } else { 0 },
+    );
+    if nvim_curbuf_line_count() > 1 {
+        nvim_curbuf_ml_delete_last();
+    }
+    nvim_redraw_later_not_valid();
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

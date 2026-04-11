@@ -725,3 +725,30 @@ int nvim_win_cap_prog_is_null(const win_T *wp) { return wp->w_s->b_cap_prog == N
 void nvim_spell_emsg_e752(void) { emsg(_("E752: No previous spell replacement")); }
 void nvim_spell_semsg_e753(const char *word) { semsg(_("E753: Not found: %s"), word); }
 
+// =============================================================================
+// ex_spelldump helpers for Rust (Phase 3)
+// =============================================================================
+#include "nvim/option.h"
+#include "nvim/drawscreen.h"
+
+extern void rs_optval_free(OptVal o);
+
+/// Setup for :spelldump - get spelllang, open new buffer, set options.
+/// Returns 1 if we should proceed with the dump, 0 if we should bail out.
+/// The OptVal spl is freed internally.
+int nvim_spelldump_setup(void)
+{
+  OptVal spl = get_option_value(kOptSpelllang, OPT_LOCAL);
+  do_cmdline_cmd("new");
+  set_option_value_give_err(kOptSpell, BOOLEAN_OPTVAL(true), OPT_LOCAL);
+  set_option_value_give_err(kOptSpelllang, spl, OPT_LOCAL);
+  rs_optval_free(spl);
+  return buf_is_empty(curbuf) ? 1 : 0;
+}
+
+/// Delete the last line of curbuf.
+void nvim_curbuf_ml_delete_last(void) { ml_delete(curbuf->b_ml.ml_line_count); }
+
+/// Redraw the current window.
+void nvim_redraw_later_not_valid(void) { redraw_later(curwin, UPD_NOT_VALID); }
+

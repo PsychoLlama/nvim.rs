@@ -953,39 +953,4 @@ void close_spellbuf(buf_T *buf)
 
 
 
-#define DUMPFLAG_KEEPCASE   1   // round 2: keep-case tree
-#define DUMPFLAG_COUNT      2   // include word count
-#define DUMPFLAG_ICASE      4   // ignore case when finding matches
-#define DUMPFLAG_ONECAP     8   // pattern starts with capital
-#define DUMPFLAG_ALLCAP     16  // pattern is all capitals
-
-// ":spelldump"
-void ex_spelldump(exarg_T *eap)
-{
-  if (no_spell_checking(curwin)) {
-    return;
-  }
-  OptVal spl = get_option_value(kOptSpelllang, OPT_LOCAL);
-
-  // Create a new empty buffer in a new window.
-  do_cmdline_cmd("new");
-
-  // enable spelling locally in the new window
-  set_option_value_give_err(kOptSpell, BOOLEAN_OPTVAL(true), OPT_LOCAL);
-  set_option_value_give_err(kOptSpelllang, spl, OPT_LOCAL);
-  rs_optval_free(spl);
-
-  if (!buf_is_empty(curbuf)) {
-    return;
-  }
-
-  spell_dump_compl(NULL, 0, NULL, eap->forceit ? DUMPFLAG_COUNT : 0);
-
-  // Delete the empty line that we started with.
-  if (curbuf->b_ml.ml_line_count > 1) {
-    ml_delete(curbuf->b_ml.ml_line_count);
-  }
-  redraw_later(curwin, UPD_NOT_VALID);
-}
-
-// spell_dump_compl, dump_word, and dump_prefixes are now implemented in Rust.
+// ex_spelldump, spell_dump_compl, dump_word, and dump_prefixes are now implemented in Rust.
