@@ -6,6 +6,7 @@ use std::ffi::{c_int, c_void};
 
 use crate::ffi::{self, HistEntryPtr};
 use crate::helpers::clear_hist_entry;
+use crate::state::HistoryEntry;
 
 // =============================================================================
 // hist_iter
@@ -74,8 +75,8 @@ pub unsafe extern "C" fn rs_hist_iter(
         }
         hiter_idx = idx;
     } else {
-        // Convert pointer back to index
-        hiter_idx = nvim_cmdhist_ptr_to_idx(hist_base, iter.cast_mut() as HistEntryPtr);
+        // Convert pointer back to index using pointer arithmetic
+        hiter_idx = iter.cast::<HistoryEntry>().offset_from(hist_base) as c_int;
     }
 
     // Copy entry to output
@@ -98,10 +99,6 @@ pub unsafe extern "C" fn rs_hist_iter(
     }
 
     ffi::nvim_cmdhist_he_at(hist_base, next_idx).cast()
-}
-
-extern "C" {
-    fn nvim_cmdhist_ptr_to_idx(base: HistEntryPtr, ptr: HistEntryPtr) -> c_int;
 }
 
 // =============================================================================

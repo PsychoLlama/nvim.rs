@@ -44,35 +44,11 @@ _Static_assert(RE_STRING == 2, "RE_STRING changed - update Rust constant");
 // set_histentry(), get_hisidx(), get_hisnum() are now Rust statics/functions
 // in src/nvim-rs/cmdhist/src/state.rs.
 
-// histentry_T field accessors for Rust
+// histentry_T field accessors (nvim_cmdhist_he_*), array ops
+// (memset_entries, memcpy_entries), sizeof_histentry, and ptr_to_idx
+// are now inline Rust functions in ffi.rs (Phase 2).
 
-int nvim_cmdhist_he_get_hisnum(histentry_T *he) { return he->hisnum; }
-
-void nvim_cmdhist_he_set_hisnum(histentry_T *he, int val) { he->hisnum = val; }
-
-char *nvim_cmdhist_he_get_hisstr(histentry_T *he) { return he->hisstr; }
-
-void nvim_cmdhist_he_set_hisstr(histentry_T *he, char *val) { he->hisstr = val; }
-
-size_t nvim_cmdhist_he_get_hisstrlen(histentry_T *he) { return he->hisstrlen; }
-
-void nvim_cmdhist_he_set_hisstrlen(histentry_T *he, size_t val) { he->hisstrlen = val; }
-
-uint64_t nvim_cmdhist_he_get_timestamp(histentry_T *he) { return he->timestamp; }
-
-void nvim_cmdhist_he_set_timestamp(histentry_T *he, uint64_t val) { he->timestamp = val; }
-
-void *nvim_cmdhist_he_get_additional_data(histentry_T *he) { return he->additional_data; }
-
-void nvim_cmdhist_he_set_additional_data(histentry_T *he, void *val) { he->additional_data = (AdditionalData *)val; }
-
-void nvim_cmdhist_he_clear(histentry_T *he) { CLEAR_POINTER(he); }
-
-void nvim_cmdhist_he_copy(histentry_T *dst, histentry_T *src) { *dst = *src; }
-
-histentry_T *nvim_cmdhist_he_at(histentry_T *base, int idx) { return &base[idx]; }
-
-// -- Memory wrappers --
+// -- Memory wrappers (Phase 3 will remove these) --
 
 void nvim_cmdhist_xfree(void *ptr) { xfree(ptr); }
 
@@ -80,28 +56,15 @@ void *nvim_cmdhist_xmalloc(size_t size) { return xmalloc(size); }
 
 char *nvim_cmdhist_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
 
-// -- String wrappers --
+// -- String wrappers (Phase 3 will remove these) --
 
 int nvim_cmdhist_strnicmp(const char *s1, const char *s2, size_t n) { return STRNICMP(s1, s2, n); }
 
 char *nvim_cmdhist_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
 
-// -- Global accessors --
+// -- Global accessors (Phase 3/4 will remove these) --
 
 int nvim_cmdhist_get_cmdline_firstc(void) { return get_cmdline_firstc(); }
-
-// -- Array ops --
-
-void nvim_cmdhist_memset_entries(histentry_T *dst, int count) { memset(dst, 0, (size_t)count * sizeof(histentry_T)); }
-
-void nvim_cmdhist_memcpy_entries(histentry_T *dst, histentry_T *src, int count)
-{
-  memcpy(dst, src, (size_t)count * sizeof(histentry_T));
-}
-
-// -- Sizeof --
-
-size_t nvim_cmdhist_sizeof_histentry(void) { return sizeof(histentry_T); }
 
 // Phase 2: History Modification Accessors
 
@@ -230,5 +193,4 @@ int nvim_cmdhist_ascii_isdigit(int c) { return ascii_isdigit(c); }
 
 int nvim_cmdhist_ascii_isalpha(int c) { return ASCII_ISALPHA(c); }
 
-/// Convert a pointer within a history array to an index.
-int nvim_cmdhist_ptr_to_idx(histentry_T *base, histentry_T *ptr) { return (int)(ptr - base); }
+// nvim_cmdhist_ptr_to_idx replaced by pointer arithmetic in iter.rs (Phase 2).

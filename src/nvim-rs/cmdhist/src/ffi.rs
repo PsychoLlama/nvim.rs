@@ -11,12 +11,14 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::state::HistoryEntry;
+
 // =============================================================================
 // Opaque Handle Types
 // =============================================================================
 
-/// Opaque pointer to histentry_T
-pub type HistEntryPtr = *mut c_void;
+/// Pointer to histentry_T (now a repr(C) Rust type)
+pub type HistEntryPtr = *mut HistoryEntry;
 
 /// Opaque pointer to typval_T
 pub type TypvalPtr = *mut c_void;
@@ -37,19 +39,19 @@ pub type EvalFuncData = *mut c_void;
 // NOTE: nvim_get_hislen, get_histentry, set_histentry, get_hisidx, get_hisnum
 // are now #[no_mangle] Rust functions in state.rs -- no extern "C" needed.
 
-/// Access `nvim_get_hislen` from within Rust (calls our own exported fn).
+/// Access `hislen` from within Rust.
 pub unsafe fn nvim_get_hislen() -> c_int {
     crate::state::hislen
 }
 
 /// Access `get_histentry` from within Rust.
 pub unsafe fn get_histentry(hist_type: c_int) -> HistEntryPtr {
-    crate::state::get_histentry(hist_type).cast()
+    crate::state::get_histentry(hist_type)
 }
 
 /// Access `set_histentry` from within Rust.
 pub unsafe fn set_histentry(hist_type: c_int, entry: HistEntryPtr) {
-    crate::state::set_histentry(hist_type, entry.cast());
+    crate::state::set_histentry(hist_type, entry);
 }
 
 /// Access `get_hisidx` from within Rust.
@@ -62,23 +64,80 @@ pub unsafe fn get_hisnum(hist_type: c_int) -> *mut c_int {
     crate::state::get_hisnum(hist_type)
 }
 
-extern "C" {
-    // -- histentry_T field accessors --
-    pub fn nvim_cmdhist_he_get_hisnum(he: HistEntryPtr) -> c_int;
-    pub fn nvim_cmdhist_he_set_hisnum(he: HistEntryPtr, val: c_int);
-    pub fn nvim_cmdhist_he_get_hisstr(he: HistEntryPtr) -> *mut c_char;
-    pub fn nvim_cmdhist_he_set_hisstr(he: HistEntryPtr, val: *mut c_char);
-    pub fn nvim_cmdhist_he_get_hisstrlen(he: HistEntryPtr) -> usize;
-    pub fn nvim_cmdhist_he_set_hisstrlen(he: HistEntryPtr, val: usize);
-    pub fn nvim_cmdhist_he_get_timestamp(he: HistEntryPtr) -> u64;
-    pub fn nvim_cmdhist_he_set_timestamp(he: HistEntryPtr, val: u64);
-    pub fn nvim_cmdhist_he_get_additional_data(he: HistEntryPtr) -> *mut c_void;
-    pub fn nvim_cmdhist_he_set_additional_data(he: HistEntryPtr, val: *mut c_void);
-    pub fn nvim_cmdhist_he_clear(he: HistEntryPtr);
-    pub fn nvim_cmdhist_he_copy(dst: HistEntryPtr, src: HistEntryPtr);
-    pub fn nvim_cmdhist_he_at(base: HistEntryPtr, idx: c_int) -> HistEntryPtr;
+// =============================================================================
+// Phase 2: HistoryEntry field accessors -- now direct struct field access
+// =============================================================================
 
-    // -- Memory --
+/// Get `hisnum` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_get_hisnum(he: HistEntryPtr) -> c_int {
+    (*he).hisnum
+}
+
+/// Set `hisnum` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_set_hisnum(he: HistEntryPtr, val: c_int) {
+    (*he).hisnum = val;
+}
+
+/// Get `hisstr` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_get_hisstr(he: HistEntryPtr) -> *mut c_char {
+    (*he).hisstr
+}
+
+/// Set `hisstr` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_set_hisstr(he: HistEntryPtr, val: *mut c_char) {
+    (*he).hisstr = val;
+}
+
+/// Get `hisstrlen` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_get_hisstrlen(he: HistEntryPtr) -> usize {
+    (*he).hisstrlen
+}
+
+/// Set `hisstrlen` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_set_hisstrlen(he: HistEntryPtr, val: usize) {
+    (*he).hisstrlen = val;
+}
+
+/// Get `timestamp` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_get_timestamp(he: HistEntryPtr) -> u64 {
+    (*he).timestamp
+}
+
+/// Set `timestamp` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_set_timestamp(he: HistEntryPtr, val: u64) {
+    (*he).timestamp = val;
+}
+
+/// Get `additional_data` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_get_additional_data(he: HistEntryPtr) -> *mut c_void {
+    (*he).additional_data
+}
+
+/// Set `additional_data` field of a history entry.
+pub unsafe fn nvim_cmdhist_he_set_additional_data(he: HistEntryPtr, val: *mut c_void) {
+    (*he).additional_data = val;
+}
+
+/// Zero-fill a history entry (equivalent to CLEAR_POINTER).
+pub unsafe fn nvim_cmdhist_he_clear(he: HistEntryPtr) {
+    std::ptr::write_bytes(he, 0, 1);
+}
+
+/// Copy a history entry (equivalent to `*dst = *src`).
+pub unsafe fn nvim_cmdhist_he_copy(dst: HistEntryPtr, src: HistEntryPtr) {
+    std::ptr::copy_nonoverlapping(src, dst, 1);
+}
+
+/// Get pointer to the `idx`-th history entry in an array.
+pub unsafe fn nvim_cmdhist_he_at(base: HistEntryPtr, idx: c_int) -> HistEntryPtr {
+    base.add(idx as usize)
+}
+
+// =============================================================================
+// Memory wrappers (still delegating to C until Phase 3)
+// =============================================================================
+
+extern "C" {
     pub fn nvim_cmdhist_xfree(ptr: *mut c_void);
     pub fn nvim_cmdhist_xmalloc(size: usize) -> *mut c_void;
     pub fn nvim_cmdhist_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -89,13 +148,21 @@ extern "C" {
 
     // -- Global --
     pub fn nvim_cmdhist_get_cmdline_firstc() -> c_int;
+}
 
-    // -- Array ops --
-    pub fn nvim_cmdhist_memset_entries(dst: HistEntryPtr, count: c_int);
-    pub fn nvim_cmdhist_memcpy_entries(dst: HistEntryPtr, src: HistEntryPtr, count: c_int);
+/// Zero-fill `count` history entries starting at `dst`.
+pub unsafe fn nvim_cmdhist_memset_entries(dst: HistEntryPtr, count: c_int) {
+    std::ptr::write_bytes(dst, 0, count as usize);
+}
 
-    // -- Sizeof --
-    pub fn nvim_cmdhist_sizeof_histentry() -> usize;
+/// Copy `count` history entries from `src` to `dst`.
+pub unsafe fn nvim_cmdhist_memcpy_entries(dst: HistEntryPtr, src: HistEntryPtr, count: c_int) {
+    std::ptr::copy_nonoverlapping(src, dst, count as usize);
+}
+
+/// Return the size of a single HistoryEntry.
+pub fn nvim_cmdhist_sizeof_histentry() -> usize {
+    std::mem::size_of::<HistoryEntry>()
 }
 
 // =============================================================================

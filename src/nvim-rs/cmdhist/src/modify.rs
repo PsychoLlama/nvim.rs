@@ -131,12 +131,11 @@ pub unsafe extern "C" fn rs_init_history() {
     let entry_size = ffi::nvim_cmdhist_sizeof_histentry();
 
     for hist_type in 0..HIST_COUNT {
-        let temp = if newlen > 0 {
-            ffi::nvim_cmdhist_xmalloc(newlen as usize * entry_size).cast::<c_char>()
+        let temp_he: ffi::HistEntryPtr = if newlen > 0 {
+            ffi::nvim_cmdhist_xmalloc(newlen as usize * entry_size).cast()
         } else {
             ptr::null_mut()
         };
-        let temp_he = temp.cast::<std::ffi::c_void>();
 
         let j = *ffi::get_hisidx(hist_type);
         let hist = ffi::get_histentry(hist_type);
@@ -183,7 +182,7 @@ pub unsafe extern "C" fn rs_init_history() {
         }
 
         *ffi::get_hisidx(hist_type) = l3 - 1;
-        ffi::nvim_cmdhist_xfree(hist);
+        ffi::nvim_cmdhist_xfree(hist.cast());
         ffi::set_histentry(hist_type, temp_he);
     }
     ffi::nvim_cmdhist_set_hislen(newlen);
