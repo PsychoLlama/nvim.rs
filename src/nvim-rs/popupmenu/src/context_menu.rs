@@ -3,7 +3,7 @@
 //! This module provides helper functions for context menu popup
 //! positioning and UI flush operations.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::PUM_STATE;
 
@@ -335,8 +335,9 @@ extern "C" {
 
 // C functions for menu operations.
 extern "C" {
-    /// Execute a menu item (`CLEAR_FIELD(ea); execute_menu(&ea, mp, -1)`).
-    fn nvim_menu_execute(menu: *mut VimMenuHandle);
+    /// Execute a menu item for a given mode index.
+    /// `eap` may be null (normal mode execution), `mode_idx` of -1 uses current state.
+    fn execute_menu(eap: *mut c_void, menu: *mut VimMenuHandle, mode_idx: c_int);
     /// Check if menu name is a separator.
     fn menu_is_separator(name: *mut std::ffi::c_char) -> bool;
 }
@@ -416,7 +417,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
     while !mp.is_null() {
         if ((*mp).modes & (*mp).enabled & mode) != 0 {
             if idx == pum_selected {
-                nvim_menu_execute(mp);
+                execute_menu(std::ptr::null_mut::<c_void>(), mp, -1);
                 return;
             }
             idx += 1;

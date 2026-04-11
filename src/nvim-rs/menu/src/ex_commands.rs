@@ -84,9 +84,6 @@ extern "C" {
     ) -> bool;
     fn pum_show_popupmenu(menu: *mut VimMenu);
 
-    // Execute menu (stays in C)
-    fn execute_menu(eap: ExArgHandle, menu: VimMenuHandle, mode_idx: c_int);
-
     // Root menu global (in C)
     static mut root_menu: *mut VimMenu;
 
@@ -434,8 +431,8 @@ pub unsafe extern "C" fn rs_ex_emenu(eap: ExArgHandle) {
         return;
     }
 
-    // Found the menu, so execute.
-    unsafe { execute_menu(eap, menu, mode_idx) };
+    // Found the menu, so execute (calling Rust implementation directly).
+    unsafe { crate::execute_menu::rs_execute_menu(eap, menu, mode_idx) };
 }
 
 /// Menu mode chars for popup menu lookup.

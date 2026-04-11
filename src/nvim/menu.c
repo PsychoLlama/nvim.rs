@@ -29,9 +29,6 @@ typedef struct {
 } MenuCmdResult;
 extern MenuCmdResult rs_get_menu_cmd_modes(const char *cmd, bool forceit);
 
-// Forward declarations for Rust-exported functions called from this file.
-extern void execute_menu(const exarg_T *eap, vimmenu_T *menu, int mode_idx);
-
 /// Returns the \ref MENU_MODES specified by menu command `cmd`.
 /// (eg :menu! returns MENU_CMDLINE_MODE | MENU_INSERT_MODE)
 ///
@@ -158,14 +155,6 @@ void nvim_menu_menutrans_append(char *from, char *from_noamp, char *to)
 
 // Error message wrapper
 void nvim_menu_emsg_invarg(void) { emsg(_(e_invarg)); }
-
-/// Execute a menu item: clears ea, then calls execute_menu.
-void nvim_menu_execute(vimmenu_T *mp)
-{
-  exarg_T ea;
-  CLEAR_FIELD(ea);
-  execute_menu(&ea, mp, -1);
-}
 
 // _Static_assert for Phase 6 constants
 _Static_assert(EXPAND_MENUS == 11, "EXPAND_MENUS must be 11");
