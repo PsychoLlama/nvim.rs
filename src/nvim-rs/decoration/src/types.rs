@@ -133,6 +133,19 @@ pub struct MarkTreeIter {
     _data: [u8; 216],
 }
 
+impl MarkTreeIter {
+    /// Create a zeroed MarkTreeIter (equivalent to `= {0}` in C).
+    pub fn new() -> Self {
+        Self { _data: [0u8; 216] }
+    }
+}
+
+impl Default for MarkTreeIter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // =============================================================================
 // VirtTextChunk -- matches struct { char *text; int hl_id; }
 // =============================================================================
@@ -362,6 +375,7 @@ pub struct DecorHighlightInline {
 
 /// Rust mirror of DecorExt. Size = 16 bytes.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct DecorExt {
     pub sh_idx: u32,
     #[allow(clippy::pub_underscore_fields)]
@@ -379,6 +393,31 @@ pub struct DecorExt {
 pub union DecorInlineData {
     pub hl: std::mem::ManuallyDrop<DecorHighlightInline>,
     pub ext: std::mem::ManuallyDrop<DecorExt>,
+}
+
+// Safety: all fields are #[repr(C)] with only Copy primitives or raw pointers.
+#[allow(clippy::non_canonical_clone_impl)]
+impl Clone for DecorInlineData {
+    fn clone(&self) -> Self {
+        // Safe: we copy the raw bytes of the union.
+        // SAFETY: DecorInlineData is a union of 16 bytes; copying it bitwise is correct.
+        unsafe { std::ptr::read(self) }
+    }
+}
+
+impl Copy for DecorInlineData {}
+
+impl DecorInlineData {
+    pub const fn zero() -> Self {
+        Self {
+            hl: std::mem::ManuallyDrop::new(DecorHighlightInline {
+                flags: 0,
+                priority: 0,
+                hl_id: 0,
+                conceal_char: 0,
+            }),
+        }
+    }
 }
 
 // =============================================================================
@@ -472,4 +511,95 @@ const _: () = {
     assert!(std::mem::offset_of!(DecorVirtText, pos) == 12);
     assert!(std::mem::offset_of!(DecorVirtText, data) == 16);
     assert!(std::mem::offset_of!(DecorVirtText, next) == 40);
+};
+
+// =============================================================================
+// MTPos -- matches struct { int32_t row; int32_t col; }
+// =============================================================================
+
+/// Rust mirror of MTPos. Size = 8 bytes.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MTPos {
+    pub row: i32,
+    pub col: i32,
+}
+
+// =============================================================================
+// MTKey -- matches struct MTKey
+//
+// Layout:
+//   pos=0(8), ns=8(4), id=12(4), flags=16(2), pad=18(6), decor_data=24(16)
+// Size = 40 bytes, align = 8
+// =============================================================================
+
+/// Rust mirror of MTKey. Size = 40 bytes.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MTKey {
+    pub pos: MTPos,
+    pub ns: u32,
+    pub id: u32,
+    pub flags: u16,
+    #[allow(clippy::pub_underscore_fields)]
+    pub _pad: [u8; 6],
+    pub decor_data: DecorInlineData,
+}
+
+impl Default for MTKey {
+    fn default() -> Self {
+        Self {
+            pos: MTPos { row: -1, col: -1 },
+            ns: 0,
+            id: 0,
+            flags: 0,
+            _pad: [0; 6],
+            decor_data: DecorInlineData::zero(),
+        }
+    }
+}
+
+// =============================================================================
+// MTPair -- matches struct { MTKey start; MTPos end_pos; bool end_right_gravity; }
+//
+// Layout: start=0(40), end_pos=40(8), end_right_gravity=48(1), pad=49(7)
+// Size = 56 bytes
+// =============================================================================
+
+/// Rust mirror of MTPair. Size = 56 bytes.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MTPair {
+    pub start: MTKey,
+    pub end_pos: MTPos,
+    pub end_right_gravity: bool,
+    #[allow(clippy::pub_underscore_fields)]
+    pub _pad: [u8; 7],
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for MTPair {
+    fn default() -> Self {
+        Self {
+            start: MTKey::default(),
+            end_pos: MTPos::default(),
+            end_right_gravity: false,
+            _pad: [0; 7],
+        }
+    }
+}
+
+// Static size/offset assertions for marktree types
+const _: () = {
+    assert!(std::mem::size_of::<MTPos>() == 8);
+    assert!(std::mem::size_of::<MTKey>() == 40);
+    assert!(std::mem::offset_of!(MTKey, pos) == 0);
+    assert!(std::mem::offset_of!(MTKey, ns) == 8);
+    assert!(std::mem::offset_of!(MTKey, id) == 12);
+    assert!(std::mem::offset_of!(MTKey, flags) == 16);
+    assert!(std::mem::offset_of!(MTKey, decor_data) == 24);
+    assert!(std::mem::size_of::<MTPair>() == 56);
+    assert!(std::mem::offset_of!(MTPair, start) == 0);
+    assert!(std::mem::offset_of!(MTPair, end_pos) == 40);
+    assert!(std::mem::offset_of!(MTPair, end_right_gravity) == 48);
 };

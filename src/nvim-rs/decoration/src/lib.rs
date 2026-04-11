@@ -28,7 +28,9 @@ pub mod types;
 
 use std::ffi::{c_char, c_int, c_void};
 
-pub use types::{DecorRange, DecorSignHighlight, DecorState, DecorVirtText, KVec};
+pub use types::{
+    DecorRange, DecorSignHighlight, DecorState, DecorVirtText, KVec, MTKey, MTPair, MTPos,
+};
 
 /// schar_T is stored as a u32.
 pub type ScharT = u32;

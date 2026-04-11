@@ -33,6 +33,10 @@
 // Rust fold FFI declaration
 extern int rs_hasAnyFolding(win_T *win);
 
+// Rust decoration FFI declarations (migrated from decoration.c to Rust)
+extern bool decor_conceal_line(win_T *wp, int row, bool check_cursor);
+extern bool win_lines_concealed(win_T *wp);
+
 // Rust implementations
 extern bool decor_virt_pos(const DecorRange *decor);
 extern VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
@@ -116,97 +120,20 @@ next_mark:
   return NULL;
 }
 
-/// @return true if decor has a virtual position (virtual text or ui_watched)
-bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
-{
-  buf_T *buf = wp->w_buffer;
-  state->top_row = top_row;
-  state->itr_valid = true;
+// Phase 1 C accessor wrappers for Rust FFI
+// Note: nvim_get_curwin, nvim_win_get_p_cole, nvim_win_get_cursor_lnum are
+// already exported from the Rust window crate (nvim-window).
 
-  if (!rs_marktree_itr_get_overlap(buf->b_marktree, top_row, 0, state->itr)) {
-    return false;
-  }
-  MTPair pair;
-
-  while (rs_marktree_itr_step_overlap(buf->b_marktree, state->itr, &pair)) {
-    MTKey m = pair.start;
-    if (mt_invalid(m) || !mt_decor_any(m)) {
-      continue;
-    }
-
-    rs_decor_range_add_from_inline(state, pair.start.pos.row, pair.start.pos.col,
-                                   pair.end_pos.row, pair.end_pos.col,
-                                   mt_decor(m).ext, mt_decor(m).data.ext.vt,
-                                   mt_decor(m).data.ext.sh_idx,
-                                   mt_decor(m).data.hl.flags, mt_decor(m).data.hl.priority,
-                                   mt_decor(m).data.hl.hl_id, mt_decor(m).data.hl.conceal_char,
-                                   false, m.ns, m.id);
-  }
-
-  return true;  // TODO(bfredl): check if available in the region
-}
-
-static const uint32_t conceal_filter[kMTMetaCount] = {[kMTMetaConcealLines] = kMTFilterSelect };
-
-/// Called by draw, move and plines code to determine whether a line is concealed.
-/// Scans the marktree for conceal_line marks on "row" and invokes any
-/// _on_conceal_line decoration provider callbacks, if necessary.
-///
-/// @param check_cursor If true, avoid an early return for an unconcealed cursorline.
-///                     Depending on the callsite, we still want to know whether the
-///                     cursor line would be concealed if it was not the cursorline.
-///
-/// @return whether "row" is concealed
-bool decor_conceal_line(win_T *wp, int row, bool check_cursor)
-{
-  if (row < 0 || wp->w_p_cole < 2
-      || (!check_cursor && wp == curwin && row + 1 == wp->w_cursor.lnum
-          && !conceal_cursor_line(wp))) {
-    return false;
-  }
-
-  // No need to scan the marktree if there are no conceal_line marks.
-  if (!buf_meta_total(wp->w_buffer, kMTMetaConcealLines)) {
-    return decor_providers_invoke_conceal_line(wp, row);
-  }
-
-  // Scan the marktree for any conceal_line marks on this row.
-  MTPair pair;
-  MarkTreeIter itr[1];
-  rs_marktree_itr_get_overlap(wp->w_buffer->b_marktree, row, 0, itr);
-  while (rs_marktree_itr_step_overlap(wp->w_buffer->b_marktree, itr, &pair)) {
-    if (mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, wp)) {
-      return true;
-    }
-  }
-
-  rs_marktree_itr_step_out_filter(wp->w_buffer->b_marktree, itr, conceal_filter);
-
-  while (itr->x) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (mark.pos.row > row) {
-      break;
-    }
-    if (mt_conceal_lines(mark) && ns_in_win(pair.start.ns, wp)) {
-      return true;
-    }
-    rs_marktree_itr_next_filter(wp->w_buffer->b_marktree, itr, row + 1, 0, conceal_filter);
-  }
-
-  return decor_providers_invoke_conceal_line(wp, row);
-}
-
-/// Wrapper for decor_conceal_line for Rust FFI.
-int nvim_decor_conceal_line(win_T *wp, int row, int check_cursor)
-{
-  return decor_conceal_line(wp, row, check_cursor != 0) ? 1 : 0;
-}
-
-/// @return whether a window may have folded or concealed lines
-bool win_lines_concealed(win_T *wp) { return rs_hasAnyFolding(wp) || wp->w_p_cole >= 2; }
-
-/// Wrapper for win_lines_concealed for Rust FFI.
-int nvim_win_lines_concealed(win_T *wp) { return win_lines_concealed(wp) ? 1 : 0; }
+/// Get buf_meta_total(buf, kMTMetaConcealLines) for Rust FFI.
+int nvim_buf_meta_total_conceal_lines(buf_T *buf) { return (int)buf_meta_total(buf, kMTMetaConcealLines); }
+/// Invoke conceal_line decoration providers for Rust FFI.
+int nvim_decor_providers_invoke_conceal_line(win_T *wp, int row) { return decor_providers_invoke_conceal_line(wp, row) ? 1 : 0; }
+/// Check conceal_cursor_line(wp) for Rust FFI.
+int nvim_conceal_cursor_line(win_T *wp) { return conceal_cursor_line(wp) ? 1 : 0; }
+/// Check ns_in_win(ns, wp) for Rust FFI.
+int nvim_ns_in_win(uint32_t ns, win_T *wp) { return ns_in_win(ns, wp) ? 1 : 0; }
+/// Check mt_conceal_lines(mark) for Rust FFI.
+int nvim_mt_conceal_lines(MTKey mark) { return mt_conceal_lines(mark) ? 1 : 0; }
 
 static const uint32_t sign_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect,
                                                    [kMTMetaSignHL] = kMTFilterSelect };

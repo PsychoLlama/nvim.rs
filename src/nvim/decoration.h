@@ -148,6 +148,10 @@ void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end
                         DecorSignHighlight *sh, bool owned, uint32_t ns, uint32_t mark_id,
                         DecorPriority subpriority);
 
+// Phase 1 Rust exports (formerly C implementations)
+bool decor_conceal_line(win_T *wp, int row, bool check_cursor);
+bool win_lines_concealed(win_T *wp);
+
 #include "decoration.h.generated.h"
 #include "decoration.h.inline.generated.h"
 

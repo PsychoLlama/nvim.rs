@@ -7,7 +7,9 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
-use crate::types::{DecorRange, DecorRangeSlot, DecorSignHighlight, DecorVirtText, KVec, VirtText};
+use crate::types::{
+    DecorRange, DecorRangeSlot, DecorSignHighlight, DecorVirtText, KVec, MTKey, MTPair, VirtText,
+};
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
     DRAW_COL_JUST_ADDED, DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
@@ -31,7 +33,61 @@ extern "C" {
     fn nvim_decor_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_decor_state_itr_current_row(state: DecorStateHandle) -> c_int;
     fn nvim_decor_state_itr_get(state: DecorStateHandle, buf: BufHandle, row: c_int, col: c_int);
-    fn decor_redraw_start(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool;
+
+    // Marktree operations (Rust functions called via C linkage from this Rust crate)
+    #[link_name = "rs_marktree_itr_get_overlap"]
+    fn rs_marktree_itr_get_overlap(b: *mut c_void, row: i32, col: i32, itr: *mut c_void) -> bool;
+    #[link_name = "rs_marktree_itr_step_overlap"]
+    fn rs_marktree_itr_step_overlap(b: *mut c_void, itr: *mut c_void, pair: *mut MTPair) -> bool;
+    #[link_name = "rs_marktree_itr_get"]
+    fn rs_marktree_itr_get(b: *mut c_void, row: i32, col: i32, itr: *mut c_void) -> bool;
+    #[link_name = "rs_marktree_itr_next"]
+    fn rs_marktree_itr_next(b: *mut c_void, itr: *mut c_void) -> bool;
+    #[link_name = "rs_marktree_itr_current"]
+    fn rs_marktree_itr_current(itr: *mut c_void) -> MTKey;
+    #[link_name = "rs_marktree_itr_get_filter"]
+    fn rs_marktree_itr_get_filter(
+        b: *mut c_void,
+        row: i32,
+        col: i32,
+        stop_row: i32,
+        stop_col: i32,
+        meta_filter: *const u32,
+        itr: *mut c_void,
+    ) -> bool;
+    #[link_name = "rs_marktree_itr_step_out_filter"]
+    fn rs_marktree_itr_step_out_filter(
+        b: *mut c_void,
+        itr: *mut c_void,
+        meta_filter: *const u32,
+    ) -> bool;
+    #[link_name = "rs_marktree_itr_next_filter"]
+    fn rs_marktree_itr_next_filter(
+        b: *mut c_void,
+        itr: *mut c_void,
+        stop_row: i32,
+        stop_col: i32,
+        meta_filter: *const u32,
+    ) -> bool;
+    #[link_name = "rs_marktree_get_altpos"]
+    fn rs_marktree_get_altpos(b: *mut c_void, mark: MTKey, itr: *mut c_void)
+        -> crate::types::MTPos;
+
+    // C accessor wrappers for buf_T fields and inline functions (Phase 1)
+    fn nvim_buf_get_marktree(buf: BufHandle) -> *mut c_void;
+    fn nvim_buf_meta_total_conceal_lines(buf: BufHandle) -> c_int;
+    fn nvim_decor_providers_invoke_conceal_line(wp: WinHandle, row: c_int) -> c_int;
+    fn nvim_conceal_cursor_line(wp: WinHandle) -> c_int;
+    fn nvim_ns_in_win(ns: u32, wp: WinHandle) -> c_int;
+    fn nvim_mt_conceal_lines(mark: MTKey) -> c_int;
+
+    // Window accessors (from nvim-window Rust crate)
+    fn nvim_win_get_p_cole(wp: WinHandle) -> i64; // OptInt = i64
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int; // LineNr = i32
+    fn nvim_get_curwin() -> WinHandle;
+    // Fold accessor (from nvim-fold Rust crate)
+    #[link_name = "rs_hasAnyFolding"]
+    fn rs_has_any_folding(wp: WinHandle) -> bool;
 
     // Memory management (shared with decor.rs)
     fn nvim_xfree_ptr(ptr: *mut c_void);
@@ -276,6 +332,202 @@ pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
     }
 }
 
+// =============================================================================
+// MTKey flag constants (from marktree.h)
+// =============================================================================
+
+const MT_FLAG_INVALID: u16 = 1 << 6;
+const MT_FLAG_DECOR_EXT: u16 = 1 << 7;
+const MT_FLAG_DECOR_HL: u16 = 1 << 8;
+const MT_FLAG_DECOR_SIGNTEXT: u16 = 1 << 9;
+const MT_FLAG_DECOR_SIGNHL: u16 = 1 << 10;
+const MT_FLAG_DECOR_VIRT_LINES: u16 = 1 << 11;
+const MT_FLAG_DECOR_VIRT_TEXT_INLINE: u16 = 1 << 12;
+const MT_FLAG_DECOR_MASK: u16 = MT_FLAG_DECOR_EXT
+    | MT_FLAG_DECOR_HL
+    | MT_FLAG_DECOR_SIGNTEXT
+    | MT_FLAG_DECOR_SIGNHL
+    | MT_FLAG_DECOR_VIRT_LINES
+    | MT_FLAG_DECOR_VIRT_TEXT_INLINE;
+
+// kMTMeta enum indices (from marktree_defs.h) - as usize for filter array indexing
+const K_MT_META_LINES: usize = 1; // kMTMetaLines
+const K_MT_META_SIGN_HL_IDX: usize = 2; // kMTMetaSignHL
+const K_MT_META_SIGN_TEXT_IDX: usize = 3; // kMTMetaSignText
+const K_MT_META_CONCEAL_LINES: usize = 4; // kMTMetaConcealLines
+const K_MT_META_COUNT: usize = 5; // kMTMetaCount
+
+// kMTMeta enum indices as c_int (for nvim_buf_meta_total)
+const K_MT_META_SIGN_TEXT: c_int = 3; // kMTMetaSignText
+
+/// kMTFilterSelect value: selects entries that match the filter.
+const K_MT_FILTER_SELECT: u32 = u32::MAX;
+
+// =============================================================================
+// Phase 1: decor_redraw_start - Migrated from C
+// =============================================================================
+
+/// Initialize DecorState for a window redraw.
+///
+/// Scans the marktree for marks that overlap the top_row position and adds
+/// them to the decoration ranges. Returns true (a hint that decorations
+/// may be available in the region; always true for simplicity).
+///
+/// Rust implementation of `decor_redraw_start()`.
+unsafe fn decor_redraw_start_impl(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool {
+    let buf = nvim_decor_win_get_buffer(wp);
+    let s = &mut *state;
+    s.top_row = top_row;
+    s.itr_valid = true;
+
+    let tree = nvim_buf_get_marktree(buf);
+    let itr_ptr = std::ptr::addr_of_mut!(s.itr).cast::<c_void>();
+
+    if !rs_marktree_itr_get_overlap(tree, top_row, 0, itr_ptr) {
+        return false;
+    }
+
+    let mut pair = MTPair::default();
+    while rs_marktree_itr_step_overlap(tree, itr_ptr, std::ptr::addr_of_mut!(pair)) {
+        let m = pair.start;
+        if m.flags & MT_FLAG_INVALID != 0 || m.flags & MT_FLAG_DECOR_MASK == 0 {
+            continue;
+        }
+        let ext = m.flags & MT_FLAG_DECOR_EXT != 0;
+        let (vt, sh_idx, hl_flags, hl_priority, hl_hl_id, conceal_char) = if ext {
+            let d = m.decor_data.ext;
+            (d.vt.cast::<c_void>(), d.sh_idx, 0u16, 0u16, 0i32, 0u32)
+        } else {
+            let hl = m.decor_data.hl;
+            (
+                std::ptr::null_mut::<c_void>(),
+                DECOR_ID_INVALID,
+                hl.flags,
+                hl.priority,
+                hl.hl_id,
+                hl.conceal_char,
+            )
+        };
+        crate::range::rs_decor_range_add_from_inline(
+            state,
+            pair.start.pos.row,
+            pair.start.pos.col,
+            pair.end_pos.row,
+            pair.end_pos.col,
+            ext,
+            DecorVtHandle(vt),
+            sh_idx,
+            hl_flags,
+            hl_priority,
+            hl_hl_id,
+            conceal_char,
+            false,
+            m.ns,
+            m.id,
+        );
+    }
+
+    true
+}
+
+// =============================================================================
+// Phase 1: decor_conceal_line - Migrated from C
+// =============================================================================
+
+/// Conceal filter: selects only kMTMetaConcealLines meta entries.
+/// Matches `static const uint32_t conceal_filter[kMTMetaCount]` from C.
+/// Index 4 = kMTMetaConcealLines = K_MT_FILTER_SELECT, all others = 0.
+static CONCEAL_FILTER: [u32; K_MT_META_COUNT] = [0, 0, 0, 0, K_MT_FILTER_SELECT];
+
+/// Check if a line is concealed by decorations.
+///
+/// Scans the marktree for conceal_line marks on "row" and invokes any
+/// _on_conceal_line decoration provider callbacks if necessary.
+///
+/// Rust implementation of `decor_conceal_line()`.
+#[unsafe(export_name = "decor_conceal_line")]
+pub unsafe extern "C" fn rs_decor_conceal_line(
+    wp: WinHandle,
+    row: c_int,
+    check_cursor: bool,
+) -> bool {
+    let p_cole = nvim_win_get_p_cole(wp);
+    if row < 0 || p_cole < 2 {
+        return false;
+    }
+    if !check_cursor {
+        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let conceal_cur = nvim_conceal_cursor_line(wp) != 0;
+        if wp.0 == curwin_handle().0 && row + 1 == cursor_lnum && !conceal_cur {
+            return false;
+        }
+    }
+
+    let buf = nvim_decor_win_get_buffer(wp);
+    let tree = nvim_buf_get_marktree(buf);
+
+    // No need to scan the marktree if there are no conceal_line marks.
+    if nvim_buf_meta_total_conceal_lines(buf) == 0 {
+        return nvim_decor_providers_invoke_conceal_line(wp, row) != 0;
+    }
+
+    // Scan the marktree for any conceal_line marks on this row (overlap scan).
+    let mut itr_buf = crate::types::MarkTreeIter::new();
+    let itr_ptr = std::ptr::addr_of_mut!(itr_buf).cast::<c_void>();
+    let mut pair = MTPair::default();
+    rs_marktree_itr_get_overlap(tree, row, 0, itr_ptr);
+    while rs_marktree_itr_step_overlap(tree, itr_ptr, std::ptr::addr_of_mut!(pair)) {
+        if nvim_mt_conceal_lines(pair.start) != 0 && nvim_ns_in_win(pair.start.ns, wp) != 0 {
+            return true;
+        }
+    }
+
+    // Advance iterator out of overlap zone using conceal filter.
+    rs_marktree_itr_step_out_filter(tree, itr_ptr, CONCEAL_FILTER.as_ptr());
+
+    loop {
+        let mark = rs_marktree_itr_current(itr_ptr);
+        // itr->x != NULL check: the iterator is done if pos.row == -1 (sentinel)
+        if mark.pos.row < 0 {
+            break;
+        }
+        if mark.pos.row > row {
+            break;
+        }
+        if nvim_mt_conceal_lines(mark) != 0 && nvim_ns_in_win(pair.start.ns, wp) != 0 {
+            return true;
+        }
+        if !rs_marktree_itr_next_filter(tree, itr_ptr, row + 1, 0, CONCEAL_FILTER.as_ptr()) {
+            break;
+        }
+    }
+
+    nvim_decor_providers_invoke_conceal_line(wp, row) != 0
+}
+
+/// Wrapper for decor_conceal_line returning int (for backward C compatibility).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_decor_conceal_line(
+    wp: WinHandle,
+    row: c_int,
+    check_cursor: c_int,
+) -> c_int {
+    c_int::from(rs_decor_conceal_line(wp, row, check_cursor != 0))
+}
+
+/// Return whether a window may have folded or concealed lines.
+#[unsafe(export_name = "win_lines_concealed")]
+pub unsafe extern "C" fn rs_win_lines_concealed(wp: WinHandle) -> bool {
+    rs_has_any_folding(wp) || nvim_win_get_p_cole(wp) >= 2
+}
+
+// nvim_win_lines_concealed is provided by drawscreen_shim.c (calls Rust win_lines_concealed)
+
+/// Get the curwin handle for use in conceal_line check.
+unsafe fn curwin_handle() -> WinHandle {
+    nvim_get_curwin()
+}
+
 /// Per-line decoration redraw setup.
 ///
 /// Packs the ranges_i array, optionally starts the marktree scan,
@@ -293,7 +545,7 @@ pub extern "C" fn rs_decor_redraw_line(wp: WinHandle, row: c_int, state: DecorSt
 
         let cur_row = (*state).row;
         if cur_row == -1 {
-            decor_redraw_start(wp, row, state);
+            decor_redraw_start_impl(wp, row, state);
         } else if !(*state).itr_valid {
             let buf = nvim_decor_win_get_buffer(wp);
             nvim_decor_state_itr_get(state, buf, row, 0);
@@ -1505,9 +1757,6 @@ pub unsafe extern "C" fn nvim_decor_state_get_eol_right_width(
 // =============================================================================
 // Phase 3: Sign buffer operations migrated from C
 // =============================================================================
-
-/// kMTMetaSignText value from marktree_defs.h.
-const K_MT_META_SIGN_TEXT: c_int = 3;
 
 /// kFalse from tristate (TriState is 0=kFalse, 1=kTrue, -1=kNone).
 const K_FALSE: c_int = 0;
