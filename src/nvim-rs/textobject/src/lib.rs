@@ -2193,23 +2193,28 @@ extern "C" {
     /// Decrement a position. Returns -1 at start, 1 at line start, 0 otherwise.
     #[link_name = "dec"]
     fn c_dec(pos: PosHandle) -> c_int;
+
+    /// Returns curbuf->b_p_qe (the 'quoteescape' option string).
+    fn nvim_textobj_get_curbuf_qe() -> *const std::ffi::c_char;
 }
 
 /// Find quote text object under cursor.
 ///
 /// Handles `i"`, `a"`, `i'`, `a'`, etc.
 ///
+/// Replaces the C `current_quote` thin wrapper: fetches the escape string
+/// (`b_p_qe`) internally via accessor.
+///
 /// # Safety
 /// - `oap` must be a valid oparg_T pointer.
-/// - `escape` must be a valid pointer to a NUL-terminated string, or null.
-#[no_mangle]
+#[unsafe(export_name = "current_quote")]
 pub unsafe extern "C" fn rs_current_quote(
     oap: OapHandle,
     count: c_int,
     include: bool,
     quotechar: c_int,
-    escape: *const std::ffi::c_char,
 ) -> bool {
+    let escape = nvim_textobj_get_curbuf_qe();
     current_quote_impl(oap, count, include, quotechar, escape)
 }
 
@@ -2528,6 +2533,379 @@ unsafe fn current_quote_impl(
 extern "C" {
     /// Set oap->start from cursor position.
     fn nvim_textobj_set_oap_start_from_cursor(oap: OapHandle);
+}
+
+// =============================================================================
+// Tag Block Text Object (current_tagblock)
+// =============================================================================
+
+extern "C" {
+    /// Get p_ws (wrapscan option).
+    fn nvim_textobj_get_p_ws() -> bool;
+
+    /// Set p_ws (wrapscan option).
+    fn nvim_textobj_set_p_ws(val: bool);
+
+    /// Returns the byte at the current cursor position as int.
+    fn nvim_textobj_get_cursor_char() -> c_int;
+
+    /// Returns a pointer to the current cursor char (for reading chars).
+    fn nvim_textobj_get_cursor_pos_ptr() -> *const std::ffi::c_char;
+
+    /// Wrapper for do_searchpair with NULL skip/match_pos.
+    fn nvim_textobj_do_searchpair(
+        spat: *const std::ffi::c_char,
+        mpat: *const std::ffi::c_char,
+        epat: *const std::ffi::c_char,
+        dir: c_int,
+    ) -> c_int;
+}
+
+/// Find tag block under the cursor, cursor at end.
+///
+/// Handles `at`, `it`, `dat`, `dit`, `cat`, `cit` text objects.
+///
+/// # Safety
+/// - `oap` must be a valid oparg_T pointer.
+#[unsafe(export_name = "current_tagblock")]
+pub unsafe extern "C" fn rs_current_tagblock(
+    oap: OapHandle,
+    count_arg: c_int,
+    include: bool,
+) -> bool {
+    current_tagblock_impl(oap, count_arg, include)
+}
+
+/// Returns true if two SimplePos positions are equal.
+#[inline]
+fn simplepos_eq(a: SimplePos, b: SimplePos) -> bool {
+    a.lnum == b.lnum && a.col == b.col
+}
+
+/// Returns true if a < b.
+#[inline]
+fn simplepos_lt(a: SimplePos, b: SimplePos) -> bool {
+    a.lnum < b.lnum || (a.lnum == b.lnum && a.col < b.col)
+}
+
+/// Get current cursor position as SimplePos.
+#[inline]
+unsafe fn cursor_pos() -> SimplePos {
+    let mut lnum = 0;
+    let mut col = 0;
+    nvim_textobj_get_cursor_pos(&raw mut lnum, &raw mut col);
+    SimplePos { lnum, col }
+}
+
+/// Set cursor to a SimplePos.
+#[inline]
+unsafe fn set_cursor(pos: SimplePos) {
+    nvim_textobj_set_cursor_pos(pos.lnum, pos.col);
+}
+
+/// Get VIsual as SimplePos.
+#[inline]
+unsafe fn visual_pos() -> SimplePos {
+    SimplePos {
+        lnum: nvim_textobj_get_VIsual_lnum(),
+        col: nvim_textobj_get_VIsual_col(),
+    }
+}
+
+/// Decrement a PosHandle position using the `decl` C function.
+/// Returns the decrement result (same as decl: -1, 0, or 1).
+#[inline]
+unsafe fn decl_simplepos(pos: SimplePos) -> (SimplePos, c_int) {
+    let ph = nvim_textobj_alloc_pos();
+    nvim_textobj_pos_set_lnum(ph, pos.lnum);
+    nvim_textobj_pos_set_col(ph, pos.col);
+    let r = c_dec(ph);
+    let out = SimplePos {
+        lnum: nvim_textobj_pos_get_lnum(ph),
+        col: nvim_textobj_pos_get_col(ph),
+    };
+    nvim_textobj_free_pos(ph);
+    (out, r)
+}
+
+/// Implementation of current_tagblock.
+///
+/// # Safety
+/// Calls multiple unsafe C accessor functions.
+unsafe fn current_tagblock_impl(oap: OapHandle, count_arg: c_int, include: bool) -> bool {
+    let mut count = count_arg;
+    let mut do_include = include;
+    let save_p_ws = nvim_textobj_get_p_ws();
+    let mut retval = false;
+    let mut is_inclusive = true;
+
+    nvim_textobj_set_p_ws(false);
+
+    let old_pos = cursor_pos();
+    let (old_start, old_end) = tagblock_init_bounds(old_pos);
+
+    let empty_pat = c"";
+    let open_pat = c"<[^ \t>/!]\\+\\%(\\_s\\_[^>]\\{-}[^/]>\\|$\\|\\_s\\=>\\)";
+    let close_pat = c"</[^>]*>";
+
+    // 'again' loop: retry when we can't find matching end tag
+    'again: loop {
+        // Search backwards for unclosed "<aaa>".  Put this position in start_pos.
+        for _n in 0..count {
+            if nvim_textobj_do_searchpair(
+                open_pat.as_ptr(),
+                empty_pat.as_ptr(),
+                close_pat.as_ptr(),
+                BACKWARD,
+            ) <= 0
+            {
+                set_cursor(old_pos);
+                break 'again; // goto theend
+            }
+        }
+        let start_pos = cursor_pos();
+
+        // Isolate tag name and build patterns for forward search.
+        let Some((spat, epat)) = tagblock_build_patterns(old_pos) else {
+            break 'again; // cursor restored inside helper
+        };
+
+        let r =
+            nvim_textobj_do_searchpair(spat.as_ptr(), empty_pat.as_ptr(), epat.as_ptr(), FORWARD);
+
+        if r < 1 || simplepos_lt(cursor_pos(), old_end) {
+            count = 1;
+            set_cursor(start_pos);
+            continue 'again;
+        }
+
+        // Adjust cursor to include/exclude the end tag boundary.
+        is_inclusive = tagblock_adjust_end(do_include, &mut is_inclusive);
+
+        let end_pos = cursor_pos();
+
+        // Determine actual start position (may retry).
+        let final_start = if do_include {
+            start_pos
+        } else {
+            let excl = tagblock_exclude_start(start_pos, end_pos, old_start, old_end);
+            match excl {
+                TagblockExclude::Retry => {
+                    do_include = true;
+                    set_cursor(old_start);
+                    count = count_arg;
+                    continue 'again;
+                }
+                TagblockExclude::Start(s) => s,
+            }
+        };
+
+        tagblock_apply_selection(oap, final_start, end_pos, is_inclusive);
+        retval = true;
+        break 'again;
+    }
+
+    nvim_textobj_set_p_ws(save_p_ws);
+    retval
+}
+
+/// Initialize old_start and old_end for current_tagblock.
+///
+/// Positions the cursor appropriately based on Visual mode state and returns
+/// the (old_start, old_end) pair.
+///
+/// # Safety
+/// Calls unsafe C accessor functions.
+unsafe fn tagblock_init_bounds(old_pos: SimplePos) -> (SimplePos, SimplePos) {
+    let mut old_end = old_pos;
+    let mut old_start = old_end;
+
+    if !nvim_textobj_get_VIsual_active() || nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+        let (new_end, _) = decl_simplepos(old_end);
+        old_end = new_end;
+    }
+
+    if !nvim_textobj_get_VIsual_active() || nvim_textobj_equalpos_cursor_VIsual() {
+        setpcmark();
+        while inindent(1) {
+            if inc_cursor() != 0 {
+                break;
+            }
+        }
+        if in_html_tag_impl(false) {
+            while nvim_textobj_get_cursor_char() != i32::from(b'>') {
+                if inc_cursor() < 0 {
+                    break;
+                }
+            }
+        } else if in_html_tag_impl(true) {
+            while nvim_textobj_get_cursor_char() != i32::from(b'<') {
+                if dec_cursor() < 0 {
+                    break;
+                }
+            }
+            dec_cursor();
+            old_end = cursor_pos();
+        }
+    } else if nvim_textobj_lt_VIsual_cursor() {
+        old_start = visual_pos();
+        set_cursor(visual_pos());
+    } else {
+        old_end = visual_pos();
+    }
+
+    (old_start, old_end)
+}
+
+/// Build the forward search patterns for a tag at current cursor (after inc_cursor).
+///
+/// Advances the cursor one position, isolates the tag name, and builds
+/// CString patterns for `do_searchpair`. Returns None on failure (cursor
+/// is restored to `fail_pos`).
+///
+/// # Safety
+/// Calls unsafe C accessor functions.
+unsafe fn tagblock_build_patterns(
+    fail_pos: SimplePos,
+) -> Option<(std::ffi::CString, std::ffi::CString)> {
+    use std::ffi::CString;
+
+    inc_cursor();
+    let p_ptr = nvim_textobj_get_cursor_pos_ptr();
+    let mut scan = p_ptr;
+    loop {
+        let ch = (*scan).cast_unsigned();
+        if ch == 0 || ch == b'>' || ch == b' ' || ch == b'\t' {
+            break;
+        }
+        scan = scan.add(1);
+    }
+    let len = scan.offset_from(p_ptr).unsigned_abs();
+    if len == 0 {
+        set_cursor(fail_pos);
+        return None;
+    }
+
+    let tag_bytes = std::slice::from_raw_parts(p_ptr.cast::<u8>(), len);
+    let tag_name = String::from_utf8_lossy(tag_bytes);
+    let spat_str = format!("<{tag_name}\\>\\%(\\_.s\\_[^>]\\{{-}}\\_[^/]>\\|\\_s\\?>\\)\\c");
+    let epat_str = format!("</{tag_name}>\\c");
+
+    let Ok(spat) = CString::new(spat_str) else {
+        set_cursor(fail_pos);
+        return None;
+    };
+    let Ok(epat) = CString::new(epat_str) else {
+        set_cursor(fail_pos);
+        return None;
+    };
+    Some((spat, epat))
+}
+
+/// Adjust cursor to mark the end boundary of a tag block.
+///
+/// For include mode: advance to '>'.
+/// For exclude mode: optionally back off from '<', updating is_inclusive.
+///
+/// Returns the updated `is_inclusive` value.
+///
+/// # Safety
+/// Calls unsafe C accessor functions.
+unsafe fn tagblock_adjust_end(do_include: bool, is_inclusive: &mut bool) -> bool {
+    if do_include {
+        while nvim_textobj_get_cursor_char() != i32::from(b'>') {
+            if inc_cursor() < 0 {
+                break;
+            }
+        }
+    } else {
+        let c = nvim_textobj_get_cursor_char();
+        if c == i32::from(b'<') && !nvim_textobj_get_VIsual_active() && cursor_pos().col == 0 {
+            *is_inclusive = false;
+        } else if c == i32::from(b'<') {
+            dec_cursor();
+        }
+    }
+    *is_inclusive
+}
+
+/// Result of `tagblock_exclude_start`.
+enum TagblockExclude {
+    /// Retry with do_include=true.
+    Retry,
+    /// Use this start position.
+    Start(SimplePos),
+}
+
+/// Exclude the start tag from the selection, skipping '>' inside quotes.
+///
+/// Returns `Retry` if Visual mode and selection unchanged (should switch to include).
+/// Returns `Start(pos)` with the new start position (after '>' of start tag).
+///
+/// # Safety
+/// Calls unsafe C accessor functions.
+unsafe fn tagblock_exclude_start(
+    start_pos: SimplePos,
+    end_pos: SimplePos,
+    old_start: SimplePos,
+    old_end: SimplePos,
+) -> TagblockExclude {
+    let mut in_quotes = false;
+    set_cursor(start_pos);
+    let mut new_start = start_pos;
+    while inc_cursor() >= 0 {
+        let ch = nvim_textobj_get_cursor_char();
+        if ch == i32::from(b'>') && !in_quotes {
+            inc_cursor();
+            new_start = cursor_pos();
+            break;
+        } else if ch == i32::from(b'"') || ch == i32::from(b'\'') {
+            in_quotes = !in_quotes;
+        }
+    }
+    set_cursor(end_pos);
+
+    if nvim_textobj_get_VIsual_active()
+        && simplepos_eq(new_start, old_start)
+        && simplepos_eq(end_pos, old_end)
+    {
+        return TagblockExclude::Retry;
+    }
+    TagblockExclude::Start(new_start)
+}
+
+/// Apply the final Visual/operator selection for a tag block.
+///
+/// # Safety
+/// Calls unsafe C accessor functions.
+unsafe fn tagblock_apply_selection(
+    oap: OapHandle,
+    start_pos: SimplePos,
+    end_pos: SimplePos,
+    is_inclusive: bool,
+) {
+    if nvim_textobj_get_VIsual_active() {
+        // If end is before start, no text between tags: select char under cursor.
+        if simplepos_lt(end_pos, start_pos) {
+            set_cursor(start_pos);
+        } else if nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+            inc_cursor();
+        }
+        nvim_textobj_set_VIsual(start_pos.lnum, start_pos.col);
+        nvim_textobj_set_VIsual_mode(i32::from(b'v'));
+        redraw_curbuf_later(UPD_INVERTED);
+        showmode();
+    } else {
+        nvim_textobj_set_oap_start(oap, start_pos.lnum, start_pos.col);
+        nvim_textobj_set_oap_motion_type(oap, MT_CHAR_WISE);
+        if simplepos_lt(end_pos, start_pos) {
+            // End before start: operate on empty area.
+            set_cursor(start_pos);
+            nvim_textobj_set_oap_inclusive(oap, false);
+        } else {
+            nvim_textobj_set_oap_inclusive(oap, is_inclusive);
+        }
+    }
 }
 
 // =============================================================================

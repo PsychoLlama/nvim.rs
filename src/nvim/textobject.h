@@ -18,5 +18,5 @@ int current_word(oparg_T *oap, int count, bool include, bool bigword);
 int current_sent(oparg_T *oap, int count, bool include);
 int current_block(oparg_T *oap, int count, bool include, int what, int other);
 int current_par(oparg_T *oap, int count, bool include, int type);
-
-#include "textobject.h.generated.h"
+bool current_quote(oparg_T *oap, int count, bool include, int quotechar);
+int current_tagblock(oparg_T *oap, int count_arg, bool include);
