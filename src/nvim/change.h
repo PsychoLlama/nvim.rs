@@ -50,4 +50,3 @@ void del_lines(linenr_T nlines, bool undo);
 int get_leader_len(char *line, char **flags, bool backward, bool include_space);
 int get_last_leader_offset(char *line, char **flags);
 
-#include "change.h.generated.h"
