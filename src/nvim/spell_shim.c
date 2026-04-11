@@ -2,22 +2,43 @@
 //
 // These functions provide access to C internals (DecorState, syntax, window
 // fields) that cannot be accessed directly from Rust FFI.
+// Also contains spell_load_lang, spell_load_cb, int_wordlist_spl which are
+// kept in C due to complex C-only dependencies (do_in_runtimepath, autocmds).
 
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
+#include "nvim/ascii_defs.h"
+#include "nvim/autocmd.h"
+#include "nvim/autocmd_defs.h"
+#include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
 #include "nvim/decoration.h"
 #include "nvim/decoration_provider.h"
 #include "nvim/drawscreen.h"
 #include "nvim/errors.h"
+#include "nvim/ex_docmd.h"
+#include "nvim/garray.h"
+#include "nvim/garray_defs.h"
 #include "nvim/globals.h"
+#include "nvim/log.h"
+#include "nvim/macros_defs.h"
 #include "nvim/memline.h"
+#include "nvim/memory.h"
 #include "nvim/message.h"
+#include "nvim/option.h"
 #include "nvim/option_vars.h"
+#include "nvim/os/os_defs.h"
+#include "nvim/path.h"
 #include "nvim/pos_defs.h"
+#include "nvim/runtime.h"
 #include "nvim/spell.h"
 #include "nvim/spell_defs.h"
+#include "nvim/spellfile.h"
+#include "nvim/strings.h"
 #include "nvim/syntax.h"
 #include "nvim/syntax_bridge.h"
 #include "nvim/types_defs.h"
@@ -132,4 +153,236 @@ bool nvim_spell_win_noplainbuffer(win_T *wp)
 void nvim_spell_give_wrap_warning(bool forward)
 {
   give_warning(_(forward ? bot_top_msg : top_bot_msg), true);
+}
+
+// =============================================================================
+// Accessors for parse_spelllang (Rust implementation in lang.rs)
+// =============================================================================
+
+/// Emit "Warning: region %s not supported" message.
+void nvim_spell_warn_region(const char *region)
+{
+  smsg(0, _("Warning: region %s not supported"), region);
+}
+
+/// Get curwin->w_s->b_p_spf (spellfile option string).
+const char *nvim_spell_get_b_p_spf(void)
+{
+  return curwin->w_s->b_p_spf;
+}
+
+/// Set wp->w_s->b_cjk.
+void nvim_win_set_b_cjk(win_T *wp, int val)
+{
+  wp->w_s->b_cjk = val;
+}
+
+/// Set wp->w_s->b_langp from the provided garray (transfer ownership).
+void nvim_win_set_b_langp(win_T *wp, garray_T ga)
+{
+  ga_clear(&wp->w_s->b_langp);
+  wp->w_s->b_langp = ga;
+}
+
+/// Append a new langp_T entry via pointer to a garray.
+/// Returns pointer to the newly appended entry.
+langp_T *nvim_spell_ga_append_langp(garray_T *ga)
+{
+  return GA_APPEND_VIA_PTR(langp_T, ga);
+}
+
+/// Initialize a bufref to the given buffer.
+void nvim_spell_set_bufref(bufref_T *bufref, buf_T *buf)
+{
+  set_bufref(bufref, buf);
+}
+
+/// Check if a bufref is still valid.
+bool nvim_spell_bufref_valid(bufref_T *bufref)
+{
+  return bufref_valid(bufref);
+}
+
+/// Wrapper for copy_option_part with a pointer-to-pointer interface.
+/// Advances *pp past the copied part. Returns the length of the copied part.
+size_t nvim_spell_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep_chars)
+{
+  return copy_option_part(pp, buf, maxlen, (char *)sep_chars);
+}
+
+/// Call path_full_compare(s1, s2, false, true). Returns 1 if equal files.
+int nvim_spell_path_full_compare(const char *s1, const char *s2)
+{
+  return (int)path_full_compare((char *)s1, (char *)s2, false, true);
+}
+
+/// Call path_fnamecmp(s1, s2).
+int nvim_spell_path_fnamecmp(const char *s1, const char *s2)
+{
+  return path_fnamecmp(s1, s2);
+}
+
+/// Return path_tail(fname).
+const char *nvim_spell_path_tail(const char *fname)
+{
+  return path_tail(fname);
+}
+
+/// Case-insensitive string compare (STRICMP).
+int nvim_spell_stricmp(const char *a, const char *b)
+{
+  return STRICMP(a, b);
+}
+
+/// Call redraw_later(wp, UPD_NOT_VALID).
+void nvim_spell_redraw_later(win_T *wp)
+{
+  redraw_later(wp, UPD_NOT_VALID);
+}
+
+/// Returns true if c is an ASCII alphabetic character.
+bool nvim_spell_ascii_isalpha(int c)
+{
+  return ASCII_ISALPHA(c);
+}
+
+/// Returns the starting global (non-zero while Nvim is starting).
+int nvim_spell_get_starting(void)
+{
+  return starting;
+}
+
+// Structure used for the cookie argument of do_in_runtimepath().
+// (Moved from spell.c)
+typedef struct {
+  char sl_lang[MAXWLEN + 1];            // language name
+  slang_T *sl_slang;                    // resulting slang_T struct
+  int sl_nobreak;                       // NOBREAK language found
+} spelload_T;
+
+/// Get the name of the .spl file for the internal wordlist into fname[MAXPATHL].
+void nvim_spell_int_wordlist_spl(char *fname)
+{
+  vim_snprintf(fname, MAXPATHL, SPL_FNAME_TMPL, int_wordlist, spell_enc());
+}
+
+// Forward declaration (defined below)
+static bool spell_load_cb_impl(int num_fnames, char **fnames, bool all, void *cookie);
+
+/// Load word list(s) for "lang" from Vim spell file(s).
+/// "lang" must be the language without the region: e.g., "en".
+/// This is the C implementation kept here due to do_in_runtimepath + autocmds.
+void nvim_spell_load_lang(char *lang)
+{
+  char fname_enc[85];
+  int r;
+  spelload_T sl;
+
+  // Copy the language name to pass it to spell_load_cb_impl() as a cookie.
+  STRCPY(sl.sl_lang, lang);
+  sl.sl_slang = NULL;
+  sl.sl_nobreak = false;
+
+  // Disallow deleting the current buffer.
+  curbuf->b_locked++;
+
+  for (int round = 1; round <= 2; round++) {
+    vim_snprintf(fname_enc, sizeof(fname_enc) - 5,
+                 "spell/%s.%s.spl", lang, spell_enc());
+    r = do_in_runtimepath(fname_enc, 0, spell_load_cb_impl, &sl);
+
+    if (r == FAIL && *sl.sl_lang != NUL) {
+      vim_snprintf(fname_enc, sizeof(fname_enc) - 5,
+                   "spell/%s.ascii.spl", lang);
+      r = do_in_runtimepath(fname_enc, 0, spell_load_cb_impl, &sl);
+
+      if (r == FAIL && *sl.sl_lang != NUL && round == 1
+          && apply_autocmds(EVENT_SPELLFILEMISSING, lang,
+                            curbuf->b_fname, false, curbuf)) {
+        continue;
+      }
+      break;
+    }
+    break;
+  }
+
+  if (r == FAIL) {
+    if (starting) {
+      char autocmd_buf[512] = { 0 };
+      snprintf(autocmd_buf, sizeof(autocmd_buf),
+               "autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell",
+               lang);
+      do_cmdline_cmd(autocmd_buf);
+    } else {
+      smsg(0, _("Warning: Cannot find word list \"%s.%s.spl\" or \"%s.ascii.spl\""),
+           lang, spell_enc(), lang);
+    }
+  } else if (sl.sl_slang != NULL) {
+    STRCPY(fname_enc + strlen(fname_enc) - 3, "add.spl");
+    do_in_runtimepath(fname_enc, DIP_ALL, spell_load_cb_impl, &sl);
+  }
+
+  curbuf->b_locked--;
+}
+
+static bool spell_load_cb_impl(int num_fnames, char **fnames, bool all, void *cookie)
+{
+  spelload_T *slp = (spelload_T *)cookie;
+  for (int i = 0; i < num_fnames; i++) {
+    slang_T *slang = spell_load_file(fnames[i], slp->sl_lang, NULL, false);
+
+    if (slang == NULL) {
+      continue;
+    }
+
+    if (slp->sl_nobreak && slang->sl_add) {
+      slang->sl_nobreak = true;
+    } else if (slang->sl_nobreak) {
+      slp->sl_nobreak = true;
+    }
+
+    slp->sl_slang = slang;
+
+    if (!all) {
+      break;
+    }
+  }
+
+  return num_fnames > 0;
+}
+
+// =============================================================================
+// Accessors for midword helpers (use_midword / clear_midword in lang.rs)
+// =============================================================================
+
+/// Get wp->w_s->b_spell_ismw[c].
+bool nvim_spell_win_get_ismw(win_T *wp, int c)
+{
+  return wp->w_s->b_spell_ismw[c];
+}
+
+/// Set wp->w_s->b_spell_ismw[c] = val.
+void nvim_spell_win_set_ismw(win_T *wp, int c, bool val)
+{
+  wp->w_s->b_spell_ismw[c] = val;
+}
+
+/// Get wp->w_s->b_spell_ismw_mb (may be NULL).
+const char *nvim_spell_win_get_ismw_mb(win_T *wp)
+{
+  return wp->w_s->b_spell_ismw_mb;
+}
+
+/// Set wp->w_s->b_spell_ismw_mb to new_val (takes ownership, frees old).
+void nvim_spell_win_set_ismw_mb(win_T *wp, char *new_val)
+{
+  xfree(wp->w_s->b_spell_ismw_mb);
+  wp->w_s->b_spell_ismw_mb = new_val;
+}
+
+/// Clear wp->w_s->b_spell_ismw[] and free+NULL b_spell_ismw_mb.
+void nvim_spell_win_clear_ismw(win_T *wp)
+{
+  CLEAR_FIELD(wp->w_s->b_spell_ismw);
+  XFREE_CLEAR(wp->w_s->b_spell_ismw_mb);
 }

@@ -31,6 +31,9 @@ typedef enum {
 
 // Functions implemented in Rust (nvim-spell crate) and exported via #[export_name].
 size_t spell_move_to(win_T *wp, int dir, smt_T behaviour, bool curline, hlf_T *attrp);
+char *parse_spelllang(win_T *wp);
+void clear_midword(win_T *wp);
+void use_midword(slang_T *lp, win_T *wp);
 slang_T *slang_alloc(char *lang);
 void slang_free(slang_T *lp);
 void slang_clear(slang_T *lp);
