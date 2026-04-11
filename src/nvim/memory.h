@@ -74,6 +74,18 @@ extern size_t xstrnlen(const char *s, size_t n);
 extern void time_to_bytes(time_t time_, uint8_t buf[8]);
 extern size_t arena_align_offset(size_t off);
 
+// Rust-provided arena allocator functions (memory migration Phase 1)
+extern void arena_free_reuse_blks(void);
+extern ArenaMem arena_finish(Arena *arena);
+extern void *alloc_block(void);
+extern void arena_alloc_block(Arena *arena);
+extern void *arena_alloc(Arena *arena, size_t size, bool align);
+extern void free_block(void *block);
+extern void arena_mem_free(ArenaMem mem);
+extern char *arena_allocz(Arena *arena, size_t size);
+extern char *arena_memdupz(Arena *arena, const char *buf, size_t size);
+extern char *arena_strdup(Arena *arena, const char *str);
+
 #define XFREE_CLEAR(ptr) \
   do { \
     /* Take the address to avoid double evaluation. #1375 */ \

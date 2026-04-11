@@ -88,6 +88,10 @@ pub use nvim_math::*;
 pub use nvim_mbyte::*;
 pub use nvim_memfile::*;
 pub use nvim_memline::*;
+pub use nvim_memory::{
+    rs_alloc_block, rs_arena_alloc, rs_arena_alloc_block, rs_arena_allocz, rs_arena_finish,
+    rs_arena_free_reuse_blks, rs_arena_mem_free, rs_arena_memdupz, rs_arena_strdup, rs_free_block,
+};
 pub use nvim_memutil::*;
 pub use nvim_menu::*;
 pub use nvim_message::*;

@@ -79,6 +79,7 @@ nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
 nvim-memfile = { path = "memfile" }
 nvim-memline = { path = "memline" }
+nvim-memory = { path = "memory" }
 nvim-memutil = { path = "memutil" }
 nvim-menu = { path = "menu" }
 nvim-message = { path = "message" }

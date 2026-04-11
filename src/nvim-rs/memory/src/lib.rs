@@ -30,6 +30,7 @@
 #![allow(clippy::missing_const_for_fn)] // Many functions can't be const due to FFI
 #![allow(clippy::must_use_candidate)] // FFI-focused crate, not all return values need must_use
 #![allow(clippy::missing_panics_doc)] // Panics only on NULL from allocator (shouldn't happen)
+#![allow(clippy::cast_ptr_alignment)] // Arena blocks are xmalloc-aligned; casts to ConsumedBlk are safe
 
 use std::alloc::Layout;
 use std::ffi::{c_char, c_void, CStr};
@@ -68,6 +69,251 @@ extern "C" {
 
     /// Duplicate memory with zero termination.
     pub fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void;
+
+    /// Align an offset to the arena alignment boundary (implemented in memutil crate).
+    fn arena_align_offset(off: u64) -> usize;
+
+    /// Increment the global `arena_alloc_count` by 1.
+    fn nvim_inc_arena_alloc_count();
+}
+
+// =============================================================================
+// Arena Allocator
+// =============================================================================
+
+const ARENA_BLOCK_SIZE: usize = 4096;
+const REUSE_MAX: usize = 4;
+
+/// Mirror of C's `struct consumed_blk` -- a singly linked list of used blocks.
+#[repr(C)]
+pub(crate) struct ConsumedBlk {
+    pub(crate) prev: *mut ConsumedBlk,
+}
+
+/// Mirror of C's `Arena` struct.
+#[repr(C)]
+pub struct Arena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+/// Opaque handle returned by `arena_finish`, used to free arena memory later.
+///
+/// In C this is `typedef struct consumed_blk *ArenaMem;`.
+/// Exposed as a raw void pointer to avoid leaking the private `ConsumedBlk` type.
+pub type ArenaMem = *mut c_void;
+
+/// Reuse pool: at most `REUSE_MAX` blocks are kept for reuse.
+static mut ARENA_REUSE_BLK: *mut ConsumedBlk = std::ptr::null_mut();
+static mut ARENA_REUSE_BLK_COUNT: usize = 0;
+
+/// Free all cached reuse blocks.
+///
+/// # Safety
+/// Mutates process-global state. Must not be called concurrently.
+#[export_name = "arena_free_reuse_blks"]
+pub unsafe extern "C" fn rs_arena_free_reuse_blks() {
+    while ARENA_REUSE_BLK_COUNT > 0 {
+        let blk = ARENA_REUSE_BLK;
+        ARENA_REUSE_BLK = (*blk).prev;
+        xfree(blk.cast());
+        ARENA_REUSE_BLK_COUNT -= 1;
+    }
+}
+
+/// Finish the allocations in an arena.
+///
+/// Returns an opaque `ArenaMem` handle that can later be passed to
+/// `arena_mem_free` to release the memory.
+///
+/// # Safety
+/// `arena` must be a valid pointer to an initialized `Arena`.
+#[export_name = "arena_finish"]
+pub unsafe extern "C" fn rs_arena_finish(arena: *mut Arena) -> ArenaMem {
+    let res = (*arena).cur_blk.cast::<c_void>();
+    // Reset to ARENA_EMPTY
+    (*arena).cur_blk = std::ptr::null_mut();
+    (*arena).pos = 0;
+    (*arena).size = 0;
+    res
+}
+
+/// Allocate a block of `ARENA_BLOCK_SIZE` bytes, reusing a cached block if
+/// available. Must be freed with `free_block`.
+///
+/// # Safety
+/// Mutates process-global reuse pool state. Must not be called concurrently.
+#[export_name = "alloc_block"]
+pub unsafe extern "C" fn rs_alloc_block() -> *mut c_void {
+    if ARENA_REUSE_BLK_COUNT > 0 {
+        let retval = ARENA_REUSE_BLK.cast::<c_void>();
+        ARENA_REUSE_BLK = (*ARENA_REUSE_BLK).prev;
+        ARENA_REUSE_BLK_COUNT -= 1;
+        retval
+    } else {
+        nvim_inc_arena_alloc_count();
+        xmalloc(ARENA_BLOCK_SIZE)
+    }
+}
+
+/// Allocate a new block and link it into the arena.
+///
+/// # Safety
+/// `arena` must be a valid pointer to an initialized `Arena`.
+#[export_name = "arena_alloc_block"]
+pub unsafe extern "C" fn rs_arena_alloc_block(arena: *mut Arena) {
+    let prev_blk = (*arena).cur_blk.cast::<ConsumedBlk>();
+    (*arena).cur_blk = rs_alloc_block().cast();
+    (*arena).pos = 0;
+    (*arena).size = ARENA_BLOCK_SIZE;
+    let blk = rs_arena_alloc(arena, std::mem::size_of::<ConsumedBlk>(), true).cast::<ConsumedBlk>();
+    (*blk).prev = prev_blk;
+}
+
+/// Main arena allocation function.
+///
+/// If `arena` is NULL, falls back to a global `xmalloc` call (caller must free).
+/// If `size` is zero, returns a non-null but non-unique pointer.
+///
+/// # Safety
+/// `arena` must be NULL or a valid pointer to an initialized `Arena`.
+#[export_name = "arena_alloc"]
+pub unsafe extern "C" fn rs_arena_alloc(
+    arena: *mut Arena,
+    size: usize,
+    align: bool,
+) -> *mut c_void {
+    if arena.is_null() {
+        return xmalloc(size);
+    }
+    if (*arena).cur_blk.is_null() {
+        rs_arena_alloc_block(arena);
+    }
+    let alloc_pos = if align {
+        arena_align_offset((*arena).pos as u64)
+    } else {
+        (*arena).pos
+    };
+    if alloc_pos + size > (*arena).size {
+        // Threshold: more than half of (ARENA_BLOCK_SIZE - header) -> oversized block
+        let threshold = (ARENA_BLOCK_SIZE - std::mem::size_of::<ConsumedBlk>()) >> 1;
+        if size > threshold {
+            nvim_inc_arena_alloc_count();
+            let hdr_size = std::mem::size_of::<ConsumedBlk>();
+            let aligned_hdr_size = if align {
+                arena_align_offset(hdr_size as u64)
+            } else {
+                hdr_size
+            };
+            let alloc: *mut c_char = xmalloc(size + aligned_hdr_size).cast();
+
+            // Insert oversized block behind current block in the linked list.
+            // cur_blk always stays as the normal ARENA_BLOCK_SIZE block.
+            let cur_blk = (*arena).cur_blk.cast::<ConsumedBlk>();
+            let fix_blk = alloc.cast::<ConsumedBlk>();
+            (*fix_blk).prev = (*cur_blk).prev;
+            (*cur_blk).prev = fix_blk;
+
+            return alloc.add(aligned_hdr_size).cast();
+        }
+        // Not oversized: allocate a new normal block
+        rs_arena_alloc_block(arena);
+        let new_alloc_pos = if align {
+            arena_align_offset((*arena).pos as u64)
+        } else {
+            (*arena).pos
+        };
+        let mem: *mut c_char = (*arena).cur_blk.add(new_alloc_pos);
+        (*arena).pos = new_alloc_pos + size;
+        return mem.cast();
+    }
+
+    let mem: *mut c_char = (*arena).cur_blk.add(alloc_pos);
+    (*arena).pos = alloc_pos + size;
+    mem.cast()
+}
+
+/// Free or cache a block for reuse.
+///
+/// # Safety
+/// `block` must have been allocated by `alloc_block` (i.e., `ARENA_BLOCK_SIZE` bytes).
+#[export_name = "free_block"]
+pub unsafe extern "C" fn rs_free_block(block: *mut c_void) {
+    if ARENA_REUSE_BLK_COUNT < REUSE_MAX {
+        let reuse_blk = block.cast::<ConsumedBlk>();
+        (*reuse_blk).prev = ARENA_REUSE_BLK;
+        ARENA_REUSE_BLK = reuse_blk;
+        ARENA_REUSE_BLK_COUNT += 1;
+    } else {
+        xfree(block);
+    }
+}
+
+/// Free all blocks in an arena chain previously obtained from `arena_finish`.
+///
+/// # Safety
+/// `mem` must be a valid `ArenaMem` handle (or NULL).
+#[export_name = "arena_mem_free"]
+pub unsafe extern "C" fn rs_arena_mem_free(mem: ArenaMem) {
+    let mut b = mem.cast::<ConsumedBlk>();
+    // The first block is always a normal ARENA_BLOCK_SIZE block; put it in reuse pool.
+    if !b.is_null() {
+        let reuse_blk = b;
+        b = (*b).prev;
+        rs_free_block(reuse_blk.cast());
+    }
+    // Remaining blocks may be oversized; always free them directly.
+    while !b.is_null() {
+        let prev = (*b).prev;
+        xfree(b.cast());
+        b = prev;
+    }
+}
+
+/// Allocate `size` bytes from `arena`, zero-terminating the result.
+///
+/// # Safety
+/// `arena` must be NULL or a valid pointer to an initialized `Arena`.
+#[export_name = "arena_allocz"]
+pub unsafe extern "C" fn rs_arena_allocz(arena: *mut Arena, size: usize) -> *mut c_char {
+    let mem = rs_arena_alloc(arena, size + 1, false).cast::<c_char>();
+    *mem.add(size) = 0;
+    mem
+}
+
+/// Duplicate `size` bytes from `buf` into `arena`, zero-terminating the result.
+///
+/// # Safety
+/// `arena` must be NULL or valid; `buf` must be valid for `size` bytes.
+#[export_name = "arena_memdupz"]
+pub unsafe extern "C" fn rs_arena_memdupz(
+    arena: *mut Arena,
+    buf: *const c_char,
+    size: usize,
+) -> *mut c_char {
+    let mem = rs_arena_allocz(arena, size);
+    std::ptr::copy_nonoverlapping(buf, mem, size);
+    mem
+}
+
+/// Duplicate a NUL-terminated string into `arena`.
+///
+/// # Safety
+/// `arena` must be NULL or valid; `str` must be a valid NUL-terminated C string.
+#[export_name = "arena_strdup"]
+pub unsafe extern "C" fn rs_arena_strdup(arena: *mut Arena, str: *const c_char) -> *mut c_char {
+    let len = libc_strlen(str);
+    rs_arena_memdupz(arena, str, len)
+}
+
+/// Minimal `strlen` for use in `arena_strdup` without a libc dependency.
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
 }
 
 // =============================================================================
