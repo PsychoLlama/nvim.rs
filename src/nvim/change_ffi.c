@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "nvim/ascii_defs.h"
 #include "nvim/charset.h"
@@ -43,6 +44,7 @@
 #include "nvim/strings.h"
 #include "nvim/textformat.h"
 #include "nvim/types_defs.h"
+#include "nvim/drawscreen.h"
 #include "nvim/ui.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
@@ -326,3 +328,96 @@ void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_a
 }
 
 int nvim_get_last_leader_offset(const char *line, char **flags) { return get_last_leader_offset((char *)line, flags); }
+
+// =============================================================================
+// Phase 1: Accessors for changed_common migration
+// =============================================================================
+
+// Window last_cursor_lnum_rnu accessors (not yet in Rust window crate)
+linenr_T nvim_win_get_last_cursor_lnum_rnu(win_T *wp) { return wp->w_last_cursor_lnum_rnu; }
+void nvim_win_set_last_cursor_lnum_rnu(win_T *wp, linenr_T val) { wp->w_last_cursor_lnum_rnu = val; }
+
+// Window last_cursorline accessors (not yet in Rust window crate)
+linenr_T nvim_win_get_last_cursorline(win_T *wp) { return wp->w_last_cursorline; }
+void nvim_win_set_last_cursorline(win_T *wp, linenr_T val) { wp->w_last_cursorline = val; }
+
+// Wrappers for functions that need window context
+int nvim_change_linetabsize_eol(win_T *wp, linenr_T lnum) { return linetabsize_eol(wp, lnum); }
+int nvim_change_sms_marker_overlap(win_T *wp, int extra2) { return sms_marker_overlap(wp, extra2); }
+void nvim_change_set_topline(win_T *wp, linenr_T topline) { set_topline(wp, topline); }
+
+// Global state accessors
+bool nvim_get_redraw_not_allowed(void) { return redraw_not_allowed; }
+bool nvim_get_VIsual_active_bool(void) { return VIsual_active; }
+void nvim_change_check_visual_pos(void) { check_visual_pos(); }
+void nvim_change_set_must_redraw(int type) { set_must_redraw(type); }
+linenr_T nvim_get_search_hl_has_cursor_lnum(void) { return search_hl_has_cursor_lnum; }
+void nvim_set_search_hl_has_cursor_lnum(linenr_T val) { search_hl_has_cursor_lnum = val; }
+
+// curtab diff update
+void nvim_curtab_set_diff_update(bool val) { curtab->tp_diff_update = val; }
+
+// Compound helper: last_cursormoved reset check for changed_common lines 302-306
+void nvim_change_last_cursormoved_reset_check(buf_T *buf, linenr_T lnum, linenr_T lnume,
+                                               linenr_T xtra)
+{
+  if (last_cursormoved_win == curwin && curwin->w_buffer == buf
+      && lnum <= curwin->w_cursor.lnum
+      && lnume + (xtra < 0 ? -xtra : xtra) > curwin->w_cursor.lnum) {
+    last_cursormoved.lnum = 0;
+  }
+}
+
+// Compound helper: changelist/mark update block (lines 141-212 of changed_common)
+void nvim_changed_common_update_changelist(buf_T *buf, linenr_T lnum, colnr_T col)
+{
+  fmarkv_T view = INIT_FMARKV;
+  // Set the markview only if lnum is visible in curwin
+  if (curwin->w_buffer == buf) {
+    if (lnum >= curwin->w_topline && lnum <= curwin->w_botline) {
+      view = mark_view_make(curwin->w_topline, curwin->w_cursor);
+    }
+  }
+  RESET_FMARK(&buf->b_last_change, ((pos_T) { lnum, col, 0 }), buf->handle, view);
+
+  if (buf->b_new_change || buf->b_changelistlen == 0) {
+    bool add;
+    if (buf->b_changelistlen == 0) {
+      add = true;
+    } else {
+      pos_T *p = &buf->b_changelist[buf->b_changelistlen - 1].mark;
+      if (p->lnum != lnum) {
+        add = true;
+      } else {
+        int cols = comp_textwidth(false);
+        if (cols == 0) {
+          cols = 79;
+        }
+        add = (p->col + cols < col || col + cols < p->col);
+      }
+    }
+    if (add) {
+      buf->b_new_change = false;
+      if (buf->b_changelistlen == JUMPLISTSIZE) {
+        buf->b_changelistlen = JUMPLISTSIZE - 1;
+        memmove(buf->b_changelist, buf->b_changelist + 1,
+                sizeof(buf->b_changelist[0]) * (JUMPLISTSIZE - 1));
+        FOR_ALL_TAB_WINDOWS(tp, wp) {
+          if (wp->w_buffer == buf && wp->w_changelistidx > 0) {
+            wp->w_changelistidx--;
+          }
+        }
+      }
+      FOR_ALL_TAB_WINDOWS(tp, wp) {
+        if (wp->w_buffer == buf && wp->w_changelistidx == buf->b_changelistlen) {
+          wp->w_changelistidx++;
+        }
+      }
+      buf->b_changelistlen++;
+    }
+  }
+  buf->b_changelist[buf->b_changelistlen - 1] = buf->b_last_change;
+  if (curwin->w_buffer == buf) {
+    curwin->w_changelistidx = buf->b_changelistlen;
+  }
+}
