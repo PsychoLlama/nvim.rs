@@ -148,3 +148,28 @@ void nvim_textobj_mb_ptr_adv(char **p) { MB_PTR_ADV(*p); }
 
 /// Returns curbuf->b_p_qe (the 'quoteescape' option string).
 const char *nvim_textobj_get_curbuf_qe(void) { return curbuf->b_p_qe; }
+
+// =============================================================================
+// Accessors for current_tagblock (Phase 2)
+// =============================================================================
+
+#include "nvim/eval/funcs.h"
+
+/// Get p_ws (wrapscan option).
+bool nvim_textobj_get_p_ws(void) { return p_ws; }
+
+/// Set p_ws (wrapscan option).
+void nvim_textobj_set_p_ws(bool val) { p_ws = val; }
+
+/// Returns the byte at the current cursor position.
+int nvim_textobj_get_cursor_char(void) { return (unsigned char)*get_cursor_pos_ptr(); }
+
+/// Wrapper for do_searchpair with NULL skip/match_pos and zero flags.
+/// Used by current_tagblock to avoid exposing typval_T in Rust FFI.
+int nvim_textobj_do_searchpair(const char *spat, const char *mpat, const char *epat, int dir)
+{
+  return do_searchpair(spat, mpat, epat, dir, NULL, 0, NULL, 0, 0);
+}
+
+/// Returns get_cursor_pos_ptr() for reading chars. Caller must check for NUL.
+const char *nvim_textobj_get_cursor_pos_ptr(void) { return get_cursor_pos_ptr(); }
