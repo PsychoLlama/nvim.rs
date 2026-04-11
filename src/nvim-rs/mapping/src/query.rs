@@ -29,8 +29,17 @@ const REPTERM_DO_LT: c_int = 2;
 /// REPTERM_NO_SIMPLIFY
 const REPTERM_NO_SIMPLIFY: c_int = 8;
 
+/// VAR_NUMBER: typval_T v_type for a number value.
+const VAR_NUMBER: c_int = 1;
+
 /// VAR_STRING: typval_T v_type for a string value.
-const VAR_STRING: c_int = 1;
+const VAR_STRING: c_int = 2;
+
+/// VAR_FUNC: typval_T v_type for a function reference.
+const VAR_FUNC: c_int = 3;
+
+/// VAR_DICT: typval_T v_type for a dict value.
+const VAR_DICT: c_int = 5;
 
 /// VAR_UNKNOWN: typval_T v_type for "no value".
 const VAR_UNKNOWN: c_int = 0;
@@ -570,4 +579,361 @@ pub unsafe extern "C" fn rs_f_mapcheck(
     _fptr: *mut c_void,
 ) {
     get_maparg_impl(argvars, rettv, 0);
+}
+
+// =============================================================================
+// Phase 3 FFI additions
+// =============================================================================
+
+extern "C" {
+    // typval helpers (opaque typval_T*) -- from eval/typval.c
+    fn nvim_tv_idx(argvars: *const c_void, i: c_int) -> *mut c_void;
+    fn nvim_tv_get_type(tv: *const c_void) -> c_int;
+    fn nvim_tv_get_dict(tv: *const c_void) -> *mut c_void; // dict_T*
+    fn nvim_tv_get_list(tv: *const c_void) -> *mut c_void; // list_T*
+
+    // tv_dict ops -- implemented in Rust (nvim-typval crate)
+    fn tv_dict_get_string(d: *mut c_void, key: *const c_char, allocate: bool) -> *mut c_char;
+    fn tv_dict_get_bool(d: *mut c_void, key: *const c_char, def: c_int) -> i64;
+    fn tv_dict_get_number(d: *mut c_void, key: *const c_char) -> i64;
+    fn tv_dict_find(d: *mut c_void, key: *const c_char, len: isize) -> *mut c_void; // dictitem_T*
+    fn tv_check_for_dict_arg(argvars: *const c_void, idx: c_int) -> c_int;
+    fn tv_get_bool(tv: *const c_void) -> i64;
+
+    // tv_list ops -- implemented in Rust (nvim-typval crate)
+    fn tv_list_alloc_ret(rettv: *mut c_void, len: c_int);
+    fn tv_list_append_dict(list: *mut c_void, dict: *mut c_void);
+
+    // ufunc_T accessors
+    fn find_func(name: *const c_char) -> *mut c_void; // ufunc_T*
+    fn nvim_ufunc_get_flags(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_get_luaref(fp: *const c_void) -> c_int;
+
+    // dictitem_T accessors (mapping.c Phase 3 additions)
+    fn nvim_mapping_dictitem_tv_type(di: *const c_void) -> c_int;
+    fn nvim_mapping_dictitem_tv_vstring(di: *const c_void) -> *const c_char;
+
+    // Error emitters
+    fn nvim_mapping_emsg_entries_missing();
+    fn nvim_mapping_semsg_illegal_map_mode(which: *const c_char);
+
+    // api_free_luaref: release a Lua reference
+    fn api_free_luaref(r: c_int);
+
+    // rs_set_maparg_rhs / rs_set_maparg_lhs_rhs / rs_buf_do_map / rs_map_add
+    // are Rust functions; call them directly by their extern "C" names.
+    fn rs_get_map_mode_string(mode_string: *const c_char, abbr: c_int) -> c_int;
+    fn rs_set_maparg_rhs(
+        orig_rhs: *const c_char,
+        orig_rhs_len: usize,
+        rhs_lua: c_int,
+        sid: c_int,
+        cpo_val: *const c_char,
+        mapargs: *mut crate::args::MapArguments,
+    );
+    fn rs_set_maparg_lhs_rhs(
+        orig_lhs: *const c_char,
+        orig_lhs_len: usize,
+        orig_rhs: *const c_char,
+        orig_rhs_len: usize,
+        rhs_lua: c_int,
+        cpo_val: *const c_char,
+        mapargs: *mut crate::args::MapArguments,
+    ) -> c_int;
+    fn rs_buf_do_map(
+        maptype: c_int,
+        args: *mut crate::args::MapArguments,
+        mode: c_int,
+        is_abbrev: c_int,
+        buf: crate::BufHandle,
+    ) -> c_int;
+    fn rs_map_add(
+        buf: crate::BufHandle,
+        is_buf_local: c_int,
+        keys: *const c_char,
+        args: *mut crate::args::MapArguments,
+        noremap: c_int,
+        mode: c_int,
+        is_abbr: c_int,
+        sid: c_int,
+        lnum: c_int,
+        simplified: c_int,
+    ) -> crate::MapblockHandle;
+}
+
+/// FC_LUAREF flag (userfunc.h)
+const FC_LUAREF: c_int = 0x800;
+
+/// MAPTYPE_UNMAP_LHS: unmap by lhs only.
+const MAPTYPE_UNMAP_LHS: c_int = 3;
+
+/// REMAP_NONE: disable remapping.
+const REMAP_NONE: c_int = -1;
+
+/// FAIL: C FAIL return value.
+const FAIL: c_int = 0;
+
+// =============================================================================
+// f_mapset
+// =============================================================================
+
+/// "mapset()" function -- restore a mapping from a dict (e.g. from maparg()).
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval_T pointers.
+#[unsafe(export_name = "f_mapset")]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_f_mapset(
+    argvars: *const c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let av0 = nvim_tv_idx(argvars, 0);
+
+    // If first arg is a dict, then that's the only arg permitted.
+    let dict_only = nvim_tv_get_type(av0) == VAR_DICT;
+
+    let d: *mut c_void;
+    let which: *const c_char;
+    let is_abbr: c_int;
+
+    let mut buf = [0u8; NUMBUFLEN];
+
+    if dict_only {
+        d = nvim_tv_get_dict(av0);
+        which = tv_dict_get_string(d, c"mode".as_ptr(), false);
+        let abbr_val = tv_dict_get_bool(d, c"abbr".as_ptr(), -1);
+        if which.is_null() || abbr_val < 0 {
+            nvim_mapping_emsg_entries_missing();
+            return;
+        }
+        is_abbr = abbr_val as c_int;
+    } else {
+        which = tv_get_string_buf_chk(av0, buf.as_mut_ptr().cast());
+        if which.is_null() {
+            return;
+        }
+        is_abbr = tv_get_bool(nvim_tv_idx(argvars, 1)) as c_int;
+        if tv_check_for_dict_arg(argvars, 2) == FAIL {
+            return;
+        }
+        d = nvim_tv_get_dict(nvim_tv_idx(argvars, 2));
+    }
+
+    let mode = rs_get_map_mode_string(which, is_abbr);
+    if mode == 0 {
+        nvim_mapping_semsg_illegal_map_mode(which);
+        return;
+    }
+
+    // Get the values in the same order as in get_maparg().
+    let lhs = tv_dict_get_string(d, c"lhs".as_ptr(), false);
+    let lhsraw = tv_dict_get_string(d, c"lhsraw".as_ptr(), false);
+    let lhsrawalt = tv_dict_get_string(d, c"lhsrawalt".as_ptr(), false);
+    let mut orig_rhs = tv_dict_get_string(d, c"rhs".as_ptr(), false);
+    let mut rhs_lua: c_int = LUA_NOREF;
+
+    // Check for a Lua callback in the dict.
+    // S_LEN("callback") = key, len = 8
+    let callback_di = tv_dict_find(d, c"callback".as_ptr(), 8);
+    if !callback_di.is_null() && nvim_mapping_dictitem_tv_type(callback_di) == VAR_FUNC {
+        let v_string = nvim_mapping_dictitem_tv_vstring(callback_di);
+        if !v_string.is_null() {
+            let fp = find_func(v_string);
+            if !fp.is_null() && (nvim_ufunc_get_flags(fp) & FC_LUAREF) != 0 {
+                rhs_lua = api_new_luaref(nvim_ufunc_get_luaref(fp));
+                orig_rhs = c"".as_ptr().cast_mut();
+            }
+        }
+    }
+
+    if lhs.is_null() || lhsraw.is_null() || orig_rhs.is_null() {
+        nvim_mapping_emsg_entries_missing();
+        api_free_luaref(rhs_lua);
+        return;
+    }
+
+    let sid = tv_dict_get_number(d, c"sid".as_ptr()) as c_int;
+    let lnum = tv_dict_get_number(d, c"lnum".as_ptr()) as c_int;
+    let buffer = tv_dict_get_number(d, c"buffer".as_ptr()) != 0;
+
+    let noremap: c_int = if tv_dict_get_number(d, c"script".as_ptr()) != 0 {
+        REMAP_SCRIPT
+    } else if tv_dict_get_number(d, c"noremap".as_ptr()) != 0 {
+        REMAP_NONE
+    } else {
+        0
+    };
+
+    let mut args: crate::args::MapArguments = std::mem::zeroed();
+    args.expr = tv_dict_get_number(d, c"expr".as_ptr()) != 0;
+    args.silent = tv_dict_get_number(d, c"silent".as_ptr()) != 0;
+    args.nowait = tv_dict_get_number(d, c"nowait".as_ptr()) != 0;
+    args.replace_keycodes = tv_dict_get_number(d, c"replace_keycodes".as_ptr()) != 0;
+    args.desc = tv_dict_get_string(d, c"desc".as_ptr(), true);
+
+    let p_cpo = nvim_mapping_get_p_cpo();
+    rs_set_maparg_rhs(
+        orig_rhs,
+        libc::strlen(orig_rhs),
+        rhs_lua,
+        sid,
+        p_cpo,
+        &raw mut args,
+    );
+
+    // Delete any existing mapping for this lhs and mode.
+    let mut unmap_args: crate::args::MapArguments = std::mem::zeroed();
+    rs_set_maparg_lhs_rhs(
+        lhs,
+        libc::strlen(lhs),
+        c"".as_ptr(),
+        0,
+        LUA_NOREF,
+        p_cpo,
+        &raw mut unmap_args,
+    );
+    unmap_args.buffer = buffer;
+    let curbuf = crate::nvim_get_curbuf();
+    rs_buf_do_map(
+        MAPTYPE_UNMAP_LHS,
+        &raw mut unmap_args,
+        mode,
+        is_abbr,
+        curbuf,
+    );
+    xfree(unmap_args.rhs);
+    xfree(unmap_args.orig_rhs);
+
+    let mp0 = rs_map_add(
+        curbuf,
+        c_int::from(buffer),
+        lhsraw,
+        &raw mut args,
+        noremap,
+        mode,
+        is_abbr,
+        sid,
+        lnum,
+        0,
+    );
+    let mp1 = if lhsrawalt.is_null() {
+        std::ptr::null_mut()
+    } else {
+        rs_map_add(
+            curbuf,
+            c_int::from(buffer),
+            lhsrawalt,
+            &raw mut args,
+            noremap,
+            mode,
+            is_abbr,
+            sid,
+            lnum,
+            1,
+        )
+    };
+
+    if !mp0.is_null() && !mp1.is_null() {
+        (*mp0).m_alt = mp1;
+        (*mp1).m_alt = mp0;
+    }
+}
+
+// =============================================================================
+// f_maplist
+// =============================================================================
+
+/// "maplist()" function -- return a list of all mappings as dicts.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval_T pointers.
+#[unsafe(export_name = "f_maplist")]
+pub unsafe extern "C" fn rs_f_maplist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    const FLAGS: c_int = REPTERM_FROM_PART | REPTERM_DO_LT;
+    const K_LIST_LEN_UNKNOWN: c_int = -1;
+
+    let av0 = nvim_tv_idx(argvars, 0);
+    let abbr = nvim_tv_get_type(av0) != VAR_UNKNOWN && tv_get_bool(av0) != 0;
+
+    tv_list_alloc_ret(rettv, K_LIST_LEN_UNKNOWN);
+    let list = nvim_tv_get_list(rettv);
+
+    let curbuf = crate::nvim_get_curbuf();
+    let p_cpo = nvim_mapping_get_p_cpo();
+
+    // Do it twice: once for global maps and once for local maps.
+    for buffer_local in 0..=1i32 {
+        for hash in 0..crate::MAX_MAPHASH {
+            let mut mp = if abbr {
+                if hash > 0 {
+                    break; // only one abbr list
+                }
+                if buffer_local != 0 {
+                    crate::nvim_buf_get_first_abbr(curbuf)
+                } else {
+                    crate::nvim_get_first_abbr()
+                }
+            } else if buffer_local != 0 {
+                crate::nvim_buf_get_maphash_entry(curbuf, hash)
+            } else {
+                crate::nvim_get_maphash_entry(hash)
+            };
+
+            while !mp.is_null() {
+                if (*mp).m_simplified == 0 {
+                    let mut keys_buf: *mut c_char = std::ptr::null_mut();
+                    let mut did_simplify = false;
+                    let mut arena = CArena::empty();
+
+                    let lhs = str2special_arena((*mp).m_keys, true, false, &raw mut arena);
+                    replace_termcodes(
+                        lhs,
+                        libc::strlen(lhs),
+                        std::ptr::addr_of_mut!(keys_buf),
+                        0,
+                        FLAGS,
+                        std::ptr::addr_of_mut!(did_simplify),
+                        p_cpo,
+                    );
+
+                    let dict = rs_mapblock_fill_dict(
+                        mp,
+                        if did_simplify {
+                            keys_buf
+                        } else {
+                            std::ptr::null()
+                        },
+                        buffer_local,
+                        abbr,
+                        true,
+                        &raw mut arena,
+                    );
+                    let dict_obj = Object {
+                        obj_type: K_OBJECT_TYPE_DICT,
+                        data: nvim_api::ObjectData { dict },
+                    };
+                    // Convert Dict to typval_T d, then append its v_dict.
+                    let mut d_tv = [0u8; TYPVAL_SIZE];
+                    object_to_vim_take_luaref(
+                        std::ptr::addr_of!(dict_obj),
+                        d_tv.as_mut_ptr().cast(),
+                        true,
+                        std::ptr::null_mut(),
+                    );
+                    let d_dict = nvim_tv_get_dict(d_tv.as_ptr().cast());
+                    tv_list_append_dict(list, d_dict);
+
+                    let mem = arena_finish(&raw mut arena);
+                    arena_mem_free(mem);
+                    xfree(keys_buf);
+                }
+                mp = (*mp).m_next;
+            }
+        }
+    }
 }

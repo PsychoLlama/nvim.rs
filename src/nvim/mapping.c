@@ -64,6 +64,9 @@ extern Dict mapblock_fill_dict(const mapblock_T *mp, const char *lhsrawalt,
 // Rust-implemented VimL eval functions (Phase 2)
 void f_maparg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// Rust-implemented VimL eval functions (Phase 3)
+void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_maplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -135,156 +138,9 @@ static const char e_illegal_map_mode_string_str[]
 
 
 
-/// "mapset()" function
-void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *which;
-  char buf[NUMBUFLEN];
-  int is_abbr;
-  dict_T *d;
+// f_mapset body deleted; implemented in Rust (Phase 3). See query.rs.
 
-  // If first arg is a dict, then that's the only arg permitted.
-  const bool dict_only = argvars[0].v_type == VAR_DICT;
-
-  if (dict_only) {
-    d = argvars[0].vval.v_dict;
-    which = tv_dict_get_string(d, "mode", false);
-    is_abbr = (int)tv_dict_get_bool(d, "abbr", -1);
-    if (which == NULL || is_abbr < 0) {
-      emsg(_(e_entries_missing_in_mapset_dict_argument));
-      return;
-    }
-  } else {
-    which = tv_get_string_buf_chk(&argvars[0], buf);
-    if (which == NULL) {
-      return;
-    }
-    is_abbr = (int)tv_get_bool(&argvars[1]);
-    if (tv_check_for_dict_arg(argvars, 2) == FAIL) {
-      return;
-    }
-    d = argvars[2].vval.v_dict;
-  }
-  const int mode = rs_get_map_mode_string(which, is_abbr);
-  if (mode == 0) {
-    semsg(_(e_illegal_map_mode_string_str), which);
-    return;
-  }
-
-  // Get the values in the same order as above in get_maparg().
-  char *lhs = tv_dict_get_string(d, "lhs", false);
-  char *lhsraw = tv_dict_get_string(d, "lhsraw", false);
-  char *lhsrawalt = tv_dict_get_string(d, "lhsrawalt", false);
-  char *orig_rhs = tv_dict_get_string(d, "rhs", false);
-  LuaRef rhs_lua = LUA_NOREF;
-  dictitem_T *callback_di = tv_dict_find(d, S_LEN("callback"));
-  if (callback_di != NULL) {
-    if (callback_di->di_tv.v_type == VAR_FUNC) {
-      ufunc_T *fp = find_func(callback_di->di_tv.vval.v_string);
-      if (fp != NULL && (fp->uf_flags & FC_LUAREF)) {
-        rhs_lua = api_new_luaref(fp->uf_luaref);
-        orig_rhs = "";
-      }
-    }
-  }
-  if (lhs == NULL || lhsraw == NULL || orig_rhs == NULL) {
-    emsg(_(e_entries_missing_in_mapset_dict_argument));
-    api_free_luaref(rhs_lua);
-    return;
-  }
-
-  int noremap = tv_dict_get_number(d, "noremap") != 0 ? REMAP_NONE : 0;
-  if (tv_dict_get_number(d, "script") != 0) {
-    noremap = REMAP_SCRIPT;
-  }
-  MapArguments args = {
-    .expr = tv_dict_get_number(d, "expr") != 0,
-    .silent = tv_dict_get_number(d, "silent") != 0,
-    .nowait = tv_dict_get_number(d, "nowait") != 0,
-    .replace_keycodes = tv_dict_get_number(d, "replace_keycodes") != 0,
-    .desc = tv_dict_get_string(d, "desc", true),
-  };
-  scid_T sid = (scid_T)tv_dict_get_number(d, "sid");
-  linenr_T lnum = (linenr_T)tv_dict_get_number(d, "lnum");
-  bool buffer = tv_dict_get_number(d, "buffer") != 0;
-  // mode from the dict is not used
-
-  rs_set_maparg_rhs(orig_rhs, strlen(orig_rhs), rhs_lua, sid, p_cpo, &args);
-
-  // Delete any existing mapping for this lhs and mode.
-  MapArguments unmap_args = MAP_ARGUMENTS_INIT;
-  rs_set_maparg_lhs_rhs(lhs, strlen(lhs), "", 0, LUA_NOREF, p_cpo, &unmap_args);
-  unmap_args.buffer = buffer;
-  rs_buf_do_map(MAPTYPE_UNMAP_LHS, &unmap_args, mode, is_abbr ? 1 : 0, curbuf);
-  xfree(unmap_args.rhs);
-  xfree(unmap_args.orig_rhs);
-
-  mapblock_T *mp_result[2] = { NULL, NULL };
-
-  mp_result[0] = rs_map_add(curbuf, buffer ? 1 : 0, lhsraw, &args,
-                            noremap, mode, is_abbr, sid, lnum, 0);
-  if (lhsrawalt != NULL) {
-    mp_result[1] = rs_map_add(curbuf, buffer ? 1 : 0, lhsrawalt, &args,
-                              noremap, mode, is_abbr, sid, lnum, 1);
-  }
-
-  if (mp_result[0] != NULL && mp_result[1] != NULL) {
-    mp_result[0]->m_alt = mp_result[1];
-    mp_result[1]->m_alt = mp_result[0];
-  }
-}
-
-/// "maplist()" function
-void f_maplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const int flags = REPTERM_FROM_PART | REPTERM_DO_LT;
-  const bool abbr = argvars[0].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[0]);
-
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-
-  // Do it twice: once for global maps and once for local maps.
-  for (int buffer_local = 0; buffer_local <= 1; buffer_local++) {
-    for (int hash = 0; hash < 256; hash++) {
-      mapblock_T *mp;
-      if (abbr) {
-        if (hash > 0) {  // there is only one abbr list
-          break;
-        }
-        if (buffer_local) {
-          mp = curbuf->b_first_abbr;
-        } else {
-          mp = first_abbr;
-        }
-      } else if (buffer_local) {
-        mp = curbuf->b_maphash[hash];
-      } else {
-        mp = maphash[hash];
-      }
-      for (; mp; mp = mp->m_next) {
-        if (mp->m_simplified) {
-          continue;
-        }
-
-        char *keys_buf = NULL;
-        bool did_simplify = false;
-
-        Arena arena = ARENA_EMPTY;
-        char *lhs = str2special_arena(mp->m_keys, true, false, &arena);
-        replace_termcodes(lhs, strlen(lhs), &keys_buf, 0, flags, &did_simplify,
-                          p_cpo);
-
-        Dict dict = mapblock_fill_dict(mp, did_simplify ? keys_buf : NULL, buffer_local, abbr, true,
-                                       &arena);
-        typval_T d = TV_INITIAL_VALUE;
-        object_to_vim_take_luaref(&DICT_OBJ(dict), &d, true, NULL);
-        assert(d.v_type == VAR_DICT);
-        tv_list_append_dict(rettv->vval.v_list, d.vval.v_dict);
-        arena_mem_free(arena_finish(&arena));
-        xfree(keys_buf);
-      }
-    }
-  }
-}
+// f_maplist body deleted; implemented in Rust (Phase 3). See query.rs.
 
 
 
@@ -527,6 +383,14 @@ uint8_t nvim_langmap_mapchar_get(int index) { return (index >= 0 && index < 256)
 void nvim_langmap_mapchar_set(int index, uint8_t value) { if (index >= 0 && index < 256) { langmap_mapchar[index] = value; } }
 int nvim_mapping_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 int nvim_mapping_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
+
+// Phase 3 accessors: f_mapset / f_maplist helpers
+LuaRef nvim_ufunc_get_luaref(const ufunc_T *fp) { return fp->uf_luaref; }
+int nvim_mapping_dictitem_tv_type(const dictitem_T *di) { return (int)di->di_tv.v_type; }
+const char *nvim_mapping_dictitem_tv_vstring(const dictitem_T *di) { return di->di_tv.vval.v_string; }
+// Error emitters for f_mapset (avoid exposing variadic semsg to Rust)
+void nvim_mapping_emsg_entries_missing(void) { emsg(_(e_entries_missing_in_mapset_dict_argument)); }
+void nvim_mapping_semsg_illegal_map_mode(const char *which) { semsg(_(e_illegal_map_mode_string_str), which); }
 void nvim_mapping_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_set_maphash_entry(int index, mapblock_T *mp) { if (index >= 0 && index < MAX_MAPHASH) { maphash[index] = mp; } }
 void nvim_set_first_abbr(mapblock_T *mp) { first_abbr = mp; }
