@@ -67,6 +67,7 @@ pub mod delete;
 pub mod display;
 pub mod ex_commands;
 pub mod execute;
+pub mod execute_menu;
 pub mod handle;
 pub mod hidden;
 pub mod lookup;

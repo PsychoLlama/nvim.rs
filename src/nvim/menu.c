@@ -62,6 +62,7 @@ extern char *get_menu_mode_str(int modes);
 extern vimmenu_T *find_menu(vimmenu_T *menu, char *name, int modes);
 extern char *menu_name_skip(char *name);
 extern bool menu_name_equal(const char *name, const vimmenu_T *menu);
+extern void execute_menu(const exarg_T *eap, vimmenu_T *menu, int mode_idx);
 
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
@@ -187,122 +188,6 @@ int get_menu_cmd_modes(const char *cmd, bool forceit, int *noremap, bool *unmenu
     *unmenu = result.unmenu;
   }
   return result.modes;
-}
-
-/// Execute "menu".  Use by ":emenu" and the window toolbar.
-/// @param eap  NULL for the window toolbar.
-/// @param mode_idx  specify a MENU_INDEX_ value,
-///                  use MENU_INDEX_INVALID to depend on the current state
-void execute_menu(const exarg_T *eap, vimmenu_T *menu, int mode_idx)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  int idx = mode_idx;
-
-  if (idx < 0) {
-    // Use the Insert mode entry when returning to Insert mode.
-    if (((State & MODE_INSERT) || restart_edit) && current_sctx.sc_sid == 0) {
-      idx = MENU_INDEX_INSERT;
-    } else if (State & MODE_CMDLINE) {
-      idx = MENU_INDEX_CMDLINE;
-    } else if (State & MODE_TERMINAL) {
-      idx = MENU_INDEX_TERMINAL;
-    } else if (get_real_state() & MODE_VISUAL) {
-      // Detect real visual mode -- if we are really in visual mode we
-      // don't need to do any guesswork to figure out what the selection
-      // is. Just execute the visual binding for the menu.
-      idx = MENU_INDEX_VISUAL;
-    } else if (eap != NULL && eap->addr_count) {
-      pos_T tpos;
-
-      idx = MENU_INDEX_VISUAL;
-
-      // GEDDES: This is not perfect - but it is a
-      // quick way of detecting whether we are doing this from a
-      // selection - see if the range matches up with the visual
-      // select start and end.
-      if ((curbuf->b_visual.vi_start.lnum == eap->line1)
-          && (curbuf->b_visual.vi_end.lnum) == eap->line2) {
-        // Set it up for visual mode - equivalent to gv.
-        VIsual_mode = curbuf->b_visual.vi_mode;
-        tpos = curbuf->b_visual.vi_end;
-        curwin->w_cursor = curbuf->b_visual.vi_start;
-        curwin->w_curswant = curbuf->b_visual.vi_curswant;
-      } else {
-        // Set it up for line-wise visual mode
-        VIsual_mode = 'V';
-        curwin->w_cursor.lnum = eap->line1;
-        curwin->w_cursor.col = 1;
-        tpos.lnum = eap->line2;
-        tpos.col = MAXCOL;
-        tpos.coladd = 0;
-      }
-
-      // Activate visual mode
-      VIsual_active = true;
-      VIsual_reselect = true;
-      check_cursor(curwin);
-      VIsual = curwin->w_cursor;
-      curwin->w_cursor = tpos;
-
-      check_cursor(curwin);
-
-      // Adjust the cursor to make sure it is in the correct pos
-      // for exclusive mode
-      if (*p_sel == 'e' && gchar_cursor() != NUL) {
-        curwin->w_cursor.col++;
-      }
-    }
-  }
-
-  if (idx == MENU_INDEX_INVALID || eap == NULL) {
-    idx = MENU_INDEX_NORMAL;
-  }
-
-  if (menu->strings[idx] != NULL && (menu->modes & (1 << idx))) {
-    // When executing a script or function execute the commands right now.
-    // Also for the window toolbar
-    // Otherwise put them in the typeahead buffer.
-    if (eap == NULL || current_sctx.sc_sid != 0) {
-      save_state_T save_state;
-
-      ex_normal_busy++;
-      if (save_current_state(&save_state)) {
-        exec_normal_cmd(menu->strings[idx], menu->noremap[idx],
-                        menu->silent[idx]);
-      }
-      restore_current_state(&save_state);
-      ex_normal_busy--;
-    } else {
-      ins_typebuf(menu->strings[idx], menu->noremap[idx], 0, true,
-                  menu->silent[idx]);
-    }
-  } else if (eap != NULL) {
-    char *mode;
-    switch (idx) {
-    case MENU_INDEX_VISUAL:
-      mode = "Visual";
-      break;
-    case MENU_INDEX_SELECT:
-      mode = "Select";
-      break;
-    case MENU_INDEX_OP_PENDING:
-      mode = "Op-pending";
-      break;
-    case MENU_INDEX_TERMINAL:
-      mode = "Terminal";
-      break;
-    case MENU_INDEX_INSERT:
-      mode = "Insert";
-      break;
-    case MENU_INDEX_CMDLINE:
-      mode = "Cmdline";
-      break;
-    // case MENU_INDEX_TIP: cannot happen
-    default:
-      mode = "Normal";
-    }
-    semsg(_("E335: Menu not defined for %s mode"), mode);
-  }
 }
 
 // Translation of menu names.  Just a simple lookup table.
@@ -453,6 +338,27 @@ int nvim_menu_eap_get_addr_count(exarg_T *eap) { return eap->addr_count; }
 
 /// Get the line2 field from an exarg_T.
 int nvim_menu_eap_get_line2(exarg_T *eap) { return (int)eap->line2; }
+
+/// Get the line1 field from an exarg_T.
+int nvim_menu_eap_get_line1(exarg_T *eap) { return (int)eap->line1; }
+
+/// Get b_visual.vi_start.lnum from curbuf.
+int nvim_menu_buf_visual_start_lnum(buf_T *buf) { return buf->b_visual.vi_start.lnum; }
+
+/// Get b_visual.vi_end.lnum from curbuf.
+int nvim_menu_buf_visual_end_lnum(buf_T *buf) { return buf->b_visual.vi_end.lnum; }
+
+/// Get b_visual.vi_mode from curbuf.
+int nvim_menu_buf_visual_mode(buf_T *buf) { return buf->b_visual.vi_mode; }
+
+/// Get b_visual.vi_curswant from curbuf.
+int nvim_menu_buf_visual_curswant(buf_T *buf) { return (int)buf->b_visual.vi_curswant; }
+
+/// Get b_visual.vi_start from curbuf as pos_T.
+pos_T nvim_menu_buf_visual_start(buf_T *buf) { return buf->b_visual.vi_start; }
+
+/// Get b_visual.vi_end from curbuf as pos_T.
+pos_T nvim_menu_buf_visual_end(buf_T *buf) { return buf->b_visual.vi_end; }
 
 // Completion + Translation accessors for Rust FFI
 
