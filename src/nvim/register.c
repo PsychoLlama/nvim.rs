@@ -310,11 +310,6 @@ bool nvim_dp_preprocs_left(void) { return preprocs_left(); }
 /// Call beginline(BL_WHITE | BL_FIX).
 void nvim_dp_beginline(void) { beginline(BL_WHITE | BL_FIX); }
 
-/// Call u_save(lnum, lnum+1).
-int nvim_dp_u_save(int top, int bot)
-{
-  return u_save((linenr_T)top, (linenr_T)bot);
-}
 
 /// Call hasFolding(curwin, lnum, firstp, lastp) for do_put backward fold correction.
 void nvim_dp_hasFolding_backward(int *lnum)
@@ -349,8 +344,6 @@ void nvim_dp_msgmore(int n) { msgmore(n); }
 /// Return gchar_cursor() (UTF codepoint at cursor position).
 int nvim_dp_gchar_cursor(void) { return gchar_cursor(); }
 
-/// Return restart_edit global.
-int nvim_dp_get_restart_edit(void) { return restart_edit; }
 
 /// Return curwin->w_cursor.lnum.
 int nvim_dp_get_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
@@ -381,14 +374,6 @@ void nvim_dp_set_cursor(const pos_T *pos) { curwin->w_cursor = *pos; }
 
 
 
-/// Call ml_append(lnum, line, 0, false).
-int nvim_dp_ml_append(int lnum, char *line) { return ml_append((linenr_T)lnum, line, 0, false); }
-
-/// Call ml_replace(lnum, line, false).
-int nvim_dp_ml_replace(int lnum, char *line) { return ml_replace((linenr_T)lnum, line, false); }
-
-/// Return VIsual_mode global.
-int nvim_dp_get_VIsual_mode(void) { return VIsual_mode; }
 
 /// Return b_visual.vi_start.lnum for do_put.
 int nvim_dp_get_b_visual_vi_start_lnum(void) { return (int)curbuf->b_visual.vi_start.lnum; }
@@ -396,8 +381,6 @@ int nvim_dp_get_b_visual_vi_start_lnum(void) { return (int)curbuf->b_visual.vi_s
 /// Return b_visual.vi_end.lnum for do_put.
 int nvim_dp_get_b_visual_vi_end_lnum(void) { return (int)curbuf->b_visual.vi_end.lnum; }
 
-/// Set VIsual_active = false.
-void nvim_dp_set_VIsual_active_false(void) { VIsual_active = false; }
 
 /// Call init_charsize_arg for do_put blockwise.
 bool nvim_dp_init_charsize_arg(void *csarg, int lnum, const char *line)
@@ -411,11 +394,6 @@ bool nvim_dp_init_charsize_arg_lnum0(void *csarg, const char *line)
   return init_charsize_arg((CharsizeArg *)csarg, curwin, 0, line);
 }
 
-/// Call utf_ptr2len(p).
-int nvim_dp_utfc_ptr2len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
 
 /// Return curbuf->b_op_start.lnum.
 int nvim_dp_get_op_start_lnum(void) { return (int)curbuf->b_op_start.lnum; }
@@ -423,14 +401,6 @@ int nvim_dp_get_op_start_lnum(void) { return (int)curbuf->b_op_start.lnum; }
 /// Return e_resulting_text_too_long string.
 const char *nvim_dp_get_e_resulting_text_too_long(void) { return e_resulting_text_too_long; }
 
-/// Call utf_head_off(base, p) on a y_array entry for do_put.
-int nvim_dp_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
-
-/// Return ml_get(lnum) for do_put (non-cursor line).
-char *nvim_dp_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
-
-/// Return ml_get_len(lnum) for do_put.
-int nvim_dp_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
 
 /// Set curbuf->b_op_end.col += delta.
 void nvim_dp_op_end_col_add(int delta) { curbuf->b_op_end.col += (colnr_T)delta; }

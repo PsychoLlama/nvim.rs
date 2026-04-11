@@ -3245,7 +3245,7 @@ extern "C" {
     fn nvim_dp_get_indent() -> c_int;
     fn nvim_dp_preprocs_left() -> bool;
     fn nvim_dp_beginline();
-    fn nvim_dp_u_save(top: c_int, bot: c_int) -> c_int;
+    fn u_save(top: c_int, bot: c_int) -> c_int;
     fn nvim_dp_hasFolding_backward(lnum: *mut c_int);
     fn nvim_dp_hasFolding_forward(lnum: *mut c_int);
     fn nvim_dp_buf_is_empty() -> bool;
@@ -3255,7 +3255,6 @@ extern "C" {
     fn nvim_dp_invalidate_botline();
     fn nvim_dp_msgmore(n: c_int);
     fn nvim_dp_gchar_cursor() -> c_int;
-    fn nvim_dp_get_restart_edit() -> c_int;
     fn nvim_dp_get_cursor_lnum() -> c_int;
     fn nvim_dp_set_cursor_lnum(lnum: c_int);
     fn nvim_dp_get_cursor_col() -> c_int;
@@ -3265,20 +3264,15 @@ extern "C" {
     fn nvim_dp_set_curswant();
     fn nvim_dp_get_cursor(pos: *mut PosT);
     fn nvim_dp_set_cursor(pos: *const PosT);
-    fn nvim_dp_ml_append(lnum: c_int, line: *mut c_char) -> c_int;
-    fn nvim_dp_ml_replace(lnum: c_int, line: *mut c_char) -> c_int;
-    fn nvim_dp_get_VIsual_mode() -> c_int;
+    fn ml_append(lnum: c_int, line: *mut c_char, len: c_int, newfile: bool) -> c_int;
+    fn ml_replace(lnum: c_int, line: *mut c_char, copy: bool) -> c_int;
     fn nvim_dp_get_b_visual_vi_start_lnum() -> c_int;
     fn nvim_dp_get_b_visual_vi_end_lnum() -> c_int;
-    fn nvim_dp_set_VIsual_active_false();
+    static mut VIsual_mode: c_int;
     fn nvim_dp_init_charsize_arg(csarg: *mut c_void, lnum: c_int, line: *const c_char) -> bool;
     fn nvim_dp_init_charsize_arg_lnum0(csarg: *mut c_void, line: *const c_char) -> bool;
-    fn nvim_dp_utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_dp_get_op_start_lnum() -> c_int;
     fn nvim_dp_get_e_resulting_text_too_long() -> *const c_char;
-    fn nvim_dp_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
-    fn nvim_dp_ml_get(lnum: c_int) -> *mut c_char;
-    fn nvim_dp_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_dp_op_end_col_add(delta: c_int);
     fn nvim_dp_adjust_cursor_eol();
     fn nvim_dp_getviscol() -> c_int;
@@ -3294,9 +3288,6 @@ extern "C" {
     // fn u_save_cursor -- already declared
     // fn emsg -- already declared
     // fn semsg -- already declared
-    // fn utf_head_off -- already declared
-    // fn ml_get -- already declared
-    // fn ml_get_len -- already declared
 }
 
 use std::ffi::c_long;
@@ -3471,7 +3462,7 @@ pub unsafe extern "C" fn rs_do_put(
     // special characters (newlines, etc.).
     if regname == c_int::from(b'.') && reg.is_null() {
         let visual_active = VIsual_active;
-        let non_linewise_vis = visual_active && nvim_dp_get_VIsual_mode() != c_int::from(b'V');
+        let non_linewise_vis = visual_active && VIsual_mode != c_int::from(b'V');
 
         // PUT_LINE has special handling below which means we use 'i' to start.
         let command_start_char: c_int = if non_linewise_vis {
@@ -3516,7 +3507,7 @@ pub unsafe extern "C" fn rs_do_put(
                 let one_past_line = *cursor_pos == 0;
                 let mut eol = false;
                 if !one_past_line {
-                    let len = nvim_dp_utfc_ptr2len(cursor_pos);
+                    let len = utfc_ptr2len(cursor_pos);
                     eol = *cursor_pos.add(len as usize) == 0;
                 }
                 let ve_allows =
@@ -3534,7 +3525,7 @@ pub unsafe extern "C" fn rs_do_put(
         // position now (though not saving any text).
         if command_start_char == c_int::from(b'a') {
             let lnum_now = nvim_dp_get_cursor_lnum();
-            if nvim_dp_u_save(lnum_now, lnum_now + 1) == FAIL {
+            if u_save(lnum_now, lnum_now + 1) == FAIL {
                 return;
             }
         }
@@ -3562,7 +3553,7 @@ pub unsafe extern "C" fn rs_do_put(
     let is_terminal = nvim_dp_curbuf_is_terminal();
     if !is_terminal {
         let cursor_lnum = nvim_dp_get_cursor_lnum();
-        if nvim_dp_u_save(cursor_lnum, cursor_lnum + 1) == FAIL {
+        if u_save(cursor_lnum, cursor_lnum + 1) == FAIL {
             return;
         }
     }
@@ -3654,7 +3645,7 @@ pub unsafe extern "C" fn rs_do_put(
                 let plen = nvim_dp_get_cursor_pos_len() as usize;
                 if dir == FORWARD && *p != 0 {
                     // MB_PTR_ADV
-                    let adv = nvim_dp_utfc_ptr2len(p);
+                    let adv = utfc_ptr2len(p);
                     p = p.add(adv as usize);
                 }
                 // split_pos = p - curline
@@ -3663,13 +3654,13 @@ pub unsafe extern "C" fn rs_do_put(
                 let part_len = plen - p.offset_from(p_orig) as usize;
                 let ptr = xmemdupz(p as *const c_void, part_len) as *mut c_char;
                 let cursor_lnum = nvim_dp_get_cursor_lnum();
-                nvim_dp_ml_append(cursor_lnum, ptr);
+                ml_append(cursor_lnum, ptr, 0, false);
                 xfree(ptr as *mut c_void);
 
                 // After ml_append, re-fetch line ptr (may have been reallocated).
                 let curline2 = nvim_dp_get_cursor_line_ptr();
                 let ptr2 = xmemdupz(curline2 as *const c_void, split_pos as usize) as *mut c_char;
-                nvim_dp_ml_replace(cursor_lnum, ptr2);
+                ml_replace(cursor_lnum, ptr2, false);
                 nr_lines += 1;
                 // C: dir = FORWARD; -- handled via effective_dir above
                 nvim_dp_buf_updates_send_changes(cursor_lnum, 1, 1);
@@ -3706,7 +3697,7 @@ pub unsafe extern "C" fn rs_do_put(
             lnum = nvim_dp_get_cursor_lnum() + y_size as c_int + 1;
             lnum = lnum.min(nvim_dp_get_ml_line_count() + 1);
             let cursor_lnum = nvim_dp_get_cursor_lnum();
-            if nvim_dp_u_save(cursor_lnum - 1, lnum) == FAIL {
+            if u_save(cursor_lnum - 1, lnum) == FAIL {
                 break 'do_put_body;
             }
         } else if y_type == K_MT_LINE_WISE_V {
@@ -3722,9 +3713,9 @@ pub unsafe extern "C" fn rs_do_put(
             }
             // In an empty buffer the empty line is going to be replaced.
             let save_failed = if nvim_dp_buf_is_empty() {
-                nvim_dp_u_save(0, 2) == FAIL
+                u_save(0, 2) == FAIL
             } else {
-                nvim_dp_u_save(lnum - 1, lnum) == FAIL
+                u_save(lnum - 1, lnum) == FAIL
             };
             if save_failed {
                 break 'do_put_body;
@@ -3777,7 +3768,7 @@ pub unsafe extern "C" fn rs_do_put(
                     nvim_dp_getvcol_cursor_end_only(&raw mut col);
                 }
                 // move to start of next multi-byte character
-                let adv = nvim_dp_utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
+                let adv = utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
                 dp_cursor_col_add(adv);
                 col += 1;
             } else {
@@ -3818,8 +3809,12 @@ pub unsafe extern "C" fn rs_do_put(
 
                 // add a new line if necessary
                 if nvim_dp_get_cursor_lnum() > nvim_dp_get_ml_line_count() {
-                    if nvim_dp_ml_append(nvim_dp_get_ml_line_count(), c"".as_ptr() as *mut c_char)
-                        == FAIL
+                    if ml_append(
+                        nvim_dp_get_ml_line_count(),
+                        c"".as_ptr() as *mut c_char,
+                        0,
+                        false,
+                    ) == FAIL
                     {
                         break;
                     }
@@ -3855,7 +3850,7 @@ pub unsafe extern "C" fn rs_do_put(
                     bd.startspaces = incr - bd.endspaces;
                     bd.textcol -= 1;
                     delcount = 1;
-                    bd.textcol -= nvim_dp_utf_head_off(oldp, oldp.add(bd.textcol as usize));
+                    bd.textcol -= utf_head_off(oldp, oldp.add(bd.textcol as usize));
                     if *oldp.add(bd.textcol as usize) != b'\t' as c_char {
                         // Only a Tab can be split into spaces.
                         delcount = 0;
@@ -3930,7 +3925,7 @@ pub unsafe extern "C" fn rs_do_put(
                     out_ptr,
                     columns as usize,
                 );
-                nvim_dp_ml_replace(nvim_dp_get_cursor_lnum(), newp);
+                ml_replace(nvim_dp_get_cursor_lnum(), newp, false);
                 nvim_dp_extmark_splice_cols(
                     nvim_dp_get_cursor_lnum() - 1,
                     bd.textcol,
@@ -3987,7 +3982,7 @@ pub unsafe extern "C" fn rs_do_put(
             if y_type == K_MT_CHAR_WISE_V {
                 // if type is kMTCharWise, FORWARD is the same as BACKWARD on the next char
                 if effective_dir == FORWARD && nvim_dp_gchar_cursor() != NUL {
-                    let bytelen = nvim_dp_utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
+                    let bytelen = utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
                     // put it on the next of the multi-byte character.
                     col += bytelen;
                     if yanklen != 0 {
@@ -4035,8 +4030,8 @@ pub unsafe extern "C" fn rs_do_put(
                 } else {
                     totlen = count as usize * yanklen as usize;
                     loop {
-                        let oldp = nvim_dp_ml_get(lnum);
-                        let oldlen = nvim_dp_ml_get_len(lnum);
+                        let oldp = ml_get(lnum);
+                        let oldlen = ml_get_len(lnum);
                         if lnum > start_lnum {
                             let mut pos_lnum = lnum;
                             let mut pos_col = 0;
@@ -4073,10 +4068,10 @@ pub unsafe extern "C" fn rs_do_put(
                             out_ptr,
                             (oldlen - col + 1) as usize, // +1 for NUL
                         );
-                        nvim_dp_ml_replace(lnum, newp);
+                        ml_replace(lnum, newp, false);
 
                         // compute the byte offset for the last character
-                        first_byte_off = nvim_dp_utf_head_off(newp, out_ptr.sub(1));
+                        first_byte_off = utf_head_off(newp, out_ptr.sub(1));
 
                         // Place cursor on last putted char.
                         if lnum == nvim_dp_get_cursor_lnum() {
@@ -4114,7 +4109,7 @@ pub unsafe extern "C" fn rs_do_put(
                 nvim_dp_op_end_col_add(-first_byte_off);
 
                 // For "CTRL-O p" in Insert mode, put cursor after last char
-                if totlen != 0 && (nvim_dp_get_restart_edit() != 0 || flags & PUT_CURSEND != 0) {
+                if totlen != 0 && (restart_edit != 0 || flags & PUT_CURSEND != 0) {
                     dp_cursor_col_add(1);
                 } else {
                     dp_cursor_col_add(-first_byte_off);
@@ -4143,9 +4138,9 @@ pub unsafe extern "C" fn rs_do_put(
                         // First insert y_array[size - 1] in front of second line.
                         // Then append y_array[0] to first line.
                         lnum = new_cursor.lnum;
-                        let cur_line_ptr = nvim_dp_ml_get(lnum);
+                        let cur_line_ptr = ml_get(lnum);
                         let ptr = cur_line_ptr.add(col as usize);
-                        let ptrlen = (nvim_dp_ml_get_len(lnum) - col) as usize;
+                        let ptrlen = (ml_get_len(lnum) - col) as usize;
                         let last_entry = y_array.add(y_size - 1);
                         totlen = (*last_entry).size;
                         let newp = xmalloc(ptrlen + totlen + 1) as *mut c_char;
@@ -4154,11 +4149,11 @@ pub unsafe extern "C" fn rs_do_put(
                         // STRCPY(newp + totlen, ptr)
                         std::ptr::copy_nonoverlapping(ptr, newp.add(totlen), ptrlen + 1);
                         // insert second line
-                        nvim_dp_ml_append(lnum, newp);
+                        ml_append(lnum, newp, 0, false);
                         new_lnum += 1;
                         xfree(newp as *mut c_void);
 
-                        let oldp = nvim_dp_ml_get(lnum);
+                        let oldp = ml_get(lnum);
                         let newp2 = xmalloc(col as usize + yanklen as usize + 1) as *mut c_char;
                         // copy first part of line
                         std::ptr::copy_nonoverlapping(oldp, newp2, col as usize);
@@ -4168,7 +4163,7 @@ pub unsafe extern "C" fn rs_do_put(
                             newp2.add(col as usize),
                             yanklen as usize + 1,
                         );
-                        nvim_dp_ml_replace(lnum, newp2);
+                        ml_replace(lnum, newp2, false);
 
                         nvim_dp_set_cursor_lnum(lnum);
                         i = 1;
@@ -4176,7 +4171,7 @@ pub unsafe extern "C" fn rs_do_put(
 
                     while i < y_size {
                         if y_type != K_MT_CHAR_WISE_V || i < y_size - 1 {
-                            if nvim_dp_ml_append(lnum, (*y_array.add(i)).data) == FAIL {
+                            if ml_append(lnum, (*y_array.add(i)).data, 0, false) == FAIL {
                                 error_break = true;
                                 break;
                             }
@@ -4189,9 +4184,9 @@ pub unsafe extern "C" fn rs_do_put(
                             let old_col = nvim_dp_get_cursor_col();
                             let old_coladd = nvim_dp_get_cursor_coladd();
                             nvim_dp_set_cursor_lnum(lnum);
-                            let line_ptr = nvim_dp_ml_get(lnum);
+                            let line_ptr = ml_get(lnum);
                             if cnt == count && i == y_size - 1 {
-                                lendiff = nvim_dp_ml_get_len(lnum);
+                                lendiff = ml_get_len(lnum);
                             }
                             if *line_ptr == b'#' as c_char && nvim_dp_preprocs_left() {
                                 indent = 0; // Leave # lines at start
@@ -4214,7 +4209,7 @@ pub unsafe extern "C" fn rs_do_put(
                             nvim_dp_set_cursor_coladd(old_coladd);
                             // remember how many chars were removed
                             if cnt == count && i == y_size - 1 {
-                                lendiff -= nvim_dp_ml_get_len(lnum);
+                                lendiff -= ml_get_len(lnum);
                             }
                         }
                         i += 1;
@@ -4317,8 +4312,7 @@ pub unsafe extern "C" fn rs_do_put(
                         let last_data = (*y_array.add(y_size - 1)).data;
                         let last_size = (*y_array.add(y_size - 1)).size;
                         nvim_dp_set_op_end_col(
-                            (raw_col - 1)
-                                - nvim_dp_utf_head_off(last_data, last_data.add(last_size - 1)),
+                            (raw_col - 1) - utf_head_off(last_data, last_data.add(last_size - 1)),
                         );
                     }
                 } else {
@@ -4386,7 +4380,7 @@ pub unsafe extern "C" fn rs_do_put(
         xfree(y_array as *mut c_void);
     }
 
-    nvim_dp_set_VIsual_active_false();
+    VIsual_active = false;
 
     // If the cursor is past the end of the line put it at the end.
     nvim_dp_adjust_cursor_eol();
