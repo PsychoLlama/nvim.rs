@@ -17,6 +17,26 @@ use crate::ExArgHandle;
 type LinenrT = i32;
 type BufHandle = *mut c_void;
 
+/// Local mirror of C `Error` struct (api_defs.h).
+/// `err_type == -1` (kErrorTypeNone) means no error.
+#[repr(C)]
+struct CError {
+    err_type: c_int,
+    msg: *mut c_char,
+}
+
+impl CError {
+    const fn init() -> Self {
+        CError {
+            err_type: -1,
+            msg: std::ptr::null_mut(),
+        }
+    }
+    fn is_set(&self) -> bool {
+        self.err_type != -1
+    }
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -162,13 +182,15 @@ extern "C" {
 
     // --- ex_detach helpers ---
     fn nvim_docmd_get_current_ui() -> u64;
-    fn nvim_docmd_detach_set_chan_detach(id: u64) -> c_int;
-    fn nvim_docmd_remote_ui_disconnect_checked(id: u64) -> c_int;
-    fn nvim_docmd_channel_close_all(id: u64) -> c_int;
+    // find_channel is inline in C; use the accessor that finds + sets detach + returns chan->id (-1 on fail).
+    fn nvim_channel_find_and_set_detach(id: u64) -> c_int;
+    fn remote_ui_disconnect(channel_id: u64, err: *mut CError, send_error_exit: bool);
+    fn channel_close(id: u64, part: c_int, error: *mut *const c_char) -> bool;
+    fn api_clear_error(err: *mut CError);
 
     // --- ex_connect helpers ---
     fn nvim_docmd_ui_active_count() -> c_int;
-    fn nvim_docmd_remote_ui_connect(id: u64, addr: *const c_char) -> c_int;
+    fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: *mut CError);
     fn getout(exitval: c_int);
 
     // --- ex_checkhealth helpers ---
@@ -644,19 +666,28 @@ pub unsafe extern "C" fn nvim_docmd_ex_detach_impl(eap: ExArgHandle) {
         return;
     }
 
-    // find_channel and set detach flag; returns 0 (and emits error) if not found
-    let chan_id = nvim_docmd_detach_set_chan_detach(current_ui);
-    if chan_id == 0 {
+    // find_channel and set detach flag (returns -1 on failure, already emitted error)
+    let chan_id = nvim_channel_find_and_set_detach(current_ui);
+    if chan_id < 0 {
         return;
     }
 
     // Server-side UI detach
-    if nvim_docmd_remote_ui_disconnect_checked(current_ui) == 0 {
+    let mut err = CError::init();
+    remote_ui_disconnect(current_ui, &mut err, true);
+    if err.is_set() {
+        emsg(err.msg);
+        api_clear_error(&mut err);
         return;
     }
 
-    // Server-side channel close (ILOG emitted inside C helper)
-    nvim_docmd_channel_close_all(current_ui);
+    // Server-side channel close
+    let mut close_err: *const c_char = std::ptr::null();
+    // kChannelPartAll = 4
+    let rv = channel_close(current_ui, 4, &mut close_err);
+    if !rv && !close_err.is_null() {
+        emsg(close_err);
+    }
 }
 
 // ============================================================================
@@ -675,7 +706,11 @@ pub unsafe extern "C" fn nvim_docmd_ex_connect_impl(eap: ExArgHandle) {
     let current_ui = nvim_docmd_get_current_ui();
     let arg = (*eap).arg;
 
-    if nvim_docmd_remote_ui_connect(current_ui, arg) == 0 {
+    let mut err = CError::init();
+    remote_ui_connect(current_ui, arg, &mut err);
+    if err.is_set() {
+        emsg(err.msg);
+        api_clear_error(&mut err);
         return;
     }
 

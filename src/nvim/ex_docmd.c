@@ -792,51 +792,21 @@ int nvim_docmd_run_quit_cmd(const char *cmd)
 }
 const char *nvim_docmd_get_cmod_confirm_prefix(void) { return (cmdmod.cmod_flags & CMOD_CONFIRM) ? "confirm " : NULL; }
 uint64_t nvim_docmd_get_current_ui(void) { return (uint64_t)current_ui; }
-int nvim_docmd_detach_set_chan_detach(uint64_t id)
+// nvim_docmd_detach_set_chan_detach, nvim_docmd_remote_ui_disconnect_checked,
+// nvim_docmd_channel_close_all, nvim_docmd_remote_ui_connect implemented in Rust (impl_bodies.rs).
+// Accessor needed because find_channel is an inline function:
+int nvim_channel_find_and_set_detach(uint64_t id)
 {
   Channel *chan = find_channel(id);
   if (!chan) {
     emsg(e_invchan);
-    return 0;
+    return -1;
   }
   chan->detach = true;
   return (int)chan->id;
 }
-int nvim_docmd_remote_ui_disconnect_checked(uint64_t id)
-{
-  Error err = ERROR_INIT;
-  remote_ui_disconnect(id, &err, true);
-  if (ERROR_SET(&err)) {
-    emsg(err.msg);
-    api_clear_error(&err);
-    return 0;
-  }
-  return 1;
-}
-int nvim_docmd_channel_close_all(uint64_t id)
-{
-  const char *err = NULL;
-  ILOG("detach current_ui=%" PRId64, (int64_t)id);
-  bool rv = channel_close(id, kChannelPartAll, &err);
-  if (!rv && err) {
-    emsg(err);
-    return 0;
-  }
-  return 1;
-}
 
 int nvim_docmd_ui_active_count(void) { return (int)ui_active(); }
-int nvim_docmd_remote_ui_connect(uint64_t id, const char *addr)
-{
-  Error err = ERROR_INIT;
-  remote_ui_connect(id, (char *)addr, &err);
-  if (ERROR_SET(&err)) {
-    emsg(err.msg);
-    api_clear_error(&err);
-    return 0;
-  }
-  return 1;
-}
 int nvim_docmd_checkhealth_exec_lua(const char *mods, size_t mlen, const char *arg,
                                     char **err_msg_out)
 {
