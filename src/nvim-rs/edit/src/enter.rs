@@ -463,11 +463,11 @@ extern "C" {
     fn nvim_check_cursor_curwin();
 }
 
-/// Maximum column value (from pos_defs.h).
+/// Maximum column value (from `pos_defs.h`).
 const MAXCOL: ColnrT = 0x7fff_ffff;
 
 /// Compute byte length of a NUL-terminated C string.
-unsafe fn c_strlen_bytes(s: *const std::ffi::c_char) -> usize {
+const unsafe fn c_strlen_bytes(s: *const std::ffi::c_char) -> usize {
     let mut len = 0usize;
     while *s.add(len) != 0 {
         len += 1;
@@ -503,10 +503,8 @@ unsafe fn init_prompt_impl(cmdchar_todo: c_int) {
 
     let need_insert = if prompt_start_lnum == cursor_lnum {
         // Prompt start is on cursor line: check if prompt text matches
-        let text_slice =
-            std::slice::from_raw_parts(text.cast::<u8>(), prompt_len as usize);
-        let prompt_slice =
-            std::slice::from_raw_parts(prompt.cast::<u8>(), prompt_len as usize);
+        let text_slice = std::slice::from_raw_parts(text.cast::<u8>(), prompt_len as usize);
+        let prompt_slice = std::slice::from_raw_parts(prompt.cast::<u8>(), prompt_len as usize);
         text_slice != prompt_slice
     } else {
         prompt_start_lnum > cursor_lnum

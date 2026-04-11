@@ -11,7 +11,8 @@
 
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+use std::ptr;
 
 // ============================================================================
 // C composite helpers
@@ -21,15 +22,29 @@ extern "C" {
     /// Full `init_prompt()` implementation (composite C helper).
     fn nvim_edit_init_prompt_impl(cmdchar_todo: c_int);
 
-    /// Full `edit()` implementation (composite C helper).
-    /// Returns true iff a CTRL-O caused the return.
-    fn nvim_edit_edit_entry(cmdchar: c_int, startln: bool, count: c_int) -> bool;
+    // --- edit() entry point dependencies ---
+    fn nvim_curbuf_has_terminal() -> bool;
+    fn nvim_get_ex_normal_busy() -> c_int;
+    fn rs_terminal_enter() -> bool;
+    fn nvim_get_sandbox() -> c_int;
+    fn nvim_emsg_sandbox();
+    fn nvim_get_textlock() -> c_int;
+    fn nvim_get_compl_busy() -> c_int;
+    fn nvim_pum_visible() -> c_int;
+    fn nvim_expr_map_locked() -> c_int;
+    fn nvim_emsg_textlock();
+    fn nvim_set_restart_edit(val: c_int);
+    fn nvim_set_force_restart_edit(val: c_int);
+    fn insert_execute_rs(state: *mut c_void, key: c_int) -> c_int;
+    fn insert_check_rs(state: *mut c_void) -> c_int;
+    fn insert_enter(s: *mut c_void);
+    fn rs_ins_compl_active() -> c_int;
 
     // --- ins_redraw composites ---
 
     fn char_avail() -> bool;
+    #[allow(unused)]
     fn pum_visible() -> bool;
-    fn rs_ins_compl_active() -> c_int;
     fn may_trigger_win_scrolled_resized();
     fn may_trigger_safestate(safe: bool);
 
@@ -131,12 +146,86 @@ pub unsafe extern "C" fn rs_init_prompt(cmdchar_todo: c_int) {
     nvim_edit_init_prompt_impl(cmdchar_todo);
 }
 
-/// Insert-mode entry point.
+/// `Ctrl_O` character value (from `ascii_defs.h`).
+const CTRL_O: c_int = 15;
+
+/// Insert-mode entry point (replaces C `nvim_edit_edit_entry` + `edit` wrapper).
 ///
 /// # Safety
 /// Accesses many globals via C subsystems.
 #[must_use]
 #[unsafe(export_name = "edit")]
 pub unsafe extern "C" fn rs_edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
-    nvim_edit_edit_entry(cmdchar, startln, count)
+    // Terminal buffer: delegate to terminal_enter() or queue restart_edit.
+    if nvim_curbuf_has_terminal() {
+        if nvim_get_ex_normal_busy() != 0 {
+            // Do not enter terminal mode from ex_normal() -- it would cause
+            // havoc (terminal-mode recursiveness). Set restart_edit instead.
+            nvim_set_restart_edit(c_int::from(b'i'));
+            nvim_set_force_restart_edit(1);
+            return false;
+        }
+        return rs_terminal_enter();
+    }
+
+    // Don't allow inserting in the sandbox.
+    if nvim_get_sandbox() != 0 {
+        nvim_emsg_sandbox();
+        return false;
+    }
+
+    // Don't allow changes while editing the cmdline, or recursive insert
+    // mode when busy with completion.
+    if nvim_get_textlock() != 0
+        || rs_ins_compl_active() != 0
+        || nvim_get_compl_busy() != 0
+        || nvim_pum_visible() != 0
+        || nvim_expr_map_locked() != 0
+    {
+        nvim_emsg_textlock();
+        return false;
+    }
+
+    // Build InsertState on the stack, zero-initialized.
+    // SAFETY: *mut VimState and *mut c_void have the same representation (both are
+    // opaque pointer-sized values). Transmute is needed because VimState uses its own
+    // pointer type while the C functions use void*.
+    let mut s = crate::dispatch::InsertState {
+        state: crate::dispatch::VimState {
+            execute: Some(std::mem::transmute::<
+                unsafe extern "C" fn(*mut c_void, c_int) -> c_int,
+                unsafe extern "C" fn(*mut crate::dispatch::VimState, c_int) -> c_int,
+            >(
+                insert_execute_rs as unsafe extern "C" fn(*mut c_void, c_int) -> c_int,
+            )),
+            check: Some(std::mem::transmute::<
+                unsafe extern "C" fn(*mut c_void) -> c_int,
+                unsafe extern "C" fn(*mut crate::dispatch::VimState) -> c_int,
+            >(
+                insert_check_rs as unsafe extern "C" fn(*mut c_void) -> c_int,
+            )),
+        },
+        ca: ptr::null_mut(),
+        mincol: 0,
+        cmdchar,
+        cmdchar_todo: 0,
+        ins_just_started: false,
+        startln: c_int::from(startln),
+        count,
+        c: 0,
+        lastc: 0,
+        i: 0,
+        did_backspace: false,
+        line_is_white: false,
+        old_topline: 0,
+        old_topfill: 0,
+        inserted_space: 0,
+        replace_state: 0,
+        did_restart_edit: 0,
+        nomove: false,
+    };
+
+    insert_enter(ptr::addr_of_mut!(s).cast::<c_void>());
+
+    s.c == CTRL_O
 }

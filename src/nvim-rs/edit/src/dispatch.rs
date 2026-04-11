@@ -29,8 +29,8 @@ type LinenrT = i32;
 /// Opaque VimState: only carries function pointers, never accessed from Rust.
 #[repr(C)]
 pub struct VimState {
-    execute: Option<unsafe extern "C" fn(*mut VimState, c_int) -> c_int>,
-    check: Option<unsafe extern "C" fn(*mut VimState) -> c_int>,
+    pub execute: Option<unsafe extern "C" fn(*mut VimState, c_int) -> c_int>,
+    pub check: Option<unsafe extern "C" fn(*mut VimState) -> c_int>,
 }
 
 /// Insert-mode state (must match C `InsertState` layout exactly).
