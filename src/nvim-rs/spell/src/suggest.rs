@@ -6110,6 +6110,101 @@ pub unsafe extern "C" fn rs_spell_find_suggest(
 }
 
 // =============================================================================
+// Phase 9: spell_suggest_list + spell_check_sps (migrated from C)
+// =============================================================================
+
+extern "C" {
+    // Alloc/free a heap-allocated suginfo_T (size opaque to Rust)
+    fn nvim_suginfo_alloc() -> *mut std::ffi::c_void;
+    fn nvim_suginfo_free(su: *mut std::ffi::c_void);
+    // xmalloc
+    #[link_name = "xmalloc"]
+    fn sl_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    // strlen
+    #[link_name = "strlen"]
+    fn sl_strlen(s: *const c_char) -> usize;
+    // ga_init
+    #[link_name = "ga_init"]
+    fn sl_ga_init(gap: *mut crate::GArrayRaw, itemsize: c_int, growsize: c_int);
+    // ga_grow
+    #[link_name = "ga_grow"]
+    fn sl_ga_grow(gap: *mut crate::GArrayRaw, n: c_int);
+    // p_sps option (read the current value)
+    #[link_name = "p_sps"]
+    static p_sps_global: *mut c_char;
+}
+
+/// Rust replacement for C `spell_suggest_list`.
+///
+/// Finds spell suggestions for "word" and returns them in gap as
+/// a list of allocated strings. The caller is responsible for freeing the strings.
+///
+/// # Safety
+/// - `gap` must be a valid pointer to an uninitialized `garray_T`.
+/// - `word` must be a valid null-terminated C string.
+#[unsafe(export_name = "spell_suggest_list")]
+pub unsafe extern "C" fn rs_spell_suggest_list(
+    gap: *mut crate::GArrayRaw,
+    word: *mut c_char,
+    maxcount: c_int,
+    need_cap: bool,
+    interactive: bool,
+) {
+    // Allocate suginfo_T on the heap (its size is opaque to Rust)
+    let su = nvim_suginfo_alloc();
+
+    rs_spell_find_suggest(word, 0, su, maxcount, false, need_cap, interactive);
+
+    // Initialize the output garray for char* pointers
+    let ga_len = (*nvim_suginfo_get_ga(su)).ga_len;
+    sl_ga_init(gap, std::mem::size_of::<*mut c_char>() as c_int, ga_len + 1);
+    sl_ga_grow(gap, ga_len);
+
+    // Build the output: one string per suggestion
+    let su_ga = nvim_suginfo_get_ga(su);
+    let su_len = (*su_ga).ga_len as usize;
+    let su_data = (*su_ga).ga_data.cast::<CSuggestT>();
+    let su_badptr = nvim_suginfo_get_badptr(su);
+
+    for i in 0..su_len {
+        let stp = su_data.add(i);
+        let st_wordlen = (*stp).st_wordlen as usize;
+        let st_orglen = (*stp).st_orglen as usize;
+
+        // The suggested word may replace only part of "word";
+        // append the not-replaced suffix from su_badptr.
+        let suffix_ptr = su_badptr.add(st_orglen);
+        let suffix_len = sl_strlen(suffix_ptr);
+        let wcopy_size = st_wordlen + suffix_len + 1;
+        let wcopy = sl_xmalloc(wcopy_size).cast::<c_char>();
+
+        // Copy: st_word + su_badptr[st_orglen..]
+        std::ptr::copy_nonoverlapping((*stp).st_word, wcopy, st_wordlen);
+        std::ptr::copy_nonoverlapping(suffix_ptr, wcopy.add(st_wordlen), suffix_len + 1);
+
+        // Append to output garray
+        let out_data = (*gap).ga_data.cast::<*mut c_char>();
+        *out_data.add((*gap).ga_len as usize) = wcopy;
+        (*gap).ga_len += 1;
+    }
+
+    rs_spell_find_cleanup(su);
+    nvim_suginfo_free(su);
+}
+
+/// Rust replacement for C `spell_check_sps`.
+///
+/// Checks the 'spellsuggest' option; sets sps_flags and sps_limit globals.
+/// Returns OK (0) on success, FAIL (-1) on error.
+///
+/// # Safety
+/// Uses the global `p_sps` option string.
+#[unsafe(export_name = "spell_check_sps")]
+pub unsafe extern "C" fn rs_spell_check_sps_export() -> c_int {
+    rs_spell_check_sps_full(p_sps_global)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

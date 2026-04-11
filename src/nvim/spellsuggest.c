@@ -168,6 +168,9 @@ void nvim_suginfo_set_maxcount(void *su, int count) { ((suginfo_T *)su)->su_maxc
 void nvim_suginfo_set_sallang(void *su, void *sallang) { ((suginfo_T *)su)->su_sallang = sallang; }
 // Clear the suginfo_T struct (CLEAR_POINTER equivalent)
 void nvim_suginfo_clear(void *su) { CLEAR_POINTER((suginfo_T *)su); }
+// Heap-allocate and heap-free a suginfo_T (size opaque to Rust)
+void *nvim_suginfo_alloc(void) { return xcalloc(1, sizeof(suginfo_T)); }
+void nvim_suginfo_free(void *su) { xfree(su); }
 
 // Accessor for curbuf->b_s.b_langp (used by rs_spell_find_suggest)
 garray_T *nvim_curbuf_get_b_langp(void) { return &curbuf->b_s.b_langp; }
@@ -211,7 +214,6 @@ void nvim_spell_suggest_expr_eval(void *su, char *expr)
 }
 
 extern int badword_captype(char *word, char *end);
-extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
 extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
 extern void rs_score_combine_lists(void *su);
@@ -221,13 +223,6 @@ extern void rs_spell_suggest_file(void *su, char *fname);
 extern void rs_spell_find_cleanup(void *su);
 extern void rs_spell_find_suggest(char *badptr, int badlen, void *su, int maxcount,
                                   bool banbadword, bool need_cap, bool interactive);
-
-/// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
-/// Sets "sps_flags" and "sps_limit".
-int spell_check_sps(void)
-{
-  return rs_spell_check_sps_full(p_sps);
-}
 
 /// "z=": Find badly spelled word under or after the cursor.
 /// Give suggestions for the properly spelled word.
@@ -449,33 +444,6 @@ void spell_suggest(int count)
   curwin->w_p_spell = wo_spell_save;
 }
 
-/// Find spell suggestions for "word".  Return them in the growarray "*gap" as
-/// a list of allocated strings.
-///
-/// @param maxcount  maximum nr of suggestions
-/// @param need_cap  'spellcapcheck' matched
-void spell_suggest_list(garray_T *gap, char *word, int maxcount, bool need_cap, bool interactive)
-{
-  suginfo_T sug;
-
-  rs_spell_find_suggest(word, 0, &sug, maxcount, false, need_cap, interactive);
-
-  // Make room in "gap".
-  ga_init(gap, sizeof(char *), sug.su_ga.ga_len + 1);
-  ga_grow(gap, sug.su_ga.ga_len);
-  for (int i = 0; i < sug.su_ga.ga_len; i++) {
-    suggest_T *stp = &SUG(sug.su_ga, i);
-
-    // The suggested word may replace only part of "word", add the not
-    // replaced part.
-    char *wcopy = xmalloc((size_t)stp->st_wordlen + strlen(sug.su_badptr + stp->st_orglen) + 1);
-    STRCPY(wcopy, stp->st_word);
-    STRCPY(wcopy + stp->st_wordlen, sug.su_badptr + stp->st_orglen);
-    ((char **)gap->ga_data)[gap->ga_len++] = wcopy;
-  }
-
-  rs_spell_find_cleanup(&sug);
-}
 
 
 
