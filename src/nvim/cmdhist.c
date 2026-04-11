@@ -40,23 +40,9 @@ _Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS changed - update 
 _Static_assert(RE_MAGIC == 1, "RE_MAGIC changed - update Rust constant");
 _Static_assert(RE_STRING == 2, "RE_STRING changed - update Rust constant");
 
-static histentry_T *(history[HIST_COUNT]) = { NULL, NULL, NULL, NULL, NULL };
-static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
-/// identifying (unique) number of newest history entry
-static int hisnum[HIST_COUNT] = { 0, 0, 0, 0, 0 };
-static int hislen = 0;  ///< actual length of history tables
-
-/// C accessor for hislen static variable.
-int nvim_get_hislen(void) { return hislen; }
-
-/// Return a pointer to a specified history table
-histentry_T *get_histentry(int hist_type) { return history[hist_type]; }
-
-void set_histentry(int hist_type, histentry_T *entry) { history[hist_type] = entry; }
-
-int *get_hisidx(int hist_type) { return &hisidx[hist_type]; }
-
-int *get_hisnum(int hist_type) { return &hisnum[hist_type]; }
+// history[], hisidx[], hisnum[], hislen, nvim_get_hislen(), get_histentry(),
+// set_histentry(), get_hisidx(), get_hisnum() are now Rust statics/functions
+// in src/nvim-rs/cmdhist/src/state.rs.
 
 // histentry_T field accessors for Rust
 
@@ -127,7 +113,7 @@ uint64_t nvim_cmdhist_os_time(void) { return os_time(); }
 
 int nvim_cmdhist_get_cmdmod_cmod_flags(void) { return (int)cmdmod.cmod_flags; }
 
-void nvim_cmdhist_set_hislen(int val) { hislen = val; }
+// nvim_cmdhist_set_hislen() is now in src/nvim-rs/cmdhist/src/state.rs.
 
 int nvim_cmdhist_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
 

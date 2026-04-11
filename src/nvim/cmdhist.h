@@ -32,6 +32,14 @@ typedef struct {
   AdditionalData *additional_data;  ///< Additional entries from ShaDa file.
 } histentry_T;
 
+// History state accessors exported from Rust (cmdhist/src/state.rs)
+histentry_T *get_histentry(int hist_type);
+void set_histentry(int hist_type, histentry_T *entry);
+int *get_hisidx(int hist_type);
+int *get_hisnum(int hist_type);
+int nvim_get_hislen(void);
+void nvim_cmdhist_set_hislen(int val);
+
 // Functions exported directly from Rust (cmdhist crate) via #[export_name]
 int get_hislen(void);
 int hist_char2type(int c);

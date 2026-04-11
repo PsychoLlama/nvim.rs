@@ -7,6 +7,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::missing_safety_doc)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -30,16 +31,38 @@ pub type ExpandPtr = *mut c_void;
 pub type EvalFuncData = *mut c_void;
 
 // =============================================================================
-// Phase 1: Core Accessors
+// Phase 1: Core Accessors (state functions now live in state.rs as Rust statics)
 // =============================================================================
 
-extern "C" {
-    // -- History state --
-    pub fn nvim_get_hislen() -> c_int;
-    pub fn get_histentry(hist_type: c_int) -> HistEntryPtr;
-    pub fn get_hisidx(hist_type: c_int) -> *mut c_int;
-    pub fn get_hisnum(hist_type: c_int) -> *mut c_int;
+// NOTE: nvim_get_hislen, get_histentry, set_histentry, get_hisidx, get_hisnum
+// are now #[no_mangle] Rust functions in state.rs -- no extern "C" needed.
 
+/// Access `nvim_get_hislen` from within Rust (calls our own exported fn).
+pub unsafe fn nvim_get_hislen() -> c_int {
+    crate::state::hislen
+}
+
+/// Access `get_histentry` from within Rust.
+pub unsafe fn get_histentry(hist_type: c_int) -> HistEntryPtr {
+    crate::state::get_histentry(hist_type).cast()
+}
+
+/// Access `set_histentry` from within Rust.
+pub unsafe fn set_histentry(hist_type: c_int, entry: HistEntryPtr) {
+    crate::state::set_histentry(hist_type, entry.cast());
+}
+
+/// Access `get_hisidx` from within Rust.
+pub unsafe fn get_hisidx(hist_type: c_int) -> *mut c_int {
+    crate::state::get_hisidx(hist_type)
+}
+
+/// Access `get_hisnum` from within Rust.
+pub unsafe fn get_hisnum(hist_type: c_int) -> *mut c_int {
+    crate::state::get_hisnum(hist_type)
+}
+
+extern "C" {
     // -- histentry_T field accessors --
     pub fn nvim_cmdhist_he_get_hisnum(he: HistEntryPtr) -> c_int;
     pub fn nvim_cmdhist_he_set_hisnum(he: HistEntryPtr, val: c_int);
@@ -84,9 +107,12 @@ extern "C" {
     pub fn nvim_cmdhist_get_maptick() -> c_int;
     pub fn nvim_cmdhist_os_time() -> u64;
     pub fn nvim_cmdhist_get_cmdmod_cmod_flags() -> c_int;
-    pub fn nvim_cmdhist_set_hislen(val: c_int);
-    pub fn set_histentry(hist_type: c_int, entry: HistEntryPtr);
     pub fn nvim_cmdhist_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}
+
+/// Set history length - calls our own exported fn.
+pub unsafe fn nvim_cmdhist_set_hislen(val: c_int) {
+    crate::state::nvim_cmdhist_set_hislen(val);
 }
 
 // =============================================================================

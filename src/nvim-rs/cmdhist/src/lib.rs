@@ -14,6 +14,7 @@ pub mod ffi;
 pub mod helpers;
 pub mod iter;
 pub mod modify;
+pub mod state;
 pub mod viml;
 
 /// Number of history tables (HIST_CMD through HIST_DEBUG).
@@ -30,11 +31,11 @@ pub const NUMBUFLEN: usize = 65;
 /// Return the length of the history tables.
 ///
 /// # Safety
-/// Calls C accessor function for `hislen`.
+/// Reads the Rust static `hislen`.
 #[export_name = "get_hislen"]
 #[must_use]
 pub unsafe extern "C" fn rs_get_hislen() -> c_int {
-    ffi::nvim_get_hislen()
+    state::hislen
 }
 
 /// History type constants (matching nvim's HistoryType enum)
