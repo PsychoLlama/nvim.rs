@@ -89,12 +89,8 @@ extern "C" {
     /// Get string value from argvars[idx].
     fn nvim_cmdexpand_tv_get_string(argvars: TypvalHandle, idx: c_int) -> *const c_char;
 
-    /// Get number from argvars[idx] with error check. Sets `*errorp` to 1 on error.
-    fn nvim_cmdexpand_tv_get_number_chk(
-        argvars: TypvalHandle,
-        idx: c_int,
-        errorp: *mut c_int,
-    ) -> i64;
+    /// `tv_get_number_chk(tv, ret_error)` — get number from typval (direct).
+    fn tv_get_number_chk(tv: *const libc::c_void, ret_error: *mut bool) -> i64;
 
     /// Allocate a list and set rettv.
     fn nvim_cmdexpand_tv_list_alloc_ret(rettv: TypvalHandle, count: c_int);
@@ -257,7 +253,12 @@ pub unsafe extern "C" fn rs_f_getcompletion(
 
     let var_unknown = nvim_cmdexpand_get_var_unknown();
     if nvim_cmdexpand_tv_get_type(argvars, 2) != var_unknown {
-        filtered = nvim_cmdexpand_tv_get_number_chk(argvars, 2, std::ptr::null_mut()) != 0;
+        // `sizeof(typval_T) == 16`; index argvars[2] = argvars + 32 bytes.
+        const TYPVAL_SIZE: usize = 16;
+        let tv2 = (argvars as *const u8)
+            .add(2 * TYPVAL_SIZE)
+            .cast::<libc::c_void>();
+        filtered = tv_get_number_chk(tv2, std::ptr::null_mut()) != 0;
     }
 
     if nvim_cmdexpand_get_p_wic() != 0 {

@@ -209,6 +209,7 @@ const K_UI_CMDLINE: c_int = 0;
 /// - `matches` must point to at least `num_matches` valid C string pointers.
 /// - Must be called from cmdline context where `get_cmdline_info()` is valid.
 #[unsafe(export_name = "cmdline_pum_create")]
+#[allow(clippy::cast_ptr_alignment)]
 pub unsafe extern "C" fn rs_cmdline_pum_create(
     _ccline: *mut libc::c_void,
     xp: *mut crate::ExpandT,

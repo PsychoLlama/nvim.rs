@@ -530,15 +530,7 @@ int nvim_cmdexpand_compl_use_pum(int need_wildmenu) { return rs_cmdline_compl_us
 int nvim_cmdexpand_tv_get_type(typval_T *argvars, int idx) { return (int)argvars[idx].v_type; }
 int nvim_cmdexpand_tv_check_for_string_arg(typval_T *argvars, int idx) { return tv_check_for_string_arg(argvars, idx); }
 const char *nvim_cmdexpand_tv_get_string(typval_T *argvars, int idx) { return tv_get_string(&argvars[idx]); }
-int64_t nvim_cmdexpand_tv_get_number_chk(typval_T *argvars, int idx, int *errorp)
-{
-  bool err = false;
-  int64_t val = tv_get_number_chk(&argvars[idx], &err);
-  if (errorp != NULL) {
-    *errorp = err ? 1 : 0;
-  }
-  return val;
-}
+// nvim_cmdexpand_tv_get_number_chk: Rust now calls tv_get_number_chk directly.
 
 /// Allocate a list and set rettv to it (for Rust FFI).
 void nvim_cmdexpand_tv_list_alloc_ret(typval_T *rettv, int estimated_count)
@@ -650,38 +642,8 @@ char *nvim_cmdexpand_xmemdupz(const char *s, size_t len) { return xmemdupz(s, le
 list_T *nvim_cmdexpand_call_user_expand_retlist(expand_T *xp) { return call_user_expand_func(call_func_retlist, xp); }
 /// call_user_expand_func with call_func_retstr (for Rust FFI).
 char *nvim_cmdexpand_call_user_expand_retstr(expand_T *xp) { return call_user_expand_func(call_func_retstr, xp); }
-/// nlua_call_user_expand_func wrapper (for Rust FFI).
-/// Caller must tv_clear rettv when done.
-int nvim_cmdexpand_nlua_call_user_expand(expand_T *xp)
-{
-  typval_T rettv = TV_INITIAL_VALUE;
-  nlua_call_user_expand_func(xp, &rettv);
-  if (rettv.v_type != VAR_LIST) {
-    tv_clear(&rettv);
-    return -1;  // Not a list
-  }
-  // Return list refcount +1; caller must tv_list_unref.
-  list_T *li = rettv.vval.v_list;
-  tv_list_ref(li);
-  tv_clear(&rettv);
-  return 0;  // Not used; see nvim_cmdexpand_nlua_get_retlist.
-}
-
-/// nlua_call_user_expand_func wrapper returning list_T * (for Rust FFI).
-/// Returns NULL if not a list. Caller must tv_list_unref.
-list_T *nvim_cmdexpand_nlua_call_user_expand_retlist(expand_T *xp)
-{
-  typval_T rettv = TV_INITIAL_VALUE;
-  nlua_call_user_expand_func(xp, &rettv);
-  if (rettv.v_type != VAR_LIST) {
-    tv_clear(&rettv);
-    return NULL;
-  }
-  list_T *li = rettv.vval.v_list;
-  tv_list_ref(li);
-  tv_clear(&rettv);
-  return li;
-}
+// nvim_cmdexpand_nlua_call_user_expand, nvim_cmdexpand_nlua_call_user_expand_retlist:
+// Rust now calls nlua_call_user_expand_func + tv_clear + nvim_tv_list_ref directly.
 
 // C accessors for list iteration (used by Rust rs_list_to_string_matches)
 // nvim_tv_list_len: already in eval_shim.c

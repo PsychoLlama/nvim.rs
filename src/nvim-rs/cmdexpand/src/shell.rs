@@ -29,6 +29,46 @@ pub use crate::expand::RegMatch;
 
 type ListHandle = *mut c_void;
 
+// =============================================================================
+// typval_T repr(C) (sizeof=16, verified by static assertion in testing_shim.c)
+// =============================================================================
+
+/// Mirror of `typval_T` from `eval/typval_defs.h` (sizeof=16).
+///
+/// Layout: `v_type`(i32)@0, `v_lock`(i32)@4, `vval`(union, 8 bytes)@8.
+/// `TV_INITIAL_VALUE` initializes to `{v_type: VAR_UNKNOWN(0), v_lock: 0, vval: 0}`.
+#[repr(C)]
+struct TypvalT {
+    v_type: c_int,
+    v_lock: c_int,
+    vval: [u8; 8],
+}
+
+impl TypvalT {
+    /// Create a zero-initialized typval (equivalent to `TV_INITIAL_VALUE`).
+    const fn initial() -> Self {
+        Self {
+            v_type: 0,
+            v_lock: 0,
+            vval: [0u8; 8],
+        }
+    }
+
+    /// Get `vval.v_list` (pointer at offset 8, reinterpreted as *mut `c_void`).
+    const unsafe fn get_list(&self) -> ListHandle {
+        let mut ptr = std::ptr::null_mut::<c_void>();
+        std::ptr::copy_nonoverlapping(
+            self.vval.as_ptr(),
+            std::ptr::addr_of_mut!(ptr).cast::<u8>(),
+            8,
+        );
+        ptr
+    }
+}
+
+/// `VAR_LIST` type constant.
+const VAR_LIST: c_int = 4;
+
 extern "C" {
     /// `call_user_expand_func(call_func_retlist, xp)` wrapper.
     fn nvim_cmdexpand_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle;
@@ -36,8 +76,14 @@ extern "C" {
     /// `call_user_expand_func(call_func_retstr, xp)` wrapper.
     fn nvim_cmdexpand_call_user_expand_retstr(xp: *mut ExpandT) -> *mut c_char;
 
-    /// `nlua_call_user_expand_func` wrapper — returns list or NULL.
-    fn nvim_cmdexpand_nlua_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle;
+    /// `nlua_call_user_expand_func(xp, ret_tv)` — direct call.
+    fn nlua_call_user_expand_func(xp: *mut ExpandT, ret_tv: *mut TypvalT);
+
+    /// `tv_clear(tv)` — clear a `typval_T` (frees contained resources).
+    fn tv_clear(tv: *mut TypvalT);
+
+    /// `nvim_tv_list_ref(list)` — increment list refcount (in `eval_shim.c`).
+    fn nvim_tv_list_ref(list: ListHandle);
 
     /// `tv_list_len(l)` — number of items in list (in `eval_shim.c`).
     fn nvim_tv_list_len(l: ListHandle) -> c_int;
@@ -287,13 +333,36 @@ pub unsafe extern "C" fn rs_expand_user_lua(
     *matches = std::ptr::null_mut();
     *num_matches = 0;
 
-    let retlist = nvim_cmdexpand_nlua_call_user_expand_retlist(xp);
+    let retlist = rs_nlua_call_user_expand_retlist(xp);
     if retlist.is_null() {
         return FAIL;
     }
 
     rs_list_to_string_matches(retlist, matches, num_matches);
     OK
+}
+
+/// Call `nlua_call_user_expand_func` and return the resulting `list_T *`.
+///
+/// Returns NULL if the result is not a list. The returned list has its
+/// refcount incremented; caller must call `nvim_tv_list_unref` when done.
+///
+/// Mirrors `nvim_cmdexpand_nlua_call_user_expand_retlist` from `cmdexpand.c`.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` pointer.
+unsafe fn rs_nlua_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle {
+    let mut rettv = TypvalT::initial();
+    nlua_call_user_expand_func(xp, &raw mut rettv);
+    if rettv.v_type != VAR_LIST {
+        tv_clear(&raw mut rettv);
+        return std::ptr::null_mut();
+    }
+    let li = rettv.get_list();
+    nvim_tv_list_ref(li);
+    tv_clear(&raw mut rettv);
+    li
 }
 
 // =============================================================================
