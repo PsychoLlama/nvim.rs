@@ -380,6 +380,136 @@ pub unsafe extern "C" fn rs_list_in_columns(items: *mut *mut c_char, size: c_int
     }
 }
 
+// =============================================================================
+// Phase 2: list_version, list_lua_version, ex_version
+// =============================================================================
+
+/// UI capability constant for kUIMessages.
+const K_UI_MESSAGES: c_int = 4;
+
+extern "C" {
+    // Phase 2 FFI additions
+    fn ui_has(ext: c_int) -> bool;
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn xfree(ptr: *mut c_void);
+    fn nvim_gettext(s: *const c_char) -> *const c_char;
+
+    // C accessors for version globals and Lua version.
+    fn nvim_version_get_lua_version() -> *mut c_char;
+    fn nvim_version_get_buildtype() -> *const c_char;
+    fn nvim_version_versions_count() -> c_int;
+    fn nvim_version_versions_get(idx: c_int) -> *const c_char;
+    fn nvim_version_get_sys_vimrc() -> *const c_char;
+    fn nvim_version_get_default_vim_dir() -> *const c_char;
+    fn nvim_version_get_default_vimruntime_dir() -> *const c_char;
+    fn nvim_version_eap_get_arg(eap: *mut c_void) -> *mut c_char;
+
+    // C accessor functions used by list_version.
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_get_starting() -> c_int;
+
+    // C accessor for version_cflags (debug builds only).
+    #[cfg(debug_assertions)]
+    fn nvim_version_get_cflags() -> *const c_char;
+
+    // longVersion is still a C global (Phase 4 will move it to Rust).
+    static longVersion: *mut c_char;
+}
+
+use std::ffi::c_void;
+
+/// Print the Lua/LuaJIT version to the message output.
+///
+/// # Safety
+/// Must be called from the main Neovim thread with Lua state initialized.
+#[unsafe(export_name = "list_lua_version")]
+pub unsafe extern "C" fn rs_list_lua_version() {
+    let s = nvim_version_get_lua_version();
+    msg_puts(s.cast_const());
+    xfree(s.cast::<c_void>());
+}
+
+/// Print the full version information to the message output.
+///
+/// # Safety
+/// Must be called from the main Neovim thread.
+#[unsafe(export_name = "list_version")]
+pub unsafe extern "C" fn rs_list_version() {
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+    msg_puts(longVersion);
+    msg_putchar(b'\n' as c_int);
+    msg_puts(nvim_version_get_buildtype());
+    msg_putchar(b'\n' as c_int);
+    rs_list_lua_version();
+
+    if nvim_get_p_verbose() > 0 {
+        msg_putchar(b'\n' as c_int);
+        msg_puts(c"Vim versions: ".as_ptr());
+
+        let count = nvim_version_versions_count();
+        for i in 0..count {
+            if i != 0 {
+                msg_puts(c", ".as_ptr());
+            }
+            msg_puts(nvim_version_versions_get(i));
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            msg_putchar(b'\n' as c_int);
+            msg_puts(nvim_version_get_cflags());
+        }
+
+        version_msg_wrap(c"\n\n".as_ptr(), false);
+
+        let sys_vimrc = nvim_version_get_sys_vimrc();
+        if !sys_vimrc.is_null() {
+            version_msg_wrap(nvim_gettext(c"   system vimrc file: \"".as_ptr()), false);
+            version_msg_wrap(sys_vimrc, false);
+            version_msg_wrap(c"\"\n".as_ptr(), false);
+        }
+
+        let vim_dir = nvim_version_get_default_vim_dir();
+        if !vim_dir.is_null() && *vim_dir != 0 {
+            version_msg_wrap(nvim_gettext(c"  fall-back for $VIM: \"".as_ptr()), false);
+            version_msg_wrap(vim_dir, false);
+            version_msg_wrap(c"\"\n".as_ptr(), false);
+        }
+
+        let runtime_dir = nvim_version_get_default_vimruntime_dir();
+        if !runtime_dir.is_null() && *runtime_dir != 0 {
+            version_msg_wrap(nvim_gettext(c" f-b for $VIMRUNTIME: \"".as_ptr()), false);
+            version_msg_wrap(runtime_dir, false);
+            version_msg_wrap(c"\"\n".as_ptr(), false);
+        }
+    }
+
+    let tail_msg = if nvim_get_p_verbose() > 0 {
+        c"\nRun :checkhealth for more info".as_ptr()
+    } else if nvim_get_starting() != 0 {
+        c"\nRun \"nvim -V1 -v\" for more info".as_ptr()
+    } else {
+        c"\nRun \":verbose version\" for more info".as_ptr()
+    };
+    version_msg_wrap(tail_msg, false);
+}
+
+/// Ex command handler for `:version`.
+///
+/// # Safety
+/// `eap` must be a valid `exarg_T *` pointer.
+#[unsafe(export_name = "ex_version")]
+pub unsafe extern "C" fn rs_ex_version(eap: *mut c_void) {
+    let arg = nvim_version_eap_get_arg(eap);
+    // Ignore ":version 9.99" — only act when no argument.
+    if arg.is_null() || *arg == 0 {
+        if !ui_has(K_UI_MESSAGES) {
+            msg_putchar(b'\n' as c_int);
+        }
+        rs_list_version();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

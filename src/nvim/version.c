@@ -57,83 +57,61 @@ char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
 #include "version.c.generated.h"
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 
+// =============================================================================
+// C accessors for Rust Phase 2 (list_version, list_lua_version, ex_version)
+// =============================================================================
 
+/// Return eap->arg (pointer to command argument).
+char *nvim_version_eap_get_arg(exarg_T *eap) { return eap->arg; }
 
-void ex_version(exarg_T *eap)
-{
-  // Ignore a ":version 9.99" command.
-  if (*eap->arg == NUL) {
-    if (!ui_has(kUIMessages)) {
-      msg_putchar('\n');
-    }
-    list_version();
-  }
-}
-
-// version_msg_wrap, version_msg, list_in_columns migrated to Rust (version crate)
-
-void list_lua_version(void)
+/// Return the Lua/LuaJIT version string by executing a Lua snippet.
+/// Caller must free the returned string with xfree().
+char *nvim_version_get_lua_version(void)
 {
   Error err = ERROR_INIT;
   Object ret = NLUA_EXEC_STATIC("return ((jit and jit.version) and jit.version or _VERSION)",
                                 (Array)ARRAY_DICT_INIT, kRetObject, NULL, &err);
   assert(!ERROR_SET(&err));
   assert(ret.type == kObjectTypeString);
-  msg_puts(ret.data.string.data);
+  char *s = xstrdup(ret.data.string.data);
   api_free_object(ret);
+  return s;
 }
 
-void list_version(void)
+/// Return the SYS_VIMRC_FILE compile-time string, or NULL if not defined.
+const char *nvim_version_get_sys_vimrc(void)
 {
-  msg_ext_set_kind("list_cmd");
-  msg_puts(longVersion);
-  msg_putchar('\n');
-  msg_puts(version_buildtype);
-  msg_putchar('\n');
-  list_lua_version();
+#ifdef SYS_VIMRC_FILE
+  return SYS_VIMRC_FILE;
+#else
+  return NULL;
+#endif
+}
 
-  if (p_verbose > 0) {
-    msg_putchar('\n');
-    msg_puts("Vim versions: ");
+/// Return default_vim_dir (may be empty string, never NULL).
+const char *nvim_version_get_default_vim_dir(void) { return default_vim_dir; }
 
-    for (size_t i = 0; i < ARRAY_SIZE(Versions); i++) {
-      if (i) {
-        msg_puts(", ");
-      }
-      msg_puts(Versions[i]);
-    }
+/// Return default_vimruntime_dir (may be empty string, never NULL).
+const char *nvim_version_get_default_vimruntime_dir(void) { return default_vimruntime_dir; }
+
+/// Return version_buildtype string.
+const char *nvim_version_get_buildtype(void) { return version_buildtype; }
 
 #ifndef NDEBUG
-    msg_putchar('\n');
-    msg_puts(version_cflags);
-#endif
-    version_msg("\n\n");
-
-#ifdef SYS_VIMRC_FILE
-    version_msg(_("   system vimrc file: \""));
-    version_msg(SYS_VIMRC_FILE);
-    version_msg("\"\n");
+/// Return version_cflags string (only in debug builds).
+const char *nvim_version_get_cflags(void) { return version_cflags; }
 #endif
 
-    if (*default_vim_dir != NUL) {
-      version_msg(_("  fall-back for $VIM: \""));
-      version_msg(default_vim_dir);
-      version_msg("\"\n");
-    }
+/// Return the number of entries in Versions[].
+int nvim_version_versions_count(void) { return (int)ARRAY_SIZE(Versions); }
 
-    if (*default_vimruntime_dir != NUL) {
-      version_msg(_(" f-b for $VIMRUNTIME: \""));
-      version_msg(default_vimruntime_dir);
-      version_msg("\"\n");
-    }
-  }
+/// Return Versions[idx].
+const char *nvim_version_versions_get(int idx) { return Versions[idx]; }
 
-  version_msg(p_verbose > 0
-              ? "\nRun :checkhealth for more info"
-              : (starting
-                 ? "\nRun \"nvim -V1 -v\" for more info"
-                 : "\nRun \":verbose version\" for more info"));
-}
+
+
+// ex_version, list_lua_version, list_version migrated to Rust (version crate)
+// version_msg_wrap, version_msg, list_in_columns migrated to Rust (version crate)
 
 /// Whether it still is not too late to show an intro message
 bool may_show_intro(void)

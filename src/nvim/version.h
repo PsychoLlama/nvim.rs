@@ -11,8 +11,11 @@ extern char *longVersion;
 extern char *version_cflags;
 #endif
 
-// Rust-implemented helpers (exported from the version crate)
+// Rust-implemented functions (exported from the version crate)
 void version_msg(char *s);
+void list_version(void);
+void list_lua_version(void);
+void ex_version(exarg_T *eap);
 
 #include "version.h.generated.h"
 bool has_nvim_version(const char *version_str);
