@@ -157,6 +157,16 @@ extern "C" {
     fn clear_evalarg(evalarg: *mut c_void, eap: *mut ExargT);
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn gettext(s: *const c_char) -> *const c_char;
+    fn ends_excmd(c: c_int) -> c_int;
+    fn find_nextcmd(p: *const c_char) -> *mut c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn eval_for_line(
+        arg: *const c_char,
+        errp: *mut bool,
+        eap: *mut ExargT,
+        evalarg: *mut c_void,
+    ) -> *mut c_void;
+    fn next_for_item(fi: *mut c_void, arg: *mut c_char) -> bool;
 }
 
 // C functions callable from Rust
@@ -197,6 +207,11 @@ extern "C" {
     static e_endif: *const c_char;
     static e_argreq: *const c_char;
     static mut did_endif: bool;
+    static e_while: *const c_char;
+    static e_for: *const c_char;
+    static e_invexpr2: *const c_char;
+    static e_trailing_arg: *const c_char;
+    static e_endtry: *const c_char;
 }
 
 // VimVarIndex constants matching eval_defs.h VimVarIndex enum
@@ -233,6 +248,24 @@ const CSTP_FINISH: c_int = 32;
 const RP_MAKE: c_int = 0;
 const RP_RESUME: c_int = 1;
 const RP_DISCARD: c_int = 2;
+
+// CMD_ enum constants matching ex_cmds_enum.generated.h (verified by C static asserts)
+const CMD_ELSE: c_int = 140;
+const CMD_ELSEIF: c_int = 141;
+const CMD_ENDFOR: c_int = 145;
+const CMD_ENDTRY: c_int = 146;
+const CMD_ENDWHILE: c_int = 147;
+const CMD_FINALLY: c_int = 159;
+const CMD_FOR: c_int = 167;
+const CMD_CATCH: c_int = 54;
+const CMD_WHILE: c_int = 524;
+
+// CSL_ loop flag constants matching ex_eval_defs.h
+const CSL_HAD_LOOP: c_int = 1;
+const CSL_HAD_ENDLOOP: c_int = 2;
+#[allow(dead_code)]
+const CSL_HAD_CONT: c_int = 4;
+const CSL_HAD_FINA: c_int = 8;
 
 // ESTACK_NONE constant from runtime_defs.h
 const ESTACK_NONE: c_int = 0;
@@ -1506,6 +1539,229 @@ unsafe fn libc_strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int {
         }
     }
     0
+}
+
+/// Handle ":else" and ":elseif"
+#[export_name = "ex_else"]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn ex_else_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    let mut skip = check_skip(cstack);
+
+    if (*cstack).cs_idx < 0
+        || ((*cstack).cs_flags[(*cstack).cs_idx as usize] & (CSF_WHILE | CSF_FOR | CSF_TRY) != 0)
+    {
+        if (*eap).cmdidx == CMD_ELSE {
+            (*eap).errmsg = gettext(c"E581: :else without :if".as_ptr()).cast_mut();
+            return;
+        }
+        (*eap).errmsg = gettext(c"E582: :elseif without :if".as_ptr()).cast_mut();
+        skip = true;
+    } else if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ELSE != 0 {
+        if (*eap).cmdidx == CMD_ELSE {
+            (*eap).errmsg = gettext(c"E583: Multiple :else".as_ptr()).cast_mut();
+            return;
+        }
+        (*eap).errmsg = gettext(c"E584: :elseif after :else".as_ptr()).cast_mut();
+        skip = true;
+    }
+
+    // if skipping or the ":if" was TRUE, reset ACTIVE, otherwise set it
+    if skip || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE != 0 {
+        if (*eap).errmsg.is_null() {
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE;
+        }
+        skip = true; // don't evaluate an ":elseif"
+    } else {
+        (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_ACTIVE;
+    }
+
+    // When debugging or a breakpoint was encountered, display the debug prompt.
+    if !skip && dbg_check_skipped(eap) && got_int {
+        do_intthrow(cstack);
+        skip = true;
+    }
+
+    if (*eap).cmdidx == CMD_ELSEIF {
+        let mut result = false;
+        let mut error = false;
+        // When skipping we ignore most errors, but a missing expression is wrong.
+        // A double quote here is the start of a string, not a comment.
+        if skip && *(*eap).arg != b'"' as i8 && ends_excmd(c_int::from(*(*eap).arg)) != 0 {
+            semsg(e_invexpr2, (*eap).arg);
+        } else {
+            result = eval_to_bool((*eap).arg, &raw mut error, eap, skip, false);
+        }
+
+        if !skip && !error {
+            if result {
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_ACTIVE | CSF_TRUE;
+            } else {
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] = 0;
+            }
+        } else if (*eap).errmsg.is_null() {
+            // set TRUE, so this conditional will never get active
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE;
+        }
+    } else {
+        (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_ELSE;
+    }
+}
+
+/// Handle ":while" and ":for"
+#[export_name = "ex_while"]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn ex_while_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+
+    if (*cstack).cs_idx == CSTACK_LEN - 1 {
+        (*eap).errmsg = gettext(c"E585: :while/:for nesting too deep".as_ptr()).cast_mut();
+    } else {
+        // The loop flag is set when we have jumped back from the matching
+        // ":endwhile" or ":endfor". When not set, need to initialise this cstack entry.
+        if (*cstack).cs_lflags & CSL_HAD_LOOP == 0 {
+            (*cstack).cs_idx += 1;
+            (*cstack).cs_looplevel += 1;
+            (*cstack).cs_line[(*cstack).cs_idx as usize] = -1;
+        }
+        (*cstack).cs_flags[(*cstack).cs_idx as usize] = if (*eap).cmdidx == CMD_WHILE {
+            CSF_WHILE
+        } else {
+            CSF_FOR
+        };
+
+        let skip = check_skip(cstack);
+        let result;
+        let error;
+
+        if (*eap).cmdidx == CMD_WHILE {
+            // ":while bool-expr"
+            let mut err = false;
+            result = eval_to_bool((*eap).arg, &raw mut err, eap, skip, false);
+            error = err;
+        } else {
+            // ":for var in list-expr"
+            let mut evalarg = [0u8; EVALARG_SIZE];
+            fill_evalarg_from_eap(evalarg.as_mut_ptr().cast::<c_void>(), eap, skip);
+
+            let fi: *mut c_void;
+            let mut err = false;
+            if (*cstack).cs_lflags & CSL_HAD_LOOP != 0 {
+                // Jumping here from a ":continue" or ":endfor": use the
+                // previously evaluated list.
+                fi = (*cstack).cs_forinfo[(*cstack).cs_idx as usize];
+                // error stays false
+            } else {
+                // Evaluate the argument and get the info in a structure.
+                fi = eval_for_line(
+                    (*eap).arg,
+                    &raw mut err,
+                    eap,
+                    evalarg.as_mut_ptr().cast::<c_void>(),
+                );
+                (*cstack).cs_forinfo[(*cstack).cs_idx as usize] = fi;
+            }
+            error = err;
+
+            // use the element at the start of the list and advance
+            let res = if !error && !fi.is_null() && !skip {
+                next_for_item(fi, (*eap).arg)
+            } else {
+                false
+            };
+
+            if !res {
+                free_for_info(fi);
+                (*cstack).cs_forinfo[(*cstack).cs_idx as usize] = std::ptr::null_mut();
+            }
+            clear_evalarg(evalarg.as_mut_ptr().cast::<c_void>(), eap);
+            result = res;
+        }
+
+        // If this cstack entry was just initialised and is active, set the
+        // loop flag, so do_cmdline() will set the line number in cs_line[].
+        // If executing the command a second time, clear the loop flag.
+        if !skip && !error && result {
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_ACTIVE | CSF_TRUE;
+            (*cstack).cs_lflags ^= CSL_HAD_LOOP;
+        } else {
+            (*cstack).cs_lflags &= !CSL_HAD_LOOP;
+            // If the ":while" evaluates to FALSE or ":for" is past the end of
+            // the list, show the debug prompt at the ":endwhile"/":endfor" as
+            // if there was a ":break" in a ":while"/":for" evaluating to TRUE.
+            if !skip && !error {
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_TRUE;
+            }
+        }
+    }
+}
+
+/// Handle ":endwhile" and ":endfor"
+#[export_name = "ex_endwhile"]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn ex_endwhile_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+
+    let (err, csf) = if (*eap).cmdidx == CMD_ENDWHILE {
+        (e_while, CSF_WHILE)
+    } else {
+        (e_for, CSF_FOR)
+    };
+
+    if (*cstack).cs_looplevel <= 0 || (*cstack).cs_idx < 0 {
+        (*eap).errmsg = gettext(err).cast_mut();
+    } else {
+        let fl = (*cstack).cs_flags[(*cstack).cs_idx as usize];
+        if fl & csf == 0 {
+            // If we are in a ":while" or ":for" but used the wrong endloop command,
+            // do not rewind to the next enclosing ":for"/":while".
+            if fl & CSF_WHILE != 0 {
+                (*eap).errmsg = gettext(c"E732: Using :endfor with :while".as_ptr()).cast_mut();
+            } else if fl & CSF_FOR != 0 {
+                (*eap).errmsg = gettext(c"E733: Using :endwhile with :for".as_ptr()).cast_mut();
+            }
+        }
+        if fl & (CSF_WHILE | CSF_FOR) == 0 {
+            if fl & CSF_TRY == 0 {
+                (*eap).errmsg = gettext(e_endif).cast_mut();
+            } else if fl & CSF_FINALLY != 0 {
+                (*eap).errmsg = gettext(e_endtry).cast_mut();
+            }
+            // Try to find the matching ":while" and report what's missing.
+            let mut idx = (*cstack).cs_idx;
+            while idx > 0 {
+                let ifl = (*cstack).cs_flags[idx as usize];
+                if (ifl & CSF_TRY != 0) && (ifl & CSF_FINALLY == 0) {
+                    // Give up at a try conditional not in its finally clause.
+                    // Ignore the ":endwhile"/":endfor".
+                    (*eap).errmsg = gettext(err).cast_mut();
+                    return;
+                }
+                if ifl & csf != 0 {
+                    break;
+                }
+                idx -= 1;
+            }
+            // Cleanup and rewind all contained (and unclosed) conditionals.
+            cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, 0);
+            rewind_conditionals(
+                cstack,
+                idx,
+                CSF_TRY,
+                std::ptr::addr_of_mut!((*cstack).cs_trylevel),
+            );
+        } else if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE != 0
+            && (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ACTIVE == 0
+            && dbg_check_skipped(eap)
+        {
+            // When debugging or a breakpoint was encountered, display the debug prompt.
+            // Throw an interrupt exception if appropriate.
+            do_intthrow(cstack);
+        }
+
+        // Set loop flag, so do_cmdline() will jump back to the matching ":while" or ":for".
+        (*cstack).cs_lflags |= CSL_HAD_ENDLOOP;
+    }
 }
 
 #[cfg(test)]
