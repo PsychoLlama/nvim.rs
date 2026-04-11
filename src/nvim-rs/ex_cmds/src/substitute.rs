@@ -1177,8 +1177,11 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ma(val: c_int);
     fn nvim_curbuf_set_deleted_bytes2(val: c_int);
     fn nvim_coladvance(col: c_int);
+    #[link_name = "u_inssub"]
     fn nvim_u_inssub(lnum: c_int) -> c_int;
+    #[link_name = "u_savesub"]
     fn nvim_u_savesub(lnum: c_int) -> c_int;
+    #[link_name = "u_savedel"]
     fn nvim_u_savedel2(lnum: c_int, count: c_int) -> c_int;
     fn nvim_u_save_cursor() -> c_int;
     fn do_check_cursorbind();
