@@ -35,7 +35,10 @@ pub use list::{
 pub use parse::{rs_putdigraph, PutdigraphResult};
 pub use register::{rs_get_digraph_for_char, rs_registerdigraph};
 pub use validate::rs_check_digraph_chars_valid;
-pub use viml::{rs_digraph_get_viml, rs_digraph_set_viml, rs_parse_digraph_chars};
+pub use viml::{
+    rs_check_digraph_chars_valid_export, rs_digraph_get_viml, rs_digraph_set_viml,
+    rs_get_digraph_for_char_export, rs_parse_digraph_chars, rs_putdigraph_export,
+};
 
 /// Digraph entry structure matching C's `digr_T`.
 #[repr(C)]

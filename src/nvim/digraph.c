@@ -55,17 +55,10 @@ static const char e_digraph_setlist_argument_must_be_list_of_lists_with_two_item
 
 #include "digraph.c.generated.h"
 
-// Rust implementations
-extern int rs_check_digraph_chars_valid(int char1, int char2);
+// Rust implementations (functions exported directly from Rust)
+// check_digraph_chars_valid, get_digraph_for_char, putdigraph are now in Rust (viml.rs)
+extern bool check_digraph_chars_valid(int char1, int char2);  // for get_digraph_chars until Phase 2
 extern void rs_registerdigraph(int char1, int char2, int result);
-extern int rs_get_digraph_for_char(int val, uint8_t *out_char1, uint8_t *out_char2);
-typedef struct {
-  int error_code;  // 0 = success, 1 = char validation error, 2 = number expected
-  int char1;       // First character (for error messages)
-  int char2;       // Second character (for error messages)
-} PutdigraphResult;
-
-extern int rs_putdigraph(char **str, PutdigraphResult *result);
 
 // Callback type for digraph iteration
 typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, void *ctx);
@@ -145,86 +138,7 @@ void nvim_digraph_putcmdline(int c, int shift) { putcmdline((char)c, shift != 0)
 /// Add a character to the showcmd display (for Rust FFI).
 void nvim_digraph_add_to_showcmd(int c) { add_to_showcmd(c); }
 
-/// handle digraphs after typing a character
-///
-/// Find a digraph for "val".  If found return the string to display it.
-/// If not found return NULL.
-char *get_digraph_for_char(int val_arg)
-{
-  static char r[3];
-  uint8_t char1, char2;
-
-  if (rs_get_digraph_for_char(val_arg, &char1, &char2)) {
-    r[0] = (char)char1;
-    r[1] = (char)char2;
-    r[2] = NUL;
-    return r;
-  }
-  return NULL;
-}
-
-/// Get a digraph.  Used after typing CTRL-K on the command line or in normal
-/// mode.
-///
-/// Lookup the pair "char1", "char2" in the digraph tables.
-///
-/// @param char1
-/// @param char2
-/// @param meta_char
-///
-/// Get digraph.
-/// Allow for both char1-char2 and char2-char1
-///
-/// @param char1
-/// @param char2
-
-/// Check the characters are valid for a digraph.
-/// If they are valid, returns true; otherwise, give an error message and
-/// returns false.
-bool check_digraph_chars_valid(int char1, int char2)
-{
-  int result = rs_check_digraph_chars_valid(char1, char2);
-  switch (result) {
-  case 1: {
-    // char2 is 0 - digraph must be two characters
-    char msg[MB_MAXCHAR + 1];
-    msg[utf_char2bytes(char1, msg)] = NUL;
-    semsg(_(e_digraph_must_be_just_two_characters_str), msg);
-    return false;
-  }
-  case 2:
-    // ESC not allowed
-    emsg(_("E104: Escape not allowed in digraph"));
-    return false;
-  default:
-    // Valid (result == 3)
-    return true;
-  }
-}
-
-/// Add the digraphs in the argument to the digraph table.
-/// format: {c1}{c2} char {c1}{c2} char ...
-///
-/// @param str
-void putdigraph(char *str)
-{
-  PutdigraphResult result = { 0, 0, 0 };
-  if (rs_putdigraph(&str, &result) == 0) {
-    // Handle errors based on error_code
-    switch (result.error_code) {
-    case 1:
-      // Character validation error - use check_digraph_chars_valid for message
-      check_digraph_chars_valid(result.char1, result.char2);
-      break;
-    case 2:
-      // Number expected
-      emsg(_(e_number_exp));
-      break;
-    default:
-      break;
-    }
-  }
-}
+// get_digraph_for_char(), check_digraph_chars_valid(), putdigraph() moved to Rust (viml.rs)
 
 // digraph_header(), listdigraphs(), printdigraph() moved to Rust (list.rs)
 

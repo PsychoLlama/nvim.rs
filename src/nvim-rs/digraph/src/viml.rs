@@ -1,11 +1,8 @@
 //! Vimscript function helpers for digraphs.
 //!
 //! This module provides Rust implementations of the core logic used by
-//! Vimscript digraph functions (`digraph_get()`, `digraph_set()`, etc.).
-//!
-//! The actual Vimscript function entry points remain in C due to their
-//! heavy dependency on typval manipulation. This module provides
-//! the pure logic that those C wrappers call.
+//! Vimscript digraph functions (`digraph_get()`, `digraph_set()`, etc.),
+//! as well as direct replacements for thin C wrappers.
 
 use std::ffi::c_char;
 
@@ -24,6 +21,18 @@ extern "C" {
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
 }
+
+// External C functions for error messages
+extern "C" {
+    fn emsg(s: *const c_char) -> c_int;
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    fn nvim_gettext(s: *const c_char) -> *const c_char;
+    static e_number_exp: [u8; 0];
+}
+
+/// Error strings for digraph validation (matching C constants).
+const E_DIGRAPH_MUST_BE_TWO_CHARS: &[u8] = b"E1214: Digraph must be just two characters: %s\0";
+const E_ESCAPE_NOT_ALLOWED: &[u8] = b"E104: Escape not allowed in digraph\0";
 
 /// Get digraph result for two characters.
 ///
@@ -159,6 +168,103 @@ pub unsafe extern "C" fn rs_parse_digraph_chars(
 #[no_mangle]
 pub extern "C" fn rs_digraph_set_viml(char1: c_int, char2: c_int, result: c_int) {
     unsafe { rs_registerdigraph(char1, char2, result) };
+}
+
+// =============================================================================
+// Phase 1: Direct Rust exports replacing thin C wrappers
+// =============================================================================
+
+/// Static buffer for `get_digraph_for_char` return value.
+/// SAFETY: Neovim is single-threaded; this matches C's `static char r[3]`.
+static mut GET_DIGRAPH_FOR_CHAR_BUF: [u8; 3] = [0u8; 3];
+
+/// Find a digraph for a given character value and return its display string.
+///
+/// Direct replacement for C's `get_digraph_for_char`.
+/// Returns pointer to a static buffer `"{c1}{c2}\0"`, or NULL if not found.
+///
+/// # Safety
+/// Must only be called from Neovim's single main thread.
+#[export_name = "get_digraph_for_char"]
+pub unsafe extern "C" fn rs_get_digraph_for_char_export(val_arg: c_int) -> *mut c_char {
+    let mut char1: u8 = 0;
+    let mut char2: u8 = 0;
+
+    if crate::register::rs_get_digraph_for_char(val_arg, &raw mut char1, &raw mut char2) != 0 {
+        let ptr = std::ptr::addr_of_mut!(GET_DIGRAPH_FOR_CHAR_BUF);
+        (*ptr)[0] = char1;
+        (*ptr)[1] = char2;
+        (*ptr)[2] = 0;
+        (*ptr).as_mut_ptr().cast::<c_char>()
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+/// Check the characters are valid for a digraph.
+///
+/// Direct replacement for C's `check_digraph_chars_valid`.
+/// Displays an error message and returns false if invalid.
+///
+/// # Safety
+/// Must only be called from Neovim's single main thread.
+#[export_name = "check_digraph_chars_valid"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_check_digraph_chars_valid_export(char1: c_int, char2: c_int) -> bool {
+    let result = unsafe { rs_check_digraph_chars_valid(char1, char2) };
+    match result {
+        1 => {
+            // char2 is 0 -- digraph must be two characters
+            let mut msg = [0u8; 7];
+            let len = unsafe { utf_char2bytes(char1, msg.as_mut_ptr().cast::<c_char>()) };
+            #[allow(clippy::cast_sign_loss)]
+            if (len as usize) < msg.len() {
+                msg[len as usize] = 0;
+            }
+            let fmt =
+                unsafe { nvim_gettext(E_DIGRAPH_MUST_BE_TWO_CHARS.as_ptr().cast::<c_char>()) };
+            unsafe { semsg(fmt, msg.as_ptr()) };
+            false
+        }
+        2 => {
+            // ESC not allowed
+            let msg = unsafe { nvim_gettext(E_ESCAPE_NOT_ALLOWED.as_ptr().cast::<c_char>()) };
+            unsafe { emsg(msg) };
+            false
+        }
+        _ => true,
+    }
+}
+
+/// Add the digraphs in the argument to the digraph table.
+///
+/// Direct replacement for C's `putdigraph`.
+///
+/// # Safety
+/// `str` must be a valid C string pointer.
+#[export_name = "putdigraph"]
+pub unsafe extern "C" fn rs_putdigraph_export(str: *mut c_char) {
+    use crate::parse::{rs_putdigraph, PutdigraphResult};
+
+    let mut result = PutdigraphResult {
+        error_code: 0,
+        char1: 0,
+        char2: 0,
+    };
+    let mut str_ptr = str;
+
+    if unsafe { rs_putdigraph(&raw mut str_ptr, &raw mut result) } == 0 {
+        match result.error_code {
+            1 => unsafe {
+                rs_check_digraph_chars_valid_export(result.char1, result.char2);
+            },
+            2 => {
+                let msg = unsafe { nvim_gettext(e_number_exp.as_ptr().cast::<c_char>()) };
+                unsafe { emsg(msg) };
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
