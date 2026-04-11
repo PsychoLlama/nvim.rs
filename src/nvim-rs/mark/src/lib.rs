@@ -5891,3 +5891,186 @@ pub unsafe extern "C" fn exported_ex_changes(_eap: *mut c_void) {
         msg_puts(c"\n>".as_ptr());
     }
 }
+
+// =============================================================================
+// Phase 9: Iterator Functions (mark_jumplist_iter, mark_global_iter,
+//          next_buffer_mark, mark_buffer_iter)
+// =============================================================================
+
+/// Iterate over jumplist items.
+///
+/// Replaces the C `mark_jumplist_iter(iter, win, fm)` function.
+///
+/// # Safety
+/// `win` and `fm` must be valid pointers. `win->w_jumplist` must be accessible.
+#[export_name = "mark_jumplist_iter"]
+pub unsafe extern "C" fn exported_mark_jumplist_iter(
+    iter: *const c_void,
+    win: WinHandle,
+    fm: *mut XfmarkT,
+) -> *const c_void {
+    let jumplistlen = nvim_mark_win_get_jumplistlen(win);
+    if iter.is_null() && jumplistlen == 0 {
+        // Empty jumplist: return zeroed xfmark
+        *fm = XfmarkT {
+            fmark: FmarkT::default(),
+            fname: std::ptr::null_mut(),
+        };
+        return std::ptr::null();
+    }
+
+    let iter_mark: *const XfmarkT = if iter.is_null() {
+        nvim_mark_win_get_jumplist_entry(win, 0)
+    } else {
+        iter.cast()
+    };
+
+    *fm = *iter_mark;
+
+    // Check if this is the last entry
+    let last_entry = nvim_mark_win_get_jumplist_entry(win, jumplistlen - 1);
+    if iter_mark == last_entry {
+        return std::ptr::null();
+    }
+
+    iter_mark.add(1).cast()
+}
+
+/// Iterate over global marks (namedfm array).
+///
+/// Replaces the C `mark_global_iter(iter, name, fm)` function.
+///
+/// # Safety
+/// `name` and `fm` must be valid pointers.
+#[export_name = "mark_global_iter"]
+pub unsafe extern "C" fn exported_mark_global_iter(
+    iter: *const c_void,
+    name: *mut c_char,
+    fm: *mut XfmarkT,
+) -> *const c_void {
+    *name = 0; // NUL
+
+    let namedfm_base = &raw mut g_namedfm as *mut XfmarkT;
+    let namedfm_end = namedfm_base.add(NGLOBALMARKS_USIZE);
+
+    let mut iter_mark: *const XfmarkT = if iter.is_null() {
+        namedfm_base
+    } else {
+        iter.cast()
+    };
+
+    // Skip entries with lnum == 0
+    while iter_mark < namedfm_end && (*iter_mark).fmark.mark.lnum == 0 {
+        iter_mark = iter_mark.add(1);
+    }
+
+    if iter_mark >= namedfm_end || (*iter_mark).fmark.mark.lnum == 0 {
+        return std::ptr::null();
+    }
+
+    let iter_off = iter_mark.offset_from(namedfm_base) as usize;
+    *name = if iter_off < NMARKS as usize {
+        b'A' + iter_off as u8
+    } else {
+        b'0' + (iter_off - NMARKS as usize) as u8
+    } as c_char;
+
+    *fm = *iter_mark;
+
+    // Find next non-empty entry
+    let mut next = iter_mark.add(1);
+    while next < namedfm_end {
+        if (*next).fmark.mark.lnum != 0 {
+            return next.cast();
+        }
+        next = next.add(1);
+    }
+
+    std::ptr::null()
+}
+
+/// Get next buffer mark and advance the mark_name state.
+///
+/// Private helper for `mark_buffer_iter`, mirroring `next_buffer_mark` in C.
+///
+/// # Safety
+/// `buf` must be valid.
+unsafe fn next_buffer_mark_rs(buf: BufHandle, mark_name: &mut u8) -> *const FmarkT {
+    match *mark_name {
+        0 => {
+            // NUL -> '"'
+            *mark_name = b'"';
+            nvim_mark_buf_get_last_cursor(buf)
+        }
+        b'"' => {
+            *mark_name = b'^';
+            nvim_mark_buf_get_last_insert(buf)
+        }
+        b'^' => {
+            *mark_name = b'.';
+            nvim_mark_buf_get_last_change(buf)
+        }
+        b'.' => {
+            *mark_name = b'a';
+            nvim_mark_buf_get_namedm(buf, 0)
+        }
+        b'z' => std::ptr::null(),
+        c => {
+            *mark_name = c + 1;
+            nvim_mark_buf_get_namedm(buf, c_int::from(c + 1 - b'a'))
+        }
+    }
+}
+
+/// Iterate over buffer marks (b_last_cursor, b_last_insert, b_last_change, b_namedm[]).
+///
+/// Replaces the C `mark_buffer_iter(iter, buf, name, fm)` function.
+///
+/// # Safety
+/// `buf`, `name`, and `fm` must be valid pointers.
+#[export_name = "mark_buffer_iter"]
+pub unsafe extern "C" fn exported_mark_buffer_iter(
+    iter: *const c_void,
+    buf: BufHandle,
+    name: *mut c_char,
+    fm: *mut FmarkT,
+) -> *const c_void {
+    *name = 0; // NUL
+
+    // Determine mark_name from the iterator pointer by comparing to field addresses
+    let mut mark_name: u8 = if iter.is_null() {
+        0 // NUL: start from the beginning
+    } else {
+        let iter_fm: *const FmarkT = iter.cast();
+        let last_cursor = nvim_mark_buf_get_last_cursor(buf);
+        let last_insert = nvim_mark_buf_get_last_insert(buf);
+        let last_change = nvim_mark_buf_get_last_change(buf);
+        if iter_fm == last_cursor {
+            b'"'
+        } else if iter_fm == last_insert {
+            b'^'
+        } else if iter_fm == last_change {
+            b'.'
+        } else {
+            // Must be in b_namedm array - compute index
+            let namedm0 = nvim_mark_buf_get_namedm(buf, 0);
+            let idx = iter_fm.offset_from(namedm0) as u8;
+            b'a' + idx
+        }
+    };
+
+    // Advance to next mark
+    let mut iter_mark = next_buffer_mark_rs(buf, &mut mark_name);
+    // Skip marks with lnum == 0
+    while !iter_mark.is_null() && (*iter_mark).mark.lnum == 0 {
+        iter_mark = next_buffer_mark_rs(buf, &mut mark_name);
+    }
+
+    if iter_mark.is_null() {
+        return std::ptr::null();
+    }
+
+    *name = mark_name as c_char;
+    *fm = *iter_mark;
+    iter_mark.cast()
+}

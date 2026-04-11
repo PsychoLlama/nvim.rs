@@ -36,6 +36,11 @@ extern void ex_marks(exarg_T *eap);
 extern void ex_jumps(exarg_T *eap);
 extern void ex_changes(exarg_T *eap);
 
+// Phase 9: iterator functions now implemented in Rust
+extern const void *mark_jumplist_iter(const void *iter, const win_T *win, xfmark_T *fm);
+extern const void *mark_global_iter(const void *iter, char *name, xfmark_T *fm);
+extern const void *mark_buffer_iter(const void *iter, const buf_T *buf, char *name, fmark_T *fm);
+
 // Phase 1: Pass-through wrappers now implemented in Rust
 extern int setmark(int c);
 extern void setpcmark(void);
