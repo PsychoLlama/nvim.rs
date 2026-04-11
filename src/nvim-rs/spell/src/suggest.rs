@@ -6205,6 +6205,447 @@ pub unsafe extern "C" fn rs_spell_check_sps_export() -> c_int {
 }
 
 // =============================================================================
+// Phase 10: spell_suggest (z= command handler, migrated from C)
+// =============================================================================
+
+#[allow(clippy::too_many_lines)]
+extern "C" {
+    // curwin and cursor accessors
+    fn nvim_ss_get_w_p_spell() -> c_int;
+    fn nvim_ss_set_w_p_spell(v: c_int);
+    fn nvim_ss_get_w_p_rl() -> bool;
+    fn nvim_ss_get_b_p_spl() -> *const c_char;
+    fn nvim_ss_get_cursor_col() -> c_int;
+    fn nvim_ss_set_cursor_col(col: c_int);
+    fn nvim_ss_get_cursor_lnum() -> c_int;
+    fn nvim_ss_set_cursor_lnum(lnum: c_int);
+    fn nvim_ss_save_cursor(col_out: *mut c_int, lnum_out: *mut c_int);
+    fn nvim_ss_restore_cursor(col: c_int, lnum: c_int);
+    // Visual mode
+    fn nvim_ss_get_visual_active() -> bool;
+    fn nvim_ss_get_visual_col() -> c_int;
+    fn nvim_ss_get_visual_lnum() -> c_int;
+    // Message globals
+    fn nvim_ss_get_msg_scroll() -> c_int;
+    fn nvim_ss_set_msg_scroll(v: c_int);
+    fn nvim_ss_get_rows() -> c_int;
+    fn nvim_ss_set_lines_left(v: c_int);
+    fn nvim_ss_get_cmdmsg_rl() -> bool;
+    fn nvim_ss_set_cmdmsg_rl(v: bool);
+    fn nvim_ss_set_msg_row(v: c_int);
+    fn nvim_ss_set_msg_col(v: c_int);
+    fn nvim_ss_get_cmdline_row() -> c_int;
+    fn nvim_ss_get_mouse_row() -> c_int;
+    // IObuff
+    fn nvim_ss_get_iobuff() -> *mut c_char;
+    fn nvim_ss_get_iosize() -> c_int;
+    // p_verbose
+    fn nvim_ss_get_p_verbose() -> libc::c_long;
+    // sps_flags/sps_limit
+    fn nvim_ss_get_sps_flags() -> c_int;
+    fn nvim_ss_get_sps_limit() -> c_int;
+    // repl_from / repl_to management
+    fn nvim_ss_clear_repl();
+    fn nvim_ss_set_repl_from_nsave(s: *const c_char, len: usize);
+    fn nvim_ss_set_repl_to_strdup(s: *const c_char);
+    // Gettext wrapper
+    fn nvim_ss_gettext(msg: *const c_char) -> *const c_char;
+    // Macro wrappers
+    fn nvim_ss_mb_ptr_back(line: *const c_char, p: *mut *mut c_char);
+    fn nvim_ss_mb_ptr_adv(p: *mut *mut c_char);
+    // Reset spell_suggest_timeout to 5000
+    fn nvim_ss_reset_timeout();
+    // e_no_spell error string
+    fn nvim_ss_e_no_spell() -> *const c_char;
+    // Other C functions
+    fn parse_spelllang(win: *mut std::ffi::c_void) -> *mut c_char;
+    fn emsg(s: *const c_char) -> bool;
+    fn vim_beep(flag: c_int);
+    fn end_visual_mode();
+    fn beep_flush();
+    fn get_cursor_line_ptr() -> *const c_char;
+    fn get_cursor_line_len() -> c_int;
+    #[link_name = "spell_iswordp_nmw"]
+    fn ss_spell_iswordp_nmw(p: *const c_char, wp: *const std::ffi::c_void) -> bool;
+    fn check_need_cap(wp: *mut std::ffi::c_void, lnum: c_int, col: c_int) -> bool;
+    #[link_name = "xstrnsave"]
+    fn ss_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn msg(s: *const c_char, attr: c_int) -> bool;
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn msg_start();
+    fn msg_puts(s: *const c_char);
+    fn msg_clr_eos();
+    fn msg_putchar(c: c_int);
+    fn msg_advance(col: c_int);
+    fn vim_snprintf(dst: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    fn rl_mirror_ascii(str_: *mut c_char, end: *mut c_char);
+    fn ui_has(ext: c_int) -> bool;
+    fn prompt_for_input(
+        prompt: *mut c_char,
+        hl_id: c_int,
+        one_key: bool,
+        mouse_used: *mut bool,
+    ) -> c_int;
+    fn u_save_cursor() -> c_int;
+    fn ml_replace(lnum: c_int, line: *mut c_char, copy: bool) -> c_int;
+    fn inserted_bytes(lnum: c_int, col: c_int, old_col: c_int, new_col: c_int);
+    fn ResetRedobuff();
+    fn AppendToRedobuff(s: *const c_char);
+    fn AppendToRedobuffLit(s: *const c_char, len: c_int);
+    fn AppendCharToRedobuff(c: c_int);
+    fn spell_move_to(
+        wp: *mut std::ffi::c_void,
+        dir: c_int,
+        what: c_int,
+        allwords: bool,
+        attrp: *mut c_int,
+    ) -> usize;
+    #[link_name = "xmalloc"]
+    fn ss_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    #[link_name = "xfree"]
+    fn ss_xfree(ptr: *mut std::ffi::c_void);
+    #[link_name = "xmemcpyz"]
+    fn ss_xmemcpyz(dst: *mut std::ffi::c_void, src: *const std::ffi::c_void, len: usize);
+    #[link_name = "xstrlcpy"]
+    fn ss_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
+}
+
+/// kUIMessages enum value (from ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+/// kOptBoFlagSpell (from option_vars.generated.h)
+const K_OPT_BO_FLAG_SPELL: c_int = 0x2_0000;
+/// FORWARD direction (from vim_defs.h)
+const SPELL_SUGGEST_FORWARD: c_int = 1;
+/// SMT_ALL: move to any misspelled word
+const SPELL_SUGGEST_SMT_ALL: c_int = 0;
+
+/// Rust implementation of C `spell_suggest` (z= command handler).
+///
+/// Finds the bad word under or after the cursor, shows a list of suggestions,
+/// and applies the chosen replacement.
+///
+/// # Safety
+/// Uses many C globals. Must only be called from the main Neovim thread.
+#[unsafe(export_name = "spell_suggest")]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_spell_suggest(count: c_int) {
+    const OK: c_int = 0;
+    const ESC: c_int = 0x1b;
+    const NUL: u8 = 0;
+
+    let mut prev_col: c_int = 0;
+    let mut prev_lnum: c_int = 0;
+    nvim_ss_save_cursor(&raw mut prev_col, &raw mut prev_lnum);
+
+    let mut badlen: c_int = 0;
+    let msg_scroll_save = nvim_ss_get_msg_scroll();
+    let wo_spell_save = nvim_ss_get_w_p_spell();
+
+    // Ensure spell checking is enabled
+    if nvim_ss_get_w_p_spell() == 0 {
+        parse_spelllang(stp_sal_curwin);
+        nvim_ss_set_w_p_spell(1);
+    }
+
+    // Check that there is a spell language
+    if *(nvim_ss_get_b_p_spl() as *const u8) == NUL {
+        emsg(nvim_ss_e_no_spell());
+        return;
+    }
+
+    if nvim_ss_get_visual_active() {
+        // Use the Visually selected text as the bad word.
+        // Reject multi-line selection.
+        if nvim_ss_get_cursor_lnum() != nvim_ss_get_visual_lnum() {
+            vim_beep(K_OPT_BO_FLAG_SPELL);
+            return;
+        }
+        badlen = nvim_ss_get_cursor_col() - nvim_ss_get_visual_col();
+        if badlen < 0 {
+            badlen = -badlen;
+        } else {
+            nvim_ss_set_cursor_col(nvim_ss_get_visual_col());
+        }
+        badlen += 1;
+        end_visual_mode();
+        // Don't include the NUL at end of line
+        let line_len = get_cursor_line_len();
+        let cursor_col = nvim_ss_get_cursor_col();
+        if badlen > line_len - cursor_col {
+            badlen = line_len - cursor_col;
+        }
+    } else if spell_move_to(
+        stp_sal_curwin,
+        SPELL_SUGGEST_FORWARD,
+        SPELL_SUGGEST_SMT_ALL,
+        true,
+        std::ptr::null_mut(),
+    ) == 0
+        || nvim_ss_get_cursor_col() > prev_col
+    {
+        // No bad word or it starts after the cursor: use the word under cursor.
+        nvim_ss_set_cursor_col(prev_col);
+        nvim_ss_set_cursor_lnum(prev_lnum);
+        let line = get_cursor_line_ptr().cast_mut();
+        let mut p = line.add(nvim_ss_get_cursor_col() as usize);
+
+        // Backup to before start of word
+        while p > line && ss_spell_iswordp_nmw(p, stp_sal_curwin) {
+            nvim_ss_mb_ptr_back(line, &raw mut p);
+        }
+        // Forward to start of word
+        while *(p as *const u8) != NUL && !ss_spell_iswordp_nmw(p, stp_sal_curwin) {
+            nvim_ss_mb_ptr_adv(&raw mut p);
+        }
+
+        if !ss_spell_iswordp_nmw(p, stp_sal_curwin) {
+            beep_flush();
+            return;
+        }
+        nvim_ss_set_cursor_col((p.offset_from(line)) as c_int);
+    }
+
+    // Figure out if the word should be capitalised
+    let need_cap = check_need_cap(
+        stp_sal_curwin,
+        nvim_ss_get_cursor_lnum(),
+        nvim_ss_get_cursor_col(),
+    );
+
+    // Make a copy of current line (autocommands may free it)
+    let cursor_col = nvim_ss_get_cursor_col();
+    let line = ss_xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as usize);
+    nvim_ss_reset_timeout();
+
+    // Get the list of suggestions (limit to 'lines' - 2 or sps_limit)
+    let sps_limit = nvim_ss_get_sps_limit();
+    let rows = nvim_ss_get_rows();
+    let limit = if sps_limit < rows - 2 {
+        sps_limit
+    } else {
+        rows - 2
+    };
+
+    let su = nvim_suginfo_alloc();
+    rs_spell_find_suggest(
+        line.add(cursor_col as usize),
+        badlen,
+        su,
+        limit,
+        true,
+        need_cap,
+        true,
+    );
+
+    let mut selected = count;
+    msg_ext_set_kind(c"confirm".as_ptr());
+
+    let su_ga = nvim_suginfo_get_ga(su);
+    let su_ga_len = (*su_ga).ga_len;
+
+    if su_ga_len == 0 {
+        msg(nvim_ss_gettext(c"Sorry, no suggestions".as_ptr()), 0);
+    } else if count > 0 {
+        if count > su_ga_len {
+            smsg(
+                0,
+                c"Sorry, only %\xb2\x64 suggestions".as_ptr(), // PRId64 format
+                i64::from(su_ga_len),
+            );
+        }
+    } else {
+        // Display suggestions
+        nvim_ss_set_cmdmsg_rl(nvim_ss_get_w_p_rl());
+
+        msg_start();
+        nvim_ss_set_msg_row(rows - 1);
+        nvim_ss_set_lines_left(rows);
+
+        // Format and display the header
+        let su_badlen = nvim_suginfo_get_badlen(su);
+        let su_badptr = nvim_suginfo_get_badptr(su);
+        let iobuff = nvim_ss_get_iobuff();
+        let iosize = nvim_ss_get_iosize() as usize;
+        let fmt_en = c"Change \"%.*s\" to:".as_ptr();
+        let fmt_rl = c":ot \"%.*s\" egnahC".as_ptr();
+        let fmt = if nvim_ss_get_cmdmsg_rl() && *(fmt_en as *const u8) == b'C' {
+            fmt_rl
+        } else {
+            fmt_en
+        };
+        vim_snprintf(iobuff, iosize, fmt, su_badlen, su_badptr);
+        msg_puts(iobuff);
+        msg_clr_eos();
+        msg_putchar(c_int::from(b'\n'));
+
+        nvim_ss_set_msg_scroll(1);
+
+        // List all suggestions
+        let su_ga_data = (*su_ga).ga_data.cast::<CSuggestT>();
+        let mut wcopy = [0i8; MAXWLEN + 2];
+
+        for i in 0..su_ga_len as usize {
+            let stp = su_ga_data.add(i);
+            let st_wordlen = (*stp).st_wordlen as usize;
+            let st_orglen = (*stp).st_orglen as usize;
+
+            // The suggested word may replace only part of the bad word;
+            // add the not-replaced part if it doesn't make the word too long.
+            ss_xstrlcpy(wcopy.as_mut_ptr(), (*stp).st_word, MAXWLEN + 1);
+            let el = su_badlen as usize - st_orglen;
+            if el > 0 && st_wordlen + el <= MAXWLEN {
+                ss_xmemcpyz(
+                    wcopy
+                        .as_mut_ptr()
+                        .add(st_wordlen)
+                        .cast::<std::ffi::c_void>(),
+                    su_badptr.add(st_orglen).cast::<std::ffi::c_void>(),
+                    el,
+                );
+            }
+
+            vim_snprintf(iobuff, iosize, c"%2d".as_ptr(), i + 1);
+            if nvim_ss_get_cmdmsg_rl() {
+                rl_mirror_ascii(iobuff, std::ptr::null_mut());
+            }
+            msg_puts(iobuff);
+
+            vim_snprintf(iobuff, iosize, c" \"%s\"".as_ptr(), wcopy.as_ptr());
+            msg_puts(iobuff);
+
+            // If word replaces more than su_badlen, show what it replaces
+            if (su_badlen as usize) < st_orglen {
+                vim_snprintf(
+                    iobuff,
+                    iosize,
+                    nvim_ss_gettext(c" < \"%.*s\"".as_ptr()),
+                    st_orglen,
+                    su_badptr,
+                );
+                msg_puts(iobuff);
+            }
+
+            if nvim_ss_get_p_verbose() > 0 {
+                // Add the score
+                let sps_flags = nvim_ss_get_sps_flags();
+                if sps_flags & (SPS_DOUBLE | SPS_BEST) != 0 {
+                    vim_snprintf(
+                        iobuff,
+                        iosize,
+                        c" (%s%d - %d)".as_ptr(),
+                        if (*stp).st_salscore {
+                            c"s ".as_ptr()
+                        } else {
+                            c"".as_ptr()
+                        },
+                        (*stp).st_score,
+                        (*stp).st_altscore,
+                    );
+                } else {
+                    vim_snprintf(iobuff, iosize, c" (%d)".as_ptr(), (*stp).st_score);
+                }
+                if nvim_ss_get_cmdmsg_rl() {
+                    rl_mirror_ascii(iobuff.add(1), std::ptr::null_mut());
+                }
+                msg_advance(30);
+                msg_puts(iobuff);
+            }
+            if !ui_has(K_UI_MESSAGES) || i < su_ga_len as usize - 1 {
+                msg_putchar(c_int::from(b'\n'));
+            }
+        }
+
+        nvim_ss_set_cmdmsg_rl(false);
+        nvim_ss_set_msg_col(0);
+
+        // Ask for choice
+        let mut mouse_used = false;
+        selected = prompt_for_input(std::ptr::null_mut(), 0, false, &raw mut mouse_used);
+        if mouse_used {
+            selected = su_ga_len + 1 - (nvim_ss_get_cmdline_row() - nvim_ss_get_mouse_row());
+        }
+
+        nvim_ss_set_lines_left(rows);
+        nvim_ss_set_msg_scroll(msg_scroll_save);
+    }
+
+    let su_ga = nvim_suginfo_get_ga(su);
+    let su_ga_len = (*su_ga).ga_len;
+
+    if selected > 0 && selected <= su_ga_len && u_save_cursor() == OK {
+        // Save the from and to text for :spellrepall
+        nvim_ss_clear_repl();
+
+        let su_badlen = nvim_suginfo_get_badlen(su);
+        let su_badptr = nvim_suginfo_get_badptr(su);
+        let su_ga_data = (*su_ga).ga_data.cast::<CSuggestT>();
+        let stp = su_ga_data.add((selected - 1) as usize);
+        let st_wordlen = (*stp).st_wordlen as usize;
+        let st_orglen = (*stp).st_orglen as usize;
+
+        if su_badlen as usize > st_orglen {
+            // Replacing less than su_badlen; append remainder to repl_to
+            nvim_ss_set_repl_from_nsave(su_badptr, su_badlen as usize);
+            let iobuff = nvim_ss_get_iobuff();
+            let iosize = nvim_ss_get_iosize() as usize;
+            vim_snprintf(
+                iobuff,
+                iosize,
+                c"%s%.*s".as_ptr(),
+                (*stp).st_word,
+                su_badlen as usize - st_orglen,
+                su_badptr.add(st_orglen),
+            );
+            nvim_ss_set_repl_to_strdup(iobuff);
+        } else {
+            // Replacing su_badlen or more; use the whole word
+            nvim_ss_set_repl_from_nsave(su_badptr, st_orglen);
+            nvim_ss_set_repl_to_strdup((*stp).st_word);
+        }
+
+        // Replace the word in the buffer
+        let line_len = sl_strlen(line);
+        let p = ss_xmalloc(line_len - st_orglen + st_wordlen + 1).cast::<c_char>();
+        let c_pos = su_badptr.offset_from(line) as usize;
+        std::ptr::copy_nonoverlapping(line, p, c_pos);
+        std::ptr::copy_nonoverlapping((*stp).st_word, p.add(c_pos), st_wordlen + 1);
+        // Append suffix (su_badptr + st_orglen .. end)
+        let suffix_src = su_badptr.add(st_orglen);
+        let suffix_len = sl_strlen(suffix_src);
+        std::ptr::copy_nonoverlapping(suffix_src, p.add(c_pos + st_wordlen), suffix_len + 1);
+
+        // For redo we use a change-word command
+        ResetRedobuff();
+        AppendToRedobuff(c"ciw".as_ptr());
+        AppendToRedobuffLit(
+            p.add(c_pos),
+            (st_wordlen + su_badlen as usize - st_orglen) as c_int,
+        );
+        AppendCharToRedobuff(ESC);
+
+        // "p" may be freed here by ml_replace
+        let cursor_lnum = nvim_ss_get_cursor_lnum();
+        ml_replace(cursor_lnum, p, false);
+        nvim_ss_set_cursor_col(c_pos as c_int);
+
+        inserted_bytes(
+            cursor_lnum,
+            c_pos as c_int,
+            st_orglen as c_int,
+            st_wordlen as c_int,
+        );
+    } else {
+        nvim_ss_restore_cursor(prev_col, prev_lnum);
+    }
+
+    rs_spell_find_cleanup(su);
+    nvim_suginfo_free(su);
+    ss_xfree(line.cast::<std::ffi::c_void>());
+    nvim_ss_set_w_p_spell(wo_spell_save);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
