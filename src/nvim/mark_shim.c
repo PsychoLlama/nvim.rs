@@ -110,7 +110,6 @@ int nvim_mark_findpar(int *inclusive, int dir, int count, int what, int do_sente
 void nvim_mark_win_set_cursor(win_T *win, pos_T pos) { win->w_cursor = pos; }
 void nvim_fmarks_check_names(buf_T *buf) { fmarks_check_names(buf); }
 
-// Phase 7: mark_move_to accessors
-bool nvim_mark_get_got_int(void) { return got_int; }
+// Phase 7/8: display accessors
 char *nvim_mark_get_iobuff(void) { return IObuff; }
 int nvim_mark_get_iosize(void) { return IOSIZE; }

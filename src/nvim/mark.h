@@ -30,6 +30,12 @@ extern int rs_pos_in_range(pos_T pos, int line_count);
 // Functions implemented in Rust (exported under their C names via #[export_name])
 extern void fmarks_check_names(buf_T *buf);
 
+// Phase 7/8: mark_move_to and display commands now implemented in Rust
+extern MarkMoveRes mark_move_to(fmark_T *fm, MarkMove flags);
+extern void ex_marks(exarg_T *eap);
+extern void ex_jumps(exarg_T *eap);
+extern void ex_changes(exarg_T *eap);
+
 // Phase 1: Pass-through wrappers now implemented in Rust
 extern int setmark(int c);
 extern void setpcmark(void);

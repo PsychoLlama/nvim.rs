@@ -41,6 +41,9 @@ extern "C" {
 
     // Screen dimensions
     static mut Columns: c_int;
+
+    // Phase 8: Interrupt flag (for display commands)
+    static mut got_int: bool;
 }
 
 // os_time() Timestamp function (Phase 2)
@@ -240,8 +243,9 @@ extern "C" {
     fn nvim_exarg_get_arg(eap: *mut c_void) -> *const c_char;
     fn nvim_exarg_get_forceit(eap: *mut c_void) -> c_int;
 
-    // Phase 7: mark_move_to accessor (from mark_shim.c)
-    // (iobuff and iosize added in Phase 2)
+    // Phase 7/8: display accessors (from mark_shim.c)
+    fn nvim_mark_get_iobuff() -> *mut c_char;
+    fn nvim_mark_get_iosize() -> c_int;
 }
 
 // Phase 7: mark_move_to FFI functions (cursor, buffer switching)
@@ -250,6 +254,21 @@ extern "C" {
     fn check_cursor(win: WinHandle);
     fn beginline(flags: c_int);
     fn emsg(s: *const c_char) -> c_int;
+}
+
+// Phase 8: display command FFI (ex_marks, ex_jumps, ex_changes)
+extern "C" {
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn msg_puts_title(s: *const c_char);
+    fn msg_puts(s: *const c_char);
+    fn msg_putchar(c: c_int);
+    fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    fn msg(s: *const c_char, hl_id: c_int) -> c_int;
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    fn message_filtered(msg: *const c_char) -> bool;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn os_breakcheck();
+    fn vim_snprintf(dst: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 /// Number of possible named marks (a-z)
@@ -5447,4 +5466,428 @@ pub unsafe extern "C" fn rs_mark_line(mp: *mut PosT, lead_len: c_int) -> *mut c_
     }
     *p = 0;
     s
+}
+
+// =============================================================================
+// Phase 8: Display Commands (ex_marks, show_one_mark, ex_jumps, ex_changes)
+// =============================================================================
+
+// HLF_D = 5 (Directory highlight group, 5th in hl_attr_table)
+const HLF_D: c_int = 5;
+
+// gettext for translated strings
+extern "C" {
+    fn gettext(msgid: *const c_char) -> *const c_char;
+}
+
+/// Show one mark entry in the `:marks` listing.
+///
+/// When `c == -1`, finishes the listing (prints "No marks" if nothing shown).
+/// This replaces the C `show_one_mark` static function.
+///
+/// # Safety
+/// All pointers must be valid. `g_curbuf` must be valid.
+unsafe fn show_one_mark(
+    c: c_int,
+    arg: *const c_char,
+    p: *const PosT,
+    name_arg: *const c_char,
+    current: bool,
+    did_title: &mut bool,
+) {
+    if c == -1 {
+        // finish up
+        if !*did_title {
+            if arg.is_null() {
+                msg(gettext(c"No marks set".as_ptr()), 0);
+            } else {
+                semsg(gettext(c"E283: No marks matching \"%s\"".as_ptr()), arg);
+            }
+        }
+        return;
+    }
+
+    if got_int {
+        return;
+    }
+    if !arg.is_null() && vim_strchr(arg, c).is_null() {
+        return;
+    }
+    if (*p).lnum == 0 {
+        return;
+    }
+
+    let mut mustfree = false;
+    let name: *const c_char = if name_arg.is_null() && current {
+        let generated = rs_mark_line(p.cast_mut(), 15);
+        mustfree = true;
+        generated
+    } else {
+        name_arg
+    };
+
+    if message_filtered(name) {
+        if mustfree {
+            xfree(name.cast_mut().cast());
+        }
+        return;
+    }
+
+    if !*did_title {
+        // Highlight title
+        msg_puts_title(gettext(c"\nmark line  col file/text".as_ptr()));
+        *did_title = true;
+    }
+    msg_putchar(b'\n' as c_int);
+    if !got_int {
+        let iobuff = nvim_mark_get_iobuff();
+        let iosize = nvim_mark_get_iosize() as usize;
+        vim_snprintf(
+            iobuff,
+            iosize,
+            c" %c %6d %4d ".as_ptr(),
+            c,
+            (*p).lnum,
+            (*p).col,
+        );
+        msg_outtrans(iobuff, 0, false);
+        if !name.is_null() {
+            let hl_id = if current { HLF_D } else { 0 };
+            msg_outtrans(name, hl_id, false);
+        }
+    }
+    if mustfree {
+        xfree(name.cast_mut().cast());
+    }
+}
+
+/// Print all marks (`:marks` command).
+/// Replaces the C `ex_marks(eap)` function.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer. All globals must be valid.
+#[export_name = "ex_marks"]
+pub unsafe extern "C" fn exported_ex_marks(eap: *mut c_void) {
+    let arg_raw = nvim_exarg_get_arg(eap);
+    let arg: *const c_char = if !arg_raw.is_null() && *arg_raw == 0 {
+        std::ptr::null()
+    } else {
+        arg_raw
+    };
+
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+    let mut did_title = false;
+
+    // pcmark: '\''
+    let pcmark = nvim_mark_win_get_pcmark(g_curwin);
+    show_one_mark(
+        b'\'' as c_int,
+        arg,
+        &raw const pcmark,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    // Named local marks a-z
+    for i in 0..NMARKS {
+        let fm_ptr = nvim_mark_buf_get_namedm(g_curbuf, i);
+        show_one_mark(
+            i + b'a' as c_int,
+            arg,
+            &raw const (*fm_ptr).mark,
+            std::ptr::null(),
+            true,
+            &mut did_title,
+        );
+    }
+
+    // Named global marks A-Z and digit marks 0-9
+    for i in 0..NGLOBALMARKS_USIZE as c_int {
+        let xfm = &raw mut g_namedfm[i as usize];
+        if (*xfm).fmark.fnum != 0 {
+            let name = rs_fm_getname((&raw mut (*xfm).fmark).cast(), 15, g_curbuf);
+            if !name.is_null() {
+                let mark_char = if i >= NMARKS {
+                    i - NMARKS + b'0' as c_int
+                } else {
+                    i + b'A' as c_int
+                };
+                let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+                show_one_mark(
+                    mark_char,
+                    arg,
+                    &raw const (*xfm).fmark.mark,
+                    name,
+                    (*xfm).fmark.fnum == curbuf_fnum,
+                    &mut did_title,
+                );
+                xfree(name.cast());
+            }
+        } else if !(*xfm).fname.is_null() {
+            let mark_char = if i >= NMARKS {
+                i - NMARKS + b'0' as c_int
+            } else {
+                i + b'A' as c_int
+            };
+            show_one_mark(
+                mark_char,
+                arg,
+                &raw const (*xfm).fmark.mark,
+                (*xfm).fname,
+                false,
+                &mut did_title,
+            );
+        }
+    }
+
+    // Special buffer marks
+    let last_cursor = nvim_mark_buf_get_last_cursor(g_curbuf);
+    show_one_mark(
+        b'"' as c_int,
+        arg,
+        &raw const (*last_cursor).mark,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    let op_start = nvim_mark_buf_get_op_start(g_curbuf);
+    show_one_mark(
+        b'[' as c_int,
+        arg,
+        op_start,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    let op_end = nvim_mark_buf_get_op_end(g_curbuf);
+    show_one_mark(
+        b']' as c_int,
+        arg,
+        op_end,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    let last_insert = nvim_mark_buf_get_last_insert(g_curbuf);
+    show_one_mark(
+        b'^' as c_int,
+        arg,
+        &raw const (*last_insert).mark,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    let last_change = nvim_mark_buf_get_last_change(g_curbuf);
+    show_one_mark(
+        b'.' as c_int,
+        arg,
+        &raw const (*last_change).mark,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    // Prompt mark (only for prompt buffers)
+    if nvim_mark_bt_prompt(g_curbuf) != 0 {
+        let prompt_start = nvim_mark_buf_get_prompt_start(g_curbuf);
+        show_one_mark(
+            b':' as c_int,
+            arg,
+            &raw const (*prompt_start).mark,
+            std::ptr::null(),
+            true,
+            &mut did_title,
+        );
+    }
+
+    // Visual marks: show where <, > will jump to
+    let startp = nvim_mark_buf_get_visual_start(g_curbuf);
+    let endp = nvim_mark_buf_get_visual_end(g_curbuf);
+    let (lt_res, lt_or_end_zero) = {
+        // lt(*startp, *endp) || endp->lnum == 0
+        let lt = rs_lt(startp, endp) != 0;
+        let end_zero = endp.lnum == 0;
+        (lt, lt || end_zero)
+    };
+    let start_nonzero = startp.lnum != 0;
+    let (less_mark_pos, greater_mark_pos) = if lt_or_end_zero && start_nonzero {
+        (&raw const startp, &raw const endp)
+    } else {
+        (&raw const endp, &raw const startp)
+    };
+
+    show_one_mark(
+        b'<' as c_int,
+        arg,
+        less_mark_pos,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+    show_one_mark(
+        b'>' as c_int,
+        arg,
+        greater_mark_pos,
+        std::ptr::null(),
+        true,
+        &mut did_title,
+    );
+
+    // Finish (prints "No marks" if did_title is false)
+    show_one_mark(
+        -1,
+        arg,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        &mut did_title,
+    );
+    let _ = lt_res; // suppress unused warning
+}
+
+/// Print the jump list (`:jumps` command).
+/// Replaces the C `ex_jumps(eap)` function.
+///
+/// # Safety
+/// `g_curwin`, `g_curbuf` must be valid.
+#[export_name = "ex_jumps"]
+pub unsafe extern "C" fn exported_ex_jumps(_eap: *mut c_void) {
+    rs_cleanup_jumplist(g_curwin, 1);
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+    msg_puts_title(gettext(c"\n jump line  col file/text".as_ptr()));
+
+    let jumplistlen = nvim_mark_win_get_jumplistlen(g_curwin);
+    let jumplistidx = nvim_mark_win_get_jumplistidx(g_curwin);
+    let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+
+    for i in 0..jumplistlen {
+        if got_int {
+            break;
+        }
+        let entry = nvim_mark_win_get_jumplist_entry(g_curwin, i);
+        let lnum = (*entry).fmark.mark.lnum;
+        if lnum == 0 {
+            continue;
+        }
+
+        let name = rs_fm_getname(&raw mut (*entry).fmark, 16, g_curbuf);
+
+        // Make sure to output current indicator even on wiped-out buffer
+        let name = if name.is_null() && i == jumplistidx {
+            xstrdup(c"-invalid-".as_ptr())
+        } else {
+            name
+        };
+
+        // apply :filter or file name not available
+        if name.is_null() || message_filtered(name) {
+            xfree(name.cast());
+            continue;
+        }
+
+        msg_putchar(b'\n' as c_int);
+        if got_int {
+            xfree(name.cast());
+            break;
+        }
+
+        let dist = if i > jumplistidx {
+            i - jumplistidx
+        } else {
+            jumplistidx - i
+        };
+        let indicator = if i == jumplistidx { b'>' } else { b' ' };
+        let col = (*entry).fmark.mark.col;
+
+        let iobuff = nvim_mark_get_iobuff();
+        let iosize = nvim_mark_get_iosize() as usize;
+        vim_snprintf(
+            iobuff,
+            iosize,
+            c"%c %2d %5d %4d ".as_ptr(),
+            indicator as c_int,
+            dist,
+            lnum,
+            col,
+        );
+        msg_outtrans(iobuff, 0, false);
+
+        let hl_id = if (*entry).fmark.fnum == curbuf_fnum {
+            HLF_D
+        } else {
+            0
+        };
+        msg_outtrans(name, hl_id, false);
+        xfree(name.cast());
+        os_breakcheck();
+    }
+
+    if jumplistidx == jumplistlen {
+        msg_puts(c"\n>".as_ptr());
+    }
+}
+
+/// Print the change list (`:changes` command).
+/// Replaces the C `ex_changes(eap)` function.
+///
+/// # Safety
+/// `g_curwin`, `g_curbuf` must be valid.
+#[export_name = "ex_changes"]
+pub unsafe extern "C" fn exported_ex_changes(_eap: *mut c_void) {
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+    msg_puts_title(gettext(c"\nchange line  col text".as_ptr()));
+
+    let changelistlen = nvim_mark_buf_get_changelistlen(g_curbuf);
+    let changelistidx = nvim_mark_win_get_changelistidx(g_curwin);
+
+    for i in 0..changelistlen {
+        if got_int {
+            break;
+        }
+        let entry = nvim_mark_buf_get_changelist(g_curbuf, i);
+        let lnum = (*entry).mark.lnum;
+        if lnum == 0 {
+            continue;
+        }
+
+        msg_putchar(b'\n' as c_int);
+        if got_int {
+            break;
+        }
+
+        let dist = if i > changelistidx {
+            i - changelistidx
+        } else {
+            changelistidx - i
+        };
+        let indicator = if i == changelistidx { b'>' } else { b' ' };
+        let col = (*entry).mark.col;
+
+        let iobuff = nvim_mark_get_iobuff();
+        let iosize = nvim_mark_get_iosize() as usize;
+        vim_snprintf(
+            iobuff,
+            iosize,
+            c"%c %3d %5d %4d ".as_ptr(),
+            indicator as c_int,
+            dist,
+            lnum,
+            col,
+        );
+        msg_outtrans(iobuff, 0, false);
+
+        let name = rs_mark_line(&raw mut (*entry).mark, 17);
+        msg_outtrans(name, HLF_D, false);
+        xfree(name.cast());
+        os_breakcheck();
+    }
+
+    if changelistidx == changelistlen {
+        msg_puts(c"\n>".as_ptr());
+    }
 }
