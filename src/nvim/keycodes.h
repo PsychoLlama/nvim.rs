@@ -519,5 +519,3 @@ int get_mouse_button(int code, bool *is_click, bool *is_drag);
 char *add_char2buf(int c, char *s);
 char *vim_strsave_escape_ks(char *p);
 void vim_unescape_ks(char *p);
-
-#include "keycodes.h.generated.h"
