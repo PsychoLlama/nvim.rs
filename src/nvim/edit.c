@@ -374,80 +374,11 @@ bool nvim_edit_edit_entry(int cmdchar, bool startln, int count)
   return s->c == Ctrl_O;
 }
 
-// Put a character directly onto the screen.  It's not stored in a buffer.
-// Used while handling CTRL-K, CTRL-V, etc. in Insert mode.
-static int pc_status;
-#define PC_STATUS_UNSET 0  // nothing was put on screen
-#define PC_STATUS_RIGHT 1  // right half of double-wide char
-#define PC_STATUS_LEFT  2  // left half of double-wide char
-#define PC_STATUS_SET   3  // pc_schar was filled
-static schar_T pc_schar;   // saved char
-static int pc_attr;
-static int pc_row;
-static int pc_col;
-
-void edit_putchar(int c, bool highlight)
-{
-  if (curwin->w_grid_alloc.chars == NULL && default_grid.chars == NULL) {
-    return;
-  }
-
-  int attr;
-  update_topline(curwin);  // just in case w_topline isn't valid
-  validate_cursor(curwin);
-  if (highlight) {
-    attr = HL_ATTR(HLF_8);
-  } else {
-    attr = 0;
-  }
-  pc_row = curwin->w_wrow;
-  pc_status = PC_STATUS_UNSET;
-  grid_line_start(&curwin->w_grid, pc_row);
-  if (curwin->w_p_rl) {
-    pc_col = curwin->w_view_width - 1 - curwin->w_wcol;
-
-    if (grid_line_getchar(pc_col, NULL) == NUL) {
-      grid_line_put_schar(pc_col - 1, schar_from_ascii(' '), attr);
-      curwin->w_wcol--;
-      pc_status = PC_STATUS_RIGHT;
-    }
-  } else {
-    pc_col = curwin->w_wcol;
-
-    if (grid_line_getchar(pc_col + 1, NULL) == NUL) {
-      // pc_col is the left half of a double-width char
-      pc_status = PC_STATUS_LEFT;
-    }
-  }
-
-  // save the character to be able to put it back
-  if (pc_status == PC_STATUS_UNSET) {
-    pc_schar = grid_line_getchar(pc_col, &pc_attr);
-    pc_status = PC_STATUS_SET;
-  }
-
-  char buf[MB_MAXCHAR + 1];
-  grid_line_puts(pc_col, buf, utf_char2bytes(c, buf), attr);
-  grid_line_flush();
-}
-
-// Undo the previous edit_putchar().
-void edit_unputchar(void)
-{
-  if (pc_status != PC_STATUS_UNSET) {
-    if (pc_status == PC_STATUS_RIGHT) {
-      curwin->w_wcol++;
-    }
-    if (pc_status == PC_STATUS_RIGHT || pc_status == PC_STATUS_LEFT) {
-      redrawWinline(curwin, curwin->w_cursor.lnum);
-    } else {
-      // TODO(bfredl): this could be smarter and also handle the dubyawidth case
-      grid_line_start(&curwin->w_grid, pc_row);
-      grid_line_put_schar(pc_col, pc_schar, pc_attr);
-      grid_line_flush();
-    }
-  }
-}
+// edit_putchar and edit_unputchar are implemented in Rust (putchar.rs).
+// nvim_set_pc_status_unset is also implemented in Rust (putchar.rs).
+extern void edit_putchar(int c, bool highlight);
+extern void edit_unputchar(void);
+// Rust symbol: nvim_set_pc_status_unset (resets pc_status static in Rust).
 
 /// Called when "$" is in 'cpoptions': display a '$' at the end of the changed
 /// text.  Only works when cursor is in the line that changes.
@@ -673,8 +604,6 @@ void nvim_set_b_last_insert_mark(void)
 int nvim_get_u_sync_once(void) { return u_sync_once; }
 
 void nvim_set_u_sync_once(int val) { u_sync_once = val; }
-
-void nvim_set_pc_status_unset(void) { pc_status = PC_STATUS_UNSET; }
 
 /// Call edit_putchar(c, highlight != 0) (accessor for Rust).
 void nvim_putchar(int c, int highlight) { edit_putchar(c, highlight != 0); }

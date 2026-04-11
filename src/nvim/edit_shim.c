@@ -39,6 +39,9 @@
 #include "nvim/strings.h"
 #include "nvim/syntax_bridge.h"
 #include "nvim/textformat.h"
+#include "nvim/grid.h"
+#include "nvim/highlight.h"
+#include "nvim/highlight_defs.h"
 #include "nvim/ui.h"
 #include "edit_shim.c.generated.h"
 extern int ins_apply_autocmds(event_T event);
@@ -611,3 +614,45 @@ void nvim_ins_redraw_screen_update(void)
   setcursor();
   emsg_on_display = false;
 }
+
+// ---- edit_putchar / edit_unputchar grid accessors ----
+
+/// Start a grid line for curwin->w_grid at the given row.
+void nvim_edit_grid_line_start(int row) { grid_line_start(&curwin->w_grid, row); }
+
+/// Get character at column from the current grid line.
+/// Returns the schar_T value (uint32_t). attr_out may be NULL.
+uint32_t nvim_edit_grid_line_getchar(int col, int *attr_out)
+{
+  return (uint32_t)grid_line_getchar(col, attr_out);
+}
+
+/// Put an schar_T character at column with attr.
+void nvim_edit_grid_line_put_schar(int col, uint32_t schar, int attr)
+{
+  grid_line_put_schar(col, (schar_T)schar, attr);
+}
+
+/// Put a string at column with attr, returns number of columns written.
+int nvim_edit_grid_line_puts(int col, const char *buf, int len, int attr)
+{
+  return grid_line_puts(col, buf, len, attr);
+}
+
+/// Flush the current grid line.
+void nvim_edit_grid_line_flush(void) { grid_line_flush(); }
+
+/// True when curwin->w_grid_alloc.chars is non-NULL.
+bool nvim_curwin_grid_alloc_has_chars(void) { return curwin->w_grid_alloc.chars != NULL; }
+
+/// Get curwin->w_p_rl (rightleft option).
+int nvim_curwin_get_p_rl(void) { return curwin->w_p_rl; }
+
+/// HL_ATTR(HLF_8) -- highlight attr for special keys.
+int nvim_hl_attr_8(void) { return HL_ATTR(HLF_8); }
+
+/// redrawWinline(curwin, curwin->w_cursor.lnum).
+void nvim_redrawwinline_cursor(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
+
+/// schar_from_ascii(' ') -- space character as schar_T.
+uint32_t nvim_schar_space(void) { return (uint32_t)schar_from_ascii(' '); }

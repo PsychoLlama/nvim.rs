@@ -21,6 +21,7 @@ pub mod key_handlers;
 pub mod keys;
 pub mod mode;
 pub mod movement;
+pub mod putchar;
 pub mod redraw;
 pub mod register;
 pub mod replace;
