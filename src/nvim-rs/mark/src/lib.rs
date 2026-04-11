@@ -239,6 +239,17 @@ extern "C" {
     // exarg_T field accessors (from ex_cmds_shim.c)
     fn nvim_exarg_get_arg(eap: *mut c_void) -> *const c_char;
     fn nvim_exarg_get_forceit(eap: *mut c_void) -> c_int;
+
+    // Phase 7: mark_move_to accessor (from mark_shim.c)
+    // (iobuff and iosize added in Phase 2)
+}
+
+// Phase 7: mark_move_to FFI functions (cursor, buffer switching)
+extern "C" {
+    fn buflist_getfile(n: c_int, lnum: LinenrT, options: c_int, forceit: c_int) -> c_int;
+    fn check_cursor(win: WinHandle);
+    fn beginline(flags: c_int);
+    fn emsg(s: *const c_char) -> c_int;
 }
 
 /// Number of possible named marks (a-z)
@@ -3415,6 +3426,128 @@ pub extern "C" fn rs_mark_move_needs_cursor_check(res: c_int) -> c_int {
     c_int::from(
         (res & mark_move_res::SWITCHED_BUF) != 0 || (res & mark_move_res::CHANGED_CURSOR) != 0,
     )
+}
+
+// beginline flags (from edit.h)
+const BL_WHITE: c_int = 1; // cursor on first non-white in the line
+const BL_FIX: c_int = 4; // don't leave cursor on a NUL
+
+// buflist_getfile options (from buffer.h)
+const GETF_SETMARK: c_int = 0x01; // set pcmark before jumping
+
+/// Switch to the buffer of the given file mark.
+///
+/// Private helper for `mark_move_to`.
+///
+/// # Safety
+/// `fm` must be a valid pointer to a `FmarkT`.
+unsafe fn switch_to_mark_buf(fm: *const FmarkT, pcmark_on_switch: bool) -> c_int {
+    let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+    if (*fm).fnum != curbuf_fnum {
+        // Switch to another file.
+        let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };
+        let res = buflist_getfile((*fm).fnum, (*fm).mark.lnum, getfile_flag, 0);
+        if res == 0 {
+            // OK
+            mark_move_res::SWITCHED_BUF
+        } else {
+            mark_move_res::FAILED
+        }
+    } else {
+        0
+    }
+}
+
+/// Move to the given file mark, changing the buffer and cursor position.
+///
+/// Validate the mark, switch to the buffer, and move the cursor.
+/// This replaces the C `mark_move_to(fm, flags)` function.
+///
+/// # Safety
+/// `fm` may be NULL. Global `g_curwin` and `g_curbuf` must be valid.
+#[export_name = "mark_move_to"]
+pub unsafe extern "C" fn exported_mark_move_to(fm: *mut FmarkT, flags: c_int) -> c_int {
+    // Static copy for autocommand safety (mirrors C's `static fmark_T fm_copy`)
+    // Note: MAXLNUM = 0x7fffffff is used for view.topline_offset to indicate no view
+    static mut FM_COPY: FmarkT = FmarkT {
+        mark: PosT {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        fnum: 0,
+        timestamp: 0,
+        view: FmarkvT {
+            topline_offset: 0x7fffffff,
+        },
+        additional_data: std::ptr::null_mut(),
+    };
+    let mut res = mark_move_res::SUCCESS;
+    let mut errormsg: *const c_char = std::ptr::null();
+
+    if rs_mark_check(fm, &raw mut errormsg, g_curbuf) == 0 {
+        if !errormsg.is_null() {
+            emsg(errormsg);
+        }
+        return mark_move_res::FAILED;
+    }
+
+    let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+    let fm_ref = if (*fm).fnum != curbuf_fnum {
+        // Need to change buffer: copy for autocommand safety
+        FM_COPY = *fm;
+        let fm_copy_ptr = &raw mut FM_COPY;
+        // Jump to the file with the mark
+        let switch_res = switch_to_mark_buf(fm_copy_ptr, (flags & mark_move_flags::JUMP_LIST) == 0);
+        res |= switch_res;
+        // Failed switching buffer
+        if (res & mark_move_res::FAILED) != 0 {
+            return res;
+        }
+        // Check line count now that the destination buffer is loaded.
+        let e_markinval_str = nvim_mark_get_e_markinval();
+        if rs_mark_check_line_bounds(
+            g_curbuf,
+            (*fm_copy_ptr).mark.lnum,
+            &raw mut errormsg,
+            e_markinval_str,
+        ) == 0
+        {
+            if !errormsg.is_null() {
+                emsg(errormsg);
+            }
+            res |= mark_move_res::FAILED;
+            return res;
+        }
+        fm_copy_ptr
+    } else {
+        if (flags & mark_move_flags::CONTEXT) != 0 {
+            // Avoid double context mark when switching buffer.
+            setpcmark();
+        }
+        fm
+    };
+
+    // Move the cursor while keeping track of what changed for the caller
+    let cursor_ptr = nvim_mark_win_get_cursor_ptr(g_curwin);
+    let prev_pos = *cursor_ptr;
+    let pos = (*fm_ref).mark;
+    // Set lnum again, autocommands may have changed it
+    *cursor_ptr = (*fm_ref).mark;
+    if (flags & mark_move_flags::BEGIN_LINE) != 0 {
+        beginline(BL_WHITE | BL_FIX);
+    }
+    // Calculate result flags based on position changes
+    res = rs_mark_move_calc_result(prev_pos.lnum, prev_pos.col, pos.lnum, pos.col, res);
+    if (flags & mark_move_flags::SET_VIEW) != 0 {
+        rs_mark_view_restore(fm_ref, g_curwin);
+    }
+
+    // Check if cursor check is needed
+    if rs_mark_move_needs_cursor_check(res) != 0 {
+        check_cursor(g_curwin);
+    }
+    res
 }
 
 /// Prepare column for getnextmark search based on direction and begin_line.

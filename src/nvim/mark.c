@@ -101,10 +101,9 @@ extern fmarkv_T rs_mark_view_make(linenr_T topline, linenr_T pos_lnum);
 
 // Jumplist and changelist operations
 
-// Mark movement functions
-extern int rs_mark_move_calc_result(linenr_T prev_lnum, colnr_T prev_col,
-                                     linenr_T new_lnum, colnr_T new_col, int initial_res);
-extern int rs_mark_move_needs_cursor_check(int res);
+// mark_move_to is now implemented in Rust (mark/src/lib.rs, exported_mark_move_to).
+// The Rust implementation exports as "mark_move_to" via #[export_name].
+extern MarkMoveRes mark_move_to(fmark_T *fm, MarkMove flags);
 
 // Mark adjustment result structures
 typedef struct {
@@ -174,85 +173,8 @@ extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
 
 
 
-/// Attempt to switch to the buffer of the given global mark
-///
-/// @param fm
-/// @param pcmark_on_switch  leave a context mark when switching buffer.
-/// @return whether the buffer was switched or not.
-static MarkMoveRes switch_to_mark_buf(fmark_T *fm, bool pcmark_on_switch)
-{
-  if (fm->fnum != curbuf->b_fnum) {
-    // Switch to another file.
-    int getfile_flag = pcmark_on_switch ? GETF_SETMARK : 0;
-    bool res = buflist_getfile(fm->fnum, fm->mark.lnum, getfile_flag, false) == OK;
-    return res == true ? kMarkSwitchedBuf : kMarkMoveFailed;
-  }
-  return 0;
-}
-
-/// Move to the given file mark, changing the buffer and cursor position.
-///
-/// Validate the mark, switch to the buffer, and move the cursor.
-/// @param fm  Mark, can be NULL will raise E78: Unknown mark
-/// @param flags  MarkMove flags to configure the movement to the mark.
-///
-/// @return  MarkMovekRes flags representing the outcome
-MarkMoveRes mark_move_to(fmark_T *fm, MarkMove flags)
-{
-  static fmark_T fm_copy = INIT_FMARK;
-  MarkMoveRes res = kMarkMoveSuccess;
-  const char *errormsg = NULL;
-  if (!mark_check(fm, &errormsg)) {
-    if (errormsg != NULL) {
-      emsg(errormsg);
-    }
-    res = kMarkMoveFailed;
-    goto end;
-  }
-
-  if (fm->fnum != curbuf->handle) {
-    // Need to change buffer
-    fm_copy = *fm;  // Copy, autocommand may change it
-    fm = &fm_copy;
-    // Jump to the file with the mark
-    res |= switch_to_mark_buf(fm, !(flags & kMarkJumpList));
-    // Failed switching buffer
-    if (res & kMarkMoveFailed) {
-      goto end;
-    }
-    // Check line count now that the **destination buffer is loaded**.
-    if (!mark_check_line_bounds(curbuf, fm, &errormsg)) {
-      if (errormsg != NULL) {
-        emsg(errormsg);
-      }
-      res |= kMarkMoveFailed;
-      goto end;
-    }
-  } else if (flags & kMarkContext) {
-    // Doing it in this condition avoids double context mark when switching buffer.
-    setpcmark();
-  }
-  // Move the cursor while keeping track of what changed for the caller
-  pos_T prev_pos = curwin->w_cursor;
-  pos_T pos = fm->mark;
-  // Set lnum again, autocommands my have changed it
-  curwin->w_cursor = fm->mark;
-  if (flags & kMarkBeginLine) {
-    beginline(BL_WHITE | BL_FIX);
-  }
-  // Use Rust helper to calculate result flags based on position changes
-  res = rs_mark_move_calc_result(prev_pos.lnum, prev_pos.col, pos.lnum, pos.col, res);
-  if (flags & kMarkSetView) {
-    mark_view_restore(fm);
-  }
-
-  // Use Rust helper to check if cursor check is needed
-  if (rs_mark_move_needs_cursor_check(res)) {
-    check_cursor(curwin);
-  }
-end:
-  return res;
-}
+// switch_to_mark_buf and mark_move_to are now implemented in Rust.
+// mark_move_to is exported via #[export_name = "mark_move_to"] in mark/src/lib.rs.
 
 
 
