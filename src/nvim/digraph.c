@@ -46,23 +46,12 @@ typedef struct {
   result_T result;
 } digr_T;
 
-static const char e_digraph_must_be_just_two_characters_str[]
-  = N_("E1214: Digraph must be just two characters: %s");
-static const char e_digraph_argument_must_be_one_character_str[]
-  = N_("E1215: Digraph must be one character: %s");
-static const char e_digraph_setlist_argument_must_be_list_of_lists_with_two_items[]
-  = N_("E1216: digraph_setlist() argument must be a list of lists with two items");
-
 #include "digraph.c.generated.h"
 
 // Rust implementations (functions exported directly from Rust)
 // check_digraph_chars_valid, get_digraph_for_char, putdigraph are now in Rust (viml.rs)
-extern void rs_registerdigraph(int char1, int char2, int result);
+// rs_registerdigraph, rs_digraph_iterate_* are now pure Rust exports
 
-// Callback type for digraph iteration
-typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, void *ctx);
-extern int rs_digraph_iterate_default(DigraphIterCallback callback, void *ctx);
-extern int rs_digraph_iterate_user(DigraphIterCallback callback, void *ctx);
 
 // Verify highlight constants match Rust values
 _Static_assert(HLF_8 == 1, "HLF_8");
@@ -72,12 +61,7 @@ _Static_assert(HLF_CM == 11, "HLF_CM");
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
 
 // Default digraph table is now in Rust (data.rs)
-extern const digr_T *rs_get_digraphdefault(void);
-extern int rs_get_digraphdefault_len(void);
-
-// DELETED: digraphdefault[] array (~1400 entries) moved to Rust data.rs
-// The following block was here: { 'N', 'U', 0x0a } through { NUL, NUL, NUL }
-// plus all DG_START_* #defines and _Static_asserts
+// rs_get_digraphdefault and rs_get_digraphdefault_len are Rust exports
 
 // Accessor functions for Rust FFI
 
@@ -146,12 +130,7 @@ int nvim_tv_check_for_opt_bool_arg(const typval_T *args, int idx) { return tv_ch
 // get_digraph_for_char(), check_digraph_chars_valid(), putdigraph() moved to Rust (viml.rs)
 
 // digraph_header(), listdigraphs(), printdigraph() moved to Rust (list.rs)
-
-// header_table[] moved to Rust (list.rs HEADER_STRINGS)
-// get_digraph_chars, digraph_set_common, f_digraph_get, f_digraph_set moved to Rust (funcs.rs)
-// digraph_getlist_callback, digraph_getlist_common, f_digraph_getlist, f_digraph_setlist moved to Rust (funcs.rs)
-
-extern bool digraph_set_common(const typval_T *argchars, const typval_T *argdigraph);
+// f_digraph_*, digraph_getlist_*, digraph_set_common moved to Rust (funcs.rs)
 
 /// structure used for b_kmap_ga.ga_data
 typedef struct {
