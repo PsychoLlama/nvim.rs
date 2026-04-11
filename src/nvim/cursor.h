@@ -27,4 +27,10 @@ char *get_cursor_pos_ptr(void);
 colnr_T get_cursor_line_len(void);
 colnr_T get_cursor_pos_len(void);
 
-#include "cursor.h.generated.h"
+// Shared C accessor functions (from cursor_shim.c, used by multiple Rust crates)
+void nvim_getvvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *ecol);
+void nvim_getvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *ecol);
+pos_T *nvim_win_get_cursor_ptr(win_T *wp);
+colnr_T nvim_cursor_get_pos_len(void);
+void nvim_curwin_set_cursor_col(colnr_T col);
+void nvim_win_set_cursor_coladd(win_T *wp, colnr_T coladd);
