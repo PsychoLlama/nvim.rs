@@ -68,33 +68,6 @@ extern int stuff_yank(int regname, char *p);
 extern void free_register(yankreg_T *reg);
 void nvim_free_register(yankreg_T *reg) { free_register(reg); }
 
-/// Generic xfree wrapper used by Rust crates that cannot call xfree directly.
-void nvim_xfree(void *ptr) { xfree(ptr); }
-
-/// Generic xstrdup wrapper.
-char *nvim_xstrdup(const char *str) { return xstrdup(str); }
-
-/// Generic xmalloc wrapper.
-void *nvim_xmalloc(size_t size) { return xmalloc(size); }
-
-/// Generic xcalloc wrapper.
-void *nvim_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
-
-/// Generic xrealloc wrapper.
-void *nvim_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
-
-/// Generic xmallocz wrapper (allocates size+1 bytes zeroed at end).
-char *nvim_xmallocz(size_t size) { return xmallocz(size); }
-
-/// Emit "E35: No previous regular expression" error.
-void nvim_emsg_noprevre(void) { emsg(_(e_noprevre)); }
-
-/// Emit "E29: No inserted text yet" error.
-void nvim_emsg_noinstext(void) { emsg(_(e_noinstext)); }
-
-/// Emit "E30: No previous command line" error.
-void nvim_emsg_nolastcmd(void) { emsg(_(e_nolastcmd)); }
-
 /// Return curbuf->b_fname (for Rust get_spec_reg).
 char *nvim_register_get_curbuf_fname(void) { return curbuf->b_fname; }
 
