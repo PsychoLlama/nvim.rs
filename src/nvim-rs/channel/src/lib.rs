@@ -44,8 +44,16 @@ extern "C" {
     /// Initialize a garray_T. Defined in garray.c.
     fn ga_init(ga: *mut c_void, itemsize: c_int, growsize: c_int);
 
-    /// Allocate a new channel. Defined in channel.c.
-    fn channel_alloc(stream_type: c_int) -> *mut c_void;
+    /// Allocate zeroed memory. Defined in memory.c.
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    /// Create a new child multiqueue. Defined in event/multiqueue.c.
+    fn multiqueue_new_child(parent: *mut c_void) -> *mut c_void;
+    /// Get next_chan_id static from channel.c.
+    fn nvim_chan_get_next_chan_id() -> u64;
+    /// Set next_chan_id static in channel.c.
+    fn nvim_chan_set_next_chan_id(v: u64);
+    /// Insert channel into map. Defined in channel.c.
+    fn nvim_chan_map_put(id: u64, chan: *mut c_void);
     /// Initialize RPC subsystem. Defined in msgpack_rpc/channel.c.
     fn rpc_init();
     /// Free RPC state for channel. Defined in msgpack_rpc/channel.c.
@@ -550,8 +558,83 @@ pub unsafe extern "C" fn int64_t_cmp(pa: *const c_void, pb: *const c_void) -> c_
 #[no_mangle]
 pub unsafe extern "C" fn channel_init() {
     // kChannelStreamStderr = 3
-    channel_alloc(3);
+    channel_alloc(3 as c_int);
     rpc_init();
+}
+
+// =============================================================================
+// Migrated functions (Phase 1b): channel allocation
+// =============================================================================
+
+/// Allocate and initialize a new Channel with the given stream type.
+///
+/// The channel is allocated with refcount=1 and inserted into the global
+/// channels map. The caller is responsible for setting up the stream.
+///
+/// # Safety
+///
+/// Must be called from the main loop thread.
+#[no_mangle]
+pub unsafe extern "C" fn channel_alloc(stream_type: c_int) -> *mut c_void {
+    let chan = xcalloc(1, 1928_usize).cast::<ChannelT>(); // sizeof(Channel) == 1928
+
+    // Assign channel id based on stream type
+    // kChannelStreamStdio = 2, kChannelStreamStderr = 3
+    let id = if stream_type == 2 {
+        CHAN_STDIO
+    } else if stream_type == 3 {
+        CHAN_STDERR
+    } else {
+        let id = nvim_chan_get_next_chan_id();
+        nvim_chan_set_next_chan_id(id + 1);
+        id
+    };
+
+    (*chan).id = id;
+    (*chan).events = multiqueue_new_child(rs_loop_get_events(main_loop_ptr()));
+    (*chan).refcount = 1;
+    (*chan).exit_status = -1;
+    (*chan).streamtype = stream_type;
+    (*chan).detach = false;
+
+    // assert(chan->id <= VARNUMBER_MAX) -- VARNUMBER_MAX = i64::MAX
+    assert!(
+        i64::try_from(id).is_ok(),
+        "channel id exceeds VARNUMBER_MAX"
+    );
+
+    nvim_chan_map_put(id, chan.cast());
+
+    chan.cast()
+}
+
+/// Destroy a channel that was never fully set up (e.g., on job spawn failure).
+///
+/// Decrements next_chan_id, removes the channel from the map, and schedules
+/// `free_channel_event` to run deferred via the main loop.
+///
+/// # Safety
+///
+/// `chan` must be a valid non-null Channel that was just allocated with
+/// `channel_alloc` and whose id is the most recently assigned id.
+#[no_mangle]
+pub unsafe extern "C" fn channel_destroy_early(chan: *mut ChannelT) {
+    let new_next = nvim_chan_get_next_chan_id() - 1;
+    assert!((*chan).id == new_next, "channel_destroy_early: id mismatch");
+    nvim_chan_set_next_chan_id(new_next);
+
+    nvim_channels_del((*chan).id);
+    (*chan).id = 0;
+
+    assert!(
+        (*chan).refcount == 1,
+        "channel_destroy_early: refcount != 1"
+    );
+    (*chan).refcount = 0;
+
+    // uv will keep a reference to handles until next loop tick, so delay free
+    let event = make_event(free_channel_event as _, chan.cast());
+    multiqueue_put_event(rs_loop_get_events(main_loop_ptr()), event);
 }
 
 // =============================================================================

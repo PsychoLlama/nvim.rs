@@ -241,30 +241,12 @@ bool channel_close(uint64_t id, ChannelPart part, const char **error)
 
 // channel_init implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-/// Allocates a channel.
-///
-/// Channel is allocated with refcount 1, which should be decreased
-/// when the underlying stream closes.
-Channel *channel_alloc(ChannelStreamType type)
-  FUNC_ATTR_NONNULL_RET
-{
-  Channel *chan = xcalloc(1, sizeof(*chan));
-  if (type == kChannelStreamStdio) {
-    chan->id = CHAN_STDIO;
-  } else if (type == kChannelStreamStderr) {
-    chan->id = CHAN_STDERR;
-  } else {
-    chan->id = next_chan_id++;
-  }
-  chan->events = multiqueue_new_child(loop_get_events(&main_loop));
-  chan->refcount = 1;
-  chan->exit_status = -1;
-  chan->streamtype = type;
-  chan->detach = false;
-  assert(chan->id <= VARNUMBER_MAX);
-  pmap_put(uint64_t)(&channels, chan->id, chan);
-  return chan;
-}
+// channel_alloc implemented in Rust (src/nvim-rs/channel/src/lib.rs)
+
+// Accessors for next_chan_id (static in this file) used by Rust channel_alloc
+uint64_t nvim_chan_get_next_chan_id(void) { return next_chan_id; }
+void nvim_chan_set_next_chan_id(uint64_t v) { next_chan_id = v; }
+void nvim_chan_map_put(uint64_t id, Channel *chan) { pmap_put(uint64_t)(&channels, id, chan); }
 
 void channel_create_event(Channel *chan, const char *ext_source)
 {
@@ -306,21 +288,7 @@ void channel_create_event(Channel *chan, const char *ext_source)
 // channel_destroy (static helper), free_channel_event, close_cb
 // implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-static void channel_destroy_early(Channel *chan)
-{
-  if ((chan->id != --next_chan_id)) {
-    abort();
-  }
-  pmap_del(uint64_t)(&channels, chan->id, NULL);
-  chan->id = 0;
-
-  if ((--chan->refcount != 0)) {
-    abort();
-  }
-
-  // uv will keep a reference to handles until next loop tick, so delay free
-  multiqueue_put(loop_get_events(&main_loop), free_channel_event, chan);
-}
+// channel_destroy_early implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 /// Starts a job and returns the associated channel
 ///
