@@ -738,80 +738,65 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 // dragwin state and jump_to_mouse logic are now owned by Rust (rs_jump_to_mouse).
 
 
-/// C accessor: resolve grid handle to window and adjust row/col.
-win_T *nvim_mouse_find_grid_win(int *gridp, int *rowp, int *colp)
-{
-  if (*gridp == msg_grid.handle) {
-    *rowp += msg_grid_pos;
-    *gridp = DEFAULT_GRID_HANDLE;
-  } else if (*gridp > 1) {
-    win_T *wp = get_win_by_grid_handle(*gridp);
-    if (wp && wp->w_grid_alloc.chars
-        && !(wp->w_floating && !wp->w_config.mouse)) {
-      *rowp = MIN(*rowp - wp->w_grid.row_offset, wp->w_view_height - 1);
-      *colp = MIN(*colp - wp->w_grid.col_offset, wp->w_view_width - 1);
-      return wp;
-    }
-  } else if (*gridp == 0) {
-    ScreenGrid *grid = ui_comp_mouse_focus(*rowp, *colp);
-    if (grid == &pum_grid) {
-      *gridp = grid->handle;
-      *rowp -= grid->comp_row;
-      *colp -= grid->comp_col;
-      // The popup menu doesn't have a window, so return NULL
-      return NULL;
-    } else {
-      FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-        if (&wp->w_grid_alloc != grid) {
-          continue;
-        }
-        *gridp = grid->handle;
-        *rowp -= wp->w_winrow + wp->w_grid.row_offset;
-        *colp -= wp->w_wincol + wp->w_grid.col_offset;
-        return wp;
-      }
-    }
+// Accessors used by Rust rs_mouse_find_grid_win / rs_frame_find_win.
 
-    // No grid found, return the default grid. With multigrid this happens for split separators for
-    // example.
-    *gridp = DEFAULT_GRID_HANDLE;
+/// Get msg_grid.handle (handle of the message grid).
+int nvim_msg_grid_get_handle(void) { return msg_grid.handle; }
+
+/// Get msg_grid_pos global (current message grid row position).
+int nvim_mouse_get_msg_grid_pos(void) { return msg_grid_pos; }
+
+/// Get window by grid handle (wraps get_win_by_grid_handle).
+win_T *nvim_get_win_by_grid_handle(int handle) { return get_win_by_grid_handle((handle_T)handle); }
+
+/// Return true if window config has mouse enabled (for floating windows).
+bool nvim_win_config_get_mouse(win_T *wp) { return wp ? wp->w_config.mouse : false; }
+
+/// Call ui_comp_mouse_focus and return opaque ScreenGrid pointer.
+ScreenGrid *nvim_ui_comp_mouse_focus(int row, int col) { return ui_comp_mouse_focus(row, col); }
+
+/// Return true if the given ScreenGrid pointer is pum_grid.
+bool nvim_grid_is_pum_grid(ScreenGrid *grid) { return grid == &pum_grid; }
+
+/// Find the window in the current tab whose w_grid_alloc pointer matches grid.
+/// Returns the window and adjusts *rowp/*colp relative to the window's grid.
+/// Returns NULL if no matching window.
+win_T *nvim_curtab_find_win_by_grid_alloc(ScreenGrid *grid, int *rowp, int *colp)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (&wp->w_grid_alloc != grid) {
+      continue;
+    }
+    *colp -= wp->w_wincol + wp->w_grid.col_offset;
+    *rowp -= wp->w_winrow + wp->w_grid.row_offset;
+    return wp;
   }
   return NULL;
 }
 
-/// C accessor: traverse frame tree to find window at row/col position.
-win_T *nvim_frame_find_win(int *rowp, int *colp)
+/// Get frame width (fr_width field).
+int nvim_ses_frame_get_width(frame_T *fp) { return fp ? fp->fr_width : 0; }
+
+/// Get frame height (fr_height field).
+int nvim_ses_frame_get_height(frame_T *fp) { return fp ? fp->fr_height : 0; }
+
+/// Find the window in the current tab whose frame pointer matches fp->fr_win.
+/// Returns NULL if not found.
+win_T *nvim_curtab_find_win_for_frame(frame_T *fp)
 {
-  frame_T *fp = topframe;
-  *rowp -= firstwin->w_winrow;
-  while (true) {
-    if (fp->fr_layout == FR_LEAF) {
-      break;
-    }
-    if (fp->fr_layout == FR_ROW) {
-      for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next) {
-        if (*colp < fp->fr_width) {
-          break;
-        }
-        *colp -= fp->fr_width;
-      }
-    } else {  // fr_layout == FR_COL
-      for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next) {
-        if (*rowp < fp->fr_height) {
-          break;
-        }
-        *rowp -= fp->fr_height;
-      }
-    }
+  if (fp == NULL || fp->fr_win == NULL) {
+    return NULL;
   }
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp == fp->fr_win) {
-      *rowp -= wp->w_winbar_height;
       return wp;
     }
   }
   return NULL;
 }
+
+/// Get firstwin->w_winrow (row position of the first window).
+int nvim_get_firstwin_winrow(void) { return firstwin ? firstwin->w_winrow : 0; }
 
 /// C accessor: convert a virtual (screen) column to a character column.
 colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)

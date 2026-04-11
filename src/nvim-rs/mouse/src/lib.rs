@@ -1085,18 +1085,178 @@ pub type OpargHandle = *mut nvim_normal::types::OpargT;
 // =============================================================================
 
 extern "C" {
-    /// C accessor: resolve grid handle to window and adjust row/col.
-    fn nvim_mouse_find_grid_win(gridp: *mut c_int, rowp: *mut c_int, colp: *mut c_int)
-        -> WinHandle;
-
-    /// C accessor: traverse frame tree to find window at row/col.
-    fn nvim_frame_find_win(rowp: *mut c_int, colp: *mut c_int) -> WinHandle;
-
     /// Get `w_winrow_off` field.
     fn nvim_win_get_winrow_off(wp: WinHandle) -> c_int;
 
     /// Get `w_wincol_off` field.
     fn nvim_win_get_wincol_off(wp: WinHandle) -> c_int;
+
+    // Grid/frame accessors used by rs_mouse_find_grid_win and rs_frame_find_win.
+
+    /// Get `msg_grid.handle`.
+    fn nvim_msg_grid_get_handle() -> c_int;
+
+    /// Get `msg_grid_pos` global.
+    fn nvim_mouse_get_msg_grid_pos() -> c_int;
+
+    /// `get_win_by_grid_handle(handle)` — find window by grid handle.
+    fn nvim_get_win_by_grid_handle(handle: c_int) -> WinHandle;
+
+    /// Return true if `wp->w_grid_alloc.chars != NULL`.
+    fn nvim_win_get_grid_alloc_chars(wp: WinHandle) -> bool;
+
+    /// Return true if `wp->w_floating`.
+    fn nvim_win_get_floating(wp: WinHandle) -> bool;
+
+    /// Return true if `wp->w_config.mouse`.
+    fn nvim_win_config_get_mouse(wp: WinHandle) -> bool;
+
+    /// Return true if grid is `pum_grid`.
+    fn nvim_grid_is_pum_grid(grid: *mut std::ffi::c_void) -> bool;
+
+    /// Call `ui_comp_mouse_focus(row, col)` and return opaque `ScreenGrid*`.
+    fn nvim_ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut std::ffi::c_void;
+
+    /// Find window in current tab whose `w_grid_alloc` matches `grid`.
+    /// Adjusts `*rowp` and `*colp` relative to that window's grid.
+    fn nvim_curtab_find_win_by_grid_alloc(
+        grid: *mut std::ffi::c_void,
+        rowp: *mut c_int,
+        colp: *mut c_int,
+    ) -> WinHandle;
+
+    /// Get `fp->fr_layout`.
+    fn nvim_ses_frame_get_layout(fp: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `fp->fr_child`.
+    fn nvim_ses_frame_get_child(fp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+
+    /// Get `fp->fr_next`.
+    fn nvim_ses_frame_get_next(fp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+
+    /// Get `fp->fr_width`.
+    fn nvim_ses_frame_get_width(fp: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `fp->fr_height`.
+    fn nvim_ses_frame_get_height(fp: *mut std::ffi::c_void) -> c_int;
+
+    /// Get `topframe` global.
+    fn nvim_ses_get_topframe() -> *mut std::ffi::c_void;
+
+    /// Get `firstwin->w_winrow` (row of the first non-floating window).
+    fn nvim_get_firstwin_winrow() -> c_int;
+
+    /// Find window in current tab matching `fp->fr_win`.
+    fn nvim_curtab_find_win_for_frame(fp: *mut std::ffi::c_void) -> WinHandle;
+}
+
+// Frame layout constants (from `buffer_defs.h`).
+const FR_LEAF: c_int = 0;
+const FR_ROW: c_int = 1;
+
+/// Resolve grid handle to window and adjust row/col.
+///
+/// Port of `nvim_mouse_find_grid_win` from mouse.c. The C function is now
+/// deleted; this Rust version is the authoritative implementation.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn rs_mouse_find_grid_win(
+    gridp: *mut c_int,
+    rowp: *mut c_int,
+    colp: *mut c_int,
+) -> WinHandle {
+    if *gridp == nvim_msg_grid_get_handle() {
+        // Message grid: adjust row to the default grid's coordinate space.
+        *rowp += nvim_mouse_get_msg_grid_pos();
+        *gridp = DEFAULT_GRID_HANDLE;
+    } else if *gridp > 1 {
+        // Specific grid handle: find the owning window.
+        let wp = nvim_get_win_by_grid_handle(*gridp);
+        if !wp.is_null()
+            && nvim_win_get_grid_alloc_chars(wp)
+            && (!nvim_win_get_floating(wp) || nvim_win_config_get_mouse(wp))
+        {
+            let view_height = nvim_win_get_view_height(wp);
+            let view_width = nvim_win_get_view_width(wp);
+            let row_offset = nvim_gridview_get_row_offset(nvim_win_get_grid(wp));
+            let col_offset = nvim_gridview_get_col_offset(nvim_win_get_grid(wp));
+            *rowp = (*rowp - row_offset).min(view_height - 1);
+            *colp = (*colp - col_offset).min(view_width - 1);
+            return wp;
+        }
+    } else if *gridp == 0 {
+        // Compositor grid: find which window/grid the mouse is over.
+        let grid = nvim_ui_comp_mouse_focus(*rowp, *colp);
+        if nvim_grid_is_pum_grid(grid) {
+            *gridp = nvim_screengrid_get_handle(grid);
+            *rowp -= nvim_screengrid_get_comp_row(grid);
+            *colp -= nvim_screengrid_get_comp_col(grid);
+            // The popup menu doesn't have a window.
+            return std::ptr::null_mut();
+        }
+        let wp = nvim_curtab_find_win_by_grid_alloc(grid, rowp, colp);
+        if !wp.is_null() {
+            *gridp = nvim_screengrid_get_handle(grid);
+            return wp;
+        }
+        // No grid found — fall back to default grid (e.g., split separator).
+        *gridp = DEFAULT_GRID_HANDLE;
+    }
+    std::ptr::null_mut()
+}
+
+/// Traverse frame tree to find window at row/col position.
+///
+/// Port of `nvim_frame_find_win` from mouse.c. The C function is now
+/// deleted; this Rust version is the authoritative implementation.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn rs_frame_find_win(rowp: *mut c_int, colp: *mut c_int) -> WinHandle {
+    let mut fp = nvim_ses_get_topframe();
+    *rowp -= nvim_get_firstwin_winrow();
+
+    loop {
+        let layout = nvim_ses_frame_get_layout(fp);
+        if layout == FR_LEAF {
+            break;
+        }
+        let mut child = nvim_ses_frame_get_child(fp);
+        if layout == FR_ROW {
+            loop {
+                let next = nvim_ses_frame_get_next(child);
+                if next.is_null() {
+                    break;
+                }
+                if *colp < nvim_ses_frame_get_width(child) {
+                    break;
+                }
+                *colp -= nvim_ses_frame_get_width(child);
+                child = next;
+            }
+        } else {
+            // FR_COL
+            loop {
+                let next = nvim_ses_frame_get_next(child);
+                if next.is_null() {
+                    break;
+                }
+                if *rowp < nvim_ses_frame_get_height(child) {
+                    break;
+                }
+                *rowp -= nvim_ses_frame_get_height(child);
+                child = next;
+            }
+        }
+        fp = child;
+    }
+
+    let wp = nvim_curtab_find_win_for_frame(fp);
+    if !wp.is_null() {
+        *rowp -= nvim_win_get_winbar_height(wp);
+    }
+    wp
 }
 
 /// Find the window at grid position `*rowp`, `*colp`.
@@ -1113,7 +1273,7 @@ pub unsafe extern "C" fn rs_mouse_find_win_inner(
     colp: *mut c_int,
 ) -> WinHandle {
     // First try grid-based resolution (floating windows, multigrid, etc.)
-    let wp_grid = nvim_mouse_find_grid_win(gridp, rowp, colp);
+    let wp_grid = rs_mouse_find_grid_win(gridp, rowp, colp);
     if !wp_grid.is_null() {
         return wp_grid;
     }
@@ -1122,7 +1282,7 @@ pub unsafe extern "C" fn rs_mouse_find_win_inner(
     }
 
     // Fall back to frame tree traversal
-    nvim_frame_find_win(rowp, colp)
+    rs_frame_find_win(rowp, colp)
 }
 
 /// Find the window at grid position `*rowp`, `*colp`.
