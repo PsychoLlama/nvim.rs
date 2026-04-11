@@ -38,6 +38,7 @@ extern void ex_profile(exarg_T *eap);
 extern char *get_profile_name(expand_T *xp, int idx);
 extern void set_context_in_profile_cmd(expand_T *xp, const char *arg);
 // Phase 3: input, function line, script line, child, startup
+extern void profile_init(scriptitem_T *si);
 extern void prof_input_start(void);
 extern void prof_input_end(void);
 extern bool prof_def_func(void);

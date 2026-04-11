@@ -148,6 +148,8 @@ int nvim_ufunc_get_script_ctx_sid(ufunc_T *fp) { return fp->uf_script_ctx.sc_sid
 
 linenr_T nvim_ufunc_get_script_ctx_lnum(ufunc_T *fp) { return fp->uf_script_ctx.sc_lnum; }
 
+uint64_t nvim_ufunc_get_script_ctx_chan(ufunc_T *fp) { return fp->uf_script_ctx.sc_chan; }
+
 int nvim_aucmd_get_script_ctx_sid(AutoPatCmd *apc) { return apc->script_ctx.sc_sid; }
 
 linenr_T nvim_aucmd_get_script_ctx_lnum(AutoPatCmd *apc) { return apc->script_ctx.sc_lnum; }

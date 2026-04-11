@@ -46,209 +46,94 @@ typedef struct {
 
 static char *startuptime_buf = NULL;  // --startuptime buffer
 
-/// Print the count and times for one function or function line.
-///
-/// @param prefer_self  when equal print only self time
-static void prof_func_line(FILE *fd, int count, const proftime_T *total, const proftime_T *self,
-                           bool prefer_self)
-{
-  if (count > 0) {
-    fprintf(fd, "%5d ", count);
-    if (prefer_self && profile_equal(*total, *self)) {
-      fprintf(fd, "           ");
-    } else {
-      fprintf(fd, "%s ", profile_msg(*total));
-    }
-    if (!prefer_self && profile_equal(*total, *self)) {
-      fprintf(fd, "           ");
-    } else {
-      fprintf(fd, "%s ", profile_msg(*self));
-    }
-  } else {
-    fprintf(fd, "                            ");
-  }
-}
+// Rust implementations replace these C functions.
+// Declarations for the Rust functions called by the wrappers below.
+extern void rs_func_dump_profile(FILE *fd);
+extern void rs_script_dump_profile(FILE *fd);
+// rs_profile_init is declared in runtime_ffi.c and called via nvim_rt_profile_init.
 
-/// @param prefer_self  when equal print only self time
-static void prof_sort_list(FILE *fd, ufunc_T **sorttab, int st_len, char *title, bool prefer_self)
-{
-  fprintf(fd, "FUNCTIONS SORTED ON %s TIME\n", title);
-  fprintf(fd, "count  total (s)   self (s)  function\n");
-  for (int i = 0; i < 20 && i < st_len; i++) {
-    ufunc_T *fp = sorttab[i];
-    prof_func_line(fd, fp->uf_tm_count, &fp->uf_tm_total, &fp->uf_tm_self,
-                   prefer_self);
-    if ((uint8_t)fp->uf_name[0] == K_SPECIAL) {
-      fprintf(fd, " <SNR>%s()\n", fp->uf_name + 3);
-    } else {
-      fprintf(fd, " %s()\n", fp->uf_name);
-    }
-  }
-  fprintf(fd, "\n");
-}
-
-/// Compare function for total time sorting.
-static int prof_total_cmp(const void *s1, const void *s2)
-{
-  ufunc_T *p1 = *(ufunc_T **)s1;
-  ufunc_T *p2 = *(ufunc_T **)s2;
-  return profile_cmp(p1->uf_tm_total, p2->uf_tm_total);
-}
-
-/// Compare function for self time sorting.
-static int prof_self_cmp(const void *s1, const void *s2)
-{
-  ufunc_T *p1 = *(ufunc_T **)s1;
-  ufunc_T *p2 = *(ufunc_T **)s2;
-  return profile_cmp(p1->uf_tm_self, p2->uf_tm_self);
-}
-
-/// Dump the profiling results for all functions in file "fd".
-static void func_dump_profile(FILE *fd)
+// Collect profiled ufunc_T pointers for Rust dump functions.
+// Returns a malloc'd array of pointers; caller must free it.
+// *out_count is set to the number of entries.
+void nvim_profile_collect_profiled_funcs(void ***out_array, int *out_count)
 {
   hashtab_T *const functbl = func_tbl_get();
-  int st_len = 0;
-
   int todo = (int)functbl->ht_used;
   if (todo == 0) {
-    return;         // nothing to dump
+    *out_array = NULL;
+    *out_count = 0;
+    return;
   }
 
-  ufunc_T **sorttab = xmalloc(sizeof(ufunc_T *) * (size_t)todo);
-
+  void **arr = xmalloc(sizeof(void *) * (size_t)todo);
+  int n = 0;
   for (hashitem_T *hi = functbl->ht_array; todo > 0; hi++) {
     if (!HASHITEM_EMPTY(hi)) {
       todo--;
       ufunc_T *fp = HI2UF(hi);
       if (fp->uf_prof_initialized) {
-        sorttab[st_len++] = fp;
-
-        if ((uint8_t)fp->uf_name[0] == K_SPECIAL) {
-          fprintf(fd, "FUNCTION  <SNR>%s()\n", fp->uf_name + 3);
-        } else {
-          fprintf(fd, "FUNCTION  %s()\n", fp->uf_name);
-        }
-        if (fp->uf_script_ctx.sc_sid != 0) {
-          bool should_free;
-          char *p = get_scriptname(fp->uf_script_ctx, &should_free);
-          fprintf(fd, "    Defined: %s:%" PRIdLINENR "\n",
-                  p, fp->uf_script_ctx.sc_lnum);
-          if (should_free) {
-            xfree(p);
-          }
-        }
-        if (fp->uf_tm_count == 1) {
-          fprintf(fd, "Called 1 time\n");
-        } else {
-          fprintf(fd, "Called %d times\n", fp->uf_tm_count);
-        }
-        fprintf(fd, "Total time: %s\n", profile_msg(fp->uf_tm_total));
-        fprintf(fd, " Self time: %s\n", profile_msg(fp->uf_tm_self));
-        fprintf(fd, "\n");
-        fprintf(fd, "count  total (s)   self (s)\n");
-
-        for (int i = 0; i < fp->uf_lines.ga_len; i++) {
-          if (FUNCLINE(fp, i) == NULL) {
-            continue;
-          }
-          prof_func_line(fd, fp->uf_tml_count[i],
-                         &fp->uf_tml_total[i], &fp->uf_tml_self[i], true);
-          fprintf(fd, "%s\n", FUNCLINE(fp, i));
-        }
-        fprintf(fd, "\n");
+        arr[n++] = fp;
       }
     }
   }
-
-  if (st_len > 0) {
-    qsort((void *)sorttab, (size_t)st_len, sizeof(ufunc_T *),
-          prof_total_cmp);
-    prof_sort_list(fd, sorttab, st_len, "TOTAL", false);
-    qsort((void *)sorttab, (size_t)st_len, sizeof(ufunc_T *),
-          prof_self_cmp);
-    prof_sort_list(fd, sorttab, st_len, "SELF", true);
-  }
-
-  xfree(sorttab);
+  *out_array = arr;
+  *out_count = n;
 }
 
-/// Start profiling a script.
-void profile_init(scriptitem_T *si)
-{
-  si->sn_pr_count = 0;
-  si->sn_pr_total = profile_zero();
-  si->sn_pr_self = profile_zero();
+// scriptitem_T dump accessors
+int nvim_si_get_pr_count(int sid) { return SCRIPT_ITEM(sid)->sn_pr_count; }
 
-  ga_init(&si->sn_prl_ga, sizeof(sn_prl_T), 100);
-  si->sn_prl_idx = -1;
-  si->sn_prof_on = true;
-  si->sn_pr_nest = 0;
-}
+proftime_T nvim_si_get_pr_total(int sid) { return SCRIPT_ITEM(sid)->sn_pr_total; }
 
-/// Dump the profiling results for all scripts in file "fd".
-static void script_dump_profile(FILE *fd)
-{
-  sn_prl_T *pp;
+proftime_T nvim_si_get_pr_self(int sid) { return SCRIPT_ITEM(sid)->sn_pr_self; }
 
-  for (int id = 1; id <= script_items.ga_len; id++) {
-    scriptitem_T *si = SCRIPT_ITEM(id);
-    if (si->sn_prof_on) {
-      fprintf(fd, "SCRIPT  %s\n", si->sn_name);
-      if (si->sn_pr_count == 1) {
-        fprintf(fd, "Sourced 1 time\n");
-      } else {
-        fprintf(fd, "Sourced %d times\n", si->sn_pr_count);
-      }
-      fprintf(fd, "Total time: %s\n", profile_msg(si->sn_pr_total));
-      fprintf(fd, " Self time: %s\n", profile_msg(si->sn_pr_self));
-      fprintf(fd, "\n");
-      fprintf(fd, "count  total (s)   self (s)\n");
+const char *nvim_si_get_name(int sid) { return SCRIPT_ITEM(sid)->sn_name; }
 
-      FILE *sfd = os_fopen(si->sn_name, "r");
-      if (sfd == NULL) {
-        fprintf(fd, "Cannot open file!\n");
-      } else {
-        // Keep going till the end of file, so that trailing
-        // continuation lines are listed.
-        for (int i = 0;; i++) {
-          if (vim_fgets(IObuff, IOSIZE, sfd)) {
-            break;
-          }
-          // When a line has been truncated, append NL, taking care
-          // of multi-byte characters .
-          if (IObuff[IOSIZE - 2] != NUL && IObuff[IOSIZE - 2] != NL) {
-            int n = IOSIZE - 2;
+FILE *nvim_si_fopen(int sid) { return os_fopen(SCRIPT_ITEM(sid)->sn_name, "r"); }
 
-            // Move to the first byte of this char.
-            // utf_head_off() doesn't work, because it checks
-            // for a truncated character.
-            while (n > 0 && (IObuff[n] & 0xc0) == 0x80) {
-              n--;
-            }
+// vim_fgets wrapper for Rust
+int nvim_profile_vim_fgets(char *buf, int size, FILE *fd) { return vim_fgets(buf, size, fd); }
 
-            IObuff[n] = NL;
-            IObuff[n + 1] = NUL;
-          }
-          if (i < si->sn_prl_ga.ga_len
-              && (pp = &PRL_ITEM(si, i))->snp_count > 0) {
-            fprintf(fd, "%5d ", pp->snp_count);
-            if (profile_equal(pp->sn_prl_total, pp->sn_prl_self)) {
-              fprintf(fd, "           ");
-            } else {
-              fprintf(fd, "%s ", profile_msg(pp->sn_prl_total));
-            }
-            fprintf(fd, "%s ", profile_msg(pp->sn_prl_self));
-          } else {
-            fprintf(fd, "                            ");
-          }
-          fprintf(fd, "%s", IObuff);
-        }
-        fclose(sfd);
-      }
-      fprintf(fd, "\n");
-    }
-  }
-}
+// IObuff/IOSIZE access
+char *nvim_profile_get_iobuff(void) { return IObuff; }
+
+int nvim_profile_get_iosize(void) { return IOSIZE; }
+
+// xfree for Rust-allocated strings (get_scriptname may return alloc'd)
+void nvim_profile_xfree_ptr(void *ptr) { xfree(ptr); }
+
+// profile_init setters for scriptitem fields (SID-based, used by script_line.rs)
+void nvim_si_set_pr_count(int sid, int val) { SCRIPT_ITEM(sid)->sn_pr_count = val; }
+
+void nvim_si_set_pr_total(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_pr_total = val; }
+
+void nvim_si_set_pr_self(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_pr_self = val; }
+
+void nvim_si_set_prof_on(int sid, int val) { SCRIPT_ITEM(sid)->sn_prof_on = (val != 0); }
+
+void nvim_si_ga_init_prl(int sid) { ga_init(&SCRIPT_ITEM(sid)->sn_prl_ga, sizeof(sn_prl_T), 100); }
+
+void nvim_si_set_prl_idx_val(int sid, int val) { SCRIPT_ITEM(sid)->sn_prl_idx = val; }
+
+void nvim_si_set_pr_nest_val(int sid, int val) { SCRIPT_ITEM(sid)->sn_pr_nest = val; }
+
+// profile_init: pointer-based setters (scriptitem_T*) for rs_profile_init
+void nvim_si_ptr_set_pr_count(scriptitem_T *si, int val) { si->sn_pr_count = val; }
+
+void nvim_si_ptr_set_pr_total(scriptitem_T *si, proftime_T val) { si->sn_pr_total = val; }
+
+void nvim_si_ptr_set_pr_self(scriptitem_T *si, proftime_T val) { si->sn_pr_self = val; }
+
+void nvim_si_ptr_ga_init_prl(scriptitem_T *si) { ga_init(&si->sn_prl_ga, sizeof(sn_prl_T), 100); }
+
+void nvim_si_ptr_set_prl_idx(scriptitem_T *si, int val) { si->sn_prl_idx = val; }
+
+void nvim_si_ptr_set_prof_on(scriptitem_T *si, bool val) { si->sn_prof_on = val; }
+
+void nvim_si_ptr_set_pr_nest(scriptitem_T *si, int val) { si->sn_pr_nest = val; }
+
+// fprintf wrappers for profile dump output (Rust can't call variadic C fprintf)
+void nvim_profile_fprintf_str(FILE *fd, const char *s) { fputs(s, fd); }
 
 // C accessors for Phase 2
 int nvim_get_script_items_len(void) { return script_items.ga_len; }
@@ -445,6 +330,6 @@ void nvim_profile_reset_funcs(void)
   }
 }
 
-void nvim_profile_script_dump(FILE *fd) { script_dump_profile(fd); }
+void nvim_profile_script_dump(FILE *fd) { rs_script_dump_profile(fd); }
 
-void nvim_profile_func_dump(FILE *fd) { func_dump_profile(fd); }
+void nvim_profile_func_dump(FILE *fd) { rs_func_dump_profile(fd); }

@@ -4113,9 +4113,17 @@ void nvim_ufunc_set_tml_wait(ufunc_T *fp, proftime_T val) { fp->uf_tml_wait = va
 
 void nvim_ufunc_set_tm_count(ufunc_T *fp, int val) { fp->uf_tm_count = val; }
 
+int nvim_ufunc_get_tm_count(const ufunc_T *fp) { return fp->uf_tm_count; }
+
 void nvim_ufunc_set_tm_total(ufunc_T *fp, proftime_T val) { fp->uf_tm_total = val; }
 
+proftime_T nvim_ufunc_get_tm_total(const ufunc_T *fp) { return fp->uf_tm_total; }
+
 void nvim_ufunc_set_tm_self(ufunc_T *fp, proftime_T val) { fp->uf_tm_self = val; }
+
+proftime_T nvim_ufunc_get_tm_self(const ufunc_T *fp) { return fp->uf_tm_self; }
+
+uint8_t nvim_ufunc_get_name_first_byte(const ufunc_T *fp) { return (uint8_t)fp->uf_name[0]; }
 
 // Array element accessors for per-line profiling arrays
 

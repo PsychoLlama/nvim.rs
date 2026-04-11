@@ -10,6 +10,7 @@
 
 pub mod child;
 pub mod command;
+pub mod dump;
 pub mod func_line;
 pub mod input;
 pub mod script_line;
