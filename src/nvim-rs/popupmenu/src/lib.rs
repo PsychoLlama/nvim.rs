@@ -959,16 +959,16 @@ pub unsafe extern "C" fn rs_pum_clear() {
 ///
 /// # Safety
 /// Calls C accessor functions for `pum_want` and `pum_size`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_ext_select_item(item: c_int, insert: c_int, finish: c_int) {
+#[export_name = "pum_ext_select_item"]
+pub unsafe extern "C" fn rs_pum_ext_select_item(item: c_int, insert: bool, finish: bool) {
     // Check if visible and item is in valid range
     if PUM_STATE.is_visible == 0 || item < -1 || item >= PUM_STATE.size {
         return;
     }
     pum_want.active = 1;
     pum_want.item = item;
-    pum_want.insert = (insert != 0) as u8;
-    pum_want.finish = (finish != 0) as u8;
+    pum_want.insert = insert as u8;
+    pum_want.finish = finish as u8;
 }
 
 /// Check if a row is within the scrollbar thumb area.

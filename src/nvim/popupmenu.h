@@ -147,5 +147,8 @@ void pum_show_popupmenu(vimmenu_T *menu);
 void pum_make_popup(const char *path_name, int use_mouse_pos);
 void pum_ui_flush(void);
 win_T *pum_set_info(int selected, char *info);
+void pum_display(pumitem_T *array, int size, int selected, bool array_changed, int cmd_startcol);
+void pum_undisplay(bool immediate);
+void pum_ext_select_item(int item, bool insert, bool finish);
 
 #include "popupmenu.h.generated.h"

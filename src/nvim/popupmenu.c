@@ -62,11 +62,7 @@
 #include "nvim/winfloat.h"
 
 // Rust FFI declarations
-extern void rs_pum_ext_select_item(int item, int insert, int finish);
-extern int rs_pum_undisplay(int immediate);
 extern int rs_pum_border_width(void);
-extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_changed,
-                           int cmd_startcol);
 
 
 
@@ -399,22 +395,7 @@ _Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE must be 0x08");
 
 #include "popupmenu.c.generated.h"
 
-/// Show the popup menu with items "array[size]".
-/// "array" must remain valid until pum_undisplay() is called!
-/// When possible the leftmost character is aligned with cursor column.
-/// The menu appears above the screen line "row" or at "row" + "height" - 1.
-///
-/// @param array
-/// @param size
-/// @param selected index of initially selected item, -1 if out of range
-/// @param array_changed if true, array contains different items since last call
-///                      if false, a new item is selected, but the array
-///                      is the same
-/// @param cmd_startcol only for cmdline mode: column of completed match
-void pum_display(pumitem_T *array, int size, int selected, bool array_changed, int cmd_startcol)
-{
-  rs_pum_display(array, size, selected, (int)array_changed, cmd_startcol);
-}
+// pum_display: migrated to Rust (display.rs) via #[export_name]
 
 // pum_redraw: migrated to Rust (redraw.rs) via #[export_name]
 
@@ -478,13 +459,7 @@ void nvim_pum_preview_set_text_impl(buf_T *buf, char *info, linenr_T *lnum, int 
 
 // pum_set_selected: migrated to Rust (selection.rs)
 
-/// Undisplay the popup menu (later).
-void pum_undisplay(bool immediate)
-{
-  if (rs_pum_undisplay(immediate ? 1 : 0)) {
-    pum_check_clear();
-  }
-}
+// pum_undisplay: migrated to Rust (display.rs) via #[export_name]
 
 // pum_check_clear: migrated to Rust (display.rs) via #[export_name]
 // pum_clear: migrated to Rust (lib.rs) via #[export_name]
@@ -497,11 +472,7 @@ void pum_undisplay(bool immediate)
 // pum_show_popupmenu: migrated to Rust (context_menu.rs) via #[export_name]
 // pum_make_popup: migrated to Rust (context_menu.rs) via #[export_name]
 // pum_ui_flush: migrated to Rust (display.rs) via #[export_name]
-
-void pum_ext_select_item(int item, bool insert, bool finish)
-{
-  rs_pum_ext_select_item(item, insert ? 1 : 0, finish ? 1 : 0);
-}
+// pum_ext_select_item: migrated to Rust (lib.rs) via #[export_name]
 
 // nvim_pum_position_at_mouse_impl: migrated to Rust (mouse.rs)
 

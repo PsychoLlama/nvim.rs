@@ -437,7 +437,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
 #[export_name = "pum_show_popupmenu"]
 #[allow(clippy::too_many_lines, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
-    crate::display::rs_pum_undisplay(1);
+    crate::display::rs_pum_undisplay(true);
     PUM_STATE.size = 0;
     let mode = get_menu_mode_flag();
 
@@ -580,7 +580,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         xfree((*array.offset(i)).pum_text.cast::<std::ffi::c_void>());
     }
     xfree(array.cast::<std::ffi::c_void>());
-    crate::display::rs_pum_undisplay(1);
+    crate::display::rs_pum_undisplay(true);
     if mousemev_was_off {
         nvim_pum_ui_set_mousemoveevent(0);
     }

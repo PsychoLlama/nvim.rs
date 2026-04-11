@@ -117,23 +117,22 @@ pub unsafe extern "C" fn rs_pum_set_display_mode(external: c_int, rl: c_int) {
 /// Undisplay the popup menu.
 ///
 /// This marks the popup as not visible and clears the array pointer.
-/// If `immediate` is true, also triggers clearing.
+/// If `immediate` is true, also triggers clearing immediately.
 ///
 /// # Arguments
 /// * `immediate` - Whether to immediately clear the popup display
 ///
-/// Returns 1 if `pum_check_clear` should be called, 0 otherwise.
-///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_undisplay(immediate: c_int) -> c_int {
+#[export_name = "pum_undisplay"]
+pub unsafe extern "C" fn rs_pum_undisplay(immediate: bool) {
     PUM_STATE.is_visible = 0;
     PUM_STATE.array = std::ptr::null_mut();
     nvim_set_must_redraw_pum(0);
 
-    // Return whether caller should call pum_check_clear
-    immediate
+    if immediate {
+        rs_pum_check_clear();
+    }
 }
 
 /// Check if the popup menu should be cleared from display.
@@ -714,13 +713,13 @@ unsafe fn pum_compute_hp(cursor_col: c_int) {
 ///
 /// # Safety
 /// `array` must be a valid `pumitem_T` array pointer with at least `size` elements.
-#[no_mangle]
+#[export_name = "pum_display"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_pum_display(
     array: *mut crate::item::PumItemArray,
     size: c_int,
     selected: c_int,
-    array_changed: c_int,
+    array_changed: bool,
     cmd_startcol: c_int,
 ) {
     let mut redo_count: c_int = 0;
@@ -757,7 +756,7 @@ pub unsafe extern "C" fn rs_pum_display(
         let cursor_col = geom.cursor_col;
 
         if PUM_STATE.external != 0 {
-            if array_changed != 0 {
+            if array_changed {
                 nvim_pum_ext_show(
                     array,
                     size,
