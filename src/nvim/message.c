@@ -335,172 +335,11 @@ void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
 // wait_return() migrated to Rust (wait.rs) with #[export_name = "wait_return"]
 // hit_return_msg, msgmore, str2special_arena migrated to Rust (misc.rs/keys.rs)
 
-/// print line for :print or :list command
-void msg_prt_line(const char *s, bool list)
-{
-  schar_T sc;
-  int col = 0;
-  int n_extra = 0;
-  schar_T sc_extra = 0;
-  schar_T sc_final = 0;
-  const char *p_extra = NULL;  // init to make SASC shut up. ASCII only!
-  int n;
-  int hl_id = 0;
-  const char *lead = NULL;
-  bool in_multispace = false;
-  int multispace_pos = 0;
-  const char *trail = NULL;
-  int l;
-
-  if (curwin->w_p_list) {
-    list = true;
-  }
-
-  if (list) {
-    // find start of trailing whitespace
-    if (curwin->w_p_lcs_chars.trail) {
-      trail = s + strlen(s);
-      while (trail > s && ascii_iswhite(trail[-1])) {
-        trail--;
-      }
-    }
-    // find end of leading whitespace
-    if (curwin->w_p_lcs_chars.lead || curwin->w_p_lcs_chars.leadmultispace != NULL) {
-      lead = s;
-      while (ascii_iswhite(lead[0])) {
-        lead++;
-      }
-      // in a line full of spaces all of them are treated as trailing
-      if (*lead == NUL) {
-        lead = NULL;
-      }
-    }
-  }
-
-  // output a space for an empty line, otherwise the line will be overwritten
-  if (*s == NUL && !(list && curwin->w_p_lcs_chars.eol != NUL)) {
-    msg_putchar(' ');
-  }
-
-  while (!got_int) {
-    if (n_extra > 0) {
-      n_extra--;
-      if (n_extra == 0 && sc_final) {
-        sc = sc_final;
-      } else if (sc_extra) {
-        sc = sc_extra;
-      } else {
-        assert(p_extra != NULL);
-        sc = schar_from_ascii((unsigned char)(*p_extra++));
-      }
-    } else if ((l = utfc_ptr2len(s)) > 1) {
-      col += utf_ptr2cells(s);
-      char buf[MB_MAXBYTES + 1];
-      if (l >= MB_MAXBYTES) {
-        xstrlcpy(buf, "?", sizeof(buf));
-      } else if (curwin->w_p_lcs_chars.nbsp != NUL && list
-                 && (utf_ptr2char(s) == 160 || utf_ptr2char(s) == 0x202f)) {
-        schar_get(buf, curwin->w_p_lcs_chars.nbsp);
-      } else {
-        memmove(buf, s, (size_t)l);
-        buf[l] = NUL;
-      }
-      msg_puts(buf);
-      s += l;
-      continue;
-    } else {
-      hl_id = 0;
-      int c = (uint8_t)(*s++);
-      if (c >= 0x80) {  // Illegal byte
-        col += utf_char2cells(c);
-        msg_putchar(c);
-        continue;
-      }
-      sc_extra = NUL;
-      sc_final = NUL;
-      if (list) {
-        in_multispace = c == ' ' && (*s == ' '
-                                     || (col > 0 && s[-2] == ' '));
-        if (!in_multispace) {
-          multispace_pos = 0;
-        }
-      }
-      if (c == TAB && (!list || curwin->w_p_lcs_chars.tab1)) {
-        // tab amount depends on current column
-        n_extra = tabstop_padding(col, curbuf->b_p_ts,
-                                  curbuf->b_p_vts_array) - 1;
-        if (!list) {
-          sc = schar_from_ascii(' ');
-          sc_extra = schar_from_ascii(' ');
-        } else {
-          sc = (n_extra == 0 && curwin->w_p_lcs_chars.tab3)
-               ? curwin->w_p_lcs_chars.tab3
-               : curwin->w_p_lcs_chars.tab1;
-          sc_extra = curwin->w_p_lcs_chars.tab2;
-          sc_final = curwin->w_p_lcs_chars.tab3;
-          hl_id = HLF_0;
-        }
-      } else if (c == NUL && list && curwin->w_p_lcs_chars.eol != NUL) {
-        p_extra = "";
-        n_extra = 1;
-        sc = curwin->w_p_lcs_chars.eol;
-        hl_id = HLF_AT;
-        s--;
-      } else if (c != NUL && (n = byte2cells(c)) > 1) {
-        n_extra = n - 1;
-        p_extra = transchar_byte_buf(NULL, c);
-        sc = schar_from_ascii(*p_extra++);
-        // Use special coloring to be able to distinguish <hex> from
-        // the same in plain text.
-        hl_id = HLF_0;
-      } else if (c == ' ') {
-        if (lead != NULL && s <= lead && in_multispace
-            && curwin->w_p_lcs_chars.leadmultispace != NULL) {
-          sc = curwin->w_p_lcs_chars.leadmultispace[multispace_pos++];
-          if (curwin->w_p_lcs_chars.leadmultispace[multispace_pos] == NUL) {
-            multispace_pos = 0;
-          }
-          hl_id = HLF_0;
-        } else if (lead != NULL && s <= lead && curwin->w_p_lcs_chars.lead != NUL) {
-          sc = curwin->w_p_lcs_chars.lead;
-          hl_id = HLF_0;
-        } else if (trail != NULL && s > trail) {
-          sc = curwin->w_p_lcs_chars.trail;
-          hl_id = HLF_0;
-        } else if (in_multispace
-                   && curwin->w_p_lcs_chars.multispace != NULL) {
-          sc = curwin->w_p_lcs_chars.multispace[multispace_pos++];
-          if (curwin->w_p_lcs_chars.multispace[multispace_pos] == NUL) {
-            multispace_pos = 0;
-          }
-          hl_id = HLF_0;
-        } else if (list && curwin->w_p_lcs_chars.space != NUL) {
-          sc = curwin->w_p_lcs_chars.space;
-          hl_id = HLF_0;
-        } else {
-          sc = schar_from_ascii(' ');  // SPACE!
-        }
-      } else {
-        sc = schar_from_ascii(c);
-      }
-    }
-
-    if (sc == NUL) {
-      break;
-    }
-
-    // TODO(bfredl): this is such baloney. need msg_put_schar
-    char buf[MAX_SCHAR_SIZE];
-    schar_get(buf, sc);
-    msg_puts_hl(buf, hl_id, false);
-    col++;
-  }
-  msg_clr_eos();
-}
+// msg_prt_line() migrated to Rust (line.rs) with #[export_name = "msg_prt_line"]
+// C accessors for lcs_chars_T: nvim_lcs_* functions (see below)
 
 // msg_puts_len() migrated to Rust: src/nvim-rs/message/src/output.rs (rs_msg_puts_len)
 // msg_ext_emit_chunk() migrated to Rust: src/nvim-rs/message/src/display.rs
-
 
 // msg_line_flush, msg_cursor_goto, inc_msg_scrolled, store_sb_text migrated to Rust (display.rs/misc.rs/scrollback.rs)
 // show_sb_text, disp_sb_line migrated to Rust (scrollback.rs) with #[export_name]
@@ -564,3 +403,37 @@ void nvim_printf_stdout(const char *s) { printf("%s", s); }
 
 /// stderr fprintf helper for Rust FFI (avoids Rust depending on libc directly).
 void nvim_fprintf_stderr(const char *s) { fprintf(stderr, "%s", s); }
+
+// ============================================================================
+// lcs_chars_T accessors for msg_prt_line (migrated to Rust)
+// These expose the curwin->w_p_lcs_chars and curbuf fields.
+// ============================================================================
+
+// nvim_curwin_w_p_list is already defined in edit.c
+uint32_t nvim_lcs_eol(void) { return curwin->w_p_lcs_chars.eol; }
+uint32_t nvim_lcs_trail(void) { return curwin->w_p_lcs_chars.trail; }
+uint32_t nvim_lcs_lead(void) { return curwin->w_p_lcs_chars.lead; }
+int nvim_lcs_has_leadmultispace(void) { return curwin->w_p_lcs_chars.leadmultispace != NULL; }
+uint32_t nvim_lcs_leadmultispace_at(int idx) {
+  if (curwin->w_p_lcs_chars.leadmultispace == NULL) { return 0; }
+  return (uint32_t)curwin->w_p_lcs_chars.leadmultispace[idx];
+}
+uint32_t nvim_lcs_tab1(void) { return curwin->w_p_lcs_chars.tab1; }
+uint32_t nvim_lcs_tab2(void) { return curwin->w_p_lcs_chars.tab2; }
+uint32_t nvim_lcs_tab3(void) { return curwin->w_p_lcs_chars.tab3; }
+uint32_t nvim_lcs_nbsp(void) { return curwin->w_p_lcs_chars.nbsp; }
+uint32_t nvim_lcs_space(void) { return curwin->w_p_lcs_chars.space; }
+int nvim_lcs_has_multispace(void) { return curwin->w_p_lcs_chars.multispace != NULL; }
+uint32_t nvim_lcs_multispace_at(int idx) {
+  if (curwin->w_p_lcs_chars.multispace == NULL) { return 0; }
+  return (uint32_t)curwin->w_p_lcs_chars.multispace[idx];
+}
+int64_t nvim_curbuf_ts(void) { return curbuf->b_p_ts; }
+int *nvim_curbuf_vts_array(void) { return curbuf->b_p_vts_array; }
+uint32_t nvim_schar_from_ascii(int c) { return schar_from_ascii(c); }
+
+/// HLF_AT highlight constant (for Rust FFI).
+int nvim_hlf_at(void) { return HLF_AT; }
+
+/// HLF_0 highlight constant (for Rust FFI).
+int nvim_hlf_0(void) { return HLF_0; }

@@ -211,6 +211,28 @@ MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bo
 // Phase 2 (wait_return): wait_return migrated to Rust (wait.rs)
 void wait_return(int redraw);
 
+// Phase 3 (msg_prt_line): migrated to Rust (line.rs)
+void msg_prt_line(const char *s, bool list);
+
+// lcs_chars_T accessors for msg_prt_line (message.c)
+uint32_t nvim_lcs_eol(void);
+uint32_t nvim_lcs_trail(void);
+uint32_t nvim_lcs_lead(void);
+int nvim_lcs_has_leadmultispace(void);
+uint32_t nvim_lcs_leadmultispace_at(int idx);
+uint32_t nvim_lcs_tab1(void);
+uint32_t nvim_lcs_tab2(void);
+uint32_t nvim_lcs_tab3(void);
+uint32_t nvim_lcs_nbsp(void);
+uint32_t nvim_lcs_space(void);
+int nvim_lcs_has_multispace(void);
+uint32_t nvim_lcs_multispace_at(int idx);
+int64_t nvim_curbuf_ts(void);
+int *nvim_curbuf_vts_array(void);
+uint32_t nvim_schar_from_ascii(int c);
+int nvim_hlf_at(void);
+int nvim_hlf_0(void);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong
