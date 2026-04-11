@@ -362,6 +362,11 @@ const UH_EMPTYBUF: c_int = 0x02;
 /// Undo header flag: buffer was reloaded.
 const UH_RELOAD: c_int = 0x04;
 
+/// beginline flag: use 'sol' option.
+const BL_SOL: c_int = 2;
+/// beginline flag: don't leave cursor on a NUL.
+const BL_FIX: c_int = 4;
+
 // =============================================================================
 // Undo Module Static State (moved from C undo.c statics)
 // =============================================================================
@@ -860,8 +865,17 @@ extern "C" {
     /// Set ML_EMPTY flag if needed
     fn nvim_undoredo_set_ml_empty(buf: BufHandle, old_flags: c_int);
 
-    /// Cursor adjustment for u_undoredo
-    fn nvim_undoredo_adjust_cursor(curhead: UHeaderHandle);
+    /// Advance cursor column to virtual column wcol. Returns true if cursor on char.
+    #[link_name = "coladvance"]
+    fn undo_coladvance(win: WinHandle, wcol: ColnrT) -> c_int;
+
+    /// Move cursor to beginning of line with flags.
+    #[link_name = "beginline"]
+    fn undo_beginline(flags: c_int);
+
+    /// Validate and adjust cursor position (lnum and col).
+    #[link_name = "check_cursor"]
+    fn undo_check_cursor(wp: WinHandle);
 
     /// Get ml_get result as non-allocating pointer for strcmp
     #[link_name = "ml_get"]
@@ -1610,6 +1624,44 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     true
 }
 
+/// Adjust cursor position after undo/redo.
+///
+/// If the cursor is only off by one line, put it at the same position as before
+/// starting the change (handles the "o" command case). Then restores the saved
+/// column from the undo header, or falls back to beginning of line.
+///
+/// # Safety
+///
+/// Must be called with valid win, buf, and curhead handles. curwin must be win.
+unsafe fn undoredo_adjust_cursor(win: WinHandle, buf: BufHandle, curhead: UHeaderHandle) {
+    let mut cur_lnum = nvim_undo_curwin_get_cursor_lnum();
+
+    // If cursor is only off by one line, restore it (handles "o" command)
+    if (*curhead).uh_cursor.lnum + 1 == cur_lnum && cur_lnum > 1 {
+        cur_lnum -= 1;
+        nvim_undo_curwin_set_cursor_lnum(cur_lnum);
+    }
+
+    let ml_count = nvim_buf_get_ml_line_count(buf);
+    if cur_lnum <= ml_count {
+        if (*curhead).uh_cursor.lnum == cur_lnum {
+            let col = (*curhead).uh_cursor.col;
+            nvim_undo_curwin_set_cursor_col(col);
+            if nvim_curwin_virtual_active() && (*curhead).uh_cursor_vcol >= 0 {
+                undo_coladvance(win, (*curhead).uh_cursor_vcol);
+            } else {
+                // Zero coladd by writing all three cursor fields
+                nvim_undo_win_set_cursor_pos(win, cur_lnum, col, 0);
+            }
+        } else {
+            undo_beginline(BL_SOL | BL_FIX);
+        }
+    } else {
+        nvim_undo_win_set_cursor_pos(win, cur_lnum, 0, 0);
+    }
+    undo_check_cursor(win);
+}
+
 /// Core undo/redo function.
 /// The lines in the file are replaced by the lines in the entry list at
 /// curbuf->b_u_curhead. The replaced lines in the file are saved in the entry
@@ -1853,7 +1905,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     nvim_xfree(saved_marks);
 
     // Adjust cursor position
-    nvim_undoredo_adjust_cursor(curhead);
+    undoredo_adjust_cursor(win, buf, curhead);
 
     // Remember where we are for "g-" and ":earlier 10s".
     // Inline nvim_undoredo_update_seq: update b_u_seq_cur, b_u_save_nr_cur, b_u_time_cur

@@ -497,34 +497,6 @@ void nvim_undoredo_set_ml_empty(buf_T *buf, int old_flags)
   }
 }
 
-// Cursor adjustment for u_undoredo:
-// Handle the complex cursor positioning logic after undo/redo
-void nvim_undoredo_adjust_cursor(u_header_T *curhead)
-{
-  // If the cursor is only off by one line, put it at the same position as
-  // before starting the change (for the "o" command).
-  if (curhead->uh_cursor.lnum + 1 == curwin->w_cursor.lnum
-      && curwin->w_cursor.lnum > 1) {
-    curwin->w_cursor.lnum--;
-  }
-  if (curwin->w_cursor.lnum <= curbuf->b_ml.ml_line_count) {
-    if (curhead->uh_cursor.lnum == curwin->w_cursor.lnum) {
-      curwin->w_cursor.col = curhead->uh_cursor.col;
-      if (virtual_active(curwin) && curhead->uh_cursor_vcol >= 0) {
-        coladvance(curwin, curhead->uh_cursor_vcol);
-      } else {
-        curwin->w_cursor.coladd = 0;
-      }
-    } else {
-      beginline(BL_SOL | BL_FIX);
-    }
-  } else {
-    curwin->w_cursor.col = 0;
-    curwin->w_cursor.coladd = 0;
-  }
-  check_cursor(curwin);
-}
-
 // Redraw conceal for all windows showing this buffer
 void nvim_undo_end_redraw_conceal(buf_T *buf)
 {
