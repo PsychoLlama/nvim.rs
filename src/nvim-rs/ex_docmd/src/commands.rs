@@ -263,7 +263,9 @@ extern "C" {
     // Phase 3: changedir_func helpers
     fn nvim_allbuf_locked() -> bool;
     fn nvim_get_prevdir(scope: c_int) -> *mut c_char;
-    fn nvim_set_prevdir(scope: c_int, pdir: *mut c_char);
+    fn nvim_curtab_set_prevdir(pdir: *mut c_char);
+    fn nvim_curwin_set_prevdir(pdir: *mut c_char);
+    fn nvim_set_global_prevdir(pdir: *mut c_char);
     fn nvim_os_dirname_namebuff() -> c_int;
     fn nvim_expand_env_home_namebuff();
     fn nvim_get_p_cdh() -> c_int;
@@ -1257,6 +1259,25 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
 // Phase 3: Filename Expansion and Edit Handlers
 // =============================================================================
 
+/// Set previous directory for scope (migrated from C nvim_set_prevdir).
+///
+/// Frees the old prevdir and sets the new one.
+/// scope: 0=window, 1=tabpage, 2=global.
+///
+/// # Safety
+///
+/// `pdir` must be a valid heap-allocated C string or NULL.
+#[export_name = "nvim_set_prevdir"]
+pub unsafe extern "C" fn rs_nvim_set_prevdir(scope: c_int, pdir: *mut c_char) {
+    const CD_SCOPE_WINDOW: c_int = 0;
+    const CD_SCOPE_TABPAGE: c_int = 1;
+    match scope {
+        CD_SCOPE_TABPAGE => nvim_curtab_set_prevdir(pdir),
+        CD_SCOPE_WINDOW => nvim_curwin_set_prevdir(pdir),
+        _ => nvim_set_global_prevdir(pdir),
+    }
+}
+
 /// Rust implementation of changedir_func.
 ///
 /// Changes the current directory with scope (global/tab/window) and handles
@@ -1307,7 +1328,7 @@ pub unsafe extern "C" fn rs_changedir_func(new_dir: *mut c_char, scope: c_int) -
         }
     }
 
-    nvim_set_prevdir(scope, pdir);
+    rs_nvim_set_prevdir(scope, pdir);
     nvim_post_chdir(scope, dir_differs);
 
     true

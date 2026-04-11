@@ -38,7 +38,7 @@ extern "C" {
     #[link_name = "del_trailing_spaces"]
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
     fn nvim_docmd_get_dollar_command() -> *mut c_char;
-    fn nvim_docmd_parse_count_digits(eap: ExArgHandle) -> c_int;
+    fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
 
     fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
     #[link_name = "checkforcmd"]
@@ -530,8 +530,24 @@ pub unsafe extern "C" fn rs_parse_count_ex(
         return OK;
     }
 
-    // Parse the digits (this also handles eap->args adjustment)
-    let n = nvim_docmd_parse_count_digits(eap);
+    // Parse the digits (migrated from C nvim_docmd_parse_count_digits).
+    let n = {
+        let n = getdigits_int32(&mut (*eap).arg, false, i32::MAX);
+        (*eap).arg = skipwhite((*eap).arg as *const c_char);
+        if !(*eap).args.is_null() {
+            // Adjust args[0]/arglens[0] or shift args if past them.
+            debug_assert!((*eap).argc > 0);
+            let arg0 = *(*eap).args;
+            let arglen0 = *(*eap).arglens;
+            if (*eap).arg < arg0.add(arglen0) {
+                *(*eap).arglens = arglen0.wrapping_sub((*eap).arg.offset_from(arg0) as usize);
+                *(*eap).args = (*eap).arg;
+            } else {
+                crate::execute::rs_shift_cmd_args(eap);
+            }
+        }
+        n
+    };
 
     if n <= 0 && (argt & crate::table::EX_ZEROR) == 0 {
         if !errormsg.is_null() {

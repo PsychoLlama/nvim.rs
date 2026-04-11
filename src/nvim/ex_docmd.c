@@ -424,24 +424,7 @@ void nvim_docmd_rettv_init_string(void *rettv) { typval_T *tv = (typval_T *)rett
 void nvim_docmd_rettv_set_string(void *rettv, const char *s) { ((typval_T *)rettv)->vval.v_string = xstrdup(s); }
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_user_command_name(useridx, (cmdidx_T)cmdidx); }
 char *nvim_docmd_get_dollar_command(void) { return dollar_command; }
-/// Parse digits from eap->arg, advance eap->arg, return the number.
-/// Also handles eap->args/arglens/argc adjustment.
-int nvim_docmd_parse_count_digits(exarg_T *eap)
-{
-  linenr_T n = getdigits_int32(&eap->arg, false, INT32_MAX);
-  eap->arg = skipwhite(eap->arg);
-
-  if (eap->args != NULL) {
-    assert(eap->argc > 0 && eap->arg >= eap->args[0]);
-    if (eap->arg < eap->args[0] + eap->arglens[0]) {
-      eap->arglens[0] -= (size_t)(eap->arg - eap->args[0]);
-      eap->args[0] = eap->arg;
-    } else {
-      shift_cmd_args(eap);
-    }
-  }
-  return (int)n;
-}
+// nvim_docmd_parse_count_digits is implemented in Rust (args.rs).
 
 
 int nvim_docmd_cmdnames_addr_type(int idx) { return (int)cmdnames[idx].cmd_addr_type; }
@@ -473,33 +456,8 @@ int nvim_docmd_last_loaded_buf_fnum(void)
 }
 
 
-/// Walk forward from firstbuf: find first loaded buffer fnum.
-/// Returns -1 if all buffers walked to end and none loaded.
-int nvim_docmd_first_loaded_fnum_or_fail(void)
-{
-  buf_T *buf = firstbuf;
-  while (buf->b_ml.ml_mfp == NULL) {
-    if (buf->b_next == NULL) {
-      return -1;
-    }
-    buf = buf->b_next;
-  }
-  return buf->b_fnum;
-}
-
-/// Walk backward from lastbuf: find last loaded buffer fnum.
-/// Returns -1 if all buffers walked to start and none loaded.
-int nvim_docmd_last_loaded_fnum_or_fail(void)
-{
-  buf_T *buf = lastbuf;
-  while (buf->b_ml.ml_mfp == NULL) {
-    if (buf->b_prev == NULL) {
-      return -1;
-    }
-    buf = buf->b_prev;
-  }
-  return buf->b_fnum;
-}
+// nvim_docmd_first_loaded_fnum_or_fail and nvim_docmd_last_loaded_fnum_or_fail
+// are implemented in Rust (range.rs).
 
 void nvim_cmod_capture_msg_scroll(cmdmod_T *cmod) { cmod->cmod_save_msg_scroll = msg_scroll; }
 void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_regmatch.regprog); cmod->cmod_filter_regmatch.regprog = NULL; }
@@ -649,24 +607,11 @@ char *nvim_get_prevdir(int scope)
   }
 }
 
-// Set previous directory for scope. Returns old pdir (caller must free if replaced).
-void nvim_set_prevdir(int scope, char *pdir)
-{
-  char **pp;
-  switch ((CdScope)scope) {
-  case kCdScopeTabpage:
-    pp = &curtab->tp_prevdir;
-    break;
-  case kCdScopeWindow:
-    pp = &curwin->w_prevdir;
-    break;
-  default:
-    pp = &prev_dir;
-    break;
-  }
-  xfree(*pp);
-  *pp = pdir;
-}
+// Scope-specific prevdir setters (used by Rust nvim_set_prevdir implementation).
+void nvim_curtab_set_prevdir(char *pdir) { xfree(curtab->tp_prevdir); curtab->tp_prevdir = pdir; }
+void nvim_curwin_set_prevdir(char *pdir) { xfree(curwin->w_prevdir); curwin->w_prevdir = pdir; }
+void nvim_set_global_prevdir(char *pdir) { xfree(prev_dir); prev_dir = pdir; }
+// nvim_set_prevdir is implemented in Rust (commands.rs).
 
 int nvim_os_dirname_namebuff(void) { return (int)os_dirname(NameBuff, MAXPATHL); }
 void nvim_expand_env_home_namebuff(void) { expand_env("$HOME", NameBuff, MAXPATHL); }

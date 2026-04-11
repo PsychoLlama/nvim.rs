@@ -33,11 +33,17 @@ extern "C" {
     fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn nvim_get_argcount() -> c_int;
     fn rs_get_highest_fnum() -> c_int;
-    fn nvim_docmd_first_loaded_fnum_or_fail() -> c_int;
-    fn nvim_docmd_last_loaded_fnum_or_fail() -> c_int;
     fn nvim_docmd_last_win_nr() -> c_int;
     fn nvim_docmd_last_tab_nr() -> c_int;
     fn qf_get_valid_size(eap: ExArgHandle) -> usize;
+
+    // Buffer traversal (for first/last loaded buf fnum)
+    fn nvim_get_firstbuf() -> *mut c_void;
+    fn nvim_get_lastbuf() -> *mut c_void;
+    fn nvim_buf_get_next(buf: *mut c_void) -> *mut c_void;
+    fn nvim_buf_get_prev(buf: *mut c_void) -> *mut c_void;
+    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
+    fn nvim_buf_has_memfile(buf: *mut c_void) -> c_int;
 
     // Error messages
 }
@@ -150,6 +156,48 @@ impl LineRange {
     #[must_use]
     pub const fn contains(&self, line: c_long) -> bool {
         line >= self.line1 && line <= self.line2
+    }
+}
+
+// =============================================================================
+// Buffer traversal helpers (migrated from C ex_docmd.c)
+// =============================================================================
+
+/// Walk forward from firstbuf: find first loaded buffer fnum.
+/// Returns -1 if all buffers walked to end and none loaded.
+///
+/// Matches C `nvim_docmd_first_loaded_fnum_or_fail()`.
+#[export_name = "nvim_docmd_first_loaded_fnum_or_fail"]
+pub unsafe extern "C" fn rs_nvim_docmd_first_loaded_fnum_or_fail() -> c_int {
+    let mut buf = nvim_get_firstbuf();
+    loop {
+        if nvim_buf_has_memfile(buf) != 0 {
+            return nvim_buf_get_fnum(buf);
+        }
+        let next = nvim_buf_get_next(buf);
+        if next.is_null() {
+            return -1;
+        }
+        buf = next;
+    }
+}
+
+/// Walk backward from lastbuf: find last loaded buffer fnum.
+/// Returns -1 if all buffers walked to start and none loaded.
+///
+/// Matches C `nvim_docmd_last_loaded_fnum_or_fail()`.
+#[export_name = "nvim_docmd_last_loaded_fnum_or_fail"]
+pub unsafe extern "C" fn rs_nvim_docmd_last_loaded_fnum_or_fail() -> c_int {
+    let mut buf = nvim_get_lastbuf();
+    loop {
+        if nvim_buf_has_memfile(buf) != 0 {
+            return nvim_buf_get_fnum(buf);
+        }
+        let prev = nvim_buf_get_prev(buf);
+        if prev.is_null() {
+            return -1;
+        }
+        buf = prev;
     }
 }
 
@@ -732,14 +780,14 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 }
             }
             x if x == ADDR_LOADED_BUFFERS => {
-                let first_loaded = nvim_docmd_first_loaded_fnum_or_fail();
+                let first_loaded = rs_nvim_docmd_first_loaded_fnum_or_fail();
                 if first_loaded < 0 {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
                 if line1 < first_loaded as i32 {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
-                let last_loaded = nvim_docmd_last_loaded_fnum_or_fail();
+                let last_loaded = rs_nvim_docmd_last_loaded_fnum_or_fail();
                 if last_loaded < 0 {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }

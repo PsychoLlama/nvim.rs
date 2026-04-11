@@ -53,6 +53,10 @@ typedef struct {
 bool is_map_cmd(cmdidx_T cmdidx);
 char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_full, int *out_useridx);
 void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg, int flags, const exarg_T *eap);
+void nvim_set_prevdir(int scope, char *pdir);
+int nvim_docmd_first_loaded_fnum_or_fail(void);
+int nvim_docmd_last_loaded_fnum_or_fail(void);
+int nvim_docmd_parse_count_digits(exarg_T *eap);
 
 // Forward declarations for Rust-implemented functions exported under C names via #[export_name].
 // These replace the C wrapper bodies that were deleted during the migration.
