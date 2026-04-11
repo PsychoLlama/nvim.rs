@@ -64,12 +64,9 @@
 // Rust FFI declarations
 extern int rs_pum_border_width(void);
 
-
-
 // Static string constants for border comparison (exposed to Rust)
 const char *const opt_winborder_shadow = "shadow";
 const char *const opt_winborder_none = "none";
-
 
 // ui_call_win_float_pos wrapper for pum_grid
 void nvim_pum_ui_call_win_float_pos(int handle, const char *anchor, int anchor_grid,
@@ -79,8 +76,6 @@ void nvim_pum_ui_call_win_float_pos(int handle, const char *anchor, int anchor_g
   ui_call_win_float_pos(handle, -1, cstr_as_string(anchor), anchor_grid,
                         row, col, false, zindex, comp_index, comp_row, comp_col);
 }
-
-
 
 // Static assertions for constants used by Rust FFI
 _Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
@@ -93,7 +88,6 @@ PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
   mouse_find_win_outer(&grid, &row, &col);
   return (PumMouseFindResult){ grid, row, col };
 }
-
 
 // Phase 1 C accessors
 
@@ -177,7 +171,6 @@ uint32_t *nvim_pum_fuzzy_match_positions(const char *text, const char *leader, i
   return positions;
 }
 
-
 // position_at_mouse helpers
 
 PumWinInfo nvim_pum_get_win_by_grid(int grid)
@@ -210,8 +203,6 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
   wp->w_config.hide = hide != 0;
   win_config_float(wp, wp->w_config);
 }
-
-
 
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
@@ -395,17 +386,6 @@ _Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE must be 0x08");
 
 #include "popupmenu.c.generated.h"
 
-// pum_display: migrated to Rust (display.rs) via #[export_name]
-
-// pum_redraw: migrated to Rust (redraw.rs) via #[export_name]
-
-// nvim_pum_display_impl: migrated to Rust (display.rs)
-
-// nvim_pum_compute_text_attrs_impl: migrated to Rust (render.rs)
-// nvim_pum_grid_puts_with_attrs_impl: migrated to Rust (render.rs)
-
-// nvim_pum_redraw_impl: migrated to Rust (redraw.rs)
-
 /// Set the informational text in the preview buffer when the completion
 /// item does not include a dedicated preview or popup window.
 ///
@@ -454,36 +434,3 @@ void nvim_pum_preview_set_text_impl(buf_T *buf, char *info, linenr_T *lnum, int 
   buf->b_p_ma = false;
 }
 
-// nvim_pum_adjust_info_position_impl: migrated to Rust (preview.rs)
-// pum_set_info: migrated to Rust (preview.rs) via #[export_name]
-
-// pum_set_selected: migrated to Rust (selection.rs)
-
-// pum_undisplay: migrated to Rust (display.rs) via #[export_name]
-
-// pum_check_clear: migrated to Rust (display.rs) via #[export_name]
-// pum_clear: migrated to Rust (lib.rs) via #[export_name]
-// pum_visible: migrated to Rust (lib.rs) via #[export_name]
-// pum_drawn: migrated to Rust (lib.rs) via #[export_name]
-// pum_invalidate: migrated to Rust (display.rs) via #[export_name]
-// pum_recompose: migrated to Rust (display.rs) via #[export_name]
-// pum_get_height: migrated to Rust (lib.rs) via #[export_name]
-// pum_set_event_info: migrated to Rust (event.rs) via #[export_name]
-// pum_show_popupmenu: migrated to Rust (context_menu.rs) via #[export_name]
-// pum_make_popup: migrated to Rust (context_menu.rs) via #[export_name]
-// pum_ui_flush: migrated to Rust (display.rs) via #[export_name]
-// pum_ext_select_item: migrated to Rust (lib.rs) via #[export_name]
-
-// nvim_pum_position_at_mouse_impl: migrated to Rust (mouse.rs)
-
-/// Select the pum entry at the mouse position.
-// nvim_pum_select_mouse_pos_impl: migrated to Rust (mouse.rs)
-
-// nvim_pum_execute_menu_impl: migrated to Rust (context_menu.rs)
-
-/// Open the terminal version of the popup menu and don't return until it is closed.
-// nvim_pum_show_popupmenu_impl: migrated to Rust (context_menu.rs)
-
-// nvim_pum_make_popup_impl: migrated to Rust (context_menu.rs)
-
-// nvim_pum_ui_flush_impl: migrated to Rust (display.rs)
