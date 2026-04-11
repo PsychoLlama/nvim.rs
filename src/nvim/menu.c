@@ -10,7 +10,6 @@
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
-#include "nvim/macros_defs.h"
 #include "nvim/memory.h"
 #include "nvim/menu.h"
 #include "nvim/menu_defs.h"
