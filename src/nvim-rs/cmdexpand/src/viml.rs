@@ -8,31 +8,31 @@ use libc::{c_char, c_int};
 // Constants
 // =============================================================================
 
-/// `EXPAND_NOTHING` — unrecognised context (value 0).
+/// `EXPAND_NOTHING` -- unrecognised context (value 0).
 const EXPAND_NOTHING: c_int = 0;
 
-/// `EXPAND_USER_DEFINED` — custom completion function (value 30).
+/// `EXPAND_USER_DEFINED` -- custom completion function (value 30).
 const EXPAND_USER_DEFINED: c_int = 30;
 
-/// `EXPAND_USER_LIST` — custom list completion function (value 31).
+/// `EXPAND_USER_LIST` -- custom list completion function (value 31).
 const EXPAND_USER_LIST: c_int = 31;
 
-/// `EXPAND_MENUS` — menu completion (value 11).
+/// `EXPAND_MENUS` -- menu completion (value 11).
 const EXPAND_MENUS: c_int = 11;
 
-/// `EXPAND_SIGN` — sign completion (value 34).
+/// `EXPAND_SIGN` -- sign completion (value 34).
 const EXPAND_SIGN: c_int = 34;
 
-/// `EXPAND_RUNTIME` — runtime completion (value 51).
+/// `EXPAND_RUNTIME` -- runtime completion (value 51).
 const EXPAND_RUNTIME: c_int = 51;
 
-/// `EXPAND_SHELLCMDLINE` — shell command line completion (value 57).
+/// `EXPAND_SHELLCMDLINE` -- shell command line completion (value 57).
 const EXPAND_SHELLCMDLINE: c_int = 57;
 
-/// `EXPAND_FILETYPECMD` — filetype command completion (value 59).
+/// `EXPAND_FILETYPECMD` -- filetype command completion (value 59).
 const EXPAND_FILETYPECMD: c_int = 59;
 
-/// `EXPAND_LUA` — Lua completion (value 63).
+/// `EXPAND_LUA` -- Lua completion (value 63).
 const EXPAND_LUA: c_int = 63;
 
 /// `WILD_SILENT` option flag.
@@ -72,8 +72,29 @@ const FAIL: c_int = 0;
 /// Opaque handle for `typval_T *`.
 type TypvalHandle = *mut libc::c_void;
 
-/// Opaque handle for `list_T *`.
+/// Opaque handle for `list_T *` or `dict_T *`.
 type ListHandle = *mut libc::c_void;
+
+/// Extract `vval.v_dict` (or `vval.v_list`) pointer from an opaque `typval_T *`.
+///
+/// In `typval_T` (sizeof=16): `v_type@0`, `v_lock@4`, `vval@8`.
+/// The union's first field (`v_list`, `v_dict`) is at offset 8.
+///
+/// # Safety
+///
+/// `tv` must be a valid `typval_T *` with a dict (or list) `v_type`.
+#[inline]
+#[allow(clippy::missing_const_for_fn)]
+unsafe fn tv_get_ptr(tv: TypvalHandle) -> *mut libc::c_void {
+    const VVAL_OFFSET: usize = 8;
+    let mut ptr = std::ptr::null_mut::<libc::c_void>();
+    std::ptr::copy_nonoverlapping(
+        (tv as *const u8).add(VVAL_OFFSET),
+        std::ptr::addr_of_mut!(ptr).cast::<u8>(),
+        std::mem::size_of::<*mut libc::c_void>(),
+    );
+    ptr
+}
 
 // =============================================================================
 // External C functions
@@ -89,47 +110,42 @@ extern "C" {
     /// Get string value from argvars[idx].
     fn nvim_cmdexpand_tv_get_string(argvars: TypvalHandle, idx: c_int) -> *const c_char;
 
-    /// `tv_get_number_chk(tv, ret_error)` — get number from typval (direct).
+    /// `tv_get_number_chk(tv, ret_error)` -- get number from typval (direct).
     fn tv_get_number_chk(tv: *const libc::c_void, ret_error: *mut bool) -> i64;
 
-    /// Allocate a list and set rettv.
-    fn nvim_cmdexpand_tv_list_alloc_ret(rettv: TypvalHandle, count: c_int);
+    /// `tv_list_alloc_ret(ret_tv, len)` -- allocate list and assign to rettv.
+    fn tv_list_alloc_ret(rettv: TypvalHandle, len: isize) -> ListHandle;
 
-    /// Append string to rettv->vval.v_list.
-    fn nvim_cmdexpand_tv_list_append_string(rettv: TypvalHandle, str_: *const c_char, len: i64);
+    /// `tv_list_alloc(len)` -- allocate a bare list.
+    fn tv_list_alloc(len: isize) -> ListHandle;
 
-    /// Set rettv to `VAR_STRING` with value `str` (takes ownership).
+    /// `tv_list_append_string(l, s, len)` -- append a string to a list.
+    fn tv_list_append_string(li: ListHandle, str_: *const c_char, len: i64);
+
+    /// Set rettv to `VAR_STRING` with value str (takes ownership).
     fn nvim_cmdexpand_tv_set_string(rettv: TypvalHandle, str_: *mut c_char);
 
-    /// Allocate a dict and set rettv.
-    fn nvim_cmdexpand_tv_dict_alloc_ret(rettv: TypvalHandle);
+    /// `tv_dict_alloc_ret(ret_tv)` -- allocate dict and assign to rettv.
+    fn tv_dict_alloc_ret(rettv: TypvalHandle);
 
-    /// Add string to rettv->vval.v_dict. Returns OK or FAIL.
-    fn nvim_cmdexpand_tv_dict_add_str(
-        rettv: TypvalHandle,
+    /// `tv_dict_add_str(d, key, klen, val)` -- add string entry to dict.
+    fn tv_dict_add_str(
+        dict: *mut libc::c_void,
         key: *const c_char,
         klen: usize,
         val: *const c_char,
     ) -> c_int;
 
-    /// Add number to rettv->vval.v_dict. Returns OK or FAIL.
-    fn nvim_cmdexpand_tv_dict_add_nr(
-        rettv: TypvalHandle,
+    /// `tv_dict_add_nr(d, key, klen, nr)` -- add number entry to dict.
+    fn tv_dict_add_nr(dict: *mut libc::c_void, key: *const c_char, klen: usize, nr: i64) -> c_int;
+
+    /// `tv_dict_add_list(d, key, klen, list)` -- add list entry to dict.
+    fn tv_dict_add_list(
+        dict: *mut libc::c_void,
         key: *const c_char,
         klen: usize,
-        val: i64,
+        list: ListHandle,
     ) -> c_int;
-
-    /// Allocate a list, add to dict, and return the list handle.
-    fn nvim_cmdexpand_tv_dict_add_list(
-        rettv: TypvalHandle,
-        key: *const c_char,
-        klen: usize,
-        count: c_int,
-    ) -> ListHandle;
-
-    /// Append string to a `list_T` directly.
-    fn nvim_cmdexpand_list_append_string(li: ListHandle, str_: *const c_char, len: i64);
 
     /// Get `pum_visible()` return value.
     fn nvim_cmdexpand_pum_visible() -> c_int;
@@ -190,7 +206,7 @@ extern "C" {
     /// `nlua_expand_pat(xp)` wrapper.
     fn nvim_cmdexpand_nlua_expand_pat(xp: *mut crate::ExpandT);
 
-    /// `ExpandOne(xp, str, orig, options, mode)` — callable via C ABI.
+    /// `ExpandOne(xp, str, orig, options, mode)` -- callable via C ABI.
     fn ExpandOne(
         xp: *mut crate::ExpandT,
         str_: *mut c_char,
@@ -199,10 +215,10 @@ extern "C" {
         mode: c_int,
     ) -> *mut c_char;
 
-    /// `ExpandCleanup(xp)` — callable via C ABI.
+    /// `ExpandCleanup(xp)` -- callable via C ABI.
     fn ExpandCleanup(xp: *mut crate::ExpandT);
 
-    /// `ExpandInit(xp)` — callable via C ABI.
+    /// `ExpandInit(xp)` -- callable via C ABI.
     fn ExpandInit(xp: *mut crate::ExpandT);
 
     fn xfree(ptr: *mut libc::c_void);
@@ -368,11 +384,11 @@ unsafe fn complete_getcompletion(
     };
 
     ExpandOne(xpc, pat, std::ptr::null_mut(), options, WILD_ALL_KEEP);
-    nvim_cmdexpand_tv_list_alloc_ret(rettv, (*xpc).xp_numfiles);
+    let li = tv_list_alloc_ret(rettv, (*xpc).xp_numfiles as isize);
 
     for i in 0..(*xpc).xp_numfiles {
         let s = *(*xpc).xp_files.add(i as usize);
-        nvim_cmdexpand_tv_list_append_string(rettv, s, -1);
+        tv_list_append_string(li, s, -1);
     }
     xfree(pat.cast::<libc::c_void>());
 }
@@ -436,15 +452,16 @@ pub unsafe extern "C" fn rs_f_cmdcomplete_info(
     rettv: TypvalHandle,
     _fptr: *mut libc::c_void,
 ) {
-    nvim_cmdexpand_tv_dict_alloc_ret(rettv);
+    tv_dict_alloc_ret(rettv);
 
     if nvim_cmdexpand_ccline_has_xp_files() == 0 {
         return;
     }
 
+    let dict = tv_get_ptr(rettv);
     let cmdline_orig = nvim_cmdexpand_get_cmdline_orig();
-    let mut ret = nvim_cmdexpand_tv_dict_add_str(
-        rettv,
+    let mut ret = tv_dict_add_str(
+        dict,
         c"cmdline_orig".as_ptr(),
         12,
         if cmdline_orig.is_null() {
@@ -454,16 +471,16 @@ pub unsafe extern "C" fn rs_f_cmdcomplete_info(
         },
     );
     if ret == OK {
-        ret = nvim_cmdexpand_tv_dict_add_nr(
-            rettv,
+        ret = tv_dict_add_nr(
+            dict,
             c"pum_visible".as_ptr(),
             11,
             i64::from(nvim_cmdexpand_pum_visible()),
         );
     }
     if ret == OK {
-        ret = nvim_cmdexpand_tv_dict_add_nr(
-            rettv,
+        ret = tv_dict_add_nr(
+            dict,
             c"selected".as_ptr(),
             8,
             i64::from(nvim_cmdexpand_get_ccline_xp_selected()),
@@ -471,12 +488,13 @@ pub unsafe extern "C" fn rs_f_cmdcomplete_info(
     }
     if ret == OK {
         let num_files = nvim_cmdexpand_get_ccline_xp_numfiles();
-        let li = nvim_cmdexpand_tv_dict_add_list(rettv, c"matches".as_ptr(), 7, num_files.max(0));
+        let li = tv_list_alloc(num_files.max(0) as isize);
+        tv_dict_add_list(dict, c"matches".as_ptr(), 7, li);
         let mut idx = 0;
         while ret == OK && idx < num_files {
             let s = nvim_cmdexpand_get_ccline_xp_file(idx);
             if !s.is_null() {
-                nvim_cmdexpand_list_append_string(li, s, -1);
+                tv_list_append_string(li, s, -1);
             }
             idx += 1;
         }

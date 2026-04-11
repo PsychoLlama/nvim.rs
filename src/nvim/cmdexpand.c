@@ -507,50 +507,14 @@ int nvim_cmdexpand_tv_check_for_string_arg(typval_T *argvars, int idx) { return 
 const char *nvim_cmdexpand_tv_get_string(typval_T *argvars, int idx) { return tv_get_string(&argvars[idx]); }
 // nvim_cmdexpand_tv_get_number_chk: Rust now calls tv_get_number_chk directly.
 
-/// Allocate a list and set rettv to it (for Rust FFI).
-void nvim_cmdexpand_tv_list_alloc_ret(typval_T *rettv, int estimated_count)
-{
-  tv_list_alloc_ret(rettv, estimated_count);
-}
-
-/// Append string to a list_T (from rettv->vval.v_list) (for Rust FFI).
-void nvim_cmdexpand_tv_list_append_string(typval_T *rettv, const char *str, int64_t len)
-{
-  tv_list_append_string(rettv->vval.v_list, str, len);
-}
+// Phase 6: tv_list_alloc_ret, tv_list_append_string, tv_dict_alloc_ret,
+// tv_dict_add_str, tv_dict_add_nr, tv_dict_add_list, tv_list_append_string:
+// Rust now calls these directly.
 
 void nvim_cmdexpand_tv_set_string(typval_T *rettv, char *str)
 {
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = str;
-}
-
-/// Allocate a dict and set rettv to it (for Rust FFI).
-void nvim_cmdexpand_tv_dict_alloc_ret(typval_T *rettv) { tv_dict_alloc_ret(rettv); }
-/// Add string to dict (for Rust FFI). Returns OK or FAIL.
-int nvim_cmdexpand_tv_dict_add_str(typval_T *rettv, const char *key, size_t klen, const char *val)
-{
-  return tv_dict_add_str(rettv->vval.v_dict, key, klen, val);
-}
-
-/// Add integer to dict (for Rust FFI). Returns OK or FAIL.
-int nvim_cmdexpand_tv_dict_add_nr(typval_T *rettv, const char *key, size_t klen, int64_t val)
-{
-  return tv_dict_add_nr(rettv->vval.v_dict, key, klen, val);
-}
-
-/// Allocate a list and add it to dict (for Rust FFI). Returns list handle.
-list_T *nvim_cmdexpand_tv_dict_add_list(typval_T *rettv, const char *key, size_t klen, int count)
-{
-  list_T *li = tv_list_alloc(count);
-  tv_dict_add_list(rettv->vval.v_dict, key, klen, li);
-  return li;
-}
-
-/// Append string to a list_T directly (for Rust FFI).
-void nvim_cmdexpand_list_append_string(list_T *li, const char *str, int64_t len)
-{
-  tv_list_append_string(li, str, len);
 }
 
 int nvim_cmdexpand_pum_visible(void) { return pum_visible(); }
