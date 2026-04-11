@@ -78,7 +78,7 @@ extern "C" {
 
     // Diff functions
     #[link_name = "rs_diff_internal"]
-    fn nvim_diff_internal() -> bool;
+    fn nvim_diff_internal() -> c_int;
     #[link_name = "rs_diff_lnum_win"]
     fn nvim_diff_lnum_win(lnum: LinenrT, win: WinHandle) -> LinenrT;
 
@@ -95,8 +95,6 @@ extern "C" {
     #[link_name = "changed"]
     fn rs_changed(buf: BufHandle);
 
-    // Changed common helper (we'll call into C for this complex function)
-    fn changed_common(buf: BufHandle, lnum: LinenrT, col: ColnrT, lnume: LinenrT, xtra: LinenrT);
 }
 
 /// Update redraw type constant (from drawscreen.h).
@@ -205,7 +203,7 @@ fn changed_bytes_impl(lnum: LinenrT, col: ColnrT) {
         let curwin = nvim_get_curwin();
 
         changed_lines_redraw_buf_impl(curbuf, lnum, lnum + 1, 0);
-        changed_common(curbuf, lnum, col, lnum + 1, 0);
+        crate::common::changed_common_impl(curbuf, lnum, col, lnum + 1, 0);
 
         // When text has been changed at the end of the line, possibly the start of
         // the next line may have SpellCap that should be removed or it needs to be
@@ -307,7 +305,7 @@ fn changed_lines_impl(
         if xtra == 0
             && nvim_win_get_p_diff(curwin) != 0
             && nvim_win_get_buffer(curwin) == buf
-            && !nvim_diff_internal()
+            && nvim_diff_internal() == 0
         {
             // When the number of lines doesn't change then mark_adjust() isn't
             // called and other diff buffers still need to be marked for
@@ -326,7 +324,7 @@ fn changed_lines_impl(
             }
         }
 
-        changed_common(buf, lnum, col, lnume, xtra);
+        crate::common::changed_common_impl(buf, lnum, col, lnume, xtra);
 
         if do_buf_event {
             let num_added = lnume + xtra - lnum;

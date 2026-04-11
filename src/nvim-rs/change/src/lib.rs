@@ -22,6 +22,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 pub mod comment;
+pub mod common;
 pub mod editing;
 pub mod events;
 pub mod file_format;

@@ -60,7 +60,7 @@ const KMT_META_LINES: c_int = 1;
 /// Invalidate a window's w_valid flags and w_lines[] entries after changing lines.
 ///
 /// This is called for each window displaying the changed buffer.
-fn changed_lines_invalidate_win_impl(
+pub(crate) fn changed_lines_invalidate_win_impl(
     wp: WinHandle,
     lnum: LinenrT,
     col: ColnrT,
