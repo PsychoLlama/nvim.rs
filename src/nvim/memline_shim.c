@@ -43,6 +43,9 @@
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
 
+// open_buffer migrated to Rust lifecycle.rs
+extern int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg);
+
 enum {
   DATA_ID = (('d' << 8) + 'a'),  // data block id
   PTR_ID = (('p' << 8) + 't'),   // pointer block id

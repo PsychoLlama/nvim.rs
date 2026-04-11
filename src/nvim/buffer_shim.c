@@ -23,7 +23,9 @@
 #include "nvim/fold.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
+#include "nvim/help.h"
 #include "nvim/indent.h"
+#include "nvim/indent_c.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/memfile.h"
@@ -61,11 +63,18 @@
 // Rust-exported fold/window helpers
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 extern void rs_clearFolding(win_T *win);
+extern void rs_foldUpdateAll(win_T *win);
 // buffer.c non-static helpers
 extern void free_buffer(buf_T *buf);
 extern void free_buffer_stuff(buf_T *buf, int free_flags);
 // Rust buffer-lifecycle helpers
 extern int rs_do_buffer_ext(int action, int start, int dir, int count, int flags);
+// Rust open_buffer (migrated from buffer.c)
+extern int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg);
+// Rust read_buffer (migrated from buffer.c)
+extern int rs_read_buffer(bool read_stdin, exarg_T *eap, int flags);
+// getout declared in main.h.generated.h (included via buffer_shim.c.generated.h indirectly)
+extern void getout(int exitval);
 
 int nvim_buf_get_handle(buf_T *buf) { return buf ? buf->b_fnum : 0; }
 char nvim_buf_get_buftype(buf_T *buf) { return buf->b_p_bt[0]; }
@@ -733,3 +742,228 @@ int nvim_READ_KEEP_UNDO(void) { return READ_KEEP_UNDO; }
 // Accessor for b_did_filetype (used by rs_do_filetype_autocmd)
 void nvim_buf_set_b_did_filetype(buf_T *buf, int val) { buf->b_did_filetype = (bool)val; }
 int nvim_buf_get_b_did_filetype(buf_T *buf) { return (int)buf->b_did_filetype; }
+
+// =============================================================================
+// open_buffer compound accessors (Phase N: migrate open_buffer to Rust)
+// =============================================================================
+
+/// Check readonlymode and set b_p_ro if needed. Returns 1 if ml_open succeeds,
+/// 0 if it fails. On failure, sets curbuf to the first buffer with a memfile,
+/// or exits if none found. Also calls enter_buffer and check_colorcolumn on
+/// failure path if needed.
+/// Returns:
+///   1  = ml_open succeeded, proceed normally
+///   0  = ml_open failed, FAIL should be returned by open_buffer
+int nvim_open_buffer_ml_init(OptInt old_tw)
+{
+  // The 'readonly' flag is only set when BF_NEVERLOADED is being reset.
+  if (readonlymode && curbuf->b_ffname != NULL
+      && (curbuf->b_flags & BF_NEVERLOADED)) {
+    curbuf->b_p_ro = true;
+  }
+
+  if (ml_open(curbuf) != FAIL) {
+    return 1;
+  }
+
+  // There MUST be a memfile, otherwise we can't do anything.
+  // If we can't create one for the current buffer, take another buffer.
+  close_buffer(NULL, curbuf, 0, false, false);
+
+  curbuf = NULL;
+  FOR_ALL_BUFFERS(buf) {
+    if (buf->b_ml.ml_mfp != NULL) {
+      curbuf = buf;
+      break;
+    }
+  }
+
+  if (curbuf == NULL) {
+    emsg(_("E82: Cannot allocate any buffer, exiting..."));
+    v_dying = 2;
+    getout(2);
+  }
+
+  emsg(_("E83: Cannot allocate buffer, using other one..."));
+  enter_buffer(curbuf);
+  if (old_tw != curbuf->b_p_tw) {
+    check_colorcolumn(NULL, curwin);
+  }
+  return 0;
+}
+
+/// Set mf_dirty to MF_DIRTY_YES_NOSYNC if memfile exists.
+void nvim_curbuf_mf_set_nosync(void)
+{
+  if (curbuf->b_ml.ml_mfp != NULL) {
+    curbuf->b_ml.ml_mfp->mf_dirty = MF_DIRTY_YES_NOSYNC;
+  }
+}
+
+/// If mf_dirty == MF_DIRTY_YES_NOSYNC, upgrade to MF_DIRTY_YES.
+void nvim_curbuf_mf_unset_nosync(void)
+{
+  if (curbuf->b_ml.ml_mfp != NULL
+      && curbuf->b_ml.ml_mfp->mf_dirty == MF_DIRTY_YES_NOSYNC) {
+    curbuf->b_ml.ml_mfp->mf_dirty = MF_DIRTY_YES;
+  }
+}
+
+/// Initialize bufref, modified_was_set, and cursor validity for open_buffer.
+/// Returns the old_curbuf bufref via the out pointer.
+void nvim_open_buffer_setup_bufref(bufref_T *old_curbuf_out)
+{
+  set_bufref(old_curbuf_out, curbuf);
+  curbuf->b_modified_was_set = false;
+  curwin->w_valid = 0;
+}
+
+/// Get curbuf->b_modified_was_set.
+int nvim_curbuf_get_modified_was_set(void)
+{
+  return curbuf->b_modified_was_set ? 1 : 0;
+}
+
+/// Read the file into curbuf for open_buffer.
+/// Handles UNIX fifo detection and binary-mode save/restore.
+/// @param eap  exarg pointer (may be NULL)
+/// @param flags  read flags (e.g. READ_NOFILE)
+/// @param silent  shortmess result
+/// @param read_fifo_out  set to 1 if fifo/socket detected (UNIX only)
+/// @return  readfile() result (OK or FAIL), or OK if no file
+int nvim_open_buffer_read_file(void *eap, int flags, int silent, int *read_fifo_out)
+{
+  *read_fifo_out = 0;
+  if (curbuf->b_ffname == NULL) {
+    return 1;  // OK, no file to read
+  }
+
+#ifdef UNIX
+  int save_bin = curbuf->b_p_bin;
+  int perm = os_getperm(curbuf->b_ffname);
+  bool is_fifo = perm >= 0 && (S_ISFIFO(perm) || S_ISSOCK(perm)
+#ifdef OPEN_CHR_FILES
+                               || (S_ISCHR(perm) && rs_is_dev_fd_file(curbuf->b_ffname))
+#endif
+                               );
+  if (is_fifo) {
+    *read_fifo_out = 1;
+    curbuf->b_p_bin = true;
+  }
+#endif
+
+  int retval = readfile(curbuf->b_ffname, curbuf->b_fname,
+                        0, 0, (linenr_T)MAXLNUM, (exarg_T *)eap,
+                        flags | READ_NEW | (*read_fifo_out ? READ_FIFO : 0), silent != 0);
+
+#ifdef UNIX
+  if (*read_fifo_out) {
+    curbuf->b_p_bin = save_bin;
+    if (retval == OK) {
+      retval = rs_read_buffer(false, eap, flags);
+    }
+  }
+#endif
+
+  if (bt_help(curbuf)) {
+    get_local_additions();
+  }
+  return retval;
+}
+
+/// Read stdin for open_buffer (binary pre-read then retry).
+/// @param eap  exarg pointer
+/// @param flags  read flags
+/// @param silent  shortmess result
+/// @return readfile()/rs_read_buffer() result
+int nvim_open_buffer_read_stdin(void *eap, int flags, int silent)
+{
+  int save_bin = curbuf->b_p_bin;
+  curbuf->b_p_bin = true;
+  int retval = readfile(NULL, NULL, 0, 0, (linenr_T)MAXLNUM, NULL,
+                        flags | (READ_NEW + READ_STDIN), silent != 0);
+  curbuf->b_p_bin = save_bin;
+  if (retval == OK) {
+    retval = rs_read_buffer(true, eap, flags);
+  }
+  return retval;
+}
+
+/// Handle first-time load of curbuf: buf_init_chartab + parse_cino.
+void nvim_curbuf_init_first_load(void)
+{
+  if (curbuf->b_flags & BF_NEVERLOADED) {
+    buf_init_chartab(curbuf, false);
+    parse_cino(curbuf);
+  }
+}
+
+/// Decide changed/unchanged state and save file format for open_buffer.
+/// @param retval  current readfile result (non-zero = OK)
+/// @param read_stdin  was reading from stdin
+/// @param read_fifo  was reading from fifo
+void nvim_open_buffer_set_changed(int retval, int read_stdin, int read_fifo)
+{
+  int fail_val = 0;  // FAIL == 0
+  if ((got_int && vim_strchr(p_cpo, CPO_INTMOD) != NULL)
+      || curbuf->b_modified_was_set
+      || (aborting() && vim_strchr(p_cpo, CPO_INTMOD) != NULL)) {
+    changed(curbuf);
+  } else if (retval != fail_val && !read_stdin && !read_fifo) {
+    unchanged(curbuf, false, true);
+  }
+  save_file_ff(curbuf);
+  curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
+  curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
+  curbuf->b_last_changedtick_pum = buf_get_changedtick(curbuf);
+  if (aborting()) {
+    curbuf->b_flags |= BF_READERR;
+  }
+}
+
+/// Set topline/topfill to 1/0 if VALID_TOPLINE is not set.
+void nvim_curwin_init_topline(void)
+{
+  if (!(curwin->w_valid & VALID_TOPLINE)) {
+    curwin->w_topline = 1;
+    curwin->w_topfill = 0;
+  }
+}
+
+/// Fire EVENT_BUFENTER and update retval.
+void nvim_open_buffer_bufenter(int *retval)
+{
+  apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval);
+}
+
+/// Fire EVENT_BUFWINENTER and update retval.
+void nvim_open_buffer_bufwinenter(int *retval)
+{
+  apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf, retval);
+}
+
+/// Execute the post-BUFENTER section of open_buffer:
+/// - validates old_curbuf is still alive with memfile
+/// - calls aucmd_prepbuf, do_modelines, clears BF_CHECK_RO|BF_NEVERLOADED
+/// - conditionally fires BUFWINENTER
+/// - restores aucmd state
+/// @param old_curbuf  bufref saved before readfile
+/// @param flags  read flags (checked for READ_NOWINENTER)
+/// @param retval  in/out: current retval, updated by BUFWINENTER autocmd
+void nvim_open_buffer_post_autocmd(bufref_T *old_curbuf, int flags, int *retval)
+{
+  if (!bufref_valid(old_curbuf) || old_curbuf->br_buf->b_ml.ml_mfp == NULL) {
+    return;
+  }
+  aco_save_T aco;
+  aucmd_prepbuf(&aco, old_curbuf->br_buf);
+  do_modelines(0);
+  curbuf->b_flags &= ~(BF_CHECK_RO | BF_NEVERLOADED);
+  if ((flags & READ_NOWINENTER) == 0) {
+    apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf, retval);
+  }
+  aucmd_restbuf(&aco);
+}
+
+/// Call rs_foldUpdateAll on curwin (convenience wrapper for Rust).
+void rs_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }

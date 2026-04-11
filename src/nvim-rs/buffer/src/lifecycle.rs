@@ -2271,6 +2271,114 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
 }
 
 // =============================================================================
+// open_buffer (Phase N migration)
+// =============================================================================
+
+extern "C" {
+    fn nvim_open_buffer_ml_init(old_tw: i64) -> c_int;
+    fn nvim_curbuf_mf_set_nosync();
+    fn nvim_curbuf_mf_unset_nosync();
+    fn nvim_open_buffer_setup_bufref(old_curbuf: *mut crate::misc::BufRef);
+    fn nvim_open_buffer_read_file(
+        eap: *mut ExArg,
+        flags: c_int,
+        silent: c_int,
+        read_fifo_out: *mut c_int,
+    ) -> c_int;
+    fn nvim_open_buffer_read_stdin(eap: *mut ExArg, flags: c_int, silent: c_int) -> c_int;
+    fn nvim_curbuf_init_first_load();
+    fn nvim_open_buffer_set_changed(retval: c_int, read_stdin: c_int, read_fifo: c_int);
+    fn nvim_curwin_init_topline();
+    fn nvim_open_buffer_bufenter(retval: *mut c_int);
+    fn nvim_open_buffer_post_autocmd(
+        old_curbuf: *mut crate::misc::BufRef,
+        flags: c_int,
+        retval: *mut c_int,
+    );
+    fn rs_bt_nofileread(buf: BufHandle) -> bool;
+    fn rs_foldUpdateAll_curwin();
+    fn nvim_curbuf_has_ffname() -> c_int;
+}
+
+// READ_NOFILE flag: do not read a file, do trigger BufReadCmd
+const READ_NOFILE: c_int = 0x100;
+
+/// Open current buffer: open the memfile and read the file into memory.
+///
+/// Port of C `open_buffer`.
+///
+/// - `read_stdin`: read file from stdin
+/// - `eap`: for forced `ff` and `fenc` or NULL
+/// - `flags_arg`: extra flags for `readfile`
+///
+/// Returns FAIL (0) for failure, OK (1) otherwise.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[unsafe(export_name = "open_buffer")]
+pub unsafe extern "C" fn rs_open_buffer(
+    read_stdin: bool,
+    eap: *mut ExArg,
+    flags_arg: c_int,
+) -> c_int {
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+
+    let mut flags = flags_arg;
+    let mut retval = OK;
+    let silent = shortmess(SHM_FILEINFO);
+    let silent_int: c_int = c_int::from(silent);
+
+    // Save old text-width before ml_open attempt (needed for fallback path).
+    let old_tw = nvim_curbuf_get_p_tw();
+
+    // Handle readonlymode + try ml_open. Returns 0 (FAIL) if we should bail.
+    if nvim_open_buffer_ml_init(old_tw) == 0 {
+        return FAIL;
+    }
+
+    // Do not sync this buffer yet; may first want to read the file.
+    nvim_curbuf_mf_set_nosync();
+
+    // Save bufref so we can detect if autocommands changed curbuf.
+    let mut old_curbuf = crate::misc::BufRef {
+        br_buf: std::ptr::null_mut(),
+        br_fnum: 0,
+        br_buf_free_count: 0,
+    };
+    nvim_open_buffer_setup_bufref(&raw mut old_curbuf);
+
+    // A buffer without an actual file should not use the buffer name to read.
+    let curbuf = nvim_get_curbuf();
+    if rs_bt_nofileread(curbuf) {
+        flags |= READ_NOFILE;
+    }
+
+    // Read the file or stdin.
+    let mut read_fifo: c_int = 0;
+    if nvim_curbuf_has_ffname() != 0 {
+        retval = nvim_open_buffer_read_file(eap, flags, silent_int, &raw mut read_fifo);
+    } else if read_stdin {
+        retval = nvim_open_buffer_read_stdin(eap, flags, silent_int);
+    }
+    // If neither, retval stays OK and read_fifo stays 0.
+
+    // Can now sync buffer; handle first-load; set changed state.
+    nvim_curbuf_mf_unset_nosync();
+    nvim_curbuf_init_first_load();
+    nvim_open_buffer_set_changed(retval, c_int::from(read_stdin), read_fifo);
+    rs_foldUpdateAll_curwin();
+    nvim_curwin_init_topline();
+    nvim_open_buffer_bufenter(&raw mut retval);
+    if retval == FAIL {
+        return retval;
+    }
+    nvim_open_buffer_post_autocmd(&raw mut old_curbuf, flags, &raw mut retval);
+
+    retval
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
