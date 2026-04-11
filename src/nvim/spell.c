@@ -163,19 +163,12 @@ char *repl_to = NULL;
 
 
 
-
-
-
-// spell_move_to, decor_spell_nav_start, decor_spell_nav_col, can_syn_spell
-// migrated to Rust: src/nvim-rs/spell/src/navigate.rs
-
-
-// spell_load_lang, int_wordlist_spl, spell_load_cb, parse_spelllang,
-// clear_midword, use_midword migrated to Rust: src/nvim-rs/spell/src/lang.rs
-// spell_load_lang, int_wordlist_spl, spell_load_cb kept as C in spell_shim.c
-
-
-
+// spell_move_to, decor_spell_nav_start, decor_spell_nav_col, can_syn_spell:
+//   migrated to Rust: src/nvim-rs/spell/src/navigate.rs
+// parse_spelllang, clear_midword, use_midword:
+//   migrated to Rust: src/nvim-rs/spell/src/lang.rs
+// spell_load_lang, int_wordlist_spl, spell_load_cb:
+//   kept as C in spell_shim.c (complex C-only dependencies)
 
 // Open a spell buffer.  This is a nameless buffer that is not in the buffer
 // list and only contains text lines.  Can use a swapfile to reduce memory
