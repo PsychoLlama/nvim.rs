@@ -1065,6 +1065,455 @@ pub unsafe extern "C" fn rs_search_for_fuzzy_match(
 }
 
 // =============================================================================
+// matchfuzzy / matchfuzzypos migration
+// =============================================================================
+
+// Opaque handles for typval_T, list_T, listitem_T, dict_T, Callback.
+type TvHandle = *mut c_void;
+type ListHandle = *mut c_void;
+type ListItemHandle = *mut c_void;
+type CallbackHandle = *mut c_void;
+
+extern "C" {
+    // typval / argvars accessors
+    fn nvim_fuzzy_argvars_type(argvars: TvHandle, idx: c_int) -> c_int;
+    fn nvim_fuzzy_argvars_list(argvars: TvHandle, idx: c_int) -> ListHandle;
+    fn nvim_fuzzy_argvars_dict(argvars: TvHandle, idx: c_int) -> *mut c_void;
+    fn nvim_fuzzy_argvars_string(argvars: TvHandle, idx: c_int) -> *const c_char;
+    fn nvim_fuzzy_argvars_vstring(argvars: TvHandle, idx: c_int) -> *const c_char;
+    fn nvim_fuzzy_check_nonnull_dict_arg(argvars: TvHandle, idx: c_int) -> c_int;
+    fn nvim_fuzzy_semsg_listarg(retmatchpos: bool);
+    fn nvim_fuzzy_semsg_invarg2(argvars: TvHandle, idx: c_int);
+    fn nvim_fuzzy_semsg_invarg_nval(argname: *const c_char, di_tv: TvHandle);
+    fn nvim_fuzzy_semsg_invargval(name: *const c_char);
+
+    // list alloc/ret
+    fn nvim_fuzzy_tv_list_alloc_ret(rettv: TvHandle, count: c_int) -> ListHandle;
+
+    // list accessors
+    fn nvim_fuzzy_list_len(l: ListHandle) -> c_int;
+    fn nvim_fuzzy_list_first(l: ListHandle) -> ListItemHandle;
+    fn nvim_fuzzy_list_item_next(l: ListHandle, li: ListItemHandle) -> ListItemHandle;
+    fn nvim_fuzzy_list_item_type(li: ListItemHandle) -> c_int;
+    fn nvim_fuzzy_list_item_string(li: ListItemHandle) -> *const c_char;
+    fn nvim_fuzzy_list_item_dict(li: ListItemHandle) -> *mut c_void;
+    fn nvim_fuzzy_list_find(l: ListHandle, n: c_int) -> ListItemHandle;
+    fn nvim_fuzzy_list_append_item_tv(dst: ListHandle, item_li: ListItemHandle);
+    fn nvim_fuzzy_list_append_list(dst: ListHandle, sublist: ListHandle);
+    fn nvim_fuzzy_list_append_number(dst: ListHandle, n: i64);
+    fn nvim_fuzzy_list_alloc_mayknow() -> ListHandle;
+    fn nvim_fuzzy_listitem_get_list(li: ListItemHandle) -> ListHandle;
+
+    // dict accessors
+    fn nvim_fuzzy_dict_get_string(
+        dict: *mut c_void,
+        key: *const c_char,
+        allocate: bool,
+    ) -> *mut c_char;
+    fn nvim_fuzzy_dict_find_tv(dict: *mut c_void, key: *const c_char) -> TvHandle;
+    fn nvim_fuzzy_dict_find_type(dict: *mut c_void, key: *const c_char) -> c_int;
+    fn nvim_fuzzy_dict_find_string(dict: *mut c_void, key: *const c_char) -> *const c_char;
+    fn nvim_fuzzy_dict_find_number(dict: *mut c_void, key: *const c_char, error: *mut bool) -> i64;
+    fn nvim_fuzzy_dict_has_key(dict: *mut c_void, key: *const c_char) -> bool;
+    fn nvim_fuzzy_dict_get_callback(
+        dict: *mut c_void,
+        key: *const c_char,
+        cb_out: CallbackHandle,
+    ) -> bool;
+
+    // callback accessors
+    fn nvim_fuzzy_callback_alloc_none() -> CallbackHandle;
+    fn nvim_fuzzy_callback_free(cb: CallbackHandle);
+    fn nvim_fuzzy_callback_is_none(cb: CallbackHandle) -> bool;
+    fn nvim_fuzzy_callback_call_dict(cb: CallbackHandle, dict: *mut c_void) -> TvHandle;
+    fn nvim_fuzzy_tv_type(tv: TvHandle) -> c_int;
+    fn nvim_fuzzy_tv_string(tv: TvHandle) -> *const c_char;
+    fn nvim_fuzzy_tv_clear_and_free(tv: TvHandle);
+
+    // memory
+    fn nvim_fuzzy_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_fuzzy_xfree(p: *mut c_void);
+
+    // unicode helpers
+    fn nvim_fuzzy_ascii_iswhite(c: c_int) -> bool;
+    fn nvim_fuzzy_utf_ptr2char(p: *const c_char) -> c_int;
+    fn nvim_fuzzy_mb_ptr_adv(p: *const c_char) -> *const c_char;
+
+}
+
+// From typval_defs.h enum VarType:
+//   VAR_UNKNOWN=0, VAR_NUMBER=1, VAR_STRING=2, VAR_FUNC=3, VAR_LIST=4, VAR_DICT=5
+const VAR_UNKNOWN: c_int = 0;
+const VAR_NUMBER: c_int = 1;
+const VAR_STRING: c_int = 2;
+const VAR_LIST: c_int = 4;
+const VAR_DICT: c_int = 5;
+
+/// Internal struct holding one fuzzy match candidate (purely Rust, not repr(C)).
+struct FuzzyItem {
+    /// stable-sort index
+    idx: i32,
+    /// `listitem_T`* handle for the original list item
+    item: ListItemHandle,
+    /// fuzzy match score
+    score: i32,
+    /// `list_T`* for match positions (only when retmatchpos is true), or null
+    lmatchpos: ListHandle,
+    /// pointer that is valid for the duration of the match
+    itemstr: *const c_char,
+    /// heap-allocated copy if `itemstr_owned` is non-null, else borrowed from C
+    itemstr_owned: *mut c_char,
+    /// starting position of match (matches[0])
+    startpos: i32,
+}
+
+impl FuzzyItem {
+    const fn itemstr_allocated(&self) -> bool {
+        !self.itemstr_owned.is_null()
+    }
+}
+
+/// Compare two `FuzzyItem` values for descending-score sort with exact-match
+/// tiebreaking and stable-index fallback.  Mirrors C `fuzzy_match_item_compare`.
+unsafe fn fuzzy_item_cmp(a: &FuzzyItem, b: &FuzzyItem, pat: *const c_char) -> std::cmp::Ordering {
+    if a.score != b.score {
+        // Higher score first (descending)
+        return b.score.cmp(&a.score);
+    }
+
+    // Same score: prefer exact prefix match
+    if !pat.is_null() {
+        let patlen = libc::strlen(pat);
+        let exact_a = a.startpos >= 0 && {
+            let p = a.itemstr.add(a.startpos as usize);
+            libc::strncmp(pat, p, patlen) == 0
+        };
+        let exact_b = b.startpos >= 0 && {
+            let p = b.itemstr.add(b.startpos as usize);
+            libc::strncmp(pat, p, patlen) == 0
+        };
+        if exact_a != exact_b {
+            return if exact_b {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Less
+            };
+        }
+    }
+
+    // Fall back to stable sort by index
+    a.idx.cmp(&b.idx)
+}
+
+/// Rust implementation of `fuzzy_match_in_list`.
+///
+/// # Safety
+/// All pointer parameters must be valid C pointers.
+#[allow(clippy::too_many_lines)]
+unsafe fn fuzzy_match_in_list_rs(
+    list: ListHandle,
+    str_ptr: *const c_char,
+    matchseq: bool,
+    key: *const c_char,
+    item_cb: CallbackHandle,
+    retmatchpos: bool,
+    fmatchlist: ListHandle,
+    max_matches: c_int,
+) {
+    let mut len = nvim_fuzzy_list_len(list);
+    if len == 0 {
+        return;
+    }
+    if max_matches > 0 && len > max_matches {
+        len = max_matches;
+    }
+
+    let mut items: Vec<FuzzyItem> = Vec::with_capacity(len as usize);
+    let mut matches = [0u32; MATCH_MAX_LEN];
+
+    // Iterate the list
+    let mut li = nvim_fuzzy_list_first(list);
+    while !li.is_null() {
+        if max_matches > 0 && items.len() >= max_matches as usize {
+            break;
+        }
+
+        let item_type = nvim_fuzzy_list_item_type(li);
+        let mut itemstr: *const c_char = std::ptr::null();
+        let mut itemstr_owned: *mut c_char = std::ptr::null_mut();
+
+        if item_type == VAR_STRING {
+            itemstr = nvim_fuzzy_list_item_string(li);
+        } else if item_type == VAR_DICT {
+            let d = nvim_fuzzy_list_item_dict(li);
+            if !d.is_null() && !key.is_null() {
+                // Dict with a key: get string by key
+                itemstr = nvim_fuzzy_dict_get_string(d, key, false).cast_const();
+            } else if !d.is_null() && !nvim_fuzzy_callback_is_none(item_cb) {
+                // Dict with callback: call it, take ownership of result string
+                let rettv_tv = nvim_fuzzy_callback_call_dict(item_cb, d);
+                if !rettv_tv.is_null() && nvim_fuzzy_tv_type(rettv_tv) == VAR_STRING {
+                    let s = nvim_fuzzy_tv_string(rettv_tv);
+                    if !s.is_null() {
+                        // Take a copy so we own the string independent of rettv lifetime
+                        itemstr_owned = nvim_fuzzy_xstrdup(s);
+                        itemstr = itemstr_owned.cast_const();
+                    }
+                }
+                nvim_fuzzy_tv_clear_and_free(rettv_tv);
+            }
+        }
+
+        let mut score: c_int = 0;
+        if !itemstr.is_null()
+            && rs_fuzzy_match(
+                itemstr,
+                str_ptr,
+                matchseq,
+                std::ptr::addr_of_mut!(score),
+                matches.as_mut_ptr(),
+                MATCH_MAX_LEN as c_int,
+            )
+        {
+            // Build match positions list if requested
+            let lmatchpos: ListHandle = if retmatchpos {
+                let pos_list = nvim_fuzzy_list_alloc_mayknow();
+                // Walk str_ptr skipping whitespace (unless matchseq), appending match positions
+                let mut j: usize = 0;
+                let mut p = str_ptr;
+                while !p.is_null() && *p != 0 && j < MATCH_MAX_LEN {
+                    let ch = nvim_fuzzy_utf_ptr2char(p);
+                    if !nvim_fuzzy_ascii_iswhite(ch) || matchseq {
+                        nvim_fuzzy_list_append_number(pos_list, i64::from(matches[j]));
+                        j += 1;
+                    }
+                    p = nvim_fuzzy_mb_ptr_adv(p);
+                }
+                pos_list
+            } else {
+                std::ptr::null_mut()
+            };
+
+            items.push(FuzzyItem {
+                idx: items.len() as i32,
+                item: li,
+                score,
+                lmatchpos,
+                itemstr,
+                itemstr_owned,
+                startpos: matches[0] as i32,
+            });
+        } else {
+            // Free owned string if no match
+            if !itemstr_owned.is_null() {
+                nvim_fuzzy_xfree(itemstr_owned.cast::<c_void>());
+            }
+        }
+
+        li = nvim_fuzzy_list_item_next(list, li);
+    }
+
+    if items.is_empty() {
+        return;
+    }
+
+    // Sort by descending score, with exact-match tiebreaking and stable index
+    let str_for_sort = str_ptr;
+    items.sort_by(|a, b| fuzzy_item_cmp(a, b, str_for_sort));
+
+    // Assemble output into fmatchlist
+    let retlist: ListHandle = if retmatchpos {
+        // fmatchlist[0] holds the strings sub-list
+        let li0 = nvim_fuzzy_list_find(fmatchlist, 0);
+        nvim_fuzzy_listitem_get_list(li0)
+    } else {
+        fmatchlist
+    };
+
+    // Append matched item tvs to retlist
+    for fi in &items {
+        nvim_fuzzy_list_append_item_tv(retlist, fi.item);
+    }
+
+    if retmatchpos {
+        // Append position lists
+        let li_neg2 = nvim_fuzzy_list_find(fmatchlist, -2);
+        let pos_retlist = nvim_fuzzy_listitem_get_list(li_neg2);
+        for fi in &mut items {
+            nvim_fuzzy_list_append_list(pos_retlist, fi.lmatchpos);
+            fi.lmatchpos = std::ptr::null_mut();
+        }
+
+        // Append scores
+        let li_neg1 = nvim_fuzzy_list_find(fmatchlist, -1);
+        let score_retlist = nvim_fuzzy_listitem_get_list(li_neg1);
+        for fi in &items {
+            nvim_fuzzy_list_append_number(score_retlist, i64::from(fi.score));
+        }
+    }
+
+    // Free owned strings
+    for fi in &items {
+        if fi.itemstr_allocated() {
+            nvim_fuzzy_xfree(fi.itemstr_owned.cast::<c_void>());
+        }
+        // lmatchpos should be null (transferred to list), but assert in debug
+        debug_assert!(fi.lmatchpos.is_null());
+    }
+}
+
+/// Rust implementation of `do_fuzzymatch`.
+///
+/// `argvars`: `typval_T[3]`, `rettv`: `typval_T*`, `retmatchpos`: whether to return positions.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid C pointers to `typval_T`.
+unsafe fn do_fuzzymatch_rs(argvars: TvHandle, rettv: TvHandle, retmatchpos: bool) {
+    // Validate arg[0]: must be a non-null list
+    if nvim_fuzzy_argvars_type(argvars, 0) != VAR_LIST
+        || nvim_fuzzy_argvars_list(argvars, 0).is_null()
+    {
+        nvim_fuzzy_semsg_listarg(retmatchpos);
+        return;
+    }
+
+    // Validate arg[1]: must be a non-null string
+    if nvim_fuzzy_argvars_type(argvars, 1) != VAR_STRING
+        || nvim_fuzzy_argvars_vstring(argvars, 1).is_null()
+    {
+        nvim_fuzzy_semsg_invarg2(argvars, 1);
+        return;
+    }
+
+    let search_list = nvim_fuzzy_argvars_list(argvars, 0);
+    let search_str = nvim_fuzzy_argvars_string(argvars, 1);
+
+    // Optional third arg: dict with options
+    let item_cb: CallbackHandle = nvim_fuzzy_callback_alloc_none();
+    let mut key: *const c_char = std::ptr::null();
+    let mut matchseq = false;
+    let mut max_matches: c_int = 0;
+
+    if nvim_fuzzy_argvars_type(argvars, 2) != VAR_UNKNOWN {
+        // Must be a non-null dict; tv_check_for_nonnull_dict_arg returns OK=1 or FAIL=0
+        if nvim_fuzzy_check_nonnull_dict_arg(argvars, 2) == 0
+        /* FAIL = 0 */
+        {
+            // check returned FAIL -- error already emitted
+            nvim_fuzzy_callback_free(item_cb);
+            return;
+        }
+
+        let d = nvim_fuzzy_argvars_dict(argvars, 2);
+        if d.is_null() {
+            // Shouldn't happen after check_nonnull_dict_arg succeeded
+            nvim_fuzzy_callback_free(item_cb);
+            return;
+        }
+
+        // "key" option
+        let key_cstr = c"key".as_ptr();
+        let key_type = nvim_fuzzy_dict_find_type(d, key_cstr);
+        if key_type == VAR_UNKNOWN {
+            // No "key" -- try "text_cb"
+            let text_cb_cstr = c"text_cb".as_ptr();
+            if !nvim_fuzzy_dict_get_callback(d, text_cb_cstr, item_cb) {
+                nvim_fuzzy_semsg_invargval(text_cb_cstr);
+                nvim_fuzzy_callback_free(item_cb);
+                return;
+            }
+        } else {
+            // "key" is present -- validate it
+            if key_type != VAR_STRING {
+                let di_tv = nvim_fuzzy_dict_find_tv(d, key_cstr);
+                nvim_fuzzy_semsg_invarg_nval(key_cstr, di_tv);
+                nvim_fuzzy_callback_free(item_cb);
+                return;
+            }
+            let s = nvim_fuzzy_dict_find_string(d, key_cstr);
+            if s.is_null() || *s == 0 {
+                // empty string key is invalid
+                let di_tv = nvim_fuzzy_dict_find_tv(d, key_cstr);
+                nvim_fuzzy_semsg_invarg_nval(key_cstr, di_tv);
+                nvim_fuzzy_callback_free(item_cb);
+                return;
+            }
+            key = s;
+        }
+
+        // "limit" option
+        let limit_cstr = c"limit".as_ptr();
+        if nvim_fuzzy_dict_find_type(d, limit_cstr) != VAR_UNKNOWN {
+            let di_tv = nvim_fuzzy_dict_find_tv(d, limit_cstr);
+            // Check that it's a number
+            if nvim_fuzzy_tv_type(di_tv) != VAR_NUMBER {
+                nvim_fuzzy_semsg_invargval(limit_cstr);
+                nvim_fuzzy_callback_free(item_cb);
+                return;
+            }
+            max_matches = nvim_fuzzy_dict_find_number(d, limit_cstr, std::ptr::null_mut()) as c_int;
+        }
+
+        // "matchseq" option: just check presence
+        let matchseq_cstr = c"matchseq".as_ptr();
+        if nvim_fuzzy_dict_has_key(d, matchseq_cstr) {
+            matchseq = true;
+        }
+    }
+
+    // Allocate the return list
+    // For matchfuzzypos: list of 3 sub-lists; for matchfuzzy: flat list
+    let k_list_len_unknown: c_int = -1;
+    let fmatchlist: ListHandle = if retmatchpos {
+        let l = nvim_fuzzy_tv_list_alloc_ret(rettv, 3);
+        // Append three empty sub-lists
+        nvim_fuzzy_list_append_list(l, nvim_fuzzy_list_alloc_mayknow());
+        nvim_fuzzy_list_append_list(l, nvim_fuzzy_list_alloc_mayknow());
+        nvim_fuzzy_list_append_list(l, nvim_fuzzy_list_alloc_mayknow());
+        l
+    } else {
+        nvim_fuzzy_tv_list_alloc_ret(rettv, k_list_len_unknown)
+    };
+
+    fuzzy_match_in_list_rs(
+        search_list,
+        search_str,
+        matchseq,
+        key,
+        item_cb,
+        retmatchpos,
+        fmatchlist,
+        max_matches,
+    );
+
+    nvim_fuzzy_callback_free(item_cb);
+}
+
+/// `VimL` builtin: `matchfuzzy(list, str [, dict])`
+///
+/// Exported as `f_matchfuzzy` so C can call it.
+///
+/// # Safety
+/// `argvars` must point to a C `typval_T[3]`, `rettv` to a `typval_T`.
+#[unsafe(export_name = "f_matchfuzzy")]
+pub unsafe extern "C" fn rs_f_matchfuzzy(argvars: TvHandle, rettv: TvHandle, _fptr: *mut c_void) {
+    do_fuzzymatch_rs(argvars, rettv, false);
+}
+
+/// `VimL` builtin: `matchfuzzypos(list, str [, dict])`
+///
+/// # Safety
+/// `argvars` must point to a C `typval_T[3]`, `rettv` to a `typval_T`.
+#[unsafe(export_name = "f_matchfuzzypos")]
+pub unsafe extern "C" fn rs_f_matchfuzzypos(
+    argvars: TvHandle,
+    rettv: TvHandle,
+    _fptr: *mut c_void,
+) {
+    do_fuzzymatch_rs(argvars, rettv, true);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

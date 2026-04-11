@@ -20,6 +20,16 @@ typedef struct {
   int score;
 } fuzmatch_str_T;
 
+// Layout assertions for Rust repr(C) structs (validated at build time)
+#include <assert.h>
+#include <stddef.h>
+_Static_assert(sizeof(pos_T) == 12, "pos_T size must match Rust PosT");
+_Static_assert(sizeof(garray_T) == 24, "garray_T size must match Rust GArray");
+_Static_assert(sizeof(fuzmatch_str_T) == 24, "fuzmatch_str_T size must match Rust FuzmatchStr");
+_Static_assert(offsetof(fuzmatch_str_T, idx) == 0, "fuzmatch_str_T.idx offset");
+_Static_assert(offsetof(fuzmatch_str_T, str) == 8, "fuzmatch_str_T.str offset");
+_Static_assert(offsetof(fuzmatch_str_T, score) == 16, "fuzmatch_str_T.score offset");
+
 // The following functions are implemented in Rust and exported under their original names.
 extern bool fuzzy_match(char *str, const char *pat, bool matchseq, int *outScore,
                         uint32_t *matches, int maxMatches);
@@ -33,4 +43,6 @@ extern void fuzzymatches_to_strmatches(fuzmatch_str_T *fuzmatch, char ***matches
                                        bool funcsort);
 extern garray_T *fuzzy_match_str_with_pos(const char *str, const char *pat);
 
-#include "fuzzy.h.generated.h"
+// VimL builtin entry points: implemented in Rust (src/nvim-rs/fuzzy/src/lib.rs).
+extern void f_matchfuzzy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_matchfuzzypos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
