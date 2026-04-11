@@ -197,18 +197,16 @@ extern "C" {
     fn get_func_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
     fn getnextac(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
 
-    // doend: error message + do_errthrow
-    fn nvim_docmd_do_one_cmd_doend(
-        cstack: CstackHandle,
-        errormsg: *const c_char,
-        flags: c_int,
-        eap: ExArgHandle,
-    );
-
     // xstrlcpy / IObuff / append_command (for error formatting)
     static mut IObuff: [c_char; 1025];
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
     fn nvim_iosize() -> usize;
+
+    // doend helpers (nvim_docmd_do_one_cmd_doend is now Rust)
+    fn emsg(s: *const c_char);
+    fn append_command(cmd: *const c_char);
+    fn do_errthrow(cstack: CstackHandle, cmdname: *mut c_char);
+    fn nvim_docmd_cmdnames_name(idx: c_int) -> *mut c_char;
 
     // argt bit checks
 
@@ -217,6 +215,46 @@ extern "C" {
 
     // find_ex_command (already in Rust but need for do_one_cmd retry)
     fn find_ex_command(eap: ExArgHandle, full: *mut c_int) -> *mut c_char;
+}
+
+// =============================================================================
+// nvim_docmd_do_one_cmd_doend: error message + do_errthrow (migrated from C)
+// =============================================================================
+
+/// Emit error message and call do_errthrow at the end of do_one_cmd.
+///
+/// This replaces the C `nvim_docmd_do_one_cmd_doend` function.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[export_name = "nvim_docmd_do_one_cmd_doend"]
+pub unsafe extern "C" fn rs_nvim_docmd_do_one_cmd_doend(
+    cstack: CstackHandle,
+    errormsg: *const c_char,
+    flags: c_int,
+    eap: ExArgHandle,
+) {
+    // Emit error if set and not already emitted.
+    if !errormsg.is_null() && *errormsg != 0 && did_emsg == 0 {
+        if (flags & DOCMD_VERBOSE) != 0 {
+            let iobuff = ptr::addr_of_mut!(IObuff).cast::<c_char>();
+            // Copy errormsg to IObuff if not already there.
+            if errormsg != iobuff {
+                nvim_xstrlcpy(iobuff, errormsg, nvim_iosize());
+            }
+            append_command(*(*eap).cmdlinep);
+        }
+        emsg(errormsg);
+    }
+    // Look up command name for do_errthrow (only for built-in non-SIZE commands).
+    let cmdidx = (*eap).cmdidx;
+    let cmd_name: *mut c_char = if cmdidx >= 0 && cmdidx != crate::commands::CMD_SIZE {
+        nvim_docmd_cmdnames_name(cmdidx)
+    } else {
+        ptr::null_mut()
+    };
+    do_errthrow(cstack, cmd_name);
 }
 
 // =============================================================================
@@ -1036,8 +1074,8 @@ unsafe fn do_one_cmd_doend(
     // Fix cursor lnum if zero (can happen with zero line number).
     nvim_docmd_fix_cursor_if_zero();
 
-    // Emit error message and do_errthrow.
-    nvim_docmd_do_one_cmd_doend(cstack, errormsg, flags, eap);
+    // Emit error message and do_errthrow (implemented in Rust).
+    rs_nvim_docmd_do_one_cmd_doend(cstack, errormsg, flags, eap);
 
     // Undo and restore cmdmod.
     undo_cmdmod(std::ptr::addr_of_mut!(cmdmod).cast());

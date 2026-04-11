@@ -7,12 +7,6 @@ use std::ffi::{c_char, c_int};
 
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_docmd_cmd_exists_inner(
-        name: *const c_char,
-        out_cmdidx: *mut c_int,
-        out_full: *mut c_int,
-        out_useridx: *mut c_int,
-    ) -> *mut c_char;
     fn nvim_docmd_cmdnames_func_is_ni(cmdidx: c_int) -> c_int;
 
     // Phase 3: command table accessors
@@ -37,6 +31,11 @@ extern "C" {
     fn nvim_docmd_rettv_init_string(rettv: *mut c_void);
     fn nvim_docmd_rettv_set_string(rettv: *mut c_void, s: *const c_char);
     fn nvim_docmd_get_user_command_name(useridx: c_int, cmdidx: c_int) -> *mut c_char;
+
+    // is_map_cmd helper: returns 1 if cmdnames[idx].cmd_func is a map/abbrev fn
+    fn nvim_docmd_cmdnames_func_is_map(idx: c_int) -> c_int;
+
+    fn xfree(ptr: *mut c_void);
 }
 
 use std::ffi::c_void;
@@ -299,6 +298,75 @@ pub unsafe extern "C" fn rs_one_letter_cmd(p: *const c_char, idx: *mut c_int) ->
 }
 
 // =============================================================================
+// is_map_cmd - Check if command is a map/abbrev command (migrated from C)
+// =============================================================================
+
+/// Check if a command index refers to a map or abbreviation command.
+///
+/// Returns true for :map, :unmap, :mapclear, :abbreviate, :abclear and variants.
+///
+/// Matches C `is_map_cmd()`.
+#[export_name = "is_map_cmd"]
+pub extern "C" fn rs_is_map_cmd(cmdidx: c_int) -> bool {
+    // IS_USER_CMDIDX: cmdidx < 0
+    if cmdidx < 0 {
+        return false;
+    }
+    unsafe { nvim_docmd_cmdnames_func_is_map(cmdidx) != 0 }
+}
+
+// =============================================================================
+// nvim_docmd_cmd_exists_inner - inner helper for cmd_exists (migrated from C)
+// =============================================================================
+
+/// Inner helper for cmd_exists / f_fullcommand: look up built-in and user commands.
+///
+/// Creates a temporary ExArg, calls find_ex_command, and returns:
+/// - cmdidx via *out_cmdidx
+/// - full match flag via *out_full
+/// - useridx via *out_useridx (if non-NULL)
+/// - pointer to end of command name (or NULL)
+///
+/// Matches C `nvim_docmd_cmd_exists_inner()`.
+///
+/// # Safety
+///
+/// `name` must be a valid null-terminated C string.
+/// `out_cmdidx` and `out_full` must be valid pointers.
+/// `out_useridx` may be NULL.
+#[export_name = "nvim_docmd_cmd_exists_inner"]
+pub unsafe extern "C" fn rs_nvim_docmd_cmd_exists_inner(
+    name: *const c_char,
+    out_cmdidx: *mut c_int,
+    out_full: *mut c_int,
+    out_useridx: *mut c_int,
+) -> *mut c_char {
+    use crate::ExArg;
+    // Allocate a temporary ExArg via the C allocator so that find_ex_command
+    // can safely work with it (it may pass it to C sub-functions).
+    let eap = ExArg::alloc();
+
+    // Skip leading "2" or "3" prefix (used by python3/lua3 command variants).
+    let name_start = if (*name as u8) == b'2' || (*name as u8) == b'3' {
+        name.add(1)
+    } else {
+        name
+    };
+    (*eap).cmd = name_start as *mut c_char;
+    (*eap).cmdidx = 0;
+    (*eap).flags = 0;
+    *out_full = 0;
+
+    let p = rs_find_ex_command(eap, out_full);
+    *out_cmdidx = (*eap).cmdidx;
+    if !out_useridx.is_null() {
+        *out_useridx = (*eap).useridx;
+    }
+    xfree(eap as *mut c_void);
+    p
+}
+
+// =============================================================================
 // cmd_exists - Check if command name exists
 // =============================================================================
 
@@ -330,7 +398,7 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
     // Check built-in commands and user defined commands.
     let mut cmdidx: c_int = 0;
     let mut full: c_int = 0;
-    let p = nvim_docmd_cmd_exists_inner(name, &mut cmdidx, &mut full, std::ptr::null_mut());
+    let p = rs_nvim_docmd_cmd_exists_inner(name, &mut cmdidx, &mut full, std::ptr::null_mut());
 
     if p.is_null() {
         return 3;
@@ -609,7 +677,7 @@ pub unsafe extern "C" fn rs_f_fullcommand(argvars: *mut c_void, rettv: *mut c_vo
     let mut cmdidx: c_int = 0;
     let mut full_val: c_int = 0;
     let mut useridx: c_int = 0;
-    let p = nvim_docmd_cmd_exists_inner(
+    let p = rs_nvim_docmd_cmd_exists_inner(
         name as *const c_char,
         &mut cmdidx,
         &mut full_val,

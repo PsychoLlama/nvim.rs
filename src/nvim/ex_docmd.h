@@ -49,6 +49,11 @@ typedef struct {
 
 #include "ex_docmd.h.generated.h"
 
+// Rust-exported functions (not in generated header)
+bool is_map_cmd(cmdidx_T cmdidx);
+char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_full, int *out_useridx);
+void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg, int flags, const exarg_T *eap);
+
 // Forward declarations for Rust-implemented functions exported under C names via #[export_name].
 // These replace the C wrapper bodies that were deleted during the migration.
 bool checkforcmd(char **pp, const char *cmd, int len);

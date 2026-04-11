@@ -388,44 +388,18 @@ int nvim_docmd_undo_count_steps(linenr_T step, int *found)
 }
 
 void nvim_docmd_loop_sleep(int64_t msec) { LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int); }
-/// Check if a command is a :map/:abbrev command.
-bool is_map_cmd(cmdidx_T cmdidx)
-{
-  if (IS_USER_CMDIDX(cmdidx)) {
-    return false;
-  }
 
-  ex_func_T func = cmdnames[cmdidx].cmd_func;
-  return func == ex_map           // :map, :nmap, :noremap, etc.
-         || func == ex_unmap         // :unmap, :nunmap, etc.
-         || func == ex_mapclear      // :mapclear, :nmapclear, etc.
-         || func == ex_abbreviate    // :abbreviate, :iabbrev, etc.
-         || func == ex_abclear;      // :abclear, :iabclear, etc.
+/// Returns nonzero if cmdnames[idx].cmd_func is a map/abbrev function.
+/// Used by Rust is_map_cmd implementation.
+int nvim_docmd_cmdnames_func_is_map(int idx)
+{
+  ex_func_T func = cmdnames[idx].cmd_func;
+  return (func == ex_map || func == ex_unmap || func == ex_mapclear
+          || func == ex_abbreviate || func == ex_abclear) ? 1 : 0;
 }
 
 
-/// Inner helper for cmd_exists / f_fullcommand: look up built-in and user commands.
-///
-/// Creates a temporary exarg_T, calls find_ex_command, and returns:
-/// - cmdidx via *out_cmdidx
-/// - full match flag via *out_full
-/// - useridx via *out_useridx (if non-NULL)
-/// - pointer to end of command name (or NULL)
-char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_full,
-                                   int *out_useridx)
-{
-  exarg_T ea;
-  ea.cmd = (char *)((*name == '2' || *name == '3') ? name + 1 : name);
-  ea.cmdidx = 0;
-  ea.flags = 0;
-  *out_full = false;
-  char *p = find_ex_command(&ea, out_full);
-  *out_cmdidx = (int)ea.cmdidx;
-  if (out_useridx != NULL) {
-    *out_useridx = ea.useridx;
-  }
-  return p;
-}
+// nvim_docmd_cmd_exists_inner is implemented in Rust (lookup.rs).
 
 int nvim_docmd_cmdnames_func_is_ni(int cmdidx) { return IS_USER_CMDIDX((cmdidx_T)cmdidx) ? 0 : (cmdnames[cmdidx].cmd_func == ex_ni || cmdnames[cmdidx].cmd_func == ex_script_ni); }
 int nvim_docmd_get_command_count(void) { return command_count; }
@@ -1029,41 +1003,9 @@ exarg_T *nvim_eap_alloc(void)
 void nvim_docmd_do_finish(exarg_T *eap) { do_finish(eap, true); }
 cmdmod_T *nvim_docmd_save_cmdmod(void) { cmdmod_T *save = xmalloc(sizeof(cmdmod_T)); *save = cmdmod; return save; }
 void nvim_docmd_restore_cmdmod(cmdmod_T *save) { cmdmod = *save; xfree(save); }
-/// Newline-scan for shell cmd args in do_one_cmd (CMD_bang/terminal/global/vglobal/usefilter).
-/// Sets eap->nextcmd and NUL-terminates at newline, handling backslash-newline.
-void nvim_eap_scan_newline_nextcmd(exarg_T *eap)
-{
-  for (char *s = eap->arg; *s; s++) {
-    if (*s == '\\' && s[1] == '\n') {
-      STRMOVE(s, s + 1);
-    } else if (*s == '\n') {
-      eap->nextcmd = s + 1;
-      *s = NUL;
-      break;
-    }
-  }
-}
+// nvim_eap_scan_newline_nextcmd removed: logic is inlined in Rust do_one_cmd.rs.
 
-/// Emit error and do_errthrow cleanup for do_one_cmd doend.
-void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
-                                  int flags, const exarg_T *eap)
-{
-  if (errormsg != NULL && *errormsg != NUL && !did_emsg) {
-    if (flags & DOCMD_VERBOSE) {
-      if (errormsg != IObuff) {
-        xstrlcpy(IObuff, errormsg, IOSIZE);
-        errormsg = IObuff;
-      }
-      append_command(*eap->cmdlinep);
-    }
-    emsg(errormsg);
-  }
-  const char *cmd_name = NULL;
-  if (!IS_USER_CMDIDX(eap->cmdidx) && eap->cmdidx != CMD_SIZE) {
-    cmd_name = cmdnames[(int)eap->cmdidx].cmd_name;
-  }
-  do_errthrow(cstack, (char *)cmd_name);
-}
+// nvim_docmd_do_one_cmd_doend is implemented in Rust (do_one_cmd.rs).
 char nvim_docmd_ask_yesno_backwards(void) { return (char)ask_yesno(_("Backwards range given, OK to swap")); }
 bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
 void nvim_docmd_fix_cursor_if_zero(void) { if (curwin->w_cursor.lnum == 0) { curwin->w_cursor.lnum = 1; curwin->w_cursor.col = 0; } }
