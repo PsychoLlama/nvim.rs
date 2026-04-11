@@ -45,10 +45,9 @@ extern "C" {
     pub fn string_to_array(input: NvimString, crlf: bool, arena: *mut std::ffi::c_void) -> Array;
     pub fn copy_array(array: Array, arena: *mut std::ffi::c_void) -> Array;
 
-    // from_dict conversion (kept in C due to array_to_string, copy_object coupling)
-    pub fn nvim_ctx_from_dict_impl(
-        dict: Dict,
-        ctx: *mut Context,
-        err: *mut std::ffi::c_void,
-    ) -> c_int;
+    // Array-to-string conversion (kept in C due to typval_T coupling)
+    pub fn nvim_ctx_array_to_string(array: Array, err: *mut std::ffi::c_void) -> NvimString;
+
+    // Object copy (C API helper)
+    pub fn copy_object(obj: crate::Object, arena: *mut std::ffi::c_void) -> crate::Object;
 }

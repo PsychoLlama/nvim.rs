@@ -46,5 +46,9 @@ bool ctx_restore(Context *ctx, int flags);
 Dict ctx_to_dict(Context *ctx, Arena *arena);
 int ctx_from_dict(Dict dict, Context *ctx, Error *err);
 
+// Prototypes for C shim functions (context_shim.c)
+String nvim_ctx_array_to_string(Array array, Error *err);
+void nvim_ctx_save_funcs(Context *ctx, bool scriptonly);
+
 // Prototypes for C accessor functions (generated from context.c)
 #include "context.h.generated.h"

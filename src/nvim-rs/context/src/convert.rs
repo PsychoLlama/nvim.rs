@@ -6,7 +6,21 @@ use crate::{
 };
 
 type ArenaHandle = *mut std::ffi::c_void;
-type ErrorHandle = *mut std::ffi::c_void;
+
+/// Minimal opaque Error struct matching C's `Error { ErrorType type; char *msg; }`.
+/// `kErrorTypeNone = -1`; any other value means an error is set.
+#[repr(C)]
+struct ApiError {
+    err_type: c_int,
+    msg: *mut c_char,
+}
+
+impl ApiError {
+    #[inline]
+    const fn is_set(&self) -> bool {
+        self.err_type != -1 // kErrorTypeNone = -1
+    }
+}
 
 /// Create an Object wrapping an Array (mirrors C's `ARRAY_OBJ(array)` macro).
 #[inline]
@@ -38,6 +52,28 @@ unsafe fn dict_put(dict: &mut Dict, key: NvimString, value: Object) {
     *dict.items.add(dict.size) = KeyValuePair { key, value };
     dict.size += 1;
 }
+
+/// Compare a `NvimString` key against a static byte-string literal.
+///
+/// Equivalent to C's `strequal(item.key.data, "literal")` for fixed keys.
+#[inline]
+unsafe fn key_eq(key: NvimString, s: &[u8]) -> bool {
+    if key.size != s.len() {
+        return false;
+    }
+    if key.size == 0 {
+        return true;
+    }
+    // Safety: key.data points to at least key.size valid bytes.
+    std::slice::from_raw_parts(key.data.cast::<u8>(), key.size) == s
+}
+
+/// Context type flags (matching `ContextTypeFlags` in context.h)
+const KCTX_REGS: c_int = 1;
+const KCTX_JUMPS: c_int = 2;
+const KCTX_BUFS: c_int = 4;
+const KCTX_GVARS: c_int = 8;
+const KCTX_FUNCS: c_int = 32;
 
 /// Converts a `Context` to its `Dict` representation.
 /// Replaces C `nvim_ctx_to_dict_impl`.
@@ -79,6 +115,52 @@ unsafe fn ctx_to_dict_impl(ctx: *mut Context, arena: ArenaHandle) -> Dict {
     rv
 }
 
+/// Converts a `Dict` back to a `Context`.
+/// Replaces C `nvim_ctx_from_dict_impl`.
+///
+/// # Safety
+/// `ctx` must be a valid non-null pointer. `err` must be a valid `Error *`.
+unsafe fn ctx_from_dict_impl(dict: Dict, ctx: *mut Context, err: *mut ApiError) -> c_int {
+    debug_assert!(!ctx.is_null());
+    let c = &mut *ctx;
+
+    let mut types: c_int = 0;
+
+    for i in 0..dict.size {
+        if (*err).is_set() {
+            break;
+        }
+        let item = &*dict.items.add(i);
+        // Only process Array-typed values
+        if item.value.obj_type != K_OBJECT_TYPE_ARRAY {
+            continue;
+        }
+        let array = item.value.data.array;
+
+        if key_eq(item.key, b"regs") {
+            types |= KCTX_REGS;
+            c.regs = ffi::nvim_ctx_array_to_string(array, err.cast());
+        } else if key_eq(item.key, b"jumps") {
+            types |= KCTX_JUMPS;
+            c.jumps = ffi::nvim_ctx_array_to_string(array, err.cast());
+        } else if key_eq(item.key, b"bufs") {
+            types |= KCTX_BUFS;
+            c.bufs = ffi::nvim_ctx_array_to_string(array, err.cast());
+        } else if key_eq(item.key, b"gvars") {
+            types |= KCTX_GVARS;
+            c.gvars = ffi::nvim_ctx_array_to_string(array, err.cast());
+        } else if key_eq(item.key, b"funcs") {
+            types |= KCTX_FUNCS;
+            // copy_object(item.value, NULL).data.array
+            // Use ptr::read to copy the Object out since Object is not Copy
+            let obj_copy = std::ptr::read(&item.value);
+            c.funcs = ffi::copy_object(obj_copy, std::ptr::null_mut()).data.array;
+        }
+    }
+
+    types
+}
+
 #[export_name = "ctx_to_dict"]
 pub unsafe extern "C" fn rs_ctx_to_dict(ctx: *mut Context, arena: ArenaHandle) -> Dict {
     ctx_to_dict_impl(ctx, arena)
@@ -88,7 +170,7 @@ pub unsafe extern "C" fn rs_ctx_to_dict(ctx: *mut Context, arena: ArenaHandle) -
 pub unsafe extern "C" fn rs_ctx_from_dict(
     dict: Dict,
     ctx: *mut Context,
-    err: ErrorHandle,
+    err: *mut std::ffi::c_void,
 ) -> c_int {
-    ffi::nvim_ctx_from_dict_impl(dict, ctx, err)
+    ctx_from_dict_impl(dict, ctx, err.cast::<ApiError>())
 }

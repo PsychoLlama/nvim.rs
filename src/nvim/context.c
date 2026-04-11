@@ -1,25 +1,8 @@
 // Context: snapshot of the entire editor state as one big object/map
+// Most logic has been migrated to Rust (src/nvim-rs/context/).
+// This file only provides the kCtxAll and ctx_stack global definitions.
 
-#include <assert.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "nvim/api/keysets_defs.h"
-#include "nvim/api/private/converter.h"
-#include "nvim/api/private/defs.h"
-#include "nvim/api/private/helpers.h"
-#include "nvim/api/vimscript.h"
 #include "nvim/context.h"
-#include "nvim/eval/encode.h"
-#include "nvim/eval/typval.h"
-#include "nvim/eval/typval_defs.h"
-#include "nvim/eval/userfunc.h"
-#include "nvim/hashtab.h"
-#include "nvim/keycodes.h"
-#include "nvim/memory.h"
-#include "nvim/memory_defs.h"
 
 #include "context.c.generated.h"
 
@@ -27,86 +10,3 @@ int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
 
 ContextVec ctx_stack = KV_INITIAL_VALUE;
-
-
-
-/// Converts readfile()-style array to String (C accessor for Rust).
-/// Kept in C due to object_to_vim, encode_vim_list_to_buf coupling.
-static inline String nvim_ctx_array_to_string(Array array, Error *err)
-{
-  String sbuf = STRING_INIT;
-
-  typval_T list_tv;
-  object_to_vim(ARRAY_OBJ(array), &list_tv, err);
-
-  assert(list_tv.v_type == VAR_LIST);
-  if (!encode_vim_list_to_buf(list_tv.vval.v_list, &sbuf.size, &sbuf.data)) {
-    api_set_error(err, kErrorTypeException, "%s",
-                  "E474: Failed to convert list to msgpack string buffer");
-  }
-
-  tv_clear(&list_tv);
-  return sbuf;
-}
-
-
-/// Converts Dict representation of Context back to Context object (C accessor for Rust).
-/// Kept in C due to array_to_string, copy_object, ERROR_SET coupling.
-int nvim_ctx_from_dict_impl(Dict dict, Context *ctx, Error *err)
-{
-  assert(ctx != NULL);
-
-  int types = 0;
-  for (size_t i = 0; i < dict.size && !ERROR_SET(err); i++) {
-    KeyValuePair item = dict.items[i];
-    if (item.value.type != kObjectTypeArray) {
-      continue;
-    }
-    if (strequal(item.key.data, "regs")) {
-      types |= kCtxRegs;
-      ctx->regs = nvim_ctx_array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "jumps")) {
-      types |= kCtxJumps;
-      ctx->jumps = nvim_ctx_array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "bufs")) {
-      types |= kCtxBufs;
-      ctx->bufs = nvim_ctx_array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "gvars")) {
-      types |= kCtxGVars;
-      ctx->gvars = nvim_ctx_array_to_string(item.value.data.array, err);
-    } else if (strequal(item.key.data, "funcs")) {
-      types |= kCtxFuncs;
-      ctx->funcs = copy_object(item.value, NULL).data.array;
-    }
-  }
-
-  return types;
-}
-
-/// Saves functions to a context (C accessor for Rust).
-/// Kept in C due to HASHTAB_ITER, exec_impl, and Dict(exec_opts) coupling.
-void nvim_ctx_save_funcs(Context *ctx, bool scriptonly)
-{
-  ctx->funcs = (Array)ARRAY_DICT_INIT;
-  Error err = ERROR_INIT;
-
-  HASHTAB_ITER(func_tbl_get(), hi, {
-    const char *const name = hi->hi_key;
-    bool islambda = (strncmp(name, "<lambda>", 8) == 0);
-    bool isscript = ((uint8_t)name[0] == K_SPECIAL);
-
-    if (!islambda && (!scriptonly || isscript)) {
-      size_t cmd_len = sizeof("func! ") + strlen(name);
-      char *cmd = xmalloc(cmd_len);
-      snprintf(cmd, cmd_len, "func! %s", name);
-      Dict(exec_opts) opts = { .output = true };
-      String func_body = exec_impl(VIML_INTERNAL_CALL, cstr_as_string(cmd),
-                                   &opts, &err);
-      xfree(cmd);
-      if (!ERROR_SET(&err)) {
-        ADD(ctx->funcs, STRING_OBJ(func_body));
-      }
-      api_clear_error(&err);
-    }
-  });
-}
