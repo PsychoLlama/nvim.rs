@@ -1,55 +1,29 @@
 // cmdpreview.c: Command preview ('inccommand') support.
 
-#include <assert.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 
-#include "klib/kvec.h"
 #include "nvim/api/extmark.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/api/vim.h"
-#include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/drawscreen.h"
 #include "nvim/errors.h"
-#include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
-#include "nvim/ex_getln.h"
-#include "nvim/extmark.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/globals.h"
-#include "nvim/map_defs.h"
-#include "nvim/mark_defs.h"
 #include "nvim/memory.h"
-#include "nvim/memory_defs.h"
-#include "nvim/message.h"
-#include "nvim/move.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/pos_defs.h"
-#include "nvim/search.h"
-#include "nvim/state_defs.h"
 #include "nvim/types_defs.h"
-#include "nvim/undo.h"
 #include "nvim/undo_defs.h"
-#include "nvim/vim_defs.h"
-#include "nvim/window.h"
 #include "nvim/cmdpreview.h"
 
 #include "cmdpreview.c.generated.h"
-
-// Command preview helpers from Rust
-extern buf_T *rs_cmdpreview_open_buf(void);
-extern win_T *rs_cmdpreview_open_win(buf_T *cmdpreview_buf);
-extern void rs_cmdpreview_close_win(void);
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -164,9 +138,6 @@ int nvim_buf_count_undo_steps(buf_T *buf)
   return count;
 }
 
-/// Returns b_u_curhead == NULL ? 1 : 0.
-int nvim_buf_u_curhead_is_null(buf_T *buf) { return buf->b_u_curhead == NULL ? 1 : 0; }
-
 /// Allocate a heap garray_T initialised for int storage. Returns opaque pointer.
 void *nvim_ga_alloc_int(void)
 {
@@ -182,11 +153,6 @@ void nvim_ga_clear_free(void *gap_void)
   ga_clear(gap);
   xfree(gap);
 }
-
-/// Prepare Rust-managed cmdpreview state. Returns opaque pointer.
-extern void *rs_cmdpreview_prepare(void);
-/// Restore Rust-managed cmdpreview state and free it.
-extern void rs_cmdpreview_restore_state(void *state);
 
 /// Heap-allocated context combining exarg_T + CmdParseInfo for Rust FFI.
 typedef struct {
