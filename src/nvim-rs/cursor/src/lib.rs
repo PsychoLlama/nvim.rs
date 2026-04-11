@@ -15,7 +15,7 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 #![allow(dead_code)] // Some extern declarations are pre-declared for future use
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use nvim_window::WinHandle;
 
@@ -185,12 +185,6 @@ extern "C" {
     // Column Advancement Functions
     // -------------------------------------------------------------------------
 
-    /// Wrapper for `getvpos` - advances cursor to screen column
-    fn nvim_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int;
-
-    /// Wrapper for `coladvance2` with addspaces=true, finetune=false
-    fn nvim_coladvance2_addspaces(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int;
-
     /// Check if character at position is TAB
     fn nvim_char_at_pos_is_tab(wp: WinHandle, pos: *const CursorPos) -> bool;
 
@@ -328,6 +322,370 @@ extern "C" {
     /// Call `redraw_later`
     #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, r#type: c_int);
+}
+
+// =============================================================================
+// coladvance2 FFI declarations
+// =============================================================================
+
+extern "C" {
+    /// Get pointer to a line in a buffer (`ml_get_buf`)
+    fn nvim_ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
+
+    /// Get length of a line in a buffer (`ml_get_buf_len`)
+    fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: i32) -> c_int;
+
+    /// Get line width as displayed (`linetabsize(wp, lnum)`)
+    fn linetabsize(wp: WinHandle, lnum: i32) -> c_int;
+
+    /// Get line width including end-of-line (`linetabsize_eol(wp, lnum)`)
+    fn linetabsize_eol(wp: WinHandle, lnum: i32) -> c_int;
+
+    /// Get visual column positions for a position (`getvcol`)
+    fn getvcol(
+        wp: WinHandle,
+        pos: *const CursorPos,
+        scol: *mut i32,
+        ccol: *mut i32,
+        ecol: *mut i32,
+    );
+
+    /// Insert bytes into a line (`inserted_bytes`)
+    fn inserted_bytes(lnum: i32, col: i32, old_col: i32, new_col: i32);
+
+    /// Allocate zeroed memory of `size` bytes plus NUL (`xmallocz`)
+    fn xmallocz(size: usize) -> *mut c_void;
+
+    /// Replace a line in a buffer (`ml_replace`)
+    fn ml_replace(lnum: i32, line: *mut c_char, copy: bool) -> c_int;
+
+    /// Initialize charsize argument buffer
+    fn init_charsize_arg(csarg: *mut c_void, wp: WinHandle, lnum: i32, line: *const c_char)
+        -> bool;
+
+    /// Compute character size (fast path)
+    fn charsize_fast(
+        csarg: *mut c_void,
+        cur: *const c_char,
+        vcol: c_int,
+        cur_char: i32,
+    ) -> CharSize;
+
+    /// Compute character size (regular path)
+    fn charsize_regular(
+        csarg: *mut c_void,
+        cur: *const c_char,
+        vcol: c_int,
+        cur_char: i32,
+    ) -> CharSize;
+
+    /// Advance to next character in string (slow path, used by `utfc_next`)
+    fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo;
+
+    /// Decode UTF-8 character at pointer (slow path, used by `utf_ptr2str_char_info`)
+    fn utf_ptr2CharInfo_impl(p: *const u8, len: usize) -> i32;
+
+    /// UTF-8 byte-length table
+    static utf8len_tab: [u8; 256];
+
+    /// Get window `w_p_wrap` option
+    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
+
+    /// Get window `w_curswant`
+    fn nvim_win_get_curswant(wp: WinHandle) -> i32;
+
+    /// Set window `w_curswant`
+    fn nvim_win_set_curswant(wp: WinHandle, val: i32);
+}
+
+// =============================================================================
+// coladvance2 struct definitions (mirroring C types)
+// =============================================================================
+
+/// Mirror of C `CharSize` from `plines.h`: `{int width; int head;}`.
+#[repr(C)]
+struct CharSize {
+    width: c_int,
+    head: c_int,
+}
+
+/// Mirror of C `CharInfo` from `mbyte_defs.h`: `{int32_t value; int len;}`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CharInfo {
+    value: i32,
+    len: c_int,
+}
+
+/// Mirror of C `StrCharInfo` from `mbyte_defs.h`: `{char *ptr; CharInfo chr;}`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct StrCharInfo {
+    ptr: *mut c_char,
+    chr: CharInfo,
+}
+
+/// Opaque stack buffer for `CharsizeArg`.
+/// The C struct size is ~264 bytes; 320 gives comfortable margin. Alignment >= 8.
+#[repr(C, align(8))]
+struct CharsizeArgBuf([u8; 320]);
+
+// =============================================================================
+// coladvance2 helper functions
+// =============================================================================
+
+/// Dispatch to `charsize_fast` or `charsize_regular` based on `cstype`.
+/// `cstype = false` → fast, `cstype = true` → regular (matches C `CSType` bool convention).
+#[inline]
+unsafe fn win_charsize(
+    cstype: bool,
+    vcol: c_int,
+    ptr: *const c_char,
+    chr: i32,
+    csarg: *mut c_void,
+) -> CharSize {
+    if cstype {
+        charsize_regular(csarg, ptr, vcol, chr)
+    } else {
+        charsize_fast(csarg, ptr, vcol, chr)
+    }
+}
+
+/// Inline `utf_ptr2StrCharInfo`: construct `StrCharInfo` for the character at `ptr`.
+#[inline]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+unsafe fn utf_ptr2str_char_info(ptr: *mut c_char) -> StrCharInfo {
+    let p = ptr.cast::<u8>();
+    let first = *p;
+    if first < 0x80 {
+        StrCharInfo {
+            ptr,
+            chr: CharInfo {
+                value: i32::from(first),
+                len: 1,
+            },
+        }
+    } else {
+        let len = utf8len_tab[first as usize] as usize;
+        let code_point = utf_ptr2CharInfo_impl(p, len);
+        let (code_point, len) = if code_point < 0 {
+            (code_point, 1)
+        } else {
+            (code_point, len as c_int)
+        };
+        StrCharInfo {
+            ptr,
+            chr: CharInfo {
+                value: code_point,
+                len,
+            },
+        }
+    }
+}
+
+/// Inline `utfc_next`: advance to the next character in a string.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn utfc_next(cur: StrCharInfo) -> StrCharInfo {
+    let first = *cur.ptr as u8;
+    if first < 0x80 {
+        let next_ptr = cur.ptr.add(1);
+        let next_first = *next_ptr as u8;
+        if next_first < 0x80 {
+            return StrCharInfo {
+                ptr: next_ptr,
+                chr: CharInfo {
+                    value: i32::from(next_first),
+                    len: 1,
+                },
+            };
+        }
+    }
+    utfc_next_impl(cur)
+}
+
+// =============================================================================
+// coladvance2 Rust implementation
+// =============================================================================
+
+/// Advance position `pos` to screen column `wcol` in window `wp`.
+///
+/// - `addspaces`: if true, insert spaces/break tabs to fill the gap (only for `curwin`)
+/// - `finetune`: if true, set `pos.coladd` for virtual positions
+///
+/// Returns `OK` if the desired column is reached, `FAIL` otherwise.
+///
+/// # Safety
+/// All pointers must be valid. `wp` must be a valid window handle.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::absurd_extreme_comparisons,
+    clippy::manual_let_else
+)]
+unsafe fn coladvance2(
+    wp: WinHandle,
+    pos: *mut CursorPos,
+    addspaces: bool,
+    finetune: bool,
+    wcol_arg: i32,
+) -> c_int {
+    debug_assert!(!addspaces || wp == nvim_cursor_get_curwin());
+
+    let mut wcol = wcol_arg;
+    let mut idx: c_int;
+    let mut col: i32;
+    let mut head: c_int = 0;
+
+    let state = nvim_get_state();
+    let one_more = c_int::from(
+        (state & MODE_INSERT) != 0
+            || (state & MODE_TERMINAL) != 0
+            || restart_edit != 0
+            || (VIsual_active && nvim_get_p_sel_first() != i32::from(b'o'))
+            || ((nvim_get_ve_flags(wp) & VE_ONEMORE) != 0 && wcol < MAXCOL),
+    );
+
+    let buf = nvim_win_get_buffer(wp);
+    let line = nvim_ml_get_buf(buf, (*pos).lnum);
+    let linelen = nvim_ml_get_buf_len(buf, (*pos).lnum);
+
+    if wcol >= MAXCOL {
+        idx = linelen - 1 + one_more;
+        col = wcol;
+
+        if (addspaces || finetune) && !VIsual_active {
+            let ts = linetabsize(wp, (*pos).lnum) + one_more;
+            nvim_win_set_curswant(wp, ts);
+            let cw = nvim_win_get_curswant(wp);
+            if cw > 0 {
+                nvim_win_set_curswant(wp, cw - 1);
+            }
+        }
+    } else {
+        let view_width = nvim_win_get_view_width(wp);
+        let width = view_width - nvim_win_col_off(wp);
+        let mut csize: c_int = 0;
+
+        if finetune && nvim_win_get_p_wrap(wp) != 0 && view_width != 0 && wcol >= width && width > 0
+        {
+            csize = linetabsize_eol(wp, (*pos).lnum);
+            if csize > 0 {
+                csize -= 1;
+            }
+
+            if wcol / width > csize / width && ((state & MODE_INSERT) == 0 || wcol > csize + 1) {
+                wcol = (csize / width + 1) * width - 1;
+            }
+        }
+
+        let mut csarg_buf = CharsizeArgBuf([0u8; 320]);
+        let csarg = (&raw mut csarg_buf).cast::<c_void>();
+        let cstype = init_charsize_arg(csarg, wp, (*pos).lnum, line);
+        let mut ci = utf_ptr2str_char_info(line);
+        col = 0;
+        while col <= wcol && *ci.ptr != 0 {
+            let cs = win_charsize(cstype, col, ci.ptr, ci.chr.value, csarg);
+            csize = cs.width;
+            head = cs.head;
+            col += cs.width;
+            ci = utfc_next(ci);
+        }
+        idx = ci.ptr.offset_from(line) as c_int;
+
+        if col > wcol || (!nvim_virtual_active_win(wp) && one_more == 0) {
+            idx -= 1;
+            csize -= head;
+            col -= csize;
+        }
+
+        if nvim_virtual_active_win(wp)
+            && addspaces
+            && wcol >= 0
+            && ((col != wcol && col != wcol + 1) || csize > 1)
+        {
+            if *line.add(idx as usize) == 0 {
+                // Append spaces
+                let correct = wcol - col;
+                let newline_size = match (idx as usize).checked_add(correct as usize) {
+                    Some(n) => n,
+                    None => return FAIL,
+                };
+                let newline = xmallocz(newline_size).cast::<c_char>();
+                std::ptr::copy_nonoverlapping(line, newline, idx as usize);
+                std::ptr::write_bytes(newline.add(idx as usize), b' ', correct as usize);
+
+                ml_replace((*pos).lnum, newline, false);
+                inserted_bytes((*pos).lnum, idx, 0, correct);
+                idx += correct;
+                col = wcol;
+            } else {
+                // Break a tab
+                let correct = wcol - col - csize + 1; // negative
+                if -correct > csize {
+                    return FAIL;
+                }
+
+                let n = match (linelen as usize - 1).checked_add(csize as usize) {
+                    Some(v) => v,
+                    None => return FAIL,
+                };
+                let newline = xmallocz(n).cast::<c_char>();
+                // Copy first idx chars
+                std::ptr::copy_nonoverlapping(line, newline, idx as usize);
+                // Replace idx'th char with csize spaces
+                std::ptr::write_bytes(newline.add(idx as usize), b' ', csize as usize);
+                // Copy the rest of the line
+                let rest = match (linelen as usize)
+                    .checked_sub(idx as usize)
+                    .and_then(|v| v.checked_sub(1))
+                {
+                    Some(v) => v,
+                    None => return FAIL,
+                };
+                std::ptr::copy_nonoverlapping(
+                    line.add(idx as usize + 1),
+                    newline.add(idx as usize + csize as usize),
+                    rest,
+                );
+
+                ml_replace((*pos).lnum, newline, false);
+                inserted_bytes((*pos).lnum, idx, 1, csize);
+                idx += csize - 1 + correct;
+                col += correct;
+            }
+        }
+    }
+
+    (*pos).col = idx.max(0);
+    (*pos).coladd = 0;
+
+    if finetune {
+        if wcol == MAXCOL {
+            if one_more == 0 {
+                let mut scol: i32 = 0;
+                let mut ecol: i32 = 0;
+                getvcol(wp, pos, &raw mut scol, std::ptr::null_mut(), &raw mut ecol);
+                (*pos).coladd = ecol - scol;
+            }
+        } else {
+            let b = wcol - col;
+            if b > 0 && b < MAXCOL - 2 * nvim_win_get_view_width(wp) {
+                (*pos).coladd = b;
+            }
+            col += b;
+        }
+    }
+
+    let buf = nvim_win_get_buffer(wp);
+    nvim_mark_mb_adjustpos(BufHandle(buf), pos);
+
+    if wcol < 0 || col < wcol {
+        return FAIL;
+    }
+    OK
 }
 
 // =============================================================================
@@ -705,7 +1063,7 @@ pub unsafe extern "C" fn rs_getviscol2(col: i32, coladd: i32) -> c_int {
 /// `wp` and `pos` must be valid pointers.
 #[export_name = "getvpos"]
 pub unsafe extern "C" fn rs_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int {
-    nvim_getvpos(wp, pos, wcol)
+    coladvance2(wp, pos, false, nvim_virtual_active_win(wp), wcol)
 }
 
 /// Try to advance the cursor to the specified screen column.
@@ -727,7 +1085,7 @@ pub unsafe extern "C" fn rs_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i3
 #[export_name = "coladvance"]
 pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
     let cursor = nvim_win_get_cursor_ptr(wp);
-    let rc = nvim_getvpos(wp, cursor, wcol);
+    let rc = coladvance2(wp, cursor, false, nvim_virtual_active_win(wp), wcol);
 
     if wcol == MAXCOL || rc == FAIL {
         nvim_win_clear_valid_virtcol(wp);
@@ -756,7 +1114,7 @@ pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
 pub unsafe extern "C" fn rs_coladvance_force(wcol: i32) -> c_int {
     let curwin = nvim_cursor_get_curwin();
     let cursor = nvim_cursor_get_curwin_cursor();
-    let rc = nvim_coladvance2_addspaces(curwin, cursor, wcol);
+    let rc = coladvance2(curwin, cursor, true, false, wcol);
     if wcol == MAXCOL {
         nvim_win_clear_valid_virtcol(curwin);
     } else {

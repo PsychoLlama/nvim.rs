@@ -31,167 +31,6 @@
 
 _Static_assert(sizeof(pos_T) == 12, "pos_T size changed - update Rust CursorPos in cursor crate");
 
-// Static Functions (real logic, not wrappers)
-
-/// @param addspaces  change the text to achieve our goal? only for wp=curwin!
-/// @param finetune  change char offset for the exact column
-/// @param wcol_arg  column to move to (can be negative)
-static int coladvance2(win_T *wp, pos_T *pos, bool addspaces, bool finetune, colnr_T wcol_arg)
-{
-  assert(wp == curwin || !addspaces);
-  colnr_T wcol = wcol_arg;
-  int idx;
-  colnr_T col = 0;
-  int head = 0;
-
-  int one_more = (State & MODE_INSERT)
-                 || (State & MODE_TERMINAL)
-                 || restart_edit != NUL
-                 || (VIsual_active && *p_sel != 'o')
-                 || ((get_ve_flags(wp) & kOptVeFlagOnemore) && wcol < MAXCOL);
-
-  char *line = ml_get_buf(wp->w_buffer, pos->lnum);
-  int linelen = ml_get_buf_len(wp->w_buffer, pos->lnum);
-
-  if (wcol >= MAXCOL) {
-    idx = linelen - 1 + one_more;
-    col = wcol;
-
-    if ((addspaces || finetune) && !VIsual_active) {
-      wp->w_curswant = linetabsize(wp, pos->lnum) + one_more;
-      if (wp->w_curswant > 0) {
-        wp->w_curswant--;
-      }
-    }
-  } else {
-    int width = wp->w_view_width - win_col_off(wp);
-    int csize = 0;
-
-    if (finetune
-        && wp->w_p_wrap
-        && wp->w_view_width != 0
-        && wcol >= (colnr_T)width
-        && width > 0) {
-      csize = linetabsize_eol(wp, pos->lnum);
-      if (csize > 0) {
-        csize--;
-      }
-
-      if (wcol / width > (colnr_T)csize / width
-          && ((State & MODE_INSERT) == 0 || (int)wcol > csize + 1)) {
-        // In case of line wrapping don't move the cursor beyond the
-        // right screen edge.  In Insert mode allow going just beyond
-        // the last character (like what happens when typing and
-        // reaching the right window edge).
-        wcol = (csize / width + 1) * width - 1;
-      }
-    }
-
-    CharsizeArg csarg;
-    CSType cstype = init_charsize_arg(&csarg, wp, pos->lnum, line);
-    StrCharInfo ci = utf_ptr2StrCharInfo(line);
-    col = 0;
-    while (col <= wcol && *ci.ptr != NUL) {
-      CharSize cs = win_charsize(cstype, col, ci.ptr, ci.chr.value, &csarg);
-      csize = cs.width;
-      head = cs.head;
-      col += cs.width;
-      ci = utfc_next(ci);
-    }
-    idx = (int)(ci.ptr - line);
-
-    // Handle all the special cases.  The virtual_active() check
-    // is needed to ensure that a virtual position off the end of
-    // a line has the correct indexing.  The one_more comparison
-    // replaces an explicit add of one_more later on.
-    if (col > wcol || (!virtual_active(wp) && one_more == 0)) {
-      idx -= 1;
-      // Don't count the chars from 'showbreak'.
-      csize -= head;
-      col -= csize;
-    }
-
-    if (virtual_active(wp)
-        && addspaces
-        && wcol >= 0
-        && ((col != wcol && col != wcol + 1) || csize > 1)) {
-      // 'virtualedit' is set: The difference between wcol and col is filled with spaces.
-
-      if (line[idx] == NUL) {
-        // Append spaces
-        int correct = wcol - col;
-        size_t newline_size;
-        STRICT_ADD(idx, correct, &newline_size, size_t);
-        char *newline = xmallocz(newline_size);
-        memcpy(newline, line, (size_t)idx);
-        memset(newline + idx, ' ', (size_t)correct);
-
-        ml_replace(pos->lnum, newline, false);
-        inserted_bytes(pos->lnum, (colnr_T)idx, 0, correct);
-        idx += correct;
-        col = wcol;
-      } else {
-        // Break a tab
-        int correct = wcol - col - csize + 1;             // negative!!
-        char *newline;
-
-        if (-correct > csize) {
-          return FAIL;
-        }
-
-        size_t n;
-        STRICT_ADD(linelen - 1, csize, &n, size_t);
-        newline = xmallocz(n);
-        // Copy first idx chars
-        memcpy(newline, line, (size_t)idx);
-        // Replace idx'th char with csize spaces
-        memset(newline + idx, ' ', (size_t)csize);
-        // Copy the rest of the line
-        STRICT_SUB(linelen, idx, &n, size_t);
-        STRICT_SUB(n, 1, &n, size_t);
-        memcpy(newline + idx + csize, line + idx + 1, n);
-
-        ml_replace(pos->lnum, newline, false);
-        inserted_bytes(pos->lnum, idx, 1, csize);
-        idx += (csize - 1 + correct);
-        col += correct;
-      }
-    }
-  }
-
-  pos->col = MAX(idx, 0);
-  pos->coladd = 0;
-
-  if (finetune) {
-    if (wcol == MAXCOL) {
-      // The width of the last character is used to set coladd.
-      if (!one_more) {
-        colnr_T scol, ecol;
-
-        getvcol(wp, pos, &scol, NULL, &ecol);
-        pos->coladd = ecol - scol;
-      }
-    } else {
-      int b = (int)wcol - (int)col;
-
-      // The difference between wcol and col is used to set coladd.
-      if (b > 0 && b < (MAXCOL - 2 * wp->w_view_width)) {
-        pos->coladd = b;
-      }
-
-      col += b;
-    }
-  }
-
-  // Prevent from moving onto a trail byte.
-  mark_mb_adjustpos(wp->w_buffer, pos);
-
-  if (wcol < 0 || col < wcol) {
-    return FAIL;
-  }
-  return OK;
-}
-
 // inc_cursor and dec_cursor are now exported directly from Rust
 // (src/nvim-rs/cursor/src/lib.rs via #[unsafe(export_name = "..."])).
 
@@ -223,10 +62,6 @@ win_T *nvim_cursor_get_curwin(void) { return curwin; }
 
 /// Get cursor position pointer for current window (curwin->w_cursor).
 pos_T *nvim_cursor_get_curwin_cursor(void) { return &curwin->w_cursor; }
-
-/// Core getvpos implementation (calls coladvance2 directly).
-/// This is used by both getvpos() and rs_getvpos().
-int nvim_getvpos(win_T *wp, pos_T *pos, colnr_T wcol) { return coladvance2(wp, pos, false, virtual_active(wp), wcol); }
 
 /// Check if character at position is TAB.
 bool nvim_char_at_pos_is_tab(win_T *wp, pos_T *pos) { return *(ml_get_buf(wp->w_buffer, pos->lnum) + pos->col) == TAB; }
@@ -298,6 +133,4 @@ void nvim_win_set_cursor_coladd(win_T *wp, colnr_T coladd) { wp->w_cursor.coladd
 /// Get getvcol start and end columns (for check_cursor_col virtualedit).
 void nvim_get_vcol_range(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *end) { getvcol(wp, pos, start, NULL, end); }
 
-/// Wrapper for coladvance2 with addspaces=true, finetune=false (for Rust).
-int nvim_coladvance2_addspaces(win_T *wp, pos_T *pos, colnr_T wcol) { return coladvance2(wp, pos, true, false, wcol); }
 
