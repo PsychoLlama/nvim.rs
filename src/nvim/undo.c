@@ -285,18 +285,6 @@ void nvim_undo_curwin_set_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = l
 
 void nvim_check_cursor_col_curwin(void) { check_cursor_col(curwin); }
 
-void nvim_u_undoline_replace_and_swap(void)
-{
-  linenr_T lnum = curbuf->b_u_line_lnum;
-  char *oldp = xstrdup(ml_get_buf(curbuf, lnum));
-  ml_replace(lnum, curbuf->b_u_line_ptr, true);
-  extmark_splice_cols(curbuf, (int)lnum - 1, 0, (colnr_T)strlen(oldp),
-                      (colnr_T)strlen(curbuf->b_u_line_ptr), kExtmarkUndo);
-  changed_bytes(lnum, 0);
-  xfree(curbuf->b_u_line_ptr);
-  curbuf->b_u_line_ptr = oldp;
-}
-
 linenr_T nvim_undo_curwin_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
 time_t nvim_buf_get_b_u_time_cur(buf_T *buf) { return buf->b_u_time_cur; }
@@ -340,32 +328,6 @@ void nvim_u_sync(bool force) { u_sync(force); }
 
 // Buffer line count and line accessors for hash computation
 linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
-
-// File info for Unix ownership checks
-#ifdef UNIX
-int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_path, int perm)
-{
-  FileInfo file_info_old;
-  FileInfo file_info_new;
-  if (orig_path != NULL
-      && os_fileinfo(orig_path, &file_info_old)
-      && os_fileinfo(undo_path, &file_info_new)
-      && file_info_old.stat.st_gid != file_info_new.stat.st_gid
-      && os_fchown(fd, (uv_uid_t)-1, (uv_gid_t)file_info_old.stat.st_gid)) {
-    // Group change failed, adjust permissions
-    return (perm & 0707) | ((perm & 07) << 3);
-  }
-  return perm;
-}
-#else
-int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_path, int perm)
-{
-  (void)fd;
-  (void)orig_path;
-  (void)undo_path;
-  return perm;
-}
-#endif
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
 
@@ -416,21 +378,6 @@ void nvim_undo_corruption_error(const char *what, const char *file_name)
 void nvim_undo_file_changed_warning(void) { give_warning(_("File contents changed, cannot use undo info"), true); }
 
 void nvim_undo_finished_reading(const char *file_name) { smsg(0, _("Finished reading undo file %s"), file_name); }
-
-bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
-{
-#ifdef UNIX
-  FileInfo file_info_orig;
-  FileInfo file_info_undo;
-  if (os_fileinfo(orig_name, &file_info_orig)
-      && os_fileinfo(file_name, &file_info_undo)
-      && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
-      && file_info_undo.stat.st_uid != getuid()) {
-    return false;
-  }
-#endif
-  return true;
-}
 
 void nvim_undoredo_save_marks(buf_T *buf, u_header_T *curhead) { zero_fmark_additional_data(buf->b_namedm); }
 

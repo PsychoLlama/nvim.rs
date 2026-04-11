@@ -367,6 +367,9 @@ const BL_SOL: c_int = 2;
 /// beginline flag: don't leave cursor on a NUL.
 const BL_FIX: c_int = 4;
 
+/// ExtmarkOp: operation should be reversible/undoable (kExtmarkUndo).
+const K_EXTMARK_UNDO: c_int = 1;
+
 // =============================================================================
 // Undo Module Static State (moved from C undo.c statics)
 // =============================================================================
@@ -610,7 +613,21 @@ extern "C" {
     fn nvim_undo_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_undo_curwin_set_cursor_lnum(lnum: LinenrT);
     fn nvim_check_cursor_col_curwin();
-    fn nvim_u_undoline_replace_and_swap();
+
+    /// Notify extmarks of a column splice on curbuf.
+    #[link_name = "extmark_splice_cols"]
+    fn nvim_extmark_splice_cols(
+        buf: BufHandle,
+        start_row: c_int,
+        start_col: ColnrT,
+        old_col: ColnrT,
+        new_col: ColnrT,
+        undo: c_int,
+    );
+
+    /// Notify that bytes changed at lnum:col in curbuf.
+    #[link_name = "changed_bytes"]
+    fn nvim_changed_bytes(lnum: LinenrT, col: ColnrT);
 
     // undo_time accessors
     fn nvim_buf_get_b_u_time_cur(buf: BufHandle) -> TimeT;
@@ -695,14 +712,6 @@ extern "C" {
     fn nvim_os_set_acl(path: *const c_char, acl: *mut c_void);
     #[link_name = "os_free_acl"]
     fn nvim_os_free_acl(acl: *mut c_void);
-
-    // File info for Unix ownership checks
-    fn nvim_undo_set_file_group(
-        fd: c_int,
-        orig_path: *const c_char,
-        undo_path: *const c_char,
-        perm: c_int,
-    ) -> c_int;
 
     // Read helper for errno handling
     #[link_name = "read_eintr"]
@@ -2599,8 +2608,25 @@ pub unsafe extern "C" fn rs_u_undoline() {
         return;
     }
 
-    // Do the replacement and swap
-    nvim_u_undoline_replace_and_swap();
+    // Replace the line with the saved undo line, then swap the pointers.
+    // (Previously nvim_u_undoline_replace_and_swap in C.)
+    {
+        let lnum = nvim_buf_get_b_u_line_lnum(curbuf);
+        let cur_line_ptr = nvim_buf_get_b_u_line_ptr(curbuf);
+        let oldp = nvim_undo_xstrdup(nvim_ml_get_buf_line(curbuf, lnum));
+        nvim_ml_replace_lnum(lnum, cur_line_ptr, true);
+        nvim_extmark_splice_cols(
+            curbuf,
+            lnum - 1,
+            0,
+            libc::strlen(oldp) as ColnrT,
+            libc::strlen(cur_line_ptr) as ColnrT,
+            K_EXTMARK_UNDO,
+        );
+        nvim_changed_bytes(lnum, 0);
+        nvim_xfree(cur_line_ptr as *mut c_void);
+        nvim_buf_set_b_u_line_ptr(curbuf, oldp);
+    }
 
     // Handle column position
     let t = nvim_buf_get_b_u_line_colnr(curbuf);
@@ -4323,6 +4349,66 @@ const O_EXCL: c_int = 0o200;
 const O_NOFOLLOW: c_int = 0o400000;
 const O_RDONLY: c_int = 0o0;
 
+/// Try to set the group of the undo file to match the original file.
+///
+/// On Unix, if the gid of orig_path differs from undo_path, calls fchown.
+/// If fchown fails, adjusts perm to propagate user perms to group.
+/// Non-Unix: no-op, returns perm unchanged.
+///
+/// # Safety
+///
+/// `orig_path` and `undo_path` must be valid C strings or null.
+unsafe fn undo_set_file_group(
+    fd: c_int,
+    orig_path: *const c_char,
+    undo_path: *const c_char,
+    perm: c_int,
+) -> c_int {
+    #[cfg(unix)]
+    {
+        let mut stat_old: libc::stat = std::mem::zeroed();
+        let mut stat_new: libc::stat = std::mem::zeroed();
+        if !orig_path.is_null()
+            && libc::stat(orig_path, &mut stat_old) == 0
+            && libc::stat(undo_path, &mut stat_new) == 0
+            && stat_old.st_gid != stat_new.st_gid
+            && libc::fchown(fd, libc::uid_t::MAX, stat_old.st_gid as libc::gid_t) != 0
+        {
+            // Group change failed; adjust perms to propagate user bits to group
+            return (perm & 0o707) | ((perm & 0o7) << 3);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (fd, orig_path, undo_path);
+    }
+    perm
+}
+
+/// Check that the undo file owner is acceptable.
+///
+/// Returns false only on Unix when the undo file is owned by neither the
+/// original file's owner nor the current user.
+///
+/// # Safety
+///
+/// `orig_name` and `file_name` must be valid C strings.
+unsafe fn undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool {
+    #[cfg(unix)]
+    {
+        let mut stat_orig: libc::stat = std::mem::zeroed();
+        let mut stat_undo: libc::stat = std::mem::zeroed();
+        if libc::stat(orig_name, &mut stat_orig) == 0
+            && libc::stat(file_name, &mut stat_undo) == 0
+            && stat_orig.st_uid != stat_undo.st_uid
+            && stat_undo.st_uid != libc::getuid()
+        {
+            return false;
+        }
+    }
+    true
+}
+
 /// Write the undo tree to an undo file.
 ///
 /// This is the Rust implementation of `u_write_undo`.
@@ -4461,7 +4547,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
 
     // Try to set the group of the undo file same as the original file
     if !ffname.is_null() {
-        let new_perm = nvim_undo_set_file_group(fd, ffname, file_name, perm);
+        let new_perm = undo_set_file_group(fd, ffname, file_name, perm);
         if new_perm != perm {
             nvim_os_setperm(file_name, new_perm);
         }
@@ -4577,7 +4663,6 @@ extern "C" {
     fn nvim_undo_finished_reading(file_name: *const c_char);
     #[link_name = "os_fopen"]
     fn nvim_os_fopen(path: *const c_char, mode: *const c_char) -> FileHandle;
-    fn nvim_undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool;
 
 }
 
@@ -4896,7 +4981,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
 
         // For safety we only read an undo file if the owner is equal to the
         // owner of the text file or equal to the current user.
-        if !nvim_undo_check_owner(orig_name, file_name) {
+        if !undo_check_owner(orig_name, file_name) {
             if nvim_get_p_verbose() > 0 {
                 nvim_undo_verbose_enter();
                 nvim_undo_not_reading_owner_differs(file_name);
