@@ -427,6 +427,555 @@ pub extern "C" fn rs_cmdwin_result_should_cancel(result: c_int) -> c_int {
 }
 
 // =============================================================================
+// nvim_open_cmdwin: Full Rust port of the command-line window lifecycle
+// =============================================================================
+
+use std::ffi::{c_char, c_uint};
+
+// Opaque C pointer types used via FFI
+type WinHandle = *mut std::ffi::c_void;
+type BufHandle = *mut std::ffi::c_void;
+
+// Key constants (matching C keycodes.h)
+const CTRL_C: c_int = 3;
+const CAR: c_int = 13;
+const K_IGNORE: c_int = {
+    // termcap2key(KS_EXTRA=2, KE_IGNORE=53): -(256 * 53 + 2) = -13570 ... let's use C-computed value
+    // Actually: termcap2key = K_SPECIAL + extra*256 + ... no.
+    // In nvim: K_SPECIAL = 0x80 = 128; termcap2key(a,b) = -(a + b*256)
+    // KS_EXTRA = 2; KE_IGNORE = 53 => -(2 + 53*256) = -(2 + 13568) = -13570
+    -(2 + 53 * 256)
+};
+const K_NOP: c_int = {
+    // KE_NOP = 97 => -(2 + 97*256) = -(2 + 24832) = -24834
+    -(2 + 97 * 256)
+};
+const K_XF1: c_int = {
+    // KE_XF1 = 57 => -(2 + 57*256) = -(2 + 14592) = -14594
+    -(2 + 57 * 256)
+};
+const K_XF2: c_int = {
+    // KE_XF2 = 58 => -(2 + 58*256) = -(2 + 14848) = -14850
+    -(2 + 58 * 256)
+};
+
+// C return codes
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// HIST constants
+const HIST_INVALID: c_int = -1;
+const HIST_CMD: c_int = 0;
+
+// MODE_NORMAL
+const MODE_NORMAL: c_int = 0x01;
+
+unsafe extern "C" {
+    // ccline accessors (many already declared in state.rs/keys.rs; we re-declare here)
+    fn nvim_get_ccline_level() -> c_int;
+    fn nvim_get_cmdline_type() -> c_int;
+    fn nvim_get_ccline_cmdbuff() -> *mut c_char;
+    fn nvim_get_ccline_cmdpos() -> c_int;
+    fn nvim_get_ccline_cmdlen() -> c_int;
+    fn nvim_set_ccline_cmdpos(pos: c_int);
+    fn nvim_set_ccline_cmdbuff(buff: *mut c_char);
+    fn nvim_set_ccline_cmdspos(spos: c_int);
+    fn nvim_set_ccline_redraw_state(state: c_int);
+
+    // Global state getters/setters (from cmdwin_shim.c and other shims)
+    fn nvim_get_cmdwin_type() -> c_int;
+    fn nvim_set_cmdwin_type(val: c_int);
+    fn nvim_set_cmdwin_level(val: c_int);
+    fn nvim_set_cmdwin_win(wp: WinHandle);
+    fn nvim_set_cmdwin_old_curwin(wp: WinHandle);
+    fn nvim_set_cmdwin_buf(buf: BufHandle);
+    fn nvim_get_cmdwin_result() -> c_int;
+    fn nvim_set_cmdwin_result(val: c_int);
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_set_restart_edit(val: c_int);
+    fn nvim_get_State() -> c_int;
+    fn nvim_set_State(val: c_int);
+    fn nvim_get_exmode_active() -> c_int;
+    fn nvim_set_exmode_active(val: c_int);
+    fn nvim_get_cmdmsg_rl() -> c_int;
+    fn nvim_set_cmdmsg_rl(val: c_int);
+    fn nvim_set_got_int(val: c_int);
+    fn nvim_set_need_wait_return(val: c_int);
+    fn nvim_get_RedrawingDisabled() -> c_int;
+    fn nvim_set_RedrawingDisabled(val: c_int);
+    fn nvim_get_KeyTyped() -> bool;
+    fn nvim_set_KeyTyped(val: c_int);
+    fn nvim_set_skip_win_fix_cursor(val: c_int);
+    fn nvim_set_cmdline_was_last_drawn(val: c_int);
+
+    // cmdmod
+    fn nvim_set_cmdmod_tab_zero();
+    fn nvim_set_cmdmod_noswapfile();
+
+    // curwin / curbuf field accessors
+    fn nvim_get_curwin_ptr() -> WinHandle;
+    fn nvim_curwin_set_w_p_fen(val: c_int);
+    fn nvim_curwin_set_w_p_rl(val: c_int);
+    fn nvim_curwin_set_w_p_cole(val: c_int);
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_curwin_set_cursor_col(col: c_uint);
+    fn nvim_curbuf_set_b_p_ma(v: c_int);
+    fn nvim_curbuf_set_b_p_tw(v: i64);
+    fn nvim_curbuf_inc_ro_locked();
+    fn nvim_curbuf_dec_ro_locked();
+    fn nvim_curbuf_get_ml_line_count() -> c_int;
+    fn nvim_get_curbuf_ptr() -> BufHandle;
+
+    // Window / buffer management
+    fn nvim_win_split_bot(height: c_int) -> c_int;
+    fn nvim_buf_open_scratch_cmdwin() -> c_int;
+    fn nvim_win_close_if_valid_not_last(wp: WinHandle) -> c_int;
+    fn nvim_win_close_cmdwin(wp: WinHandle);
+    fn nvim_close_buffer_wipe_if_valid(bufref: *mut std::ffi::c_void, curbuf: BufHandle);
+    fn nvim_win_goto_cmdwin(wp: WinHandle);
+    fn nvim_normal_enter_cmdwin();
+
+    // Rust win/buf helpers
+    fn rs_win_valid(win: WinHandle) -> c_int;
+    fn rs_win_size_save(gap: *mut std::ffi::c_void);
+    fn rs_win_size_restore(gap: *mut std::ffi::c_void);
+    fn rs_clear_showcmd();
+
+    // Heap-allocated opaque handles
+    fn nvim_alloc_garray() -> *mut std::ffi::c_void;
+    fn nvim_free_garray(gap: *mut std::ffi::c_void);
+    fn nvim_alloc_bufref() -> *mut std::ffi::c_void;
+    fn nvim_free_bufref(br: *mut std::ffi::c_void);
+    fn nvim_set_bufref_cmdwin(br: *mut std::ffi::c_void, buf: BufHandle);
+    fn nvim_bufref_valid_cmdwin(br: *mut std::ffi::c_void) -> c_int;
+    fn nvim_bufref_get_buf_cmdwin(br: *mut std::ffi::c_void) -> BufHandle;
+
+    // text_or_buf_locked / cmdline_star
+    fn nvim_text_or_buf_locked() -> c_int;
+    fn nvim_get_cmdline_star() -> c_int;
+
+    // beep / pum
+    fn nvim_beep_flush();
+    fn nvim_pum_undisplay_true();
+
+    // win_T field accessor
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
+
+    // Autocommands
+    fn nvim_trigger_cmdwinenter();
+    fn nvim_trigger_cmdwinleave();
+
+    // Option setters
+    fn nvim_set_opt_bufhidden_wipe();
+    fn nvim_set_opt_filetype_vim();
+
+    // Mapping
+    fn nvim_add_tab_map_insert();
+    fn nvim_add_tab_map_normal();
+
+    // History
+    fn nvim_init_history_and_get_hislen() -> c_int;
+    fn nvim_get_hisidx(histtype: c_int) -> c_int;
+    fn nvim_get_histentry_str(histtype: c_int, i: c_int) -> *const c_char;
+
+    // Buffer / line r/w
+    fn nvim_ml_replace_last_with_cmdbuff();
+    fn nvim_ml_append_cmdwin(lnum: c_int, line: *const c_char) -> c_int;
+
+    // UI / redraw
+    fn nvim_changed_line_abv_curs_cmdwin();
+    fn nvim_invalidate_botline_curwin();
+    fn nvim_redraw_later_curwin_some_valid();
+    fn nvim_ui_has_cmdline() -> c_int;
+    fn nvim_ui_call_cmdline_hide_ccline(do_flush: c_int);
+    fn nvim_cmd_screencol_cmdpos() -> c_int;
+    fn nvim_redrawcmd();
+
+    // Getchar / typeahead
+    fn nvim_stuffcharReadbuff_cmdwin(c: c_int);
+
+    // Clipboard batch count
+    fn nvim_save_batch_count() -> c_int;
+    fn nvim_restore_batch_count(save_count: c_int);
+
+    // cmdline buffer management
+    fn nvim_dealloc_cmdbuff();
+
+    // Misc
+    fn nvim_aborting() -> c_int;
+    fn nvim_set_ccline_cmdpos_from_cursor();
+    fn nvim_emsg_cmdwin_changed();
+    fn nvim_may_trigger_modechanged();
+    fn nvim_setmouse();
+    fn nvim_setcursor();
+
+    // Result extraction helpers
+    fn nvim_set_ccline_cmdbuff_qa(with_bang: c_int);
+    fn nvim_stuff_qa_into_readbuff(with_bang: c_int);
+    fn nvim_set_ccline_cmdbuff_empty();
+    fn nvim_set_ccline_cmdbuff_from_cursor();
+
+    // p_cwh / p_wc
+    fn nvim_get_p_cwh() -> c_int;
+    fn nvim_cmdexpand_get_p_wc() -> c_int;
+}
+
+/// Open a command-line window for the current command-line type.
+/// Rust port of `nvim_open_cmdwin` from cmdwin.c.
+///
+/// # Safety
+///
+/// Calls many C FFI functions that manipulate global editor state.
+/// Must only be called from the main editor thread.
+#[allow(clippy::must_use_candidate)]
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "nvim_open_cmdwin")]
+pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
+    // Early exit: can't open while already in cmdwin, text locked, or in password mode.
+    if rs_cmdwin_can_open(
+        c_int::from(nvim_get_cmdwin_type() != 0),
+        nvim_text_or_buf_locked(),
+        nvim_get_cmdline_star(),
+    ) != 0
+    {
+        nvim_beep_flush();
+        return K_IGNORE;
+    }
+
+    // Remember old_curwin and old_curbuf.
+    let old_curwin = nvim_get_curwin_ptr();
+    let old_curbuf_ref = nvim_alloc_bufref();
+    nvim_set_bufref_cmdwin(old_curbuf_ref, nvim_get_curbuf_ptr());
+
+    // Save current window sizes.
+    let winsizes = nvim_alloc_garray();
+    rs_win_size_save(winsizes);
+
+    // Dismiss popup menu.
+    nvim_pum_undisplay_true();
+
+    // Don't use a new tab page.
+    nvim_set_cmdmod_tab_zero();
+    nvim_set_cmdmod_noswapfile();
+
+    // Save state that we restore later.
+    let save_restart_edit = nvim_get_restart_edit();
+    let save_state = nvim_get_State();
+    let save_exmode = nvim_get_exmode_active();
+    let save_cmdmsg_rl = nvim_get_cmdmsg_rl();
+
+    // Create a split window at the bottom.
+    if nvim_win_split_bot(nvim_get_p_cwh()) == FAIL {
+        nvim_beep_flush();
+        nvim_free_garray(winsizes);
+        nvim_free_bufref(old_curbuf_ref);
+        return K_IGNORE;
+    }
+
+    // win_split() autocommands may have invalidated old_curwin / old_curbuf.
+    let old_curbuf_valid = nvim_bufref_valid_cmdwin(old_curbuf_ref);
+    let old_curbuf_buf = nvim_bufref_get_buf_cmdwin(old_curbuf_ref);
+    let old_curwin_buf = if rs_win_valid(old_curwin) != 0 {
+        nvim_win_get_w_buffer(old_curwin)
+    } else {
+        std::ptr::null_mut()
+    };
+    let curwin_is_old = nvim_get_curwin_ptr() == old_curwin;
+
+    if rs_cmdwin_split_invalid(
+        rs_win_valid(old_curwin),
+        c_int::from(curwin_is_old),
+        old_curbuf_valid,
+        c_int::from(!old_curwin_buf.is_null() && old_curwin_buf != old_curbuf_buf),
+    ) != 0
+    {
+        nvim_beep_flush();
+        nvim_free_garray(winsizes);
+        nvim_free_bufref(old_curbuf_ref);
+        return CTRL_C;
+    }
+
+    // Don't let quitting the More prompt abort this.
+    nvim_set_got_int(0);
+
+    // Set cmdwin variables before any autocommands.
+    nvim_set_cmdwin_type(nvim_get_cmdline_type());
+    nvim_set_cmdwin_level(nvim_get_ccline_level());
+    nvim_set_cmdwin_win(nvim_get_curwin_ptr());
+    nvim_set_cmdwin_old_curwin(old_curwin);
+
+    // Create empty scratch buffer. Be especially cautious of BufLeave autocommands.
+    let newbuf_status = nvim_buf_open_scratch_cmdwin();
+    let cmdwin_win = nvim_get_curwin_ptr(); // snapshot: may differ after autocommands
+    let cmdwin_valid = rs_win_valid(cmdwin_win);
+    let curwin_after = nvim_get_curwin_ptr();
+    let curwin_is_cmdwin = c_int::from(curwin_after == cmdwin_win);
+
+    // Re-check after buf_open_scratch autocommands.
+    let old_curbuf_valid2 = nvim_bufref_valid_cmdwin(old_curbuf_ref);
+    let old_curbuf_buf2 = nvim_bufref_get_buf_cmdwin(old_curbuf_ref);
+    let old_curwin_buf2 = if rs_win_valid(old_curwin) != 0 {
+        nvim_win_get_w_buffer(old_curwin)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    if rs_cmdwin_buffer_invalid(
+        c_int::from(newbuf_status == OK),
+        cmdwin_valid,
+        curwin_is_cmdwin,
+        rs_win_valid(old_curwin),
+        old_curbuf_valid2,
+        c_int::from(!old_curwin_buf2.is_null() && old_curwin_buf2 != old_curbuf_buf2),
+    ) != 0
+    {
+        // Set bufref for the new buffer (if created) for cleanup.
+        let new_buf_ref = if newbuf_status == OK {
+            let br = nvim_alloc_bufref();
+            nvim_set_bufref_cmdwin(br, nvim_get_curbuf_ptr());
+            br
+        } else {
+            std::ptr::null_mut()
+        };
+
+        // Close cmdwin window if still valid.
+        nvim_win_close_if_valid_not_last(cmdwin_win);
+
+        // Close newly-created buffer if it survived win_close().
+        if !new_buf_ref.is_null() {
+            nvim_close_buffer_wipe_if_valid(new_buf_ref, nvim_get_curbuf_ptr());
+            nvim_free_bufref(new_buf_ref);
+        }
+
+        // Reset cmdwin state.
+        nvim_set_cmdwin_type(0);
+        nvim_set_cmdwin_level(0);
+        nvim_set_cmdwin_win(std::ptr::null_mut());
+        nvim_set_cmdwin_old_curwin(std::ptr::null_mut());
+
+        nvim_beep_flush();
+        nvim_free_garray(winsizes);
+        nvim_free_bufref(old_curbuf_ref);
+        return CTRL_C;
+    }
+
+    // Point cmdwin_buf to the new buffer.
+    nvim_set_cmdwin_buf(nvim_get_curbuf_ptr());
+
+    // Set buffer options.
+    nvim_set_opt_bufhidden_wipe();
+    nvim_curbuf_set_b_p_ma(1);
+    nvim_curwin_set_w_p_fen(0);
+    // C: curwin->w_p_rl = cmdmsg_rl; cmdmsg_rl = false;
+    // save_cmdmsg_rl holds the saved cmdmsg_rl value (1 = true, 0 = false)
+    nvim_curwin_set_w_p_rl(c_int::from(save_cmdmsg_rl != 0));
+    nvim_set_cmdmsg_rl(0);
+
+    // Don't allow switching to another buffer.
+    nvim_curbuf_inc_ro_locked();
+
+    // Reset need_wait_return.
+    nvim_set_need_wait_return(0);
+
+    // History type and tab mapping.
+    let histtype = rs_cmdwin_to_hist_type(nvim_get_cmdwin_type());
+    if rs_cmdwin_needs_tab_mapping(histtype, nvim_cmdexpand_get_p_wc()) != 0 {
+        nvim_add_tab_map_insert();
+        nvim_add_tab_map_normal();
+    }
+    if rs_cmdwin_needs_vim_filetype(histtype) != 0 {
+        nvim_set_opt_filetype_vim();
+    }
+    nvim_curbuf_dec_ro_locked();
+
+    // Reset 'textwidth' (vim filetype plugin sets it to 78).
+    nvim_curbuf_set_b_p_tw(0);
+
+    // Fill the buffer with history.
+    let hislen = nvim_init_history_and_get_hislen();
+    if hislen > 0 && histtype != HIST_INVALID {
+        let hisidx = nvim_get_hisidx(histtype);
+        if hisidx >= 0 {
+            let mut i = hisidx;
+            let mut lnum: c_int = 0;
+            loop {
+                i += 1;
+                if i == hislen {
+                    i = 0;
+                }
+                let s = nvim_get_histentry_str(histtype, i);
+                if !s.is_null() {
+                    nvim_ml_append_cmdwin(lnum, s);
+                    lnum += 1;
+                }
+                if i == hisidx {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Replace the empty last line with the current command-line.
+    nvim_ml_replace_last_with_cmdbuff();
+    nvim_curwin_set_cursor_lnum(nvim_curbuf_get_ml_line_count());
+    nvim_curwin_set_cursor_col(nvim_get_ccline_cmdpos() as c_uint);
+    nvim_changed_line_abv_curs_cmdwin();
+    nvim_invalidate_botline_curwin();
+
+    // Handle UI cmdline hiding.
+    if nvim_ui_has_cmdline() != 0 {
+        nvim_set_cmdline_was_last_drawn(0);
+        nvim_set_ccline_redraw_state(0); // kCmdRedrawNone
+        nvim_ui_call_cmdline_hide_ccline(0);
+    }
+    nvim_redraw_later_curwin_some_valid();
+
+    // No Ex mode in cmdwin.
+    nvim_set_exmode_active(0);
+
+    nvim_set_State(MODE_NORMAL);
+    nvim_setmouse();
+    rs_clear_showcmd();
+
+    // Reset result (can be set by CmdwinEnter autocmd).
+    nvim_set_cmdwin_result(0);
+
+    // Trigger CmdwinEnter.
+    nvim_trigger_cmdwinenter();
+    if nvim_get_restart_edit() != 0 {
+        // autocmd with :startinsert
+        nvim_stuffcharReadbuff_cmdwin(K_NOP);
+    }
+
+    // Save/clear RedrawingDisabled and batch count.
+    let saved_redrawing = nvim_get_RedrawingDisabled();
+    nvim_set_RedrawingDisabled(0);
+    let save_count = nvim_save_batch_count();
+
+    // Main loop: blocks until <CR> or CTRL-C.
+    nvim_normal_enter_cmdwin();
+
+    nvim_set_RedrawingDisabled(saved_redrawing);
+    nvim_restore_batch_count(save_count);
+
+    let save_key_typed = nvim_get_KeyTyped();
+
+    // Trigger CmdwinLeave.
+    nvim_trigger_cmdwinleave();
+
+    // Restore KeyTyped in case autocommands modified it.
+    nvim_set_KeyTyped(c_int::from(save_key_typed));
+
+    // Clear cmdwin state.
+    nvim_set_cmdwin_type(0);
+    nvim_set_cmdwin_level(0);
+    nvim_set_cmdwin_buf(std::ptr::null_mut());
+    nvim_set_cmdwin_win(std::ptr::null_mut());
+    nvim_set_cmdwin_old_curwin(std::ptr::null_mut());
+
+    nvim_set_exmode_active(save_exmode);
+
+    // Safety check: old window or buffer must still be valid.
+    let old_curbuf_valid3 = nvim_bufref_valid_cmdwin(old_curbuf_ref);
+    let old_curbuf_buf3 = nvim_bufref_get_buf_cmdwin(old_curbuf_ref);
+    let old_curwin_buf3 = if rs_win_valid(old_curwin) != 0 {
+        nvim_win_get_w_buffer(old_curwin)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    if rs_cmdwin_cleanup_had_error(
+        rs_win_valid(old_curwin),
+        old_curbuf_valid3,
+        c_int::from(!old_curwin_buf3.is_null() && old_curwin_buf3 != old_curbuf_buf3),
+    ) != 0
+    {
+        nvim_set_cmdwin_result(CTRL_C);
+        nvim_emsg_cmdwin_changed();
+    } else {
+        // autocmds may abort script processing
+        if nvim_aborting() != 0 && nvim_get_cmdwin_result() != K_IGNORE {
+            nvim_set_cmdwin_result(CTRL_C);
+        }
+
+        // Set the new command line from the cmdwin buffer.
+        nvim_dealloc_cmdbuff();
+
+        let result = nvim_get_cmdwin_result();
+        if result == K_XF1 || result == K_XF2 {
+            // :qa[!] typed
+            let with_bang = c_int::from(result == K_XF1);
+            if histtype == HIST_CMD {
+                // Execute the command directly.
+                nvim_set_ccline_cmdbuff_qa(with_bang);
+                nvim_set_cmdwin_result(CAR);
+            } else {
+                // Cancel what we were doing, then stuff the command.
+                nvim_stuff_qa_into_readbuff(with_bang);
+            }
+        } else if result == CTRL_C {
+            // :q or :close -- don't execute, clear cmdbuff.
+            nvim_set_ccline_cmdbuff(std::ptr::null_mut());
+        } else {
+            nvim_set_ccline_cmdbuff_from_cursor();
+        }
+
+        if nvim_get_ccline_cmdbuff().is_null() {
+            nvim_set_ccline_cmdbuff_empty();
+            nvim_set_cmdwin_result(CTRL_C);
+        } else {
+            nvim_set_ccline_cmdpos_from_cursor();
+            // If cursor is at last char or beyond, set cmdpos to cmdlen.
+            let cmdpos = nvim_get_ccline_cmdpos();
+            let cmdlen = nvim_get_ccline_cmdlen();
+            if cmdpos == cmdlen - 1 || cmdpos > cmdlen {
+                nvim_set_ccline_cmdpos(cmdlen);
+            }
+            if nvim_get_cmdwin_result() == K_IGNORE {
+                nvim_set_ccline_cmdspos(nvim_cmd_screencol_cmdpos());
+                nvim_redrawcmd();
+            }
+        }
+
+        // Avoid command-line window first character being concealed.
+        nvim_curwin_set_w_p_cole(0);
+
+        // Go back to the original window.
+        let wp = nvim_get_curwin_ptr();
+        let bufref = nvim_alloc_bufref();
+        nvim_set_bufref_cmdwin(bufref, nvim_get_curbuf_ptr());
+
+        nvim_set_skip_win_fix_cursor(1);
+        nvim_win_goto_cmdwin(old_curwin);
+
+        // win_goto() may trigger an autocommand that already closes cmdwin.
+        if rs_win_valid(wp) != 0 && wp != nvim_get_curwin_ptr() {
+            nvim_win_close_cmdwin(wp);
+        }
+
+        // win_close() may have already wiped the buffer when bh=wipe.
+        nvim_close_buffer_wipe_if_valid(bufref, nvim_get_curbuf_ptr());
+        nvim_free_bufref(bufref);
+
+        // Restore window sizes.
+        rs_win_size_restore(winsizes);
+        nvim_set_skip_win_fix_cursor(0);
+    }
+
+    nvim_free_garray(winsizes);
+    nvim_free_bufref(old_curbuf_ref);
+
+    nvim_set_restart_edit(save_restart_edit);
+    nvim_set_cmdmsg_rl(save_cmdmsg_rl);
+    nvim_set_State(save_state);
+    nvim_may_trigger_modechanged();
+    nvim_setmouse();
+    nvim_setcursor();
+
+    nvim_get_cmdwin_result()
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
