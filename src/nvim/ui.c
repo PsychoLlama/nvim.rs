@@ -78,29 +78,10 @@ extern int rs_ui_get_pending_has_mouse(void);
 extern void rs_ui_set_pending_has_mouse(int val);
 extern bool rs_ui_get_pending_default_colors(void);
 extern void rs_ui_set_pending_default_colors(bool val);
-// Rust implementations of migrated functions
-extern bool rs_ui_rgb_attached(void);
-extern bool rs_ui_gui_attached(void);
-extern bool rs_ui_override(void);
-extern size_t rs_ui_active(void);
-extern int rs_ui_pum_get_height(void);
-extern bool rs_ui_pum_get_pos(double *pwidth, double *pheight, double *prow, double *pcol);
-extern void rs_ui_cursor_goto(int new_row, int new_col);
-extern void rs_ui_grid_cursor_goto(handle_T grid_handle, int new_row, int new_col);
-extern void rs_ui_check_cursor_grid(handle_T grid_handle);
-extern void rs_ui_mode_info_set(void);
-extern void rs_ui_cursor_shape_no_check_conceal(void);
-extern void rs_ui_cursor_shape(void);
-extern void rs_ui_default_colors_set(void);
-extern void rs_ui_may_set_default_colors(void);
-extern void rs_ui_busy_start(void);
-extern void rs_ui_busy_stop(void);
-extern void rs_vim_beep(unsigned val);
-extern void rs_ui_check_mouse(void);
-extern void rs_ui_flush(void);
+// Rust line renderer and grid resize (called from thin C wrappers with validation)
 extern void rs_ui_line(const void *grid, int row, bool invalid_row, int startcol, int endcol,
                        int clearcol, int clearattr, bool wrap);
-extern void rs_do_autocmd_uienter_all(void);
+extern void rs_ui_grid_resize_win(void *wp, int width, int height);
 
 #ifdef NVIM_LOG_DEBUG
 static size_t uilog_seen = 0;
@@ -170,60 +151,9 @@ void ui_free_all_mem(void)
 }
 #endif
 
-/// Returns true if any `rgb=true` UI is attached.
-bool ui_rgb_attached(void) { return rs_ui_rgb_attached(); }
-
-/// Returns true if a GUI is attached.
-bool ui_gui_attached(void) { return rs_ui_gui_attached(); }
-
-/// Returns true if any UI requested `override=true`.
-bool ui_override(void) { return rs_ui_override(); }
-
-/// Gets the number of UIs connected to this server.
-size_t ui_active(void) { return rs_ui_active(); }
-
-extern void rs_ui_refresh(void);
-void ui_refresh(void) { rs_ui_refresh(); }
-
-int ui_pum_get_height(void) { return rs_ui_pum_get_height(); }
-
-bool ui_pum_get_pos(double *pwidth, double *pheight, double *prow, double *pcol)
-{
-  return rs_ui_pum_get_pos(pwidth, pheight, prow, pcol);
-}
-
 static void ui_refresh_event(void **argv) { ui_refresh(); }
 
 void ui_schedule_refresh(void) { multiqueue_put(resize_events, ui_refresh_event, NULL); }
-
-void ui_default_colors_set(void) { rs_ui_default_colors_set(); }
-
-static void ui_may_set_default_colors(void) { rs_ui_may_set_default_colors(); }
-
-void ui_busy_start(void) { rs_ui_busy_start(); }
-
-void ui_busy_stop(void) { rs_ui_busy_stop(); }
-
-/// Emit a bell or visualbell as a warning
-///
-/// val is one of the OptBoFlags values, e.g., kOptBoFlagOperator
-void vim_beep(unsigned val) { rs_vim_beep(val); }
-
-/// Trigger UIEnter for all attached UIs.
-/// Used on startup after VimEnter.
-void do_autocmd_uienter_all(void) { rs_do_autocmd_uienter_all(); }
-
-extern void rs_ui_attach_impl(void *ui, uint64_t chanid);
-void ui_attach_impl(RemoteUI *ui, uint64_t chanid) { rs_ui_attach_impl((void *)ui, chanid); }
-
-extern void rs_ui_detach_impl(void *ui, uint64_t chanid);
-void ui_detach_impl(RemoteUI *ui, uint64_t chanid) { rs_ui_detach_impl((void *)ui, chanid); }
-
-extern void rs_ui_set_ext_option(void *ui, int ext, bool active);
-void ui_set_ext_option(RemoteUI *ui, UIExtension ext, bool active)
-{
-  rs_ui_set_ext_option((void *)ui, (int)ext, active);
-}
 
 void ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endcol, int clearcol,
              int clearattr, bool wrap)
@@ -232,40 +162,9 @@ void ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endc
   rs_ui_line((const void *)grid, row, invalid_row, startcol, endcol, clearcol, clearattr, wrap);
 }
 
-void ui_cursor_goto(int new_row, int new_col) { rs_ui_cursor_goto(new_row, new_col); }
-
-void ui_grid_cursor_goto(handle_T grid_handle, int new_row, int new_col)
-{
-  rs_ui_grid_cursor_goto(grid_handle, new_row, new_col);
-}
-
-/// moving the cursor grid will implicitly move the cursor
-void ui_check_cursor_grid(handle_T grid_handle) { rs_ui_check_cursor_grid(grid_handle); }
-
-void ui_mode_info_set(void) { rs_ui_mode_info_set(); }
-
 // C accessors for cursor position (delegates to Rust-owned state)
 int nvim_get_ui_cursor_row(void) { return rs_ui_get_cursor_row(); }
 int nvim_get_ui_cursor_col(void) { return rs_ui_get_cursor_col(); }
-
-void ui_flush(void) { rs_ui_flush(); }
-
-/// Check if 'mouse' is active for the current mode
-///
-/// TODO(bfredl): precompute the State -> active mapping when 'mouse' changes,
-/// then this can be checked directly in ui_flush()
-void ui_check_mouse(void) { rs_ui_check_mouse(); }
-
-/// Check if current mode has changed.
-///
-/// May update the shape of the cursor.
-void ui_cursor_shape_no_check_conceal(void) { rs_ui_cursor_shape_no_check_conceal(); }
-
-/// Check if current mode has changed.
-///
-/// May update the shape of the cursor.
-/// With concealing on, may conceal or unconceal the cursor line.
-void ui_cursor_shape(void) { rs_ui_cursor_shape(); }
 
 // C accessor for ui_ext array (used by Rust)
 int nvim_get_ui_ext(int ext) { return ui_ext[ext] ? 1 : 0; }

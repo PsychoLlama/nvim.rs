@@ -626,8 +626,8 @@ pub unsafe extern "C" fn rs_ui_set_has_mouse(val: bool) {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_rgb_attached() -> bool {
+#[export_name = "ui_rgb_attached"]
+pub unsafe extern "C" fn ui_rgb_attached() -> bool {
     if nvim_get_p_tgc() != 0 {
         return true;
     }
@@ -646,8 +646,8 @@ pub unsafe extern "C" fn rs_ui_rgb_attached() -> bool {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_gui_attached() -> bool {
+#[export_name = "ui_gui_attached"]
+pub unsafe extern "C" fn ui_gui_attached() -> bool {
     let count = nvim_ui_active();
     for i in 0..count {
         let ui = nvim_ui_get_uis_ptr(i);
@@ -663,8 +663,8 @@ pub unsafe extern "C" fn rs_ui_gui_attached() -> bool {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_override() -> bool {
+#[export_name = "ui_override"]
+pub unsafe extern "C" fn ui_override() -> bool {
     let count = nvim_ui_active();
     for i in 0..count {
         let ui = nvim_ui_get_uis_ptr(i);
@@ -679,8 +679,8 @@ pub unsafe extern "C" fn rs_ui_override() -> bool {
 ///
 /// # Safety
 /// Calls C accessor function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_active() -> usize {
+#[export_name = "ui_active"]
+pub unsafe extern "C" fn ui_active() -> usize {
     nvim_ui_active()
 }
 
@@ -688,8 +688,8 @@ pub unsafe extern "C" fn rs_ui_active() -> usize {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_pum_get_height() -> c_int {
+#[export_name = "ui_pum_get_height"]
+pub unsafe extern "C" fn ui_pum_get_height() -> c_int {
     let count = nvim_ui_active();
     let mut pum_height: c_int = 0;
     for i in 0..count {
@@ -710,8 +710,8 @@ pub unsafe extern "C" fn rs_ui_pum_get_height() -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions and writes to out parameters.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_pum_get_pos(
+#[export_name = "ui_pum_get_pos"]
+pub unsafe extern "C" fn ui_pum_get_pos(
     pwidth: *mut c_double,
     pheight: *mut c_double,
     prow: *mut c_double,
@@ -736,21 +736,17 @@ pub unsafe extern "C" fn rs_ui_pum_get_pos(
 ///
 /// # Safety
 /// Modifies Rust-owned cursor state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_cursor_goto(new_row: c_int, new_col: c_int) {
-    rs_ui_grid_cursor_goto(DEFAULT_GRID_HANDLE, new_row, new_col);
+#[export_name = "ui_cursor_goto"]
+pub unsafe extern "C" fn ui_cursor_goto(new_row: c_int, new_col: c_int) {
+    ui_grid_cursor_goto(DEFAULT_GRID_HANDLE, new_row, new_col);
 }
 
 /// Move the cursor to the given position on the specified grid.
 ///
 /// # Safety
 /// Modifies Rust-owned cursor state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_grid_cursor_goto(
-    grid_handle: HandleT,
-    new_row: c_int,
-    new_col: c_int,
-) {
+#[export_name = "ui_grid_cursor_goto"]
+pub unsafe extern "C" fn ui_grid_cursor_goto(grid_handle: HandleT, new_row: c_int, new_col: c_int) {
     if new_row == CURSOR_ROW && new_col == CURSOR_COL && grid_handle == CURSOR_GRID_HANDLE {
         return;
     }
@@ -764,8 +760,8 @@ pub unsafe extern "C" fn rs_ui_grid_cursor_goto(
 ///
 /// # Safety
 /// Modifies Rust-owned cursor state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_check_cursor_grid(grid_handle: HandleT) {
+#[export_name = "ui_check_cursor_grid"]
+pub unsafe extern "C" fn ui_check_cursor_grid(grid_handle: HandleT) {
     if CURSOR_GRID_HANDLE == grid_handle {
         PENDING_CURSOR_UPDATE = true;
     }
@@ -775,8 +771,8 @@ pub unsafe extern "C" fn rs_ui_check_cursor_grid(grid_handle: HandleT) {
 ///
 /// # Safety
 /// Modifies Rust-owned state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_mode_info_set() {
+#[export_name = "ui_mode_info_set"]
+pub unsafe extern "C" fn ui_mode_info_set() {
     PENDING_MODE_INFO_UPDATE = true;
 }
 
@@ -784,8 +780,8 @@ pub unsafe extern "C" fn rs_ui_mode_info_set() {
 ///
 /// # Safety
 /// Calls C accessor for mode index, modifies Rust-owned state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_cursor_shape_no_check_conceal() {
+#[export_name = "ui_cursor_shape_no_check_conceal"]
+pub unsafe extern "C" fn ui_cursor_shape_no_check_conceal() {
     if !nvim_get_full_screen() {
         return;
     }
@@ -800,9 +796,9 @@ pub unsafe extern "C" fn rs_ui_cursor_shape_no_check_conceal() {
 ///
 /// # Safety
 /// Calls C functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_cursor_shape() {
-    rs_ui_cursor_shape_no_check_conceal();
+#[export_name = "ui_cursor_shape"]
+pub unsafe extern "C" fn ui_cursor_shape() {
+    ui_cursor_shape_no_check_conceal();
     conceal_check_cursor_line();
 }
 
@@ -810,8 +806,8 @@ pub unsafe extern "C" fn rs_ui_cursor_shape() {
 ///
 /// # Safety
 /// Calls C accessor and modifies Rust-owned state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_default_colors_set() {
+#[export_name = "ui_default_colors_set"]
+pub unsafe extern "C" fn ui_default_colors_set() {
     PENDING_DEFAULT_COLORS = true;
     if nvim_get_starting() == 0 {
         rs_ui_may_set_default_colors();
@@ -822,8 +818,7 @@ pub unsafe extern "C" fn rs_ui_default_colors_set() {
 ///
 /// # Safety
 /// Calls C ui_call function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_may_set_default_colors() {
+unsafe fn rs_ui_may_set_default_colors() {
     if PENDING_DEFAULT_COLORS {
         PENDING_DEFAULT_COLORS = false;
         ui_call_default_colors_set(
@@ -840,8 +835,8 @@ pub unsafe extern "C" fn rs_ui_may_set_default_colors() {
 ///
 /// # Safety
 /// Calls C ui_call function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_busy_start() {
+#[export_name = "ui_busy_start"]
+pub unsafe extern "C" fn ui_busy_start() {
     if BUSY == 0 {
         ui_call_busy_start();
     }
@@ -852,8 +847,8 @@ pub unsafe extern "C" fn rs_ui_busy_start() {
 ///
 /// # Safety
 /// Calls C ui_call function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_busy_stop() {
+#[export_name = "ui_busy_stop"]
+pub unsafe extern "C" fn ui_busy_stop() {
     BUSY -= 1;
     if BUSY == 0 {
         ui_call_busy_stop();
@@ -893,8 +888,8 @@ static BEEP_MSG: &[u8] = b"Beep!\0";
 
 /// Emit a bell or visualbell as a warning.
 /// val is one of the OptBoFlags values, e.g., kOptBoFlagOperator.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_beep(val: u32) {
+#[export_name = "vim_beep"]
+pub unsafe extern "C" fn vim_beep(val: u32) {
     nvim_set_called_vim_beep(1);
 
     if nvim_get_emsg_silent() != 0 || nvim_get_in_assert_fails() {
@@ -933,8 +928,8 @@ pub unsafe extern "C" fn rs_vim_beep(val: u32) {
 }
 
 /// Check if 'mouse' is active for the current mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_check_mouse() {
+#[export_name = "ui_check_mouse"]
+pub unsafe extern "C" fn ui_check_mouse() {
     HAS_MOUSE = false;
 
     let p_mouse = nvim_get_p_mouse();
@@ -1000,8 +995,8 @@ const K_OPT_RDB_FLAG_LINE: u32 = 0x10;
 const K_OPT_RDB_FLAG_FLUSH: u32 = 0x20;
 
 /// Flush pending UI state updates to all attached UIs.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_flush() {
+#[export_name = "ui_flush"]
+pub unsafe extern "C" fn ui_flush() {
     debug_assert!(nvim_get_ui_client_channel_id() == 0);
     if nvim_ui_active() == 0 {
         return;
@@ -1121,8 +1116,8 @@ pub unsafe extern "C" fn rs_ui_line(
 }
 
 /// Trigger UIEnter autocmd for all attached UIs.
-#[no_mangle]
-pub unsafe extern "C" fn rs_do_autocmd_uienter_all() {
+#[export_name = "do_autocmd_uienter_all"]
+pub unsafe extern "C" fn do_autocmd_uienter_all() {
     let count = nvim_ui_active();
     for i in 0..count {
         let ui = nvim_ui_get_uis_ptr(i);
@@ -1145,8 +1140,8 @@ const K_UI_GLOBAL_COUNT: c_int = 5;
 ///
 /// # Safety
 /// Calls many C accessor and ui_call functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_refresh() {
+#[export_name = "ui_refresh"]
+pub unsafe extern "C" fn ui_refresh() {
     if nvim_get_ui_client_channel_id() != 0 {
         // This should not happen; abort like the C code does.
         std::process::abort();
@@ -1155,7 +1150,7 @@ pub unsafe extern "C" fn rs_ui_refresh() {
     let count = nvim_ui_active();
     let mut width: c_int = c_int::MAX;
     let mut height: c_int = c_int::MAX;
-    let inclusive = rs_ui_override();
+    let inclusive = ui_override();
 
     // Compute negotiated ext_widgets and dimensions
     let mut ext_widgets = [count > 0; K_UI_EXT_COUNT as usize];
@@ -1206,16 +1201,16 @@ pub unsafe extern "C" fn rs_ui_refresh() {
         return;
     }
 
-    rs_ui_default_colors_set();
+    ui_default_colors_set();
 
     let save_p_lz = nvim_get_p_lz();
     nvim_set_p_lz(0); // convince redrawing() to return true
     screen_resize(width, height);
     nvim_set_p_lz(save_p_lz);
 
-    rs_ui_mode_info_set();
+    ui_mode_info_set();
     PENDING_MODE_UPDATE = true;
-    rs_ui_cursor_shape();
+    ui_cursor_shape();
     PENDING_HAS_MOUSE = -1;
 }
 
@@ -1249,8 +1244,8 @@ pub unsafe extern "C" fn rs_ui_grid_resize_win(wp: *mut c_void, width: c_int, he
 ///
 /// # Safety
 /// Calls C accessor functions and modifies global UI state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_attach_impl(ui: *mut c_void, chanid: u64) {
+#[export_name = "ui_attach_impl"]
+pub unsafe extern "C" fn ui_attach_impl(ui: *mut c_void, chanid: u64) {
     let count = nvim_get_ui_count();
     if count == MAX_UI_COUNT {
         std::process::abort();
@@ -1272,7 +1267,7 @@ pub unsafe extern "C" fn rs_ui_attach_impl(ui: *mut c_void, chanid: u64) {
     nvim_ui_set_ext_options_above_global(ui);
     nvim_ui_init_highlights(ui);
 
-    rs_ui_refresh();
+    ui_refresh();
 
     do_autocmd_uienter(chanid, true);
 }
@@ -1281,8 +1276,8 @@ pub unsafe extern "C" fn rs_ui_attach_impl(ui: *mut c_void, chanid: u64) {
 ///
 /// # Safety
 /// Calls C accessor functions and modifies global UI state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_detach_impl(ui: *mut c_void, chanid: u64) {
+#[export_name = "ui_detach_impl"]
+pub unsafe extern "C" fn ui_detach_impl(ui: *mut c_void, chanid: u64) {
     let count = nvim_get_ui_count();
     let mut shift_index = MAX_UI_COUNT;
 
@@ -1325,10 +1320,10 @@ pub unsafe extern "C" fn rs_ui_detach_impl(ui: *mut c_void, chanid: u64) {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_set_ext_option(ui: *mut c_void, ext: c_int, active: bool) {
+#[export_name = "ui_set_ext_option"]
+pub unsafe extern "C" fn ui_set_ext_option(ui: *mut c_void, ext: c_int, active: bool) {
     if ext < K_UI_GLOBAL_COUNT {
-        rs_ui_refresh();
+        ui_refresh();
         return;
     }
     nvim_remote_ui_option_set(ui, ext, active);
