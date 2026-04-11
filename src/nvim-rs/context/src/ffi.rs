@@ -40,8 +40,12 @@ extern "C" {
     ) -> *const std::ffi::c_char;
     pub fn rs_optval_free(o: nvim_option::storage::OptVal);
 
-    // Dict conversion (kept in C due to Arena/API coupling)
-    pub fn nvim_ctx_to_dict_impl(ctx: *mut Context, arena: *mut std::ffi::c_void) -> Dict;
+    // Dict/Array helpers (C API functions)
+    pub fn arena_dict(arena: *mut std::ffi::c_void, max_size: usize) -> Dict;
+    pub fn string_to_array(input: NvimString, crlf: bool, arena: *mut std::ffi::c_void) -> Array;
+    pub fn copy_array(array: Array, arena: *mut std::ffi::c_void) -> Array;
+
+    // from_dict conversion (kept in C due to array_to_string, copy_object coupling)
     pub fn nvim_ctx_from_dict_impl(
         dict: Dict,
         ctx: *mut Context,

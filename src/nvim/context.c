@@ -49,22 +49,6 @@ static inline String nvim_ctx_array_to_string(Array array, Error *err)
   return sbuf;
 }
 
-/// Converts Context to Dict representation (C accessor for Rust).
-/// Kept in C due to Arena, PUT_C, string_to_array, copy_array coupling.
-Dict nvim_ctx_to_dict_impl(Context *ctx, Arena *arena)
-{
-  assert(ctx != NULL);
-
-  Dict rv = arena_dict(arena, 5);
-
-  PUT_C(rv, "regs", ARRAY_OBJ(string_to_array(ctx->regs, false, arena)));
-  PUT_C(rv, "jumps", ARRAY_OBJ(string_to_array(ctx->jumps, false, arena)));
-  PUT_C(rv, "bufs", ARRAY_OBJ(string_to_array(ctx->bufs, false, arena)));
-  PUT_C(rv, "gvars", ARRAY_OBJ(string_to_array(ctx->gvars, false, arena)));
-  PUT_C(rv, "funcs", ARRAY_OBJ(copy_array(ctx->funcs, arena)));
-
-  return rv;
-}
 
 /// Converts Dict representation of Context back to Context object (C accessor for Rust).
 /// Kept in C due to array_to_string, copy_object, ERROR_SET coupling.
