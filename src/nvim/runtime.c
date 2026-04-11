@@ -325,6 +325,11 @@ extern const char *rs_did_set_runtimepackpath(optset_T *args);
 extern void rs_runtime_search_path_get_cached(int *ref);
 extern bool rs_runtime_search_path_unref(const int *ref);
 
+// Phase 1: Rust implementations of runtime_inspect / runtime_get_named*
+extern Array rs_runtime_inspect(Arena *arena);
+extern Array rs_runtime_get_named(bool lua, Array pat, bool all, Arena *arena);
+extern Array rs_runtime_get_named_thread(bool lua, Array pat, bool all);
+
 // Phase 4: Search path global state accessors (globals are static)
 
 /// Get runtime_search_path_valid.
@@ -380,7 +385,7 @@ void nvim_rt_sp_copy_to_thread(void)
 /// @return     number of entries in the cached path
 size_t nvim_rt_rsp_get_cached_size(int *ref)
 {
-  runtime_search_path_get_cached(ref);
+  rs_runtime_search_path_get_cached(ref);
   return kv_size(runtime_search_path);
 }
 
@@ -407,6 +412,70 @@ void nvim_rt_rsp_unref(const int *ref)
   }
 }
 
+// Phase 1: Accessors for the global (non-cached) runtime_search_path used by runtime_inspect.
+
+/// Get the size of the global (non-cached) runtime search path.
+size_t nvim_rt_rsp_get_path_size(void) { return kv_size(runtime_search_path); }
+
+/// Get path string of item at index in the global runtime_search_path.
+const char *nvim_rt_rsp_get_path_item_path(size_t idx)
+{
+  return kv_A(runtime_search_path, idx).path;
+}
+
+/// Get the 'after' flag of item at index in the global runtime_search_path.
+bool nvim_rt_rsp_get_path_item_after(size_t idx)
+{
+  return kv_A(runtime_search_path, idx).after;
+}
+
+/// Get has_lua of item at index in the global runtime_search_path as int (-1/0/1).
+int nvim_rt_rsp_get_path_item_has_lua(size_t idx)
+{
+  return (int)kv_A(runtime_search_path, idx).has_lua;
+}
+
+/// Get has_lua of item at index in the cached runtime_search_path as int (-1/0/1).
+int nvim_rt_rsp_get_item_has_lua(size_t idx)
+{
+  return (int)kv_A(runtime_search_path, idx).has_lua;
+}
+
+/// Set has_lua of item at index in the cached runtime_search_path.
+void nvim_rt_rsp_set_item_has_lua(size_t idx, int val)
+{
+  kv_A(runtime_search_path, idx).has_lua = (TriState)val;
+}
+
+// Phase 1: Accessors for the thread-safe copy (runtime_search_path_thread).
+
+/// Get the size of the thread-safe runtime search path.
+size_t nvim_rt_rsp_get_thread_size(void) { return kv_size(runtime_search_path_thread); }
+
+/// Get path string of item at index in runtime_search_path_thread.
+const char *nvim_rt_rsp_get_thread_item_path(size_t idx)
+{
+  return kv_A(runtime_search_path_thread, idx).path;
+}
+
+/// Get the 'after' flag of item at index in runtime_search_path_thread.
+bool nvim_rt_rsp_get_thread_item_after(size_t idx)
+{
+  return kv_A(runtime_search_path_thread, idx).after;
+}
+
+/// Get has_lua of item at index in runtime_search_path_thread as int (-1/0/1).
+int nvim_rt_rsp_get_thread_item_has_lua(size_t idx)
+{
+  return (int)kv_A(runtime_search_path_thread, idx).has_lua;
+}
+
+/// Set has_lua of item at index in runtime_search_path_thread.
+void nvim_rt_rsp_set_thread_item_has_lua(size_t idx, int val)
+{
+  kv_A(runtime_search_path_thread, idx).has_lua = (TriState)val;
+}
+
 /// Get p_rtp pointer value (for pointer comparison in do_in_path).
 const char *nvim_rt_get_p_rtp(void) { return p_rtp; }
 
@@ -426,13 +495,6 @@ int do_in_path(const char *path, const char *prefix, char *name, int flags,
   return rs_do_in_path(path, prefix, name, flags, callback, cookie);
 }
 
-static RuntimeSearchPath runtime_search_path_get_cached(int *ref)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_runtime_search_path_get_cached(ref);
-  return runtime_search_path;
-}
-
 static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src)
 {
   RuntimeSearchPath dst = KV_INITIAL_VALUE;
@@ -442,14 +504,6 @@ static RuntimeSearchPath copy_runtime_search_path(const RuntimeSearchPath src)
   }
 
   return dst;
-}
-
-static void runtime_search_path_unref(RuntimeSearchPath path, const int *ref)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (rs_runtime_search_path_unref(ref)) {
-    runtime_search_path_free(path);
-  }
 }
 
 /// Find the file "name" in all directories in "path" and invoke
@@ -465,82 +519,16 @@ int do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *c
   return rs_do_in_cached_path(name, flags, callback, cookie);
 }
 
-Array runtime_inspect(Arena *arena)
-{
-  RuntimeSearchPath path = runtime_search_path;
-  Array rv = arena_array(arena, kv_size(path));
-
-  for (size_t i = 0; i < kv_size(path); i++) {
-    SearchPathItem *item = &kv_A(path, i);
-    Array entry = arena_array(arena, 3);
-    ADD_C(entry, CSTR_AS_OBJ(item->path));
-    ADD_C(entry, BOOLEAN_OBJ(item->after));
-    if (item->has_lua != kNone) {
-      ADD_C(entry, BOOLEAN_OBJ(item->has_lua == kTrue));
-    }
-    ADD_C(rv, ARRAY_OBJ(entry));
-  }
-  return rv;
-}
+Array runtime_inspect(Arena *arena) { return rs_runtime_inspect(arena); }
 
 ArrayOf(String) runtime_get_named(bool lua, Array pat, bool all, Arena *arena)
 {
-  int ref;
-  RuntimeSearchPath path = runtime_search_path_get_cached(&ref);
-  static char buf[MAXPATHL];
-
-  ArrayOf(String) rv = runtime_get_named_common(lua, pat, all, path, buf, sizeof buf, arena);
-
-  runtime_search_path_unref(path, &ref);
-  return rv;
+  return rs_runtime_get_named(lua, pat, all, arena);
 }
 
 ArrayOf(String) runtime_get_named_thread(bool lua, Array pat, bool all)
 {
-  // TODO(bfredl): avoid contention between multiple worker threads?
-  uv_mutex_lock(&runtime_search_path_mutex);
-  static char buf[MAXPATHL];
-  ArrayOf(String) rv = runtime_get_named_common(lua, pat, all, runtime_search_path_thread,
-                                                buf, sizeof buf, NULL);
-  uv_mutex_unlock(&runtime_search_path_mutex);
-  return rv;
-}
-
-static ArrayOf(String) runtime_get_named_common(bool lua, Array pat, bool all,
-                                                RuntimeSearchPath path, char *buf, size_t buf_len,
-                                                Arena *arena)
-{
-  ArrayOf(String) rv = arena_array(arena, kv_size(path) * pat.size);
-  for (size_t i = 0; i < kv_size(path); i++) {
-    SearchPathItem *item = &kv_A(path, i);
-    if (lua) {
-      if (item->has_lua == kNone) {
-        size_t size = (size_t)snprintf(buf, buf_len, "%s/lua/", item->path);
-        item->has_lua = (size < buf_len && os_isdir(buf));
-      }
-      if (item->has_lua == kFalse) {
-        continue;
-      }
-    }
-
-    for (size_t j = 0; j < pat.size; j++) {
-      Object pat_item = pat.items[j];
-      if (pat_item.type == kObjectTypeString) {
-        size_t size = (size_t)snprintf(buf, buf_len, "%s/%s",
-                                       item->path, pat_item.data.string.data);
-        if (size < buf_len) {
-          if (os_file_is_readable(buf)) {
-            ADD_C(rv, CSTR_TO_ARENA_OBJ(arena, buf));
-            if (!all) {
-              goto done;
-            }
-          }
-        }
-      }
-    }
-  }
-done:
-  return rv;
+  return rs_runtime_get_named_thread(lua, pat, all);
 }
 
 /// Find "name" in "path".  When found, invoke the callback function for
