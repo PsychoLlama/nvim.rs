@@ -1,50 +1,23 @@
 // Code for menus.  Used for the GUI and 'wildmenu'.
 // GUI/Motif support by Robert Webb
 
-#include <assert.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
 
-#include "nvim/ascii_defs.h"
-#include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/charset.h"
 #include "nvim/cmdexpand_defs.h"
-#include "nvim/cursor.h"
 #include "nvim/errors.h"
-#include "nvim/eval/typval.h"
-#include "nvim/eval/typval_defs.h"
-#include "nvim/eval/vars.h"
 #include "nvim/ex_cmds_defs.h"
-#include "nvim/ex_docmd.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
-#include "nvim/getchar.h"
-#include "nvim/getchar_defs.h"
 #include "nvim/gettext_defs.h"
-#include "nvim/globals.h"
-#include "nvim/highlight_defs.h"
-#include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
-#include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memory.h"
 #include "nvim/menu.h"
 #include "nvim/menu_defs.h"
 #include "nvim/message.h"
-#include "nvim/option_vars.h"
-#include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
-#include "nvim/state.h"
-#include "nvim/state_defs.h"
-#include "nvim/strings.h"
 #include "nvim/types_defs.h"
-#include "nvim/ui.h"
 #include "nvim/vim_defs.h"
-
-#define MENUDEPTH   10          // maximum depth of menus
 
 #include "menu.c.generated.h"
 
@@ -56,12 +29,7 @@ typedef struct {
 } MenuCmdResult;
 extern MenuCmdResult rs_get_menu_cmd_modes(const char *cmd, bool forceit);
 
-// Forward declarations for Rust-exported static functions used by remaining C code.
-extern bool menu_is_hidden(char *name);
-extern char *get_menu_mode_str(int modes);
-extern vimmenu_T *find_menu(vimmenu_T *menu, char *name, int modes);
-extern char *menu_name_skip(char *name);
-extern bool menu_name_equal(const char *name, const vimmenu_T *menu);
+// Forward declarations for Rust-exported functions called from this file.
 extern void execute_menu(const exarg_T *eap, vimmenu_T *menu, int mode_idx);
 
 /// Returns the \ref MENU_MODES specified by menu command `cmd`.
