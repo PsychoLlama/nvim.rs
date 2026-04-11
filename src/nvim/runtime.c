@@ -139,6 +139,9 @@ extern int rs_do_in_path(const char *path, const char *prefix, char *name, int f
                          DoInRuntimepathCB callback, void *cookie);
 extern int rs_do_in_cached_path(char *name, int flags, DoInRuntimepathCB callback, void *cookie);
 
+// Phase 5 (getsourceline): Rust implementations of sourced-line reading
+extern char *rs_getsourceline(int c, void *cookie, int indent, bool do_concat);
+
 // Phase 4: Rust implementations of sourcing entry points
 extern int rs_do_source_ext(char *fname, bool check_other, int is_vimrc, int *ret_sid,
                             const void *eap, bool ex_lua, const char *str);
@@ -201,8 +204,20 @@ list_T *nvim_rt_get_script_local_funcs(scid_T sid)
 // Phase 4: source_cookie_T accessors and static variable wrappers
 // These must live in runtime.c because source_cookie_T and static vars are here.
 
-// fopen_noinh_readbin wrapper (static function, so wrapper must be here).
-void *nvim_rt_fopen_noinh_readbin(const char *fname) { return fopen_noinh_readbin((char *)fname); }
+// Open file without inheriting handle (was formerly static fopen_noinh_readbin).
+void *nvim_rt_fopen_noinh_readbin(const char *fname)
+{
+#ifdef MSWIN
+  int fd_tmp = os_open((char *)fname, O_RDONLY | O_BINARY | O_NOINHERIT, 0);
+#else
+  int fd_tmp = os_open((char *)fname, O_RDONLY, 0);
+#endif
+  if (fd_tmp < 0) {
+    return NULL;
+  }
+  os_set_cloexec(fd_tmp);
+  return fdopen(fd_tmp, READBIN);
+}
 
 // last_current_SID_seq increment (static var, must be here).
 int nvim_rt_next_script_seq(void) { return ++last_current_SID_seq; }
@@ -259,6 +274,12 @@ const char *nvim_rt_cookie_get_bufline(void *cookie, int idx)
 {
   return ((char **)((source_cookie_T *)cookie)->buflines.ga_data)[idx];
 }
+
+/// cookie breakpoint value getter (not pointer).
+int nvim_rt_cookie_get_breakpoint(void *cookie) { return (int)((source_cookie_T *)cookie)->breakpoint; }
+
+/// cookie buf_lnum increment.
+void nvim_rt_cookie_inc_buf_lnum(void *cookie) { ((source_cookie_T *)cookie)->buf_lnum++; }
 
 /// do_cmdline via getsourceline (accesses static getsourceline).
 int nvim_rt_do_cmdline_source(char *firstline, void *cookie, int flags)
@@ -687,55 +708,6 @@ void nvim_rt_cookie_set_finished(void *cookie, bool val) { ((source_cookie_T *)c
 void *nvim_rt_cookie_get_conv(void *cookie) { return &((source_cookie_T *)cookie)->conv; }
 
 
-/// Special function to open a file without handle inheritance.
-/// If possible the handle is closed on exec().
-static FILE *fopen_noinh_readbin(char *filename)
-{
-#ifdef MSWIN
-  int fd_tmp = os_open(filename, O_RDONLY | O_BINARY | O_NOINHERIT, 0);
-#else
-  int fd_tmp = os_open(filename, O_RDONLY, 0);
-#endif
-
-  if (fd_tmp < 0) {
-    return NULL;
-  }
-
-  os_set_cloexec(fd_tmp);
-
-  return fdopen(fd_tmp, READBIN);
-}
-
-/// Concatenate Vimscript line if it starts with a line continuation into a growarray
-/// (excluding the continuation chars and leading whitespace)
-///
-/// @note Growsize of the growarray may be changed to speed up concatenations!
-///
-/// @param ga  the growarray to append to
-/// @param init_growsize  the starting growsize value of the growarray
-/// @param p  pointer to the beginning of the line to consider
-/// @param len  the length of this line
-///
-/// @return true if this line did begin with a continuation (the next line
-///         should also be considered, if it exists); false otherwise
-static bool concat_continued_line(garray_T *const ga, const int init_growsize, const char *const p,
-                                  size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *const line = skipwhite_len(p, len);
-  len -= (size_t)(line - p);
-  // Skip lines starting with '\" ', concat lines starting with '\'
-  if (len >= 3 && strncmp(line, "\"\\ ", 3) == 0) {
-    return true;
-  } else if (len == 0 || line[0] != '\\') {
-    return false;
-  }
-  if (ga->ga_len > init_growsize) {
-    ga_set_growsize(ga, MIN(ga->ga_len, 8000));
-  }
-  ga_concat_len(ga, line + 1, len - 1);
-  return true;
-}
 
 void cmd_source_buffer(const exarg_T *const eap, bool ex_lua) { rs_cmd_source_buffer(eap, ex_lua); }
 
@@ -783,195 +755,9 @@ void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 ///         some error.
 char *getsourceline(int c, void *cookie, int indent, bool do_concat)
 {
-  source_cookie_T *sp = (source_cookie_T *)cookie;
-  char *line;
-
-  // If breakpoints have been added/deleted need to check for it.
-  if ((sp->dbg_tick < debug_tick) && !sp->source_from_buf_or_str) {
-    sp->breakpoint = dbg_find_breakpoint(true, sp->fname, SOURCING_LNUM);
-    sp->dbg_tick = debug_tick;
-  }
-  if (do_profiling == PROF_YES) {
-    script_line_end();
-  }
-  // Set the current sourcing line number.
-  SOURCING_LNUM = sp->sourcing_lnum + 1;
-  // Get current line.  If there is a read-ahead line, use it, otherwise get
-  // one now.  "fp" is NULL if actually using a string.
-  if (sp->finished || (!sp->source_from_buf_or_str && sp->fp == NULL)) {
-    line = NULL;
-  } else if (sp->nextline == NULL) {
-    line = get_one_sourceline(sp);
-  } else {
-    line = sp->nextline;
-    sp->nextline = NULL;
-    sp->sourcing_lnum++;
-  }
-  if (line != NULL && do_profiling == PROF_YES) {
-    script_line_start();
-  }
-
-  // Only concatenate lines starting with a \ when 'cpoptions' doesn't
-  // contain the 'C' flag.
-  if (line != NULL && do_concat && (vim_strchr(p_cpo, CPO_CONCAT) == NULL)) {
-    char *p;
-    // compensate for the one line read-ahead
-    sp->sourcing_lnum--;
-
-    // Get the next line and concatenate it when it starts with a
-    // backslash. We always need to read the next line, keep it in
-    // sp->nextline.
-    // Also check for a comment in between continuation lines: "\ .
-    sp->nextline = get_one_sourceline(sp);
-    if (sp->nextline != NULL
-        && (*(p = skipwhite(sp->nextline)) == '\\'
-            || (p[0] == '"' && p[1] == '\\' && p[2] == ' '))) {
-      garray_T ga;
-
-      ga_init(&ga, (int)sizeof(char), 400);
-      ga_concat(&ga, line);
-      while (sp->nextline != NULL
-             && concat_continued_line(&ga, 400, sp->nextline, strlen(sp->nextline))) {
-        xfree(sp->nextline);
-        sp->nextline = get_one_sourceline(sp);
-      }
-      ga_append(&ga, NUL);
-      xfree(line);
-      line = ga.ga_data;
-    }
-  }
-
-  if (line != NULL && sp->conv.vc_type != CONV_NONE) {
-    // Convert the encoding of the script line.
-    char *s = string_convert(&sp->conv, line, NULL);
-    if (s != NULL) {
-      xfree(line);
-      line = s;
-    }
-  }
-
-  // Did we encounter a breakpoint?
-  if (!sp->source_from_buf_or_str
-      && sp->breakpoint != 0 && sp->breakpoint <= SOURCING_LNUM) {
-    dbg_breakpoint(sp->fname, SOURCING_LNUM);
-    // Find next breakpoint.
-    sp->breakpoint = dbg_find_breakpoint(true, sp->fname, SOURCING_LNUM);
-    sp->dbg_tick = debug_tick;
-  }
-
-  return line;
+  return rs_getsourceline(c, cookie, indent, do_concat);
 }
 
-static char *get_one_sourceline(source_cookie_T *sp)
-{
-  garray_T ga;
-  int len;
-  int c;
-  char *buf;
-#ifdef USE_CRNL
-  bool has_cr;                           // CR-LF found
-#endif
-  bool have_read = false;
-
-  // use a growarray to store the sourced line
-  ga_init(&ga, 1, 250);
-
-  // Loop until there is a finished line (or end-of-file).
-  sp->sourcing_lnum++;
-  while (true) {
-    // make room to read at least 120 (more) characters
-    ga_grow(&ga, 120);
-    if (sp->source_from_buf_or_str) {
-      if (sp->buf_lnum >= sp->buflines.ga_len) {
-        break;              // all the lines are processed
-      }
-      ga_concat(&ga, ((char **)sp->buflines.ga_data)[sp->buf_lnum]);
-      sp->buf_lnum++;
-      ga_grow(&ga, 1);
-      buf = (char *)ga.ga_data;
-      buf[ga.ga_len++] = NUL;
-      len = ga.ga_len;
-    } else {
-      buf = ga.ga_data;
-retry:
-      errno = 0;
-      if (fgets(buf + ga.ga_len, ga.ga_maxlen - ga.ga_len, sp->fp) == NULL) {
-        if (errno == EINTR) {
-          goto retry;
-        }
-        break;
-      }
-      len = ga.ga_len + (int)strlen(buf + ga.ga_len);
-    }
-#ifdef USE_CRNL
-    // Ignore a trailing CTRL-Z, when in Dos mode. Only recognize the
-    // CTRL-Z by its own, or after a NL.
-    if ((len == 1 || (len >= 2 && buf[len - 2] == '\n'))
-        && sp->fileformat == EOL_DOS
-        && buf[len - 1] == Ctrl_Z) {
-      buf[len - 1] = NUL;
-      break;
-    }
-#endif
-
-    have_read = true;
-    ga.ga_len = len;
-
-    // If the line was longer than the buffer, read more.
-    if (ga.ga_maxlen - ga.ga_len == 1 && buf[len - 1] != '\n') {
-      continue;
-    }
-
-    if (len >= 1 && buf[len - 1] == '\n') {     // remove trailing NL
-#ifdef USE_CRNL
-      has_cr = (len >= 2 && buf[len - 2] == '\r');
-      if (sp->fileformat == EOL_UNKNOWN) {
-        if (has_cr) {
-          sp->fileformat = EOL_DOS;
-        } else {
-          sp->fileformat = EOL_UNIX;
-        }
-      }
-
-      if (sp->fileformat == EOL_DOS) {
-        if (has_cr) {               // replace trailing CR
-          buf[len - 2] = '\n';
-          len--;
-          ga.ga_len--;
-        } else {          // lines like ":map xx yy^M" will have failed
-          if (!sp->error) {
-            msg_source(HL_ATTR(HLF_W));
-            emsg(_("W15: Warning: Wrong line separator, ^M may be missing"));
-          }
-          sp->error = true;
-          sp->fileformat = EOL_UNIX;
-        }
-      }
-#endif
-      // The '\n' is escaped if there is an odd number of ^V's just
-      // before it, first set "c" just before the 'V's and then check
-      // len&c parities (is faster than ((len-c)%2 == 0)) -- Acevedo
-      for (c = len - 2; c >= 0 && buf[c] == Ctrl_V; c--) {}
-      if ((len & 1) != (c & 1)) {       // escaped NL, read more
-        sp->sourcing_lnum++;
-        continue;
-      }
-
-      buf[len - 1] = NUL;               // remove the NL
-    }
-
-    // Check for ^C here now and then, so recursive :so can be broken.
-    line_breakcheck();
-    break;
-  }
-
-  if (have_read) {
-    return ga.ga_data;
-  }
-
-  xfree(ga.ga_data);
-  return NULL;
-}
 
 /// Returns true if sourcing a script either from a file or a buffer or a string.
 /// Otherwise returns false.

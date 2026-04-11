@@ -154,6 +154,9 @@ linenr_T nvim_aucmd_get_script_ctx_lnum(AutoPatCmd *apc) { return apc->script_ct
 
 linenr_T nvim_get_sourcing_lnum_direct(void) { return SOURCING_LNUM; }
 
+/// Set SOURCING_LNUM.
+void nvim_rt_set_sourcing_lnum(int lnum) { SOURCING_LNUM = (linenr_T)lnum; }
+
 /// Format a stack entry with line number: "type_name name[lnum]dots"
 int nvim_estack_format_entry(char *buf, size_t buflen,
                              const char *type_name, const char *name,
@@ -1088,6 +1091,12 @@ int nvim_rt_ga_get_len(const void *ga) { return ((garray_T *)ga)->ga_len; }
 
 /// ga_get_data wrapper.
 void *nvim_rt_ga_get_data(const void *ga) { return ((garray_T *)ga)->ga_data; }
+
+/// ga_get_maxlen wrapper.
+int nvim_rt_ga_get_maxlen(const void *ga) { return ((garray_T *)ga)->ga_maxlen; }
+
+/// Set ga_len.
+void nvim_rt_ga_set_len(void *ga, int len) { ((garray_T *)ga)->ga_len = len; }
 
 /// dbg_breakpoint wrapper.
 void nvim_rt_dbg_breakpoint(const char *fname, int lnum)
