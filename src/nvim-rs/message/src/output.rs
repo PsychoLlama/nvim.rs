@@ -236,46 +236,8 @@ pub unsafe extern "C" fn rs_msg_dec_lines_left() -> c_int {
 // ============================================================================
 
 extern "C" {
-    // Wait return functions
-    fn wait_return(redraw: c_int);
     static mut no_wait_return: c_int;
     fn nvim_get_vgetc_busy() -> c_int;
-}
-
-/// Wait for the user to press a key and optionally redraw.
-///
-/// This is the main function for "Press ENTER to continue" prompts.
-///
-/// # Arguments
-/// * `redraw` - If true, redraw the screen after the wait
-///
-/// # Safety
-/// Calls C function that blocks for user input.
-#[no_mangle]
-pub unsafe extern "C" fn rs_wait_return(redraw: c_int) {
-    wait_return(redraw);
-}
-
-/// Wait for return with screen redraw.
-///
-/// Convenience wrapper that always redraws after waiting.
-///
-/// # Safety
-/// Calls C function that blocks for user input.
-#[no_mangle]
-pub unsafe extern "C" fn rs_wait_return_redraw() {
-    wait_return(1);
-}
-
-/// Wait for return without screen redraw.
-///
-/// Convenience wrapper that doesn't redraw after waiting.
-///
-/// # Safety
-/// Calls C function that blocks for user input.
-#[no_mangle]
-pub unsafe extern "C" fn rs_wait_return_no_redraw() {
-    wait_return(0);
 }
 
 /// Get the no_wait_return counter.

@@ -638,7 +638,6 @@ extern "C" {
     fn msg_scroll_up(may_throttle: bool, zerocmd: bool);
     fn msg_do_throttle() -> bool;
     fn inc_msg_scrolled();
-    fn wait_return(redraw: c_int);
     fn msg_moremsg(full: bool);
 
     // Grid state (msg_grid, msg_scrolled, msg_scrolled_at_flush, msg_grid_scroll_discount
@@ -1020,7 +1019,7 @@ pub unsafe extern "C" fn rs_show_sb_text() {
         vim_beep(K_OPT_BO_FLAG_MESS);
     } else {
         rs_do_more_prompt(c_int::from(b'G'));
-        wait_return(0);
+        crate::wait::rs_wait_return(0);
     }
 }
 

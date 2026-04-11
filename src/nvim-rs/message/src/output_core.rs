@@ -54,7 +54,7 @@ extern "C" {
     fn nvim_get_exiting() -> c_int;
     static mut need_wait_return: bool;
     fn nvim_get_state() -> c_int;
-    fn wait_return(redraw: c_int);
+    // wait_return is now defined in Rust (wait.rs)
 
     // Verbose enter/leave
     fn verbose_enter();
@@ -571,7 +571,7 @@ pub unsafe extern "C" fn rs_msg_end() -> c_int {
     // Do not do this if we are abandoning the file or editing the command line.
     const MODE_CMDLINE: c_int = 0x08;
     if nvim_get_exiting() == 0 && need_wait_return && (nvim_get_state() & MODE_CMDLINE) == 0 {
-        wait_return(0);
+        crate::wait::rs_wait_return(0);
         return 0;
     }
 

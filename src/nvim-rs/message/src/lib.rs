@@ -83,6 +83,7 @@ pub mod output_core;
 pub mod scheduled;
 pub mod scrollback;
 pub mod verbose;
+pub mod wait;
 pub mod warning;
 
 // Re-export FFI functions for the static library
@@ -101,6 +102,7 @@ pub use output_core::*;
 pub use scheduled::*;
 pub use scrollback::*;
 pub use verbose::*;
+pub use wait::*;
 pub use warning::*;
 
 // ============================================================================
