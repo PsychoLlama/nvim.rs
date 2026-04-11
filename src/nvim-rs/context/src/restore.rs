@@ -24,6 +24,17 @@ const OPT_GLOBAL: c_int = 0x01;
 /// Mirrors `"!,'100,%"` as a static string for `STATIC_CSTR_AS_OPTVAL`.
 static SHADA_RESTORE_STR: &[u8] = b"!,'100,%\0";
 
+/// Restore functions from a context by executing each function body via `do_cmdline_cmd`.
+/// Replaces C `nvim_ctx_restore_funcs`.
+unsafe fn ctx_restore_funcs(ctx: &Context) {
+    for i in 0..ctx.funcs.size {
+        let item = &*ctx.funcs.items.add(i);
+        // item is an Object; funcs contains STRING_OBJ values
+        // ObjectData.string is the NvimString
+        ffi::do_cmdline_cmd(item.data.string.data);
+    }
+}
+
 /// Saved shada option value (mirrors `saved_shada_opt` static in context.c).
 static mut SAVED_SHADA_OPT: OptVal = OptVal {
     type_: OptValType::Nil,
@@ -91,7 +102,7 @@ pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool
         ffi::rs_shada_read_string(c.gvars, SHADA_READ_FLAGS);
     }
     if flags & KCTX_FUNCS != 0 {
-        ffi::nvim_ctx_restore_funcs(ctx);
+        ctx_restore_funcs(c);
     }
 
     if free_ctx {

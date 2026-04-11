@@ -16,7 +16,6 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/userfunc.h"
-#include "nvim/ex_docmd.h"
 #include "nvim/hashtab.h"
 #include "nvim/keycodes.h"
 #include "nvim/memory.h"
@@ -30,14 +29,6 @@ int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
 ContextVec ctx_stack = KV_INITIAL_VALUE;
 
 
-/// Restores functions from a context (C accessor for Rust).
-/// Kept in C due to do_cmdline_cmd coupling.
-void nvim_ctx_restore_funcs(Context *ctx)
-{
-  for (size_t i = 0; i < ctx->funcs.size; i++) {
-    do_cmdline_cmd(ctx->funcs.items[i].data.string.data);
-  }
-}
 
 /// Converts readfile()-style array to String (C accessor for Rust).
 /// Kept in C due to object_to_vim, encode_vim_list_to_buf coupling.

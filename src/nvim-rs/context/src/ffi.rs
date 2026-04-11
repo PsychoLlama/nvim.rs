@@ -20,9 +20,11 @@ extern "C" {
     // ShaDa reading (implemented in nvim-shada Rust crate)
     pub fn rs_shada_read_string(s: NvimString, flags: c_int);
 
-    // Function save/restore (kept in C due to HASHTAB_ITER, exec_impl coupling)
+    // Function save (kept in C due to HASHTAB_ITER, exec_impl coupling)
     pub fn nvim_ctx_save_funcs(ctx: *mut Context, scriptonly: bool);
-    pub fn nvim_ctx_restore_funcs(ctx: *mut Context);
+
+    // Command execution
+    pub fn do_cmdline_cmd(cmd: *const std::ffi::c_char) -> std::os::raw::c_int;
 
     // Option get/set (implemented in nvim-option Rust crate)
     #[link_name = "get_option_value"]
