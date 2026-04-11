@@ -1553,6 +1553,261 @@ unsafe fn libc_strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int {
     0
 }
 
+// C functions for do_return and do_finish (thin wrappers around Rust implementations)
+extern "C" {
+    fn do_return(eap: *mut ExargT, reanimate: bool, is_cmd: bool, rettv: *mut c_void) -> bool;
+    fn do_finish(eap: *mut ExargT, reanimate: bool);
+}
+
+// CHAR_MIN and CHAR_MAX for bounds checking (c_char is i8 on this platform)
+const CHAR_MIN: c_int = i8::MIN as c_int;
+const CHAR_MAX: c_int = i8::MAX as c_int;
+
+/// Handle ":finally"
+///
+/// # Panics
+///
+/// Panics if the computed pending value is out of `i8` range (internal error).
+#[export_name = "ex_finally"]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation
+)]
+pub unsafe extern "C" fn ex_finally_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    let mut pending: c_int = CSTP_NONE;
+
+    let mut idx = (*cstack).cs_idx;
+    while idx >= 0 {
+        if (*cstack).cs_flags[idx as usize] & CSF_TRY != 0 {
+            break;
+        }
+        idx -= 1;
+    }
+    if (*cstack).cs_trylevel <= 0 || idx < 0 {
+        (*eap).errmsg = gettext(c"E606: :finally without :try".as_ptr()).cast_mut();
+        return;
+    }
+
+    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY == 0 {
+        (*eap).errmsg = get_end_emsg(cstack);
+        // Make this error pending, so that the commands in the following
+        // finally clause can be executed.
+        pending = CSTP_ERROR;
+    }
+
+    if (*cstack).cs_flags[idx as usize] & CSF_FINALLY != 0 {
+        // Give up for a multiple ":finally" and ignore it.
+        (*eap).errmsg = gettext(c"E607: Multiple :finally".as_ptr()).cast_mut();
+        return;
+    }
+    rewind_conditionals(
+        cstack,
+        idx,
+        CSF_WHILE | CSF_FOR,
+        std::ptr::addr_of_mut!((*cstack).cs_looplevel),
+    );
+
+    // Don't do something when the corresponding try block never got active.
+    let skip = (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE == 0;
+
+    if !skip {
+        // When debugging or a breakpoint was encountered, display the debug prompt.
+        if dbg_check_skipped(eap) {
+            do_intthrow(cstack);
+        }
+
+        // If there is a preceding catch clause and it caught the exception,
+        // finish the exception now.
+        cleanup_conditionals(cstack, CSF_TRY, 0);
+
+        // Make did_emsg, got_int, did_throw pending.
+        if pending == CSTP_ERROR || did_emsg != 0 || got_int || did_throw {
+            if (*cstack).cs_pending[(*cstack).cs_idx as usize] == CSTP_RETURN as i8 {
+                report_discard_pending(
+                    CSTP_RETURN,
+                    (*cstack).cs_pend.csp_rv[(*cstack).cs_idx as usize],
+                );
+                discard_pending_return((*cstack).cs_pend.csp_rv[(*cstack).cs_idx as usize]);
+            }
+            if pending == CSTP_ERROR && did_emsg == 0 {
+                // THROW_ON_ERROR is always true for Vim release
+                pending |= CSTP_THROW;
+            } else {
+                pending |= if did_throw { CSTP_THROW } else { 0 };
+            }
+            pending |= if did_emsg != 0 { CSTP_ERROR } else { 0 };
+            pending |= if got_int { CSTP_INTERRUPT } else { 0 };
+            assert!((CHAR_MIN..=CHAR_MAX).contains(&pending));
+            (*cstack).cs_pending[(*cstack).cs_idx as usize] = pending as i8;
+
+            // It's mandatory that the current exception is stored in the cstack.
+            if did_throw && (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize] != current_exception
+            {
+                internal_error(c"ex_finally()".as_ptr());
+            }
+        }
+
+        // Set CSL_HAD_FINA, so do_cmdline() will reset did_emsg, got_int,
+        // and did_throw and make the finally clause active.
+        (*cstack).cs_lflags |= CSL_HAD_FINA;
+    }
+}
+
+/// Handle ":endtry"
+#[export_name = "ex_endtry"]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn ex_endtry_impl(eap: *mut ExargT) {
+    let cstack = (*eap).cstack;
+    let mut rethrow = false;
+    let mut rettv: *mut c_void = std::ptr::null_mut();
+
+    let mut idx = (*cstack).cs_idx;
+    while idx >= 0 {
+        if (*cstack).cs_flags[idx as usize] & CSF_TRY != 0 {
+            break;
+        }
+        idx -= 1;
+    }
+    if (*cstack).cs_trylevel <= 0 || idx < 0 {
+        (*eap).errmsg = gettext(c"E602: :endtry without :try".as_ptr()).cast_mut();
+        return;
+    }
+
+    // Don't do something after an error, interrupt or throw in the try
+    // block, catch clause, or finally clause preceding this ":endtry".
+    let mut skip = did_emsg != 0
+        || got_int
+        || did_throw
+        || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE == 0;
+
+    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY == 0 {
+        (*eap).errmsg = get_end_emsg(cstack);
+
+        // Find the matching ":try" and report what's missing.
+        rewind_conditionals(
+            cstack,
+            idx,
+            CSF_WHILE | CSF_FOR,
+            std::ptr::addr_of_mut!((*cstack).cs_looplevel),
+        );
+        skip = true;
+
+        // If an exception is being thrown, discard it to prevent it from
+        // being rethrown at the end of this function.
+        if did_throw {
+            discard_current_exception();
+        }
+
+        // report eap->errmsg, also when there already was an error
+        did_emsg = 0;
+    } else {
+        idx = (*cstack).cs_idx;
+
+        // If we stopped with the exception currently being thrown at this
+        // try conditional since we didn't know that it doesn't have
+        // a finally clause, we need to rethrow it after closing the try
+        // conditional.
+        if did_throw
+            && (*cstack).cs_flags[idx as usize] & CSF_TRUE != 0
+            && (*cstack).cs_flags[idx as usize] & CSF_FINALLY == 0
+        {
+            rethrow = true;
+        }
+    }
+
+    // If there was no finally clause, show the user when debugging or
+    // a breakpoint was encountered that the end of the try conditional has been reached.
+    if (rethrow
+        || (!skip
+            && (*cstack).cs_flags[idx as usize] & CSF_FINALLY == 0
+            && (*cstack).cs_pending[idx as usize] == 0))
+        && dbg_check_skipped(eap)
+    {
+        // Handle a ">quit" debug command as if an interrupt had occurred before the ":endtry".
+        if got_int {
+            skip = true;
+            do_intthrow(cstack);
+            // The do_intthrow() call may have reset did_throw or cs_pending[idx].
+            rethrow = false;
+            if did_throw && (*cstack).cs_flags[idx as usize] & CSF_FINALLY == 0 {
+                rethrow = true;
+            }
+        }
+    }
+
+    // If a ":return" is pending, we need to resume it after closing the try
+    // conditional; remember the return value.  If there was a finally clause
+    // making an exception pending, we need to rethrow it.
+    let pending: c_int;
+    if skip {
+        pending = CSTP_NONE;
+    } else {
+        pending = c_int::from((*cstack).cs_pending[idx as usize]);
+        (*cstack).cs_pending[idx as usize] = CSTP_NONE as i8;
+        if pending == CSTP_RETURN {
+            rettv = (*cstack).cs_pend.csp_rv[idx as usize];
+        } else if pending & CSTP_THROW != 0 {
+            current_exception = (*cstack).cs_pend.csp_ex[idx as usize];
+        }
+    }
+
+    // Discard anything pending on an error, interrupt, or throw in the
+    // finally clause.
+    cleanup_conditionals(cstack, CSF_TRY | CSF_SILENT, 1);
+
+    if (*cstack).cs_idx >= 0 && (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY != 0 {
+        (*cstack).cs_idx -= 1;
+    }
+    (*cstack).cs_trylevel -= 1;
+
+    if !skip {
+        report_resume_pending(
+            pending,
+            if pending == CSTP_RETURN {
+                rettv
+            } else if pending & CSTP_THROW != 0 {
+                current_exception
+            } else {
+                std::ptr::null_mut()
+            },
+        );
+        match pending {
+            CSTP_NONE => {}
+            CSTP_CONTINUE => ex_continue_impl(eap),
+            CSTP_BREAK => ex_break_impl(eap),
+            CSTP_RETURN => {
+                do_return(eap, false, false, rettv);
+            }
+            CSTP_FINISH => {
+                do_finish(eap, false);
+            }
+            _ => {
+                if pending & CSTP_ERROR != 0 {
+                    did_emsg = 1;
+                }
+                if pending & CSTP_INTERRUPT != 0 {
+                    got_int = true;
+                }
+                if pending & CSTP_THROW != 0 {
+                    rethrow = true;
+                }
+            }
+        }
+    }
+
+    if rethrow {
+        // Rethrow the current exception (within this cstack).
+        do_throw(cstack);
+    }
+}
+
 /// Handle ":else" and ":elseif"
 #[export_name = "ex_else"]
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]

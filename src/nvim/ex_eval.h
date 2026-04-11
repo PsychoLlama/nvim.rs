@@ -48,3 +48,5 @@ void ex_else(exarg_T *eap);
 void ex_while(exarg_T *eap);
 void ex_endwhile(exarg_T *eap);
 void ex_catch(exarg_T *eap);
+void ex_finally(exarg_T *eap);
+void ex_endtry(exarg_T *eap);
