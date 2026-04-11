@@ -317,6 +317,150 @@ unsafe fn libc_strlen(s: *const c_char) -> usize {
 }
 
 // =============================================================================
+// Mergesort for doubly linked lists
+// =============================================================================
+
+type MergeSortGetFunc = unsafe extern "C" fn(*mut c_void) -> *mut c_void;
+type MergeSortSetFunc = unsafe extern "C" fn(*mut c_void, *mut c_void);
+type MergeSortCompareFunc = unsafe extern "C" fn(*const c_void, *const c_void) -> std::ffi::c_int;
+
+/// Iterative merge sort for doubly linked list. O(NlogN) worst case, stable.
+///
+/// The list is divided into blocks of increasing size (1, 2, 4, 8, ...).
+/// Each pair of blocks is merged in sorted order.
+/// Merged blocks are reconnected to build the sorted list.
+///
+/// # Safety
+/// All function pointer arguments must be non-null and valid C function pointers.
+/// `head` must be NULL or a valid node pointer.
+#[export_name = "mergesort_list"]
+pub unsafe extern "C" fn rs_mergesort_list(
+    mut head: *mut c_void,
+    get_next: MergeSortGetFunc,
+    set_next: MergeSortSetFunc,
+    get_prev: MergeSortGetFunc,
+    set_prev: MergeSortSetFunc,
+    compare: MergeSortCompareFunc,
+) -> *mut c_void {
+    if head.is_null() || get_next(head).is_null() {
+        return head;
+    }
+
+    // Count length
+    let mut n = 0i32;
+    let mut curr = head;
+    while !curr.is_null() {
+        n += 1;
+        curr = get_next(curr);
+    }
+
+    let mut size = 1i32;
+    while size < n {
+        let mut new_head: *mut c_void = std::ptr::null_mut();
+        let mut tail: *mut c_void = std::ptr::null_mut();
+        curr = head;
+
+        while !curr.is_null() {
+            // Split two runs
+            let left = curr;
+            let mut right = left;
+            for _ in 0..size {
+                if right.is_null() {
+                    break;
+                }
+                right = get_next(right);
+            }
+
+            let mut next = right;
+            for _ in 0..size {
+                if next.is_null() {
+                    break;
+                }
+                next = get_next(next);
+            }
+
+            // Break links between left run and right run
+            let l_end = if right.is_null() {
+                std::ptr::null_mut()
+            } else {
+                get_prev(right)
+            };
+            if !l_end.is_null() {
+                set_next(l_end, std::ptr::null_mut());
+            }
+            if !right.is_null() {
+                set_prev(right, std::ptr::null_mut());
+            }
+
+            // Break links between right run and next chunk
+            let r_end = if next.is_null() {
+                std::ptr::null_mut()
+            } else {
+                get_prev(next)
+            };
+            if !r_end.is_null() {
+                set_next(r_end, std::ptr::null_mut());
+            }
+            if !next.is_null() {
+                set_prev(next, std::ptr::null_mut());
+            }
+
+            // Merge the two runs
+            let mut merged: *mut c_void = std::ptr::null_mut();
+            let mut merged_tail: *mut c_void = std::ptr::null_mut();
+            let mut left_cur = left;
+            let mut right_cur = right;
+
+            while !left_cur.is_null() || !right_cur.is_null() {
+                // Choose the next element: left if right is done or left <= right
+                let take_left = !left_cur.is_null()
+                    && (right_cur.is_null() || compare(left_cur, right_cur) <= 0);
+                let chosen = if take_left {
+                    let c = left_cur;
+                    left_cur = get_next(left_cur);
+                    c
+                } else {
+                    let c = right_cur;
+                    right_cur = get_next(right_cur);
+                    c
+                };
+
+                if merged_tail.is_null() {
+                    merged = chosen;
+                    merged_tail = chosen;
+                    set_prev(chosen, std::ptr::null_mut());
+                } else {
+                    set_next(merged_tail, chosen);
+                    set_prev(chosen, merged_tail);
+                    merged_tail = chosen;
+                }
+            }
+
+            // Connect merged run to the accumulating full list
+            if new_head.is_null() {
+                new_head = merged;
+            } else {
+                set_next(tail, merged);
+                set_prev(merged, tail);
+            }
+
+            // Advance tail to end of merged run
+            while !get_next(merged_tail).is_null() {
+                merged_tail = get_next(merged_tail);
+            }
+            tail = merged_tail;
+
+            curr = next;
+        }
+
+        head = new_head;
+        size *= 2;
+    }
+
+    head
+}
+
+// =============================================================================
 // NvimBox - A Box-like type that uses nvim's allocator
 // =============================================================================
 

@@ -74,6 +74,11 @@ extern size_t xstrnlen(const char *s, size_t n);
 extern void time_to_bytes(time_t time_, uint8_t buf[8]);
 extern size_t arena_align_offset(size_t off);
 
+// Rust-provided mergesort (memory migration Phase 2)
+extern void *mergesort_list(void *head, MergeSortGetFunc get_next, MergeSortSetFunc set_next,
+                            MergeSortGetFunc get_prev, MergeSortSetFunc set_prev,
+                            MergeSortCompareFunc compare);
+
 // Rust-provided arena allocator functions (memory migration Phase 1)
 extern void arena_free_reuse_blks(void);
 extern ArenaMem arena_finish(Arena *arena);
