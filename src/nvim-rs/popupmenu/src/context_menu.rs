@@ -392,8 +392,10 @@ extern "C" {
     fn vungetc(c: c_int);
     /// Select popup entry at mouse position.
     fn rs_pum_select_mouse_pos();
-    /// Emit error for wrong menu mode.
-    fn nvim_pum_emsg_menu_mode();
+    /// Emit an error message.
+    fn emsg(s: *const std::ffi::c_char);
+    /// Error string: "Menu only exists in another mode".
+    static e_menu_only_exists_in_another_mode: std::ffi::c_char;
     /// Batch key constants accessor.
     fn nvim_pum_get_key_constants() -> PumKeyConstants;
 }
@@ -453,7 +455,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     PUM_STATE.size = count;
 
     if count <= 0 {
-        nvim_pum_emsg_menu_mode();
+        emsg(std::ptr::addr_of!(e_menu_only_exists_in_another_mode));
         return;
     }
 

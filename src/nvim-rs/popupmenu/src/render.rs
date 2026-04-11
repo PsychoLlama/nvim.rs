@@ -3,7 +3,7 @@
 //! This module provides helper functions for rendering popup menu text
 //! with fuzzy match highlighting and proper attribute handling.
 
-use std::ffi::{c_char, c_int, c_ulong};
+use std::ffi::{c_char, c_int, c_uint, c_ulong};
 
 use crate::PUM_STATE;
 
@@ -302,12 +302,30 @@ pub const extern "C" fn rs_pum_needs_truncation(
     (text_cells > available_cells && available_cells > 0) as c_int
 }
 
-// C accessor functions for Phase 3 migration.
+/// Mode flag for command line.
+const MODE_CMDLINE: c_int = 0x08;
+/// `kOptCotFlagFuzzy` constant for fuzzy completion detection.
+const K_OPT_COT_FLAG_FUZZY: c_uint = 0x80;
+
+// C globals for leader/fuzzy detection.
 extern "C" {
-    /// Get completion leader string.
-    fn nvim_pum_get_compl_leader() -> *mut c_char;
-    /// Check if completion is using fuzzy matching.
-    fn nvim_pum_compl_is_fuzzy() -> c_int;
+    static mut State: c_int;
+}
+
+// C functions for leader/fuzzy detection (direct, replacing wrapper accessors).
+extern "C" {
+    /// Get the cmdline completion pattern (for cmdline mode leader).
+    fn cmdline_compl_pattern() -> *mut c_char;
+    /// Check if cmdline completion is fuzzy.
+    fn cmdline_compl_is_fuzzy() -> c_int;
+    /// Get the insert-mode completion leader string.
+    fn rs_ins_compl_leader() -> *const c_char;
+    /// Get the current 'cot' option flags.
+    fn rs_get_cot_flags() -> c_uint;
+}
+
+// C accessor functions.
+extern "C" {
     /// Get fuzzy match positions. Caller must free with `nvim_xfree`.
     fn nvim_pum_fuzzy_match_positions(
         text: *const c_char,
@@ -353,7 +371,12 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
         return std::ptr::null_mut();
     }
 
-    let leader = nvim_pum_get_compl_leader();
+    // Inline nvim_pum_get_compl_leader: return cmdline pattern or ins-mode leader
+    let leader = if (State & MODE_CMDLINE) != 0 {
+        cmdline_compl_pattern()
+    } else {
+        rs_ins_compl_leader().cast_mut()
+    };
     if leader.is_null() || *leader == 0 {
         return std::ptr::null_mut();
     }
@@ -361,7 +384,12 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     let text_cells = vim_strsize(text);
     #[allow(clippy::cast_sign_loss)]
     let attrs = xmalloc(std::mem::size_of::<c_int>() * text_cells as usize).cast::<c_int>();
-    let in_fuzzy = nvim_pum_compl_is_fuzzy() != 0;
+    // Inline nvim_pum_compl_is_fuzzy: check cmdline or insert-mode fuzzy flag
+    let in_fuzzy = if (State & MODE_CMDLINE) != 0 {
+        cmdline_compl_is_fuzzy() != 0
+    } else {
+        (rs_get_cot_flags() & K_OPT_COT_FLAG_FUZZY) != 0
+    };
     let leader_len = strlen(leader) as c_ulong;
     let is_select = hlf_id == hlf::HLF_PSI;
 

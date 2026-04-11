@@ -62,8 +62,6 @@
 #include "nvim/winfloat.h"
 
 // Rust FFI declarations
-extern const char *rs_ins_compl_leader(void);
-extern unsigned rs_get_cot_flags(void);
 extern void rs_pum_ext_select_item(int item, int insert, int finish);
 extern int rs_pum_undisplay(int immediate);
 extern int rs_pum_border_width(void);
@@ -164,19 +162,6 @@ PumPvwinRows nvim_pum_find_pvwin(void)
 
 // Text attrs computation helpers
 
-/// Get completion leader string.
-char *nvim_pum_get_compl_leader(void)
-{
-  return (State & MODE_CMDLINE) ? cmdline_compl_pattern() : (char *)rs_ins_compl_leader();
-}
-
-/// Check if completion is fuzzy.
-int nvim_pum_compl_is_fuzzy(void)
-{
-  return (State & MODE_CMDLINE) ? cmdline_compl_is_fuzzy()
-                                : (rs_get_cot_flags() & kOptCotFlagFuzzy) != 0;
-}
-
 /// Fuzzy match helper: returns flat array of matching positions and count.
 /// Caller must free the returned array with xfree().
 /// Returns NULL if no match. Sets *out_len to number of positions.
@@ -264,9 +249,6 @@ PumKeyConstants nvim_pum_get_key_constants(void)
   };
 }
 
-
-/// Emit error message.
-void nvim_pum_emsg_menu_mode(void) { emsg(_(e_menu_only_exists_in_another_mode)); }
 
 /// Opaque border configuration for popup menu rendering.
 /// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
