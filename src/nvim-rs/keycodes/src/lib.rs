@@ -536,7 +536,6 @@ const K_F63: c_int = termcap2key(b'F' as c_int, b'r' as c_int);
 // When new special keys are added to `keycodes.lua`, this table must also be
 // updated to match the newly generated header.
 
-#[allow(dead_code)]
 struct KeyNameEntry {
     key: c_int,
     is_alt: bool,
@@ -544,7 +543,6 @@ struct KeyNameEntry {
 }
 
 // 187 entries matching keycode_names.generated.h order exactly
-#[allow(dead_code)]
 static KEY_NAMES_TABLE: &[KeyNameEntry] = &[
     KeyNameEntry {
         key: K_K0,
@@ -1485,7 +1483,6 @@ static KEY_NAMES_TABLE: &[KeyNameEntry] = &[
 
 /// Case-insensitive ASCII comparison (equivalent to `vim_strnicmp_asc` semantics).
 /// Returns true if `a` and `b` are equal (case-insensitively) for the first `len` bytes.
-#[allow(dead_code)]
 fn ascii_strnicmp(a: &[u8], b: &[u8], len: usize) -> bool {
     if a.len() < len || b.len() < len {
         return false;
@@ -1504,7 +1501,7 @@ fn ascii_strnicmp(a: &[u8], b: &[u8], len: usize) -> bool {
 /// `get_special_key_code_hash` in `keycode_names.generated.h`.
 ///
 /// Returns the index into `KEY_NAMES_TABLE`, or `None` if not found.
-#[allow(dead_code, clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)]
 fn key_names_table_hash(name: &[u8]) -> Option<usize> {
     let len = name.len();
     let (low, high): (usize, usize) = match len {
@@ -1767,25 +1764,6 @@ const fn toupper_asc(c: c_int) -> c_int {
 // =============================================================================
 
 extern "C" {
-    /// Get the length of the `key_names_table` array.
-    fn nvim_get_key_names_table_len() -> c_int;
-
-    /// Get the key code at the specified index in `key_names_table`.
-    fn nvim_get_key_names_table_key(idx: c_int) -> c_int;
-
-    /// Get whether the entry at idx is an alternative name.
-    fn nvim_get_key_names_table_is_alt(idx: c_int) -> bool;
-
-    /// Lookup a special key code by name using the generated hash function.
-    /// Returns the index in `key_names_table`, or -1 if not found.
-    fn nvim_get_special_key_code_hash(name: *const std::ffi::c_char, len: usize) -> c_int;
-
-    /// Get the name data pointer at the specified index.
-    fn nvim_get_key_names_table_name_data(idx: c_int) -> *const std::ffi::c_char;
-
-    /// Get the name length at the specified index.
-    fn nvim_get_key_names_table_name_size(idx: c_int) -> usize;
-
     /// Translate character to printable string representation.
     /// Returns a pointer to a static buffer.
     fn transchar(c: c_int) -> *const std::ffi::c_char;
@@ -1826,12 +1804,10 @@ extern "C" {
 #[must_use]
 #[export_name = "find_special_key_in_table"]
 pub extern "C" fn rs_find_special_key_in_table(c: c_int) -> c_int {
-    let len = unsafe { nvim_get_key_names_table_len() };
-    for i in 0..len {
-        let key = unsafe { nvim_get_key_names_table_key(i) };
-        let is_alt = unsafe { nvim_get_key_names_table_is_alt(i) };
-        if c == key && !is_alt {
-            return i;
+    for (i, entry) in KEY_NAMES_TABLE.iter().enumerate() {
+        if c == entry.key && !entry.is_alt {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            return i as c_int;
         }
     }
     -1
@@ -1873,12 +1849,8 @@ pub unsafe extern "C" fn rs_get_special_key_code(name: *const std::ffi::c_char) 
     // name_end is always >= name_u8, so the offset is always non-negative
     #[allow(clippy::cast_sign_loss)]
     let len = name_end.offset_from(name_u8) as usize;
-    let idx = nvim_get_special_key_code_hash(name, len);
-    if idx >= 0 {
-        nvim_get_key_names_table_key(idx)
-    } else {
-        0
-    }
+    let name_slice = std::slice::from_raw_parts(name_u8, len);
+    key_names_table_hash(name_slice).map_or(0, |idx| KEY_NAMES_TABLE[idx].key)
 }
 
 /// Static buffer for `get_special_key_name` result.
@@ -1997,10 +1969,12 @@ pub unsafe extern "C" fn rs_get_special_key_name(
         }
     } else {
         // Use name of special key
-        let name_data = nvim_get_key_names_table_name_data(table_idx);
-        let name_size = nvim_get_key_names_table_name_size(table_idx);
-        if !name_data.is_null() && name_size + idx + 2 <= MAX_KEY_NAME_LEN {
-            std::ptr::copy_nonoverlapping(name_data.cast::<u8>(), string.add(idx), name_size);
+        #[allow(clippy::cast_sign_loss)]
+        let entry = &KEY_NAMES_TABLE[table_idx as usize];
+        let entry_name = entry.name.as_bytes();
+        let name_size = entry_name.len();
+        if name_size + idx + 2 <= MAX_KEY_NAME_LEN {
+            std::ptr::copy_nonoverlapping(entry_name.as_ptr(), string.add(idx), name_size);
             idx += name_size;
         }
     }
