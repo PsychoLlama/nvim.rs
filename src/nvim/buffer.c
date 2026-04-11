@@ -182,101 +182,14 @@ extern int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg);
 
 
 
-/// Free a buffer structure and the things it contains related to the buffer
-/// itself (not the file, that must have been done already).
-void free_buffer(buf_T *buf)
-{
-  pmap_del(int)(&buffer_handles, buf->b_fnum, NULL);
-  buf_free_count++;
-  // b:changedtick uses an item in buf_T.
-  free_buffer_stuff(buf, kBffClearWinInfo);
-  if (buf->b_vars->dv_refcount > DO_NOT_FREE_CNT) {
-    tv_dict_add(buf->b_vars,
-                tv_dict_item_copy((dictitem_T *)(&buf->changedtick_di)));
-  }
-  unref_var_dict(buf->b_vars);
-  rs_aubuflocal_remove(buf->b_fnum);
-  xfree(buf->additional_data);
-  xfree(buf->b_prompt_text);
-  kv_destroy(buf->b_wininfo);
-  callback_free(&buf->b_prompt_callback);
-  callback_free(&buf->b_prompt_interrupt);
-  clear_fmark(&buf->b_last_cursor, 0);
-  clear_fmark(&buf->b_last_insert, 0);
-  clear_fmark(&buf->b_last_change, 0);
-  clear_fmark(&buf->b_prompt_start, 0);
-  for (size_t i = 0; i < NMARKS; i++) {
-    free_fmark(buf->b_namedm[i]);
-  }
-  for (int i = 0; i < buf->b_changelistlen; i++) {
-    free_fmark(buf->b_changelist[i]);
-  }
-  if (autocmd_busy) {
-    // Do not free the buffer structure while autocommands are executing,
-    // it's still needed. Free it when autocmd_busy is reset.
-    CLEAR_FIELD(buf->b_namedm);
-    CLEAR_FIELD(buf->b_changelist);
-    buf->b_next = au_pending_free_buf;
-    au_pending_free_buf = buf;
-  } else {
-    xfree(buf);
-  }
-}
-
-/// Free the b_wininfo list for buffer "buf".
-void clear_wininfo(buf_T *buf)
-{
-  for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
-    free_wininfo(kv_A(buf->b_wininfo, i), buf);
-  }
-  kv_size(buf->b_wininfo) = 0;
-}
-
-/// Free stuff in the buffer for ":bdel" and when wiping out the buffer.
-///
-/// @param buf  Buffer pointer
-/// @param free_flags  BufFreeFlags
-void free_buffer_stuff(buf_T *buf, int free_flags)
-{
-  if (free_flags & kBffClearWinInfo) {
-    clear_wininfo(buf);                 // including window-local options
-    free_buf_options(buf, true);
-    ga_clear(&buf->b_s.b_langp);
-  }
-  {
-    // Avoid losing b:changedtick when deleting buffer: clearing variables
-    // implies using clear_tv() on b:changedtick and that sets changedtick to
-    // zero.
-    hashitem_T *const changedtick_hi = hash_find(&buf->b_vars->dv_hashtab, "changedtick");
-    assert(changedtick_hi != NULL);
-    hash_remove(&buf->b_vars->dv_hashtab, changedtick_hi);
-  }
-  vars_clear(&buf->b_vars->dv_hashtab);   // free all internal variables
-  hash_init(&buf->b_vars->dv_hashtab);
-  if (free_flags & kBffInitChangedtick) {
-    buf_init_changedtick(buf);
-  }
-  uc_clear(&buf->b_ucmds);               // clear local user commands
-  extmark_free_all(buf);                 // delete any extmarks
-  map_clear_mode(buf, MAP_ALL_MODES, true, false);  // clear local mappings
-  map_clear_mode(buf, MAP_ALL_MODES, true, true);   // clear local abbrevs
-  XFREE_CLEAR(buf->b_start_fenc);
-
-  buf_free_callbacks(buf);
-}
+// free_buffer(), clear_wininfo(), free_buffer_stuff() migrated to Rust close.rs (Phase N).
+extern void free_buffer(buf_T *buf);
+extern void clear_wininfo(buf_T *buf);
+extern void free_buffer_stuff(buf_T *buf, int free_flags);
 
 // handle_swap_exists() moved to buffer_shim.c (Phase 18).
 
-
-/// Implementation of the commands for the buffer list.
-///
-/// action == DOBUF_GOTO     go to specified buffer
-/// action == DOBUF_SPLIT    split window and go to specified buffer
-/// action == DOBUF_UNLOAD   unload specified buffer(s)
-/// action == DOBUF_DEL      delete specified buffer(s) from buffer list
-
 // set_curbuf() moved to buffer_shim.c (Phase 19).
-
 
 //
 // functions for dealing with the buffer list
@@ -300,6 +213,18 @@ static inline void buf_init_changedtick(buf_T *const buf)
     .di_key = "changedtick",
   };
   tv_dict_add(buf->b_vars, (dictitem_T *)&buf->changedtick_di);
+}
+
+/// Non-static wrapper for buf_init_changedtick (called from buffer_shim.c).
+void nvim_buf_init_changedtick_c(buf_T *buf)
+{
+  buf_init_changedtick(buf);
+}
+
+/// Increment buf_free_count (called from buffer_shim.c compound wrappers).
+void nvim_inc_buf_free_count(void)
+{
+  buf_free_count++;
 }
 
 /// Add a file name to the buffer list.

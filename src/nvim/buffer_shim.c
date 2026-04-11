@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "klib/kvec.h"
+#include "nvim/api/private/helpers.h"
 #include "nvim/arglist.h"
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
@@ -23,9 +24,14 @@
 #include "nvim/fold.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
+#include "nvim/extmark.h"
+#include "nvim/garray.h"
+#include "nvim/hashtab.h"
 #include "nvim/help.h"
 #include "nvim/indent.h"
 #include "nvim/indent_c.h"
+#include "nvim/mapping.h"
+#include "nvim/usercmd.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/memfile.h"
@@ -967,3 +973,89 @@ void nvim_open_buffer_post_autocmd(bufref_T *old_curbuf, int flags, int *retval)
 
 /// Call rs_foldUpdateAll on curwin (convenience wrapper for Rust).
 void rs_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
+
+// =============================================================================
+// free_buffer cluster compound accessors (Phase N: migrate free_buffer to Rust)
+// =============================================================================
+
+// Declarations from buffer.c (callable from buffer_shim.c)
+extern void nvim_buf_init_changedtick_c(buf_T *buf);
+extern void nvim_inc_buf_free_count(void);
+extern void rs_aubuflocal_remove(int bufnr);
+
+/// Free the b_wininfo list for a buffer.
+void nvim_clear_wininfo_c(buf_T *buf)
+{
+  for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
+    free_wininfo(kv_A(buf->b_wininfo, i), buf);
+  }
+  kv_size(buf->b_wininfo) = 0;
+}
+
+/// Handle all C-side operations needed by free_buffer_stuff.
+/// Corresponds to the body of free_buffer_stuff() in buffer.c.
+/// @param buf       the buffer being freed
+/// @param free_flags  BufFreeFlags (kBffClearWinInfo=1, kBffInitChangedtick=2)
+void nvim_free_buffer_stuff_c_parts(buf_T *buf, int free_flags)
+{
+  if (free_flags & kBffClearWinInfo) {
+    nvim_clear_wininfo_c(buf);
+    free_buf_options(buf, true);
+    ga_clear(&buf->b_s.b_langp);
+  }
+  {
+    hashitem_T *const changedtick_hi = hash_find(&buf->b_vars->dv_hashtab, "changedtick");
+    assert(changedtick_hi != NULL);
+    hash_remove(&buf->b_vars->dv_hashtab, changedtick_hi);
+  }
+  vars_clear(&buf->b_vars->dv_hashtab);
+  hash_init(&buf->b_vars->dv_hashtab);
+  if (free_flags & kBffInitChangedtick) {
+    nvim_buf_init_changedtick_c(buf);
+  }
+  uc_clear(&buf->b_ucmds);
+  extmark_free_all(buf);
+  map_clear_mode(buf, MAP_ALL_MODES, true, false);
+  map_clear_mode(buf, MAP_ALL_MODES, true, true);
+  XFREE_CLEAR(buf->b_start_fenc);
+  buf_free_callbacks(buf);
+}
+
+/// Handle all C-side operations needed by free_buffer.
+/// @param buf   the buffer being freed
+void nvim_free_buffer_c_parts(buf_T *buf)
+{
+  pmap_del(int)(&buffer_handles, buf->b_fnum, NULL);
+  nvim_inc_buf_free_count();
+  // b:changedtick uses an item in buf_T.
+  nvim_free_buffer_stuff_c_parts(buf, kBffClearWinInfo);
+  if (buf->b_vars->dv_refcount > DO_NOT_FREE_CNT) {
+    tv_dict_add(buf->b_vars,
+                tv_dict_item_copy((dictitem_T *)(&buf->changedtick_di)));
+  }
+  unref_var_dict(buf->b_vars);
+  rs_aubuflocal_remove(buf->b_fnum);
+  xfree(buf->additional_data);
+  xfree(buf->b_prompt_text);
+  kv_destroy(buf->b_wininfo);
+  callback_free(&buf->b_prompt_callback);
+  callback_free(&buf->b_prompt_interrupt);
+  clear_fmark(&buf->b_last_cursor, 0);
+  clear_fmark(&buf->b_last_insert, 0);
+  clear_fmark(&buf->b_last_change, 0);
+  clear_fmark(&buf->b_prompt_start, 0);
+  for (size_t i = 0; i < NMARKS; i++) {
+    free_fmark(buf->b_namedm[i]);
+  }
+  for (int i = 0; i < buf->b_changelistlen; i++) {
+    free_fmark(buf->b_changelist[i]);
+  }
+  if (autocmd_busy) {
+    CLEAR_FIELD(buf->b_namedm);
+    CLEAR_FIELD(buf->b_changelist);
+    buf->b_next = au_pending_free_buf;
+    au_pending_free_buf = buf;
+  } else {
+    xfree(buf);
+  }
+}

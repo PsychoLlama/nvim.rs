@@ -491,3 +491,55 @@ pub unsafe extern "C" fn rs_close_buffer(
     // NOTE: at this point "curbuf" may be invalid!
     true
 }
+
+// =============================================================================
+// free_buffer cluster (Phase N migration)
+// =============================================================================
+
+extern "C" {
+    fn nvim_free_buffer_c_parts(buf: BufHandle);
+    fn nvim_free_buffer_stuff_c_parts(buf: BufHandle, free_flags: c_int);
+    fn nvim_clear_wininfo_c(buf: BufHandle);
+    fn nvim_buf_init_changedtick_c(buf: BufHandle);
+}
+
+// BufFreeFlags from buffer.h (kBff* enum)
+const KBF_CLEAR_WIN_INFO: c_int = 1;
+const KBF_INIT_CHANGEDTICK: c_int = 2;
+
+/// Free a buffer structure and the things it contains related to the buffer
+/// itself (not the file, that must have been done already).
+///
+/// Port of C `free_buffer`.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[unsafe(export_name = "free_buffer")]
+pub unsafe extern "C" fn rs_free_buffer(buf: BufHandle) {
+    nvim_free_buffer_c_parts(buf);
+}
+
+/// Free the `b_wininfo` list for buffer `buf`.
+///
+/// Port of C `clear_wininfo`.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[unsafe(export_name = "clear_wininfo")]
+pub unsafe extern "C" fn rs_clear_wininfo(buf: BufHandle) {
+    nvim_clear_wininfo_c(buf);
+}
+
+/// Free stuff in the buffer for `:bdel` and when wiping out the buffer.
+///
+/// Port of C `free_buffer_stuff`.
+///
+/// - `buf`: Buffer pointer
+/// - `free_flags`: `BufFreeFlags` (`kBffClearWinInfo` | `kBffInitChangedtick`)
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[unsafe(export_name = "free_buffer_stuff")]
+pub unsafe extern "C" fn rs_free_buffer_stuff(buf: BufHandle, free_flags: c_int) {
+    nvim_free_buffer_stuff_c_parts(buf, free_flags);
+}
