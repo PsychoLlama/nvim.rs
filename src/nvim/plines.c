@@ -406,17 +406,11 @@ int plines_win_col(win_T *wp, linenr_T lnum, long column)
 
 // C Wrappers for Rust FFI
 
-/// Wrapper for linetabsize_eol() (accessor for Rust).
-int nvim_linetabsize_eol(win_T *wp, linenr_T lnum) { return linetabsize_eol(wp, lnum); }
-
 /// Wrapper for plines_win() (accessor for Rust).
 int nvim_plines_win(win_T *wp, linenr_T lnum, int limit) { return plines_win(wp, lnum, limit != 0); }
 
 /// Wrapper for plines_win_col() (accessor for Rust).
 int nvim_plines_win_col(win_T *wp, linenr_T lnum, long column) { return plines_win_col(wp, lnum, column); }
-
-/// Wrapper for win_may_fill() (accessor for Rust).
-int nvim_win_may_fill(win_T *wp) { return win_may_fill(wp) ? 1 : 0; }
 
 /// Wrapper for win_linetabsize() (accessor for Rust).
 int nvim_win_linetabsize(win_T *wp, linenr_T lnum, char *line, colnr_T len)

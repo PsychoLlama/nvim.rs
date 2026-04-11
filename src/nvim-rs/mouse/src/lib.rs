@@ -744,7 +744,7 @@ extern "C" {
     fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
 
     /// Check if window may have filler lines.
-    fn nvim_win_may_fill(wp: WinHandle) -> c_int;
+    fn win_may_fill(wp: WinHandle) -> bool;
 
     /// Get filler lines for a line in a window.
     fn nvim_win_get_fill(wp: WinHandle, lnum: linenr_T) -> c_int;
@@ -827,7 +827,7 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
 
     while row > 0 {
         // Don't include filler lines in "count"
-        let count = if nvim_win_may_fill(win) != 0 {
+        let count = if win_may_fill(win) {
             let fill = if lnum == topline {
                 nvim_win_get_topfill(win)
             } else {

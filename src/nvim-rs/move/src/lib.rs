@@ -1371,9 +1371,9 @@ extern "C" {
     fn cursor_down(n: c_int, upd_topline: bool) -> c_int;
 
     // Plines wrappers
-    fn nvim_linetabsize_eol(wp: WinHandle, lnum: LinenrT) -> c_int;
+    fn linetabsize_eol(wp: WinHandle, lnum: LinenrT) -> c_int;
     fn nvim_plines_win(wp: WinHandle, lnum: LinenrT, limit: c_int) -> c_int;
-    fn nvim_win_may_fill(wp: WinHandle) -> c_int;
+    fn win_may_fill(wp: WinHandle) -> bool;
 
     fn win_col_off(wp: WinHandle) -> c_int;
     fn win_col_off2(wp: WinHandle) -> c_int;
@@ -1563,7 +1563,7 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
             } else if nvim_decor_conceal_line(wp, topline - 1, 0) != 0 {
                 todo += 1;
             } else if do_sms {
-                let mut size = nvim_linetabsize_eol(wp, topline);
+                let mut size = linetabsize_eol(wp, topline);
                 if size > width1 {
                     nvim_win_set_skipcol(wp, width1);
                     size -= width1;
@@ -1699,13 +1699,13 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
     let do_sms = p_wrap && p_sms;
     let view_width = nvim_win_get_view_width(wp);
 
-    if do_sms || (byfold && nvim_win_lines_concealed(wp) != 0) || nvim_win_may_fill(wp) != 0 {
+    if do_sms || (byfold && nvim_win_lines_concealed(wp) != 0) || win_may_fill(wp) {
         let width1 = view_width - win_col_off(wp);
         let width2 = width1 + win_col_off2(wp);
         let prev_skipcol = nvim_win_get_skipcol(wp);
 
         let mut size = if do_sms {
-            nvim_linetabsize_eol(wp, nvim_win_get_topline(wp))
+            linetabsize_eol(wp, nvim_win_get_topline(wp))
         } else {
             0
         };
@@ -1763,7 +1763,7 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
                     nvim_win_set_topfill(wp, fill);
                     nvim_win_set_skipcol(wp, 0);
                     if todo > 1 && do_sms {
-                        size = nvim_linetabsize_eol(wp, nvim_win_get_topline(wp));
+                        size = linetabsize_eol(wp, nvim_win_get_topline(wp));
                     }
                 }
             }
@@ -2944,7 +2944,7 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
     let size = if so == 0 {
         0
     } else {
-        nvim_linetabsize_eol(wp, topline)
+        linetabsize_eol(wp, topline)
     };
 
     let skipcol = nvim_win_get_skipcol(wp);
@@ -3100,7 +3100,7 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
 
     // Avoid adjusting for 'scrolloff' beyond the text line height.
     if scrolloff_cols > 0 {
-        let mut size = nvim_linetabsize_eol(wp, topline);
+        let mut size = linetabsize_eol(wp, topline);
         size = width1 + width2 * ((size - width1 + width2 - 1) / width2);
         while col > size {
             col -= width2;
@@ -3473,7 +3473,7 @@ pub unsafe extern "C" fn rs_scroll_with_sms(
         let skipcol = nvim_win_get_skipcol(wp);
 
         if fixdir == DIRECTION_FORWARD {
-            let tabsize = nvim_linetabsize_eol(wp, topline);
+            let tabsize = linetabsize_eol(wp, topline);
             count = 1 + (tabsize - skipcol - width1 + width2 - 1) / width2;
         } else {
             count = 1 + (skipcol - width1 - 1) / width2;
@@ -4168,7 +4168,7 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
         }
 
         let skipcol = nvim_win_get_skipcol(wp);
-        let may_fill = nvim_win_may_fill(wp) != 0;
+        let may_fill = win_may_fill(wp);
 
         if valid && (lnum != topline || (skipcol == 0 && !may_fill)) {
             let wl = nvim_win_get_wl_entry(wp, i);
