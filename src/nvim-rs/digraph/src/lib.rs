@@ -14,6 +14,7 @@ use std::ffi::c_void;
 use libc::c_int;
 
 pub mod data;
+mod funcs;
 mod input;
 mod list;
 mod parse;
@@ -23,6 +24,7 @@ mod viml;
 
 // Re-export FFI functions
 pub use data::{rs_get_digraphdefault, rs_get_digraphdefault_len};
+pub use funcs::{digraph_set_common_impl, rs_f_digraph_get, rs_f_digraph_set};
 pub use input::{
     rs_digraph_is_esc, rs_digraph_should_cancel, rs_do_digraph, rs_get_digraph,
     rs_get_digraph_result,

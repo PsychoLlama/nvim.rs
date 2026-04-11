@@ -57,7 +57,6 @@ static const char e_digraph_setlist_argument_must_be_list_of_lists_with_two_item
 
 // Rust implementations (functions exported directly from Rust)
 // check_digraph_chars_valid, get_digraph_for_char, putdigraph are now in Rust (viml.rs)
-extern bool check_digraph_chars_valid(int char1, int char2);  // for get_digraph_chars until Phase 2
 extern void rs_registerdigraph(int char1, int char2, int result);
 
 // Callback type for digraph iteration
@@ -186,76 +185,9 @@ void digraph_getlist_common(bool list_all, typval_T *rettv)
 }
 
 // header_table[] moved to Rust (list.rs HEADER_STRINGS)
+// get_digraph_chars, digraph_set_common, f_digraph_get, f_digraph_set moved to Rust (funcs.rs)
 
-/// Get the two digraph characters from a typval.
-/// @return OK or FAIL.
-static int get_digraph_chars(const typval_T *arg, int *char1, int *char2)
-{
-  char buf_chars[NUMBUFLEN];
-  const char *chars = tv_get_string_buf_chk(arg, buf_chars);
-  const char *p = chars;
-
-  if (p != NULL) {
-    if (*p != NUL) {
-      *char1 = mb_cptr2char_adv(&p);
-      if (*p != NUL) {
-        *char2 = mb_cptr2char_adv(&p);
-        if (*p == NUL) {
-          if (check_digraph_chars_valid(*char1, *char2)) {
-            return OK;
-          }
-          return FAIL;
-        }
-      }
-    }
-  }
-  semsg(_(e_digraph_must_be_just_two_characters_str), chars);
-  return FAIL;
-}
-
-static bool digraph_set_common(const typval_T *argchars, const typval_T *argdigraph)
-{
-  int char1, char2;
-  if (get_digraph_chars(argchars, &char1, &char2) == FAIL) {
-    return false;
-  }
-
-  char buf_digraph[NUMBUFLEN];
-  const char *digraph = tv_get_string_buf_chk(argdigraph, buf_digraph);
-  if (digraph == NULL) {
-    return false;
-  }
-  const char *p = digraph;
-  int n = mb_cptr2char_adv(&p);
-  if (*p != NUL) {
-    semsg(_(e_digraph_argument_must_be_one_character_str), digraph);
-    return false;
-  }
-
-  rs_registerdigraph(char1, char2, n);
-  return true;
-}
-
-/// "digraph_get()" function
-void f_digraph_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;  // Return empty string for failure
-  const char *digraphs = tv_get_string_chk(&argvars[0]);
-
-  if (digraphs == NULL) {
-    return;
-  }
-  if (strlen(digraphs) != 2) {
-    semsg(_(e_digraph_must_be_just_two_characters_str), digraphs);
-    return;
-  }
-  int code = digraph_get(digraphs[0], digraphs[1], false);
-
-  char buf[NUMBUFLEN];
-  buf[utf_char2bytes(code, buf)] = NUL;
-  rettv->vval.v_string = xstrdup(buf);
-}
+extern bool digraph_set_common(const typval_T *argchars, const typval_T *argdigraph);
 
 /// "digraph_getlist()" function
 void f_digraph_getlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -274,19 +206,6 @@ void f_digraph_getlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   digraph_getlist_common(flag_list_all, rettv);
-}
-
-/// "digraph_set()" function
-void f_digraph_set(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_BOOL;
-  rettv->vval.v_bool = kBoolVarFalse;
-
-  if (!digraph_set_common(&argvars[0], &argvars[1])) {
-    return;
-  }
-
-  rettv->vval.v_bool = kBoolVarTrue;
 }
 
 /// "digraph_setlist()" function

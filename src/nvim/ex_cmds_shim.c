@@ -37,11 +37,13 @@
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/option.h"
+#include "nvim/cmdexpand_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/fs.h"
 #include "nvim/os/input.h"
 #include "nvim/os/os.h"
 #include "nvim/os/shell.h"
+#include "nvim/os/time.h"
 #include "nvim/path.h"
 #include "nvim/regexp.h"
 #include "nvim/search.h"
@@ -515,3 +517,4 @@ void nvim_exarg_set_force_ff(exarg_T *eap, int val) { eap->force_ff = val; }
 void nvim_exarg_set_force_bin(exarg_T *eap, int val) { eap->force_bin = val; }
 void nvim_exarg_set_read_edit(exarg_T *eap, int val) { eap->read_edit = val; }
 void nvim_exarg_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; }
+

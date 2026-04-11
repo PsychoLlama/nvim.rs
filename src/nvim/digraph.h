@@ -9,3 +9,5 @@
 int do_digraph(int c);
 int get_digraph(bool cmdline);
 int digraph_get(int char1, int char2, bool meta_char);
+void f_digraph_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_digraph_set(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
