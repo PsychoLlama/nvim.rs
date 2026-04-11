@@ -48,23 +48,9 @@ _Static_assert(RE_STRING == 2, "RE_STRING changed - update Rust constant");
 // (memset_entries, memcpy_entries), sizeof_histentry, and ptr_to_idx
 // are now inline Rust functions in ffi.rs (Phase 2).
 
-// -- Memory wrappers (Phase 3 will remove these) --
-
-void nvim_cmdhist_xfree(void *ptr) { xfree(ptr); }
-
-void *nvim_cmdhist_xmalloc(size_t size) { return xmalloc(size); }
-
-char *nvim_cmdhist_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
-
-// -- String wrappers (Phase 3 will remove these) --
-
-int nvim_cmdhist_strnicmp(const char *s1, const char *s2, size_t n) { return STRNICMP(s1, s2, n); }
-
-char *nvim_cmdhist_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
-
-// -- Global accessors (Phase 3/4 will remove these) --
-
-int nvim_cmdhist_get_cmdline_firstc(void) { return get_cmdline_firstc(); }
+// Memory wrappers (nvim_cmdhist_xfree/xmalloc/xstrnsave), string wrappers
+// (strnicmp, vim_strchr, strcmp), and get_cmdline_firstc now call the real
+// C functions directly from Rust via extern "C" in ffi.rs (Phase 3).
 
 // Phase 2: History Modification Accessors
 
@@ -78,7 +64,7 @@ int nvim_cmdhist_get_cmdmod_cmod_flags(void) { return (int)cmdmod.cmod_flags; }
 
 // nvim_cmdhist_set_hislen() is now in src/nvim-rs/cmdhist/src/state.rs.
 
-int nvim_cmdhist_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
+// nvim_cmdhist_strcmp now calls strcmp directly from Rust (Phase 3).
 
 extern int nvim_cmdhist_get_last_maptick(void);
 extern void nvim_cmdhist_set_last_maptick(int val);

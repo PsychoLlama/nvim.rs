@@ -134,20 +134,46 @@ pub unsafe fn nvim_cmdhist_he_at(base: HistEntryPtr, idx: c_int) -> HistEntryPtr
 }
 
 // =============================================================================
-// Memory wrappers (still delegating to C until Phase 3)
+// Memory / String / Global -- Phase 3: direct C externs replace wrappers
 // =============================================================================
 
 extern "C" {
-    pub fn nvim_cmdhist_xfree(ptr: *mut c_void);
-    pub fn nvim_cmdhist_xmalloc(size: usize) -> *mut c_void;
-    pub fn nvim_cmdhist_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn strncasecmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    pub fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    pub fn get_cmdline_firstc() -> c_int;
+}
 
-    // -- String --
-    pub fn nvim_cmdhist_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
-    pub fn nvim_cmdhist_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+/// Free memory (wraps C `xfree`).
+pub unsafe fn nvim_cmdhist_xfree(ptr: *mut c_void) {
+    xfree(ptr);
+}
 
-    // -- Global --
-    pub fn nvim_cmdhist_get_cmdline_firstc() -> c_int;
+/// Allocate memory (wraps C `xmalloc`).
+pub unsafe fn nvim_cmdhist_xmalloc(size: usize) -> *mut c_void {
+    xmalloc(size)
+}
+
+/// Save a string slice (wraps C `xstrnsave`).
+pub unsafe fn nvim_cmdhist_xstrnsave(s: *const c_char, len: usize) -> *mut c_char {
+    xstrnsave(s, len)
+}
+
+/// Case-insensitive string compare (wraps `strncasecmp`, equivalent to C STRNICMP).
+pub unsafe fn nvim_cmdhist_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int {
+    strncasecmp(s1, s2, n)
+}
+
+/// Find character in string (wraps C `vim_strchr`).
+pub unsafe fn nvim_cmdhist_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char {
+    vim_strchr(s, c)
+}
+
+/// Get first character of current command line (wraps C `get_cmdline_firstc`).
+pub unsafe fn nvim_cmdhist_get_cmdline_firstc() -> c_int {
+    get_cmdline_firstc()
 }
 
 /// Zero-fill `count` history entries starting at `dst`.
@@ -166,7 +192,7 @@ pub fn nvim_cmdhist_sizeof_histentry() -> usize {
 }
 
 // =============================================================================
-// Phase 2: History Modification Accessors
+// Phase 2/3: History Modification Accessors -- global accessors
 // =============================================================================
 
 extern "C" {
@@ -174,7 +200,12 @@ extern "C" {
     pub fn nvim_cmdhist_get_maptick() -> c_int;
     pub fn nvim_cmdhist_os_time() -> u64;
     pub fn nvim_cmdhist_get_cmdmod_cmod_flags() -> c_int;
-    pub fn nvim_cmdhist_strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}
+
+/// Compare two C strings (wraps `strcmp`).
+pub unsafe fn nvim_cmdhist_strcmp(s1: *const c_char, s2: *const c_char) -> c_int {
+    strcmp(s1, s2)
 }
 
 /// Set history length - calls our own exported fn.
