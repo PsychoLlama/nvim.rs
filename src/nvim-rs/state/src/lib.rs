@@ -356,6 +356,240 @@ pub extern "C" fn nvim_state_get_was_safe() -> c_int {
 }
 
 // =============================================================================
+// Phase 2: get_mode and may_trigger_modechanged
+// =============================================================================
+
+// Additional mode constants (from state_defs.h)
+const MODE_NORMAL: c_int = 0x01;
+const MODE_CMDLINE: c_int = 0x08;
+const REPLACE_FLAG: c_int = 0x100;
+const VREPLACE_FLAG: c_int = 0x200;
+const MODE_HITRETURN: c_int = 0x2000 | MODE_NORMAL;
+const MODE_ASKMORE: c_int = 0x3000;
+const MODE_SETWSIZE: c_int = 0x4000;
+const MODE_EXTERNCMD: c_int = 0x5000;
+
+/// `NUL` terminator
+const NUL: u8 = 0;
+
+/// Size of the mode buffer (`MODE_MAX_LENGTH` from `globals.h`).
+const MODE_MAX_LENGTH: usize = 4;
+
+/// Size of `save_v_event_T`: bool (1) + padding (7) + `hashtab_T` (296) = 304 bytes.
+const SAVE_V_EVENT_SIZE: usize = 304;
+
+extern "C" {
+    /// `VIsual_select` global.
+    fn nvim_get_VIsual_select() -> bool;
+    /// `restart_VIsual_select` global.
+    fn nvim_get_restart_VIsual_select() -> c_int;
+    /// `finish_op` global.
+    fn nvim_get_finish_op() -> c_int;
+    /// `motion_force` global.
+    fn nvim_get_motion_force() -> c_int;
+    /// `restart_edit` global.
+    fn nvim_get_restart_edit() -> c_int;
+    /// `exmode_active` global.
+    fn nvim_get_exmode_active() -> c_int;
+    /// Returns true if `curbuf->terminal` is non-null.
+    fn nvim_get_curbuf_terminal() -> bool;
+    /// Returns true if `rs_ins_compl_active` returns non-zero.
+    fn rs_ins_compl_active() -> c_int;
+    /// Returns non-zero if ctrl-x mode not defined yet.
+    fn rs_ctrl_x_mode_not_defined_yet() -> c_int;
+    /// Returns cmdline overstrike flag.
+    fn nvim_cmdline_overstrike() -> c_int;
+    /// Returns `ccline.one_key`.
+    fn nvim_get_ccline_one_key() -> c_int;
+    /// Returns `got_int` (for `ModeChanged` check).
+    fn nvim_state_got_int() -> c_int;
+    /// Returns true if `EVENT_MODECHANGED` has any autocmds.
+    fn nvim_has_event_modechanged() -> c_int;
+    /// `get_v_event` opaque accessor.
+    fn get_v_event(save: *mut u8) -> *mut c_void;
+    /// `restore_v_event` opaque accessor.
+    fn restore_v_event(dict: *mut c_void, save: *mut u8);
+    /// Fill `v_event` dict with `new_mode`/`old_mode` and set readonly.
+    fn nvim_state_fill_v_event_modechanged(
+        v_event: *mut c_void,
+        new_mode: *const c_char,
+        old_mode: *const c_char,
+    );
+    /// Apply `ModeChanged` autocommand.
+    fn nvim_apply_autocmds_modechanged(pattern_buf: *const c_char);
+    /// Get `last_mode` global (pointer to static array).
+    fn nvim_get_last_mode() -> *const c_char;
+    /// Set `last_mode` global (copy `src` to static array).
+    fn nvim_set_last_mode(src: *const c_char);
+}
+
+use std::ffi::c_char;
+
+/// Returns the current mode as a string in `buf[MODE_MAX_LENGTH]`, NUL terminated.
+/// The first character represents the major mode, the following ones the minor ones.
+///
+/// Matches C `get_mode()` from state.c.
+///
+/// # Safety
+/// `buf` must point to a buffer of at least `MODE_MAX_LENGTH` bytes.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::branches_sharing_code
+)]
+#[unsafe(export_name = "get_mode")]
+pub unsafe extern "C" fn rs_get_mode(buf: *mut c_char) {
+    // SAFETY: buf is validated by caller (FUNC_ATTR_NONNULL_ALL in C)
+    let buf = std::slice::from_raw_parts_mut(buf.cast::<u8>(), MODE_MAX_LENGTH);
+    let mut i = 0usize;
+
+    let state = State;
+
+    if state == MODE_HITRETURN
+        || state == MODE_ASKMORE
+        || state == MODE_SETWSIZE
+        || ((state & MODE_CMDLINE) != 0 && nvim_get_ccline_one_key() != 0)
+    {
+        buf[i] = b'r';
+        i += 1;
+        if state == MODE_ASKMORE {
+            buf[i] = b'm';
+            i += 1;
+        } else if (state & MODE_CMDLINE) != 0 {
+            buf[i] = b'?';
+            i += 1;
+        }
+    } else if state == MODE_EXTERNCMD {
+        buf[i] = b'!';
+        i += 1;
+    } else if (state & MODE_INSERT) != 0 {
+        if (state & VREPLACE_FLAG) != 0 {
+            buf[i] = b'R';
+            i += 1;
+            buf[i] = b'v';
+            i += 1;
+        } else if (state & REPLACE_FLAG) != 0 {
+            buf[i] = b'R';
+            i += 1;
+        } else {
+            buf[i] = b'i';
+            i += 1;
+        }
+        if rs_ins_compl_active() != 0 {
+            buf[i] = b'c';
+            i += 1;
+        } else if rs_ctrl_x_mode_not_defined_yet() != 0 {
+            buf[i] = b'x';
+            i += 1;
+        }
+    } else if (state & MODE_CMDLINE) != 0 || nvim_get_exmode_active() != 0 {
+        buf[i] = b'c';
+        i += 1;
+        if nvim_get_exmode_active() != 0 {
+            buf[i] = b'v';
+            i += 1;
+        }
+        if (state & MODE_CMDLINE) != 0 && nvim_cmdline_overstrike() != 0 {
+            buf[i] = b'r';
+            i += 1;
+        }
+    } else if (state & MODE_TERMINAL) != 0 {
+        buf[i] = b't';
+        i += 1;
+    } else if VIsual_active {
+        let visual_mode = nvim_get_VIsual_mode();
+        if nvim_get_VIsual_select() {
+            buf[i] = (visual_mode as u8).wrapping_add(b's').wrapping_sub(b'v');
+            i += 1;
+        } else {
+            buf[i] = visual_mode as u8;
+            i += 1;
+            if nvim_get_restart_VIsual_select() != 0 {
+                buf[i] = b's';
+                i += 1;
+            }
+        }
+    } else {
+        buf[i] = b'n';
+        i += 1;
+        if nvim_get_finish_op() != 0 {
+            buf[i] = b'o';
+            i += 1;
+            buf[i] = nvim_get_motion_force() as u8;
+            i += 1;
+        } else if nvim_get_curbuf_terminal() {
+            buf[i] = b't';
+            i += 1;
+            if nvim_get_restart_edit() == c_int::from(b'I') {
+                buf[i] = b'T';
+                i += 1;
+            }
+        } else {
+            let re = nvim_get_restart_edit();
+            if re == c_int::from(b'I') || re == c_int::from(b'R') || re == c_int::from(b'V') {
+                buf[i] = b'i';
+                i += 1;
+                buf[i] = re as u8;
+                i += 1;
+            }
+        }
+    }
+
+    buf[i] = NUL;
+}
+
+/// Fires a `ModeChanged` autocmd if appropriate.
+///
+/// # Safety
+/// Calls C autocmd/state functions.
+#[unsafe(export_name = "may_trigger_modechanged")]
+pub unsafe extern "C" fn rs_may_trigger_modechanged() {
+    // Skip this when got_int is set, the autocommand will not be executed.
+    if nvim_has_event_modechanged() == 0 || nvim_state_got_int() != 0 {
+        return;
+    }
+
+    let mut curr_mode = [0u8; MODE_MAX_LENGTH];
+    rs_get_mode(curr_mode.as_mut_ptr().cast());
+
+    // Compare curr_mode with last_mode
+    let last = nvim_get_last_mode();
+    let last_slice = std::ffi::CStr::from_ptr(last).to_bytes();
+    let curr_len = curr_mode
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(MODE_MAX_LENGTH);
+    if &curr_mode[..curr_len] == last_slice {
+        return;
+    }
+
+    // Build pattern "old_mode:new_mode"
+    let mut pattern_buf = [0u8; 2 * MODE_MAX_LENGTH];
+    let mut p = 0usize;
+    for &b in last_slice {
+        pattern_buf[p] = b;
+        p += 1;
+    }
+    pattern_buf[p] = b':';
+    p += 1;
+    for &b in &curr_mode[..curr_len] {
+        pattern_buf[p] = b;
+        p += 1;
+    }
+    // pattern_buf[p] = 0; (already zero-initialized)
+
+    let mut save_buf = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::zeroed();
+    let v_event = get_v_event(save_buf.as_mut_ptr().cast::<u8>());
+
+    nvim_state_fill_v_event_modechanged(v_event, curr_mode.as_ptr().cast(), last);
+
+    nvim_apply_autocmds_modechanged(pattern_buf.as_ptr().cast());
+    nvim_set_last_mode(curr_mode.as_ptr().cast());
+
+    restore_v_event(v_event, save_buf.as_mut_ptr().cast::<u8>());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

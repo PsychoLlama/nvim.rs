@@ -629,3 +629,42 @@ void nvim_apply_autocmds_safestate(void)
 {
   apply_autocmds(EVENT_SAFESTATE, NULL, NULL, false, curbuf);
 }
+
+// =============================================================================
+// State crate accessors (Phase 2)
+// =============================================================================
+
+/// Return motion_force global.
+int nvim_get_motion_force(void) { return motion_force; }
+
+/// Return restart_VIsual_select global.
+int nvim_get_restart_VIsual_select(void) { return restart_VIsual_select; }
+
+/// Return whether cmdline overstrike mode is active.
+int nvim_cmdline_overstrike(void) { return cmdline_overstrike() ? 1 : 0; }
+
+/// Return whether EVENT_MODECHANGED has any autocommands.
+int nvim_has_event_modechanged(void) { return has_event(EVENT_MODECHANGED) ? 1 : 0; }
+
+/// Apply ModeChanged autocommand with pattern "old:new".
+void nvim_apply_autocmds_modechanged(const char *pattern_buf)
+{
+  apply_autocmds(EVENT_MODECHANGED, (char *)pattern_buf, NULL, false, curbuf);
+}
+
+/// Get last_mode global (returns pointer to static array of MODE_MAX_LENGTH bytes).
+const char *nvim_get_last_mode(void) { return last_mode; }
+
+/// Set last_mode from src string (copies up to MODE_MAX_LENGTH - 1 bytes).
+void nvim_set_last_mode(const char *src) { STRCPY(last_mode, src); }
+
+/// Return got_int (for ModeChanged check).
+int nvim_state_got_int(void) { return got_int ? 1 : 0; }
+
+/// Add new_mode/old_mode to v_event dict and set keys readonly.
+void nvim_state_fill_v_event_modechanged(void *v_event, const char *new_mode, const char *old_mode)
+{
+  tv_dict_add_str(v_event, S_LEN("new_mode"), new_mode);
+  tv_dict_add_str(v_event, S_LEN("old_mode"), old_mode);
+  tv_dict_set_keys_readonly(v_event);
+}
