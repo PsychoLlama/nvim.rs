@@ -1059,3 +1059,11 @@ void nvim_free_buffer_c_parts(buf_T *buf)
     xfree(buf);
   }
 }
+
+// nvim_buf_get_changedtick is defined in api/buffer.c (nvim API).
+
+/// Set win->w_p_cul (cursorline option).
+void nvim_win_set_w_p_cul(win_T *win, bool val) { win->w_p_cul = val; }
+
+/// Set win->w_p_cuc (cursorcolumn option).
+void nvim_win_set_w_p_cuc(win_T *win, bool val) { win->w_p_cuc = val; }

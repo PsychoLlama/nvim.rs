@@ -44,58 +44,9 @@
 #include "nvim/window.h"
 #include "nvim/cmdpreview.h"
 
-typedef struct {
-  u_header_T *save_b_u_oldhead;
-  u_header_T *save_b_u_newhead;
-  u_header_T *save_b_u_curhead;
-  int save_b_u_numhead;
-  bool save_b_u_synced;
-  int save_b_u_seq_last;
-  int save_b_u_save_nr_last;
-  int save_b_u_seq_cur;
-  time_t save_b_u_time_cur;
-  int save_b_u_save_nr_cur;
-  char *save_b_u_line_ptr;
-  linenr_T save_b_u_line_lnum;
-  colnr_T save_b_u_line_colnr;
-} CpUndoInfo;
-
-typedef struct {
-  buf_T *buf;
-  OptInt save_b_p_ul;
-  int save_b_p_ma;
-  int save_b_changed;
-  pos_T save_b_op_start;
-  pos_T save_b_op_end;
-  varnumber_T save_changedtick;
-  CpUndoInfo undo_info;
-} CpBufInfo;
-
-typedef struct {
-  win_T *win;
-  pos_T save_w_cursor;
-  viewstate_T save_viewstate;
-  int save_w_p_cul;
-  int save_w_p_cuc;
-} CpWinInfo;
-
-typedef struct {
-  kvec_t(CpWinInfo) win_info;
-  kvec_t(CpBufInfo) buf_info;
-  bool save_hls;
-  cmdmod_T save_cmdmod;
-  garray_T save_view;
-} CpInfo;
-
 #include "cmdpreview.c.generated.h"
 
 // Command preview helpers from Rust
-extern int rs_cmdpreview_should_skip_buffer(int64_t buf_handle, int64_t preview_bufnr);
-extern int rs_cmdpreview_needs_undo_restore(int64_t current_seq, int64_t saved_seq);
-extern void rs_save_viewstate_win(win_T *win, viewstate_T *vs);
-extern void rs_restore_viewstate_win(win_T *win, const viewstate_T *vs);
-extern void rs_win_size_save(garray_T *gap);
-extern void rs_win_size_restore(garray_T *gap);
 extern buf_T *rs_cmdpreview_open_buf(void);
 extern win_T *rs_cmdpreview_open_win(buf_T *cmdpreview_buf);
 extern void rs_cmdpreview_close_win(void);
@@ -158,6 +109,85 @@ int nvim_win_get_w_p_cuc(win_T *win) { return win->w_p_cuc ? 1 : 0; }
 /// Set b_p_tw for a buffer.
 void nvim_buf_set_b_p_tw(buf_T *buf, OptInt val) { buf->b_p_tw = val; }
 
+/// Save cmdmod to a heap-allocated buffer. Returns opaque pointer.
+void *nvim_cmdpreview_save_cmdmod(void)
+{
+  cmdmod_T *save = xmalloc(sizeof(cmdmod_T));
+  nvim_cmdmod_store_to_save(save);
+  return save;
+}
+
+/// Restore cmdmod from heap-allocated save and free it.
+void nvim_cmdpreview_restore_cmdmod(void *saved)
+{
+  cmdmod_T *save = (cmdmod_T *)saved;
+  nvim_cmdmod_restore_from_save(save);
+  xfree(save);
+}
+
+/// Set cmdmod fields for command preview mode.
+void nvim_cmdpreview_setup_cmdmod(void)
+{
+  p_hls = false;                 // Don't show search highlighting during live substitution
+  cmdmod.cmod_split = 0;         // Disable :leftabove/botright modifiers
+  cmdmod.cmod_tab = 0;           // Disable :tab modifier
+  cmdmod.cmod_flags |= CMOD_NOSWAPFILE;  // Disable swap for preview buffer
+}
+
+/// Get b_op_start lnum from buffer.
+linenr_T nvim_buf_get_b_op_start_lnum(buf_T *buf) { return buf->b_op_start.lnum; }
+/// Get b_op_start col from buffer.
+colnr_T nvim_buf_get_b_op_start_col(buf_T *buf) { return buf->b_op_start.col; }
+/// Get b_op_start coladd from buffer.
+colnr_T nvim_buf_get_b_op_start_coladd(buf_T *buf) { return buf->b_op_start.coladd; }
+/// Get b_op_end lnum from buffer.
+linenr_T nvim_buf_get_b_op_end_lnum(buf_T *buf) { return buf->b_op_end.lnum; }
+/// Get b_op_end col from buffer.
+colnr_T nvim_buf_get_b_op_end_col(buf_T *buf) { return buf->b_op_end.col; }
+/// Get b_op_end coladd from buffer.
+colnr_T nvim_buf_get_b_op_end_coladd(buf_T *buf) { return buf->b_op_end.coladd; }
+/// Set b_op_start from lnum/col/coladd.
+void nvim_buf_set_b_op_start(buf_T *buf, linenr_T lnum, colnr_T col, colnr_T coladd)
+{ buf->b_op_start.lnum = lnum; buf->b_op_start.col = col; buf->b_op_start.coladd = coladd; }
+/// Set b_op_end from lnum/col/coladd.
+void nvim_buf_set_b_op_end(buf_T *buf, linenr_T lnum, colnr_T col, colnr_T coladd)
+{ buf->b_op_end.lnum = lnum; buf->b_op_end.col = col; buf->b_op_end.coladd = coladd; }
+
+/// Count undo steps needed to restore to an earlier state.
+/// Iterates b_u_curhead (if non-null) or b_u_newhead chain.
+int nvim_buf_count_undo_steps(buf_T *buf)
+{
+  int count = 0;
+  for (u_header_T *uhp = buf->b_u_curhead ? buf->b_u_curhead : buf->b_u_newhead;
+       uhp != NULL;
+       uhp = uhp->uh_next.ptr, ++count) {}
+  return count;
+}
+
+/// Returns b_u_curhead == NULL ? 1 : 0.
+int nvim_buf_u_curhead_is_null(buf_T *buf) { return buf->b_u_curhead == NULL ? 1 : 0; }
+
+/// Allocate a heap garray_T initialised for int storage. Returns opaque pointer.
+void *nvim_ga_alloc_int(void)
+{
+  garray_T *gap = xcalloc(1, sizeof(garray_T));
+  ga_init(gap, (int)sizeof(int), 1);
+  return gap;
+}
+
+/// Clear and free a heap-allocated garray_T.
+void nvim_ga_clear_free(void *gap_void)
+{
+  garray_T *gap = (garray_T *)gap_void;
+  ga_clear(gap);
+  xfree(gap);
+}
+
+/// Prepare Rust-managed cmdpreview state. Returns opaque pointer.
+extern void *rs_cmdpreview_prepare(void);
+/// Restore Rust-managed cmdpreview state and free it.
+extern void rs_cmdpreview_restore_state(void *state);
+
 /// Sets up command preview buffer. Implemented in Rust.
 ///
 /// @return Pointer to command preview buffer if succeeded, NULL if failed.
@@ -183,186 +213,8 @@ static void cmdpreview_close_win(void)
   rs_cmdpreview_close_win();
 }
 
-/// Save the undo state of a buffer for command preview.
-static void cmdpreview_save_undo(CpUndoInfo *cp_undoinfo, buf_T *buf)
-  FUNC_ATTR_NONNULL_ALL
-{
-  cp_undoinfo->save_b_u_synced = buf->b_u_synced;
-  cp_undoinfo->save_b_u_oldhead = buf->b_u_oldhead;
-  cp_undoinfo->save_b_u_newhead = buf->b_u_newhead;
-  cp_undoinfo->save_b_u_curhead = buf->b_u_curhead;
-  cp_undoinfo->save_b_u_numhead = buf->b_u_numhead;
-  cp_undoinfo->save_b_u_seq_last = buf->b_u_seq_last;
-  cp_undoinfo->save_b_u_save_nr_last = buf->b_u_save_nr_last;
-  cp_undoinfo->save_b_u_seq_cur = buf->b_u_seq_cur;
-  cp_undoinfo->save_b_u_time_cur = buf->b_u_time_cur;
-  cp_undoinfo->save_b_u_save_nr_cur = buf->b_u_save_nr_cur;
-  cp_undoinfo->save_b_u_line_ptr = buf->b_u_line_ptr;
-  cp_undoinfo->save_b_u_line_lnum = buf->b_u_line_lnum;
-  cp_undoinfo->save_b_u_line_colnr = buf->b_u_line_colnr;
-}
-
-/// Restore the undo state of a buffer for command preview.
-static void cmdpreview_restore_undo(const CpUndoInfo *cp_undoinfo, buf_T *buf)
-{
-  buf->b_u_oldhead = cp_undoinfo->save_b_u_oldhead;
-  buf->b_u_newhead = cp_undoinfo->save_b_u_newhead;
-  buf->b_u_curhead = cp_undoinfo->save_b_u_curhead;
-  buf->b_u_numhead = cp_undoinfo->save_b_u_numhead;
-  buf->b_u_seq_last = cp_undoinfo->save_b_u_seq_last;
-  buf->b_u_save_nr_last = cp_undoinfo->save_b_u_save_nr_last;
-  buf->b_u_seq_cur = cp_undoinfo->save_b_u_seq_cur;
-  buf->b_u_time_cur = cp_undoinfo->save_b_u_time_cur;
-  buf->b_u_save_nr_cur = cp_undoinfo->save_b_u_save_nr_cur;
-  buf->b_u_line_ptr = cp_undoinfo->save_b_u_line_ptr;
-  buf->b_u_line_lnum = cp_undoinfo->save_b_u_line_lnum;
-  buf->b_u_line_colnr = cp_undoinfo->save_b_u_line_colnr;
-  if (buf->b_u_curhead == NULL) {
-    buf->b_u_synced = cp_undoinfo->save_b_u_synced;
-  }
-}
-
-/// Save current state and prepare windows and buffers for command preview.
-static void cmdpreview_prepare(CpInfo *cpinfo)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Set(ptr_t) saved_bufs = SET_INIT;
-
-  kv_init(cpinfo->buf_info);
-  kv_init(cpinfo->win_info);
-
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    buf_T *buf = win->w_buffer;
-
-    // Don't save state of command preview buffer or preview window.
-    // Use Rust helper to check if buffer should be skipped for preview.
-    if (rs_cmdpreview_should_skip_buffer(buf->handle, cmdpreview_bufnr)) {
-      continue;
-    }
-
-    if (!set_has(ptr_t, &saved_bufs, buf)) {
-      CpBufInfo cp_bufinfo;
-      cp_bufinfo.buf = buf;
-      cp_bufinfo.save_b_p_ma = buf->b_p_ma;
-      cp_bufinfo.save_b_p_ul = buf->b_p_ul;
-      cp_bufinfo.save_b_changed = buf->b_changed;
-      cp_bufinfo.save_b_op_start = buf->b_op_start;
-      cp_bufinfo.save_b_op_end = buf->b_op_end;
-      cp_bufinfo.save_changedtick = buf_get_changedtick(buf);
-      cmdpreview_save_undo(&cp_bufinfo.undo_info, buf);
-      kv_push(cpinfo->buf_info, cp_bufinfo);
-      set_put(ptr_t, &saved_bufs, buf);
-
-      u_clearall(buf);
-      buf->b_p_ul = INT_MAX;  // Make sure we can undo all changes
-    }
-
-    CpWinInfo cp_wininfo;
-    cp_wininfo.win = win;
-
-    // Save window cursor position and viewstate
-    cp_wininfo.save_w_cursor = win->w_cursor;
-    rs_save_viewstate_win(win, &cp_wininfo.save_viewstate);
-
-    // Save 'cursorline' and 'cursorcolumn'
-    cp_wininfo.save_w_p_cul = win->w_p_cul;
-    cp_wininfo.save_w_p_cuc = win->w_p_cuc;
-
-    kv_push(cpinfo->win_info, cp_wininfo);
-
-    win->w_p_cul = false;       // Disable 'cursorline' so it doesn't mess up the highlights
-    win->w_p_cuc = false;       // Disable 'cursorcolumn' so it doesn't mess up the highlights
-  }
-
-  set_destroy(ptr_t, &saved_bufs);
-
-  cpinfo->save_hls = p_hls;
-  cpinfo->save_cmdmod = cmdmod;
-  rs_win_size_save(&cpinfo->save_view);
-  save_search_patterns();
-
-  p_hls = false;                 // Don't show search highlighting during live substitution
-  cmdmod.cmod_split = 0;         // Disable :leftabove/botright modifiers
-  cmdmod.cmod_tab = 0;           // Disable :tab modifier
-  cmdmod.cmod_flags |= CMOD_NOSWAPFILE;  // Disable swap for preview buffer
-
-  u_sync(true);
-}
-
-/// Restore the state of buffers and windows for command preview.
-static void cmdpreview_restore_state(CpInfo *cpinfo)
-  FUNC_ATTR_NONNULL_ALL
-{
-  for (size_t i = 0; i < cpinfo->buf_info.size; i++) {
-    CpBufInfo cp_bufinfo = cpinfo->buf_info.items[i];
-    buf_T *buf = cp_bufinfo.buf;
-
-    buf->b_changed = cp_bufinfo.save_b_changed;
-
-    // Clear preview highlights.
-    extmark_clear(buf, (uint32_t)cmdpreview_ns, 0, 0, MAXLNUM, MAXCOL);
-
-    // Use Rust helper to check if undo restoration is needed.
-    if (rs_cmdpreview_needs_undo_restore(buf->b_u_seq_cur,
-                                         cp_bufinfo.undo_info.save_b_u_seq_cur)) {
-      int count = 0;
-
-      // Calculate how many undo steps are necessary to restore earlier state.
-      for (u_header_T *uhp = buf->b_u_curhead ? buf->b_u_curhead : buf->b_u_newhead;
-           uhp != NULL;
-           uhp = uhp->uh_next.ptr, ++count) {}
-
-      aco_save_T aco;
-      aucmd_prepbuf(&aco, buf);
-      // Ensure all the entries will be undone
-      if (curbuf->b_u_synced == false) {
-        u_sync(true);
-      }
-      // Undo invisibly. This also moves the cursor!
-      if (!u_undo_and_forget(count, false)) {
-        abort();
-      }
-      aucmd_restbuf(&aco);
-    }
-
-    u_blockfree(buf);
-    cmdpreview_restore_undo(&cp_bufinfo.undo_info, buf);
-
-    buf->b_op_start = cp_bufinfo.save_b_op_start;
-    buf->b_op_end = cp_bufinfo.save_b_op_end;
-
-    if (cp_bufinfo.save_changedtick != buf_get_changedtick(buf)) {
-      buf_set_changedtick(buf, cp_bufinfo.save_changedtick);
-    }
-
-    buf->b_p_ul = cp_bufinfo.save_b_p_ul;        // Restore 'undolevels'
-    buf->b_p_ma = cp_bufinfo.save_b_p_ma;        // Restore 'modifiable'
-  }
-
-  for (size_t i = 0; i < cpinfo->win_info.size; i++) {
-    CpWinInfo cp_wininfo = cpinfo->win_info.items[i];
-    win_T *win = cp_wininfo.win;
-
-    // Restore window cursor position and viewstate
-    win->w_cursor = cp_wininfo.save_w_cursor;
-    rs_restore_viewstate_win(win, &cp_wininfo.save_viewstate);
-
-    // Restore 'cursorline' and 'cursorcolumn'
-    win->w_p_cul = cp_wininfo.save_w_p_cul;
-    win->w_p_cuc = cp_wininfo.save_w_p_cuc;
-
-    update_topline(win);
-  }
-
-  cmdmod = cpinfo->save_cmdmod;                // Restore cmdmod
-  p_hls = cpinfo->save_hls;                    // Restore 'hlsearch'
-  restore_search_patterns();           // Restore search patterns
-  rs_win_size_restore(&cpinfo->save_view);        // Restore window sizes
-
-  ga_clear(&cpinfo->save_view);
-  kv_destroy(cpinfo->win_info);
-  kv_destroy(cpinfo->buf_info);
-}
+// cmdpreview_prepare and cmdpreview_restore_state are implemented in Rust
+// (src/nvim-rs/cmdline/src/preview.rs).
 
 /// Show 'inccommand' preview if command is previewable. It works like this:
 ///    1. Store current undo information so we can revert to current state later.
@@ -415,7 +267,6 @@ bool cmdpreview_may_show(void)
     ea.line2 = lnum;
   }
 
-  CpInfo cpinfo;
   bool icm_split = *p_icm == 's';  // inccommand=split
   buf_T *cmdpreview_buf = NULL;
   win_T *cmdpreview_win = NULL;
@@ -425,8 +276,8 @@ bool cmdpreview_may_show(void)
   msg_silent++;                  // Block messages, namely ones that prompt
   block_autocmds();              // Block events
 
-  // Save current state and prepare for command preview.
-  cmdpreview_prepare(&cpinfo);
+  // Save current state and prepare for command preview. Implemented in Rust.
+  void *cpstate = rs_cmdpreview_prepare();
 
   // Open preview buffer if inccommand=split.
   if (icm_split && (cmdpreview_buf = cmdpreview_open_buf()) == NULL) {
@@ -474,8 +325,8 @@ bool cmdpreview_may_show(void)
     cmdpreview_close_win();
   }
 
-  // Restore state.
-  cmdpreview_restore_state(&cpinfo);
+  // Restore state. Implemented in Rust.
+  rs_cmdpreview_restore_state(cpstate);
 
   unblock_autocmds();                  // Unblock events
   msg_silent--;                        // Unblock messages

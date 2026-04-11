@@ -560,3 +560,9 @@ Callback *nvim_get_opfunc_cb(void) { return &opfunc_cb; }
 
 /// Return true if p_opfunc is non-empty.
 bool nvim_get_p_opfunc_nonempty(void) { return *p_opfunc != NUL; }
+
+/// Get buf->b_p_ul (undolevels for buffer).
+OptInt nvim_buf_get_b_p_ul(buf_T *buf) { return buf->b_p_ul; }
+
+/// Set p_hls (hlsearch option).
+void nvim_set_p_hls(bool val) { p_hls = val; }

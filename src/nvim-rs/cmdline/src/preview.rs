@@ -606,6 +606,440 @@ pub extern "C" fn rs_preview_type_is_previewable(preview_type: c_int) -> c_int {
 }
 
 // =============================================================================
+// Phase 3: Prepare and Restore Orchestration
+// =============================================================================
+
+extern "C" {
+    // Window iteration (FOR_ALL_WINDOWS_IN_TAB equivalent)
+    fn nvim_get_curtab() -> *mut c_void;
+    fn nvim_tabpage_first_win(tp: *mut c_void) -> WinHandle;
+    fn nvim_win_next(wp: WinHandle) -> WinHandle;
+
+    // Buffer from window
+    fn nvim_win_get_w_buffer_raw(wp: WinHandle) -> BufHandle;
+
+    // b_changed
+    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
+    fn nvim_buf_set_b_changed(buf: BufHandle, val: bool);
+
+    // b_p_ma (getter only; setter already declared above)
+    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
+
+    // b_p_ul (getter only; setter already declared above)
+    fn nvim_buf_get_b_p_ul(buf: BufHandle) -> i64;
+
+    // b_op_start / b_op_end
+    fn nvim_buf_get_b_op_start_lnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_op_start_col(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_op_start_coladd(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_op_end_lnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_op_end_col(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_op_end_coladd(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_op_start(buf: BufHandle, lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_buf_set_b_op_end(buf: BufHandle, lnum: c_int, col: c_int, coladd: c_int);
+
+    // changedtick (use _direct variant to avoid conflict with nvim API function)
+    fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
+    fn buf_set_changedtick(buf: BufHandle, changedtick: i64);
+
+    // Undo field accessors (from undo.c)
+    fn nvim_buf_get_b_u_oldhead(buf: BufHandle) -> *mut c_void;
+    fn nvim_buf_set_b_u_oldhead(buf: BufHandle, val: *mut c_void);
+    fn nvim_buf_get_b_u_newhead(buf: BufHandle) -> *mut c_void;
+    fn nvim_buf_set_b_u_newhead(buf: BufHandle, val: *mut c_void);
+    fn nvim_buf_get_b_u_curhead(buf: BufHandle) -> *mut c_void;
+    fn nvim_buf_set_b_u_curhead(buf: BufHandle, val: *mut c_void);
+    fn nvim_buf_get_b_u_numhead(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_numhead(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_synced(buf: BufHandle) -> bool;
+    fn nvim_buf_set_b_u_synced(buf: BufHandle, val: bool);
+    fn nvim_buf_get_b_u_seq_last(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_seq_last(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_save_nr_last(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_save_nr_last(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_seq_cur(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_seq_cur(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_time_cur(buf: BufHandle) -> i64;
+    fn nvim_buf_set_b_u_time_cur(buf: BufHandle, val: i64);
+    fn nvim_buf_get_b_u_save_nr_cur(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_save_nr_cur(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_line_ptr(buf: BufHandle) -> *mut std::ffi::c_char;
+    fn nvim_buf_set_b_u_line_ptr(buf: BufHandle, val: *mut std::ffi::c_char);
+    fn nvim_buf_get_b_u_line_lnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_line_lnum(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_line_colnr(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_line_colnr(buf: BufHandle, val: c_int);
+
+    // undo operations
+    fn u_clearall(buf: BufHandle);
+    fn u_blockfree(buf: BufHandle);
+    fn u_sync(force: bool);
+    fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool;
+
+    // Undo step counting (from cmdpreview.c helpers)
+    fn nvim_buf_count_undo_steps(buf: BufHandle) -> c_int;
+
+    // extmarks
+    fn extmark_clear(
+        buf: BufHandle,
+        ns_id: u32,
+        l_row: c_int,
+        l_col: c_int,
+        u_row: c_int,
+        u_col: c_int,
+    ) -> bool;
+
+    // window cursor
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, val: c_int);
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
+    fn nvim_win_set_cursor_col(wp: WinHandle, val: c_int);
+    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> c_int;
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
+
+    // window cursor/line options
+    fn nvim_win_get_w_p_cul(wp: WinHandle) -> c_int;
+    fn nvim_win_set_w_p_cul(wp: WinHandle, val: bool);
+    fn nvim_win_get_w_p_cuc(wp: WinHandle) -> c_int;
+    fn nvim_win_set_w_p_cuc(wp: WinHandle, val: bool);
+
+    // update_topline
+    fn update_topline(wp: WinHandle);
+
+    // search patterns
+    fn save_search_patterns();
+    fn restore_search_patterns();
+
+    // p_hls (declared in C as int, but our getter returns bool-like int)
+    fn nvim_get_p_hls() -> c_int;
+    fn nvim_set_p_hls(val: bool);
+
+    // cmdmod save/restore via C helpers
+    fn nvim_cmdpreview_save_cmdmod() -> *mut c_void;
+    fn nvim_cmdpreview_restore_cmdmod(saved: *mut c_void);
+
+    // win_size save/restore
+    fn rs_win_size_save(gap: *mut c_void);
+    fn rs_win_size_restore(gap: *mut c_void);
+
+    // garray heap management
+    fn nvim_ga_alloc_int() -> *mut c_void;
+    fn nvim_ga_clear_free(gap: *mut c_void);
+
+    // cmdpreview cmdmod setup
+    fn nvim_cmdpreview_setup_cmdmod();
+}
+
+/// Saved undo state for a buffer during command preview.
+struct CpUndoSaved {
+    oldhead: *mut c_void,
+    newhead: *mut c_void,
+    curhead: *mut c_void,
+    numhead: c_int,
+    synced: bool,
+    seq_last: c_int,
+    save_nr_last: c_int,
+    seq_cur: c_int,
+    time_cur: i64,
+    save_nr_cur: c_int,
+    line_ptr: *mut std::ffi::c_char,
+    line_lnum: c_int,
+    line_colnr: c_int,
+}
+
+/// Saved state for one buffer during command preview.
+struct CpBufSaved {
+    buf: BufHandle,
+    save_b_p_ul: i64,
+    save_b_p_ma: c_int,
+    save_b_changed: bool,
+    save_b_op_start: (c_int, c_int, c_int), // (lnum, col, coladd)
+    save_b_op_end: (c_int, c_int, c_int),
+    save_changedtick: i64,
+    undo: CpUndoSaved,
+}
+
+/// Saved state for one window during command preview.
+struct CpWinSaved {
+    win: WinHandle,
+    save_cursor_lnum: c_int,
+    save_cursor_col: c_int,
+    save_cursor_coladd: c_int,
+    save_viewstate: crate::viewstate::ViewState,
+    save_w_p_cul: c_int,
+    save_w_p_cuc: c_int,
+}
+
+/// All saved state for command preview (owned by Rust).
+struct CpState {
+    buf_info: Vec<CpBufSaved>,
+    win_info: Vec<CpWinSaved>,
+    save_hls: c_int,
+    save_cmdmod: *mut c_void,
+    save_view: *mut c_void,
+}
+
+// Safety: CpState contains raw pointers but is only used on the main Neovim
+// thread. The pointers are all valid C objects during the prepare/restore cycle.
+#[allow(clippy::non_send_fields_in_send_ty)]
+unsafe impl Send for CpState {}
+#[allow(clippy::non_send_fields_in_send_ty)]
+unsafe impl Sync for CpState {}
+
+/// Save undo fields from a buffer handle into `CpUndoSaved`.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer pointer.
+unsafe fn save_undo(buf: BufHandle) -> CpUndoSaved {
+    CpUndoSaved {
+        oldhead: nvim_buf_get_b_u_oldhead(buf),
+        newhead: nvim_buf_get_b_u_newhead(buf),
+        curhead: nvim_buf_get_b_u_curhead(buf),
+        numhead: nvim_buf_get_b_u_numhead(buf),
+        synced: nvim_buf_get_b_u_synced(buf),
+        seq_last: nvim_buf_get_b_u_seq_last(buf),
+        save_nr_last: nvim_buf_get_b_u_save_nr_last(buf),
+        seq_cur: nvim_buf_get_b_u_seq_cur(buf),
+        time_cur: nvim_buf_get_b_u_time_cur(buf),
+        save_nr_cur: nvim_buf_get_b_u_save_nr_cur(buf),
+        line_ptr: nvim_buf_get_b_u_line_ptr(buf),
+        line_lnum: nvim_buf_get_b_u_line_lnum(buf),
+        line_colnr: nvim_buf_get_b_u_line_colnr(buf),
+    }
+}
+
+/// Restore undo fields from `CpUndoSaved` into a buffer handle.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer pointer. All pointer fields in `saved`
+/// must remain valid (they were saved from the same buffer before preview).
+unsafe fn restore_undo(buf: BufHandle, saved: &CpUndoSaved) {
+    nvim_buf_set_b_u_oldhead(buf, saved.oldhead);
+    nvim_buf_set_b_u_newhead(buf, saved.newhead);
+    nvim_buf_set_b_u_curhead(buf, saved.curhead);
+    nvim_buf_set_b_u_numhead(buf, saved.numhead);
+    nvim_buf_set_b_u_seq_last(buf, saved.seq_last);
+    nvim_buf_set_b_u_save_nr_last(buf, saved.save_nr_last);
+    nvim_buf_set_b_u_seq_cur(buf, saved.seq_cur);
+    nvim_buf_set_b_u_time_cur(buf, saved.time_cur);
+    nvim_buf_set_b_u_save_nr_cur(buf, saved.save_nr_cur);
+    nvim_buf_set_b_u_line_ptr(buf, saved.line_ptr);
+    nvim_buf_set_b_u_line_lnum(buf, saved.line_lnum);
+    nvim_buf_set_b_u_line_colnr(buf, saved.line_colnr);
+    if saved.curhead.is_null() {
+        nvim_buf_set_b_u_synced(buf, saved.synced);
+    }
+}
+
+/// Save state and prepare all buffers/windows for command preview.
+///
+/// Equivalent to C `cmdpreview_prepare`. Returns an opaque Box as raw pointer.
+///
+/// # Safety
+///
+/// Must be called on the main Neovim thread with valid global state.
+unsafe fn cmdpreview_prepare_impl() -> *mut c_void {
+    let mut buf_info: Vec<CpBufSaved> = Vec::new();
+    let mut win_info: Vec<CpWinSaved> = Vec::new();
+    // Track which buffers have already been saved (replace Set(ptr_t)).
+    let mut saved_bufs: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+    let curtab = nvim_get_curtab();
+    let mut wp = nvim_tabpage_first_win(curtab);
+
+    while !wp.is_null() {
+        let buf = nvim_win_get_w_buffer_raw(wp);
+        let buf_handle = nvim_buf_get_handle(buf);
+        let preview_bufnr = nvim_get_cmdpreview_bufnr();
+
+        // Don't save state of command preview buffer or preview window.
+        if buf_handle == preview_bufnr {
+            wp = nvim_win_next(wp);
+            continue;
+        }
+
+        let buf_key = buf as usize;
+        if saved_bufs.insert(buf_key) {
+            let undo = save_undo(buf);
+            let saved = CpBufSaved {
+                buf,
+                save_b_p_ul: nvim_buf_get_b_p_ul(buf),
+                save_b_p_ma: nvim_buf_get_b_p_ma(buf),
+                save_b_changed: nvim_buf_get_b_changed(buf),
+                save_b_op_start: (
+                    nvim_buf_get_b_op_start_lnum(buf),
+                    nvim_buf_get_b_op_start_col(buf),
+                    nvim_buf_get_b_op_start_coladd(buf),
+                ),
+                save_b_op_end: (
+                    nvim_buf_get_b_op_end_lnum(buf),
+                    nvim_buf_get_b_op_end_col(buf),
+                    nvim_buf_get_b_op_end_coladd(buf),
+                ),
+                save_changedtick: nvim_buf_get_changedtick_direct(buf),
+                undo,
+            };
+            buf_info.push(saved);
+
+            u_clearall(buf);
+            // Make sure we can undo all changes (b_p_ul = INT_MAX)
+            nvim_buf_set_b_p_ul(buf, i32::MAX as i64);
+        }
+
+        let win_saved = CpWinSaved {
+            win: wp,
+            save_cursor_lnum: nvim_win_get_cursor_lnum(wp),
+            save_cursor_col: nvim_win_get_cursor_col(wp),
+            save_cursor_coladd: nvim_win_get_cursor_coladd(wp),
+            save_viewstate: crate::viewstate::ViewState::from_window(wp),
+            save_w_p_cul: nvim_win_get_w_p_cul(wp),
+            save_w_p_cuc: nvim_win_get_w_p_cuc(wp),
+        };
+        win_info.push(win_saved);
+
+        // Disable 'cursorline'/'cursorcolumn' so they don't mess up highlights
+        nvim_win_set_w_p_cul(wp, false);
+        nvim_win_set_w_p_cuc(wp, false);
+
+        wp = nvim_win_next(wp);
+    }
+
+    let save_hls = nvim_get_p_hls();
+    let save_cmdmod = nvim_cmdpreview_save_cmdmod();
+    let save_view = nvim_ga_alloc_int();
+    rs_win_size_save(save_view);
+    save_search_patterns();
+
+    // Disable search highlighting, tab/split modifiers, enable noswapfile
+    nvim_set_p_hls(false);
+    nvim_cmdpreview_setup_cmdmod();
+
+    u_sync(true);
+
+    let state = Box::new(CpState {
+        buf_info,
+        win_info,
+        save_hls,
+        save_cmdmod,
+        save_view,
+    });
+    Box::into_raw(state).cast::<c_void>()
+}
+
+/// Restore all buffer/window state after command preview.
+///
+/// Equivalent to C `cmdpreview_restore_state`. Frees the state box.
+///
+/// # Safety
+///
+/// `state` must be a pointer returned by `rs_cmdpreview_prepare`.
+/// Must be called on the main Neovim thread.
+unsafe fn cmdpreview_restore_state_impl(state: *mut c_void) {
+    let state = Box::from_raw(state.cast::<CpState>());
+
+    let preview_ns = nvim_get_cmdpreview_ns();
+
+    for cp in &state.buf_info {
+        let buf = cp.buf;
+
+        nvim_buf_set_b_changed(buf, cp.save_b_changed);
+
+        // Clear preview highlights.
+        extmark_clear(buf, preview_ns as u32, 0, 0, c_int::MAX, c_int::MAX);
+
+        // Check if undo restoration is needed.
+        let cur_seq = nvim_buf_get_b_u_seq_cur(buf);
+        if cur_seq != cp.undo.seq_cur {
+            let count = nvim_buf_count_undo_steps(buf);
+            let aco = nvim_buf_aucmd_prepbuf_alloc(buf);
+            // Ensure all entries will be undone.
+            if !nvim_buf_get_b_u_synced(buf) {
+                u_sync(true);
+            }
+            // Undo invisibly. This also moves the cursor!
+            if !u_undo_and_forget(count, false) {
+                // This should not happen — abort as C did.
+                std::process::abort();
+            }
+            nvim_buf_aucmd_restbuf_free(aco);
+        }
+
+        u_blockfree(buf);
+        restore_undo(buf, &cp.undo);
+
+        nvim_buf_set_b_op_start(
+            buf,
+            cp.save_b_op_start.0,
+            cp.save_b_op_start.1,
+            cp.save_b_op_start.2,
+        );
+        nvim_buf_set_b_op_end(
+            buf,
+            cp.save_b_op_end.0,
+            cp.save_b_op_end.1,
+            cp.save_b_op_end.2,
+        );
+
+        let cur_tick = nvim_buf_get_changedtick_direct(buf);
+        if cp.save_changedtick != cur_tick {
+            buf_set_changedtick(buf, cp.save_changedtick);
+        }
+
+        nvim_buf_set_b_p_ul(buf, cp.save_b_p_ul); // Restore 'undolevels'
+        nvim_buf_set_b_p_ma(buf, cp.save_b_p_ma); // Restore 'modifiable'
+    }
+
+    for cw in &state.win_info {
+        let win = cw.win;
+
+        // Restore window cursor position.
+        nvim_win_set_cursor_lnum(win, cw.save_cursor_lnum);
+        nvim_win_set_cursor_col(win, cw.save_cursor_col);
+        nvim_win_set_cursor_coladd(win, cw.save_cursor_coladd);
+
+        // Restore viewstate.
+        cw.save_viewstate.restore_to_window(win);
+
+        // Restore 'cursorline' and 'cursorcolumn'.
+        nvim_win_set_w_p_cul(win, cw.save_w_p_cul != 0);
+        nvim_win_set_w_p_cuc(win, cw.save_w_p_cuc != 0);
+
+        update_topline(win);
+    }
+
+    nvim_cmdpreview_restore_cmdmod(state.save_cmdmod); // Restore cmdmod + free
+    nvim_set_p_hls(state.save_hls != 0); // Restore 'hlsearch'
+    restore_search_patterns(); // Restore search patterns
+    rs_win_size_restore(state.save_view); // Restore window sizes
+    nvim_ga_clear_free(state.save_view); // Free the garray
+                                         // state is dropped here (Box freed)
+}
+
+/// Prepare Rust-managed cmdpreview state (FFI, called from C).
+///
+/// Returns an opaque `*mut c_void` that must be passed to `rs_cmdpreview_restore_state`.
+///
+/// # Safety
+///
+/// Must be called on the main Neovim thread with valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdpreview_prepare() -> *mut c_void {
+    cmdpreview_prepare_impl()
+}
+
+/// Restore cmdpreview state and free it (FFI, called from C).
+///
+/// # Safety
+///
+/// `state` must be a pointer returned by `rs_cmdpreview_prepare`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdpreview_restore_state(state: *mut c_void) {
+    cmdpreview_restore_state_impl(state);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

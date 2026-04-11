@@ -56,3 +56,8 @@ void nvim_curwin_set_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 
 /// Set window cursor coladd (for Rust).
 void nvim_win_set_cursor_coladd(win_T *wp, colnr_T coladd) { wp->w_cursor.coladd = coladd; }
+
+// nvim_win_get_cursor_lnum, nvim_win_set_cursor_lnum,
+// nvim_win_get_cursor_col, nvim_win_set_cursor_col,
+// nvim_win_get_cursor_coladd
+// are exported from Rust (src/nvim-rs/window/src/win_struct.rs).
