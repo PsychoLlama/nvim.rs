@@ -39,12 +39,20 @@ extern "C" {
     /// `nlua_call_user_expand_func` wrapper — returns list or NULL.
     fn nvim_cmdexpand_nlua_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle;
 
-    /// Convert a `list_T *` to `char **` array (takes ownership of list, unrefs it).
-    fn nvim_cmdexpand_list_to_string_matches(
-        list: ListHandle,
-        matches: *mut *mut *mut c_char,
-        num_matches: *mut c_int,
-    );
+    /// `tv_list_len(l)` — number of items in list (in `eval_shim.c`).
+    fn nvim_tv_list_len(l: ListHandle) -> c_int;
+
+    /// `tv_list_find(l, idx)` — find list item by index (NULL if out of range).
+    fn nvim_tv_list_find(l: ListHandle, idx: c_int) -> *mut c_void;
+
+    /// Get `v_type` of `listitem_T->li_tv`.
+    fn nvim_tv_list_item_type(li: *mut c_void) -> c_int;
+
+    /// Get string value of `listitem_T->li_tv` via `tv_get_string_chk` (in `quickfix_shim.c`).
+    fn nvim_tv_list_item_string(li: *mut c_void) -> *mut c_char;
+
+    /// `tv_list_unref(l)` — decrement refcount and free if zero.
+    fn nvim_tv_list_unref(l: ListHandle);
 
     fn vim_regexec(rmp: *mut RegMatch, line: *const c_char, col: c_int) -> bool;
     fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
@@ -67,6 +75,50 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 const NUL: u8 = 0;
+
+// =============================================================================
+// list_to_string_matches
+// =============================================================================
+
+/// Convert a `list_T *` to a `char **` array, taking ownership of the list.
+///
+/// Iterates the list, copying each string item with `xstrdup`, then unrefs the list.
+///
+/// # Safety
+///
+/// `list` must be a valid `list_T *`. `matches` and `num_matches` must be non-null.
+pub unsafe fn rs_list_to_string_matches(
+    list: ListHandle,
+    matches: *mut *mut *mut c_char,
+    num_matches: *mut c_int,
+) {
+    let len = nvim_tv_list_len(list);
+    let mut result: Vec<*mut c_char> = Vec::with_capacity(len as usize);
+
+    for i in 0..len {
+        let li = nvim_tv_list_find(list, i);
+        if li.is_null() {
+            continue;
+        }
+        // nvim_tv_list_item_type checks VAR_STRING; skip non-string items
+        if nvim_tv_list_item_type(li) != crate::VAR_STRING {
+            continue;
+        }
+        // nvim_tv_list_item_string returns NULL for non-string items (tv_get_string_chk)
+        let s = nvim_tv_list_item_string(li);
+        if s.is_null() {
+            continue;
+        }
+        result.push(xmemdupz(s, libc::strlen(s)));
+    }
+
+    nvim_tv_list_unref(list);
+
+    let count = result.len();
+    let boxed = result.into_boxed_slice();
+    *matches = Box::into_raw(boxed).cast::<*mut c_char>();
+    *num_matches = count as c_int;
+}
 
 // =============================================================================
 // ExpandUserDefined
@@ -212,8 +264,7 @@ pub unsafe extern "C" fn rs_expand_user_list(
         return FAIL;
     }
 
-    // C function handles TV_LIST_ITER_CONST + xstrdup + tv_list_unref
-    nvim_cmdexpand_list_to_string_matches(retlist, matches, num_matches);
+    rs_list_to_string_matches(retlist, matches, num_matches);
     OK
 }
 
@@ -241,7 +292,7 @@ pub unsafe extern "C" fn rs_expand_user_lua(
         return FAIL;
     }
 
-    nvim_cmdexpand_list_to_string_matches(retlist, matches, num_matches);
+    rs_list_to_string_matches(retlist, matches, num_matches);
     OK
 }
 

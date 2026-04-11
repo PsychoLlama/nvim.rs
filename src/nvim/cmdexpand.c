@@ -203,14 +203,6 @@ void nvim_cmdexpand_expand_escape(expand_T *xp, const char *str, int options)
   rs_expand_escape(xp, (char *)str, xp->xp_numfiles, xp->xp_files, options);
 }
 
-int nvim_cmdexpand_match_suffix(expand_T *xp, int i)
-{
-  if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
-    return 0;
-  }
-  return match_suffix(xp->xp_files[i]);
-}
-
 void nvim_cmdexpand_semsg_nomatch(const char *str) { semsg(_(e_nomatch2), str); }
 void nvim_cmdexpand_emsg_toomany(void) { emsg(_(e_toomany)); }
 // Static assert for kOptBoFlagWildmode used in rs_find_longest_match
@@ -484,14 +476,6 @@ int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
 int nvim_cmdexpand_get_dip_start_opt(void) { return DIP_START + DIP_OPT; }
 int nvim_cmdexpand_get_re_magic(void) { return RE_MAGIC; }
 int nvim_cmdexpand_magic_isset(void) { return rs_magic_isset(); }
-char *nvim_cmdexpand_make_snr_pattern(const char *suffix)
-{
-  const size_t len = strlen(suffix) + 20;
-  char *tofree = xmalloc(len);
-  snprintf(tofree, len, "^<SNR>\\d\\+_%s", suffix);
-  return tofree;
-}
-
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_command_name(void) { return get_command_name; }
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_history_arg(void) { return get_history_arg; }
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_commands(void) { return get_user_commands; }
@@ -525,13 +509,8 @@ char *nvim_cmdexpand_xstrnsave(const char *s, size_t n) { return xstrnsave(s, n)
 void nvim_cmdexpand_set_cmd_showtail(int val) { cmd_showtail = (bool)val; }
 void nvim_cmdexpand_set_may_expand_pattern(int val) { may_expand_pattern = (bool)val; }
 void nvim_cmdexpand_copy_pre_incsearch_pos(expand_T *xp) { pre_incsearch_pos = xp->xp_pre_incsearch_pos; }
-void nvim_cmdexpand_save_cmdline_orig(void)
-{
-  CmdlineInfo *ccline = get_cmdline_info();
-  xfree(cmdline_orig);
-  cmdline_orig = xstrnsave(ccline->cmdbuff, (size_t)ccline->cmdlen);
-}
-
+/// Free old cmdline_orig and set new value (Rust FFI).
+void nvim_cmdexpand_set_cmdline_orig(char *val) { xfree(cmdline_orig); cmdline_orig = val; }
 // nvim_cmdexpand_apply_expansion: implemented in Rust (helpers.rs)
 extern void rs_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen);
 void nvim_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen)
@@ -735,21 +714,12 @@ list_T *nvim_cmdexpand_nlua_call_user_expand_retlist(expand_T *xp)
   return li;
 }
 
-void nvim_cmdexpand_list_to_string_matches(list_T *list, char ***matches, int *numMatches)
-{
-  garray_T ga;
-  ga_init(&ga, (int)sizeof(char *), 3);
-  TV_LIST_ITER_CONST(list, li, {
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_STRING
-        || TV_LIST_ITEM_TV(li)->vval.v_string == NULL) {
-      continue;
-    }
-    GA_APPEND(char *, &ga, xstrdup(TV_LIST_ITEM_TV(li)->vval.v_string));
-  });
-  tv_list_unref(list);
-  *matches = ga.ga_data;
-  *numMatches = ga.ga_len;
-}
+// C accessors for list iteration (used by Rust rs_list_to_string_matches)
+// nvim_tv_list_len: already in eval_shim.c
+// nvim_tv_list_item_string: already in quickfix_shim.c
+void *nvim_tv_list_find(list_T *l, int n) { return tv_list_find(l, n); }
+int nvim_tv_list_item_type(void *li) { return ((listitem_T *)li)->li_tv.v_type; }
+void nvim_tv_list_unref(list_T *l) { tv_list_unref(l); }
 
 /// Completion for |:checkhealth| command.
 ///

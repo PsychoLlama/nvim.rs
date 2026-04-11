@@ -60,7 +60,7 @@ extern "C" {
         options: c_int,
     ) -> c_int;
     fn nvim_cmdexpand_expand_escape(xp: ExpandHandle, str_: *const c_char, options: c_int);
-    fn nvim_cmdexpand_match_suffix(xp: ExpandHandle, i: c_int) -> c_int;
+    fn match_suffix(fname: *const c_char) -> c_int;
 
     // Message functions
     fn nvim_cmdexpand_semsg_nomatch(str_: *const c_char);
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_expand_one_start(
                 // More than one match; check suffix.
                 nsm = 0;
                 for i in 0..2 {
-                    if nvim_cmdexpand_match_suffix(xp, i) != 0 {
+                    if match_suffix(*(*xp).xp_files.add(i as usize)) != 0 {
                         nsm += 1;
                     }
                 }

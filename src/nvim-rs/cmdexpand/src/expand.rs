@@ -157,7 +157,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_cmdexpand_get_dip_start_opt() -> c_int;
     fn nvim_cmdexpand_magic_isset() -> c_int;
-    fn nvim_cmdexpand_make_snr_pattern(suffix: *const c_char) -> *mut c_char;
 
     // Function pointer accessors for ExpandOther dispatch table
     fn nvim_cmdexpand_get_fn_get_command_name() -> CompleteListItemGetter;
@@ -789,7 +788,12 @@ pub unsafe extern "C" fn rs_expand_from_context(
     let effective_pat = if ctx == ExpandContext::UserFunc.to_raw() {
         let slice = std::ffi::CStr::from_ptr(pat).to_bytes();
         if slice.starts_with(b"^s:") {
-            tofree = nvim_cmdexpand_make_snr_pattern(pat.add(3));
+            // Build "^<SNR>\d\+_<suffix>" pattern. pat+3 skips the "^s:" prefix.
+            let suffix = std::ffi::CStr::from_ptr(pat.add(3));
+            let suffix_str = suffix.to_string_lossy();
+            let pattern = format!("^<SNR>\\d\\+_{suffix_str}\0");
+            let boxed = pattern.into_bytes().into_boxed_slice();
+            tofree = Box::into_raw(boxed).cast::<c_char>();
             tofree
         } else {
             pat

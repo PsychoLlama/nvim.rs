@@ -134,8 +134,8 @@ extern "C" {
     /// Copy `pre_incsearch_pos` from `xp->xp_pre_incsearch_pos`.
     fn nvim_cmdexpand_copy_pre_incsearch_pos(xp: *mut crate::ExpandT);
 
-    /// Save `cmdline_orig` from current ccline.
-    fn nvim_cmdexpand_save_cmdline_orig();
+    /// Free old `cmdline_orig` and set a new value (NULL to just free).
+    fn nvim_cmdexpand_set_cmdline_orig(val: *mut libc::c_char);
 
     /// Apply expansion result into ccline->cmdbuff.
     fn nvim_cmdexpand_apply_expansion(
@@ -1007,7 +1007,9 @@ pub unsafe extern "C" fn rs_nextwild(
 
     // Save cmdline before inserting selected item
     if !wild_navigate && !cmdbuff.is_null() {
-        nvim_cmdexpand_save_cmdline_orig();
+        let cmdlen = nvim_cmdexpand_get_cmdlen();
+        let new_orig = nvim_cmdexpand_xstrnsave(cmdbuff, cmdlen as usize);
+        nvim_cmdexpand_set_cmdline_orig(new_orig);
     }
 
     let got_int_val = got_int;
