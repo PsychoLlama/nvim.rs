@@ -358,21 +358,7 @@ const char *nvim_get_sourcing_name(void) { return (exestack.ga_data == NULL || e
 int nvim_get_sourcing_lnum(void) { return (exestack.ga_data == NULL || exestack.ga_len == 0) ? 0 : (int)SOURCING_LNUM; }
 int nvim_get_exestack_len(void) { return exestack.ga_len; }
 const char *nvim_docmd_get_curbuf_swapname(void) { return (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) ? NULL : curbuf->b_ml.ml_mfp->mf_fname; }
-// Returns the parsed count, or 0 on error (sets *errmsg_set = 1).
-int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
-{
-  char *p = eap->arg;
-  char *p_save = p;
-  int tab_number = (int)getdigits(&p, false, 0);
-  if (p == p_save || *p_save == '-' || *p_save == '+' || *p != NUL
-      || tab_number == 0) {
-    eap->errmsg = ex_errmsg(e_invarg2, eap->arg);
-    *errmsg_set = 1;
-    return 0;
-  }
-  *errmsg_set = 0;
-  return tab_number;
-}
+// nvim_docmd_parse_tabnext_count is implemented in Rust (commands.rs).
 
 // Count the number of undo steps to reach sequence 'step' in the current branch.
 // Sets *found to 1 if the target was found in the branch, 0 otherwise.
@@ -466,28 +452,7 @@ void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
 char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
 
-/// Wrap do_search for Rust.
-int nvim_docmd_do_search(exarg_T *eap, int type, int dirc, const char *pat,
-                         size_t patlen, int count, int options)
-{
-  (void)eap;
-  return do_search(NULL, type, dirc, (char *)pat, patlen, (long)count, options, NULL);
-}
-
-/// Wrap searchit for Rust.
-/// Returns lnum of found position, or 0 on failure.
-linenr_T nvim_docmd_searchit(int dir, int re_pat, linenr_T start_lnum,
-                             colnr_T start_col, int flags)
-{
-  pos_T pos;
-  pos.lnum = start_lnum;
-  pos.col = start_col;
-  pos.coladd = 0;
-  if (searchit(curwin, curbuf, &pos, NULL, dir, "", 0, 1, flags, re_pat, NULL) != FAIL) {
-    return pos.lnum;
-  }
-  return 0;
-}
+// nvim_docmd_do_search and nvim_docmd_searchit are implemented in Rust (address.rs).
 
 /// Returns opaque fmark_T pointer (NULL on failure).
 void *nvim_docmd_mark_get(int flag, int ch) { return mark_get(curbuf, curwin, NULL, (MarkGet)flag, (uint8_t)ch); }
@@ -497,16 +462,7 @@ int nvim_docmd_mark_fnum(const void *fm) { return ((const fmark_T *)fm)->fnum; }
 linenr_T nvim_docmd_mark_lnum(const void *fm) { return ((const fmark_T *)fm)->mark.lnum; }
 
 
-/// Wrap hasFolding for Rust.
-/// Returns last line of fold containing lnum, or lnum if not folded.
-linenr_T nvim_docmd_hasFolding(linenr_T lnum)
-{
-  linenr_T last;
-  if (hasFolding(curwin, lnum, NULL, &last)) {
-    return last;
-  }
-  return lnum;
-}
+// nvim_docmd_hasFolding is implemented in Rust (address.rs).
 
 /// Wrap getdigits_int32 for Rust.
 /// Wrap qf_get_size for Rust.

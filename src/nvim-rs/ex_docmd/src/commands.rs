@@ -295,7 +295,8 @@ extern "C" {
     fn nvim_docmd_get_curbuf_swapname() -> *const c_char;
     // Phase 6: ex_tabnext helpers
     fn goto_tabpage(n: c_int);
-    fn nvim_docmd_parse_tabnext_count(eap: ExArgHandle, errmsg_set: *mut c_int) -> c_int;
+    fn ex_errmsg(msg: *const c_char, arg: *const c_char) -> *mut c_char;
+    static e_invarg2: c_char;
 
     // Phase 7: ex_undo helpers
     fn u_undo(count: c_int);
@@ -3206,6 +3207,30 @@ pub unsafe extern "C" fn rs_ex_swapname(_eap: ExArgHandle) {
 }
 
 // =============================================================================
+// Phase 6: ex_tabnext helpers
+// =============================================================================
+
+/// Parse a positive tab number from `eap->arg`.
+/// Returns the tab number on success, 0 on error (sets `eap->errmsg`).
+/// Replaces C `nvim_docmd_parse_tabnext_count`.
+#[export_name = "nvim_docmd_parse_tabnext_count"]
+unsafe extern "C" fn rs_nvim_docmd_parse_tabnext_count(eap: ExArgHandle) -> c_int {
+    let p_save = (*eap).arg;
+    let mut p = p_save;
+    let tab_number = getdigits_int(&mut p, false, 0);
+    if p == p_save
+        || *p_save == b'-' as c_char
+        || *p_save == b'+' as c_char
+        || *p != 0
+        || tab_number == 0
+    {
+        (*eap).errmsg = ex_errmsg(std::ptr::addr_of!(e_invarg2), (*eap).arg);
+        return 0;
+    }
+    tab_number
+}
+
+// =============================================================================
 // Phase 6: ex_tabnext
 // =============================================================================
 
@@ -3222,12 +3247,12 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
     } else if cmdidx == CMD_TABPREVIOUS || cmdidx == CMD_TABNEXT_BACKWARD {
         let arg = (*eap).arg;
         let tab_number = if !arg.is_null() && *arg != 0 {
-            let mut errmsg_set: c_int = 0;
-            let n = nvim_docmd_parse_tabnext_count(eap, &mut errmsg_set);
-            if errmsg_set != 0 {
+            let n = rs_nvim_docmd_parse_tabnext_count(eap);
+            if (*eap).errmsg.is_null() {
+                n
+            } else {
                 return;
             }
-            n
         } else if (*eap).addr_count == 0 {
             1
         } else {

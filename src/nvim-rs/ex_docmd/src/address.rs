@@ -613,22 +613,30 @@ extern "C" {
     fn qf_get_size(eap: ExArgHandle) -> usize;
 
     // Search
-    fn nvim_docmd_do_search(
-        eap: ExArgHandle,
-        search_type: c_int,
+    fn do_search(
+        oap: *mut c_void,
         dirc: c_int,
+        search_type: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        count: i64,
+        options: c_int,
+        extra_arg: *mut c_void,
+    ) -> c_int;
+    fn searchit(
+        win: *mut c_void,
+        buf: *mut c_void,
+        pos: *mut PosT,
+        end_pos: *mut PosT,
+        dir: c_int,
         pat: *const c_char,
         patlen: usize,
         count: c_int,
         options: c_int,
+        pat_use: c_int,
+        extra_arg: *mut c_void,
     ) -> c_int;
-    fn nvim_docmd_searchit(
-        dir: c_int,
-        re_pat: c_int,
-        start_lnum: i32,
-        start_col: i32,
-        flags: c_int,
-    ) -> i32;
+    fn hasFolding(win: *mut c_void, lnum: i32, first: *mut i32, last: *mut i32) -> bool;
     #[link_name = "strlen"]
     fn nvim_docmd_strlen(s: *const c_char) -> usize;
     #[link_name = "rs_magic_isset"]
@@ -640,9 +648,6 @@ extern "C" {
     fn nvim_docmd_mark_fnum(fm: *const c_void) -> c_int;
     fn nvim_docmd_mark_lnum(fm: *const c_void) -> i32;
     fn mark_move_to(fm: *mut c_void, flags: c_int) -> c_int;
-
-    // Folding
-    fn nvim_docmd_hasFolding(lnum: i32) -> i32;
 
     // Buffer list navigation (for compute_buffer_local_count)
     fn nvim_get_firstbuf() -> *mut c_void;
@@ -664,6 +669,103 @@ extern "C" {
     fn check_cursor(win: *mut c_void);
     fn check_cursor_col(win: *mut c_void);
     fn nvim_get_curwin() -> *mut c_void;
+}
+
+/// C `pos_T` struct: { lnum: i32, col: i32, coladd: i32 }
+#[repr(C)]
+pub struct PosT {
+    pub lnum: i32,
+    pub col: i32,
+    pub coladd: i32,
+}
+
+/// FAIL constant (searchit returns FAIL = 0)
+const SEARCH_FAIL: c_int = 0;
+
+/// Wrap do_search for Rust.
+/// Matches C `nvim_docmd_do_search()`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[export_name = "nvim_docmd_do_search"]
+pub unsafe extern "C" fn rs_nvim_docmd_do_search(
+    _eap: *mut c_void,
+    search_type: c_int,
+    dirc: c_int,
+    pat: *const c_char,
+    patlen: usize,
+    count: c_int,
+    options: c_int,
+) -> c_int {
+    do_search(
+        std::ptr::null_mut(),
+        dirc,
+        search_type,
+        pat as *mut c_char,
+        patlen,
+        count as i64,
+        options,
+        std::ptr::null_mut(),
+    )
+}
+
+/// Wrap searchit for Rust, using curwin/curbuf.
+/// Returns lnum of found position, or 0 on failure.
+/// Matches C `nvim_docmd_searchit()`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[export_name = "nvim_docmd_searchit"]
+pub unsafe extern "C" fn rs_nvim_docmd_searchit(
+    dir: c_int,
+    re_pat: c_int,
+    start_lnum: i32,
+    start_col: i32,
+    flags: c_int,
+) -> i32 {
+    let mut pos = PosT {
+        lnum: start_lnum,
+        col: start_col,
+        coladd: 0,
+    };
+    let win = nvim_get_curwin();
+    let buf = nvim_get_curbuf();
+    if searchit(
+        win,
+        buf,
+        &mut pos,
+        std::ptr::null_mut(),
+        dir,
+        c"".as_ptr(),
+        0,
+        1,
+        flags,
+        re_pat,
+        std::ptr::null_mut(),
+    ) != SEARCH_FAIL
+    {
+        pos.lnum
+    } else {
+        0
+    }
+}
+
+/// Wrap hasFolding for Rust.
+/// Returns last line of fold containing lnum, or lnum if not folded.
+/// Matches C `nvim_docmd_hasFolding()`.
+///
+/// # Safety
+/// curwin must be a valid window pointer.
+#[allow(non_snake_case)]
+#[export_name = "nvim_docmd_hasFolding"]
+pub unsafe extern "C" fn rs_nvim_docmd_hasFolding(lnum: i32) -> i32 {
+    let win = nvim_get_curwin();
+    let mut last: i32 = 0;
+    if hasFolding(win, lnum, std::ptr::null_mut(), &mut last) {
+        last
+    } else {
+        lnum
+    }
 }
 
 /// Compute the buffer number reached by stepping `offset` buffers from the
@@ -936,7 +1038,8 @@ pub unsafe fn get_address_impl(
                         SEARCH_HIS | SEARCH_MSG
                     };
                     let patlen = nvim_docmd_strlen(cmd);
-                    if nvim_docmd_do_search(std::ptr::null_mut(), c, c, cmd, patlen, 1, flags) == 0
+                    if rs_nvim_docmd_do_search(std::ptr::null_mut(), c, c, cmd, patlen, 1, flags)
+                        == 0
                     {
                         nvim_win_set_cursor_lnum(nvim_get_curwin(), save_lnum);
                         nvim_win_set_cursor_col(nvim_get_curwin(), save_col);
@@ -987,7 +1090,7 @@ pub unsafe fn get_address_impl(
                     } else {
                         FORWARD
                     };
-                    let result = nvim_docmd_searchit(dir, i, start_lnum, start_col, SEARCH_MSG);
+                    let result = rs_nvim_docmd_searchit(dir, i, start_lnum, start_col, SEARCH_MSG);
                     if result != 0 {
                         lnum = result;
                     } else {
@@ -1088,7 +1191,7 @@ pub unsafe fn get_address_impl(
                 // Relative line addressing: need to adjust for lines in a
                 // closed fold after the first address.
                 if addr_type == ADDR_LINES && (i == b'-' || i == b'+') && address_count >= 2 {
-                    lnum = nvim_docmd_hasFolding(lnum);
+                    lnum = rs_nvim_docmd_hasFolding(lnum);
                 }
                 if i == b'-' {
                     lnum -= n;
