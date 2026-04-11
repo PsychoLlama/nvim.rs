@@ -372,6 +372,1281 @@ const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, KE_X2MOUSE);
 const K_X2DRAG: c_int = termcap2key(KS_EXTRA, KE_X2DRAG);
 const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, KE_X2RELEASE);
 
+// ASCII character constants (from ascii_defs.h)
+#[allow(dead_code)]
+const NL: c_int = 0x0A; // '\012'
+#[allow(dead_code)]
+const CAR: c_int = 0x0D; // '\015'
+#[allow(dead_code)]
+const ESC: c_int = 0x1B; // '\033'
+#[allow(dead_code)]
+const CSI: c_int = 0x9B; // 0x9b
+
+// KE_ constants for special keys not yet defined above
+#[allow(dead_code)]
+const KE_KINS: c_int = 79;
+#[allow(dead_code)]
+const KE_PLUG: c_int = 83;
+#[allow(dead_code)]
+const KE_DROP: c_int = 95;
+#[allow(dead_code)]
+const KS_MOUSE: c_int = 251;
+
+// Additional K_* constants from keycodes.h
+// These are used in KEY_NAMES_TABLE; allow dead_code because static
+// initializers don't count as "usage" for this lint.
+#[allow(dead_code)]
+const K_HELP: c_int = termcap2key(b'%' as c_int, b'1' as c_int);
+#[allow(dead_code)]
+const K_UNDO: c_int = termcap2key(b'&' as c_int, b'8' as c_int);
+#[allow(dead_code)]
+const K_FIND: c_int = termcap2key(b'@' as c_int, b'0' as c_int);
+#[allow(dead_code)]
+const K_KSELECT: c_int = termcap2key(b'*' as c_int, b'6' as c_int);
+#[allow(dead_code)]
+const K_KINS: c_int = termcap2key(KS_EXTRA, KE_KINS);
+#[allow(dead_code)]
+const K_KHOME: c_int = termcap2key(b'K' as c_int, b'1' as c_int);
+#[allow(dead_code)]
+const K_KEND: c_int = termcap2key(b'K' as c_int, b'4' as c_int);
+#[allow(dead_code)]
+const K_KUP: c_int = termcap2key(b'K' as c_int, b'u' as c_int);
+#[allow(dead_code)]
+const K_KDOWN: c_int = termcap2key(b'K' as c_int, b'd' as c_int);
+#[allow(dead_code)]
+const K_KLEFT: c_int = termcap2key(b'K' as c_int, b'l' as c_int);
+#[allow(dead_code)]
+const K_KRIGHT: c_int = termcap2key(b'K' as c_int, b'r' as c_int);
+#[allow(dead_code)]
+const K_KORIGIN: c_int = termcap2key(b'K' as c_int, b'2' as c_int);
+#[allow(dead_code)]
+const K_KPLUS: c_int = termcap2key(b'K' as c_int, b'6' as c_int);
+#[allow(dead_code)]
+const K_KMINUS: c_int = termcap2key(b'K' as c_int, b'7' as c_int);
+#[allow(dead_code)]
+const K_KDIVIDE: c_int = termcap2key(b'K' as c_int, b'8' as c_int);
+#[allow(dead_code)]
+const K_KMULTIPLY: c_int = termcap2key(b'K' as c_int, b'9' as c_int);
+#[allow(dead_code)]
+const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
+#[allow(dead_code)]
+const K_KPOINT: c_int = termcap2key(b'K' as c_int, b'B' as c_int);
+#[allow(dead_code)]
+const K_K0: c_int = termcap2key(b'K' as c_int, b'C' as c_int);
+#[allow(dead_code)]
+const K_K1: c_int = termcap2key(b'K' as c_int, b'D' as c_int);
+#[allow(dead_code)]
+const K_K2: c_int = termcap2key(b'K' as c_int, b'E' as c_int);
+#[allow(dead_code)]
+const K_K3: c_int = termcap2key(b'K' as c_int, b'F' as c_int);
+#[allow(dead_code)]
+const K_K4: c_int = termcap2key(b'K' as c_int, b'G' as c_int);
+#[allow(dead_code)]
+const K_K5: c_int = termcap2key(b'K' as c_int, b'H' as c_int);
+#[allow(dead_code)]
+const K_K6: c_int = termcap2key(b'K' as c_int, b'I' as c_int);
+#[allow(dead_code)]
+const K_K7: c_int = termcap2key(b'K' as c_int, b'J' as c_int);
+#[allow(dead_code)]
+const K_K8: c_int = termcap2key(b'K' as c_int, b'K' as c_int);
+#[allow(dead_code)]
+const K_K9: c_int = termcap2key(b'K' as c_int, b'L' as c_int);
+#[allow(dead_code)]
+const K_KCOMMA: c_int = termcap2key(b'K' as c_int, b'M' as c_int);
+#[allow(dead_code)]
+const K_KEQUAL: c_int = termcap2key(b'K' as c_int, b'N' as c_int);
+#[allow(dead_code)]
+const K_MOUSE: c_int = termcap2key(KS_MOUSE, KE_FILLER);
+#[allow(dead_code)]
+const K_IGNORE: c_int = termcap2key(KS_EXTRA, KE_IGNORE);
+#[allow(dead_code)]
+const K_SNR: c_int = termcap2key(KS_EXTRA, KE_SNR);
+#[allow(dead_code)]
+const K_PLUG: c_int = termcap2key(KS_EXTRA, KE_PLUG);
+#[allow(dead_code)]
+const K_DROP: c_int = termcap2key(KS_EXTRA, KE_DROP);
+
+// Extended function keys F38-F63 (from keycodes.h)
+#[allow(dead_code)]
+const K_F38: c_int = termcap2key(b'F' as c_int, b'S' as c_int);
+#[allow(dead_code)]
+const K_F39: c_int = termcap2key(b'F' as c_int, b'T' as c_int);
+#[allow(dead_code)]
+const K_F40: c_int = termcap2key(b'F' as c_int, b'U' as c_int);
+#[allow(dead_code)]
+const K_F41: c_int = termcap2key(b'F' as c_int, b'V' as c_int);
+#[allow(dead_code)]
+const K_F42: c_int = termcap2key(b'F' as c_int, b'W' as c_int);
+#[allow(dead_code)]
+const K_F43: c_int = termcap2key(b'F' as c_int, b'X' as c_int);
+#[allow(dead_code)]
+const K_F44: c_int = termcap2key(b'F' as c_int, b'Y' as c_int);
+#[allow(dead_code)]
+const K_F45: c_int = termcap2key(b'F' as c_int, b'Z' as c_int);
+#[allow(dead_code)]
+const K_F46: c_int = termcap2key(b'F' as c_int, b'a' as c_int);
+#[allow(dead_code)]
+const K_F47: c_int = termcap2key(b'F' as c_int, b'b' as c_int);
+#[allow(dead_code)]
+const K_F48: c_int = termcap2key(b'F' as c_int, b'c' as c_int);
+#[allow(dead_code)]
+const K_F49: c_int = termcap2key(b'F' as c_int, b'd' as c_int);
+#[allow(dead_code)]
+const K_F50: c_int = termcap2key(b'F' as c_int, b'e' as c_int);
+#[allow(dead_code)]
+const K_F51: c_int = termcap2key(b'F' as c_int, b'f' as c_int);
+#[allow(dead_code)]
+const K_F52: c_int = termcap2key(b'F' as c_int, b'g' as c_int);
+#[allow(dead_code)]
+const K_F53: c_int = termcap2key(b'F' as c_int, b'h' as c_int);
+#[allow(dead_code)]
+const K_F54: c_int = termcap2key(b'F' as c_int, b'i' as c_int);
+#[allow(dead_code)]
+const K_F55: c_int = termcap2key(b'F' as c_int, b'j' as c_int);
+#[allow(dead_code)]
+const K_F56: c_int = termcap2key(b'F' as c_int, b'k' as c_int);
+#[allow(dead_code)]
+const K_F57: c_int = termcap2key(b'F' as c_int, b'l' as c_int);
+#[allow(dead_code)]
+const K_F58: c_int = termcap2key(b'F' as c_int, b'm' as c_int);
+#[allow(dead_code)]
+const K_F59: c_int = termcap2key(b'F' as c_int, b'n' as c_int);
+#[allow(dead_code)]
+const K_F60: c_int = termcap2key(b'F' as c_int, b'o' as c_int);
+#[allow(dead_code)]
+const K_F61: c_int = termcap2key(b'F' as c_int, b'p' as c_int);
+#[allow(dead_code)]
+const K_F62: c_int = termcap2key(b'F' as c_int, b'q' as c_int);
+#[allow(dead_code)]
+const K_F63: c_int = termcap2key(b'F' as c_int, b'r' as c_int);
+
+// =============================================================================
+// Key names table (Rust-native replacement for C key_names_table)
+// =============================================================================
+//
+// This table is a port of the generated `key_names_table` in
+// `build/src/nvim/auto/keycode_names.generated.h`, which is produced by
+// `src/gen/gen_keycodes.lua` from `src/nvim/keycodes.lua`.
+//
+// The ordering is determined by `gen_keycodes.lua`'s `hashy` sorting algorithm
+// (sorted by lowercase name, then by hash bucket). The order MUST match the
+// generated header exactly since `key_names_table_hash()` returns indices into
+// this array.
+//
+// When new special keys are added to `keycodes.lua`, this table must also be
+// updated to match the newly generated header.
+
+#[allow(dead_code)]
+struct KeyNameEntry {
+    key: c_int,
+    is_alt: bool,
+    name: &'static str,
+}
+
+// 187 entries matching keycode_names.generated.h order exactly
+#[allow(dead_code)]
+static KEY_NAMES_TABLE: &[KeyNameEntry] = &[
+    KeyNameEntry {
+        key: K_K0,
+        is_alt: false,
+        name: "k0",
+    },
+    KeyNameEntry {
+        key: K_F1,
+        is_alt: false,
+        name: "F1",
+    },
+    KeyNameEntry {
+        key: K_K1,
+        is_alt: false,
+        name: "k1",
+    },
+    KeyNameEntry {
+        key: K_F2,
+        is_alt: false,
+        name: "F2",
+    },
+    KeyNameEntry {
+        key: K_K2,
+        is_alt: false,
+        name: "k2",
+    },
+    KeyNameEntry {
+        key: K_F3,
+        is_alt: false,
+        name: "F3",
+    },
+    KeyNameEntry {
+        key: K_K3,
+        is_alt: false,
+        name: "k3",
+    },
+    KeyNameEntry {
+        key: K_F4,
+        is_alt: false,
+        name: "F4",
+    },
+    KeyNameEntry {
+        key: K_K4,
+        is_alt: false,
+        name: "k4",
+    },
+    KeyNameEntry {
+        key: K_F5,
+        is_alt: false,
+        name: "F5",
+    },
+    KeyNameEntry {
+        key: K_K5,
+        is_alt: false,
+        name: "k5",
+    },
+    KeyNameEntry {
+        key: K_F6,
+        is_alt: false,
+        name: "F6",
+    },
+    KeyNameEntry {
+        key: K_K6,
+        is_alt: false,
+        name: "k6",
+    },
+    KeyNameEntry {
+        key: K_F7,
+        is_alt: false,
+        name: "F7",
+    },
+    KeyNameEntry {
+        key: K_K7,
+        is_alt: false,
+        name: "k7",
+    },
+    KeyNameEntry {
+        key: K_F8,
+        is_alt: false,
+        name: "F8",
+    },
+    KeyNameEntry {
+        key: K_K8,
+        is_alt: false,
+        name: "k8",
+    },
+    KeyNameEntry {
+        key: K_F9,
+        is_alt: false,
+        name: "F9",
+    },
+    KeyNameEntry {
+        key: K_K9,
+        is_alt: false,
+        name: "k9",
+    },
+    KeyNameEntry {
+        key: NL,
+        is_alt: true,
+        name: "LF",
+    },
+    KeyNameEntry {
+        key: NL,
+        is_alt: false,
+        name: "NL",
+    },
+    KeyNameEntry {
+        key: K_UP,
+        is_alt: false,
+        name: "Up",
+    },
+    KeyNameEntry {
+        key: CAR,
+        is_alt: false,
+        name: "CR",
+    },
+    KeyNameEntry {
+        key: K_BS,
+        is_alt: false,
+        name: "BS",
+    },
+    KeyNameEntry {
+        key: '<' as c_int,
+        is_alt: false,
+        name: "lt",
+    },
+    KeyNameEntry {
+        key: K_F10,
+        is_alt: false,
+        name: "F10",
+    },
+    KeyNameEntry {
+        key: K_F20,
+        is_alt: false,
+        name: "F20",
+    },
+    KeyNameEntry {
+        key: K_F30,
+        is_alt: false,
+        name: "F30",
+    },
+    KeyNameEntry {
+        key: K_F40,
+        is_alt: false,
+        name: "F40",
+    },
+    KeyNameEntry {
+        key: K_F50,
+        is_alt: false,
+        name: "F50",
+    },
+    KeyNameEntry {
+        key: K_F60,
+        is_alt: false,
+        name: "F60",
+    },
+    KeyNameEntry {
+        key: K_KINS,
+        is_alt: true,
+        name: "KP0",
+    },
+    KeyNameEntry {
+        key: K_F11,
+        is_alt: false,
+        name: "F11",
+    },
+    KeyNameEntry {
+        key: K_F21,
+        is_alt: false,
+        name: "F21",
+    },
+    KeyNameEntry {
+        key: K_F31,
+        is_alt: false,
+        name: "F31",
+    },
+    KeyNameEntry {
+        key: K_F41,
+        is_alt: false,
+        name: "F41",
+    },
+    KeyNameEntry {
+        key: K_F51,
+        is_alt: false,
+        name: "F51",
+    },
+    KeyNameEntry {
+        key: K_F61,
+        is_alt: false,
+        name: "F61",
+    },
+    KeyNameEntry {
+        key: K_KEND,
+        is_alt: true,
+        name: "KP1",
+    },
+    KeyNameEntry {
+        key: K_XF1,
+        is_alt: false,
+        name: "xF1",
+    },
+    KeyNameEntry {
+        key: K_F12,
+        is_alt: false,
+        name: "F12",
+    },
+    KeyNameEntry {
+        key: K_F22,
+        is_alt: false,
+        name: "F22",
+    },
+    KeyNameEntry {
+        key: K_F32,
+        is_alt: false,
+        name: "F32",
+    },
+    KeyNameEntry {
+        key: K_F42,
+        is_alt: false,
+        name: "F42",
+    },
+    KeyNameEntry {
+        key: K_F52,
+        is_alt: false,
+        name: "F52",
+    },
+    KeyNameEntry {
+        key: K_F62,
+        is_alt: false,
+        name: "F62",
+    },
+    KeyNameEntry {
+        key: K_KDOWN,
+        is_alt: true,
+        name: "KP2",
+    },
+    KeyNameEntry {
+        key: K_XF2,
+        is_alt: false,
+        name: "xF2",
+    },
+    KeyNameEntry {
+        key: K_F13,
+        is_alt: false,
+        name: "F13",
+    },
+    KeyNameEntry {
+        key: K_F23,
+        is_alt: false,
+        name: "F23",
+    },
+    KeyNameEntry {
+        key: K_F33,
+        is_alt: false,
+        name: "F33",
+    },
+    KeyNameEntry {
+        key: K_F43,
+        is_alt: false,
+        name: "F43",
+    },
+    KeyNameEntry {
+        key: K_F53,
+        is_alt: false,
+        name: "F53",
+    },
+    KeyNameEntry {
+        key: K_F63,
+        is_alt: false,
+        name: "F63",
+    },
+    KeyNameEntry {
+        key: K_KPAGEDOWN,
+        is_alt: true,
+        name: "KP3",
+    },
+    KeyNameEntry {
+        key: K_XF3,
+        is_alt: false,
+        name: "xF3",
+    },
+    KeyNameEntry {
+        key: K_F14,
+        is_alt: false,
+        name: "F14",
+    },
+    KeyNameEntry {
+        key: K_F24,
+        is_alt: false,
+        name: "F24",
+    },
+    KeyNameEntry {
+        key: K_F34,
+        is_alt: false,
+        name: "F34",
+    },
+    KeyNameEntry {
+        key: K_F44,
+        is_alt: false,
+        name: "F44",
+    },
+    KeyNameEntry {
+        key: K_F54,
+        is_alt: false,
+        name: "F54",
+    },
+    KeyNameEntry {
+        key: K_KLEFT,
+        is_alt: true,
+        name: "KP4",
+    },
+    KeyNameEntry {
+        key: K_XF4,
+        is_alt: false,
+        name: "xF4",
+    },
+    KeyNameEntry {
+        key: K_F15,
+        is_alt: false,
+        name: "F15",
+    },
+    KeyNameEntry {
+        key: K_F25,
+        is_alt: false,
+        name: "F25",
+    },
+    KeyNameEntry {
+        key: K_F35,
+        is_alt: false,
+        name: "F35",
+    },
+    KeyNameEntry {
+        key: K_F45,
+        is_alt: false,
+        name: "F45",
+    },
+    KeyNameEntry {
+        key: K_F55,
+        is_alt: false,
+        name: "F55",
+    },
+    KeyNameEntry {
+        key: K_KORIGIN,
+        is_alt: true,
+        name: "KP5",
+    },
+    KeyNameEntry {
+        key: K_F16,
+        is_alt: false,
+        name: "F16",
+    },
+    KeyNameEntry {
+        key: K_F26,
+        is_alt: false,
+        name: "F26",
+    },
+    KeyNameEntry {
+        key: K_F36,
+        is_alt: false,
+        name: "F36",
+    },
+    KeyNameEntry {
+        key: K_F46,
+        is_alt: false,
+        name: "F46",
+    },
+    KeyNameEntry {
+        key: K_F56,
+        is_alt: false,
+        name: "F56",
+    },
+    KeyNameEntry {
+        key: K_KRIGHT,
+        is_alt: true,
+        name: "KP6",
+    },
+    KeyNameEntry {
+        key: K_F17,
+        is_alt: false,
+        name: "F17",
+    },
+    KeyNameEntry {
+        key: K_F27,
+        is_alt: false,
+        name: "F27",
+    },
+    KeyNameEntry {
+        key: K_F37,
+        is_alt: false,
+        name: "F37",
+    },
+    KeyNameEntry {
+        key: K_F47,
+        is_alt: false,
+        name: "F47",
+    },
+    KeyNameEntry {
+        key: K_F57,
+        is_alt: false,
+        name: "F57",
+    },
+    KeyNameEntry {
+        key: K_KHOME,
+        is_alt: true,
+        name: "KP7",
+    },
+    KeyNameEntry {
+        key: K_F18,
+        is_alt: false,
+        name: "F18",
+    },
+    KeyNameEntry {
+        key: K_F28,
+        is_alt: false,
+        name: "F28",
+    },
+    KeyNameEntry {
+        key: K_F38,
+        is_alt: false,
+        name: "F38",
+    },
+    KeyNameEntry {
+        key: K_F48,
+        is_alt: false,
+        name: "F48",
+    },
+    KeyNameEntry {
+        key: K_F58,
+        is_alt: false,
+        name: "F58",
+    },
+    KeyNameEntry {
+        key: K_KUP,
+        is_alt: true,
+        name: "KP8",
+    },
+    KeyNameEntry {
+        key: K_F19,
+        is_alt: false,
+        name: "F19",
+    },
+    KeyNameEntry {
+        key: K_F29,
+        is_alt: false,
+        name: "F29",
+    },
+    KeyNameEntry {
+        key: K_F39,
+        is_alt: false,
+        name: "F39",
+    },
+    KeyNameEntry {
+        key: K_F49,
+        is_alt: false,
+        name: "F49",
+    },
+    KeyNameEntry {
+        key: K_F59,
+        is_alt: false,
+        name: "F59",
+    },
+    KeyNameEntry {
+        key: K_KPAGEUP,
+        is_alt: true,
+        name: "KP9",
+    },
+    KeyNameEntry {
+        key: TAB,
+        is_alt: false,
+        name: "Tab",
+    },
+    KeyNameEntry {
+        key: K_TAB,
+        is_alt: false,
+        name: "Tab",
+    },
+    KeyNameEntry {
+        key: ESC,
+        is_alt: false,
+        name: "Esc",
+    },
+    KeyNameEntry {
+        key: K_COMMAND,
+        is_alt: false,
+        name: "Cmd",
+    },
+    KeyNameEntry {
+        key: K_END,
+        is_alt: false,
+        name: "End",
+    },
+    KeyNameEntry {
+        key: CSI,
+        is_alt: false,
+        name: "CSI",
+    },
+    KeyNameEntry {
+        key: K_DEL,
+        is_alt: false,
+        name: "Del",
+    },
+    KeyNameEntry {
+        key: K_ZERO,
+        is_alt: false,
+        name: "Nul",
+    },
+    KeyNameEntry {
+        key: K_KUP,
+        is_alt: false,
+        name: "kUp",
+    },
+    KeyNameEntry {
+        key: K_XUP,
+        is_alt: false,
+        name: "xUp",
+    },
+    KeyNameEntry {
+        key: '|' as c_int,
+        is_alt: false,
+        name: "Bar",
+    },
+    KeyNameEntry {
+        key: K_SNR,
+        is_alt: false,
+        name: "SNR",
+    },
+    KeyNameEntry {
+        key: K_INS,
+        is_alt: true,
+        name: "Ins",
+    },
+    KeyNameEntry {
+        key: K_DOWN,
+        is_alt: false,
+        name: "Down",
+    },
+    KeyNameEntry {
+        key: K_DROP,
+        is_alt: false,
+        name: "Drop",
+    },
+    KeyNameEntry {
+        key: K_FIND,
+        is_alt: false,
+        name: "Find",
+    },
+    KeyNameEntry {
+        key: K_HELP,
+        is_alt: false,
+        name: "Help",
+    },
+    KeyNameEntry {
+        key: K_HOME,
+        is_alt: false,
+        name: "Home",
+    },
+    KeyNameEntry {
+        key: K_KDEL,
+        is_alt: false,
+        name: "kDel",
+    },
+    KeyNameEntry {
+        key: K_KEND,
+        is_alt: false,
+        name: "kEnd",
+    },
+    KeyNameEntry {
+        key: K_LEFT,
+        is_alt: false,
+        name: "Left",
+    },
+    KeyNameEntry {
+        key: K_PLUG,
+        is_alt: false,
+        name: "Plug",
+    },
+    KeyNameEntry {
+        key: K_UNDO,
+        is_alt: false,
+        name: "Undo",
+    },
+    KeyNameEntry {
+        key: K_XEND,
+        is_alt: false,
+        name: "xEnd",
+    },
+    KeyNameEntry {
+        key: K_ZEND,
+        is_alt: false,
+        name: "zEnd",
+    },
+    KeyNameEntry {
+        key: K_KDOWN,
+        is_alt: false,
+        name: "kDown",
+    },
+    KeyNameEntry {
+        key: K_XDOWN,
+        is_alt: false,
+        name: "xDown",
+    },
+    KeyNameEntry {
+        key: K_KHOME,
+        is_alt: false,
+        name: "kHome",
+    },
+    KeyNameEntry {
+        key: K_XHOME,
+        is_alt: false,
+        name: "xHome",
+    },
+    KeyNameEntry {
+        key: K_ZHOME,
+        is_alt: false,
+        name: "zHome",
+    },
+    KeyNameEntry {
+        key: K_RIGHT,
+        is_alt: false,
+        name: "Right",
+    },
+    KeyNameEntry {
+        key: K_KLEFT,
+        is_alt: false,
+        name: "kLeft",
+    },
+    KeyNameEntry {
+        key: K_XLEFT,
+        is_alt: false,
+        name: "xLeft",
+    },
+    KeyNameEntry {
+        key: CAR,
+        is_alt: true,
+        name: "Enter",
+    },
+    KeyNameEntry {
+        key: K_MOUSE,
+        is_alt: false,
+        name: "Mouse",
+    },
+    KeyNameEntry {
+        key: K_KDIVIDE,
+        is_alt: true,
+        name: "KPDiv",
+    },
+    KeyNameEntry {
+        key: K_KPLUS,
+        is_alt: false,
+        name: "kPlus",
+    },
+    KeyNameEntry {
+        key: ' ' as c_int,
+        is_alt: false,
+        name: "Space",
+    },
+    KeyNameEntry {
+        key: ESC,
+        is_alt: true,
+        name: "Escape",
+    },
+    KeyNameEntry {
+        key: K_X1DRAG,
+        is_alt: false,
+        name: "X1Drag",
+    },
+    KeyNameEntry {
+        key: K_X2DRAG,
+        is_alt: false,
+        name: "X2Drag",
+    },
+    KeyNameEntry {
+        key: K_PAGEUP,
+        is_alt: false,
+        name: "PageUp",
+    },
+    KeyNameEntry {
+        key: K_KMINUS,
+        is_alt: false,
+        name: "kMinus",
+    },
+    KeyNameEntry {
+        key: K_KRIGHT,
+        is_alt: false,
+        name: "kRight",
+    },
+    KeyNameEntry {
+        key: K_XRIGHT,
+        is_alt: false,
+        name: "xRight",
+    },
+    KeyNameEntry {
+        key: '\\' as c_int,
+        is_alt: false,
+        name: "Bslash",
+    },
+    KeyNameEntry {
+        key: K_DEL,
+        is_alt: true,
+        name: "Delete",
+    },
+    KeyNameEntry {
+        key: K_KSELECT,
+        is_alt: false,
+        name: "Select",
+    },
+    KeyNameEntry {
+        key: K_KMULTIPLY,
+        is_alt: true,
+        name: "KPMult",
+    },
+    KeyNameEntry {
+        key: K_IGNORE,
+        is_alt: false,
+        name: "Ignore",
+    },
+    KeyNameEntry {
+        key: K_KENTER,
+        is_alt: false,
+        name: "kEnter",
+    },
+    KeyNameEntry {
+        key: K_KCOMMA,
+        is_alt: false,
+        name: "kComma",
+    },
+    KeyNameEntry {
+        key: K_KPOINT,
+        is_alt: false,
+        name: "kPoint",
+    },
+    KeyNameEntry {
+        key: K_KPLUS,
+        is_alt: true,
+        name: "KPPlus",
+    },
+    KeyNameEntry {
+        key: K_KEQUAL,
+        is_alt: false,
+        name: "kEqual",
+    },
+    KeyNameEntry {
+        key: K_INS,
+        is_alt: false,
+        name: "Insert",
+    },
+    KeyNameEntry {
+        key: CAR,
+        is_alt: true,
+        name: "Return",
+    },
+    KeyNameEntry {
+        key: K_KPAGEUP,
+        is_alt: false,
+        name: "kPageUp",
+    },
+    KeyNameEntry {
+        key: K_KCOMMA,
+        is_alt: true,
+        name: "KPComma",
+    },
+    KeyNameEntry {
+        key: K_KENTER,
+        is_alt: true,
+        name: "KPEnter",
+    },
+    KeyNameEntry {
+        key: K_KDIVIDE,
+        is_alt: false,
+        name: "kDivide",
+    },
+    KeyNameEntry {
+        key: K_KMINUS,
+        is_alt: true,
+        name: "KPMinus",
+    },
+    KeyNameEntry {
+        key: K_X1MOUSE,
+        is_alt: false,
+        name: "X1Mouse",
+    },
+    KeyNameEntry {
+        key: K_X2MOUSE,
+        is_alt: false,
+        name: "X2Mouse",
+    },
+    KeyNameEntry {
+        key: K_KINS,
+        is_alt: false,
+        name: "kInsert",
+    },
+    KeyNameEntry {
+        key: K_KORIGIN,
+        is_alt: false,
+        name: "kOrigin",
+    },
+    KeyNameEntry {
+        key: K_MOUSEUP,
+        is_alt: true,
+        name: "MouseUp",
+    },
+    KeyNameEntry {
+        key: NL,
+        is_alt: true,
+        name: "NewLine",
+    },
+    KeyNameEntry {
+        key: K_KEQUAL,
+        is_alt: true,
+        name: "KPEquals",
+    },
+    KeyNameEntry {
+        key: K_LEFTDRAG,
+        is_alt: false,
+        name: "LeftDrag",
+    },
+    KeyNameEntry {
+        key: K_PAGEDOWN,
+        is_alt: false,
+        name: "PageDown",
+    },
+    KeyNameEntry {
+        key: NL,
+        is_alt: true,
+        name: "LineFeed",
+    },
+    KeyNameEntry {
+        key: K_KDEL,
+        is_alt: true,
+        name: "KPPeriod",
+    },
+    KeyNameEntry {
+        key: K_BS,
+        is_alt: true,
+        name: "BackSpace",
+    },
+    KeyNameEntry {
+        key: K_KMULTIPLY,
+        is_alt: false,
+        name: "kMultiply",
+    },
+    KeyNameEntry {
+        key: K_KPAGEDOWN,
+        is_alt: false,
+        name: "kPageDown",
+    },
+    KeyNameEntry {
+        key: K_LEFTMOUSE,
+        is_alt: false,
+        name: "LeftMouse",
+    },
+    KeyNameEntry {
+        key: K_MOUSEDOWN,
+        is_alt: true,
+        name: "MouseDown",
+    },
+    KeyNameEntry {
+        key: K_MOUSEMOVE,
+        is_alt: false,
+        name: "MouseMove",
+    },
+    KeyNameEntry {
+        key: K_RIGHTDRAG,
+        is_alt: false,
+        name: "RightDrag",
+    },
+    KeyNameEntry {
+        key: K_X1RELEASE,
+        is_alt: false,
+        name: "X1Release",
+    },
+    KeyNameEntry {
+        key: K_X2RELEASE,
+        is_alt: false,
+        name: "X2Release",
+    },
+    KeyNameEntry {
+        key: K_MIDDLEDRAG,
+        is_alt: false,
+        name: "MiddleDrag",
+    },
+    KeyNameEntry {
+        key: K_RIGHTMOUSE,
+        is_alt: false,
+        name: "RightMouse",
+    },
+    KeyNameEntry {
+        key: K_MIDDLEMOUSE,
+        is_alt: false,
+        name: "MiddleMouse",
+    },
+    KeyNameEntry {
+        key: K_LEFTMOUSE_NM,
+        is_alt: false,
+        name: "LeftMouseNM",
+    },
+    KeyNameEntry {
+        key: K_LEFTRELEASE,
+        is_alt: false,
+        name: "LeftRelease",
+    },
+    KeyNameEntry {
+        key: K_RIGHTRELEASE,
+        is_alt: false,
+        name: "RightRelease",
+    },
+    KeyNameEntry {
+        key: K_LEFTRELEASE_NM,
+        is_alt: false,
+        name: "LeftReleaseNM",
+    },
+    KeyNameEntry {
+        key: K_MIDDLERELEASE,
+        is_alt: false,
+        name: "MiddleRelease",
+    },
+    KeyNameEntry {
+        key: K_MOUSEDOWN,
+        is_alt: false,
+        name: "ScrollWheelUp",
+    },
+    KeyNameEntry {
+        key: K_MOUSEUP,
+        is_alt: false,
+        name: "ScrollWheelDown",
+    },
+    KeyNameEntry {
+        key: K_MOUSERIGHT,
+        is_alt: false,
+        name: "ScrollWheelLeft",
+    },
+    KeyNameEntry {
+        key: K_MOUSELEFT,
+        is_alt: false,
+        name: "ScrollWheelRight",
+    },
+];
+
+/// Case-insensitive ASCII comparison (equivalent to `vim_strnicmp_asc` semantics).
+/// Returns true if `a` and `b` are equal (case-insensitively) for the first `len` bytes.
+#[allow(dead_code)]
+fn ascii_strnicmp(a: &[u8], b: &[u8], len: usize) -> bool {
+    if a.len() < len || b.len() < len {
+        return false;
+    }
+    for i in 0..len {
+        let ca = a[i].to_ascii_uppercase();
+        let cb = b[i].to_ascii_uppercase();
+        if ca != cb {
+            return false;
+        }
+    }
+    true
+}
+
+/// Lookup a special key code by name using the hash function ported from
+/// `get_special_key_code_hash` in `keycode_names.generated.h`.
+///
+/// Returns the index into `KEY_NAMES_TABLE`, or `None` if not found.
+#[allow(dead_code, clippy::too_many_lines)]
+fn key_names_table_hash(name: &[u8]) -> Option<usize> {
+    let len = name.len();
+    let (low, high): (usize, usize) = match len {
+        2 => match name[1] {
+            b'0' => (0, 1),
+            b'1' => (1, 3),
+            b'2' => (3, 5),
+            b'3' => (5, 7),
+            b'4' => (7, 9),
+            b'5' => (9, 11),
+            b'6' => (11, 13),
+            b'7' => (13, 15),
+            b'8' => (15, 17),
+            b'9' => (17, 19),
+            b'F' | b'f' => (19, 20),
+            b'L' | b'l' => (20, 21),
+            b'P' | b'p' => (21, 22),
+            b'R' | b'r' => (22, 23),
+            b'S' | b's' => (23, 24),
+            b'T' | b't' => (24, 25),
+            _ => return None,
+        },
+        3 => match name[2] {
+            b'0' => (25, 32),
+            b'1' => (32, 40),
+            b'2' => (40, 48),
+            b'3' => (48, 56),
+            b'4' => (56, 63),
+            b'5' => (63, 69),
+            b'6' => (69, 75),
+            b'7' => (75, 81),
+            b'8' => (81, 87),
+            b'9' => (87, 93),
+            b'B' | b'b' => (93, 95),
+            b'C' | b'c' => (95, 96),
+            b'D' | b'd' => (96, 98),
+            b'I' | b'i' => (98, 99),
+            b'L' | b'l' => (99, 101),
+            b'P' | b'p' => (101, 103),
+            b'R' | b'r' => (103, 105),
+            b'S' | b's' => (105, 106),
+            _ => return None,
+        },
+        4 => match name[0] {
+            b'D' | b'd' => (106, 108),
+            b'F' | b'f' => (108, 109),
+            b'H' | b'h' => (109, 111),
+            b'K' | b'k' => (111, 113),
+            b'L' | b'l' => (113, 114),
+            b'P' | b'p' => (114, 115),
+            b'U' | b'u' => (115, 116),
+            b'X' | b'x' => (116, 117),
+            b'Z' | b'z' => (117, 118),
+            _ => return None,
+        },
+        5 => match name[1] {
+            b'D' | b'd' => (118, 120),
+            b'H' | b'h' => (120, 123),
+            b'I' | b'i' => (123, 124),
+            b'L' | b'l' => (124, 126),
+            b'N' | b'n' => (126, 127),
+            b'O' | b'o' => (127, 128),
+            b'P' | b'p' => (128, 131),
+            _ => return None,
+        },
+        6 => match name[2] {
+            b'C' | b'c' => (131, 132),
+            b'D' | b'd' => (132, 134),
+            b'G' | b'g' => (134, 135),
+            b'I' | b'i' => (135, 138),
+            b'L' | b'l' => (138, 141),
+            b'M' | b'm' => (141, 142),
+            b'N' | b'n' => (142, 144),
+            b'O' | b'o' => (144, 146),
+            b'P' | b'p' => (146, 147),
+            b'Q' | b'q' => (147, 148),
+            b'S' | b's' => (148, 149),
+            b'T' | b't' => (149, 150),
+            _ => return None,
+        },
+        7 => match name[2] {
+            b'A' | b'a' => (150, 151),
+            b'C' | b'c' => (151, 152),
+            b'E' | b'e' => (152, 153),
+            b'I' | b'i' => (153, 154),
+            b'M' | b'm' => (154, 157),
+            b'N' | b'n' => (157, 158),
+            b'R' | b'r' => (158, 159),
+            b'U' | b'u' => (159, 160),
+            b'W' | b'w' => (160, 161),
+            _ => return None,
+        },
+        8 => match name[2] {
+            b'E' | b'e' => (161, 162),
+            b'F' | b'f' => (162, 163),
+            b'G' | b'g' => (163, 164),
+            b'N' | b'n' => (164, 165),
+            b'P' | b'p' => (165, 166),
+            _ => return None,
+        },
+        9 => match name[0] {
+            b'B' | b'b' => (166, 167),
+            b'K' | b'k' => (167, 169),
+            b'L' | b'l' => (169, 170),
+            b'M' | b'm' => (170, 172),
+            b'R' | b'r' => (172, 173),
+            b'X' | b'x' => (173, 175),
+            _ => return None,
+        },
+        10 => match name[0] {
+            b'M' | b'm' => (175, 176),
+            b'R' | b'r' => (176, 177),
+            _ => return None,
+        },
+        11 => match name[4] {
+            b'L' | b'l' => (177, 178),
+            b'M' | b'm' => (178, 179),
+            b'R' | b'r' => (179, 180),
+            _ => return None,
+        },
+        12 => (180, 181),
+        13 => match name[0] {
+            b'L' | b'l' => (181, 182),
+            b'M' | b'm' => (182, 183),
+            b'S' | b's' => (183, 184),
+            _ => return None,
+        },
+        15 => match name[11] {
+            b'D' | b'd' => (184, 185),
+            b'L' | b'l' => (185, 186),
+            _ => return None,
+        },
+        16 => (186, 187),
+        _ => return None,
+    };
+    KEY_NAMES_TABLE[low..high]
+        .iter()
+        .enumerate()
+        .find(|(_, entry)| ascii_strnicmp(name, entry.name.as_bytes(), len))
+        .map(|(i, _)| low + i)
+}
+
 /// Modifier mask table entry (for `name_to_mod_mask`)
 struct ModMaskEntry {
     mod_flag: c_int,
