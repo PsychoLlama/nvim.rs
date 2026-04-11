@@ -11,5 +11,7 @@ void may_trigger_safestate(bool safe);
 void state_no_longer_safe(const char *reason);
 void get_mode(char *buf);
 void may_trigger_modechanged(void);
+void state_enter(VimState *s);
+void state_handle_k_event(void);
 
 #include "state.h.generated.h"
