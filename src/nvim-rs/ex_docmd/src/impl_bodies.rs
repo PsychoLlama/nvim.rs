@@ -58,7 +58,13 @@ extern "C" {
     fn nvim_docmd_get_quitmore() -> c_int;
     fn nvim_docmd_set_quitmore(n: c_int);
     fn nvim_docmd_check_more_semsg(n: c_int);
-    fn nvim_docmd_check_more_dialog(n: c_int) -> c_int;
+    fn vim_dialog_yesno(
+        type_: c_int,
+        title: *const c_char,
+        message: *const c_char,
+        dflt: c_int,
+    ) -> c_int;
+    fn ngettext(s1: *const c_char, s2: *const c_char, n: std::ffi::c_ulong) -> *const c_char;
     fn nvim_get_argcount() -> c_int;
     fn nvim_win_get_arg_idx(wp: *mut c_void) -> c_int;
     fn nvim_al_get_arg_had_last() -> c_int;
@@ -211,6 +217,32 @@ extern "C" {
 }
 
 // ============================================================================
+// Rust replacement for nvim_docmd_check_more_dialog (Phase 5)
+// ============================================================================
+
+/// VIM_QUESTION = 4 (from message.h)
+const VIM_QUESTION: c_int = 4;
+
+/// Build the "more files" dialog message and call vim_dialog_yesno.
+/// Replaces C `nvim_docmd_check_more_dialog`.
+///
+/// ngettext selects the translated format string; we substitute `n` for `%d` in Rust.
+unsafe fn rs_nvim_docmd_check_more_dialog(n: c_int) -> c_int {
+    // ngettext picks the singular or plural translated format string (with "%d").
+    let fmt_ptr = ngettext(
+        c"%d more file to edit.  Quit anyway?".as_ptr(),
+        c"%d more files to edit.  Quit anyway?".as_ptr(),
+        n as std::ffi::c_ulong,
+    );
+    // Convert the C format string to a Rust str and replace "%d" with the number.
+    let fmt_cstr = std::ffi::CStr::from_ptr(fmt_ptr);
+    let fmt_str = fmt_cstr.to_string_lossy();
+    let msg = format!("{}\0", fmt_str.replacen("%d", &n.to_string(), 1));
+    let c_msg = msg.as_ptr() as *const c_char;
+    vim_dialog_yesno(VIM_QUESTION, std::ptr::null(), c_msg, 1)
+}
+
+// ============================================================================
 // nvim_docmd_check_more
 // ============================================================================
 
@@ -233,7 +265,7 @@ pub unsafe extern "C" fn nvim_docmd_check_more(message: c_int, forceit: c_int) -
     {
         if message != 0 {
             if nvim_get_p_confirm() != 0 || nvim_get_cmdmod_confirm() != 0 {
-                let response = nvim_docmd_check_more_dialog(n);
+                let response = rs_nvim_docmd_check_more_dialog(n);
                 if response == VIM_YES {
                     return OK;
                 }

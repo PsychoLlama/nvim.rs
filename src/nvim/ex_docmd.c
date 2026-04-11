@@ -360,18 +360,12 @@ int nvim_get_exestack_len(void) { return exestack.ga_len; }
 const char *nvim_docmd_get_curbuf_swapname(void) { return (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) ? NULL : curbuf->b_ml.ml_mfp->mf_fname; }
 // nvim_docmd_parse_tabnext_count is implemented in Rust (commands.rs).
 
-// Count the number of undo steps to reach sequence 'step' in the current branch.
-// Sets *found to 1 if the target was found in the branch, 0 otherwise.
-int nvim_docmd_undo_count_steps(linenr_T step, int *found)
-{
-  u_header_T *uhp;
-  int count = 0;
-  for (uhp = curbuf->b_u_curhead ? curbuf->b_u_curhead : curbuf->b_u_newhead;
-       uhp != NULL && uhp->uh_seq > step;
-       uhp = uhp->uh_next.ptr, ++count) {}
-  *found = (step == 0 || (uhp != NULL && uhp->uh_seq >= step)) ? 1 : 0;
-  return count;
-}
+// nvim_docmd_undo_count_steps is implemented in Rust (commands.rs).
+// Undo tree accessors for Rust implementation:
+u_header_T *nvim_curbuf_get_u_curhead(void) { return curbuf->b_u_curhead; }
+u_header_T *nvim_curbuf_get_u_newhead(void) { return curbuf->b_u_newhead; }
+long nvim_uhp_get_seq(const u_header_T *uhp) { return uhp->uh_seq; }
+u_header_T *nvim_uhp_get_next(const u_header_T *uhp) { return uhp->uh_next.ptr; }
 
 void nvim_docmd_loop_sleep(int64_t msec) { LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int); }
 
@@ -577,16 +571,7 @@ void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope) { do_
 void nvim_post_chdir(int scope, bool dir_differs) { nvim_docmd_post_chdir_impl((CdScope)scope, dir_differs); }
 char *nvim_docmd_get_do_ecmd_cmd_dollar(void) { return dollar_command; }
 
-// eval_vars wrapper that returns the result and updates src/escaped via out-params.
-// Returns NULL if no match, or the replacement string (caller must free).
-char *nvim_eval_vars_wrap(exarg_T *eap, char *p, size_t *srclenp, const char **errormsgp,
-                          int *escapedp)
-{
-  int escaped = 0;
-  char *repl = eval_vars(p, eap->arg, srclenp, &eap->do_ecmd_lnum, errormsgp, &escaped, true);
-  *escapedp = escaped;
-  return repl;
-}
+// nvim_eval_vars_wrap is implemented in Rust (commands.rs, inlined into rs_expand_filename).
 
 int nvim_get_p_wic(void) { return p_wic ? 1 : 0; }
 void nvim_backslash_halve(char *p) { backslash_halve(p); }
@@ -640,16 +625,7 @@ void nvim_docmd_set_filetype_option(const char *arg)
   set_option_value_give_err(kOptFiletype, CSTR_AS_OPTVAL((char *)arg), OPT_LOCAL);
 }
 int nvim_docmd_setfname_curbuf(const char *arg) { return setfname(curbuf, (char *)arg, NULL, true); }
-/// Get eval_to_string for colorscheme query.
-char *nvim_docmd_eval_to_string_g_colors_name(void)
-{
-  char *expr = xstrdup("g:colors_name");
-  emsg_off++;
-  char *p = eval_to_string(expr, false, false);
-  emsg_off--;
-  xfree(expr);
-  return p;
-}
+// nvim_docmd_eval_to_string_g_colors_name is implemented in Rust (commands.rs, inlined).
 
 
 
@@ -737,14 +713,7 @@ char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
 int nvim_docmd_get_quitmore(void) { return quitmore; }
 void nvim_docmd_set_quitmore(int n) { quitmore = n; }
 void nvim_docmd_check_more_semsg(int n) { semsg(NGETTEXT("E173: %" PRId64 " more file to edit", "E173: %" PRId64 " more files to edit", (unsigned)n), (int64_t)n); }
-int nvim_docmd_check_more_dialog(int n)
-{
-  char buff[DIALOG_MSG_SIZE];
-  vim_snprintf(buff, DIALOG_MSG_SIZE,
-               NGETTEXT("%d more file to edit.  Quit anyway?",
-                        "%d more files to edit.  Quit anyway?", n), n);
-  return vim_dialog_yesno(VIM_QUESTION, NULL, buff, 1);
-}
+// nvim_docmd_check_more_dialog is implemented in Rust (impl_bodies.rs).
 // nvim_al_get_arg_had_last is defined in arglist.c
 // nvim_get_p_confirm and nvim_get_cmdmod_confirm are defined in window_shim.c
 

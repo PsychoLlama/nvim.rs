@@ -303,7 +303,11 @@ extern "C" {
     fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool;
     fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool);
     fn nvim_curbuf_get_u_seq_cur() -> c_int;
-    fn nvim_docmd_undo_count_steps(step: LinenrT, found: *mut c_int) -> c_int;
+    // Undo tree accessors (for rs_nvim_docmd_undo_count_steps)
+    fn nvim_curbuf_get_u_curhead() -> *mut c_void;
+    fn nvim_curbuf_get_u_newhead() -> *mut c_void;
+    fn nvim_uhp_get_seq(uhp: *const c_void) -> i64;
+    fn nvim_uhp_get_next(uhp: *const c_void) -> *mut c_void;
     // eval_vars helpers
     fn eval_vars(
         src: *mut c_char,
@@ -1351,13 +1355,7 @@ extern "C" {
     fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char;
     fn nvim_path_has_wildcard(p: *const c_char) -> bool;
     fn nvim_is_expand_char(c: c_int) -> bool;
-    fn nvim_eval_vars_wrap(
-        eap: ExArgHandle,
-        p: *mut c_char,
-        srclenp: *mut usize,
-        errormsgp: *mut *const c_char,
-        escapedp: *mut c_int,
-    ) -> *mut c_char;
+    // nvim_eval_vars_wrap replaced by direct eval_vars call in Rust
     fn nvim_has_dollar_or_tilde(s: *const c_char) -> bool;
     #[link_name = "expand_env_save"]
     fn nvim_expand_env_save(s: *const c_char) -> *mut c_char;
@@ -1530,7 +1528,15 @@ pub unsafe extern "C" fn rs_expand_filename(
 
         let mut srclen: usize = 0;
         let mut escaped: c_int = 0;
-        let repl = nvim_eval_vars_wrap(eap, p, &mut srclen, errormsgp, &mut escaped);
+        let repl = eval_vars(
+            p,
+            (*eap).arg,
+            &mut srclen,
+            &mut (*eap).do_ecmd_lnum,
+            errormsgp,
+            &mut escaped,
+            true,
+        );
         if !(*errormsgp).is_null() {
             return FAIL_VAL;
         }
@@ -2149,7 +2155,8 @@ extern "C" {
     fn rs_bt_prompt(buf: *mut c_void) -> bool;
 
     // Phase 21 helpers
-    fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
+    fn eval_to_string(arg: *mut c_char, join_list: bool, use_simple_function: bool) -> *mut c_char;
+    static mut emsg_off: c_int;
     fn load_colors(name: *mut c_char) -> c_int;
     fn nvim_buf_get_ml_empty(buf: *mut c_void) -> bool;
     fn os_breakcheck();
@@ -2197,7 +2204,14 @@ pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
     let arg = (*eap).arg;
     if arg.is_null() || *(arg as *const u8) == 0 {
-        let p = nvim_docmd_eval_to_string_g_colors_name();
+        let p = {
+            let expr = xstrdup(c"g:colors_name".as_ptr()) as *mut c_char;
+            emsg_off += 1;
+            let result = eval_to_string(expr, false, false);
+            emsg_off -= 1;
+            xfree(expr as *mut c_void);
+            result
+        };
         if !p.is_null() {
             msg(p as *const c_char, 0);
             xfree(p as *mut c_void);
@@ -3274,6 +3288,34 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
 }
 
 // =============================================================================
+// Phase 5: nvim_docmd_undo_count_steps (Rust migration)
+// =============================================================================
+
+/// Count undo steps needed to reach sequence `step` in the current branch.
+/// Sets `*found` to 1 if the target was found, 0 otherwise.
+/// Replaces C `nvim_docmd_undo_count_steps`.
+#[export_name = "nvim_docmd_undo_count_steps"]
+pub unsafe extern "C" fn rs_nvim_docmd_undo_count_steps(step: LinenrT, found: *mut c_int) -> c_int {
+    let start = nvim_curbuf_get_u_curhead();
+    let mut uhp = if !start.is_null() {
+        start
+    } else {
+        nvim_curbuf_get_u_newhead()
+    };
+    let mut count: c_int = 0;
+    while !uhp.is_null() && nvim_uhp_get_seq(uhp) > step as i64 {
+        uhp = nvim_uhp_get_next(uhp);
+        count += 1;
+    }
+    *found = if step == 0 || (!uhp.is_null() && nvim_uhp_get_seq(uhp) >= step as i64) {
+        1
+    } else {
+        0
+    };
+    count
+}
+
+// =============================================================================
 // Phase 7: ex_undo
 // =============================================================================
 
@@ -3300,7 +3342,7 @@ pub unsafe extern "C" fn rs_ex_undo(eap: ExArgHandle) {
             return;
         }
         let mut found: c_int = 0;
-        let count = nvim_docmd_undo_count_steps(step, &mut found);
+        let count = rs_nvim_docmd_undo_count_steps(step, &mut found);
         if found == 0 {
             emsg(crate::gt(crate::E_UNDOBANG_STR.as_ptr()));
             return;
