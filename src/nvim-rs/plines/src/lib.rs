@@ -2168,9 +2168,17 @@ extern "C" {
     fn nvim_win_get_topline(wp: WinHandle) -> c_int;
     fn rs_lineFolded(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
-    fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
+    fn decor_virt_lines(
+        wp: WinHandle,
+        start_row: c_int,
+        end_row: c_int,
+        num_below: *mut c_int,
+        lines: *mut c_void,
+        apply_folds: bool,
+    ) -> c_int;
+    fn rs_diff_check_fill(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_buf_get_line_len(buf: *mut c_void, lnum: c_int) -> c_int;
     fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
 }
@@ -2478,7 +2486,7 @@ pub extern "C" fn rs_plines_win(wp: WinHandle, lnum: c_int, limit_winheight: c_i
     unsafe {
         // Check for filler lines above this buffer line.
         let nofill = plines_win_nofill_impl(wp, lnum, limit_winheight);
-        let fill = nvim_win_get_fill(wp, lnum);
+        let fill = win_get_fill_impl(wp, lnum);
         nofill + fill
     }
 }
@@ -2606,7 +2614,7 @@ pub unsafe extern "C" fn rs_plines_win_full(
         let filler_lines = if actual_lnum == topline {
             nvim_win_get_topfill(wp)
         } else {
-            nvim_win_get_fill(wp, actual_lnum)
+            win_get_fill_impl(wp, actual_lnum)
         };
 
         // Check for concealed line
@@ -2668,7 +2676,7 @@ pub extern "C" fn rs_plines_m_win(wp: WinHandle, first: c_int, last: c_int, max:
         // Check for filler lines beyond end of buffer
         let line_count = nvim_win_buf_line_count(wp) as c_int;
         if current == line_count + 1 {
-            count += nvim_win_get_fill(wp, current);
+            count += win_get_fill_impl(wp, current);
         }
 
         if count < max {
@@ -2676,6 +2684,85 @@ pub extern "C" fn rs_plines_m_win(wp: WinHandle, first: c_int, last: c_int, max:
         } else {
             max
         }
+    }
+}
+
+// ============================================================================
+// win_get_fill - Filler lines above lnum
+// ============================================================================
+
+/// Internal implementation of win_get_fill, called directly from Rust.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+unsafe fn win_get_fill_impl(wp: WinHandle, lnum: c_int) -> c_int {
+    unsafe {
+        let virt_lines = decor_virt_lines(
+            wp,
+            lnum - 1,
+            lnum,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            true,
+        );
+
+        if nvim_diffopt_filler() != 0 {
+            let n = rs_diff_check_fill(wp, lnum);
+            if n > 0 {
+                return virt_lines + n;
+            }
+        }
+        virt_lines
+    }
+}
+
+/// Return the number of filler lines above "lnum".
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[unsafe(export_name = "win_get_fill")]
+pub extern "C" fn rs_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    unsafe { win_get_fill_impl(wp, lnum) }
+}
+
+// ============================================================================
+// plines_m_win_fill - Total lines (no fold/wrap) for a range
+// ============================================================================
+
+/// Return total number of physical and filler lines in a physical line range.
+/// Doesn't treat a fold as a single line or a wrapped line as multiple lines.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[unsafe(export_name = "plines_m_win_fill")]
+pub extern "C" fn rs_plines_m_win_fill(wp: WinHandle, first: c_int, last: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let mut count: c_int = last - first
+            + 1
+            + decor_virt_lines(
+                wp,
+                first - 1,
+                last,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                false,
+            );
+
+        if nvim_diffopt_filler() != 0 {
+            for lnum in first..=last {
+                let n = rs_diff_check_fill(wp, lnum);
+                count += n.max(0);
+            }
+        }
+
+        count.max(0)
     }
 }
 
@@ -2822,7 +2909,7 @@ pub unsafe extern "C" fn rs_win_text_height(
             ) != 0;
             lnum = lnum_first;
 
-            height_sum_fill += i64::from(nvim_win_get_fill(wp, lnum));
+            height_sum_fill += i64::from(win_get_fill_impl(wp, lnum));
             height_cur_nofill = i64::from(plines_win_nofill_impl(wp, lnum, 0));
             height_sum_nofill += height_cur_nofill;
             cur_lnum = lnum;

@@ -44,8 +44,6 @@ extern int rs_plines_win_nofold(void *csarg, int cstype, int first_char);
 extern int rs_plines_win_col(void *csarg, const char *line, int column, int cstype, int fill_lines);
 extern void rs_getvvcol(win_T *wp, pos_T pos, colnr_T *start, colnr_T *cursor, colnr_T *end);
 extern void rs_getvcols(win_T *wp, pos_T pos1, pos_T pos2, colnr_T *left, colnr_T *right);
-extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
-extern int rs_diffopt_filler(void);
 
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
@@ -376,28 +374,7 @@ void getvcols(win_T *wp, pos_T *pos1, pos_T *pos2, colnr_T *left, colnr_T *right
 /// Calls horizontal size functions defined above.
 
 
-// plines_win, plines_win_nofill: implemented in Rust (plines crate)
-
-/// Return the number of filler lines above "lnum".
-///
-/// @param wp
-/// @param lnum
-///
-/// @return Number of filler lines above lnum
-int win_get_fill(win_T *wp, linenr_T lnum)
-{
-  int virt_lines = decor_virt_lines(wp, lnum - 1, lnum, NULL, NULL, true);
-
-  // be quick when there are no filler lines
-  if (rs_diffopt_filler()) {
-    int n = rs_diff_check_fill(wp, lnum);
-
-    if (n > 0) {
-      return virt_lines + n;
-    }
-  }
-  return virt_lines;
-}
+// plines_win, plines_win_nofill, win_get_fill: implemented in Rust (plines crate)
 
 /// Get number of window lines physical line "lnum" will occupy in window "wp".
 /// Does not care about folding, 'wrap' or filler lines.
@@ -424,27 +401,7 @@ int plines_win_col(win_T *wp, linenr_T lnum, long column)
   return rs_plines_win_col(&csarg, line, (int)column, (int)cstype, fill_lines);
 }
 
-// plines_win_full, plines_m_win: implemented in Rust (plines crate)
-
-/// Return total number of physical and filler lines in a physical line range.
-/// Doesn't treat a fold as a single line or consider a wrapped line multiple lines,
-/// unlike plines_m_win() or win_text_height().
-///
-/// Mainly used for calculating scrolling offsets.
-int plines_m_win_fill(win_T *wp, linenr_T first, linenr_T last)
-{
-  int count = last - first + 1 + decor_virt_lines(wp, first - 1, last, NULL, NULL, false);
-
-  if (rs_diffopt_filler()) {
-    for (int lnum = first; lnum <= last; lnum++) {
-      // Note: this also considers folds (no filler lines inside folds).
-      int n = rs_diff_check_fill(wp, lnum);
-      count += MAX(n, 0);
-    }
-  }
-
-  return MAX(count, 0);
-}
+// plines_win_full, plines_m_win, plines_m_win_fill: implemented in Rust (plines crate)
 
 
 // C Wrappers for Rust FFI
