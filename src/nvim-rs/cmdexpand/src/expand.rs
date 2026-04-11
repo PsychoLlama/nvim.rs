@@ -83,25 +83,24 @@ extern "C" {
     );
 
     // Individual expanders
-    fn nvim_cmdexpand_find_help_tags(
-        pat: *const c_char,
+    fn find_help_tags(
+        arg: *const c_char,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
+        keep_lang: bool,
     ) -> c_int;
+    fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char);
     fn expand_shellcmd(
         filepat: *mut c_char,
         matches: *mut *mut *mut c_char,
         num_matches: *mut c_int,
         flags: c_int,
     );
-    fn nvim_cmdexpand_expand_old_setting(
-        num_matches: *mut c_int,
-        matches: *mut *mut *mut c_char,
-    ) -> c_int;
-    fn nvim_cmdexpand_expand_bufnames(
-        pat: *const c_char,
-        num_matches: *mut c_int,
-        matches: *mut *mut *mut c_char,
+    fn ExpandOldSetting(num_matches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int;
+    fn rs_ExpandBufnames(
+        pat: *mut c_char,
+        num_file: *mut c_int,
+        file: *mut *mut *mut c_char,
         options: c_int,
     ) -> c_int;
     fn nvim_cmdexpand_expand_rtdir(
@@ -121,13 +120,13 @@ extern "C" {
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_settings(
+    fn ExpandSettings(
         xp: *mut ExpandT,
         regmatch: *mut RegMatch,
-        pat: *const c_char,
+        fuzzystr: *mut c_char,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
-        fuzzy: c_int,
+        can_fuzzy: bool,
     ) -> c_int;
     fn nvim_cmdexpand_expand_string_setting(
         xp: *mut ExpandT,
@@ -707,7 +706,17 @@ pub unsafe extern "C" fn rs_expand_from_context(
     *num_matches = 0;
 
     if ctx == ExpandContext::Help.to_raw() {
-        return nvim_cmdexpand_find_help_tags(pat, num_matches, matches);
+        let help_pat = if pat.is_null() || *pat == 0 {
+            c"help".as_ptr()
+        } else {
+            pat.cast_const()
+        };
+        let ret = find_help_tags(help_pat, num_matches, matches, false);
+        if ret == OK {
+            cleanup_help_tags(*num_matches, *matches);
+            return 1;
+        }
+        return 0;
     }
 
     if ctx == ExpandContext::Shellcmd.to_raw() {
@@ -715,18 +724,13 @@ pub unsafe extern "C" fn rs_expand_from_context(
         return OK;
     }
     if ctx == ExpandContext::OldSetting.to_raw() {
-        return nvim_cmdexpand_expand_old_setting(num_matches, matches);
+        return ExpandOldSetting(num_matches, matches);
     }
     if ctx == ExpandContext::Buffers.to_raw() {
-        return nvim_cmdexpand_expand_bufnames(pat, num_matches, matches, options);
+        return rs_ExpandBufnames(pat, num_matches, matches, options);
     }
     if ctx == ExpandContext::DiffBuffers.to_raw() {
-        return nvim_cmdexpand_expand_bufnames(
-            pat,
-            num_matches,
-            matches,
-            options | BUF_DIFF_FILTER,
-        );
+        return rs_ExpandBufnames(pat, num_matches, matches, options | BUF_DIFF_FILTER);
     }
     if ctx == ExpandContext::Tags.to_raw() || ctx == ExpandContext::TagsListfiles.to_raw() {
         return rs_expand_tags(
@@ -828,13 +832,13 @@ pub unsafe extern "C" fn rs_expand_from_context(
 
     let ret =
         if ctx == ExpandContext::Settings.to_raw() || ctx == ExpandContext::BoolSettings.to_raw() {
-            nvim_cmdexpand_expand_settings(
+            ExpandSettings(
                 xp,
                 &raw mut regmatch,
                 effective_pat,
                 num_matches,
                 matches,
-                c_int::from(fuzzy),
+                fuzzy,
             )
         } else if ctx == ExpandContext::StringSetting.to_raw() {
             nvim_cmdexpand_expand_string_setting(xp, &raw mut regmatch, num_matches, matches)

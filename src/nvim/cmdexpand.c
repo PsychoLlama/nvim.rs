@@ -378,24 +378,6 @@ void nvim_cmdexpand_regmatch_set_regprog(regmatch_T *rmp, void *prog)
   rmp->regprog = (regprog_T *)prog;
 }
 
-int nvim_cmdexpand_find_help_tags(const char *pat, int *numMatches, char ***matches)
-{
-  if (find_help_tags(*pat == NUL ? "help" : pat, numMatches, matches, false) == OK) {
-    cleanup_help_tags(*numMatches, *matches);
-    return 1;
-  }
-  return 0;
-}
-
-int nvim_cmdexpand_expand_old_setting(int *numMatches, char ***matches)
-{
-  return ExpandOldSetting(numMatches, matches);
-}
-
-int nvim_cmdexpand_expand_bufnames(const char *pat, int *numMatches, char ***matches, int options)
-{
-  return ExpandBufnames(pat, numMatches, matches, options);
-}
 
 int nvim_cmdexpand_expand_rtdir(const char *pat, int flags, int *numMatches, char ***matches,
                                 char **directories)
@@ -413,11 +395,6 @@ int nvim_cmdexpand_expand_runtime_cmd(const char *pat, int *numMatches, char ***
   return expand_runtime_cmd(pat, numMatches, matches);
 }
 
-int nvim_cmdexpand_expand_settings(expand_T *xp, regmatch_T *regmatch, const char *pat,
-                                   int *numMatches, char ***matches, int fuzzy)
-{
-  return ExpandSettings(xp, regmatch, pat, numMatches, matches, (bool)fuzzy);
-}
 
 int nvim_cmdexpand_expand_string_setting(expand_T *xp, regmatch_T *regmatch,
                                           int *numMatches, char ***matches)
