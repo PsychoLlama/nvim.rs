@@ -8,46 +8,40 @@ use crate::ffi::{self, ExargPtr, ExpandPtr};
 use crate::helpers::HISTORY_NAMES;
 use crate::{HIST_COUNT, HIST_INVALID};
 
+/// IOSIZE constant (verified by _Static_assert in C).
+const IOSIZE: usize = 1025;
+
 extern "C" {
     // -- Message output --
-    fn nvim_cmdhist_msg_puts_title(buf: *const c_char);
-    fn nvim_cmdhist_msg_putchar(c: c_int);
+    fn msg_puts_title(buf: *const c_char);
+    fn msg_putchar(c: c_int);
     fn nvim_cmdhist_msg_outtrans(buf: *const c_char);
-    fn nvim_cmdhist_message_filtered(s: *const c_char) -> c_int;
+    fn message_filtered(s: *const c_char) -> bool;
 
     // -- Display --
-    fn nvim_cmdhist_get_Columns() -> c_int;
-    fn nvim_cmdhist_get_got_int() -> c_int;
-    fn nvim_cmdhist_vim_strsize(s: *const c_char) -> c_int;
-    fn nvim_cmdhist_trunc_string(s: *const c_char, buf: *mut c_char, len: c_int, buflen: c_int);
-    fn nvim_cmdhist_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
+    static Columns: c_int;
+    static got_int: bool;
+    fn vim_strsize(s: *const c_char) -> c_int;
+    fn trunc_string(s: *mut c_char, buf: *mut c_char, len: c_int, buflen: c_int);
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
 
-    // -- Formatting (snprintf wrappers using IObuff) --
+    // -- Formatting (snprintf wrappers using IObuff in ex_cmds_shim.c) --
     fn nvim_cmdhist_format_hist_header(name: *const c_char) -> *mut c_char;
     fn nvim_cmdhist_format_hist_entry(is_current: c_int, hisnum: c_int) -> c_int;
     fn nvim_cmdhist_get_IObuff() -> *mut c_char;
-    fn nvim_cmdhist_get_IOSIZE() -> c_int;
 
     // -- Parsing --
-    fn nvim_cmdhist_get_list_range(
-        end: *mut *mut c_char,
-        val1: *mut c_int,
-        val2: *mut c_int,
-    ) -> c_int;
+    fn get_list_range(end: *mut *mut c_char, val1: *mut c_int, val2: *mut c_int) -> c_int;
 
     // -- Errors --
     fn nvim_cmdhist_semsg_trailing_arg(s: *const c_char);
     fn nvim_cmdhist_semsg_val_too_large(s: *const c_char);
     fn nvim_cmdhist_msg_history_zero();
 
-    // -- Exarg/expand accessors --
+    // -- Exarg/expand accessors (ex_cmds_shim.c) --
     fn nvim_cmdhist_eap_get_arg(eap: ExargPtr) -> *mut c_char;
     fn nvim_cmdhist_xp_buf_set(xp: ExpandPtr, idx: c_int, c: c_char);
     fn nvim_cmdhist_xp_buf_ptr(xp: ExpandPtr) -> *mut c_char;
-
-    // -- Character classification --
-    fn nvim_cmdhist_ascii_isdigit(c: c_int) -> c_int;
-    fn nvim_cmdhist_ascii_isalpha(c: c_int) -> c_int;
 }
 
 /// Short names for history argument completion: `:=@>?/`
@@ -111,13 +105,13 @@ pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
 
     // Parse history type if not starting with digit, '-', or ','
     let first_byte = *arg;
-    if nvim_cmdhist_ascii_isdigit(c_int::from(first_byte)) == 0
+    if !(first_byte as u8).is_ascii_digit()
         && first_byte != b'-' as c_char
         && first_byte != b',' as c_char
     {
         end = arg;
-        while nvim_cmdhist_ascii_isalpha(c_int::from(*end)) != 0
-            || !ffi::nvim_cmdhist_vim_strchr(c":=@>/?".as_ptr(), c_int::from(*end as u8)).is_null()
+        while (*end as u8).is_ascii_alphabetic()
+            || !ffi::vim_strchr(c":=@>/?".as_ptr(), c_int::from(*end as u8)).is_null()
         {
             end = end.add(1);
         }
@@ -136,7 +130,7 @@ pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
         }
     }
 
-    if nvim_cmdhist_get_list_range(&mut end, &mut hisidx1, &mut hisidx2) == 0 || *end != 0 {
+    if get_list_range(&mut end, &mut hisidx1, &mut hisidx2) == 0 || *end != 0 {
         if *end != 0 {
             nvim_cmdhist_semsg_trailing_arg(end);
         } else {
@@ -145,11 +139,11 @@ pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
         return;
     }
 
-    while nvim_cmdhist_get_got_int() == 0 && histype1 <= histype2 {
+    while !got_int && histype1 <= histype2 {
         // Format header: "\n      #  <name> history"
         let name = HISTORY_NAMES[histype1 as usize].as_ptr().cast::<c_char>();
         let header_buf = nvim_cmdhist_format_hist_header(name);
-        nvim_cmdhist_msg_puts_title(header_buf);
+        msg_puts_title(header_buf);
 
         let idx = *ffi::get_hisidx(histype1);
         let hist = ffi::get_histentry(histype1);
@@ -176,7 +170,7 @@ pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
         if idx >= 0 && j <= k {
             let mut i = idx + 1;
             loop {
-                if nvim_cmdhist_get_got_int() != 0 {
+                if got_int {
                     break;
                 }
                 if i == hislen {
@@ -185,29 +179,20 @@ pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
                 let entry = ffi::nvim_cmdhist_he_at(hist, i);
                 let hisstr = ffi::nvim_cmdhist_he_get_hisstr(entry);
                 let hisnum = ffi::nvim_cmdhist_he_get_hisnum(entry);
-                if !hisstr.is_null()
-                    && hisnum >= j
-                    && hisnum <= k
-                    && nvim_cmdhist_message_filtered(hisstr) == 0
-                {
-                    nvim_cmdhist_msg_putchar(b'\n' as c_int);
+                if !hisstr.is_null() && hisnum >= j && hisnum <= k && !message_filtered(hisstr) {
+                    msg_putchar(b'\n' as c_int);
                     let is_current = c_int::from(i == idx);
                     let len = nvim_cmdhist_format_hist_entry(is_current, hisnum);
                     let iobuff = nvim_cmdhist_get_IObuff();
-                    let iosize = nvim_cmdhist_get_IOSIZE();
-                    if nvim_cmdhist_vim_strsize(hisstr) > nvim_cmdhist_get_Columns() - 10 {
-                        nvim_cmdhist_trunc_string(
+                    if vim_strsize(hisstr) > Columns - 10 {
+                        trunc_string(
                             hisstr,
                             iobuff.add(len as usize),
-                            nvim_cmdhist_get_Columns() - 10,
-                            iosize - len,
+                            Columns - 10,
+                            (IOSIZE - len as usize) as c_int,
                         );
                     } else {
-                        nvim_cmdhist_xstrlcpy(
-                            iobuff.add(len as usize),
-                            hisstr,
-                            (iosize - len) as usize,
-                        );
+                        xstrlcpy(iobuff.add(len as usize), hisstr, IOSIZE - len as usize);
                     }
                     nvim_cmdhist_msg_outtrans(iobuff);
                 }

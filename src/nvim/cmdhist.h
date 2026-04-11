@@ -55,4 +55,4 @@ void f_histnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 const void *hist_iter(const void *iter, uint8_t history_type, bool zero, histentry_T *hist);
 histentry_T *hist_get_array(uint8_t history_type, int **new_hisidx, int **new_hisnum);
 
-#include "cmdhist.h.generated.h"
+// cmdhist.c deleted: no generated header.

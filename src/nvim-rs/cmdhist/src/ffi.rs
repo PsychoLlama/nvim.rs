@@ -196,11 +196,26 @@ pub fn nvim_cmdhist_sizeof_histentry() -> usize {
 // =============================================================================
 
 extern "C" {
-    pub fn nvim_cmdhist_get_p_hi() -> i64;
-    pub fn nvim_cmdhist_get_maptick() -> c_int;
-    pub fn nvim_cmdhist_os_time() -> u64;
+    static p_hi: i64;
+    static maptick: c_int;
+    pub fn os_time() -> u64;
     pub fn nvim_cmdhist_get_cmdmod_cmod_flags() -> c_int;
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}
+
+/// Get `'history'` option value.
+pub unsafe fn nvim_cmdhist_get_p_hi() -> i64 {
+    p_hi
+}
+
+/// Get current maptick value.
+pub unsafe fn nvim_cmdhist_get_maptick() -> c_int {
+    maptick
+}
+
+/// Get current OS time.
+pub unsafe fn nvim_cmdhist_os_time() -> u64 {
+    os_time()
 }
 
 /// Compare two C strings (wraps `strcmp`).

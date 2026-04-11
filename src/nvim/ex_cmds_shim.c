@@ -518,3 +518,83 @@ void nvim_exarg_set_force_bin(exarg_T *eap, int val) { eap->force_bin = val; }
 void nvim_exarg_set_read_edit(exarg_T *eap, int val) { eap->read_edit = val; }
 void nvim_exarg_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; }
 
+// cmdhist Phase 4: shims for symbols that were in cmdhist.c, now relocated here
+// after cmdhist.c is deleted. These replace the identical functions in cmdhist.c.
+
+// Compile-time assertions verifying constants match Rust-side expectations
+#include "nvim/eval/typval_defs.h"
+_Static_assert(sizeof(histentry_T) == 40,
+               "sizeof(histentry_T) changed - update Rust HistoryEntry in state.rs");
+_Static_assert(HIST_COUNT == 5, "HIST_COUNT changed - update Rust HIST_COUNT");
+_Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS changed - update Rust constant");
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC changed - update Rust constant");
+_Static_assert(RE_STRING == 2, "RE_STRING changed - update Rust constant");
+_Static_assert(VAR_UNKNOWN == 0, "VAR_UNKNOWN changed - update Rust constant");
+_Static_assert(VAR_NUMBER == 1, "VAR_NUMBER changed - update Rust constant");
+_Static_assert(VAR_STRING == 2, "VAR_STRING changed - update Rust constant");
+_Static_assert(NUMBUFLEN == 65, "NUMBUFLEN changed - update Rust constant");
+_Static_assert(IOSIZE == 1025, "IOSIZE changed - update Rust constant");
+
+// Global accessor that requires C cmdmod struct access
+int nvim_cmdhist_get_cmdmod_cmod_flags(void) { return (int)cmdmod.cmod_flags; }
+
+// Regexp wrappers (opaque regmatch_T heap-allocated for Rust)
+void *nvim_cmdhist_regcomp(const char *str, int flags)
+{
+  regmatch_T *rm = xmalloc(sizeof(regmatch_T));
+  rm->regprog = vim_regcomp((char *)str, flags);
+  if (rm->regprog == NULL) {
+    xfree(rm);
+    return NULL;
+  }
+  rm->rm_ic = false;  // always match case
+  return (void *)rm;
+}
+int nvim_cmdhist_regexec(void *rm, const char *str)
+{
+  return vim_regexec((regmatch_T *)rm, (char *)str, 0);
+}
+void nvim_cmdhist_regfree(void *rm)
+{
+  regmatch_T *r = (regmatch_T *)rm;
+  vim_regfree(r->regprog);
+  xfree(r);
+}
+
+// typval_T wrappers
+const char *nvim_cmdhist_tv_get_string_chk(typval_T *tv) { return tv_get_string_chk(tv); }
+const char *nvim_cmdhist_tv_get_string_buf(typval_T *tv, char *buf) { return tv_get_string_buf(tv, buf); }
+int64_t nvim_cmdhist_tv_get_number(typval_T *tv) { return (int64_t)tv_get_number(tv); }
+int64_t nvim_cmdhist_tv_get_number_chk(typval_T *tv, void *error) { return (int64_t)tv_get_number_chk(tv, (bool *)error); }
+int nvim_cmdhist_tv_get_type(typval_T *tv) { return tv->v_type; }
+typval_T *nvim_cmdhist_tv_idx(typval_T *tv, int idx) { return &tv[idx]; }
+void nvim_cmdhist_rettv_set_number(typval_T *rettv, int64_t val) { rettv->vval.v_number = (varnumber_T)val; }
+void nvim_cmdhist_rettv_set_string(typval_T *rettv, char *s) { rettv->vval.v_string = s; }
+void nvim_cmdhist_rettv_set_type(typval_T *rettv, int typ) { rettv->v_type = (VarType)typ; }
+size_t nvim_cmdhist_strlen(const char *s) { return strlen(s); }
+
+// msg_outtrans adapter (Rust cannot call 3-arg C function directly)
+void nvim_cmdhist_msg_outtrans(const char *buf) { msg_outtrans(buf, 0, false); }
+
+// History display formatting (uses IObuff global and vim_snprintf)
+char *nvim_cmdhist_format_hist_header(const char *name)
+{
+  vim_snprintf(IObuff, IOSIZE, "\n      #  %s history", name);
+  return IObuff;
+}
+int nvim_cmdhist_format_hist_entry(int is_current, int hisnum_val)
+{
+  return snprintf(IObuff, IOSIZE, "%c%6d  ", is_current ? '>' : ' ', hisnum_val);
+}
+char *nvim_cmdhist_get_IObuff(void) { return IObuff; }
+
+// Error messages (gettext wrappers)
+void nvim_cmdhist_semsg_trailing_arg(const char *s) { semsg(_(e_trailing_arg), s); }
+void nvim_cmdhist_semsg_val_too_large(const char *s) { semsg(_(e_val_too_large), s); }
+void nvim_cmdhist_msg_history_zero(void) { msg(_("'history' option is zero"), 0); }
+
+// exarg_T / expand_T field accessors
+char *nvim_cmdhist_eap_get_arg(exarg_T *eap) { return eap->arg; }
+void nvim_cmdhist_xp_buf_set(expand_T *xp, int idx, char c) { xp->xp_buf[idx] = c; }
+char *nvim_cmdhist_xp_buf_ptr(expand_T *xp) { return xp->xp_buf; }
+
