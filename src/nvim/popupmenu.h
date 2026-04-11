@@ -42,17 +42,6 @@ typedef struct {
 /// Opaque border configuration for popup menu rendering (Rust FFI).
 typedef struct PumBorderConfig PumBorderConfig;
 
-/// Result type for display geometry computation (Rust FFI).
-typedef struct {
-  int pum_win_row;
-  int cursor_col;
-  int anchor_grid;
-  int win_row_offset;
-  int win_col_offset;
-  int above_row;
-  int below_row;
-} PumDisplayGeometry;
-
 /// state for pum_ext_select_item.
 EXTERN struct {
   bool active;
@@ -81,8 +70,16 @@ typedef struct {
   int key_k_rightrelease;
 } PumKeyConstants;
 
-/// Batch curwin geometry for popup menu positioning (Rust FFI).
-/// Filled by `nvim_pum_get_curwin_geometry()`.
+/// Target window context for vertical placement (Rust FFI).
+/// Filled by `nvim_pum_get_target_win_context()`.
+typedef struct {
+  int wrow;
+  int cline_row;
+  int cline_height;
+} PumTargetWinContext;
+
+/// Target window geometry for geometry computation (Rust FFI).
+/// Filled by `nvim_pum_get_target_win_geometry()`.
 typedef struct {
   int row_offset;
   int col_offset;
@@ -90,11 +87,20 @@ typedef struct {
   int wcol;
   int p_rl;
   int view_width;
+  int view_height;
   int winrow;
   int wincol;
   int grid_target_handle;
   int grid_target_is_default;
-} PumCurwinGeometry;
+  int cmdline_offset;
+} PumTargetWinGeometry;
+
+/// Preview window row info (Rust FFI).
+/// Filled by `nvim_pum_find_pvwin()`.
+typedef struct {
+  int above_row;
+  int below_row;
+} PumPvwinRows;
 
 /// Popup menu state owned by Rust.
 /// Field layout must match `PumState` in src/nvim-rs/popupmenu/src/lib.rs.

@@ -330,12 +330,10 @@ extern "C" {
     fn win_close(wp: *mut WinHandle, free_buf: bool, force: bool) -> c_int;
 }
 
-// Phase 8: Display orchestrator C accessor functions.
+// Display orchestrator C accessor functions.
 extern "C" {
     /// Validate cursor column in the given window.
     fn validate_cursor_col(wp: *mut WinHandle);
-    /// Compute display geometry (`pum_win_row`, `cursor_col`, anchor, offsets, above/below).
-    fn nvim_pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry;
     /// Send external popupmenu show event with Arena-allocated arrays.
     fn nvim_pum_ext_show(
         array: *mut crate::item::PumItemArray,
@@ -349,28 +347,57 @@ extern "C" {
     );
     /// Send external popupmenu select event.
     fn ui_call_popupmenu_select(selected: i64);
-    /// Find preview window and compute above/below row adjustments.
-    fn nvim_pum_find_pvwin_rows(above_row_out: *mut c_int, below_row_out: *mut c_int);
-    /// Compute vertical placement (writes `PUM_STATE.row`, `.height`, `.above`).
-    fn nvim_pum_compute_vp(
-        size: c_int,
-        pum_win_row: c_int,
-        above_row: c_int,
-        below_row: c_int,
-        border_width: c_int,
-    );
-    /// Compute horizontal placement (writes `PUM_STATE.col`, `.width`).
-    fn nvim_pum_compute_hp(cursor_col: c_int);
     /// Get `w_p_rl` for a window.
     #[link_name = "nvim_win_get_p_rl"]
     fn nvim_win_get_w_p_rl(wp: *mut WinHandle) -> c_int;
-    /// Get `Columns`.
     /// Set selected item (Rust function via extern "C").
     fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int;
     /// Get border width from Rust.
     fn rs_pum_border_width() -> c_int;
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
+    /// Return `cmdline_win` pointer (or NULL).
+    fn nvim_pum_get_cmdline_win() -> *mut WinHandle;
+    /// Return `cmdline_row` value.
+    fn nvim_pum_get_cmdline_row() -> c_int;
+    /// Return target window context after calling `validate_cheight`.
+    fn nvim_pum_get_target_win_context(wp: *mut WinHandle) -> PumTargetWinContext;
+    /// Return target window geometry fields.
+    fn nvim_pum_get_target_win_geometry(wp: *mut WinHandle) -> PumTargetWinGeometry;
+    /// Find the preview window and return above/below row adjustments.
+    fn nvim_pum_find_pvwin() -> PumPvwinRows;
+}
+
+/// Context fields for the target window (for vertical placement).
+#[repr(C)]
+struct PumTargetWinContext {
+    wrow: c_int,
+    cline_row: c_int,
+    cline_height: c_int,
+}
+
+/// Geometry fields for the target window.
+#[repr(C)]
+struct PumTargetWinGeometry {
+    row_offset: c_int,
+    col_offset: c_int,
+    wrow: c_int,
+    wcol: c_int,
+    p_rl: c_int,
+    view_width: c_int,
+    view_height: c_int,
+    winrow: c_int,
+    wincol: c_int,
+    grid_target_handle: c_int,
+    grid_target_is_default: c_int,
+    cmdline_offset: c_int,
+}
+
+/// Preview window row info.
+#[repr(C)]
+struct PumPvwinRows {
+    above_row: c_int,
+    below_row: c_int,
 }
 
 // C globals used by display.
@@ -381,8 +408,7 @@ extern "C" {
     static mut pum_grid: crate::ScreenGrid;
 }
 
-/// Result of geometry computation from C.
-#[repr(C)]
+/// Result of display geometry computation.
 struct PumDisplayGeometry {
     pum_win_row: c_int,
     cursor_col: c_int,
@@ -509,6 +535,174 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
 // rs_pum_set_info: moved to preview.rs
 // rs_pum_set_selected: moved to selection.rs
 
+/// UI capability for cmdline mode (kUICmdline = 0).
+const K_UI_CMDLINE: c_int = 0;
+/// Default grid handle.
+const DEFAULT_GRID_HANDLE: c_int = 1;
+
+/// Compute display geometry (replaces `nvim_pum_compute_geometry`).
+///
+/// Returns `pum_win_row`, `cursor_col`, `anchor_grid`, `win_row/col` offsets, `above_row`,
+/// `below_row`.
+///
+/// # Safety
+/// Calls C accessor functions for `cmdline_win`, `curwin`, and state.
+unsafe fn pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry {
+    let mut geom = PumDisplayGeometry {
+        pum_win_row: 0,
+        cursor_col: 0,
+        anchor_grid: DEFAULT_GRID_HANDLE,
+        win_row_offset: 0,
+        win_col_offset: 0,
+        above_row: 0,
+        below_row: 0,
+    };
+
+    let state = State;
+    let is_cmdline = (state & MODE_CMDLINE) != 0;
+    let cmdline_win = nvim_pum_get_cmdline_win();
+    let cmdline_row_val = nvim_pum_get_cmdline_row();
+
+    // Compute below_row: max of cmdline_row and curwin bottom
+    let cw = nvim_pum_get_target_win_geometry(curwin);
+    let curwin_bottom = cw.winrow + cw.view_height;
+    geom.below_row = if cmdline_row_val > curwin_bottom {
+        cmdline_row_val
+    } else {
+        curwin_bottom
+    };
+
+    if is_cmdline {
+        geom.below_row = cmdline_row_val;
+    }
+
+    let target_win = if is_cmdline { cmdline_win } else { curwin };
+
+    if is_cmdline {
+        if !cmdline_win.is_null() {
+            let cw_geom = nvim_pum_get_target_win_geometry(cmdline_win);
+            geom.pum_win_row = cw_geom.wrow;
+            geom.cursor_col = cw_geom.cmdline_offset + cmd_startcol;
+            geom.cursor_col %= cw_geom.view_width;
+        } else if ui_has(K_UI_CMDLINE) {
+            geom.pum_win_row = 0;
+            geom.cursor_col = cmd_startcol % Columns;
+            geom.anchor_grid = -1;
+        } else {
+            geom.pum_win_row = cmdline_row_val;
+            geom.cursor_col = cmd_startcol % Columns;
+        }
+    } else {
+        let cw_geom = nvim_pum_get_target_win_geometry(curwin);
+        geom.pum_win_row = cw_geom.wrow;
+        if PUM_STATE.rl != 0 {
+            geom.cursor_col = cw_geom.view_width - cw_geom.wcol - 1;
+        } else {
+            geom.cursor_col = cw_geom.wcol;
+        }
+    }
+
+    if !target_win.is_null() {
+        let tw = nvim_pum_get_target_win_geometry(target_win);
+        geom.anchor_grid = tw.grid_target_handle;
+        geom.pum_win_row += tw.row_offset;
+        geom.cursor_col += tw.col_offset;
+        if tw.grid_target_is_default == 0 {
+            geom.pum_win_row += tw.winrow;
+            geom.cursor_col += tw.wincol;
+            if ui_has(K_UI_MULTIGRID) {
+                geom.win_row_offset = tw.winrow;
+                geom.win_col_offset = tw.wincol;
+            } else {
+                geom.anchor_grid = DEFAULT_GRID_HANDLE;
+            }
+        }
+    }
+
+    geom
+}
+
+/// Compute vertical placement (replaces `nvim_pum_compute_vp`).
+///
+/// Writes `PUM_STATE.row`, `.height`, `.above`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn pum_compute_vp(
+    size: c_int,
+    pum_win_row: c_int,
+    above_row: c_int,
+    below_row: c_int,
+    border_width: c_int,
+) {
+    let state = State;
+    let is_cmdline = (state & MODE_CMDLINE) != 0;
+    let cmdline_win = nvim_pum_get_cmdline_win();
+    let target_win = if is_cmdline { cmdline_win } else { curwin };
+    let has_target_win = !target_win.is_null();
+    let (context_above, context_below) = if has_target_win {
+        let ctx = nvim_pum_get_target_win_context(target_win);
+        let above = ctx.wrow - ctx.cline_row;
+        let below = ctx.cline_row + ctx.cline_height - ctx.wrow;
+        (above, below)
+    } else {
+        (0, 0)
+    };
+    let cmdline_row_val = nvim_pum_get_cmdline_row();
+
+    let result = crate::placement::rs_pum_compute_vertical(
+        size,
+        pum_win_row,
+        above_row,
+        below_row,
+        border_width,
+        cmdline_row_val,
+        c_int::from(is_cmdline),
+        c_int::from(has_target_win),
+        context_above,
+        context_below,
+    );
+    PUM_STATE.row = result.row;
+    PUM_STATE.height = result.height;
+    PUM_STATE.above = result.above;
+}
+
+/// Compute horizontal placement (replaces `nvim_pum_compute_hp`).
+///
+/// Writes `PUM_STATE.col`, `.width`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn pum_compute_hp(cursor_col: c_int) {
+    let state = State;
+    let is_cmdline = (state & MODE_CMDLINE) != 0;
+    let cmdline_win = nvim_pum_get_cmdline_win();
+    let target_win = if is_cmdline { cmdline_win } else { curwin };
+    let max_col = if target_win.is_null() {
+        Columns
+    } else {
+        let tw = nvim_pum_get_target_win_geometry(target_win);
+        let win_right = tw.wincol + tw.view_width;
+        if Columns > win_right {
+            Columns
+        } else {
+            win_right
+        }
+    };
+
+    let result = crate::placement::rs_pum_compute_horizontal(
+        cursor_col,
+        max_col,
+        PUM_STATE.rl,
+        PUM_STATE.scrollbar,
+        PUM_STATE.base_width,
+        PUM_STATE.kind_width,
+        PUM_STATE.extra_width,
+    );
+    PUM_STATE.col = result.col;
+    PUM_STATE.width = result.width;
+}
+
 /// Display the popup menu.
 ///
 /// Shows the popup menu with the given items array. Handles:
@@ -553,8 +747,8 @@ pub unsafe extern "C" fn rs_pum_display(
         PUM_STATE.is_drawn = 1;
         validate_cursor_col(curwin);
 
-        // Compute geometry from C (handles target_win, cmdline_win, grid offsets)
-        let geom = nvim_pum_compute_geometry(cmd_startcol);
+        // Compute geometry in Rust (handles target_win, cmdline_win, grid offsets)
+        let geom = pum_compute_geometry(cmd_startcol);
         PUM_STATE.win_row_offset = geom.win_row_offset;
         PUM_STATE.win_col_offset = geom.win_col_offset;
         PUM_STATE.anchor_grid = geom.anchor_grid;
@@ -583,21 +777,16 @@ pub unsafe extern "C" fn rs_pum_display(
         // Find preview window and adjust above/below rows
         let mut above_row = geom.above_row;
         let mut below_row = geom.below_row;
-        let mut pvwin_above: c_int = 0;
-        let mut pvwin_below: c_int = 0;
-        nvim_pum_find_pvwin_rows(
-            std::ptr::addr_of_mut!(pvwin_above),
-            std::ptr::addr_of_mut!(pvwin_below),
-        );
-        if pvwin_above > 0 {
-            above_row = pvwin_above;
+        let pvwin = nvim_pum_find_pvwin();
+        if pvwin.above_row > 0 {
+            above_row = pvwin.above_row;
         }
-        if pvwin_below > 0 {
-            below_row = pvwin_below;
+        if pvwin.below_row > 0 {
+            below_row = pvwin.below_row;
         }
 
-        // Compute vertical placement (writes PUM_STATE.row, .height, .above)
-        nvim_pum_compute_vp(size, pum_win_row, above_row, below_row, border_width);
+        // Compute vertical placement in Rust (writes PUM_STATE.row, .height, .above)
+        pum_compute_vp(size, pum_win_row, above_row, below_row, border_width);
 
         // Don't display when we only have room for one line
         let pum_height = PUM_STATE.height;
@@ -620,8 +809,8 @@ pub unsafe extern "C" fn rs_pum_display(
         let pum_height = PUM_STATE.height;
         PUM_STATE.scrollbar = c_int::from(pum_height < size);
 
-        // Compute horizontal placement (writes PUM_STATE.col, .width)
-        nvim_pum_compute_hp(cursor_col);
+        // Compute horizontal placement in Rust (writes PUM_STATE.col, .width)
+        pum_compute_hp(cursor_col);
 
         // Adjust for border overflow
         let pum_col = PUM_STATE.col;

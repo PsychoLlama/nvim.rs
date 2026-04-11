@@ -31,22 +31,24 @@ struct PumKeyConstants {
     key_k_rightrelease: c_int,
 }
 
-/// Batch curwin geometry for popup menu positioning.
+/// Target window geometry for popup menu positioning.
 ///
-/// Filled by `nvim_pum_get_curwin_geometry()`. Layout must match
-/// `PumCurwinGeometry` in `popupmenu.h`.
+/// Filled by `nvim_pum_get_target_win_geometry()`. Layout must match
+/// `PumTargetWinGeometry` in `popupmenu.h`.
 #[repr(C)]
-struct PumCurwinGeometry {
+struct PumTargetWinGeometry {
     row_offset: c_int,
     col_offset: c_int,
     wrow: c_int,
     wcol: c_int,
     p_rl: c_int,
     view_width: c_int,
+    view_height: c_int,
     winrow: c_int,
     wincol: c_int,
     grid_target_handle: c_int,
     grid_target_is_default: c_int,
+    cmdline_offset: c_int,
 }
 
 /// Result of UI flush position calculation.
@@ -353,8 +355,9 @@ extern "C" {
     fn nvim_get_mouse_col() -> c_int;
     /// Set `mouse_col`.
     fn nvim_set_mouse_col(val: c_int);
-    /// Batch curwin geometry accessor.
-    fn nvim_pum_get_curwin_geometry() -> PumCurwinGeometry;
+    /// Target window geometry accessor.
+    fn nvim_pum_get_target_win_geometry(wp: *mut crate::display::WinHandle)
+        -> PumTargetWinGeometry;
     /// Find menu by path name (returns NULL if not found).
     fn menu_find(path_name: *const std::ffi::c_char) -> *mut VimMenuHandle;
 }
@@ -596,7 +599,7 @@ pub unsafe extern "C" fn rs_pum_make_popup(
 ) {
     if use_mouse_pos == 0 {
         // Set mouse position at the cursor so the menu pops up there.
-        let cw = nvim_pum_get_curwin_geometry();
+        let cw = nvim_pum_get_target_win_geometry(curwin);
         let p_rl = cw.p_rl != 0;
 
         nvim_set_mouse_row(cw.row_offset + cw.wrow);

@@ -67,29 +67,8 @@ extern unsigned rs_get_cot_flags(void);
 extern void rs_pum_ext_select_item(int item, int insert, int finish);
 extern int rs_pum_undisplay(int immediate);
 extern int rs_pum_border_width(void);
-
-
-typedef struct {
-  int row;
-  int height;
-  int above;
-} PumVerticalResult;
-extern PumVerticalResult rs_pum_compute_vertical(int size, int pum_win_row, int above_row,
-                                                  int below_row, int pum_border_size,
-                                                  int cmdline_row, int is_cmdline,
-                                                  int has_target_win, int context_above,
-                                                  int context_below);
-
-typedef struct {
-  int col;
-  int width;
-} PumHorizontalResult;
-extern PumHorizontalResult rs_pum_compute_horizontal(int cursor_col, int max_col, int pum_rl,
-                                                     int pum_scrollbar, int pum_base_width,
-                                                     int pum_kind_width, int pum_extra_width);
-
 extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_changed,
-                            int cmd_startcol);
+                           int cmd_startcol);
 
 
 
@@ -122,22 +101,65 @@ PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
 }
 
 
-// curwin geometry for make_popup
-/// Batch curwin geometry accessor (replaces 10 individual nvim_pum_curwin_* functions).
-PumCurwinGeometry nvim_pum_get_curwin_geometry(void)
+// Phase 1 C accessors
+
+/// Return cmdline_win pointer (or NULL).
+win_T *nvim_pum_get_cmdline_win(void)
 {
-  return (PumCurwinGeometry) {
-    .row_offset = curwin->w_grid.row_offset,
-    .col_offset = curwin->w_grid.col_offset,
-    .wrow = curwin->w_wrow,
-    .wcol = curwin->w_wcol,
-    .p_rl = curwin->w_p_rl,
-    .view_width = curwin->w_view_width,
-    .winrow = curwin->w_winrow,
-    .wincol = curwin->w_wincol,
-    .grid_target_handle = curwin->w_grid.target->handle,
-    .grid_target_is_default = (curwin->w_grid.target == &default_grid) ? 1 : 0,
+  return cmdline_win;
+}
+
+/// Return cmdline_row value.
+int nvim_pum_get_cmdline_row(void)
+{
+  return cmdline_row;
+}
+
+/// Return target window context after calling validate_cheight.
+PumTargetWinContext nvim_pum_get_target_win_context(win_T *wp)
+{
+  validate_cheight(wp);
+  return (PumTargetWinContext){
+    .wrow = wp->w_wrow,
+    .cline_row = wp->w_cline_row,
+    .cline_height = wp->w_cline_height,
   };
+}
+
+/// Return target window geometry fields needed by geometry computation.
+PumTargetWinGeometry nvim_pum_get_target_win_geometry(win_T *wp)
+{
+  return (PumTargetWinGeometry){
+    .row_offset = wp->w_grid.row_offset,
+    .col_offset = wp->w_grid.col_offset,
+    .wrow = wp->w_wrow,
+    .wcol = wp->w_wcol,
+    .p_rl = wp->w_p_rl,
+    .view_width = wp->w_view_width,
+    .view_height = wp->w_view_height,
+    .winrow = wp->w_winrow,
+    .wincol = wp->w_wincol,
+    .grid_target_handle = wp->w_grid.target->handle,
+    .grid_target_is_default = (wp->w_grid.target == &default_grid) ? 1 : 0,
+    .cmdline_offset = wp->w_config._cmdline_offset,
+  };
+}
+
+/// Find the preview window and return above/below row adjustments.
+PumPvwinRows nvim_pum_find_pvwin(void)
+{
+  PumPvwinRows result = { 0, 0 };
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_p_pvw) {
+      if (wp->w_winrow < curwin->w_winrow) {
+        result.above_row = wp->w_winrow + wp->w_height;
+      } else if (wp->w_winrow > curwin->w_winrow + curwin->w_height) {
+        result.below_row = wp->w_winrow;
+      }
+      break;
+    }
+  }
+  return result;
 }
 
 // Text attrs computation helpers
@@ -352,56 +374,6 @@ void nvim_pum_set_wipeout_options(void)
 }
 
 
-// Display orchestrator
-
-/// Compute the complete display geometry for popup menu positioning.
-/// This encapsulates all target_win field access and cmdline_win queries.
-PumDisplayGeometry nvim_pum_compute_geometry(int cmd_startcol)
-{
-  PumDisplayGeometry g = { 0, 0, DEFAULT_GRID_HANDLE, 0, 0, 0, 0 };
-  int is_cmdline = (State & MODE_CMDLINE) != 0;
-
-  g.below_row = MAX(cmdline_row, curwin->w_winrow + curwin->w_view_height);
-  if (is_cmdline) {
-    g.below_row = cmdline_row;
-  }
-
-  win_T *target_win = is_cmdline ? cmdline_win : curwin;
-
-  if (is_cmdline) {
-    g.pum_win_row = cmdline_win ? cmdline_win->w_wrow : ui_has(kUICmdline) ? 0 : cmdline_row;
-    g.cursor_col = (cmdline_win ? cmdline_win->w_config._cmdline_offset : 0) + cmd_startcol;
-    g.cursor_col %= cmdline_win ? cmdline_win->w_view_width : Columns;
-    g.anchor_grid = ui_has(kUICmdline) ? -1 : DEFAULT_GRID_HANDLE;
-  } else {
-    g.pum_win_row = curwin->w_wrow;
-    if (PUM_STATE.rl) {
-      g.cursor_col = curwin->w_view_width - curwin->w_wcol - 1;
-    } else {
-      g.cursor_col = curwin->w_wcol;
-    }
-  }
-
-  if (target_win != NULL) {
-    g.anchor_grid = target_win->w_grid.target->handle;
-    g.pum_win_row += target_win->w_grid.row_offset;
-    g.cursor_col += target_win->w_grid.col_offset;
-    if (target_win->w_grid.target != &default_grid) {
-      g.pum_win_row += target_win->w_winrow;
-      g.cursor_col += target_win->w_wincol;
-      if (!ui_has(kUIMultigrid)) {
-        g.anchor_grid = DEFAULT_GRID_HANDLE;
-      } else {
-        g.win_row_offset = target_win->w_winrow;
-        g.win_col_offset = target_win->w_wincol;
-      }
-    }
-  }
-
-  return g;
-}
-
-
 /// Call ui_call_popupmenu_show with Arena-built array. Handles all Arena allocation.
 void nvim_pum_ext_show(pumitem_T *array, int size, int selected,
                        int pum_win_row, int cursor_col, int anchor_grid,
@@ -422,26 +394,6 @@ void nvim_pum_ext_show(pumitem_T *array, int size, int selected,
   arena_mem_free(arena_finish(&arena));
 }
 
-
-/// Find preview window row adjustments using FOR_ALL_WINDOWS_IN_TAB.
-/// Returns (above_row_adj, below_row_adj) via output params.
-/// above_row_adj > 0 means above_row should be updated.
-/// below_row_adj > 0 means below_row should be updated.
-void nvim_pum_find_pvwin_rows(int *above_row_out, int *below_row_out)
-{
-  *above_row_out = 0;
-  *below_row_out = 0;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_p_pvw) {
-      if (wp->w_winrow < curwin->w_winrow) {
-        *above_row_out = wp->w_winrow + wp->w_height;
-      } else if (wp->w_winrow > curwin->w_winrow + curwin->w_height) {
-        *below_row_out = wp->w_winrow;
-      }
-      break;
-    }
-  }
-}
 
 // Static assertions for constants used by Rust FFI
 _Static_assert(DEFAULT_GRID_HANDLE == 1, "DEFAULT_GRID_HANDLE must be 1");
@@ -464,44 +416,6 @@ _Static_assert(kZIndexCmdlinePopupMenu == 250, "kZIndexCmdlinePopupMenu must be 
 _Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE must be 0x08");
 
 #include "popupmenu.c.generated.h"
-
-#define PUM_DEF_HEIGHT 10
-
-/// Compute vertical placement for popup menu (writes PUM_STATE.row, .height, .above).
-void nvim_pum_compute_vp(int size, int pum_win_row, int above_row, int below_row,
-                         int border_width)
-{
-  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
-  int is_cmdline = (State & MODE_CMDLINE) != 0;
-  int has_target_win = target_win != NULL;
-  int context_above = 0;
-  int context_below = 0;
-
-  if (has_target_win) {
-    context_above = target_win->w_wrow - target_win->w_cline_row;
-    validate_cheight(target_win);
-    context_below = target_win->w_cline_row + target_win->w_cline_height - target_win->w_wrow;
-  }
-
-  PumVerticalResult result = rs_pum_compute_vertical(
-      size, pum_win_row, above_row, below_row, border_width,
-      cmdline_row, is_cmdline, has_target_win, context_above, context_below);
-  PUM_STATE.row = result.row;
-  PUM_STATE.height = result.height;
-  PUM_STATE.above = result.above;
-}
-
-/// Compute horizontal placement for popup menu (writes PUM_STATE.col, .width).
-void nvim_pum_compute_hp(int cursor_col)
-{
-  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
-  int max_col = MAX(Columns, target_win ? (target_win->w_wincol + target_win->w_view_width) : 0);
-  PumHorizontalResult result = rs_pum_compute_horizontal(
-      cursor_col, max_col, PUM_STATE.rl, PUM_STATE.scrollbar,
-      PUM_STATE.base_width, PUM_STATE.kind_width, PUM_STATE.extra_width);
-  PUM_STATE.col = result.col;
-  PUM_STATE.width = result.width;
-}
 
 /// Show the popup menu with items "array[size]".
 /// "array" must remain valid until pum_undisplay() is called!
