@@ -16,6 +16,9 @@ void version_msg(char *s);
 void list_version(void);
 void list_lua_version(void);
 void ex_version(exarg_T *eap);
+bool may_show_intro(void);
+void intro_message(bool colon);
+void ex_intro(exarg_T *eap);
 
 #include "version.h.generated.h"
 bool has_nvim_version(const char *version_str);

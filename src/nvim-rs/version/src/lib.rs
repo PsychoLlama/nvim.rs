@@ -510,6 +510,287 @@ pub unsafe extern "C" fn rs_ex_version(eap: *mut c_void) {
     }
 }
 
+// =============================================================================
+// Phase 3: may_show_intro, intro_message, do_intro_line, ex_intro
+// =============================================================================
+
+/// `SHM_INTRO` = 'I' (from `option_vars.h`).
+const SHM_INTRO: c_int = b'I' as c_int;
+
+/// `LOWEST_WIN_ID` = 1000 (from window/frame/constants.rs).
+const LOWEST_WIN_ID: c_int = 1000;
+
+extern "C" {
+    // Phase 3 FFI additions.
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+    fn buf_is_empty(buf: *mut c_void) -> bool;
+    fn rs_one_window_in_tab(wp: *mut c_void, tp: *mut c_void) -> c_int;
+    fn screenclear();
+    fn wait_return(redraw: bool);
+    fn xmallocz(size: usize) -> *mut c_char;
+    fn grid_line_puts(col: c_int, text: *const c_char, len: c_int, attr: c_int) -> c_int;
+    fn grid_line_flush();
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    // C accessors for intro globals.
+    fn nvim_version_get_curbuf() -> *mut c_void;
+    fn nvim_version_curbuf_b_fname() -> *const c_char;
+    fn nvim_version_curbuf_handle() -> c_int;
+    fn nvim_version_curwin_handle() -> c_int;
+    fn nvim_version_get_curwin() -> *mut c_void;
+    fn nvim_version_get_p_shm() -> *const c_char;
+    fn nvim_version_get_Rows() -> c_int;
+    fn nvim_version_topframe_fr_height() -> c_int;
+    fn nvim_version_get_p_ls() -> i64;
+    fn nvim_version_get_hl_8() -> c_int;
+    fn nvim_version_intro_grid_line_start(colon: c_int, row: c_int);
+}
+
+/// Check whether it is still safe to show the intro message.
+///
+/// # Safety
+/// Reads C globals via accessor functions.
+#[unsafe(export_name = "may_show_intro")]
+pub unsafe extern "C" fn rs_may_show_intro() -> bool {
+    let curbuf = nvim_version_get_curbuf();
+    buf_is_empty(curbuf)
+        && nvim_version_curbuf_b_fname().is_null()
+        && nvim_version_curbuf_handle() == 1
+        && nvim_version_curwin_handle() == LOWEST_WIN_ID
+        && rs_one_window_in_tab(nvim_version_get_curwin(), std::ptr::null_mut()) != 0
+        && vim_strchr(nvim_version_get_p_shm(), SHM_INTRO).is_null()
+}
+
+/// Render one intro screen line centered at `row`.
+///
+/// # Safety
+/// `mesg` must be a valid null-terminated C string.
+/// Must be called from the main Neovim thread.
+unsafe fn do_intro_line(row: c_int, mesg: *const c_char, colon: bool) {
+    // Center the message horizontally.
+    let text_width = vim_strsize(mesg);
+    let mut col = (Columns - text_width) / 2;
+    if col < 0 {
+        col = 0;
+    }
+
+    nvim_version_intro_grid_line_start(c_int::from(colon), row);
+
+    let hl_8 = nvim_version_get_hl_8();
+
+    // Split up into parts to highlight `<…>` items differently.
+    // This mirrors the C logic:
+    //   for (p = mesg; *p != NUL; p += l) {
+    //     for (l = 0; p[l] != NUL && (l == 0 || (p[l] != '<' && p[l-1] != '>')); l++)
+    //       l += utfc_ptr2len(p + l) - 1;
+    // Casting i32 to usize and u8/i8 is safe here because:
+    // - l is the result of utfc_ptr2len, always >= 0
+    // - ASCII byte comparisons use i8 directly from char buffer
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap,
+        clippy::cast_lossless
+    )]
+    {
+        let mut p = mesg;
+        while *p != 0 {
+            let mut l: c_int = 0;
+            loop {
+                let pc = p.add(l as usize);
+                if *pc == 0 {
+                    break;
+                }
+                if l > 0 && *pc == b'<' as i8 {
+                    break;
+                }
+                if l > 0 && *p.add((l - 1) as usize) == b'>' as i8 {
+                    break;
+                }
+                l += utfc_ptr2len(pc);
+            }
+            let attr = if *p == b'<' as i8 { hl_8 } else { 0 };
+            col += grid_line_puts(col, p, l, attr);
+            p = p.add(l as usize);
+        }
+    }
+    grid_line_flush();
+}
+
+/// The intro screen message lines (compile-time literals).
+/// Index 0 is unused (replaced by `longVersion` at runtime).
+/// These match the `N_()` strings in the C source; they are translated at runtime
+/// via `nvim_gettext`.
+const INTRO_LINES: &[&[u8]] = &[
+    b"\0", // index 0: replaced by longVersion at runtime
+    b"\0",
+    b"Nvim is open source and freely distributable\0",
+    b"https://neovim.io/#chat\0",
+    b"\0",
+    b"type  :help nvim<Enter>       if you are new! \0",
+    b"type  :checkhealth<Enter>     to optimize Nvim\0",
+    b"type  :q<Enter>               to exit         \0",
+    b"type  :help<Enter>            for help        \0",
+    b"\0",
+    b"type  :help news<Enter> to see changes in v%s.%s\0",
+    b"\0",
+    b"Help poor children in Uganda!\0",
+    b"type  :help Kuwasha<Enter>    for information \0",
+];
+
+/// Render the intro screen.
+///
+/// # Safety
+/// Must be called from the main Neovim thread with grid initialized.
+#[unsafe(export_name = "intro_message")]
+pub unsafe extern "C" fn rs_intro_message(colon: bool) {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let n_lines = INTRO_LINES.len() as c_int;
+    let rows = nvim_version_get_Rows();
+    let mut blanklines = rows - (n_lines - 1);
+
+    // Don't overwrite a statusline.
+    if nvim_version_get_p_ls() > 1 {
+        blanklines -= rows - nvim_version_topframe_fr_height();
+    }
+
+    if blanklines < 0 {
+        blanklines = 0;
+    }
+
+    let mut row = blanklines / 2;
+
+    if (row >= 2 && Columns >= 50) || colon {
+        for (i, &line_bytes) in INTRO_LINES.iter().enumerate() {
+            // The first entry is always longVersion at runtime.
+            let raw_ptr: *const c_char = if i == 0 {
+                longVersion
+            } else {
+                line_ptr(line_bytes)
+            };
+
+            // Check if this is the "news" line (contains "%s.%s").
+            let is_news = is_news_line(line_bytes);
+
+            let mesg: *const c_char;
+            let mut owned: Option<*mut c_char> = None;
+
+            if is_news {
+                let translated = nvim_gettext(raw_ptr);
+                // Format: "type  :help news<Enter> to see changes in v0.12"
+                let major_str = c_str_of_int(NVIM_VERSION_MAJOR);
+                let minor_str = c_str_of_int(NVIM_VERSION_MINOR);
+                let formatted = format_news_line(
+                    translated,
+                    major_str.as_ptr().cast(),
+                    minor_str.as_ptr().cast(),
+                );
+                owned = Some(formatted);
+                mesg = formatted.cast_const();
+            } else if *raw_ptr == 0 {
+                // Empty line — no rendering, but still advance row.
+                mesg = c"".as_ptr();
+            } else {
+                mesg = nvim_gettext(raw_ptr);
+            }
+
+            if !mesg.is_null() && *mesg != 0 {
+                do_intro_line(row, mesg, colon);
+            }
+            row += 1;
+
+            if let Some(ptr) = owned {
+                xfree(ptr.cast::<c_void>());
+            }
+        }
+    }
+}
+
+/// Get a `*const c_char` from a static byte slice (which includes a NUL).
+fn line_ptr(bytes: &[u8]) -> *const c_char {
+    bytes.as_ptr().cast::<c_char>()
+}
+
+/// Check if a line contains `%s.%s` (the "news" placeholder line).
+fn is_news_line(bytes: &[u8]) -> bool {
+    bytes.windows(4).any(|w| w == b"%s.%")
+}
+
+/// Format the news line using snprintf-equivalent.
+///
+/// # Safety
+/// `fmt` must be a valid C printf format string. `major`/`minor` must be valid C strings.
+unsafe fn format_news_line(
+    fmt: *const c_char,
+    major: *const c_char,
+    minor: *const c_char,
+) -> *mut c_char {
+    // Compute size. size >= 0 by snprintf contract, so cast to usize is safe.
+    let size = libc_snprintf_size(fmt, major, minor);
+    #[allow(clippy::cast_sign_loss)]
+    let buf = xmallocz(size as usize);
+    // Write formatted string.
+    #[allow(clippy::cast_sign_loss)]
+    libc_snprintf(buf, (size + 1) as usize, fmt, major, minor);
+    buf
+}
+
+/// Compute the size needed for snprintf(NULL, 0, fmt, major, minor).
+///
+/// # Safety
+/// `fmt`, `major`, `minor` must be valid C strings.
+unsafe fn libc_snprintf_size(
+    fmt: *const c_char,
+    major: *const c_char,
+    minor: *const c_char,
+) -> c_int {
+    extern "C" {
+        fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    }
+    snprintf(std::ptr::null_mut(), 0, fmt, major, minor)
+}
+
+/// Write snprintf(buf, size, fmt, major, minor).
+///
+/// # Safety
+/// `buf` must have room for `size` bytes. `fmt`, `major`, `minor` must be valid C strings.
+unsafe fn libc_snprintf(
+    buf: *mut c_char,
+    size: usize,
+    fmt: *const c_char,
+    major: *const c_char,
+    minor: *const c_char,
+) {
+    extern "C" {
+        fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    }
+    snprintf(buf, size, fmt, major, minor);
+}
+
+/// Return a stack-allocated null-terminated C string of an i32.
+fn c_str_of_int(n: i32) -> [c_char; 12] {
+    let mut buf = [0i8; 12];
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    // ASCII digits are all < 128, so cast from u8 to i8 is safe.
+    #[allow(clippy::cast_possible_wrap)]
+    for (i, &b) in bytes.iter().enumerate() {
+        buf[i] = b as i8;
+    }
+    buf
+}
+
+/// Ex command handler for `:intro`.
+///
+/// # Safety
+/// Must be called from the main Neovim thread.
+#[unsafe(export_name = "ex_intro")]
+pub unsafe extern "C" fn rs_ex_intro(_eap: *mut c_void) {
+    // TODO(bfredl): use msg_grid instead!
+    screenclear();
+    rs_intro_message(true);
+    wait_return(true);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

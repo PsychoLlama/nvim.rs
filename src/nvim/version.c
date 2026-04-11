@@ -113,131 +113,46 @@ const char *nvim_version_versions_get(int idx) { return Versions[idx]; }
 // ex_version, list_lua_version, list_version migrated to Rust (version crate)
 // version_msg_wrap, version_msg, list_in_columns migrated to Rust (version crate)
 
-/// Whether it still is not too late to show an intro message
-bool may_show_intro(void)
+// =============================================================================
+// C accessors for Rust Phase 3 (may_show_intro, intro_message, do_intro_line, ex_intro)
+// =============================================================================
+
+/// Return curbuf (opaque pointer for Rust).
+buf_T *nvim_version_get_curbuf(void) { return curbuf; }
+
+/// Return curbuf->b_fname (NULL if no file name).
+const char *nvim_version_curbuf_b_fname(void) { return curbuf->b_fname; }
+
+/// Return curbuf->handle.
+int nvim_version_curbuf_handle(void) { return curbuf->handle; }
+
+/// Return curwin->handle.
+int nvim_version_curwin_handle(void) { return curwin->handle; }
+
+/// Return curwin (opaque pointer for Rust).
+win_T *nvim_version_get_curwin(void) { return curwin; }
+
+/// Return p_shm option string.
+const char *nvim_version_get_p_shm(void) { return p_shm; }
+
+/// Return Rows global.
+int nvim_version_get_Rows(void) { return Rows; }
+
+/// Return topframe->fr_height.
+int nvim_version_topframe_fr_height(void) { return topframe->fr_height; }
+
+/// Return p_ls global.
+long nvim_version_get_p_ls(void) { return p_ls; }
+
+/// Return HL_ATTR(HLF_8) for intro line highlighting.
+int nvim_version_get_hl_8(void) { return HL_ATTR(HLF_8); }
+
+/// Start a grid line for intro rendering.
+/// If !colon and kUIMultigrid is set, uses firstwin->w_grid; otherwise default_gridview.
+void nvim_version_intro_grid_line_start(int colon, int row)
 {
-  return (buf_is_empty(curbuf)
-          && (curbuf->b_fname == NULL)
-          && (curbuf->handle == 1)
-          && (curwin->handle == LOWEST_WIN_ID)
-          && rs_one_window_in_tab(curwin, NULL)
-          && (vim_strchr(p_shm, SHM_INTRO) == NULL));
-}
-
-/// Give an introductory message about Vim.
-/// Only used when starting Vim on an empty file, without a file name.
-/// Or with the ":intro" command (for Sven :-).
-///
-/// @param colon true for ":intro"
-void intro_message(bool colon)
-{
-  static char *(lines[]) = {
-    N_(NVIM_VERSION_LONG),
-    "",
-    N_("Nvim is open source and freely distributable"),
-    "https://neovim.io/#chat",
-    "",
-    N_("type  :help nvim<Enter>       if you are new! "),
-    N_("type  :checkhealth<Enter>     to optimize Nvim"),
-    N_("type  :q<Enter>               to exit         "),
-    N_("type  :help<Enter>            for help        "),
-    "",
-    N_("type  :help news<Enter> to see changes in v%s.%s"),
-    "",
-    N_("Help poor children in Uganda!"),
-    N_("type  :help Kuwasha<Enter>    for information "),
-  };
-
-  // blanklines = screen height - # message lines
-  size_t lines_size = ARRAY_SIZE(lines);
-  assert(lines_size <= LONG_MAX);
-
-  int blanklines = Rows - ((int)lines_size - 1);
-
-  // Don't overwrite a statusline.  Depends on 'cmdheight'.
-  if (p_ls > 1) {
-    blanklines -= Rows - topframe->fr_height;
-  }
-
-  if (blanklines < 0) {
-    blanklines = 0;
-  }
-
-  // start displaying the message lines after half of the blank lines
-  int row = blanklines / 2;
-
-  if (((row >= 2) && (Columns >= 50)) || colon) {
-    for (int i = 0; i < (int)ARRAY_SIZE(lines); i++) {
-      char *p = lines[i];
-      char *mesg = NULL;
-      int mesg_size = 0;
-
-      if (strstr(p, "news") != NULL) {
-        p = _(p);
-        mesg_size = snprintf(NULL, 0, p,
-                             STR(NVIM_VERSION_MAJOR), STR(NVIM_VERSION_MINOR));
-        assert(mesg_size > 0);
-        mesg = xmallocz((size_t)mesg_size);
-        snprintf(mesg, (size_t)mesg_size + 1, p,
-                 STR(NVIM_VERSION_MAJOR), STR(NVIM_VERSION_MINOR));
-      }
-
-      if (mesg == NULL) {
-        if (*p != NUL) {
-          mesg = _(p);
-        } else {
-          mesg = "";
-        }
-      }
-
-      if (*mesg != NUL) {
-        do_intro_line(row, mesg, colon);
-      }
-      row++;
-
-      if (mesg_size > 0) {
-        XFREE_CLEAR(mesg);
-      }
-    }
-  }
-}
-
-static void do_intro_line(int row, char *mesg, bool colon)
-{
-  int l;
-
-  // Center the message horizontally.
-  int col = vim_strsize(mesg);
-
-  col = (Columns - col) / 2;
-
-  if (col < 0) {
-    col = 0;
-  }
-
   grid_line_start((!colon && ui_has(kUIMultigrid)) ? &firstwin->w_grid : &default_gridview, row);
-
-  // Split up in parts to highlight <> items differently.
-  for (char *p = mesg; *p != NUL; p += l) {
-    for (l = 0;
-         p[l] != NUL && (l == 0 || (p[l] != '<' && p[l - 1] != '>'));
-         l++) {
-      l += utfc_ptr2len(p + l) - 1;
-    }
-    assert(row <= INT_MAX && col <= INT_MAX);
-    col += grid_line_puts(col, p, l, *p == '<' ? HL_ATTR(HLF_8) : 0);
-  }
-  grid_line_flush();
 }
 
-/// ":intro": clear screen, display intro screen and wait for return.
-///
-/// @param eap
-void ex_intro(exarg_T *eap)
-{
-  // TODO(bfredl): use msg_grid instead!
-  screenclear();
-  intro_message(true);
-  wait_return(true);
-}
+// may_show_intro, intro_message, do_intro_line, ex_intro migrated to Rust (version crate)
 

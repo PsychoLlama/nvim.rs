@@ -590,6 +590,192 @@ pub unsafe extern "C" fn rs_may_trigger_modechanged() {
 }
 
 // =============================================================================
+// Phase 3: state_enter and state_handle_k_event
+// =============================================================================
+
+// K_EVENT = TERMCAP2KEY(KS_EXTRA, KE_EVENT=102) = -26365
+const K_EVENT: c_int = -26365;
+
+// NUL = 0 (already defined as NUL: u8, use 0 for c_int comparison)
+const NUL_INT: c_int = 0;
+
+extern "C" {
+    /// Loop handle type (opaque pointer, passed through).
+    static main_loop: [u8; 0]; // accessed as pointer only
+
+    /// `vpeekc()` -- peek at next character without consuming.
+    fn vpeekc() -> c_int;
+    /// `safe_vgetc()` -- get next character safely.
+    fn safe_vgetc() -> c_int;
+    /// `rs_multiqueue_empty(mq)` -- returns 1 if queue is empty.
+    fn rs_multiqueue_empty(mq: *mut c_void) -> c_int;
+    /// `rs_loop_get_events(loop)` -- get the events queue from a loop.
+    fn rs_loop_get_events(lp: *mut c_void) -> *mut c_void;
+    /// `ui_flush()` -- flush UI output.
+    fn nvim_ui_flush();
+    /// `must_redraw` -- nonzero if screen needs redraw.
+    fn nvim_must_redraw() -> c_int;
+    /// `need_wait_return` -- true if waiting for user to press Enter.
+    fn nvim_get_need_wait_return() -> bool;
+    /// `update_screen()` -- update the screen.
+    fn nvim_update_screen_c();
+    /// `setcursor()` -- put cursor at correct position.
+    fn nvim_setcursor();
+    /// `input_get(...)` -- block for input.
+    fn input_get(
+        buf: *mut u8,
+        maxlen: c_int,
+        ms: c_int,
+        tb_change_cnt: c_int,
+        events: *mut c_void,
+    ) -> c_int;
+    /// `input_available()` -- returns nonzero if input is available.
+    fn input_available() -> usize;
+    /// `check_end_reg_executing(advance)` -- clear `reg_executing` if needed.
+    fn check_end_reg_executing(advance: bool);
+    /// `may_sync_undo()` -- sync undo if needed.
+    fn may_sync_undo();
+    /// `os_breakcheck()` -- check for break (Ctrl-C).
+    fn os_breakcheck();
+    /// `multiqueue_get(mq)` -- get next event from queue.
+    fn multiqueue_get(mq: *mut c_void) -> crate::EventStub;
+    /// `nvim_get_typebuf_change_cnt()` -- returns `typebuf.tb_change_cnt`.
+    fn nvim_get_typebuf_change_cnt() -> c_int;
+    /// `got_int` -- set when Ctrl-C was pressed.
+    static got_int: bool;
+}
+
+/// Stub matching the C `Event` layout for `state_handle_k_event`.
+/// handler: optional fn ptr (8 bytes), argv: 10 void ptrs (80 bytes) = 88 bytes total.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EventStub {
+    handler: Option<unsafe extern "C" fn(*mut *mut c_void)>,
+    argv: [*mut c_void; 10],
+}
+
+/// `VimState` struct matching C layout from `state_defs.h`.
+/// Two function pointers: check and execute.
+#[repr(C)]
+pub struct VimState {
+    /// Called before each key: returns 0 (exit), -1 (re-check), 1 (proceed).
+    pub check: Option<unsafe extern "C" fn(*mut VimState) -> c_int>,
+    /// Called with each key: returns 0 (exit), -1 (retry key), 1 (continue).
+    pub execute: Option<unsafe extern "C" fn(*mut VimState, c_int) -> c_int>,
+}
+
+/// Main state machine loop.
+///
+/// Processes input events for a particular editing state (normal, insert, cmdline, etc.)
+/// until the state signals termination.
+///
+/// Faithfully translates the C `state_enter()` from state.c.
+///
+/// # Safety
+/// `s` must be a non-null pointer to a valid `VimState`.
+#[unsafe(export_name = "state_enter")]
+pub unsafe extern "C" fn rs_state_enter(s: *mut VimState) {
+    // SAFETY: s is non-null (FUNC_ATTR_NONNULL_ALL)
+    let events = || rs_loop_get_events(main_loop.as_ptr().cast::<c_void>().cast_mut());
+
+    'outer: loop {
+        // Run the state's check callback.
+        let check_result = (*s).check.map_or(1, |check| check(s));
+
+        if check_result == 0 {
+            break; // Terminate this state.
+        } else if check_result == -1 {
+            continue; // check() again.
+        }
+
+        // 'execute: loop allows goto getkey (execute returned -1)
+        'execute: loop {
+            // 'getkey: loop allows retry on inner goto getkey
+            let key = 'getkey: loop {
+                // vpeekc() != NUL or typebuf has pending input
+                if vpeekc() != NUL_INT || nvim_get_typebuf_len() > 0 {
+                    break 'getkey safe_vgetc();
+                }
+                if rs_multiqueue_empty(events()) == 0 {
+                    // Event available -- flush before processing
+                    nvim_ui_flush();
+                    break 'getkey K_EVENT;
+                }
+                // No input available. Ensure screen is updated before blocking.
+                if nvim_must_redraw() != 0
+                    && !nvim_get_need_wait_return()
+                    && (State & MODE_CMDLINE) == 0
+                {
+                    nvim_update_screen_c();
+                    nvim_setcursor();
+                }
+                nvim_ui_flush();
+                // Block waiting for input or events.
+                input_get(
+                    std::ptr::null_mut(),
+                    0,
+                    -1,
+                    nvim_get_typebuf_change_cnt(),
+                    events(),
+                );
+                // If an event appeared, send K_EVENT.
+                if input_available() == 0 && rs_multiqueue_empty(events()) == 0 {
+                    break 'getkey K_EVENT;
+                }
+                // else: retry key reading (goto getkey -- continues 'getkey loop naturally)
+            };
+
+            if key == K_EVENT {
+                // Clear reg_executing if it should be cleared before next char.
+                check_end_reg_executing(true);
+                may_sync_undo();
+            }
+
+            let execute_result = (*s).execute.map_or(0, |execute| execute(s, key));
+
+            if execute_result == 0 {
+                break 'outer; // Terminate this state.
+            } else if execute_result == -1 {
+                continue 'execute; // goto getkey: re-read without re-check
+            }
+            // execute_result > 0: normal, re-run check()
+            break 'execute;
+        }
+    }
+}
+
+/// Process events on `main_loop`, interrupting if input becomes available.
+///
+/// Should be used to handle `K_EVENT` in states accepting input;
+/// otherwise bursts of events can block break-checking indefinitely.
+///
+/// # Safety
+/// Calls C event/input functions.
+#[unsafe(export_name = "state_handle_k_event")]
+pub unsafe extern "C" fn rs_state_handle_k_event() {
+    let events = || rs_loop_get_events(main_loop.as_ptr().cast::<c_void>().cast_mut());
+
+    loop {
+        let event = multiqueue_get(events());
+        if let Some(handler) = event.handler {
+            handler(event.argv.as_ptr().cast_mut().cast::<*mut c_void>());
+        }
+
+        if rs_multiqueue_empty(events()) != 0 {
+            // Queue empty -- don't breakcheck, caller returns to main-loop.
+            return;
+        }
+
+        // Check if new input arrived during event processing.
+        os_breakcheck();
+        let got_int_val = got_int;
+        if input_available() != 0 || got_int_val {
+            return;
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
