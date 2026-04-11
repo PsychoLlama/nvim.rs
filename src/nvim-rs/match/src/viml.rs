@@ -271,13 +271,16 @@ pub extern "C" fn rs_match_cmd_line_to_id(line: i64) -> c_int {
 // =============================================================================
 
 /// Opaque handle to a `win_T` (re-use from core to avoid type mismatches)
-use crate::core::WinHandle;
+use crate::core::{MatchItemHandle, WinHandle};
 
 /// Opaque pointer to `typval_T`
 type TypvalPtr = *mut std::ffi::c_void;
 
 /// Opaque pointer to a list (`list_T`)
 type ListPtr = *mut std::ffi::c_void;
+
+/// Opaque pointer to a dict (`dict_T`)
+type DictPtr = *mut std::ffi::c_void;
 
 /// Opaque pointer to a list item (`listitem_T`)
 type ListItemPtr = *mut std::ffi::c_void;
@@ -339,6 +342,76 @@ extern "C" {
     static e_dictreq: [std::ffi::c_char; 0];
     static e_listarg: [std::ffi::c_char; 0];
     static e_invarg2: [std::ffi::c_char; 0];
+    static e_listreq: [std::ffi::c_char; 0];
+
+    // match item field accessors
+    fn nvim_match_item_get_pattern(m: *mut MatchItemHandle) -> *const std::ffi::c_char;
+    fn nvim_match_item_get_hlg_id(m: *mut MatchItemHandle) -> c_int;
+    fn nvim_match_item_get_conceal_char(m: *mut MatchItemHandle) -> c_int;
+    fn nvim_match_item_has_positions(m: *mut MatchItemHandle) -> bool;
+    fn nvim_match_item_get_pos_count(m: *mut MatchItemHandle) -> c_int;
+    fn nvim_match_item_pos_get_lnum(m: *mut MatchItemHandle, idx: c_int) -> i32;
+    fn nvim_match_item_pos_get_col(m: *mut MatchItemHandle, idx: c_int) -> i32;
+    fn nvim_match_item_pos_get_len(m: *mut MatchItemHandle, idx: c_int) -> c_int;
+    fn nvim_match_item_get_id(m: *mut MatchItemHandle) -> c_int;
+    fn nvim_match_item_get_priority(m: *mut MatchItemHandle) -> c_int;
+    fn nvim_match_get_head(wp: *mut WinHandle) -> *mut MatchItemHandle;
+    fn nvim_match_item_next(m: *mut MatchItemHandle) -> *mut MatchItemHandle;
+
+    // syn_id2name: exported from highlight crate
+    fn syn_id2name(id: c_int) -> *const std::ffi::c_char;
+
+    // typval list/dict builders
+    #[link_name = "tv_list_alloc_ret"]
+    fn nvim_tv_list_alloc_ret(rettv: TypvalPtr, len: isize) -> ListPtr;
+    #[link_name = "tv_list_append_string"]
+    fn nvim_tv_list_append_string(list: ListPtr, s: *const std::ffi::c_char, len: isize);
+    #[link_name = "tv_list_alloc"]
+    fn nvim_tv_list_alloc(count: c_int) -> ListPtr;
+    #[link_name = "tv_list_append_number"]
+    fn nvim_tv_list_append_number(list: ListPtr, nr: i64);
+    #[link_name = "tv_list_append_dict"]
+    fn nvim_tv_list_append_dict(list: ListPtr, dict: DictPtr);
+    #[link_name = "tv_list_append_tv"]
+    fn nvim_tv_list_append_tv(list: ListPtr, tv: TypvalPtr);
+    // tv_list_ref is static inline - use the nvim_tv_list_ref C wrapper instead
+    fn nvim_tv_list_ref(list: ListPtr);
+    #[link_name = "tv_list_unref"]
+    fn nvim_tv_list_unref(list: ListPtr);
+    #[link_name = "tv_dict_alloc"]
+    fn nvim_tv_dict_alloc() -> DictPtr;
+    fn tv_dict_add_str(
+        dict: DictPtr,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        val: *const std::ffi::c_char,
+    ) -> c_int;
+    fn tv_dict_add_nr(
+        dict: DictPtr,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        nr: i64,
+    ) -> c_int;
+    fn tv_dict_add_list(
+        dict: DictPtr,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        list: ListPtr,
+    ) -> c_int;
+    fn tv_dict_get_string(
+        dict: DictPtr,
+        key: *const std::ffi::c_char,
+        save: bool,
+    ) -> *mut std::ffi::c_char;
+    fn tv_dict_get_number(dict: DictPtr, key: *const std::ffi::c_char) -> i64;
+    fn tv_dict_get_string_buf(
+        dict: DictPtr,
+        key: *const std::ffi::c_char,
+        buf: *mut std::ffi::c_char,
+    ) -> *const std::ffi::c_char;
+
+    // utf_char2bytes wrapper
+    fn nvim_match_utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
 }
 
 // =============================================================================
@@ -762,6 +835,388 @@ pub unsafe extern "C" fn rs_ex_match(eap: *mut ExArg) {
     };
 
     (*eap).nextcmd = find_nextcmd(end);
+}
+
+// =============================================================================
+// Phase 1: f_matcharg
+// =============================================================================
+
+/// `kListLenMayKnow` constant (= -3): list length may be computed.
+const K_LIST_LEN_MAY_KNOW: isize = -3;
+
+/// `matcharg()` `VimL` function.
+///
+/// Returns a 2-element list `[group_name, pattern]` for match IDs 1-3.
+/// Returns an empty list for other IDs.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers.
+#[export_name = "f_matcharg"]
+pub unsafe extern "C" fn rs_f_matcharg(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
+    let id = nvim_tv_get_number(argvars) as c_int;
+    let valid = (1..=3).contains(&id);
+
+    let list = nvim_tv_list_alloc_ret(rettv, if valid { 2 } else { 0 });
+
+    if valid {
+        let m = crate::core::rs_get_match(nvim_get_curwin(), id);
+        if m.is_null() {
+            nvim_tv_list_append_string(list, std::ptr::null(), 0);
+            nvim_tv_list_append_string(list, std::ptr::null(), 0);
+        } else {
+            let group = syn_id2name(nvim_match_item_get_hlg_id(m));
+            let pattern = nvim_match_item_get_pattern(m);
+            nvim_tv_list_append_string(list, group, -1);
+            nvim_tv_list_append_string(list, pattern, if pattern.is_null() { 0 } else { -1 });
+        }
+    }
+}
+
+// =============================================================================
+// Phase 2: f_getmatches
+// =============================================================================
+
+/// `getmatches()` `VimL` function.
+///
+/// Iterates the window's match list and builds a `VimL` list of dicts.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers.
+#[allow(clippy::too_many_lines)]
+#[export_name = "f_getmatches"]
+pub unsafe extern "C" fn rs_f_getmatches(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    use std::ffi::c_char;
+
+    let win = get_optional_window(argvars, 0);
+    let list = nvim_tv_list_alloc_ret(rettv, K_LIST_LEN_MAY_KNOW);
+    if win.is_null() {
+        return;
+    }
+
+    let mut cur = nvim_match_get_head(win);
+    while !cur.is_null() {
+        let dict = nvim_tv_dict_alloc();
+
+        if nvim_match_item_has_positions(cur) {
+            // Position-based match (added with matchaddpos())
+            let pos_count = nvim_match_item_get_pos_count(cur);
+            for i in 0..pos_count {
+                let lnum = nvim_match_item_pos_get_lnum(cur, i);
+                if lnum == 0 {
+                    break;
+                }
+                let col = nvim_match_item_pos_get_col(cur, i);
+                let len = nvim_match_item_pos_get_len(cur, i);
+
+                // Allocate sub-list: lnum always, col+len if col > 0
+                let sub_count = if col > 0 { 3 } else { 1 };
+                let sublist = nvim_tv_list_alloc(sub_count);
+                nvim_tv_list_append_number(sublist, i64::from(lnum));
+                if col > 0 {
+                    nvim_tv_list_append_number(sublist, i64::from(col));
+                    nvim_tv_list_append_number(sublist, i64::from(len));
+                }
+
+                // Build key "posN" (N is 1-based)
+                let key_str = format!("pos{}", i + 1);
+                let key_bytes = key_str.as_bytes();
+                let mut key_buf = [0u8; 30];
+                key_buf[..key_bytes.len()].copy_from_slice(key_bytes);
+                let key_len = key_bytes.len();
+
+                tv_dict_add_list(dict, key_buf.as_ptr().cast::<c_char>(), key_len, sublist);
+            }
+        } else {
+            // Pattern-based match
+            let pattern = nvim_match_item_get_pattern(cur);
+            tv_dict_add_str(dict, c"pattern".as_ptr(), 7, pattern);
+        }
+
+        let group = syn_id2name(nvim_match_item_get_hlg_id(cur));
+        tv_dict_add_str(dict, c"group".as_ptr(), 5, group);
+        tv_dict_add_nr(
+            dict,
+            c"priority".as_ptr(),
+            8,
+            i64::from(nvim_match_item_get_priority(cur)),
+        );
+        tv_dict_add_nr(
+            dict,
+            c"id".as_ptr(),
+            2,
+            i64::from(nvim_match_item_get_id(cur)),
+        );
+
+        let conceal_char = nvim_match_item_get_conceal_char(cur);
+        if conceal_char != 0 {
+            let mut buf = [0u8; 7]; // MB_MAXCHAR (6) + NUL
+            let n = nvim_match_utf_char2bytes(conceal_char, buf.as_mut_ptr().cast::<c_char>());
+            buf[n as usize] = 0;
+            tv_dict_add_str(dict, c"conceal".as_ptr(), 7, buf.as_ptr().cast::<c_char>());
+        }
+
+        nvim_tv_list_append_dict(list, dict);
+        cur = nvim_match_item_next(cur);
+    }
+}
+
+// =============================================================================
+// Phase 3: f_setmatches
+// =============================================================================
+
+/// `setmatches()` `VimL` function.
+///
+/// Restores matches from a `VimL` list of dicts (as returned by `getmatches()`).
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers.
+#[allow(clippy::too_many_lines)]
+#[export_name = "f_setmatches"]
+pub unsafe extern "C" fn rs_f_setmatches(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    use std::ffi::c_char;
+
+    nvim_tv_set_number(rettv, -1);
+
+    let win = get_optional_window(nvim_tv_idx(argvars, 1), 0);
+
+    // argvars[0] must be a list
+    if nvim_tv_get_type(argvars) != VAR_LIST {
+        emsg(e_listreq.as_ptr());
+        return;
+    }
+    if win.is_null() {
+        return;
+    }
+
+    let l = nvim_tv_get_list(argvars);
+
+    // First pass: validate each dict has required keys
+    let mut li = nvim_list_get_first(l);
+    let mut li_idx: c_int = 0;
+    while !li.is_null() {
+        let tv_li = nvim_listitem_get_tv(li);
+        if nvim_tv_get_type(tv_li) != VAR_DICT {
+            let fmt = b"E474: List item %d is either not a dictionary or an empty one\0";
+            semsg(fmt.as_ptr().cast::<c_char>(), li_idx);
+            return;
+        }
+
+        // Get dict pointer from typval (offset 8 in typval_T is the union, which is v_dict)
+        #[allow(clippy::cast_ptr_alignment)]
+        let dict: DictPtr = std::ptr::read_unaligned(tv_li.cast::<u8>().add(8).cast::<DictPtr>());
+        if dict.is_null() {
+            let fmt = b"E474: List item %d is either not a dictionary or an empty one\0";
+            semsg(fmt.as_ptr().cast::<c_char>(), li_idx);
+            return;
+        }
+
+        let has_group = !tv_dict_find(dict, c"group".as_ptr(), -1).is_null();
+        let has_priority = !tv_dict_find(dict, c"priority".as_ptr(), -1).is_null();
+        let has_id = !tv_dict_find(dict, c"id".as_ptr(), -1).is_null();
+        let has_pattern = !tv_dict_find(dict, c"pattern".as_ptr(), -1).is_null();
+        let has_pos1 = !tv_dict_find(dict, c"pos1".as_ptr(), -1).is_null();
+
+        if !(has_group && has_priority && has_id && (has_pattern || has_pos1)) {
+            let fmt = b"E474: List item %d is missing one of the required keys\0";
+            semsg(fmt.as_ptr().cast::<c_char>(), li_idx);
+            return;
+        }
+
+        li = nvim_listitem_get_next(li);
+        li_idx += 1;
+    }
+
+    clear_matches(win);
+
+    // Second pass: restore matches
+    let mut match_add_failed = false;
+    let mut pos_list: ListPtr = std::ptr::null_mut();
+
+    li = nvim_list_get_first(l);
+    while !li.is_null() {
+        let tv_li = nvim_listitem_get_tv(li);
+        #[allow(clippy::cast_ptr_alignment)]
+        let dict: DictPtr = std::ptr::read_unaligned(tv_li.cast::<u8>().add(8).cast::<DictPtr>());
+
+        let pattern_di = tv_dict_find(dict, c"pattern".as_ptr(), -1);
+
+        if pattern_di.is_null() {
+            // Position-based match: collect pos1..pos8
+            if pos_list.is_null() {
+                pos_list = nvim_tv_list_alloc(9);
+            }
+
+            let mut i: c_int = 1;
+            while i < 9 {
+                let mut key_buf = [0u8; 10];
+                let key_str = format!("pos{i}");
+                let kb = key_str.as_bytes();
+                key_buf[..kb.len()].copy_from_slice(kb);
+
+                let pos_di = tv_dict_find(dict, key_buf.as_ptr().cast::<c_char>(), -1);
+                if pos_di.is_null() {
+                    break;
+                }
+
+                // pos_di->di_tv is at offset 0 of dictitem_T -- usable as TypvalPtr
+                let pos_tv: TypvalPtr = pos_di;
+                if nvim_tv_get_type(pos_tv) != VAR_LIST {
+                    // Revert: unref and bail
+                    nvim_tv_list_unref(pos_list);
+                    return;
+                }
+
+                nvim_tv_list_append_tv(pos_list, pos_tv);
+                nvim_tv_list_ref(pos_list);
+                i += 1;
+            }
+        }
+
+        // Extract group, priority, id, conceal
+        let mut group_buf = [0u8; NUMBUFLEN];
+        let group = tv_dict_get_string_buf(
+            dict,
+            c"group".as_ptr(),
+            group_buf.as_mut_ptr().cast::<c_char>(),
+        );
+        let priority = tv_dict_get_number(dict, c"priority".as_ptr()) as c_int;
+        let id = tv_dict_get_number(dict, c"id".as_ptr()) as c_int;
+
+        let conceal_di = tv_dict_find(dict, c"conceal".as_ptr(), -1);
+        let conceal: *const c_char = if conceal_di.is_null() {
+            std::ptr::null()
+        } else {
+            tv_get_string(conceal_di.cast::<std::ffi::c_void>())
+        };
+
+        let result = if pattern_di.is_null() {
+            // Position-based
+            // Extract positions from pos_list
+            let mut lnums: Vec<i32> = Vec::new();
+            let mut cols: Vec<i32> = Vec::new();
+            let mut lens: Vec<c_int> = Vec::new();
+            let mut err = false;
+
+            let mut sub_li = nvim_list_get_first(pos_list);
+            let mut idx: c_int = 0;
+            while !sub_li.is_null() {
+                let tv_item = nvim_listitem_get_tv(sub_li);
+                if nvim_tv_get_type(tv_item) != VAR_LIST {
+                    sub_li = nvim_listitem_get_next(sub_li);
+                    idx += 1;
+                    continue;
+                }
+
+                let subl = nvim_tv_get_list(tv_item);
+                let mut inner = nvim_list_get_first(subl);
+                if inner.is_null() {
+                    let fmt = b"E5030: Empty list at position %d\0";
+                    semsg(fmt.as_ptr().cast::<c_char>(), idx);
+                    err = true;
+                    break;
+                }
+
+                let lnum = nvim_tv_get_number_chk(nvim_listitem_get_tv(inner), &raw mut err) as i32;
+                if err {
+                    break;
+                }
+                if lnum <= 0 {
+                    sub_li = nvim_listitem_get_next(sub_li);
+                    idx += 1;
+                    continue;
+                }
+
+                inner = nvim_listitem_get_next(inner);
+                let col = if inner.is_null() {
+                    0i32
+                } else {
+                    let c =
+                        nvim_tv_get_number_chk(nvim_listitem_get_tv(inner), &raw mut err) as i32;
+                    if err {
+                        break;
+                    }
+                    if c < 0 {
+                        sub_li = nvim_listitem_get_next(sub_li);
+                        idx += 1;
+                        continue;
+                    }
+                    c
+                };
+                let len = if inner.is_null() {
+                    1
+                } else {
+                    inner = nvim_listitem_get_next(inner);
+                    if inner.is_null() {
+                        1
+                    } else {
+                        let ln = nvim_tv_get_number_chk(nvim_listitem_get_tv(inner), &raw mut err)
+                            as c_int;
+                        if err {
+                            break;
+                        }
+                        if ln < 0 {
+                            sub_li = nvim_listitem_get_next(sub_li);
+                            idx += 1;
+                            continue;
+                        }
+                        ln
+                    }
+                };
+
+                lnums.push(lnum);
+                cols.push(col);
+                lens.push(len);
+
+                sub_li = nvim_listitem_get_next(sub_li);
+                idx += 1;
+            }
+
+            nvim_tv_list_unref(pos_list);
+            pos_list = std::ptr::null_mut(); // reset so next iteration allocates fresh
+
+            if err {
+                -1
+            } else {
+                let actual = lnums.len() as c_int;
+                crate::core::rs_match_add_pos(
+                    win,
+                    group,
+                    priority,
+                    id,
+                    conceal,
+                    lnums.as_ptr(),
+                    cols.as_ptr(),
+                    lens.as_ptr(),
+                    actual,
+                )
+            }
+        } else {
+            // Pattern-based
+            let pat = tv_dict_get_string(dict, c"pattern".as_ptr(), false);
+            crate::core::rs_match_add(win, group, pat, priority, id, conceal)
+        };
+
+        if result != id {
+            match_add_failed = true;
+        }
+
+        li = nvim_listitem_get_next(li);
+    }
+
+    if !match_add_failed {
+        nvim_tv_set_number(rettv, 0);
+    }
 }
 
 // =============================================================================
