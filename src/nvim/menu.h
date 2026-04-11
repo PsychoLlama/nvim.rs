@@ -23,3 +23,5 @@ void ex_menutranslate(exarg_T *eap);
 char *set_context_in_menu_cmd(expand_T *xp, const char *cmd, char *arg, bool forceit);
 char *get_menu_name(expand_T *xp, int idx);
 char *get_menu_names(expand_T *xp, int idx);
+bool menu_get(char *path_name, int modes, list_T *list);
+void f_menu_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
