@@ -15,8 +15,6 @@ typedef struct {
 } Context;
 typedef kvec_t(Context) ContextVec;
 
-extern ContextVec ctx_stack;
-
 #define CONTEXT_INIT (Context) { \
   .regs = STRING_INIT, \
   .jumps = STRING_INIT, \
@@ -34,6 +32,8 @@ typedef enum {
   kCtxFuncs = 32,     ///< Functions
 } ContextTypeFlags;
 
+// These globals are now owned by the Rust context crate (context/src/lib.rs).
+extern ContextVec ctx_stack;
 extern int kCtxAll;
 
 // Functions implemented in Rust (export_name matches these symbols)
@@ -50,5 +50,3 @@ int ctx_from_dict(Dict dict, Context *ctx, Error *err);
 String nvim_ctx_array_to_string(Array array, Error *err);
 void nvim_ctx_save_funcs(Context *ctx, bool scriptonly);
 
-// Prototypes for C accessor functions (generated from context.c)
-#include "context.h.generated.h"

@@ -101,10 +101,24 @@ pub struct ContextVec {
     pub items: *mut Context,
 }
 
-unsafe extern "C" {
-    /// The global context stack defined in context.c.
-    pub static mut ctx_stack: ContextVec;
-}
+// SAFETY: ctx_stack is only accessed from single-threaded Neovim main loop code.
+// The *mut Context pointer is not sent between threads.
+unsafe impl Send for ContextVec {}
+unsafe impl Sync for ContextVec {}
+
+/// The global context stack (matches `KV_INITIAL_VALUE` in C: all-zero / null items).
+/// Previously defined in context.c; now owned by Rust.
+#[no_mangle]
+pub static mut ctx_stack: ContextVec = ContextVec {
+    size: 0,
+    capacity: 0,
+    items: std::ptr::null_mut(),
+};
+
+/// All context type flags combined (`kCtxAll` in context.h).
+/// Previously defined in context.c; now owned by Rust.
+#[no_mangle]
+pub static kCtxAll: std::os::raw::c_int = 1 | 2 | 4 | 8 | 16 | 32; // kCtxRegs|kCtxJumps|kCtxBufs|kCtxGVars|kCtxSFuncs|kCtxFuncs
 
 /// Returns the size of the context stack.
 #[must_use]
