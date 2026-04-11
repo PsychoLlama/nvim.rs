@@ -1,9 +1,12 @@
-// register.c: functions for managing registers
+// register.c: C accessor wrappers for the Rust register crate (nvim-register).
+//
+// All register business logic lives in src/nvim-rs/register/src/lib.rs.
+// This file contains only thin FFI bridges for C struct fields and compound
+// C operations that cannot be expressed directly in Rust.
 
 #include <stdbool.h>
 
 #include "nvim/api/private/helpers.h"
-#include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/buffer_updates.h"
@@ -14,42 +17,29 @@
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/errors.h"
-#include "nvim/eval.h"
 #include "nvim/eval/typval.h"
-#include "nvim/ex_cmds2.h"
-#include "nvim/ex_getln.h"
 #include "nvim/extmark.h"
-#include "nvim/file_search.h"
 #include "nvim/fold.h"
-#include "nvim/garray.h"
-#include "nvim/getchar.h"
 #include "nvim/globals.h"
 #include "nvim/indent.h"
-#include "nvim/memory.h"
-#include "nvim/keycodes.h"
 #include "nvim/mark.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
-#include "nvim/normal.h"
 #include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/input.h"
-#include "nvim/os/time.h"
 #include "nvim/plines.h"
 #include "nvim/register.h"
-#include "nvim/search.h"
 #include "nvim/strings.h"
 #include "nvim/terminal.h"
 #include "nvim/types_defs.h"
-#include "nvim/ui.h"
-#include "nvim/undo.h"
 
 #include "register.c.generated.h"
 
-// Global register state owned by Rust (src/nvim-rs/register/src/lib.rs).
+// Global register state is owned by Rust; the C side declares them extern so
+// that legacy C callers can still access them.
 extern yankreg_T y_regs[NUM_REGISTERS];
 extern yankreg_T *y_previous;
 extern char *expr_line;
@@ -57,12 +47,6 @@ extern int execreg_lastc;
 
 /// Set curwin->w_alt_fnum from a buf_T pointer (called from Rust write_reg_contents_ex).
 void nvim_register_set_alt_fnum(buf_T *buf) { curwin->w_alt_fnum = buf->b_fnum; }
-
-// Functions now implemented in Rust (src/nvim-rs/register/src/lib.rs) with #[export_name].
-extern int stuff_yank(int regname, char *p);
-
-// C accessor wrappers used by Rust crates via FFI.
-// These thin wrappers delegate to Neovim's memory allocator and error helpers.
 
 /// Free a register's contents (delegating to the Rust free_register export).
 extern void free_register(yankreg_T *reg);
@@ -94,18 +78,6 @@ char *nvim_register_ml_get_buf_curwin_lnum(void)
 {
   return ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum);
 }
-
-// do_record is implemented in Rust (src/nvim-rs/register/src/lib.rs).
-
-// put_in_typebuf, put_reedit_in_typebuf, execreg_line_continuation are
-// private helpers implemented in Rust (src/nvim-rs/register/src/lib.rs).
-// do_execreg is implemented in Rust with export_name = "do_execreg".
-
-// insert_reg and get_spec_reg are implemented in Rust
-// (src/nvim-rs/register/src/lib.rs) with export_name.
-
-// op_yank, op_yank_reg, yank_copy_line, do_autocmd_textyankpost are implemented
-// in Rust (src/nvim-rs/register/src/lib.rs) with export_name.
 
 // --- oparg_T accessors for Rust op_yank_reg ---
 int nvim_oap_get_motion_type(oparg_T *oap) { return (int)oap->motion_type; }
@@ -166,9 +138,6 @@ void nvim_register_curbuf_decl_op_end(void) { decl(&curbuf->b_op_end); }
 
 // --- tv_list_set_lock wrapper (inline in C, needs wrapper for Rust) ---
 void nvim_register_tv_list_set_lock_fixed(list_T *list) { tv_list_set_lock(list, VAR_FIXED); }
-
-// --- textlock inc/dec for do_autocmd_textyankpost ---
-// (already exist as nvim_inc_textlock / nvim_dec_textlock in ex_getln.c)
 
 // --- do_put accessor wrappers ---
 
@@ -373,8 +342,6 @@ void nvim_dp_get_cursor(pos_T *pos) { *pos = curwin->w_cursor; }
 void nvim_dp_set_cursor(const pos_T *pos) { curwin->w_cursor = *pos; }
 
 
-
-
 /// Return b_visual.vi_start.lnum for do_put.
 int nvim_dp_get_b_visual_vi_start_lnum(void) { return (int)curbuf->b_visual.vi_start.lnum; }
 
@@ -408,8 +375,6 @@ void nvim_dp_op_end_col_add(int delta) { curbuf->b_op_end.col += (colnr_T)delta;
 /// Call adjust_cursor_eol().
 void nvim_dp_adjust_cursor_eol(void) { adjust_cursor_eol(); }
 
-
-
 /// Call getviscol() for do_put virtual edit.
 int nvim_dp_getviscol(void) { return getviscol(); }
 
@@ -427,10 +392,4 @@ int nvim_dp_get_cursor_pos_len(void) { return (int)get_cursor_pos_len(); }
 
 /// Call semsg for do_put E353.
 void nvim_dp_semsg_E353(int regname) { semsg(_("E353: Nothing in register %s"), regname == 0 ? "\"" : transchar(regname)); }
-
-// do_put is implemented in Rust (src/nvim-rs/register/src/lib.rs).
-
-// dis_msg and ex_display are implemented in Rust (src/nvim-rs/register/src/lib.rs).
-
-
 
