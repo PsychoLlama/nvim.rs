@@ -182,71 +182,8 @@ bool ui_override(void) { return rs_ui_override(); }
 /// Gets the number of UIs connected to this server.
 size_t ui_active(void) { return rs_ui_active(); }
 
-void ui_refresh(void)
-{
-  if (ui_client_channel_id) {
-    abort();
-  }
-
-  int width = INT_MAX;
-  int height = INT_MAX;
-  bool ext_widgets[kUIExtCount];
-  bool inclusive = ui_override();
-  memset(ext_widgets, !!ui_active(), ARRAY_SIZE(ext_widgets));
-
-  for (size_t i = 0; i < ui_count; i++) {
-    RemoteUI *ui = uis[i];
-    width = MIN(ui->width, width);
-    height = MIN(ui->height, height);
-    for (UIExtension j = 0; (int)j < kUIExtCount; j++) {
-      ext_widgets[j] &= (ui->ui_ext[j] || inclusive);
-    }
-  }
-
-  rs_ui_set_cursor_pos(0, 0);
-  rs_ui_set_pending_cursor_update(true);
-
-  bool had_message = ui_ext[kUIMessages];
-  for (UIExtension i = 0; (int)i < kUIExtCount; i++) {
-    ui_ext[i] = ext_widgets[i] | ui_cb_ext[i];
-    if (i < kUIGlobalCount) {
-      ui_call_option_set(cstr_as_string(ui_ext_names[i]), BOOLEAN_OBJ(ui_ext[i]));
-    }
-  }
-
-  // Reset 'cmdheight' for all tabpages when ext_messages toggles.
-  if (had_message != ui_ext[kUIMessages]) {
-    if (ui_refresh_cmdheight) {
-      set_option_value(kOptCmdheight, NUMBER_OPTVAL(had_message), 0);
-      FOR_ALL_TABS(tp) {
-        tp->tp_ch_used = had_message;
-      }
-    }
-    msg_scroll_flush();
-  }
-  msg_ui_refresh();
-
-  if (!ui_active()) {
-    return;
-  }
-
-  if (updating_screen) {
-    ui_schedule_refresh();
-    return;
-  }
-
-  ui_default_colors_set();
-
-  int save_p_lz = p_lz;
-  p_lz = false;  // convince redrawing() to return true ...
-  screen_resize(width, height);
-  p_lz = save_p_lz;
-
-  ui_mode_info_set();
-  rs_ui_set_pending_mode_update(true);
-  ui_cursor_shape();
-  rs_ui_set_pending_has_mouse(-1);
-}
+extern void rs_ui_refresh(void);
+void ui_refresh(void) { rs_ui_refresh(); }
 
 int ui_pum_get_height(void) { return rs_ui_pum_get_height(); }
 
@@ -276,90 +213,16 @@ void vim_beep(unsigned val) { rs_vim_beep(val); }
 /// Used on startup after VimEnter.
 void do_autocmd_uienter_all(void) { rs_do_autocmd_uienter_all(); }
 
-void ui_attach_impl(RemoteUI *ui, uint64_t chanid)
-{
-  if (ui_count == MAX_UI_COUNT) {
-    abort();
-  }
-  if (!ui->ui_ext[kUIMultigrid] && !ui->ui_ext[kUIFloatDebug]
-      && !ui_client_channel_id) {
-    ui_comp_attach(ui);
-  }
+extern void rs_ui_attach_impl(void *ui, uint64_t chanid);
+void ui_attach_impl(RemoteUI *ui, uint64_t chanid) { rs_ui_attach_impl((void *)ui, chanid); }
 
-  uis[ui_count++] = ui;
-  ui_refresh_options();
-  resettitle();
+extern void rs_ui_detach_impl(void *ui, uint64_t chanid);
+void ui_detach_impl(RemoteUI *ui, uint64_t chanid) { rs_ui_detach_impl((void *)ui, chanid); }
 
-  char cwd[MAXPATHL];
-  size_t cwdlen = sizeof(cwd);
-  if (uv_cwd(cwd, &cwdlen) == 0) {
-    ui_call_chdir((String){ .data = cwd, .size = cwdlen });
-  }
-
-  for (UIExtension i = kUIGlobalCount; (int)i < kUIExtCount; i++) {
-    ui_set_ext_option(ui, i, ui->ui_ext[i]);
-  }
-
-  bool sent = false;
-  if (ui->ui_ext[kUIHlState]) {
-    sent = highlight_use_hlstate();
-  }
-  if (!sent) {
-    ui_send_all_hls(ui);
-  }
-  ui_refresh();
-
-  do_autocmd_uienter(chanid, true);
-}
-
-void ui_detach_impl(RemoteUI *ui, uint64_t chanid)
-{
-  size_t shift_index = MAX_UI_COUNT;
-
-  // Find the index that will be removed
-  for (size_t i = 0; i < ui_count; i++) {
-    if (uis[i] == ui) {
-      shift_index = i;
-      break;
-    }
-  }
-
-  if (shift_index == MAX_UI_COUNT) {
-    abort();
-  }
-
-  // Shift UIs at "shift_index"
-  while (shift_index < ui_count - 1) {
-    uis[shift_index] = uis[shift_index + 1];
-    shift_index++;
-  }
-
-  if (--ui_count
-      // During teardown/exit the loop was already destroyed, cannot schedule.
-      // https://github.com/neovim/neovim/pull/5119#issuecomment-258667046
-      && !exiting) {
-    ui_schedule_refresh();
-  }
-
-  if (!ui->ui_ext[kUIMultigrid] && !ui->ui_ext[kUIFloatDebug]) {
-    ui_comp_detach(ui);
-  }
-
-  do_autocmd_uienter(chanid, false);
-}
-
+extern void rs_ui_set_ext_option(void *ui, int ext, bool active);
 void ui_set_ext_option(RemoteUI *ui, UIExtension ext, bool active)
 {
-  if (ext < kUIGlobalCount) {
-    ui_refresh();
-    return;
-  }
-  if (ui_ext_names[ext][0] != '_' || active) {
-    remote_ui_option_set(ui, cstr_as_string(ui_ext_names[ext]), BOOLEAN_OBJ(active));
-  }
-  if (ext == kUITermColors) {
-    ui_default_colors_set();
-  }
+  rs_ui_set_ext_option((void *)ui, (int)ext, active);
 }
 
 void ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endcol, int clearcol,
@@ -440,6 +303,7 @@ Array ui_array(Arena *arena)
   return all_uis;
 }
 
+extern void rs_ui_grid_resize_win(void *wp, int width, int height);
 void ui_grid_resize(handle_T grid_handle, int width, int height, Error *err)
 {
   if (grid_handle == DEFAULT_GRID_HANDLE) {
@@ -452,18 +316,7 @@ void ui_grid_resize(handle_T grid_handle, int width, int height, Error *err)
     return;
   });
 
-  if (wp->w_floating) {
-    if (width != wp->w_width || height != wp->w_height) {
-      wp->w_config.width = MAX(width, 1);
-      wp->w_config.height = MAX(height, 1);
-      win_config_float(wp, wp->w_config);
-    }
-  } else {
-    // non-positive indicates no request
-    wp->w_height_request = MAX(height, 0);
-    wp->w_width_request = MAX(width, 0);
-    win_set_inner_size(wp, true);
-  }
+  rs_ui_grid_resize_win((void *)wp, width, height);
 }
 
 static void ui_attach_error(uint32_t ns_id, const char *name, const char *msg)
@@ -664,4 +517,133 @@ const void *nvim_grid_get_attrs_at(const void *grid, size_t off)
 /// Get ui_client_channel_id global (used by Rust)
 uint64_t nvim_get_ui_client_channel_id(void) { return ui_client_channel_id; }
 
+// =============================================================================
+// C accessors for Rust (Phase 4: ui_refresh / ui_grid_resize / ui_attach_impl)
+// =============================================================================
+
+/// Get width field of RemoteUI
+int nvim_remoteui_get_width(void *ui) { return ((RemoteUI *)ui)->width; }
+
+/// Get height field of RemoteUI
+int nvim_remoteui_get_height(void *ui) { return ((RemoteUI *)ui)->height; }
+
+/// Get ui_ext[ext] field of RemoteUI
+bool nvim_remoteui_get_ui_ext(void *ui, int ext) { return ((RemoteUI *)ui)->ui_ext[ext]; }
+
+/// Get ui_cb_ext[ext] global
+bool nvim_get_ui_cb_ext(int ext) { return ui_cb_ext[ext]; }
+
+/// Set ui_ext[ext] global
+void nvim_set_ui_ext(int ext, bool val) { ui_ext[ext] = val; }
+
+/// Get ui_ext[ext] global
+bool nvim_get_ui_ext_val(int ext) { return ui_ext[ext]; }
+
+/// Get ui_refresh_cmdheight global
+bool nvim_get_ui_refresh_cmdheight(void) { return ui_refresh_cmdheight; }
+
+/// Get p_lz option
+int nvim_get_p_lz(void) { return p_lz; }
+
+/// Set p_lz option
+void nvim_set_p_lz(int val) { p_lz = val; }
+
+/// Get uis[i] count (same as nvim_ui_active, convenience alias)
+size_t nvim_get_ui_count(void) { return ui_count; }
+
+/// Set uis[i] ptr (for attach/detach from Rust)
+void nvim_ui_set_uis_ptr(size_t i, void *ui) { uis[i] = (RemoteUI *)ui; }
+
+/// Set ui_count
+void nvim_ui_set_ui_count(size_t val) { ui_count = val; }
+
+// nvim_get_exiting is defined as a Rust drop-in in nvim-window crate (globals.rs)
+
+/// Set ui_ext[kUIHlState] accessor: used to read kUIHlState in attach
+bool nvim_remoteui_get_hlstate(void *ui)
+{
+  return ((RemoteUI *)ui)->ui_ext[kUIHlState];
+}
+
+/// Set ui_ext[kUIMultigrid] accessor
+bool nvim_remoteui_get_multigrid(void *ui)
+{
+  return ((RemoteUI *)ui)->ui_ext[kUIMultigrid];
+}
+
+/// Set ui_ext[kUIFloatDebug] accessor
+bool nvim_remoteui_get_floatdebug(void *ui)
+{
+  return ((RemoteUI *)ui)->ui_ext[kUIFloatDebug];
+}
+
+/// Wrapper: call ui_call_chdir with current working directory
+void nvim_ui_call_chdir_cwd(void)
+{
+  char cwd[MAXPATHL];
+  size_t cwdlen = sizeof(cwd);
+  if (uv_cwd(cwd, &cwdlen) == 0) {
+    ui_call_chdir((String){ .data = cwd, .size = cwdlen });
+  }
+}
+
+/// Wrapper: call ui_set_ext_option for each extension >= kUIGlobalCount
+void nvim_ui_set_ext_options_above_global(void *ui)
+{
+  for (UIExtension i = kUIGlobalCount; (int)i < kUIExtCount; i++) {
+    ui_set_ext_option((RemoteUI *)ui, i, ((RemoteUI *)ui)->ui_ext[i]);
+  }
+}
+
+/// Wrapper: call highlight_use_hlstate and ui_send_all_hls
+/// Returns true if hlstate was used
+bool nvim_ui_init_highlights(void *ui)
+{
+  bool sent = false;
+  if (((RemoteUI *)ui)->ui_ext[kUIHlState]) {
+    sent = highlight_use_hlstate();
+  }
+  if (!sent) {
+    ui_send_all_hls((RemoteUI *)ui);
+  }
+  return sent;
+}
+
+/// Wrapper for remote_ui_option_set (for ui_set_ext_option from Rust)
+void nvim_remote_ui_option_set(void *ui, int ext, bool active)
+{
+  if (ui_ext_names[ext][0] != '_' || active) {
+    remote_ui_option_set((RemoteUI *)ui, cstr_as_string(ui_ext_names[ext]), BOOLEAN_OBJ(active));
+  }
+  if (ext == kUITermColors) {
+    ui_default_colors_set();
+  }
+}
+
+/// Call ui_call_option_set for extension ext with current ui_ext[ext] value
+/// Only valid for ext < kUIGlobalCount
+void nvim_ui_call_option_set_ext(int ext)
+{
+  ui_call_option_set(cstr_as_string(ui_ext_names[ext]), BOOLEAN_OBJ(ui_ext[ext]));
+}
+
+/// Process the ext_messages toggle in ui_refresh:
+/// when had_message != ui_ext[kUIMessages], update cmdheight for all tabs
+/// Returns current value of ui_ext[kUIMessages]
+void nvim_ui_refresh_ext_messages(bool had_message)
+{
+  if (had_message != ui_ext[kUIMessages]) {
+    if (ui_refresh_cmdheight) {
+      set_option_value(kOptCmdheight, NUMBER_OPTVAL(had_message), 0);
+      FOR_ALL_TABS(tp) {
+        tp->tp_ch_used = had_message;
+      }
+    }
+    msg_scroll_flush();
+  }
+  msg_ui_refresh();
+}
+
+/// Get current value of ui_ext[kUIMessages]
+bool nvim_get_ui_ext_messages(void) { return ui_ext[kUIMessages]; }
 

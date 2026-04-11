@@ -752,3 +752,20 @@ void nvim_curbuf_ml_delete_last(void) { ml_delete(curbuf->b_ml.ml_line_count); }
 /// Redraw the current window.
 void nvim_redraw_later_not_valid(void) { redraw_later(curwin, UPD_NOT_VALID); }
 
+// =============================================================================
+// C accessors for ui.c Rust migration (Phase 1: ui_refresh / ui_grid_resize)
+// Note: nvim_win_get_w_width, nvim_win_get_w_height, nvim_win_get_config_width/height,
+//       nvim_win_set_config_width/height, nvim_get_first_tabpage, nvim_tabpage_get_next,
+//       nvim_tabpage_set_ch_used, nvim_get_exiting are already defined as Rust drop-ins
+//       in the nvim-window crate (window/src/win_struct.rs, globals.rs, tabpage_struct.rs).
+// =============================================================================
+
+/// Set window width_request (w_width_request)
+void nvim_win_set_width_request(win_T *wp, int val) { if (wp) { wp->w_width_request = val; } }
+
+/// Set window height_request (w_height_request)
+void nvim_win_set_height_request(win_T *wp, int val) { if (wp) { wp->w_height_request = val; } }
+
+/// Call win_set_inner_size on the window
+void nvim_win_set_inner_size(win_T *wp, bool valid_cursor) { win_set_inner_size(wp, valid_cursor); }
+

@@ -407,6 +407,69 @@ extern "C" {
     /// Get ui_client_channel_id global
     fn nvim_get_ui_client_channel_id() -> u64;
 
+    // Phase 4 FFI declarations: ui_refresh / ui_grid_resize / attach/detach
+    /// Get RemoteUI width field
+    fn nvim_remoteui_get_width(ui: *mut c_void) -> c_int;
+    /// Get RemoteUI height field
+    fn nvim_remoteui_get_height(ui: *mut c_void) -> c_int;
+    /// Get RemoteUI ui_ext[ext] field
+    fn nvim_remoteui_get_ui_ext(ui: *mut c_void, ext: c_int) -> bool;
+    /// Get ui_cb_ext[ext] global
+    fn nvim_get_ui_cb_ext(ext: c_int) -> bool;
+    /// Set ui_ext[ext] global
+    fn nvim_set_ui_ext(ext: c_int, val: bool);
+    /// Get p_lz option
+    fn nvim_get_p_lz() -> c_int;
+    /// Set p_lz option
+    fn nvim_set_p_lz(val: c_int);
+    /// Get updating_screen global
+    fn nvim_get_updating_screen() -> bool;
+    /// Schedule a UI refresh
+    fn ui_schedule_refresh();
+    /// Resize the screen
+    fn screen_resize(width: c_int, height: c_int);
+    /// Process ext_messages toggle and call msg_scroll_flush + msg_ui_refresh
+    fn nvim_ui_refresh_ext_messages(had_message: bool);
+    /// Get current value of ui_ext[kUIMessages]
+    fn nvim_get_ui_ext_messages() -> bool;
+    /// Call ui_call_option_set for extension ext with current ui_ext[ext]
+    fn nvim_ui_call_option_set_ext(ext: c_int);
+    /// Get window w_width field (renamed to avoid conflict with API nvim_win_get_width)
+    fn nvim_win_get_w_width(wp: *mut c_void) -> c_int;
+    /// Get window w_height field
+    fn nvim_win_get_w_height(wp: *mut c_void) -> c_int;
+    /// Set window config width (drop-in from nvim-window crate)
+    fn nvim_win_set_config_width(wp: *mut c_void, val: c_int);
+    /// Set window config height (drop-in from nvim-window crate)
+    fn nvim_win_set_config_height(wp: *mut c_void, val: c_int);
+    /// Set window width_request
+    fn nvim_win_set_width_request(wp: *mut c_void, val: c_int);
+    /// Set window height_request
+    fn nvim_win_set_height_request(wp: *mut c_void, val: c_int);
+    /// Call win_config_float(wp, wp->w_config)
+    fn nvim_win_config_float(wp: *mut c_void);
+    /// Call win_set_inner_size(wp, valid_cursor)
+    fn nvim_win_set_inner_size(wp: *mut c_void, valid_cursor: bool);
+    /// Get floating status of window
+    fn nvim_win_get_floating_win(wp: *mut c_void) -> c_int;
+    /// ui_attach_impl helpers
+    fn nvim_ui_call_chdir_cwd();
+    fn nvim_ui_set_ext_options_above_global(ui: *mut c_void);
+    fn nvim_ui_init_highlights(ui: *mut c_void) -> bool;
+    fn ui_comp_attach(ui: *mut c_void);
+    fn ui_comp_detach(ui: *mut c_void);
+    fn ui_refresh_options();
+    fn resettitle();
+    // do_autocmd_uienter already declared in Phase 3 FFI block above
+    fn nvim_get_ui_count() -> usize;
+    fn nvim_ui_set_uis_ptr(i: usize, ui: *mut c_void);
+    fn nvim_ui_set_ui_count(val: usize);
+    fn nvim_get_exiting() -> bool;
+    fn nvim_remote_ui_option_set(ui: *mut c_void, ext: c_int, active: bool);
+    fn nvim_remoteui_get_multigrid(ui: *mut c_void) -> bool;
+    fn nvim_remoteui_get_floatdebug(ui: *mut c_void) -> bool;
+    // Note: do_autocmd_uienter is already declared above in Phase 3 FFI
+
     // Phase 2 FFI declarations
     /// Get emsg_silent global
     fn nvim_get_emsg_silent() -> c_int;
@@ -1066,6 +1129,209 @@ pub unsafe extern "C" fn rs_do_autocmd_uienter_all() {
         let chanid = nvim_remoteui_get_channel_id(ui);
         do_autocmd_uienter(chanid, true);
     }
+}
+
+// =============================================================================
+// Migrated functions: Phase 4 (ui_refresh, ui_grid_resize, attach/detach)
+// =============================================================================
+
+/// kUIExtCount value (10 extensions total)
+const K_UI_EXT_COUNT: c_int = 10;
+
+/// kUIGlobalCount value (5 global extensions, before Linegrid)
+const K_UI_GLOBAL_COUNT: c_int = 5;
+
+/// Refresh UI state: negotiate dimensions and extensions across all attached UIs.
+///
+/// # Safety
+/// Calls many C accessor and ui_call functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_refresh() {
+    if nvim_get_ui_client_channel_id() != 0 {
+        // This should not happen; abort like the C code does.
+        std::process::abort();
+    }
+
+    let count = nvim_ui_active();
+    let mut width: c_int = c_int::MAX;
+    let mut height: c_int = c_int::MAX;
+    let inclusive = rs_ui_override();
+
+    // Compute negotiated ext_widgets and dimensions
+    let mut ext_widgets = [count > 0; K_UI_EXT_COUNT as usize];
+
+    for i in 0..count {
+        let ui = nvim_ui_get_uis_ptr(i);
+        let ui_w = nvim_remoteui_get_width(ui);
+        let ui_h = nvim_remoteui_get_height(ui);
+        if ui_w < width {
+            width = ui_w;
+        }
+        if ui_h < height {
+            height = ui_h;
+        }
+        for (j, widget) in ext_widgets.iter_mut().enumerate() {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            let j_c = j as c_int;
+            *widget &= nvim_remoteui_get_ui_ext(ui, j_c) || inclusive;
+        }
+    }
+
+    CURSOR_ROW = 0;
+    CURSOR_COL = 0;
+    PENDING_CURSOR_UPDATE = true;
+
+    let had_message = nvim_get_ui_ext_messages();
+
+    // Update ui_ext[] and call option_set for each global extension
+    for (i, widget) in ext_widgets.iter().enumerate() {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let i_c = i as c_int;
+        let new_val = *widget || nvim_get_ui_cb_ext(i_c);
+        nvim_set_ui_ext(i_c, new_val);
+        if i_c < K_UI_GLOBAL_COUNT {
+            nvim_ui_call_option_set_ext(i_c);
+        }
+    }
+
+    // Handle ext_messages toggle: update cmdheight, flush messages
+    nvim_ui_refresh_ext_messages(had_message);
+
+    if count == 0 {
+        return;
+    }
+
+    if nvim_get_updating_screen() {
+        ui_schedule_refresh();
+        return;
+    }
+
+    rs_ui_default_colors_set();
+
+    let save_p_lz = nvim_get_p_lz();
+    nvim_set_p_lz(0); // convince redrawing() to return true
+    screen_resize(width, height);
+    nvim_set_p_lz(save_p_lz);
+
+    rs_ui_mode_info_set();
+    PENDING_MODE_UPDATE = true;
+    rs_ui_cursor_shape();
+    PENDING_HAS_MOUSE = -1;
+}
+
+/// Resize a window's grid. Called by the C wrapper after validation.
+///
+/// # Safety
+/// Calls C accessor functions and modifies window state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_grid_resize_win(wp: *mut c_void, width: c_int, height: c_int) {
+    if nvim_win_get_floating_win(wp) != 0 {
+        let cur_w = nvim_win_get_w_width(wp);
+        let cur_h = nvim_win_get_w_height(wp);
+        if width != cur_w || height != cur_h {
+            let new_w = if width > 1 { width } else { 1 };
+            let new_h = if height > 1 { height } else { 1 };
+            nvim_win_set_config_width(wp, new_w);
+            nvim_win_set_config_height(wp, new_h);
+            nvim_win_config_float(wp);
+        }
+    } else {
+        // non-positive indicates no request
+        let req_h = if height > 0 { height } else { 0 };
+        let req_w = if width > 0 { width } else { 0 };
+        nvim_win_set_height_request(wp, req_h);
+        nvim_win_set_width_request(wp, req_w);
+        nvim_win_set_inner_size(wp, true);
+    }
+}
+
+/// Attach a new UI: add to uis[], trigger compositor, send highlights, fire autocmd.
+///
+/// # Safety
+/// Calls C accessor functions and modifies global UI state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_attach_impl(ui: *mut c_void, chanid: u64) {
+    let count = nvim_get_ui_count();
+    if count == MAX_UI_COUNT {
+        std::process::abort();
+    }
+
+    if !nvim_remoteui_get_multigrid(ui)
+        && !nvim_remoteui_get_floatdebug(ui)
+        && nvim_get_ui_client_channel_id() == 0
+    {
+        ui_comp_attach(ui);
+    }
+
+    nvim_ui_set_uis_ptr(count, ui);
+    nvim_ui_set_ui_count(count + 1);
+    ui_refresh_options();
+    resettitle();
+
+    nvim_ui_call_chdir_cwd();
+    nvim_ui_set_ext_options_above_global(ui);
+    nvim_ui_init_highlights(ui);
+
+    rs_ui_refresh();
+
+    do_autocmd_uienter(chanid, true);
+}
+
+/// Detach a UI: remove from uis[], trigger compositor detach, fire autocmd.
+///
+/// # Safety
+/// Calls C accessor functions and modifies global UI state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_detach_impl(ui: *mut c_void, chanid: u64) {
+    let count = nvim_get_ui_count();
+    let mut shift_index = MAX_UI_COUNT;
+
+    // Find the index that will be removed
+    for i in 0..count {
+        let ptr = nvim_ui_get_uis_ptr(i);
+        if ptr == ui {
+            shift_index = i;
+            break;
+        }
+    }
+
+    if shift_index == MAX_UI_COUNT {
+        std::process::abort();
+    }
+
+    // Shift UIs at shift_index
+    let mut idx = shift_index;
+    while idx < count - 1 {
+        let next = nvim_ui_get_uis_ptr(idx + 1);
+        nvim_ui_set_uis_ptr(idx, next);
+        idx += 1;
+    }
+
+    let new_count = count - 1;
+    nvim_ui_set_ui_count(new_count);
+
+    if new_count > 0 && !nvim_get_exiting() {
+        ui_schedule_refresh();
+    }
+
+    if !nvim_remoteui_get_multigrid(ui) && !nvim_remoteui_get_floatdebug(ui) {
+        ui_comp_detach(ui);
+    }
+
+    do_autocmd_uienter(chanid, false);
+}
+
+/// Set a UI extension option on a specific RemoteUI.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_set_ext_option(ui: *mut c_void, ext: c_int, active: bool) {
+    if ext < K_UI_GLOBAL_COUNT {
+        rs_ui_refresh();
+        return;
+    }
+    nvim_remote_ui_option_set(ui, ext, active);
 }
 
 // =============================================================================
