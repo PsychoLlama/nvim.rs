@@ -11,7 +11,8 @@ pub mod global;
 pub mod mode;
 pub mod screen;
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // =============================================================================
 // State Change Types
@@ -228,6 +229,130 @@ pub unsafe extern "C" fn rs_state_snapshot_is_valid(snap: *const StateSnapshot) 
         return 0;
     }
     c_int::from((*snap).is_valid())
+}
+
+// =============================================================================
+// Phase 1: virtual_active, SafeState functions
+// =============================================================================
+
+// kOptVeFlags values (from option_vars.generated.h)
+const K_OPT_VE_FLAG_ALL: u32 = 0x04;
+const K_OPT_VE_FLAG_BLOCK: u32 = 0x05;
+const K_OPT_VE_FLAG_INSERT: u32 = 0x06;
+
+// Mode constants (from state_defs.h)
+const MODE_TERMINAL: c_int = 0x80;
+const MODE_INSERT: c_int = 0x10;
+
+// TriState values (kNone = -1, kFalse = 0, kTrue = 1)
+const K_NONE: c_int = -1;
+
+// Ctrl_V = 22 (from ascii_defs.h)
+const CTRL_V: c_int = 22;
+
+// WinHandle type alias
+type WinHandle = *mut c_void;
+
+extern "C" {
+    /// Current editor state flags.
+    static mut State: c_int;
+    /// `VIsual_active` global (visual mode active).
+    static mut VIsual_active: bool;
+    /// Get `VIsual_mode` global.
+    fn nvim_get_VIsual_mode() -> c_int;
+    /// Get `virtual_op` `TriState`.
+    fn nvim_get_virtual_op() -> c_int;
+    /// Get `ve_flags` for a window.
+    #[link_name = "get_ve_flags"]
+    fn nvim_state_get_ve_flags(wp: WinHandle) -> c_uint;
+    /// Get `typebuf.tb_len`.
+    fn nvim_get_typebuf_len() -> c_int;
+    /// Check if stuff is empty.
+    fn nvim_stuff_empty() -> c_int;
+    /// Check if using a script.
+    fn nvim_using_script() -> c_int;
+    /// Get `global_busy`.
+    fn nvim_get_global_busy() -> bool;
+    /// Get `debug_mode`.
+    fn nvim_is_debug_mode() -> c_int;
+    /// Apply `SafeState` autocommand.
+    fn nvim_apply_autocmds_safestate();
+    // Log message (DLOG macro equivalent -- ignored in Rust for now).
+    // (no-op in Rust migration)
+}
+
+use std::ffi::c_uint;
+
+/// Rust-owned `was_safe` static (replaces C static in state.c).
+static WAS_SAFE: AtomicBool = AtomicBool::new(false);
+
+/// Return whether currently it is safe (no typeahead, not in script, etc.).
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn is_safe_now() -> bool {
+    nvim_stuff_empty() != 0
+        && nvim_get_typebuf_len() == 0
+        && nvim_using_script() == 0
+        && !nvim_get_global_busy()
+        && nvim_is_debug_mode() == 0
+}
+
+/// Return true if in the current mode we need to use virtual editing.
+///
+/// # Safety
+/// Reads C globals via accessor functions.
+#[unsafe(export_name = "virtual_active")]
+pub unsafe extern "C" fn rs_virtual_active(wp: WinHandle) -> bool {
+    // While an operator is being executed we return virtual_op, because
+    // VIsual_active has already been reset.
+    let virtual_op = nvim_get_virtual_op();
+    if virtual_op != K_NONE {
+        return virtual_op != 0;
+    }
+
+    // In Terminal mode the cursor can be positioned anywhere.
+    if (State & MODE_TERMINAL) != 0 {
+        return true;
+    }
+
+    let cur_ve_flags = nvim_state_get_ve_flags(wp);
+
+    cur_ve_flags == K_OPT_VE_FLAG_ALL
+        || ((cur_ve_flags & K_OPT_VE_FLAG_BLOCK) != 0
+            && VIsual_active
+            && nvim_get_VIsual_mode() == CTRL_V)
+        || ((cur_ve_flags & K_OPT_VE_FLAG_INSERT) != 0 && (State & MODE_INSERT) != 0)
+}
+
+/// Trigger `SafeState` autocmd if currently in a safe state.
+///
+/// # Safety
+/// Calls C autocmd/state functions.
+#[unsafe(export_name = "may_trigger_safestate")]
+pub unsafe extern "C" fn rs_may_trigger_safestate(safe: bool) {
+    let is_safe = safe && is_safe_now();
+    // (DLOG for state changes omitted -- Rust migration)
+    if is_safe {
+        nvim_apply_autocmds_safestate();
+    }
+    WAS_SAFE.store(is_safe, Ordering::Relaxed);
+}
+
+/// Reset the `was_safe` flag (something changed making state unsafe).
+///
+/// # Safety
+/// Modifies Rust-owned atomic.
+#[unsafe(export_name = "state_no_longer_safe")]
+pub unsafe extern "C" fn rs_state_no_longer_safe(_reason: *const std::ffi::c_char) {
+    // (DLOG omitted)
+    WAS_SAFE.store(false, Ordering::Relaxed);
+}
+
+/// C-callable accessor for `was_safe` (for event crate compatibility).
+#[no_mangle]
+pub extern "C" fn nvim_state_get_was_safe() -> c_int {
+    c_int::from(WAS_SAFE.load(Ordering::Relaxed))
 }
 
 // =============================================================================

@@ -246,7 +246,7 @@ extern "C" {
 
 extern "C" {
     pub fn nvim_al_gotocmdline(clr: c_int);
-    pub fn nvim_al_list_in_columns(items: *mut *mut c_char, count: c_int, current: c_int);
+    pub fn list_in_columns(items: *mut *mut c_char, count: c_int, current: c_int);
     pub fn nvim_al_maketitle();
     pub fn nvim_al_curbuf_reusable() -> c_int;
     pub fn nvim_al_curbuf_ml_empty() -> c_int;

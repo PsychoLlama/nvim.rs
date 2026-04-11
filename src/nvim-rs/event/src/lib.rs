@@ -3275,7 +3275,7 @@ pub unsafe extern "C" fn rs_signal_watcher_signum(watcher: SignalWatcherHandle) 
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_was_safe() -> c_int;
+    fn nvim_state_get_was_safe() -> c_int;
     fn nvim_get_state() -> c_int;
     static mut VIsual_active: bool;
     fn nvim_get_visual_select() -> c_int;
@@ -3294,7 +3294,7 @@ const MODE_SELECT: c_int = 0x40;
 /// Calls C accessor function for was_safe static.
 #[export_name = "get_was_safe_state"]
 pub unsafe extern "C" fn rs_get_was_safe_state() -> bool {
-    nvim_get_was_safe() != 0
+    nvim_state_get_was_safe() != 0
 }
 
 /// Get the real state of the editor.

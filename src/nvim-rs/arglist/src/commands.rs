@@ -352,7 +352,7 @@ pub extern "C" fn rs_ex_args(eap: ExargPtr) {
                 *items.add(i as usize) = crate::query::alist_name(ae);
             }
             let curwin = ffi::nvim_al_get_curwin();
-            ffi::nvim_al_list_in_columns(items, argcount, ffi::nvim_al_win_get_arg_idx(curwin));
+            ffi::list_in_columns(items, argcount, ffi::nvim_al_win_get_arg_idx(curwin));
             ffi::nvim_al_xfree(items.cast::<c_void>());
 
             return;

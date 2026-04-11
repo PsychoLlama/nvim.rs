@@ -612,3 +612,20 @@ const char *nvim_get_curbuf_b_p_fp(void) { return curbuf->b_p_fp; }
 
 /// Return p_fp string pointer (global format program).
 const char *nvim_get_p_fp(void) { return p_fp; }
+
+// =============================================================================
+// State crate accessors (Phase 1)
+// =============================================================================
+
+/// Return whether currently using a script (for SafeState check).
+int nvim_using_script(void) { return using_script() ? 1 : 0; }
+
+/// Return whether debug_mode is set.
+int nvim_is_debug_mode(void) { return debug_mode ? 1 : 0; }
+
+
+/// Apply SafeState autocommand.
+void nvim_apply_autocmds_safestate(void)
+{
+  apply_autocmds(EVENT_SAFESTATE, NULL, NULL, false, curbuf);
+}

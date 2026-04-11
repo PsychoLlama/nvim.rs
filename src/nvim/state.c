@@ -143,28 +143,6 @@ void state_handle_k_event(void)
   }
 }
 
-/// Return true if in the current mode we need to use virtual.
-bool virtual_active(win_T *wp)
-{
-  // While an operator is being executed we return "virtual_op", because
-  // VIsual_active has already been reset, thus we can't check for "block"
-  // being used.
-  if (virtual_op != kNone) {
-    return virtual_op;
-  }
-
-  // In Terminal mode the cursor can be positioned anywhere by the application
-  if (State & MODE_TERMINAL) {
-    return true;
-  }
-
-  unsigned cur_ve_flags = get_ve_flags(wp);
-
-  return cur_ve_flags == kOptVeFlagAll
-         || ((cur_ve_flags & kOptVeFlagBlock) && VIsual_active && VIsual_mode == Ctrl_V)
-         || ((cur_ve_flags & kOptVeFlagInsert) && (State & MODE_INSERT));
-}
-
 /// Returns the current mode as a string in "buf[MODE_MAX_LENGTH]", NUL
 /// terminated.
 /// The first character represents the major mode, the following ones the minor
@@ -271,48 +249,6 @@ void may_trigger_modechanged(void)
   restore_v_event(v_event, &save_v_event);
 }
 
-/// When true in a safe state when starting to wait for a character.
-static bool was_safe = false;
-
-/// C accessor for was_safe static.
-int nvim_get_was_safe(void) { return was_safe; }
-
-/// Return whether currently it is safe, assuming it was safe before (high level
-/// state didn't change).
-static bool is_safe_now(void)
-{
-  return stuff_empty()
-         && typebuf.tb_len == 0
-         && !using_script()
-         && !global_busy
-         && !debug_mode;
-}
-
-/// Trigger SafeState if currently in a safe state, that is "safe" is true and
-/// there is no typeahead.
-void may_trigger_safestate(bool safe)
-{
-  bool is_safe = safe && is_safe_now();
-
-  if (was_safe != is_safe) {
-    // Only log when the state changes, otherwise it happens at nearly
-    // every key stroke.
-    DLOG(is_safe ? "SafeState: Start triggering" : "SafeState: Stop triggering");
-  }
-  if (is_safe) {
-    apply_autocmds(EVENT_SAFESTATE, NULL, NULL, false, curbuf);
-  }
-  was_safe = is_safe;
-}
-
-/// Something changed which causes the state possibly to be unsafe, e.g. a
-/// character was typed.  It will remain unsafe until the next call to
-/// may_trigger_safestate().
-void state_no_longer_safe(const char *reason)
-{
-  if (was_safe && reason != NULL) {
-    DLOG("SafeState reset: %s", reason);
-  }
-  was_safe = false;
-}
+// was_safe, is_safe_now, may_trigger_safestate, state_no_longer_safe
+// migrated to Rust (state crate, Phase 1).
 

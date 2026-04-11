@@ -235,6 +235,151 @@ pub extern "C" fn rs_has_vim_patch(n: c_int, major_minor_version: c_int) -> bool
     has_vim_patch_impl(n, major_minor_version)
 }
 
+// =============================================================================
+// Phase 1: list_in_columns and version_msg helpers
+// =============================================================================
+
+extern "C" {
+    static got_int: c_int;
+    static Columns: c_int;
+    static mut msg_col: c_int;
+
+    fn msg_puts(s: *const c_char);
+    fn msg_putchar(c: c_int);
+    fn vim_strsize(s: *const c_char) -> c_int;
+}
+
+/// Output a string for the version message.  If it's going to wrap, output a
+/// newline, unless the message is too long to fit on the screen anyway.
+/// When `wrap` is true, wrap the string in `[]`.
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string pointer.
+/// Calls C FFI functions (`msg_puts`, `msg_putchar`, `vim_strsize`).
+/// Must be called from the main Neovim thread.
+unsafe fn version_msg_wrap(s: *const c_char, wrap: bool) {
+    let extra = if wrap { 2 } else { 0 };
+    let len = vim_strsize(s) + extra;
+
+    // 10 = b'\n'; use literal to avoid u8->i8 cast lint
+    if got_int == 0 && len < Columns && msg_col + len >= Columns && *s != 10 {
+        msg_putchar(b'\n' as c_int);
+    }
+
+    if got_int == 0 {
+        if wrap {
+            msg_puts(c"[".as_ptr());
+        }
+        msg_puts(s);
+        if wrap {
+            msg_puts(c"]".as_ptr());
+        }
+    }
+}
+
+/// Call `version_msg_wrap(s, false)`.
+/// Exported as `version_msg` for C callers (`list_version` until it is migrated).
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string.
+#[unsafe(export_name = "version_msg")]
+pub unsafe extern "C" fn rs_version_msg(s: *const c_char) {
+    version_msg_wrap(s, false);
+}
+
+/// List string items nicely aligned in columns.
+///
+/// When `size` is < 0 then the last entry is marked with NULL.
+/// The entry with index `current` is enclosed in `[]`.
+///
+/// # Safety
+/// `items` must be a valid pointer to `size` (or NULL-terminated if size < 0)
+/// pointers to null-terminated C strings.
+#[unsafe(export_name = "list_in_columns")]
+pub unsafe extern "C" fn rs_list_in_columns(items: *mut *mut c_char, size: c_int, current: c_int) {
+    let mut item_count: c_int = 0;
+    let mut width: c_int = 0;
+
+    // Find the length of the longest item; use that + 1 as the column width.
+    let mut i: c_int = 0;
+    loop {
+        let done = if size < 0 {
+            // Safety: caller guarantees NULL-terminated array when size < 0.
+            #[allow(clippy::cast_sign_loss)]
+            (*items.add(i as usize)).is_null()
+        } else {
+            i >= size
+        };
+        if done {
+            break;
+        }
+        #[allow(clippy::cast_sign_loss)]
+        let l = vim_strsize(*items.add(i as usize)) + if i == current { 2 } else { 0 };
+        if l > width {
+            width = l;
+        }
+        item_count += 1;
+        i += 1;
+    }
+    width += 1;
+
+    if Columns < width {
+        // Not enough screen columns — show one per line.
+        for idx in 0..item_count {
+            #[allow(clippy::cast_sign_loss)]
+            let item = *items.add(idx as usize);
+            version_msg_wrap(item, idx == current);
+            if msg_col > 0 && idx < item_count - 1 {
+                msg_putchar(b'\n' as c_int);
+            }
+        }
+        return;
+    }
+
+    // The rightmost column doesn't need a separator.
+    // Sacrifice it to fit in one more column if possible.
+    let ncol = (Columns + 1) / width;
+    let nrow = item_count / ncol + i32::from(item_count % ncol != 0);
+    let mut cur_row: c_int = 1;
+
+    // `i` counts columns then rows; `idx` counts rows then columns.
+    let mut i: c_int = 0;
+    while got_int == 0 && i < nrow * ncol {
+        let idx = (i / ncol) + (i % ncol) * nrow;
+        if idx < item_count {
+            let last_col = (i + 1) % ncol == 0;
+            if idx == current {
+                msg_putchar(b'[' as c_int);
+            }
+            #[allow(clippy::cast_sign_loss)]
+            let item = *items.add(idx as usize);
+            msg_puts(item);
+            if idx == current {
+                msg_putchar(b']' as c_int);
+            }
+            if last_col {
+                if msg_col > 0 && cur_row < nrow {
+                    msg_putchar(b'\n' as c_int);
+                }
+                cur_row += 1;
+            } else {
+                while msg_col % width != 0 {
+                    msg_putchar(b' ' as c_int);
+                }
+            }
+        } else {
+            // This row is out of items — at the end of the row.
+            if msg_col > 0 {
+                if cur_row < nrow {
+                    msg_putchar(b'\n' as c_int);
+                }
+                cur_row += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

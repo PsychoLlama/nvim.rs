@@ -305,7 +305,7 @@ void nvim_al_emsg_E165(void) { emsg(_("E165: Cannot go beyond last file")); }
 
 // -- Phase 7 extra accessors --
 void nvim_al_gotocmdline(int clr) { gotocmdline(clr); }
-void nvim_al_list_in_columns(char **items, int count, int current) { list_in_columns(items, count, current); }
+// nvim_al_list_in_columns deleted: arglist Rust now calls list_in_columns directly (Rust export).
 void nvim_al_maketitle(void) { maketitle(); }
 int nvim_al_curbuf_reusable(void) { return curbuf_reusable(); }
 int nvim_al_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }

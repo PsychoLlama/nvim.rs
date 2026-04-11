@@ -6,5 +6,8 @@
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 int get_real_state(void);
 bool get_was_safe_state(void);
+bool virtual_active(win_T *wp);
+void may_trigger_safestate(bool safe);
+void state_no_longer_safe(const char *reason);
 
 #include "state.h.generated.h"
