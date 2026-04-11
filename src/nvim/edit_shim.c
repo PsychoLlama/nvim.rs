@@ -45,6 +45,8 @@
 #include "nvim/ui.h"
 #include "edit_shim.c.generated.h"
 extern int ins_apply_autocmds(event_T event);
+extern void replace_join(int off);
+extern void ins_bytes_len(char *p, size_t len);
 extern int echeck_abbr(int c);
 extern void rs_replace_stack_clear(void);
 extern int rs_ctrl_x_mode_scroll(void);
@@ -687,6 +689,140 @@ int nvim_edit_utf_head_off_cursor_col(int col)
 
 /// Call curs_columns(curwin, false) -- recompute w_wrow and w_wcol.
 void nvim_curs_columns_curwin_no_scroll(void) { curs_columns(curwin, false); }
+
+// ---- Phase 4 accessors: nvim_edit_edit_entry ----
+
+/// True when curbuf->terminal is non-NULL.
+bool nvim_curbuf_has_terminal(void) { return curbuf->terminal != NULL; }
+
+/// expr_map_locked() wrapper.
+int nvim_expr_map_locked(void) { return expr_map_locked() ? 1 : 0; }
+
+// ---- Phase 4 accessors: nvim_edit_ins_tab_replace_spaces ----
+
+/// Save curwin->w_p_list and optionally clear it if CPO_LISTWM is not set.
+/// Returns the saved value.
+int nvim_edit_tab_save_list(void)
+{
+  int save = curwin->w_p_list;
+  if (vim_strchr(p_cpo, CPO_LISTWM) == NULL) {
+    curwin->w_p_list = false;
+  }
+  return save;
+}
+
+/// Restore curwin->w_p_list to saved value.
+void nvim_edit_tab_restore_list(int save_list) { curwin->w_p_list = save_list; }
+
+/// Get cursor position (lnum, col) for ins_tab_replace_spaces.
+/// Returns cursor col; sets *lnum_out.
+colnr_T nvim_edit_tab_cursor_col(linenr_T *lnum_out)
+{
+  if (lnum_out) {
+    *lnum_out = curwin->w_cursor.lnum;
+  }
+  return curwin->w_cursor.col;
+}
+
+/// Set cursor col.
+void nvim_edit_tab_set_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
+
+/// Get curwin->w_cursor (lnum, col) for fpos construction.
+void nvim_edit_tab_get_cursor(linenr_T *lnum, colnr_T *col)
+{
+  if (lnum) { *lnum = curwin->w_cursor.lnum; }
+  if (col)  { *col  = curwin->w_cursor.col; }
+}
+
+/// True when VREPLACE_FLAG is set in State.
+bool nvim_edit_tab_is_vreplace(void) { return (State & VREPLACE_FLAG) != 0; }
+
+/// True when REPLACE_FLAG is set in State.
+bool nvim_edit_tab_is_replace(void) { return (State & REPLACE_FLAG) != 0; }
+
+/// xstrnsave(get_cursor_line_ptr(), get_cursor_line_len()) for vreplace.
+char *nvim_edit_tab_strnsave_cursor_line(void)
+{
+  return xstrnsave(get_cursor_line_ptr(), (size_t)get_cursor_line_len());
+}
+
+/// Get pointer to cursor position in current line (for non-vreplace).
+char *nvim_edit_tab_get_cursor_pos_ptr(void) { return get_cursor_pos_ptr(); }
+
+/// ascii_iswhite(c) check.
+bool nvim_ascii_iswhite(char c) { return ascii_iswhite(c); }
+
+/// getvcol(curwin, &fpos, &vcol, NULL, NULL) for computing virtual column.
+colnr_T nvim_edit_tab_getvcol(linenr_T lnum, colnr_T col)
+{
+  pos_T fpos = { .lnum = lnum, .col = col };
+  colnr_T vcol = 0;
+  getvcol(curwin, &fpos, &vcol, NULL, NULL);
+  return vcol;
+}
+
+/// CharsizeArg/CSType init and win_charsize for TAB width calculation.
+/// Returns tab width at given vcol.
+int nvim_edit_tab_charsize_tab(colnr_T vcol)
+{
+  const char *tab = "\t";
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, 0, tab);
+  return win_charsize(cstype, vcol, tab, (uint8_t)'\t', &csarg).width;
+}
+
+/// win_charsize for ' ' (space) at vcol.
+int nvim_edit_tab_charsize_space(colnr_T vcol, const char *ptr)
+{
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, 0, ptr);
+  return win_charsize(cstype, vcol, ptr, (uint8_t)' ', &csarg).width;
+}
+
+/// Get Insstart.lnum and Insstart.col.
+void nvim_edit_tab_get_Insstart(linenr_T *lnum, colnr_T *col)
+{
+  if (lnum) { *lnum = Insstart.lnum; }
+  if (col)  { *col  = Insstart.col; }
+}
+
+/// Set Insstart.col.
+void nvim_edit_tab_set_Insstart_col(colnr_T col) { Insstart.col = col; }
+
+/// The raw buffer rewrite for space-to-TAB in non-vreplace mode.
+/// ptr: pointer to start of the spaces/tabs region (offset into line buffer).
+/// i: number of bytes to delete (spaces to collapse).
+/// change_col, cursor_col, fpos_col, fpos_lnum: for inserted_bytes.
+void nvim_edit_tab_rewrite_line(char *ptr, int i,
+                                colnr_T change_col, colnr_T cursor_col,
+                                colnr_T fpos_col, linenr_T fpos_lnum)
+{
+  char *newp = xmalloc((size_t)(curbuf->b_ml.ml_line_len - i));
+  ptrdiff_t col = ptr - curbuf->b_ml.ml_line_ptr;
+  if (col > 0) {
+    memmove(newp, ptr - col, (size_t)col);
+  }
+  memmove(newp + col, ptr + i, (size_t)(curbuf->b_ml.ml_line_len - col - i));
+  if (curbuf->b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED)) {
+    xfree(curbuf->b_ml.ml_line_ptr);
+  }
+  curbuf->b_ml.ml_line_ptr = newp;
+  curbuf->b_ml.ml_line_len -= i;
+  curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
+  inserted_bytes(fpos_lnum, change_col, cursor_col - change_col, fpos_col - change_col);
+}
+
+/// STRMOVE(ptr, ptr + i) for vreplace space deletion.
+void nvim_edit_tab_strmove(char *ptr, int i) { STRMOVE(ptr, ptr + i); }
+
+/// backspace_until_column(col) for vreplace.
+void nvim_edit_tab_backspace_until_column(colnr_T col) { backspace_until_column(col); }
+
+/// ins_bytes_len(s, len) for vreplace.
+void nvim_edit_tab_ins_bytes_len(const char *s, size_t len) { ins_bytes_len((char *)s, len); }
+
+/// replace_join(off) for replace mode.
+void nvim_edit_tab_replace_join(int off) { replace_join(off); }
 
 // ---- Phase 3 accessors: nvim_edit_init_prompt_impl ----
 
