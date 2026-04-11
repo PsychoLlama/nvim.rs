@@ -137,115 +137,21 @@ void nvim_digraph_putcmdline(int c, int shift) { putcmdline((char)c, shift != 0)
 /// Add a character to the showcmd display (for Rust FFI).
 void nvim_digraph_add_to_showcmd(int c) { add_to_showcmd(c); }
 
+/// Append a list to a list (for Rust FFI).
+void nvim_tv_list_append_list(list_T *l, list_T *itemlist) { tv_list_append_list(l, itemlist); }
+
+/// Check for optional bool arg in typval array (for Rust FFI). Returns OK or FAIL.
+int nvim_tv_check_for_opt_bool_arg(const typval_T *args, int idx) { return tv_check_for_opt_bool_arg(args, idx); }
+
 // get_digraph_for_char(), check_digraph_chars_valid(), putdigraph() moved to Rust (viml.rs)
 
 // digraph_header(), listdigraphs(), printdigraph() moved to Rust (list.rs)
 
-/// Context for digraph_getlist iteration callback.
-typedef struct {
-  list_T *list;
-} DigraphGetlistCtx;
-
-/// Callback for digraph_getlist iteration.
-static int digraph_getlist_callback(uint8_t char1, uint8_t char2, int result, void *ctx)
-{
-  DigraphGetlistCtx *gctx = (DigraphGetlistCtx *)ctx;
-
-  // Create a 2-element sublist ["{c1}{c2}", "{result}"]
-  list_T *l2 = tv_list_alloc(2);
-  tv_list_append_list(gctx->list, l2);
-
-  // Append digraph characters
-  char buf[30];
-  buf[0] = (char)char1;
-  buf[1] = (char)char2;
-  buf[2] = NUL;
-  tv_list_append_string(l2, buf, -1);
-
-  // Append result as UTF-8
-  char *p = buf;
-  p += utf_char2bytes(result, p);
-  *p = NUL;
-  tv_list_append_string(l2, buf, -1);
-
-  // Continue iteration if not interrupted
-  return !got_int;
-}
-
-void digraph_getlist_common(bool list_all, typval_T *rettv)
-{
-  tv_list_alloc_ret(rettv, (int)((size_t)rs_get_digraphdefault_len() * sizeof(digr_T)) + user_digraphs.ga_len);
-
-  DigraphGetlistCtx ctx = { .list = rettv->vval.v_list };
-
-  if (list_all) {
-    rs_digraph_iterate_default(digraph_getlist_callback, &ctx);
-  }
-  rs_digraph_iterate_user(digraph_getlist_callback, &ctx);
-}
-
 // header_table[] moved to Rust (list.rs HEADER_STRINGS)
 // get_digraph_chars, digraph_set_common, f_digraph_get, f_digraph_set moved to Rust (funcs.rs)
+// digraph_getlist_callback, digraph_getlist_common, f_digraph_getlist, f_digraph_setlist moved to Rust (funcs.rs)
 
 extern bool digraph_set_common(const typval_T *argchars, const typval_T *argdigraph);
-
-/// "digraph_getlist()" function
-void f_digraph_getlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_opt_bool_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  bool flag_list_all;
-
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    flag_list_all = false;
-  } else {
-    varnumber_T flag = tv_get_bool(&argvars[0]);
-    flag_list_all = flag != 0;
-  }
-
-  digraph_getlist_common(flag_list_all, rettv);
-}
-
-/// "digraph_setlist()" function
-void f_digraph_setlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_BOOL;
-  rettv->vval.v_bool = kBoolVarFalse;
-
-  if (argvars[0].v_type != VAR_LIST) {
-    emsg(_(e_digraph_setlist_argument_must_be_list_of_lists_with_two_items));
-    return;
-  }
-
-  list_T *pl = argvars[0].vval.v_list;
-  if (pl == NULL) {
-    // Empty list always results in success.
-    rettv->vval.v_bool = kBoolVarTrue;
-    return;
-  }
-
-  TV_LIST_ITER_CONST(pl, pli, {
-    if (TV_LIST_ITEM_TV(pli)->v_type != VAR_LIST) {
-      emsg(_(e_digraph_setlist_argument_must_be_list_of_lists_with_two_items));
-      return;
-    }
-
-    list_T *l = TV_LIST_ITEM_TV(pli)->vval.v_list;
-    if (l == NULL || tv_list_len(l) != 2) {
-      emsg(_(e_digraph_setlist_argument_must_be_list_of_lists_with_two_items));
-      return;
-    }
-
-    if (!digraph_set_common(TV_LIST_ITEM_TV(tv_list_first(l)),
-                            TV_LIST_ITEM_TV(TV_LIST_ITEM_NEXT(l, tv_list_first(l))))) {
-      return;
-    }
-  });
-
-  rettv->vval.v_bool = kBoolVarTrue;
-}
 
 /// structure used for b_kmap_ga.ga_data
 typedef struct {

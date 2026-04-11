@@ -24,7 +24,10 @@ mod viml;
 
 // Re-export FFI functions
 pub use data::{rs_get_digraphdefault, rs_get_digraphdefault_len};
-pub use funcs::{digraph_set_common_impl, rs_f_digraph_get, rs_f_digraph_set};
+pub use funcs::{
+    digraph_set_common_impl, rs_f_digraph_get, rs_f_digraph_getlist, rs_f_digraph_set,
+    rs_f_digraph_setlist,
+};
 pub use input::{
     rs_digraph_is_esc, rs_digraph_should_cancel, rs_do_digraph, rs_get_digraph,
     rs_get_digraph_result,

@@ -250,3 +250,242 @@ pub unsafe extern "C" fn rs_f_digraph_set(
 
     unsafe { nvim_tv_set_bool(rettv, K_BOOL_VAR_TRUE) };
 }
+
+// =============================================================================
+// Phase 3: VimL digraph_getlist() and digraph_setlist()
+// =============================================================================
+
+extern "C" {
+    /// Allocate a new `list_T` and set rettv to it.
+    fn nvim_tv_list_alloc_ret(rettv: *mut c_void, len: isize) -> *mut c_void;
+
+    /// Allocate a new empty `list_T`.
+    fn nvim_tv_list_alloc() -> *mut c_void;
+
+    /// Append a string to a list.
+    fn nvim_tv_list_append_string(list: *mut c_void, s: *const c_char, len: isize);
+
+    /// Append a sublist to a list.
+    fn nvim_tv_list_append_list(l: *mut c_void, itemlist: *mut c_void);
+
+    /// Get the type of a typval.
+    fn nvim_tv_get_type(tv: *const c_void) -> c_int;
+
+    /// Get the list pointer from a typval.
+    fn nvim_tv_get_list(tv: *const c_void) -> *mut c_void;
+
+    /// Get the length of a list.
+    fn nvim_list_get_len(l: *const c_void) -> c_int;
+
+    /// Get the first item in a list.
+    fn nvim_list_get_first(l: *const c_void) -> *mut c_void;
+
+    /// Get the next listitem.
+    fn nvim_listitem_get_next(li: *const c_void) -> *mut c_void;
+
+    /// Get the typval from a listitem.
+    fn nvim_listitem_get_tv(li: *mut c_void) -> *mut c_void;
+
+    /// Check for optional bool arg. Returns OK (0) or FAIL (-1).
+    fn nvim_tv_check_for_opt_bool_arg(args: *const c_void, idx: c_int) -> c_int;
+
+    /// Get bool value from typval.
+    fn nvim_tv_get_bool(tv: *const c_void) -> c_int;
+
+    /// Get default digraph table length.
+    fn rs_get_digraphdefault_len() -> c_int;
+
+    /// Iterate default digraphs with a callback.
+    fn rs_digraph_iterate_default(
+        callback: unsafe extern "C" fn(u8, u8, c_int, *mut c_void) -> c_int,
+        ctx: *mut c_void,
+    ) -> c_int;
+
+    /// Iterate user digraphs with a callback.
+    fn rs_digraph_iterate_user(
+        callback: unsafe extern "C" fn(u8, u8, c_int, *mut c_void) -> c_int,
+        ctx: *mut c_void,
+    ) -> c_int;
+
+    /// Display an error message.
+    fn emsg(s: *const c_char) -> c_int;
+}
+
+// VarType constants
+const VAR_UNKNOWN: c_int = 0;
+const VAR_LIST: c_int = 6;
+
+// Error message for digraph_setlist
+const E_SETLIST_MUST_BE_LIST: &[u8] =
+    b"E1216: digraph_setlist() argument must be a list of lists with two items ";
+
+// OK/FAIL constants (matching C)
+const OK: c_int = 0;
+
+/// Callback context for `digraph_getlist` iteration.
+struct GetlistCtx {
+    list: *mut c_void,
+}
+
+/// Callback for digraph iteration that appends entries to a `VimL` list.
+///
+/// # Safety
+/// `ctx` must be a valid `*mut GetlistCtx`.
+unsafe extern "C" fn getlist_callback(
+    char1: u8,
+    char2: u8,
+    result: c_int,
+    ctx: *mut c_void,
+) -> c_int {
+    let gctx = ctx.cast::<GetlistCtx>();
+    let outer_list = unsafe { (*gctx).list };
+
+    // Allocate a 2-element sublist
+    let sub = unsafe { nvim_tv_list_alloc() };
+
+    // Append it to the outer list
+    unsafe { nvim_tv_list_append_list(outer_list, sub) };
+
+    // Build "{c1}{c2}\0" string
+    let mut key_buf = [0u8; 3];
+    key_buf[0] = char1;
+    key_buf[1] = char2;
+    key_buf[2] = 0;
+    unsafe { nvim_tv_list_append_string(sub, key_buf.as_ptr().cast::<c_char>(), -1) };
+
+    // Build UTF-8 result string
+    let mut val_buf = [0u8; 8];
+    let blen = unsafe { utf_char2bytes(result, val_buf.as_mut_ptr().cast::<c_char>()) } as usize;
+    val_buf[blen] = 0;
+    unsafe { nvim_tv_list_append_string(sub, val_buf.as_ptr().cast::<c_char>(), -1) };
+
+    // Continue if not interrupted (got_int check is done by rs_digraph_iterate_*)
+    1
+}
+
+/// Core logic for `digraph_getlist()`.
+///
+/// # Safety
+/// `rettv` must be a valid `*mut typval_T`.
+unsafe fn digraph_getlist_common_impl(list_all: bool, rettv: *mut c_void) {
+    // Allocate list into rettv
+    let len = unsafe { rs_get_digraphdefault_len() } as isize;
+    let outer = unsafe { nvim_tv_list_alloc_ret(rettv, len) };
+
+    let mut ctx = GetlistCtx { list: outer };
+    let ctx_ptr: *mut GetlistCtx = &raw mut ctx;
+
+    if list_all {
+        unsafe {
+            rs_digraph_iterate_default(getlist_callback, ctx_ptr.cast::<c_void>());
+        }
+    }
+    unsafe {
+        rs_digraph_iterate_user(getlist_callback, ctx_ptr.cast::<c_void>());
+    }
+}
+
+/// `digraph_getlist()` `VimL` function.
+///
+/// Returns list of all or user digraphs.
+///
+/// # Safety
+/// argvars and rettv must be valid `typval_T` pointers.
+#[export_name = "f_digraph_getlist"]
+pub unsafe extern "C" fn rs_f_digraph_getlist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: c_void,
+) {
+    // tv_check_for_opt_bool_arg(argvars, 0) -- FAIL means return early
+    let check = unsafe { nvim_tv_check_for_opt_bool_arg(argvars, 0) };
+    if check != OK {
+        return;
+    }
+
+    let tv0 = argvars;
+    let tv0_type: c_int = unsafe { nvim_tv_get_type(tv0) };
+    let flag_list_all = if tv0_type == VAR_UNKNOWN {
+        false
+    } else {
+        let bool_val: c_int = unsafe { nvim_tv_get_bool(tv0) };
+        bool_val != 0
+    };
+
+    unsafe { digraph_getlist_common_impl(flag_list_all, rettv) };
+}
+
+/// `digraph_setlist()` `VimL` function.
+///
+/// Sets multiple user digraphs from a list of `[chars, result]` pairs.
+///
+/// # Safety
+/// argvars and rettv must be valid `typval_T` pointers.
+#[export_name = "f_digraph_setlist"]
+pub unsafe extern "C" fn rs_f_digraph_setlist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: c_void,
+) {
+    unsafe { nvim_tv_set_type(rettv, VAR_BOOL) };
+    unsafe { nvim_tv_set_bool(rettv, K_BOOL_VAR_FALSE) };
+
+    let tv0 = argvars;
+    if unsafe { nvim_tv_get_type(tv0) } != VAR_LIST {
+        let msg = unsafe { nvim_gettext(E_SETLIST_MUST_BE_LIST.as_ptr().cast::<c_char>()) };
+        unsafe { emsg(msg) };
+        return;
+    }
+
+    let pl = unsafe { nvim_tv_get_list(tv0) };
+    if pl.is_null() {
+        // Empty list is success
+        unsafe { nvim_tv_set_bool(rettv, K_BOOL_VAR_TRUE) };
+        return;
+    }
+
+    // Iterate over list items
+    let mut pli = unsafe { nvim_list_get_first(pl) };
+    while !pli.is_null() {
+        let item_tv = unsafe { nvim_listitem_get_tv(pli) };
+        if item_tv.is_null() || unsafe { nvim_tv_get_type(item_tv.cast::<c_void>()) } != VAR_LIST {
+            let msg = unsafe { nvim_gettext(E_SETLIST_MUST_BE_LIST.as_ptr().cast::<c_char>()) };
+            unsafe { emsg(msg) };
+            return;
+        }
+
+        let l = unsafe { nvim_tv_get_list(item_tv.cast::<c_void>()) };
+        if l.is_null() || unsafe { nvim_list_get_len(l) } != 2 {
+            let msg = unsafe { nvim_gettext(E_SETLIST_MUST_BE_LIST.as_ptr().cast::<c_char>()) };
+            unsafe { emsg(msg) };
+            return;
+        }
+
+        // Get first and second items from sublist
+        let first = unsafe { nvim_list_get_first(l) };
+        if first.is_null() {
+            let msg = unsafe { nvim_gettext(E_SETLIST_MUST_BE_LIST.as_ptr().cast::<c_char>()) };
+            unsafe { emsg(msg) };
+            return;
+        }
+        let first_tv = unsafe { nvim_listitem_get_tv(first) };
+
+        let second = unsafe { nvim_listitem_get_next(first) };
+        if second.is_null() {
+            let msg = unsafe { nvim_gettext(E_SETLIST_MUST_BE_LIST.as_ptr().cast::<c_char>()) };
+            unsafe { emsg(msg) };
+            return;
+        }
+        let second_tv = unsafe { nvim_listitem_get_tv(second) };
+
+        if !unsafe {
+            digraph_set_common_impl(first_tv.cast::<c_void>(), second_tv.cast::<c_void>())
+        } {
+            return;
+        }
+
+        pli = unsafe { nvim_listitem_get_next(pli) };
+    }
+
+    unsafe { nvim_tv_set_bool(rettv, K_BOOL_VAR_TRUE) };
+}
