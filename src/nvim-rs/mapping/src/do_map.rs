@@ -36,6 +36,8 @@ const CTRL_C: u8 = 3;
 
 extern "C" {
     static mut got_int: bool;
+    // current_sctx global (non-static in globals.h)
+    static mut current_sctx: crate::SctxT;
     // Existing accessors
     fn nvim_get_maphash_entry(index: c_int) -> MapblockHandle;
     fn nvim_get_first_abbr() -> MapblockHandle;
@@ -43,13 +45,8 @@ extern "C" {
     fn nvim_buf_get_first_abbr(buf: BufHandle) -> MapblockHandle;
     fn nvim_get_curbuf() -> BufHandle;
 
-    fn nvim_mapblock_reuse(
-        mp: MapblockHandle,
-        args: *mut MapArguments,
-        noremap: c_int,
-        mode: c_int,
-        simplified: c_int,
-    );
+    fn nlua_set_sctx(ctx: *mut crate::SctxT);
+    fn nvim_dbg_get_sourcing_lnum() -> i64;
     fn nvim_mapping_set_no_abbr(val: c_int);
     fn nvim_get_mapped_ctrl_c() -> c_int;
     fn nvim_set_mapped_ctrl_c(val: c_int);
@@ -289,6 +286,59 @@ unsafe fn get_list_head(
     } else {
         nvim_get_maphash_entry(hash)
     }
+}
+
+// =============================================================================
+// mapblock_reuse
+// =============================================================================
+
+/// Reuse an existing mapblock for a new mapping (inlined from C `nvim_mapblock_reuse`).
+///
+/// Updates all fields of `mp` from `args`. If `mp` has an alt sibling, the
+/// pair is disconnected. Otherwise the old Lua ref and strings are freed.
+///
+/// # Safety
+/// `mp` and `args` must be valid non-null pointers.
+unsafe fn mapblock_reuse(
+    mp: MapblockHandle,
+    args: *mut MapArguments,
+    noremap: c_int,
+    mode: c_int,
+    simplified: c_int,
+) {
+    if mp.is_null() || args.is_null() {
+        return;
+    }
+
+    if (*mp).m_alt.is_null() {
+        // Free old LuaRef and strings owned by mp.
+        if (*mp).m_luaref != LUA_NOREF {
+            api_free_luaref((*mp).m_luaref);
+            (*mp).m_luaref = LUA_NOREF;
+        }
+        xfree((*mp).m_str);
+        xfree((*mp).m_orig_str);
+        xfree((*mp).m_desc);
+    } else {
+        // Disconnect from alt sibling.
+        (*(*mp).m_alt).m_alt = std::ptr::null_mut();
+        (*mp).m_alt = std::ptr::null_mut();
+    }
+
+    (*mp).m_str = (*args).rhs;
+    (*mp).m_orig_str = (*args).orig_rhs;
+    (*mp).m_luaref = (*args).rhs_lua;
+    (*mp).m_noremap = noremap;
+    (*mp).m_nowait = c_char::from((*args).nowait);
+    (*mp).m_silent = c_char::from((*args).silent);
+    (*mp).m_mode = mode;
+    (*mp).m_simplified = c_int::from(simplified != 0);
+    (*mp).m_expr = c_char::from((*args).expr);
+    (*mp).m_replace_keycodes = (*args).replace_keycodes;
+    (*mp).m_script_ctx = current_sctx;
+    (*mp).m_script_ctx.sc_lnum += nvim_dbg_get_sourcing_lnum() as c_int;
+    nlua_set_sctx(std::ptr::addr_of_mut!((*mp).m_script_ctx));
+    (*mp).m_desc = (*args).desc;
 }
 
 // =============================================================================
@@ -757,13 +807,7 @@ unsafe fn process_matching_entries(
                     (*mp).m_mode = mapblock_mode(mp) & !mode;
                     if mapblock_mode(mp) == 0 && !*did_it {
                         // Reuse entry
-                        nvim_mapblock_reuse(
-                            mp,
-                            args,
-                            noremap,
-                            mode,
-                            c_int::from(keyround1_simplified),
-                        );
+                        mapblock_reuse(mp, args, noremap, mode, c_int::from(keyround1_simplified));
                         mp_result[keyround as usize - 1] = mp;
                         *did_it = true;
                     }

@@ -663,37 +663,6 @@ void nvim_set_first_abbr(mapblock_T *mp) { first_abbr = mp; }
 void nvim_buf_set_maphash_entry(buf_T *buf, int index, mapblock_T *mp) { if (buf && index >= 0 && index < MAX_MAPHASH) { buf->b_maphash[index] = mp; } }
 void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp) { if (buf) { buf->b_first_abbr = mp; } }
 
-void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
-                         int noremap, int mode, int simplified)
-{
-  MapArguments *args = (MapArguments *)args_ptr;
-  if (!mp || !args) {
-    return;
-  }
-  if (mp->m_alt != NULL) {
-    mp->m_alt = mp->m_alt->m_alt = NULL;
-  } else {
-    NLUA_CLEAR_REF(mp->m_luaref);
-    xfree(mp->m_str);
-    xfree(mp->m_orig_str);
-    xfree(mp->m_desc);
-  }
-  mp->m_str = args->rhs;
-  mp->m_orig_str = args->orig_rhs;
-  mp->m_luaref = args->rhs_lua;
-  mp->m_noremap = noremap;
-  mp->m_nowait = args->nowait;
-  mp->m_silent = args->silent;
-  mp->m_mode = mode;
-  mp->m_simplified = simplified != 0;
-  mp->m_expr = args->expr;
-  mp->m_replace_keycodes = args->replace_keycodes;
-  mp->m_script_ctx = current_sctx;
-  mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
-  nlua_set_sctx(&mp->m_script_ctx);
-  mp->m_desc = args->desc;
-}
-
 void nvim_mapping_set_no_abbr(int val) { no_abbr = val != 0; }
 int nvim_mapping_buf_get_mapped_ctrl_c(buf_T *buf) { return buf ? buf->b_mapped_ctrl_c : 0; }
 void nvim_mapping_buf_set_mapped_ctrl_c(buf_T *buf, int val) { if (buf) { buf->b_mapped_ctrl_c = val; } }
