@@ -77,8 +77,6 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-/// Type used by call_user_expand_func
-typedef void *(*user_expand_func_T)(const char *, int, typval_T *);
 
 #include "cmdexpand.c.generated.h"
 
@@ -615,10 +613,45 @@ void nvim_cmdexpand_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_cmdexpand_semsg_invarg2(const char *type) { semsg(_(e_invarg2), type); }
 /// xmemdupz wrapper (for Rust FFI).
 char *nvim_cmdexpand_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
-/// call_user_expand_func with call_func_retlist (for Rust FFI).
-list_T *nvim_cmdexpand_call_user_expand_retlist(expand_T *xp) { return call_user_expand_func(call_func_retlist, xp); }
-/// call_user_expand_func with call_func_retstr (for Rust FFI).
-char *nvim_cmdexpand_call_user_expand_retstr(expand_T *xp) { return call_user_expand_func(call_func_retstr, xp); }
+// call_user_expand_func: migrated to Rust (rs_call_user_expand_retlist / rs_call_user_expand_retstr).
+extern list_T *rs_call_user_expand_retlist(expand_T *xp);
+extern char *rs_call_user_expand_retstr(expand_T *xp);
+/// call_user_expand_func with call_func_retlist — now implemented in Rust.
+list_T *nvim_cmdexpand_call_user_expand_retlist(expand_T *xp) { return rs_call_user_expand_retlist(xp); }
+/// call_user_expand_func with call_func_retstr — now implemented in Rust.
+char *nvim_cmdexpand_call_user_expand_retstr(expand_T *xp) { return rs_call_user_expand_retstr(xp); }
+/// Save current_sctx and set it from xp->xp_script_ctx (for Rust FFI).
+void nvim_cmdexpand_sctx_save_and_set(const expand_T *xp, sctx_T *saved) {
+  *saved = current_sctx;
+  current_sctx = xp->xp_script_ctx;
+}
+/// Restore current_sctx from saved value (for Rust FFI).
+void nvim_cmdexpand_sctx_restore(const sctx_T *saved) { current_sctx = *saved; }
+/// Null-terminate cmdbuff[cmdlen] and return the saved byte (0 if no cmdbuff).
+char nvim_cmdexpand_cmdbuff_nullterm(void)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  if (ccline->cmdbuff == NULL) { return 0; }
+  char keep = ccline->cmdbuff[ccline->cmdlen];
+  ccline->cmdbuff[ccline->cmdlen] = 0;
+  return keep;
+}
+/// Restore cmdbuff[cmdlen] to the saved byte (for Rust FFI).
+void nvim_cmdexpand_cmdbuff_restore(char keep)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  if (ccline->cmdbuff != NULL) { ccline->cmdbuff[ccline->cmdlen] = keep; }
+}
+/// Call call_func_retlist with the given args (for Rust FFI).
+void *nvim_cmdexpand_call_func_retlist(const char *arg, int nargs, typval_T *args)
+{
+  return call_func_retlist(arg, nargs, args);
+}
+/// Call call_func_retstr with the given args (for Rust FFI).
+char *nvim_cmdexpand_call_func_retstr(const char *arg, int nargs, typval_T *args)
+{
+  return call_func_retstr(arg, nargs, args);
+}
 // nvim_cmdexpand_nlua_call_user_expand, nvim_cmdexpand_nlua_call_user_expand_retlist:
 // Rust now calls nlua_call_user_expand_func + tv_clear + nvim_tv_list_ref directly.
 
@@ -656,46 +689,6 @@ static char *get_healthcheck_names(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return NULL;
 }
 
-/// Call "user_expand_func()" to invoke a user defined Vim script function and
-/// return the result (either a string, a List or NULL).
-static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T *xp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  CmdlineInfo *const ccline = get_cmdline_info();
-  char keep = 0;
-  typval_T args[4];
-  const sctx_T save_current_sctx = current_sctx;
-
-  if (xp->xp_arg == NULL || xp->xp_arg[0] == NUL || xp->xp_line == NULL) {
-    return NULL;
-  }
-
-  if (ccline->cmdbuff != NULL) {
-    keep = ccline->cmdbuff[ccline->cmdlen];
-    ccline->cmdbuff[ccline->cmdlen] = 0;
-  }
-
-  char *pat = xstrnsave(xp->xp_pattern, xp->xp_pattern_len);
-  args[0].v_type = VAR_STRING;
-  args[1].v_type = VAR_STRING;
-  args[2].v_type = VAR_NUMBER;
-  args[3].v_type = VAR_UNKNOWN;
-  args[0].vval.v_string = pat;
-  args[1].vval.v_string = xp->xp_line;
-  args[2].vval.v_number = xp->xp_col;
-
-  current_sctx = xp->xp_script_ctx;
-
-  void *const ret = user_expand_func(xp->xp_arg, 3, args);
-
-  current_sctx = save_current_sctx;
-  if (ccline->cmdbuff != NULL) {
-    ccline->cmdbuff[ccline->cmdlen] = keep;
-  }
-
-  xfree(pat);
-  return ret;
-}
 
 // cmdline_del and parse_pattern_and_range are now implemented in Rust (cmdexpand/src/incsearch.rs)
 // and exported with the same C symbol name via #[unsafe(export_name = "parse_pattern_and_range")].

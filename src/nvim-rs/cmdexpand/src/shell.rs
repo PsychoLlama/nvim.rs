@@ -4,7 +4,7 @@
 
 use libc::{c_char, c_int, c_void};
 
-use crate::ExpandT;
+use crate::{ExpandT, SctxT};
 
 // =============================================================================
 // `fuzmatch_str_T` repr(C) mirror (same layout as in expand.rs)
@@ -64,18 +64,36 @@ impl TypvalT {
         );
         ptr
     }
+
+    /// Create a `VAR_STRING` typval (`v_type=2`) with the given pointer.
+    ///
+    /// # Safety
+    ///
+    /// `s` must remain valid for the lifetime of this `TypvalT`.
+    unsafe fn from_string_ptr(s: *mut c_char) -> Self {
+        let mut tv = Self::initial();
+        tv.v_type = 2; // VAR_STRING
+        std::ptr::copy_nonoverlapping(
+            std::ptr::addr_of!(s).cast::<u8>(),
+            tv.vval.as_mut_ptr(),
+            std::mem::size_of::<*mut c_char>(),
+        );
+        tv
+    }
+
+    /// Create a `VAR_NUMBER` typval (`v_type=1`) with the given `i64` value.
+    fn from_number(n: i64) -> Self {
+        let mut tv = Self::initial();
+        tv.v_type = 1; // VAR_NUMBER
+        tv.vval.copy_from_slice(&n.to_ne_bytes());
+        tv
+    }
 }
 
 /// `VAR_LIST` type constant.
 const VAR_LIST: c_int = 4;
 
 extern "C" {
-    /// `call_user_expand_func(call_func_retlist, xp)` wrapper.
-    fn nvim_cmdexpand_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle;
-
-    /// `call_user_expand_func(call_func_retstr, xp)` wrapper.
-    fn nvim_cmdexpand_call_user_expand_retstr(xp: *mut ExpandT) -> *mut c_char;
-
     /// `nlua_call_user_expand_func(xp, ret_tv)` — direct call.
     fn nlua_call_user_expand_func(xp: *mut ExpandT, ret_tv: *mut TypvalT);
 
@@ -111,6 +129,28 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
     fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn xstrnsave(s: *const c_char, n: usize) -> *mut c_char;
+
+    /// Save `current_sctx` into `*saved` and set it from `xp->xp_script_ctx`.
+    fn nvim_cmdexpand_sctx_save_and_set(xp: *const ExpandT, saved: *mut SctxT);
+    /// Restore `current_sctx` from `*saved`.
+    fn nvim_cmdexpand_sctx_restore(saved: *const SctxT);
+    /// Null-terminate `cmdbuff[cmdlen]`, returning the displaced byte (0 if no cmdbuff).
+    fn nvim_cmdexpand_cmdbuff_nullterm() -> c_char;
+    /// Restore `cmdbuff[cmdlen]` to the previously saved byte.
+    fn nvim_cmdexpand_cmdbuff_restore(keep: c_char);
+    /// Call `call_func_retlist(arg, nargs, args)` — returns `list_T *`.
+    fn nvim_cmdexpand_call_func_retlist(
+        arg: *const c_char,
+        nargs: c_int,
+        args: *mut TypvalT,
+    ) -> *mut c_void;
+    /// Call `call_func_retstr(arg, nargs, args)` — returns `char *`.
+    fn nvim_cmdexpand_call_func_retstr(
+        arg: *const c_char,
+        nargs: c_int,
+        args: *mut TypvalT,
+    ) -> *mut c_char;
 }
 
 // =============================================================================
@@ -121,6 +161,85 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 const NUL: u8 = 0;
+
+// =============================================================================
+// rs_call_user_expand_retlist / rs_call_user_expand_retstr
+// (Rust port of static call_user_expand_func from cmdexpand.c)
+// =============================================================================
+
+/// Shared body of `rs_call_user_expand_retlist` and `rs_call_user_expand_retstr`.
+///
+/// Mirrors the deleted `call_user_expand_func` from `cmdexpand.c`.
+///
+/// # Safety
+///
+/// `xp` must be a valid, fully initialized `expand_T *`.
+unsafe fn call_user_expand_core<T>(
+    xp: *mut ExpandT,
+    dispatch: unsafe fn(*const c_char, c_int, *mut TypvalT) -> T,
+    null_val: T,
+) -> T {
+    // Guard: xp_arg, xp_arg[0], xp_line must all be valid/non-empty.
+    if (*xp).xp_arg.is_null() || *(*xp).xp_arg == 0 || (*xp).xp_line.is_null() {
+        return null_val;
+    }
+
+    let keep = nvim_cmdexpand_cmdbuff_nullterm();
+
+    let pat = xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len);
+    let mut args = [
+        TypvalT::from_string_ptr(pat), // args[0]: pattern (VAR_STRING)
+        TypvalT::from_string_ptr((*xp).xp_line), // args[1]: line    (VAR_STRING)
+        TypvalT::from_number(i64::from((*xp).xp_col)), // args[2]: col     (VAR_NUMBER)
+        TypvalT::initial(),            // args[3]: sentinel (VAR_UNKNOWN=0)
+    ];
+
+    // Save current_sctx and set it from xp->xp_script_ctx.
+    // SAFETY: we initialise with zeros; the C function fills all fields.
+    let mut saved_sctx = std::mem::zeroed::<SctxT>();
+    nvim_cmdexpand_sctx_save_and_set(xp, &raw mut saved_sctx);
+
+    let ret = dispatch((*xp).xp_arg, 3, args.as_mut_ptr());
+
+    nvim_cmdexpand_sctx_restore(&raw const saved_sctx);
+    nvim_cmdexpand_cmdbuff_restore(keep);
+    xfree(pat.cast());
+    ret
+}
+
+/// Call a user-defined VimL expand function, returning the result as a list.
+///
+/// Exported as `rs_call_user_expand_retlist` (called from C wrappers in
+/// `cmdexpand.c` which forward `nvim_cmdexpand_call_user_expand_retlist`).
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T *`.
+#[unsafe(export_name = "rs_call_user_expand_retlist")]
+pub unsafe extern "C" fn rs_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle {
+    call_user_expand_core(
+        xp,
+        |arg, n, args| nvim_cmdexpand_call_func_retlist(arg, n, args),
+        std::ptr::null_mut(),
+    )
+}
+
+/// Call a user-defined VimL expand function, returning the result as a string.
+///
+/// Exported as `rs_call_user_expand_retstr` (called from C wrappers in
+/// `cmdexpand.c` which forward `nvim_cmdexpand_call_user_expand_retstr`).
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T *`.
+#[unsafe(export_name = "rs_call_user_expand_retstr")]
+pub unsafe extern "C" fn rs_call_user_expand_retstr(xp: *mut ExpandT) -> *mut c_char {
+    call_user_expand_core(
+        xp,
+        |arg, n, args| nvim_cmdexpand_call_func_retstr(arg, n, args),
+        std::ptr::null_mut(),
+    )
+}
 
 // =============================================================================
 // list_to_string_matches
@@ -191,7 +310,7 @@ pub unsafe extern "C" fn rs_expand_user_defined(
     *matches = std::ptr::null_mut();
     *num_matches = 0;
 
-    let retstr = nvim_cmdexpand_call_user_expand_retstr(xp);
+    let retstr = rs_call_user_expand_retstr(xp);
     if retstr.is_null() {
         return FAIL;
     }
@@ -305,7 +424,7 @@ pub unsafe extern "C" fn rs_expand_user_list(
     *matches = std::ptr::null_mut();
     *num_matches = 0;
 
-    let retlist = nvim_cmdexpand_call_user_expand_retlist(xp);
+    let retlist = rs_call_user_expand_retlist(xp);
     if retlist.is_null() {
         return FAIL;
     }
