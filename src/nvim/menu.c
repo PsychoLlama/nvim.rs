@@ -21,35 +21,6 @@
 
 #include "menu.c.generated.h"
 
-typedef struct {
-  int modes;
-  int noremap;
-  bool unmenu;
-  int consumed;
-} MenuCmdResult;
-extern MenuCmdResult rs_get_menu_cmd_modes(const char *cmd, bool forceit);
-
-/// Returns the \ref MENU_MODES specified by menu command `cmd`.
-/// (eg :menu! returns MENU_CMDLINE_MODE | MENU_INSERT_MODE)
-///
-/// @param[in] cmd      string like "nmenu", "vmenu", etc.
-/// @param[in] forceit  bang (!) was given after the command
-/// @param[out] noremap If not NULL, the flag it points to is set according
-///                     to whether the command is a "nore" command.
-/// @param[out] unmenu  If not NULL, the flag it points to is set according
-///                     to whether the command is an "unmenu" command.
-int get_menu_cmd_modes(const char *cmd, bool forceit, int *noremap, bool *unmenu)
-{
-  MenuCmdResult result = rs_get_menu_cmd_modes(cmd, forceit);
-  if (noremap != NULL) {
-    *noremap = result.noremap;
-  }
-  if (unmenu != NULL) {
-    *unmenu = result.unmenu;
-  }
-  return result.modes;
-}
-
 // Translation of menu names.  Just a simple lookup table.
 
 typedef struct {

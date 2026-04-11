@@ -105,14 +105,6 @@ extern "C" {
         no_ff: c_int,
     ) -> c_int;
 
-    // menu_get inlining
-    fn get_menu_cmd_modes(
-        cmd: *const c_char,
-        force_menu: bool,
-        noremap: *mut c_int,
-        unmenu: *mut c_int,
-    ) -> c_int;
-    fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut c_void);
 }
 
 // =============================================================================
@@ -541,7 +533,19 @@ pub unsafe extern "C" fn rs_f_menu_get(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    // nvim_eval_menu_get: inlined — menu_get delegation
+    /// Minimal ABI-compatible result of `rs_get_menu_cmd_modes`.
+    #[repr(C)]
+    struct MenuCmdResult {
+        modes: c_int,
+        noremap: c_int,
+        unmenu: bool,
+        consumed: c_int,
+    }
+    extern "C" {
+        fn rs_get_menu_cmd_modes(cmd: *const c_char, forceit: bool) -> MenuCmdResult;
+        fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut c_void) -> bool;
+    }
+
     // kListLenMayKnow = -3
     const K_LIST_LEN_MAY_KNOW: isize = -3;
     // MENU_ALL_MODES = (1 << 7) - 1 = 127
@@ -551,16 +555,12 @@ pub unsafe extern "C" fn rs_f_menu_get(
     let arg1 = arg_at(argvars, 1);
     if nvim_tv_get_type(arg1) == VAR_STRING {
         let strmodes = nvim_tv_get_string_ptr(arg1);
-        modes = get_menu_cmd_modes(
-            strmodes.cast::<c_char>(),
-            false,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        );
+        let result = unsafe { rs_get_menu_cmd_modes(strmodes.cast::<c_char>(), false) };
+        modes = result.modes;
     }
     // Cast the string to *mut c_char (menu_get takes non-const)
     let path = nvim_tv_get_string_ptr(argvars).cast::<c_char>().cast_mut();
-    menu_get(path, modes, list);
+    unsafe { menu_get(path, modes, list) };
 }
 
 /// Size of typval_T in bytes (must match C sizeof(typval_T) = 16).
