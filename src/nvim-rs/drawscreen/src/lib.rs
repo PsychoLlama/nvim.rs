@@ -3310,8 +3310,8 @@ pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
 // =============================================================================
 
 extern "C" {
-    /// Non-static wrapper for win_update() in drawscreen.c.
-    fn nvim_win_update(wp: WinHandle);
+    /// Body of win_update() after zero-size checks, called from rs_win_update().
+    fn nvim_win_update_body(wp: WinHandle);
 
     /// update_window_hl: update highlight attributes for a window.
     fn update_window_hl(wp: WinHandle, invalid: bool);
@@ -3352,6 +3352,43 @@ extern "C" {
     /// nvim_buf_set_mod_tick_decor: set buf->b_mod_tick_decor.
     fn nvim_buf_set_mod_tick_decor(buf: BufHandle, val: u64);
 
+}
+
+/// Rust entry point for updating a single window.
+///
+/// Handles the zero-size early-return cases (drawing only separator lines),
+/// then delegates to the C body `nvim_win_update_body` for the full update.
+///
+/// Replaces the former `nvim_win_update` C wrapper.
+///
+/// # Safety
+/// Must be called with a valid, non-null `wp` during screen update.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_update(wp: WinHandle) {
+    let type_ = nvim_win_get_redr_type(wp);
+    if type_ >= UPD_NOT_VALID {
+        nvim_win_set_redr_status(wp, 1);
+        nvim_win_set_lines_valid(wp, 0);
+    }
+
+    // Window is zero-height: only draw horizontal separator.
+    if nvim_win_get_view_height(wp) == 0 {
+        rs_draw_hsep_win(wp);
+        rs_draw_sep_connectors_win(wp);
+        nvim_win_set_redr_type(wp, 0);
+        return;
+    }
+
+    // Window is zero-width: only draw vertical separator.
+    if nvim_win_get_view_width(wp) == 0 {
+        rs_draw_vsep_win(wp);
+        rs_draw_sep_connectors_win(wp);
+        nvim_win_set_redr_type(wp, 0);
+        return;
+    }
+
+    // Delegate to the C body for the full update logic.
+    nvim_win_update_body(wp);
 }
 
 /// Handle the three window iteration loops of update_screen.
@@ -3416,7 +3453,7 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
                 did_one = true;
                 rs_start_search_hl();
             }
-            nvim_win_update(wp);
+            rs_win_update(wp);
         }
 
         if nvim_win_get_redr_status(wp) != 0 {

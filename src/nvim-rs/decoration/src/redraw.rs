@@ -137,6 +137,8 @@ extern "C" {
     fn nvim_curtab_first_win() -> WinHandle;
     fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    // Fold accessor (used by decor_virt_lines)
+    fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
 }
 
 // =============================================================================
@@ -358,6 +360,7 @@ const K_MT_META_CONCEAL_LINES: usize = 4; // kMTMetaConcealLines
 const K_MT_META_COUNT: usize = 5; // kMTMetaCount
 
 // kMTMeta enum indices as c_int (for nvim_buf_meta_total)
+const K_MT_META_LINES_INT: c_int = 1; // kMTMetaLines
 const K_MT_META_SIGN_TEXT: c_int = 3; // kMTMetaSignText
 
 /// kMTFilterSelect value: selects entries that match the filter.

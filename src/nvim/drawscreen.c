@@ -137,32 +137,10 @@ extern void nvim_set_conceal_cursor_used(int val);
 static void win_update(win_T *wp);  // forward declaration
 
 
-/// Update a single window.
-///
-/// This may cause the windows below it also to be redrawn (when clearing the
-/// screen or scrolling lines).
-///
-/// How the window is redrawn depends on wp->w_redr_type.  Each type also
-/// implies the one below it.
-/// UPD_NOT_VALID    redraw the whole window
-/// UPD_SOME_VALID   redraw the whole window but do scroll when possible
-/// UPD_REDRAW_TOP   redraw the top w_upd_rows window lines, otherwise like UPD_VALID
-/// UPD_INVERTED     redraw the changed part of the Visual area
-/// UPD_INVERTED_ALL redraw the whole Visual area
-/// UPD_VALID        1. scroll up/down to adjust for a changed w_topline
-///                  2. update lines at the top when scrolled down
-///                  3. redraw changed text:
-///                     - if wp->w_buffer->b_mod_set set, update lines between
-///                       b_mod_top and b_mod_bot.
-///                     - if wp->w_redraw_top non-zero, redraw lines between
-///                       wp->w_redraw_top and wp->w_redraw_bot.
-///                     - continue redrawing when syntax status is invalid.
-///                  4. if scrolled up, update lines at the bottom.
-/// This results in three areas that may need updating:
-/// top: from first row to top_end (when scrolled down)
-/// mid: from mid_start to mid_end (update inversion or changed text)
-/// bot: from bot_start to last row (when scrolled up)
-static void win_update(win_T *wp)
+/// Body of win_update() after size checks, called from rs_win_update() in Rust.
+/// Handles initialization, scroll computation, draw loop, and finalization.
+/// The caller (Rust) has already handled zero-size early returns.
+void nvim_win_update_body(win_T *wp)
 {
   int top_end = 0;              // Below last row of the top area that needs
                                 // updating.  0 when no top area updating.
@@ -196,24 +174,6 @@ static void win_update(win_T *wp)
   if (type >= UPD_NOT_VALID) {
     wp->w_redr_status = true;
     wp->w_lines_valid = 0;
-  }
-
-  // Window is zero-height: Only need to draw the separator
-  if (wp->w_view_height == 0) {
-    // draw the horizontal separator below this window
-    rs_draw_hsep_win(wp);
-    rs_draw_sep_connectors_win(wp);
-    wp->w_redr_type = 0;
-    return;
-  }
-
-  // Window is zero-width: Only need to draw the separator.
-  if (wp->w_view_width == 0) {
-    // draw the vertical separator right of this window
-    rs_draw_vsep_win(wp);
-    rs_draw_sep_connectors_win(wp);
-    wp->w_redr_type = 0;
-    return;
   }
 
   buf_T *buf = wp->w_buffer;
@@ -1054,7 +1014,7 @@ redr_statuscol:
         int mod_set = curbuf->b_mod_set;
         curbuf->b_mod_set = false;
         curs_columns(curwin, true);
-        win_update(curwin);
+        nvim_win_update_body(curwin);
         must_redraw = 0;
         curbuf->b_mod_set = mod_set;
       }
@@ -1072,10 +1032,4 @@ redr_statuscol:
   }
 }
 
-/// Non-static wrapper for win_update() so Rust can call it via FFI.
-/// Called from rs_update_screen_win_loop() in Rust.
-void nvim_win_update(win_T *wp)
-{
-  win_update(wp);
-}
 
