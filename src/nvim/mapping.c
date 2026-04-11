@@ -57,6 +57,21 @@
 extern int rs_get_map_mode(char **cmdp, int forceit);
 extern int rs_get_map_mode_string(const char *mode_string, int abbr);
 
+// Rust-implemented dict/query functions (Phase 2)
+extern Dict mapblock_fill_dict(const mapblock_T *mp, const char *lhsrawalt,
+                               int buffer_value, bool abbr, bool compatible,
+                               Arena *arena);
+// Rust-implemented VimL eval functions (Phase 2)
+void f_maparg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// Rust-implemented VimL eval functions (Phase 3)
+void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_maplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// Rust-implemented API functions (Phase 4)
+void modify_keymap(uint64_t channel_id, Buffer buffer, bool is_unmap, String mode, String lhs,
+                   String rhs, Dict(keymap) *opts, Error *err);
+ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena);
+
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
 
@@ -126,486 +141,16 @@ static const char e_illegal_map_mode_string_str[]
   = N_("E1276: Illegal map mode string: '%s'");
 
 
-/// Fill a Dict with all applicable maparg() like dictionaries.
-static Dict mapblock_fill_dict(const mapblock_T *const mp, const char *lhsrawalt,
-                               const int buffer_value, const bool abbr, const bool compatible,
-                               Arena *arena)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  Dict dict = arena_dict(arena, 19);
-  char *const lhs = str2special_arena(mp->m_keys, compatible, !compatible, arena);
-  char *mapmode = arena_alloc(arena, 7, false);
-  map_mode_to_chars(mp->m_mode, mapmode);
-  int noremap_value;
 
-  if (compatible) {
-    noremap_value = !!mp->m_noremap;
-  } else {
-    noremap_value = mp->m_noremap == REMAP_SCRIPT ? 2 : !!mp->m_noremap;
-  }
+// f_mapset body deleted; implemented in Rust (Phase 3). See query.rs.
 
-  if (mp->m_luaref != LUA_NOREF) {
-    PUT_C(dict, "callback", LUAREF_OBJ(api_new_luaref(mp->m_luaref)));
-  } else {
-    String rhs = cstr_as_string(compatible
-                                ? mp->m_orig_str
-                                : str2special_arena(mp->m_str, false, true, arena));
-    PUT_C(dict, "rhs", STRING_OBJ(rhs));
-  }
-  if (mp->m_desc != NULL) {
-    PUT_C(dict, "desc", CSTR_AS_OBJ(mp->m_desc));
-  }
-  PUT_C(dict, "lhs", CSTR_AS_OBJ(lhs));
-  PUT_C(dict, "lhsraw", CSTR_AS_OBJ(mp->m_keys));
-  if (lhsrawalt != NULL) {
-    PUT_C(dict, "lhsrawalt", CSTR_AS_OBJ(lhsrawalt));
-  }
-  PUT_C(dict, "noremap", INTEGER_OBJ(noremap_value));
-  PUT_C(dict, "script", INTEGER_OBJ(mp->m_noremap == REMAP_SCRIPT ? 1 : 0));
-  PUT_C(dict, "expr", INTEGER_OBJ(mp->m_expr ? 1 : 0));
-  PUT_C(dict, "silent", INTEGER_OBJ(mp->m_silent ? 1 : 0));
-  PUT_C(dict, "sid", INTEGER_OBJ(mp->m_script_ctx.sc_sid));
-  PUT_C(dict, "scriptversion", INTEGER_OBJ(1));
-  PUT_C(dict, "lnum", INTEGER_OBJ(mp->m_script_ctx.sc_lnum));
-  PUT_C(dict, "buffer", INTEGER_OBJ(buffer_value));
-  PUT_C(dict, "nowait", INTEGER_OBJ(mp->m_nowait ? 1 : 0));
-  if (mp->m_replace_keycodes) {
-    PUT_C(dict, "replace_keycodes", INTEGER_OBJ(1));
-  }
-  PUT_C(dict, "mode", CSTR_AS_OBJ(mapmode));
-  PUT_C(dict, "abbr", INTEGER_OBJ(abbr ? 1 : 0));
-  PUT_C(dict, "mode_bits", INTEGER_OBJ(mp->m_mode));
-
-  return dict;
-}
-
-static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
-{
-  // Return empty string for failure.
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  char *keys = (char *)tv_get_string(&argvars[0]);
-  if (*keys == NUL) {
-    return;
-  }
-
-  const char *which;
-  char buf[NUMBUFLEN];
-  bool abbr = false;
-  bool get_dict = false;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    which = tv_get_string_buf_chk(&argvars[1], buf);
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      abbr = (bool)tv_get_number(&argvars[2]);
-      if (argvars[3].v_type != VAR_UNKNOWN) {
-        get_dict = (bool)tv_get_number(&argvars[3]);
-      }
-    }
-  } else {
-    which = "";
-  }
-  if (which == NULL) {
-    return;
-  }
-
-  char *keys_buf = NULL;
-  char *alt_keys_buf = NULL;
-  bool did_simplify = false;
-  const int flags = REPTERM_FROM_PART | REPTERM_DO_LT;
-  const int mode = rs_get_map_mode((char **)&which, 0);
-
-  char *keys_simplified = replace_termcodes(keys, strlen(keys), &keys_buf, 0,
-                                            flags, &did_simplify, p_cpo);
-  mapblock_T *mp = NULL;
-  int buffer_local;
-  LuaRef rhs_lua;
-  char *rhs = check_map(keys_simplified, mode, exact, false, abbr, &mp, &buffer_local,
-                        &rhs_lua);
-  if (did_simplify) {
-    // When the lhs is being simplified the not-simplified keys are
-    // preferred for printing, like in do_map().
-    replace_termcodes(keys, strlen(keys), &alt_keys_buf, 0,
-                      flags | REPTERM_NO_SIMPLIFY, NULL, p_cpo);
-    rhs = check_map(alt_keys_buf, mode, exact, false, abbr, &mp, &buffer_local, &rhs_lua);
-  }
-
-  if (!get_dict) {
-    // Return a string.
-    if (rhs != NULL) {
-      if (*rhs == NUL) {
-        rettv->vval.v_string = xstrdup("<Nop>");
-      } else {
-        rettv->vval.v_string = str2special_save(rhs, false, false);
-      }
-    } else if (rhs_lua != LUA_NOREF) {
-      rettv->vval.v_string = nlua_funcref_str(mp->m_luaref, NULL);
-    }
-  } else {
-    // Return a dictionary.
-    if (mp != NULL && (rhs != NULL || rhs_lua != LUA_NOREF)) {
-      Arena arena = ARENA_EMPTY;
-      Dict dict = mapblock_fill_dict(mp, did_simplify ? keys_simplified : NULL,
-                                     buffer_local, abbr, true, &arena);
-      object_to_vim_take_luaref(&DICT_OBJ(dict), rettv, true, NULL);
-      arena_mem_free(arena_finish(&arena));
-    } else {
-      // Return an empty dictionary.
-      tv_dict_alloc_ret(rettv);
-    }
-  }
-
-  xfree(keys_buf);
-  xfree(alt_keys_buf);
-}
-
-/// "mapset()" function
-void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *which;
-  char buf[NUMBUFLEN];
-  int is_abbr;
-  dict_T *d;
-
-  // If first arg is a dict, then that's the only arg permitted.
-  const bool dict_only = argvars[0].v_type == VAR_DICT;
-
-  if (dict_only) {
-    d = argvars[0].vval.v_dict;
-    which = tv_dict_get_string(d, "mode", false);
-    is_abbr = (int)tv_dict_get_bool(d, "abbr", -1);
-    if (which == NULL || is_abbr < 0) {
-      emsg(_(e_entries_missing_in_mapset_dict_argument));
-      return;
-    }
-  } else {
-    which = tv_get_string_buf_chk(&argvars[0], buf);
-    if (which == NULL) {
-      return;
-    }
-    is_abbr = (int)tv_get_bool(&argvars[1]);
-    if (tv_check_for_dict_arg(argvars, 2) == FAIL) {
-      return;
-    }
-    d = argvars[2].vval.v_dict;
-  }
-  const int mode = rs_get_map_mode_string(which, is_abbr);
-  if (mode == 0) {
-    semsg(_(e_illegal_map_mode_string_str), which);
-    return;
-  }
-
-  // Get the values in the same order as above in get_maparg().
-  char *lhs = tv_dict_get_string(d, "lhs", false);
-  char *lhsraw = tv_dict_get_string(d, "lhsraw", false);
-  char *lhsrawalt = tv_dict_get_string(d, "lhsrawalt", false);
-  char *orig_rhs = tv_dict_get_string(d, "rhs", false);
-  LuaRef rhs_lua = LUA_NOREF;
-  dictitem_T *callback_di = tv_dict_find(d, S_LEN("callback"));
-  if (callback_di != NULL) {
-    if (callback_di->di_tv.v_type == VAR_FUNC) {
-      ufunc_T *fp = find_func(callback_di->di_tv.vval.v_string);
-      if (fp != NULL && (fp->uf_flags & FC_LUAREF)) {
-        rhs_lua = api_new_luaref(fp->uf_luaref);
-        orig_rhs = "";
-      }
-    }
-  }
-  if (lhs == NULL || lhsraw == NULL || orig_rhs == NULL) {
-    emsg(_(e_entries_missing_in_mapset_dict_argument));
-    api_free_luaref(rhs_lua);
-    return;
-  }
-
-  int noremap = tv_dict_get_number(d, "noremap") != 0 ? REMAP_NONE : 0;
-  if (tv_dict_get_number(d, "script") != 0) {
-    noremap = REMAP_SCRIPT;
-  }
-  MapArguments args = {
-    .expr = tv_dict_get_number(d, "expr") != 0,
-    .silent = tv_dict_get_number(d, "silent") != 0,
-    .nowait = tv_dict_get_number(d, "nowait") != 0,
-    .replace_keycodes = tv_dict_get_number(d, "replace_keycodes") != 0,
-    .desc = tv_dict_get_string(d, "desc", true),
-  };
-  scid_T sid = (scid_T)tv_dict_get_number(d, "sid");
-  linenr_T lnum = (linenr_T)tv_dict_get_number(d, "lnum");
-  bool buffer = tv_dict_get_number(d, "buffer") != 0;
-  // mode from the dict is not used
-
-  rs_set_maparg_rhs(orig_rhs, strlen(orig_rhs), rhs_lua, sid, p_cpo, &args);
-
-  // Delete any existing mapping for this lhs and mode.
-  MapArguments unmap_args = MAP_ARGUMENTS_INIT;
-  rs_set_maparg_lhs_rhs(lhs, strlen(lhs), "", 0, LUA_NOREF, p_cpo, &unmap_args);
-  unmap_args.buffer = buffer;
-  rs_buf_do_map(MAPTYPE_UNMAP_LHS, &unmap_args, mode, is_abbr ? 1 : 0, curbuf);
-  xfree(unmap_args.rhs);
-  xfree(unmap_args.orig_rhs);
-
-  mapblock_T *mp_result[2] = { NULL, NULL };
-
-  mp_result[0] = rs_map_add(curbuf, buffer ? 1 : 0, lhsraw, &args,
-                            noremap, mode, is_abbr, sid, lnum, 0);
-  if (lhsrawalt != NULL) {
-    mp_result[1] = rs_map_add(curbuf, buffer ? 1 : 0, lhsrawalt, &args,
-                              noremap, mode, is_abbr, sid, lnum, 1);
-  }
-
-  if (mp_result[0] != NULL && mp_result[1] != NULL) {
-    mp_result[0]->m_alt = mp_result[1];
-    mp_result[1]->m_alt = mp_result[0];
-  }
-}
-
-/// "maplist()" function
-void f_maplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const int flags = REPTERM_FROM_PART | REPTERM_DO_LT;
-  const bool abbr = argvars[0].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[0]);
-
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-
-  // Do it twice: once for global maps and once for local maps.
-  for (int buffer_local = 0; buffer_local <= 1; buffer_local++) {
-    for (int hash = 0; hash < 256; hash++) {
-      mapblock_T *mp;
-      if (abbr) {
-        if (hash > 0) {  // there is only one abbr list
-          break;
-        }
-        if (buffer_local) {
-          mp = curbuf->b_first_abbr;
-        } else {
-          mp = first_abbr;
-        }
-      } else if (buffer_local) {
-        mp = curbuf->b_maphash[hash];
-      } else {
-        mp = maphash[hash];
-      }
-      for (; mp; mp = mp->m_next) {
-        if (mp->m_simplified) {
-          continue;
-        }
-
-        char *keys_buf = NULL;
-        bool did_simplify = false;
-
-        Arena arena = ARENA_EMPTY;
-        char *lhs = str2special_arena(mp->m_keys, true, false, &arena);
-        replace_termcodes(lhs, strlen(lhs), &keys_buf, 0, flags, &did_simplify,
-                          p_cpo);
-
-        Dict dict = mapblock_fill_dict(mp, did_simplify ? keys_buf : NULL, buffer_local, abbr, true,
-                                       &arena);
-        typval_T d = TV_INITIAL_VALUE;
-        object_to_vim_take_luaref(&DICT_OBJ(dict), &d, true, NULL);
-        assert(d.v_type == VAR_DICT);
-        tv_list_append_dict(rettv->vval.v_list, d.vval.v_dict);
-        arena_mem_free(arena_finish(&arena));
-        xfree(keys_buf);
-      }
-    }
-  }
-}
-
-/// "maparg()" function
-void f_maparg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_maparg(argvars, rettv, true); }
-
-/// "mapcheck()" function
-void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_maparg(argvars, rettv, false); }
+// f_maplist body deleted; implemented in Rust (Phase 3). See query.rs.
 
 
-/// Set, tweak, or remove a mapping in a mode. Acts as the implementation for
-/// functions like @ref nvim_buf_set_keymap.
-///
-/// Arguments are handled like @ref nvim_set_keymap unless noted.
-/// @param  buffer    Buffer handle for a specific buffer, or 0 for the current
-///                   buffer, or -1 to signify global behavior ("all buffers")
-/// @param  is_unmap  When true, removes the mapping that matches {lhs}.
-void modify_keymap(uint64_t channel_id, Buffer buffer, bool is_unmap, String mode, String lhs,
-                   String rhs, Dict(keymap) *opts, Error *err)
-{
-  LuaRef lua_funcref = LUA_NOREF;
-  bool global = (buffer == -1);
-  if (global) {
-    buffer = 0;
-  }
-  buf_T *target_buf = find_buffer_by_handle(buffer, err);
 
-  if (!target_buf) {
-    return;
-  }
+// modify_keymap body deleted; implemented in Rust (Phase 4). See api.rs.
 
-  const sctx_T save_current_sctx = api_set_sctx(channel_id);
-
-  MapArguments parsed_args = MAP_ARGUMENTS_INIT;
-  if (opts) {
-    parsed_args.nowait = opts->nowait;
-    parsed_args.noremap = opts->noremap;
-    parsed_args.silent = opts->silent;
-    parsed_args.script = opts->script;
-    parsed_args.expr = opts->expr;
-    parsed_args.unique = opts->unique;
-    parsed_args.replace_keycodes = opts->replace_keycodes;
-    if (HAS_KEY(opts, keymap, callback)) {
-      lua_funcref = opts->callback;
-      opts->callback = LUA_NOREF;
-    }
-    if (HAS_KEY(opts, keymap, desc)) {
-      parsed_args.desc = string_to_cstr(opts->desc);
-    }
-  }
-  parsed_args.buffer = !global;
-
-  if (parsed_args.replace_keycodes && !parsed_args.expr) {
-    api_set_error(err, kErrorTypeValidation,  "\"replace_keycodes\" requires \"expr\"");
-    goto fail_and_free;
-  }
-
-  if (!rs_set_maparg_lhs_rhs(lhs.data, lhs.size,
-                             rhs.data, rhs.size, lua_funcref,
-                             p_cpo, &parsed_args)) {
-    api_set_error(err, kErrorTypeValidation,  "LHS exceeds maximum map length: %s", lhs.data);
-    goto fail_and_free;
-  }
-
-  if (parsed_args.lhs_len > MAXMAPLEN || parsed_args.alt_lhs_len > MAXMAPLEN) {
-    api_set_error(err, kErrorTypeValidation,  "LHS exceeds maximum map length: %s", lhs.data);
-    goto fail_and_free;
-  }
-
-  char *p = mode.size > 0 ? mode.data : "m";
-  bool forceit = *p == '!';
-  // integer value of the mapping mode, to be passed to do_map()
-  int mode_val = rs_get_map_mode(&p, forceit);
-  if (forceit) {
-    assert(p == mode.data);
-    p++;
-  }
-  bool is_abbrev = (mode_val & (MODE_INSERT | MODE_CMDLINE)) != 0 && *p == 'a';
-  if (is_abbrev) {
-    p++;
-  }
-  if (mode.size > 0 && (size_t)(p - mode.data) != mode.size) {
-    api_set_error(err, kErrorTypeValidation, "Invalid mode shortname: \"%s\"", mode.data);
-    goto fail_and_free;
-  }
-
-  if (parsed_args.lhs_len == 0) {
-    api_set_error(err, kErrorTypeValidation, "Invalid (empty) LHS");
-    goto fail_and_free;
-  }
-
-  bool is_noremap = parsed_args.noremap;
-  assert(!(is_unmap && is_noremap));
-
-  if (!is_unmap && lua_funcref == LUA_NOREF
-      && (parsed_args.rhs_len == 0 && !parsed_args.rhs_is_noop)) {
-    if (rhs.size == 0) {  // assume that the user wants RHS to be a <Nop>
-      parsed_args.rhs_is_noop = true;
-    } else {
-      abort();  // should never happen
-    }
-  } else if (is_unmap && (parsed_args.rhs_len || parsed_args.rhs_lua != LUA_NOREF)) {
-    if (parsed_args.rhs_len) {
-      api_set_error(err, kErrorTypeValidation,
-                    "Gave nonempty RHS in unmap command: %s", parsed_args.rhs);
-    } else {
-      api_set_error(err, kErrorTypeValidation, "Gave nonempty RHS for unmap");
-    }
-    goto fail_and_free;
-  }
-
-  // rs_buf_do_map() reads noremap/unmap as its own argument.
-  int maptype_val = MAPTYPE_MAP;
-  if (is_unmap) {
-    maptype_val = MAPTYPE_UNMAP;
-  } else if (is_noremap) {
-    maptype_val = MAPTYPE_NOREMAP;
-  }
-
-  switch (rs_buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev ? 1 : 0, target_buf)) {
-  case 0:
-    break;
-  case 1:
-    api_set_error(err, kErrorTypeException, e_invarg, 0);
-    goto fail_and_free;
-  case 2:
-    api_set_error(err, kErrorTypeException, e_nomap, 0);
-    goto fail_and_free;
-  case 5:
-    api_set_error(err, kErrorTypeException,
-                  is_abbrev ? e_abbreviation_already_exists_for_str
-                            : e_mapping_already_exists_for_str, lhs.data);
-    goto fail_and_free;
-    break;
-  case 6:
-    api_set_error(err, kErrorTypeException,
-                  is_abbrev ? e_global_abbreviation_already_exists_for_str
-                            : e_global_mapping_already_exists_for_str, lhs.data);
-    goto fail_and_free;
-  default:
-    assert(false && "Unrecognized return code!");
-    goto fail_and_free;
-  }  // switch
-
-fail_and_free:
-  current_sctx = save_current_sctx;
-  NLUA_CLEAR_REF(parsed_args.rhs_lua);
-  xfree(parsed_args.rhs);
-  xfree(parsed_args.orig_rhs);
-  xfree(parsed_args.desc);
-}
-
-/// Get an array containing dictionaries describing mappings
-/// based on mode and buffer id
-///
-/// @param  mode  The abbreviation for the mode
-/// @param  buf  The buffer to get the mapping array. NULL for global
-/// @returns Array of maparg()-like dictionaries describing mappings
-ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena)
-{
-  ArrayBuilder mappings = KV_INITIAL_VALUE;
-  kvi_init(mappings);
-
-  char *p = mode.size > 0 ? mode.data : "m";
-  bool forceit = *p == '!';
-  // Convert the string mode to the integer mode stored within each mapblock.
-  int int_mode = rs_get_map_mode(&p, forceit);
-  if (forceit) {
-    assert(p == mode.data);
-    p++;
-  }
-  bool is_abbrev = (int_mode & (MODE_INSERT | MODE_CMDLINE)) != 0 && *p == 'a';
-
-  // Determine the desired buffer value
-  int buffer_value = (buf == NULL) ? 0 : buf->handle;
-
-  for (int i = 0; i < (is_abbrev ? 1 : MAX_MAPHASH); i++) {
-    for (const mapblock_T *current_maphash = is_abbrev
-                                             ? (buf ? buf->b_first_abbr : first_abbr)
-                                             : (buf ? buf->b_maphash[i] : maphash[i]);
-         current_maphash;
-         current_maphash = current_maphash->m_next) {
-      if (current_maphash->m_simplified) {
-        continue;
-      }
-      // Check for correct mode
-      if (int_mode & current_maphash->m_mode) {
-        kvi_push(mappings, DICT_OBJ(mapblock_fill_dict(current_maphash,
-                                                       current_maphash->m_alt
-                                                       ? current_maphash->m_alt->m_keys : NULL,
-                                                       buffer_value,
-                                                       is_abbrev, false, arena)));
-      }
-    }
-  }
-
-  return arena_take_arraybuilder(arena, &mappings);
-}
+// keymap_array body deleted; implemented in Rust (Phase 4). See api.rs.
 
 // Rust FFI accessor functions
 mapblock_T *nvim_get_maphash_entry(int index) { return (index >= 0 && index < MAX_MAPHASH) ? maphash[index] : NULL; }
@@ -657,6 +202,69 @@ uint8_t nvim_langmap_mapchar_get(int index) { return (index >= 0 && index < 256)
 void nvim_langmap_mapchar_set(int index, uint8_t value) { if (index >= 0 && index < 256) { langmap_mapchar[index] = value; } }
 int nvim_mapping_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 int nvim_mapping_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
+
+// Phase 4 accessors: modify_keymap / keymap_array helpers
+
+// Dict(keymap) field accessors
+bool nvim_mapping_keymap_opts_get_noremap(const Dict(keymap) *opts) { return opts->noremap; }
+bool nvim_mapping_keymap_opts_get_nowait(const Dict(keymap) *opts) { return opts->nowait; }
+bool nvim_mapping_keymap_opts_get_silent(const Dict(keymap) *opts) { return opts->silent; }
+bool nvim_mapping_keymap_opts_get_script(const Dict(keymap) *opts) { return opts->script; }
+bool nvim_mapping_keymap_opts_get_expr(const Dict(keymap) *opts) { return opts->expr; }
+bool nvim_mapping_keymap_opts_get_unique(const Dict(keymap) *opts) { return opts->unique; }
+bool nvim_mapping_keymap_opts_get_replace_keycodes(const Dict(keymap) *opts) { return opts->replace_keycodes; }
+bool nvim_mapping_keymap_opts_has_callback(const Dict(keymap) *opts) { return HAS_KEY(opts, keymap, callback); }
+LuaRef nvim_mapping_keymap_opts_take_callback(Dict(keymap) *opts) { LuaRef r = opts->callback; opts->callback = LUA_NOREF; return r; }
+bool nvim_mapping_keymap_opts_has_desc(const Dict(keymap) *opts) { return HAS_KEY(opts, keymap, desc); }
+const char *nvim_mapping_keymap_opts_get_desc_data(const Dict(keymap) *opts) { return opts->desc.data; }
+size_t nvim_mapping_keymap_opts_get_desc_size(const Dict(keymap) *opts) { return opts->desc.size; }
+
+// api_set_error wrappers (avoid variadic from Rust)
+void nvim_mapping_api_set_error_validation(Error *err, const char *msg) { api_set_error(err, kErrorTypeValidation, "%s", msg); }
+void nvim_mapping_api_set_error_validation_lhs(Error *err, const char *lhs) { api_set_error(err, kErrorTypeValidation, "LHS exceeds maximum map length: %s", lhs); }
+void nvim_mapping_api_set_error_validation_mode(Error *err, const char *mode) { api_set_error(err, kErrorTypeValidation, "Invalid mode shortname: \"%s\"", mode); }
+void nvim_mapping_api_set_error_validation_rhs_lhs(Error *err, const char *rhs) { api_set_error(err, kErrorTypeValidation, "Gave nonempty RHS in unmap command: %s", rhs); }
+void nvim_mapping_api_set_error_exception_invarg(Error *err) { api_set_error(err, kErrorTypeException, "%s", e_invarg); }
+void nvim_mapping_api_set_error_exception_nomap(Error *err) { api_set_error(err, kErrorTypeException, "%s", e_nomap); }
+void nvim_mapping_api_set_error_exception(Error *err, const char *msg) { api_set_error(err, kErrorTypeException, "%s", msg); }
+void nvim_mapping_api_set_error_exception_abbr(Error *err, int is_abbrev, int is_global, const char *lhs)
+{
+  if (is_global) {
+    api_set_error(err, kErrorTypeException, is_abbrev
+      ? _(e_global_abbreviation_already_exists_for_str)
+      : _(e_global_mapping_already_exists_for_str), lhs);
+  } else {
+    api_set_error(err, kErrorTypeException, is_abbrev
+      ? _(e_abbreviation_already_exists_for_str)
+      : _(e_mapping_already_exists_for_str), lhs);
+  }
+}
+
+// api_set_sctx / current_sctx save-restore helpers
+sctx_T nvim_mapping_api_set_sctx(uint64_t channel_id) { return api_set_sctx(channel_id); }
+void nvim_mapping_restore_sctx(sctx_T sctx) { current_sctx = sctx; }
+
+// find_buffer_by_handle wrapper (returns NULL on error)
+buf_T *nvim_mapping_find_buffer_by_handle(int buffer, Error *err) { return find_buffer_by_handle(buffer, err); }
+
+// buf->handle accessor
+int nvim_mapping_buf_handle(const buf_T *buf) { return buf->handle; }
+
+// string_to_cstr wrapper (for desc field)
+char *nvim_mapping_string_to_cstr_len(const char *data, size_t size) { return string_to_cstr((String){ .data = (char *)data, .size = size }); }
+
+// ArrayBuilder wrappers for keymap_array (opaque void* handle)
+void *nvim_mapping_array_builder_new(void) { ArrayBuilder *b = xmalloc(sizeof(*b)); kvi_init(*b); return b; }
+void nvim_mapping_array_builder_push_dict(void *b, Dict d) { kvi_push(*(ArrayBuilder *)b, DICT_OBJ(d)); }
+Array nvim_mapping_array_builder_finish(Arena *arena, void *b) { Array r = arena_take_arraybuilder(arena, (ArrayBuilder *)b); xfree(b); return r; }
+
+// Phase 3 accessors: f_mapset / f_maplist helpers
+LuaRef nvim_ufunc_get_luaref(const ufunc_T *fp) { return fp->uf_luaref; }
+int nvim_mapping_dictitem_tv_type(const dictitem_T *di) { return (int)di->di_tv.v_type; }
+const char *nvim_mapping_dictitem_tv_vstring(const dictitem_T *di) { return di->di_tv.vval.v_string; }
+// Error emitters for f_mapset (avoid exposing variadic semsg to Rust)
+void nvim_mapping_emsg_entries_missing(void) { emsg(_(e_entries_missing_in_mapset_dict_argument)); }
+void nvim_mapping_semsg_illegal_map_mode(const char *which) { semsg(_(e_illegal_map_mode_string_str), which); }
 void nvim_mapping_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_set_maphash_entry(int index, mapblock_T *mp) { if (index >= 0 && index < MAX_MAPHASH) { maphash[index] = mp; } }
 void nvim_set_first_abbr(mapblock_T *mp) { first_abbr = mp; }

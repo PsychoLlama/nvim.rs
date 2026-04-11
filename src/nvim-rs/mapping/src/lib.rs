@@ -15,6 +15,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)] // Safe wrappers that null-check before deref
 
 pub mod abbrev;
+pub mod api;
 pub mod args;
 pub mod completion;
 pub mod display;
@@ -25,6 +26,7 @@ pub mod flags;
 pub mod langmap;
 pub mod lookup;
 pub mod mutate;
+pub mod query;
 pub mod session;
 
 use std::ffi::{c_char, c_int};
