@@ -432,17 +432,8 @@ char *nvim_dp_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
 /// Return ml_get_len(lnum) for do_put.
 int nvim_dp_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
 
-/// Set curwin->w_cursor.col += delta.
-void nvim_dp_cursor_col_add(int delta) { curwin->w_cursor.col += (colnr_T)delta; }
-
 /// Set curbuf->b_op_end.col += delta.
 void nvim_dp_op_end_col_add(int delta) { curbuf->b_op_end.col += (colnr_T)delta; }
-
-/// Set curbuf->b_op_start = curwin->w_cursor.
-void nvim_dp_set_op_start_cursor(void) { curbuf->b_op_start = curwin->w_cursor; }
-
-/// Set curbuf->b_op_end = curwin->w_cursor.
-void nvim_dp_set_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 
 /// Call adjust_cursor_eol().
 void nvim_dp_adjust_cursor_eol(void) { adjust_cursor_eol(); }

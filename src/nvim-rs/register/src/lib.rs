@@ -3279,10 +3279,7 @@ extern "C" {
     fn nvim_dp_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_dp_ml_get(lnum: c_int) -> *mut c_char;
     fn nvim_dp_ml_get_len(lnum: c_int) -> c_int;
-    fn nvim_dp_cursor_col_add(delta: c_int);
     fn nvim_dp_op_end_col_add(delta: c_int);
-    fn nvim_dp_set_op_start_cursor();
-    fn nvim_dp_set_op_end_cursor();
     fn nvim_dp_adjust_cursor_eol();
     fn nvim_dp_getviscol() -> c_int;
     fn nvim_dp_coladvance_force(viscol: c_int) -> c_int;
@@ -3404,6 +3401,37 @@ unsafe fn dp_utfc_next(cur: DpStrCharInfo) -> DpStrCharInfo {
     utfc_next_impl(cur)
 }
 
+/// Read `curwin->w_cursor` and add `delta` to its `col` field, then write it back.
+///
+/// Replaces the C `nvim_dp_cursor_col_add` wrapper.
+#[inline]
+unsafe fn dp_cursor_col_add(delta: c_int) {
+    let mut pos = PosT::default();
+    nvim_dp_get_cursor(&raw mut pos);
+    pos.col += delta;
+    nvim_dp_set_cursor(&raw const pos);
+}
+
+/// Copy `curwin->w_cursor` into `curbuf->b_op_start`.
+///
+/// Replaces the C `nvim_dp_set_op_start_cursor` wrapper.
+#[inline]
+unsafe fn dp_set_op_start_cursor() {
+    let mut pos = PosT::default();
+    nvim_dp_get_cursor(&raw mut pos);
+    nvim_register_curbuf_set_op_start(&raw const pos);
+}
+
+/// Copy `curwin->w_cursor` into `curbuf->b_op_end`.
+///
+/// Replaces the C `nvim_dp_set_op_end_cursor` wrapper.
+#[inline]
+unsafe fn dp_set_op_end_cursor() {
+    let mut pos = PosT::default();
+    nvim_dp_get_cursor(&raw mut pos);
+    nvim_register_curbuf_set_op_end(&raw const pos);
+}
+
 /// Put contents of register `regname` into the text.
 ///
 /// Caller must check `regname` to be valid.
@@ -3436,8 +3464,8 @@ pub unsafe extern "C" fn rs_do_put(
     let cur_ve_flags = nvim_dp_get_ve_flags();
 
     // default for '[ and '] marks
-    nvim_dp_set_op_start_cursor();
-    nvim_dp_set_op_end_cursor();
+    dp_set_op_start_cursor();
+    dp_set_op_end_cursor();
 
     // Using inserted text works differently, because the register includes
     // special characters (newlines, etc.).
@@ -3650,8 +3678,8 @@ pub unsafe extern "C" fn rs_do_put(
                 // Must be "p" for a Visual block, put lines below the block.
                 nvim_dp_set_cursor_to_b_visual_vi_end();
             }
-            nvim_dp_set_op_start_cursor(); // for mark_adjust()
-            nvim_dp_set_op_end_cursor();
+            dp_set_op_start_cursor(); // for mark_adjust()
+            dp_set_op_end_cursor();
         }
 
         // Effective direction after linewise adjustments.
@@ -3706,7 +3734,7 @@ pub unsafe extern "C" fn rs_do_put(
             } else {
                 nvim_dp_set_cursor_lnum(lnum);
             }
-            nvim_dp_set_op_start_cursor(); // for mark_adjust()
+            dp_set_op_start_cursor(); // for mark_adjust()
         } else if u_save_cursor() == FAIL {
             break 'do_put_body;
         }
@@ -3750,7 +3778,7 @@ pub unsafe extern "C" fn rs_do_put(
                 }
                 // move to start of next multi-byte character
                 let adv = nvim_dp_utfc_ptr2len(nvim_dp_get_cursor_pos_ptr());
-                nvim_dp_cursor_col_add(adv);
+                dp_cursor_col_add(adv);
                 col += 1;
             } else {
                 nvim_dp_getvcol_cursor(&raw mut col, &raw mut endcol2);
@@ -3764,14 +3792,14 @@ pub unsafe extern "C" fn rs_do_put(
                     col += 1;
                 }
                 if dir != FORWARD && c != NUL && nvim_dp_get_cursor_coladd() > 0 {
-                    nvim_dp_cursor_col_add(1);
+                    dp_cursor_col_add(1);
                 }
                 if c == TAB {
                     if dir == BACKWARD && nvim_dp_get_cursor_col() != 0 {
-                        nvim_dp_cursor_col_add(-1);
+                        dp_cursor_col_add(-1);
                     }
                     if dir == FORWARD && col - 1 == endcol2 {
-                        nvim_dp_cursor_col_add(1);
+                        dp_cursor_col_add(1);
                     }
                 }
             }
@@ -3914,7 +3942,7 @@ pub unsafe extern "C" fn rs_do_put(
 
                 nvim_dp_set_cursor_lnum(nvim_dp_get_cursor_lnum() + 1);
                 if i == 0 {
-                    nvim_dp_cursor_col_add(bd.startspaces);
+                    dp_cursor_col_add(bd.startspaces);
                 }
 
                 i += 1;
@@ -3929,7 +3957,7 @@ pub unsafe extern "C" fn rs_do_put(
 
             // Set '[ mark.
             let cursor_lnum_end = nvim_dp_get_cursor_lnum();
-            nvim_dp_set_op_start_cursor();
+            dp_set_op_start_cursor();
             nvim_dp_set_op_start_lnum(lnum);
 
             // adjust '] mark
@@ -3941,7 +3969,7 @@ pub unsafe extern "C" fn rs_do_put(
                 let mut op_end = PosT::default();
                 nvim_dp_get_op_end(&raw mut op_end);
                 nvim_dp_set_cursor(&raw const op_end);
-                nvim_dp_cursor_col_add(1);
+                dp_cursor_col_add(1);
 
                 // in Insert mode we might be after the NUL, correct for that
                 let len = nvim_dp_get_cursor_line_len();
@@ -3963,11 +3991,11 @@ pub unsafe extern "C" fn rs_do_put(
                     // put it on the next of the multi-byte character.
                     col += bytelen;
                     if yanklen != 0 {
-                        nvim_dp_cursor_col_add(bytelen);
+                        dp_cursor_col_add(bytelen);
                         nvim_dp_op_end_col_add(bytelen);
                     }
                 }
-                nvim_dp_set_op_start_cursor();
+                dp_set_op_start_cursor();
             } else if effective_dir == BACKWARD {
                 // Line mode: BACKWARD is the same as FORWARD on the previous line
                 lnum -= 1;
@@ -4055,7 +4083,7 @@ pub unsafe extern "C" fn rs_do_put(
                             // make sure curwin->w_virtcol is updated
                             nvim_dp_changed_cline_bef_curs();
                             nvim_dp_invalidate_botline();
-                            nvim_dp_cursor_col_add(totlen as c_int - 1);
+                            dp_cursor_col_add(totlen as c_int - 1);
                         }
                         nvim_dp_changed_bytes(lnum, col);
                         nvim_dp_extmark_splice_cols(
@@ -4082,14 +4110,14 @@ pub unsafe extern "C" fn rs_do_put(
                 }
 
                 // put '] at the first byte of the last character
-                nvim_dp_set_op_end_cursor();
+                dp_set_op_end_cursor();
                 nvim_dp_op_end_col_add(-first_byte_off);
 
                 // For "CTRL-O p" in Insert mode, put cursor after last char
                 if totlen != 0 && (nvim_dp_get_restart_edit() != 0 || flags & PUT_CURSEND != 0) {
-                    nvim_dp_cursor_col_add(1);
+                    dp_cursor_col_add(1);
                 } else {
-                    nvim_dp_cursor_col_add(-first_byte_off);
+                    dp_cursor_col_add(-first_byte_off);
                 }
             } else {
                 // Multi-line charwise or linewise insert
@@ -4243,9 +4271,9 @@ pub unsafe extern "C" fn rs_do_put(
                 if y_type == K_MT_LINE_WISE_V {
                     nvim_dp_set_op_start_lnum(nvim_dp_get_op_start_lnum()); // no-op if already set
                                                                             // curbuf->b_op_start.col = 0
-                    nvim_dp_set_op_start_cursor(); // this sets from curwin which isn't right
-                                                   // We need to set col=0 explicitly
-                                                   // We'll set via nvim_register_curbuf_set_op_start_col
+                                                                            // dp_set_op_start_cursor sets from curwin which isn't right for
+                                                                            // linewise put -- col must be 0.
+                    dp_set_op_start_cursor();
                     nvim_register_curbuf_set_op_start_col(0);
                     if effective_dir == FORWARD {
                         nvim_dp_set_op_start_lnum(nvim_dp_get_op_start_lnum() + 1);
@@ -4313,7 +4341,7 @@ pub unsafe extern "C" fn rs_do_put(
                     } else {
                         nvim_dp_set_cursor_lnum(new_lnum);
                         nvim_dp_set_cursor_col(raw_col);
-                        nvim_dp_set_op_end_cursor();
+                        dp_set_op_end_cursor();
                         if raw_col > 1 {
                             nvim_dp_set_op_end_col(raw_col - 1);
                         }
