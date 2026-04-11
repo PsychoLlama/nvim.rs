@@ -24,10 +24,19 @@ extern "C" {
     pub fn nvim_ctx_save_funcs(ctx: *mut Context, scriptonly: bool);
     pub fn nvim_ctx_restore_funcs(ctx: *mut Context);
 
-    // Option save/restore for shada
-    pub fn nvim_ctx_save_shada_opt();
-    pub fn nvim_ctx_set_shada_restore();
-    pub fn nvim_ctx_restore_shada_opt();
+    // Option get/set (implemented in nvim-option Rust crate)
+    #[link_name = "get_option_value"]
+    pub fn rs_get_option_value(
+        opt_idx: std::os::raw::c_int,
+        opt_flags: std::os::raw::c_int,
+    ) -> nvim_option::storage::OptVal;
+    #[link_name = "set_option_value"]
+    pub fn rs_set_option_value(
+        opt_idx: std::os::raw::c_int,
+        value: nvim_option::storage::OptVal,
+        opt_flags: std::os::raw::c_int,
+    ) -> *const std::ffi::c_char;
+    pub fn rs_optval_free(o: nvim_option::storage::OptVal);
 
     // Dict conversion (kept in C due to Arena/API coupling)
     pub fn nvim_ctx_to_dict_impl(ctx: *mut Context, arena: *mut std::ffi::c_void) -> Dict;

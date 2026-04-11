@@ -1,4 +1,8 @@
+use std::ffi::c_char;
 use std::os::raw::c_int;
+
+use nvim_option::storage::{OptVal, OptValData, String_};
+use nvim_option::OptValType;
 
 use crate::{ctx_stack, ffi, rs_ctx_free, stack, Context};
 
@@ -10,6 +14,51 @@ const KCTX_FUNCS: c_int = 32;
 
 // kShaDaWantInfo (1) | kShaDaForceit (4)
 const SHADA_READ_FLAGS: c_int = 5;
+
+/// `kOptShada` = 254 (from `options_enum.generated.h`)
+const K_OPT_SHADA: c_int = 254;
+
+/// `OPT_GLOBAL` = 0x01 (from option.h)
+const OPT_GLOBAL: c_int = 0x01;
+
+/// Mirrors `"!,'100,%"` as a static string for `STATIC_CSTR_AS_OPTVAL`.
+static SHADA_RESTORE_STR: &[u8] = b"!,'100,%\0";
+
+/// Saved shada option value (mirrors `saved_shada_opt` static in context.c).
+static mut SAVED_SHADA_OPT: OptVal = OptVal {
+    type_: OptValType::Nil,
+    data: OptValData { number: 0 },
+};
+
+/// Save the current 'shada' option value globally.
+/// Replaces C `nvim_ctx_save_shada_opt`.
+unsafe fn ctx_save_shada_opt() {
+    SAVED_SHADA_OPT = ffi::rs_get_option_value(K_OPT_SHADA, OPT_GLOBAL);
+}
+
+/// Set 'shada' to the restore value `"!,'100,%"`.
+/// Replaces C `nvim_ctx_set_shada_restore`.
+unsafe fn ctx_set_shada_restore() {
+    // STATIC_CSTR_AS_OPTVAL("!,'100,%") expanded:
+    //   OptVal { type: kOptValTypeString, data.string: { data: "!,'100,%", size: 8 } }
+    let restore_val = OptVal {
+        type_: OptValType::String,
+        data: OptValData {
+            string: String_ {
+                data: SHADA_RESTORE_STR.as_ptr().cast::<c_char>().cast_mut(),
+                size: SHADA_RESTORE_STR.len() - 1, // exclude NUL
+            },
+        },
+    };
+    ffi::rs_set_option_value(K_OPT_SHADA, restore_val, OPT_GLOBAL);
+}
+
+/// Restore 'shada' to the previously saved value and free it.
+/// Replaces C `nvim_ctx_restore_shada_opt`.
+unsafe fn ctx_restore_shada_opt() {
+    ffi::rs_set_option_value(K_OPT_SHADA, SAVED_SHADA_OPT, OPT_GLOBAL);
+    ffi::rs_optval_free(SAVED_SHADA_OPT);
+}
 
 #[export_name = "ctx_restore"]
 pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
@@ -26,8 +75,8 @@ pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool
 
     let c = &mut *ctx;
 
-    ffi::nvim_ctx_save_shada_opt();
-    ffi::nvim_ctx_set_shada_restore();
+    ctx_save_shada_opt();
+    ctx_set_shada_restore();
 
     if flags & KCTX_REGS != 0 {
         ffi::rs_shada_read_string(c.regs, SHADA_READ_FLAGS);
@@ -49,6 +98,6 @@ pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool
         rs_ctx_free(ctx);
     }
 
-    ffi::nvim_ctx_restore_shada_opt();
+    ctx_restore_shada_opt();
     true
 }

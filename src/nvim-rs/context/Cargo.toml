@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 nvim-memory = { path = "../memory" }
+nvim-option = { path = "../option" }

@@ -21,32 +21,14 @@
 #include "nvim/keycodes.h"
 #include "nvim/memory.h"
 #include "nvim/memory_defs.h"
-#include "nvim/option.h"
-#include "nvim/option_defs.h"
 
 #include "context.c.generated.h"
-
-extern void rs_optval_free(OptVal o);
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
 
 ContextVec ctx_stack = KV_INITIAL_VALUE;
 
-// ShaDa option save/restore accessors.
-// Wraps the save-set-restore pattern for the shada option so Rust
-// never needs to touch the OptVal struct.
-static OptVal saved_shada_opt;
-
-void nvim_ctx_save_shada_opt(void) { saved_shada_opt = get_option_value(kOptShada, OPT_GLOBAL); }
-
-void nvim_ctx_set_shada_restore(void) { set_option_value(kOptShada, STATIC_CSTR_AS_OPTVAL("!,'100,%"), OPT_GLOBAL); }
-
-void nvim_ctx_restore_shada_opt(void)
-{
-  set_option_value(kOptShada, saved_shada_opt, OPT_GLOBAL);
-  rs_optval_free(saved_shada_opt);
-}
 
 /// Restores functions from a context (C accessor for Rust).
 /// Kept in C due to do_cmdline_cmd coupling.
