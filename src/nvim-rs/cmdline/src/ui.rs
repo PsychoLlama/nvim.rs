@@ -619,8 +619,7 @@ mod phase2 {
         fn nvim_set_cmdline_was_last_drawn(val: c_int);
         fn nvim_ccline_ptr_get_redraw_state(p: *mut c_void) -> c_int;
         fn nvim_ccline_ptr_set_redraw_none(p: *mut c_void);
-        fn nvim_cmdline_ui_show_for_level(p: *mut c_void);
-        fn nvim_cmdline_ui_pos_for_level(p: *mut c_void);
+        fn nvim_cmdline_ui_update_for_level(p: *mut c_void, show: c_int);
     }
 
     // CmdRedraw enum values (from ex_getln_defs.h)
@@ -677,10 +676,10 @@ mod phase2 {
                 nvim_ccline_ptr_set_redraw_none(line);
                 if redraw_state == K_CMD_REDRAW_ALL {
                     nvim_set_cmdline_was_last_drawn(1);
-                    nvim_cmdline_ui_show_for_level(line);
+                    nvim_cmdline_ui_update_for_level(line, 1);
                 } else if redraw_state == K_CMD_REDRAW_POS && nvim_get_cmdline_was_last_drawn() != 0
                 {
-                    nvim_cmdline_ui_pos_for_level(line);
+                    nvim_cmdline_ui_update_for_level(line, 0);
                 }
                 level -= 1;
             }

@@ -474,6 +474,33 @@ extern "C" {
     fn rs_tabpage_win_valid(tp: TabpageHandle, wp: WinHandle) -> c_int;
     // Phase 3: win_float_remove
     fn win_close(wp: WinHandle, free_buf: bool, force: bool) -> c_int;
+    // Phase 4: win_set_minimal_style
+    fn nvim_win_set_p_nu(wp: WinHandle, val: c_int);
+    fn nvim_win_set_p_rnu(wp: WinHandle, val: c_int);
+    fn nvim_win_set_p_cul_wrap(wp: WinHandle, val: c_int);
+    fn nvim_win_set_p_cuc_wrap(wp: WinHandle, val: c_int);
+    fn nvim_win_set_p_spell(wp: WinHandle, val: c_int);
+    fn nvim_win_set_p_list(wp: WinHandle, val: c_int);
+    fn nvim_win_get_p_fcs_eob(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_fcs_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_fcs(wp: WinHandle, val: *mut c_char);
+    fn nvim_win_get_p_winhl_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_winhl(wp: WinHandle, val: *mut c_char);
+    fn nvim_win_get_p_scl_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_scl(wp: WinHandle, val: *mut c_char);
+    fn nvim_win_get_p_fdc_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_fdc(wp: WinHandle, val: *mut c_char);
+    fn nvim_win_get_p_cc_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_cc(wp: WinHandle, val: *mut c_char);
+    fn nvim_win_get_p_stc_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_stc(wp: WinHandle, val: *mut c_char);
+    fn nvim_win_get_p_stl_ptr(wp: WinHandle) -> *mut c_char;
+    fn nvim_win_set_p_stl(wp: WinHandle, val: *mut c_char);
+    fn free_string_option(p: *mut c_char);
+    fn nvim_get_empty_string_option() -> *mut c_char;
+    fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn rs_parse_winhl_opt(winhl: *const c_char, win: WinHandle) -> bool;
 }
 
 /// Check if window is a floating window.
@@ -917,6 +944,106 @@ pub unsafe extern "C" fn rs_win_float_find_altwin(win: WinHandle, tp: TabpageHan
         wp
     } else {
         nvim_tabpage_get_firstwin(tp)
+    }
+}
+
+// =============================================================================
+// Phase 4: win_set_minimal_style
+// =============================================================================
+
+/// Set window to minimal style (no number column, EOB markers, etc).
+///
+/// C equivalent: `win_set_minimal_style`
+#[unsafe(export_name = "win_set_minimal_style")]
+pub unsafe extern "C" fn rs_win_set_minimal_style(wp: WinHandle) {
+    // Boolean options: clear them all
+    nvim_win_set_p_nu(wp, 0);
+    nvim_win_set_p_rnu(wp, 0);
+    nvim_win_set_p_cul_wrap(wp, 0);
+    nvim_win_set_p_cuc_wrap(wp, 0);
+    nvim_win_set_p_spell(wp, 0);
+    nvim_win_set_p_list(wp, 0);
+
+    // Hide EOB region: use " " fillchar and cleared highlighting
+    // if w_p_fcs_chars.eob != ' '
+    if nvim_win_get_p_fcs_eob(wp) != b' ' as c_int {
+        let old = nvim_win_get_p_fcs_ptr(wp);
+        let new_fcs = if *old == 0 {
+            xstrdup(c"eob: ".as_ptr())
+        } else {
+            nvim_concat_str(old, c",eob: ".as_ptr())
+        };
+        nvim_win_set_p_fcs(wp, new_fcs);
+        free_string_option(old);
+    }
+
+    // winhl: append ",EndOfBuffer:" or set to "EndOfBuffer:"
+    {
+        let old = nvim_win_get_p_winhl_ptr(wp);
+        let new_winhl = if *old == 0 {
+            xstrdup(c"EndOfBuffer:".as_ptr())
+        } else {
+            nvim_concat_str(old, c",EndOfBuffer:".as_ptr())
+        };
+        nvim_win_set_p_winhl(wp, new_winhl);
+        free_string_option(old);
+        rs_parse_winhl_opt(std::ptr::null(), wp);
+    }
+
+    // signcolumn: use 'auto' if not already 'auto' (check first char and length)
+    {
+        let scl = nvim_win_get_p_scl_ptr(wp);
+        // strlen equivalent: check if scl[0] != 'a' || length >= 8
+        let scl_bytes = scl as *const u8;
+        let first = *scl_bytes;
+        // Compute length up to 8
+        let mut len = 0usize;
+        while len < 8 && *scl_bytes.add(len) != 0 {
+            len += 1;
+        }
+        if first != b'a' || len >= 8 {
+            free_string_option(scl);
+            nvim_win_set_p_scl(wp, xstrdup(c"auto".as_ptr()));
+        }
+    }
+
+    // foldcolumn: use '0' if not already '0'
+    {
+        let fdc = nvim_win_get_p_fdc_ptr(wp);
+        if *fdc != b'0' as c_char {
+            free_string_option(fdc);
+            nvim_win_set_p_fdc(wp, xstrdup(c"0".as_ptr()));
+        }
+    }
+
+    // colorcolumn: clear if non-empty
+    {
+        let cc = nvim_win_get_p_cc_ptr(wp);
+        if !cc.is_null() && *cc != 0 {
+            free_string_option(cc);
+            nvim_win_set_p_cc(wp, xstrdup(c"".as_ptr()));
+        }
+    }
+
+    // statuscolumn: clear if non-empty
+    {
+        let stc = nvim_win_get_p_stc_ptr(wp);
+        if !stc.is_null() && *stc != 0 {
+            free_string_option(stc);
+            nvim_win_set_p_stc(wp, nvim_get_empty_string_option());
+        }
+    }
+
+    // statusline: clear if floating and non-empty
+    if nvim_win_get_floating(wp) != 0 {
+        let stl = nvim_win_get_p_stl_ptr(wp);
+        if !stl.is_null() && *stl != 0 {
+            free_string_option(stl);
+            nvim_win_set_p_stl(wp, nvim_get_empty_string_option());
+            if nvim_win_get_status_height(wp) > 0 {
+                nvim_win_config_float(wp);
+            }
+        }
     }
 }
 

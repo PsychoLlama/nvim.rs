@@ -980,13 +980,16 @@ void nvim_ccline_ptr_set_redraw_none(void *p) { ((CmdlineInfo *)p)->redraw_state
 /// Get a CmdlineInfo node's cmdpos field (for Rust cmdline_ui_flush).
 int nvim_ccline_ptr_get_cmdpos(void *p) { return ((CmdlineInfo *)p)->cmdpos; }
 
-/// Build content Array and call ui_call_cmdline_show for the given CmdlineInfo node.
-/// Handles star-masking, color chunks, and plain text cases.
-/// Also fires ui_call_cmdline_special_char if special_char is set.
-/// Uses arena allocation internally.
-void nvim_cmdline_ui_show_for_level(void *p)
+/// Update cmdline UI for the given CmdlineInfo node.
+/// show=1: call ui_call_cmdline_show (full redraw).
+/// show=0: call ui_call_cmdline_pos (position update only).
+void nvim_cmdline_ui_update_for_level(void *p, int show)
 {
   CmdlineInfo *line = (CmdlineInfo *)p;
+  if (!show) {
+    ui_call_cmdline_pos(line->cmdpos, line->level);
+    return;
+  }
   Arena arena = ARENA_EMPTY;
   Array content;
   if (cmdline_star) {
@@ -1032,13 +1035,6 @@ void nvim_cmdline_ui_show_for_level(void *p)
     ui_call_cmdline_special_char(cstr_as_string(charbuf), line->special_shift, line->level);
   }
   arena_mem_free(arena_finish(&arena));
-}
-
-/// Call ui_call_cmdline_pos for the given CmdlineInfo node.
-void nvim_cmdline_ui_pos_for_level(void *p)
-{
-  CmdlineInfo *line = (CmdlineInfo *)p;
-  ui_call_cmdline_pos(line->cmdpos, line->level);
 }
 
 // =============================================================================
