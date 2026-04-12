@@ -599,7 +599,7 @@ extern "C" {
     // u_savecommon infrastructure
     fn nvim_buf_set_b_new_change(buf: BufHandle, val: bool);
     fn nvim_buf_set_b_u_time_cur(buf: BufHandle, val: TimeT);
-    fn nvim_uhp_copy_marks_visual(buf: BufHandle, uhp: UHeaderHandle);
+    // nvim_uhp_copy_marks_visual: migrated to Rust (rs_uhp_copy_marks_visual)
     fn nvim_emsg_line_count_changed();
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
 
@@ -826,32 +826,26 @@ extern "C" {
     // Phase 3: u_undoredo FFI helpers
     // ==========================================================================
 
-    /// Save named marks before undo/redo (zeros additional_data)
-    fn nvim_undoredo_save_marks(buf: BufHandle, curhead: UHeaderHandle);
+    // nvim_undoredo_save_marks, nvim_undoredo_restore_marks,
+    // nvim_undoredo_swap_visual, nvim_undoredo_get_buf_marks,
+    // nvim_undoredo_init_op_marks, nvim_uhp_copy_marks_visual:
+    // migrated to Rust (see rs_uhp_copy_marks_visual etc. below).
 
-    /// Restore named marks from undo header to buffer and vice versa
-    fn nvim_undoredo_restore_marks(
-        buf: BufHandle,
-        curhead: UHeaderHandle,
-        saved_namedm: *const c_void,
-    );
+    /// Pointer to buf->b_namedm array (NMARKS fmark_T entries).
+    fn nvim_buf_get_namedm_ptr(buf: BufHandle) -> *mut FmarkT;
 
-    /// Swap visual info between buffer and undo header
-    fn nvim_undoredo_swap_visual(
-        buf: BufHandle,
-        curhead: UHeaderHandle,
-        saved_visual: *const c_void,
-    );
+    /// Pointer to buf->b_visual (visualinfo_T).
+    fn nvim_buf_get_b_visual_ptr(buf: BufHandle) -> *mut VisualInfoT;
 
-    /// Get saved namedm array and visual info from buffer
-    fn nvim_undoredo_get_buf_marks(
-        buf: BufHandle,
-        out_namedm: *mut c_void,
-        out_visual: *mut c_void,
-    );
+    /// Set b_op_start.col
+    fn nvim_buf_set_op_start_col(buf: BufHandle, col: ColnrT);
 
-    /// Set b_op_start and b_op_end initial values
-    fn nvim_undoredo_init_op_marks(buf: BufHandle);
+    /// Set b_op_end.col
+    fn nvim_buf_set_op_end_col(buf: BufHandle, col: ColnrT);
+
+    /// free_fmark(fm): frees fm.additional_data.
+    #[link_name = "free_fmark"]
+    fn nvim_free_fmark(fm: FmarkT);
 
     /// Get b_op_start.lnum
     fn nvim_buf_get_op_start_lnum(buf: BufHandle) -> LinenrT;
@@ -973,6 +967,134 @@ extern "C" {
 
     /// Get MAXPATHL value
     fn nvim_undo_get_maxpathl() -> usize;
+}
+
+// =============================================================================
+// Phase 1: Mark/visual manipulation cluster (migrated from undo.c)
+// =============================================================================
+
+/// Zero out `additional_data` pointers in the first NMARKS fmark_T entries.
+///
+/// Equivalent to C's `zero_fmark_additional_data`.
+///
+/// # Safety
+///
+/// `fmarks` must point to an array of at least NMARKS FmarkT entries.
+unsafe fn rs_zero_fmark_additional_data(fmarks: *mut FmarkT) {
+    for i in 0..NMARKS {
+        let fm = fmarks.add(i);
+        if !(*fm).additional_data.is_null() {
+            nvim_xfree((*fm).additional_data);
+            (*fm).additional_data = ptr::null_mut();
+        }
+    }
+}
+
+/// Copy named marks and visual info from buffer to undo header.
+///
+/// Zeros `b_namedm[i].additional_data` before copying to avoid double-free.
+/// Equivalent to C's `nvim_uhp_copy_marks_visual`.
+///
+/// # Safety
+///
+/// `buf` and `uhp` must be valid non-null pointers.
+unsafe fn rs_uhp_copy_marks_visual_impl(buf: BufHandle, uhp: UHeaderHandle) {
+    let namedm = nvim_buf_get_namedm_ptr(buf);
+    rs_zero_fmark_additional_data(namedm);
+    // Copy all NMARKS entries from buf->b_namedm into uhp->uh_namedm.
+    ptr::copy_nonoverlapping(namedm, (*uhp).uh_namedm.as_mut_ptr(), NMARKS);
+    // Copy buf->b_visual into uhp->uh_visual.
+    (*uhp).uh_visual = *nvim_buf_get_b_visual_ptr(buf);
+}
+
+/// Save named marks before undo/redo (zeros additional_data on buf's namedm).
+///
+/// Equivalent to C's `nvim_undoredo_save_marks`.
+///
+/// # Safety
+///
+/// `buf` must be a valid non-null pointer.
+unsafe fn rs_undoredo_save_marks_impl(buf: BufHandle) {
+    rs_zero_fmark_additional_data(nvim_buf_get_namedm_ptr(buf));
+}
+
+/// Copy buf->b_namedm and buf->b_visual to output buffers.
+///
+/// Equivalent to C's `nvim_undoredo_get_buf_marks`.
+///
+/// # Safety
+///
+/// `out_namedm` must point to at least NMARKS FmarkT entries.
+/// `out_visual` must point to one VisualInfoT.
+unsafe fn rs_undoredo_get_buf_marks_impl(
+    buf: BufHandle,
+    out_namedm: *mut FmarkT,
+    out_visual: *mut VisualInfoT,
+) {
+    ptr::copy_nonoverlapping(nvim_buf_get_namedm_ptr(buf), out_namedm, NMARKS);
+    *out_visual = *nvim_buf_get_b_visual_ptr(buf);
+}
+
+/// Restore named marks from undo header to buffer and vice versa.
+///
+/// Equivalent to C's `nvim_undoredo_restore_marks`.
+///
+/// # Safety
+///
+/// `buf`, `curhead`, and `saved_namedm` must be valid non-null pointers.
+/// `saved_namedm` must point to an array of at least NMARKS FmarkT entries.
+unsafe fn rs_undoredo_restore_marks_impl(
+    buf: BufHandle,
+    curhead: UHeaderHandle,
+    saved_namedm: *const FmarkT,
+) {
+    let buf_namedm = nvim_buf_get_namedm_ptr(buf);
+    for i in 0..NMARKS {
+        let uhp_mark = &mut (*curhead).uh_namedm[i];
+        let buf_mark = buf_namedm.add(i);
+        if uhp_mark.mark.lnum != 0 {
+            nvim_free_fmark(*buf_mark);
+            *buf_mark = *uhp_mark;
+        }
+        let saved = saved_namedm.add(i).read();
+        if saved.mark.lnum != 0 {
+            *uhp_mark = saved;
+        } else {
+            uhp_mark.mark.lnum = 0;
+        }
+    }
+}
+
+/// Swap visual info between buffer and undo header.
+///
+/// Equivalent to C's `nvim_undoredo_swap_visual`.
+///
+/// # Safety
+///
+/// `buf`, `curhead`, and `saved_visual` must be valid non-null pointers.
+unsafe fn rs_undoredo_swap_visual_impl(
+    buf: BufHandle,
+    curhead: UHeaderHandle,
+    saved_visual: *const VisualInfoT,
+) {
+    if (*curhead).uh_visual.vi_start.lnum != 0 {
+        *nvim_buf_get_b_visual_ptr(buf) = (*curhead).uh_visual;
+        (*curhead).uh_visual = *saved_visual;
+    }
+}
+
+/// Initialize b_op_start and b_op_end in buffer.
+///
+/// Equivalent to C's `nvim_undoredo_init_op_marks`.
+///
+/// # Safety
+///
+/// `buf` must be a valid non-null pointer.
+unsafe fn rs_undoredo_init_op_marks_impl(buf: BufHandle) {
+    nvim_buf_set_op_start_lnum(buf, nvim_buf_get_b_ml_line_count(buf));
+    nvim_buf_set_op_start_col(buf, 0);
+    nvim_buf_set_op_end_lnum(buf, 0);
+    nvim_buf_set_op_end_col(buf, 0);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -1705,14 +1827,19 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     nvim_undo_setpcmark();
 
     // Save marks before undo/redo
-    nvim_undoredo_save_marks(buf, curhead);
+    rs_undoredo_save_marks_impl(buf);
     // Allocate buffer for saved namedm + visualinfo
     const SAVED_MARKS_VISUAL_OFFSET: usize = std::mem::size_of::<FmarkT>() * NMARKS;
-    let saved_marks = nvim_xmalloc(SAVED_MARKS_VISUAL_OFFSET + std::mem::size_of::<VisualInfoT>());
+    let saved_marks_raw =
+        nvim_xmalloc(SAVED_MARKS_VISUAL_OFFSET + std::mem::size_of::<VisualInfoT>());
+    let saved_marks_namedm = saved_marks_raw.cast::<FmarkT>();
+    let saved_marks_visual = saved_marks_raw
+        .add(SAVED_MARKS_VISUAL_OFFSET)
+        .cast::<VisualInfoT>();
     // NMARKS fmark_T entries followed by one visualinfo_T
-    nvim_undoredo_get_buf_marks(buf, saved_marks, saved_marks.add(SAVED_MARKS_VISUAL_OFFSET));
+    rs_undoredo_get_buf_marks_impl(buf, saved_marks_namedm, saved_marks_visual);
 
-    nvim_undoredo_init_op_marks(buf);
+    rs_undoredo_init_op_marks_impl(buf);
 
     let mut newlist: *mut UEntry = ptr::null_mut();
     let mut uep = (*curhead).uh_entry;
@@ -1730,7 +1857,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
             nvim_unblock_autocmds();
             nvim_iemsg_undo_line_numbers_wrong();
             nvim_buf_changed(buf); // don't want UNCHANGED now
-            nvim_xfree(saved_marks);
+            nvim_xfree(saved_marks_raw);
             return;
         }
 
@@ -1909,9 +2036,9 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     }
 
     // restore marks from before undo/redo
-    nvim_undoredo_restore_marks(buf, curhead, saved_marks);
-    nvim_undoredo_swap_visual(buf, curhead, saved_marks.add(SAVED_MARKS_VISUAL_OFFSET));
-    nvim_xfree(saved_marks);
+    rs_undoredo_restore_marks_impl(buf, curhead, saved_marks_namedm);
+    rs_undoredo_swap_visual_impl(buf, curhead, saved_marks_visual);
+    nvim_xfree(saved_marks_raw);
 
     // Adjust cursor position
     undoredo_adjust_cursor(win, buf, curhead);
@@ -2304,8 +2431,8 @@ pub unsafe extern "C" fn rs_u_savecommon(
         let flags = (if changed { 1 } else { 0 }) + (if ml_empty { 2 } else { 0 });
         (*uhp).uh_flags = flags;
 
-        // Save named marks and Visual marks (calls zero_fmark_additional_data and memmove)
-        nvim_uhp_copy_marks_visual(buf, uhp);
+        // Save named marks and Visual marks
+        rs_uhp_copy_marks_visual_impl(buf, uhp);
 
         nvim_buf_set_b_u_newhead(buf, uhp);
 

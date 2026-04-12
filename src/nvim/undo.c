@@ -139,12 +139,7 @@ static OptInt get_undolevel(buf_T *buf)
   return buf->b_p_ul;
 }
 
-static inline void zero_fmark_additional_data(fmark_T *fmarks)
-{
-  for (size_t i = 0; i < NMARKS; i++) {
-    XFREE_CLEAR(fmarks[i].additional_data);
-  }
-}
+// zero_fmark_additional_data: migrated to Rust (rs_zero_fmark_additional_data).
 
 /// "undofile(name)" function
 void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -259,13 +254,7 @@ void nvim_buf_set_b_new_change(buf_T *buf, bool val) { buf->b_new_change = val; 
 
 void nvim_buf_set_b_u_time_cur(buf_T *buf, time_t val) { buf->b_u_time_cur = val; }
 
-// Copy marks and visual from buffer to undo header
-void nvim_uhp_copy_marks_visual(buf_T *buf, u_header_T *uhp)
-{
-  zero_fmark_additional_data(buf->b_namedm);
-  memmove(uhp->uh_namedm, buf->b_namedm, sizeof(buf->b_namedm[0]) * NMARKS);
-  uhp->uh_visual = buf->b_visual;
-}
+// nvim_uhp_copy_marks_visual: migrated to Rust (rs_uhp_copy_marks_visual_impl).
 
 // Error message wrapper
 void nvim_emsg_line_count_changed(void) { emsg(_("E881: Line count changed unexpectedly")); }
@@ -379,51 +368,9 @@ void nvim_undo_file_changed_warning(void) { give_warning(_("File contents change
 
 void nvim_undo_finished_reading(const char *file_name) { smsg(0, _("Finished reading undo file %s"), file_name); }
 
-void nvim_undoredo_save_marks(buf_T *buf, u_header_T *curhead) { zero_fmark_additional_data(buf->b_namedm); }
-
-// Restore named marks from undo header to buffer and vice versa
-void nvim_undoredo_restore_marks(buf_T *buf, u_header_T *curhead,
-                                 const fmark_T *saved_namedm)
-{
-  for (int i = 0; i < NMARKS; i++) {
-    if (curhead->uh_namedm[i].mark.lnum != 0) {
-      free_fmark(buf->b_namedm[i]);
-      buf->b_namedm[i] = curhead->uh_namedm[i];
-    }
-    if (saved_namedm[i].mark.lnum != 0) {
-      curhead->uh_namedm[i] = saved_namedm[i];
-    } else {
-      curhead->uh_namedm[i].mark.lnum = 0;
-    }
-  }
-}
-
-// Swap visual info between buffer and undo header
-void nvim_undoredo_swap_visual(buf_T *buf, u_header_T *curhead,
-                               const visualinfo_T *saved_visual)
-{
-  if (curhead->uh_visual.vi_start.lnum != 0) {
-    buf->b_visual = curhead->uh_visual;
-    curhead->uh_visual = *saved_visual;
-  }
-}
-
-// Get saved namedm array and visual info from buffer (for save before undo)
-// Copies buf->b_namedm to output array and returns buf->b_visual
-void nvim_undoredo_get_buf_marks(buf_T *buf, fmark_T *out_namedm,
-                                 visualinfo_T *out_visual)
-{
-  memmove(out_namedm, buf->b_namedm, sizeof(fmark_T) * NMARKS);
-  *out_visual = buf->b_visual;
-}
-
-void nvim_undoredo_init_op_marks(buf_T *buf)
-{
-  buf->b_op_start.lnum = buf->b_ml.ml_line_count;
-  buf->b_op_start.col = 0;
-  buf->b_op_end.lnum = 0;
-  buf->b_op_end.col = 0;
-}
+// nvim_undoredo_save_marks, nvim_undoredo_restore_marks,
+// nvim_undoredo_swap_visual, nvim_undoredo_get_buf_marks,
+// nvim_undoredo_init_op_marks: migrated to Rust (Phase 1).
 
 linenr_T nvim_buf_get_op_start_lnum(buf_T *buf) { return buf->b_op_start.lnum; }
 
@@ -436,6 +383,14 @@ void nvim_buf_adjust_op_start_lnum(buf_T *buf, linenr_T delta) { buf->b_op_start
 void nvim_buf_set_op_end_lnum(buf_T *buf, linenr_T lnum) { buf->b_op_end.lnum = lnum; }
 
 void nvim_buf_adjust_op_end_lnum(buf_T *buf, linenr_T delta) { buf->b_op_end.lnum += delta; }
+
+void nvim_buf_set_op_start_col(buf_T *buf, colnr_T col) { buf->b_op_start.col = col; }
+
+void nvim_buf_set_op_end_col(buf_T *buf, colnr_T col) { buf->b_op_end.col = col; }
+
+fmark_T *nvim_buf_get_namedm_ptr(buf_T *buf) { return buf->b_namedm; }
+
+visualinfo_T *nvim_buf_get_b_visual_ptr(buf_T *buf) { return &buf->b_visual; }
 
 void nvim_undoredo_set_ml_empty(buf_T *buf, int old_flags)
 {
