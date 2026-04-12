@@ -251,28 +251,8 @@ void ui_client_run(bool remote_ui)
 
 // ui_client_stop: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
-void ui_client_set_size(int width, int height)
-{
-  // The currently known size will be sent when attaching
-  if (ui_client_attached) {
-    MAXSIZE_TEMP_ARRAY(args, 2);
-    ADD_C(args, INTEGER_OBJ((int)width));
-    ADD_C(args, INTEGER_OBJ((int)height));
-    rpc_send_event(ui_client_channel_id, "nvim_ui_try_resize", args);
-  }
-  tui_width = width;
-  tui_height = height;
-}
-
-UIClientHandler ui_client_get_redraw_handler(const char *name, size_t name_len, Error *error)
-{
-  int hash = ui_client_handler_hash(name, name_len);
-  if (hash < 0) {
-    return (UIClientHandler){ NULL, NULL };
-  }
-  return event_handlers[hash];
-}
-
+// ui_client_set_size: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
+// ui_client_get_redraw_handler: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 // handle_ui_client_redraw: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 static HlAttrs ui_client_dict2hlattrs(Dict d, bool rgb)
@@ -344,6 +324,39 @@ void nvim_uic_save_restart_args(Array args)
   api_free_array(restart_args);
   restart_args = copy_array(args, NULL);
   restart_pending = true;
+}
+
+// C accessor: get ui_client_attached global (used by Rust)
+bool nvim_uic_get_attached(void)
+{
+  return ui_client_attached;
+}
+
+// C accessor: set tui_width and tui_height (used by Rust)
+void nvim_uic_set_tui_size(int width, int height)
+{
+  tui_width = width;
+  tui_height = height;
+}
+
+// C accessor: send nvim_ui_try_resize RPC event (used by Rust)
+// Handles MAXSIZE_TEMP_ARRAY/ADD_C/INTEGER_OBJ macros which can't be used from Rust.
+void nvim_uic_send_resize(int width, int height)
+{
+  MAXSIZE_TEMP_ARRAY(args, 2);
+  ADD_C(args, INTEGER_OBJ((int)width));
+  ADD_C(args, INTEGER_OBJ((int)height));
+  rpc_send_event(ui_client_channel_id, "nvim_ui_try_resize", args);
+}
+
+// C accessor: look up redraw event handler by name hash (used by Rust)
+UIClientHandler nvim_uic_handler_hash_lookup(const char *name, size_t name_len)
+{
+  int hash = ui_client_handler_hash(name, name_len);
+  if (hash < 0) {
+    return (UIClientHandler){ NULL, NULL };
+  }
+  return event_handlers[hash];
 }
 
 // ui_client_event_restart: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)

@@ -38,11 +38,13 @@ EXTERN bool ui_client_forward_stdin INIT( = false);
 // Functions implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 void ui_client_detach(void);
 void ui_client_stop(void);
+void ui_client_set_size(int width, int height);
 void ui_client_event_grid_line(Array args) FUNC_ATTR_NORETURN;
 void ui_client_event_grid_resize(Array args);
 void ui_client_event_connect(Array args);
 void ui_client_event_restart(Array args);
 void ui_client_event_error_exit(Array args);
+UIClientHandler ui_client_get_redraw_handler(const char *name, size_t name_len, Error *error);
 Object handle_ui_client_redraw(uint64_t channel_id, Array args, Arena *arena, Error *error);
 
 // uncrustify:off

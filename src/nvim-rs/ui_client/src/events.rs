@@ -13,10 +13,20 @@ type Error = c_void;
 const K_OBJECT_TYPE_INTEGER: i32 = ObjectType::Integer as i32;
 const K_OBJECT_TYPE_STRING: i32 = ObjectType::String as i32;
 
+/// C-compatible `UIClientHandler` struct (mirrors `ui_defs.h`).
+#[repr(C)]
+pub struct UiClientHandler {
+    /// Event name (static string)
+    pub name: *const c_char,
+    /// Handler function pointer
+    pub fn_ptr: Option<unsafe extern "C" fn(args: Array)>,
+}
+
 // C accessors declared in ui_client.c
 extern "C" {
     fn nvim_uic_rpc_send_detach();
     fn nvim_uic_set_attached(value: bool);
+    fn nvim_uic_get_attached() -> bool;
     fn nvim_uic_tui_is_stopped() -> bool;
     fn nvim_uic_tui_stop();
     fn nvim_uic_api_set_error_validation(err: *mut Error, msg: *const c_char);
@@ -27,6 +37,9 @@ extern "C" {
     fn nvim_uic_grid_line_buf_realloc(new_size: usize);
     fn nvim_uic_get_grid_line_buf_size() -> usize;
     fn nvim_uic_save_restart_args(args: Array);
+    fn nvim_uic_send_resize(width: i32, height: i32);
+    fn nvim_uic_set_tui_size(width: i32, height: i32);
+    fn nvim_uic_handler_hash_lookup(name: *const c_char, name_len: usize) -> UiClientHandler;
 }
 
 // ============================================================================
@@ -179,4 +192,40 @@ pub unsafe extern "C" fn rs_ui_client_event_grid_resize(args: Array) {
             nvim_uic_grid_line_buf_realloc(width_usize);
         }
     }
+}
+
+// ============================================================================
+// Phase 3: Lifecycle functions
+// ============================================================================
+
+/// Send a resize RPC event and update local TUI size state.
+///
+/// Replaces C `ui_client_set_size`.
+///
+/// # Safety
+/// Must be called from C; accesses TUI state and RPC channel via C accessors.
+#[unsafe(export_name = "ui_client_set_size")]
+pub unsafe extern "C" fn rs_ui_client_set_size(width: i32, height: i32) {
+    unsafe {
+        if nvim_uic_get_attached() {
+            nvim_uic_send_resize(width, height);
+        }
+        nvim_uic_set_tui_size(width, height);
+    }
+}
+
+/// Look up a UI event handler by name.
+///
+/// Replaces C `ui_client_get_redraw_handler`.
+///
+/// # Safety
+/// `name` must be a valid pointer to a string of at least `name_len` bytes.
+/// `error` is unused (kept for ABI compatibility).
+#[unsafe(export_name = "ui_client_get_redraw_handler")]
+pub unsafe extern "C" fn rs_ui_client_get_redraw_handler(
+    name: *const c_char,
+    name_len: usize,
+    _error: *mut c_void,
+) -> UiClientHandler {
+    unsafe { nvim_uic_handler_hash_lookup(name, name_len) }
 }
