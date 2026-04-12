@@ -177,32 +177,41 @@ pub unsafe fn nvim_al_get_got_int() -> c_int {
 
 // =============================================================================
 // Phase 2: Extra Accessors
+// Phase 3: Many of these now use #[link_name] to call underlying C directly
 // =============================================================================
 
 extern "C" {
     pub fn nvim_al_emsg_arglist_locked();
+    #[link_name = "xfree"]
     pub fn nvim_al_xfree(ptr: *mut c_void);
+    #[link_name = "xmalloc"]
     pub fn nvim_al_xmalloc(size: usize) -> *mut c_void;
+    #[link_name = "xstrdup"]
     pub fn nvim_al_xstrdup(s: *const c_char) -> *mut c_char;
     pub fn nvim_al_deep_clear_aentry(al: AlistPtr);
     pub fn nvim_al_buflist_add(fname: *const c_char, flags: c_int) -> c_int;
     pub fn nvim_al_buf_set_name(fnum: c_int, name: *const c_char);
+    #[link_name = "os_breakcheck"]
     pub fn nvim_al_os_breakcheck();
     pub fn nvim_al_alloc_alist() -> AlistPtr;
     pub fn nvim_al_ga_init_charptr(ga: GarrayPtr);
     pub fn nvim_al_ga_append_charptr(ga: GarrayPtr, ptr: *mut c_char);
     pub fn nvim_al_alloc_garray() -> GarrayPtr;
+    #[link_name = "xfree"]
     pub fn nvim_al_free_garray(ga: GarrayPtr);
 }
 
 // =============================================================================
-// Phase 3: String Parsing Accessors
+// Phase 3: String Parsing Accessors (now direct via #[link_name])
 // =============================================================================
 
 extern "C" {
     pub fn nvim_al_rem_backslash(p: *const c_char) -> c_int;
+    #[link_name = "rs_ascii_isspace"]
     pub fn nvim_al_ascii_isspace(c: c_int) -> c_int;
+    #[link_name = "skipwhite"]
     pub fn nvim_al_skipwhite(p: *const c_char) -> *mut c_char;
+    #[link_name = "expand_wildcards"]
     pub fn nvim_al_expand_wildcards(
         num_pat: c_int,
         pat: *mut *mut c_char,
@@ -210,6 +219,7 @@ extern "C" {
         files: *mut *mut *mut c_char,
         flags: c_int,
     ) -> c_int;
+    #[link_name = "gen_expand_wildcards"]
     pub fn nvim_al_gen_expand_wildcards(
         num_pat: c_int,
         pat: *mut *mut c_char,

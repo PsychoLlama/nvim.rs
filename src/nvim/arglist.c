@@ -172,9 +172,9 @@ void nvim_al_win_set_locked(win_T *wp, int val) { wp->w_locked = val; }
 
 // -- Phase 2 extra accessors --
 void nvim_al_emsg_arglist_locked(void) { emsg(_(e_cannot_change_arglist_recursively)); }
-void nvim_al_xfree(void *ptr) { xfree(ptr); }
-void *nvim_al_xmalloc(size_t size) { return xmalloc(size); }
-char *nvim_al_xstrdup(const char *s) { return xstrdup(s); }
+// nvim_al_xfree deleted: ffi.rs uses #[link_name = "xfree"]
+// nvim_al_xmalloc deleted: ffi.rs uses #[link_name = "xmalloc"]
+// nvim_al_xstrdup deleted: ffi.rs uses #[link_name = "xstrdup"]
 void nvim_al_deep_clear_aentry(alist_T *al)
 {
 #define FREE_AENTRY_FNAME(arg) xfree((arg)->ae_fname)
@@ -183,24 +183,18 @@ void nvim_al_deep_clear_aentry(alist_T *al)
 }
 int nvim_al_buflist_add(const char *fname, int flags) { return buflist_add((char *)fname, flags); }
 void nvim_al_buf_set_name(int fnum, const char *name) { buf_set_name(fnum, (char *)name); }
-void nvim_al_os_breakcheck(void) { os_breakcheck(); }
+// nvim_al_os_breakcheck deleted: ffi.rs uses #[link_name = "os_breakcheck"]
 
 // -- Phase 3 extra accessors --
 int nvim_al_rem_backslash(const char *p) { return rem_backslash(p); }
-int nvim_al_ascii_isspace(int c) { return ascii_isspace(c); }
-char *nvim_al_skipwhite(const char *p) { return skipwhite(p); }
-int nvim_al_expand_wildcards(int num_pat, char **pat, int *num_files, char ***files, int flags)
-{
-  return expand_wildcards(num_pat, pat, num_files, files, flags);
-}
-int nvim_al_gen_expand_wildcards(int num_pat, char **pat, int *num_files, char ***files, int flags)
-{
-  return gen_expand_wildcards(num_pat, pat, num_files, files, flags);
-}
+// nvim_al_ascii_isspace deleted: ffi.rs uses #[link_name = "ascii_isspace"]
+// nvim_al_skipwhite deleted: ffi.rs uses #[link_name = "skipwhite"]
+// nvim_al_expand_wildcards deleted: ffi.rs uses #[link_name = "expand_wildcards"]
+// nvim_al_gen_expand_wildcards deleted: ffi.rs uses #[link_name = "gen_expand_wildcards"]
 void nvim_al_ga_init_charptr(garray_T *ga) { ga_init(ga, (int)sizeof(char *), 20); }
 void nvim_al_ga_append_charptr(garray_T *ga, char *ptr) { GA_APPEND(char *, ga, ptr); }
 garray_T *nvim_al_alloc_garray(void) { return xcalloc(1, sizeof(garray_T)); }
-void nvim_al_free_garray(garray_T *ga) { xfree(ga); }
+// nvim_al_free_garray deleted: ffi.rs uses #[link_name = "xfree"]
 
 alist_T *nvim_al_alloc_alist(void) { return xmalloc(sizeof(alist_T)); }
 
