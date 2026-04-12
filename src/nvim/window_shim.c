@@ -815,11 +815,6 @@ double nvim_wconfig_get_col(WinConfig *cfg) { return cfg ? cfg->col : 0.0; }
 int nvim_wconfig_get_window(WinConfig *cfg) { return cfg ? (int)cfg->window : 0; }
 int nvim_wconfig_get_external(WinConfig *cfg) { return (cfg && cfg->external) ? 1 : 0; }
 int nvim_wconfig_get_border(WinConfig *cfg) { return (cfg && cfg->border) ? 1 : 0; }
-int nvim_wconfig_get_border_hl_id(WinConfig *cfg, int i) { return (cfg && i >= 0 && i < 8) ? cfg->border_hl_ids[i] : 0; }
-// border_chars[2*i+1][0] -- the "side" char for border change detection
-int nvim_wconfig_get_border_side_char(WinConfig *cfg, int i) { return (cfg && i >= 0 && i < 4) ? (unsigned char)cfg->border_chars[2 * i + 1][0] : 0; }
-linenr_T nvim_wconfig_get_bufpos_lnum(WinConfig *cfg) { return cfg ? cfg->bufpos.lnum : -1; }
-int nvim_wconfig_get_bufpos_col(WinConfig *cfg) { return cfg ? (int)cfg->bufpos.col : 0; }
 void nvim_wconfig_set_relative(WinConfig *cfg, int val) { if (cfg) { cfg->relative = (FloatRelative)val; } }
 void nvim_wconfig_set_row(WinConfig *cfg, double val) { if (cfg) { cfg->row = val; } }
 void nvim_wconfig_set_col(WinConfig *cfg, double val) { if (cfg) { cfg->col = val; } }
@@ -904,7 +899,6 @@ void nvim_win_init_for_float(win_T *wp) { win_init(wp, curwin, 0); }
 // wp->w_p_wbr accessors
 int nvim_win_get_p_wbr_not_null(win_T *wp) { return (wp && wp->w_p_wbr) ? 1 : 0; }
 int nvim_win_p_wbr_is_empty_string_option(win_T *wp) { return (wp && wp->w_p_wbr == empty_string_option) ? 1 : 0; }
-void nvim_win_set_p_wbr_empty_string_option(win_T *wp) { if (wp) { wp->w_p_wbr = empty_string_option; } }
 void nvim_win_free_and_set_p_wbr_empty(win_T *wp)
 { if (!wp) { return; } if (wp->w_p_wbr && wp->w_p_wbr != empty_string_option) { free_string_option(wp->w_p_wbr); } wp->w_p_wbr = empty_string_option; }
 
