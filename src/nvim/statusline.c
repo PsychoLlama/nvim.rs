@@ -454,6 +454,7 @@ int nvim_stl_HL_ATTR(int hlf) { return HL_ATTR((hlf_T)hlf); }
 
 /// Build a UI msg_ruler content chunk and call ui_call_msg_ruler.
 /// Takes arrays of (attr, text, tsize, group) tuples.
+/// When count == 0, emits an empty array (clears the ruler).
 void nvim_stl_ui_call_msg_ruler_content(int *attrs, const char **texts, size_t *tsizes,
                                         int *groups, int count)
 {
@@ -489,8 +490,6 @@ void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_win
 
 
 
-/// Call ui_call_msg_ruler with empty array (to clear ruler).
-void nvim_stl_ui_call_msg_ruler_empty(void) { ui_call_msg_ruler((Array)ARRAY_DICT_INIT); }
 
 
 

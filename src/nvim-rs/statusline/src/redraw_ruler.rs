@@ -120,7 +120,6 @@ extern "C" {
     fn nvim_stl_msg_clr_eos();
 
     // UI events
-    fn nvim_stl_ui_call_msg_ruler_empty();
     fn nvim_stl_ui_call_msg_ruler_content(
         attrs: *const c_int,
         texts: *const *const c_char,
@@ -158,7 +157,13 @@ pub unsafe fn redraw_ruler() {
     if !ruler_enabled || status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has_messages) {
         let did_ruler_col = DID_RULER_COL.get();
         if did_ruler_col > 0 && ui_has_messages {
-            nvim_stl_ui_call_msg_ruler_empty();
+            nvim_stl_ui_call_msg_ruler_content(
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+            );
             DID_SHOW_EXT_RULER.set(false);
         } else if did_ruler_col > 0 {
             msg_col = did_ruler_col;
@@ -316,7 +321,13 @@ pub unsafe fn redraw_ruler() {
         DID_RULER_COL.set(1);
     } else {
         if DID_SHOW_EXT_RULER.get() {
-            nvim_stl_ui_call_msg_ruler_empty();
+            nvim_stl_ui_call_msg_ruler_content(
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+            );
             DID_SHOW_EXT_RULER.set(false);
         }
 
