@@ -145,7 +145,7 @@ extern "C" {
     fn nvim_set_Insstart_blank_vcol(val: c_int);
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_curwin_get_cursor_col() -> c_int;
-    fn nvim_get_mod_mask() -> c_int;
+    static mod_mask: c_int;
     fn nvim_has_mod_mask_ctrl() -> c_int;
 
     // -- Phase 4 dispatch accessors --
@@ -802,7 +802,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_W => {
-            if nvim_bt_prompt_curbuf() && (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 {
+            if nvim_bt_prompt_curbuf() && (mod_mask & MOD_MASK_SHIFT) == 0 {
                 stuffcharReadbuff(CTRL_W);
                 restart_edit = c_int::from(b'A');
                 (*s).nomove = true;
@@ -894,7 +894,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_LEFT => {
-            if nvim_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
+            if mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
                 ins_s_left();
             } else {
                 ins_left();
@@ -908,7 +908,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_RIGHT => {
-            if nvim_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
+            if mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
                 ins_s_right();
             } else {
                 ins_right();
@@ -924,7 +924,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         K_UP => {
             if pum_visible() {
                 rs_insert_do_complete(s);
-            } else if nvim_get_mod_mask() & MOD_MASK_SHIFT != 0 {
+            } else if mod_mask & MOD_MASK_SHIFT != 0 {
                 ins_pageup();
             } else {
                 ins_up(0);
@@ -944,7 +944,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         K_DOWN => {
             if pum_visible() {
                 rs_insert_do_complete(s);
-            } else if nvim_get_mod_mask() & MOD_MASK_SHIFT != 0 {
+            } else if mod_mask & MOD_MASK_SHIFT != 0 {
                 ins_pagedown();
             } else {
                 ins_down(0);
@@ -1082,7 +1082,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         nvim_set_cmdwin_result(CAR);
         return SwitchAction::Exit(0);
     }
-    if (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_bt_prompt_curbuf() {
+    if (mod_mask & MOD_MASK_SHIFT) == 0 && nvim_bt_prompt_curbuf() {
         prompt_invoke_callback();
         if !nvim_bt_prompt_curbuf() {
             return SwitchAction::Exit(0);

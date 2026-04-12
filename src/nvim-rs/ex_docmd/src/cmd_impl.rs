@@ -979,9 +979,8 @@ extern "C" {
     fn nvim_get_opcount() -> c_int;
     fn nvim_set_opcount(val: c_int);
     fn nvim_get_reg_executing() -> c_int;
-    fn nvim_set_reg_executing(val: c_int);
-    fn nvim_get_pending_end_reg_executing() -> c_int;
-    fn nvim_set_pending_end_reg_executing(val: c_int);
+    static mut reg_executing: c_int;
+    static mut pending_end_reg_executing: bool;
     fn nvim_get_force_restart_edit() -> c_int;
     fn nvim_set_force_restart_edit(val: c_int);
     // typeahead - kept as C wrappers since they call save_typeahead/restore_typeahead
@@ -1004,7 +1003,7 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     (*sst).save_finish_op = nvim_get_finish_op() != 0;
     (*sst).save_opcount = nvim_get_opcount();
     (*sst).save_reg_executing = nvim_get_reg_executing();
-    (*sst).save_pending_end_reg_executing = nvim_get_pending_end_reg_executing() != 0;
+    (*sst).save_pending_end_reg_executing = pending_end_reg_executing;
 
     msg_scroll = 0; // no msg scrolling in Normal mode
     crate::restart_edit = 0; // don't go to Insert mode
@@ -1030,8 +1029,8 @@ pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
     }
     nvim_set_finish_op((*sst).save_finish_op);
     nvim_set_opcount((*sst).save_opcount);
-    nvim_set_reg_executing((*sst).save_reg_executing);
-    nvim_set_pending_end_reg_executing(c_int::from((*sst).save_pending_end_reg_executing));
+    reg_executing = (*sst).save_reg_executing;
+    pending_end_reg_executing = (*sst).save_pending_end_reg_executing;
 
     // Don't reset msg_didout now; OR in the saved value.
     msg_didout = msg_didout || (*sst).save_msg_didout;

@@ -388,58 +388,35 @@ bool at_ins_compl_key(void);
 // inchar moved to Rust (typebuf.rs, Phase 5) as #[no_mangle] pub unsafe extern "C" fn inchar
 // map_execute_lua, paste_repeat migrated to Rust (Phase 3)
 
-int nvim_get_typebuf_change_cnt(void) { return typebuf.tb_change_cnt; }
-int nvim_get_typebuf_was_filled(void) { return typebuf_was_filled ? 1 : 0; }
-int nvim_get_typebuf_maplen(void) { return typebuf.tb_maplen; }
-int nvim_get_typebuf_len(void) { return typebuf.tb_len; }
+// nvim_get_typebuf_change_cnt/was_filled/maplen/len deleted: moved to Rust (typebuf.rs)
 // nvim_get_curscript, nvim_get_keynoremap deleted: curscript, KeyNoremap now non-static
 // nvim_get_rm_none, nvim_get_rm_script, nvim_get_maxmaplen deleted: Rust uses constants directly
 // nvim_get_typebuf_buf/noremap/buflen/off, nvim_set_typebuf_* deleted: Rust uses typebuf_ptr() directly (Phase 4)
 // nvim_get_typebuf_silent/no_abbr_cnt, nvim_init_typebuf deleted: Rust uses typebuf_ptr() directly (Phase 4)
 
 // nvim_get/set/add_last_recorded_len deleted: moved to Rust (macro_recording.rs)
-void nvim_set_keynoremap(int val) { KeyNoremap = val; }
-int nvim_get_no_mapping(void) { return no_mapping; }
-void nvim_set_no_mapping(int val) { no_mapping = val; }
-int nvim_get_allow_keys(void) { return allow_keys; }
-void nvim_set_allow_keys(int val) { allow_keys = val; }
-int nvim_get_mapped_ctrl_c(void) { return mapped_ctrl_c; }
-void nvim_set_mapped_ctrl_c(int val) { mapped_ctrl_c = val; }
+// nvim_set_keynoremap deleted: Rust uses static mut KeyNoremap directly
+// nvim_get/set_no_mapping deleted: Rust uses static mut no_mapping directly
+// nvim_get/set_allow_keys deleted: Rust uses static mut allow_keys directly
+// nvim_get/set_mapped_ctrl_c deleted: Rust uses static mut mapped_ctrl_c directly
 // nvim_get/set_keytyped deleted: no Rust callers (Phase 4)
-int nvim_get_keystuffed(void) { return KeyStuffed; }
-void nvim_set_keystuffed(int val) { KeyStuffed = val; }
-int nvim_get_vgetc_busy(void) { return vgetc_busy; }
+// nvim_get/set_keystuffed deleted: Rust uses static mut KeyStuffed directly
+// nvim_get_vgetc_busy deleted: Rust uses static vgetc_busy directly
 // nvim_inc/dec_vgetc_busy deleted: no callers (Phase 4)
-int nvim_get_ex_normal_busy(void) { return ex_normal_busy; }
+// nvim_get_ex_normal_busy deleted: Rust uses static ex_normal_busy directly
 // nvim_get_maptick, nvim_inc_maptick deleted: no callers (Phase 4)
-int nvim_get_mod_mask(void) { return mod_mask; }
-void nvim_set_mod_mask(int val) { mod_mask = val; }
-int nvim_get_cmd_silent(void) { return cmd_silent ? 1 : 0; }
-void nvim_set_cmd_silent(int val) { cmd_silent = val != 0; }
-int nvim_get_mouse_grid(void) { return mouse_grid; }
-void nvim_set_mouse_grid(int val) { mouse_grid = val; }
-int nvim_get_mouse_row(void) { return mouse_row; }
-void nvim_set_mouse_row(int val) { mouse_row = val; }
-int nvim_get_mouse_col(void) { return mouse_col; }
-void nvim_set_mouse_col(int val) { mouse_col = val; }
+// nvim_get/set_mod_mask deleted: Rust uses static mut mod_mask directly
+// nvim_get/set_cmd_silent deleted: Rust uses static mut cmd_silent directly
+// nvim_get/set_mouse_grid/row/col deleted: Rust uses static mut mouse_* directly
 int nvim_char_avail(void) { return char_avail() ? 1 : 0; }
-void nvim_set_reg_executing(int val) { reg_executing = val; }
-int nvim_get_pending_end_reg_executing(void) { return pending_end_reg_executing ? 1 : 0; }
-void nvim_set_pending_end_reg_executing(int val) { pending_end_reg_executing = val != 0; }
+// nvim_set_reg_executing deleted: Rust uses static mut reg_executing directly
+// nvim_get/set_pending_end_reg_executing deleted: Rust uses static mut directly
 // nvim_mb_byte2len_check deleted: no Rust callers
 void nvim_state_no_longer_safe(void) { state_no_longer_safe("rs_ins_typebuf()"); }
-int nvim_get_key_stuffed(void) { return KeyStuffed ? 1 : 0; }
+// nvim_get_key_stuffed deleted: duplicate of nvim_get_keystuffed
 // nvim_get/set_typeahead_char deleted: typeahead_char now non-static
 // nvim_get/set_old_keystuffed deleted: moved to Rust (input.rs)
 
-void nvim_set_visual_from_cursor(void)
-{
-  VIsual = curwin->w_cursor;
-  VIsual_active = true;
-  VIsual_select = false;
-  VIsual_reselect = true;
-  redo_VIsual_busy = true;
-}
-
+// nvim_set_visual_from_cursor deleted: moved to Rust (stuff.rs)
 // nvim_map_execute_lua_discard, nvim_paste_repeat_discard deleted:
 // Rust calls map_execute_lua/paste_repeat directly

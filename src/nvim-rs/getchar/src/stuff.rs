@@ -892,7 +892,31 @@ pub unsafe extern "C" fn rs_start_redo_ins() -> c_int {
 extern "C" {
     /// cmd_silent: don't echo the command line
     static mut cmd_silent: bool;
-    fn nvim_set_visual_from_cursor();
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+    fn nvim_get_curwin_cursor_col() -> c_int;
+    fn nvim_get_curwin_cursor_coladd() -> c_int;
+    fn nvim_set_VIsual_pos(lnum: c_int, col: c_int, coladd: c_int);
+    static mut VIsual_active: bool;
+    static mut VIsual_select: bool;
+    static mut VIsual_reselect: bool;
+    fn nvim_set_redo_VIsual_busy(val: bool);
+}
+
+/// Set VIsual to the current cursor position and activate visual mode.
+/// Replaces C `nvim_set_visual_from_cursor` shim.
+///
+/// # Safety
+/// Accesses C globals directly.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_set_visual_from_cursor() {
+    let lnum = nvim_get_curwin_cursor_lnum();
+    let col = nvim_get_curwin_cursor_col();
+    let coladd = nvim_get_curwin_cursor_coladd();
+    nvim_set_VIsual_pos(lnum, col, coladd);
+    VIsual_active = true;
+    VIsual_select = false;
+    VIsual_reselect = true;
+    nvim_set_redo_VIsual_busy(true);
 }
 
 // Note: rs_to_special and rs_is_special are already exported from input.rs

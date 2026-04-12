@@ -53,7 +53,7 @@ extern "C" {
     fn correct_screencol(idx: c_int, cells: c_int, col: *mut c_int);
     fn draw_cmdline(start: c_int, len: c_int);
     fn msg_clr_eos();
-    fn nvim_get_cmd_silent() -> c_int;
+    static cmd_silent: bool;
     static mut cmdline_row: c_int;
 
     // Globals
@@ -954,7 +954,7 @@ const K_CMD_REDRAW_ALL: c_int = 2;
 /// Calls C functions to access ccline state and UI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_putcmdline(c: c_int, shift: bool) {
-    if nvim_get_cmd_silent() != 0 {
+    if cmd_silent {
         return;
     }
     if ui_has(K_UI_CMDLINE) == 0 {
@@ -985,7 +985,7 @@ pub unsafe extern "C" fn rs_putcmdline(c: c_int, shift: bool) {
 /// Calls C functions to access ccline state and UI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_unputcmdline() {
-    if nvim_get_cmd_silent() != 0 {
+    if cmd_silent {
         return;
     }
     nvim_set_msg_no_more(1);
@@ -1249,7 +1249,7 @@ pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, r
 
     let cur_pos = nvim_get_ccline_cmdpos();
 
-    if redraw && nvim_get_cmd_silent() == 0 {
+    if redraw && !cmd_silent {
         nvim_set_msg_no_more(1);
         let old_row = cmdline_row;
         cursorcmd();

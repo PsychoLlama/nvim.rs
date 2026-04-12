@@ -237,7 +237,7 @@ pub unsafe extern "C" fn rs_msg_dec_lines_left() -> c_int {
 
 extern "C" {
     static mut no_wait_return: c_int;
-    fn nvim_get_vgetc_busy() -> c_int;
+    static vgetc_busy: c_int;
 }
 
 /// Get the no_wait_return counter.
@@ -282,7 +282,6 @@ pub unsafe extern "C" fn rs_no_wait_return_leave() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_wait_return_blocked() -> c_int {
-    let vgetc_busy = nvim_get_vgetc_busy();
     c_int::from(msg_silent != 0 || vgetc_busy > 0 || no_wait_return > 0)
 }
 

@@ -80,11 +80,10 @@ unsafe extern "C" {
     fn nvim_cmdline_redraw_statuslines();
     fn nvim_get_exmode_active() -> c_int;
 
-    // rs_redrawcmdprompt, rs_cmd_startcol, nvim_get_cmd_silent
+    // rs_redrawcmdprompt, rs_cmd_startcol
     fn rs_redrawcmdprompt();
     fn rs_cmd_startcol() -> c_int;
     fn nvim_set_ccline_cmdspos(spos: c_int);
-    fn nvim_get_cmd_silent() -> c_int;
 
     // Autocmds
     fn nvim_cmdline_fire_enter_full(firstcbuf: *const c_char, level: c_int) -> c_int;
@@ -138,7 +137,7 @@ unsafe extern "C" {
     // msg_col / msg_silent — direct static access (Phase 2)
     static mut msg_col: c_int;
     static mut msg_silent: c_int;
-    fn nvim_set_cmd_silent(val: c_int);
+    static mut cmd_silent: bool;
 
     // ccline field setters for prompt (Phase 2)
     fn nvim_set_ccline_cmdprompt(prompt: *mut c_char);
@@ -276,7 +275,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     nvim_set_redir_off(1);
 
     // Draw prompt if not silent
-    if nvim_get_cmd_silent() == 0 {
+    if !cmd_silent {
         nvim_gotocmdline();
         rs_redrawcmdprompt();
         nvim_set_ccline_cmdspos(rs_cmd_startcol());
@@ -318,7 +317,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     }
 
     // Redraw statuslines if not silent/not exmode
-    if nvim_get_cmd_silent() == 0 && nvim_get_exmode_active() == 0 {
+    if !cmd_silent && nvim_get_exmode_active() == 0 {
         nvim_cmdline_redraw_statuslines();
     }
 
@@ -566,10 +565,10 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     // Apply pending highlight callback (set by C getcmdline_prompt before calling us).
     nvim_apply_pending_hl_callback();
 
-    let cmd_silent_saved = nvim_get_cmd_silent();
+    let cmd_silent_saved = cmd_silent;
     let msg_silent_saved = msg_silent;
     msg_silent = 0;
-    nvim_set_cmd_silent(0); // Want to see the prompt
+    cmd_silent = false; // Want to see the prompt
 
     // Call command_line_enter with clear_ccline=false (0)
     let ret = rs_command_line_enter(firstc, 1, 0, 0);
@@ -581,7 +580,7 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     }
 
     msg_silent = msg_silent_saved;
-    nvim_set_cmd_silent(cmd_silent_saved);
+    cmd_silent = cmd_silent_saved;
 
     // Restore msg_col only if we're in a recursive cmdline
     if !nvim_get_ccline_cmdbuff().is_null() {

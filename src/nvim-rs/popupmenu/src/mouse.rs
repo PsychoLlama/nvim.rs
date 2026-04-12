@@ -152,8 +152,8 @@ pub struct PumMousePlacement {
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub extern "C" fn rs_pum_calc_mouse_placement(
-    mouse_row: c_int,
-    mouse_col: c_int,
+    mrow: c_int,
+    mcol: c_int,
     pum_size: c_int,
     pum_height: c_int,
     base_width: c_int,
@@ -170,17 +170,17 @@ pub extern "C" fn rs_pum_calc_mouse_placement(
     let above;
 
     // Vertical placement
-    if max_row - mouse_row > pum_size || max_row - mouse_row > mouse_row - min_row {
+    if max_row - mrow > pum_size || max_row - mrow > mrow - min_row {
         // Enough space below, or more space below than above
         above = 0;
-        row = mouse_row + 1;
+        row = mrow + 1;
         if height > max_row - row {
             height = max_row - row;
         }
     } else {
         // Show above mouse row
         above = 1;
-        let mut r = mouse_row - pum_size;
+        let mut r = mrow - pum_size;
         if r < min_row {
             height += r - min_row;
             r = min_row;
@@ -198,18 +198,18 @@ pub extern "C" fn rs_pum_calc_mouse_placement(
     };
 
     if is_rl {
-        if mouse_col - min_col + 1 >= base_width || mouse_col - min_col + 1 > min_width {
+        if mcol - min_col + 1 >= base_width || mcol - min_col + 1 > min_width {
             // Enough space at mouse column
-            col = mouse_col;
+            col = mcol;
         } else {
             // Left align with window
             col = min_col + effective_min_width.min(min_width) - 1;
         }
         width = (col - min_col + 1).min(base_width + 1);
     } else {
-        if max_col - mouse_col >= base_width || max_col - mouse_col > min_width {
+        if max_col - mcol >= base_width || max_col - mcol > min_width {
             // Enough space at mouse column
-            col = mouse_col;
+            col = mcol;
         } else {
             // Right align with window
             col = max_col - effective_min_width.min(min_width);
@@ -325,14 +325,14 @@ extern "C" {
     static mut pum_grid: crate::ScreenGrid;
 }
 
-// C accessor functions for mouse globals and selection.
+// C mouse globals and accessor functions.
 extern "C" {
-    /// Get `mouse_grid`.
-    fn nvim_get_mouse_grid() -> c_int;
-    /// Get `mouse_row`.
-    fn nvim_get_mouse_row() -> c_int;
-    /// Get `mouse_col`.
-    fn nvim_get_mouse_col() -> c_int;
+    /// `mouse_grid` global.
+    static mouse_grid: c_int;
+    /// `mouse_row` global.
+    static mouse_row: c_int;
+    /// `mouse_col` global.
+    static mouse_col: c_int;
     /// Find window from outer grid coords, returning adjusted grid/row/col.
     fn nvim_pum_mouse_find_win_outer(grid: c_int, row: c_int, col: c_int) -> PumMouseFindResult;
 }
@@ -380,9 +380,9 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
     let min_col = 0;
     let mut max_row = Rows;
     let mut max_col = Columns;
-    let mut grid = nvim_get_mouse_grid();
-    let mut row = nvim_get_mouse_row();
-    let mut col = nvim_get_mouse_col();
+    let mut grid = mouse_grid;
+    let mut row = mouse_row;
+    let mut col = mouse_col;
     PUM_STATE.win_row_offset = 0;
     PUM_STATE.win_col_offset = 0;
 
@@ -489,9 +489,9 @@ const fn max(a: c_int, b: c_int) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
-    let mut grid = nvim_get_mouse_grid();
-    let mut row = nvim_get_mouse_row();
-    let mut col = nvim_get_mouse_col();
+    let mut grid = mouse_grid;
+    let mut row = mouse_row;
+    let mut col = mouse_col;
 
     if grid == 0 {
         let result = nvim_pum_mouse_find_win_outer(grid, row, col);

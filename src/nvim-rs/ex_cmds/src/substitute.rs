@@ -1157,7 +1157,7 @@ extern "C" {
     fn nvim_set_highlight_match(val: c_int);
     fn nvim_set_search_match_lines(val: c_int);
     fn nvim_set_search_match_endcol(val: c_int);
-    fn nvim_get_ex_normal_busy() -> c_int;
+    static ex_normal_busy: c_int;
     static mut exmode_active: bool;
     static mut need_wait_return: bool;
     fn nvim_get_sandbox() -> c_int;
@@ -2310,7 +2310,7 @@ unsafe fn handle_do_ask(
             typed = nvim_do_sub_getcmdline_prompt(prompt);
             libc_free(prompt);
 
-            if nvim_get_ex_normal_busy() != 0 && typed == 0 {
+            if ex_normal_busy != 0 && typed == 0 {
                 typed = b'q' as c_int;
             }
         } else {

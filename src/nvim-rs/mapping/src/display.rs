@@ -69,9 +69,8 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
 
-    // Global mapped_ctrl_c accessors
-    fn nvim_get_mapped_ctrl_c() -> c_int;
-    fn nvim_set_mapped_ctrl_c(val: c_int);
+    // Global mapped_ctrl_c
+    static mut mapped_ctrl_c: c_int;
     fn nvim_mapping_buf_get_mapped_ctrl_c(buf: BufHandle) -> c_int;
     fn nvim_mapping_buf_set_mapped_ctrl_c(buf: BufHandle, val: c_int);
 
@@ -275,8 +274,7 @@ pub unsafe extern "C" fn rs_map_add(
             let cur = nvim_mapping_buf_get_mapped_ctrl_c(buf);
             nvim_mapping_buf_set_mapped_ctrl_c(buf, cur | mode);
         } else {
-            let cur = nvim_get_mapped_ctrl_c();
-            nvim_set_mapped_ctrl_c(cur | mode);
+            mapped_ctrl_c |= mode;
         }
     }
 

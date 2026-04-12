@@ -231,8 +231,8 @@ extern "C" {
 
     // --- Mouse globals ---
 
-    /// Get `mouse_col` global.
-    fn nvim_get_mouse_col() -> c_int;
+    /// `mouse_col` global.
+    static mouse_col: c_int;
 
     // --- Tabpage operations ---
 
@@ -541,9 +541,9 @@ pub const MOD_MASK_ALT: c_int = 0x08;
 ///
 /// Returns 0 if the click count doesn't correspond to a selection mode change.
 #[no_mangle]
-pub const extern "C" fn rs_compute_selection_mode(mod_mask: c_int) -> c_int {
-    let multi_click = mod_mask & MOD_MASK_MULTI_CLICK;
-    let alt_pressed = (mod_mask & MOD_MASK_ALT) != 0;
+pub const extern "C" fn rs_compute_selection_mode(mmask: c_int) -> c_int {
+    let multi_click = mmask & MOD_MASK_MULTI_CLICK;
+    let alt_pressed = (mmask & MOD_MASK_ALT) != 0;
 
     match multi_click {
         MOD_MASK_2CLICK => {
@@ -561,8 +561,8 @@ pub const extern "C" fn rs_compute_selection_mode(mod_mask: c_int) -> c_int {
 
 /// Get the click count from a modifier mask (1, 2, 3, or 4).
 #[no_mangle]
-pub const extern "C" fn rs_get_click_count(mod_mask: c_int) -> c_int {
-    let multi_click = mod_mask & MOD_MASK_MULTI_CLICK;
+pub const extern "C" fn rs_get_click_count(mmask: c_int) -> c_int {
+    let multi_click = mmask & MOD_MASK_MULTI_CLICK;
 
     match multi_click {
         MOD_MASK_4CLICK => 4,
@@ -574,14 +574,14 @@ pub const extern "C" fn rs_get_click_count(mod_mask: c_int) -> c_int {
 
 /// Check if this is a multi-click (double, triple, or quadruple click).
 #[no_mangle]
-pub const extern "C" fn rs_is_multi_click(mod_mask: c_int) -> bool {
-    (mod_mask & MOD_MASK_MULTI_CLICK) != 0
+pub const extern "C" fn rs_is_multi_click(mmask: c_int) -> bool {
+    (mmask & MOD_MASK_MULTI_CLICK) != 0
 }
 
 /// Check if this is specifically a double-click.
 #[no_mangle]
-pub const extern "C" fn rs_is_double_click(mod_mask: c_int) -> bool {
-    (mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK
+pub const extern "C" fn rs_is_double_click(mmask: c_int) -> bool {
+    (mmask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK
 }
 
 // =============================================================================
@@ -694,7 +694,7 @@ pub unsafe extern "C" fn rs_reset_dragwin() {
 /// Requires valid `tab_page_click_defs` array and valid `mouse_col`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_move_tab_to_mouse() {
-    let tabnr = nvim_mouse_get_tab_click_tabnr(nvim_get_mouse_col());
+    let tabnr = nvim_mouse_get_tab_click_tabnr(mouse_col);
     if tabnr <= 0 {
         tabpage_move(9999);
     } else if tabnr < rs_tabpage_index(nvim_get_curtab()) {
@@ -1312,11 +1312,11 @@ pub unsafe extern "C" fn rs_mouse_find_win_outer(
 // =============================================================================
 
 extern "C" {
-    /// Get `mouse_grid` global.
-    fn nvim_get_mouse_grid() -> c_int;
+    /// `mouse_grid` global.
+    static mouse_grid: c_int;
 
-    /// Get `mouse_row` global.
-    fn nvim_get_mouse_row() -> c_int;
+    /// `mouse_row` global.
+    static mouse_row: c_int;
 
     /// Get `w_p_stc` field (statuscolumn option string).
     fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
@@ -1386,8 +1386,8 @@ extern "C" {
     /// Set `w_redr_status` field.
     fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
 
-    /// Get `mod_mask` global.
-    fn nvim_get_mod_mask() -> c_int;
+    /// `mod_mask` global.
+    static mod_mask: c_int;
 
     /// Get `State` global.
     fn nvim_get_state() -> c_int;
@@ -1633,9 +1633,9 @@ const DEFAULT_GRID_HANDLE: c_int = 1;
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_mouse_check_grid(vcolp: *mut colnr_T, flagsp: *mut c_int) {
-    let mut click_grid = nvim_get_mouse_grid();
-    let mut click_row = nvim_get_mouse_row();
-    let mut click_col = nvim_get_mouse_col();
+    let mut click_grid = mouse_grid;
+    let mut click_row = mouse_row;
+    let mut click_col = mouse_col;
 
     let curwin = nvim_get_curwin();
 
@@ -1702,13 +1702,13 @@ pub unsafe extern "C" fn rs_mouse_check_grid(vcolp: *mut colnr_T, flagsp: *mut c
 /// `mpos` must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
-    let row = nvim_get_mouse_row();
-    let col = nvim_get_mouse_col();
+    let row = mouse_row;
+    let col = mouse_col;
     if row < 0 || col < 0 {
         return IN_UNKNOWN;
     }
 
-    let mut grid = nvim_get_mouse_grid();
+    let mut grid = mouse_grid;
     let mut frow = row;
     let mut fcol = col;
     let wp = rs_mouse_find_win_inner(
@@ -1749,7 +1749,7 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
 
     if winrow >= view_height + status_height {
         // Below window — check for global status line
-        let mouse_grid_val = nvim_get_mouse_grid();
+        let mouse_grid_val = mouse_grid;
         let rows = Rows;
         #[allow(clippy::cast_possible_truncation)]
         let p_ch_int = p_ch as c_int;
@@ -1933,9 +1933,9 @@ const BACKWARD_DIR: c_int = 0; // pagescroll BACKWARD is 0 in C
 #[export_name = "do_mousescroll"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
-    let mod_mask = nvim_get_mod_mask();
+    let mm = mod_mask;
     // MOD_MASK_SHIFT = 0x02, MOD_MASK_CTRL = 0x04
-    let shift_or_ctrl = (mod_mask & (0x02 | 0x04)) != 0;
+    let shift_or_ctrl = (mm & (0x02 | 0x04)) != 0;
     let cap_arg = (*cap.cast::<CmdargT>()).arg;
     let curwin = nvim_get_curwin();
 
@@ -1983,14 +1983,14 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
 pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
     let old_curwin = nvim_get_curwin();
 
-    let mouse_row = nvim_get_mouse_row();
-    let mouse_col = nvim_get_mouse_col();
-    if mouse_row >= 0 && mouse_col >= 0 {
+    let mr = mouse_row;
+    let mc = mouse_col;
+    if mr >= 0 && mc >= 0 {
         // Find the window at the mouse pointer coordinates.
         // NOTE: Must restore curwin to old_curwin before returning!
-        let mut grid = nvim_get_mouse_grid();
-        let mut row = mouse_row;
-        let mut col = mouse_col;
+        let mut grid = mouse_grid;
+        let mut row = mr;
+        let mut col = mc;
         let wp = rs_mouse_find_win_inner(
             std::ptr::addr_of_mut!(grid),
             std::ptr::addr_of_mut!(row),
@@ -2059,14 +2059,14 @@ pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
     };
 
     let old_curwin = nvim_get_curwin();
-    let mouse_row = nvim_get_mouse_row();
-    let mouse_col_val = nvim_get_mouse_col();
-    if mouse_row >= 0 && mouse_col_val >= 0 {
+    let mr = mouse_row;
+    let mc = mouse_col;
+    if mr >= 0 && mc >= 0 {
         // Find the window at the mouse pointer coordinates.
         // NOTE: Must restore curwin to old_curwin before returning!
-        let mut grid = nvim_get_mouse_grid();
-        let mut row = mouse_row;
-        let mut col = mouse_col_val;
+        let mut grid = mouse_grid;
+        let mut row = mr;
+        let mut col = mc;
         let wp = rs_mouse_find_win_inner(
             std::ptr::addr_of_mut!(grid),
             std::ptr::addr_of_mut!(row),
@@ -2184,9 +2184,9 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
     inclusive: *mut bool,
     which_button: c_int,
 ) -> c_int {
-    let mut row = nvim_get_mouse_row();
-    let mut col = nvim_get_mouse_col();
-    let mut grid = nvim_get_mouse_grid();
+    let mut row = mouse_row;
+    let mut col = mouse_col;
+    let mut grid = mouse_grid;
     #[allow(unused_assignments)]
     let mut fdc: c_int = 0;
     let keep_focus = (flags & MOUSE_FOCUS) != 0;
@@ -2204,15 +2204,12 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
         DID_DRAG = 0;
     }
 
-    if (flags & MOUSE_DID_MOVE) != 0
-        && PREV_ROW == nvim_get_mouse_row()
-        && PREV_COL == nvim_get_mouse_col()
-    {
+    if (flags & MOUSE_DID_MOVE) != 0 && PREV_ROW == mouse_row && PREV_COL == mouse_col {
         return retnomove(flags);
     }
 
-    PREV_ROW = nvim_get_mouse_row();
-    PREV_COL = nvim_get_mouse_col();
+    PREV_ROW = mouse_row;
+    PREV_COL = mouse_col;
 
     if (flags & MOUSE_SETPOS) != 0 {
         return retnomove(flags);
@@ -2266,9 +2263,9 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
     }
 
     if keep_focus {
-        row = nvim_get_mouse_row();
-        col = nvim_get_mouse_col();
-        grid = nvim_get_mouse_grid();
+        row = mouse_row;
+        col = mouse_col;
+        grid = mouse_grid;
     }
 
     let curwin = nvim_get_curwin();
@@ -2638,11 +2635,11 @@ pub unsafe extern "C" fn rs_f_getmousepos(
     rettv: *mut std::ffi::c_void,
     _fptr: *mut std::ffi::c_void,
 ) {
-    let mouse_row = nvim_get_mouse_row();
-    let mouse_col = nvim_get_mouse_col();
-    let mut grid = nvim_get_mouse_grid();
-    let mut row = mouse_row;
-    let mut col = mouse_col;
+    let mr = mouse_row;
+    let mc = mouse_col;
+    let mut grid = mouse_grid;
+    let mut row = mr;
+    let mut col = mc;
     let mut winid: i64 = 0;
     let mut winrow: i64 = 0;
     let mut wincol: i64 = 0;
@@ -2784,10 +2781,10 @@ pub unsafe extern "C" fn rs_call_click_def_func(
     col: c_int,
     which_button: c_int,
 ) {
-    let mod_mask = nvim_get_mod_mask();
+    let mm = mod_mask;
 
     // Click count from multi-click mask bits.
-    let click_count = rs_get_click_count(mod_mask);
+    let click_count = rs_get_click_count(mm);
 
     // Button string: single char for l/r/m, two chars for x1/x2.
     let button_str: &[u8] = match which_button {

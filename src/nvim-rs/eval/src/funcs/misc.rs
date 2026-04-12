@@ -13,7 +13,7 @@ use super::dispatch::{rettv_set_number, TypevalPtrMut};
 
 extern "C" {
     static mut got_int: bool;
-    fn nvim_get_vgetc_busy() -> c_int;
+    static vgetc_busy: c_int;
     fn nvim_curbuf_get_did_filetype() -> c_int;
     fn nvim_curbuf_get_u_seq_cur() -> c_int;
     fn nvim_get_reg_executing() -> c_int;
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn rs_f_eventhandler(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_get_vgetc_busy()));
+    rettv_set_number(rettv, i64::from(vgetc_busy));
 }
 
 /// "did_filetype()" function - returns true if FileType autocommand was fired

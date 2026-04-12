@@ -38,9 +38,6 @@ extern "C" {
     /// restore_old_char_state: restore state after consuming old_char
     fn rs_restore_old_char_state();
 
-    /// Get typebuf.tb_len
-    fn nvim_get_typebuf_len() -> c_int;
-
     /// no_mapping: currently no mapping allowed
     static mut no_mapping: c_int;
     /// allow_keys: allow key codes when no_mapping is set
@@ -453,7 +450,7 @@ pub unsafe extern "C" fn rs_vpeekc() -> c_int {
 #[export_name = "vpeekc_any"]
 pub unsafe extern "C" fn rs_vpeekc_any() -> c_int {
     let c = rs_vpeekc();
-    if c == NUL && nvim_get_typebuf_len() > 0 {
+    if c == NUL && crate::typebuf::get_tb_len() > 0 {
         return ESC;
     }
     c

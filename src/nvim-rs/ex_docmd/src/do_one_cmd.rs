@@ -58,9 +58,8 @@ extern "C" {
 
     // reg_executing / pending_end_reg_executing
     fn nvim_get_reg_executing() -> c_int;
-    fn nvim_set_reg_executing(val: c_int);
-    fn nvim_get_pending_end_reg_executing() -> c_int;
-    fn nvim_set_pending_end_reg_executing(val: c_int);
+    static mut reg_executing: c_int;
+    static mut pending_end_reg_executing: bool;
 
     // quitmore
     fn nvim_docmd_get_quitmore() -> c_int;
@@ -357,7 +356,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Save register execution state.
     let save_reg_executing = nvim_get_reg_executing();
-    let save_pending_end_reg_executing = nvim_get_pending_end_reg_executing();
+    let save_pending_end_reg_executing = pending_end_reg_executing;
 
     // Allocate exarg_T on the heap (line1=1, line2=1).
     let eap = crate::ExArg::alloc();
@@ -1068,7 +1067,7 @@ unsafe fn do_one_cmd_doend(
     flags: c_int,
     save_cmdmod: *mut c_void,
     save_reg_executing: c_int,
-    save_pending_end_reg_executing: c_int,
+    save_pending_end_reg_executing: bool,
     _cmdlinep: *mut *mut c_char,
 ) {
     // Fix cursor lnum if zero (can happen with zero line number).
@@ -1082,8 +1081,8 @@ unsafe fn do_one_cmd_doend(
     nvim_docmd_restore_cmdmod(save_cmdmod);
 
     // Restore register execution state.
-    nvim_set_reg_executing(save_reg_executing);
-    nvim_set_pending_end_reg_executing(save_pending_end_reg_executing);
+    reg_executing = save_reg_executing;
+    pending_end_reg_executing = save_pending_end_reg_executing;
 }
 
 extern "C" {

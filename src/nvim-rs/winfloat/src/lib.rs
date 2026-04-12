@@ -525,9 +525,9 @@ extern "C" {
     fn nvim_win_set_w_height(wp: WinHandle, val: c_int);
     fn nvim_win_set_border_adj(wp: WinHandle, i: c_int, val: c_int);
     fn nvim_win_set_redr_status_from_status_height(wp: WinHandle);
-    fn nvim_get_mouse_row() -> c_int;
-    fn nvim_get_mouse_col() -> c_int;
-    fn nvim_get_mouse_grid() -> c_int;
+    static mouse_row: c_int;
+    static mouse_col: c_int;
+    static mouse_grid: c_int;
     fn nvim_wf_mouse_find_win_inner(
         gridp: *mut c_int,
         rowp: *mut c_int,
@@ -1166,9 +1166,9 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
         nvim_wconfig_set_col(fconfig, old_col + f64::from(cur_wcol));
         nvim_wconfig_set_window(fconfig, nvim_get_curwin_handle());
     } else if rel == K_FLOAT_RELATIVE_MOUSE {
-        let mut row = nvim_get_mouse_row();
-        let mut col = nvim_get_mouse_col();
-        let mut grid = nvim_get_mouse_grid();
+        let mut row = mouse_row;
+        let mut col = mouse_col;
+        let mut grid = mouse_grid;
         let mouse_win = nvim_wf_mouse_find_win_inner(
             std::ptr::addr_of_mut!(grid),
             std::ptr::addr_of_mut!(row),

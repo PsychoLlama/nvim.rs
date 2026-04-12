@@ -27,12 +27,6 @@ pub mod typebuf;
 use std::ffi::c_int;
 
 extern "C" {
-    /// Get `typebuf.tb_change_cnt`
-    fn nvim_get_typebuf_change_cnt() -> c_int;
-    /// Get `typebuf_was_filled`
-    fn nvim_get_typebuf_was_filled() -> c_int;
-    /// Get `typebuf.tb_maplen`
-    fn nvim_get_typebuf_maplen() -> c_int;
     /// curscript: index in scriptin (non-static in C after Phase 3)
     static curscript: c_int;
     /// KeyNoremap: remapping flags (non-static in C after Phase 3)
@@ -100,63 +94,63 @@ pub unsafe extern "C" fn rs_typebuf_changed(tb_change_cnt: c_int) -> c_int {
     if tb_change_cnt == 0 {
         return 0;
     }
-    let current_cnt = nvim_get_typebuf_change_cnt();
-    let was_filled = nvim_get_typebuf_was_filled();
-    c_int::from(current_cnt != tb_change_cnt || was_filled != 0)
+    let current_cnt = typebuf::get_tb_change_cnt();
+    let was_filled = typebuf::get_typebuf_was_filled();
+    c_int::from(current_cnt != tb_change_cnt || was_filled)
 }
 
 /// `typebuf_changed(int tb_change_cnt)` -> bool: Phase 1 export replacing C wrapper
 ///
 /// # Safety
-/// Calls C accessor functions for `typebuf`.
+/// Accesses `typebuf` C global directly.
 #[must_use]
 #[export_name = "typebuf_changed"]
 pub unsafe extern "C" fn typebuf_changed_export(tb_change_cnt: c_int) -> bool {
     if tb_change_cnt == 0 {
         return false;
     }
-    let current_cnt = nvim_get_typebuf_change_cnt();
-    let was_filled = nvim_get_typebuf_was_filled();
-    current_cnt != tb_change_cnt || was_filled != 0
+    let current_cnt = typebuf::get_tb_change_cnt();
+    let was_filled = typebuf::get_typebuf_was_filled();
+    current_cnt != tb_change_cnt || was_filled
 }
 
 /// Return true if there are no characters in the typeahead buffer that have
 /// not been typed (result from a mapping or come from `:normal`).
 ///
 /// # Safety
-/// Calls C accessor function for `typebuf.tb_maplen`.
+/// Accesses `typebuf` C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_typed() -> c_int {
-    c_int::from(nvim_get_typebuf_maplen() == 0)
+    c_int::from(typebuf::get_tb_maplen() == 0)
 }
 
 /// `typebuf_typed(void)` -- Phase 1 export replacing C wrapper
 ///
 /// # Safety
-/// Calls C accessor function for `typebuf.tb_maplen`.
+/// Accesses `typebuf` C global directly.
 #[must_use]
 #[export_name = "typebuf_typed"]
 pub unsafe extern "C" fn typebuf_typed_export() -> c_int {
-    c_int::from(nvim_get_typebuf_maplen() == 0)
+    c_int::from(typebuf::get_tb_maplen() == 0)
 }
 
 /// Get the number of characters that are mapped (or not typed).
 ///
 /// # Safety
-/// Calls C accessor function for `typebuf.tb_maplen`.
+/// Accesses `typebuf` C global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_maplen() -> c_int {
-    nvim_get_typebuf_maplen()
+    typebuf::get_tb_maplen()
 }
 
 /// `typebuf_maplen(void)` -- Phase 1 export replacing C wrapper
 ///
 /// # Safety
-/// Calls C accessor function for `typebuf.tb_maplen`.
+/// Accesses `typebuf` C global directly.
 #[must_use]
 #[export_name = "typebuf_maplen"]
 pub unsafe extern "C" fn typebuf_maplen_export() -> c_int {
-    nvim_get_typebuf_maplen()
+    typebuf::get_tb_maplen()
 }
 
 /// Return true when reading keys from a script file.

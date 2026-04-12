@@ -14,7 +14,7 @@ use crate::char_search_state;
 
 extern "C" {
     fn nvim_cap_get_nchar_composing_ptr(cap: *const c_void) -> *const c_char;
-    fn nvim_get_keystuffed() -> c_int;
+    static KeyStuffed: c_int;
     fn nvim_get_cursor_line_ptr() -> *const c_char;
     fn nvim_get_cursor_line_len() -> c_int;
     fn nvim_get_curwin_cursor_col() -> c_int;
@@ -521,7 +521,7 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
 
     if c != 0 {
         // Normal search: remember args for repeat
-        if nvim_get_keystuffed() == 0 {
+        if KeyStuffed == 0 {
             // Don't remember when redoing
             let nchar_len = (*cap.cast::<CmdargT>()).nchar_len;
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(cap);

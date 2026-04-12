@@ -346,16 +346,12 @@ extern "C" {
 extern "C" {
     /// Check if UI has a capability.
     fn ui_has(what: c_int) -> bool;
-    /// Set `mouse_grid`.
-    fn nvim_set_mouse_grid(val: c_int);
-    /// Get `mouse_row`.
-    fn nvim_get_mouse_row() -> c_int;
-    /// Set `mouse_row`.
-    fn nvim_set_mouse_row(val: c_int);
-    /// Get `mouse_col`.
-    fn nvim_get_mouse_col() -> c_int;
-    /// Set `mouse_col`.
-    fn nvim_set_mouse_col(val: c_int);
+    /// `mouse_grid` global.
+    static mut mouse_grid: c_int;
+    /// `mouse_row` global.
+    static mut mouse_row: c_int;
+    /// `mouse_col` global.
+    static mut mouse_col: c_int;
     /// Target window geometry accessor.
     fn nvim_pum_get_target_win_geometry(wp: *mut crate::display::WinHandle)
         -> PumTargetWinGeometry;
@@ -605,22 +601,20 @@ pub unsafe extern "C" fn rs_pum_make_popup(
         let cw = nvim_pum_get_target_win_geometry(curwin);
         let p_rl = cw.p_rl != 0;
 
-        nvim_set_mouse_row(cw.row_offset + cw.wrow);
-        nvim_set_mouse_col(
-            cw.col_offset
-                + if p_rl {
-                    cw.view_width - cw.wcol - 1
-                } else {
-                    cw.wcol
-                },
-        );
+        mouse_row = cw.row_offset + cw.wrow;
+        mouse_col = cw.col_offset
+            + if p_rl {
+                cw.view_width - cw.wcol - 1
+            } else {
+                cw.wcol
+            };
 
         if ui_has(K_UI_MULTIGRID) {
-            nvim_set_mouse_grid(cw.grid_target_handle);
+            mouse_grid = cw.grid_target_handle;
         } else if cw.grid_target_is_default == 0 {
-            nvim_set_mouse_grid(0);
-            nvim_set_mouse_row(nvim_get_mouse_row() + cw.winrow);
-            nvim_set_mouse_col(nvim_get_mouse_col() + cw.wincol);
+            mouse_grid = 0;
+            mouse_row += cw.winrow;
+            mouse_col += cw.wincol;
         }
     }
 

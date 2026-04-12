@@ -1073,10 +1073,10 @@ unsafe extern "C" {
     static p_wmnu: c_int;
     fn nvim_get_key_typed_cmdline() -> c_int;
     static mut cmdmsg_rl: bool;
-    fn nvim_get_key_stuffed() -> c_int;
-    fn nvim_get_cmd_silent() -> c_int;
+    static KeyStuffed: c_int;
+    static cmd_silent: bool;
     fn nvim_get_global_busy() -> bool;
-    fn nvim_get_ex_normal_busy() -> c_int;
+    static ex_normal_busy: c_int;
     static mut exmode_active: bool;
     fn nvim_get_cedit_key() -> c_int;
     fn nvim_open_cmdwin() -> c_int;
@@ -1370,7 +1370,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     if nvim_get_key_typed_cmdline() != 0 {
         nvim_cls_set_some_key_typed(s, 1);
 
-        if cmdmsg_rl && nvim_get_key_stuffed() == 0 {
+        if cmdmsg_rl && KeyStuffed == 0 {
             // Invert horizontal movements and operations. Only when typed by user
             // directly, not when the result of a mapping.
             let c_curr = nvim_cls_get_c(s);
@@ -1532,7 +1532,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         let c_check = nvim_cls_get_c(s);
         let cedit_key = nvim_get_cedit_key();
         if c_check == cedit_key || c_check == K_CMDWIN {
-            if (c_check == K_CMDWIN || nvim_get_ex_normal_busy() == 0) && !unsafe { got_int } {
+            if (c_check == K_CMDWIN || ex_normal_busy == 0) && !unsafe { got_int } {
                 let c_new = nvim_open_cmdwin();
                 nvim_cls_set_c(s, c_new);
                 nvim_cls_set_some_key_typed(s, 1);
@@ -1573,7 +1573,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 if crate::edit::rs_ccheck_abbr(nvim_cls_get_c(s) + 0x100) != 0 {
                     return nvim_command_line_changed(s);
                 }
-                if nvim_get_cmd_silent() == 0 {
+                if !cmd_silent {
                     if ui_has(K_UI_CMDLINE) == 0 {
                         msg_cursor_goto(msg_row, 0);
                     }
@@ -1696,6 +1696,7 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
                   // cause the command not to be executed.
 
     if stuff_empty() != 0 && nvim_get_typebuf_len() == 0 {
+        // typebuf_len accessor kept
         // There is no pending input from sources other than user input, so
         // Vim is going to wait for the user to type a key.  Consider the
         // command line typed even if next key will trigger a mapping.

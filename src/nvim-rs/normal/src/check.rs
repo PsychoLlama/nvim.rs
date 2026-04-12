@@ -53,7 +53,7 @@ extern "C" {
 extern "C" {
     // Global accessors
     static did_throw: bool;
-    fn nvim_get_ex_normal_busy() -> c_int;
+    static ex_normal_busy: c_int;
 
     static mut exmode_active: bool;
     static mut msg_scroll: c_int;
@@ -526,7 +526,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
     // At the toplevel there is no exception handling. Discard any that
     // may be hanging around (e.g. from "interrupt" at the debug prompt).
-    if did_throw && nvim_get_ex_normal_busy() == 0 {
+    if did_throw && ex_normal_busy == 0 {
         discard_current_exception();
     }
 

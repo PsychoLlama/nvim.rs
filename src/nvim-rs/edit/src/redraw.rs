@@ -24,7 +24,7 @@ extern "C" {
 
     // --- edit() entry point dependencies ---
     fn nvim_curbuf_has_terminal() -> bool;
-    fn nvim_get_ex_normal_busy() -> c_int;
+    static ex_normal_busy: c_int;
     fn rs_terminal_enter() -> bool;
     fn nvim_get_sandbox() -> c_int;
     fn nvim_emsg_sandbox();
@@ -158,7 +158,7 @@ const CTRL_O: c_int = 15;
 pub unsafe extern "C" fn rs_edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
     // Terminal buffer: delegate to terminal_enter() or queue restart_edit.
     if nvim_curbuf_has_terminal() {
-        if nvim_get_ex_normal_busy() != 0 {
+        if ex_normal_busy != 0 {
             // Do not enter terminal mode from ex_normal() -- it would cause
             // havoc (terminal-mode recursiveness). Set restart_edit instead.
             nvim_set_restart_edit(c_int::from(b'i'));

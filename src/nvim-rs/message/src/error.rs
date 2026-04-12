@@ -478,7 +478,7 @@ extern "C" {
     fn estack_sfile(which: c_int) -> *mut std::ffi::c_char;
     fn gettext(s: *const std::ffi::c_char) -> *const std::ffi::c_char;
     static mut ex_exitval: c_int;
-    fn nvim_set_cmd_silent(val: c_int);
+    static mut cmd_silent: bool;
     fn nvim_inc_global_busy();
     static mut p_eb: c_int;
     #[link_name = "beep_flush"]
@@ -609,7 +609,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
 
         // Reset msg_silent, an error causes messages to be switched back on.
         msg_silent = 0;
-        nvim_set_cmd_silent(0);
+        cmd_silent = false;
 
         if nvim_get_global_busy() != 0 {
             // break :global command

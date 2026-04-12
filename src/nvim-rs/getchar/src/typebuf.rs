@@ -708,6 +708,82 @@ pub unsafe extern "C" fn rs_typebuf_was_changed(old_change_cnt: c_int) -> c_int 
     c_int::from(current != old_change_cnt || was_filled)
 }
 
+/// Get `typebuf.tb_change_cnt`.
+///
+/// # Safety
+/// Reads C global `typebuf`.
+#[must_use]
+#[inline]
+pub unsafe fn get_tb_change_cnt() -> c_int {
+    typebuf.tb_change_cnt
+}
+
+/// C-exported `nvim_get_typebuf_change_cnt` replacement.
+///
+/// # Safety
+/// Reads C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_typebuf_change_cnt() -> c_int {
+    typebuf.tb_change_cnt
+}
+
+/// C-exported `nvim_get_typebuf_was_filled` replacement.
+///
+/// # Safety
+/// Reads C global `typebuf_was_filled`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_typebuf_was_filled() -> c_int {
+    c_int::from(typebuf_was_filled)
+}
+
+/// C-exported `nvim_get_typebuf_maplen` replacement.
+///
+/// # Safety
+/// Reads C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_typebuf_maplen() -> c_int {
+    typebuf.tb_maplen
+}
+
+/// C-exported `nvim_get_typebuf_len` replacement.
+///
+/// # Safety
+/// Reads C global `typebuf`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_typebuf_len() -> c_int {
+    typebuf.tb_len
+}
+
+/// Get `typebuf_was_filled`.
+///
+/// # Safety
+/// Reads C global `typebuf_was_filled`.
+#[must_use]
+#[inline]
+pub unsafe fn get_typebuf_was_filled() -> bool {
+    typebuf_was_filled
+}
+
+/// Get `typebuf.tb_maplen`.
+///
+/// # Safety
+/// Reads C global `typebuf`.
+#[must_use]
+#[inline]
+pub unsafe fn get_tb_maplen() -> c_int {
+    typebuf.tb_maplen
+}
+
+/// Get `typebuf.tb_len`.
+///
+/// # Safety
+/// Reads C global `typebuf`.
+#[must_use]
+#[inline]
+pub unsafe fn get_tb_len() -> c_int {
+    typebuf.tb_len
+}
+
 /// Increment the typeahead buffer change counter.
 ///
 /// # Safety

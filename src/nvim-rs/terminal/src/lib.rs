@@ -1232,8 +1232,7 @@ extern "C" {
     fn nvim_set_state(s: c_int);
     fn nvim_get_RedrawingDisabled() -> c_int;
     fn nvim_set_RedrawingDisabled(v: c_int);
-    fn nvim_get_mapped_ctrl_c() -> c_int;
-    fn nvim_set_mapped_ctrl_c(v: c_int);
+    static mut mapped_ctrl_c: c_int;
     fn nvim_get_stop_insert_mode() -> c_int;
     fn nvim_set_stop_insert_mode(v: c_int);
     fn nvim_get_restart_edit() -> c_int;
@@ -1265,7 +1264,6 @@ extern "C" {
     fn nvim_curbuf_update_changedtick();
     fn nvim_curbuf_last_changedtick_i() -> c_int;
     fn nvim_state_enter_c(state: *mut c_void);
-    fn nvim_get_mod_mask() -> c_int;
     fn nvim_merge_modifiers_c(key: c_int, tmp_mod_mask: *mut c_int) -> c_int;
     fn nvim_paste_repeat_c();
     fn state_handle_k_event();
@@ -1276,9 +1274,9 @@ extern "C" {
     fn nvim_terminal_check_cursor_c();
     fn nvim_curwin_handle() -> c_int;
     // Mouse event accessors (Phase 3)
-    fn nvim_get_mouse_row() -> c_int;
-    fn nvim_get_mouse_col() -> c_int;
-    fn nvim_get_mouse_grid() -> c_int;
+    static mouse_row: c_int;
+    static mouse_col: c_int;
+    static mouse_grid: c_int;
     fn nvim_mouse_find_win_inner(grid: *mut c_int, row: *mut c_int, col: *mut c_int)
         -> *mut c_void;
     #[link_name = "win_col_off"]
@@ -1302,6 +1300,7 @@ extern "C" {
     fn nvim_terminal_opts_is_internal(term: *mut c_void) -> c_int;
     fn nvim_terminal_call_close_cb(term: *mut c_void);
     fn nvim_terminal_apply_termclose_event(buf: *mut c_void, status: c_int);
+    static mut mod_mask: c_int;
 }
 
 /// Write input data to a terminal's `VTerm` instance.
@@ -2466,9 +2465,9 @@ pub extern "C" fn rs_terminal_convert_mouse_button(key: c_int) -> MouseButtonRes
 /// `term` must be a valid `Terminal *` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_send_mouse_event(term: TerminalHandle, c: c_int) -> c_int {
-    let mut row = unsafe { nvim_get_mouse_row() };
-    let mut col = unsafe { nvim_get_mouse_col() };
-    let mut grid = unsafe { nvim_get_mouse_grid() };
+    let mut row = unsafe { mouse_row };
+    let mut col = unsafe { mouse_col };
+    let mut grid = unsafe { mouse_grid };
     let mouse_win = unsafe { nvim_mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col) };
 
     if !mouse_win.is_null() {
@@ -2895,11 +2894,6 @@ pub unsafe extern "C" fn rs_terminal_refresh_size(term: TerminalHandle, _buf: *m
 const K_ZERO: c_int = termcap2key(255, b'X' as c_int);
 // Ctrl-@ = ASCII NUL (0)
 const CTRL_AT: c_int = 0;
-
-extern "C" {
-    /// Current key modifier mask (from `globals.h`).
-    static mod_mask: c_int;
-}
 
 /// Send a key to a terminal, handling special key codes.
 ///
@@ -4542,7 +4536,7 @@ pub unsafe extern "C" fn rs_terminal_execute(state: *mut c_void, key: c_int) -> 
     }
     let s = unsafe { &mut *state.cast::<TerminalStateRust>() };
 
-    let mut tmp_mod_mask = unsafe { nvim_get_mod_mask() };
+    let mut tmp_mod_mask = unsafe { mod_mask };
     let mod_key = unsafe { nvim_merge_modifiers_c(key, &raw mut tmp_mod_mask) };
 
     // Mouse events
@@ -4781,7 +4775,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     s.save_rd = unsafe { nvim_get_RedrawingDisabled() };
     unsafe { nvim_set_state(MODE_TERMINAL) };
     // Always map CTRL-C to avoid interrupt.
-    unsafe { nvim_set_mapped_ctrl_c(nvim_get_mapped_ctrl_c() | MODE_TERMINAL) };
+    unsafe { mapped_ctrl_c |= MODE_TERMINAL };
     unsafe { nvim_set_RedrawingDisabled(0) };
     unsafe { nvim_set_stop_insert_mode(0) };
 

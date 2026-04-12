@@ -48,8 +48,7 @@ extern "C" {
     fn nlua_set_sctx(ctx: *mut crate::SctxT);
     fn nvim_dbg_get_sourcing_lnum() -> i64;
     fn nvim_mapping_set_no_abbr(val: c_int);
-    fn nvim_get_mapped_ctrl_c() -> c_int;
-    fn nvim_set_mapped_ctrl_c(val: c_int);
+    static mut mapped_ctrl_c: c_int;
     fn nvim_mapping_buf_get_mapped_ctrl_c(buf: BufHandle) -> c_int;
     fn nvim_mapping_buf_set_mapped_ctrl_c(buf: BufHandle, val: c_int);
 
@@ -514,8 +513,7 @@ pub unsafe extern "C" fn rs_buf_do_map(
                     let cur = nvim_mapping_buf_get_mapped_ctrl_c(buf);
                     nvim_mapping_buf_set_mapped_ctrl_c(buf, cur & !mode);
                 } else {
-                    let cur = nvim_get_mapped_ctrl_c();
-                    nvim_set_mapped_ctrl_c(cur & !mode);
+                    mapped_ctrl_c &= !mode;
                 }
             }
             continue;

@@ -659,13 +659,11 @@ unsafe extern "C" {
     fn nvim_set_key_typed(val: c_int);
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
-    fn nvim_get_no_mapping() -> c_int;
-    fn nvim_set_no_mapping(val: c_int);
-    fn nvim_get_allow_keys() -> c_int;
-    fn nvim_set_allow_keys(val: c_int);
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
     static mut emsg_on_display: bool;
     static mut exmode_active: bool;
-    fn nvim_get_cmd_silent() -> c_int;
+    static cmd_silent: bool;
     fn nvim_set_redraw_cmdline(val: bool);
     fn ui_has(what: c_int) -> c_int;
     static mut msg_col: c_int;
@@ -697,12 +695,12 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
     c_ptr: *mut c_int,
     gotesc_ptr: *mut bool,
 ) -> c_int {
-    nvim_set_no_mapping(nvim_get_no_mapping() + 1);
-    nvim_set_allow_keys(nvim_get_allow_keys() + 1);
+    no_mapping += 1;
+    allow_keys += 1;
     let c = plain_vgetc();
     *c_ptr = c;
-    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
-    nvim_set_allow_keys(nvim_get_allow_keys() - 1);
+    no_mapping -= 1;
+    allow_keys -= 1;
 
     // CTRL-\ e doesn't work when obtaining an expression, unless it is in a mapping.
     if c != CTRL_N
@@ -784,8 +782,8 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
     let save_new_cmdpos = nvim_get_new_cmdpos();
 
     crate::edit::rs_putcmdline(b'"' as c_int, true);
-    nvim_set_no_mapping(nvim_get_no_mapping() + 1);
-    nvim_set_allow_keys(nvim_get_allow_keys() + 1);
+    no_mapping += 1;
+    allow_keys += 1;
     let mut i = plain_vgetc(); // CTRL-R <char>
     *c_ptr = i;
     if i == CTRL_O {
@@ -794,8 +792,8 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
     if i == CTRL_R {
         *c_ptr = plain_vgetc(); // CTRL-R CTRL-R <char>
     }
-    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
-    nvim_set_allow_keys(nvim_get_allow_keys() - 1);
+    no_mapping -= 1;
+    allow_keys -= 1;
 
     // Insert the result of an expression.
     nvim_set_new_cmdpos(-1);
@@ -910,7 +908,7 @@ pub unsafe extern "C" fn rs_command_line_erase_chars(
 
         dealloc_cmdbuff(); // no commandline to return
 
-        if nvim_get_cmd_silent() == 0 && ui_has(K_UI_CMDLINE) == 0 {
+        if !cmd_silent && ui_has(K_UI_CMDLINE) == 0 {
             msg_col = 0;
             msg_putchar(b' ' as c_int); // delete ':'
         }
@@ -1038,12 +1036,11 @@ unsafe extern "C" {
     fn nvim_get_ccline_special_shift() -> c_int;
     fn nvim_set_ccline_overstrike(val: c_int);
     fn nvim_get_ccline_overstrike() -> c_int;
-    fn nvim_get_mod_mask() -> c_int;
-    fn nvim_set_mod_mask(val: c_int);
+    static mut mod_mask: c_int;
     static mut IObuff: [c_char; 1025];
-    fn nvim_get_mouse_row() -> c_int;
+    static mouse_row: c_int;
     static mut cmdline_row: c_int;
-    fn nvim_get_ex_normal_busy() -> c_int;
+    static ex_normal_busy: c_int;
     fn nvim_get_getln_interrupted_highlight() -> c_int;
     fn nvim_set_getln_interrupted_highlight(val: c_int);
     fn nvim_get_typebuf_len() -> c_int;
@@ -1161,7 +1158,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         // ESC / CTRL-C: cancel command line
         x if x == ESC || x == CTRL_C => {
             let exmode = exmode_active;
-            let ex_normal = nvim_get_ex_normal_busy();
+            let ex_normal = ex_normal_busy;
             let typebuf_len = nvim_get_typebuf_len();
             let getln_interrupted = nvim_get_getln_interrupted_highlight();
 
@@ -1231,12 +1228,12 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
                 let adv = utfc_ptr2len(cmdbuff.add(cmdpos as usize));
                 nvim_set_ccline_cmdpos(cmdpos + adv);
                 let c_curr = nvim_cls_get_c(s);
-                let mod_mask = nvim_get_mod_mask();
+                let mm = mod_mask;
                 let cmdbuff = nvim_get_ccline_cmdbuff();
                 let cmdpos = nvim_get_ccline_cmdpos();
                 if !((c_curr == K_S_RIGHT
                     || c_curr == K_C_RIGHT
-                    || (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) != 0)
+                    || (mm & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) != 0)
                     && *cmdbuff.add(cmdpos as usize) != b' ' as c_char)
                 {
                     break;
@@ -1265,12 +1262,12 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
                 nvim_set_ccline_cmdspos(cmdspos - cells);
 
                 let c_curr = nvim_cls_get_c(s);
-                let mod_mask = nvim_get_mod_mask();
+                let mm = mod_mask;
                 let cmdpos = nvim_get_ccline_cmdpos();
                 if !(cmdpos > 0
                     && (c_curr == K_S_LEFT
                         || c_curr == K_C_LEFT
-                        || (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) != 0)
+                        || (mm & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) != 0)
                     && *cmdbuff.add(cmdpos as usize - 1) != b' ' as c_char)
                 {
                     break;
@@ -1322,8 +1319,8 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         x if x == K_LEFTMOUSE => {
             let mouse_used = nvim_cls_get_ccline_mouse_used();
             if mouse_used != 0 {
-                let mouse_row = nvim_get_mouse_row();
-                if mouse_row < cmdline_row {
+                let mr = mouse_row;
+                if mr < cmdline_row {
                     nvim_cls_set_ccline_mouse_used_val(1);
                     return 0;
                 }
@@ -1504,14 +1501,14 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             nvim_cls_set_ignore_drag_release(s, 1);
             crate::edit::rs_putcmdline(b'^' as c_int, true);
 
-            let mod_mask = nvim_get_mod_mask();
-            let c_new = get_literal((mod_mask & MOD_MASK_SHIFT) != 0);
+            let mm = mod_mask;
+            let c_new = get_literal((mm & MOD_MASK_SHIFT) != 0);
             nvim_cls_set_c(s, c_new);
             nvim_cls_set_do_abbr(s, 0);
             nvim_set_ccline_special_char(NUL);
 
             let c_curr = nvim_cls_get_c(s);
-            if nvim_utf_iscomposing_first(c_curr) != 0 && nvim_get_cmd_silent() == 0 {
+            if nvim_utf_iscomposing_first(c_curr) != 0 && !cmd_silent {
                 if ui_has(K_UI_CMDLINE_MAIN) != 0 {
                     crate::edit::rs_unputcmdline();
                 } else {
@@ -1563,7 +1560,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
 
         // Open command window
         k if k == get_cedit_key() || k == K_CMDWIN => {
-            let ex_normal = nvim_get_ex_normal_busy();
+            let ex_normal = ex_normal_busy;
             if (c == K_CMDWIN || ex_normal == 0) && nvim_get_ccline_cmdfirstc() != b'@' as c_int {
                 nvim_open_cmdwin();
                 // K_IGNORE after command window means nothing changed
@@ -1585,7 +1582,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
         _ => {
             let c_curr = nvim_cls_get_c(s);
             if !is_special_key(c_curr) {
-                nvim_set_mod_mask(0);
+                mod_mask = 0;
             }
             // break: fall through to end
         }
@@ -1612,9 +1609,9 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
 /// Put the character in the command line (the "end:" goto target in C).
 #[inline]
 unsafe fn handle_key_end(s: *mut c_void, c: c_int) -> c_int {
-    let mod_mask = nvim_get_mod_mask();
-    if is_special_key(c) || mod_mask != 0 {
-        let key_name = nvim_get_special_key_name(c, mod_mask);
+    let mm = mod_mask;
+    if is_special_key(c) || mm != 0 {
+        let key_name = nvim_get_special_key_name(c, mm);
         crate::edit::put_on_cmdline_rs(key_name, -1, true);
     } else {
         let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();

@@ -296,14 +296,10 @@ extern "C" {
     static mut msg_scrolled: c_int;
     static mut msg_row: c_int;
     static mut cmdline_row: c_int;
-    fn nvim_get_mod_mask() -> c_int;
-    fn nvim_set_mod_mask(val: c_int);
-    fn nvim_get_no_mapping() -> c_int;
-    fn nvim_set_no_mapping(val: c_int);
-    fn nvim_get_allow_keys() -> c_int;
-    fn nvim_set_allow_keys(val: c_int);
-    fn nvim_get_mapped_ctrl_c() -> c_int;
-    fn nvim_set_mapped_ctrl_c(val: c_int);
+    static mut mod_mask: c_int;
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
+    static mut mapped_ctrl_c: c_int;
     fn ui_has(ext: c_int) -> bool;
     static mut keep_msg: *mut c_char;
     static mut keep_msg_hl_id: c_int;
@@ -383,15 +379,15 @@ unsafe fn prompt_for_input_impl(
     ui_flush();
 
     // Don't map prompt input
-    nvim_set_no_mapping(nvim_get_no_mapping() + 1);
+    no_mapping += 1;
     // Allow special keys
-    nvim_set_allow_keys(nvim_get_allow_keys() + 1);
+    allow_keys += 1;
 
     let resp =
         nvim_getcmdline_prompt_simple(-1, prompt, hl_id, EXPAND_NOTHING, one_key, mouse_used);
 
-    nvim_set_allow_keys(nvim_get_allow_keys() - 1);
-    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
+    allow_keys -= 1;
+    no_mapping -= 1;
 
     if !resp.is_null() {
         if one_key {
@@ -455,10 +451,10 @@ pub unsafe extern "C" fn rs_get_keystroke(events: *mut c_void) -> c_int {
     let mut buflen: usize = 150;
     let mut buf: Vec<u8> = Vec::with_capacity(buflen);
     let mut len: usize = 0;
-    let save_mapped_ctrl_c = nvim_get_mapped_ctrl_c();
+    let save_mapped_ctrl_c = mapped_ctrl_c;
 
-    nvim_set_mod_mask(0);
-    nvim_set_mapped_ctrl_c(0); // mappings are not used here
+    mod_mask = 0;
+    mapped_ctrl_c = 0; // mappings are not used here
 
     let n;
     loop {
@@ -511,7 +507,7 @@ pub unsafe extern "C" fn rs_get_keystroke(events: *mut c_void) -> c_int {
                 || (is_mouse_key(code) && code != K_LEFTMOUSE)
             {
                 if buf[1] == KS_MODIFIER {
-                    nvim_set_mod_mask(buf[2] as c_int);
+                    mod_mask = buf[2] as c_int;
                 }
                 if len >= 3 {
                     len -= 3;
@@ -534,11 +530,8 @@ pub unsafe extern "C" fn rs_get_keystroke(events: *mut c_void) -> c_int {
         break;
     }
 
-    nvim_set_mapped_ctrl_c(save_mapped_ctrl_c);
-    let mut mod_mask = nvim_get_mod_mask();
-    let result = merge_modifiers(n, &mut mod_mask);
-    nvim_set_mod_mask(mod_mask);
-    result
+    mapped_ctrl_c = save_mapped_ctrl_c;
+    merge_modifiers(n, &raw mut mod_mask)
 }
 
 /// Exported wrapper for prompt_for_input (called from C).

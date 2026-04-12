@@ -22,10 +22,8 @@ extern "C" {
     // Global state accessors
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
-    fn nvim_get_no_mapping() -> c_int;
-    fn nvim_set_no_mapping(val: c_int);
-    fn nvim_get_allow_keys() -> c_int;
-    fn nvim_set_allow_keys(val: c_int);
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
     static mut VIsual_active: bool;
     fn nvim_set_VIsual_active(val: bool);
     static mut VIsual_reselect: bool;
@@ -65,13 +63,13 @@ fn set_finish_op_impl(val: bool) {
 /// Check if no_mapping is set.
 #[inline]
 fn is_no_mapping_impl() -> bool {
-    unsafe { nvim_get_no_mapping() != 0 }
+    unsafe { no_mapping != 0 }
 }
 
 /// Set no_mapping flag.
 #[inline]
 fn set_no_mapping_impl(val: bool) {
-    unsafe { nvim_set_no_mapping(c_int::from(val)) };
+    unsafe { no_mapping = c_int::from(val) };
 }
 
 // =============================================================================
@@ -81,13 +79,13 @@ fn set_no_mapping_impl(val: bool) {
 /// Check if allow_keys is set.
 #[inline]
 fn is_allow_keys_impl() -> bool {
-    unsafe { nvim_get_allow_keys() != 0 }
+    unsafe { allow_keys != 0 }
 }
 
 /// Set allow_keys flag.
 #[inline]
 fn set_allow_keys_impl(val: bool) {
-    unsafe { nvim_set_allow_keys(c_int::from(val)) };
+    unsafe { allow_keys = c_int::from(val) };
 }
 
 // =============================================================================

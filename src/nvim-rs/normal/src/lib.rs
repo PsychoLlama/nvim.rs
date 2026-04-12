@@ -164,7 +164,7 @@ extern "C" {
     fn AppendNumberToRedobuff(n: c_int);
 
     // Modifier and scrolling functions
-    fn nvim_get_mod_mask() -> c_int;
+    static mut mod_mask: c_int;
     fn goto_tabpage(n: c_int);
     fn pagescroll(dir: c_int, count: c_int, half: bool);
     fn nvim_get_VIsual_select() -> bool;
@@ -1030,7 +1030,7 @@ pub unsafe extern "C" fn rs_nv_page(cap: CapHandle) {
     let count0 = (*cap).count0;
     let count1 = (*cap).count1;
 
-    if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+    if (mod_mask & MOD_MASK_CTRL) != 0 {
         // <C-PageUp>: tab page back; <C-PageDown>: tab page forward
         if arg == BACKWARD {
             goto_tabpage(-count1);
@@ -1216,7 +1216,7 @@ pub unsafe extern "C" fn rs_nv_dollar(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_end(cap: CapHandle) {
     let arg = (*cap).arg;
 
-    if arg != 0 || (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+    if arg != 0 || (mod_mask & MOD_MASK_CTRL) != 0 {
         // CTRL-END = goto last line
         (*cap).arg = 1;
         rs_nv_goto(cap);
@@ -1232,7 +1232,7 @@ pub unsafe extern "C" fn rs_nv_end(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_home(cap: CapHandle) {
     // CTRL-HOME is like "gg"
-    if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+    if (mod_mask & MOD_MASK_CTRL) != 0 {
         rs_nv_goto(cap);
     } else {
         (*cap).count0 = 1;
@@ -1746,7 +1746,7 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
         return;
     }
 
-    if cmdchar == TAB_CHAR && nvim_get_mod_mask() == MOD_MASK_CTRL_VALUE {
+    if cmdchar == TAB_CHAR && mod_mask == MOD_MASK_CTRL_VALUE {
         if !goto_tabpage_lastused() {
             rs_clearopbeep(oap);
         }
@@ -2254,7 +2254,7 @@ extern "C" {
     fn nvim_clear_b_syn_slow_all_windows();
     fn buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: c_int);
     // Phase 4 accessors
-    fn nvim_get_ex_normal_busy() -> c_int;
+    static ex_normal_busy: c_int;
     fn vim_beep(flags: u32);
     fn nvim_get_curbuf_terminal() -> bool;
     fn anyBufIsChanged() -> bool;
@@ -2439,7 +2439,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
             } // don't stop executing autocommands et al.
             return;
         }
-    } else if cmdwin_type != 0 && nvim_get_ex_normal_busy() != 0 && typebuf_was_empty {
+    } else if cmdwin_type != 0 && ex_normal_busy != 0 && typebuf_was_empty {
         // When :normal runs out of characters while in the command line window
         // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
         // break the loop.
@@ -5333,8 +5333,8 @@ const CA_NO_ADJ_OP_END_P1: c_int = 2;
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
     // <C-Right> and <S-Right> move a word or WORD right
-    if (nvim_get_mod_mask() & (MOD_MASK_SHIFT_P1 | MOD_MASK_CTRL)) != 0 {
-        if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+    if (mod_mask & (MOD_MASK_SHIFT_P1 | MOD_MASK_CTRL)) != 0 {
+        if (mod_mask & MOD_MASK_CTRL) != 0 {
             (*cap).arg = 1;
         }
         rs_nv_wordcmd(cap);
@@ -5437,8 +5437,8 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
     // <C-Left> and <S-Left> move a word or WORD left
-    if (nvim_get_mod_mask() & (MOD_MASK_SHIFT_P1 | MOD_MASK_CTRL)) != 0 {
-        if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+    if (mod_mask & (MOD_MASK_SHIFT_P1 | MOD_MASK_CTRL)) != 0 {
+        if (mod_mask & MOD_MASK_CTRL) != 0 {
             (*cap).arg = 1;
         }
         rs_nv_bck_word(cap);
@@ -5511,7 +5511,7 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_up(cap: CapHandle) {
-    if (nvim_get_mod_mask() & MOD_MASK_SHIFT_P1) != 0 {
+    if (mod_mask & MOD_MASK_SHIFT_P1) != 0 {
         // <S-Up> is page up
         (*cap).arg = BACKWARD;
         rs_nv_page(cap);
@@ -5540,7 +5540,7 @@ pub unsafe extern "C" fn rs_nv_up(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
     let oap = (*cap).oap;
     let cmdchar = (*cap).cmdchar;
-    if (nvim_get_mod_mask() & MOD_MASK_SHIFT_P1) != 0 {
+    if (mod_mask & MOD_MASK_SHIFT_P1) != 0 {
         // <S-Down> is page down
         (*cap).arg = FORWARD;
         rs_nv_page(cap);
@@ -5592,7 +5592,6 @@ extern "C" {
     fn current_search(count: c_int, forward: bool) -> bool;
     fn cursor_up(count: c_int, upd_topline: bool) -> c_int;
     fn cursor_pos_info(dict: *mut std::ffi::c_void);
-    static mut mod_mask: c_int;
     fn rs_goto_byte(count: c_int);
     fn undo_time(count: c_int, sec: bool, file: bool, absolute: bool);
     fn show_sb_text();

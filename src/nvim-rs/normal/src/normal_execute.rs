@@ -61,8 +61,7 @@ extern "C" {
     static mut VIsual_active: bool;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_get_KeyTyped() -> bool;
-    fn nvim_get_keystuffed() -> c_int;
-    fn nvim_get_mod_mask() -> c_int;
+    static KeyStuffed: c_int;
     #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
     fn nvim_get_vgetc_char() -> c_int;
@@ -101,7 +100,6 @@ extern "C" {
     fn ui_flush();
     fn rs_start_selection();
     fn rs_unshift_special(cmdchar: c_int, modp: *mut c_int) -> c_int;
-    fn nvim_set_mod_mask(val: c_int);
     static mut mod_mask: c_int;
     #[link_name = "rs_execute_dispatch"]
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
@@ -248,7 +246,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
         if nvim_get_curwin_w_p_rl()
             && nvim_get_KeyTyped()
-            && nvim_get_keystuffed() == 0
+            && KeyStuffed == 0
             && (crate::dispatch::table::rs_table_get_cmd_flags((*sp).idx) & NV_RL != 0)
         {
             let new_cmdchar = rs_invert_horizontal((*ca).cmdchar);
@@ -294,14 +292,14 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             let flags = crate::dispatch::table::rs_table_get_cmd_flags(cur_idx);
             if flags & NV_SS != 0 {
                 rs_start_selection();
-                let mut mm = nvim_get_mod_mask();
+                let mut mm = mod_mask;
                 let new_cmdchar = rs_unshift_special((*ca).cmdchar, &raw mut mm);
-                nvim_set_mod_mask(mm);
+                mod_mask = mm;
                 (*ca.cast::<CmdargT>()).cmdchar = new_cmdchar;
                 let new_idx = rs_find_command(new_cmdchar);
                 debug_assert!(new_idx >= 0);
                 (*sp).idx = new_idx;
-            } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
+            } else if (flags & NV_SSS != 0) && (mod_mask & MOD_MASK_SHIFT != 0) {
                 rs_start_selection();
                 mod_mask &= !MOD_MASK_SHIFT;
             }
@@ -414,7 +412,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
     // When 'keymodel' contains "stopsel" may stop Select/Visual mode
     if km_stopsel
         && (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_STS != 0)
-        && (nvim_get_mod_mask() & MOD_MASK_SHIFT == 0)
+        && (mod_mask & MOD_MASK_SHIFT == 0)
     {
         rs_end_visual_mode();
         nvim_redraw_curbuf_inverted();
@@ -424,9 +422,9 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
     if km_startsel {
         let flags = crate::dispatch::table::rs_table_get_cmd_flags(idx);
         if flags & NV_SS != 0 {
-            let mut mm = nvim_get_mod_mask();
+            let mut mm = mod_mask;
             let new_cmdchar = rs_unshift_special((*ca).cmdchar, &raw mut mm);
-            nvim_set_mod_mask(mm);
+            mod_mask = mm;
             (*ca.cast::<CmdargT>()).cmdchar = new_cmdchar;
             let new_idx = rs_find_command(new_cmdchar);
             (*sp).idx = new_idx;
@@ -435,7 +433,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
                 rs_clearopbeep(oa);
                 return true;
             }
-        } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
+        } else if (flags & NV_SSS != 0) && (mod_mask & MOD_MASK_SHIFT != 0) {
             mod_mask &= !MOD_MASK_SHIFT;
         }
     }

@@ -165,8 +165,6 @@ extern "C" {
     static mut reg_executing: c_int;
     /// pending_end_reg_executing: clear reg_executing at a safe moment
     static mut pending_end_reg_executing: bool;
-    /// Get typebuf.tb_maplen
-    fn nvim_get_typebuf_maplen() -> c_int;
 }
 
 /// Check if we are currently recording a macro.
@@ -228,7 +226,7 @@ pub unsafe extern "C" fn rs_is_block_redo() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_end_reg_executing(advance: c_int) {
     let re = reg_executing;
-    let tb_maplen = nvim_get_typebuf_maplen();
+    let tb_maplen = crate::typebuf::get_tb_maplen();
     let pending = pending_end_reg_executing;
 
     if re != 0 && (tb_maplen == 0 || pending) {

@@ -388,7 +388,7 @@ extern "C" {
     static mut msg_scrolled: c_int;
     static mut p_ch: i64;
     static mut lines_left: c_int;
-    fn nvim_get_cmd_silent() -> c_int;
+    static cmd_silent: bool;
     static mut msg_row: c_int;
     static mut msg_col: c_int;
     fn ui_has(what: c_int) -> c_int;
@@ -475,7 +475,7 @@ pub unsafe extern "C" fn compute_cmdrow_rs() {
 /// Calls C functions to access and set global state.
 #[export_name = "cursorcmd"]
 pub unsafe extern "C" fn cursorcmd_rs() {
-    if nvim_get_cmd_silent() != 0 || ui_has(K_UI_CMDLINE) != 0 {
+    if cmd_silent || ui_has(K_UI_CMDLINE) != 0 {
         return;
     }
 
@@ -542,7 +542,7 @@ const K_CMD_REDRAW_ALL: c_int = 2;
 /// Calls C functions to access and set global state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_redrawcmdprompt() {
-    if nvim_get_cmd_silent() != 0 {
+    if cmd_silent {
         return;
     }
     if ui_has(K_UI_CMDLINE) != 0 {
@@ -658,7 +658,7 @@ pub unsafe extern "C" fn draw_cmdline_rs(start: c_int, len: c_int) {
 /// Calls C functions to access and set global state.
 #[export_name = "redrawcmd"]
 pub unsafe extern "C" fn redrawcmd_rs() {
-    if nvim_get_cmd_silent() != 0 {
+    if cmd_silent {
         return;
     }
 
@@ -714,7 +714,7 @@ pub unsafe extern "C" fn redrawcmd_rs() {
 /// Calls C functions to access and set global state.
 #[unsafe(export_name = "redrawcmdline")]
 pub unsafe extern "C" fn rs_redrawcmdline() {
-    if nvim_get_cmd_silent() != 0 {
+    if cmd_silent {
         return;
     }
     need_wait_return = false;
