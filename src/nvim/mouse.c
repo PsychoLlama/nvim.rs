@@ -99,39 +99,7 @@ extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
 extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int which_button);
 
 // got_click state is now owned by Rust; use rs_get_got_click()/rs_set_got_click().
-
-/// Bridge for Rust-computed click arguments to VimL function call.
-/// Builds typval_T args from pre-computed strings and calls the VimL callback.
-void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
-                               int click_count, const char *button_str,
-                               const char *modifier_str)
-{
-  typval_T argv[] = {
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_NUMBER,
-      .vval = { .v_number = (varnumber_T)click_defs[col].tabnr },
-    },
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_NUMBER,
-      .vval = { .v_number = click_count },
-    },
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_STRING,
-      .vval = { .v_string = (char *)button_str },
-    },
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_STRING,
-      .vval = { .v_string = (char *)modifier_str },
-    },
-  };
-  typval_T rettv;
-  call_vim_function(click_defs[col].func, ARRAY_SIZE(argv), argv, &rettv);
-  tv_clear(&rettv);
-}
+// nvim_call_stl_click_func is now implemented in Rust (rs_call_click_def_func).
 
 // nvim_do_mouse_impl is now implemented in Rust (rs_do_mouse_impl).
 // dragwin state and jump_to_mouse logic are now owned by Rust (rs_jump_to_mouse).
@@ -347,60 +315,8 @@ bool nvim_get_VIsual_reselect(void) { return VIsual_reselect; }
 // --- Insert/put/register operations ------------------------------------------
 
 // nvim_eval_has_provider already defined in eval/funcs_shim.c
-
-/// Handle middle-click paste in insert mode.
-/// Returns false always (caller should return false after calling this).
-bool nvim_mouse_middle_insert_mode(int regname, int count, bool fixindent)
-{
-  if (regname == '.') {
-    insert_reg(regname, NULL, true);
-  } else {
-    if (regname == 0 && eval_has_provider("clipboard", false)) {
-      regname = '*';
-    }
-    yankreg_T *reg = NULL;
-    if ((State & REPLACE_FLAG) && !yank_register_mline(regname, &reg)) {
-      insert_reg(regname, reg, true);
-    } else {
-      do_put(regname, reg, BACKWARD, 1,
-             (fixindent ? PUT_FIXINDENT : 0) | PUT_CURSEND);
-      AppendCharToRedobuff(Ctrl_R);
-      AppendCharToRedobuff(fixindent ? Ctrl_P : Ctrl_O);
-      AppendCharToRedobuff(regname == 0 ? '"' : regname);
-    }
-  }
-  return false;
-}
-
-/// Middle-click put after jump_to_mouse (normal mode).
-void nvim_do_put_middle_click(int regname, int dir, int count, bool fixindent)
-{
-  yankreg_T *reg = NULL;
-  bool is_mline = yank_register_mline(regname, &reg);
-  if (is_mline) {
-    if (mouse_past_bottom) {
-      dir = FORWARD;
-    }
-  } else if (mouse_past_eol) {
-    dir = FORWARD;
-  }
-
-  int c1, c2;
-  if (fixindent) {
-    c1 = (dir == BACKWARD) ? '[' : ']';
-    c2 = 'p';
-  } else {
-    c1 = (dir == FORWARD) ? 'p' : 'P';
-    c2 = NUL;
-  }
-  rs_prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
-
-  if (restart_edit != 0) {
-    where_paste_started = curwin->w_cursor;
-  }
-  do_put(regname, reg, dir, count,
-         (fixindent ? PUT_FIXINDENT : 0) | PUT_CURSEND);
-}
+// nvim_mouse_middle_insert_mode is now implemented in Rust (inlined in rs_do_mouse_impl).
+// nvim_do_put_middle_click is now implemented in Rust (inlined in rs_do_mouse_impl).
 
 /// Set where_paste_started to current cursor position.
 void nvim_set_where_paste_started_to_cursor(void)
