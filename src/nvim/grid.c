@@ -66,6 +66,22 @@ char *nvim_get_linebuf_scratch(void) { return linebuf_scratch; }
 /// Get the current linebuf size
 size_t nvim_get_linebuf_size(void) { return linebuf_size; }
 
+/// Update linebuf arrays if columns exceeds current linebuf_size (used by rs_grid_alloc).
+void nvim_grid_alloc_update_linebuf(int columns)
+{
+  if (linebuf_size < (size_t)columns) {
+    xfree(linebuf_char);
+    xfree(linebuf_attr);
+    xfree(linebuf_vcol);
+    xfree(linebuf_scratch);
+    linebuf_char = xmalloc((size_t)columns * sizeof(schar_T));
+    linebuf_attr = xmalloc((size_t)columns * sizeof(sattr_T));
+    linebuf_vcol = xmalloc((size_t)columns * sizeof(colnr_T));
+    linebuf_scratch = xmalloc((size_t)columns * sizeof(sscratch_T));
+    linebuf_size = (size_t)columns;
+  }
+}
+
 void nvim_ui_grid_cursor_goto(handle_T grid_handle, int row, int col) { ui_grid_cursor_goto(grid_handle, row, col); }
 
 /// Get handle from a ScreenGrid pointer
@@ -90,6 +106,14 @@ colnr_T *nvim_screengrid_get_vcols(ScreenGrid *grid) { return grid ? grid->vcols
 size_t *nvim_screengrid_get_line_offset(ScreenGrid *grid) { return grid ? grid->line_offset : NULL; }
 
 int *nvim_screengrid_get_dirty_col(ScreenGrid *grid) { return grid ? grid->dirty_col : NULL; }
+
+// ScreenGrid field setters (used by rs_grid_alloc)
+void nvim_screengrid_set_chars(ScreenGrid *grid, schar_T *val) { if (grid) { grid->chars = val; } }
+void nvim_screengrid_set_attrs(ScreenGrid *grid, sattr_T *val) { if (grid) { grid->attrs = val; } }
+void nvim_screengrid_set_vcols(ScreenGrid *grid, colnr_T *val) { if (grid) { grid->vcols = val; } }
+void nvim_screengrid_set_line_offset(ScreenGrid *grid, size_t *val) { if (grid) { grid->line_offset = val; } }
+void nvim_screengrid_set_rows(ScreenGrid *grid, int val) { if (grid) { grid->rows = val; } }
+void nvim_screengrid_set_cols(ScreenGrid *grid, int val) { if (grid) { grid->cols = val; } }
 
 // ScreenGrid field accessors
 int nvim_screengrid_get_cols(ScreenGrid *grid) { return grid ? grid->cols : 0; }
