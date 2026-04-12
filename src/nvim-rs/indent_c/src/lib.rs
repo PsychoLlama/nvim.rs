@@ -240,6 +240,12 @@ extern "C" {
     fn tolower(c: c_int) -> c_int;
     // rs_skip_to_option_part is defined in the strings crate, exported as C symbol
     fn rs_skip_to_option_part(p: *const c_char) -> *const c_char;
+
+    // Phase 2 accessors (for parse_cino and get_c_indent migration)
+    fn nvim_cindent_buf_set_ind_fields(buf: *mut std::ffi::c_void, opts: *const CindentOptions);
+    fn nvim_cindent_curbuf_get_ind_opts(opts: *mut CindentOptions);
+    fn nvim_cindent_buf_get_p_cino(buf: *mut std::ffi::c_void) -> *const c_char;
+    fn nvim_cindent_buf_get_sw_value(buf: *mut std::ffi::c_void) -> c_int;
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -6133,6 +6139,45 @@ pub unsafe extern "C" fn rs_in_cinkeys(keytyped: c_int, when: c_int, line_is_emp
     }
 
     false
+}
+
+// ============================================================================
+// Phase 2: parse_cino and get_c_indent — marshaling wrappers in Rust
+// ============================================================================
+
+/// Parse `cinoptions` and set `b_ind_*` fields on `buf`.
+///
+/// Drop-in replacement for the C `parse_cino(buf_T *buf)` function.
+/// Calls `rs_parse_cino` to get a `CindentOptions` struct, then uses the
+/// bulk setter accessor to write all fields back into the buffer.
+///
+/// # Safety
+/// `buf` must be a valid `buf_T *` pointer (opaque handle).
+#[unsafe(export_name = "parse_cino")]
+pub unsafe extern "C" fn rs_parse_cino_wrapper(buf: *mut std::ffi::c_void) {
+    let sw = nvim_cindent_buf_get_sw_value(buf);
+    let cino = nvim_cindent_buf_get_p_cino(buf);
+    let mut opts = CindentOptions::default();
+    rs_parse_cino(cino, sw, &raw mut opts);
+    nvim_cindent_buf_set_ind_fields(buf, &raw const opts);
+}
+
+/// Return the desired indent for C code.
+///
+/// Drop-in replacement for the C `get_c_indent(void)` function.
+/// Reads all `curbuf->b_ind_*` fields via the bulk getter accessor,
+/// then delegates to `rs_get_c_indent`.
+///
+/// Returns -1 if the indent should be left alone (inside a raw string).
+///
+/// # Safety
+/// Must be called from a valid Neovim context with `curbuf` set.
+#[unsafe(export_name = "get_c_indent")]
+#[must_use]
+pub unsafe extern "C" fn rs_get_c_indent_wrapper() -> c_int {
+    let mut opts = CindentOptions::default();
+    nvim_cindent_curbuf_get_ind_opts(&raw mut opts);
+    rs_get_c_indent(&raw const opts)
 }
 
 // ============================================================================

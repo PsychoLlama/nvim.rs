@@ -108,6 +108,99 @@ int nvim_cindent_get_indent_lnum(int lnum) { return get_indent_lnum(lnum); }
 
 extern void rs_parse_cino(const char *cino, int sw, CindentOptions *opts);
 
+// Phase 2 bulk accessors for parse_cino / get_c_indent migration.
+
+/// Bulk setter: copy all CindentOptions fields into buf->b_ind_* fields.
+void nvim_cindent_buf_set_ind_fields(void *buf_, const CindentOptions *opts)
+{
+  buf_T *buf = buf_;
+  buf->b_ind_level = opts->ind_level;
+  buf->b_ind_open_imag = opts->ind_open_imag;
+  buf->b_ind_no_brace = opts->ind_no_brace;
+  buf->b_ind_first_open = opts->ind_first_open;
+  buf->b_ind_open_extra = opts->ind_open_extra;
+  buf->b_ind_close_extra = opts->ind_close_extra;
+  buf->b_ind_open_left_imag = opts->ind_open_left_imag;
+  buf->b_ind_jump_label = opts->ind_jump_label;
+  buf->b_ind_case = opts->ind_case;
+  buf->b_ind_case_code = opts->ind_case_code;
+  buf->b_ind_case_break = opts->ind_case_break;
+  buf->b_ind_scopedecl = opts->ind_scopedecl;
+  buf->b_ind_scopedecl_code = opts->ind_scopedecl_code;
+  buf->b_ind_param = opts->ind_param;
+  buf->b_ind_func_type = opts->ind_func_type;
+  buf->b_ind_cpp_baseclass = opts->ind_cpp_baseclass;
+  buf->b_ind_continuation = opts->ind_continuation;
+  buf->b_ind_unclosed = opts->ind_unclosed;
+  buf->b_ind_unclosed2 = opts->ind_unclosed2;
+  buf->b_ind_unclosed_noignore = opts->ind_unclosed_noignore;
+  buf->b_ind_unclosed_wrapped = opts->ind_unclosed_wrapped;
+  buf->b_ind_unclosed_whiteok = opts->ind_unclosed_whiteok;
+  buf->b_ind_matching_paren = opts->ind_matching_paren;
+  buf->b_ind_paren_prev = opts->ind_paren_prev;
+  buf->b_ind_comment = opts->ind_comment;
+  buf->b_ind_in_comment = opts->ind_in_comment;
+  buf->b_ind_in_comment2 = opts->ind_in_comment2;
+  buf->b_ind_maxparen = opts->ind_maxparen;
+  buf->b_ind_maxcomment = opts->ind_maxcomment;
+  buf->b_ind_java = opts->ind_java;
+  buf->b_ind_js = opts->ind_js;
+  buf->b_ind_keep_case_label = opts->ind_keep_case_label;
+  buf->b_ind_cpp_namespace = opts->ind_cpp_namespace;
+  buf->b_ind_if_for_while = opts->ind_if_for_while;
+  buf->b_ind_hash_comment = opts->ind_hash_comment;
+  buf->b_ind_cpp_extern_c = opts->ind_cpp_extern_c;
+  buf->b_ind_pragma = opts->ind_pragma;
+}
+
+/// Bulk getter: copy all curbuf->b_ind_* fields into opts.
+void nvim_cindent_curbuf_get_ind_opts(CindentOptions *opts)
+{
+  opts->ind_level = curbuf->b_ind_level;
+  opts->ind_open_imag = curbuf->b_ind_open_imag;
+  opts->ind_no_brace = curbuf->b_ind_no_brace;
+  opts->ind_first_open = curbuf->b_ind_first_open;
+  opts->ind_open_extra = curbuf->b_ind_open_extra;
+  opts->ind_close_extra = curbuf->b_ind_close_extra;
+  opts->ind_open_left_imag = curbuf->b_ind_open_left_imag;
+  opts->ind_jump_label = curbuf->b_ind_jump_label;
+  opts->ind_case = curbuf->b_ind_case;
+  opts->ind_case_code = curbuf->b_ind_case_code;
+  opts->ind_case_break = curbuf->b_ind_case_break;
+  opts->ind_scopedecl = curbuf->b_ind_scopedecl;
+  opts->ind_scopedecl_code = curbuf->b_ind_scopedecl_code;
+  opts->ind_param = curbuf->b_ind_param;
+  opts->ind_func_type = curbuf->b_ind_func_type;
+  opts->ind_cpp_baseclass = curbuf->b_ind_cpp_baseclass;
+  opts->ind_continuation = curbuf->b_ind_continuation;
+  opts->ind_unclosed = curbuf->b_ind_unclosed;
+  opts->ind_unclosed2 = curbuf->b_ind_unclosed2;
+  opts->ind_unclosed_noignore = curbuf->b_ind_unclosed_noignore;
+  opts->ind_unclosed_wrapped = curbuf->b_ind_unclosed_wrapped;
+  opts->ind_unclosed_whiteok = curbuf->b_ind_unclosed_whiteok;
+  opts->ind_matching_paren = curbuf->b_ind_matching_paren;
+  opts->ind_paren_prev = curbuf->b_ind_paren_prev;
+  opts->ind_comment = curbuf->b_ind_comment;
+  opts->ind_in_comment = curbuf->b_ind_in_comment;
+  opts->ind_in_comment2 = curbuf->b_ind_in_comment2;
+  opts->ind_maxparen = curbuf->b_ind_maxparen;
+  opts->ind_maxcomment = curbuf->b_ind_maxcomment;
+  opts->ind_java = curbuf->b_ind_java;
+  opts->ind_js = curbuf->b_ind_js;
+  opts->ind_keep_case_label = curbuf->b_ind_keep_case_label;
+  opts->ind_cpp_namespace = curbuf->b_ind_cpp_namespace;
+  opts->ind_if_for_while = curbuf->b_ind_if_for_while;
+  opts->ind_hash_comment = curbuf->b_ind_hash_comment;
+  opts->ind_cpp_extern_c = curbuf->b_ind_cpp_extern_c;
+  opts->ind_pragma = curbuf->b_ind_pragma;
+}
+
+/// Get buf->b_p_cino (cinoptions string) for the given buffer.
+const char *nvim_cindent_buf_get_p_cino(void *buf_) { return ((buf_T *)buf_)->b_p_cino; }
+
+/// Get get_sw_value(buf) -- shiftwidth for the given buffer.
+int nvim_cindent_buf_get_sw_value(void *buf_) { return get_sw_value((buf_T *)buf_); }
+
 /// C accessor for curbuf->b_p_cinsd (cinscopedecls option).
 const char *nvim_cindent_curbuf_get_cinsd(void) { return curbuf->b_p_cinsd; }
 
@@ -189,100 +282,9 @@ pos_T *find_start_comment(int ind_maxcomment)  // XXX
 
 // Below "XXX" means that this function may unlock the current line.
 
-// Parse 'cinoptions' and set the values in "curbuf".
-// Must be called when 'cinoptions', 'shiftwidth' and/or 'tabstop' changes.
-void parse_cino(buf_T *buf)
-{
-  int sw = get_sw_value(buf);
-  CindentOptions opts;
-  rs_parse_cino(buf->b_p_cino, sw, &opts);
-
-  buf->b_ind_level = opts.ind_level;
-  buf->b_ind_open_imag = opts.ind_open_imag;
-  buf->b_ind_no_brace = opts.ind_no_brace;
-  buf->b_ind_first_open = opts.ind_first_open;
-  buf->b_ind_open_extra = opts.ind_open_extra;
-  buf->b_ind_close_extra = opts.ind_close_extra;
-  buf->b_ind_open_left_imag = opts.ind_open_left_imag;
-  buf->b_ind_jump_label = opts.ind_jump_label;
-  buf->b_ind_case = opts.ind_case;
-  buf->b_ind_case_code = opts.ind_case_code;
-  buf->b_ind_case_break = opts.ind_case_break;
-  buf->b_ind_scopedecl = opts.ind_scopedecl;
-  buf->b_ind_scopedecl_code = opts.ind_scopedecl_code;
-  buf->b_ind_param = opts.ind_param;
-  buf->b_ind_func_type = opts.ind_func_type;
-  buf->b_ind_cpp_baseclass = opts.ind_cpp_baseclass;
-  buf->b_ind_continuation = opts.ind_continuation;
-  buf->b_ind_unclosed = opts.ind_unclosed;
-  buf->b_ind_unclosed2 = opts.ind_unclosed2;
-  buf->b_ind_unclosed_noignore = opts.ind_unclosed_noignore;
-  buf->b_ind_unclosed_wrapped = opts.ind_unclosed_wrapped;
-  buf->b_ind_unclosed_whiteok = opts.ind_unclosed_whiteok;
-  buf->b_ind_matching_paren = opts.ind_matching_paren;
-  buf->b_ind_paren_prev = opts.ind_paren_prev;
-  buf->b_ind_comment = opts.ind_comment;
-  buf->b_ind_in_comment = opts.ind_in_comment;
-  buf->b_ind_in_comment2 = opts.ind_in_comment2;
-  buf->b_ind_maxparen = opts.ind_maxparen;
-  buf->b_ind_maxcomment = opts.ind_maxcomment;
-  buf->b_ind_java = opts.ind_java;
-  buf->b_ind_js = opts.ind_js;
-  buf->b_ind_keep_case_label = opts.ind_keep_case_label;
-  buf->b_ind_cpp_namespace = opts.ind_cpp_namespace;
-  buf->b_ind_if_for_while = opts.ind_if_for_while;
-  buf->b_ind_hash_comment = opts.ind_hash_comment;
-  buf->b_ind_cpp_extern_c = opts.ind_cpp_extern_c;
-  buf->b_ind_pragma = opts.ind_pragma;
-}
-
-// Return the desired indent for C code.
-// Return -1 if the indent should be left alone (inside a raw string).
-// Delegates to rs_get_c_indent() in Rust.
-int get_c_indent(void)
-{
-  // Build CindentOptions from curbuf->b_ind_* fields
-  CindentOptions opts;
-  opts.ind_level = curbuf->b_ind_level;
-  opts.ind_open_imag = curbuf->b_ind_open_imag;
-  opts.ind_no_brace = curbuf->b_ind_no_brace;
-  opts.ind_first_open = curbuf->b_ind_first_open;
-  opts.ind_open_extra = curbuf->b_ind_open_extra;
-  opts.ind_close_extra = curbuf->b_ind_close_extra;
-  opts.ind_open_left_imag = curbuf->b_ind_open_left_imag;
-  opts.ind_jump_label = curbuf->b_ind_jump_label;
-  opts.ind_case = curbuf->b_ind_case;
-  opts.ind_case_code = curbuf->b_ind_case_code;
-  opts.ind_case_break = curbuf->b_ind_case_break;
-  opts.ind_scopedecl = curbuf->b_ind_scopedecl;
-  opts.ind_scopedecl_code = curbuf->b_ind_scopedecl_code;
-  opts.ind_param = curbuf->b_ind_param;
-  opts.ind_func_type = curbuf->b_ind_func_type;
-  opts.ind_cpp_baseclass = curbuf->b_ind_cpp_baseclass;
-  opts.ind_continuation = curbuf->b_ind_continuation;
-  opts.ind_unclosed = curbuf->b_ind_unclosed;
-  opts.ind_unclosed2 = curbuf->b_ind_unclosed2;
-  opts.ind_unclosed_noignore = curbuf->b_ind_unclosed_noignore;
-  opts.ind_unclosed_wrapped = curbuf->b_ind_unclosed_wrapped;
-  opts.ind_unclosed_whiteok = curbuf->b_ind_unclosed_whiteok;
-  opts.ind_matching_paren = curbuf->b_ind_matching_paren;
-  opts.ind_paren_prev = curbuf->b_ind_paren_prev;
-  opts.ind_comment = curbuf->b_ind_comment;
-  opts.ind_in_comment = curbuf->b_ind_in_comment;
-  opts.ind_in_comment2 = curbuf->b_ind_in_comment2;
-  opts.ind_maxparen = curbuf->b_ind_maxparen;
-  opts.ind_maxcomment = curbuf->b_ind_maxcomment;
-  opts.ind_java = curbuf->b_ind_java;
-  opts.ind_js = curbuf->b_ind_js;
-  opts.ind_keep_case_label = curbuf->b_ind_keep_case_label;
-  opts.ind_cpp_namespace = curbuf->b_ind_cpp_namespace;
-  opts.ind_if_for_while = curbuf->b_ind_if_for_while;
-  opts.ind_hash_comment = curbuf->b_ind_hash_comment;
-  opts.ind_cpp_extern_c = curbuf->b_ind_cpp_extern_c;
-  opts.ind_pragma = curbuf->b_ind_pragma;
-
-  return rs_get_c_indent(&opts);
-}
+// parse_cino and get_c_indent are implemented in Rust
+// (src/nvim-rs/indent_c/src/lib.rs) via #[unsafe(export_name)].
+// The C bodies have been removed.
 
 // in_cinkeys is implemented in Rust (src/nvim-rs/indent_c/src/lib.rs) via
 // #[unsafe(export_name = "in_cinkeys")]. The C body has been removed.
