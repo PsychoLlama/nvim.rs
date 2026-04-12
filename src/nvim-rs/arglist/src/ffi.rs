@@ -189,7 +189,9 @@ extern "C" {
     #[link_name = "xstrdup"]
     pub fn nvim_al_xstrdup(s: *const c_char) -> *mut c_char;
     pub fn nvim_al_deep_clear_aentry(al: AlistPtr);
+    #[link_name = "rs_buflist_add"]
     pub fn nvim_al_buflist_add(fname: *const c_char, flags: c_int) -> c_int;
+    #[link_name = "buf_set_name"]
     pub fn nvim_al_buf_set_name(fnum: c_int, name: *const c_char);
     #[link_name = "os_breakcheck"]
     pub fn nvim_al_os_breakcheck();
@@ -206,6 +208,7 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
+    #[link_name = "rem_backslash"]
     pub fn nvim_al_rem_backslash(p: *const c_char) -> c_int;
     #[link_name = "rs_ascii_isspace"]
     pub fn nvim_al_ascii_isspace(c: c_int) -> c_int;
@@ -253,7 +256,9 @@ extern "C" {
     pub fn nvim_al_emsg_nomatch();
     pub fn nvim_al_curbuf_b_ffname() -> *mut c_char;
     pub fn nvim_al_curbuf_b_fname() -> *mut c_char;
+    #[link_name = "alist_name"]
     pub fn nvim_al_alist_name(ae: AentryPtr) -> *mut c_char;
+    #[link_name = "check_arg_idx"]
     pub fn nvim_al_check_arg_idx(wp: WinPtr);
 }
 
@@ -262,10 +267,12 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
+    #[link_name = "buflist_findnr"]
     pub fn nvim_al_buflist_findnr(fnum: c_int) -> BufPtr;
     pub fn nvim_al_buf_get_fname(buf: BufPtr) -> *mut c_char;
     pub fn nvim_al_buf_get_ffname(buf: BufPtr) -> *mut c_char;
     pub fn nvim_al_buf_get_fnum(buf: BufPtr) -> c_int;
+    #[link_name = "path_full_compare"]
     pub fn nvim_al_path_full_compare(
         s1: *const c_char,
         s2: *const c_char,
@@ -293,14 +300,22 @@ extern "C" {
     pub fn nvim_al_eap_set_line2(eap: ExargPtr, val: i32);
 
     // Buffer/window operations
+    #[link_name = "check_can_set_curbuf_forceit"]
     pub fn nvim_al_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
+    #[link_name = "setpcmark"]
     pub fn nvim_al_setpcmark();
+    #[link_name = "win_split"]
     pub fn nvim_al_win_split(size: c_int, flags: c_int) -> c_int;
     pub fn nvim_al_reset_binding(wp: WinPtr);
+    #[link_name = "rs_buf_hide"]
     pub fn nvim_al_buf_hide(buf: BufPtr) -> c_int;
+    #[link_name = "fix_fname"]
     pub fn nvim_al_fix_fname(fname: *const c_char) -> *mut c_char;
+    #[link_name = "rs_otherfile"]
     pub fn nvim_al_otherfile(fname: *const c_char) -> c_int;
+    #[link_name = "check_changed"]
     pub fn nvim_al_check_changed(buf: BufPtr, flags: c_int) -> c_int;
+    #[link_name = "do_ecmd"]
     pub fn nvim_al_do_ecmd(
         fnum: c_int,
         ffname: *const c_char,
@@ -310,8 +325,11 @@ extern "C" {
         flags: c_int,
         old_curwin: WinPtr,
     ) -> c_int;
+    #[link_name = "setmark"]
     pub fn nvim_al_setmark(c: c_int);
+    #[link_name = "FullName_save"]
     pub fn nvim_al_FullName_save(fname: *const c_char, force: c_int) -> *mut c_char;
+    #[link_name = "path_fnamecmp"]
     pub fn nvim_al_path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
     pub fn nvim_al_get_cmdmod_cmod_tab() -> c_int;
     pub fn nvim_al_emsg_E163();
@@ -324,9 +342,12 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
+    #[link_name = "gotocmdline"]
     pub fn nvim_al_gotocmdline(clr: c_int);
     pub fn list_in_columns(items: *mut *mut c_char, count: c_int, current: c_int);
+    #[link_name = "maketitle"]
     pub fn nvim_al_maketitle();
+    #[link_name = "rs_curbuf_reusable"]
     pub fn nvim_al_curbuf_reusable() -> c_int;
     pub fn nvim_al_curbuf_ml_empty() -> c_int;
     pub fn nvim_al_emsg_invarg();
@@ -344,13 +365,17 @@ extern "C" {
     pub fn nvim_al_get_firstwin() -> WinPtr;
     pub fn nvim_al_get_lastwin() -> WinPtr;
     pub fn nvim_al_get_first_tabpage() -> TabpagePtr;
+    #[link_name = "goto_tabpage_tp"]
     pub fn nvim_al_goto_tabpage_tp(tp: TabpagePtr, trigger_enter: c_int, trigger_leave: c_int);
     #[link_name = "rs_valid_tabpage"]
     pub fn nvim_al_valid_tabpage(tp: TabpagePtr) -> c_int;
     #[link_name = "rs_win_valid"]
     pub fn nvim_al_win_valid(wp: WinPtr) -> c_int;
+    #[link_name = "win_close"]
     pub fn nvim_al_win_close(wp: WinPtr, free_buf: c_int, force: c_int);
+    #[link_name = "win_enter"]
     pub fn nvim_al_win_enter(wp: WinPtr, undo_sync: c_int);
+    #[link_name = "win_move_after"]
     pub fn nvim_al_win_move_after(wp: WinPtr, after: WinPtr);
     #[link_name = "rs_lastwin_nofloating"]
     pub fn nvim_al_lastwin_nofloating() -> WinPtr;
@@ -361,14 +386,19 @@ extern "C" {
     pub fn nvim_al_win_get_frame_parent(wp: WinPtr) -> *mut c_void;
     pub fn nvim_al_get_Columns() -> c_int;
     pub fn nvim_al_buf_get_nwindows(buf: BufPtr) -> c_int;
+    #[link_name = "bufIsChanged"]
     pub fn nvim_al_bufIsChanged(buf: BufPtr) -> c_int;
+    #[link_name = "rs_buf_is_empty"]
     pub fn nvim_al_buf_is_empty(buf: BufPtr) -> c_int;
+    #[link_name = "autowrite"]
     pub fn nvim_al_autowrite(buf: BufPtr, eap_forceit: c_int) -> c_int;
     pub fn nvim_al_bufref_create(buf: BufPtr) -> BufrefPtr;
+    #[link_name = "rs_bufref_valid"]
     pub fn nvim_al_bufref_valid(br: BufrefPtr) -> c_int;
     pub fn nvim_al_bufref_destroy(br: BufrefPtr);
     pub fn nvim_al_set_bufref(br: BufrefPtr, buf: BufPtr);
     pub fn nvim_al_ONE_WINDOW() -> c_int;
+    #[link_name = "is_aucmd_win"]
     pub fn nvim_al_is_aucmd_win(wp: WinPtr) -> c_int;
     #[link_name = "rs_reset_VIsual_and_resel"]
     pub fn nvim_al_reset_VIsual_and_resel();
@@ -403,14 +433,18 @@ extern "C" {
 
 extern "C" {
     pub fn nvim_al_tv_get_type(tv: TypvalPtr) -> c_int;
+    #[link_name = "tv_get_number"]
     pub fn nvim_al_tv_get_number(tv: TypvalPtr) -> i64;
     pub fn nvim_al_tv_get_number_chk(tv: TypvalPtr, error: *mut c_int) -> i64;
     pub fn nvim_al_rettv_set_number(rettv: TypvalPtr, val: i64);
     pub fn nvim_al_rettv_set_string(rettv: TypvalPtr, s: *mut c_char);
     pub fn nvim_al_rettv_set_type(rettv: TypvalPtr, typ: c_int);
+    #[link_name = "tv_list_alloc_ret"]
     pub fn nvim_al_tv_list_alloc_ret(rettv: TypvalPtr, len: c_int);
     pub fn nvim_al_tv_list_append_string(rettv: TypvalPtr, s: *const c_char, len: i64);
+    #[link_name = "find_win_by_nr_or_id"]
     pub fn nvim_al_find_win_by_nr_or_id(tv: TypvalPtr) -> WinPtr;
+    #[link_name = "find_tabwin"]
     pub fn nvim_al_find_tabwin(tv_tab: TypvalPtr, tv_win: TypvalPtr) -> WinPtr;
     pub fn nvim_al_win_get_alist_id(wp: WinPtr) -> c_int;
     pub fn nvim_al_tv_idx(tv: TypvalPtr, idx: c_int) -> TypvalPtr;

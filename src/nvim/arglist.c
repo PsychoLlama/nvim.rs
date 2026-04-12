@@ -181,12 +181,12 @@ void nvim_al_deep_clear_aentry(alist_T *al)
   GA_DEEP_CLEAR(&al->al_ga, aentry_T, FREE_AENTRY_FNAME);
 #undef FREE_AENTRY_FNAME
 }
-int nvim_al_buflist_add(const char *fname, int flags) { return buflist_add((char *)fname, flags); }
-void nvim_al_buf_set_name(int fnum, const char *name) { buf_set_name(fnum, (char *)name); }
+// nvim_al_buflist_add deleted: ffi.rs uses #[link_name = "rs_buflist_add"] (buflist_add is static inline)
+// nvim_al_buf_set_name deleted: ffi.rs uses #[link_name = "buf_set_name"]
 // nvim_al_os_breakcheck deleted: ffi.rs uses #[link_name = "os_breakcheck"]
 
 // -- Phase 3 extra accessors --
-int nvim_al_rem_backslash(const char *p) { return rem_backslash(p); }
+// nvim_al_rem_backslash deleted: ffi.rs uses #[link_name = "rem_backslash"]
 // nvim_al_ascii_isspace deleted: ffi.rs uses #[link_name = "ascii_isspace"]
 // nvim_al_skipwhite deleted: ffi.rs uses #[link_name = "skipwhite"]
 // nvim_al_expand_wildcards deleted: ffi.rs uses #[link_name = "expand_wildcards"]
@@ -238,8 +238,8 @@ char *nvim_al_file_pat_to_reg_pat(const char *pat) { return file_pat_to_reg_pat(
 int nvim_al_get_p_fic(void) { return p_fic; }
 void nvim_al_semsg_nomatch2(const char *s) { semsg(_(e_nomatch2), s); }
 void nvim_al_emsg_nomatch(void) { emsg(_(e_nomatch)); }
-char *nvim_al_alist_name(aentry_T *ae) { return alist_name(ae); }
-void nvim_al_check_arg_idx(win_T *wp) { check_arg_idx(wp); }
+// nvim_al_alist_name deleted: ffi.rs uses #[link_name = "alist_name"]
+void nvim_al_check_arg_idx(win_T *wp) { check_arg_idx(wp); }  // kept: used by nvim_ex_docmd crate
 char *nvim_al_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 char *nvim_al_curbuf_b_fname(void) { return curbuf->b_fname; }
 void nvim_al_memmove_aentry(aentry_T *dst, const aentry_T *src, int count)
@@ -248,14 +248,11 @@ void nvim_al_memmove_aentry(aentry_T *dst, const aentry_T *src, int count)
 }
 
 // -- Phase 5 extra accessors --
-buf_T *nvim_al_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
+// nvim_al_buflist_findnr deleted: ffi.rs uses #[link_name = "buflist_findnr"]
 char *nvim_al_buf_get_fname(buf_T *buf) { return buf == NULL ? NULL : buf->b_fname; }
 char *nvim_al_buf_get_ffname(buf_T *buf) { return buf == NULL ? NULL : buf->b_ffname; }
 int nvim_al_buf_get_fnum(buf_T *buf) { return buf == NULL ? 0 : buf->b_fnum; }
-int nvim_al_path_full_compare(const char *s1, const char *s2, int check_name, int expand_env)
-{
-  return path_full_compare(s1, s2, check_name, expand_env);
-}
+// nvim_al_path_full_compare deleted: ffi.rs uses #[link_name = "path_full_compare"]
 buf_T *nvim_al_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 void nvim_al_win_set_arg_idx_invalid(win_T *wp, int val) { wp->w_arg_idx_invalid = val; }
 
@@ -269,32 +266,28 @@ int nvim_al_eap_get_forceit(exarg_T *eap) { return eap->forceit; }
 int nvim_al_eap_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
 void nvim_al_eap_set_line1(exarg_T *eap, linenr_T val) { eap->line1 = val; }
 void nvim_al_eap_set_line2(exarg_T *eap, linenr_T val) { eap->line2 = val; }
-int nvim_al_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
-void nvim_al_setpcmark(void) { setpcmark(); }
-int nvim_al_win_split(int size, int flags) { return win_split(size, flags); }
+// nvim_al_check_can_set_curbuf_forceit deleted: ffi.rs uses #[link_name = "check_can_set_curbuf_forceit"]
+// nvim_al_setpcmark deleted: ffi.rs uses #[link_name = "setpcmark"]
+// nvim_al_win_split deleted: ffi.rs uses #[link_name = "win_split"]
 void nvim_al_reset_binding(win_T *wp) { RESET_BINDING(wp); }
-int nvim_al_buf_hide(buf_T *buf) { return buf_hide(buf); }
-char *nvim_al_fix_fname(const char *fname) { return fix_fname(fname); }
-int nvim_al_otherfile(const char *fname) { return otherfile((char *)fname); }
-int nvim_al_check_changed(buf_T *buf, int flags) { return check_changed(buf, flags); }
-int nvim_al_do_ecmd(int fnum, const char *ffname, const char *sfname, exarg_T *eap,
-                    linenr_T newlnum, int flags, win_T *oldwin)
-{
-  return do_ecmd(fnum, (char *)ffname, (char *)sfname, eap, newlnum, flags, oldwin);
-}
-void nvim_al_setmark(int c) { setmark(c); }
-char *nvim_al_FullName_save(const char *fname, int force) { return FullName_save(fname, force); }
-int nvim_al_path_fnamecmp(const char *s1, const char *s2) { return path_fnamecmp(s1, s2); }
+// nvim_al_buf_hide deleted: ffi.rs uses #[link_name = "rs_buf_hide"] (buf_hide is static inline)
+// nvim_al_fix_fname deleted: ffi.rs uses #[link_name = "fix_fname"]
+// nvim_al_otherfile deleted: ffi.rs uses #[link_name = "rs_otherfile"] (otherfile is static inline)
+// nvim_al_check_changed deleted: ffi.rs uses #[link_name = "check_changed"]
+// nvim_al_do_ecmd deleted: ffi.rs uses #[link_name = "do_ecmd"]
+// nvim_al_setmark deleted: ffi.rs uses #[link_name = "setmark"]
+// nvim_al_FullName_save deleted: ffi.rs uses #[link_name = "FullName_save"]
+// nvim_al_path_fnamecmp deleted: ffi.rs uses #[link_name = "path_fnamecmp"]
 int nvim_al_get_cmdmod_cmod_tab(void) { return cmdmod.cmod_tab; }
 void nvim_al_emsg_E163(void) { emsg(_("E163: There is only one file to edit")); }
 void nvim_al_emsg_E164(void) { emsg(_("E164: Cannot go before first file")); }
 void nvim_al_emsg_E165(void) { emsg(_("E165: Cannot go beyond last file")); }
 
 // -- Phase 7 extra accessors --
-void nvim_al_gotocmdline(int clr) { gotocmdline(clr); }
+void nvim_al_gotocmdline(int clr) { gotocmdline(clr); }  // kept: used by nvim_ex_cmds crate
 // nvim_al_list_in_columns deleted: arglist Rust now calls list_in_columns directly (Rust export).
-void nvim_al_maketitle(void) { maketitle(); }
-int nvim_al_curbuf_reusable(void) { return curbuf_reusable(); }
+// nvim_al_maketitle deleted: ffi.rs uses #[link_name = "maketitle"]
+// nvim_al_curbuf_reusable deleted: ffi.rs uses #[link_name = "rs_curbuf_reusable"] (curbuf_reusable is static inline)
 int nvim_al_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
 void nvim_al_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_al_emsg_invrange(void) { emsg(_(e_invrange)); }
@@ -304,14 +297,11 @@ void nvim_al_emsg_E610(void) { emsg(_("E610: No argument to delete")); }
 win_T *nvim_al_get_firstwin(void) { return firstwin; }
 win_T *nvim_al_get_lastwin(void) { return lastwin; }
 tabpage_T *nvim_al_get_first_tabpage(void) { return first_tabpage; }
-void nvim_al_goto_tabpage_tp(tabpage_T *tp, int trigger_enter, int trigger_leave)
-{
-  goto_tabpage_tp(tp, trigger_enter, trigger_leave);
-}
+void nvim_al_goto_tabpage_tp(tabpage_T *tp, int trigger_enter, int trigger_leave) { goto_tabpage_tp(tp, trigger_enter, trigger_leave); }  // kept: used by nvim_window crate
 // nvim_al_valid_tabpage, nvim_al_win_valid deleted: Rust ffi.rs now uses #[link_name] to call rs_ directly.
-void nvim_al_win_close(win_T *wp, int free_buf, int force) { win_close(wp, free_buf, force); }
-void nvim_al_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync); }
-void nvim_al_win_move_after(win_T *wp, win_T *after) { win_move_after(wp, after); }
+void nvim_al_win_close(win_T *wp, int free_buf, int force) { win_close(wp, free_buf, force); }  // kept: used by nvim_window crate
+void nvim_al_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync); }  // kept: used by nvim_buffer crate
+void nvim_al_win_move_after(win_T *wp, win_T *after) { win_move_after(wp, after); }  // kept: used by nvim_buffer crate
 // nvim_al_lastwin_nofloating deleted: Rust ffi.rs now uses #[link_name = "rs_lastwin_nofloating"].
 int nvim_al_win_is_floating(win_T *wp) { return wp->w_floating; }
 win_T *nvim_al_win_get_prev(win_T *wp) { return wp->w_prev; }
@@ -320,20 +310,20 @@ int nvim_al_win_get_width(win_T *wp) { return wp->w_width; }
 void *nvim_al_win_get_frame_parent(win_T *wp) { return wp->w_frame->fr_parent; }
 int nvim_al_get_Columns(void) { return Columns; }
 int nvim_al_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
-int nvim_al_bufIsChanged(buf_T *buf) { return bufIsChanged(buf); }
-int nvim_al_buf_is_empty(buf_T *buf) { return buf_is_empty(buf); }
-int nvim_al_autowrite(buf_T *buf, int eap_forceit) { return autowrite(buf, eap_forceit); }
+// nvim_al_bufIsChanged deleted: ffi.rs uses #[link_name = "bufIsChanged"]
+// nvim_al_buf_is_empty deleted: ffi.rs uses #[link_name = "rs_buf_is_empty"] (buf_is_empty is static inline)
+int nvim_al_autowrite(buf_T *buf, int eap_forceit) { return autowrite(buf, eap_forceit); }  // kept: used by nvim_buffer crate
 void *nvim_al_bufref_create(buf_T *buf)
 {
   bufref_T *br = xcalloc(1, sizeof(bufref_T));
   set_bufref(br, buf);
   return br;
 }
-int nvim_al_bufref_valid(void *br) { return bufref_valid((bufref_T *)br); }
+// nvim_al_bufref_valid deleted: ffi.rs uses #[link_name = "rs_bufref_valid"] (bufref_valid is static inline)
 void nvim_al_bufref_destroy(void *br) { xfree(br); }
 void nvim_al_set_bufref(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
 int nvim_al_ONE_WINDOW(void) { return ONE_WINDOW; }
-int nvim_al_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp); }
+int nvim_al_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp); }  // kept: used by nvim_buffer crate
 // nvim_al_reset_VIsual_and_resel deleted: Rust ffi.rs now uses #[link_name = "rs_reset_VIsual_and_resel"].
 void *nvim_al_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
 // nvim_al_tabpage_index deleted: Rust ffi.rs now uses #[link_name = "rs_tabpage_index"].
@@ -356,7 +346,7 @@ void nvim_al_emsg_e_window_layout(void) { emsg(_(e_window_layout_changed_unexpec
 
 // -- Phase 9 extra accessors (VimL functions) --
 int nvim_al_tv_get_type(typval_T *tv) { return (int)tv->v_type; }
-int64_t nvim_al_tv_get_number(typval_T *tv) { return tv_get_number(tv); }
+// nvim_al_tv_get_number deleted: ffi.rs uses #[link_name = "tv_get_number"]
 int64_t nvim_al_tv_get_number_chk(typval_T *tv, int *error)
 {
   bool berr = false;
@@ -369,13 +359,13 @@ int64_t nvim_al_tv_get_number_chk(typval_T *tv, int *error)
 void nvim_al_rettv_set_number(typval_T *rettv, int64_t val) { rettv->vval.v_number = val; }
 void nvim_al_rettv_set_string(typval_T *rettv, char *s) { rettv->vval.v_string = s; }
 void nvim_al_rettv_set_type(typval_T *rettv, int typ) { rettv->v_type = (VarType)typ; }
-void nvim_al_tv_list_alloc_ret(typval_T *rettv, int len) { tv_list_alloc_ret(rettv, len); }
+// nvim_al_tv_list_alloc_ret deleted: ffi.rs uses #[link_name = "tv_list_alloc_ret"]
 void nvim_al_tv_list_append_string(typval_T *rettv, const char *s, int64_t len)
 {
   tv_list_append_string(rettv->vval.v_list, s, (ssize_t)len);
 }
-win_T *nvim_al_find_win_by_nr_or_id(typval_T *tv) { return find_win_by_nr_or_id(tv); }
-win_T *nvim_al_find_tabwin(typval_T *tv_win, typval_T *tv_tab) { return find_tabwin(tv_win, tv_tab); }
+// nvim_al_find_win_by_nr_or_id deleted: ffi.rs uses #[link_name = "find_win_by_nr_or_id"]
+// nvim_al_find_tabwin deleted: ffi.rs uses #[link_name = "find_tabwin"]
 int nvim_al_win_get_alist_id(win_T *wp) { return wp->w_alist->id; }
 typval_T *nvim_al_tv_idx(typval_T *tv, int idx) { return &tv[idx]; }
 aentry_T *nvim_al_ae_idx(aentry_T *ae, int idx) { return &ae[idx]; }
