@@ -2425,8 +2425,12 @@ extern "C" {
     // Buffer field accessors (only the ones we actually call from Rust)
     fn nvim_autocmd_buf_get_fnum(buf: *const c_void) -> c_int;
 
-    // Win ignore check
-    fn nvim_autocmd_check_win_ignore(event: c_int, buf: *const c_void) -> bool;
+    // Win ignore helpers (Phase 4)
+    fn nvim_autocmd_event_is_positive(event: c_int) -> bool;
+    fn nvim_autocmd_buf_is_curbuf(buf: *const c_void) -> bool;
+    fn nvim_get_curwin_p_eiw() -> *const c_char;
+    fn nvim_autocmd_buf_get_nwindows(buf: *const c_void) -> c_int;
+    fn nvim_autocmd_all_wins_ignore_event(event: c_int, buf: *const c_void) -> bool;
 
     // AutoPatCmd lifecycle
     fn nvim_sizeof_autopatcmd() -> usize;
@@ -2574,6 +2578,27 @@ unsafe extern "C" fn getnextac_callback(
     do_concat: bool,
 ) -> *mut c_char {
     rs_getnextac(c, cookie, indent, do_concat)
+}
+
+// Phase 4: check_win_ignore implemented in Rust
+
+/// Check if ALL windows showing buf have 'eventignorewin' suppressing event.
+/// Mirrors the former C `nvim_autocmd_check_win_ignore`.
+///
+/// # Safety
+/// `buf` must be a valid buffer pointer or null.
+unsafe fn autocmd_check_win_ignore_rs(event: c_int, buf: *const c_void) -> bool {
+    // Only window-level events (negative sign in event_names) are affected.
+    if nvim_autocmd_event_is_positive(event) {
+        return false;
+    }
+    if nvim_autocmd_buf_is_curbuf(buf) {
+        return nvim_event_ignored(event, nvim_get_curwin_p_eiw());
+    }
+    if !buf.is_null() && nvim_autocmd_buf_get_nwindows(buf) > 0 {
+        return nvim_autocmd_all_wins_ignore_event(event, buf);
+    }
+    false
 }
 
 // Phase 3: resolve_fname and setup_afile implemented in Rust
@@ -2765,7 +2790,7 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
 
     // If event is allowed in 'eventignorewin', check if curwin or all windows
     // into "buf" are ignoring the event.
-    if !buf.is_null() && nvim_autocmd_check_win_ignore(event, buf) {
+    if !buf.is_null() && autocmd_check_win_ignore_rs(event, buf) {
         nvim_set_keytd(save_key_typed);
         return bypass_au(event, buf);
     }

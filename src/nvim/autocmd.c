@@ -1054,31 +1054,36 @@ void nvim_set_curbuf_b_au_did_filetype(bool v) { curbuf->b_au_did_filetype = v; 
 
 int nvim_autocmd_buf_get_fnum(const void *buf) { return ((const buf_T *)buf)->b_fnum; }
 
-// --- Win ignore / eventignorewin check ---
+// --- Win ignore / eventignorewin check (helpers for Rust migration) ---
 
-/// Check if ALL windows showing buf have 'eventignorewin' suppressing event.
-/// Returns true if the event should be ignored for this buf.
-bool nvim_autocmd_check_win_ignore(int event, const void *buf_raw)
+/// Return the sign of event_names[event].event (positive = true, non-positive = false).
+bool nvim_autocmd_event_is_positive(int event) { return event_names[event].event > 0; }
+
+/// Return true if buf == curbuf.
+bool nvim_autocmd_buf_is_curbuf(const void *buf) { return (const buf_T *)buf == curbuf; }
+
+/// Return curwin->w_p_eiw.
+const char *nvim_get_curwin_p_eiw(void) { return curwin->w_p_eiw; }
+
+/// Return buf->b_nwindows.
+int nvim_autocmd_buf_get_nwindows(const void *buf)
+{
+  return ((const buf_T *)buf)->b_nwindows;
+}
+
+/// Iterate all tab windows; return true if ALL windows showing buf ignore event.
+/// Returns false immediately if any window showing buf does NOT ignore the event.
+bool nvim_autocmd_all_wins_ignore_event(int event, const void *buf_raw)
 {
   const buf_T *buf = (const buf_T *)buf_raw;
-  // Only applies to events with negative sign (window-level events).
-  if (event_names[event].event > 0) {
-    return false;
-  }
-  if (buf == curbuf) {
-    return event_ignored(event, curwin->w_p_eiw);
-  }
-  if (buf != NULL && buf->b_nwindows > 0) {
-    bool all_ignore = true;
-    FOR_ALL_TAB_WINDOWS(tp, wp) {
-      if (wp->w_buffer == buf && !event_ignored(event, wp->w_p_eiw)) {
-        all_ignore = false;
-        break;
-      }
+  bool all_ignore = true;
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (wp->w_buffer == buf && !event_ignored(event, wp->w_p_eiw)) {
+      all_ignore = false;
+      break;
     }
-    return all_ignore;
   }
-  return false;
+  return all_ignore;
 }
 
 // --- AutoPatCmd lifecycle ---
