@@ -2500,10 +2500,10 @@ extern "C" {
     fn autocmd_emsg(msg: *const c_char);
 }
 
-// do_cmdline flags
-const DOCMD_NOWAIT: c_int = 0x01;
-const DOCMD_VERBOSE: c_int = 0x02;
-const DOCMD_REPEAT: c_int = 0x08;
+// do_cmdline flags (from ex_docmd.h)
+const DOCMD_NOWAIT: c_int = 0x02;
+const DOCMD_VERBOSE: c_int = 0x01;
+const DOCMD_REPEAT: c_int = 0x04;
 
 // getnextac as a callback pointer
 unsafe extern "C" fn getnextac_callback(

@@ -42,7 +42,9 @@ const OPT_VAL_TYPE_STRING: c_int = 2;
 const K_TRUE: c_int = 1;
 
 // VV_SWAPCOMMAND index (from eval_defs.h VvVars)
-const VV_SWAPCOMMAND: c_int = 35;
+// Verified: VV_COUNT=0, ..., VV_INSERTMODE=34, VV_VAL=35, VV_KEY=36, ...
+// VV_SWAPCOMMAND=49 (not 35, which is VV_VAL)
+const VV_SWAPCOMMAND: c_int = 49;
 
 // SESSION_FILE default name
 const SESSION_FILE: &[u8] = b"Session.vim\0";
