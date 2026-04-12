@@ -133,211 +133,46 @@ extern void rs_win_update_visual_region(win_T *wp, buf_T *buf, int type,
                                         int *mid_start, int *mid_end);
 extern bool rs_win_redraw_signcols(win_T *wp);
 extern void nvim_set_conceal_cursor_used(int val);
+extern void rs_win_update(win_T *wp);  // Rust entry point
 
 static void win_update(win_T *wp);  // forward declaration
 
 
-/// Body of win_update() after size checks, called from rs_win_update() in Rust.
-/// Handles initialization, scroll computation, draw loop, and finalization.
-/// The caller (Rust) has already handled zero-size early returns.
-void nvim_win_update_body(win_T *wp)
+/// Execute the scroll + draw loop + finalize portion of nvim_win_update_body.
+/// Called by rs_win_update() (via Rust) after the init phase has run.
+/// The Rust init phase computes st and passes it here.
+void nvim_win_update_body_from_scroll(win_T *wp, WinUpdateBodyState *st)
 {
-  int top_end = 0;              // Below last row of the top area that needs
-                                // updating.  0 when no top area updating.
-  int mid_start = 999;          // first row of the mid area that needs
-                                // updating.  999 when no mid area updating.
-  int mid_end = 0;              // Below last row of the mid area that needs
-                                // updating.  0 when no mid area updating.
-  int bot_start = 999;          // first row of the bot area that needs
-                                // updating.  999 when no bot area updating
-  bool scrolled_down = false;   // true when scrolled down when w_topline got smaller a bit
-  bool top_to_mod = false;      // redraw above mod_top
+  int top_end = st->top_end;
+  int mid_start = st->mid_start;
+  int mid_end = st->mid_end;
+  int bot_start = st->bot_start;
+  int bot_scroll_start = st->bot_scroll_start;
+  bool scrolled_down = st->scrolled_down;
+  bool top_to_mod = st->top_to_mod;
 
-  int bot_scroll_start = 999;   // first line that needs to be redrawn due to
-                                // scrolling. only used for EOB
-
-  static bool recursive = false;  // being called recursively
-
-  // Remember what happened to the previous line.
+  // did_update enum: DID_NONE=1, DID_LINE=2, DID_FOLD=3
   enum {
-    DID_NONE = 1,  // didn't update a line
-    DID_LINE = 2,  // updated a normal line
-    DID_FOLD = 3,  // updated a folded line
-  } did_update = DID_NONE;
+    DID_NONE = 1,
+    DID_LINE = 2,
+    DID_FOLD = 3,
+  } did_update = (int)st->did_update;
 
-  linenr_T syntax_last_parsed = 0;              // last parsed text line
-  linenr_T mod_top = 0;
-  linenr_T mod_bot = 0;
-
-  int type = wp->w_redr_type;
-
-  if (type >= UPD_NOT_VALID) {
-    wp->w_redr_status = true;
-    wp->w_lines_valid = 0;
-  }
+  linenr_T syntax_last_parsed = st->syntax_last_parsed;
+  linenr_T mod_top = st->mod_top;
+  linenr_T mod_bot = st->mod_bot;
+  int type = st->type;
+  int save_got_int = st->save_got_int;
+  int nrwidth_before = st->nrwidth_before;
+  static bool recursive = false;  // being called recursively
 
   buf_T *buf = wp->w_buffer;
 
-  // reset got_int, otherwise regexp won't work
-  int save_got_int = got_int;
+  // Zero got_int (Rust init only saved it; we zero+restore here to keep
+  // the proftime_T alive for the duration of this function).
   got_int = 0;
-  // Set the time limit to 'redrawtime'.
   proftime_T syntax_tm = profile_setlimit(p_rdt);
   syn_set_timeout(&syntax_tm);
-
-  win_extmark_arr.size = 0;
-
-  decor_redraw_reset(wp, &decor_state);
-
-  decor_providers_invoke_win(wp);
-
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (win->w_buffer == wp->w_buffer && rs_win_redraw_signcols(win)) {
-      changed_line_abv_curs_win(win);
-      redraw_later(win, UPD_NOT_VALID);
-    }
-  }
-  buf->b_signcols.last_max = buf->b_signcols.max;
-
-  init_search_hl(wp, &screen_search_hl);
-
-  // Make sure skipcol is valid, it depends on various options and the window
-  // width.
-  if (wp->w_skipcol > 0 && wp->w_view_width > win_col_off(wp)) {
-    int w = 0;
-    int width1 = wp->w_view_width - win_col_off(wp);
-    int width2 = width1 + win_col_off2(wp);
-    int add = width1;
-
-    while (w < wp->w_skipcol) {
-      if (w > 0) {
-        add = width2;
-      }
-      w += add;
-    }
-    if (w != wp->w_skipcol) {
-      // always round down, the higher value may not be valid
-      wp->w_skipcol = w - add;
-    }
-  }
-
-  const int nrwidth_before = wp->w_nrwidth;
-  int nrwidth_new = (wp->w_p_nu || wp->w_p_rnu || *wp->w_p_stc) ? number_width(wp) : 0;
-  // Force redraw when width of 'number' or 'relativenumber' column changes.
-  if (wp->w_nrwidth != nrwidth_new) {
-    type = UPD_NOT_VALID;
-    changed_line_abv_curs_win(wp);
-    wp->w_nrwidth = nrwidth_new;
-  } else {
-    // Set mod_top to the first line that needs displaying because of
-    // changes.  Set mod_bot to the first line after the changes.
-    mod_top = wp->w_redraw_top;
-    if (wp->w_redraw_bot != 0) {
-      mod_bot = wp->w_redraw_bot + 1;
-    } else {
-      mod_bot = 0;
-    }
-    if (buf->b_mod_set) {
-      if (mod_top == 0 || mod_top > buf->b_mod_top) {
-        mod_top = buf->b_mod_top;
-        // Need to redraw lines above the change that may be included
-        // in a pattern match.
-        if (syntax_present(wp)) {
-          mod_top -= buf->b_s.b_syn_sync_linebreaks;
-          mod_top = MAX(mod_top, 1);
-        }
-      }
-      if (mod_bot == 0 || mod_bot < buf->b_mod_bot) {
-        mod_bot = buf->b_mod_bot;
-      }
-
-      // When 'hlsearch' is on and using a multi-line search pattern, a
-      // change in one line may make the Search highlighting in a
-      // previous line invalid.  Simple solution: redraw all visible
-      // lines above the change.
-      // Same for a match pattern.
-      if (screen_search_hl.rm.regprog != NULL
-          && re_multiline(screen_search_hl.rm.regprog)) {
-        top_to_mod = true;
-      } else {
-        const matchitem_T *cur = wp->w_match_head;
-        while (cur != NULL) {
-          if (cur->mit_match.regprog != NULL
-              && re_multiline(cur->mit_match.regprog)) {
-            top_to_mod = true;
-            break;
-          }
-          cur = cur->mit_next;
-        }
-      }
-    }
-
-    if (search_hl_has_cursor_lnum > 0) {
-      // CurSearch was used last time, need to redraw the line with it to
-      // avoid having two matches highlighted with CurSearch.
-      if (mod_top == 0 || mod_top > search_hl_has_cursor_lnum) {
-        mod_top = search_hl_has_cursor_lnum;
-      }
-      if (mod_bot == 0 || mod_bot < search_hl_has_cursor_lnum + 1) {
-        mod_bot = search_hl_has_cursor_lnum + 1;
-      }
-    }
-
-    if (mod_top != 0 && win_lines_concealed(wp)) {
-      // A change in a line can cause lines above it to become folded or
-      // unfolded.  Find the top most buffer line that may be affected.
-      // If the line was previously folded and displayed, get the first
-      // line of that fold.  If the line is folded now, get the first
-      // folded line.  Use the minimum of these two.
-
-      // Find last valid w_lines[] entry above mod_top.  Set lnumt to
-      // the line below it.  If there is no valid entry, use w_topline.
-      // Find the first valid w_lines[] entry below mod_bot.  Set lnumb
-      // to this line.  If there is no valid entry, use MAXLNUM.
-      linenr_T lnumt = wp->w_topline;
-      linenr_T lnumb = MAXLNUM;
-      for (int i = 0; i < wp->w_lines_valid; i++) {
-        if (wp->w_lines[i].wl_valid) {
-          if (wp->w_lines[i].wl_lastlnum < mod_top) {
-            lnumt = wp->w_lines[i].wl_lastlnum + 1;
-          }
-          if (lnumb == MAXLNUM && wp->w_lines[i].wl_lnum >= mod_bot) {
-            lnumb = wp->w_lines[i].wl_lnum;
-            // When there is a fold column it might need updating
-            // in the next line ("J" just above an open fold).
-            if (compute_foldcolumn(wp, 0) > 0) {
-              lnumb++;
-            }
-          }
-        }
-      }
-
-      hasFolding(wp, mod_top, &mod_top, NULL);
-      mod_top = MIN(mod_top, lnumt);
-
-      // Now do the same for the bottom line (one above mod_bot).
-      mod_bot--;
-      hasFolding(wp, mod_bot, NULL, &mod_bot);
-      mod_bot++;
-      mod_bot = MAX(mod_bot, lnumb);
-    }
-
-    // When a change starts above w_topline and the end is below
-    // w_topline, start redrawing at w_topline.
-    // If the end of the change is above w_topline: do like no change was
-    // made, but redraw the first line to find changes in syntax.
-    if (mod_top != 0 && mod_top < wp->w_topline) {
-      if (mod_bot > wp->w_topline) {
-        mod_top = wp->w_topline;
-      } else if (syntax_present(wp)) {
-        top_end = 1;
-      }
-    }
-  }
-
-  wp->w_redraw_top = 0;  // reset for next time
-  wp->w_redraw_bot = 0;
-  search_hl_has_cursor_lnum = 0;
 
   // When only displaying the lines at the top, set top_end.  Used when
   // window has scrolled down for msg_scrolled.
@@ -1014,7 +849,7 @@ redr_statuscol:
         int mod_set = curbuf->b_mod_set;
         curbuf->b_mod_set = false;
         curs_columns(curwin, true);
-        nvim_win_update_body(curwin);
+        rs_win_update(curwin);
         must_redraw = 0;
         curbuf->b_mod_set = mod_set;
       }

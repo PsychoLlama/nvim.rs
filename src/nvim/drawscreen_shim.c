@@ -544,3 +544,95 @@ int nvim_decor_virt_lines_check(win_T *wp, linenr_T start, linenr_T end)
 {
   return decor_virt_lines(wp, start, end, NULL, NULL, true) > 0 ? 1 : 0;
 }
+
+// =============================================================================
+// Phase 1 (plan 78e2a5ac): nvim_win_update_body init accessors
+// =============================================================================
+
+/// Return true if any match item in wp->w_match_head has a multiline regprog.
+bool nvim_win_match_has_multiline_regprog(win_T *wp)
+{
+  const matchitem_T *cur = wp->w_match_head;
+  while (cur != NULL) {
+    if (cur->mit_match.regprog != NULL && re_multiline(cur->mit_match.regprog)) {
+      return true;
+    }
+    cur = cur->mit_next;
+  }
+  return false;
+}
+
+/// Return true if screen_search_hl has a multiline regprog.
+bool nvim_search_hl_is_multiline(void)
+{
+  return screen_search_hl.rm.regprog != NULL
+         && re_multiline(screen_search_hl.rm.regprog);
+}
+
+/// Reset win_extmark_arr.size to 0.
+void nvim_win_extmark_arr_reset(void)
+{
+  win_extmark_arr.size = 0;
+}
+
+/// Call decor_redraw_reset(wp, &decor_state).
+void nvim_decor_redraw_reset_win(win_T *wp)
+{
+  decor_redraw_reset(wp, &decor_state);
+}
+
+/// Call decor_providers_invoke_win(wp).
+void nvim_decor_providers_invoke_win_shim(win_T *wp)
+{
+  decor_providers_invoke_win(wp);
+}
+
+/// Call init_search_hl(wp, &screen_search_hl).
+void nvim_init_search_hl_win(win_T *wp)
+{
+  init_search_hl(wp, &screen_search_hl);
+}
+
+/// Get buf->b_s.b_syn_sync_linebreaks.
+linenr_T nvim_buf_get_syn_sync_linebreaks(buf_T *buf)
+{
+  return buf->b_s.b_syn_sync_linebreaks;
+}
+
+/// Get wp->w_upd_rows.
+int nvim_win_get_upd_rows(win_T *wp)
+{
+  return wp->w_upd_rows;
+}
+
+/// Get wp->w_lines[idx].wl_lnum.
+linenr_T nvim_win_get_wlines_lnum(win_T *wp, int idx)
+{
+  return wp->w_lines[idx].wl_lnum;
+}
+
+/// Get wp->w_lines[idx].wl_lastlnum.
+linenr_T nvim_win_get_wlines_lastlnum(win_T *wp, int idx)
+{
+  return wp->w_lines[idx].wl_lastlnum;
+}
+
+/// Get wp->w_lines[idx].wl_valid.
+bool nvim_win_get_wlines_valid(win_T *wp, int idx)
+{
+  return wp->w_lines[idx].wl_valid;
+}
+
+/// Wrap hasFolding(wp, lnum, lo, hi). lo and hi are linenr_T pointers (may be NULL).
+/// Returns true if lnum is in a fold.
+bool nvim_hasFolding_win(win_T *wp, linenr_T lnum, linenr_T *lo, linenr_T *hi)
+{
+  return hasFolding(wp, lnum, lo, hi);
+}
+
+/// Call number_width(wp) and return.
+int nvim_number_width(win_T *wp)
+{
+  return number_width(wp);
+}
+

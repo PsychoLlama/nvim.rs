@@ -3310,9 +3310,6 @@ pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
 // =============================================================================
 
 extern "C" {
-    /// Body of win_update() after zero-size checks, called from rs_win_update().
-    fn nvim_win_update_body(wp: WinHandle);
-
     /// update_window_hl: update highlight attributes for a window.
     fn update_window_hl(wp: WinHandle, invalid: bool);
 
@@ -3354,10 +3351,351 @@ extern "C" {
 
 }
 
+// =============================================================================
+// Phase 1 (plan 78e2a5ac): nvim_win_update_body init FFI + implementation
+// =============================================================================
+
+extern "C" {
+    /// Return true if any match item has a multiline regprog.
+    fn nvim_win_match_has_multiline_regprog(wp: WinHandle) -> bool;
+    /// Return true if screen_search_hl has a multiline regprog.
+    fn nvim_search_hl_is_multiline() -> bool;
+    /// Reset win_extmark_arr.size to 0.
+    fn nvim_win_extmark_arr_reset();
+    /// Call decor_redraw_reset(wp, &decor_state).
+    fn nvim_decor_redraw_reset_win(wp: WinHandle);
+    /// Call decor_providers_invoke_win(wp).
+    fn nvim_decor_providers_invoke_win_shim(wp: WinHandle);
+    /// Call init_search_hl(wp, &screen_search_hl).
+    fn nvim_init_search_hl_win(wp: WinHandle);
+    /// Get buf->b_mod_top.
+    fn nvim_buf_get_mod_top(buf: BufHandle) -> LinenrT;
+    /// Get buf->b_mod_bot.
+    fn nvim_buf_get_mod_bot(buf: BufHandle) -> LinenrT;
+    /// Get buf->b_s.b_syn_sync_linebreaks.
+    fn nvim_buf_get_syn_sync_linebreaks(buf: BufHandle) -> LinenrT;
+    /// Get wp->w_skipcol.
+    fn nvim_win_get_skipcol(wp: WinHandle) -> ColnrT;
+    /// Set wp->w_skipcol.
+    fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
+    /// Set wp->w_nrwidth.
+    fn nvim_win_set_nrwidth(wp: WinHandle, val: c_int);
+    /// Get wp->w_upd_rows.
+    fn nvim_win_get_upd_rows(wp: WinHandle) -> c_int;
+    /// Get wp->w_lines[idx].wl_lnum.
+    fn nvim_win_get_wlines_lnum(wp: WinHandle, idx: c_int) -> LinenrT;
+    /// Get wp->w_lines[idx].wl_lastlnum.
+    fn nvim_win_get_wlines_lastlnum(wp: WinHandle, idx: c_int) -> LinenrT;
+    /// Get wp->w_lines[idx].wl_valid.
+    fn nvim_win_get_wlines_valid(wp: WinHandle, idx: c_int) -> bool;
+    /// hasFolding wrapper: returns true if lnum is in a fold.
+    fn nvim_hasFolding_win(
+        wp: WinHandle,
+        lnum: LinenrT,
+        lo: *mut LinenrT,
+        hi: *mut LinenrT,
+    ) -> bool;
+    /// Call changed_line_abv_curs_win(wp).
+    fn nvim_changed_line_abv_curs_win(wp: WinHandle);
+    /// Call number_width(wp).
+    fn nvim_number_width(wp: WinHandle) -> c_int;
+    /// Get search_hl_has_cursor_lnum.
+    fn nvim_get_search_hl_has_cursor_lnum() -> LinenrT;
+    /// Set search_hl_has_cursor_lnum.
+    fn nvim_set_search_hl_has_cursor_lnum(val: LinenrT);
+    /// Execute the scroll + draw loop + finalize of nvim_win_update_body.
+    fn nvim_win_update_body_from_scroll(wp: WinHandle, st: *mut WinUpdateBodyState);
+    /// nvim_win_lines_concealed: returns 1 if window has concealed lines.
+    #[link_name = "nvim_win_lines_concealed"]
+    fn nvim_win_lines_concealed_init(wp: WinHandle) -> c_int;
+    /// compute_foldcolumn: compute fold column width.
+    #[link_name = "compute_foldcolumn"]
+    fn compute_foldcolumn_init(wp: WinHandle, extra: c_int) -> c_int;
+    /// nvim_win_col_off: call win_col_off(wp).
+    fn nvim_win_col_off(wp: WinHandle) -> c_int;
+    /// nvim_win_col_off2: call win_col_off2(wp).
+    fn nvim_win_col_off2(wp: WinHandle) -> c_int;
+    /// nvim_win_update_syn_timeout_start: setup syntax timeout.
+    fn nvim_win_update_syn_timeout_start(wp: WinHandle);
+    /// nvim_win_update_signcols_for_tab: FOR_ALL_WINDOWS_IN_TAB signcols helper.
+    fn nvim_win_update_signcols_for_tab(wp: WinHandle);
+    /// nvim_get_got_int: get global got_int.
+    fn nvim_get_got_int() -> c_int;
+    /// nvim_win_get_redraw_top: get wp->w_redraw_top.
+    #[link_name = "nvim_win_get_redraw_top"]
+    fn win_get_redraw_top(wp: WinHandle) -> LinenrT;
+    /// nvim_win_set_redraw_top: set wp->w_redraw_top.
+    #[link_name = "nvim_win_set_redraw_top"]
+    fn win_set_redraw_top(wp: WinHandle, val: LinenrT);
+    /// nvim_win_get_redraw_bot: get wp->w_redraw_bot.
+    #[link_name = "nvim_win_get_redraw_bot"]
+    fn win_get_redraw_bot(wp: WinHandle) -> LinenrT;
+    /// nvim_win_set_redraw_bot: set wp->w_redraw_bot.
+    #[link_name = "nvim_win_set_redraw_bot"]
+    fn win_set_redraw_bot(wp: WinHandle, val: LinenrT);
+    /// nvim_win_get_p_nu: get wp->w_p_nu.
+    fn nvim_win_get_p_nu(wp: WinHandle) -> c_int;
+    /// nvim_win_get_p_rnu: get wp->w_p_rnu.
+    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
+    /// nvim_win_get_nrwidth: get wp->w_nrwidth.
+    fn nvim_win_get_nrwidth(wp: WinHandle) -> c_int;
+    /// nvim_win_get_wlines_size: get wp->w_lines[idx].wl_size.
+    fn nvim_win_get_wlines_size(wp: WinHandle, idx: c_int) -> c_int;
+    /// nvim_win_get_redr_type: get wp->w_redr_type.
+    #[link_name = "nvim_win_get_redr_type"]
+    fn win_get_redr_type_body(wp: WinHandle) -> c_int;
+    /// nvim_win_set_redr_status: set wp->w_redr_status.
+    #[link_name = "nvim_win_set_redr_status"]
+    fn win_set_redr_status_body(wp: WinHandle, val: c_int);
+    /// nvim_win_set_lines_valid: set wp->w_lines_valid.
+    #[link_name = "nvim_win_set_lines_valid"]
+    fn win_set_lines_valid_body(wp: WinHandle, val: c_int);
+    /// nvim_win_get_lines_valid: get wp->w_lines_valid.
+    #[link_name = "nvim_win_get_lines_valid"]
+    fn win_get_lines_valid_body(wp: WinHandle) -> c_int;
+    /// nvim_win_get_topline: get wp->w_topline.
+    #[link_name = "nvim_win_get_topline"]
+    fn win_get_topline_body(wp: WinHandle) -> LinenrT;
+    /// nvim_buf_get_ml_line_count: get buf->b_ml.ml_line_count.
+    #[link_name = "nvim_buf_get_ml_line_count"]
+    fn buf_get_ml_line_count_body(buf: BufHandle) -> LinenrT;
+    /// nvim_buf_get_mod_set: get buf->b_mod_set.
+    #[link_name = "nvim_buf_get_mod_set"]
+    fn buf_get_mod_set_body(buf: BufHandle) -> c_int;
+}
+
+/// DID_NONE = 1, DID_LINE = 2, DID_FOLD = 3
+const DID_NONE: c_int = 1;
+
+/// State passed from Rust init phase to C from-scroll phase.
+/// Must match WinUpdateBodyState in drawscreen.h (C typedef struct).
+#[repr(C)]
+struct WinUpdateBodyState {
+    top_end: c_int,
+    mid_start: c_int,
+    mid_end: c_int,
+    bot_start: c_int,
+    bot_scroll_start: c_int,
+    scrolled_down: bool,
+    top_to_mod: bool,
+    did_update: c_int,
+    syntax_last_parsed: LinenrT,
+    mod_top: LinenrT,
+    mod_bot: LinenrT,
+    type_: c_int,
+    save_got_int: c_int,
+    nrwidth_before: c_int,
+}
+
+/// Rust implementation of the init phase of nvim_win_update_body (lines 143-340 of C).
+///
+/// Sets up syntax timeout, resets win_extmark_arr, initializes search highlight,
+/// validates skipcol, handles nrwidth change, and computes mod_top/mod_bot.
+///
+/// # Safety
+/// Must be called with a valid non-null wp and during screen update.
+#[allow(clippy::too_many_lines)]
+unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
+    // Read type from window (rs_win_update already did UPD_NOT_VALID side-effects).
+    let type_ = win_get_redr_type_body(wp);
+    let buf = nvim_win_get_buffer(wp);
+
+    // Save got_int; the C from_scroll function will zero and restore it.
+    // (Zeroing got_int + syn_set_timeout is done in C where proftime_T stays in scope.)
+    let save_got_int = nvim_get_got_int();
+
+    // win_extmark_arr.size = 0
+    nvim_win_extmark_arr_reset();
+
+    // decor_redraw_reset(wp, &decor_state)
+    nvim_decor_redraw_reset_win(wp);
+
+    // decor_providers_invoke_win(wp)
+    nvim_decor_providers_invoke_win_shim(wp);
+
+    // FOR_ALL_WINDOWS_IN_TAB signcols update
+    nvim_win_update_signcols_for_tab(wp);
+
+    // init_search_hl(wp, &screen_search_hl)
+    nvim_init_search_hl_win(wp);
+
+    // Make sure skipcol is valid
+    let skipcol = nvim_win_get_skipcol(wp);
+    let view_width = nvim_win_get_view_width(wp);
+    let col_off = nvim_win_col_off(wp);
+    if skipcol > 0 && view_width > col_off {
+        let mut w: c_int = 0;
+        let width1 = view_width - col_off;
+        let width2 = width1 + nvim_win_col_off2(wp);
+        let mut add = width1;
+
+        while w < skipcol {
+            if w > 0 {
+                add = width2;
+            }
+            w += add;
+        }
+        if w != skipcol {
+            // always round down, the higher value may not be valid
+            nvim_win_set_skipcol(wp, w - add);
+        }
+    }
+
+    let nrwidth_before = nvim_win_get_nrwidth(wp);
+    let has_stc = nvim_win_get_w_p_stc_nul(wp);
+    let nrwidth_new = if nvim_win_get_p_nu(wp) != 0 || nvim_win_get_p_rnu(wp) != 0 || has_stc {
+        nvim_number_width(wp)
+    } else {
+        0
+    };
+
+    let mut top_end: c_int = 0;
+    let mut top_to_mod = false;
+    let mut mod_top: LinenrT = 0;
+    let mut mod_bot: LinenrT = 0;
+    let mut type_ = type_;
+
+    #[allow(clippy::if_not_else)]
+    if nvim_win_get_nrwidth(wp) != nrwidth_new {
+        // Force redraw when width of 'number' or 'relativenumber' column changes.
+        type_ = UPD_NOT_VALID;
+        nvim_changed_line_abv_curs_win(wp);
+        nvim_win_set_nrwidth(wp, nrwidth_new);
+    } else {
+        // Set mod_top to the first line that needs displaying because of
+        // changes. Set mod_bot to the first line after the changes.
+        mod_top = win_get_redraw_top(wp);
+        let redraw_bot = win_get_redraw_bot(wp);
+        mod_bot = if redraw_bot != 0 { redraw_bot + 1 } else { 0 };
+
+        if buf_get_mod_set_body(buf) != 0 {
+            let b_mod_top = nvim_buf_get_mod_top(buf);
+            let b_mod_bot = nvim_buf_get_mod_bot(buf);
+
+            if mod_top == 0 || mod_top > b_mod_top {
+                mod_top = b_mod_top;
+                // Need to redraw lines above the change that may be included
+                // in a pattern match.
+                if syntax_present(wp) {
+                    mod_top -= nvim_buf_get_syn_sync_linebreaks(buf);
+                    if mod_top < 1 {
+                        mod_top = 1;
+                    }
+                }
+            }
+            if mod_bot == 0 || mod_bot < b_mod_bot {
+                mod_bot = b_mod_bot;
+            }
+
+            // When 'hlsearch' is on and using a multi-line search pattern, a
+            // change in one line may make the Search highlighting in a
+            // previous line invalid. Simple solution: redraw all visible
+            // lines above the change. Same for a match pattern.
+            if nvim_search_hl_is_multiline() || nvim_win_match_has_multiline_regprog(wp) {
+                top_to_mod = true;
+            }
+        }
+
+        let search_hl_cursor = nvim_get_search_hl_has_cursor_lnum();
+        if search_hl_cursor > 0 {
+            // CurSearch was used last time, need to redraw the line with it to
+            // avoid having two matches highlighted with CurSearch.
+            if mod_top == 0 || mod_top > search_hl_cursor {
+                mod_top = search_hl_cursor;
+            }
+            if mod_bot == 0 || mod_bot < search_hl_cursor + 1 {
+                mod_bot = search_hl_cursor + 1;
+            }
+        }
+
+        if mod_top != 0 && nvim_win_lines_concealed_init(wp) != 0 {
+            // A change in a line can cause lines above it to become folded or
+            // unfolded. Find the top most buffer line that may be affected.
+            let topline = win_get_topline_body(wp);
+            let lines_valid = win_get_lines_valid_body(wp);
+            let mut fold_top_lnum = topline;
+            #[allow(clippy::similar_names)]
+            let mut fold_bot_lnum: LinenrT = MAXLNUM;
+
+            for i in 0..lines_valid {
+                if nvim_win_get_wlines_valid(wp, i) {
+                    let wl_lastlnum = nvim_win_get_wlines_lastlnum(wp, i);
+                    let wl_lnum = nvim_win_get_wlines_lnum(wp, i);
+                    if wl_lastlnum < mod_top {
+                        fold_top_lnum = wl_lastlnum + 1;
+                    }
+                    if fold_bot_lnum == MAXLNUM && wl_lnum >= mod_bot {
+                        fold_bot_lnum = wl_lnum;
+                        // When there is a fold column it might need updating
+                        // in the next line ("J" just above an open fold).
+                        if compute_foldcolumn_init(wp, 0) > 0 {
+                            fold_bot_lnum += 1;
+                        }
+                    }
+                }
+            }
+
+            nvim_hasFolding_win(
+                wp,
+                mod_top,
+                std::ptr::addr_of_mut!(mod_top),
+                std::ptr::null_mut(),
+            );
+            mod_top = mod_top.min(fold_top_lnum);
+
+            // Now do the same for the bottom line (one above mod_bot).
+            mod_bot -= 1;
+            nvim_hasFolding_win(
+                wp,
+                mod_bot,
+                std::ptr::null_mut(),
+                std::ptr::addr_of_mut!(mod_bot),
+            );
+            mod_bot += 1;
+            mod_bot = mod_bot.max(fold_bot_lnum);
+        }
+
+        // When a change starts above w_topline and the end is below
+        // w_topline, start redrawing at w_topline.
+        // If the end of the change is above w_topline: do like no change was
+        // made, but redraw the first line to find changes in syntax.
+        let topline = win_get_topline_body(wp);
+        if mod_top != 0 && mod_top < topline {
+            if mod_bot > topline {
+                mod_top = topline;
+            } else if syntax_present(wp) {
+                top_end = 1;
+            }
+        }
+    }
+
+    win_set_redraw_top(wp, 0); // reset for next time
+    win_set_redraw_bot(wp, 0);
+    nvim_set_search_hl_has_cursor_lnum(0);
+
+    WinUpdateBodyState {
+        top_end,
+        mid_start: 999,
+        mid_end: 0,
+        bot_start: 999,
+        bot_scroll_start: 999,
+        scrolled_down: false,
+        top_to_mod,
+        did_update: DID_NONE,
+        syntax_last_parsed: 0,
+        mod_top,
+        mod_bot,
+        type_,
+        save_got_int,
+        nrwidth_before,
+    }
+}
+
 /// Rust entry point for updating a single window.
 ///
 /// Handles the zero-size early-return cases (drawing only separator lines),
-/// then delegates to the C body `nvim_win_update_body` for the full update.
+/// then runs the Rust init phase and delegates to the C body for
+/// scroll + draw loop + finalize.
 ///
 /// Replaces the former `nvim_win_update` C wrapper.
 ///
@@ -3387,8 +3725,11 @@ pub unsafe extern "C" fn rs_win_update(wp: WinHandle) {
         return;
     }
 
-    // Delegate to the C body for the full update logic.
-    nvim_win_update_body(wp);
+    // Phase 1 (Rust): run the init phase (lines 143-340 of the original C).
+    let mut state = win_update_body_init(wp);
+
+    // Phases 2+3 (C): scroll optimization + draw loop + finalize.
+    nvim_win_update_body_from_scroll(wp, std::ptr::addr_of_mut!(state));
 }
 
 /// Handle the three window iteration loops of update_screen.
