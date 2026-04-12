@@ -132,39 +132,7 @@ uint64_t nvim_chan_get_next_chan_id(void) { return next_chan_id; }
 void nvim_chan_set_next_chan_id(uint64_t v) { next_chan_id = v; }
 void nvim_chan_map_put(uint64_t id, Channel *chan) { pmap_put(uint64_t)(&channels, id, chan); }
 
-void channel_create_event(Channel *chan, const char *ext_source)
-{
-#ifdef NVIM_LOG_DEBUG
-  const char *source;
-
-  if (ext_source) {
-    // TODO(bfredl): in a future improved traceback solution,
-    // external events should be included.
-    source = ext_source;
-  } else {
-    eval_fmt_source_name_line(IObuff, sizeof(IObuff));
-    source = IObuff;
-  }
-
-  assert(chan->id <= VARNUMBER_MAX);
-  Arena arena = ARENA_EMPTY;
-  Dict info = channel_info(chan->id, &arena);
-  typval_T tv = TV_INITIAL_VALUE;
-  // TODO(bfredl): do the conversion in one step. Also would be nice
-  // to pretty print top level dict in defined order
-  object_to_vim(DICT_OBJ(info), &tv, NULL);
-  assert(tv.v_type == VAR_DICT);
-  char *str = encode_tv2json(&tv, NULL);
-  ILOG("new channel %" PRIu64 " (%s) : %s", chan->id, source, str);
-  xfree(str);
-  arena_mem_free(arena_finish(&arena));
-
-#else
-  (void)ext_source;
-#endif
-
-  channel_info_changed(chan, true);
-}
+// channel_create_event implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 // channel_incref, channel_decref, callback_reader_free, callback_reader_start
 // implemented in Rust (src/nvim-rs/channel/src/lib.rs)
@@ -340,20 +308,7 @@ end:
   return channel->id;
 }
 
-/// Creates an RPC channel from a tcp/pipe socket connection
-///
-/// @param watcher The SocketWatcher ready to accept the connection
-void channel_from_connection(SocketWatcher *watcher)
-{
-  Channel *channel = channel_alloc(kChannelStreamSocket);
-  socket_watcher_accept(watcher, &channel->stream.socket);
-  channel->stream.socket.s.internal_close_cb = close_cb;
-  channel->stream.socket.s.internal_data = channel;
-  wstream_init(&channel->stream.socket.s, 0);
-  rstream_init(&channel->stream.socket);
-  rpc_start(channel);
-  channel_create_event(channel, watcher->addr);
-}
+// channel_from_connection implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 /// Creates an API channel from stdin/stdout. Used when embedding Nvim.
 uint64_t channel_from_stdio(bool rpc, CallbackReader on_output, const char **error)
@@ -511,23 +466,7 @@ Dict channel_info(uint64_t id, Arena *arena)
 
 // int64_t_cmp implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-Array channel_all_info(Arena *arena)
-{
-  // order the items in the array by channel number, for Determinism™
-  kvec_t(int64_t) ids = KV_INITIAL_VALUE;
-  kv_fixsize_arena(arena, ids, map_size(&channels));
-  uint64_t id;
-  map_foreach_key(&channels, id, {
-    kv_push(ids, (int64_t)id);
-  });
-  qsort(ids.items, ids.size, sizeof ids.items[0], int64_t_cmp);
-
-  Array ret = arena_array(arena, ids.size);
-  for (size_t i = 0; i < ids.size; i++) {
-    ADD_C(ret, DICT_OBJ(channel_info((uint64_t)ids.items[i], arena)));
-  }
-  return ret;
-}
+// channel_all_info implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 // f_prompt_setcallback, f_prompt_setinterrupt, f_prompt_setprompt
 // -- all implemented in Rust (src/nvim-rs/channel/src/lib.rs)

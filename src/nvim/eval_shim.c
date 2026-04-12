@@ -457,3 +457,54 @@ bool nvim_di_check_ro_translate(const dictitem_T *di, const char *name) { return
 void nvim_dictitem_move_tv_to_rettv(typval_T *rettv, dictitem_T *di) { *rettv = di->di_tv; di->di_tv = TV_INITIAL_VALUE; }
 void nvim_semsg_dictkey(const char *key) { semsg(_(e_dictkey), key); }
 void nvim_semsg_toomanyarg(const char *fname) { semsg(_(e_toomanyarg), fname); }
+
+// Phase 7 (channel migration): accessors for channel_create_event, channel_from_connection, channel_all_info
+
+#include "nvim/api/private/helpers.h"
+#include "nvim/event/socket.h"
+#include "nvim/event/wstream.h"
+#include "nvim/event/rstream.h"
+
+/// Accept a socket connection from watcher into chan->stream.socket, then
+/// set close_cb/data and init streams. Called from Rust channel_from_connection.
+void nvim_socket_watcher_accept_and_init(SocketWatcher *watcher, Channel *chan)
+{
+  socket_watcher_accept(watcher, &chan->stream.socket);
+  chan->stream.socket.s.internal_close_cb = close_cb;
+  chan->stream.socket.s.internal_data = chan;
+  wstream_init(&chan->stream.socket.s, 0);
+  rstream_init(&chan->stream.socket);
+}
+
+/// Wrap rpc_start for Rust (rpc_start is declared in msgpack_rpc/channel.h).
+void nvim_chan_rpc_start(Channel *chan) { rpc_start(chan); }
+
+/// Return the number of entries in the channels map.
+size_t nvim_chan_map_size(void) { return map_size(&channels); }
+
+/// Fill `out[0..cap]` with channel IDs (as uint64_t). Returns the count stored.
+size_t nvim_chan_map_collect_ids(uint64_t *out, size_t cap)
+{
+  size_t n = 0;
+  uint64_t id;
+  map_foreach_key(&channels, id, {
+    if (n < cap) {
+      out[n++] = id;
+    }
+  });
+  return n;
+}
+
+/// Return an arena-allocated Array of the given max_size.
+Array nvim_arena_array(Arena *arena, size_t max_size)
+{
+  return arena_array(arena, max_size);
+}
+
+/// Call channel_info(id, arena) and wrap result in DICT_OBJ.
+/// Returns an Object of type Dict containing the channel info.
+Object nvim_chan_info_as_object(uint64_t id, Arena *arena)
+{
+  Dict info = channel_info(id, arena);
+  return DICT_OBJ(info);
+}

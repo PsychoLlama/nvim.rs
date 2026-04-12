@@ -4,12 +4,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "nvim/api/private/defs.h"  // IWYU pragma: keep (for Array)
 #include "nvim/channel_defs.h"  // IWYU pragma: keep
 #include "nvim/eval/typval_defs.h"
 #include "nvim/event/defs.h"
 #include "nvim/event/libuv_proc.h"
 #include "nvim/macros_defs.h"
 #include "nvim/map_defs.h"
+#include "nvim/memory_defs.h"  // IWYU pragma: keep (for Arena)
 #include "nvim/msgpack_rpc/channel_defs.h"
 #include "nvim/os/pty_proc.h"
 #include "nvim/types_defs.h"
@@ -73,6 +75,9 @@ size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data,
 void channel_proc_exit_cb(Proc *proc, int status, void *data);
 void channel_destroy(Channel *chan);
 void channel_info_changed(Channel *chan, bool new_chan);
+void channel_create_event(Channel *chan, const char *ext_source);
+void channel_from_connection(SocketWatcher *watcher);
+Array channel_all_info(Arena *arena);
 void channel_terminal_open(buf_T *buf, Channel *chan);
 void term_delayed_free(void **argv);
 void f_prompt_setcallback(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

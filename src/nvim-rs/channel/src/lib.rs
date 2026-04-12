@@ -25,6 +25,67 @@ use std::ffi::{c_int, c_longlong, c_void};
 use nvim_eval::typval::{CallbackReaderT, CallbackT};
 
 // =============================================================================
+// API types (repr(C) mirrors of C Dict/Array/Object/String/KeyValuePair)
+// =============================================================================
+
+/// Mirror of C `String` (api/private/defs.h): `{char *data; size_t size}`.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ApiString {
+    pub data: *mut std::ffi::c_char,
+    pub size: usize,
+}
+
+/// Mirror of C `ObjectData` union (24 bytes).
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ObjectData {
+    pub boolean: bool,
+    pub integer: i64,
+    pub floating: f64,
+    pub string: ApiString,
+    pub array: ApiArray,
+    pub dict: ApiDict,
+    pub luaref: c_int,
+    _pad: [u8; 24],
+}
+
+/// Mirror of C `Object` struct (32 bytes).
+///
+/// Layout: `{ObjectType type (4 bytes + 4 pad); ObjectData data (24 bytes)}`.
+#[repr(C)]
+pub struct ApiObject {
+    pub obj_type: c_int,
+    pub _pad: [u8; 4],
+    pub data: ObjectData,
+}
+
+/// Mirror of C `KeyValuePair` struct (48 bytes).
+#[repr(C)]
+pub struct ApiKeyValuePair {
+    pub key: ApiString,
+    pub value: ApiObject,
+}
+
+/// Mirror of C `Array` = `kvec_t(Object)` (24 bytes).
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ApiArray {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut ApiObject,
+}
+
+/// Mirror of C `Dict` = `kvec_t(KeyValuePair)` (24 bytes).
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ApiDict {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut ApiKeyValuePair,
+}
+
+// =============================================================================
 // FFI: existing C symbols (no new C accessors)
 // =============================================================================
 
@@ -212,6 +273,31 @@ extern "C" {
     fn nvim_chan_send_err_closed_stream() -> *const std::ffi::c_char;
     /// Translated "Can't send raw data to rpc channel". Defined in eval_shim.c.
     fn nvim_chan_send_err_raw_rpc() -> *const std::ffi::c_char;
+
+    // --- Phase 7 FFI: channel_create_event, channel_from_connection, channel_all_info ---
+
+    /// Accept socket watcher connection and initialise chan->stream.socket streams.
+    /// Defined in eval_shim.c.
+    fn nvim_socket_watcher_accept_and_init(watcher: *mut c_void, chan: *mut c_void);
+    /// Return watcher->addr pointer. Defined in eval_shim.c.
+    fn nvim_socket_watcher_get_addr(watcher: *mut c_void) -> *const std::ffi::c_char;
+    /// Call rpc_start(chan). Defined in eval_shim.c.
+    fn nvim_chan_rpc_start(chan: *mut c_void);
+    /// Return map_size(&channels). Defined in eval_shim.c.
+    fn nvim_chan_map_size() -> usize;
+    /// Fill out[0..cap] with channel IDs; return count. Defined in eval_shim.c.
+    fn nvim_chan_map_collect_ids(out: *mut u64, cap: usize) -> usize;
+    /// arena_array(arena, max_size). Defined in eval_shim.c.
+    fn nvim_arena_array(arena: *mut c_void, max_size: usize) -> ApiArray;
+    /// channel_info(id, arena) wrapped as DICT_OBJ. Defined in eval_shim.c.
+    fn nvim_chan_info_as_object(id: u64, arena: *mut c_void) -> ApiObject;
+    /// qsort. From libc.
+    fn qsort(
+        base: *mut c_void,
+        nmemb: usize,
+        size: usize,
+        compar: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
+    );
 
     // --- Phase 5 FFI ---
 
@@ -1006,6 +1092,89 @@ pub unsafe extern "C" fn channel_info_changed(chan: *mut ChannelT, new_chan: boo
         event_argv.argv[1] = event_ptr;
         multiqueue_put_event(rs_loop_get_events(main_loop_ptr()), event_argv);
     }
+}
+
+// =============================================================================
+// Migrated functions (Phase 7a): channel_create_event, channel_from_connection,
+//                                channel_all_info
+// =============================================================================
+
+/// Log channel creation and fire channel_info_changed.
+///
+/// In non-debug builds this simply calls `channel_info_changed(chan, true)`.
+/// The `NVIM_LOG_DEBUG` path (JSON logging) is omitted in Rust.
+///
+/// # Safety
+///
+/// `chan` must be a valid non-null Channel. `ext_source` may be null.
+#[unsafe(export_name = "channel_create_event")]
+pub unsafe extern "C" fn rs_channel_create_event(
+    chan: *mut ChannelT,
+    _ext_source: *const std::ffi::c_char,
+) {
+    channel_info_changed(chan, true);
+}
+
+/// Create an RPC channel from an incoming socket connection.
+///
+/// Accepts the connection from `watcher`, initialises the socket streams,
+/// starts the RPC layer, and fires `channel_create_event`.
+///
+/// # Safety
+///
+/// `watcher` must be a valid non-null SocketWatcher ready to accept.
+#[unsafe(export_name = "channel_from_connection")]
+pub unsafe extern "C" fn rs_channel_from_connection(watcher: *mut c_void) {
+    let chan = channel_alloc(1 /* kChannelStreamSocket */);
+    nvim_socket_watcher_accept_and_init(watcher, chan);
+    nvim_chan_rpc_start(chan);
+    let addr = nvim_socket_watcher_get_addr(watcher);
+    rs_channel_create_event(chan.cast::<ChannelT>(), addr);
+}
+
+/// Return an arena-allocated Array of info Dicts for all active channels.
+///
+/// Channels are sorted by ID for determinism.
+///
+/// # Safety
+///
+/// `arena` must be a valid Arena pointer (or null).
+#[unsafe(export_name = "channel_all_info")]
+pub unsafe extern "C" fn rs_channel_all_info(arena: *mut c_void) -> ApiArray {
+    let map_size = nvim_chan_map_size();
+    if map_size == 0 {
+        return ApiArray {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+    }
+
+    // Collect IDs into a temporary Vec, then sort.
+    // IDs are always positive (u64 channel IDs cast to i64 for int64_t_cmp compat).
+    let mut ids: Vec<i64> = vec![0i64; map_size];
+    let count = nvim_chan_map_collect_ids(ids.as_mut_ptr().cast::<u64>(), map_size);
+    ids.truncate(count);
+
+    // Sort by i64 value (same as int64_t_cmp)
+    qsort(
+        ids.as_mut_ptr().cast(),
+        ids.len(),
+        std::mem::size_of::<i64>(),
+        Some(int64_t_cmp),
+    );
+
+    // Build arena-allocated Array of DICT_OBJ(channel_info(id, arena)).
+    // IDs are positive u64 values stored as i64; cast back is always safe.
+    let mut ret = nvim_arena_array(arena, count);
+    for &id in &ids {
+        #[allow(clippy::cast_sign_loss)]
+        let obj = nvim_chan_info_as_object(id as u64, arena);
+        debug_assert!(ret.size < ret.capacity);
+        std::ptr::write(ret.items.add(ret.size), obj);
+        ret.size += 1;
+    }
+    ret
 }
 
 // =============================================================================
