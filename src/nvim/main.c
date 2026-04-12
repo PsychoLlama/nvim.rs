@@ -262,18 +262,6 @@ void nvim_setup_cmdline_row(void)
 
 void nvim_sync_firstwin_height(void) { firstwin->w_prev_height = firstwin->w_height; }
 
-// Opens scriptout file; returns false and prints error if it fails.
-bool nvim_open_scriptout(char *path, bool append)
-{
-  scriptout = os_fopen(path, append ? APPENDBIN : WRITEBIN);
-  if (scriptout == NULL) {
-    fprintf(stderr, _("Cannot open for script output: \""));
-    fprintf(stderr, "%s\"\n", path);
-    return false;
-  }
-  return true;
-}
-
 // Returns true if use_vimrc is "NONE".
 bool nvim_vimrc_is_none(const mparm_T *parmp) { return strequal(parmp->use_vimrc, "NONE"); }
 
