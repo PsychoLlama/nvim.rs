@@ -416,8 +416,8 @@ int main(int argc, char **argv)
   bool use_builtin_ui = (has_term && !headless_mode && !embedded_mode && !silent_mode);
 
   if (params.remote) {
-    remote_request(&params, params.remote, params.server_addr, argc, argv,
-                   use_builtin_ui);
+    rs_remote_request(&params, params.remote, params.server_addr, argc, argv,
+                      use_builtin_ui);
   }
 
   bool remote_ui = (ui_client_channel_id != 0);
@@ -627,7 +627,7 @@ int main(int argc, char **argv)
   // are the same terminal: "cat | vim -".
   // Using autocommands here may cause trouble...
   if (params.edit_type == EDIT_STDIN && !recoverymode) {
-    read_stdin();
+    rs_read_stdin();
   }
 
   setmouse();  // may start using the mouse
@@ -638,7 +638,7 @@ int main(int argc, char **argv)
 
   // Create the requested number of windows and edit buffers in them.
   // Also does recovery if "recoverymode" set.
-  create_windows(&params);
+  rs_create_windows(&params);
   TIME_MSG("opening buffers");
 
   // Clear v:swapcommand
@@ -661,7 +661,7 @@ int main(int argc, char **argv)
 
   // If opened more than one window, start editing files in the other
   // windows.
-  edit_buffers(&params, cwd);
+  rs_edit_buffers(&params, cwd);
   xfree(cwd);
 
   if (params.diff_mode) {
@@ -882,93 +882,22 @@ void nvim_getout_do_restart(void)
 // getout() is implemented in Rust (src/nvim-rs/main/src/exit.rs)
 extern void getout(int exitval) FUNC_ATTR_NORETURN;
 
-/// Preserve files, print contents of `errmsg`, and exit 1.
-/// @param errmsg  If NULL, this function will not print anything.
-///
-/// May be called from deadly_signal().
-void preserve_exit(const char *errmsg)
-  FUNC_ATTR_NORETURN
+// preserve_exit() is implemented in Rust (src/nvim-rs/main/src/exit.rs)
+extern void preserve_exit(const char *errmsg) FUNC_ATTR_NORETURN;
+
+// C helper for rs_preserve_exit: iterate buffers to check/sync swap files.
+bool nvim_preserve_exit_buf_check(const char *errmsg)
 {
-  // 'true' when we are sure to exit, e.g., after a deadly signal
-  static bool really_exiting = false;
-
-  // Prevent repeated calls into this method.
-  if (really_exiting) {
-    if (used_stdin) {
-      // normalize stream (#2598)
-      stream_set_blocking(STDIN_FILENO, true);
-    }
-    exit(2);
-  }
-
-  really_exiting = true;
-  // Ignore SIGHUP while we are already exiting. #9274
-  signal_reject_deadly();
-
-  if (ui_client_channel_id) {
-    // For TUI: exit alternate screen so that the error messages can be seen.
-    ui_client_stop();
-  }
-  if (errmsg != NULL && errmsg[0] != NUL) {
-    size_t has_eol = '\n' == errmsg[strlen(errmsg) - 1];
-    fprintf(stderr, has_eol ? "%s" : "%s\n", errmsg);
-  }
-  if (ui_client_channel_id) {
-    os_exit(1);
-  }
-
-  ml_close_notmod();                // close all not-modified buffers
-
   FOR_ALL_BUFFERS(buf) {
     if (buf->b_ml.ml_mfp != NULL && buf->b_ml.ml_mfp->mf_fname != NULL) {
       if (errmsg != NULL) {
         fprintf(stderr, "Nvim: preserving files...\n");
       }
       ml_sync_all(false, false, true);  // preserve all swap files
-      break;
+      return true;
     }
   }
-
-  ml_close_all(false);              // close all memfiles, without deleting
-
-  if (errmsg != NULL) {
-    fprintf(stderr, "Nvim: Finished.\n");
-  }
-
-  getout(1);
-}
-
-static uint64_t server_connect(char *server_addr, const char **errmsg)
-{
-  return rs_server_connect(server_addr, errmsg);
-}
-
-/// Handle remote subcommands
-static void remote_request(mparm_T *params, int remote_args, char *server_addr, int argc,
-                           char **argv, bool ui_only)
-{
-  rs_remote_request(params, remote_args, server_addr, argc, argv, ui_only);
-}
-
-
-/// Read text from stdin.
-static void read_stdin(void)
-{
-  rs_read_stdin();
-}
-
-// Create the requested number of windows and edit buffers in them.
-// Also does recovery if "recoverymode" set.
-static void create_windows(mparm_T *parmp)
-{
-  rs_create_windows(parmp);
-}
-
-/// If opened more than one window, start editing files in the other
-/// windows. make_windows() has already opened the windows.
-static void edit_buffers(mparm_T *parmp, char *cwd)
-{
-  rs_edit_buffers(parmp, cwd);
+  return false;
 }
 
 

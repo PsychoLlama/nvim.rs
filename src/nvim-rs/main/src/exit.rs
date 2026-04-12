@@ -401,6 +401,100 @@ pub unsafe extern "C" fn rs_getout(exitval: c_int) -> ! {
 }
 
 // =============================================================================
+// Phase 4: preserve_exit
+// =============================================================================
+
+unsafe extern "C" {
+    // C helper: FOR_ALL_BUFFERS loop -- syncs swap files if any exist.
+    // (The C helper also calls ml_sync_all internally.)
+    fn nvim_preserve_exit_buf_check(errmsg: *const std::ffi::c_char) -> bool;
+
+    // Memory file operations
+    fn ml_close_notmod();
+    fn ml_close_all(del_file: bool);
+
+    // Signal / UI helpers
+    fn signal_reject_deadly();
+    fn stream_set_blocking(fd: c_int, blocking: bool); // return value not used
+    fn ui_client_stop();
+
+    // fprintf / stderr / strlen for error printing
+    fn fprintf(stream: *mut std::ffi::c_void, fmt: *const std::ffi::c_char, ...) -> c_int;
+    fn strlen(s: *const std::ffi::c_char) -> usize;
+    static stderr: *mut std::ffi::c_void;
+
+    // Globals
+    static mut used_stdin: bool;
+
+    // getout is exported by this crate but used via FFI to avoid direct self-call
+    fn getout(exitval: c_int) -> !;
+}
+
+/// Whether preserve_exit has already started (prevents re-entrancy).
+static REALLY_EXITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Emergency exit: preserve swap files, print errmsg, and exit 1.
+///
+/// May be called from deadly signal handlers.
+///
+/// # Safety
+/// `errmsg` must be a valid C string or null.
+#[unsafe(export_name = "preserve_exit")]
+pub unsafe extern "C" fn rs_preserve_exit(errmsg: *const std::ffi::c_char) -> ! {
+    use std::sync::atomic::Ordering;
+
+    // Prevent re-entrant calls.
+    if REALLY_EXITING.swap(true, Ordering::SeqCst) {
+        // Already exiting -- just normalize stdin and hard exit.
+        if used_stdin {
+            stream_set_blocking(0 /* STDIN_FILENO */, true);
+        }
+        unsafe extern "C" {
+            fn exit(code: c_int) -> !;
+        }
+        exit(2);
+    }
+
+    // Ignore SIGHUP while we are already exiting.
+    signal_reject_deadly();
+
+    if ui_client_channel_id != 0 {
+        // For TUI: exit alternate screen so error messages can be seen.
+        ui_client_stop();
+    }
+
+    if !errmsg.is_null() {
+        let len = strlen(errmsg);
+        if len > 0 {
+            let last = *errmsg.add(len - 1) as u8;
+            let fmt = if last == b'\n' {
+                c"%s".as_ptr()
+            } else {
+                c"%s\n".as_ptr()
+            };
+            fprintf(stderr, fmt, errmsg);
+        }
+    }
+
+    if ui_client_channel_id != 0 {
+        os_exit(1);
+    }
+
+    ml_close_notmod(); // close all not-modified buffers
+
+    // FOR_ALL_BUFFERS: handled via C helper (macro cannot be expressed in Rust).
+    nvim_preserve_exit_buf_check(errmsg);
+
+    ml_close_all(false); // close all memfiles, without deleting
+
+    if !errmsg.is_null() {
+        fprintf(stderr, c"Nvim: Finished.\n".as_ptr());
+    }
+
+    getout(1)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
