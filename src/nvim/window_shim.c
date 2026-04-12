@@ -619,6 +619,7 @@ int nvim_curwin_get_arg_idx(void) { return curwin->w_arg_idx; }
 void nvim_curwin_set_arg_idx(int val) { curwin->w_arg_idx = val; }
 void nvim_curbuf_setfname_null(void) { setfname(curbuf, NULL, NULL, false); }
 win_T *nvim_get_curwin_ptr(void) { return curwin; }
+void nvim_set_curwin_ptr(win_T *wp) { curwin = wp; }
 win_T *nvim_get_firstwin_ptr(void) { return firstwin; }
 win_T *nvim_curwin_get_next(void) { return curwin->w_next; }
 buf_T *nvim_firstwin_get_buffer(void) { return firstwin->w_buffer; }

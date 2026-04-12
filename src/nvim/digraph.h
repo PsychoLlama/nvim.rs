@@ -13,3 +13,10 @@ void f_digraph_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_digraph_getlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_digraph_set(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_digraph_setlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
+// ex_loadkeymap: still implemented in C (digraph.c)
+void ex_loadkeymap(exarg_T *eap);
+
+// Keymap functions moved to Rust (digraph/src/keymap.rs)
+void keymap_ga_clear(garray_T *kmap_ga);
+int get_keymap_str(win_T *wp, char *fmt, char *buf, int len);

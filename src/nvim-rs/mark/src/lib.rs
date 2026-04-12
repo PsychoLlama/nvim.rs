@@ -130,9 +130,23 @@ extern "C" {
     fn nvim_mark_get_e_marknotset() -> *const c_char;
     fn nvim_mark_get_e_markinval() -> *const c_char;
 
-    // Cross-function callbacks
-    fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
+    // Cross-function callbacks (nvim_mark_fname2fnum replaced by rs_fname2fnum in Rust)
     fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
+
+    // Phase 1: fname2fnum path/env accessors
+    fn nvim_mark_get_namebuff() -> *mut c_char;
+    fn nvim_mark_get_maxpathl() -> c_int;
+    fn nvim_mark_expand_env(src: *const c_char, dst: *mut c_char, dstlen: usize) -> usize;
+    fn nvim_mark_os_dirname(buf: *mut c_char, len: usize);
+    fn nvim_mark_path_shorten_fname(full_path: *mut c_char, dir_name: *mut c_char) -> *mut c_char;
+    fn nvim_mark_buflist_new(
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> BufHandle;
+    fn nvim_mark_vim_ispathsep_nocolon(c: c_int) -> bool;
+    fn nvim_mark_xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
 
     // Static inline wrappers (can't call these C functions directly from Rust)
     fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
@@ -2215,7 +2229,7 @@ pub unsafe extern "C" fn rs_get_jumplist(
         let jmp = nvim_mark_win_get_jumplist_entry(win, new_idx);
         if (*jmp).fmark.fnum == 0 {
             // Resolve the fnum (buff number) in the mark before returning it (shada)
-            nvim_mark_fname2fnum(jmp);
+            rs_fname2fnum(jmp);
         }
         let curbuf_fnum = nvim_buf_get_fnum(curbuf_ptr);
         if (*jmp).fmark.fnum != curbuf_fnum {
@@ -2275,7 +2289,7 @@ pub unsafe extern "C" fn rs_cleanup_jumplist(wp: WinHandle, loadfiles: c_int) {
         for i in 0..len {
             let entry = nvim_mark_win_get_jumplist_entry(wp, i);
             if (*entry).fmark.fnum == 0 && (*entry).fmark.mark.lnum != 0 {
-                nvim_mark_fname2fnum(entry);
+                rs_fname2fnum(entry);
             }
         }
     }
@@ -4671,7 +4685,7 @@ pub unsafe extern "C" fn rs_mark_get_global(resolve: c_int, name: c_int) -> *mut
     let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     let mark = namedfm.offset(idx as isize);
     if resolve != 0 && (*mark).fmark.fnum == 0 {
-        nvim_mark_fname2fnum(mark);
+        rs_fname2fnum(mark);
     }
     mark
 }
@@ -4892,6 +4906,46 @@ pub unsafe extern "C" fn rs_fm_getname(
         return rs_mark_line(&raw mut (*fmark).mark, lead_len);
     }
     nvim_mark_buflist_nr2name((*fmark).fnum, 0, 1)
+}
+
+/// Resolve the xfmark_T filename to a buffer number via expand_env,
+/// path_shorten_fname, and buflist_new.
+///
+/// Rust implementation of the C `fname2fnum` static function.
+/// Called from `rs_mark_get_global`, `rs_get_jumplist`, `rs_cleanup_jumplist`.
+///
+/// # Safety
+/// `fm` must be a valid, non-null pointer to an XfmarkT.
+pub unsafe fn rs_fname2fnum(fm: *mut XfmarkT) {
+    if (*fm).fname.is_null() {
+        return;
+    }
+
+    let maxpathl = nvim_mark_get_maxpathl() as usize;
+    let namebuff = nvim_mark_get_namebuff();
+    let iobuff = nvim_mark_get_iobuff();
+    let iosize = nvim_mark_get_iosize() as usize;
+
+    // First expand "~/" in the file name to the home directory.
+    let fname = (*fm).fname;
+    let first = *fname as u8;
+    let second = if first != 0 { *fname.add(1) as u8 } else { 0 };
+
+    if first == b'~' && nvim_mark_vim_ispathsep_nocolon(c_int::from(second)) {
+        // expand_env("~/", NameBuff, MAXPATHL) returns the length written
+        let len = nvim_mark_expand_env(c"~/".as_ptr(), namebuff, maxpathl);
+        // Copy the rest of fname (after "~/") into NameBuff after the expanded home
+        nvim_mark_xstrlcpy(namebuff.add(len), fname.add(2), maxpathl - len);
+    } else {
+        nvim_mark_xstrlcpy(namebuff, fname, maxpathl);
+    }
+
+    // Try to shorten the file name by getting the current directory.
+    nvim_mark_os_dirname(iobuff, iosize);
+    let p = nvim_mark_path_shorten_fname(namebuff, iobuff);
+
+    // buflist_new() will call fmarks_check_names()
+    nvim_mark_buflist_new(namebuff, p, 1, 0);
 }
 
 /// Check all file marks for a name that matches the file name in buf.

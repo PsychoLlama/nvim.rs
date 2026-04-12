@@ -16,6 +16,7 @@ use libc::c_int;
 pub mod data;
 mod funcs;
 mod input;
+pub mod keymap;
 mod list;
 mod parse;
 mod register;

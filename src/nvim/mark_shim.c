@@ -17,7 +17,12 @@
 #include "nvim/move.h"
 #include "nvim/normal_defs.h"
 #include "nvim/option_vars.h"
+#include "nvim/os/fs.h"
+#include "nvim/os/os.h"
+#include "nvim/os/os_defs.h"
+#include "nvim/path.h"
 #include "nvim/pos_defs.h"
+#include "nvim/strings.h"
 #include "nvim/textobject.h"
 #include "nvim/types_defs.h"
 
@@ -113,3 +118,13 @@ void nvim_fmarks_check_names(buf_T *buf) { fmarks_check_names(buf); }
 // Phase 7/8: display accessors
 char *nvim_mark_get_iobuff(void) { return IObuff; }
 int nvim_mark_get_iosize(void) { return IOSIZE; }
+
+// Phase 1 (fname2fnum migration): path/env accessors
+char *nvim_mark_get_namebuff(void) { return NameBuff; }
+int nvim_mark_get_maxpathl(void) { return MAXPATHL; }
+size_t nvim_mark_expand_env(const char *src, char *dst, size_t dstlen) { return expand_env((char *)src, dst, (int)dstlen); }
+void nvim_mark_os_dirname(char *buf, size_t len) { os_dirname(buf, len); }
+char *nvim_mark_path_shorten_fname(char *full_path, char *dir_name) { return path_shorten_fname(full_path, dir_name); }
+buf_T *nvim_mark_buflist_new(char *ffname, char *sfname, int lnum, int flags) { return buflist_new(ffname, sfname, (linenr_T)lnum, flags); }
+bool nvim_mark_vim_ispathsep_nocolon(int c) { return vim_ispathsep_nocolon(c); }
+size_t nvim_mark_xstrlcpy(char *dst, const char *src, size_t dstsize) { return xstrlcpy(dst, src, dstsize); }
