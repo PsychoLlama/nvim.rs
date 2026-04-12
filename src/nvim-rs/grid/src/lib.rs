@@ -2429,6 +2429,192 @@ extern "C" {
     fn ui_has(ext: c_int) -> bool;
 }
 
+// =============================================================================
+// Phase 4: Border drawing (grid_draw_border / grid_draw_bordertext)
+// =============================================================================
+
+extern "C" {
+    fn nvim_winconfig_get_border_attr(cfg: *mut std::ffi::c_void, idx: c_int) -> c_int;
+    fn nvim_winconfig_get_border_char(
+        cfg: *mut std::ffi::c_void,
+        idx: c_int,
+    ) -> *const std::ffi::c_char;
+    fn nvim_winconfig_get_title_flag(cfg: *mut std::ffi::c_void) -> c_int;
+    fn nvim_winconfig_get_title_pos(cfg: *mut std::ffi::c_void) -> c_int;
+    fn nvim_winconfig_get_title_width(cfg: *mut std::ffi::c_void) -> c_int;
+    fn nvim_winconfig_get_title_chunks(cfg: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn nvim_winconfig_get_footer_flag(cfg: *mut std::ffi::c_void) -> c_int;
+    fn nvim_winconfig_get_footer_pos(cfg: *mut std::ffi::c_void) -> c_int;
+    fn nvim_winconfig_get_footer_width(cfg: *mut std::ffi::c_void) -> c_int;
+    fn nvim_winconfig_get_footer_chunks(cfg: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn nvim_hl_attr_active_get(idx: c_int) -> c_int;
+    fn nvim_hlf_btitle_val() -> c_int;
+    fn nvim_hlf_bfooter_val() -> c_int;
+    fn nvim_hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int;
+    fn nvim_next_virt_text_chunk(
+        vt: *mut std::ffi::c_void,
+        pos: *mut usize,
+        attr: *mut c_int,
+    ) -> *const std::ffi::c_char;
+    fn nvim_kv_size_virttext(vt: *mut std::ffi::c_void) -> usize;
+}
+
+/// Draw border text (title or footer) into the current grid line.
+///
+/// `vt` is a pointer to a VirtText (kvec). `col` is the starting column.
+/// `winbl` is the window blend value. `hl_attr` is the active HL attribute array.
+/// `is_title` selects HLF_BTITLE (true) or HLF_BFOOTER (false).
+unsafe fn draw_bordertext(
+    vt: *mut std::ffi::c_void,
+    mut col: c_int,
+    winbl: c_int,
+    hl_attr: *const c_int,
+    is_title: bool,
+) {
+    let count = nvim_kv_size_virttext(vt);
+    let hlf_idx = if is_title {
+        nvim_hlf_btitle_val()
+    } else {
+        nvim_hlf_bfooter_val()
+    };
+    let mut pos: usize = 0;
+    while pos < count {
+        let mut attr: c_int = -1;
+        let text = nvim_next_virt_text_chunk(vt, &mut pos, &mut attr);
+        if text.is_null() {
+            break;
+        }
+        if attr == -1 {
+            attr = if hl_attr.is_null() {
+                nvim_hl_attr_active_get(hlf_idx)
+            } else {
+                *hl_attr.add(hlf_idx as usize)
+            };
+        }
+        attr = nvim_hl_apply_winblend(winbl, attr);
+        col += rs_grid_line_puts(col, text, -1, attr);
+    }
+}
+
+/// Draw a floating window border.
+///
+/// This is the Rust implementation of C's `grid_draw_border()`.
+/// `grid` is a `ScreenGrid*`, `config` is a `WinConfig*`,
+/// `adj` is a 4-element int array (or NULL for all-ones), `winbl` is blend,
+/// `hl_attr` is the highlight attr array (or NULL to use hl_attr_active).
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_draw_border(
+    grid: *mut std::ffi::c_void,
+    config: *mut std::ffi::c_void,
+    adj: *const c_int,
+    winbl: c_int,
+    hl_attr: *const c_int,
+) {
+    let default_adj: [c_int; 4] = [1, 1, 1, 1];
+    let adj = if adj.is_null() {
+        default_adj.as_ptr()
+    } else {
+        adj
+    };
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    let mut chars: [ScharT; 8] = [0u32; 8];
+    for i in 0..8i32 {
+        let s = nvim_winconfig_get_border_char(config, i);
+        chars[i as usize] = schar_from_str(s);
+    }
+
+    let irow = rows - *adj.add(0) - *adj.add(2);
+    let icol = cols - *adj.add(1) - *adj.add(3);
+
+    if *adj.add(0) != 0 {
+        rs_screengrid_line_start(grid, 0, 0);
+        if *adj.add(3) != 0 {
+            grid_line_put_schar(0, chars[0], nvim_winconfig_get_border_attr(config, 0));
+        }
+        for i in 0..icol {
+            grid_line_put_schar(
+                i + *adj.add(3),
+                chars[1],
+                nvim_winconfig_get_border_attr(config, 1),
+            );
+        }
+        if nvim_winconfig_get_title_flag(config) != 0 {
+            let tw = nvim_winconfig_get_title_width(config);
+            let tp = nvim_winconfig_get_title_pos(config);
+            let title_col = rs_get_bordertext_col(icol, tw, tp);
+            let vt = nvim_winconfig_get_title_chunks(config);
+            draw_bordertext(vt, title_col, winbl, hl_attr, true);
+        }
+        if *adj.add(1) != 0 {
+            grid_line_put_schar(
+                icol + *adj.add(3),
+                chars[2],
+                nvim_winconfig_get_border_attr(config, 2),
+            );
+        }
+        grid_line_flush();
+    }
+
+    for i in 0..irow {
+        if *adj.add(3) != 0 {
+            rs_screengrid_line_start(grid, i + *adj.add(0), 0);
+            grid_line_put_schar(0, chars[7], nvim_winconfig_get_border_attr(config, 7));
+            grid_line_flush();
+        }
+        if *adj.add(1) != 0 {
+            let ic = if i == 0 && *adj.add(0) == 0 && chars[2] != 0 {
+                2usize
+            } else {
+                3usize
+            };
+            rs_screengrid_line_start(grid, i + *adj.add(0), 0);
+            grid_line_put_schar(
+                icol + *adj.add(3),
+                chars[ic],
+                nvim_winconfig_get_border_attr(config, ic as i32),
+            );
+            grid_line_flush();
+        }
+    }
+
+    if *adj.add(2) != 0 {
+        rs_screengrid_line_start(grid, irow + *adj.add(0), 0);
+        if *adj.add(3) != 0 {
+            grid_line_put_schar(0, chars[6], nvim_winconfig_get_border_attr(config, 6));
+        }
+        for i in 0..icol {
+            let ic = if i == 0 && *adj.add(3) == 0 && chars[6] != 0 {
+                6usize
+            } else {
+                5usize
+            };
+            grid_line_put_schar(
+                i + *adj.add(3),
+                chars[ic],
+                nvim_winconfig_get_border_attr(config, ic as i32),
+            );
+        }
+        if nvim_winconfig_get_footer_flag(config) != 0 {
+            let fw = nvim_winconfig_get_footer_width(config);
+            let fp = nvim_winconfig_get_footer_pos(config);
+            let footer_col = rs_get_bordertext_col(icol, fw, fp);
+            let vt = nvim_winconfig_get_footer_chunks(config);
+            draw_bordertext(vt, footer_col, winbl, hl_attr, false);
+        }
+        if *adj.add(1) != 0 {
+            grid_line_put_schar(
+                icol + *adj.add(3),
+                chars[4],
+                nvim_winconfig_get_border_attr(config, 4),
+            );
+        }
+        grid_line_flush();
+    }
+}
+
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
 

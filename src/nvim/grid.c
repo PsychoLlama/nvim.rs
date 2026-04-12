@@ -221,6 +221,30 @@ extern win_T *rs_get_win_by_grid_handle(handle_T handle);
 extern void rs_grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid);
 extern void rs_win_grid_alloc(win_T *wp);
 
+// Phase 4: WinConfig border field accessors
+int nvim_winconfig_get_border_attr(WinConfig *cfg, int idx) { return (cfg && idx >= 0 && idx < 8) ? cfg->border_attr[idx] : 0; }
+const char *nvim_winconfig_get_border_char(WinConfig *cfg, int idx) { return (cfg && idx >= 0 && idx < 8) ? cfg->border_chars[idx] : NULL; }
+int nvim_winconfig_get_title_flag(WinConfig *cfg) { return cfg ? (int)cfg->title : 0; }
+int nvim_winconfig_get_title_pos(WinConfig *cfg) { return cfg ? (int)cfg->title_pos : 0; }
+int nvim_winconfig_get_title_width(WinConfig *cfg) { return cfg ? cfg->title_width : 0; }
+VirtText *nvim_winconfig_get_title_chunks(WinConfig *cfg) { return cfg ? &cfg->title_chunks : NULL; }
+int nvim_winconfig_get_footer_flag(WinConfig *cfg) { return cfg ? (int)cfg->footer : 0; }
+int nvim_winconfig_get_footer_pos(WinConfig *cfg) { return cfg ? (int)cfg->footer_pos : 0; }
+int nvim_winconfig_get_footer_width(WinConfig *cfg) { return cfg ? cfg->footer_width : 0; }
+VirtText *nvim_winconfig_get_footer_chunks(WinConfig *cfg) { return cfg ? &cfg->footer_chunks : NULL; }
+
+// Phase 4: highlight attribute accessors
+int nvim_hl_attr_active_get(int idx) { return (idx >= 0 && idx < (int)HLF_COUNT) ? hl_attr_active[idx] : 0; }
+int nvim_hlf_btitle_val(void) { return (int)HLF_BTITLE; }
+int nvim_hlf_bfooter_val(void) { return (int)HLF_BFOOTER; }
+int nvim_hl_apply_winblend(int winbl, int attr) { return hl_apply_winblend(winbl, attr); }
+
+size_t nvim_kv_size_virttext(VirtText *vt) { return vt ? kv_size(*vt) : 0; }
+// nvim_next_virt_text_chunk removed from grid.c - conflicts with decoration.c version
+
+// Phase 4: Rust implementation
+extern void rs_grid_draw_border(ScreenGrid *grid, WinConfig *config, int *adj, int winbl, int *hl_attr);
+
 // Global accessors
 ScreenGrid *nvim_get_default_grid(void) { return &default_grid; }
 
@@ -314,97 +338,10 @@ void win_grid_alloc(win_T *wp)
   rs_win_grid_alloc(wp);
 }
 
-static void grid_draw_bordertext(VirtText vt, int col, int winbl, const int *hl_attr,
-                                 BorderTextType bt)
-{
-  for (size_t i = 0; i < kv_size(vt);) {
-    int attr = -1;
-    char *text = next_virt_text_chunk(vt, &i, &attr);
-    if (text == NULL) {
-      break;
-    }
-    if (attr == -1) {  // No highlight specified.
-      attr = hl_attr[bt == kBorderTextTitle ? HLF_BTITLE : HLF_BFOOTER];
-    }
-    attr = hl_apply_winblend(winbl, attr);
-    col += grid_line_puts(col, text, -1, attr);
-  }
-}
-
 /// draw border on floating window grid
 void grid_draw_border(ScreenGrid *grid, WinConfig *config, int *adj, int winbl, int *hl_attr)
 {
-  int *attrs = config->border_attr;
-  int default_adj[4] = { 1, 1, 1, 1 };
-  if (adj == NULL) {
-    adj = default_adj;
-  }
-  schar_T chars[8];
-  if (!hl_attr) {
-    hl_attr = hl_attr_active;
-  }
-
-  for (int i = 0; i < 8; i++) {
-    chars[i] = schar_from_str(config->border_chars[i]);
-  }
-
-  int irow = grid->rows - adj[0] - adj[2];
-  int icol = grid->cols - adj[1] - adj[3];
-
-  if (adj[0]) {
-    screengrid_line_start(grid, 0, 0);
-    if (adj[3]) {
-      grid_line_put_schar(0, chars[0], attrs[0]);
-    }
-
-    for (int i = 0; i < icol; i++) {
-      grid_line_put_schar(i + adj[3], chars[1], attrs[1]);
-    }
-
-    if (config->title) {
-      int title_col = rs_get_bordertext_col(icol, config->title_width, (int)config->title_pos);
-      grid_draw_bordertext(config->title_chunks, title_col, winbl, hl_attr, kBorderTextTitle);
-    }
-    if (adj[1]) {
-      grid_line_put_schar(icol + adj[3], chars[2], attrs[2]);
-    }
-    grid_line_flush();
-  }
-
-  for (int i = 0; i < irow; i++) {
-    if (adj[3]) {
-      screengrid_line_start(grid, i + adj[0], 0);
-      grid_line_put_schar(0, chars[7], attrs[7]);
-      grid_line_flush();
-    }
-    if (adj[1]) {
-      int ic = (i == 0 && !adj[0] && chars[2]) ? 2 : 3;
-      screengrid_line_start(grid, i + adj[0], 0);
-      grid_line_put_schar(icol + adj[3], chars[ic], attrs[ic]);
-      grid_line_flush();
-    }
-  }
-
-  if (adj[2]) {
-    screengrid_line_start(grid, irow + adj[0], 0);
-    if (adj[3]) {
-      grid_line_put_schar(0, chars[6], attrs[6]);
-    }
-
-    for (int i = 0; i < icol; i++) {
-      int ic = (i == 0 && !adj[3] && chars[6]) ? 6 : 5;
-      grid_line_put_schar(i + adj[3], chars[ic], attrs[ic]);
-    }
-
-    if (config->footer) {
-      int footer_col = rs_get_bordertext_col(icol, config->footer_width, (int)config->footer_pos);
-      grid_draw_bordertext(config->footer_chunks, footer_col, winbl, hl_attr, kBorderTextFooter);
-    }
-    if (adj[1]) {
-      grid_line_put_schar(icol + adj[3], chars[4], attrs[4]);
-    }
-    grid_line_flush();
-  }
+  rs_grid_draw_border(grid, config, adj, winbl, hl_attr);
 }
 
 win_T *get_win_by_grid_handle(handle_T handle)
