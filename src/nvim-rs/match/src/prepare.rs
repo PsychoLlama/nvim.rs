@@ -5,6 +5,8 @@
 use std::ffi::c_int;
 use std::ptr;
 
+use crate::HLF_LC;
+
 // =============================================================================
 // Opaque Handle Types
 // =============================================================================
@@ -77,7 +79,7 @@ extern "C" {
     fn nvim_match_syn_name2id_conceal() -> c_int;
     fn nvim_match_set_search_hl_has_cursor_lnum(lnum: i32);
     fn nvim_win_hl_attr(wp: *mut WinHandle, hlf: c_int) -> c_int;
-    fn nvim_match_get_HLF_LC() -> c_int;
+    // nvim_match_get_HLF_LC() removed — use crate::HLF_LC constant
 
     // Delegated functions
     fn rs_next_search_hl(
@@ -302,7 +304,7 @@ pub unsafe extern "C" fn rs_update_search_hl(
     let mut cur = nvim_match_get_head(wp);
     let mut shl_flag = false;
 
-    let hlf_lc = nvim_match_get_HLF_LC();
+    let hlf_lc = HLF_LC;
     let conceal_id = nvim_match_syn_name2id_conceal();
 
     // Do this for 'search_hl' and the match list (ordered by priority).

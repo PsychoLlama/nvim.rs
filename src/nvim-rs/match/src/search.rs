@@ -5,6 +5,8 @@
 use std::ffi::c_int;
 use std::ptr;
 
+use crate::HLF_L;
+
 // =============================================================================
 // Opaque Handle Types
 // =============================================================================
@@ -86,7 +88,7 @@ extern "C" {
     fn nvim_match_get_search_first_line() -> i32;
     fn nvim_match_get_search_last_line() -> i32;
     fn nvim_match_get_p_rdt() -> i64;
-    fn nvim_match_get_HLF_L() -> c_int;
+    // nvim_match_get_HLF_L() removed — use crate::HLF_L constant
     fn nvim_match_win_get_buffer(wp: *mut WinHandle) -> *mut BufHandle;
 
     // Existing global accessors
@@ -143,8 +145,7 @@ pub unsafe extern "C" fn rs_init_search_hl(wp: *mut WinHandle, search_hl: *mut M
     nvim_match_hl_set_buf(search_hl, buf);
     nvim_match_hl_set_lnum(search_hl, 0);
     nvim_match_hl_set_first_lnum(search_hl, 0);
-    let hlf_l = nvim_match_get_HLF_L();
-    nvim_match_hl_set_attr(search_hl, nvim_win_hl_attr(wp, hlf_l));
+    nvim_match_hl_set_attr(search_hl, nvim_win_hl_attr(wp, HLF_L));
 
     // time limit is set at the toplevel, for all windows
 }

@@ -86,11 +86,10 @@ extern "C" {
     fn nvim_semsg_id_not_found(id: i64);
     fn nvim_semsg_invarg2(arg: *const c_char);
 
-    // Constants
-    fn nvim_get_RE_MAGIC() -> c_int;
-    fn nvim_get_UPD_SOME_VALID() -> c_int;
-    fn nvim_get_UPD_VALID() -> c_int;
 }
+
+// Constants are now Rust-side (match/src/lib.rs), guarded by _Static_assert in match.c.
+use crate::{RE_MAGIC, UPD_SOME_VALID, UPD_VALID};
 
 // =============================================================================
 // Position type (matches C llpos_T)
@@ -174,7 +173,7 @@ pub unsafe extern "C" fn rs_match_add(
     // Compile regex if pattern provided
     let mut regprog: *mut RegProgHandle = ptr::null_mut();
     if !pat.is_null() {
-        regprog = nvim_match_vim_regcomp(pat, nvim_get_RE_MAGIC());
+        regprog = nvim_match_vim_regcomp(pat, RE_MAGIC);
         if regprog.is_null() {
             nvim_semsg_invarg2(pat);
             return -1;
@@ -203,7 +202,7 @@ pub unsafe extern "C" fn rs_match_add(
     // Insert in priority order
     insert_by_priority(wp, m, prio);
 
-    nvim_match_redraw_later(wp, nvim_get_UPD_SOME_VALID());
+    nvim_match_redraw_later(wp, UPD_SOME_VALID);
     resolved_id
 }
 
@@ -283,7 +282,7 @@ pub unsafe extern "C" fn rs_match_add_pos(
     }
 
     // Allocate and fill position array
-    let mut rtype = nvim_get_UPD_SOME_VALID();
+    let mut rtype = UPD_SOME_VALID;
 
     if count > 0 {
         let pos_arr = nvim_match_alloc_positions(count as usize);
@@ -313,7 +312,7 @@ pub unsafe extern "C" fn rs_match_add_pos(
             nvim_match_redraw_win_range_later(wp, toplnum, botlnum);
             nvim_match_item_set_toplnum(m, toplnum);
             nvim_match_item_set_botlnum(m, botlnum);
-            rtype = nvim_get_UPD_VALID();
+            rtype = UPD_VALID;
         }
     }
 
@@ -342,7 +341,7 @@ pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_
         return -1;
     }
 
-    let mut rtype = nvim_get_UPD_SOME_VALID();
+    let mut rtype = UPD_SOME_VALID;
 
     // Find the match
     let head = nvim_match_get_head(wp);
@@ -374,7 +373,7 @@ pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_
     if toplnum != 0 {
         let botlnum = nvim_match_item_get_botlnum(cur);
         nvim_match_redraw_win_range_later(wp, toplnum, botlnum);
-        rtype = nvim_get_UPD_VALID();
+        rtype = UPD_VALID;
     }
 
     nvim_match_free(cur);
@@ -419,7 +418,7 @@ pub unsafe extern "C" fn rs_clear_matches(wp: *mut WinHandle) {
         nvim_match_free(head);
         nvim_match_set_head(wp, next);
     }
-    nvim_match_redraw_later(wp, nvim_get_UPD_SOME_VALID());
+    nvim_match_redraw_later(wp, UPD_SOME_VALID);
 }
 
 // =============================================================================

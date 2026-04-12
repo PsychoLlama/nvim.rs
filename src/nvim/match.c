@@ -35,6 +35,14 @@
 
 #include "match.c.generated.h"
 
+// Static assertions: guard constants that Rust hardcodes in the match crate.
+// If any of these fail, update the corresponding constant in src/nvim-rs/match/src/lib.rs.
+_Static_assert(RE_MAGIC == 1, "RE_MAGIC changed: update Rust constant RE_MAGIC in match/src/lib.rs");
+_Static_assert(UPD_SOME_VALID == 35, "UPD_SOME_VALID changed: update Rust constant in match/src/lib.rs");
+_Static_assert(UPD_VALID == 10, "UPD_VALID changed: update Rust constant in match/src/lib.rs");
+_Static_assert(HLF_L == 8, "HLF_L changed: update Rust constant in match/src/lib.rs");
+_Static_assert(HLF_LC == 9, "HLF_LC changed: update Rust constant in match/src/lib.rs");
+
 /// Get the head of the match list for a window.
 matchitem_T *nvim_match_get_head(win_T *wp) { return wp->w_match_head; }
 
@@ -281,8 +289,7 @@ linenr_T nvim_match_get_search_last_line(void) { return search_last_line; }
 /// Get p_rdt (redrawtime option).
 int64_t nvim_match_get_p_rdt(void) { return p_rdt; }
 
-/// Get HLF_L constant.
-int nvim_match_get_HLF_L(void) { return (int)HLF_L; }
+// nvim_match_get_HLF_L() deleted — Rust uses constant HLF_L = 8 (with _Static_assert guard).
 
 /// Get the window's buffer.
 buf_T *nvim_match_win_get_buffer(win_T *wp) { return wp->w_buffer; }
@@ -308,8 +315,7 @@ int nvim_match_syn_name2id_conceal(void) { return syn_name2id("Conceal"); }
 /// Set search_hl_has_cursor_lnum global.
 void nvim_match_set_search_hl_has_cursor_lnum(linenr_T lnum) { search_hl_has_cursor_lnum = lnum; }
 
-/// Get HLF_LC constant.
-int nvim_match_get_HLF_LC(void) { return (int)HLF_LC; }
+// nvim_match_get_HLF_LC() deleted — Rust uses constant HLF_LC = 9 (with _Static_assert guard).
 
 void nvim_semsg_id_taken(int64_t id) { semsg(_("E801: ID already taken: %" PRId64), id); }
 
@@ -321,11 +327,8 @@ void nvim_semsg_id_not_found(int64_t id) { semsg(_("E803: ID not found: %" PRId6
 
 void nvim_semsg_invarg2(const char *arg) { semsg(_(e_invarg2), arg); }
 
-int nvim_get_RE_MAGIC(void) { return RE_MAGIC; }
-
-int nvim_get_UPD_SOME_VALID(void) { return UPD_SOME_VALID; }
-
-int nvim_get_UPD_VALID(void) { return UPD_VALID; }
+// nvim_get_RE_MAGIC, nvim_get_UPD_SOME_VALID, nvim_get_UPD_VALID deleted —
+// Rust uses constants RE_MAGIC=1, UPD_SOME_VALID=35, UPD_VALID=10 (with _Static_assert guards).
 
 /// Wrapper for utf_char2bytes.
 int nvim_match_utf_char2bytes(int c, char *buf) { return utf_char2bytes(c, buf); }

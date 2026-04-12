@@ -30,6 +30,26 @@ use std::ffi::c_int;
 // Constants
 // =============================================================================
 
+/// `RE_MAGIC` flag for `vim_regcomp` (`regexp.h`: `#define RE_MAGIC 1`).
+/// Guarded by `_Static_assert` in `match.c`.
+pub const RE_MAGIC: c_int = 1;
+
+/// `UPD_SOME_VALID` redraw type (`drawscreen.h`: `UPD_SOME_VALID = 35`).
+/// Guarded by `_Static_assert` in `match.c`.
+pub const UPD_SOME_VALID: c_int = 35;
+
+/// `UPD_VALID` redraw type (`drawscreen.h`: `UPD_VALID = 10`).
+/// Guarded by `_Static_assert` in `match.c`.
+pub const UPD_VALID: c_int = 10;
+
+/// `HLF_L` highlight group (last search string), enum value 8.
+/// Guarded by `_Static_assert` in `match.c`.
+pub const HLF_L: c_int = 8;
+
+/// `HLF_LC` highlight group (current search match), enum value 9.
+/// Guarded by `_Static_assert` in `match.c`.
+pub const HLF_LC: c_int = 9;
+
 /// Search highlight priority (hlsearch)
 pub const SEARCH_HL_PRIORITY: i32 = 0;
 
