@@ -76,9 +76,6 @@ extern const char *rs_event_nr2name(int event, int num_events);
 extern void rs_aubuflocal_remove(int bufnr);
 extern int arg_augroup_get(char **argp);
 
-// getnextac is implemented in Rust; declare it here so apply_autocmds_group can use it.
-extern char *getnextac(int c, void *cookie, int indent, bool do_concat);
-
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -96,9 +93,6 @@ size_t nvim_get_autocmds_count(int event)
   }
   return 0;
 }
-
-static const char e_autocommand_nesting_too_deep[]
-  = N_("E218: Autocommand nesting too deep");
 
 // Autocommands are stored in a contiguous vector per event, in definition order.
 // Patterns are reference-counted and reused for consecutive autocommands.
@@ -521,388 +515,9 @@ win_found:
 }
 
 
-/// Execute autocommands for "event" and file name "fname".
-///
-/// @param event event that occurred
-/// @param fname filename, NULL or empty means use actual file name
-/// @param fname_io filename to use for <afile> on cmdline,
-///                 NULL means use `fname`.
-/// @param force When true, ignore autocmd_busy
-/// @param group autocmd group ID or AUGROUP_ALL
-/// @param buf Buffer for <abuf>
-/// @param eap Ex command arguments
-///
-/// @return true if some commands were executed.
-bool apply_autocmds_group(event_T event, char *fname, char *fname_io, bool force, int group,
-                          buf_T *buf, exarg_T *eap, Object *data)
-{
-  char *sfname = NULL;  // short file name
-  bool retval = false;
-  static int nesting = 0;
-  char *save_cmdarg;
-  static bool filechangeshell_busy = false;
-  proftime_T wait_time;
-  bool did_save_redobuff = false;
-  save_redo_T save_redo;
-  const bool save_KeyTyped = KeyTyped;
-
-  // Quickly return if there are no autocommands for this event or
-  // autocommands are blocked.
-  if (event == NUM_EVENTS || kv_size(autocmds[(int)event]) == 0 || is_autocmd_blocked()) {
-    goto BYPASS_AU;
-  }
-
-  // When autocommands are busy, new autocommands are only executed when
-  // explicitly enabled with the "nested" flag.
-  if (autocmd_busy && !(force || autocmd_nested)) {
-    goto BYPASS_AU;
-  }
-
-  // Quickly return when immediately aborting on error, or when an interrupt
-  // occurred or an exception was thrown but not caught.
-  if (aborting()) {
-    goto BYPASS_AU;
-  }
-
-  // FileChangedShell never nests, because it can create an endless loop.
-  if (filechangeshell_busy
-      && (event == EVENT_FILECHANGEDSHELL || event == EVENT_FILECHANGEDSHELLPOST)) {
-    goto BYPASS_AU;
-  }
-
-  // Ignore events in 'eventignore'.
-  if (event_ignored(event, p_ei)) {
-    goto BYPASS_AU;
-  }
-
-  bool win_ignore = false;
-  // If event is allowed in 'eventignorewin', check if curwin or all windows
-  // into "buf" are ignoring the event.
-  if (buf == curbuf && event_names[event].event <= 0) {
-    win_ignore = event_ignored(event, curwin->w_p_eiw);
-  } else if (buf != NULL && event_names[event].event <= 0 && buf->b_nwindows > 0) {
-    win_ignore = true;
-    FOR_ALL_TAB_WINDOWS(tp, wp) {
-      if (wp->w_buffer == buf && !event_ignored(event, wp->w_p_eiw)) {
-        win_ignore = false;
-        break;
-      }
-    }
-  }
-  if (win_ignore) {
-    goto BYPASS_AU;
-  }
-
-  // Allow nesting of autocommands, but restrict the depth, because it's
-  // possible to create an endless loop.
-  if (nesting == 10) {
-    emsg(_(e_autocommand_nesting_too_deep));
-    goto BYPASS_AU;
-  }
-
-  // Check if these autocommands are disabled.  Used when doing ":all" or
-  // ":ball".
-  if ((autocmd_no_enter && (event == EVENT_WINENTER || event == EVENT_BUFENTER))
-      || (autocmd_no_leave && (event == EVENT_WINLEAVE || event == EVENT_BUFLEAVE))) {
-    goto BYPASS_AU;
-  }
-
-  // Save the autocmd_* variables and info about the current buffer.
-  char *save_autocmd_fname = autocmd_fname;
-  bool save_autocmd_fname_full = autocmd_fname_full;
-  int save_autocmd_bufnr = autocmd_bufnr;
-  char *save_autocmd_match = autocmd_match;
-  int save_autocmd_busy = autocmd_busy;
-  int save_autocmd_nested = autocmd_nested;
-  bool save_changed = curbuf->b_changed;
-  buf_T *old_curbuf = curbuf;
-
-  // Set the file name to be used for <afile>.
-  // Make a copy to avoid that changing a buffer name or directory makes it
-  // invalid.
-  if (fname_io == NULL) {
-    if (event == EVENT_COLORSCHEME || event == EVENT_COLORSCHEMEPRE
-        || event == EVENT_OPTIONSET || event == EVENT_MODECHANGED) {
-      autocmd_fname = NULL;
-    } else if (fname != NULL && !ends_excmd(*fname)) {
-      autocmd_fname = fname;
-    } else if (buf != NULL) {
-      autocmd_fname = buf->b_ffname;
-    } else {
-      autocmd_fname = NULL;
-    }
-  } else {
-    autocmd_fname = fname_io;
-  }
-  char *afile_orig = NULL;  ///< Unexpanded <afile>
-  if (autocmd_fname != NULL) {
-    afile_orig = xstrdup(autocmd_fname);
-    // Allocate MAXPATHL for when eval_vars() resolves the fullpath.
-    autocmd_fname = xstrnsave(autocmd_fname, MAXPATHL);
-  }
-  autocmd_fname_full = false;  // call FullName_save() later
-
-  // Set the buffer number to be used for <abuf>.
-  autocmd_bufnr = buf == NULL ? 0 : buf->b_fnum;
-
-  // When the file name is NULL or empty, use the file name of buffer "buf".
-  // Always use the full path of the file name to match with, in case
-  // "allow_dirs" is set.
-  if (fname == NULL || *fname == NUL) {
-    if (buf == NULL) {
-      fname = NULL;
-    } else {
-      if (event == EVENT_SYNTAX) {
-        fname = buf->b_p_syn;
-      } else if (event == EVENT_FILETYPE) {
-        fname = buf->b_p_ft;
-      } else {
-        if (buf->b_sfname != NULL) {
-          sfname = xstrdup(buf->b_sfname);
-        }
-        fname = buf->b_ffname;
-      }
-    }
-    if (fname == NULL) {
-      fname = "";
-    }
-    fname = xstrdup(fname);  // make a copy, so we can change it
-  } else {
-    sfname = xstrdup(fname);
-    // Don't try expanding the following events.
-    if (event == EVENT_CMDLINECHANGED
-        || event == EVENT_CMDLINEENTER
-        || event == EVENT_CMDLINELEAVEPRE
-        || event == EVENT_CMDLINELEAVE
-        || event == EVENT_CMDUNDEFINED
-        || event == EVENT_CURSORMOVEDC
-        || event == EVENT_CMDWINENTER
-        || event == EVENT_CMDWINLEAVE
-        || event == EVENT_COLORSCHEME
-        || event == EVENT_COLORSCHEMEPRE
-        || event == EVENT_DIRCHANGED
-        || event == EVENT_DIRCHANGEDPRE
-        || event == EVENT_FILETYPE
-        || event == EVENT_FUNCUNDEFINED
-        || event == EVENT_MENUPOPUP
-        || event == EVENT_MODECHANGED
-        || event == EVENT_OPTIONSET
-        || event == EVENT_QUICKFIXCMDPOST
-        || event == EVENT_QUICKFIXCMDPRE
-        || event == EVENT_REMOTEREPLY
-        || event == EVENT_SIGNAL
-        || event == EVENT_SPELLFILEMISSING
-        || event == EVENT_SYNTAX
-        || event == EVENT_TABCLOSED
-        || event == EVENT_USER
-        || event == EVENT_WINCLOSED
-        || event == EVENT_WINRESIZED
-        || event == EVENT_WINSCROLLED) {
-      fname = xstrdup(fname);
-      autocmd_fname_full = true;  // don't expand it later
-    } else {
-      fname = FullName_save(fname, false);
-    }
-  }
-  if (fname == NULL) {  // out of memory
-    xfree(sfname);
-    retval = false;
-    goto BYPASS_AU;
-  }
-
-#ifdef BACKSLASH_IN_FILENAME
-  // Replace all backslashes with forward slashes. This makes the
-  // autocommand patterns portable between Unix and Windows.
-  if (sfname != NULL) {
-    forward_slash(sfname);
-  }
-  forward_slash(fname);
-#endif
-
-  // Set the name to be used for <amatch>.
-  autocmd_match = fname;
-
-  // Don't redraw while doing autocommands.
-  RedrawingDisabled++;
-
-  // name and lnum are filled in later
-  estack_push(ETYPE_AUCMD, NULL, 0);
-
-  const sctx_T save_current_sctx = current_sctx;
-
-  if (do_profiling == PROF_YES) {
-    prof_child_enter(&wait_time);  // doesn't count for the caller itself
-  }
-
-  // Don't use local function variables, if called from a function.
-  funccal_entry_T funccal_entry;
-  save_funccal(&funccal_entry);
-
-  // When starting to execute autocommands, save the search patterns.
-  if (!autocmd_busy) {
-    save_search_patterns();
-    if (!rs_ins_compl_active()) {
-      saveRedobuff(&save_redo);
-      did_save_redobuff = true;
-    }
-    curbuf->b_did_filetype = curbuf->b_keep_filetype;
-  }
-
-  // Note that we are applying autocmds.  Some commands need to know.
-  autocmd_busy = true;
-  filechangeshell_busy = (event == EVENT_FILECHANGEDSHELL);
-  nesting++;  // see matching decrement below
-
-  // Remember that FileType was triggered.  Used for did_filetype().
-  if (event == EVENT_FILETYPE) {
-    curbuf->b_did_filetype = true;
-  }
-
-  char *tail = path_tail(fname);
-
-  // Find first autocommand that matches
-  AutoPatCmd patcmd = {
-    // aucmd_next will set lastpat back to NULL if there are no more autocommands left to run
-    .lastpat = NULL,
-    // current autocommand index
-    .auidx = 0,
-    // save vector size, to avoid an endless loop when more patterns
-    // are added when executing autocommands
-    .ausize = kv_size(autocmds[(int)event]),
-    .afile_orig = afile_orig,
-    .fname = fname,
-    .sfname = sfname,
-    .tail = tail,
-    .group = group,
-    .event = event,
-    .arg_bufnr = autocmd_bufnr,
-  };
-  aucmd_next(&patcmd);
-
-  // Found first autocommand, start executing them
-  if (patcmd.lastpat != NULL) {
-    // add to active_apc_list
-    patcmd.next = active_apc_list;
-    active_apc_list = &patcmd;
-
-    // Attach data to command
-    patcmd.data = data;
-
-    // set v:cmdarg (only when there is a matching pattern)
-    varnumber_T save_cmdbang = get_vim_var_nr(VV_CMDBANG);
-    if (eap != NULL) {
-      save_cmdarg = set_cmdarg(eap, NULL);
-      set_vim_var_nr(VV_CMDBANG, eap->forceit);
-    } else {
-      save_cmdarg = NULL;  // avoid gcc warning
-    }
-    retval = true;
-
-    // Make sure cursor and topline are valid.  The first time the current
-    // values are saved, restored by rs_reset_lnums().  When nested only the
-    // values are corrected when needed.
-    if (nesting == 1) {
-      rs_check_lnums(1);
-    } else {
-      rs_check_lnums_nested(1);
-    }
-
-    const int save_did_emsg = did_emsg;
-    const bool save_ex_pressedreturn = get_pressedreturn();
-
-    // Execute the autocmd. The `getnextac` callback handles iteration.
-    do_cmdline(NULL, getnextac, &patcmd, DOCMD_NOWAIT | DOCMD_VERBOSE | DOCMD_REPEAT);
-
-    did_emsg += save_did_emsg;
-    set_pressedreturn(save_ex_pressedreturn);
-
-    if (nesting == 1) {
-      // restore cursor and topline, unless they were changed
-      rs_reset_lnums();
-    }
-
-    if (eap != NULL) {
-      set_cmdarg(NULL, save_cmdarg);
-      set_vim_var_nr(VV_CMDBANG, save_cmdbang);
-    }
-    // delete from active_apc_list
-    if (active_apc_list == &patcmd) {  // just in case
-      active_apc_list = patcmd.next;
-    }
-  }
-
-  RedrawingDisabled--;
-  autocmd_busy = save_autocmd_busy;
-  filechangeshell_busy = false;
-  autocmd_nested = save_autocmd_nested;
-  xfree(SOURCING_NAME);
-  estack_pop();
-  xfree(afile_orig);
-  xfree(autocmd_fname);
-  autocmd_fname = save_autocmd_fname;
-  autocmd_fname_full = save_autocmd_fname_full;
-  autocmd_bufnr = save_autocmd_bufnr;
-  autocmd_match = save_autocmd_match;
-  current_sctx = save_current_sctx;
-  restore_funccal();
-  if (do_profiling == PROF_YES) {
-    prof_child_exit(&wait_time);
-  }
-  KeyTyped = save_KeyTyped;
-  xfree(fname);
-  xfree(sfname);
-  nesting--;  // see matching increment above
-
-  // When stopping to execute autocommands, restore the search patterns and
-  // the redo buffer. Free any buffers in the au_pending_free_buf list and
-  // free any windows in the au_pending_free_win list.
-  if (!autocmd_busy) {
-    restore_search_patterns();
-    if (did_save_redobuff) {
-      restoreRedobuff(&save_redo);
-    }
-    curbuf->b_did_filetype = false;
-    while (au_pending_free_buf != NULL) {
-      buf_T *b = au_pending_free_buf->b_next;
-
-      xfree(au_pending_free_buf);
-      au_pending_free_buf = b;
-    }
-    while (au_pending_free_win != NULL) {
-      win_T *w = au_pending_free_win->w_next;
-
-      xfree(au_pending_free_win);
-      au_pending_free_win = w;
-    }
-  }
-
-  // Some events don't set or reset the Changed flag.
-  // Check if still in the same buffer!
-  if (curbuf == old_curbuf
-      && (event == EVENT_BUFREADPOST || event == EVENT_BUFWRITEPOST
-          || event == EVENT_FILEAPPENDPOST || event == EVENT_VIMLEAVE
-          || event == EVENT_VIMLEAVEPRE)) {
-    if (curbuf->b_changed != save_changed) {
-      need_maketitle = true;
-    }
-    curbuf->b_changed = save_changed;
-  }
-
-  au_cleanup();  // may really delete removed patterns/commands now
-
-BYPASS_AU:
-  // When wiping out a buffer make sure all its buffer-local autocommands
-  // are deleted.
-  if (event == EVENT_BUFWIPEOUT && buf != NULL) {
-    rs_aubuflocal_remove(buf->b_fnum);
-  }
-
-  if (retval == OK && event == EVENT_FILETYPE) {
-    curbuf->b_au_did_filetype = true;
-  }
-
-  return retval;
-}
+// apply_autocmds_group is implemented in Rust (rs_apply_autocmds_group in autocmd/src/lib.rs)
+// and exported directly under the name "apply_autocmds_group" via #[unsafe(export_name)].
+// The C declaration in autocmd.h still covers external callers.
 
 /// Find next matching autocommand.
 /// If next autocommand was not found, sets lastpat to NULL and cmdidx to SIZE_MAX on apc.
@@ -1228,14 +843,6 @@ int nvim_autocmd_register_cmd(int event, const char *pat, int patlen, int group,
                           NULL, cmd, &handler_fn);
 }
 
-/// Call apply_autocmds_group from Rust (casts void* to typed pointers).
-bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, bool force,
-                                       int group, void *buf, void *eap, void *data)
-{
-  return apply_autocmds_group((event_T)event, fname, fname_io, force, group,
-                              (buf_T *)buf, (exarg_T *)eap, (Object *)data);
-}
-
 void *nvim_autocmd_get_curbuf_ptr(void) { return curbuf; }
 void nvim_autocmd_semsg_str(const char *fmt, const char *arg) { semsg(fmt, arg); }
 void nvim_autocmd_smsg_no_matching(const char *arg_start) { smsg(0, _("No matching autocommands: %s"), arg_start); }
@@ -1482,3 +1089,486 @@ void nvim_aucmd_next(void *apc_raw) { aucmd_next((AutoPatCmd *)apc_raw); }
 
 /// Add a non-static wrapper for xcalloc.
 void *nvim_autocmd_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
+
+// =============================================================================
+// Phase 2: apply_autocmds_group migration accessors
+// =============================================================================
+
+// --- Global variable save/restore ---
+
+/// Saved autocmd context (for save/restore around apply_autocmds_group).
+typedef struct {
+  char *save_autocmd_fname;
+  bool save_autocmd_fname_full;
+  int save_autocmd_bufnr;
+  char *save_autocmd_match;
+  int save_autocmd_busy;
+  bool save_autocmd_nested;
+  bool save_changed;
+  buf_T *old_curbuf;
+} AutocmdSaveCtx;
+
+/// Save autocmd global variables. Returns heap-allocated context.
+void *nvim_autocmd_save_ctx(void)
+{
+  AutocmdSaveCtx *ctx = xmalloc(sizeof(*ctx));
+  ctx->save_autocmd_fname = autocmd_fname;
+  ctx->save_autocmd_fname_full = autocmd_fname_full;
+  ctx->save_autocmd_bufnr = autocmd_bufnr;
+  ctx->save_autocmd_match = autocmd_match;
+  ctx->save_autocmd_busy = autocmd_busy;
+  ctx->save_autocmd_nested = autocmd_nested;
+  ctx->save_changed = curbuf->b_changed;
+  ctx->old_curbuf = curbuf;
+  return ctx;
+}
+
+/// Restore autocmd global variables from saved context. Frees context.
+/// Also frees the current autocmd_fname (MAXPATHL copy) before restoring.
+void nvim_autocmd_restore_ctx(void *ctx_raw)
+{
+  AutocmdSaveCtx *ctx = (AutocmdSaveCtx *)ctx_raw;
+  autocmd_busy = ctx->save_autocmd_busy;
+  autocmd_nested = ctx->save_autocmd_nested;
+  xfree(autocmd_fname);  // free MAXPATHL copy set by nvim_autocmd_setup_afile
+  autocmd_fname = ctx->save_autocmd_fname;
+  autocmd_fname_full = ctx->save_autocmd_fname_full;
+  autocmd_bufnr = ctx->save_autocmd_bufnr;
+  autocmd_match = ctx->save_autocmd_match;
+  xfree(ctx);
+}
+
+/// Get the saved old_curbuf from context.
+void *nvim_autocmd_ctx_get_old_curbuf(const void *ctx_raw)
+{
+  return ((const AutocmdSaveCtx *)ctx_raw)->old_curbuf;
+}
+
+/// Get the saved b_changed from context.
+bool nvim_autocmd_ctx_get_save_changed(const void *ctx_raw)
+{
+  return ((const AutocmdSaveCtx *)ctx_raw)->save_changed;
+}
+
+// --- Set individual autocmd globals ---
+
+void nvim_set_autocmd_fname(char *f) { autocmd_fname = f; }
+char *nvim_get_autocmd_fname(void) { return autocmd_fname; }
+void nvim_set_autocmd_fname_full(bool v) { autocmd_fname_full = v; }
+bool nvim_get_autocmd_fname_full(void) { return autocmd_fname_full; }
+void nvim_set_autocmd_bufnr2(int v) { autocmd_bufnr = v; }
+void nvim_set_autocmd_match(char *m) { autocmd_match = m; }
+void nvim_set_autocmd_busy(bool v) { autocmd_busy = v; }
+int nvim_get_autocmd_no_enter(void) { return autocmd_no_enter; }
+int nvim_get_autocmd_no_leave(void) { return autocmd_no_leave; }
+
+// --- Current buffer field accessors ---
+
+bool nvim_get_curbuf_b_changed(void) { return curbuf->b_changed; }
+void nvim_set_curbuf_b_changed(bool v) { curbuf->b_changed = v; }
+bool nvim_get_curbuf_b_did_filetype(void) { return curbuf->b_did_filetype; }
+void nvim_set_curbuf_b_did_filetype(bool v) { curbuf->b_did_filetype = v; }
+bool nvim_get_curbuf_b_keep_filetype(void) { return curbuf->b_keep_filetype; }
+bool nvim_get_curbuf_b_au_did_filetype(void) { return curbuf->b_au_did_filetype; }
+void nvim_set_curbuf_b_au_did_filetype(bool v) { curbuf->b_au_did_filetype = v; }
+
+/// Check if buf == curbuf (autocmd variant to avoid conflict with undo.c).
+bool nvim_autocmd_buf_is_curbuf(const void *buf) { return (const buf_T *)buf == curbuf; }
+
+// --- Buffer field accessors (autocmd-specific variants) ---
+
+const char *nvim_autocmd_buf_get_sfname(const void *buf) { return ((const buf_T *)buf)->b_sfname; }
+const char *nvim_autocmd_buf_get_ffname(const void *buf) { return ((const buf_T *)buf)->b_ffname; }
+const char *nvim_autocmd_buf_get_p_syn(const void *buf) { return ((const buf_T *)buf)->b_p_syn; }
+const char *nvim_autocmd_buf_get_p_ft2(const void *buf) { return ((const buf_T *)buf)->b_p_ft; }
+int nvim_autocmd_buf_get_fnum(const void *buf) { return ((const buf_T *)buf)->b_fnum; }
+int nvim_autocmd_buf_get_nwindows(const void *buf) { return ((const buf_T *)buf)->b_nwindows; }
+
+// --- Win ignore / eventignorewin check ---
+
+/// Check if ALL windows showing buf have 'eventignorewin' suppressing event.
+/// Returns true if the event should be ignored for this buf.
+bool nvim_autocmd_check_win_ignore(int event, const void *buf_raw)
+{
+  const buf_T *buf = (const buf_T *)buf_raw;
+  // Only applies to events with negative sign (window-level events).
+  if (event_names[event].event > 0) {
+    return false;
+  }
+  if (buf == curbuf) {
+    return event_ignored(event, curwin->w_p_eiw);
+  }
+  if (buf != NULL && buf->b_nwindows > 0) {
+    bool all_ignore = true;
+    FOR_ALL_TAB_WINDOWS(tp, wp) {
+      if (wp->w_buffer == buf && !event_ignored(event, wp->w_p_eiw)) {
+        all_ignore = false;
+        break;
+      }
+    }
+    return all_ignore;
+  }
+  return false;
+}
+
+// --- AutoPatCmd lifecycle ---
+
+/// Returns the size of AutoPatCmd (for heap allocation in Rust).
+size_t nvim_sizeof_autopatcmd(void) { return sizeof(AutoPatCmd); }
+
+/// Initialize a heap-allocated AutoPatCmd with the given fields.
+void nvim_apc_init(void *apc_raw, int event, int group, char *fname, char *sfname,
+                   const char *tail, int arg_bufnr, char *afile_orig, void *data)
+{
+  AutoPatCmd *apc = (AutoPatCmd *)apc_raw;
+  memset(apc, 0, sizeof(*apc));
+  apc->lastpat = NULL;
+  apc->auidx = 0;
+  apc->ausize = kv_size(autocmds[event]);
+  apc->afile_orig = afile_orig;
+  apc->fname = fname;
+  apc->sfname = sfname;
+  apc->tail = (char *)tail;
+  apc->group = group;
+  apc->event = (event_T)event;
+  apc->arg_bufnr = arg_bufnr;
+  apc->data = (Object *)data;
+  apc->next = NULL;
+}
+
+/// Push apc onto active_apc_list.
+void nvim_apc_push_active(void *apc_raw)
+{
+  AutoPatCmd *apc = (AutoPatCmd *)apc_raw;
+  apc->next = active_apc_list;
+  active_apc_list = apc;
+}
+
+/// Pop apc from active_apc_list (if it's at the top).
+void nvim_apc_pop_active(void *apc_raw)
+{
+  if (active_apc_list == (AutoPatCmd *)apc_raw) {
+    active_apc_list = ((AutoPatCmd *)apc_raw)->next;
+  }
+}
+
+/// Get apc->lastpat != NULL.
+bool nvim_apc_has_match(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->lastpat != NULL; }
+
+// --- Search pattern / redo save/restore ---
+
+/// Saved search + redo state for apply_autocmds_group.
+typedef struct {
+  bool did_save_redobuff;
+  save_redo_T save_redo;
+} AutocmdExecSave;
+
+/// Save search patterns and optionally redo buffer. Returns heap-allocated save struct.
+void *nvim_autocmd_save_exec(void)
+{
+  AutocmdExecSave *s = xmalloc(sizeof(*s));
+  save_search_patterns();
+  s->did_save_redobuff = false;
+  if (!rs_ins_compl_active()) {
+    saveRedobuff(&s->save_redo);
+    s->did_save_redobuff = true;
+  }
+  return s;
+}
+
+/// Restore search patterns and optionally redo buffer. Frees save struct.
+void nvim_autocmd_restore_exec(void *save_raw)
+{
+  AutocmdExecSave *s = (AutocmdExecSave *)save_raw;
+  restore_search_patterns();
+  if (s->did_save_redobuff) {
+    restoreRedobuff(&s->save_redo);
+  }
+  xfree(s);
+}
+
+// --- funccal save/restore ---
+
+typedef struct {
+  funccal_entry_T entry;
+} AutocmdFunccalSave;
+
+/// Save funccal state. Returns heap-allocated save struct.
+void *nvim_autocmd_save_funccal(void)
+{
+  AutocmdFunccalSave *s = xmalloc(sizeof(*s));
+  save_funccal(&s->entry);
+  return s;
+}
+
+/// Restore funccal state. Frees save struct.
+void nvim_autocmd_restore_funccal(void *save_raw)
+{
+  (void)save_raw;
+  restore_funccal();
+  xfree(save_raw);
+}
+
+// --- Profiling ---
+
+/// Size of proftime_T for heap allocation.
+size_t nvim_sizeof_proftime(void) { return sizeof(proftime_T); }
+
+/// Call prof_child_enter if profiling is active. Returns heap-allocated proftime_T or NULL.
+void *nvim_autocmd_prof_enter(void)
+{
+  if (do_profiling != PROF_YES) {
+    return NULL;
+  }
+  proftime_T *wt = xmalloc(sizeof(*wt));
+  prof_child_enter(wt);
+  return wt;
+}
+
+/// Call prof_child_exit if profiling is active. Frees the proftime_T.
+void nvim_autocmd_prof_exit(void *wt)
+{
+  if (wt == NULL) {
+    return;
+  }
+  prof_child_exit((proftime_T *)wt);
+  xfree(wt);
+}
+
+// --- estack ---
+
+void nvim_autocmd_estack_push(void) { estack_push(ETYPE_AUCMD, NULL, 0); }
+void nvim_autocmd_estack_pop(void) { xfree(SOURCING_NAME); estack_pop(); }
+
+// --- filechangeshell_busy (file-static in apply_autocmds_group) ---
+// This static is local to apply_autocmds_group. We manage it here via a separate global.
+// Since apply_autocmds_group will be in Rust, we need this static to be accessible.
+// Solution: move it to a file-level static and expose via accessors.
+
+static bool filechangeshell_busy_global = false;
+
+bool nvim_get_filechangeshell_busy(void) { return filechangeshell_busy_global; }
+void nvim_set_filechangeshell_busy(bool v) { filechangeshell_busy_global = v; }
+
+// --- nesting counter (static in apply_autocmds_group) ---
+// Same approach: move to file-level static.
+
+static int autocmd_nesting = 0;
+
+int nvim_get_autocmd_nesting(void) { return autocmd_nesting; }
+void nvim_inc_autocmd_nesting(void) { autocmd_nesting++; }
+void nvim_dec_autocmd_nesting(void) { autocmd_nesting--; }
+
+// --- v:cmdbang ---
+
+int64_t nvim_get_vim_var_cmdbang(void) { return get_vim_var_nr(VV_CMDBANG); }
+void nvim_set_vim_var_cmdbang(int64_t v) { set_vim_var_nr(VV_CMDBANG, v); }
+
+// --- eap.forceit accessor ---
+
+bool nvim_autocmd_eap_get_forceit(const void *eap) { return ((const exarg_T *)eap)->forceit; }
+
+// --- set_cmdarg wrapper ---
+// Returns old cmdarg (saved value). If eap is NULL, restores from old_arg.
+
+char *nvim_set_cmdarg(void *eap, char *old_arg) { return set_cmdarg((exarg_T *)eap, old_arg); }
+
+// --- get/set pressedreturn (autocmd variant) ---
+
+bool nvim_autocmd_get_pressedreturn(void) { return get_pressedreturn(); }
+void nvim_autocmd_set_pressedreturn(bool v) { set_pressedreturn(v); }
+
+// --- KeyTyped global ---
+
+bool nvim_get_keytd(void) { return KeyTyped; }
+void nvim_set_keytd(bool v) { KeyTyped = v; }
+
+// --- RedrawingDisabled global ---
+
+void nvim_inc_redrawing_disabled(void) { RedrawingDisabled++; }
+void nvim_dec_redrawing_disabled(void) { RedrawingDisabled--; }
+
+// --- Free pending bufs/wins ---
+
+void nvim_autocmd_free_pending(void)
+{
+  while (au_pending_free_buf != NULL) {
+    buf_T *b = au_pending_free_buf->b_next;
+    xfree(au_pending_free_buf);
+    au_pending_free_buf = b;
+  }
+  while (au_pending_free_win != NULL) {
+    win_T *w = au_pending_free_win->w_next;
+    xfree(au_pending_free_win);
+    au_pending_free_win = w;
+  }
+}
+
+// --- fname resolution for apply_autocmds_group ---
+// Complex: depends on event and buf. Returns heap-allocated fname or NULL.
+// Also sets *sfname_out if relevant. Both must be freed by caller.
+
+char *nvim_autocmd_resolve_fname(int event, void *buf_raw, char *fname, char **sfname_out,
+                                 bool *fname_full_out)
+{
+  buf_T *buf = (buf_T *)buf_raw;
+  char *sfname = NULL;
+  char *out_fname = NULL;
+  bool fname_full = false;
+
+  if (fname == NULL || *fname == NUL) {
+    if (buf == NULL) {
+      out_fname = NULL;
+    } else {
+      if (event == EVENT_SYNTAX) {
+        out_fname = xstrdup(buf->b_p_syn);
+        fname_full = true;
+      } else if (event == EVENT_FILETYPE) {
+        out_fname = xstrdup(buf->b_p_ft);
+        fname_full = true;
+      } else {
+        if (buf->b_sfname != NULL) {
+          sfname = xstrdup(buf->b_sfname);
+        }
+        out_fname = buf->b_ffname ? xstrdup(buf->b_ffname) : xstrdup("");
+      }
+    }
+    if (out_fname == NULL) {
+      out_fname = xstrdup("");
+    }
+  } else {
+    sfname = xstrdup(fname);
+    if (event == EVENT_CMDLINECHANGED
+        || event == EVENT_CMDLINEENTER
+        || event == EVENT_CMDLINELEAVEPRE
+        || event == EVENT_CMDLINELEAVE
+        || event == EVENT_CMDUNDEFINED
+        || event == EVENT_CURSORMOVEDC
+        || event == EVENT_CMDWINENTER
+        || event == EVENT_CMDWINLEAVE
+        || event == EVENT_COLORSCHEME
+        || event == EVENT_COLORSCHEMEPRE
+        || event == EVENT_DIRCHANGED
+        || event == EVENT_DIRCHANGEDPRE
+        || event == EVENT_FILETYPE
+        || event == EVENT_FUNCUNDEFINED
+        || event == EVENT_MENUPOPUP
+        || event == EVENT_MODECHANGED
+        || event == EVENT_OPTIONSET
+        || event == EVENT_QUICKFIXCMDPOST
+        || event == EVENT_QUICKFIXCMDPRE
+        || event == EVENT_REMOTEREPLY
+        || event == EVENT_SIGNAL
+        || event == EVENT_SPELLFILEMISSING
+        || event == EVENT_SYNTAX
+        || event == EVENT_TABCLOSED
+        || event == EVENT_USER
+        || event == EVENT_WINCLOSED
+        || event == EVENT_WINRESIZED
+        || event == EVENT_WINSCROLLED) {
+      out_fname = xstrdup(fname);
+      fname_full = true;
+    } else {
+      out_fname = FullName_save(fname, false);
+    }
+  }
+
+  *sfname_out = sfname;
+  *fname_full_out = fname_full;
+  return out_fname;
+}
+
+/// Set autocmd_fname from fname_io or fname, and return afile_orig (heap-allocated copy).
+/// Also sets autocmd_fname to a MAXPATHL-extended copy.
+char *nvim_autocmd_setup_afile(int event, void *buf_raw, char *fname_io, char *fname)
+{
+  buf_T *buf = (buf_T *)buf_raw;
+  if (fname_io == NULL) {
+    if (event == EVENT_COLORSCHEME || event == EVENT_COLORSCHEMEPRE
+        || event == EVENT_OPTIONSET || event == EVENT_MODECHANGED) {
+      autocmd_fname = NULL;
+    } else if (fname != NULL && !ends_excmd(*fname)) {
+      autocmd_fname = fname;
+    } else if (buf != NULL) {
+      autocmd_fname = buf->b_ffname;
+    } else {
+      autocmd_fname = NULL;
+    }
+  } else {
+    autocmd_fname = fname_io;
+  }
+
+  char *afile_orig = NULL;
+  if (autocmd_fname != NULL) {
+    afile_orig = xstrdup(autocmd_fname);
+    autocmd_fname = xstrnsave(autocmd_fname, MAXPATHL);
+  }
+  autocmd_fname_full = false;
+  return afile_orig;
+}
+
+/// Set b_changed for old_curbuf if it changed during autocmd execution (post-cleanup).
+void nvim_autocmd_check_changed(void *ctx_raw)
+{
+  AutocmdSaveCtx *ctx = (AutocmdSaveCtx *)ctx_raw;
+  if (curbuf == ctx->old_curbuf) {
+    if (curbuf->b_changed != ctx->save_changed) {
+      need_maketitle = true;
+    }
+    curbuf->b_changed = ctx->save_changed;
+  }
+}
+
+/// Variant of check_changed that takes explicit values (for Rust after ctx has been freed).
+void nvim_autocmd_check_changed_ex(void *old_curbuf_raw, bool save_changed)
+{
+  buf_T *old_curbuf = (buf_T *)old_curbuf_raw;
+  if (curbuf == old_curbuf) {
+    if (curbuf->b_changed != save_changed) {
+      need_maketitle = true;
+    }
+    curbuf->b_changed = save_changed;
+  }
+}
+
+/// The event constants for events that check b_changed in apply_autocmds_group.
+bool nvim_autocmd_event_resets_changed(int event)
+{
+  return event == EVENT_BUFREADPOST || event == EVENT_BUFWRITEPOST
+      || event == EVENT_FILEAPPENDPOST || event == EVENT_VIMLEAVE
+      || event == EVENT_VIMLEAVEPRE;
+}
+
+/// event_ignored wrapper.
+bool nvim_event_ignored(int event, const char *pat) { return event_ignored((event_T)event, pat); }
+
+/// Get curwin->w_p_eiw.
+const char *nvim_get_curwin_p_eiw(void) { return curwin->w_p_eiw; }
+
+/// did_emsg accessor.
+int nvim_autocmd_get_did_emsg(void) { return did_emsg; }
+void nvim_autocmd_add_did_emsg(int v) { did_emsg += v; }
+
+/// Get current autocmd_nested value.
+bool nvim_get_autocmd_nested(void) { return autocmd_nested; }
+
+// nvim_get_autocmd_busy is already defined in change_ffi.c
+
+/// Save/restore current_sctx (for apply_autocmds_group migration).
+typedef struct {
+  sctx_T sctx;
+} AutocmdSctxSave;
+
+void *nvim_autocmd_save_sctx(void)
+{
+  AutocmdSctxSave *s = xmalloc(sizeof(*s));
+  s->sctx = current_sctx;
+  return s;
+}
+
+void nvim_autocmd_restore_sctx(void *s_raw)
+{
+  AutocmdSctxSave *s = (AutocmdSctxSave *)s_raw;
+  current_sctx = s->sctx;
+  xfree(s);
+}

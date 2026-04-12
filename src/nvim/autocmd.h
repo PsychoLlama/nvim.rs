@@ -103,6 +103,8 @@ bool autocmd_delete_id(int64_t id);
 void block_autocmds(void);
 void unblock_autocmds(void);
 bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf);
+bool apply_autocmds_group(event_T event, char *fname, char *fname_io, bool force, int group,
+                          buf_T *buf, exarg_T *eap, Object *data);
 bool apply_autocmds_exarg(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
                           exarg_T *eap);
 bool apply_autocmds_retval(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
