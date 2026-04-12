@@ -2181,6 +2181,157 @@ pub unsafe extern "C" fn rs_do_filetype_autocmd(buf: *mut c_void, force: bool) {
     nvim_set_secure(secure_save);
 }
 
+// =============================================================================
+// Phase 1: getnextac migration
+// =============================================================================
+
+extern "C" {
+    // AutoPatCmd field accessors
+    fn nvim_apc_get_event(apc: *const c_void) -> c_int;
+    fn nvim_apc_get_ausize(apc: *const c_void) -> usize;
+    fn nvim_apc_get_auidx(apc: *const c_void) -> usize;
+    fn nvim_apc_get_lastpat(apc: *const c_void) -> *mut c_void;
+    fn nvim_apc_set_auidx(apc: *mut c_void, idx: usize);
+
+    // aucmd_next wrapper (calls C aucmd_next)
+    fn nvim_aucmd_next(apc: *mut c_void);
+
+    // Accessor for ac->nested
+    fn nvim_autocmd_get_ac_nested(event: c_int, idx: usize) -> bool;
+
+    // Accessor for ac->once
+    fn nvim_autocmd_get_ac_once(event: c_int, idx: usize) -> bool;
+
+    // Set current_sctx from ac->script_ctx + update apc->script_ctx
+    fn nvim_autocmd_set_script_ctx(event: c_int, idx: usize, apc: *mut c_void);
+
+    // Set autocmd_nested global
+    fn nvim_set_autocmd_nested(val: bool);
+
+    // Get xstrdup of ac->handler_cmd, or NULL if handler is function
+    fn nvim_autocmd_get_ac_handler_cmd(event: c_int, idx: usize) -> *mut c_char;
+
+    // Get verbose handler string (allocated, caller frees)
+    fn nvim_autocmd_get_handler_str_verbose(event: c_int, idx: usize) -> *mut c_char;
+
+    // Verbose enter/leave with scroll
+    fn verbose_enter_scroll();
+    fn verbose_leave_scroll();
+
+    // smsg (variadic, but we use %s form only)
+    #[link_name = "smsg"]
+    fn autocmd_smsg(attr: c_int, fmt: *const c_char, arg: *const c_char);
+
+    // Size of AutoCmd struct
+    fn nvim_sizeof_autocmd() -> usize;
+
+    // Copy AutoCmd at (event, idx) into dst
+    fn nvim_autocmd_copy_ac(event: c_int, idx: usize, dst: *mut c_void);
+
+    // Temporarily set ac->pat = NULL (for oneshot hide-during-callback trick)
+    fn nvim_autocmd_set_pat_null(event: c_int, idx: usize);
+
+    // Execute the callback from an AutoCmd copy
+    fn nvim_autocmd_execute_callback_copy(ac_copy: *const c_void, apc: *const c_void) -> bool;
+
+    // Restore pat from copy
+    fn nvim_autocmd_restore_pat(event: c_int, idx: usize, ac_copy: *mut c_void);
+
+    // xcalloc
+    #[link_name = "xcalloc"]
+    fn autocmd_xcalloc(count: usize, size: usize) -> *mut c_void;
+}
+
+/// Get next autocommand command.
+/// Called by do_cmdline() to get the next line for ":if".
+/// Returns allocated string, or NULL for end of autocommands.
+///
+/// This replaces the C `getnextac` function.
+///
+/// # Safety
+/// `cookie` must be a valid `AutoPatCmd *` pointer.
+#[unsafe(export_name = "getnextac")]
+pub unsafe extern "C" fn rs_getnextac(
+    _c: c_int,
+    cookie: *mut c_void,
+    _indent: c_int,
+    _do_concat: bool,
+) -> *mut c_char {
+    let apc = cookie;
+
+    nvim_aucmd_next(apc);
+    if nvim_apc_get_lastpat(apc).is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let event = nvim_apc_get_event(apc);
+    let idx = nvim_apc_get_auidx(apc);
+    let oneshot = nvim_autocmd_get_ac_once(event, idx);
+
+    // Verbose: log autocommand being executed
+    if p_verbose >= 9 {
+        verbose_enter_scroll();
+        let handler_str = nvim_autocmd_get_handler_str_verbose(event, idx);
+        autocmd_smsg(0, c"autocommand %s".as_ptr(), handler_str);
+        nvim_autocmd_msg_puts(c"\n".as_ptr());
+        nvim_autocmd_xfree(handler_str);
+        verbose_leave_scroll();
+    }
+
+    // Set autocmd_nested and current_sctx from this autocmd
+    nvim_set_autocmd_nested(nvim_autocmd_get_ac_nested(event, idx));
+    nvim_autocmd_set_script_ctx(event, idx, apc);
+
+    let handler_cmd = nvim_autocmd_get_ac_handler_cmd(event, idx);
+    let mut oneshot = oneshot;
+
+    let retval: *mut c_char = if handler_cmd.is_null() {
+        // Handler is a Lua/VimL callback. Copy ac for safe oneshot handling.
+        let ac_size = nvim_sizeof_autocmd();
+        let ac_copy = autocmd_xcalloc(1, ac_size);
+        nvim_autocmd_copy_ac(event, idx, ac_copy);
+
+        // Mark oneshot handler as "removed" now, to prevent recursion. #25526
+        if oneshot {
+            nvim_autocmd_set_pat_null(event, idx);
+        }
+
+        // Execute callback (may reallocate acs vector, invalidating pointers)
+        let rv = nvim_autocmd_execute_callback_copy(ac_copy.cast_const(), apc.cast_const());
+
+        if oneshot {
+            // Restore pat. Use event/idx because acs may have been reallocated.
+            nvim_autocmd_restore_pat(event, idx, ac_copy);
+        }
+
+        nvim_autocmd_xfree(ac_copy.cast::<c_char>());
+
+        // If an autocommand callback returns true, delete the autocommand
+        oneshot = oneshot || rv;
+
+        // Return non-NULL to signal "keep going" to do_cmdline
+        autocmd_xcalloc(1, 1).cast::<c_char>()
+    } else {
+        // Handler is an Ex command string (already xstrdup'd by the accessor)
+        handler_cmd
+    };
+
+    // Remove one-shot ("once") autocmd in anticipation of its execution.
+    if oneshot {
+        nvim_autocmd_del_at(event, idx);
+    }
+
+    // Advance the autocmd index for next call
+    let ausize = nvim_apc_get_ausize(apc);
+    if idx < ausize {
+        nvim_apc_set_auidx(apc, idx + 1);
+    } else {
+        nvim_apc_set_auidx(apc, usize::MAX);
+    }
+
+    retval
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

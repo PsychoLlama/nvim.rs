@@ -76,6 +76,9 @@ extern const char *rs_event_nr2name(int event, int num_events);
 extern void rs_aubuflocal_remove(int bufnr);
 extern int arg_augroup_get(char **argp);
 
+// getnextac is implemented in Rust; declare it here so apply_autocmds_group can use it.
+extern char *getnextac(int c, void *cookie, int indent, bool do_concat);
+
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
 {
@@ -1006,84 +1009,8 @@ static bool au_callback(const AutoCmd *ac, const AutoPatCmd *apc)
   }
 }
 
-/// Get next autocommand command.
-/// Called by do_cmdline() to get the next line for ":if".
-/// @return allocated string, or NULL for end of autocommands.
-char *getnextac(int c, void *cookie, int indent, bool do_concat)
-{
-  // These arguments are required for do_cmdline.
-  (void)c;
-  (void)indent;
-  (void)do_concat;
-
-  AutoPatCmd *const apc = (AutoPatCmd *)cookie;
-  AutoCmdVec *const acs = &autocmds[(int)apc->event];
-
-  aucmd_next(apc);
-  if (apc->lastpat == NULL) {
-    return NULL;
-  }
-
-  assert(apc->auidx < kv_size(*acs));
-  AutoCmd *const ac = &kv_A(*acs, apc->auidx);
-  assert(ac->pat != NULL);
-  bool oneshot = ac->once;
-
-  if (p_verbose >= 9) {
-    verbose_enter_scroll();
-    char *handler_str = aucmd_handler_to_string(ac);
-    smsg(0, _("autocommand %s"), handler_str);
-    msg_puts("\n");  // don't overwrite this either
-    XFREE_CLEAR(handler_str);
-    verbose_leave_scroll();
-  }
-
-  // Make sure to set autocmd_nested before executing
-  // lua code, so that it works properly
-  autocmd_nested = ac->nested;
-  current_sctx = ac->script_ctx;
-  apc->script_ctx = current_sctx;
-
-  char *retval;
-  if (ac->handler_cmd) {
-    retval = xstrdup(ac->handler_cmd);
-  } else {
-    AutoCmd ac_copy = *ac;
-    // Mark oneshot handler as "removed" now, to prevent recursion by e.g. `:doautocmd`. #25526
-    ac->pat = oneshot ? NULL : ac->pat;
-    // May reallocate `acs` kvec_t data and invalidate the `ac` pointer.
-    bool rv = au_callback(&ac_copy, apc);
-    if (oneshot) {
-      // Restore `pat`. Use `acs` because `ac` may have been invalidated by the callback.
-      kv_A(*acs, apc->auidx).pat = ac_copy.pat;
-    }
-    // If an autocommand callback returns true, delete the autocommand
-    oneshot = oneshot || rv;
-
-    // HACK(tjdevries):
-    //  We just return "not-null" and continue going.
-    //  This would be a good candidate for a refactor. You would need to refactor:
-    //      1. do_cmdline to accept something besides a string
-    //      OR
-    //      2. make where we call do_cmdline for autocmds not have to return anything,
-    //      and instead we loop over all the matches and just execute one-by-one.
-    //          However, my expectation would be that could be expensive.
-    retval = xcalloc(1, 1);
-  }
-
-  // Remove one-shot ("once") autocmd in anticipation of its execution.
-  if (oneshot) {
-    aucmd_del(&kv_A(*acs, apc->auidx));
-  }
-
-  if (apc->auidx < apc->ausize) {
-    apc->auidx++;
-  } else {
-    apc->auidx = SIZE_MAX;
-  }
-
-  return retval;
-}
+// getnextac is implemented in Rust (rs_getnextac in autocmd/src/lib.rs)
+// and exported directly under the name "getnextac" via #[unsafe(export_name)].
 
 /// Gets an (allocated) string representation of an autocmd command/callback.
 static char *aucmd_handler_to_string(AutoCmd *ac)
@@ -1312,3 +1239,246 @@ bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, b
 void *nvim_autocmd_get_curbuf_ptr(void) { return curbuf; }
 void nvim_autocmd_semsg_str(const char *fmt, const char *arg) { semsg(fmt, arg); }
 void nvim_autocmd_smsg_no_matching(const char *arg_start) { smsg(0, _("No matching autocommands: %s"), arg_start); }
+
+// =============================================================================
+// Phase 1: AutoPatCmd field accessors for aucmd_next / getnextac migration
+// =============================================================================
+
+int nvim_apc_get_event(const void *apc_raw) { return (int)((const AutoPatCmd *)apc_raw)->event; }
+size_t nvim_apc_get_ausize(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->ausize; }
+size_t nvim_apc_get_auidx(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->auidx; }
+int nvim_apc_get_group(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->group; }
+void *nvim_apc_get_lastpat(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->lastpat; }
+const char *nvim_apc_get_fname(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->fname; }
+const char *nvim_apc_get_sfname(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->sfname; }
+const char *nvim_apc_get_tail(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->tail; }
+int nvim_apc_get_arg_bufnr(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->arg_bufnr; }
+const char *nvim_apc_get_afile_orig(const void *apc_raw) { return ((const AutoPatCmd *)apc_raw)->afile_orig; }
+
+void nvim_apc_set_lastpat(void *apc_raw, void *pat) { ((AutoPatCmd *)apc_raw)->lastpat = (AutoPat *)pat; }
+void nvim_apc_set_auidx(void *apc_raw, size_t idx) { ((AutoPatCmd *)apc_raw)->auidx = idx; }
+
+/// Returns the AutoPat* for autocmd at (event, idx), or NULL if deleted.
+void *nvim_autocmd_get_ac_pat(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
+  }
+  return kv_A(*acs, idx).pat;
+}
+
+/// Returns whether two AutoPat* pointers are equal.
+bool nvim_autopat_eq(const void *a, const void *b) { return a == b; }
+
+/// Check if autocmd at (event, i) should be skipped: pat is NULL, group doesn't match,
+/// or file pattern doesn't match. Returns 1 if the autocmd should be skipped.
+int nvim_aucmd_should_skip_at(int event, size_t i, const void *apc_raw)
+{
+  const AutoPatCmd *apc = (const AutoPatCmd *)apc_raw;
+  AutoCmdVec *const acs = &autocmds[event];
+  if (i >= kv_size(*acs)) {
+    return 1;
+  }
+  AutoCmd *const ac = &kv_A(*acs, i);
+  AutoPat *const ap = ac->pat;
+
+  // Skip deleted autocommands.
+  if (ap == NULL) {
+    return 1;
+  }
+  // Skip matching if pattern didn't change (caller checks lastpat == ap).
+  if (ap == apc->lastpat) {
+    return 0;  // Same pat as last: don't skip, it already matched.
+  }
+  // Skip autocommands that don't match the group.
+  if (apc->group != AUGROUP_ALL && apc->group != ap->group) {
+    return 1;
+  }
+  // Skip autocommands that don't match the pattern or buffer number.
+  if (ap->buflocal_nr == 0
+      ? !match_file_pat(NULL, &ap->reg_prog, apc->fname, apc->sfname, apc->tail, ap->allow_dirs)
+      : ap->buflocal_nr != apc->arg_bufnr) {
+    return 1;
+  }
+  return 0;
+}
+
+/// Check if the lastpat pointer at index i in event's autocmd vector matches apc->lastpat.
+bool nvim_apc_lastpat_same(int event, size_t i, const void *apc_raw)
+{
+  const AutoPatCmd *apc = (const AutoPatCmd *)apc_raw;
+  AutoCmdVec *const acs = &autocmds[event];
+  if (i >= kv_size(*acs)) {
+    return false;
+  }
+  return kv_A(*acs, i).pat == apc->lastpat;
+}
+
+/// Update the exestack entry for a matching autocmd at (event, i) in apc.
+/// Frees old es_name and sets new one. Returns the pat pointer for use as lastpat.
+void *nvim_aucmd_exestack_update(int event, size_t i, void *apc_raw)
+{
+  AutoPatCmd *apc = (AutoPatCmd *)apc_raw;
+  AutoCmdVec *const acs = &autocmds[event];
+  AutoPat *const ap = kv_A(*acs, i).pat;
+
+  estack_T *const entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
+  const char *const name = rs_event_nr2name(event, NUM_EVENTS);
+  const char *const s = _("%s Autocommands for \"%s\"");
+  const size_t sourcing_name_len = strlen(s) + strlen(name) + (size_t)ap->patlen + 1;
+  char *const namep = xmalloc(sourcing_name_len);
+  snprintf(namep, sourcing_name_len, s, name, ap->pat);
+
+  XFREE_CLEAR(entry->es_name);
+  entry->es_name = namep;
+  entry->es_info.aucmd = apc;
+  return ap;
+}
+
+/// Clear the exestack entry for this autocmd execution (when no more autocmds).
+void nvim_aucmd_exestack_clear(void)
+{
+  estack_T *const entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
+  XFREE_CLEAR(entry->es_name);
+  entry->es_info.aucmd = NULL;
+}
+
+/// Emit verbose message for the current autocmd at (event, i) if p_verbose >= 8.
+void nvim_aucmd_verbose_match(int event, size_t i, const void *apc_raw)
+{
+  const AutoPatCmd *apc = (const AutoPatCmd *)apc_raw;
+  AutoCmdVec *const acs = &autocmds[event];
+  AutoPat *const ap = kv_A(*acs, i).pat;
+  if (p_verbose >= 8) {
+    const char *const name = rs_event_nr2name(event, NUM_EVENTS);
+    const char *const s = _("%s Autocommands for \"%s\"");
+    const size_t sourcing_name_len = strlen(s) + strlen(name) + (size_t)ap->patlen + 1;
+    char *namep = xmalloc(sourcing_name_len);
+    snprintf(namep, sourcing_name_len, s, name, ap->pat);
+    verbose_enter();
+    smsg(0, _("Executing %s"), namep);
+    verbose_leave();
+    xfree(namep);
+  }
+  (void)apc;  // suppress unused warning
+}
+
+/// Get ac->nested for autocmd at (event, idx).
+bool nvim_autocmd_get_ac_nested(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return false;
+  }
+  return kv_A(*acs, idx).nested;
+}
+
+/// Get ac->once for autocmd at (event, idx).
+bool nvim_autocmd_get_ac_once(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return false;
+  }
+  return kv_A(*acs, idx).once;
+}
+
+/// Set current_sctx from ac->script_ctx for autocmd at (event, idx).
+/// Also sets apc->script_ctx = current_sctx.
+void nvim_autocmd_set_script_ctx(int event, size_t idx, void *apc_raw)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    current_sctx = kv_A(*acs, idx).script_ctx;
+    if (apc_raw) {
+      ((AutoPatCmd *)apc_raw)->script_ctx = current_sctx;
+    }
+  }
+}
+
+/// Return xstrdup of ac->handler_cmd for autocmd at (event, idx), or NULL if handler is function.
+char *nvim_autocmd_get_ac_handler_cmd(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs) || kv_A(*acs, idx).handler_cmd == NULL) {
+    return NULL;
+  }
+  return xstrdup(kv_A(*acs, idx).handler_cmd);
+}
+
+/// Get the verbose handler string for a autocmd at (event, idx) for verbose output.
+/// Returns an allocated string (caller frees).
+char *nvim_autocmd_get_handler_str_verbose(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
+  }
+  return aucmd_handler_to_string(&kv_A(*acs, idx));
+}
+
+/// Execute the callback for autocmd at (event, idx) using the apc context.
+/// Returns true if the callback returned a "delete me" value (Lua returning true).
+/// For VimL callbacks, always returns false.
+bool nvim_autocmd_execute_callback(int event, size_t idx, const void *apc_raw)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return false;
+  }
+  // We need to use the copy of ac (like getnextac does: AutoCmd ac_copy = *ac)
+  // The caller already made a copy situation. We act on the original.
+  AutoCmd *const ac = &kv_A(*acs, idx);
+  if (ac->pat == NULL) {
+    return false;
+  }
+  return au_callback(ac, (const AutoPatCmd *)apc_raw);
+}
+
+/// Execute the callback from an AutoCmd copy (for safe oneshot handling).
+/// ac_copy_raw is a pointer to an AutoCmd copy (stack allocated by Rust via xcalloc or similar).
+bool nvim_autocmd_execute_callback_copy(const void *ac_copy_raw, const void *apc_raw)
+{
+  return au_callback((const AutoCmd *)ac_copy_raw, (const AutoPatCmd *)apc_raw);
+}
+
+/// Get the size of AutoCmd struct (for Rust allocation).
+size_t nvim_sizeof_autocmd(void) { return sizeof(AutoCmd); }
+
+/// Copy the AutoCmd at (event, idx) into the buffer pointed to by dst.
+void nvim_autocmd_copy_ac(int event, size_t idx, void *dst)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    memcpy(dst, &kv_A(*acs, idx), sizeof(AutoCmd));
+  }
+}
+
+/// Restore the pat pointer for autocmd at (event, idx) from a saved copy.
+/// Used to undo the oneshot pat=NULL trick after callback may have reallocated acs.
+void nvim_autocmd_restore_pat(int event, size_t idx, void *ac_copy_raw)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    kv_A(*acs, idx).pat = ((AutoCmd *)ac_copy_raw)->pat;
+  }
+}
+
+/// Set autocmd_nested global.
+void nvim_set_autocmd_nested(bool val) { autocmd_nested = val; }
+
+/// Temporarily set ac->pat = NULL without freeing (for oneshot hide-during-callback trick).
+void nvim_autocmd_set_pat_null(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx < kv_size(*acs)) {
+    kv_A(*acs, idx).pat = NULL;
+  }
+}
+
+/// Add a non-static wrapper for aucmd_next (called from Rust getnextac).
+void nvim_aucmd_next(void *apc_raw) { aucmd_next((AutoPatCmd *)apc_raw); }
+
+/// Add a non-static wrapper for xcalloc.
+void *nvim_autocmd_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
