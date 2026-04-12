@@ -479,23 +479,10 @@ void os_exit(int r)
   rs_os_exit(r);
 }
 
-// C helpers for Rust getout (Phase 3) ------------------------------------
+// C helpers for Rust getout ------------------------------------
 
-// Returns adjusted exitval (adds ex_exitval if exmode_active)
-int nvim_getout_exmode_adjust(int exitval)
-{
-  if (exmode_active) {
-    exitval += ex_exitval;
-  }
-  return exitval;
-}
-
-// Set VV_EXITING vim variable
-void nvim_getout_set_vv_exiting(int exitval)
-{
-  set_vim_var_type(VV_EXITING, VAR_NUMBER);
-  set_vim_var_nr(VV_EXITING, exitval);
-}
+// nvim_getout_exmode_adjust: inlined into Rust rs_getout.
+// nvim_getout_set_vv_exiting: inlined into Rust rs_getout.
 
 // Trigger BufWinLeave for all windows (once per buffer).
 void nvim_getout_trigger_bufwinleave(void)
@@ -537,44 +524,11 @@ void nvim_getout_trigger_bufunload(void)
   }
 }
 
-// Trigger autocmd event (VimLeavePre or VimLeave), unblocking if needed
-void nvim_getout_apply_autocmd_event(int event)
-{
-  int unblock = 0;
-  if (is_autocmd_blocked()) {
-    unblock_autocmds();
-    unblock++;
-  }
-  apply_autocmds((event_T)event, NULL, NULL, false, curbuf);
-  if (unblock) {
-    block_autocmds();
-  }
-}
+// nvim_getout_apply_autocmd_event: inlined into Rust rs_getout.
 
-// Returns true if ShaDa should be written
-bool nvim_getout_should_write_shada(void)
-{
-  return
-#ifdef EXITFREE
-    !entered_free_all_mem &&
-#endif
-    p_shada && *p_shada != NUL;
-}
-
-// Handle did_emsg: clear no_wait_return and call wait_return
-void nvim_getout_handle_emsg(void)
-{
-  no_wait_return = false;
-  wait_return(false);
-}
-
-// Restore titleold if p_title is set
-void nvim_getout_restore_title(void)
-{
-  if (p_title && *p_titleold != NUL) {
-    ui_call_set_title(cstr_as_string(p_titleold));
-  }
-}
+// nvim_getout_should_write_shada: inlined into Rust rs_getout.
+// nvim_getout_handle_emsg: inlined into Rust rs_getout.
+// nvim_getout_restore_title: inlined into Rust rs_getout.
 
 // Handle restart via remote_ui_restart; sets restarting=false
 void nvim_getout_do_restart(void)

@@ -302,16 +302,17 @@ impl PreservedState {
 const EVENT_VIMLEAVEPRE: c_int = 131;
 const EVENT_VIMLEAVE: c_int = 130;
 
+// VV_EXITING enum value (from eval_defs.h, 90th entry starting from VV_COUNT=0)
+const VV_EXITING: c_int = 90;
+// VAR_NUMBER typval type (from eval/typval_defs.h)
+const VAR_NUMBER: c_int = 4;
+
+use std::ffi::c_char;
+
 unsafe extern "C" {
-    // C helpers for getout (defined in main.c, Phase 3)
-    fn nvim_getout_exmode_adjust(exitval: c_int) -> c_int;
-    fn nvim_getout_set_vv_exiting(exitval: c_int);
+    // C helpers for getout that MUST stay in C (use FOR_ALL_* macros or complex C types)
     fn nvim_getout_trigger_bufwinleave();
     fn nvim_getout_trigger_bufunload();
-    fn nvim_getout_apply_autocmd_event(event: c_int);
-    fn nvim_getout_should_write_shada() -> bool;
-    fn nvim_getout_handle_emsg();
-    fn nvim_getout_restore_title();
     fn nvim_getout_do_restart();
 
     // Plain C functions needed by getout
@@ -320,7 +321,34 @@ unsafe extern "C" {
     fn profile_dump();
     fn garbage_collect(testing: bool) -> bool;
     fn os_exit(r: c_int) -> !;
-    fn rs_shada_write_file(file: *const std::ffi::c_char, nomerge: bool) -> c_int;
+    fn rs_shada_write_file(file: *const c_char, nomerge: bool) -> c_int;
+
+    // Functions for inlined getout helpers
+    fn set_vim_var_type(idx: c_int, type_: c_int);
+    fn set_vim_var_nr(idx: c_int, val: i64);
+    fn wait_return(redraw: bool);
+    fn is_autocmd_blocked() -> c_int;
+    fn unblock_autocmds();
+    fn block_autocmds();
+    /// apply_autocmds(event, fname, fname_io, force, buf)
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut std::ffi::c_void,
+    ) -> bool;
+    /// curbuf global (opaque buf_T*)
+    static mut curbuf: *mut std::ffi::c_void;
+
+    // p_shada: pointer to the shada option string (NULL if not set, or empty)
+    static p_shada: *const c_char;
+    // p_title: bool option 'title'
+    static p_title: bool;
+    // p_titleold: old title string
+    static p_titleold: *const c_char;
+    // nvim_ui_call_set_title: set title via UI (wraps ui_call_set_title)
+    fn nvim_ui_call_set_title(s: *const c_char);
 
     // Globals
     static mut exiting: bool;
@@ -329,6 +357,32 @@ unsafe extern "C" {
     static mut restarting: bool;
     static mut garbage_collect_at_exit: bool;
     static mut did_emsg: c_int;
+    static mut no_wait_return: c_int;
+    static mut exmode_active: bool;
+    static mut ex_exitval: c_int;
+}
+
+/// Apply an autocmd event, unblocking autocmds temporarily if needed.
+/// Inline of C's nvim_getout_apply_autocmd_event.
+///
+/// # Safety
+/// Must be called from the main event loop context.
+unsafe fn apply_autocmd_event_impl(event: c_int) {
+    let mut unblock = 0;
+    if is_autocmd_blocked() != 0 {
+        unblock_autocmds();
+        unblock += 1;
+    }
+    apply_autocmds(
+        event,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        false,
+        curbuf,
+    );
+    if unblock != 0 {
+        block_autocmds();
+    }
 }
 
 /// Exit Nvim cleanly: fire autocmds, write ShaDa, restore title, exit.
@@ -345,10 +399,16 @@ pub unsafe extern "C" fn rs_getout(exitval: c_int) -> ! {
 
     // On error during Ex mode, exit with a non-zero code.
     // POSIX requires this, although it's not 100% clear from the standard.
-    let exitval = nvim_getout_exmode_adjust(exitval);
+    // (Inline of C's nvim_getout_exmode_adjust)
+    let exitval = if exmode_active {
+        exitval + ex_exitval
+    } else {
+        exitval
+    };
 
-    // Set v:exiting.
-    nvim_getout_set_vv_exiting(exitval);
+    // Set v:exiting. (Inline of C's nvim_getout_set_vv_exiting)
+    set_vim_var_type(VV_EXITING, VAR_NUMBER);
+    set_vim_var_nr(VV_EXITING, i64::from(exitval));
 
     // Invoke all deferred functions in the function stack.
     invoke_all_defer();
@@ -363,17 +423,20 @@ pub unsafe extern "C" fn rs_getout(exitval: c_int) -> ! {
         nvim_getout_trigger_bufunload();
 
         // Trigger VimLeavePre (unblocking autocmds if needed).
-        nvim_getout_apply_autocmd_event(EVENT_VIMLEAVEPRE);
+        // (Inline of C's nvim_getout_apply_autocmd_event)
+        apply_autocmd_event_impl(EVENT_VIMLEAVEPRE);
     }
 
-    if nvim_getout_should_write_shada() {
-        // Write out the registers, history, marks etc, to the ShaDa file.
+    // Write out registers, history, marks etc, to ShaDa file if option is set.
+    // (Inline of C's nvim_getout_should_write_shada -- EXITFREE guard omitted: not defined in Rust builds)
+    if !p_shada.is_null() && *p_shada != 0 {
         rs_shada_write_file(std::ptr::null(), false);
     }
 
     if v_dying <= 1 {
         // Trigger VimLeave (unblocking autocmds if needed).
-        nvim_getout_apply_autocmd_event(EVENT_VIMLEAVE);
+        // (Inline of C's nvim_getout_apply_autocmd_event)
+        apply_autocmd_event_impl(EVENT_VIMLEAVE);
     }
 
     profile_dump();
@@ -381,11 +444,15 @@ pub unsafe extern "C" fn rs_getout(exitval: c_int) -> ! {
     if did_emsg != 0 {
         // Give the user a chance to read the (error) message.
         // TODO(justinmk): this may call getout(0), clobbering exitval...
-        nvim_getout_handle_emsg();
+        // (Inline of C's nvim_getout_handle_emsg)
+        no_wait_return = 0;
+        wait_return(false);
     }
 
-    // Apply 'titleold'.
-    nvim_getout_restore_title();
+    // Apply 'titleold'. (Inline of C's nvim_getout_restore_title)
+    if p_title && !p_titleold.is_null() && *p_titleold != 0 {
+        nvim_ui_call_set_title(p_titleold);
+    }
 
     if restarting {
         nvim_getout_do_restart();
