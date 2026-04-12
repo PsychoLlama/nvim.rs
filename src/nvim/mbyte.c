@@ -258,40 +258,43 @@ void mb_adjust_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_cursor); }
 /// C accessor for mb_adjust_cursor (for Rust FFI).
 void nvim_mb_adjust_cursor(void) { mb_adjust_cursor(); }
 
-/// Checks and adjusts cursor column. Not mode-dependent.
-/// @see check_cursor_col
-///
-/// @param  win_  Places cursor on a valid column for this window.
-void mb_check_adjust_col(void *win_)
+// mb_check_adjust_col is now implemented in Rust (Phase 3).
+
+/// Rust accessor: get win->w_cursor.col.
+int nvim_mbyte_win_get_cursor_col(void *win_)
+{
+  return (int)((win_T *)win_)->w_cursor.col;
+}
+
+/// Rust accessor: set win->w_cursor.col.
+void nvim_mbyte_win_set_cursor_col(void *win_, int col)
+{
+  ((win_T *)win_)->w_cursor.col = (colnr_T)col;
+}
+
+/// Rust accessor: get win->w_cursor.coladd.
+int nvim_mbyte_win_get_cursor_coladd(void *win_)
+{
+  return (int)((win_T *)win_)->w_cursor.coladd;
+}
+
+/// Rust accessor: set win->w_cursor.coladd.
+void nvim_mbyte_win_set_cursor_coladd(void *win_, int coladd)
+{
+  ((win_T *)win_)->w_cursor.coladd = (colnr_T)coladd;
+}
+
+/// Rust accessor: returns ml_get_buf(win->w_buffer, win->w_cursor.lnum).
+const char *nvim_mbyte_win_ml_get_buf_lnum(void *win_)
 {
   win_T *win = (win_T *)win_;
-  colnr_T oldcol = win->w_cursor.col;
+  return ml_get_buf(win->w_buffer, win->w_cursor.lnum);
+}
 
-  // Column 0 is always valid.
-  if (oldcol != 0) {
-    char *p = ml_get_buf(win->w_buffer, win->w_cursor.lnum);
-    colnr_T len = (colnr_T)strlen(p);
-
-    // Empty line or invalid column?
-    if (len == 0 || oldcol < 0) {
-      win->w_cursor.col = 0;
-    } else {
-      // Cursor column too big for line?
-      if (oldcol > len) {
-        win->w_cursor.col = len - 1;
-      }
-      // Move the cursor to the head byte.
-      win->w_cursor.col -= utf_head_off(p, p + win->w_cursor.col);
-    }
-
-    // Reset `coladd` when the cursor would be on the right half of a
-    // double-wide character.
-    if (win->w_cursor.coladd == 1 && p[win->w_cursor.col] != TAB
-        && vim_isprintc(utf_ptr2char(p + win->w_cursor.col))
-        && ptr2cells(p + win->w_cursor.col) > 1) {
-      win->w_cursor.coladd = 0;
-    }
-  }
+/// Rust accessor: ptr2cells(p).
+int nvim_mbyte_ptr2cells(const char *p)
+{
+  return ptr2cells(p);
 }
 
 // mb_prevptr, mb_unescape are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).

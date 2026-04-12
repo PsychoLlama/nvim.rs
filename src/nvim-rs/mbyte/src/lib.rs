@@ -5652,3 +5652,71 @@ extern "C" {
     /// Wrapper for string_convert(vcp, ptr, NULL) - used by rs_utf_find_illegal.
     fn nvim_mbyte_string_convert(vcp: *const VimConv, ptr: *mut c_char) -> *mut c_char;
 }
+
+// =============================================================================
+// mb_check_adjust_col (Phase 3 migration)
+// =============================================================================
+
+extern "C" {
+    /// Get win->w_cursor.col.
+    fn nvim_mbyte_win_get_cursor_col(win: *mut c_void) -> c_int;
+
+    /// Set win->w_cursor.col.
+    fn nvim_mbyte_win_set_cursor_col(win: *mut c_void, col: c_int);
+
+    /// Get win->w_cursor.coladd.
+    fn nvim_mbyte_win_get_cursor_coladd(win: *mut c_void) -> c_int;
+
+    /// Set win->w_cursor.coladd.
+    fn nvim_mbyte_win_set_cursor_coladd(win: *mut c_void, coladd: c_int);
+
+    /// Return ml_get_buf(win->w_buffer, win->w_cursor.lnum).
+    fn nvim_mbyte_win_ml_get_buf_lnum(win: *mut c_void) -> *const c_char;
+
+    /// Return ptr2cells(p).
+    fn nvim_mbyte_ptr2cells(p: *const c_char) -> c_int;
+}
+
+/// Checks and adjusts cursor column. Not mode-dependent.
+///
+/// Ensures `win->w_cursor.col` is on a valid multibyte character boundary.
+///
+/// # Safety
+/// `win_` must be a valid `win_T *` pointer from a Neovim context.
+#[unsafe(export_name = "mb_check_adjust_col")]
+pub unsafe extern "C" fn rs_mb_check_adjust_col(win_: *mut c_void) {
+    let oldcol = nvim_mbyte_win_get_cursor_col(win_);
+
+    // Column 0 is always valid.
+    if oldcol == 0 {
+        return;
+    }
+
+    let p = nvim_mbyte_win_ml_get_buf_lnum(win_);
+    let len = libc::strlen(p) as i32;
+
+    if len == 0 || oldcol < 0 {
+        // Empty line or invalid column.
+        nvim_mbyte_win_set_cursor_col(win_, 0);
+    } else {
+        // Clamp to line length.
+        if oldcol > len {
+            nvim_mbyte_win_set_cursor_col(win_, len - 1);
+        }
+        // Move cursor to head byte of multi-byte character.
+        let col = nvim_mbyte_win_get_cursor_col(win_);
+        let head_off = rs_utf_head_off(p, p.add(col as usize));
+        nvim_mbyte_win_set_cursor_col(win_, col - head_off);
+    }
+
+    // Reset coladd when cursor is on right half of a double-wide character.
+    let col = nvim_mbyte_win_get_cursor_col(win_) as usize;
+    let coladd = nvim_mbyte_win_get_cursor_coladd(win_);
+    if coladd == 1
+        && *p.add(col) != b'\t' as c_char
+        && vim_isprintc(rs_utf_ptr2char(p.add(col)))
+        && nvim_mbyte_ptr2cells(p.add(col)) > 1
+    {
+        nvim_mbyte_win_set_cursor_coladd(win_, 0);
+    }
+}
