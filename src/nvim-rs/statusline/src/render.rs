@@ -16,13 +16,9 @@ use crate::highlight::HighlightTracker;
 // C callbacks for expression evaluation and other operations that need C-side support
 extern "C" {
     // Expression evaluation
-    fn nvim_stl_eval_expr(
-        wp: WinHandle,
-        expr: *const c_char,
-        expr_len: c_int,
-        out: *mut c_char,
-        out_len: c_int,
-    ) -> c_int;
+    fn nvim_stl_eval_expr_alloc(wp: WinHandle, expr: *const c_char, expr_len: c_int)
+        -> *mut c_char;
+    fn xfree(ptr: *mut std::ffi::c_void);
 
     // Buffer/Window accessors
     fn nvim_win_get_buffer(wp: WinHandle) -> nvim_window::BufHandle;
@@ -329,21 +325,18 @@ fn render_expression(
     ctx: &RenderContext,
     builder: &mut StatuslineBuilder,
 ) {
-    let mut result_buf = [0u8; 512];
-
     unsafe {
         let c_expr = std::ffi::CString::new(expr).unwrap_or_default();
-        let len = nvim_stl_eval_expr(
-            ctx.wp,
-            c_expr.as_ptr(),
-            expr.len() as c_int,
-            result_buf.as_mut_ptr().cast(),
-            result_buf.len() as c_int,
-        );
+        let result_ptr = nvim_stl_eval_expr_alloc(ctx.wp, c_expr.as_ptr(), expr.len() as c_int);
 
-        if len > 0 {
-            let result = std::str::from_utf8_unchecked(&result_buf[..len as usize]);
-            builder.append_literal(result);
+        if !result_ptr.is_null() {
+            let cstr = std::ffi::CStr::from_ptr(result_ptr);
+            if let Ok(s) = cstr.to_str() {
+                if !s.is_empty() {
+                    builder.append_literal(s);
+                }
+            }
+            xfree(result_ptr.cast());
         }
     }
 }

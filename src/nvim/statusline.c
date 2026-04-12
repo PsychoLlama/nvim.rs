@@ -54,13 +54,12 @@
 // Rust FFI declarations
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 
-/// Evaluate an expression for the statusline.
-/// Returns the length of the result string.
-int nvim_stl_eval_expr(win_T *wp, const char *expr, int expr_len, char *out, int out_len)
+/// Evaluate an expression for the statusline, returning an allocated string.
+/// Returns allocated string result (caller must free via xfree), or NULL.
+char *nvim_stl_eval_expr_alloc(win_T *wp, const char *expr, int expr_len)
 {
-  if (wp == NULL || expr == NULL || out == NULL || out_len <= 0) {
-    out[0] = '\0';
-    return 0;
+  if (wp == NULL || expr == NULL || expr_len <= 0) {
+    return NULL;
   }
 
   // Create a null-terminated copy of the expression
@@ -70,21 +69,7 @@ int nvim_stl_eval_expr(win_T *wp, const char *expr, int expr_len, char *out, int
   char *result = eval_to_string(expr_copy, true, false);
   xfree(expr_copy);
 
-  if (result == NULL) {
-    out[0] = '\0';
-    return 0;
-  }
-
-  // Copy result to output buffer
-  int len = (int)strlen(result);
-  if (len >= out_len) {
-    len = out_len - 1;
-  }
-  memcpy(out, result, (size_t)len);
-  out[len] = '\0';
-
-  xfree(result);
-  return len;
+  return result;
 }
 
 /// Get highlight group ID by name.
@@ -223,50 +208,51 @@ stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp) { return &stcp->hlr
 
 
 
-/// Evaluate a VimL expression for the statusline with full context switching.
-/// Sets g:actual_curbuf, g:actual_curwin, switches curwin/curbuf, saves VIsual_active.
-/// Returns allocated string result (caller must free via nvim_stl_xfree), or NULL.
-char *nvim_stl_eval_expr_full(win_T *wp, char *expr, bool use_sandbox)
+/// Evaluate a VimL expression for the statusline with context switching.
+/// mode=0: full context (save/restore curwin/curbuf, set g:actual_curbuf/g:actual_curwin)
+/// mode=1: fmt expr (set g:statusline_winid for "%!" expressions)
+/// Returns allocated string result (caller must free via xfree), or NULL.
+char *nvim_stl_eval_with_context(win_T *wp, char *expr, int mode, bool use_sandbox)
 {
-  char buf_tmp[70];
+  char *result;
 
-  vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curbuf->b_fnum);
-  set_internal_string_var("g:actual_curbuf", buf_tmp);
-  vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curwin->handle);
-  set_internal_string_var("g:actual_curwin", buf_tmp);
+  if (mode == 1) {
+    // "%!" format expression: set g:statusline_winid
+    typval_T tv = {
+      .v_type = VAR_NUMBER,
+      .vval.v_number = wp->handle,
+    };
+    set_var(S_LEN("g:statusline_winid"), &tv, false);
+    result = eval_to_string_safe(expr, use_sandbox, false);
+    do_unlet(S_LEN("g:statusline_winid"), true);
+  } else {
+    // Full context switching: save/restore curwin/curbuf, set g:actual_curbuf/g:actual_curwin
+    char buf_tmp[70];
 
-  buf_T *const save_curbuf = curbuf;
-  win_T *const save_curwin = curwin;
-  const int save_VIsual_active = VIsual_active;
-  curwin = wp;
-  curbuf = wp->w_buffer;
-  if (curwin != save_curwin) {
-    VIsual_active = false;
+    vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curbuf->b_fnum);
+    set_internal_string_var("g:actual_curbuf", buf_tmp);
+    vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curwin->handle);
+    set_internal_string_var("g:actual_curwin", buf_tmp);
+
+    buf_T *const save_curbuf = curbuf;
+    win_T *const save_curwin = curwin;
+    const int save_VIsual_active = VIsual_active;
+    curwin = wp;
+    curbuf = wp->w_buffer;
+    if (curwin != save_curwin) {
+      VIsual_active = false;
+    }
+
+    result = eval_to_string_safe(expr, use_sandbox, false);
+
+    curwin = save_curwin;
+    curbuf = save_curbuf;
+    VIsual_active = save_VIsual_active;
+
+    do_unlet(S_LEN("g:actual_curbuf"), true);
+    do_unlet(S_LEN("g:actual_curwin"), true);
   }
 
-  char *result = eval_to_string_safe(expr, use_sandbox, false);
-
-  curwin = save_curwin;
-  curbuf = save_curbuf;
-  VIsual_active = save_VIsual_active;
-
-  do_unlet(S_LEN("g:actual_curbuf"), true);
-  do_unlet(S_LEN("g:actual_curwin"), true);
-
-  return result;
-}
-
-/// Evaluate "%!" expression format: set g:statusline_winid, call eval_to_string_safe,
-/// clean up. Returns allocated string result (caller must free), or NULL.
-char *nvim_stl_eval_fmt_expr(win_T *wp, char *expr, bool use_sandbox)
-{
-  typval_T tv = {
-    .v_type = VAR_NUMBER,
-    .vval.v_number = wp->handle,
-  };
-  set_var(S_LEN("g:statusline_winid"), &tv, false);
-  char *result = eval_to_string_safe(expr, use_sandbox, false);
-  do_unlet(S_LEN("g:statusline_winid"), true);
   return result;
 }
 

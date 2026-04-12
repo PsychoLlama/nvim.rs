@@ -111,8 +111,12 @@ const ITEM_TRUNC: c_int = 9;
 
 extern "C" {
     // Expression evaluation
-    fn nvim_stl_eval_expr_full(wp: WinHandle, expr: *mut c_char, use_sandbox: bool) -> *mut c_char;
-    fn nvim_stl_eval_fmt_expr(wp: WinHandle, expr: *mut c_char, use_sandbox: bool) -> *mut c_char;
+    fn nvim_stl_eval_with_context(
+        wp: WinHandle,
+        expr: *mut c_char,
+        mode: c_int,
+        use_sandbox: bool,
+    ) -> *mut c_char;
     #[link_name = "was_set_insecurely"]
     fn nvim_stl_was_set_insecurely(wp: WinHandle, opt_idx: c_int, opt_scope: c_int) -> c_int;
 
@@ -560,7 +564,7 @@ pub unsafe fn build_stl_str_hl(
     let mut usefmt_allocated = false;
 
     if *fmt as u8 == b'%' && *fmt.add(1) as u8 == b'!' {
-        let result = nvim_stl_eval_fmt_expr(wp, fmt.add(2), use_sandbox);
+        let result = nvim_stl_eval_with_context(wp, fmt.add(2), 1, use_sandbox);
         if !result.is_null() {
             usefmt = result;
             usefmt_allocated = true;
@@ -923,7 +927,7 @@ pub unsafe fn build_stl_str_hl(
                 out_p = t;
 
                 // Evaluate expression with full context
-                let eval_result = nvim_stl_eval_expr_full(wp, out_p, use_sandbox);
+                let eval_result = nvim_stl_eval_with_context(wp, out_p, 0, use_sandbox);
 
                 if !eval_result.is_null() && *eval_result != NUL as c_char {
                     // Check if result is all digits -> numeric
