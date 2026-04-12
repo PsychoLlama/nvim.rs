@@ -54,6 +54,7 @@
 // Rust FFI declarations
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 
+
 /// Evaluate an expression for the statusline, returning an allocated string.
 /// Returns allocated string result (caller must free via xfree), or NULL.
 char *nvim_stl_eval_expr_alloc(win_T *wp, const char *expr, int expr_len)
@@ -81,41 +82,53 @@ int nvim_syn_name2id(const char *name)
   return syn_name2id(name);
 }
 
-/// Get byte value at cursor position in window.
-int nvim_stl_get_byte_value(win_T *wp)
-{
-  if (wp == NULL || wp->w_buffer == NULL) {
-    return 0;
-  }
-  char *line = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum);
-  if (line == NULL) {
-    return 0;
-  }
-  colnr_T col = wp->w_cursor.col;
-  if (col >= ml_get_buf_len(wp->w_buffer, wp->w_cursor.lnum)) {
-    return 0;
-  }
-  return (uint8_t)line[col];
-}
 
-/// Get byte offset at cursor position in window.
-int nvim_stl_get_byte_offset(win_T *wp)
+/// Get batch cursor information for a window in one C call.
+/// Clamps cursor, then fills StlCursorInfo with all commonly-needed fields.
+StlCursorInfo nvim_stl_get_win_cursor_info(win_T *wp)
 {
+  StlCursorInfo info = { 0 };
   if (wp == NULL || wp->w_buffer == NULL) {
-    return 0;
+    return info;
   }
-  // Use ml_find_line_or_offset which is O(log n) for byte offset calculation
-  int l = rs_ml_find_line_or_offset(wp->w_buffer, wp->w_cursor.lnum, NULL, false);
-  if (wp->w_buffer->b_ml.ml_flags & ML_EMPTY) {
-    return 0;
+
+  buf_T *buf = wp->w_buffer;
+
+  // Clamp cursor lnum to line count
+  linenr_T lnum = wp->w_cursor.lnum;
+  if (lnum > buf->b_ml.ml_line_count) {
+    lnum = buf->b_ml.ml_line_count;
+    wp->w_cursor.lnum = lnum;
   }
-  if (l < 0) {
-    return 0;
+  // Clamp cursor col
+  colnr_T linelen = ml_get_buf_len(buf, lnum);
+  if (wp->w_cursor.col > linelen) {
+    wp->w_cursor.col = linelen;
+    wp->w_cursor.coladd = 0;
   }
-  // Add column position, but handle empty lines
-  bool empty_line = ml_get_buf_len(wp->w_buffer, wp->w_cursor.lnum) == 0;
-  int col_offset = ((State & MODE_INSERT) == 0 && empty_line) ? 0 : (int)wp->w_cursor.col;
-  return l + 1 + col_offset;
+
+  info.clamped_lnum = (int)lnum;
+  info.cursor_invalid = (wp->w_cursor.lnum > buf->b_ml.ml_line_count) ? 1 : 0;
+  info.ml_empty = (buf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
+
+  // Get cursor line text
+  const char *line = ml_get_buf(buf, lnum);
+  info.first_char = line ? (int)(uint8_t)line[0] : 0;
+  info.empty_line = (line == NULL || line[0] == NUL) ? 1 : 0;
+
+  // Byte value at cursor
+  colnr_T col = wp->w_cursor.col;
+  if (line != NULL && col < linelen) {
+    info.byte_value = (int)(uint8_t)line[col];
+  }
+
+  // Byte offset using rs_ml_find_line_or_offset
+  int l = rs_ml_find_line_or_offset(buf, lnum, NULL, false);
+  if (!info.ml_empty && l >= 0) {
+    info.byte_offset = l;
+  }
+
+  return info;
 }
 
 /// Get showcmd output.
@@ -265,35 +278,6 @@ void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dst
 }
 
 
-/// Get cursor line text pointer and length.
-/// Returns pointer to line text, sets *len_out to length.
-const char *nvim_stl_get_cursor_line(win_T *wp, int *len_out)
-{
-  linenr_T lnum = wp->w_cursor.lnum;
-  if (lnum > wp->w_buffer->b_ml.ml_line_count) {
-    lnum = wp->w_buffer->b_ml.ml_line_count;
-  }
-  const char *line = ml_get_buf(wp->w_buffer, lnum);
-  if (len_out) {
-    *len_out = (int)ml_get_buf_len(wp->w_buffer, lnum);
-  }
-  return line;
-}
-
-/// Clamp cursor to line length if needed.
-void nvim_stl_clamp_cursor(win_T *wp)
-{
-  linenr_T lnum = wp->w_cursor.lnum;
-  if (lnum > wp->w_buffer->b_ml.ml_line_count) {
-    lnum = wp->w_buffer->b_ml.ml_line_count;
-    wp->w_cursor.lnum = lnum;
-  }
-  colnr_T len = ml_get_buf_len(wp->w_buffer, lnum);
-  if (wp->w_cursor.col > len) {
-    wp->w_cursor.col = len;
-    wp->w_cursor.coladd = 0;
-  }
-}
 
 
 
@@ -304,18 +288,6 @@ void nvim_stl_set_option_empty(int opt_idx, int opt_scope)
 }
 
 
-/// Get the ML_EMPTY flag for a buffer.
-int nvim_stl_buf_ml_empty(buf_T *buf) { return (buf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0; }
-
-/// Get window cursor lnum (clamped to line count).
-int nvim_stl_win_get_clamped_lnum(win_T *wp)
-{
-  linenr_T lnum = wp->w_cursor.lnum;
-  if (lnum > wp->w_buffer->b_ml.ml_line_count) {
-    lnum = wp->w_buffer->b_ml.ml_line_count;
-  }
-  return (int)lnum;
-}
 
 
 
@@ -534,12 +506,6 @@ int nvim_stl_getvvcol_cursor(win_T *wp)
   return (int)virtcol;
 }
 
-/// Get first char of cursor line in buffer (0 if empty).
-int nvim_stl_ml_get_buf_first_char(win_T *wp) { return (int)(uint8_t)(*ml_get_buf(wp->w_buffer, wp->w_cursor.lnum)); }
-
-
-/// Check if cursor lnum > line count (invalid position).
-int nvim_stl_win_cursor_invalid(win_T *wp) { return wp->w_cursor.lnum > wp->w_buffer->b_ml.ml_line_count ? 1 : 0; }
 
 /// Start grid line on msg_grid_adj at given row.
 void nvim_stl_msg_grid_line_start(int row) { grid_line_start(&msg_grid_adj, row); }

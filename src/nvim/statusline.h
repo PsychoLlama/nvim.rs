@@ -10,6 +10,17 @@
 #include "nvim/statusline_defs.h"  // IWYU pragma: keep
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
+/// Batch cursor info returned by nvim_stl_get_win_cursor_info.
+typedef struct {
+  int clamped_lnum;   ///< cursor lnum clamped to ml_line_count
+  int byte_value;     ///< byte at cursor position (0 if empty)
+  int byte_offset;    ///< byte offset at cursor (from rs_ml_find_line_or_offset)
+  int ml_empty;       ///< 1 if buffer ML_EMPTY flag is set
+  int empty_line;     ///< 1 if cursor line is empty (first char is NUL)
+  int cursor_invalid; ///< 1 if cursor lnum > line count
+  int first_char;     ///< first char of cursor line (uint8_t cast to int)
+} StlCursorInfo;
+
 /// Array defining what should be done when tabline is clicked
 EXTERN StlClickDefinition *tab_page_click_defs INIT( = NULL);
 /// Size of the tab_page_click_defs array

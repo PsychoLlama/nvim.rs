@@ -52,7 +52,7 @@ extern "C" {
     fn nvim_stl_win_get_cursor_col(wp: WinHandle) -> c_int;
     #[link_name = "nvim_win_get_cursor_lnum"]
     fn nvim_stl_win_get_cursor_lnum(wp: WinHandle) -> c_int;
-    fn nvim_stl_win_cursor_invalid(wp: WinHandle) -> c_int;
+    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
     #[link_name = "nvim_win_get_p_list"]
     fn nvim_stl_win_get_p_list(wp: WinHandle) -> c_int;
     #[link_name = "nvim_win_set_p_list"]
@@ -60,7 +60,6 @@ extern "C" {
     #[link_name = "nvim_win_get_lcs_tab1"]
     fn nvim_stl_win_get_lcs_tab1(wp: WinHandle) -> c_int;
     fn nvim_stl_getvvcol_cursor(wp: WinHandle) -> c_int;
-    fn nvim_stl_ml_get_buf_first_char(wp: WinHandle) -> c_int;
 
     // Global state
     #[link_name = "nvim_get_curwin"]
@@ -76,8 +75,6 @@ extern "C" {
     static mut State: c_int;
     fn nvim_stl_edit_submode_not_null() -> c_int;
     fn ui_has(ext: c_int) -> bool;
-    fn nvim_stl_buf_ml_empty(buf: *mut std::ffi::c_void) -> c_int;
-    fn nvim_win_get_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
 
     // Fill character / highlight
     #[link_name = "fillchar_status"]
@@ -172,8 +169,11 @@ pub unsafe fn redraw_ruler() {
         return;
     }
 
+    // Get batch cursor info (also validates cursor position)
+    let cursor_info = nvim_stl_get_win_cursor_info(wp);
+
     // Check if cursor.lnum is valid
-    if nvim_stl_win_cursor_invalid(wp) != 0 {
+    if cursor_info.cursor_invalid != 0 {
         return;
     }
 
@@ -215,18 +215,12 @@ pub unsafe fn redraw_ruler() {
     }
 
     // Check if not in Insert mode and the line is empty (will show "0-1").
-    let empty_line = (State & MODE_INSERT) == 0 && nvim_stl_ml_get_buf_first_char(wp) == NUL;
+    let empty_line = (State & MODE_INSERT) == 0 && cursor_info.first_char == NUL;
 
     let mut buffer = [0u8; RULER_BUF_LEN];
 
     // Format "lnum," part
-    let buf = nvim_win_get_buffer(wp);
-    let ml_empty = if buf.is_null() {
-        false
-    } else {
-        nvim_stl_buf_ml_empty(buf) != 0
-    };
-
+    let ml_empty = cursor_info.ml_empty != 0;
     let cursor_lnum = nvim_stl_win_get_cursor_lnum(wp);
     let lnum_val: i64 = if ml_empty { 0 } else { i64::from(cursor_lnum) };
 

@@ -50,11 +50,8 @@ extern "C" {
     // Showcmd buffer
     fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
 
-    // Byte offset
-    fn nvim_stl_get_byte_offset(wp: WinHandle) -> c_int;
-
-    // Byte value at cursor
-    fn nvim_stl_get_byte_value(wp: WinHandle) -> c_int;
+    // Batch cursor info
+    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
 
 }
 
@@ -478,22 +475,22 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Offset items
             StlFlag::Offset => {
-                let offset = nvim_stl_get_byte_offset(wp);
-                (format!("{offset}"), true, false)
+                let info = nvim_stl_get_win_cursor_info(wp);
+                (format!("{}", info.byte_offset), true, false)
             }
             StlFlag::OffsetX => {
-                let offset = nvim_stl_get_byte_offset(wp);
-                (format!("{offset:X}"), true, false)
+                let info = nvim_stl_get_win_cursor_info(wp);
+                (format!("{:X}", info.byte_offset), true, false)
             }
 
             // Byte value items
             StlFlag::ByteVal => {
-                let byte = nvim_stl_get_byte_value(wp);
-                (format!("{byte}"), true, false)
+                let info = nvim_stl_get_win_cursor_info(wp);
+                (format!("{}", info.byte_value), true, false)
             }
             StlFlag::ByteValX => {
-                let byte = nvim_stl_get_byte_value(wp);
-                (format!("{byte:X}"), true, false)
+                let info = nvim_stl_get_win_cursor_info(wp);
+                (format!("{:X}", info.byte_value), true, false)
             }
 
             // Flag items

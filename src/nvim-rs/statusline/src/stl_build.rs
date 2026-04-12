@@ -106,6 +106,31 @@ const ITEM_CLICK_FUNC: c_int = 8;
 const ITEM_TRUNC: c_int = 9;
 
 // =============================================================================
+// C FFI types
+// =============================================================================
+
+/// Batch cursor info returned by nvim_stl_get_win_cursor_info.
+/// Matches `StlCursorInfo` in statusline.c.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StlCursorInfo {
+    /// cursor lnum clamped to ml_line_count
+    pub clamped_lnum: c_int,
+    /// byte value at cursor position
+    pub byte_value: c_int,
+    /// byte offset at cursor (from rs_ml_find_line_or_offset)
+    pub byte_offset: c_int,
+    /// 1 if buffer ML_EMPTY flag is set
+    pub ml_empty: c_int,
+    /// 1 if cursor line is empty (first char NUL)
+    pub empty_line: c_int,
+    /// 1 if cursor lnum > line count
+    pub cursor_invalid: c_int,
+    /// first char of cursor line (uint8 cast to int)
+    pub first_char: c_int,
+}
+
+// =============================================================================
 // C FFI declarations
 // =============================================================================
 
@@ -150,10 +175,8 @@ extern "C" {
     #[link_name = "utf_ptr2char"]
     fn nvim_stl_utf_ptr2char(s: *const c_char) -> c_int;
 
-    // Cursor / line
-    fn nvim_stl_get_cursor_line(wp: WinHandle) -> *const c_char;
-    fn nvim_stl_clamp_cursor(wp: WinHandle);
-    fn nvim_stl_win_get_clamped_lnum(wp: WinHandle) -> c_int;
+    // Cursor / line (batch accessor)
+    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> StlCursorInfo;
 
     // Global state (direct static access instead of C shims)
     static mut updating_screen: bool;
@@ -162,7 +185,6 @@ extern "C" {
     static mut did_emsg: c_int;
     fn nvim_stl_set_option_empty(opt_idx: c_int, opt_scope: c_int);
     static mut State: c_int;
-    fn nvim_stl_buf_ml_empty(buf: BufHandle) -> c_int;
 
     // Memory (direct link to C implementations)
     #[link_name = "xfree"]
@@ -234,10 +256,6 @@ extern "C" {
     // Quickfix / keymap
     fn nvim_stl_get_qf_info(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
     fn nvim_stl_get_keymap(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-
-    // Byte value / offset
-    fn nvim_stl_get_byte_offset(wp: WinHandle) -> c_int;
-    fn nvim_stl_get_byte_value(wp: WinHandle) -> c_int;
 
     // NameBuff (MAXPATHL global buffer)
     fn nvim_get_namebuff() -> *mut c_char;
@@ -576,17 +594,12 @@ pub unsafe fn build_stl_str_hl(
         fillchar = nvim_stl_schar_from_ascii(b' ' as c_char);
     }
 
-    // Clamp cursor and get line info
-    nvim_stl_clamp_cursor(wp);
-    let lnum = nvim_stl_win_get_clamped_lnum(wp);
+    // Clamp cursor and get batch cursor info
+    let cursor_info = nvim_stl_get_win_cursor_info(wp);
+    let lnum = cursor_info.clamped_lnum;
     let line_count = nvim_win_buf_line_count(wp);
-
-    // Check if line is empty
-    let line_ptr = nvim_stl_get_cursor_line(wp);
-    let empty_line = !line_ptr.is_null() && *line_ptr == NUL as c_char;
-
-    // Get byte value at cursor
-    let byteval = nvim_stl_get_byte_value(wp);
+    let empty_line = cursor_info.empty_line != 0;
+    let byteval = cursor_info.byte_value;
 
     let mut groupdepth: c_int = 0;
     let mut evaldepth: c_int = 0;
@@ -1038,11 +1051,7 @@ pub unsafe fn build_stl_str_hl(
                         }
                     }
                 } else if stcp.is_null() {
-                    num = if nvim_stl_buf_ml_empty(buf) != 0 {
-                        0
-                    } else {
-                        lnum
-                    };
+                    num = if cursor_info.ml_empty != 0 { 0 } else { lnum };
                 }
             }
 
@@ -1117,8 +1126,8 @@ pub unsafe fn build_stl_str_hl(
 
             STL_OFFSET_X => {
                 base = NUM_BASE_HEX;
-                num = nvim_stl_get_byte_offset(wp);
-                if num < 0 || nvim_stl_buf_ml_empty(buf) != 0 {
+                num = cursor_info.byte_offset;
+                if num < 0 || cursor_info.ml_empty != 0 {
                     num = 0;
                 } else {
                     num += 1;
@@ -1131,8 +1140,8 @@ pub unsafe fn build_stl_str_hl(
             }
 
             STL_OFFSET => {
-                num = nvim_stl_get_byte_offset(wp);
-                if num < 0 || nvim_stl_buf_ml_empty(buf) != 0 {
+                num = cursor_info.byte_offset;
+                if num < 0 || cursor_info.ml_empty != 0 {
                     num = 0;
                 } else {
                     num += 1;
