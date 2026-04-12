@@ -503,6 +503,34 @@ extern "C" {
     fn nvim_buf_init_changedtick_c(buf: BufHandle);
     /// Execute all `free_buf_options()` logic in C (batch shim).
     fn nvim_buf_do_free_options(buf: BufHandle, free_p_ff: bool);
+    /// Execute the body of `buflist_new()` in C (batch shim).
+    fn nvim_buflist_new_impl(
+        ffname_arg: *mut c_char,
+        sfname_arg: *mut c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> BufHandle;
+}
+
+// =============================================================================
+// buflist_new (Phase 3 migration)
+// =============================================================================
+
+/// Add a file name to the buffer list.
+///
+/// Drop-in replacement for C `buflist_new`. Delegates to `nvim_buflist_new_impl`
+/// in `buffer_shim.c`.
+///
+/// # Safety
+/// Must be called on the main thread with valid Neovim state.
+#[unsafe(export_name = "buflist_new")]
+pub unsafe extern "C" fn rs_buflist_new(
+    ffname_arg: *mut c_char,
+    sfname_arg: *mut c_char,
+    lnum: c_int,
+    flags: c_int,
+) -> BufHandle {
+    nvim_buflist_new_impl(ffname_arg, sfname_arg, lnum, flags)
 }
 
 // =============================================================================

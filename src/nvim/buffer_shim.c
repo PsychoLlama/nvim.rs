@@ -986,6 +986,12 @@ extern void nvim_buf_init_changedtick_c(buf_T *buf);
 extern void nvim_inc_buf_free_count(void);
 // free_buf_options is exported from Rust close.rs (Phase 2).
 extern void free_buf_options(buf_T *buf, bool free_p_ff);
+// buflist_new is exported from Rust close.rs (Phase 3).
+extern buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags);
+// top_file_num accessors exported from Rust state.rs (Phase 1).
+extern int nvim_get_top_file_num(void);
+extern int nvim_inc_top_file_num(void);
+extern void nvim_reset_top_file_num(void);
 extern void rs_aubuflocal_remove(int bufnr);
 
 /// Free the b_wininfo list for a buffer.
@@ -1079,6 +1085,182 @@ void nvim_win_set_w_p_cuc(win_T *win, bool val) { win->w_p_cuc = val; }
 
 // clear_cpt_callbacks is in insexpand_shim.c (no static header, use extern).
 extern void clear_cpt_callbacks(Callback **callbacks, int count);
+
+// =============================================================================
+// buflist_new shim (Phase 3: migrate buflist_new to Rust)
+// =============================================================================
+
+/// Execute the body of buflist_new() in C.
+/// Called from the Rust buflist_new() drop-in replacement.
+///
+/// This is the ONLY place where a new buffer structure is allocated.
+/// (A spell file buffer is allocated in spell.c, but that's not a normal
+/// buffer.)
+buf_T *nvim_buflist_new_impl(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags)
+{
+  char *ffname = ffname_arg;
+  char *sfname = sfname_arg;
+  buf_T *buf;
+
+  fname_expand(curbuf, &ffname, &sfname);       // will allocate ffname
+
+  // If the file name already exists in the list, update the entry.
+
+  // We can use inode numbers when the file exists.  Works better
+  // for hard links.
+  FileID file_id;
+  bool file_id_valid = (sfname != NULL && os_fileid(sfname, &file_id));
+  if (ffname != NULL && !(flags & (BLN_DUMMY | BLN_NEW))
+      && (buf = buflist_findname_file_id(ffname, &file_id, file_id_valid)) != NULL) {
+    xfree(ffname);
+    if (lnum != 0) {
+      buflist_setfpos(buf, (flags & BLN_NOCURWIN) ? NULL : curwin,
+                      lnum, 0, false);
+    }
+    if ((flags & BLN_NOOPT) == 0) {
+      // Copy the options now, if 'cpo' doesn't have 's' and not done already.
+      buf_copy_options(buf, 0);
+    }
+    if ((flags & BLN_LISTED) && !buf->b_p_bl) {
+      buf->b_p_bl = true;
+      bufref_T bufref;
+      set_bufref(&bufref, buf);
+      if (!(flags & BLN_DUMMY)) {
+        if (apply_autocmds(EVENT_BUFADD, NULL, NULL, false, buf)
+            && !bufref_valid(&bufref)) {
+          return NULL;
+        }
+      }
+    }
+    return buf;
+  }
+
+  buf = NULL;
+  if ((flags & BLN_CURBUF) && curbuf_reusable()) {
+    bufref_T bufref;
+
+    assert(curbuf != NULL);
+    buf = curbuf;
+    set_bufref(&bufref, buf);
+    // It's like this buffer is deleted.  Watch out for autocommands that
+    // change curbuf!  If that happens, allocate a new buffer anyway.
+    buf_freeall(buf, BFA_WIPE | BFA_DEL);
+    if (aborting()) {           // autocmds may abort script processing
+      xfree(ffname);
+      return NULL;
+    }
+    if (!bufref_valid(&bufref)) {
+      buf = NULL;  // buf was deleted; allocate a new buffer
+    }
+  }
+  if (buf != curbuf || curbuf == NULL) {
+    buf = xcalloc(1, sizeof(buf_T));
+    // init b: variables
+    buf->b_vars = tv_dict_alloc();
+    init_var_dict(buf->b_vars, &buf->b_bufvar, VAR_SCOPE);
+    nvim_buf_init_changedtick_c(buf);
+  }
+
+  if (ffname != NULL) {
+    buf->b_ffname = ffname;
+    buf->b_sfname = xstrdup(sfname);
+  }
+
+  clear_wininfo(buf);
+  WinInfo *curwin_info = xcalloc(1, sizeof(WinInfo));
+  kv_push(buf->b_wininfo, curwin_info);
+
+  if (buf == curbuf) {
+    free_buffer_stuff(buf, kBffInitChangedtick);  // delete local vars et al.
+
+    // Init the options.
+    buf->b_p_initialized = false;
+    buf_copy_options(buf, BCO_ENTER);
+
+    // need to reload lmaps and set b:keymap_name
+    curbuf->b_kmap_state |= KEYMAP_INIT;
+  } else {
+    // put new buffer at the end of the buffer list
+    buf->b_next = NULL;
+    if (firstbuf == NULL) {             // buffer list is empty
+      buf->b_prev = NULL;
+      firstbuf = buf;
+    } else {                            // append new buffer at end of list
+      lastbuf->b_next = buf;
+      buf->b_prev = lastbuf;
+    }
+    lastbuf = buf;
+
+    buf->b_fnum = nvim_inc_top_file_num();
+    pmap_put(int)(&buffer_handles, buf->b_fnum, buf);
+    if (nvim_get_top_file_num() < 0) {  // wrap around (may cause duplicates)
+      emsg(_("W14: Warning: List of file names overflow"));
+      if (emsg_silent == 0 && !in_assert_fails && !ui_has(kUIMessages)) {
+        ui_flush();
+        os_delay(3001, true);  // make sure it is noticed
+      }
+      nvim_reset_top_file_num();
+    }
+
+    // Always copy the options from the current buffer.
+    buf_copy_options(buf, BCO_ALWAYS);
+  }
+
+  curwin_info->wi_mark = (fmark_T)INIT_FMARK;
+  curwin_info->wi_mark.mark.lnum = lnum;
+  curwin_info->wi_win = curwin;
+
+  hash_init(&buf->b_s.b_keywtab);
+  hash_init(&buf->b_s.b_keywtab_ic);
+
+  buf->b_fname = buf->b_sfname;
+  if (!file_id_valid) {
+    buf->file_id_valid = false;
+  } else {
+    buf->file_id_valid = true;
+    buf->file_id = file_id;
+  }
+  buf->b_u_synced = true;
+  buf->b_flags = BF_CHECK_RO | BF_NEVERLOADED;
+  if (flags & BLN_DUMMY) {
+    buf->b_flags |= BF_DUMMY;
+  }
+  buf_clear_file(buf);
+  clrallmarks(buf, 0);                  // clear marks
+  fmarks_check_names(buf);              // check file marks for this file
+  buf->b_p_bl = (flags & BLN_LISTED) ? true : false;    // init 'buflisted'
+  kv_destroy(buf->update_channels);
+  kv_init(buf->update_channels);
+  kv_destroy(buf->update_callbacks);
+  kv_init(buf->update_callbacks);
+  if (!(flags & BLN_DUMMY)) {
+    // Tricky: these autocommands may change the buffer list.  They could also
+    // split the window with re-using the one empty buffer. This may result in
+    // unexpectedly losing the empty buffer.
+    bufref_T bufref;
+    set_bufref(&bufref, buf);
+    if (apply_autocmds(EVENT_BUFNEW, NULL, NULL, false, buf)
+        && !bufref_valid(&bufref)) {
+      return NULL;
+    }
+    if ((flags & BLN_LISTED)
+        && apply_autocmds(EVENT_BUFADD, NULL, NULL, false, buf)
+        && !bufref_valid(&bufref)) {
+      return NULL;
+    }
+    if (aborting()) {
+      // Autocmds may abort script processing.
+      return NULL;
+    }
+  }
+
+  buf->b_prompt_callback.type = kCallbackNone;
+  buf->b_prompt_interrupt.type = kCallbackNone;
+  buf->b_prompt_text = NULL;
+  clear_fmark(&buf->b_prompt_start, 0);
+
+  return buf;
+}
 
 /// Execute the body of free_buf_options() in C.
 /// Called from the Rust free_buf_options() drop-in replacement.

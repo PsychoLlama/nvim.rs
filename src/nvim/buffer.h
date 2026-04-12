@@ -269,3 +269,7 @@ void buf_freeall(buf_T *buf, int flags);
 void free_buffer(buf_T *buf);
 void clear_wininfo(buf_T *buf);
 void free_buffer_stuff(buf_T *buf, int free_flags);
+// buflist_new() migrated to Rust close.rs / buffer_shim.c (Phase 3 of buffer.c plan).
+buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags);
+// free_buf_options() migrated to Rust close.rs / buffer_shim.c (Phase 2 of buffer.c plan).
+void free_buf_options(buf_T *buf, bool free_p_ff);

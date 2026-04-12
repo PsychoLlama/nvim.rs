@@ -424,3 +424,39 @@ bool nvim_spell_eap_is_undo(const exarg_T *eap)
 {
   return eap->cmdidx == CMD_spellundo;
 }
+
+// =============================================================================
+// spell_add_word / init_spellfile accessors (Phase 3)
+// =============================================================================
+
+// These are already included above, but listed here for clarity:
+// globals.h, garray.h, buffer_defs.h are already included at top of file.
+
+/// Get int_wordlist global (temporary file for internal word list).
+char *nvim_get_int_wordlist(void) { return int_wordlist; }
+
+/// Set int_wordlist global.
+void nvim_set_int_wordlist(char *val) { int_wordlist = val; }
+
+/// Get curwin->w_s->b_p_spf (spell file option).
+char *nvim_curwin_get_ws_b_p_spf(void) { return curwin->w_s->b_p_spf; }
+
+/// Get curwin->w_s->b_p_spl (spell language option).
+char *nvim_curwin_get_ws_b_p_spl(void) { return curwin->w_s->b_p_spl; }
+
+/// Return true if curwin->w_s->b_langp is empty (GA_EMPTY).
+bool nvim_curwin_ws_b_langp_is_empty(void) { return GA_EMPTY(&curwin->w_s->b_langp); }
+
+/// Get curwin->w_s->b_langp as GArray pointer for langp_entry access.
+const garray_T *nvim_curwin_get_ws_b_langp(void) { return &curwin->w_s->b_langp; }
+
+/// Get curbuf->b_s.b_p_spl (buffer spell language option).
+char *nvim_curbuf_get_b_s_b_p_spl(void) { return curbuf->b_s.b_p_spl; }
+
+/// Get pointer to NameBuff global.
+char *nvim_get_NameBuff(void) { return NameBuff; }
+
+// nvim_buf_get_b_orig_mode() already defined in buffer_shim.c (Phase 3 dedup).
+
+/// Check buf->b_ml.ml_mfp == NULL.
+bool nvim_buf_ml_mfp_is_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
