@@ -130,66 +130,7 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
   return wp;
 }
 
-void win_set_minimal_style(win_T *wp)
-{
-  wp->w_p_nu = false;
-  wp->w_p_rnu = false;
-  wp->w_p_cul = false;
-  wp->w_p_cuc = false;
-  wp->w_p_spell = false;
-  wp->w_p_list = false;
-
-  // Hide EOB region: use " " fillchar and cleared highlighting
-  if (wp->w_p_fcs_chars.eob != ' ') {
-    char *old = wp->w_p_fcs;
-    wp->w_p_fcs = ((*old == NUL)
-                   ? xstrdup("eob: ")
-                   : concat_str(old, ",eob: "));
-    free_string_option(old);
-  }
-
-  // TODO(bfredl): this could use a highlight namespace directly,
-  // and avoid peculiarities around window options
-  char *old = wp->w_p_winhl;
-  wp->w_p_winhl = ((*old == NUL)
-                   ? xstrdup("EndOfBuffer:")
-                   : concat_str(old, ",EndOfBuffer:"));
-  free_string_option(old);
-  rs_parse_winhl_opt(NULL, wp);
-
-  // signcolumn: use 'auto'
-  if (wp->w_p_scl[0] != 'a' || strlen(wp->w_p_scl) >= 8) {
-    free_string_option(wp->w_p_scl);
-    wp->w_p_scl = xstrdup("auto");
-  }
-
-  // foldcolumn: use '0'
-  if (wp->w_p_fdc[0] != '0') {
-    free_string_option(wp->w_p_fdc);
-    wp->w_p_fdc = xstrdup("0");
-  }
-
-  // colorcolumn: cleared
-  if (wp->w_p_cc != NULL && *wp->w_p_cc != NUL) {
-    free_string_option(wp->w_p_cc);
-    wp->w_p_cc = xstrdup("");
-  }
-
-  // statuscolumn: cleared
-  if (wp->w_p_stc != NULL && *wp->w_p_stc != NUL) {
-    free_string_option(wp->w_p_stc);
-    wp->w_p_stc = empty_string_option;
-  }
-
-  // statusline: cleared (for floating windows)
-  if (wp->w_floating && wp->w_p_stl != NULL && *wp->w_p_stl != NUL) {
-    free_string_option(wp->w_p_stl);
-    wp->w_p_stl = empty_string_option;
-    if (wp->w_status_height > 0) {
-      win_config_float(wp, wp->w_config);
-    }
-  }
-}
+// win_set_minimal_style: migrated to Rust (winfloat crate, Phase 4).
 
 // win_border_height and win_border_width exported directly from Rust.
 

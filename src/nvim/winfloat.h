@@ -15,7 +15,7 @@ extern int win_border_height(win_T *wp);
 extern int win_border_width(win_T *wp);
 extern int win_float_valid(win_T *win);
 
-// These functions are exported from Rust (nvim-winfloat crate, Phase 1-3).
+// These functions are exported from Rust (nvim-winfloat crate, Phase 1-4).
 extern void win_check_anchored_floats(win_T *win);
 extern void win_float_update_statusline(void);
 extern void win_float_anchor_laststatus(void);
@@ -23,5 +23,6 @@ extern void win_reconfig_floats(void);
 extern win_T *win_float_find_preview(void);
 extern win_T *win_float_find_altwin(const win_T *win, const tabpage_T *tp);
 extern void win_float_remove(bool bang, int count);
+extern void win_set_minimal_style(win_T *wp);
 
 #include "winfloat.h.generated.h"
