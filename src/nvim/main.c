@@ -369,17 +369,9 @@ int main(int argc, char **argv)
 
   // Many variables are in `params` so that we can pass them around easily.
   // `argc` and `argv` are also copied, so that they can be changed.
-  rs_init_params(&params, argc, argv);
+  rs_init_params(&params, argc, argv);  // also pre-scans for --clean
 
   rs_init_startuptime(&params);
-
-  // Need to find "--clean" before actually parsing arguments.
-  for (int i = 1; i < params.argc; i++) {
-    if (STRICMP(params.argv[i], "--clean") == 0) {
-      params.clean = true;
-      break;
-    }
-  }
 
   event_init();
 

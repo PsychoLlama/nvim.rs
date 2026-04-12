@@ -112,6 +112,16 @@ pub unsafe extern "C" fn rs_init_params(paramp: *mut MparmT, argc: c_int, argv: 
     p.remote = 0;
     p.luaf = std::ptr::null_mut();
     p.lua_arg0 = -1;
+
+    // Need to find "--clean" before actually parsing arguments.
+    // This is a pre-scan so early_init() can see params->clean.
+    for i in 1..(argc as usize) {
+        let arg = *argv.add(i);
+        if ascii_strcasecmp(arg, c"--clean".as_ptr()) == 0 {
+            p.clean = true;
+            break;
+        }
+    }
 }
 
 /// Initialize global startuptime file if "--startuptime" passed as an argument.
