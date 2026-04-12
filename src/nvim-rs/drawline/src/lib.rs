@@ -5762,6 +5762,378 @@ unsafe fn utf_ptr2cells_at(wp: WinHandle, lnum: LinenrT, col: ColnrT) -> c_int {
     utf_ptr2cells(line.add(col as usize))
 }
 
+// ============================================================================
+// Phase 1: c_win_line_pre_loop migration
+// ============================================================================
+
+/// Result type for nvim_c_advance_to_start_vcol (matches C AdvanceToStartVcolResult).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct AdvanceToStartVcolResult {
+    ptr_offset: c_int,
+    vcol: c_int,
+    in_multispace: bool,
+    multispace_pos: c_int,
+    skip_cells: c_int,
+    fromcol: c_int,
+    need_showbreak: bool,
+}
+
+/// PreLoopResult: output from rs_c_win_line_pre_loop (matches C PreLoopResult).
+///
+/// Size verified by `_Static_assert(sizeof(PreLoopResult) == 60, ...)` in drawline.c.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PreLoopResult {
+    pub ptr_offset: c_int,
+    pub trailcol: ColnrT,
+    pub leadcol: ColnrT,
+    pub lcs_eol_todo: bool,
+    pub lcs_eol: ScharT,
+    pub lcs_prec_todo: ScharT,
+    pub start_vcol: c_int,
+    pub may_have_inline_virt: bool,
+    pub virt_line_index: c_int,
+    pub virt_line_flags: c_int,
+    pub draw_cols: bool,
+    pub leftcols_width: c_int,
+    pub statuscol_draw: bool,
+    pub statuscol_width: c_int,
+    pub statuscol_sign_cul_id: c_int,
+}
+
+// FFI: new drawline_ffi.c accessor functions for Phase 1
+extern "C" {
+    /// Charsize iteration wrapper: advance ptr to start_vcol.
+    fn nvim_c_advance_to_start_vcol(
+        wp: WinHandle,
+        lnum: LinenrT,
+        line: *mut c_char,
+        start_vcol: c_int,
+        wlv_vcol: c_int,
+        wlv_tocol: c_int,
+        wlv_fromcol: c_int,
+        has_fold: bool,
+        p_list: bool,
+        p_wrap: bool,
+        leadcol: c_int,
+        in_ms: bool,
+        ms_pos: c_int,
+    ) -> AdvanceToStartVcolResult;
+
+    /// Return true if virtual editing is active for the given window.
+    fn nvim_win_virtual_active_drawline(wp: WinHandle) -> bool;
+    /// Return true if wp->w_buffer->terminal is non-NULL.
+    fn nvim_win_buf_has_terminal_drawline(wp: WinHandle) -> bool;
+    /// Get buf_meta_total(wp->w_buffer, kMTMetaInline) > 0.
+    fn nvim_win_buf_meta_total_inline(wp: WinHandle) -> bool;
+    /// Get highlight_attr[hlf].
+    fn nvim_get_highlight_attr_hlf(hlf: c_int) -> c_int;
+    /// Wrap terminal_get_line_attributes.
+    fn nvim_win_terminal_get_line_attrs(wp: WinHandle, lnum: c_int, term_attrs: *mut c_int);
+    /// Get length of wp->w_p_lcs_chars.multispace array.
+    fn nvim_win_lcs_multispace_len(wp: WinHandle) -> c_int;
+    /// Get length of wp->w_p_lcs_chars.leadmultispace array.
+    fn nvim_win_lcs_leadmultispace_len(wp: WinHandle) -> c_int;
+    /// Return true if *wp->w_p_stc != NUL.
+    fn nvim_win_get_w_p_stc_is_set(wp: WinHandle) -> bool;
+    /// wp->w_p_lcs_chars.space (already in window crate, declare here for local use)
+    fn nvim_win_lcs_space(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.trail
+    fn nvim_win_lcs_trail(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.lead
+    fn nvim_win_lcs_lead(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.nbsp
+    fn nvim_win_lcs_nbsp(wp: WinHandle) -> ScharT;
+    /// Set wp->w_cursor.lnum
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
+    /// Set wp->w_cursor.col
+    fn nvim_win_set_cursor_col(wp: WinHandle, col: ColnrT);
+    /// Set wp->w_cursor.coladd
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: ColnrT);
+}
+
+/// Implement `c_win_line_pre_loop` in Rust.
+///
+/// Sets up pre-loop state: statuscol init, trailing/leading whitespace detection,
+/// vcol advancement with charsize iteration (via C wrapper), spell setup,
+/// decoration redraw, search highlight preparation, terminal attributes.
+///
+/// # Safety
+/// All pointers must be valid. `line` must point to the start of the buffer line.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_c_win_line_pre_loop(
+    wp: WinHandle,
+    lnum: LinenrT,
+    wlv: *mut WinLineVars,
+    wls: *mut WinLineState,
+    spv: *mut c_void,
+    _foldinfo: FoldInfo,
+    startrow: c_int,
+    endrow: c_int,
+    col_rows: c_int,
+    term_attrs: *mut c_int,
+) -> PreLoopResult {
+    let state = &mut *wls;
+
+    let draw_text = state.draw_text;
+    let has_foldtext = state.has_foldtext;
+    let has_fold = state.has_fold;
+
+    // Build initial result
+    let lcs_eol = nvim_win_get_lcs_eol(wp);
+    let lcs_prec_todo = nvim_win_get_lcs_prec(wp);
+    let mut res = PreLoopResult {
+        ptr_offset: 0,
+        trailcol: MAXCOL,
+        leadcol: 0,
+        lcs_eol_todo: true,
+        lcs_eol,
+        lcs_prec_todo,
+        start_vcol: 0,
+        may_have_inline_virt: false,
+        virt_line_index: -1,
+        virt_line_flags: 0,
+        draw_cols: true,
+        leftcols_width: 0,
+        statuscol_draw: false,
+        statuscol_width: 0,
+        statuscol_sign_cul_id: 0,
+    };
+
+    // statuscol initialization
+    if nvim_win_get_w_p_stc_is_set(wp) {
+        res.statuscol_draw = true;
+        let cmdwin_win = nvim_get_cmdwin_win();
+        let cmdwin_offset = c_int::from(wp == cmdwin_win);
+        res.statuscol_width = rs_win_col_off(wp) - cmdwin_offset;
+        res.statuscol_sign_cul_id = if use_cursor_line_highlight(wp, lnum) {
+            (*wlv).sign_cul_attr
+        } else {
+            0
+        };
+    }
+
+    // current line pointer (as byte offset into the buffer line)
+    let mut ptr_col: c_int = 0; // offset of ptr into line
+
+    let p_list = nvim_win_get_p_list(wp) != 0;
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+
+    if p_list && !has_foldtext && draw_text {
+        // Check if any listchars that affect whitespace are set
+        let has_space = nvim_win_lcs_space(wp) != 0
+            || nvim_win_lcs_multispace_len(wp) > 0
+            || nvim_win_lcs_leadmultispace_len(wp) > 0
+            || nvim_win_lcs_trail(wp) != 0
+            || nvim_win_lcs_lead(wp) != 0
+            || nvim_win_lcs_nbsp(wp) != 0;
+        if has_space {
+            state.extra_check = true;
+        }
+
+        // Find start of trailing whitespace
+        if nvim_win_lcs_trail(wp) != 0 {
+            let line_len = nvim_win_ml_get_buf_len(wp, lnum);
+            let line_ptr = nvim_win_ml_get_buf(wp, lnum);
+            let mut trailcol = line_len;
+            // ascii_iswhite: space or tab
+            while trailcol > 0 {
+                let c = *line_ptr.add((trailcol - 1) as usize) as u8;
+                if c != b' ' && c != b'\t' {
+                    break;
+                }
+                trailcol -= 1;
+            }
+            res.trailcol = trailcol + ptr_col;
+        }
+
+        // Find end of leading whitespace
+        if nvim_win_lcs_lead(wp) != 0 || nvim_win_lcs_leadmultispace_len(wp) > 0 {
+            let line_ptr = nvim_win_ml_get_buf(wp, lnum);
+            let mut leadcol: c_int = 0;
+            loop {
+                let c = *line_ptr.add(leadcol as usize) as u8;
+                if c != b' ' && c != b'\t' {
+                    break;
+                }
+                leadcol += 1;
+            }
+            // Check if line is all spaces (leadcol at NUL)
+            if *line_ptr.add(leadcol as usize) == NUL {
+                res.leadcol = 0;
+            } else {
+                res.leadcol = leadcol + ptr_col + 1;
+            }
+        }
+    }
+
+    // Determine start_vcol
+    res.start_vcol = if p_wrap {
+        if startrow == 0 {
+            nvim_win_get_skipcol(wp)
+        } else {
+            0
+        }
+    } else {
+        nvim_win_get_leftcol(wp)
+    };
+
+    if has_foldtext {
+        (*wlv).vcol = res.start_vcol;
+    } else if res.start_vcol > 0 && col_rows == 0 {
+        // Use the C charsize iteration wrapper
+        let line_ptr = if draw_text {
+            nvim_win_ml_get_buf(wp, lnum).cast_mut()
+        } else {
+            c"".as_ptr().cast_mut()
+        };
+
+        let adv = nvim_c_advance_to_start_vcol(
+            wp,
+            lnum,
+            line_ptr,
+            res.start_vcol,
+            (*wlv).vcol,
+            (*wlv).tocol,
+            (*wlv).fromcol,
+            has_fold,
+            p_list,
+            p_wrap,
+            res.leadcol,
+            state.in_multispace,
+            state.multispace_pos,
+        );
+
+        (*wlv).vcol = adv.vcol;
+        (*wlv).skip_cells = adv.skip_cells;
+        (*wlv).fromcol = adv.fromcol;
+        (*wlv).need_showbreak = adv.need_showbreak;
+        state.in_multispace = adv.in_multispace;
+        state.multispace_pos = adv.multispace_pos;
+        ptr_col = adv.ptr_offset;
+
+        // Spell check at start of line (when line starts mid-word)
+        if nvim_spv_get_has_spell(spv) {
+            let linecol = ptr_col;
+            let mut spell_hlf: c_int = 76; // HLF_COUNT
+
+            // Save/restore cursor around spell_move_to
+            // (spell_move_to modifies wp->w_cursor then we restore it)
+            let save_cursor_lnum = nvim_win_get_cursor_lnum(wp);
+            let save_cursor_col = nvim_win_get_cursor_col(wp);
+            let save_cursor_coladd = nvim_win_get_cursor_coladd(wp);
+
+            // Set cursor to our position
+            nvim_win_set_cursor_lnum(wp, lnum);
+            nvim_win_set_cursor_col(wp, linecol);
+
+            let forward: c_int = 1;
+            let smt_all: c_int = 3;
+            let len = spell_move_to(wp, forward, smt_all, true, &mut spell_hlf);
+
+            // spell_move_to() may call ml_get() and make "line" invalid
+            // Re-fetch line pointer (ptr_col stays valid as byte offset)
+            let line_ptr2 = nvim_win_ml_get_buf(wp, lnum);
+            let cursor_col_after = nvim_win_get_cursor_col(wp);
+
+            let hlf_count: c_int = 76; // HLF_COUNT
+            if len == 0 || cursor_col_after > linecol {
+                // no bad word found at line start, don't check until end of a word
+                let ptr2 = line_ptr2.add(linecol as usize);
+                state.word_end =
+                    (spell_to_word_end(ptr2, wp) as usize - line_ptr2 as usize + 1) as c_int;
+            } else {
+                // bad word found, use attributes until end of word
+                state.word_end = cursor_col_after + len as c_int + 1;
+                if spell_hlf != hlf_count {
+                    state.spell_attr = nvim_get_highlight_attr_hlf(spell_hlf);
+                }
+            }
+
+            // Restore cursor
+            nvim_win_set_cursor_lnum(wp, save_cursor_lnum);
+            nvim_win_set_cursor_col(wp, save_cursor_col);
+            nvim_win_set_cursor_coladd(wp, save_cursor_coladd);
+
+            // Need to restart syntax highlighting for this line.
+            if state.has_syntax {
+                syntax_start(wp, lnum);
+            }
+        }
+    }
+
+    if state.check_decor_providers {
+        state.decor_provider_end_col =
+            rs_decor_providers_setup(endrow - startrow, res.start_vcol == 0, lnum, ptr_col, wp);
+        // rs_decor_providers_setup may invalidate line pointer; re-fetch not needed
+        // since we only use ptr_col (integer offset)
+    }
+
+    decor_redraw_line(wp, lnum - 1, get_decor_state().cast::<c_void>());
+    if !state.has_decor && decor_has_more_decorations(get_decor_state().cast::<c_void>(), lnum - 1)
+    {
+        state.has_decor = true;
+        state.extra_check = true;
+    }
+
+    // Correct highlighting for cursor that can't be disabled.
+    if (*wlv).fromcol >= 0 {
+        if state.noinvcur {
+            let virtcol = nvim_win_get_virtcol(wp);
+            if (*wlv).fromcol as ColnrT == virtcol {
+                state.fromcol_prev = (*wlv).fromcol;
+                (*wlv).fromcol = -1;
+            } else if ((*wlv).fromcol as ColnrT) < virtcol {
+                state.fromcol_prev = virtcol;
+            }
+        }
+        if (*wlv).fromcol >= (*wlv).tocol {
+            (*wlv).fromcol = -1;
+        }
+    }
+
+    if col_rows == 0 && draw_text && !has_foldtext {
+        // prepare_search_hl_line: update line pointer (via *line)
+        let screen_search_hl = nvim_get_screen_search_hl_ptr();
+        let mut line_for_search: *const c_char = nvim_win_ml_get_buf(wp, lnum);
+        let area = prepare_search_hl_line(
+            wp,
+            lnum,
+            ptr_col,
+            &mut line_for_search,
+            screen_search_hl,
+            &mut state.search_attr,
+            &mut state.search_attr_from_match,
+        );
+        state.area_highlighting |= area;
+        // Update ptr_col if line pointer moved (prepare_search_hl_line may update *line)
+        // ptr_col stays valid as an offset; line base may have changed but offset is the same
+    }
+
+    if (nvim_get_state() & MODE_INSERT) != 0
+        && rs_ins_compl_win_active(wp) != 0
+        && (state.in_curline || rs_ins_compl_lnum_in_range(lnum as c_int) != 0)
+    {
+        state.area_highlighting = true;
+    }
+
+    rs_win_line_start(wp, wlv);
+
+    if nvim_win_buf_has_terminal_drawline(wp) {
+        nvim_win_terminal_get_line_attrs(wp, lnum, term_attrs);
+        state.extra_check = true;
+    }
+
+    res.may_have_inline_virt = !has_foldtext && nvim_win_buf_meta_total_inline(wp);
+    res.ptr_offset = ptr_col;
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
