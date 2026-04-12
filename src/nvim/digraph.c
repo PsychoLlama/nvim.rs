@@ -55,6 +55,7 @@ typedef struct {
 
 // Forward declarations for Rust-exported keymap functions called from C
 extern void keymap_ga_clear(garray_T *kmap_ga);
+extern void keymap_unload(void);
 
 
 // Verify highlight constants match Rust values
@@ -158,45 +159,33 @@ size_t nvim_kmap_entry_size(void) { return sizeof(kmap_T); }
 /// Get the b_kmap_state field of a buffer (for Rust FFI).
 int nvim_buf_get_b_kmap_state(buf_T *buf) { return buf ? (int)buf->b_kmap_state : 0; }
 
-/// Set up key mapping tables for the 'keymap' option.
-///
-/// @return NULL if OK, an error message for failure.  This only needs to be
-///         used when setting the option, not later when the value has already
-///         been checked.
-char *keymap_init(void)
-{
-  curbuf->b_kmap_state &= ~KEYMAP_INIT;
+// curbuf kmap state accessors for keymap_unload / keymap_init (Rust)
 
-  if (*curbuf->b_p_keymap == NUL) {
-    // Stop any active keymap and clear the table.  Also remove
-    // b:keymap_name, as no keymap is active now.
-    keymap_unload();
-    do_cmdline_cmd("unlet! b:keymap_name");
-  } else {
-    // Source the keymap file.  It will contain a ":loadkeymap" command
-    // which will call ex_loadkeymap() below.
-    size_t buflen = strlen(curbuf->b_p_keymap) + strlen(p_enc) + 14;
-    char *buf = xmalloc(buflen);
+/// Get curbuf->b_kmap_state (for Rust FFI).
+int nvim_curbuf_get_b_kmap_state(void) { return (int)curbuf->b_kmap_state; }
 
-    // try finding "keymap/'keymap'_'encoding'.vim"  in 'runtimepath'
-    vim_snprintf(buf, buflen, "keymap/%s_%s.vim",
-                 curbuf->b_p_keymap, p_enc);
+/// Clear specific bits in curbuf->b_kmap_state (for Rust FFI).
+void nvim_curbuf_clear_b_kmap_state_bits(int mask) { curbuf->b_kmap_state &= (int16_t)~mask; }
 
-    if (source_runtime(buf, 0) == FAIL) {
-      // try finding "keymap/'keymap'.vim" in 'runtimepath'
-      vim_snprintf(buf, buflen, "keymap/%s.vim",
-                   curbuf->b_p_keymap);
+/// Get pointer to curbuf->b_kmap_ga (as opaque garray) (for Rust FFI).
+garray_T *nvim_curbuf_get_b_kmap_ga(void) { return &curbuf->b_kmap_ga; }
 
-      if (source_runtime(buf, 0) == FAIL) {
-        xfree(buf);
-        return N_("E544: Keymap file not found");
-      }
-    }
-    xfree(buf);
-  }
+/// Get curbuf->b_p_keymap (for Rust FFI).
+const char *nvim_curbuf_get_b_p_keymap(void) { return curbuf->b_p_keymap; }
 
-  return NULL;
-}
+/// Set p_cpo global (for Rust FFI, to restore after operations).
+void nvim_set_p_cpo(char *val) { p_cpo = val; }
+
+/// Get p_enc global (for Rust FFI, keymap file path construction).
+const char *nvim_get_p_enc(void) { return p_enc; }
+
+/// Call do_map with MAPTYPE_MAP/UNMAP for keymap operations (for Rust FFI).
+/// mode is MODE_LANGMAP, abbr is false.
+int nvim_do_map_keymap(int maptype, char *arg) { return do_map(maptype, arg, MODE_LANGMAP, false); }
+// Note: nvim_ga_clear already exists in fold_shim.c
+// Note: nvim_get_p_cpo already exported from Rust (window/src/globals.rs)
+
+// keymap_init() moved to Rust (digraph/src/keymap.rs)
 
 /// ":loadkeymap" command: load the following lines as the keymap.
 ///
@@ -268,34 +257,6 @@ void ex_loadkeymap(exarg_T *eap)
 }
 
 // keymap_ga_clear() moved to Rust (digraph/src/keymap.rs)
-
-/// Stop using 'keymap'.
-static void keymap_unload(void)
-{
-  char buf[KMAP_MAXLEN + 10];
-  char *save_cpo = p_cpo;
-
-  if (!(curbuf->b_kmap_state & KEYMAP_LOADED)) {
-    return;
-  }
-
-  // Set 'cpoptions' to "C" to avoid line continuation.
-  p_cpo = "C";
-
-  // clear the ":lmap"s
-  kmap_T *kp = (kmap_T *)curbuf->b_kmap_ga.ga_data;
-
-  for (int i = 0; i < curbuf->b_kmap_ga.ga_len; i++) {
-    vim_snprintf(buf, sizeof(buf), "<buffer> %s", kp[i].from);
-    do_map(MAPTYPE_UNMAP, buf, MODE_LANGMAP, false);
-  }
-  keymap_ga_clear(&curbuf->b_kmap_ga);
-
-  p_cpo = save_cpo;
-
-  ga_clear(&curbuf->b_kmap_ga);
-  curbuf->b_kmap_state &= ~KEYMAP_LOADED;
-  status_redraw_curbuf();
-}
+// keymap_unload() moved to Rust (digraph/src/keymap.rs)
 
 // get_keymap_str() moved to Rust (digraph/src/keymap.rs)
