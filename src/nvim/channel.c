@@ -376,93 +376,9 @@ extern void term_delayed_free(void **argv);
 
 // channel_info_changed implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-void set_info_event(void **argv)
-{
-  Channel *chan = argv[0];
-  event_T event = (event_T)(ptrdiff_t)argv[1];
+// set_info_event implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-  Arena arena = ARENA_EMPTY;
-  Dict info = channel_info(chan->id, &arena);
-  typval_T retval;
-  object_to_vim(DICT_OBJ(info), &retval, NULL);
-  assert(retval.v_type == VAR_DICT);
-  tv_dict_add_dict(dict, S_LEN("info"), retval.vval.v_dict);
-  tv_dict_set_keys_readonly(dict);
-
-  apply_autocmds(event, NULL, NULL, true, curbuf);
-
-  restore_v_event(dict, &save_v_event);
-  arena_mem_free(arena_finish(&arena));
-  channel_decref(chan);
-}
-
-
-Dict channel_info(uint64_t id, Arena *arena)
-{
-  Channel *chan = find_channel(id);
-  if (!chan) {
-    return (Dict)ARRAY_DICT_INIT;
-  }
-
-  Dict info = arena_dict(arena, 8);
-  PUT_C(info, "id", INTEGER_OBJ((Integer)chan->id));
-
-  const char *stream_desc, *mode_desc;
-  switch (chan->streamtype) {
-  case kChannelStreamProc: {
-    stream_desc = "job";
-    if (chan->stream.proc.type == kProcTypePty) {
-      const char *name = pty_proc_tty_name(&chan->stream.pty);
-      PUT_C(info, "pty", CSTR_TO_ARENA_OBJ(arena, name));
-    }
-
-    char **args = chan->stream.proc.argv;
-    Array argv = ARRAY_DICT_INIT;
-    if (args != NULL) {
-      size_t n;
-      for (n = 0; args[n] != NULL; n++) {}
-      argv = arena_array(arena, n);
-      for (size_t i = 0; i < n; i++) {
-        ADD_C(argv, CSTR_AS_OBJ(args[i]));
-      }
-    }
-    PUT_C(info, "argv", ARRAY_OBJ(argv));
-    break;
-  }
-
-  case kChannelStreamStdio:
-    stream_desc = "stdio";
-    break;
-
-  case kChannelStreamStderr:
-    stream_desc = "stderr";
-    break;
-
-  case kChannelStreamInternal:
-    PUT_C(info, "internal", BOOLEAN_OBJ(true));
-    FALLTHROUGH;
-
-  case kChannelStreamSocket:
-    stream_desc = "socket";
-    break;
-  }
-  PUT_C(info, "stream", CSTR_AS_OBJ(stream_desc));
-
-  if (chan->is_rpc) {
-    mode_desc = "rpc";
-    PUT_C(info, "client", DICT_OBJ(chan->rpc.info));
-  } else if (chan->term) {
-    mode_desc = "terminal";
-    PUT_C(info, "buffer", BUFFER_OBJ(terminal_buf(chan->term)));
-  } else {
-    mode_desc = "bytes";
-  }
-  PUT_C(info, "mode", CSTR_AS_OBJ(mode_desc));
-
-  return info;
-}
+// channel_info implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 // int64_t_cmp implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 

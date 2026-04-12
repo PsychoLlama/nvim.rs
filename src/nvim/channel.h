@@ -78,6 +78,8 @@ void channel_info_changed(Channel *chan, bool new_chan);
 void channel_create_event(Channel *chan, const char *ext_source);
 void channel_from_connection(SocketWatcher *watcher);
 Array channel_all_info(Arena *arena);
+Dict channel_info(uint64_t id, Arena *arena);
+void set_info_event(void **argv);
 void channel_terminal_open(buf_T *buf, Channel *chan);
 void term_delayed_free(void **argv);
 void f_prompt_setcallback(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

@@ -299,6 +299,35 @@ extern "C" {
         compar: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
     );
 
+    // --- Phase 7b FFI: channel_info, set_info_event ---
+
+    /// Return chan->stream.proc.argv. Defined in eval_shim.c.
+    fn nvim_chan_proc_get_argv(chan: *mut c_void) -> *const *const std::ffi::c_char;
+    /// Return pty_proc_tty_name(&chan->stream.pty). Defined in eval_shim.c.
+    fn nvim_chan_pty_tty_name(chan: *mut c_void) -> *const std::ffi::c_char;
+    /// Return (int)terminal_buf(chan->term). Defined in eval_shim.c.
+    fn nvim_terminal_buf_id(chan: *mut c_void) -> c_int;
+    /// Return chan->rpc.info (Dict, by value, 24 bytes). Defined in eval_shim.c.
+    fn nvim_chan_get_rpc_info(chan: *mut c_void) -> ApiDict;
+    /// arena_dict(arena, max_size). Defined in eval_shim.c.
+    fn nvim_arena_dict(arena: *mut c_void, max_size: usize) -> ApiDict;
+    /// Wrap cstr_as_string(s) → ApiString. (cstr_as_string is in strings.c)
+    fn cstr_as_string(s: *const std::ffi::c_char) -> ApiString;
+    /// arena_string(arena, s) → ApiString. Defined in memory.c.
+    fn arena_string(arena: *mut c_void, s: ApiString) -> ApiString;
+    /// Set `v:event["info"]` from a Dict: calls object_to_vim + tv_dict_add_dict + set_readonly.
+    /// Defined in eval_shim.c.
+    fn nvim_chan_set_v_event_info(v_event: *mut c_void, info_dict: *const ApiDict);
+    /// get_v_event wrapper. Returns dict_T *. Defined in eval_shim.c.
+    fn get_v_event(sve: *mut c_void) -> *mut c_void;
+    /// restore_v_event wrapper. Defined in eval_shim.c.
+    fn restore_v_event(v_event: *mut c_void, sve: *mut c_void);
+    /// apply_autocmds(event, NULL, NULL, true, curbuf) force=true variant for channel events.
+    /// Defined in eval_shim.c.
+    fn nvim_chan_apply_autocmds_event(event: c_int);
+    /// arena_finish + arena_mem_free for channel use. Defined in eval_shim.c.
+    fn nvim_chan_arena_finish_and_free(arena: *mut c_void);
+
     // --- Phase 5 FFI ---
 
     /// Check if in secure mode (sandbox). Defined in Rust (ex_cmds crate).
@@ -1175,6 +1204,276 @@ pub unsafe extern "C" fn rs_channel_all_info(arena: *mut c_void) -> ApiArray {
         ret.size += 1;
     }
     ret
+}
+
+// =============================================================================
+// Migrated functions (Phase 7b): channel_info, set_info_event
+// =============================================================================
+
+// ObjectType constants (from api/private/defs.h)
+const K_OBJ_NIL: c_int = 0;
+const K_OBJ_BOOLEAN: c_int = 1;
+const K_OBJ_INTEGER: c_int = 2;
+const K_OBJ_STRING: c_int = 4;
+const K_OBJ_ARRAY: c_int = 5;
+const K_OBJ_DICT: c_int = 6;
+const K_OBJ_BUFFER: c_int = 8; // kObjectTypeBuffer = EXT type offset
+
+// kProcTypePty = 1
+const K_PROC_TYPE_PTY_STREAM: c_int = 1;
+
+/// Construct an integer Object.
+#[inline]
+fn integer_obj(n: i64) -> ApiObject {
+    ApiObject {
+        obj_type: K_OBJ_INTEGER,
+        _pad: [0u8; 4],
+        data: ObjectData { integer: n },
+    }
+}
+
+/// Construct a boolean Object.
+#[inline]
+fn boolean_obj(b: bool) -> ApiObject {
+    ApiObject {
+        obj_type: K_OBJ_BOOLEAN,
+        _pad: [0u8; 4],
+        data: ObjectData { boolean: b },
+    }
+}
+
+/// Construct a String Object from a static C string key (non-owning reference).
+///
+/// # Safety
+/// `s` must be a valid NUL-terminated string that outlives the Object.
+#[inline]
+unsafe fn cstr_as_obj(s: *const std::ffi::c_char) -> ApiObject {
+    let api_str = cstr_as_string(s);
+    ApiObject {
+        obj_type: K_OBJ_STRING,
+        _pad: [0u8; 4],
+        data: ObjectData { string: api_str },
+    }
+}
+
+/// Construct a String Object, copying `s` into `arena`.
+///
+/// # Safety
+/// `s` must be a valid NUL-terminated string; `arena` must be a valid Arena.
+#[inline]
+unsafe fn cstr_to_arena_obj(arena: *mut c_void, s: *const std::ffi::c_char) -> ApiObject {
+    let base = cstr_as_string(s);
+    let arena_str = arena_string(arena, base);
+    ApiObject {
+        obj_type: K_OBJ_STRING,
+        _pad: [0u8; 4],
+        data: ObjectData { string: arena_str },
+    }
+}
+
+/// Construct an Array Object.
+#[inline]
+fn array_obj(a: ApiArray) -> ApiObject {
+    ApiObject {
+        obj_type: K_OBJ_ARRAY,
+        _pad: [0u8; 4],
+        data: ObjectData { array: a },
+    }
+}
+
+/// Construct a Dict Object.
+#[inline]
+fn dict_obj(d: ApiDict) -> ApiObject {
+    ApiObject {
+        obj_type: K_OBJ_DICT,
+        _pad: [0u8; 4],
+        data: ObjectData { dict: d },
+    }
+}
+
+/// Construct a Buffer Object (EXT integer type).
+#[inline]
+fn buffer_obj(buf_id: c_int) -> ApiObject {
+    ApiObject {
+        obj_type: K_OBJ_BUFFER,
+        _pad: [0u8; 4],
+        data: ObjectData {
+            integer: i64::from(buf_id),
+        },
+    }
+}
+
+/// Nil Object.
+#[inline]
+fn nil_obj() -> ApiObject {
+    ApiObject {
+        obj_type: K_OBJ_NIL,
+        _pad: [0u8; 4],
+        data: ObjectData { integer: 0 },
+    }
+}
+
+/// Append a key-value pair to an arena-allocated Dict (mirrors PUT_C macro).
+///
+/// # Safety
+/// `dict` must have sufficient pre-allocated capacity (from `arena_dict`/`nvim_arena_dict`).
+#[inline]
+unsafe fn dict_put(dict: &mut ApiDict, key: *const std::ffi::c_char, value: ApiObject) {
+    debug_assert!(dict.size < dict.capacity);
+    *dict.items.add(dict.size) = ApiKeyValuePair {
+        key: cstr_as_string(key),
+        value,
+    };
+    dict.size += 1;
+}
+
+/// Append an Object to an arena-allocated Array (mirrors ADD_C macro).
+///
+/// # Safety
+/// `arr` must have sufficient capacity.
+#[inline]
+unsafe fn array_add(arr: &mut ApiArray, item: ApiObject) {
+    debug_assert!(arr.size < arr.capacity);
+    *arr.items.add(arr.size) = item;
+    arr.size += 1;
+}
+
+/// Build a Dict describing a channel's state.
+///
+/// Returns an arena-allocated Dict with keys "id", "stream", "mode", and
+/// optional "pty", "argv", "internal", "client", "buffer".
+///
+/// # Safety
+///
+/// `id` must refer to an existing channel; `arena` must be a valid Arena pointer.
+#[unsafe(export_name = "channel_info")]
+pub unsafe extern "C" fn rs_channel_info(id: u64, arena: *mut c_void) -> ApiDict {
+    let chan = nvim_find_channel(id);
+    if chan.is_null() {
+        // Return ARRAY_DICT_INIT (all-zero kvec_t)
+        return ApiDict {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+    }
+    let chan_t = chan.cast::<ChannelT>();
+
+    let mut info = nvim_arena_dict(arena, 8);
+    #[allow(clippy::cast_possible_wrap)]
+    dict_put(&mut info, c"id".as_ptr(), integer_obj((*chan_t).id as i64));
+
+    // stream type and optional pty/argv fields
+    let stream_desc: *const std::ffi::c_char;
+    match (*chan_t).streamtype {
+        // kChannelStreamProc = 0
+        0 => {
+            stream_desc = c"job".as_ptr();
+            if nvim_chan_get_proc_type(chan) == K_PROC_TYPE_PTY_STREAM {
+                let tty_name = nvim_chan_pty_tty_name(chan);
+                dict_put(
+                    &mut info,
+                    c"pty".as_ptr(),
+                    cstr_to_arena_obj(arena, tty_name),
+                );
+            }
+            // Build argv array
+            let args = nvim_chan_proc_get_argv(chan);
+            let mut arg_array = ApiArray {
+                size: 0,
+                capacity: 0,
+                items: std::ptr::null_mut(),
+            };
+            if !args.is_null() {
+                let mut n = 0usize;
+                while !(*args.add(n)).is_null() {
+                    n += 1;
+                }
+                arg_array = nvim_arena_array(arena, n);
+                for i in 0..n {
+                    array_add(&mut arg_array, cstr_as_obj(*args.add(i)));
+                }
+            }
+            dict_put(&mut info, c"argv".as_ptr(), array_obj(arg_array));
+        }
+        // kChannelStreamStdio = 2
+        2 => {
+            stream_desc = c"stdio".as_ptr();
+        }
+        // kChannelStreamStderr = 3
+        3 => {
+            stream_desc = c"stderr".as_ptr();
+        }
+        // kChannelStreamInternal = 4
+        4 => {
+            dict_put(&mut info, c"internal".as_ptr(), boolean_obj(true));
+            stream_desc = c"socket".as_ptr();
+        }
+        // kChannelStreamSocket = 1 (and default)
+        _ => {
+            stream_desc = c"socket".as_ptr();
+        }
+    }
+    dict_put(&mut info, c"stream".as_ptr(), cstr_as_obj(stream_desc));
+
+    // mode and optional client/buffer
+    let mode_desc: *const std::ffi::c_char;
+    if (*chan_t).is_rpc {
+        mode_desc = c"rpc".as_ptr();
+        let rpc_info = nvim_chan_get_rpc_info(chan);
+        dict_put(&mut info, c"client".as_ptr(), dict_obj(rpc_info));
+    } else if !(*chan_t).term.is_null() {
+        mode_desc = c"terminal".as_ptr();
+        let buf_id = nvim_terminal_buf_id(chan);
+        dict_put(&mut info, c"buffer".as_ptr(), buffer_obj(buf_id));
+    } else {
+        mode_desc = c"bytes".as_ptr();
+    }
+    dict_put(&mut info, c"mode".as_ptr(), cstr_as_obj(mode_desc));
+
+    info
+}
+
+/// Deferred event handler: fires ChanOpen/ChanInfo autocmds with v:event dict.
+///
+/// argv[0] = Channel *chan
+/// argv[1] = event (as pointer-sized int: EVENT_CHANOPEN or EVENT_CHANINFO)
+///
+/// # Safety
+///
+/// argv must be valid.
+#[unsafe(export_name = "set_info_event")]
+pub unsafe extern "C" fn rs_set_info_event(argv: *mut *mut c_void) {
+    let chan = (*argv).cast::<ChannelT>();
+    // argv[1] carries an event ID packed as a pointer-sized integer.
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
+    let event = (*argv.add(1)) as usize as c_int;
+
+    // Stack-allocate save_v_event_T (bool(1) + 7pad + hashtab_T(296) = 304 bytes)
+    let mut sve = [0u8; 304];
+
+    let v_event = get_v_event(sve.as_mut_ptr().cast());
+
+    // Build arena and call channel_info
+    // Arena = {char*(8), size_t(8), size_t(8)} = 24 bytes, ARENA_EMPTY = all zero
+    let mut arena = [0u8; 24usize];
+    let arena_ptr = arena.as_mut_ptr().cast::<c_void>();
+
+    let info = rs_channel_info((*chan).id, arena_ptr);
+
+    // Set v:event["info"] = info dict (calls object_to_vim + tv_dict_add_dict)
+    nvim_chan_set_v_event_info(v_event, &raw const info);
+
+    nvim_chan_apply_autocmds_event(event);
+
+    restore_v_event(v_event, sve.as_mut_ptr().cast());
+    nvim_chan_arena_finish_and_free(arena_ptr);
+
+    channel_decref(chan);
 }
 
 // =============================================================================

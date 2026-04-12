@@ -508,3 +508,52 @@ Object nvim_chan_info_as_object(uint64_t id, Arena *arena)
   Dict info = channel_info(id, arena);
   return DICT_OBJ(info);
 }
+
+// Phase 7b (channel migration): accessors for channel_info, set_info_event
+
+#include "nvim/os/pty_proc.h"
+#include "nvim/terminal.h"
+#include "nvim/api/private/converter.h"
+#include "nvim/autocmd.h"
+
+/// Return chan->stream.proc.argv (char **).
+char **nvim_chan_proc_get_argv(Channel *chan) { return chan->stream.proc.argv; }
+
+/// Return pty_proc_tty_name(&chan->stream.pty) (const char *).
+const char *nvim_chan_pty_tty_name(Channel *chan) { return pty_proc_tty_name(&chan->stream.pty); }
+
+/// Return terminal_buf(chan->term) as int (Buffer handle).
+int nvim_terminal_buf_id(Channel *chan) { return (int)terminal_buf(chan->term); }
+
+/// Return chan->rpc.info (Dict, by value).
+Dict nvim_chan_get_rpc_info(Channel *chan) { return chan->rpc.info; }
+
+/// arena_dict(arena, max_size) wrapper.
+Dict nvim_arena_dict(Arena *arena, size_t max_size) { return arena_dict(arena, max_size); }
+
+/// Build an arena-allocated CSTR_TO_ARENA_STR (copies s into arena, returns String).
+/// Caller wraps in STRING_OBJ.
+String nvim_arena_cstr_to_str(Arena *arena, const char *s)
+{
+  return CSTR_TO_ARENA_STR(arena, s);
+}
+
+/// Convert a Dict to v:event["info"] (typval dict) and mark readonly.
+/// Calls object_to_vim(DICT_OBJ(info), ...) + tv_dict_add_dict + tv_dict_set_keys_readonly.
+void nvim_chan_set_v_event_info(dict_T *v_event, Dict *info_dict)
+{
+  typval_T retval;
+  object_to_vim(DICT_OBJ(*info_dict), &retval, NULL);
+  assert(retval.v_type == VAR_DICT);
+  tv_dict_add_dict(v_event, S_LEN("info"), retval.vval.v_dict);
+  tv_dict_set_keys_readonly(v_event);
+}
+
+/// apply_autocmds(event, NULL, NULL, true, curbuf) wrapper (force=true variant for channel events).
+void nvim_chan_apply_autocmds_event(int event)
+{
+  apply_autocmds((event_T)event, NULL, NULL, true, curbuf);
+}
+
+/// arena_finish + arena_mem_free wrapper (called from Rust set_info_event).
+void nvim_chan_arena_finish_and_free(Arena *arena) { arena_mem_free(arena_finish(arena)); }
