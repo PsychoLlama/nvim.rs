@@ -980,8 +980,31 @@ void rs_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
 // free_buffer cluster compound accessors (Phase N: migrate free_buffer to Rust)
 // =============================================================================
 
-// Declarations from buffer.c (callable from buffer_shim.c)
-extern void nvim_buf_init_changedtick_c(buf_T *buf);
+// buf_init_changedtick and nvim_buf_init_changedtick_c migrated from buffer.c (Phase 4).
+// These needed to stay in C to avoid complex Rust struct layout issues with
+// ChangedtickDictItem / typval_T compound literal initializers.
+
+/// Initialize b:changedtick and changedtick_val attribute.
+/// (Migrated from static inline in buffer.c.)
+static inline void buf_init_changedtick_shim(buf_T *const buf)
+{
+  buf->changedtick_di = (ChangedtickDictItem) {
+    .di_flags = DI_FLAGS_RO|DI_FLAGS_FIX,  // Must not include DI_FLAGS_ALLOC.
+    .di_tv = (typval_T) {
+      .v_type = VAR_NUMBER,
+      .v_lock = VAR_FIXED,
+      .vval.v_number = buf_get_changedtick(buf),
+    },
+    .di_key = "changedtick",
+  };
+  tv_dict_add(buf->b_vars, (dictitem_T *)&buf->changedtick_di);
+}
+
+/// Non-static wrapper for buf_init_changedtick (called from buffer_shim.c compound shims).
+void nvim_buf_init_changedtick_c(buf_T *buf)
+{
+  buf_init_changedtick_shim(buf);
+}
 // nvim_inc_buf_free_count is exported from Rust state.rs (Phase 1).
 extern void nvim_inc_buf_free_count(void);
 // free_buf_options is exported from Rust close.rs (Phase 2).

@@ -11385,6 +11385,452 @@ pub unsafe extern "C" fn rs_mkspell(
 }
 
 // =============================================================================
+// spell_add_word and init_spellfile (Phase 3 migration)
+// =============================================================================
+
+extern "C" {
+    // Globals and accessors (spell_shim.c Phase 3)
+    fn nvim_get_int_wordlist() -> *mut c_char;
+    fn nvim_set_int_wordlist(val: *mut c_char);
+    fn nvim_curwin_get_ws_b_p_spf() -> *mut c_char;
+    fn nvim_curwin_get_ws_b_p_spl() -> *mut c_char;
+    fn nvim_curwin_ws_b_langp_is_empty() -> bool;
+    fn nvim_curwin_get_ws_b_langp() -> *const crate::GArrayRaw;
+    fn nvim_curbuf_get_b_s_b_p_spl() -> *mut c_char;
+    fn nvim_get_NameBuff() -> *mut c_char;
+    fn nvim_buf_get_b_orig_mode(buf: *mut c_void) -> c_int;
+    fn nvim_buf_ml_mfp_is_null(buf: *mut c_void) -> bool;
+
+    // String / path functions
+    fn vim_tempname() -> *mut c_char;
+    fn copy_option_part(
+        str: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
+    fn home_replace(
+        buf: *const c_void,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: bool,
+    );
+    fn dir_of_file_exists(fname: *const c_char) -> bool;
+    #[link_name = "path_tail_with_sep"]
+    fn path_tail_with_sep_saw(fname: *mut c_char) -> *mut c_char;
+    #[link_name = "os_mkdir"]
+    fn os_mkdir_saw(path: *const c_char, perm: u32) -> c_int;
+    fn vim_ispathsep(c: c_int) -> bool;
+    #[link_name = "vim_strchr"]
+    fn vim_strchr_saw(str: *const c_char, c: c_int) -> *mut c_char;
+    fn get_xdg_home(xdg: c_int) -> *mut c_char;
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    fn os_mkdir_recurse(
+        path: *const c_char,
+        perm: u32,
+        failed_dir: *mut *mut c_char,
+        created_dir: *mut *mut c_char,
+    ) -> c_int;
+
+    // Buffer functions (use shim names - buflist_findname_exp is a C inline)
+    fn rs_buflist_findname_exp(fname: *mut c_char) -> *mut c_void;
+    fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
+    fn nvim_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int);
+
+    // File I/O (use libc via Rust's libc crate for portability)
+    #[link_name = "os_fopen"]
+    fn os_fopen_saw(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
+
+    // Memory
+    #[link_name = "xmalloc"]
+    fn xmalloc_saw(size: usize) -> *mut c_void;
+    #[link_name = "xfree"]
+    fn xfree_saw(ptr: *mut c_void);
+
+    // Messaging
+    #[link_name = "emsg"]
+    fn emsg_saw(s: *const c_char) -> bool;
+    #[link_name = "semsg"]
+    fn semsg_saw(fmt: *const c_char, ...) -> bool;
+    #[link_name = "smsg"]
+    fn smsg_saw(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+
+    // Validation
+    fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool;
+
+    // Redraw
+    #[link_name = "redraw_all_later"]
+    fn redraw_all_later_saw(type_: c_int);
+}
+
+// kXDGDataHome = 0 (from stdpaths_defs.h)
+const K_XDG_DATA_HOME: c_int = 0;
+
+// UPD_SOME_VALID is already defined at the top of this file (= 35).
+
+/// E_NOTSET error message key
+const E_NOTSET: *const c_char = c"E764: Option '%s' is not set".as_ptr();
+/// E_NOTOPEN error message key
+const E_NOTOPEN: *const c_char = c"E484: Can't open file %s".as_ptr();
+/// E_BUFLOADED error message
+const E_BUFLOADED: *const c_char = c"E139: File is loaded in another buffer".as_ptr();
+/// E_ILLEGAL_CHAR_IN_WORD
+const E_ILLEGAL_CHAR: *const c_char = c"E1280: Illegal character in word".as_ptr();
+
+const MAXPATHL_SAW: usize = 4096;
+
+// Use the existing rs_spell_add_word_format and rs_spell_find_duplicate_word
+// as direct Rust function calls (they're defined in this module).
+
+/// Initialize the 'spellfile' option for the current window/buffer.
+///
+/// If the location does not exist, create it. Defaults to
+/// stdpath("data") + "/site/spell/{spelllang}.{encoding}.add".
+///
+/// # Safety
+/// Must be called from main thread with valid curwin/curbuf state.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn init_spellfile() {
+    let mut aspath = false;
+    let mut lstart = nvim_curbuf_get_b_s_b_p_spl();
+
+    let b_p_spl = nvim_curwin_get_ws_b_p_spl();
+    if *b_p_spl == 0 || nvim_curwin_ws_b_langp_is_empty() {
+        return;
+    }
+
+    // Find the end of the language name; exclude the region.
+    // If there is a path separator, remember the start of the tail.
+    let mut lend = b_p_spl;
+    loop {
+        let ch = *lend;
+        if ch == 0 {
+            break;
+        }
+        // Check vim_strchr(",._", ch)
+        let in_sep = vim_strchr_saw(c",._".as_ptr(), ch as c_int);
+        if !in_sep.is_null() {
+            break;
+        }
+        if vim_ispathsep(ch as c_int) {
+            aspath = true;
+            lstart = lend.add(1);
+        }
+        lend = lend.add(1);
+    }
+
+    let buf = xmalloc_saw(MAXPATHL_SAW).cast::<c_char>();
+    let buf_len = MAXPATHL_SAW;
+
+    if aspath {
+        let lstart_spl = nvim_curbuf_get_b_s_b_p_spl();
+        let copy_len = (lend as usize).wrapping_sub(lstart_spl as usize);
+        if copy_len >= buf_len {
+            xfree_saw(buf.cast::<c_void>());
+            return;
+        }
+        // xmemcpyz equivalent: copy + NUL-terminate
+        std::ptr::copy_nonoverlapping(lstart_spl, buf, copy_len);
+        *buf.add(copy_len) = 0;
+    } else {
+        // Use XDG data home
+        let xdg_path = get_xdg_home(K_XDG_DATA_HOME);
+        xstrlcpy(buf, xdg_path, buf_len);
+        xfree_saw(xdg_path.cast::<c_void>());
+
+        xstrlcat(buf, c"/site/spell".as_ptr(), buf_len);
+
+        let mut failed_dir: *mut c_char = std::ptr::null_mut();
+        if os_mkdir_recurse(buf, 0o755, &raw mut failed_dir, std::ptr::null_mut()) != 0 {
+            xfree_saw(buf.cast::<c_void>());
+            xfree_saw(failed_dir.cast::<c_void>());
+            return;
+        }
+    }
+
+    // Append spelllang tail
+    let lend_usize = lend as usize;
+    let lstart_usize = lstart as usize;
+    let tail_len = lend_usize.wrapping_sub(lstart_usize);
+    let buf_used = libc::strlen(buf.cast::<libc::c_char>());
+    // Append "/" + lstart..lend
+    if buf_used + 1 + tail_len + 1 < buf_len {
+        let p = buf.add(buf_used);
+        *p = 47; // b'/'
+        std::ptr::copy_nonoverlapping(lstart, p.add(1), tail_len);
+        *p.add(1 + tail_len) = 0;
+    }
+
+    // Append ".ascii.add" or ".{enc}.add"
+    let langp_ga = nvim_curwin_get_ws_b_langp();
+    let lp = crate::langp_entry(langp_ga, 0);
+    let slang = (*lp).lp_slang;
+    let sl_fname = if slang.is_null() {
+        std::ptr::null_mut()
+    } else {
+        (*slang).sl_fname
+    };
+    let enc_suffix: *const c_char = if sl_fname.is_null() {
+        spell_enc()
+    } else {
+        let tail = path_tail(sl_fname);
+        // Check if tail contains ".ascii."
+        let ascii_str = c".ascii.".as_ptr();
+        if libc::strstr(
+            tail.cast::<libc::c_char>(),
+            ascii_str.cast::<libc::c_char>(),
+        )
+        .is_null()
+        {
+            spell_enc()
+        } else {
+            c"ascii".as_ptr()
+        }
+    };
+
+    // Append ".{enc}.add"
+    let buf_used2 = libc::strlen(buf.cast::<libc::c_char>());
+    // Format: ".{enc}.add"
+    let enc_len = libc::strlen(enc_suffix.cast::<libc::c_char>());
+    if buf_used2 + 1 + enc_len + 4 + 1 < buf_len {
+        let p = buf.add(buf_used2);
+        *p = 46; // b'.'
+        std::ptr::copy_nonoverlapping(enc_suffix, p.add(1), enc_len);
+        let q = p.add(1 + enc_len);
+        *q = 46; // b'.'
+        *q.add(1) = 97; // b'a'
+        *q.add(2) = 100; // b'd'
+        *q.add(3) = 100; // b'd'
+        *q.add(4) = 0;
+    }
+
+    nvim_spell_set_spellfile_option(buf);
+    xfree_saw(buf.cast::<c_void>());
+}
+
+extern "C" {
+    /// Thin shim: set_option_value_give_err(kOptSpellfile, CSTR_AS_OPTVAL(buf), OPT_LOCAL)
+    fn nvim_spell_set_spellfile_option(buf: *const c_char);
+}
+
+/// Add "word[len]" to 'spellfile' as a good or bad word.
+///
+/// # Safety
+/// Must be called from main thread with valid Neovim state.
+#[export_name = "spell_add_word"]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_spell_add_word(
+    word: *mut c_char,
+    len: c_int,
+    what: c_int,
+    idx: c_int,
+    undo: bool,
+) {
+    // SPELL_ADD_* values
+    const SPELL_ADD_BAD: c_int = 1;
+
+    let mut buf_ptr: *mut c_void = std::ptr::null_mut(); // buf_T*
+    let mut new_spf = false;
+    let mut file_written = false;
+    let mut fname: *mut c_char;
+    let mut fnamebuf: *mut c_char = std::ptr::null_mut();
+
+    if !valid_spell_word(word, word.add(len as usize)) {
+        let _ = emsg_saw(E_ILLEGAL_CHAR);
+        return;
+    }
+
+    if idx == 0 {
+        // Use internal word list
+        if nvim_get_int_wordlist().is_null() {
+            let tmp = vim_tempname();
+            if tmp.is_null() {
+                return;
+            }
+            nvim_set_int_wordlist(tmp);
+        }
+        fname = nvim_get_int_wordlist();
+    } else {
+        // If 'spellfile' isn't set, figure out a default.
+        if *nvim_curwin_get_ws_b_p_spf() == 0 {
+            init_spellfile();
+            new_spf = true;
+        }
+
+        if *nvim_curwin_get_ws_b_p_spf() == 0 {
+            let _ = semsg_saw(E_NOTSET, c"spellfile".as_ptr());
+            return;
+        }
+
+        fnamebuf = xmalloc_saw(MAXPATHL_SAW).cast::<c_char>();
+        let mut spf = nvim_curwin_get_ws_b_p_spf();
+        let mut i = 1i32;
+        loop {
+            if *spf == 0 {
+                break;
+            }
+            copy_option_part(&raw mut spf, fnamebuf, MAXPATHL_SAW, c",".as_ptr());
+            if i == idx {
+                break;
+            }
+            if *spf == 0 {
+                let _ = semsg_saw(
+                    c"E765: 'spellfile' does not have %ld entries".as_ptr(),
+                    idx as i64,
+                );
+                xfree_saw(fnamebuf.cast::<c_void>());
+                return;
+            }
+            i += 1;
+        }
+
+        // Check that the user isn't editing the .add file somewhere.
+        buf_ptr = rs_buflist_findname_exp(fnamebuf);
+        if !buf_ptr.is_null() && nvim_buf_ml_mfp_is_null(buf_ptr) {
+            buf_ptr = std::ptr::null_mut();
+        }
+        if !buf_ptr.is_null() && nvim_buf_is_changed(buf_ptr) != 0 {
+            let _ = emsg_saw(E_BUFLOADED);
+            xfree_saw(fnamebuf.cast::<c_void>());
+            return;
+        }
+
+        fname = fnamebuf;
+    }
+
+    if what == SPELL_ADD_BAD || undo {
+        // Read the whole file to find duplicates.
+        let fd = os_fopen_saw(fname, c"r".as_ptr());
+        if !fd.is_null() {
+            libc::fseek(fd, 0, libc::SEEK_END);
+            let fsize = libc::ftell(fd);
+            libc::rewind(fd);
+
+            if fsize > 0 {
+                let fbuf = xmalloc_saw(fsize as usize).cast::<u8>();
+                let nread = libc::fread(fbuf.cast::<c_void>(), 1, fsize as usize, fd);
+                libc::fclose(fd);
+
+                let mut scan_offset = 0usize;
+                while scan_offset < nread {
+                    let mut match_offset = 0usize;
+                    if !rs_spell_find_duplicate_word(
+                        fbuf.add(scan_offset),
+                        nread - scan_offset,
+                        word.cast::<u8>(),
+                        len as usize,
+                        &raw mut match_offset,
+                    ) {
+                        break;
+                    }
+                    let abs_offset = scan_offset + match_offset;
+
+                    // Comment out the line by writing '#'.
+                    let fd2 = os_fopen_saw(fname, c"r+".as_ptr());
+                    if !fd2.is_null() {
+                        if libc::fseek(fd2, abs_offset as libc::c_long, libc::SEEK_SET) == 0 {
+                            libc::fputc(b'#' as libc::c_int, fd2);
+                            file_written = true;
+                            if undo {
+                                let name_buff = nvim_get_NameBuff();
+                                home_replace(
+                                    std::ptr::null(),
+                                    fname,
+                                    name_buff,
+                                    MAXPATHL_SAW,
+                                    true,
+                                );
+                                let _ = smsg_saw(
+                                    0,
+                                    c"Word '%.*s' removed from %s".as_ptr(),
+                                    len,
+                                    word,
+                                    name_buff,
+                                );
+                            }
+                        }
+                        libc::fclose(fd2);
+                    }
+
+                    // Advance past this line.
+                    let mut next = abs_offset;
+                    let content = std::slice::from_raw_parts(fbuf, nread);
+                    while next < nread && content[next] != b'\n' {
+                        next += 1;
+                    }
+                    scan_offset = next + 1;
+                }
+                xfree_saw(fbuf.cast::<c_void>());
+            } else {
+                libc::fclose(fd);
+            }
+        }
+    }
+
+    if !undo {
+        let mut fd = os_fopen_saw(fname, c"a".as_ptr());
+        if fd.is_null() && new_spf {
+            // May need to create the "spell" directory first.
+            if !dir_of_file_exists(fname) {
+                let p = path_tail_with_sep_saw(fname);
+                if p != fname {
+                    let c = *p;
+                    *p = 0;
+                    os_mkdir_saw(fname, 0o755);
+                    *p = c;
+                    fd = os_fopen_saw(fname, c"a".as_ptr());
+                }
+            }
+        }
+
+        if fd.is_null() {
+            let _ = semsg_saw(E_NOTOPEN, fname);
+        } else {
+            // Format the line to append.
+            let mut append_buf = [0u8; MAXWLEN * 2 + 4];
+            let append_len = rs_spell_add_word_format(
+                word.cast::<u8>(),
+                len as usize,
+                what,
+                append_buf.as_mut_ptr(),
+                append_buf.len(),
+            );
+            if append_len > 0 {
+                libc::fwrite(
+                    append_buf.as_ptr().cast::<c_void>(),
+                    1,
+                    append_len as usize,
+                    fd,
+                );
+                file_written = true;
+            }
+            libc::fclose(fd);
+
+            let name_buff = nvim_get_NameBuff();
+            home_replace(std::ptr::null(), fname, name_buff, MAXPATHL_SAW, true);
+            let _ = smsg_saw(0, c"Word '%.*s' added to %s".as_ptr(), len, word, name_buff);
+        }
+    }
+
+    if file_written {
+        // Update the .add.spl file.
+        rs_mkspell(1, &raw mut fname, false, true, true);
+
+        // Reload if edited elsewhere.
+        if !buf_ptr.is_null() {
+            let orig_mode = nvim_buf_get_b_orig_mode(buf_ptr);
+            nvim_buf_reload(buf_ptr, orig_mode, 0);
+        }
+
+        redraw_all_later_saw(UPD_SOME_VALID);
+    }
+    xfree_saw(fnamebuf.cast::<c_void>());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

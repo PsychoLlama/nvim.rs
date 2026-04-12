@@ -460,3 +460,9 @@ char *nvim_get_NameBuff(void) { return NameBuff; }
 
 /// Check buf->b_ml.ml_mfp == NULL.
 bool nvim_buf_ml_mfp_is_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
+
+/// Set spellfile option locally via set_option_value_give_err.
+void nvim_spell_set_spellfile_option(const char *buf)
+{
+  set_option_value_give_err(kOptSpellfile, CSTR_AS_OPTVAL(buf), OPT_LOCAL);
+}

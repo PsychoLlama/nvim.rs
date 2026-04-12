@@ -183,35 +183,7 @@ extern void free_buffer_stuff(buf_T *buf, int free_flags);
 
 // set_curbuf() moved to buffer_shim.c (Phase 19).
 
-//
-// functions for dealing with the buffer list
-//
-
-/// Initialize b:changedtick and changedtick_val attribute
-///
-/// @param[out]  buf  Buffer to initialize for.
-static inline void buf_init_changedtick(buf_T *const buf)
-  FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_NONNULL_ALL
-{
-  STATIC_ASSERT(sizeof("changedtick") <= sizeof(buf->changedtick_di.di_key),
-                "buf->changedtick_di cannot hold large enough keys");
-  buf->changedtick_di = (ChangedtickDictItem) {
-    .di_flags = DI_FLAGS_RO|DI_FLAGS_FIX,  // Must not include DI_FLAGS_ALLOC.
-    .di_tv = (typval_T) {
-      .v_type = VAR_NUMBER,
-      .v_lock = VAR_FIXED,
-      .vval.v_number = buf_get_changedtick(buf),
-    },
-    .di_key = "changedtick",
-  };
-  tv_dict_add(buf->b_vars, (dictitem_T *)&buf->changedtick_di);
-}
-
-/// Non-static wrapper for buf_init_changedtick (called from buffer_shim.c).
-void nvim_buf_init_changedtick_c(buf_T *buf)
-{
-  buf_init_changedtick(buf);
-}
+// buf_init_changedtick() and nvim_buf_init_changedtick_c() migrated to buffer_shim.c (Phase 4).
 
 // buflist_new() migrated to Rust close.rs (Phase 3).
 // Implementation body moved to nvim_buflist_new_impl() in buffer_shim.c.
