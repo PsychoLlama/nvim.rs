@@ -319,6 +319,32 @@ extern PreLoopResult rs_c_win_line_pre_loop(win_T *wp, linenr_T lnum, winlinevar
 
 // Phase function declarations (Rust implementations)
 
+/// Return type for rs_win_line_draw_cols (action codes + updated state).
+typedef struct {
+  int action;           ///< DRAW_COLS_ACTION_* constant
+  bool draw_cols;       ///< updated draw_cols flag
+  int leftcols_width;   ///< updated leftcols_width
+  int virt_line_index;  ///< updated virt_line_index
+  int virt_line_flags;  ///< updated virt_line_flags
+  int win_col_offset;   ///< updated win_col_offset
+  int ptr_offset;       ///< updated ptr offset
+} DrawColsResult;
+
+/// Action codes returned by rs_win_line_draw_cols.
+#define DRAW_COLS_ACTION_FALLTHROUGH 0
+#define DRAW_COLS_ACTION_BREAK       1
+#define DRAW_COLS_ACTION_CONTINUE    2
+#define DRAW_COLS_ACTION_GOTO_END_CHECK 3
+
+/// Draw the columns (fold, sign, number, statuscolumn) for this row.
+extern DrawColsResult rs_win_line_draw_cols(win_T *wp, linenr_T lnum, winlinevars_T *wlv,
+                                            const WinLineState *wls, statuscol_T *statuscol,
+                                            bool statuscol_draw, VirtLines *virt_lines,
+                                            int ptr_col, int startrow, int endrow, int col_rows,
+                                            int virt_line_index, int virt_line_flags,
+                                            int leftcols_width, int win_col_offset,
+                                            bool draw_text, bool has_decor, int bg_attr);
+
 /// Return value for rs_win_line_process_n_extra.
 typedef struct { schar_T mb_schar; int mb_c; int mb_l; } NExtraResult;
 
@@ -570,108 +596,28 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
       }
     }
 
-    // Skip this quickly when working on the text.
+    // Delegate the draw_cols block to Rust.
     if (draw_cols) {
-      if (cul_screenline) {
-        wlv.cul_attr = 0;
-        wlv.line_attr = line_attr_save;
-        wlv.line_attr_lowprio = line_attr_lowprio_save;
-      }
-
-      assert(wlv.off == 0);
-
-      if (wp == cmdwin_win) {
-        // Draw the cmdline character.
-        draw_col_fill(&wlv, schar_from_ascii(cmdwin_type), 1, win_hl_attr(wp, HLF_AT));
-      }
-
-      if (wlv.filler_todo > 0) {
-        int index = wlv.filler_todo - (wlv.filler_lines - wlv.n_virt_lines);
-        if (index > 0) {
-          virt_line_index = (int)kv_size(virt_lines) - index;
-          assert(virt_line_index >= 0);
-          virt_line_flags = kv_A(virt_lines, virt_line_index).flags;
-        }
-      }
-
-      if (virt_line_index >= 0 && (virt_line_flags & kVLLeftcol)) {
-        // skip columns
-      } else if (statuscol.draw) {
-        // Draw 'statuscolumn' if it is set.
-        const int v = (int)(ptr - line);
-        rs_draw_statuscol(wp, &wlv, wlv.row - startrow - wlv.filler_lines, col_rows, &statuscol);
-        if (wp->w_redr_statuscol) {
-          break;
-        }
-        if (draw_text) {
-          // Get the line again as evaluating 'statuscolumn' may free it.
-          line = ml_get_buf(wp->w_buffer, lnum);
-          ptr = line + v;
-        }
-      } else {
-        // draw builtin info columns: fold, sign, number
-        draw_foldcolumn(wp, &wlv);
-
-        // wp->w_scwidth is zero if signcol=number is used
-        for (int sign_idx = 0; sign_idx < wp->w_scwidth; sign_idx++) {
-          draw_sign(false, wp, &wlv, sign_idx);
-        }
-
-        draw_lnum_col(wp, &wlv);
-      }
-
-      win_col_offset = wlv.off;
-
-      // When only updating the columns and that's done, stop here.
-      if (col_rows > 0) {
-        wlv_put_linebuf(wp, &wlv, MIN(wlv.off, view_width), false, bg_attr, 0);
-        // Need to update more screen lines if:
-        // - 'statuscolumn' needs to be drawn, or
-        // - LineNrAbove or LineNrBelow is used, or
-        // - still drawing filler lines.
-        if ((wlv.row + 1 - wlv.startrow < col_rows
-             && (statuscol.draw
-                 || win_hl_attr(wp, HLF_LNA) != win_hl_attr(wp, HLF_N)
-                 || win_hl_attr(wp, HLF_LNB) != win_hl_attr(wp, HLF_N)))
-            || wlv.filler_todo > 0) {
-          wlv.row++;
-          if (wlv.row == endrow) {
-            break;
-          }
-          wlv.filler_todo--;
-          virt_line_index = -1;
-          if (wlv.filler_todo == 0 && (wp->w_botfill || !draw_text)) {
-            break;
-          }
-          // win_line_start(wp, &wlv);
-          wlv.col = 0;
-          wlv.off = 0;
-          continue;
-        } else {
-          break;
-        }
-      }
-
-      // Check if 'breakindent' applies and show it.
-      if (!wp->w_briopt_sbr) {
-        handle_breakindent(wp, &wlv);
-      }
-      handle_showbreak_and_filler(wp, &wlv);
-      if (wp->w_briopt_sbr) {
-        handle_breakindent(wp, &wlv);
-      }
-
-      wlv.col = wlv.off;
-      draw_cols = false;
-      if (wlv.filler_todo <= 0) {
-        leftcols_width = wlv.off;
-      }
-      if (has_decor && wlv.row == startrow + wlv.filler_lines) {
-        // hide virt_text on text hidden by 'nowrap' or 'smoothscroll'
-        decor_redraw_col(wp, (colnr_T)(ptr - line) - 1, wlv.off, true, &decor_state);
-      }
-      if (wlv.col >= view_width) {
-        wlv.col = wlv.off = view_width;
+      DrawColsResult dcr = rs_win_line_draw_cols(
+        wp, lnum, &wlv, &wls, &statuscol, statuscol.draw, &virt_lines,
+        (int)(ptr - line), startrow, endrow, col_rows,
+        virt_line_index, virt_line_flags, leftcols_width, win_col_offset,
+        draw_text, has_decor, bg_attr);
+      // Apply outputs
+      draw_cols = dcr.draw_cols;
+      leftcols_width = dcr.leftcols_width;
+      virt_line_index = dcr.virt_line_index;
+      virt_line_flags = dcr.virt_line_flags;
+      win_col_offset = dcr.win_col_offset;
+      // Re-fetch line pointer: rs_win_line_draw_cols may have called ml_get_buf.
+      line = draw_text ? ml_get_buf(wp->w_buffer, lnum) : "";
+      ptr = line + dcr.ptr_offset;
+      // Dispatch control flow
+      if (dcr.action == DRAW_COLS_ACTION_BREAK) {
+        break;
+      } else if (dcr.action == DRAW_COLS_ACTION_CONTINUE) {
+        continue;
+      } else if (dcr.action == DRAW_COLS_ACTION_GOTO_END_CHECK) {
         goto end_check;
       }
     }

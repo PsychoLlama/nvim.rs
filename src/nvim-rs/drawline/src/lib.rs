@@ -6134,6 +6134,233 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
     res
 }
 
+// ============================================================================
+// Phase 2: draw_cols block migration
+// ============================================================================
+
+/// Action codes returned by rs_win_line_draw_cols.
+/// Must match DRAW_COLS_ACTION_* constants used in C wrapper.
+const DRAW_COLS_ACTION_FALLTHROUGH: c_int = 0;
+const DRAW_COLS_ACTION_BREAK: c_int = 1;
+const DRAW_COLS_ACTION_CONTINUE: c_int = 2;
+const DRAW_COLS_ACTION_GOTO_END_CHECK: c_int = 3;
+
+/// Return struct for rs_win_line_draw_cols (matches C DrawColsResult).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DrawColsResult {
+    /// Control flow action for the caller.
+    pub action: c_int,
+    /// Updated draw_cols flag.
+    pub draw_cols: bool,
+    /// Updated leftcols_width.
+    pub leftcols_width: c_int,
+    /// Updated virt_line_index.
+    pub virt_line_index: c_int,
+    /// Updated virt_line_flags.
+    pub virt_line_flags: c_int,
+    /// Updated win_col_offset.
+    pub win_col_offset: c_int,
+    /// Updated ptr byte offset (for re-fetching ptr = line + ptr_offset).
+    pub ptr_offset: c_int,
+}
+
+// FFI for Phase 2
+extern "C" {
+    /// kv_size(*vl) for VirtLines.
+    fn nvim_kv_size_virt_lines(vl: *mut c_void) -> c_int;
+    /// kv_A(*vl, idx).flags for VirtLines.
+    fn nvim_kv_A_virt_lines_flags(vl: *mut c_void, idx: c_int) -> c_int;
+    /// wp->w_p_fcs_chars.fold.
+    fn nvim_win_get_fcs_fold(wp: WinHandle) -> ScharT;
+    /// nvim_get_cmdwin_type (cmdwin_type global, c_int).
+    fn nvim_get_cmdwin_type() -> c_int;
+    /// wp->w_redr_statuscol.
+    fn nvim_win_get_redr_statuscol(wp: WinHandle) -> bool;
+    /// wp->w_scwidth.
+    #[link_name = "nvim_win_get_scwidth"]
+    fn nvim_win_get_w_scwidth_drawline(wp: WinHandle) -> c_int;
+    /// Convert ASCII byte to schar_T (from grid crate).
+    fn rs_schar_from_ascii(c: c_int) -> ScharT;
+}
+
+/// Handle the `draw_cols` block from win_line.
+///
+/// Implements the `if (draw_cols)` block from the main loop body.
+/// Returns a `DrawColsResult` with a control-flow action code:
+/// - DRAW_COLS_ACTION_FALLTHROUGH: continue with loop body normally
+/// - DRAW_COLS_ACTION_BREAK: break the outer while loop
+/// - DRAW_COLS_ACTION_CONTINUE: continue to next iteration
+/// - DRAW_COLS_ACTION_GOTO_END_CHECK: jump to `end_check:` label
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_win_line_draw_cols(
+    wp: WinHandle,
+    _lnum: LinenrT,
+    wlv: *mut WinLineVars,
+    wls: *const WinLineState,
+    statuscol: *mut c_void,
+    statuscol_draw: bool,
+    virt_lines: *mut c_void,
+    ptr_col: c_int,
+    startrow: c_int,
+    endrow: c_int,
+    col_rows: c_int,
+    virt_line_index_in: c_int,
+    virt_line_flags_in: c_int,
+    leftcols_width_in: c_int,
+    win_col_offset_in: c_int,
+    draw_text: bool,
+    has_decor: bool,
+    bg_attr: c_int,
+) -> DrawColsResult {
+    let state = &*wls;
+    let mut res = DrawColsResult {
+        action: DRAW_COLS_ACTION_FALLTHROUGH,
+        draw_cols: true,
+        leftcols_width: leftcols_width_in,
+        virt_line_index: virt_line_index_in,
+        virt_line_flags: virt_line_flags_in,
+        win_col_offset: win_col_offset_in,
+        ptr_offset: ptr_col,
+    };
+
+    // Restore cul_screenline line attrs
+    if state.cul_screenline {
+        (*wlv).cul_attr = 0;
+        (*wlv).line_attr = state.line_attr_save;
+        (*wlv).line_attr_lowprio = state.line_attr_lowprio_save;
+    }
+
+    // assert(wlv.off == 0)
+    debug_assert_eq!((*wlv).off, 0);
+
+    // Draw cmdwin char
+    let cmdwin_win = nvim_get_cmdwin_win();
+    if wp == cmdwin_win {
+        let cmdwin_type = nvim_get_cmdwin_type();
+        let hl_at = nvim_win_hl_attr(wp, HLF_AT);
+        draw_col_fill_impl(wlv, rs_schar_from_ascii(cmdwin_type), 1, hl_at);
+    }
+
+    // Compute virt_line_index from filler state
+    let mut virt_line_index = virt_line_index_in;
+    let mut virt_line_flags = virt_line_flags_in;
+    let filler_todo = (*wlv).filler_todo;
+    let filler_lines = (*wlv).filler_lines;
+    let n_virt_lines = (*wlv).n_virt_lines;
+    if filler_todo > 0 {
+        let index = filler_todo - (filler_lines - n_virt_lines);
+        if index > 0 {
+            let vl_size = nvim_kv_size_virt_lines(virt_lines);
+            virt_line_index = vl_size - index;
+            virt_line_flags = nvim_kv_A_virt_lines_flags(virt_lines, virt_line_index);
+        }
+    }
+    res.virt_line_index = virt_line_index;
+    res.virt_line_flags = virt_line_flags;
+
+    // Draw columns
+    if virt_line_index >= 0 && (virt_line_flags & K_VL_LEFTCOL) != 0 {
+        // skip columns (kVLLeftcol)
+    } else if statuscol_draw {
+        // Draw 'statuscolumn'
+        let v = ptr_col;
+        rs_draw_statuscol(
+            wp,
+            wlv,
+            (*wlv).row - startrow - (*wlv).filler_lines,
+            col_rows,
+            statuscol,
+        );
+        if nvim_win_get_redr_statuscol(wp) {
+            res.action = DRAW_COLS_ACTION_BREAK;
+            res.win_col_offset = (*wlv).off;
+            res.ptr_offset = v;
+            return res;
+        }
+        if draw_text {
+            // ptr_col stays valid as offset; re-fetch line pointer in caller
+            res.ptr_offset = v;
+        }
+    } else {
+        // Draw builtin info columns: fold, sign, number
+        rs_draw_foldcolumn(wp, wlv);
+        let scwidth = nvim_win_get_w_scwidth_drawline(wp);
+        for sign_idx in 0..scwidth {
+            rs_draw_sign(false, wp, wlv, sign_idx);
+        }
+        rs_draw_lnum_col(wp, wlv);
+    }
+
+    res.win_col_offset = (*wlv).off;
+
+    // When only updating the columns and that's done, stop here.
+    if col_rows > 0 {
+        rs_wlv_put_linebuf(wp, wlv, (*wlv).off.min(state.view_width), false, bg_attr, 0);
+
+        let need_more = ((*wlv).row + 1 - (*wlv).startrow < col_rows
+            && (statuscol_draw
+                || nvim_win_hl_attr(wp, HLF_LNA) != nvim_win_hl_attr(wp, HLF_N)
+                || nvim_win_hl_attr(wp, HLF_LNB) != nvim_win_hl_attr(wp, HLF_N)))
+            || filler_todo > 0;
+
+        if need_more {
+            (*wlv).row += 1;
+            if (*wlv).row == endrow {
+                res.action = DRAW_COLS_ACTION_BREAK;
+                return res;
+            }
+            (*wlv).filler_todo -= 1;
+            res.virt_line_index = -1;
+            if (*wlv).filler_todo == 0 && (nvim_win_get_botfill(wp) || !draw_text) {
+                res.action = DRAW_COLS_ACTION_BREAK;
+                return res;
+            }
+            (*wlv).col = 0;
+            (*wlv).off = 0;
+            res.action = DRAW_COLS_ACTION_CONTINUE;
+        } else {
+            res.action = DRAW_COLS_ACTION_BREAK;
+        }
+        return res;
+    }
+
+    // Check if 'breakindent' applies and show it.
+    let briopt_sbr = nvim_win_get_briopt_sbr(wp);
+    if !briopt_sbr {
+        rs_handle_breakindent(wp, wlv);
+    }
+    rs_handle_showbreak_and_filler(wp, wlv);
+    if briopt_sbr {
+        rs_handle_breakindent(wp, wlv);
+    }
+
+    (*wlv).col = (*wlv).off;
+    res.draw_cols = false;
+    if filler_todo <= 0 {
+        res.leftcols_width = (*wlv).off;
+    }
+    if has_decor && (*wlv).row == startrow + (*wlv).filler_lines {
+        // hide virt_text on text hidden by 'nowrap' or 'smoothscroll'
+        let decor_state = get_decor_state().cast::<c_void>();
+        decor_redraw_col_impl(wp, ptr_col - 1, (*wlv).off, true, decor_state);
+    }
+    if (*wlv).col >= state.view_width {
+        (*wlv).col = state.view_width;
+        (*wlv).off = state.view_width;
+        res.action = DRAW_COLS_ACTION_GOTO_END_CHECK;
+        return res;
+    }
+
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

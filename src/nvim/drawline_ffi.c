@@ -304,3 +304,19 @@ AdvanceToStartVcolResult nvim_c_advance_to_start_vcol(win_T *wp, linenr_T lnum, 
   return out;
 }
 
+// ============================================================================
+// Phase 2 accessors: needed by rs_win_line_draw_cols
+// ============================================================================
+
+/// Get kv_size(virt_lines).
+int nvim_kv_size_virt_lines(VirtLines *vl) { return (int)kv_size(*vl); }
+
+/// Get kv_A(virt_lines, idx).flags.
+int nvim_kv_A_virt_lines_flags(VirtLines *vl, int idx)
+{
+  return kv_A(*vl, (size_t)idx).flags;
+}
+
+/// Get wp->w_p_fcs_chars.fold (fillchars fold character).
+uint32_t nvim_win_get_fcs_fold(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.fold; }
+
