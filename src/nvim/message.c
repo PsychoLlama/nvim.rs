@@ -175,15 +175,10 @@ void inc_msg_scrolled(void);
 
 // nvim_msg_show_empty() migrated to Rust (display.rs) with #[export_name]
 
-// message_filtered() is implemented in Rust (#[export_name]); this is its C helper.
-bool nvim_message_filtered_impl(const char *msg)
-{
-  if (cmdmod.cmod_filter_regmatch.regprog == NULL) {
-    return false;
-  }
-  bool match = vim_regexec(&cmdmod.cmod_filter_regmatch, msg, 0);
-  return cmdmod.cmod_filter_force ? match : !match;
-}
+// message_filtered() logic migrated to Rust (misc.rs); accessors for cmdmod fields:
+bool nvim_cmdmod_has_filter(void) { return cmdmod.cmod_filter_regmatch.regprog != NULL; }
+bool nvim_cmdmod_vim_regexec(const char *msg) { return vim_regexec(&cmdmod.cmod_filter_regmatch, msg, 0); }
+bool nvim_cmdmod_filter_force(void) { return cmdmod.cmod_filter_force; }
 
 // nvim_msg_ui_refresh_impl and nvim_msg_ui_flush_impl migrated to Rust (misc.rs)
 // msg_grid_validate() migrated to Rust (misc.rs) with #[export_name]
@@ -225,7 +220,9 @@ int smsg_keep(int hl_id, const char *s, ...)
 
 // get_emsg_source, get_emsg_lnum, msg_source, emsg_multiline migrated to Rust (error.rs)
 
-void emsg_invreg(int name) { semsg(_("E354: Invalid register name: '%s'"), transchar_buf(NULL, name)); }
+// emsg_invreg() migrated to Rust (error.rs) with #[export_name]
+/// C accessor: transchar_buf(NULL, c) for Rust FFI (returns static buffer).
+const char *nvim_transchar_null_buf(int c) { return transchar_buf(NULL, c); }
 
 /// Print an error message with unknown number of arguments
 ///
@@ -297,8 +294,9 @@ void siemsg(const char *s, ...)
 #endif
 }
 
-/// Give an "Internal error" message.
-void internal_error(const char *where) { siemsg(_(e_intern2), where); }
+// internal_error() migrated to Rust (error.rs) with #[export_name]
+/// C helper: call siemsg(_(e_intern2), where) — needed because siemsg is variadic.
+void nvim_siemsg_intern2(const char *where) { siemsg(_(e_intern2), where); }
 
 static void msg_semsg_event(void **argv)
 {

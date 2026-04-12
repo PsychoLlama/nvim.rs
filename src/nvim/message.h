@@ -211,6 +211,10 @@ MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bo
 // Phase 1 (Plan 8a): do_autocmd_progress migrated to Rust (display.rs)
 void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data);
 
+// Phase 2 (Plan 8a): emsg_invreg, internal_error migrated to Rust (error.rs)
+void emsg_invreg(int name);
+void internal_error(const char *where);
+
 // Phase 2 (wait_return): wait_return migrated to Rust (wait.rs)
 void wait_return(int redraw);
 

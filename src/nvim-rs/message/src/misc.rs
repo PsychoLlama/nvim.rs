@@ -111,8 +111,10 @@ extern "C" {
         wrap: bool,
     );
 
-    // Phase 1: message_filtered C implementation
-    fn nvim_message_filtered_impl(msg: *const c_char) -> bool;
+    // Phase 2: cmdmod filter accessors (replacing nvim_message_filtered_impl)
+    fn nvim_cmdmod_has_filter() -> bool;
+    fn nvim_cmdmod_vim_regexec(msg: *const c_char) -> bool;
+    fn nvim_cmdmod_filter_force() -> bool;
 
     // For msg_clr_cmdline
     static mut cmdline_row: c_int;
@@ -678,11 +680,19 @@ pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
 ///
 /// # Safety
 /// - `msg` must be a valid NUL-terminated C string
-/// - Calls C accessor that performs regex matching
+/// - Calls C accessors that perform regex matching
 #[must_use]
 #[export_name = "message_filtered"]
 pub unsafe extern "C" fn rs_message_filtered(msg: *const c_char) -> bool {
-    nvim_message_filtered_impl(msg)
+    if !nvim_cmdmod_has_filter() {
+        return false;
+    }
+    let matches = nvim_cmdmod_vim_regexec(msg);
+    if nvim_cmdmod_filter_force() {
+        matches
+    } else {
+        !matches
+    }
 }
 
 /// Format "N more/fewer lines" into msg_buf and return pointer to it.

@@ -971,6 +971,57 @@ pub unsafe extern "C" fn rs_get_emsg_lnum() -> *mut c_char {
     emsg_lnum_string()
 }
 
+// ============================================================================
+// Phase 2: emsg_invreg and internal_error — migrated from message.c
+// ============================================================================
+
+extern "C" {
+    /// Wraps transchar_buf(NULL, c) — returns pointer to static transchar_charbuf.
+    fn nvim_transchar_null_buf(c: c_int) -> *const c_char;
+    /// Wraps siemsg(_(e_intern2), where) — needed because siemsg is variadic.
+    fn nvim_siemsg_intern2(where_: *const c_char);
+}
+
+/// Print "invalid register name" error.
+///
+/// Replaces C `emsg_invreg(int name)`.
+///
+/// # Safety
+/// Calls C transchar_buf and emsg.
+#[export_name = "emsg_invreg"]
+pub unsafe extern "C" fn rs_emsg_invreg(name: c_int) {
+    let ch = nvim_transchar_null_buf(name);
+    // Format: E354: Invalid register name: '<ch>'
+    // Use a static format and call emsg with pre-formatted string
+    // We avoid gettext here since emsg_invreg is a one-shot internal call.
+    let mut buf = [0u8; 256];
+    let ch_str = std::ffi::CStr::from_ptr(ch).to_bytes();
+    let prefix = b"E354: Invalid register name: '";
+    let suffix = b"'";
+    let len = prefix.len().min(buf.len());
+    buf[..len].copy_from_slice(&prefix[..len]);
+    let mut pos = len;
+    let ch_len = ch_str.len().min(buf.len() - pos - suffix.len() - 1);
+    buf[pos..pos + ch_len].copy_from_slice(&ch_str[..ch_len]);
+    pos += ch_len;
+    let suf_len = suffix.len().min(buf.len() - pos - 1);
+    buf[pos..pos + suf_len].copy_from_slice(&suffix[..suf_len]);
+    pos += suf_len;
+    buf[pos] = 0;
+    let _ = rs_emsg(buf.as_ptr().cast::<c_char>());
+}
+
+/// Give an "Internal error" message.
+///
+/// Replaces C `internal_error(const char *where)`.
+///
+/// # Safety
+/// - `where_` must be a valid NUL-terminated C string.
+#[export_name = "internal_error"]
+pub unsafe extern "C" fn rs_internal_error(where_: *const c_char) {
+    nvim_siemsg_intern2(where_);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
