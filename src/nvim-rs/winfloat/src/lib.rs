@@ -501,6 +501,75 @@ extern "C" {
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn rs_parse_winhl_opt(winhl: *const c_char, win: WinHandle) -> bool;
+    // Phase 5: win_config_float
+    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
+    #[link_name = "rs_win_remove_status_line"]
+    fn nvim_win_remove_status_line(wp: WinHandle, add_hsep: c_int);
+    fn nvim_wconfig_get_width(cfg: *mut c_void) -> c_int;
+    fn nvim_wconfig_get_height(cfg: *mut c_void) -> c_int;
+    fn nvim_wconfig_get_relative(cfg: *mut c_void) -> c_int;
+    fn nvim_wconfig_get_row(cfg: *mut c_void) -> f64;
+    fn nvim_wconfig_get_col(cfg: *mut c_void) -> f64;
+    fn nvim_wconfig_get_external(cfg: *mut c_void) -> c_int;
+    fn nvim_wconfig_get_border(cfg: *mut c_void) -> c_int;
+    fn nvim_wconfig_set_relative(cfg: *mut c_void, val: c_int);
+    fn nvim_wconfig_set_row(cfg: *mut c_void, val: f64);
+    fn nvim_wconfig_set_col(cfg: *mut c_void, val: f64);
+    fn nvim_wconfig_set_window(cfg: *mut c_void, val: c_int);
+    fn nvim_merge_win_config_ptr(dst: WinHandle, src: *mut c_void);
+    fn nvim_win_border_hl_ids_cmp(wp: WinHandle, cfg: *mut c_void) -> c_int;
+    fn nvim_win_get_config_border_flag(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_external_flag(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_border_side_char(wp: WinHandle, i: c_int) -> c_int;
+    fn nvim_win_set_w_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_w_height(wp: WinHandle, val: c_int);
+    fn nvim_win_set_border_adj(wp: WinHandle, i: c_int, val: c_int);
+    fn nvim_win_set_redr_status_from_status_height(wp: WinHandle);
+    fn nvim_get_mouse_row() -> c_int;
+    fn nvim_get_mouse_col() -> c_int;
+    fn nvim_get_mouse_grid() -> c_int;
+    fn nvim_wf_mouse_find_win_inner(
+        gridp: *mut c_int,
+        rowp: *mut c_int,
+        colp: *mut c_int,
+    ) -> WinHandle;
+    fn nvim_ui_has_multigrid() -> c_int;
+    fn nvim_set_must_redraw(type_: c_int);
+    fn nvim_redraw_later(wp: WinHandle, type_: c_int);
+    fn nvim_win_set_inner_size(wp: WinHandle, valid_cursor: bool);
+    fn nvim_win_set_hl_needs_update(wp: WinHandle, val: c_int);
+    fn nvim_win_set_redr_border(wp: WinHandle, val: c_int);
+    fn nvim_win_grid_adjust(wp: WinHandle, row: *mut c_int, col: *mut c_int);
+    fn nvim_textpos2screenpos(
+        wp: WinHandle,
+        lnum: i32,
+        col: c_int,
+        rowp: *mut c_int,
+        scolp: *mut c_int,
+        ccolp: *mut c_int,
+        ecolp: *mut c_int,
+    );
+    fn nvim_find_window_by_handle_safe(handle: c_int) -> WinHandle;
+    fn nvim_get_upd_valid() -> c_int;
+    fn nvim_get_upd_not_valid() -> c_int;
+    fn nvim_win_get_config_relative_after_merge(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_window_after_merge(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_row_after_merge(wp: WinHandle) -> f64;
+    fn nvim_win_get_config_col_after_merge(wp: WinHandle) -> f64;
+    fn nvim_win_get_config_bufpos_lnum_after_merge(wp: WinHandle) -> i32;
+    fn nvim_win_get_config_bufpos_col_after_merge(wp: WinHandle) -> c_int;
+    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
+    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
+    // Additional Phase 5 helpers
+    fn nvim_get_Rows() -> c_int;
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_win_border_height_wrapper(wp: WinHandle) -> c_int;
+    fn nvim_win_border_width_wrapper(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_ml_line_count(wp: WinHandle) -> i32;
+    fn nvim_get_curwin_handle() -> c_int;
+    fn nvim_get_curwin_wrow() -> c_int;
+    fn nvim_get_curwin_wcol() -> c_int;
+    fn nvim_get_status_height_const() -> c_int;
 }
 
 /// Check if window is a floating window.
@@ -1044,6 +1113,173 @@ pub unsafe extern "C" fn rs_win_set_minimal_style(wp: WinHandle) {
                 nvim_win_config_float(wp);
             }
         }
+    }
+}
+
+// =============================================================================
+// Phase 5: win_config_float
+// =============================================================================
+
+/// Configure a floating window.
+///
+/// Called via thin C wrapper: `void win_config_float(win_T *wp, WinConfig fconfig)`
+/// which passes `&fconfig` to this function.
+///
+/// C equivalent: `win_config_float`
+#[unsafe(export_name = "rs_win_config_float")]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void) {
+    // kFloatRelative* constants
+    const K_FLOAT_RELATIVE_CURSOR: c_int = 2;
+    const K_FLOAT_RELATIVE_MOUSE: c_int = 3;
+    const K_FLOAT_RELATIVE_WINDOW: c_int = 1;
+
+    // Step 1: Handle statusline changes
+    let stl = nvim_win_get_p_stl_ptr(wp);
+    let stl_nonempty = !stl.is_null() && *stl != 0;
+    let p_ls = nvim_version_get_p_ls();
+    let show_stl = stl_nonempty && (p_ls == 1 || p_ls == 2);
+    let status_height = nvim_win_get_status_height(wp);
+    if status_height != 0 && !show_stl {
+        nvim_win_remove_status_line(wp, 0);
+    } else if status_height == 0 && show_stl {
+        let sh = nvim_get_status_height_const();
+        // Set w_status_height via win_set_status_height (which exists in window crate)
+        nvim_win_set_status_height(wp, sh);
+    }
+
+    // Step 2: Set dimensions
+    let fw = nvim_wconfig_get_width(fconfig).max(1);
+    let fh = nvim_wconfig_get_height(fconfig).max(1);
+    nvim_win_set_w_width(wp, fw);
+    nvim_win_set_w_height(wp, fh);
+
+    // Step 3: Resolve relative positioning (modifies fconfig copy)
+    let rel = nvim_wconfig_get_relative(fconfig);
+    if rel == K_FLOAT_RELATIVE_CURSOR {
+        nvim_wconfig_set_relative(fconfig, K_FLOAT_RELATIVE_WINDOW);
+        let cur_wrow = nvim_get_curwin_wrow();
+        let cur_wcol = nvim_get_curwin_wcol();
+        let old_row = nvim_wconfig_get_row(fconfig);
+        let old_col = nvim_wconfig_get_col(fconfig);
+        nvim_wconfig_set_row(fconfig, old_row + f64::from(cur_wrow));
+        nvim_wconfig_set_col(fconfig, old_col + f64::from(cur_wcol));
+        nvim_wconfig_set_window(fconfig, nvim_get_curwin_handle());
+    } else if rel == K_FLOAT_RELATIVE_MOUSE {
+        let mut row = nvim_get_mouse_row();
+        let mut col = nvim_get_mouse_col();
+        let mut grid = nvim_get_mouse_grid();
+        let mouse_win = nvim_wf_mouse_find_win_inner(
+            std::ptr::addr_of_mut!(grid),
+            std::ptr::addr_of_mut!(row),
+            std::ptr::addr_of_mut!(col),
+        );
+        if !mouse_win.is_null() {
+            nvim_wconfig_set_relative(fconfig, K_FLOAT_RELATIVE_WINDOW);
+            let old_row = nvim_wconfig_get_row(fconfig);
+            let old_col = nvim_wconfig_get_col(fconfig);
+            nvim_wconfig_set_row(fconfig, old_row + f64::from(row));
+            nvim_wconfig_set_col(fconfig, old_col + f64::from(col));
+            nvim_wconfig_set_window(fconfig, nvim_win_get_handle(mouse_win));
+        }
+    }
+
+    // Step 4: Detect changes BEFORE merge
+    let cfg_external = nvim_wconfig_get_external(fconfig);
+    let wp_external = nvim_win_get_config_external_flag(wp);
+    let change_external = cfg_external != wp_external;
+
+    let cfg_border = nvim_wconfig_get_border(fconfig);
+    let wp_border = nvim_win_get_config_border_flag(wp);
+    let border_hl_changed = nvim_win_border_hl_ids_cmp(wp, fconfig) != 0;
+    let mut change_border = cfg_border != wp_border || border_hl_changed;
+
+    // Step 5: Merge config into wp->w_config
+    nvim_merge_win_config_ptr(wp, fconfig);
+
+    // Step 6: Update border_adj based on merged config
+    let has_border = nvim_win_get_floating(wp) != 0 && nvim_win_get_config_border_flag(wp) != 0;
+    for i in 0..4 {
+        let side_char = nvim_win_get_config_border_side_char(wp, i);
+        let new_adj = c_int::from(has_border && side_char != 0);
+        if new_adj != nvim_win_get_border_adj(wp, i) {
+            change_border = true;
+            nvim_win_set_border_adj(wp, i, new_adj);
+        }
+    }
+
+    // Step 7: Clamp to screen if not multigrid
+    if nvim_ui_has_multigrid() == 0 {
+        let rows = nvim_get_Rows();
+        let cols = nvim_get_Columns();
+        let border_h = nvim_win_border_height_wrapper(wp);
+        let border_w = nvim_win_border_width_wrapper(wp);
+        let clamped_h = nvim_win_get_w_height(wp).min(rows - border_h);
+        let clamped_w = nvim_win_get_w_width(wp).min(cols - border_w);
+        nvim_win_set_w_height(wp, clamped_h);
+        nvim_win_set_w_width(wp, clamped_w);
+    }
+
+    // Step 8: Finalize
+    nvim_win_set_inner_size(wp, true);
+    let upd_valid = nvim_get_upd_valid();
+    let upd_not_valid = nvim_get_upd_not_valid();
+    nvim_set_must_redraw(upd_valid);
+    nvim_win_set_redr_status_from_status_height(wp);
+    nvim_win_set_pos_changed(wp, 1);
+    if change_external || change_border {
+        nvim_win_set_hl_needs_update(wp, 1);
+        nvim_redraw_later(wp, upd_not_valid);
+    }
+
+    // Step 9: Compute initial position based on merged config
+    let config_relative = nvim_win_get_config_relative_after_merge(wp);
+    if config_relative == K_FLOAT_RELATIVE_WINDOW {
+        let mut row = nvim_win_get_config_row_after_merge(wp) as c_int;
+        let mut col = nvim_win_get_config_col_after_merge(wp) as c_int;
+        let parent_handle = nvim_win_get_config_window_after_merge(wp);
+        let parent = nvim_find_window_by_handle_safe(parent_handle);
+        if !parent.is_null() {
+            row += nvim_win_get_winrow(parent);
+            col += nvim_win_get_wincol(parent);
+            nvim_win_grid_adjust(
+                parent,
+                std::ptr::addr_of_mut!(row),
+                std::ptr::addr_of_mut!(col),
+            );
+            let bufpos_lnum = nvim_win_get_config_bufpos_lnum_after_merge(wp);
+            if bufpos_lnum >= 0 {
+                let buf_line_count = nvim_win_buf_ml_line_count(parent);
+                let clamped_lnum = (bufpos_lnum + 1).min(buf_line_count);
+                let bufpos_col = nvim_win_get_config_bufpos_col_after_merge(wp);
+                let mut text_row: c_int = 0;
+                let mut text_col: c_int = 0;
+                let mut text_col_char: c_int = 0;
+                let mut text_col_end: c_int = 0;
+                nvim_textpos2screenpos(
+                    parent,
+                    clamped_lnum,
+                    bufpos_col,
+                    std::ptr::addr_of_mut!(text_row),
+                    std::ptr::addr_of_mut!(text_col),
+                    std::ptr::addr_of_mut!(text_col_char),
+                    std::ptr::addr_of_mut!(text_col_end),
+                );
+                row += text_row - 1;
+                col += text_col - 1;
+            }
+        }
+        nvim_win_set_winrow(wp, row);
+        nvim_win_set_wincol(wp, col);
+    } else {
+        nvim_win_set_winrow(wp, nvim_wconfig_get_row(fconfig) as c_int);
+        nvim_win_set_wincol(wp, nvim_wconfig_get_col(fconfig) as c_int);
+    }
+
+    // Step 10: Border redraw
+    if nvim_wconfig_get_border(fconfig) != 0 {
+        nvim_win_set_redr_border(wp, 1);
+        nvim_redraw_later(wp, upd_valid);
     }
 }
 

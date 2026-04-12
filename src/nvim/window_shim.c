@@ -794,3 +794,87 @@ void nvim_win_set_p_stc(win_T *wp, char *val) { if (wp) { wp->w_p_stc = val; } }
 char *nvim_win_get_p_stl_ptr(win_T *wp) { return wp ? wp->w_p_stl : NULL; }
 void nvim_win_set_p_stl(win_T *wp, char *val) { if (wp) { wp->w_p_stl = val; } }
 
+// =============================================================================
+// C accessors for winfloat Phase 5: win_config_float
+// =============================================================================
+
+// WinConfig field accessors (taking WinConfig * directly)
+int nvim_wconfig_get_width(WinConfig *cfg) { return cfg ? cfg->width : 0; }
+int nvim_wconfig_get_height(WinConfig *cfg) { return cfg ? cfg->height : 0; }
+int nvim_wconfig_get_relative(WinConfig *cfg) { return cfg ? (int)cfg->relative : 0; }
+double nvim_wconfig_get_row(WinConfig *cfg) { return cfg ? cfg->row : 0.0; }
+double nvim_wconfig_get_col(WinConfig *cfg) { return cfg ? cfg->col : 0.0; }
+int nvim_wconfig_get_window(WinConfig *cfg) { return cfg ? (int)cfg->window : 0; }
+int nvim_wconfig_get_external(WinConfig *cfg) { return (cfg && cfg->external) ? 1 : 0; }
+int nvim_wconfig_get_border(WinConfig *cfg) { return (cfg && cfg->border) ? 1 : 0; }
+int nvim_wconfig_get_border_hl_id(WinConfig *cfg, int i) { return (cfg && i >= 0 && i < 8) ? cfg->border_hl_ids[i] : 0; }
+// border_chars[2*i+1][0] -- the "side" char for border change detection
+int nvim_wconfig_get_border_side_char(WinConfig *cfg, int i) { return (cfg && i >= 0 && i < 4) ? (unsigned char)cfg->border_chars[2 * i + 1][0] : 0; }
+linenr_T nvim_wconfig_get_bufpos_lnum(WinConfig *cfg) { return cfg ? cfg->bufpos.lnum : -1; }
+int nvim_wconfig_get_bufpos_col(WinConfig *cfg) { return cfg ? (int)cfg->bufpos.col : 0; }
+void nvim_wconfig_set_relative(WinConfig *cfg, int val) { if (cfg) { cfg->relative = (FloatRelative)val; } }
+void nvim_wconfig_set_row(WinConfig *cfg, double val) { if (cfg) { cfg->row = val; } }
+void nvim_wconfig_set_col(WinConfig *cfg, double val) { if (cfg) { cfg->col = val; } }
+void nvim_wconfig_set_window(WinConfig *cfg, int val) { if (cfg) { cfg->window = (Window)val; } }
+// Merge src WinConfig into wp->w_config via merge_win_config
+void nvim_merge_win_config_ptr(win_T *wp, WinConfig *src) { if (wp && src) { merge_win_config(&wp->w_config, *src); } }
+// Compare border_hl_ids between wp->w_config and fconfig (returns 0 if equal)
+int nvim_win_border_hl_ids_cmp(win_T *wp, WinConfig *cfg) { return (wp && cfg) ? memcmp(wp->w_config.border_hl_ids, cfg->border_hl_ids, sizeof(wp->w_config.border_hl_ids)) : 1; }
+// wp->w_config accessors needed during comparison
+int nvim_win_get_config_border_flag(win_T *wp) { return (wp && wp->w_config.border) ? 1 : 0; }
+int nvim_win_get_config_external_flag(win_T *wp) { return (wp && wp->w_config.external) ? 1 : 0; }
+int nvim_win_get_config_border_side_char(win_T *wp, int i) { return (wp && i >= 0 && i < 4) ? (unsigned char)wp->w_config.border_chars[2 * i + 1][0] : 0; }
+// win_T width/height setters
+void nvim_win_set_w_width(win_T *wp, int val) { if (wp) { wp->w_width = val; } }
+void nvim_win_set_w_height(win_T *wp, int val) { if (wp) { wp->w_height = val; } }
+// win_T border_adj setter
+void nvim_win_set_border_adj(win_T *wp, int i, int val) { if (wp && i >= 0 && i < 4) { wp->w_border_adj[i] = val; } }
+// win_T redr_status setter (w_redr_status = w_status_height)
+void nvim_win_set_redr_status_from_status_height(win_T *wp) { if (wp) { wp->w_redr_status = wp->w_status_height; } }
+// win_T w_pos_changed = true
+// already have nvim_win_set_pos_changed
+// Screen size globals
+int nvim_get_Rows(void) { return Rows; }
+int nvim_get_Columns(void) { return Columns; }
+// win_border_height / win_border_width (already exported from Rust but needed here for clamping)
+// We alias to the wrapper that already exists:
+// nvim_win_border_height_wrapper and nvim_win_border_width_wrapper already exist above.
+
+// buf line count for bufpos clamping
+linenr_T nvim_win_buf_ml_line_count(win_T *wp) { return (wp && wp->w_buffer) ? wp->w_buffer->b_ml.ml_line_count : 0; }
+// nvim_get_curwin_handle: already exported from Rust (window crate, globals.rs)
+// curwin wrow/wcol
+int nvim_get_curwin_wrow(void) { return curwin ? curwin->w_wrow : 0; }
+int nvim_get_curwin_wcol(void) { return curwin ? curwin->w_wcol : 0; }
+// STATUS_HEIGHT constant
+int nvim_get_status_height_const(void) { return STATUS_HEIGHT; }
+
+// Mouse globals: already defined in getchar.c:
+// nvim_get_mouse_row, nvim_get_mouse_col, nvim_get_mouse_grid
+// nvim_set_mouse_row, nvim_set_mouse_col, nvim_set_mouse_grid
+
+// mouse_find_win_inner wrapper for winfloat (unique name to avoid conflict with terminal_shim.c)
+// (forward-declared here since mouse.h not included in window_shim.c)
+extern win_T *mouse_find_win_inner(int *gridp, int *rowp, int *colp);
+win_T *nvim_wf_mouse_find_win_inner(int *gridp, int *rowp, int *colp) { return mouse_find_win_inner(gridp, rowp, colp); }
+// nvim_ui_has_multigrid: already exported from Rust (window crate, wrappers.rs)
+// set_must_redraw and redraw_later wrappers
+void nvim_set_must_redraw(int type) { set_must_redraw(type); }
+void nvim_redraw_later(win_T *wp, int type) { redraw_later(wp, type); }
+// grid_adjust wrapper (takes w_grid of win_T)
+void nvim_win_grid_adjust(win_T *wp, int *row, int *col) { if (wp) { grid_adjust(&wp->w_grid, row, col); } }
+// textpos2screenpos wrapper
+void nvim_textpos2screenpos(win_T *wp, linenr_T lnum, int col, int *rowp, int *scolp, int *ccolp, int *ecolp) { if (wp) { pos_T pos = { lnum, (colnr_T)col, 0 }; textpos2screenpos(wp, &pos, rowp, scolp, ccolp, ecolp, true); } }
+// find_window_by_handle with error ignored (returns NULL on failure)
+win_T *nvim_find_window_by_handle_safe(int handle) { Error dummy = ERROR_INIT; win_T *wp = find_window_by_handle(handle, &dummy); api_clear_error(&dummy); return wp; }
+// UPD_VALID and UPD_NOT_VALID constants
+int nvim_get_upd_valid(void) { return UPD_VALID; }
+int nvim_get_upd_not_valid(void) { return UPD_NOT_VALID; }
+// win_T w_config accessors after merge
+int nvim_win_get_config_relative_after_merge(win_T *wp) { return wp ? (int)wp->w_config.relative : 0; }
+int nvim_win_get_config_window_after_merge(win_T *wp) { return wp ? (int)wp->w_config.window : 0; }
+double nvim_win_get_config_row_after_merge(win_T *wp) { return wp ? wp->w_config.row : 0.0; }
+double nvim_win_get_config_col_after_merge(win_T *wp) { return wp ? wp->w_config.col : 0.0; }
+linenr_T nvim_win_get_config_bufpos_lnum_after_merge(win_T *wp) { return wp ? wp->w_config.bufpos.lnum : -1; }
+int nvim_win_get_config_bufpos_col_after_merge(win_T *wp) { return wp ? (int)wp->w_config.bufpos.col : 0; }
+

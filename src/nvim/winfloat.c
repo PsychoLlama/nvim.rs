@@ -134,100 +134,11 @@ win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
 
 // win_border_height and win_border_width exported directly from Rust.
 
+// win_config_float: migrated to Rust (winfloat crate, Phase 5).
+extern void rs_win_config_float(win_T *wp, WinConfig *fconfig);
 void win_config_float(win_T *wp, WinConfig fconfig)
 {
-  // Process statusline changes before applying new height from config
-  bool show_stl = *wp->w_p_stl != NUL && (p_ls == 1 || p_ls == 2);
-  if (wp->w_status_height && !show_stl) {
-    rs_win_remove_status_line(wp, 0);
-  } else if (wp->w_status_height == 0 && show_stl) {
-    wp->w_status_height = STATUS_HEIGHT;
-  }
-
-  wp->w_width = MAX(fconfig.width, 1);
-  wp->w_height = MAX(fconfig.height, 1);
-
-  if (fconfig.relative == kFloatRelativeCursor) {
-    fconfig.relative = kFloatRelativeWindow;
-    fconfig.row += curwin->w_wrow;
-    fconfig.col += curwin->w_wcol;
-    fconfig.window = curwin->handle;
-  } else if (fconfig.relative == kFloatRelativeMouse) {
-    int row = mouse_row;
-    int col = mouse_col;
-    int grid = mouse_grid;
-    win_T *mouse_win = mouse_find_win_inner(&grid, &row, &col);
-    if (mouse_win != NULL) {
-      fconfig.relative = kFloatRelativeWindow;
-      fconfig.row += row;
-      fconfig.col += col;
-      fconfig.window = mouse_win->handle;
-    }
-  }
-
-  bool change_external = fconfig.external != wp->w_config.external;
-  bool change_border = (fconfig.border != wp->w_config.border
-                        || memcmp(fconfig.border_hl_ids,
-                                  wp->w_config.border_hl_ids,
-                                  sizeof fconfig.border_hl_ids) != 0);
-
-  merge_win_config(&wp->w_config, fconfig);
-
-  bool has_border = wp->w_floating && wp->w_config.border;
-  for (int i = 0; i < 4; i++) {
-    int new_adj = has_border && wp->w_config.border_chars[2 * i + 1][0];
-    if (new_adj != wp->w_border_adj[i]) {
-      change_border = true;
-      wp->w_border_adj[i] = new_adj;
-    }
-  }
-
-  if (!ui_has(kUIMultigrid)) {
-    wp->w_height = MIN(wp->w_height, Rows - win_border_height(wp));
-    wp->w_width = MIN(wp->w_width, Columns - win_border_width(wp));
-  }
-
-  win_set_inner_size(wp, true);
-  set_must_redraw(UPD_VALID);
-  wp->w_redr_status = wp->w_status_height;
-  wp->w_pos_changed = true;
-  if (change_external || change_border) {
-    wp->w_hl_needs_update = true;
-    redraw_later(wp, UPD_NOT_VALID);
-  }
-
-  // compute initial position
-  if (wp->w_config.relative == kFloatRelativeWindow) {
-    int row = (int)wp->w_config.row;
-    int col = (int)wp->w_config.col;
-    Error dummy = ERROR_INIT;
-    win_T *parent = find_window_by_handle(wp->w_config.window, &dummy);
-    if (parent) {
-      row += parent->w_winrow;
-      col += parent->w_wincol;
-      grid_adjust(&parent->w_grid, &row, &col);
-      if (wp->w_config.bufpos.lnum >= 0) {
-        pos_T pos = { MIN(wp->w_config.bufpos.lnum + 1, parent->w_buffer->b_ml.ml_line_count),
-                      wp->w_config.bufpos.col, 0 };
-        int trow, tcol, tcolc, tcole;
-        textpos2screenpos(parent, &pos, &trow, &tcol, &tcolc, &tcole, true);
-        row += trow - 1;
-        col += tcol - 1;
-      }
-    }
-    api_clear_error(&dummy);
-    wp->w_winrow = row;
-    wp->w_wincol = col;
-  } else {
-    wp->w_winrow = (int)fconfig.row;
-    wp->w_wincol = (int)fconfig.col;
-  }
-
-  // changing border style while keeping border only requires redrawing border
-  if (fconfig.border) {
-    wp->w_redr_border = true;
-    redraw_later(wp, UPD_VALID);
-  }
+  rs_win_config_float(wp, &fconfig);
 }
 
 // float_zindex_cmp, win_float_remove: migrated to Rust (winfloat crate, Phase 3).
