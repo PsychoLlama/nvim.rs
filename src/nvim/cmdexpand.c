@@ -420,34 +420,8 @@ int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
 int nvim_cmdexpand_get_dip_start_opt(void) { return DIP_START + DIP_OPT; }
 int nvim_cmdexpand_get_re_magic(void) { return RE_MAGIC; }
 int nvim_cmdexpand_magic_isset(void) { return rs_magic_isset(); }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_command_name(void) { return get_command_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_history_arg(void) { return get_history_arg; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_commands(void) { return get_user_commands; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_addr_type(void) { return get_user_cmd_addr_type; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_flags(void) { return get_user_cmd_flags; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_nargs(void) { return get_user_cmd_nargs; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_complete(void) { return get_user_cmd_complete; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_var_name(void) { return get_user_var_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_function_name(void) { return get_function_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_func_name(void) { return get_user_func_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_expr_name(void) { return get_expr_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_name(void) { return get_menu_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_names(void) { return get_menu_names; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntax_name(void) { return get_syntax_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntime_arg(void) { return get_syntime_arg; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_highlight_name(void) { return get_highlight_name; }
-// Rust implementations (exported under same C names)
-extern char *expand_get_event_name(expand_T *xp, int idx);
-extern char *expand_get_augroup_name(expand_T *xp, int idx);
-CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_event_name(void) { return expand_get_event_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_augroup_name(void) { return expand_get_augroup_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_sign_name(void) { return get_sign_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_profile_name(void) { return get_profile_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_lang_arg(void) { return get_lang_arg; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_locales(void) { return get_locales; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_env_name(void) { return get_env_name; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_users(void) { return get_users; }
-CompleteListItemGetter nvim_cmdexpand_get_fn_get_arglist_name(void) { return get_arglist_name; }
+// nvim_cmdexpand_get_fn_get_* getters (except healthcheck) removed:
+// Rust now references the underlying functions directly via extern "C".
 CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void) { return get_healthcheck_names; }
 char *nvim_cmdexpand_xstrnsave(const char *s, size_t n) { return xstrnsave(s, n); }
 void nvim_cmdexpand_set_cmd_showtail(int val) { cmd_showtail = (bool)val; }

@@ -157,32 +157,34 @@ extern "C" {
     fn nvim_cmdexpand_get_dip_start_opt() -> c_int;
     fn nvim_cmdexpand_magic_isset() -> c_int;
 
-    // Function pointer accessors for ExpandOther dispatch table
-    fn nvim_cmdexpand_get_fn_get_command_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_history_arg() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_commands() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_cmd_addr_type() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_cmd_flags() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_cmd_nargs() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_cmd_complete() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_var_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_function_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_user_func_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_expr_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_menu_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_menu_names() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_syntax_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_syntime_arg() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_highlight_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_expand_get_event_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_expand_get_augroup_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_sign_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_profile_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_lang_arg() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_locales() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_env_name() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_users() -> CompleteListItemGetter;
-    fn nvim_cmdexpand_get_fn_get_arglist_name() -> CompleteListItemGetter;
+    // Direct function pointers for ExpandOther dispatch table
+    // (replaces per-function nvim_cmdexpand_get_fn_* getter wrappers)
+    fn get_command_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_history_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_commands(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_cmd_addr_type(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_cmd_flags(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_cmd_nargs(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_cmd_complete(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_var_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_function_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_user_func_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_expr_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_menu_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_menu_names(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_syntax_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_syntime_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_highlight_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn expand_get_event_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn expand_get_augroup_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_sign_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_profile_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_lang_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_locales(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_env_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_users(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn get_arglist_name(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    // get_healthcheck_names is 'static' in C; accessed via wrapper
     fn nvim_cmdexpand_get_fn_get_healthcheck_names() -> CompleteListItemGetter;
 
     // Other Rust functions (called via C ABI)
@@ -285,7 +287,7 @@ pub unsafe extern "C" fn rs_expand_generic(
     let mut str_matches: Vec<*mut c_char> = Vec::new();
     let mut fuz_matches: Vec<FuzmatchStr> = Vec::new();
 
-    let get_menu_names_fn = nvim_cmdexpand_get_fn_get_menu_names();
+    let get_menu_names_fn: CompleteListItemGetter = Some(get_menu_names);
 
     let mut i: c_int = 0;
     loop {
@@ -447,11 +449,11 @@ pub unsafe fn expand_other(
 ) -> c_int {
     let ctx = (*xp).xp_context;
 
-    // Build the dispatch table inline (all function pointers obtained from C)
+    // Build the dispatch table inline (function pointers referenced directly)
     let table = [
         ExpGen {
             context: ExpandContext::Commands.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_command_name(),
+            func: Some(get_command_name),
             ic: false,
             escaped: true,
         },
@@ -475,145 +477,145 @@ pub unsafe fn expand_other(
         },
         ExpGen {
             context: ExpandContext::History.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_history_arg(),
+            func: Some(get_history_arg),
             ic: true,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserCommands.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_commands(),
+            func: Some(get_user_commands),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserAddrType.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_cmd_addr_type(),
+            func: Some(get_user_cmd_addr_type),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserCmdFlags.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_cmd_flags(),
+            func: Some(get_user_cmd_flags),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserNargs.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_cmd_nargs(),
+            func: Some(get_user_cmd_nargs),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserComplete.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_cmd_complete(),
+            func: Some(get_user_cmd_complete),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserVars.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_var_name(),
+            func: Some(get_user_var_name),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Functions.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_function_name(),
+            func: Some(get_function_name),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::UserFunc.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_user_func_name(),
+            func: Some(get_user_func_name),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Expression.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_expr_name(),
+            func: Some(get_expr_name),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Menus.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_menu_name(),
+            func: Some(get_menu_name),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Menunames.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_menu_names(),
+            func: Some(get_menu_names),
             ic: false,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Syntax.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_syntax_name(),
+            func: Some(get_syntax_name),
             ic: true,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Syntime.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_syntime_arg(),
+            func: Some(get_syntime_arg),
             ic: true,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Highlight.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_highlight_name(),
+            func: Some(get_highlight_name),
             ic: true,
             escaped: false,
         },
         ExpGen {
             context: ExpandContext::Events.to_raw(),
-            func: nvim_cmdexpand_get_fn_expand_get_event_name(),
+            func: Some(expand_get_event_name),
             ic: true,
             escaped: false,
         },
         ExpGen {
             context: ExpandContext::Augroup.to_raw(),
-            func: nvim_cmdexpand_get_fn_expand_get_augroup_name(),
+            func: Some(expand_get_augroup_name),
             ic: true,
             escaped: false,
         },
         ExpGen {
             context: ExpandContext::Sign.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_sign_name(),
+            func: Some(get_sign_name),
             ic: true,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Profile.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_profile_name(),
+            func: Some(get_profile_name),
             ic: true,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::Language.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_lang_arg(),
+            func: Some(get_lang_arg),
             ic: true,
             escaped: false,
         },
         ExpGen {
             context: ExpandContext::Locales.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_locales(),
+            func: Some(get_locales),
             ic: true,
             escaped: false,
         },
         ExpGen {
             context: ExpandContext::EnvVars.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_env_name(),
+            func: Some(get_env_name),
             ic: true,
             escaped: true,
         },
         ExpGen {
             context: ExpandContext::User.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_users(),
+            func: Some(get_users),
             ic: true,
             escaped: false,
         },
         ExpGen {
             context: ExpandContext::Arglist.to_raw(),
-            func: nvim_cmdexpand_get_fn_get_arglist_name(),
+            func: Some(get_arglist_name),
             ic: true,
             escaped: false,
         },
