@@ -17,6 +17,13 @@ use crate::ExArgHandle;
 type LinenrT = i32;
 type BufHandle = *mut c_void;
 
+/// Matches C `String` (api/private/defs.h): `{ char *data; size_t size }`.
+#[repr(C)]
+struct NvimString {
+    data: *mut c_char,
+    size: usize,
+}
+
 /// Local mirror of C `Error` struct (api_defs.h).
 /// `err_type == -1` (kErrorTypeNone) means no error.
 #[repr(C)]
@@ -153,7 +160,8 @@ extern "C" {
     fn redraw_curbuf_later(type_: c_int);
 
     // --- ex_terminal helpers ---
-    fn nvim_docmd_add_win_cmd_modifiers_global(buf: *mut c_char, bufsize: usize) -> usize;
+    // nvim_docmd_add_win_cmd_modifiers_global: now implemented in Rust below
+    fn add_win_cmd_modifiers(buf: *mut c_char, cmod: *mut c_void, multi_mods: *mut bool) -> usize;
     fn nvim_docmd_p_sh_is_empty() -> c_int;
     fn nvim_docmd_e_shellempty_str() -> *const c_char;
     fn nvim_docmd_terminal_get_shell_argv_str(buf: *mut c_char, buflen: usize);
@@ -173,9 +181,11 @@ extern "C" {
     // --- ex_restart helpers ---
     fn nvim_docmd_restart_patch_argv(arg: *const c_char);
     static mut restarting: bool;
-    fn nvim_docmd_run_quit_cmd(cmd: *const c_char) -> c_int;
+    // nvim_docmd_run_quit_cmd: now implemented in Rust below
     fn concat_str(a: *const c_char, b: *const c_char) -> *mut c_char;
     fn nvim_docmd_get_cmod_confirm_prefix() -> *const c_char;
+    // nvim_command for ex_quit_impl
+    fn nvim_command(cmd: NvimString, err: *mut CError);
 
     // --- ex_detach helpers ---
     fn nvim_docmd_get_current_ui() -> u64;
@@ -233,6 +243,72 @@ extern "C" {
     fn nvim_docmd_optset_varp_set(args: *mut c_void, name: *mut c_char);
     fn get_scriptlocal_funcname(name: *const c_char) -> *mut c_char;
     fn free_string_option(p: *mut c_char);
+}
+
+// ============================================================================
+// nvim_docmd_add_win_cmd_modifiers_global (migrated from C to Rust)
+// ============================================================================
+
+/// Build the window command modifiers string into `buf` from the global cmdmod.
+///
+/// Previously `nvim_docmd_add_win_cmd_modifiers_global` in ex_docmd.c.
+/// Calls `add_win_cmd_modifiers` (Rust, from usercmd crate).
+///
+/// # Safety
+/// `buf` must have at least `bufsize` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_docmd_add_win_cmd_modifiers_global(
+    buf: *mut c_char,
+    bufsize: usize,
+) -> usize {
+    let mut multi_mods = false;
+    *buf = 0; // buf[0] = NUL
+    let len = add_win_cmd_modifiers(
+        buf,
+        std::ptr::addr_of_mut!(crate::cmdmod).cast::<c_void>(),
+        &raw mut multi_mods,
+    );
+    debug_assert!(len < bufsize);
+    len
+}
+
+// ============================================================================
+// nvim_docmd_run_quit_cmd (migrated from C to Rust)
+// ============================================================================
+
+/// Execute a quit command via the nvim_command API.
+///
+/// Returns 1 on success, 0 on error (and emits the error message).
+/// Previously `nvim_docmd_run_quit_cmd` in ex_docmd.c.
+///
+/// # Safety
+/// Calls C API functions. `cmd` must be a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_docmd_run_quit_cmd(cmd: *const c_char) -> c_int {
+    let len = libc_strlen(cmd);
+    let mut err = CError::init();
+    nvim_command(
+        NvimString {
+            data: cmd as *mut c_char,
+            size: len,
+        },
+        &raw mut err,
+    );
+    if err.is_set() {
+        emsg(err.msg);
+        api_clear_error(&raw mut err);
+        return 0;
+    }
+    1
+}
+
+/// Compute strlen of a C string (used in nvim_docmd_run_quit_cmd).
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut p = s;
+    while *p != 0 {
+        p = p.add(1);
+    }
+    p.offset_from(s) as usize
 }
 
 // ============================================================================

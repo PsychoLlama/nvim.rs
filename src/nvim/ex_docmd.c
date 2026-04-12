@@ -662,14 +662,7 @@ const char *nvim_docmd_get_grep_or_make_program(int isgrep)
                 : (*curbuf->b_p_mp == NUL ? p_mp : curbuf->b_p_mp);
 }
 
-// Show dialog_changed prompt and return true if buffer is still changed after.
-bool nvim_docmd_dialog_changed_still_dirty(buf_T *buf)
-{
-  bufref_T bufref;
-  set_bufref(&bufref, buf);
-  dialog_changed(buf, false);
-  return bufref_valid(&bufref) && bufIsChanged(buf);
-}
+// nvim_docmd_dialog_changed_still_dirty is now in Rust (cmd_impl.rs)
 int nvim_docmd_curwin_is_floating(void) { return curwin->w_floating ? 1 : 0; }
 
 void nvim_docmd_ex_win_close_curwin(int forceit) { ex_win_close(forceit, curwin, NULL); }
@@ -713,14 +706,7 @@ const char *nvim_docmd_curbuf_b_fname(void) { return curbuf->b_fname; }
 const char *nvim_docmd_e_notopen_str(void) { return _(e_notopen); }
 void nvim_docmd_curwin_cursor_lnum_maybe_dec(linenr_T lnum) { if (curwin->w_cursor.lnum > 1 && curwin->w_cursor.lnum >= lnum) { curwin->w_cursor.lnum--; } }
 
-size_t nvim_docmd_add_win_cmd_modifiers_global(char *buf, size_t bufsize)
-{
-  bool multi_mods = false;
-  buf[0] = NUL;
-  size_t len = add_win_cmd_modifiers(buf, &cmdmod, &multi_mods);
-  assert(len < bufsize);
-  return len;
-}
+// nvim_docmd_add_win_cmd_modifiers_global is now in Rust (impl_bodies.rs)
 
 int nvim_docmd_p_sh_is_empty(void) { return *p_sh == NUL ? 1 : 0; }
 const char *nvim_docmd_e_shellempty_str(void) { return _(e_shellempty); }
@@ -768,17 +754,7 @@ void nvim_docmd_restart_patch_argv(const char *arg)
   });
   set_vim_var_list(VV_ARGV, argv_cpy);
 }
-int nvim_docmd_run_quit_cmd(const char *cmd)
-{
-  Error err = ERROR_INIT;
-  nvim_command(cstr_as_string((char *)cmd), &err);
-  if (ERROR_SET(&err)) {
-    emsg(err.msg);
-    api_clear_error(&err);
-    return 0;
-  }
-  return 1;
-}
+// nvim_docmd_run_quit_cmd is now in Rust (impl_bodies.rs)
 const char *nvim_docmd_get_cmod_confirm_prefix(void) { return (cmdmod.cmod_flags & CMOD_CONFIRM) ? "confirm " : NULL; }
 uint64_t nvim_docmd_get_current_ui(void) { return (uint64_t)current_ui; }
 // nvim_docmd_detach_set_chan_detach, nvim_docmd_remote_ui_disconnect_checked,
@@ -851,15 +827,4 @@ int nvim_docmd_parse_command_modifiers_global(exarg_T *eap, const char **errorms
 void nvim_docmd_set_sourcing_lnum(linenr_T lnum) { if (exestack.ga_data != NULL && exestack.ga_len > 0) { SOURCING_LNUM = lnum; } }
 void nvim_docmd_ga_deep_clear_lines(garray_T *gap) { GA_DEEP_CLEAR(gap, wcmd_T, FREE_WCMD); }
 
-/// Free the cs_emsg_silent_list from a cstack.
-/// Called from Rust do_cmdline after the cstack goes out of scope.
-void nvim_docmd_free_emsg_silent_list(cstack_T *cstack)
-{
-  if (cstack->cs_emsg_silent_list != NULL) {
-    eslist_T *temp;
-    for (eslist_T *elem = cstack->cs_emsg_silent_list; elem != NULL; elem = temp) {
-      temp = elem->next;
-      xfree(elem);
-    }
-  }
-}
+// nvim_docmd_free_emsg_silent_list is now in Rust (do_cmdline.rs)

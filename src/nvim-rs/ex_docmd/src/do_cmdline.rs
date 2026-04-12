@@ -251,7 +251,31 @@ extern "C" {
     // lines_ga deep clear helper
     fn nvim_docmd_ga_deep_clear_lines(gap: *mut c_void);
     fn strlen(s: *const c_char) -> usize;
-    fn nvim_docmd_free_emsg_silent_list(cstack: *mut c_void);
+}
+
+// =============================================================================
+// Rust implementation of nvim_docmd_free_emsg_silent_list
+// Previously a C function in ex_docmd.c; moved to Rust since CstackT and
+// EslistT are already defined in the nvim_ex_eval crate.
+// =============================================================================
+
+/// Free the cs_emsg_silent_list from a cstack.
+///
+/// Called from do_cmdline after the cstack goes out of scope.
+///
+/// # Safety
+///
+/// `cstack` must be a valid pointer to a `CstackT`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_docmd_free_emsg_silent_list(cstack_ptr: *mut c_void) {
+    let cstack = cstack_ptr as *mut CstackT;
+    let mut elem = (*cstack).cs_emsg_silent_list;
+    while !elem.is_null() {
+        let next = (*elem).next;
+        xfree(elem.cast::<c_void>());
+        elem = next;
+    }
+    (*cstack).cs_emsg_silent_list = std::ptr::null_mut();
 }
 
 // =============================================================================

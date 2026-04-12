@@ -816,7 +816,10 @@ extern "C" {
     fn nvim_get_p_confirm() -> c_int;
     fn nvim_get_cmdmod_confirm() -> c_int;
     fn nvim_get_p_write() -> c_int;
-    fn nvim_docmd_dialog_changed_still_dirty(buf: BufHandle) -> bool;
+    // nvim_docmd_dialog_changed_still_dirty: now implemented in Rust below
+    fn set_bufref(bufref: *mut c_void, buf: BufHandle);
+    fn bufref_valid(bufref: *const c_void) -> bool;
+    fn dialog_changed(buf: BufHandle, checkall: bool);
     fn no_write_message();
     #[link_name = "win_close"]
     fn nvim_docmd_win_close(win: WinHandle, free_buf: bool, force: bool) -> c_int;
@@ -961,6 +964,36 @@ extern "C" {
 
 use crate::CmdMod;
 type CmodHandle = *mut CmdMod;
+
+// =============================================================================
+// nvim_docmd_dialog_changed_still_dirty (migrated from C to Rust)
+// =============================================================================
+
+/// Opaque bufref_T layout: buf_T*, int, int = 16 bytes on 64-bit.
+#[repr(C)]
+struct BufRefOpaque {
+    _br_buf: BufHandle,
+    _br_fnum: c_int,
+    _br_buf_free_count: c_int,
+}
+
+/// Show dialog_changed prompt and return true if buffer is still changed after.
+///
+/// Previously `nvim_docmd_dialog_changed_still_dirty` in ex_docmd.c.
+///
+/// # Safety
+/// Calls C functions that access global Neovim state.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_docmd_dialog_changed_still_dirty(buf: BufHandle) -> bool {
+    let mut bufref = BufRefOpaque {
+        _br_buf: buf,
+        _br_fnum: 0,
+        _br_buf_free_count: 0,
+    };
+    set_bufref(std::ptr::addr_of_mut!(bufref).cast::<c_void>(), buf);
+    dialog_changed(buf, false);
+    bufref_valid(std::ptr::addr_of!(bufref).cast::<c_void>()) && bufIsChanged(buf) != 0
+}
 
 // =============================================================================
 // Phase N+15: save_current_state_impl / restore_current_state_impl
