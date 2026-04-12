@@ -102,8 +102,8 @@ unsafe extern "C" {
     fn nvim_ccline_colors_push(start: c_int, end: c_int, hl_id: c_int);
     // Finalize coloring: success=1 updates cache; success=0 prints error, clears colors, redraws.
     fn nvim_color_finalize(success: c_int);
-    // Get ccline.cmdlen.
-    fn nvim_color_cmdlen() -> c_int;
+    // Get ccline.cmdlen (canonical accessor, replaces nvim_color_cmdlen).
+    fn nvim_get_ccline_cmdlen() -> c_int;
     // Get one byte from ccline.cmdbuff at position idx.
     fn nvim_color_cmdbuff_at(idx: c_int) -> u8;
     // nvim_color_tv_list_len: wrapper for tv_list_len (inline) - get length of a list.
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn nvim_color_cmdline() -> bool {
 ///
 /// Returns `false` if any chunk fails validation (error message already printed).
 unsafe fn process_color_list(list: ListPtr) -> bool {
-    let cmdlen = nvim_color_cmdlen();
+    let cmdlen = nvim_get_ccline_cmdlen();
     let mut prev_end: i64 = 0;
     let mut i: c_int = 0;
     let mut outer = nvim_list_get_first(list);

@@ -341,8 +341,6 @@ void nvim_realloc_cmdbuff_xp_fixup(const char *old_buff)
   }
 }
 
-enum { MAX_CB_ERRORS = 1, };
-
 /// Color the command-line (ccline).
 ///
 /// Uses built-in expression parser for '=' prompt, or user-specified callback.
@@ -550,9 +548,6 @@ void nvim_color_finalize(int success)
     redrawcmdline();
   }
 }
-
-/// Get ccline.cmdlen.
-int nvim_color_cmdlen(void) { return ccline.cmdlen; }
 
 /// Get one byte from ccline.cmdbuff at the given index.
 unsigned char nvim_color_cmdbuff_at(int idx) { return (unsigned char)ccline.cmdbuff[idx]; }
