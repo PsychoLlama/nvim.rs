@@ -34,8 +34,9 @@ unsafe extern "C" {
     fn win_new_screensize();
     fn edit_stdin(parmp: *const MparmT) -> bool;
     fn open_scriptin(fname: *mut c_char) -> bool;
-    fn nvim_open_scriptout(path: *mut c_char, append: bool) -> bool; // opens scriptout
     fn nlua_init_defaults();
+    // For inline nvim_open_scriptout
+    fn os_fopen(path: *const c_char, mode: *const c_char) -> *mut std::ffi::c_void;
     fn nvim_vimrc_is_none(parmp: *const MparmT) -> bool; // strequal(use_vimrc, "NONE")
     fn nvim_set_p_lpl(val: bool); // p_lpl = val
     fn filetype_plugin_enable();
@@ -127,6 +128,10 @@ unsafe extern "C" {
     static mut msg_didout: bool;
     static mut RedrawingDisabled: c_int;
     static mut debug_break_level: c_int;
+    // scriptout FILE* global (opaque)
+    static mut scriptout: *mut std::ffi::c_void;
+    static stderr: *mut std::ffi::c_void;
+    fn fprintf(stream: *mut std::ffi::c_void, fmt: *const c_char, ...) -> c_int;
 }
 
 // =============================================================================
@@ -208,8 +213,18 @@ pub unsafe extern "C" fn rs_main_server_setup(parmp: *mut MparmT) {
     if !p.scriptin.is_null() && !open_scriptin(p.scriptin) {
         os_exit(2);
     }
-    if !p.scriptout.is_null() && !nvim_open_scriptout(p.scriptout, p.scriptout_append) {
-        os_exit(2);
+    // Inline of nvim_open_scriptout: open the scriptout file.
+    if !p.scriptout.is_null() {
+        let mode = if p.scriptout_append { c"ab" } else { c"wb" };
+        scriptout = os_fopen(p.scriptout, mode.as_ptr());
+        if scriptout.is_null() {
+            fprintf(
+                stderr,
+                c"Cannot open for script output: \"%s\"\n".as_ptr(),
+                p.scriptout,
+            );
+            os_exit(2);
+        }
     }
 
     nlua_init_defaults();

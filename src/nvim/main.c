@@ -137,12 +137,6 @@ enum {
   EDIT_QF = 4,     // start in quickfix mode
 };
 
-// Result struct for cs_remote_call (must be before main.c.generated.h)
-typedef struct {
-  int should_exit;  // -1=kNone, 0=kFalse, 1=kTrue
-  int tabbed;       // -1=kNone, 0=kFalse, 1=kTrue
-} CsRemoteResult;
-
 #include "main.c.generated.h"
 extern int rs_only_one_window(void);
 
@@ -202,86 +196,7 @@ extern void rs_edit_buffers(mparm_T *parmp, char *cwd);
 extern void rs_remote_request(mparm_T *params, int remote_args, char *server_addr, int argc,
                                char **argv, bool ui_only);
 
-// C helper: builds API types, calls vim._cs_remote via nlua_exec.
-// Calls os_exit on error. Returns result for Rust to process.
-static CsRemoteResult cs_remote_call(uint64_t chan, const char *server_addr,
-                                     const char *connect_error,
-                                     int argc, char **argv, int remote_args)
-{
-  Array args = ARRAY_DICT_INIT;
-  kv_resize(args, (size_t)(argc - remote_args));
-  for (int t_argc = remote_args; t_argc < argc; t_argc++) {
-    ADD_C(args, CSTR_AS_OBJ(argv[t_argc]));
-  }
-
-  Error err = ERROR_INIT;
-  MAXSIZE_TEMP_ARRAY(a, 4);
-  ADD_C(a, INTEGER_OBJ((int)chan));
-  ADD_C(a, CSTR_AS_OBJ(server_addr));
-  ADD_C(a, CSTR_AS_OBJ(connect_error));
-  ADD_C(a, ARRAY_OBJ(args));
-  String s = STATIC_CSTR_AS_STRING("return vim._cs_remote(...)");
-  Object o = nlua_exec(s, NULL, a, kRetObject, NULL, &err);
-  kv_destroy(args);
-  if (ERROR_SET(&err)) {
-    fprintf(stderr, "%s\n", err.msg);
-    os_exit(2);
-  }
-
-  if (o.type != kObjectTypeDict) {
-    fprintf(stderr, "vim._cs_remote returned unexpected value\n");
-    os_exit(2);
-  }
-
-  CsRemoteResult result = { .should_exit = -1, .tabbed = -1 };
-  Dict rvdict = o.data.dict;
-
-  for (size_t i = 0; i < rvdict.size; i++) {
-    if (strequal(rvdict.items[i].key.data, "errmsg")) {
-      if (rvdict.items[i].value.type != kObjectTypeString) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'errmsg'\n");
-        os_exit(2);
-      }
-      fprintf(stderr, "%s\n", rvdict.items[i].value.data.string.data);
-      os_exit(2);
-    } else if (strequal(rvdict.items[i].key.data, "result")) {
-      if (rvdict.items[i].value.type != kObjectTypeString) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'result'\n");
-        os_exit(2);
-      }
-      printf("%s", rvdict.items[i].value.data.string.data);
-    } else if (strequal(rvdict.items[i].key.data, "tabbed")) {
-      if (rvdict.items[i].value.type != kObjectTypeBoolean) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'tabbed'\n");
-        os_exit(2);
-      }
-      result.tabbed = rvdict.items[i].value.data.boolean ? 1 : 0;
-    } else if (strequal(rvdict.items[i].key.data, "should_exit")) {
-      if (rvdict.items[i].value.type != kObjectTypeBoolean) {
-        fprintf(stderr, "vim._cs_remote returned an unexpected type for 'should_exit'\n");
-        os_exit(2);
-      }
-      result.should_exit = rvdict.items[i].value.data.boolean ? 1 : 0;
-    }
-  }
-
-  if (result.should_exit == -1 || result.tabbed == -1) {
-    fprintf(stderr, "vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n");
-    os_exit(2);
-  }
-  api_free_object(o);
-  return result;
-}
-
-// Non-static wrapper for Rust: packs {should_exit, tabbed} into int64_t.
-// High 32 bits = should_exit (-1/0/1), low 32 bits = tabbed (-1/0/1).
-int64_t nvim_call_cs_remote(uint64_t chan, const char *server_addr,
-                             const char *connect_error, int argc, char **argv,
-                             int remote_args)
-{
-  CsRemoteResult r = cs_remote_call(chan, server_addr, connect_error, argc, argv, remote_args);
-  return ((int64_t)r.should_exit << 32) | (uint32_t)r.tabbed;
-}
+// cs_remote_call and nvim_call_cs_remote are now implemented in Rust (rs_remote_request).
 
 // C helper: set 'shortmess' option from Rust (avoids OptVal complexity)
 void nvim_set_shortmess_opt(const char *val)
@@ -346,18 +261,6 @@ void nvim_setup_cmdline_row(void)
 }
 
 void nvim_sync_firstwin_height(void) { firstwin->w_prev_height = firstwin->w_height; }
-
-// Opens scriptout file; returns false and prints error if it fails.
-bool nvim_open_scriptout(char *path, bool append)
-{
-  scriptout = os_fopen(path, append ? APPENDBIN : WRITEBIN);
-  if (scriptout == NULL) {
-    fprintf(stderr, _("Cannot open for script output: \""));
-    fprintf(stderr, "%s\"\n", path);
-    return false;
-  }
-  return true;
-}
 
 // Returns true if use_vimrc is "NONE".
 bool nvim_vimrc_is_none(const mparm_T *parmp) { return strequal(parmp->use_vimrc, "NONE"); }
@@ -454,17 +357,9 @@ int main(int argc, char **argv)
 
   // Many variables are in `params` so that we can pass them around easily.
   // `argc` and `argv` are also copied, so that they can be changed.
-  rs_init_params(&params, argc, argv);
+  rs_init_params(&params, argc, argv);  // also pre-scans for --clean
 
   rs_init_startuptime(&params);
-
-  // Need to find "--clean" before actually parsing arguments.
-  for (int i = 1; i < params.argc; i++) {
-    if (STRICMP(params.argv[i], "--clean") == 0) {
-      params.clean = true;
-      break;
-    }
-  }
 
   event_init();
 
@@ -564,23 +459,10 @@ void os_exit(int r)
   rs_os_exit(r);
 }
 
-// C helpers for Rust getout (Phase 3) ------------------------------------
+// C helpers for Rust getout ------------------------------------
 
-// Returns adjusted exitval (adds ex_exitval if exmode_active)
-int nvim_getout_exmode_adjust(int exitval)
-{
-  if (exmode_active) {
-    exitval += ex_exitval;
-  }
-  return exitval;
-}
-
-// Set VV_EXITING vim variable
-void nvim_getout_set_vv_exiting(int exitval)
-{
-  set_vim_var_type(VV_EXITING, VAR_NUMBER);
-  set_vim_var_nr(VV_EXITING, exitval);
-}
+// nvim_getout_exmode_adjust: inlined into Rust rs_getout.
+// nvim_getout_set_vv_exiting: inlined into Rust rs_getout.
 
 // Trigger BufWinLeave for all windows (once per buffer).
 void nvim_getout_trigger_bufwinleave(void)
@@ -622,44 +504,11 @@ void nvim_getout_trigger_bufunload(void)
   }
 }
 
-// Trigger autocmd event (VimLeavePre or VimLeave), unblocking if needed
-void nvim_getout_apply_autocmd_event(int event)
-{
-  int unblock = 0;
-  if (is_autocmd_blocked()) {
-    unblock_autocmds();
-    unblock++;
-  }
-  apply_autocmds((event_T)event, NULL, NULL, false, curbuf);
-  if (unblock) {
-    block_autocmds();
-  }
-}
+// nvim_getout_apply_autocmd_event: inlined into Rust rs_getout.
 
-// Returns true if ShaDa should be written
-bool nvim_getout_should_write_shada(void)
-{
-  return
-#ifdef EXITFREE
-    !entered_free_all_mem &&
-#endif
-    p_shada && *p_shada != NUL;
-}
-
-// Handle did_emsg: clear no_wait_return and call wait_return
-void nvim_getout_handle_emsg(void)
-{
-  no_wait_return = false;
-  wait_return(false);
-}
-
-// Restore titleold if p_title is set
-void nvim_getout_restore_title(void)
-{
-  if (p_title && *p_titleold != NUL) {
-    ui_call_set_title(cstr_as_string(p_titleold));
-  }
-}
+// nvim_getout_should_write_shada: inlined into Rust rs_getout.
+// nvim_getout_handle_emsg: inlined into Rust rs_getout.
+// nvim_getout_restore_title: inlined into Rust rs_getout.
 
 // Handle restart via remote_ui_restart; sets restarting=false
 void nvim_getout_do_restart(void)

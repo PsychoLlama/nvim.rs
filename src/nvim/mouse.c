@@ -81,14 +81,6 @@ void nvim_set_mouse_past_bottom(bool val) { mouse_past_bottom = val; }
 /// Set mouse_past_eol global (used from Rust).
 void nvim_set_mouse_past_eol(bool val) { mouse_past_eol = val; }
 
-/// Get tabnr from tab_page_click_defs at given column.
-int nvim_mouse_get_tab_click_tabnr(int col)
-{
-  if (tab_page_click_defs == NULL || col < 0 || col >= (int)tab_page_click_defs_size) {
-    return 0;
-  }
-  return tab_page_click_defs[col].tabnr;
-}
 
 extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_move_tab_to_mouse(void);
@@ -99,39 +91,7 @@ extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
 extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int which_button);
 
 // got_click state is now owned by Rust; use rs_get_got_click()/rs_set_got_click().
-
-/// Bridge for Rust-computed click arguments to VimL function call.
-/// Builds typval_T args from pre-computed strings and calls the VimL callback.
-void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
-                               int click_count, const char *button_str,
-                               const char *modifier_str)
-{
-  typval_T argv[] = {
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_NUMBER,
-      .vval = { .v_number = (varnumber_T)click_defs[col].tabnr },
-    },
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_NUMBER,
-      .vval = { .v_number = click_count },
-    },
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_STRING,
-      .vval = { .v_string = (char *)button_str },
-    },
-    {
-      .v_lock = VAR_FIXED,
-      .v_type = VAR_STRING,
-      .vval = { .v_string = (char *)modifier_str },
-    },
-  };
-  typval_T rettv;
-  call_vim_function(click_defs[col].func, ARRAY_SIZE(argv), argv, &rettv);
-  tv_clear(&rettv);
-}
+// nvim_call_stl_click_func is now implemented in Rust (rs_call_click_def_func).
 
 // nvim_do_mouse_impl is now implemented in Rust (rs_do_mouse_impl).
 // dragwin state and jump_to_mouse logic are now owned by Rust (rs_jump_to_mouse).
@@ -229,11 +189,6 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
 
 // --- Input helpers -----------------------------------------------------------
 
-/// Decode a mouse key code into which_button, is_click, is_drag.
-int nvim_get_mouse_button(int code, bool *is_click, bool *is_drag)
-{
-  return get_mouse_button(code, is_click, is_drag);
-}
 
 /// Peek at the next character in the input queue without consuming it.
 int nvim_vpeekc(void) { return vpeekc(); }
@@ -326,14 +281,6 @@ bool nvim_tab_page_click_defs_valid(void) { return tab_page_click_defs != NULL; 
 /// Get tab_page_click_defs_size.
 int nvim_get_tab_page_click_defs_size(void) { return (int)tab_page_click_defs_size; }
 
-/// Get the click type for a given column from tab_page_click_defs.
-int nvim_mouse_get_tab_click_type(int col)
-{
-  if (tab_page_click_defs == NULL || col < 0 || col >= (int)tab_page_click_defs_size) {
-    return 0;  // kStlClickDisabled
-  }
-  return (int)tab_page_click_defs[col].type;
-}
 
 /// Get pointer to tab_page_click_defs (as opaque handle).
 StlClickDefinition *nvim_get_tab_page_click_defs_ptr(void) { return tab_page_click_defs; }
@@ -347,60 +294,8 @@ bool nvim_get_VIsual_reselect(void) { return VIsual_reselect; }
 // --- Insert/put/register operations ------------------------------------------
 
 // nvim_eval_has_provider already defined in eval/funcs_shim.c
-
-/// Handle middle-click paste in insert mode.
-/// Returns false always (caller should return false after calling this).
-bool nvim_mouse_middle_insert_mode(int regname, int count, bool fixindent)
-{
-  if (regname == '.') {
-    insert_reg(regname, NULL, true);
-  } else {
-    if (regname == 0 && eval_has_provider("clipboard", false)) {
-      regname = '*';
-    }
-    yankreg_T *reg = NULL;
-    if ((State & REPLACE_FLAG) && !yank_register_mline(regname, &reg)) {
-      insert_reg(regname, reg, true);
-    } else {
-      do_put(regname, reg, BACKWARD, 1,
-             (fixindent ? PUT_FIXINDENT : 0) | PUT_CURSEND);
-      AppendCharToRedobuff(Ctrl_R);
-      AppendCharToRedobuff(fixindent ? Ctrl_P : Ctrl_O);
-      AppendCharToRedobuff(regname == 0 ? '"' : regname);
-    }
-  }
-  return false;
-}
-
-/// Middle-click put after jump_to_mouse (normal mode).
-void nvim_do_put_middle_click(int regname, int dir, int count, bool fixindent)
-{
-  yankreg_T *reg = NULL;
-  bool is_mline = yank_register_mline(regname, &reg);
-  if (is_mline) {
-    if (mouse_past_bottom) {
-      dir = FORWARD;
-    }
-  } else if (mouse_past_eol) {
-    dir = FORWARD;
-  }
-
-  int c1, c2;
-  if (fixindent) {
-    c1 = (dir == BACKWARD) ? '[' : ']';
-    c2 = 'p';
-  } else {
-    c1 = (dir == FORWARD) ? 'p' : 'P';
-    c2 = NUL;
-  }
-  rs_prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
-
-  if (restart_edit != 0) {
-    where_paste_started = curwin->w_cursor;
-  }
-  do_put(regname, reg, dir, count,
-         (fixindent ? PUT_FIXINDENT : 0) | PUT_CURSEND);
-}
+// nvim_mouse_middle_insert_mode is now implemented in Rust (inlined in rs_do_mouse_impl).
+// nvim_do_put_middle_click is now implemented in Rust (inlined in rs_do_mouse_impl).
 
 /// Set where_paste_started to current cursor position.
 void nvim_set_where_paste_started_to_cursor(void)
@@ -440,14 +335,6 @@ int nvim_win_get_statuscol_click_defs_size(win_T *wp)
   return wp ? (int)wp->w_statuscol_click_defs_size : 0;
 }
 
-/// Get click type from a StlClickDefinition array at given column.
-int nvim_stl_click_defs_get_type(StlClickDefinition *click_defs, int col)
-{
-  if (click_defs == NULL) {
-    return 0;  // kStlClickDisabled
-  }
-  return (int)click_defs[col].type;
-}
 
 // --- Navigation/tag/quickfix -------------------------------------------------
 
@@ -476,24 +363,6 @@ int nvim_curbuf_is_help_mouse(void)
 }
 
 // --- Position operations -----------------------------------------------------
-
-/// Get the character at a given (lnum, col, coladd) position.
-int nvim_gchar_pos(linenr_T lnum, int col, int coladd)
-{
-  pos_T p = { .lnum = lnum, .col = col, .coladd = coladd };
-  return gchar_pos(&p);
-}
-
-/// Increment a position (lnum, col, coladd). Returns 1 if moved past EOL.
-int nvim_inc_pos(linenr_T *lnum, int *col, int *coladd)
-{
-  pos_T p = { .lnum = *lnum, .col = *col, .coladd = *coladd };
-  int r = inc(&p);
-  *lnum = p.lnum;
-  *col = p.col;
-  *coladd = p.coladd;
-  return r;
-}
 
 /// Find match using findmatch(). Returns false if no match.
 /// On match, writes the position into *lnum/*col/*coladd and motion_type into *motion_type_out.
@@ -528,16 +397,6 @@ const char *nvim_get_cursor_pos_ptr_mouse(void) { return get_cursor_pos_ptr(); }
 int nvim_utfc_ptr2len_at_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
 
 // --- Visual/cursor operations ------------------------------------------------
-
-/// Get virtual column ranges for a visual selection.
-void nvim_getvcols_mouse(colnr_T *leftcol, colnr_T *rightcol,
-                          linenr_T sv_lnum, int sv_col, int sv_coladd,
-                          linenr_T ev_lnum, int ev_col, int ev_coladd)
-{
-  pos_T sv = { .lnum = sv_lnum, .col = sv_col, .coladd = sv_coladd };
-  pos_T ev = { .lnum = ev_lnum, .col = ev_col, .coladd = ev_coladd };
-  getvcols(curwin, &sv, &ev, leftcol, rightcol);
-}
 
 /// Advance the cursor in curwin to a given column.
 int nvim_curwin_coladvance(int col) { return coladvance(curwin, (colnr_T)col); }

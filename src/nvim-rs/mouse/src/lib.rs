@@ -125,6 +125,8 @@ const TAB: u8 = b'\t';
 
 // Re-use existing Rust implementations from mbyte and charset crates
 use nvim_charset::rs_vim_iswordc;
+// Re-use typval layout from eval crate
+use nvim_eval::typval::{TypvalT, TypvalVval};
 
 // =============================================================================
 // Type aliases for C types
@@ -139,6 +141,9 @@ pub type WinHandle = *mut std::ffi::c_void;
 
 /// Opaque handle for tabpage pointer
 pub type TabpageHandle = *mut std::ffi::c_void;
+
+/// Opaque handle for `yankreg_T *` (yank register).
+pub type YankregHandle = std::ffi::c_void;
 
 // =============================================================================
 // Rust-owned static state (moved from C)
@@ -235,9 +240,6 @@ extern "C" {
     static mouse_col: c_int;
 
     // --- Tabpage operations ---
-
-    /// Get `tabnr` from `tab_page_click_defs` at given column.
-    fn nvim_mouse_get_tab_click_tabnr(col: c_int) -> c_int;
 
     /// Get the current tabpage.
     fn nvim_get_curtab() -> TabpageHandle;
@@ -694,7 +696,14 @@ pub unsafe extern "C" fn rs_reset_dragwin() {
 /// Requires valid `tab_page_click_defs` array and valid `mouse_col`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_move_tab_to_mouse() {
-    let tabnr = nvim_mouse_get_tab_click_tabnr(mouse_col);
+    let tab_defs = nvim_get_tab_page_click_defs_ptr();
+    let col = mouse_col;
+    #[allow(clippy::cast_sign_loss)]
+    let tabnr = if tab_defs.is_null() || col < 0 {
+        0
+    } else {
+        (*tab_defs.cast::<StlClickDefinition>().add(col as usize)).tabnr
+    };
     if tabnr <= 0 {
         tabpage_move(9999);
     } else if tabnr < rs_tabpage_index(nvim_get_curtab()) {
@@ -2701,14 +2710,14 @@ pub unsafe extern "C" fn rs_f_getmousepos(
 // ---------------------------------------------------------------------------
 extern "C" {
     // Input helpers
-    fn nvim_get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut bool) -> c_int;
+    fn get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut bool) -> c_int;
     fn nvim_vpeekc() -> c_int;
     fn nvim_safe_vgetc() -> c_int;
     fn nvim_vungetc(c: c_int);
     fn nvim_stuffcharReadbuff(c: c_int);
     fn nvim_stuffnumReadbuff(n: c_int);
     fn nvim_stuffReadbuff(s: *const c_char);
-    // nvim_AppendCharToRedobuff: declared but unused (middle-click in insert uses nvim_mouse_middle_insert_mode wrapper)
+    // nvim_AppendCharToRedobuff: now in the insert/put block below
 
     // Keyboard globals
     static KeyStuffed: c_int;
@@ -2735,15 +2744,18 @@ extern "C" {
     fn nvim_get_firstwin_winrow_mouse() -> c_int;
     fn nvim_get_cmdwin_type_mouse() -> c_int;
     fn nvim_tab_page_click_defs_valid() -> bool;
-    fn nvim_mouse_get_tab_click_type(col: c_int) -> c_int;
     fn nvim_get_tab_page_click_defs_ptr() -> StlClickDefinitionHandle;
     fn nvim_get_restart_edit_mouse() -> c_int;
 
     // Insert/put/register operations
     fn nvim_eval_has_provider(feat: *const c_char) -> bool;
-    fn nvim_mouse_middle_insert_mode(regname: c_int, count: c_int, fixindent: bool) -> bool;
-    fn nvim_do_put_middle_click(regname: c_int, dir: c_int, count: c_int, fixindent: bool);
     fn nvim_set_where_paste_started_to_cursor();
+    fn nvim_get_mouse_past_bottom() -> bool;
+    fn nvim_get_mouse_past_eol() -> bool;
+    fn nvim_AppendCharToRedobuff(c: c_int);
+    fn insert_reg(regname: c_int, reg: *mut YankregHandle, literally_arg: bool) -> c_int;
+    fn do_put(regname: c_int, reg: *mut YankregHandle, dir: c_int, count: c_int, flags: c_int);
+    fn yank_register_mline(regname: c_int, reg: *mut *mut YankregHandle) -> bool;
 
     // Click defs accessors
     fn nvim_win_get_status_click_defs(wp: WinHandle) -> StlClickDefinitionHandle;
@@ -2751,7 +2763,6 @@ extern "C" {
     fn nvim_win_get_statuscol_click_defs(wp: WinHandle) -> StlClickDefinitionHandle;
     fn nvim_win_get_status_click_defs_size(wp: WinHandle) -> c_int;
     fn nvim_win_get_statuscol_click_defs_size(wp: WinHandle) -> c_int;
-    fn nvim_stl_click_defs_get_type(click_defs: StlClickDefinitionHandle, col: c_int) -> c_int;
 
     // Navigation/tag/quickfix
     fn nvim_curwin_is_qf() -> c_int;
@@ -2760,8 +2771,8 @@ extern "C" {
     fn nvim_curbuf_is_help_mouse() -> c_int;
 
     // Position operations
-    fn nvim_gchar_pos(lnum: linenr_T, col: c_int, coladd: c_int) -> c_int;
-    fn nvim_inc_pos(lnum: *mut linenr_T, col: *mut c_int, coladd: *mut c_int) -> c_int;
+    fn gchar_pos(pos: *const PosT) -> c_int;
+    fn inc(pos: *mut PosT) -> c_int;
     fn nvim_findmatch_nul(
         oap: OpargHandle,
         lnum: *mut linenr_T,
@@ -2776,16 +2787,6 @@ extern "C" {
     fn nvim_utfc_ptr2len_at_cursor() -> c_int;
 
     // Visual/cursor operations
-    fn nvim_getvcols_mouse(
-        leftcol: *mut colnr_T,
-        rightcol: *mut colnr_T,
-        sv_lnum: linenr_T,
-        sv_col: c_int,
-        sv_coladd: c_int,
-        ev_lnum: linenr_T,
-        ev_col: c_int,
-        ev_coladd: c_int,
-    );
     fn nvim_curwin_coladvance(col: c_int) -> c_int;
     fn nvim_curwin_get_curswant() -> c_int;
     fn nvim_set_curswant_flag();
@@ -2843,13 +2844,20 @@ const NUL_KEY: c_int = 0;
 
 // Mode bits
 const MODE_INSERT_IMPL: c_int = 0x10;
+const REPLACE_FLAG: c_int = 0x100;
 
 // Direction constants
 const FORWARD_IMPL: c_int = 1;
 const BACKWARD_IMPL: c_int = -1;
 
+// do_put flags (from register_defs.h)
+const PUT_FIXINDENT: c_int = 1;
+const PUT_CURSEND: c_int = 2;
+
 // Ctrl key codes
 const CTRL_O_CODE: c_int = 15;
+const CTRL_P_CODE: c_int = 16;
+const CTRL_R_CODE: c_int = 18;
 const CTRL_T_CODE: c_int = 20;
 const CTRL_G_CODE: c_int = 7;
 const CTRL_RSB_CODE: c_int = 29;
@@ -2946,7 +2954,7 @@ fn pos_equal(a: PosT, b: PosT) -> bool {
 unsafe fn rs_do_mouse_impl(
     oap: OpargHandle,
     c: c_int,
-    dir: c_int,
+    mut dir: c_int,
     count: c_int,
     fixindent: bool,
 ) -> bool {
@@ -2962,7 +2970,7 @@ unsafe fn rs_do_mouse_impl(
         let mut ic = false;
         let mut id = false;
         loop {
-            wb = nvim_get_mouse_button(key2termcap1(c), &raw mut ic, &raw mut id);
+            wb = get_mouse_button(key2termcap1(c), &raw mut ic, &raw mut id);
             if id && KeyStuffed == 0 && nvim_vpeekc() != 0 {
                 let save_grid = mouse_grid;
                 let save_row = mouse_row;
@@ -3071,7 +3079,34 @@ unsafe fn rs_do_mouse_impl(
             return false;
         }
         if (state & MODE_INSERT_IMPL) != 0 {
-            return nvim_mouse_middle_insert_mode(regname, count, fixindent);
+            // Inline of C's nvim_mouse_middle_insert_mode.
+            if regname == c_int::from(b'.') {
+                insert_reg(regname, std::ptr::null_mut(), true);
+            } else {
+                if regname == 0 && nvim_eval_has_provider(c"clipboard".as_ptr()) {
+                    regname = c_int::from(b'*');
+                }
+                let mut reg: *mut YankregHandle = std::ptr::null_mut();
+                if (state & REPLACE_FLAG) != 0 && !yank_register_mline(regname, &raw mut reg) {
+                    insert_reg(regname, reg, true);
+                } else {
+                    do_put(
+                        regname,
+                        reg,
+                        BACKWARD_IMPL,
+                        1,
+                        (if fixindent { PUT_FIXINDENT } else { 0 }) | PUT_CURSEND,
+                    );
+                    nvim_AppendCharToRedobuff(CTRL_R_CODE);
+                    nvim_AppendCharToRedobuff(if fixindent { CTRL_P_CODE } else { CTRL_O_CODE });
+                    nvim_AppendCharToRedobuff(if regname == 0 {
+                        c_int::from(b'"')
+                    } else {
+                        regname
+                    });
+                }
+            }
+            return false;
         }
     }
 
@@ -3096,9 +3131,20 @@ unsafe fn rs_do_mouse_impl(
             }
             if is_click && nvim_get_cmdwin_type_mouse() == 0 && mouse_col < nvim_get_Columns_mouse()
             {
-                let tabnr = nvim_mouse_get_tab_click_tabnr(mouse_col);
+                let tab_defs = nvim_get_tab_page_click_defs_ptr();
+                #[allow(clippy::cast_sign_loss)]
+                let tab_def = if tab_defs.is_null() || mouse_col < 0 {
+                    None
+                } else {
+                    Some(
+                        &*tab_defs
+                            .cast::<StlClickDefinition>()
+                            .add(mouse_col as usize),
+                    )
+                };
+                let tabnr = tab_def.map_or(0, |d| d.tabnr);
                 IN_TAB_LINE = true;
-                let click_type = nvim_mouse_get_tab_click_type(mouse_col);
+                let click_type = tab_def.map_or(0, |d| d.click_type);
                 if click_type == STL_CLICK_TAB_SWITCH {
                     if which_button == MOUSE_MIDDLE {
                         rs_mouse_tab_close(tabnr);
@@ -3276,7 +3322,11 @@ unsafe fn rs_do_mouse_impl(
         }
 
         if !click_defs.is_null() {
-            let click_type = nvim_stl_click_defs_get_type(click_defs, click_col);
+            #[allow(clippy::cast_sign_loss)]
+            let click_type = (*click_defs
+                .cast::<StlClickDefinition>()
+                .add(click_col as usize))
+            .click_type;
             if click_type == STL_CLICK_DISABLED {
                 if in_statuscol
                     && mouse_model_popup_impl()
@@ -3360,15 +3410,13 @@ unsafe fn rs_do_mouse_impl(
         if vmode == VISUAL_BLOCK {
             let mut leftcol: colnr_T = 0;
             let mut rightcol: colnr_T = 0;
-            nvim_getvcols_mouse(
+            // Inline of C's nvim_getvcols_mouse.
+            rs_getvcols(
+                curwin,
+                start_visual,
+                end_visual,
                 &raw mut leftcol,
                 &raw mut rightcol,
-                start_visual.lnum,
-                start_visual.col,
-                start_visual.coladd,
-                end_visual.lnum,
-                end_visual.col,
-                end_visual.coladd,
             );
             let curswant = nvim_curwin_get_curswant();
             let target_col = if curswant > i32::midpoint(leftcol, rightcol) {
@@ -3439,6 +3487,16 @@ unsafe fn rs_do_mouse_impl(
         if regname == 0 && nvim_eval_has_provider(c"clipboard".as_ptr()) {
             regname = c_int::from(b'*');
         }
+        // Inline of C's nvim_do_put_middle_click: check mline, adjust dir, redo, put.
+        let mut reg: *mut YankregHandle = std::ptr::null_mut();
+        let is_mline = yank_register_mline(regname, &raw mut reg);
+        if is_mline {
+            if nvim_get_mouse_past_bottom() {
+                dir = FORWARD_IMPL;
+            }
+        } else if nvim_get_mouse_past_eol() {
+            dir = FORWARD_IMPL;
+        }
         let fixindent_char = if fixindent {
             if dir == BACKWARD_IMPL {
                 c_int::from(b'[')
@@ -3467,7 +3525,13 @@ unsafe fn rs_do_mouse_impl(
         if nvim_get_restart_edit_mouse() != 0 {
             nvim_set_where_paste_started_to_cursor();
         }
-        nvim_do_put_middle_click(regname, dir, count, fixindent);
+        do_put(
+            regname,
+            reg,
+            dir,
+            count,
+            (if fixindent { PUT_FIXINDENT } else { 0 }) | PUT_CURSEND,
+        );
     } else if ((mm & MOD_MASK_CTRL) != 0 || (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK)
         && nvim_curwin_is_qf() != 0
     {
@@ -3534,28 +3598,25 @@ unsafe fn rs_do_mouse_impl(
             if is_click {
                 // Skip white space, then check for bracket match
                 let curwin = nvim_get_curwin();
-                let cursor = *nvim_win_get_cursor_ptr(curwin);
-                let mut ep_lnum = cursor.lnum;
-                let mut ep_col = cursor.col;
-                let mut ep_coladd = cursor.coladd;
+                let mut ep = *nvim_win_get_cursor_ptr(curwin);
 
                 loop {
-                    let gc = nvim_gchar_pos(ep_lnum, ep_col, ep_coladd);
+                    let gc = gchar_pos(&raw const ep);
                     if nvim_ascii_iswhite_mouse(gc) == 0 {
                         break;
                     }
-                    if nvim_inc_pos(&raw mut ep_lnum, &raw mut ep_col, &raw mut ep_coladd) < 0 {
+                    if inc(&raw mut ep) < 0 {
                         break;
                     }
                 }
-                nvim_set_cursor_pos(ep_lnum, ep_col, ep_coladd);
+                nvim_set_cursor_pos(ep.lnum, ep.col, ep.coladd);
                 oap_set_motion_type(oap, MT_CHAR_WISE);
 
                 let curwin = nvim_get_curwin();
                 let ep = *nvim_win_get_cursor_ptr(curwin);
                 let vis = get_visual_pos();
                 let vmode = nvim_get_VIsual_mode_mouse();
-                let gc = nvim_gchar_pos(ep.lnum, ep.col, ep.coladd);
+                let gc = gchar_pos(&raw const ep);
 
                 if !oap.is_null()
                     && vmode == c_int::from(b'v')
@@ -3698,26 +3759,41 @@ const MOD_MASK_META: c_int = 0x10;
 /// Opaque handle for `StlClickDefinition *` (statusline/winbar/tabline click defs).
 type StlClickDefinitionHandle = *mut std::ffi::c_void;
 
+/// Rust mirror of C `StlClickDefinition` (layout verified against `statusline_defs.h`).
+/// Fields: type(i32), tabnr(i32), func(*char)
+#[repr(C)]
+struct StlClickDefinition {
+    /// Click type enum (kStlClickDisabled=0..kStlClickFuncRun=3)
+    click_type: c_int,
+    /// Tab page number
+    tabnr: c_int,
+    /// `VimL` function name (NUL-terminated)
+    func: *mut c_char,
+}
+
+// typval_T type constants (from eval/typval_defs.h)
+const VAR_NUMBER: c_int = 4;
+const VAR_STRING: c_int = 2;
+// VarLockStatus VAR_FIXED = 1
+const VAR_FIXED: c_int = 1;
+
 extern "C" {
-    /// C bridge: build `typval_T` args and call the `VimL` click callback.
-    ///
-    /// Takes pre-computed `click_count`, `button_str`, and `modifier_str`
-    /// so that typval construction stays in C.
-    fn nvim_call_stl_click_func(
-        click_defs: StlClickDefinitionHandle,
-        col: c_int,
-        click_count: c_int,
-        button_str: *const c_char,
-        modifier_str: *const c_char,
-    );
+    /// Call a `VimL` function: `call_vim_function(func, argc, argv, rettv)`.
+    fn call_vim_function(
+        func: *const c_char,
+        argc: c_int,
+        argv: *mut TypvalT,
+        rettv: *mut TypvalT,
+    ) -> c_int;
+    /// Clear a typval (frees its contents).
+    fn tv_clear(tv: *mut TypvalT);
 }
 
 /// Call the `VimL` function registered for a statusline/winbar/tabline click.
 ///
 /// Computes the click count, button string, and modifier string from the
-/// current `mod_mask` global and the given `which_button`, then delegates to
-/// the C helper `nvim_call_stl_click_func` for the actual `call_vim_function`
-/// invocation (which requires `typval_T` construction that stays in C).
+/// current `mod_mask` global and the given `which_button`, then builds
+/// `typval_T` args in Rust and calls `call_vim_function` directly.
 ///
 /// After the callback returns, `got_click` is cleared so that the next click
 /// is not mistakenly treated as a drag.
@@ -3771,13 +3847,48 @@ pub unsafe extern "C" fn rs_call_click_def_func(
         0u8, // NUL terminator
     ];
 
-    nvim_call_stl_click_func(
-        click_defs,
-        col,
-        click_count,
-        button_str.as_ptr().cast::<c_char>(),
-        modifier_str.as_ptr().cast::<c_char>(),
-    );
+    // Access the click definition for this column (col >= 0 is enforced by callers).
+    #[allow(clippy::cast_sign_loss)]
+    let def = &*click_defs.cast::<StlClickDefinition>().add(col as usize);
+
+    // Build typval_T args on the stack (mirrors C's nvim_call_stl_click_func).
+    let mut argv: [TypvalT; 4] = [
+        TypvalT {
+            v_type: VAR_NUMBER,
+            v_lock: VAR_FIXED,
+            vval: TypvalVval {
+                v_number: i64::from(def.tabnr),
+            },
+        },
+        TypvalT {
+            v_type: VAR_NUMBER,
+            v_lock: VAR_FIXED,
+            vval: TypvalVval {
+                v_number: i64::from(click_count),
+            },
+        },
+        TypvalT {
+            v_type: VAR_STRING,
+            v_lock: VAR_FIXED,
+            vval: TypvalVval {
+                v_string: button_str.as_ptr().cast::<c_char>().cast_mut(),
+            },
+        },
+        TypvalT {
+            v_type: VAR_STRING,
+            v_lock: VAR_FIXED,
+            vval: TypvalVval {
+                v_string: modifier_str.as_ptr().cast::<c_char>().cast_mut(),
+            },
+        },
+    ];
+    let mut rettv: TypvalT = TypvalT {
+        v_type: 0,
+        v_lock: 0,
+        vval: TypvalVval { v_number: 0 },
+    };
+    call_vim_function(def.func, 4, argv.as_mut_ptr(), &raw mut rettv);
+    tv_clear(&raw mut rettv);
 
     // Ensure the next click is not treated as a drag.
     GOT_CLICK = false;
