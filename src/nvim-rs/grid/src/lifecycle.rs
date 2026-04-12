@@ -64,6 +64,75 @@ extern "C" {
 
     /// Find window in curtab by its grid_alloc handle.
     fn nvim_find_win_by_grid_handle(handle: HandleT) -> *mut std::ffi::c_void;
+
+    // =================================================================
+    // Phase 3: win_grid_alloc accessors
+    // =================================================================
+
+    /// Get wp->w_height_outer.
+    fn nvim_win_get_w_height_outer(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_width_outer.
+    fn nvim_win_get_w_width_outer(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_floating.
+    fn nvim_win_get_floating(wp: *mut std::ffi::c_void) -> bool;
+    /// Get wp->w_view_height.
+    fn nvim_win_get_view_height(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_lines_size.
+    fn nvim_win_get_w_lines_size(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_lines.
+    fn nvim_win_get_w_lines(wp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    /// Set wp->w_lines.
+    fn nvim_win_set_w_lines(wp: *mut std::ffi::c_void, ptr: *mut std::ffi::c_void);
+    /// Set wp->w_lines_size.
+    fn nvim_win_set_w_lines_size(wp: *mut std::ffi::c_void, val: c_int);
+    /// Set wp->w_lines_valid.
+    fn nvim_win_set_lines_valid(wp: *mut std::ffi::c_void, val: c_int);
+    /// Get wp->w_winrow.
+    fn nvim_win_get_winrow(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_wincol.
+    fn nvim_win_get_wincol(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_winrow_off.
+    fn nvim_win_get_winrow_off(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_wincol_off.
+    fn nvim_win_get_wincol_off(wp: *mut std::ffi::c_void) -> c_int;
+    /// Get wp->w_config.border.
+    fn nvim_win_get_config_border_flag(wp: *mut std::ffi::c_void) -> c_int;
+    /// Set wp->w_redr_border (val != 0 means true).
+    fn nvim_win_set_redr_border(wp: *mut std::ffi::c_void, val: c_int);
+    /// Get wp->w_grid as GridView*.
+    fn nvim_win_get_w_grid(wp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    /// Get &wp->w_grid_alloc as ScreenGrid*.
+    fn nvim_win_get_w_grid_alloc(wp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    /// Get default_grid.
+    fn nvim_get_default_grid() -> *mut std::ffi::c_void;
+    /// Get resizing_screen global.
+    fn nvim_get_resizing_screen() -> bool;
+    /// Wrapper for ui_call_grid_resize.
+    fn nvim_call_grid_resize(handle: HandleT, cols: c_int, rows: c_int);
+    /// Wrapper for ui_check_cursor_grid.
+    fn nvim_win_ui_check_cursor_grid(grid_handle: c_int);
+    /// Allocate zeroed memory.
+    fn nvim_xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
+    /// Get sizeof(wline_T).
+    fn nvim_wline_T_size() -> usize;
+    /// Set GridView target.
+    fn nvim_gridview_set_target(view: *mut std::ffi::c_void, target: *mut std::ffi::c_void);
+    /// Set GridView row_offset.
+    fn nvim_gridview_set_row_offset(view: *mut std::ffi::c_void, val: c_int);
+    /// Set GridView col_offset.
+    fn nvim_gridview_set_col_offset(view: *mut std::ffi::c_void, val: c_int);
+    /// Check ui_has(kUIMultigrid) -- exported from Rust window crate.
+    fn nvim_ui_has_multigrid() -> c_int;
+    /// grid_alloc (now in Rust but callable via C ABI).
+    fn grid_alloc(grid: *mut std::ffi::c_void, rows: c_int, cols: c_int, copy: bool, valid: bool);
+    /// grid_free (now in Rust but callable via C ABI).
+    fn grid_free(grid: *mut std::ffi::c_void);
+    /// grid_invalidate (already in Rust via export_name).
+    fn grid_invalidate(grid: *mut std::ffi::c_void);
+    /// Get ScreenGrid valid field.
+    fn nvim_screengrid_get_valid(grid: *mut std::ffi::c_void) -> bool;
+    /// Set ScreenGrid valid field.
+    fn nvim_screengrid_set_valid(grid: *mut std::ffi::c_void, val: bool);
 }
 
 // =============================================================================
@@ -591,6 +660,87 @@ pub unsafe extern "C" fn rs_grid_alloc(
 
     // Update linebuf if this grid is wider than current linebuf
     nvim_grid_alloc_update_linebuf(columns);
+}
+
+// =============================================================================
+// Phase 3: win_grid_alloc
+// =============================================================================
+
+/// Allocate or resize the per-window grid.
+///
+/// Matches C's `win_grid_alloc()`. Manages the ScreenGrid for multigrid mode
+/// and updates the GridView offsets for both single-grid and multigrid layouts.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_grid_alloc(wp: *mut std::ffi::c_void) {
+    let grid_view = nvim_win_get_w_grid(wp);
+    let grid_alloc_ptr = nvim_win_get_w_grid_alloc(wp);
+
+    let total_rows = nvim_win_get_w_height_outer(wp);
+    let total_cols = nvim_win_get_w_width_outer(wp);
+
+    let want_allocation = nvim_ui_has_multigrid() != 0 || nvim_win_get_floating(wp);
+    let has_allocation = !nvim_screengrid_get_chars(grid_alloc_ptr).is_null();
+
+    // Grow w_lines array if view_height exceeds current allocation
+    let view_height = nvim_win_get_view_height(wp);
+    let lines_size = nvim_win_get_w_lines_size(wp);
+    if view_height > lines_size {
+        nvim_win_set_lines_valid(wp, 0);
+        let old_lines = nvim_win_get_w_lines(wp);
+        xfree(old_lines);
+        let wline_sz = nvim_wline_T_size();
+        let new_lines = nvim_xcalloc((view_height as usize) + 1, wline_sz);
+        nvim_win_set_w_lines(wp, new_lines);
+        nvim_win_set_w_lines_size(wp, view_height);
+    }
+
+    let mut was_resized = false;
+    let ga_rows = nvim_screengrid_get_rows(grid_alloc_ptr);
+    let ga_cols = nvim_screengrid_get_cols(grid_alloc_ptr);
+    let ga_valid = nvim_screengrid_get_valid(grid_alloc_ptr);
+
+    if want_allocation && (!has_allocation || ga_rows != total_rows || ga_cols != total_cols) {
+        grid_alloc(grid_alloc_ptr, total_rows, total_cols, ga_valid, false);
+        nvim_screengrid_set_valid(grid_alloc_ptr, true);
+        if nvim_win_get_floating(wp) && nvim_win_get_config_border_flag(wp) != 0 {
+            nvim_win_set_redr_border(wp, 1);
+        }
+        was_resized = true;
+    } else if !want_allocation && has_allocation {
+        grid_free(grid_alloc_ptr);
+        nvim_screengrid_set_valid(grid_alloc_ptr, false);
+        was_resized = true;
+    } else if want_allocation && has_allocation && !ga_valid {
+        grid_invalidate(grid_alloc_ptr);
+        nvim_screengrid_set_valid(grid_alloc_ptr, true);
+    }
+
+    let winrow = nvim_win_get_winrow(wp);
+    let wincol = nvim_win_get_wincol(wp);
+    let winrow_off = nvim_win_get_winrow_off(wp);
+    let wincol_off = nvim_win_get_wincol_off(wp);
+
+    if want_allocation {
+        nvim_gridview_set_target(grid_view, grid_alloc_ptr);
+        nvim_gridview_set_row_offset(grid_view, winrow_off);
+        nvim_gridview_set_col_offset(grid_view, wincol_off);
+    } else {
+        let default_grid = nvim_get_default_grid();
+        nvim_gridview_set_target(grid_view, default_grid);
+        nvim_gridview_set_row_offset(grid_view, winrow + winrow_off);
+        nvim_gridview_set_col_offset(grid_view, wincol + wincol_off);
+    }
+
+    if (nvim_get_resizing_screen() || was_resized) && want_allocation {
+        let ga_handle = nvim_screengrid_get_handle(grid_alloc_ptr);
+        let ga_cols_new = nvim_screengrid_get_cols(grid_alloc_ptr);
+        let ga_rows_new = nvim_screengrid_get_rows(grid_alloc_ptr);
+        nvim_call_grid_resize(ga_handle, ga_cols_new, ga_rows_new);
+        nvim_win_ui_check_cursor_grid(ga_handle);
+    }
 }
 
 // =============================================================================

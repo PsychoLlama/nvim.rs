@@ -195,6 +195,7 @@ bool nvim_screengrid_get_mouse_enabled(ScreenGrid *grid) { return grid ? grid->m
 
 void nvim_screengrid_set_zindex(ScreenGrid *grid, int val) { if (grid) { grid->zindex = val; } }
 void nvim_screengrid_set_valid(ScreenGrid *grid, bool val) { if (grid) { grid->valid = val; } }
+bool nvim_screengrid_get_valid(ScreenGrid *grid) { return grid ? grid->valid : false; }
 void nvim_screengrid_set_mouse_enabled(ScreenGrid *grid, bool val) { if (grid) { grid->mouse_enabled = val; } }
 
 // Null-setters for grid arrays (used by rs_grid_free)
@@ -214,15 +215,41 @@ win_T *nvim_find_win_by_grid_handle(handle_T handle)
   return NULL;
 }
 
-// Rust implementations (Phase 1 & 2)
+// Rust implementations (Phase 1, 2 & 3)
 extern void rs_grid_free(ScreenGrid *grid);
 extern win_T *rs_get_win_by_grid_handle(handle_T handle);
 extern void rs_grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid);
+extern void rs_win_grid_alloc(win_T *wp);
 
 // Global accessors
 ScreenGrid *nvim_get_default_grid(void) { return &default_grid; }
 
 GridView *nvim_get_default_gridview(void) { return &default_gridview; }
+
+/// Get resizing_screen global (used by rs_win_grid_alloc)
+bool nvim_get_resizing_screen(void) { return resizing_screen; }
+
+/// Wrapper for ui_call_grid_resize (used by rs_win_grid_alloc)
+void nvim_call_grid_resize(handle_T handle, int cols, int rows)
+{
+  ui_call_grid_resize(handle, cols, rows);
+}
+
+// GridView field setters (used by rs_win_grid_alloc)
+void nvim_gridview_set_target(GridView *view, ScreenGrid *target)
+{
+  if (view) { view->target = target; }
+}
+
+void nvim_gridview_set_row_offset(GridView *view, int val)
+{
+  if (view) { view->row_offset = val; }
+}
+
+void nvim_gridview_set_col_offset(GridView *view, int val)
+{
+  if (view) { view->col_offset = val; }
+}
 
 int nvim_get_p_arshape(void) { return p_arshape; }
 
@@ -284,63 +311,7 @@ void grid_free_all_mem(void)
 /// resized grid.
 void win_grid_alloc(win_T *wp)
 {
-  GridView *grid = &wp->w_grid;
-  ScreenGrid *grid_allocated = &wp->w_grid_alloc;
-
-  int total_rows = wp->w_height_outer;
-  int total_cols = wp->w_width_outer;
-
-  bool want_allocation = ui_has(kUIMultigrid) || wp->w_floating;
-  bool has_allocation = (grid_allocated->chars != NULL);
-
-  if (wp->w_view_height > wp->w_lines_size) {
-    wp->w_lines_valid = 0;
-    xfree(wp->w_lines);
-    wp->w_lines = xcalloc((size_t)wp->w_view_height + 1, sizeof(wline_T));
-    wp->w_lines_size = wp->w_view_height;
-  }
-
-  bool was_resized = false;
-  if (want_allocation && (!has_allocation
-                          || grid_allocated->rows != total_rows
-                          || grid_allocated->cols != total_cols)) {
-    grid_alloc(grid_allocated, total_rows, total_cols,
-               wp->w_grid_alloc.valid, false);
-    grid_allocated->valid = true;
-    if (wp->w_floating && wp->w_config.border) {
-      wp->w_redr_border = true;
-    }
-    was_resized = true;
-  } else if (!want_allocation && has_allocation) {
-    // Single grid mode, all rendering will be redirected to default_grid.
-    // Only keep track of the size and offset of the window.
-    grid_free(grid_allocated);
-    grid_allocated->valid = false;
-    was_resized = true;
-  } else if (want_allocation && has_allocation && !wp->w_grid_alloc.valid) {
-    grid_invalidate(grid_allocated);
-    grid_allocated->valid = true;
-  }
-
-  if (want_allocation) {
-    grid->target = grid_allocated;
-    grid->row_offset = wp->w_winrow_off;
-    grid->col_offset = wp->w_wincol_off;
-  } else {
-    grid->target = &default_grid;
-    grid->row_offset = wp->w_winrow + wp->w_winrow_off;
-    grid->col_offset = wp->w_wincol + wp->w_wincol_off;
-  }
-
-  // send grid resize event if:
-  // - a grid was just resized
-  // - screen_resize was called and all grid sizes must be sent
-  // - the UI wants multigrid event (necessary)
-  if ((resizing_screen || was_resized) && want_allocation) {
-    ui_call_grid_resize(grid_allocated->handle,
-                        grid_allocated->cols, grid_allocated->rows);
-    ui_check_cursor_grid(grid_allocated->handle);
-  }
+  rs_win_grid_alloc(wp);
 }
 
 static void grid_draw_bordertext(VirtText vt, int col, int winbl, const int *hl_attr,

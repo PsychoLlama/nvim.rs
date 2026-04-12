@@ -391,6 +391,13 @@ int nvim_has_event_tabclosed(void) { return has_event(EVENT_TABCLOSED) ? 1 : 0; 
 void nvim_curwin_set_buffer_to_curbuf(void) { if (curwin) { curwin->w_buffer = curbuf; } }
 int nvim_one_window_and_locked_split(void) { return (ONE_WINDOW && curwin && curwin->w_locked && curbuf && curbuf->b_locked_split && first_tabpage && first_tabpage->tp_next != NULL) ? 1 : 0; }
 wline_T *nvim_win_get_wl_entry(win_T *wp, int idx) { return (idx < 0 || idx >= wp->w_lines_valid) ? NULL : &wp->w_lines[idx]; }
+
+// Accessors for w_lines array management (used by rs_win_grid_alloc)
+int nvim_win_get_w_lines_size(win_T *wp) { return wp ? wp->w_lines_size : 0; }
+void nvim_win_set_w_lines_size(win_T *wp, int val) { if (wp) { wp->w_lines_size = val; } }
+wline_T *nvim_win_get_w_lines(win_T *wp) { return wp ? wp->w_lines : NULL; }
+void nvim_win_set_w_lines(win_T *wp, wline_T *ptr) { if (wp) { wp->w_lines = ptr; } }
+size_t nvim_wline_T_size(void) { return sizeof(wline_T); }
 linenr_T nvim_wline_get_lnum(wline_T *wl) { return wl->wl_lnum; }
 linenr_T nvim_wline_get_foldend(wline_T *wl) { return wl->wl_foldend; }
 bool nvim_wline_get_valid(wline_T *wl) { return wl->wl_valid; }
