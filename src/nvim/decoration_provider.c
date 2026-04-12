@@ -32,7 +32,7 @@ static void decor_provider_error(DecorProvider *provider, const char *name, cons
 
 // Note we pass in a provider index as this function may cause decor_providers providers to be
 // reallocated so we need to be careful with DecorProvider pointers
-static bool decor_provider_invoke(int provider_idx, const char *name, LuaRef ref, Array args,
+bool nvim_decor_provider_invoke_c(int provider_idx, const char *name, LuaRef ref, Array args,
                                   bool default_true, Array *res)
 {
   Error err = ERROR_INIT;
@@ -83,7 +83,7 @@ void decor_providers_invoke_spell(win_T *wp, int start_row, int start_col, int e
       ADD_C(args, INTEGER_OBJ(start_col));
       ADD_C(args, INTEGER_OBJ(end_row));
       ADD_C(args, INTEGER_OBJ(end_col));
-      decor_provider_invoke((int)i, "spell", p->spell_nav, args, true, NULL);
+      nvim_decor_provider_invoke_c((int)i, "spell", p->spell_nav, args, true, NULL);
     }
   }
 }
@@ -99,7 +99,7 @@ bool decor_providers_invoke_conceal_line(win_T *wp, int row)
       ADD_C(args, INTEGER_OBJ(wp->handle));
       ADD_C(args, INTEGER_OBJ(wp->w_buffer->handle));
       ADD_C(args, INTEGER_OBJ(row));
-      decor_provider_invoke((int)i, "conceal_line", p->conceal_line, args, true, NULL);
+      nvim_decor_provider_invoke_c((int)i, "conceal_line", p->conceal_line, args, true, NULL);
     }
   }
   return wp->w_buffer->b_marktree->n_keys > keys;
@@ -116,7 +116,7 @@ void decor_providers_start(void)
     if (p->state != kDecorProviderDisabled && p->redraw_start != LUA_NOREF) {
       MAXSIZE_TEMP_ARRAY(args, 2);
       ADD_C(args, INTEGER_OBJ((int)display_tick));
-      bool active = decor_provider_invoke((int)i, "start", p->redraw_start, args, true, NULL);
+      bool active = nvim_decor_provider_invoke_c((int)i, "start", p->redraw_start, args, true, NULL);
       kv_A(decor_providers, i).state = active ? kDecorProviderActive : kDecorProviderRedrawDisabled;
     } else if (p->state != kDecorProviderDisabled) {
       kv_A(decor_providers, i).state = kDecorProviderActive;
@@ -160,7 +160,7 @@ void decor_providers_invoke_win(win_T *wp)
       ADD_C(args, INTEGER_OBJ(wp->w_topline - 1));
       ADD_C(args, INTEGER_OBJ(botline - 1));
       // TODO(bfredl): could skip a call if retval was interpreted like range?
-      if (!decor_provider_invoke((int)i, "win", p->redraw_win, args, true, NULL)) {
+      if (!nvim_decor_provider_invoke_c((int)i, "win", p->redraw_win, args, true, NULL)) {
         kv_A(decor_providers, i).state = kDecorProviderWinDisabled;
       }
     }
@@ -184,7 +184,7 @@ void decor_providers_invoke_line(win_T *wp, int row)
       ADD_C(args, WINDOW_OBJ(wp->handle));
       ADD_C(args, BUFFER_OBJ(wp->w_buffer->handle));
       ADD_C(args, INTEGER_OBJ(row));
-      if (!decor_provider_invoke((int)i, "line", p->redraw_line, args, true, NULL)) {
+      if (!nvim_decor_provider_invoke_c((int)i, "line", p->redraw_line, args, true, NULL)) {
         // return 'false' or error: skip rest of this window
         kv_A(decor_providers, i).state = kDecorProviderWinDisabled;
       }
@@ -213,7 +213,7 @@ void decor_providers_invoke_range(win_T *wp, int start_row, int start_col, int e
       ADD_C(args, INTEGER_OBJ(end_row));
       ADD_C(args, INTEGER_OBJ(end_col));
       Array res = ARRAY_DICT_INIT;
-      bool status = decor_provider_invoke((int)i, "range", p->redraw_range, args, true, &res);
+      bool status = nvim_decor_provider_invoke_c((int)i, "range", p->redraw_range, args, true, &res);
       p = &kv_A(decor_providers, i);  // lua call might have reallocated decor_providers
 
       if (!status) {
@@ -260,7 +260,7 @@ void decor_providers_invoke_buf(buf_T *buf)
       MAXSIZE_TEMP_ARRAY(args, 2);
       ADD_C(args, BUFFER_OBJ(buf->handle));
       ADD_C(args, INTEGER_OBJ((int64_t)display_tick));
-      decor_provider_invoke((int)i, "buf", p->redraw_buf, args, true, NULL);
+      nvim_decor_provider_invoke_c((int)i, "buf", p->redraw_buf, args, true, NULL);
     }
   }
 }
@@ -277,7 +277,7 @@ void decor_providers_invoke_end(void)
     if (p->state != kDecorProviderDisabled && p->redraw_end != LUA_NOREF) {
       MAXSIZE_TEMP_ARRAY(args, 1);
       ADD_C(args, INTEGER_OBJ((int)display_tick));
-      decor_provider_invoke((int)i, "end", p->redraw_end, args, true, NULL);
+      nvim_decor_provider_invoke_c((int)i, "end", p->redraw_end, args, true, NULL);
     }
   }
   decor_check_to_be_deleted();
@@ -410,3 +410,144 @@ LuaRef nvim_decor_provider_get_conceal_line(DecorProvider *p) { return p ? p->co
 
 void decor_provider_clear(DecorProvider *p);
 void decor_free_all_mem(void);
+
+// =============================================================================
+// Phase 2: Core invocation infrastructure
+// =============================================================================
+
+/// Log an error from a decoration provider (used by Rust invoke wrappers).
+void nvim_decor_provider_log_error(int ns_id, const char *name, const char *msg)
+{
+  const char *ns = describe_ns(ns_id, "(UNKNOWN PLUGIN)");
+  ELOG("Error in decoration provider \"%s\" (ns=%s):\n%s", name, ns, msg);
+  msg_schedule_semsg_multiline("Decoration provider \"%s\" (ns=%s):\n%s", name, ns, msg);
+}
+
+// =============================================================================
+// Phase 3: Index-based accessor functions for invoke functions
+// =============================================================================
+
+/// Get provider state by index.
+int nvim_decor_providers_get_state(size_t i) { return kv_A(decor_providers, i).state; }
+
+/// Set provider state by index.
+void nvim_decor_providers_set_state(size_t i, int state) { kv_A(decor_providers, i).state = state; }
+
+/// Get redraw_start callback ref by index.
+LuaRef nvim_decor_providers_get_redraw_start(size_t i) { return kv_A(decor_providers, i).redraw_start; }
+
+/// Get redraw_buf callback ref by index.
+LuaRef nvim_decor_providers_get_redraw_buf(size_t i) { return kv_A(decor_providers, i).redraw_buf; }
+
+/// Get redraw_end callback ref by index.
+LuaRef nvim_decor_providers_get_redraw_end(size_t i) { return kv_A(decor_providers, i).redraw_end; }
+
+/// Get spell_nav callback ref by index.
+LuaRef nvim_decor_providers_get_spell_nav(size_t i) { return kv_A(decor_providers, i).spell_nav; }
+
+/// Get conceal_line callback ref by index.
+LuaRef nvim_decor_providers_get_conceal_line(size_t i) { return kv_A(decor_providers, i).conceal_line; }
+
+/// Get global display_tick.
+uint64_t nvim_decor_get_display_tick(void) { return display_tick; }
+
+/// Get the buffer handle of a window's current buffer.
+int nvim_win_get_buf_handle(win_T *wp) { return wp->w_buffer->handle; }
+
+/// Get the marktree n_keys of a window's current buffer.
+size_t nvim_win_get_buf_marktree_n_keys(win_T *wp) { return wp->w_buffer->b_marktree->n_keys; }
+
+/// Call decor_check_to_be_deleted().
+void nvim_decor_check_to_be_deleted(void) { decor_check_to_be_deleted(); }
+
+// =============================================================================
+// Phase 4: Complex invoke function accessors
+// =============================================================================
+
+/// Set decor_state.running_decor_provider.
+void nvim_decor_state_set_running(bool val) { decor_state.running_decor_provider = val; }
+
+/// Assert that decor_state is clean (as required by invoke_win).
+void nvim_decor_state_assert_clean(void)
+{
+  assert(decor_state.current_end == 0
+         && decor_state.future_begin == (int)kv_size(decor_state.ranges_i));
+}
+
+/// Call validate_botline(wp).
+void nvim_decor_validate_botline(win_T *wp) { validate_botline(wp); }
+
+/// Get redraw_win callback ref by index.
+LuaRef nvim_decor_providers_get_redraw_win(size_t i) { return kv_A(decor_providers, i).redraw_win; }
+
+/// Get redraw_line callback ref by index.
+LuaRef nvim_decor_providers_get_redraw_line(size_t i) { return kv_A(decor_providers, i).redraw_line; }
+
+/// Get redraw_range callback ref by index.
+LuaRef nvim_decor_providers_get_redraw_range(size_t i) { return kv_A(decor_providers, i).redraw_range; }
+
+/// Get win_skip_row for provider at index.
+int nvim_decor_providers_get_win_skip_row(size_t i) { return kv_A(decor_providers, i).win_skip_row; }
+
+/// Get win_skip_col for provider at index.
+int nvim_decor_providers_get_win_skip_col(size_t i) { return kv_A(decor_providers, i).win_skip_col; }
+
+/// Set win_skip_row and win_skip_col for provider at index.
+void nvim_decor_providers_set_win_skip(size_t i, int row, int col)
+{
+  kv_A(decor_providers, i).win_skip_row = row;
+  kv_A(decor_providers, i).win_skip_col = col;
+}
+
+/// Set win_skip_row and win_skip_col to zero for provider at index.
+void nvim_decor_providers_clear_win_skip(size_t i)
+{
+  kv_A(decor_providers, i).win_skip_row = 0;
+  kv_A(decor_providers, i).win_skip_col = 0;
+}
+
+/// Invoke a range provider callback and parse the result into a struct.
+/// The caller is responsible for calling hl_check_ns() afterwards.
+DecorRangeInvokeResult nvim_decor_provider_invoke_range_c(int provider_idx, LuaRef ref,
+                                                          int winid, int bufid,
+                                                          int start_row, int start_col,
+                                                          int end_row, int end_col)
+{
+  MAXSIZE_TEMP_ARRAY(args, 6);
+  ADD_C(args, WINDOW_OBJ(winid));
+  ADD_C(args, BUFFER_OBJ(bufid));
+  ADD_C(args, INTEGER_OBJ(start_row));
+  ADD_C(args, INTEGER_OBJ(start_col));
+  ADD_C(args, INTEGER_OBJ(end_row));
+  ADD_C(args, INTEGER_OBJ(end_col));
+  Array res = ARRAY_DICT_INIT;
+  bool status = nvim_decor_provider_invoke_c(provider_idx, "range", ref, args, true, &res);
+
+  DecorRangeInvokeResult result = { .ok = status, .stop_win = false, .has_skip = false };
+
+  if (!status) {
+    result.stop_win = true;
+  } else if (res.size >= 1) {
+    Object first = res.items[0];
+    if (first.type == kObjectTypeBoolean) {
+      if (first.data.boolean == false) {
+        result.stop_win = true;
+      }
+    } else if (first.type == kObjectTypeInteger) {
+      Integer row = first.data.integer;
+      Integer col = 0;
+      if (res.size >= 2) {
+        Object second = res.items[1];
+        if (second.type == kObjectTypeInteger) {
+          col = second.data.integer;
+        }
+      }
+      result.has_skip = true;
+      result.skip_row = (int)row;
+      result.skip_col = (int)col;
+    }
+  }
+
+  api_free_array(res);
+  return result;
+}
