@@ -227,11 +227,10 @@ typedef struct {
 } HistoryBrowseState;
 extern int rs_command_line_browse_history(HistoryBrowseState *state);
 
-/// Thin wrapper for Rust: trigger autocmd with int event (avoids event_T in public header).
+/// Thin C wrapper: delegates to Rust rs_trigger_cmd_autocmd.
 void nvim_trigger_cmd_autocmd(int typechar, int evt)
 {
-  char typestr[2] = { (char)typechar, NUL };
-  apply_autocmds((event_T)evt, typestr, typestr, false, curbuf);
+  rs_trigger_cmd_autocmd(typechar, evt);
 }
 
 // command_line_enter migrated to Rust (entry_impl.rs as rs_command_line_enter).
@@ -268,9 +267,7 @@ void nvim_fire_cmdlinechanged_autocmd(int firstc)
 /// Check if CmdlineChanged event has any listeners (for Rust).
 int nvim_has_event_cmdlinechanged(void) { return has_event(EVENT_CMDLINECHANGED) ? 1 : 0; }
 
-// do_autocmd_cmdlinechanged: implemented in Rust (cmdline crate, state.rs).
-// Thin C wrapper delegates to Rust.
-static void do_autocmd_cmdlinechanged(int firstc) { rs_do_autocmd_cmdlinechanged(firstc); }
+// do_autocmd_cmdlinechanged: implemented in Rust (cmdline crate, state.rs as rs_do_autocmd_cmdlinechanged).
 
 /// Abandon the command line.
 /// getcmdline() - accept a command line starting with firstc.
@@ -649,8 +646,8 @@ CmdlineInfo *nvim_get_ccline_ptr(void)
   }
 }
 
-/// Public wrapper for do_autocmd_cmdlinechanged (for VimL functions in other files).
-void nvim_do_autocmd_cmdlinechanged(int firstc) { do_autocmd_cmdlinechanged(firstc); }
+/// Public wrapper for rs_do_autocmd_cmdlinechanged (for VimL functions in other files).
+void nvim_do_autocmd_cmdlinechanged(int firstc) { rs_do_autocmd_cmdlinechanged(firstc); }
 
 /// Get the current command-line type.
 /// Returns ':' or '/' or '?' or '@' or '>' or '-'

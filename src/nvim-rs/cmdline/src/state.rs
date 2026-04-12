@@ -1014,8 +1014,7 @@ const K_OPT_BO_FLAG_WILDMODE: c_int = 0x1;
 const K_UI_CMDLINE: c_int = 24;
 
 unsafe extern "C" {
-    // Autocmd trigger wrapper (int event to avoid event_T in public header)
-    fn nvim_trigger_cmd_autocmd(typechar: c_int, evt: c_int);
+    // Autocmd trigger (now implemented in Rust as rs_trigger_cmd_autocmd)
     fn xfree(ptr: *mut c_char);
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
@@ -1437,7 +1436,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 let c_val = (*s).c;
                 set_vim_var_char(c_val);
                 let cmdline_type = crate::entry::rs_entry_cmdline_type((*s).firstc);
-                nvim_trigger_cmd_autocmd(cmdline_type, EVENT_CMDLINELEAVEPRE);
+                rs_trigger_cmd_autocmd(cmdline_type, EVENT_CMDLINELEAVEPRE);
             }
             (*s).event_cmdlineleavepre_triggered = true;
             if (c_check == ESC || c_check == CTRL_C) && (nvim_get_wim_flags(0) & WIM_FLAG_LIST) != 0
@@ -1700,8 +1699,6 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
 unsafe extern "C" {
     // Autocmd event IDs
     // EVENT_CURSORMOVEDC = 44 (from auevents_enum.generated.h)
-    // Trigger CmdlineChanged autocmd (public wrapper, callable from Rust)
-    fn nvim_do_autocmd_cmdlinechanged(firstc: c_int);
 
     // cmdline pum and vim char helpers
     fn cmdline_pum_remove(skip_redraw: bool);
@@ -1798,7 +1795,7 @@ pub unsafe extern "C" fn nvim_command_line_not_changed(s: *mut c_void) -> c_int 
     let ss = s.cast::<crate::command_line_state::CommandLineState>();
     let cmdpos = nvim_get_ccline_cmdpos();
     if cmdpos != (*ss).prev_cmdpos {
-        nvim_trigger_cmd_autocmd((*ss).cmdline_type, EVENT_CURSORMOVEDC);
+        rs_trigger_cmd_autocmd((*ss).cmdline_type, EVENT_CURSORMOVEDC);
         // ccline.redraw_state = max(ccline.redraw_state, kCmdRedrawPos=1)
         let rs = nvim_get_ccline_redraw_state();
         if rs < 1 {
@@ -1860,12 +1857,12 @@ pub unsafe extern "C" fn nvim_command_line_changed(s: *mut c_void) -> c_int {
         } else {
             b'-' as c_int
         };
-        nvim_do_autocmd_cmdlinechanged(effective_firstc);
+        do_autocmd_cmdlinechanged_inner(effective_firstc);
     }
 
     // trigger CursorMoveD if position changed
     if cmdpos_changed {
-        nvim_trigger_cmd_autocmd((*ss).cmdline_type, EVENT_CURSORMOVEDC);
+        rs_trigger_cmd_autocmd((*ss).cmdline_type, EVENT_CURSORMOVEDC);
         let rs = nvim_get_ccline_redraw_state();
         if rs < 1 {
             nvim_set_ccline_redraw_state(1);
@@ -2035,6 +2032,38 @@ pub unsafe extern "C" fn nvim_command_line_end_wildmenu(s: *mut c_void, key_is_w
 unsafe extern "C" {
     fn nvim_has_event_cmdlinechanged() -> c_int;
     fn nvim_fire_cmdlinechanged_autocmd(firstc: c_int);
+    fn apply_autocmds(
+        event: c_int,
+        pat: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    static mut curbuf: *mut c_void;
+}
+
+/// Rust replacement for `nvim_trigger_cmd_autocmd` in ex_getln.c.
+///
+/// Formats `typechar` as a 2-byte C string and calls `apply_autocmds`.
+///
+/// # Safety
+///
+/// Calls C autocmd functions with global editor state.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_trigger_cmd_autocmd(typechar: c_int, evt: c_int) {
+    let typestr: [c_char; 2] = [typechar as c_char, 0];
+    apply_autocmds(evt, typestr.as_ptr(), typestr.as_ptr(), false, curbuf);
+}
+
+/// Inner logic for `do_autocmd_cmdlinechanged`.
+///
+/// # Safety
+///
+/// Calls C autocmd/dict functions.
+unsafe fn do_autocmd_cmdlinechanged_inner(firstc: c_int) {
+    if nvim_has_event_cmdlinechanged() != 0 {
+        nvim_fire_cmdlinechanged_autocmd(firstc);
+    }
 }
 
 /// Rust replacement for `do_autocmd_cmdlinechanged` in ex_getln.c.
@@ -2044,7 +2073,5 @@ unsafe extern "C" {
 /// Calls C autocmd/dict functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_do_autocmd_cmdlinechanged(firstc: c_int) {
-    if nvim_has_event_cmdlinechanged() != 0 {
-        nvim_fire_cmdlinechanged_autocmd(firstc);
-    }
+    do_autocmd_cmdlinechanged_inner(firstc);
 }
