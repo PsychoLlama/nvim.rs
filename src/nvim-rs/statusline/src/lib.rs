@@ -2081,7 +2081,11 @@ struct StlClickDefsResult {
 
 // Phase 1 C accessors
 extern "C" {
-    fn nvim_stl_get_trans_bufname(buf: BufHandle);
+    #[link_name = "rs_buf_spname"]
+    fn lib_buf_spname(buf: BufHandle) -> *const c_char;
+    fn home_replace(buf: BufHandle, src: *const c_char, dst: *mut c_char, dstlen: c_int, one: bool);
+    fn trans_characters(buf: *mut c_char, bufsize: c_int);
+    fn nvim_get_namebuff() -> *mut c_char;
     #[link_name = "rs_win_redr_custom"]
     fn nvim_stl_win_redr_custom_direct(
         wp: WinHandle,
@@ -2109,15 +2113,32 @@ const MAXPATHL: usize = 4096;
 
 /// FFI export: Fill NameBuff with the translated buffer name.
 ///
-/// This is the Rust replacement for `get_trans_bufname()` in statusline.c.
-/// The actual work is done by the C accessor `nvim_stl_get_trans_bufname`
-/// which calls buf_spname/home_replace/trans_characters.
+/// Replacement for the C `nvim_stl_get_trans_bufname` wrapper.
+/// Calls rs_buf_spname or home_replace, then trans_characters, filling NameBuff.
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle.
 #[export_name = "get_trans_bufname"]
 pub unsafe extern "C" fn rs_get_trans_bufname(buf: BufHandle) {
-    nvim_stl_get_trans_bufname(buf);
+    let namebuff = nvim_get_namebuff();
+    let spname = lib_buf_spname(buf);
+    if spname.is_null() {
+        let bfname = nvim_buf_get_b_fname(buf);
+        home_replace(buf, bfname, namebuff, 4096_i32, true);
+    } else {
+        // xstrlcpy(NameBuff, spname, MAXPATHL)
+        let src_len = {
+            let mut n = 0usize;
+            while *spname.add(n) != 0 {
+                n += 1;
+            }
+            n
+        };
+        let copy = src_len.min(MAXPATHL - 1);
+        std::ptr::copy_nonoverlapping(spname, namebuff, copy);
+        *namebuff.add(copy) = 0;
+    }
+    trans_characters(namebuff, 4096_i32);
 }
 
 /// FFI export: Redraw the status line according to 'statusline'.

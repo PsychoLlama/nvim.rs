@@ -15,10 +15,11 @@ use crate::highlight::HighlightTracker;
 
 // C callbacks for expression evaluation and other operations that need C-side support
 extern "C" {
-    // Expression evaluation
-    fn nvim_stl_eval_expr_alloc(wp: WinHandle, expr: *const c_char, expr_len: c_int)
-        -> *mut c_char;
     fn xfree(ptr: *mut std::ffi::c_void);
+    // eval_to_string: evaluates a VimL expression, returns allocated string
+    fn eval_to_string(arg: *mut c_char, join_list: bool, use_simple_function: bool) -> *mut c_char;
+    #[link_name = "xmemdupz"]
+    fn render_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
     // Buffer/Window accessors
     fn nvim_win_get_buffer(wp: WinHandle) -> nvim_window::BufHandle;
@@ -41,14 +42,14 @@ extern "C" {
     // Highlight lookup
     fn nvim_syn_name2id(name: *const c_char) -> c_int;
 
-    // Quickfix info
-    fn nvim_stl_get_qf_info(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-
-    // Keymap info
-    fn nvim_stl_get_keymap(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-
-    // Showcmd buffer
-    fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
+    // Quickfix / keymap: direct underlying functions
+    fn nvim_win_is_qf_win(wp: WinHandle) -> bool;
+    fn nvim_win_get_llist_ref(wp: WinHandle) -> *mut std::ffi::c_void;
+    fn nvim_stl_get_msg_loclist() -> *const c_char;
+    fn nvim_stl_get_msg_qflist() -> *const c_char;
+    fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+    static showcmd_buf: [u8; 41];
 
     // Batch cursor info
     fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
@@ -319,12 +320,17 @@ fn process_spec(
 fn render_expression(
     expr: &str,
     _reevaluate: bool,
-    ctx: &RenderContext,
+    _ctx: &RenderContext,
     builder: &mut StatuslineBuilder,
 ) {
     unsafe {
-        let c_expr = std::ffi::CString::new(expr).unwrap_or_default();
-        let result_ptr = nvim_stl_eval_expr_alloc(ctx.wp, c_expr.as_ptr(), expr.len() as c_int);
+        // Build a null-terminated copy of expr, evaluate it, free the copy.
+        let expr_copy = render_xmemdupz(expr.as_ptr().cast(), expr.len());
+        if expr_copy.is_null() {
+            return;
+        }
+        let result_ptr = eval_to_string(expr_copy, true, false);
+        xfree(expr_copy.cast());
 
         if !result_ptr.is_null() {
             let cstr = std::ffi::CStr::from_ptr(result_ptr);
@@ -577,10 +583,24 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Quickfix items
             StlFlag::Quickfix => {
-                let len = nvim_stl_get_qf_info(wp, buf.as_mut_ptr().cast(), buf.len() as c_int);
-                if len > 0 {
-                    let s = std::str::from_utf8_unchecked(&buf[..len as usize]);
-                    (s.to_string(), false, false)
+                if nvim_win_is_qf_win(wp) {
+                    let msg = if nvim_win_get_llist_ref(wp).is_null() {
+                        nvim_stl_get_msg_qflist()
+                    } else {
+                        nvim_stl_get_msg_loclist()
+                    };
+                    if msg.is_null() {
+                        (String::new(), false, false)
+                    } else {
+                        let msg_len = strlen(msg);
+                        if msg_len > 0 {
+                            let slice = std::slice::from_raw_parts(msg.cast::<u8>(), msg_len);
+                            let s = std::str::from_utf8_unchecked(slice);
+                            (s.to_string(), false, false)
+                        } else {
+                            (String::new(), false, false)
+                        }
+                    }
                 } else {
                     (String::new(), false, false)
                 }
@@ -588,7 +608,8 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Keymap
             StlFlag::Keymap => {
-                let len = nvim_stl_get_keymap(wp, buf.as_mut_ptr().cast(), buf.len() as c_int);
+                let fmt = c"<%s>".as_ptr();
+                let len = get_keymap_str(wp, fmt, buf.as_mut_ptr().cast(), buf.len() as c_int);
                 if len > 0 {
                     let s = std::str::from_utf8_unchecked(&buf[..len as usize]);
                     (s.to_string(), false, false)
@@ -613,12 +634,15 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Showcmd
             StlFlag::ShowCmd => {
-                let len = nvim_stl_get_showcmd(buf.as_mut_ptr().cast(), buf.len() as c_int);
-                if len > 0 {
-                    let s = std::str::from_utf8_unchecked(&buf[..len as usize]);
-                    (s.to_string(), false, false)
-                } else {
+                if showcmd_buf[0] == 0 {
                     (String::new(), false, false)
+                } else {
+                    let mut len = 0usize;
+                    while len < showcmd_buf.len() && showcmd_buf[len] != 0 {
+                        len += 1;
+                    }
+                    let s = std::str::from_utf8_unchecked(&showcmd_buf[..len]);
+                    (s.to_string(), false, false)
                 }
             }
 

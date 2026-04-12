@@ -55,24 +55,6 @@
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 
 
-/// Evaluate an expression for the statusline, returning an allocated string.
-/// Returns allocated string result (caller must free via xfree), or NULL.
-char *nvim_stl_eval_expr_alloc(win_T *wp, const char *expr, int expr_len)
-{
-  if (wp == NULL || expr == NULL || expr_len <= 0) {
-    return NULL;
-  }
-
-  // Create a null-terminated copy of the expression
-  char *expr_copy = xmemdupz(expr, (size_t)expr_len);
-
-  // Evaluate the expression
-  char *result = eval_to_string(expr_copy, true, false);
-  xfree(expr_copy);
-
-  return result;
-}
-
 /// Get highlight group ID by name.
 int nvim_syn_name2id(const char *name)
 {
@@ -131,72 +113,6 @@ StlCursorInfo nvim_stl_get_win_cursor_info(win_T *wp)
   return info;
 }
 
-/// Get showcmd output.
-int nvim_stl_get_showcmd(char *buf, int buflen)
-{
-  if (buf == NULL || buflen <= 0) {
-    return 0;
-  }
-  // showcmd_buf is declared in normal.h
-  if (showcmd_buf[0] == NUL) {
-    buf[0] = '\0';
-    return 0;
-  }
-  int len = (int)strlen(showcmd_buf);
-  if (len >= buflen) {
-    len = buflen - 1;
-  }
-  memcpy(buf, showcmd_buf, (size_t)len);
-  buf[len] = '\0';
-  return len;
-}
-
-/// Get keymap name for statusline.
-int nvim_stl_get_keymap(win_T *wp, char *buf, int buflen)
-{
-  if (wp == NULL || buf == NULL || buflen <= 0) {
-    return 0;
-  }
-  buf[0] = '\0';
-  // Call get_keymap_str to get the keymap name formatted as "<%s>"
-  int len = get_keymap_str(wp, "<%s>", buf, buflen);
-  return len > 0 ? len : 0;
-}
-
-
-/// Get quickfix info for statusline.
-int nvim_stl_get_qf_info(win_T *wp, char *buf, int buflen)
-{
-  if (wp == NULL || buf == NULL || buflen <= 0) {
-    return 0;
-  }
-  buf[0] = '\0';
-  // For quickfix window, show list info
-  if (bt_quickfix(wp->w_buffer)) {
-    const char *msg = wp->w_llist_ref ? _(msg_loclist) : _(msg_qflist);
-    int len = (int)strlen(msg);
-    if (len >= buflen) {
-      len = buflen - 1;
-    }
-    memcpy(buf, msg, (size_t)len);
-    buf[len] = '\0';
-    return len;
-  }
-  return 0;
-}
-
-/// Fill NameBuff with the translated buffer name via buf_spname/home_replace/trans_characters.
-void nvim_stl_get_trans_bufname(buf_T *buf)
-{
-  if (buf_spname(buf) != NULL) {
-    xstrlcpy(NameBuff, buf_spname(buf), MAXPATHL);
-  } else {
-    home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, true);
-  }
-  trans_characters(NameBuff, MAXPATHL);
-}
-
-
 /// Get wp->w_p_stc (statuscolumn option).
 const char *nvim_stl_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 
@@ -210,76 +126,14 @@ stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp) { return &stcp->hlr
 
 
 
-/// Evaluate a VimL expression for the statusline with context switching.
-/// mode=0: full context (save/restore curwin/curbuf, set g:actual_curbuf/g:actual_curwin)
-/// mode=1: fmt expr (set g:statusline_winid for "%!" expressions)
-/// Returns allocated string result (caller must free via xfree), or NULL.
-char *nvim_stl_eval_with_context(win_T *wp, char *expr, int mode, bool use_sandbox)
+
+
+/// Set g:statusline_winid to a number value. Helper for Rust eval_with_context.
+void nvim_stl_set_statusline_winid(int handle)
 {
-  char *result;
-
-  if (mode == 1) {
-    // "%!" format expression: set g:statusline_winid
-    typval_T tv = {
-      .v_type = VAR_NUMBER,
-      .vval.v_number = wp->handle,
-    };
-    set_var(S_LEN("g:statusline_winid"), &tv, false);
-    result = eval_to_string_safe(expr, use_sandbox, false);
-    do_unlet(S_LEN("g:statusline_winid"), true);
-  } else {
-    // Full context switching: save/restore curwin/curbuf, set g:actual_curbuf/g:actual_curwin
-    char buf_tmp[70];
-
-    vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curbuf->b_fnum);
-    set_internal_string_var("g:actual_curbuf", buf_tmp);
-    vim_snprintf(buf_tmp, sizeof(buf_tmp), "%d", curwin->handle);
-    set_internal_string_var("g:actual_curwin", buf_tmp);
-
-    buf_T *const save_curbuf = curbuf;
-    win_T *const save_curwin = curwin;
-    const int save_VIsual_active = VIsual_active;
-    curwin = wp;
-    curbuf = wp->w_buffer;
-    if (curwin != save_curwin) {
-      VIsual_active = false;
-    }
-
-    result = eval_to_string_safe(expr, use_sandbox, false);
-
-    curwin = save_curwin;
-    curbuf = save_curbuf;
-    VIsual_active = save_VIsual_active;
-
-    do_unlet(S_LEN("g:actual_curbuf"), true);
-    do_unlet(S_LEN("g:actual_curwin"), true);
-  }
-
-  return result;
+  typval_T tv = { .v_type = VAR_NUMBER, .vval.v_number = handle };
+  set_var(S_LEN("g:statusline_winid"), &tv, false);
 }
-
-
-/// Call home_replace + trans_characters to fill the provided buffer.
-void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dstlen)
-{
-  home_replace(buf, src, dst, dstlen, true);
-  trans_characters(dst, dstlen);
-}
-
-
-
-
-
-/// Set an option to empty string on error (SID_ERROR).
-void nvim_stl_set_option_empty(int opt_idx, int opt_scope)
-{
-  set_option_direct((OptIndex)opt_idx, STATIC_CSTR_AS_OPTVAL(""), opt_scope, SID_ERROR);
-}
-
-
-
-
-
 
 /// Find option index by 'showcmdloc' value.
 int nvim_stl_showcmd_matches_opt(int opt_idx)
@@ -330,6 +184,11 @@ int nvim_stl_describe_sign_text(char *buf, schar_T *text) { return (int)describe
 
 
 
+
+/// Return the gettext-translated "[Location List]" string.
+const char *nvim_stl_get_msg_loclist(void) { return _(msg_loclist); }
+/// Return the gettext-translated "[Quickfix List]" string.
+const char *nvim_stl_get_msg_qflist(void) { return _(msg_qflist); }
 
 _Static_assert(kOptInvalid == -1, "kOptInvalid must be -1");
 _Static_assert(kOptStatuscolumn == 293, "kOptStatuscolumn");

@@ -81,7 +81,7 @@ extern "C" {
     static mut p_tal: *mut c_char;
     fn nvim_stl_get_p_sc() -> c_int;
     fn nvim_stl_showcmd_loc_is_tabline() -> c_int;
-    fn nvim_stl_get_showcmd_buf() -> *const c_char;
+    static showcmd_buf: [u8; 41];
 
     // Click defs
     fn nvim_stl_get_tab_page_click_defs_size() -> usize;
@@ -390,10 +390,9 @@ unsafe fn draw_builtin_tabline(
         let sc_width = if 10 < n { 10 } else { n };
 
         if sc_width > 0 {
-            let showcmd_buf = nvim_stl_get_showcmd_buf();
             nvim_stl_grid_line_puts(
                 columns - sc_width - (if drawn_tabcount > 1 { 2 } else { 0 }),
-                showcmd_buf,
+                showcmd_buf.as_ptr().cast(),
                 sc_width,
                 attr_nosel,
             );

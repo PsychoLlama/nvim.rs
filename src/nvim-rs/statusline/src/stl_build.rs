@@ -149,12 +149,6 @@ struct StlSignInfo {
 
 extern "C" {
     // Expression evaluation
-    fn nvim_stl_eval_with_context(
-        wp: WinHandle,
-        expr: *mut c_char,
-        mode: c_int,
-        use_sandbox: bool,
-    ) -> *mut c_char;
     #[link_name = "was_set_insecurely"]
     fn nvim_stl_was_set_insecurely(wp: WinHandle, opt_idx: c_int, opt_scope: c_int) -> c_int;
 
@@ -175,12 +169,10 @@ extern "C" {
     // Buffer / path (direct link to Rust/C implementations)
     #[link_name = "rs_buf_spname"]
     fn nvim_stl_buf_spname(buf: BufHandle) -> *const c_char;
-    fn nvim_stl_home_replace_trans(
-        buf: BufHandle,
-        src: *const c_char,
-        dst: *mut c_char,
-        dstlen: c_int,
-    );
+    // home_replace: fills dst with home-replaced path (buf may be null)
+    fn home_replace(buf: BufHandle, src: *const c_char, dst: *mut c_char, dstlen: c_int, one: bool);
+    // trans_characters: translates special characters in buf in-place
+    fn trans_characters(buf: *mut c_char, bufsize: c_int);
     #[link_name = "path_tail"]
     fn nvim_stl_path_tail(s: *const c_char) -> *const c_char;
     #[link_name = "rs_get_fileformat"]
@@ -196,8 +188,9 @@ extern "C" {
     static mut redraw_not_allowed: bool;
     static mut KeyTyped: bool;
     static mut did_emsg: c_int;
-    fn nvim_stl_set_option_empty(opt_idx: c_int, opt_scope: c_int);
     static mut State: c_int;
+    // showcmd_buf: global array of 41 bytes (SHOWCMD_BUFLEN = 10+1+30 = 41)
+    static showcmd_buf: [u8; 41];
 
     // Memory (direct link to C implementations)
     #[link_name = "xfree"]
@@ -213,7 +206,6 @@ extern "C" {
 
     // Showcmd
     fn nvim_stl_showcmd_matches_opt(opt_idx: c_int) -> c_int;
-    fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
 
     // Vim variables
     #[link_name = "rs_get_vim_var_nr"]
@@ -264,9 +256,12 @@ extern "C" {
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
 
-    // Quickfix / keymap
-    fn nvim_stl_get_qf_info(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-    fn nvim_stl_get_keymap(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
+    // Quickfix / keymap: direct underlying functions
+    fn nvim_win_is_qf_win(wp: WinHandle) -> bool;
+    fn nvim_win_get_llist_ref(wp: WinHandle) -> *mut c_void;
+    fn nvim_stl_get_msg_loclist() -> *const c_char;
+    fn nvim_stl_get_msg_qflist() -> *const c_char;
+    fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
 
     // NameBuff (MAXPATHL global buffer)
     fn nvim_get_namebuff() -> *mut c_char;
@@ -275,10 +270,254 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
     fn memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
     fn memmove(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
+
+    // Eval with context: lower-level functions
+    fn eval_to_string_safe(
+        expr: *mut c_char,
+        use_sandbox: bool,
+        use_simple_function: bool,
+    ) -> *mut c_char;
+    fn set_internal_string_var(name: *const c_char, val: *mut c_char);
+    fn do_unlet(name: *const c_char, name_len: usize, forceit: bool) -> c_int;
+    fn nvim_stl_set_statusline_winid(handle: c_int);
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+    fn nvim_get_curwin_ptr() -> WinHandle;
+    fn nvim_set_curwin_ptr(wp: WinHandle);
+    fn nvim_get_curbuf_ptr() -> BufHandle;
+    fn nvim_set_curbuf_ptr(buf: BufHandle);
+    fn nvim_get_visual_active() -> c_int;
+    fn nvim_set_visual_active(val: bool);
+
+    // set_option_direct with OptVal (kOptValTypeString=2)
+    fn set_option_direct(opt_idx: c_int, val: StlOptVal, opt_flags: c_int, set_sid: c_int);
+    fn nvim_get_empty_string_option() -> *mut c_char;
 }
 
 // MAXPATHL - max path length
 const MAXPATHL: c_int = 4096;
+
+// =============================================================================
+// OptVal for set_option_direct (kOptValTypeString = 2)
+// =============================================================================
+
+/// String type for OptVal (matches C String type: data + size).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct StlOptString {
+    data: *mut c_char,
+    size: usize,
+}
+
+/// Union data for StlOptVal.
+#[repr(C)]
+#[derive(Clone, Copy)]
+union StlOptValData {
+    number: i64,
+    string: StlOptString,
+}
+
+/// OptVal for use with set_option_direct (matches C OptVal layout).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct StlOptVal {
+    type_: c_int,
+    data: StlOptValData,
+}
+
+// kOptValTypeString = 2 (from option_defs.h: Nil=-1, Boolean=0, Number=1, String=2)
+const K_OPT_VAL_TYPE_STRING: c_int = 2;
+
+// =============================================================================
+// Phase 1 Rust implementations (replacing C nvim_stl_* wrappers)
+// =============================================================================
+
+/// Get the showcmd buffer contents into `out`. Returns bytes written.
+/// Replacement for C `nvim_stl_get_showcmd`.
+///
+/// # Safety
+/// `out` must be valid for `outlen` bytes.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn stl_get_showcmd(out: *mut c_char, outlen: c_int) -> c_int {
+    if out.is_null() || outlen <= 0 {
+        return 0;
+    }
+    // showcmd_buf is a global C array; read it via the static extern
+    if showcmd_buf[0] == 0 {
+        *out = 0;
+        return 0;
+    }
+    let mut len = 0usize;
+    while len < showcmd_buf.len() && showcmd_buf[len] != 0 {
+        len += 1;
+    }
+    let copy = len.min((outlen - 1) as usize);
+    std::ptr::copy_nonoverlapping(showcmd_buf.as_ptr().cast(), out, copy);
+    *out.add(copy) = 0;
+    copy as c_int
+}
+
+/// Get the keymap indicator string into `out`. Returns bytes written.
+/// Replacement for C `nvim_stl_get_keymap`.
+///
+/// # Safety
+/// `wp` must be a valid window handle. `out` must be valid for `outlen` bytes.
+unsafe fn stl_get_keymap(wp: WinHandle, out: *mut c_char, outlen: c_int) -> c_int {
+    if wp.is_null() || out.is_null() || outlen <= 0 {
+        return 0;
+    }
+    *out = 0;
+    let fmt = b"<%s>\0".as_ptr().cast::<c_char>();
+    let len = get_keymap_str(wp, fmt, out, outlen);
+    if len > 0 {
+        len
+    } else {
+        0
+    }
+}
+
+/// Get quickfix/location list indicator into `out`. Returns bytes written.
+/// Replacement for C `nvim_stl_get_qf_info`.
+///
+/// # Safety
+/// `wp` must be a valid window handle. `out` must be valid for `outlen` bytes.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn stl_get_qf_info(wp: WinHandle, out: *mut c_char, outlen: c_int) -> c_int {
+    if wp.is_null() || out.is_null() || outlen <= 0 {
+        return 0;
+    }
+    *out = 0;
+    if nvim_win_is_qf_win(wp) {
+        let msg = if !nvim_win_get_llist_ref(wp).is_null() {
+            nvim_stl_get_msg_loclist()
+        } else {
+            nvim_stl_get_msg_qflist()
+        };
+        if msg.is_null() {
+            return 0;
+        }
+        let msg_len = strlen(msg);
+        let copy = msg_len.min((outlen - 1) as usize);
+        std::ptr::copy_nonoverlapping(msg, out, copy);
+        *out.add(copy) = 0;
+        return copy as c_int;
+    }
+    0
+}
+
+/// Fill home-replaced + trans_characters path in `dst`.
+/// Replacement for C `nvim_stl_home_replace_trans`.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle. `src` must be a valid C string or null.
+/// `dst` must be valid for `dstlen` bytes.
+unsafe fn stl_home_replace_trans(
+    buf: BufHandle,
+    src: *const c_char,
+    dst: *mut c_char,
+    dstlen: c_int,
+) {
+    home_replace(buf, src, dst, dstlen, true);
+    trans_characters(dst, dstlen);
+}
+
+/// Set option to empty string on error (SID_ERROR = -5, OPT_LOCAL = 0x02).
+/// Replacement for C `nvim_stl_set_option_empty`.
+///
+/// # Safety
+/// `opt_idx` must be a valid option index.
+unsafe fn stl_set_option_empty(opt_idx: c_int, opt_scope: c_int) {
+    let empty_ptr = nvim_get_empty_string_option();
+    let val = StlOptVal {
+        type_: K_OPT_VAL_TYPE_STRING,
+        data: StlOptValData {
+            string: StlOptString {
+                data: empty_ptr,
+                size: 0,
+            },
+        },
+    };
+    set_option_direct(opt_idx, val, opt_scope, SID_ERROR);
+}
+
+/// Evaluate a VimL expression for the statusline with context switching.
+/// Replacement for C `nvim_stl_eval_with_context`.
+///
+/// mode=0: full context (save/restore curwin/curbuf/VIsual_active, set g:actual_curbuf/g:actual_curwin)
+/// mode=1: fmt expr (set g:statusline_winid for "%!" expressions)
+///
+/// Returns allocated string (caller must free via xfree), or NULL.
+///
+/// # Safety
+/// `wp` must be a valid window handle. `expr` must be a valid null-terminated C string.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe fn stl_eval_with_context(
+    wp: WinHandle,
+    expr: *mut c_char,
+    mode: c_int,
+    use_sandbox: bool,
+) -> *mut c_char {
+    if mode == 1 {
+        // "%!" format expression: set g:statusline_winid then eval
+        let handle = nvim_win_get_handle(wp);
+        nvim_stl_set_statusline_winid(handle);
+        let result = eval_to_string_safe(expr, use_sandbox, false);
+        do_unlet(b"g:statusline_winid\0".as_ptr().cast(), 18, true);
+        result
+    } else {
+        // Full context switching: save/restore curwin/curbuf/VIsual_active
+        let save_curwin = nvim_get_curwin_ptr();
+        let save_curbuf = nvim_get_curbuf_ptr();
+        let save_visual = nvim_get_visual_active();
+
+        // Set g:actual_curbuf and g:actual_curwin
+        let curbuf_fnum = nvim_buf_get_fnum(nvim_get_curbuf_ptr());
+        let curwin_handle = nvim_win_get_handle(nvim_get_curwin_ptr());
+
+        let mut tmp_fnum = [0u8; 24];
+        {
+            let s = format!("{curbuf_fnum}");
+            let bytes = s.as_bytes();
+            let n = bytes.len().min(tmp_fnum.len() - 1);
+            tmp_fnum[..n].copy_from_slice(&bytes[..n]);
+        }
+        set_internal_string_var(
+            b"g:actual_curbuf\0".as_ptr().cast(),
+            tmp_fnum.as_mut_ptr().cast(),
+        );
+
+        let mut tmp_handle = [0u8; 24];
+        {
+            let s = format!("{curwin_handle}");
+            let bytes = s.as_bytes();
+            let n = bytes.len().min(tmp_handle.len() - 1);
+            tmp_handle[..n].copy_from_slice(&bytes[..n]);
+        }
+        set_internal_string_var(
+            b"g:actual_curwin\0".as_ptr().cast(),
+            tmp_handle.as_mut_ptr().cast(),
+        );
+
+        // Switch context
+        let buf = nvim_win_get_buffer(wp);
+        nvim_set_curwin_ptr(wp);
+        nvim_set_curbuf_ptr(buf);
+        if !std::ptr::eq(wp.as_ptr(), save_curwin.as_ptr()) {
+            nvim_set_visual_active(false);
+        }
+
+        let result = eval_to_string_safe(expr, use_sandbox, false);
+
+        // Restore
+        nvim_set_curwin_ptr(save_curwin);
+        nvim_set_curbuf_ptr(save_curbuf);
+        nvim_set_visual_active(save_visual != 0);
+
+        do_unlet(b"g:actual_curbuf\0".as_ptr().cast(), 15, true);
+        do_unlet(b"g:actual_curwin\0".as_ptr().cast(), 15, true);
+
+        result
+    }
+}
 
 /// Check if all characters in a C string are ASCII digits.
 /// Replacement for the deleted `nvim_stl_str_all_digits` C accessor.
@@ -593,7 +832,7 @@ pub unsafe fn build_stl_str_hl(
     let mut usefmt_allocated = false;
 
     if *fmt as u8 == b'%' && *fmt.add(1) as u8 == b'!' {
-        let result = nvim_stl_eval_with_context(wp, fmt.add(2), 1, use_sandbox);
+        let result = stl_eval_with_context(wp, fmt.add(2), 1, use_sandbox);
         if !result.is_null() {
             usefmt = result;
             usefmt_allocated = true;
@@ -908,9 +1147,9 @@ pub unsafe fn build_stl_str_hl(
                     } else {
                         nvim_buf_get_b_fname(buf)
                     };
-                    nvim_stl_home_replace_trans(buf, t, namebuff, MAXPATHL);
+                    stl_home_replace_trans(buf, t, namebuff, MAXPATHL);
                 }
-                // trans_characters is done inside home_replace_trans
+                // trans_characters is done inside stl_home_replace_trans
                 if opt != STL_FILENAME {
                     str_ptr = namebuff;
                 } else {
@@ -951,7 +1190,7 @@ pub unsafe fn build_stl_str_hl(
                 out_p = t;
 
                 // Evaluate expression with full context
-                let eval_result = nvim_stl_eval_with_context(wp, out_p, 0, use_sandbox);
+                let eval_result = stl_eval_with_context(wp, out_p, 0, use_sandbox);
 
                 if !eval_result.is_null() && *eval_result != NUL as c_char {
                     // Check if result is all digits -> numeric
@@ -1107,7 +1346,7 @@ pub unsafe fn build_stl_str_hl(
 
             STL_SHOWCMD => {
                 if nvim_stl_showcmd_matches_opt(opt_idx) != 0 {
-                    nvim_stl_get_showcmd(buf_tmp.as_mut_ptr(), TMPLEN as c_int);
+                    stl_get_showcmd(buf_tmp.as_mut_ptr(), TMPLEN as c_int);
                     str_ptr = buf_tmp.as_ptr();
                 }
             }
@@ -1122,7 +1361,7 @@ pub unsafe fn build_stl_str_hl(
 
             STL_KEYMAP => {
                 fillable = false;
-                if nvim_stl_get_keymap(wp, buf_tmp.as_mut_ptr(), TMPLEN as c_int) > 0 {
+                if stl_get_keymap(wp, buf_tmp.as_mut_ptr(), TMPLEN as c_int) > 0 {
                     str_ptr = buf_tmp.as_ptr();
                 }
             }
@@ -1268,7 +1507,7 @@ pub unsafe fn build_stl_str_hl(
             }
 
             STL_QUICKFIX => {
-                if nvim_stl_get_qf_info(wp, buf_tmp.as_mut_ptr(), TMPLEN as c_int) > 0 {
+                if stl_get_qf_info(wp, buf_tmp.as_mut_ptr(), TMPLEN as c_int) > 0 {
                     str_ptr = buf_tmp.as_ptr();
                 }
             }
@@ -1808,7 +2047,7 @@ pub unsafe fn build_stl_str_hl(
     redraw_not_allowed = save_redraw_not_allowed;
 
     if opt_idx != K_OPT_INVALID && did_emsg > did_emsg_before {
-        nvim_stl_set_option_empty(opt_idx, opt_scope);
+        stl_set_option_empty(opt_idx, opt_scope);
     }
 
     KeyTyped = save_key_typed;

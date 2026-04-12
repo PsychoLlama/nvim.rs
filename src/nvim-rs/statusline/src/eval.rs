@@ -3,7 +3,7 @@
 //! This module provides evaluation of statusline format items.
 //! Each item type can produce a string or numeric value.
 
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr};
 
 use nvim_window::{BufHandle, WinHandle};
 
@@ -74,9 +74,14 @@ extern "C" {
 
     // Statusline-specific accessors
     fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
-    fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
-    fn nvim_stl_get_keymap(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-    fn nvim_stl_get_qf_info(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
+    // Quickfix/keymap: direct underlying functions (used by stl_* helpers in stl_build)
+    fn nvim_win_is_qf_win(wp: WinHandle) -> bool;
+    fn nvim_win_get_llist_ref(wp: WinHandle) -> *mut c_void;
+    fn nvim_stl_get_msg_loclist() -> *const c_char;
+    fn nvim_stl_get_msg_qflist() -> *const c_char;
+    fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+    static showcmd_buf: [u8; 41];
 }
 
 /// Context for evaluating statusline items.
@@ -438,7 +443,8 @@ fn eval_keymap(wp: WinHandle) -> EvalResult {
 
     let mut buf = [0u8; 128];
     unsafe {
-        let len = nvim_stl_get_keymap(wp, buf.as_mut_ptr().cast(), buf.len() as c_int);
+        let fmt = c"<%s>".as_ptr();
+        let len = get_keymap_str(wp, fmt, buf.as_mut_ptr().cast(), buf.len() as c_int);
         if len > 0 {
             std::str::from_utf8(&buf[..len as usize])
                 .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
@@ -461,15 +467,24 @@ fn eval_quickfix(wp: WinHandle) -> EvalResult {
         return EvalResult::Empty;
     }
 
-    let mut buf = [0u8; 64];
     unsafe {
-        let len = nvim_stl_get_qf_info(wp, buf.as_mut_ptr().cast(), buf.len() as c_int);
-        if len > 0 {
-            std::str::from_utf8(&buf[..len as usize])
-                .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
-        } else {
-            EvalResult::Empty
+        if nvim_win_is_qf_win(wp) {
+            let msg = if nvim_win_get_llist_ref(wp).is_null() {
+                nvim_stl_get_msg_qflist()
+            } else {
+                nvim_stl_get_msg_loclist()
+            };
+            if msg.is_null() {
+                return EvalResult::Empty;
+            }
+            let msg_len = strlen(msg);
+            if msg_len > 0 {
+                let slice = std::slice::from_raw_parts(msg.cast::<u8>(), msg_len);
+                return std::str::from_utf8(slice)
+                    .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()));
+            }
         }
+        EvalResult::Empty
     }
 }
 
@@ -482,15 +497,16 @@ fn eval_quickfix(wp: WinHandle) -> EvalResult {
     clippy::cast_possible_wrap
 )]
 fn eval_showcmd() -> EvalResult {
-    let mut buf = [0u8; 64];
     unsafe {
-        let len = nvim_stl_get_showcmd(buf.as_mut_ptr().cast(), buf.len() as c_int);
-        if len > 0 {
-            std::str::from_utf8(&buf[..len as usize])
-                .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
-        } else {
-            EvalResult::Empty
+        if showcmd_buf[0] == 0 {
+            return EvalResult::Empty;
         }
+        let mut len = 0usize;
+        while len < showcmd_buf.len() && showcmd_buf[len] != 0 {
+            len += 1;
+        }
+        std::str::from_utf8(&showcmd_buf[..len])
+            .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
     }
 }
 

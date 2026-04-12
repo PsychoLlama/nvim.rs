@@ -123,6 +123,7 @@ int nvim_get_state(void) { return State; }
 int nvim_get_finish_op(void) { return finish_op ? 1 : 0; }
 
 int nvim_get_visual_active(void) { return VIsual_active ? 1 : 0; }
+void nvim_set_visual_active(bool val) { VIsual_active = val; }
 
 int nvim_get_visual_select(void) { return VIsual_select ? 1 : 0; }
 
