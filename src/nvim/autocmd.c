@@ -519,68 +519,6 @@ win_found:
 // and exported directly under the name "apply_autocmds_group" via #[unsafe(export_name)].
 // The C declaration in autocmd.h still covers external callers.
 
-/// Find next matching autocommand.
-/// If next autocommand was not found, sets lastpat to NULL and cmdidx to SIZE_MAX on apc.
-static void aucmd_next(AutoPatCmd *apc)
-{
-  estack_T *const entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
-
-  AutoCmdVec *const acs = &autocmds[(int)apc->event];
-  assert(apc->ausize <= kv_size(*acs));
-  for (size_t i = apc->auidx; i < apc->ausize && !got_int; i++) {
-    AutoCmd *const ac = &kv_A(*acs, i);
-    AutoPat *const ap = ac->pat;
-
-    // Skip deleted autocommands.
-    if (ap == NULL) {
-      continue;
-    }
-    // Skip matching if pattern didn't change.
-    if (ap != apc->lastpat) {
-      // Skip autocommands that don't match the group.
-      if (apc->group != AUGROUP_ALL && apc->group != ap->group) {
-        continue;
-      }
-      // Skip autocommands that don't match the pattern or buffer number.
-      if (ap->buflocal_nr == 0
-          ? !match_file_pat(NULL, &ap->reg_prog, apc->fname, apc->sfname, apc->tail, ap->allow_dirs)
-          : ap->buflocal_nr != apc->arg_bufnr) {
-        continue;
-      }
-
-      const char *const name = rs_event_nr2name((int)apc->event, NUM_EVENTS);
-      const char *const s = _("%s Autocommands for \"%s\"");
-
-      const size_t sourcing_name_len = strlen(s) + strlen(name) + (size_t)ap->patlen + 1;
-      char *const namep = xmalloc(sourcing_name_len);
-      snprintf(namep, sourcing_name_len, s, name, ap->pat);
-      if (p_verbose >= 8) {
-        verbose_enter();
-        smsg(0, _("Executing %s"), namep);
-        verbose_leave();
-      }
-
-      // Update the exestack entry for this autocmd.
-      XFREE_CLEAR(entry->es_name);
-      entry->es_name = namep;
-      entry->es_info.aucmd = apc;
-    }
-
-    apc->lastpat = ap;
-    apc->auidx = i;
-
-    line_breakcheck();
-    return;
-  }
-
-  // Clear the exestack entry for this ETYPE_AUCMD entry.
-  XFREE_CLEAR(entry->es_name);
-  entry->es_info.aucmd = NULL;
-
-  apc->lastpat = NULL;
-  apc->auidx = SIZE_MAX;
-}
-
 /// Executes an autocmd callback function (as opposed to an Ex command).
 static bool au_callback(const AutoCmd *ac, const AutoPatCmd *apc)
 {
@@ -964,8 +902,76 @@ void nvim_autocmd_set_pat_null(int event, size_t idx)
   }
 }
 
-/// Add a non-static wrapper for aucmd_next (called from Rust getnextac).
-void nvim_aucmd_next(void *apc_raw) { aucmd_next((AutoPatCmd *)apc_raw); }
+/// Check whether autocmd at (event, i) should be skipped, returns new pat match status.
+/// Returns 0 for skip, 1 for same-pat (already matched), 2 for new match.
+/// On new match, also updates the exestack entry and emits verbose message.
+int nvim_aucmd_try_match(int event, size_t i, void *apc_raw)
+{
+  AutoPatCmd *apc = (AutoPatCmd *)apc_raw;
+  AutoCmdVec *const acs = &autocmds[event];
+  if (i >= kv_size(*acs)) {
+    return 0;
+  }
+  AutoPat *const ap = kv_A(*acs, i).pat;
+  if (ap == NULL) {
+    return 0;
+  }
+  if (ap == apc->lastpat) {
+    return 1;  // Same pattern, already matched
+  }
+  if (apc->group != AUGROUP_ALL && apc->group != ap->group) {
+    return 0;
+  }
+  if (ap->buflocal_nr == 0
+      ? !match_file_pat(NULL, &ap->reg_prog, apc->fname, apc->sfname, apc->tail, ap->allow_dirs)
+      : ap->buflocal_nr != apc->arg_bufnr) {
+    return 0;
+  }
+  return 2;  // New match
+}
+
+/// Update exestack entry for a new match at (event, i) in apc, and emit verbose message.
+void nvim_aucmd_set_entry(int event, size_t i, void *apc_raw)
+{
+  AutoPatCmd *apc = (AutoPatCmd *)apc_raw;
+  AutoCmdVec *const acs = &autocmds[event];
+  AutoPat *const ap = kv_A(*acs, i).pat;
+  estack_T *const entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
+  const char *const name = rs_event_nr2name(event, NUM_EVENTS);
+  const char *const s = _("%s Autocommands for \"%s\"");
+  const size_t sourcing_name_len = strlen(s) + strlen(name) + (size_t)ap->patlen + 1;
+  char *const namep = xmalloc(sourcing_name_len);
+  snprintf(namep, sourcing_name_len, s, name, ap->pat);
+  if (p_verbose >= 8) {
+    verbose_enter();
+    smsg(0, _("Executing %s"), namep);
+    verbose_leave();
+  }
+  XFREE_CLEAR(entry->es_name);
+  entry->es_name = namep;
+  entry->es_info.aucmd = apc;
+}
+
+/// Clear the exestack entry when no more autocmds remain.
+void nvim_aucmd_clear_entry(void)
+{
+  estack_T *const entry = ((estack_T *)exestack.ga_data) + exestack.ga_len - 1;
+  XFREE_CLEAR(entry->es_name);
+  entry->es_info.aucmd = NULL;
+}
+
+/// Set apc->lastpat from the AutoPat* at (event, i).
+void nvim_apc_set_lastpat_from_ac(int event, size_t i, void *apc_raw)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  ((AutoPatCmd *)apc_raw)->lastpat = kv_A(*acs, i).pat;
+}
+
+/// Set apc->lastpat to NULL (signal no more autocmds).
+void nvim_apc_set_lastpat_null(void *apc_raw)
+{
+  ((AutoPatCmd *)apc_raw)->lastpat = NULL;
+}
 
 // =============================================================================
 // Phase 2: apply_autocmds_group migration accessors

@@ -2182,9 +2182,15 @@ extern "C" {
     fn nvim_apc_get_auidx(apc: *const c_void) -> usize;
     fn nvim_apc_get_lastpat(apc: *const c_void) -> *mut c_void;
     fn nvim_apc_set_auidx(apc: *mut c_void, idx: usize);
+    fn nvim_apc_set_lastpat_from_ac(event: c_int, i: usize, apc: *mut c_void);
+    fn nvim_apc_set_lastpat_null(apc: *mut c_void);
 
-    // aucmd_next wrapper (calls C aucmd_next)
-    fn nvim_aucmd_next(apc: *mut c_void);
+    // aucmd_next inlined helpers
+    fn nvim_aucmd_try_match(event: c_int, i: usize, apc: *mut c_void) -> c_int;
+    fn nvim_aucmd_set_entry(event: c_int, i: usize, apc: *mut c_void);
+    fn nvim_aucmd_clear_entry();
+    fn nvim_get_got_int() -> c_int;
+    fn line_breakcheck();
 
     // Accessor for ac->nested
     fn nvim_autocmd_get_ac_nested(event: c_int, idx: usize) -> bool;
@@ -2232,6 +2238,34 @@ extern "C" {
     fn autocmd_xcalloc(count: usize, size: usize) -> *mut c_void;
 }
 
+/// Advance apc to the next matching autocommand.
+/// Equivalent to the former C `aucmd_next` static function.
+///
+/// # Safety
+/// `apc` must be a valid `AutoPatCmd *` pointer.
+unsafe fn aucmd_next_rs(apc: *mut c_void) {
+    let event = nvim_apc_get_event(apc);
+    let ausize = nvim_apc_get_ausize(apc);
+    let mut i = nvim_apc_get_auidx(apc);
+    while i < ausize && nvim_get_got_int() == 0 {
+        let result = nvim_aucmd_try_match(event, i, apc);
+        if result == 0 {
+            i += 1;
+            continue;
+        }
+        if result == 2 {
+            nvim_aucmd_set_entry(event, i, apc);
+        }
+        nvim_apc_set_lastpat_from_ac(event, i, apc);
+        nvim_apc_set_auidx(apc, i);
+        line_breakcheck();
+        return;
+    }
+    nvim_aucmd_clear_entry();
+    nvim_apc_set_lastpat_null(apc);
+    nvim_apc_set_auidx(apc, usize::MAX);
+}
+
 /// Get next autocommand command.
 /// Called by do_cmdline() to get the next line for ":if".
 /// Returns allocated string, or NULL for end of autocommands.
@@ -2249,7 +2283,7 @@ pub unsafe extern "C" fn rs_getnextac(
 ) -> *mut c_char {
     let apc = cookie;
 
-    nvim_aucmd_next(apc);
+    aucmd_next_rs(apc);
     if nvim_apc_get_lastpat(apc).is_null() {
         return std::ptr::null_mut();
     }
@@ -2684,7 +2718,7 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
         afile_orig,
         data,
     );
-    nvim_aucmd_next(apc);
+    aucmd_next_rs(apc);
 
     let mut retval = false;
 
