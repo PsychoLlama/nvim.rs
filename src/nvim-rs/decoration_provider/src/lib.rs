@@ -25,15 +25,18 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::match_same_arms)]
+#![allow(clippy::semicolon_if_nothing_returned)]
 #![allow(dead_code)]
 
 pub mod accessors;
 pub mod callbacks;
 pub mod constants;
+pub mod invoke;
 pub mod lifecycle;
 pub mod state;
 pub mod types;
@@ -42,6 +45,7 @@ pub mod types;
 pub use accessors::*;
 pub use callbacks::*;
 pub use constants::*;
+pub use invoke::*;
 pub use lifecycle::*;
 pub use state::*;
 pub use types::*;
