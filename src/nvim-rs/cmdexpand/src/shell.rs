@@ -141,18 +141,10 @@ extern "C" {
     fn nvim_cmdexpand_cmdbuff_nullterm() -> c_char;
     /// Restore `cmdbuff[cmdlen]` to the previously saved byte.
     fn nvim_cmdexpand_cmdbuff_restore(keep: c_char);
-    /// Call `call_func_retlist(arg, nargs, args)` — returns `list_T *`.
-    fn nvim_cmdexpand_call_func_retlist(
-        arg: *const c_char,
-        nargs: c_int,
-        args: *mut TypvalT,
-    ) -> *mut c_void;
-    /// Call `call_func_retstr(arg, nargs, args)` — returns `char *`.
-    fn nvim_cmdexpand_call_func_retstr(
-        arg: *const c_char,
-        nargs: c_int,
-        args: *mut TypvalT,
-    ) -> *mut c_char;
+    /// Call a `VimL` function, returning the result as a list.
+    fn call_func_retlist(arg: *const c_char, nargs: c_int, args: *mut TypvalT) -> *mut c_void;
+    /// Call a `VimL` function, returning the result as a string.
+    fn call_func_retstr(arg: *const c_char, nargs: c_int, args: *mut TypvalT) -> *mut c_char;
 }
 
 // =============================================================================
@@ -221,7 +213,7 @@ unsafe fn call_user_expand_core<T>(
 pub unsafe extern "C" fn rs_call_user_expand_retlist(xp: *mut ExpandT) -> ListHandle {
     call_user_expand_core(
         xp,
-        |arg, n, args| nvim_cmdexpand_call_func_retlist(arg, n, args),
+        |arg, n, args| call_func_retlist(arg, n, args),
         std::ptr::null_mut(),
     )
 }
@@ -238,7 +230,7 @@ pub unsafe extern "C" fn rs_call_user_expand_retlist(xp: *mut ExpandT) -> ListHa
 pub unsafe extern "C" fn rs_call_user_expand_retstr(xp: *mut ExpandT) -> *mut c_char {
     call_user_expand_core(
         xp,
-        |arg, n, args| nvim_cmdexpand_call_func_retstr(arg, n, args),
+        |arg, n, args| call_func_retstr(arg, n, args),
         std::ptr::null_mut(),
     )
 }

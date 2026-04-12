@@ -339,11 +339,7 @@ char *nvim_cmdexpand_get_script_name(int idx)
 int nvim_cmdexpand_get_p_wic(void) { return (int)p_wic; }
 int nvim_cmdexpand_get_ccline_xp_context(void) { return get_cmdline_info()->xp_context; }
 char *nvim_cmdexpand_get_ccline_xp_arg(void) { return get_cmdline_info()->xp_arg; }
-void nvim_cmdexpand_set_context_for_expression(expand_T *xp, char *str, int cmdidx)
-{
-  set_context_for_expression(xp, str, (cmdidx_T)cmdidx);
-}
-
+// nvim_cmdexpand_set_context_for_expression: Rust calls set_context_for_expression directly.
 void nvim_cmdexpand_set_cmdlen(int val) { get_cmdline_info()->cmdlen = val; }
 void nvim_cmdexpand_set_cmdpos(int val) { get_cmdline_info()->cmdpos = val; }
 int nvim_cmdexpand_get_cmdbufflen(void) { return get_cmdline_info()->cmdbufflen; }
@@ -377,45 +373,13 @@ void nvim_cmdexpand_regmatch_set_regprog(regmatch_T *rmp, void *prog)
 }
 
 
-int nvim_cmdexpand_expand_rtdir(const char *pat, int flags, int *numMatches, char ***matches,
-                                char **directories)
-{
-  return ExpandRTDir(pat, flags, numMatches, matches, directories);
-}
-
-int nvim_cmdexpand_expand_pack_add_dir(const char *pat, int *numMatches, char ***matches)
-{
-  return ExpandPackAddDir(pat, numMatches, matches);
-}
-
-int nvim_cmdexpand_expand_runtime_cmd(const char *pat, int *numMatches, char ***matches)
-{
-  return expand_runtime_cmd(pat, numMatches, matches);
-}
-
-
-int nvim_cmdexpand_expand_string_setting(expand_T *xp, regmatch_T *regmatch,
-                                          int *numMatches, char ***matches)
-{
-  return ExpandStringSetting(xp, regmatch, numMatches, matches);
-}
-
-int nvim_cmdexpand_expand_mappings(const char *pat, regmatch_T *regmatch,
-                                   int *numMatches, char ***matches)
-{
-  return ExpandMappings(pat, regmatch, numMatches, matches);
-}
-
-int nvim_cmdexpand_expand_argopt(const char *pat, expand_T *xp, regmatch_T *regmatch,
-                                  char ***matches, int *numMatches)
-{
-  return expand_argopt(pat, xp, regmatch, matches, numMatches);
-}
-
-int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
-{
-  return nlua_expand_get_matches(numMatches, matches);
-}
+// nvim_cmdexpand_expand_rtdir: Rust calls ExpandRTDir directly.
+// nvim_cmdexpand_expand_pack_add_dir: Rust calls ExpandPackAddDir directly.
+// nvim_cmdexpand_expand_runtime_cmd: Rust calls expand_runtime_cmd directly.
+// nvim_cmdexpand_expand_string_setting: Rust calls ExpandStringSetting directly.
+// nvim_cmdexpand_expand_mappings: Rust calls ExpandMappings directly.
+// nvim_cmdexpand_expand_argopt: Rust calls expand_argopt directly.
+// nvim_cmdexpand_nlua_expand_get_matches: Rust calls nlua_expand_get_matches directly.
 
 int nvim_cmdexpand_get_dip_start_opt(void) { return DIP_START + DIP_OPT; }
 int nvim_cmdexpand_get_re_magic(void) { return RE_MAGIC; }
@@ -441,18 +405,8 @@ void nvim_cmdexpand_msg_putchar(int c) { msg_putchar(c); }
 void nvim_cmdexpand_msg_ext_set_kind(const char *kind) { msg_ext_set_kind(kind); }
 void nvim_cmdexpand_free_wild(int count, char **files) { FreeWild(count, files); }
 void nvim_cmdexpand_pum_clear(void) { pum_clear(); }
-void nvim_cmdexpand_pum_create_from_matches(expand_T *xp, char **matches, int num_matches,
-                                            int showtail, int noselect)
-{
-  cmdline_pum_create(get_cmdline_info(), xp, matches, num_matches,
-                     showtail != 0, noselect != 0);
-}
-
-void nvim_cmdexpand_redraw_wildmenu_ex(expand_T *xp, int num_matches, char **matches,
-                                       int findex, int showtail)
-{
-  redraw_wildmenu(xp, num_matches, matches, findex, showtail != 0);
-}
+// nvim_cmdexpand_pum_create_from_matches: Rust calls cmdline_pum_create directly.
+// nvim_cmdexpand_redraw_wildmenu_ex: Rust calls redraw_wildmenu directly.
 
 void nvim_cmdexpand_msg_clr_eos(void) { msg_clr_eos(); }
 int nvim_cmdexpand_msg_outtrans(const char *str, int attr, int maxcol) { return msg_outtrans(str, attr, (bool)maxcol); }
@@ -531,16 +485,9 @@ int nvim_cmdexpand_ccline_has_xp_files(void)
 int nvim_cmdexpand_cmdcomplete_str_to_type(const char *type) { return cmdcomplete_str_to_type(type); }
 char *nvim_cmdexpand_cmdcomplete_type_to_str(int ctx, const char *arg) { return cmdcomplete_type_to_str(ctx, arg); }
 const char *nvim_cmdexpand_get_cmdline_orig(void) { return cmdline_orig; }
-/// set_context_in_menu_cmd wrapper (for Rust FFI).
-void nvim_cmdexpand_set_context_in_menu_cmd(expand_T *xp, const char *cmd, char *arg, bool delim_optional)
-{
-  set_context_in_menu_cmd(xp, cmd, arg, delim_optional);
-}
-
-/// set_context_in_sign_cmd wrapper (for Rust FFI).
-void nvim_cmdexpand_set_context_in_sign_cmd(expand_T *xp, char *arg) { set_context_in_sign_cmd(xp, arg); }
-/// set_context_in_runtime_cmd wrapper (for Rust FFI).
-void nvim_cmdexpand_set_context_in_runtime_cmd(expand_T *xp, char *arg) { set_context_in_runtime_cmd(xp, arg); }
+// set_context_in_menu_cmd: Rust calls it directly.
+// set_context_in_sign_cmd: Rust calls it directly.
+// set_context_in_runtime_cmd: Rust calls it directly.
 /// VAR_UNKNOWN constant (for Rust FFI).
 int nvim_cmdexpand_get_var_unknown(void) { return VAR_UNKNOWN; }
 /// filetype_expand_what = EXP_FILETYPECMD_ALL (for Rust FFI).
@@ -580,16 +527,8 @@ void nvim_cmdexpand_cmdbuff_restore(char keep)
   CmdlineInfo *ccline = get_cmdline_info();
   if (ccline->cmdbuff != NULL) { ccline->cmdbuff[ccline->cmdlen] = keep; }
 }
-/// Call call_func_retlist with the given args (for Rust FFI).
-void *nvim_cmdexpand_call_func_retlist(const char *arg, int nargs, typval_T *args)
-{
-  return call_func_retlist(arg, nargs, args);
-}
-/// Call call_func_retstr with the given args (for Rust FFI).
-char *nvim_cmdexpand_call_func_retstr(const char *arg, int nargs, typval_T *args)
-{
-  return call_func_retstr(arg, nargs, args);
-}
+// call_func_retlist: Rust calls it directly.
+// call_func_retstr: Rust calls it directly.
 // nvim_cmdexpand_nlua_call_user_expand, nvim_cmdexpand_nlua_call_user_expand_retlist:
 // Rust now calls nlua_call_user_expand_func + tv_clear + nvim_tv_list_ref directly.
 

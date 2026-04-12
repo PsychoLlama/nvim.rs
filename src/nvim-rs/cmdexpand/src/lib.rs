@@ -138,11 +138,7 @@ extern "C" {
     // CmdlineInfo accessors for set_cmd_context
     fn nvim_cmdexpand_get_ccline_xp_context() -> c_int;
     fn nvim_cmdexpand_get_ccline_xp_arg() -> *mut c_char;
-    fn nvim_cmdexpand_set_context_for_expression(
-        xp: *mut ExpandT,
-        str_: *mut c_char,
-        cmdidx: c_int,
-    );
+    fn set_context_for_expression(xp: *mut ExpandT, str_: *mut c_char, cmdidx: c_int);
 
     // Rust context helpers (already in Rust, called via C FFI)
     fn rs_set_context_for_wildcard_arg(
@@ -271,7 +267,7 @@ pub unsafe extern "C" fn rs_set_cmd_context(
 
     if use_ccline != 0 && nvim_cmdexpand_get_cmdfirstc() == c_int::from(b'=') {
         // pass CMD_SIZE because there is no real command
-        nvim_cmdexpand_set_context_for_expression(xp, str_, CMD_SIZE);
+        set_context_for_expression(xp, str_, CMD_SIZE);
     } else if use_ccline != 0 && nvim_cmdexpand_get_input_fn() != 0 {
         (*xp).xp_context = nvim_cmdexpand_get_ccline_xp_context();
         (*xp).xp_pattern = nvim_cmdexpand_get_cmdbuff();

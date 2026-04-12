@@ -103,20 +103,20 @@ extern "C" {
         file: *mut *mut *mut c_char,
         options: c_int,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_rtdir(
-        pat: *const c_char,
+    fn ExpandRTDir(
+        pat: *mut c_char,
         flags: c_int,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
         directories: *mut *mut c_char,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_pack_add_dir(
-        pat: *const c_char,
+    fn ExpandPackAddDir(
+        pat: *mut c_char,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_runtime_cmd(
-        pat: *const c_char,
+    fn expand_runtime_cmd(
+        pat: *mut c_char,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
@@ -128,20 +128,20 @@ extern "C" {
         matches: *mut *mut *mut c_char,
         can_fuzzy: bool,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_string_setting(
+    fn ExpandStringSetting(
         xp: *mut ExpandT,
         regmatch: *mut RegMatch,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_mappings(
-        pat: *const c_char,
+    fn ExpandMappings(
+        pat: *mut c_char,
         regmatch: *mut RegMatch,
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_argopt(
-        pat: *const c_char,
+    fn expand_argopt(
+        pat: *mut c_char,
         xp: *mut ExpandT,
         regmatch: *mut RegMatch,
         matches: *mut *mut *mut c_char,
@@ -150,10 +150,7 @@ extern "C" {
     // nvim_cmdexpand_expand_user_defined -- replaced by crate::shell::rs_expand_user_defined
     // nvim_cmdexpand_expand_user_list -- replaced by crate::shell::rs_expand_user_list
     // nvim_cmdexpand_expand_user_lua -- replaced by crate::shell::rs_expand_user_lua
-    fn nvim_cmdexpand_nlua_expand_get_matches(
-        num_matches: *mut c_int,
-        matches: *mut *mut *mut c_char,
-    ) -> c_int;
+    fn nlua_expand_get_matches(num_matches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int;
     fn nvim_cmdexpand_get_dip_start_opt() -> c_int;
     fn nvim_cmdexpand_magic_isset() -> c_int;
 
@@ -744,7 +741,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
     }
     if ctx == ExpandContext::Colors.to_raw() {
         let mut dirs: [*mut c_char; 2] = [c"colors".as_ptr().cast_mut(), std::ptr::null_mut()];
-        return nvim_cmdexpand_expand_rtdir(
+        return ExpandRTDir(
             pat,
             nvim_cmdexpand_get_dip_start_opt(),
             num_matches,
@@ -754,11 +751,11 @@ pub unsafe extern "C" fn rs_expand_from_context(
     }
     if ctx == ExpandContext::Compiler.to_raw() {
         let mut dirs: [*mut c_char; 2] = [c"compiler".as_ptr().cast_mut(), std::ptr::null_mut()];
-        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+        return ExpandRTDir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
     }
     if ctx == ExpandContext::Ownsyntax.to_raw() {
         let mut dirs: [*mut c_char; 2] = [c"syntax".as_ptr().cast_mut(), std::ptr::null_mut()];
-        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+        return ExpandRTDir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
     }
     if ctx == ExpandContext::Filetype.to_raw() {
         let mut dirs: [*mut c_char; 4] = [
@@ -767,11 +764,11 @@ pub unsafe extern "C" fn rs_expand_from_context(
             c"ftplugin".as_ptr().cast_mut(),
             std::ptr::null_mut(),
         ];
-        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+        return ExpandRTDir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
     }
     if ctx == ExpandContext::Keymap.to_raw() {
         let mut dirs: [*mut c_char; 2] = [c"keymap".as_ptr().cast_mut(), std::ptr::null_mut()];
-        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+        return ExpandRTDir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
     }
     if ctx == ExpandContext::UserList.to_raw() {
         return crate::shell::rs_expand_user_list(xp, matches, num_matches);
@@ -780,10 +777,10 @@ pub unsafe extern "C" fn rs_expand_from_context(
         return crate::shell::rs_expand_user_lua(xp, num_matches, matches);
     }
     if ctx == ExpandContext::Packadd.to_raw() {
-        return nvim_cmdexpand_expand_pack_add_dir(pat, num_matches, matches);
+        return ExpandPackAddDir(pat, num_matches, matches);
     }
     if ctx == ExpandContext::Runtime.to_raw() {
-        return nvim_cmdexpand_expand_runtime_cmd(pat, num_matches, matches);
+        return expand_runtime_cmd(pat, num_matches, matches);
     }
     if ctx == ExpandContext::PatternInBuf.to_raw() {
         return rs_expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, num_matches);
@@ -809,7 +806,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
     };
 
     if ctx == ExpandContext::Lua.to_raw() {
-        let ret = nvim_cmdexpand_nlua_expand_get_matches(num_matches, matches);
+        let ret = nlua_expand_get_matches(num_matches, matches);
         xfree(tofree.cast());
         return ret;
     }
@@ -843,13 +840,13 @@ pub unsafe extern "C" fn rs_expand_from_context(
                 fuzzy,
             )
         } else if ctx == ExpandContext::StringSetting.to_raw() {
-            nvim_cmdexpand_expand_string_setting(xp, &raw mut regmatch, num_matches, matches)
+            ExpandStringSetting(xp, &raw mut regmatch, num_matches, matches)
         } else if ctx == ExpandContext::SettingSubtract.to_raw() {
             rs_expand_setting_subtract(xp, &raw mut regmatch, num_matches, matches)
         } else if ctx == ExpandContext::Mappings.to_raw() {
-            nvim_cmdexpand_expand_mappings(effective_pat, &raw mut regmatch, num_matches, matches)
+            ExpandMappings(effective_pat, &raw mut regmatch, num_matches, matches)
         } else if ctx == ExpandContext::Argopt.to_raw() {
-            nvim_cmdexpand_expand_argopt(effective_pat, xp, &raw mut regmatch, matches, num_matches)
+            expand_argopt(effective_pat, xp, &raw mut regmatch, matches, num_matches)
         } else if ctx == ExpandContext::UserDefined.to_raw() {
             crate::shell::rs_expand_user_defined(
                 effective_pat,

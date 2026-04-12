@@ -84,26 +84,8 @@ extern "C" {
     /// Set `compl_selected`.
     fn nvim_set_compl_selected(val: c_int);
 
-    /// Create cmdline PUM from matches and display it.
-    fn nvim_cmdexpand_pum_create_from_matches(
-        xp: *mut crate::ExpandT,
-        matches: *mut *mut c_char,
-        num_matches: c_int,
-        showtail: c_int,
-        noselect: c_int,
-    );
-
     /// Display the cmdline PUM (already-created).
     fn nvim_cmdexpand_pum_display(changed_array: c_int);
-
-    /// Draw the wildmenu status-bar display.
-    fn nvim_cmdexpand_redraw_wildmenu_ex(
-        xp: *mut crate::ExpandT,
-        num_matches: c_int,
-        matches: *mut *mut c_char,
-        findex: c_int,
-        showtail: c_int,
-    );
 
     // msg_col declared above as static
 
@@ -418,12 +400,13 @@ pub unsafe extern "C" fn rs_showmatches(
 
     // Use PUM if applicable
     if nvim_cmdexpand_compl_use_pum(c_int::from(display_wildmenu && !display_list)) != 0 {
-        nvim_cmdexpand_pum_create_from_matches(
+        crate::pum::rs_cmdline_pum_create(
+            std::ptr::null_mut(),
             xp,
             matches,
             num_matches,
-            c_int::from(showtail),
-            c_int::from(noselect),
+            showtail,
+            noselect,
         );
         nvim_set_compl_selected(if noselect { -1 } else { 0 });
         nvim_cmdexpand_pum_clear();
@@ -446,12 +429,12 @@ pub unsafe extern "C" fn rs_showmatches(
         got_int = false; // only interrupt the completion, not the cmd line
     } else if display_wildmenu && !display_list {
         // Display status-bar wildmenu
-        nvim_cmdexpand_redraw_wildmenu_ex(
+        crate::wildmenu::rs_redraw_wildmenu(
             xp,
             num_matches,
             matches,
             if noselect { -1 } else { 0 },
-            c_int::from(showtail),
+            showtail,
         );
     } else if display_list {
         showmatches_list(xp, matches, num_matches, showtail);

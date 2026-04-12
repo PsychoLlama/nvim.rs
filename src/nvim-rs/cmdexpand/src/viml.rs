@@ -171,19 +171,19 @@ extern "C" {
     /// Get `cmdline_orig` static.
     fn nvim_cmdexpand_get_cmdline_orig() -> *const c_char;
 
-    /// `set_context_in_menu_cmd` wrapper.
-    fn nvim_cmdexpand_set_context_in_menu_cmd(
+    /// Set tab completion context for a :menu command.
+    fn set_context_in_menu_cmd(
         xp: *mut crate::ExpandT,
         cmd: *const c_char,
         arg: *mut c_char,
         delim_optional: bool,
-    );
+    ) -> *mut c_char;
 
-    /// `set_context_in_sign_cmd` wrapper.
-    fn nvim_cmdexpand_set_context_in_sign_cmd(xp: *mut crate::ExpandT, arg: *mut c_char);
+    /// Set tab completion context for a :sign command.
+    fn set_context_in_sign_cmd(xp: *mut crate::ExpandT, arg: *mut c_char);
 
-    /// `set_context_in_runtime_cmd` wrapper.
-    fn nvim_cmdexpand_set_context_in_runtime_cmd(xp: *mut crate::ExpandT, arg: *mut c_char);
+    /// Set tab completion context for a :runtime command.
+    fn set_context_in_runtime_cmd(xp: *mut crate::ExpandT, arg: *const c_char);
 
     /// Set `filetype_expand_what = EXP_FILETYPECMD_ALL`.
     fn nvim_cmdexpand_set_filetype_expand_all();
@@ -333,18 +333,13 @@ pub unsafe extern "C" fn rs_f_getcompletion(
         }
         xpc.xp_arg = type_.add(11).cast_mut();
     } else if xpc.xp_context == EXPAND_MENUS {
-        nvim_cmdexpand_set_context_in_menu_cmd(
-            &raw mut xpc,
-            c"menu".as_ptr(),
-            xpc.xp_pattern,
-            false,
-        );
+        set_context_in_menu_cmd(&raw mut xpc, c"menu".as_ptr(), xpc.xp_pattern, false);
         xpc.xp_pattern_len -= (xpc.xp_pattern as usize) - (pattern_start as usize);
     } else if xpc.xp_context == EXPAND_SIGN {
-        nvim_cmdexpand_set_context_in_sign_cmd(&raw mut xpc, xpc.xp_pattern);
+        set_context_in_sign_cmd(&raw mut xpc, xpc.xp_pattern);
         xpc.xp_pattern_len -= (xpc.xp_pattern as usize) - (pattern_start as usize);
     } else if xpc.xp_context == EXPAND_RUNTIME {
-        nvim_cmdexpand_set_context_in_runtime_cmd(&raw mut xpc, xpc.xp_pattern);
+        set_context_in_runtime_cmd(&raw mut xpc, xpc.xp_pattern);
         xpc.xp_pattern_len -= (xpc.xp_pattern as usize) - (pattern_start as usize);
     } else if xpc.xp_context == EXPAND_SHELLCMDLINE {
         let mut context = EXPAND_SHELLCMDLINE;
