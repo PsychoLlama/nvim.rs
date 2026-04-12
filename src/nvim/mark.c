@@ -178,31 +178,8 @@ extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
 
 
 
-// For an xtended filemark: set the fnum from the fname.
-// This is used for marks obtained from the .shada file.  It's postponed
-// until the mark is used to avoid a long startup delay.
-static void fname2fnum(xfmark_T *fm)
-{
-  if (fm->fname == NULL) {
-    return;
-  }
-
-  // First expand "~/" in the file name to the home directory.
-  // Don't expand the whole name, it may contain other '~' chars.
-  if (fm->fname[0] == '~' && vim_ispathsep_nocolon(fm->fname[1])) {
-    size_t len = expand_env("~/", NameBuff, MAXPATHL);
-    xstrlcpy(NameBuff + len, fm->fname + 2, MAXPATHL - len);
-  } else {
-    xstrlcpy(NameBuff, fm->fname, MAXPATHL);
-  }
-
-  // Try to shorten the file name.
-  os_dirname(IObuff, IOSIZE);
-  char *p = path_shorten_fname(NameBuff, IObuff);
-
-  // buflist_new() will call fmarks_check_names()
-  (void)buflist_new(NameBuff, p, 1, 0);
-}
+// fname2fnum is now implemented in Rust (mark/src/lib.rs, rs_fname2fnum).
+// It resolves a .shada file mark's filename to a buffer number.
 
 // Check all file marks for a name that matches the file name in buf.
 // May replace the name with an fnum.
@@ -314,8 +291,7 @@ void get_global_marks(list_T *l)
 }
 
 // Cross-function callbacks from Rust (Phase 3)
-// Placed at end of file after static function definitions
-void nvim_mark_fname2fnum(xfmark_T *xfm) { fname2fnum(xfm); }
+// nvim_mark_fname2fnum was removed: fname2fnum is now implemented in Rust (rs_fname2fnum).
 char *nvim_mark_buflist_nr2name(int fnum, int listed, int unstripped) {
   return buflist_nr2name(fnum, listed, unstripped);
 }

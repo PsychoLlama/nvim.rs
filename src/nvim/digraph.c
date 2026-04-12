@@ -51,6 +51,10 @@ typedef struct {
 // Rust implementations (functions exported directly from Rust)
 // check_digraph_chars_valid, get_digraph_for_char, putdigraph are now in Rust (viml.rs)
 // rs_registerdigraph, rs_digraph_iterate_* are now pure Rust exports
+// keymap_ga_clear, get_keymap_str are now in Rust (digraph/src/keymap.rs)
+
+// Forward declarations for Rust-exported keymap functions called from C
+extern void keymap_ga_clear(garray_T *kmap_ga);
 
 
 // Verify highlight constants match Rust values
@@ -139,6 +143,20 @@ typedef struct {
 } kmap_T;
 
 #define KMAP_MAXLEN 20  // maximum length of "from" or "to"
+
+// kmap_T field accessors for Rust FFI
+
+/// Get the 'from' field of a kmap_T entry (for Rust FFI).
+char *nvim_kmap_entry_get_from(void *entry) { return ((kmap_T *)entry)->from; }
+
+/// Get the 'to' field of a kmap_T entry (for Rust FFI).
+char *nvim_kmap_entry_get_to(void *entry) { return ((kmap_T *)entry)->to; }
+
+/// Get sizeof(kmap_T) (for Rust FFI).
+size_t nvim_kmap_entry_size(void) { return sizeof(kmap_T); }
+
+/// Get the b_kmap_state field of a buffer (for Rust FFI).
+int nvim_buf_get_b_kmap_state(buf_T *buf) { return buf ? (int)buf->b_kmap_state : 0; }
 
 /// Set up key mapping tables for the 'keymap' option.
 ///
@@ -249,15 +267,7 @@ void ex_loadkeymap(exarg_T *eap)
   status_redraw_curbuf();
 }
 
-/// Frees the buf_T.b_kmap_ga field of a buffer.
-void keymap_ga_clear(garray_T *kmap_ga)
-{
-  kmap_T *kp = (kmap_T *)kmap_ga->ga_data;
-  for (int i = 0; i < kmap_ga->ga_len; i++) {
-    xfree(kp[i].from);
-    xfree(kp[i].to);
-  }
-}
+// keymap_ga_clear() moved to Rust (digraph/src/keymap.rs)
 
 /// Stop using 'keymap'.
 static void keymap_unload(void)
@@ -288,43 +298,4 @@ static void keymap_unload(void)
   status_redraw_curbuf();
 }
 
-/// Get the value to show for the language mappings, active 'keymap'.
-///
-/// @param fmt  format string containing one %s item
-/// @param buf  buffer for the result
-/// @param len  length of buffer
-int get_keymap_str(win_T *wp, char *fmt, char *buf, int len)
-{
-  char *p;
-
-  if (wp->w_buffer->b_p_iminsert != B_IMODE_LMAP) {
-    return 0;
-  }
-
-  buf_T *old_curbuf = curbuf;
-  win_T *old_curwin = curwin;
-  char to_evaluate[] = "b:keymap_name";
-
-  curbuf = wp->w_buffer;
-  curwin = wp;
-  emsg_skip++;
-  char *s = p = eval_to_string(to_evaluate, false, false);
-  emsg_skip--;
-  curbuf = old_curbuf;
-  curwin = old_curwin;
-  if (p == NULL || *p == NUL) {
-    if (wp->w_buffer->b_kmap_state & KEYMAP_LOADED) {
-      p = wp->w_buffer->b_p_keymap;
-    } else {
-      p = "lang";
-    }
-  }
-  int plen = vim_snprintf(buf, (size_t)len, fmt, p);
-  xfree(s);
-  if (plen < 0 || plen > len - 1) {
-    buf[0] = NUL;
-    plen = 0;
-  }
-
-  return plen;
-}
+// get_keymap_str() moved to Rust (digraph/src/keymap.rs)
