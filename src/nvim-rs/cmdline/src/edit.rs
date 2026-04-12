@@ -59,7 +59,7 @@ extern "C" {
     // Globals
     fn nvim_get_key_typed_cmdline() -> c_int;
     fn nvim_set_msg_no_more(val: c_int);
-    fn nvim_msg_check();
+    fn msg_check();
 
     // Abbreviation support
     fn nvim_get_p_paste() -> c_int;
@@ -1298,7 +1298,7 @@ pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, r
     nvim_set_ccline_cmdpos(pos);
 
     if redraw {
-        nvim_msg_check();
+        msg_check();
     }
 }
 
