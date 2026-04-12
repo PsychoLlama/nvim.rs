@@ -3,6 +3,7 @@
 #include <locale.h>
 
 #include "nvim/ascii_defs.h"
+#include "nvim/eval/typval_defs.h"  // IWYU pragma: keep
 #include "nvim/ex_cmds_defs.h"  // IWYU pragma: keep
 #include "nvim/extmark_defs.h"  // IWYU pragma: keep
 #include "nvim/macros_defs.h"
@@ -40,6 +41,10 @@ extern void ex_changes(exarg_T *eap);
 extern const void *mark_jumplist_iter(const void *iter, const win_T *win, xfmark_T *fm);
 extern const void *mark_global_iter(const void *iter, char *name, xfmark_T *fm);
 extern const void *mark_buffer_iter(const void *iter, const buf_T *buf, char *name, fmark_T *fm);
+
+// Phase 2 (plan e0541d31): mark list functions now implemented in Rust
+void get_buf_local_marks(const buf_T *buf, list_T *l);
+void get_global_marks(list_T *l);
 
 // Phase 1: Pass-through wrappers now implemented in Rust
 extern int setmark(int c);
