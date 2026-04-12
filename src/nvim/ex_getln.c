@@ -370,15 +370,7 @@ typedef struct {
 } ColorCmdlineHelperState;
 static ColorCmdlineHelperState ccs;
 
-/// Returns 1 if the color cache for the current cmdline is still valid.
-int nvim_color_cache_valid(void)
-{
-  ColoredCmdline *cc = &ccline.last_colors;
-  return (cc->prompt_id == ccline.prompt_id
-          && cc->cmdbuff != NULL
-          && ccline.cmdbuff != NULL
-          && strcmp(cc->cmdbuff, ccline.cmdbuff) == 0) ? 1 : 0;
-}
+// nvim_color_cache_valid: inlined into Rust nvim_color_cmdline (color.rs).
 
 /// Reset ccline.last_colors.colors kvec to size 0 and reset helper state.
 void nvim_ccline_reset_colors(void)
@@ -397,15 +389,7 @@ void nvim_ccline_reset_colors(void)
   };
 }
 
-/// Returns 1 if ccline.cmdbuff is NULL or empty (nothing to color).
-int nvim_color_is_empty(void)
-{
-  if (ccline.cmdbuff == NULL || *ccline.cmdbuff == NUL) {
-    XFREE_CLEAR(ccline.last_colors.cmdbuff);
-    return 1;
-  }
-  return 0;
-}
+// nvim_color_is_empty: inlined into Rust nvim_color_cmdline (color.rs).
 
 /// Acquire the coloring callback.
 /// Returns: 0=none, 1=highlight_callback, 2=ex callback(':'), 3=expr path('=').
@@ -525,6 +509,15 @@ void nvim_color_errmsg(const char *msg)
   msg_putchar('\n');
   smsg(HLF_E, "%s", msg);
 }
+
+/// Get ccline.last_colors.prompt_id (for Rust cache_valid check).
+unsigned int nvim_get_ccline_last_colors_prompt_id(void) { return ccline.last_colors.prompt_id; }
+
+/// Get ccline.last_colors.cmdbuff (for Rust cache_valid/is_empty check).
+const char *nvim_get_ccline_last_colors_cmdbuff(void) { return ccline.last_colors.cmdbuff; }
+
+/// Free and NULL ccline.last_colors.cmdbuff (for Rust is_empty check).
+void nvim_ccline_clear_last_colors_cmdbuff(void) { XFREE_CLEAR(ccline.last_colors.cmdbuff); }
 
 /// Push a color chunk to ccline.last_colors.colors.
 void nvim_ccline_colors_push(int start, int end, int hl_id)
