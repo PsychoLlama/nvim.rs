@@ -16,6 +16,19 @@ use nvim_window::WinHandle;
 use crate::ScharT;
 
 // =============================================================================
+// Types
+// =============================================================================
+
+/// pos_T layout for getvvcol call (matches C's pos_T in pos_defs.h).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct RulerPosT {
+    lnum: c_int,
+    col: c_int,
+    coladd: c_int,
+}
+
+// =============================================================================
 // Constants (verified via _Static_assert in statusline.c)
 // =============================================================================
 
@@ -59,7 +72,20 @@ extern "C" {
     fn nvim_stl_win_set_p_list(wp: WinHandle, val: c_int);
     #[link_name = "nvim_win_get_lcs_tab1"]
     fn nvim_stl_win_get_lcs_tab1(wp: WinHandle) -> c_int;
-    fn nvim_stl_getvvcol_cursor(wp: WinHandle) -> c_int;
+    // getvvcol via cursor position accessors (replace nvim_stl_getvvcol_cursor)
+    fn nvim_getvvcol(
+        wp: WinHandle,
+        pos: *mut RulerPosT,
+        scol: *mut c_int,
+        ccol: *mut c_int,
+        ecol: *mut c_int,
+    );
+    #[link_name = "nvim_win_get_cursor_lnum"]
+    fn ruler_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_col"]
+    fn ruler_win_get_cursor_col(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_coladd"]
+    fn ruler_win_get_cursor_coladd(wp: WinHandle) -> c_int;
 
     // Global state
     #[link_name = "nvim_get_curwin"]
@@ -215,7 +241,19 @@ pub unsafe fn redraw_ruler() {
     let mut virtcol = nvim_stl_win_get_w_virtcol(wp);
     if nvim_stl_win_get_p_list(wp) != 0 && nvim_stl_win_get_lcs_tab1(wp) == NUL {
         nvim_stl_win_set_p_list(wp, 0);
-        virtcol = nvim_stl_getvvcol_cursor(wp);
+        // Inline of nvim_stl_getvvcol_cursor: call nvim_getvvcol with cursor pos
+        let mut pos = RulerPosT {
+            lnum: ruler_win_get_cursor_lnum(wp),
+            col: ruler_win_get_cursor_col(wp),
+            coladd: ruler_win_get_cursor_coladd(wp),
+        };
+        nvim_getvvcol(
+            wp,
+            &raw mut pos,
+            std::ptr::null_mut(),
+            &raw mut virtcol,
+            std::ptr::null_mut(),
+        );
         nvim_stl_win_set_p_list(wp, 1);
     }
 

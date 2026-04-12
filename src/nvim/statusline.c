@@ -124,8 +124,41 @@ int nvim_stl_stcp_get_width(statuscol_T *stcp) { return stcp->width; }
 /// Get stcp->hlrec pointer address (for passing to build_stl_str_hl).
 stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp) { return &stcp->hlrec; }
 
+/// Get stcp->sattrs[idx].text[0] != 0 (1 if sign has text, else 0).
+int nvim_stl_stcp_sattr_has_text(statuscol_T *stcp, int idx)
+{
+  if (stcp == NULL || stcp->sattrs == NULL) { return 0; }
+  return stcp->sattrs[idx].text[0] ? 1 : 0;
+}
 
+/// Get stcp->sattrs[idx].hl_id.
+int nvim_stl_stcp_sattr_hl_id(statuscol_T *stcp, int idx)
+{
+  if (stcp == NULL || stcp->sattrs == NULL) { return 0; }
+  return stcp->sattrs[idx].hl_id;
+}
 
+/// Get stcp->sign_cul_id.
+int nvim_stl_stcp_get_sign_cul_id(statuscol_T *stcp)
+{
+  if (stcp == NULL) { return 0; }
+  return stcp->sign_cul_id;
+}
+
+/// Get stcp->foldinfo (by value).
+foldinfo_T nvim_stl_stcp_get_foldinfo(statuscol_T *stcp)
+{
+  foldinfo_T empty = { 0 };
+  if (stcp == NULL) { return empty; }
+  return stcp->foldinfo;
+}
+
+/// Get pointer to stcp->fold_vcol array.
+colnr_T *nvim_stl_stcp_fold_vcol_ptr(statuscol_T *stcp)
+{
+  if (stcp == NULL) { return NULL; }
+  return stcp->fold_vcol;
+}
 
 
 /// Set g:statusline_winid to a number value. Helper for Rust eval_with_context.
@@ -135,48 +168,11 @@ void nvim_stl_set_statusline_winid(int handle)
   set_var(S_LEN("g:statusline_winid"), &tv, false);
 }
 
-/// Find option index by 'showcmdloc' value.
-int nvim_stl_showcmd_matches_opt(int opt_idx)
-{
-  if (p_sc && (opt_idx < 0 || find_option(p_sloc) == (OptIndex)opt_idx)) {
-    return 1;
-  }
-  return 0;
-}
-
 /// Get showcmd_buf contents.
 const char *nvim_stl_get_showcmd_buf(void) { return showcmd_buf; }
 
 /// Get wp->w_maxscwidth (sign column setting).
 int nvim_stl_win_get_maxscwidth(win_T *wp) { return (int)wp->w_maxscwidth; }
-
-/// Get batch sign info from statuscol_T for a given sattrs index.
-StlSignInfo nvim_stl_stcp_get_sign_info(statuscol_T *stcp, int idx)
-{
-  StlSignInfo info = { 0 };
-  if (stcp == NULL) { return info; }
-  info.has_text = stcp->sattrs[idx].text[0] ? 1 : 0;
-  info.hl_id = stcp->sattrs[idx].hl_id;
-  info.sign_cul_id = stcp->sign_cul_id;
-  return info;
-}
-
-
-/// Fill fold column into buf. Returns bytes written.
-int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, char *buf, int buflen)
-{
-  if (stcp == NULL || fdc <= 0 || buf == NULL) {
-    return 0;
-  }
-  schar_T fold_buf[9];
-  fill_foldcolumn(wp, stcp->foldinfo, lnum, 0, fdc, NULL, stcp->fold_vcol, fold_buf);
-  size_t written = 0;
-  for (int i = 0; i < fdc && (int)written < buflen - 4; i++) {
-    written += schar_get(buf + written, fold_buf[i]);
-  }
-  buf[written] = NUL;
-  return (int)written;
-}
 
 
 /// Describe sign text into a buffer. Returns bytes written.
@@ -357,15 +353,6 @@ void nvim_stl_win_set_click_defs(win_T *wp, int type, void *ptr, size_t size)
 
 /// Get edit_submode != NULL (check if in edit submode).
 int nvim_stl_edit_submode_not_null(void) { return edit_submode != NULL ? 1 : 0; }
-
-
-/// Call getvvcol and return the cursor virtual column.
-int nvim_stl_getvvcol_cursor(win_T *wp)
-{
-  colnr_T virtcol;
-  getvvcol(wp, &wp->w_cursor, NULL, &virtcol, NULL);
-  return (int)virtcol;
-}
 
 
 /// Start grid line on msg_grid_adj at given row.

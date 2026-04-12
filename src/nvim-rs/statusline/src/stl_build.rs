@@ -143,6 +143,28 @@ struct StlSignInfo {
     sign_cul_id: c_int,
 }
 
+/// foldinfo_T layout matching C's `foldinfo_T` in fold_defs.h.
+/// Fields: fi_lnum (i32), fi_level (i32), fi_low_level (i32), fi_lines (i32).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+#[allow(clippy::struct_field_names)]
+struct FoldinfoT {
+    fi_lnum: c_int,
+    fi_level: c_int,
+    fi_low_level: c_int,
+    fi_lines: c_int,
+}
+
+/// pos_T layout matching C's `pos_T` in pos_defs.h.
+/// Fields: lnum (i32), col (i32), coladd (i32).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+struct PosT {
+    lnum: c_int,
+    col: c_int,
+    coladd: c_int,
+}
+
 // =============================================================================
 // C FFI declarations
 // =============================================================================
@@ -204,8 +226,10 @@ extern "C" {
     #[link_name = "rs_append_arg_number"]
     fn nvim_stl_append_arg_number(wp: WinHandle, buf: *mut c_char, buflen: usize) -> c_int;
 
-    // Showcmd
-    fn nvim_stl_showcmd_matches_opt(opt_idx: c_int) -> c_int;
+    // Showcmd / option lookup
+    fn find_option(name: *const c_char) -> c_int;
+    static p_sc: c_int;
+    static p_sloc: *const c_char;
 
     // Vim variables
     #[link_name = "rs_get_vim_var_nr"]
@@ -227,18 +251,40 @@ extern "C" {
     fn nvim_stl_win_get_scwidth(wp: WinHandle) -> c_int;
 
     // Statuscolumn accessors
-    // Statuscolumn sign info (batch accessor)
-    fn nvim_stl_stcp_get_sign_info(stcp: StatuscolHandle, idx: c_int) -> StlSignInfo;
+    // Per-slot sign info accessors (replace batch nvim_stl_stcp_get_sign_info)
+    fn nvim_stl_stcp_sattr_has_text(stcp: StatuscolHandle, idx: c_int) -> c_int;
+    fn nvim_stl_stcp_sattr_hl_id(stcp: StatuscolHandle, idx: c_int) -> c_int;
+    fn nvim_stl_stcp_get_sign_cul_id(stcp: StatuscolHandle) -> c_int;
+    // Foldcolumn accessors (replace nvim_stl_fill_foldcolumn)
+    fn nvim_stl_stcp_get_foldinfo(stcp: StatuscolHandle) -> FoldinfoT;
+    fn nvim_stl_stcp_fold_vcol_ptr(stcp: StatuscolHandle) -> *mut c_int;
+    fn fill_foldcolumn(
+        wp: WinHandle,
+        foldinfo: FoldinfoT,
+        lnum: c_int,
+        attr: c_int,
+        fdc: c_int,
+        wlv_off: *mut c_int,
+        out_vcol: *mut c_int,
+        out_buffer: *mut ScharT,
+    );
+    // getvvcol via existing C wrapper
+    fn nvim_getvvcol(
+        wp: WinHandle,
+        pos: *mut PosT,
+        scol: *mut c_int,
+        ccol: *mut c_int,
+        ecol: *mut c_int,
+    );
+    // cursor position accessors (already exported from Rust window crate)
+    #[link_name = "nvim_win_get_cursor_lnum"]
+    fn stl_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_col"]
+    fn stl_win_get_cursor_col(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_coladd"]
+    fn stl_win_get_cursor_coladd(wp: WinHandle) -> c_int;
     #[link_name = "compute_foldcolumn"]
     fn nvim_stl_compute_foldcolumn(wp: WinHandle, col: c_int) -> c_int;
-    fn nvim_stl_fill_foldcolumn(
-        wp: WinHandle,
-        stcp: StatuscolHandle,
-        lnum: c_int,
-        fdc: c_int,
-        buf: *mut c_char,
-        buflen: c_int,
-    ) -> c_int;
     #[link_name = "use_cursor_line_highlight"]
     fn nvim_stl_use_cursor_line_hl(wp: WinHandle, lnum: c_int) -> bool;
     fn nvim_stl_describe_sign_text(buf: *mut c_char, text: *mut ScharT) -> c_int;
@@ -517,6 +563,111 @@ unsafe fn stl_eval_with_context(
 
         result
     }
+}
+
+// =============================================================================
+// Phase 2 Rust implementations (replacing C nvim_stl_* wrappers)
+// =============================================================================
+
+/// Check if showcmd option matches the given opt_idx.
+/// Replacement for C `nvim_stl_showcmd_matches_opt`.
+///
+/// # Safety
+/// Reads C globals p_sc and p_sloc; calls find_option with p_sloc.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn stl_showcmd_matches_opt(opt_idx: c_int) -> c_int {
+    if p_sc == 0 {
+        return 0;
+    }
+    if opt_idx < 0 {
+        return 1;
+    }
+    if find_option(p_sloc) == opt_idx {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get sign info for statuscolumn slot at `idx`.
+/// Replacement for C `nvim_stl_stcp_get_sign_info`.
+///
+/// # Safety
+/// `stcp` must be a valid statuscol_T pointer or null.
+unsafe fn stl_stcp_get_sign_info(stcp: StatuscolHandle, idx: c_int) -> StlSignInfo {
+    if stcp.is_null() {
+        return StlSignInfo::default();
+    }
+    StlSignInfo {
+        has_text: nvim_stl_stcp_sattr_has_text(stcp, idx),
+        hl_id: nvim_stl_stcp_sattr_hl_id(stcp, idx),
+        sign_cul_id: nvim_stl_stcp_get_sign_cul_id(stcp),
+    }
+}
+
+/// Fill fold column into `buf`. Returns bytes written.
+/// Replacement for C `nvim_stl_fill_foldcolumn`.
+///
+/// # Safety
+/// `wp` must be a valid window handle. `stcp` must be a valid statuscol_T pointer or null.
+/// `buf` must be valid for `buflen` bytes.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+unsafe fn stl_fill_foldcolumn(
+    wp: WinHandle,
+    stcp: StatuscolHandle,
+    lnum: c_int,
+    fdc: c_int,
+    buf: *mut c_char,
+    buflen: c_int,
+) -> c_int {
+    if stcp.is_null() || fdc <= 0 || buf.is_null() {
+        return 0;
+    }
+    let foldinfo = nvim_stl_stcp_get_foldinfo(stcp);
+    let fold_vcol = nvim_stl_stcp_fold_vcol_ptr(stcp);
+    let mut fold_buf = [0u32; 9]; // schar_T is u32
+    fill_foldcolumn(
+        wp,
+        foldinfo,
+        lnum,
+        0,
+        fdc,
+        std::ptr::null_mut(),
+        fold_vcol,
+        fold_buf.as_mut_ptr().cast(),
+    );
+    let mut written = 0usize;
+    for i in 0..fdc {
+        if (written as c_int) >= buflen - 4 {
+            break;
+        }
+        let n = nvim_stl_schar_get(buf.add(written), fold_buf[i as usize]);
+        written += n;
+    }
+    *buf.add(written) = 0;
+    written as c_int
+}
+
+/// Get virtual column for window cursor.
+/// Replacement for C `nvim_stl_getvvcol_cursor`.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+unsafe fn stl_getvvcol_cursor(wp: WinHandle) -> c_int {
+    let mut pos = PosT {
+        lnum: stl_win_get_cursor_lnum(wp),
+        col: stl_win_get_cursor_col(wp),
+        coladd: stl_win_get_cursor_coladd(wp),
+    };
+    let mut virtcol: c_int = 0;
+    nvim_getvvcol(
+        wp,
+        &raw mut pos,
+        std::ptr::null_mut(),
+        &raw mut virtcol,
+        std::ptr::null_mut(),
+    );
+    virtcol
 }
 
 /// Check if all characters in a C string are ASCII digits.
@@ -1262,7 +1413,7 @@ pub unsafe fn build_stl_str_hl(
                     && nvim_stl_get_vim_var_nr(VV_VIRTNUM) == 0
                 {
                     if nvim_stl_win_get_maxscwidth(wp) == SCL_NUM
-                        && nvim_stl_stcp_get_sign_info(stcp, 0).has_text != 0
+                        && stl_stcp_get_sign_info(stcp, 0).has_text != 0
                     {
                         // goto stcsign - handled inline below as the sign column path
                         handle_stcsign(
@@ -1345,7 +1496,7 @@ pub unsafe fn build_stl_str_hl(
             }
 
             STL_SHOWCMD => {
-                if nvim_stl_showcmd_matches_opt(opt_idx) != 0 {
+                if stl_showcmd_matches_opt(opt_idx) != 0 {
                     stl_get_showcmd(buf_tmp.as_mut_ptr(), TMPLEN as c_int);
                     str_ptr = buf_tmp.as_ptr();
                 }
@@ -2248,8 +2399,7 @@ unsafe fn handle_stcsign(
     *foldsignitem = ci;
 
     if fdc > 0 {
-        let n =
-            nvim_stl_fill_foldcolumn(wp, stcp, lnum, fdc, buf_tmp.as_mut_ptr(), TMPLEN as c_int);
+        let n = stl_fill_foldcolumn(wp, stcp, lnum, fdc, buf_tmp.as_mut_ptr(), TMPLEN as c_int);
         let hl = if nvim_stl_use_cursor_line_hl(wp, lnum) {
             -HLF_CLF
         } else {
@@ -2277,7 +2427,7 @@ unsafe fn handle_stcsign(
         });
 
         if fdc == 0 {
-            let sign_info = nvim_stl_stcp_get_sign_info(stcp, i);
+            let sign_info = stl_stcp_get_sign_info(stcp, i);
             let virtnum = nvim_stl_get_vim_var_nr(VV_VIRTNUM);
             if sign_info.has_text != 0 && virtnum == 0 {
                 // For now, use the accessor that writes sign text for index i

@@ -494,19 +494,14 @@ void nvim_ui_set_ext_options_above_global(void *ui)
   }
 }
 
-/// Wrapper: call highlight_use_hlstate and ui_send_all_hls
-/// Returns true if hlstate was used
-bool nvim_ui_init_highlights(void *ui)
-{
-  bool sent = false;
-  if (((RemoteUI *)ui)->ui_ext[kUIHlState]) {
-    sent = highlight_use_hlstate();
-  }
-  if (!sent) {
-    ui_send_all_hls((RemoteUI *)ui);
-  }
-  return sent;
-}
+/// Wrapper: call highlight_use_hlstate (for Rust).
+bool nvim_highlight_use_hlstate(void) { return highlight_use_hlstate(); }
+
+/// Wrapper: call ui_send_all_hls on an opaque UI pointer (for Rust).
+void nvim_ui_send_all_hls(void *ui) { ui_send_all_hls((RemoteUI *)ui); }
+
+/// Get RemoteUI ui_ext[kUIHlState] field (for Rust).
+bool nvim_remoteui_get_hlstate_ext(void *ui) { return ((RemoteUI *)ui)->ui_ext[kUIHlState]; }
 
 /// Wrapper for remote_ui_option_set (for ui_set_ext_option from Rust)
 void nvim_remote_ui_option_set(void *ui, int ext, bool active)

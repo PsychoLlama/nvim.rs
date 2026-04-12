@@ -309,11 +309,24 @@ const VAR_NUMBER: c_int = 4;
 
 use std::ffi::c_char;
 
+/// Minimal C Error struct (matches C's `Error` in api/private/defs.h).
+/// Only err_type and msg are needed; msg is freed by api_clear_error.
+#[repr(C)]
+struct CError {
+    err_type: c_int,
+    msg: *mut c_char,
+}
+
 unsafe extern "C" {
     // C helpers for getout that MUST stay in C (use FOR_ALL_* macros or complex C types)
     fn nvim_getout_trigger_bufwinleave();
     fn nvim_getout_trigger_bufunload();
-    fn nvim_getout_do_restart();
+
+    // remote_ui_restart: sends restart event to UI channel
+    fn remote_ui_restart(channel_id: u64, err: *mut CError) -> bool;
+    fn api_clear_error(err: *mut CError);
+    fn nvim_get_current_ui() -> u64;
+    fn nvim_set_restarting(val: bool);
 
     // Plain C functions needed by getout
     fn time_finish();
@@ -455,7 +468,16 @@ pub unsafe extern "C" fn rs_getout(exitval: c_int) -> ! {
     }
 
     if restarting {
-        nvim_getout_do_restart();
+        // Inline of C's nvim_getout_do_restart: call remote_ui_restart, set restarting=false
+        let mut err = CError {
+            err_type: 0,
+            msg: std::ptr::null_mut(),
+        };
+        remote_ui_restart(nvim_get_current_ui(), &raw mut err);
+        if err.msg.is_null() {
+            api_clear_error(&raw mut err);
+        }
+        nvim_set_restarting(false);
     }
 
     if garbage_collect_at_exit {

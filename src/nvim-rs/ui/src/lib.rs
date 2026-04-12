@@ -455,7 +455,9 @@ extern "C" {
     /// ui_attach_impl helpers
     fn nvim_ui_call_chdir_cwd();
     fn nvim_ui_set_ext_options_above_global(ui: *mut c_void);
-    fn nvim_ui_init_highlights(ui: *mut c_void) -> bool;
+    fn nvim_highlight_use_hlstate() -> bool;
+    fn nvim_ui_send_all_hls(ui: *mut c_void);
+    fn nvim_remoteui_get_hlstate_ext(ui: *mut c_void) -> bool;
     fn ui_comp_attach(ui: *mut c_void);
     fn ui_comp_detach(ui: *mut c_void);
     fn ui_refresh_options();
@@ -1265,7 +1267,15 @@ pub unsafe extern "C" fn ui_attach_impl(ui: *mut c_void, chanid: u64) {
 
     nvim_ui_call_chdir_cwd();
     nvim_ui_set_ext_options_above_global(ui);
-    nvim_ui_init_highlights(ui);
+    // Inline of C's nvim_ui_init_highlights: use hlstate if ui supports it, else send all hls
+    let sent = if nvim_remoteui_get_hlstate_ext(ui) {
+        nvim_highlight_use_hlstate()
+    } else {
+        false
+    };
+    if !sent {
+        nvim_ui_send_all_hls(ui);
+    }
 
     ui_refresh();
 

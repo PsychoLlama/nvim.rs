@@ -510,18 +510,11 @@ void nvim_getout_trigger_bufunload(void)
 // nvim_getout_handle_emsg: inlined into Rust rs_getout.
 // nvim_getout_restore_title: inlined into Rust rs_getout.
 
-// Handle restart via remote_ui_restart; sets restarting=false
-void nvim_getout_do_restart(void)
-{
-  Error err = ERROR_INIT;
-  if (!remote_ui_restart(current_ui, &err)) {
-    if (ERROR_SET(&err)) {
-      ELOG("%s", err.msg);
-      api_clear_error(&err);
-    }
-  }
-  restarting = false;
-}
+/// Set the restarting global (for Rust).
+void nvim_set_restarting(bool val) { restarting = val; }
+
+/// Get the current_ui channel id (for Rust).
+uint64_t nvim_get_current_ui(void) { return current_ui; }
 
 // getout() is implemented in Rust (src/nvim-rs/main/src/exit.rs)
 extern void getout(int exitval) FUNC_ATTR_NORETURN;
