@@ -203,29 +203,6 @@ _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 // show_popupmenu helpers
 
 
-/// Batch key constant accessor (replaces 15 individual nvim_key_* functions).
-PumKeyConstants nvim_pum_get_key_constants(void)
-{
-  return (PumKeyConstants) {
-    .key_esc = ESC,
-    .key_ctrl_c = Ctrl_C,
-    .key_car = CAR,
-    .key_nl = NL,
-    .key_k_up = K_UP,
-    .key_k_down = K_DOWN,
-    .key_k_mouseup = K_MOUSEUP,
-    .key_k_mousedown = K_MOUSEDOWN,
-    .key_k_rightmouse = K_RIGHTMOUSE,
-    .key_k_leftdrag = K_LEFTDRAG,
-    .key_k_rightdrag = K_RIGHTDRAG,
-    .key_k_mousemove = K_MOUSEMOVE,
-    .key_k_leftmouse = K_LEFTMOUSE,
-    .key_k_leftmouse_nm = K_LEFTMOUSE_NM,
-    .key_k_rightrelease = K_RIGHTRELEASE,
-  };
-}
-
-
 /// Parse popup menu border configuration and return a flat struct.
 /// Returns false on parse error (emsg already called). Fills *out.
 bool nvim_pum_parse_winborder_flat(int has_scrollbar, PumBorderFlat *out)

@@ -62,29 +62,40 @@ unsafe fn set_mousemoveevent(val: bool) {
     ui_call_option_set(name, value);
 }
 
-/// Batch key constants for popup menu key handling.
-///
-/// Filled by `nvim_pum_get_key_constants()`. Layout must match
-/// `PumKeyConstants` in `popupmenu.h`.
-#[repr(C)]
-#[allow(clippy::struct_field_names)]
-struct PumKeyConstants {
-    key_esc: c_int,
-    key_ctrl_c: c_int,
-    key_car: c_int,
-    key_nl: c_int,
-    key_k_up: c_int,
-    key_k_down: c_int,
-    key_k_mouseup: c_int,
-    key_k_mousedown: c_int,
-    key_k_rightmouse: c_int,
-    key_k_leftdrag: c_int,
-    key_k_rightdrag: c_int,
-    key_k_mousemove: c_int,
-    key_k_leftmouse: c_int,
-    key_k_leftmouse_nm: c_int,
-    key_k_rightrelease: c_int,
+// ---- Key constant definitions (replaces PumKeyConstants + nvim_pum_get_key_constants) ----
+
+/// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))
+const fn termcap2key(a: c_int, b: c_int) -> c_int {
+    -(a + (b << 8))
 }
+
+/// `KS_EXTRA` = 253 (from keycodes.h)
+const KS_EXTRA: c_int = 253;
+const KE_MOUSEUP: c_int = 76;
+const KE_MOUSEDOWN: c_int = 75;
+const KE_RIGHTMOUSE: c_int = 50;
+const KE_LEFTDRAG: c_int = 45;
+const KE_RIGHTDRAG: c_int = 51;
+const KE_MOUSEMOVE: c_int = 100;
+const KE_LEFTMOUSE: c_int = 44;
+const KE_LEFTMOUSE_NM: c_int = 69;
+const KE_RIGHTRELEASE: c_int = 52;
+
+const KEY_ESC: c_int = 0x1B;
+const KEY_CTRL_C: c_int = 3;
+const KEY_CAR: c_int = 0x0D;
+const KEY_NL: c_int = 0x0A;
+const KEY_K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+const KEY_K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+const KEY_K_MOUSEUP: c_int = termcap2key(KS_EXTRA, KE_MOUSEUP);
+const KEY_K_MOUSEDOWN: c_int = termcap2key(KS_EXTRA, KE_MOUSEDOWN);
+const KEY_K_RIGHTMOUSE: c_int = termcap2key(KS_EXTRA, KE_RIGHTMOUSE);
+const KEY_K_LEFTDRAG: c_int = termcap2key(KS_EXTRA, KE_LEFTDRAG);
+const KEY_K_RIGHTDRAG: c_int = termcap2key(KS_EXTRA, KE_RIGHTDRAG);
+const KEY_K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
+const KEY_K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
+const KEY_K_LEFTMOUSE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE_NM);
+const KEY_K_RIGHTRELEASE: c_int = termcap2key(KS_EXTRA, KE_RIGHTRELEASE);
 
 /// Target window geometry for popup menu positioning.
 ///
@@ -446,8 +457,6 @@ extern "C" {
     fn emsg(s: *const std::ffi::c_char);
     /// Error string: "Menu only exists in another mode".
     static e_menu_only_exists_in_another_mode: std::ffi::c_char;
-    /// Batch key constants accessor.
-    fn nvim_pum_get_key_constants() -> PumKeyConstants;
 }
 
 /// Execute the currently selected popup menu item.
@@ -546,24 +555,6 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         set_mousemoveevent(true);
     }
 
-    // Cache key constants via batch accessor
-    let keys = nvim_pum_get_key_constants();
-    let key_esc = keys.key_esc;
-    let key_ctrl_c = keys.key_ctrl_c;
-    let key_car = keys.key_car;
-    let key_nl = keys.key_nl;
-    let key_k_up = keys.key_k_up;
-    let key_k_down = keys.key_k_down;
-    let key_k_mouseup = keys.key_k_mouseup;
-    let key_k_mousedown = keys.key_k_mousedown;
-    let key_k_rightmouse = keys.key_k_rightmouse;
-    let key_k_leftdrag = keys.key_k_leftdrag;
-    let key_k_rightdrag = keys.key_k_rightdrag;
-    let key_k_mousemove = keys.key_k_mousemove;
-    let key_k_leftmouse = keys.key_k_leftmouse;
-    let key_k_leftmouse_nm = keys.key_k_leftmouse_nm;
-    let key_k_rightrelease = keys.key_k_rightrelease;
-
     loop {
         PUM_STATE.is_visible = 1;
         PUM_STATE.is_drawn = 1;
@@ -574,13 +565,13 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         let c = vgetc();
 
         // Bail out on Esc, Ctrl-C, or if a callback cleared pum_array
-        if c == key_esc || c == key_ctrl_c || PUM_STATE.array.is_null() {
+        if c == KEY_ESC || c == KEY_CTRL_C || PUM_STATE.array.is_null() {
             break;
-        } else if c == key_car || c == key_nl {
+        } else if c == KEY_CAR || c == KEY_NL {
             // Enter: select current item and close
             rs_pum_execute_menu(menu, mode);
             break;
-        } else if c == i32::from(b'k') || c == key_k_up || c == key_k_mouseup {
+        } else if c == i32::from(b'k') || c == KEY_K_UP || c == KEY_K_MOUSEUP {
             // Cursor up: select previous item
             let mut sel = PUM_STATE.selected;
             while sel > 0 {
@@ -592,7 +583,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
                 }
             }
             PUM_STATE.selected = sel;
-        } else if c == i32::from(b'j') || c == key_k_down || c == key_k_mousedown {
+        } else if c == i32::from(b'j') || c == KEY_K_DOWN || c == KEY_K_MOUSEDOWN {
             // Cursor down: select next item
             let pum_size = PUM_STATE.size;
             let mut sel = PUM_STATE.selected;
@@ -605,21 +596,21 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
                 }
             }
             PUM_STATE.selected = sel;
-        } else if c == key_k_rightmouse {
+        } else if c == KEY_K_RIGHTMOUSE {
             // Right mouse: reposition the menu
             vungetc(c);
             break;
-        } else if c == key_k_leftdrag || c == key_k_rightdrag || c == key_k_mousemove {
+        } else if c == KEY_K_LEFTDRAG || c == KEY_K_RIGHTDRAG || c == KEY_K_MOUSEMOVE {
             // Mouse moved: select item at mouse position
             rs_pum_select_mouse_pos();
-        } else if c == key_k_leftmouse || c == key_k_leftmouse_nm || c == key_k_rightrelease {
+        } else if c == KEY_K_LEFTMOUSE || c == KEY_K_LEFTMOUSE_NM || c == KEY_K_RIGHTRELEASE {
             // Mouse click: select and maybe close
             rs_pum_select_mouse_pos();
             if PUM_STATE.selected >= 0 {
                 rs_pum_execute_menu(menu, mode);
                 break;
             }
-            if c == key_k_leftmouse || c == key_k_leftmouse_nm {
+            if c == KEY_K_LEFTMOUSE || c == KEY_K_LEFTMOUSE_NM {
                 break;
             }
         }

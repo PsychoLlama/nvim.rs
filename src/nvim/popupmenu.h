@@ -57,26 +57,6 @@ EXTERN struct {
   bool finish;
 } pum_want;
 
-/// Batch key constants for popup menu key handling (Rust FFI).
-/// Filled by `nvim_pum_get_key_constants()`.
-typedef struct {
-  int key_esc;
-  int key_ctrl_c;
-  int key_car;
-  int key_nl;
-  int key_k_up;
-  int key_k_down;
-  int key_k_mouseup;
-  int key_k_mousedown;
-  int key_k_rightmouse;
-  int key_k_leftdrag;
-  int key_k_rightdrag;
-  int key_k_mousemove;
-  int key_k_leftmouse;
-  int key_k_leftmouse_nm;
-  int key_k_rightrelease;
-} PumKeyConstants;
-
 /// Target window context for vertical placement (Rust FFI).
 /// Filled by `nvim_pum_get_target_win_context()`.
 typedef struct {
