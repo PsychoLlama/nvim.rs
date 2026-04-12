@@ -20,7 +20,9 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 use std::ptr::addr_of_mut;
 
-use crate::ffi::{AclHandle, BufHandle, ExargHandle, FileInfoHandle, FAIL, NOTDONE, OK};
+use crate::ffi::{
+    AclHandle, BufHandle, BwInfo, BwInfoHandle, ExargHandle, FileInfoHandle, FAIL, NOTDONE, OK,
+};
 
 // libc file-open flags and syscalls (cross-platform)
 #[cfg(unix)]
@@ -94,8 +96,6 @@ const SMALLBUFSIZE: usize = 256;
 const IOSIZE: usize = 1025;
 const ICONV_MULT: usize = 8;
 
-// Opaque handle for bw_info struct
-type BwInfoHandle = *mut c_void;
 // Opaque handle for SHA256 context
 type Sha256Handle = *mut c_void;
 // iconv handle
@@ -328,22 +328,6 @@ extern "C" {
     // I/O
     fn nvim_bw_write_eintr_direct(fd: c_int, buf: *const c_char, len: usize) -> c_int;
 
-    // bw_info management
-    fn nvim_bw_sizeof_bw_info() -> usize;
-    fn nvim_bw_info_init(p: BwInfoHandle);
-    fn nvim_bw_info_set_fd(p: BwInfoHandle, fd: c_int);
-    fn nvim_bw_info_set_buf(p: BwInfoHandle, buf: *mut c_char);
-    fn nvim_bw_info_set_len(p: BwInfoHandle, len: c_int);
-    fn nvim_bw_info_set_flags(p: BwInfoHandle, flags: c_int);
-    fn nvim_bw_info_set_conv_buflen(p: BwInfoHandle, len: usize);
-    fn nvim_bw_info_set_conv_buf(p: BwInfoHandle, buf: *mut c_char);
-    fn nvim_bw_info_get_conv_error(p: BwInfoHandle) -> c_int;
-    fn nvim_bw_info_get_conv_error_lnum(p: BwInfoHandle) -> i32;
-    fn nvim_bw_info_get_iconv_fd(p: BwInfoHandle) -> IconvHandle;
-    fn nvim_bw_info_set_iconv_fd(p: BwInfoHandle, fd: IconvHandle);
-    fn nvim_bw_info_set_start_lnum(p: BwInfoHandle, val: i32);
-    fn nvim_bw_info_get_conv_buf(p: BwInfoHandle) -> *mut c_char;
-
     // Existing error helpers
     fn rs_set_err(msg: *const c_char) -> ErrorT;
     fn rs_set_err_arg(msg: *const c_char, arg: c_int) -> ErrorT;
@@ -479,11 +463,9 @@ pub unsafe extern "C" fn rs_buf_write(
         return FAIL;
     }
 
-    // bw_info allocated on Rust heap as opaque blob
-    let bw_size = unsafe { nvim_bw_sizeof_bw_info() };
-    let mut bw_buf = vec![0u8; bw_size];
-    let write_info: BwInfoHandle = bw_buf.as_mut_ptr().cast();
-    unsafe { nvim_bw_info_init(write_info) };
+    // bw_info allocated on Rust stack (Rust owns the struct layout)
+    let mut bw_info_val = BwInfo::new();
+    let write_info: BwInfoHandle = &raw mut bw_info_val;
 
     unsafe { ex_no_reprint = true };
 
@@ -710,11 +692,11 @@ pub unsafe extern "C" fn rs_buf_write(
             nvim_bw_xfree(fenc_tofree);
             nvim_bw_xfree(backup);
         }
-        let conv_buf = unsafe { nvim_bw_info_get_conv_buf(write_info) };
+        let conv_buf = unsafe { (*write_info).bw_conv_buf };
         if !conv_buf.is_null() {
             unsafe { nvim_bw_xfree(conv_buf) };
         }
-        let iconv_fd = unsafe { nvim_bw_info_get_iconv_fd(write_info) };
+        let iconv_fd = unsafe { (*write_info).bw_iconv_fd };
         if iconv_fd as isize != ICONV_INVALID {
             unsafe { nvim_bw_iconv_close(iconv_fd) };
         }
@@ -838,8 +820,8 @@ pub unsafe extern "C" fn rs_buf_write(
             };
             let conv_buf = unsafe { nvim_bw_verbose_try_malloc(conv_buflen) };
             unsafe {
-                nvim_bw_info_set_conv_buflen(write_info, conv_buflen);
-                nvim_bw_info_set_conv_buf(write_info, conv_buf);
+                (*write_info).bw_conv_buflen = conv_buflen;
+                (*write_info).bw_conv_buf = conv_buf;
             }
             if conv_buf.is_null() {
                 end = 0;
@@ -889,12 +871,12 @@ pub unsafe extern "C" fn rs_buf_write(
                 wfname_allocated = true;
             }
         } else {
-            unsafe { nvim_bw_info_set_iconv_fd(write_info, iconv_fd) };
+            unsafe { (*write_info).bw_iconv_fd = iconv_fd };
             let conv_buflen = bufsize as usize * ICONV_MULT;
             let conv_buf = unsafe { nvim_bw_verbose_try_malloc(conv_buflen) };
             unsafe {
-                nvim_bw_info_set_conv_buflen(write_info, conv_buflen);
-                nvim_bw_info_set_conv_buf(write_info, conv_buf);
+                (*write_info).bw_conv_buflen = conv_buflen;
+                (*write_info).bw_conv_buf = conv_buf;
             }
             if conv_buf.is_null() {
                 end = 0;
@@ -905,7 +887,7 @@ pub unsafe extern "C" fn rs_buf_write(
 
     let notconverted = if converted
         && wb_flags == 0
-        && unsafe { nvim_bw_info_get_iconv_fd(write_info) } as isize == ICONV_INVALID
+        && unsafe { (*write_info).bw_iconv_fd } as isize == ICONV_INVALID
         && wfname == fname
     {
         if forceit == 0 {
@@ -1079,10 +1061,10 @@ pub unsafe extern "C" fn rs_buf_write(
                 );
             }
         }
-        unsafe { nvim_bw_info_set_fd(write_info, fd) };
+        unsafe { (*write_info).bw_fd = fd };
         err = unsafe { rs_set_err(ptr::null()) };
 
-        unsafe { nvim_bw_info_set_buf(write_info, buffer) };
+        unsafe { (*write_info).bw_buf = buffer };
         nchars = 0;
 
         // Binary mode
@@ -1098,12 +1080,11 @@ pub unsafe extern "C" fn rs_buf_write(
             && write_bin == 0
             && (append == 0 || perm < 0)
         {
-            unsafe { nvim_bw_info_set_len(write_info, rs_make_bom(buffer, fenc)) };
-            // Read back bw_len via the info accessor
-            let bom_len = unsafe { crate::ffi::nvim_bw_info_get_len_direct(write_info) };
+            unsafe { (*write_info).bw_len = rs_make_bom(buffer, fenc) };
+            let bom_len = unsafe { (*write_info).bw_len };
             if bom_len > 0 {
                 unsafe {
-                    nvim_bw_info_set_flags(write_info, FIO_NOCONVERT | wb_flags);
+                    (*write_info).bw_flags = FIO_NOCONVERT | wb_flags;
                 }
                 if unsafe { rs_buf_write_bytes(write_info) } == FAIL {
                     end = 0;
@@ -1112,7 +1093,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 }
             }
         }
-        unsafe { nvim_bw_info_set_start_lnum(write_info, start) };
+        unsafe { (*write_info).bw_start_lnum = start };
 
         write_undo_file = unsafe { nvim_bw_buf_get_p_udf(buf) } != 0
             && overwriting
@@ -1125,8 +1106,8 @@ pub unsafe extern "C" fn rs_buf_write(
         }
 
         unsafe {
-            nvim_bw_info_set_len(write_info, bufsize);
-            nvim_bw_info_set_flags(write_info, wb_flags);
+            (*write_info).bw_len = bufsize;
+            (*write_info).bw_flags = wb_flags;
         }
         fileformat = unsafe { get_fileformat_force(buf, eap) };
         let mut s = buffer;
@@ -1166,7 +1147,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 nchars += bufsize;
                 s = buffer;
                 len = 0;
-                unsafe { nvim_bw_info_set_start_lnum(write_info, lnum) };
+                unsafe { (*write_info).bw_start_lnum = lnum };
             }
 
             // Check if we should stop
@@ -1228,7 +1209,7 @@ pub unsafe extern "C" fn rs_buf_write(
 
         // Flush remaining
         if len > 0 && end > 0 {
-            unsafe { nvim_bw_info_set_len(write_info, len) };
+            unsafe { (*write_info).bw_len = len };
             if unsafe { rs_buf_write_bytes(write_info) } == FAIL {
                 end = 0;
             }
@@ -1325,9 +1306,8 @@ pub unsafe extern "C" fn rs_buf_write(
                 && unsafe { nvim_bw_eval_charconvert(c"utf-8".as_ptr(), fenc, wfname, fname) }
                     == FAIL
             {
-                // set conv_error via accessor
                 unsafe {
-                    crate::ffi::nvim_bw_info_set_conv_error_direct(write_info, 1);
+                    (*write_info).bw_conv_error = 1;
                 }
                 end = 0;
             }
@@ -1341,9 +1321,9 @@ pub unsafe extern "C" fn rs_buf_write(
     // Error handling after write
     if end == 0 {
         if err.msg.is_null() {
-            let conv_error = unsafe { nvim_bw_info_get_conv_error(write_info) };
+            let conv_error = unsafe { (*write_info).bw_conv_error };
             if conv_error != 0 {
-                let conv_error_lnum = unsafe { nvim_bw_info_get_conv_error_lnum(write_info) };
+                let conv_error_lnum = unsafe { (*write_info).bw_conv_error_lnum };
                 if conv_error_lnum == 0 {
                     err = unsafe {
                         rs_set_err(nvim_bw_gettext(
@@ -1430,7 +1410,7 @@ pub unsafe extern "C" fn rs_buf_write(
         let iosize = IOSIZE;
         unsafe { nvim_bw_add_quoted_fname(iobuff, iosize as c_int, buf, fname) };
         let mut insert_space = false;
-        let conv_error = unsafe { nvim_bw_info_get_conv_error(write_info) };
+        let conv_error = unsafe { (*write_info).bw_conv_error };
         if conv_error != 0 {
             unsafe {
                 nvim_bw_xstrlcat(
@@ -1440,7 +1420,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 );
             }
             insert_space = true;
-            let conv_error_lnum = unsafe { nvim_bw_info_get_conv_error_lnum(write_info) };
+            let conv_error_lnum = unsafe { (*write_info).bw_conv_error_lnum };
             if conv_error_lnum != 0 {
                 unsafe {
                     nvim_bw_vim_snprintf_add(
@@ -1515,7 +1495,7 @@ pub unsafe extern "C" fn rs_buf_write(
     }
 
     // Reset modified flag
-    let conv_error = unsafe { nvim_bw_info_get_conv_error(write_info) };
+    let conv_error = unsafe { (*write_info).bw_conv_error };
     if reset_changed != 0
         && whole
         && append == 0
@@ -1617,11 +1597,11 @@ pub unsafe extern "C" fn rs_buf_write(
         unsafe { nvim_bw_xfree(buffer) };
     }
     unsafe { nvim_bw_xfree(fenc_tofree) };
-    let conv_buf = unsafe { nvim_bw_info_get_conv_buf(write_info) };
+    let conv_buf = unsafe { (*write_info).bw_conv_buf };
     if !conv_buf.is_null() {
         unsafe { nvim_bw_xfree(conv_buf) };
     }
-    let iconv_fd = unsafe { nvim_bw_info_get_iconv_fd(write_info) };
+    let iconv_fd = unsafe { (*write_info).bw_iconv_fd };
     if iconv_fd as isize != ICONV_INVALID {
         unsafe { nvim_bw_iconv_close(iconv_fd) };
     }
@@ -1719,11 +1699,11 @@ unsafe fn do_fail_cleanup(
     }
     unsafe { nvim_bw_xfree(*fenc_tofree) };
     *fenc_tofree = ptr::null_mut();
-    let conv_buf = unsafe { nvim_bw_info_get_conv_buf(write_info) };
+    let conv_buf = unsafe { (*write_info).bw_conv_buf };
     if !conv_buf.is_null() {
         unsafe { nvim_bw_xfree(conv_buf) };
     }
-    let iconv_fd = unsafe { nvim_bw_info_get_iconv_fd(write_info) };
+    let iconv_fd = unsafe { (*write_info).bw_iconv_fd };
     if iconv_fd as isize != ICONV_INVALID {
         unsafe { nvim_bw_iconv_close(iconv_fd) };
     }

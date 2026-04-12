@@ -55,6 +55,7 @@
 // or nvim-bufwrite/src/ffi.rs have been removed: FIO_LATIN1, FIO_UTF8, FIO_ENDIAN_L,
 // FIO_NOCONVERT, FIO_UCSBOM, FIO_ALL, CONV_RESTLEN, WRITEBUFSIZE, OK, FAIL, NOTDONE,
 // EOL_UNIX, EOL_DOS, EOL_MAC.
+// Note: struct bw_info size is checked in Rust (BwInfo: assert 104 bytes)
 _Static_assert(FIO_UCS2 == 0x04, "FIO_UCS2");
 _Static_assert(FIO_UCS4 == 0x08, "FIO_UCS4");
 _Static_assert(FIO_UTF16 == 0x10, "FIO_UTF16");
@@ -162,22 +163,7 @@ int nvim_bw_cpo_contains(int c) { return vim_strchr(p_cpo, c) != NULL; }
 // Gettext
 const char *nvim_bw_gettext(const char *s) { return _(s); }
 
-// bw_info field accessors (use void* for opaque handle pattern)
-int nvim_bw_info_get_fd(void *p) { struct bw_info *ip = p; return ip->bw_fd; }
-char *nvim_bw_info_get_buf(void *p) { struct bw_info *ip = p; return ip->bw_buf; }
-int nvim_bw_info_get_len(void *p) { struct bw_info *ip = p; return ip->bw_len; }
-int nvim_bw_info_get_flags(void *p) { struct bw_info *ip = p; return ip->bw_flags; }
-int nvim_bw_info_get_restlen(void *p) { struct bw_info *ip = p; return ip->bw_restlen; }
-void nvim_bw_info_set_restlen(void *p, int val) { struct bw_info *ip = p; ip->bw_restlen = val; }
-uint8_t *nvim_bw_info_get_rest_ptr(void *p) { struct bw_info *ip = p; return ip->bw_rest; }
-char *nvim_bw_info_get_conv_buf(void *p) { struct bw_info *ip = p; return ip->bw_conv_buf; }
-int nvim_bw_info_get_conv_error(void *p) { struct bw_info *ip = p; return ip->bw_conv_error; }
-void nvim_bw_info_set_conv_error(void *p, int val) { struct bw_info *ip = p; ip->bw_conv_error = val; }
-linenr_T nvim_bw_info_get_conv_error_lnum(void *p) { struct bw_info *ip = p; return ip->bw_conv_error_lnum; }
-void nvim_bw_info_set_conv_error_lnum(void *p, linenr_T val) { struct bw_info *ip = p; ip->bw_conv_error_lnum = val; }
-linenr_T nvim_bw_info_get_start_lnum(void *p) { struct bw_info *ip = p; return ip->bw_start_lnum; }
-void nvim_bw_info_set_start_lnum(void *p, linenr_T val) { struct bw_info *ip = p; ip->bw_start_lnum = val; }
-int nvim_bw_info_has_iconv(void *p) { struct bw_info *ip = p; return ip->bw_iconv_fd != (iconv_t)-1; }
+// bw_info field accessors removed: Rust accesses BwInfo fields directly via #[repr(C)] struct
 
 // iconv wrapper: handles the full iconv conversion with remainder management
 int nvim_bw_iconv_convert(void *p, char **bufp, int *lenp)
@@ -380,17 +366,7 @@ int nvim_bw_eval_charconvert(const char *from, const char *to, const char *src, 
 // I/O - direct write_eintr (for use in write loop)
 int nvim_bw_write_eintr_direct(int fd, const char *buf, size_t len) { return write_eintr(fd, (void *)buf, len); }
 
-// bw_info management
-size_t nvim_bw_sizeof_bw_info(void) { return sizeof(struct bw_info); }
-void nvim_bw_info_init(void *p) { memset(p, 0, sizeof(struct bw_info)); struct bw_info *ip = p; ip->bw_iconv_fd = (iconv_t)-1; }
-void nvim_bw_info_set_fd(void *p, int fd) { struct bw_info *ip = p; ip->bw_fd = fd; }
-void nvim_bw_info_set_buf(void *p, char *buf) { struct bw_info *ip = p; ip->bw_buf = buf; }
-void nvim_bw_info_set_len(void *p, int len) { struct bw_info *ip = p; ip->bw_len = len; }
-void nvim_bw_info_set_flags(void *p, int flags) { struct bw_info *ip = p; ip->bw_flags = flags; }
-void nvim_bw_info_set_conv_buflen(void *p, size_t len) { struct bw_info *ip = p; ip->bw_conv_buflen = len; }
-void nvim_bw_info_set_conv_buf(void *p, char *buf) { struct bw_info *ip = p; ip->bw_conv_buf = buf; }
-void *nvim_bw_info_get_iconv_fd(void *p) { struct bw_info *ip = p; return (void *)ip->bw_iconv_fd; }
-void nvim_bw_info_set_iconv_fd(void *p, void *fd) { struct bw_info *ip = p; ip->bw_iconv_fd = (iconv_t)fd; }
+// bw_info init/set accessors removed: Rust owns BwInfo::new() and sets fields directly
 
 
 #include "bufwrite.c.generated.h"
