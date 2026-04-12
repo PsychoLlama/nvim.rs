@@ -573,7 +573,6 @@ int nvim_fileio_BAD_DROP(void) { return BAD_DROP; }
 // =============================================================================
 // exarg_T field accessors (opaque pointer)
 // =============================================================================
-int nvim_fileio_eap_is_null(void *eap) { return eap == NULL ? 1 : 0; }
 int nvim_fileio_eap_bad_char(void *eap) { return (int)((exarg_T *)eap)->bad_char; }
 int nvim_fileio_eap_force_enc(void *eap) { return (int)((exarg_T *)eap)->force_enc; }
 int nvim_fileio_eap_force_ff(void *eap) { return (int)((exarg_T *)eap)->force_ff; }

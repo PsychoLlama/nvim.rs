@@ -495,8 +495,6 @@ int nvim_curwin_get_wcol(void) { return curwin->w_wcol; }
 void nvim_curwin_set_wcol(int val) { curwin->w_wcol = val; }
 int nvim_curwin_get_wrow(void) { return curwin->w_wrow; }
 void nvim_curwin_set_wrow(int val) { curwin->w_wrow = val; }
-int nvim_curwin_get_cline_row(void) { return curwin->w_cline_row; }
-bool nvim_curwin_get_p_wrap(void) { return curwin->w_p_wrap; }
 int nvim_curbuf_get_mapped_ctrl_c(void) { return curbuf->b_mapped_ctrl_c; }
 
 /// Check if get_cmdline_info()->cmdbuff is non-NULL (for showcmd display).

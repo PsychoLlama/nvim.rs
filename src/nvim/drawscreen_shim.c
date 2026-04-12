@@ -520,15 +520,6 @@ void nvim_win_update_syn_timeout_start(win_T *wp)
   syn_set_timeout(&syntax_tm);
 }
 
-/// Reset syntax timeout after win_update. Wraps syn_set_timeout(NULL).
-void nvim_win_update_syn_timeout_end(void) { syn_set_timeout(NULL); }
-
-/// Call decor_redraw_reset for the window (uses global decor_state).
-void nvim_decor_redraw_reset(win_T *wp) { decor_redraw_reset(wp, &decor_state); }
-
-/// Call decor_providers_invoke_win for the window.
-void nvim_decor_providers_invoke_win_wrapper(win_T *wp) { decor_providers_invoke_win(wp); }
-
 /// Call win_col_off for wp.
 int nvim_win_col_off(win_T *wp) { return win_col_off(wp); }
 
