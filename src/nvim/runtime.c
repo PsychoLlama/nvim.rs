@@ -175,20 +175,7 @@ list_T *nvim_rt_get_script_local_funcs(scid_T sid)
 // Phase 4: source_cookie_T accessors and static variable wrappers
 // These must live in runtime.c because source_cookie_T and static vars are here.
 
-// Open file without inheriting handle (was formerly static fopen_noinh_readbin).
-void *nvim_rt_fopen_noinh_readbin(const char *fname)
-{
-#ifdef MSWIN
-  int fd_tmp = os_open((char *)fname, O_RDONLY | O_BINARY | O_NOINHERIT, 0);
-#else
-  int fd_tmp = os_open((char *)fname, O_RDONLY, 0);
-#endif
-  if (fd_tmp < 0) {
-    return NULL;
-  }
-  os_set_cloexec(fd_tmp);
-  return fdopen(fd_tmp, READBIN);
-}
+// nvim_rt_fopen_noinh_readbin: migrated to Rust (dosource.rs).
 
 // last_current_SID_seq increment (static var, must be here).
 int nvim_rt_next_script_seq(void) { return ++last_current_SID_seq; }
@@ -196,16 +183,7 @@ int nvim_rt_next_script_seq(void) { return ++last_current_SID_seq; }
 // Allocate a source_cookie_T.
 void *nvim_rt_cookie_alloc(void) { return xcalloc(1, sizeof(source_cookie_T)); }
 
-// Free source_cookie_T with cleanup.
-void nvim_rt_cookie_free_full(void *cookie)
-{
-  source_cookie_T *sp = (source_cookie_T *)cookie;
-  if (sp->fp != NULL) { fclose(sp->fp); }
-  if (sp->source_from_buf_or_str) { ga_clear_strings(&sp->buflines); }
-  xfree(sp->nextline);
-  convert_setup(&sp->conv, NULL, NULL);
-  xfree(sp);
-}
+// nvim_rt_cookie_free_full: migrated to Rust (dosource.rs).
 
 void *nvim_rt_cookie_get_buflines_ga(void *cookie) { return &((source_cookie_T *)cookie)->buflines; }
 void nvim_rt_cookie_set_fp(void *cookie, void *fp) { ((source_cookie_T *)cookie)->fp = (FILE *)fp; }

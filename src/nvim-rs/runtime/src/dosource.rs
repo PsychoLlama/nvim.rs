@@ -67,7 +67,7 @@ extern "C" {
     fn nvim_rt_DOSO_VIMRC() -> c_int;
 
     // File I/O
-    fn nvim_rt_fopen_noinh_readbin(fname: *const c_char) -> *mut c_void;
+    // nvim_rt_fopen_noinh_readbin: migrated to Rust (see bottom of this file)
     fn nvim_rt_fclose(fp: *mut c_void) -> c_int;
 
     // Verbose messages
@@ -140,7 +140,7 @@ extern "C" {
 
     // Cookie accessors (source_cookie_T, defined in runtime.c)
     fn nvim_rt_cookie_alloc() -> *mut c_void;
-    fn nvim_rt_cookie_free_full(cookie: *mut c_void);
+    // nvim_rt_cookie_free_full: migrated to Rust (see bottom of this file)
     fn nvim_rt_cookie_get_buflines_ga(cookie: *mut c_void) -> *mut c_void;
     fn nvim_rt_cookie_set_fp(cookie: *mut c_void, fp: *mut c_void);
     fn nvim_rt_cookie_get_fp(cookie: *mut c_void) -> *mut c_void;
@@ -220,6 +220,10 @@ extern "C" {
         sourcing_name: *const c_char,
         sourcing_lnum: c_int,
     );
+
+    // File I/O helpers (for rs_fopen_noinh_readbin)
+    fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
+    fn os_set_cloexec(fd: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -839,4 +843,51 @@ pub unsafe extern "C" fn rs_do_source_str(
         false,
         str_arg,
     )
+}
+
+// =============================================================================
+// Migrated from runtime.c (Phase 2)
+// =============================================================================
+
+/// Free all resources owned by a source_cookie_T and the cookie struct itself.
+///
+/// Replaces `nvim_rt_cookie_free_full` in C.
+///
+/// # Safety
+///
+/// `cookie` must be a valid source_cookie_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_rt_cookie_free_full(cookie: *mut c_void) {
+    let fp = nvim_rt_cookie_get_fp(cookie);
+    if !fp.is_null() {
+        nvim_rt_fclose(fp);
+    }
+    if nvim_rt_cookie_get_src_from_buf_or_str(cookie) {
+        nvim_rt_cookie_clear_buflines(cookie);
+    }
+    nvim_rt_cookie_free_nextline(cookie);
+    nvim_rt_cookie_teardown_conv(cookie);
+    xfree(cookie);
+}
+
+/// Open a file for reading without inheriting the file handle to child processes.
+///
+/// Replaces `nvim_rt_fopen_noinh_readbin` in C.
+///
+/// # Safety
+///
+/// `fname` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_rt_fopen_noinh_readbin(fname: *const c_char) -> *mut c_void {
+    #[cfg(windows)]
+    let flags = libc::O_RDONLY | libc::O_BINARY | 0x0010; // O_NOINHERIT on Windows
+    #[cfg(not(windows))]
+    let flags = libc::O_RDONLY;
+
+    let fd_tmp = os_open(fname, flags, 0);
+    if fd_tmp < 0 {
+        return ptr::null_mut();
+    }
+    os_set_cloexec(fd_tmp);
+    libc::fdopen(fd_tmp, c"rb".as_ptr()).cast()
 }
