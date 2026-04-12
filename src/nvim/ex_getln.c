@@ -1220,60 +1220,6 @@ void nvim_cmdline_redraw_statuslines(void)
   }
 }
 
-/// Fire CmdlineEnter autocmd with TRY_WRAP.
-/// firstcbuf: 2-byte buffer with [typechar, NUL].
-/// Sets v:event dict fields and calls apply_autocmds.
-/// Returns 1 if an error was set.
-int nvim_cmdline_fire_enter_autocmd(const char *firstcbuf, Error *err)
-{
-  if (!has_event(EVENT_CMDLINEENTER)) {
-    return 0;
-  }
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-  tv_dict_set_keys_readonly(dict);
-  TRY_WRAP(err, {
-    apply_autocmds(EVENT_CMDLINEENTER, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
-    restore_v_event(dict, &save_v_event);
-  });
-  return ERROR_SET(err) ? 1 : 0;
-}
-
-/// Print error from CmdlineEnter and clear it.
-void nvim_cmdline_print_enter_error(Error *err)
-{
-  msg_putchar('\n');
-  msg_scroll = true;
-  msg_puts_hl(err->msg, HLF_E, true);
-  api_clear_error(err);
-}
-
-/// Fire CmdlineLeave autocmd with TRY_WRAP.
-/// Returns 1 if user set abort=true in v:event.
-int nvim_cmdline_fire_leave_autocmd(const char *firstcbuf, bool *gotesc_out, Error *err)
-{
-  if (!has_event(EVENT_CMDLINELEAVE)) {
-    return 0;
-  }
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-  tv_dict_set_keys_readonly(dict);
-  tv_dict_add_bool(dict, S_LEN("abort"),
-                   *gotesc_out ? kBoolVarTrue : kBoolVarFalse);
-  TRY_WRAP(err, {
-    apply_autocmds(EVENT_CMDLINELEAVE, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
-  });
-  if (tv_dict_get_number(dict, "abort") != 0) {
-    *gotesc_out = true;
-  }
-  restore_v_event(dict, &save_v_event);
-  return 0;
-}
-
 /// Post-leave cleanup: pum, expand, incsearch, history.
 /// Returns allocated command line string (the result), or NULL.
 uint8_t *nvim_cmdline_leave_cleanup(void *s)
