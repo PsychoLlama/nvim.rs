@@ -1476,3 +1476,103 @@ int nvim_cmdline_fire_enter_full(const char *firstcbuf, int level)
 /// Wrapper to emit e_command_too_recursive error.
 void nvim_emsg_command_too_recursive(void) { emsg(_(e_command_too_recursive)); }
 
+// =============================================================================
+// Phase 3 thin C wrappers (for Rust leave_cleanup / final_teardown)
+// =============================================================================
+
+/// Check if cmdline popup menu is active.
+int nvim_cmdline_pum_active_check(void) { return cmdline_pum_active() ? 1 : 0; }
+
+/// Remove cmdline popup menu. confirm=0 means no confirmation prompt.
+void nvim_cmdline_pum_remove_noconfirm(void) { cmdline_pum_remove(false); }
+
+/// Check/clear popup menu after cmdline hide.
+void nvim_pum_check_clear_wrap(void) { pum_check_clear(); }
+
+/// Cleanup wildmenu for ccline.
+void nvim_wildmenu_cleanup_ccline(void) { wildmenu_cleanup(&ccline); }
+
+/// Cleanup expand context at pointer xpc.
+void nvim_expand_cleanup_xpc(void *xpc) { ExpandCleanup((expand_T *)xpc); }
+
+/// Clear xpc pointer in ccline and clear cmdline_orig.
+void nvim_ccline_clear_xpc_and_orig(void) { ccline.xpc = NULL; clear_cmdline_orig(); }
+
+/// Set ccline.xpc to NULL.
+void nvim_ccline_xpc_clear(void) { ccline.xpc = NULL; }
+
+/// Add current ccline.cmdbuff to history. histype, sep_char from Rust.
+void nvim_add_to_history_ccline(int histype, int sep_char)
+{
+  add_to_history(histype, ccline.cmdbuff, (size_t)ccline.cmdlen, true, sep_char);
+}
+
+/// Save new_last_cmdline from current ccline.cmdbuff.
+void nvim_save_last_cmdline(void)
+{
+  xfree(new_last_cmdline);
+  new_last_cmdline = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
+}
+
+/// Compute and update cmdrow if msg_scrolled is 0.
+void nvim_compute_cmdrow_if_not_scrolled(void) { if (msg_scrolled == 0) { compute_cmdrow(); } }
+
+/// Set msg("", 0) and redraw_cmdline=true (for gotesc case).
+void nvim_cmdline_gotesc_msg(void) { msg("", 0); redraw_cmdline = true; }
+
+/// Check if p_ch==0 and kUIMessages not active, and set must redraw VALID.
+void nvim_cmdline_check_must_redraw(void)
+{
+  if (p_ch == 0 && !ui_has(kUIMessages)) {
+    set_must_redraw(UPD_VALID);
+  }
+}
+
+/// Get ccline.cmdbuff (non-NULL means we have a line).
+int nvim_ccline_has_cmdbuff(void) { return ccline.cmdbuff != NULL ? 1 : 0; }
+
+/// Get ccline.one_key (for gotesc handling).
+int nvim_ccline_get_one_key(void) { return ccline.one_key ? 1 : 0; }
+
+/// Get msg_scrolled global.
+int nvim_get_msg_scrolled(void) { return msg_scrolled; }
+
+/// Set need_wait_return=false.
+void nvim_clear_need_wait_return_wrap(void) { need_wait_return = false; }
+
+/// Free ccline.last_colors.cmdbuff and kv_destroy ccline.last_colors.colors.
+void nvim_ccline_free_last_colors(void)
+{
+  xfree(ccline.last_colors.cmdbuff);
+  kv_destroy(ccline.last_colors.colors);
+}
+
+/// Call ui_call_cmdline_hide if kUICmdline is active.
+void nvim_cmdline_ui_hide(int gotesc)
+{
+  if (ui_has(kUICmdline)) {
+    cmdline_was_last_drawn = false;
+    ccline.redraw_state = kCmdRedrawNone;
+    ui_call_cmdline_hide(ccline.level, gotesc);
+  }
+}
+
+/// Emit status_redraw_all() and redraw_custom_title_later() if not cmd_silent.
+void nvim_cmdline_status_redraw(void)
+{
+  if (!cmd_silent) {
+    redraw_custom_title_later();
+    status_redraw_all();
+  }
+}
+
+/// Restore ccline from save_ccline_in if did_save, else set cmdbuff=NULL.
+void nvim_ccline_restore_or_clear(bool did_save, const void *save_ccline_in)
+{
+  if (did_save) {
+    ccline = *(const CmdlineInfo *)save_ccline_in;
+  } else {
+    ccline.cmdbuff = NULL;
+  }
+}
+

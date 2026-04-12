@@ -327,35 +327,7 @@ void win_float_remove(bool bang, int count)
 ///
 // win_float_valid exported directly from Rust (returns int; callers cast to bool as needed).
 
-win_T *win_float_find_preview(void)
-{
-  for (win_T *wp = lastwin; wp && wp->w_floating; wp = wp->w_prev) {
-    if (wp->w_float_is_info) {
-      return wp;
-    }
-  }
-  return NULL;
-}
-
-/// Select an alternative window to `win` (assumed floating) in tabpage `tp`.
-///
-/// Useful for finding a window to switch to if `win` is the current window, but is then closed or
-/// moved to a different tabpage.
-///
-/// @param  tp  `win`'s original tabpage, or NULL for current.
-win_T *win_float_find_altwin(const win_T *win, const tabpage_T *tp)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  win_T *wp = prevwin;
-  if (tp == NULL) {
-    return (rs_win_valid(wp) && wp != win && wp->w_config.focusable
-            && !wp->w_config.hide) ? wp : firstwin;
-  }
-
-  assert(tp != curtab);
-  wp = rs_tabpage_win_valid((tabpage_T *)tp, tp->tp_prevwin) ? tp->tp_prevwin : tp->tp_firstwin;
-  return (wp->w_config.focusable && !wp->w_config.hide) ? wp : tp->tp_firstwin;
-}
+// win_float_find_preview, win_float_find_altwin: migrated to Rust (winfloat crate, Phase 2).
 
 /// Inline helper function for handling errors and cleanup in win_float_create.
 static inline win_T *handle_error_and_cleanup(win_T *wp, Error *err)

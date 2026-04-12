@@ -96,21 +96,6 @@ unsafe extern "C" {
 
     // command_line_check / command_line_execute are Rust functions already exported
 
-    // Cleanup helpers
-    fn nvim_cmdline_leave_cleanup(s: *mut c_void) -> *mut u8;
-    fn nvim_cmdline_final_teardown(
-        s: *mut c_void,
-        did_save_ccline: bool,
-        save_ccline: *mut c_void,
-        save_msg_scroll: c_int,
-        save_state: c_int,
-        save_cmdpreview: bool,
-        err: *mut c_void, // NULL (we handle errors via the full wrappers)
-    );
-
-    // Error: pass null to nvim_cmdline_final_teardown (no pending error from Rust)
-    // The leave autocmd wrappers handle their own errors.
-
     // emsg for recursion error
     fn nvim_emsg_command_too_recursive();
 
@@ -120,6 +105,48 @@ unsafe extern "C" {
 
     // State accessor
     fn nvim_get_State() -> c_int;
+
+    // Cleanup helpers (still needed until leave_cleanup is fully replaced)
+    fn nvim_cmdline_leave_cleanup(s: *mut c_void) -> *mut u8;
+    fn nvim_cmdline_final_teardown(
+        s: *mut c_void,
+        did_save_ccline: bool,
+        save_ccline: *mut c_void,
+        save_msg_scroll: c_int,
+        save_state: c_int,
+        save_cmdpreview: bool,
+        err: *mut c_void,
+    );
+}
+
+// Phase 3 cleanup thin wrappers (declared for upcoming Rust migration; not yet used)
+#[allow(dead_code)]
+unsafe extern "C" {
+    fn nvim_cmdline_pum_active_check() -> c_int;
+    fn nvim_cmdline_pum_remove_noconfirm();
+    fn nvim_pum_check_clear_wrap();
+    fn nvim_wildmenu_cleanup_ccline();
+    fn nvim_expand_cleanup_xpc(xpc: *mut c_void);
+    fn nvim_ccline_clear_xpc_and_orig();
+    fn nvim_add_to_history_ccline(histype: c_int, sep_char: c_int);
+    fn nvim_save_last_cmdline();
+    fn nvim_compute_cmdrow_if_not_scrolled();
+    fn nvim_cmdline_gotesc_msg();
+    fn nvim_cmdline_check_must_redraw();
+    fn nvim_ccline_has_cmdbuff() -> c_int;
+    fn nvim_ccline_get_one_key() -> c_int;
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_clear_need_wait_return_wrap();
+    fn nvim_ccline_free_last_colors();
+    fn nvim_cmdline_ui_hide(gotesc: c_int);
+    fn nvim_cmdline_status_redraw();
+    fn nvim_ccline_restore_or_clear(did_save: bool, save_ccline_in: *const c_void);
+    // Accessors for CommandLineState fields needed in cleanup
+    fn nvim_cls_get_histype(s: *mut c_void) -> c_int;
+    fn nvim_cls_get_some_key_typed(s: *mut c_void) -> c_int;
+    fn nvim_cls_get_save_p_icm(s: *mut c_void) -> *mut c_char;
+    fn nvim_cls_xfree_save_p_icm(s: *mut c_void);
+    fn nvim_cls_xfree_prev_cmdbuff_phase3(s: *mut c_void);
 }
 
 // MODE_CMDLINE constant

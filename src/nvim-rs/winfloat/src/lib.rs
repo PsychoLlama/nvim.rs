@@ -465,6 +465,13 @@ extern "C" {
     fn nvim_win_config_float(wp: WinHandle);
     fn nvim_get_curtab() -> TabpageHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
+    // Phase 2: find functions
+    fn nvim_win_get_float_is_info(wp: WinHandle) -> c_int;
+    fn nvim_get_prevwin() -> WinHandle;
+    fn nvim_get_firstwin() -> WinHandle;
+    fn nvim_tabpage_get_prevwin(tp: TabpageHandle) -> WinHandle;
+    fn rs_win_valid(wp: WinHandle) -> c_int;
+    fn rs_tabpage_win_valid(tp: TabpageHandle, wp: WinHandle) -> c_int;
 }
 
 /// Check if window is a floating window.
@@ -821,6 +828,56 @@ pub unsafe extern "C" fn rs_win_reconfig_floats() {
     while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
         nvim_win_config_float(wp);
         wp = nvim_win_get_prev(wp);
+    }
+}
+
+// =============================================================================
+// Phase 2: win_float_find_preview and win_float_find_altwin
+// =============================================================================
+
+/// Return the first floating preview window, or NULL.
+///
+/// C equivalent: `win_float_find_preview`
+#[unsafe(export_name = "win_float_find_preview")]
+pub unsafe extern "C" fn rs_win_float_find_preview() -> WinHandle {
+    let mut wp = nvim_get_lastwin();
+    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+        if nvim_win_get_float_is_info(wp) != 0 {
+            return wp;
+        }
+        wp = nvim_win_get_prev(wp);
+    }
+    WinHandle::null()
+}
+
+/// Select an alternative window to `win` (assumed floating) in tabpage `tp`.
+///
+/// C equivalent: `win_float_find_altwin`
+#[unsafe(export_name = "win_float_find_altwin")]
+pub unsafe extern "C" fn rs_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle {
+    if tp.0.is_null() {
+        // tp == NULL: use prevwin in current tabpage
+        let wp = nvim_get_prevwin();
+        if rs_win_valid(wp) != 0
+            && wp != win
+            && nvim_win_get_config_focusable(wp) != 0
+            && nvim_win_get_config_hide(wp) == 0
+        {
+            return wp;
+        }
+        return nvim_get_firstwin();
+    }
+    // tp != NULL (other tabpage)
+    let prevwin = nvim_tabpage_get_prevwin(tp);
+    let wp = if rs_tabpage_win_valid(tp, prevwin) != 0 {
+        prevwin
+    } else {
+        nvim_tabpage_get_firstwin(tp)
+    };
+    if nvim_win_get_config_focusable(wp) != 0 && nvim_win_get_config_hide(wp) == 0 {
+        wp
+    } else {
+        nvim_tabpage_get_firstwin(tp)
     }
 }
 
