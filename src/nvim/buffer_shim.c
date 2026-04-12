@@ -721,7 +721,6 @@ int nvim_ml_delete_in_buf(buf_T *buf, linenr_T lnum) {
 int nvim_ml_append_curbuf(linenr_T lnum, const char *line) {
   return ml_append(lnum, (char *)line, 0, false);
 }
-void nvim_set_buf_curwin_buffer(buf_T *buf) { curbuf = buf; curwin->w_buffer = buf; }
 // Note: nvim_buf_get_b_ml_line_count is defined in undo.c
 void nvim_semsg_reload_fail(const char *fname) {
   semsg(_("E321: Could not reload \"%s\""), fname);
@@ -744,13 +743,8 @@ exarg_T *nvim_exarg_alloc_clear(void) {
 int nvim_BLN_DUMMY(void) { return BLN_DUMMY; }
 // BF_CHECK_RO constant
 int nvim_BF_CHECK_RO(void) { return BF_CHECK_RO; }
-// READ_NEW and READ_KEEP_UNDO constants
-int nvim_READ_NEW(void) { return READ_NEW; }
-int nvim_READ_KEEP_UNDO(void) { return READ_KEEP_UNDO; }
-
 // Accessor for b_did_filetype (used by rs_do_filetype_autocmd)
 void nvim_buf_set_b_did_filetype(buf_T *buf, int val) { buf->b_did_filetype = (bool)val; }
-int nvim_buf_get_b_did_filetype(buf_T *buf) { return (int)buf->b_did_filetype; }
 
 // =============================================================================
 // open_buffer compound accessors (Phase N: migrate open_buffer to Rust)
@@ -825,12 +819,6 @@ void nvim_open_buffer_setup_bufref(bufref_T *old_curbuf_out)
   set_bufref(old_curbuf_out, curbuf);
   curbuf->b_modified_was_set = false;
   curwin->w_valid = 0;
-}
-
-/// Get curbuf->b_modified_was_set.
-int nvim_curbuf_get_modified_was_set(void)
-{
-  return curbuf->b_modified_was_set ? 1 : 0;
 }
 
 /// Read the file into curbuf for open_buffer.
@@ -943,12 +931,6 @@ void nvim_curwin_init_topline(void)
 void nvim_open_buffer_bufenter(int *retval)
 {
   apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval);
-}
-
-/// Fire EVENT_BUFWINENTER and update retval.
-void nvim_open_buffer_bufwinenter(int *retval)
-{
-  apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf, retval);
 }
 
 /// Execute the post-BUFENTER section of open_buffer:
