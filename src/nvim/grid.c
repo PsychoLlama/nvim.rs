@@ -173,6 +173,27 @@ void nvim_screengrid_set_zindex(ScreenGrid *grid, int val) { if (grid) { grid->z
 void nvim_screengrid_set_valid(ScreenGrid *grid, bool val) { if (grid) { grid->valid = val; } }
 void nvim_screengrid_set_mouse_enabled(ScreenGrid *grid, bool val) { if (grid) { grid->mouse_enabled = val; } }
 
+// Null-setters for grid arrays (used by rs_grid_free)
+void nvim_screengrid_set_chars_null(ScreenGrid *grid) { if (grid) { grid->chars = NULL; } }
+void nvim_screengrid_set_attrs_null(ScreenGrid *grid) { if (grid) { grid->attrs = NULL; } }
+void nvim_screengrid_set_vcols_null(ScreenGrid *grid) { if (grid) { grid->vcols = NULL; } }
+void nvim_screengrid_set_line_offset_null(ScreenGrid *grid) { if (grid) { grid->line_offset = NULL; } }
+
+/// Find a window in curtab by its grid_alloc handle (used by rs_get_win_by_grid_handle).
+win_T *nvim_find_win_by_grid_handle(handle_T handle)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_grid_alloc.handle == handle) {
+      return wp;
+    }
+  }
+  return NULL;
+}
+
+// Rust implementations (Phase 1)
+extern void rs_grid_free(ScreenGrid *grid);
+extern win_T *rs_get_win_by_grid_handle(handle_T handle);
+
 // Global accessors
 ScreenGrid *nvim_get_default_grid(void) { return &default_grid; }
 
@@ -266,15 +287,7 @@ void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)
 
 void grid_free(ScreenGrid *grid)
 {
-  xfree(grid->chars);
-  xfree(grid->attrs);
-  xfree(grid->vcols);
-  xfree(grid->line_offset);
-
-  grid->chars = NULL;
-  grid->attrs = NULL;
-  grid->vcols = NULL;
-  grid->line_offset = NULL;
+  rs_grid_free(grid);
 }
 
 #ifdef EXITFREE
@@ -452,11 +465,6 @@ void grid_draw_border(ScreenGrid *grid, WinConfig *config, int *adj, int winbl, 
 
 win_T *get_win_by_grid_handle(handle_T handle)
 {
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_grid_alloc.handle == handle) {
-      return wp;
-    }
-  }
-  return NULL;
+  return rs_get_win_by_grid_handle(handle);
 }
 

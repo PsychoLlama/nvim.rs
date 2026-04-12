@@ -29,6 +29,24 @@ extern "C" {
     fn nvim_screengrid_get_rows(grid: *mut std::ffi::c_void) -> c_int;
     fn nvim_screengrid_get_cols(grid: *mut std::ffi::c_void) -> c_int;
     fn nvim_screengrid_get_chars(grid: *mut std::ffi::c_void) -> *mut u32;
+
+    // Array getters for other array types
+    // sattr_T = i32, colnr_T = i32
+    fn nvim_screengrid_get_attrs(grid: *mut std::ffi::c_void) -> *mut i32;
+    fn nvim_screengrid_get_vcols(grid: *mut std::ffi::c_void) -> *mut i32;
+    fn nvim_screengrid_get_line_offset(grid: *mut std::ffi::c_void) -> *mut usize;
+
+    // Null-setters for grid arrays
+    fn nvim_screengrid_set_chars_null(grid: *mut std::ffi::c_void);
+    fn nvim_screengrid_set_attrs_null(grid: *mut std::ffi::c_void);
+    fn nvim_screengrid_set_vcols_null(grid: *mut std::ffi::c_void);
+    fn nvim_screengrid_set_line_offset_null(grid: *mut std::ffi::c_void);
+
+    /// Free memory (Neovim's xfree, safe to call with NULL).
+    fn xfree(ptr: *mut std::ffi::c_void);
+
+    /// Find window in curtab by its grid_alloc handle.
+    fn nvim_find_win_by_grid_handle(handle: HandleT) -> *mut std::ffi::c_void;
 }
 
 // =============================================================================
@@ -440,6 +458,49 @@ pub unsafe extern "C" fn rs_grid_dims_match(
     let grid_cols = nvim_screengrid_get_cols(grid);
 
     c_int::from(grid_rows == rows && grid_cols == cols)
+}
+
+// =============================================================================
+// Phase 1: grid_free and get_win_by_grid_handle
+// =============================================================================
+
+/// Free all allocated arrays in a ScreenGrid and null out the pointers.
+///
+/// Matches C's `grid_free()`. Safe to call on an already-freed or zeroed grid.
+///
+/// # Safety
+/// `grid` must be a valid `ScreenGrid*` or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_free(grid: *mut std::ffi::c_void) {
+    if grid.is_null() {
+        return;
+    }
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let vcols = nvim_screengrid_get_vcols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    xfree(chars.cast());
+    xfree(attrs.cast());
+    xfree(vcols.cast());
+    xfree(line_offset.cast());
+
+    nvim_screengrid_set_chars_null(grid);
+    nvim_screengrid_set_attrs_null(grid);
+    nvim_screengrid_set_vcols_null(grid);
+    nvim_screengrid_set_line_offset_null(grid);
+}
+
+/// Find the window in the current tabpage whose `w_grid_alloc.handle` equals `handle`.
+///
+/// Returns a pointer to the `win_T` or null if not found.
+/// Matches C's `get_win_by_grid_handle()`.
+///
+/// # Safety
+/// Must be called from the main Neovim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_win_by_grid_handle(handle: HandleT) -> *mut std::ffi::c_void {
+    nvim_find_win_by_grid_handle(handle)
 }
 
 // =============================================================================
