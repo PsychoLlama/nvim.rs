@@ -1035,6 +1035,7 @@ bool nvim_autocmd_ctx_get_save_changed(const void *ctx_raw)
 
 // --- Set individual autocmd globals ---
 
+void nvim_set_autocmd_fname(char *f) { autocmd_fname = f; }
 void nvim_set_autocmd_fname_full(bool v) { autocmd_fname_full = v; }
 void nvim_set_autocmd_bufnr2(int v) { autocmd_bufnr = v; }
 void nvim_set_autocmd_match(char *m) { autocmd_match = m; }
@@ -1270,108 +1271,6 @@ void nvim_autocmd_free_pending(void)
   }
 }
 
-// --- fname resolution for apply_autocmds_group ---
-// Complex: depends on event and buf. Returns heap-allocated fname or NULL.
-// Also sets *sfname_out if relevant. Both must be freed by caller.
-
-char *nvim_autocmd_resolve_fname(int event, void *buf_raw, char *fname, char **sfname_out,
-                                 bool *fname_full_out)
-{
-  buf_T *buf = (buf_T *)buf_raw;
-  char *sfname = NULL;
-  char *out_fname = NULL;
-  bool fname_full = false;
-
-  if (fname == NULL || *fname == NUL) {
-    if (buf == NULL) {
-      out_fname = NULL;
-    } else {
-      if (event == EVENT_SYNTAX) {
-        out_fname = xstrdup(buf->b_p_syn);
-        fname_full = true;
-      } else if (event == EVENT_FILETYPE) {
-        out_fname = xstrdup(buf->b_p_ft);
-        fname_full = true;
-      } else {
-        if (buf->b_sfname != NULL) {
-          sfname = xstrdup(buf->b_sfname);
-        }
-        out_fname = buf->b_ffname ? xstrdup(buf->b_ffname) : xstrdup("");
-      }
-    }
-    if (out_fname == NULL) {
-      out_fname = xstrdup("");
-    }
-  } else {
-    sfname = xstrdup(fname);
-    if (event == EVENT_CMDLINECHANGED
-        || event == EVENT_CMDLINEENTER
-        || event == EVENT_CMDLINELEAVEPRE
-        || event == EVENT_CMDLINELEAVE
-        || event == EVENT_CMDUNDEFINED
-        || event == EVENT_CURSORMOVEDC
-        || event == EVENT_CMDWINENTER
-        || event == EVENT_CMDWINLEAVE
-        || event == EVENT_COLORSCHEME
-        || event == EVENT_COLORSCHEMEPRE
-        || event == EVENT_DIRCHANGED
-        || event == EVENT_DIRCHANGEDPRE
-        || event == EVENT_FILETYPE
-        || event == EVENT_FUNCUNDEFINED
-        || event == EVENT_MENUPOPUP
-        || event == EVENT_MODECHANGED
-        || event == EVENT_OPTIONSET
-        || event == EVENT_QUICKFIXCMDPOST
-        || event == EVENT_QUICKFIXCMDPRE
-        || event == EVENT_REMOTEREPLY
-        || event == EVENT_SIGNAL
-        || event == EVENT_SPELLFILEMISSING
-        || event == EVENT_SYNTAX
-        || event == EVENT_TABCLOSED
-        || event == EVENT_USER
-        || event == EVENT_WINCLOSED
-        || event == EVENT_WINRESIZED
-        || event == EVENT_WINSCROLLED) {
-      out_fname = xstrdup(fname);
-      fname_full = true;
-    } else {
-      out_fname = FullName_save(fname, false);
-    }
-  }
-
-  *sfname_out = sfname;
-  *fname_full_out = fname_full;
-  return out_fname;
-}
-
-/// Set autocmd_fname from fname_io or fname, and return afile_orig (heap-allocated copy).
-/// Also sets autocmd_fname to a MAXPATHL-extended copy.
-char *nvim_autocmd_setup_afile(int event, void *buf_raw, char *fname_io, char *fname)
-{
-  buf_T *buf = (buf_T *)buf_raw;
-  if (fname_io == NULL) {
-    if (event == EVENT_COLORSCHEME || event == EVENT_COLORSCHEMEPRE
-        || event == EVENT_OPTIONSET || event == EVENT_MODECHANGED) {
-      autocmd_fname = NULL;
-    } else if (fname != NULL && !ends_excmd(*fname)) {
-      autocmd_fname = fname;
-    } else if (buf != NULL) {
-      autocmd_fname = buf->b_ffname;
-    } else {
-      autocmd_fname = NULL;
-    }
-  } else {
-    autocmd_fname = fname_io;
-  }
-
-  char *afile_orig = NULL;
-  if (autocmd_fname != NULL) {
-    afile_orig = xstrdup(autocmd_fname);
-    autocmd_fname = xstrnsave(autocmd_fname, MAXPATHL);
-  }
-  autocmd_fname_full = false;
-  return afile_orig;
-}
 
 /// Variant of check_changed that takes explicit values (for Rust after ctx has been freed).
 void nvim_autocmd_check_changed_ex(void *old_curbuf_raw, bool save_changed)

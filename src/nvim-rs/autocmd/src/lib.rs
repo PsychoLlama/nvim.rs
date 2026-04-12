@@ -2369,6 +2369,35 @@ const EVENT_FILECHANGEDSHELLPOST: c_int = 53;
 const EVENT_WINENTER: c_int = 136;
 const EVENT_WINLEAVE: c_int = 137;
 
+// Event constants for resolve_fname and setup_afile (Phase 3)
+const EVENT_CMDLINECHANGED: c_int = 25;
+const EVENT_CMDLINEENTER: c_int = 26;
+const EVENT_CMDLINELEAVE: c_int = 27;
+const EVENT_CMDLINELEAVEPRE: c_int = 28;
+const EVENT_CMDUNDEFINED: c_int = 29;
+const EVENT_CMDWINENTER: c_int = 30;
+const EVENT_CMDWINLEAVE: c_int = 31;
+const EVENT_COLORSCHEME: c_int = 32;
+const EVENT_COLORSCHEMEPRE: c_int = 33;
+const EVENT_CURSORMOVEDC: c_int = 40;
+const EVENT_DIRCHANGED: c_int = 44;
+const EVENT_DIRCHANGEDPRE: c_int = 45;
+const EVENT_FUNCUNDEFINED: c_int = 68;
+const EVENT_MENUPOPUP: c_int = 82;
+const EVENT_MODECHANGED: c_int = 83;
+const EVENT_OPTIONSET: c_int = 84;
+const EVENT_QUICKFIXCMDPOST: c_int = 88;
+const EVENT_QUICKFIXCMDPRE: c_int = 89;
+const EVENT_REMOTEREPLY: c_int = 93;
+const EVENT_SIGNAL: c_int = 100;
+const EVENT_SPELLFILEMISSING: c_int = 104;
+const EVENT_SYNTAX: c_int = 108;
+const EVENT_TABCLOSED: c_int = 109;
+const EVENT_USER: c_int = 128;
+const EVENT_WINCLOSED: c_int = 135;
+const EVENT_WINRESIZED: c_int = 139;
+const EVENT_WINSCROLLED: c_int = 140;
+
 // Error string for nesting too deep
 const E_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
 
@@ -2470,23 +2499,6 @@ extern "C" {
     // Free pending bufs/wins
     fn nvim_autocmd_free_pending();
 
-    // fname resolution
-    fn nvim_autocmd_resolve_fname(
-        event: c_int,
-        buf: *mut c_void,
-        fname: *mut c_char,
-        sfname_out: *mut *mut c_char,
-        fname_full_out: *mut bool,
-    ) -> *mut c_char;
-
-    // afile setup
-    fn nvim_autocmd_setup_afile(
-        event: c_int,
-        buf: *mut c_void,
-        fname_io: *mut c_char,
-        fname: *mut c_char,
-    ) -> *mut c_char;
-
     // check changed / event resets changed
     fn nvim_autocmd_check_changed_ex(old_curbuf: *mut c_void, save_changed: bool);
     fn nvim_autocmd_event_resets_changed(event: c_int) -> bool;
@@ -2532,6 +2544,21 @@ extern "C" {
     // emsg
     #[link_name = "emsg"]
     fn autocmd_emsg(msg: *const c_char);
+
+    // Phase 3: resolve_fname and setup_afile helpers
+    fn nvim_set_autocmd_fname(f: *mut c_char);
+    #[link_name = "xstrnsave"]
+    fn nvim_autocmd_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // Buffer field accessors from buffer_shim.c
+    #[link_name = "nvim_buf_get_b_ffname"]
+    fn nvim_autocmd_buf_ffname(buf: *mut c_void) -> *const c_char;
+    #[link_name = "nvim_buf_get_b_sfname"]
+    fn nvim_autocmd_buf_sfname(buf: *mut c_void) -> *const c_char;
+    #[link_name = "nvim_buf_get_b_p_ft"]
+    fn nvim_autocmd_buf_p_ft(buf: *mut c_void) -> *const c_char;
+    #[link_name = "nvim_buf_get_b_p_syn"]
+    fn nvim_autocmd_buf_p_syn(buf: *mut c_void) -> *const c_char;
 }
 
 // do_cmdline flags (from ex_docmd.h)
@@ -2547,6 +2574,137 @@ unsafe extern "C" fn getnextac_callback(
     do_concat: bool,
 ) -> *mut c_char {
     rs_getnextac(c, cookie, indent, do_concat)
+}
+
+// Phase 3: resolve_fname and setup_afile implemented in Rust
+
+/// Set `autocmd_fname` for `<afile>` and return heap-allocated afile_orig copy.
+/// Mirrors the former C `nvim_autocmd_setup_afile`.
+///
+/// # Safety
+/// All pointer arguments must be valid or null.
+unsafe fn autocmd_setup_afile_rs(
+    event: c_int,
+    buf: *mut c_void,
+    fname_io: *mut c_char,
+    fname: *mut c_char,
+) -> *mut c_char {
+    let autocmd_fname: *mut c_char = if fname_io.is_null() {
+        if event == EVENT_COLORSCHEME
+            || event == EVENT_COLORSCHEMEPRE
+            || event == EVENT_OPTIONSET
+            || event == EVENT_MODECHANGED
+        {
+            std::ptr::null_mut()
+        } else if !fname.is_null() && !ends_excmd(*fname as u8) {
+            fname
+        } else if !buf.is_null() {
+            nvim_autocmd_buf_ffname(buf).cast_mut()
+        } else {
+            std::ptr::null_mut()
+        }
+    } else {
+        fname_io
+    };
+
+    nvim_set_autocmd_fname(autocmd_fname);
+
+    let mut afile_orig: *mut c_char = std::ptr::null_mut();
+    if !autocmd_fname.is_null() {
+        afile_orig = nvim_autocmd_xstrdup(autocmd_fname);
+        let maxpathl = 4096usize; // MAXPATHL
+        let new_fname = nvim_autocmd_xstrnsave(autocmd_fname, maxpathl);
+        nvim_set_autocmd_fname(new_fname);
+    }
+    nvim_set_autocmd_fname_full(false);
+    afile_orig
+}
+
+/// Resolve the filename for an autocommand event.
+/// Mirrors the former C `nvim_autocmd_resolve_fname`.
+/// Returns heap-allocated fname (caller must free), sets *sfname_out and *fname_full_out.
+///
+/// # Safety
+/// All pointer arguments must be valid or null.
+unsafe fn autocmd_resolve_fname_rs(
+    event: c_int,
+    buf: *mut c_void,
+    fname: *mut c_char,
+    sfname_out: *mut *mut c_char,
+    fname_full_out: *mut bool,
+) -> *mut c_char {
+    let mut sfname: *mut c_char = std::ptr::null_mut();
+    let mut out_fname: *mut c_char;
+    let mut fname_full = false;
+
+    if fname.is_null() || *fname == 0 {
+        if buf.is_null() {
+            out_fname = std::ptr::null_mut();
+        } else if event == EVENT_SYNTAX {
+            let s = nvim_autocmd_buf_p_syn(buf);
+            out_fname = nvim_autocmd_xstrdup(s);
+            fname_full = true;
+        } else if event == EVENT_FILETYPE {
+            let s = nvim_autocmd_buf_p_ft(buf);
+            out_fname = nvim_autocmd_xstrdup(s);
+            fname_full = true;
+        } else {
+            let bs = nvim_autocmd_buf_sfname(buf);
+            if !bs.is_null() {
+                sfname = nvim_autocmd_xstrdup(bs);
+            }
+            let bf = nvim_autocmd_buf_ffname(buf);
+            out_fname = if bf.is_null() {
+                nvim_autocmd_xstrdup(c"".as_ptr())
+            } else {
+                nvim_autocmd_xstrdup(bf)
+            };
+        }
+        if out_fname.is_null() {
+            out_fname = nvim_autocmd_xstrdup(c"".as_ptr());
+        }
+    } else {
+        sfname = nvim_autocmd_xstrdup(fname);
+        // These events use the fname directly (no FullName_save)
+        if event == EVENT_CMDLINECHANGED
+            || event == EVENT_CMDLINEENTER
+            || event == EVENT_CMDLINELEAVEPRE
+            || event == EVENT_CMDLINELEAVE
+            || event == EVENT_CMDUNDEFINED
+            || event == EVENT_CURSORMOVEDC
+            || event == EVENT_CMDWINENTER
+            || event == EVENT_CMDWINLEAVE
+            || event == EVENT_COLORSCHEME
+            || event == EVENT_COLORSCHEMEPRE
+            || event == EVENT_DIRCHANGED
+            || event == EVENT_DIRCHANGEDPRE
+            || event == EVENT_FILETYPE
+            || event == EVENT_FUNCUNDEFINED
+            || event == EVENT_MENUPOPUP
+            || event == EVENT_MODECHANGED
+            || event == EVENT_OPTIONSET
+            || event == EVENT_QUICKFIXCMDPOST
+            || event == EVENT_QUICKFIXCMDPRE
+            || event == EVENT_REMOTEREPLY
+            || event == EVENT_SIGNAL
+            || event == EVENT_SPELLFILEMISSING
+            || event == EVENT_SYNTAX
+            || event == EVENT_TABCLOSED
+            || event == EVENT_USER
+            || event == EVENT_WINCLOSED
+            || event == EVENT_WINRESIZED
+            || event == EVENT_WINSCROLLED
+        {
+            out_fname = nvim_autocmd_xstrdup(fname);
+            fname_full = true;
+        } else {
+            out_fname = nvim_autocmd_fullname_save(fname, false);
+        }
+    }
+
+    *sfname_out = sfname;
+    *fname_full_out = fname_full;
+    out_fname
 }
 
 /// Execute autocommands for "event" and file name "fname".
@@ -2636,13 +2794,13 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
     let save_changed = nvim_autocmd_ctx_get_save_changed(ctx);
 
     // Set the file name to be used for <afile>.
-    let afile_orig = nvim_autocmd_setup_afile(event, buf, fname_io, fname);
+    let afile_orig = autocmd_setup_afile_rs(event, buf, fname_io, fname);
 
     // Resolve fname (may do FullName_save or strdup based on event type)
     let mut sfname: *mut c_char = std::ptr::null_mut();
     let mut fname_full = false;
     let resolved_fname =
-        nvim_autocmd_resolve_fname(event, buf, fname, &raw mut sfname, &raw mut fname_full);
+        autocmd_resolve_fname_rs(event, buf, fname, &raw mut sfname, &raw mut fname_full);
 
     if resolved_fname.is_null() {
         // Out of memory

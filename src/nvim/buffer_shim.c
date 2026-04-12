@@ -106,6 +106,7 @@ const char *nvim_buf_get_b_sfname(buf_T *buf) { return buf->b_sfname; }
 const char *nvim_buf_get_b_p_efm(buf_T *buf) { return buf->b_p_efm; }
 int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
 const char *nvim_buf_get_b_p_ft(buf_T *buf) { return buf->b_p_ft; }
+const char *nvim_buf_get_b_p_syn(buf_T *buf) { return buf->b_p_syn; }
 int nvim_buf_get_b_p_ma(buf_T *buf) { return buf->b_p_ma; }
 void nvim_buf_set_b_p_ml(buf_T *buf, int val) { if (buf) { buf->b_p_ml = val != 0; } }
 void nvim_buf_set_b_p_iminsert(buf_T *buf, int val) { if (buf) { buf->b_p_iminsert = val; } }
