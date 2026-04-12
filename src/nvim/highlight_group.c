@@ -130,6 +130,60 @@ extern const char *highlight_init_dark[];
 int nvim_highlight_name_lookup(const char *name_u) { return map_get(cstr_t, int)(&highlight_unames, name_u); }
 
 
+// C accessors called from Rust (Phase 1: syn_add_group migration)
+
+void *nvim_hlg_alloc_entry(int *id_out)
+{
+  if (highlight_ga.ga_data == NULL) {
+    highlight_ga.ga_itemsize = (int)sizeof(HlGroup);
+    ga_set_growsize(&highlight_ga, 10);
+    ga_grow(&highlight_ga, 300);
+  }
+  if (highlight_ga.ga_len >= MAX_HL_ID) {
+    *id_out = 0;
+    return NULL;
+  }
+  HlGroup *hlgp = GA_APPEND_VIA_PTR(HlGroup, &highlight_ga);
+  CLEAR_POINTER(hlgp);
+  *id_out = highlight_ga.ga_len;
+  return (void *)hlgp;
+}
+
+char *nvim_hlg_arena_memdupz(const char *name, size_t len)
+{
+  return arena_memdupz(&highlight_arena, name, len);
+}
+
+void nvim_hlg_vim_strup(char *s)
+{
+  vim_strup(s);
+}
+
+void nvim_hlg_unames_put(const char *name_u, int id)
+{
+  map_put(cstr_t, int)(&highlight_unames, name_u, id);
+}
+
+void nvim_hlg_emsg(const char *msg)
+{
+  emsg(_(msg));
+}
+
+void nvim_hlg_msg_source(void)
+{
+  msg_source(HLF_W);
+}
+
+int nvim_hlg_vim_isprintc(int c)
+{
+  return vim_isprintc(c);
+}
+
+void *nvim_hlg_xmemrchr(const void *s, int c, size_t n)
+{
+  return xmemrchr(s, c, n);
+}
+
 
 void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id)
 {
@@ -316,77 +370,8 @@ cleanup:
 /// @param len length of \p pp
 ///
 /// @return 0 for failure else the id of the group
-// Forward declaration of syn_add_group for Rust to call back
-static int syn_add_group(const char *name, size_t len);
-
-// Exposed to Rust for creating new highlight groups
-int c_syn_add_group(const char *name, size_t len) { return syn_add_group(name, len); }
-
-/// Add new highlight group and return its ID.
-///
-/// @param name must be an allocated string, it will be consumed.
-/// @return 0 for failure, else the allocated group id
-/// @see syn_check_group
-static int syn_add_group(const char *name, size_t len)
-{
-  // Check that the name is valid (ASCII letters, digits, '_', '.', '@', '-').
-  for (size_t i = 0; i < len; i++) {
-    int c = (uint8_t)name[i];
-    if (!vim_isprintc(c)) {
-      emsg(_("E669: Unprintable character in group name"));
-      return 0;
-    } else if (!ASCII_ISALNUM(c) && c != '_' && c != '.' && c != '@' && c != '-') {
-      // '.' and '@' are allowed characters for use with treesitter capture names.
-      msg_source(HLF_W);
-      emsg(_(e_highlight_group_name_invalid_char));
-      return 0;
-    }
-  }
-
-  int scoped_parent = 0;
-  if (len > 1 && name[0] == '@') {
-    char *delim = xmemrchr(name, '.', len);
-    if (delim) {
-      scoped_parent = syn_check_group(name, (size_t)(delim - name));
-    }
-  }
-
-  // First call for this growarray: init growing array.
-  if (highlight_ga.ga_data == NULL) {
-    highlight_ga.ga_itemsize = sizeof(HlGroup);
-    ga_set_growsize(&highlight_ga, 10);
-    // 265 builtin groups, will always be used, plus some space
-    ga_grow(&highlight_ga, 300);
-  }
-
-  if (highlight_ga.ga_len >= MAX_HL_ID) {
-    emsg(_("E849: Too many highlight and syntax groups"));
-    return 0;
-  }
-
-  // Append another syntax_highlight entry.
-  HlGroup *hlgp = GA_APPEND_VIA_PTR(HlGroup, &highlight_ga);
-  CLEAR_POINTER(hlgp);
-  hlgp->sg_name = arena_memdupz(&highlight_arena, name, len);
-  hlgp->sg_rgb_bg = -1;
-  hlgp->sg_rgb_fg = -1;
-  hlgp->sg_rgb_sp = -1;
-  hlgp->sg_rgb_bg_idx = kColorIdxNone;
-  hlgp->sg_rgb_fg_idx = kColorIdxNone;
-  hlgp->sg_rgb_sp_idx = kColorIdxNone;
-  hlgp->sg_blend = -1;
-  hlgp->sg_name_u = arena_memdupz(&highlight_arena, name, len);
-  hlgp->sg_parent = scoped_parent;
-  // will get set to false by caller if settings are added
-  hlgp->sg_cleared = true;
-  vim_strup(hlgp->sg_name_u);
-
-  int id = highlight_ga.ga_len;  // ID is index plus one
-
-  map_put(cstr_t, int)(&highlight_unames, hlgp->sg_name_u, id);
-
-  return id;
-}
+// syn_add_group and c_syn_add_group migrated to Rust (Phase 1).
+// See src/nvim-rs/highlight_group/src/ffi.rs.
 
 
 

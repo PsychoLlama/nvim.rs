@@ -43,8 +43,18 @@ extern "C" {
     /// Get the active highlight namespace for a window.
     pub fn nvim_win_get_ns_hl_active(wp: *mut c_void) -> c_int;
 
-    /// Group management functions (called from Rust back into C)
-    pub fn c_syn_add_group(name: *const c_char, len: usize) -> c_int;
+}
+
+// C accessors used by the Phase 1 Rust implementation of syn_add_group.
+extern "C" {
+    fn nvim_hlg_alloc_entry(id_out: *mut c_int) -> *mut c_void;
+    fn nvim_hlg_arena_memdupz(name: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_hlg_vim_strup(s: *mut c_char);
+    fn nvim_hlg_unames_put(name_u: *const c_char, id: c_int);
+    fn nvim_hlg_emsg(msg: *const c_char);
+    fn nvim_hlg_msg_source();
+    fn nvim_hlg_vim_isprintc(c: c_int) -> c_int;
+    fn nvim_hlg_xmemrchr(s: *const c_void, c: c_int, n: usize) -> *mut c_void;
 }
 
 // =============================================================================
@@ -2427,4 +2437,71 @@ pub unsafe extern "C" fn rs_free_highlight() {
     highlight_unames.values = std::ptr::null_mut();
 
     arena_mem_free(arena_finish(&raw mut highlight_arena));
+}
+
+// =============================================================================
+// Phase 1: syn_add_group migrated to Rust from highlight_group.c
+// =============================================================================
+
+/// Add new highlight group and return its 1-based ID.
+///
+/// Exported as `c_syn_add_group` so the nvim-highlight crate's
+/// rs_syn_check_group can call it without any changes on its end.
+///
+/// # Safety
+/// `name` must be valid for at least `len` bytes.
+#[export_name = "c_syn_add_group"]
+pub unsafe extern "C" fn rs_syn_add_group(name: *const c_char, len: usize) -> c_int {
+    // Validate every character in the name.
+    for i in 0..len {
+        let c = (*name.add(i) as u8) as c_int;
+        if nvim_hlg_vim_isprintc(c) == 0 {
+            nvim_hlg_emsg(c"E669: Unprintable character in group name".as_ptr());
+            return 0;
+        }
+        let b = c as u8;
+        if !b.is_ascii_alphanumeric() && b != b'_' && b != b'.' && b != b'@' && b != b'-' {
+            nvim_hlg_msg_source();
+            nvim_hlg_emsg(c"E5248: Invalid character in group name".as_ptr());
+            return 0;
+        }
+    }
+
+    // Look up the scoped parent for @foo.bar style names.
+    let scoped_parent: c_int = if len > 1 && *name == b'@' as c_char {
+        let delim = nvim_hlg_xmemrchr(name as *const c_void, b'.' as c_int, len) as *const c_char;
+        if !delim.is_null() {
+            let parent_len = (delim as usize) - (name as usize);
+            syn_check_group(name, parent_len)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    // Allocate a new entry in highlight_ga (already zeroed by nvim_hlg_alloc_entry).
+    let mut id: c_int = 0;
+    let hlgp = nvim_hlg_alloc_entry(&raw mut id) as *mut crate::types::HlGroup;
+    if hlgp.is_null() {
+        nvim_hlg_emsg(c"E849: Too many highlight and syntax groups".as_ptr());
+        return 0;
+    }
+
+    (*hlgp).sg_name = nvim_hlg_arena_memdupz(name, len);
+    (*hlgp).sg_rgb_bg = -1;
+    (*hlgp).sg_rgb_fg = -1;
+    (*hlgp).sg_rgb_sp = -1;
+    (*hlgp).sg_rgb_bg_idx = crate::types::ColorIdx::None as c_int;
+    (*hlgp).sg_rgb_fg_idx = crate::types::ColorIdx::None as c_int;
+    (*hlgp).sg_rgb_sp_idx = crate::types::ColorIdx::None as c_int;
+    (*hlgp).sg_blend = -1;
+    (*hlgp).sg_name_u = nvim_hlg_arena_memdupz(name, len);
+    (*hlgp).sg_parent = scoped_parent;
+    (*hlgp).sg_cleared = true;
+    nvim_hlg_vim_strup((*hlgp).sg_name_u);
+
+    nvim_hlg_unames_put((*hlgp).sg_name_u, id);
+
+    id
 }
