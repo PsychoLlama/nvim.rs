@@ -93,6 +93,12 @@ extern "C" {
     fn tv_dict_add_nr(d: *mut std::ffi::c_void, key: *const c_char, key_len: usize, nr: i64);
     fn tv_list_alloc(len: i64) -> *mut std::ffi::c_void;
     fn tv_list_append_dict(l: *mut std::ffi::c_void, d: *mut std::ffi::c_void);
+    fn tv_dict_add_list(
+        d: *mut std::ffi::c_void,
+        key: *const c_char,
+        key_len: usize,
+        list: *mut std::ffi::c_void,
+    ) -> c_int;
 
     // Phase 1: message functions for list_placed
     fn msg_puts_title(s: *const c_char);
@@ -489,6 +495,77 @@ pub unsafe extern "C" fn rs_nvim_get_buffer_signs_impl(
     }
     nvim_marktree_itr_free(itr);
     l
+}
+
+/// Replace C `nvim_sign_get_placed_in_buf_impl`.
+///
+/// Appends a dict to `retlist` with keys "bufnr" and "signs".
+/// The "signs" list contains one dict per matching placed sign.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+/// `group` must be null or a valid null-terminated C string.
+/// `retlist` must be a valid list_T pointer.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+#[unsafe(export_name = "nvim_sign_get_placed_in_buf_impl")]
+pub unsafe extern "C" fn rs_nvim_sign_get_placed_in_buf_impl(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    sign_id: c_int,
+    group: *const c_char,
+    retlist: *mut std::ffi::c_void,
+) {
+    const K_LIST_LEN_MAY_KNOW: i64 = -3;
+
+    // Build the outer dict: { bufnr: N, signs: [...] }
+    let d = tv_dict_alloc();
+    tv_list_append_dict(retlist, d);
+    let fnum = nvim_buf_get_fnum(buf);
+    tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, i64::from(fnum));
+    let l = tv_list_alloc(K_LIST_LEN_MAY_KNOW);
+    tv_dict_add_list(d, c"signs".as_ptr(), 5, l);
+
+    let ns = rs_sign_get_ns_filter(group);
+    if !rs_sign_buffer_has_signs(buf) || ns < 0 {
+        return;
+    }
+
+    // Iterate marktree from (lnum-1) or 0
+    let b = nvim_buf_get_marktree(buf);
+    let itr = nvim_marktree_itr_alloc();
+    let start_row = if lnum > 0 { lnum - 1 } else { 0 };
+    rs_marktree_itr_get(b, start_row, 0, itr);
+
+    let mut signs: Vec<MTKey> = Vec::new();
+    while nvim_mtitr_has_x(itr) {
+        let mark = rs_marktree_itr_current(itr);
+        // If filtering by lnum, stop once we pass that row
+        if lnum > 0 && mark.pos.row >= lnum {
+            break;
+        }
+        let mark_lnum = mark.pos.row + 1;
+        let mark_id = mark.id as c_int;
+        let ns_matches = ns == NS_ALL || ns as u32 == mark.ns;
+        let id_lnum_matches =
+            (sign_id == mark_id || sign_id == 0) && (lnum == mark_lnum || lnum == 0);
+        if !mtkey_is_end(&mark) && ns_matches && id_lnum_matches && mtkey_is_decor_sign(&mark) {
+            signs.push(mark);
+        }
+        rs_marktree_itr_next(b, itr);
+    }
+    nvim_marktree_itr_free(itr);
+
+    if !signs.is_empty() {
+        signs.sort_by(|a, bk| cmp_signs(a, bk));
+        for mark in &signs {
+            let dict = build_placed_info_dict(&raw const *mark);
+            tv_list_append_dict(l, dict);
+        }
+    }
 }
 
 /// Replace C `nvim_sign_list_placed_impl`.

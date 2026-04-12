@@ -51,7 +51,6 @@
 extern void rs_foldOpenCursor(void);
 extern void sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group, list_T *retlist);
 extern int64_t group_get_ns(const char *group);
-extern int rs_sign_row_cmp(int row1, int row2);
 extern int rs_sign_cmd_idx(const char *cmd);
 extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
 extern bool rs_sign_buffer_has_signs(const buf_T *buf);
@@ -69,25 +68,12 @@ extern dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark);
 extern int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum);
 extern void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row, sign_T *sp, int prio);
 extern void nvim_sign_define_update_placed(const char *name, sign_T *sp);
+// Phase 3: these functions now live in Rust (nvim-sign crate)
+extern void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group, list_T *retlist);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
 
-static int sign_row_cmp(const void *p1, const void *p2)
-{
-  const MTKey *s1 = (MTKey *)p1;
-  const MTKey *s2 = (MTKey *)p2;
-  int row_cmp = rs_sign_row_cmp(s1->pos.row, s2->pos.row);
-  if (row_cmp != 0) {
-    return row_cmp;
-  }
-  DecorSignHighlight *sh1 = decor_find_sign(mt_decor(*s1));
-  DecorSignHighlight *sh2 = decor_find_sign(mt_decor(*s2));
-  assert(sh1 && sh2);
-  SignItem si1 = { sh1, s1->id };
-  SignItem si2 = { sh2, s2->id };
-  return sign_item_cmp(&si1, &si2);
-}
 
 sign_T *nvim_sign_map_get(const char *name)
 { return name ? pmap_get(cstr_t)(&sign_map, name) : NULL; }
@@ -209,43 +195,4 @@ void nvim_sign_extmark_set(buf_T *buf, uint32_t ns, uint32_t *id, int row,
   extmark_set(buf, ns, id, row, 0, -1, -1, decor, decor_flags, true, false, true, true, NULL);
 }
 
-void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group, list_T *retlist)
-{
-  dict_T *d = tv_dict_alloc();
-  tv_list_append_dict(retlist, d);
-  tv_dict_add_nr(d, S_LEN("bufnr"), buf->b_fnum);
-  list_T *l = tv_list_alloc(kListLenMayKnow);
-  tv_dict_add_list(d, S_LEN("signs"), l);
-  int64_t ns = group_get_ns(group);
-  if (!rs_sign_buffer_has_signs(buf) || ns < 0) {
-    return;
-  }
-  MarkTreeIter itr[1];
-  kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-  rs_marktree_itr_get(buf->b_marktree, lnum ? lnum - 1 : 0, 0, itr);
-  while (itr->x) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (lnum && mark.pos.row >= lnum) {
-      break;
-    }
-    if (!mt_end(mark)
-        && (ns == UINT32_MAX || ns == mark.ns)
-        && ((lnum == 0 && sign_id == 0)
-            || (sign_id == 0 && lnum == mark.pos.row + 1)
-            || (lnum == 0 && sign_id == (int)mark.id)
-            || (lnum == mark.pos.row + 1 && sign_id == (int)mark.id))) {
-      if (mt_decor_sign(mark)) {
-        kv_push(signs, mark);
-      }
-    }
-    rs_marktree_itr_next(buf->b_marktree, itr);
-  }
-  if (kv_size(signs)) {
-    qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
-    for (size_t i = 0; i < kv_size(signs); i++) {
-      tv_list_append_dict(l, nvim_sign_get_placed_info_dict_impl(&kv_A(signs, i)));
-    }
-    kv_destroy(signs);
-  }
-}
 

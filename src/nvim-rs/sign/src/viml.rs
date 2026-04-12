@@ -470,13 +470,6 @@ extern "C" {
     // Complex dict/list ops that stay in C for now
     fn nvim_sign_get_placed_info_dict_impl(mark: MTKeyHandle) -> *mut c_void;
     fn nvim_get_buffer_signs_impl(buf: SignBufHandle) -> *mut c_void;
-    fn nvim_sign_get_placed_in_buf_impl(
-        buf: SignBufHandle,
-        lnum: LinenrT,
-        sign_id: c_int,
-        group: *const c_char,
-        retlist: *mut c_void,
-    );
 }
 
 // =============================================================================
@@ -600,7 +593,7 @@ pub unsafe extern "C" fn rs_sign_get_placed_in_buf(
     if buf.is_null() || retlist.is_null() {
         return;
     }
-    nvim_sign_get_placed_in_buf_impl(buf, lnum, sign_id, group, retlist);
+    crate::query::rs_nvim_sign_get_placed_in_buf_impl(buf, lnum, sign_id, group, retlist);
 }
 
 /// Get placed signs across buffers.
@@ -627,12 +620,12 @@ pub unsafe extern "C" fn rs_sign_get_placed(
         let mut cbuf = nvim_get_firstbuf();
         while !cbuf.is_null() {
             if rs_sign_buffer_has_signs(cbuf) {
-                nvim_sign_get_placed_in_buf_impl(cbuf, 0, id, group, retlist);
+                crate::query::rs_nvim_sign_get_placed_in_buf_impl(cbuf, 0, id, group, retlist);
             }
             cbuf = nvim_buf_get_next(cbuf);
         }
     } else {
-        nvim_sign_get_placed_in_buf_impl(buf, lnum, id, group, retlist);
+        crate::query::rs_nvim_sign_get_placed_in_buf_impl(buf, lnum, id, group, retlist);
     }
 }
 
