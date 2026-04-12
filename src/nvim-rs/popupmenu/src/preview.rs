@@ -3,10 +3,151 @@
 //! This module handles the floating preview window that shows
 //! completion item info text alongside the popup menu.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::display::{BufHandle, WinHandle};
 use crate::PUM_STATE;
+
+// ---- Minimal API types for nvim_buf_set_lines ----
+
+/// `NvimString` (matches C `String` / `NvimString`).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvimString {
+    data: *mut c_char,
+    size: usize,
+}
+
+/// Object type discriminant — only need kObjectTypeString (4).
+const K_OBJECT_TYPE_STRING: c_int = 4;
+
+/// Object data union — only use the string variant.
+#[repr(C)]
+#[derive(Clone, Copy)]
+union ObjectData {
+    string: NvimString,
+    _integer: i64,
+}
+
+/// Object (matches C `Object`).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvimObject {
+    obj_type: c_int,
+    data: ObjectData,
+}
+
+/// Array (matches C `Array` kvec).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvimArray {
+    size: usize,
+    capacity: usize,
+    items: *mut NvimObject,
+}
+
+impl NvimArray {
+    const fn empty() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        }
+    }
+
+    /// Push a string object into the array.
+    ///
+    /// # Safety
+    /// Array must have been allocated with sufficient capacity.
+    unsafe fn push_string(&mut self, s: NvimString) {
+        debug_assert!(self.size < self.capacity);
+        *self.items.add(self.size) = NvimObject {
+            obj_type: K_OBJECT_TYPE_STRING,
+            data: ObjectData { string: s },
+        };
+        self.size += 1;
+    }
+}
+
+/// Arena allocator (matches C `Arena` from `memory_defs.h`).
+/// Layout: `cur_blk` (pointer), `pos` (`size_t`), `size` (`size_t`).
+#[repr(C)]
+struct Arena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+impl Arena {
+    const fn empty() -> Self {
+        Self {
+            cur_blk: std::ptr::null_mut(),
+            pos: 0,
+            size: 0,
+        }
+    }
+}
+
+// ---- FFI declarations ----
+
+extern "C" {
+    /// Get display width in cells of a NUL-terminated multibyte string.
+    fn mb_string2cells(s: *const c_char) -> usize;
+    /// Duplicate a C string into a newly allocated `NvimString`.
+    fn cstr_to_string(s: *const c_char) -> NvimString;
+    /// Free an Array (recursively frees items).
+    fn api_free_array(arr: NvimArray);
+    /// Set lines in a buffer.
+    fn nvim_buf_set_lines(
+        channel_id: u64,
+        buffer: c_int,
+        start: i64,
+        end: i64,
+        strict_indexing: bool,
+        replacement: NvimArray,
+        arena: *mut Arena,
+        err: *mut NvimError,
+    );
+    /// Finish arena and return memory block.
+    fn arena_finish(arena: *mut Arena) -> *mut c_void;
+    /// Free arena memory block.
+    fn arena_mem_free(mem: *mut c_void);
+    /// Set buffer `b_p_ma` field.
+    fn nvim_buf_set_b_p_ma(buf: *mut BufHandle, val: c_int);
+    /// Get buffer handle (`b_fnum` field as integer).
+    fn nvim_buf_get_handle(buf: *mut BufHandle) -> c_int;
+    /// Emit an error message.
+    fn emsg(s: *const c_char);
+    /// Clear an error.
+    fn api_clear_error(err: *mut NvimError);
+    /// Allocate memory.
+    fn xmalloc(size: usize) -> *mut c_void;
+}
+
+extern "C" {
+    /// C global: `textlock` (prevents buffer text changes during certain ops).
+    static mut textlock: c_int;
+}
+
+/// Error struct (matches C `Error`).
+#[repr(C)]
+struct NvimError {
+    err_type: c_int,
+    msg: *mut c_char,
+}
+
+impl NvimError {
+    const fn init() -> Self {
+        Self {
+            err_type: -1,
+            msg: std::ptr::null_mut(),
+        }
+    }
+
+    const fn is_set(&self) -> bool {
+        self.err_type != -1
+    }
+}
 
 // C accessor functions for preview window operations.
 extern "C" {
@@ -30,13 +171,6 @@ extern "C" {
     fn nvim_win_get_buffer(wp: *mut WinHandle) -> *mut BufHandle;
     /// Call `redraw_later` for a window.
     fn redraw_later(wp: *mut WinHandle, update_type: c_int);
-    /// Set preview text in buffer (C wrapper for `nvim_buf_set_lines`).
-    fn nvim_pum_preview_set_text_impl(
-        buf: *mut BufHandle,
-        info: *mut c_char,
-        lnum: *mut i32,
-        max_width: *mut c_int,
-    );
 }
 
 extern "C" {
@@ -76,10 +210,13 @@ const K_FLOAT_ANCHOR_SOUTH: c_int = 2;
 
 /// Set the informational text in the preview buffer.
 ///
-/// Delegates to C wrapper that handles Arena/Array/`nvim_buf_set_lines`.
+/// Iterates through the `info` C string line-by-line, builds an Array of
+/// String objects, and calls `nvim_buf_set_lines` to replace the buffer content.
+/// Handles textlock save/restore and error reporting.
 ///
 /// # Safety
-/// All pointers must be valid. `info` must be a valid C string.
+/// All pointers must be valid. `info` must be a valid, mutable C string
+/// (temporarily modified in-place during iteration, always restored).
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_preview_set_text(
     buf: *mut BufHandle,
@@ -87,7 +224,109 @@ pub unsafe extern "C" fn rs_pum_preview_set_text(
     lnum: *mut i32,
     max_width: *mut c_int,
 ) {
-    nvim_pum_preview_set_text_impl(buf, info, lnum, max_width);
+    let mut err = NvimError::init();
+    let mut arena = Arena::empty();
+    let mut replacement = NvimArray::empty();
+
+    nvim_buf_set_b_p_ma(buf, 1);
+
+    // First pass: count lines so we can allocate the array.
+    let mut line_count: usize = 0;
+    {
+        let mut curr = info;
+        loop {
+            let next = libc_strchr(curr, b'\n' as c_int);
+            let is_last = next.is_null();
+            // Only skip if this is an empty line AND it's the last line
+            if *curr == 0 && is_last {
+                break;
+            }
+            line_count += 1;
+            if is_last {
+                break;
+            }
+            curr = next.add(1);
+        }
+    }
+
+    if line_count > 0 {
+        // Allocate array storage on the heap (not arena, since we pass it to nvim_buf_set_lines).
+        let items_ptr =
+            xmalloc(line_count * std::mem::size_of::<NvimObject>()).cast::<NvimObject>();
+        replacement = NvimArray {
+            size: 0,
+            capacity: line_count,
+            items: items_ptr,
+        };
+
+        // Second pass: fill array.
+        let mut curr = info;
+        loop {
+            let next = libc_strchr(curr, b'\n' as c_int);
+            let is_last = next.is_null();
+            if *curr == 0 && is_last {
+                break;
+            }
+
+            // Temporarily NUL-terminate at newline boundary.
+            if !next.is_null() {
+                *next = 0;
+            }
+
+            // Compute display width.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            let cells = mb_string2cells(curr) as c_int;
+            if cells > *max_width {
+                *max_width = cells;
+            }
+
+            replacement.push_string(cstr_to_string(curr));
+            *lnum += 1;
+
+            // Restore newline.
+            if next.is_null() {
+                break;
+            }
+            *next = 10i8; // '\n'
+            curr = next.add(1);
+        }
+    }
+
+    // Save/restore textlock around nvim_buf_set_lines.
+    let original_textlock = textlock;
+    if textlock > 0 {
+        textlock = 0;
+    }
+    let buf_handle = nvim_buf_get_handle(buf);
+    nvim_buf_set_lines(
+        0,
+        buf_handle,
+        0,
+        -1,
+        false,
+        replacement,
+        &raw mut arena,
+        &raw mut err,
+    );
+    textlock = original_textlock;
+
+    if err.is_set() {
+        emsg(err.msg);
+        api_clear_error(&raw mut err);
+    }
+    let mem = arena_finish(&raw mut arena);
+    arena_mem_free(mem);
+    api_free_array(replacement);
+
+    nvim_buf_set_b_p_ma(buf, 0);
+}
+
+/// Thin C wrapper for `strchr` to avoid `libc` dependency.
+unsafe fn libc_strchr(s: *mut c_char, c: c_int) -> *mut c_char {
+    extern "C" {
+        fn strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    }
+    strchr(s, c)
 }
 
 /// Adjust floating info preview window position.
@@ -176,7 +415,7 @@ pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> 
     let mut lnum: i32 = 0;
     let mut max_info_width: c_int = 0;
     let buf = nvim_win_get_buffer(wp);
-    nvim_pum_preview_set_text_impl(
+    rs_pum_preview_set_text(
         buf,
         info,
         std::ptr::addr_of_mut!(lnum),
