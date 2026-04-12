@@ -161,6 +161,17 @@ int nvim_match_hl_get_attr(match_T *shl) { return shl->attr; }
 /// Get is_addpos field of a match_T.
 int nvim_match_hl_get_is_addpos(match_T *shl) { return shl->is_addpos ? 1 : 0; }
 
+/// Get all four rm position fields for a given index in one call (batch getter).
+void nvim_match_hl_get_rm_pos(match_T *shl, int idx,
+                              linenr_T *slnum, colnr_T *scol,
+                              linenr_T *elnum, colnr_T *ecol) {
+  if (slnum != NULL) { *slnum = shl->rm.startpos[idx].lnum; }
+  if (scol  != NULL) { *scol  = shl->rm.startpos[idx].col;  }
+  if (elnum != NULL) { *elnum = shl->rm.endpos[idx].lnum;   }
+  if (ecol  != NULL) { *ecol  = shl->rm.endpos[idx].col;    }
+}
+
+// Individual rm position getters kept for callers that only need one field.
 /// Get rm.startpos[idx].lnum from a match_T.
 linenr_T nvim_match_hl_rm_startpos_lnum(match_T *shl, int idx) { return shl->rm.startpos[idx].lnum; }
 
@@ -181,6 +192,26 @@ void nvim_match_hl_set_lnum(match_T *shl, linenr_T lnum) { shl->lnum = lnum; }
 
 /// Set is_addpos field of a match_T.
 void nvim_match_hl_set_is_addpos(match_T *shl, int val) { shl->is_addpos = (bool)val; }
+
+/// Set both rm startpos and endpos for a given index in one call (batch setter).
+void nvim_match_hl_set_rm_pos(match_T *shl, int idx,
+                              linenr_T slnum, colnr_T scol,
+                              linenr_T elnum, colnr_T ecol) {
+  shl->rm.startpos[idx].lnum = slnum; shl->rm.startpos[idx].col = scol;
+  shl->rm.endpos[idx].lnum   = elnum; shl->rm.endpos[idx].col   = ecol;
+}
+
+/// Record a position match result in shl: sets lnum, rm pos[0], is_addpos, has_cursor (batch setter).
+void nvim_match_hl_set_match_result(match_T *shl, linenr_T lnum,
+                                    linenr_T slnum, colnr_T scol,
+                                    linenr_T elnum, colnr_T ecol,
+                                    int is_addpos, int has_cursor) {
+  shl->lnum = lnum;
+  shl->rm.startpos[0].lnum = slnum; shl->rm.startpos[0].col = scol;
+  shl->rm.endpos[0].lnum   = elnum; shl->rm.endpos[0].col   = ecol;
+  shl->is_addpos  = (bool)is_addpos;
+  shl->has_cursor = (bool)has_cursor;
+}
 
 /// Set rm.startpos[idx] of a match_T.
 void nvim_match_hl_rm_set_startpos(match_T *shl, int idx, linenr_T lnum, colnr_T col) { shl->rm.startpos[idx].lnum = lnum; shl->rm.startpos[idx].col = col; }

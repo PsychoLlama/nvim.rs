@@ -38,10 +38,14 @@ extern "C" {
     fn nvim_match_hl_get_endcol(shl: *mut MatchHlHandle) -> i32;
     fn nvim_match_hl_get_attr(shl: *mut MatchHlHandle) -> c_int;
     fn nvim_match_hl_get_is_addpos(shl: *mut MatchHlHandle) -> c_int;
-    fn nvim_match_hl_rm_startpos_lnum(shl: *mut MatchHlHandle, idx: c_int) -> i32;
-    fn nvim_match_hl_rm_startpos_col(shl: *mut MatchHlHandle, idx: c_int) -> i32;
-    fn nvim_match_hl_rm_endpos_lnum(shl: *mut MatchHlHandle, idx: c_int) -> i32;
-    fn nvim_match_hl_rm_endpos_col(shl: *mut MatchHlHandle, idx: c_int) -> i32;
+    fn nvim_match_hl_get_rm_pos(
+        shl: *mut MatchHlHandle,
+        idx: c_int,
+        slnum: *mut i32,
+        scol: *mut i32,
+        elnum: *mut i32,
+        ecol: *mut i32,
+    );
 
     // Window accessors
     fn nvim_win_get_cursor_lnum(wp: *mut WinHandle) -> i32;
@@ -71,12 +75,22 @@ const SEARCH_HL_PRIORITY: c_int = 0;
 /// `wp` and `shl` must be valid pointers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_check_cur_search_hl(wp: *mut WinHandle, shl: *mut MatchHlHandle) {
-    let linecount = nvim_match_hl_rm_endpos_lnum(shl, 0) - nvim_match_hl_rm_startpos_lnum(shl, 0);
+    let mut start_lnum: i32 = 0;
+    let mut start_col: i32 = 0;
+    let mut end_lnum: i32 = 0;
+    let mut end_col: i32 = 0;
+    nvim_match_hl_get_rm_pos(
+        shl,
+        0,
+        &raw mut start_lnum,
+        &raw mut start_col,
+        &raw mut end_lnum,
+        &raw mut end_col,
+    );
+    let linecount = end_lnum - start_lnum;
     let shl_lnum = nvim_match_hl_get_lnum(shl);
     let cursor_lnum = nvim_win_get_cursor_lnum(wp);
     let cursor_col = nvim_win_get_cursor_col(wp);
-    let start_col = nvim_match_hl_rm_startpos_col(shl, 0);
-    let end_col = nvim_match_hl_rm_endpos_col(shl, 0);
 
     let has_cursor = cursor_lnum >= shl_lnum
         && cursor_lnum <= shl_lnum + linecount

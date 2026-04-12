@@ -27,10 +27,16 @@ pub struct MatchItemHandle {
 extern "C" {
     // match_T (MatchHlHandle) setters
     fn nvim_match_hl_set_lnum(shl: *mut MatchHlHandle, lnum: i32);
-    fn nvim_match_hl_set_is_addpos(shl: *mut MatchHlHandle, val: c_int);
-    fn nvim_match_hl_set_has_cursor(shl: *mut MatchHlHandle, val: c_int);
-    fn nvim_match_hl_rm_set_startpos(shl: *mut MatchHlHandle, idx: c_int, lnum: i32, col: i32);
-    fn nvim_match_hl_rm_set_endpos(shl: *mut MatchHlHandle, idx: c_int, lnum: i32, col: i32);
+    fn nvim_match_hl_set_match_result(
+        shl: *mut MatchHlHandle,
+        lnum: i32,
+        slnum: i32,
+        scol: i32,
+        elnum: i32,
+        ecol: i32,
+        is_addpos: c_int,
+        has_cursor: c_int,
+    );
 
     // matchitem_T position accessors
     fn nvim_match_item_get_pos_cur(m: *mut MatchItemHandle) -> c_int;
@@ -132,11 +138,7 @@ pub unsafe extern "C" fn rs_next_search_hl_pos(
             start + found_len
         };
 
-        nvim_match_hl_set_lnum(shl, lnum);
-        nvim_match_hl_rm_set_startpos(shl, 0, 0, start);
-        nvim_match_hl_rm_set_endpos(shl, 0, 0, end);
-        nvim_match_hl_set_is_addpos(shl, 1);
-        nvim_match_hl_set_has_cursor(shl, 0);
+        nvim_match_hl_set_match_result(shl, lnum, 0, start, 0, end, 1, 0);
         nvim_match_item_set_pos_cur(match_item, found + 1);
         return 1;
     }
