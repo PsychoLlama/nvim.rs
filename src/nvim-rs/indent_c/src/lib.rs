@@ -225,6 +225,21 @@ extern "C" {
     fn xstrdup(str_: *const c_char) -> *mut c_char;
     fn xfree(p: *mut std::ffi::c_void);
     fn strlen(s: *const c_char) -> usize;
+
+    // Phase 1 accessors (for rs_in_cinkeys)
+    fn nvim_cindent_curbuf_get_indk() -> *const c_char;
+    fn nvim_cindent_curbuf_get_cink() -> *const c_char;
+    fn nvim_cindent_get_cursor_pos_ptr() -> *const c_char;
+    fn nvim_cindent_get_special_key_code(look: *const c_char) -> c_int;
+    fn nvim_cindent_getwhitecols_curline() -> c_int;
+    fn nvim_cindent_vim_iswordp(p: *const c_char) -> c_int;
+    fn nvim_cindent_mb_prevptr(line: *const c_char, p: *const c_char) -> *const c_char;
+    fn nvim_cindent_get_cursor_line_ptr_mut() -> *mut c_char;
+    fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn tolower(c: c_int) -> c_int;
+    // rs_skip_to_option_part is defined in the strings crate, exported as C symbol
+    fn rs_skip_to_option_part(p: *const c_char) -> *const c_char;
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -5844,6 +5859,280 @@ fn trim_to_int(x: i64) -> c_int {
     } else {
         x as c_int
     }
+}
+
+// ============================================================================
+// Phase 1: in_cinkeys — check if a key triggers auto-indent
+// ============================================================================
+
+/// Key code constants (from src/nvim/edit.h).
+const KEY_OPEN_FORW: c_int = 0x101;
+const KEY_OPEN_BACK: c_int = 0x102;
+const KEY_COMPLETE: c_int = 0x103;
+
+/// `CTRL_CHR(x)`: converts an ASCII character to its control character equivalent.
+///
+/// Equivalent to the C macro `TOUPPER_ASC(x) ^ 0x40`.
+/// For '?': DEL (0x7F). For '@': NUL (0). For 'A'-'Z': 0x01-0x1A.
+#[inline]
+const fn ctrl_chr(c: c_char) -> c_int {
+    // TOUPPER_ASC: uppercase only ASCII lowercase letters; others unchanged.
+    let upper = if (c as u8) >= b'a' && (c as u8) <= b'z' {
+        c as u8 - b'a' + b'A'
+    } else {
+        c as u8
+    };
+    (upper as c_int) ^ 0x40
+}
+
+/// Check if "cinkeys"/"indentkeys" contains the key `keytyped`.
+///
+/// - `when == b'*'`: Only if key is preceded with '*' (indent before insert)
+/// - `when == b'!'`: Only if key is preceded with '!' (don't insert)
+/// - `when == b' '`: Only if key is not preceded with '*' (indent afterwards)
+///
+/// `keytyped` can have special values: `KEY_OPEN_FORW`, `KEY_OPEN_BACK`, `KEY_COMPLETE`.
+///
+/// # Safety
+/// Calls multiple C accessor functions; must be called from a valid Neovim context.
+#[unsafe(export_name = "in_cinkeys")]
+#[allow(clippy::too_many_lines)]
+#[must_use]
+pub unsafe extern "C" fn rs_in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
+    if keytyped == 0 {
+        // NUL: can happen with CTRL-Y and CTRL-E on a short line.
+        return false;
+    }
+
+    // Choose cinkeys or indentkeys based on whether 'indentexpr' is set.
+    let look_start = if nvim_curbuf_get_inde_nonempty() != 0 {
+        nvim_cindent_curbuf_get_indk()
+    } else {
+        nvim_cindent_curbuf_get_cink()
+    };
+
+    let mut look = look_start;
+
+    while *look != NUL {
+        // Find out if we want to try a match with this key, depending on
+        // 'when' and a '*' or '!' before the key.
+        let try_match_base = if when == c_int::from(b'*') {
+            *look == b'*' as c_char
+        } else if when == c_int::from(b'!') {
+            *look == b'!' as c_char
+        } else {
+            *look != b'*' as c_char
+        };
+        let mut try_match = try_match_base;
+
+        if *look == b'*' as c_char || *look == b'!' as c_char {
+            look = look.add(1);
+        }
+
+        // If there is a '0', only accept a match if the line is empty.
+        // But may still match when typing last char of a word.
+        let try_match_word;
+        if *look == b'0' as c_char {
+            try_match_word = try_match;
+            if !line_is_empty {
+                try_match = false;
+            }
+            look = look.add(1);
+        } else {
+            try_match_word = false;
+        }
+
+        // Does it look like a control character?
+        if *look == b'^' as c_char
+            && *look.add(1) >= b'?' as c_char
+            && *look.add(1) <= b'_' as c_char
+        {
+            if try_match && keytyped == ctrl_chr(*look.add(1)) {
+                return true;
+            }
+            look = look.add(2);
+
+        // 'o' means "o" command, open forward.
+        // 'O' means "O" command, open backward.
+        } else if *look == b'o' as c_char {
+            if try_match && keytyped == KEY_OPEN_FORW {
+                return true;
+            }
+            look = look.add(1);
+        } else if *look == b'O' as c_char {
+            if try_match && keytyped == KEY_OPEN_BACK {
+                return true;
+            }
+            look = look.add(1);
+
+        // 'e' means to check for "else" at start of line and just before cursor.
+        } else if *look == b'e' as c_char {
+            if try_match && keytyped == c_int::from(b'e') {
+                let col = nvim_cindent_curwin_get_cursor_col();
+                if col >= 4 {
+                    let p = nvim_cindent_get_cursor_line_ptr();
+                    let sw = skipwhite(p);
+                    // skipwhite(p) == p + col - 4 means no whitespace before "else"
+                    if sw.offset_from(p) == (col - 4) as isize
+                        && strncmp(p.add((col - 4) as usize), c"else".as_ptr(), 4) == 0
+                    {
+                        return true;
+                    }
+                }
+            }
+            look = look.add(1);
+
+        // ':' only causes indent if at end of a label/case or before '::' (C++).
+        } else if *look == b':' as c_char {
+            if try_match && keytyped == c_int::from(b':') {
+                let p = nvim_cindent_get_cursor_line_ptr_mut();
+                if rs_cin_iscase(p, false) || rs_cin_isscopedecl(p) || rs_cin_islabel() {
+                    return true;
+                }
+                // Need to get line again after cin_islabel().
+                let p = nvim_cindent_get_cursor_line_ptr_mut();
+                let col = nvim_cindent_curwin_get_cursor_col() as usize;
+                if col > 2 && *p.add(col - 1) == b':' as c_char && *p.add(col - 2) == b':' as c_char
+                {
+                    // Temporarily replace ':' with ' ' to test if it's a case/label.
+                    *p.add(col - 1) = b' ' as c_char;
+                    let i = rs_cin_iscase(p, false) || rs_cin_isscopedecl(p) || rs_cin_islabel();
+                    // Restore the ':' (get fresh pointer since cin_islabel may have moved things).
+                    let p2 = nvim_cindent_get_cursor_line_ptr_mut();
+                    *p2.add(col - 1) = b':' as c_char;
+                    if i {
+                        return true;
+                    }
+                }
+            }
+            look = look.add(1);
+
+        // Is it a key in <>, maybe?
+        } else if *look == b'<' as c_char {
+            if try_match {
+                // Named special keys: <o>, <O>, <e>, <0>, <>>, <<>, <*>, <:>, <!>
+                let special_chars = b"<>!*oOe0:\0";
+                if !vim_strchr(
+                    special_chars.as_ptr().cast(),
+                    c_int::from(*look.add(1) as u8),
+                )
+                .is_null()
+                    && keytyped == c_int::from(*look.add(1) as u8)
+                {
+                    return true;
+                }
+                if keytyped == nvim_cindent_get_special_key_code(look.add(1)) {
+                    return true;
+                }
+            }
+            while *look != NUL && *look != b'>' as c_char {
+                look = look.add(1);
+            }
+            while *look == b'>' as c_char {
+                look = look.add(1);
+            }
+
+        // Is it a word: "=word"?
+        } else if *look == b'=' as c_char && *look.add(1) != b',' as c_char && *look.add(1) != NUL {
+            look = look.add(1);
+            let icase = if *look == b'~' as c_char {
+                look = look.add(1);
+                true
+            } else {
+                false
+            };
+
+            // Find the end of the word (next ',' or end of string).
+            let word_end = vim_strchr(look, c_int::from(b','));
+            let p: *const c_char = if word_end.is_null() {
+                look.add(strlen(look))
+            } else {
+                word_end
+            };
+
+            let word_len = p.offset_from(look) as usize;
+            let col = nvim_cindent_curwin_get_cursor_col() as usize;
+
+            if (try_match || try_match_word) && col >= word_len {
+                let mut matched = false;
+
+                if keytyped == KEY_COMPLETE {
+                    // Just completed a word, check if it starts with "look".
+                    // Search back for the start of a word.
+                    let line = nvim_cindent_get_cursor_line_ptr();
+                    let mut s = line.add(col);
+                    while s > line {
+                        let n = nvim_cindent_mb_prevptr(line, s);
+                        if nvim_cindent_vim_iswordp(n) == 0 {
+                            break;
+                        }
+                        s = n;
+                    }
+                    // Check if word at s matches look[..word_len]
+                    if s.add(word_len) <= line.add(col)
+                        && (if icase {
+                            mb_strnicmp(s, look, word_len)
+                        } else {
+                            strncmp(s, look, word_len)
+                        }) == 0
+                    {
+                        matched = true;
+                    }
+                } else {
+                    // TODO(@brammool): multi-byte
+                    // Check if the last typed char matches p[-1].
+                    let last_char = *p.sub(1) as u8;
+                    if keytyped == c_int::from(last_char)
+                        || (icase
+                            && (0..256).contains(&keytyped)
+                            && tolower(keytyped) == tolower(c_int::from(last_char)))
+                    {
+                        // get_cursor_pos_ptr() points to character at cursor position.
+                        let line = nvim_cindent_get_cursor_pos_ptr();
+                        // Check word boundary and content.
+                        if (col == word_len
+                            || vim_iswordc(c_int::from(*line.sub(word_len + 1) as u8)) == 0)
+                            && (if icase {
+                                mb_strnicmp(line.sub(word_len), look, word_len)
+                            } else {
+                                strncmp(line.sub(word_len), look, word_len)
+                            }) == 0
+                        {
+                            matched = true;
+                        }
+                    }
+                }
+
+                // "0=word": Check if there are only blanks before the word.
+                if matched
+                    && try_match_word
+                    && !try_match
+                    && nvim_cindent_getwhitecols_curline() != (col as c_int - word_len as c_int)
+                {
+                    matched = false;
+                }
+
+                if matched {
+                    return true;
+                }
+            }
+            look = p;
+
+        // Generic character.
+        } else {
+            if try_match && c_int::from(*look as u8) == keytyped {
+                return true;
+            }
+            if *look != NUL {
+                look = look.add(1);
+            }
+        }
+
+        // Skip over ", ".
+        look = rs_skip_to_option_part(look);
+    }
+
+    false
 }
 
 // ============================================================================

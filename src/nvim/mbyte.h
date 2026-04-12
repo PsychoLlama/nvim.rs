@@ -14,6 +14,13 @@
 
 #define GRAPHEME_STATE_INIT 0
 
+/// Cell-width interval entry (setcellwidths table). Used internally in mbyte.c.
+typedef struct {
+  int64_t first;
+  int64_t last;
+  char width;
+} cw_interval_T;
+
 #include "mbyte.h.generated.h"
 #include "mbyte.h.inline.generated.h"
 
@@ -52,6 +59,10 @@ extern const uint8_t utf8len_tab[256];
 // multi-byte characters if needed. Only use with "p" > "s" !
 #define MB_PTR_BACK(s, p) \
   (p -= utf_head_off((char *)(s), (char *)(p) - 1) + 1)
+
+// Functions implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
+// Declared here so C callers (including auto-generated function tables) don't need changes.
+void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 // Declarations for functions implemented in Rust (src/nvim-rs/mbyte/).
 // These were previously thin C wrappers; the Rust implementations are now

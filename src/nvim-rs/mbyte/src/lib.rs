@@ -5359,3 +5359,92 @@ pub unsafe extern "C" fn rs_string_convert_ext(
         _ => std::ptr::null_mut(),
     }
 }
+
+// =============================================================================
+// f_setcellwidths (Phase 1 migration)
+// =============================================================================
+
+extern "C" {
+    /// Validate argvars[0] as a list and extract a sorted cellwidths table.
+    ///
+    /// Returns 0 on success, -1 on error (error message already displayed).
+    /// On success, *out_table is set to an xmalloc'd array (may be NULL for
+    /// an empty list), and *out_size is set to the number of entries.
+    fn nvim_mbyte_extract_cellwidths(
+        argvars: *const c_void,
+        out_table: *mut *mut c_void,
+        out_size: *mut usize,
+    ) -> c_int;
+
+    /// Save current cw_table / cw_table_size into *old_table / *old_size.
+    fn nvim_mbyte_get_cw_table_save(old_table: *mut *mut c_void, old_size: *mut usize);
+
+    /// Set cw_table = table and cw_table_size = size.
+    fn nvim_mbyte_set_cw_table(table: *mut c_void, size: usize);
+
+    /// Wrapper for check_chars_options().
+    /// Returns translated error string or NULL if no conflict.
+    fn nvim_mbyte_check_chars_options() -> *const c_char;
+
+    /// Wrapper for emsg().
+    fn nvim_mbyte_emsg(msg: *const c_char);
+
+    /// Wrapper for changed_window_setting_all().
+    fn nvim_mbyte_changed_window_setting_all();
+
+    /// Wrapper for redraw_all_later(UPD_NOT_VALID).
+    fn nvim_mbyte_redraw_all_later();
+}
+
+/// "setcellwidths()" function — drop-in replacement for C implementation.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to at least one `typval_T`.
+/// `rettv` must be a valid pointer to a `typval_T` (unused here).
+/// `fptr` is unused.
+#[unsafe(export_name = "f_setcellwidths")]
+pub unsafe extern "C" fn rs_f_setcellwidths(
+    argvars: *const c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let mut new_table: *mut c_void = std::ptr::null_mut();
+    let mut new_size: usize = 0;
+
+    // Validate and extract the table in C (handles all list iteration).
+    if nvim_mbyte_extract_cellwidths(
+        argvars,
+        std::ptr::addr_of_mut!(new_table),
+        std::ptr::addr_of_mut!(new_size),
+    ) != 0
+    {
+        return; // error already reported
+    }
+
+    // Save old table for possible rollback.
+    let mut old_table: *mut c_void = std::ptr::null_mut();
+    let mut old_size: usize = 0;
+    nvim_mbyte_get_cw_table_save(
+        std::ptr::addr_of_mut!(old_table),
+        std::ptr::addr_of_mut!(old_size),
+    );
+
+    // Install new table.
+    nvim_mbyte_set_cw_table(new_table, new_size);
+
+    // Check that the new table doesn't conflict with 'listchars'/'fillchars'.
+    let error = nvim_mbyte_check_chars_options();
+    if !error.is_null() {
+        nvim_mbyte_emsg(error);
+        // Restore old table.
+        nvim_mbyte_set_cw_table(old_table, old_size);
+        // Free the rejected new table.
+        xfree(new_table as *mut c_char);
+        return;
+    }
+
+    // Success: free the old table, notify and redraw.
+    xfree(old_table as *mut c_char);
+    nvim_mbyte_changed_window_setting_all();
+    nvim_mbyte_redraw_all_later();
+}

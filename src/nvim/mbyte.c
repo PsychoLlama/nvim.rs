@@ -382,14 +382,7 @@ void f_iconv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // convert_setup, convert_setup_ext, string_convert, string_convert_ext
 // are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
-/// Table set by setcellwidths().
-/// Exposed for Rust FFI access.
-typedef struct {
-  int64_t first;
-  int64_t last;
-  char width;
-} cw_interval_T;
-
+// cw_interval_T is defined in mbyte.h (exposed for Rust FFI).
 // Exposed for Rust FFI access (remove static).
 cw_interval_T *cw_table = NULL;
 size_t cw_table_size = 0;
@@ -405,27 +398,30 @@ static int tv_nr_compare(const void *a1, const void *a2)
   return n1 == n2 ? 0 : n1 > n2 ? 1 : -1;
 }
 
-/// "setcellwidths()" function
-void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+/// Rust accessor: validate argvars[0] as a list and extract sorted cellwidths table.
+///
+/// Returns 0 on success, -1 on error (error already shown).
+/// On success: *out_table is set to an xmalloc'd array (or NULL if empty),
+/// and *out_size is set to the number of entries.
+int nvim_mbyte_extract_cellwidths(const typval_T *argvars, void **out_table,
+                                  size_t *out_size)
 {
   if (argvars[0].v_type != VAR_LIST || argvars[0].vval.v_list == NULL) {
     emsg(_(e_listreq));
-    return;
+    return -1;
   }
 
   const list_T *const l = argvars[0].vval.v_list;
-  cw_interval_T *table = NULL;
   const size_t table_size = (size_t)tv_list_len(l);
+  *out_size = table_size;
+
   if (table_size == 0) {
-    // Clearing the table.
-    goto update;
+    *out_table = NULL;
+    return 0;
   }
 
-  // Note: use list_T instead of listitem_T so that TV_LIST_ITEM_NEXT can be used properly below.
   const list_T **ptrs = xmalloc(sizeof(const list_T *) * table_size);
 
-  // Check that all entries are a list with three numbers, the range is
-  // valid and the cell width is valid.
   int item = 0;
   TV_LIST_ITER_CONST(l, li, {
     const typval_T *const li_tv = TV_LIST_ITEM_TV(li);
@@ -433,7 +429,7 @@ void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     if (li_tv->v_type != VAR_LIST || li_tv->vval.v_list == NULL) {
       semsg(_(e_list_item_nr_is_not_list), item);
       xfree((void *)ptrs);
-      return;
+      return -1;
     }
 
     const list_T *const li_l = li_tv->vval.v_list;
@@ -451,23 +447,23 @@ void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
         if (n1 < 0x80) {
           emsg(_(e_only_values_of_0x80_and_higher_supported));
           xfree((void *)ptrs);
-          return;
+          return -1;
         }
       } else if (i == 1 && lili_tv->vval.v_number < n1) {
         semsg(_(e_list_item_nr_range_invalid), item);
         xfree((void *)ptrs);
-        return;
+        return -1;
       } else if (i == 2 && (lili_tv->vval.v_number < 1 || lili_tv->vval.v_number > 2)) {
         semsg(_(e_list_item_nr_cell_width_invalid), item);
         xfree((void *)ptrs);
-        return;
+        return -1;
       }
     }
 
     if (i != 3) {
       semsg(_(e_list_item_nr_does_not_contain_3_numbers), item);
       xfree((void *)ptrs);
-      return;
+      return -1;
     }
 
     item++;
@@ -476,7 +472,7 @@ void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   // Sort the list on the first number.
   qsort((void *)ptrs, table_size, sizeof(const list_T *), tv_nr_compare);
 
-  table = xmalloc(sizeof(cw_interval_T) * table_size);
+  cw_interval_T *table = xmalloc(sizeof(cw_interval_T) * table_size);
 
   // Store the items in the new table.
   for (item = 0; (size_t)item < table_size; item++) {
@@ -487,7 +483,7 @@ void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
       semsg(_(e_overlapping_ranges_for_nr), (size_t)n1);
       xfree((void *)ptrs);
       xfree(table);
-      return;
+      return -1;
     }
     table[item].first = n1;
     lili = TV_LIST_ITEM_NEXT(li_l, lili);
@@ -497,29 +493,41 @@ void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   xfree((void *)ptrs);
-
-update:
-  ;
-  cw_interval_T *const cw_table_save = cw_table;
-  const size_t cw_table_size_save = cw_table_size;
-  cw_table = table;
-  cw_table_size = table_size;
-
-  // Check that the new value does not conflict with 'listchars' or
-  // 'fillchars'.
-  const char *const error = check_chars_options();
-  if (error != NULL) {
-    emsg(_(error));
-    cw_table = cw_table_save;
-    cw_table_size = cw_table_size_save;
-    xfree(table);
-    return;
-  }
-
-  xfree(cw_table_save);
-  changed_window_setting_all();
-  redraw_all_later(UPD_NOT_VALID);
+  *out_table = table;
+  return 0;
 }
+
+/// Rust accessor: get the old cw_table and cw_table_size for save/restore.
+void nvim_mbyte_get_cw_table_save(void **old_table, size_t *old_size)
+{
+  *old_table = cw_table;
+  *old_size = cw_table_size;
+}
+
+/// Rust accessor: set new cw_table and cw_table_size.
+void nvim_mbyte_set_cw_table(void *table, size_t size)
+{
+  cw_table = table;
+  cw_table_size = size;
+}
+
+/// Rust accessor: check_chars_options() -- returns translated error string or NULL.
+const char *nvim_mbyte_check_chars_options(void)
+{
+  const char *err = check_chars_options();
+  return err != NULL ? _(err) : NULL;
+}
+
+/// Rust accessor: emsg() wrapper.
+void nvim_mbyte_emsg(const char *msg) { emsg(msg); }
+
+/// Rust accessor: changed_window_setting_all().
+void nvim_mbyte_changed_window_setting_all(void) { changed_window_setting_all(); }
+
+/// Rust accessor: redraw_all_later(UPD_NOT_VALID).
+void nvim_mbyte_redraw_all_later(void) { redraw_all_later(UPD_NOT_VALID); }
+
+// f_setcellwidths and tv_nr_compare are now implemented in Rust.
 
 /// "getcellwidths()" function
 void f_getcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

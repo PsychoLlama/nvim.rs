@@ -63,3 +63,4 @@ typedef struct {
 int is_pos_in_string(const char *line, colnr_T col);
 bool cin_is_cinword(const char *line);
 bool cindent_on(void);
+bool in_cinkeys(int keytyped, int when, bool line_is_empty);
