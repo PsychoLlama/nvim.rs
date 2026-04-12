@@ -155,11 +155,37 @@ void ui_client_attach(int width, int height, char *term, bool rgb)
   TIME_MSG("nvim_set_client_info");
 }
 
-void ui_client_detach(void)
+// C accessor: send nvim_ui_detach RPC event (used by Rust)
+void nvim_uic_rpc_send_detach(void)
 {
   rpc_send_event(ui_client_channel_id, "nvim_ui_detach", (Array)ARRAY_DICT_INIT);
-  ui_client_attached = false;
 }
+
+// C accessor: check if tui is stopped (used by Rust)
+bool nvim_uic_tui_is_stopped(void)
+{
+  return tui_is_stopped(tui);
+}
+
+// C accessor: stop the tui (used by Rust)
+void nvim_uic_tui_stop(void)
+{
+  tui_stop(tui);
+}
+
+// C accessor: set api validation error (used by Rust)
+void nvim_uic_api_set_error_validation(Error *err, const char *msg)
+{
+  api_set_error(err, kErrorTypeValidation, "%s", msg);
+}
+
+// C accessor: set ui_client_attached global (used by Rust)
+void nvim_uic_set_attached(bool value)
+{
+  ui_client_attached = value;
+}
+
+// ui_client_detach: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 void ui_client_run(bool remote_ui)
   FUNC_ATTR_NORETURN
@@ -181,13 +207,7 @@ void ui_client_run(bool remote_ui)
   }
 }
 
-void ui_client_stop(void)
-{
-  ui_client_attached = false;
-  if (!tui_is_stopped(tui)) {
-    tui_stop(tui);
-  }
-}
+// ui_client_stop: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 void ui_client_set_size(int width, int height)
 {
@@ -211,16 +231,7 @@ UIClientHandler ui_client_get_redraw_handler(const char *name, size_t name_len, 
   return event_handlers[hash];
 }
 
-/// Placeholder for _sync_ requests with 'redraw' method name
-///
-/// async 'redraw' events, which are expected when nvim acts as a ui client.
-/// get handled in msgpack_rpc/unpacker.c and directly dispatched to handlers
-/// of specific ui events, like ui_client_event_grid_resize and so on.
-Object handle_ui_client_redraw(uint64_t channel_id, Array args, Arena *arena, Error *error)
-{
-  api_set_error(error, kErrorTypeValidation, "'redraw' cannot be sent as a request");
-  return NIL;
-}
+// handle_ui_client_redraw: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 static HlAttrs ui_client_dict2hlattrs(Dict d, bool rgb)
 {
@@ -264,11 +275,7 @@ void ui_client_event_grid_resize(Array args)
   }
 }
 
-void ui_client_event_grid_line(Array args)
-  FUNC_ATTR_NORETURN
-{
-  abort();  // unreachable
-}
+// ui_client_event_grid_line: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 void ui_client_event_raw_line(GridLineEvent *g)
 {

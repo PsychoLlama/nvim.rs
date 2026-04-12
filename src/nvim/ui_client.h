@@ -4,8 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "nvim/api/private/defs.h"  // IWYU pragma: keep
 #include "nvim/grid_defs.h"  // IWYU pragma: keep
 #include "nvim/macros_defs.h"
+#include "nvim/memory_defs.h"  // IWYU pragma: keep
 #include "nvim/types_defs.h"
 #include "nvim/ui_defs.h"  // IWYU pragma: keep
 
@@ -32,6 +34,13 @@ EXTERN bool ui_client_attached INIT( = false);
 EXTERN bool ui_client_forward_stdin INIT( = false);
 
 #define UI_CLIENT_STDIN_FD 3
+
+// Functions implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
+void ui_client_detach(void);
+void ui_client_stop(void);
+void ui_client_event_grid_line(Array args) FUNC_ATTR_NORETURN;
+Object handle_ui_client_redraw(uint64_t channel_id, Array args, Arena *arena, Error *error);
+
 // uncrustify:off
 # include "ui_client.h.generated.h"
 # include "ui_events_client.h.generated.h"

@@ -8,6 +8,7 @@
 #![allow(clippy::cast_possible_wrap)] // u64 to i64 in statistics
 
 pub mod attach;
+pub mod events;
 pub mod handler;
 pub mod protocol;
 
