@@ -189,43 +189,7 @@ int cmdname_first_char(int cmdidx) { return (cmdidx < 0 || cmdidx >= CMD_SIZE) ?
 
 // dollar_command is now owned by Rust (state.rs)
 
-/// Helper function to apply an offset for buffer commands, i.e. ":bdelete",
-/// ":bwipeout", etc.
-///
-/// @return  the buffer number.
-/// @return  the window number of "win" or,
-///          the number of windows if "win" is NULL
-static int current_win_nr(const win_T *win)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  int nr = 0;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    nr++;
-    if (wp == win) {
-      break;
-    }
-  }
-  return nr;
-}
-
-static int current_tab_nr(tabpage_T *tab)
-{
-  int nr = 0;
-
-  FOR_ALL_TABS(tp) {
-    nr++;
-    if (tp == tab) {
-      break;
-    }
-  }
-  return nr;
-}
-
-#define CURRENT_WIN_NR current_win_nr(curwin)
-#define LAST_WIN_NR current_win_nr(NULL)
-#define CURRENT_TAB_NR current_tab_nr(curtab)
-#define LAST_TAB_NR current_tab_nr(NULL)
+// current_win_nr, current_tab_nr, and their macros are now in Rust (state.rs)
 
 // exmode_plus is now owned by Rust (state.rs)
 
@@ -403,10 +367,7 @@ char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_use
 
 
 int nvim_docmd_cmdnames_addr_type(int idx) { return (int)cmdnames[idx].cmd_addr_type; }
-int nvim_docmd_current_win_nr(void) { return CURRENT_WIN_NR; }
-int nvim_docmd_last_win_nr(void) { return LAST_WIN_NR; }
-int nvim_docmd_current_tab_nr(void) { return CURRENT_TAB_NR; }
-int nvim_docmd_last_tab_nr(void) { return LAST_TAB_NR; }
+// nvim_docmd_{current,last}_{win,tab}_nr are now in Rust (state.rs)
 
 /// Walk forward from firstbuf to find first loaded buffer.
 /// Returns fnum of first loaded buffer, or -1 if none found.
@@ -626,18 +587,7 @@ int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1
 int nvim_docmd_tabpage_is_current(void *tp) { return tp == curtab ? 1 : 0; }
 int nvim_docmd_tabpage_is_curtopframe(void *tp) { return ((tabpage_T *)tp)->tp_topframe == topframe ? 1 : 0; }
 
-/// Return the nth window in curtab (1-based), or lastwin if not found.
-win_T *nvim_docmd_nth_window(int nr)
-{
-  int winnr = 0;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    winnr++;
-    if (winnr == nr) {
-      return wp;
-    }
-  }
-  return lastwin;
-}
+// nvim_docmd_nth_window is now in Rust (state.rs)
 
 linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg) { return get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, errormsg); }
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
