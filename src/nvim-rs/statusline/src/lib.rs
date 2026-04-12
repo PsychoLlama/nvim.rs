@@ -2067,6 +2067,18 @@ type StatuscolHandle = *mut c_void;
 /// Opaque handle to C's stl_hlrec_t pointer-to-pointer
 type HlrecPtrPtr = *mut c_void;
 
+/// Click defs type for statuscol (matches STL_CLICK_DEFS_STATUSCOL in statusline.h)
+const STL_CLICK_DEFS_STATUSCOL: c_int = 2;
+
+/// Batch click defs result from nvim_stl_win_get_click_defs.
+/// Matches `StlClickDefsResult` in statusline.h.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct StlClickDefsResult {
+    ptr: *mut c_void,
+    size: usize,
+}
+
 // Phase 1 C accessors
 extern "C" {
     fn nvim_stl_get_trans_bufname(buf: BufHandle);
@@ -2080,10 +2092,8 @@ extern "C" {
     #[link_name = "rs_set_vim_var_nr"]
     fn nvim_stl_set_vim_var_nr(idx: c_int, val: i64);
     fn nvim_stl_win_get_p_stc(wp: WinHandle) -> *const c_char;
-    fn nvim_stl_win_get_statuscol_click_defs(wp: WinHandle) -> *mut c_void;
-    fn nvim_stl_win_get_statuscol_click_defs_size(wp: WinHandle) -> usize;
-    fn nvim_stl_win_set_statuscol_click_defs(wp: WinHandle, defs: *mut c_void);
-    fn nvim_stl_win_set_statuscol_click_defs_size(wp: WinHandle, size: usize);
+    fn nvim_stl_win_get_click_defs(wp: WinHandle, click_type: c_int) -> StlClickDefsResult;
+    fn nvim_stl_win_set_click_defs(wp: WinHandle, click_type: c_int, ptr: *mut c_void, size: usize);
     fn nvim_stl_stcp_get_width(stcp: StatuscolHandle) -> c_int;
     fn nvim_stl_stcp_get_hlrec_ptr(stcp: StatuscolHandle) -> HlrecPtrPtr;
     #[link_name = "nvim_win_get_topline"]
@@ -2205,15 +2215,18 @@ pub unsafe extern "C" fn rs_build_statuscol_str(
 
     if fillclick {
         // Clear existing click defs
-        let old_defs = nvim_stl_win_get_statuscol_click_defs(wp);
-        let old_size = nvim_stl_win_get_statuscol_click_defs_size(wp);
-        click::rs_stl_clear_click_defs(old_defs.cast(), old_size);
+        let old_cd = nvim_stl_win_get_click_defs(wp, STL_CLICK_DEFS_STATUSCOL);
+        click::rs_stl_clear_click_defs(old_cd.ptr.cast(), old_cd.size);
 
         // Allocate new click defs
-        let mut new_size = old_size;
-        let new_defs = click::rs_stl_alloc_click_defs(old_defs.cast(), width, &raw mut new_size);
-        nvim_stl_win_set_statuscol_click_defs(wp, new_defs.cast::<c_void>());
-        nvim_stl_win_set_statuscol_click_defs_size(wp, new_size);
+        let mut new_size = old_cd.size;
+        let new_defs = click::rs_stl_alloc_click_defs(old_cd.ptr.cast(), width, &raw mut new_size);
+        nvim_stl_win_set_click_defs(
+            wp,
+            STL_CLICK_DEFS_STATUSCOL,
+            new_defs.cast::<c_void>(),
+            new_size,
+        );
 
         // Fill click defs
         click::rs_stl_fill_click_defs(new_defs, clickrec.cast(), buf.cast(), width, false);

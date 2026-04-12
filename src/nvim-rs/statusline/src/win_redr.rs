@@ -41,6 +41,19 @@ type GridHandle = *mut c_void;
 /// Opaque handle for click definitions
 type ClickDefsHandle = *mut c_void;
 
+// Click defs type selectors (match STL_CLICK_DEFS_* macros in statusline.h)
+const STL_CLICK_DEFS_STATUS: c_int = 0;
+const STL_CLICK_DEFS_WINBAR: c_int = 1;
+
+/// Batch click defs result from nvim_stl_win_get_click_defs.
+/// Matches `StlClickDefsResult` in statusline.h.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct StlClickDefsResult {
+    ptr: ClickDefsHandle,
+    size: usize,
+}
+
 // =============================================================================
 // C FFI declarations
 // =============================================================================
@@ -156,15 +169,14 @@ extern "C" {
     );
     fn nvim_stl_get_tab_page_click_defs() -> ClickDefsHandle;
 
-    // Window click defs
-    fn nvim_stl_win_get_status_click_defs(wp: WinHandle) -> ClickDefsHandle;
-    fn nvim_stl_win_get_status_click_defs_size(wp: WinHandle) -> usize;
-    fn nvim_stl_win_set_status_click_defs(wp: WinHandle, defs: ClickDefsHandle);
-    fn nvim_stl_win_set_status_click_defs_size(wp: WinHandle, size: usize);
-    fn nvim_stl_win_get_winbar_click_defs(wp: WinHandle) -> ClickDefsHandle;
-    fn nvim_stl_win_get_winbar_click_defs_size(wp: WinHandle) -> usize;
-    fn nvim_stl_win_set_winbar_click_defs(wp: WinHandle, defs: ClickDefsHandle);
-    fn nvim_stl_win_set_winbar_click_defs_size(wp: WinHandle, size: usize);
+    // Window click defs (batch accessors)
+    fn nvim_stl_win_get_click_defs(wp: WinHandle, click_type: c_int) -> StlClickDefsResult;
+    fn nvim_stl_win_set_click_defs(
+        wp: WinHandle,
+        click_type: c_int,
+        ptr: ClickDefsHandle,
+        size: usize,
+    );
 
     // Window width
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
@@ -354,13 +366,11 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         maxwidth = nvim_stl_win_get_view_width(wp);
 
         // Clear and allocate click defs
-        let click_defs = nvim_stl_win_get_winbar_click_defs(wp);
-        let click_defs_size = nvim_stl_win_get_winbar_click_defs_size(wp);
-        nvim_stl_clear_click_defs_wrap(click_defs, click_defs_size);
-        let mut new_size = click_defs_size;
-        let new_defs = nvim_stl_alloc_click_defs_wrap(click_defs, maxwidth, &mut new_size);
-        nvim_stl_win_set_winbar_click_defs(wp, new_defs);
-        nvim_stl_win_set_winbar_click_defs_size(wp, new_size);
+        let cd = nvim_stl_win_get_click_defs(wp, STL_CLICK_DEFS_WINBAR);
+        nvim_stl_clear_click_defs_wrap(cd.ptr, cd.size);
+        let mut new_size = cd.size;
+        let new_defs = nvim_stl_alloc_click_defs_wrap(cd.ptr, maxwidth, &mut new_size);
+        nvim_stl_win_set_click_defs(wp, STL_CLICK_DEFS_WINBAR, new_defs, new_size);
     } else {
         // Statusline or Ruler mode
         let in_status_line = nvim_stl_win_get_status_height(wp) != 0 || is_stl_global;
@@ -384,13 +394,11 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         fillchar = nvim_stl_fillchar_status(&mut group, wp);
 
         // Clear and allocate click defs
-        let click_defs = nvim_stl_win_get_status_click_defs(wp);
-        let click_defs_size = nvim_stl_win_get_status_click_defs_size(wp);
-        nvim_stl_clear_click_defs_wrap(click_defs, click_defs_size);
-        let mut new_size = click_defs_size;
-        let new_defs = nvim_stl_alloc_click_defs_wrap(click_defs, maxwidth, &mut new_size);
-        nvim_stl_win_set_status_click_defs(wp, new_defs);
-        nvim_stl_win_set_status_click_defs_size(wp, new_size);
+        let cd = nvim_stl_win_get_click_defs(wp, STL_CLICK_DEFS_STATUS);
+        nvim_stl_clear_click_defs_wrap(cd.ptr, cd.size);
+        let mut new_size = cd.size;
+        let new_defs = nvim_stl_alloc_click_defs_wrap(cd.ptr, maxwidth, &mut new_size);
+        nvim_stl_win_set_click_defs(wp, STL_CLICK_DEFS_STATUS, new_defs, new_size);
 
         if draw_ruler {
             stl = p_ruf;
@@ -643,9 +651,9 @@ unsafe fn draw_result(
     let click_defs: ClickDefsHandle = if wp.is_null() {
         nvim_stl_get_tab_page_click_defs()
     } else if draw_winbar {
-        nvim_stl_win_get_winbar_click_defs(wp)
+        nvim_stl_win_get_click_defs(wp, STL_CLICK_DEFS_WINBAR).ptr
     } else {
-        nvim_stl_win_get_status_click_defs(wp)
+        nvim_stl_win_get_click_defs(wp, STL_CLICK_DEFS_STATUS).ptr
     };
 
     nvim_stl_fill_click_defs_wrap(click_defs, *tabtab, buf, maxwidth, wp.is_null());

@@ -201,17 +201,6 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 const char *nvim_stl_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 
 
-/// Get window statuscol click defs pointer.
-StlClickDefinition *nvim_stl_win_get_statuscol_click_defs(win_T *wp) { return wp->w_statuscol_click_defs; }
-
-/// Get window statuscol click defs size.
-size_t nvim_stl_win_get_statuscol_click_defs_size(win_T *wp) { return wp->w_statuscol_click_defs_size; }
-
-/// Set window statuscol click defs.
-void nvim_stl_win_set_statuscol_click_defs(win_T *wp, StlClickDefinition *defs) { wp->w_statuscol_click_defs = defs; }
-
-/// Set window statuscol click defs size.
-void nvim_stl_win_set_statuscol_click_defs_size(win_T *wp, size_t size) { wp->w_statuscol_click_defs_size = size; }
 
 /// Get stcp->width.
 int nvim_stl_stcp_get_width(statuscol_T *stcp) { return stcp->width; }
@@ -475,17 +464,48 @@ void nvim_stl_ui_call_msg_ruler_content(int *attrs, const char **texts, size_t *
 /// Get tab_page_click_defs pointer.
 void *nvim_stl_get_tab_page_click_defs(void) { return tab_page_click_defs; }
 
-/// Get wp->w_status_click_defs.
-void *nvim_stl_win_get_status_click_defs(win_T *wp) { return wp->w_status_click_defs; }
-size_t nvim_stl_win_get_status_click_defs_size(win_T *wp) { return wp->w_status_click_defs_size; }
-void nvim_stl_win_set_status_click_defs(win_T *wp, void *defs) { wp->w_status_click_defs = defs; }
-void nvim_stl_win_set_status_click_defs_size(win_T *wp, size_t size) { wp->w_status_click_defs_size = size; }
+/// Get window click defs pointer and size for the given type.
+/// type: STL_CLICK_DEFS_STATUS, STL_CLICK_DEFS_WINBAR, STL_CLICK_DEFS_STATUSCOL
+StlClickDefsResult nvim_stl_win_get_click_defs(win_T *wp, int type)
+{
+  StlClickDefsResult result = { NULL, 0 };
+  if (wp == NULL) { return result; }
+  switch (type) {
+  case STL_CLICK_DEFS_STATUS:
+    result.ptr = wp->w_status_click_defs;
+    result.size = wp->w_status_click_defs_size;
+    break;
+  case STL_CLICK_DEFS_WINBAR:
+    result.ptr = wp->w_winbar_click_defs;
+    result.size = wp->w_winbar_click_defs_size;
+    break;
+  case STL_CLICK_DEFS_STATUSCOL:
+    result.ptr = wp->w_statuscol_click_defs;
+    result.size = wp->w_statuscol_click_defs_size;
+    break;
+  }
+  return result;
+}
 
-/// Get wp->w_winbar_click_defs.
-void *nvim_stl_win_get_winbar_click_defs(win_T *wp) { return wp->w_winbar_click_defs; }
-size_t nvim_stl_win_get_winbar_click_defs_size(win_T *wp) { return wp->w_winbar_click_defs_size; }
-void nvim_stl_win_set_winbar_click_defs(win_T *wp, void *defs) { wp->w_winbar_click_defs = defs; }
-void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_winbar_click_defs_size = size; }
+/// Set window click defs pointer and size for the given type.
+void nvim_stl_win_set_click_defs(win_T *wp, int type, void *ptr, size_t size)
+{
+  if (wp == NULL) { return; }
+  switch (type) {
+  case STL_CLICK_DEFS_STATUS:
+    wp->w_status_click_defs = ptr;
+    wp->w_status_click_defs_size = size;
+    break;
+  case STL_CLICK_DEFS_WINBAR:
+    wp->w_winbar_click_defs = ptr;
+    wp->w_winbar_click_defs_size = size;
+    break;
+  case STL_CLICK_DEFS_STATUSCOL:
+    wp->w_statuscol_click_defs = ptr;
+    wp->w_statuscol_click_defs_size = size;
+    break;
+  }
+}
 
 
 

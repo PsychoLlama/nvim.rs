@@ -10,6 +10,17 @@
 #include "nvim/statusline_defs.h"  // IWYU pragma: keep
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
+/// Click defs type selector for nvim_stl_win_get/set_click_defs.
+#define STL_CLICK_DEFS_STATUS    0
+#define STL_CLICK_DEFS_WINBAR    1
+#define STL_CLICK_DEFS_STATUSCOL 2
+
+/// Batch click defs result for nvim_stl_win_get_click_defs.
+typedef struct {
+  void *ptr;   ///< pointer to click defs array
+  size_t size; ///< number of elements in the array
+} StlClickDefsResult;
+
 /// Batch cursor info returned by nvim_stl_get_win_cursor_info.
 typedef struct {
   int clamped_lnum;   ///< cursor lnum clamped to ml_line_count
