@@ -95,8 +95,6 @@ extern bool rs_unadjust_for_sel(void);
 
 
 
-// block_insert, op_insert, and op_change migrated to Rust (op_insert_full.rs, op_change_full.rs)
-
-
-void clear_oparg(oparg_T *oap) { CLEAR_POINTER(oap); }
+// block_insert, op_insert, op_change, and clear_oparg migrated to Rust
+// (op_insert_full.rs, op_change_full.rs, oparg.rs)
 

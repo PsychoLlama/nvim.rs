@@ -73,5 +73,8 @@ int do_join(size_t count, bool insert_space, bool save_undo, bool use_formatopti
 void rs_shift_block(oparg_T *oap, int amount);
 void block_prep(oparg_T *oap, struct block_def *bdp, linenr_T lnum, bool is_del);
 void charwise_block_prep(pos_T start, pos_T end, struct block_def *bdp, linenr_T lnum, bool inclusive);
+int op_insert(oparg_T *oap, int count1);
+int op_change(oparg_T *oap);
+void clear_oparg(oparg_T *oap);
 
 EXTERN LuaRef repeat_luaref INIT( = LUA_NOREF);  ///< LuaRef for "."

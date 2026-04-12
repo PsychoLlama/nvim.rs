@@ -710,6 +710,21 @@ pub extern "C" fn rs_calc_block_char_count(textlen: c_int) -> c_int {
 }
 
 // =============================================================================
+// clear_oparg -- drop-in replacement for the 1-line C function
+// =============================================================================
+
+/// Zeroes an `oparg_T` struct.
+///
+/// Equivalent to C's `CLEAR_POINTER(oap)` which is `memset(oap, 0, sizeof(*oap))`.
+///
+/// # Safety
+/// - `oap` must be a valid, non-null `oparg_T *`
+#[unsafe(export_name = "clear_oparg")]
+pub unsafe extern "C" fn rs_clear_oparg(oap: *mut OpargT) {
+    std::ptr::write(oap, std::mem::zeroed());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
