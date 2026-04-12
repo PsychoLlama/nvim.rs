@@ -429,18 +429,7 @@ void nvim_undo_end_smsg(int64_t count, const char *msgstr, bool did_undo,
             timebuf);
 }
 
-// Resolve symlink if available, returning resolved path or original.
-// Returns allocated copy.
-char *nvim_undo_resolve_symlink(const char *ffname)
-{
-#ifdef HAVE_READLINK
-  char fname_buf[MAXPATHL];
-  if (resolve_symlink(ffname, fname_buf) == OK) {
-    return xstrdup(fname_buf);
-  }
-#endif
-  return xstrdup(ffname);
-}
+// nvim_undo_resolve_symlink: migrated to Rust (nvim_undo_resolve_symlink).
 
 const char *nvim_undo_get_p_udir(void) { return p_udir; }
 

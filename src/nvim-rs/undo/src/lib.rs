@@ -918,9 +918,6 @@ extern "C" {
     // Phase 5: u_get_undo_file_name FFI helpers
     // ==========================================================================
 
-    /// Resolve symlink, returns allocated copy
-    fn nvim_undo_resolve_symlink(ffname: *const c_char) -> *mut c_char;
-
     /// Get p_udir option value
     fn nvim_undo_get_p_udir() -> *const c_char;
 
@@ -967,6 +964,35 @@ extern "C" {
 
     /// Get MAXPATHL value
     fn nvim_undo_get_maxpathl() -> usize;
+}
+
+// =============================================================================
+// Undo file resolve-symlink helper (migrated from undo.c Phase 2)
+// =============================================================================
+
+/// Resolve symlink using the platform-native implementation, then return an
+/// allocated copy of the result.  Falls back to a copy of `ffname` when
+/// readlink is unavailable or the lookup fails.
+///
+/// Replaces `nvim_undo_resolve_symlink` in C.
+///
+/// # Safety
+///
+/// `ffname` must be a valid, NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_undo_resolve_symlink(ffname: *const c_char) -> *mut c_char {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int;
+        }
+        let maxpathl = nvim_undo_get_maxpathl();
+        let mut fname_buf = vec![0i8; maxpathl];
+        if resolve_symlink(ffname, fname_buf.as_mut_ptr()) != 0 {
+            return nvim_undo_xstrdup(fname_buf.as_ptr());
+        }
+    }
+    nvim_undo_xstrdup(ffname)
 }
 
 // =============================================================================
