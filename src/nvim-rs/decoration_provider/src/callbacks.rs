@@ -35,17 +35,20 @@ use crate::types::{BufHandle, DecorProviderHandle, WinHandle};
 // C accessor declarations for callback invocation
 // =============================================================================
 
-extern "C" {
-    // Callback reference accessors
-    fn nvim_decor_provider_get_redraw_start(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_redraw_buf(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_redraw_win(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_redraw_line(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_redraw_range(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_redraw_end(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_spell_nav(provider: DecorProviderHandle) -> c_int;
-    fn nvim_decor_provider_get_conceal_line(provider: DecorProviderHandle) -> c_int;
+// Callback reference accessor functions are now implemented in accessors.rs
+// (Phase 5 migration). Use the accessors module functions directly.
+use crate::accessors::{
+    nvim_decor_provider_get_conceal_line_rs as nvim_decor_provider_get_conceal_line,
+    nvim_decor_provider_get_redraw_buf_rs as nvim_decor_provider_get_redraw_buf,
+    nvim_decor_provider_get_redraw_end_rs as nvim_decor_provider_get_redraw_end,
+    nvim_decor_provider_get_redraw_line_rs as nvim_decor_provider_get_redraw_line,
+    nvim_decor_provider_get_redraw_range_rs as nvim_decor_provider_get_redraw_range,
+    nvim_decor_provider_get_redraw_start_rs as nvim_decor_provider_get_redraw_start,
+    nvim_decor_provider_get_redraw_win_rs as nvim_decor_provider_get_redraw_win,
+    nvim_decor_provider_get_spell_nav_rs as nvim_decor_provider_get_spell_nav,
+};
 
+extern "C" {
     // Handle accessors for argument building
     fn nvim_win_get_handle(win: WinHandle) -> c_int;
     fn nvim_buf_get_handle(buf: BufHandle) -> c_int;

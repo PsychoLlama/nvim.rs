@@ -12,55 +12,215 @@
 //! - Rust to safely read/write fields through typed functions
 //! - Future migration of accessors to Rust as needed
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::constants::{DECOR_PROVIDER_DISABLED, LUA_NOREF};
+use crate::lifecycle::get_decor_provider;
 use crate::types::DecorProviderHandle;
 
 // =============================================================================
-// C Accessor Function Declarations - Namespace-based
+// C Pointer-based Field Accessors (defined in decoration_provider.c)
 // =============================================================================
 
 extern "C" {
-    // These functions are defined in decoration_provider.c
-    fn nvim_decor_provider_get_hl_valid(ns_id: c_int) -> c_int;
-    fn nvim_decor_provider_get_hl_cached(ns_id: c_int) -> bool;
-    fn nvim_decor_provider_set_hl_cached(ns_id: c_int, cached: bool, force: bool);
-    fn nvim_decor_provider_hl_def_prepare(ns_id: c_int) -> c_int;
-    fn nvim_decor_provider_has_hl_def(ns_id: c_int) -> bool;
+    fn nvim_decor_provider_ptr_get_hl_valid(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_hl_cached(p: *mut c_void) -> bool;
+    fn nvim_decor_provider_ptr_set_hl_cached(p: *mut c_void, val: bool);
+    fn nvim_decor_provider_ptr_has_hl_def(p: *mut c_void) -> bool;
+    fn nvim_decor_provider_ptr_get_hl_valid_and_clear_cached(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_redraw_start(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_redraw_buf(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_redraw_win(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_redraw_line(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_redraw_range(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_redraw_end(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_spell_nav(p: *mut c_void) -> c_int;
+    fn nvim_decor_provider_ptr_get_conceal_line(p: *mut c_void) -> c_int;
 }
 
 // =============================================================================
-// Namespace-based Rust Wrapper Functions
+// Namespace-based Exported Functions (Phase 5 migration)
 // =============================================================================
 
-/// Get hl_valid for a namespace.
-/// Returns -1 if provider doesn't exist.
-pub fn get_hl_valid(ns_id: c_int) -> c_int {
-    unsafe { nvim_decor_provider_get_hl_valid(ns_id) }
+/// Get hl_valid for a namespace. Returns -1 if provider doesn't exist.
+///
+/// Migrated from C `nvim_decor_provider_get_hl_valid`.
+#[unsafe(export_name = "nvim_decor_provider_get_hl_valid")]
+pub unsafe extern "C" fn nvim_decor_provider_get_hl_valid_rs(ns_id: c_int) -> c_int {
+    let p = unsafe { get_decor_provider(ns_id, false) };
+    if p.is_null() {
+        -1
+    } else {
+        unsafe { nvim_decor_provider_ptr_get_hl_valid(p) }
+    }
 }
 
-/// Get hl_cached for a namespace.
-/// Returns false if provider doesn't exist.
-pub fn get_hl_cached(ns_id: c_int) -> bool {
-    unsafe { nvim_decor_provider_get_hl_cached(ns_id) }
+/// Get hl_cached for a namespace. Returns false if provider doesn't exist.
+///
+/// Migrated from C `nvim_decor_provider_get_hl_cached`.
+#[unsafe(export_name = "nvim_decor_provider_get_hl_cached")]
+pub unsafe extern "C" fn nvim_decor_provider_get_hl_cached_rs(ns_id: c_int) -> bool {
+    let p = unsafe { get_decor_provider(ns_id, false) };
+    if p.is_null() {
+        false
+    } else {
+        unsafe { nvim_decor_provider_ptr_get_hl_cached(p) }
+    }
 }
 
-/// Set hl_cached for a namespace.
-/// Creates provider if force=true.
-pub fn set_hl_cached(ns_id: c_int, cached: bool, force: bool) {
-    unsafe { nvim_decor_provider_set_hl_cached(ns_id, cached, force) }
+/// Set hl_cached for a namespace. Creates provider if force=true.
+///
+/// Migrated from C `nvim_decor_provider_set_hl_cached`.
+#[unsafe(export_name = "nvim_decor_provider_set_hl_cached")]
+pub unsafe extern "C" fn nvim_decor_provider_set_hl_cached_rs(
+    ns_id: c_int,
+    cached: bool,
+    force: bool,
+) {
+    let p = unsafe { get_decor_provider(ns_id, force) };
+    if !p.is_null() {
+        unsafe { nvim_decor_provider_ptr_set_hl_cached(p, cached) };
+    }
 }
 
-/// Get hl_valid and set hl_cached=false atomically.
-/// Creates provider if needed.
-pub fn hl_def_prepare(ns_id: c_int) -> c_int {
-    unsafe { nvim_decor_provider_hl_def_prepare(ns_id) }
+/// Get hl_valid and set hl_cached=false atomically. Creates provider if needed.
+///
+/// Migrated from C `nvim_decor_provider_hl_def_prepare`.
+#[unsafe(export_name = "nvim_decor_provider_hl_def_prepare")]
+pub unsafe extern "C" fn nvim_decor_provider_hl_def_prepare_rs(ns_id: c_int) -> c_int {
+    let p = unsafe { get_decor_provider(ns_id, true) };
+    // get_decor_provider with force=true always returns non-null
+    unsafe { nvim_decor_provider_ptr_get_hl_valid_and_clear_cached(p) }
 }
 
 /// Check if namespace has a hl_def callback defined.
+///
+/// Migrated from C `nvim_decor_provider_has_hl_def`.
+#[unsafe(export_name = "nvim_decor_provider_has_hl_def")]
+pub unsafe extern "C" fn nvim_decor_provider_has_hl_def_rs(ns_id: c_int) -> bool {
+    let p = unsafe { get_decor_provider(ns_id, false) };
+    if p.is_null() {
+        false
+    } else {
+        unsafe { nvim_decor_provider_ptr_has_hl_def(p) }
+    }
+}
+
+// =============================================================================
+// Pointer-based Exported Functions (Phase 5 migration)
+// =============================================================================
+
+/// Get redraw_start callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_redraw_start`.
+#[unsafe(export_name = "nvim_decor_provider_get_redraw_start")]
+pub unsafe extern "C" fn nvim_decor_provider_get_redraw_start_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_redraw_start(provider.as_ptr()) }
+}
+
+/// Get redraw_buf callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_redraw_buf`.
+#[unsafe(export_name = "nvim_decor_provider_get_redraw_buf")]
+pub unsafe extern "C" fn nvim_decor_provider_get_redraw_buf_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_redraw_buf(provider.as_ptr()) }
+}
+
+/// Get redraw_win callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_redraw_win`.
+#[unsafe(export_name = "nvim_decor_provider_get_redraw_win")]
+pub unsafe extern "C" fn nvim_decor_provider_get_redraw_win_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_redraw_win(provider.as_ptr()) }
+}
+
+/// Get redraw_line callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_redraw_line`.
+#[unsafe(export_name = "nvim_decor_provider_get_redraw_line")]
+pub unsafe extern "C" fn nvim_decor_provider_get_redraw_line_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_redraw_line(provider.as_ptr()) }
+}
+
+/// Get redraw_range callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_redraw_range`.
+#[unsafe(export_name = "nvim_decor_provider_get_redraw_range")]
+pub unsafe extern "C" fn nvim_decor_provider_get_redraw_range_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_redraw_range(provider.as_ptr()) }
+}
+
+/// Get redraw_end callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_redraw_end`.
+#[unsafe(export_name = "nvim_decor_provider_get_redraw_end")]
+pub unsafe extern "C" fn nvim_decor_provider_get_redraw_end_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_redraw_end(provider.as_ptr()) }
+}
+
+/// Get spell_nav callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_spell_nav`.
+#[unsafe(export_name = "nvim_decor_provider_get_spell_nav")]
+pub unsafe extern "C" fn nvim_decor_provider_get_spell_nav_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_spell_nav(provider.as_ptr()) }
+}
+
+/// Get conceal_line callback ref from provider pointer.
+///
+/// Migrated from C `nvim_decor_provider_get_conceal_line`.
+#[unsafe(export_name = "nvim_decor_provider_get_conceal_line")]
+pub unsafe extern "C" fn nvim_decor_provider_get_conceal_line_rs(
+    provider: DecorProviderHandle,
+) -> c_int {
+    unsafe { nvim_decor_provider_ptr_get_conceal_line(provider.as_ptr()) }
+}
+
+// =============================================================================
+// Rust-internal accessor wrappers
+// =============================================================================
+
+/// Get hl_valid for a namespace (Rust-internal helper).
+/// Returns -1 if provider doesn't exist.
+pub fn get_hl_valid(ns_id: c_int) -> c_int {
+    unsafe { nvim_decor_provider_get_hl_valid_rs(ns_id) }
+}
+
+/// Get hl_cached for a namespace (Rust-internal helper).
+/// Returns false if provider doesn't exist.
+pub fn get_hl_cached(ns_id: c_int) -> bool {
+    unsafe { nvim_decor_provider_get_hl_cached_rs(ns_id) }
+}
+
+/// Set hl_cached for a namespace (Rust-internal helper).
+/// Creates provider if force=true.
+pub fn set_hl_cached(ns_id: c_int, cached: bool, force: bool) {
+    unsafe { nvim_decor_provider_set_hl_cached_rs(ns_id, cached, force) };
+}
+
+/// Get hl_valid and set hl_cached=false atomically (Rust-internal helper).
+/// Creates provider if needed.
+pub fn hl_def_prepare(ns_id: c_int) -> c_int {
+    unsafe { nvim_decor_provider_hl_def_prepare_rs(ns_id) }
+}
+
+/// Check if namespace has a hl_def callback defined (Rust-internal helper).
 pub fn has_hl_def(ns_id: c_int) -> bool {
-    unsafe { nvim_decor_provider_has_hl_def(ns_id) }
+    unsafe { nvim_decor_provider_has_hl_def_rs(ns_id) }
 }
 
 // =============================================================================
