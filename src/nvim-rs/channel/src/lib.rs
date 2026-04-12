@@ -385,6 +385,57 @@ extern "C" {
     /// Translated error strings for channel_from_stdio. Defined in eval_shim.c.
     fn nvim_chan_from_stdio_err_headless() -> *const std::ffi::c_char;
     fn nvim_chan_from_stdio_err_already_open() -> *const std::ffi::c_char;
+
+    // --- Phase 8 FFI: channel_job_start ---
+
+    /// pty_proc_init(&main_loop, chan) stored in place. Defined in eval_shim.c.
+    fn nvim_chan_pty_proc_init(chan: *mut c_void);
+    /// libuv_proc_init(&main_loop, chan) stored in place. Defined in eval_shim.c.
+    fn nvim_chan_libuv_proc_init(chan: *mut c_void);
+    /// Set chan->stream.pty.width. Defined in eval_shim.c.
+    fn nvim_chan_set_pty_width(chan: *mut c_void, w: u16);
+    /// Set chan->stream.pty.height. Defined in eval_shim.c.
+    fn nvim_chan_set_pty_height(chan: *mut c_void, h: u16);
+    /// Return &chan->stream.proc. Defined in eval_shim.c.
+    fn nvim_chan_get_proc_ptr(chan: *mut c_void) -> *mut c_void;
+    /// proc_get_exepath(proc). Defined in eval_shim.c.
+    fn nvim_proc_get_exepath(proc_ptr: *mut c_void) -> *const std::ffi::c_char;
+    /// proc_spawn(proc, has_in, has_out, has_err). Defined in eval_shim.c.
+    fn nvim_proc_spawn(proc_ptr: *mut c_void, has_in: bool, has_out: bool, has_err: bool) -> c_int;
+    /// Set proc exit callback to channel_proc_exit_cb. Defined in eval_shim.c.
+    fn nvim_chan_proc_set_exit_cb(chan: *mut c_void);
+    /// wstream_init for proc->in. Defined in eval_shim.c.
+    fn nvim_chan_proc_wstream_init_in(chan: *mut c_void);
+    /// rstream_init for proc->out. Defined in eval_shim.c.
+    fn nvim_chan_proc_rstream_init_out(chan: *mut c_void);
+    /// rstream_start on proc->out with on_channel_data. Defined in eval_shim.c.
+    fn nvim_chan_proc_rstream_start_data(chan: *mut c_void);
+    /// rstream_init for proc->err. Defined in eval_shim.c.
+    fn nvim_chan_proc_rstream_init_err(chan: *mut c_void);
+    /// rstream_start on proc->err with on_job_stderr. Defined in eval_shim.c.
+    fn nvim_chan_proc_rstream_start_stderr(chan: *mut c_void);
+    /// semsg(_(e_invarg2), msg) for PTY detach error. Defined in eval_shim.c.
+    fn nvim_chan_job_semsg_invarg2(msg: *const std::ffi::c_char);
+    /// semsg(_(e_jobspawn), os_strerror(status), cmd) for spawn failure. Defined in eval_shim.c.
+    fn nvim_chan_job_semsg_spawn_error(status: c_int, cmd: *const std::ffi::c_char);
+    /// Free argv array. Defined in os/shell.c.
+    fn shell_free_argv(argv: *mut *mut std::ffi::c_char);
+    /// Free a dict_T. Defined in eval/typval.c.
+    fn tv_dict_free(d: *mut c_void);
+
+    // Proc accessor functions (defined in nvim-event crate)
+    fn rs_proc_set_argv(proc_ptr: *mut c_void, argv: *mut *mut std::ffi::c_char);
+    fn rs_proc_set_exepath(proc_ptr: *mut c_void, exepath: *const std::ffi::c_char);
+    fn rs_proc_set_events(proc_ptr: *mut c_void, events: *mut c_void);
+    fn rs_proc_set_detach(proc_ptr: *mut c_void, detach: c_int);
+    fn rs_proc_set_cwd(proc_ptr: *mut c_void, cwd: *const std::ffi::c_char);
+    fn rs_proc_get_env(proc_ptr: *mut c_void) -> *mut c_void;
+    fn rs_proc_set_env(proc_ptr: *mut c_void, env: *mut c_void);
+    fn rs_proc_set_overlapped(proc_ptr: *mut c_void, overlapped: c_int);
+    fn rs_proc_set_fwd_err(proc_ptr: *mut c_void, fwd_err: c_int);
+    fn rs_proc_get_type(proc_ptr: *mut c_void) -> c_int;
+    fn rs_proc_get_status(proc_ptr: *mut c_void) -> c_int;
+    fn rs_proc_set_cb(proc_ptr: *mut c_void, cb: *mut c_void);
 }
 
 // =============================================================================
@@ -1621,6 +1672,147 @@ pub unsafe extern "C" fn rs_channel_from_stdio(
     }
 
     (*channel).id
+}
+
+// =============================================================================
+// Phase 4: channel_job_start
+// =============================================================================
+
+/// Check whether a `CallbackReader` has a real callback set.
+///
+/// Mirrors the C inline `callback_reader_set` from channel.h:
+/// `reader.cb.type != kCallbackNone || reader.self`.
+#[inline]
+fn callback_reader_set_check(reader: &CallbackReaderT) -> bool {
+    reader.cb.cb_type != K_CALLBACK_NONE || !reader.self_.is_null()
+}
+
+/// kChannelStdinPipe = 0
+const K_CHANNEL_STDIN_PIPE: c_int = 0;
+
+/// Starts a job process channel.
+///
+/// Returns the allocated Channel pointer, or null on failure.
+/// `status_out` is set to 0 for invalid args, >0 for the channel id,
+/// <0 if the job can't start.
+///
+/// # Safety
+///
+/// All pointers must be valid. `argv` must be null-terminated.
+#[unsafe(export_name = "channel_job_start")]
+pub unsafe extern "C" fn rs_channel_job_start(
+    argv: *mut *mut std::ffi::c_char,
+    exepath: *const std::ffi::c_char,
+    on_stdout: CallbackReaderT,
+    on_stderr: CallbackReaderT,
+    on_exit: CallbackT,
+    pty: bool,
+    rpc: bool,
+    overlapped: bool,
+    detach: bool,
+    stdin_mode: c_int,
+    cwd: *const std::ffi::c_char,
+    pty_width: u16,
+    pty_height: u16,
+    env: *mut c_void,
+    status_out: *mut c_longlong,
+) -> *mut ChannelT {
+    let chan = channel_alloc(K_CHANNEL_STREAM_PROC).cast::<ChannelT>();
+    (*chan).on_data = on_stdout;
+    (*chan).on_stderr = on_stderr;
+    (*chan).on_exit = on_exit;
+
+    if pty {
+        if detach {
+            nvim_chan_job_semsg_invarg2(c"terminal/pty job cannot be detached".as_ptr());
+            shell_free_argv(argv);
+            if !env.is_null() {
+                tv_dict_free(env);
+            }
+            channel_destroy_early(chan);
+            *status_out = 0;
+            return std::ptr::null_mut();
+        }
+        nvim_chan_pty_proc_init(chan.cast());
+        if pty_width > 0 {
+            nvim_chan_set_pty_width(chan.cast(), pty_width);
+        }
+        if pty_height > 0 {
+            nvim_chan_set_pty_height(chan.cast(), pty_height);
+        }
+    } else {
+        nvim_chan_libuv_proc_init(chan.cast());
+    }
+
+    let proc_ptr = nvim_chan_get_proc_ptr(chan.cast());
+    rs_proc_set_argv(proc_ptr, argv);
+    rs_proc_set_exepath(proc_ptr, exepath);
+    nvim_chan_proc_set_exit_cb(chan.cast());
+    rs_proc_set_events(proc_ptr, (*chan).events);
+    rs_proc_set_detach(proc_ptr, c_int::from(detach));
+    rs_proc_set_cwd(proc_ptr, cwd);
+    rs_proc_set_env(proc_ptr, env);
+    rs_proc_set_overlapped(proc_ptr, c_int::from(overlapped));
+
+    let cmd = xstrdup(nvim_proc_get_exepath(proc_ptr));
+    let has_out: bool;
+    let has_err: bool;
+    // kProcTypePty = 1
+    if rs_proc_get_type(proc_ptr) == K_PROC_TYPE_PTY {
+        has_out = true;
+        has_err = false;
+    } else {
+        has_out = rpc || callback_reader_set_check(&(*chan).on_data);
+        has_err = callback_reader_set_check(&(*chan).on_stderr);
+        rs_proc_set_fwd_err(proc_ptr, c_int::from((*chan).on_stderr.fwd_err));
+    }
+
+    let has_in = stdin_mode == K_CHANNEL_STDIN_PIPE;
+
+    let status = nvim_proc_spawn(proc_ptr, has_in, has_out, has_err);
+    if status != 0 {
+        nvim_chan_job_semsg_spawn_error(status, cmd);
+        xfree(cmd.cast());
+        let env_ptr = rs_proc_get_env(proc_ptr);
+        if !env_ptr.is_null() {
+            tv_dict_free(env_ptr);
+        }
+        channel_destroy_early(chan);
+        *status_out = c_longlong::from(rs_proc_get_status(proc_ptr));
+        return std::ptr::null_mut();
+    }
+    xfree(cmd.cast());
+    let env_ptr = rs_proc_get_env(proc_ptr);
+    if !env_ptr.is_null() {
+        tv_dict_free(env_ptr);
+    }
+
+    if has_in {
+        nvim_chan_proc_wstream_init_in(chan.cast());
+    }
+    if has_out {
+        nvim_chan_proc_rstream_init_out(chan.cast());
+    }
+
+    if rpc {
+        // rpc takes over in and out streams
+        nvim_chan_rpc_start(chan.cast());
+    } else if has_out {
+        callback_reader_start(&raw mut (*chan).on_data, c"stdout".as_ptr());
+        nvim_chan_proc_rstream_start_data(chan.cast());
+    }
+
+    if has_err {
+        callback_reader_start(&raw mut (*chan).on_stderr, c"stderr".as_ptr());
+        nvim_chan_proc_rstream_init_err(chan.cast());
+        nvim_chan_proc_rstream_start_stderr(chan.cast());
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    {
+        *status_out = (*chan).id as c_longlong;
+    }
+    chan
 }
 
 // =============================================================================

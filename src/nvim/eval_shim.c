@@ -646,3 +646,99 @@ void nvim_chan_from_stdio_dup_fds(int *p_stdin, int *p_stdout)
   }
 #endif
 }
+
+// Phase 8 (channel migration): accessors for channel_job_start
+
+#include "nvim/os/pty_proc.h"
+#include "nvim/event/libuv_proc.h"
+#include "nvim/os/shell.h"
+#include "nvim/errors.h"
+#include "nvim/os/fs.h"
+
+extern size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+extern void channel_proc_exit_cb(Proc *proc, int status, void *data);
+extern void rs_proc_set_cb(Proc *proc, void *cb);
+
+/// pty_proc_init wrapper: initialise chan->stream.pty and return Proc * for the chan.
+void nvim_chan_pty_proc_init(Channel *chan)
+{
+  chan->stream.pty = pty_proc_init(&main_loop, chan);
+}
+
+/// libuv_proc_init wrapper: initialise chan->stream.uv and return Proc * for the chan.
+void nvim_chan_libuv_proc_init(Channel *chan)
+{
+  chan->stream.uv = libuv_proc_init(&main_loop, chan);
+}
+
+/// Set chan->stream.pty.width.
+void nvim_chan_set_pty_width(Channel *chan, uint16_t w)
+{
+  chan->stream.pty.width = w;
+}
+
+/// Set chan->stream.pty.height.
+void nvim_chan_set_pty_height(Channel *chan, uint16_t h)
+{
+  chan->stream.pty.height = h;
+}
+
+/// Return &chan->stream.proc (pointer to the Proc union member).
+Proc *nvim_chan_get_proc_ptr(Channel *chan)
+{
+  return &chan->stream.proc;
+}
+
+/// proc_spawn wrapper.
+int nvim_proc_spawn(Proc *proc, bool has_in, bool has_out, bool has_err)
+{
+  return proc_spawn(proc, has_in, has_out, has_err);
+}
+
+/// Set the proc exit callback to channel_proc_exit_cb.
+void nvim_chan_proc_set_exit_cb(Channel *chan)
+{
+  rs_proc_set_cb(&chan->stream.proc, (void *)channel_proc_exit_cb);
+}
+
+/// wstream_init for proc->in (stdin pipe).
+void nvim_chan_proc_wstream_init_in(Channel *chan)
+{
+  wstream_init(&chan->stream.proc.in, 0);
+}
+
+/// rstream_init for proc->out (stdout).
+void nvim_chan_proc_rstream_init_out(Channel *chan)
+{
+  rstream_init(&chan->stream.proc.out);
+}
+
+/// rstream_start on proc->out with on_channel_data callback.
+void nvim_chan_proc_rstream_start_data(Channel *chan)
+{
+  rstream_start(&chan->stream.proc.out, on_channel_data, chan);
+}
+
+/// rstream_init for proc->err (stderr).
+void nvim_chan_proc_rstream_init_err(Channel *chan)
+{
+  rstream_init(&chan->stream.proc.err);
+}
+
+/// rstream_start on proc->err with on_job_stderr callback.
+void nvim_chan_proc_rstream_start_stderr(Channel *chan)
+{
+  rstream_start(&chan->stream.proc.err, on_job_stderr, chan);
+}
+
+/// semsg(_(e_invarg2), msg) for PTY detach error.
+void nvim_chan_job_semsg_invarg2(const char *msg)
+{
+  semsg(_(e_invarg2), msg);
+}
+
+/// semsg(_(e_jobspawn), os_strerror(status), cmd) for spawn failure.
+void nvim_chan_job_semsg_spawn_error(int status, const char *cmd)
+{
+  semsg(_(e_jobspawn), os_strerror(status), cmd);
+}

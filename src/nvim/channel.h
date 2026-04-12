@@ -75,6 +75,11 @@ size_t on_job_stderr(RStream *stream, const char *buf, size_t count, void *data,
 void channel_proc_exit_cb(Proc *proc, int status, void *data);
 void channel_destroy(Channel *chan);
 void channel_info_changed(Channel *chan, bool new_chan);
+Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_stdout,
+                           CallbackReader on_stderr, Callback on_exit, bool pty, bool rpc,
+                           bool overlapped, bool detach, ChannelStdinMode stdin_mode,
+                           const char *cwd, uint16_t pty_width, uint16_t pty_height, dict_T *env,
+                           varnumber_T *status_out);
 void channel_create_event(Channel *chan, const char *ext_source);
 void channel_from_connection(SocketWatcher *watcher);
 uint64_t channel_connect(bool tcp, const char *address, bool rpc, CallbackReader on_output,
