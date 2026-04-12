@@ -82,25 +82,4 @@ DLLEXPORT void show_cursor_info_later(bool force);
 DLLEXPORT int showmode(void);
 DLLEXPORT void win_scroll_lines(win_T *wp, int row, int line_count);
 
-/// State passed from the Rust init phase to nvim_win_update_body_from_scroll().
-/// Must match WinUpdateBodyState in src/nvim-rs/drawscreen/src/lib.rs (repr(C)).
-typedef struct {
-  int top_end;
-  int mid_start;
-  int mid_end;
-  int bot_start;
-  int bot_scroll_start;
-  bool scrolled_down;
-  bool top_to_mod;
-  int did_update;         ///< DID_NONE=1, DID_LINE=2, DID_FOLD=3
-  linenr_T syntax_last_parsed;
-  linenr_T mod_top;
-  linenr_T mod_bot;
-  int type;
-  int save_got_int;
-  int nrwidth_before;
-} WinUpdateBodyState;
-
-void nvim_win_update_body_from_scroll(win_T *wp, WinUpdateBodyState *st);
-
 #include "drawscreen.h.generated.h"

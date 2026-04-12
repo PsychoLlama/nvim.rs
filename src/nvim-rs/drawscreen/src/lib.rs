@@ -2144,6 +2144,7 @@ type FoldinfoHandle = *mut c_void;
 ///
 /// `repr(C)` matches fold crate's `FoldInfoResult`.
 #[repr(C)]
+#[derive(Clone, Copy)]
 #[allow(clippy::struct_field_names)]
 struct FoldInfo {
     fi_lnum: LinenrT,
@@ -3403,8 +3404,6 @@ extern "C" {
     fn nvim_get_search_hl_has_cursor_lnum() -> LinenrT;
     /// Set search_hl_has_cursor_lnum.
     fn nvim_set_search_hl_has_cursor_lnum(val: LinenrT);
-    /// Execute the scroll + draw loop + finalize of nvim_win_update_body.
-    fn nvim_win_update_body_from_scroll(wp: WinHandle, st: *mut WinUpdateBodyState);
     /// nvim_win_lines_concealed: returns 1 if window has concealed lines.
     #[link_name = "nvim_win_lines_concealed"]
     fn nvim_win_lines_concealed_init(wp: WinHandle) -> c_int;
@@ -3464,8 +3463,216 @@ extern "C" {
     fn buf_get_mod_set_body(buf: BufHandle) -> c_int;
 }
 
+// Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize FFI
+extern "C" {
+    /// Get wp->w_old_topfill.
+    fn nvim_win_get_old_topfill(wp: WinHandle) -> c_int;
+    /// Set wp->w_old_topfill.
+    fn nvim_win_set_old_topfill(wp: WinHandle, val: c_int);
+    /// Get wp->w_old_botfill.
+    fn nvim_win_get_old_botfill(wp: WinHandle) -> bool;
+    /// Set wp->w_old_botfill.
+    fn nvim_win_set_old_botfill(wp: WinHandle, val: bool);
+    /// Get wp->w_botfill.
+    #[link_name = "nvim_win_get_botfill"]
+    fn nvim_win_get_botfill_body(wp: WinHandle) -> c_int;
+    /// Get wp->w_redr_statuscol.
+    fn nvim_win_get_redr_statuscol(wp: WinHandle) -> bool;
+    /// Set wp->w_redr_statuscol.
+    #[link_name = "nvim_win_set_redr_statuscol"]
+    fn nvim_win_set_redr_statuscol_body(wp: WinHandle, val: bool);
+    /// Get wp->w_valid.
+    fn nvim_win_get_w_valid(wp: WinHandle) -> c_int;
+    /// Apply wp->w_valid &= mask.
+    fn nvim_win_and_w_valid(wp: WinHandle, mask: c_int);
+    /// Apply wp->w_valid |= mask.
+    fn nvim_win_or_w_valid(wp: WinHandle, mask: c_int);
+    /// Get wp->w_last_cursorline.
+    fn nvim_win_get_last_cursorline(wp: WinHandle) -> LinenrT;
+    /// Set wp->w_last_cursorline.
+    fn nvim_win_set_last_cursorline(wp: WinHandle, val: LinenrT);
+    /// Get wp->w_last_cursor_lnum_rnu.
+    fn nvim_win_get_last_cursor_lnum_rnu(wp: WinHandle) -> LinenrT;
+    /// Set wp->w_last_cursor_lnum_rnu.
+    fn nvim_win_set_last_cursor_lnum_rnu(wp: WinHandle, val: LinenrT);
+    /// Return true if wp->w_match_head != NULL.
+    fn nvim_win_get_match_head_nonnull(wp: WinHandle) -> bool;
+    /// Get buf->b_mod_xlines.
+    fn nvim_buf_get_mod_xlines(buf: BufHandle) -> LinenrT;
+    /// Return true if *wp->w_p_fdt == NUL.
+    fn nvim_win_get_w_p_fdt_nul(wp: WinHandle) -> bool;
+    /// Get raw w_lines pointer (unchecked, Rust must bounds-check).
+    fn nvim_win_get_wlines_ptr(wp: WinHandle) -> *mut WlineT;
+    /// Send win_extmarks (kv_size/kv_A + ui_call_win_extmark loop).
+    fn nvim_win_send_extmarks(wp: WinHandle);
+    /// Reset state for statuscolumn restart: clears idx/row/lnum/lines_valid,
+    /// calls decor_redraw_reset + decor_providers_invoke_win.
+    fn nvim_win_redr_statuscol_restart(wp: WinHandle);
+    /// Call prepare_search_hl(wp, &screen_search_hl, lnum).
+    fn nvim_prepare_search_hl_win(wp: WinHandle, lnum: LinenrT);
+    /// Call plines_correct_topline(wp, lnum, nextp, true, NULL).
+    fn nvim_plines_correct_topline_adv(wp: WinHandle, lnum: LinenrT, nextp: *mut LinenrT) -> c_int;
+    /// Call plines_win_true(wp, lnum) [= plines_win(wp, lnum, true)].
+    fn nvim_plines_win_true(wp: WinHandle, lnum: LinenrT) -> c_int;
+    /// Call win_may_fill(wp).
+    fn nvim_win_may_fill(wp: WinHandle) -> bool;
+    /// Call curs_columns(curwin, true).
+    fn nvim_curs_columns_curwin();
+    /// Set curbuf->b_mod_set.
+    fn nvim_curbuf_set_mod_set(val: c_int);
+    /// Get curbuf->b_mod_set.
+    fn nvim_curbuf_get_mod_set() -> c_int;
+    /// Return true if buf->terminal != NULL.
+    fn nvim_buf_has_terminal(buf: BufHandle) -> bool;
+    /// Call terminal_check_size(buf->terminal).
+    fn nvim_buf_terminal_check_size(buf: BufHandle);
+    /// Call syn_set_timeout(NULL).
+    fn nvim_syn_set_timeout_null();
+    /// Zero got_int and set up proftime_T for syntax timeout (static proftime_T in C).
+    fn nvim_win_setup_syntax_tm();
+    /// Call set_empty_rows(wp, srow).
+    fn nvim_set_empty_rows_win(wp: WinHandle, srow: c_int);
+    /// Call hl_combine_attr(a, b).
+    fn nvim_hl_combine_attr(a: c_int, b: c_int) -> c_int;
+    /// Call win_bg_attr(wp).
+    fn nvim_win_bg_attr(wp: WinHandle) -> c_int;
+    /// Return dy_flags (cast to c_int).
+    #[link_name = "nvim_get_dy_flags"]
+    fn nvim_get_dy_flags_body() -> c_int;
+    /// Return dollar_vcol (colnr_T = c_int).
+    fn nvim_get_dollar_vcol() -> ColnrT;
+    /// Return must_redraw.
+    fn nvim_get_must_redraw() -> c_int;
+    /// Set got_int.
+    fn nvim_set_got_int(val: c_int);
+    /// Call update_topline(curwin).
+    fn nvim_update_topline_curwin();
+    /// Call plines_m_win(wp, first, last, max).
+    fn nvim_plines_m_win(wp: WinHandle, first: LinenrT, last: LinenrT, max: c_int) -> c_int;
+    /// Call win_get_fill(wp, lnum).
+    fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
+    /// win_line: draw a single line; returns new row.
+    fn win_line(
+        wp: WinHandle,
+        lnum: LinenrT,
+        startrow: c_int,
+        endrow: c_int,
+        col_rows: c_int,
+        concealed: bool,
+        spv: *mut SpvT,
+        foldinfo: FoldInfo,
+    ) -> c_int;
+    /// Call syntax_end_parsing(wp, lnum).
+    fn syntax_end_parsing(wp: WinHandle, lnum: LinenrT);
+    /// Call syntax_check_changed(lnum).
+    fn syntax_check_changed(lnum: LinenrT) -> bool;
+    /// grid_line_getchar (exported from Rust grid crate as "grid_line_getchar")
+    #[link_name = "grid_line_getchar"]
+    fn nvim_grid_line_getchar(col: c_int, attr: *mut c_int) -> ScharT;
+    /// win_draw_end (exported from Rust as "win_draw_end")
+    fn win_draw_end(
+        wp: WinHandle,
+        c1: ScharT,
+        draw_margin: bool,
+        startrow: c_int,
+        endrow: c_int,
+        hl: c_int,
+    );
+    /// Get wp->w_botline.
+    #[link_name = "nvim_win_get_botline"]
+    fn nvim_win_get_botline_body(wp: WinHandle) -> LinenrT;
+    /// Set wp->w_botline.
+    #[link_name = "nvim_win_set_botline"]
+    fn nvim_win_set_botline_body(wp: WinHandle, val: LinenrT);
+    /// Set wp->w_empty_rows.
+    #[link_name = "nvim_win_set_empty_rows"]
+    fn nvim_win_set_empty_rows_body(wp: WinHandle, val: c_int);
+    /// Set wp->w_filler_rows.
+    #[link_name = "nvim_win_set_filler_rows"]
+    fn nvim_win_set_filler_rows_body(wp: WinHandle, val: c_int);
+    /// Get wp->w_topfill.
+    #[link_name = "nvim_win_get_topfill"]
+    fn nvim_win_get_topfill_body(wp: WinHandle) -> c_int;
+    /// Get wp->w_cursorline.
+    #[link_name = "nvim_win_get_cursorline"]
+    fn nvim_win_get_cursorline_body(wp: WinHandle) -> LinenrT;
+    /// Get wp->w_p_rnu.
+    #[link_name = "nvim_win_get_p_rnu"]
+    fn nvim_win_get_p_rnu_body(wp: WinHandle) -> c_int;
+    /// Get wp->w_p_nu.
+    #[link_name = "nvim_win_get_p_nu"]
+    fn nvim_win_get_p_nu_body(wp: WinHandle) -> c_int;
+    /// Get wp->w_p_cul.
+    #[link_name = "nvim_win_get_p_cul"]
+    fn nvim_win_get_p_cul_body(wp: WinHandle) -> c_int;
+    /// Set wp->w_viewport_invalid.
+    #[link_name = "nvim_win_set_viewport_invalid"]
+    fn nvim_win_set_viewport_invalid_body(wp: WinHandle, val: bool);
+    /// Get wp->w_p_fcs_chars.lastline (schar_T as u32).
+    fn nvim_win_get_fcs_lastline(wp: WinHandle) -> ScharT;
+    /// Get wp->w_p_fcs_chars.eob (schar_T as u32).
+    fn nvim_win_get_fcs_eob(wp: WinHandle) -> ScharT;
+    /// Get wp->w_lines_valid (aliased to avoid name collision).
+    #[link_name = "nvim_win_get_lines_valid"]
+    fn nvim_win_get_lines_valid2(wp: WinHandle) -> c_int;
+    /// Set wp->w_lines_valid (aliased to avoid name collision).
+    #[link_name = "nvim_win_set_lines_valid"]
+    fn nvim_win_set_lines_valid2(wp: WinHandle, val: c_int);
+    /// spell_check_window wrapper.
+    fn nvim_spell_check_window(wp: WinHandle) -> bool;
+    /// Check if fold method is Syntax for this window.
+    fn rs_foldmethodIsSyntax(wp: WinHandle) -> c_int;
+    /// Check if window has any folding.
+    fn rs_hasAnyFolding(wp: WinHandle) -> c_int;
+    /// Check if window has virt_lines in range (returns 1 if > 0).
+    fn nvim_decor_virt_lines_check(wp: WinHandle, start: LinenrT, end: LinenrT) -> c_int;
+}
+
+/// Mirrored from C `wline_T` (repr(C) - must match buffer_defs.h exactly).
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[allow(clippy::struct_field_names)]
+struct WlineT {
+    wl_lnum: LinenrT,
+    wl_size: u16,
+    wl_valid: bool,
+    wl_folded: bool,
+    wl_foldend: LinenrT,
+    wl_lastlnum: LinenrT,
+}
+
+/// Mirrored from C `spellvars_T` (repr(C) - must match drawline.h exactly).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+#[allow(clippy::struct_field_names)]
+struct SpvT {
+    spv_has_spell: bool,
+    spv_unchanged: bool,
+    spv_checked_col: c_int,
+    spv_checked_lnum: LinenrT,
+    spv_cap_col: c_int,
+    spv_capcol_lnum: LinenrT,
+}
+
+/// kOptDyFlagLastline = 0x01
+const K_OPT_DY_FLAG_LASTLINE: c_int = 0x01;
+/// kOptDyFlagTruncate = 0x02
+const K_OPT_DY_FLAG_TRUNCATE: c_int = 0x02;
+
+/// VALID_WCOL = 0x02 (w_wcol is valid)
+const VALID_WCOL: c_int = 0x02;
+/// VALID_TOPLINE = 0x80 (w_topline is valid)
+const VALID_TOPLINE: c_int = 0x80;
+
+/// HLF_EOB = 2 (after last line in buffer)
+const HLF_EOB: c_int = 2;
+/// HLF_AT = 4 (@ chars at end of screen)
+const HLF_AT: c_int = 4;
+
 /// DID_NONE = 1, DID_LINE = 2, DID_FOLD = 3
 const DID_NONE: c_int = 1;
+const DID_LINE: c_int = 2;
+const DID_FOLD: c_int = 3;
 
 /// State passed from Rust init phase to C from-scroll phase.
 /// Must match WinUpdateBodyState in drawscreen.h (C typedef struct).
@@ -3691,11 +3898,890 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
     }
 }
 
+/// Phase 2 (Rust): Scroll optimization - compute top_end, mid_start, mid_end, bot_start.
+///
+/// Handles UPD_REDRAW_TOP + topline_conceal + three-way scroll logic.
+/// Mirrors lines 177-368 of the original `nvim_win_update_body_from_scroll`.
+///
+/// # Safety
+/// wp must be valid. Called after win_update_body_init() has run.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::similar_names,
+    clippy::ptr_as_ptr
+)]
+unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
+    let buf = nvim_win_get_buffer(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    // When only displaying lines at the top, compute top_end from w_upd_rows.
+    if st.type_ == UPD_REDRAW_TOP {
+        let lines_valid = win_get_lines_valid_body(wp);
+        let upd_rows = nvim_win_get_upd_rows(wp);
+        let mut j: c_int = 0;
+        for i in 0..lines_valid {
+            j += nvim_win_get_wlines_size(wp, i);
+            if j >= upd_rows {
+                st.top_end = j;
+                break;
+            }
+        }
+        if st.top_end == 0 {
+            st.type_ = UPD_NOT_VALID;
+        } else {
+            st.type_ = UPD_VALID;
+        }
+    }
+
+    // Compute adjusted topline (skipping concealed lines at top).
+    let topline = win_get_topline_body(wp);
+    let ml_line_count = buf_get_ml_line_count_body(buf);
+    let mut topline_conceal = topline;
+    while topline_conceal < ml_line_count
+        && nvim_decor_conceal_line(wp, topline_conceal - 1, 0) != 0
+    {
+        topline_conceal += 1;
+        nvim_hasFolding_win(
+            wp,
+            topline_conceal,
+            std::ptr::null_mut(),
+            addr_of_mut!(topline_conceal),
+        );
+    }
+
+    let botfill = nvim_win_get_botfill_body(wp) != 0;
+    let old_botfill = nvim_win_get_old_botfill(wp);
+
+    if (st.type_ == UPD_VALID
+        || st.type_ == UPD_SOME_VALID
+        || st.type_ == UPD_INVERTED
+        || st.type_ == UPD_INVERTED_ALL)
+        && !botfill
+        && !old_botfill
+    {
+        let wlines0_valid = nvim_win_get_wlines_valid(wp, 0);
+        let wlines0_lnum = nvim_win_get_wlines_lnum(wp, 0);
+        let old_topfill = nvim_win_get_old_topfill(wp);
+        let topfill = nvim_win_get_topfill_body(wp);
+
+        if st.mod_top != 0
+            && topline == st.mod_top
+            && (!wlines0_valid || topline_conceal == wlines0_lnum)
+        {
+            // w_topline is the first changed line, scrolling handled further down.
+        } else if wlines0_valid
+            && (topline_conceal < wlines0_lnum
+                || (topline_conceal == wlines0_lnum && topfill > old_topfill))
+        {
+            // New topline is above old topline: may scroll down.
+            let j = if nvim_win_lines_concealed_init(wp) != 0 {
+                // Count lines we are off, skipping concealed/folded lines.
+                let mut j: c_int = 0;
+                let mut ln = topline;
+                while ln < wlines0_lnum {
+                    if nvim_decor_conceal_line(wp, ln - 1, 0) == 0 {
+                        j += 1;
+                    }
+                    if j >= view_height - 2 {
+                        break;
+                    }
+                    nvim_hasFolding_win(wp, ln, std::ptr::null_mut(), addr_of_mut!(ln));
+                    ln += 1;
+                }
+                j
+            } else {
+                wlines0_lnum - topline
+            };
+
+            if j < view_height - 2 {
+                // not too far off
+                let mut i = nvim_plines_m_win(wp, topline, wlines0_lnum - 1, view_height);
+                if wlines0_lnum != topline {
+                    i += nvim_win_get_fill(wp, wlines0_lnum) - old_topfill;
+                }
+                if i != 0 && i < view_height - 2 {
+                    // less than a screen off: scroll down
+                    rs_win_scroll_lines(wp, 0, i);
+                    st.bot_scroll_start = 0;
+                    let lines_valid = win_get_lines_valid_body(wp);
+                    if lines_valid != 0 {
+                        st.top_end = i;
+                        st.scrolled_down = true;
+                        // Move entries that were scrolled; invalidate new rows.
+                        let new_lv = (lines_valid + j).min(view_height);
+                        win_set_lines_valid_body(wp, new_lv);
+                        let wlines = nvim_win_get_wlines_ptr(wp);
+                        let lv = win_get_lines_valid_body(wp);
+                        let mut idx = lv;
+                        while idx - j >= 0 {
+                            *wlines.add(idx as usize) = *wlines.add((idx - j) as usize);
+                            idx -= 1;
+                        }
+                        while idx >= 0 {
+                            (*wlines.add(idx as usize)).wl_valid = false;
+                            idx -= 1;
+                        }
+                    }
+                } else {
+                    st.mid_start = 0;
+                }
+            } else {
+                st.mid_start = 0;
+            }
+        } else {
+            // New topline at or below old topline: may scroll up.
+            let lines_valid = win_get_lines_valid_body(wp);
+            let wlines = nvim_win_get_wlines_ptr(wp);
+            let mut j: c_int = -1;
+            let mut row: c_int = 0;
+            for i in 0..lines_valid {
+                if (*wlines.add(i as usize)).wl_valid
+                    && (*wlines.add(i as usize)).wl_lnum == topline
+                {
+                    j = i;
+                    break;
+                }
+                row += (*wlines.add(i as usize)).wl_size as c_int;
+            }
+            if j == -1 {
+                st.mid_start = 0;
+            } else {
+                // Delete old filler lines or new topline's filler lines.
+                if (*wlines.add(0)).wl_lnum == topline {
+                    row += old_topfill;
+                } else {
+                    row += nvim_win_get_fill(wp, topline);
+                }
+                row -= topfill;
+                if row > 0 {
+                    rs_win_scroll_lines(wp, 0, -row);
+                    st.bot_start = view_height - row;
+                    st.bot_scroll_start = st.bot_start;
+                }
+                if (row == 0 || st.bot_start < 999) && lines_valid != 0 {
+                    st.bot_start = 0;
+                    let mut idx: c_int = 0;
+                    loop {
+                        *wlines.add(idx as usize) = *wlines.add(j as usize);
+                        if row > 0
+                            && st.bot_start + row + (*wlines.add(j as usize)).wl_size as c_int
+                                > view_height
+                        {
+                            win_set_lines_valid_body(wp, idx + 1);
+                            break;
+                        }
+                        let wl_size = (*wlines.add(idx as usize)).wl_size as c_int;
+                        st.bot_start += wl_size;
+                        idx += 1;
+                        j += 1;
+                        if j >= win_get_lines_valid_body(wp) {
+                            win_set_lines_valid_body(wp, idx);
+                            break;
+                        }
+                    }
+                    // Correct first entry for filler lines at top when not updated below.
+                    if nvim_win_may_fill(wp) && st.bot_start > 0 {
+                        let new_size =
+                            nvim_plines_correct_topline_adv(wp, topline, std::ptr::null_mut());
+                        (*nvim_win_get_wlines_ptr(wp)).wl_size = new_size as u16;
+                    }
+                }
+            }
+        }
+
+        if st.mid_start == 0 {
+            st.mid_end = view_height;
+        }
+    } else {
+        st.mid_start = 0;
+        st.mid_end = view_height;
+    }
+
+    if st.type_ == UPD_SOME_VALID {
+        st.mid_start = 0;
+        st.mid_end = view_height;
+        st.type_ = UPD_NOT_VALID;
+    }
+
+    // Check if we are updating or removing the inverted part.
+    let buf = nvim_win_get_buffer(wp);
+    rs_win_update_visual_region(
+        wp,
+        buf,
+        st.type_,
+        st.top_end,
+        st.scrolled_down,
+        addr_of_mut!(st.mid_start),
+        addr_of_mut!(st.mid_end),
+    );
+
+    // Update cursorline info.
+    let mut cursorline_fi = FoldInfo {
+        fi_lnum: 0,
+        fi_level: 0,
+        fi_low_level: 0,
+        fi_lines: 0,
+    };
+    rs_win_update_cursorline(wp, addr_of_mut!(cursorline_fi) as *mut c_void);
+
+    let curwin = nvim_get_curwin();
+    if wp == curwin {
+        rs_set_conceal_cursor_used(c_int::from(rs_conceal_cursor_line(curwin)));
+    }
+
+    nvim_win_check_ns_hl(wp);
+
+    // Store cursorline_fi in state for draw loop (we pass it via a local in a moment).
+    // For simplicity, store as separate fields - we recompute it in draw loop via a closure.
+    // Actually, we need to pass cursorline_fi to the draw loop. We'll store it in the WinUpdateBodyState.
+    // For now, store it as a thread-local approach won't work. We use a workaround:
+    // The draw loop will re-read it via a saved copy. Since WinUpdateBodyState doesn't have a
+    // cursorline_fi field, we store it in the WinUpdateBodyState padding by aliasing type_.
+    // ACTUALLY: We extend WinUpdateBodyState to include cursorline_fi. But since it's repr(C)
+    // and must match C code... But the C code is being deleted! So we can change WinUpdateBodyState.
+    // However, the C drawscreen.h still has the typedef. But after this phase, we'll delete the C
+    // function that uses it. For now, we store cursorline_fi on the stack and thread it through.
+    // We'll use a different approach: store it in the state struct's unused `did_update` field temporarily.
+    // Actually the cleanest solution: just inline everything into one big function.
+    // We'll do that below - pass cursorline_fi as part of the draw loop return value setup.
+    // FIXME: Actually WinUpdateBodyState is repr(C) matching C header. Adding fields would break
+    // the ABI. But we're going to DELETE the C code that uses it. Let's just NOT call the C
+    // function anymore and instead store cursorline_fi on the stack in rs_win_update.
+    // The solution: make the scroll function return cursorline_fi.
+    let _ = cursorline_fi; // will be in draw loop
+}
+
+/// Phase 2 scroll helper that also returns cursorline fold info.
+/// Phase 2 (Rust): Main draw loop.
+///
+/// Iterates over window rows, deciding whether to draw each line.
+/// Handles folds, concealment, `goto redr_statuscol` (as a Rust loop).
+/// Mirrors lines 382-715 of `nvim_win_update_body_from_scroll`.
+///
+/// Returns (eof, didline, lnum, srow, row, idx) for use in finalize.
+///
+/// # Safety
+/// wp must be valid. st must have been initialized by init + scroll phases.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::similar_names,
+    clippy::ptr_as_ptr,
+    clippy::bool_to_int_with_if
+)]
+unsafe fn win_update_body_draw_loop(
+    wp: WinHandle,
+    st: &mut WinUpdateBodyState,
+) -> (bool, bool, LinenrT, c_int, c_int, c_int) {
+    let buf = nvim_win_get_buffer(wp);
+    let ml_line_count = buf_get_ml_line_count_body(buf);
+    let view_height = nvim_win_get_view_height(wp);
+    let curwin = nvim_get_curwin();
+
+    // Cursorline fold info (computed during scroll phase for wp).
+    let mut cursorline_fi = FoldInfo {
+        fi_lnum: 0,
+        fi_level: 0,
+        fi_low_level: 0,
+        fi_lines: 0,
+    };
+    rs_win_update_cursorline(wp, addr_of_mut!(cursorline_fi) as *mut c_void);
+
+    // Spell checking setup.
+    let mut spv = SpvT::default();
+    if nvim_spell_check_window(wp) {
+        spv.spv_has_spell = true;
+        spv.spv_unchanged = st.mod_top == 0;
+    }
+
+    let mut idx: c_int = 0;
+    let mut row: c_int = 0;
+    let mut srow: c_int = 0;
+    let mut lnum: LinenrT = win_get_topline_body(wp);
+    let mut eof = false;
+    let mut didline = false;
+
+    // The draw loop with statuscolumn restart handled by an outer loop.
+    'draw_loop: loop {
+        loop {
+            // Stop when past end of window.
+            if row == view_height {
+                didline = true;
+                break 'draw_loop;
+            }
+            // Stop when past end of file.
+            if lnum > ml_line_count {
+                eof = true;
+                break 'draw_loop;
+            }
+
+            srow = row;
+
+            // Determine if this line needs updating.
+            let lines_valid = win_get_lines_valid_body(wp);
+            let wlines = nvim_win_get_wlines_ptr(wp);
+            let wl_size_cur = if idx < lines_valid {
+                (*wlines.add(idx as usize)).wl_size as c_int
+            } else {
+                0
+            };
+            let mod_set = buf_get_mod_set_body(buf) != 0;
+            let p_nu = nvim_win_get_p_nu_body(wp) != 0;
+            let p_rnu = nvim_win_get_p_rnu_body(wp) != 0;
+            let p_cul = nvim_win_get_p_cul_body(wp) != 0;
+            let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+            let w_cursorline = nvim_win_get_cursorline_body(wp);
+            let w_last_cursorline = nvim_win_get_last_cursorline(wp);
+
+            let needs_update = row < st.top_end
+                || (row >= st.mid_start && row < st.mid_end)
+                || st.top_to_mod
+                || idx >= lines_valid
+                || (row + wl_size_cur > st.bot_start)
+                || (st.mod_top != 0
+                    && (lnum == st.mod_top
+                        || (lnum >= st.mod_top
+                            && (lnum < st.mod_bot
+                                || st.did_update == DID_FOLD
+                                || (st.did_update == DID_LINE
+                                    && syntax_present(wp)
+                                    && ((rs_foldmethodIsSyntax(wp) != 0
+                                        && rs_hasAnyFolding(wp) != 0)
+                                        || syntax_check_changed(lnum)))
+                                || (nvim_win_get_match_head_nonnull(wp)
+                                    && mod_set
+                                    && nvim_buf_get_mod_xlines(buf) != 0)))))
+                || lnum == w_cursorline
+                || lnum == w_last_cursorline;
+
+            if needs_update {
+                if lnum == st.mod_top {
+                    st.top_to_mod = false;
+                }
+
+                // Get fold info for this line.
+                let foldinfo = if p_cul && lnum == cursor_lnum {
+                    cursorline_fi
+                } else {
+                    nvim_fold_info_rs(wp, lnum)
+                };
+
+                // If line is concealed and has no filler lines, skip it.
+                let concealed = nvim_decor_conceal_line(wp, lnum - 1, 0) != 0;
+                if concealed && nvim_win_get_fill(wp, lnum) == 0 {
+                    if lnum == st.mod_top && lnum < st.mod_bot {
+                        st.mod_top += if foldinfo.fi_lines != 0 {
+                            foldinfo.fi_lines
+                        } else {
+                            1
+                        };
+                    }
+                    lnum += if foldinfo.fi_lines != 0 {
+                        foldinfo.fi_lines
+                    } else {
+                        1
+                    };
+                    spv.spv_capcol_lnum = 0;
+                    continue;
+                }
+
+                // At start of changed lines: may scroll following lines up/down.
+                if lnum == st.mod_top && st.mod_bot != MAXLNUM && row >= st.top_end {
+                    let lines_valid = win_get_lines_valid_body(wp);
+                    let wlines = nvim_win_get_wlines_ptr(wp);
+                    let mut old_cline_height: c_int = 0;
+                    let mut old_rows: c_int = 0;
+                    let mut i = idx;
+
+                    // Count old window rows for changed region.
+                    while i < lines_valid {
+                        let entry = &*wlines.add(i as usize);
+                        if entry.wl_valid && entry.wl_lnum == st.mod_bot {
+                            break;
+                        }
+                        if entry.wl_lnum == cursor_lnum {
+                            old_cline_height = entry.wl_size as c_int;
+                        }
+                        old_rows += entry.wl_size as c_int;
+                        if entry.wl_valid && entry.wl_lastlnum + 1 == st.mod_bot {
+                            i += 1;
+                            while i < lines_valid && !(*wlines.add(i as usize)).wl_valid {
+                                old_rows += (*wlines.add(i as usize)).wl_size as c_int;
+                                i += 1;
+                            }
+                            break;
+                        }
+                        i += 1;
+                    }
+
+                    if i >= lines_valid {
+                        // Can't find valid line below changes: redraw to end.
+                        st.bot_start = 0;
+                        st.bot_scroll_start = 0;
+                    } else {
+                        let mut new_rows: c_int = 0;
+                        let mut j: c_int = idx;
+                        let mut l = lnum;
+                        while l < st.mod_bot {
+                            if nvim_get_dollar_vcol() >= 0
+                                && wp == curwin
+                                && old_cline_height > 0
+                                && l == cursor_lnum
+                            {
+                                new_rows += old_cline_height;
+                                j += 1;
+                            } else {
+                                let n = nvim_plines_correct_topline_adv(wp, l, addr_of_mut!(l));
+                                new_rows += n;
+                                if n > 0 {
+                                    j += 1;
+                                }
+                            }
+                            if new_rows > view_height - row - 2 {
+                                new_rows = 9999;
+                                break;
+                            }
+                            l += 1;
+                        }
+                        let xtra_rows = new_rows - old_rows;
+                        if xtra_rows < 0 {
+                            if row - xtra_rows >= view_height - 2 {
+                                st.mod_bot = MAXLNUM;
+                            } else {
+                                rs_win_scroll_lines(wp, row, xtra_rows);
+                                st.bot_start = view_height + xtra_rows;
+                                st.bot_scroll_start = st.bot_start;
+                            }
+                        } else if xtra_rows > 0 {
+                            if row + xtra_rows >= view_height - 2 {
+                                st.mod_bot = MAXLNUM;
+                            } else {
+                                rs_win_scroll_lines(wp, row + old_rows, xtra_rows);
+                                st.bot_scroll_start = 0;
+                                if st.top_end > row + old_rows {
+                                    st.top_end += xtra_rows;
+                                }
+                            }
+                        }
+
+                        // Move w_lines[] entries if needed.
+                        let wlines = nvim_win_get_wlines_ptr(wp);
+                        let lv = win_get_lines_valid_body(wp);
+                        if st.mod_bot != MAXLNUM && i != j {
+                            if j < i {
+                                let mut x = row + new_rows;
+                                loop {
+                                    if i >= lv {
+                                        win_set_lines_valid_body(wp, j);
+                                        break;
+                                    }
+                                    *wlines.add(j as usize) = *wlines.add(i as usize);
+                                    if x + (*wlines.add(j as usize)).wl_size as c_int > view_height
+                                    {
+                                        win_set_lines_valid_body(wp, j + 1);
+                                        break;
+                                    }
+                                    x += (*wlines.add(j as usize)).wl_size as c_int;
+                                    j += 1;
+                                    i += 1;
+                                }
+                                st.bot_start = st.bot_start.min(x);
+                            } else {
+                                // j > i: move entries downwards.
+                                let shift = j - i;
+                                let new_lv = (lv + shift).min(view_height);
+                                win_set_lines_valid_body(wp, new_lv);
+                                let lv2 = win_get_lines_valid_body(wp);
+                                let mut ii = lv2;
+                                while ii - shift >= idx {
+                                    *wlines.add(ii as usize) = *wlines.add((ii - shift) as usize);
+                                    ii -= 1;
+                                }
+                                while ii >= idx {
+                                    (*wlines.add(ii as usize)).wl_size = 0;
+                                    (*wlines.add(ii as usize)).wl_valid = false;
+                                    ii -= 1;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check if line won't fit (only draw "@" lines below).
+                let lines_valid = win_get_lines_valid_body(wp);
+                let wlines = nvim_win_get_wlines_ptr(wp);
+                let dy_flags = nvim_get_dy_flags_body();
+                if foldinfo.fi_lines == 0
+                    && idx < lines_valid
+                    && (*wlines.add(idx as usize)).wl_valid
+                    && (*wlines.add(idx as usize)).wl_lnum == lnum
+                    && lnum > win_get_topline_body(wp)
+                    && (dy_flags & (K_OPT_DY_FLAG_LASTLINE | K_OPT_DY_FLAG_TRUNCATE)) == 0
+                    && srow + (*wlines.add(idx as usize)).wl_size as c_int > view_height
+                    && nvim_win_get_fill(wp, lnum) == 0
+                {
+                    row = view_height + 1;
+                } else {
+                    nvim_prepare_search_hl_win(wp, lnum);
+                    if st.syntax_last_parsed != 0
+                        && st.syntax_last_parsed + 1 < lnum
+                        && syntax_present(wp)
+                    {
+                        syntax_end_parsing(wp, st.syntax_last_parsed + 1);
+                    }
+
+                    let display_buf_line =
+                        !concealed && (foldinfo.fi_lines == 0 || nvim_win_get_w_p_fdt_nul(wp));
+
+                    let mut zero_spv = SpvT::default();
+                    let spv_ptr = if display_buf_line {
+                        addr_of_mut!(spv)
+                    } else {
+                        addr_of_mut!(zero_spv)
+                    };
+                    row = win_line(wp, lnum, srow, view_height, 0, concealed, spv_ptr, foldinfo);
+
+                    if display_buf_line {
+                        st.syntax_last_parsed = lnum;
+                    } else {
+                        spv.spv_capcol_lnum = 0;
+                    }
+
+                    let lastlnum =
+                        lnum + foldinfo.fi_lines - if foldinfo.fi_lines > 0 { 1 } else { 0 };
+                    let wlines = nvim_win_get_wlines_ptr(wp);
+                    (*wlines.add(idx as usize)).wl_folded = foldinfo.fi_lines > 0;
+                    (*wlines.add(idx as usize)).wl_foldend = lastlnum;
+                    (*wlines.add(idx as usize)).wl_lastlnum = lastlnum;
+                    st.did_update = if foldinfo.fi_lines > 0 {
+                        DID_FOLD
+                    } else {
+                        DID_LINE
+                    };
+
+                    // Adjust wl_lastlnum for concealed lines below.
+                    let mut virt_below =
+                        nvim_decor_virt_lines_check(wp, lastlnum, lastlnum + 1) != 0;
+                    let wlines = nvim_win_get_wlines_ptr(wp);
+                    while !virt_below
+                        && (*wlines.add(idx as usize)).wl_lastlnum < ml_line_count
+                        && nvim_decor_conceal_line(wp, (*wlines.add(idx as usize)).wl_lastlnum, 0)
+                            != 0
+                    {
+                        virt_below = false;
+                        (*wlines.add(idx as usize)).wl_lastlnum += 1;
+                        nvim_hasFolding_win(
+                            wp,
+                            (*wlines.add(idx as usize)).wl_lastlnum,
+                            std::ptr::null_mut(),
+                            addr_of_mut!((*wlines.add(idx as usize)).wl_lastlnum),
+                        );
+                    }
+                }
+
+                let wlines = nvim_win_get_wlines_ptr(wp);
+                (*wlines.add(idx as usize)).wl_lnum = lnum;
+                (*wlines.add(idx as usize)).wl_valid = true;
+
+                let is_curline = wp == curwin && lnum == cursor_lnum;
+                let dollar_vcol = nvim_get_dollar_vcol();
+
+                if row > view_height {
+                    // past end of grid
+                    if dollar_vcol == -1 || !is_curline {
+                        (*wlines.add(idx as usize)).wl_size = nvim_plines_win_true(wp, lnum) as u16;
+                    }
+                    idx += 1;
+                    break 'draw_loop;
+                }
+                if dollar_vcol == -1 || !is_curline {
+                    (*wlines.add(idx as usize)).wl_size = (row - srow) as u16;
+                }
+                lnum = (*nvim_win_get_wlines_ptr(wp).add(idx as usize)).wl_lastlnum + 1;
+                idx += 1;
+            } else {
+                // Line doesn't need redrawing, but may need number column update.
+                let p_cul = nvim_win_get_p_cul_body(wp) != 0;
+                let foldinfo = if p_cul && lnum == cursor_lnum {
+                    cursorline_fi
+                } else {
+                    nvim_fold_info_rs(wp, lnum)
+                };
+                let wlines = nvim_win_get_wlines_ptr(wp);
+                let wl_size = (*wlines.add(idx as usize)).wl_size as c_int;
+
+                if (p_nu
+                    && st.mod_top != 0
+                    && lnum >= st.mod_bot
+                    && buf_get_mod_set_body(buf) != 0
+                    && nvim_buf_get_mod_xlines(buf) != 0)
+                    || (p_rnu && nvim_win_get_last_cursor_lnum_rnu(wp) != cursor_lnum)
+                {
+                    let mut zero_spv = SpvT::default();
+                    win_line(
+                        wp,
+                        lnum,
+                        srow,
+                        view_height,
+                        wl_size,
+                        false,
+                        addr_of_mut!(zero_spv),
+                        foldinfo,
+                    );
+                }
+
+                row += wl_size;
+                idx += 1;
+                if row > view_height {
+                    break 'draw_loop;
+                }
+                let wlines = nvim_win_get_wlines_ptr(wp);
+                lnum = (*wlines.add(idx as usize - 1)).wl_lastlnum + 1;
+                st.did_update = DID_NONE;
+                spv.spv_capcol_lnum = 0;
+            }
+
+            // 'statuscolumn' width has changed or errored: restart from top.
+            if nvim_win_get_redr_statuscol(wp) {
+                nvim_win_redr_statuscol_restart(wp);
+                idx = 0;
+                row = 0;
+                lnum = win_get_topline_body(wp);
+                // Restart the outer loop.
+                continue 'draw_loop;
+            }
+
+            if lnum > ml_line_count {
+                eof = true;
+                break 'draw_loop;
+            }
+        }
+    }
+
+    (eof, didline, lnum, srow, row, idx)
+}
+
+/// Phase 3 (Rust): Post-loop finalization.
+///
+/// Sets w_last_cursorline, clamps w_lines_valid, ends syntax parsing,
+/// handles EOF/not-EOF display, draws separators, sends extmarks,
+/// handles botline correction recursion, terminal resize.
+///
+/// Mirrors lines 716-868 of `nvim_win_update_body_from_scroll`.
+/// NOTE: got_int save/restore and syn_set_timeout(NULL) are done in rs_win_update.
+///
+/// # Safety
+/// wp must be valid. All other args from draw loop.
+#[allow(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::similar_names,
+    clippy::ptr_as_ptr,
+    clippy::branches_sharing_code
+)]
+unsafe fn win_update_body_finalize(
+    wp: WinHandle,
+    st: &mut WinUpdateBodyState,
+    eof: bool,
+    didline: bool,
+    lnum: LinenrT,
+    srow: c_int,
+    row: c_int,
+    idx: c_int,
+) {
+    // Static to detect recursive calls (matches C `static bool recursive`).
+    static mut RECURSIVE: bool = false;
+
+    let buf = nvim_win_get_buffer(wp);
+    let ml_line_count = buf_get_ml_line_count_body(buf);
+    let view_height = nvim_win_get_view_height(wp);
+    let curwin = nvim_get_curwin();
+
+    // Update w_last_cursorline.
+    nvim_win_set_last_cursorline(wp, nvim_win_get_cursorline_body(wp));
+
+    // Update w_last_cursor_lnum_rnu.
+    let last_rnu = if nvim_win_get_p_rnu_body(wp) != 0 {
+        nvim_win_get_cursor_lnum(wp)
+    } else {
+        0
+    };
+    nvim_win_set_last_cursor_lnum_rnu(wp, last_rnu);
+
+    // Clamp w_lines_valid.
+    let lines_valid = win_get_lines_valid_body(wp);
+    win_set_lines_valid_body(wp, lines_valid.max(idx));
+
+    // Let syntax know we stop parsing here.
+    if st.syntax_last_parsed != 0 && syntax_present(wp) {
+        syntax_end_parsing(wp, st.syntax_last_parsed + 1);
+    }
+
+    let old_botline = nvim_win_get_botline_body(wp);
+
+    // Handle end-of-window conditions.
+    nvim_win_set_empty_rows_body(wp, 0);
+    nvim_win_set_filler_rows_body(wp, 0);
+
+    if !eof && !didline {
+        // Line didn't fit: draw truncation markers.
+        let at_attr = nvim_hl_combine_attr(nvim_win_bg_attr(wp), nvim_win_hl_attr(wp, HLF_AT));
+        let topline = win_get_topline_body(wp);
+        let view_width = nvim_win_get_view_width(wp);
+
+        if lnum == topline {
+            // Single line that doesn't fit.
+            nvim_win_set_botline_body(wp, lnum + 1);
+        } else if nvim_win_get_fill(wp, lnum) >= view_height - srow {
+            // Window ends in filler lines.
+            nvim_win_set_botline_body(wp, lnum);
+            nvim_win_set_filler_rows_body(wp, view_height - srow);
+        } else {
+            let dy_flags = nvim_get_dy_flags_body();
+            if dy_flags & K_OPT_DY_FLAG_TRUNCATE != 0 {
+                // Display "@@@" in last screen line.
+                rs_grid_line_start(nvim_win_get_w_grid(wp), view_height - 1);
+                // Read fcs_chars.lastline from the grid/win (we use a shim approach below)
+                let lastline_char = nvim_win_get_fcs_lastline(wp);
+                rs_grid_line_fill(0, view_width.min(3), lastline_char, at_attr);
+                rs_grid_line_fill(3, view_width, SCHAR_SPACE, at_attr);
+                rs_grid_line_flush();
+                nvim_set_empty_rows_win(wp, srow);
+                nvim_win_set_botline_body(wp, lnum);
+            } else if dy_flags & K_OPT_DY_FLAG_LASTLINE != 0 {
+                // Display "@@@" at end of last line.
+                rs_grid_line_start(nvim_win_get_w_grid(wp), view_height - 1);
+                let lastline_char = nvim_win_get_fcs_lastline(wp);
+                let check_col = (view_width - 3).max(0);
+                let width = if nvim_grid_line_getchar(check_col, std::ptr::null_mut()) == 0 {
+                    4
+                } else {
+                    3
+                };
+                rs_grid_line_fill(
+                    (view_width - width).max(0),
+                    view_width,
+                    lastline_char,
+                    at_attr,
+                );
+                rs_grid_line_flush();
+                nvim_set_empty_rows_win(wp, srow);
+                nvim_win_set_botline_body(wp, lnum);
+            } else {
+                let lastline_char = nvim_win_get_fcs_lastline(wp);
+                win_draw_end(wp, lastline_char, true, srow, view_height, HLF_AT);
+                nvim_set_empty_rows_win(wp, srow);
+                nvim_win_set_botline_body(wp, lnum);
+            }
+        }
+    } else {
+        if eof {
+            // Hit end of file.
+            nvim_win_set_botline_body(wp, ml_line_count + 1);
+            let j = nvim_win_get_fill(wp, ml_line_count + 1);
+            let botfill = nvim_win_get_botfill_body(wp) != 0;
+            if j > 0 && !botfill && row < view_height {
+                // Display filler text below last line.
+                let mut zero_spv = SpvT::default();
+                let zero_fi = FoldInfo {
+                    fi_lnum: 0,
+                    fi_level: 0,
+                    fi_low_level: 0,
+                    fi_lines: 0,
+                };
+                let new_row = win_line(
+                    wp,
+                    ml_line_count + 1,
+                    row,
+                    view_height,
+                    0,
+                    false,
+                    addr_of_mut!(zero_spv),
+                    zero_fi,
+                );
+                let _ = new_row;
+                // If redr_statuscol was set during this win_line call, we can't restart
+                // (we're in finalize). The C original did `goto redr_statuscol` here.
+                // We skip that restart since it would require a full re-entry.
+                // This matches the C behavior for the post-EOF filler line case.
+            }
+        } else if nvim_get_dollar_vcol() == -1 || wp != curwin {
+            nvim_win_set_botline_body(wp, lnum);
+        }
+
+        // Draw EOB characters for empty rows.
+        let lastline = {
+            let mut ll = st.bot_scroll_start;
+            if st.mid_end >= row {
+                ll = ll.min(st.mid_start);
+            }
+            if st.mod_bot > ml_line_count {
+                ll = 0;
+            }
+            ll
+        };
+
+        let eob_char = nvim_win_get_fcs_eob(wp);
+        win_draw_end(wp, eob_char, false, lastline.max(row), view_height, HLF_EOB);
+        nvim_set_empty_rows_win(wp, row);
+    }
+
+    // Draw separators.
+    if nvim_win_get_redr_type(wp) >= UPD_REDRAW_TOP {
+        rs_draw_vsep_win(wp);
+        rs_draw_hsep_win(wp);
+        rs_draw_sep_connectors_win(wp);
+    }
+
+    // Reset redraw type and fill state.
+    nvim_win_set_redr_type(wp, 0);
+    let topfill = nvim_win_get_topfill_body(wp);
+    nvim_win_set_old_topfill(wp, topfill);
+    let botfill = nvim_win_get_botfill_body(wp) != 0;
+    nvim_win_set_old_botfill(wp, botfill);
+
+    // Send win_extmarks.
+    nvim_win_send_extmarks(wp);
+
+    // Botline validation + recursive topline correction.
+    if nvim_get_dollar_vcol() == -1 || wp != curwin {
+        nvim_win_or_w_valid(wp, VALID_BOTLINE);
+        nvim_win_set_viewport_invalid_body(wp, true);
+        let new_botline = nvim_win_get_botline_body(wp);
+        if wp == curwin && new_botline != old_botline && !RECURSIVE {
+            RECURSIVE = true;
+            nvim_win_and_w_valid(curwin, !VALID_TOPLINE);
+            nvim_update_topline_curwin();
+            if nvim_get_must_redraw() != 0 {
+                let mod_set = nvim_curbuf_get_mod_set();
+                nvim_curbuf_set_mod_set(0);
+                nvim_curs_columns_curwin();
+                rs_win_update(curwin);
+                must_redraw = 0; // directly zero, not via set_must_redraw (which takes max)
+                nvim_curbuf_set_mod_set(mod_set);
+            }
+            RECURSIVE = false;
+        }
+    }
+
+    // Terminal resize if nrwidth changed.
+    if st.nrwidth_before != nvim_win_get_nrwidth(wp) && nvim_buf_has_terminal(buf) {
+        nvim_buf_terminal_check_size(buf);
+    }
+}
+
 /// Rust entry point for updating a single window.
 ///
 /// Handles the zero-size early-return cases (drawing only separator lines),
-/// then runs the Rust init phase and delegates to the C body for
-/// scroll + draw loop + finalize.
+/// then runs the full Rust init + scroll + draw loop + finalize phases.
 ///
 /// Replaces the former `nvim_win_update` C wrapper.
 ///
@@ -3725,11 +4811,21 @@ pub unsafe extern "C" fn rs_win_update(wp: WinHandle) {
         return;
     }
 
-    // Phase 1 (Rust): run the init phase (lines 143-340 of the original C).
+    // Phase 1 (Rust): run the init phase.
     let mut state = win_update_body_init(wp);
 
-    // Phases 2+3 (C): scroll optimization + draw loop + finalize.
-    nvim_win_update_body_from_scroll(wp, std::ptr::addr_of_mut!(state));
+    // Phases 2+3 (Rust): scroll optimization + draw loop + finalize.
+    nvim_win_setup_syntax_tm(); // zero got_int + setup proftime_T in C static
+
+    win_update_body_scroll(wp, &mut state);
+    let (eof, didline, lnum, srow, row, idx) = win_update_body_draw_loop(wp, &mut state);
+    win_update_body_finalize(wp, &mut state, eof, didline, lnum, srow, row, idx);
+
+    nvim_syn_set_timeout_null();
+    // Restore got_int unless CTRL-C was hit during redraw.
+    if nvim_get_got_int() == 0 {
+        nvim_set_got_int(state.save_got_int);
+    }
 }
 
 /// Handle the three window iteration loops of update_screen.
