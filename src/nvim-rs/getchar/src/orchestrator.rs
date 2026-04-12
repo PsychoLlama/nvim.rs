@@ -105,7 +105,7 @@ extern "C" {
     fn ga_clear(gap: *mut GarrayT);
 
     // Error message and translation
-    fn emsg(s: *const std::ffi::c_char);
+    fn emsg(s: *const std::ffi::c_char) -> bool;
     fn gettext(msgid: *const std::ffi::c_char) -> *const std::ffi::c_char;
 
     // got_int global

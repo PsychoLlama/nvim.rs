@@ -1697,6 +1697,129 @@ unsafe fn libc_fprintf_stderr(fmt: *const c_char, name: *const c_char, err: *con
     fprintf(stderr, fmt, name, err);
 }
 
+// =============================================================================
+// openscript -- Phase 2 Rust migration
+// =============================================================================
+
+use nvim_normal::types::OpargT;
+
+/// Maximum path length (matches C `MAXPATHL`).
+const MAXPATHL: c_int = 4096;
+
+/// Normal mode state flag.
+const MODE_NORMAL: c_int = 0x01;
+
+extern "C" {
+    /// Error string for nested scripts (e_nesting).
+    static e_nesting: c_char;
+    /// Error string for file-not-opened (e_notopen_2, 2-arg semsg).
+    static e_notopen_2: c_char;
+    /// Expand environment variables: `expand_env(src, dst, dstlen)`.
+    fn expand_env(src: *const c_char, dst: *mut c_char, dstlen: c_int);
+    /// Display a simple error message.
+    fn emsg(s: *const c_char) -> bool;
+    /// Display a formatted error message with two extra args.
+    fn semsg(fmt: *const c_char, ...) -> bool;
+    /// Get pointer to the `NameBuff` global buffer.
+    fn nvim_get_NameBuff() -> *mut c_char;
+    /// Return true (nonzero) if sandbox mode is active.
+    fn rs_check_secure() -> c_int;
+    /// Call `normal_cmd(oap, false)` to execute one Normal-mode command.
+    fn normal_cmd(oap: *mut OpargT, toplevel: bool);
+    /// Zero-initialize an `oparg_T`.
+    fn clear_oparg(oap: *mut OpargT);
+    /// Update cursor position and topline.
+    fn update_topline_cursor();
+    /// Peek at next character in the typeahead buffer.
+    fn vpeekc() -> c_int;
+    /// `finish_op`: whether an operator is pending.
+    static mut finish_op: bool;
+    /// `restart_edit`: nonzero when re-entering insert mode.
+    static mut restart_edit: c_int;
+    /// `msg_scroll`: whether messages have been scrolled.
+    static mut msg_scroll: c_int;
+}
+
+/// `openscript(char *name, bool directly)` -- Phase 2 Rust replacement.
+///
+/// Opens a new script file for the `:source!` command.
+///
+/// When `directly` is true, executes all commands from the file immediately
+/// (synchronously), without updating the display.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string.
+#[unsafe(export_name = "openscript")]
+pub unsafe extern "C" fn rs_openscript(name: *const c_char, directly: bool) {
+    if curscript + 1 == NSCRIPT as c_int {
+        emsg(std::ptr::addr_of!(e_nesting).cast());
+        return;
+    }
+
+    // Disallow sourcing a file in the sandbox.
+    if rs_check_secure() != 0 {
+        return;
+    }
+
+    if ignore_script {
+        return;
+    }
+
+    curscript += 1;
+    // Use NameBuff for expanded name.
+    let name_buff = nvim_get_NameBuff();
+    expand_env(name, name_buff, MAXPATHL);
+    let error = file_open(
+        std::ptr::addr_of_mut!(scriptin[curscript as usize]),
+        name_buff,
+        K_FILE_READ_ONLY,
+        0,
+    );
+    if error != 0 {
+        semsg(
+            std::ptr::addr_of!(e_notopen_2).cast(),
+            name,
+            uv_strerror(error),
+        );
+        curscript -= 1;
+        return;
+    }
+    rs_save_typebuf_impl();
+
+    // Execute the commands from the file right now when using ":source!"
+    // after ":global" or ":argdo" or in a loop.  Also when another command
+    // follows.  This means the display won't be updated.  Don't do this
+    // always, "make test" would fail.
+    if directly {
+        let mut oa = OpargT::default();
+        let save_state = State;
+        let save_restart_edit = restart_edit;
+        let save_finish_op = finish_op;
+        let save_msg_scroll = msg_scroll;
+
+        State = MODE_NORMAL;
+        msg_scroll = 0; // no msg scrolling in Normal mode (bool -> 0/1)
+        restart_edit = 0; // don't go to Insert mode
+        clear_oparg(std::ptr::addr_of_mut!(oa));
+        finish_op = false;
+
+        let oldcurscript = curscript;
+        loop {
+            update_topline_cursor(); // update cursor position and topline
+            normal_cmd(std::ptr::addr_of_mut!(oa), false); // execute one command
+            vpeekc(); // check for end of file
+            if curscript < oldcurscript {
+                break;
+            }
+        }
+
+        State = save_state;
+        msg_scroll = save_msg_scroll;
+        restart_edit = save_restart_edit;
+        finish_op = save_finish_op;
+    }
+}
+
 /// `inchar(uint8_t *buf, int maxlen, long wait_time)` -- Phase 5 Rust replacement.
 ///
 /// Gets characters from a script file or keyboard into `buf`.

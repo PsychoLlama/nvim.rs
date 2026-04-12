@@ -196,7 +196,7 @@ extern "C" {
     fn nvim_rt_emsg_norange();
     fn nvim_rt_emsg_argreq();
     fn nvim_rt_semsg_notopen(fname: *const c_char);
-    fn nvim_rt_openscript(fname: *const c_char, directly: bool);
+    fn openscript(fname: *const c_char, directly: bool);
     fn nvim_rt_get_global_busy() -> c_int;
     fn nvim_rt_get_listcmd_busy() -> c_int;
     fn nvim_rt_exarg_get_nextcmd(eap: *mut c_void) -> *const c_char;
@@ -761,7 +761,7 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
             || nvim_rt_get_listcmd_busy() != 0
             || !nvim_rt_exarg_get_nextcmd(eap).is_null()
             || nvim_rt_exarg_get_cstack_idx(eap) >= 0;
-        nvim_rt_openscript(fname, directly);
+        openscript(fname, directly);
     } else if rs_do_source(fname, false, doso::NONE, ptr::null_mut()) == FAIL {
         nvim_rt_semsg_notopen(fname);
     }

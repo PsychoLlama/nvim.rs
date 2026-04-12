@@ -143,69 +143,7 @@ static const char e_recursive_mapping[] = N_("E223: Recursive mapping");
 // rs_save_typebuf, rs_close_typebuf (in nvim-getchar crate)
 
 // save_typeahead / restore_typeahead moved to Rust (typebuf.rs) as #[export_name] fns
-
-/// Open a new script file for the ":source!" command.
-///
-/// @param directly  when true execute directly
-void openscript(char *name, bool directly)
-{
-  if (curscript + 1 == NSCRIPT) {
-    emsg(_(e_nesting));
-    return;
-  }
-
-  // Disallow sourcing a file in the sandbox, the commands would be executed
-  // later, possibly outside of the sandbox.
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (ignore_script) {
-    // Not reading from script, also don't open one.  Warning message?
-    return;
-  }
-
-  curscript++;
-  // use NameBuff for expanded name
-  expand_env(name, NameBuff, MAXPATHL);
-  int error = file_open(&scriptin[curscript], NameBuff, kFileReadOnly, 0);
-  if (error) {
-    semsg(_(e_notopen_2), name, os_strerror(error));
-    curscript--;
-    return;
-  }
-  rs_save_typebuf();
-
-  // Execute the commands from the file right now when using ":source!"
-  // after ":global" or ":argdo" or in a loop.  Also when another command
-  // follows.  This means the display won't be updated.  Don't do this
-  // always, "make test" would fail.
-  if (directly) {
-    oparg_T oa;
-    int save_State = State;
-    int save_restart_edit = restart_edit;
-    int save_finish_op = finish_op;
-    int save_msg_scroll = msg_scroll;
-
-    State = MODE_NORMAL;
-    msg_scroll = false;         // no msg scrolling in Normal mode
-    restart_edit = 0;           // don't go to Insert mode
-    clear_oparg(&oa);
-    finish_op = false;
-
-    int oldcurscript = curscript;
-    do {
-      update_topline_cursor();          // update cursor position and topline
-      normal_cmd(&oa, false);           // execute one command
-      vpeekc();                   // check for end of file
-    } while (curscript >= oldcurscript);
-
-    State = save_State;
-    msg_scroll = save_msg_scroll;
-    restart_edit = save_restart_edit;
-    finish_op = save_finish_op;
-  }
-}
+// openscript moved to Rust (typebuf.rs, Phase 2) as #[unsafe(export_name = "openscript")]
 
 // closescript, close_all_scripts, open_scriptin moved to Rust (typebuf.rs, Phase 5)
 // rs_closescript is the Rust implementation; close_all_scripts and open_scriptin

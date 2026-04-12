@@ -885,8 +885,7 @@ void nvim_rt_os_setenv(const char *name, const char *val, int overwrite) { os_se
 /// SYS_OPTWIN_FILE constant.
 const char *nvim_rt_SYS_OPTWIN_FILE(void) { return SYS_OPTWIN_FILE; }
 
-/// openscript wrapper.
-void nvim_rt_openscript(const char *fname, bool directly) { openscript((char *)fname, directly); }
+// nvim_rt_openscript deleted: openscript now exported directly from Rust (typebuf.rs, Phase 2)
 
 /// global_busy / listcmd_busy accessors.
 int nvim_rt_get_global_busy(void) { return global_busy; }

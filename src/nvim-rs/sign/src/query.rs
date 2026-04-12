@@ -4,10 +4,43 @@
 
 use std::ffi::{c_char, c_int};
 
+use nvim_decoration::types::{DecorInline, DecorSignHighlight, MTKey, MTPair};
+
 use crate::{
     text::describe_sign_text_impl, DecorSignHighlightHandle, LinenrT, MTKeyHandle, SignBufHandle,
     NS_ALL, NS_GLOBAL, NS_INVALID,
 };
+
+// Flag constants (from marktree)
+const MT_FLAG_DECOR_EXT: u16 = 1 << 7;
+const MT_FLAG_DECOR_SIGNTEXT: u16 = 1 << 9;
+const MT_FLAG_DECOR_SIGNHL: u16 = 1 << 10;
+
+/// Convert an MTKey to a DecorInline for use with decor_find_sign.
+#[allow(dead_code)]
+#[inline]
+fn mtkey_to_decor_inline(key: &MTKey) -> DecorInline {
+    DecorInline {
+        ext: (key.flags & MT_FLAG_DECOR_EXT) != 0,
+        _pad: [0; 7],
+        data: key.decor_data,
+    }
+}
+
+/// Check if an MTKey is a sign decoration.
+#[allow(dead_code)]
+#[inline]
+fn mtkey_is_decor_sign(key: &MTKey) -> bool {
+    (key.flags & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL)) != 0
+}
+
+/// Check if an MTKey is an end mark.
+#[allow(dead_code)]
+#[inline]
+fn mtkey_is_end(key: &MTKey) -> bool {
+    const MT_FLAG_END: u16 = 1 << 1;
+    (key.flags & MT_FLAG_END) != 0
+}
 
 // =============================================================================
 // C Accessor Extern Declarations
@@ -35,7 +68,7 @@ extern "C" {
     // Error reporting
     fn semsg(fmt: *const c_char, ...);
 
-    // Display/listing composite accessors
+    // Display/listing composite accessors (sign_list_placed_impl not yet migrated)
     fn nvim_sign_list_placed_impl(rbuf: SignBufHandle, group: *const c_char);
 
     // Message functions for sign_list_defined
@@ -48,6 +81,65 @@ extern "C" {
         idx: c_int,
         skip_cleared: bool,
     ) -> *const c_char;
+
+    // Phase 1: decor_find_sign — exported from nvim-decoration crate
+    fn decor_find_sign(decor: DecorInline) -> *mut DecorSignHighlight;
+
+    // Phase 1: dict/list construction
+    fn tv_dict_alloc() -> *mut std::ffi::c_void;
+    fn tv_dict_add_str(
+        d: *mut std::ffi::c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    );
+    fn tv_dict_add_nr(d: *mut std::ffi::c_void, key: *const c_char, key_len: usize, nr: i64);
+    fn tv_list_alloc(len: i64) -> *mut std::ffi::c_void;
+    fn tv_list_append_dict(l: *mut std::ffi::c_void, d: *mut std::ffi::c_void);
+
+    // Phase 1: message functions for list_placed
+    fn msg_puts_title(s: *const c_char);
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    fn msg_puts(s: *const c_char);
+    fn msg_putchar(c: c_int);
+    fn vim_snprintf(dst: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+
+    // Phase 1: global state
+    static mut got_int: bool;
+    fn nvim_get_firstbuf() -> SignBufHandle;
+    fn nvim_buf_get_next(buf: SignBufHandle) -> SignBufHandle;
+
+    // Phase 1: marktree iteration (heap-allocated iterator)
+    fn nvim_marktree_itr_alloc() -> *mut std::ffi::c_void;
+    fn nvim_marktree_itr_free(itr: *mut std::ffi::c_void);
+    fn rs_marktree_itr_get(
+        b: *mut std::ffi::c_void,
+        row: c_int,
+        col: c_int,
+        itr: *mut std::ffi::c_void,
+    );
+    fn rs_marktree_itr_current(itr: *mut std::ffi::c_void) -> MTKey;
+    fn rs_marktree_itr_next(b: *mut std::ffi::c_void, itr: *mut std::ffi::c_void) -> bool;
+    fn rs_marktree_itr_get_overlap(
+        b: *mut std::ffi::c_void,
+        row: c_int,
+        col: c_int,
+        itr: *mut std::ffi::c_void,
+    ) -> bool;
+    fn rs_marktree_itr_step_overlap(
+        b: *mut std::ffi::c_void,
+        itr: *mut std::ffi::c_void,
+        pair: *mut MTPair,
+    ) -> bool;
+    fn extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
+
+    // Phase 1: buffer marktree handle
+    fn nvim_buf_get_marktree(buf: SignBufHandle) -> *mut std::ffi::c_void;
+    fn nvim_buf_get_fnum(buf: SignBufHandle) -> c_int;
+    fn nvim_buf_get_fname(buf: SignBufHandle) -> *const c_char;
+
+    // Phase 1: iterator validity check
+    fn nvim_mtitr_has_x(itr: *const std::ffi::c_void) -> bool;
 }
 
 const E155_FMT: &[u8] = b"E155: Unknown sign: %s\0";

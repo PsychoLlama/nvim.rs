@@ -372,7 +372,7 @@ extern "C" {
     fn setcursor();
 
     /// emsg: display an error message
-    fn emsg(s: *const c_char);
+    fn emsg(s: *const c_char) -> bool;
 
     /// gettext: translate a message string
     fn gettext(msgid: *const c_char) -> *const c_char;
