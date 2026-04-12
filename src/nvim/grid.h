@@ -85,3 +85,5 @@ void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol
 void grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width);
 void grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width);
 void grid_assign_handle(ScreenGrid *grid);
+void grid_free(ScreenGrid *grid);
+win_T *get_win_by_grid_handle(handle_T handle);
