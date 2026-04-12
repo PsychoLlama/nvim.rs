@@ -20,6 +20,7 @@ pub mod exit;
 pub mod helpers;
 pub mod init;
 pub mod lifecycle;
+pub mod main_body;
 pub mod output;
 pub mod remote;
 pub mod scan;

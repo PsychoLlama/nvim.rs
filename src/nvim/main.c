@@ -331,6 +331,100 @@ bool nvim_paramp_get_clean(const mparm_T *paramp) { return paramp->clean; }
 // Forward declaration for Rust-exported symbol
 extern void early_init(mparm_T *paramp);
 
+// =============================================================================
+// C accessors for rs_main_server_setup / rs_main_post_startup / rs_main_enter_loop
+// =============================================================================
+
+// server setup helpers
+void nvim_diff_win_options_firstwin(void) { diff_win_options(firstwin, false); }
+
+void nvim_setup_cmdline_row(void)
+{
+  assert(p_ch >= 0 && Rows >= p_ch && Rows - p_ch <= INT_MAX);
+  cmdline_row = Rows - (int)p_ch;
+  msg_row = cmdline_row;
+}
+
+void nvim_sync_firstwin_height(void) { firstwin->w_prev_height = firstwin->w_height; }
+
+// Opens scriptout file; returns false and prints error if it fails.
+bool nvim_open_scriptout(char *path, bool append)
+{
+  scriptout = os_fopen(path, append ? APPENDBIN : WRITEBIN);
+  if (scriptout == NULL) {
+    fprintf(stderr, _("Cannot open for script output: \""));
+    fprintf(stderr, "%s\"\n", path);
+    return false;
+  }
+  return true;
+}
+
+// Returns true if use_vimrc is "NONE".
+bool nvim_vimrc_is_none(const mparm_T *parmp) { return strequal(parmp->use_vimrc, "NONE"); }
+
+void nvim_set_p_lpl(bool val) { p_lpl = val; }
+
+// post-startup helpers
+void nvim_set_vv_vim_did_init(void) { set_vim_var_nr(VV_VIM_DID_INIT, 1); }
+void nvim_set_p_uc_zero(void) { p_uc = 0; }
+void nvim_set_p_ut_one(void) { p_ut = 1; }
+bool nvim_p_shada_is_empty(void) { return p_shada == NULL || *p_shada == NUL; }
+bool nvim_vv_oldfiles_is_null(void) { return get_vim_var_list(VV_OLDFILES) == NULL; }
+void nvim_init_vv_oldfiles(void) { set_vim_var_list(VV_OLDFILES, tv_list_alloc(0)); }
+
+void nvim_redraw_later_curwin(void) { redraw_later(curwin, UPD_VALID); }
+
+void nvim_clear_vv_swapcommand(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
+
+void nvim_set_curwin_lnum_to_last_line(void)
+{
+  curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
+}
+
+void nvim_apply_event_bufenter(void)
+{
+  apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
+}
+
+// FOR_ALL_WINDOWS_IN_TAB over curtab: apply diff_win_options to non-invalid windows.
+void nvim_diff_win_options_curtab(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (!wp->w_arg_idx_invalid) {
+      diff_win_options(wp, true);
+    }
+  }
+}
+
+// Sets starting=0, RedrawingDisabled=0.
+void nvim_clear_starting_state(void) { starting = 0; RedrawingDisabled = 0; }
+
+// enter-loop helpers
+void nvim_set_vv_vim_did_enter(void) { set_vim_var_nr(VV_VIM_DID_ENTER, 1); }
+
+void nvim_apply_event_vimenter(void)
+{
+  apply_autocmds(EVENT_VIMENTER, NULL, NULL, false, curbuf);
+}
+
+void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
+
+bool nvim_curwin_needs_scrollbind_sync(void) { return curwin->w_p_diff && curwin->w_p_scb; }
+
+// nvim_update_topline_curwin defined in eval_shim.c
+// nvim_get_restart_edit defined in ex_docmd.c
+// Returns a pointer to IObuff for error messages.
+const char *nvim_get_ioerr_ptr(void) { return IObuff; }
+
+void nvim_stuffchar_K_NOP(void) { stuffcharReadbuff(K_NOP); }
+
+bool nvim_has_clipboard_flags(void) { return (cb_flags & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus)) != 0; }
+
+// Rust entry points
+extern void rs_main_server_setup(mparm_T *parmp);
+extern void rs_main_post_startup(mparm_T *parmp, const char *fname, char *cwd, bool use_remote_ui);
+extern void rs_main_enter_loop(mparm_T *parmp, bool use_remote_ui) FUNC_ATTR_NORETURN;
+
 #ifdef MAKE_LIB
 int nvim_main(int argc, char **argv);  // silence -Wmissing-prototypes
 int nvim_main(int argc, char **argv)
@@ -440,271 +534,13 @@ int main(int argc, char **argv)
   assert(!ui_client_channel_id && !use_builtin_ui);
   // Nvim server...
 
-  if (!server_init(params.listen_addr)) {
-    rs_mainerr(IObuff, NULL, NULL);
-  }
+  // Server setup, vimrc sourcing, plugin loading.
+  setbuf(stdout, NULL);  // NOLINT(bugprone-unsafe-functions) -- must stay in C (macros)
+  rs_main_server_setup(&params);
 
-  TIME_MSG("expanding arguments");
-
-  if (params.diff_mode && params.window_count == -1) {
-    params.window_count = 0;            // open up to 3 windows
-  }
-  // Don't redraw until much later.
-  RedrawingDisabled++;
-
-  setbuf(stdout, NULL);  // NOLINT(bugprone-unsafe-functions)
-
-  full_screen = !silent_mode;
-
-  // Set the default values for the options that use Rows and Columns.
-  win_init_size();
-  // Set the 'diff' option now, so that it can be checked for in a vimrc
-  // file.  There is no buffer yet though.
-  if (params.diff_mode) {
-    diff_win_options(firstwin, false);
-  }
-
-  assert(p_ch >= 0 && Rows >= p_ch && Rows - p_ch <= INT_MAX);
-  cmdline_row = Rows - (int)p_ch;
-  msg_row = cmdline_row;
-  default_grid_alloc();  // allocate screen buffers
-  set_init_2(headless_mode);
-  TIME_MSG("inits 2");
-
-  msg_scroll = true;
-  no_wait_return = true;
-
-  init_highlight(true, false);  // Default highlight groups.
-  ui_comp_syn_init();
-  TIME_MSG("init highlight");
-
-  // Set the break level after the terminal is initialized.
-  debug_break_level = params.use_debug_break_level;
-
-  // Read ex-commands if invoked with "-es".
-  if (!stdin_isatty && !params.input_istext && silent_mode && exmode_active) {
-    input_start();
-  }
-
-  // Wait for UIs to set up Nvim or show early messages
-  // and prompts (--cmd, swapfile dialog, …).
+  // Post-startup: plugins, ShaDa, windows, buffers.
   bool use_remote_ui = (embedded_mode && !headless_mode);
-  bool listen_and_embed = params.listen_addr != NULL;
-  if (use_remote_ui) {
-    TIME_MSG("waiting for UI");
-    remote_ui_wait_for_attach(!listen_and_embed);
-    TIME_MSG("done waiting for UI");
-    firstwin->w_prev_height = firstwin->w_height;  // may have changed
-  }
-
-  // prepare screen now
-  starting = NO_BUFFERS;
-  screenclear();
-  win_new_screensize();
-  TIME_MSG("clear screen");
-
-  // Handle "foo | nvim". EDIT_FILE may be overwritten now. #6299
-  if (edit_stdin(&params)) {
-    params.edit_type = EDIT_STDIN;
-  }
-
-  if (params.scriptin) {
-    if (!open_scriptin(params.scriptin)) {
-      os_exit(2);
-    }
-  }
-  if (params.scriptout) {
-    scriptout = os_fopen(params.scriptout, params.scriptout_append ? APPENDBIN : WRITEBIN);
-    if (scriptout == NULL) {
-      fprintf(stderr, _("Cannot open for script output: \""));
-      fprintf(stderr, "%s\"\n", params.scriptout);
-      os_exit(2);
-    }
-  }
-
-  nlua_init_defaults();
-
-  TIME_MSG("init default mappings & autocommands");
-
-  bool vimrc_none = strequal(params.use_vimrc, "NONE");
-
-  // Reset 'loadplugins' for "-u NONE" before "--cmd" arguments.
-  // Allows for setting 'loadplugins' there.
-  // For --clean we still want to load plugins.
-  p_lpl = vimrc_none ? params.clean : p_lpl;
-
-  // Execute --cmd arguments.
-  rs_exe_pre_commands(&params);
-  TIME_MSG("--cmd commands");
-
-  if (!vimrc_none || params.clean) {
-    // Sources ftplugin.vim and indent.vim. We do this *before* the user startup scripts to ensure
-    // ftplugins run before FileType autocommands defined in the init file (which allows those
-    // autocommands to overwrite settings from ftplugins).
-    filetype_plugin_enable();
-  }
-
-  // Source startup scripts.
-  rs_source_startup_scripts(&params);
-  TIME_MSG("sourcing vimrc file(s)");
-
-  // If using the runtime (-u is not NONE), enable syntax & filetype plugins.
-  if (!vimrc_none || params.clean) {
-    // Sources filetype.lua unless the user explicitly disabled it with :filetype off.
-    filetype_maybe_enable();
-    // Sources syntax/syntax.vim. We do this *after* the user startup scripts so that users can
-    // disable syntax highlighting with `:syntax off` if they wish.
-    syn_maybe_enable();
-  }
-
-  set_vim_var_nr(VV_VIM_DID_INIT, 1);
-
-  // Read all the plugin files.
-  load_plugins();
-
-  // Decide about window layout for diff mode after reading vimrc.
-  rs_set_window_layout(&params);
-
-  // Recovery mode without a file name: List swap files.
-  // Uses the 'dir' option, therefore it must be after the initializations.
-  if (recoverymode && fname == NULL) {
-    extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
-                                char **fname_out);
-    rs_recover_names(NULL, true, NULL, 0, NULL);
-    os_exit(0);
-  }
-
-  // Set some option defaults after reading vimrc files.
-  set_init_3();
-  TIME_MSG("inits 3");
-
-  // "-n" argument: Disable swap file by setting 'updatecount' to 0.
-  // Note that this overrides anything from a vimrc file.
-  if (params.no_swap_file) {
-    p_uc = 0;
-  }
-
-  // XXX: Minimize 'updatetime' for -es/-Es. #7679
-  if (silent_mode) {
-    p_ut = 1;
-  }
-
-  // Read in registers, history etc, from the ShaDa file.
-  // This is where v:oldfiles gets filled.
-  if (*p_shada != NUL) {
-    rs_shada_read_everything(NULL, false, true);
-    TIME_MSG("reading ShaDa");
-  }
-  // It's better to make v:oldfiles an empty list than NULL.
-  if (get_vim_var_list(VV_OLDFILES) == NULL) {
-    set_vim_var_list(VV_OLDFILES, tv_list_alloc(0));
-  }
-
-  // "-q errorfile": Load the error file now.
-  // If the error file can't be read, exit before doing anything else.
-  rs_handle_quickfix(&params);
-  if (params.edit_type == EDIT_QF) {
-    TIME_MSG("reading errorfile");
-  }
-
-  //
-  // Start putting things on the screen.
-  // Scroll screen down before drawing over it
-  // Clear screen now, so file message will not be cleared.
-  //
-  starting = NO_BUFFERS;
-  no_wait_return = false;
-  if (!exmode_active) {
-    msg_scroll = false;
-  }
-
-  // Read file (text, not commands) from stdin if:
-  //    - stdin is not a tty
-  //    - and -e/-es was not given
-  //
-  // Do this before starting Raw mode, because it may change things that the
-  // writing end of the pipe doesn't like, e.g., in case stdin and stderr
-  // are the same terminal: "cat | vim -".
-  // Using autocommands here may cause trouble...
-  if (params.edit_type == EDIT_STDIN && !recoverymode) {
-    rs_read_stdin();
-  }
-
-  setmouse();  // may start using the mouse
-
-  redraw_later(curwin, UPD_VALID);
-
-  no_wait_return = true;
-
-  // Create the requested number of windows and edit buffers in them.
-  // Also does recovery if "recoverymode" set.
-  rs_create_windows(&params);
-  TIME_MSG("opening buffers");
-
-  // Clear v:swapcommand
-  set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
-
-  // Ex starts at last line of the file.
-  if (exmode_active) {
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-  }
-
-  apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
-  TIME_MSG("BufEnter autocommands");
-  setpcmark();
-
-  // When started with "-q errorfile" jump to first error now.
-  if (params.edit_type == EDIT_QF) {
-    rs_qf_jump_newwin(NULL, 0, 0, false, false);
-    TIME_MSG("jump to first error");
-  }
-
-  // If opened more than one window, start editing files in the other
-  // windows.
-  rs_edit_buffers(&params, cwd);
-  xfree(cwd);
-
-  if (params.diff_mode) {
-    // set options in each window for "nvim -d".
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (!wp->w_arg_idx_invalid) {
-        diff_win_options(wp, true);
-      }
-    }
-  }
-
-  // Shorten any of the filenames, but only when absolute.
-  shorten_fnames(false);
-
-  // Need to jump to the tag before executing the '-c command'.
-  // Makes "vim -c '/return' -t main" work.
-  rs_handle_tag(params.tagname);
-  if (params.tagname != NULL) {
-    TIME_MSG("jumping to tag");
-  }
-
-  // Execute any "+", "-c" and "-S" arguments.
-  if (params.n_commands > 0) {
-    rs_exe_commands(&params);
-    TIME_MSG("executing command arguments");
-  }
-
-  starting = 0;
-
-  RedrawingDisabled = 0;
-  redraw_all_later(UPD_NOT_VALID);
-  no_wait_return = false;
-
-  // 'autochdir' has been postponed.
-  do_autochdir();
-
-  set_vim_var_nr(VV_VIM_DID_ENTER, 1);
-  apply_autocmds(EVENT_VIMENTER, NULL, NULL, false, curbuf);
-  TIME_MSG("VimEnter autocommands");
-  if (use_remote_ui) {
-    do_autocmd_uienter_all();
-    TIME_MSG("UIEnter autocommands");
-  }
+  rs_main_post_startup(&params, fname, cwd, use_remote_ui);
 
 #ifdef MSWIN
   if (use_remote_ui) {
@@ -713,49 +549,8 @@ int main(int argc, char **argv)
   os_title_save();
 #endif
 
-  // Adjust default register name for "unnamed" in 'clipboard'. Can only be
-  // done after the clipboard is available and all initial commands that may
-  // modify the 'clipboard' setting have run; i.e. just before entering the
-  // main loop.
-  set_reg_var(get_default_register_name());
-
-  // When a startup script or session file setup for diff'ing and
-  // scrollbind, sync the scrollbind now.
-  if (curwin->w_p_diff && curwin->w_p_scb) {
-    update_topline(curwin);
-    check_scrollbind(0, 0);
-    TIME_MSG("diff scrollbinding");
-  }
-
-  // If ":startinsert" command used, stuff a dummy command to be able to
-  // call normal_cmd(), which will then start Insert mode.
-  if (restart_edit != 0) {
-    stuffcharReadbuff(K_NOP);
-  }
-
-  // WORKAROUND(mhi): #3023
-  if (cb_flags & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus)) {
-    eval_has_provider("clipboard", false);
-  }
-
-  if (params.luaf != NULL) {
-    // Like "--cmd", "+", "-c" and "-S", don't truncate messages.
-    msg_scroll = true;
-    DLOG("executing Lua -l script");
-    bool lua_ok = nlua_exec_file(params.luaf);
-    TIME_MSG("executing Lua -l script");
-    if (msg_didout) {
-      msg_putchar('\n');
-      msg_didout = false;
-    }
-    getout(lua_ok ? 0 : 1);
-  }
-
-  TIME_MSG("before starting main loop");
-  ILOG("starting main loop");
-
-  // Main loop: never returns.
-  normal_enter(false, false);
+  // Enter main loop. NORETURN.
+  rs_main_enter_loop(&params, use_remote_ui);
 
 #if defined(MSWIN) && !defined(MAKE_LIB)
   xfree(argv);

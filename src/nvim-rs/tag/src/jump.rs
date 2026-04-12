@@ -559,7 +559,7 @@ extern "C" {
     fn ui_flush();
     fn os_delay(ms: u64, ignoreinput: bool);
     // Post-jump helpers (Phase 3 — migrated to Rust inline)
-    fn nvim_curbuf_is_help() -> bool;
+    fn nvim_curbuf_is_help() -> c_int;
     fn nvim_tag_set_topline_curwin();
     fn nvim_get_fdo_flags() -> u32;
     fn rs_foldOpenCursor();
@@ -867,7 +867,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
         if l_g_do_tagpreview != 0 {
             nvim_tag_set_keep_help_flag(nvim_tag_bt_help_saved_win(curwin_save));
         } else {
-            nvim_tag_set_keep_help_flag(nvim_curbuf_is_help());
+            nvim_tag_set_keep_help_flag(nvim_curbuf_is_help() != 0);
         }
     }
 
@@ -891,7 +891,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
 
         if search_retval == OK {
             // Inline Rust port of nvim_tag_jumpto_post_success (Phase 3)
-            if nvim_curbuf_is_help() {
+            if nvim_curbuf_is_help() != 0 {
                 nvim_tag_set_topline_curwin();
             }
             // kOptFdoFlagTag = 0x80 (verified by _Static_assert in tag_shim.c)

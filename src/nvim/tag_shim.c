@@ -158,7 +158,7 @@ void *nvim_findtags_state_xcalloc(void) { return xcalloc(1, sizeof(findtags_stat
 void nvim_findtags_init_match_arrays(void *st_void)
 { findtags_state_T *st = (findtags_state_T *)st_void; for (int mtt = 0; mtt < MT_COUNT; mtt++) { ga_init(&st->ga_match[mtt], sizeof(char *), 100); hash_init(&st->ht_match[mtt]); } }
 char *nvim_findtags_get_tag_fname_buf(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return st->tag_fname; }
-bool nvim_curbuf_is_help(void) { return curbuf->b_help; }
+int nvim_curbuf_is_help(void) { return curbuf->b_help ? 1 : 0; }
 const char *nvim_get_p_hf(void) { return p_hf; }
 const char *nvim_get_curbuf_tags(void) { return curbuf->b_p_tags; }
 const char *nvim_get_p_tags(void) { return p_tags; }

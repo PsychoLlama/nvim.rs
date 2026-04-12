@@ -37,7 +37,7 @@ extern "C" {
     fn nvim_do_in_runtimepath_for_tags();
 
     // Current buffer check
-    fn nvim_curbuf_is_help() -> bool;
+    fn nvim_curbuf_is_help() -> c_int;
 
     // Options
     fn nvim_get_p_hf() -> *const c_char;
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_get_tagfname(
         ptr::write_bytes(tnp, 0, 1);
     }
 
-    if nvim_curbuf_is_help() {
+    if nvim_curbuf_is_help() != 0 {
         // For help files, search in runtimepath
         return get_help_tagfname(tnp, first != 0, buf);
     }
@@ -607,7 +607,7 @@ pub unsafe extern "C" fn rs_expand_tag_fname(
 
     let retval;
     let p_tr = nvim_get_p_tr();
-    let is_help = nvim_curbuf_is_help();
+    let is_help = nvim_curbuf_is_help() != 0;
 
     if (p_tr || is_help) && !vim_isAbsName(fname) {
         let p = path_tail(tag_fname);
