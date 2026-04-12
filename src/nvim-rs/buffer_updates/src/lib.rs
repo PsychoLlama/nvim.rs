@@ -7,6 +7,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use std::ffi::c_int;
+use std::ptr;
 
 /// Opaque handle to a `buf_T` structure.
 #[repr(C)]
@@ -63,6 +64,55 @@ extern "C" {
     fn nvim_buf_set_update_need_codepoints(buf: *mut BufHandle, val: bool);
     fn nvim_buf_send_initial_lines(buf: *mut BufHandle, channel_id: u64);
     fn nvim_buf_get_ml_mfp_is_null(buf: *mut BufHandle) -> bool;
+
+    // Phase 3: callback notification accessors
+    fn nvim_buf_update_callbacks_get(buf: *mut BufHandle, i: usize) -> BufUpdateCallbacks;
+    fn nvim_buf_update_callbacks_set(buf: *mut BufHandle, i: usize, cb: BufUpdateCallbacks);
+    fn nvim_buf_update_callbacks_set_size(buf: *mut BufHandle, new_size: usize);
+    #[allow(dead_code)]
+    fn nvim_buf_update_callbacks_destroy(buf: *mut BufHandle);
+    fn nvim_buf_is_cmdpreview_curbuf(buf: *mut BufHandle) -> bool;
+    fn nvim_buf_send_lines_to_channels(
+        buf: *mut BufHandle,
+        firstline: i64,
+        num_added: i64,
+        num_removed: i64,
+        send_tick: bool,
+    ) -> u64;
+    fn nvim_buf_log_dead_channel(buf: *mut BufHandle, channel_id: u64);
+    fn nvim_buf_call_on_lines(
+        buf: *mut BufHandle,
+        on_lines: LuaRef,
+        send_tick: bool,
+        utf_sizes: bool,
+        firstline: i64,
+        num_added: i64,
+        num_removed: i64,
+        deleted_bytes: usize,
+        deleted_codepoints: usize,
+        deleted_codeunits: usize,
+    ) -> bool;
+    fn nvim_buf_call_on_bytes(
+        buf: *mut BufHandle,
+        on_bytes: LuaRef,
+        start_row: c_int,
+        start_col: c_int,
+        start_byte: i64,
+        old_row: c_int,
+        old_col: c_int,
+        old_byte: i64,
+        new_row: c_int,
+        new_col: c_int,
+        new_byte: i64,
+    ) -> bool;
+    fn nvim_buf_call_on_changedtick(buf: *mut BufHandle, on_changedtick: LuaRef) -> bool;
+
+    // ml_flush_deleted_bytes: flush pending deleted byte counts
+    fn ml_flush_deleted_bytes(
+        buf: *mut BufHandle,
+        codepoints: *mut usize,
+        codeunits: *mut usize,
+    ) -> usize;
 }
 
 /// Check if a buffer has any active update listeners.
@@ -198,6 +248,171 @@ pub unsafe extern "C" fn rs_buf_updates_unregister(buf: *mut BufHandle, channel_
             nvim_buf_update_channels_destroy(buf);
         }
     }
+}
+
+/// Send line change events to all registered channels and callbacks.
+///
+/// # Safety
+/// `buf` must be a valid pointer to a `buf_T` structure.
+#[export_name = "buf_updates_send_changes"]
+pub unsafe extern "C" fn rs_buf_updates_send_changes(
+    buf: *mut BufHandle,
+    firstline: i32,
+    num_added: i64,
+    num_removed: i64,
+) {
+    let mut deleted_codepoints: usize = 0;
+    let mut deleted_codeunits: usize = 0;
+    let deleted_bytes = ml_flush_deleted_bytes(
+        buf,
+        ptr::addr_of_mut!(deleted_codepoints),
+        ptr::addr_of_mut!(deleted_codeunits),
+    );
+
+    if !rs_buf_updates_active(buf.cast_const()) {
+        return;
+    }
+
+    // Don't send b:changedtick during 'inccommand' preview if buf is the current buffer.
+    let send_tick = !nvim_buf_is_cmdpreview_curbuf(buf);
+
+    // Send to channels (C helper handles arena + rpc_send_event loop)
+    let bad_channel = nvim_buf_send_lines_to_channels(
+        buf,
+        i64::from(firstline),
+        num_added,
+        num_removed,
+        send_tick,
+    );
+
+    if bad_channel != 0 {
+        nvim_buf_log_dead_channel(buf, bad_channel);
+    }
+
+    // Notify callbacks, compacting as we go
+    let callback_count = nvim_buf_get_update_callbacks_size(buf);
+    let mut j = 0usize;
+    for i in 0..callback_count {
+        let cb = nvim_buf_update_callbacks_get(buf, i);
+        let mut keep = true;
+        if cb.on_lines != LUA_NOREF && (cb.preview || !nvim_buf_is_cmdpreview_curbuf(buf)) {
+            let wants_detach = nvim_buf_call_on_lines(
+                buf,
+                cb.on_lines,
+                send_tick,
+                cb.utf_sizes,
+                i64::from(firstline),
+                num_added,
+                num_removed,
+                deleted_bytes,
+                deleted_codepoints,
+                deleted_codeunits,
+            );
+            if wants_detach {
+                nvim_buf_callbacks_free_refs(cb);
+                keep = false;
+            }
+        }
+        if keep {
+            if i != j {
+                nvim_buf_update_callbacks_set(buf, j, cb);
+            }
+            j += 1;
+        }
+    }
+    nvim_buf_update_callbacks_set_size(buf, j);
+}
+
+/// Send byte-level splice events to all registered callbacks.
+///
+/// # Safety
+/// `buf` must be a valid pointer to a `buf_T` structure.
+#[export_name = "buf_updates_send_splice"]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_buf_updates_send_splice(
+    buf: *mut BufHandle,
+    start_row: c_int,
+    start_col: c_int,
+    start_byte: isize,
+    old_row: c_int,
+    old_col: c_int,
+    old_byte: isize,
+    new_row: c_int,
+    new_col: c_int,
+    new_byte: isize,
+) {
+    if !rs_buf_updates_active(buf.cast_const()) || (old_byte == 0 && new_byte == 0) {
+        return;
+    }
+
+    let callback_count = nvim_buf_get_update_callbacks_size(buf);
+    let mut j = 0usize;
+    for i in 0..callback_count {
+        let cb = nvim_buf_update_callbacks_get(buf, i);
+        let mut keep = true;
+        if cb.on_bytes != LUA_NOREF && (cb.preview || !nvim_buf_is_cmdpreview_curbuf(buf)) {
+            let wants_detach = nvim_buf_call_on_bytes(
+                buf,
+                cb.on_bytes,
+                start_row,
+                start_col,
+                start_byte as i64,
+                old_row,
+                old_col,
+                old_byte as i64,
+                new_row,
+                new_col,
+                new_byte as i64,
+            );
+            if wants_detach {
+                nvim_buf_callbacks_free_refs(cb);
+                keep = false;
+            }
+        }
+        if keep {
+            if i != j {
+                nvim_buf_update_callbacks_set(buf, j, cb);
+            }
+            j += 1;
+        }
+    }
+    nvim_buf_update_callbacks_set_size(buf, j);
+}
+
+/// Send `changedtick` to all registered channels and callbacks.
+///
+/// # Safety
+/// `buf` must be a valid pointer to a `buf_T` structure.
+#[export_name = "buf_updates_changedtick"]
+pub unsafe extern "C" fn rs_buf_updates_changedtick(buf: *mut BufHandle) {
+    // Notify each channel
+    let channel_count = nvim_buf_get_update_channels_size(buf);
+    for i in 0..channel_count {
+        let channel_id = nvim_buf_update_channels_get(buf, i);
+        nvim_buf_send_changedtick_event(buf, channel_id);
+    }
+
+    // Notify each callback, compacting as we go
+    let callback_count = nvim_buf_get_update_callbacks_size(buf);
+    let mut j = 0usize;
+    for i in 0..callback_count {
+        let cb = nvim_buf_update_callbacks_get(buf, i);
+        let mut keep = true;
+        if cb.on_changedtick != LUA_NOREF {
+            let wants_detach = nvim_buf_call_on_changedtick(buf, cb.on_changedtick);
+            if wants_detach {
+                nvim_buf_callbacks_free_refs(cb);
+                keep = false;
+            }
+        }
+        if keep {
+            if i != j {
+                nvim_buf_update_callbacks_set(buf, j, cb);
+            }
+            j += 1;
+        }
+    }
+    nvim_buf_update_callbacks_set_size(buf, j);
 }
 
 #[cfg(test)]
