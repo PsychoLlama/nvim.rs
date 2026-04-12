@@ -298,12 +298,9 @@ void siemsg(const char *s, ...)
 /// C helper: call siemsg(_(e_intern2), where) — needed because siemsg is variadic.
 void nvim_siemsg_intern2(const char *where) { siemsg(_(e_intern2), where); }
 
-static void msg_semsg_event(void **argv)
-{
-  char *s = argv[0];
-  emsg(s);
-  xfree(s);
-}
+// msg_semsg_event, msg_semsg_multiline_event migrated to Rust (scheduled.rs)
+extern void rs_msg_semsg_event(void **argv);
+extern void rs_msg_semsg_multiline_event(void **argv);
 
 void msg_schedule_semsg(const char *const fmt, ...)
   FUNC_ATTR_PRINTF(1, 2)
@@ -314,14 +311,7 @@ void msg_schedule_semsg(const char *const fmt, ...)
   va_end(ap);
 
   char *s = xstrdup(IObuff);
-  loop_schedule_deferred(&main_loop, event_create(msg_semsg_event, s));
-}
-
-static void msg_semsg_multiline_event(void **argv)
-{
-  char *s = argv[0];
-  emsg_multiline(s, "emsg", HLF_E, true);
-  xfree(s);
+  loop_schedule_deferred(&main_loop, event_create(rs_msg_semsg_event, s));
 }
 
 void msg_schedule_semsg_multiline(const char *const fmt, ...)
@@ -332,7 +322,7 @@ void msg_schedule_semsg_multiline(const char *const fmt, ...)
   va_end(ap);
 
   char *s = xstrdup(IObuff);
-  loop_schedule_deferred(&main_loop, event_create(msg_semsg_multiline_event, s));
+  loop_schedule_deferred(&main_loop, event_create(rs_msg_semsg_multiline_event, s));
 }
 
 // hl_msg_free, msg_hist_add migrated to Rust: src/nvim-rs/message/src/history.rs

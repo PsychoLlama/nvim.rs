@@ -4,7 +4,7 @@
 //! scheduled to be displayed later via the event loop. This is used
 //! when errors occur in contexts where immediate display is not safe.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 // ============================================================================
 // Constants
@@ -27,6 +27,12 @@ pub const SCHED_MSG_MULTILINE: c_int = 1;
 extern "C" {
     /// Check if we're in a fast callback context (unsafe for direct messages)
     fn nvim_get_in_fast_callback() -> c_int;
+    /// Call emsg(s) — error message display.
+    fn emsg(s: *const c_char) -> bool;
+    /// Call emsg_multiline(s, kind, hl, true) — multiline error display.
+    fn emsg_multiline(s: *const c_char, kind: *const c_char, hl: c_int, crlf: bool) -> bool;
+    /// Free memory allocated with xstrdup/xmalloc.
+    fn xfree(ptr: *mut c_void);
 }
 
 /// Check if we're in a fast callback context.
@@ -165,6 +171,40 @@ pub const extern "C" fn rs_deferred_context_unpack(flags: c_int) -> DeferredCont
 #[no_mangle]
 pub const extern "C" fn rs_deferred_context_any(flags: c_int) -> c_int {
     (flags != 0) as c_int
+}
+
+// ============================================================================
+// Phase 3: msg_semsg_event / msg_semsg_multiline_event — migrated from message.c
+// ============================================================================
+
+/// HLF_E constant (error highlight group index).
+/// Enum value 6: HLF_NONE=0, HLF_8=1, HLF_EOB=2, HLF_TERM=3, HLF_AT=4, HLF_D=5, HLF_E=6.
+const HLF_E: c_int = 6;
+
+/// Event callback: display a deferred error message and free the string.
+///
+/// Replaces C static `msg_semsg_event(void **argv)`.
+///
+/// # Safety
+/// `argv[0]` must be a valid heap-allocated C string (`xstrdup` result).
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_semsg_event(argv: *mut *mut c_void) {
+    let s = (*argv).cast::<c_char>();
+    let _ = emsg(s);
+    xfree((*argv).cast::<c_void>());
+}
+
+/// Event callback: display a deferred multiline error message and free the string.
+///
+/// Replaces C static `msg_semsg_multiline_event(void **argv)`.
+///
+/// # Safety
+/// `argv[0]` must be a valid heap-allocated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_semsg_multiline_event(argv: *mut *mut c_void) {
+    let s = (*argv).cast::<c_char>();
+    emsg_multiline(s, c"emsg".as_ptr(), HLF_E, true);
+    xfree((*argv).cast::<c_void>());
 }
 
 // ============================================================================
