@@ -14,4 +14,4 @@ void may_trigger_modechanged(void);
 void state_enter(VimState *s);
 void state_handle_k_event(void);
 
-#include "state.h.generated.h"
+// state.c was deleted (all functions migrated to Rust) — no generated header

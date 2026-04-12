@@ -13,6 +13,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 
+use libc;
+
 // =============================================================================
 // State
 // =============================================================================
@@ -73,12 +75,13 @@ union TvVal {
 // =============================================================================
 
 unsafe extern "C" {
-    // Cache validity: returns 1 if color cache is still valid.
-    fn nvim_color_cache_valid() -> c_int;
+    // Cache validity: direct accessors for Rust-side check.
+    fn nvim_get_ccline_last_colors_prompt_id() -> u32;
+    fn nvim_get_ccline_last_colors_cmdbuff() -> *const c_char;
+    fn nvim_get_ccline_cmdbuff() -> *mut c_char;
+    fn nvim_ccline_clear_last_colors_cmdbuff();
     // Reset colors kvec: sets kv_size = 0 and frees cached cmdbuff.
     fn nvim_ccline_reset_colors();
-    // Returns 1 if cmdbuff is NULL or empty.
-    fn nvim_color_is_empty() -> c_int;
     // Get current prompt_id (ccline.prompt_id).
     fn nvim_get_ccline_prompt_id() -> u32;
     // Acquire the coloring callback (stores internally in C static state).
@@ -183,16 +186,32 @@ const fn is_utf8_continuation(byte: u8) -> bool {
 pub unsafe extern "C" fn nvim_color_cmdline() -> bool {
     // --- Cache check ---
     // If the prompt_id and cmdbuff haven't changed, reuse cached colors.
-    if nvim_color_cache_valid() != 0 {
-        return true;
+    // Inlined from C nvim_color_cache_valid().
+    {
+        let last_prompt_id = nvim_get_ccline_last_colors_prompt_id();
+        let cur_prompt_id = nvim_get_ccline_prompt_id();
+        let last_cmdbuff = nvim_get_ccline_last_colors_cmdbuff();
+        let cur_cmdbuff = nvim_get_ccline_cmdbuff();
+        if last_prompt_id == cur_prompt_id
+            && !last_cmdbuff.is_null()
+            && !cur_cmdbuff.is_null()
+            && libc::strcmp(last_cmdbuff, cur_cmdbuff.cast_const()) == 0
+        {
+            return true;
+        }
     }
 
     // --- Reset colors ---
     nvim_ccline_reset_colors();
 
     // --- Early exit for empty buffer ---
-    if nvim_color_is_empty() != 0 {
-        return true;
+    // Inlined from C nvim_color_is_empty().
+    {
+        let cmdbuff = nvim_get_ccline_cmdbuff();
+        if cmdbuff.is_null() || *cmdbuff == 0 {
+            nvim_ccline_clear_last_colors_cmdbuff();
+            return true;
+        }
     }
 
     // --- Error tracking for callbacks ---

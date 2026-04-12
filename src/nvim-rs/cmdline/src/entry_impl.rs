@@ -41,19 +41,19 @@ unsafe extern "C" {
     fn alloc_cmdbuff(len: c_int);
     fn dealloc_cmdbuff();
 
-    // sb_text wrappers
-    fn nvim_sb_text_start_cmdline();
-    fn nvim_sb_text_end_cmdline();
+    // sb_text (direct)
+    fn sb_text_start_cmdline();
+    fn sb_text_end_cmdline();
 
     // cmdmsg_rl / msg_grid_validate / redir_off
     fn nvim_set_cmdmsg_rl(val: c_int);
-    fn nvim_msg_grid_validate();
+    fn msg_grid_validate();
     fn nvim_set_redir_off(val: c_int);
 
     // gotocmdline / setmouse / may_trigger_modechanged
     fn nvim_gotocmdline();
-    fn nvim_setmouse();
-    fn nvim_may_trigger_modechanged();
+    fn setmouse();
+    fn may_trigger_modechanged();
 
     // State / msg_scroll / clear flags
     fn nvim_set_State(val: c_int);
@@ -94,8 +94,8 @@ unsafe extern "C" {
     fn nvim_init_history_and_get_hislen() -> c_int;
     fn rs_entry_hist_char2type(firstc: c_int) -> c_int;
 
-    // Digraph init
-    fn nvim_do_digraph_init();
+    // Digraph init (direct — do_digraph(-1))
+    fn do_digraph(c: c_int) -> c_int;
 
     // state_enter (C function that runs the state machine)
     fn nvim_state_enter(state: *mut c_void);
@@ -112,12 +112,12 @@ unsafe extern "C" {
     // State accessor
     fn nvim_get_State() -> c_int;
 
-    // Phase 3 cleanup thin C wrappers
-    fn nvim_cmdline_pum_active_check() -> c_int;
-    fn nvim_cmdline_pum_remove_noconfirm();
-    fn nvim_pum_check_clear_wrap();
+    // Phase 3 cleanup — direct C functions
+    fn cmdline_pum_active() -> c_int;
+    fn cmdline_pum_remove(defer_redraw: bool);
+    fn pum_check_clear();
     fn nvim_wildmenu_cleanup_ccline();
-    fn nvim_expand_cleanup_xpc(xpc: *mut c_void);
+    fn ExpandCleanup(xpc: *mut c_void);
     fn nvim_ccline_clear_xpc_and_orig();
     fn nvim_add_to_history_ccline(histype: c_int, sep_char: c_int);
     fn nvim_save_last_cmdline();
@@ -131,7 +131,7 @@ unsafe extern "C" {
     fn nvim_cmdline_status_redraw();
     fn nvim_ccline_restore_or_clear(did_save: bool, save_ccline_in: *const c_void);
     fn nvim_get_ccline_cmdlen() -> c_int;
-    fn nvim_msg_check();
+    fn msg_check();
     fn xfree(ptr: *mut c_char);
 
     // msg_col / msg_silent — direct static access (Phase 2)
@@ -150,6 +150,12 @@ unsafe extern "C" {
     fn nvim_set_ccline_redraw_state(state: c_int);
     fn nvim_get_ccline_cmdbuff() -> *mut c_char;
     fn nvim_apply_pending_hl_callback();
+
+    // getexline dependencies
+    fn nvim_get_exec_from_reg() -> c_int;
+    fn vpeekc() -> c_int;
+    fn vgetc() -> c_int;
+    fn getcmdline(firstc: c_int, count: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
 }
 
 // MODE_CMDLINE constant
@@ -235,7 +241,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     alloc_cmdbuff(indent + 50);
     nvim_ccline_enter_init(state.firstc, indent);
 
-    nvim_sb_text_start_cmdline();
+    sb_text_start_cmdline();
 
     // Apply autoindent for :insert/:append (firstc <= 0)
     if state.firstc <= 0 {
@@ -269,7 +275,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     );
     nvim_set_cmdmsg_rl(use_rl);
 
-    nvim_msg_grid_validate();
+    msg_grid_validate();
 
     // Don't redirect the typed command
     nvim_set_redir_off(1);
@@ -290,7 +296,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     // Set langmap mode if needed
     nvim_cmdline_setup_langmap(s, state.firstc);
 
-    nvim_setmouse();
+    setmouse();
 
     // Set cmdline_type for events
     let cmdline_type = crate::entry::EntryContext::new(firstc, count, indent).cmdline_type();
@@ -302,14 +308,14 @@ pub unsafe extern "C" fn rs_command_line_enter(
     // Fire CmdlineEnter autocmd
     nvim_cmdline_fire_enter_full(firstcbuf.as_ptr(), level);
 
-    nvim_may_trigger_modechanged();
+    may_trigger_modechanged();
 
     // Initialize history
     state.hiscnt = nvim_init_history_and_get_hislen();
     state.histype = rs_entry_hist_char2type(state.firstc);
 
     // Init digraph typeahead
-    nvim_do_digraph_init();
+    do_digraph(-1);
 
     // If there was an error above, reset flags
     if nvim_get_did_emsg_for_redraw() != 0 {
@@ -390,16 +396,16 @@ unsafe fn leave_cleanup(state: *mut CommandLineState) -> *mut u8 {
     let cs = &mut *state;
 
     // PUM cleanup
-    if nvim_cmdline_pum_active_check() != 0 {
-        nvim_cmdline_pum_remove_noconfirm();
+    if cmdline_pum_active() != 0 {
+        cmdline_pum_remove(false);
     } else {
-        nvim_pum_check_clear_wrap();
+        pum_check_clear();
     }
     nvim_wildmenu_cleanup_ccline();
     cs.did_wild_list = false;
     cs.wim_index = 0;
 
-    nvim_expand_cleanup_xpc(std::ptr::addr_of_mut!(cs.xpc).cast::<c_void>());
+    ExpandCleanup(std::ptr::addr_of_mut!(cs.xpc).cast::<c_void>());
     nvim_ccline_clear_xpc_and_orig();
 
     crate::search::rs_finish_incsearch_highlighting(
@@ -438,7 +444,7 @@ unsafe fn leave_cleanup(state: *mut CommandLineState) -> *mut u8 {
         }
     }
 
-    nvim_msg_check();
+    msg_check();
     nvim_cmdline_check_must_redraw();
 
     nvim_get_ccline_cmdbuff().cast::<u8>()
@@ -474,9 +480,9 @@ unsafe fn final_teardown(
     let current_cmdpreview = nvim_get_cmdpreview();
     nvim_cmdpreview_restore(save_cmdpreview, current_cmdpreview);
 
-    nvim_may_trigger_modechanged();
-    nvim_setmouse();
-    nvim_sb_text_end_cmdline();
+    may_trigger_modechanged();
+    setmouse();
+    sb_text_end_cmdline();
 
     // Free save_p_icm after restoring option
     xfree(cs.save_p_icm);
@@ -588,4 +594,30 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     }
 
     ret.cast::<c_char>()
+}
+
+// =============================================================================
+// getexline: migrated from ex_getln.c
+// =============================================================================
+
+/// Get an Ex command line for the ":" command.
+///
+/// When executing a register, removes the leading ':' from each line.
+/// Then delegates to getcmdline().
+///
+/// # Safety
+///
+/// Calls C functions vpeekc, vgetc, getcmdline.
+#[no_mangle]
+pub unsafe extern "C" fn getexline(
+    c: c_int,
+    _cookie: *mut c_void,
+    indent: c_int,
+    do_concat: bool,
+) -> *mut c_char {
+    // When executing a register, remove ':' that's in front of each line.
+    if nvim_get_exec_from_reg() != 0 && vpeekc() == b':' as c_int {
+        vgetc();
+    }
+    getcmdline(c, 1, indent, do_concat)
 }

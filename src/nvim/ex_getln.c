@@ -25,7 +25,6 @@
 #include "nvim/cmdexpand_defs.h"
 #include "nvim/cmdhist.h"
 #include "nvim/cursor.h"
-#include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/errors.h"
@@ -64,7 +63,6 @@
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/input.h"
-#include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
 #include "nvim/regexp.h"
 #include "nvim/regexp_defs.h"
@@ -328,20 +326,7 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
 
 // check_opt_wim() is implemented in Rust (cmdline crate, wildmenu.rs).
 
-/// Get an Ex command line for the ":" command.
-///
-/// @param c  normally ':', NUL for ":append"
-/// @param indent  indent for inside conditionals
-char *getexline(int c, void *cookie, int indent, bool do_concat)
-{
-  // When executing a register, remove ':' that's in front of each line.
-  if (exec_from_reg && vpeekc() == ':') {
-    vgetc();
-  }
-
-  return getcmdline(c, 1, indent, do_concat);
-}
-
+// getexline: implemented in Rust (cmdline crate, entry_impl.rs).
 // alloc_cmdbuff, dealloc_cmdbuff, realloc_cmdbuff: implemented in Rust (cmdline crate, cmdbuff.rs).
 
 /// Adjust ccline.xpc->xp_pattern after buffer reallocation.
@@ -383,15 +368,7 @@ typedef struct {
 } ColorCmdlineHelperState;
 static ColorCmdlineHelperState ccs;
 
-/// Returns 1 if the color cache for the current cmdline is still valid.
-int nvim_color_cache_valid(void)
-{
-  ColoredCmdline *cc = &ccline.last_colors;
-  return (cc->prompt_id == ccline.prompt_id
-          && cc->cmdbuff != NULL
-          && ccline.cmdbuff != NULL
-          && strcmp(cc->cmdbuff, ccline.cmdbuff) == 0) ? 1 : 0;
-}
+// nvim_color_cache_valid: inlined into Rust nvim_color_cmdline (color.rs).
 
 /// Reset ccline.last_colors.colors kvec to size 0 and reset helper state.
 void nvim_ccline_reset_colors(void)
@@ -410,15 +387,7 @@ void nvim_ccline_reset_colors(void)
   };
 }
 
-/// Returns 1 if ccline.cmdbuff is NULL or empty (nothing to color).
-int nvim_color_is_empty(void)
-{
-  if (ccline.cmdbuff == NULL || *ccline.cmdbuff == NUL) {
-    XFREE_CLEAR(ccline.last_colors.cmdbuff);
-    return 1;
-  }
-  return 0;
-}
+// nvim_color_is_empty: inlined into Rust nvim_color_cmdline (color.rs).
 
 /// Acquire the coloring callback.
 /// Returns: 0=none, 1=highlight_callback, 2=ex callback(':'), 3=expr path('=').
@@ -538,6 +507,15 @@ void nvim_color_errmsg(const char *msg)
   msg_putchar('\n');
   smsg(HLF_E, "%s", msg);
 }
+
+/// Get ccline.last_colors.prompt_id (for Rust cache_valid check).
+unsigned int nvim_get_ccline_last_colors_prompt_id(void) { return ccline.last_colors.prompt_id; }
+
+/// Get ccline.last_colors.cmdbuff (for Rust cache_valid/is_empty check).
+const char *nvim_get_ccline_last_colors_cmdbuff(void) { return ccline.last_colors.cmdbuff; }
+
+/// Free and NULL ccline.last_colors.cmdbuff (for Rust is_empty check).
+void nvim_ccline_clear_last_colors_cmdbuff(void) { XFREE_CLEAR(ccline.last_colors.cmdbuff); }
 
 /// Push a color chunk to ccline.last_colors.colors.
 void nvim_ccline_colors_push(int start, int end, int hl_id)
@@ -810,7 +788,6 @@ void nvim_set_redrawing_cmdline(int val) { redrawing_cmdline = (val != 0); }
 void nvim_set_msg_no_more(int val) { msg_no_more = (val != 0); }
 void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }
 int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
-void nvim_msg_check(void) { msg_check(); }
 int nvim_get_p_ru(void) { return p_ru; }
 
 /// Move cursor to end of search match (called from Rust).
@@ -831,44 +808,8 @@ void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
 void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
 
-// CommandLineState field accessors
-int nvim_cls_get_c(void *s) { return ((CommandLineState *)s)->c; }
-void nvim_cls_set_c(void *s, int val) { ((CommandLineState *)s)->c = val; }
-int nvim_cls_get_firstc(void *s) { return ((CommandLineState *)s)->firstc; }
-int nvim_cls_get_count(void *s) { return ((CommandLineState *)s)->count; }
-int nvim_cls_get_indent(void *s) { return ((CommandLineState *)s)->indent; }
-int nvim_cls_get_gotesc(void *s) { return ((CommandLineState *)s)->gotesc ? 1 : 0; }
-void nvim_cls_set_gotesc(void *s, int val) { ((CommandLineState *)s)->gotesc = (val != 0); }
-int nvim_cls_get_do_abbr(void *s) { return ((CommandLineState *)s)->do_abbr ? 1 : 0; }
-void nvim_cls_set_do_abbr(void *s, int val) { ((CommandLineState *)s)->do_abbr = (val != 0); }
-int nvim_cls_get_ignore_drag_release(void *s) { return ((CommandLineState *)s)->ignore_drag_release ? 1 : 0; }
-void nvim_cls_set_ignore_drag_release(void *s, int val) { ((CommandLineState *)s)->ignore_drag_release = (val != 0); }
-int nvim_cls_get_did_wild_list(void *s) { return ((CommandLineState *)s)->did_wild_list ? 1 : 0; }
-void nvim_cls_set_did_wild_list(void *s, int val) { ((CommandLineState *)s)->did_wild_list = (val != 0); }
-int nvim_cls_get_wim_index(void *s) { return ((CommandLineState *)s)->wim_index; }
-void nvim_cls_set_wim_index(void *s, int val) { ((CommandLineState *)s)->wim_index = val; }
-void nvim_cls_set_skip_pum_redraw(void *s, int val) { ((CommandLineState *)s)->skip_pum_redraw = (val != 0); }
-void nvim_cls_set_prev_cmdpos(void *s, int val) { ((CommandLineState *)s)->prev_cmdpos = val; }
-void nvim_cls_xfree_prev_cmdbuff(void *s) { XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff); }
 
-/// Set s->prev_cmdbuff to a copy of ccline.cmdbuff (if non-NULL).
-void nvim_cls_dup_cmdbuff_to_prev(void *s)
-{
-  if (ccline.cmdbuff != NULL) {
-    XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff);
-    ((CommandLineState *)s)->prev_cmdbuff = xstrdup(ccline.cmdbuff);
-  }
-}
 
-void nvim_cls_set_some_key_typed(void *s, int val) { ((CommandLineState *)s)->some_key_typed = (val != 0); }
-int nvim_cls_get_did_hist_navigate(void *s) { return ((CommandLineState *)s)->did_hist_navigate ? 1 : 0; }
-void nvim_cls_set_did_hist_navigate(void *s, int val) { ((CommandLineState *)s)->did_hist_navigate = (val != 0); }
-void *nvim_cls_get_is_state(void *s) { return (void *)&((CommandLineState *)s)->is_state; }
-void *nvim_cls_get_xpc(void *s) { return (void *)&((CommandLineState *)s)->xpc; }
-int nvim_cls_get_xpc_numfiles(void *s) { return ((CommandLineState *)s)->xpc.xp_numfiles; }
-void nvim_cls_set_xpc_context(void *s, int val) { ((CommandLineState *)s)->xpc.xp_context = val; }
-void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val) { ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0); }
-int nvim_cls_get_break_ctrl_c(void *s) { return ((CommandLineState *)s)->break_ctrl_c ? 1 : 0; }
 
 /// Get ccline.mouse_used pointer (may be NULL).
 int nvim_cls_get_ccline_mouse_used(void) { return ccline.mouse_used != NULL ? 1 : 0; }
@@ -895,22 +836,16 @@ void nvim_set_getln_interrupted_highlight(int val) { getln_interrupted_highlight
 /// Get cedit_key value (static variable, exposed for Rust).
 int nvim_get_cedit_key(void) { return cedit_key; }
 
+/// Get exec_from_reg global (for Rust getexline).
+int nvim_get_exec_from_reg(void) { return exec_from_reg ? 1 : 0; }
+
 /// Set cedit_key value (for Rust did_set_cedit implementation).
 void nvim_set_cedit_key(int val) { cedit_key = val; }
 
 /// Get p_cedit option string (for Rust did_set_cedit implementation).
 const char *nvim_get_p_cedit(void) { return p_cedit; }
 
-/// Get s->lookfor field (may be NULL).
-char *nvim_cls_get_lookfor(void *s) { return ((CommandLineState *)s)->lookfor; }
 
-/// Free s->lookfor and set to NULL (XFREE_CLEAR equivalent).
-void nvim_cls_xfree_lookfor(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  XFREE_CLEAR(cs->lookfor);
-  cs->lookforlen = 0;
-}
 
 /// Get cmdline_was_last_drawn global.
 int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
@@ -929,8 +864,6 @@ int nvim_wildmenu_process_key(void *s)
   return wildmenu_process_key(&ccline, cs->c, &cs->xpc);
 }
 
-/// Get is_state.did_incsearch field.
-int nvim_cls_get_is_state_did_incsearch(void *s) { return ((CommandLineState *)s)->is_state.did_incsearch ? 1 : 0; }
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
 void nvim_cmdline_do_cmdline_nowait(void) { do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT); }
@@ -1078,9 +1011,6 @@ void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
 
 /// Set State global.
 void nvim_set_State(int val) { State = val; }
-
-/// Set need_wait_return to false.
-void nvim_clear_need_wait_return(void) { need_wait_return = false; }
 
 /// Set got_int to false.
 void nvim_clear_got_int(void) { got_int = false; }
@@ -1246,17 +1176,8 @@ void nvim_cls_set_b_im_ptr_val(void *s, int val)
 // Additional C helpers for rs_command_line_enter (Phase 1 new wrappers)
 // =============================================================================
 
-/// Wrapper for sb_text_start_cmdline().
-void nvim_sb_text_start_cmdline(void) { sb_text_start_cmdline(); }
-
-/// Wrapper for sb_text_end_cmdline().
-void nvim_sb_text_end_cmdline(void) { sb_text_end_cmdline(); }
-
 /// Set cmdmsg_rl global.
 void nvim_set_cmdmsg_rl(int val) { cmdmsg_rl = (val != 0); }
-
-/// Wrapper for msg_grid_validate().
-void nvim_msg_grid_validate(void) { msg_grid_validate(); }
 
 /// Set redir_off global.
 void nvim_set_redir_off(int val) { redir_off = (val != 0); }
@@ -1267,12 +1188,6 @@ int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
 /// Wrapper for gotocmdline(true).
 void nvim_gotocmdline(void) { gotocmdline(true); }
 
-/// Wrapper for setmouse().
-void nvim_setmouse(void) { setmouse(); }
-
-/// Wrapper for may_trigger_modechanged().
-void nvim_may_trigger_modechanged(void) { may_trigger_modechanged(); }
-
 /// Initialize history and return hislen.
 int nvim_init_history_and_get_hislen(void)
 {
@@ -1280,14 +1195,8 @@ int nvim_init_history_and_get_hislen(void)
   return get_hislen();
 }
 
-/// Wrapper for do_digraph(-1) (init digraph typeahead).
-void nvim_do_digraph_init(void) { do_digraph(-1); }
-
 /// Get exmode_active global.
 int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
-
-/// Set v:char to a single character value (for CmdlineLeavePre/CmdlineLeave).
-void nvim_set_vim_var_char_int(int c) { set_vim_var_char(c); }
 
 /// Fire CmdlineLeavePre autocmd if not already triggered.
 /// Sets v:char to c_val first. Returns 1 if triggered, 0 if already done.
@@ -1376,20 +1285,8 @@ void nvim_emsg_command_too_recursive(void) { emsg(_(e_command_too_recursive)); }
 // Phase 3 thin C wrappers (for Rust leave_cleanup / final_teardown)
 // =============================================================================
 
-/// Check if cmdline popup menu is active.
-int nvim_cmdline_pum_active_check(void) { return cmdline_pum_active() ? 1 : 0; }
-
-/// Remove cmdline popup menu. confirm=0 means no confirmation prompt.
-void nvim_cmdline_pum_remove_noconfirm(void) { cmdline_pum_remove(false); }
-
-/// Check/clear popup menu after cmdline hide.
-void nvim_pum_check_clear_wrap(void) { pum_check_clear(); }
-
 /// Cleanup wildmenu for ccline.
 void nvim_wildmenu_cleanup_ccline(void) { wildmenu_cleanup(&ccline); }
-
-/// Cleanup expand context at pointer xpc.
-void nvim_expand_cleanup_xpc(void *xpc) { ExpandCleanup((expand_T *)xpc); }
 
 /// Clear xpc pointer in ccline and clear cmdline_orig.
 void nvim_ccline_clear_xpc_and_orig(void) { ccline.xpc = NULL; clear_cmdline_orig(); }

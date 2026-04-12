@@ -605,8 +605,8 @@ unsafe extern "C" {
     fn nvim_aborting() -> c_int;
     fn nvim_set_ccline_cmdpos_from_cursor();
     fn nvim_emsg_cmdwin_changed();
-    fn nvim_may_trigger_modechanged();
-    fn nvim_setmouse();
+    fn may_trigger_modechanged();
+    fn setmouse();
     fn nvim_setcursor();
 
     // Result extraction helpers
@@ -834,7 +834,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
     nvim_set_exmode_active(0);
 
     nvim_set_State(MODE_NORMAL);
-    nvim_setmouse();
+    setmouse();
     rs_clear_showcmd();
 
     // Reset result (can be set by CmdwinEnter autocmd).
@@ -968,8 +968,8 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
     nvim_set_restart_edit(save_restart_edit);
     nvim_set_cmdmsg_rl(save_cmdmsg_rl);
     nvim_set_State(save_state);
-    nvim_may_trigger_modechanged();
-    nvim_setmouse();
+    may_trigger_modechanged();
+    setmouse();
     nvim_setcursor();
 
     nvim_get_cmdwin_result()
