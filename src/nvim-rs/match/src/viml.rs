@@ -350,9 +350,13 @@ extern "C" {
     fn nvim_match_item_get_conceal_char(m: *mut MatchItemHandle) -> c_int;
     fn nvim_match_item_has_positions(m: *mut MatchItemHandle) -> bool;
     fn nvim_match_item_get_pos_count(m: *mut MatchItemHandle) -> c_int;
-    fn nvim_match_item_pos_get_lnum(m: *mut MatchItemHandle, idx: c_int) -> i32;
-    fn nvim_match_item_pos_get_col(m: *mut MatchItemHandle, idx: c_int) -> i32;
-    fn nvim_match_item_pos_get_len(m: *mut MatchItemHandle, idx: c_int) -> c_int;
+    fn nvim_match_item_get_pos(
+        m: *mut MatchItemHandle,
+        idx: c_int,
+        lnum: *mut i32,
+        col: *mut i32,
+        len: *mut c_int,
+    );
     fn nvim_match_item_get_id(m: *mut MatchItemHandle) -> c_int;
     fn nvim_match_item_get_priority(m: *mut MatchItemHandle) -> c_int;
     fn nvim_match_get_head(wp: *mut WinHandle) -> *mut MatchItemHandle;
@@ -907,12 +911,13 @@ pub unsafe extern "C" fn rs_f_getmatches(
             // Position-based match (added with matchaddpos())
             let pos_count = nvim_match_item_get_pos_count(cur);
             for i in 0..pos_count {
-                let lnum = nvim_match_item_pos_get_lnum(cur, i);
+                let mut lnum: i32 = 0;
+                let mut col: i32 = 0;
+                let mut len: c_int = 0;
+                nvim_match_item_get_pos(cur, i, &raw mut lnum, &raw mut col, &raw mut len);
                 if lnum == 0 {
                     break;
                 }
-                let col = nvim_match_item_pos_get_col(cur, i);
-                let len = nvim_match_item_pos_get_len(cur, i);
 
                 // Allocate sub-list: lnum always, col+len if col > 0
                 let sub_count = if col > 0 { 3 } else { 1 };

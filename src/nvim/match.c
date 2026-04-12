@@ -65,17 +65,23 @@ int nvim_match_item_get_id(matchitem_T *m) { return m != NULL ? m->mit_id : 0; }
 
 int nvim_match_item_get_priority(matchitem_T *m) { return m != NULL ? m->mit_priority : 0; }
 
+/// Get the highlight group ID and conceal char of a match item (batch getter).
+void nvim_match_item_get_conceal_hl(matchitem_T *m, int *hlg_id, int *conceal_char) {
+  if (hlg_id != NULL) { *hlg_id = m != NULL ? m->mit_hlg_id : 0; }
+  if (conceal_char != NULL) { *conceal_char = m != NULL ? m->mit_conceal_char : 0; }
+}
+
 /// Get the highlight group ID of a match item.
 int nvim_match_item_get_hlg_id(matchitem_T *m) { return m != NULL ? m->mit_hlg_id : 0; }
 
 /// Get the conceal character of a match item.
 int nvim_match_item_get_conceal_char(matchitem_T *m) { return m != NULL ? m->mit_conceal_char : 0; }
 
-/// Get the top line number for position matches.
-linenr_T nvim_match_item_get_toplnum(matchitem_T *m) { return m != NULL ? m->mit_toplnum : 0; }
-
-/// Get the bottom line number for position matches.
-linenr_T nvim_match_item_get_botlnum(matchitem_T *m) { return m != NULL ? m->mit_botlnum : 0; }
+/// Get the top and bottom line numbers for a position match (batch getter).
+void nvim_match_item_get_bounds(matchitem_T *m, linenr_T *toplnum, linenr_T *botlnum) {
+  if (toplnum != NULL) { *toplnum = m != NULL ? m->mit_toplnum : 0; }
+  if (botlnum != NULL) { *botlnum = m != NULL ? m->mit_botlnum : 0; }
+}
 
 /// Get the pattern of a match item (may be NULL for position matches).
 const char *nvim_match_item_get_pattern(matchitem_T *m) { return m != NULL ? m->mit_pattern : NULL; }
@@ -98,38 +104,41 @@ void nvim_match_free(matchitem_T *m) { if (m != NULL) { vim_regfree(m->mit_match
 /// Allocate position array for a match item.
 llpos_T *nvim_match_alloc_positions(size_t count) { if (count == 0) { return NULL; } return xcalloc(count, sizeof(llpos_T)); }
 
-/// Set the ID of a match item.
-void nvim_match_item_set_id(matchitem_T *m, int id) { if (m != NULL) { m->mit_id = id; } }
+/// Initialize a newly-allocated match item with common fields (batch setter).
+/// `pat` may be NULL (position-only match). `conceal_char` is a code point (0 = none).
+void nvim_match_item_init(matchitem_T *m, int id, int priority, const char *pat, int hlg_id,
+                          int conceal_char, regprog_T *regprog, int ic, colnr_T maxcol) {
+  if (m == NULL) { return; }
+  m->mit_id       = id;
+  m->mit_priority = priority;
+  m->mit_pattern  = pat != NULL ? xstrdup(pat) : NULL;
+  m->mit_hlg_id   = hlg_id;
+  m->mit_conceal_char = conceal_char;
+  m->mit_match.regprog   = regprog;
+  m->mit_match.rmm_ic    = (bool)ic;
+  m->mit_match.rmm_maxcol = maxcol;
+}
 
-/// Set the priority of a match item.
-void nvim_match_item_set_priority(matchitem_T *m, int priority) { if (m != NULL) { m->mit_priority = priority; } }
-
-/// Set the pattern of a match item (xstrdup).
-void nvim_match_item_set_pattern(matchitem_T *m, const char *pat) { if (m != NULL) { m->mit_pattern = pat != NULL ? xstrdup(pat) : NULL; } }
-
-/// Set the highlight group ID of a match item.
-void nvim_match_item_set_hlg_id(matchitem_T *m, int hlg_id) { if (m != NULL) { m->mit_hlg_id = hlg_id; } }
-
-/// Set the conceal character of a match item.
-void nvim_match_item_set_conceal_char(matchitem_T *m, int ch) { if (m != NULL) { m->mit_conceal_char = ch; } }
-
-/// Set the top line number for position matches.
-void nvim_match_item_set_toplnum(matchitem_T *m, linenr_T lnum) { if (m != NULL) { m->mit_toplnum = lnum; } }
-
-/// Set the bottom line number for position matches.
-void nvim_match_item_set_botlnum(matchitem_T *m, linenr_T lnum) { if (m != NULL) { m->mit_botlnum = lnum; } }
-
-/// Set the regprog of a match item.
-void nvim_match_item_set_regprog(matchitem_T *m, regprog_T *regprog) { if (m != NULL) { m->mit_match.regprog = regprog; } }
-
-/// Set rmm_ic of a match item.
-void nvim_match_item_set_rmm_ic(matchitem_T *m, int ic) { if (m != NULL) { m->mit_match.rmm_ic = (bool)ic; } }
-
-/// Set rmm_maxcol of a match item.
-void nvim_match_item_set_rmm_maxcol(matchitem_T *m, colnr_T maxcol) { if (m != NULL) { m->mit_match.rmm_maxcol = maxcol; } }
+/// Set the top and bottom line numbers for position matches (batch setter).
+void nvim_match_item_set_bounds(matchitem_T *m, linenr_T toplnum, linenr_T botlnum) {
+  if (m != NULL) { m->mit_toplnum = toplnum; m->mit_botlnum = botlnum; }
+}
 
 /// Set position array and count for a match item.
 void nvim_match_item_set_pos_array(matchitem_T *m, llpos_T *arr, int count) { if (m != NULL) { m->mit_pos_array = arr; m->mit_pos_count = count; } }
+
+/// Get a single position entry (lnum, col, len) from a match item's position array (batch getter).
+void nvim_match_item_get_pos(matchitem_T *m, int idx, linenr_T *lnum, colnr_T *col, int *len) {
+  if (m == NULL || m->mit_pos_array == NULL || idx < 0 || idx >= m->mit_pos_count) {
+    if (lnum != NULL) { *lnum = 0; }
+    if (col  != NULL) { *col  = 0; }
+    if (len  != NULL) { *len  = 0; }
+    return;
+  }
+  if (lnum != NULL) { *lnum = m->mit_pos_array[idx].lnum; }
+  if (col  != NULL) { *col  = m->mit_pos_array[idx].col;  }
+  if (len  != NULL) { *len  = m->mit_pos_array[idx].len;  }
+}
 
 /// Set a single position entry in a position array.
 void nvim_match_pos_set(llpos_T *arr, int idx, linenr_T lnum, colnr_T col, int len) { if (arr != NULL && idx >= 0) { arr[idx].lnum = lnum; arr[idx].col = col; arr[idx].len = len; } }

@@ -48,25 +48,26 @@ extern "C" {
     fn nvim_match_item_set_next(m: *mut MatchItemHandle, next: *mut MatchItemHandle);
     fn nvim_match_item_get_id(m: *mut MatchItemHandle) -> c_int;
     fn nvim_match_item_get_priority(m: *mut MatchItemHandle) -> c_int;
-    fn nvim_match_item_get_toplnum(m: *mut MatchItemHandle) -> i32;
-    fn nvim_match_item_get_botlnum(m: *mut MatchItemHandle) -> i32;
+    fn nvim_match_item_get_bounds(m: *mut MatchItemHandle, toplnum: *mut i32, botlnum: *mut i32);
 
     // Match item allocation / deallocation
     fn nvim_match_alloc() -> *mut MatchItemHandle;
     fn nvim_match_free(m: *mut MatchItemHandle);
     fn nvim_match_alloc_positions(count: usize) -> *mut LlposT;
 
-    // Match item field setters
-    fn nvim_match_item_set_id(m: *mut MatchItemHandle, id: c_int);
-    fn nvim_match_item_set_priority(m: *mut MatchItemHandle, priority: c_int);
-    fn nvim_match_item_set_pattern(m: *mut MatchItemHandle, pat: *const c_char);
-    fn nvim_match_item_set_hlg_id(m: *mut MatchItemHandle, hlg_id: c_int);
-    fn nvim_match_item_set_conceal_char(m: *mut MatchItemHandle, ch: c_int);
-    fn nvim_match_item_set_toplnum(m: *mut MatchItemHandle, lnum: i32);
-    fn nvim_match_item_set_botlnum(m: *mut MatchItemHandle, lnum: i32);
-    fn nvim_match_item_set_regprog(m: *mut MatchItemHandle, regprog: *mut RegProgHandle);
-    fn nvim_match_item_set_rmm_ic(m: *mut MatchItemHandle, ic: c_int);
-    fn nvim_match_item_set_rmm_maxcol(m: *mut MatchItemHandle, maxcol: i32);
+    // Match item batch setters (Phase 3 consolidated)
+    fn nvim_match_item_init(
+        m: *mut MatchItemHandle,
+        id: c_int,
+        priority: c_int,
+        pat: *const c_char,
+        hlg_id: c_int,
+        conceal_char: c_int,
+        regprog: *mut RegProgHandle,
+        ic: c_int,
+        maxcol: i32,
+    );
+    fn nvim_match_item_set_bounds(m: *mut MatchItemHandle, toplnum: i32, botlnum: i32);
     fn nvim_match_item_set_pos_array(m: *mut MatchItemHandle, arr: *mut LlposT, count: c_int);
 
     // Position array access
@@ -231,24 +232,16 @@ pub unsafe extern "C" fn rs_match_add(
         }
     }
 
+    // Conceal character
+    let conceal_ch = if !conceal_char.is_null() && *conceal_char != 0 {
+        nvim_match_utf_ptr2char(conceal_char)
+    } else {
+        0
+    };
+
     // Build new match item
     let m = nvim_match_alloc();
-    nvim_match_item_set_id(m, resolved_id);
-    nvim_match_item_set_priority(m, prio);
-    if !pat.is_null() {
-        nvim_match_item_set_pattern(m, pat); // accessor does xstrdup
-    }
-    nvim_match_item_set_hlg_id(m, hlg_id);
-    nvim_match_item_set_regprog(m, regprog);
-    nvim_match_item_set_rmm_ic(m, 0);
-    nvim_match_item_set_rmm_maxcol(m, 0);
-
-    // Conceal character
-    if !conceal_char.is_null() && *conceal_char != 0 {
-        nvim_match_item_set_conceal_char(m, nvim_match_utf_ptr2char(conceal_char));
-    } else {
-        nvim_match_item_set_conceal_char(m, 0);
-    }
+    nvim_match_item_init(m, resolved_id, prio, pat, hlg_id, conceal_ch, regprog, 0, 0);
 
     // Insert in priority order
     insert_by_priority(wp, m, prio);
@@ -316,21 +309,26 @@ pub unsafe extern "C" fn rs_match_add_pos(
         return -1;
     }
 
+    // Conceal character
+    let conceal_ch = if !conceal_char.is_null() && *conceal_char != 0 {
+        nvim_match_utf_ptr2char(conceal_char)
+    } else {
+        0
+    };
+
     // Build new match item
     let m = nvim_match_alloc();
-    nvim_match_item_set_id(m, resolved_id);
-    nvim_match_item_set_priority(m, prio);
-    nvim_match_item_set_hlg_id(m, hlg_id);
-    nvim_match_item_set_regprog(m, ptr::null_mut());
-    nvim_match_item_set_rmm_ic(m, 0);
-    nvim_match_item_set_rmm_maxcol(m, 0);
-
-    // Conceal character
-    if !conceal_char.is_null() && *conceal_char != 0 {
-        nvim_match_item_set_conceal_char(m, nvim_match_utf_ptr2char(conceal_char));
-    } else {
-        nvim_match_item_set_conceal_char(m, 0);
-    }
+    nvim_match_item_init(
+        m,
+        resolved_id,
+        prio,
+        ptr::null(),
+        hlg_id,
+        conceal_ch,
+        ptr::null_mut(),
+        0,
+        0,
+    );
 
     // Allocate and fill position array
     let mut rtype = UPD_SOME_VALID;
@@ -361,8 +359,7 @@ pub unsafe extern "C" fn rs_match_add_pos(
 
         if toplnum != 0 {
             nvim_match_redraw_win_range_later(wp, toplnum, botlnum);
-            nvim_match_item_set_toplnum(m, toplnum);
-            nvim_match_item_set_botlnum(m, botlnum);
+            nvim_match_item_set_bounds(m, toplnum, botlnum);
             rtype = UPD_VALID;
         }
     }
@@ -420,9 +417,10 @@ pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_
     }
 
     // Check if we need range redraw
-    let toplnum = nvim_match_item_get_toplnum(cur);
+    let mut toplnum: i32 = 0;
+    let mut botlnum: i32 = 0;
+    nvim_match_item_get_bounds(cur, &raw mut toplnum, &raw mut botlnum);
     if toplnum != 0 {
-        let botlnum = nvim_match_item_get_botlnum(cur);
         nvim_match_redraw_win_range_later(wp, toplnum, botlnum);
         rtype = UPD_VALID;
     }

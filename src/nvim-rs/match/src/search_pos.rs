@@ -36,9 +36,13 @@ extern "C" {
     fn nvim_match_item_get_pos_cur(m: *mut MatchItemHandle) -> c_int;
     fn nvim_match_item_set_pos_cur(m: *mut MatchItemHandle, cur: c_int);
     fn nvim_match_item_get_pos_count(m: *mut MatchItemHandle) -> c_int;
-    fn nvim_match_item_pos_get_lnum(m: *mut MatchItemHandle, idx: c_int) -> i32;
-    fn nvim_match_item_pos_get_col(m: *mut MatchItemHandle, idx: c_int) -> i32;
-    fn nvim_match_item_pos_get_len(m: *mut MatchItemHandle, idx: c_int) -> c_int;
+    fn nvim_match_item_get_pos(
+        m: *mut MatchItemHandle,
+        idx: c_int,
+        lnum: *mut i32,
+        col: *mut i32,
+        len: *mut c_int,
+    );
     fn nvim_match_item_pos_swap(m: *mut MatchItemHandle, idx1: c_int, idx2: c_int);
 }
 
@@ -71,9 +75,16 @@ pub unsafe extern "C" fn rs_next_search_hl_pos(
     let pos_count = nvim_match_item_get_pos_count(match_item);
 
     for i in pos_cur..pos_count {
-        let pos_lnum = nvim_match_item_pos_get_lnum(match_item, i);
-        let pos_col = nvim_match_item_pos_get_col(match_item, i);
-        let pos_len = nvim_match_item_pos_get_len(match_item, i);
+        let mut pos_lnum: i32 = 0;
+        let mut pos_col: i32 = 0;
+        let mut pos_len: c_int = 0;
+        nvim_match_item_get_pos(
+            match_item,
+            i,
+            &raw mut pos_lnum,
+            &raw mut pos_col,
+            &raw mut pos_len,
+        );
 
         if pos_lnum == 0 {
             break;
@@ -84,7 +95,14 @@ pub unsafe extern "C" fn rs_next_search_hl_pos(
         if pos_lnum == lnum {
             if found >= 0 {
                 // if this match comes before the one at "found" then swap them
-                let found_col = nvim_match_item_pos_get_col(match_item, found);
+                let mut found_col: i32 = 0;
+                nvim_match_item_get_pos(
+                    match_item,
+                    found,
+                    std::ptr::null_mut(),
+                    &raw mut found_col,
+                    std::ptr::null_mut(),
+                );
                 if pos_col < found_col {
                     nvim_match_item_pos_swap(match_item, i, found);
                 }
@@ -97,8 +115,15 @@ pub unsafe extern "C" fn rs_next_search_hl_pos(
     nvim_match_item_set_pos_cur(match_item, 0);
 
     if found >= 0 {
-        let found_col = nvim_match_item_pos_get_col(match_item, found);
-        let found_len = nvim_match_item_pos_get_len(match_item, found);
+        let mut found_col: i32 = 0;
+        let mut found_len: c_int = 0;
+        nvim_match_item_get_pos(
+            match_item,
+            found,
+            std::ptr::null_mut(),
+            &raw mut found_col,
+            &raw mut found_len,
+        );
 
         let start = if found_col == 0 { 0 } else { found_col - 1 };
         let end = if found_col == 0 {
