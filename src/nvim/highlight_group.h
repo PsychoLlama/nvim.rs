@@ -15,6 +15,14 @@ typedef struct {
   char *name;
   RgbValue color;
 } color_name_table_T;
+
+/// Extracted fields from a Dict(highlight) for use in set_hl_group (Rust bridge).
+typedef struct {
+  bool force;
+  const char *fg_name;  ///< NULL if not a named color
+  const char *bg_name;
+  const char *sp_name;
+} HlGroupSetInfo;
 extern color_name_table_T color_name_table[708];
 
 // Functions implemented in Rust (nvim-highlight crate) via #[export_name]
@@ -67,5 +75,8 @@ void highlight_changed(void);
 
 // Phase 4: migrated to Rust
 void free_highlight(void);
+
+// Phase 5: migrated to Rust
+void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id);
 
 #include "highlight_group.h.generated.h"

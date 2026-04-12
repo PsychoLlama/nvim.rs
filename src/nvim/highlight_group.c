@@ -185,105 +185,84 @@ void *nvim_hlg_xmemrchr(const void *s, int c, size_t n)
 }
 
 
-void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id)
+// C bridge for set_hl_group Phase 2 migration
+
+HlGroupSetInfo nvim_hlg_extract_set_info(Dict(highlight) *dict)
 {
-  int idx = id - 1;  // Index is ID minus one.
-  bool is_default = attrs.rgb_ae_attr & HL_DEFAULT;
-
-  // Return if "default" was used and the group already has settings
-  if (is_default && hl_has_settings(idx, true) && !dict->force) {
-    return;
+  HlGroupSetInfo info = { 0 };
+  info.force = dict->force;
+  Object fg = HAS_KEY(dict, highlight, fg) ? dict->fg : dict->foreground;
+  Object bg = HAS_KEY(dict, highlight, bg) ? dict->bg : dict->background;
+  Object sp = HAS_KEY(dict, highlight, sp) ? dict->sp : dict->special;
+  if (fg.type == kObjectTypeString && fg.data.string.size > 0) {
+    info.fg_name = fg.data.string.data;
   }
-
-  HlGroup *g = &hl_table[idx];
-  g->sg_cleared = false;
-
-  if (link_id > 0) {
-    g->sg_link = link_id;
-    g->sg_script_ctx = current_sctx;
-    g->sg_script_ctx.sc_lnum += SOURCING_LNUM;
-    nlua_set_sctx(&g->sg_script_ctx);
-    g->sg_set |= SG_LINK;
-    if (is_default) {
-      g->sg_deflink = link_id;
-      g->sg_deflink_sctx = current_sctx;
-      g->sg_deflink_sctx.sc_lnum += SOURCING_LNUM;
-      nlua_set_sctx(&g->sg_deflink_sctx);
-    }
-  } else {
-    g->sg_link = 0;
+  if (bg.type == kObjectTypeString && bg.data.string.size > 0) {
+    info.bg_name = bg.data.string.data;
   }
-
-  g->sg_gui = attrs.rgb_ae_attr &~HL_DEFAULT;
-
-  g->sg_rgb_fg = attrs.rgb_fg_color;
-  g->sg_rgb_bg = attrs.rgb_bg_color;
-  g->sg_rgb_sp = attrs.rgb_sp_color;
-
-  struct {
-    int *dest; RgbValue val; Object name;
-  } cattrs[] = {
-    { &g->sg_rgb_fg_idx, g->sg_rgb_fg,
-      HAS_KEY(dict, highlight, fg) ? dict->fg : dict->foreground },
-    { &g->sg_rgb_bg_idx, g->sg_rgb_bg,
-      HAS_KEY(dict, highlight, bg) ? dict->bg : dict->background },
-    { &g->sg_rgb_sp_idx, g->sg_rgb_sp, HAS_KEY(dict, highlight, sp) ? dict->sp : dict->special },
-    { NULL, -1, NIL },
-  };
-
-  for (int j = 0; cattrs[j].dest; j++) {
-    if (cattrs[j].val < 0) {
-      *cattrs[j].dest = kColorIdxNone;
-    } else if (cattrs[j].name.type == kObjectTypeString && cattrs[j].name.data.string.size) {
-      name_to_color(cattrs[j].name.data.string.data, cattrs[j].dest);
-    } else {
-      *cattrs[j].dest = kColorIdxHex;
-    }
+  if (sp.type == kObjectTypeString && sp.data.string.size > 0) {
+    info.sp_name = sp.data.string.data;
   }
+  return info;
+}
 
-  g->sg_cterm = attrs.cterm_ae_attr &~HL_DEFAULT;
-  g->sg_cterm_bg = attrs.cterm_bg_color;
-  g->sg_cterm_fg = attrs.cterm_fg_color;
-  g->sg_cterm_bold = g->sg_cterm & HL_BOLD;
-  g->sg_blend = attrs.hl_blend;
+/// Get current_sctx value.
+sctx_T nvim_hlg_get_current_sctx(void)
+{
+  return current_sctx;
+}
 
-  g->sg_script_ctx = current_sctx;
-  g->sg_script_ctx.sc_lnum += SOURCING_LNUM;
-  nlua_set_sctx(&g->sg_script_ctx);
+/// Get SOURCING_LNUM value.
+int nvim_hlg_get_sourcing_lnum(void)
+{
+  return SOURCING_LNUM;
+}
 
-  g->sg_attr = hl_get_syn_attr(0, id, attrs);
+/// Call nlua_set_sctx.
+void nvim_hlg_nlua_set_sctx(sctx_T *sctx)
+{
+  nlua_set_sctx(sctx);
+}
 
-  // 'Normal' is special
-  if (strcmp(g->sg_name_u, "NORMAL") == 0) {
-    cterm_normal_fg_color = g->sg_cterm_fg;
-    cterm_normal_bg_color = g->sg_cterm_bg;
-    bool did_changed = false;
-    if (normal_bg != g->sg_rgb_bg || normal_fg != g->sg_rgb_fg || normal_sp != g->sg_rgb_sp) {
-      did_changed = true;
-    }
-    normal_fg = g->sg_rgb_fg;
-    normal_bg = g->sg_rgb_bg;
-    normal_sp = g->sg_rgb_sp;
+/// Call name_to_color.
+RgbValue nvim_hlg_name_to_color(const char *name, int *idx)
+{
+  return name_to_color(name, idx);
+}
 
-    if (did_changed) {
-      highlight_attr_set_all();
-    }
-    ui_default_colors_set();
-  } else {
-    // a cursor style uses this syn_id, make sure its attribute is updated.
-    if (cursor_mode_uses_syn_id(id)) {
-      ui_mode_info_set();
-    }
-  }
+/// Call highlight_attr_set_all().
+void nvim_hlg_highlight_attr_set_all(void)
+{
+  highlight_attr_set_all();
+}
 
-  if (!updating_screen) {
-    redraw_all_later(UPD_NOT_VALID);
-  }
+/// Call ui_default_colors_set().
+void nvim_hlg_ui_default_colors_set(void)
+{
+  ui_default_colors_set();
+}
+
+/// Call redraw_all_later(UPD_NOT_VALID).
+void nvim_hlg_redraw_all_later(void)
+{
+  redraw_all_later(UPD_NOT_VALID);
+}
+
+/// Get updating_screen global.
+bool nvim_hlg_updating_screen(void)
+{
+  return updating_screen;
+}
+
+/// Set need_highlight_changed to true.
+void nvim_hlg_set_need_highlight_changed(void)
+{
   need_highlight_changed = true;
 }
 
 
-
+// set_hl_group migrated to Rust (Phase 2).
+// See src/nvim-rs/highlight_group/src/ffi.rs.
 
 
 static bool hlgroup2dict(Dict *hl, NS ns_id, int hl_id, Arena *arena)

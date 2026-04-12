@@ -57,6 +57,30 @@ extern "C" {
     fn nvim_hlg_xmemrchr(s: *const c_void, c: c_int, n: usize) -> *mut c_void;
 }
 
+// C accessors used by the Phase 2 Rust implementation of set_hl_group.
+extern "C" {
+    /// Extract Dict(highlight) fields into HlGroupSetInfo bridge struct.
+    fn nvim_hlg_extract_set_info(dict: *mut c_void) -> crate::types::HlGroupSetInfo;
+    /// Get current_sctx value.
+    fn nvim_hlg_get_current_sctx() -> crate::types::SctxT;
+    /// Get SOURCING_LNUM value.
+    fn nvim_hlg_get_sourcing_lnum() -> c_int;
+    /// Call nlua_set_sctx.
+    fn nvim_hlg_nlua_set_sctx(sctx: *mut crate::types::SctxT);
+    /// Call name_to_color.
+    fn nvim_hlg_name_to_color(name: *const c_char, idx: *mut c_int) -> c_int;
+    /// Call highlight_attr_set_all().
+    fn nvim_hlg_highlight_attr_set_all();
+    /// Call ui_default_colors_set().
+    fn nvim_hlg_ui_default_colors_set();
+    /// Call redraw_all_later(UPD_NOT_VALID).
+    fn nvim_hlg_redraw_all_later();
+    /// Get updating_screen global.
+    fn nvim_hlg_updating_screen() -> bool;
+    /// Set need_highlight_changed = true.
+    fn nvim_hlg_set_need_highlight_changed();
+}
+
 // =============================================================================
 // Inline helpers for direct highlight_ga access
 // =============================================================================
@@ -2504,4 +2528,117 @@ pub unsafe extern "C" fn rs_syn_add_group(name: *const c_char, len: usize) -> c_
     nvim_hlg_unames_put((*hlgp).sg_name_u, id);
 
     id
+}
+
+// =============================================================================
+// Phase 2: set_hl_group migrated to Rust from highlight_group.c
+// =============================================================================
+
+/// Set highlight group attributes from an API call.
+///
+/// This directly provides the C symbol `set_hl_group`, replacing the C implementation.
+///
+/// # Safety
+/// `dict` must be a valid `Dict(highlight)*` pointer.
+#[export_name = "set_hl_group"]
+pub unsafe extern "C" fn rs_set_hl_group(
+    id: c_int,
+    attrs: crate::HlAttrs,
+    dict: *mut c_void,
+    link_id: c_int,
+) {
+    use nvim_highlight::hl_attr_flags::{HL_BOLD, HL_DEFAULT};
+
+    // SG_LINK flag value (matches C enum in highlight_group.c)
+    const SG_LINK: c_int = 8;
+
+    let idx = id - 1;
+    let is_default = (attrs.rgb_ae_attr & HL_DEFAULT) != 0;
+
+    let info = nvim_hlg_extract_set_info(dict);
+
+    // Return if "default" was used and the group already has settings.
+    if is_default && rs_hl_has_settings(idx, true) && !info.force {
+        return;
+    }
+
+    let sg = &mut *hl_table_ptr(idx);
+    sg.sg_cleared = false;
+
+    if link_id > 0 {
+        sg.sg_link = link_id;
+        sg.sg_script_ctx = nvim_hlg_get_current_sctx();
+        sg.sg_script_ctx.sc_lnum += nvim_hlg_get_sourcing_lnum();
+        nvim_hlg_nlua_set_sctx(&raw mut sg.sg_script_ctx);
+        sg.sg_set |= SG_LINK;
+        if is_default {
+            sg.sg_deflink = link_id;
+            sg.sg_deflink_sctx = nvim_hlg_get_current_sctx();
+            sg.sg_deflink_sctx.sc_lnum += nvim_hlg_get_sourcing_lnum();
+            nvim_hlg_nlua_set_sctx(&raw mut sg.sg_deflink_sctx);
+        }
+    } else {
+        sg.sg_link = 0;
+    }
+
+    sg.sg_gui = (attrs.rgb_ae_attr & !HL_DEFAULT) as c_int;
+
+    sg.sg_rgb_fg = attrs.rgb_fg_color;
+    sg.sg_rgb_bg = attrs.rgb_bg_color;
+    sg.sg_rgb_sp = attrs.rgb_sp_color;
+
+    // Resolve color index for each channel.
+    let channels: [(*mut c_int, crate::types::RgbValue, *const c_char); 3] = [
+        (&raw mut sg.sg_rgb_fg_idx, sg.sg_rgb_fg, info.fg_name),
+        (&raw mut sg.sg_rgb_bg_idx, sg.sg_rgb_bg, info.bg_name),
+        (&raw mut sg.sg_rgb_sp_idx, sg.sg_rgb_sp, info.sp_name),
+    ];
+    for (dest, val, name) in channels {
+        if val < 0 {
+            *dest = crate::types::ColorIdx::None as c_int;
+        } else if !name.is_null() {
+            nvim_hlg_name_to_color(name, dest);
+        } else {
+            *dest = crate::types::ColorIdx::Hex as c_int;
+        }
+    }
+
+    sg.sg_cterm = (attrs.cterm_ae_attr & !HL_DEFAULT) as c_int;
+    sg.sg_cterm_bg = attrs.cterm_bg_color as c_int;
+    sg.sg_cterm_fg = attrs.cterm_fg_color as c_int;
+    sg.sg_cterm_bold = (sg.sg_cterm & HL_BOLD as c_int) != 0;
+    sg.sg_blend = attrs.hl_blend;
+
+    sg.sg_script_ctx = nvim_hlg_get_current_sctx();
+    sg.sg_script_ctx.sc_lnum += nvim_hlg_get_sourcing_lnum();
+    nvim_hlg_nlua_set_sctx(&raw mut sg.sg_script_ctx);
+
+    sg.sg_attr = hl_get_syn_attr(0, id, attrs);
+
+    // Normal group is special.
+    let is_normal = {
+        let s = std::ffi::CStr::from_ptr(sg.sg_name_u);
+        s.to_bytes() == b"NORMAL"
+    };
+
+    if is_normal {
+        cterm_normal_fg_color = sg.sg_cterm_fg;
+        cterm_normal_bg_color = sg.sg_cterm_bg;
+        let did_changed =
+            normal_bg != sg.sg_rgb_bg || normal_fg != sg.sg_rgb_fg || normal_sp != sg.sg_rgb_sp;
+        normal_fg = sg.sg_rgb_fg;
+        normal_bg = sg.sg_rgb_bg;
+        normal_sp = sg.sg_rgb_sp;
+        if did_changed {
+            nvim_hlg_highlight_attr_set_all();
+        }
+        nvim_hlg_ui_default_colors_set();
+    } else if cursor_mode_uses_syn_id(id) {
+        ui_mode_info_set();
+    }
+
+    if !nvim_hlg_updating_screen() {
+        nvim_hlg_redraw_all_later();
+    }
+    nvim_hlg_set_need_highlight_changed();
 }

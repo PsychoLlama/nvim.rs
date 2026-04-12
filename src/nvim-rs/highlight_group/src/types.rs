@@ -202,6 +202,25 @@ impl Default for HlGroup {
     }
 }
 
+/// Extracted fields from a `Dict(highlight)` for use in set_hl_group.
+///
+/// This is a C-side-extracted bridge struct that avoids exposing the
+/// complex `Dict(highlight)` / `Object` macro types to Rust.
+///
+/// Mirrors `HlGroupSetInfo` in `highlight_group.h`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct HlGroupSetInfo {
+    /// Whether "force" key was set in the dict.
+    pub force: bool,
+    /// fg color name (NULL if not a named color string).
+    pub fg_name: *const std::ffi::c_char,
+    /// bg color name (NULL if not a named color string).
+    pub bg_name: *const std::ffi::c_char,
+    /// sp color name (NULL if not a named color string).
+    pub sp_name: *const std::ffi::c_char,
+}
+
 /// Growing array (matches C's `garray_T`).
 ///
 /// Used to store the highlight group table (`highlight_ga`).
