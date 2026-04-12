@@ -185,6 +185,48 @@ void nvim_uic_set_attached(bool value)
   ui_client_attached = value;
 }
 
+// C accessor: set ui_client_error_exit global (used by Rust)
+void nvim_uic_set_error_exit(int value)
+{
+  ui_client_error_exit = value;
+}
+
+// C accessor: set ui_client_channel_id global (used by Rust)
+void nvim_uic_set_channel_id(uint64_t value)
+{
+  ui_client_channel_id = value;
+}
+
+// C accessor: queue a channel-connect event (used by Rust)
+// Wraps multiqueue_put(fast_events, channel_connect_event, server_addr)
+// since channel_connect_event is static and cannot be used from Rust.
+void nvim_uic_queue_channel_connect(char *server_addr)
+{
+  multiqueue_put(loop_get_fast_events(&main_loop), channel_connect_event, server_addr);
+}
+
+// C accessor: call tui_grid_resize (used by Rust)
+void nvim_uic_tui_grid_resize(Integer grid, Integer width, Integer height)
+{
+  tui_grid_resize(tui, grid, width, height);
+}
+
+// C accessor: reallocate grid_line buffers (used by Rust)
+void nvim_uic_grid_line_buf_realloc(size_t new_size)
+{
+  xfree(grid_line_buf_char);
+  xfree(grid_line_buf_attr);
+  grid_line_buf_size = new_size;
+  grid_line_buf_char = xmalloc(grid_line_buf_size * sizeof(schar_T));
+  grid_line_buf_attr = xmalloc(grid_line_buf_size * sizeof(sattr_T));
+}
+
+// C accessor: get grid_line_buf_size (used by Rust)
+size_t nvim_uic_get_grid_line_buf_size(void)
+{
+  return grid_line_buf_size;
+}
+
 // ui_client_detach: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 void ui_client_run(bool remote_ui)
@@ -251,30 +293,7 @@ static HlAttrs ui_client_dict2hlattrs(Dict d, bool rgb)
   return attrs;
 }
 
-void ui_client_event_grid_resize(Array args)
-{
-  if (args.size < 3
-      || args.items[0].type != kObjectTypeInteger
-      || args.items[1].type != kObjectTypeInteger
-      || args.items[2].type != kObjectTypeInteger) {
-    ELOG("Error handling ui event 'grid_resize'");
-    return;
-  }
-
-  Integer grid = args.items[0].data.integer;
-  Integer width = args.items[1].data.integer;
-  Integer height = args.items[2].data.integer;
-  tui_grid_resize(tui, grid, width, height);
-
-  if (grid_line_buf_size < (size_t)width) {
-    xfree(grid_line_buf_char);
-    xfree(grid_line_buf_attr);
-    grid_line_buf_size = (size_t)width;
-    grid_line_buf_char = xmalloc(grid_line_buf_size * sizeof(schar_T));
-    grid_line_buf_attr = xmalloc(grid_line_buf_size * sizeof(sattr_T));
-  }
-}
-
+// ui_client_event_grid_resize: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 // ui_client_event_grid_line: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 void ui_client_event_raw_line(GridLineEvent *g)
@@ -290,18 +309,7 @@ void ui_client_event_raw_line(GridLineEvent *g)
                (const schar_T *)grid_line_buf_char, grid_line_buf_attr);
 }
 
-void ui_client_event_connect(Array args)
-{
-  if (args.size < 1 || args.items[0].type != kObjectTypeString) {
-    ELOG("Error handling UI event 'connect'");
-    return;
-  }
-
-  char *server_addr = args.items[0].data.string.data;
-  multiqueue_put(loop_get_fast_events(&main_loop), channel_connect_event, server_addr);
-  // Set a dummy channel ID to prevent client exit when server detaches.
-  ui_client_channel_id = UINT64_MAX;
-}
+// ui_client_event_connect: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 static void channel_connect_event(void **argv)
 {
@@ -330,16 +338,15 @@ static void channel_connect_event(void **argv)
 static Array restart_args = ARRAY_DICT_INIT;
 static bool restart_pending = false;
 
-void ui_client_event_restart(Array args)
+// C accessor: save restart args and set pending flag (used by Rust)
+void nvim_uic_save_restart_args(Array args)
 {
-  // NB: don't send nvim_ui_detach to server, as it may have already exited.
-  // ui_client_detach();
-
-  // Save the arguments for ui_client_may_restart_server() later.
   api_free_array(restart_args);
   restart_args = copy_array(args, NULL);
   restart_pending = true;
 }
+
+// ui_client_event_restart: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 /// Called when the current server has exited.
 void ui_client_may_restart_server(void)
@@ -390,15 +397,7 @@ cleanup:
   restart_args = (Array)ARRAY_DICT_INIT;
 }
 
-void ui_client_event_error_exit(Array args)
-{
-  if (args.size < 1
-      || args.items[0].type != kObjectTypeInteger) {
-    ELOG("Error handling ui event 'error_exit'");
-    return;
-  }
-  ui_client_error_exit = (int)args.items[0].data.integer;
-}
+// ui_client_event_error_exit: implemented in Rust (src/nvim-rs/ui_client/src/events.rs)
 
 #ifdef EXITFREE
 void ui_client_free_all_mem(void)
