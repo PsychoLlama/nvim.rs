@@ -2693,18 +2693,968 @@ pub unsafe extern "C" fn rs_f_getmousepos(
 }
 
 // =============================================================================
-// Phase 7 — do_mouse and nv_mouse
+// Phase 9 — full rs_do_mouse_impl (formerly nvim_do_mouse_impl in C)
 // =============================================================================
 
+// ---------------------------------------------------------------------------
+// Extern declarations for rs_do_mouse_impl
+// ---------------------------------------------------------------------------
 extern "C" {
-    /// C accessor: the actual `do_mouse` logic.
-    fn nvim_do_mouse_impl(
+    // Input helpers
+    fn nvim_get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut bool) -> c_int;
+    fn nvim_vpeekc() -> c_int;
+    fn nvim_safe_vgetc() -> c_int;
+    fn nvim_vungetc(c: c_int);
+    fn nvim_stuffcharReadbuff(c: c_int);
+    fn nvim_stuffnumReadbuff(n: c_int);
+    fn nvim_stuffReadbuff(s: *const c_char);
+    // nvim_AppendCharToRedobuff: declared but unused (middle-click in insert uses nvim_mouse_middle_insert_mode wrapper)
+
+    // Keyboard globals
+    static KeyStuffed: c_int;
+
+    // Mouse global setters
+    fn nvim_set_mouse_grid(val: c_int);
+    fn nvim_set_mouse_row(val: c_int);
+    fn nvim_set_mouse_col(val: c_int);
+    fn nvim_set_mouse_dragging(val: c_int);
+
+    // Mode/state accessors
+    fn nvim_get_state_mouse() -> c_int;
+    fn nvim_get_mod_mask_mouse() -> c_int;
+    fn nvim_get_VIsual_active_mouse() -> bool;
+    fn nvim_get_VIsual_mode_mouse() -> c_int;
+    fn nvim_set_VIsual_mode_mouse(val: c_int);
+    fn nvim_get_VIsual_select_mouse() -> bool;
+    fn nvim_get_mode_displayed_mouse() -> bool;
+    fn nvim_get_p_smd_mouse() -> c_int;
+    fn nvim_get_msg_silent_mouse() -> c_int;
+    fn nvim_get_p_sel() -> *const c_char;
+    fn nvim_get_p_mousem() -> *const c_char;
+    fn nvim_get_Columns_mouse() -> c_int;
+    fn nvim_get_firstwin_winrow_mouse() -> c_int;
+    fn nvim_get_cmdwin_type_mouse() -> c_int;
+    fn nvim_tab_page_click_defs_valid() -> bool;
+    fn nvim_mouse_get_tab_click_type(col: c_int) -> c_int;
+    fn nvim_get_tab_page_click_defs_ptr() -> StlClickDefinitionHandle;
+    fn nvim_get_restart_edit_mouse() -> c_int;
+
+    // Insert/put/register operations
+    fn nvim_eval_has_provider(feat: *const c_char) -> bool;
+    fn nvim_mouse_middle_insert_mode(regname: c_int, count: c_int, fixindent: bool) -> bool;
+    fn nvim_do_put_middle_click(regname: c_int, dir: c_int, count: c_int, fixindent: bool);
+    fn nvim_set_where_paste_started_to_cursor();
+
+    // Click defs accessors
+    fn nvim_win_get_status_click_defs(wp: WinHandle) -> StlClickDefinitionHandle;
+    fn nvim_win_get_winbar_click_defs(wp: WinHandle) -> StlClickDefinitionHandle;
+    fn nvim_win_get_statuscol_click_defs(wp: WinHandle) -> StlClickDefinitionHandle;
+    fn nvim_win_get_status_click_defs_size(wp: WinHandle) -> c_int;
+    fn nvim_win_get_statuscol_click_defs_size(wp: WinHandle) -> c_int;
+    fn nvim_stl_click_defs_get_type(click_defs: StlClickDefinitionHandle, col: c_int) -> c_int;
+
+    // Navigation/tag/quickfix
+    fn nvim_curwin_is_qf() -> c_int;
+    fn nvim_curwin_is_ll() -> c_int;
+    fn nvim_do_cmdline_cmd_mouse(cmd: *const c_char) -> c_int;
+    fn nvim_curbuf_is_help_mouse() -> c_int;
+
+    // Position operations
+    fn nvim_gchar_pos(lnum: linenr_T, col: c_int, coladd: c_int) -> c_int;
+    fn nvim_inc_pos(lnum: *mut linenr_T, col: *mut c_int, coladd: *mut c_int) -> c_int;
+    fn nvim_findmatch_nul(
         oap: OpargHandle,
-        c: c_int,
-        dir: c_int,
-        count: c_int,
-        fixindent: bool,
+        lnum: *mut linenr_T,
+        col: *mut c_int,
+        coladd: *mut c_int,
+        motion_type_out: *mut c_int,
     ) -> bool;
+    fn nvim_ml_get_line(lnum: linenr_T) -> *const c_char;
+    fn nvim_ascii_iswhite_mouse(c: c_int) -> c_int;
+    fn nvim_vim_iswordc_mouse(c: c_int) -> c_int;
+    fn nvim_get_cursor_pos_ptr_mouse() -> *const c_char;
+    fn nvim_utfc_ptr2len_at_cursor() -> c_int;
+
+    // Visual/cursor operations
+    fn nvim_getvcols_mouse(
+        leftcol: *mut colnr_T,
+        rightcol: *mut colnr_T,
+        sv_lnum: linenr_T,
+        sv_col: c_int,
+        sv_coladd: c_int,
+        ev_lnum: linenr_T,
+        ev_col: c_int,
+        ev_coladd: c_int,
+    );
+    fn nvim_curwin_coladvance(col: c_int) -> c_int;
+    fn nvim_curwin_get_curswant() -> c_int;
+    fn nvim_set_curswant_flag();
+    fn nvim_set_VIsual_to_cursor();
+    fn nvim_get_VIsual_pos(lnum: *mut linenr_T, col: *mut c_int, coladd: *mut c_int);
+    fn nvim_set_VIsual_lnum_col_coladd(lnum: linenr_T, col: c_int, coladd: c_int);
+    fn nvim_set_VIsual_col_only(col: c_int);
+    fn nvim_inc_VIsual_col();
+    fn nvim_inc_cursor_col();
+    fn nvim_set_cursor_pos(lnum: linenr_T, col: c_int, coladd: c_int);
+    fn nvim_set_cursor_col(col: c_int);
+
+    // Tabpage ops
+    fn nvim_goto_tabpage(n: c_int);
+    fn nvim_tabpage_new();
+
+    // Scroll
+    fn nvim_scroll_redraw(up: bool, count: c_int);
+
+    // Cross-crate Rust functions
+    fn rs_prep_redo(
+        regname: c_int,
+        num: c_int,
+        cmd1: c_int,
+        cmd2: c_int,
+        cmd3: c_int,
+        cmd4: c_int,
+        cmd5: c_int,
+    );
+    fn rs_get_scrolloff_value(wp: WinHandle) -> c_int;
+    fn rs_setFoldRepeat(lnum: linenr_T, count: c_int, do_open: bool);
+    fn rs_clearop(oap: OpargHandle);
+    fn rs_clearopbeep(oap: OpargHandle);
+
+    #[link_name = "nvim_set_redraw_cmdline"]
+    fn nvim_set_redraw_cmdline_mouse(val: bool);
+}
+
+// ---------------------------------------------------------------------------
+// Constants for rs_do_mouse_impl
+// ---------------------------------------------------------------------------
+
+/// `K_MOUSEMOVE` = `TERMCAP2KEY(KS_EXTRA=253`, `KE_MOUSEMOVE=100`)
+const K_MOUSEMOVE: c_int = -(253 + (100i32 << 8));
+
+/// KEY2TERMCAP1(x): extract the termcap1 byte from a negative key code.
+#[inline]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+fn key2termcap1(x: c_int) -> c_int {
+    ((-x as u32) >> 8) as c_int & 0xff
+}
+
+/// NUL key code value (used in `rs_prep_redo` calls).
+const NUL_KEY: c_int = 0;
+
+// Mode bits
+const MODE_INSERT_IMPL: c_int = 0x10;
+
+// Direction constants
+const FORWARD_IMPL: c_int = 1;
+const BACKWARD_IMPL: c_int = -1;
+
+// Ctrl key codes
+const CTRL_O_CODE: c_int = 15;
+const CTRL_T_CODE: c_int = 20;
+const CTRL_G_CODE: c_int = 7;
+const CTRL_RSB_CODE: c_int = 29;
+
+// K_MIDDLEMOUSE = TERMCAP2KEY(KS_EXTRA=253, KE_MIDDLEMOUSE=47)
+const K_MIDDLEMOUSE_IMPL: c_int = -(253 + (47i32 << 8));
+
+// kStlClickType enum values (match C)
+const STL_CLICK_DISABLED: c_int = 0;
+const STL_CLICK_TAB_SWITCH: c_int = 1;
+const STL_CLICK_TAB_CLOSE: c_int = 2;
+const STL_CLICK_FUNC_RUN: c_int = 3;
+
+// op_type OP_NOP = 0, motion kMTCharWise = 0, kMTLineWise = 1
+const OP_NOP_IMPL: c_int = 0;
+const MT_CHAR_WISE: c_int = 0;
+const MT_LINE_WISE: c_int = 1;
+
+// Static state for in_tab_line and orig_cursor (from C's static locals in nvim_do_mouse_impl)
+static mut IN_TAB_LINE: bool = false;
+static mut ORIG_CURSOR: PosT = PosT {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+// ---------------------------------------------------------------------------
+// Helpers for oparg_T field access (opaque pointer)
+// ---------------------------------------------------------------------------
+
+/// Get `op_type` from oparg handle (first field, `c_int` at offset 0).
+#[inline]
+unsafe fn oap_op_type(oap: OpargHandle) -> c_int {
+    if oap.is_null() {
+        OP_NOP_IMPL
+    } else {
+        *(oap.cast::<c_int>())
+    }
+}
+
+/// Get `regname` from oparg handle (second field after `op_type`).
+#[inline]
+unsafe fn oap_regname(oap: OpargHandle) -> c_int {
+    use nvim_normal::types::OpargT;
+    if oap.is_null() {
+        0
+    } else {
+        (*oap.cast::<OpargT>()).regname
+    }
+}
+
+/// Set `motion_type` field of oparg handle.
+#[inline]
+unsafe fn oap_set_motion_type(oap: OpargHandle, val: c_int) {
+    use nvim_normal::types::OpargT;
+    if !oap.is_null() {
+        (*oap.cast::<OpargT>()).motion_type = val;
+    }
+}
+
+/// Get `VIsual` position as a `PosT`.
+#[inline]
+unsafe fn get_visual_pos() -> PosT {
+    let mut lnum: linenr_T = 0;
+    let mut col: c_int = 0;
+    let mut coladd: c_int = 0;
+    nvim_get_VIsual_pos(&raw mut lnum, &raw mut col, &raw mut coladd);
+    PosT { lnum, col, coladd }
+}
+
+/// Check if mousemodel is popup (first char of `p_mousem` is 'p').
+#[inline]
+unsafe fn mouse_model_popup_impl() -> bool {
+    let p = nvim_get_p_mousem();
+    !p.is_null() && *p.cast::<u8>() == b'p'
+}
+
+/// Check equality of two `PosT` values.
+#[inline]
+fn pos_equal(a: PosT, b: PosT) -> bool {
+    a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
+}
+
+// ---------------------------------------------------------------------------
+// The main migration: rs_do_mouse_impl
+// ---------------------------------------------------------------------------
+
+/// Full implementation of `do_mouse` logic (was `nvim_do_mouse_impl` in C).
+///
+/// # Safety
+/// `oap` may be null. Otherwise must be valid `oparg_T*`.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+unsafe fn rs_do_mouse_impl(
+    oap: OpargHandle,
+    c: c_int,
+    dir: c_int,
+    count: c_int,
+    fixindent: bool,
+) -> bool {
+    // ------------------------------------------------------------------
+    // Drag coalescing loop
+    // ------------------------------------------------------------------
+    let which_button: c_int;
+    let is_click: bool;
+    let is_drag: bool;
+
+    {
+        let mut wb: c_int;
+        let mut ic = false;
+        let mut id = false;
+        loop {
+            wb = nvim_get_mouse_button(key2termcap1(c), &raw mut ic, &raw mut id);
+            if id && KeyStuffed == 0 && nvim_vpeekc() != 0 {
+                let save_grid = mouse_grid;
+                let save_row = mouse_row;
+                let save_col = mouse_col;
+                let nc = nvim_safe_vgetc();
+                if c == nc {
+                    continue;
+                }
+                nvim_vungetc(nc);
+                nvim_set_mouse_grid(save_grid);
+                nvim_set_mouse_row(save_row);
+                nvim_set_mouse_col(save_col);
+            }
+            break;
+        }
+        which_button = wb;
+        is_click = ic;
+        is_drag = id;
+    }
+
+    if c == K_MOUSEMOVE {
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // got_click tracking
+    // ------------------------------------------------------------------
+    if is_click {
+        GOT_CLICK = true;
+    } else {
+        if !GOT_CLICK {
+            return false;
+        }
+        if !is_drag {
+            GOT_CLICK = false;
+            if IN_TAB_LINE {
+                IN_TAB_LINE = false;
+                return false;
+            }
+        }
+    }
+
+    let mm = nvim_get_mod_mask_mouse();
+
+    // ------------------------------------------------------------------
+    // CTRL + right mouse = CTRL-T
+    // ------------------------------------------------------------------
+    if is_click && (mm & MOD_MASK_CTRL) != 0 && which_button == MOUSE_RIGHT {
+        if (nvim_get_state_mouse() & MODE_INSERT_IMPL) != 0 {
+            nvim_stuffcharReadbuff(CTRL_O_CODE);
+        }
+        if count > 1 {
+            nvim_stuffnumReadbuff(count);
+        }
+        nvim_stuffcharReadbuff(CTRL_T_CODE);
+        GOT_CLICK = false;
+        return false;
+    }
+
+    // CTRL only works with left mouse button
+    if (mm & MOD_MASK_CTRL) != 0 && which_button != MOUSE_LEFT {
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Modifier filtering
+    // ------------------------------------------------------------------
+    if (mm & (MOD_MASK_SHIFT | MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_META)) != 0
+        && (!is_click || (mm & MOD_MASK_MULTI_CLICK) != 0 || which_button == MOUSE_MIDDLE)
+        && !((mm & (MOD_MASK_SHIFT | MOD_MASK_ALT)) != 0
+            && mouse_model_popup_impl()
+            && which_button == MOUSE_LEFT)
+        && !((mm & MOD_MASK_ALT) != 0 && !mouse_model_popup_impl() && which_button == MOUSE_RIGHT)
+    {
+        return false;
+    }
+
+    // Ignore drag/release with middle button
+    if !is_click && which_button == MOUSE_MIDDLE {
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Middle mouse button (before jump_to_mouse)
+    // ------------------------------------------------------------------
+    let mut regname = oap_regname(oap);
+    if which_button == MOUSE_MIDDLE {
+        let state = nvim_get_state_mouse();
+        if state == MODE_NORMAL {
+            if !oap.is_null() && oap_op_type(oap) != OP_NOP_IMPL {
+                rs_clearopbeep(oap);
+                return false;
+            }
+            if nvim_get_VIsual_active_mouse() {
+                if nvim_get_VIsual_select_mouse() {
+                    nvim_stuffcharReadbuff(CTRL_G_CODE);
+                    nvim_stuffReadbuff(c"\"+p".as_ptr());
+                } else {
+                    nvim_stuffcharReadbuff(c_int::from(b'y'));
+                    nvim_stuffcharReadbuff(K_MIDDLEMOUSE_IMPL);
+                }
+                return false;
+            }
+            // The rest is below jump_to_mouse
+        } else if (state & MODE_INSERT_IMPL) == 0 {
+            return false;
+        }
+        if (state & MODE_INSERT_IMPL) != 0 {
+            return nvim_mouse_middle_insert_mode(regname, count, fixindent);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Tab line handling
+    // ------------------------------------------------------------------
+    let mut jump_flags: c_int = if is_click {
+        0
+    } else {
+        MOUSE_FOCUS | MOUSE_DID_MOVE
+    };
+    let old_curwin = nvim_get_curwin();
+
+    if nvim_tab_page_click_defs_valid() {
+        let fwwinrow = nvim_get_firstwin_winrow_mouse();
+        if mouse_grid <= 1 && mouse_row == 0 && fwwinrow > 0 {
+            if is_drag {
+                if IN_TAB_LINE {
+                    rs_move_tab_to_mouse();
+                }
+                return false;
+            }
+            if is_click && nvim_get_cmdwin_type_mouse() == 0 && mouse_col < nvim_get_Columns_mouse()
+            {
+                let tabnr = nvim_mouse_get_tab_click_tabnr(mouse_col);
+                IN_TAB_LINE = true;
+                let click_type = nvim_mouse_get_tab_click_type(mouse_col);
+                if click_type == STL_CLICK_TAB_SWITCH {
+                    if which_button == MOUSE_MIDDLE {
+                        rs_mouse_tab_close(tabnr);
+                    } else if (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK {
+                        end_visual_mode();
+                        nvim_tabpage_new();
+                        tabpage_move(if tabnr == 0 { 9999 } else { tabnr - 1 });
+                    } else {
+                        nvim_goto_tabpage(tabnr);
+                        if nvim_get_curwin() != old_curwin {
+                            end_visual_mode();
+                        }
+                    }
+                } else if click_type == STL_CLICK_TAB_CLOSE {
+                    rs_mouse_tab_close(tabnr);
+                } else if click_type == STL_CLICK_FUNC_RUN {
+                    rs_call_click_def_func(
+                        nvim_get_tab_page_click_defs_ptr(),
+                        mouse_col,
+                        which_button,
+                    );
+                }
+                // kStlClickDisabled: do nothing
+            }
+            return true;
+        } else if is_drag && IN_TAB_LINE {
+            rs_move_tab_to_mouse();
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Popup model translation
+    // ------------------------------------------------------------------
+    let mut m_pos_flag: c_int = 0;
+    let mut m_pos = PosT::default();
+    let mut which_button = which_button; // shadow as mutable
+
+    if mouse_model_popup_impl() {
+        m_pos_flag = rs_get_fpos_of_mouse(&raw mut m_pos);
+        let not_in_ui = (m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL)) == 0;
+        if not_in_ui && which_button == MOUSE_RIGHT && (mm & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) == 0
+        {
+            if !is_click {
+                return false;
+            }
+            return (rs_do_popup(which_button, m_pos_flag, m_pos) & CURSOR_MOVED) != 0;
+        }
+        if not_in_ui && which_button == MOUSE_LEFT && (mm & (MOD_MASK_SHIFT | MOD_MASK_ALT)) != 0 {
+            which_button = MOUSE_RIGHT;
+            // Note: the C code also does mod_mask &= ~MOD_MASK_SHIFT here
+            // mod_mask is a C global; we can't mutate it, but only the
+            // jump_flags computation below uses it and we re-read with nvim_get_mod_mask_mouse()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Visual mode flag setup
+    // ------------------------------------------------------------------
+    let mm = nvim_get_mod_mask_mouse();
+    let state = nvim_get_state_mouse();
+    let mut start_visual = PosT::default();
+    let mut end_visual = PosT::default();
+
+    if (state & (MODE_NORMAL | MODE_INSERT_IMPL)) != 0
+        && (mm & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) == 0
+    {
+        if which_button == MOUSE_LEFT {
+            if is_click {
+                if nvim_get_VIsual_active_mouse() {
+                    jump_flags |= MOUSE_MAY_STOP_VIS;
+                }
+            } else {
+                jump_flags |= MOUSE_MAY_VIS;
+            }
+        } else if which_button == MOUSE_RIGHT {
+            if is_click && nvim_get_VIsual_active_mouse() {
+                let curwin = nvim_get_curwin();
+                let cursor = *nvim_win_get_cursor_ptr(curwin);
+                let visual = get_visual_pos();
+                if pos_lt(cursor, visual) {
+                    start_visual = cursor;
+                    end_visual = visual;
+                } else {
+                    start_visual = visual;
+                    end_visual = cursor;
+                }
+            }
+            jump_flags |= MOUSE_FOCUS;
+            jump_flags |= MOUSE_MAY_VIS;
+        }
+    }
+
+    // If operator pending, ignore drags/releases
+    if !is_drag && !oap.is_null() && oap_op_type(oap) != OP_NOP_IMPL {
+        GOT_CLICK = false;
+        oap_set_motion_type(oap, MT_CHAR_WISE);
+    }
+
+    // Releasing button: tell jump_to_mouse
+    if !is_click && !is_drag {
+        jump_flags |= MOUSE_RELEASED;
+    }
+
+    // ------------------------------------------------------------------
+    // jump_to_mouse
+    // ------------------------------------------------------------------
+    let old_active = nvim_get_VIsual_active_mouse();
+    let curwin = nvim_get_curwin();
+    let save_cursor = *nvim_win_get_cursor_ptr(curwin);
+
+    let inclusive_ptr: *mut bool = if oap.is_null() {
+        std::ptr::null_mut()
+    } else {
+        use nvim_normal::types::OpargT;
+        std::ptr::addr_of_mut!((*oap.cast::<OpargT>()).inclusive)
+    };
+
+    jump_flags = rs_jump_to_mouse(jump_flags, inclusive_ptr, which_button);
+
+    let moved = (jump_flags & CURSOR_MOVED) != 0;
+    let in_winbar = (jump_flags & MOUSE_WINBAR) != 0;
+    let in_statuscol = (jump_flags & MOUSE_STATUSCOL) != 0;
+    let in_status_line = (jump_flags & IN_STATUS_LINE) != 0;
+    let in_global_statusline = in_status_line && nvim_global_stl_height() > 0;
+    let in_sep_line = (jump_flags & IN_SEP_LINE) != 0;
+
+    // ------------------------------------------------------------------
+    // Status line / winbar / statuscol click dispatch
+    // ------------------------------------------------------------------
+    if (in_winbar || in_status_line || in_statuscol) && is_click {
+        let mut click_grid = mouse_grid;
+        let mut click_row = mouse_row;
+        let mut click_col = mouse_col;
+        let wp =
+            rs_mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col);
+        if wp.is_null() {
+            return false;
+        }
+
+        let click_defs_raw = if in_status_line {
+            nvim_win_get_status_click_defs(wp)
+        } else if in_winbar {
+            nvim_win_get_winbar_click_defs(wp)
+        } else {
+            nvim_win_get_statuscol_click_defs(wp)
+        };
+
+        let (click_defs, click_col) = if in_global_statusline {
+            let cw = nvim_get_curwin();
+            (nvim_win_get_status_click_defs(cw), mouse_col)
+        } else {
+            (click_defs_raw, click_col)
+        };
+
+        let click_col = if in_statuscol && nvim_win_get_p_rl(wp) != 0 {
+            nvim_win_get_view_width(wp) - click_col - 1
+        } else {
+            click_col
+        };
+
+        // Bounds checks
+        if in_statuscol && click_col >= nvim_win_get_statuscol_click_defs_size(wp) {
+            return false;
+        }
+        if in_status_line {
+            let check_wp = if in_global_statusline {
+                nvim_get_curwin()
+            } else {
+                wp
+            };
+            if click_col >= nvim_win_get_status_click_defs_size(check_wp) {
+                return false;
+            }
+        }
+
+        if !click_defs.is_null() {
+            let click_type = nvim_stl_click_defs_get_type(click_defs, click_col);
+            if click_type == STL_CLICK_DISABLED {
+                if in_statuscol
+                    && mouse_model_popup_impl()
+                    && which_button == MOUSE_RIGHT
+                    && (mm & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) == 0
+                {
+                    rs_do_popup(which_button, m_pos_flag, m_pos);
+                }
+            } else if click_type == STL_CLICK_FUNC_RUN {
+                rs_call_click_def_func(click_defs, click_col, which_button);
+            }
+        }
+
+        if !(in_statuscol && (jump_flags & (MOUSE_FOLD_CLOSE | MOUSE_FOLD_OPEN)) != 0) {
+            return false;
+        }
+    } else if in_winbar || in_statuscol {
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Operator clear on window change
+    // ------------------------------------------------------------------
+    if nvim_get_curwin() != old_curwin && !oap.is_null() && oap_op_type(oap) != OP_NOP_IMPL {
+        rs_clearop(oap);
+    }
+
+    // ------------------------------------------------------------------
+    // Fold open/close
+    // ------------------------------------------------------------------
+    let mm = nvim_get_mod_mask_mouse();
+    if mm == 0
+        && !is_drag
+        && (jump_flags & (MOUSE_FOLD_CLOSE | MOUSE_FOLD_OPEN)) != 0
+        && which_button == MOUSE_LEFT
+    {
+        let curwin = nvim_get_curwin();
+        let lnum = (*nvim_win_get_cursor_ptr(curwin)).lnum;
+        if (jump_flags & MOUSE_FOLD_OPEN) != 0 {
+            rs_setFoldRepeat(lnum, 1, true);
+        } else {
+            rs_setFoldRepeat(lnum, 1, false);
+        }
+        if nvim_get_curwin() == old_curwin {
+            nvim_set_cursor_pos(save_cursor.lnum, save_cursor.col, save_cursor.coladd);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Scroll dragging
+    // ------------------------------------------------------------------
+    if nvim_get_VIsual_active_mouse() && is_drag && rs_get_scrolloff_value(nvim_get_curwin()) > 0 {
+        if mouse_row == 0 {
+            nvim_set_mouse_dragging(2);
+        } else {
+            nvim_set_mouse_dragging(1);
+        }
+    }
+
+    // Drag above window: scroll down
+    if is_drag && mouse_row < 0 && !in_status_line {
+        nvim_scroll_redraw(false, 1);
+        nvim_set_mouse_row(0);
+    }
+
+    // ------------------------------------------------------------------
+    // Visual extend (right-click in visual mode)
+    // ------------------------------------------------------------------
+    let old_mode = nvim_get_VIsual_mode_mouse();
+    let state = nvim_get_state_mouse();
+
+    if start_visual.lnum != 0 {
+        let mm = nvim_get_mod_mask_mouse();
+        if (mm & MOD_MASK_ALT) != 0 {
+            nvim_set_VIsual_mode_mouse(VISUAL_BLOCK);
+        }
+        let vmode = nvim_get_VIsual_mode_mouse();
+        let curwin = nvim_get_curwin();
+        let cursor = *nvim_win_get_cursor_ptr(curwin);
+
+        if vmode == VISUAL_BLOCK {
+            let mut leftcol: colnr_T = 0;
+            let mut rightcol: colnr_T = 0;
+            nvim_getvcols_mouse(
+                &raw mut leftcol,
+                &raw mut rightcol,
+                start_visual.lnum,
+                start_visual.col,
+                start_visual.coladd,
+                end_visual.lnum,
+                end_visual.col,
+                end_visual.coladd,
+            );
+            let curswant = nvim_curwin_get_curswant();
+            let target_col = if curswant > i32::midpoint(leftcol, rightcol) {
+                leftcol
+            } else {
+                rightcol
+            };
+            let target_lnum = if cursor.lnum >= i32::midpoint(start_visual.lnum, end_visual.lnum) {
+                start_visual.lnum
+            } else {
+                end_visual.lnum
+            };
+            // Move VIsual to the right column
+            let save_curs = cursor;
+            nvim_set_cursor_pos(target_lnum, target_col, 0);
+            nvim_curwin_coladvance(target_col);
+            // VIsual = curwin->w_cursor (after coladvance)
+            let curwin = nvim_get_curwin();
+            let new_curs = *nvim_win_get_cursor_ptr(curwin);
+            nvim_set_VIsual_lnum_col_coladd(new_curs.lnum, new_curs.col, new_curs.coladd);
+            nvim_set_cursor_pos(save_curs.lnum, save_curs.col, save_curs.coladd);
+        } else if pos_lt(cursor, start_visual) {
+            nvim_set_VIsual_lnum_col_coladd(end_visual.lnum, end_visual.col, end_visual.coladd);
+        } else if pos_lt(end_visual, cursor) {
+            nvim_set_VIsual_lnum_col_coladd(
+                start_visual.lnum,
+                start_visual.col,
+                start_visual.coladd,
+            );
+        } else if end_visual.lnum == start_visual.lnum {
+            if (cursor.col - start_visual.col) > (end_visual.col - cursor.col) {
+                nvim_set_VIsual_lnum_col_coladd(
+                    start_visual.lnum,
+                    start_visual.col,
+                    start_visual.coladd,
+                );
+            } else {
+                nvim_set_VIsual_lnum_col_coladd(end_visual.lnum, end_visual.col, end_visual.coladd);
+            }
+        } else {
+            let diff = (cursor.lnum - start_visual.lnum) - (end_visual.lnum - cursor.lnum);
+            // diff > 0: cursor is closest to end, anchor at start
+            // diff < 0: cursor is closest to start, anchor at end
+            // diff == 0 (middle line): compare column
+            if diff > 0
+                || (diff == 0 && cursor.col >= i32::midpoint(start_visual.col, end_visual.col))
+            {
+                nvim_set_VIsual_lnum_col_coladd(
+                    start_visual.lnum,
+                    start_visual.col,
+                    start_visual.coladd,
+                );
+            } else {
+                nvim_set_VIsual_lnum_col_coladd(end_visual.lnum, end_visual.col, end_visual.coladd);
+            }
+        }
+    } else if (state & MODE_INSERT_IMPL) != 0 && nvim_get_VIsual_active_mouse() {
+        nvim_stuffcharReadbuff(CTRL_O_CODE);
+    }
+
+    // ------------------------------------------------------------------
+    // Middle click put, Ctrl-click tag, shift-click search,
+    // multi-click word/line/block selection
+    // ------------------------------------------------------------------
+    let mm = nvim_get_mod_mask_mouse();
+
+    if which_button == MOUSE_MIDDLE {
+        if regname == 0 && nvim_eval_has_provider(c"clipboard".as_ptr()) {
+            regname = c_int::from(b'*');
+        }
+        let fixindent_char = if fixindent {
+            if dir == BACKWARD_IMPL {
+                c_int::from(b'[')
+            } else {
+                c_int::from(b']')
+            }
+        } else if dir == FORWARD_IMPL {
+            c_int::from(b'p')
+        } else {
+            c_int::from(b'P')
+        };
+        let fixindent_char2 = if fixindent {
+            c_int::from(b'p')
+        } else {
+            NUL_KEY
+        };
+        rs_prep_redo(
+            regname,
+            count,
+            NUL_KEY,
+            fixindent_char,
+            NUL_KEY,
+            fixindent_char2,
+            NUL_KEY,
+        );
+        if nvim_get_restart_edit_mouse() != 0 {
+            nvim_set_where_paste_started_to_cursor();
+        }
+        nvim_do_put_middle_click(regname, dir, count, fixindent);
+    } else if ((mm & MOD_MASK_CTRL) != 0 || (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK)
+        && nvim_curwin_is_qf() != 0
+    {
+        nvim_do_cmdline_cmd_mouse(c".cc".as_ptr());
+        GOT_CLICK = false;
+    } else if ((mm & MOD_MASK_CTRL) != 0 || (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK)
+        && nvim_curwin_is_ll() != 0
+    {
+        nvim_do_cmdline_cmd_mouse(c".ll".as_ptr());
+        GOT_CLICK = false;
+    } else if (mm & MOD_MASK_CTRL) != 0
+        || (nvim_curbuf_is_help_mouse() != 0 && (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK)
+    {
+        let state = nvim_get_state_mouse();
+        if (state & MODE_INSERT_IMPL) != 0 {
+            nvim_stuffcharReadbuff(CTRL_O_CODE);
+        }
+        nvim_stuffcharReadbuff(CTRL_RSB_CODE);
+        GOT_CLICK = false;
+    } else if (mm & MOD_MASK_SHIFT) != 0 {
+        let state = nvim_get_state_mouse();
+        if (state & MODE_INSERT_IMPL) != 0 || nvim_get_VIsual_select_mouse() {
+            nvim_stuffcharReadbuff(CTRL_O_CODE);
+        }
+        if which_button == MOUSE_LEFT {
+            nvim_stuffcharReadbuff(c_int::from(b'*'));
+        } else {
+            nvim_stuffcharReadbuff(c_int::from(b'#'));
+        }
+    } else if in_status_line || in_sep_line {
+        // Do nothing
+    } else if (mm & MOD_MASK_MULTI_CLICK) != 0 && (state & (MODE_NORMAL | MODE_INSERT_IMPL)) != 0 {
+        if is_click || !nvim_get_VIsual_active_mouse() {
+            if nvim_get_VIsual_active_mouse() {
+                ORIG_CURSOR = get_visual_pos();
+            } else {
+                nvim_set_VIsual_to_cursor();
+                let curwin = nvim_get_curwin();
+                ORIG_CURSOR = *nvim_win_get_cursor_ptr(curwin);
+                nvim_set_VIsual_active(true);
+                nvim_set_VIsual_reselect(true);
+                rs_may_start_select(c_int::from(b'o'));
+                setmouse_global();
+            }
+            let mm = nvim_get_mod_mask_mouse();
+            if (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK {
+                if (mm & MOD_MASK_ALT) != 0 {
+                    nvim_set_VIsual_mode_mouse(VISUAL_BLOCK);
+                } else {
+                    nvim_set_VIsual_mode_mouse(c_int::from(b'v'));
+                }
+            } else if (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_3CLICK {
+                nvim_set_VIsual_mode_mouse(c_int::from(b'V'));
+            } else if (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_4CLICK {
+                nvim_set_VIsual_mode_mouse(VISUAL_BLOCK);
+            }
+        }
+
+        // Double-click: select word or block
+        let mm = nvim_get_mod_mask_mouse();
+        if (mm & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK {
+            let mut found_match = false;
+
+            if is_click {
+                // Skip white space, then check for bracket match
+                let curwin = nvim_get_curwin();
+                let cursor = *nvim_win_get_cursor_ptr(curwin);
+                let mut ep_lnum = cursor.lnum;
+                let mut ep_col = cursor.col;
+                let mut ep_coladd = cursor.coladd;
+
+                loop {
+                    let gc = nvim_gchar_pos(ep_lnum, ep_col, ep_coladd);
+                    if nvim_ascii_iswhite_mouse(gc) == 0 {
+                        break;
+                    }
+                    if nvim_inc_pos(&raw mut ep_lnum, &raw mut ep_col, &raw mut ep_coladd) < 0 {
+                        break;
+                    }
+                }
+                nvim_set_cursor_pos(ep_lnum, ep_col, ep_coladd);
+                oap_set_motion_type(oap, MT_CHAR_WISE);
+
+                let curwin = nvim_get_curwin();
+                let ep = *nvim_win_get_cursor_ptr(curwin);
+                let vis = get_visual_pos();
+                let vmode = nvim_get_VIsual_mode_mouse();
+                let gc = nvim_gchar_pos(ep.lnum, ep.col, ep.coladd);
+
+                if !oap.is_null()
+                    && vmode == c_int::from(b'v')
+                    && nvim_vim_iswordc_mouse(gc) == 0
+                    && pos_equal(ep, vis)
+                {
+                    let mut m_lnum: linenr_T = 0;
+                    let mut m_col: c_int = 0;
+                    let mut m_coladd: c_int = 0;
+                    let mut mot: c_int = 0;
+                    if nvim_findmatch_nul(
+                        oap,
+                        &raw mut m_lnum,
+                        &raw mut m_col,
+                        &raw mut m_coladd,
+                        &raw mut mot,
+                    ) {
+                        nvim_set_cursor_pos(m_lnum, m_col, m_coladd);
+                        if mot == MT_LINE_WISE {
+                            nvim_set_VIsual_mode_mouse(c_int::from(b'V'));
+                        } else {
+                            let psel = nvim_get_p_sel();
+                            if !psel.is_null() && *psel.cast::<u8>() == b'e' {
+                                let curwin = nvim_get_curwin();
+                                let cursor = *nvim_win_get_cursor_ptr(curwin);
+                                let vis = get_visual_pos();
+                                if pos_lt(cursor, vis) {
+                                    nvim_inc_VIsual_col();
+                                } else {
+                                    nvim_inc_cursor_col();
+                                }
+                            }
+                        }
+                        found_match = true;
+                    }
+                }
+            }
+
+            if !found_match && (is_click || is_drag) {
+                let curwin = nvim_get_curwin();
+                let cursor = *nvim_win_get_cursor_ptr(curwin);
+                let orig = ORIG_CURSOR;
+                let psel = nvim_get_p_sel();
+                let sel_exclusive = !psel.is_null() && *psel.cast::<u8>() == b'e';
+
+                if pos_lt(cursor, orig) {
+                    let line = nvim_ml_get_line(cursor.lnum);
+                    nvim_set_cursor_col(rs_find_start_of_word(line, cursor.col));
+                    let vis = get_visual_pos();
+                    let line = nvim_ml_get_line(vis.lnum);
+                    nvim_set_VIsual_col_only(rs_find_end_of_word(line, vis.col, sel_exclusive));
+                } else {
+                    let vis = get_visual_pos();
+                    let line = nvim_ml_get_line(vis.lnum);
+                    nvim_set_VIsual_col_only(rs_find_start_of_word(line, vis.col));
+                    if sel_exclusive {
+                        let cp = nvim_get_cursor_pos_ptr_mouse();
+                        if !cp.is_null() && *cp.cast::<u8>() != 0 {
+                            let len = nvim_utfc_ptr2len_at_cursor();
+                            let curwin = nvim_get_curwin();
+                            let cursor = *nvim_win_get_cursor_ptr(curwin);
+                            nvim_set_cursor_col(cursor.col + len);
+                        }
+                    }
+                    let curwin = nvim_get_curwin();
+                    let cursor = *nvim_win_get_cursor_ptr(curwin);
+                    let line = nvim_ml_get_line(cursor.lnum);
+                    nvim_set_cursor_col(rs_find_end_of_word(line, cursor.col, sel_exclusive));
+                }
+            }
+            nvim_set_curswant_flag();
+        }
+
+        if is_click {
+            redraw_curbuf_later(UPD_INVERTED);
+        }
+    } else if nvim_get_VIsual_active_mouse() && !old_active {
+        let mm = nvim_get_mod_mask_mouse();
+        if (mm & MOD_MASK_ALT) != 0 {
+            nvim_set_VIsual_mode_mouse(VISUAL_BLOCK);
+        } else {
+            nvim_set_VIsual_mode_mouse(c_int::from(b'v'));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Show visual mode change later
+    // ------------------------------------------------------------------
+    let vis_active = nvim_get_VIsual_active_mouse();
+    if (!vis_active && old_active && nvim_get_mode_displayed_mouse())
+        || (vis_active
+            && nvim_get_p_smd_mouse() != 0
+            && nvim_get_msg_silent_mouse() == 0
+            && (!old_active || nvim_get_VIsual_mode_mouse() != old_mode))
+    {
+        nvim_set_redraw_cmdline_mouse(true);
+    }
+
+    moved
 }
 
 /// Do the appropriate action for the current mouse click in the current mode.
@@ -2719,7 +3669,7 @@ pub unsafe extern "C" fn rs_do_mouse(
     count: c_int,
     fixindent: bool,
 ) -> bool {
-    nvim_do_mouse_impl(oap, c, dir, count, fixindent)
+    rs_do_mouse_impl(oap, c, dir, count, fixindent)
 }
 
 /// Mouse clicks and drags (Normal/Visual mode entry point).

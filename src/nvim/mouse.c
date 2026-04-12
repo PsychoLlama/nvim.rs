@@ -133,8 +133,11 @@ void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
   tv_clear(&rettv);
 }
 
-/// C accessor: the actual do_mouse logic — entry point called from rs_do_mouse.
-bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
+// nvim_do_mouse_impl is now implemented in Rust (rs_do_mouse_impl, Phase 9).
+// The C body is preserved in #if 0 for reference; it is dead code.
+#if 0
+/// OLD C implementation (replaced by Rust rs_do_mouse_impl).
+static bool nvim_do_mouse_impl_DELETED(oparg_T *oap, int c, int dir, int count, bool fixindent)
 {
   int which_button;             // MOUSE_LEFT, _MIDDLE or _RIGHT
   bool is_click;                // If false it's a drag or release event
@@ -734,6 +737,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 
   return moved;
 }
+#endif  // nvim_do_mouse_impl_DELETED
 
 // dragwin state and jump_to_mouse logic are now owned by Rust (rs_jump_to_mouse).
 
@@ -823,3 +827,370 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
 }
 
 // nvim_mouse_check_grid_impl and f_getmousepos migrated to Rust.
+
+// =============================================================================
+// Phase 9 accessor functions — used by rs_do_mouse_impl in Rust
+// =============================================================================
+
+// --- Input helpers -----------------------------------------------------------
+
+/// Decode a mouse key code into which_button, is_click, is_drag.
+int nvim_get_mouse_button(int code, bool *is_click, bool *is_drag)
+{
+  return get_mouse_button(code, is_click, is_drag);
+}
+
+/// Peek at the next character in the input queue without consuming it.
+int nvim_vpeekc(void) { return vpeekc(); }
+
+/// Get next character safely (handles special keys).
+int nvim_safe_vgetc(void) { return safe_vgetc(); }
+
+/// Push a character back onto the input queue.
+void nvim_vungetc(int c) { vungetc(c); }
+
+/// Insert a character into the readbuff (stuff buffer).
+void nvim_stuffcharReadbuff(int c) { stuffcharReadbuff(c); }
+
+/// Insert a number into the readbuff (for count prefixes).
+void nvim_stuffnumReadbuff(int n) { stuffnumReadbuff(n); }
+
+/// Insert a string into the readbuff.
+void nvim_stuffReadbuff(const char *s) { stuffReadbuff(s); }
+
+/// Append a character to the redo buffer.
+void nvim_AppendCharToRedobuff(int c) { AppendCharToRedobuff(c); }
+
+// --- Mouse global setters ----------------------------------------------------
+
+/// Set mouse_grid global.
+void nvim_set_mouse_grid(int val) { mouse_grid = val; }
+
+/// Set mouse_row global.
+void nvim_set_mouse_row(int val) { mouse_row = val; }
+
+/// Set mouse_col global.
+void nvim_set_mouse_col(int val) { mouse_col = val; }
+
+// nvim_set_mouse_dragging already defined in normal_shim.c
+
+// --- Mouse global getters ----------------------------------------------------
+
+/// Get mouse_past_bottom global.
+bool nvim_get_mouse_past_bottom(void) { return mouse_past_bottom; }
+
+/// Get mouse_past_eol global.
+bool nvim_get_mouse_past_eol(void) { return mouse_past_eol; }
+
+// --- Mode/state accessors ----------------------------------------------------
+
+/// Get the current editor State.
+int nvim_get_state_mouse(void) { return State; }
+
+/// Get the current mod_mask.
+int nvim_get_mod_mask_mouse(void) { return mod_mask; }
+
+/// Get VIsual_active flag.
+bool nvim_get_VIsual_active_mouse(void) { return VIsual_active; }
+
+/// Get VIsual_mode value.
+int nvim_get_VIsual_mode_mouse(void) { return VIsual_mode; }
+
+/// Set VIsual_mode value.
+void nvim_set_VIsual_mode_mouse(int val) { VIsual_mode = val; }
+
+/// Get VIsual_select flag.
+bool nvim_get_VIsual_select_mouse(void) { return VIsual_select; }
+
+/// Get mode_displayed flag.
+bool nvim_get_mode_displayed_mouse(void) { return mode_displayed; }
+
+/// Get p_smd (show mode) option.
+int nvim_get_p_smd_mouse(void) { return p_smd; }
+
+/// Get msg_silent value.
+int nvim_get_msg_silent_mouse(void) { return msg_silent; }
+
+// nvim_get_p_sel already defined in window_shim.c
+
+/// Get p_mousem (mousemodel) string pointer.
+const char *nvim_get_p_mousem(void) { return (const char *)p_mousem; }
+
+/// Get Columns (screen width) global.
+int nvim_get_Columns_mouse(void) { return Columns; }
+
+/// Get firstwin->w_winrow (or 0 if firstwin is NULL).
+int nvim_get_firstwin_winrow_mouse(void) { return firstwin ? firstwin->w_winrow : 0; }
+
+/// Get cmdwin_type global.
+int nvim_get_cmdwin_type_mouse(void) { return cmdwin_type; }
+
+/// Return true if tab_page_click_defs is initialized (non-NULL).
+bool nvim_tab_page_click_defs_valid(void) { return tab_page_click_defs != NULL; }
+
+/// Get tab_page_click_defs_size.
+int nvim_get_tab_page_click_defs_size(void) { return (int)tab_page_click_defs_size; }
+
+/// Get the click type for a given column from tab_page_click_defs.
+int nvim_mouse_get_tab_click_type(int col)
+{
+  if (tab_page_click_defs == NULL || col < 0 || col >= (int)tab_page_click_defs_size) {
+    return 0;  // kStlClickDisabled
+  }
+  return (int)tab_page_click_defs[col].type;
+}
+
+/// Get pointer to tab_page_click_defs (as opaque handle).
+StlClickDefinition *nvim_get_tab_page_click_defs_ptr(void) { return tab_page_click_defs; }
+
+/// Get restart_edit global.
+int nvim_get_restart_edit_mouse(void) { return restart_edit; }
+
+/// Get VIsual_reselect flag.
+bool nvim_get_VIsual_reselect(void) { return VIsual_reselect; }
+
+// --- Insert/put/register operations ------------------------------------------
+
+// nvim_eval_has_provider already defined in eval/funcs_shim.c
+
+/// Handle middle-click paste in insert mode.
+/// Returns false always (caller should return false after calling this).
+bool nvim_mouse_middle_insert_mode(int regname, int count, bool fixindent)
+{
+  if (regname == '.') {
+    insert_reg(regname, NULL, true);
+  } else {
+    if (regname == 0 && eval_has_provider("clipboard", false)) {
+      regname = '*';
+    }
+    yankreg_T *reg = NULL;
+    if ((State & REPLACE_FLAG) && !yank_register_mline(regname, &reg)) {
+      insert_reg(regname, reg, true);
+    } else {
+      do_put(regname, reg, BACKWARD, 1,
+             (fixindent ? PUT_FIXINDENT : 0) | PUT_CURSEND);
+      AppendCharToRedobuff(Ctrl_R);
+      AppendCharToRedobuff(fixindent ? Ctrl_P : Ctrl_O);
+      AppendCharToRedobuff(regname == 0 ? '"' : regname);
+    }
+  }
+  return false;
+}
+
+/// Middle-click put after jump_to_mouse (normal mode).
+void nvim_do_put_middle_click(int regname, int dir, int count, bool fixindent)
+{
+  yankreg_T *reg = NULL;
+  bool is_mline = yank_register_mline(regname, &reg);
+  if (is_mline) {
+    if (mouse_past_bottom) {
+      dir = FORWARD;
+    }
+  } else if (mouse_past_eol) {
+    dir = FORWARD;
+  }
+
+  int c1, c2;
+  if (fixindent) {
+    c1 = (dir == BACKWARD) ? '[' : ']';
+    c2 = 'p';
+  } else {
+    c1 = (dir == FORWARD) ? 'p' : 'P';
+    c2 = NUL;
+  }
+  rs_prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
+
+  if (restart_edit != 0) {
+    where_paste_started = curwin->w_cursor;
+  }
+  do_put(regname, reg, dir, count,
+         (fixindent ? PUT_FIXINDENT : 0) | PUT_CURSEND);
+}
+
+/// Set where_paste_started to current cursor position.
+void nvim_set_where_paste_started_to_cursor(void)
+{
+  where_paste_started = curwin->w_cursor;
+}
+
+// --- Click defs accessors ----------------------------------------------------
+
+/// Get w_status_click_defs for a window.
+StlClickDefinition *nvim_win_get_status_click_defs(win_T *wp)
+{
+  return wp ? wp->w_status_click_defs : NULL;
+}
+
+/// Get w_winbar_click_defs for a window.
+StlClickDefinition *nvim_win_get_winbar_click_defs(win_T *wp)
+{
+  return wp ? wp->w_winbar_click_defs : NULL;
+}
+
+/// Get w_statuscol_click_defs for a window.
+StlClickDefinition *nvim_win_get_statuscol_click_defs(win_T *wp)
+{
+  return wp ? wp->w_statuscol_click_defs : NULL;
+}
+
+/// Get w_status_click_defs_size for a window.
+int nvim_win_get_status_click_defs_size(win_T *wp)
+{
+  return wp ? (int)wp->w_status_click_defs_size : 0;
+}
+
+/// Get w_statuscol_click_defs_size for a window.
+int nvim_win_get_statuscol_click_defs_size(win_T *wp)
+{
+  return wp ? (int)wp->w_statuscol_click_defs_size : 0;
+}
+
+/// Get click type from a StlClickDefinition array at given column.
+int nvim_stl_click_defs_get_type(StlClickDefinition *click_defs, int col)
+{
+  if (click_defs == NULL) {
+    return 0;  // kStlClickDisabled
+  }
+  return (int)click_defs[col].type;
+}
+
+// --- Navigation/tag/quickfix -------------------------------------------------
+
+/// Return 1 if curwin is a quickfix window (not location list).
+int nvim_curwin_is_qf(void)
+{
+  return (bt_quickfix(curbuf) && curwin->w_llist_ref == NULL) ? 1 : 0;
+}
+
+/// Return 1 if curwin is a location list window.
+int nvim_curwin_is_ll(void)
+{
+  return (bt_quickfix(curbuf) && curwin->w_llist_ref != NULL) ? 1 : 0;
+}
+
+/// Run a cmdline command (wraps do_cmdline_cmd).
+int nvim_do_cmdline_cmd_mouse(const char *cmd)
+{
+  return do_cmdline_cmd(cmd);
+}
+
+/// Return 1 if curbuf is a help buffer.
+int nvim_curbuf_is_help_mouse(void)
+{
+  return curbuf->b_help ? 1 : 0;
+}
+
+// --- Position operations -----------------------------------------------------
+
+/// Get the character at a given (lnum, col, coladd) position.
+int nvim_gchar_pos(linenr_T lnum, int col, int coladd)
+{
+  pos_T p = { .lnum = lnum, .col = col, .coladd = coladd };
+  return gchar_pos(&p);
+}
+
+/// Increment a position (lnum, col, coladd). Returns 1 if moved past EOL.
+int nvim_inc_pos(linenr_T *lnum, int *col, int *coladd)
+{
+  pos_T p = { .lnum = *lnum, .col = *col, .coladd = *coladd };
+  int r = inc(&p);
+  *lnum = p.lnum;
+  *col = p.col;
+  *coladd = p.coladd;
+  return r;
+}
+
+/// Find match using findmatch(). Returns false if no match.
+/// On match, writes the position into *lnum/*col/*coladd and motion_type into *motion_type_out.
+bool nvim_findmatch_nul(oparg_T *oap, linenr_T *lnum, int *col, int *coladd, int *motion_type_out)
+{
+  pos_T *pos = findmatch(oap, NUL);
+  if (pos == NULL) {
+    return false;
+  }
+  *lnum = pos->lnum;
+  *col = pos->col;
+  *coladd = pos->coladd;
+  if (motion_type_out != NULL && oap != NULL) {
+    *motion_type_out = (int)oap->motion_type;
+  }
+  return true;
+}
+
+/// Get line from memline (ml_get).
+const char *nvim_ml_get_line(linenr_T lnum) { return ml_get(lnum); }
+
+/// Check if character is ASCII whitespace.
+int nvim_ascii_iswhite_mouse(int c) { return ascii_iswhite(c) ? 1 : 0; }
+
+/// Check if character is a word character (vim_iswordc).
+int nvim_vim_iswordc_mouse(int c) { return vim_iswordc((unsigned)c) ? 1 : 0; }
+
+/// Get pointer to character at cursor position.
+const char *nvim_get_cursor_pos_ptr_mouse(void) { return get_cursor_pos_ptr(); }
+
+/// Get the byte length of the UTF-8 char at the cursor.
+int nvim_utfc_ptr2len_at_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
+
+// --- Visual/cursor operations ------------------------------------------------
+
+/// Get virtual column ranges for a visual selection.
+void nvim_getvcols_mouse(colnr_T *leftcol, colnr_T *rightcol,
+                          linenr_T sv_lnum, int sv_col, int sv_coladd,
+                          linenr_T ev_lnum, int ev_col, int ev_coladd)
+{
+  pos_T sv = { .lnum = sv_lnum, .col = sv_col, .coladd = sv_coladd };
+  pos_T ev = { .lnum = ev_lnum, .col = ev_col, .coladd = ev_coladd };
+  getvcols(curwin, &sv, &ev, leftcol, rightcol);
+}
+
+/// Advance the cursor in curwin to a given column.
+int nvim_curwin_coladvance(int col) { return coladvance(curwin, (colnr_T)col); }
+
+// nvim_curwin_get_curswant already defined in drawscreen_shim.c
+
+/// Set curwin->w_set_curswant = true.
+void nvim_set_curswant_flag(void) { curwin->w_set_curswant = true; }
+
+/// Set VIsual to current cursor position.
+void nvim_set_VIsual_to_cursor(void) { VIsual = curwin->w_cursor; }
+
+/// Get VIsual position.
+void nvim_get_VIsual_pos(linenr_T *lnum, int *col, int *coladd)
+{
+  *lnum = VIsual.lnum;
+  *col = VIsual.col;
+  *coladd = VIsual.coladd;
+}
+
+/// Set VIsual position (lnum, col, coladd).
+void nvim_set_VIsual_lnum_col_coladd(linenr_T lnum, int col, int coladd)
+{
+  VIsual.lnum = lnum;
+  VIsual.col = col;
+  VIsual.coladd = coladd;
+}
+
+/// Set only VIsual.col (for adjusting column in block-visual).
+void nvim_set_VIsual_col_only(int col) { VIsual.col = col; }
+
+/// Increment VIsual.col by 1.
+void nvim_inc_VIsual_col(void) { VIsual.col++; }
+
+/// Increment cursor col by 1.
+void nvim_inc_cursor_col(void) { curwin->w_cursor.col++; }
+
+// nvim_set_cursor_pos and nvim_set_cursor_col already defined in normal_shim.c
+
+// --- Tabpage ops -------------------------------------------------------------
+
+/// Go to a tab page by number (wraps goto_tabpage).
+void nvim_goto_tabpage(int n) { goto_tabpage(n); }
+
+/// Create a new tab page (wraps tabpage_new).
+void nvim_tabpage_new(void) { tabpage_new(); }
+
+// --- Scroll ------------------------------------------------------------------
+
+/// Scroll and redraw (wraps scroll_redraw).
+void nvim_scroll_redraw(bool up, int count) { scroll_redraw(up, count); }
