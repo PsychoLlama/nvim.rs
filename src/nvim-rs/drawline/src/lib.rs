@@ -7191,6 +7191,669 @@ pub unsafe extern "C" fn rs_win_line_process_char(
     res
 }
 
+// ============================================================================
+// Phase 4: rs_win_line — full Rust orchestration loop
+// ============================================================================
+
+/// Return type of rs_get_foldtext (matches Rust FoldTextResult in fold crate).
+#[repr(C)]
+struct FoldTextResult {
+    text: *mut c_char,
+    text_is_allocated: bool,
+    has_virt_text: bool,
+}
+
+// FFI declarations for Phase 4
+extern "C" {
+    /// rs_get_foldtext from fold crate.
+    fn rs_get_foldtext(
+        wp: WinHandle,
+        lnum: LinenrT,
+        lnume: LinenrT,
+        fi_level: c_int,
+        buf: *mut c_char,
+        vt_out: *mut KVec<VirtTextChunkC>,
+    ) -> FoldTextResult;
+
+    /// get dollar_vcol global.
+    fn nvim_get_dollar_vcol() -> ColnrT;
+    /// wp->w_cline_row.
+    fn nvim_win_get_cline_row(wp: WinHandle) -> c_int;
+    /// wp->w_cline_height.
+    fn nvim_win_get_cline_height(wp: WinHandle) -> c_int;
+    /// Alloc and zero-init a statuscol_T, returns opaque pointer.
+    fn nvim_stcp_alloc() -> *mut c_void;
+    /// Free a heap-allocated statuscol_T.
+    fn nvim_stcp_free(stcp: *mut c_void);
+    /// Set stcp->draw.
+    fn nvim_stcp_set_draw(stcp: *mut c_void, val: bool);
+    /// Set stcp->sattrs (pointer into wlv.sattrs).
+    fn nvim_stcp_set_sattrs(stcp: *mut c_void, sattrs: *mut c_void);
+    /// Set stcp->foldinfo from individual components.
+    fn nvim_stcp_set_foldinfo(
+        stcp: *mut c_void,
+        fi_lnum: c_int,
+        fi_level: c_int,
+        fi_low_level: c_int,
+        fi_lines: c_int,
+    );
+    /// Set stcp->sign_cul_id.
+    fn nvim_stcp_set_sign_cul_id(stcp: *mut c_void, val: c_int);
+    /// Get stcp->draw.
+    fn nvim_stcp_get_draw(stcp: *mut c_void) -> bool;
+    /// Set stcp->width.
+    // nvim_stcp_set_width already declared above
+    /// kv_destroy for VirtLines (destroys the inner VirtLines kvec).
+    fn nvim_c_kv_destroy_virt_lines(vl: *mut c_void);
+    /// xfree a heap-allocated pointer.
+    fn nvim_c_xfree(ptr: *mut c_void);
+}
+
+/// Full Rust implementation of win_line().
+///
+/// Initializes `WinLineVars`, runs pre-loop setup, then executes the main rendering
+/// loop calling all existing Rust phase functions. Returns the last row used.
+///
+/// # Safety
+/// All pointers must be valid. `spv` must point to a valid `spellvars_T`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(unused_assignments)]
+pub unsafe extern "C" fn rs_win_line(
+    wp: WinHandle,
+    lnum: LinenrT,
+    startrow: c_int,
+    endrow: c_int,
+    col_rows: c_int,
+    concealed: bool,
+    spv: *mut c_void,
+    foldinfo: FoldInfo,
+) -> c_int {
+    const TERM_ATTRS_MAX: usize = 4096;
+
+    // Initialize WinLineVars on the stack. Zero-init then set specific fields.
+    let mut wlv: WinLineVars = std::mem::zeroed();
+    wlv.lnum = lnum;
+    wlv.foldinfo = foldinfo;
+    wlv.startrow = startrow;
+    wlv.row = startrow;
+    wlv.fromcol = -10;
+    wlv.tocol = MAXCOL;
+    wlv.vcol_sbr = -1;
+    wlv.old_boguscols = 0;
+    wlv.prev_num_attr = -1;
+
+    // Delegate initialization to Rust rs_win_line_init.
+    let mut wls = WinLineState::default();
+    rs_win_line_init(
+        wp, lnum, startrow, col_rows, concealed, spv, foldinfo, &mut wlv, &mut wls,
+    );
+
+    // Unpack frequently-used wls fields into locals for readability.
+    let view_width = wls.view_width;
+    let view_height = wls.view_height;
+    let in_curline = wls.in_curline;
+    let has_fold = wls.has_fold;
+    let has_foldtext = wls.has_foldtext;
+    let draw_text = wls.draw_text;
+
+    // Pre-loop setup.
+    let mut term_attrs = vec![0i32; TERM_ATTRS_MAX];
+    let plr = rs_c_win_line_pre_loop(
+        wp,
+        lnum,
+        &mut wlv,
+        &mut wls,
+        spv,
+        foldinfo,
+        startrow,
+        endrow,
+        col_rows,
+        term_attrs.as_mut_ptr(),
+    );
+
+    // Build statuscol_T from PreLoopResult (heap-allocated, freed at end).
+    let statuscol = nvim_stcp_alloc();
+    if plr.statuscol_draw {
+        nvim_stcp_set_draw(statuscol, true);
+        nvim_stcp_set_sattrs(statuscol, wlv.sattrs.as_mut_ptr().cast());
+        nvim_stcp_set_foldinfo(
+            statuscol,
+            foldinfo.fi_lnum,
+            foldinfo.fi_level,
+            foldinfo.fi_low_level,
+            foldinfo.fi_lines,
+        );
+        nvim_stcp_set_width(statuscol, plr.statuscol_width);
+        nvim_stcp_set_sign_cul_id(statuscol, plr.statuscol_sign_cul_id);
+    }
+
+    // Re-fetch line pointer (rs_c_win_line_pre_loop may have called ml_get_buf internally).
+    let mut line: *const c_char = if draw_text {
+        nvim_win_ml_get_buf(wp, lnum)
+    } else {
+        c"".as_ptr()
+    };
+    let mut ptr_col: c_int = plr.ptr_offset;
+    let start_vcol = plr.start_vcol;
+    let trailcol = plr.trailcol;
+    let leadcol = plr.leadcol;
+    let mut lcs_eol_todo = plr.lcs_eol_todo;
+    let lcs_eol = plr.lcs_eol;
+    let mut lcs_prec_todo = plr.lcs_prec_todo;
+    let may_have_inline_virt = plr.may_have_inline_virt;
+    let mut virt_line_index = plr.virt_line_index;
+    let mut virt_line_flags = plr.virt_line_flags;
+    let mut draw_cols = plr.draw_cols;
+    let mut leftcols_width = plr.leftcols_width;
+
+    // Re-sync locals that rs_c_win_line_pre_loop may have modified in wls.
+    let mut area_attr = wls.area_attr;
+    let mut search_attr = wls.search_attr;
+    let mut decor_attr = wls.decor_attr;
+    let mut char_attr_pri = wls.char_attr_pri;
+    let area_highlighting = wls.area_highlighting;
+    let mut multi_attr = wls.multi_attr;
+    let mut mb_schar: ScharT = 0;
+    let mut mb_c: c_int = 0;
+    let mut vcol_prev = wls.vcol_prev;
+    let mut is_concealing = wls.is_concealing;
+    let mut did_wcol = wls.did_wcol;
+    let mut saved_attr2 = wls.saved_attr2;
+    let mut has_decor = wls.has_decor;
+    let mut extra_check = wls.extra_check;
+    let mut search_attr_from_match = wls.search_attr_from_match;
+    let mut n_attr3 = wls.n_attr3;
+    let mut saved_attr3 = wls.saved_attr3;
+    let mut decor_need_recheck = wls.decor_need_recheck;
+    let mut win_col_offset = wls.win_col_offset;
+    let mut area_active = wls.area_active;
+    let mut saved_search_attr = wls.saved_search_attr;
+    let mut saved_area_attr = wls.saved_area_attr;
+    let mut saved_decor_attr = wls.saved_decor_attr;
+    let mut saved_search_attr_from_match = wls.saved_search_attr_from_match;
+    let mut on_last_col = wls.on_last_col;
+    let mut match_conc = wls.match_conc;
+    let mut folded_attr = wls.folded_attr;
+    let mut change_index = wls.change_index;
+    let mut change_start = wls.change_start;
+    let mut change_end = wls.change_end;
+    let cul_screenline = wls.cul_screenline;
+    let left_curline_col = wls.left_curline_col;
+    let right_curline_col = wls.right_curline_col;
+    let mut n_extra_next = wls.n_extra_next;
+    let mut extra_attr_next = wls.extra_attr_next;
+    let bg_attr = wls.bg_attr;
+
+    // We use the screen_search_hl pointer (opaque, C-owned).
+    let screen_search_hl = nvim_get_screen_search_hl_ptr();
+
+    // Main rendering loop.
+    // We use a labeled loop to implement the goto end_check: control flow.
+    'main_loop: loop {
+        let mut has_match_conc: c_int = 0;
+        // did_decrement_ptr: tracked in process_char result (pcr), not needed here
+
+        // Get next chunk of extmark highlights if previous approximation was smaller.
+        if wls.check_decor_providers && ptr_col >= wls.decor_provider_end_col {
+            let col = ptr_col;
+            wls.decor_provider_end_col = rs_invoke_range_next(wp, lnum, col as ColnrT, 100);
+            line = if draw_text {
+                nvim_win_ml_get_buf(wp, lnum)
+            } else {
+                c"".as_ptr()
+            };
+            if !wls.has_decor && decor_has_more_decorations(get_decor_state().cast(), lnum - 1) {
+                wls.has_decor = true;
+                wls.extra_check = true;
+                has_decor = true;
+                extra_check = true;
+            }
+        }
+
+        // Delegate the draw_cols block to Rust.
+        let mut goto_end_check = false;
+        if draw_cols {
+            // Sync state into wls before calling rs_win_line_draw_cols.
+            wls.area_attr = area_attr;
+            wls.search_attr = search_attr;
+            wls.decor_attr = decor_attr;
+            wls.char_attr_pri = char_attr_pri;
+            wls.has_decor = has_decor;
+            wls.win_col_offset = win_col_offset;
+
+            let dcr = rs_win_line_draw_cols(
+                wp,
+                lnum,
+                &mut wlv,
+                &wls,
+                statuscol,
+                nvim_stcp_get_draw(statuscol),
+                std::ptr::addr_of_mut!(wls.virt_lines).cast(),
+                ptr_col,
+                startrow,
+                endrow,
+                col_rows,
+                virt_line_index,
+                virt_line_flags,
+                leftcols_width,
+                win_col_offset,
+                draw_text,
+                has_decor,
+                bg_attr,
+            );
+            draw_cols = dcr.draw_cols;
+            leftcols_width = dcr.leftcols_width;
+            virt_line_index = dcr.virt_line_index;
+            virt_line_flags = dcr.virt_line_flags;
+            win_col_offset = dcr.win_col_offset;
+            wls.win_col_offset = win_col_offset;
+
+            // Re-fetch line pointer: rs_win_line_draw_cols may have called ml_get_buf.
+            line = if draw_text {
+                nvim_win_ml_get_buf(wp, lnum)
+            } else {
+                c"".as_ptr()
+            };
+            ptr_col = dcr.ptr_offset;
+
+            if dcr.action == DRAW_COLS_ACTION_BREAK {
+                break 'main_loop;
+            } else if dcr.action == DRAW_COLS_ACTION_CONTINUE {
+                continue 'main_loop;
+            } else if dcr.action == DRAW_COLS_ACTION_GOTO_END_CHECK {
+                goto_end_check = true;
+            }
+        }
+
+        if !goto_end_check {
+            if cul_screenline
+                && wlv.filler_todo <= 0
+                && wlv.vcol >= left_curline_col
+                && wlv.vcol < right_curline_col
+            {
+                rs_apply_cursorline_highlight(wp, &mut wlv);
+            }
+
+            // When still displaying '$' of change command, stop at cursor.
+            let dollar_vcol = nvim_get_dollar_vcol();
+            if dollar_vcol >= 0 && in_curline && wlv.vcol >= nvim_win_get_virtcol(wp) {
+                let buf = BufHandle(nvim_win_get_buffer(wp));
+                rs_draw_virt_text(wp, buf, win_col_offset, &mut wlv.col, wlv.row);
+                rs_wlv_put_linebuf(wp, &mut wlv, wlv.col, false, bg_attr, 0);
+                if nvim_win_get_p_cuc(wp) != 0 {
+                    wlv.row = nvim_win_get_cline_row(wp) + nvim_win_get_cline_height(wp);
+                } else {
+                    wlv.row = view_height;
+                }
+                break 'main_loop;
+            }
+
+            let draw_folded = has_fold && wlv.row == startrow + wlv.filler_lines;
+            if draw_folded && wlv.n_extra == 0 {
+                wlv.char_attr = {
+                    folded_attr = nvim_win_hl_attr(wp, HLF_FL);
+                    folded_attr
+                };
+                wls.folded_attr = folded_attr;
+                decor_attr = 0;
+                wls.decor_attr = 0;
+            }
+
+            let mut extmark_attr: c_int = 0;
+            if wlv.filler_todo <= 0
+                && (area_highlighting || nvim_spv_get_has_spell(spv) || extra_check)
+            {
+                // Sync C locals into wls so Rust can read/write them.
+                wls.area_attr = area_attr;
+                wls.search_attr = search_attr;
+                wls.decor_attr = decor_attr;
+                wls.char_attr_pri = char_attr_pri;
+                // wls.char_attr_base already in wls (no sync needed)
+                wls.search_attr_from_match = search_attr_from_match;
+                wls.on_last_col = on_last_col;
+                wls.area_active = area_active;
+                wls.decor_need_recheck = decor_need_recheck;
+                wls.saved_search_attr = saved_search_attr;
+                wls.saved_area_attr = saved_area_attr;
+                wls.saved_decor_attr = saved_decor_attr;
+                wls.saved_search_attr_from_match = saved_search_attr_from_match;
+                wls.match_conc = match_conc;
+                wls.folded_attr = folded_attr;
+                wls.change_index = change_index;
+                wls.change_start = change_start;
+                wls.change_end = change_end;
+                wls.vcol_prev = vcol_prev;
+                // wls.fromcol_prev already in wls (no sync needed)
+
+                let hlr = rs_win_line_highlight_attrs(
+                    wp,
+                    &mut wlv,
+                    &mut wls,
+                    ptr_col as ColnrT,
+                    lcs_eol_todo,
+                    may_have_inline_virt,
+                    lnum,
+                    screen_search_hl,
+                );
+                extmark_attr = hlr.extmark_attr;
+                has_match_conc = hlr.has_match_conc;
+
+                // Sync wls back to C locals.
+                area_attr = wls.area_attr;
+                search_attr = wls.search_attr;
+                char_attr_pri = wls.char_attr_pri;
+                search_attr_from_match = wls.search_attr_from_match;
+                on_last_col = wls.on_last_col;
+                area_active = wls.area_active;
+                decor_need_recheck = wls.decor_need_recheck;
+                saved_search_attr = wls.saved_search_attr;
+                saved_area_attr = wls.saved_area_attr;
+                saved_decor_attr = wls.saved_decor_attr;
+                saved_search_attr_from_match = wls.saved_search_attr_from_match;
+                match_conc = wls.match_conc;
+                change_index = wls.change_index;
+                change_start = wls.change_start;
+                change_end = wls.change_end;
+
+                // Re-fetch line pointer: rs_win_line_highlight_attrs may have reallocated.
+                line = if draw_text {
+                    nvim_win_ml_get_buf(wp, lnum)
+                } else {
+                    c"".as_ptr()
+                };
+            }
+
+            if draw_folded && has_foldtext && wlv.n_extra == 0 && wlv.col == win_col_offset {
+                let v = ptr_col;
+                let lnume = lnum + foldinfo.fi_lines - 1;
+                // Zero-fill buf_fold with spaces.
+                memset(wls.buf_fold.as_mut_ptr().cast(), c_int::from(b' '), 51);
+                let ftr = rs_get_foldtext(
+                    wp,
+                    lnum,
+                    lnume,
+                    foldinfo.fi_level,
+                    wls.buf_fold.as_mut_ptr(),
+                    &mut wls.fold_vt,
+                );
+                wlv.p_extra = ftr.text;
+                wlv.n_extra = strlen(ftr.text.cast_const()) as c_int;
+
+                if ftr.text_is_allocated {
+                    wls.foldtext_free = ftr.text;
+                }
+                wlv.sc_extra = 0;
+                wlv.sc_final = 0;
+                *ftr.text.add(wlv.n_extra as usize) = 0;
+
+                // Get line again: evaluating 'foldtext' may have freed it.
+                line = nvim_win_ml_get_buf(wp, lnum);
+                ptr_col = v;
+            }
+
+            // Draw 'fold' fillchar after 'foldtext', or after 'eol' listchar for transparent foldtext.
+            let ptr_is_nul = *line.add(ptr_col as usize) == 0;
+            if draw_folded
+                && wlv.n_extra == 0
+                && wlv.col < view_width
+                && (has_foldtext
+                    || (ptr_is_nul
+                        && (nvim_win_get_p_list(wp) == 0 || !lcs_eol_todo || lcs_eol == 0)))
+            {
+                wlv.sc_extra = nvim_win_get_fcs_fold(wp);
+                wlv.sc_final = 0;
+                wlv.n_extra = view_width - wlv.col;
+                search_attr = 0;
+                wls.search_attr = 0;
+            }
+
+            if draw_folded && wlv.n_extra != 0 && wlv.col >= view_width {
+                wlv.n_extra = 0;
+            }
+
+            // Get the next character to put on the screen.
+            let ptr_is_nul = *line.add(ptr_col as usize) == 0;
+            if wlv.n_extra > 0 {
+                // Phase 5: delegate n_extra processing to Rust.
+                wls.search_attr = search_attr;
+                wls.saved_search_attr = saved_search_attr;
+                wls.area_attr = area_attr;
+                wls.saved_area_attr = saved_area_attr;
+                wls.decor_attr = decor_attr;
+                wls.saved_decor_attr = saved_decor_attr;
+                wls.n_extra_next = n_extra_next;
+                wls.extra_attr_next = extra_attr_next;
+                wls.multi_attr = multi_attr;
+                let ner = rs_win_line_process_n_extra(wp, &mut wlv, &mut wls, ptr_is_nul);
+                mb_schar = ner.mb_schar;
+                mb_c = ner.mb_c;
+                let _ = ner.mb_l; // consumed by rs_win_line_process_n_extra internally
+                search_attr = wls.search_attr;
+                saved_search_attr = wls.saved_search_attr;
+                area_attr = wls.area_attr;
+                saved_area_attr = wls.saved_area_attr;
+                decor_attr = wls.decor_attr;
+                saved_decor_attr = wls.saved_decor_attr;
+                n_extra_next = wls.n_extra_next;
+                extra_attr_next = wls.extra_attr_next;
+                multi_attr = wls.multi_attr;
+            } else if wlv.filler_todo > 0 {
+                mb_c = c_int::from(b' ');
+                mb_schar = schar_from_char(c_int::from(b' '));
+            } else if has_foldtext || (has_fold && wlv.col >= view_width) {
+                mb_schar = 0;
+            } else {
+                // Phase 3: delegate character processing to Rust.
+                wls.extra_check = extra_check;
+                wls.has_decor = has_decor;
+                wls.char_attr_pri = char_attr_pri;
+                let pcr = rs_win_line_process_char(
+                    wp,
+                    lnum,
+                    &mut wlv,
+                    &mut wls,
+                    spv,
+                    line,
+                    ptr_col,
+                    trailcol,
+                    leadcol,
+                    extmark_attr,
+                    lcs_eol_todo,
+                    search_attr,
+                    area_attr,
+                    term_attrs.as_ptr(),
+                    has_match_conc,
+                );
+                mb_schar = pcr.mb_schar;
+                mb_c = pcr.mb_c;
+                let _ = pcr.mb_l; // mb_l consumed by rs_win_line_process_char internally
+                ptr_col = pcr.ptr_col;
+                lcs_eol_todo = pcr.lcs_eol_todo;
+                search_attr = pcr.search_attr;
+                decor_attr = pcr.decor_attr;
+                let _ = pcr.did_decrement_ptr; // handled inside rs_win_line_process_char
+                is_concealing = wls.is_concealing;
+                saved_attr2 = wls.saved_attr2;
+                let _ = wls.prev_syntax_id; // tracked inside wls
+                char_attr_pri = wls.char_attr_pri;
+                let _ = wls.has_syntax; // tracked inside wls
+            }
+
+            // cursor conceal correct. Delegate to Rust.
+            wls.did_wcol = did_wcol;
+            wls.mb_schar = mb_schar;
+            rs_win_line_cursor_conceal_correct(
+                wp,
+                &mut wlv,
+                &mut wls,
+                in_curline,
+                ptr_col as ColnrT,
+            );
+            did_wcol = wls.did_wcol;
+
+            // extra_attr restore + precedes listchar. Delegate to Rust.
+            wls.search_attr_from_match = search_attr_from_match;
+            wls.extra_attr_next = extra_attr_next;
+            wls.n_attr3 = n_attr3;
+            wls.saved_attr3 = saved_attr3;
+            wls.mb_schar = mb_schar;
+            wls.mb_c = mb_c;
+            wls.n_extra_next = n_extra_next;
+            lcs_prec_todo = rs_win_line_extra_attr_restore(wp, &mut wlv, &mut wls, lcs_prec_todo);
+            search_attr_from_match = wls.search_attr_from_match;
+            extra_attr_next = wls.extra_attr_next;
+            n_attr3 = wls.n_attr3;
+            saved_attr3 = wls.saved_attr3;
+            mb_schar = wls.mb_schar;
+            mb_c = wls.mb_c;
+            n_extra_next = wls.n_extra_next;
+
+            // At end of the text line or just after the last character.
+            // EOL highlight. Delegate to Rust.
+            if mb_schar == 0 && wls.eol_hl_off == 0 {
+                wls.eol_hl_off = rs_win_line_eol_highlight(
+                    wp,
+                    &mut wlv,
+                    &wls,
+                    lcs_eol_todo,
+                    area_attr,
+                    ptr_col as ColnrT,
+                    screen_search_hl,
+                );
+            }
+
+            // At end of the text line. EOL fill. Delegate to Rust.
+            if mb_schar == 0 {
+                // wls.fold_vt already in wls (no sync needed)
+                if rs_win_line_eol_fill(
+                    wp,
+                    &mut wlv,
+                    &mut wls,
+                    start_vcol,
+                    lcs_eol_todo,
+                    wls.eol_hl_off,
+                    term_attrs.as_ptr(),
+                    has_decor,
+                ) {
+                    break 'main_loop;
+                }
+            }
+
+            // extends char. Delegate to Rust.
+            wls.has_decor = has_decor;
+            wls.mb_schar = mb_schar;
+            wls.mb_c = mb_c;
+            let ptr_is_nul_now = *line.add(ptr_col as usize) == 0;
+            rs_win_line_extends_char(
+                wp,
+                &mut wlv,
+                &mut wls,
+                ptr_col as ColnrT,
+                ptr_is_nul_now,
+                lcs_eol,
+                lcs_eol_todo,
+                may_have_inline_virt,
+            );
+            mb_schar = wls.mb_schar;
+            mb_c = wls.mb_c;
+
+            // cursorcolumn highlight. Delegate to Rust.
+            let vcol_save_attr = rs_win_line_cursorcolumn(
+                wp,
+                &mut wlv,
+                wls.lnum_in_visual_area,
+                search_attr,
+                area_attr,
+            );
+
+            if wlv.filler_todo <= 0 {
+                vcol_prev = wlv.vcol;
+                wls.vcol_prev = vcol_prev;
+            }
+
+            // store char. Delegate to Rust.
+            rs_win_line_store_char(wp, &mut wlv, &wls, mb_schar, multi_attr, is_concealing);
+            multi_attr = 0;
+
+            // post-store. Delegate to Rust.
+            wls.has_decor = has_decor;
+            wls.n_attr3 = n_attr3;
+            wls.saved_attr3 = saved_attr3;
+            wls.saved_attr2 = saved_attr2;
+            wls.decor_need_recheck = decor_need_recheck;
+            rs_win_line_post_store(wp, &mut wlv, &mut wls, vcol_save_attr, ptr_col as ColnrT);
+            n_attr3 = wls.n_attr3;
+            saved_attr3 = wls.saved_attr3;
+            decor_need_recheck = wls.decor_need_recheck;
+        } // end of !goto_end_check block
+
+        // end_check: end-check / wrap. Delegate to Rust.
+        {
+            let ptr_is_nul_ec = *line.add(ptr_col as usize) == 0;
+            let has_foldtext_ec = has_foldtext;
+            let has_n_extra = wlv.n_extra != 0
+                && (wlv.sc_extra != 0 || (!wlv.p_extra.is_null() && *wlv.p_extra != 0));
+            let beyond_foldtext = !has_foldtext_ec || virt_line_index >= 0;
+            if wlv.col >= view_width
+                && beyond_foldtext
+                && (wlv.col <= leftcols_width
+                    || !ptr_is_nul_ec
+                    || wlv.filler_todo > 0
+                    || (nvim_win_get_p_list(wp) != 0 && nvim_win_lcs_eol(wp) != 0 && lcs_eol_todo)
+                    || has_n_extra
+                    || (may_have_inline_virt
+                        && has_more_inline_virt_impl(&mut wlv, ptr_col as isize)))
+            {
+                let mut statuscol_draw_out = nvim_stcp_get_draw(statuscol);
+                let mut virt_line_index_out = virt_line_index;
+                let mut virt_line_flags_out = virt_line_flags;
+                let mut lcs_prec_todo_out = lcs_prec_todo;
+                let mut draw_cols_out = draw_cols;
+                if rs_win_line_end_check(
+                    wp,
+                    &mut wlv,
+                    &mut wls,
+                    endrow,
+                    leftcols_width,
+                    virt_line_index,
+                    virt_line_flags,
+                    ptr_is_nul_ec,
+                    lcs_eol_todo,
+                    std::ptr::addr_of_mut!(wls.virt_lines).cast(),
+                    bg_attr,
+                    &mut statuscol_draw_out,
+                    &mut draw_cols_out,
+                    &mut virt_line_index_out,
+                    &mut virt_line_flags_out,
+                    &mut lcs_prec_todo_out,
+                ) {
+                    break 'main_loop;
+                }
+                nvim_stcp_set_draw(statuscol, statuscol_draw_out);
+                virt_line_index = virt_line_index_out;
+                virt_line_flags = virt_line_flags_out;
+                lcs_prec_todo = lcs_prec_todo_out;
+                draw_cols = draw_cols_out;
+            }
+        }
+    } // end main_loop
+
+    // Cleanup.
+    clear_virttext(std::ptr::addr_of_mut!(wls.fold_vt).cast());
+    nvim_c_kv_destroy_virt_lines(std::ptr::addr_of_mut!(wls.virt_lines).cast());
+    if !wls.foldtext_free.is_null() {
+        nvim_c_xfree(wls.foldtext_free.cast());
+    }
+    nvim_stcp_free(statuscol);
+
+    wlv.row
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

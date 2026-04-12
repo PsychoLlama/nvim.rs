@@ -1,4 +1,5 @@
 #include <inttypes.h>
+#include <string.h>
 
 #include "klib/kvec.h"
 #include "nvim/api/private/defs.h"
@@ -438,6 +439,25 @@ int nvim_stcp_get_width(statuscol_T *stcp) { return stcp->width; }
 void nvim_stcp_set_width(statuscol_T *stcp, int val) { stcp->width = val; }
 stl_hlrec_t *nvim_stcp_get_hlrec(statuscol_T *stcp) { return stcp->hlrec; }
 colnr_T *nvim_stcp_get_fold_vcol(statuscol_T *stcp) { return stcp->fold_vcol; }
+bool nvim_stcp_get_draw(statuscol_T *stcp) { return stcp->draw; }
+void nvim_stcp_set_draw(statuscol_T *stcp, bool val) { stcp->draw = val; }
+void nvim_stcp_set_sattrs(statuscol_T *stcp, SignTextAttrs *sattrs) { stcp->sattrs = sattrs; }
+void nvim_stcp_set_foldinfo(statuscol_T *stcp, int fi_lnum, int fi_level, int fi_low_level,
+                            int fi_lines)
+{
+  stcp->foldinfo.fi_lnum = (linenr_T)fi_lnum;
+  stcp->foldinfo.fi_level = fi_level;
+  stcp->foldinfo.fi_low_level = fi_low_level;
+  stcp->foldinfo.fi_lines = (linenr_T)fi_lines;
+}
+void nvim_stcp_set_sign_cul_id(statuscol_T *stcp, int val) { stcp->sign_cul_id = val; }
+statuscol_T *nvim_stcp_alloc(void)
+{
+  statuscol_T *stcp = xmalloc(sizeof(statuscol_T));
+  memset(stcp, 0, sizeof(statuscol_T));
+  return stcp;
+}
+void nvim_stcp_free(statuscol_T *stcp) { xfree(stcp); }
 char *nvim_hlrec_get_start(stl_hlrec_t *sp) { return sp->start; }
 int nvim_hlrec_get_item(stl_hlrec_t *sp) { return (int)sp->item; }
 int nvim_hlrec_get_userhl(stl_hlrec_t *sp) { return sp->userhl; }

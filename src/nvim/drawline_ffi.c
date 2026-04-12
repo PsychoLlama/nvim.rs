@@ -17,6 +17,7 @@
 #include "nvim/mbyte.h"
 #include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
+#include "nvim/memory.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
 #include "nvim/pos_defs.h"
@@ -358,4 +359,12 @@ int nvim_c_win_charsize_for_lbr(win_T *wp, char *line,  // NOLINT(readability-no
   return win_charsize(cstype, vcol, p, utf_ptr2CharInfo(p).value, &csarg).width;
 }
 
+// ============================================================================
+// Phase 4 accessors: needed by rs_win_line
+// ============================================================================
 
+/// Destroy a VirtLines kvec (wraps kv_destroy).
+void nvim_c_kv_destroy_virt_lines(VirtLines *vl) { kv_destroy(*vl); }
+
+/// Free a heap-allocated pointer (wraps xfree).
+void nvim_c_xfree(void *ptr) { xfree(ptr); }

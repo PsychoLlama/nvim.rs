@@ -371,6 +371,10 @@ extern ProcessCharResult rs_win_line_process_char(win_T *wp, linenr_T lnum,
                                                   int search_attr, int area_attr,
                                                   const int *term_attrs, int has_match_conc);
 
+/// Full Rust implementation of win_line (Phase 4).
+extern int rs_win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows,
+                       bool concealed, spellvars_T *spv, foldinfo_T foldinfo);
+
 // Phase 1: EOL highlight + fill + cursorcolumn
 extern int rs_win_line_eol_highlight(win_T *wp, winlinevars_T *wlv, const WinLineState *state,
                                      bool lcs_eol_todo, int area_attr, colnr_T ptr_col,
@@ -451,6 +455,15 @@ void nvim_win_extmark_push(uint64_t ns_id, uint64_t mark_id, int win_row, int wi
 ///
 /// @return             the number of last row the line occupies.
 int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, bool concealed,
+             spellvars_T *spv, foldinfo_T foldinfo)
+{
+  return rs_win_line(wp, lnum, startrow, endrow, col_rows, concealed, spv, foldinfo);
+}
+
+// DEAD CODE: the following is the old C implementation, kept for reference
+// and deleted in Phase 5. This code is never compiled (guarded by #if 0).
+#if 0
+int win_line_old(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, bool concealed,
              spellvars_T *spv, foldinfo_T foldinfo)
 {
   // Initialize winlinevars_T
@@ -937,4 +950,5 @@ end_check:
   xfree(foldtext_free);
   return wlv.row;
 }
+#endif  // 0 -- dead code (old C implementation)
 
