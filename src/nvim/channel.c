@@ -131,6 +131,9 @@ void channel_free_all_mem(void)
 uint64_t nvim_chan_get_next_chan_id(void) { return next_chan_id; }
 void nvim_chan_set_next_chan_id(uint64_t v) { next_chan_id = v; }
 void nvim_chan_map_put(uint64_t id, Channel *chan) { pmap_put(uint64_t)(&channels, id, chan); }
+// Accessor for did_stdio (static in this file) used by Rust channel_from_stdio
+bool nvim_chan_get_did_stdio(void) { return did_stdio; }
+void nvim_chan_set_did_stdio(bool v) { did_stdio = v; }
 
 // channel_create_event implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
@@ -267,101 +270,11 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   return chan;
 }
 
-uint64_t channel_connect(bool tcp, const char *address, bool rpc, CallbackReader on_output,
-                         int timeout, const char **error)
-{
-  Channel *channel;
-
-  if (!tcp && rpc) {
-    if (server_owns_pipe_address(address)) {
-      // Create a loopback channel. This avoids deadlock if nvim connects to
-      // its own named pipe.
-      channel = channel_alloc(kChannelStreamInternal);
-      channel->stream.internal.cb = LUA_NOREF;
-      rpc_start(channel);
-      goto end;
-    }
-  }
-
-  channel = channel_alloc(kChannelStreamSocket);
-  if (!socket_connect(&main_loop, &channel->stream.socket,
-                      tcp, address, timeout, error)) {
-    channel_destroy_early(channel);
-    return 0;
-  }
-
-  channel->stream.socket.s.internal_close_cb = close_cb;
-  channel->stream.socket.s.internal_data = channel;
-  wstream_init(&channel->stream.socket.s, 0);
-  rstream_init(&channel->stream.socket);
-
-  if (rpc) {
-    rpc_start(channel);
-  } else {
-    channel->on_data = on_output;
-    callback_reader_start(&channel->on_data, "data");
-    rstream_start(&channel->stream.socket, on_channel_data, channel);
-  }
-
-end:
-  channel_create_event(channel, address);
-  return channel->id;
-}
+// channel_connect implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 // channel_from_connection implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
-/// Creates an API channel from stdin/stdout. Used when embedding Nvim.
-uint64_t channel_from_stdio(bool rpc, CallbackReader on_output, const char **error)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (!headless_mode && !embedded_mode) {
-    *error = _("can only be opened in headless mode");
-    return 0;
-  }
-
-  if (did_stdio) {
-    *error = _("channel was already open");
-    return 0;
-  }
-  did_stdio = true;
-
-  Channel *channel = channel_alloc(kChannelStreamStdio);
-
-  int stdin_dup_fd = STDIN_FILENO;
-  int stdout_dup_fd = STDOUT_FILENO;
-#ifdef MSWIN
-  // Strangely, ConPTY doesn't work if stdin and stdout are pipes. So replace
-  // stdin and stdout with CONIN$ and CONOUT$, respectively.
-  if (embedded_mode && os_has_conpty_working()) {
-    stdin_dup_fd = os_dup(STDIN_FILENO);
-    os_replace_stdin_to_conin();
-    stdout_dup_fd = os_dup(STDOUT_FILENO);
-    os_replace_stdout_and_stderr_to_conout();
-  }
-#else
-  if (embedded_mode) {
-    // Redirect stdout/stdin (the UI channel) to stderr. Use fnctl(F_DUPFD_CLOEXEC) instead of dup()
-    // to prevent child processes from inheriting the file descriptors, which are used by UIs to
-    // detect when Nvim exits.
-    stdin_dup_fd = fcntl(STDIN_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
-    stdout_dup_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
-    dup2(STDERR_FILENO, STDOUT_FILENO);
-    dup2(STDERR_FILENO, STDIN_FILENO);
-  }
-#endif
-  rstream_init_fd(&main_loop, &channel->stream.stdio.in, stdin_dup_fd);
-  wstream_init_fd(&main_loop, &channel->stream.stdio.out, stdout_dup_fd, 0);
-
-  if (rpc) {
-    rpc_start(channel);
-  } else {
-    channel->on_data = on_output;
-    callback_reader_start(&channel->on_data, "stdin");
-    rstream_start(&channel->stream.stdio.in, on_channel_data, channel);
-  }
-
-  return channel->id;
-}
+// channel_from_stdio implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 
 // channel_send implemented in Rust (src/nvim-rs/channel/src/lib.rs)
 

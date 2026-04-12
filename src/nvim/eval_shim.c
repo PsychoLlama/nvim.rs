@@ -557,3 +557,92 @@ void nvim_chan_apply_autocmds_event(int event)
 
 /// arena_finish + arena_mem_free wrapper (called from Rust set_info_event).
 void nvim_chan_arena_finish_and_free(Arena *arena) { arena_mem_free(arena_finish(arena)); }
+
+// Phase 7c (channel migration): accessors for channel_connect, channel_from_stdio
+
+#include <fcntl.h>
+#include "nvim/msgpack_rpc/server.h"
+#include "nvim/os/os_defs.h"
+#ifdef MSWIN
+# include "nvim/os/fs.h"
+# include "nvim/os/pty_conpty_win.h"
+#endif
+
+extern size_t on_channel_data(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+
+/// socket_connect wrapper: connect chan->stream.socket. Returns 0 on success, nonzero on error.
+bool nvim_chan_socket_connect(Channel *chan, bool tcp, const char *address, int timeout,
+                              const char **error)
+{
+  return socket_connect(&main_loop, &chan->stream.socket, tcp, address, timeout, error);
+}
+
+/// Set close_cb and internal_data on chan->stream.socket.s.
+void nvim_chan_set_socket_close_cb_and_data(Channel *chan)
+{
+  chan->stream.socket.s.internal_close_cb = close_cb;
+  chan->stream.socket.s.internal_data = chan;
+}
+
+/// wstream_init for the socket stream (write side).
+void nvim_chan_socket_wstream_init(Channel *chan)
+{
+  wstream_init(&chan->stream.socket.s, 0);
+}
+
+/// rstream_init for the socket stream (read side).
+void nvim_chan_socket_rstream_init(Channel *chan)
+{
+  rstream_init(&chan->stream.socket);
+}
+
+/// rstream_start on socket with on_channel_data callback.
+void nvim_chan_socket_rstream_start_data(Channel *chan)
+{
+  rstream_start(&chan->stream.socket, on_channel_data, chan);
+}
+
+/// rstream_init_fd for chan->stream.stdio.in (stdin fd).
+void nvim_chan_stdio_rstream_init_fd(Channel *chan, int fd)
+{
+  rstream_init_fd(&main_loop, &chan->stream.stdio.in, fd);
+}
+
+/// wstream_init_fd for chan->stream.stdio.out (stdout fd).
+void nvim_chan_stdio_wstream_init_fd(Channel *chan, int fd)
+{
+  wstream_init_fd(&main_loop, &chan->stream.stdio.out, fd, 0);
+}
+
+/// rstream_start on stdio.in with on_channel_data callback.
+void nvim_chan_stdio_rstream_start_data(Channel *chan)
+{
+  rstream_start(&chan->stream.stdio.in, on_channel_data, chan);
+}
+
+/// Translated error strings for channel_from_stdio.
+const char *nvim_chan_from_stdio_err_headless(void) { return _("can only be opened in headless mode"); }
+const char *nvim_chan_from_stdio_err_already_open(void) { return _("channel was already open"); }
+
+/// Platform-specific fd duplication for channel_from_stdio.
+/// Returns stdin_dup_fd in *p_stdin and stdout_dup_fd in *p_stdout.
+void nvim_chan_from_stdio_dup_fds(int *p_stdin, int *p_stdout)
+{
+  *p_stdin = STDIN_FILENO;
+  *p_stdout = STDOUT_FILENO;
+#ifdef MSWIN
+  if (embedded_mode && os_has_conpty_working()) {
+    *p_stdin = os_dup(STDIN_FILENO);
+    os_replace_stdin_to_conin();
+    *p_stdout = os_dup(STDOUT_FILENO);
+    os_replace_stdout_and_stderr_to_conout();
+  }
+#else
+  if (embedded_mode) {
+    *p_stdin = fcntl(STDIN_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+    *p_stdout = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+    dup2(STDERR_FILENO, STDOUT_FILENO);
+    dup2(STDERR_FILENO, STDIN_FILENO);
+  }
+#endif
+}

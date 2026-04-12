@@ -340,6 +340,51 @@ extern "C" {
     fn rs_callback_from_typval(callback: *mut CallbackT, arg: *const c_void) -> bool;
     /// Duplicate a string. Defined in memory.c.
     fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+
+    // --- Phase 7c FFI: channel_connect, channel_from_stdio ---
+
+    /// Check if server owns a pipe address (avoids loopback deadlock).
+    /// Returns 1 if owned, 0 otherwise. Defined in msgpack_rpc/server.c.
+    fn nvim_server_owns_pipe_address(addr: *const std::ffi::c_char) -> c_int;
+    /// socket_connect wrapper for a channel's socket stream. Returns true on success.
+    /// Defined in eval_shim.c.
+    fn nvim_chan_socket_connect(
+        chan: *mut c_void,
+        tcp: bool,
+        address: *const std::ffi::c_char,
+        timeout: c_int,
+        error: *mut *const std::ffi::c_char,
+    ) -> bool;
+    /// Set internal_close_cb=close_cb and internal_data=chan on the socket stream.
+    /// Defined in eval_shim.c.
+    fn nvim_chan_set_socket_close_cb_and_data(chan: *mut c_void);
+    /// wstream_init for chan->stream.socket.s. Defined in eval_shim.c.
+    fn nvim_chan_socket_wstream_init(chan: *mut c_void);
+    /// rstream_init for chan->stream.socket. Defined in eval_shim.c.
+    fn nvim_chan_socket_rstream_init(chan: *mut c_void);
+    /// rstream_start on chan->stream.socket with on_channel_data. Defined in eval_shim.c.
+    fn nvim_chan_socket_rstream_start_data(chan: *mut c_void);
+    /// Get did_stdio static from channel.c.
+    fn nvim_chan_get_did_stdio() -> bool;
+    /// Set did_stdio static in channel.c.
+    fn nvim_chan_set_did_stdio(v: bool);
+    /// headless_mode global. Defined in globals.h.
+    static headless_mode: bool;
+    /// embedded_mode global. Defined in globals.h.
+    static embedded_mode: bool;
+    /// Platform-specific fd duplication for channel_from_stdio.
+    /// Sets *p_stdin and *p_stdout to the appropriate fds to use.
+    /// Defined in eval_shim.c.
+    fn nvim_chan_from_stdio_dup_fds(p_stdin: *mut c_int, p_stdout: *mut c_int);
+    /// rstream_init_fd for chan->stream.stdio.in. Defined in eval_shim.c.
+    fn nvim_chan_stdio_rstream_init_fd(chan: *mut c_void, fd: c_int);
+    /// wstream_init_fd for chan->stream.stdio.out. Defined in eval_shim.c.
+    fn nvim_chan_stdio_wstream_init_fd(chan: *mut c_void, fd: c_int);
+    /// rstream_start on chan->stream.stdio.in with on_channel_data. Defined in eval_shim.c.
+    fn nvim_chan_stdio_rstream_start_data(chan: *mut c_void);
+    /// Translated error strings for channel_from_stdio. Defined in eval_shim.c.
+    fn nvim_chan_from_stdio_err_headless() -> *const std::ffi::c_char;
+    fn nvim_chan_from_stdio_err_already_open() -> *const std::ffi::c_char;
 }
 
 // =============================================================================
@@ -456,6 +501,12 @@ pub const CHAN_STDERR: u64 = 2;
 
 // kChannelStreamProc = 0
 const K_CHANNEL_STREAM_PROC: c_int = 0;
+// kChannelStreamSocket = 1
+const K_CHANNEL_STREAM_SOCKET: c_int = 1;
+// kChannelStreamStdio = 2
+const K_CHANNEL_STREAM_STDIO: c_int = 2;
+// kChannelStreamInternal = 4
+const K_CHANNEL_STREAM_INTERNAL: c_int = 4;
 
 // kCallbackNone = 0
 const K_CALLBACK_NONE: c_int = 0;
@@ -1474,6 +1525,102 @@ pub unsafe extern "C" fn rs_set_info_event(argv: *mut *mut c_void) {
     nvim_chan_arena_finish_and_free(arena_ptr);
 
     channel_decref(chan);
+}
+
+// =============================================================================
+// Phase 3: channel_connect and channel_from_stdio
+// =============================================================================
+
+/// Establish a TCP or pipe socket connection, optionally with RPC.
+///
+/// Returns the channel id (>0) on success, or 0 on error.
+///
+/// # Safety
+///
+/// `address` must be a valid NUL-terminated string. `error` must be valid.
+#[unsafe(export_name = "channel_connect")]
+pub unsafe extern "C" fn rs_channel_connect(
+    tcp: bool,
+    address: *const std::ffi::c_char,
+    rpc: bool,
+    on_output: CallbackReaderT,
+    timeout: c_int,
+    error: *mut *const std::ffi::c_char,
+) -> u64 {
+    let channel: *mut ChannelT;
+
+    if !tcp && rpc && nvim_server_owns_pipe_address(address) != 0 {
+        // Create a loopback channel. This avoids deadlock if nvim connects to
+        // its own named pipe.
+        channel = channel_alloc(K_CHANNEL_STREAM_INTERNAL).cast::<ChannelT>();
+        nvim_chan_set_internal_cb(channel.cast(), LUA_NOREF);
+        nvim_chan_rpc_start(channel.cast());
+    } else {
+        channel = channel_alloc(K_CHANNEL_STREAM_SOCKET).cast::<ChannelT>();
+        if !nvim_chan_socket_connect(channel.cast(), tcp, address, timeout, error) {
+            channel_destroy_early(channel);
+            return 0;
+        }
+
+        nvim_chan_set_socket_close_cb_and_data(channel.cast());
+        nvim_chan_socket_wstream_init(channel.cast());
+        nvim_chan_socket_rstream_init(channel.cast());
+
+        if rpc {
+            nvim_chan_rpc_start(channel.cast());
+        } else {
+            (*channel).on_data = on_output;
+            callback_reader_start(&raw mut (*channel).on_data, c"data".as_ptr());
+            nvim_chan_socket_rstream_start_data(channel.cast());
+        }
+    }
+
+    rs_channel_create_event(channel, address);
+    (*channel).id
+}
+
+/// Creates an API channel from stdin/stdout. Used when embedding Nvim.
+///
+/// Returns the channel id (>0) on success, or 0 on error.
+///
+/// # Safety
+///
+/// `error` must be a valid pointer.
+#[unsafe(export_name = "channel_from_stdio")]
+pub unsafe extern "C" fn rs_channel_from_stdio(
+    rpc: bool,
+    on_output: CallbackReaderT,
+    error: *mut *const std::ffi::c_char,
+) -> u64 {
+    if !headless_mode && !embedded_mode {
+        *error = nvim_chan_from_stdio_err_headless();
+        return 0;
+    }
+
+    if nvim_chan_get_did_stdio() {
+        *error = nvim_chan_from_stdio_err_already_open();
+        return 0;
+    }
+    nvim_chan_set_did_stdio(true);
+
+    let channel = channel_alloc(K_CHANNEL_STREAM_STDIO).cast::<ChannelT>();
+
+    let mut stdin_dup_fd: c_int = 0;
+    let mut stdout_dup_fd: c_int = 0;
+    nvim_chan_from_stdio_dup_fds(&raw mut stdin_dup_fd, &raw mut stdout_dup_fd);
+
+    nvim_chan_stdio_rstream_init_fd(channel.cast(), stdin_dup_fd);
+    nvim_chan_stdio_wstream_init_fd(channel.cast(), stdout_dup_fd);
+
+    if rpc {
+        nvim_chan_rpc_start(channel.cast());
+    } else {
+        (*channel).on_data = on_output;
+        callback_reader_start(&raw mut (*channel).on_data, c"stdin".as_ptr());
+        nvim_chan_stdio_rstream_start_data(channel.cast());
+    }
+
+    (*channel).id
 }
 
 // =============================================================================

@@ -77,6 +77,10 @@ void channel_destroy(Channel *chan);
 void channel_info_changed(Channel *chan, bool new_chan);
 void channel_create_event(Channel *chan, const char *ext_source);
 void channel_from_connection(SocketWatcher *watcher);
+uint64_t channel_connect(bool tcp, const char *address, bool rpc, CallbackReader on_output,
+                         int timeout, const char **error);
+uint64_t channel_from_stdio(bool rpc, CallbackReader on_output, const char **error)
+  FUNC_ATTR_NONNULL_ALL;
 Array channel_all_info(Arena *arena);
 Dict channel_info(uint64_t id, Arena *arena);
 void set_info_event(void **argv);
