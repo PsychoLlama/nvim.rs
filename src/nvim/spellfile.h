@@ -18,4 +18,12 @@ typedef struct sblock_S sblock_T;
 // spell_check_msm is implemented in Rust; declare it here for callers.
 int spell_check_msm(void);
 
+// Functions now exported directly from Rust (no C wrapper).
+#include <stdbool.h>
+#include <stddef.h>
+slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent);
+void suggest_load_files(void);
+void *getroom(spellinfo_T *spin, size_t len, bool align);
+void free_blocks(sblock_T *bl);
+
 #include "spellfile.h.generated.h"

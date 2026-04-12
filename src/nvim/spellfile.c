@@ -70,12 +70,11 @@ extern bool rs_spell_find_duplicate_word(const uint8_t *file_content, size_t con
                                          const uint8_t *word, size_t word_len,
                                          size_t *offset_out);
 
-// Rust-implemented spell file I/O.
-extern slang_T *rs_spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent);
-extern void rs_suggest_load_files(void);
-
 
 static const char *e_illegal_character_in_word = N_("E1280: Illegal character in word");
+
+// Arena allocator (getroom/free_blocks) and spell file I/O (spell_load_file,
+// suggest_load_files) are now exported directly from Rust with their C names.
 
 // Arena block for word tree; full definition required because free_blocks() takes sblock_T*.
 typedef struct sblock_S sblock_T;
@@ -84,10 +83,6 @@ struct sblock_S {
   sblock_T *sb_next;         // next block in list
   char sb_data[];            // data
 };
-
-// Arena allocator and memory management -- now in Rust.
-extern void *rs_getroom(spellinfo_T *spin, size_t len, bool align);
-extern void rs_free_blocks(sblock_T *bl);
 
 // A node in the tree.
 // (Forward declaration is in spellfile.h; full definition here.)
@@ -191,43 +186,6 @@ typedef struct spellinfo_S {
 
 extern bool valid_spell_word(const char *word, const char *end);
 #include "spellfile.c.generated.h"
-
-/// Load one spell file and store the info into a slang_T.
-///
-/// This is invoked in three ways:
-/// - From spell_load_cb() to load a spell file for the first time.  "lang" is
-///   the language name, "old_lp" is NULL.  Will allocate an slang_T.
-/// - To reload a spell file that was changed.  "lang" is NULL and "old_lp"
-///   points to the existing slang_T.
-/// - Just after writing a .spl file; it's read back to produce the .sug file.
-///   "old_lp" is NULL and "lang" is NULL.  Will allocate an slang_T.
-///
-/// @param silent  no error if file doesn't exist
-///
-/// @return  the slang_T the spell file was loaded into.  NULL for error.
-slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
-{
-  return rs_spell_load_file(fname, lang, old_lp, silent);
-}
-
-
-/// Load the .sug files for languages that have one and weren't loaded yet.
-void suggest_load_files(void)
-{
-  rs_suggest_load_files();
-}
-
-// Functions for ":mkspell".
-
-/// Thin wrapper: arena allocator delegated to Rust rs_getroom.
-void *getroom(spellinfo_T *spin, size_t len, bool align)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_getroom(spin, len, align);
-}
-
-/// Thin wrapper: free sblock_T list delegated to Rust rs_free_blocks.
-void free_blocks(sblock_T *bl) { rs_free_blocks(bl); }
 
 /// Thin wrapper: write_vim_spell is now implemented in Rust (rs_write_vim_spell).
 extern int rs_write_vim_spell(spellinfo_T *spin, char *fname);

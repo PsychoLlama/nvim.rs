@@ -7052,7 +7052,7 @@ const K_EQUAL_FILES_SLANG: c_int = 1;
 ///
 /// # Safety
 /// `fname` must be a valid NUL-terminated string. `lang` and `old_lp` may be null.
-#[no_mangle]
+#[export_name = "spell_load_file"]
 #[allow(
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
@@ -7649,7 +7649,7 @@ pub unsafe extern "C" fn rs_spell_reload_one(fname: *mut c_char, added_word: boo
 ///
 /// # Safety
 /// Must be called with a valid curwin.
-#[no_mangle]
+#[export_name = "suggest_load_files"]
 #[allow(
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
@@ -8552,7 +8552,7 @@ extern "C" {
 ///
 /// # Safety
 /// `spin` must be a valid non-null pointer to a `spellinfo_T`.
-#[no_mangle]
+#[export_name = "getroom"]
 #[allow(
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
@@ -8603,7 +8603,7 @@ pub unsafe extern "C" fn rs_getroom_save(spin: *mut SpellinfoT, s: *mut c_char) 
 ///
 /// # Safety
 /// `bl` must be a valid pointer to a `sblock_T` linked list, or NULL.
-#[no_mangle]
+#[export_name = "free_blocks"]
 pub unsafe extern "C" fn rs_free_blocks(mut bl: *mut SblockT) {
     while !bl.is_null() {
         let next = (*bl).sb_next;
