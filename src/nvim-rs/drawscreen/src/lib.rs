@@ -3551,8 +3551,8 @@ extern "C" {
     fn nvim_plines_m_win(wp: WinHandle, first: LinenrT, last: LinenrT, max: c_int) -> c_int;
     /// Call win_get_fill(wp, lnum).
     fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
-    /// win_line: draw a single line; returns new row.
-    fn win_line(
+    /// rs_win_line: draw a single line (Rust implementation); returns new row.
+    fn rs_win_line(
         wp: WinHandle,
         lnum: LinenrT,
         startrow: c_int,
@@ -4444,7 +4444,7 @@ unsafe fn win_update_body_draw_loop(
                     } else {
                         addr_of_mut!(zero_spv)
                     };
-                    row = win_line(wp, lnum, srow, view_height, 0, concealed, spv_ptr, foldinfo);
+                    row = rs_win_line(wp, lnum, srow, view_height, 0, concealed, spv_ptr, foldinfo);
 
                     if display_buf_line {
                         st.syntax_last_parsed = lnum;
@@ -4523,7 +4523,7 @@ unsafe fn win_update_body_draw_loop(
                     || (p_rnu && nvim_win_get_last_cursor_lnum_rnu(wp) != cursor_lnum)
                 {
                     let mut zero_spv = SpvT::default();
-                    win_line(
+                    rs_win_line(
                         wp,
                         lnum,
                         srow,
@@ -4697,7 +4697,7 @@ unsafe fn win_update_body_finalize(
                     fi_low_level: 0,
                     fi_lines: 0,
                 };
-                let new_row = win_line(
+                let new_row = rs_win_line(
                     wp,
                     ml_line_count + 1,
                     row,
@@ -4708,7 +4708,7 @@ unsafe fn win_update_body_finalize(
                     zero_fi,
                 );
                 let _ = new_row;
-                // If redr_statuscol was set during this win_line call, we can't restart
+                // If redr_statuscol was set during this rs_win_line call, we can't restart
                 // (we're in finalize). The C original did `goto redr_statuscol` here.
                 // We skip that restart since it would require a full re-entry.
                 // This matches the C behavior for the post-EOF filler line case.

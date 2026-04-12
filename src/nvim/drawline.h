@@ -45,8 +45,13 @@ extern bool use_cursor_line_highlight(win_T *wp, linenr_T lnum);
 extern void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, int fdc,
                             int *wlv_off, colnr_T *out_vcol, schar_T *out_buffer);
 
+// drawline_shim.c declarations (formerly in drawline.h.generated.h)
+extern int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows,
+                    bool concealed, spellvars_T *spv, foldinfo_T foldinfo);
+extern void nvim_win_extmark_push(uint64_t ns_id, uint64_t mark_id, int win_row, int win_col);
+
 #ifdef __cplusplus
 }
 #endif
 
-#include "drawline.h.generated.h"
+#include "drawline_shim.h.generated.h"
