@@ -48,22 +48,23 @@ pub type EvalFuncData = *mut c_void;
 pub type BufrefPtr = *mut c_void;
 
 // =============================================================================
-// Phase 1: Global State Accessors
+// Phase 1: Global State
 // =============================================================================
 
 extern "C" {
-    // -- Globals --
-    pub fn nvim_al_get_arglist_locked() -> c_int;
-    pub fn nvim_al_set_arglist_locked(val: c_int);
+    // Globals accessed directly as statics (C accessor functions deleted)
+    pub static mut arglist_locked: bool;
+    pub static mut arg_had_last: bool;
+    pub static mut max_alist_id: c_int;
+    pub static curwin: WinPtr;
+    pub static curbuf: BufPtr;
+    pub static curtab: TabpagePtr;
+    pub static got_int: bool;
+
+    // These two C functions are kept because nvim-main and nvim-ex-docmd
+    // crates have their own extern "C" fn declarations for them.
     pub fn nvim_al_get_global_alist() -> AlistPtr;
     pub fn nvim_al_get_arg_had_last() -> c_int;
-    pub fn nvim_al_set_arg_had_last(val: c_int);
-    pub fn nvim_al_get_max_alist_id() -> c_int;
-    pub fn nvim_al_inc_max_alist_id() -> c_int;
-    pub fn nvim_al_get_curwin() -> WinPtr;
-    pub fn nvim_al_get_curbuf() -> BufPtr;
-    pub fn nvim_al_get_curtab() -> TabpagePtr;
-    pub fn nvim_al_get_got_int() -> c_int;
 
     // -- Macros --
     pub fn nvim_al_ARGCOUNT() -> c_int;
@@ -104,6 +105,74 @@ extern "C" {
     pub fn nvim_al_win_get_alist(wp: WinPtr) -> AlistPtr;
     pub fn nvim_al_win_set_alist(wp: WinPtr, al: AlistPtr);
     pub fn nvim_al_win_set_locked(wp: WinPtr, val: c_int);
+}
+
+// =============================================================================
+// Phase 1: Inline Rust shims replacing deleted C global accessor functions
+// =============================================================================
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_get_arglist_locked() -> c_int {
+    c_int::from(arglist_locked)
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_set_arglist_locked(val: c_int) {
+    arglist_locked = val != 0;
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_set_arg_had_last(val: c_int) {
+    arg_had_last = val != 0;
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_get_max_alist_id() -> c_int {
+    max_alist_id
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_inc_max_alist_id() -> c_int {
+    max_alist_id += 1;
+    max_alist_id
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_get_curwin() -> WinPtr {
+    curwin
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_get_curbuf() -> BufPtr {
+    curbuf
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_get_curtab() -> TabpagePtr {
+    curtab
+}
+
+/// # Safety
+/// Must be called on the Neovim main thread; no concurrent access to C globals.
+#[inline]
+pub unsafe fn nvim_al_get_got_int() -> c_int {
+    c_int::from(got_int)
 }
 
 // =============================================================================

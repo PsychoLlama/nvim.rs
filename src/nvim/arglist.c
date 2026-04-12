@@ -120,22 +120,15 @@ _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
 
 /// This flag is set whenever the argument list is being changed and calling a
 /// function that might trigger an autocommand.
-static bool arglist_locked = false;
+bool arglist_locked = false;
 
 // C accessor functions for Rust FFI
+// Phase 1: arglist_locked, curwin, curbuf, curtab, max_alist_id, got_int
+// are accessed directly via extern statics in arglist/src/ffi.rs.
+// Only two functions remain because they are used by OTHER crates.
 
-// -- Globals --
-int nvim_al_get_arglist_locked(void) { return arglist_locked; }
-void nvim_al_set_arglist_locked(int val) { arglist_locked = val; }
 alist_T *nvim_al_get_global_alist(void) { return &global_alist; }
 int nvim_al_get_arg_had_last(void) { return arg_had_last; }
-void nvim_al_set_arg_had_last(int val) { arg_had_last = val; }
-int nvim_al_get_max_alist_id(void) { return max_alist_id; }
-int nvim_al_inc_max_alist_id(void) { return ++max_alist_id; }
-win_T *nvim_al_get_curwin(void) { return curwin; }
-buf_T *nvim_al_get_curbuf(void) { return curbuf; }
-tabpage_T *nvim_al_get_curtab(void) { return curtab; }
-int nvim_al_get_got_int(void) { return got_int; }
 
 // -- Macros --
 int nvim_al_ARGCOUNT(void) { return ARGCOUNT; }
