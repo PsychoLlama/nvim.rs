@@ -4932,3 +4932,88 @@ pub unsafe extern "C" fn rs_expand_wildcards(
 
     retval
 }
+
+// ---------------------------------------------------------------------------
+// rs_expand_wildcards_eval (Phase 2: migrated from C)
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    /// eval_vars -- expand `%`, `#`, `<` in a string
+    fn eval_vars(
+        src: *mut c_char,
+        srcstart: *const c_char,
+        usedlen: *mut usize,
+        lnump: *mut i32,
+        errormsg: *mut *const c_char,
+        escaped: *mut c_int,
+        use_fnamep: bool,
+    ) -> *mut c_char;
+    /// concat_str -- allocate and concatenate two C strings
+    fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char;
+    /// emsg_off increment (suppress errors)
+    fn nvim_path_emsg_off_inc();
+    /// emsg_off decrement (restore error reporting)
+    fn nvim_path_emsg_off_dec();
+}
+
+/// Expand `%`, `#`, and `<` in a filename pattern, then call `expand_wildcards`.
+///
+/// This is the Rust replacement for `expand_wildcards_eval()` in path.c.
+///
+/// # Safety
+/// All pointer arguments must be valid. `pat` points to a writable `char *`.
+#[unsafe(export_name = "expand_wildcards_eval")]
+pub unsafe extern "C" fn rs_expand_wildcards_eval(
+    pat: *mut *mut c_char,
+    num_file: *mut c_int,
+    file: *mut *mut *mut c_char,
+    flags: c_int,
+) -> c_int {
+    let mut ret = FAIL;
+    let mut eval_pat: *mut c_char = std::ptr::null_mut();
+    let mut exp_pat: *mut c_char = *pat;
+    let mut ignored_msg: *const c_char = std::ptr::null();
+    let mut usedlen: usize = 0;
+
+    let is_cur_alt_file = *exp_pat as u8 == b'%' || *exp_pat as u8 == b'#';
+    let mut star_follows = false;
+
+    if is_cur_alt_file || *exp_pat as u8 == b'<' {
+        nvim_path_emsg_off_inc();
+        eval_pat = eval_vars(
+            exp_pat,
+            exp_pat,
+            &raw mut usedlen,
+            std::ptr::null_mut(),
+            &raw mut ignored_msg,
+            std::ptr::null_mut(),
+            true,
+        );
+        nvim_path_emsg_off_dec();
+        if !eval_pat.is_null() {
+            star_follows = libc::strcmp(exp_pat.add(usedlen), c"*".as_ptr()) == 0;
+            exp_pat = concat_str(eval_pat, exp_pat.add(usedlen));
+        }
+    }
+
+    if !exp_pat.is_null() {
+        ret = rs_expand_wildcards(1, &raw mut exp_pat, num_file, file, flags);
+    }
+
+    if !eval_pat.is_null() {
+        if *num_file == 0 && is_cur_alt_file && star_follows {
+            // Expanding "%" or "#" and the file does not exist: Add the
+            // pattern anyway (without the star) so that this works for remote
+            // files and non-file buffer names.
+            *file = nvim_path_xcalloc(1, std::mem::size_of::<*mut c_char>()) as *mut *mut c_char;
+            **file = eval_pat;
+            eval_pat = std::ptr::null_mut();
+            *num_file = 1;
+            ret = OK;
+        }
+        nvim_path_xfree(exp_pat);
+        nvim_path_xfree(eval_pat);
+    }
+
+    ret
+}

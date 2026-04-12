@@ -185,6 +185,14 @@ void nvim_path_emsg_silent_dec(void) {
   emsg_silent--;
 }
 
+void nvim_path_emsg_off_inc(void) {
+  emsg_off++;
+}
+
+void nvim_path_emsg_off_dec(void) {
+  emsg_off--;
+}
+
 void nvim_path_ga_sort_strings(void *gap, int start) {
   garray_T *ga = (garray_T *)gap;
   size_t count = (size_t)(ga->ga_len - start);
@@ -293,64 +301,4 @@ _Static_assert(RE_MAGIC == 1, "RE_MAGIC");
 _Static_assert(RE_NOBREAK == 16, "RE_NOBREAK");
 
 #include "path.c.generated.h"
-
-/// Try to find a shortname by comparing the fullname with `dir_name`.
-///
-/// Invoke expand_wildcards() for one pattern
-///
-/// One should expand items like "%:h" before the expansion.
-///
-/// @param[in]   pat       Pointer to the input pattern.
-/// @param[out]  num_file  Resulting number of files.
-/// @param[out]  file      Array of resulting files.
-/// @param[in]   flags     Flags passed to expand_wildcards().
-///
-/// @returns               OK when *file is set to allocated array of matches
-///                        and *num_file (can be zero) to the number of matches.
-///                        If FAIL is returned, *num_file and *file are either
-///                        unchanged or *num_file is set to 0 and *file is set
-///                        to NULL or points to "".
-int expand_wildcards_eval(char **pat, int *num_file, char ***file, int flags)
-{
-  int ret = FAIL;
-  char *eval_pat = NULL;
-  char *exp_pat = *pat;
-  const char *ignored_msg;
-  size_t usedlen;
-  const bool is_cur_alt_file = *exp_pat == '%' || *exp_pat == '#';
-  bool star_follows = false;
-
-  if (is_cur_alt_file || *exp_pat == '<') {
-    emsg_off++;
-    eval_pat = eval_vars(exp_pat, exp_pat, &usedlen, NULL, &ignored_msg,
-                         NULL,
-                         true);
-    emsg_off--;
-    if (eval_pat != NULL) {
-      star_follows = strcmp(exp_pat + usedlen, "*") == 0;
-      exp_pat = concat_str(eval_pat, exp_pat + usedlen);
-    }
-  }
-
-  if (exp_pat != NULL) {
-    ret = expand_wildcards(1, &exp_pat, num_file, file, flags);
-  }
-
-  if (eval_pat != NULL) {
-    if (*num_file == 0 && is_cur_alt_file && star_follows) {
-      // Expanding "%" or "#" and the file does not exist: Add the
-      // pattern anyway (without the star) so that this works for remote
-      // files and non-file buffer names.
-      *file = xmalloc(sizeof(char *));
-      **file = eval_pat;
-      eval_pat = NULL;
-      *num_file = 1;
-      ret = OK;
-    }
-    xfree(exp_pat);
-    xfree(eval_pat);
-  }
-
-  return ret;
-}
 
