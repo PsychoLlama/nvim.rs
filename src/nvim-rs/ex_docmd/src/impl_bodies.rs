@@ -75,8 +75,6 @@ extern "C" {
     fn semsg(fmt: *const c_char, ...);
 
     // --- check_more helpers ---
-    fn nvim_docmd_get_quitmore() -> c_int;
-    fn nvim_docmd_set_quitmore(n: c_int);
     fn nvim_docmd_check_more_semsg(n: c_int);
     fn vim_dialog_yesno(
         type_: c_int,
@@ -97,7 +95,6 @@ extern "C" {
 
     // --- do_exedit_handle_exmode helpers ---
     static mut exmode_active: bool;
-    fn nvim_set_ex_pressedreturn(val: bool);
     fn nvim_get_global_busy() -> bool;
     fn stuffReadbuff(s: *const c_char);
     static mut RedrawingDisabled: c_int;
@@ -283,7 +280,7 @@ pub unsafe extern "C" fn nvim_docmd_check_more(message: c_int, forceit: c_int) -
         && nvim_get_argcount() > 1
         && nvim_al_get_arg_had_last() == 0
         && n > 0
-        && nvim_docmd_get_quitmore() == 0
+        && crate::state::nvim_docmd_get_quitmore() == 0
     {
         if message != 0 {
             if nvim_get_p_confirm() != 0 || nvim_get_cmdmod_confirm() != 0 {
@@ -294,7 +291,7 @@ pub unsafe extern "C" fn nvim_docmd_check_more(message: c_int, forceit: c_int) -
                 return FAIL;
             }
             nvim_docmd_check_more_semsg(n);
-            nvim_docmd_set_quitmore(2); // next try to quit is allowed
+            crate::state::nvim_docmd_set_quitmore(2); // next try to quit is allowed
         }
         return FAIL;
     }
@@ -331,7 +328,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
 
     if crate::exmode_active && (cmdidx == cmd_visual || cmdidx == cmd_view) {
         exmode_active = false;
-        nvim_set_ex_pressedreturn(false);
+        crate::state::nvim_set_ex_pressedreturn(false);
 
         let arg = (*eap).arg;
         if arg.is_null() || *arg as u8 == 0 {

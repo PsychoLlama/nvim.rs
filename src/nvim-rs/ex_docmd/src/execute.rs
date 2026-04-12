@@ -375,8 +375,7 @@ extern "C" {
     fn nvim_script_line_exec();
 
     // parse_cmdline helpers
-    fn nvim_get_ex_pressedreturn() -> c_int;
-    fn nvim_set_ex_pressedreturn(val: bool);
+    // nvim_get_ex_pressedreturn, nvim_set_ex_pressedreturn: now in Rust state module
     fn nvim_sizeof_pos_T() -> usize;
     fn nvim_save_cursor(save: *mut c_void);
     fn nvim_restore_cursor(save: *const c_void);
@@ -820,7 +819,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     errormsg: *mut *const c_char,
 ) -> bool {
     // Save ex_pressedreturn and cursor.
-    let save_ex_pressedreturn = nvim_get_ex_pressedreturn();
+    let save_ex_pressedreturn = crate::state::nvim_get_ex_pressedreturn();
     let pos_size = nvim_sizeof_pos_T();
     let save_cursor = xcalloc(1, pos_size);
     nvim_save_cursor(save_cursor);
@@ -844,7 +843,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // parse_command_modifiers takes a pointer to CmdParseInfo.cmdmod (first field).
     if parse_command_modifiers(eap, errormsg, cmdinfo, false) == FAIL_P2 {
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -858,7 +857,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
         *errormsg =
             crate::errors::gt(crate::errors::E_AMBIGUOUS_USE_OF_USER_DEFINED_COMMAND_STR.as_ptr());
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -869,7 +868,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     set_cmd_addr_type(eap, p);
     if parse_cmd_address(eap, errormsg, true) == FAIL_P2 {
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -882,7 +881,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Fail if command is a comment or doesn't exist.
     if (*eap).cmd.read() == 0 || (*eap).cmd.read() == b'"' as c_char {
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -906,7 +905,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
         crate::errors::rs_append_command(cmdname);
         *errormsg = iobuff as *const c_char;
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -955,7 +954,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     if !((*eap).argt & 0x002u32) != 0 && (*eap).forceit != 0 {
         *errormsg = crate::errors::gt(crate::errors::E_NOBANG_STR.as_ptr());
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -966,7 +965,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     if !((*eap).argt & 0x001u32) != 0 && (*eap).addr_count > 0 {
         *errormsg = crate::errors::E_NORANGE_STR.as_ptr();
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -982,7 +981,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     parse_register(eap);
     if crate::args::rs_parse_count_ex(eap, errormsg, 0) == FAIL_P2 {
         undo_cmdmod(cmdinfo.cast::<c_void>());
-        nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+        crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
         restore_last_search_pattern();
         xfree(save_cursor);
@@ -1000,7 +999,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // We need accessors for this. For now, use the existing C setters.
     // (These are in CmdParseInfo which is opaque to us; we'll handle via wrapper.)
 
-    nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
+    crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
     nvim_restore_cursor(save_cursor);
     restore_last_search_pattern();
     xfree(save_cursor);

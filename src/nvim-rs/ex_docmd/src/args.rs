@@ -37,7 +37,7 @@ extern "C" {
     fn skip_expr(pp: *mut *mut c_char, evalarg: *mut c_void) -> c_int;
     #[link_name = "del_trailing_spaces"]
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
-    fn nvim_docmd_get_dollar_command() -> *mut c_char;
+    // nvim_docmd_get_dollar_command: now in Rust state module
     fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
 
     fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn rs_getargcmd(argp: *mut *mut c_char) -> *mut c_char {
     let arg = arg.add(1); // skip '+'
 
     if (*arg as u8).is_ascii_whitespace() || *arg as u8 == 0 {
-        let command = nvim_docmd_get_dollar_command();
+        let command = crate::state::nvim_docmd_get_dollar_command();
         *argp = skipwhite(arg as *const c_char);
         return command;
     }

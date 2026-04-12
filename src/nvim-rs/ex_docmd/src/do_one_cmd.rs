@@ -61,10 +61,6 @@ extern "C" {
     static mut reg_executing: c_int;
     static mut pending_end_reg_executing: bool;
 
-    // quitmore
-    fn nvim_docmd_get_quitmore() -> c_int;
-    fn nvim_docmd_dec_quitmore();
-
     // did_throw
     static mut did_throw: bool;
 
@@ -364,13 +360,13 @@ pub unsafe extern "C" fn do_one_cmd(
     crate::ex_nesting_level += 1;
 
     // When the last file has not been edited :q has to be typed twice.
-    if nvim_docmd_get_quitmore() != 0
+    if crate::state::nvim_docmd_get_quitmore() != 0
         // avoid function call in 'statusline'
         && !crate::do_cmdline::getline_equal(fgetline, cookie, Some(get_func_line as LineGetterFn))
         // avoid autocommand (e.g. QuitPre)
         && !crate::do_cmdline::getline_equal(fgetline, cookie, Some(getnextac as LineGetterFn))
     {
-        nvim_docmd_dec_quitmore();
+        crate::state::nvim_docmd_dec_quitmore();
     }
 
     // Save cmdmod -- will be restored on return.

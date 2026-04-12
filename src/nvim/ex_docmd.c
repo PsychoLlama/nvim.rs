@@ -122,8 +122,7 @@ static const char e_ambiguous_use_of_user_defined_command[]
 static const char e_not_an_editor_command[]
   = N_("E492: Not an editor command");
 
-static int quitmore = 0;
-static bool ex_pressedreturn = false;
+// quitmore and ex_pressedreturn are now owned by Rust (state.rs)
 
 // Struct for storing a line inside a while/for loop
 typedef struct {
@@ -188,7 +187,7 @@ extern void verify_command(const char *cmd);
 // Returns 0 if cmdidx is out of bounds
 int cmdname_first_char(int cmdidx) { return (cmdidx < 0 || cmdidx >= CMD_SIZE) ? 0 : (unsigned char)cmdnames[cmdidx].cmd_name[0]; }
 
-static char dollar_command[2] = { '$', 0 };
+// dollar_command is now owned by Rust (state.rs)
 
 /// Helper function to apply an offset for buffer commands, i.e. ":bdelete",
 /// ":bwipeout", etc.
@@ -228,9 +227,7 @@ static int current_tab_nr(tabpage_T *tab)
 #define CURRENT_TAB_NR current_tab_nr(curtab)
 #define LAST_TAB_NR current_tab_nr(NULL)
 
-/// The "+" string used in place of an empty command in Ex mode.
-/// This string is used in pointer comparison.
-static char exmode_plus[] = "+";
+// exmode_plus is now owned by Rust (state.rs)
 
 extern char *nvim_docmd_get_bad_name(expand_T *xp, int idx);
 
@@ -334,9 +331,7 @@ extern char *eval_vars(char *src, const char *srcstart, size_t *usedlen,
                        linenr_T *lnump, const char **errormsg, int *escaped,
                        bool empty_is_error);
 
-static TriState filetype_detect = kNone;
-static TriState filetype_plugin = kNone;
-static TriState filetype_indent = kNone;
+// filetype_detect/plugin/indent are now owned by Rust (state.rs)
 
 /// ":filetype [plugin] [indent] {on,off,detect}"
 /// on: Load the filetype.vim file to install autocommands for file types.
@@ -350,7 +345,7 @@ static TriState filetype_indent = kNone;
 /// autocommands will always fire first (and thus can be overridden) while still
 /// allowing general filetype detection to be disabled in the user's init file.
 
-int nvim_get_ex_pressedreturn(void) { return ex_pressedreturn ? 1 : 0; }
+// nvim_get_ex_pressedreturn is now in Rust (state.rs)
 int nvim_get_expr_map_lock(void) { return expr_map_lock; }
 int nvim_curbuf_is_dummy(void) { return (curbuf->b_flags & BF_DUMMY) != 0; }
 // C accessors for Rust sourcing info access
@@ -403,7 +398,7 @@ char *nvim_docmd_tv_get_string(const void *argvars) { return (char *)tv_get_stri
 void nvim_docmd_rettv_init_string(void *rettv) { typval_T *tv = (typval_T *)rettv; tv->v_type = VAR_STRING; tv->vval.v_string = NULL; }
 void nvim_docmd_rettv_set_string(void *rettv, const char *s) { ((typval_T *)rettv)->vval.v_string = xstrdup(s); }
 char *nvim_docmd_get_user_command_name(int useridx, int cmdidx) { return get_user_command_name(useridx, (cmdidx_T)cmdidx); }
-char *nvim_docmd_get_dollar_command(void) { return dollar_command; }
+// nvim_docmd_get_dollar_command is now in Rust (state.rs)
 // nvim_docmd_parse_count_digits is implemented in Rust (args.rs).
 
 
@@ -444,7 +439,7 @@ void nvim_cmod_regfree_filter(cmdmod_T *cmod) { vim_regfree(cmod->cmod_filter_re
 void nvim_docmd_set_eventignore_all(void) { set_option_direct(kOptEventignore, STATIC_CSTR_AS_OPTVAL("all"), 0, SID_NONE); }
 void nvim_docmd_set_eventignore_str(char *s) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE); }
 int nvim_docmd_getline_is_getexline(const exarg_T *eap) { return getline_equal(eap->ea_getline, eap->cookie, getexline); }
-char *nvim_docmd_get_exmode_plus(void) { return exmode_plus; }
+// nvim_docmd_get_exmode_plus is now in Rust (state.rs)
 
 // nvim_docmd_do_search and nvim_docmd_searchit are implemented in Rust (address.rs).
 
@@ -463,12 +458,7 @@ linenr_T nvim_docmd_mark_lnum(const void *fm) { return ((const fmark_T *)fm)->ma
 /// Wrap mark_get_visual for Rust.
 void *nvim_docmd_mark_get_visual(int ch) { return mark_get_visual(curbuf, (uint8_t)ch); }
 // (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
-int nvim_docmd_get_filetype_detect(void) { return (int)filetype_detect; }
-void nvim_docmd_set_filetype_detect(int val) { filetype_detect = (TriState)val; }
-int nvim_docmd_get_filetype_plugin(void) { return (int)filetype_plugin; }
-void nvim_docmd_set_filetype_plugin(int val) { filetype_plugin = (TriState)val; }
-int nvim_docmd_get_filetype_indent(void) { return (int)filetype_indent; }
-void nvim_docmd_set_filetype_indent(int val) { filetype_indent = (TriState)val; }
+// nvim_docmd_{get,set}_filetype_{detect,plugin,indent} are now in Rust (state.rs)
 int nvim_docmd_curbuf_file_id_valid(void) { return curbuf->file_id_valid ? 1 : 0; }
 const char *nvim_docmd_get_curbuf_sfname(void) { return curbuf->b_sfname; }
 void nvim_docmd_do_cmdline_getexline_noflags(void) { do_cmdline(NULL, getexline, NULL, 0); }
@@ -511,7 +501,7 @@ void nvim_eap_init(exarg_T *eap, char *cmdline_val, char **cmdlinep)
     .cookie = NULL,
   };
 }
-void nvim_set_ex_pressedreturn(bool val) { ex_pressedreturn = val; }
+// nvim_set_ex_pressedreturn is now in Rust (state.rs)
 void nvim_save_cursor(pos_T *save) { *save = curwin->w_cursor; }
 void nvim_restore_cursor(const pos_T *save) { curwin->w_cursor = *save; }
 size_t nvim_sizeof_pos_T(void) { return sizeof(pos_T); }
@@ -569,7 +559,7 @@ int nvim_get_p_cdh(void) { return p_cdh ? 1 : 0; }
 int nvim_vim_chdir(const char *dir) { return vim_chdir(dir); }
 void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope) { do_autocmd_dirchanged(new_dir, (CdScope)scope, kCdCauseManual, true); }
 void nvim_post_chdir(int scope, bool dir_differs) { nvim_docmd_post_chdir_impl((CdScope)scope, dir_differs); }
-char *nvim_docmd_get_do_ecmd_cmd_dollar(void) { return dollar_command; }
+// nvim_docmd_get_do_ecmd_cmd_dollar is now in Rust (state.rs)
 
 // nvim_eval_vars_wrap is implemented in Rust (commands.rs, inlined into rs_expand_filename).
 
@@ -710,8 +700,7 @@ int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
 char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
-int nvim_docmd_get_quitmore(void) { return quitmore; }
-void nvim_docmd_set_quitmore(int n) { quitmore = n; }
+// nvim_docmd_{get,set}_quitmore are now in Rust (state.rs)
 void nvim_docmd_check_more_semsg(int n) { semsg(NGETTEXT("E173: %" PRId64 " more file to edit", "E173: %" PRId64 " more files to edit", (unsigned)n), (int64_t)n); }
 // nvim_docmd_check_more_dialog is implemented in Rust (impl_bodies.rs).
 // nvim_al_get_arg_had_last is defined in arglist.c
@@ -831,7 +820,7 @@ void nvim_docmd_findfunc_free_local_cb(buf_T *buf) { callback_free(&buf->b_ffu_c
 char *nvim_docmd_optset_varp_deref(optset_T *args) { return *(char **)args->os_varp; }
 void nvim_docmd_optset_varp_set(optset_T *args, char *name) { *(char **)args->os_varp = name; }
 size_t nvim_xp_get_pattern_len(expand_T *xp) { return xp->xp_pattern_len; }
-void nvim_docmd_dec_quitmore(void) { quitmore--; }
+// nvim_docmd_dec_quitmore is now in Rust (state.rs)
 /// Allocate a zeroed exarg_T on the heap (line1=1, line2=1).
 exarg_T *nvim_eap_alloc(void)
 {

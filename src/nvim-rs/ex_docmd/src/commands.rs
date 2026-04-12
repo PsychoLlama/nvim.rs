@@ -220,13 +220,7 @@ extern "C" {
     fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
     fn nvim_win_set_cursor_col(wp: WinHandle, col: i32);
 
-    // Filetype helpers
-    fn nvim_docmd_get_filetype_detect() -> c_int;
-    fn nvim_docmd_set_filetype_detect(val: c_int);
-    fn nvim_docmd_get_filetype_plugin() -> c_int;
-    fn nvim_docmd_set_filetype_plugin(val: c_int);
-    fn nvim_docmd_get_filetype_indent() -> c_int;
-    fn nvim_docmd_set_filetype_indent(val: c_int);
+    // Filetype helpers: now in Rust state module
     fn source_runtime(fname: *const c_char, flags: c_int) -> c_int;
     fn do_doautocmd(eap_arg: *mut c_char, do_msg: bool, did_something: *mut bool) -> c_int;
     fn do_modelines(flags: c_int);
@@ -1061,10 +1055,10 @@ pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
 
     if *arg == 0 {
         // Print current status
-        let detect_str = tristate_str(nvim_docmd_get_filetype_detect());
-        let plugin_val = nvim_docmd_get_filetype_plugin();
-        let indent_val = nvim_docmd_get_filetype_indent();
-        let detect_val = nvim_docmd_get_filetype_detect();
+        let detect_str = tristate_str(crate::state::nvim_docmd_get_filetype_detect());
+        let plugin_val = crate::state::nvim_docmd_get_filetype_plugin();
+        let indent_val = crate::state::nvim_docmd_get_filetype_indent();
+        let detect_val = crate::state::nvim_docmd_get_filetype_detect();
 
         let plugin_str = if plugin_val == K_TRUE {
             if detect_val == K_TRUE {
@@ -1121,16 +1115,16 @@ pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
 
     if p_bytes == b"on" || p_bytes == b"detect" {
         let first_byte = p_bytes[0];
-        if first_byte == b'o' || nvim_docmd_get_filetype_detect() != K_TRUE {
+        if first_byte == b'o' || crate::state::nvim_docmd_get_filetype_detect() != K_TRUE {
             source_runtime(c"filetype.lua filetype.vim".as_ptr(), DIP_ALL);
-            nvim_docmd_set_filetype_detect(K_TRUE);
+            crate::state::nvim_docmd_set_filetype_detect(K_TRUE);
             if plugin {
                 source_runtime(c"ftplugin.vim".as_ptr(), DIP_ALL);
-                nvim_docmd_set_filetype_plugin(K_TRUE);
+                crate::state::nvim_docmd_set_filetype_plugin(K_TRUE);
             }
             if indent {
                 source_runtime(c"indent.vim".as_ptr(), DIP_ALL);
-                nvim_docmd_set_filetype_indent(K_TRUE);
+                crate::state::nvim_docmd_set_filetype_indent(K_TRUE);
             }
         }
         if first_byte == b'd' {
@@ -1145,15 +1139,15 @@ pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
         if plugin || indent {
             if plugin {
                 source_runtime(c"ftplugof.vim".as_ptr(), DIP_ALL);
-                nvim_docmd_set_filetype_plugin(K_FALSE);
+                crate::state::nvim_docmd_set_filetype_plugin(K_FALSE);
             }
             if indent {
                 source_runtime(c"indoff.vim".as_ptr(), DIP_ALL);
-                nvim_docmd_set_filetype_indent(K_FALSE);
+                crate::state::nvim_docmd_set_filetype_indent(K_FALSE);
             }
         } else {
             source_runtime(c"ftoff.vim".as_ptr(), DIP_ALL);
-            nvim_docmd_set_filetype_detect(K_FALSE);
+            crate::state::nvim_docmd_set_filetype_detect(K_FALSE);
         }
     } else {
         semsg(crate::errors::E_INVARG2_STR.as_ptr(), p);
@@ -1360,7 +1354,7 @@ extern "C" {
     #[link_name = "expand_env_save"]
     fn nvim_expand_env_save(s: *const c_char) -> *mut c_char;
     // repl_cmdline accessors
-    fn nvim_docmd_get_do_ecmd_cmd_dollar() -> *mut c_char;
+    // nvim_docmd_get_do_ecmd_cmd_dollar: now in Rust state module
     fn nvim_repl_has_exclaim(s: *const c_char) -> bool;
     fn nvim_vim_strsave_escaped_shell(s: *const c_char) -> *mut c_char;
     fn nvim_vim_strsave_escaped_bang(s: *const c_char) -> *mut c_char;
@@ -1462,7 +1456,7 @@ pub unsafe extern "C" fn rs_repl_cmdline(
 
     // Fix up eap->do_ecmd_cmd (if set and not dollar_command)
     let do_ecmd_cmd = (*eap).do_ecmd_cmd;
-    let dollar_cmd = nvim_docmd_get_do_ecmd_cmd_dollar();
+    let dollar_cmd = crate::state::nvim_docmd_get_do_ecmd_cmd_dollar();
     if !do_ecmd_cmd.is_null() && do_ecmd_cmd != dollar_cmd {
         let dec_offset = (do_ecmd_cmd as usize).wrapping_sub(old_cmdline as usize);
         (*eap).do_ecmd_cmd = new_cmdline.add(dec_offset);
@@ -1666,7 +1660,7 @@ extern "C" {
     fn nvim_docmd_rundo(arg: *const c_char);
     fn tabpage_move(nr: c_int);
     fn nvim_docmd_checkpath(forceit: bool);
-    fn nvim_set_ex_pressedreturn(val: bool);
+    // nvim_set_ex_pressedreturn: now in Rust state module
 }
 
 /// ":buffer" -- delegates to do_exbuffer.
@@ -1831,8 +1825,8 @@ pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
 
 /// set_pressedreturn -- set ex_pressedreturn flag.
 #[export_name = "set_pressedreturn"]
-pub unsafe extern "C" fn rs_set_pressedreturn(val: bool) {
-    nvim_set_ex_pressedreturn(val);
+pub extern "C" fn rs_set_pressedreturn(val: bool) {
+    crate::state::nvim_set_ex_pressedreturn(val);
 }
 
 // =============================================================================
@@ -1853,7 +1847,7 @@ extern "C" {
     fn do_augroup(arg: *mut c_char, del_group: c_int);
     fn check_nomodeline(argp: *mut *mut c_char) -> bool;
     // Phase 22: before_quit_all, ex_range_without_command helpers
-    fn nvim_docmd_get_exmode_plus() -> *mut c_char;
+    // nvim_docmd_get_exmode_plus: now in Rust state module
     static mut exmode_active: bool;
     fn invalid_range(eap: ExArgHandle) -> *mut c_char;
     fn correct_range(eap: ExArgHandle);
@@ -2542,7 +2536,7 @@ const K_XF2: c_int = -15101;
 pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c_char {
     let mut errormsg: *mut c_char = std::ptr::null_mut();
     let cmd = (*eap).cmd;
-    let exmode_plus_p1 = nvim_docmd_get_exmode_plus().add(1);
+    let exmode_plus_p1 = crate::state::nvim_docmd_get_exmode_plus().add(1);
     if !cmd.is_null() && *(cmd as *const u8) == b'|' || (exmode_active && cmd != exmode_plus_p1) {
         (*eap).cmdidx = CMD_PRINT;
         (*eap).argt = EX_RANGE | EX_COUNT | EX_TRLBAR;

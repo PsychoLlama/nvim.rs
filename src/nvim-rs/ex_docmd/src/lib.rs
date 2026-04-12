@@ -29,6 +29,7 @@ pub mod lookup;
 pub mod modifiers;
 pub mod range;
 pub mod source;
+pub mod state;
 pub mod table;
 
 use std::ffi::{c_char, c_int};
@@ -64,6 +65,7 @@ pub use lookup::*;
 pub use modifiers::*;
 pub use range::*;
 pub use source::*;
+pub use state::*;
 pub use table::*;
 
 // =============================================================================
@@ -80,7 +82,6 @@ pub const VGR_FUZZY: c_int = 4;
 // FFI declarations for C helper functions
 extern "C" {
     fn cmdname_first_char(cmdidx: c_int) -> c_int;
-    fn nvim_get_ex_pressedreturn() -> c_int;
     fn nvim_get_expr_map_lock() -> c_int;
     fn nvim_curbuf_is_dummy() -> c_int;
     static cmdwin_type: c_int;
@@ -270,13 +271,9 @@ pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int) -> c_int {
 /// Get the current value of ex_pressedreturn.
 ///
 /// Returns true if the user pressed Enter on an empty command line.
-///
-/// # Safety
-///
-/// Calls external C function to access static variable.
 #[export_name = "get_pressedreturn"]
-pub unsafe extern "C" fn rs_get_pressedreturn() -> c_int {
-    nvim_get_ex_pressedreturn()
+pub extern "C" fn rs_get_pressedreturn() -> c_int {
+    crate::state::nvim_get_ex_pressedreturn()
 }
 
 /// Check if expression mapping is locked.

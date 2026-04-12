@@ -262,8 +262,8 @@ extern "C" {
 
     // Global state accessors
     fn nvim_docmd_getline_is_getexline(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_get_exmode_plus() -> *mut c_char;
-    fn nvim_set_ex_pressedreturn(val: bool);
+    // nvim_docmd_get_exmode_plus: now in Rust state module
+    // nvim_set_ex_pressedreturn: now in Rust state module
     fn nvim_get_curwin() -> *mut c_void;
     fn nvim_win_get_cursor_lnum(wp: *mut c_void) -> i32;
     fn nvim_get_curbuf() -> *mut c_void;
@@ -329,9 +329,9 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             && nvim_win_get_cursor_lnum(nvim_get_curwin())
                 < nvim_buf_get_line_count(nvim_get_curbuf())
         {
-            (*eap).cmd = nvim_docmd_get_exmode_plus();
+            (*eap).cmd = crate::state::nvim_docmd_get_exmode_plus();
             if !skip_only {
-                nvim_set_ex_pressedreturn(true);
+                crate::state::nvim_set_ex_pressedreturn(true);
             }
         }
 
@@ -353,7 +353,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         }
         if *cmd == 0 {
             if !skip_only {
-                nvim_set_ex_pressedreturn(true);
+                crate::state::nvim_set_ex_pressedreturn(true);
             }
             return FAIL;
         }

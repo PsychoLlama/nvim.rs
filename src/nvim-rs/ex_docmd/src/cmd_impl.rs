@@ -1540,9 +1540,7 @@ extern "C" {
     // typebuf.tb_len
     fn nvim_get_typebuf_len() -> c_int;
 
-    // ex_pressedreturn get/set
-    fn nvim_get_ex_pressedreturn() -> c_int;
-    fn nvim_set_ex_pressedreturn(val: bool);
+    // ex_pressedreturn: now in Rust state module
 
     // ex_no_reprint set/get
     fn nvim_set_ex_no_reprint(val: c_int);
@@ -1587,13 +1585,7 @@ extern "C" {
     fn nvim_redraw_all_later(redraw_type: c_int);
     fn update_screen();
 
-    // filetype accessor functions
-    fn nvim_docmd_get_filetype_plugin() -> c_int;
-    fn nvim_docmd_set_filetype_plugin(val: c_int);
-    fn nvim_docmd_get_filetype_indent() -> c_int;
-    fn nvim_docmd_set_filetype_indent(val: c_int);
-    fn nvim_docmd_get_filetype_detect() -> c_int;
-    fn nvim_docmd_set_filetype_detect(val: c_int);
+    // filetype accessors: now in Rust state module
 
     // source_runtime (Rust function, already exported as "source_runtime")
     fn source_runtime(name: *const c_char, flags: c_int) -> c_int;
@@ -1661,13 +1653,13 @@ pub unsafe extern "C" fn do_cmdline_cmd(cmd: *const c_char) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn filetype_plugin_enable() {
     const DIP_ALL: c_int = 0x01;
-    if nvim_docmd_get_filetype_plugin() == K_NONE {
+    if crate::state::nvim_docmd_get_filetype_plugin() == K_NONE {
         source_runtime(c"ftplugin.vim".as_ptr(), DIP_ALL);
-        nvim_docmd_set_filetype_plugin(K_TRUE);
+        crate::state::nvim_docmd_set_filetype_plugin(K_TRUE);
     }
-    if nvim_docmd_get_filetype_indent() == K_NONE {
+    if crate::state::nvim_docmd_get_filetype_indent() == K_NONE {
         source_runtime(c"indent.vim".as_ptr(), DIP_ALL);
-        nvim_docmd_set_filetype_indent(K_TRUE);
+        crate::state::nvim_docmd_set_filetype_indent(K_TRUE);
     }
 }
 
@@ -1679,12 +1671,12 @@ pub unsafe extern "C" fn filetype_plugin_enable() {
 /// Calls C functions that source runtime files.
 #[no_mangle]
 pub unsafe extern "C" fn filetype_maybe_enable() {
-    if nvim_docmd_get_filetype_detect() == K_NONE {
+    if crate::state::nvim_docmd_get_filetype_detect() == K_NONE {
         // Normally .vim files are sourced before .lua files when both are
         // supported, but we reverse the order here because we want the Lua
         // autocommand to be defined first so that it runs first
         source_runtime(c"filetype.lua filetype.vim".as_ptr(), 0x01); // DIP_ALL
-        nvim_docmd_set_filetype_detect(K_TRUE);
+        crate::state::nvim_docmd_set_filetype_detect(K_TRUE);
     }
 }
 
@@ -1720,7 +1712,7 @@ pub unsafe extern "C" fn do_exmode() {
         }
         msg_scroll = 1;
         need_wait_return = false;
-        nvim_set_ex_pressedreturn(false);
+        crate::state::nvim_set_ex_pressedreturn(false);
         nvim_set_ex_no_reprint(0);
         let changedtick = nvim_docmd_curbuf_changedtick();
         let prev_msg_row = msg_row;
@@ -1736,7 +1728,7 @@ pub unsafe extern "C" fn do_exmode() {
             if nvim_al_curbuf_ml_empty() != 0 {
                 emsg(nvim_get_e_empty_buffer());
             } else {
-                if nvim_get_ex_pressedreturn() != 0 {
+                if crate::state::nvim_get_ex_pressedreturn() != 0 {
                     // Make sure the message overwrites the right line and isn't throttled.
                     nvim_docmd_msg_scroll_flush();
                     // go up one line, to overwrite the ":<CR>" line, so the
@@ -1751,7 +1743,7 @@ pub unsafe extern "C" fn do_exmode() {
                 nvim_p6_print_line_no_prefix(nvim_get_curwin_cursor_lnum(), false, false);
                 msg_clr_eos();
             }
-        } else if nvim_get_ex_pressedreturn() != 0 && nvim_get_ex_no_reprint() == 0 {
+        } else if crate::state::nvim_get_ex_pressedreturn() != 0 && nvim_get_ex_no_reprint() == 0 {
             // must be at EOF
             if nvim_al_curbuf_ml_empty() != 0 {
                 emsg(nvim_get_e_empty_buffer());
