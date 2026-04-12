@@ -63,6 +63,8 @@ extern int rs_sign_undefine_by_name(const char *name);
 extern size_t rs_describe_sign_text(char *buf, size_t buf_len, schar_T *sign_text);
 extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf, linenr_T lnum, int prio);
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
+// Phase 1: these functions now live in Rust (nvim-sign crate)
+extern dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -274,85 +276,6 @@ int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
     return FAIL;
   }
   return OK;
-}
-void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
-{
-  char lbuf[MSG_BUF_LEN];
-  char namebuf[MSG_BUF_LEN];
-  char groupbuf[MSG_BUF_LEN];
-  buf_T *buf = rbuf ? rbuf : firstbuf;
-  int64_t ns = group_get_ns(group);
-  msg_puts_title(_("\n--- Signs ---"));
-  msg_putchar('\n');
-  while (buf != NULL && !got_int) {
-    if (rs_sign_buffer_has_signs(buf)) {
-      vim_snprintf(lbuf, MSG_BUF_LEN, _("Signs for %s:"), buf->b_fname);
-      msg_puts_hl(lbuf, HLF_D, false);
-      msg_putchar('\n');
-    }
-    if (ns >= 0) {
-      MarkTreeIter itr[1];
-      kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-      rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
-      while (itr->x) {
-        MTKey mark = rs_marktree_itr_current(itr);
-        if (!mt_end(mark) && mt_decor_sign(mark)
-            && (ns == UINT32_MAX || ns == mark.ns)) {
-          kv_push(signs, mark);
-        }
-        rs_marktree_itr_next(buf->b_marktree, itr);
-      }
-      if (kv_size(signs)) {
-        qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
-        for (size_t i = 0; i < kv_size(signs); i++) {
-          namebuf[0] = NUL;
-          groupbuf[0] = NUL;
-          MTKey mark = kv_A(signs, i);
-          DecorSignHighlight *sh = decor_find_sign(mt_decor(mark));
-          if (sh->sign_name != NULL) {
-            vim_snprintf(namebuf, MSG_BUF_LEN, _("  name=%s"), rs_sign_get_display_name(sh));
-          }
-          if (mark.ns != 0) {
-            vim_snprintf(groupbuf, MSG_BUF_LEN, _("  group=%s"), describe_ns((int)mark.ns, ""));
-          }
-          vim_snprintf(lbuf, MSG_BUF_LEN, _("    line=%" PRIdLINENR "  id=%u%s%s  priority=%d"),
-                       mark.pos.row + 1, mark.id, groupbuf, namebuf, sh->priority);
-          msg_puts(lbuf);
-          msg_putchar('\n');
-        }
-        kv_destroy(signs);
-      }
-    }
-    if (rbuf != NULL) {
-      return;
-    }
-    buf = buf->b_next;
-  }
-}
-dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark)
-{
-  dict_T *d = tv_dict_alloc();
-  DecorSignHighlight *sh = decor_find_sign(mt_decor(*mark));
-  tv_dict_add_str(d, S_LEN("name"), rs_sign_get_display_name(sh));
-  tv_dict_add_nr(d,  S_LEN("id"), (int)mark->id);
-  tv_dict_add_str(d, S_LEN("group"), describe_ns((int)mark->ns, ""));
-  tv_dict_add_nr(d,  S_LEN("lnum"), mark->pos.row + 1);
-  tv_dict_add_nr(d,  S_LEN("priority"), sh->priority);
-  return d;
-}
-list_T *nvim_get_buffer_signs_impl(buf_T *buf)
-{
-  list_T *const l = tv_list_alloc(kListLenMayKnow);
-  MarkTreeIter itr[1];
-  rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
-  while (itr->x) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (!mt_end(mark) && mt_decor_sign(mark)) {
-      tv_list_append_dict(l, nvim_sign_get_placed_info_dict_impl(&mark));
-    }
-    rs_marktree_itr_next(buf->b_marktree, itr);
-  }
-  return l;
 }
 void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group, list_T *retlist)
 {

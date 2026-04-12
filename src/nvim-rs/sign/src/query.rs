@@ -68,9 +68,6 @@ extern "C" {
     // Error reporting
     fn semsg(fmt: *const c_char, ...);
 
-    // Display/listing composite accessors (sign_list_placed_impl not yet migrated)
-    fn nvim_sign_list_placed_impl(rbuf: SignBufHandle, group: *const c_char);
-
     // Message functions for sign_list_defined
     fn nvim_smsg0(msg: *const c_char);
     fn nvim_msg_puts(s: *const c_char);
@@ -396,10 +393,217 @@ pub unsafe extern "C" fn rs_sign_get_lnum_from_key(key: MTKeyHandle) -> LinenrT 
 // Sign Display/Listing
 // =============================================================================
 
+// =============================================================================
+// Phase 1: Sort comparator for signs (replaces C sign_row_cmp / qsort callback)
+// =============================================================================
+
+static EMPTY_CSTR: &[u8] = b"\0";
+
+/// Compare two MTKey signs: ascending row, then descending priority/id/add_id.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn cmp_signs(a: &MTKey, b: &MTKey) -> std::cmp::Ordering {
+    if a.pos.row != b.pos.row {
+        return a.pos.row.cmp(&b.pos.row);
+    }
+    let sha = decor_find_sign(mtkey_to_decor_inline(a));
+    let shb = decor_find_sign(mtkey_to_decor_inline(b));
+    let (prio_a, add_a) = if sha.is_null() {
+        (0u16, 0i32)
+    } else {
+        ((*sha).priority, (*sha).sign_add_id)
+    };
+    let (prio_b, add_b) = if shb.is_null() {
+        (0u16, 0i32)
+    } else {
+        ((*shb).priority, (*shb).sign_add_id)
+    };
+    if prio_a != prio_b {
+        return prio_b.cmp(&prio_a);
+    }
+    if a.id != b.id {
+        return b.id.cmp(&a.id);
+    }
+    add_b.cmp(&add_a)
+}
+
+// =============================================================================
+// Phase 1: Rust implementations replacing C _impl functions
+// =============================================================================
+
+/// Build a dict_T containing placement info for a single sign mark.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn build_placed_info_dict(mark: *const MTKey) -> *mut std::ffi::c_void {
+    let d = tv_dict_alloc();
+    let sh = decor_find_sign(mtkey_to_decor_inline(&*mark));
+    let name = rs_sign_get_display_name(crate::DecorSignHighlightHandle(sh.cast()));
+    tv_dict_add_str(d, c"name".as_ptr(), 4, name);
+    tv_dict_add_nr(d, c"id".as_ptr(), 2, i64::from((*mark).id));
+    let group_name = describe_ns((*mark).ns as c_int, EMPTY_CSTR.as_ptr().cast());
+    tv_dict_add_str(d, c"group".as_ptr(), 5, group_name);
+    tv_dict_add_nr(d, c"lnum".as_ptr(), 4, i64::from((*mark).pos.row + 1));
+    let priority = if sh.is_null() {
+        0i64
+    } else {
+        i64::from((*sh).priority)
+    };
+    tv_dict_add_nr(d, c"priority".as_ptr(), 8, priority);
+    d
+}
+
+/// Replace C `nvim_sign_get_placed_info_dict_impl`.
+///
+/// # Safety
+/// `mark_ptr` must be a valid pointer to an MTKey.
+#[unsafe(export_name = "nvim_sign_get_placed_info_dict_impl")]
+pub unsafe extern "C" fn rs_nvim_sign_get_placed_info_dict_impl(
+    mark_ptr: *mut std::ffi::c_void,
+) -> *mut std::ffi::c_void {
+    if mark_ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    build_placed_info_dict(mark_ptr.cast::<MTKey>())
+}
+
+/// Replace C `nvim_get_buffer_signs_impl`.
+///
+/// Returns a list_T containing all placed signs in the buffer.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+#[unsafe(export_name = "nvim_get_buffer_signs_impl")]
+pub unsafe extern "C" fn rs_nvim_get_buffer_signs_impl(
+    buf: SignBufHandle,
+) -> *mut std::ffi::c_void {
+    const K_LIST_LEN_MAY_KNOW: i64 = -3;
+    let l = tv_list_alloc(K_LIST_LEN_MAY_KNOW);
+    let b = nvim_buf_get_marktree(buf);
+    let itr = nvim_marktree_itr_alloc();
+    rs_marktree_itr_get(b, 0, 0, itr);
+    while nvim_mtitr_has_x(itr) {
+        let mark = rs_marktree_itr_current(itr);
+        if !mtkey_is_end(&mark) && mtkey_is_decor_sign(&mark) {
+            let d = build_placed_info_dict(&raw const mark);
+            tv_list_append_dict(l, d);
+        }
+        rs_marktree_itr_next(b, itr);
+    }
+    nvim_marktree_itr_free(itr);
+    l
+}
+
+/// Replace C `nvim_sign_list_placed_impl`.
+///
+/// Lists all placed signs, optionally filtered by buffer and group.
+///
+/// # Safety
+/// `rbuf` must be a valid buffer handle or null.
+/// `group` must be null or a valid null-terminated C string.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+#[unsafe(export_name = "nvim_sign_list_placed_impl")]
+pub unsafe extern "C" fn rs_nvim_sign_list_placed_impl(rbuf: SignBufHandle, group: *const c_char) {
+    // HLF_D = 5 (directory highlight for sign listing headers)
+    const HLF_D: c_int = 5;
+    const MSG_BUF_LEN: usize = 480;
+
+    let ns = rs_sign_get_ns_filter(group);
+    msg_puts_title(c"\n--- Signs ---".as_ptr());
+    msg_putchar(c_int::from(b'\n'));
+
+    let mut buf = if rbuf.is_null() {
+        nvim_get_firstbuf()
+    } else {
+        rbuf
+    };
+
+    while !buf.is_null() && !got_int {
+        if rs_sign_buffer_has_signs(buf) {
+            let fname = nvim_buf_get_fname(buf);
+            let mut lbuf = [0u8; MSG_BUF_LEN];
+            vim_snprintf(
+                lbuf.as_mut_ptr().cast(),
+                MSG_BUF_LEN,
+                c"Signs for %s:".as_ptr(),
+                fname,
+            );
+            msg_puts_hl(lbuf.as_ptr().cast(), HLF_D, false);
+            msg_putchar(c_int::from(b'\n'));
+        }
+        if ns >= 0 {
+            let b = nvim_buf_get_marktree(buf);
+            let itr = nvim_marktree_itr_alloc();
+            rs_marktree_itr_get(b, 0, 0, itr);
+            let mut signs: Vec<MTKey> = Vec::new();
+            while nvim_mtitr_has_x(itr) {
+                let mark = rs_marktree_itr_current(itr);
+                if !mtkey_is_end(&mark)
+                    && mtkey_is_decor_sign(&mark)
+                    && (ns == NS_ALL || mark.ns == ns as u32)
+                {
+                    signs.push(mark);
+                }
+                rs_marktree_itr_next(b, itr);
+            }
+            nvim_marktree_itr_free(itr);
+            if !signs.is_empty() {
+                signs.sort_by(|a, bk| cmp_signs(a, bk));
+                for mark in &signs {
+                    let mut namebuf = [0u8; MSG_BUF_LEN];
+                    let mut groupbuf = [0u8; MSG_BUF_LEN];
+                    let sh = decor_find_sign(mtkey_to_decor_inline(mark));
+                    if !sh.is_null() && !(*sh).sign_name.is_null() {
+                        let display_name =
+                            rs_sign_get_display_name(crate::DecorSignHighlightHandle(sh.cast()));
+                        vim_snprintf(
+                            namebuf.as_mut_ptr().cast(),
+                            MSG_BUF_LEN,
+                            c"  name=%s".as_ptr(),
+                            display_name,
+                        );
+                    }
+                    if mark.ns != 0 {
+                        let ns_name = describe_ns(mark.ns as c_int, EMPTY_CSTR.as_ptr().cast());
+                        vim_snprintf(
+                            groupbuf.as_mut_ptr().cast(),
+                            MSG_BUF_LEN,
+                            c"  group=%s".as_ptr(),
+                            ns_name,
+                        );
+                    }
+                    let priority = if sh.is_null() {
+                        0i32
+                    } else {
+                        i32::from((*sh).priority)
+                    };
+                    let mut lbuf = [0u8; MSG_BUF_LEN];
+                    vim_snprintf(
+                        lbuf.as_mut_ptr().cast(),
+                        MSG_BUF_LEN,
+                        c"    line=%d  id=%u%s%s  priority=%d".as_ptr(),
+                        mark.pos.row + 1,
+                        mark.id,
+                        groupbuf.as_ptr(),
+                        namebuf.as_ptr(),
+                        priority,
+                    );
+                    msg_puts(lbuf.as_ptr().cast());
+                    msg_putchar(c_int::from(b'\n'));
+                }
+            }
+        }
+        if !rbuf.is_null() {
+            return;
+        }
+        buf = nvim_buf_get_next(buf);
+    }
+}
+
 /// List placed signs for a buffer or all buffers.
 ///
 /// If `rbuf` is null, lists signs for all buffers.
-/// Delegates to C composite accessor for marktree iteration and message output.
 ///
 /// # Safety
 ///
@@ -407,7 +611,7 @@ pub unsafe extern "C" fn rs_sign_get_lnum_from_key(key: MTKeyHandle) -> LinenrT 
 /// `group` must be null or a valid null-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sign_list_placed(rbuf: SignBufHandle, group: *const c_char) {
-    nvim_sign_list_placed_impl(rbuf, group);
+    rs_nvim_sign_list_placed_impl(rbuf, group);
 }
 
 /// List a single sign definition.

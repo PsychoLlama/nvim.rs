@@ -14,3 +14,4 @@ workspace = true
 
 [dependencies]
 nvim-decoration = { path = "../decoration" }
+nvim-marktree = { path = "../marktree" }
