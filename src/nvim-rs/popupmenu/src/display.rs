@@ -443,10 +443,6 @@ extern "C" {
     fn rs_pum_border_width() -> c_int;
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
-    /// Return `cmdline_win` pointer (or NULL).
-    fn nvim_pum_get_cmdline_win() -> *mut WinHandle;
-    /// Return `cmdline_row` value.
-    fn nvim_pum_get_cmdline_row() -> c_int;
     /// Return target window context after calling `validate_cheight`.
     fn nvim_pum_get_target_win_context(wp: *mut WinHandle) -> PumTargetWinContext;
     /// Return target window geometry fields.
@@ -493,6 +489,10 @@ extern "C" {
     static mut curwin: *mut WinHandle;
     /// C global: `pum_grid` (the popup menu grid).
     static mut pum_grid: crate::ScreenGrid;
+    /// C global: `cmdline_win` (window used for `ext_cmdline`, or `NULL`).
+    static mut cmdline_win: *mut WinHandle;
+    /// C global: `cmdline_row` (row of command line).
+    static cmdline_row: c_int;
 }
 
 /// Result of display geometry computation.
@@ -647,20 +647,18 @@ unsafe fn pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry {
 
     let state = State;
     let is_cmdline = (state & MODE_CMDLINE) != 0;
-    let cmdline_win = nvim_pum_get_cmdline_win();
-    let cmdline_row_val = nvim_pum_get_cmdline_row();
 
     // Compute below_row: max of cmdline_row and curwin bottom
     let cw = nvim_pum_get_target_win_geometry(curwin);
     let curwin_bottom = cw.winrow + cw.view_height;
-    geom.below_row = if cmdline_row_val > curwin_bottom {
-        cmdline_row_val
+    geom.below_row = if cmdline_row > curwin_bottom {
+        cmdline_row
     } else {
         curwin_bottom
     };
 
     if is_cmdline {
-        geom.below_row = cmdline_row_val;
+        geom.below_row = cmdline_row;
     }
 
     let target_win = if is_cmdline { cmdline_win } else { curwin };
@@ -676,7 +674,7 @@ unsafe fn pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry {
             geom.cursor_col = cmd_startcol % Columns;
             geom.anchor_grid = -1;
         } else {
-            geom.pum_win_row = cmdline_row_val;
+            geom.pum_win_row = cmdline_row;
             geom.cursor_col = cmd_startcol % Columns;
         }
     } else {
@@ -724,7 +722,6 @@ unsafe fn pum_compute_vp(
 ) {
     let state = State;
     let is_cmdline = (state & MODE_CMDLINE) != 0;
-    let cmdline_win = nvim_pum_get_cmdline_win();
     let target_win = if is_cmdline { cmdline_win } else { curwin };
     let has_target_win = !target_win.is_null();
     let (context_above, context_below) = if has_target_win {
@@ -735,7 +732,6 @@ unsafe fn pum_compute_vp(
     } else {
         (0, 0)
     };
-    let cmdline_row_val = nvim_pum_get_cmdline_row();
 
     let result = crate::placement::rs_pum_compute_vertical(
         size,
@@ -743,7 +739,7 @@ unsafe fn pum_compute_vp(
         above_row,
         below_row,
         border_width,
-        cmdline_row_val,
+        cmdline_row,
         c_int::from(is_cmdline),
         c_int::from(has_target_win),
         context_above,
@@ -763,7 +759,6 @@ unsafe fn pum_compute_vp(
 unsafe fn pum_compute_hp(cursor_col: c_int) {
     let state = State;
     let is_cmdline = (state & MODE_CMDLINE) != 0;
-    let cmdline_win = nvim_pum_get_cmdline_win();
     let target_win = if is_cmdline { cmdline_win } else { curwin };
     let max_col = if target_win.is_null() {
         Columns

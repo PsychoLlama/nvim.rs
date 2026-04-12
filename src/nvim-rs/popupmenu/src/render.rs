@@ -324,18 +324,30 @@ extern "C" {
     fn rs_get_cot_flags() -> c_uint;
 }
 
+/// `garray_T` C struct layout for fuzzy match positions.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct GArray {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut std::ffi::c_void,
+}
+
 // C accessor functions.
 extern "C" {
-    /// Get fuzzy match positions. Caller must free with `nvim_xfree`.
-    fn nvim_pum_fuzzy_match_positions(
-        text: *const c_char,
-        leader: *const c_char,
-        out_len: *mut c_int,
-    ) -> *mut u32;
+    /// Fuzzy match a string against a pattern, filling a `GArray` with match positions.
+    /// Returns `NULL` on no match. Caller must free with `ga_clear` + `xfree`.
+    fn fuzzy_match_str_with_pos(text: *const c_char, leader: *const c_char) -> *mut GArray;
+    /// Clear a `GArray` (frees `ga_data` but not the `GArray` itself).
+    fn ga_clear(ga: *mut GArray);
     /// Case-insensitive multibyte string comparison.
     fn mb_strnicmp(s1: *const c_char, s2: *const c_char, len: c_ulong) -> c_int;
     /// Allocate memory via xmalloc.
     fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+    /// Free memory.
+    fn xfree(ptr: *mut std::ffi::c_void);
     /// Get display width of string in cells.
     fn vim_strsize(text: *const c_char) -> c_int;
     /// Display text on popup grid at column with attribute.
@@ -344,6 +356,40 @@ extern "C" {
     fn nvim_xfree(ptr: *mut u8);
     /// Get C strlen.
     fn strlen(s: *const c_char) -> c_ulong;
+}
+
+/// Get fuzzy match positions for `text` against `leader`.
+///
+/// Returns a pointer to an xmalloc'd `u32` array of character positions, and
+/// sets `*out_len` to the number of positions. Returns NULL on no match.
+/// Caller must free with `xfree`.
+///
+/// # Safety
+/// `text` and `leader` must be valid NUL-terminated C strings.
+unsafe fn fuzzy_match_positions(
+    text: *const c_char,
+    leader: *const c_char,
+    out_len: &mut c_int,
+) -> *mut u32 {
+    *out_len = 0;
+    let ga = fuzzy_match_str_with_pos(text, leader);
+    if ga.is_null() {
+        return std::ptr::null_mut();
+    }
+    let len = (*ga).ga_len;
+    if len <= 0 {
+        ga_clear(ga);
+        xfree(ga.cast());
+        return std::ptr::null_mut();
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let len_usize = len as usize;
+    let positions = xmalloc(std::mem::size_of::<u32>() * len_usize).cast::<u32>();
+    std::ptr::copy_nonoverlapping((*ga).ga_data.cast::<u32>(), positions, len_usize);
+    ga_clear(ga);
+    xfree(ga.cast());
+    *out_len = len;
+    positions
 }
 
 /// Compute text attributes for a popup menu item.
@@ -396,8 +442,7 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     // Get fuzzy match positions if in fuzzy mode
     let mut fuzzy_len: c_int = 0;
     let fuzzy_positions = if in_fuzzy {
-        let positions =
-            nvim_pum_fuzzy_match_positions(text, leader, std::ptr::addr_of_mut!(fuzzy_len));
+        let positions = fuzzy_match_positions(text, leader, &mut fuzzy_len);
         if positions.is_null() {
             nvim_xfree(attrs.cast());
             return std::ptr::null_mut();
@@ -467,7 +512,7 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     }
 
     if !fuzzy_positions.is_null() {
-        nvim_xfree(fuzzy_positions.cast());
+        xfree(fuzzy_positions.cast());
     }
     attrs
 }

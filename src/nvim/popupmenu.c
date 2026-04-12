@@ -85,18 +85,6 @@ _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 
 // Phase 1 C accessors
 
-/// Return cmdline_win pointer (or NULL).
-win_T *nvim_pum_get_cmdline_win(void)
-{
-  return cmdline_win;
-}
-
-/// Return cmdline_row value.
-int nvim_pum_get_cmdline_row(void)
-{
-  return cmdline_row;
-}
-
 /// Return target window context after calling validate_cheight.
 PumTargetWinContext nvim_pum_get_target_win_context(win_T *wp)
 {
@@ -145,25 +133,6 @@ PumPvwinRows nvim_pum_find_pvwin(void)
 }
 
 // Text attrs computation helpers
-
-/// Fuzzy match helper: returns flat array of matching positions and count.
-/// Caller must free the returned array with xfree().
-/// Returns NULL if no match. Sets *out_len to number of positions.
-uint32_t *nvim_pum_fuzzy_match_positions(const char *text, const char *leader, int *out_len)
-{
-  garray_T *ga = fuzzy_match_str_with_pos(text, leader);
-  if (!ga) {
-    *out_len = 0;
-    return NULL;
-  }
-  int len = ga->ga_len;
-  uint32_t *positions = xmalloc(sizeof(uint32_t) * (size_t)len);
-  memcpy(positions, ga->ga_data, sizeof(uint32_t) * (size_t)len);
-  ga_clear(ga);
-  xfree(ga);
-  *out_len = len;
-  return positions;
-}
 
 // position_at_mouse helpers
 
