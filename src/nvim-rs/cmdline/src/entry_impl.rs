@@ -1,7 +1,7 @@
 //! rs_command_line_enter: Rust implementation of command_line_enter and
 //! rs_getcmdline_prompt: Rust implementation of getcmdline_prompt
 //!
-//! Migrated from ex_getln.c (Phase 1 + Phase 2).
+//! Migrated from ex_getln.c (Phase 1 + Phase 2 + Phase 3).
 
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
@@ -12,19 +12,22 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::command_line_state::{CommandLineState, VimState};
+use crate::entry::{rs_entry_should_add_to_history, rs_entry_should_save_last_cmdline};
+use crate::history::hist_type;
 
 // =============================================================================
-// FFI declarations for Phase 1
+// FFI declarations
 // =============================================================================
 
 unsafe extern "C" {
     // Level / cmdpreview
     fn nvim_cmdline_enter_level_inc() -> c_int;
+    fn nvim_cmdline_enter_level_dec();
     fn nvim_cmdpreview_save_and_clear() -> bool;
+    fn nvim_get_cmdpreview() -> bool;
+    fn nvim_cmdpreview_restore(saved: bool, current: bool);
 
     // ccline save/restore
-    // CmdlineInfo is opaque from Rust side; we use a byte array large enough.
-    // Size from C: sizeof(CmdlineInfo). We pass a pointer to stack-allocated storage.
     fn nvim_ccline_save_and_clear(save_out: *mut c_void, clear_ccline_flag: bool) -> bool;
     fn nvim_ccline_restore(save_out: *const c_void);
 
@@ -36,9 +39,11 @@ unsafe extern "C" {
 
     // alloc_cmdbuff (already in Rust, exported as extern C)
     fn alloc_cmdbuff(len: c_int);
+    fn dealloc_cmdbuff();
 
     // sb_text wrappers
     fn nvim_sb_text_start_cmdline();
+    fn nvim_sb_text_end_cmdline();
 
     // cmdmsg_rl / msg_grid_validate / redir_off
     fn nvim_set_cmdmsg_rl(val: c_int);
@@ -57,9 +62,11 @@ unsafe extern "C" {
     fn nvim_clear_did_emsg();
     fn nvim_clear_got_int();
     fn nvim_get_did_emsg_for_redraw() -> c_int;
+    fn nvim_clear_need_wait_return_wrap();
 
     // p_icm
     fn nvim_get_p_icm_dup() -> *mut c_char;
+    fn nvim_set_p_icm_option(val: *const c_char);
 
     // Langmap / RTL
     fn nvim_cmdline_setup_langmap(s: *mut c_void, firstc: c_int) -> c_int;
@@ -106,22 +113,7 @@ unsafe extern "C" {
     // State accessor
     fn nvim_get_State() -> c_int;
 
-    // Cleanup helpers (still needed until leave_cleanup is fully replaced)
-    fn nvim_cmdline_leave_cleanup(s: *mut c_void) -> *mut u8;
-    fn nvim_cmdline_final_teardown(
-        s: *mut c_void,
-        did_save_ccline: bool,
-        save_ccline: *mut c_void,
-        save_msg_scroll: c_int,
-        save_state: c_int,
-        save_cmdpreview: bool,
-        err: *mut c_void,
-    );
-}
-
-// Phase 3 cleanup thin wrappers (declared for upcoming Rust migration; not yet used)
-#[allow(dead_code)]
-unsafe extern "C" {
+    // Phase 3 cleanup thin C wrappers
     fn nvim_cmdline_pum_active_check() -> c_int;
     fn nvim_cmdline_pum_remove_noconfirm();
     fn nvim_pum_check_clear_wrap();
@@ -135,18 +127,30 @@ unsafe extern "C" {
     fn nvim_cmdline_check_must_redraw();
     fn nvim_ccline_has_cmdbuff() -> c_int;
     fn nvim_ccline_get_one_key() -> c_int;
-    fn nvim_get_msg_scrolled() -> c_int;
-    fn nvim_clear_need_wait_return_wrap();
     fn nvim_ccline_free_last_colors();
     fn nvim_cmdline_ui_hide(gotesc: c_int);
     fn nvim_cmdline_status_redraw();
     fn nvim_ccline_restore_or_clear(did_save: bool, save_ccline_in: *const c_void);
-    // Accessors for CommandLineState fields needed in cleanup
-    fn nvim_cls_get_histype(s: *mut c_void) -> c_int;
-    fn nvim_cls_get_some_key_typed(s: *mut c_void) -> c_int;
-    fn nvim_cls_get_save_p_icm(s: *mut c_void) -> *mut c_char;
-    fn nvim_cls_xfree_save_p_icm(s: *mut c_void);
-    fn nvim_cls_xfree_prev_cmdbuff_phase3(s: *mut c_void);
+    fn nvim_get_ccline_cmdlen() -> c_int;
+    fn nvim_msg_check();
+    fn xfree(ptr: *mut c_char);
+
+    // msg_col / msg_silent — direct static access (Phase 2)
+    static mut msg_col: c_int;
+    static mut msg_silent: c_int;
+    fn nvim_set_cmd_silent(val: c_int);
+
+    // ccline field setters for prompt (Phase 2)
+    fn nvim_set_ccline_cmdprompt(prompt: *mut c_char);
+    fn nvim_set_ccline_hl_id(hl_id: c_int);
+    fn nvim_set_ccline_xp_context(context: c_int);
+    fn nvim_set_ccline_xp_arg(arg: *const c_char);
+    fn nvim_set_ccline_input_fn(val: c_int);
+    fn nvim_set_ccline_one_key(val: c_int);
+    fn nvim_set_ccline_mouse_used_ptr(ptr: *mut bool);
+    fn nvim_set_ccline_redraw_state(state: c_int);
+    fn nvim_get_ccline_cmdbuff() -> *mut c_char;
+    fn nvim_apply_pending_hl_callback();
 }
 
 // MODE_CMDLINE constant
@@ -186,12 +190,6 @@ pub unsafe extern "C" fn rs_command_line_enter(
     indent: c_int,
     clear_ccline: c_int,
 ) -> *mut u8 {
-    // clear_ccline controls whether to clear ccline if not in use (recursive entry).
-    // - rs_getcmdline_prompt sets ccline fields before calling us (clear_ccline=false case)
-    // - nvim_ccline_save_and_clear handles both cases: saves if in use, clears if not
-    // The C assertion "assert(clear_ccline)" fires if cmdbuff!=NULL && clear_ccline==false,
-    // which is an invariant maintained by the caller.
-
     // Increment recursion level (returns new level)
     let level = nvim_cmdline_enter_level_inc();
 
@@ -223,8 +221,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     // Initialize incsearch state
     crate::search::rs_init_incsearch_state(std::ptr::addr_of_mut!(state.is_state));
 
-    // Save/clear ccline. When clear_ccline=false (getcmdline_prompt case),
-    // caller pre-sets ccline fields and we must not clear them.
+    // Save/clear ccline
     let mut save_ccline_buf = CmdlineInfoStorage::new();
     let save_ccline_ptr = std::ptr::addr_of_mut!(save_ccline_buf).cast::<c_void>();
     let did_save_ccline = nvim_ccline_save_and_clear(save_ccline_ptr, clear_ccline != 0);
@@ -235,10 +232,8 @@ pub unsafe extern "C" fn rs_command_line_enter(
         state.break_ctrl_c = true;
     }
 
-    // Alloc initial cmdbuff FIRST (nvim_ccline_enter_init writes cmdbuff[0]=NUL)
+    // Alloc initial cmdbuff FIRST
     alloc_cmdbuff(indent + 50);
-    // Initialize ccline fields (overstrike, cmdfirstc, cmdindent, cmdlen, cmdpos, etc.)
-    // This writes cmdbuff[0]=NUL; cmdbuff must already be allocated.
     nvim_ccline_enter_init(state.firstc, indent);
 
     nvim_sb_text_start_cmdline();
@@ -254,9 +249,8 @@ pub unsafe extern "C" fn rs_command_line_enter(
     // Check recursion limit
     if level == 50 {
         nvim_emsg_command_too_recursive();
-        // goto theend equivalent: jump to teardown
         return do_theend(
-            s,
+            std::ptr::addr_of_mut!(state),
             did_save_ccline,
             save_ccline_ptr,
             save_msg_scroll,
@@ -318,7 +312,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     // Init digraph typeahead
     nvim_do_digraph_init();
 
-    // If there was an error above, reset flags (we want to type and execute commands)
+    // If there was an error above, reset flags
     if nvim_get_did_emsg_for_redraw() != 0 {
         crate::screen::redrawcmd_rs();
     }
@@ -343,19 +337,17 @@ pub unsafe extern "C" fn rs_command_line_enter(
     // Reset cmdmsg_rl
     nvim_set_cmdmsg_rl(0);
 
-    // Post-leave cleanup (PUM, expand, incsearch, history, gotesc handling)
-    // Returns ccline.cmdbuff (the result string)
-    let result_ptr = nvim_cmdline_leave_cleanup(s);
+    // Post-leave cleanup
+    let result_ptr = leave_cleanup(std::ptr::addr_of_mut!(state));
 
-    // Final teardown (hide UI, restore ccline, free)
-    nvim_cmdline_final_teardown(
-        s,
+    // Final teardown
+    final_teardown(
+        std::ptr::addr_of_mut!(state),
         did_save_ccline,
         save_ccline_ptr,
         save_msg_scroll,
         save_state,
         save_cmdpreview,
-        std::ptr::null_mut(), // no pending error from Rust side
     );
 
     result_ptr
@@ -367,28 +359,141 @@ pub unsafe extern "C" fn rs_command_line_enter(
 ///
 /// All pointers must be valid.
 unsafe fn do_theend(
-    s: *mut c_void,
+    state: *mut CommandLineState,
     did_save_ccline: bool,
     save_ccline_ptr: *mut c_void,
     save_msg_scroll: c_int,
     save_state: c_int,
     save_cmdpreview: bool,
 ) -> *mut u8 {
-    // theend: xfree(s->save_p_icm), xfree ccline.last_colors, kv_destroy colors,
-    // ui_call_cmdline_hide, status_redraw_all, cmdline_enter_level--
-    // nvim_cmdline_final_teardown handles most of this.
-    // But first we need to free save_p_icm which was allocated before entering theend.
-    // nvim_cmdline_final_teardown will xfree cs->save_p_icm for us.
-    nvim_cmdline_final_teardown(
-        s,
+    final_teardown(
+        state,
         did_save_ccline,
         save_ccline_ptr,
         save_msg_scroll,
         save_state,
         save_cmdpreview,
-        std::ptr::null_mut(),
     );
     std::ptr::null_mut()
+}
+
+// =============================================================================
+// Phase 3: Rust implementations of leave_cleanup and final_teardown
+// =============================================================================
+
+/// Post-leave cleanup: PUM, expand, incsearch, history.
+/// Returns ccline.cmdbuff (the result string), or NULL.
+///
+/// # Safety
+///
+/// state must be a valid pointer to CommandLineState.
+unsafe fn leave_cleanup(state: *mut CommandLineState) -> *mut u8 {
+    let cs = &mut *state;
+
+    // PUM cleanup
+    if nvim_cmdline_pum_active_check() != 0 {
+        nvim_cmdline_pum_remove_noconfirm();
+    } else {
+        nvim_pum_check_clear_wrap();
+    }
+    nvim_wildmenu_cleanup_ccline();
+    cs.did_wild_list = false;
+    cs.wim_index = 0;
+
+    nvim_expand_cleanup_xpc(std::ptr::addr_of_mut!(cs.xpc).cast::<c_void>());
+    nvim_ccline_clear_xpc_and_orig();
+
+    crate::search::rs_finish_incsearch_highlighting(
+        c_int::from(cs.gotesc),
+        std::ptr::addr_of_mut!(cs.is_state),
+        0,
+    );
+
+    // History
+    if nvim_ccline_has_cmdbuff() != 0 {
+        let cmdlen = nvim_get_ccline_cmdlen();
+        if rs_entry_should_add_to_history(
+            cs.histype,
+            cmdlen,
+            cs.firstc,
+            c_int::from(cs.some_key_typed),
+        ) != 0
+        {
+            let sep_char = if cs.histype == hist_type::HIST_SEARCH {
+                cs.firstc
+            } else {
+                0
+            };
+            nvim_add_to_history_ccline(cs.histype, sep_char);
+            if rs_entry_should_save_last_cmdline(cs.firstc) != 0 {
+                nvim_save_last_cmdline();
+            }
+        }
+
+        if cs.gotesc {
+            dealloc_cmdbuff();
+            nvim_compute_cmdrow_if_not_scrolled();
+            if nvim_ccline_get_one_key() == 0 {
+                nvim_cmdline_gotesc_msg();
+            }
+        }
+    }
+
+    nvim_msg_check();
+    nvim_cmdline_check_must_redraw();
+
+    nvim_get_ccline_cmdbuff().cast::<u8>()
+}
+
+/// Final teardown: hide cmdline UI, restore ccline, free resources.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+unsafe fn final_teardown(
+    state: *mut CommandLineState,
+    did_save_ccline: bool,
+    save_ccline_ptr: *mut c_void,
+    save_msg_scroll: c_int,
+    save_state: c_int,
+    save_cmdpreview: bool,
+) {
+    let cs = &mut *state;
+
+    nvim_set_msg_scroll(save_msg_scroll);
+    nvim_set_redir_off(0);
+
+    if cs.some_key_typed {
+        nvim_clear_need_wait_return_wrap();
+    }
+
+    // Restore p_icm option (restore before free)
+    nvim_set_p_icm_option(cs.save_p_icm);
+    nvim_set_State(save_state);
+
+    // Restore cmdpreview if it changed
+    let current_cmdpreview = nvim_get_cmdpreview();
+    nvim_cmdpreview_restore(save_cmdpreview, current_cmdpreview);
+
+    nvim_may_trigger_modechanged();
+    nvim_setmouse();
+    nvim_sb_text_end_cmdline();
+
+    // Free save_p_icm after restoring option
+    xfree(cs.save_p_icm);
+    cs.save_p_icm = std::ptr::null_mut();
+
+    nvim_ccline_free_last_colors();
+
+    nvim_cmdline_ui_hide(c_int::from(cs.gotesc));
+    nvim_cmdline_status_redraw();
+
+    nvim_cmdline_enter_level_dec();
+
+    nvim_ccline_restore_or_clear(did_save_ccline, save_ccline_ptr);
+
+    xfree(cs.prev_cmdbuff);
+    cs.prev_cmdbuff = std::ptr::null_mut();
 }
 
 // =============================================================================
@@ -423,27 +528,6 @@ unsafe extern "C" fn command_line_execute_trampoline(
 // Phase 2: rs_getcmdline_prompt
 // =============================================================================
 
-unsafe extern "C" {
-    // msg_col / msg_silent — direct static access
-    static mut msg_col: c_int;
-    static mut msg_silent: c_int;
-    fn nvim_set_cmd_silent(val: c_int);
-
-    // ccline field setters for prompt
-    // Use *mut c_char to match other extern declarations in the codebase
-    fn nvim_set_ccline_cmdprompt(prompt: *mut c_char);
-    fn nvim_set_ccline_hl_id(hl_id: c_int);
-    fn nvim_set_ccline_xp_context(context: c_int);
-    // xp_arg setter
-    fn nvim_set_ccline_xp_arg(arg: *const c_char);
-    fn nvim_set_ccline_input_fn(val: c_int);
-    fn nvim_set_ccline_one_key(val: c_int);
-    fn nvim_set_ccline_mouse_used_ptr(ptr: *mut bool);
-    fn nvim_set_ccline_redraw_state(state: c_int);
-    fn nvim_get_ccline_cmdbuff() -> *mut c_char;
-    fn nvim_apply_pending_hl_callback();
-}
-
 /// Rust implementation of `getcmdline_prompt`.
 ///
 /// Sets up ccline fields for prompt mode and calls rs_command_line_enter.
@@ -469,9 +553,6 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     let did_save_ccline = nvim_ccline_save_and_clear(save_ccline_ptr, true);
 
     // Set ccline fields for prompt mode.
-    // prompt_id will be overwritten by nvim_ccline_enter_init inside rs_command_line_enter.
-    // The following fields survive (not touched by nvim_ccline_enter_init):
-    // cmdprompt, hl_id, xp_context, xp_arg, input_fn, one_key, mouse_used.
     nvim_set_ccline_cmdprompt(prompt.cast_mut());
     nvim_set_ccline_hl_id(hl_id);
     nvim_set_ccline_xp_context(xp_context);
@@ -483,8 +564,6 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     nvim_set_ccline_mouse_used_ptr(mouse_used);
 
     // Apply pending highlight callback (set by C getcmdline_prompt before calling us).
-    // The Callback union cannot cross the FFI boundary; C stores it in a static,
-    // and we apply it here after ccline fields are initialized.
     nvim_apply_pending_hl_callback();
 
     let cmd_silent_saved = nvim_get_cmd_silent();

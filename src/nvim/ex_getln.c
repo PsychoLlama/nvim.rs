@@ -1062,6 +1062,9 @@ bool nvim_cmdpreview_save_and_clear(void)
   return saved;
 }
 
+/// Get current cmdpreview value (for Rust teardown).
+bool nvim_get_cmdpreview(void) { return cmdpreview; }
+
 /// Restore cmdpreview and optionally trigger a full redraw.
 void nvim_cmdpreview_restore(bool saved, bool current)
 {
@@ -1220,111 +1223,8 @@ void nvim_cmdline_redraw_statuslines(void)
   }
 }
 
-/// Post-leave cleanup: pum, expand, incsearch, history.
-/// Returns allocated command line string (the result), or NULL.
-uint8_t *nvim_cmdline_leave_cleanup(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-
-  // PUM cleanup
-  if (cmdline_pum_active()) {
-    cmdline_pum_remove(false);
-  } else {
-    pum_check_clear();
-  }
-  wildmenu_cleanup(&ccline);
-  cs->did_wild_list = false;
-  cs->wim_index = 0;
-
-  ExpandCleanup(&cs->xpc);
-  ccline.xpc = NULL;
-  clear_cmdline_orig();
-
-  rs_finish_incsearch_highlighting(cs->gotesc ? 1 : 0, &cs->is_state, 0);
-
-  // History
-  if (ccline.cmdbuff != NULL) {
-    if (rs_entry_should_add_to_history(cs->histype, ccline.cmdlen, cs->firstc,
-                                       cs->some_key_typed)) {
-      add_to_history(cs->histype, ccline.cmdbuff, (size_t)ccline.cmdlen, true,
-                     cs->histype == HIST_SEARCH ? cs->firstc : NUL);
-      if (rs_entry_should_save_last_cmdline(cs->firstc)) {
-        xfree(new_last_cmdline);
-        new_last_cmdline = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
-      }
-    }
-
-    if (cs->gotesc) {
-      dealloc_cmdbuff();
-      if (msg_scrolled == 0) {
-        compute_cmdrow();
-      }
-      if (!ccline.one_key) {
-        msg("", 0);
-        redraw_cmdline = true;
-      }
-    }
-  }
-
-  msg_check();
-  if (p_ch == 0 && !ui_has(kUIMessages)) {
-    set_must_redraw(UPD_VALID);
-  }
-
-  return (uint8_t *)ccline.cmdbuff;
-}
-
-/// Final teardown: hide cmdline UI, restore ccline, free.
-/// save_ccline_in must point to CmdlineInfo-sized, 8-byte-aligned storage (or NULL).
-/// err must be NULL (error handling is done in the autocmd wrappers from Rust).
-void nvim_cmdline_final_teardown(void *s, bool did_save_ccline, void *save_ccline_in,
-                                 int save_msg_scroll, int save_State,
-                                 bool save_cmdpreview, void *err_unused)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  const CmdlineInfo *save_ccline = (const CmdlineInfo *)save_ccline_in;
-  (void)err_unused;  // error handling done before calling this
-  msg_scroll = save_msg_scroll;
-  redir_off = false;
-
-  if (cs->some_key_typed) {
-    need_wait_return = false;
-  }
-
-  set_option_direct(kOptInccommand, CSTR_AS_OPTVAL(cs->save_p_icm), 0, SID_NONE);
-  State = save_State;
-  if (cmdpreview != save_cmdpreview) {
-    cmdpreview = save_cmdpreview;
-    redraw_all_later(UPD_SOME_VALID);
-  }
-  may_trigger_modechanged();
-  setmouse();
-  sb_text_end_cmdline();
-
-  xfree(cs->save_p_icm);
-  xfree(ccline.last_colors.cmdbuff);
-  kv_destroy(ccline.last_colors.colors);
-
-  if (ui_has(kUICmdline)) {
-    cmdline_was_last_drawn = false;
-    ccline.redraw_state = kCmdRedrawNone;
-    ui_call_cmdline_hide(ccline.level, cs->gotesc);
-  }
-  if (!cmd_silent) {
-    redraw_custom_title_later();
-    status_redraw_all();
-  }
-
-  cmdline_enter_level--;
-
-  if (did_save_ccline) {
-    ccline = *save_ccline;
-  } else {
-    ccline.cmdbuff = NULL;
-  }
-
-  xfree(cs->prev_cmdbuff);
-}
+// nvim_cmdline_leave_cleanup: implemented in Rust (entry_impl.rs, leave_cleanup).
+// nvim_cmdline_final_teardown: implemented in Rust (entry_impl.rs, final_teardown).
 
 /// Get b_p_imsearch or b_p_iminsert based on cs->b_im_ptr.
 /// Returns the value to restore when leaving.

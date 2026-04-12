@@ -289,36 +289,7 @@ void win_config_float(win_T *wp, WinConfig fconfig)
   }
 }
 
-static int float_zindex_cmp(const void *a, const void *b)
-{
-  int za = (*(win_T **)a)->w_config.zindex;
-  int zb = (*(win_T **)b)->w_config.zindex;
-  return za == zb ? 0 : za < zb ? 1 : -1;
-}
-
-void win_float_remove(bool bang, int count)
-{
-  kvec_t(win_T *) float_win_arr = KV_INITIAL_VALUE;
-  for (win_T *wp = lastwin; wp && wp->w_floating; wp = wp->w_prev) {
-    kv_push(float_win_arr, wp);
-  }
-  if (float_win_arr.size > 0) {
-    qsort(float_win_arr.items, float_win_arr.size, sizeof(win_T *), float_zindex_cmp);
-  }
-  for (size_t i = 0; i < float_win_arr.size; i++) {
-    win_T *wp = float_win_arr.items[i];
-    if (rs_win_valid(wp) && win_close(wp, false, false) == FAIL) {
-      break;
-    }
-    if (!bang) {
-      count--;
-      if (count == 0) {
-        break;
-      }
-    }
-  }
-  kv_destroy(float_win_arr);
-}
+// float_zindex_cmp, win_float_remove: migrated to Rust (winfloat crate, Phase 3).
 
 // win_check_anchored_floats, win_float_update_statusline, win_float_anchor_laststatus,
 // win_reconfig_floats: migrated to Rust (winfloat crate, Phase 1).

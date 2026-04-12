@@ -472,6 +472,8 @@ extern "C" {
     fn nvim_tabpage_get_prevwin(tp: TabpageHandle) -> WinHandle;
     fn rs_win_valid(wp: WinHandle) -> c_int;
     fn rs_tabpage_win_valid(tp: TabpageHandle, wp: WinHandle) -> c_int;
+    // Phase 3: win_float_remove
+    fn win_close(wp: WinHandle, free_buf: bool, force: bool) -> c_int;
 }
 
 /// Check if window is a floating window.
@@ -828,6 +830,43 @@ pub unsafe extern "C" fn rs_win_reconfig_floats() {
     while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
         nvim_win_config_float(wp);
         wp = nvim_win_get_prev(wp);
+    }
+}
+
+// =============================================================================
+// Phase 3: win_float_remove
+// =============================================================================
+
+/// Remove floating windows in z-index order.
+///
+/// C equivalent: `win_float_remove`
+#[unsafe(export_name = "win_float_remove")]
+pub unsafe extern "C" fn rs_win_float_remove(bang: bool, count: c_int) {
+    const FAIL: c_int = 0;
+    // Collect all floating windows (from lastwin backwards)
+    let mut floats: Vec<WinHandle> = Vec::new();
+    let mut wp = nvim_get_lastwin();
+    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+        floats.push(wp);
+        wp = nvim_win_get_prev(wp);
+    }
+    // Sort descending by zindex (highest first)
+    floats.sort_by(|a, b| {
+        let za = nvim_win_get_config_zindex(*a);
+        let zb = nvim_win_get_config_zindex(*b);
+        zb.cmp(&za)
+    });
+    let mut remaining = count;
+    for wp in floats {
+        if rs_win_valid(wp) != 0 && win_close(wp, false, false) == FAIL {
+            break;
+        }
+        if !bang {
+            remaining -= 1;
+            if remaining == 0 {
+                break;
+            }
+        }
     }
 }
 
