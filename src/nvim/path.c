@@ -201,10 +201,8 @@ void nvim_path_ga_sort_strings(void *gap, int start) {
   }
 }
 
-// --- Phase 7 Rust declarations ---
+// Rust declarations
 extern void rs_expand_path_option(char *curdir, char *path_option, void *gap);
-
-// --- Phase 7 accessor functions ---
 
 const char *nvim_path_get_path_option(void) {
   return *curbuf->b_p_path == NUL ? p_path : curbuf->b_p_path;
