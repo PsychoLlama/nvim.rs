@@ -53,3 +53,6 @@ typedef struct {
 #endif
 
 #include "main.h.generated.h"
+
+// Rust-exported exit functions (Phase 3: getout migrated to Rust)
+DLLEXPORT void getout(int exitval) FUNC_ATTR_NORETURN;

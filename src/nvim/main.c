@@ -769,145 +769,118 @@ void os_exit(int r)
   rs_os_exit(r);
 }
 
-/// Exit properly
-void getout(int exitval)
-  FUNC_ATTR_NORETURN
+// C helpers for Rust getout (Phase 3) ------------------------------------
+
+// Returns adjusted exitval (adds ex_exitval if exmode_active)
+int nvim_getout_exmode_adjust(int exitval)
 {
-  assert(!ui_client_channel_id);
-  exiting = true;
-
-  // make sure startuptimes have been flushed
-  time_finish();
-
-  // On error during Ex mode, exit with a non-zero code.
-  // POSIX requires this, although it's not 100% clear from the standard.
   if (exmode_active) {
     exitval += ex_exitval;
   }
+  return exitval;
+}
 
+// Set VV_EXITING vim variable
+void nvim_getout_set_vv_exiting(int exitval)
+{
   set_vim_var_type(VV_EXITING, VAR_NUMBER);
   set_vim_var_nr(VV_EXITING, exitval);
+}
 
-  // Invoked all deferred functions in the function stack.
-  invoke_all_defer();
-
-  // Optionally print hashtable efficiency.
-  hash_debug_results();
-
-  if (v_dying <= 1) {
-    const tabpage_T *next_tp;
-
-    // Trigger BufWinLeave for all windows, but only once per buffer.
-    for (const tabpage_T *tp = first_tabpage; tp != NULL; tp = next_tp) {
-      next_tp = tp->tp_next;
-      FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-        if (wp->w_buffer == NULL || !buf_valid(wp->w_buffer)) {
-          // Autocmd must have close the buffer already, skip.
-          continue;
-        }
-
-        buf_T *buf = wp->w_buffer;
-        if (buf_get_changedtick(buf) != -1) {
-          bufref_T bufref;
-
-          set_bufref(&bufref, buf);
-          apply_autocmds(EVENT_BUFWINLEAVE, buf->b_fname, buf->b_fname, false, buf);
-          if (bufref_valid(&bufref)) {
-            buf_set_changedtick(buf, -1);  // note that we did it already
-          }
-          // start all over, autocommands may mess up the lists
-          next_tp = first_tabpage;
-          break;
-        }
+// Trigger BufWinLeave for all windows (once per buffer).
+void nvim_getout_trigger_bufwinleave(void)
+{
+  const tabpage_T *next_tp;
+  for (const tabpage_T *tp = first_tabpage; tp != NULL; tp = next_tp) {
+    next_tp = tp->tp_next;
+    FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
+      if (wp->w_buffer == NULL || !buf_valid(wp->w_buffer)) {
+        continue;
       }
-    }
-
-    // Trigger BufUnload for buffers that are loaded
-    FOR_ALL_BUFFERS(buf) {
-      if (buf->b_ml.ml_mfp != NULL) {
+      buf_T *buf = wp->w_buffer;
+      if (buf_get_changedtick(buf) != -1) {
         bufref_T bufref;
         set_bufref(&bufref, buf);
-        apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, false, buf);
-        if (!bufref_valid(&bufref)) {
-          // Autocmd deleted the buffer.
-          break;
+        apply_autocmds(EVENT_BUFWINLEAVE, buf->b_fname, buf->b_fname, false, buf);
+        if (bufref_valid(&bufref)) {
+          buf_set_changedtick(buf, -1);
         }
+        next_tp = first_tabpage;
+        break;
       }
     }
+  }
+}
 
-    int unblock = 0;
-    // deathtrap() blocks autocommands, but we do want to trigger
-    // VimLeavePre.
-    if (is_autocmd_blocked()) {
-      unblock_autocmds();
-      unblock++;
-    }
-    apply_autocmds(EVENT_VIMLEAVEPRE, NULL, NULL, false, curbuf);
-    if (unblock) {
-      block_autocmds();
+// Trigger BufUnload for loaded buffers
+void nvim_getout_trigger_bufunload(void)
+{
+  FOR_ALL_BUFFERS(buf) {
+    if (buf->b_ml.ml_mfp != NULL) {
+      bufref_T bufref;
+      set_bufref(&bufref, buf);
+      apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, false, buf);
+      if (!bufref_valid(&bufref)) {
+        break;
+      }
     }
   }
+}
 
-  if (
+// Trigger autocmd event (VimLeavePre or VimLeave), unblocking if needed
+void nvim_getout_apply_autocmd_event(int event)
+{
+  int unblock = 0;
+  if (is_autocmd_blocked()) {
+    unblock_autocmds();
+    unblock++;
+  }
+  apply_autocmds((event_T)event, NULL, NULL, false, curbuf);
+  if (unblock) {
+    block_autocmds();
+  }
+}
+
+// Returns true if ShaDa should be written
+bool nvim_getout_should_write_shada(void)
+{
+  return
 #ifdef EXITFREE
-      !entered_free_all_mem &&
+    !entered_free_all_mem &&
 #endif
-      p_shada && *p_shada != NUL) {
-    // Write out the registers, history, marks etc, to the ShaDa file
-    rs_shada_write_file(NULL, false);
-  }
+    p_shada && *p_shada != NUL;
+}
 
-  if (v_dying <= 1) {
-    int unblock = 0;
+// Handle did_emsg: clear no_wait_return and call wait_return
+void nvim_getout_handle_emsg(void)
+{
+  no_wait_return = false;
+  wait_return(false);
+}
 
-    // deathtrap() blocks autocommands, but we do want to trigger VimLeave.
-    if (is_autocmd_blocked()) {
-      unblock_autocmds();
-      unblock++;
-    }
-    apply_autocmds(EVENT_VIMLEAVE, NULL, NULL, false, curbuf);
-    if (unblock) {
-      block_autocmds();
-    }
-  }
-
-  profile_dump();
-
-  if (did_emsg) {
-    // give the user a chance to read the (error) message
-    no_wait_return = false;
-    // TODO(justinmk): this may call getout(0), clobbering exitval...
-    wait_return(false);
-  }
-
-  // Apply 'titleold'.
+// Restore titleold if p_title is set
+void nvim_getout_restore_title(void)
+{
   if (p_title && *p_titleold != NUL) {
     ui_call_set_title(cstr_as_string(p_titleold));
   }
-
-  if (restarting) {
-    Error err = ERROR_INIT;
-    if (!remote_ui_restart(current_ui, &err)) {
-      if (ERROR_SET(&err)) {
-        ELOG("%s", err.msg);  // UI disappeared already?
-        api_clear_error(&err);
-      }
-    }
-    restarting = false;
-  }
-
-  if (garbage_collect_at_exit) {
-    garbage_collect(false);
-  }
-
-#ifdef MSWIN
-  // Restore Windows console icon before exiting.
-  os_icon_reset();
-  os_title_reset();
-#endif
-
-  os_exit(exitval);
 }
+
+// Handle restart via remote_ui_restart; sets restarting=false
+void nvim_getout_do_restart(void)
+{
+  Error err = ERROR_INIT;
+  if (!remote_ui_restart(current_ui, &err)) {
+    if (ERROR_SET(&err)) {
+      ELOG("%s", err.msg);
+      api_clear_error(&err);
+    }
+  }
+  restarting = false;
+}
+
+// getout() is implemented in Rust (src/nvim-rs/main/src/exit.rs)
+extern void getout(int exitval) FUNC_ATTR_NORETURN;
 
 /// Preserve files, print contents of `errmsg`, and exit 1.
 /// @param errmsg  If NULL, this function will not print anything.
