@@ -438,19 +438,6 @@ void nvim_chan_foreach_close_all(void)
   });
 }
 
-// channel_free_all_mem helper: destroy all channels, clear map, free on_print
-#ifdef EXITFREE
-void nvim_chan_foreach_destroy_all(void)
-{
-  Channel *chan;
-  map_foreach_value(&channels, chan, {
-    channel_destroy(chan);
-  });
-  map_destroy(uint64_t, &channels);
-  callback_free(&on_print);
-}
-#endif
-
 // Phase 6f: tv_dict_remove accessors (Rust FFI helpers)
 bool nvim_di_check_fixed_translate(const dictitem_T *di, const char *name) { return var_check_fixed(di->di_flags, name, TV_TRANSLATE); }
 bool nvim_di_check_ro_translate(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_TRANSLATE); }
@@ -530,13 +517,6 @@ Dict nvim_chan_get_rpc_info(Channel *chan) { return chan->rpc.info; }
 
 /// arena_dict(arena, max_size) wrapper.
 Dict nvim_arena_dict(Arena *arena, size_t max_size) { return arena_dict(arena, max_size); }
-
-/// Build an arena-allocated CSTR_TO_ARENA_STR (copies s into arena, returns String).
-/// Caller wraps in STRING_OBJ.
-String nvim_arena_cstr_to_str(Arena *arena, const char *s)
-{
-  return CSTR_TO_ARENA_STR(arena, s);
-}
 
 /// Convert a Dict to v:event["info"] (typval dict) and mark readonly.
 /// Calls object_to_vim(DICT_OBJ(info), ...) + tv_dict_add_dict + tv_dict_set_keys_readonly.
