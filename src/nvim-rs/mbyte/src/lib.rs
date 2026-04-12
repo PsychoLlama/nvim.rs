@@ -5448,3 +5448,207 @@ pub unsafe extern "C" fn rs_f_setcellwidths(
     nvim_mbyte_changed_window_setting_all();
     nvim_mbyte_redraw_all_later();
 }
+
+// =============================================================================
+// show_utf8 and utf_find_illegal (Phase 2 migration)
+// =============================================================================
+
+/// Size of `IObuff` global (IOSIZE in C).
+const MBYTE_IOSIZE: usize = 1025;
+
+extern "C" {
+    /// Get the character at the current cursor position.
+    fn nvim_mbyte_get_cursor_pos_ptr() -> *const c_char;
+
+    /// Get `IObuff` global scratch buffer.
+    fn nvim_mbyte_get_IObuff() -> *mut c_char;
+
+    /// Call `msg(s, 0)`.
+    fn nvim_mbyte_msg(s: *const c_char);
+
+    /// Call `beep_flush()`.
+    fn nvim_mbyte_beep_flush();
+
+    /// Get `p_enc` (current encoding, always "utf-8").
+    fn nvim_mbyte_get_p_enc() -> *mut c_char;
+
+    /// Get curwin->w_cursor.lnum.
+    fn nvim_mbyte_curwin_get_cursor_lnum() -> c_int;
+
+    /// Get curwin->w_cursor.col.
+    fn nvim_mbyte_curwin_get_cursor_col() -> c_int;
+
+    /// Get curwin->w_cursor.coladd.
+    fn nvim_mbyte_curwin_get_cursor_coladd() -> c_int;
+
+    /// Set curwin->w_cursor to (lnum, col, coladd).
+    fn nvim_mbyte_curwin_set_cursor(lnum: c_int, col: c_int, coladd: c_int);
+
+    /// Add delta to curwin->w_cursor.col.
+    fn nvim_mbyte_curwin_add_cursor_col(delta: c_int);
+
+    /// Get curbuf->b_ml.ml_line_count.
+    fn nvim_mbyte_curbuf_get_ml_line_count() -> c_int;
+}
+
+/// "g8" command: show bytes of the UTF-8 char under the cursor.
+///
+/// # Safety
+/// Must be called from a valid Neovim context with a valid cursor position.
+#[unsafe(export_name = "show_utf8")]
+pub unsafe extern "C" fn rs_show_utf8() {
+    let line = nvim_mbyte_get_cursor_pos_ptr();
+    let len = rs_utfc_ptr2len(line) as usize;
+    if len == 0 {
+        nvim_mbyte_msg(c"NUL".as_ptr());
+        return;
+    }
+
+    let iobuff = nvim_mbyte_get_IObuff();
+    let mut rlen: usize = 0;
+    let mut clen: i32 = 0;
+
+    for i in 0..len {
+        if clen == 0 {
+            // Start of (composing) character: record length.
+            if i > 0 {
+                // Write "+ " separator.
+                *iobuff.add(rlen) = b'+' as c_char;
+                *iobuff.add(rlen + 1) = b' ' as c_char;
+                rlen += 2;
+            }
+            clen = rs_utf_ptr2len(line.add(i));
+        }
+
+        // Format current byte as hex. NUL is stored as NL in buffer.
+        let byte = *line.add(i) as u8;
+        let display_byte: u8 = if byte == b'\n' { 0 } else { byte };
+        let written = libc::snprintf(
+            iobuff.add(rlen),
+            MBYTE_IOSIZE - rlen,
+            c"%02x ".as_ptr(),
+            c_int::from(display_byte),
+        );
+        clen -= 1;
+        rlen += written as usize;
+        // Recompute rlen from actual string length in case snprintf truncated.
+        rlen = (rlen).min(MBYTE_IOSIZE - 1);
+        // Stop if buffer is nearly full.
+        if rlen > MBYTE_IOSIZE - 20 {
+            break;
+        }
+    }
+
+    nvim_mbyte_msg(iobuff);
+}
+
+/// Find the next illegal UTF-8 byte sequence, moving cursor to it.
+/// If none found, beep and restore cursor.
+///
+/// Restructured from the C goto-based implementation.
+///
+/// # Safety
+/// Must be called from a valid Neovim context.
+#[unsafe(export_name = "utf_find_illegal")]
+pub unsafe extern "C" fn rs_utf_find_illegal() {
+    // Save current cursor position for possible restore.
+    let saved_lnum = nvim_mbyte_curwin_get_cursor_lnum();
+    let saved_col = nvim_mbyte_curwin_get_cursor_col();
+    let saved_coladd = nvim_mbyte_curwin_get_cursor_coladd();
+
+    let mut vimconv = VimConv {
+        vc_type: CONV_NONE,
+        vc_factor: 1,
+        vc_fd: std::ptr::null_mut(),
+        vc_fail: false,
+    };
+
+    // If editing an 8-bit encoded file, set up conversion from utf-8 to fenc.
+    let b_p_fenc = nvim_curbuf_get_b_p_fenc();
+    if rs_enc_canon_props(b_p_fenc) & ENC_8BIT != 0 {
+        let p_enc = nvim_mbyte_get_p_enc();
+        rs_convert_setup(
+            std::ptr::addr_of_mut!(vimconv),
+            p_enc,
+            b_p_fenc as *mut c_char,
+        );
+    }
+
+    // Zero coladd before scanning.
+    nvim_mbyte_curwin_set_cursor(
+        nvim_mbyte_curwin_get_cursor_lnum(),
+        nvim_mbyte_curwin_get_cursor_col(),
+        0,
+    );
+
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let mut found = false;
+
+    'outer: loop {
+        let mut p = nvim_mbyte_get_cursor_pos_ptr();
+
+        if vimconv.vc_type != CONV_NONE {
+            xfree(tofree);
+            tofree = nvim_mbyte_string_convert(&raw const vimconv, p as *mut c_char);
+            if tofree.is_null() {
+                break 'outer;
+            }
+            p = tofree;
+        }
+
+        while *p != NUL as c_char {
+            let byte = *p as u8;
+            let len = rs_utf_ptr2len(p);
+            // Illegal: not enough trail bytes, or overlong sequence.
+            if byte >= 0x80 && (len == 1 || utf_char2len(rs_utf_ptr2char(p)) as i32 != len) {
+                if vimconv.vc_type == CONV_NONE {
+                    // Advance col by the offset from cursor to illegal byte.
+                    let line = nvim_mbyte_get_cursor_pos_ptr();
+                    let offset = p.offset_from(line) as i32;
+                    nvim_mbyte_curwin_add_cursor_col(offset);
+                } else {
+                    // Convert byte offset in converted string to col in original.
+                    let illegal_offset = p.offset_from(tofree) as i32;
+                    // Reset col, then walk the original line for illegal_offset bytes.
+                    nvim_mbyte_curwin_set_cursor(nvim_mbyte_curwin_get_cursor_lnum(), 0, 0);
+                    let mut orig_p = nvim_mbyte_get_cursor_pos_ptr();
+                    let mut remaining = illegal_offset;
+                    while *orig_p != NUL as c_char && remaining > 0 {
+                        let l = rs_utf_ptr2len(orig_p);
+                        nvim_mbyte_curwin_add_cursor_col(l);
+                        orig_p = orig_p.add(l as usize);
+                        remaining -= l;
+                    }
+                }
+                found = true;
+                break 'outer;
+            }
+            p = p.add(len as usize);
+        }
+
+        // End of line: move to next line or stop at end of buffer.
+        let line_count = nvim_mbyte_curbuf_get_ml_line_count();
+        if nvim_mbyte_curwin_get_cursor_lnum() == line_count {
+            break 'outer;
+        }
+        nvim_mbyte_curwin_set_cursor(nvim_mbyte_curwin_get_cursor_lnum() + 1, 0, 0);
+    }
+
+    if !found {
+        // Didn't find illegal byte: restore cursor and beep.
+        nvim_mbyte_curwin_set_cursor(saved_lnum, saved_col, saved_coladd);
+        nvim_mbyte_beep_flush();
+    }
+
+    xfree(tofree);
+    rs_convert_setup(
+        std::ptr::addr_of_mut!(vimconv),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+}
+
+extern "C" {
+    /// Wrapper for string_convert(vcp, ptr, NULL) - used by rs_utf_find_illegal.
+    fn nvim_mbyte_string_convert(vcp: *const VimConv, ptr: *mut c_char) -> *mut c_char;
+}

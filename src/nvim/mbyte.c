@@ -198,107 +198,58 @@ int utf16_to_utf8(const wchar_t *utf16, int utf16len, char **utf8)
 #endif
 
 
-// "g8": show bytes of the UTF-8 char under the cursor.  Doesn't matter what
-// 'encoding' has been set to.
-void show_utf8(void)
-{
-  // Get the byte length of the char under the cursor, including composing
-  // characters.
-  char *line = get_cursor_pos_ptr();
-  int len = utfc_ptr2len(line);
-  if (len == 0) {
-    msg("NUL", 0);
-    return;
-  }
-
-  size_t rlen = 0;
-  int clen = 0;
-  for (int i = 0; i < len; i++) {
-    if (clen == 0) {
-      // start of (composing) character, get its length
-      if (i > 0) {
-        STRCPY(IObuff + rlen, "+ ");
-        rlen += 2;
-      }
-      clen = utf_ptr2len(line + i);
-    }
-    assert(IOSIZE > rlen);
-    snprintf(IObuff + rlen, IOSIZE - rlen, "%02x ",
-             (line[i] == NL) ? NUL : (uint8_t)line[i]);  // NUL is stored as NL
-    clen--;
-    rlen += strlen(IObuff + rlen);
-    if (rlen > IOSIZE - 20) {
-      break;
-    }
-  }
-
-  msg(IObuff, 0);
-}
+// show_utf8 and utf_find_illegal are now implemented in Rust.
 
 // utfc_next_impl, mb_copy_char are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
-// Find the next illegal byte sequence.
-void utf_find_illegal(void)
+// Rust accessors for show_utf8 and utf_find_illegal (Phase 2).
+
+/// Get the pointer to the char at the cursor position.
+const char *nvim_mbyte_get_cursor_pos_ptr(void) { return get_cursor_pos_ptr(); }
+
+/// Get a pointer to IObuff (global I/O scratch buffer).
+char *nvim_mbyte_get_IObuff(void) { return IObuff; }
+
+/// Call msg() with the given string and attr 0.
+void nvim_mbyte_msg(const char *s) { msg(s, 0); }
+
+/// Wrapper for beep_flush().
+void nvim_mbyte_beep_flush(void) { beep_flush(); }
+
+/// Get current buffer's 'fileencoding' (same as nvim_curbuf_get_b_p_fenc but cast to char*).
+char *nvim_mbyte_get_p_enc(void) { return p_enc; }
+
+/// Wrapper for string_convert() -- needed so Rust can call without mut vimconv.
+char *nvim_mbyte_string_convert(const vimconv_T *vcp, char *ptr)
 {
-  pos_T pos = curwin->w_cursor;
-  vimconv_T vimconv;
-  char *tofree = NULL;
-
-  vimconv.vc_type = CONV_NONE;
-  if (enc_canon_props(curbuf->b_p_fenc) & ENC_8BIT) {
-    // 'encoding' is "utf-8" but we are editing a 8-bit encoded file,
-    // possibly a utf-8 file with illegal bytes.  Setup for conversion
-    // from utf-8 to 'fileencoding'.
-    convert_setup(&vimconv, p_enc, curbuf->b_p_fenc);
-  }
-
-  curwin->w_cursor.coladd = 0;
-  while (true) {
-    char *p = get_cursor_pos_ptr();
-    if (vimconv.vc_type != CONV_NONE) {
-      xfree(tofree);
-      tofree = string_convert(&vimconv, p, NULL);
-      if (tofree == NULL) {
-        break;
-      }
-      p = tofree;
-    }
-
-    while (*p != NUL) {
-      // Illegal means that there are not enough trail bytes (checked by
-      // utf_ptr2len()) or too many of them (overlong sequence).
-      int len = utf_ptr2len(p);
-      if ((uint8_t)(*p) >= 0x80 && (len == 1 || utf_char2len(utf_ptr2char(p)) != len)) {
-        if (vimconv.vc_type == CONV_NONE) {
-          curwin->w_cursor.col += (colnr_T)(p - get_cursor_pos_ptr());
-        } else {
-          int l;
-
-          len = (int)(p - tofree);
-          for (p = get_cursor_pos_ptr(); *p != NUL && len-- > 0; p += l) {
-            l = utf_ptr2len(p);
-            curwin->w_cursor.col += l;
-          }
-        }
-        goto theend;
-      }
-      p += len;
-    }
-    if (curwin->w_cursor.lnum == curbuf->b_ml.ml_line_count) {
-      break;
-    }
-    curwin->w_cursor.lnum++;
-    curwin->w_cursor.col = 0;
-  }
-
-  // didn't find it: don't move and beep
-  curwin->w_cursor = pos;
-  beep_flush();
-
-theend:
-  xfree(tofree);
-  convert_setup(&vimconv, NULL, NULL);
+  return string_convert(vcp, ptr, NULL);
 }
+
+/// Get curwin->w_cursor.lnum.
+int nvim_mbyte_curwin_get_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
+
+/// Get curwin->w_cursor.col.
+int nvim_mbyte_curwin_get_cursor_col(void) { return (int)curwin->w_cursor.col; }
+
+/// Get curwin->w_cursor.coladd.
+int nvim_mbyte_curwin_get_cursor_coladd(void) { return (int)curwin->w_cursor.coladd; }
+
+/// Set curwin->w_cursor.
+void nvim_mbyte_curwin_set_cursor(int lnum, int col, int coladd)
+{
+  curwin->w_cursor.lnum = (linenr_T)lnum;
+  curwin->w_cursor.col = (colnr_T)col;
+  curwin->w_cursor.coladd = (colnr_T)coladd;
+}
+
+/// Add delta to curwin->w_cursor.col.
+void nvim_mbyte_curwin_add_cursor_col(int delta)
+{
+  curwin->w_cursor.col += (colnr_T)delta;
+}
+
+/// Get curbuf->b_ml.ml_line_count.
+int nvim_mbyte_curbuf_get_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 
 // If the cursor moves on an trail byte, set the cursor on the lead byte.
 // Thus it moves left if necessary.
