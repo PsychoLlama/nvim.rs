@@ -296,6 +296,8 @@ uint64_t nvim_channel_connect(bool is_tcp, const char *server_addr, const char *
   return channel_connect(is_tcp, server_addr, true, on_data, 500, error);
 }
 
+// Forward declaration for Rust-exported event_teardown
+extern bool event_teardown(void);
 bool nvim_event_teardown(void) { return event_teardown(); }
 
 void nvim_free_all_mem_if_exitfree(void)
@@ -310,98 +312,24 @@ Loop main_loop;
 char *nvim_argv0 = NULL;
 #define argv0 nvim_argv0
 
-void event_init(void)
-{
-  loop_init(&main_loop, NULL);
-  resize_events = multiqueue_new_child(loop_get_events(&main_loop));
+// C accessors for Rust event_init/event_teardown (Phase 1)
+void *nvim_get_main_loop(void) { return &main_loop; }
+void nvim_set_resize_events(void *mq) { resize_events = (MultiQueue *)mq; }
+void nvim_time_msg(const char *msg) { if (time_fd != NULL) time_msg(msg, NULL); }
 
-  signal_init();
-  // mspgack-rpc initialization
-  channel_init();
-  terminal_init();
-  ui_init();
-  TIME_MSG("event init");
-}
+// Forward declaration for Rust-exported event_init (Phase 1)
+extern void event_init(void);
 
-/// @returns false if main_loop could not be closed gracefully
-static bool event_teardown(void)
-{
-  if (!loop_get_events(&main_loop)) {
-    input_stop();
-    return true;
-  }
+// event_init() and event_teardown() are implemented in Rust (src/nvim-rs/main/src/init.rs)
 
-  multiqueue_process_events(loop_get_events(&main_loop));
-  loop_poll_events(&main_loop, 0);  // Drain thread_events, fast_events.
-  input_stop();
-  channel_teardown();
-  proc_teardown(&main_loop);
-  timer_teardown();
-  server_teardown();
-  signal_teardown();
-  terminal_teardown();
+// C accessors for Rust early_init (Phase 2)
+void *nvim_get_global_alist_ptr(void) { return &global_alist; }
+void nvim_set_global_alist_id(int id) { global_alist.id = id; }
+bool nvim_paramp_get_clean(const mparm_T *paramp) { return paramp->clean; }
 
-  return loop_close(&main_loop, true);
-}
-
-/// Performs early initialization.
-///
-/// Needed for unit tests.
-void early_init(mparm_T *paramp)
-{
-  os_hint_priority();
-  estack_init();
-  cmdline_init();
-  eval_init();          // init global variables
-  rs_init_path(argv0 ? argv0 : "nvim");
-  init_normal_cmds();   // Init the table of Normal mode commands.
-  runtime_init();
-  highlight_init();
-
-#ifdef MSWIN
-  OSVERSIONINFO ovi;
-  ovi.dwOSVersionInfoSize = sizeof(ovi);
-  // Disable warning about GetVersionExA being deprecated. There doesn't seem to be a convenient
-  // replacement that doesn't add a ton of extra code as of writing this.
-# ifdef _MSC_VER
-#  pragma warning(suppress : 4996)
-  GetVersionEx(&ovi);
-# else
-  GetVersionEx(&ovi);
-# endif
-  snprintf(windowsVersion, sizeof(windowsVersion), "%d.%d",
-           (int)ovi.dwMajorVersion, (int)ovi.dwMinorVersion);
-#endif
-
-  TIME_MSG("early init");
-
-  // Setup to use the current locale (for ctype() and many other things).
-  // NOTE: Translated messages with encodings other than latin1 will not
-  // work until set_init_1() has been called!
-  init_locale();
-
-  // tabpage local options (p_ch) must be set before allocating first tabpage.
-  set_init_tablocal();
-
-  // Allocate the first tabpage, window and buffer.
-  win_alloc_first();
-  TIME_MSG("init first window");
-
-  alist_init(&global_alist);    // Init the argument list to empty.
-  global_alist.id = 0;
-
-  // Set the default values for the options.
-  // First find out the home directory, needed to expand "~" in options.
-  init_homedir();               // find real value of $HOME
-  set_init_1(paramp != NULL ? paramp->clean : false);
-  log_init();
-  TIME_MSG("inits 1");
-
-  set_lang_var();               // set v:lang and v:ctype
-
-  // initialize quickfix list
-  qf_init_stack();
-}
+// early_init() is implemented in Rust (src/nvim-rs/main/src/init.rs)
+// Forward declaration for Rust-exported symbol
+extern void early_init(mparm_T *paramp);
 
 #ifdef MAKE_LIB
 int nvim_main(int argc, char **argv);  // silence -Wmissing-prototypes
