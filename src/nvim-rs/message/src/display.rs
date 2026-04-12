@@ -174,6 +174,23 @@ extern "C" {
     fn gettext(s: *const c_char) -> *const c_char;
     fn msg_hist_clear(keep: c_int);
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // For do_autocmd_progress
+    fn nvim_has_event_progress() -> c_int;
+    #[allow(improper_ctypes)]
+    fn nvim_apply_autocmds_progress_c(
+        msg_id: Object,
+        text_ptrs: *const *const c_char,
+        text_sizes: *const usize,
+        num_chunks: c_int,
+        has_data: bool,
+        percent: i64,
+        title_data: *const c_char,
+        title_size: usize,
+        status_data: *const c_char,
+        status_size: usize,
+        pat: *const c_char,
+    );
 }
 
 // ============================================================================
@@ -1220,6 +1237,89 @@ pub unsafe extern "C" fn rs_nvim_msg_show_empty() {
             obj_type: K_OBJECT_TYPE_INTEGER,
             data: ObjectData { integer: -1 },
         },
+    );
+}
+
+// ============================================================================
+// do_autocmd_progress — migrated from message.c
+// ============================================================================
+
+/// Fire the `Progress` autocmd with message data.
+///
+/// Replaces C `do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)`.
+/// Dict construction is delegated to `nvim_apply_autocmds_progress_c` to avoid
+/// replicating the `MAXSIZE_TEMP_DICT`/`ADD`/`PUT_C` API macros in Rust.
+///
+/// # Safety
+/// All pointer arguments must be valid. `msg_data` may be null.
+#[export_name = "do_autocmd_progress"]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_do_autocmd_progress(
+    msg_id: Object,
+    msg: crate::history::HlMessage,
+    msg_data: *const MessageData,
+) {
+    if nvim_has_event_progress() == 0 {
+        return;
+    }
+
+    // Collect text pointers and sizes from HlMessage chunks
+    let size = msg.size;
+    let mut text_ptrs: Vec<*const c_char> = Vec::with_capacity(size);
+    let mut text_sizes: Vec<usize> = Vec::with_capacity(size);
+    for i in 0..size {
+        let chunk = &*msg.items.add(i);
+        text_ptrs.push(chunk.text_data.cast::<c_char>());
+        text_sizes.push(chunk.text_size);
+    }
+
+    let (has_data, percent, title_data, title_size, status_data, status_size, pat): (
+        bool,
+        i64,
+        *const c_char,
+        usize,
+        *const c_char,
+        usize,
+        *const c_char,
+    ) = if msg_data.is_null() {
+        (
+            false,
+            0i64,
+            std::ptr::null(),
+            0usize,
+            std::ptr::null(),
+            0usize,
+            std::ptr::null(),
+        )
+    } else {
+        let d = &*msg_data;
+        (
+            true,
+            d.percent,
+            d.title.data.cast::<c_char>(),
+            d.title.size,
+            d.status.data.cast::<c_char>(),
+            d.status.size,
+            if d.title.size > 0 {
+                d.title.data.cast::<c_char>()
+            } else {
+                std::ptr::null()
+            },
+        )
+    };
+
+    nvim_apply_autocmds_progress_c(
+        msg_id,
+        text_ptrs.as_ptr(),
+        text_sizes.as_ptr(),
+        size as c_int,
+        has_data,
+        percent,
+        title_data,
+        title_size,
+        status_data,
+        status_size,
+        pat,
     );
 }
 

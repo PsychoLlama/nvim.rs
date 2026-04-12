@@ -208,6 +208,9 @@ void msg_hist_add(const char *s, int len, int hl_id);
 MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bool err,
                   MessageData *msg_data, bool *needs_msg_clear);
 
+// Phase 1 (Plan 8a): do_autocmd_progress migrated to Rust (display.rs)
+void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data);
+
 // Phase 2 (wait_return): wait_return migrated to Rust (wait.rs)
 void wait_return(int redraw);
 

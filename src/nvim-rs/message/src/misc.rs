@@ -78,7 +78,18 @@ extern "C" {
     static mut msg_scrolled: c_int;
     static mut msg_scrolled_at_flush: c_int;
     static mut msg_grid_scroll_discount: c_int;
-    fn nvim_ui_ext_msg_set_pos(pos: c_int, scrolled: bool);
+    // nvim_ui_ext_msg_set_pos is now implemented in Rust (below)
+    fn nvim_curwin_get_fcs_msgsep() -> u32;
+    fn nvim_ui_call_msg_set_pos_impl(
+        handle: c_int,
+        row: c_int,
+        scrolled: bool,
+        buf: *const c_char,
+        size: usize,
+        zindex: c_int,
+        comp_index: c_int,
+    );
+    fn nvim_schar_get_impl(buf_out: *mut c_char, sc: u32) -> usize;
     fn ui_call_grid_resize(grid: i64, width: i64, height: i64);
     fn ui_call_grid_scroll(
         grid: i64,
@@ -384,7 +395,7 @@ pub unsafe extern "C" fn rs_msg_ui_refresh() {
             i64::from(msg_grid.cols),
             i64::from(msg_grid.rows),
         );
-        nvim_ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled != 0);
+        rs_nvim_ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled != 0);
     }
 }
 
@@ -397,7 +408,7 @@ pub unsafe extern "C" fn rs_msg_ui_refresh() {
 #[export_name = "msg_ui_flush"]
 pub unsafe extern "C" fn rs_msg_ui_flush() {
     if ui_has(K_UI_MULTIGRID) && !msg_grid.chars.is_null() && msg_grid.pending_comp_index_update {
-        nvim_ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled != 0);
+        rs_nvim_ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled != 0);
     }
 }
 
@@ -422,7 +433,7 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
         let delta = (msg_scrolled - msg_scrolled_at_flush).min(msg_grid.rows);
 
         if pos_delta > 0 {
-            nvim_ui_ext_msg_set_pos(msg_grid_pos, true);
+            rs_nvim_ui_ext_msg_set_pos(msg_grid_pos, true);
         }
 
         let to_scroll = delta - pos_delta - msg_grid_scroll_discount;
@@ -911,7 +922,7 @@ extern "C" {
 #[export_name = "msg_grid_set_pos"]
 pub unsafe extern "C" fn rs_msg_grid_set_pos(row: c_int, scrolled: bool) {
     if !msg_grid.throttled {
-        nvim_ui_ext_msg_set_pos(row, scrolled);
+        rs_nvim_ui_ext_msg_set_pos(row, scrolled);
         msg_grid_pos_at_flush = row;
     }
     msg_grid_pos = row;
@@ -1001,6 +1012,38 @@ pub unsafe extern "C" fn rs_msg_grid_validate() {
     if !msg_grid.chars.is_null() && msg_scrolled == 0 && cmdline_row < msg_grid_pos {
         cmdline_row = msg_grid_pos;
     }
+}
+
+// ============================================================================
+// nvim_ui_ext_msg_set_pos — migrated from message.c
+// ============================================================================
+
+/// Update the message grid position in the UI compositor.
+///
+/// Reads the current window's msgsep fillchar, gets its UTF-8 bytes via
+/// `nvim_schar_get_impl`, and calls `ui_call_msg_set_pos` via C wrapper.
+///
+/// Replaces C `nvim_ui_ext_msg_set_pos(int row, bool scrolled)`.
+///
+/// # Safety
+/// Accesses global `msg_grid` and calls C accessors.
+#[export_name = "nvim_ui_ext_msg_set_pos"]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_nvim_ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
+    const MAX_SCHAR_SIZE: usize = 32;
+    let mut buf = [0u8; MAX_SCHAR_SIZE];
+    let sc = nvim_curwin_get_fcs_msgsep();
+    let size = nvim_schar_get_impl(buf.as_mut_ptr().cast::<c_char>(), sc);
+    nvim_ui_call_msg_set_pos_impl(
+        msg_grid.handle,
+        row,
+        scrolled,
+        buf.as_ptr().cast::<c_char>(),
+        size,
+        msg_grid.zindex,
+        msg_grid.comp_index as c_int,
+    );
+    msg_grid.pending_comp_index_update = false;
 }
 
 #[cfg(test)]

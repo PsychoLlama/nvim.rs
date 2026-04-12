@@ -103,14 +103,50 @@ extern int msg_grid_pos_at_flush;  // owned by Rust (misc.rs)
 
 extern int64_t msg_id_next;  // owned by Rust (display.rs)
 
-void nvim_ui_ext_msg_set_pos(int row, bool scrolled)
+// nvim_ui_ext_msg_set_pos() migrated to Rust (misc.rs) with #[export_name]
+
+/// C accessor: curwin msgsep fillchar for Rust FFI.
+uint32_t nvim_curwin_get_fcs_msgsep(void) { return (uint32_t)curwin->w_p_fcs_chars.msgsep; }
+
+/// C wrapper for ui_call_msg_set_pos to avoid exposing String struct to Rust.
+void nvim_ui_call_msg_set_pos_impl(int handle, int row, bool scrolled,
+                                    const char *buf, size_t size, int zindex,
+                                    int comp_index)
 {
-  char buf[MAX_SCHAR_SIZE];
-  size_t size = schar_get(buf, curwin->w_p_fcs_chars.msgsep);
-  ui_call_msg_set_pos(msg_grid.handle, row, scrolled,
-                      (String){ .data = buf, .size = size }, msg_grid.zindex,
-                      (int)msg_grid.comp_index);
-  msg_grid.pending_comp_index_update = false;
+  ui_call_msg_set_pos(handle, row, scrolled,
+                      (String){ .data = (char *)buf, .size = size },
+                      zindex, comp_index);
+}
+
+/// C helper for schar_get used by Rust FFI.
+size_t nvim_schar_get_impl(char *buf_out, uint32_t sc) { return schar_get(buf_out, (schar_T)sc); }
+
+/// C accessor: check if EVENT_PROGRESS autocmd is registered.
+int nvim_has_event_progress(void) { return has_event(EVENT_PROGRESS) ? 1 : 0; }
+
+/// C helper for do_autocmd_progress autocmd dispatch (dict construction uses API macros).
+void nvim_apply_autocmds_progress_c(Object msg_id, const char **text_ptrs,
+                                     const size_t *text_sizes, int num_chunks,
+                                     bool has_data, int64_t percent,
+                                     const char *title_data, size_t title_size,
+                                     const char *status_data, size_t status_size,
+                                     const char *pat)
+{
+  MAXSIZE_TEMP_DICT(data, 7);
+  ArrayOf(String) messages = ARRAY_DICT_INIT;
+  for (int i = 0; i < num_chunks; i++) {
+    ADD(messages, STRING_OBJ(((String){ .data = (char *)text_ptrs[i], .size = text_sizes[i] })));
+  }
+  PUT_C(data, "id", OBJECT_OBJ(msg_id));
+  PUT_C(data, "text", ARRAY_OBJ(messages));
+  if (has_data) {
+    PUT_C(data, "percent", INTEGER_OBJ(percent));
+    PUT_C(data, "status", STRING_OBJ(((String){ .data = (char *)status_data, .size = status_size })));
+    PUT_C(data, "title", STRING_OBJ(((String){ .data = (char *)title_data, .size = title_size })));
+  }
+  apply_autocmds_group(EVENT_PROGRESS, pat ? pat : "", NULL, true,
+                       AUGROUP_ALL, NULL, NULL, &DICT_OBJ(data));
+  kv_destroy(messages);
 }
 
 // msg_grid_set_pos() migrated to Rust (misc.rs) with #[export_name]
@@ -303,31 +339,8 @@ void msg_schedule_semsg_multiline(const char *const fmt, ...)
 
 // hl_msg_free, msg_hist_add migrated to Rust: src/nvim-rs/message/src/history.rs
 
-void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
-{
-  if (!has_event(EVENT_PROGRESS)) {
-    return;
-  }
-
-  MAXSIZE_TEMP_DICT(data, 7);
-  ArrayOf(String) messages = ARRAY_DICT_INIT;
-  for (size_t i = 0; i < msg.size; i++) {
-    ADD(messages, STRING_OBJ(msg.items[i].text));
-  }
-
-  PUT_C(data, "id", OBJECT_OBJ(msg_id));
-  PUT_C(data, "text", ARRAY_OBJ(messages));
-  if (msg_data != NULL) {
-    PUT_C(data, "percent", INTEGER_OBJ(msg_data->percent));
-    PUT_C(data, "status", STRING_OBJ(msg_data->status));
-    PUT_C(data, "title", STRING_OBJ(msg_data->title));
-    PUT_C(data, "data", DICT_OBJ(msg_data->data));
-  }
-
-  apply_autocmds_group(EVENT_PROGRESS, msg_data ? msg_data->title.data : "", NULL, true,
-                       AUGROUP_ALL, NULL, NULL, &DICT_OBJ(data));
-  kv_destroy(messages);
-}
+// do_autocmd_progress() migrated to Rust (display.rs) with #[export_name]
+// (uses nvim_apply_autocmds_progress_c helper for dict construction)
 
 // msg_hist_add_multihl migrated to Rust: src/nvim-rs/message/src/history.rs
 // ex_messages() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_ex_messages)
