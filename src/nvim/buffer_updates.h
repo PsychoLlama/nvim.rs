@@ -14,3 +14,5 @@ bool buf_updates_active(buf_T *buf);
 void buffer_update_callbacks_free(BufUpdateCallbacks cb);
 void buf_updates_changedtick_single(buf_T *buf, uint64_t channel_id);
 void buf_updates_send_end(buf_T *buf, uint64_t channelid);
+bool buf_updates_register(buf_T *buf, uint64_t channel_id, BufUpdateCallbacks cb, bool send_buffer);
+void buf_updates_unregister(buf_T *buf, uint64_t channelid);

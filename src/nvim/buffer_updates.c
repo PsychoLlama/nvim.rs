@@ -30,109 +30,11 @@ size_t nvim_buf_get_update_channels_size(buf_T *buf) { return kv_size(buf->updat
 /// Get the size of the update_callbacks kvec for a buffer.
 size_t nvim_buf_get_update_callbacks_size(buf_T *buf) { return kv_size(buf->update_callbacks); }
 
-// Register a channel. Return True if the channel was added, or already added.
-// Return False if the channel couldn't be added because the buffer is
-// unloaded.
-bool buf_updates_register(buf_T *buf, uint64_t channel_id, BufUpdateCallbacks cb, bool send_buffer)
-{
-  // must fail if the buffer isn't loaded
-  if (buf->b_ml.ml_mfp == NULL) {
-    return false;
-  }
-
-  if (channel_id == LUA_INTERNAL_CALL) {
-    kv_push(buf->update_callbacks, cb);
-    if (cb.utf_sizes) {
-      buf->update_need_codepoints = true;
-    }
-    return true;
-  }
-
-  // count how many channels are currently watching the buffer
-  size_t size = kv_size(buf->update_channels);
-  for (size_t i = 0; i < size; i++) {
-    if (kv_A(buf->update_channels, i) == channel_id) {
-      // buffer is already registered ... nothing to do
-      return true;
-    }
-  }
-
-  // append the channelid to the list
-  kv_push(buf->update_channels, channel_id);
-
-  if (send_buffer) {
-    MAXSIZE_TEMP_ARRAY(args, 6);
-
-    // the first argument is always the buffer handle
-    ADD_C(args, BUFFER_OBJ(buf->handle));
-    ADD_C(args, INTEGER_OBJ(buf_get_changedtick(buf)));
-    // the first line that changed (zero-indexed)
-    ADD_C(args, INTEGER_OBJ(0));
-    // the last line that was changed
-    ADD_C(args, INTEGER_OBJ(-1));
-
-    // collect buffer contents
-
-    STATIC_ASSERT(SIZE_MAX >= MAXLNUM, "size_t smaller than MAXLNUM");
-    size_t line_count = (size_t)buf->b_ml.ml_line_count;
-
-    Array linedata = ARRAY_DICT_INIT;
-    Arena arena = ARENA_EMPTY;
-    if (line_count > 0) {
-      linedata = arena_array(&arena, line_count);
-      buf_collect_lines(buf, line_count, 1, 0, true, &linedata, NULL, &arena);
-    }
-
-    ADD_C(args, ARRAY_OBJ(linedata));
-    ADD_C(args, BOOLEAN_OBJ(false));
-
-    rpc_send_event(channel_id, "nvim_buf_lines_event", args);
-    arena_mem_free(arena_finish(&arena));
-  } else {
-    buf_updates_changedtick_single(buf, channel_id);
-  }
-
-  return true;
-}
+// buf_updates_register: migrated to Rust (buffer_updates crate)
 
 // buf_updates_send_end: migrated to Rust (buffer_updates crate)
 
-void buf_updates_unregister(buf_T *buf, uint64_t channelid)
-{
-  size_t size = kv_size(buf->update_channels);
-  if (!size) {
-    return;
-  }
-
-  // go through list backwards and remove the channel id each time it appears
-  // (it should never appear more than once)
-  size_t j = 0;
-  size_t found = 0;
-  for (size_t i = 0; i < size; i++) {
-    if (kv_A(buf->update_channels, i) == channelid) {
-      found++;
-    } else {
-      // copy item backwards into prior slot if needed
-      if (i != j) {
-        kv_A(buf->update_channels, j) = kv_A(buf->update_channels, i);
-      }
-      j++;
-    }
-  }
-
-  if (found) {
-    // remove X items from the end of the array
-    buf->update_channels.size -= found;
-
-    // make a new copy of the active array without the channelid in it
-    buf_updates_send_end(buf, channelid);
-
-    if (found == size) {
-      kv_destroy(buf->update_channels);
-      kv_init(buf->update_channels);
-    }
-  }
-}
+// buf_updates_unregister: migrated to Rust (buffer_updates crate)
 
 void buf_free_callbacks(buf_T *buf)
 {
@@ -429,6 +331,78 @@ void nvim_buf_send_detach_event(buf_T *buf, uint64_t channel_id)
   MAXSIZE_TEMP_ARRAY(args, 1);
   ADD_C(args, BUFFER_OBJ(buf->handle));
   rpc_send_event(channel_id, "nvim_buf_detach_event", args);
+}
+
+// Phase 2 accessor functions for Rust FFI (channel management)
+
+/// Get the channel ID at index i in update_channels.
+uint64_t nvim_buf_update_channels_get(buf_T *buf, size_t i)
+{
+  return kv_A(buf->update_channels, i);
+}
+
+/// Set the channel ID at index i in update_channels.
+void nvim_buf_update_channels_set(buf_T *buf, size_t i, uint64_t channel_id)
+{
+  kv_A(buf->update_channels, i) = channel_id;
+}
+
+/// Shrink update_channels by removing `count` items from the end.
+void nvim_buf_update_channels_shrink(buf_T *buf, size_t count)
+{
+  buf->update_channels.size -= count;
+}
+
+/// Push a channel ID onto update_channels.
+void nvim_buf_update_channels_push(buf_T *buf, uint64_t channel_id)
+{
+  kv_push(buf->update_channels, channel_id);
+}
+
+/// Destroy and reinitialize update_channels (free allocated memory).
+void nvim_buf_update_channels_destroy(buf_T *buf)
+{
+  kv_destroy(buf->update_channels);
+  kv_init(buf->update_channels);
+}
+
+/// Push a BufUpdateCallbacks entry onto update_callbacks.
+void nvim_buf_update_callbacks_push(buf_T *buf, BufUpdateCallbacks cb)
+{
+  kv_push(buf->update_callbacks, cb);
+}
+
+/// Set update_need_codepoints for a buffer.
+void nvim_buf_set_update_need_codepoints(buf_T *buf, bool val)
+{
+  buf->update_need_codepoints = val;
+}
+
+/// Send the initial buffer contents as nvim_buf_lines_event to a channel.
+/// This handles arena allocation, buf_collect_lines, and rpc_send_event.
+void nvim_buf_send_initial_lines(buf_T *buf, uint64_t channel_id)
+{
+  MAXSIZE_TEMP_ARRAY(args, 6);
+  ADD_C(args, BUFFER_OBJ(buf->handle));
+  ADD_C(args, INTEGER_OBJ(buf_get_changedtick(buf)));
+  ADD_C(args, INTEGER_OBJ(0));
+  ADD_C(args, INTEGER_OBJ(-1));
+
+  STATIC_ASSERT(SIZE_MAX >= MAXLNUM, "size_t smaller than MAXLNUM");
+  size_t line_count = (size_t)buf->b_ml.ml_line_count;
+
+  Array linedata = ARRAY_DICT_INIT;
+  Arena arena = ARENA_EMPTY;
+  if (line_count > 0) {
+    linedata = arena_array(&arena, line_count);
+    buf_collect_lines(buf, line_count, 1, 0, true, &linedata, NULL, &arena);
+  }
+
+  ADD_C(args, ARRAY_OBJ(linedata));
+  ADD_C(args, BOOLEAN_OBJ(false));
+
+  rpc_send_event(channel_id, "nvim_buf_lines_event", args);
+  arena_mem_free(arena_finish(&arena));
 }
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
