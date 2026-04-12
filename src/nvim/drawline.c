@@ -348,6 +348,29 @@ extern DrawColsResult rs_win_line_draw_cols(win_T *wp, linenr_T lnum, winlinevar
 /// Return value for rs_win_line_process_n_extra.
 typedef struct { schar_T mb_schar; int mb_c; int mb_l; } NExtraResult;
 
+/// Return value for rs_win_line_process_char.
+/// Must match Rust ProcessCharResult (repr(C)).
+typedef struct {
+  schar_T mb_schar;       ///< Display character (schar_T).
+  int mb_c;               ///< Codepoint of the character.
+  int mb_l;               ///< Byte length of the character.
+  int ptr_col;            ///< Updated ptr byte offset (ptr - line).
+  int prev_ptr_col;       ///< Updated prev_ptr byte offset.
+  bool did_decrement_ptr; ///< Whether ptr was decremented.
+  bool lcs_eol_todo;      ///< Whether EOL listchar is still to do.
+  int search_attr;        ///< Updated search highlight attr.
+  int decor_attr;         ///< Updated decoration attr.
+} ProcessCharResult;
+
+/// Phase 3: Process one character from the buffer line.
+extern ProcessCharResult rs_win_line_process_char(win_T *wp, linenr_T lnum,
+                                                  winlinevars_T *wlv, WinLineState *wls,
+                                                  spellvars_T *spv, const char *line,
+                                                  int ptr_col, colnr_T trailcol, colnr_T leadcol,
+                                                  int extmark_attr, bool lcs_eol_todo,
+                                                  int search_attr, int area_attr,
+                                                  const int *term_attrs, int has_match_conc);
+
 // Phase 1: EOL highlight + fill + cursorcolumn
 extern int rs_win_line_eol_highlight(win_T *wp, winlinevars_T *wlv, const WinLineState *state,
                                      bool lcs_eol_todo, int area_attr, colnr_T ptr_col,
@@ -580,7 +603,6 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
   // Repeat for the whole displayed line.
   while (true) {
     int has_match_conc = 0;  ///< match wants to conceal
-    int decor_conceal = 0;
 
     bool did_decrement_ptr = false;
 
@@ -785,553 +807,32 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
       // skip writing the buffer line itself
       mb_schar = NUL;
     } else {
-      const char *prev_ptr = ptr;
-
-      // first byte of next char
-      int c0 = (uint8_t)(*ptr);
-      if (c0 == NUL) {
-        // no more cells to skip
-        wlv.skip_cells = 0;
-      }
-
-      // Get a character from the line itself.
-      mb_l = utfc_ptr2len(ptr);
-      mb_schar = utfc_ptr2schar(ptr, &mb_c);
-
-      // Overlong encoded ASCII or ASCII with composing char
-      // is displayed normally, except a NUL.
-      if (mb_l > 1 && mb_c < 0x80) {
-        c0 = mb_c;
-      }
-
-      if ((mb_l == 1 && c0 >= 0x80)
-          || (mb_l >= 1 && mb_c == 0)
-          || (mb_l > 1 && (!vim_isprintc(mb_c)))) {
-        // Illegal UTF-8 byte: display as <xx>.
-        // Non-printable character : display as ? or fullwidth ?.
-        transchar_hex(wlv.extra, mb_c);
-        if (wp->w_p_rl) {  // reverse
-          rl_mirror_ascii(wlv.extra, NULL);
-        }
-
-        wlv.p_extra = wlv.extra;
-        mb_c = mb_ptr2char_adv((const char **)&wlv.p_extra);
-        mb_schar = schar_from_char(mb_c);
-        wlv.n_extra = (int)strlen(wlv.p_extra);
-        wlv.sc_extra = NUL;
-        wlv.sc_final = NUL;
-        if (area_attr == 0 && search_attr == 0) {
-          wlv.n_attr = wlv.n_extra + 1;
-          wlv.extra_attr = win_hl_attr(wp, HLF_8);
-          saved_attr2 = wlv.char_attr;               // save current attr
-        }
-      } else if (mb_l == 0) {        // at the NUL at end-of-line
-        mb_l = 1;
-      }
-      // If a double-width char doesn't fit display a '>' in the
-      // last column; the character is displayed at the start of the
-      // next line.
-      if (wlv.col >= view_width - 1 && schar_cells(mb_schar) == 2) {
-        mb_schar = schar_from_ascii('>');
-        mb_c = '>';
-        mb_l = 1;
-        multi_attr = win_hl_attr(wp, HLF_AT);
-        // Put pointer back so that the character will be
-        // displayed at the start of the next line.
-        ptr--;
-        did_decrement_ptr = true;
-      } else if (*ptr != NUL) {
-        ptr += mb_l - 1;
-      }
-
-      // If a double-width char doesn't fit at the left side display a '<' in
-      // the first column.  Don't do this for unprintable characters.
-      if (wlv.skip_cells > 0 && mb_l > 1 && wlv.n_extra == 0) {
-        wlv.n_extra = 1;
-        wlv.sc_extra = schar_from_ascii(MB_FILLER_CHAR);
-        wlv.sc_final = NUL;
-        mb_schar = schar_from_ascii(' ');
-        mb_c = ' ';
-        mb_l = 1;
-        if (area_attr == 0 && search_attr == 0) {
-          wlv.n_attr = wlv.n_extra + 1;
-          wlv.extra_attr = win_hl_attr(wp, HLF_AT);
-          saved_attr2 = wlv.char_attr;             // save current attr
-        }
-      }
-      ptr++;
-
-      decor_attr = 0;
-      if (extra_check) {
-        const bool no_plain_buffer = (wp->w_s->b_p_spo_flags & kOptSpoFlagNoplainbuffer) != 0;
-        bool can_spell = !no_plain_buffer;
-
-        // Get extmark and syntax attributes, unless still at the start of the line
-        // (double-wide char that doesn't fit).
-        const int v = (int)(ptr - line);
-        const ptrdiff_t prev_v = prev_ptr - line;
-        if (has_syntax && v > 0) {
-          // Get the syntax attribute for the character.  If there
-          // is an error, disable syntax highlighting.
-          int save_did_emsg = did_emsg;
-          did_emsg = false;
-
-          decor_attr = get_syntax_attr(v - 1, spv->spv_has_spell ? &can_spell : NULL, false);
-
-          if (did_emsg) {
-            wp->w_s->b_syn_error = true;
-            has_syntax = false;
-          } else {
-            did_emsg = save_did_emsg;
-          }
-
-          if (wp->w_s->b_syn_slow) {
-            has_syntax = false;
-          }
-
-          // Need to get the line again, a multi-line regexp may
-          // have made it invalid.
-          line = ml_get_buf(wp->w_buffer, lnum);
-          ptr = line + v;
-          prev_ptr = line + prev_v;
-
-          // no concealing past the end of the line, it interferes
-          // with line highlighting.
-          syntax_flags = (mb_schar == 0) ? 0 : get_syntax_info(&syntax_seqnr);
-        }
-
-        if (has_decor && v > 0) {
-          // extmarks take preceedence over syntax.c
-          decor_attr = hl_combine_attr(decor_attr, extmark_attr);
-          decor_conceal = decor_state.conceal;
-          can_spell = TRISTATE_TO_BOOL(decor_state.spell, can_spell);
-        }
-
-        char_attr_base = hl_combine_attr(folded_attr, decor_attr);
-        wlv.char_attr = hl_combine_attr(char_attr_base, char_attr_pri);
-
-        // Check spelling (unless at the end of the line).
-        // Only do this when there is no syntax highlighting, the
-        // @Spell cluster is not used or the current syntax item
-        // contains the @Spell cluster.
-        int v1 = (int)(ptr - line);
-        if (spv->spv_has_spell && v1 >= word_end && v1 > cur_checked_col) {
-          spell_attr = 0;
-          // do not calculate cap_col at the end of the line or when
-          // only white space is following
-          if (mb_schar != 0 && (*skipwhite(prev_ptr) != NUL) && can_spell) {
-            char *p;
-            hlf_T spell_hlf = HLF_COUNT;
-            v1 -= mb_l - 1;
-
-            // Use nextline[] if possible, it has the start of the
-            // next line concatenated.
-            if ((prev_ptr - line) - nextlinecol >= 0) {
-              p = nextline + ((prev_ptr - line) - nextlinecol);
-            } else {
-              p = (char *)prev_ptr;
-            }
-            spv->spv_cap_col -= (int)(prev_ptr - line);
-            size_t tmplen = spell_check(wp, p, &spell_hlf, &spv->spv_cap_col, spv->spv_unchanged);
-            assert(tmplen <= INT_MAX);
-            int len = (int)tmplen;
-            word_end = v1 + len;
-
-            // In Insert mode only highlight a word that
-            // doesn't touch the cursor.
-            if (spell_hlf != HLF_COUNT
-                && (State & MODE_INSERT)
-                && wp->w_cursor.lnum == lnum
-                && wp->w_cursor.col >= (colnr_T)(prev_ptr - line)
-                && wp->w_cursor.col < (colnr_T)word_end) {
-              spell_hlf = HLF_COUNT;
-              spell_redraw_lnum = lnum;
-            }
-
-            if (spell_hlf == HLF_COUNT && p != prev_ptr
-                && (p - nextline) + len > nextline_idx) {
-              // Remember that the good word continues at the
-              // start of the next line.
-              spv->spv_checked_lnum = lnum + 1;
-              spv->spv_checked_col = (int)((p - nextline) + len - nextline_idx);
-            }
-
-            // Turn index into actual attributes.
-            if (spell_hlf != HLF_COUNT) {
-              spell_attr = highlight_attr[spell_hlf];
-            }
-
-            if (spv->spv_cap_col > 0) {
-              if (p != prev_ptr && (p - nextline) + spv->spv_cap_col >= nextline_idx) {
-                // Remember that the word in the next line
-                // must start with a capital.
-                spv->spv_capcol_lnum = lnum + 1;
-                spv->spv_cap_col = (int)((p - nextline) + spv->spv_cap_col - nextline_idx);
-              } else {
-                // Compute the actual column.
-                spv->spv_cap_col += (int)(prev_ptr - line);
-              }
-            }
-          }
-        }
-        if (spell_attr != 0) {
-          char_attr_base = hl_combine_attr(char_attr_base, spell_attr);
-          wlv.char_attr = hl_combine_attr(char_attr_base, char_attr_pri);
-        }
-
-        if (wp->w_buffer->terminal) {
-          wlv.char_attr = hl_combine_attr(wlv.vcol < TERM_ATTRS_MAX ? term_attrs[wlv.vcol] : 0,
-                                          wlv.char_attr);
-        }
-
-        // we don't want linebreak to apply for lines that start with
-        // leading spaces, followed by long letters (since it would add
-        // a break at the beginning of a line and this might be unexpected)
-        //
-        // So only allow to linebreak, once we have found chars not in
-        // 'breakat' in the line.
-        if (wp->w_p_lbr && !wlv.need_lbr && mb_schar != NUL
-            && !vim_isbreak((uint8_t)(*ptr))) {
-          wlv.need_lbr = true;
-        }
-        // Found last space before word: check for line break.
-        if (wp->w_p_lbr && c0 == mb_c && mb_c < 128 && wlv.need_lbr
-            && vim_isbreak(mb_c) && !vim_isbreak((uint8_t)(*ptr))) {
-          int mb_off = utf_head_off(line, ptr - 1);
-          char *p = ptr - (mb_off + 1);
-
-          CharsizeArg csarg;
-          // lnum == 0, do not want virtual text to be counted here
-          CSType cstype = init_charsize_arg(&csarg, wp, 0, line);
-          wlv.n_extra = win_charsize(cstype, wlv.vcol, p, utf_ptr2CharInfo(p).value,
-                                     &csarg).width - 1;
-
-          if (on_last_col && mb_c != TAB) {
-            // Do not continue search/match highlighting over the
-            // line break, but for TABs the highlighting should
-            // include the complete width of the character
-            search_attr = 0;
-          }
-
-          if (mb_c == TAB && wlv.n_extra + wlv.col > view_width) {
-            wlv.n_extra = tabstop_padding(wlv.vcol, wp->w_buffer->b_p_ts,
-                                          wp->w_buffer->b_p_vts_array) - 1;
-          }
-          wlv.sc_extra = schar_from_ascii(mb_off > 0 ? MB_FILLER_CHAR : ' ');
-          wlv.sc_final = NUL;
-          if (mb_c < 128 && ascii_iswhite(mb_c)) {
-            if (mb_c == TAB) {
-              // See "Tab alignment" below.
-              fix_for_boguscols(&wlv);
-            }
-            if (!wp->w_p_list) {
-              mb_c = ' ';
-              mb_schar = schar_from_ascii(mb_c);
-            }
-          }
-        }
-
-        if (wp->w_p_list) {
-          in_multispace = mb_c == ' ' && (*ptr == ' ' || (prev_ptr > line && prev_ptr[-1] == ' '));
-          if (!in_multispace) {
-            multispace_pos = 0;
-          }
-        }
-
-        // 'list': Change char 160 to 'nbsp' and space to 'space'.
-        // But not when the character is followed by a composing
-        // character (use mb_l to check that).
-        if (wp->w_p_list
-            && ((((mb_c == 160 && mb_l == 2) || (mb_c == 0x202f && mb_l == 3))
-                 && wp->w_p_lcs_chars.nbsp)
-                || (mb_c == ' '
-                    && mb_l == 1
-                    && (wp->w_p_lcs_chars.space
-                        || (in_multispace && wp->w_p_lcs_chars.multispace != NULL))
-                    && ptr - line >= leadcol
-                    && ptr - line <= trailcol))) {
-          if (in_multispace && wp->w_p_lcs_chars.multispace != NULL) {
-            mb_schar = wp->w_p_lcs_chars.multispace[multispace_pos++];
-            if (wp->w_p_lcs_chars.multispace[multispace_pos] == NUL) {
-              multispace_pos = 0;
-            }
-          } else {
-            mb_schar = (mb_c == ' ') ? wp->w_p_lcs_chars.space : wp->w_p_lcs_chars.nbsp;
-          }
-          wlv.n_attr = 1;
-          wlv.extra_attr = win_hl_attr(wp, HLF_0);
-          saved_attr2 = wlv.char_attr;  // save current attr
-          mb_c = schar_get_first_codepoint(mb_schar);
-        }
-
-        if (mb_c == ' ' && mb_l == 1 && ((trailcol != MAXCOL && ptr > line + trailcol)
-                                         || (leadcol != 0 && ptr < line + leadcol))) {
-          if (leadcol != 0 && in_multispace && ptr < line + leadcol
-              && wp->w_p_lcs_chars.leadmultispace != NULL) {
-            mb_schar = wp->w_p_lcs_chars.leadmultispace[multispace_pos++];
-            if (wp->w_p_lcs_chars.leadmultispace[multispace_pos] == NUL) {
-              multispace_pos = 0;
-            }
-          } else if (ptr > line + trailcol && wp->w_p_lcs_chars.trail) {
-            mb_schar = wp->w_p_lcs_chars.trail;
-          } else if (ptr < line + leadcol && wp->w_p_lcs_chars.lead) {
-            mb_schar = wp->w_p_lcs_chars.lead;
-          } else if (leadcol != 0 && wp->w_p_lcs_chars.space) {
-            mb_schar = wp->w_p_lcs_chars.space;
-          }
-
-          wlv.n_attr = 1;
-          wlv.extra_attr = win_hl_attr(wp, HLF_0);
-          saved_attr2 = wlv.char_attr;  // save current attr
-          mb_c = schar_get_first_codepoint(mb_schar);
-        }
-      }
-
-      // Handling of non-printable characters.
-      if (!vim_isprintc(mb_c)) {
-        // when getting a character from the file, we may have to
-        // turn it into something else on the way to putting it on the screen.
-        if (mb_c == TAB && (!wp->w_p_list || wp->w_p_lcs_chars.tab1)) {
-          int tab_len = 0;
-          colnr_T vcol_adjusted = wlv.vcol;  // removed showbreak length
-          char *const sbr = (char *)rs_get_showbreak_value(wp);
-
-          // Only adjust the tab_len, when at the first column after the
-          // showbreak value was drawn.
-          if (*sbr != NUL && wlv.vcol == wlv.vcol_sbr && wp->w_p_wrap) {
-            vcol_adjusted = wlv.vcol - mb_charlen(sbr);
-          }
-          // tab amount depends on current column
-          tab_len = tabstop_padding(vcol_adjusted,
-                                    wp->w_buffer->b_p_ts,
-                                    wp->w_buffer->b_p_vts_array) - 1;
-
-          if (!wp->w_p_lbr || !wp->w_p_list) {
-            wlv.n_extra = tab_len;
-          } else {
-            int saved_nextra = wlv.n_extra;
-
-            if (wlv.vcol_off_co > 0) {
-              // there are characters to conceal
-              tab_len += wlv.vcol_off_co;
-            }
-            // boguscols before fix_for_boguscols() from above.
-            if (wp->w_p_lcs_chars.tab1 && wlv.old_boguscols > 0
-                && wlv.n_extra > tab_len) {
-              tab_len += wlv.n_extra - tab_len;
-            }
-
-            if (tab_len > 0) {
-              // If wlv.n_extra > 0, it gives the number of chars
-              // to use for a tab, else we need to calculate the
-              // width for a tab.
-              size_t tab2_len = schar_len(wp->w_p_lcs_chars.tab2);
-              size_t len = (size_t)tab_len * tab2_len;
-              if (wp->w_p_lcs_chars.tab3) {
-                len += schar_len(wp->w_p_lcs_chars.tab3) - tab2_len;
-              }
-              if (wlv.n_extra > 0) {
-                len += (size_t)(wlv.n_extra - tab_len);
-              }
-              mb_schar = wp->w_p_lcs_chars.tab1;
-              mb_c = schar_get_first_codepoint(mb_schar);
-              char *p = rs_get_extra_buf(len + 1);
-              memset(p, ' ', len);
-              p[len] = NUL;
-              wlv.p_extra = p;
-              for (int i = 0; i < tab_len; i++) {
-                if (*p == NUL) {
-                  tab_len = i;
-                  break;
-                }
-                schar_T lcs = wp->w_p_lcs_chars.tab2;
-
-                // if tab3 is given, use it for the last char
-                if (wp->w_p_lcs_chars.tab3 && i == tab_len - 1) {
-                  lcs = wp->w_p_lcs_chars.tab3;
-                }
-                size_t slen = schar_get_adv(&p, lcs);
-                wlv.n_extra += (int)slen - (saved_nextra > 0 ? 1 : 0);
-              }
-
-              // n_extra will be increased by fix_for_boguscols()
-              // below, so need to adjust for that here
-              if (wlv.vcol_off_co > 0) {
-                wlv.n_extra -= wlv.vcol_off_co;
-              }
-            }
-          }
-
-          {
-            int vc_saved = wlv.vcol_off_co;
-
-            // Tab alignment should be identical regardless of
-            // 'conceallevel' value. So tab compensates of all
-            // previous concealed characters, and thus resets
-            // vcol_off_co and boguscols accumulated so far in the
-            // line. Note that the tab can be longer than
-            // 'tabstop' when there are concealed characters.
-            fix_for_boguscols(&wlv);
-
-            // Make sure, the highlighting for the tab char will be
-            // correctly set further below (effectively reverts the
-            // fix_for_boguscols() call).
-            if (wlv.n_extra == tab_len + vc_saved && wp->w_p_list
-                && wp->w_p_lcs_chars.tab1) {
-              tab_len += vc_saved;
-            }
-          }
-
-          if (wp->w_p_list) {
-            mb_schar = (wlv.n_extra == 0 && wp->w_p_lcs_chars.tab3)
-                       ? wp->w_p_lcs_chars.tab3 : wp->w_p_lcs_chars.tab1;
-            if (wp->w_p_lbr && wlv.p_extra != NULL && *wlv.p_extra != NUL) {
-              wlv.sc_extra = NUL;  // using p_extra from above
-            } else {
-              wlv.sc_extra = wp->w_p_lcs_chars.tab2;
-            }
-            wlv.sc_final = wp->w_p_lcs_chars.tab3;
-            wlv.n_attr = tab_len + 1;
-            wlv.extra_attr = win_hl_attr(wp, HLF_0);
-            saved_attr2 = wlv.char_attr;  // save current attr
-          } else {
-            wlv.sc_final = NUL;
-            wlv.sc_extra = schar_from_ascii(' ');
-            mb_schar = schar_from_ascii(' ');
-          }
-          mb_c = schar_get_first_codepoint(mb_schar);
-        } else if (mb_schar == NUL
-                   && (wp->w_p_list
-                       || ((wlv.fromcol >= 0 || fromcol_prev >= 0)
-                           && wlv.tocol > wlv.vcol
-                           && VIsual_mode != Ctrl_V
-                           && wlv.col < view_width
-                           && !(noinvcur
-                                && lnum == wp->w_cursor.lnum
-                                && wlv.vcol == wp->w_virtcol)))
-                   && lcs_eol_todo && lcs_eol != NUL) {
-          // Display a '$' after the line or highlight an extra
-          // character if the line break is included.
-          // For a diff line the highlighting continues after the "$".
-          if (wlv.diff_hlf == (hlf_T)0
-              && wlv.line_attr == 0
-              && wlv.line_attr_lowprio == 0) {
-            // In virtualedit, visual selections may extend beyond end of line
-            if (!(area_highlighting && virtual_active(wp)
-                  && wlv.tocol != MAXCOL && wlv.vcol < wlv.tocol)) {
-              wlv.p_extra = "";
-            }
-            wlv.n_extra = 0;
-          }
-          if (wp->w_p_list && wp->w_p_lcs_chars.eol > 0) {
-            mb_schar = wp->w_p_lcs_chars.eol;
-          } else {
-            mb_schar = schar_from_ascii(' ');
-          }
-          lcs_eol_todo = false;
-          ptr--;  // put it back at the NUL
-          wlv.extra_attr = win_hl_attr(wp, HLF_AT);
-          wlv.n_attr = 1;
-          mb_c = schar_get_first_codepoint(mb_schar);
-        } else if (mb_schar != NUL) {
-          wlv.p_extra = transchar_buf(wp->w_buffer, mb_c);
-          if (wlv.n_extra == 0) {
-            wlv.n_extra = byte2cells(mb_c) - 1;
-          }
-          if ((dy_flags & kOptDyFlagUhex) && wp->w_p_rl) {
-            rl_mirror_ascii(wlv.p_extra, NULL);   // reverse "<12>"
-          }
-          wlv.sc_extra = NUL;
-          wlv.sc_final = NUL;
-          if (wp->w_p_lbr) {
-            mb_c = (uint8_t)(*wlv.p_extra);
-            char *p = rs_get_extra_buf((size_t)wlv.n_extra + 1);
-            memset(p, ' ', (size_t)wlv.n_extra);
-            memcpy(p, wlv.p_extra + 1, strlen(wlv.p_extra) - 1);
-            p[wlv.n_extra] = NUL;
-            wlv.p_extra = p;
-          } else {
-            wlv.n_extra = byte2cells(mb_c) - 1;
-            mb_c = (uint8_t)(*wlv.p_extra++);
-          }
-          wlv.n_attr = wlv.n_extra + 1;
-          wlv.extra_attr = win_hl_attr(wp, HLF_8);
-          saved_attr2 = wlv.char_attr;  // save current attr
-          mb_schar = schar_from_ascii(mb_c);
-        } else if (VIsual_active
-                   && (VIsual_mode == Ctrl_V || VIsual_mode == 'v')
-                   && virtual_active(wp)
-                   && wlv.tocol != MAXCOL
-                   && wlv.vcol < wlv.tocol
-                   && wlv.col < view_width) {
-          mb_c = ' ';
-          mb_schar = schar_from_char(mb_c);
-          ptr--;  // put it back at the NUL
-        }
-      }
-
-      if (wp->w_p_cole > 0
-          && (wp != curwin || lnum != wp->w_cursor.lnum || conceal_cursor_line(wp))
-          && ((syntax_flags & HL_CONCEAL) != 0 || has_match_conc > 0 || decor_conceal > 0)
-          && !(lnum_in_visual_area && vim_strchr(wp->w_p_cocu, 'v') == NULL)) {
-        wlv.char_attr = conceal_attr;
-        if (((prev_syntax_id != syntax_seqnr && (syntax_flags & HL_CONCEAL) != 0)
-             || has_match_conc > 1 || decor_conceal > 1)
-            && (syn_get_sub_char() != NUL
-                || (has_match_conc && match_conc)
-                || (decor_conceal && decor_state.conceal_char)
-                || wp->w_p_cole == 1)
-            && wp->w_p_cole != 3) {
-          if (schar_cells(mb_schar) > 1) {
-            // When the first char to be concealed is double-width,
-            // need to advance one more virtual column.
-            wlv.n_extra++;
-          }
-
-          // First time at this concealed item: display one
-          // character.
-          if (has_match_conc && match_conc) {
-            mb_schar = schar_from_char(match_conc);
-          } else if (decor_conceal && decor_state.conceal_char) {
-            mb_schar = decor_state.conceal_char;
-            if (decor_state.conceal_attr) {
-              wlv.char_attr = decor_state.conceal_attr;
-            }
-          } else if (syn_get_sub_char() != NUL) {
-            mb_schar = schar_from_char(syn_get_sub_char());
-          } else if (wp->w_p_lcs_chars.conceal != NUL) {
-            mb_schar = wp->w_p_lcs_chars.conceal;
-          } else {
-            mb_schar = schar_from_ascii(' ');
-          }
-
-          mb_c = schar_get_first_codepoint(mb_schar);
-
-          prev_syntax_id = syntax_seqnr;
-
-          if (wlv.n_extra > 0) {
-            wlv.vcol_off_co += wlv.n_extra;
-          }
-          wlv.vcol += wlv.n_extra;
-          if (is_wrapped && wlv.n_extra > 0) {
-            wlv.boguscols += wlv.n_extra;
-            wlv.col += wlv.n_extra;
-          }
-          wlv.n_extra = 0;
-          wlv.n_attr = 0;
-        } else if (wlv.skip_cells == 0) {
-          is_concealing = true;
-          wlv.skip_cells = 1;
-        }
-      } else {
-        prev_syntax_id = 0;
-        is_concealing = false;
-      }
-
-      if (wlv.skip_cells > 0 && did_decrement_ptr) {
-        // not showing the '>', put pointer back to avoid getting stuck
-        ptr++;
-      }
+      // Phase 3: delegate character processing to Rust.
+      // Sync state that may have changed in C since last wls write.
+      wls.extra_check = extra_check;
+      wls.has_decor = has_decor;
+      wls.char_attr_pri = char_attr_pri;
+      ProcessCharResult pcr = rs_win_line_process_char(
+        wp, lnum, &wlv, &wls, spv, line,
+        (int)(ptr - line), trailcol, leadcol,
+        extmark_attr, lcs_eol_todo, search_attr, area_attr,
+        term_attrs, has_match_conc);
+      // Apply results.
+      mb_schar = pcr.mb_schar;
+      mb_c = pcr.mb_c;
+      mb_l = pcr.mb_l;
+      ptr = line + pcr.ptr_col;
+      lcs_eol_todo = pcr.lcs_eol_todo;
+      search_attr = pcr.search_attr;
+      decor_attr = pcr.decor_attr;
+      did_decrement_ptr = pcr.did_decrement_ptr;
+      // Sync back locals that Rust may have updated via wls.
+      is_concealing = wls.is_concealing;
+      saved_attr2 = wls.saved_attr2;
+      prev_syntax_id = wls.prev_syntax_id;
+      char_attr_pri = wls.char_attr_pri;
+      // Sync has_syntax back (Rust writes it when syntax highlighting is active).
+      has_syntax = wls.has_syntax;
     }  // end of printing from buffer content
 
     // In the cursor line and we may be concealing characters: correct

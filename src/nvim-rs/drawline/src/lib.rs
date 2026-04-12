@@ -6361,6 +6361,836 @@ pub unsafe extern "C" fn rs_win_line_draw_cols(
     res
 }
 
+// ============================================================================
+// Phase 3: Character processing (the `else` branch of the main loop)
+// ============================================================================
+
+/// HLF constants used in Phase 3.
+const HLF_8: c_int = 1; // SpecialKey / non-printable
+const HLF_FL: c_int = 28; // Folded
+const HLF_0: c_int = 59; // Whitespace (listchars)
+
+// FFI for Phase 3
+extern "C" {
+    /// vim_isprintc: return true if c is printable.
+    fn nvim_vim_isprintc(c: c_int) -> bool;
+    /// vim_isbreak: return true if c is in 'breakat'.
+    fn nvim_vim_isbreak(c: c_int) -> c_int;
+    /// decor_state.conceal.
+    fn nvim_get_decor_state_conceal() -> c_int;
+    /// decor_state.spell (as int: kFalse=0, kTrue=1, kNone=-1).
+    fn nvim_get_decor_state_spell() -> c_int;
+    /// decor_state.conceal_char.
+    fn nvim_get_decor_state_conceal_char() -> ScharT;
+    /// decor_state.conceal_attr.
+    fn nvim_get_decor_state_conceal_attr() -> c_int;
+    /// Compute charsize width for linebreak using CharsizeArg (lnum=0).
+    fn nvim_c_win_charsize_for_lbr(
+        wp: WinHandle,
+        line: *const c_char,
+        ptr_off: c_int,
+        vcol: c_int,
+    ) -> c_int;
+    /// Get dy_flags (option flags).
+    fn nvim_get_dy_flags() -> c_int;
+    /// Set spell_redraw_lnum global.
+    fn nvim_set_spell_redraw_lnum(lnum: LinenrT);
+    /// Get State global.
+    fn nvim_get_State() -> c_int;
+    /// ascii_iswhite: return true if char is whitespace (space/tab).
+    fn nvim_ascii_iswhite(c: c_char) -> bool;
+    /// noplainbuffer spelloptions flag check.
+    fn nvim_spell_win_noplainbuffer(wp: WinHandle) -> bool;
+    /// Get curwin as WinHandle.
+    fn nvim_get_curwin() -> WinHandle;
+    /// VIsual_active as int (non-zero = true).
+    fn nvim_get_VIsual_active() -> c_int;
+    /// wp->w_p_lcs_chars.tab1 (exported as nvim_win_get_lcs_tab1 from window crate).
+    #[link_name = "nvim_win_get_lcs_tab1"]
+    fn nvim_win_lcs_tab1(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.tab2.
+    fn nvim_win_lcs_tab2(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.tab3.
+    fn nvim_win_lcs_tab3(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.eol.
+    fn nvim_win_lcs_eol(wp: WinHandle) -> ScharT;
+    /// wp->w_p_lcs_chars.conceal.
+    fn nvim_win_lcs_conceal(wp: WinHandle) -> ScharT;
+    /// spv->spv_unchanged.
+    fn nvim_spv_get_unchanged(spv: *mut c_void) -> bool;
+    /// Set spv->spv_checked_col.
+    fn nvim_spv_set_checked_col(spv: *mut c_void, val: c_int);
+    /// wp->w_p_lcs_chars.multispace[pos] (0 if NULL or at NUL).
+    fn nvim_win_lcs_multispace_char_at(wp: WinHandle, pos: c_int) -> ScharT;
+    /// wp->w_p_lcs_chars.leadmultispace[pos] (0 if NULL or at NUL).
+    fn nvim_win_lcs_leadmultispace_char_at(wp: WinHandle, pos: c_int) -> ScharT;
+    /// strlen from C stdlib.
+    fn strlen(s: *const c_char) -> usize;
+    /// memset from C stdlib.
+    fn memset(dst: *mut c_void, c: c_int, n: usize) -> *mut c_void;
+    /// memcpy from C stdlib.
+    fn memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
+}
+
+/// Return value for rs_win_line_process_char.
+/// Most state changes go through wls in-place; this carries fields
+/// that are not in WinLineState.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ProcessCharResult {
+    /// Updated mb_schar.
+    pub mb_schar: ScharT,
+    /// Updated mb_c.
+    pub mb_c: c_int,
+    /// Updated mb_l.
+    pub mb_l: c_int,
+    /// Updated ptr byte offset into line.
+    pub ptr_col: c_int,
+    /// Updated prev_ptr byte offset into line.
+    pub prev_ptr_col: c_int,
+    /// Whether ptr was decremented (double-width overflow).
+    pub did_decrement_ptr: bool,
+    /// Updated lcs_eol_todo (may be cleared to false by EOL display).
+    pub lcs_eol_todo: bool,
+    /// Updated search_attr (may be cleared in linebreak path).
+    pub search_attr: c_int,
+    /// Updated decor_attr.
+    pub decor_attr: c_int,
+}
+
+/// Process a character from the buffer line in the main win_line loop.
+///
+/// This implements the `else` branch (non-n_extra path) of the character
+/// processing section. It reads from the buffer via ptr_col offset, applies
+/// all list/spell/syntax/conceal transformations, and returns the final
+/// character to display plus updated state.
+///
+/// # Safety
+/// All pointers must be valid. `line` must point to the current buffer line.
+/// `term_attrs` must point to a TERM_ATTRS_MAX array.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_win_line_process_char(
+    wp: WinHandle,
+    lnum: LinenrT,
+    wlv: *mut WinLineVars,
+    wls: *mut WinLineState,
+    spv: *mut c_void,
+    line: *const c_char,
+    ptr_col: c_int,
+    trailcol: ColnrT,
+    leadcol: ColnrT,
+    extmark_attr: c_int,
+    lcs_eol_todo: bool,
+    search_attr_in: c_int,
+    area_attr: c_int,
+    term_attrs: *const c_int,
+    has_match_conc: c_int,
+) -> ProcessCharResult {
+    let state = &*wls;
+    let view_width = state.view_width;
+
+    // Initialize result with current input values that may be updated.
+    let mut res = ProcessCharResult {
+        mb_schar: 0,
+        mb_c: 0,
+        mb_l: 0,
+        ptr_col,
+        prev_ptr_col: ptr_col,
+        did_decrement_ptr: false,
+        lcs_eol_todo,
+        search_attr: search_attr_in,
+        decor_attr: 0,
+    };
+
+    let ptr = line.add(ptr_col as usize);
+
+    // First byte of next char.
+    let c0 = if ptr.is_null() {
+        0
+    } else {
+        c_int::from(*ptr as u8)
+    };
+    if c0 == 0 {
+        // no more cells to skip
+        (*wlv).skip_cells = 0;
+    }
+
+    // Get a character from the line itself.
+    let mb_l_raw = utfc_ptr2len(ptr);
+    let mut mb_c: c_int = 0;
+    let mut mb_schar = rs_utfc_ptr2schar(ptr, &raw mut mb_c);
+    let mut mb_l = mb_l_raw;
+
+    // Overlong encoded ASCII or ASCII with composing char is displayed normally, except NUL.
+    let c0 = if mb_l > 1 && mb_c < 0x80 { mb_c } else { c0 };
+
+    if (mb_l == 1 && c0 >= 0x80)
+        || (mb_l >= 1 && mb_c == 0)
+        || (mb_l > 1 && !nvim_vim_isprintc(mb_c))
+    {
+        // Illegal UTF-8 byte: display as <xx>. Non-printable: display as ? or fullwidth ?.
+        transchar_hex((*wlv).extra.as_mut_ptr().cast(), mb_c);
+        if nvim_win_get_p_rl(wp) != 0 {
+            // reverse
+            rl_mirror_ascii((*wlv).extra.as_mut_ptr().cast(), std::ptr::null_mut());
+        }
+        (*wlv).p_extra = (*wlv).extra.as_mut_ptr().cast();
+        {
+            let mut p_extra_const: *const c_char = (*wlv).p_extra.cast_const();
+            mb_c = mb_ptr2char_adv(&raw mut p_extra_const);
+            (*wlv).p_extra = p_extra_const.cast_mut();
+        }
+        mb_schar = rs_schar_from_char(mb_c);
+        (*wlv).n_extra = strlen((*wlv).p_extra.cast()) as c_int;
+        (*wlv).sc_extra = 0; // NUL
+        (*wlv).sc_final = 0; // NUL
+        if area_attr == 0 && search_attr_in == 0 {
+            (*wlv).n_attr = (*wlv).n_extra + 1;
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_8);
+            (*wls).saved_attr2 = (*wlv).char_attr;
+        }
+    } else if mb_l == 0 {
+        // at the NUL at end-of-line
+        mb_l = 1;
+    }
+
+    // If a double-width char doesn't fit in the last column, display '>'.
+    if (*wlv).col >= view_width - 1 && schar_cells(mb_schar) == 2 {
+        mb_schar = rs_schar_from_ascii(c_int::from(b'>'));
+        mb_c = c_int::from(b'>');
+        mb_l = 1;
+        (*wls).multi_attr = nvim_win_hl_attr(wp, HLF_AT);
+        // Put pointer back so char will be displayed at start of next line.
+        res.ptr_col = ptr_col - 1;
+        res.did_decrement_ptr = true;
+    } else if *ptr != 0 {
+        // advance by mb_l - 1 bytes (we will add 1 more below)
+        res.ptr_col = ptr_col + mb_l - 1;
+    }
+
+    // If a double-width char doesn't fit at the left side, display '<'.
+    if (*wlv).skip_cells > 0 && mb_l > 1 && (*wlv).n_extra == 0 {
+        (*wlv).n_extra = 1;
+        (*wlv).sc_extra = rs_schar_from_ascii(c_int::from(b'<')); // MB_FILLER_CHAR
+        (*wlv).sc_final = 0; // NUL
+        mb_schar = rs_schar_from_ascii(c_int::from(b' '));
+        mb_c = c_int::from(b' ');
+        mb_l = 1;
+        if area_attr == 0 && search_attr_in == 0 {
+            (*wlv).n_attr = (*wlv).n_extra + 1;
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_AT);
+            (*wls).saved_attr2 = (*wlv).char_attr;
+        }
+    }
+    // ptr++ equivalent
+    res.ptr_col += 1;
+
+    // Remember prev_ptr position (before the ptr++ above, after any mb_l-1 advance)
+    // prev_ptr was the original ptr before any advancement
+    res.prev_ptr_col = ptr_col;
+
+    res.decor_attr = 0;
+
+    if state.extra_check {
+        let no_plain_buffer = nvim_spell_win_noplainbuffer(wp);
+        let mut can_spell = !no_plain_buffer;
+
+        // Get extmark and syntax attributes, unless still at the start of the line.
+        let v = res.ptr_col; // ptr - line after advancement
+        let prev_v = res.prev_ptr_col;
+
+        let mut has_syntax = state.has_syntax;
+        let syntax_flags;
+        let mut syntax_seqnr = state.syntax_seqnr;
+
+        if has_syntax && v > 0 {
+            let save_did_emsg = nvim_get_did_emsg();
+            nvim_set_did_emsg(false);
+
+            res.decor_attr = get_syntax_attr(
+                v - 1,
+                if nvim_spv_get_has_spell(spv) {
+                    &raw mut can_spell
+                } else {
+                    std::ptr::null_mut()
+                },
+                false,
+            );
+
+            if nvim_get_did_emsg() {
+                nvim_win_set_syn_error(wp, true);
+                has_syntax = false;
+            } else {
+                nvim_set_did_emsg(save_did_emsg);
+            }
+
+            if nvim_win_get_syn_slow(wp) {
+                has_syntax = false;
+            }
+
+            // Sync syntax state changes back.
+            (*wls).has_syntax = has_syntax;
+
+            // Note: line pointer has been re-fetched by caller after this call.
+            // We don't refetch here; ptr offsets remain valid.
+
+            // no concealing past the end of the line.
+            syntax_flags = if mb_schar == 0 {
+                0
+            } else {
+                get_syntax_info(&raw mut syntax_seqnr)
+            };
+            (*wls).syntax_flags = syntax_flags;
+            (*wls).syntax_seqnr = syntax_seqnr;
+        }
+
+        if state.has_decor && v > 0 {
+            // extmarks take precedence over syntax.c
+            res.decor_attr = hl_combine_attr(res.decor_attr, extmark_attr);
+            // decor_conceal is read via nvim_get_decor_state_conceal() at point of use.
+            // TRISTATE_TO_BOOL(decor_state.spell, can_spell)
+            let ds_spell = nvim_get_decor_state_spell();
+            can_spell = if ds_spell == 1 {
+                true
+            } else if ds_spell == 0 {
+                false
+            } else {
+                can_spell
+            };
+        }
+
+        let char_attr_base = hl_combine_attr(state.folded_attr, res.decor_attr);
+        (*wlv).char_attr = hl_combine_attr(char_attr_base, state.char_attr_pri);
+        (*wls).char_attr_base = char_attr_base;
+
+        // Check spelling.
+        let v1 = v; // ptr - line
+        let word_end = state.word_end;
+        let cur_checked_col = state.cur_checked_col;
+        if nvim_spv_get_has_spell(spv) && v1 >= word_end && v1 > cur_checked_col {
+            let mut spell_attr = 0;
+            // do not calculate cap_col at end of line or when only whitespace follows
+            if mb_schar != 0 && *skipwhite(line.add(prev_v as usize)) != 0 && can_spell {
+                let hlf_count: c_int = 76; // HLF_COUNT
+                let mut spell_hlf: c_int = hlf_count;
+                let v1_adj = v1 - (mb_l - 1);
+
+                let nextline = state.nextline.as_ptr();
+                let nextlinecol = state.nextlinecol;
+                let nextline_idx = state.nextline_idx;
+
+                let p: *const c_char = if (prev_v as isize) - (nextlinecol as isize) >= 0 {
+                    nextline
+                        .add(((prev_v as isize) - (nextlinecol as isize)) as usize)
+                        .cast()
+                } else {
+                    line.add(prev_v as usize)
+                };
+
+                let cap_col_adj = nvim_spv_get_cap_col(spv) - prev_v;
+                nvim_spv_set_cap_col(spv, cap_col_adj);
+
+                // spell_check modifies cap_col in place via pointer; use a local
+                let mut local_cap_col: c_int = nvim_spv_get_cap_col(spv);
+                let tmplen = spell_check(
+                    wp,
+                    p.cast_mut(),
+                    &raw mut spell_hlf,
+                    &raw mut local_cap_col,
+                    nvim_spv_get_unchanged(spv),
+                );
+                nvim_spv_set_cap_col(spv, local_cap_col);
+                // Write back cap_col is now handled above via local_cap_col.
+                let word_end_new = v1_adj + tmplen as c_int;
+                (*wls).word_end = word_end_new;
+
+                let state_val = nvim_get_State();
+                if spell_hlf != hlf_count
+                    && (state_val & MODE_INSERT) != 0
+                    && nvim_win_get_cursor_lnum(wp) == lnum
+                    && nvim_win_get_cursor_col(wp) >= prev_v as ColnrT
+                    && nvim_win_get_cursor_col(wp) < word_end_new as ColnrT
+                {
+                    spell_hlf = hlf_count;
+                    nvim_set_spell_redraw_lnum(lnum);
+                }
+
+                if spell_hlf == hlf_count
+                    && !std::ptr::eq(p, line.add(prev_v as usize))
+                    && (p.offset_from(nextline.cast::<c_char>()) as c_int) + tmplen as c_int
+                        > nextline_idx
+                {
+                    nvim_spv_set_checked_lnum(spv, lnum + 1);
+                    let checked_col = (p.offset_from(nextline.cast::<c_char>()) as c_int)
+                        + tmplen as c_int
+                        - nextline_idx;
+                    nvim_spv_set_checked_col(spv, checked_col);
+                }
+
+                if spell_hlf != hlf_count {
+                    spell_attr = nvim_get_highlight_attr_hlf(spell_hlf);
+                }
+
+                let cap_col = nvim_spv_get_cap_col(spv);
+                if cap_col > 0 {
+                    if !std::ptr::eq(p, line.add(prev_v as usize))
+                        && (p.offset_from(nextline.cast::<c_char>()) as c_int) + cap_col
+                            >= nextline_idx
+                    {
+                        nvim_spv_set_capcol_lnum(spv, lnum + 1);
+                        let new_cap_col = (p.offset_from(nextline.cast::<c_char>()) as c_int)
+                            + cap_col
+                            - nextline_idx;
+                        nvim_spv_set_cap_col(spv, new_cap_col);
+                    } else {
+                        nvim_spv_set_cap_col(spv, cap_col + prev_v);
+                    }
+                }
+
+                (*wls).spell_attr = spell_attr;
+            } else {
+                (*wls).spell_attr = 0;
+            }
+            let spell_attr = (*wls).spell_attr;
+            if spell_attr != 0 {
+                let char_attr_base = hl_combine_attr((*wls).char_attr_base, spell_attr);
+                (*wlv).char_attr = hl_combine_attr(char_attr_base, (*wls).char_attr_pri);
+                (*wls).char_attr_base = char_attr_base;
+            }
+        }
+
+        // Terminal: combine terminal attributes.
+        if nvim_win_buf_has_terminal_drawline(wp) {
+            let vcol = (*wlv).vcol;
+            let term_attr = if vcol < 1024 {
+                *term_attrs.add(vcol as usize)
+            } else {
+                0
+            };
+            (*wlv).char_attr = hl_combine_attr(term_attr, (*wlv).char_attr);
+        }
+
+        // linebreak: only allow once we have found chars not in 'breakat'.
+        if nvim_win_get_p_lbr(wp) != 0
+            && !(*wlv).need_lbr
+            && mb_schar != 0
+            && nvim_vim_isbreak(c_int::from(*line.add(res.ptr_col as usize) as u8)) == 0
+        {
+            (*wlv).need_lbr = true;
+        }
+        // Found last space before word: check for line break.
+        if nvim_win_get_p_lbr(wp) != 0
+            && c0 == mb_c
+            && mb_c < 128
+            && (*wlv).need_lbr
+            && nvim_vim_isbreak(mb_c) != 0
+            && nvim_vim_isbreak(c_int::from(*line.add(res.ptr_col as usize) as u8)) == 0
+        {
+            let mb_off = utf_head_off(line, line.add(res.ptr_col as usize - 1));
+            let p_off = res.ptr_col - 1 - mb_off;
+            let charsize_w = nvim_c_win_charsize_for_lbr(wp, line, p_off, (*wlv).vcol);
+            (*wlv).n_extra = charsize_w - 1;
+
+            if (*wls).on_last_col && mb_c != c_int::from(b'\t') {
+                // Do not continue search/match highlighting over line break,
+                // but for TABs highlighting should include complete width.
+                res.search_attr = 0;
+            }
+
+            if mb_c == c_int::from(b'\t') && (*wlv).n_extra + (*wlv).col > view_width {
+                let buf = nvim_win_get_w_buffer(wp);
+                let ts = nvim_buf_get_p_ts(buf);
+                let vts = nvim_buf_get_p_vts_array(buf);
+                (*wlv).n_extra = rs_tabstop_padding((*wlv).vcol, ts, vts) - 1;
+            }
+            (*wlv).sc_extra = rs_schar_from_ascii(if mb_off > 0 {
+                c_int::from(b'<')
+            } else {
+                c_int::from(b' ')
+            });
+            (*wlv).sc_final = 0; // NUL
+            if mb_c < 128 && nvim_ascii_iswhite(mb_c as c_char) {
+                if mb_c == c_int::from(b'\t') {
+                    // Tab alignment.
+                    fix_for_boguscols_impl(wlv);
+                }
+                if nvim_win_get_p_list(wp) == 0 {
+                    mb_c = c_int::from(b' ');
+                    mb_schar = rs_schar_from_ascii(mb_c);
+                }
+            }
+        }
+
+        // Update in_multispace tracking.
+        if nvim_win_get_p_list(wp) != 0 {
+            let next_char = c_int::from(*line.add(res.ptr_col as usize) as u8);
+            let prev_char = if ptr_col > 0 {
+                c_int::from(*line.add(ptr_col as usize - 1) as u8)
+            } else {
+                -1
+            };
+            let in_multispace = mb_c == c_int::from(b' ')
+                && (next_char == c_int::from(b' ')
+                    || (ptr_col > 0 && prev_char == c_int::from(b' ')));
+            (*wls).in_multispace = in_multispace;
+            if !in_multispace {
+                (*wls).multispace_pos = 0;
+            }
+        }
+
+        // 'list': Change char 160/nbsp/space to listchars equivalents.
+        let p_list = nvim_win_get_p_list(wp) != 0;
+        let ptr_after = res.ptr_col; // ptr after increment
+
+        // nbsp/space listchar substitution
+        let lcs_nbsp = nvim_win_lcs_nbsp(wp);
+        let lcs_space = nvim_win_lcs_space(wp);
+        let lcs_ms = nvim_win_lcs_multispace_char_at(wp, 0);
+
+        if p_list
+            && (((mb_c == 160 && mb_l == 2) || (mb_c == 0x202f && mb_l == 3)) && lcs_nbsp != 0
+                || (mb_c == c_int::from(b' ')
+                    && mb_l == 1
+                    && (lcs_space != 0 || ((*wls).in_multispace && lcs_ms != 0))
+                    && ptr_after as ColnrT >= leadcol
+                    && ptr_after as ColnrT <= trailcol))
+        {
+            if (*wls).in_multispace && lcs_ms != 0 {
+                let pos = (*wls).multispace_pos;
+                mb_schar = nvim_win_lcs_multispace_char_at(wp, pos);
+                let new_pos = pos + 1;
+                if nvim_win_lcs_multispace_char_at(wp, new_pos) == 0 {
+                    (*wls).multispace_pos = 0;
+                } else {
+                    (*wls).multispace_pos = new_pos;
+                }
+            } else {
+                mb_schar = if mb_c == c_int::from(b' ') {
+                    lcs_space
+                } else {
+                    lcs_nbsp
+                };
+            }
+            (*wlv).n_attr = 1;
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_0);
+            (*wls).saved_attr2 = (*wlv).char_attr;
+            mb_c = schar_get_first_codepoint(mb_schar);
+        }
+
+        // trail/lead listchar substitution.
+        let lcs_trail = nvim_win_lcs_trail(wp);
+        let lcs_lead = nvim_win_lcs_lead(wp);
+        let lcs_leadms = nvim_win_lcs_leadmultispace_char_at(wp, 0);
+
+        if mb_c == c_int::from(b' ')
+            && mb_l == 1
+            && ((trailcol != ColnrT::MAX && ptr_after as ColnrT > trailcol)
+                || (leadcol != 0 && (ptr_after as ColnrT) < leadcol))
+        {
+            if leadcol != 0
+                && (*wls).in_multispace
+                && (ptr_after as ColnrT) < leadcol
+                && lcs_leadms != 0
+            {
+                let pos = (*wls).multispace_pos;
+                mb_schar = nvim_win_lcs_leadmultispace_char_at(wp, pos);
+                let new_pos = pos + 1;
+                if nvim_win_lcs_leadmultispace_char_at(wp, new_pos) == 0 {
+                    (*wls).multispace_pos = 0;
+                } else {
+                    (*wls).multispace_pos = new_pos;
+                }
+            } else if ptr_after as ColnrT > trailcol && lcs_trail != 0 {
+                mb_schar = lcs_trail;
+            } else if (ptr_after as ColnrT) < leadcol && lcs_lead != 0 {
+                mb_schar = lcs_lead;
+            } else if leadcol != 0 && lcs_space != 0 {
+                mb_schar = lcs_space;
+            }
+            (*wlv).n_attr = 1;
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_0);
+            (*wls).saved_attr2 = (*wlv).char_attr;
+            mb_c = schar_get_first_codepoint(mb_schar);
+        }
+    } // end extra_check
+
+    // Handling of non-printable characters.
+    if !nvim_vim_isprintc(mb_c) {
+        if mb_c == c_int::from(b'\t')
+            && (nvim_win_get_p_list(wp) == 0 || nvim_win_lcs_tab1(wp) != 0)
+        {
+            // Tab handling.
+            let mut tab_len: c_int;
+            let mut vcol_adjusted = (*wlv).vcol; // removed showbreak length
+            let sbr = rs_get_showbreak_value(wp);
+            if *sbr != 0 && (*wlv).vcol == (*wlv).vcol_sbr && nvim_win_get_p_wrap(wp) != 0 {
+                vcol_adjusted = (*wlv).vcol - mb_charlen(sbr);
+            }
+
+            let buf = nvim_win_get_w_buffer(wp);
+            let ts = nvim_buf_get_p_ts(buf);
+            let vts = nvim_buf_get_p_vts_array(buf);
+            tab_len = rs_tabstop_padding(vcol_adjusted, ts, vts) - 1;
+
+            if nvim_win_get_p_lbr(wp) == 0 || nvim_win_get_p_list(wp) == 0 {
+                (*wlv).n_extra = tab_len;
+            } else {
+                let saved_nextra = (*wlv).n_extra;
+                let vc_off = (*wlv).vcol_off_co;
+
+                if vc_off > 0 {
+                    tab_len += vc_off;
+                }
+                let lcs_tab1 = nvim_win_lcs_tab1(wp);
+                if lcs_tab1 != 0 && (*wlv).old_boguscols > 0 && (*wlv).n_extra > tab_len {
+                    tab_len += (*wlv).n_extra - tab_len;
+                }
+
+                if tab_len > 0 {
+                    let lcs_tab2 = nvim_win_lcs_tab2(wp);
+                    let lcs_tab3 = nvim_win_lcs_tab3(wp);
+                    let tab2_len = schar_len(lcs_tab2);
+                    let mut len = (tab_len as usize) * tab2_len;
+                    if lcs_tab3 != 0 {
+                        len += schar_len(lcs_tab3) - tab2_len;
+                    }
+                    if saved_nextra > 0 {
+                        len += (saved_nextra - tab_len) as usize;
+                    }
+                    let p = rs_get_extra_buf(len + 1);
+                    memset(p.cast(), c_int::from(b' '), len);
+                    *p.add(len) = 0;
+                    (*wlv).p_extra = p;
+                    let mut i = 0;
+                    while i < tab_len {
+                        if *(*wlv).p_extra == 0 {
+                            tab_len = i;
+                            break;
+                        }
+                        let lcs = if lcs_tab3 != 0 && i == tab_len - 1 {
+                            lcs_tab3
+                        } else {
+                            lcs_tab2
+                        };
+                        let slen = schar_get_adv(&raw mut (*wlv).p_extra, lcs);
+                        let decr = i32::from(saved_nextra > 0);
+                        (*wlv).n_extra += slen as c_int - decr;
+                        i += 1;
+                    }
+                    if vc_off > 0 {
+                        (*wlv).n_extra -= vc_off;
+                    }
+                }
+            }
+
+            {
+                let vc_saved = (*wlv).vcol_off_co;
+                fix_for_boguscols_impl(wlv);
+                let lcs_tab1 = nvim_win_lcs_tab1(wp);
+                if (*wlv).n_extra == tab_len + vc_saved
+                    && nvim_win_get_p_list(wp) != 0
+                    && lcs_tab1 != 0
+                {
+                    tab_len += vc_saved;
+                }
+            }
+
+            if nvim_win_get_p_list(wp) != 0 {
+                let lcs_tab1 = nvim_win_lcs_tab1(wp);
+                let lcs_tab3 = nvim_win_lcs_tab3(wp);
+                let lcs_tab2 = nvim_win_lcs_tab2(wp);
+                mb_schar = if (*wlv).n_extra == 0 && lcs_tab3 != 0 {
+                    lcs_tab3
+                } else {
+                    lcs_tab1
+                };
+                if nvim_win_get_p_lbr(wp) != 0 && !(*wlv).p_extra.is_null() && *(*wlv).p_extra != 0
+                {
+                    (*wlv).sc_extra = 0; // using p_extra from above
+                } else {
+                    (*wlv).sc_extra = lcs_tab2;
+                }
+                (*wlv).sc_final = lcs_tab3;
+                (*wlv).n_attr = tab_len + 1;
+                (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_0);
+                (*wls).saved_attr2 = (*wlv).char_attr;
+            } else {
+                (*wlv).sc_final = 0; // NUL
+                (*wlv).sc_extra = rs_schar_from_ascii(c_int::from(b' '));
+                mb_schar = rs_schar_from_ascii(c_int::from(b' '));
+            }
+            mb_c = schar_get_first_codepoint(mb_schar);
+        } else if mb_schar == 0
+            && (nvim_win_get_p_list(wp) != 0
+                || (((*wlv).fromcol >= 0 || (*wls).fromcol_prev >= 0)
+                    && (*wlv).tocol > (*wlv).vcol
+                    && nvim_get_VIsual_mode() != c_int::from(b'\x16') // Ctrl_V
+                    && (*wlv).col < view_width
+                    && !((*wls).noinvcur
+                        && lnum == nvim_win_get_cursor_lnum(wp)
+                        && (*wlv).vcol == nvim_win_get_virtcol(wp))))
+            && res.lcs_eol_todo
+            && nvim_win_lcs_eol(wp) != 0
+        {
+            // Display a '$' after the line or highlight an extra character.
+            if (*wlv).diff_hlf == 0 && (*wlv).line_attr == 0 && (*wlv).line_attr_lowprio == 0 {
+                // In virtualedit, visual selections may extend beyond end of line
+                if !(state.area_highlighting
+                    && nvim_win_virtual_active_drawline(wp)
+                    && (*wlv).tocol != ColnrT::MAX
+                    && (*wlv).vcol < (*wlv).tocol)
+                {
+                    (*wlv).p_extra = c"".as_ptr().cast_mut();
+                }
+                (*wlv).n_extra = 0;
+            }
+            let lcs_eol = nvim_win_lcs_eol(wp);
+            if nvim_win_get_p_list(wp) != 0 && lcs_eol > 0 {
+                mb_schar = lcs_eol;
+            } else {
+                mb_schar = rs_schar_from_ascii(c_int::from(b' '));
+            }
+            res.lcs_eol_todo = false;
+            res.ptr_col -= 1; // put it back at the NUL
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_AT);
+            (*wlv).n_attr = 1;
+            mb_c = schar_get_first_codepoint(mb_schar);
+        } else if mb_schar != 0 {
+            // Non-printable, non-TAB, non-NUL: display as hex or transchar.
+            (*wlv).p_extra = transchar_buf(nvim_win_get_w_buffer(wp).0, mb_c);
+            if (*wlv).n_extra == 0 {
+                (*wlv).n_extra = byte2cells(mb_c) - 1;
+            }
+            if (nvim_get_dy_flags() & 0x100) != 0 && nvim_win_get_p_rl(wp) != 0 {
+                // (dy_flags & kOptDyFlagUhex) = 0x100
+                rl_mirror_ascii((*wlv).p_extra, std::ptr::null_mut());
+            }
+            (*wlv).sc_extra = 0; // NUL
+            (*wlv).sc_final = 0; // NUL
+            if nvim_win_get_p_lbr(wp) != 0 {
+                mb_c = c_int::from(*(*wlv).p_extra as u8);
+                let p = rs_get_extra_buf(((*wlv).n_extra + 1) as usize);
+                memset(p.cast(), c_int::from(b' '), (*wlv).n_extra as usize);
+                let pextra_str_len = strlen((*wlv).p_extra.cast());
+                if pextra_str_len > 1 {
+                    memcpy(p.cast(), (*wlv).p_extra.add(1).cast(), pextra_str_len - 1);
+                }
+                *p.add((*wlv).n_extra as usize) = 0;
+                (*wlv).p_extra = p;
+            } else {
+                (*wlv).n_extra = byte2cells(mb_c) - 1;
+                mb_c = c_int::from(*(*wlv).p_extra as u8);
+                (*wlv).p_extra = (*wlv).p_extra.add(1);
+            }
+            (*wlv).n_attr = (*wlv).n_extra + 1;
+            (*wlv).extra_attr = nvim_win_hl_attr(wp, HLF_8);
+            (*wls).saved_attr2 = (*wlv).char_attr;
+            mb_schar = rs_schar_from_ascii(mb_c);
+        } else if nvim_get_VIsual_active() != 0
+            && (nvim_get_VIsual_mode() == c_int::from(b'v')
+                || nvim_get_VIsual_mode() == c_int::from(b'\x16')) // Ctrl_V
+            && nvim_win_virtual_active_drawline(wp)
+            && (*wlv).tocol != ColnrT::MAX
+            && (*wlv).vcol < (*wlv).tocol
+            && (*wlv).col < view_width
+        {
+            mb_c = c_int::from(b' ');
+            mb_schar = rs_schar_from_char(mb_c);
+            res.ptr_col -= 1; // put it back at the NUL
+        }
+    } // end non-printable handling
+
+    // Concealment
+    if nvim_win_get_p_cole(wp) > 0
+        && (wp != nvim_get_curwin()
+            || lnum != nvim_win_get_cursor_lnum(wp)
+            || conceal_cursor_line(wp))
+        && (state.syntax_flags & 0x04 != 0 // HL_CONCEAL
+            || has_match_conc > 0
+            || nvim_get_decor_state_conceal() > 0)
+        && !((*wls).lnum_in_visual_area && {
+            let cocu = nvim_win_get_p_cocu(wp);
+            let v_ptr = {
+                extern "C" {
+                    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+                }
+                vim_strchr(cocu, c_int::from(b'v'))
+            };
+            v_ptr.is_null()
+        })
+    {
+        (*wlv).char_attr = state.conceal_attr;
+        let prev_syntax_id = state.prev_syntax_id;
+        if ((prev_syntax_id != state.syntax_seqnr && (state.syntax_flags & 0x04) != 0)
+            || has_match_conc > 1
+            || nvim_get_decor_state_conceal() > 1)
+            && (syn_get_sub_char() != 0
+                || (has_match_conc != 0 && (*wls).match_conc != 0)
+                || (nvim_get_decor_state_conceal() != 0
+                    && nvim_get_decor_state_conceal_char() != 0)
+                || nvim_win_get_p_cole(wp) == 1)
+            && nvim_win_get_p_cole(wp) != 3
+        {
+            if schar_cells(mb_schar) > 1 {
+                // Double-width concealed char: advance one more virtual column.
+                (*wlv).n_extra += 1;
+            }
+            if has_match_conc != 0 && (*wls).match_conc != 0 {
+                mb_schar = rs_schar_from_char((*wls).match_conc);
+            } else if nvim_get_decor_state_conceal() != 0
+                && nvim_get_decor_state_conceal_char() != 0
+            {
+                mb_schar = nvim_get_decor_state_conceal_char();
+                let conceal_attr = nvim_get_decor_state_conceal_attr();
+                if conceal_attr != 0 {
+                    (*wlv).char_attr = conceal_attr;
+                }
+            } else if syn_get_sub_char() != 0 {
+                mb_schar = rs_schar_from_char(syn_get_sub_char());
+            } else if nvim_win_lcs_conceal(wp) != 0 {
+                mb_schar = nvim_win_lcs_conceal(wp);
+            } else {
+                mb_schar = rs_schar_from_ascii(c_int::from(b' '));
+            }
+            mb_c = schar_get_first_codepoint(mb_schar);
+            (*wls).prev_syntax_id = state.syntax_seqnr;
+
+            let n_extra = (*wlv).n_extra;
+            if n_extra > 0 {
+                (*wlv).vcol_off_co += n_extra;
+            }
+            (*wlv).vcol += n_extra;
+            if state.is_wrapped && n_extra > 0 {
+                (*wlv).boguscols += n_extra;
+                (*wlv).col += n_extra;
+            }
+            (*wlv).n_extra = 0;
+            (*wlv).n_attr = 0;
+        } else if (*wlv).skip_cells == 0 {
+            (*wls).is_concealing = true;
+            (*wlv).skip_cells = 1;
+        }
+    } else {
+        (*wls).prev_syntax_id = 0;
+        (*wls).is_concealing = false;
+    }
+
+    if (*wlv).skip_cells > 0 && res.did_decrement_ptr {
+        // not showing the '>'; put pointer back to avoid getting stuck
+        res.ptr_col += 1;
+    }
+
+    res.mb_schar = mb_schar;
+    res.mb_c = mb_c;
+    res.mb_l = mb_l;
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

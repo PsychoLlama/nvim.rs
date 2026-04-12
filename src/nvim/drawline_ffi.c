@@ -8,6 +8,7 @@
 
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
+#include "nvim/charset.h"
 #include "nvim/cursor_shape.h"
 #include "nvim/decoration.h"
 #include "nvim/drawline.h"
@@ -72,6 +73,12 @@ void nvim_spv_set_capcol_lnum(spellvars_T *spv, int val)
 {
   spv->spv_capcol_lnum = (linenr_T)val;
 }
+
+/// Get spellvars_T->spv_unchanged.
+bool nvim_spv_get_unchanged(spellvars_T *spv) { return spv->spv_unchanged; }
+
+/// Set spellvars_T->spv_checked_col.
+void nvim_spv_set_checked_col(spellvars_T *spv, int val) { spv->spv_checked_col = val; }
 
 /// Get did_emsg global.
 bool nvim_get_did_emsg(void) { return did_emsg; }
@@ -319,4 +326,36 @@ int nvim_kv_A_virt_lines_flags(VirtLines *vl, int idx)
 
 /// Get wp->w_p_fcs_chars.fold (fillchars fold character).
 uint32_t nvim_win_get_fcs_fold(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.fold; }
+
+// ============================================================================
+// Phase 3 accessors: needed by rs_win_line_process_char
+// ============================================================================
+
+/// Return true if the character is printable (wraps vim_isprintc).
+bool nvim_vim_isprintc(int c) { return vim_isprintc(c); }
+
+/// Get decor_state.conceal field.
+int nvim_get_decor_state_conceal(void) { return decor_state.conceal; }
+
+/// Get decor_state.spell field (as int: kFalse=0, kTrue=1, kNone=-1).
+int nvim_get_decor_state_spell(void) { return (int)decor_state.spell; }
+
+/// Get decor_state.conceal_char field.
+uint32_t nvim_get_decor_state_conceal_char(void) { return (uint32_t)decor_state.conceal_char; }
+
+/// Get decor_state.conceal_attr field.
+int nvim_get_decor_state_conceal_attr(void) { return decor_state.conceal_attr; }
+
+/// Compute win_charsize width for the linebreak ('lbr') calculation.
+/// Uses CharsizeArg with lnum==0 (no virtual text counted).
+/// Returns the charsize width for the character at ptr_off in line, at vcol.
+int nvim_c_win_charsize_for_lbr(win_T *wp, char *line,  // NOLINT(readability-non-const-parameter)
+                                 int ptr_off, int vcol)
+{
+  char *p = line + ptr_off;
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, wp, 0, line);
+  return win_charsize(cstype, vcol, p, utf_ptr2CharInfo(p).value, &csarg).width;
+}
+
 
