@@ -317,15 +317,8 @@ void nvim_match_set_search_hl_has_cursor_lnum(linenr_T lnum) { search_hl_has_cur
 
 // nvim_match_get_HLF_LC() deleted — Rust uses constant HLF_LC = 9 (with _Static_assert guard).
 
-void nvim_semsg_id_taken(int64_t id) { semsg(_("E801: ID already taken: %" PRId64), id); }
-
-void nvim_semsg_invalid_id(int64_t id) { semsg(_("E799: Invalid ID: %" PRId64 " (must be greater than or equal to 1)"), id); }
-
-void nvim_semsg_invalid_delete_id(int64_t id) { semsg(_("E802: Invalid ID: %" PRId64 " (must be greater than or equal to 1)"), id); }
-
-void nvim_semsg_id_not_found(int64_t id) { semsg(_("E803: ID not found: %" PRId64), id); }
-
-void nvim_semsg_invarg2(const char *arg) { semsg(_(e_invarg2), arg); }
+// nvim_semsg_id_taken, nvim_semsg_invalid_id, nvim_semsg_invalid_delete_id,
+// nvim_semsg_id_not_found, nvim_semsg_invarg2 migrated to Rust (match/src/core.rs).
 
 // nvim_get_RE_MAGIC, nvim_get_UPD_SOME_VALID, nvim_get_UPD_VALID deleted —
 // Rust uses constants RE_MAGIC=1, UPD_SOME_VALID=35, UPD_VALID=10 (with _Static_assert guards).

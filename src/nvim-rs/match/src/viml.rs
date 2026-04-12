@@ -322,7 +322,7 @@ extern "C" {
     fn find_win_by_nr_or_id(tv: TypvalPtr) -> *mut WinHandle;
     fn clear_matches(wp: *mut WinHandle);
     fn match_delete(wp: *mut WinHandle, id: c_int, perr: bool) -> c_int;
-    fn emsg(s: *const std::ffi::c_char);
+    fn emsg(s: *const std::ffi::c_char) -> bool;
     fn semsg(fmt: *const std::ffi::c_char, ...);
     fn nvim_get_curwin() -> *mut WinHandle;
     // ex_match helpers
@@ -441,7 +441,7 @@ unsafe fn matchadd_dict_arg_impl(
     const OK: c_int = 1;
 
     if nvim_tv_get_type(tv) != VAR_DICT {
-        emsg(e_dictreq.as_ptr());
+        let _ = emsg(e_dictreq.as_ptr());
         return FAIL;
     }
 
@@ -469,7 +469,7 @@ unsafe fn matchadd_dict_arg_impl(
 
     *win = find_win_by_nr_or_id(di_window.cast::<std::ffi::c_void>());
     if (*win).is_null() {
-        emsg(E_INVALWINDOW.as_ptr().cast());
+        let _ = emsg(E_INVALWINDOW.as_ptr().cast());
         return FAIL;
     }
 

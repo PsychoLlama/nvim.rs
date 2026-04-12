@@ -79,17 +79,68 @@ extern "C" {
     fn nvim_match_redraw_later(wp: *mut WinHandle, rtype: c_int);
     fn nvim_match_redraw_win_range_later(wp: *mut WinHandle, top: i32, bot: i32);
 
-    // Error message wrappers
-    fn nvim_semsg_id_taken(id: i64);
-    fn nvim_semsg_invalid_id(id: i64);
-    fn nvim_semsg_invalid_delete_id(id: i64);
-    fn nvim_semsg_id_not_found(id: i64);
-    fn nvim_semsg_invarg2(arg: *const c_char);
-
+    // emsg is now in Rust (message crate, error.rs)
+    fn emsg(s: *const c_char) -> bool;
 }
 
 // Constants are now Rust-side (match/src/lib.rs), guarded by _Static_assert in match.c.
 use crate::{RE_MAGIC, UPD_SOME_VALID, UPD_VALID};
+
+// =============================================================================
+// Error message helpers (Phase 2: replacing nvim_semsg_* C wrappers)
+// =============================================================================
+
+/// Emit "E801: ID already taken" error.
+///
+/// # Safety
+/// Calls C `emsg()`.
+unsafe fn match_semsg_id_taken(id: i64) {
+    let msg = format!("E801: ID already taken: {id}\0");
+    let _ = emsg(msg.as_ptr().cast::<c_char>());
+}
+
+/// Emit "E799: Invalid ID" error.
+///
+/// # Safety
+/// Calls C `emsg()`.
+unsafe fn match_semsg_invalid_id(id: i64) {
+    let msg = format!("E799: Invalid ID: {id} (must be greater than or equal to 1)\0");
+    let _ = emsg(msg.as_ptr().cast::<c_char>());
+}
+
+/// Emit "E802: Invalid ID" error for delete operations.
+///
+/// # Safety
+/// Calls C `emsg()`.
+unsafe fn match_semsg_invalid_delete_id(id: i64) {
+    let msg = format!("E802: Invalid ID: {id} (must be greater than or equal to 1)\0");
+    let _ = emsg(msg.as_ptr().cast::<c_char>());
+}
+
+/// Emit "E803: ID not found" error.
+///
+/// # Safety
+/// Calls C `emsg()`.
+unsafe fn match_semsg_id_not_found(id: i64) {
+    let msg = format!("E803: ID not found: {id}\0");
+    let _ = emsg(msg.as_ptr().cast::<c_char>());
+}
+
+/// Emit "E475: Invalid argument" error (exported for C and `eval_exec` callers).
+///
+/// # Safety
+/// - `arg` must be a valid NUL-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nvim_semsg_invarg2(arg: *const c_char) {
+    let arg_str = std::ffi::CStr::from_ptr(arg).to_string_lossy();
+    let msg = format!("E475: Invalid argument: {arg_str}\0");
+    let _ = emsg(msg.as_ptr().cast::<c_char>());
+}
+
+/// Internal alias for `match_semsg_invarg2` call sites.
+unsafe fn match_semsg_invarg2(arg: *const c_char) {
+    nvim_semsg_invarg2(arg);
+}
 
 // =============================================================================
 // Position type (matches C llpos_T)
@@ -137,7 +188,7 @@ pub unsafe extern "C" fn rs_match_add(
 
     // Validate ID
     if id < -1 || id == 0 {
-        nvim_semsg_invalid_id(i64::from(id));
+        match_semsg_invalid_id(i64::from(id));
         return -1;
     }
 
@@ -151,7 +202,7 @@ pub unsafe extern "C" fn rs_match_add(
         let mut cur = nvim_match_get_head(wp);
         while !cur.is_null() {
             if nvim_match_item_get_id(cur) == id {
-                nvim_semsg_id_taken(i64::from(id));
+                match_semsg_id_taken(i64::from(id));
                 return -1;
             }
             cur = nvim_match_item_next(cur);
@@ -175,7 +226,7 @@ pub unsafe extern "C" fn rs_match_add(
     if !pat.is_null() {
         regprog = nvim_match_vim_regcomp(pat, RE_MAGIC);
         if regprog.is_null() {
-            nvim_semsg_invarg2(pat);
+            match_semsg_invarg2(pat);
             return -1;
         }
     }
@@ -234,7 +285,7 @@ pub unsafe extern "C" fn rs_match_add_pos(
 
     // Validate ID
     if id < -1 || id == 0 {
-        nvim_semsg_invalid_id(i64::from(id));
+        match_semsg_invalid_id(i64::from(id));
         return -1;
     }
 
@@ -247,7 +298,7 @@ pub unsafe extern "C" fn rs_match_add_pos(
         let mut cur = nvim_match_get_head(wp);
         while !cur.is_null() {
             if nvim_match_item_get_id(cur) == id {
-                nvim_semsg_id_taken(i64::from(id));
+                match_semsg_id_taken(i64::from(id));
                 return -1;
             }
             cur = nvim_match_item_next(cur);
@@ -336,7 +387,7 @@ pub unsafe extern "C" fn rs_match_add_pos(
 pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_int) -> c_int {
     if id < 1 {
         if perr != 0 {
-            nvim_semsg_invalid_delete_id(i64::from(id));
+            match_semsg_invalid_delete_id(i64::from(id));
         }
         return -1;
     }
@@ -355,7 +406,7 @@ pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_
 
     if cur.is_null() {
         if perr != 0 {
-            nvim_semsg_id_not_found(i64::from(id));
+            match_semsg_id_not_found(i64::from(id));
         }
         return -1;
     }
