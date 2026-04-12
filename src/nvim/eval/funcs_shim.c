@@ -4535,7 +4535,6 @@ end:
 }
 
 
-
 // Phase 31 (part 2): f_sockconnect and f_stdioopen
 
 /// "sockconnect()" function
@@ -4819,7 +4818,6 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
 
 
 /// "menu_get(path [, modes])" function
-
 
 
 /// "flatten(list[, {maxdepth}])" function
@@ -5575,8 +5573,6 @@ theend:
 
 
 /// "timer_info([timer])" function
-
-
 
 
 int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
@@ -6964,7 +6960,6 @@ void nvim_f_writefile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
 }
-
 
 
 // =============================================================================
