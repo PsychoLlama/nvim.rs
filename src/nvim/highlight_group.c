@@ -342,17 +342,4 @@ cleanup:
 
 
 
-/// Find highlight group name in the table and return its ID.
-/// If it doesn't exist yet, a new entry is created.
-///
-/// @param pp Highlight group name
-/// @param len length of \p pp
-///
-/// @return 0 for failure else the id of the group
-// syn_add_group and c_syn_add_group migrated to Rust (Phase 1).
-// See src/nvim-rs/highlight_group/src/ffi.rs.
-
-
-
-
 
