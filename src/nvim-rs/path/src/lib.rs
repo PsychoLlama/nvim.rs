@@ -4238,6 +4238,8 @@ extern "C" {
     fn nvim_path_backslash_halve_save(s: *const c_char) -> *mut c_char;
     /// p_wig option value
     fn nvim_path_get_p_wig() -> *const c_char;
+    /// p_cdpath option value
+    fn nvim_path_get_p_cdpath() -> *const c_char;
     /// match_file_list(list, fname, ffname)
     #[link_name = "match_file_list"]
     fn nvim_path_match_file_list(
@@ -4253,10 +4255,36 @@ extern "C" {
         file: *mut *mut *mut c_char,
         flags: c_int,
     ) -> c_int;
-    /// expand_backtick(gap, pat, flags) -- stays in C
-    fn nvim_path_expand_backtick(gap: *mut c_void, pat: *mut c_char, flags: c_int) -> c_int;
-    /// expand_in_path(gap, pat, flags) -- stays in C
-    fn nvim_path_expand_in_path(gap: *mut c_void, pat: *mut c_char, flags: c_int) -> c_int;
+    /// eval_to_string(arg, join_list, use_simple_function) -- evaluate expr to string
+    #[link_name = "eval_to_string"]
+    fn nvim_path_eval_to_string(
+        arg: *mut c_char,
+        join_list: bool,
+        use_simple_function: bool,
+    ) -> *mut c_char;
+    /// get_cmd_output(cmd, infile, flags, ret_len) -- run shell command, return output
+    #[link_name = "get_cmd_output"]
+    fn nvim_path_get_cmd_output(
+        cmd: *const c_char,
+        infile: *const c_char,
+        flags: c_int,
+        ret_len: *mut usize,
+    ) -> *mut c_char;
+    /// skipwhite(p) -- skip whitespace, return pointer past it
+    #[link_name = "skipwhite"]
+    fn nvim_path_skipwhite(p: *const c_char) -> *mut c_char;
+    /// ga_concat_strings(gap, sep) -- join garray strings with separator
+    #[link_name = "ga_concat_strings"]
+    fn nvim_path_ga_concat_strings(gap: *const c_void, sep: *const c_char) -> *mut c_char;
+    /// globpath(path, file, ga, flags, dirs) -- expand file in path option
+    #[link_name = "globpath"]
+    fn nvim_path_globpath(
+        path: *const c_char,
+        file: *const c_char,
+        ga: *mut c_void,
+        flags: c_int,
+        dirs: bool,
+    );
     /// Heap-allocate a garray_T for strings and ga_init it
     fn nvim_path_ga_alloc_strings(growsize: c_int) -> *mut c_void;
     /// Free the garray_T handle (NOT ga_clear)
@@ -4279,6 +4307,15 @@ extern "C" {
 
 /// RE_STRING flag for `vim_regcomp`.
 const RE_STRING: c_int = 2;
+
+/// WILD_ICASE flag for `globpath` expand_options (case-insensitive matching).
+const WILD_ICASE: c_int = 0x100;
+
+/// WILD_ADD_SLASH flag for `globpath` expand_options (append slash to dirs).
+const WILD_ADD_SLASH: c_int = 0x10;
+
+/// kShellOptSilent flag for `get_cmd_output` (don't print error from command).
+const K_SHELL_OPT_SILENT: c_int = 8;
 
 /// Path separator character.
 #[cfg(unix)]
@@ -4546,6 +4583,113 @@ pub unsafe extern "C" fn rs_uniquefy_paths(
 }
 
 // ---------------------------------------------------------------------------
+// rs_expand_backtick / rs_expand_in_path (Phase 8: migrated from C)
+// ---------------------------------------------------------------------------
+
+/// Expand an item in backticks by executing it as a command.
+///
+/// Currently only works when pat[] starts and ends with a backtick.
+/// Returns number of file names found, -1 if an error is encountered.
+///
+/// # Safety
+/// `gap` must be a valid garray_T of `char *`. `pat` must be a valid NUL-terminated C string.
+unsafe fn rs_expand_backtick(gap: *mut c_void, pat: *mut c_char, flags: c_int) -> c_int {
+    // Create the command: lop off the backticks.
+    let pat_len = libc::strlen(pat);
+    let cmd: *mut c_char = nvim_path_xmemdupz(pat.add(1), pat_len - 2) as *mut c_char;
+
+    let buffer: *mut c_char = if *cmd as u8 == b'=' {
+        // `={expr}`: Expand expression
+        nvim_path_eval_to_string(cmd.add(1), true, false)
+    } else {
+        nvim_path_get_cmd_output(
+            cmd,
+            std::ptr::null(),
+            if (flags & EW_SILENT) != 0 {
+                K_SHELL_OPT_SILENT
+            } else {
+                0
+            },
+            std::ptr::null_mut(),
+        )
+    };
+    nvim_path_xfree(cmd);
+
+    if buffer.is_null() {
+        return -1;
+    }
+
+    let mut cnt: c_int = 0;
+    let mut cur = buffer;
+    while *cur != 0 {
+        cur = nvim_path_skipwhite(cur); // skip over white space
+                                        // Find end of this entry (up to newline or NUL)
+        let mut end = cur;
+        while *end != 0 && *end != b'\r' as c_char && *end != b'\n' as c_char {
+            end = end.add(1);
+        }
+        // Add entry if non-empty
+        if end > cur {
+            let saved = *end;
+            *end = 0;
+            rs_addfile(gap, cur, flags);
+            *end = saved;
+            cnt += 1;
+        }
+        cur = end;
+        while *cur != 0 && (*cur == b'\r' as c_char || *cur == b'\n' as c_char) {
+            cur = cur.add(1);
+        }
+    }
+
+    nvim_path_xfree(buffer);
+    cnt
+}
+
+/// Calls globpath() with 'path' values for the given pattern and stores the
+/// result in `gap`. Returns the total number of matches.
+///
+/// # Safety
+/// `gap` must be a valid garray_T of `char *`. `pattern` must be a valid NUL-terminated C string.
+unsafe fn rs_expand_in_path(gap: *mut c_void, pattern: *mut c_char, flags: c_int) -> c_int {
+    let path_option = nvim_path_get_path_option();
+
+    let curdir: *mut c_char = nvim_path_xmalloc(MAXPATHL) as *mut c_char;
+    nvim_path_os_dirname(curdir, MAXPATHL);
+
+    let path_ga = nvim_path_ga_alloc_strings(1);
+
+    if (flags & EW_CDPATH) != 0 {
+        let p_cdpath = nvim_path_get_p_cdpath();
+        rs_expand_path_option(curdir, p_cdpath.cast_mut(), path_ga);
+    } else {
+        rs_expand_path_option(curdir, path_option.cast_mut(), path_ga);
+    }
+    nvim_path_xfree(curdir);
+
+    if nvim_path_ga_len(path_ga) == 0 {
+        nvim_path_ga_free_handle(path_ga);
+        return 0;
+    }
+
+    let paths = nvim_path_ga_concat_strings(path_ga, c",".as_ptr());
+    nvim_path_ga_clear_strings(path_ga);
+    nvim_path_ga_free_handle(path_ga);
+
+    let mut glob_flags: c_int = 0;
+    if (flags & EW_ICASE) != 0 {
+        glob_flags |= WILD_ICASE;
+    }
+    if (flags & EW_ADDSLASH) != 0 {
+        glob_flags |= WILD_ADD_SLASH;
+    }
+    nvim_path_globpath(paths, pattern, gap, glob_flags, (flags & EW_CDPATH) != 0);
+    nvim_path_xfree(paths);
+
+    nvim_path_ga_len(gap)
+}
+
+// ---------------------------------------------------------------------------
 // rs_gen_expand_wildcards
 // ---------------------------------------------------------------------------
 
@@ -4604,7 +4748,7 @@ pub unsafe extern "C" fn rs_gen_expand_wildcards(
         let mut p: *mut c_char = *pat.add(i as usize);
 
         if rs_vim_backtick(p) != 0 {
-            add_pat = nvim_path_expand_backtick(ga, p, flags);
+            add_pat = rs_expand_backtick(ga, p, flags);
             if add_pat == -1 {
                 GEN_EXPAND_RECURSIVE = false;
                 nvim_path_ga_clear_strings(ga);
@@ -4653,7 +4797,7 @@ pub unsafe extern "C" fn rs_gen_expand_wildcards(
                             || (*p.add(1) as u8 == b'.' && rs_vim_ispathsep(*p.add(2) as c_int))))
                 {
                     // :find completion where 'path' is used.
-                    add_pat = nvim_path_expand_in_path(ga, p, flags);
+                    add_pat = rs_expand_in_path(ga, p, flags);
                     did_expand_in_path = true;
                 } else {
                     let tmp_add_pat = rs_path_expand(ga, p, flags);

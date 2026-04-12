@@ -45,10 +45,6 @@ enum {
 // pstrcmp is implemented in Rust (path crate)
 extern int pstrcmp(const void *a, const void *b);
 
-// Forward declarations (defined below, after #include "path.c.generated.h")
-static int expand_backtick(garray_T *gap, char *pat, int flags);
-static int expand_in_path(garray_T *gap, char *pattern, int flags);
-
 // C accessor functions for Rust
 void *nvim_path_xmalloc(size_t size) {
   return xmalloc(size);
@@ -214,17 +210,13 @@ const char *nvim_path_get_p_wig(void) {
   return p_wig;
 }
 
+const char *nvim_path_get_p_cdpath(void) {
+  return p_cdpath;
+}
+
 int nvim_path_os_expand_wildcards(int num_pat, char **pat, int *num_file,
                                    char ***file, int flags) {
   return os_expand_wildcards(num_pat, pat, num_file, file, flags);
-}
-
-int nvim_path_expand_backtick(void *gap, char *pat, int flags) {
-  return expand_backtick((garray_T *)gap, pat, flags);
-}
-
-int nvim_path_expand_in_path(void *gap, char *pat, int flags) {
-  return expand_in_path((garray_T *)gap, pat, flags);
 }
 
 void *nvim_path_ga_alloc_strings(int growsize) {
@@ -301,97 +293,6 @@ _Static_assert(RE_MAGIC == 1, "RE_MAGIC");
 _Static_assert(RE_NOBREAK == 16, "RE_NOBREAK");
 
 #include "path.c.generated.h"
-
-/// Calls globpath() with 'path' values for the given pattern and stores the
-/// result in "gap".
-/// Returns the total number of matches.
-///
-/// @param flags  EW_* flags
-static int expand_in_path(garray_T *const gap, char *const pattern, const int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  garray_T path_ga;
-  char *path_option = *curbuf->b_p_path == NUL ? p_path : curbuf->b_p_path;
-
-  char *const curdir = xmalloc(MAXPATHL);
-  os_dirname(curdir, MAXPATHL);
-
-  ga_init(&path_ga, (int)sizeof(char *), 1);
-  if (flags & EW_CDPATH) {
-    rs_expand_path_option(curdir, p_cdpath, &path_ga);
-  } else {
-    rs_expand_path_option(curdir, path_option, &path_ga);
-  }
-  xfree(curdir);
-  if (GA_EMPTY(&path_ga)) {
-    return 0;
-  }
-
-  char *const paths = ga_concat_strings(&path_ga, ",");
-  ga_clear_strings(&path_ga);
-
-  int glob_flags = 0;
-  if (flags & EW_ICASE) {
-    glob_flags |= WILD_ICASE;
-  }
-  if (flags & EW_ADDSLASH) {
-    glob_flags |= WILD_ADD_SLASH;
-  }
-  globpath(paths, pattern, gap, glob_flags, !!(flags & EW_CDPATH));
-  xfree(paths);
-
-  return gap->ga_len;
-}
-
-/// Expand an item in `backticks` by executing it as a command.
-/// Currently only works when pat[] starts and ends with a `.
-/// Returns number of file names found, -1 if an error is encountered.
-///
-/// @param flags  EW_* flags
-static int expand_backtick(garray_T *gap, char *pat, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *p;
-  char *buffer;
-  int cnt = 0;
-
-  // Create the command: lop off the backticks.
-  char *cmd = xmemdupz(pat + 1, strlen(pat) - 2);
-
-  if (*cmd == '=') {          // `={expr}`: Expand expression
-    buffer = eval_to_string(cmd + 1, true, false);
-  } else {
-    buffer = get_cmd_output(cmd, NULL, (flags & EW_SILENT) ? kShellOptSilent : 0, NULL);
-  }
-  xfree(cmd);
-  if (buffer == NULL) {
-    return -1;
-  }
-
-  cmd = buffer;
-  while (*cmd != NUL) {
-    cmd = skipwhite(cmd);               // skip over white space
-    p = cmd;
-    while (*p != NUL && *p != '\r' && *p != '\n') {  // skip over entry
-      p++;
-    }
-    // add an entry if it is not empty
-    if (p > cmd) {
-      char i = *p;
-      *p = NUL;
-      addfile(gap, cmd, flags);
-      *p = i;
-      cnt++;
-    }
-    cmd = p;
-    while (*cmd != NUL && (*cmd == '\r' || *cmd == '\n')) {
-      cmd++;
-    }
-  }
-
-  xfree(buffer);
-  return cnt;
-}
 
 /// Try to find a shortname by comparing the fullname with `dir_name`.
 ///
