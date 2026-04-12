@@ -95,12 +95,7 @@ bool buf_updates_register(buf_T *buf, uint64_t channel_id, BufUpdateCallbacks cb
   return true;
 }
 
-void buf_updates_send_end(buf_T *buf, uint64_t channelid)
-{
-  MAXSIZE_TEMP_ARRAY(args, 1);
-  ADD_C(args, BUFFER_OBJ(buf->handle));
-  rpc_send_event(channelid, "nvim_buf_detach_event", args);
-}
+// buf_updates_send_end: migrated to Rust (buffer_updates crate)
 
 void buf_updates_unregister(buf_T *buf, uint64_t channelid)
 {
@@ -396,27 +391,44 @@ void buf_updates_changedtick(buf_T *buf)
   kv_size(buf->update_callbacks) = j;
 }
 
-void buf_updates_changedtick_single(buf_T *buf, uint64_t channel_id)
-{
-  MAXSIZE_TEMP_ARRAY(args, 2);
+// buf_updates_changedtick_single: migrated to Rust (buffer_updates crate)
 
-  // the first argument is always the buffer handle
-  ADD_C(args, BUFFER_OBJ(buf->handle));
+// buffer_update_callbacks_free: migrated to Rust (buffer_updates crate)
 
-  // next argument is b:changedtick
-  ADD_C(args, INTEGER_OBJ(buf_get_changedtick(buf)));
+// Accessor and helper functions for Rust FFI (buffer_updates crate)
 
-  // don't try and clean up dead channels here
-  rpc_send_event(channel_id, "nvim_buf_changedtick_event", args);
-}
+/// Get the current changedtick value for a buffer.
+int64_t nvim_buf_get_changedtick_value(buf_T *buf) { return buf_get_changedtick(buf); }
 
-void buffer_update_callbacks_free(BufUpdateCallbacks cb)
+/// Returns true if buf->b_ml.ml_mfp is NULL (buffer not loaded).
+bool nvim_buf_get_ml_mfp_is_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
+
+/// Free the LuaRef fields of a BufUpdateCallbacks struct.
+/// This is the C helper for buffer_update_callbacks_free (used in Phase 1).
+void nvim_buf_callbacks_free_refs(BufUpdateCallbacks cb)
 {
   api_free_luaref(cb.on_lines);
   api_free_luaref(cb.on_bytes);
   api_free_luaref(cb.on_changedtick);
   api_free_luaref(cb.on_reload);
   api_free_luaref(cb.on_detach);
+}
+
+/// Send the nvim_buf_changedtick_event RPC event to a single channel.
+void nvim_buf_send_changedtick_event(buf_T *buf, uint64_t channel_id)
+{
+  MAXSIZE_TEMP_ARRAY(args, 2);
+  ADD_C(args, BUFFER_OBJ(buf->handle));
+  ADD_C(args, INTEGER_OBJ(buf_get_changedtick(buf)));
+  rpc_send_event(channel_id, "nvim_buf_changedtick_event", args);
+}
+
+/// Send the nvim_buf_detach_event RPC event to a single channel.
+void nvim_buf_send_detach_event(buf_T *buf, uint64_t channel_id)
+{
+  MAXSIZE_TEMP_ARRAY(args, 1);
+  ADD_C(args, BUFFER_OBJ(buf->handle));
+  rpc_send_event(channel_id, "nvim_buf_detach_event", args);
 }
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
