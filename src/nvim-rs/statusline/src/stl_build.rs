@@ -202,8 +202,7 @@ extern "C" {
     #[link_name = "utf_ptr2char"]
     fn nvim_stl_utf_ptr2char(s: *const c_char) -> c_int;
 
-    // Cursor / line (batch accessor)
-    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> StlCursorInfo;
+    // Cursor / line (nvim_stl_get_win_cursor_info replaced by crate::get_win_cursor_info)
 
     // Global state (direct static access instead of C shims)
     static mut updating_screen: bool;
@@ -996,7 +995,7 @@ pub unsafe fn build_stl_str_hl(
     }
 
     // Clamp cursor and get batch cursor info
-    let cursor_info = nvim_stl_get_win_cursor_info(wp);
+    let cursor_info = crate::get_win_cursor_info(wp);
     let lnum = cursor_info.clamped_lnum;
     let line_count = nvim_win_buf_line_count(wp);
     let empty_line = cursor_info.empty_line != 0;

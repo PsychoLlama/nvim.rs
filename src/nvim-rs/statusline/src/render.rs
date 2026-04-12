@@ -51,9 +51,7 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
     static showcmd_buf: [u8; 41];
 
-    // Batch cursor info
-    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
-
+    // (nvim_stl_get_win_cursor_info replaced by crate::get_win_cursor_info)
 }
 
 /// Rendering context for the statusline.
@@ -481,21 +479,21 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Offset items
             StlFlag::Offset => {
-                let info = nvim_stl_get_win_cursor_info(wp);
+                let info = crate::get_win_cursor_info(wp);
                 (format!("{}", info.byte_offset), true, false)
             }
             StlFlag::OffsetX => {
-                let info = nvim_stl_get_win_cursor_info(wp);
+                let info = crate::get_win_cursor_info(wp);
                 (format!("{:X}", info.byte_offset), true, false)
             }
 
             // Byte value items
             StlFlag::ByteVal => {
-                let info = nvim_stl_get_win_cursor_info(wp);
+                let info = crate::get_win_cursor_info(wp);
                 (format!("{}", info.byte_value), true, false)
             }
             StlFlag::ByteValX => {
-                let info = nvim_stl_get_win_cursor_info(wp);
+                let info = crate::get_win_cursor_info(wp);
                 (format!("{:X}", info.byte_value), true, false)
             }
 

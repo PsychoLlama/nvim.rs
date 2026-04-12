@@ -65,7 +65,7 @@ extern "C" {
     fn nvim_stl_win_get_cursor_col(wp: WinHandle) -> c_int;
     #[link_name = "nvim_win_get_cursor_lnum"]
     fn nvim_stl_win_get_cursor_lnum(wp: WinHandle) -> c_int;
-    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
+    // (nvim_stl_get_win_cursor_info replaced by crate::get_win_cursor_info)
     #[link_name = "nvim_win_get_p_list"]
     fn nvim_stl_win_get_p_list(wp: WinHandle) -> c_int;
     #[link_name = "nvim_win_set_p_list"]
@@ -201,7 +201,7 @@ pub unsafe fn redraw_ruler() {
     }
 
     // Get batch cursor info (also validates cursor position)
-    let cursor_info = nvim_stl_get_win_cursor_info(wp);
+    let cursor_info = crate::get_win_cursor_info(wp);
 
     // Check if cursor.lnum is valid
     if cursor_info.cursor_invalid != 0 {

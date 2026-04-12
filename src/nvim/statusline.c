@@ -51,10 +51,6 @@
 #include "nvim/undo.h"
 #include "nvim/window.h"
 
-// Rust FFI declarations
-extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
-
-
 /// Get highlight group ID by name.
 int nvim_syn_name2id(const char *name)
 {
@@ -62,55 +58,6 @@ int nvim_syn_name2id(const char *name)
     return 0;
   }
   return syn_name2id(name);
-}
-
-
-/// Get batch cursor information for a window in one C call.
-/// Clamps cursor, then fills StlCursorInfo with all commonly-needed fields.
-StlCursorInfo nvim_stl_get_win_cursor_info(win_T *wp)
-{
-  StlCursorInfo info = { 0 };
-  if (wp == NULL || wp->w_buffer == NULL) {
-    return info;
-  }
-
-  buf_T *buf = wp->w_buffer;
-
-  // Clamp cursor lnum to line count
-  linenr_T lnum = wp->w_cursor.lnum;
-  if (lnum > buf->b_ml.ml_line_count) {
-    lnum = buf->b_ml.ml_line_count;
-    wp->w_cursor.lnum = lnum;
-  }
-  // Clamp cursor col
-  colnr_T linelen = ml_get_buf_len(buf, lnum);
-  if (wp->w_cursor.col > linelen) {
-    wp->w_cursor.col = linelen;
-    wp->w_cursor.coladd = 0;
-  }
-
-  info.clamped_lnum = (int)lnum;
-  info.cursor_invalid = (wp->w_cursor.lnum > buf->b_ml.ml_line_count) ? 1 : 0;
-  info.ml_empty = (buf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
-
-  // Get cursor line text
-  const char *line = ml_get_buf(buf, lnum);
-  info.first_char = line ? (int)(uint8_t)line[0] : 0;
-  info.empty_line = (line == NULL || line[0] == NUL) ? 1 : 0;
-
-  // Byte value at cursor
-  colnr_T col = wp->w_cursor.col;
-  if (line != NULL && col < linelen) {
-    info.byte_value = (int)(uint8_t)line[col];
-  }
-
-  // Byte offset using rs_ml_find_line_or_offset
-  int l = rs_ml_find_line_or_offset(buf, lnum, NULL, false);
-  if (!info.ml_empty && l >= 0) {
-    info.byte_offset = l;
-  }
-
-  return info;
 }
 
 /// Get wp->w_p_stc (statuscolumn option).

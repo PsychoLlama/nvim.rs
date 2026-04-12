@@ -223,6 +223,96 @@ extern "C" {
     fn nvim_buf_get_b_p_ft(buf: BufHandle) -> *const c_char;
     fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
+
+    // Cursor info accessors (for get_win_cursor_info)
+    #[link_name = "nvim_win_get_cursor_lnum"]
+    fn lib_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
+    #[link_name = "nvim_win_get_cursor_col"]
+    fn lib_win_get_cursor_col(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_set_cursor_lnum"]
+    fn lib_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
+    #[link_name = "nvim_win_set_cursor_col"]
+    fn lib_win_set_cursor_col(wp: WinHandle, col: c_int);
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_buf_get_ml_flags(buf: BufHandle) -> c_int;
+    fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> c_int;
+    fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
+    fn rs_ml_find_line_or_offset(
+        buf: BufHandle,
+        lnum: LinenrT,
+        offp: *mut c_int,
+        no_ff: c_int,
+    ) -> c_int;
+}
+
+// ML_EMPTY flag value (from memline_defs.h, verified via _Static_assert in statusline.c)
+const ML_EMPTY: c_int = 0x01;
+
+/// Compute cursor info for a window.
+/// Pure Rust replacement for C `nvim_stl_get_win_cursor_info`.
+///
+/// # Safety
+/// `wp` must be a valid non-null window handle.
+pub(crate) unsafe fn get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo {
+    use crate::stl_build::StlCursorInfo;
+
+    let mut info = StlCursorInfo::default();
+    if wp.is_null() {
+        return info;
+    }
+
+    let buf = nvim_win_get_buffer(wp);
+    if buf.is_null() {
+        return info;
+    }
+
+    let line_count = nvim_buf_get_ml_line_count(buf);
+    let mut lnum = lib_win_get_cursor_lnum(wp);
+
+    // Clamp cursor lnum to line count
+    if lnum > line_count {
+        lnum = line_count;
+        lib_win_set_cursor_lnum(wp, lnum);
+    }
+
+    // Clamp cursor col to line length
+    let linelen = nvim_ml_get_buf_len(buf, lnum);
+    let col = lib_win_get_cursor_col(wp);
+    if col > linelen {
+        lib_win_set_cursor_col(wp, linelen);
+        nvim_win_set_cursor_coladd(wp, 0);
+    }
+    let col = lib_win_get_cursor_col(wp);
+
+    info.clamped_lnum = lnum;
+    // cursor_invalid: lnum > line_count before clamping (already clamped, check original)
+    // Note: after clamping, lnum <= line_count, so cursor_invalid = 0
+    info.cursor_invalid = 0;
+    info.ml_empty = c_int::from((nvim_buf_get_ml_flags(buf) & ML_EMPTY) != 0);
+
+    // Get cursor line text
+    let line = nvim_ml_get_buf(buf, lnum);
+    info.first_char = if line.is_null() {
+        0
+    } else {
+        c_int::from(*line.cast::<u8>())
+    };
+    info.empty_line = c_int::from(line.is_null() || *line == 0);
+
+    // Byte value at cursor (col >= 0 guaranteed since it was compared to non-negative linelen)
+    #[allow(clippy::cast_sign_loss)]
+    if !line.is_null() && col < linelen {
+        info.byte_value = c_int::from(*line.add(col as usize).cast::<u8>());
+    }
+
+    // Byte offset using rs_ml_find_line_or_offset
+    let l = rs_ml_find_line_or_offset(buf, lnum, std::ptr::null_mut(), 0);
+    if info.ml_empty == 0 && l >= 0 {
+        info.byte_offset = l;
+    }
+
+    info
 }
 
 /// Check if the status line of window "wp" is connected to the status

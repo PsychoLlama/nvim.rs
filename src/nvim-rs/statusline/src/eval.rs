@@ -72,8 +72,7 @@ extern "C" {
     fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
 
-    // Statusline-specific accessors
-    fn nvim_stl_get_win_cursor_info(wp: WinHandle) -> crate::stl_build::StlCursorInfo;
+    // Statusline-specific accessors (nvim_stl_get_win_cursor_info replaced by crate::get_win_cursor_info)
     // Quickfix/keymap: direct underlying functions (used by stl_* helpers in stl_build)
     fn nvim_win_is_qf_win(wp: WinHandle) -> bool;
     fn nvim_win_get_llist_ref(wp: WinHandle) -> *mut c_void;
@@ -214,14 +213,14 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
 
         // Byte offset items
         StlFlag::Offset => unsafe {
-            let info = nvim_stl_get_win_cursor_info(ctx.wp);
+            let info = crate::get_win_cursor_info(ctx.wp);
             EvalResult::Number {
                 value: info.byte_offset,
                 base: NumberBase::Decimal,
             }
         },
         StlFlag::OffsetX => unsafe {
-            let info = nvim_stl_get_win_cursor_info(ctx.wp);
+            let info = crate::get_win_cursor_info(ctx.wp);
             EvalResult::Number {
                 value: info.byte_offset,
                 base: NumberBase::Hexadecimal,
@@ -230,14 +229,14 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
 
         // Byte value items
         StlFlag::ByteVal => unsafe {
-            let info = nvim_stl_get_win_cursor_info(ctx.wp);
+            let info = crate::get_win_cursor_info(ctx.wp);
             EvalResult::Number {
                 value: info.byte_value,
                 base: NumberBase::Decimal,
             }
         },
         StlFlag::ByteValX => unsafe {
-            let info = nvim_stl_get_win_cursor_info(ctx.wp);
+            let info = crate::get_win_cursor_info(ctx.wp);
             EvalResult::Number {
                 value: info.byte_value,
                 base: NumberBase::Hexadecimal,
