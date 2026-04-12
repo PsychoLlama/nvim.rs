@@ -283,45 +283,64 @@ void decor_providers_invoke_end(void)
   decor_check_to_be_deleted();
 }
 
+// Accessor functions for Rust to access DecorProvider fields
+
+// kvec accessors for the decor_providers vector
+size_t nvim_decor_providers_size(void) { return kv_size(decor_providers); }
+NS nvim_decor_providers_get_ns_id(size_t i) { return kv_A(decor_providers, i).ns_id; }
+DecorProvider *nvim_decor_providers_get_ptr(size_t i) { return &kv_A(decor_providers, i); }
+
+/// Push a new entry initialized with DECORATION_PROVIDER_INIT and return its pointer.
+/// NOTE: This may reallocate the vector -- callers must not hold other pointers.
+DecorProvider *nvim_decor_providers_push_init(NS ns_id)
+{
+  size_t len = kv_size(decor_providers);
+  DecorProvider *item = &kv_a(decor_providers, len);
+  *item = DECORATION_PROVIDER_INIT(ns_id);
+  return item;
+}
+
+/// Clear all LuaRef callbacks on a provider and set state to disabled.
+/// Does NOT clear hl_def (intentional: matches C decor_provider_clear behavior).
+void nvim_decor_provider_clear_callbacks(DecorProvider *p)
+{
+  if (p == NULL) {
+    return;
+  }
+  NLUA_CLEAR_REF(p->redraw_start);
+  NLUA_CLEAR_REF(p->redraw_buf);
+  NLUA_CLEAR_REF(p->redraw_win);
+  NLUA_CLEAR_REF(p->redraw_line);
+  NLUA_CLEAR_REF(p->redraw_range);
+  NLUA_CLEAR_REF(p->redraw_end);
+  NLUA_CLEAR_REF(p->spell_nav);
+  NLUA_CLEAR_REF(p->conceal_line);
+  p->state = kDecorProviderDisabled;
+}
+
+/// Destroy the decor_providers vector (called at shutdown).
+void nvim_decor_providers_kv_destroy(void) { kv_destroy(decor_providers); }
+
+/// Set hl_cached for provider at index i.
+void nvim_decor_providers_set_hl_cached(size_t i, bool val) { kv_A(decor_providers, i).hl_cached = val; }
+
+/// Get ns_hl_active global.
+int nvim_decor_get_ns_hl_active(void) { return ns_hl_active; }
+
+/// Set ns_hl_active global.
+void nvim_decor_set_ns_hl_active(int val) { ns_hl_active = (NS)val; }
+
+/// Call hl_check_ns().
+void nvim_decor_hl_check_ns(void) { hl_check_ns(); }
+
 /// Mark all cached state of per-namespace highlights as invalid. Revalidate
 /// current namespace.
 ///
 /// Expensive! Should on be called by an already throttled validity check
 /// like highlight_changed() (throttled to the next redraw or mode change)
-void decor_provider_invalidate_hl(void)
-{
-  for (size_t i = 0; i < kv_size(decor_providers); i++) {
-    kv_A(decor_providers, i).hl_cached = false;
-  }
+void decor_provider_invalidate_hl(void);
 
-  if (ns_hl_active) {
-    ns_hl_active = -1;
-    hl_check_ns();
-  }
-}
-
-DecorProvider *get_decor_provider(NS ns_id, bool force)
-{
-  assert(ns_id > 0);
-  size_t len = kv_size(decor_providers);
-  for (size_t i = 0; i < len; i++) {
-    DecorProvider *p = &kv_A(decor_providers, i);
-    if (p->ns_id == ns_id) {
-      return p;
-    }
-  }
-
-  if (!force) {
-    return NULL;
-  }
-
-  DecorProvider *item = &kv_a(decor_providers, len);
-  *item = DECORATION_PROVIDER_INIT(ns_id);
-
-  return item;
-}
-
-// Accessor functions for Rust to access DecorProvider fields
+DecorProvider *get_decor_provider(NS ns_id, bool force);
 
 /// Get hl_valid for a namespace. Returns -1 if provider doesn't exist.
 int nvim_decor_provider_get_hl_valid(int ns_id)
@@ -389,26 +408,5 @@ LuaRef nvim_decor_provider_get_spell_nav(DecorProvider *p) { return p ? p->spell
 /// Get conceal_line callback ref from provider
 LuaRef nvim_decor_provider_get_conceal_line(DecorProvider *p) { return p ? p->conceal_line : LUA_NOREF; }
 
-void decor_provider_clear(DecorProvider *p)
-{
-  if (p == NULL) {
-    return;
-  }
-  NLUA_CLEAR_REF(p->redraw_start);
-  NLUA_CLEAR_REF(p->redraw_buf);
-  NLUA_CLEAR_REF(p->redraw_win);
-  NLUA_CLEAR_REF(p->redraw_line);
-  NLUA_CLEAR_REF(p->redraw_range);
-  NLUA_CLEAR_REF(p->redraw_end);
-  NLUA_CLEAR_REF(p->spell_nav);
-  NLUA_CLEAR_REF(p->conceal_line);
-  p->state = kDecorProviderDisabled;
-}
-
-void decor_free_all_mem(void)
-{
-  for (size_t i = 0; i < kv_size(decor_providers); i++) {
-    decor_provider_clear(&kv_A(decor_providers, i));
-  }
-  kv_destroy(decor_providers);
-}
+void decor_provider_clear(DecorProvider *p);
+void decor_free_all_mem(void);

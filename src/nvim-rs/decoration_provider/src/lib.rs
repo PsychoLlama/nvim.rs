@@ -34,6 +34,7 @@
 pub mod accessors;
 pub mod callbacks;
 pub mod constants;
+pub mod lifecycle;
 pub mod state;
 pub mod types;
 
@@ -41,5 +42,6 @@ pub mod types;
 pub use accessors::*;
 pub use callbacks::*;
 pub use constants::*;
+pub use lifecycle::*;
 pub use state::*;
 pub use types::*;

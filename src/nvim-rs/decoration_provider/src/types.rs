@@ -27,6 +27,15 @@ impl DecorProviderHandle {
         Self(std::ptr::null_mut())
     }
 
+    /// Create a handle from a raw pointer.
+    ///
+    /// # Safety
+    /// The pointer must be a valid DecorProvider pointer or null.
+    #[must_use]
+    pub const unsafe fn from_ptr(ptr: *mut c_void) -> Self {
+        Self(ptr)
+    }
+
     /// Check if the handle is null.
     #[must_use]
     pub const fn is_null(self) -> bool {
