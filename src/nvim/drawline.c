@@ -153,6 +153,12 @@ typedef struct {
   int statuscol_sign_cul_id;
 } PreLoopResult;
 
+/// Return type from rs_win_line_highlight_attrs (Phase 2 migration).
+typedef struct {
+  int extmark_attr;
+  int has_match_conc;
+} HighlightResult;
+
 #include "drawline.c.generated.h"
 
 // Rust implementations (rs_* names, called from win_line via generated extern decls)
@@ -163,6 +169,10 @@ extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestat
 extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
                                  int *change_start, int *change_end);
+extern HighlightResult rs_win_line_highlight_attrs(win_T *wp, winlinevars_T *wlv,
+                                                   WinLineState *state, colnr_T ptr_col,
+                                                   bool lcs_eol_todo, bool may_have_inline_virt,
+                                                   linenr_T lnum, void *screen_search_hl);
 
 // Rust-exported functions (export_name = original C name, called directly from C)
 extern schar_T get_lcs_ext(win_T *wp);
@@ -946,154 +956,59 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
     int extmark_attr = 0;
     if (wlv.filler_todo <= 0
         && (area_highlighting || spv->spv_has_spell || extra_check)) {
-      if (wlv.n_extra == 0 || !wlv.extra_for_extmark) {
-        wlv.reset_extra_attr = false;
-      }
+      // Sync C locals into wls so Rust can read/write them.
+      wls.area_attr = area_attr;
+      wls.search_attr = search_attr;
+      wls.decor_attr = decor_attr;
+      wls.char_attr_pri = char_attr_pri;
+      wls.char_attr_base = char_attr_base;
+      wls.search_attr_from_match = search_attr_from_match;
+      wls.on_last_col = on_last_col;
+      wls.area_active = area_active;
+      wls.decor_need_recheck = decor_need_recheck;
+      wls.saved_search_attr = saved_search_attr;
+      wls.saved_area_attr = saved_area_attr;
+      wls.saved_decor_attr = saved_decor_attr;
+      wls.saved_search_attr_from_match = saved_search_attr_from_match;
+      wls.match_conc = match_conc;
+      wls.folded_attr = folded_attr;
+      wls.change_index = change_index;
+      wls.line_changes = line_changes;
+      wls.change_start = change_start;
+      wls.change_end = change_end;
+      wls.vcol_prev = vcol_prev;
+      wls.fromcol_prev = fromcol_prev;
 
-      if (has_decor && wlv.n_extra == 0) {
-        // Duplicate the Visual area check after this block,
-        // but don't check inside p_extra here.
-        if (wlv.vcol == wlv.fromcol
-            || (wlv.vcol + 1 == wlv.fromcol
-                && (wlv.n_extra == 0 && utf_ptr2cells(ptr) > 1))
-            || (vcol_prev == fromcol_prev
-                && vcol_prev < wlv.vcol
-                && wlv.vcol < wlv.tocol)) {
-          area_active = true;
-        } else if (area_active
-                   && (wlv.vcol == wlv.tocol
-                       || (noinvcur && wlv.vcol == wp->w_virtcol))) {
-          area_active = false;
-        }
+      const colnr_T ptr_col = (colnr_T)(ptr - line);
+      HighlightResult hlr = rs_win_line_highlight_attrs(wp, &wlv, &wls, ptr_col,
+                                                        lcs_eol_todo, may_have_inline_virt,
+                                                        lnum, &screen_search_hl);
+      extmark_attr = hlr.extmark_attr;
+      has_match_conc = hlr.has_match_conc;
 
-        bool selected = (area_active || (area_highlighting && noinvcur
-                                         && wlv.vcol == wp->w_virtcol));
-        // When there may be inline virtual text, position of non-inline virtual text
-        // can only be decided after drawing inline virtual text with lower priority.
-        if (decor_need_recheck) {
-          if (!may_have_inline_virt) {
-            decor_recheck_draw_col(wlv.off, selected, &decor_state);
-          }
-          decor_need_recheck = false;
-        }
-        extmark_attr = decor_redraw_col(wp, (colnr_T)(ptr - line),
-                                        may_have_inline_virt ? -3 : wlv.off,
-                                        selected, &decor_state);
-        if (may_have_inline_virt) {
-          handle_inline_virtual_text(wp, &wlv, ptr - line, selected);
-          if (wlv.n_extra > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace) {
-            // restore search_attr and area_attr when n_extra is down to zero
-            // TODO(bfredl): this is ugly as fuck. look if we can do this some other way.
-            saved_search_attr = search_attr;
-            saved_area_attr = area_attr;
-            saved_decor_attr = decor_attr;
-            saved_search_attr_from_match = search_attr_from_match;
-            search_attr = 0;
-            area_attr = 0;
-            decor_attr = 0;
-            search_attr_from_match = false;
-          }
-        }
-      }
+      // Sync wls back to C locals.
+      area_attr = wls.area_attr;
+      search_attr = wls.search_attr;
+      char_attr_pri = wls.char_attr_pri;
+      char_attr_base = wls.char_attr_base;
+      search_attr_from_match = wls.search_attr_from_match;
+      on_last_col = wls.on_last_col;
+      area_active = wls.area_active;
+      decor_need_recheck = wls.decor_need_recheck;
+      saved_search_attr = wls.saved_search_attr;
+      saved_area_attr = wls.saved_area_attr;
+      saved_decor_attr = wls.saved_decor_attr;
+      saved_search_attr_from_match = wls.saved_search_attr_from_match;
+      match_conc = wls.match_conc;
+      change_index = wls.change_index;
+      change_start = wls.change_start;
+      change_end = wls.change_end;
+      line_changes = wls.line_changes;
 
-      int *area_attr_p = wlv.extra_for_extmark && wlv.virt_inline_hl_mode <= kHlModeReplace
-                         ? &saved_area_attr : &area_attr;
-
-      // handle Visual or match highlighting in this line
-      if (wlv.vcol == wlv.fromcol
-          || (wlv.vcol + 1 == wlv.fromcol
-              && ((wlv.n_extra == 0 && utf_ptr2cells(ptr) > 1)
-                  || (wlv.n_extra > 0 && wlv.p_extra != NULL
-                      && utf_ptr2cells(wlv.p_extra) > 1)))
-          || (vcol_prev == fromcol_prev
-              && vcol_prev < wlv.vcol               // not at margin
-              && wlv.vcol < wlv.tocol)) {
-        *area_attr_p = vi_attr;                     // start highlighting
-        area_active = true;
-      } else if (*area_attr_p != 0
-                 && (wlv.vcol == wlv.tocol
-                     || (noinvcur && wlv.vcol == wp->w_virtcol))) {
-        *area_attr_p = 0;                           // stop highlighting
-        area_active = false;
-      }
-
-      if (!has_foldtext && wlv.n_extra == 0) {
-        // Check for start/end of 'hlsearch' and other matches.
-        // After end, check for start/end of next match.
-        // When another match, have to check for start again.
-        const int v = (int)(ptr - line);
-        search_attr = update_search_hl(wp, lnum, v, &line, &screen_search_hl,
-                                       &has_match_conc, &match_conc, lcs_eol_todo,
-                                       &on_last_col, &search_attr_from_match);
-        ptr = line + v;  // "line" may have been changed
-
-        // Do not allow a conceal over EOL otherwise EOL will be missed
-        // and bad things happen.
-        if (*ptr == NUL) {
-          has_match_conc = 0;
-        }
-
-        // Check if ComplMatchIns highlight is needed.
-        if ((State & MODE_INSERT) && rs_ins_compl_win_active(wp)
-            && (in_curline || rs_ins_compl_lnum_in_range((int)lnum))) {
-          int ins_match_attr = rs_ins_compl_col_range_attr((int)lnum, (int)(ptr - line));
-          if (ins_match_attr > 0) {
-            search_attr = hl_combine_attr(search_attr, ins_match_attr);
-          }
-        }
-      }
-
-      if (wlv.diff_hlf != (hlf_T)0) {
-        if (line_changes.num_changes > 0
-            && change_index >= 0
-            && change_index < line_changes.num_changes - 1) {
-          if (ptr - line
-              >= line_changes.changes[change_index + 1].dc_start[line_changes.bufidx]) {
-            change_index += 1;
-          }
-        }
-        bool added = false;
-        if (line_changes.num_changes > 0 && change_index >= 0
-            && change_index < line_changes.num_changes) {
-          added = rs_diff_change_parse(&line_changes, &line_changes.changes[change_index],
-                                    &change_start, &change_end);
-        }
-        // When there is extra text (eg: virtual text) it gets the
-        // diff highlighting for the line, but not for changed text.
-        if (wlv.diff_hlf == HLF_CHD && ptr - line >= change_start
-            && wlv.n_extra == 0) {
-          wlv.diff_hlf = added ? HLF_TXA : HLF_TXD;   // added/changed text
-        }
-        if ((wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA)
-            && ((ptr - line >= change_end && wlv.n_extra == 0)
-                || (wlv.n_extra > 0 && wlv.extra_for_extmark))) {
-          wlv.diff_hlf = HLF_CHD;                     // changed line
-        }
-        set_line_attr_for_diff(wp, &wlv);
-      }
-
-      // Decide which of the highlight attributes to use.
-      if (area_attr != 0) {
-        char_attr_pri = hl_combine_attr(wlv.line_attr, area_attr);
-        if (!highlight_match) {
-          // let search highlight show in Visual area if possible
-          char_attr_pri = hl_combine_attr(search_attr, char_attr_pri);
-        }
-      } else if (search_attr != 0) {
-        char_attr_pri = hl_combine_attr(wlv.line_attr, search_attr);
-      } else if (wlv.line_attr != 0
-                 && ((wlv.fromcol == -10 && wlv.tocol == MAXCOL)
-                     || wlv.vcol < wlv.fromcol
-                     || vcol_prev < fromcol_prev
-                     || wlv.vcol >= wlv.tocol)) {
-        // Use wlv.line_attr when not in the Visual or 'incsearch' area
-        // (area_attr may be 0 when "noinvcur" is set).
-        char_attr_pri = wlv.line_attr;
-      } else {
-        char_attr_pri = 0;
-      }
-      char_attr_base = hl_combine_attr(folded_attr, decor_attr);
-      wlv.char_attr = hl_combine_attr(char_attr_base, char_attr_pri);
+      // Re-fetch line pointer: rs_win_line_highlight_attrs calls update_search_hl
+      // which may have reallocated the line buffer.
+      line = draw_text ? ml_get_buf(wp->w_buffer, lnum) : "";
+      ptr = line + ptr_col;
     }
 
     if (draw_folded && has_foldtext && wlv.n_extra == 0 && wlv.col == win_col_offset) {

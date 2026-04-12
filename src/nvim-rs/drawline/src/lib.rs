@@ -426,7 +426,9 @@ extern "C" {
         search_hl: *mut c_void,
         has_match_conc: *mut c_int,
         match_conc: *mut c_int,
-        n_skip: c_int,
+        lcs_eol_todo: bool,
+        on_last_col: *mut bool,
+        search_attr_from_match: *mut bool,
     ) -> c_int;
     fn get_prevcol_hl_flag(wp: WinHandle, search_hl: *mut c_void, curcol: ColnrT) -> bool;
     fn get_search_match_hl(
@@ -3938,6 +3940,15 @@ extern "C" {
     fn nvim_win_get_cursor_coladd(wp: WinHandle) -> ColnrT;
     // nvim_win_ml_get_buf already declared above at line ~392
     // nvim_win_get_cursorline, nvim_win_get_p_cul, nvim_win_get_p_culopt_flags already declared above
+
+    // diff accessor: get nth change from diffline_T
+    fn nvim_diff_diffline_get_change(dl: *mut c_void, i: c_int) -> *mut c_void;
+    fn nvim_diffchange_get_start(change: *mut c_void, idx: c_int) -> ColnrT;
+
+    // insexpand functions (exported from insexpand crate)
+    fn rs_ins_compl_win_active(wp: WinHandle) -> c_int;
+    fn rs_ins_compl_lnum_in_range(lnum: c_int) -> c_int;
+    fn rs_ins_compl_col_range_attr(lnum: c_int, col: c_int) -> c_int;
 }
 
 // use_cursor_line_highlight: already exported from this crate, but also needed as FFI call
@@ -5474,6 +5485,281 @@ pub unsafe extern "C" fn rs_win_line_process_n_extra(
         mb_c,
         mb_l,
     }
+}
+
+/// Result returned by rs_win_line_highlight_attrs (Phase 2 migration).
+///
+/// Must match C typedef `HighlightResult` in drawline.c.
+#[repr(C)]
+pub struct HighlightResult {
+    pub extmark_attr: c_int,
+    pub has_match_conc: c_int,
+}
+
+/// Phase 2: Area highlighting + attr decision for one character position.
+///
+/// Absorbs lines 838-1016 of the original win_line() (C lines 946-1097 after Phase 1).
+/// Called once per character in the main while loop, only when
+/// `filler_todo <= 0 && (area_highlighting || spv_has_spell || extra_check)`.
+///
+/// All state mutations go directly through `state` (WinLineState fields).
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_line_highlight_attrs(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    state: *mut WinLineState,
+    ptr_col: ColnrT,
+    lcs_eol_todo: bool,
+    may_have_inline_virt: bool,
+    lnum: LinenrT,
+    screen_search_hl: *mut c_void,
+) -> HighlightResult {
+    let mut extmark_attr: c_int = 0;
+    let mut has_match_conc: c_int = 0;
+
+    // Reset extra_attr flag for this character position when not in extra-text mode.
+    if (*wlv).n_extra == 0 || !(*wlv).extra_for_extmark {
+        (*wlv).reset_extra_attr = false;
+    }
+
+    // Handle extmark/decor highlights when not in n_extra mode.
+    if (*state).has_decor && (*wlv).n_extra == 0 {
+        // Duplicate Visual area check to decide `selected` for decor calls.
+        let vcol = (*wlv).vcol;
+        let fromcol = (*wlv).fromcol;
+        let tocol = (*wlv).tocol;
+        let vcol_prev = (*state).vcol_prev;
+        let fromcol_prev = (*state).fromcol_prev;
+        let virtcol = nvim_win_get_virtcol(wp);
+
+        let n_extra_cells = if (*wlv).n_extra == 0 {
+            utf_ptr2cells_at(wp, lnum, ptr_col)
+        } else {
+            1
+        };
+
+        if vcol == fromcol
+            || (vcol + 1 == fromcol && n_extra_cells > 1)
+            || (vcol_prev == fromcol_prev && vcol_prev < vcol && vcol < tocol)
+        {
+            (*state).area_active = true;
+        } else if (*state).area_active && (vcol == tocol || ((*state).noinvcur && vcol == virtcol))
+        {
+            (*state).area_active = false;
+        }
+
+        let selected = (*state).area_active
+            || ((*state).area_highlighting && (*state).noinvcur && vcol == virtcol);
+
+        // Recheck non-inline virt text draw column if needed.
+        if (*state).decor_need_recheck {
+            if !may_have_inline_virt {
+                let ds = get_decor_state().cast::<c_void>();
+                decor_recheck_draw_col((*wlv).off, selected, ds);
+            }
+            (*state).decor_need_recheck = false;
+        }
+
+        let decor_state = get_decor_state().cast::<c_void>();
+        let win_col = if may_have_inline_virt { -3 } else { (*wlv).off };
+        extmark_attr = decor_redraw_col_impl(wp, ptr_col, win_col, selected, decor_state);
+
+        if may_have_inline_virt {
+            handle_inline_virtual_text_impl(wp, wlv, ptr_col as isize, selected);
+            if (*wlv).n_extra > 0 && (*wlv).virt_inline_hl_mode <= HL_MODE_REPLACE {
+                // Save current attrs and reset for inline virt text rendering.
+                (*state).saved_search_attr = (*state).search_attr;
+                (*state).saved_area_attr = (*state).area_attr;
+                (*state).saved_decor_attr = (*state).decor_attr;
+                (*state).saved_search_attr_from_match = (*state).search_attr_from_match;
+                (*state).search_attr = 0;
+                (*state).area_attr = 0;
+                (*state).decor_attr = 0;
+                (*state).search_attr_from_match = false;
+            }
+        }
+    }
+
+    // Determine which area_attr to update (normal vs saved for inline virt).
+    let use_saved_area = (*wlv).extra_for_extmark && (*wlv).virt_inline_hl_mode <= HL_MODE_REPLACE;
+
+    // Handle Visual area or match highlighting.
+    {
+        let vcol = (*wlv).vcol;
+        let fromcol = (*wlv).fromcol;
+        let tocol = (*wlv).tocol;
+        let vcol_prev = (*state).vcol_prev;
+        let fromcol_prev = (*state).fromcol_prev;
+        let noinvcur = (*state).noinvcur;
+        let virtcol = nvim_win_get_virtcol(wp);
+
+        let n_extra_cells = if (*wlv).n_extra == 0 {
+            utf_ptr2cells_at(wp, lnum, ptr_col)
+        } else if !(*wlv).p_extra.is_null() {
+            utf_ptr2cells((*wlv).p_extra.cast_const())
+        } else {
+            1
+        };
+
+        let area_attr_ref = if use_saved_area {
+            &mut (*state).saved_area_attr
+        } else {
+            &mut (*state).area_attr
+        };
+
+        if vcol == fromcol
+            || (vcol + 1 == fromcol && n_extra_cells > 1)
+            || (vcol_prev == fromcol_prev && vcol_prev < vcol && vcol < tocol)
+        {
+            *area_attr_ref = (*state).vi_attr;
+            (*state).area_active = true;
+        } else if *area_attr_ref != 0 && (vcol == tocol || (noinvcur && vcol == virtcol)) {
+            *area_attr_ref = 0;
+            (*state).area_active = false;
+        }
+    }
+
+    // Update search highlighting (only when not in fold text or extra chars).
+    if !(*state).has_foldtext && (*wlv).n_extra == 0 {
+        // update_search_hl can change the line pointer; we pass a local copy.
+        // The caller always re-fetches line after this call returns.
+        let mut line_ptr: *const c_char = nvim_win_ml_get_buf(wp, lnum);
+        let mut match_conc = (*state).match_conc;
+        let mut on_last_col = (*state).on_last_col;
+        let mut search_attr_from_match = (*state).search_attr_from_match;
+
+        (*state).search_attr = update_search_hl(
+            wp,
+            lnum,
+            ptr_col,
+            &mut line_ptr,
+            screen_search_hl,
+            &mut has_match_conc,
+            &mut match_conc,
+            lcs_eol_todo,
+            &mut on_last_col,
+            &mut search_attr_from_match,
+        );
+
+        (*state).match_conc = match_conc;
+        (*state).on_last_col = on_last_col;
+        (*state).search_attr_from_match = search_attr_from_match;
+
+        // Check if at NUL: re-fetch line_ptr in case update_search_hl changed it.
+        // If at NUL (end of line), concealing is not allowed.
+        let line_after = nvim_win_ml_get_buf(wp, lnum);
+        if *line_after.add(ptr_col as usize) == 0 {
+            has_match_conc = 0;
+        }
+
+        // Check ComplMatchIns highlight.
+        if (nvim_get_state() & MODE_INSERT) != 0
+            && rs_ins_compl_win_active(wp) != 0
+            && ((*state).in_curline || rs_ins_compl_lnum_in_range(lnum) != 0)
+        {
+            let ins_match_attr = rs_ins_compl_col_range_attr(lnum, ptr_col);
+            if ins_match_attr > 0 {
+                (*state).search_attr = hl_combine_attr((*state).search_attr, ins_match_attr);
+            }
+        }
+    }
+
+    // Update diff highlighting.
+    if (*wlv).diff_hlf != 0 {
+        let num_changes = (*state).line_changes.num_changes;
+        let bufidx = (*state).line_changes.bufidx;
+        let change_index = (*state).change_index;
+
+        // Advance change_index if ptr has passed the start of the next change.
+        if num_changes > 0 && change_index >= 0 && change_index < num_changes - 1 {
+            let next_change =
+                nvim_diff_diffline_get_change((*state).line_changes.changes, change_index + 1);
+            if !next_change.is_null() {
+                let next_start = nvim_diffchange_get_start(next_change, bufidx) as c_int;
+                if ptr_col >= next_start {
+                    (*state).change_index += 1;
+                }
+            }
+        }
+
+        // Parse current change boundaries.
+        let change_index = (*state).change_index;
+        let mut added = false;
+        if num_changes > 0 && change_index >= 0 && change_index < num_changes {
+            let cur_change =
+                nvim_diff_diffline_get_change((*state).line_changes.changes, change_index);
+            if !cur_change.is_null() {
+                added = rs_diff_change_parse(
+                    (*state).line_changes.changes,
+                    cur_change,
+                    &mut (*state).change_start,
+                    &mut (*state).change_end,
+                );
+            }
+        }
+
+        // Switch diff_hlf based on position within changed region.
+        if (*wlv).diff_hlf == HLF_CHD && ptr_col >= (*state).change_start && (*wlv).n_extra == 0 {
+            (*wlv).diff_hlf = if added { HLF_TXA } else { HLF_TXD };
+        }
+        if ((*wlv).diff_hlf == HLF_TXD || (*wlv).diff_hlf == HLF_TXA)
+            && ((ptr_col >= (*state).change_end && (*wlv).n_extra == 0)
+                || ((*wlv).n_extra > 0 && (*wlv).extra_for_extmark))
+        {
+            (*wlv).diff_hlf = HLF_CHD;
+        }
+        set_line_attr_for_diff_impl(wp, wlv);
+    }
+
+    // Decide which highlight attribute to use.
+    let area_attr = (*state).area_attr;
+    let search_attr = (*state).search_attr;
+    let highlight_match = nvim_get_highlight_match();
+    let folded_attr = (*state).folded_attr;
+    let decor_attr = (*state).decor_attr;
+
+    (*state).char_attr_pri = if area_attr != 0 {
+        let combined = hl_combine_attr((*wlv).line_attr, area_attr);
+        if highlight_match == 0 {
+            // let search highlight show in Visual area if possible
+            hl_combine_attr(search_attr, combined)
+        } else {
+            combined
+        }
+    } else if search_attr != 0 {
+        hl_combine_attr((*wlv).line_attr, search_attr)
+    } else if (*wlv).line_attr != 0
+        && (((*wlv).fromcol == -10 && (*wlv).tocol == MAXCOL)
+            || (*wlv).vcol < (*wlv).fromcol
+            || (*state).vcol_prev < (*state).fromcol_prev
+            || (*wlv).vcol >= (*wlv).tocol)
+    {
+        // Use line_attr when not in Visual or 'incsearch' area.
+        (*wlv).line_attr
+    } else {
+        0
+    };
+
+    (*state).char_attr_base = hl_combine_attr(folded_attr, decor_attr);
+    (*wlv).char_attr = hl_combine_attr((*state).char_attr_base, (*state).char_attr_pri);
+
+    HighlightResult {
+        extmark_attr,
+        has_match_conc,
+    }
+}
+
+/// Return the number of cells for the character at byte offset `col` in the buffer line.
+/// Helper for rs_win_line_highlight_attrs.
+#[inline]
+unsafe fn utf_ptr2cells_at(wp: WinHandle, lnum: LinenrT, col: ColnrT) -> c_int {
+    let line = nvim_win_ml_get_buf(wp, lnum);
+    utf_ptr2cells(line.add(col as usize))
 }
 
 #[cfg(test)]
