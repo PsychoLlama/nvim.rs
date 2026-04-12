@@ -103,6 +103,7 @@ void nvim_apply_pending_hl_callback(void);
 // Phase 4: Functions implemented in Rust (ex_getln migration)
 void rs_do_autocmd_cmdlinechanged(int firstc);
 void rs_trigger_cmd_autocmd(int typechar, int evt);
+int rs_cmdline_fire_leavepre_autocmd(void *s, int c_val);
 const char *rs_did_set_cedit(optset_T *args);
 char *getexline(int c, void *cookie, int indent, bool do_concat);
 

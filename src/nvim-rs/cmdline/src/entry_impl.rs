@@ -87,8 +87,8 @@ unsafe extern "C" {
 
     // Autocmds
     fn nvim_cmdline_fire_enter_full(firstcbuf: *const c_char, level: c_int) -> c_int;
-    fn nvim_cmdline_fire_leavepre_autocmd(s: *mut c_void, c_val: c_int) -> c_int;
     fn nvim_cmdline_fire_leave_full(s: *mut c_void, c_val: c_int) -> c_int;
+    fn set_vim_var_char(c: c_int);
 
     // History
     fn nvim_init_history_and_get_hislen() -> c_int;
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
     nvim_state_enter(s);
 
     // Trigger CmdlineLeavePre if not already triggered
-    nvim_cmdline_fire_leavepre_autocmd(s, state.c);
+    rs_cmdline_fire_leavepre_autocmd(s, state.c);
 
     // Fire CmdlineLeave autocmd
     nvim_cmdline_fire_leave_full(s, state.c);
@@ -594,6 +594,36 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     }
 
     ret.cast::<c_char>()
+}
+
+// =============================================================================
+// rs_cmdline_fire_leavepre_autocmd: migrated from ex_getln.c
+// =============================================================================
+
+const EVENT_CMDLINELEAVEPRE: c_int = 28;
+
+unsafe extern "C" {
+    fn rs_trigger_cmd_autocmd(typechar: c_int, evt: c_int);
+}
+
+/// Rust replacement for `nvim_cmdline_fire_leavepre_autocmd` in ex_getln.c.
+///
+/// Fires the CmdlineLeavePre autocmd if not already triggered.
+/// Sets v:char to c_val first. Returns 1 if triggered, 0 if already done.
+///
+/// # Safety
+///
+/// `s` must be a valid pointer to `CommandLineState`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_fire_leavepre_autocmd(s: *mut c_void, c_val: c_int) -> c_int {
+    let cs = &mut *s.cast::<crate::command_line_state::CommandLineState>();
+    if cs.event_cmdlineleavepre_triggered {
+        return 0;
+    }
+    set_vim_var_char(c_val);
+    rs_trigger_cmd_autocmd(cs.cmdline_type, EVENT_CMDLINELEAVEPRE);
+    cs.event_cmdlineleavepre_triggered = true;
+    1
 }
 
 // =============================================================================

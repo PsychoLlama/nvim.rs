@@ -1190,18 +1190,10 @@ int nvim_init_history_and_get_hislen(void)
 /// Get exmode_active global.
 int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
 
-/// Fire CmdlineLeavePre autocmd if not already triggered.
-/// Sets v:char to c_val first. Returns 1 if triggered, 0 if already done.
+/// Thin C wrapper: delegates to Rust rs_cmdline_fire_leavepre_autocmd.
 int nvim_cmdline_fire_leavepre_autocmd(void *s, int c_val)
 {
-  CommandLineState *cs = (CommandLineState *)s;
-  if (cs->event_cmdlineleavepre_triggered) {
-    return 0;
-  }
-  set_vim_var_char(c_val);
-  nvim_trigger_cmd_autocmd(cs->cmdline_type, EVENT_CMDLINELEAVEPRE);
-  cs->event_cmdlineleavepre_triggered = true;
-  return 1;
+  return rs_cmdline_fire_leavepre_autocmd(s, c_val);
 }
 
 /// Fire CmdlineLeave autocmd (with v:char and abort handling).
