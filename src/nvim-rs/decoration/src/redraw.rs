@@ -1123,9 +1123,6 @@ pub struct DecorRangeFlatView {
 }
 
 extern "C" {
-    // Phase 6: C helpers
-    fn nvim_decor_col_iter_marks(wp: WinHandle, col: c_int, state: DecorStateHandle) -> c_int;
-
     #[link_name = "hl_combine_attr"]
     fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
 
@@ -1375,11 +1372,97 @@ unsafe fn promote_future_ranges(
     (col_until, cur_end, fut_beg, count)
 }
 
+/// Advance the marktree iterator for column decorations.
+///
+/// Rust implementation of C's `nvim_decor_col_iter_marks()`.
+///
+/// Walks the marktree iterator from the current position, adding inline decorations
+/// to the decor state. Returns the `col_until` value (next mark column - 1, or MAXCOL).
+///
+/// # Safety
+/// `wp` and `state` must be valid.
+unsafe fn decor_col_iter_marks_impl(wp: WinHandle, col: c_int, state: DecorStateHandle) -> c_int {
+    let buf = nvim_decor_win_get_buffer(wp);
+    let tree = nvim_buf_get_marktree(buf);
+    let row = (*state).row;
+    let mut col_until = i32::MAX; // MAXCOL
+
+    let itr_ptr = std::ptr::addr_of_mut!((*state).itr).cast::<c_void>();
+
+    loop {
+        let mark = rs_marktree_itr_current(itr_ptr);
+        if mark.pos.row < 0 || mark.pos.row > row {
+            break;
+        }
+        if mark.pos.row == row && mark.pos.col > col {
+            col_until = mark.pos.col - 1;
+            break;
+        }
+
+        // mt_invalid || mt_end || !mt_decor_any || !ns_in_win: skip
+        if mark.flags & MT_FLAG_INVALID != 0
+            || mark.flags & MT_FLAG_END != 0
+            || mark.flags & MT_FLAG_DECOR_MASK == 0
+            || nvim_ns_in_win(mark.ns, wp) == 0
+        {
+            rs_marktree_itr_next(tree, itr_ptr);
+            continue;
+        }
+
+        let endpos = rs_marktree_get_altpos(tree, mark, std::ptr::null_mut());
+        // mt_decor(mark): construct DecorInline from mark flags and decor_data
+        let ext = mark.flags & MT_FLAG_DECOR_EXT != 0;
+        let (vt_handle, sh_idx, hl_flags, hl_priority, hl_hl_id, conceal_char) = if ext {
+            let d = mark.decor_data.ext;
+            (
+                crate::range::DecorVtHandle(d.vt.cast::<c_void>()),
+                d.sh_idx,
+                0u16,
+                0u16,
+                0i32,
+                0u32,
+            )
+        } else {
+            let hl = mark.decor_data.hl;
+            (
+                crate::range::DecorVtHandle(std::ptr::null_mut()),
+                crate::decor::DECOR_ID_INVALID,
+                hl.flags,
+                hl.priority,
+                hl.hl_id,
+                hl.conceal_char,
+            )
+        };
+
+        crate::range::rs_decor_range_add_from_inline(
+            state,
+            mark.pos.row,
+            mark.pos.col,
+            endpos.row,
+            endpos.col,
+            ext,
+            vt_handle,
+            sh_idx,
+            hl_flags,
+            hl_priority,
+            hl_hl_id,
+            conceal_char,
+            false,
+            mark.ns,
+            mark.id,
+        );
+
+        rs_marktree_itr_next(tree, itr_ptr);
+    }
+
+    col_until
+}
+
 /// Core column rendering implementation.
 ///
 /// This is the hot-path function called for each column during line rendering.
 /// It:
-/// 1. Advances the marktree iterator (via thin C stub)
+/// 1. Advances the marktree iterator (Rust)
 /// 2. Promotes future ranges to active (Rust)
 /// 3. Computes highlight, conceal, and spell attributes for active ranges
 /// 4. Retires expired ranges
@@ -1394,8 +1477,8 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     hidden: bool,
     state: DecorStateHandle,
 ) -> c_int {
-    // Part 1: Advance marktree iterator (thin C stub), get initial col_until
-    let col_until_from_itr = nvim_decor_col_iter_marks(wp, col, state);
+    // Part 1: Advance marktree iterator, get initial col_until
+    let col_until_from_itr = decor_col_iter_marks_impl(wp, col, state);
 
     // Part 2: Promote future ranges to active (Rust)
     let (mut col_until, cur_end, fut_beg, count) =

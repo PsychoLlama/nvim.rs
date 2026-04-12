@@ -436,43 +436,4 @@ int nvim_get_sign_add_id(void) { return sign_add_id; }
 /// Post-increment sign_add_id, return old value for Rust FFI.
 int nvim_incr_sign_add_id(void) { return sign_add_id++; }
 
-// Core Column Rendering helpers
-
-/// Advance the marktree iterator to position (row, col), adding inline decorations.
-///
-/// Returns the col_until value from the marktree (next mark column - 1, or MAXCOL).
-/// The future-to-active promotion loop (Part 2) is done in Rust (promote_future_ranges).
-int nvim_decor_col_iter_marks(win_T *wp, int col, DecorState *state)
-{
-  buf_T *const buf = wp->w_buffer;
-  int const row = state->row;
-  int col_until = MAXCOL;
-
-  while (true) {
-    MTKey mark = rs_marktree_itr_current(state->itr);
-    if (mark.pos.row < 0 || mark.pos.row > row) {
-      break;
-    } else if (mark.pos.row == row && mark.pos.col > col) {
-      col_until = mark.pos.col - 1;
-      break;
-    }
-
-    if (mt_invalid(mark) || mt_end(mark) || !mt_decor_any(mark) || !ns_in_win(mark.ns, wp)) {
-      goto next_mark;
-    }
-
-    MTPos endpos = rs_marktree_get_altpos(buf->b_marktree, mark, NULL);
-    DecorInline d = mt_decor(mark);
-    rs_decor_range_add_from_inline(state, mark.pos.row, mark.pos.col, endpos.row, endpos.col,
-                                   d.ext, d.data.ext.vt, d.data.ext.sh_idx,
-                                   d.data.hl.flags, d.data.hl.priority,
-                                   d.data.hl.hl_id, d.data.hl.conceal_char,
-                                   false, mark.ns, mark.id);
-
-next_mark:
-    rs_marktree_itr_next(buf->b_marktree, state->itr);
-  }
-
-  return col_until;
-}
 
