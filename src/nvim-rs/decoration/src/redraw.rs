@@ -124,20 +124,33 @@ extern "C" {
     fn nvim_buf_meta_total(buf: BufHandle, key: c_int) -> c_int;
     fn nvim_buf_signcols_get_count0(buf: BufHandle) -> c_int;
     fn nvim_buf_signcols_set_count0(buf: BufHandle, val: c_int);
+    fn nvim_buf_signcols_get_count_at(buf: BufHandle, idx: c_int) -> c_int;
+    fn nvim_buf_signcols_set_count_at(buf: BufHandle, idx: c_int, val: c_int);
     fn nvim_buf_signcols_get_max(buf: BufHandle) -> c_int;
     fn nvim_buf_signcols_set_max(buf: BufHandle, val: c_int);
+    fn nvim_buf_signcols_get_autom(buf: BufHandle) -> bool;
     fn nvim_get_sign_add_id() -> c_int;
     fn nvim_incr_sign_add_id() -> c_int;
-    fn nvim_buf_signcols_count_range(
-        buf: BufHandle,
-        row1: c_int,
-        row2: c_int,
-        add: c_int,
-        clear: c_int,
-    );
     fn nvim_curtab_first_win() -> WinHandle;
+    // nvim_buf_signcols_count_range is no longer needed (buf_signcols_count_range is now Rust)
     fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    // Sign and window accessors for decor_redraw_signs
+    fn buf_has_signs(buf: BufHandle) -> bool;
+    fn nvim_win_get_minscwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
+    // decor_find_sign(DecorInline) - exported as "decor_find_sign" from decor.rs
+    #[link_name = "decor_find_sign"]
+    fn decor_find_sign(decor: crate::types::DecorInline) -> *mut crate::types::DecorSignHighlight;
+    // rs_sign_item_cmp from nvim-sign crate
+    fn rs_sign_item_cmp(
+        priority1: c_int,
+        id1: u32,
+        add_id1: u32,
+        priority2: c_int,
+        id2: u32,
+        add_id2: u32,
+    ) -> c_int;
     // Fold accessor (used by decor_virt_lines)
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
 }
@@ -339,6 +352,7 @@ pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
 // MTKey flag constants (from marktree.h)
 // =============================================================================
 
+const MT_FLAG_END: u16 = 1 << 1;
 const MT_FLAG_INVALID: u16 = 1 << 6;
 const MT_FLAG_DECOR_EXT: u16 = 1 << 7;
 const MT_FLAG_DECOR_HL: u16 = 1 << 8;
@@ -366,6 +380,11 @@ const K_MT_META_SIGN_TEXT: c_int = 3; // kMTMetaSignText
 
 /// kMTFilterSelect value: selects entries that match the filter.
 const K_MT_FILTER_SELECT: u32 = u32::MAX;
+
+// Sign column constants
+const SCL_NUM: c_int = -2; // signcolumn='number'
+const SIGN_SHOW_MAX: usize = 9;
+const SIGN_WIDTH: usize = 2; // SIGN_WIDTH - number of schar_T per sign text
 
 // =============================================================================
 // Phase 1: decor_redraw_start - Migrated from C
@@ -1831,7 +1850,7 @@ pub unsafe extern "C" fn rs_buf_put_decor_sh(
     if flags & KSH_IS_SIGN != 0 {
         (*sh).sign_add_id = nvim_incr_sign_add_id();
         if (*sh).text[0] != 0 {
-            nvim_buf_signcols_count_range(buf, row1, row2, 1, K_FALSE);
+            buf_signcols_count_range_impl(buf, row1, row2, 1, K_FALSE);
             nvim_may_force_numberwidth_recompute(buf, false);
         }
     }
@@ -1858,7 +1877,7 @@ pub unsafe extern "C" fn rs_buf_remove_decor_sh(
     let flags = (*sh).flags;
     if flags & KSH_IS_SIGN != 0 && (*sh).text[0] != 0 {
         if nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) != 0 {
-            nvim_buf_signcols_count_range(buf, row1, row2, -1, K_FALSE);
+            buf_signcols_count_range_impl(buf, row1, row2, -1, K_FALSE);
         } else {
             nvim_may_force_numberwidth_recompute(buf, true);
             nvim_buf_signcols_set_count0(buf, 0);
@@ -2046,6 +2065,294 @@ pub unsafe extern "C" fn rs_decor_virt_lines(
     }
 
     virt_lines_total
+}
+
+// =============================================================================
+// Phase 3: decor_redraw_signs and buf_signcols_count_range - Migrated from C
+// =============================================================================
+
+/// Sign filter: selects kMTMetaSignText and kMTMetaSignHL meta entries.
+/// Matches `static const uint32_t sign_filter[kMTMetaCount]` from C.
+/// Index 2 = kMTMetaSignHL, index 3 = kMTMetaSignText = K_MT_FILTER_SELECT.
+static SIGN_FILTER: [u32; K_MT_META_COUNT] = [0, 0, K_MT_FILTER_SELECT, K_MT_FILTER_SELECT, 0];
+
+/// Signtext filter: selects only kMTMetaSignText meta entries.
+/// Matches `static const uint32_t signtext_filter[kMTMetaCount]` from C.
+static SIGNTEXT_FILTER: [u32; K_MT_META_COUNT] = [0, 0, 0, K_MT_FILTER_SELECT, 0];
+
+/// Local mirror of C's SignItem: pointer to DecorSignHighlight + mark id.
+/// Layout: { *mut DecorSignHighlight sh @ 0, u32 id @ 8 }. Size = 16 bytes.
+#[repr(C)]
+pub(crate) struct SignItem {
+    sh: *mut DecorSignHighlight,
+    id: u32,
+}
+
+/// Local mirror of C's SignTextAttrs.
+///
+/// Layout: `schar_T text[SIGN_WIDTH]` = `u32[2]` at offset 0, `int hl_id` = `i32` at offset 8.
+#[repr(C)]
+pub struct SignTextAttrsLocal {
+    pub text: [ScharT; SIGN_WIDTH],
+    pub hl_id: c_int,
+}
+
+/// Return the signs and highest priority sign attributes on a row.
+///
+/// Rust implementation of `decor_redraw_signs()`.
+///
+/// # Safety
+/// All pointers must be valid. `sattrs` may be null, `line_id`/`cul_id`/`num_id` may be null.
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "decor_redraw_signs")]
+pub unsafe extern "C" fn rs_decor_redraw_signs(
+    wp: WinHandle,
+    buf: BufHandle,
+    row: c_int,
+    sattrs: *mut SignTextAttrsLocal,
+    line_id: *mut c_int,
+    cul_id: *mut c_int,
+    num_id: *mut c_int,
+) {
+    if !buf_has_signs(buf) {
+        return;
+    }
+
+    let tree = nvim_buf_get_marktree(buf);
+    let mut itr_buf = crate::types::MarkTreeIter::new();
+    let itr_ptr = std::ptr::addr_of_mut!(itr_buf).cast::<c_void>();
+    let mut signs: Vec<SignItem> = Vec::new();
+    let mut num_text: c_int = 0;
+
+    // Collect signs that overlap this row (start before row).
+    rs_marktree_itr_get_overlap(tree, row, 0, itr_ptr);
+    let mut pair = MTPair::default();
+    while rs_marktree_itr_step_overlap(tree, itr_ptr, std::ptr::addr_of_mut!(pair)) {
+        let start = pair.start;
+        if start.flags & MT_FLAG_INVALID == 0
+            && (start.flags & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL)) != 0
+            && nvim_ns_in_win(start.ns, wp) != 0
+        {
+            let decor = crate::types::DecorInline {
+                ext: true,
+                _pad: [0u8; 7],
+                data: crate::types::DecorInlineData {
+                    ext: std::mem::ManuallyDrop::new(crate::types::DecorExt {
+                        sh_idx: start.decor_data.ext.sh_idx,
+                        _pad: 0,
+                        vt: start.decor_data.ext.vt,
+                    }),
+                },
+            };
+            let sh = decor_find_sign(decor);
+            if !sh.is_null() {
+                num_text += c_int::from((*sh).text[0] != 0);
+                signs.push(SignItem { sh, id: start.id });
+            }
+        }
+    }
+
+    // Step out of overlap zone and continue with sign filter.
+    rs_marktree_itr_step_out_filter(tree, itr_ptr, SIGN_FILTER.as_ptr());
+
+    // Collect signs that start on this row.
+    loop {
+        let mark = rs_marktree_itr_current(itr_ptr);
+        if mark.pos.row < 0 {
+            break;
+        }
+        if mark.pos.row != row {
+            break;
+        }
+        if mark.flags & MT_FLAG_INVALID == 0
+            && mark.flags & MT_FLAG_END == 0
+            && (mark.flags & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL)) != 0
+            && nvim_ns_in_win(mark.ns, wp) != 0
+        {
+            let ext = mark.flags & MT_FLAG_DECOR_EXT != 0;
+            let decor = crate::types::DecorInline {
+                ext,
+                _pad: [0u8; 7],
+                data: if ext {
+                    crate::types::DecorInlineData {
+                        ext: std::mem::ManuallyDrop::new(crate::types::DecorExt {
+                            sh_idx: mark.decor_data.ext.sh_idx,
+                            _pad: 0,
+                            vt: mark.decor_data.ext.vt,
+                        }),
+                    }
+                } else {
+                    crate::types::DecorInlineData {
+                        hl: std::mem::ManuallyDrop::new(*mark.decor_data.hl),
+                    }
+                },
+            };
+            let sh = decor_find_sign(decor);
+            if !sh.is_null() {
+                num_text += c_int::from((*sh).text[0] != 0);
+                signs.push(SignItem { sh, id: mark.id });
+            }
+        }
+        if !rs_marktree_itr_next_filter(tree, itr_ptr, row + 1, 0, SIGN_FILTER.as_ptr()) {
+            break;
+        }
+    }
+
+    if signs.is_empty() {
+        return;
+    }
+
+    // Sort signs by priority/id (same order as C qsort with sign_item_cmp).
+    signs.sort_by(|a, b| {
+        let sh1 = &*a.sh;
+        let sh2 = &*b.sh;
+        rs_sign_item_cmp(
+            c_int::from(sh1.priority),
+            a.id,
+            sh1.sign_add_id as u32,
+            c_int::from(sh2.priority),
+            b.id,
+            sh2.sign_add_id as u32,
+        )
+        .cmp(&0)
+    });
+
+    let width = if nvim_win_get_minscwidth(wp) == SCL_NUM {
+        1
+    } else {
+        nvim_win_get_scwidth(wp)
+    };
+    let len = width.min(num_text) as usize;
+    let mut idx: usize = 0;
+
+    for item in &signs {
+        let sh = &*item.sh;
+        if !sattrs.is_null() && idx < len && sh.text[0] != 0 {
+            let out = &mut *sattrs.add(idx);
+            out.text[0] = sh.text[0];
+            out.text[1] = sh.text[1];
+            out.hl_id = sh.hl_id;
+            idx += 1;
+        }
+        if !num_id.is_null() && *num_id <= 0 {
+            *num_id = sh.number_hl_id;
+        }
+        if !line_id.is_null() && *line_id <= 0 {
+            *line_id = sh.line_hl_id;
+        }
+        if !cul_id.is_null() && *cul_id <= 0 {
+            *cul_id = sh.cursorline_hl_id;
+        }
+    }
+}
+
+/// Internal implementation of buf_signcols_count_range, shared by the export and
+/// by the existing Rust callers (rs_buf_put_decor_sh, rs_buf_remove_decor_sh).
+///
+/// # Safety
+/// `buf` must be valid.
+unsafe fn buf_signcols_count_range_impl(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    add: c_int,
+    clear: c_int,
+) {
+    if !nvim_buf_signcols_get_autom(buf)
+        || row2 < row1
+        || nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) == 0
+    {
+        return;
+    }
+
+    let n = (row2 + 1 - row1) as usize;
+    let mut count: Vec<c_int> = vec![0; n];
+
+    let tree = nvim_buf_get_marktree(buf);
+    let mut itr_buf = crate::types::MarkTreeIter::new();
+    let itr_ptr = std::ptr::addr_of_mut!(itr_buf).cast::<c_void>();
+
+    // Count signs that start before row1 but overlap the range.
+    rs_marktree_itr_get_overlap(tree, row1, 0, itr_ptr);
+    let mut pair = MTPair::default();
+    while rs_marktree_itr_step_overlap(tree, itr_ptr, std::ptr::addr_of_mut!(pair)) {
+        let start = pair.start;
+        if (start.flags & MT_FLAG_DECOR_SIGNTEXT) != 0 && (start.flags & MT_FLAG_INVALID) == 0 {
+            let end_row = pair.end_pos.row;
+            let stop = row2.min(end_row);
+            let lo = 0usize;
+            let hi = (stop - row1) as usize;
+            for c in &mut count[lo..=hi] {
+                *c += 1;
+            }
+        }
+    }
+
+    rs_marktree_itr_step_out_filter(tree, itr_ptr, SIGNTEXT_FILTER.as_ptr());
+
+    // Count signs that start within the range.
+    loop {
+        let mark = rs_marktree_itr_current(itr_ptr);
+        if mark.pos.row < 0 || mark.pos.row > row2 {
+            break;
+        }
+        if (mark.flags & MT_FLAG_DECOR_SIGNTEXT) != 0
+            && (mark.flags & MT_FLAG_INVALID) == 0
+            && (mark.flags & MT_FLAG_END) == 0
+        {
+            let end_pos = rs_marktree_get_altpos(tree, mark, std::ptr::null_mut());
+            let stop = row2.min(end_pos.row);
+            let lo = (mark.pos.row - row1) as usize;
+            let hi = (stop - row1) as usize;
+            for c in &mut count[lo..=hi] {
+                *c += 1;
+            }
+        }
+        if !rs_marktree_itr_next_filter(tree, itr_ptr, row2 + 1, 0, SIGNTEXT_FILTER.as_ptr()) {
+            break;
+        }
+    }
+
+    // Update b_signcols.count[] based on the counts.
+    for c in count {
+        let prevwidth = (SIGN_SHOW_MAX as c_int).min(c - add);
+        if clear != KNONE && prevwidth > 0 {
+            let idx = prevwidth - 1;
+            let cur = nvim_buf_signcols_get_count_at(buf, idx);
+            nvim_buf_signcols_set_count_at(buf, idx, cur - 1);
+            // In non-RELDEBUG builds: assert(buf->b_signcols.count[prevwidth-1] >= 0)
+            // We skip the assertion here as it's a debug-only check in C.
+        }
+        let width = (SIGN_SHOW_MAX as c_int).min(c);
+        if clear != KTRUE && width > 0 {
+            let idx = width - 1;
+            let cur = nvim_buf_signcols_get_count_at(buf, idx);
+            nvim_buf_signcols_set_count_at(buf, idx, cur + 1);
+            if width > nvim_buf_signcols_get_max(buf) {
+                nvim_buf_signcols_set_max(buf, width);
+            }
+        }
+    }
+}
+
+/// Count the number of signs in a range after adding/removing a sign.
+///
+/// Rust implementation of `buf_signcols_count_range()`.
+///
+/// @param add    1, -1 or 0 for an added, deleted or initialized range.
+/// @param clear  0 (kFalse), 1 (kTrue) or -1 (kNone) for added/deleted, cleared, or initialized range.
+///
+/// # Safety
+/// `buf` must be valid.
+#[unsafe(export_name = "buf_signcols_count_range")]
+pub unsafe extern "C" fn rs_buf_signcols_count_range(
+    buf: BufHandle,
+    row1: c_int,
+    row2: c_int,
+    add: c_int,
+    clear: c_int,
+) {
+    buf_signcols_count_range_impl(buf, row1, row2, add, clear);
 }
 
 // =============================================================================

@@ -111,149 +111,6 @@ int nvim_ns_in_win(uint32_t ns, win_T *wp) { return ns_in_win(ns, wp) ? 1 : 0; }
 /// Check mt_conceal_lines(mark) for Rust FFI.
 int nvim_mt_conceal_lines(MTKey mark) { return mt_conceal_lines(mark) ? 1 : 0; }
 
-static const uint32_t sign_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect,
-                                                   [kMTMetaSignHL] = kMTFilterSelect };
-
-/// Return the signs and highest priority sign attributes on a row.
-///
-/// @param[out] sattrs Output array for sign text and texthl id
-/// @param[out] line_id Highest priority linehl id
-/// @param[out] cul_id Highest priority culhl id
-/// @param[out] num_id Highest priority numhl id
-void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], int *line_id,
-                        int *cul_id, int *num_id)
-{
-  if (!buf_has_signs(buf)) {
-    return;
-  }
-
-  MTPair pair;
-  int num_text = 0;
-  MarkTreeIter itr[1];
-  kvec_t(SignItem) signs = KV_INITIAL_VALUE;
-  // TODO(bfredl): integrate with main decor loop.
-  rs_marktree_itr_get_overlap(buf->b_marktree, row, 0, itr);
-  while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
-    if (!mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, wp)) {
-      DecorSignHighlight *sh = decor_find_sign(mt_decor(pair.start));
-      num_text += (sh->text[0] != NUL);
-      kv_push(signs, ((SignItem){ sh, pair.start.id }));
-    }
-  }
-
-  rs_marktree_itr_step_out_filter(buf->b_marktree, itr, sign_filter);
-
-  while (itr->x) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (mark.pos.row != row) {
-      break;
-    }
-    if (!mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, wp)) {
-      DecorSignHighlight *sh = decor_find_sign(mt_decor(mark));
-      num_text += (sh->text[0] != NUL);
-      kv_push(signs, ((SignItem){ sh, mark.id }));
-    }
-
-    rs_marktree_itr_next_filter(buf->b_marktree, itr, row + 1, 0, sign_filter);
-  }
-
-  if (kv_size(signs)) {
-    int width = wp->w_minscwidth == SCL_NUM ? 1 : wp->w_scwidth;
-    int len = MIN(width, num_text);
-    int idx = 0;
-    qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(kv_A(signs, 0)), sign_item_cmp);
-
-    for (size_t i = 0; i < kv_size(signs); i++) {
-      DecorSignHighlight *sh = kv_A(signs, i).sh;
-      if (sattrs && idx < len && sh->text[0]) {
-        memcpy(sattrs[idx].text, sh->text, SIGN_WIDTH * sizeof(sattr_T));
-        sattrs[idx++].hl_id = sh->hl_id;
-      }
-      if (num_id != NULL && *num_id <= 0) {
-        *num_id = sh->number_hl_id;
-      }
-      if (line_id != NULL && *line_id <= 0) {
-        *line_id = sh->line_hl_id;
-      }
-      if (cul_id != NULL && *cul_id <= 0) {
-        *cul_id = sh->cursorline_hl_id;
-      }
-    }
-    kv_destroy(signs);
-  }
-}
-
-static const uint32_t signtext_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect };
-
-/// Count the number of signs in a range after adding/removing a sign, or to
-/// (re-)initialize a range in "b_signcols.count".
-///
-/// @param add  1, -1 or 0 for an added, deleted or initialized range.
-/// @param clear  kFalse, kTrue or kNone for an, added/deleted, cleared, or initialized range.
-void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState clear)
-{
-  if (!buf->b_signcols.autom || row2 < row1 || !buf_meta_total(buf, kMTMetaSignText)) {
-    return;
-  }
-
-  // Allocate an array of integers holding the number of signs in the range.
-  int *count = xcalloc((size_t)(row2 + 1 - row1), sizeof(int));
-  MarkTreeIter itr[1];
-  MTPair pair = { 0 };
-
-  // Increment count array for signs that start before "row1" but do overlap the range.
-  rs_marktree_itr_get_overlap(buf->b_marktree, row1, 0, itr);
-  while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
-    if ((pair.start.flags & MT_FLAG_DECOR_SIGNTEXT) && !mt_invalid(pair.start)) {
-      for (int i = row1; i <= MIN(row2, pair.end_pos.row); i++) {
-        count[i - row1]++;
-      }
-    }
-  }
-
-  rs_marktree_itr_step_out_filter(buf->b_marktree, itr, signtext_filter);
-
-  // Continue traversing the marktree until beyond "row2".
-  while (itr->x) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (mark.pos.row > row2) {
-      break;
-    }
-    if ((mark.flags & MT_FLAG_DECOR_SIGNTEXT) && !mt_invalid(mark) && !mt_end(mark)) {
-      // Increment count array for the range of a paired sign mark.
-      MTPos end = rs_marktree_get_altpos(buf->b_marktree, mark, NULL);
-      for (int i = mark.pos.row; i <= MIN(row2, end.row); i++) {
-        count[i - row1]++;
-      }
-    }
-
-    rs_marktree_itr_next_filter(buf->b_marktree, itr, row2 + 1, 0, signtext_filter);
-  }
-
-  // For each row increment "b_signcols.count" at the number of counted signs,
-  // and decrement at the previous number of signs. These two operations are
-  // split in separate calls if "clear" is not kFalse (surrounding a marktree splice).
-  for (int i = 0; i < row2 + 1 - row1; i++) {
-    int prevwidth = MIN(SIGN_SHOW_MAX, count[i] - add);
-    if (clear != kNone && prevwidth > 0) {
-      buf->b_signcols.count[prevwidth - 1]--;
-#ifndef RELDEBUG
-      // TODO(bfredl): correct marktree splicing so that this doesn't fail
-      assert(buf->b_signcols.count[prevwidth - 1] >= 0);
-#endif
-    }
-    int width = MIN(SIGN_SHOW_MAX, count[i]);
-    if (clear != kTrue && width > 0) {
-      buf->b_signcols.count[width - 1]++;
-      if (width > buf->b_signcols.max) {
-        buf->b_signcols.max = width;
-      }
-    }
-  }
-
-  xfree(count);
-}
-
 /// This assumes maximum one entry of each kind, which will not always be the case.
 ///
 /// NB: assumes caller has allocated enough space in dict for all fields!
@@ -570,6 +427,9 @@ void nvim_may_force_numberwidth_recompute(buf_T *buf, bool unplace)
 int nvim_buf_signcols_get_count0(buf_T *buf) { return buf->b_signcols.count[0]; }
 /// Set b_signcols.count[0] for Rust FFI.
 void nvim_buf_signcols_set_count0(buf_T *buf, int val) { buf->b_signcols.count[0] = val; }
+/// Indexed get/set for b_signcols.count[] (Phase 3).
+int nvim_buf_signcols_get_count_at(buf_T *buf, int idx) { return buf->b_signcols.count[idx]; }
+void nvim_buf_signcols_set_count_at(buf_T *buf, int idx, int val) { buf->b_signcols.count[idx] = val; }
 
 /// Get current sign_add_id for Rust FFI.
 int nvim_get_sign_add_id(void) { return sign_add_id; }

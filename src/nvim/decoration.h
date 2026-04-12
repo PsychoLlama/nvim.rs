@@ -157,6 +157,11 @@ DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id);
 int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, VirtLines *lines,
                      bool apply_folds);
 
+// Phase 3 Rust exports (formerly C implementations)
+void decor_redraw_signs(win_T *wp, buf_T *buf, int row, SignTextAttrs sattrs[], int *line_id,
+                        int *cul_id, int *num_id);
+void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState clear);
+
 #include "decoration.h.generated.h"
 #include "decoration.h.inline.generated.h"
 
