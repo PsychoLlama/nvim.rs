@@ -94,9 +94,6 @@ extern "C" {
     /// Get the `b_prev` field from a buffer.
     fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
 
-    /// Get the `top_file_num` global (highest file number counter).
-    fn nvim_get_top_file_num() -> c_int;
-
     /// Get the first character of the `b_p_bh` (bufhidden option) field.
     fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
 
@@ -105,9 +102,6 @@ extern "C" {
 
     /// Get the `cmdmod.cmod_flags` field.
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
-
-    /// Get the `buf_free_count` global counter.
-    fn nvim_get_buf_free_count() -> c_int;
 
     /// Get the `br_buf` field from a bufref.
     fn nvim_bufref_get_buf(bufref: *const std::ffi::c_void) -> BufHandle;
@@ -285,7 +279,7 @@ fn bufref_valid_impl(bufref: *const std::ffi::c_void) -> bool {
     // SAFETY: We check for null above.
     unsafe {
         let cached_count = nvim_bufref_get_buf_free_count(bufref);
-        let current_count = nvim_get_buf_free_count();
+        let current_count = crate::state::get_buf_free_count();
 
         if cached_count == current_count {
             // No buffers have been freed since the reference was created
@@ -538,8 +532,7 @@ pub extern "C" fn rs_get_fileformat(buf: BufHandle) -> c_int {
 /// to be assigned to a new buffer.
 #[inline]
 fn get_highest_fnum_impl() -> c_int {
-    // SAFETY: nvim_get_top_file_num is a simple global accessor
-    unsafe { nvim_get_top_file_num() - 1 }
+    crate::state::get_top_file_num() - 1
 }
 
 /// FFI wrapper for `get_highest_fnum`.

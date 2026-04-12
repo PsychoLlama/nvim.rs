@@ -144,17 +144,12 @@ extern int rs_buf_effective_action(buf_T *buf, int action);
 // Accessor functions for Rust opaque handle pattern are in buffer_shim.c.
 // Only accessor functions that reference file-scope static variables remain here.
 
-// Number of times free_buffer() was called.
-static int buf_free_count = 0;
-
-/// Get the buf_free_count global (accessor for Rust).
-int nvim_get_buf_free_count(void) { return buf_free_count; }
-
-static int top_file_num = 1;            ///< highest file number
-
-/// Get the top_file_num global (accessor for Rust).
-int nvim_get_top_file_num(void) { return top_file_num; }
-
+// buf_free_count and top_file_num migrated to Rust state.rs (Phase 1).
+// Accessors are exported by the Rust buffer crate.
+extern int nvim_get_top_file_num(void);
+extern int nvim_inc_top_file_num(void);   // increments and returns old value
+extern void nvim_set_top_file_num(int val);
+extern void nvim_reset_top_file_num(void);
 
 // Static assertions for constants used in Rust (Phase 1).
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch with Rust");
@@ -219,12 +214,6 @@ static inline void buf_init_changedtick(buf_T *const buf)
 void nvim_buf_init_changedtick_c(buf_T *buf)
 {
   buf_init_changedtick(buf);
-}
-
-/// Increment buf_free_count (called from buffer_shim.c compound wrappers).
-void nvim_inc_buf_free_count(void)
-{
-  buf_free_count++;
 }
 
 /// Add a file name to the buffer list.
@@ -346,15 +335,15 @@ buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags)
     }
     lastbuf = buf;
 
-    buf->b_fnum = top_file_num++;
+    buf->b_fnum = nvim_inc_top_file_num();
     pmap_put(int)(&buffer_handles, buf->b_fnum, buf);
-    if (top_file_num < 0) {  // wrap around (may cause duplicates)
+    if (nvim_get_top_file_num() < 0) {  // wrap around (may cause duplicates)
       emsg(_("W14: Warning: List of file names overflow"));
       if (emsg_silent == 0 && !in_assert_fails && !ui_has(kUIMessages)) {
         ui_flush();
         os_delay(3001, true);  // make sure it is noticed
       }
-      top_file_num = 1;
+      nvim_reset_top_file_num();
     }
 
     // Always copy the options from the current buffer.

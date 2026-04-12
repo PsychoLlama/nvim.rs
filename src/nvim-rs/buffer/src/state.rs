@@ -11,8 +11,104 @@
 #![allow(clippy::doc_markdown)]
 
 use std::ffi::{c_char, c_int};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::BufHandle;
+
+// =============================================================================
+// Global counters (migrated from C static variables in buffer.c)
+// =============================================================================
+
+/// Number of times `free_buffer()` was called.
+/// Corresponds to the C static `buf_free_count` in `buffer.c`.
+static BUF_FREE_COUNT: AtomicI32 = AtomicI32::new(0);
+
+/// Highest file number assigned to a buffer.
+/// Corresponds to the C static `top_file_num` in `buffer.c`.
+static TOP_FILE_NUM: AtomicI32 = AtomicI32::new(1);
+
+/// Get the `buf_free_count` global.
+///
+/// Called from Rust code that needs to validate buffer references.
+#[inline]
+#[must_use]
+pub fn get_buf_free_count() -> c_int {
+    BUF_FREE_COUNT.load(Ordering::Relaxed)
+}
+
+/// Increment `buf_free_count`.
+///
+/// Called when a buffer is freed.
+#[inline]
+pub fn inc_buf_free_count() {
+    BUF_FREE_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Get the `top_file_num` global.
+#[inline]
+#[must_use]
+pub fn get_top_file_num() -> c_int {
+    TOP_FILE_NUM.load(Ordering::Relaxed)
+}
+
+/// Increment `top_file_num` and return the old value (the number to assign).
+#[inline]
+#[must_use]
+pub fn inc_top_file_num() -> c_int {
+    TOP_FILE_NUM.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Set `top_file_num` to the given value.
+#[inline]
+pub fn set_top_file_num(val: c_int) {
+    TOP_FILE_NUM.store(val, Ordering::Relaxed);
+}
+
+/// Reset `top_file_num` to 1.
+#[inline]
+pub fn reset_top_file_num() {
+    TOP_FILE_NUM.store(1, Ordering::Relaxed);
+}
+
+// ---------------------------------------------------------------------------
+// C-ABI exports for the above globals (used by C code in buffer_shim.c etc.)
+// ---------------------------------------------------------------------------
+
+/// C accessor: `nvim_get_buf_free_count`.
+#[unsafe(no_mangle)]
+pub extern "C" fn nvim_get_buf_free_count() -> c_int {
+    get_buf_free_count()
+}
+
+/// C mutator: `nvim_inc_buf_free_count`.
+#[unsafe(no_mangle)]
+pub extern "C" fn nvim_inc_buf_free_count() {
+    inc_buf_free_count();
+}
+
+/// C accessor: `nvim_get_top_file_num`.
+#[unsafe(no_mangle)]
+pub extern "C" fn nvim_get_top_file_num() -> c_int {
+    get_top_file_num()
+}
+
+/// C mutator: `nvim_inc_top_file_num` — increments and returns the old value.
+#[unsafe(no_mangle)]
+pub extern "C" fn nvim_inc_top_file_num() -> c_int {
+    inc_top_file_num()
+}
+
+/// C mutator: `nvim_set_top_file_num`.
+#[unsafe(no_mangle)]
+pub extern "C" fn nvim_set_top_file_num(val: c_int) {
+    set_top_file_num(val);
+}
+
+/// C mutator: `nvim_reset_top_file_num`.
+#[unsafe(no_mangle)]
+pub extern "C" fn nvim_reset_top_file_num() {
+    reset_top_file_num();
+}
 
 // =============================================================================
 // External C Functions

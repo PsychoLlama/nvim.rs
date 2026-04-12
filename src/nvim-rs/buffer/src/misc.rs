@@ -26,7 +26,6 @@ extern "C" {
 
     // Buffer accessors
     fn nvim_buf_channel_job_running(buf: BufHandle) -> c_int;
-    fn nvim_get_buf_free_count() -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
 
     // Option accessors
@@ -281,7 +280,7 @@ pub unsafe extern "C" fn set_bufref(bufref: *mut BufRef, buf: BufHandle) {
     } else {
         nvim_buf_get_fnum(buf)
     };
-    br.br_buf_free_count = nvim_get_buf_free_count();
+    br.br_buf_free_count = crate::state::get_buf_free_count();
 }
 
 // =============================================================================

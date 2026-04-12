@@ -980,6 +980,7 @@ void rs_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
 
 // Declarations from buffer.c (callable from buffer_shim.c)
 extern void nvim_buf_init_changedtick_c(buf_T *buf);
+// nvim_inc_buf_free_count is exported from Rust state.rs (Phase 1).
 extern void nvim_inc_buf_free_count(void);
 extern void rs_aubuflocal_remove(int bufnr);
 
