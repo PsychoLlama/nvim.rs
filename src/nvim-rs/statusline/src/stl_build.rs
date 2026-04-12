@@ -130,6 +130,19 @@ pub struct StlCursorInfo {
     pub first_char: c_int,
 }
 
+/// Batch sign info returned by nvim_stl_stcp_get_sign_info.
+/// Matches `StlSignInfo` in statusline.h.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+struct StlSignInfo {
+    /// 1 if sattrs[idx].text[0] != 0
+    has_text: c_int,
+    /// sattrs[idx].hl_id
+    hl_id: c_int,
+    /// stcp->sign_cul_id
+    sign_cul_id: c_int,
+}
+
 // =============================================================================
 // C FFI declarations
 // =============================================================================
@@ -222,7 +235,8 @@ extern "C" {
     fn nvim_stl_win_get_scwidth(wp: WinHandle) -> c_int;
 
     // Statuscolumn accessors
-    fn nvim_stl_stcp_has_sign_text(stcp: StatuscolHandle) -> c_int;
+    // Statuscolumn sign info (batch accessor)
+    fn nvim_stl_stcp_get_sign_info(stcp: StatuscolHandle, idx: c_int) -> StlSignInfo;
     #[link_name = "compute_foldcolumn"]
     fn nvim_stl_compute_foldcolumn(wp: WinHandle, col: c_int) -> c_int;
     fn nvim_stl_fill_foldcolumn(
@@ -236,9 +250,6 @@ extern "C" {
     #[link_name = "use_cursor_line_highlight"]
     fn nvim_stl_use_cursor_line_hl(wp: WinHandle, lnum: c_int) -> bool;
     fn nvim_stl_describe_sign_text(buf: *mut c_char, text: *mut ScharT) -> c_int;
-    fn nvim_stl_stcp_get_sign_cul_id(stcp: StatuscolHandle) -> c_int;
-    fn nvim_stl_stcp_get_sattr_hl_id(stcp: StatuscolHandle, idx: c_int) -> c_int;
-    fn nvim_stl_stcp_sattr_has_text(stcp: StatuscolHandle, idx: c_int) -> c_int;
     #[link_name = "nvim_syn_name2id_len_wrapper"]
     fn nvim_stl_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
 
@@ -1012,7 +1023,7 @@ pub unsafe fn build_stl_str_hl(
                     && nvim_stl_get_vim_var_nr(VV_VIRTNUM) == 0
                 {
                     if nvim_stl_win_get_maxscwidth(wp) == SCL_NUM
-                        && nvim_stl_stcp_has_sign_text(stcp) != 0
+                        && nvim_stl_stcp_get_sign_info(stcp, 0).has_text != 0
                     {
                         // goto stcsign - handled inline below as the sign column path
                         handle_stcsign(
@@ -2027,19 +2038,9 @@ unsafe fn handle_stcsign(
         });
 
         if fdc == 0 {
-            let has_text = nvim_stl_stcp_sattr_has_text(stcp, i);
+            let sign_info = nvim_stl_stcp_get_sign_info(stcp, i);
             let virtnum = nvim_stl_get_vim_var_nr(VV_VIRTNUM);
-            if has_text != 0 && virtnum == 0 {
-                // Get sign text via accessor - writes into buf_tmp+signlen
-                let written = nvim_stl_describe_sign_text(
-                    buf_tmp.as_mut_ptr().add(signlen),
-                    // We need sattr.text pointer - use accessor
-                    ptr::null_mut(), // placeholder - accessor handles index
-                );
-                // Actually we need to pass the sign text array.
-                // The C code does: describe_sign_text(buf_tmp + signlen, sattr.text)
-                // We need to use the stcp accessor that gives us the text ptr.
-                let _ = written;
+            if sign_info.has_text != 0 && virtnum == 0 {
                 // For now, use the accessor that writes sign text for index i
                 let n = nvim_stl_describe_sign_text(
                     buf_tmp.as_mut_ptr().add(signlen),
@@ -2048,11 +2049,13 @@ unsafe fn handle_stcsign(
                     ptr::null_mut(),
                 );
                 signlen += n as usize;
-                let cul_id = nvim_stl_stcp_get_sign_cul_id(stcp);
-                let hl_id = nvim_stl_stcp_get_sattr_hl_id(stcp, i);
                 STL_ITEMS.with(|items| {
                     let mut items = items.borrow_mut();
-                    items[ci as usize].minwid = -(if cul_id != 0 { cul_id } else { hl_id });
+                    items[ci as usize].minwid = -(if sign_info.sign_cul_id != 0 {
+                        sign_info.sign_cul_id
+                    } else {
+                        sign_info.hl_id
+                    });
                 });
             } else {
                 buf_tmp[signlen] = b' ' as c_char;

@@ -296,11 +296,15 @@ const char *nvim_stl_get_showcmd_buf(void) { return showcmd_buf; }
 /// Get wp->w_maxscwidth (sign column setting).
 int nvim_stl_win_get_maxscwidth(win_T *wp) { return (int)wp->w_maxscwidth; }
 
-/// Get stcp->sattrs[0].text[0] != 0 (has sign text).
-int nvim_stl_stcp_has_sign_text(statuscol_T *stcp)
+/// Get batch sign info from statuscol_T for a given sattrs index.
+StlSignInfo nvim_stl_stcp_get_sign_info(statuscol_T *stcp, int idx)
 {
-  if (stcp == NULL) { return 0; }
-  return stcp->sattrs[0].text[0] ? 1 : 0;
+  StlSignInfo info = { 0 };
+  if (stcp == NULL) { return info; }
+  info.has_text = stcp->sattrs[idx].text[0] ? 1 : 0;
+  info.hl_id = stcp->sattrs[idx].hl_id;
+  info.sign_cul_id = stcp->sign_cul_id;
+  return info;
 }
 
 
@@ -324,27 +328,6 @@ int nvim_stl_fill_foldcolumn(win_T *wp, statuscol_T *stcp, int lnum, int fdc, ch
 /// Describe sign text into a buffer. Returns bytes written.
 int nvim_stl_describe_sign_text(char *buf, schar_T *text) { return (int)describe_sign_text(buf, text); }
 
-/// Get stcp->sign_cul_id.
-int nvim_stl_stcp_get_sign_cul_id(statuscol_T *stcp)
-{
-  if (stcp == NULL) { return 0; }
-  return stcp->sign_cul_id;
-}
-
-/// Get stcp->sattrs[idx].hl_id.
-int nvim_stl_stcp_get_sattr_hl_id(statuscol_T *stcp, int idx)
-{
-  if (stcp == NULL) { return 0; }
-  return stcp->sattrs[idx].hl_id;
-}
-
-
-/// Get stcp->sattrs[idx].text[0] != 0.
-int nvim_stl_stcp_sattr_has_text(statuscol_T *stcp, int idx)
-{
-  if (stcp == NULL) { return 0; }
-  return stcp->sattrs[idx].text[0] ? 1 : 0;
-}
 
 
 

@@ -21,6 +21,13 @@ typedef struct {
   size_t size; ///< number of elements in the array
 } StlClickDefsResult;
 
+/// Batch sign info returned by nvim_stl_stcp_get_sign_info.
+typedef struct {
+  int has_text;     ///< 1 if sattrs[idx].text[0] != 0
+  int hl_id;        ///< sattrs[idx].hl_id
+  int sign_cul_id;  ///< stcp->sign_cul_id (same for all indices)
+} StlSignInfo;
+
 /// Batch cursor info returned by nvim_stl_get_win_cursor_info.
 typedef struct {
   int clamped_lnum;   ///< cursor lnum clamped to ml_line_count
