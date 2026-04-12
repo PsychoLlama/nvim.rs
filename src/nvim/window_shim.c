@@ -878,3 +878,109 @@ double nvim_win_get_config_col_after_merge(win_T *wp) { return wp ? wp->w_config
 linenr_T nvim_win_get_config_bufpos_lnum_after_merge(win_T *wp) { return wp ? wp->w_config.bufpos.lnum : -1; }
 int nvim_win_get_config_bufpos_col_after_merge(win_T *wp) { return wp ? (int)wp->w_config.bufpos.col : 0; }
 
+// =============================================================================
+// C accessors for winfloat Phase 6: win_new_float, handle_error_and_cleanup, win_float_create
+// =============================================================================
+
+// Forward declarations for functions not declared by included headers
+extern void free_string_option(char *p);
+extern Buffer nvim_create_buf(bool listed, bool scratch, Error *err);
+extern buf_T *find_buffer_by_handle(Buffer buf, Error *err);
+
+// nvim_tabpage_get_lastwin: already exported from Rust (window crate, tabpage_struct.rs)
+
+// win_alloc and win_init wrappers
+win_T *nvim_win_alloc_float(win_T *after) { return win_alloc(after, false); }
+void nvim_win_init_for_float(win_T *wp) { win_init(wp, curwin, 0); }
+
+// wp->w_p_wbr accessors
+int nvim_win_get_p_wbr_not_null(win_T *wp) { return (wp && wp->w_p_wbr) ? 1 : 0; }
+int nvim_win_p_wbr_is_empty_string_option(win_T *wp) { return (wp && wp->w_p_wbr == empty_string_option) ? 1 : 0; }
+void nvim_win_set_p_wbr_empty_string_option(win_T *wp) { if (wp) { wp->w_p_wbr = empty_string_option; } }
+void nvim_win_free_and_set_p_wbr_empty(win_T *wp)
+{ if (!wp) { return; } if (wp->w_p_wbr && wp->w_p_wbr != empty_string_option) { free_string_option(wp->w_p_wbr); } wp->w_p_wbr = empty_string_option; }
+
+// empty_string_option accessor
+char *nvim_get_empty_string_opt(void) { return empty_string_option; }
+
+// wp->w_p_stl is_empty_string_option check
+int nvim_win_p_stl_is_empty_string_option(win_T *wp) { return (wp && wp->w_p_stl == empty_string_option) ? 1 : 0; }
+void nvim_win_set_p_stl_empty_string_option(win_T *wp) { if (wp) { if (wp->w_p_stl && wp->w_p_stl != empty_string_option) { free_string_option(wp->w_p_stl); } wp->w_p_stl = empty_string_option; } }
+
+// win_T floating/bar/sep setters - floating, winbar, hsep, vsep already in Rust (window crate)
+
+// Status height via p_stl check
+int nvim_win_get_status_height_for_float(win_T *wp)
+{ if (!wp) { return 0; } return (wp->w_p_stl && *wp->w_p_stl != NUL && (p_ls == 1 || p_ls == 2)) ? STATUS_HEIGHT : 0; }
+
+// win_config_float via fconfig pointer
+void nvim_win_config_float_with_fconfig(win_T *wp, WinConfig *fconfig)
+{ if (wp && fconfig) { win_config_float(wp, *fconfig); } }
+
+// winframe_remove wrapper
+void nvim_winframe_remove(win_T *wp) { if (wp) { int dir; winframe_remove(wp, &dir, NULL, NULL); } }
+
+// XFREE_CLEAR(wp->w_frame) wrapper
+void nvim_win_xfree_clear_frame(win_T *wp) { if (wp) { XFREE_CLEAR(wp->w_frame); } }
+
+// api_set_error wrappers for win_new_float error messages
+void nvim_api_set_error_cannot_make_float(Error *err)
+{ if (err) { api_set_error(err, kErrorTypeException, "Cannot change last window into float"); } }
+void nvim_api_set_error_float_diff_tabpage(Error *err)
+{ if (err) { api_set_error(err, kErrorTypeException, "Cannot change window from different tabpage into float"); } }
+
+// ERROR_SET check
+int nvim_error_is_set(Error *err) { return (err && ERROR_SET(err)) ? 1 : 0; }
+// emsg from error msg and clear
+void nvim_emsg_and_clear_error(Error *err)
+{ if (err) { if (ERROR_SET(err)) { emsg(err->msg); } api_clear_error(err); } }
+// api_clear_error
+void nvim_api_clear_error(Error *err) { if (err) { api_clear_error(err); } }
+
+// win_free wrapper
+void nvim_win_free(win_T *wp) { if (wp) { win_free(wp, NULL); } }
+
+// block/unblock autocmds
+void nvim_block_autocmds(void) { block_autocmds(); }
+void nvim_unblock_autocmds(void) { unblock_autocmds(); }
+
+// nvim_create_buf wrapper
+Buffer nvim_create_buf_wrapper(bool listed, bool scratch, Error *err)
+{ return nvim_create_buf(listed, scratch, err); }
+
+// find_buffer_by_handle wrapper
+buf_T *nvim_find_buffer_by_handle(Buffer b, Error *err) { return find_buffer_by_handle(b, err); }
+
+// set_option_direct_for for bufhidden=wipe
+void nvim_buf_set_bufhidden_wipe(buf_T *buf) { if (buf) { set_option_direct_for(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL, 0, kOptScopeBuf, buf); } }
+
+// wp->w_p_diff setter
+void nvim_win_set_p_diff(win_T *wp, int val) { if (wp) { wp->w_p_diff = (val != 0); } }
+
+// wp->w_float_is_info setter
+void nvim_win_set_float_is_info(win_T *wp, int val) { if (wp) { wp->w_float_is_info = (val != 0); } }
+
+// WinConfig init helpers for win_float_create
+void nvim_wconfig_set_col_to_curwin_wcol(WinConfig *cfg) { if (cfg && curwin) { cfg->col = curwin->w_wcol; } }
+void nvim_wconfig_set_row_to_curwin_wrow(WinConfig *cfg) { if (cfg && curwin) { cfg->row = curwin->w_wrow; } }
+void nvim_wconfig_set_relative_editor(WinConfig *cfg) { if (cfg) { cfg->relative = kFloatRelativeEditor; } }
+void nvim_wconfig_set_focusable(WinConfig *cfg, int val) { if (cfg) { cfg->focusable = (val != 0); } }
+void nvim_wconfig_set_mouse(WinConfig *cfg, int val) { if (cfg) { cfg->mouse = (val != 0); } }
+void nvim_wconfig_set_anchor(WinConfig *cfg, int val) { if (cfg) { cfg->anchor = (FloatAnchor)val; } }
+void nvim_wconfig_set_noautocmd(WinConfig *cfg, int val) { if (cfg) { cfg->noautocmd = (val != 0); } }
+void nvim_wconfig_set_hide(WinConfig *cfg, int val) { if (cfg) { cfg->hide = (val != 0); } }
+void nvim_wconfig_set_style_minimal(WinConfig *cfg) { if (cfg) { cfg->style = kWinStyleMinimal; } }
+// WinConfig init (heap-allocated, returned to Rust as opaque pointer)
+WinConfig *nvim_wconfig_alloc_init(void) { WinConfig *cfg = xmalloc(sizeof(WinConfig)); WinConfig _init = WIN_CONFIG_INIT; *cfg = _init; return cfg; }
+void nvim_wconfig_free(WinConfig *cfg) { xfree(cfg); }
+// Error init and alloc
+Error *nvim_error_alloc_init(void) { Error *err = xmalloc(sizeof(Error)); Error _init = ERROR_INIT; *err = _init; return err; }
+void nvim_error_free(Error *err) { if (err) { api_clear_error(err); xfree(err); } }
+// nvim_buf_set_p_bl already defined above (line 381)
+// win_set_buf
+// already exists in window_shim.c as win_set_buf(win, buf, err)
+// find_window_by_handle with explicit error (not safe version)
+win_T *nvim_find_window_by_handle_ex(int handle, Error *err) { return find_window_by_handle((int)handle, err); }
+// nvim_wconfig_get_window_handle
+int nvim_wconfig_get_window_val(WinConfig *cfg) { return cfg ? (int)cfg->window : 0; }
+

@@ -46,88 +46,11 @@ extern int rs_win_comp_pos(void);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern void rs_win_remove_status_line(win_T *wp, int add_hsep);
 
-/// Create a new float.
-///
-/// @param wp      if NULL, allocate a new window, otherwise turn existing window into a float.
-///                It must then already belong to the current tabpage!
-/// @param last    make the window the last one in the window list.
-///                Only used when allocating the autocommand window.
-/// @param config  must already have been validated!
+// win_new_float: migrated to Rust (winfloat crate, Phase 6).
+extern win_T *rs_win_new_float(win_T *wp, bool last, WinConfig *fconfig, Error *err);
 win_T *win_new_float(win_T *wp, bool last, WinConfig fconfig, Error *err)
 {
-  if (wp == NULL) {
-    tabpage_T *tp = NULL;
-    win_T *tp_last = last ? lastwin : rs_lastwin_nofloating();
-    if (fconfig.window != 0) {
-      assert(!last);
-      win_T *parent_wp = find_window_by_handle(fconfig.window, err);
-      if (!parent_wp) {
-        return NULL;
-      }
-      tp = rs_win_find_tabpage(parent_wp);
-      if (!tp) {
-        return NULL;
-      }
-      tp_last = tp == curtab ? lastwin : tp->tp_lastwin;
-      while (tp_last->w_floating && tp_last->w_prev) {
-        tp_last = tp_last->w_prev;
-      }
-    }
-    wp = win_alloc(tp_last, false);
-    win_init(wp, curwin, 0);
-    if (wp->w_p_wbr != NULL && fconfig.height == 1) {
-      if (wp->w_p_wbr != empty_string_option) {
-        free_string_option(wp->w_p_wbr);
-      }
-      wp->w_p_wbr = empty_string_option;
-    }
-    if (wp->w_p_stl && wp->w_p_stl != empty_string_option) {
-      free_string_option(wp->w_p_stl);
-      wp->w_p_stl = empty_string_option;
-    }
-  } else {
-    assert(!last);
-    assert(!wp->w_floating);
-    if (firstwin == wp && rs_lastwin_nofloating() == wp) {
-      // last non-float
-      api_set_error(err, kErrorTypeException,
-                    "Cannot change last window into float");
-      return NULL;
-    } else if (!rs_win_valid(wp)) {
-      api_set_error(err, kErrorTypeException,
-                    "Cannot change window from different tabpage into float");
-      return NULL;
-    } else if (cmdwin_win != NULL && !cmdwin_win->w_floating) {
-      // cmdwin can't become the only non-float. Check for others.
-      bool other_nonfloat = false;
-      for (win_T *wp2 = firstwin; wp2 != NULL && !wp2->w_floating; wp2 = wp2->w_next) {
-        if (wp2 != wp && wp2 != cmdwin_win) {
-          other_nonfloat = true;
-          break;
-        }
-      }
-      if (!other_nonfloat) {
-        api_set_error(err, kErrorTypeException, "%s", e_cmdwin);
-        return NULL;
-      }
-    }
-    int dir;
-    winframe_remove(wp, &dir, NULL, NULL);
-    XFREE_CLEAR(wp->w_frame);
-    rs_win_comp_pos();  // recompute window positions
-    rs_win_remove(wp, NULL);
-    rs_win_append(rs_lastwin_nofloating(), wp, NULL);
-  }
-  wp->w_floating = true;
-  wp->w_status_height = wp->w_p_stl && *wp->w_p_stl != NUL
-                        && (p_ls == 1 || p_ls == 2) ? STATUS_HEIGHT : 0;
-  wp->w_winbar_height = 0;
-  wp->w_hsep_height = 0;
-  wp->w_vsep_width = 0;
-
-  win_config_float(wp, fconfig);
-  redraw_later(wp, UPD_VALID);
-  return wp;
+  return rs_win_new_float(wp, last, &fconfig, err);
 }
 
 // win_set_minimal_style: migrated to Rust (winfloat crate, Phase 4).
@@ -152,69 +75,7 @@ void win_config_float(win_T *wp, WinConfig fconfig)
 
 // win_float_find_preview, win_float_find_altwin: migrated to Rust (winfloat crate, Phase 2).
 
-/// Inline helper function for handling errors and cleanup in win_float_create.
-static inline win_T *handle_error_and_cleanup(win_T *wp, Error *err)
-{
-  if (ERROR_SET(err)) {
-    emsg(err->msg);
-    api_clear_error(err);
-  }
-  if (wp) {
-    rs_win_remove(wp, NULL);
-    win_free(wp, NULL);
-  }
-  unblock_autocmds();
-  return NULL;
-}
+// handle_error_and_cleanup: inlined into win_float_create Rust implementation (Phase 6).
 
-/// create a floating preview window.
-///
-/// @param[in] bool enter floating window.
-/// @param[in] bool create a new buffer for window.
-///
-/// @return win_T
-win_T *win_float_create(bool enter, bool new_buf)
-{
-  WinConfig config = WIN_CONFIG_INIT;
-  config.col = curwin->w_wcol;
-  config.row = curwin->w_wrow;
-  config.relative = kFloatRelativeEditor;
-  config.focusable = false;
-  config.mouse = false;
-  config.anchor = 0;  // NW
-  config.noautocmd = true;
-  config.hide = true;
-  config.style = kWinStyleMinimal;
-  Error err = ERROR_INIT;
-
-  block_autocmds();
-  win_T *wp = win_new_float(NULL, false, config, &err);
-  if (!wp) {
-    return handle_error_and_cleanup(wp, &err);
-  }
-
-  if (new_buf) {
-    Buffer b = nvim_create_buf(false, true, &err);
-    if (!b) {
-      return handle_error_and_cleanup(wp, &err);
-    }
-    buf_T *buf = find_buffer_by_handle(b, &err);
-    if (!buf) {
-      return handle_error_and_cleanup(wp, &err);
-    }
-    buf->b_p_bl = false;  // unlist
-    set_option_direct_for(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL, 0,
-                          kOptScopeBuf, buf);
-    win_set_buf(wp, buf, &err);
-    if (ERROR_SET(&err)) {
-      return handle_error_and_cleanup(wp, &err);
-    }
-  }
-  unblock_autocmds();
-  wp->w_p_diff = false;
-  wp->w_float_is_info = true;
-  if (enter) {
-    win_enter(wp, false);
-  }
-  return wp;
-}
+// win_float_create: migrated to Rust (winfloat crate, Phase 6).
+// win_float_create exported directly from Rust with same symbol name.
