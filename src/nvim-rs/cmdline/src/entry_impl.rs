@@ -150,6 +150,12 @@ unsafe extern "C" {
     fn nvim_set_ccline_redraw_state(state: c_int);
     fn nvim_get_ccline_cmdbuff() -> *mut c_char;
     fn nvim_apply_pending_hl_callback();
+
+    // getexline dependencies
+    fn nvim_get_exec_from_reg() -> c_int;
+    fn vpeekc() -> c_int;
+    fn vgetc() -> c_int;
+    fn getcmdline(firstc: c_int, count: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
 }
 
 // MODE_CMDLINE constant
@@ -588,4 +594,30 @@ pub unsafe extern "C" fn rs_getcmdline_prompt(
     }
 
     ret.cast::<c_char>()
+}
+
+// =============================================================================
+// getexline: migrated from ex_getln.c
+// =============================================================================
+
+/// Get an Ex command line for the ":" command.
+///
+/// When executing a register, removes the leading ':' from each line.
+/// Then delegates to getcmdline().
+///
+/// # Safety
+///
+/// Calls C functions vpeekc, vgetc, getcmdline.
+#[no_mangle]
+pub unsafe extern "C" fn getexline(
+    c: c_int,
+    _cookie: *mut c_void,
+    indent: c_int,
+    do_concat: bool,
+) -> *mut c_char {
+    // When executing a register, remove ':' that's in front of each line.
+    if nvim_get_exec_from_reg() != 0 && vpeekc() == b':' as c_int {
+        vgetc();
+    }
+    getcmdline(c, 1, indent, do_concat)
 }

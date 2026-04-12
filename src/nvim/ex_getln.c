@@ -328,20 +328,7 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
 
 // check_opt_wim() is implemented in Rust (cmdline crate, wildmenu.rs).
 
-/// Get an Ex command line for the ":" command.
-///
-/// @param c  normally ':', NUL for ":append"
-/// @param indent  indent for inside conditionals
-char *getexline(int c, void *cookie, int indent, bool do_concat)
-{
-  // When executing a register, remove ':' that's in front of each line.
-  if (exec_from_reg && vpeekc() == ':') {
-    vgetc();
-  }
-
-  return getcmdline(c, 1, indent, do_concat);
-}
-
+// getexline: implemented in Rust (cmdline crate, entry_impl.rs).
 // alloc_cmdbuff, dealloc_cmdbuff, realloc_cmdbuff: implemented in Rust (cmdline crate, cmdbuff.rs).
 
 /// Adjust ccline.xpc->xp_pattern after buffer reallocation.
@@ -858,6 +845,9 @@ void nvim_set_getln_interrupted_highlight(int val) { getln_interrupted_highlight
 /// Get cedit_key value (static variable, exposed for Rust).
 int nvim_get_cedit_key(void) { return cedit_key; }
 
+/// Get exec_from_reg global (for Rust getexline).
+int nvim_get_exec_from_reg(void) { return exec_from_reg ? 1 : 0; }
+
 /// Set cedit_key value (for Rust did_set_cedit implementation).
 void nvim_set_cedit_key(int val) { cedit_key = val; }
 
@@ -1030,9 +1020,6 @@ void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
 
 /// Set State global.
 void nvim_set_State(int val) { State = val; }
-
-/// Set need_wait_return to false.
-void nvim_clear_need_wait_return(void) { need_wait_return = false; }
 
 /// Set got_int to false.
 void nvim_clear_got_int(void) { got_int = false; }
