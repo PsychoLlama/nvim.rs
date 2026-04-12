@@ -241,9 +241,6 @@ extern "C" {
 
     // --- Tabpage operations ---
 
-    /// Get `tabnr` from `tab_page_click_defs` at given column.
-    fn nvim_mouse_get_tab_click_tabnr(col: c_int) -> c_int;
-
     /// Get the current tabpage.
     fn nvim_get_curtab() -> TabpageHandle;
 
@@ -699,7 +696,14 @@ pub unsafe extern "C" fn rs_reset_dragwin() {
 /// Requires valid `tab_page_click_defs` array and valid `mouse_col`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_move_tab_to_mouse() {
-    let tabnr = nvim_mouse_get_tab_click_tabnr(mouse_col);
+    let tab_defs = nvim_get_tab_page_click_defs_ptr();
+    let col = mouse_col;
+    #[allow(clippy::cast_sign_loss)]
+    let tabnr = if tab_defs.is_null() || col < 0 {
+        0
+    } else {
+        (*tab_defs.cast::<StlClickDefinition>().add(col as usize)).tabnr
+    };
     if tabnr <= 0 {
         tabpage_move(9999);
     } else if tabnr < rs_tabpage_index(nvim_get_curtab()) {
@@ -2706,7 +2710,7 @@ pub unsafe extern "C" fn rs_f_getmousepos(
 // ---------------------------------------------------------------------------
 extern "C" {
     // Input helpers
-    fn nvim_get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut bool) -> c_int;
+    fn get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut bool) -> c_int;
     fn nvim_vpeekc() -> c_int;
     fn nvim_safe_vgetc() -> c_int;
     fn nvim_vungetc(c: c_int);
@@ -2740,7 +2744,6 @@ extern "C" {
     fn nvim_get_firstwin_winrow_mouse() -> c_int;
     fn nvim_get_cmdwin_type_mouse() -> c_int;
     fn nvim_tab_page_click_defs_valid() -> bool;
-    fn nvim_mouse_get_tab_click_type(col: c_int) -> c_int;
     fn nvim_get_tab_page_click_defs_ptr() -> StlClickDefinitionHandle;
     fn nvim_get_restart_edit_mouse() -> c_int;
 
@@ -2760,7 +2763,6 @@ extern "C" {
     fn nvim_win_get_statuscol_click_defs(wp: WinHandle) -> StlClickDefinitionHandle;
     fn nvim_win_get_status_click_defs_size(wp: WinHandle) -> c_int;
     fn nvim_win_get_statuscol_click_defs_size(wp: WinHandle) -> c_int;
-    fn nvim_stl_click_defs_get_type(click_defs: StlClickDefinitionHandle, col: c_int) -> c_int;
 
     // Navigation/tag/quickfix
     fn nvim_curwin_is_qf() -> c_int;
@@ -2968,7 +2970,7 @@ unsafe fn rs_do_mouse_impl(
         let mut ic = false;
         let mut id = false;
         loop {
-            wb = nvim_get_mouse_button(key2termcap1(c), &raw mut ic, &raw mut id);
+            wb = get_mouse_button(key2termcap1(c), &raw mut ic, &raw mut id);
             if id && KeyStuffed == 0 && nvim_vpeekc() != 0 {
                 let save_grid = mouse_grid;
                 let save_row = mouse_row;
@@ -3129,9 +3131,20 @@ unsafe fn rs_do_mouse_impl(
             }
             if is_click && nvim_get_cmdwin_type_mouse() == 0 && mouse_col < nvim_get_Columns_mouse()
             {
-                let tabnr = nvim_mouse_get_tab_click_tabnr(mouse_col);
+                let tab_defs = nvim_get_tab_page_click_defs_ptr();
+                #[allow(clippy::cast_sign_loss)]
+                let tab_def = if tab_defs.is_null() || mouse_col < 0 {
+                    None
+                } else {
+                    Some(
+                        &*tab_defs
+                            .cast::<StlClickDefinition>()
+                            .add(mouse_col as usize),
+                    )
+                };
+                let tabnr = tab_def.map_or(0, |d| d.tabnr);
                 IN_TAB_LINE = true;
-                let click_type = nvim_mouse_get_tab_click_type(mouse_col);
+                let click_type = tab_def.map_or(0, |d| d.click_type);
                 if click_type == STL_CLICK_TAB_SWITCH {
                     if which_button == MOUSE_MIDDLE {
                         rs_mouse_tab_close(tabnr);
@@ -3309,7 +3322,11 @@ unsafe fn rs_do_mouse_impl(
         }
 
         if !click_defs.is_null() {
-            let click_type = nvim_stl_click_defs_get_type(click_defs, click_col);
+            #[allow(clippy::cast_sign_loss)]
+            let click_type = (*click_defs
+                .cast::<StlClickDefinition>()
+                .add(click_col as usize))
+            .click_type;
             if click_type == STL_CLICK_DISABLED {
                 if in_statuscol
                     && mouse_model_popup_impl()

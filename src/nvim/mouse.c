@@ -81,14 +81,6 @@ void nvim_set_mouse_past_bottom(bool val) { mouse_past_bottom = val; }
 /// Set mouse_past_eol global (used from Rust).
 void nvim_set_mouse_past_eol(bool val) { mouse_past_eol = val; }
 
-/// Get tabnr from tab_page_click_defs at given column.
-int nvim_mouse_get_tab_click_tabnr(int col)
-{
-  if (tab_page_click_defs == NULL || col < 0 || col >= (int)tab_page_click_defs_size) {
-    return 0;
-  }
-  return tab_page_click_defs[col].tabnr;
-}
 
 extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_move_tab_to_mouse(void);
@@ -197,11 +189,6 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
 
 // --- Input helpers -----------------------------------------------------------
 
-/// Decode a mouse key code into which_button, is_click, is_drag.
-int nvim_get_mouse_button(int code, bool *is_click, bool *is_drag)
-{
-  return get_mouse_button(code, is_click, is_drag);
-}
 
 /// Peek at the next character in the input queue without consuming it.
 int nvim_vpeekc(void) { return vpeekc(); }
@@ -294,14 +281,6 @@ bool nvim_tab_page_click_defs_valid(void) { return tab_page_click_defs != NULL; 
 /// Get tab_page_click_defs_size.
 int nvim_get_tab_page_click_defs_size(void) { return (int)tab_page_click_defs_size; }
 
-/// Get the click type for a given column from tab_page_click_defs.
-int nvim_mouse_get_tab_click_type(int col)
-{
-  if (tab_page_click_defs == NULL || col < 0 || col >= (int)tab_page_click_defs_size) {
-    return 0;  // kStlClickDisabled
-  }
-  return (int)tab_page_click_defs[col].type;
-}
 
 /// Get pointer to tab_page_click_defs (as opaque handle).
 StlClickDefinition *nvim_get_tab_page_click_defs_ptr(void) { return tab_page_click_defs; }
@@ -356,14 +335,6 @@ int nvim_win_get_statuscol_click_defs_size(win_T *wp)
   return wp ? (int)wp->w_statuscol_click_defs_size : 0;
 }
 
-/// Get click type from a StlClickDefinition array at given column.
-int nvim_stl_click_defs_get_type(StlClickDefinition *click_defs, int col)
-{
-  if (click_defs == NULL) {
-    return 0;  // kStlClickDisabled
-  }
-  return (int)click_defs[col].type;
-}
 
 // --- Navigation/tag/quickfix -------------------------------------------------
 
