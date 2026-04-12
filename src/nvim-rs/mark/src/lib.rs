@@ -260,6 +260,30 @@ extern "C" {
     // Phase 7/8: display accessors (from mark_shim.c)
     fn nvim_mark_get_iobuff() -> *mut c_char;
     fn nvim_mark_get_iosize() -> c_int;
+
+    // Phase 2: typval list/dict FFI (for add_mark, get_buf_local_marks, get_global_marks)
+    #[link_name = "tv_dict_alloc"]
+    fn nvim_mark_tv_dict_alloc() -> *mut c_void;
+    #[link_name = "tv_list_append_dict"]
+    fn nvim_mark_tv_list_append_dict(list: *mut c_void, dict: *mut c_void);
+    #[link_name = "tv_list_alloc"]
+    fn nvim_mark_tv_list_alloc(len: isize) -> *mut c_void;
+    #[link_name = "tv_list_append_number"]
+    fn nvim_mark_tv_list_append_number(list: *mut c_void, n: i64);
+    #[link_name = "tv_dict_add_str"]
+    fn nvim_mark_tv_dict_add_str(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    ) -> c_int;
+    #[link_name = "tv_dict_add_list"]
+    fn nvim_mark_tv_dict_add_list(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        list: *mut c_void,
+    ) -> c_int;
 }
 
 // Phase 7: mark_move_to FFI functions (cursor, buffer switching)
@@ -6127,4 +6151,176 @@ pub unsafe extern "C" fn exported_mark_buffer_iter(
     *name = mark_name as c_char;
     *fm = *iter_mark;
     iter_mark.cast()
+}
+
+// Phase 2: add_mark, get_buf_local_marks, get_global_marks
+
+/// Internal helper: add a mark entry (dict) to a typval list.
+///
+/// Mirrors C `add_mark()` in mark.c.
+///
+/// # Safety
+/// All pointers must be valid. `l` and `pos` must not be null.
+unsafe fn rs_add_mark(
+    l: *mut c_void,
+    mname: *const c_char,
+    pos: *const PosT,
+    bufnr: c_int,
+    fname: *const c_char,
+) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = 1;
+    const MAXCOL_VAL: i32 = 0x7fff_ffff;
+
+    if (*pos).lnum <= 0 {
+        return OK;
+    }
+
+    let d = nvim_mark_tv_dict_alloc();
+    nvim_mark_tv_list_append_dict(l, d);
+
+    let lpos = nvim_mark_tv_list_alloc(-3); // kListLenMayKnow
+    nvim_mark_tv_list_append_number(lpos, i64::from(bufnr));
+    nvim_mark_tv_list_append_number(lpos, i64::from((*pos).lnum));
+    let col_val: i64 = if (*pos).col < MAXCOL_VAL {
+        i64::from((*pos).col) + 1
+    } else {
+        i64::from(MAXCOL_VAL)
+    };
+    nvim_mark_tv_list_append_number(lpos, col_val);
+    nvim_mark_tv_list_append_number(lpos, i64::from((*pos).coladd));
+
+    if nvim_mark_tv_dict_add_str(d, c"mark".as_ptr(), 4, mname) == FAIL {
+        return FAIL;
+    }
+    if nvim_mark_tv_dict_add_list(d, c"pos".as_ptr(), 3, lpos) == FAIL {
+        return FAIL;
+    }
+    if !fname.is_null() && nvim_mark_tv_dict_add_str(d, c"file".as_ptr(), 4, fname) == FAIL {
+        return FAIL;
+    }
+
+    OK
+}
+
+/// Get information about marks local to a buffer.
+///
+/// Replaces the C `get_buf_local_marks(buf, l)` function.
+///
+/// # Safety
+/// `buf` and `l` must be valid pointers.
+#[unsafe(export_name = "get_buf_local_marks")]
+pub unsafe extern "C" fn exported_get_buf_local_marks(buf: BufHandle, l: *mut c_void) {
+    let fnum = nvim_buf_get_fnum(buf);
+    let mut mname = [0u8; 3];
+    mname[0] = b'\'';
+    mname[2] = 0;
+
+    // Marks 'a' to 'z'
+    for i in 0..NMARKS as usize {
+        mname[1] = b'a' + i as u8;
+        let fm = nvim_mark_buf_get_namedm(buf, i as c_int);
+        rs_add_mark(
+            l,
+            mname.as_ptr().cast(),
+            &(*fm).mark,
+            fnum,
+            std::ptr::null(),
+        );
+    }
+
+    // Mark '' (curwin->w_pcmark) -- window local, but still listed here
+    let curwin = g_curwin;
+    let pcmark = nvim_mark_win_get_pcmark(curwin);
+    let curbuf = g_curbuf;
+    let curbuf_fnum = nvim_buf_get_fnum(curbuf);
+    rs_add_mark(l, c"''".as_ptr(), &pcmark, curbuf_fnum, std::ptr::null());
+
+    // Mark '"' (b_last_cursor)
+    let last_cursor = nvim_mark_buf_get_last_cursor(buf);
+    rs_add_mark(
+        l,
+        c"'\"".as_ptr(),
+        &(*last_cursor).mark,
+        fnum,
+        std::ptr::null(),
+    );
+
+    // Mark '[ (b_op_start)
+    let op_start = nvim_mark_buf_get_op_start_val(buf);
+    rs_add_mark(l, c"'[".as_ptr(), &op_start, fnum, std::ptr::null());
+
+    // Mark '] (b_op_end)
+    let op_end = nvim_mark_buf_get_op_end_val(buf);
+    rs_add_mark(l, c"']".as_ptr(), &op_end, fnum, std::ptr::null());
+
+    // Mark '^ (b_last_insert)
+    let last_insert = nvim_mark_buf_get_last_insert(buf);
+    rs_add_mark(
+        l,
+        c"'^".as_ptr(),
+        &(*last_insert).mark,
+        fnum,
+        std::ptr::null(),
+    );
+
+    // Mark '. (b_last_change)
+    let last_change = nvim_mark_buf_get_last_change(buf);
+    rs_add_mark(
+        l,
+        c"'.".as_ptr(),
+        &(*last_change).mark,
+        fnum,
+        std::ptr::null(),
+    );
+
+    // Mark '< (b_visual.vi_start)
+    let vi_start = nvim_mark_buf_get_visual_start(buf);
+    rs_add_mark(l, c"'<".as_ptr(), &vi_start, fnum, std::ptr::null());
+
+    // Mark '> (b_visual.vi_end)
+    let vi_end = nvim_mark_buf_get_visual_end(buf);
+    rs_add_mark(l, c"'>".as_ptr(), &vi_end, fnum, std::ptr::null());
+}
+
+/// Get information about global marks ('A' to 'Z' and '0' to '9').
+///
+/// Replaces the C `get_global_marks(l)` function.
+///
+/// # Safety
+/// `l` must be a valid pointer to a typval list_T.
+#[unsafe(export_name = "get_global_marks")]
+pub unsafe extern "C" fn exported_get_global_marks(l: *mut c_void) {
+    let namedfm_ptr = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
+    let mut mname = [0u8; 3];
+    mname[0] = b'\'';
+    mname[2] = 0;
+
+    for i in 0..(NMARKS + 10) as usize {
+        let gmark = &*namedfm_ptr.add(i);
+        let name: *mut c_char = if gmark.fmark.fnum != 0 {
+            nvim_mark_buflist_nr2name(gmark.fmark.fnum, 1, 1)
+        } else {
+            gmark.fname
+        };
+        if name.is_null() {
+            continue;
+        }
+        mname[1] = if i >= NMARKS as usize {
+            b'0' + (i - NMARKS as usize) as u8
+        } else {
+            b'A' + i as u8
+        };
+        rs_add_mark(
+            l,
+            mname.as_ptr().cast(),
+            &gmark.fmark.mark,
+            gmark.fmark.fnum,
+            name,
+        );
+        if gmark.fmark.fnum != 0 {
+            // buflist_nr2name allocated a new string; free it
+            xfree(name.cast());
+        }
+    }
 }
