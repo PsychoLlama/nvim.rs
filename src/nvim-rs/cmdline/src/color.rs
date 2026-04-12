@@ -86,9 +86,9 @@ unsafe extern "C" {
     // On error returns -1 and stores error internally.
     fn nvim_color_acquire_callback() -> c_int;
     // Run the full '=' expression coloring path. Updates ccline.last_colors.colors.
-    fn nvim_color_do_expr_path();
+    fn nvim_color_run_expr_coloring();
     // Invoke the previously acquired callback. Returns 1=ok, 0=failed.
-    fn nvim_color_invoke_callback() -> c_int;
+    fn nvim_color_run_callback_coloring() -> c_int;
     // Get v_type of the result typval (VAR_LIST=5, VAR_UNKNOWN=0, etc).
     fn nvim_color_result_tv_type() -> c_int;
     // Get v_list pointer from result typval (may be NULL).
@@ -97,10 +97,8 @@ unsafe extern "C" {
     fn nvim_color_errmsg(msg: *const c_char);
     // Push one color chunk to ccline.last_colors.colors.
     fn nvim_ccline_colors_push(start: c_int, end: c_int, hl_id: c_int);
-    // Finalize success: update prompt_id cache, cmdbuff copy, tv_clear, free callback.
-    fn nvim_color_finalize_success();
-    // Finalize error: increment prev_prompt_errors, clear colors, call redrawcmdline.
-    fn nvim_color_finalize_error();
+    // Finalize coloring: success=1 updates cache; success=0 prints error, clears colors, redraws.
+    fn nvim_color_finalize(success: c_int);
     // Get ccline.cmdlen.
     fn nvim_color_cmdlen() -> c_int;
     // Get one byte from ccline.cmdbuff at position idx.
@@ -207,7 +205,7 @@ pub unsafe extern "C" fn nvim_color_cmdline() -> bool {
         PREV_PROMPT_ID.store(current_prompt_id, Ordering::Relaxed);
     } else if rs_should_skip_coloring(current_prompt_id, prev_id, prev_errors) != 0 {
         // Too many consecutive errors - skip coloring, finalize with empty colors.
-        nvim_color_finalize_success();
+        nvim_color_finalize(1);
         return true;
     }
 
@@ -222,24 +220,24 @@ pub unsafe extern "C" fn nvim_color_cmdline() -> bool {
         }
         3 => {
             // '=' expression path: entirely handled in C.
-            nvim_color_do_expr_path();
-            nvim_color_finalize_success();
+            nvim_color_run_expr_coloring();
+            nvim_color_finalize(1);
             return true;
         }
         0 => {
             // No callback available.
-            nvim_color_finalize_success();
+            nvim_color_finalize(1);
             return true;
         }
         1 | 2 => {} // callback acquired, fall through to invoke
         _ => {
-            nvim_color_finalize_success();
+            nvim_color_finalize(1);
             return true;
         }
     }
 
     // --- Invoke callback ---
-    if nvim_color_invoke_callback() == 0 {
+    if nvim_color_run_callback_coloring() == 0 {
         return finalize_error();
     }
 
@@ -251,7 +249,7 @@ pub unsafe extern "C" fn nvim_color_cmdline() -> bool {
 
     let list = nvim_color_result_tv_list();
     if list.is_null() {
-        nvim_color_finalize_success();
+        nvim_color_finalize(1);
         return true;
     }
 
@@ -260,7 +258,7 @@ pub unsafe extern "C" fn nvim_color_cmdline() -> bool {
         return finalize_error();
     }
 
-    nvim_color_finalize_success();
+    nvim_color_finalize(1);
     true
 }
 
@@ -370,6 +368,6 @@ unsafe fn process_color_list(list: ListPtr) -> bool {
 /// Finalize the error path: update error counter and return false.
 unsafe fn finalize_error() -> bool {
     PREV_PROMPT_ERRORS.fetch_add(1, Ordering::Relaxed);
-    nvim_color_finalize_error();
+    nvim_color_finalize(0);
     false
 }

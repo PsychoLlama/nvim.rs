@@ -456,7 +456,7 @@ int nvim_color_acquire_callback(void)
 }
 
 /// Run the full VimL expression coloring path ('=' firstc).
-void nvim_color_do_expr_path(void)
+void nvim_color_run_expr_coloring(void)
 {
   ColoredCmdline *ccline_colors = &ccline.last_colors;
   ParserLine parser_lines[] = {
@@ -502,7 +502,7 @@ void nvim_color_do_expr_path(void)
 }
 
 /// Invoke the acquired callback. Returns 1=ok, 0=failed.
-int nvim_color_invoke_callback(void)
+int nvim_color_run_callback_coloring(void)
 {
   if (ccline.cmdbuff[ccline.cmdlen] != NUL) {
     ccs.arg_allocated = true;
@@ -547,9 +547,19 @@ void nvim_ccline_colors_push(int start, int end, int hl_id)
   }));
 }
 
-/// Common finalization: update cmdbuff cache, prompt_id, tv_clear, free callback.
-static void color_finalize_common(void)
+/// Finalize coloring: update cmdbuff cache, prompt_id, tv_clear, free callback.
+/// If success==0 (error path): print pending error, clear colors, call redrawcmdline.
+void nvim_color_finalize(int success)
 {
+  if (!success) {
+    if (ERROR_SET(&ccs.err)) {
+      msg_putchar('\n');
+      msg_scroll = true;
+      smsg(HLF_E, _(ccs.err_errmsg), ccs.err.msg);
+      api_clear_error(&ccs.err);
+    }
+    kv_size(ccline.last_colors.colors) = 0;
+  }
   if (ccs.can_free_cb) {
     callback_free(&ccs.color_cb);
   }
@@ -561,26 +571,9 @@ static void color_finalize_common(void)
     ccline.last_colors.cmdbuff = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
   }
   tv_clear(&ccs.tv);
-}
-
-/// Finalize success path.
-void nvim_color_finalize_success(void)
-{
-  color_finalize_common();
-}
-
-/// Finalize error path: clear colors, print error if set, call redrawcmdline.
-void nvim_color_finalize_error(void)
-{
-  if (ERROR_SET(&ccs.err)) {
-    msg_putchar('\n');
-    msg_scroll = true;
-    smsg(HLF_E, _(ccs.err_errmsg), ccs.err.msg);
-    api_clear_error(&ccs.err);
+  if (!success) {
+    redrawcmdline();
   }
-  kv_size(ccline.last_colors.colors) = 0;
-  color_finalize_common();
-  redrawcmdline();
 }
 
 /// Get ccline.cmdlen.
