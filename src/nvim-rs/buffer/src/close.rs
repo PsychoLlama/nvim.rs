@@ -501,6 +501,29 @@ extern "C" {
     fn nvim_free_buffer_stuff_c_parts(buf: BufHandle, free_flags: c_int);
     fn nvim_clear_wininfo_c(buf: BufHandle);
     fn nvim_buf_init_changedtick_c(buf: BufHandle);
+    /// Execute all `free_buf_options()` logic in C (batch shim).
+    fn nvim_buf_do_free_options(buf: BufHandle, free_p_ff: bool);
+}
+
+// =============================================================================
+// free_buf_options (Phase 2 migration)
+// =============================================================================
+
+/// Free the memory for the options of a buffer.
+///
+/// If `free_p_ff` is true, also frees `fileformat`, `buftype`, and
+/// `fileencoding` options.
+///
+/// Drop-in replacement for C `free_buf_options`.
+///
+/// # Safety
+/// Must be called on the main thread with valid Neovim state.
+#[unsafe(export_name = "free_buf_options")]
+pub unsafe extern "C" fn rs_free_buf_options(buf: BufHandle, free_p_ff: bool) {
+    if buf.is_null() {
+        return;
+    }
+    nvim_buf_do_free_options(buf, free_p_ff);
 }
 
 // BufFreeFlags from buffer.h (kBff* enum)

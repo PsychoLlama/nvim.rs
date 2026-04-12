@@ -407,88 +407,9 @@ buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags)
 }
 
 
-/// Free the memory for the options of a buffer.
-/// If "free_p_ff" is true also free 'fileformat', 'buftype' and
-/// 'fileencoding'.
-void free_buf_options(buf_T *buf, bool free_p_ff)
-{
-  if (free_p_ff) {
-    clear_string_option(&buf->b_p_fenc);
-    clear_string_option(&buf->b_p_ff);
-    clear_string_option(&buf->b_p_bh);
-    clear_string_option(&buf->b_p_bt);
-  }
-  clear_string_option(&buf->b_p_def);
-  clear_string_option(&buf->b_p_inc);
-  clear_string_option(&buf->b_p_inex);
-  clear_string_option(&buf->b_p_inde);
-  clear_string_option(&buf->b_p_indk);
-  clear_string_option(&buf->b_p_fp);
-  clear_string_option(&buf->b_p_fex);
-  clear_string_option(&buf->b_p_kp);
-  clear_string_option(&buf->b_p_mps);
-  clear_string_option(&buf->b_p_fo);
-  clear_string_option(&buf->b_p_flp);
-  clear_string_option(&buf->b_p_isk);
-  clear_string_option(&buf->b_p_vsts);
-  XFREE_CLEAR(buf->b_p_vsts_nopaste);
-  XFREE_CLEAR(buf->b_p_vsts_array);
-  clear_string_option(&buf->b_p_vts);
-  XFREE_CLEAR(buf->b_p_vts_array);
-  clear_string_option(&buf->b_p_keymap);
-  keymap_ga_clear(&buf->b_kmap_ga);
-  ga_clear(&buf->b_kmap_ga);
-  clear_string_option(&buf->b_p_com);
-  clear_string_option(&buf->b_p_cms);
-  clear_string_option(&buf->b_p_nf);
-  clear_string_option(&buf->b_p_syn);
-  clear_string_option(&buf->b_s.b_syn_isk);
-  clear_string_option(&buf->b_s.b_p_spc);
-  clear_string_option(&buf->b_s.b_p_spf);
-  vim_regfree(buf->b_s.b_cap_prog);
-  buf->b_s.b_cap_prog = NULL;
-  clear_string_option(&buf->b_s.b_p_spl);
-  clear_string_option(&buf->b_s.b_p_spo);
-  clear_string_option(&buf->b_p_sua);
-  clear_string_option(&buf->b_p_ft);
-  clear_string_option(&buf->b_p_cink);
-  clear_string_option(&buf->b_p_cino);
-  clear_string_option(&buf->b_p_lop);
-  clear_string_option(&buf->b_p_cinsd);
-  clear_string_option(&buf->b_p_cinw);
-  clear_string_option(&buf->b_p_cot);
-  clear_string_option(&buf->b_p_cpt);
-  clear_string_option(&buf->b_p_cfu);
-  callback_free(&buf->b_cfu_cb);
-  clear_string_option(&buf->b_p_ofu);
-  callback_free(&buf->b_ofu_cb);
-  clear_string_option(&buf->b_p_tsrfu);
-  callback_free(&buf->b_tsrfu_cb);
-  clear_cpt_callbacks(&buf->b_p_cpt_cb, buf->b_p_cpt_count);
-  buf->b_p_cpt_count = 0;
-  clear_string_option(&buf->b_p_gefm);
-  clear_string_option(&buf->b_p_gp);
-  clear_string_option(&buf->b_p_mp);
-  clear_string_option(&buf->b_p_efm);
-  clear_string_option(&buf->b_p_ep);
-  clear_string_option(&buf->b_p_path);
-  clear_string_option(&buf->b_p_tags);
-  clear_string_option(&buf->b_p_tc);
-  clear_string_option(&buf->b_p_tfu);
-  callback_free(&buf->b_tfu_cb);
-  clear_string_option(&buf->b_p_ffu);
-  callback_free(&buf->b_ffu_cb);
-  clear_string_option(&buf->b_p_dict);
-  clear_string_option(&buf->b_p_dia);
-  clear_string_option(&buf->b_p_tsr);
-  clear_string_option(&buf->b_p_qe);
-  buf->b_p_ac = -1;
-  buf->b_p_ar = -1;
-  buf->b_p_ul = NO_LOCAL_UNDOLEVEL;
-  clear_string_option(&buf->b_p_lw);
-  clear_string_option(&buf->b_p_bkc);
-  clear_string_option(&buf->b_p_menc);
-}
+// free_buf_options() migrated to Rust close.rs (Phase 2).
+// Implementation body moved to nvim_buf_do_free_options() in buffer_shim.c.
+extern void free_buf_options(buf_T *buf, bool free_p_ff);
 
 // buflist_getfpos(), enter_buffer(), handle_swap_exists(), ex_buffer_all()
 // migrated to Rust lifecycle.rs (Phases 1, 3, 4).

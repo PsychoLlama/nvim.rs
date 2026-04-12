@@ -12,6 +12,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
+use libc;
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -1316,6 +1317,86 @@ pub unsafe extern "C" fn rs_ex_spelldump(eap: *mut c_void) {
         nvim_curbuf_ml_delete_last();
     }
     nvim_redraw_later_not_valid();
+}
+
+// =============================================================================
+// Phase 4: ex_mkspell and ex_spell (migrated from spellfile.c)
+// =============================================================================
+
+extern "C" {
+    // From arglist crate (exported as get_arglist_exp)
+    #[link_name = "get_arglist_exp"]
+    fn get_arglist_exp(
+        str: *mut c_char,
+        fcountp: *mut c_int,
+        fnamesp: *mut *mut *mut c_char,
+        wig: c_int,
+    ) -> c_int;
+    // From path crate (exported as FreeWild)
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
+    // From spellfile.rs
+    fn rs_mkspell(
+        fcount: c_int,
+        fnames: *mut *mut c_char,
+        ascii: bool,
+        over_write: bool,
+        added_word: bool,
+    );
+    // exarg_T field accessors (spell_shim.c)
+    fn nvim_spell_eap_get_arg(eap: *const c_void) -> *mut c_char;
+    fn nvim_spell_eap_get_forceit(eap: *const c_void) -> bool;
+    fn nvim_spell_eap_get_add_type(eap: *const c_void) -> c_int;
+    fn nvim_spell_eap_is_undo(eap: *const c_void) -> bool;
+    fn nvim_spell_eap_get_line2(eap: *const c_void) -> c_int;
+    // spell_add_word is still in C (spellfile.c) at this point
+    fn spell_add_word(word: *mut c_char, len: c_int, what: c_int, idx: c_int, undo: bool);
+}
+
+/// `:mkspell [-ascii] outfile infile ...` / `:mkspell [-ascii] addfile`
+///
+/// Migrated from spellfile.c ex_mkspell().
+///
+/// # Safety
+/// Called from C with a valid exarg_T pointer.
+#[export_name = "ex_mkspell"]
+pub unsafe extern "C" fn rs_ex_mkspell(eap: *mut c_void) {
+    let mut fcount: c_int = 0;
+    let mut fnames: *mut *mut c_char = std::ptr::null_mut();
+    let mut arg = nvim_spell_eap_get_arg(eap.cast_const());
+    let mut ascii = false;
+
+    // Check for "-ascii" flag.
+    if libc::strncmp(arg, c"-ascii".as_ptr(), 6) == 0 {
+        ascii = true;
+        arg = skipwhite(arg.add(6));
+    }
+
+    // Expand all remaining arguments (e.g. $VIMRUNTIME).
+    if get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, 0) != OK {
+        return;
+    }
+
+    let forceit = nvim_spell_eap_get_forceit(eap.cast_const());
+    rs_mkspell(fcount, fnames, ascii, forceit, false);
+    FreeWild(fcount, fnames);
+}
+
+/// `:[count]spellgood {word}` / `:[count]spellwrong {word}` / etc.
+///
+/// Migrated from spellfile.c ex_spell().
+///
+/// # Safety
+/// Called from C with a valid exarg_T pointer.
+#[export_name = "ex_spell"]
+pub unsafe extern "C" fn rs_ex_spell(eap: *mut c_void) {
+    let arg = nvim_spell_eap_get_arg(eap.cast_const());
+    let len = libc::strlen(arg.cast::<libc::c_char>()) as c_int;
+    let what = nvim_spell_eap_get_add_type(eap.cast_const());
+    let undo = nvim_spell_eap_is_undo(eap.cast_const());
+    let forceit = nvim_spell_eap_get_forceit(eap.cast_const());
+    let line2 = nvim_spell_eap_get_line2(eap.cast_const());
+    let idx = if forceit { 0 } else { line2 };
+    spell_add_word(arg, len, what, idx, undo);
 }
 
 // =============================================================================

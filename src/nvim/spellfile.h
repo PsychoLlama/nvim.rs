@@ -25,5 +25,7 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent);
 void suggest_load_files(void);
 void *getroom(spellinfo_T *spin, size_t len, bool align);
 void free_blocks(sblock_T *bl);
+void ex_mkspell(exarg_T *eap);
+void ex_spell(exarg_T *eap);
 
 #include "spellfile.h.generated.h"

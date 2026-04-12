@@ -187,57 +187,10 @@ typedef struct spellinfo_S {
 extern bool valid_spell_word(const char *word, const char *end);
 #include "spellfile.c.generated.h"
 
-/// Thin wrapper: write_vim_spell is now implemented in Rust (rs_write_vim_spell).
-extern int rs_write_vim_spell(spellinfo_T *spin, char *fname);
-static int write_vim_spell(spellinfo_T *spin, char *fname)
-{
-  return rs_write_vim_spell(spin, fname);
-}
-
-
-// ":mkspell [-ascii] outfile  infile ..."
-// ":mkspell [-ascii] addfile"
-void ex_mkspell(exarg_T *eap)
-{
-  int fcount;
-  char **fnames;
-  char *arg = eap->arg;
-  bool ascii = false;
-
-  if (strncmp(arg, "-ascii", 6) == 0) {
-    ascii = true;
-    arg = skipwhite(arg + 6);
-  }
-
-  // Expand all the remaining arguments (e.g., $VIMRUNTIME).
-  if (get_arglist_exp(arg, &fcount, &fnames, false) != OK) {
-    return;
-  }
-
-  mkspell(fcount, fnames, ascii, eap->forceit, false);
-  FreeWild(fcount, fnames);
-}
-
-/// Thin wrapper: mkspell is now implemented in Rust (rs_mkspell).
+// ex_mkspell, ex_spell, write_vim_spell, and mkspell are now implemented in
+// Rust (commands.rs / spellfile.rs) and exported directly with their C names.
+// spell_add_word still calls mkspell via rs_mkspell until Phase 3.
 extern void rs_mkspell(int fcount, char **fnames, bool ascii, bool over_write, bool added_word);
-static void mkspell(int fcount, char **fnames, bool ascii, bool over_write, bool added_word)
-{
-  rs_mkspell(fcount, fnames, ascii, over_write, added_word);
-}
-
-// ":[count]spellgood  {word}"
-// ":[count]spellwrong {word}"
-// ":[count]spellundo  {word}"
-// ":[count]spellrare  {word}"
-void ex_spell(exarg_T *eap)
-{
-  spell_add_word(eap->arg, (int)strlen(eap->arg),
-                 eap->cmdidx == CMD_spellwrong
-                 ? SPELL_ADD_BAD
-                 : eap->cmdidx == CMD_spellrare ? SPELL_ADD_RARE : SPELL_ADD_GOOD,
-                 eap->forceit ? 0 : (int)eap->line2,
-                 eap->cmdidx == CMD_spellundo);
-}
 
 /// Add "word[len]" to 'spellfile' as a good or bad word.
 ///
@@ -409,7 +362,7 @@ void spell_add_word(char *word, int len, SpellAddType what, int idx, bool undo)
 
   if (file_written) {
     // Update the .add.spl file.
-    mkspell(1, &fname, false, true, true);
+    rs_mkspell(1, &fname, false, true, true);
 
     // If the .add file is edited somewhere, reload it.
     if (buf != NULL) {

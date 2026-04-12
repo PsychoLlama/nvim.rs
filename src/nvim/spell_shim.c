@@ -386,3 +386,41 @@ void nvim_spell_win_clear_ismw(win_T *wp)
   CLEAR_FIELD(wp->w_s->b_spell_ismw);
   XFREE_CLEAR(wp->w_s->b_spell_ismw_mb);
 }
+
+// =============================================================================
+// exarg_T accessors for ex_mkspell / ex_spell (now in Rust)
+// =============================================================================
+
+#include "nvim/ex_cmds_defs.h"
+
+/// Get eap->arg for spell commands.
+char *nvim_spell_eap_get_arg(const exarg_T *eap) { return eap->arg; }
+
+/// Get eap->forceit for spell commands.
+bool nvim_spell_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
+
+/// Get eap->cmdidx as int for spell commands.
+int nvim_spell_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
+
+/// Get eap->line2 as int for spell commands.
+int nvim_spell_eap_get_line2(const exarg_T *eap) { return (int)eap->line2; }
+
+#include "nvim/spell_defs.h"
+
+/// Map eap->cmdidx to SpellAddType for ex_spell (SPELL_ADD_BAD, _RARE, or _GOOD).
+int nvim_spell_eap_get_add_type(const exarg_T *eap)
+{
+  if (eap->cmdidx == CMD_spellwrong) {
+    return SPELL_ADD_BAD;
+  }
+  if (eap->cmdidx == CMD_spellrare) {
+    return SPELL_ADD_RARE;
+  }
+  return SPELL_ADD_GOOD;
+}
+
+/// Return true if eap->cmdidx is CMD_spellundo.
+bool nvim_spell_eap_is_undo(const exarg_T *eap)
+{
+  return eap->cmdidx == CMD_spellundo;
+}
