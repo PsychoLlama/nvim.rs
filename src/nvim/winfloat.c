@@ -320,46 +320,8 @@ void win_float_remove(bool bang, int count)
   kv_destroy(float_win_arr);
 }
 
-void win_check_anchored_floats(win_T *win)
-{
-  for (win_T *wp = lastwin; wp && wp->w_floating; wp = wp->w_prev) {
-    // float might be anchored to moved window
-    if (wp->w_config.relative == kFloatRelativeWindow
-        && wp->w_config.window == win->handle) {
-      wp->w_pos_changed = true;
-    }
-  }
-}
-
-/// Wrapper for win_check_anchored_floats for Rust FFI.
-void nvim_win_check_anchored_floats(win_T *win) { win_check_anchored_floats(win); }
-
-void win_float_update_statusline(void)
-{
-  for (win_T *wp = lastwin; wp && wp->w_floating; wp = wp->w_prev) {
-    bool has_status = wp->w_status_height > 0;
-    bool should_show = *wp->w_p_stl != NUL && (p_ls == 1 || p_ls == 2);
-    if (should_show != has_status) {
-      win_config_float(wp, wp->w_config);
-    }
-  }
-}
-
-void win_float_anchor_laststatus(void)
-{
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (win->w_config.relative == kFloatRelativeLaststatus) {
-      win->w_pos_changed = true;
-    }
-  }
-}
-
-void win_reconfig_floats(void)
-{
-  for (win_T *wp = lastwin; wp && wp->w_floating; wp = wp->w_prev) {
-    win_config_float(wp, wp->w_config);
-  }
-}
+// win_check_anchored_floats, win_float_update_statusline, win_float_anchor_laststatus,
+// win_reconfig_floats: migrated to Rust (winfloat crate, Phase 1).
 
 /// Return true if "win" is floating window in the current tab page.
 ///

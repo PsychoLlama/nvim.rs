@@ -412,7 +412,7 @@ pub extern "C" fn rs_border_char_count() -> c_int {
 // Phase D3: Floating Window Positioning Helpers
 // =============================================================================
 
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void};
 
 /// Opaque handle to window (`win_T*`).
 #[repr(transparent)]
@@ -435,6 +435,11 @@ impl WinHandle {
     }
 }
 
+/// Opaque handle to tabpage (`tabpage_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TabpageHandle(*mut c_void);
+
 // C accessor functions
 extern "C" {
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
@@ -448,6 +453,18 @@ extern "C" {
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
+    // Phase 1: iteration accessors
+    fn nvim_get_lastwin() -> WinHandle;
+    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+    fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
+    fn nvim_version_get_p_ls() -> i64;
+    fn nvim_win_config_float(wp: WinHandle);
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 }
 
 /// Check if window is a floating window.
@@ -737,6 +754,73 @@ pub const extern "C" fn rs_float_point_in_rect(
         1
     } else {
         0
+    }
+}
+
+// =============================================================================
+// Phase 1: Small leaf iteration functions
+// =============================================================================
+
+/// For each floating window anchored to `win`, set `w_pos_changed = true`.
+///
+/// C equivalent: `win_check_anchored_floats`
+#[unsafe(export_name = "win_check_anchored_floats")]
+pub unsafe extern "C" fn rs_win_check_anchored_floats(win: WinHandle) {
+    // kFloatRelativeWindow = 1
+    let win_handle = nvim_win_get_handle(win);
+    let mut wp = nvim_get_lastwin();
+    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+        if nvim_win_get_config_relative(wp) == 1 && nvim_win_get_config_window(wp) == win_handle {
+            nvim_win_set_pos_changed(wp, 1);
+        }
+        wp = nvim_win_get_prev(wp);
+    }
+}
+
+/// Update statusline visibility for all floating windows.
+///
+/// C equivalent: `win_float_update_statusline`
+#[unsafe(export_name = "win_float_update_statusline")]
+pub unsafe extern "C" fn rs_win_float_update_statusline() {
+    let p_ls = nvim_version_get_p_ls();
+    let mut wp = nvim_get_lastwin();
+    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+        let has_status = nvim_win_get_status_height(wp) > 0;
+        let stl = nvim_stl_win_get_p_stl(wp);
+        let stl_nonempty = !stl.is_null() && *stl != 0;
+        let should_show = stl_nonempty && (p_ls == 1 || p_ls == 2);
+        if should_show != has_status {
+            nvim_win_config_float(wp);
+        }
+        wp = nvim_win_get_prev(wp);
+    }
+}
+
+/// Mark laststatus-relative floats as needing position recalculation.
+///
+/// C equivalent: `win_float_anchor_laststatus`
+#[unsafe(export_name = "win_float_anchor_laststatus")]
+pub unsafe extern "C" fn rs_win_float_anchor_laststatus() {
+    // kFloatRelativeLaststatus = 5
+    let curtab = nvim_get_curtab();
+    let mut wp = nvim_tabpage_get_firstwin(curtab);
+    while !wp.is_null() {
+        if nvim_win_get_config_relative(wp) == 5 {
+            nvim_win_set_pos_changed(wp, 1);
+        }
+        wp = nvim_win_get_next(wp);
+    }
+}
+
+/// Reconfigure all floating windows.
+///
+/// C equivalent: `win_reconfig_floats`
+#[unsafe(export_name = "win_reconfig_floats")]
+pub unsafe extern "C" fn rs_win_reconfig_floats() {
+    let mut wp = nvim_get_lastwin();
+    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+        nvim_win_config_float(wp);
+        wp = nvim_win_get_prev(wp);
     }
 }
 

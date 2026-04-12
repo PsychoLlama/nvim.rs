@@ -1090,7 +1090,7 @@ pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
 
     rs_set_empty_rows(wp, done);
 
-    nvim_win_check_anchored_floats(wp);
+    win_check_anchored_floats(wp);
 }
 
 // =============================================================================
@@ -1346,7 +1346,7 @@ extern "C" {
     fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
 
     // Float window management
-    fn nvim_win_check_anchored_floats(wp: WinHandle);
+    fn win_check_anchored_floats(wp: WinHandle);
 
     // Wrow accessors
     fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
@@ -1418,7 +1418,7 @@ pub unsafe extern "C" fn rs_check_topfill(wp: WinHandle, down: c_int) {
         }
     }
 
-    nvim_win_check_anchored_floats(wp);
+    win_check_anchored_floats(wp);
 }
 
 /// Get the topfill value for a window.
@@ -4439,7 +4439,7 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
             let new_leftcol = new_leftcol.max(0);
             if new_leftcol != leftcol {
                 nvim_win_set_leftcol(wp, new_leftcol);
-                nvim_win_check_anchored_floats(wp);
+                win_check_anchored_floats(wp);
                 // screen has to be redrawn with new w_leftcol
                 nvim_redraw_later(wp, upd::NOT_VALID);
             }
@@ -4927,7 +4927,7 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
     let valid = nvim_win_get_valid(wp);
     nvim_win_set_valid(wp, valid | VALID_TOPLINE);
     nvim_win_set_viewport_invalid(wp, 1);
-    nvim_win_check_anchored_floats(wp);
+    win_check_anchored_floats(wp);
 
     // Need to redraw when topline changed.
     let new_topline = nvim_win_get_topline(wp);
