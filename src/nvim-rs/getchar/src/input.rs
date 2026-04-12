@@ -640,6 +640,333 @@ pub unsafe extern "C" fn ins_char_typebuf_export(
     rs_ins_char_typebuf(c, modifiers, c_int::from(on_key_ignore))
 }
 
+// =============================================================================
+// getchar_common, f_getchar, f_getcharstr, f_getcharmod -- Phase 3 migration
+// =============================================================================
+
+use nvim_eval::typval::TypvalT;
+
+/// VAR_UNKNOWN = 0
+const VAR_UNKNOWN: c_int = 0;
+/// VAR_NUMBER = 1
+const VAR_NUMBER: c_int = 1;
+/// VAR_STRING = 2
+const VAR_STRING: c_int = 2;
+/// VAR_DICT = 5
+const VAR_DICT: c_int = 5;
+/// FAIL return from C functions
+const FAIL: c_int = 0;
+
+/// VV_MOUSE_WIN vim variable index (= 51, 0-based from VV_COUNT in eval_defs.h)
+const VV_MOUSE_WIN: c_int = 51;
+/// VV_MOUSE_WINID vim variable index
+const VV_MOUSE_WINID: c_int = 52;
+/// VV_MOUSE_LNUM vim variable index
+const VV_MOUSE_LNUM: c_int = 53;
+/// VV_MOUSE_COL vim variable index
+const VV_MOUSE_COL: c_int = 54;
+
+/// Opaque handle for window (win_T*).
+type WinHandle = *mut std::ffi::c_void;
+
+/// linenr_T (line number, C int32_t).
+type LinenrT = c_int;
+
+extern "C" {
+    // globals needed by getchar_common
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
+    static mut called_emsg: c_int;
+    static msg_row: c_int;
+    static msg_col: c_int;
+
+    // error string globals
+    static e_invarg2: [std::ffi::c_char; 0];
+    static e_invargNval: [std::ffi::c_char; 0];
+
+    // typval functions
+    fn tv_check_for_opt_dict_arg(argvars: *const std::ffi::c_void, idx: c_int) -> c_int;
+    fn tv_dict_get_bool(d: *mut std::ffi::c_void, key: *const std::ffi::c_char, def: c_int) -> i64;
+    fn tv_dict_get_string(
+        d: *const std::ffi::c_void,
+        key: *const std::ffi::c_char,
+        allocate: bool,
+    ) -> *mut std::ffi::c_char;
+    fn tv_dict_has_key(d: *const std::ffi::c_void, key: *const std::ffi::c_char) -> bool;
+    fn tv_get_number_chk(tv: *const std::ffi::c_void, error: *mut bool) -> i64;
+
+    // UI
+    fn ui_busy_start();
+    fn ui_busy_stop();
+    fn ui_cursor_goto(row: c_int, col: c_int);
+
+    // Input
+    fn safe_vgetc() -> c_int;
+    fn vpeekc_any() -> c_int;
+    fn char_avail() -> bool;
+    fn input_available() -> usize;
+    fn state_handle_k_event();
+
+    // set_vim_var_nr (implemented in Rust vars crate, exported as rs_set_vim_var_nr)
+    #[link_name = "rs_set_vim_var_nr"]
+    fn set_vim_var_nr(idx: c_int, val: i64);
+
+    // Mouse window finding
+    fn mouse_find_win_inner(grid: *mut c_int, row: *mut c_int, col: *mut c_int) -> WinHandle;
+    fn mouse_comp_pos(win: WinHandle, row: *mut c_int, col: *mut c_int, lnum: *mut LinenrT)
+        -> bool;
+
+    // Window iteration
+    fn nvim_get_firstwin() -> WinHandle;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+
+    // String utilities
+    fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
+    fn xmemdupz(data: *const std::ffi::c_void, len: usize) -> *mut std::ffi::c_void;
+
+    // is_mouse_key
+    fn is_mouse_key(c: c_int) -> bool;
+
+    // semsg (for arg validation errors in getchar_common)
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+
+    // loop / main_loop access
+    fn nvim_get_main_loop() -> *mut std::ffi::c_void;
+    fn rs_loop_get_events(lp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn rs_multiqueue_empty(mq: *mut std::ffi::c_void) -> c_int;
+
+    // no_reduce_keys increment/decrement (exported from getchar crate)
+    fn rs_inc_no_reduce_keys();
+    fn rs_dec_no_reduce_keys();
+}
+
+/// Opaque handle for EvalFuncData union.
+type EvalFuncData = *mut std::ffi::c_void;
+
+/// "getchar()" and "getcharstr()" functions -- common implementation.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval_T pointers (pointing to an array
+/// of at least 2 elements for argvars).
+#[allow(
+    clippy::cast_lossless,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    unused_assignments
+)]
+unsafe fn getchar_common(argvars: *mut TypvalT, rettv: *mut TypvalT, allow_number: bool) {
+    let mut n: i64 = 0;
+    let called_emsg_start = called_emsg;
+    let mut error = false;
+    let mut simplify = true;
+    let mut cursor_flag: u8 = b'\0';
+    let mut allow_number = allow_number;
+
+    // Validate optional dict argument
+    if (*argvars).v_type != VAR_UNKNOWN && tv_check_for_opt_dict_arg(argvars.cast(), 1) == FAIL {
+        return;
+    }
+
+    let argvars1 = argvars.add(1);
+    if (*argvars).v_type != VAR_UNKNOWN && (*argvars1).v_type == VAR_DICT {
+        let d = (*argvars1).vval.v_dict;
+
+        if allow_number {
+            allow_number = tv_dict_get_bool(d, c"number".as_ptr(), 1) != 0;
+        } else if tv_dict_has_key(d.cast_const(), c"number".as_ptr()) {
+            semsg(e_invarg2.as_ptr(), c"number".as_ptr());
+        }
+
+        simplify = tv_dict_get_bool(d, c"simplify".as_ptr(), 1) != 0;
+
+        let cursor_str = tv_dict_get_string(d.cast_const(), c"cursor".as_ptr(), false);
+        if !cursor_str.is_null() {
+            let s = std::ffi::CStr::from_ptr(cursor_str);
+            let sb = s.to_bytes();
+            if sb == b"hide" || sb == b"keep" || sb == b"msg" {
+                cursor_flag = sb[0];
+            } else {
+                semsg(e_invargNval.as_ptr(), c"cursor".as_ptr(), cursor_str);
+            }
+        }
+    }
+
+    if called_emsg != called_emsg_start {
+        return;
+    }
+
+    if cursor_flag == b'h' {
+        ui_busy_start();
+    }
+
+    no_mapping += 1;
+    allow_keys += 1;
+    if !simplify {
+        rs_inc_no_reduce_keys();
+    }
+
+    loop {
+        if cursor_flag == b'm' || (cursor_flag == b'\0' && msg_col > 0) {
+            ui_cursor_goto(msg_row, msg_col);
+        }
+
+        if (*argvars).v_type == VAR_UNKNOWN
+            || ((*argvars).v_type == VAR_NUMBER && (*argvars).vval.v_number == -1)
+        {
+            // getchar(): blocking wait.
+            if !char_avail() {
+                // Flush screen updates before blocking.
+                crate::typebuf::ui_flush_for_getchar();
+                let main_loop = nvim_get_main_loop();
+                let events = rs_loop_get_events(main_loop);
+                crate::typebuf::input_get_for_getchar(crate::typebuf::get_tb_change_cnt(), events);
+                if input_available() == 0 && rs_multiqueue_empty(events) == 0 {
+                    state_handle_k_event();
+                    continue;
+                }
+            }
+            n = safe_vgetc().into();
+        } else if tv_get_number_chk(argvars.cast(), &raw mut error) == 1 {
+            // getchar(1): only check if char avail
+            n = vpeekc_any().into();
+        } else if error || vpeekc_any() == 0 {
+            // illegal argument or getchar(0) and no char avail: return zero
+            n = 0;
+        } else {
+            // getchar(0) and char avail() != NUL: get a character.
+            n = safe_vgetc().into();
+        }
+
+        if n == i64::from(keys::K_IGNORE)
+            || n == i64::from(keys::K_MOUSEMOVE)
+            || n == i64::from(keys::K_VER_SCROLLBAR)
+            || n == i64::from(keys::K_HOR_SCROLLBAR)
+        {
+            continue;
+        }
+        break;
+    }
+
+    no_mapping -= 1;
+    allow_keys -= 1;
+    if !simplify {
+        rs_dec_no_reduce_keys();
+    }
+
+    if cursor_flag == b'h' {
+        ui_busy_stop();
+    }
+
+    set_vim_var_nr(VV_MOUSE_WIN, 0);
+    set_vim_var_nr(VV_MOUSE_WINID, 0);
+    set_vim_var_nr(VV_MOUSE_LNUM, 0);
+    set_vim_var_nr(VV_MOUSE_COL, 0);
+
+    let n_int = n as c_int;
+
+    if n != 0 && (!allow_number || is_special(n_int) || mod_mask != 0) {
+        let mut temp = [0u8; 10]; // modifier: 3, mbyte-char: 6, NUL: 1
+        let mut i: usize = 0;
+
+        // Turn a special key into three bytes, plus modifier.
+        if mod_mask != 0 {
+            temp[i] = K_SPECIAL;
+            i += 1;
+            temp[i] = KS_MODIFIER;
+            i += 1;
+            temp[i] = mod_mask as u8;
+            i += 1;
+        }
+        if is_special(n_int) {
+            temp[i] = K_SPECIAL;
+            i += 1;
+            temp[i] = k_second(n_int);
+            i += 1;
+            temp[i] = k_third(n_int);
+            i += 1;
+        } else {
+            let written = utf_char2bytes(n_int, temp[i..].as_mut_ptr().cast());
+            i += written as usize;
+        }
+        debug_assert!(i < 10);
+        temp[i] = 0; // NUL
+
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = xmemdupz(temp.as_ptr().cast(), i).cast();
+
+        if is_mouse_key(n_int) {
+            let mut row = mouse_row;
+            let mut col = mouse_col;
+            let mut grid = mouse_grid;
+            let mut lnum: LinenrT = 0;
+
+            if row >= 0 && col >= 0 {
+                let mut winnr: i64 = 1;
+                let win = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
+                if win.is_null() {
+                    return;
+                }
+                mouse_comp_pos(win, &raw mut row, &raw mut col, &raw mut lnum);
+                // Walk the window list to count `win`'s position.
+                let mut wp = nvim_get_firstwin();
+                while !wp.is_null() && wp != win {
+                    wp = nvim_win_get_next(wp);
+                    winnr += 1;
+                }
+                set_vim_var_nr(VV_MOUSE_WIN, winnr);
+                set_vim_var_nr(VV_MOUSE_WINID, nvim_win_get_handle(wp).into());
+                set_vim_var_nr(VV_MOUSE_LNUM, lnum.into());
+                set_vim_var_nr(VV_MOUSE_COL, (col + 1).into());
+            }
+        }
+    } else if !allow_number {
+        (*rettv).v_type = VAR_STRING;
+    } else {
+        (*rettv).vval.v_number = n;
+    }
+}
+
+/// "getchar()" VimL function -- Phase 3 Rust replacement.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval_T pointers.
+#[unsafe(export_name = "f_getchar")]
+pub unsafe extern "C" fn rs_f_getchar(
+    argvars: *mut TypvalT,
+    rettv: *mut TypvalT,
+    _fptr: EvalFuncData,
+) {
+    getchar_common(argvars, rettv, true);
+}
+
+/// "getcharstr()" VimL function -- Phase 3 Rust replacement.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval_T pointers.
+#[unsafe(export_name = "f_getcharstr")]
+pub unsafe extern "C" fn rs_f_getcharstr(
+    argvars: *mut TypvalT,
+    rettv: *mut TypvalT,
+    _fptr: EvalFuncData,
+) {
+    getchar_common(argvars, rettv, false);
+}
+
+/// "getcharmod()" VimL function -- Phase 3 Rust replacement.
+///
+/// # Safety
+/// `rettv` must be a valid typval_T pointer.
+#[unsafe(export_name = "f_getcharmod")]
+pub unsafe extern "C" fn rs_f_getcharmod(
+    _argvars: *mut TypvalT,
+    rettv: *mut TypvalT,
+    _fptr: EvalFuncData,
+) {
+    (*rettv).vval.v_number = mod_mask.into();
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {

@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use nvim_decoration::types::{DecorExt, DecorInline, DecorInlineData, DecorSignHighlight};
+
 use crate::{LinenrT, SignBufHandle, SignHandle, SIGN_DEF_PRIO};
 
 // =============================================================================
@@ -20,15 +22,22 @@ extern "C" {
     fn nvim_sign_create_namespace_cstr(name: *const c_char) -> c_int;
     fn nvim_sign_namespace_exists(name: *const c_char) -> c_int;
 
-    // Composite sign operations
-    fn nvim_sign_build_decor_and_set(
+    // Sign extmark placement (thin C wrapper to avoid exposing Error* to Rust)
+    fn nvim_sign_extmark_set(
         buf: SignBufHandle,
         ns: u32,
         id: *mut u32,
         row: c_int,
-        sp: SignHandle,
-        prio: c_int,
+        decor: DecorInline,
+        decor_flags: u16,
     );
+
+    // decor_put_sh is exported from nvim-decoration Rust crate
+    fn decor_put_sh(item: DecorSignHighlight) -> u32;
+
+    // xstrdup for sign name
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+
     fn nvim_sign_marktree_lookup_row(buf: SignBufHandle, ns: u32, id: u32) -> LinenrT;
     fn nvim_sign_buf_line_count(buf: SignBufHandle) -> LinenrT;
     fn nvim_sign_ns_push(ns: i64);
@@ -373,10 +382,10 @@ pub extern "C" fn rs_sign_location_not_found() -> SignLocation {
 // =============================================================================
 
 /// Marktree flag for sign text decoration.
-pub const MT_FLAG_DECOR_SIGNTEXT: u16 = 0x0040;
+pub const MT_FLAG_DECOR_SIGNTEXT: u16 = 1 << 9; // 0x0200
 
 /// Marktree flag for sign highlight decoration.
-pub const MT_FLAG_DECOR_SIGNHL: u16 = 0x0080;
+pub const MT_FLAG_DECOR_SIGNHL: u16 = 1 << 10; // 0x0400
 
 /// Calculate decoration flags for a sign.
 ///
@@ -408,6 +417,80 @@ pub extern "C" fn rs_sign_calc_decor_flags(
 /// Callback used by rs_group_get_ns for namespace lookup.
 extern "C" fn namespace_lookup_fn(name: *const c_char) -> c_int {
     unsafe { nvim_namespace_lookup(name) }
+}
+
+// =============================================================================
+// Phase 2: nvim_sign_build_decor_and_set — build DecorSignHighlight and set extmark
+// =============================================================================
+
+/// `kSHIsSign` flag from decoration_defs.h
+const KSH_IS_SIGN: u16 = 1;
+/// `DECOR_PRIORITY_BASE` from decoration_defs.h
+const DECOR_PRIORITY_BASE: u16 = 0x1000;
+/// `DECOR_ID_INVALID` from decoration_defs.h
+const DECOR_ID_INVALID: u32 = u32::MAX;
+
+/// Replace C `nvim_sign_build_decor_and_set`.
+///
+/// Builds a `DecorSignHighlight` from a `sign_T` and places it as an extmark.
+///
+/// # Safety
+/// `buf`, `id`, and `sp` must be valid pointers.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[unsafe(export_name = "nvim_sign_build_decor_and_set")]
+pub unsafe extern "C" fn rs_nvim_sign_build_decor_and_set(
+    buf: SignBufHandle,
+    ns: u32,
+    id: *mut u32,
+    row: c_int,
+    sp: SignHandle,
+    prio: c_int,
+) {
+    let s = &*sp;
+    let mut sign = DecorSignHighlight {
+        flags: 0,
+        priority: DECOR_PRIORITY_BASE,
+        hl_id: 0,
+        text: [0u32; 2],
+        sign_name: std::ptr::null_mut(),
+        sign_add_id: 0,
+        number_hl_id: 0,
+        line_hl_id: 0,
+        cursorline_hl_id: 0,
+        next: DECOR_ID_INVALID,
+        _pad_next: 0,
+        url: std::ptr::null(),
+    };
+    sign.flags |= KSH_IS_SIGN;
+    sign.text = s.sn_text;
+    sign.sign_name = xstrdup(s.sn_name);
+    sign.hl_id = s.sn_text_hl;
+    sign.line_hl_id = s.sn_line_hl;
+    sign.number_hl_id = s.sn_num_hl;
+    sign.cursorline_hl_id = s.sn_cul_hl;
+    sign.priority = prio as u16;
+
+    let has_hl = s.sn_line_hl != 0 || s.sn_num_hl != 0 || s.sn_cul_hl != 0;
+    let decor_flags: u16 = (if s.sn_text[0] != 0 {
+        MT_FLAG_DECOR_SIGNTEXT
+    } else {
+        0
+    }) | (if has_hl { MT_FLAG_DECOR_SIGNHL } else { 0 });
+
+    let sh_idx = decor_put_sh(sign);
+    let decor = DecorInline {
+        ext: true,
+        _pad: [0; 7],
+        data: DecorInlineData {
+            ext: std::mem::ManuallyDrop::new(DecorExt {
+                sh_idx,
+                _pad: 0,
+                vt: std::ptr::null_mut(),
+            }),
+        },
+    };
+
+    nvim_sign_extmark_set(buf, ns, id, row, decor, decor_flags);
 }
 
 /// Create or update a sign extmark.
@@ -443,7 +526,7 @@ pub unsafe extern "C" fn rs_buf_set_sign(
     let clamped = if lnum > line_count { line_count } else { lnum };
     let row = clamped - 1;
 
-    nvim_sign_build_decor_and_set(buf, ns, id, row, sp, prio);
+    rs_nvim_sign_build_decor_and_set(buf, ns, id, row, sp, prio);
 }
 
 /// Modify an existing placed sign. Returns the 1-based line number, or 0 if not found.

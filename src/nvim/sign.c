@@ -65,6 +65,10 @@ extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
 // Phase 1: these functions now live in Rust (nvim-sign crate)
 extern dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark);
+// Phase 2: these functions now live in Rust (nvim-sign crate)
+extern int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum);
+extern void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row, sign_T *sp, int prio);
+extern void nvim_sign_define_update_placed(const char *name, sign_T *sp);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -99,23 +103,6 @@ int nvim_sign_ns_size(void) { return (int)kv_size(sign_ns); }
 Integer nvim_sign_ns_get(int idx) { return idx < (int)kv_size(sign_ns) ? kv_A(sign_ns, idx) : -1; }
 char *nvim_sign_ns_get_name(int idx)
 { return idx < (int)kv_size(sign_ns) ? (char *)describe_ns((NS)kv_A(sign_ns, idx), "") : NULL; }
-void nvim_sign_build_decor_and_set(buf_T *buf, uint32_t ns, uint32_t *id, int row, sign_T *sp, int prio)
-{
-  DecorSignHighlight sign = DECOR_SIGN_HIGHLIGHT_INIT;
-  sign.flags |= kSHIsSign;
-  memcpy(sign.text, sp->sn_text, SIGN_WIDTH * sizeof(schar_T));
-  sign.sign_name = xstrdup(sp->sn_name);
-  sign.hl_id = sp->sn_text_hl;
-  sign.line_hl_id = sp->sn_line_hl;
-  sign.number_hl_id = sp->sn_num_hl;
-  sign.cursorline_hl_id = sp->sn_cul_hl;
-  sign.priority = (DecorPriority)prio;
-  bool has_hl = (sp->sn_line_hl || sp->sn_num_hl || sp->sn_cul_hl);
-  uint16_t decor_flags = (sp->sn_text[0] ? MT_FLAG_DECOR_SIGNTEXT : 0)
-                         | (has_hl ? MT_FLAG_DECOR_SIGNHL : 0);
-  DecorInline decor = { .ext = true, .data.ext = { .vt = NULL, .sh_idx = decor_put_sh(sign) } };
-  extmark_set(buf, ns, id, row, 0, -1, -1, decor, decor_flags, true, false, true, true, NULL);
-}
 linenr_T nvim_sign_marktree_lookup_row(buf_T *buf, uint32_t ns, uint32_t id)
 { MTKey mark = rs_marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL); return mark.pos.row + 1; }
 linenr_T nvim_sign_buf_line_count(buf_T *buf) { return buf ? buf->b_ml.ml_line_count : 0; }
@@ -176,29 +163,6 @@ sign_T *nvim_sign_map_get_or_create(const char *name, bool *is_new)
 int nvim_init_sign_text(sign_T *sp, schar_T *out, const char *text)
 { return (int)init_sign_text(sp, out, (char *)text); }
 // nvim_backslash_halve is in ex_docmd.c
-// Update placed signs and redraw when sign definition is modified
-void nvim_sign_define_update_placed(const char *name, sign_T *sp)
-{
-  bool did_redraw = false;
-  for (size_t i = 0; i < kv_size(decor_items); i++) {
-    DecorSignHighlight *sh = &kv_A(decor_items, i);
-    if (sh->sign_name && strcmp(sh->sign_name, name) == 0) {
-      memcpy(sh->text, sp->sn_text, SIGN_WIDTH * sizeof(schar_T));
-      sh->hl_id = sp->sn_text_hl;
-      sh->line_hl_id = sp->sn_line_hl;
-      sh->number_hl_id = sp->sn_num_hl;
-      sh->cursorline_hl_id = sp->sn_cul_hl;
-      if (!did_redraw) {
-        FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-          if (rs_sign_buffer_has_signs(wp->w_buffer)) {
-            redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
-          }
-        }
-        did_redraw = true;
-      }
-    }
-  }
-}
 // Phase 3: jump accessors
 win_T *nvim_buf_jump_open_win(buf_T *buf) { return buf_jump_open_win(buf); }
 // nvim_curwin_set_cursor_lnum is in ex_cmds_shim.c
@@ -229,54 +193,22 @@ void nvim_mtitr_get(buf_T *buf, int row, int col, MarkTreeIter *itr) { rs_marktr
 void nvim_extmark_del(buf_T *buf, MarkTreeIter *itr, MTKey mark, bool end) { extmark_del(buf, itr, mark, end); }
 MTKey nvim_mtpair_start(MTPair pair) { return pair.start; }
 uint32_t nvim_ns_all(void) { return UINT32_MAX; }
-
-int nvim_sign_delete_signs_impl(buf_T *buf, int64_t ns, int id, linenr_T atlnum)
+// Phase 2: C helper — trigger sign redraw for all windows in current tab
+void nvim_redraw_sign_buffers_in_curtab(void)
 {
-  MarkTreeIter itr[1];
-  int row = atlnum > 0 ? atlnum - 1 : 0;
-  kvec_t(MTKey) signs = KV_INITIAL_VALUE;
-  // Store signs at a specific line number to remove one later.
-  if (atlnum > 0) {
-    if (!rs_marktree_itr_get_overlap(buf->b_marktree, row, 0, itr)) {
-      return FAIL;
-    }
-    MTPair pair;
-    while (rs_marktree_itr_step_overlap(buf->b_marktree, itr, &pair)) {
-      if ((ns == UINT32_MAX || ns == pair.start.ns) && mt_decor_sign(pair.start)) {
-        kv_push(signs, pair.start);
-      }
-    }
-  } else {
-    rs_marktree_itr_get(buf->b_marktree, 0, 0, itr);
-  }
-  while (itr->x) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (row && mark.pos.row > row) {
-      break;
-    }
-    if (!mt_end(mark) && mt_decor_sign(mark)
-        && (id == 0 || (int)mark.id == id)
-        && (ns == UINT32_MAX || ns == mark.ns)) {
-      if (atlnum > 0) {
-        kv_push(signs, mark);
-        rs_marktree_itr_next(buf->b_marktree, itr);
-      } else {
-        extmark_del(buf, itr, mark, true);
-      }
-    } else {
-      rs_marktree_itr_next(buf->b_marktree, itr);
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (rs_sign_buffer_has_signs(wp->w_buffer)) {
+      redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
     }
   }
-  // Sort to remove the highest priority sign at a specific line number.
-  if (kv_size(signs)) {
-    qsort((void *)&kv_A(signs, 0), kv_size(signs), sizeof(MTKey), sign_row_cmp);
-    extmark_del_id(buf, kv_A(signs, 0).ns, kv_A(signs, 0).id);
-    kv_destroy(signs);
-  } else if (atlnum > 0) {
-    return FAIL;
-  }
-  return OK;
 }
+// Phase 2: C helper for extmark_set (to avoid exposing Error* to Rust)
+void nvim_sign_extmark_set(buf_T *buf, uint32_t ns, uint32_t *id, int row,
+                           DecorInline decor, uint16_t decor_flags)
+{
+  extmark_set(buf, ns, id, row, 0, -1, -1, decor, decor_flags, true, false, true, true, NULL);
+}
+
 void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group, list_T *retlist)
 {
   dict_T *d = tv_dict_alloc();

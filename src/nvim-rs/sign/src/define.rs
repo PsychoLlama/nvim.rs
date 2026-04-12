@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
+use nvim_decoration::types::DecorSignHighlight;
+
 use crate::{DecorSignHighlightHandle, SignHandle, SIGN_DEF_PRIO};
 
 // =============================================================================
@@ -401,13 +403,58 @@ extern "C" {
     fn nvim_sign_map_del(name: *const c_char) -> SignHandle;
     fn nvim_init_sign_text(sp: SignHandle, out: *mut u32, text: *const c_char) -> c_int;
     fn nvim_backslash_halve(path: *mut c_char);
-    fn nvim_sign_define_update_placed(name: *const c_char, sp: SignHandle);
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
 
     // Sign map iteration (for free_all)
     fn nvim_sign_map_size() -> c_int;
     fn nvim_sign_map_get_nth_key(idx: c_int) -> *mut c_char;
+
+    // Phase 2: decor_items iteration
+    fn nvim_decor_items_size() -> u32;
+    fn nvim_decor_items_get_ptr(idx: u32) -> *mut c_void;
+
+    // Phase 2: window redraw (C accessor for FOR_ALL_WINDOWS_IN_TAB + redraw_buf_later)
+    fn nvim_redraw_sign_buffers_in_curtab();
+}
+
+// =============================================================================
+// Phase 2: Update placed signs when sign definition changes
+// =============================================================================
+
+/// Replace C `nvim_sign_define_update_placed`.
+///
+/// Iterates all `decor_items`, updates fields for any sign matching `name`,
+/// and triggers a redraw on first match.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string. `sp` must be a valid sign handle.
+#[unsafe(export_name = "nvim_sign_define_update_placed")]
+pub unsafe extern "C" fn rs_nvim_sign_define_update_placed(name: *const c_char, sp: SignHandle) {
+    let name_cstr = CStr::from_ptr(name);
+    let s = &*sp;
+    let count = nvim_decor_items_size();
+    let mut did_redraw = false;
+    for i in 0..count {
+        let sh = &mut *nvim_decor_items_get_ptr(i).cast::<DecorSignHighlight>();
+        if sh.sign_name.is_null() {
+            continue;
+        }
+        let sh_name = CStr::from_ptr(sh.sign_name);
+        if sh_name != name_cstr {
+            continue;
+        }
+        // Update fields from sign definition
+        sh.text = s.sn_text;
+        sh.hl_id = s.sn_text_hl;
+        sh.line_hl_id = s.sn_line_hl;
+        sh.number_hl_id = s.sn_num_hl;
+        sh.cursorline_hl_id = s.sn_cul_hl;
+        if !did_redraw {
+            nvim_redraw_sign_buffers_in_curtab();
+            did_redraw = true;
+        }
+    }
 }
 
 /// Resolve a highlight group name to its ID.
@@ -542,7 +589,7 @@ pub unsafe extern "C" fn rs_sign_define_by_name(
     }
     // Update placed signs and redraw if modifying an existing sign
     if !is_new {
-        nvim_sign_define_update_placed(name, sp);
+        rs_nvim_sign_define_update_placed(name, sp);
     }
     1 // OK
 }
