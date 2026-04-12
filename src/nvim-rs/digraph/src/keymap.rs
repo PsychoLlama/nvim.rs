@@ -87,6 +87,32 @@ extern "C" {
 
     // status_redraw_curbuf (already exported from Rust drawscreen crate)
     fn status_redraw_curbuf();
+
+    // Additional accessors for ex_loadkeymap (Phase 3, added to digraph.c)
+    fn nvim_curbuf_set_b_kmap_state_bits(mask: c_int);
+    fn nvim_curbuf_zero_b_kmap_state();
+    fn nvim_curbuf_kmap_ga_dec_len();
+    fn nvim_curbuf_kmap_ga_init();
+    fn nvim_curbuf_kmap_ga_append() -> *mut c_void;
+
+    // skipwhite: use link_name to avoid clash with parse.rs's rs_skipwhite alias
+    #[link_name = "skipwhite"]
+    fn kmap_skipwhite(p: *const c_char) -> *const c_char;
+    fn skiptowhite(p: *const c_char) -> *mut c_char;
+    fn xmemdupz(data: *const c_void, len: size_t) -> *mut c_char;
+
+    // kmap_T field setters (added to digraph.c for Phase 3)
+    fn nvim_kmap_entry_set_from(entry: *mut c_void, val: *mut c_char);
+    fn nvim_kmap_entry_set_to(entry: *mut c_void, val: *mut c_char);
+
+    // emsg (for E105 / E791 errors)
+    fn emsg(s: *const c_char) -> c_int;
+
+    // nvim_rt_exarg_is_sourcing: checks getline_equal(eap->ea_getline, cookie, getsourceline)
+    fn nvim_rt_exarg_is_sourcing(eap: *mut c_void) -> bool;
+
+    // nvim_excmds_call_getline: calls eap->ea_getline(c, eap->cookie, indent, true)
+    fn nvim_excmds_call_getline(eap: *mut c_void, c: c_int, indent: c_int) -> *mut c_char;
 }
 
 /// `B_IMODE_LMAP = 1` (from `buffer_defs.h`).
@@ -307,4 +333,100 @@ pub unsafe extern "C" fn rs_get_keymap_str(
         return 0;
     }
     plen
+}
+
+/// Maximum combined length of `from` and `to` strings in a keymap entry.
+const KMAP_LLEN: usize = 200;
+
+/// `:loadkeymap` command: load the following lines as the keymap.
+///
+/// Exported as `ex_loadkeymap` replacing the C symbol.
+/// Called from the `ex_cmds.lua` command dispatch.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to an `exarg_T` coming from a sourced file.
+#[unsafe(export_name = "ex_loadkeymap")]
+pub unsafe extern "C" fn rs_ex_loadkeymap(eap: *mut c_void) {
+    // Validate that we're called from a sourced file.
+    if !nvim_rt_exarg_is_sourcing(eap) {
+        emsg(c"E105: Using :loadkeymap not in a sourced file".as_ptr());
+        return;
+    }
+
+    // Stop any active keymap and clear the table.
+    rs_keymap_unload();
+
+    nvim_curbuf_zero_b_kmap_state();
+    nvim_curbuf_kmap_ga_init();
+
+    // Set 'cpoptions' to "C" to avoid line continuation.
+    let save_cpo = nvim_get_p_cpo();
+    nvim_set_p_cpo(c"C".as_ptr().cast_mut());
+
+    // Read each line of the sourced file and parse "from to" pairs.
+    loop {
+        let line = nvim_excmds_call_getline(eap, 0, 0);
+        if line.is_null() {
+            break;
+        }
+
+        let p = kmap_skipwhite(line);
+
+        // Skip comment lines (starting with '"') and blank lines.
+        #[allow(clippy::cast_possible_wrap)]
+        if *p != b'"' as c_char && *p != 0 {
+            let kp = nvim_curbuf_kmap_ga_append();
+
+            // Parse "from" field.
+            let s = skiptowhite(p);
+            #[allow(clippy::cast_sign_loss)]
+            let from_len = s.offset_from(p) as usize;
+            let from = xmemdupz(p.cast::<c_void>(), from_len);
+            nvim_kmap_entry_set_from(kp, from);
+
+            // Parse "to" field.
+            let p2 = kmap_skipwhite(s);
+            let s2 = skiptowhite(p2);
+            #[allow(clippy::cast_sign_loss)]
+            let to_len = s2.offset_from(p2) as usize;
+            let to = xmemdupz(p2.cast::<c_void>(), to_len);
+            nvim_kmap_entry_set_to(kp, to);
+
+            // Validate: combined length must be < KMAP_LLEN, and neither field empty.
+            let from_len2 = libc::strlen(from);
+            let to_len2 = libc::strlen(to);
+            if from_len2 + to_len2 >= KMAP_LLEN || from_len2 == 0 || to_len2 == 0 {
+                if to_len2 == 0 {
+                    emsg(c"E791: Empty keymap entry".as_ptr());
+                }
+                xfree(from.cast::<c_void>());
+                xfree(to.cast::<c_void>());
+                nvim_curbuf_kmap_ga_dec_len();
+            }
+        }
+        xfree(line.cast::<c_void>());
+    }
+
+    // Set up ":lmap" to map the keys.
+    let ga = &*nvim_curbuf_get_b_kmap_ga();
+    let entry_size = nvim_kmap_entry_size();
+    // cmd_buf: "<buffer> " (9) + from (KMAP_LLEN) + " " (1) + to (KMAP_LLEN) + NUL = KMAP_LLEN+11
+    let cmd_buf_size = KMAP_LLEN + 11;
+    let cmd_buf = xmalloc(cmd_buf_size).cast::<c_char>();
+    #[allow(clippy::cast_sign_loss)]
+    let len = ga.ga_len as usize;
+    for i in 0..len {
+        let entry = ga.ga_data.cast::<u8>().add(i * entry_size).cast::<c_void>();
+        let from = nvim_kmap_entry_get_from(entry);
+        let to = nvim_kmap_entry_get_to(entry);
+        vim_snprintf(cmd_buf, cmd_buf_size, c"<buffer> %s %s".as_ptr(), from, to);
+        nvim_do_map_keymap(MAPTYPE_MAP, cmd_buf);
+    }
+    xfree(cmd_buf.cast::<c_void>());
+
+    nvim_set_p_cpo(save_cpo);
+
+    nvim_curbuf_set_b_kmap_state_bits(KEYMAP_LOADED);
+    status_redraw_curbuf();
 }

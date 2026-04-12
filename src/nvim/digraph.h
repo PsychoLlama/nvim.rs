@@ -19,3 +19,4 @@ void keymap_ga_clear(garray_T *kmap_ga);
 int get_keymap_str(win_T *wp, char *fmt, char *buf, int len);
 char *keymap_init(void);
 void keymap_unload(void);
+void ex_loadkeymap(exarg_T *eap);

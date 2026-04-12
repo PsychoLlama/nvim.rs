@@ -53,9 +53,7 @@ typedef struct {
 // rs_registerdigraph, rs_digraph_iterate_* are now pure Rust exports
 // keymap_ga_clear, get_keymap_str are now in Rust (digraph/src/keymap.rs)
 
-// Forward declarations for Rust-exported keymap functions called from C
-extern void keymap_ga_clear(garray_T *kmap_ga);
-extern void keymap_unload(void);
+// Rust-exported keymap functions are declared in digraph.h
 
 
 // Verify highlight constants match Rust values
@@ -153,6 +151,12 @@ char *nvim_kmap_entry_get_from(void *entry) { return ((kmap_T *)entry)->from; }
 /// Get the 'to' field of a kmap_T entry (for Rust FFI).
 char *nvim_kmap_entry_get_to(void *entry) { return ((kmap_T *)entry)->to; }
 
+/// Set the 'from' field of a kmap_T entry (for Rust FFI).
+void nvim_kmap_entry_set_from(void *entry, char *val) { ((kmap_T *)entry)->from = val; }
+
+/// Set the 'to' field of a kmap_T entry (for Rust FFI).
+void nvim_kmap_entry_set_to(void *entry, char *val) { ((kmap_T *)entry)->to = val; }
+
 /// Get sizeof(kmap_T) (for Rust FFI).
 size_t nvim_kmap_entry_size(void) { return sizeof(kmap_T); }
 
@@ -185,76 +189,25 @@ int nvim_do_map_keymap(int maptype, char *arg) { return do_map(maptype, arg, MOD
 // Note: nvim_ga_clear already exists in fold_shim.c
 // Note: nvim_get_p_cpo already exported from Rust (window/src/globals.rs)
 
+// Additional accessors for ex_loadkeymap (Phase 3)
+
+/// Set all bits in curbuf->b_kmap_state (for Rust FFI).
+void nvim_curbuf_set_b_kmap_state_bits(int mask) { curbuf->b_kmap_state |= (int16_t)mask; }
+
+/// Set curbuf->b_kmap_state to zero (for Rust FFI).
+void nvim_curbuf_zero_b_kmap_state(void) { curbuf->b_kmap_state = 0; }
+
+/// Decrement curbuf->b_kmap_ga.ga_len by 1 (for Rust FFI).
+void nvim_curbuf_kmap_ga_dec_len(void) { curbuf->b_kmap_ga.ga_len--; }
+
+/// Initialize curbuf->b_kmap_ga with kmap_T item size (for Rust FFI).
+void nvim_curbuf_kmap_ga_init(void) { ga_init(&curbuf->b_kmap_ga, (int)sizeof(kmap_T), 20); }
+
+/// Append a new kmap_T entry to curbuf->b_kmap_ga; returns pointer to new entry (for Rust FFI).
+void *nvim_curbuf_kmap_ga_append(void) { return ga_append_via_ptr(&curbuf->b_kmap_ga, sizeof(kmap_T)); }
+
 // keymap_init() moved to Rust (digraph/src/keymap.rs)
-
-/// ":loadkeymap" command: load the following lines as the keymap.
-///
-/// @param eap
-void ex_loadkeymap(exarg_T *eap)
-{
-#define KMAP_LLEN 200  // max length of "to" and "from" together
-  char buf[KMAP_LLEN + 11];
-  char *save_cpo = p_cpo;
-
-  if (!getline_equal(eap->ea_getline, eap->cookie, getsourceline)) {
-    emsg(_("E105: Using :loadkeymap not in a sourced file"));
-    return;
-  }
-
-  // Stop any active keymap and clear the table.
-  keymap_unload();
-
-  curbuf->b_kmap_state = 0;
-  ga_init(&curbuf->b_kmap_ga, (int)sizeof(kmap_T), 20);
-
-  // Set 'cpoptions' to "C" to avoid line continuation.
-  p_cpo = "C";
-
-  // Get each line of the sourced file, break at the end.
-  while (true) {
-    char *line = eap->ea_getline(0, eap->cookie, 0, true);
-
-    if (line == NULL) {
-      break;
-    }
-
-    char *p = skipwhite(line);
-
-    if ((*p != '"') && (*p != NUL)) {
-      kmap_T *kp = GA_APPEND_VIA_PTR(kmap_T, &curbuf->b_kmap_ga);
-      char *s = skiptowhite(p);
-      kp->from = xmemdupz(p, (size_t)(s - p));
-      p = skipwhite(s);
-      s = skiptowhite(p);
-      kp->to = xmemdupz(p, (size_t)(s - p));
-
-      if ((strlen(kp->from) + strlen(kp->to) >= KMAP_LLEN)
-          || (*kp->from == NUL)
-          || (*kp->to == NUL)) {
-        if (*kp->to == NUL) {
-          emsg(_("E791: Empty keymap entry"));
-        }
-        xfree(kp->from);
-        xfree(kp->to);
-        curbuf->b_kmap_ga.ga_len--;
-      }
-    }
-    xfree(line);
-  }
-
-  // setup ":lmap" to map the keys
-  for (int i = 0; i < curbuf->b_kmap_ga.ga_len; i++) {
-    vim_snprintf(buf, sizeof(buf), "<buffer> %s %s",
-                 ((kmap_T *)curbuf->b_kmap_ga.ga_data)[i].from,
-                 ((kmap_T *)curbuf->b_kmap_ga.ga_data)[i].to);
-    do_map(MAPTYPE_MAP, buf, MODE_LANGMAP, false);
-  }
-
-  p_cpo = save_cpo;
-
-  curbuf->b_kmap_state |= KEYMAP_LOADED;
-  status_redraw_curbuf();
-}
+// ex_loadkeymap() moved to Rust (digraph/src/keymap.rs)
 
 // keymap_ga_clear() moved to Rust (digraph/src/keymap.rs)
 // keymap_unload() moved to Rust (digraph/src/keymap.rs)
