@@ -152,6 +152,11 @@ void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end
 bool decor_conceal_line(win_T *wp, int row, bool check_cursor);
 bool win_lines_concealed(win_T *wp);
 
+// Phase 2 Rust exports (formerly C implementations)
+DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id);
+int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, VirtLines *lines,
+                     bool apply_folds);
+
 #include "decoration.h.generated.h"
 #include "decoration.h.inline.generated.h"
 

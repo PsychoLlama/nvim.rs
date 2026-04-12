@@ -8,7 +8,8 @@ use std::ffi::{c_char, c_int, c_void};
 use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
 use crate::types::{
-    DecorRange, DecorRangeSlot, DecorSignHighlight, DecorVirtText, KVec, MTKey, MTPair, VirtText,
+    DecorRange, DecorRangeSlot, DecorSignHighlight, DecorVirtText, KVec, MTKey, MTPair, VirtLines,
+    VirtText,
 };
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
@@ -1864,6 +1865,187 @@ pub unsafe extern "C" fn rs_buf_remove_decor_sh(
             nvim_buf_signcols_set_max(buf, 0);
         }
     }
+}
+
+// =============================================================================
+// Phase 2: decor_virt_lines and decor_find_virttext - Migrated from C
+// =============================================================================
+
+/// Lines filter: selects only kMTMetaLines meta entries.
+/// Matches `static const uint32_t lines_filter[kMTMetaCount]` from C.
+/// Index 1 = kMTMetaLines = K_MT_FILTER_SELECT, all others = 0.
+static LINES_FILTER: [u32; K_MT_META_COUNT] = [0, K_MT_FILTER_SELECT, 0, 0, 0];
+
+/// Splice src VirtLines into dest (appends all src entries to dest).
+/// Equivalent to C `kv_splice(*dest, src)`.
+///
+/// # Safety
+/// `dest` must be valid. `src` contents are bitwise-copied.
+///
+/// # Panics
+/// Panics if `libc::realloc` returns null (out of memory).
+unsafe fn virt_lines_splice(dest: &mut VirtLines, src: &VirtLines) {
+    let n = src.size;
+    if n == 0 {
+        return;
+    }
+    // Grow dest to fit n more items.
+    let new_size = dest.size + n;
+    if new_size > dest.capacity {
+        let new_cap = new_size.next_power_of_two().max(8);
+        let bytes = new_cap * std::mem::size_of::<crate::types::VirtLine>();
+        let ptr = libc::realloc(dest.items.cast::<libc::c_void>(), bytes);
+        assert!(!ptr.is_null(), "virt_lines_splice: realloc failed");
+        dest.items = ptr.cast();
+        dest.capacity = new_cap;
+    }
+    // Copy src items into dest.
+    libc::memcpy(
+        dest.items.add(dest.size).cast::<libc::c_void>(),
+        src.items.cast::<libc::c_void>(),
+        n * std::mem::size_of::<crate::types::VirtLine>(),
+    );
+    dest.size = new_size;
+}
+
+/// Find the first non-virt_lines virtual text decoration on a row.
+///
+/// Rust implementation of `decor_find_virttext()`.
+///
+/// # Safety
+/// `buf` must be valid. Returned pointer is into the marktree, not owned.
+#[unsafe(export_name = "decor_find_virttext")]
+pub unsafe extern "C" fn rs_decor_find_virttext(
+    buf: BufHandle,
+    row: c_int,
+    ns_id: u64,
+) -> *mut DecorVirtText {
+    let tree = nvim_buf_get_marktree(buf);
+    let mut itr_buf = crate::types::MarkTreeIter::new();
+    let itr_ptr = std::ptr::addr_of_mut!(itr_buf).cast::<c_void>();
+    rs_marktree_itr_get(tree, row, 0, itr_ptr);
+
+    loop {
+        let mark = rs_marktree_itr_current(itr_ptr);
+        // itr->x != NULL equivalent: pos.row < 0 is sentinel
+        if mark.pos.row < 0 || mark.pos.row > row {
+            break;
+        }
+        if mark.flags & MT_FLAG_INVALID == 0 {
+            // mt_decor_virt(mark): returns vt if MT_FLAG_DECOR_EXT set
+            let vt_ptr: *mut DecorVirtText = if mark.flags & MT_FLAG_DECOR_EXT != 0 {
+                mark.decor_data.ext.vt
+            } else {
+                std::ptr::null_mut()
+            };
+            // Skip all virt_lines decorations to find the first virt_text
+            let mut vt = vt_ptr;
+            while !vt.is_null() && ((*vt).flags & KVT_IS_LINES != 0) {
+                vt = (*vt).next;
+            }
+            if (ns_id == 0 || ns_id == u64::from(mark.ns)) && !vt.is_null() {
+                return vt;
+            }
+        }
+        rs_marktree_itr_next(tree, itr_ptr);
+    }
+    std::ptr::null_mut()
+}
+
+/// Count virtual lines in a range (and optionally collect them).
+///
+/// Rust implementation of `decor_virt_lines()`.
+///
+/// @param apply_folds  Only count virtual lines that are not in folds.
+///
+/// # Safety
+/// `wp` must be valid. `num_below` and `lines` may be null.
+///
+/// # Panics
+/// Panics if memory reallocation fails when appending to `lines`.
+#[unsafe(export_name = "decor_virt_lines")]
+pub unsafe extern "C" fn rs_decor_virt_lines(
+    wp: WinHandle,
+    start_row: c_int,
+    end_row: c_int,
+    num_below: *mut c_int,
+    lines: *mut VirtLines,
+    apply_folds: bool,
+) -> c_int {
+    let buf = nvim_decor_win_get_buffer(wp);
+    if nvim_buf_meta_total(buf, K_MT_META_LINES_INT) == 0 {
+        // Only pay for what you use: no virt_lines active.
+        return 0;
+    }
+
+    let tree = nvim_buf_get_marktree(buf);
+    let mut itr_buf = crate::types::MarkTreeIter::new();
+    let itr_ptr = std::ptr::addr_of_mut!(itr_buf).cast::<c_void>();
+
+    if !rs_marktree_itr_get_filter(
+        tree,
+        (start_row - 1).max(0),
+        0,
+        end_row,
+        0,
+        LINES_FILTER.as_ptr(),
+        itr_ptr,
+    ) {
+        return 0;
+    }
+
+    assert!(start_row >= 0);
+
+    let mut virt_lines_total: c_int = 0;
+
+    loop {
+        let mark = rs_marktree_itr_current(itr_ptr);
+        // mt_decor_virt: returns vt if MT_FLAG_DECOR_EXT set
+        let vt_ptr: *mut DecorVirtText = if mark.flags & MT_FLAG_DECOR_EXT != 0 {
+            mark.decor_data.ext.vt
+        } else {
+            std::ptr::null_mut()
+        };
+        if mark.flags & MT_FLAG_INVALID == 0 && nvim_ns_in_win(mark.ns, wp) != 0 {
+            let mut vt = vt_ptr;
+            while !vt.is_null() {
+                let flags = (*vt).flags;
+                if flags & KVT_IS_LINES != 0 {
+                    let above = flags & KVT_LINES_ABOVE != 0;
+                    let mrow = mark.pos.row;
+                    let draw_row = mrow + i32::from(!above);
+                    if draw_row >= start_row && draw_row < end_row {
+                        let skip = apply_folds
+                            && (nvim_hasFolding(
+                                wp,
+                                mrow + 1,
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut(),
+                            ) != 0
+                                || rs_decor_conceal_line(wp, mrow, false));
+                        if !skip {
+                            let vt_lines = &(*vt).data.virt_lines;
+                            let n = vt_lines.size as c_int;
+                            virt_lines_total += n;
+                            if !lines.is_null() {
+                                virt_lines_splice(&mut *lines, vt_lines);
+                            }
+                            if !num_below.is_null() && !above {
+                                *num_below += n;
+                            }
+                        }
+                    }
+                }
+                vt = (*vt).next;
+            }
+        }
+
+        if !rs_marktree_itr_next_filter(tree, itr_ptr, end_row, 0, LINES_FILTER.as_ptr()) {
+            break;
+        }
+    }
+
+    virt_lines_total
 }
 
 // =============================================================================

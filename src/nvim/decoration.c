@@ -96,30 +96,6 @@ void bufhl_add_hl_pos_offset(buf_T *buf, int src_id, int hl_id, lpos_T pos_start
 }
 
 
-DecorVirtText *decor_find_virttext(buf_T *buf, int row, uint64_t ns_id)
-{
-  MarkTreeIter itr[1] = { 0 };
-  rs_marktree_itr_get(buf->b_marktree, row, 0,  itr);
-  while (true) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (mark.pos.row < 0 || mark.pos.row > row) {
-      break;
-    } else if (mt_invalid(mark)) {
-      goto next_mark;
-    }
-    DecorVirtText *decor = mt_decor_virt(mark);
-    while (decor && (decor->flags & kVTIsLines)) {
-      decor = decor->next;
-    }
-    if ((ns_id == 0 || ns_id == mark.ns) && decor) {
-      return decor;
-    }
-next_mark:
-    rs_marktree_itr_next(buf->b_marktree, itr);
-  }
-  return NULL;
-}
-
 // Phase 1 C accessor wrappers for Rust FFI
 // Note: nvim_get_curwin, nvim_win_get_p_cole, nvim_win_get_cursor_lnum are
 // already exported from the Rust window crate (nvim-window).
@@ -276,61 +252,6 @@ void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState 
   }
 
   xfree(count);
-}
-
-static const uint32_t lines_filter[kMTMetaCount] = {[kMTMetaLines] = kMTFilterSelect };
-
-/// @param apply_folds Only count virtual lines that are not in folds.
-int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, VirtLines *lines,
-                     bool apply_folds)
-{
-  buf_T *buf = wp->w_buffer;
-  if (!buf_meta_total(buf, kMTMetaLines)) {
-    // Only pay for what you use: in case virt_lines feature is not active
-    // in a buffer, plines do not need to access the marktree at all
-    return 0;
-  }
-
-  MarkTreeIter itr[1] = { 0 };
-  if (!rs_marktree_itr_get_filter(buf->b_marktree, MAX(start_row - 1, 0), 0, end_row, 0,
-                               lines_filter, itr)) {
-    return 0;
-  }
-
-  assert(start_row >= 0);
-
-  int virt_lines = 0;
-  while (true) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    DecorVirtText *vt = mt_decor_virt(mark);
-    if (!mt_invalid(mark) && ns_in_win(mark.ns, wp)) {
-      while (vt) {
-        if (rs_vt_is_lines(vt->flags)) {
-          bool above = rs_vt_is_lines_above(vt->flags);
-          int mrow = mark.pos.row;
-          int draw_row = mrow + (above ? 0 : 1);
-          if (draw_row >= start_row && draw_row < end_row
-              && (!apply_folds || !(hasFolding(wp, mrow + 1, NULL, NULL)
-                                    || decor_conceal_line(wp, mrow, false)))) {
-            virt_lines += (int)kv_size(vt->data.virt_lines);
-            if (lines) {
-              kv_splice(*lines, vt->data.virt_lines);
-            }
-            if (num_below && !above) {
-              (*num_below) += (int)kv_size(vt->data.virt_lines);
-            }
-          }
-        }
-        vt = vt->next;
-      }
-    }
-
-    if (!rs_marktree_itr_next_filter(buf->b_marktree, itr, end_row, 0, lines_filter)) {
-      break;
-    }
-  }
-
-  return virt_lines;
 }
 
 /// This assumes maximum one entry of each kind, which will not always be the case.
