@@ -214,9 +214,10 @@ win_T *nvim_find_win_by_grid_handle(handle_T handle)
   return NULL;
 }
 
-// Rust implementations (Phase 1)
+// Rust implementations (Phase 1 & 2)
 extern void rs_grid_free(ScreenGrid *grid);
 extern win_T *rs_get_win_by_grid_handle(handle_T handle);
+extern void rs_grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid);
 
 // Global accessors
 ScreenGrid *nvim_get_default_grid(void) { return &default_grid; }
@@ -254,59 +255,7 @@ void nvim_ui_call_grid_scroll(handle_T handle, int top, int bot, int left, int r
 
 void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)
 {
-  int new_row;
-  ScreenGrid ngrid = *grid;
-  assert(rows >= 0 && columns >= 0);
-  size_t ncells = (size_t)rows * (size_t)columns;
-  ngrid.chars = xmalloc(ncells * sizeof(schar_T));
-  ngrid.attrs = xmalloc(ncells * sizeof(sattr_T));
-  ngrid.vcols = xmalloc(ncells * sizeof(colnr_T));
-  memset(ngrid.vcols, -1, ncells * sizeof(colnr_T));
-  ngrid.line_offset = xmalloc((size_t)rows * sizeof(*ngrid.line_offset));
-
-  ngrid.rows = rows;
-  ngrid.cols = columns;
-
-  for (new_row = 0; new_row < ngrid.rows; new_row++) {
-    ngrid.line_offset[new_row] = (size_t)new_row * (size_t)ngrid.cols;
-
-    grid_clear_line(&ngrid, ngrid.line_offset[new_row], columns, valid);
-
-    if (copy) {
-      // If the screen is not going to be cleared, copy as much as
-      // possible from the old screen to the new one and clear the rest
-      // (used when resizing the window at the "--more--" prompt or when
-      // executing an external command, for the GUI).
-      if (new_row < grid->rows && grid->chars != NULL) {
-        int len = MIN(grid->cols, ngrid.cols);
-        memmove(ngrid.chars + ngrid.line_offset[new_row],
-                grid->chars + grid->line_offset[new_row],
-                (size_t)len * sizeof(schar_T));
-        memmove(ngrid.attrs + ngrid.line_offset[new_row],
-                grid->attrs + grid->line_offset[new_row],
-                (size_t)len * sizeof(sattr_T));
-        memmove(ngrid.vcols + ngrid.line_offset[new_row],
-                grid->vcols + grid->line_offset[new_row],
-                (size_t)len * sizeof(colnr_T));
-      }
-    }
-  }
-  grid_free(grid);
-  *grid = ngrid;
-
-  // Share a single scratch buffer for all grids, by
-  // ensuring it is as wide as the widest grid.
-  if (linebuf_size < (size_t)columns) {
-    xfree(linebuf_char);
-    xfree(linebuf_attr);
-    xfree(linebuf_vcol);
-    xfree(linebuf_scratch);
-    linebuf_char = xmalloc((size_t)columns * sizeof(schar_T));
-    linebuf_attr = xmalloc((size_t)columns * sizeof(sattr_T));
-    linebuf_vcol = xmalloc((size_t)columns * sizeof(colnr_T));
-    linebuf_scratch = xmalloc((size_t)columns * sizeof(sscratch_T));
-    linebuf_size = (size_t)columns;
-  }
+  rs_grid_alloc(grid, rows, columns, copy, valid);
 }
 
 void grid_free(ScreenGrid *grid)

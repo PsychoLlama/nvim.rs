@@ -42,8 +42,25 @@ extern "C" {
     fn nvim_screengrid_set_vcols_null(grid: *mut std::ffi::c_void);
     fn nvim_screengrid_set_line_offset_null(grid: *mut std::ffi::c_void);
 
+    // Full pointer setters (used by rs_grid_alloc)
+    fn nvim_screengrid_set_chars(grid: *mut std::ffi::c_void, val: *mut u32);
+    fn nvim_screengrid_set_attrs(grid: *mut std::ffi::c_void, val: *mut i32);
+    fn nvim_screengrid_set_vcols(grid: *mut std::ffi::c_void, val: *mut i32);
+    fn nvim_screengrid_set_line_offset(grid: *mut std::ffi::c_void, val: *mut usize);
+    fn nvim_screengrid_set_rows(grid: *mut std::ffi::c_void, val: c_int);
+    fn nvim_screengrid_set_cols(grid: *mut std::ffi::c_void, val: c_int);
+
     /// Free memory (Neovim's xfree, safe to call with NULL).
     fn xfree(ptr: *mut std::ffi::c_void);
+
+    /// Allocate memory (Neovim's xmalloc, aborts on OOM).
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+
+    /// grid_clear_line (already in Rust but need to call it here).
+    fn grid_clear_line(grid: *mut std::ffi::c_void, off: usize, width: c_int, valid: bool);
+
+    /// Update linebuf arrays if wider than current size (Phase 2 helper).
+    fn nvim_grid_alloc_update_linebuf(columns: c_int);
 
     /// Find window in curtab by its grid_alloc handle.
     fn nvim_find_win_by_grid_handle(handle: HandleT) -> *mut std::ffi::c_void;
@@ -501,6 +518,79 @@ pub unsafe extern "C" fn rs_grid_free(grid: *mut std::ffi::c_void) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_win_by_grid_handle(handle: HandleT) -> *mut std::ffi::c_void {
     nvim_find_win_by_grid_handle(handle)
+}
+
+// =============================================================================
+// Phase 2: grid_alloc
+// =============================================================================
+
+/// Allocate or resize a ScreenGrid's arrays.
+///
+/// Matches C's `grid_alloc()`. Allocates new char/attr/vcol/line_offset arrays,
+/// optionally copies content from the old grid, frees the old arrays, and
+/// updates the linebuf globals if this grid is wider than any previous grid.
+///
+/// # Safety
+/// `grid` must be a valid `ScreenGrid*`. `rows` and `columns` must be >= 0.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_alloc(
+    grid: *mut std::ffi::c_void,
+    rows: c_int,
+    columns: c_int,
+    copy: bool,
+    valid: bool,
+) {
+    debug_assert!(rows >= 0 && columns >= 0);
+
+    let ncells = (rows as usize) * (columns as usize);
+
+    // Save old pointers and dimensions before overwriting
+    let old_chars = nvim_screengrid_get_chars(grid);
+    let old_attrs = nvim_screengrid_get_attrs(grid);
+    let old_vcols = nvim_screengrid_get_vcols(grid);
+    let old_line_offset = nvim_screengrid_get_line_offset(grid);
+    let old_rows = nvim_screengrid_get_rows(grid);
+    let old_cols = nvim_screengrid_get_cols(grid);
+
+    // Allocate new arrays
+    let new_chars = xmalloc(ncells * 4).cast::<u32>(); // sizeof(schar_T) = 4
+    let new_attrs = xmalloc(ncells * 4).cast::<i32>(); // sizeof(sattr_T) = 4
+    let new_vcols = xmalloc(ncells * 4).cast::<i32>(); // sizeof(colnr_T) = 4
+    std::ptr::write_bytes(new_vcols, 0xFF_u8, ncells); // init to -1; count is in T elements
+    let new_line_offset = xmalloc((rows as usize) * std::mem::size_of::<usize>()).cast::<usize>();
+
+    // Update grid dimensions and array pointers
+    nvim_screengrid_set_rows(grid, rows);
+    nvim_screengrid_set_cols(grid, columns);
+    nvim_screengrid_set_chars(grid, new_chars);
+    nvim_screengrid_set_attrs(grid, new_attrs);
+    nvim_screengrid_set_vcols(grid, new_vcols);
+    nvim_screengrid_set_line_offset(grid, new_line_offset);
+
+    // Initialize each row
+    for new_row in 0..rows {
+        let offset = (new_row as usize) * (columns as usize);
+        *new_line_offset.add(new_row as usize) = offset;
+
+        grid_clear_line(grid, offset, columns, valid);
+
+        if copy && new_row < old_rows && !old_chars.is_null() {
+            let len = old_cols.min(columns) as usize;
+            let old_row_offset = *old_line_offset.add(new_row as usize);
+            std::ptr::copy(old_chars.add(old_row_offset), new_chars.add(offset), len);
+            std::ptr::copy(old_attrs.add(old_row_offset), new_attrs.add(offset), len);
+            std::ptr::copy(old_vcols.add(old_row_offset), new_vcols.add(offset), len);
+        }
+    }
+
+    // Free old arrays (manually, to avoid using grid_free which would use new ptrs)
+    xfree(old_chars.cast());
+    xfree(old_attrs.cast());
+    xfree(old_vcols.cast());
+    xfree(old_line_offset.cast());
+
+    // Update linebuf if this grid is wider than current linebuf
+    nvim_grid_alloc_update_linebuf(columns);
 }
 
 // =============================================================================
