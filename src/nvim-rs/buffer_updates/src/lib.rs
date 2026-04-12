@@ -415,6 +415,75 @@ pub unsafe extern "C" fn rs_buf_updates_changedtick(buf: *mut BufHandle) {
     nvim_buf_update_callbacks_set_size(buf, j);
 }
 
+// Phase 4 FFI declarations
+extern "C" {
+    fn nvim_buf_call_reload_or_detach(
+        buf: *mut BufHandle,
+        cb: BufUpdateCallbacks,
+        can_reload: bool,
+    ) -> bool;
+}
+
+/// Free all update channels and callbacks for a buffer.
+///
+/// Destroys the `update_channels` kvec and frees each `BufUpdateCallbacks` entry.
+///
+/// # Safety
+/// `buf` must be a valid pointer to a `buf_T` structure.
+#[export_name = "buf_free_callbacks"]
+pub unsafe extern "C" fn rs_buf_free_callbacks(buf: *mut BufHandle) {
+    // Destroy channels
+    nvim_buf_update_channels_destroy(buf);
+
+    // Free each callback entry then destroy the kvec
+    let callback_count = nvim_buf_get_update_callbacks_size(buf);
+    for i in 0..callback_count {
+        let cb = nvim_buf_update_callbacks_get(buf, i);
+        nvim_buf_callbacks_free_refs(cb);
+    }
+    nvim_buf_update_callbacks_destroy(buf);
+}
+
+/// Unload a buffer, notifying listeners and optionally retaining reload callbacks.
+///
+/// If `can_reload` is true, callbacks with `on_reload` are kept after calling them.
+/// All other callbacks receive `on_detach` if set, then are freed.
+///
+/// # Safety
+/// `buf` must be a valid pointer to a `buf_T` structure.
+#[export_name = "buf_updates_unload"]
+pub unsafe extern "C" fn rs_buf_updates_unload(buf: *mut BufHandle, can_reload: bool) {
+    // Send detach event to all channels and clear them
+    let channel_count = nvim_buf_get_update_channels_size(buf);
+    if channel_count > 0 {
+        for i in 0..channel_count {
+            let channel_id = nvim_buf_update_channels_get(buf, i);
+            nvim_buf_send_detach_event(buf, channel_id);
+        }
+        nvim_buf_update_channels_destroy(buf);
+    }
+
+    // Process callbacks: call reload/detach, compact keepers
+    let callback_count = nvim_buf_get_update_callbacks_size(buf);
+    let mut j = 0usize;
+    for i in 0..callback_count {
+        let cb = nvim_buf_update_callbacks_get(buf, i);
+        let keep = nvim_buf_call_reload_or_detach(buf, cb, can_reload);
+        if keep {
+            if i != j {
+                nvim_buf_update_callbacks_set(buf, j, cb);
+            }
+            j += 1;
+        } else {
+            nvim_buf_callbacks_free_refs(cb);
+        }
+    }
+    nvim_buf_update_callbacks_set_size(buf, j);
+    if j == 0 {
+        nvim_buf_update_callbacks_destroy(buf);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

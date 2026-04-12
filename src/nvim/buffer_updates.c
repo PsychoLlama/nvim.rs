@@ -36,62 +36,9 @@ size_t nvim_buf_get_update_callbacks_size(buf_T *buf) { return kv_size(buf->upda
 
 // buf_updates_unregister: migrated to Rust (buffer_updates crate)
 
-void buf_free_callbacks(buf_T *buf)
-{
-  kv_destroy(buf->update_channels);
-  for (size_t i = 0; i < kv_size(buf->update_callbacks); i++) {
-    buffer_update_callbacks_free(kv_A(buf->update_callbacks, i));
-  }
-  kv_destroy(buf->update_callbacks);
-}
+// buf_free_callbacks: migrated to Rust (buffer_updates crate)
 
-void buf_updates_unload(buf_T *buf, bool can_reload)
-{
-  size_t size = kv_size(buf->update_channels);
-  if (size) {
-    for (size_t i = 0; i < size; i++) {
-      buf_updates_send_end(buf, kv_A(buf->update_channels, i));
-    }
-    kv_destroy(buf->update_channels);
-    kv_init(buf->update_channels);
-  }
-
-  size_t j = 0;
-  for (size_t i = 0; i < kv_size(buf->update_callbacks); i++) {
-    BufUpdateCallbacks cb = kv_A(buf->update_callbacks, i);
-    LuaRef thecb = LUA_NOREF;
-
-    bool keep = false;
-    if (can_reload && cb.on_reload != LUA_NOREF) {
-      keep = true;
-      thecb = cb.on_reload;
-    } else if (cb.on_detach != LUA_NOREF) {
-      thecb = cb.on_detach;
-    }
-
-    if (thecb != LUA_NOREF) {
-      MAXSIZE_TEMP_ARRAY(args, 1);
-
-      // the first argument is always the buffer handle
-      ADD_C(args, BUFFER_OBJ(buf->handle));
-
-      TEXTLOCK_WRAP({
-        nlua_call_ref(thecb, keep ? "reload" : "detach", args, false, NULL, NULL);
-      });
-    }
-
-    if (keep) {
-      kv_A(buf->update_callbacks, j++) = kv_A(buf->update_callbacks, i);
-    } else {
-      buffer_update_callbacks_free(cb);
-    }
-  }
-  kv_size(buf->update_callbacks) = j;
-  if (kv_size(buf->update_callbacks) == 0) {
-    kv_destroy(buf->update_callbacks);
-    kv_init(buf->update_callbacks);
-  }
-}
+// buf_updates_unload: migrated to Rust (buffer_updates crate)
 
 // buf_updates_send_changes: migrated to Rust (buffer_updates crate)
 
@@ -348,6 +295,34 @@ bool nvim_buf_call_on_changedtick(buf_T *buf, LuaRef on_changedtick)
     res = nlua_call_ref(on_changedtick, "changedtick", args, kRetNilBool, NULL, NULL);
   });
   return LUARET_TRUTHY(res);
+}
+
+// Phase 4 helper functions for Rust FFI (unload and cleanup)
+
+/// Call reload or detach callback for buf_updates_unload.
+/// Returns true if the callback was the reload callback (i.e., we should keep this entry).
+/// Returns false if the callback was the detach callback (or no callback at all).
+bool nvim_buf_call_reload_or_detach(buf_T *buf, BufUpdateCallbacks cb, bool can_reload)
+{
+  LuaRef thecb = LUA_NOREF;
+  bool keep = false;
+
+  if (can_reload && cb.on_reload != LUA_NOREF) {
+    keep = true;
+    thecb = cb.on_reload;
+  } else if (cb.on_detach != LUA_NOREF) {
+    thecb = cb.on_detach;
+  }
+
+  if (thecb != LUA_NOREF) {
+    MAXSIZE_TEMP_ARRAY(args, 1);
+    ADD_C(args, BUFFER_OBJ(buf->handle));
+    TEXTLOCK_WRAP({
+      nlua_call_ref(thecb, keep ? "reload" : "detach", args, false, NULL, NULL);
+    });
+  }
+
+  return keep;
 }
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
