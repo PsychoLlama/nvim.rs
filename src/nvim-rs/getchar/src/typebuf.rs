@@ -1613,6 +1613,22 @@ extern "C" {
 const K_FILE_READ_ONLY: c_int = 1;
 const K_FILE_NON_BLOCKING: c_int = 128;
 
+/// Flush UI -- helper for getchar_common in input.rs.
+///
+/// # Safety
+/// Calls C `ui_flush()`.
+pub unsafe fn ui_flush_for_getchar() {
+    ui_flush();
+}
+
+/// Call `input_get(NULL, 0, -1, tb_change_cnt, events)` -- helper for getchar_common.
+///
+/// # Safety
+/// `events` must be a valid `MultiQueue*`.
+pub unsafe fn input_get_for_getchar(tb_change_cnt: c_int, events: *mut c_void) {
+    input_get(std::ptr::null_mut(), 0, -1, tb_change_cnt, events);
+}
+
 /// `MODE_HITRETURN` value from `state_defs.h`.
 const MODE_HITRETURN: c_int = 0x2000 | 0x01; // MODE_HITRETURN = 0x2000 | MODE_NORMAL
 

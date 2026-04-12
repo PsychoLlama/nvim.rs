@@ -287,6 +287,11 @@ extern void f_matchlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_matchstr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_matchstrpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust getchar VimL function declarations (exported from nvim-getchar crate via #[export_name])
+extern void f_getchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcharstr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcharmod(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 4 VimL function declarations (exported from nvim-eval crate via #[export_name])
 extern void f_execute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_flatten(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

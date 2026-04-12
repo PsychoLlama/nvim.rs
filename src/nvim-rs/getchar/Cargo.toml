@@ -12,5 +12,6 @@ workspace = true
 [dependencies]
 libc = "0.2"
 nvim-api = { path = "../api" }
+nvim-eval = { path = "../eval" }
 nvim-mapping = { path = "../mapping" }
 nvim-normal = { path = "../normal" }
