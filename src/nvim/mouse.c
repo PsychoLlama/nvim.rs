@@ -393,24 +393,6 @@ int nvim_curbuf_is_help_mouse(void)
 
 // --- Position operations -----------------------------------------------------
 
-/// Get the character at a given (lnum, col, coladd) position.
-int nvim_gchar_pos(linenr_T lnum, int col, int coladd)
-{
-  pos_T p = { .lnum = lnum, .col = col, .coladd = coladd };
-  return gchar_pos(&p);
-}
-
-/// Increment a position (lnum, col, coladd). Returns 1 if moved past EOL.
-int nvim_inc_pos(linenr_T *lnum, int *col, int *coladd)
-{
-  pos_T p = { .lnum = *lnum, .col = *col, .coladd = *coladd };
-  int r = inc(&p);
-  *lnum = p.lnum;
-  *col = p.col;
-  *coladd = p.coladd;
-  return r;
-}
-
 /// Find match using findmatch(). Returns false if no match.
 /// On match, writes the position into *lnum/*col/*coladd and motion_type into *motion_type_out.
 bool nvim_findmatch_nul(oparg_T *oap, linenr_T *lnum, int *col, int *coladd, int *motion_type_out)
@@ -444,16 +426,6 @@ const char *nvim_get_cursor_pos_ptr_mouse(void) { return get_cursor_pos_ptr(); }
 int nvim_utfc_ptr2len_at_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
 
 // --- Visual/cursor operations ------------------------------------------------
-
-/// Get virtual column ranges for a visual selection.
-void nvim_getvcols_mouse(colnr_T *leftcol, colnr_T *rightcol,
-                          linenr_T sv_lnum, int sv_col, int sv_coladd,
-                          linenr_T ev_lnum, int ev_col, int ev_coladd)
-{
-  pos_T sv = { .lnum = sv_lnum, .col = sv_col, .coladd = sv_coladd };
-  pos_T ev = { .lnum = ev_lnum, .col = ev_col, .coladd = ev_coladd };
-  getvcols(curwin, &sv, &ev, leftcol, rightcol);
-}
 
 /// Advance the cursor in curwin to a given column.
 int nvim_curwin_coladvance(int col) { return coladvance(curwin, (colnr_T)col); }

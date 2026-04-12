@@ -2769,8 +2769,8 @@ extern "C" {
     fn nvim_curbuf_is_help_mouse() -> c_int;
 
     // Position operations
-    fn nvim_gchar_pos(lnum: linenr_T, col: c_int, coladd: c_int) -> c_int;
-    fn nvim_inc_pos(lnum: *mut linenr_T, col: *mut c_int, coladd: *mut c_int) -> c_int;
+    fn gchar_pos(pos: *const PosT) -> c_int;
+    fn inc(pos: *mut PosT) -> c_int;
     fn nvim_findmatch_nul(
         oap: OpargHandle,
         lnum: *mut linenr_T,
@@ -2785,16 +2785,6 @@ extern "C" {
     fn nvim_utfc_ptr2len_at_cursor() -> c_int;
 
     // Visual/cursor operations
-    fn nvim_getvcols_mouse(
-        leftcol: *mut colnr_T,
-        rightcol: *mut colnr_T,
-        sv_lnum: linenr_T,
-        sv_col: c_int,
-        sv_coladd: c_int,
-        ev_lnum: linenr_T,
-        ev_col: c_int,
-        ev_coladd: c_int,
-    );
     fn nvim_curwin_coladvance(col: c_int) -> c_int;
     fn nvim_curwin_get_curswant() -> c_int;
     fn nvim_set_curswant_flag();
@@ -3403,15 +3393,13 @@ unsafe fn rs_do_mouse_impl(
         if vmode == VISUAL_BLOCK {
             let mut leftcol: colnr_T = 0;
             let mut rightcol: colnr_T = 0;
-            nvim_getvcols_mouse(
+            // Inline of C's nvim_getvcols_mouse.
+            rs_getvcols(
+                curwin,
+                start_visual,
+                end_visual,
                 &raw mut leftcol,
                 &raw mut rightcol,
-                start_visual.lnum,
-                start_visual.col,
-                start_visual.coladd,
-                end_visual.lnum,
-                end_visual.col,
-                end_visual.coladd,
             );
             let curswant = nvim_curwin_get_curswant();
             let target_col = if curswant > i32::midpoint(leftcol, rightcol) {
@@ -3593,28 +3581,25 @@ unsafe fn rs_do_mouse_impl(
             if is_click {
                 // Skip white space, then check for bracket match
                 let curwin = nvim_get_curwin();
-                let cursor = *nvim_win_get_cursor_ptr(curwin);
-                let mut ep_lnum = cursor.lnum;
-                let mut ep_col = cursor.col;
-                let mut ep_coladd = cursor.coladd;
+                let mut ep = *nvim_win_get_cursor_ptr(curwin);
 
                 loop {
-                    let gc = nvim_gchar_pos(ep_lnum, ep_col, ep_coladd);
+                    let gc = gchar_pos(&raw const ep);
                     if nvim_ascii_iswhite_mouse(gc) == 0 {
                         break;
                     }
-                    if nvim_inc_pos(&raw mut ep_lnum, &raw mut ep_col, &raw mut ep_coladd) < 0 {
+                    if inc(&raw mut ep) < 0 {
                         break;
                     }
                 }
-                nvim_set_cursor_pos(ep_lnum, ep_col, ep_coladd);
+                nvim_set_cursor_pos(ep.lnum, ep.col, ep.coladd);
                 oap_set_motion_type(oap, MT_CHAR_WISE);
 
                 let curwin = nvim_get_curwin();
                 let ep = *nvim_win_get_cursor_ptr(curwin);
                 let vis = get_visual_pos();
                 let vmode = nvim_get_VIsual_mode_mouse();
-                let gc = nvim_gchar_pos(ep.lnum, ep.col, ep.coladd);
+                let gc = gchar_pos(&raw const ep);
 
                 if !oap.is_null()
                     && vmode == c_int::from(b'v')
