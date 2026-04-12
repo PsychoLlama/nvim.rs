@@ -831,44 +831,8 @@ void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
 void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
 
-// CommandLineState field accessors
-int nvim_cls_get_c(void *s) { return ((CommandLineState *)s)->c; }
-void nvim_cls_set_c(void *s, int val) { ((CommandLineState *)s)->c = val; }
-int nvim_cls_get_firstc(void *s) { return ((CommandLineState *)s)->firstc; }
-int nvim_cls_get_count(void *s) { return ((CommandLineState *)s)->count; }
-int nvim_cls_get_indent(void *s) { return ((CommandLineState *)s)->indent; }
-int nvim_cls_get_gotesc(void *s) { return ((CommandLineState *)s)->gotesc ? 1 : 0; }
-void nvim_cls_set_gotesc(void *s, int val) { ((CommandLineState *)s)->gotesc = (val != 0); }
-int nvim_cls_get_do_abbr(void *s) { return ((CommandLineState *)s)->do_abbr ? 1 : 0; }
-void nvim_cls_set_do_abbr(void *s, int val) { ((CommandLineState *)s)->do_abbr = (val != 0); }
-int nvim_cls_get_ignore_drag_release(void *s) { return ((CommandLineState *)s)->ignore_drag_release ? 1 : 0; }
-void nvim_cls_set_ignore_drag_release(void *s, int val) { ((CommandLineState *)s)->ignore_drag_release = (val != 0); }
-int nvim_cls_get_did_wild_list(void *s) { return ((CommandLineState *)s)->did_wild_list ? 1 : 0; }
-void nvim_cls_set_did_wild_list(void *s, int val) { ((CommandLineState *)s)->did_wild_list = (val != 0); }
-int nvim_cls_get_wim_index(void *s) { return ((CommandLineState *)s)->wim_index; }
-void nvim_cls_set_wim_index(void *s, int val) { ((CommandLineState *)s)->wim_index = val; }
-void nvim_cls_set_skip_pum_redraw(void *s, int val) { ((CommandLineState *)s)->skip_pum_redraw = (val != 0); }
-void nvim_cls_set_prev_cmdpos(void *s, int val) { ((CommandLineState *)s)->prev_cmdpos = val; }
-void nvim_cls_xfree_prev_cmdbuff(void *s) { XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff); }
 
-/// Set s->prev_cmdbuff to a copy of ccline.cmdbuff (if non-NULL).
-void nvim_cls_dup_cmdbuff_to_prev(void *s)
-{
-  if (ccline.cmdbuff != NULL) {
-    XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff);
-    ((CommandLineState *)s)->prev_cmdbuff = xstrdup(ccline.cmdbuff);
-  }
-}
 
-void nvim_cls_set_some_key_typed(void *s, int val) { ((CommandLineState *)s)->some_key_typed = (val != 0); }
-int nvim_cls_get_did_hist_navigate(void *s) { return ((CommandLineState *)s)->did_hist_navigate ? 1 : 0; }
-void nvim_cls_set_did_hist_navigate(void *s, int val) { ((CommandLineState *)s)->did_hist_navigate = (val != 0); }
-void *nvim_cls_get_is_state(void *s) { return (void *)&((CommandLineState *)s)->is_state; }
-void *nvim_cls_get_xpc(void *s) { return (void *)&((CommandLineState *)s)->xpc; }
-int nvim_cls_get_xpc_numfiles(void *s) { return ((CommandLineState *)s)->xpc.xp_numfiles; }
-void nvim_cls_set_xpc_context(void *s, int val) { ((CommandLineState *)s)->xpc.xp_context = val; }
-void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val) { ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0); }
-int nvim_cls_get_break_ctrl_c(void *s) { return ((CommandLineState *)s)->break_ctrl_c ? 1 : 0; }
 
 /// Get ccline.mouse_used pointer (may be NULL).
 int nvim_cls_get_ccline_mouse_used(void) { return ccline.mouse_used != NULL ? 1 : 0; }
@@ -901,16 +865,7 @@ void nvim_set_cedit_key(int val) { cedit_key = val; }
 /// Get p_cedit option string (for Rust did_set_cedit implementation).
 const char *nvim_get_p_cedit(void) { return p_cedit; }
 
-/// Get s->lookfor field (may be NULL).
-char *nvim_cls_get_lookfor(void *s) { return ((CommandLineState *)s)->lookfor; }
 
-/// Free s->lookfor and set to NULL (XFREE_CLEAR equivalent).
-void nvim_cls_xfree_lookfor(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  XFREE_CLEAR(cs->lookfor);
-  cs->lookforlen = 0;
-}
 
 /// Get cmdline_was_last_drawn global.
 int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
@@ -929,8 +884,6 @@ int nvim_wildmenu_process_key(void *s)
   return wildmenu_process_key(&ccline, cs->c, &cs->xpc);
 }
 
-/// Get is_state.did_incsearch field.
-int nvim_cls_get_is_state_did_incsearch(void *s) { return ((CommandLineState *)s)->is_state.did_incsearch ? 1 : 0; }
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
 void nvim_cmdline_do_cmdline_nowait(void) { do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT); }

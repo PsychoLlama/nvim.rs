@@ -1014,35 +1014,10 @@ const K_OPT_BO_FLAG_WILDMODE: c_int = 0x1;
 const K_UI_CMDLINE: c_int = 24;
 
 unsafe extern "C" {
-    // CommandLineState field accessors (for Phase 4)
-    fn nvim_cls_get_c(s: *mut c_void) -> c_int;
-    fn nvim_cls_set_c(s: *mut c_void, val: c_int);
-    fn nvim_cls_get_firstc(s: *mut c_void) -> c_int;
-    fn nvim_cls_get_gotesc(s: *mut c_void) -> c_int;
-    fn nvim_cls_set_gotesc(s: *mut c_void, val: c_int);
-    fn nvim_cls_set_do_abbr(s: *mut c_void, val: c_int);
-    fn nvim_cls_get_did_wild_list(s: *mut c_void) -> c_int;
-    fn nvim_cls_set_did_wild_list(s: *mut c_void, val: c_int);
-    fn nvim_cls_get_wim_index(s: *mut c_void) -> c_int;
-    fn nvim_cls_set_wim_index(s: *mut c_void, val: c_int);
-    fn nvim_cls_get_xpc(s: *mut c_void) -> *mut c_void;
-    fn nvim_cls_get_xpc_numfiles(s: *mut c_void) -> c_int;
-    fn nvim_cls_set_xpc_context(s: *mut c_void, val: c_int);
-    fn nvim_cls_set_some_key_typed(s: *mut c_void, val: c_int);
-    fn nvim_cls_get_break_ctrl_c(s: *mut c_void) -> c_int;
-    fn nvim_cls_set_event_cmdlineleavepre_triggered(s: *mut c_void, val: c_int);
-    fn nvim_cls_set_did_hist_navigate(s: *mut c_void, val: c_int);
-    fn nvim_cls_get_did_hist_navigate(s: *mut c_void) -> c_int;
-    fn nvim_cls_xfree_lookfor(s: *mut c_void);
-    fn nvim_cls_get_lookfor(s: *mut c_void) -> *mut c_char;
-    fn nvim_cls_get_is_state_did_incsearch(s: *mut c_void) -> c_int;
-
-    // CLS is_state access
-    fn nvim_cls_get_is_state(s: *mut c_void) -> *mut c_void;
-    fn nvim_cls_get_count(s: *mut c_void) -> c_int;
-
     // Autocmd trigger wrapper (int event to avoid event_T in public header)
     fn nvim_trigger_cmd_autocmd(typechar: c_int, evt: c_int);
+    fn xfree(ptr: *mut c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // v:char setter
     fn set_vim_var_char(c: c_int);
@@ -1111,11 +1086,7 @@ unsafe extern "C" {
     fn vim_strchr(haystack: *const c_char, needle: c_int) -> *mut c_char;
     fn nvim_get_p_cpo() -> *const c_char;
     fn cmdline_pum_active() -> c_int;
-    // For command_line_check
-    fn nvim_cls_set_prev_cmdpos(s: *mut c_void, val: c_int);
-    fn nvim_cls_xfree_prev_cmdbuff(s: *mut c_void);
-    fn nvim_cls_dup_cmdbuff_to_prev(s: *mut c_void);
-    fn nvim_cls_set_skip_pum_redraw(s: *mut c_void, val: c_int);
+
     static mut redir_off: bool;
     fn nvim_set_quit_more(val: bool);
     fn nvim_get_typebuf_len() -> c_int;
@@ -1144,33 +1115,34 @@ const EVENT_CMDLINELEAVEPRE: c_int = 28;
 #[allow(clippy::similar_names)]
 #[unsafe(export_name = "command_line_wildchar_complete")]
 pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_int {
+    let s = s.cast::<crate::command_line_state::CommandLineState>();
     let mut options: c_int = WILD_NO_BEEP;
-    let c = nvim_cls_get_c(s);
-    let firstc = nvim_cls_get_firstc(s);
+    let c = (*s).c;
+    let firstc = (*s).firstc;
     let escape = firstc != b'@' as c_int;
     let redraw_if_menu_empty = c == K_WILD;
     let p_wmnu_set = p_wmnu != 0;
     let wim_noselect = p_wmnu_set && (nvim_get_wim_flags(0) & WIM_FLAG_NOSELECT) != 0;
 
-    let wim_index = nvim_cls_get_wim_index(s);
+    let wim_index = (*s).wim_index;
     if (nvim_get_wim_flags(wim_index) & WIM_FLAG_LASTUSED) != 0 {
         options |= WILD_BUFLASTUSED;
     }
 
-    let xpc_numfiles = nvim_cls_get_xpc_numfiles(s);
-    let xp = nvim_cls_get_xpc(s);
+    let xpc_numfiles = (*s).xpc.xp_numfiles;
+    let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
 
     let res: c_int;
     if xpc_numfiles > 0 {
         // typed p_wc at least twice
         // If "list" is present, list matches unless already listed
         if xpc_numfiles > 1
-            && nvim_cls_get_did_wild_list(s) == 0
+            && !(*s).did_wild_list
             && (nvim_get_wim_flags(wim_index) & WIM_FLAG_LIST) != 0
         {
             showmatches(xp, false, true, wim_noselect);
             crate::screen::redrawcmd_rs();
-            nvim_cls_set_did_wild_list(s, 1);
+            (*s).did_wild_list = true;
         }
         if (nvim_get_wim_flags(wim_index) & WIM_FLAG_LONGEST) != 0 {
             res = nextwild(xp, WILD_LONGEST, options, escape);
@@ -1185,7 +1157,7 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
         let wim_list = (nvim_get_wim_flags(0) & WIM_FLAG_LIST) != 0;
         let wim_full = (nvim_get_wim_flags(0) & WIM_FLAG_FULL) != 0;
 
-        nvim_cls_set_wim_index(s, 0);
+        (*s).wim_index = 0;
         let wc = p_wc as c_int;
         let wcm = p_wcm as c_int;
         if c == wc || c == wcm || c == K_WILD || c == CTRL_Z {
@@ -1195,9 +1167,8 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
             }
             // Inlined nvim_cls_set_xpc_pre_incsearch_from_is_state
             {
-                let is_state_ptr =
-                    nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
-                let xp_ptr = nvim_cls_get_xpc(s).cast::<nvim_cmdexpand::ExpandT>();
+                let is_state_ptr = std::ptr::addr_of_mut!((*s).is_state);
+                let xp_ptr = std::ptr::addr_of_mut!((*s).xpc);
                 (*xp_ptr).xp_pre_incsearch_pos.lnum = (*is_state_ptr).search_start.lnum;
                 (*xp_ptr).xp_pre_incsearch_pos.col = (*is_state_ptr).search_start.col;
                 (*xp_ptr).xp_pre_incsearch_pos.coladd = (*is_state_ptr).search_start.coladd;
@@ -1217,7 +1188,7 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
         }
 
         // Remove popup menu if no completion items are available
-        if redraw_if_menu_empty && nvim_cls_get_xpc_numfiles(s) <= 0 {
+        if redraw_if_menu_empty && (*s).xpc.xp_numfiles <= 0 {
             pum_check_clear();
         }
 
@@ -1228,12 +1199,12 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
                 got_int = false;
             } // don't abandon the command line
             ExpandOne(xp, std::ptr::null_mut(), std::ptr::null_mut(), 0, WILD_FREE);
-            nvim_cls_set_xpc_context(s, EXPAND_NOTHING);
+            (*s).xpc.xp_context = EXPAND_NOTHING;
             return CMDLINE_CHANGED;
         }
 
         // Display matches
-        let xpc_numfiles2 = nvim_cls_get_xpc_numfiles(s);
+        let xpc_numfiles2 = (*s).xpc.xp_numfiles;
         let threshold = i32::from(!wim_noselect);
         if res == OK && xpc_numfiles2 > threshold {
             if wim_longest {
@@ -1252,7 +1223,7 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
                             showmatches(xp, p_wmnu_set, wim_list_next, wim_noselect_next);
                         }
                         if wim_list_next {
-                            nvim_cls_set_did_wild_list(s, 1);
+                            (*s).did_wild_list = true;
                         }
                     }
                 }
@@ -1266,20 +1237,20 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
             }
             crate::screen::redrawcmd_rs();
             if wim_list {
-                nvim_cls_set_did_wild_list(s, 1);
+                (*s).did_wild_list = true;
             }
-        } else if nvim_cls_get_xpc_numfiles(s) == -1 {
-            nvim_cls_set_xpc_context(s, EXPAND_NOTHING);
+        } else if (*s).xpc.xp_numfiles == -1 {
+            (*s).xpc.xp_context = EXPAND_NOTHING;
         }
     }
 
-    let wim_index_new = nvim_cls_get_wim_index(s);
+    let wim_index_new = (*s).wim_index;
     if wim_index_new < 3 {
-        nvim_cls_set_wim_index(s, wim_index_new + 1);
+        (*s).wim_index = wim_index_new + 1;
     }
 
     if c == ESC {
-        nvim_cls_set_gotesc(s, 1);
+        (*s).gotesc = true;
     }
 
     if res == OK {
@@ -1302,21 +1273,21 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
 #[allow(clippy::similar_names)]
 #[unsafe(export_name = "command_line_execute")]
 pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int) -> c_int {
-    let s = state;
+    let s = state.cast::<crate::command_line_state::CommandLineState>();
     if key == K_IGNORE || key == K_NOP {
         return -1; // get another key
     }
 
     let display_tick_saved = nvim_syn_get_display_tick();
-    nvim_cls_set_c(s, key);
+    (*s).c = key;
 
     // Skip wildmenu during history navigation via Up/Down keys
-    if nvim_cls_get_c(s) == K_WILD && nvim_cls_get_did_hist_navigate(s) != 0 {
-        nvim_cls_set_did_hist_navigate(s, 0);
+    if (*s).c == K_WILD && (*s).did_hist_navigate {
+        (*s).did_hist_navigate = false;
         return 1;
     }
 
-    let c = nvim_cls_get_c(s);
+    let c = (*s).c;
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
         if c == K_EVENT {
             state_handle_k_event();
@@ -1328,21 +1299,18 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         // If the window changed incremental search state is not valid.
         // Inlined nvim_cls_maybe_reset_incsearch_state
         {
-            let is_state_ptr = nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+            let is_state_ptr = std::ptr::addr_of_mut!((*s).is_state);
             if (*is_state_ptr).winid != nvim_get_curwin_handle() {
                 crate::search::rs_init_incsearch_state(is_state_ptr);
             }
         }
         // Re-apply 'incsearch' highlighting in case it was cleared.
-        if nvim_syn_get_display_tick() > display_tick_saved
-            && nvim_cls_get_is_state_did_incsearch(s) != 0
-        {
+        if nvim_syn_get_display_tick() > display_tick_saved && (*s).is_state.did_incsearch {
             // Inlined nvim_cls_may_do_incsearch
             {
-                let firstc = nvim_cls_get_firstc(s);
-                let count = nvim_cls_get_count(s);
-                let is_state_ptr =
-                    nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+                let firstc = (*s).firstc;
+                let count = (*s).count;
+                let is_state_ptr = std::ptr::addr_of_mut!((*s).is_state);
                 crate::search::rs_may_do_incsearch_highlighting(firstc, count, is_state_ptr);
             }
         }
@@ -1350,12 +1318,12 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         // nvim_select_popupmenu_item() can be called from K_EVENT/K_COMMAND/K_LUA
         if nvim_get_pum_want_active() != 0 {
             if cmdline_pum_active() != 0 {
-                let firstc = nvim_cls_get_firstc(s);
-                let xp = nvim_cls_get_xpc(s);
+                let firstc = (*s).firstc;
+                let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
                 nextwild(xp, WILD_PUM_WANT, 0, firstc != b'@' as c_int);
                 if nvim_get_pum_want_finish() != 0 {
                     nextwild(xp, WILD_APPLY, WILD_NO_BEEP, firstc != b'@' as c_int);
-                    nvim_command_line_end_wildmenu(s, false);
+                    nvim_command_line_end_wildmenu(s.cast::<c_void>(), false);
                 }
             }
             nvim_set_pum_want_active(0);
@@ -1368,13 +1336,13 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     }
 
     if nvim_get_key_typed_cmdline() != 0 {
-        nvim_cls_set_some_key_typed(s, 1);
+        (*s).some_key_typed = true;
 
         if cmdmsg_rl && KeyStuffed == 0 {
             // Invert horizontal movements and operations. Only when typed by user
             // directly, not when the result of a mapping.
-            let c_curr = nvim_cls_get_c(s);
-            nvim_cls_set_c(s, crate::keys::invert_rtl_key(c_curr));
+            let c_curr = (*s).c;
+            (*s).c = crate::keys::invert_rtl_key(c_curr);
         }
     }
 
@@ -1382,9 +1350,9 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     // Don't ignore it in :global, we really need to break then.
     // Don't ignore it for the input() function.
     {
-        let c_curr = nvim_cls_get_c(s);
-        let firstc = nvim_cls_get_firstc(s);
-        let break_ctrl_c = nvim_cls_get_break_ctrl_c(s) != 0;
+        let c_curr = (*s).c;
+        let firstc = (*s).firstc;
+        let break_ctrl_c = (*s).break_ctrl_c;
         let exmode = exmode_active;
         if c_curr == CTRL_C
             && firstc != b'@' as c_int
@@ -1399,9 +1367,9 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // free old command line when finished moving around in the history list
     {
-        let c_curr = nvim_cls_get_c(s);
-        let xpc_numfiles = nvim_cls_get_xpc_numfiles(s);
-        if !nvim_cls_get_lookfor(s).is_null()
+        let c_curr = (*s).c;
+        let xpc_numfiles = (*s).xpc.xp_numfiles;
+        if !(*s).lookfor.is_null()
             && c_curr != K_S_DOWN
             && c_curr != K_S_UP
             && c_curr != K_DOWN
@@ -1414,49 +1382,49 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             && c_curr != K_RIGHT
             && (xpc_numfiles > 0 || (c_curr != CTRL_P && c_curr != CTRL_N))
         {
-            nvim_cls_xfree_lookfor(s);
+            xfree((*s).lookfor);
+            (*s).lookfor = std::ptr::null_mut();
+            (*s).lookforlen = 0;
         }
     }
 
     // When there are matching completions to select <S-Tab> works like CTRL-P
     {
-        let c_curr = nvim_cls_get_c(s);
+        let c_curr = (*s).c;
         let wc = p_wc as c_int;
-        if crate::keys::rs_is_stab_to_ctrl_p(c_curr, wc) != 0 && nvim_cls_get_xpc_numfiles(s) > 0 {
-            nvim_cls_set_c(s, CTRL_P);
+        if crate::keys::rs_is_stab_to_ctrl_p(c_curr, wc) != 0 && (*s).xpc.xp_numfiles > 0 {
+            (*s).c = CTRL_P;
         }
     }
 
     if p_wmnu != 0 {
-        let c_new = nvim_wildmenu_translate_key(s);
-        nvim_cls_set_c(s, c_new);
+        let c_new = nvim_wildmenu_translate_key(s.cast::<c_void>());
+        (*s).c = c_new;
     }
 
-    let c_curr = nvim_cls_get_c(s);
+    let c_curr = (*s).c;
     let wc = p_wc as c_int;
     let wcm = p_wcm as c_int;
     let key_is_wc = (c_curr == wc && nvim_get_key_typed_cmdline() != 0) || c_curr == wcm;
 
     let mut wild_type = 0_i32;
-    if (cmdline_pum_active() != 0 || wild_menu_showing != 0 || nvim_cls_get_did_wild_list(s) != 0)
-        && !key_is_wc
-    {
-        let c_check = nvim_cls_get_c(s);
+    if (cmdline_pum_active() != 0 || wild_menu_showing != 0 || (*s).did_wild_list) && !key_is_wc {
+        let c_check = (*s).c;
         if c_check == CTRL_E || c_check == CTRL_Y {
             wild_type = if c_check == CTRL_E {
                 WILD_CANCEL
             } else {
                 WILD_APPLY
             };
-            let xp = nvim_cls_get_xpc(s);
-            let firstc = nvim_cls_get_firstc(s);
+            let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
+            let firstc = (*s).firstc;
             nextwild(xp, wild_type, WILD_NO_BEEP, firstc != b'@' as c_int);
         }
     }
 
     // Trigger CmdlineLeavePre autocommand
     {
-        let c_check = nvim_cls_get_c(s);
+        let c_check = (*s).c;
         if (nvim_get_key_typed_cmdline() != 0
             && (c_check == b'\n' as c_int
                 || c_check == b'\r' as c_int
@@ -1466,12 +1434,12 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         {
             // Inlined nvim_cls_trigger_cmdlineleavepre
             {
-                let c_val = nvim_cls_get_c(s);
+                let c_val = (*s).c;
                 set_vim_var_char(c_val);
-                let cmdline_type = crate::entry::rs_entry_cmdline_type(nvim_cls_get_firstc(s));
+                let cmdline_type = crate::entry::rs_entry_cmdline_type((*s).firstc);
                 nvim_trigger_cmd_autocmd(cmdline_type, EVENT_CMDLINELEAVEPRE);
             }
-            nvim_cls_set_event_cmdlineleavepre_triggered(s, 1);
+            (*s).event_cmdlineleavepre_triggered = true;
             if (c_check == ESC || c_check == CTRL_C) && (nvim_get_wim_flags(0) & WIM_FLAG_LIST) != 0
             {
                 set_no_hlsearch(1);
@@ -1480,7 +1448,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     }
 
     // The wildmenu is cleared if the pressed key is not used for navigating
-    let c_check = nvim_cls_get_c(s);
+    let c_check = (*s).c;
     let end_wildmenu = !key_is_wc
         && crate::keys::rs_should_end_wildmenu(c_check, p_wc as c_int, p_wcm as c_int) != 0;
     let end_wildmenu = end_wildmenu
@@ -1488,40 +1456,40 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // free expanded names when finished walking through matches
     if end_wildmenu {
-        nvim_command_line_end_wildmenu(s, key_is_wc);
+        nvim_command_line_end_wildmenu(s.cast::<c_void>(), key_is_wc);
     }
 
     if p_wmnu != 0 {
-        let c_new = nvim_wildmenu_process_key(s);
-        nvim_cls_set_c(s, c_new);
+        let c_new = nvim_wildmenu_process_key(s.cast::<c_void>());
+        (*s).c = c_new;
     }
 
     // CTRL-\ handling
     {
-        let c_check = nvim_cls_get_c(s);
+        let c_check = (*s).c;
         if c_check == CTRL_BSL {
-            let mut c_val = nvim_cls_get_c(s);
-            let mut gotesc_val = (nvim_cls_get_gotesc(s) != 0) as bool;
+            let mut c_val = (*s).c;
+            let mut gotesc_val = (*s).gotesc;
             match crate::keys::rs_command_line_handle_ctrl_bsl(&raw mut c_val, &raw mut gotesc_val)
             {
                 x if x == CMDLINE_CHANGED => {
-                    nvim_cls_set_c(s, c_val);
-                    nvim_cls_set_gotesc(s, gotesc_val as c_int);
-                    return nvim_command_line_changed(s);
+                    (*s).c = c_val;
+                    (*s).gotesc = gotesc_val;
+                    return nvim_command_line_changed(s.cast::<c_void>());
                 }
                 x if x == CMDLINE_NOT_CHANGED => {
-                    nvim_cls_set_c(s, c_val);
-                    nvim_cls_set_gotesc(s, gotesc_val as c_int);
-                    return nvim_command_line_not_changed(s);
+                    (*s).c = c_val;
+                    (*s).gotesc = gotesc_val;
+                    return nvim_command_line_not_changed(s.cast::<c_void>());
                 }
                 0 => {
-                    nvim_cls_set_c(s, c_val);
-                    nvim_cls_set_gotesc(s, gotesc_val as c_int);
+                    (*s).c = c_val;
+                    (*s).gotesc = gotesc_val;
                     return 0; // back to cmd mode
                 }
                 _ => {
                     // backslash key not processed
-                    nvim_cls_set_c(s, CTRL_BSL);
+                    (*s).c = CTRL_BSL;
                 }
             }
         }
@@ -1529,24 +1497,24 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // Handle cedit_key or K_CMDWIN
     {
-        let c_check = nvim_cls_get_c(s);
+        let c_check = (*s).c;
         let cedit_key = nvim_get_cedit_key();
         if c_check == cedit_key || c_check == K_CMDWIN {
             if (c_check == K_CMDWIN || ex_normal_busy == 0) && !unsafe { got_int } {
                 let c_new = nvim_open_cmdwin();
-                nvim_cls_set_c(s, c_new);
-                nvim_cls_set_some_key_typed(s, 1);
+                (*s).c = c_new;
+                (*s).some_key_typed = true;
             }
         } else {
-            let c_check = nvim_cls_get_c(s);
+            let c_check = (*s).c;
             let c_new = do_digraph(c_check);
-            nvim_cls_set_c(s, c_new);
+            (*s).c = c_new;
         }
     }
 
     // Handle Enter/ESC
     {
-        let c_check = nvim_cls_get_c(s);
+        let c_check = (*s).c;
         if c_check == b'\n' as c_int
             || c_check == b'\r' as c_int
             || c_check == K_KENTER
@@ -1565,13 +1533,13 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 && unsafe { *nvim_get_ccline_cmdbuff().add(cmdpos as usize - 1) } == b'\\' as c_char
             {
                 if c_check == K_KENTER {
-                    nvim_cls_set_c(s, b'\n' as c_int);
+                    (*s).c = b'\n' as c_int;
                 }
                 // fall through: don't return, just continue with the char
             } else {
-                nvim_cls_set_gotesc(s, 0);
-                if crate::edit::rs_ccheck_abbr(nvim_cls_get_c(s) + 0x100) != 0 {
-                    return nvim_command_line_changed(s);
+                (*s).gotesc = false;
+                if crate::edit::rs_ccheck_abbr((*s).c + 0x100) != 0 {
+                    return nvim_command_line_changed(s.cast::<c_void>());
                 }
                 if !cmd_silent {
                     if ui_has(K_UI_CMDLINE) == 0 {
@@ -1586,10 +1554,10 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // Completion for 'wildchar', 'wildcharm', and wildtrigger()
     {
-        let c_check = nvim_cls_get_c(s);
+        let c_check = (*s).c;
         let wc = p_wc as c_int;
         let wcm = p_wcm as c_int;
-        if (c_check == wc && nvim_cls_get_gotesc(s) == 0 && nvim_get_key_typed_cmdline() != 0)
+        if (c_check == wc && !(*s).gotesc && nvim_get_key_typed_cmdline() != 0)
             || c_check == wcm
             || c_check == K_WILD
             || c_check == CTRL_Z
@@ -1597,33 +1565,32 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             if c_check == K_WILD {
                 emsg_silent += 1; // silence the bell
             }
-            let res = rs_command_line_wildchar_complete(s);
+            let res = rs_command_line_wildchar_complete(s.cast::<c_void>());
             if c_check == K_WILD {
                 emsg_silent -= 1;
             }
             if res == CMDLINE_CHANGED {
-                return nvim_command_line_changed(s);
+                return nvim_command_line_changed(s.cast::<c_void>());
             }
             if c_check == K_WILD {
-                return nvim_command_line_not_changed(s);
+                return nvim_command_line_not_changed(s.cast::<c_void>());
             }
         }
     }
 
-    nvim_cls_set_gotesc(s, 0);
+    (*s).gotesc = false;
 
     // <S-Tab> goes to last match, in a clumsy way
     {
-        let c_check = nvim_cls_get_c(s);
+        let c_check = (*s).c;
         if c_check == K_S_TAB && nvim_get_key_typed_cmdline() != 0 {
-            let xp = nvim_cls_get_xpc(s);
-            let firstc = nvim_cls_get_firstc(s);
+            let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
+            let firstc = (*s).firstc;
             if nextwild(xp, WILD_EXPAND_KEEP, 0, firstc != b'@' as c_int) == OK {
-                let numfiles = nvim_cls_get_xpc_numfiles(s);
-                let wim_idx = nvim_cls_get_wim_index(s);
+                let numfiles = (*s).xpc.xp_numfiles;
+                let wim_idx = (*s).wim_index;
                 if numfiles > 1
-                    && ((nvim_cls_get_did_wild_list(s) == 0
-                        && (nvim_get_wim_flags(wim_idx) & WIM_FLAG_LIST) != 0)
+                    && ((!(*s).did_wild_list && (nvim_get_wim_flags(wim_idx) & WIM_FLAG_LIST) != 0)
                         || p_wmnu != 0)
                 {
                     showmatches(
@@ -1635,23 +1602,23 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 }
                 nextwild(xp, WILD_PREV, 0, firstc != b'@' as c_int);
                 nextwild(xp, WILD_PREV, 0, firstc != b'@' as c_int);
-                return nvim_command_line_changed(s);
+                return nvim_command_line_changed(s.cast::<c_void>());
             }
         }
     }
 
     // NUL is stored as NL
-    if nvim_cls_get_c(s) == NUL_INT || nvim_cls_get_c(s) == K_ZERO {
-        nvim_cls_set_c(s, NL);
+    if (*s).c == NUL_INT || (*s).c == K_ZERO {
+        (*s).c = NL;
     }
 
-    nvim_cls_set_do_abbr(s, 1); // default: check for abbreviation
+    (*s).do_abbr = true; // default: check for abbreviation
 
     // If already used to cancel/accept wildmenu, don't process the key further.
     if wild_type == WILD_CANCEL || wild_type == WILD_APPLY {
         // Inlined nvim_cls_maybe_reset_incsearch_state
         {
-            let is_state_ptr = nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+            let is_state_ptr = std::ptr::addr_of_mut!((*s).is_state);
             if (*is_state_ptr).winid != nvim_get_curwin_handle() {
                 crate::search::rs_init_incsearch_state(is_state_ptr);
             }
@@ -1659,18 +1626,17 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         if nvim_get_key_typed_cmdline() != 0 || vpeekc() == NUL_INT {
             // Inlined nvim_cls_may_do_incsearch
             {
-                let firstc = nvim_cls_get_firstc(s);
-                let count = nvim_cls_get_count(s);
-                let is_state_ptr =
-                    nvim_cls_get_is_state(s).cast::<crate::search::IncsearchStateT>();
+                let firstc = (*s).firstc;
+                let count = (*s).count;
+                let is_state_ptr = std::ptr::addr_of_mut!((*s).is_state);
                 crate::search::rs_may_do_incsearch_highlighting(firstc, count, is_state_ptr);
             }
         }
-        return nvim_command_line_not_changed(s);
+        return nvim_command_line_not_changed(s.cast::<c_void>());
     }
 
     // Dispatch to command_line_handle_key (now Rust-exported)
-    crate::keys::rs_command_line_handle_key(s)
+    crate::keys::rs_command_line_handle_key(s.cast::<c_void>())
 }
 
 /// Rust replacement for `command_line_check(VimState *state)`.
@@ -1683,10 +1649,11 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 /// `state` must be a valid non-null pointer to a `CommandLineState`.
 #[unsafe(export_name = "command_line_check")]
 pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
-    let s = state;
+    let s = state.cast::<crate::command_line_state::CommandLineState>();
 
-    nvim_cls_set_prev_cmdpos(s, nvim_get_ccline_cmdpos());
-    nvim_cls_xfree_prev_cmdbuff(s);
+    (*s).prev_cmdpos = nvim_get_ccline_cmdpos();
+    xfree((*s).prev_cmdbuff);
+    (*s).prev_cmdbuff = std::ptr::null_mut();
 
     redir_off = (1) != 0; // Don't redirect the typed command.
     nvim_set_quit_more(false); // reset after CTRL-D which had a more-prompt
@@ -1700,17 +1667,24 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
         // There is no pending input from sources other than user input, so
         // Vim is going to wait for the user to type a key.  Consider the
         // command line typed even if next key will trigger a mapping.
-        nvim_cls_set_some_key_typed(s, 1);
+        (*s).some_key_typed = true;
     }
 
     // Trigger SafeState if nothing is pending.
-    may_trigger_safestate(nvim_cls_get_xpc_numfiles(s) <= 0);
+    may_trigger_safestate((*s).xpc.xp_numfiles <= 0);
 
-    nvim_cls_dup_cmdbuff_to_prev(s);
+    // Inline nvim_cls_dup_cmdbuff_to_prev: copy ccline.cmdbuff to s->prev_cmdbuff
+    {
+        let cmdbuff = nvim_get_ccline_cmdbuff();
+        if !cmdbuff.is_null() {
+            xfree((*s).prev_cmdbuff);
+            (*s).prev_cmdbuff = xstrdup(cmdbuff);
+        }
+    }
 
     // Defer screen update to avoid pum flicker during wildtrigger()
-    if nvim_cls_get_c(s) == K_WILD && nvim_cls_get_firstc(s) != b'@' as c_int {
-        nvim_cls_set_skip_pum_redraw(s, 1);
+    if (*s).c == K_WILD && (*s).firstc != b'@' as c_int {
+        (*s).skip_pum_redraw = true;
     }
 
     cursorcmd(); // set the cursor on the right spot
