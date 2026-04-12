@@ -32,6 +32,7 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 
 pub mod commands;
 pub mod define;
+pub mod map;
 pub mod operations;
 pub mod place;
 pub mod query;

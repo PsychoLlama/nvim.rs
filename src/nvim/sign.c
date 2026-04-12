@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "klib/kvec.h"
 #include "nvim/api/extmark.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
@@ -32,7 +31,6 @@
 #include "nvim/highlight_defs.h"
 #include "nvim/highlight_group.h"
 #include "nvim/macros_defs.h"
-#include "nvim/map_defs.h"
 #include "nvim/marktree.h"
 #include "nvim/marktree_defs.h"
 #include "nvim/memory.h"
@@ -71,30 +69,14 @@ extern void nvim_sign_define_update_placed(const char *name, sign_T *sp);
 // Phase 3: these functions now live in Rust (nvim-sign crate)
 extern void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, const char *group, list_T *retlist);
 
-static PMap(cstr_t) sign_map = MAP_INIT;
-static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
+// sign_map and sign_ns are now owned by Rust (nvim-sign crate, map.rs).
+// nvim_sign_map_get/has/size/del/get_or_create/get_nth_key/get_nth_value
+// and nvim_sign_ns_size/get/get_name/push/create_namespace_cstr/namespace_exists
+// are all implemented in Rust.
 
-
-sign_T *nvim_sign_map_get(const char *name)
-{ return name ? pmap_get(cstr_t)(&sign_map, name) : NULL; }
-int nvim_sign_map_has(const char *name)
-{ return name ? (map_has(cstr_t, &sign_map, name) ? 1 : 0) : 0; }
-char *nvim_sign_map_get_nth_key(int idx)
-{
-  cstr_t name; int current_idx = 0;
-  map_foreach_key(&sign_map, name, { if (current_idx++ == idx) { return (char *)name; } });
-  return NULL;
-}
-int nvim_sign_ns_size(void) { return (int)kv_size(sign_ns); }
-Integer nvim_sign_ns_get(int idx) { return idx < (int)kv_size(sign_ns) ? kv_A(sign_ns, idx) : -1; }
-char *nvim_sign_ns_get_name(int idx)
-{ return idx < (int)kv_size(sign_ns) ? (char *)describe_ns((NS)kv_A(sign_ns, idx), "") : NULL; }
 linenr_T nvim_sign_marktree_lookup_row(buf_T *buf, uint32_t ns, uint32_t id)
 { MTKey mark = rs_marktree_lookup_ns(buf->b_marktree, ns, id, false, NULL); return mark.pos.row + 1; }
 linenr_T nvim_sign_buf_line_count(buf_T *buf) { return buf ? buf->b_ml.ml_line_count : 0; }
-void nvim_sign_ns_push(Integer ns) { kv_push(sign_ns, ns); }
-int nvim_sign_create_namespace_cstr(const char *name) { return (int)nvim_create_namespace(cstr_as_string(name)); }
-int nvim_sign_namespace_exists(const char *name) { return map_get(String, int)(&namespace_ids, cstr_as_string(name)) ? 1 : 0; }
 
 // typval_T / list_T / dict_T accessor shims for Rust FFI
 // These let Rust access C typval internals without knowing the struct layout.
@@ -107,43 +89,12 @@ void nvim_rettv_alloc_list(typval_T *rettv, int len) { tv_list_alloc_ret(rettv, 
 list_T *nvim_rettv_get_list(typval_T *rettv) { return rettv->vval.v_list; }
 // Indexed access to argvars / rettv (pointer arithmetic as C shim)
 typval_T *nvim_argvars_at(typval_T *argvars, int idx) { return &argvars[idx]; }
-// sign_map iteration by value (for getdefined)
-sign_T *nvim_sign_map_get_nth_value(int idx)
-{
-  sign_T *sp; int current_idx = 0;
-  map_foreach_value(&sign_map, sp, { if (current_idx++ == idx) { return sp; } });
-  return NULL;
-}
 // TV list indexed item typval access
 typval_T *nvim_tv_list_item_tv_at(list_T *l, int idx)
 {
   int i = 0;
   TV_LIST_ITER_CONST(l, li, { if (i++ == idx) { return (typval_T *)TV_LIST_ITEM_TV(li); } });
   return NULL;
-}
-// sign_map iteration size (for free_all)
-int nvim_sign_map_size(void) { return (int)map_size(&sign_map); }
-
-// Phase 3 accessors: sign_map insert/delete
-sign_T *nvim_sign_map_del(const char *name)
-{
-  sign_T *sp = pmap_del(cstr_t)(&sign_map, name, NULL);
-  return sp;
-}
-// Get or create sign entry in sign_map. Returns sign_T*, sets *is_new if created.
-// If new, also allocates and initializes the sign_T and copies the name.
-sign_T *nvim_sign_map_get_or_create(const char *name, bool *is_new)
-{
-  cstr_t *key;
-  bool new_sign = false;
-  sign_T **sp_ptr = (sign_T **)pmap_put_ref(cstr_t)(&sign_map, name, &key, &new_sign);
-  if (new_sign) {
-    *key = xstrdup(name);
-    *sp_ptr = xcalloc(1, sizeof(sign_T));
-    (*sp_ptr)->sn_name = (char *)(*key);
-  }
-  *is_new = new_sign;
-  return *sp_ptr;
 }
 // init_sign_text wrapper (expose to Rust)
 int nvim_init_sign_text(sign_T *sp, schar_T *out, const char *text)
