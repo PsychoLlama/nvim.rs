@@ -451,6 +451,29 @@ use crate::render::hlf;
 /// `schar_T` is `uint32_t`.
 type ScharT = u32;
 
+/// Flat border configuration returned by `nvim_pum_parse_winborder_flat`.
+/// Matches `PumBorderFlat` in `popupmenu.h`.
+#[repr(C)]
+struct PumBorderFlat {
+    has_border: c_int,
+    is_shadow: c_int,
+    has_border_chars: c_int,
+    scrollbar_border_char: ScharT,
+    scrollbar_border_attr: c_int,
+}
+
+impl PumBorderFlat {
+    const fn zeroed() -> Self {
+        Self {
+            has_border: 0,
+            is_shadow: 0,
+            has_border_chars: 0,
+            scrollbar_border_char: 0,
+            scrollbar_border_attr: 0,
+        }
+    }
+}
+
 /// NUL character value.
 const NUL: u8 = 0;
 /// TAB character value.
@@ -512,14 +535,8 @@ extern "C" {
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
 
     // Border operations
-    fn nvim_pum_parse_border(has_scrollbar: c_int) -> *mut c_void;
-    fn nvim_pum_border_cfg_has_border(cfg: *mut c_void) -> c_int;
-    fn nvim_pum_border_cfg_is_shadow(cfg: *mut c_void) -> c_int;
-    fn nvim_pum_border_cfg_has_border_chars(cfg: *mut c_void) -> c_int;
-    fn nvim_pum_border_cfg_scrollbar_char(cfg: *mut c_void) -> ScharT;
-    fn nvim_pum_border_cfg_scrollbar_attr(cfg: *mut c_void) -> c_int;
-    fn nvim_pum_border_draw(cfg: *mut c_void);
-    fn nvim_pum_border_cfg_free(cfg: *mut c_void);
+    fn nvim_pum_parse_winborder_flat(has_scrollbar: c_int, out: *mut PumBorderFlat) -> bool;
+    fn nvim_pum_grid_draw_border();
 
     // These are Rust #[no_mangle] functions callable via C linkage
     fn rs_pum_get_item(array: *const PumItemArray, index: c_int, item_type: c_int)
@@ -636,21 +653,21 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         grid_width += 1;
     }
 
-    // Parse border configuration (opaque handle)
-    let border_cfg = nvim_pum_parse_border(pum_scrollbar);
-    if border_cfg.is_null() {
+    // Parse border configuration (flat struct)
+    let mut border_flat = PumBorderFlat::zeroed();
+    if !nvim_pum_parse_winborder_flat(pum_scrollbar, &raw mut border_flat) {
         return;
     }
-    let has_border = nvim_pum_border_cfg_has_border(border_cfg) != 0;
+    let has_border = border_flat.has_border != 0;
     let (border_char, border_attr) = if has_border && pum_scrollbar != 0 {
         (
-            nvim_pum_border_cfg_scrollbar_char(border_cfg),
-            nvim_pum_border_cfg_scrollbar_attr(border_cfg),
+            border_flat.scrollbar_border_char,
+            border_flat.scrollbar_border_attr,
         )
     } else {
         (0, 0)
     };
-    let has_border_chars = nvim_pum_border_cfg_has_border_chars(border_cfg) != 0;
+    let has_border_chars = border_flat.has_border_chars != 0;
 
     if pum_scrollbar > 0 && !has_border_chars {
         grid_width += 1;
@@ -724,8 +741,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     // Avoid border for mouse menu
     let mouse_menu = (State & MODE_CMDLINE) == 0 && pum_grid.zindex == K_Z_INDEX_CMDLINE_POPUP_MENU;
     if !mouse_menu && has_border_chars {
-        nvim_pum_border_draw(border_cfg);
-        if nvim_pum_border_cfg_is_shadow(border_cfg) == 0 {
+        nvim_pum_grid_draw_border();
+        if border_flat.is_shadow == 0 {
             row += 1;
             col_off += 1;
         }
@@ -1017,7 +1034,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         row += 1;
     }
 
-    nvim_pum_border_cfg_free(border_cfg);
+    // border_flat is stack-allocated, no free needed.
 }
 
 #[cfg(test)]

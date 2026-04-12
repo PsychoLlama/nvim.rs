@@ -237,76 +237,93 @@ PumKeyConstants nvim_pum_get_key_constants(void)
 }
 
 
-/// Opaque border configuration for popup menu rendering.
-/// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
-struct PumBorderConfig {
-  WinConfig fconfig;
-  bool has_border;
-  bool is_shadow;
-  schar_T scrollbar_border_char;
-  int scrollbar_border_attr;
-};
-
-/// Parse border configuration. Returns heap-allocated PumBorderConfig.
-/// Returns NULL on parse error (emsg already called).
-PumBorderConfig *nvim_pum_parse_border(int has_scrollbar)
+/// Parse popup menu border configuration and return a flat struct.
+/// Returns false on parse error (emsg already called). Fills *out.
+bool nvim_pum_parse_winborder_flat(int has_scrollbar, PumBorderFlat *out)
 {
-  PumBorderConfig *cfg = xcalloc(1, sizeof(*cfg));
-  cfg->fconfig = WIN_CONFIG_INIT;
+  *out = (PumBorderFlat){ 0 };
 
   int bw = rs_pum_border_width();
-  cfg->has_border = bw > 0;
+  out->has_border = bw > 0 ? 1 : 0;
 
   if (bw > 0) {
+    WinConfig fconfig = WIN_CONFIG_INIT;
     Error err = ERROR_INIT;
-    if (!parse_winborder(&cfg->fconfig, p_pumborder, &err)) {
+    if (!parse_winborder(&fconfig, p_pumborder, &err)) {
       if (ERROR_SET(&err)) {
         emsg(err.msg);
       }
       api_clear_error(&err);
-      xfree(cfg);
-      return NULL;
+      return false;
     }
 
     // Shadow style
     if (strequal(p_pumborder, opt_winborder_values[3])) {
-      cfg->fconfig.shadow = true;
+      fconfig.shadow = true;
       int blend = SYN_GROUP_STATIC("PmenuShadow");
       int through = SYN_GROUP_STATIC("PmenuShadowThrough");
-      cfg->fconfig.border_hl_ids[2] = through;
-      cfg->fconfig.border_hl_ids[3] = blend;
-      cfg->fconfig.border_hl_ids[4] = blend;
-      cfg->fconfig.border_hl_ids[5] = blend;
-      cfg->fconfig.border_hl_ids[6] = through;
+      fconfig.border_hl_ids[2] = through;
+      fconfig.border_hl_ids[3] = blend;
+      fconfig.border_hl_ids[4] = blend;
+      fconfig.border_hl_ids[5] = blend;
+      fconfig.border_hl_ids[6] = through;
     }
-    cfg->is_shadow = cfg->fconfig.shadow;
+    out->is_shadow = fconfig.shadow ? 1 : 0;
+    out->has_border_chars = fconfig.border ? 1 : 0;
 
     // Convert border highlight IDs to attributes
     for (int i = 0; i < 8; i++) {
       int attr = hl_attr_active[HLF_PBR];
-      if (cfg->fconfig.border_hl_ids[i]) {
-        attr = hl_get_ui_attr(-1, HLF_PBR, cfg->fconfig.border_hl_ids[i], false);
+      if (fconfig.border_hl_ids[i]) {
+        attr = hl_get_ui_attr(-1, HLF_PBR, fconfig.border_hl_ids[i], false);
       }
-      cfg->fconfig.border_attr[i] = attr;
+      fconfig.border_attr[i] = attr;
     }
     api_clear_error(&err);
 
     if (has_scrollbar) {
-      cfg->scrollbar_border_char = schar_from_str(cfg->fconfig.border_chars[3]);
-      cfg->scrollbar_border_attr = cfg->fconfig.border_attr[3];
+      out->scrollbar_border_char = schar_from_str(fconfig.border_chars[3]);
+      out->scrollbar_border_attr = fconfig.border_attr[3];
     }
   }
 
-  return cfg;
+  return true;
 }
 
-int nvim_pum_border_cfg_has_border(PumBorderConfig *cfg) { return cfg->has_border ? 1 : 0; }
-int nvim_pum_border_cfg_is_shadow(PumBorderConfig *cfg) { return cfg->is_shadow ? 1 : 0; }
-int nvim_pum_border_cfg_has_border_chars(PumBorderConfig *cfg) { return cfg->fconfig.border ? 1 : 0; }
-schar_T nvim_pum_border_cfg_scrollbar_char(PumBorderConfig *cfg) { return cfg->scrollbar_border_char; }
-int nvim_pum_border_cfg_scrollbar_attr(PumBorderConfig *cfg) { return cfg->scrollbar_border_attr; }
-void nvim_pum_border_draw(PumBorderConfig *cfg) { grid_draw_border(&pum_grid, &cfg->fconfig, NULL, 0, NULL); }
-void nvim_pum_border_cfg_free(PumBorderConfig *cfg) { xfree(cfg); }
+/// Draw popup menu border using current pumborder option.
+void nvim_pum_grid_draw_border(void)
+{
+  WinConfig fconfig = WIN_CONFIG_INIT;
+  Error err = ERROR_INIT;
+  if (!parse_winborder(&fconfig, p_pumborder, &err)) {
+    api_clear_error(&err);
+    return;
+  }
+
+  // Shadow style
+  if (strequal(p_pumborder, opt_winborder_values[3])) {
+    fconfig.shadow = true;
+    int blend = SYN_GROUP_STATIC("PmenuShadow");
+    int through = SYN_GROUP_STATIC("PmenuShadowThrough");
+    fconfig.border_hl_ids[2] = through;
+    fconfig.border_hl_ids[3] = blend;
+    fconfig.border_hl_ids[4] = blend;
+    fconfig.border_hl_ids[5] = blend;
+    fconfig.border_hl_ids[6] = through;
+  }
+
+  // Convert border highlight IDs to attributes
+  for (int i = 0; i < 8; i++) {
+    int attr = hl_attr_active[HLF_PBR];
+    if (fconfig.border_hl_ids[i]) {
+      attr = hl_get_ui_attr(-1, HLF_PBR, fconfig.border_hl_ids[i], false);
+    }
+    fconfig.border_attr[i] = attr;
+  }
+  api_clear_error(&err);
+
+  grid_draw_border(&pum_grid, &fconfig, NULL, 0, NULL);
+}
 
 // Selection / preview window management
 

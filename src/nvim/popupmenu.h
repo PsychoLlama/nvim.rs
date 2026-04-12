@@ -39,8 +39,15 @@ typedef struct {
   int valid;
 } PumWinInfo;
 
-/// Opaque border configuration for popup menu rendering (Rust FFI).
-typedef struct PumBorderConfig PumBorderConfig;
+/// Flat border configuration returned by `nvim_pum_parse_winborder_flat` (Rust FFI).
+typedef struct {
+  int has_border;        ///< 1 if border width > 0, 0 otherwise
+  int is_shadow;         ///< 1 if shadow style, 0 otherwise
+  int has_border_chars;  ///< 1 if fconfig.border is set, 0 otherwise
+  /// valid when has_border && has_scrollbar
+  uint32_t scrollbar_border_char;
+  int scrollbar_border_attr;
+} PumBorderFlat;
 
 /// state for pum_ext_select_item.
 EXTERN struct {
