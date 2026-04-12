@@ -36,6 +36,7 @@ pub mod join_full;
 pub mod op_addsub;
 pub mod op_colon;
 pub mod op_function;
+pub mod op_insert_full;
 pub mod op_shift;
 pub mod oparg;
 pub mod pending;
