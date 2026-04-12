@@ -3,9 +3,107 @@
 //! This module provides helper functions for showing, hiding, and managing
 //! the popup menu display state.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::PUM_STATE;
+
+// ---- Minimal API types for nvim_pum_ext_show ----
+
+/// Matches C `String` / `NvimString`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ApiString {
+    data: *mut c_char,
+    size: usize,
+}
+
+/// Object type constants.
+const K_OBJ_STRING: c_int = 4;
+const K_OBJ_ARRAY: c_int = 5;
+
+/// Object data union (sized to 8 bytes to cover all C variants).
+#[repr(C)]
+#[derive(Clone, Copy)]
+union ObjData {
+    string: ApiString,
+    array: ApiArray,
+    _integer: i64,
+}
+
+/// Matches C `Object`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ApiObject {
+    obj_type: c_int,
+    data: ObjData,
+}
+
+impl ApiObject {
+    const fn string(s: ApiString) -> Self {
+        Self {
+            obj_type: K_OBJ_STRING,
+            data: ObjData { string: s },
+        }
+    }
+    const fn array(a: ApiArray) -> Self {
+        Self {
+            obj_type: K_OBJ_ARRAY,
+            data: ObjData { array: a },
+        }
+    }
+}
+
+/// Matches C `Array` kvec.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ApiArray {
+    size: usize,
+    capacity: usize,
+    items: *mut ApiObject,
+}
+
+impl ApiArray {
+    /// Push an item.
+    ///
+    /// # Safety
+    /// Must have been allocated with sufficient capacity.
+    unsafe fn push(&mut self, obj: ApiObject) {
+        debug_assert!(self.size < self.capacity);
+        *self.items.add(self.size) = obj;
+        self.size += 1;
+    }
+}
+
+/// Matches C `Arena` from `memory_defs.h`.
+#[repr(C)]
+struct ExtArena {
+    cur_blk: *mut c_char,
+    pos: usize,
+    size: usize,
+}
+
+impl ExtArena {
+    const fn empty() -> Self {
+        Self {
+            cur_blk: std::ptr::null_mut(),
+            pos: 0,
+            size: 0,
+        }
+    }
+}
+
+extern "C" {
+    /// Allocate an Arena-backed Array with given capacity.
+    fn arena_array(arena: *mut ExtArena, max_size: usize) -> ApiArray;
+    /// Create a string alias (no copy) from a C string.
+    fn cstr_as_string(s: *const c_char) -> ApiString;
+    /// Send the `popupmenu_show` UI event.
+    fn ui_call_popupmenu_show(items: ApiArray, selected: i64, row: i64, col: i64, grid: i64);
+    /// Finish arena, returning memory block.
+    fn arena_finish(arena: *mut ExtArena) -> *mut c_void;
+    /// Free arena memory block.
+    fn arena_mem_free(mem: *mut c_void);
+}
 
 // External functions needed (not PumState fields)
 extern "C" {
@@ -333,17 +431,7 @@ extern "C" {
 extern "C" {
     /// Validate cursor column in the given window.
     fn validate_cursor_col(wp: *mut WinHandle);
-    /// Send external popupmenu show event with Arena-allocated arrays.
-    fn nvim_pum_ext_show(
-        array: *mut crate::item::PumItemArray,
-        size: c_int,
-        selected: c_int,
-        pum_win_row: c_int,
-        cursor_col: c_int,
-        anchor_grid: c_int,
-        win_row_offset: c_int,
-        win_col_offset: c_int,
-    );
+    // nvim_pum_ext_show is now implemented in Rust below.
     /// Send external popupmenu select event.
     fn ui_call_popupmenu_select(selected: i64);
     /// Get `w_p_rl` for a window.
@@ -702,6 +790,45 @@ unsafe fn pum_compute_hp(cursor_col: c_int) {
     PUM_STATE.width = result.width;
 }
 
+/// Send the external popupmenu show event.
+///
+/// Builds an Arena-allocated nested Array from the popup items and
+/// calls `ui_call_popupmenu_show`.
+///
+/// # Safety
+/// `array` must point to at least `size` valid `PumItemArray` elements.
+#[allow(clippy::cast_sign_loss, clippy::too_many_arguments)]
+unsafe fn pum_ext_show(
+    array: *mut crate::item::PumItemArray,
+    size: c_int,
+    selected: c_int,
+    pum_win_row: c_int,
+    cursor_col: c_int,
+    anchor_grid: c_int,
+    win_row_offset: c_int,
+    win_col_offset: c_int,
+) {
+    let mut arena = ExtArena::empty();
+    let mut arr = arena_array(&raw mut arena, size as usize);
+    for i in 0..size as usize {
+        let item = &*array.add(i);
+        let mut entry = arena_array(&raw mut arena, 4);
+        entry.push(ApiObject::string(cstr_as_string(item.pum_text)));
+        entry.push(ApiObject::string(cstr_as_string(item.pum_kind)));
+        entry.push(ApiObject::string(cstr_as_string(item.pum_extra)));
+        entry.push(ApiObject::string(cstr_as_string(item.pum_info)));
+        arr.push(ApiObject::array(entry));
+    }
+    ui_call_popupmenu_show(
+        arr,
+        i64::from(selected),
+        i64::from(pum_win_row - win_row_offset),
+        i64::from(cursor_col - win_col_offset),
+        i64::from(anchor_grid),
+    );
+    arena_mem_free(arena_finish(&raw mut arena));
+}
+
 /// Display the popup menu.
 ///
 /// Shows the popup menu with the given items array. Handles:
@@ -757,7 +884,7 @@ pub unsafe extern "C" fn rs_pum_display(
 
         if PUM_STATE.external != 0 {
             if array_changed {
-                nvim_pum_ext_show(
+                pum_ext_show(
                     array,
                     size,
                     selected,

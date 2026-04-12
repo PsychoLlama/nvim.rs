@@ -333,17 +333,33 @@ extern "C" {
     static mouse_row: c_int;
     /// `mouse_col` global.
     static mouse_col: c_int;
-    /// Find window from outer grid coords, returning adjusted grid/row/col.
-    fn nvim_pum_mouse_find_win_outer(grid: c_int, row: c_int, col: c_int) -> PumMouseFindResult;
+    /// Find window from outer grid coords, modifying grid/row/col in-place.
+    fn mouse_find_win_outer(gridp: *mut c_int, rowp: *mut c_int, colp: *mut c_int);
 }
 
-/// Result of `mouse_find_win_outer` wrapper.
+/// Result of `mouse_find_win_outer`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct PumMouseFindResult {
     grid: c_int,
     row: c_int,
     col: c_int,
+}
+
+/// Call `mouse_find_win_outer` and return the adjusted grid/row/col.
+///
+/// # Safety
+/// Calls C `mouse_find_win_outer`.
+unsafe fn find_win_outer(grid: c_int, row: c_int, col: c_int) -> PumMouseFindResult {
+    let mut g = grid;
+    let mut r = row;
+    let mut c = col;
+    mouse_find_win_outer(&raw mut g, &raw mut r, &raw mut c);
+    PumMouseFindResult {
+        grid: g,
+        row: r,
+        col: c,
+    }
 }
 
 // C accessor functions for position_at_mouse.
@@ -387,7 +403,7 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
     PUM_STATE.win_col_offset = 0;
 
     if nvim_ui_has_multigrid() != 0 && grid == 0 {
-        let result = nvim_pum_mouse_find_win_outer(grid, row, col);
+        let result = find_win_outer(grid, row, col);
         grid = result.grid;
         row = result.row;
         col = result.col;
@@ -494,7 +510,7 @@ pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
     let mut col = mouse_col;
 
     if grid == 0 {
-        let result = nvim_pum_mouse_find_win_outer(grid, row, col);
+        let result = find_win_outer(grid, row, col);
         grid = result.grid;
         row = result.row;
         col = result.col;

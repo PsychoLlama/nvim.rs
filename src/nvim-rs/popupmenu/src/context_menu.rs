@@ -3,9 +3,64 @@
 //! This module provides helper functions for context menu popup
 //! positioning and UI flush operations.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::PUM_STATE;
+
+// ---- Minimal API types for ui_call_option_set ----
+
+/// Matches C `String` / `NvimString`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ApiString {
+    data: *mut c_char,
+    size: usize,
+}
+
+impl ApiString {
+    /// Create a static string from a byte literal (no allocation).
+    ///
+    /// # Safety
+    /// `bytes` must be a NUL-terminated static byte string.
+    const unsafe fn from_static(bytes: &'static [u8]) -> Self {
+        Self {
+            // SAFETY: We immediately pass this to C which treats it as const.
+            data: bytes.as_ptr().cast_mut().cast::<c_char>(),
+            size: bytes.len() - 1, // exclude NUL terminator
+        }
+    }
+}
+
+/// Matches C `Object` — only Boolean variant used here.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ApiObject {
+    obj_type: c_int,
+    /// Pad to union size: the union contains at least a pointer-size field.
+    data: [u8; 16],
+}
+
+impl ApiObject {
+    /// Construct a Boolean object (`kObjectTypeBoolean = 1`).
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    const fn boolean(val: bool) -> Self {
+        let mut data = [0u8; 16];
+        data[0] = val as u8;
+        Self { obj_type: 1, data }
+    }
+}
+
+extern "C" {
+    /// Send UI `option_set` event.
+    fn ui_call_option_set(name: ApiString, value: ApiObject);
+}
+
+/// Set the `mousemoveevent` UI option.
+unsafe fn set_mousemoveevent(val: bool) {
+    let name = ApiString::from_static(b"mousemoveevent\0");
+    let value = ApiObject::boolean(val);
+    ui_call_option_set(name, value);
+}
 
 /// Batch key constants for popup menu key handling.
 ///
@@ -379,8 +434,6 @@ extern "C" {
     fn nvim_win_get_w_p_rl(wp: *mut crate::display::WinHandle) -> c_int;
     /// Position popup at mouse.
     fn rs_pum_position_at_mouse(min_width: c_int);
-    /// Set mousemoveevent UI option.
-    fn nvim_pum_ui_set_mousemoveevent(val: c_int);
     /// Call `setcursor_mayforce(wp, force)`.
     fn setcursor_mayforce(wp: *mut crate::display::WinHandle, force: bool);
     /// Call `vgetc()`.
@@ -490,7 +543,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     PUM_STATE.first = 0;
     let mousemev_was_off = p_mousemev == 0;
     if mousemev_was_off {
-        nvim_pum_ui_set_mousemoveevent(1);
+        set_mousemoveevent(true);
     }
 
     // Cache key constants via batch accessor
@@ -579,7 +632,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     xfree(array.cast::<std::ffi::c_void>());
     crate::display::rs_pum_undisplay(true);
     if mousemev_was_off {
-        nvim_pum_ui_set_mousemoveevent(0);
+        set_mousemoveevent(false);
     }
 }
 

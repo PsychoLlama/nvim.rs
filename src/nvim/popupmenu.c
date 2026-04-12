@@ -82,12 +82,6 @@ _Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
 _Static_assert(kUIPopupmenu == 1, "kUIPopupmenu must be 1");
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 
-// mouse_find_win_outer wrapper
-PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
-{
-  mouse_find_win_outer(&grid, &row, &col);
-  return (PumMouseFindResult){ grid, row, col };
-}
 
 // Phase 1 C accessors
 
@@ -208,11 +202,6 @@ _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
 // show_popupmenu helpers
 
-/// Set mousemoveevent option via UI.
-void nvim_pum_ui_set_mousemoveevent(int val)
-{
-  ui_call_option_set(STATIC_CSTR_AS_STRING("mousemoveevent"), BOOLEAN_OBJ(val != 0));
-}
 
 /// Batch key constant accessor (replaces 15 individual nvim_key_* functions).
 PumKeyConstants nvim_pum_get_key_constants(void)
@@ -360,25 +349,6 @@ void nvim_pum_set_wipeout_options(void)
 }
 
 
-/// Call ui_call_popupmenu_show with Arena-built array. Handles all Arena allocation.
-void nvim_pum_ext_show(pumitem_T *array, int size, int selected,
-                       int pum_win_row, int cursor_col, int anchor_grid,
-                       int win_row_offset, int win_col_offset)
-{
-  Arena arena = ARENA_EMPTY;
-  Array arr = arena_array(&arena, (size_t)size);
-  for (int i = 0; i < size; i++) {
-    Array item = arena_array(&arena, 4);
-    ADD_C(item, CSTR_AS_OBJ(array[i].pum_text));
-    ADD_C(item, CSTR_AS_OBJ(array[i].pum_kind));
-    ADD_C(item, CSTR_AS_OBJ(array[i].pum_extra));
-    ADD_C(item, CSTR_AS_OBJ(array[i].pum_info));
-    ADD_C(arr, ARRAY_OBJ(item));
-  }
-  ui_call_popupmenu_show(arr, selected, pum_win_row - win_row_offset,
-                         cursor_col - win_col_offset, anchor_grid);
-  arena_mem_free(arena_finish(&arena));
-}
 
 
 // Static assertions for constants used by Rust FFI
