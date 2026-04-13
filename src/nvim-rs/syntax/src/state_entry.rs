@@ -9,7 +9,8 @@
 use std::ffi::c_int;
 
 use crate::synblock_struct::{synblock_mut, synblock_ref};
-use crate::types::{IdListHandle, SynBlockHandle, SynStateHandle, SST_FIX_STATES};
+use crate::synstate_struct::{synstate_mut, synstate_ref, SynStateStruct};
+use crate::types::{SynBlockHandle, SynStateHandle, SST_FIX_STATES};
 
 // =============================================================================
 // FFI declarations
@@ -19,21 +20,8 @@ extern "C" {
     // Synblock accessors
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
 
-    // SynState navigation
-    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
-    fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
-    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_set_stacksize(state: SynStateHandle, size: c_int);
-    fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
-
     // SynState setters for store
     fn rs_clear_syn_state(p: SynStateHandle);
-    fn nvim_synstate_set_sst_next_flags(state: SynStateHandle, flags: c_int);
-    fn nvim_synstate_set_sst_next_list(state: SynStateHandle, list: IdListHandle);
-    fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
-    fn nvim_synstate_set_tick_to_display(state: SynStateHandle);
-
-    // Stack size from current_state
 
     // Phase 11 accessors for rs_syn_store_bufstates Rust implementation
     fn nvim_synstate_ga_init_for_store(sp: SynStateHandle);
@@ -46,6 +34,9 @@ extern "C" {
     // Array allocation/free
     fn nvim_syn_xcalloc_synstate_array(len: c_int) -> SynStateHandle;
     fn nvim_syn_free_sst_array(ptr: SynStateHandle);
+
+    // syn_time display_tick
+    fn nvim_syn_get_display_tick() -> c_int;
 }
 
 // =============================================================================
@@ -69,13 +60,13 @@ pub unsafe extern "C" fn rs_syn_stack_remove_entry(sp: SynStateHandle) {
     }
     let first = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     if first.0 == sp.0 {
-        synblock_mut(block).b_sst_first = nvim_synstate_get_next(sp).0.cast();
+        synblock_mut(block).b_sst_first = synstate_ref(sp).sst_next.cast();
     } else {
         let mut p = first;
         while !p.is_null() {
-            let pnext = nvim_synstate_get_next(p);
+            let pnext = SynStateHandle(synstate_ref(p).sst_next.cast());
             if pnext.0 == sp.0 {
-                nvim_synstate_set_next(p, nvim_synstate_get_next(sp));
+                synstate_mut(p).sst_next = synstate_ref(sp).sst_next;
                 break;
             }
             p = pnext;
@@ -116,22 +107,22 @@ pub unsafe extern "C" fn rs_syn_stack_alloc_entry(
     let p = SynStateHandle(synblock_ref(block).b_sst_firstfree.cast());
     {
         let b = synblock_mut(block);
-        b.b_sst_firstfree = nvim_synstate_get_next(p).0.cast();
+        b.b_sst_firstfree = synstate_ref(p).sst_next.cast();
         b.b_sst_freecount -= 1;
     }
 
     if after.is_null() {
         // Insert at the front of the used list
-        nvim_synstate_set_next(p, SynStateHandle(synblock_ref(block).b_sst_first.cast()));
+        synstate_mut(p).sst_next = synblock_ref(block).b_sst_first;
         synblock_mut(block).b_sst_first = p.0.cast();
     } else {
         // Insert after the given entry
-        nvim_synstate_set_next(p, nvim_synstate_get_next(after));
-        nvim_synstate_set_next(after, p);
+        synstate_mut(p).sst_next = synstate_ref(after).sst_next;
+        synstate_mut(after).sst_next = p.0.cast();
     }
 
-    nvim_synstate_set_stacksize(p, 0);
-    nvim_synstate_set_lnum(p, lnum);
+    synstate_mut(p).sst_stacksize = 0;
+    synstate_mut(p).sst_lnum = lnum;
     p
 }
 
@@ -148,7 +139,7 @@ pub unsafe extern "C" fn rs_syn_store_bufstates(sp: SynStateHandle) {
     if sp.is_null() {
         return;
     }
-    let stacksize = nvim_synstate_get_stacksize(sp);
+    let stacksize = synstate_ref(sp).sst_stacksize;
     let sst_fix_states = SST_FIX_STATES;
     if stacksize > sst_fix_states {
         nvim_synstate_ga_init_for_store(sp);
@@ -174,16 +165,16 @@ pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
     rs_clear_syn_state(sp);
 
     let stacksize = crate::statics::CURRENT_STATE.ga_len;
-    nvim_synstate_set_stacksize(sp, stacksize);
+    synstate_mut(sp).sst_stacksize = stacksize;
 
     // Fill bufstate array (handles union fixed/growarray split)
     rs_syn_store_bufstates(sp);
 
     // Copy next_flags, next_list, tick, change_lnum
-    nvim_synstate_set_sst_next_flags(sp, crate::statics::CURRENT_NEXT_FLAGS);
-    nvim_synstate_set_sst_next_list(sp, IdListHandle(crate::statics::CURRENT_NEXT_LIST));
-    nvim_synstate_set_tick_to_display(sp);
-    nvim_synstate_set_change_lnum(sp, 0);
+    synstate_mut(sp).sst_next_flags = crate::statics::CURRENT_NEXT_FLAGS;
+    synstate_mut(sp).sst_next_list = crate::statics::CURRENT_NEXT_LIST;
+    synstate_mut(sp).sst_tick = nvim_syn_get_display_tick() as u64;
+    synstate_mut(sp).sst_change_lnum = 0;
 }
 
 /// Reallocate b_sst_array, copy existing entries from used list,
@@ -205,26 +196,29 @@ pub unsafe extern "C" fn rs_syn_do_stack_realloc(len: c_int) {
     // Allocate new zeroed array
     let sstp = nvim_syn_xcalloc_synstate_array(len);
 
+    // Get the base pointer of the new array as *mut SynStateStruct
+    let base: *mut SynStateStruct = sstp.0.cast();
+
     // Copy existing used entries from the linked list to the new array
     let mut used_count = 0;
     let mut from = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     while !from.is_null() && used_count < len {
-        // Destination = sstp + used_count
-        let to = nvim_syn_sst_array_at(sstp, used_count);
-        nvim_syn_sst_copy_entry(to, from);
+        // Destination = base + used_count
+        let to_ptr = base.add(used_count as usize);
+        // Copy the entire struct (memcpy equivalent)
+        std::ptr::copy_nonoverlapping(from.0.cast::<SynStateStruct>(), to_ptr, 1);
         // Set sst_next to point to the next slot (or null for last)
-        nvim_synstate_set_next(to, nvim_syn_sst_array_at(sstp, used_count + 1));
-        from = nvim_synstate_get_next(from);
+        (*to_ptr).sst_next = base.add((used_count + 1) as usize);
+        from = SynStateHandle(synstate_ref(from).sst_next.cast());
         used_count += 1;
     }
 
     // Fix the last used entry's sst_next to be null
     if used_count > 0 {
-        let last_used = nvim_syn_sst_array_at(sstp, used_count - 1);
-        nvim_synstate_set_next(last_used, SynStateHandle::null());
+        (*base.add((used_count - 1) as usize)).sst_next = std::ptr::null_mut();
         {
             let b = synblock_mut(block);
-            b.b_sst_first = sstp.0.cast();
+            b.b_sst_first = base.cast();
             b.b_sst_freecount = len - used_count;
         }
     } else {
@@ -235,19 +229,16 @@ pub unsafe extern "C" fn rs_syn_do_stack_realloc(len: c_int) {
         }
     }
 
-    // Build the free list starting at sstp[used_count]
-    let firstfree = nvim_syn_sst_array_at(sstp, used_count);
-    synblock_mut(block).b_sst_firstfree = firstfree.0.cast();
+    // Build the free list starting at base[used_count]
+    synblock_mut(block).b_sst_firstfree = base.add(used_count as usize).cast();
 
     // Chain free entries together
     for i in used_count..(len - 1) {
-        let entry = nvim_syn_sst_array_at(sstp, i);
-        nvim_synstate_set_next(entry, nvim_syn_sst_array_at(sstp, i + 1));
+        (*base.add(i as usize)).sst_next = base.add((i + 1) as usize);
     }
     // Terminate the free list
     if used_count < len {
-        let last_free = nvim_syn_sst_array_at(sstp, len - 1);
-        nvim_synstate_set_next(last_free, SynStateHandle::null());
+        (*base.add((len - 1) as usize)).sst_next = std::ptr::null_mut();
     }
 
     // Free the old array
@@ -260,10 +251,4 @@ pub unsafe extern "C" fn rs_syn_do_stack_realloc(len: c_int) {
         b.b_sst_array = sstp.0.cast();
         b.b_sst_len = len;
     }
-}
-
-// Helper: get pointer to synstate entry at index in array (used in do_stack_realloc)
-extern "C" {
-    fn nvim_syn_sst_array_at(array: SynStateHandle, idx: c_int) -> SynStateHandle;
-    fn nvim_syn_sst_copy_entry(dst: SynStateHandle, src: SynStateHandle);
 }

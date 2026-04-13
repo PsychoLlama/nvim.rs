@@ -15,6 +15,7 @@
 use std::ffi::{c_char, c_int};
 
 use crate::synblock_struct::synblock_ref;
+use crate::synstate_struct::{synstate_mut, synstate_ref};
 
 // =============================================================================
 // Modules
@@ -209,19 +210,7 @@ extern "C" {
     // synstate_T accessors (syntax state)
     // -------------------------------------------------------------------------
 
-    /// Get sst_next (next entry in used or free list)
-    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
-
-    /// Get sst_lnum (line number for this state)
-    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
-
-    /// Get sst_stacksize (number of states on the stack)
-    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
-
-    /// Get sst_next_flags (flags for sst_next_list)
-    fn nvim_synstate_get_next_flags(state: SynStateHandle) -> c_int;
-    /// Get sst_change_lnum (line where change may have invalidated state)
-    fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
+    // synstate_T accessors removed: use synstate_ref/synstate_mut directly
 
     // -------------------------------------------------------------------------
     // Syntax state global accessors
@@ -293,20 +282,8 @@ extern "C" {
 
     /// Set current_next_list
 
-    /// Get sst_next_list from a synstate
-    fn nvim_synstate_get_next_list(state: SynStateHandle) -> IdListHandle;
-
-    /// Get bufstate item from synstate at index
-    fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
-
     /// Call update_si_attr for item at index
     fn nvim_syn_update_si_attr(idx: c_int);
-
-    // -------------------------------------------------------------------------
-    // Phase 24.5: Sync and Line Operations Helpers
-    // -------------------------------------------------------------------------
-    /// Set synstate sst_change_lnum
-    fn nvim_synstate_set_change_lnum(p: SynStateHandle, lnum: c_int);
 }
 
 // =============================================================================
@@ -507,7 +484,7 @@ pub fn synstate_lnum(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_lnum(state) }
+    unsafe { synstate_ref(state).sst_lnum }
 }
 
 /// Get the stack size for a syntax state
@@ -516,7 +493,7 @@ pub fn synstate_stacksize(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_stacksize(state) }
+    unsafe { synstate_ref(state).sst_stacksize }
 }
 
 /// Get the next state in the list
@@ -525,7 +502,7 @@ pub fn synstate_next(state: SynStateHandle) -> SynStateHandle {
     if state.is_null() {
         return SynStateHandle::null();
     }
-    unsafe { nvim_synstate_get_next(state) }
+    SynStateHandle(unsafe { synstate_ref(state).sst_next }.cast())
 }
 
 /// Check if a state change may have invalidated the state
@@ -534,7 +511,7 @@ pub fn synstate_is_valid(state: SynStateHandle) -> bool {
     if state.is_null() {
         return false;
     }
-    unsafe { nvim_synstate_get_change_lnum(state) == 0 }
+    unsafe { synstate_ref(state).sst_change_lnum == 0 }
 }
 
 /// Get the pattern type (SPTYPE_* value)
@@ -2043,7 +2020,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
     }
 
     // Determine if we need to allocate a new entry
-    let entry = if sp.is_null() || nvim_synstate_get_lnum(sp) != lnum {
+    let entry = if sp.is_null() || synstate_ref(sp).sst_lnum != lnum {
         // Need to allocate a new entry
         crate::state_entry::rs_syn_stack_alloc_entry(lnum, sp)
     } else {
@@ -2075,7 +2052,7 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
     nvim_syn_validate_current_state();
     statics::KEEPEND_LEVEL = -1;
 
-    let stacksize = nvim_synstate_get_stacksize(from);
+    let stacksize = synstate_ref(from).sst_stacksize;
     if stacksize > 0 {
         // Grow current state array
         crate::statics::current_state_grow(stacksize);
@@ -2084,7 +2061,7 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
         // Copy each state item
         let mut keepend_level = -1;
         for i in 0..stacksize {
-            let bs = nvim_synstate_get_bufstate(from, i);
+            let bs = crate::types::BufStateHandle(synstate_ref(from).bufstate_at(i));
             if bs.is_null() {
                 continue;
             }
@@ -2118,10 +2095,9 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
     }
 
     // Copy next_list and next_flags from saved state
-    let next_list = nvim_synstate_get_next_list(from);
-    crate::statics::CURRENT_NEXT_LIST = next_list.0;
-    statics::CURRENT_NEXT_FLAGS = nvim_synstate_get_next_flags(from);
-    statics::CURRENT_LNUM = nvim_synstate_get_lnum(from);
+    crate::statics::CURRENT_NEXT_LIST = synstate_ref(from).sst_next_list;
+    statics::CURRENT_NEXT_FLAGS = synstate_ref(from).sst_next_flags;
+    statics::CURRENT_LNUM = synstate_ref(from).sst_lnum;
 }
 
 /// Compare saved state stack with the current state.
@@ -2135,7 +2111,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
         return 0;
     }
 
-    let sp_stacksize = nvim_synstate_get_stacksize(sp);
+    let sp_stacksize = synstate_ref(sp).sst_stacksize;
     let current_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Quick check: stack sizes must match
@@ -2145,16 +2121,14 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
 
     // Quick check: next_list pointers must match
     // (We compare raw pointers since they point to the same data)
-    let sp_next_list = nvim_synstate_get_next_list(sp);
-    let cur_next_list = IdListHandle(crate::statics::CURRENT_NEXT_LIST);
-    if sp_next_list.0 != cur_next_list.0 {
+    if synstate_ref(sp).sst_next_list != crate::statics::CURRENT_NEXT_LIST {
         return 0;
     }
 
     // Compare each state item
     let nsubexp = crate::types::NSUBEXP;
     for i in (0..current_len).rev() {
-        let bs = nvim_synstate_get_bufstate(sp, i);
+        let bs = crate::types::BufStateHandle(synstate_ref(sp).bufstate_at(i));
         if bs.is_null() {
             return 0;
         }
@@ -2289,7 +2263,9 @@ pub unsafe extern "C" fn rs_syntax_start(wp: WinHandle, lnum: c_int) {
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_synstate_set_change_lnum(p: SynStateHandle, lnum: c_int) {
-    nvim_synstate_set_change_lnum(p, lnum);
+    if !p.is_null() {
+        synstate_mut(p).sst_change_lnum = lnum;
+    }
 }
 // =============================================================================
 // Phase 32.1: Stack management exports

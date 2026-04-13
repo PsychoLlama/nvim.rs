@@ -9,6 +9,7 @@
 use std::ffi::c_int;
 
 use crate::synblock_struct::synblock_ref;
+use crate::synstate_struct::{synstate_mut, synstate_ref};
 use crate::types::{bref, BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
 
 // =============================================================================
@@ -53,11 +54,6 @@ extern "C" {
     fn nvim_syn_get_got_int() -> c_int;
     fn nvim_syn_get_sst_first() -> SynStateHandle;
     // (nvim_syn_stack_find_entry deleted: call Rust directly)
-    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
-    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_set_change_lnum(p: SynStateHandle, lnum: c_int);
-
     fn rs_store_current_state() -> SynStateHandle;
     fn rs_load_current_state(from: SynStateHandle);
     fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int;
@@ -151,16 +147,16 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         let sync_minlines = nvim_syn_get_sync_minlines();
         let mut p = nvim_syn_get_sst_first();
         while !p.is_null() {
-            if nvim_synstate_get_lnum(p) > lnum {
+            if synstate_ref(p).sst_lnum > lnum {
                 break;
             }
-            if nvim_synstate_get_change_lnum(p) == 0 {
+            if synstate_ref(p).sst_change_lnum == 0 {
                 last_valid = p;
-                if nvim_synstate_get_lnum(p) >= lnum - sync_minlines {
+                if synstate_ref(p).sst_lnum >= lnum - sync_minlines {
                     last_min_valid = p;
                 }
             }
-            p = nvim_synstate_get_next(p);
+            p = SynStateHandle(synstate_ref(p).sst_next.cast());
         }
         if !last_min_valid.is_null() {
             rs_load_current_state(last_min_valid);
@@ -209,29 +205,27 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
             } else {
                 prev
             };
-            while !sp.is_null() && nvim_synstate_get_lnum(sp) < cur_lnum {
-                sp = nvim_synstate_get_next(sp);
+            while !sp.is_null() && synstate_ref(sp).sst_lnum < cur_lnum {
+                sp = SynStateHandle(synstate_ref(sp).sst_next.cast());
             }
 
-            if !sp.is_null()
-                && nvim_synstate_get_lnum(sp) == cur_lnum
-                && rs_syn_stack_equal(sp) != 0
+            if !sp.is_null() && synstate_ref(sp).sst_lnum == cur_lnum && rs_syn_stack_equal(sp) != 0
             {
                 let parsed_lnum = cur_lnum;
                 prev = sp;
-                while !sp.is_null() && nvim_synstate_get_change_lnum(sp) <= parsed_lnum {
-                    if nvim_synstate_get_lnum(sp) <= lnum {
+                while !sp.is_null() && synstate_ref(sp).sst_change_lnum <= parsed_lnum {
+                    if synstate_ref(sp).sst_lnum <= lnum {
                         prev = sp;
-                    } else if nvim_synstate_get_change_lnum(sp) == 0 {
+                    } else if synstate_ref(sp).sst_change_lnum == 0 {
                         break;
                     }
-                    nvim_synstate_set_change_lnum(sp, 0);
-                    sp = nvim_synstate_get_next(sp);
+                    synstate_mut(sp).sst_change_lnum = 0;
+                    sp = SynStateHandle(synstate_ref(sp).sst_next.cast());
                 }
                 rs_load_current_state(prev);
             } else if prev.is_null()
                 || cur_lnum == lnum
-                || cur_lnum >= nvim_synstate_get_lnum(prev) + dist
+                || cur_lnum >= synstate_ref(prev).sst_lnum + dist
             {
                 prev = rs_store_current_state();
             }
@@ -261,7 +255,7 @@ unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
     // Check the state stack when lnum is just below the previously syntaxed line.
     if crate::statics::current_state_is_valid() && lnum == crate::statics::CURRENT_LNUM + 1 {
         let sp = crate::cache::rs_syn_stack_find_entry(lnum);
-        if !sp.is_null() && nvim_synstate_get_lnum(sp) == lnum {
+        if !sp.is_null() && synstate_ref(sp).sst_lnum == lnum {
             // finish the previous line (needed when not all of the line was drawn)
             nvim_syn_finish_line(0);
 
@@ -295,11 +289,11 @@ unsafe fn syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
         return;
     }
     let mut target = sp;
-    if nvim_synstate_get_lnum(sp) < lnum {
-        target = nvim_synstate_get_next(sp);
+    if synstate_ref(sp).sst_lnum < lnum {
+        target = SynStateHandle(synstate_ref(sp).sst_next.cast());
     }
-    if !target.is_null() && nvim_synstate_get_change_lnum(target) != 0 {
-        nvim_synstate_set_change_lnum(target, lnum);
+    if !target.is_null() && synstate_ref(target).sst_change_lnum != 0 {
+        synstate_mut(target).sst_change_lnum = lnum;
     }
 }
 

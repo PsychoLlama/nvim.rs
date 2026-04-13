@@ -13,6 +13,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synstate_struct::synstate_ref;
 use crate::types::{
     BufStateHandle, ExtMatchHandle, StateItemHandle, SynStateHandle, HL_EXTEND, HL_KEEPEND,
     HL_MATCHCONT, SPTYPE_MATCH, SST_FIX_STATES,
@@ -45,8 +46,6 @@ extern "C" {
     // clear_syn_state accessors (Phase 11)
     fn nvim_synstate_ga_clear(state: SynStateHandle);
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
-    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
 
     // Already-Rust functions called from syn_update_ends / syn_start_line
     fn rs_update_si_end(sip: StateItemHandle, startcol: c_int, force: c_int);
@@ -206,11 +205,11 @@ pub unsafe extern "C" fn rs_clear_syn_state(p: SynStateHandle) {
     if p.is_null() {
         return;
     }
-    let stacksize = nvim_synstate_get_stacksize(p);
+    let stacksize = synstate_ref(p).sst_stacksize;
     let sst_fix_states = SST_FIX_STATES;
     // Unref all extmatch pointers
     for i in 0..stacksize {
-        let bs = nvim_synstate_get_bufstate(p, i);
+        let bs = BufStateHandle(synstate_ref(p).bufstate_at(i));
         if !bs.0.is_null() {
             let em = ExtMatchHandle(unsafe { (*bs.as_ptr()).bs_extmatch as *mut _ });
             nvim_syn_unref_extmatch(em);

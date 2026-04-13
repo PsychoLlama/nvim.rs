@@ -9,6 +9,7 @@
 use std::ffi::c_int;
 
 use crate::synblock_struct::synblock_ref;
+use crate::synstate_struct::{synstate_mut, synstate_ref};
 use crate::types::{
     bref, BufStateHandle, ExtMatchHandle, IdListHandle, StateItemHandle, SynBlockHandle,
     SynStateHandle, KEYWORD_IDX,
@@ -19,19 +20,6 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // -------------------------------------------------------------------------
-    // synstate_T accessors
-    // -------------------------------------------------------------------------
-    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
-    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_next_flags(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_tick(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_next_list(state: SynStateHandle) -> IdListHandle;
-    fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
-    fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
-
     // -------------------------------------------------------------------------
     // Current state accessors (non-static ones remain)
     // -------------------------------------------------------------------------
@@ -48,8 +36,6 @@ extern "C" {
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
     #[link_name = "syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: crate::types::BufHandle);
-    fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
-    fn nvim_synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> c_int;
 }
 
 // =============================================================================
@@ -87,7 +73,7 @@ pub fn synstate_next(state: SynStateHandle) -> SynStateHandle {
     if state.is_null() {
         return SynStateHandle::null();
     }
-    unsafe { nvim_synstate_get_next(state) }
+    SynStateHandle(unsafe { synstate_ref(state).sst_next }.cast())
 }
 
 /// Get the line number for a syntax state
@@ -96,7 +82,7 @@ pub fn synstate_lnum(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_lnum(state) }
+    unsafe { synstate_ref(state).sst_lnum }
 }
 
 /// Get the stack size for a syntax state
@@ -105,7 +91,7 @@ pub fn synstate_stacksize(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_stacksize(state) }
+    unsafe { synstate_ref(state).sst_stacksize }
 }
 
 /// Get the next flags for a syntax state
@@ -114,7 +100,7 @@ pub fn synstate_next_flags(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_next_flags(state) }
+    unsafe { synstate_ref(state).sst_next_flags }
 }
 
 /// Get the tick (when last displayed) for a syntax state
@@ -123,7 +109,7 @@ pub fn synstate_tick(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_tick(state) }
+    unsafe { synstate_ref(state).sst_tick as i32 }
 }
 
 /// Get the change line number for a syntax state
@@ -133,13 +119,13 @@ pub fn synstate_change_lnum(state: SynStateHandle) -> i32 {
     if state.is_null() {
         return 0;
     }
-    unsafe { nvim_synstate_get_change_lnum(state) }
+    unsafe { synstate_ref(state).sst_change_lnum }
 }
 
 /// Set the change line number for a syntax state
 pub fn synstate_set_change_lnum(state: SynStateHandle, lnum: i32) {
     if !state.is_null() {
-        unsafe { nvim_synstate_set_change_lnum(state, lnum) }
+        unsafe { synstate_mut(state).sst_change_lnum = lnum }
     }
 }
 
@@ -149,7 +135,7 @@ pub fn synstate_is_valid(state: SynStateHandle) -> bool {
     if state.is_null() {
         return false;
     }
-    unsafe { nvim_synstate_get_change_lnum(state) == 0 }
+    unsafe { synstate_ref(state).sst_change_lnum == 0 }
 }
 
 /// Get the nextgroup list for a syntax state
@@ -158,7 +144,7 @@ pub fn synstate_next_list(state: SynStateHandle) -> IdListHandle {
     if state.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_synstate_get_next_list(state) }
+    IdListHandle(unsafe { synstate_ref(state).sst_next_list })
 }
 
 /// Get a bufstate item from a synstate at the given index
@@ -167,7 +153,7 @@ pub fn synstate_bufstate(state: SynStateHandle, idx: i32) -> BufStateHandle {
     if state.is_null() || idx < 0 {
         return BufStateHandle::null();
     }
-    unsafe { nvim_synstate_get_bufstate(state, idx) }
+    BufStateHandle(unsafe { synstate_ref(state).bufstate_at(idx) })
 }
 
 // =============================================================================
@@ -968,7 +954,7 @@ pub fn synblock_linebreaks(block: SynBlockHandle) -> i32 {
 /// Set the line number for a syntax state.
 pub fn synstate_set_lnum(state: SynStateHandle, lnum: i32) {
     if !state.is_null() {
-        unsafe { nvim_synstate_set_lnum(state, lnum) }
+        unsafe { synstate_mut(state).sst_lnum = lnum }
     }
 }
 
@@ -978,7 +964,7 @@ pub fn synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> bool {
     if a.is_null() || b.is_null() {
         return a.is_null() && b.is_null();
     }
-    unsafe { nvim_synstate_next_list_eq(a, b) != 0 }
+    unsafe { synstate_ref(a).sst_next_list == synstate_ref(b).sst_next_list }
 }
 
 // =============================================================================

@@ -10,9 +10,10 @@ use std::ffi::{c_int, c_void};
 
 use crate::ffi_types::{BufState, StateItem};
 use crate::synblock_struct::{synblock_mut, synblock_ref};
+use crate::synstate_struct::{synstate_mut, synstate_ref};
 use crate::types::{
-    bref, BufHandle, BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle,
-    HL_KEEPEND, SST_DIST, SST_MAX_ENTRIES, SST_MIN_ENTRIES,
+    bref, BufHandle, BufStateHandle, ExtMatchHandle, SynBlockHandle, SynStateHandle, HL_KEEPEND,
+    SST_DIST, SST_MAX_ENTRIES, SST_MIN_ENTRIES,
 };
 
 // =============================================================================
@@ -20,16 +21,6 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // (nvim_syn_stack_find_entry/stack_alloc deleted: call Rust directly)
-
-    // State accessors for comparison
-    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_next_flags(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_next_list(state: SynStateHandle) -> IdListHandle;
-    fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
-    fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
-
     // Current state accessors
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
@@ -39,17 +30,6 @@ extern "C" {
     fn nvim_syn_get_sst_array() -> *mut c_void;
     fn nvim_syn_get_sst_first() -> SynStateHandle;
     fn nvim_syn_get_sst_len() -> c_int;
-
-    // -------------------------------------------------------------------------
-    // Phase 8 accessors: state stack cache management
-    // -------------------------------------------------------------------------
-
-    // synstate_T setters / navigation (Phase 3: remain as C accessors for now)
-    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
-    fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
-    fn nvim_synstate_get_tick(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
-    fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
 
     // clear_syn_state (Rust implementation)
     fn rs_clear_syn_state(p: SynStateHandle);
@@ -96,7 +76,7 @@ pub unsafe extern "C" fn rs_syn_stack_find_entry(lnum: c_int) -> SynStateHandle 
     let mut prev = SynStateHandle::null();
     let mut p = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     while !p.is_null() {
-        let p_lnum = nvim_synstate_get_lnum(p);
+        let p_lnum = synstate_ref(p).sst_lnum;
         if p_lnum == lnum {
             return p;
         }
@@ -104,7 +84,7 @@ pub unsafe extern "C" fn rs_syn_stack_find_entry(lnum: c_int) -> SynStateHandle 
             break;
         }
         prev = p;
-        p = nvim_synstate_get_next(p);
+        p = SynStateHandle(synstate_ref(p).sst_next.cast());
     }
     prev
 }
@@ -122,7 +102,7 @@ pub unsafe extern "C" fn rs_syn_stack_free_entry(block: SynBlockHandle, p: SynSt
     }
     rs_clear_syn_state(p);
     let firstfree = SynStateHandle(synblock_ref(block).b_sst_firstfree.cast());
-    nvim_synstate_set_next(p, firstfree);
+    synstate_mut(p).sst_next = firstfree.0.cast();
     synblock_mut(block).b_sst_firstfree = p.0.cast();
     let count = synblock_ref(block).b_sst_freecount;
     synblock_mut(block).b_sst_freecount = count + 1;
@@ -145,7 +125,7 @@ pub unsafe extern "C" fn rs_syn_stack_free_block(block: SynBlockHandle) {
     // Clear all used entries
     let mut p = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     while !p.is_null() {
-        let next = nvim_synstate_get_next(p);
+        let next = SynStateHandle(synstate_ref(p).sst_next.cast());
         rs_clear_syn_state(p);
         p = next;
     }
@@ -210,12 +190,12 @@ pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
     let mut above = false;
 
     let mut prev = first;
-    let mut p = nvim_synstate_get_next(first);
+    let mut p = SynStateHandle(synstate_ref(first).sst_next.cast());
     while !p.is_null() {
-        let prev_lnum = nvim_synstate_get_lnum(prev);
-        let p_lnum = nvim_synstate_get_lnum(p);
+        let prev_lnum = synstate_ref(prev).sst_lnum;
+        let p_lnum = synstate_ref(p).sst_lnum;
         if prev_lnum + dist > p_lnum {
-            let p_tick = nvim_synstate_get_tick(p);
+            let p_tick = synstate_ref(p).sst_tick as c_int;
             if p_tick > lasttick {
                 if !above || p_tick < tick {
                     tick = p_tick;
@@ -226,21 +206,21 @@ pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
             }
         }
         prev = p;
-        p = nvim_synstate_get_next(p);
+        p = SynStateHandle(synstate_ref(p).sst_next.cast());
     }
 
     // Remove entries at the oldest tick that are too close together.
     let mut retval = 0;
     prev = first;
-    p = nvim_synstate_get_next(first);
+    p = SynStateHandle(synstate_ref(first).sst_next.cast());
     while !p.is_null() {
-        let prev_lnum = nvim_synstate_get_lnum(prev);
-        let p_lnum = nvim_synstate_get_lnum(p);
-        let p_tick = nvim_synstate_get_tick(p);
-        let next = nvim_synstate_get_next(p);
+        let prev_lnum = synstate_ref(prev).sst_lnum;
+        let p_lnum = synstate_ref(p).sst_lnum;
+        let p_tick = synstate_ref(p).sst_tick as c_int;
+        let next = SynStateHandle(synstate_ref(p).sst_next.cast());
         if p_tick == tick && prev_lnum + dist > p_lnum {
             // Move this entry from used list to free list
-            nvim_synstate_set_next(prev, next);
+            synstate_mut(prev).sst_next = next.0.cast();
             rs_syn_stack_free_entry(block, p);
             // prev stays the same (we removed p, not prev)
             retval = 1;
@@ -316,8 +296,8 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
     let mut p = SynStateHandle(synblock_ref(block).b_sst_first.cast());
 
     while !p.is_null() {
-        let p_lnum = nvim_synstate_get_lnum(p);
-        let next = nvim_synstate_get_next(p);
+        let p_lnum = synstate_ref(p).sst_lnum;
+        let next = SynStateHandle(synstate_ref(p).sst_next.cast());
 
         if p_lnum + linebreaks > mod_top {
             let n = p_lnum + mod_xlines;
@@ -326,7 +306,7 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
                 if prev.is_null() {
                     synblock_mut(block).b_sst_first = next.0.cast();
                 } else {
-                    nvim_synstate_set_next(prev, next);
+                    synstate_mut(prev).sst_next = next.0.cast();
                 }
                 rs_syn_stack_free_entry(block, p);
                 p = next;
@@ -334,7 +314,7 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
             }
 
             // This state is below the changed area.
-            let change_lnum = nvim_synstate_get_change_lnum(p);
+            let change_lnum = synstate_ref(p).sst_change_lnum;
             let new_change_lnum = if change_lnum != 0 && change_lnum > mod_top {
                 if change_lnum + mod_xlines > mod_top {
                     change_lnum + mod_xlines
@@ -350,8 +330,8 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
             } else {
                 new_change_lnum
             };
-            nvim_synstate_set_change_lnum(p, final_change_lnum);
-            nvim_synstate_set_lnum(p, n);
+            synstate_mut(p).sst_change_lnum = final_change_lnum;
+            synstate_mut(p).sst_lnum = n;
         }
 
         prev = p;
@@ -459,7 +439,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
     }
 
     // Determine if we need to allocate a new entry
-    let entry = if sp.is_null() || nvim_synstate_get_lnum(sp) != lnum {
+    let entry = if sp.is_null() || synstate_ref(sp).sst_lnum != lnum {
         // Need to allocate a new entry
         crate::state_entry::rs_syn_stack_alloc_entry(lnum, sp)
     } else {
@@ -490,7 +470,7 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
     nvim_syn_validate_current_state();
     crate::statics::KEEPEND_LEVEL = -1;
 
-    let stacksize = nvim_synstate_get_stacksize(from);
+    let stacksize = synstate_ref(from).sst_stacksize;
     if stacksize > 0 {
         // Grow current state array
         crate::statics::current_state_grow(stacksize);
@@ -499,7 +479,7 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
         // Copy each state item
         let mut keepend_level = -1;
         for i in 0..stacksize {
-            let bs = nvim_synstate_get_bufstate(from, i);
+            let bs = BufStateHandle(synstate_ref(from).bufstate_at(i));
             if bs.is_null() {
                 continue;
             }
@@ -529,10 +509,9 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
     }
 
     // Copy next_list and next_flags from saved state
-    let next_list = nvim_synstate_get_next_list(from);
-    crate::statics::CURRENT_NEXT_LIST = next_list.0;
-    crate::statics::CURRENT_NEXT_FLAGS = nvim_synstate_get_next_flags(from);
-    crate::statics::CURRENT_LNUM = nvim_synstate_get_lnum(from);
+    crate::statics::CURRENT_NEXT_LIST = synstate_ref(from).sst_next_list;
+    crate::statics::CURRENT_NEXT_FLAGS = synstate_ref(from).sst_next_flags;
+    crate::statics::CURRENT_LNUM = synstate_ref(from).sst_lnum;
 }
 
 // =============================================================================
@@ -550,7 +529,7 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
         return false;
     }
 
-    let sp_stacksize = nvim_synstate_get_stacksize(sp);
+    let sp_stacksize = synstate_ref(sp).sst_stacksize;
     let current_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Quick check: stack sizes must match
@@ -559,16 +538,15 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
     }
 
     // Quick check: next_list pointers must match
-    let sp_next_list = nvim_synstate_get_next_list(sp);
-    let cur_next_list = IdListHandle(crate::statics::CURRENT_NEXT_LIST);
-    if sp_next_list.0 != cur_next_list.0 {
+    let sp_next_list = synstate_ref(sp).sst_next_list;
+    if sp_next_list != crate::statics::CURRENT_NEXT_LIST {
         return false;
     }
 
     // Compare each state item
     let nsubexp = crate::types::NSUBEXP;
     for i in (0..current_len).rev() {
-        let bs = nvim_synstate_get_bufstate(sp, i);
+        let bs = BufStateHandle(synstate_ref(sp).bufstate_at(i));
         if bs.is_null() {
             return false;
         }
@@ -636,10 +614,10 @@ pub fn invalidate_states_after(block: SynBlockHandle, lnum: i32) {
 
     let mut state = unsafe { SynStateHandle(synblock_ref(block).b_sst_first.cast()) };
     while !state.is_null() {
-        let state_lnum = unsafe { nvim_synstate_get_lnum(state) };
+        let state_lnum = unsafe { synstate_ref(state).sst_lnum };
         if state_lnum >= lnum {
             // Mark this state as invalid
-            unsafe { nvim_synstate_set_change_lnum(state, lnum) }
+            unsafe { synstate_mut(state).sst_change_lnum = lnum }
         }
         state = crate::state::synstate_next(state);
     }

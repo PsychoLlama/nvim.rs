@@ -12,6 +12,7 @@ use crate::check_ends::{check_keepend, check_state_ends, update_si_attr};
 use crate::current_attr::syn_finish_line;
 use crate::region::update_si_end;
 use crate::synblock_struct::synblock_ref;
+use crate::synstate_struct::synstate_ref;
 use crate::types::{
     SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle, KEYWORD_IDX, SPTYPE_START,
 };
@@ -60,9 +61,6 @@ extern "C" {
     // Phase 3 accessors
     #[link_name = "rs_load_current_state"]
     fn nvim_syn_load_current_state(from: SynStateHandle);
-    // (nvim_syn_match_linecont deleted: call Rust directly)
-    fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
-
     // C-comment sync: thin helper that saves/restores curwin/curbuf/cursor,
     // calls find_start_comment, and returns the adjusted start_lnum via out-param.
     // Returns 1 if find_start_comment found a comment, 0 otherwise.
@@ -307,7 +305,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
             }
 
             // Check if we have run into a valid saved state stack now.
-            if !last_valid.is_null() && lnum == nvim_synstate_get_lnum(last_valid) {
+            if !last_valid.is_null() && lnum == unsafe { synstate_ref(last_valid).sst_lnum } {
                 nvim_syn_load_current_state(last_valid);
                 break;
             }
