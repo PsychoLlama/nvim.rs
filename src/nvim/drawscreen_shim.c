@@ -326,18 +326,6 @@ void *nvim_virt_lines_get_line(void *virt_lines, int idx)
 /// Return true if wp->w_grid_alloc.chars is non-NULL.
 bool nvim_win_get_grid_alloc_chars(win_T *wp) { return wp->w_grid_alloc.chars != NULL; }
 
-/// Get buf->b_mod_tick_syn (display tick when syntax was last updated).
-uint64_t nvim_buf_get_mod_tick_syn(buf_T *buf) { return buf->b_mod_tick_syn; }
-
-/// Set buf->b_mod_tick_syn.
-void nvim_buf_set_mod_tick_syn(buf_T *buf, uint64_t val) { buf->b_mod_tick_syn = val; }
-
-/// Get buf->b_mod_tick_decor (display tick when decoration providers were last invoked).
-uint64_t nvim_buf_get_mod_tick_decor(buf_T *buf) { return buf->b_mod_tick_decor; }
-
-/// Set buf->b_mod_tick_decor.
-void nvim_buf_set_mod_tick_decor(buf_T *buf, uint64_t val) { buf->b_mod_tick_decor = val; }
-
 /// Call grid_draw_border for wp->w_grid_alloc using wp's config fields.
 /// Bundles the struct-heavy call for Rust FFI.
 void nvim_win_draw_border(win_T *wp)

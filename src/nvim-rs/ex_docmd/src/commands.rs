@@ -212,7 +212,6 @@ extern "C" {
     fn var_redir_start(name: *const c_char, append: bool) -> c_int;
 
     // ex_normal helpers
-    fn nvim_buf_get_terminal(buf: *mut c_void) -> c_int;
     fn expr_map_locked() -> bool;
     fn save_current_state(save: *mut c_void) -> bool;
     fn restore_current_state(save: *mut c_void);
@@ -909,7 +908,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     }
 
     // Check if we're in terminal mode
-    if nvim_buf_get_terminal(nvim_get_curbuf()) != 0 && (State & MODE_TERMINAL) != 0 {
+    if !bref_raw(nvim_get_curbuf()).terminal.is_null() && (State & MODE_TERMINAL) != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
         return;
     }

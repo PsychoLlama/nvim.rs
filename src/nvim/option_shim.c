@@ -259,7 +259,6 @@ void nvim_notify_all_terminals_theme(int dark) { FOR_ALL_BUFFERS(buf) { if (buf-
 // optset oldval first char (for background comparison)
 int nvim_optset_oldval_first_char(const void *args) { const char *s = ((const optset_T *)args)->os_oldval.string.data; return s ? (int)(unsigned char)s[0] : 0; }
 // did_set_buftype helpers
-char *nvim_buf_get_b_p_bt(buf_T *buf) { return buf ? buf->b_p_bt : NULL; }
 void nvim_buf_buftype_prompt_init(buf_T *buf) { set_option_direct(kOptComments, STATIC_CSTR_AS_OPTVAL(""), OPT_LOCAL, SID_NONE); pos_T next_prompt = { .lnum = buf->b_ml.ml_line_count, .col = 1, .coladd = 0 }; RESET_FMARK(&buf->b_prompt_start, next_prompt, 0, ((fmarkv_T)INIT_FMARKV)); }
 // nvim_win_get_status_height and nvim_win_set_redr_status are in window/src/win_struct.rs
 // keymap helpers

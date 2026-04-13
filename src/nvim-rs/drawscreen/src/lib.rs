@@ -2849,7 +2849,6 @@ extern "C" {
     static mut g_edit_submode_highl: c_int;
     fn vim_strsize(s: *const c_char) -> c_int;
     fn nvim_get_p_ri() -> c_int;
-    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_get_p_paste() -> c_int;
     fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
@@ -2943,10 +2942,10 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
                 || re == c_int::from(b'a')
                 || re == c_int::from(b'A')
             {
-                if nvim_buf_get_terminal(nvim_get_curbuf()) != 0 {
-                    msg_puts_hl(c" (terminal)".as_ptr(), hl_id, false);
-                } else {
+                if bref(nvim_get_curbuf()).terminal.is_null() {
                     msg_puts_hl(c" (insert)".as_ptr(), hl_id, false);
+                } else {
+                    msg_puts_hl(c" (terminal)".as_ptr(), hl_id, false);
                 }
             } else if re == c_int::from(b'R') {
                 msg_puts_hl(c" (replace)".as_ptr(), hl_id, false);
@@ -3555,15 +3554,6 @@ extern "C" {
 
     /// nvim_win_get_grid_alloc_chars: returns true if wp->w_grid_alloc.chars is non-NULL.
     fn nvim_win_get_grid_alloc_chars(wp: WinHandle) -> bool;
-
-    /// nvim_buf_get_mod_tick_syn: get buf->b_mod_tick_syn.
-    fn nvim_buf_get_mod_tick_syn(buf: BufHandle) -> u64;
-    /// nvim_buf_set_mod_tick_syn: set buf->b_mod_tick_syn.
-    fn nvim_buf_set_mod_tick_syn(buf: BufHandle, val: u64);
-    /// nvim_buf_get_mod_tick_decor: get buf->b_mod_tick_decor.
-    fn nvim_buf_get_mod_tick_decor(buf: BufHandle) -> u64;
-    /// nvim_buf_set_mod_tick_decor: set buf->b_mod_tick_decor.
-    fn nvim_buf_set_mod_tick_decor(buf: BufHandle, val: u64);
 
 }
 
@@ -5013,13 +5003,13 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
 
         let buf = BufHandle(win_ref(wp).w_buffer);
         if bref(buf).b_mod_set != 0 {
-            if nvim_buf_get_mod_tick_syn(buf) < tick && syntax_present(wp) {
+            if bref(buf).b_mod_tick_syn < tick && syntax_present(wp) {
                 syn_stack_apply_changes(buf);
-                nvim_buf_set_mod_tick_syn(buf, tick);
+                buf_mut_raw(buf).b_mod_tick_syn = tick;
             }
-            if nvim_buf_get_mod_tick_decor(buf) < tick {
+            if bref(buf).b_mod_tick_decor < tick {
                 decor_providers_invoke_buf(buf);
-                nvim_buf_set_mod_tick_decor(buf, tick);
+                buf_mut_raw(buf).b_mod_tick_decor = tick;
             }
         }
         wp = win_ref(wp).w_next;

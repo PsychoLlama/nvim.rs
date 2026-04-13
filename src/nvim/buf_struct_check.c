@@ -46,6 +46,8 @@ _Static_assert(offsetof(buf_T, b_mod_set) == 273, "b_mod_set offset mismatch");
 _Static_assert(offsetof(buf_T, b_mod_top) == 276, "b_mod_top offset mismatch");
 _Static_assert(offsetof(buf_T, b_mod_bot) == 280, "b_mod_bot offset mismatch");
 _Static_assert(offsetof(buf_T, b_mod_xlines) == 284, "b_mod_xlines offset mismatch");
+_Static_assert(offsetof(buf_T, b_mod_tick_syn) == 312, "b_mod_tick_syn offset mismatch");
+_Static_assert(offsetof(buf_T, b_mod_tick_decor) == 320, "b_mod_tick_decor offset mismatch");
 
 // Time/size
 _Static_assert(offsetof(buf_T, b_mtime) == 328, "b_mtime offset mismatch");

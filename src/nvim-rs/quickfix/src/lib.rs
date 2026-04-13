@@ -2142,7 +2142,6 @@ extern "C" {
     // Phase 16: fix_fname migration accessors
     #[link_name = "fix_fname"]
     fn rs_fix_fname(fname: *const c_char) -> *mut c_char;
-    fn nvim_buf_get_b_ffname(buf: *mut c_void) -> *const c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     // nvim_path_try_shorten_fname deleted: use path_try_shorten_fname directly
     fn path_try_shorten_fname(full: *const c_char) -> *mut c_char;
@@ -2196,7 +2195,7 @@ pub unsafe extern "C" fn rs_qf_fix_fname(fname: *const c_char, bufnum: c_int) ->
 
     let buf = nvim_buflist_findnr_ptr(bufnum);
     if !buf.is_null() {
-        let ffname = nvim_buf_get_b_ffname(buf);
+        let ffname = bref_raw(buf).b_ffname;
         if !ffname.is_null() && path_fnamecmp(fullname, ffname) != 0 {
             let p = path_try_shorten_fname(fullname);
             if !p.is_null() {

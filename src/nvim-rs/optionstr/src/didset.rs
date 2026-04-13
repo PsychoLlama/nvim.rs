@@ -1521,11 +1521,8 @@ extern "C" {
     fn nvim_optset_oldval_first_char(args: *const c_void) -> c_int;
 
     // Buftype
-    fn nvim_buf_get_b_p_bt(buf: *mut c_void) -> *mut c_char;
-    fn nvim_buf_get_terminal(buf: *mut c_void) -> c_int;
     fn nvim_buf_buftype_prompt_init(buf: *mut c_void);
     fn redraw_later(wp: *mut c_void, kind: c_int);
-    fn nvim_buf_set_b_help(buf: *mut c_void, val: c_int);
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
 
@@ -1534,10 +1531,6 @@ extern "C" {
     fn nvim_set_secure(val: c_int);
     fn keymap_init() -> *const c_char;
     fn nvim_buf_get_b_p_keymap(buf: *mut c_void) -> *mut c_char;
-    fn nvim_buf_get_b_p_iminsert(buf: *mut c_void) -> i64;
-    fn nvim_buf_get_b_p_imsearch(buf: *mut c_void) -> i64;
-    fn nvim_buf_set_b_p_iminsert(buf: *mut c_void, val: c_int);
-    fn nvim_buf_set_b_p_imsearch(buf: *mut c_void, val: c_int);
     fn set_iminsert_global(buf: *mut c_void);
     fn set_imsearch_global(buf: *mut c_void);
     fn status_redraw_buf(buf: *mut c_void);
@@ -1623,8 +1616,12 @@ pub unsafe extern "C" fn did_set_buftype(args: *const c_void) -> *const c_char {
     let buf = nvim_optset_get_buf(args);
     let win = nvim_optset_get_win(args);
 
-    let bt = nvim_buf_get_b_p_bt(buf);
-    let has_terminal = nvim_buf_get_terminal(buf) != 0;
+    let bt = if buf.is_null() {
+        std::ptr::null()
+    } else {
+        bref_raw(buf).b_p_bt
+    };
+    let has_terminal = !buf.is_null() && !bref_raw(buf).terminal.is_null();
     let bt0 = if bt.is_null() { 0u8 } else { *bt as u8 };
 
     if (has_terminal && bt0 != b't')
@@ -1643,7 +1640,9 @@ pub unsafe extern "C" fn did_set_buftype(args: *const c_void) -> *const c_char {
         redraw_later(win, UPD_VALID);
     }
 
-    nvim_buf_set_b_help(buf, c_int::from(bt0 == b'h'));
+    if !buf.is_null() {
+        bref_raw_mut(buf).b_help = u8::from(bt0 == b'h');
+    }
     redraw_titles();
     std::ptr::null()
 }
@@ -1731,16 +1730,16 @@ pub unsafe extern "C" fn did_set_keymap(args: *const c_void) -> *const c_char {
         let keymap_set = !keymap.is_null() && *keymap != 0;
 
         if keymap_set {
-            nvim_buf_set_b_p_iminsert(buf, B_IMODE_LMAP as c_int);
-            if nvim_buf_get_b_p_imsearch(buf) != B_IMODE_USE_INSERT {
-                nvim_buf_set_b_p_imsearch(buf, B_IMODE_LMAP as c_int);
+            bref_raw_mut(buf).b_p_iminsert = B_IMODE_LMAP;
+            if bref_raw(buf).b_p_imsearch != B_IMODE_USE_INSERT {
+                bref_raw_mut(buf).b_p_imsearch = B_IMODE_LMAP;
             }
         } else {
-            if nvim_buf_get_b_p_iminsert(buf) == B_IMODE_LMAP {
-                nvim_buf_set_b_p_iminsert(buf, B_IMODE_NONE as c_int);
+            if bref_raw(buf).b_p_iminsert == B_IMODE_LMAP {
+                bref_raw_mut(buf).b_p_iminsert = B_IMODE_NONE;
             }
-            if nvim_buf_get_b_p_imsearch(buf) == B_IMODE_LMAP {
-                nvim_buf_set_b_p_imsearch(buf, B_IMODE_USE_INSERT as c_int);
+            if bref_raw(buf).b_p_imsearch == B_IMODE_LMAP {
+                bref_raw_mut(buf).b_p_imsearch = B_IMODE_USE_INSERT;
             }
         }
 

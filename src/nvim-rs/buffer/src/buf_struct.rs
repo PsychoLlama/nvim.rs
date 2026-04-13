@@ -148,8 +148,12 @@ pub struct BufStruct {
     // offset 284: linenr_T b_mod_xlines
     pub b_mod_xlines: LineNr,
 
-    // offset 288..327: b_wininfo, b_mod_tick_syn, b_mod_tick_decor (40 bytes, opaque)
-    _pad4: [u8; 40],
+    // offset 288..311: b_wininfo (kvec_t(WinInfo*) = 24 bytes, opaque)
+    _pad4a: [u8; 24],
+    // offset 312: disptick_T b_mod_tick_syn (uint64_t)
+    pub b_mod_tick_syn: u64,
+    // offset 320: disptick_T b_mod_tick_decor (uint64_t)
+    pub b_mod_tick_decor: u64,
 
     // --- TIME/SIZE (offsets 328-383) ---
 
