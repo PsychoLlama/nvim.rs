@@ -90,6 +90,22 @@ _Static_assert(DOSO_VIMRC == 1, "DOSO_VIMRC must be 1");
 _Static_assert(FAIL == 0, "FAIL must be 0");
 _Static_assert(OK == 1, "OK must be 1");
 
+// Phase 1: validate constants inlined into Rust (constants.rs)
+_Static_assert(IOSIZE == 1025, "IOSIZE must be 1025");
+_Static_assert(MAXPATHL == 4096, "MAXPATHL must be 4096");
+_Static_assert(PROF_YES == 1, "PROF_YES must be 1");
+_Static_assert(DOSO_VIMRC == 1, "DOSO_VIMRC must be 1");
+_Static_assert(SID_STR == -10, "SID_STR must be -10");
+_Static_assert(DOCMD_VERBOSE == 0x01, "DOCMD_VERBOSE must be 0x01");
+_Static_assert(DOCMD_NOWAIT == 0x02, "DOCMD_NOWAIT must be 0x02");
+_Static_assert(DOCMD_REPEAT == 0x04, "DOCMD_REPEAT must be 0x04");
+_Static_assert(CSTP_FINISH == 32, "CSTP_FINISH must be 32");
+_Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
+_Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
+_Static_assert(EW_NOBREAK == 0x40000, "EW_NOBREAK must be 0x40000");
+_Static_assert(CPO_CONCAT == 'C', "CPO_CONCAT must be 'C'");
+_Static_assert(CONV_NONE == 0, "CONV_NONE must be 0");
+
 /// Grow the execution stack garray by n entries.
 void nvim_exestack_ga_grow(int n) { ga_grow(&exestack, n); }
 
@@ -333,11 +349,7 @@ bool nvim_rt_got_int(void) { return got_int; }
 
 char *nvim_rt_get_namebuff(void) { return NameBuff; }
 
-int nvim_rt_maxpathl(void) { return MAXPATHL; }
-
 char *nvim_rt_get_iobuff(void) { return IObuff; }
-
-int nvim_rt_iosize(void) { return IOSIZE; }
 
 /// Call home_replace(NULL, name, buf, len, true).
 void nvim_rt_home_replace(const char *name, char *buf, size_t len) { home_replace(NULL, name, buf, len, true); }
@@ -624,9 +636,6 @@ void nvim_rt_cstack_set_pending(void *cstack, int idx, int val)
 /// report_make_pending wrapper (for CSTP_FINISH).
 void nvim_rt_report_make_pending_finish(void) { report_make_pending(CSTP_FINISH, NULL); }
 
-/// CSTP_FINISH value.
-int nvim_rt_CSTP_FINISH(void) { return CSTP_FINISH; }
-
 /// emsg for E167.
 void nvim_rt_emsg_scriptencoding_outside(void) { emsg(_("E167: :scriptencoding used outside of a sourced file")); }
 
@@ -732,9 +741,6 @@ int nvim_rt_get_ex_nesting_level(void) { return ex_nesting_level; }
 /// Get do_profiling.
 int nvim_rt_get_do_profiling(void) { return do_profiling; }
 
-/// Get PROF_YES value.
-int nvim_rt_PROF_YES(void) { return PROF_YES; }
-
 /// Get time_fd.
 void *nvim_rt_get_time_fd(void) { return time_fd; }
 
@@ -833,20 +839,6 @@ const char *nvim_rt_curbuf_get_ft(void) { return curbuf ? curbuf->b_p_ft : NULL;
 
 /// IObuff accessor.
 char *nvim_rt_src_get_iobuff(void) { return IObuff; }
-
-/// IOSIZE constant.
-int nvim_rt_src_iosize(void) { return IOSIZE; }
-
-/// DOCMD flags constants.
-int nvim_rt_DOCMD_VERBOSE(void) { return DOCMD_VERBOSE; }
-int nvim_rt_DOCMD_NOWAIT(void) { return DOCMD_NOWAIT; }
-int nvim_rt_DOCMD_REPEAT(void) { return DOCMD_REPEAT; }
-
-/// SID_STR constant.
-int nvim_rt_SID_STR(void) { return SID_STR; }
-
-/// DOSO_VIMRC constant.
-int nvim_rt_DOSO_VIMRC(void) { return DOSO_VIMRC; }
 
 /// get_scriptname wrapper (from runtime.c, used by FFI).
 char *nvim_rt_src_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
@@ -1020,33 +1012,11 @@ void nvim_rt_copy_option_part(char **option, char *buf, size_t maxlen, const cha
   copy_option_part(option, buf, maxlen, sep_chars);
 }
 
-/// strlen wrapper.
-size_t nvim_rt_strlen(const char *s) { return strlen(s); }
-
-/// strcat wrapper (for buf + prefix + name construction).
-void nvim_rt_strcat(char *dst, const char *src) { strcat(dst, src); }
-
-/// EW_DIR constant.
-int nvim_rt_EW_DIR(void) { return EW_DIR; }
-/// EW_FILE constant.
-int nvim_rt_EW_FILE(void) { return EW_FILE; }
-/// EW_NOBREAK constant.
-int nvim_rt_EW_NOBREAK(void) { return EW_NOBREAK; }
-/// DIP_DIR constant.
-int nvim_rt_DIP_DIR(void) { return DIP_DIR; }
-/// DIP_DIRFILE constant.
-int nvim_rt_DIP_DIRFILE(void) { return DIP_DIRFILE; }
-/// STRCPY wrapper.
-void nvim_rt_strcpy(char *dst, const char *src) { STRCPY(dst, src); }
-
 /// vim_strchr wrapper.
 char *nvim_rt_vim_strchr(const char *buf, int c) { return vim_strchr(buf, c); }
 
 /// p_cpo accessor.
 const char *nvim_rt_get_p_cpo(void) { return p_cpo; }
-
-/// CPO_CONCAT constant.
-int nvim_rt_CPO_CONCAT(void) { return CPO_CONCAT; }
 
 /// skipwhite wrapper.
 char *nvim_rt_skipwhite(const char *p) { return skipwhite(p); }
@@ -1117,17 +1087,8 @@ void nvim_rt_script_line_start(void) { script_line_start(); }
 /// script_line_end wrapper.
 void nvim_rt_script_line_end(void) { script_line_end(); }
 
-/// CONV_NONE constant.
-int nvim_rt_CONV_NONE(void) { return CONV_NONE; }
-
 /// Get vc_type from vimconv_T*.
 int nvim_rt_conv_get_type(const void *vcp) { return ((vimconv_T *)vcp)->vc_type; }
 
-/// Get sizeof garray_T (for stack allocation from Rust).
-size_t nvim_rt_sizeof_garray(void) { return sizeof(garray_T); }
-
 /// skipwhite_len wrapper.
 const char *nvim_rt_skipwhite_len(const char *p, size_t len) { return skipwhite_len(p, len); }
-
-/// NUL constant.
-char nvim_rt_NUL(void) { return NUL; }

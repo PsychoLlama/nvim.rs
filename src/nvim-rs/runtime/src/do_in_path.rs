@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::constants::{EW_DIR, EW_FILE, EW_NOBREAK, MAXPATHL};
 use crate::dip;
 
 // =============================================================================
@@ -27,9 +28,6 @@ extern "C" {
     // Path utilities
     fn nvim_rt_path_is_after(buf: *const c_char, buflen: usize) -> bool;
     fn nvim_rt_add_pathsep(p: *mut c_char);
-    fn nvim_rt_strlen(s: *const c_char) -> usize;
-    fn nvim_rt_strcat(dst: *mut c_char, src: *const c_char);
-    fn nvim_rt_strcpy(dst: *mut c_char, src: *const c_char);
 
     // Verbose messaging
     fn nvim_rt_verbose_enter();
@@ -67,18 +65,8 @@ extern "C" {
         cookie: *mut c_void,
     ) -> c_int;
 
-    // EW_* constants
-    fn nvim_rt_EW_DIR() -> c_int;
-    fn nvim_rt_EW_FILE() -> c_int;
-    fn nvim_rt_EW_NOBREAK() -> c_int;
-    fn nvim_rt_DIP_DIR() -> c_int;
-    fn nvim_rt_DIP_DIRFILE() -> c_int;
-
     // p_rtp for comparison in error messages
     fn nvim_rt_get_p_rtp() -> *const c_char;
-
-    // MAXPATHL
-    fn nvim_rt_maxpathl() -> c_int;
 
     // RuntimeSearchPath accessors (for do_in_cached_path)
     fn nvim_rt_rsp_get_cached_size(ref_: *mut c_int) -> usize;
@@ -123,8 +111,7 @@ pub unsafe extern "C" fn rs_do_in_path(
 
     // Make a copy of the path. Invoking the callback may change the value.
     let rtp_copy = xstrdup(path);
-    let maxpathl = nvim_rt_maxpathl() as usize;
-    let mut buf = xmallocz(maxpathl).cast::<c_char>();
+    let mut buf = xmallocz(MAXPATHL).cast::<c_char>();
 
     {
         if nvim_rt_get_p_verbose() > 10 && !name.is_null() {
@@ -143,8 +130,8 @@ pub unsafe extern "C" fn rs_do_in_path(
         let mut rtp = rtp_copy;
         while unsafe { *rtp } != 0 && (do_all || !did_one) {
             // Copy the path from 'runtimepath' to buf[].
-            nvim_rt_copy_option_part(&raw mut rtp, buf, maxpathl, c",".as_ptr());
-            let buflen = nvim_rt_strlen(buf);
+            nvim_rt_copy_option_part(&raw mut rtp, buf, MAXPATHL, c",".as_ptr());
+            let buflen = libc::strlen(buf.cast());
 
             // Skip after or non-after directories.
             if (flags & (dip::NOAFTER | dip::AFTER)) != 0 {
@@ -161,17 +148,19 @@ pub unsafe extern "C" fn rs_do_in_path(
                     cb(1, &raw mut buf, do_all, cookie);
                 }
                 did_one = true;
-            } else if buflen + 2 + nvim_rt_strlen(prefix) + nvim_rt_strlen(name) < maxpathl {
+            } else if buflen + 2 + libc::strlen(prefix.cast()) + libc::strlen(name.cast())
+                < MAXPATHL
+            {
                 nvim_rt_add_pathsep(buf);
-                nvim_rt_strcat(buf, prefix);
-                let tail_offset = nvim_rt_strlen(buf);
+                libc::strcat(buf.cast(), prefix.cast());
+                let tail_offset = libc::strlen(buf.cast());
                 let tail = buf.add(tail_offset);
 
                 // Loop over all patterns in "name"
                 let mut np = name;
                 while unsafe { *np } != 0 && (do_all || !did_one) {
                     // Append the pattern from "name" to buf[].
-                    let remaining = maxpathl - tail_offset;
+                    let remaining = MAXPATHL - tail_offset;
                     nvim_rt_copy_option_part(&raw mut np, tail, remaining, c"\t ".as_ptr());
 
                     if nvim_rt_get_p_verbose() > 10 {
@@ -180,12 +169,12 @@ pub unsafe extern "C" fn rs_do_in_path(
                         nvim_rt_verbose_leave();
                     }
 
-                    let ew_flags = (if (flags & nvim_rt_DIP_DIR()) != 0 {
-                        nvim_rt_EW_DIR()
+                    let ew_flags = (if (flags & dip::DIR) != 0 {
+                        EW_DIR
                     } else {
-                        nvim_rt_EW_FILE()
-                    }) | (if (flags & nvim_rt_DIP_DIRFILE()) != 0 {
-                        nvim_rt_EW_DIR() | nvim_rt_EW_FILE()
+                        EW_FILE
+                    }) | (if (flags & dip::DIRFILE) != 0 {
+                        EW_DIR | EW_FILE
                     } else {
                         0
                     });
@@ -251,8 +240,6 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 ) -> c_int {
     let mut did_one = false;
 
-    let maxpathl = nvim_rt_maxpathl() as usize;
-
     if nvim_rt_get_p_verbose() > 10 && !name.is_null() {
         nvim_rt_verbose_enter();
         nvim_rt_smsg_searching_rtp(name);
@@ -266,7 +253,7 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 
     // Stack-allocate a buffer of MAXPATHL bytes.
     // We use a Vec as a stack-like buffer to avoid a heap allocation per call.
-    let mut buf_vec: Vec<u8> = vec![0u8; maxpathl];
+    let mut buf_vec: Vec<u8> = vec![0u8; MAXPATHL];
     let buf = buf_vec.as_mut_ptr().cast::<c_char>();
 
     // Loop over all entries in cached path
@@ -277,7 +264,7 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 
         let item_path = nvim_rt_rsp_get_item_path(j);
         let item_after = nvim_rt_rsp_get_item_after(j);
-        let buflen = nvim_rt_strlen(item_path);
+        let buflen = libc::strlen(item_path.cast());
 
         // Skip after or non-after directories.
         if (flags & (dip::NOAFTER | dip::AFTER)) != 0
@@ -293,17 +280,17 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
             if let Some(cb) = callback {
                 cb(1, &raw mut item_path_mut, do_all, cookie);
             }
-        } else if buflen + nvim_rt_strlen(name) + 2 < maxpathl {
-            nvim_rt_strcpy(buf, item_path);
+        } else if buflen + libc::strlen(name.cast()) + 2 < MAXPATHL {
+            libc::strcpy(buf.cast(), item_path.cast());
             nvim_rt_add_pathsep(buf);
-            let tail_offset = nvim_rt_strlen(buf);
+            let tail_offset = libc::strlen(buf.cast());
             let tail = buf.add(tail_offset);
 
             // Loop over all patterns in "name"
             let mut np = name;
             while unsafe { *np } != 0 && (do_all || !did_one) {
                 // Append the pattern from "name" to buf[].
-                let remaining = maxpathl - tail_offset;
+                let remaining = MAXPATHL - tail_offset;
                 nvim_rt_copy_option_part(&raw mut np, tail, remaining, c"\t ".as_ptr());
 
                 if nvim_rt_get_p_verbose() > 10 {
@@ -312,15 +299,15 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
                     nvim_rt_verbose_leave();
                 }
 
-                let ew_flags = (if (flags & nvim_rt_DIP_DIR()) != 0 {
-                    nvim_rt_EW_DIR()
+                let ew_flags = (if (flags & dip::DIR) != 0 {
+                    EW_DIR
                 } else {
-                    nvim_rt_EW_FILE()
-                }) | (if (flags & nvim_rt_DIP_DIRFILE()) != 0 {
-                    nvim_rt_EW_DIR() | nvim_rt_EW_FILE()
+                    EW_FILE
+                }) | (if (flags & dip::DIRFILE) != 0 {
+                    EW_DIR | EW_FILE
                 } else {
                     0
-                }) | nvim_rt_EW_NOBREAK();
+                }) | EW_NOBREAK;
 
                 // Expand wildcards, invoke the callback for each match.
                 let mut pat_ptr = buf;

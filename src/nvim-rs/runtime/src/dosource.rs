@@ -17,6 +17,9 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::constants::{
+    DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, DOSO_VIMRC, IOSIZE, PROF_YES, SID_STR,
+};
 use crate::doso;
 
 // =============================================================================
@@ -64,7 +67,6 @@ extern "C" {
     fn nvim_rt_aborting() -> bool;
     fn nvim_rt_vimrc_found(fname_exp: *const c_char, env: *const c_char);
     fn nvim_rt_get_curbuf() -> *mut c_void;
-    fn nvim_rt_DOSO_VIMRC() -> c_int;
 
     // File I/O
     // nvim_rt_fopen_noinh_readbin: migrated to Rust (see bottom of this file)
@@ -99,7 +101,6 @@ extern "C" {
     fn nvim_rt_save_current_sctx() -> *mut c_void;
     fn nvim_rt_restore_current_sctx(saved: *mut c_void);
     fn nvim_rt_next_script_seq() -> c_int;
-    fn nvim_rt_SID_STR() -> c_int;
 
     // Estack
     fn estack_push(etype: c_int, name: *mut c_char, lnum: LinenrT) -> *mut c_void;
@@ -107,7 +108,6 @@ extern "C" {
 
     // Profiling
     fn nvim_rt_get_do_profiling() -> c_int;
-    fn nvim_rt_PROF_YES() -> c_int;
     fn nvim_rt_get_time_fd() -> *mut c_void;
     fn nvim_rt_time_push(rel_time: *mut u64, start_time: *mut u64);
     fn nvim_rt_time_pop(rel_time: u64);
@@ -134,9 +134,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_rt_nlua_exec_file(fname: *const c_char);
     fn nvim_rt_nlua_exec_ga(ga: *mut c_void, fname: *const c_char);
-    fn nvim_rt_DOCMD_VERBOSE() -> c_int;
-    fn nvim_rt_DOCMD_NOWAIT() -> c_int;
-    fn nvim_rt_DOCMD_REPEAT() -> c_int;
 
     // Cookie accessors (source_cookie_T, defined in runtime.c)
     fn nvim_rt_cookie_alloc() -> *mut c_void;
@@ -169,7 +166,6 @@ extern "C" {
 
     // IObuff / getsourceline passthrough
     fn nvim_rt_src_get_iobuff() -> *mut c_char;
-    fn nvim_rt_src_iosize() -> c_int;
     fn nvim_rt_src_got_int() -> bool;
     fn nvim_rt_emsg_interr();
 
@@ -254,9 +250,8 @@ unsafe fn do_source_buffer_init(
         let ffname = nvim_rt_curbuf_get_ffname();
         if ffname.is_null() {
             let iobuff = nvim_rt_src_get_iobuff();
-            let iosize = nvim_rt_src_iosize();
             let fnum = nvim_rt_curbuf_get_fnum();
-            nvim_rt_snprintf_source_buffer_name(iobuff, iosize, ex_lua, fnum);
+            nvim_rt_snprintf_source_buffer_name(iobuff, IOSIZE as c_int, ex_lua, fnum);
             xstrdup(iobuff)
         } else {
             xstrdup(ffname)
@@ -364,11 +359,10 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     // See if we loaded this script before.
-    let sid_str = nvim_rt_SID_STR();
     let mut sid = if str_arg.is_null() {
         crate::script::rs_find_script_by_name(fname_exp)
     } else {
-        sid_str
+        SID_STR
     };
 
     if sid > 0 && !ret_sid.is_null() {
@@ -469,7 +463,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
         nvim_rt_verbose_leave();
     }
 
-    if is_vimrc == nvim_rt_DOSO_VIMRC() {
+    if is_vimrc == DOSO_VIMRC {
         nvim_rt_vimrc_found(fname_exp, c"MYVIMRC".as_ptr());
     }
 
@@ -490,8 +484,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     let l_do_profiling = nvim_rt_get_do_profiling();
-    let prof_yes = nvim_rt_PROF_YES();
-    if l_do_profiling == prof_yes {
+    if l_do_profiling == PROF_YES {
         nvim_rt_prof_child_enter(&raw mut wait_start);
     }
 
@@ -541,7 +534,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     estack_push(ETYPE_SCRIPT, es_name, 0);
 
     // Profiling
-    if l_do_profiling == prof_yes && !si.is_null() {
+    if l_do_profiling == PROF_YES && !si.is_null() {
         let mut forceit = false;
         if !nvim_rt_si_get_sn_prof_on(si)
             && nvim_rt_has_profiling(true, nvim_rt_si_get_sn_name(si), &raw mut forceit)
@@ -573,7 +566,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
             let ga = nvim_rt_cookie_get_buflines_ga(cookie);
             nvim_rt_nlua_exec_ga(ga, fname_cookie);
         } else {
-            let flags = nvim_rt_DOCMD_VERBOSE() | nvim_rt_DOCMD_NOWAIT() | nvim_rt_DOCMD_REPEAT();
+            let flags = DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT;
             nvim_rt_do_cmdline_source(ptr::null_mut(), cookie, flags);
         }
     } else if !si.is_null() && nvim_rt_si_get_sn_lua(si) {
@@ -600,13 +593,13 @@ pub unsafe extern "C" fn rs_do_source_ext(
                 }
             }
         }
-        let flags = nvim_rt_DOCMD_VERBOSE() | nvim_rt_DOCMD_NOWAIT() | nvim_rt_DOCMD_REPEAT();
+        let flags = DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT;
         nvim_rt_do_cmdline_source(firstline, cookie, flags);
     }
     retval = OK;
 
     // Post-execution profiling
-    if l_do_profiling == prof_yes && !si.is_null() {
+    if l_do_profiling == PROF_YES && !si.is_null() {
         // Re-fetch si as script_items may have been reallocated
         si = nvim_rt_script_item_get(nvim_rt_get_current_sctx_sid());
         if nvim_rt_si_get_sn_prof_on(si) {
@@ -648,7 +641,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
 
     nvim_rt_restore_current_sctx(save_current_sctx);
     nvim_rt_restore_funccal(funccalp_entry);
-    if l_do_profiling == prof_yes {
+    if l_do_profiling == PROF_YES {
         nvim_rt_prof_child_exit(&raw mut wait_start);
     }
 

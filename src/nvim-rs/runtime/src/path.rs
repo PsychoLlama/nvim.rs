@@ -8,6 +8,8 @@ use std::ptr;
 
 use nvim_memory::xstrdup;
 
+use crate::constants::{IOSIZE, MAXPATHL};
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -71,7 +73,6 @@ extern "C" {
     fn nvim_rt_append_path(path: *mut c_char, to_append: *const c_char, max_len: usize) -> c_int;
     fn nvim_rt_vim_ispathsep(c: c_int) -> bool;
     fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize);
-    fn nvim_rt_iosize() -> c_int;
 
     // Phase 3 accessors from runtime.c (ga_loaded)
     fn nvim_rt_ga_loaded_len() -> c_int;
@@ -83,8 +84,6 @@ extern "C" {
         cookie: *mut c_void,
     ) -> c_int;
 
-    // MAXPATHL accessor (from Phase 2)
-    fn nvim_rt_maxpathl() -> c_int;
     fn nvim_rt_get_iobuff() -> *mut c_char;
 }
 
@@ -441,7 +440,7 @@ unsafe fn add_dir(
         }
         let appname = nvim_rt_get_appname();
         let appname_len = libc::strlen(appname);
-        let iosize = nvim_rt_iosize() as usize;
+        let iosize = IOSIZE;
         assert!(appname_len < iosize - 5); // sizeof("-data")
         let iobuff = nvim_rt_get_iobuff();
         xmemcpyz(iobuff.cast(), appname.cast(), appname_len);
@@ -501,7 +500,7 @@ pub unsafe extern "C" fn rs_get_lib_dir() -> *mut c_char {
         return xstrdup(default_lib);
     }
 
-    let maxpathl = nvim_rt_maxpathl() as usize;
+    let maxpathl = MAXPATHL;
     let exe_name = xmalloc(maxpathl).cast::<c_char>();
     nvim_rt_vim_get_prefix_from_exepath(exe_name);
     if nvim_rt_append_path(exe_name, b"lib/nvim\0".as_ptr().cast(), maxpathl) == OK {

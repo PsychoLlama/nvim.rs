@@ -6,6 +6,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::constants::MAXPATHL;
 use crate::{LinenrT, ScidT, ScriptItemHandle};
 
 // =============================================================================
@@ -55,9 +56,7 @@ extern "C" {
     fn nvim_rt_emsg_invarg();
     fn nvim_rt_got_int() -> bool;
     fn nvim_rt_get_namebuff() -> *mut c_char;
-    fn nvim_rt_maxpathl() -> c_int;
     fn nvim_rt_get_iobuff() -> *mut c_char;
-    fn nvim_rt_iosize() -> c_int;
     fn nvim_rt_home_replace(name: *const c_char, buf: *mut c_char, len: usize);
     fn nvim_rt_format_script_entry(i: c_int, namebuff: *const c_char);
     fn nvim_rt_message_filtered(msg: *const c_char) -> bool;
@@ -304,8 +303,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
         } else {
             let arg = nvim_rt_exarg_get_arg(eap);
             let namebuff = nvim_rt_get_namebuff();
-            let maxpathl = nvim_rt_maxpathl();
-            nvim_rt_expand_env(arg, namebuff, maxpathl);
+            nvim_rt_expand_env(arg, namebuff, MAXPATHL as c_int);
             nvim_rt_exarg_set_arg(eap, namebuff);
         }
         nvim_rt_do_exedit(eap);
@@ -315,7 +313,6 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
     // List all scripts
     let count = nvim_script_items_get_len();
     let namebuff = nvim_rt_get_namebuff();
-    let maxpathl = nvim_rt_maxpathl();
     let iobuff = nvim_rt_get_iobuff();
 
     let mut i: c_int = 1;
@@ -324,7 +321,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
         let sn_name = nvim_scriptitem_get_name(si);
 
         if !sn_name.is_null() {
-            nvim_rt_home_replace(sn_name, namebuff, maxpathl as usize);
+            nvim_rt_home_replace(sn_name, namebuff, MAXPATHL);
             nvim_rt_format_script_entry(i, namebuff);
             if !nvim_rt_message_filtered(iobuff) {
                 nvim_rt_msg_putchar_nl();

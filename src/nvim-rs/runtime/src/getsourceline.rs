@@ -8,6 +8,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::constants::{CONV_NONE, CPO_CONCAT, PROF_YES};
+
 // =============================================================================
 // Type aliases
 // =============================================================================
@@ -58,9 +60,7 @@ extern "C" {
     // Charset / path
     fn nvim_rt_skipwhite(p: *const c_char) -> *mut c_char;
     fn nvim_rt_skipwhite_len(p: *const c_char, len: usize) -> *const c_char;
-    fn nvim_rt_strlen(s: *const c_char) -> usize;
     fn nvim_rt_get_p_cpo() -> *const c_char;
-    fn nvim_rt_CPO_CONCAT() -> c_int;
     fn nvim_rt_vim_strchr(buf: *const c_char, c: c_int) -> *mut c_char;
 
     // Debugger
@@ -70,7 +70,6 @@ extern "C" {
 
     // Profiling
     fn nvim_rt_get_do_profiling() -> c_int;
-    fn nvim_rt_PROF_YES() -> c_int;
     fn nvim_rt_script_line_start();
     fn nvim_rt_script_line_end();
 
@@ -102,7 +101,6 @@ extern "C" {
     // Encoding conversion
     fn nvim_rt_string_convert(vcp: *mut c_void, s: *mut c_char, len: *mut usize) -> *mut c_char;
     fn nvim_rt_conv_get_type(vcp: *const c_void) -> c_int;
-    fn nvim_rt_CONV_NONE() -> c_int;
 
 }
 
@@ -210,7 +208,7 @@ unsafe fn get_one_sourceline(cookie: *mut c_void) -> *mut c_char {
                 break;
             }
 
-            ga.ga_len + nvim_rt_strlen(buf_start) as c_int
+            ga.ga_len + libc::strlen(buf_start.cast()) as c_int
         };
 
         have_read = true;
@@ -291,7 +289,7 @@ pub unsafe extern "C" fn rs_getsourceline(
         nvim_rt_cookie_set_dbg_tick(cookie, nvim_rt_get_debug_tick());
     }
 
-    if nvim_rt_get_do_profiling() == nvim_rt_PROF_YES() {
+    if nvim_rt_get_do_profiling() == PROF_YES {
         nvim_rt_script_line_end();
     }
 
@@ -314,16 +312,14 @@ pub unsafe extern "C" fn rs_getsourceline(
         nl
     };
 
-    if !line.is_null() && nvim_rt_get_do_profiling() == nvim_rt_PROF_YES() {
+    if !line.is_null() && nvim_rt_get_do_profiling() == PROF_YES {
         nvim_rt_script_line_start();
     }
 
     // Concatenate continuation lines (backslash-continued) unless 'C' is in
     // 'cpoptions'.
-    if !line.is_null()
-        && do_concat
-        && nvim_rt_vim_strchr(nvim_rt_get_p_cpo(), nvim_rt_CPO_CONCAT()).is_null()
-    {
+    let no_cpo_concat = nvim_rt_vim_strchr(nvim_rt_get_p_cpo(), CPO_CONCAT).is_null();
+    if !line.is_null() && do_concat && no_cpo_concat {
         // Compensate for the one line read-ahead.
         nvim_rt_cookie_dec_sourcing_lnum(cookie);
 
@@ -347,7 +343,7 @@ pub unsafe extern "C" fn rs_getsourceline(
 
                 while !nvim_rt_cookie_get_nextline(cookie).is_null() {
                     let nl = nvim_rt_cookie_get_nextline(cookie);
-                    let nl_len = nvim_rt_strlen(nl);
+                    let nl_len = libc::strlen(nl.cast());
                     if !concat_continued_line(&raw mut ga, 400, nl, nl_len) {
                         break;
                     }
@@ -364,7 +360,7 @@ pub unsafe extern "C" fn rs_getsourceline(
     // Convert encoding if needed.
     if !line.is_null() {
         let conv = nvim_rt_cookie_get_conv(cookie);
-        if nvim_rt_conv_get_type(conv) != nvim_rt_CONV_NONE() {
+        if nvim_rt_conv_get_type(conv) != CONV_NONE {
             let s = nvim_rt_string_convert(conv, line, std::ptr::null_mut());
             if !s.is_null() {
                 xfree(line.cast::<c_void>());

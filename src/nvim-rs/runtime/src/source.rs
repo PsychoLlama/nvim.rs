@@ -4,6 +4,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::constants::CSTP_FINISH;
 use crate::{doso, LinenrT, ScidT};
 
 // =============================================================================
@@ -40,7 +41,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_rt_cstack_set_pending(cstack: *mut c_void, idx: c_int, val: c_int);
     fn nvim_rt_report_make_pending_finish();
-    fn nvim_rt_CSTP_FINISH() -> c_int;
 
     // Error messages
     fn nvim_rt_emsg_scriptencoding_outside();
@@ -148,8 +148,7 @@ pub unsafe extern "C" fn rs_do_finish(eap: *mut c_void, reanimate: bool) {
     let cstack = nvim_rt_exarg_get_cstack(eap);
     let idx = nvim_rt_cleanup_conditionals(cstack, 0, 1);
     if idx >= 0 {
-        let cstp_finish = nvim_rt_CSTP_FINISH();
-        nvim_rt_cstack_set_pending(cstack, idx, cstp_finish);
+        nvim_rt_cstack_set_pending(cstack, idx, CSTP_FINISH);
         nvim_rt_report_make_pending_finish();
     } else {
         let sp = nvim_rt_exarg_get_source_cookie(eap);

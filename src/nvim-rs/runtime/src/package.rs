@@ -5,6 +5,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::constants::MAXPATHL;
 use crate::dip;
 use crate::do_in_path::rs_do_in_path;
 
@@ -33,9 +34,6 @@ extern "C" {
         maxlen: usize,
         sep_chars: *const c_char,
     );
-
-    // MAXPATHL value
-    fn nvim_rt_maxpathl() -> c_int;
 
     // Phase 3: add_pack_dir_to_rtp helpers
     fn nvim_rt_utfc_ptr2len(p: *const c_char) -> c_int;
@@ -305,7 +303,7 @@ pub unsafe extern "C" fn rs_add_pack_dir_to_rtp(fname: *mut c_char, is_pack: boo
 
     // Find insertion point in p_rtp
     let fname_len = strlen(fixed_fname);
-    let maxpathl = nvim_rt_maxpathl() as usize;
+    let maxpathl = MAXPATHL;
     let buf = xmallocz(maxpathl).cast::<c_char>();
 
     let mut insp: *const c_char = ptr::null();
@@ -484,7 +482,7 @@ unsafe fn rs_add_pack_plugins_impl(
     cookie: *mut c_void,
 ) {
     let mut did_one = false;
-    let maxpathl = nvim_rt_maxpathl() as usize;
+    let maxpathl = MAXPATHL;
 
     if !cookie_is_app_load(cookie) {
         let buf = xmallocz(maxpathl).cast::<c_char>();
@@ -567,7 +565,7 @@ pub unsafe extern "C" fn rs_add_pack_start_dir(
     all: bool,
     _cookie: *mut c_void,
 ) -> bool {
-    let maxpathl = nvim_rt_maxpathl() as usize;
+    let maxpathl = MAXPATHL;
     let buf = xmallocz(maxpathl).cast::<c_char>();
 
     let start_pats = [c"/start/*".as_ptr(), c"/pack/*/start/*".as_ptr()];
