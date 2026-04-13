@@ -24,9 +24,8 @@ extern "C" {
     fn utfc_ptr2len(p: *mut c_char) -> c_int;
     fn nvim_syn_vim_iswordp_buf(p: *mut c_char) -> c_int;
 
-    // Window-level keyword accessors
-    fn nvim_win_get_keywtab_used(win: WinHandle) -> c_int;
-    fn nvim_win_get_keywtab_ic_used(win: WinHandle) -> c_int;
+    // Window-level synblock access
+    fn nvim_win_get_synblock(win: WinHandle) -> SynBlockHandle;
 
     // current_next_list access
 
@@ -500,7 +499,11 @@ pub fn win_keyword_count(win: WinHandle) -> i32 {
     if win.is_null() {
         return 0;
     }
-    unsafe { nvim_win_get_keywtab_used(win) }
+    let block = unsafe { nvim_win_get_synblock(win) };
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { synblock_ref(block).b_keywtab.ht_used as i32 }
 }
 
 /// Get the count of case-insensitive keywords used in a window's synblock.
@@ -509,7 +512,11 @@ pub fn win_keyword_ic_count(win: WinHandle) -> i32 {
     if win.is_null() {
         return 0;
     }
-    unsafe { nvim_win_get_keywtab_ic_used(win) }
+    let block = unsafe { nvim_win_get_synblock(win) };
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { synblock_ref(block).b_keywtab_ic.ht_used as i32 }
 }
 
 // =============================================================================

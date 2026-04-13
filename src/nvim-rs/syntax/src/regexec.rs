@@ -11,8 +11,8 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::synblock_struct::synblock_ref;
-use crate::types::{SynBlockHandle, SynPatHandle};
+use crate::synblock_struct::{synblock_mut, synblock_ref};
+use crate::types::{SynBlockHandle, SynPatHandle, WinHandle};
 
 // ============================================================================
 // FFI declarations
@@ -36,9 +36,9 @@ extern "C" {
 
     // syn_time_on flag
 
-    // b_syn_slow flag
-    fn nvim_syn_get_b_syn_slow() -> c_int;
-    fn nvim_syn_set_b_syn_slow(val: c_int);
+    // syn_win access for b_syn_slow
+    fn nvim_syn_get_win() -> WinHandle;
+    fn nvim_win_get_synblock(win: WinHandle) -> SynBlockHandle;
 
     // Profiling (from profile crate, exported via #[export_name])
     fn profile_start() -> u64;
@@ -131,8 +131,21 @@ unsafe fn syn_regexec_impl(
         }
     }
 
-    if timed_out != 0 && nvim_syn_get_b_syn_slow() == 0 {
-        nvim_syn_set_b_syn_slow(1);
+    let syn_win = nvim_syn_get_win();
+    let syn_win_block = if syn_win.is_null() {
+        SynBlockHandle(std::ptr::null_mut())
+    } else {
+        nvim_win_get_synblock(syn_win)
+    };
+    let b_syn_slow = if syn_win_block.is_null() {
+        0
+    } else {
+        synblock_ref(syn_win_block).b_syn_slow as c_int
+    };
+    if timed_out != 0 && b_syn_slow == 0 {
+        if !syn_win_block.is_null() {
+            synblock_mut(syn_win_block).b_syn_slow = true;
+        }
         msg(MSG_REDRAWTIME_EXCEEDED.as_ptr().cast(), 0);
     }
 

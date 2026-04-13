@@ -6,6 +6,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::ffi_types::SynPat;
 use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{KeyEntryHandle, SynBlockHandle, SynClusterHandle, SynPatHandle, WinHandle};
 
@@ -23,14 +24,6 @@ extern "C" {
     // Memory management
     fn xfree(ptr: *mut c_void);
     fn vim_regfree(ptr: *mut c_void);
-
-    // New accessors added for clearing.rs
-    fn nvim_synblock_memmove_patterns(
-        block: SynBlockHandle,
-        dst_idx: c_int,
-        src_idx: c_int,
-        count: c_int,
-    );
 
     // curwin synblock for syn_clear_one
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
@@ -169,7 +162,10 @@ pub unsafe extern "C" fn rs_syn_remove_pattern(block: SynBlockHandle, idx: c_int
     // Compact: memmove(spp, spp+1, sizeof(synpat_T) * (ga_len - idx - 1))
     let count = synblock_ref(block).b_syn_patterns.ga_len - idx - 1;
     if count > 0 {
-        nvim_synblock_memmove_patterns(block, idx, idx + 1, count);
+        let base = synblock_ref(block).b_syn_patterns.ga_data.cast::<SynPat>();
+        let dst = base.add(idx as usize);
+        let src = base.add((idx + 1) as usize);
+        std::ptr::copy(src, dst, count as usize);
     }
     synblock_mut(block).b_syn_patterns.ga_len -= 1;
 }

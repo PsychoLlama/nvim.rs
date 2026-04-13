@@ -255,8 +255,6 @@ int nvim_syn_do_regexec(void *regprog, int ic,
   return 0;
 }
 
-int nvim_syn_get_b_syn_slow(void) { return syn_win->w_s->b_syn_slow ? 1 : 0; }
-void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
 int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
 int nvim_win_get_keywtab_used(win_T *win) { return (int)win->w_s->b_keywtab.ht_used; }
@@ -454,7 +452,6 @@ void nvim_syn_apply_autocmds_syntax(const char *arg) { apply_autocmds(EVENT_SYNT
 void nvim_syn_set_internal_string_var(const char *name, const char *val) { set_internal_string_var(name, val); }
 void nvim_syn_do_unlet_b_current_syntax(void) { do_unlet(S_LEN("b:current_syntax"), true); }
 void nvim_synblock_set_pattern_count(synblock_T *block, int len) { block->b_syn_patterns.ga_len = len; }
-void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx, int count) { memmove(SYN_ITEMS(block) + dst_idx, SYN_ITEMS(block) + src_idx, sizeof(synpat_T) * (size_t)count); }
 void nvim_synblock_dec_folditems(synblock_T *block) { block->b_syn_folditems--; }
 void nvim_win_release_synblock(win_T *wp) { if (wp->w_s != &wp->w_buffer->b_s) { syntax_clear(wp->w_s); xfree(wp->w_s); wp->w_s = &wp->w_buffer->b_s; } }
 char *nvim_syn_vim_strsave_up(const char *s) { return vim_strsave_up(s); }
