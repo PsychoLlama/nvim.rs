@@ -14,6 +14,12 @@
 use crate::ffi_types::QfListPtr;
 use std::ffi::{c_int, c_void};
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_const<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -470,7 +476,6 @@ extern "C" {
     fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> *mut c_void;
 
     // Window field accessors
-    fn nvim_win_get_llist_ref(win: *const c_void) -> *const c_void;
     fn nvim_win_get_p_lhi(wp: *const c_void) -> c_int;
     fn nvim_win_set_p_lhi(win: *mut c_void, v: c_int);
     fn nvim_qf_win_get_llist(wp: *const c_void) -> *mut c_void;
@@ -494,7 +499,7 @@ pub unsafe extern "C" fn rs_qf_sync_llw_to_win(llw: WinHandle) {
     if llw.is_null() {
         return;
     }
-    let llist_ref = nvim_win_get_llist_ref(llw.cast_const());
+    let llist_ref = win_ref_const(llw.cast_const()).w_llist_ref;
     if llist_ref.is_null() {
         return;
     }
@@ -525,8 +530,8 @@ pub unsafe extern "C" fn rs_qf_sync_win_to_llw(pwp: WinHandle) {
     // FOR_ALL_WINDOWS_IN_TAB(wp, curtab)
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
-        let llist_ref = nvim_win_get_llist_ref(wp.cast_const());
-        if llist_ref == llw.cast_const() && nvim_win_is_qf_win(wp.cast_const()) {
+        let llist_ref = win_ref_const(wp.cast_const()).w_llist_ref;
+        if llist_ref == llw && nvim_win_is_qf_win(wp.cast_const()) {
             nvim_win_set_p_lhi(wp, lhi);
             return;
         }

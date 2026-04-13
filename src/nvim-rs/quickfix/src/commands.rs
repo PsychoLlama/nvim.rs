@@ -7,6 +7,17 @@ use crate::ffi_types::QfListPtr;
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_const<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+
 use crate::{nvim_qf_get_curlist_idx, nvim_qf_get_listcount, QfInfoHandle};
 
 // =============================================================================
@@ -74,7 +85,6 @@ extern "C" {
     // nvim_hgr_is_lhelpgrep deleted (Phase 4): use nvim_eap_get_cmdidx comparison
     // nvim_hgr_cleanup deleted (Phase 4): inlined via curwin accessors + rs_ll_free_all
     static mut curwin: *mut c_void;
-    fn nvim_win_set_llist(win: *mut c_void, qi: *mut c_void);
     // Used for finalization after compile+search (Phase 3)
 }
 
@@ -1235,7 +1245,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
             }
         } else if curwin_llist.is_null() && new_qi {
             // current window didn't have a location list — associate now.
-            nvim_win_set_llist(curwin_local, qi);
+            win_mut_raw(curwin_local).w_llist = qi;
         }
     }
 }
@@ -2087,7 +2097,6 @@ type WinHandle = *const c_void;
 
 extern "C" {
     fn nvim_qf_is_ll_window(wp: WinHandle) -> bool;
-    fn nvim_win_get_llist_ref(wp: WinHandle) -> QfInfoHandle;
 }
 
 /// Returns the line number of the current entry in the quickfix/location list
@@ -2107,7 +2116,7 @@ pub unsafe extern "C" fn rs_qf_current_entry(wp: WinHandle) -> i32 {
     assert!(!qi.is_null());
 
     if nvim_qf_is_ll_window(wp) {
-        qi = nvim_win_get_llist_ref(wp).cast_mut();
+        qi = win_ref_const(wp).w_llist_ref;
     }
 
     let qfl = nvim_qf_get_curlist_mut(qi);

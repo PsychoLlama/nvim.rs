@@ -13,6 +13,16 @@
 use crate::listval::{rs_opt_strings_flags, OptStringsFlagsResult};
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // =============================================================================
 // C FFI: check_str_opt infrastructure
 // =============================================================================
@@ -1025,16 +1035,7 @@ pub unsafe extern "C" fn did_set_virtualedit(args: *const c_void) -> *const c_ch
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_get_p_scl(wp: *mut c_void) -> *mut c_char;
-    fn nvim_win_set_nrwidth_line_count(wp: *mut c_void, val: c_int);
-    fn nvim_win_get_minscwidth(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_maxscwidth(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_scwidth(wp: *mut c_void) -> c_int;
-    fn nvim_win_set_scwidth(wp: *mut c_void, val: c_int);
-    fn nvim_win_set_minscwidth(wp: *mut c_void, val: c_int);
-    fn nvim_win_set_maxscwidth(wp: *mut c_void, val: c_int);
-    fn nvim_win_get_p_nu(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_p_rnu(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_p_scl(wp: *mut c_void) -> *mut c_char; // string option, keep
     fn rs_parse_signcolumn(val: *const c_char) -> SigncolumnResult;
 }
 
@@ -1081,23 +1082,23 @@ pub unsafe extern "C" fn check_signcolumn(scl: *mut c_char, wp: *mut c_void) -> 
     }
 
     // "number" mode only applies when 'number' or 'relativenumber' is set
-    if r.min_width == SCL_NUM && nvim_win_get_p_nu(wp) == 0 && nvim_win_get_p_rnu(wp) == 0 {
-        nvim_win_set_minscwidth(wp, 0);
-        nvim_win_set_maxscwidth(wp, 1);
+    if r.min_width == SCL_NUM && win_ref_raw(wp).w_p_nu() == 0 && win_ref_raw(wp).w_p_rnu() == 0 {
+        win_mut_raw(wp).w_minscwidth = 0;
+        win_mut_raw(wp).w_maxscwidth = 1;
     } else {
-        nvim_win_set_minscwidth(wp, r.min_width);
-        nvim_win_set_maxscwidth(wp, r.max_width);
+        win_mut_raw(wp).w_minscwidth = r.min_width;
+        win_mut_raw(wp).w_maxscwidth = r.max_width;
     }
 
-    let minscwidth = nvim_win_get_minscwidth(wp);
-    let maxscwidth = nvim_win_get_maxscwidth(wp);
-    let scwidth = nvim_win_get_scwidth(wp);
+    let minscwidth = win_ref_raw(wp).w_minscwidth;
+    let maxscwidth = win_ref_raw(wp).w_maxscwidth;
+    let scwidth = win_ref_raw(wp).w_scwidth;
     let new_scwidth = if minscwidth <= 0 {
         0
     } else {
         maxscwidth.min(scwidth)
     };
-    nvim_win_set_scwidth(wp, minscwidth.max(new_scwidth));
+    win_mut_raw(wp).w_scwidth = minscwidth.max(new_scwidth);
 
     OK
 }
@@ -1133,10 +1134,10 @@ pub unsafe extern "C" fn did_set_signcolumn(args: *const c_void) -> *const c_cha
     let minscwidth = if win.is_null() {
         0
     } else {
-        nvim_win_get_minscwidth(win)
+        win_ref_raw(win).w_minscwidth
     };
     if oldval_nu || minscwidth == SCL_NUM {
-        nvim_win_set_nrwidth_line_count(win, 0);
+        win_mut_raw(win).w_nrwidth_line_count = 0;
     }
     std::ptr::null()
 }
@@ -1497,8 +1498,6 @@ extern "C" {
     fn nvim_buf_get_b_p_bt(buf: *mut c_void) -> *mut c_char;
     fn nvim_buf_get_terminal(buf: *mut c_void) -> c_int;
     fn nvim_buf_buftype_prompt_init(buf: *mut c_void);
-    fn nvim_win_get_status_height(wp: *mut c_void) -> c_int;
-    fn nvim_win_set_redr_status(wp: *mut c_void, val: c_int);
     fn redraw_later(wp: *mut c_void, kind: c_int);
     fn nvim_buf_set_b_help(buf: *mut c_void, val: c_int);
     #[link_name = "rs_global_stl_height"]
@@ -1528,7 +1527,6 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_get_ru_wid() -> c_int;
     fn nvim_set_ru_wid(val: c_int);
-    fn nvim_win_get_floating_win(wp: *mut c_void) -> c_int;
     fn nvim_win_config_float(wp: *mut c_void);
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def_val: c_int) -> c_int;
     fn nvim_optset_stl_get_default(args: *const c_void) -> *const c_char;
@@ -1614,8 +1612,8 @@ pub unsafe extern "C" fn did_set_buftype(args: *const c_void) -> *const c_char {
         nvim_buf_buftype_prompt_init(buf);
     }
 
-    if nvim_win_get_status_height(win) != 0 || nvim_global_stl_height() != 0 {
-        nvim_win_set_redr_status(win, 1);
+    if win_ref_raw(win).w_status_height != 0 || nvim_global_stl_height() != 0 {
+        win_mut_raw(win).w_redr_status = (1) != 0;
         redraw_later(win, UPD_VALID);
     }
 
@@ -1748,7 +1746,7 @@ pub unsafe extern "C" fn did_set_statustabline_rulerformat(
     if rulerformat {
         nvim_set_ru_wid(0);
     } else if statuscolumn {
-        nvim_win_set_nrwidth_line_count(win, 0);
+        win_mut_raw(win).w_nrwidth_line_count = 0;
     }
 
     let mut s = *varp;
@@ -1762,7 +1760,7 @@ pub unsafe extern "C" fn did_set_statustabline_rulerformat(
         s = *varp;
     }
 
-    if is_stl && !win.is_null() && nvim_win_get_floating_win(win) != 0 {
+    if is_stl && !win.is_null() && win_ref_raw(win).w_floating as c_int != 0 {
         nvim_win_config_float(win);
     }
 

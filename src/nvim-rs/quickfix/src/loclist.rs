@@ -8,12 +8,18 @@
 //! - Location list windows can reference another window's location list
 
 use crate::ffi_types::QfListPtr;
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::{
-    nvim_qf_get_curlist_idx, nvim_qf_get_listcount, nvim_qf_get_refcount, nvim_win_get_llist_ref,
-    nvim_win_get_loclist, QfInfoHandle, WinHandle,
+    nvim_qf_get_curlist_idx, nvim_qf_get_listcount, nvim_qf_get_refcount, nvim_win_get_loclist,
+    QfInfoHandle, WinHandle,
 };
+
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_const<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
 
 // =============================================================================
 // External C functions for location lists
@@ -112,7 +118,7 @@ pub unsafe extern "C" fn rs_ll_is_loclist_window(wp: WinHandle) -> bool {
         return false;
     }
 
-    !nvim_win_get_llist_ref(wp).is_null()
+    !win_ref_const(wp).w_llist_ref.is_null()
 }
 
 /// Check if a window has its own location list (not a reference).
@@ -128,7 +134,7 @@ pub unsafe extern "C" fn rs_ll_window_owns_loclist(wp: WinHandle) -> bool {
     }
 
     let ll = nvim_win_get_loclist(wp);
-    let ll_ref = nvim_win_get_llist_ref(wp);
+    let ll_ref = win_ref_const(wp).w_llist_ref;
 
     !ll.is_null() && ll_ref.is_null()
 }

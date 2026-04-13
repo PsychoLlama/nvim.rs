@@ -4,6 +4,12 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_const<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+
 // =============================================================================
 // Submodules
 // =============================================================================
@@ -1979,7 +1985,6 @@ extern "C" {
     fn nvim_qf_get_bufnr(qi: QfInfoHandle) -> c_int;
     fn nvim_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int);
     fn nvim_win_is_qf_win(win: WinHandle) -> bool;
-    fn nvim_win_get_llist_ref(win: WinHandle) -> QfInfoHandle;
 
     // Phase 10 (Pass 10): Window iteration primitives for is_qf_win/find_win/find_buf
     fn nvim_get_firstwin() -> *mut c_void;
@@ -3243,7 +3248,7 @@ unsafe fn is_qf_win_for_stack(win: *const c_void, qi: QfInfoHandle) -> bool {
     if !nvim_win_is_qf_win(win) {
         return false;
     }
-    let llist_ref = nvim_win_get_llist_ref(win);
+    let llist_ref = win_ref_const(win).w_llist_ref;
     if nvim_qf_is_qf_stack(qi) {
         llist_ref.is_null()
     } else {
@@ -3400,7 +3405,7 @@ pub unsafe extern "C" fn rs_win_get_llist_ref(win: WinHandle) -> QfInfoHandle {
     if win.is_null() {
         return std::ptr::null_mut();
     }
-    nvim_win_get_llist_ref(win)
+    win_ref_const(win).w_llist_ref
 }
 
 // =============================================================================

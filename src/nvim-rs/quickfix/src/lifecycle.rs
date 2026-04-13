@@ -23,6 +23,16 @@ use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // =============================================================================
 // Constants (mirror C defines)
 // =============================================================================
@@ -82,10 +92,6 @@ extern "C" {
     fn nvim_close_buffer_wipe(buf: *mut c_void);
 
     // --- Window / location list accessors ---
-    /// Set wp->w_llist = NULL and return old value.
-    fn nvim_win_take_llist(wp: *mut c_void) -> *mut c_void;
-    /// Set wp->w_llist_ref = NULL and return old value.
-    fn nvim_win_take_llist_ref(wp: *mut c_void) -> *mut c_void;
     fn nvim_get_ql_info() -> *mut c_void;
     fn nvim_set_ql_info(qi: *mut c_void);
     fn nvim_get_p_chi() -> c_int;
@@ -99,7 +105,6 @@ extern "C" {
     fn nvim_qf_set_new_lists(qi: *mut c_void, n: c_int);
     fn nvim_qf_incr_refcount(qi: *mut c_void);
     fn nvim_win_get_p_lhi(wp: *const c_void) -> c_int;
-    fn nvim_win_get_llist_ref(wp: *const c_void) -> *mut c_void;
     fn nvim_qf_is_ll_window(wp: *const c_void) -> bool;
     fn nvim_qf_win_get_llist(wp: *const c_void) -> *mut c_void;
     fn nvim_qf_win_set_loclist(wp: *mut c_void, qi: *mut c_void);
@@ -128,8 +133,6 @@ extern "C" {
     fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
     /// Return `win->w_buffer->b_fnum`.
     fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
-    /// Set `wp->w_llist_ref = qi`.
-    fn nvim_win_set_llist_ref(wp: *mut c_void, qi: *mut c_void);
     /// Return `tv_list_len(list)` -- 0 if list is NULL.
     fn nvim_tv_list_len(list: *const c_void) -> c_int;
     /// Emit "cannot have both a list and a 'what' argument" error.
@@ -363,13 +366,14 @@ pub unsafe extern "C" fn rs_qf_free_all(wp: *mut c_void) {
         }
     } else {
         // Location list: atomically take w_llist and w_llist_ref, then free.
-        // nvim_win_take_llist sets wp->w_llist = NULL and returns the old value,
-        // mirroring what ll_free_all(&wp->w_llist) does (sets *pqi = NULL first).
-        let mut llist = nvim_win_take_llist(wp);
+        // Read and clear w_llist (mirrors what ll_free_all(&wp->w_llist) does).
+        let mut llist = win_ref_raw(wp).w_llist;
+        win_mut_raw(wp).w_llist = std::ptr::null_mut();
         if !llist.is_null() {
             rs_ll_free_all(std::ptr::addr_of_mut!(llist));
         }
-        let mut llist_ref = nvim_win_take_llist_ref(wp);
+        let mut llist_ref = win_ref_raw(wp).w_llist_ref;
+        win_mut_raw(wp).w_llist_ref = std::ptr::null_mut();
         if !llist_ref.is_null() {
             rs_ll_free_all(std::ptr::addr_of_mut!(llist_ref));
         }
@@ -442,11 +446,12 @@ pub unsafe extern "C" fn rs_qf_init_stack() {
 pub unsafe extern "C" fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> *mut c_void {
     if nvim_qf_is_ll_window(wp) {
         // For a location list window, use the referenced location list.
-        return nvim_win_get_llist_ref(wp);
+        return win_ref_raw(wp).w_llist_ref;
     }
 
     // For a non-location list window, w_llist_ref should not point anywhere.
-    let mut llist_ref = nvim_win_take_llist_ref(wp);
+    let mut llist_ref = win_ref_raw(wp).w_llist_ref;
+    win_mut_raw(wp).w_llist_ref = std::ptr::null_mut();
     if !llist_ref.is_null() {
         rs_ll_free_all(std::ptr::addr_of_mut!(llist_ref));
     }
@@ -580,13 +585,14 @@ pub unsafe extern "C" fn rs_qf_free_stack(wp: *mut c_void, qi: *mut c_void) {
         nvim_qf_set_bufnr(new_ll, nvim_qf_win_buf_fnum(qfwin));
 
         // Free the old llist_ref in the location list window.
-        let mut old_ref = nvim_win_take_llist_ref(qfwin);
+        let mut old_ref = win_ref_raw(qfwin).w_llist_ref;
+        win_mut_raw(qfwin).w_llist_ref = std::ptr::null_mut();
         if !old_ref.is_null() {
             rs_ll_free_all(std::ptr::addr_of_mut!(old_ref));
         }
 
         // Assign new_ll to the location list window as its llist_ref.
-        nvim_win_set_llist_ref(qfwin, new_ll);
+        win_mut_raw(qfwin).w_llist_ref = new_ll;
 
         // If the source window is not the location list window itself, also
         // update its w_llist.

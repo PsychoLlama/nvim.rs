@@ -14,6 +14,12 @@ use crate::ffi_types::QfListPtr;
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // =============================================================================
 // Type aliases
 // =============================================================================
@@ -189,7 +195,6 @@ extern "C" {
 
     // copy_loclist_stack helpers
     fn nvim_win_get_llist_or_ref(from_win: *const c_void) -> *mut c_void;
-    fn nvim_win_set_llist(to_win: *mut c_void, qi: *mut c_void);
     // nvim_win_get_p_lhi already declared in lifecycle.rs (returns c_int)
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
     fn nvim_qf_set_listcount(qi: *mut c_void, n: c_int);
@@ -933,7 +938,7 @@ pub unsafe extern "C" fn rs_copy_loclist_stack(from: *mut c_void, to: *mut c_voi
     let new_qi = rs_qf_alloc_stack(QFLT_LOCATION, lhi);
 
     // Set to->w_llist to the new stack.
-    nvim_win_set_llist(to, new_qi);
+    win_mut_raw(to).w_llist = new_qi;
 
     // new_qi->qf_maxcount is set by alloc; copy lhi from it.
     let maxcount = nvim_qf_get_maxcount(new_qi);

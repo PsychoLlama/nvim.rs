@@ -16,5 +16,6 @@ workspace = true
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 libc = "0.2"
 nvim-eval = { path = "../eval" }
+nvim-window = { path = "../window" }
 
 [dev-dependencies]
