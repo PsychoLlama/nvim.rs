@@ -67,21 +67,16 @@ char nvim_win_get_fdm_char(win_T *wp, int idx) { return wp->w_p_fdm[idx]; }
 int nvim_win_buf_has_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL; }
 int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
 const char *nvim_win_get_w_p_fdc(win_T *wp) { return wp->w_p_fdc; }
-char *nvim_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
-char *nvim_win_get_p_cocu(win_T *wp) { return wp->w_p_cocu; }
 linenr_T nvim_win_buf_line_count(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
-char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
 int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
-int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
 ScreenGrid *nvim_win_get_w_grid_alloc(win_T *wp) { return wp ? &wp->w_grid_alloc : NULL; }
 int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
-void nvim_win_set_p_wfb(win_T *wp, int val) { wp->w_p_wfb = val != 0; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
 typedef enum {
@@ -657,46 +652,10 @@ int nvim_spelldump_setup(void)
   return buf_is_empty(curbuf) ? 1 : 0;
 }
 
-/// Delete the last line of curbuf.
 void nvim_curbuf_ml_delete_last(void) { ml_delete(curbuf->b_ml.ml_line_count); }
-
-/// Redraw the current window.
 void nvim_redraw_later_not_valid(void) { redraw_later(curwin, UPD_NOT_VALID); }
-
-// =============================================================================
-// C accessors for ui.c Rust migration (Phase 1: ui_refresh / ui_grid_resize)
-// Note: nvim_win_get_w_width, nvim_win_get_w_height, nvim_win_get_config_width/height,
-//       nvim_win_set_config_width/height, nvim_get_first_tabpage, nvim_tabpage_get_next,
-//       nvim_tabpage_set_ch_used, nvim_get_exiting are already defined as Rust drop-ins
-//       in the nvim-window crate (window/src/win_struct.rs, globals.rs, tabpage_struct.rs).
-// =============================================================================
-
-/// Call win_set_inner_size on the window
 void nvim_win_set_inner_size(win_T *wp, bool valid_cursor) { win_set_inner_size(wp, valid_cursor); }
-
-// =============================================================================
-// C accessors for winfloat Phase 4: win_set_minimal_style
-// =============================================================================
-// nvim_win_set_p_list already in plines.c
 int nvim_win_get_p_fcs_eob(win_T *wp) { return wp ? (unsigned char)wp->w_p_fcs_chars.eob : 0; }
-char *nvim_win_get_p_fcs_ptr(win_T *wp) { return wp ? wp->w_p_fcs : NULL; }
-void nvim_win_set_p_fcs(win_T *wp, char *val) { if (wp) { wp->w_p_fcs = val; } }
-char *nvim_win_get_p_winhl_ptr(win_T *wp) { return wp ? wp->w_p_winhl : NULL; }
-void nvim_win_set_p_winhl(win_T *wp, char *val) { if (wp) { wp->w_p_winhl = val; } }
-char *nvim_win_get_p_scl_ptr(win_T *wp) { return wp ? wp->w_p_scl : NULL; }
-void nvim_win_set_p_scl(win_T *wp, char *val) { if (wp) { wp->w_p_scl = val; } }
-char *nvim_win_get_p_fdc_ptr(win_T *wp) { return wp ? wp->w_p_fdc : NULL; }
-void nvim_win_set_p_fdc(win_T *wp, char *val) { if (wp) { wp->w_p_fdc = val; } }
-char *nvim_win_get_p_cc_ptr(win_T *wp) { return wp ? wp->w_p_cc : NULL; }
-void nvim_win_set_p_cc(win_T *wp, char *val) { if (wp) { wp->w_p_cc = val; } }
-char *nvim_win_get_p_stc_ptr(win_T *wp) { return wp ? wp->w_p_stc : NULL; }
-void nvim_win_set_p_stc(win_T *wp, char *val) { if (wp) { wp->w_p_stc = val; } }
-char *nvim_win_get_p_stl_ptr(win_T *wp) { return wp ? wp->w_p_stl : NULL; }
-void nvim_win_set_p_stl(win_T *wp, char *val) { if (wp) { wp->w_p_stl = val; } }
-
-// =============================================================================
-// C accessors for winfloat Phase 5: win_config_float
-// =============================================================================
 
 // WinConfig field accessors (taking WinConfig * directly)
 int nvim_wconfig_get_width(WinConfig *cfg) { return cfg ? cfg->width : 0; }

@@ -192,6 +192,19 @@ _Static_assert(offsetof(win_T, w_p_cole) == 1104, "w_p_cole offset mismatch");
 _Static_assert(offsetof(win_T, w_p_nuw) == 952, "w_p_nuw offset mismatch");
 _Static_assert(offsetof(win_T, w_p_winbl) == 1168, "w_p_winbl offset mismatch");
 _Static_assert(offsetof(win_T, w_p_wrap_flags) == 1176, "w_p_wrap_flags offset mismatch");
+// String option pointer fields (in w_onebuf_opt)
+_Static_assert(offsetof(win_T, w_p_fdc) == 808, "w_p_fdc offset mismatch");
+_Static_assert(offsetof(win_T, w_p_eiw) == 816, "w_p_eiw offset mismatch");
+_Static_assert(offsetof(win_T, w_p_cc) == 1032, "w_p_cc offset mismatch");
+_Static_assert(offsetof(win_T, w_p_sbr) == 1040, "w_p_sbr offset mismatch");
+_Static_assert(offsetof(win_T, w_p_stc) == 1048, "w_p_stc offset mismatch");
+_Static_assert(offsetof(win_T, w_p_stl) == 1056, "w_p_stl offset mismatch");
+_Static_assert(offsetof(win_T, w_p_wbr) == 1064, "w_p_wbr offset mismatch");
+_Static_assert(offsetof(win_T, w_p_cocu) == 1096, "w_p_cocu offset mismatch");
+_Static_assert(offsetof(win_T, w_p_scl) == 1120, "w_p_scl offset mismatch");
+_Static_assert(offsetof(win_T, w_p_winhl) == 1144, "w_p_winhl offset mismatch");
+_Static_assert(offsetof(win_T, w_p_lcs) == 1152, "w_p_lcs offset mismatch");
+_Static_assert(offsetof(win_T, w_p_fcs) == 1160, "w_p_fcs offset mismatch");
 
 // Struct type sizes
 _Static_assert(sizeof(pos_save_T) == 32, "pos_save_T size mismatch");

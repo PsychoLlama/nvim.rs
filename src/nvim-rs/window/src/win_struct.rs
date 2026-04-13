@@ -539,6 +539,36 @@ const unsafe fn write_optint_at(ws: &mut WinStruct, abs_offset: usize, val: OptI
     ptr.write_unaligned(val);
 }
 
+/// Read a `*mut c_char` pointer at `abs_offset` bytes from the start of a WinStruct.
+///
+/// # Safety
+/// The caller must ensure `abs_offset` is a valid field offset for the
+/// `win_T` struct, as validated by `_Static_assert` in window_struct_check.c.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+const unsafe fn read_cstr_ptr_at(ws: &WinStruct, abs_offset: usize) -> *mut c_char {
+    let ptr = std::ptr::addr_of!(*ws)
+        .cast::<u8>()
+        .add(abs_offset)
+        .cast::<*mut c_char>();
+    ptr.read_unaligned()
+}
+
+/// Write a `*mut c_char` pointer at `abs_offset` bytes from the start of a WinStruct.
+///
+/// # Safety
+/// The caller must ensure `abs_offset` is a valid field offset for the
+/// `win_T` struct, as validated by `_Static_assert` in window_struct_check.c.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+const unsafe fn write_cstr_ptr_at(ws: &mut WinStruct, abs_offset: usize, val: *mut c_char) {
+    let ptr = std::ptr::addr_of_mut!(*ws)
+        .cast::<u8>()
+        .add(abs_offset)
+        .cast::<*mut c_char>();
+    ptr.write_unaligned(val);
+}
+
 impl WinStruct {
     /// `w_p_pvw` (preview window) - at absolute offset 972
     #[must_use]
@@ -3163,4 +3193,75 @@ pub unsafe extern "C" fn win_get_w_height_outer(wp: WinHandle) -> c_int {
 #[must_use]
 pub unsafe extern "C" fn win_get_w_width_outer(wp: WinHandle) -> c_int {
     win_ref(wp).w_width_outer
+}
+
+// =============================================================================
+// String option field accessors (in w_onebuf_opt).
+// Offsets validated in window_struct_check.c via _Static_assert.
+// =============================================================================
+
+macro_rules! win_stropt_getter {
+    ($export:literal, $fn_name:ident, $offset:literal) => {
+        #[export_name = $export]
+        #[must_use]
+        pub unsafe extern "C" fn $fn_name(wp: WinHandle) -> *mut c_char {
+            if wp.is_null() {
+                return std::ptr::null_mut();
+            }
+            read_cstr_ptr_at(win_ref(wp), $offset)
+        }
+    };
+}
+
+macro_rules! win_stropt_setter {
+    ($export:literal, $fn_name:ident, $offset:literal) => {
+        #[export_name = $export]
+        pub unsafe extern "C" fn $fn_name(wp: WinHandle, val: *mut c_char) {
+            if wp.is_null() {
+                return;
+            }
+            write_cstr_ptr_at(win_mut(wp), $offset, val);
+        }
+    };
+}
+
+win_stropt_getter!("nvim_win_get_p_fdc_ptr", win_get_p_fdc_ptr, 808);
+win_stropt_setter!("nvim_win_set_p_fdc", win_set_p_fdc, 808);
+win_stropt_getter!("nvim_win_get_p_cc_ptr", win_get_p_cc_ptr, 1032);
+win_stropt_setter!("nvim_win_set_p_cc", win_set_p_cc, 1032);
+win_stropt_getter!("nvim_win_get_p_sbr", win_get_p_sbr, 1040);
+win_stropt_getter!("nvim_win_get_p_stc", win_get_p_stc, 1048);
+win_stropt_getter!("nvim_win_get_p_stc_ptr", win_get_p_stc_ptr, 1048);
+win_stropt_setter!("nvim_win_set_p_stc", win_set_p_stc, 1048);
+win_stropt_getter!("nvim_win_get_p_stl_ptr", win_get_p_stl_ptr, 1056);
+win_stropt_setter!("nvim_win_set_p_stl", win_set_p_stl, 1056);
+// nvim_win_get_p_wbr is already defined in option_shim.c - no duplicate here
+win_stropt_getter!("nvim_win_get_p_cocu", win_get_p_cocu, 1096);
+win_stropt_getter!("nvim_win_get_p_scl_ptr", win_get_p_scl_ptr, 1120);
+win_stropt_setter!("nvim_win_set_p_scl", win_set_p_scl, 1120);
+win_stropt_getter!("nvim_win_get_p_winhl_ptr", win_get_p_winhl_ptr, 1144);
+win_stropt_setter!("nvim_win_set_p_winhl", win_set_p_winhl, 1144);
+win_stropt_getter!("nvim_win_get_p_fcs_ptr", win_get_p_fcs_ptr, 1160);
+win_stropt_setter!("nvim_win_set_p_fcs", win_set_p_fcs, 1160);
+
+/// Returns `wp->w_buffer != NULL` as c_int.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_has_buffer"]
+#[must_use]
+pub unsafe extern "C" fn win_has_buffer(wp: WinHandle) -> c_int {
+    c_int::from(!win_ref(wp).w_buffer.is_null())
+}
+
+/// Sets `wp->w_p_wfb`. Does nothing if wp is null.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` or null.
+#[export_name = "nvim_win_set_p_wfb"]
+pub unsafe extern "C" fn win_set_p_wfb(wp: WinHandle, val: c_int) {
+    if wp.is_null() {
+        return;
+    }
+    write_int_at(win_mut(wp), 960, val);
 }
