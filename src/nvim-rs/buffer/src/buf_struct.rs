@@ -15,7 +15,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 /// Neovim `linenr_T` (`int32_t`)
 pub type LineNr = i32;
@@ -313,8 +313,12 @@ pub struct BufStruct {
     // offset 10088: int b_p_ai_nopaste
     pub b_p_ai_nopaste: c_int,
 
-    // offset 10092..10107: other bool options (16 bytes, opaque)
-    _pad20: [u8; 16],
+    // offset 10092..10096: alignment gap (4 bytes)
+    _pad20_gap: [u8; 4],
+    // offset 10096: char* b_p_bkc (BackupCopy)
+    pub b_p_bkc: *const c_char,
+    // offset 10104: uint b_bkc_flags
+    pub b_bkc_flags: c_uint,
     // offset 10108: int b_p_ci  (CopyIndent)
     pub b_p_ci: c_int,
 

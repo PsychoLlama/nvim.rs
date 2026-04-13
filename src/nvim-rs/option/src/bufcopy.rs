@@ -113,7 +113,6 @@ extern "C" {
     fn nvim_buf_set_b_s_syn_isk_empty(buf: *mut core::ffi::c_void);
 
     // Global-local setters with flag side-effects (cannot use generic helper):
-    fn nvim_buf_set_b_p_bkc_empty(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_tc_empty(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_cot_empty(buf: *mut core::ffi::c_void);
 
@@ -439,7 +438,11 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     bref_raw_mut(buf).b_p_ac = -1; // global-local: use global value
     bref_raw_mut(buf).b_p_ar = -1; // global-local: use global value
     bref_raw_mut(buf).b_p_ul = -123_456; // NO_LOCAL_UNDOLEVEL sentinel
-    nvim_buf_set_b_p_bkc_empty(buf);
+    {
+        let bp = bref_raw_mut(buf);
+        bp.b_p_bkc = empty_string_option.as_ptr();
+        bp.b_bkc_flags = 0;
+    } // global-local
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_GREPFORMAT));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_GREPPRG));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_MAKEPRG));

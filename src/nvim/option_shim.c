@@ -104,7 +104,6 @@ const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
 const char *nvim_optset_get_newval_str(const void *args) { return ((const optset_T *)args)->os_newval.string.data; }
 unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
-void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; }
 const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }

@@ -8,6 +8,8 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+use nvim_buffer::buf_struct::BufStruct;
+
 use super::{callback_ok, CallbackResult};
 
 // Result type matching OptStringsFlagsResult from optionstr crate (must match C layout)
@@ -59,7 +61,6 @@ extern "C" {
     fn redraw_all_later(typ: c_int);
 
     // Phase 2 accessors
-    fn nvim_buf_set_bkc_flags(buf: crate::BufHandle, val: c_uint);
     fn nvim_buf_get_p_bkc(buf: crate::BufHandle) -> *const c_char;
     static mut p_bkc: *mut c_char;
     static mut bkc_flags: c_uint;
@@ -381,12 +382,12 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
 
     // When using :set (neither LOCAL nor GLOBAL), clear the local flags
     if opt_flags & OPT_LOCAL == 0 && opt_flags & OPT_GLOBAL == 0 {
-        nvim_buf_set_bkc_flags(buf, 0);
+        unsafe { (*buf.cast::<BufStruct>()).b_bkc_flags = 0 };
     }
 
     if opt_flags & OPT_LOCAL != 0 && (bkc.is_null() || *bkc == 0) {
         // make the local value empty: use the global value
-        nvim_buf_set_bkc_flags(buf, 0);
+        unsafe { (*buf.cast::<BufStruct>()).b_bkc_flags = 0 };
     } else {
         // Parse the flags value
         let result = rs_opt_strings_flags(bkc, bkc_values, true);
@@ -404,7 +405,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
             let old_result = rs_opt_strings_flags(oldval, bkc_values, true);
             let restored = old_result.flags;
             if opt_flags & OPT_LOCAL != 0 {
-                nvim_buf_set_bkc_flags(buf, restored);
+                unsafe { (*buf.cast::<BufStruct>()).b_bkc_flags = restored };
             } else {
                 bkc_flags = restored;
             }
@@ -412,7 +413,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
         }
 
         if opt_flags & OPT_LOCAL != 0 {
-            nvim_buf_set_bkc_flags(buf, flags);
+            unsafe { (*buf.cast::<BufStruct>()).b_bkc_flags = flags };
         } else {
             bkc_flags = flags;
         }
