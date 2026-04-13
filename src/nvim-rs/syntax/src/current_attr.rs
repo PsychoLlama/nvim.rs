@@ -10,6 +10,7 @@ use crate::check_ends::{check_keepend, check_state_ends};
 use crate::offset::{limit_pos_zero, syn_add_end_off, syn_add_start_off, RegMatch};
 use crate::region::find_endpos;
 use crate::state::Position;
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     ExtMatchHandle, IdListHandle, StateItemHandle, HL_CONCEAL, HL_DISPLAY, HL_ONELINE,
     HL_SKIPEMPTY, HL_SKIPNL, HL_SKIPWHITE, HL_SYNC_HERE, HL_SYNC_THERE, HL_TRANSP, KEYWORD_IDX,
@@ -53,7 +54,6 @@ extern "C" {
 
     // Synblock queries
     fn nvim_syn_has_containedin() -> c_int;
-    fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_syn_has_keywords() -> c_int;
     fn nvim_syn_has_keywords_ic() -> c_int;
 
@@ -61,8 +61,6 @@ extern "C" {
 
     // Spell
     fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
-    fn nvim_synblock_get_spell_cluster_id(block: crate::types::SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_nospell_cluster_id(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_spell() -> c_int;
     fn nvim_syn_in_id_list_spell(sip: StateItemHandle, list: IdListHandle, id: c_int) -> c_int;
 
@@ -308,7 +306,7 @@ pub unsafe fn syn_current_attr(
             }
 
             // 3. Check for patterns (only if no keyword found).
-            if syn_id == 0 && nvim_synblock_get_pattern_count(nvim_syn_get_syn_block()) > 0 {
+            if syn_id == 0 && synblock_ref(nvim_syn_get_syn_block()).b_syn_patterns.ga_len > 0 {
                 let current_col = crate::statics::CURRENT_COL;
                 let next_match_idx = crate::statics::NEXT_MATCH_IDX;
                 let next_match_col = crate::statics::NEXT_MATCH_COL;
@@ -323,7 +321,7 @@ pub unsafe fn syn_current_attr(
                     let si_idx = if cur_si_valid { state_len - 1 } else { -1 };
 
                     let block = nvim_syn_get_syn_block();
-                    let pat_len = nvim_synblock_get_pattern_count(block);
+                    let pat_len = synblock_ref(block).b_syn_patterns.ga_len;
                     for idx in (0..pat_len).rev() {
                         let pat_p = crate::statics::syn_item_at(block, idx);
                         if pat_p.is_null() {
@@ -628,7 +626,7 @@ pub unsafe fn syn_current_attr(
         // Default: Only do spelling when there is no @Spell cluster or when
         // ":syn spell toplevel" was used.
         let syn_spell = nvim_syn_get_syn_spell();
-        let spell_cluster = nvim_synblock_get_spell_cluster_id(nvim_syn_get_syn_block());
+        let spell_cluster = synblock_ref(nvim_syn_get_syn_block()).b_spell_cluster_id;
         *can_spell = if syn_spell == SYNSPL_DEFAULT {
             (spell_cluster == 0) as c_int
         } else {
@@ -656,8 +654,8 @@ pub unsafe fn syn_current_attr(
 /// Compute can_spell based on spell clusters.
 unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
     let block = nvim_syn_get_syn_block();
-    let spell_cluster = nvim_synblock_get_spell_cluster_id(block);
-    let nospell_cluster = nvim_synblock_get_nospell_cluster_id(block);
+    let spell_cluster = unsafe { synblock_ref(block).b_spell_cluster_id };
+    let nospell_cluster = unsafe { synblock_ref(block).b_nospell_cluster_id };
     let syn_spell = nvim_syn_get_syn_spell();
     let current_trans_id = if sip.is_null() {
         0

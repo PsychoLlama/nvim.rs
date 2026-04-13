@@ -8,6 +8,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{
     IdListHandle, KeyEntryHandle, StateItemHandle, SynBlockHandle, WinHandle, HL_CONTAINED,
     MAXKEYWLEN,
@@ -26,12 +27,6 @@ extern "C" {
     // Keyword table accessors
     fn nvim_syn_has_keywords() -> c_int;
     fn nvim_syn_has_keywords_ic() -> c_int;
-    fn nvim_synblock_has_keywords(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_has_keywords_ic(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_keywtab_count(block: SynBlockHandle) -> usize;
-    fn nvim_synblock_keywtab_ic_count(block: SynBlockHandle) -> usize;
-    fn nvim_synblock_get_keywtab(block: SynBlockHandle) -> *mut c_void;
-    fn nvim_synblock_get_keywtab_ic(block: SynBlockHandle) -> *mut c_void;
 
     // Window-level keyword accessors
     fn nvim_win_get_keywtab_used(win: WinHandle) -> c_int;
@@ -223,12 +218,13 @@ pub unsafe extern "C" fn rs_syn_keyword_find(
     if block.is_null() {
         return KeyEntryHandle::null();
     }
-    let ht = if use_ic != 0 {
-        nvim_synblock_get_keywtab_ic(block)
+    let b = synblock_mut(block);
+    let ht: *mut c_void = if use_ic != 0 {
+        &mut b.b_keywtab_ic as *mut _ as *mut c_void
     } else {
-        nvim_synblock_get_keywtab(block)
+        &mut b.b_keywtab as *mut _ as *mut c_void
     };
-    if ht.is_null() || nvim_ht_get_used(ht as *const c_void) == 0 {
+    if nvim_ht_get_used(ht as *const c_void) == 0 {
         return KeyEntryHandle::null();
     }
     nvim_ht_find_ke(ht, keyword)
@@ -440,7 +436,7 @@ pub fn synblock_has_keywords(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_keywords(block) != 0 }
+    unsafe { synblock_ref(block).b_keywtab.ht_used > 0 }
 }
 
 /// Check if a synblock has any case-insensitive keywords.
@@ -449,7 +445,7 @@ pub fn synblock_has_keywords_ic(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_keywords_ic(block) != 0 }
+    unsafe { synblock_ref(block).b_keywtab_ic.ht_used > 0 }
 }
 
 /// Get the count of case-sensitive keywords in a synblock.
@@ -458,7 +454,7 @@ pub fn synblock_keyword_count(block: SynBlockHandle) -> usize {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_keywtab_count(block) }
+    unsafe { synblock_ref(block).b_keywtab.ht_used }
 }
 
 /// Get the count of case-insensitive keywords in a synblock.
@@ -467,7 +463,7 @@ pub fn synblock_keyword_ic_count(block: SynBlockHandle) -> usize {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_keywtab_ic_count(block) }
+    unsafe { synblock_ref(block).b_keywtab_ic.ht_used }
 }
 
 /// Get the case-sensitive keyword hash table for a synblock.
@@ -477,7 +473,7 @@ pub fn synblock_keywtab(block: SynBlockHandle) -> *mut c_void {
     if block.is_null() {
         return std::ptr::null_mut();
     }
-    unsafe { nvim_synblock_get_keywtab(block) }
+    unsafe { &mut synblock_mut(block).b_keywtab as *mut _ as *mut c_void }
 }
 
 /// Get the case-insensitive keyword hash table for a synblock.
@@ -487,7 +483,7 @@ pub fn synblock_keywtab_ic(block: SynBlockHandle) -> *mut c_void {
     if block.is_null() {
         return std::ptr::null_mut();
     }
-    unsafe { nvim_synblock_get_keywtab_ic(block) }
+    unsafe { &mut synblock_mut(block).b_keywtab_ic as *mut _ as *mut c_void }
 }
 
 // =============================================================================

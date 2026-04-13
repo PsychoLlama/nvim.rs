@@ -6,6 +6,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     SynPatHandle, HL_CONCEAL, HL_CONCEALENDS, HL_CONTAINED, HL_DISPLAY, HL_EXCLUDENL, HL_EXTEND,
     HL_FOLD, HL_KEEPEND, HL_ONELINE, HL_SKIPEMPTY, HL_SKIPNL, HL_SKIPWHITE, HL_SYNC_HERE,
@@ -50,9 +51,8 @@ extern "C" {
     fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
     fn highlight_num_groups() -> c_int;
     fn highlight_group_name(idx: c_int) -> *mut c_char;
-    // Synblock accessors (synblock_T is not repr(C) yet)
+    // Synblock accessors
     fn nvim_syn_get_curwin_synblock() -> crate::types::SynBlockHandle;
-    fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: crate::types::SynBlockHandle, idx: c_int) -> SynPatHandle;
 
     // Regexp
@@ -94,7 +94,7 @@ const FAIL: c_int = 0;
 /// Accesses C global state (curwin).
 unsafe fn find_sync_pattern_idx(syn_id: c_int) -> c_int {
     let block = nvim_syn_get_curwin_synblock();
-    let count = nvim_synblock_get_pattern_count(block);
+    let count = synblock_ref(block).b_syn_patterns.ga_len;
     let mut i = count - 1;
     while i >= 0 {
         let pat = nvim_synblock_get_pattern(block, i);

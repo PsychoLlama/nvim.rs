@@ -5,6 +5,8 @@
 
 use std::ffi::c_int;
 
+use crate::synblock_struct::synblock_ref;
+
 // =============================================================================
 // Fold level tracking
 // =============================================================================
@@ -284,10 +286,6 @@ use crate::types::{SynBlockHandle, WinHandle};
 
 extern "C" {
     fn nvim_win_get_synblock(wp: WinHandle) -> SynBlockHandle;
-    fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_syn_error(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
     fn nvim_win_get_foldnestmax(wp: WinHandle) -> c_int;
 
     #[link_name = "syntax_start"]
@@ -312,16 +310,14 @@ unsafe fn syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
     let block = nvim_win_get_synblock(wp);
 
     // Return quickly when there are no fold items at all.
-    if nvim_synblock_get_folditems(block) != 0
-        && nvim_synblock_get_syn_error(block) == 0
-        && nvim_synblock_get_syn_slow(block) == 0
-    {
+    let b = synblock_ref(block);
+    if b.b_syn_folditems != 0 && !b.b_syn_error && !b.b_syn_slow {
         rs_syntax_start(wp, lnum);
 
         // Start with the fold level at the start of the line.
         level = crate::state_ops::rs_syn_count_fold_items();
 
-        if nvim_synblock_get_syn_foldlevel(block) == SYNFLD_MINIMUM {
+        if b.b_syn_foldlevel == SYNFLD_MINIMUM {
             // Find the lowest fold level that is followed by a higher one.
             let mut cur_level = level;
             let mut low_level = cur_level;

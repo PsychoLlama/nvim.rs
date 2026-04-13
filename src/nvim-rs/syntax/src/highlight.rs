@@ -7,6 +7,7 @@
 
 use std::ffi::c_int;
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     KeyEntryHandle, StateItemHandle, SynBlockHandle, SynPatHandle, WinHandle, HL_CONCEAL,
     HL_CONCEALENDS, HL_EXTEND, HL_KEEPEND, HL_MATCH, HL_MATCHCONT, HL_ONELINE,
@@ -21,20 +22,14 @@ extern "C" {
     #[link_name = "syn_id2attr"]
     fn c_syn_id2attr(syn_id: c_int) -> c_int;
 
-    // Synblock conceal settings
-    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-
     // Concealed position check
     fn syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
 
     // Phase 32.4: Line highlighting
-    fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
     fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
     #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut std::ffi::c_char;
     // get_syntax_attr dependencies
-    fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
     fn nvim_syn_get_buf() -> crate::types::BufHandle;
 
@@ -72,7 +67,7 @@ pub fn synblock_conceal(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_conceal(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_conceal != 0 }
 }
 
 /// Get the conceal setting for a synblock (same as above).
@@ -81,7 +76,7 @@ pub fn synblock_conceal_setting(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_conceal(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_conceal != 0 }
 }
 
 // =============================================================================
@@ -420,15 +415,15 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
     let buf = nvim_syn_get_buf();
 
     // Default spell checking value
-    let syn_spell = nvim_synblock_get_syn_spell(block);
+    let syn_spell = unsafe { synblock_ref(block).b_syn_spell };
     let can_spell = if syn_spell == SYNSPL_DEFAULT {
-        nvim_synblock_get_spell_cluster_id(block) == 0
+        unsafe { synblock_ref(block).b_spell_cluster_id == 0 }
     } else {
         syn_spell == SYNSPL_TOP
     };
 
     // Check for out of memory situation
-    if nvim_synblock_has_sst_array(block) == 0 {
+    if unsafe { synblock_ref(block).b_sst_array.is_null() } {
         return SyntaxAttrResult { attr: 0, can_spell };
     }
 
@@ -518,7 +513,7 @@ pub fn synblock_syn_spell(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return syn_spell::DEFAULT;
     }
-    unsafe { nvim_synblock_get_syn_spell(block) }
+    unsafe { synblock_ref(block).b_syn_spell }
 }
 
 /// Get the synmaxcol setting from a buffer.

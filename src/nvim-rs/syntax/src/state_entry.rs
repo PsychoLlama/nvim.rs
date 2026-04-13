@@ -8,6 +8,7 @@
 
 use std::ffi::c_int;
 
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{IdListHandle, SynBlockHandle, SynStateHandle, SST_FIX_STATES};
 
 // =============================================================================
@@ -17,13 +18,6 @@ use crate::types::{IdListHandle, SynBlockHandle, SynStateHandle, SST_FIX_STATES}
 extern "C" {
     // Synblock accessors
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
-    fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
-    fn nvim_synblock_set_sst_first(block: SynBlockHandle, ptr: SynStateHandle);
-    fn nvim_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle;
-    fn nvim_synblock_set_sst_firstfree(block: SynBlockHandle, ptr: SynStateHandle);
-    fn nvim_synblock_get_sst_freecount(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_set_sst_freecount(block: SynBlockHandle, count: c_int);
-    fn nvim_synblock_set_sst_array(block: SynBlockHandle, ptr: SynStateHandle, len: c_int);
 
     // SynState navigation
     fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
@@ -52,7 +46,6 @@ extern "C" {
     // Array allocation/free
     fn nvim_syn_xcalloc_synstate_array(len: c_int) -> SynStateHandle;
     fn nvim_syn_free_sst_array(ptr: SynStateHandle);
-    fn nvim_synblock_get_sst_array_ptr(block: SynBlockHandle) -> SynStateHandle;
 }
 
 // =============================================================================
@@ -74,9 +67,9 @@ pub unsafe extern "C" fn rs_syn_stack_remove_entry(sp: SynStateHandle) {
     if block.is_null() {
         return;
     }
-    let first = nvim_synblock_get_sst_first(block);
+    let first = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     if first.0 == sp.0 {
-        nvim_synblock_set_sst_first(block, nvim_synstate_get_next(sp));
+        synblock_mut(block).b_sst_first = nvim_synstate_get_next(sp).0.cast();
     } else {
         let mut p = first;
         while !p.is_null() {
@@ -110,24 +103,27 @@ pub unsafe extern "C" fn rs_syn_stack_alloc_entry(
     }
 
     // If no free items, try to cleanup first
-    if nvim_synblock_get_sst_freecount(block) == 0 {
+    if synblock_ref(block).b_sst_freecount == 0 {
         rs_syn_stack_cleanup();
     }
 
     // Still no free items?
-    if nvim_synblock_get_sst_freecount(block) == 0 {
+    if synblock_ref(block).b_sst_freecount == 0 {
         return SynStateHandle::null();
     }
 
     // Take the first item from the free list
-    let p = nvim_synblock_get_sst_firstfree(block);
-    nvim_synblock_set_sst_firstfree(block, nvim_synstate_get_next(p));
-    nvim_synblock_set_sst_freecount(block, nvim_synblock_get_sst_freecount(block) - 1);
+    let p = SynStateHandle(synblock_ref(block).b_sst_firstfree.cast());
+    {
+        let b = synblock_mut(block);
+        b.b_sst_firstfree = nvim_synstate_get_next(p).0.cast();
+        b.b_sst_freecount -= 1;
+    }
 
     if after.is_null() {
         // Insert at the front of the used list
-        nvim_synstate_set_next(p, nvim_synblock_get_sst_first(block));
-        nvim_synblock_set_sst_first(block, p);
+        nvim_synstate_set_next(p, SynStateHandle(synblock_ref(block).b_sst_first.cast()));
+        synblock_mut(block).b_sst_first = p.0.cast();
     } else {
         // Insert after the given entry
         nvim_synstate_set_next(p, nvim_synstate_get_next(after));
@@ -211,7 +207,7 @@ pub unsafe extern "C" fn rs_syn_do_stack_realloc(len: c_int) {
 
     // Copy existing used entries from the linked list to the new array
     let mut used_count = 0;
-    let mut from = nvim_synblock_get_sst_first(block);
+    let mut from = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     while !from.is_null() && used_count < len {
         // Destination = sstp + used_count
         let to = nvim_syn_sst_array_at(sstp, used_count);
@@ -226,17 +222,22 @@ pub unsafe extern "C" fn rs_syn_do_stack_realloc(len: c_int) {
     if used_count > 0 {
         let last_used = nvim_syn_sst_array_at(sstp, used_count - 1);
         nvim_synstate_set_next(last_used, SynStateHandle::null());
-        nvim_synblock_set_sst_first(block, sstp);
-        let free_count = len - used_count;
-        nvim_synblock_set_sst_freecount(block, free_count);
+        {
+            let b = synblock_mut(block);
+            b.b_sst_first = sstp.0.cast();
+            b.b_sst_freecount = len - used_count;
+        }
     } else {
-        nvim_synblock_set_sst_first(block, SynStateHandle::null());
-        nvim_synblock_set_sst_freecount(block, len);
+        {
+            let b = synblock_mut(block);
+            b.b_sst_first = std::ptr::null_mut();
+            b.b_sst_freecount = len;
+        }
     }
 
     // Build the free list starting at sstp[used_count]
     let firstfree = nvim_syn_sst_array_at(sstp, used_count);
-    nvim_synblock_set_sst_firstfree(block, firstfree);
+    synblock_mut(block).b_sst_firstfree = firstfree.0.cast();
 
     // Chain free entries together
     for i in used_count..(len - 1) {
@@ -250,11 +251,15 @@ pub unsafe extern "C" fn rs_syn_do_stack_realloc(len: c_int) {
     }
 
     // Free the old array
-    let old_array = nvim_synblock_get_sst_array_ptr(block);
+    let old_array = SynStateHandle(synblock_ref(block).b_sst_array.cast());
     nvim_syn_free_sst_array(old_array);
 
     // Install the new array
-    nvim_synblock_set_sst_array(block, sstp, len);
+    {
+        let b = synblock_mut(block);
+        b.b_sst_array = sstp.0.cast();
+        b.b_sst_len = len;
+    }
 }
 
 // Helper: get pointer to synstate entry at index in array (used in do_stack_realloc)

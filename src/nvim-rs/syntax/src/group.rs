@@ -10,6 +10,7 @@
 
 use std::ffi::c_int;
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{SynBlockHandle, SynPatHandle, WinHandle};
 
 // =============================================================================
@@ -17,9 +18,6 @@ use crate::types::{SynBlockHandle, SynPatHandle, WinHandle};
 // =============================================================================
 
 extern "C" {
-
-    // Synblock group settings
-    fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
 
     // (syn_id2attr: use crate::highlight::syn_id2attr directly)
 
@@ -77,7 +75,7 @@ pub fn synblock_topgrp(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_topgrp(block) }
+    unsafe { synblock_ref(block).b_syn_topgrp }
 }
 
 // =============================================================================

@@ -8,6 +8,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{SynBlockHandle, WinHandle};
 
 // =============================================================================
@@ -28,26 +29,6 @@ extern "C" {
     fn nvim_syn_get_include_none() -> c_int;
 
     // Running inc_tag for :syntax include
-
-    // -------------------------------------------------------------------------
-    // Phase 18a: Synblock getters/setters for simple :syntax commands
-    // -------------------------------------------------------------------------
-
-    // Case mode
-    fn nvim_synblock_get_syn_ic(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_set_syn_ic(block: SynBlockHandle, ic: c_int);
-
-    // Spell mode
-    fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_set_syn_spell(block: SynBlockHandle, spell: c_int);
-
-    // Foldlevel mode
-    fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_set_syn_foldlevel(block: SynBlockHandle, foldlevel: c_int);
-
-    // Conceal mode
-    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_set_conceal(block: SynBlockHandle, conceal: c_int);
 
     // -------------------------------------------------------------------------
     // Message output functions
@@ -469,7 +450,7 @@ pub unsafe fn synblock_conceal_setting(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    nvim_synblock_get_conceal(block) != 0
+    synblock_ref(block).b_syn_conceal != 0
 }
 
 /// Get the case-insensitive setting for current window's synblock.
@@ -481,7 +462,7 @@ pub unsafe fn synblock_ic_setting(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    nvim_synblock_get_syn_ic(block) != 0
+    synblock_ref(block).b_syn_ic != 0
 }
 
 // =============================================================================
@@ -731,7 +712,7 @@ pub unsafe extern "C" fn rs_syn_cmd_case(
 
     // No argument: show current setting
     if *arg == 0 {
-        if nvim_synblock_get_syn_ic(block) != 0 {
+        if synblock_ref(block).b_syn_ic != 0 {
             msg_display(MSG_SYNTAX_CASE_IGNORE.as_ptr().cast());
         } else {
             msg_display(MSG_SYNTAX_CASE_MATCH.as_ptr().cast());
@@ -741,13 +722,13 @@ pub unsafe extern "C" fn rs_syn_cmd_case(
 
     // Check for "match"
     if strnicmp_exact(arg, b"match", 5, arg_len) {
-        nvim_synblock_set_syn_ic(block, 0);
+        synblock_mut(block).b_syn_ic = 0;
         return 0;
     }
 
     // Check for "ignore"
     if strnicmp_exact(arg, b"ignore", 6, arg_len) {
-        nvim_synblock_set_syn_ic(block, 1);
+        synblock_mut(block).b_syn_ic = 1;
         return 0;
     }
 
@@ -779,7 +760,7 @@ pub unsafe extern "C" fn rs_syn_cmd_conceal(
 
     // No argument: show current setting
     if *arg == 0 {
-        if nvim_synblock_get_conceal(block) != 0 {
+        if synblock_ref(block).b_syn_conceal != 0 {
             msg_display(MSG_SYNTAX_CONCEAL_ON.as_ptr().cast());
         } else {
             msg_display(MSG_SYNTAX_CONCEAL_OFF.as_ptr().cast());
@@ -789,13 +770,13 @@ pub unsafe extern "C" fn rs_syn_cmd_conceal(
 
     // Check for "on"
     if strnicmp_exact(arg, b"on", 2, arg_len) {
-        nvim_synblock_set_conceal(block, 1);
+        synblock_mut(block).b_syn_conceal = 1;
         return 0;
     }
 
     // Check for "off"
     if strnicmp_exact(arg, b"off", 3, arg_len) {
-        nvim_synblock_set_conceal(block, 0);
+        synblock_mut(block).b_syn_conceal = 0;
         return 0;
     }
 
@@ -827,7 +808,7 @@ pub unsafe extern "C" fn rs_syn_cmd_spell(
 
     // No argument: show current setting
     if *arg == 0 {
-        let spell = nvim_synblock_get_syn_spell(block);
+        let spell = synblock_ref(block).b_syn_spell;
         let msg = match spell {
             spell_mode::TOP => MSG_SYNTAX_SPELL_TOPLEVEL.as_ptr().cast(),
             spell_mode::NOTOP => MSG_SYNTAX_SPELL_NOTOPLEVEL.as_ptr().cast(),
@@ -839,19 +820,19 @@ pub unsafe extern "C" fn rs_syn_cmd_spell(
 
     // Check for "toplevel"
     if strnicmp_exact(arg, b"toplevel", 8, arg_len) {
-        nvim_synblock_set_syn_spell(block, spell_mode::TOP);
+        synblock_mut(block).b_syn_spell = spell_mode::TOP;
         return 0;
     }
 
     // Check for "notoplevel"
     if strnicmp_exact(arg, b"notoplevel", 10, arg_len) {
-        nvim_synblock_set_syn_spell(block, spell_mode::NOTOP);
+        synblock_mut(block).b_syn_spell = spell_mode::NOTOP;
         return 0;
     }
 
     // Check for "default"
     if strnicmp_exact(arg, b"default", 7, arg_len) {
-        nvim_synblock_set_syn_spell(block, spell_mode::DEFAULT);
+        synblock_mut(block).b_syn_spell = spell_mode::DEFAULT;
         return 0;
     }
 
@@ -883,7 +864,7 @@ pub unsafe extern "C" fn rs_syn_cmd_foldlevel(
 
     // No argument: show current setting
     if *arg == 0 {
-        let foldlevel = nvim_synblock_get_syn_foldlevel(block);
+        let foldlevel = synblock_ref(block).b_syn_foldlevel;
         let msg = match foldlevel {
             foldlevel_mode::START => MSG_SYNTAX_FOLDLEVEL_START.as_ptr().cast(),
             foldlevel_mode::MINIMUM => MSG_SYNTAX_FOLDLEVEL_MINIMUM.as_ptr().cast(),
@@ -895,7 +876,7 @@ pub unsafe extern "C" fn rs_syn_cmd_foldlevel(
 
     // Check for "start"
     if strnicmp_exact(arg, b"start", 5, arg_len) {
-        nvim_synblock_set_syn_foldlevel(block, foldlevel_mode::START);
+        synblock_mut(block).b_syn_foldlevel = foldlevel_mode::START;
         // Check for extra arguments after the keyword
         let after = skipwhite(arg_end);
         if *after != 0 {
@@ -907,7 +888,7 @@ pub unsafe extern "C" fn rs_syn_cmd_foldlevel(
 
     // Check for "minimum"
     if strnicmp_exact(arg, b"minimum", 7, arg_len) {
-        nvim_synblock_set_syn_foldlevel(block, foldlevel_mode::MINIMUM);
+        synblock_mut(block).b_syn_foldlevel = foldlevel_mode::MINIMUM;
         // Check for extra arguments after the keyword
         let after = skipwhite(arg_end);
         if *after != 0 {

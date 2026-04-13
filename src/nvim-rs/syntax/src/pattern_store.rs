@@ -8,6 +8,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::synblock_mut;
 use crate::types::{
     SynBlockHandle, SynPatHandle, HL_EXCLUDENL, HL_FOLD, HL_HAS_EOL, HL_SYNC_HERE, HL_SYNC_THERE,
     SF_MATCH, SPTYPE_END, SPTYPE_MATCH, SPTYPE_SKIP, SPTYPE_START,
@@ -30,7 +31,6 @@ extern "C" {
     fn nvim_syn_vim_regcomp_had_eol() -> c_int;
 
     // (synpat_T setters removed -- use direct repr(C) field access)
-    fn nvim_synblock_set_containedin(val: c_int);
     fn nvim_synblock_or_sync_flags(block: SynBlockHandle, flags: c_int);
     fn nvim_synblock_inc_folditems();
 
@@ -170,7 +170,7 @@ pub unsafe fn store_match_pattern(
         (*p).sp_next_list = next_list;
     }
     if !cont_in_list.is_null() {
-        nvim_synblock_set_containedin(1);
+        synblock_mut(nvim_syn_get_curwin_synblock()).b_syn_containedin = 1;
     }
 
     if flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
@@ -237,7 +237,7 @@ pub unsafe fn store_region_patterns(
                 (*p).sp_cont_list = cont_list;
                 (*p).sp_syn.cont_in_list = cont_in_list;
                 if !cont_in_list.is_null() {
-                    nvim_synblock_set_containedin(1);
+                    synblock_mut(nvim_syn_get_curwin_synblock()).b_syn_containedin = 1;
                 }
                 (*p).sp_next_list = next_list;
             }

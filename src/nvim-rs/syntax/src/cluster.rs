@@ -7,6 +7,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     IdListHandle, SynBlockHandle, SynClusterHandle, CLUSTER_ADD, CLUSTER_REPLACE, CLUSTER_SUBTRACT,
     SYNID_ALLBUT, SYNID_CLUSTER,
@@ -23,19 +24,10 @@ extern "C" {
 
 extern "C" {
     // Synblock cluster accessors
-    fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
-    fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
 
     // ID list operations
     fn nvim_id_list_get(list: IdListHandle, idx: c_int) -> i16;
-
-    // Phase 32.3: Cluster lookup and containedin
-    fn nvim_synblock_has_containedin(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
-    fn nvim_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -91,7 +83,7 @@ pub fn cluster_id(cluster: SynClusterHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    let count = unsafe { nvim_synblock_get_cluster_count(block) };
+    let count = unsafe { synblock_ref(block).b_syn_clusters.ga_len };
     for i in 0..count {
         let c = unsafe { nvim_synblock_get_cluster(block, i) };
         if c.0 == cluster.0 {
@@ -111,7 +103,7 @@ pub fn synblock_cluster_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_cluster_count(block) }
+    unsafe { synblock_ref(block).b_syn_clusters.ga_len }
 }
 
 /// Get a cluster from a synblock by index.
@@ -130,7 +122,7 @@ pub fn synblock_cluster_id(block: SynBlockHandle, idx: i32) -> i32 {
     if block.is_null() || idx < 0 {
         return 0;
     }
-    let count = unsafe { nvim_synblock_get_cluster_count(block) };
+    let count = unsafe { synblock_ref(block).b_syn_clusters.ga_len };
     if idx >= count {
         return 0;
     }
@@ -143,7 +135,7 @@ pub fn synblock_spell_cluster_id(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_spell_cluster_id(block) }
+    unsafe { synblock_ref(block).b_spell_cluster_id as i32 }
 }
 
 /// Get the nospell cluster ID for a synblock.
@@ -152,7 +144,7 @@ pub fn synblock_nospell_cluster_id(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_nospell_cluster_id(block) }
+    unsafe { synblock_ref(block).b_nospell_cluster_id as i32 }
 }
 
 /// Get the spell cluster index for a synblock.
@@ -161,7 +153,7 @@ pub fn synblock_spell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_spell_cluster_id(block) }
+    unsafe { synblock_ref(block).b_spell_cluster_id as i32 }
 }
 
 /// Get the nospell cluster index for a synblock.
@@ -170,7 +162,7 @@ pub fn synblock_nospell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_nospell_cluster_id(block) }
+    unsafe { synblock_ref(block).b_nospell_cluster_id as i32 }
 }
 
 // =============================================================================
@@ -386,7 +378,7 @@ pub fn synblock_has_containedin(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_containedin(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_containedin != 0 }
 }
 
 /// Get the pattern count for a synblock.
@@ -395,7 +387,7 @@ pub fn synblock_pattern_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_pattern_count(block) }
+    unsafe { synblock_ref(block).b_syn_patterns.ga_len }
 }
 
 /// Get the inc_tag from a pattern.
@@ -413,7 +405,7 @@ pub fn is_spell_cluster(block: SynBlockHandle, id: i32) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_is_spell_cluster(block, id) != 0 }
+    unsafe { synblock_ref(block).b_spell_cluster_id as i32 == id }
 }
 
 /// Check if a cluster ID is the @NoSpell cluster.
@@ -422,7 +414,7 @@ pub fn is_nospell_cluster(block: SynBlockHandle, id: i32) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_is_nospell_cluster(block, id) != 0 }
+    unsafe { synblock_ref(block).b_nospell_cluster_id as i32 == id }
 }
 
 /// Check if an ID is a special spell-related cluster.
@@ -831,7 +823,7 @@ unsafe fn syn_scl_name2id_impl(name: *mut c_char) -> c_int {
     if name_u.is_null() {
         return 0;
     }
-    let count = nvim_synblock_get_cluster_count(block);
+    let count = synblock_ref(block).b_syn_clusters.ga_len;
     let mut result = 0i32;
     let mut i = count - 1;
     while i >= 0 {

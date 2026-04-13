@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{SynBlockHandle, SynPatHandle, WinHandle};
 
 // =============================================================================
@@ -17,8 +18,7 @@ type Proftime = u64;
 extern "C" {
     // syn_time_on toggle
 
-    // synblock pattern access (synblock_T is not repr(C) yet)
-    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
+    // synblock pattern access
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
     // syntax_present(curwin)
@@ -145,7 +145,7 @@ unsafe fn syntime_clear_impl() {
         return;
     }
     let block = nvim_syn_get_curwin_synblock();
-    let count = nvim_synblock_get_pattern_count(block);
+    let count = synblock_ref(block).b_syn_patterns.ga_len;
     for idx in 0..count {
         let pat = nvim_synblock_get_pattern(block, idx);
         if !pat.is_null() {
@@ -163,7 +163,7 @@ unsafe fn syntime_report_impl() {
     }
 
     let block = nvim_syn_get_curwin_synblock();
-    let pat_count = nvim_synblock_get_pattern_count(block);
+    let pat_count = synblock_ref(block).b_syn_patterns.ga_len;
 
     // Collect entries with count > 0
     let mut entries: Vec<TimeEntry> = Vec::new();

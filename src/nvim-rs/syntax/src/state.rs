@@ -8,6 +8,7 @@
 
 use std::ffi::c_int;
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     bref, BufStateHandle, ExtMatchHandle, IdListHandle, StateItemHandle, SynBlockHandle,
     SynStateHandle, KEYWORD_IDX,
@@ -32,16 +33,6 @@ extern "C" {
     fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
 
     // -------------------------------------------------------------------------
-    // Synblock state accessors
-    // -------------------------------------------------------------------------
-    fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
-    fn nvim_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle;
-    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sst_len(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sst_freecount(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sst_check_lnum(block: SynBlockHandle) -> c_int;
-
-    // -------------------------------------------------------------------------
     // Current state accessors (non-static ones remain)
     // -------------------------------------------------------------------------
     // Current state setters (non-static ones remain)
@@ -57,7 +48,6 @@ extern "C" {
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
     #[link_name = "syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: crate::types::BufHandle);
-    fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
     fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
     fn nvim_synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> c_int;
 }
@@ -638,7 +628,7 @@ pub fn synblock_first_state(block: SynBlockHandle) -> SynStateHandle {
     if block.is_null() {
         return SynStateHandle::null();
     }
-    unsafe { nvim_synblock_get_sst_first(block) }
+    SynStateHandle(unsafe { synblock_ref(block).b_sst_first }.cast())
 }
 
 /// Get the first free state in the state array
@@ -647,7 +637,7 @@ pub fn synblock_first_free_state(block: SynBlockHandle) -> SynStateHandle {
     if block.is_null() {
         return SynStateHandle::null();
     }
-    unsafe { nvim_synblock_get_sst_firstfree(block) }
+    SynStateHandle(unsafe { synblock_ref(block).b_sst_firstfree }.cast())
 }
 
 /// Check if the synblock has a state array allocated
@@ -656,7 +646,7 @@ pub fn synblock_has_state_array(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_sst_array(block) != 0 }
+    !unsafe { synblock_ref(block).b_sst_array }.is_null()
 }
 
 /// Get the state array length
@@ -665,7 +655,7 @@ pub fn synblock_state_array_len(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sst_len(block) }
+    unsafe { synblock_ref(block).b_sst_len }
 }
 
 /// Get the number of free entries in the state array
@@ -674,7 +664,7 @@ pub fn synblock_free_state_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sst_freecount(block) }
+    unsafe { synblock_ref(block).b_sst_freecount }
 }
 
 /// Get the check line number (entries after this need to be checked)
@@ -683,7 +673,7 @@ pub fn synblock_check_lnum(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sst_check_lnum(block) }
+    unsafe { synblock_ref(block).b_sst_check_lnum }
 }
 
 // =============================================================================
@@ -972,7 +962,7 @@ pub fn synblock_linebreaks(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sync_linebreaks(block) }
+    unsafe { synblock_ref(block).b_syn_sync_linebreaks }
 }
 
 /// Set the line number for a syntax state.

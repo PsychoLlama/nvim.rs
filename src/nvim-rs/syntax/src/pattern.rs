@@ -8,6 +8,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     IdListHandle, RegProgHandle, SynBlockHandle, SynPatHandle, HL_CONTAINED, HL_FOLD, HL_KEEPEND,
     HL_TRANSP, SPO_COUNT, SPO_HE_OFF, SPO_HS_OFF, SPO_LC_OFF, SPO_ME_OFF, SPO_MS_OFF, SPO_RE_OFF,
@@ -20,9 +21,7 @@ use crate::types::{
 
 extern "C" {
     // synblock_T pattern accessors
-    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
-    fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
 }
 
@@ -79,7 +78,7 @@ pub fn synblock_pattern_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_pattern_count(block) }
+    unsafe { synblock_ref(block).b_syn_patterns.ga_len }
 }
 
 /// Get a pattern at the given index from a synblock
@@ -102,7 +101,7 @@ pub fn synblock_fold_item_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_folditems(block) }
+    unsafe { synblock_ref(block).b_syn_folditems }
 }
 
 /// Check if a pattern at the given index is for syncing.
@@ -127,7 +126,7 @@ pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
     if block.is_null() {
         return 0;
     }
-    let count = unsafe { nvim_synblock_get_pattern_count(block) };
+    let count = unsafe { synblock_ref(block).b_syn_patterns.ga_len };
     let mut n = 0;
     for i in 0..count {
         let pat = unsafe { nvim_synblock_get_pattern(block, i) };

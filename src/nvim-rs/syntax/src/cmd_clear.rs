@@ -6,6 +6,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::clearing::{rs_syn_clear_one, rs_syntax_clear, rs_syntax_sync_clear};
+use crate::synblock_struct::synblock_ref;
 use crate::types::SynBlockHandle;
 
 // =============================================================================
@@ -25,7 +26,6 @@ extern "C" {
 
     // Synblock
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
-    fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
 
     // Group lookup
     fn rs_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
@@ -72,7 +72,7 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
     let block = nvim_syn_get_curwin_synblock();
 
     // Disabled within ":syn include @group filename" to avoid deleting @group
-    if nvim_synblock_get_topgrp(block) != 0 {
+    if unsafe { synblock_ref(block).b_syn_topgrp } != 0 {
         return;
     }
 

@@ -6,6 +6,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{KeyEntryHandle, SynBlockHandle, SynClusterHandle, SynPatHandle, WinHandle};
 
 // =============================================================================
@@ -15,10 +16,8 @@ use crate::types::{KeyEntryHandle, SynBlockHandle, SynClusterHandle, SynPatHandl
 extern "C" {
     // Pattern accessors
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
-    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
 
     // Cluster accessors
-    fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
 
     // Memory management
@@ -26,21 +25,15 @@ extern "C" {
     fn vim_regfree(ptr: *mut c_void);
 
     // New accessors added for clearing.rs
-    fn nvim_synblock_set_pattern_count(block: SynBlockHandle, len: c_int);
     fn nvim_synblock_memmove_patterns(
         block: SynBlockHandle,
         dst_idx: c_int,
         src_idx: c_int,
         count: c_int,
     );
-    fn nvim_synblock_dec_folditems(block: SynBlockHandle);
 
     // curwin synblock for syn_clear_one
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
-
-    // Hashtab for syn_clear_one
-    fn nvim_synblock_get_keywtab(block: SynBlockHandle) -> *mut c_void;
-    fn nvim_synblock_get_keywtab_ic(block: SynBlockHandle) -> *mut c_void;
 
     /// Free all syntax state stack entries for block.
     #[link_name = "syn_stack_free_all"]
@@ -50,31 +43,15 @@ extern "C" {
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
 
-    /// Reset running_syn_inc_tag to 0.
-
     /// Release ownsyntax block: clear it, free it, reset to buf's b_s.
     fn nvim_win_release_synblock(wp: WinHandle);
 
-    // Phase 3: Rust implementations of nvim_synblock_full_clear / nvim_synblock_sync_clear
+    // Phase 3: Rust implementations (side-effect functions, kept in C)
     fn nvim_syn_clear_linecont_pat(block: SynBlockHandle);
-    fn nvim_synblock_set_sync_flags_zero(block: SynBlockHandle);
-    fn nvim_synblock_set_folditems(block: SynBlockHandle, n: c_int);
-    fn nvim_synblock_set_syn_error(block: SynBlockHandle, val: c_int);
-    fn nvim_synblock_set_syn_slow(block: SynBlockHandle, val: c_int);
-    fn nvim_synblock_set_syn_containedin_b(block: SynBlockHandle, val: c_int);
-    fn nvim_synblock_set_syn_conceal(block: SynBlockHandle, val: c_int);
-    fn nvim_synblock_set_spell_cluster_id_b(block: SynBlockHandle, id: c_int);
-    fn nvim_synblock_set_nospell_cluster_id_b(block: SynBlockHandle, id: c_int);
     fn nvim_synblock_ga_clear_patterns(block: SynBlockHandle);
     fn nvim_synblock_ga_clear_clusters(block: SynBlockHandle);
     fn nvim_synblock_regfree_linecont_prog(block: SynBlockHandle);
     fn nvim_synblock_clear_syn_isk(block: SynBlockHandle);
-    fn nvim_synblock_set_syn_ic(block: SynBlockHandle, ic: c_int);
-    fn nvim_synblock_set_syn_spell(block: SynBlockHandle, spell: c_int);
-    fn nvim_synblock_set_syn_foldlevel(block: SynBlockHandle, foldlevel: c_int);
-    fn nvim_synblock_set_sync_minlines(block: SynBlockHandle, n: c_int);
-    fn nvim_synblock_set_sync_maxlines(block: SynBlockHandle, n: c_int);
-    fn nvim_synblock_set_sync_linebreaks(block: SynBlockHandle, n: c_int);
 
     // Phase 11 accessors for hashtab keyword operations (Phase 1)
 
@@ -183,18 +160,18 @@ pub unsafe extern "C" fn rs_syn_remove_pattern(block: SynBlockHandle, idx: c_int
     // Decrement fold item count if the pattern has HL_FOLD
     let pat = nvim_synblock_get_pattern(block, idx);
     if !pat.is_null() && ((*pat.as_ptr()).sp_flags & HL_FOLD) != 0 {
-        nvim_synblock_dec_folditems(block);
+        synblock_mut(block).b_syn_folditems -= 1;
     }
 
     // Clear the pattern's allocated fields
     rs_syn_clear_pattern(block, idx);
 
     // Compact: memmove(spp, spp+1, sizeof(synpat_T) * (ga_len - idx - 1))
-    let count = nvim_synblock_get_pattern_count(block) - idx - 1;
+    let count = synblock_ref(block).b_syn_patterns.ga_len - idx - 1;
     if count > 0 {
         nvim_synblock_memmove_patterns(block, idx, idx + 1, count);
     }
-    nvim_synblock_set_pattern_count(block, nvim_synblock_get_pattern_count(block) - 1);
+    synblock_mut(block).b_syn_patterns.ga_len -= 1;
 }
 
 /// Clear all patterns and keywords matching a specific group ID.
@@ -210,18 +187,18 @@ pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
 
     // Clear keywords only when not ":syn sync clear group-name"
     if syncing == 0 {
-        let ht = nvim_synblock_get_keywtab(block);
+        let ht = &mut synblock_mut(block).b_keywtab as *mut _ as *mut c_void;
         if !ht.is_null() {
             rs_syn_clear_keyword(id, ht);
         }
-        let ht_ic = nvim_synblock_get_keywtab_ic(block);
+        let ht_ic = &mut synblock_mut(block).b_keywtab_ic as *mut _ as *mut c_void;
         if !ht_ic.is_null() {
             rs_syn_clear_keyword(id, ht_ic);
         }
     }
 
     // Clear patterns for "id", iterating from last to first
-    let mut idx = nvim_synblock_get_pattern_count(block) - 1;
+    let mut idx = synblock_ref(block).b_syn_patterns.ga_len - 1;
     while idx >= 0 {
         let pat = nvim_synblock_get_pattern(block, idx);
         if !pat.is_null()
@@ -340,33 +317,39 @@ pub unsafe extern "C" fn rs_synblock_full_clear(block: SynBlockHandle) {
         return;
     }
     // Clear keyword tables
-    rs_clear_keywtab(nvim_synblock_get_keywtab(block));
-    rs_clear_keywtab(nvim_synblock_get_keywtab_ic(block));
+    rs_clear_keywtab(&mut synblock_mut(block).b_keywtab as *mut _ as *mut c_void);
+    rs_clear_keywtab(&mut synblock_mut(block).b_keywtab_ic as *mut _ as *mut c_void);
     // Free pattern and cluster arrays
     nvim_synblock_ga_clear_patterns(block);
     nvim_synblock_ga_clear_clusters(block);
     // Reset cluster IDs
-    nvim_synblock_set_spell_cluster_id_b(block, 0);
-    nvim_synblock_set_nospell_cluster_id_b(block, 0);
-    // Reset sync flags and related
-    nvim_synblock_set_sync_flags_zero(block);
-    nvim_synblock_set_sync_minlines(block, 0);
-    nvim_synblock_set_sync_maxlines(block, 0);
-    nvim_synblock_set_sync_linebreaks(block, 0);
-    nvim_synblock_set_folditems(block, 0);
-    // Free linecont
+    {
+        let b = synblock_mut(block);
+        b.b_spell_cluster_id = 0;
+        b.b_nospell_cluster_id = 0;
+        // Reset sync flags and related
+        b.b_syn_sync_flags = 0;
+        b.b_syn_sync_minlines = 0;
+        b.b_syn_sync_maxlines = 0;
+        b.b_syn_sync_linebreaks = 0;
+        b.b_syn_folditems = 0;
+    }
+    // Free linecont (side effects: regfree + xfree_clear)
     nvim_synblock_regfree_linecont_prog(block);
     nvim_syn_clear_linecont_pat(block);
     // Clear iskeyword option
     nvim_synblock_clear_syn_isk(block);
     // Reset scalar flags
-    nvim_synblock_set_syn_error(block, 0);
-    nvim_synblock_set_syn_slow(block, 0);
-    nvim_synblock_set_syn_ic(block, 0);
-    nvim_synblock_set_syn_foldlevel(block, SYNFLD_START);
-    nvim_synblock_set_syn_spell(block, SYNSPL_DEFAULT);
-    nvim_synblock_set_syn_containedin_b(block, 0);
-    nvim_synblock_set_syn_conceal(block, 0);
+    {
+        let b = synblock_mut(block);
+        b.b_syn_error = false;
+        b.b_syn_slow = false;
+        b.b_syn_ic = 0;
+        b.b_syn_foldlevel = SYNFLD_START;
+        b.b_syn_spell = SYNSPL_DEFAULT;
+        b.b_syn_containedin = 0;
+        b.b_syn_conceal = 0;
+    }
 }
 
 /// Sync-only clear of a synblock: reset sync_flags, linecont, syn_isk.
@@ -379,12 +362,15 @@ pub unsafe extern "C" fn rs_synblock_sync_clear(block: SynBlockHandle) {
         return;
     }
     // Reset sync flags
-    nvim_synblock_set_sync_flags_zero(block);
-    nvim_synblock_set_sync_minlines(block, 0);
-    nvim_synblock_set_sync_maxlines(block, 0);
-    nvim_synblock_set_sync_linebreaks(block, 0);
-    nvim_synblock_set_folditems(block, 0);
-    // Free linecont
+    {
+        let b = synblock_mut(block);
+        b.b_syn_sync_flags = 0;
+        b.b_syn_sync_minlines = 0;
+        b.b_syn_sync_maxlines = 0;
+        b.b_syn_sync_linebreaks = 0;
+        b.b_syn_folditems = 0;
+    }
+    // Free linecont (side effects: regfree + xfree_clear)
     nvim_synblock_regfree_linecont_prog(block);
     nvim_syn_clear_linecont_pat(block);
     // Clear iskeyword option
@@ -402,14 +388,14 @@ pub unsafe extern "C" fn rs_syntax_clear(block: SynBlockHandle) {
     }
 
     // Free the syntax patterns (last to first)
-    let mut i = nvim_synblock_get_pattern_count(block) - 1;
+    let mut i = synblock_ref(block).b_syn_patterns.ga_len - 1;
     while i >= 0 {
         rs_syn_clear_pattern(block, i);
         i -= 1;
     }
 
     // Free the syntax clusters (last to first)
-    let mut i = nvim_synblock_get_cluster_count(block) - 1;
+    let mut i = synblock_ref(block).b_syn_clusters.ga_len - 1;
     while i >= 0 {
         rs_syn_clear_cluster(block, i);
         i -= 1;
@@ -450,7 +436,7 @@ pub unsafe extern "C" fn rs_syntax_sync_clear() {
     }
 
     // Free syncing patterns (last to first)
-    let mut i = nvim_synblock_get_pattern_count(block) - 1;
+    let mut i = synblock_ref(block).b_syn_patterns.ga_len - 1;
     while i >= 0 {
         let pat = nvim_synblock_get_pattern(block, i);
         if !pat.is_null() && (*pat.as_ptr()).sp_syncing {

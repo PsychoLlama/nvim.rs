@@ -8,6 +8,7 @@
 
 use std::ffi::c_int;
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{bref, BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
 
 // =============================================================================
@@ -15,14 +16,6 @@ use crate::types::{bref, BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
 // =============================================================================
 
 extern "C" {
-    // Synblock settings
-    fn nvim_synblock_get_syn_error(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_containedin(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-
     // Change handling
     #[link_name = "syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: BufHandle);
@@ -46,7 +39,6 @@ extern "C" {
     fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
     fn nvim_win_get_synblock(wp: WinHandle) -> SynBlockHandle;
     // (nvim_syn_stack_alloc deleted: call Rust directly)
-    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
     fn nvim_syn_set_sst_lasttick(tick: c_int);
     fn nvim_syn_get_display_tick() -> c_int;
     fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
@@ -125,7 +117,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     // Allocate syntax stack when needed.
     crate::cache::rs_syn_stack_alloc();
     let block = nvim_syn_get_syn_block();
-    if nvim_synblock_has_sst_array(block) == 0 {
+    if unsafe { synblock_ref(block).b_sst_array.is_null() } {
         return; // out of memory
     }
     nvim_syn_set_sst_lasttick(nvim_syn_get_display_tick());
@@ -152,7 +144,9 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     }
 
     // Try to synchronize from a saved state in b_sst_array[].
-    if !crate::statics::current_state_is_valid() && nvim_synblock_has_sst_array(block) != 0 {
+    if !crate::statics::current_state_is_valid()
+        && !unsafe { synblock_ref(block).b_sst_array.is_null() }
+    {
         // Find last valid saved state before start_lnum.
         let sync_minlines = nvim_syn_get_sync_minlines();
         let mut p = nvim_syn_get_sst_first();
@@ -319,7 +313,7 @@ pub fn synblock_has_error(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_syn_error(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_error }
 }
 
 /// Check if syntax highlighting is running slowly.
@@ -328,7 +322,7 @@ pub fn synblock_is_slow(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_syn_slow(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_slow }
 }
 
 /// Check if syntax highlighting is enabled and not in error state.
@@ -388,7 +382,7 @@ pub fn synblock_folditems(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_folditems(block) }
+    unsafe { synblock_ref(block).b_syn_folditems }
 }
 
 /// Check if the synblock has any fold items.
@@ -403,7 +397,7 @@ pub fn synblock_foldlevel_mode(block: SynBlockHandle) -> FoldLevelMode {
     if block.is_null() {
         return FoldLevelMode::Start;
     }
-    FoldLevelMode::from_raw(unsafe { nvim_synblock_get_syn_foldlevel(block) })
+    FoldLevelMode::from_raw(unsafe { synblock_ref(block).b_syn_foldlevel })
 }
 
 // =============================================================================
@@ -416,7 +410,7 @@ pub fn synblock_has_containedin(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_containedin(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_containedin != 0 }
 }
 
 /// Check if concealing is enabled for the synblock.
@@ -425,7 +419,7 @@ pub fn synblock_conceal_enabled(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_conceal(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_conceal != 0 }
 }
 
 // =============================================================================

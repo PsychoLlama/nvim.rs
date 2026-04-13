@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{SynBlockHandle, SF_CCOMMENT};
 
 // =============================================================================
@@ -33,21 +34,10 @@ extern "C" {
 
     // Synblock sync field setters
     fn nvim_synblock_or_sync_flags(block: SynBlockHandle, flags: c_int);
-    fn nvim_synblock_set_sync_id(block: SynBlockHandle, id: c_int);
-    fn nvim_synblock_set_sync_minlines(block: SynBlockHandle, n: c_int);
-    fn nvim_synblock_set_sync_maxlines(block: SynBlockHandle, n: c_int);
-    fn nvim_synblock_set_sync_linebreaks(block: SynBlockHandle, n: c_int);
-    fn nvim_synblock_get_linecont_pat_is_set(block: SynBlockHandle) -> c_int;
 
-    // Accessors for linecont fields (replacing nvim_synblock_set_linecont)
+    // Accessors for linecont fields
     fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
-    fn nvim_synblock_get_syn_ic(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_set_linecont_pat(block: SynBlockHandle, pat: *mut c_char);
-    fn nvim_synblock_get_linecont_pat(block: SynBlockHandle) -> *mut c_char;
-    fn nvim_synblock_set_linecont_ic(block: SynBlockHandle, ic: c_int);
-    fn nvim_synblock_set_linecont_prog2(block: SynBlockHandle, prog: *mut c_void);
     fn nvim_syn_clear_linecont_pat(block: SynBlockHandle);
-    fn nvim_synblock_get_linecont_time_ptr(block: SynBlockHandle) -> *mut c_void;
     fn nvim_syn_vim_regcomp_empty_cpo(pat: *mut c_char, flags: c_int) -> *mut c_void;
     fn rs_syn_clear_time(st: *mut c_void);
 
@@ -100,20 +90,20 @@ unsafe fn synblock_set_linecont(
 ) -> c_int {
     // Save a copy of the pattern text.
     let pat = xstrnsave(pat_start, pat_len);
-    nvim_synblock_set_linecont_pat(block, pat);
+    synblock_mut(block).b_syn_linecont_pat = pat;
 
     // Copy the block's ignore-case setting.
-    let ic = nvim_synblock_get_syn_ic(block);
-    nvim_synblock_set_linecont_ic(block, ic);
+    let ic = synblock_ref(block).b_syn_ic;
+    synblock_mut(block).b_syn_linecont_ic = ic;
 
     // Compile the pattern with empty cpoptions (avoid 'l' flag side-effect).
     let prog = nvim_syn_vim_regcomp_empty_cpo(
-        nvim_synblock_get_linecont_pat(block),
+        synblock_ref(block).b_syn_linecont_pat,
         1, // RE_MAGIC
     );
 
     // Zero out the timing info.
-    let time_ptr = nvim_synblock_get_linecont_time_ptr(block);
+    let time_ptr = &mut synblock_mut(block).b_syn_linecont_time as *mut _ as *mut c_void;
     rs_syn_clear_time(time_ptr);
 
     if prog.is_null() {
@@ -122,7 +112,7 @@ unsafe fn synblock_set_linecont(
         return 0;
     }
 
-    nvim_synblock_set_linecont_prog2(block, prog);
+    synblock_mut(block).b_syn_linecont_prog = prog;
     1
 }
 
@@ -164,12 +154,12 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
                 let arg_end2 = skiptowhite(next_arg);
                 if skip == 0 {
                     let id = syn_check_group(next_arg, arg_end2.offset_from(next_arg) as c_int);
-                    nvim_synblock_set_sync_id(block, id);
+                    synblock_mut(block).b_syn_sync_id = id as i16;
                 }
                 next_arg = skipwhite(arg_end2);
             } else if skip == 0 {
                 let comment_id = syn_name2id(STR_COMMENT.as_ptr().cast());
-                nvim_synblock_set_sync_id(block, comment_id);
+                synblock_mut(block).b_syn_sync_id = comment_id as i16;
             }
         } else if key_bytes.starts_with(b"LINES")
             || key_bytes.starts_with(b"MINLINES")
@@ -203,21 +193,23 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
 
             if skip == 0 {
                 // C: if (key[4] == 'B') linebreaks; else if (key[1] == 'A') maxlines; else minlines
+                let b = synblock_mut(block);
                 if key_bytes[4] == b'B' {
                     // LINEBREAKS
-                    nvim_synblock_set_sync_linebreaks(block, n);
+                    b.b_syn_sync_linebreaks = n;
                 } else if key_bytes[1] == b'A' {
                     // MAXLINES
-                    nvim_synblock_set_sync_maxlines(block, n);
+                    b.b_syn_sync_maxlines = n;
                 } else {
                     // LINES or MINLINES
-                    nvim_synblock_set_sync_minlines(block, n);
+                    b.b_syn_sync_minlines = n;
                 }
             }
         } else if key_bytes == b"FROMSTART" {
             if skip == 0 {
-                nvim_synblock_set_sync_minlines(block, MAXLNUM);
-                nvim_synblock_set_sync_maxlines(block, 0);
+                let b = synblock_mut(block);
+                b.b_syn_sync_minlines = MAXLNUM;
+                b.b_syn_sync_maxlines = 0;
             }
         } else if key_bytes == b"LINECONT" {
             if *next_arg == 0 {
@@ -225,7 +217,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
                 illegal = true;
                 break;
             }
-            if nvim_synblock_get_linecont_pat_is_set(block) != 0 {
+            if !synblock_ref(block).b_syn_linecont_pat.is_null() {
                 emsg(EMSG_SYNC_LINECONT_TWICE.as_ptr().cast());
                 finished = true;
                 break;

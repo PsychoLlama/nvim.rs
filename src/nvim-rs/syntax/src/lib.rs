@@ -14,6 +14,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::synblock_struct::synblock_ref;
+
 // =============================================================================
 // Modules
 // =============================================================================
@@ -197,28 +199,6 @@ extern "C" {
     // synblock_T accessors (syntax block)
     // -------------------------------------------------------------------------
 
-    /// Get b_syn_patterns.ga_len (number of syntax patterns)
-    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_clusters.ga_len (number of syntax clusters)
-    fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_ic (ignore case for :syn cmds)
-    fn nvim_synblock_get_syn_ic(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_spell (SYNSPL_ values)
-    fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
-    /// Get b_syn_containedin (true if any item has containedin)
-    fn nvim_synblock_get_containedin(block: SynBlockHandle) -> c_int;
-    /// Get b_syn_folditems (number of patterns with HL_FOLD)
-    fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
-    /// Get b_syn_error (true when error occurred in HL)
-    fn nvim_synblock_get_syn_error(block: SynBlockHandle) -> c_int;
-
-    /// Get b_syn_slow (true when 'redrawtime' reached)
-    fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
-    /// Get b_sst_first (first used entry in state array)
-    fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
     /// Get synpat_T at index from b_syn_patterns
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
@@ -257,22 +237,6 @@ extern "C" {
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
 
     // -------------------------------------------------------------------------
-    // Phase 4: Keyword hashtable accessors
-    // -------------------------------------------------------------------------
-
-    /// Check if synblock has matching-case keywords
-    fn nvim_synblock_has_keywords(block: SynBlockHandle) -> c_int;
-
-    /// Check if synblock has ignore-case keywords
-    fn nvim_synblock_has_keywords_ic(block: SynBlockHandle) -> c_int;
-
-    /// Get count of matching-case keywords
-    fn nvim_synblock_keywtab_count(block: SynBlockHandle) -> usize;
-
-    /// Get count of ignore-case keywords
-    fn nvim_synblock_keywtab_ic_count(block: SynBlockHandle) -> usize;
-
-    // -------------------------------------------------------------------------
     // Phase 4: ID list iteration helpers
     // -------------------------------------------------------------------------
 
@@ -303,12 +267,6 @@ extern "C" {
     /// Get the current synblock from curwin->w_s
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
-    /// Get the spell cluster ID from a synblock
-    fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
-
-    /// Get the nospell cluster ID from a synblock
-    fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 6: Command & user interface accessors
     // -------------------------------------------------------------------------
@@ -318,9 +276,6 @@ extern "C" {
 
     /// Set the current syntax topgrp
     fn nvim_syn_set_topgrp(topgrp: c_int);
-
-    /// Get the syntax block's conceal setting
-    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
 
     // -------------------------------------------------------------------------
     // Phase 24.1: State Management Helpers
@@ -480,7 +435,7 @@ pub fn synblock_pattern_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_pattern_count(block) }
+    unsafe { synblock_ref(block).b_syn_patterns.ga_len }
 }
 
 /// Get the number of syntax clusters in a block
@@ -489,7 +444,7 @@ pub fn synblock_cluster_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_cluster_count(block) }
+    unsafe { synblock_ref(block).b_syn_clusters.ga_len }
 }
 
 /// Check if the block uses ignore-case for :syn commands
@@ -498,7 +453,7 @@ pub fn synblock_is_ignore_case(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_syn_ic(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_ic != 0 }
 }
 
 /// Get the spell checking mode for the block
@@ -507,7 +462,7 @@ pub fn synblock_spell_mode(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return SYNSPL_DEFAULT;
     }
-    unsafe { nvim_synblock_get_syn_spell(block) }
+    unsafe { synblock_ref(block).b_syn_spell }
 }
 
 /// Check if any item has a containedin argument
@@ -516,7 +471,7 @@ pub fn synblock_has_containedin(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_containedin(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_containedin != 0 }
 }
 
 /// Get the first used state in the state array
@@ -525,7 +480,7 @@ pub fn synblock_first_state(block: SynBlockHandle) -> SynStateHandle {
     if block.is_null() {
         return SynStateHandle::null();
     }
-    unsafe { nvim_synblock_get_sst_first(block) }
+    SynStateHandle(unsafe { synblock_ref(block).b_sst_first }.cast())
 }
 
 /// Check if the block has an error
@@ -534,7 +489,7 @@ pub fn synblock_has_error(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_syn_error(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_error }
 }
 
 /// Check if the block is slow (redrawtime reached)
@@ -543,7 +498,7 @@ pub fn synblock_is_slow(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_syn_slow(block) != 0 }
+    unsafe { synblock_ref(block).b_syn_slow }
 }
 
 /// Get the line number for a syntax state
@@ -799,7 +754,7 @@ pub fn synblock_has_keywords(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_keywords(block) != 0 }
+    unsafe { synblock_ref(block).b_keywtab.ht_used > 0 }
 }
 
 /// Check if a synblock has ignore-case keywords
@@ -808,7 +763,7 @@ pub fn synblock_has_keywords_ic(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_keywords_ic(block) != 0 }
+    unsafe { synblock_ref(block).b_keywtab_ic.ht_used > 0 }
 }
 
 /// Get the count of matching-case keywords
@@ -817,7 +772,7 @@ pub fn synblock_keyword_count(block: SynBlockHandle) -> usize {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_keywtab_count(block) }
+    unsafe { synblock_ref(block).b_keywtab.ht_used }
 }
 
 /// Get the count of ignore-case keywords
@@ -826,7 +781,7 @@ pub fn synblock_keyword_count_ic(block: SynBlockHandle) -> usize {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_keywtab_ic_count(block) }
+    unsafe { synblock_ref(block).b_keywtab_ic.ht_used }
 }
 
 /// Check if a keyword entry has a nextgroup list
@@ -909,7 +864,7 @@ pub fn synblock_cluster_id(block: SynBlockHandle, idx: i32) -> i32 {
     if block.is_null() || idx < 0 {
         return 0;
     }
-    let count = unsafe { nvim_synblock_get_cluster_count(block) };
+    let count = unsafe { synblock_ref(block).b_syn_clusters.ga_len };
     if idx >= count {
         return 0;
     }
@@ -1061,7 +1016,7 @@ pub fn synblock_spell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_spell_cluster_id(block) }
+    unsafe { synblock_ref(block).b_spell_cluster_id }
 }
 
 /// Get the nospell cluster ID from a synblock
@@ -1070,7 +1025,7 @@ pub fn synblock_nospell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_nospell_cluster_id(block) }
+    unsafe { synblock_ref(block).b_nospell_cluster_id }
 }
 
 /// Check if a stateitem has the HL_TRANS_CONT flag
@@ -1169,7 +1124,7 @@ pub fn synblock_conceal_setting(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_conceal(block) }
+    unsafe { synblock_ref(block).b_syn_conceal }
 }
 
 /// Get the syntax block's case ignore setting
@@ -1178,7 +1133,7 @@ pub fn synblock_ic_setting(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_syn_ic(block) }
+    unsafe { synblock_ref(block).b_syn_ic }
 }
 
 /// Get the number of syntax subcommands
@@ -1236,7 +1191,7 @@ pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
     if block.is_null() {
         return 0;
     }
-    let count = unsafe { nvim_synblock_get_pattern_count(block) };
+    let count = unsafe { synblock_ref(block).b_syn_patterns.ga_len };
     let mut n = 0;
     for i in 0..count {
         let pat = unsafe { nvim_synblock_get_pattern(block, i) };
@@ -1297,7 +1252,7 @@ pub extern "C" fn rs_syntax_block_has_folds(block: SynBlockHandle) -> c_int {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_folditems(block) }
+    unsafe { synblock_ref(block).b_syn_folditems }
 }
 
 /// Check if a synstate is valid (not invalidated by changes)

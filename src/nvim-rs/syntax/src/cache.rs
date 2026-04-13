@@ -9,6 +9,7 @@
 use std::ffi::{c_int, c_void};
 
 use crate::ffi_types::{BufState, StateItem};
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{
     bref, BufHandle, BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle,
     HL_KEEPEND, SST_DIST, SST_MAX_ENTRIES, SST_MIN_ENTRIES,
@@ -34,12 +35,6 @@ extern "C" {
     fn nvim_syn_validate_current_state();
     fn nvim_syn_update_si_attr(idx: c_int);
 
-    // Synblock accessors
-    fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
-    fn nvim_synblock_get_sst_len(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sst_freecount(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
-
     // Global state accessors
     fn nvim_syn_get_sst_array() -> *mut c_void;
     fn nvim_syn_get_sst_first() -> SynStateHandle;
@@ -49,22 +44,12 @@ extern "C" {
     // Phase 8 accessors: state stack cache management
     // -------------------------------------------------------------------------
 
-    // synstate_T setters / navigation
+    // synstate_T setters / navigation (Phase 3: remain as C accessors for now)
     fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
     fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
     fn nvim_synstate_get_tick(state: SynStateHandle) -> c_int;
     fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
     fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
-
-    // synblock_T setters
-    fn nvim_synblock_set_sst_first(block: SynBlockHandle, ptr: SynStateHandle);
-    fn nvim_synblock_set_sst_firstfree(block: SynBlockHandle, ptr: SynStateHandle);
-    fn nvim_synblock_set_sst_freecount(block: SynBlockHandle, count: c_int);
-    fn nvim_synblock_set_sst_array(block: SynBlockHandle, ptr: SynStateHandle, len: c_int);
-    fn nvim_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle;
-    fn nvim_synblock_get_sst_lasttick(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sst_array_ptr(block: SynBlockHandle) -> SynStateHandle;
 
     // clear_syn_state (Rust implementation)
     fn rs_clear_syn_state(p: SynStateHandle);
@@ -89,7 +74,6 @@ extern "C" {
     // buf->b_s accessor
     fn nvim_buf_get_b_s(buf: BufHandle) -> SynBlockHandle;
 
-    // nvim_synblock_get_sync_linebreaks already declared above
 }
 
 // =============================================================================
@@ -110,7 +94,7 @@ pub unsafe extern "C" fn rs_syn_stack_find_entry(lnum: c_int) -> SynStateHandle 
         return SynStateHandle::null();
     }
     let mut prev = SynStateHandle::null();
-    let mut p = nvim_synblock_get_sst_first(block);
+    let mut p = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     while !p.is_null() {
         let p_lnum = nvim_synstate_get_lnum(p);
         if p_lnum == lnum {
@@ -137,11 +121,11 @@ pub unsafe extern "C" fn rs_syn_stack_free_entry(block: SynBlockHandle, p: SynSt
         return;
     }
     rs_clear_syn_state(p);
-    let firstfree = nvim_synblock_get_sst_firstfree(block);
+    let firstfree = SynStateHandle(synblock_ref(block).b_sst_firstfree.cast());
     nvim_synstate_set_next(p, firstfree);
-    nvim_synblock_set_sst_firstfree(block, p);
-    let count = nvim_synblock_get_sst_freecount(block);
-    nvim_synblock_set_sst_freecount(block, count + 1);
+    synblock_mut(block).b_sst_firstfree = p.0.cast();
+    let count = synblock_ref(block).b_sst_freecount;
+    synblock_mut(block).b_sst_freecount = count + 1;
 }
 
 /// Free all entries in a synblock's state array.
@@ -155,22 +139,26 @@ pub unsafe extern "C" fn rs_syn_stack_free_block(block: SynBlockHandle) {
     if block.is_null() {
         return;
     }
-    if nvim_synblock_has_sst_array(block) == 0 {
+    if synblock_ref(block).b_sst_array.is_null() {
         return;
     }
     // Clear all used entries
-    let mut p = nvim_synblock_get_sst_first(block);
+    let mut p = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     while !p.is_null() {
         let next = nvim_synstate_get_next(p);
         rs_clear_syn_state(p);
         p = next;
     }
     // Free the backing array and reset fields
-    let arr = nvim_synblock_get_sst_array_ptr(block);
+    let arr = SynStateHandle(synblock_ref(block).b_sst_array.cast());
     nvim_syn_free_sst_array(arr);
-    nvim_synblock_set_sst_array(block, SynStateHandle::null(), 0);
-    nvim_synblock_set_sst_first(block, SynStateHandle::null());
-    nvim_synblock_set_sst_freecount(block, 0);
+    {
+        let b = synblock_mut(block);
+        b.b_sst_array = std::ptr::null_mut();
+        b.b_sst_len = 0;
+        b.b_sst_first = std::ptr::null_mut();
+        b.b_sst_freecount = 0;
+    }
 }
 
 /// Free b_sst_array[] for the given synblock.
@@ -200,12 +188,12 @@ pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
     if block.is_null() {
         return 0;
     }
-    let first = nvim_synblock_get_sst_first(block);
+    let first = SynStateHandle(synblock_ref(block).b_sst_first.cast());
     if first.is_null() {
         return 0;
     }
 
-    let sst_len = nvim_synblock_get_sst_len(block);
+    let sst_len = synblock_ref(block).b_sst_len;
     let rows = nvim_syn_get_rows();
 
     // Compute normal distance between non-displayed entries.
@@ -217,7 +205,7 @@ pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
     };
 
     // Find the "tick" for the oldest entry that can be removed.
-    let lasttick = nvim_synblock_get_sst_lasttick(block);
+    let lasttick = synblock_ref(block).b_sst_lasttick as c_int;
     let mut tick = lasttick;
     let mut above = false;
 
@@ -282,8 +270,8 @@ pub unsafe extern "C" fn rs_syn_stack_alloc() {
     // Compute desired length
     let len = (line_count / SST_DIST + rows * 2).clamp(SST_MIN_ENTRIES, SST_MAX_ENTRIES);
 
-    let sst_len = nvim_synblock_get_sst_len(block);
-    let freecount = nvim_synblock_get_sst_freecount(block);
+    let sst_len = synblock_ref(block).b_sst_len;
+    let freecount = synblock_ref(block).b_sst_freecount;
 
     if sst_len > len * 2 || sst_len < len {
         // Allocate 50% too much to avoid frequent reallocation.
@@ -291,13 +279,13 @@ pub unsafe extern "C" fn rs_syn_stack_alloc() {
         let new_len_raw = (line_count2 + line_count2 / 2) / SST_DIST + rows * 2;
         let mut new_len = new_len_raw.clamp(SST_MIN_ENTRIES, SST_MAX_ENTRIES);
 
-        if nvim_synblock_has_sst_array(block) != 0 {
+        if !synblock_ref(block).b_sst_array.is_null() {
             // When shrinking, cleanup until all valid entries fit.
             let used_plus_margin = sst_len - freecount + 2;
             while used_plus_margin > new_len && rs_syn_stack_cleanup() != 0 {}
             // Ensure minimum size to hold existing entries.
             let min_needed =
-                nvim_synblock_get_sst_len(block) - nvim_synblock_get_sst_freecount(block) + 2;
+                synblock_ref(block).b_sst_len - synblock_ref(block).b_sst_freecount + 2;
             if new_len < min_needed {
                 new_len = min_needed;
             }
@@ -319,13 +307,13 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
     if block.is_null() || buf.is_null() {
         return;
     }
-    let linebreaks = nvim_synblock_get_sync_linebreaks(block);
+    let linebreaks = synblock_ref(block).b_syn_sync_linebreaks;
     let mod_top = bref(buf).b_mod_top;
     let mod_bot = bref(buf).b_mod_bot;
     let mod_xlines = bref(buf).b_mod_xlines;
 
     let mut prev = SynStateHandle::null();
-    let mut p = nvim_synblock_get_sst_first(block);
+    let mut p = SynStateHandle(synblock_ref(block).b_sst_first.cast());
 
     while !p.is_null() {
         let p_lnum = nvim_synstate_get_lnum(p);
@@ -336,7 +324,7 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
             if n <= mod_bot {
                 // This state is inside the changed area - remove it.
                 if prev.is_null() {
-                    nvim_synblock_set_sst_first(block, next);
+                    synblock_mut(block).b_sst_first = next.0.cast();
                 } else {
                     nvim_synstate_set_next(prev, next);
                 }
@@ -646,7 +634,7 @@ pub fn invalidate_states_after(block: SynBlockHandle, lnum: i32) {
         return;
     }
 
-    let mut state = unsafe { nvim_synblock_get_sst_first(block) };
+    let mut state = unsafe { SynStateHandle(synblock_ref(block).b_sst_first.cast()) };
     while !state.is_null() {
         let state_lnum = unsafe { nvim_synstate_get_lnum(state) };
         if state_lnum >= lnum {
@@ -685,7 +673,7 @@ pub fn synblock_has_state_array(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_has_sst_array(block) != 0 }
+    unsafe { !synblock_ref(block).b_sst_array.is_null() }
 }
 
 /// Get the state array length for a synblock
@@ -694,7 +682,7 @@ pub fn synblock_state_array_len(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sst_len(block) }
+    unsafe { synblock_ref(block).b_sst_len }
 }
 
 /// Get the number of free entries in the state array
@@ -703,7 +691,7 @@ pub fn synblock_free_state_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sst_freecount(block) }
+    unsafe { synblock_ref(block).b_sst_freecount }
 }
 
 #[cfg(test)]

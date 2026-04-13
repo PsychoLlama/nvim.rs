@@ -11,6 +11,7 @@ use crate::check_ends::{check_keepend, check_state_ends, update_si_attr};
 
 use crate::current_attr::syn_finish_line;
 use crate::region::update_si_end;
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle, KEYWORD_IDX, SPTYPE_START,
 };
@@ -33,13 +34,6 @@ const HL_SYNC_HERE: i32 = 0x10;
 // =============================================================================
 
 extern "C" {
-    // Synblock sync accessors
-    fn nvim_synblock_get_sync_flags(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sync_id(block: SynBlockHandle) -> i16;
-    fn nvim_synblock_get_sync_minlines(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sync_maxlines(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
-
     // Pattern sync accessors
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
@@ -78,8 +72,6 @@ extern "C" {
         out_start_lnum: *mut c_int,
     ) -> c_int;
 
-    // Synblock pattern count
-    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
 
     // Line content access
@@ -97,7 +89,7 @@ pub fn synblock_sync_flags(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sync_flags(block) }
+    unsafe { synblock_ref(block).b_syn_sync_flags }
 }
 
 /// Get the sync ID for a synblock.
@@ -106,7 +98,7 @@ pub fn synblock_sync_id(block: SynBlockHandle) -> i16 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sync_id(block) }
+    unsafe { synblock_ref(block).b_syn_sync_id }
 }
 
 /// Get the sync minlines for a synblock.
@@ -115,7 +107,7 @@ pub fn synblock_sync_minlines(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sync_minlines(block) }
+    unsafe { synblock_ref(block).b_syn_sync_minlines }
 }
 
 /// Get the sync maxlines for a synblock.
@@ -124,7 +116,7 @@ pub fn synblock_sync_maxlines(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sync_maxlines(block) }
+    unsafe { synblock_ref(block).b_syn_sync_maxlines }
 }
 
 /// Get the sync linebreaks for a synblock.
@@ -133,7 +125,7 @@ pub fn synblock_sync_linebreaks(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_sync_linebreaks(block) }
+    unsafe { synblock_ref(block).b_syn_sync_linebreaks }
 }
 
 // =============================================================================
@@ -271,7 +263,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
             // Inside a comment: find the syntax item that defines the comment.
             let sync_id = nvim_syn_get_sync_id();
             let blk = nvim_syn_get_syn_block();
-            let ga_len = nvim_synblock_get_pattern_count(blk);
+            let ga_len = synblock_ref(blk).b_syn_patterns.ga_len;
             let mut idx = ga_len - 1;
             while idx >= 0 {
                 let pp = crate::statics::syn_item_at(blk, idx);
