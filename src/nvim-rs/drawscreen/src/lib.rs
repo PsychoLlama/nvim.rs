@@ -28,7 +28,7 @@ use std::ptr::{addr_of, addr_of_mut};
 const K_UI_MESSAGES: c_int = 4;
 
 use nvim_buffer::buf_struct::BufStruct;
-use nvim_window::win_struct::{win_mut, win_ref};
+use nvim_window::win_struct::{win_mut, win_ref, PosT};
 use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // Direct access to C globals (avoids thin C accessor functions).
@@ -3049,9 +3049,117 @@ extern "C" {
     /// Get VIsual.col.
     fn nvim_get_VIsual_col() -> c_int;
 
-    /// Compute block-visual column range: getvcols(&VIsual, &curwin->w_cursor),
-    /// handles MAXCOL curswant, returns fromc and toc (post-increment).
-    fn nvim_win_visual_block_cols(wp: WinHandle, fromc: *mut ColnrT, toc: *mut ColnrT);
+    /// Compute getvcols(&pos1, &pos2) for two positions.
+    fn getvcols(
+        wp: WinHandle,
+        pos1: *const PosT,
+        pos2: *const PosT,
+        left: *mut ColnrT,
+        right: *mut ColnrT,
+    );
+    /// Compute virtual column positions for pos in wp.
+    fn getvvcol(
+        wp: WinHandle,
+        pos: *const PosT,
+        start: *mut ColnrT,
+        cursor: *mut ColnrT,
+        end: *mut ColnrT,
+    );
+    /// Get length of line lnum in buf (number of bytes, excluding NUL).
+    fn ml_get_buf_len(buf: *mut c_void, lnum: i32) -> i32;
+    /// Get virtualedit flags for window wp.
+    #[link_name = "get_ve_flags"]
+    fn win_get_ve_flags(wp: WinHandle) -> c_int;
+}
+
+/// kOptVeFlagAll: virtualedit=all (from option_vars.generated.h).
+const K_OPT_VE_FLAG_ALL: u32 = 0x04;
+/// kOptVeFlagBlock: virtualedit=block (from option_vars.generated.h).
+const K_OPT_VE_FLAG_BLOCK: c_int = 0x05;
+
+/// Compute block-visual column range for window `wp`.
+///
+/// Mirrors `nvim_win_visual_block_cols()` from `drawscreen_shim.c`.
+/// Calls `getvcols(&VIsual, &curwin->w_cursor)`, then handles MAXCOL
+/// `curswant` block expansion using `getvvcol`.
+///
+/// # Safety
+/// Must be called in a visual block context with valid `wp`.
+unsafe fn win_visual_block_cols_impl(wp: WinHandle, fromc_out: *mut ColnrT, toc_out: *mut ColnrT) {
+    let save_ve_flags = nvim_curwin_get_w_ve_flags();
+    if nvim_curwin_get_w_p_lbr() != 0 {
+        nvim_curwin_set_w_ve_flags(K_OPT_VE_FLAG_ALL);
+    }
+
+    let curwin = nvim_get_curwin();
+    let cursor = win_ref(curwin).w_cursor;
+
+    // Build VIsual as PosT from individual accessors.
+    let mut vis_lnum: i32 = 0;
+    let mut vis_col: i32 = 0;
+    let mut vis_coladd: i32 = 0;
+    nvim_get_VIsual_pos_fields(&raw mut vis_lnum, &raw mut vis_col, &raw mut vis_coladd);
+    let visual = PosT {
+        lnum: vis_lnum,
+        col: vis_col,
+        coladd: vis_coladd,
+    };
+
+    let mut fromc: ColnrT = 0;
+    let mut toc: ColnrT = 0;
+    getvcols(
+        wp,
+        &raw const visual,
+        &raw const cursor,
+        &raw mut fromc,
+        &raw mut toc,
+    );
+    toc += 1;
+    nvim_curwin_set_w_ve_flags(save_ve_flags);
+
+    let curswant = win_ref(curwin).w_curswant;
+    if curswant == MAXCOL {
+        if win_get_ve_flags(wp) & K_OPT_VE_FLAG_BLOCK != 0 {
+            let cursor_lnum = cursor.lnum;
+            let cursor_above = cursor_lnum < vis_lnum;
+            toc = 0;
+            let buf_ptr = win_ref(wp).w_buffer;
+            let mut pos = PosT {
+                lnum: cursor_lnum,
+                col: 0,
+                coladd: 0,
+            };
+            loop {
+                pos.col = ml_get_buf_len(buf_ptr, pos.lnum);
+                let mut t: ColnrT = 0;
+                getvvcol(
+                    wp,
+                    &raw const pos,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    &raw mut t,
+                );
+                if t > toc {
+                    toc = t;
+                }
+                let done = if cursor_above {
+                    pos.lnum >= vis_lnum
+                } else {
+                    pos.lnum <= vis_lnum
+                };
+                if done {
+                    break;
+                }
+                pos.lnum += if cursor_above { 1 } else { -1 };
+            }
+            toc += 1;
+        } else {
+            toc = MAXCOL;
+        }
+    }
+
+    *fromc_out = fromc;
+    *toc_out = toc;
 }
 
 /// Visual mode region update section extracted from `win_update()`.
@@ -3124,7 +3232,7 @@ unsafe fn win_update_visual_region_impl(
             let (from, to) = if visual_mode == ctrl_v {
                 let mut fromc: ColnrT = 0;
                 let mut toc: ColnrT = 0;
-                nvim_win_visual_block_cols(wp, &raw mut fromc, &raw mut toc);
+                win_visual_block_cols_impl(wp, &raw mut fromc, &raw mut toc);
 
                 let prev_first_col = win_ref(wp).w_old_cursor_fcol;
                 let prev_last_col = win_ref(wp).w_old_cursor_lcol;

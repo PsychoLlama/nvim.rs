@@ -431,48 +431,6 @@ bool nvim_buf_is_curwin_buf(buf_T *buf) { return buf == curwin->w_buffer; }
 /// Return true if *wp->w_p_stc != NUL (statuscolumn option is set).
 bool nvim_win_get_w_p_stc_nul(win_T *wp) { return *wp->w_p_stc != NUL; }
 
-/// Compute getvcols(&VIsual, &curwin->w_cursor) for block visual mode.
-/// Returns fromc via *fromc_out and pre-incremented toc via *toc_out.
-/// Also handles MAXCOL curswant block expansion.
-/// This is the core of the block-visual column range calculation.
-void nvim_win_visual_block_cols(win_T *wp, colnr_T *fromc_out, colnr_T *toc_out)
-{
-  colnr_T fromc, toc;
-  unsigned save_ve_flags = curwin->w_ve_flags;
-
-  if (curwin->w_p_lbr) {
-    curwin->w_ve_flags = kOptVeFlagAll;
-  }
-
-  getvcols(wp, &VIsual, &curwin->w_cursor, &fromc, &toc);
-  toc++;
-  curwin->w_ve_flags = save_ve_flags;
-
-  if (curwin->w_curswant == MAXCOL) {
-    if (get_ve_flags(curwin) & kOptVeFlagBlock) {
-      pos_T pos;
-      int cursor_above = curwin->w_cursor.lnum < VIsual.lnum;
-
-      toc = 0;
-      pos.coladd = 0;
-      for (pos.lnum = curwin->w_cursor.lnum;
-           cursor_above ? pos.lnum <= VIsual.lnum : pos.lnum >= VIsual.lnum;
-           pos.lnum += cursor_above ? 1 : -1) {
-        colnr_T t;
-
-        pos.col = ml_get_buf_len(wp->w_buffer, pos.lnum);
-        getvvcol(wp, &pos, NULL, NULL, &t);
-        toc = MAX(toc, t);
-      }
-      toc++;
-    } else {
-      toc = MAXCOL;
-    }
-  }
-
-  *fromc_out = fromc;
-  *toc_out = toc;
-}
 
 // =============================================================================
 // Phase 1 (plan 132e8cc7): win_update accessor infrastructure
