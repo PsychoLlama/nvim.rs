@@ -8,3 +8,4 @@ description = "Neovim main/startup infrastructure"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+nvim-buffer = { path = "../buffer" }

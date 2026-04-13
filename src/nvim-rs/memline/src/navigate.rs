@@ -18,6 +18,7 @@
 //! The memline B-tree uses a stack to track the path from root to the current
 //! data block. This module provides helpers for stack management and tree traversal.
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int};
 
 use crate::block_ops;
@@ -81,9 +82,6 @@ extern "C" {
 
     /// Get b_p_fixeol
     fn nvim_buf_get_b_p_fixeol(buf: *mut BufHandle) -> c_int;
-
-    /// Get b_p_bin
-    fn nvim_buf_get_b_p_bin(buf: *mut BufHandle) -> c_int;
 
     /// Get b_p_eol
     fn nvim_buf_get_b_p_eol(buf: *mut BufHandle) -> c_int;
@@ -885,7 +883,7 @@ pub unsafe extern "C" fn rs_ml_find_line_or_offset(
         }
 
         // Don't count the last line break if 'noeol' and ('bin' or 'nofixeol').
-        if (nvim_buf_get_b_p_fixeol(buf) == 0 || nvim_buf_get_b_p_bin(buf) != 0)
+        if (nvim_buf_get_b_p_fixeol(buf) == 0 || (*buf.cast::<BufStruct>()).b_p_bin != 0)
             && nvim_buf_get_b_p_eol(buf) == 0
             && lnum > line_count
         {

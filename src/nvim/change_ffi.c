@@ -53,7 +53,6 @@ bool nvim_buf_get_b_may_swap(buf_T *buf) { return buf->b_may_swap; }
 bool nvim_buf_get_b_p_eol(buf_T *buf) { return buf->b_p_eol; }
 linenr_T nvim_buf_get_b_ml_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
-bool nvim_buf_get_b_p_bin(buf_T *buf) { return buf->b_p_bin; }
 bool nvim_buf_get_b_p_fixeol(buf_T *buf) { return buf->b_p_fixeol; }
 const char *nvim_buf_get_b_p_fenc(buf_T *buf) { return buf->b_p_fenc; }
 int nvim_buf_marktree_n_keys(buf_T *buf) { return (int)buf->b_marktree->n_keys; }

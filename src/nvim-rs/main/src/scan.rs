@@ -4,6 +4,7 @@
 //! `command_line_scan` in `src/nvim/main.c`.
 
 use crate::setup::MparmT;
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int};
 
 // =============================================================================
@@ -180,10 +181,6 @@ unsafe extern "C" {
     static mut p_shadafile: *mut c_char;
     static mut nlua_disable_preload: bool;
 
-    // Curbuf accessors
-    fn nvim_buf_get_b_p_bin(buf: *mut std::ffi::c_void) -> c_int;
-    fn nvim_buf_set_b_p_bin(buf: *mut std::ffi::c_void, val: c_int);
-    fn nvim_buf_set_b_p_ro_true(buf: *mut std::ffi::c_void);
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
 
     // GARGCOUNT
@@ -472,9 +469,9 @@ pub unsafe extern "C" fn rs_command_line_scan(parmp: *mut MparmT) {
                 b'b' => {
                     // "-b" binary mode.
                     let curbuf = nvim_get_curbuf();
-                    let old_bin = nvim_buf_get_b_p_bin(curbuf);
+                    let old_bin = (*curbuf.cast::<BufStruct>()).b_p_bin;
                     set_options_bin(old_bin, 1, 0);
-                    nvim_buf_set_b_p_bin(curbuf, 1);
+                    (*curbuf.cast::<BufStruct>()).b_p_bin = 1;
                 }
 
                 b'D' => {
@@ -577,7 +574,7 @@ pub unsafe extern "C" fn rs_command_line_scan(parmp: *mut MparmT) {
                     // "-R" readonly mode
                     readonlymode = true;
                     let curbuf = nvim_get_curbuf();
-                    nvim_buf_set_b_p_ro_true(curbuf);
+                    (*curbuf.cast::<BufStruct>()).b_p_ro = 1;
                     p_uc = 10000; // don't update very often
                 }
 

@@ -1561,9 +1561,6 @@ extern "C" {
     /// Decrement no_wait_return
     fn nvim_dec_no_wait_return();
 
-    /// Set buf->b_p_ro = true
-    fn nvim_buf_set_b_p_ro_true(buf: *mut BufHandle);
-
     /// Get buf->b_help
     fn nvim_buf_get_help(buf: *mut BufHandle) -> c_int;
 
@@ -2107,7 +2104,7 @@ pub unsafe extern "C" fn rs_findswapname(
                     // Handle the choice
                     match choice {
                         c if c == crate::types::SEA_CHOICE_READONLY => {
-                            nvim_buf_set_b_p_ro_true(buf);
+                            (*buf.cast::<BufStruct>()).b_p_ro = 1;
                         }
                         c if c == crate::types::SEA_CHOICE_EDIT => {
                             // Edit anyway: do nothing

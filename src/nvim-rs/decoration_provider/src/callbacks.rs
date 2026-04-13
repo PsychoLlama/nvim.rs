@@ -27,6 +27,7 @@
 //! - `spell`: (winid, start_row, start_col, end_row, end_col)
 //! - `conceal_line`: (winid, row)
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::c_int;
 
 use crate::types::{BufHandle, DecorProviderHandle, WinHandle};
@@ -51,7 +52,12 @@ use crate::accessors::{
 extern "C" {
     // Handle accessors for argument building
     fn nvim_win_get_handle(win: WinHandle) -> c_int;
-    fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
+}
+
+/// Get the buffer handle (b_fnum) from a BufHandle.
+#[inline]
+unsafe fn buf_get_handle(buf: BufHandle) -> c_int {
+    (*buf.as_ptr().cast::<BufStruct>()).handle
 }
 
 // =============================================================================
@@ -183,7 +189,7 @@ pub extern "C" fn rs_decor_provider_has_conceal_callback(provider: DecorProvider
 #[no_mangle]
 pub extern "C" fn rs_build_buf_callback_args(buf: BufHandle) -> BufCallbackArgs {
     BufCallbackArgs {
-        bufnr: unsafe { nvim_buf_get_handle(buf) },
+        bufnr: unsafe { buf_get_handle(buf) },
     }
 }
 
@@ -197,7 +203,7 @@ pub extern "C" fn rs_build_win_callback_args(
 ) -> WinCallbackArgs {
     WinCallbackArgs {
         winid: unsafe { nvim_win_get_handle(win) },
-        bufnr: unsafe { nvim_buf_get_handle(buf) },
+        bufnr: unsafe { buf_get_handle(buf) },
         toprow,
         botrow,
     }
@@ -212,7 +218,7 @@ pub extern "C" fn rs_build_line_callback_args(
 ) -> LineCallbackArgs {
     LineCallbackArgs {
         winid: unsafe { nvim_win_get_handle(win) },
-        bufnr: unsafe { nvim_buf_get_handle(buf) },
+        bufnr: unsafe { buf_get_handle(buf) },
         row,
     }
 }
@@ -229,7 +235,7 @@ pub extern "C" fn rs_build_range_callback_args(
 ) -> RangeCallbackArgs {
     RangeCallbackArgs {
         winid: unsafe { nvim_win_get_handle(win) },
-        bufnr: unsafe { nvim_buf_get_handle(buf) },
+        bufnr: unsafe { buf_get_handle(buf) },
         start_row,
         start_col,
         end_row,

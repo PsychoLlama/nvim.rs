@@ -84,7 +84,6 @@ extern int rs_read_buffer(bool read_stdin, exarg_T *eap, int flags);
 // getout declared in main.h.generated.h (included via buffer_shim.c.generated.h indirectly)
 extern void getout(int exitval);
 
-int nvim_buf_get_handle(buf_T *buf) { return buf ? buf->b_fnum : 0; }
 int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
 int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
 buf_T *nvim_get_lastbuf(void) { return lastbuf; }

@@ -273,7 +273,6 @@ int nvim_get_recoverymode(void) { return recoverymode ? 1 : 0; }
 const char *nvim_get_p_shm(void) { return p_shm; }
 void nvim_inc_no_wait_return(void) { no_wait_return++; }
 void nvim_dec_no_wait_return(void) { no_wait_return--; }
-void nvim_buf_set_b_p_ro_true(buf_T *buf) { buf->b_p_ro = true; }
 int nvim_os_fileinfo_link(const char *fname) { FileInfo fi; return os_fileinfo_link(fname, &fi) ? 1 : 0; }
 int nvim_read_block0(int fd, ZeroBlock *b0p) { ssize_t n = read_eintr(fd, b0p, sizeof(*b0p)); return (n == (ssize_t)sizeof(*b0p)) ? 1 : 0; }
 int nvim_same_directory(const char *a, const char *b) { return same_directory(a, b); }
@@ -421,6 +420,5 @@ void nvim_sb_concat_len(void *sb, const char *ptr, size_t len) { kv_concat_len(*
 const char *nvim_get_p_ffs(void) { return p_ffs; }
 int nvim_get_fileformat_force(buf_T *buf, exarg_T *eap) { return get_fileformat_force(buf, eap); }
 void nvim_set_options_bin(int oldval, int newval, int opt) { set_options_bin(oldval, newval, opt); }
-void nvim_buf_set_b_p_bin(buf_T *buf, int val) { buf->b_p_bin = (bool)val; }
 int nvim_exarg_get_force_bin(const exarg_T *eap) { return eap->force_bin; }
 int nvim_exarg_get_force_ff(const exarg_T *eap) { return eap->force_ff; }

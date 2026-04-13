@@ -2,6 +2,7 @@
 //!
 //! Implements `rs_read_stdin` replacing the static C function in main.c.
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int};
 
 // Buffer list flags
@@ -46,7 +47,6 @@ unsafe extern "C" {
     fn semsg(fmt: *const c_char, ...);
     fn rs_check_swap_exists_action();
 
-    fn nvim_buf_get_handle(buf: *mut std::ffi::c_void) -> c_int;
     fn nvim_curbuf_get_handle() -> c_int;
     fn nvim_curbuf_has_ffname() -> c_int;
     fn nvim_buf_is_empty(buf: *mut std::ffi::c_void) -> c_int;
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn rs_read_stdin() {
         );
 
         // remember stdin_buf_handle so we can close it if stdin_buf ends up empty
-        let stdin_buf_handle = nvim_buf_get_handle(stdin_buf);
+        let stdin_buf_handle = (*stdin_buf.cast::<BufStruct>()).handle;
         let curbuf = nvim_get_curbuf();
         let stdin_buf_empty = nvim_buf_is_empty(curbuf) != 0;
 

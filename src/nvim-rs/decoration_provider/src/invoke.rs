@@ -24,6 +24,7 @@
 //! the vector. All iteration is therefore index-based: we never hold a pointer
 //! into the vector across a C call.
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::c_int;
 
 use crate::constants::{DECOR_PROVIDER_ACTIVE, DECOR_PROVIDER_DISABLED, LUA_NOREF};
@@ -200,12 +201,8 @@ pub unsafe extern "C" fn decor_providers_invoke_conceal_line(wp: WinHandle, row:
 /// `buf` must be a valid `buf_T*`.
 #[unsafe(export_name = "decor_providers_invoke_buf")]
 pub unsafe extern "C" fn decor_providers_invoke_buf(buf: crate::types::BufHandle) {
-    // Use nvim_buf_get_handle (from buffer_shim.c) to extract the buffer handle.
-    extern "C" {
-        fn nvim_buf_get_handle(buf: crate::types::BufHandle) -> c_int;
-    }
     let len = unsafe { nvim_decor_providers_size() };
-    let buf_handle = unsafe { nvim_buf_get_handle(buf) };
+    let buf_handle = unsafe { (*buf.as_ptr().cast::<BufStruct>()).handle };
     let display_tick = unsafe { nvim_decor_get_display_tick() };
     for i in 0..len {
         let state = unsafe { nvim_decor_providers_get_state(i) };
