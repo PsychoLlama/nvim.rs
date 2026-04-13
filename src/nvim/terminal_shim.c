@@ -313,7 +313,6 @@ void nvim_set_option_value_buftype_terminal(void) { set_option_value(kOptBuftype
 void *nvim_aucmd_prepbuf_alloc(void *buf) { aco_save_T *aco = xmalloc(sizeof(aco_save_T)); aucmd_prepbuf(aco, (buf_T *)buf); return aco; }
 void nvim_aucmd_restbuf_free(void *aco) { aucmd_restbuf((aco_save_T *)aco); xfree(aco); }
 void nvim_apply_autocmds_termopen(void *buf) { apply_autocmds(EVENT_TERMOPEN, NULL, NULL, false, (buf_T *)buf); }
-const char *nvim_buf_get_ffname(void *buf) { return ((buf_T *)buf)->b_ffname; }
 size_t nvim_buf_get_ffname_len(void *buf) { const char *n = ((buf_T *)buf)->b_ffname; return n ? strlen(n) : 0; }
 void *nvim_multiqueue_new_standalone(void) { return multiqueue_new(NULL, NULL); }
 int nvim_name_to_color_int(const char *name) { int dummy; return (int)name_to_color(name, &dummy); }

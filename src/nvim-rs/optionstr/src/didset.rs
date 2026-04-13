@@ -11,7 +11,17 @@
 #![allow(clippy::cast_lossless)]
 
 use crate::listval::{rs_opt_strings_flags, OptStringsFlagsResult};
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int, c_uint, c_void};
+
+/// Get `&BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
 
 #[allow(clippy::missing_const_for_fn)]
 #[inline]
@@ -861,9 +871,6 @@ extern "C" {
     // Fileformat
     fn rs_get_fileformat(buf: *mut c_void) -> c_int;
 
-    // Buffer modifiable check
-    fn nvim_buf_get_b_p_ma(buf: *mut c_void) -> c_int;
-
     // Memory
     fn xfree(ptr: *mut c_void);
 }
@@ -1238,7 +1245,7 @@ pub unsafe extern "C" fn did_set_fileformat(args: *const c_void) -> *const c_cha
     let oldval = nvim_optset_get_oldval_str(args);
 
     // Check modifiable when not setting global
-    if nvim_buf_get_b_p_ma(buf) == 0 && (opt_flags & OPT_GLOBAL == 0) {
+    if bref_raw(buf).b_p_ma == 0 && (opt_flags & OPT_GLOBAL == 0) {
         return e_modifiable;
     }
 
@@ -1633,7 +1640,7 @@ pub unsafe extern "C" fn did_set_encoding(args: *const c_void) -> *const c_char 
     let opt_flags = nvim_optset_get_flags(args);
 
     if nvim_optset_varp_is_p_fenc(args) != 0 {
-        if nvim_buf_get_b_p_ma(buf) == 0 && opt_flags != OPT_GLOBAL {
+        if bref_raw(buf).b_p_ma == 0 && opt_flags != OPT_GLOBAL {
             return e_modifiable;
         }
         if !vim_strchr(*varp, b',' as c_int).is_null() {

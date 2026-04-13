@@ -8,6 +8,16 @@
 use std::ffi::c_int;
 
 use crate::ffi_types::{BufState, KeyEntry, StateItem, SynCluster, SynPat};
+use nvim_buffer::buf_struct::BufStruct;
+
+/// Get `&BufStruct` from a `BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    &*(buf.0.cast::<BufStruct>())
+}
 
 // =============================================================================
 // Opaque handle types for C interop

@@ -17,8 +17,27 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
+
+/// Get `&BufStruct` from a `BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    &*(buf.0.cast::<BufStruct>())
+}
+
+/// Get `&BufStruct` from a raw `*mut c_void`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
 
 // =============================================================================
 // Position Types
@@ -124,9 +143,6 @@ pub const VE_NONEU: c_int = 0x20;
 const VALID_VIRTCOL: c_int = 0x04;
 
 extern "C" {
-    /// Get line count from buffer (returns `linenr_T` = `int32_t`)
-    fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i32;
-
     /// Get length of a line in bytes (lnum is `linenr_T` = `int32_t`)
     fn nvim_buf_get_line_len(buf: *mut std::ffi::c_void, lnum: i32) -> i32;
 
@@ -678,7 +694,7 @@ pub unsafe extern "C" fn rs_cursor_get_line_count(win: WinHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_get_line_count(buf)
+    bref_raw(buf).ml_line_count
 }
 
 /// Clamp a line number to valid buffer range.
@@ -1153,7 +1169,7 @@ pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
         return;
     }
 
-    let line_count = i64::from(nvim_buf_get_line_count(buf.0));
+    let line_count = i64::from(bref(buf).ml_line_count);
 
     // Clamp line number to buffer range
     // line_count fits in i64 from i32, but lnum is i32 (linenr_T)
@@ -1183,7 +1199,7 @@ pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
     }
 
     let cursor_lnum = win_ref(win).w_cursor.lnum;
-    let line_count = i64::from(nvim_buf_get_line_count(buf));
+    let line_count = i64::from(bref_raw(buf).ml_line_count);
 
     if i64::from(cursor_lnum) > line_count {
         // If there is a closed fold at the end of the file, put the cursor in
@@ -1312,7 +1328,7 @@ pub unsafe extern "C" fn rs_check_visual_pos() {
         return;
     }
 
-    let line_count = i64::from(nvim_buf_get_line_count(curbuf));
+    let line_count = i64::from(bref_raw(curbuf).ml_line_count);
 
     if i64::from(VIsual.lnum) > line_count {
         VIsual.lnum = line_count as i32;

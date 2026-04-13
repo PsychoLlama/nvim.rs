@@ -10,7 +10,7 @@ use std::ffi::{c_int, c_void};
 
 use crate::ffi_types::{BufState, StateItem};
 use crate::types::{
-    BufHandle, BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle,
+    bref, BufHandle, BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle,
     HL_KEEPEND, SST_DIST, SST_MAX_ENTRIES, SST_MIN_ENTRIES,
 };
 
@@ -88,11 +88,6 @@ extern "C" {
 
     // buf->b_s accessor
     fn nvim_buf_get_b_s(buf: BufHandle) -> SynBlockHandle;
-
-    // buf modification info
-    fn nvim_buf_get_mod_top(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_mod_bot(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_mod_xlines(buf: BufHandle) -> c_int;
 
     // nvim_synblock_get_sync_linebreaks already declared above
 }
@@ -325,9 +320,9 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
         return;
     }
     let linebreaks = nvim_synblock_get_sync_linebreaks(block);
-    let mod_top = nvim_buf_get_mod_top(buf);
-    let mod_bot = nvim_buf_get_mod_bot(buf);
-    let mod_xlines = nvim_buf_get_mod_xlines(buf);
+    let mod_top = bref(buf).b_mod_top;
+    let mod_bot = bref(buf).b_mod_bot;
+    let mod_xlines = bref(buf).b_mod_xlines;
 
     let mut prev = SynStateHandle::null();
     let mut p = nvim_synblock_get_sst_first(block);

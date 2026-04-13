@@ -15,6 +15,7 @@ tabpage_diff = []
 
 [dependencies]
 nvim-window = { path = "../window" }
+nvim-buffer = { path = "../buffer" }
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 libc = "0.2"
 

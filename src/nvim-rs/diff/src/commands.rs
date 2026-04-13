@@ -9,7 +9,7 @@ use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_void;
 use std::os::raw::c_int;
 
-use crate::buffer::{win_ref, BufHandle, DiffBlockHandle, WinHandle, DB_COUNT};
+use crate::buffer::{bref, win_ref, BufHandle, DiffBlockHandle, WinHandle, DB_COUNT};
 
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
@@ -37,8 +37,6 @@ extern "C" {
     fn nvim_diffblock_get_next(dp: DiffBlockHandle) -> DiffBlockHandle;
     fn nvim_diffblock_get_lnum(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
     fn nvim_diffblock_get_count(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
-
     // Phase 2: nv_diffgetput and ex_diffthis accessors
     fn nvim_bt_prompt_curbuf() -> bool;
     fn nvim_vim_beep_operator();
@@ -407,7 +405,7 @@ pub fn diff_get_corresponding_line_clamped(
         if to_buf.is_null() {
             return result;
         }
-        let max_line = nvim_buf_get_ml_line_count(to_buf);
+        let max_line = bref(to_buf).ml_line_count;
         result.min(max_line).max(1)
     }
 }

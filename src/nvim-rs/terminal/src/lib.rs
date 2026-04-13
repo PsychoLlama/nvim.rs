@@ -13,6 +13,7 @@
 use std::ffi::{c_int, c_long};
 use std::os::raw::c_void;
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_vterm::VTermScreenCellAttrs;
 use nvim_window::win_struct::WinStruct;
 
@@ -26,6 +27,12 @@ unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a WinStruct {
 #[inline]
 unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut WinStruct {
     nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
+/// Access `BufStruct` fields from a raw `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
 }
 
 // =============================================================================
@@ -4883,9 +4890,8 @@ extern "C" {
     fn nvim_apply_autocmds_termopen(buf: *mut c_void);
     fn nvim_reset_binding_curwin();
     fn nvim_curwin_cursor_topleft();
-    fn nvim_buf_get_ffname(buf: *mut c_void) -> *const i8;
     fn nvim_buf_get_ffname_len(buf: *mut c_void) -> usize;
-    fn nvim_buf_get_handle(buf: *mut c_void) -> c_int;
+
     fn nvim_multiqueue_new_standalone() -> *mut c_void;
     fn nvim_get_config_string(key: *const i8) -> *mut i8;
     fn nvim_name_to_color_int(name: *const i8) -> c_int;
@@ -4923,8 +4929,8 @@ pub unsafe extern "C" fn rs_terminal_open(
 
     // Fill in basic fields.
     term.opts = opts;
-    // buf_handle = buf->handle (accessed via accessor)
-    let buf_handle = unsafe { nvim_buf_get_handle(buf) };
+    // buf_handle = buf->handle (direct BufStruct field access)
+    let buf_handle = unsafe { bref_raw(buf).handle };
     term.buf_handle = buf_handle;
     // buf->terminal = term
     unsafe { nvim_buf_set_terminal(buf, term_ptr.cast()) };
@@ -4978,7 +4984,7 @@ pub unsafe extern "C" fn rs_terminal_open(
     let term_handle = unsafe { TerminalHandle::from_ptr(term_ptr.cast()) };
     unsafe { rs_refresh_screen_pub(term_handle, buf) };
     unsafe { nvim_set_option_value_buftype_terminal() };
-    let ffname = unsafe { nvim_buf_get_ffname(buf) };
+    let ffname = unsafe { bref_raw(buf).b_ffname };
     if !ffname.is_null() {
         let len = unsafe { nvim_buf_get_ffname_len(buf) };
         unsafe { nvim_terminal_buf_set_title(buf, ffname, len) };

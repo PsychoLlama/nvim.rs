@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use crate::types::{BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
+use crate::types::{bref, BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
 
 // =============================================================================
 // FFI declarations for buffer operations
@@ -22,11 +22,6 @@ extern "C" {
     fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_containedin(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-
-    // Buffer modification tracking
-    fn nvim_buf_get_mod_top(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_mod_bot(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_mod_xlines(buf: BufHandle) -> c_int;
 
     // Change handling
     #[link_name = "syn_stack_apply_changes"]
@@ -443,7 +438,7 @@ pub fn buf_mod_top(buf: BufHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    unsafe { nvim_buf_get_mod_top(buf) }
+    unsafe { bref(buf).b_mod_top }
 }
 
 /// Get the bottommost modified line in the buffer.
@@ -452,7 +447,7 @@ pub fn buf_mod_bot(buf: BufHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    unsafe { nvim_buf_get_mod_bot(buf) }
+    unsafe { bref(buf).b_mod_bot }
 }
 
 /// Get the number of extra lines added/removed.
@@ -461,7 +456,7 @@ pub fn buf_mod_xlines(buf: BufHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    unsafe { nvim_buf_get_mod_xlines(buf) }
+    unsafe { bref(buf).b_mod_xlines }
 }
 
 /// Buffer modification info.

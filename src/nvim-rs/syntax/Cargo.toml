@@ -7,3 +7,4 @@ edition = "2021"
 nvim-api = { path = "../api" }
 nvim-collections = { path = "../collections" }
 nvim-memory = { path = "../memory" }
+nvim-buffer = { path = "../buffer" }

@@ -9,8 +9,8 @@
 use std::ffi::c_int;
 
 use crate::types::{
-    BufStateHandle, ExtMatchHandle, IdListHandle, StateItemHandle, SynBlockHandle, SynStateHandle,
-    KEYWORD_IDX,
+    bref, BufStateHandle, ExtMatchHandle, IdListHandle, StateItemHandle, SynBlockHandle,
+    SynStateHandle, KEYWORD_IDX,
 };
 
 // =============================================================================
@@ -57,9 +57,6 @@ extern "C" {
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
     #[link_name = "syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: crate::types::BufHandle);
-    fn nvim_buf_get_mod_top(buf: crate::types::BufHandle) -> c_int;
-    fn nvim_buf_get_mod_bot(buf: crate::types::BufHandle) -> c_int;
-    fn nvim_buf_get_mod_xlines(buf: crate::types::BufHandle) -> c_int;
     fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
     fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
     fn nvim_synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> c_int;
@@ -948,7 +945,7 @@ pub fn buf_mod_top(buf: crate::types::BufHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    unsafe { nvim_buf_get_mod_top(buf) }
+    unsafe { bref(buf).b_mod_top }
 }
 
 /// Get the line after a buffer change.
@@ -957,7 +954,7 @@ pub fn buf_mod_bot(buf: crate::types::BufHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    unsafe { nvim_buf_get_mod_bot(buf) }
+    unsafe { bref(buf).b_mod_bot }
 }
 
 /// Get the number of extra lines from a buffer change.
@@ -966,7 +963,7 @@ pub fn buf_mod_xlines(buf: crate::types::BufHandle) -> i32 {
     if buf.is_null() {
         return 0;
     }
-    unsafe { nvim_buf_get_mod_xlines(buf) }
+    unsafe { bref(buf).b_mod_xlines }
 }
 
 /// Get the sync linebreaks setting from a synblock.

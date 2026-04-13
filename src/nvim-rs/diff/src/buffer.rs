@@ -5,9 +5,19 @@
 
 #![allow(clippy::must_use_candidate)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::win_struct::WinStruct;
 use std::ffi::c_void;
 use std::os::raw::c_int;
+
+/// Get `&BufStruct` from a `BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    &*(buf.as_ptr().cast::<BufStruct>())
+}
 
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
@@ -161,7 +171,6 @@ extern "C" {
     fn nvim_diffblock_set_count(dp: DiffBlockHandle, idx: c_int, count: LinenrT);
 
     // Buffer accessors
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
 
     // Tab iteration
     fn nvim_get_first_tabpage() -> TabpageHandle;
@@ -725,7 +734,7 @@ pub unsafe extern "C" fn rs_diff_check_sanity(tp: TabpageHandle, dp: DiffBlockHa
         if !buf.is_null() {
             let lnum = nvim_diffblock_get_lnum(dp, i);
             let count = nvim_diffblock_get_count(dp, i);
-            let line_count = nvim_buf_get_ml_line_count(buf);
+            let line_count = bref(buf).ml_line_count;
 
             if lnum + count - 1 > line_count {
                 return FAIL;
@@ -2570,7 +2579,7 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
     }
 
     let buf = nvim_win_get_w_buffer(wp);
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = bref(buf).ml_line_count;
     if lnum < 1 || lnum > line_count + 1 {
         return 0;
     }
@@ -2722,8 +2731,8 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
     if dp.is_null() {
         // After last change, compute relative to end of file
         let to_buf = nvim_win_get_w_buffer(towin);
-        let to_line_count = nvim_buf_get_ml_line_count(to_buf);
-        let from_line_count = nvim_buf_get_ml_line_count(frombuf);
+        let to_line_count = bref(to_buf).ml_line_count;
+        let from_line_count = bref(frombuf).ml_line_count;
         win_mut(towin).w_topline = to_line_count - (from_line_count - lnum);
     } else {
         let tobuf = nvim_win_get_w_buffer(towin);
@@ -2747,7 +2756,7 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
     // Safety checks
     win_mut(towin).w_botfill = false;
     let to_buf = nvim_win_get_w_buffer(towin);
-    let to_line_count = nvim_buf_get_ml_line_count(to_buf);
+    let to_line_count = bref(to_buf).ml_line_count;
 
     if win_ref(towin).w_topline > to_line_count {
         win_mut(towin).w_topline = to_line_count;
@@ -2869,7 +2878,7 @@ pub unsafe extern "C" fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int {
     }
 
     // Clamp to buffer end
-    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    let line_count = bref(curbuf).ml_line_count;
     if lnum > line_count {
         lnum = line_count;
     }
@@ -2951,7 +2960,7 @@ pub unsafe extern "C" fn rs_diff_get_corresponding_line(
 ) -> LinenrT {
     let lnum = rs_diff_get_corresponding_line_int(buf1, lnum1);
     let curbuf = nvim_get_curbuf();
-    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    let line_count = bref(curbuf).ml_line_count;
     if lnum < line_count {
         lnum
     } else {
@@ -2986,8 +2995,8 @@ pub unsafe extern "C" fn rs_diff_lnum_win(lnum: LinenrT, wp: WinHandle) -> Linen
     if dp.is_null() {
         // After last change, compute relative to end of file
         let wp_buf = nvim_win_get_w_buffer(wp);
-        let wp_line_count = nvim_buf_get_ml_line_count(wp_buf);
-        let cur_line_count = nvim_buf_get_ml_line_count(curbuf);
+        let wp_line_count = bref(wp_buf).ml_line_count;
+        let cur_line_count = bref(curbuf).ml_line_count;
         return wp_line_count - (cur_line_count - lnum);
     }
 
