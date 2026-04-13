@@ -340,18 +340,6 @@ void nvim_eval_format_reg_type(int reg_type, int reg_width, char *buf, size_t bu
   format_reg_type((MotionType)reg_type, (colnr_T)reg_width, buf, buf_len);
 }
 
-/// Get unnamedregister name char.
-int nvim_eval_get_unname_register(void)
-{
-  return get_unname_register();
-}
-
-/// Get register name char for register number num.
-int nvim_eval_get_register_name(int num)
-{
-  return rs_get_register_name(num);
-}
-
 /// Set rettv to VAR_LIST with list from get_reg_contents.
 /// @param regname   register name char
 /// @param flags     get_reg_contents flags (kGReg*)
@@ -491,30 +479,6 @@ char *nvim_eval_cmdcomplete_type_to_str(int ctx, void *xpc)
   return (char *)nvim_cmdexpand_cmdcomplete_type_to_str(ctx, ((expand_T *)xpc)->xp_arg);
 }
 
-/// Get cmdlen from CmdlineInfo.
-int nvim_eval_ccline_get_cmdlen(void *p)
-{
-  return ((CmdlineInfo *)p)->cmdlen;
-}
-
-/// Get cmdpos from CmdlineInfo.
-int nvim_eval_ccline_get_cmdpos(void *p)
-{
-  return ((CmdlineInfo *)p)->cmdpos;
-}
-
-/// Set cmdlen in CmdlineInfo.
-void nvim_eval_ccline_set_cmdlen(void *p, int len)
-{
-  ((CmdlineInfo *)p)->cmdlen = len;
-}
-
-/// Set cmdpos in CmdlineInfo.
-void nvim_eval_ccline_set_cmdpos(void *p, int pos)
-{
-  ((CmdlineInfo *)p)->cmdpos = pos;
-}
-
 /// Get cmdbuff pointer from CmdlineInfo.
 char *nvim_eval_ccline_get_cmdbuff(void *p)
 {
@@ -623,13 +587,6 @@ void nvim_eval_tv_set_list(typval_T *tv, list_T *l)
   tv->v_type = VAR_LIST;
   tv->vval.v_list = l;
 }
-
-/// Get v_number from a typval.
-varnumber_T nvim_eval_tv_get_number(typval_T *tv)
-{
-  return tv->vval.v_number;
-}
-
 
 /// Returns 1 if tv is a function type (VAR_FUNC, VAR_PARTIAL), else 0.
 int nvim_eval_tv_is_func(const typval_T *tv)
@@ -6045,12 +6002,6 @@ int nvim_readdir_core(garray_T *gap, const char *path, void *context,
                       varnumber_T (*checkitem)(void *context, const char *name))
 {
   return readdir_core(gap, path, context, checkitem);
-}
-
-/// Initialize a garray_T for string pointers (element size = sizeof(char *)).
-void nvim_ga_init_str(garray_T *gap)
-{
-  ga_init(gap, (int)sizeof(char *), 20);
 }
 
 /// Clear a garray_T of strings.

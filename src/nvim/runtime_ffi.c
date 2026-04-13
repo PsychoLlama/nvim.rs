@@ -654,13 +654,9 @@ bool nvim_rt_has_profiling(bool file, const char *name, bool *forceit) { return 
 /// profile_init wrapper.
 void nvim_rt_profile_init(void *si) { profile_init((scriptitem_T *)si); }
 
-/// profile_start/end/zero/sub_wait/add/self wrappers.
+/// profile_start/zero wrappers.
 uint64_t nvim_rt_profile_start(void) { return (uint64_t)profile_start(); }
-uint64_t nvim_rt_profile_end(uint64_t tm) { return (uint64_t)profile_end((proftime_T)tm); }
 uint64_t nvim_rt_profile_zero(void) { return (uint64_t)profile_zero(); }
-uint64_t nvim_rt_profile_sub_wait(uint64_t wait_start, uint64_t tm) { return (uint64_t)profile_sub_wait((proftime_T)wait_start, (proftime_T)tm); }
-uint64_t nvim_rt_profile_add(uint64_t tm1, uint64_t tm2) { return (uint64_t)profile_add((proftime_T)tm1, (proftime_T)tm2); }
-uint64_t nvim_rt_profile_self(uint64_t self, uint64_t total, uint64_t children) { return (uint64_t)profile_self((proftime_T)self, (proftime_T)total, (proftime_T)children); }
 
 /// Set si profiling fields after source.
 void nvim_rt_si_update_profile(void *si, uint64_t wait_start)
@@ -783,12 +779,6 @@ void nvim_rt_semsg_notopen(const char *fname) { semsg(_(e_notopen), fname); }
 
 /// emsg_argreq: "E471: Argument required".
 void nvim_rt_emsg_argreq(void) { emsg(_(e_argreq)); }
-
-/// do_source: trampoline to avoid circular dependency.
-int nvim_rt_do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid)
-{
-  return do_source(fname, check_other, is_vimrc, ret_sid);
-}
 
 /// SOURCING_NAME check: if not NULL, return it.
 const char *nvim_rt_get_sourcing_name_if_set(void)
