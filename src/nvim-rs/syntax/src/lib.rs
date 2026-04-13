@@ -57,7 +57,9 @@ pub mod state;
 pub mod state_entry;
 pub mod state_ops;
 pub mod statics;
+pub mod synblock_struct;
 pub mod sync;
+pub mod synstate_struct;
 pub mod syntime;
 pub mod types;
 
