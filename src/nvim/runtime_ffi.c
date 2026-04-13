@@ -454,14 +454,11 @@ const void *nvim_rt_vim_env_iter_rev(const char *val, const void *iter,
   return vim_env_iter_rev(ENV_SEPCHAR, val, iter, dir, len);
 }
 
-/// Count occurrences of a character in a buffer.
-size_t nvim_rt_memcnt(const void *s, int c, size_t n) { return memcnt(s, c, n); }
 
 const char *nvim_rt_get_appname(void) { return get_appname(false); }
 
 char *nvim_rt_stdpaths_get_xdg_var(int type) { return stdpaths_get_xdg_var((XDGVarType)type); }
 
-char *nvim_rt_vim_getenv(const char *name) { return vim_getenv(name); }
 
 const char *nvim_rt_get_default_lib_dir(void) { return default_lib_dir; }
 
@@ -584,8 +581,6 @@ int nvim_rt_EVENT_SOURCEPRE(void) { return EVENT_SOURCEPRE; }
 /// Get EVENT_SOURCEPOST value.
 int nvim_rt_EVENT_SOURCEPOST(void) { return EVENT_SOURCEPOST; }
 
-/// aborting() wrapper.
-bool nvim_rt_aborting(void) { return aborting(); }
 
 /// vimrc_found wrapper.
 void nvim_rt_vimrc_found(const char *fname_exp, const char *env) { vimrc_found((char *)fname_exp, (char *)env); }
@@ -765,11 +760,6 @@ void nvim_rt_snprintf_source_buffer_name(char *buf, int size, bool ex_lua, int f
   }
 }
 
-/// skip_to_newline wrapper.
-const char *nvim_rt_skip_to_newline(const char *str) { return skip_to_newline(str); }
-
-/// xmemdupz wrapper.
-char *nvim_rt_xmemdupz(const char *str, size_t len) { return xmemdupz(str, len); }
 
 /// emsg_norange: signal "E16: Invalid range" for :source with range+file.
 void nvim_rt_emsg_norange(void) { emsg(_(e_norange)); }

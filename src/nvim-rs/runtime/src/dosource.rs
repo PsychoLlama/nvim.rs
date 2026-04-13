@@ -73,6 +73,7 @@ extern "C" {
     fn nvim_rt_EVENT_SOURCECMD() -> c_int;
     fn nvim_rt_EVENT_SOURCEPRE() -> c_int;
     fn nvim_rt_EVENT_SOURCEPOST() -> c_int;
+    #[link_name = "aborting"]
     fn nvim_rt_aborting() -> bool;
     fn nvim_rt_vimrc_found(fname_exp: *const c_char, env: *const c_char);
     fn nvim_rt_get_curbuf() -> *mut c_void;
@@ -176,7 +177,9 @@ extern "C" {
     fn nvim_rt_ml_get(lnum: c_int) -> *const c_char;
     fn nvim_rt_exarg_get_line1(eap: *mut c_void) -> c_int;
     fn nvim_rt_exarg_get_line2(eap: *mut c_void) -> LinenrT;
+    #[link_name = "skip_to_newline"]
     fn nvim_rt_skip_to_newline(s: *const c_char) -> *const c_char;
+    #[link_name = "xmemdupz"]
     fn nvim_rt_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
     // cmd_source helpers
