@@ -11,6 +11,7 @@
 
 use std::ffi::{c_int, c_void};
 
+use crate::synblock_struct::synblock_ref;
 use crate::types::{SynBlockHandle, SynPatHandle};
 
 // ============================================================================
@@ -50,7 +51,6 @@ extern "C" {
     // (synpat_T setters removed -- use direct repr(C) field access)
 
     // Current synblock pattern access
-    fn nvim_syn_get_synblock_pattern_count() -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
@@ -163,8 +163,12 @@ pub unsafe fn syn_regexec_pat(
     end_lnum: *mut c_int,
     end_col: *mut c_int,
 ) -> c_int {
-    let pat_count = nvim_syn_get_synblock_pattern_count();
     let block = nvim_syn_get_syn_block();
+    let pat_count = if block.is_null() {
+        0
+    } else {
+        synblock_ref(block).b_syn_patterns.ga_len
+    };
     if block.is_null() || idx < 0 || idx >= pat_count {
         return 0;
     }

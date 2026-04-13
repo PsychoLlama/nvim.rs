@@ -32,7 +32,6 @@ extern "C" {
 
     // (synpat_T setters removed -- use direct repr(C) field access)
     fn nvim_synblock_or_sync_flags(block: SynBlockHandle, flags: c_int);
-    fn nvim_synblock_inc_folditems();
 
     // garray operations
     fn nvim_synblock_ga_append_pattern() -> SynPatHandle;
@@ -177,7 +176,7 @@ pub unsafe fn store_match_pattern(
         nvim_synblock_or_sync_flags(nvim_syn_get_curwin_synblock(), SF_MATCH);
     }
     if flags & HL_FOLD != 0 {
-        nvim_synblock_inc_folditems();
+        synblock_mut(nvim_syn_get_curwin_synblock()).b_syn_folditems += 1;
     }
 
     nvim_syn_redraw_curbuf_later();
@@ -243,7 +242,7 @@ pub unsafe fn store_region_patterns(
             }
         }
         if flags & HL_FOLD != 0 {
-            nvim_synblock_inc_folditems();
+            synblock_mut(nvim_syn_get_curwin_synblock()).b_syn_folditems += 1;
         }
     }
 

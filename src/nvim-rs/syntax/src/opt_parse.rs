@@ -45,7 +45,6 @@ extern "C" {
     fn vim_isprintc(c: c_int) -> c_int;
 
     // Syntax functions
-    fn nvim_syn_get_b_syn_conceal() -> c_int;
     fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
     fn syn_name2id(name: *const c_char) -> c_int;
     fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
@@ -273,7 +272,8 @@ pub unsafe fn get_syn_options_impl(
         return std::ptr::null_mut();
     }
 
-    if nvim_syn_get_b_syn_conceal() != 0 {
+    let curwin_block = unsafe { nvim_syn_get_curwin_synblock() };
+    if !curwin_block.is_null() && unsafe { synblock_ref(curwin_block).b_syn_conceal } != 0 {
         *opt_flags |= HL_CONCEAL;
     }
 

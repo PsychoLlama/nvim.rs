@@ -266,16 +266,12 @@ syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx) { if (idx <
 int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
 int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
-int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
-void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 void nvim_syn_update_si_attr(int idx) { if (idx >= 0 && idx < current_state.ga_len) rs_update_si_attr(idx); }
 const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx) { if (em == NULL || subidx < 0 || subidx >= NSUBEXP) return NULL; return (const char *)em->matches[subidx]; }
 int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b) { if (a == NULL || b == NULL) return a == b ? 0 : 1; return mb_strcmp_ic(ic, a, b); }
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
-int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
-int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
@@ -284,19 +280,11 @@ void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
 void nvim_syn_set_syn_win(void *win) { syn_win = (win_T *)win; }
-int nvim_syn_get_sync_minlines(void) { return syn_block ? (int)syn_block->b_syn_sync_minlines : 0; }
-int nvim_syn_get_sync_maxlines(void) { return syn_block ? (int)syn_block->b_syn_sync_maxlines : 0; }
-int nvim_syn_get_sync_flags(void) { return syn_block ? syn_block->b_syn_sync_flags : 0; }
-int nvim_syn_get_sync_id(void) { return syn_block ? syn_block->b_syn_sync_id : 0; }
-void *nvim_syn_get_sst_first(void) { return syn_block ? syn_block->b_sst_first : NULL; }
-void *nvim_syn_get_sst_array(void) { return syn_block ? syn_block->b_sst_array : NULL; }
-int nvim_syn_get_sst_len(void) { return syn_block ? syn_block->b_sst_len : 0; }
 void *nvim_win_get_synblock(void *wp) { return wp ? ((win_T *)wp)->w_s : NULL; }
 void *nvim_syn_win_get_buffer_ptr(void *wp) { return wp ? ((win_T *)wp)->w_buffer : NULL; }
 int nvim_win_get_foldnestmax(void *wp) { return wp ? (int)((win_T *)wp)->w_p_fdn : 0; }
 int nvim_syn_buf_get_line_count(void *buf) { return buf ? (int)((buf_T *)buf)->b_ml.ml_line_count : 0; }
 int nvim_syn_buf_get_changed_tick(void *buf) { return buf ? (int)buf_get_changedtick((buf_T *)buf) : 0; }
-void nvim_syn_set_sst_lasttick(int tick) { if (syn_block) syn_block->b_sst_lasttick = (disptick_T)tick; }
 int nvim_syn_get_display_tick(void) { return (int)display_tick; }
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
@@ -306,7 +294,6 @@ char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
-int nvim_syn_get_synblock_pattern_count(void) { if (syn_block == NULL) return 0; return syn_block->b_syn_patterns.ga_len; }
 int nvim_syn_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
 int nvim_syn_get_line_len(int lnum) { return (int)ml_get_buf_len(syn_buf, (linenr_T)lnum); }
 int nvim_syn_get_buf_line_count(void) { return (int)syn_buf->b_ml.ml_line_count; }
@@ -315,9 +302,7 @@ void nvim_syn_clear_extmatch_in(void) { unref_extmatch(re_extmatch_in); re_extma
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
 reg_extmatch_T *nvim_syn_take_re_extmatch_out(void) { reg_extmatch_T *em = re_extmatch_out; re_extmatch_out = NULL; return em; }
 void nvim_syn_clear_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); re_extmatch_out = NULL; }
-int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
 int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id) { return rs_syn_in_id_list(sip, list, id, 0, NULL, 0); }
-int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
 char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
@@ -351,7 +336,6 @@ int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
   return found;
 }
 
-int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
 void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
 char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
 void nvim_syn_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
@@ -366,11 +350,9 @@ int nvim_syn_getdigits_int(char **pp, int strict, int def) { return getdigits_in
 char *nvim_syn_get_p_cpo(void) { return p_cpo; }
 void nvim_syn_set_p_cpo(char *val) { p_cpo = val; }
 char *nvim_syn_get_empty_string_option(void) { return empty_string_option; }
-int nvim_syn_get_curwin_syn_ic(void) { return curwin->w_s->b_syn_ic; }
 int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
 synpat_T *nvim_synblock_ga_append_pattern(void) { return GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns); }
 void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
-void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
 synpat_T *nvim_syn_xcalloc_synpat(void) { return xcalloc(1, sizeof(synpat_T)); }
 void nvim_syn_free_synpat(synpat_T *pat) { if (pat != NULL) { vim_regfree(pat->sp_prog); xfree(pat->sp_pattern); xfree(pat); } }
 void nvim_syn_set_reg_do_extmatch(int val) { reg_do_extmatch = val; }
@@ -475,8 +457,6 @@ void nvim_synblock_set_pattern_count(synblock_T *block, int len) { block->b_syn_
 void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx, int count) { memmove(SYN_ITEMS(block) + dst_idx, SYN_ITEMS(block) + src_idx, sizeof(synpat_T) * (size_t)count); }
 void nvim_synblock_dec_folditems(synblock_T *block) { block->b_syn_folditems--; }
 void nvim_win_release_synblock(win_T *wp) { if (wp->w_s != &wp->w_buffer->b_s) { syntax_clear(wp->w_s); xfree(wp->w_s); wp->w_s = &wp->w_buffer->b_s; } }
-void nvim_synblock_set_spell_cluster_id(int id) { curwin->w_s->b_spell_cluster_id = id; }
-void nvim_synblock_set_nospell_cluster_id(int id) { curwin->w_s->b_nospell_cluster_id = id; }
 char *nvim_syn_vim_strsave_up(const char *s) { return vim_strsave_up(s); }
 void nvim_synblock_ga_init_patterns(void) { curwin->w_s->b_syn_patterns.ga_itemsize = sizeof(synpat_T); ga_set_growsize(&curwin->w_s->b_syn_patterns, 10); }
 synstate_T *nvim_syn_xcalloc_synstate_array(int len) { if (len <= 0) return NULL; return xcalloc((size_t)len, sizeof(synstate_T)); }

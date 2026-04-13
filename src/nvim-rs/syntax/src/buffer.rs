@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use crate::synblock_struct::synblock_ref;
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::synstate_struct::{synstate_mut, synstate_ref};
 use crate::types::{bref, BufHandle, SynBlockHandle, SynStateHandle, WinHandle};
 
@@ -40,19 +40,15 @@ extern "C" {
     fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
     fn nvim_win_get_synblock(wp: WinHandle) -> SynBlockHandle;
     // (nvim_syn_stack_alloc deleted: call Rust directly)
-    fn nvim_syn_set_sst_lasttick(tick: c_int);
     fn nvim_syn_get_display_tick() -> c_int;
     fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
     #[link_name = "rs_syn_finish_line"]
     fn nvim_syn_finish_line(syncing: c_int) -> c_int;
-    fn nvim_syn_get_sync_minlines() -> c_int;
-    fn nvim_syn_get_sst_len() -> c_int;
     fn nvim_syn_get_rows() -> c_int;
     #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
     fn line_breakcheck();
     fn nvim_syn_get_got_int() -> c_int;
-    fn nvim_syn_get_sst_first() -> SynStateHandle;
     // (nvim_syn_stack_find_entry deleted: call Rust directly)
     fn rs_store_current_state() -> SynStateHandle;
     fn rs_load_current_state(from: SynStateHandle);
@@ -116,7 +112,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     if unsafe { synblock_ref(block).b_sst_array.is_null() } {
         return; // out of memory
     }
-    nvim_syn_set_sst_lasttick(nvim_syn_get_display_tick());
+    synblock_mut(block).b_sst_lasttick = nvim_syn_get_display_tick() as u64;
 
     // If the state of the end of the previous line is useful, store it.
     let current_lnum = crate::statics::CURRENT_LNUM;
@@ -144,8 +140,8 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         && !unsafe { synblock_ref(block).b_sst_array.is_null() }
     {
         // Find last valid saved state before start_lnum.
-        let sync_minlines = nvim_syn_get_sync_minlines();
-        let mut p = nvim_syn_get_sst_first();
+        let sync_minlines = unsafe { synblock_ref(block).b_syn_sync_minlines };
+        let mut p = SynStateHandle(unsafe { synblock_ref(block).b_sst_first }.cast());
         while !p.is_null() {
             if synstate_ref(p).sst_lnum > lnum {
                 break;
@@ -171,14 +167,14 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         if crate::statics::CURRENT_LNUM == 1 {
             first_stored = 1;
         } else {
-            first_stored = crate::statics::CURRENT_LNUM + nvim_syn_get_sync_minlines();
+            first_stored = crate::statics::CURRENT_LNUM + synblock_ref(block).b_syn_sync_minlines;
         }
     } else {
         first_stored = crate::statics::CURRENT_LNUM;
     }
 
     // Advance from the sync point or saved state until the current line.
-    let sst_len = nvim_syn_get_sst_len();
+    let sst_len = synblock_ref(block).b_sst_len;
     let rows = nvim_syn_get_rows();
     let dist = if sst_len <= rows {
         999999
@@ -201,7 +197,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
             }
 
             let mut sp = if prev.is_null() {
-                nvim_syn_get_sst_first()
+                SynStateHandle(synblock_ref(block).b_sst_first.cast())
             } else {
                 prev
             };

@@ -53,15 +53,11 @@ extern "C" {
     // (syn_id2attr: use crate::highlight::syn_id2attr directly)
 
     // Synblock queries
-    fn nvim_syn_has_containedin() -> c_int;
-    fn nvim_syn_has_keywords() -> c_int;
-    fn nvim_syn_has_keywords_ic() -> c_int;
 
     // Line ID tracking
 
     // Spell
     fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
-    fn nvim_syn_get_syn_spell() -> c_int;
     fn nvim_syn_in_id_list_spell(sip: StateItemHandle, list: IdListHandle, id: c_int) -> c_int;
 
     // Word check
@@ -174,7 +170,8 @@ pub unsafe fn syn_current_attr(
     }
 
     // Only check for keywords when not syncing and there are some.
-    let do_keywords = !syncing && (nvim_syn_has_keywords() != 0 || nvim_syn_has_keywords_ic() != 0);
+    let do_keywords =
+        !syncing && (crate::keyword::has_keywords() || crate::keyword::has_keywords_ic());
 
     // Init the list of zero-width matches with a nextlist.
     let mut zero_width_next_ga: Vec<i32> = Vec::new();
@@ -203,10 +200,14 @@ pub unsafe fn syn_current_attr(
         let state_len = crate::statics::CURRENT_STATE.ga_len;
         cur_si_valid = state_len > 0;
 
-        if nvim_syn_has_containedin() != 0 || !cur_si_valid || {
-            let si = crate::statics::current_state_item(state_len - 1);
-            !(*si.as_ptr()).si_cont_list.is_null()
-        } {
+        let syn_blk = nvim_syn_get_syn_block();
+        if (!syn_blk.is_null() && synblock_ref(syn_blk).b_syn_containedin != 0)
+            || !cur_si_valid
+            || {
+                let si = crate::statics::current_state_item(state_len - 1);
+                !(*si.as_ptr()).si_cont_list.is_null()
+            }
+        {
             // 2. Check for keywords
             if do_keywords {
                 let line = nvim_syn_getcurline();
@@ -625,8 +626,17 @@ pub unsafe fn syn_current_attr(
     } else if !can_spell.is_null() {
         // Default: Only do spelling when there is no @Spell cluster or when
         // ":syn spell toplevel" was used.
-        let syn_spell = nvim_syn_get_syn_spell();
-        let spell_cluster = synblock_ref(nvim_syn_get_syn_block()).b_spell_cluster_id;
+        let spell_blk = nvim_syn_get_syn_block();
+        let syn_spell = if spell_blk.is_null() {
+            0
+        } else {
+            synblock_ref(spell_blk).b_syn_spell
+        };
+        let spell_cluster = if spell_blk.is_null() {
+            0
+        } else {
+            synblock_ref(spell_blk).b_spell_cluster_id
+        };
         *can_spell = if syn_spell == SYNSPL_DEFAULT {
             (spell_cluster == 0) as c_int
         } else {
@@ -656,7 +666,11 @@ unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
     let block = nvim_syn_get_syn_block();
     let spell_cluster = unsafe { synblock_ref(block).b_spell_cluster_id };
     let nospell_cluster = unsafe { synblock_ref(block).b_nospell_cluster_id };
-    let syn_spell = nvim_syn_get_syn_spell();
+    let syn_spell = if block.is_null() {
+        0
+    } else {
+        unsafe { synblock_ref(block).b_syn_spell }
+    };
     let current_trans_id = if sip.is_null() {
         0
     } else {

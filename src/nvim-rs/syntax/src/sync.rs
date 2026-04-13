@@ -39,10 +39,7 @@ extern "C" {
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
     // Current synblock sync accessors
-    fn nvim_syn_get_sync_minlines() -> c_int;
-    fn nvim_syn_get_sync_maxlines() -> c_int;
-    fn nvim_syn_get_sync_flags() -> c_int;
-    fn nvim_syn_get_sync_id() -> c_int;
+    // syn_block sync accessors removed: use synblock_ref(syn_block) directly
 
     // Update ends with syncing parameter
     #[link_name = "rs_syn_update_ends"]
@@ -169,25 +166,53 @@ pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
 /// Get the sync minlines for the current synblock.
 #[must_use]
 pub fn sync_minlines() -> i32 {
-    unsafe { nvim_syn_get_sync_minlines() }
+    unsafe {
+        let blk = nvim_syn_get_syn_block();
+        if blk.is_null() {
+            0
+        } else {
+            synblock_ref(blk).b_syn_sync_minlines
+        }
+    }
 }
 
 /// Get the sync maxlines for the current synblock.
 #[must_use]
 pub fn sync_maxlines() -> i32 {
-    unsafe { nvim_syn_get_sync_maxlines() }
+    unsafe {
+        let blk = nvim_syn_get_syn_block();
+        if blk.is_null() {
+            0
+        } else {
+            synblock_ref(blk).b_syn_sync_maxlines
+        }
+    }
 }
 
 /// Get the sync flags for the current synblock.
 #[must_use]
 pub fn sync_flags() -> i32 {
-    unsafe { nvim_syn_get_sync_flags() }
+    unsafe {
+        let blk = nvim_syn_get_syn_block();
+        if blk.is_null() {
+            0
+        } else {
+            synblock_ref(blk).b_syn_sync_flags
+        }
+    }
 }
 
 /// Get the sync ID for the current synblock.
 #[must_use]
 pub fn sync_id() -> i32 {
-    unsafe { nvim_syn_get_sync_id() }
+    unsafe {
+        let blk = nvim_syn_get_syn_block();
+        if blk.is_null() {
+            0
+        } else {
+            synblock_ref(blk).b_syn_sync_id as i32
+        }
+    }
 }
 
 // =============================================================================
@@ -223,9 +248,22 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
     nvim_syn_invalidate_current_state();
 
     // Calculate start_lnum based on minlines/maxlines.
-    let sync_minlines = nvim_syn_get_sync_minlines();
-    let sync_maxlines = nvim_syn_get_sync_maxlines();
-    let sync_fl = nvim_syn_get_sync_flags();
+    let syn_blk = nvim_syn_get_syn_block();
+    let sync_minlines = if syn_blk.is_null() {
+        0
+    } else {
+        synblock_ref(syn_blk).b_syn_sync_minlines
+    };
+    let sync_maxlines = if syn_blk.is_null() {
+        0
+    } else {
+        synblock_ref(syn_blk).b_syn_sync_maxlines
+    };
+    let sync_fl = if syn_blk.is_null() {
+        0
+    } else {
+        synblock_ref(syn_blk).b_syn_sync_flags
+    };
 
     if sync_minlines > start_lnum {
         start_lnum = 1;
@@ -259,8 +297,12 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
 
         if found != 0 {
             // Inside a comment: find the syntax item that defines the comment.
-            let sync_id = nvim_syn_get_sync_id();
             let blk = nvim_syn_get_syn_block();
+            let sync_id = if blk.is_null() {
+                0
+            } else {
+                synblock_ref(blk).b_syn_sync_id as i32
+            };
             let ga_len = synblock_ref(blk).b_syn_patterns.ga_len;
             let mut idx = ga_len - 1;
             while idx >= 0 {

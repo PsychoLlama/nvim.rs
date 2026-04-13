@@ -24,10 +24,6 @@ extern "C" {
     fn utfc_ptr2len(p: *mut c_char) -> c_int;
     fn nvim_syn_vim_iswordp_buf(p: *mut c_char) -> c_int;
 
-    // Keyword table accessors
-    fn nvim_syn_has_keywords() -> c_int;
-    fn nvim_syn_has_keywords_ic() -> c_int;
-
     // Window-level keyword accessors
     fn nvim_win_get_keywtab_used(win: WinHandle) -> c_int;
     fn nvim_win_get_keywtab_ic_used(win: WinHandle) -> c_int;
@@ -373,12 +369,12 @@ pub unsafe fn check_keyword_id(
 
     // Case-sensitive match.
     let mut kp = KeyEntryHandle::null();
-    if nvim_syn_has_keywords() != 0 {
+    if has_keywords() {
         kp = match_keyword(kw_ptr, false, cur_si);
     }
 
     // Case-insensitive match.
-    if kp.is_null() && nvim_syn_has_keywords_ic() != 0 {
+    if kp.is_null() && has_keywords_ic() {
         nvim_syn_keyword_foldcase(kwp, kwlen, kw_ptr, MAXKEYWLEN + 1);
         kp = match_keyword(kw_ptr, true, cur_si);
     }
@@ -421,13 +417,21 @@ pub const MAX_KEYWORD_LEN: i32 = MAXKEYWLEN;
 /// Check if the current synblock has any case-sensitive keywords.
 #[must_use]
 pub fn has_keywords() -> bool {
-    unsafe { nvim_syn_has_keywords() != 0 }
+    let block = unsafe { nvim_syn_get_syn_block() };
+    if block.is_null() {
+        return false;
+    }
+    unsafe { synblock_ref(block).b_keywtab.ht_used > 0 }
 }
 
 /// Check if the current synblock has any case-insensitive keywords.
 #[must_use]
 pub fn has_keywords_ic() -> bool {
-    unsafe { nvim_syn_has_keywords_ic() != 0 }
+    let block = unsafe { nvim_syn_get_syn_block() };
+    if block.is_null() {
+        return false;
+    }
+    unsafe { synblock_ref(block).b_keywtab_ic.ht_used > 0 }
 }
 
 /// Check if a synblock has any case-sensitive keywords.
@@ -546,7 +550,7 @@ impl KeywordMatch {
 // =============================================================================
 
 extern "C" {
-    fn nvim_syn_get_curwin_syn_ic() -> c_int;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 }
 
 extern "C" {
@@ -661,7 +665,12 @@ pub unsafe extern "C" fn rs_add_keyword(
         return;
     }
 
-    let use_ic = nvim_syn_get_curwin_syn_ic();
+    let cw_block = nvim_syn_get_curwin_synblock();
+    let use_ic = if cw_block.is_null() {
+        0
+    } else {
+        synblock_ref(cw_block).b_syn_ic
+    };
     let inc_tag = crate::statics::CURRENT_SYN_INC_TAG;
 
     // Perform case folding if needed.

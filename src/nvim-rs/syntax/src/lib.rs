@@ -14,7 +14,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::synblock_struct::synblock_ref;
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::synstate_struct::{synstate_mut, synstate_ref};
 
 // =============================================================================
@@ -255,16 +255,6 @@ extern "C" {
 
     /// Get the current synblock from curwin->w_s
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
-
-    // -------------------------------------------------------------------------
-    // Phase 6: Command & user interface accessors
-    // -------------------------------------------------------------------------
-
-    /// Get the current syntax topgrp (for :syn include)
-    fn nvim_syn_get_topgrp() -> c_int;
-
-    /// Set the current syntax topgrp
-    fn nvim_syn_set_topgrp(topgrp: c_int);
 
     // -------------------------------------------------------------------------
     // Phase 24.1: State Management Helpers
@@ -1087,12 +1077,20 @@ impl ClusterOp {
 /// Get the current syntax topgrp (for :syn include)
 #[must_use]
 pub fn topgrp() -> i32 {
-    unsafe { nvim_syn_get_topgrp() }
+    let block = unsafe { nvim_syn_get_curwin_synblock() };
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { synblock_ref(block).b_syn_topgrp }
 }
 
 /// Set the current syntax topgrp
 pub fn set_topgrp(topgrp: i32) {
-    unsafe { nvim_syn_set_topgrp(topgrp) }
+    let block = unsafe { nvim_syn_get_curwin_synblock() };
+    if block.is_null() {
+        return;
+    }
+    unsafe { synblock_mut(block).b_syn_topgrp = topgrp };
 }
 
 /// Get the syntax block's conceal setting

@@ -7,7 +7,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::synblock_struct::synblock_ref;
+use crate::synblock_struct::{synblock_mut, synblock_ref};
 use crate::types::{
     IdListHandle, SynBlockHandle, SynClusterHandle, CLUSTER_ADD, CLUSTER_REPLACE, CLUSTER_SUBTRACT,
     SYNID_ALLBUT, SYNID_CLUSTER,
@@ -801,8 +801,6 @@ pub unsafe extern "C" fn rs_syn_cmd_cluster(eap: *mut c_void, syncing: c_int) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_synblock_set_spell_cluster_id(id: c_int);
-    fn nvim_synblock_set_nospell_cluster_id(id: c_int);
     fn nvim_syn_vim_strsave_up(s: *const c_char) -> *mut c_char;
     // Phase 11: inner accessor for cluster_append (handles GA_APPEND_VIA_PTR)
     fn nvim_synblock_cluster_append_inner() -> c_int;
@@ -876,10 +874,13 @@ unsafe fn syn_add_cluster_impl(name: *mut c_char) -> c_int {
         .iter()
         .map(|&c| if c.is_ascii_uppercase() { c | 0x20 } else { c })
         .collect();
-    if lc == b"spell" {
-        nvim_synblock_set_spell_cluster_id(idx + crate::types::SYNID_CLUSTER);
-    } else if lc == b"nospell" {
-        nvim_synblock_set_nospell_cluster_id(idx + crate::types::SYNID_CLUSTER);
+    let cw_block = nvim_syn_get_curwin_synblock();
+    if !cw_block.is_null() {
+        if lc == b"spell" {
+            synblock_mut(cw_block).b_spell_cluster_id = idx + crate::types::SYNID_CLUSTER;
+        } else if lc == b"nospell" {
+            synblock_mut(cw_block).b_nospell_cluster_id = idx + crate::types::SYNID_CLUSTER;
+        }
     }
 
     idx + crate::types::SYNID_CLUSTER
@@ -984,7 +985,6 @@ pub unsafe extern "C" fn rs_syn_add_cluster(name: *mut c_char) -> c_int {
 extern "C" {
     fn skiptowhite(p: *const c_char) -> *mut c_char;
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_get_topgrp() -> c_int;
     fn nvim_synblock_ga_init_patterns();
 }
 
@@ -1035,7 +1035,12 @@ pub unsafe extern "C" fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int) {
         return;
     }
     let flags = *flagsp;
-    let topgrp = nvim_syn_get_topgrp();
+    let cw_blk = nvim_syn_get_curwin_synblock();
+    let topgrp = if cw_blk.is_null() {
+        0
+    } else {
+        synblock_ref(cw_blk).b_syn_topgrp
+    };
 
     if (flags & HL_CONTAINED) != 0 || topgrp == 0 {
         return;

@@ -5,6 +5,9 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::synblock_struct::{synblock_mut, synblock_ref};
+use crate::types::SynBlockHandle;
+
 // =============================================================================
 // FFI declarations
 // =============================================================================
@@ -20,9 +23,8 @@ extern "C" {
     fn rs_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
     fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
 
-    // State management
-    fn nvim_syn_get_topgrp() -> c_int;
-    fn nvim_syn_set_topgrp(topgrp: c_int);
+    // curwin synblock
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // File sourcing compound accessors
     /// Prepare the include: sets EX_XFILE|EX_NOSPC, calls separate_nextcmd,
@@ -97,15 +99,24 @@ unsafe fn syn_cmd_include_impl(eap: *mut c_void, _syncing: c_int) {
         crate::statics::CURRENT_SYN_INC_TAG
     };
 
-    let prev_toplvl_grp = nvim_syn_get_topgrp();
-    nvim_syn_set_topgrp(sgl_id);
+    let cw_block = nvim_syn_get_curwin_synblock();
+    let prev_toplvl_grp = if cw_block.is_null() {
+        0
+    } else {
+        synblock_ref(cw_block).b_syn_topgrp
+    };
+    if !cw_block.is_null() {
+        synblock_mut(cw_block).b_syn_topgrp = sgl_id;
+    }
 
     let result = nvim_syn_include_source(eap, source);
     if result != 0 {
         semsg(EMSG_E_NOTOPEN.as_ptr().cast(), nvim_syn_get_eap_arg(eap));
     }
 
-    nvim_syn_set_topgrp(prev_toplvl_grp);
+    if !cw_block.is_null() {
+        synblock_mut(cw_block).b_syn_topgrp = prev_toplvl_grp;
+    }
     crate::statics::CURRENT_SYN_INC_TAG = prev_syn_inc_tag;
 }
 

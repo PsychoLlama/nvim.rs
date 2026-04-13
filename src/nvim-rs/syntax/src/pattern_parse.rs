@@ -5,7 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::types::{SynPatHandle, SPO_COUNT, SPO_LC_OFF, SPO_MS_OFF};
+use crate::synblock_struct::synblock_ref;
+use crate::types::{SynBlockHandle, SynPatHandle, SPO_COUNT, SPO_LC_OFF, SPO_MS_OFF};
 
 // spo_name_tab from C: "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc="
 // Each entry is exactly 3 bytes + NUL terminator.
@@ -30,7 +31,7 @@ extern "C" {
     // (synpat_T setters/getters removed -- use direct repr(C) field access)
 
     // curwin accessor
-    fn nvim_syn_get_curwin_syn_ic() -> c_int;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // regexp
     fn vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
@@ -97,7 +98,12 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
     }
 
     (*ci.as_ptr()).sp_prog = prog;
-    (*ci.as_ptr()).sp_ic = nvim_syn_get_curwin_syn_ic();
+    let cw_block = nvim_syn_get_curwin_synblock();
+    (*ci.as_ptr()).sp_ic = if cw_block.is_null() {
+        0
+    } else {
+        synblock_ref(cw_block).b_syn_ic
+    };
     let st_ptr = &mut (*ci.as_ptr()).sp_time as *mut _ as *mut c_void;
     crate::line_init::rs_syn_clear_time(st_ptr);
 

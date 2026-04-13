@@ -6,7 +6,7 @@
 //! - State comparison for cache validation
 //! - Cache invalidation logic
 
-use std::ffi::{c_int, c_void};
+use std::ffi::c_int;
 
 use crate::ffi_types::{BufState, StateItem};
 use crate::synblock_struct::{synblock_mut, synblock_ref};
@@ -25,11 +25,6 @@ extern "C" {
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     fn nvim_syn_update_si_attr(idx: c_int);
-
-    // Global state accessors
-    fn nvim_syn_get_sst_array() -> *mut c_void;
-    fn nvim_syn_get_sst_first() -> SynStateHandle;
-    fn nvim_syn_get_sst_len() -> c_int;
 
     // clear_syn_state (Rust implementation)
     fn rs_clear_syn_state(p: SynStateHandle);
@@ -630,19 +625,31 @@ pub fn invalidate_states_after(block: SynBlockHandle, lnum: i32) {
 /// Get the first used state in the cache
 #[must_use]
 pub fn get_sst_first() -> SynStateHandle {
-    unsafe { nvim_syn_get_sst_first() }
+    let block = unsafe { nvim_syn_get_syn_block() };
+    if block.is_null() {
+        return SynStateHandle::null();
+    }
+    SynStateHandle(unsafe { synblock_ref(block).b_sst_first }.cast())
 }
 
 /// Get the state array length
 #[must_use]
 pub fn get_sst_len() -> i32 {
-    unsafe { nvim_syn_get_sst_len() }
+    let block = unsafe { nvim_syn_get_syn_block() };
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { synblock_ref(block).b_sst_len }
 }
 
 /// Get the raw state array pointer
 #[must_use]
 pub fn get_sst_array() -> *mut std::ffi::c_void {
-    unsafe { nvim_syn_get_sst_array() }
+    let block = unsafe { nvim_syn_get_syn_block() };
+    if block.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { synblock_ref(block).b_sst_array }.cast()
 }
 
 /// Check if a synblock has a state array allocated

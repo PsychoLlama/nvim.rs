@@ -11,6 +11,7 @@ use std::ffi::c_int;
 use crate::ffi_types::StateItem;
 use crate::offset::{limit_pos, syn_add_end_off, RegMatch};
 use crate::state::Position;
+use crate::synblock_struct::synblock_ref;
 use crate::types::{
     ExtMatchHandle, StateItemHandle, SynPatHandle, HL_ONELINE, SPO_COUNT, SPO_HE_OFF, SPO_LC_OFF,
     SPO_ME_OFF, SPO_RE_OFF, SPTYPE_END, SPTYPE_MATCH, SPTYPE_SKIP, SPTYPE_START,
@@ -22,7 +23,6 @@ use crate::types::{
 
 extern "C" {
     // Pattern accessors for find_endpos
-    fn nvim_syn_get_synblock_pattern_count() -> c_int;
     fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 
     // (nvim_syn_regexec_pat replaced by crate::regexec::syn_regexec_pat)
@@ -211,7 +211,12 @@ pub unsafe fn find_endpos(
     }
 
     // Find the SKIP or first END pattern after the last START pattern.
-    let pat_count = nvim_syn_get_synblock_pattern_count();
+    let syn_blk = nvim_syn_get_syn_block();
+    let pat_count = if syn_blk.is_null() {
+        0
+    } else {
+        synblock_ref(syn_blk).b_syn_patterns.ga_len
+    };
     while idx < pat_count && pat_type_at(idx) == SPTYPE_START {
         idx += 1;
     }
