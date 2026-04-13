@@ -259,9 +259,12 @@ pub struct BufStruct {
     pub b_u_seq_cur: c_int,
     _pad13: [u8; 4], // abs 7796..7799
 
-    // offset 7800..7839: b_u_time_cur(8), b_u_save_nr_cur(4), gap(4), b_u_line_ptr(8),
-    //                    b_u_line_lnum(4), b_u_line_colnr(4), b_scanned(4), gap(4) = 40 bytes
-    _pad14: [u8; 40],
+    // offset 7800..7831: b_u_time_cur(8), b_u_save_nr_cur(4), gap(4), b_u_line_ptr(8),
+    //                    b_u_line_lnum(4), b_u_line_colnr(4) = 32 bytes
+    _pad14a: [u8; 32],
+    // offset 7832: bool b_scanned (^N/^P buffer scan flag)
+    pub b_scanned: u8,
+    _pad14b: [u8; 7], // alignment gap to reach 7840
 
     // --- INPUT MODE (offsets 7840-7887) ---
 

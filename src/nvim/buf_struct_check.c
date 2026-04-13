@@ -92,6 +92,9 @@ _Static_assert(offsetof(buf_T, b_u_seq_last) == 7784, "b_u_seq_last offset misma
 _Static_assert(offsetof(buf_T, b_u_save_nr_last) == 7788, "b_u_save_nr_last offset mismatch");
 _Static_assert(offsetof(buf_T, b_u_seq_cur) == 7792, "b_u_seq_cur offset mismatch");
 
+// Scan flag
+_Static_assert(offsetof(buf_T, b_scanned) == 7832, "b_scanned offset mismatch");
+
 // Input mode / kmap
 _Static_assert(offsetof(buf_T, b_p_iminsert) == 7840, "b_p_iminsert offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_imsearch) == 7848, "b_p_imsearch offset mismatch");

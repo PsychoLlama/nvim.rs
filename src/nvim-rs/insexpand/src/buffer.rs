@@ -18,7 +18,6 @@ extern "C" {
     // nvim_get_next_bufname_token_impl: deleted (Phase 15), inlined below
 
     // ins_compl_next_buf buf accessors (Phase 14) - use BufHandle to match next.rs
-    fn nvim_buf_get_b_scanned(buf: BufHandle) -> c_int;
     fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
@@ -164,7 +163,7 @@ pub unsafe extern "C" fn rs_ins_compl_next_buf(buf: BufHandle, flag: c_int) -> B
 
             // Stop if we wrapped back to curwin, or found an unscanned focusable buffer
             let wp_buf = nvim_win_get_w_buffer_raw(NEXT_BUF_WP);
-            let scanned = nvim_buf_get_b_scanned(wp_buf) != 0;
+            let scanned = buf_ref(wp_buf).b_scanned != 0;
             let focusable = nvim_win_get_focusable(NEXT_BUF_WP) != 0;
             if NEXT_BUF_WP == curwin || (!scanned && focusable) {
                 break;
@@ -203,7 +202,7 @@ pub unsafe extern "C" fn rs_ins_compl_next_buf(buf: BufHandle, flag: c_int) -> B
             !is_listed || (is_loaded == want_unloaded)
         };
 
-        if !skip && nvim_buf_get_b_scanned(cur) == 0 {
+        if !skip && buf_ref(cur).b_scanned == 0 {
             break;
         }
     }

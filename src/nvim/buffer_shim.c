@@ -104,7 +104,6 @@ void nvim_buf_set_b_p_iminsert(buf_T *buf, int val) { if (buf) { buf->b_p_iminse
 void nvim_buf_set_b_p_imsearch(buf_T *buf, int val) { if (buf) { buf->b_p_imsearch = val; } }
 int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 uint64_t *nvim_buf_get_chartab(buf_T *buf) { return buf->b_chartab; }
-OptInt nvim_buf_get_p_sw(buf_T *buf) { return buf->b_p_sw; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
 int nvim_buf_get_locked(buf_T *buf) { return buf->b_locked; }
 const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
