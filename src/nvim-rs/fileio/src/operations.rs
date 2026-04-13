@@ -9,7 +9,7 @@
 
 use std::ffi::c_int;
 
-use crate::{FileFormat, ReadFlags, WriteFlags};
+use crate::{bref_void, buf_mut_void, FileFormat, ReadFlags, WriteFlags};
 
 // =============================================================================
 // Read Operation Result
@@ -784,14 +784,10 @@ pub unsafe extern "C" fn rs_filemess(buf: *const c_void, name: *const c_char, s:
 // =============================================================================
 
 extern "C" {
-    /// Get buf->b_p_fenc (fileencoding option string) -- from change_ffi.c.
-    fn nvim_buf_get_b_p_fenc(buf: *const c_void) -> *const c_char;
     /// Get buf->b_bad_char -- from buffer_shim.c.
     fn nvim_buf_get_b_bad_char(buf: *const c_void) -> c_int;
     /// Get buf->b_p_ff[0] as int -- from buffer_shim.c.
     fn nvim_buf_get_b_p_ff_char(buf: *const c_void) -> c_int;
-    /// Get buf->b_p_bin (returns bool as int) -- from change_ffi.c.
-    fn nvim_buf_get_b_p_bin(buf: *const c_void) -> bool;
     /// Set eap->cmd (takes ownership of the pointer).
     fn nvim_exarg_set_cmd(eap: *mut c_void, cmd: *mut c_char);
     /// Set eap->force_enc.
@@ -825,7 +821,7 @@ const FORCE_NOBIN: c_int = 2;
 /// - `buf` must be a valid non-null pointer to a buf_T.
 #[export_name = "prep_exarg"]
 pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
-    let fenc = unsafe { nvim_buf_get_b_p_fenc(buf) };
+    let fenc = unsafe { bref_void(buf).b_p_fenc };
     // cmd_len = 15 + strlen(buf->b_p_fenc)
     let fenc_len = if fenc.is_null() {
         0
@@ -840,7 +836,7 @@ pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
     unsafe { nvim_exarg_set_force_enc(eap, 8) };
     unsafe { nvim_exarg_set_bad_char(eap, nvim_buf_get_b_bad_char(buf)) };
     unsafe { nvim_exarg_set_force_ff(eap, nvim_buf_get_b_p_ff_char(buf)) };
-    let bin = unsafe { nvim_buf_get_b_p_bin(buf) };
+    let bin = unsafe { bref_void(buf).b_p_bin != 0 };
     let force_bin = if bin { FORCE_BIN } else { FORCE_NOBIN };
     unsafe { nvim_exarg_set_force_bin(eap, force_bin) };
     unsafe { nvim_exarg_set_read_edit(eap, 0) };
@@ -873,8 +869,6 @@ extern "C" {
     fn nvim_get_fileformat_force(buf: *mut c_void, eap: *mut c_void) -> c_int;
     /// set_options_bin(oldval, newval, opt) -- update binary option.
     fn nvim_set_options_bin(oldval: c_int, newval: c_int, opt: c_int);
-    /// Set buf->b_p_bin.
-    fn nvim_buf_set_b_p_bin(buf: *mut c_void, val: c_int);
     /// Get eap->force_bin.
     fn nvim_exarg_get_force_bin(eap: *const c_void) -> c_int;
     /// Get eap->force_ff.
@@ -898,14 +892,6 @@ extern "C" {
     ) -> c_int;
     /// Display error message.
     fn emsg(msg: *const c_char);
-    /// Get buf->b_flags.
-    fn nvim_buf_get_b_flags(buf: *const c_void) -> c_int;
-    /// Set buf->b_flags.
-    fn nvim_buf_set_b_flags(buf: *mut c_void, val: c_int);
-    /// Get buf->b_p_bl.
-    fn nvim_buf_get_b_p_bl(buf: *const c_void) -> c_int;
-    /// Get buf->b_p_ft.
-    fn nvim_buf_get_b_p_ft(buf: *const c_void) -> *const c_char;
     /// augroup_exists(name) -> int.
     fn augroup_exists(name: *const c_char) -> c_int;
     /// do_doautocmd(autocmds, check_after_done, ret_did_aucmd).
@@ -957,9 +943,9 @@ pub unsafe extern "C" fn rs_set_file_options(set_options: c_int, eap: *mut c_voi
     };
     if force_bin != 0 {
         let buf = unsafe { nvim_get_curbuf() };
-        let oldval = unsafe { nvim_buf_get_b_p_bin(buf as *const c_void) as c_int };
+        let oldval = unsafe { bref_void(buf as *const c_void).b_p_bin };
         let newval = if force_bin == FORCE_BIN { 1 } else { 0 };
-        unsafe { nvim_buf_set_b_p_bin(buf, newval) };
+        unsafe { buf_mut_void(buf).b_p_bin = newval };
         unsafe { nvim_set_options_bin(oldval, newval, OPT_LOCAL) };
     }
 }
@@ -976,7 +962,7 @@ pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char
     let buf = unsafe { nvim_get_curbuf() };
 
     // Fire BufDelete/BufWipeout like the unnamed buffer is being deleted.
-    if unsafe { nvim_buf_get_b_p_bl(buf) } != 0 {
+    if unsafe { bref_void(buf as *const c_void).b_p_bl } != 0 {
         unsafe {
             apply_autocmds(
                 EVENT_BUFDELETE,
@@ -1008,14 +994,14 @@ pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char
 
     let r = unsafe { setfname(buf, fname, sfname, false) };
     if r == OK {
-        let flags = unsafe { nvim_buf_get_b_flags(buf) };
-        unsafe { nvim_buf_set_b_flags(buf, flags | BF_NOTEDITED) };
+        let flags = unsafe { bref_void(buf as *const c_void).b_flags };
+        unsafe { buf_mut_void(buf).b_flags = flags | BF_NOTEDITED };
     }
 
     // Fire BufNew/BufAdd like a new named buffer is being created.
     unsafe { apply_autocmds(EVENT_BUFNEW, std::ptr::null(), std::ptr::null(), false, buf) };
     let cur = unsafe { nvim_get_curbuf() };
-    if unsafe { nvim_buf_get_b_p_bl(cur) } != 0 {
+    if unsafe { bref_void(cur as *const c_void).b_p_bl } != 0 {
         unsafe { apply_autocmds(EVENT_BUFADD, std::ptr::null(), std::ptr::null(), false, cur) };
     }
     if unsafe { aborting() } {
@@ -1024,7 +1010,7 @@ pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char
 
     // Do filetype detection if 'filetype' is empty.
     let cur = unsafe { nvim_get_curbuf() };
-    let ft = unsafe { nvim_buf_get_b_p_ft(cur) };
+    let ft = unsafe { bref_void(cur as *const c_void).b_p_ft };
     if ft.is_null() || unsafe { *ft } == 0 {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } != 0 {
             unsafe {
@@ -1060,16 +1046,6 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     /// Free memory.
     fn xfree(ptr: *mut c_void);
-    /// Get buf->b_fname (non-owning pointer).
-    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
-    /// Get buf->b_ffname (non-owning pointer).
-    fn nvim_buf_get_b_ffname(buf: *const c_void) -> *const c_char;
-    /// Get buf->b_sfname (non-owning pointer).
-    fn nvim_buf_get_b_sfname(buf: *const c_void) -> *const c_char;
-    /// Set buf->b_sfname.
-    fn nvim_buf_set_b_sfname(buf: *mut c_void, val: *mut c_char);
-    /// Set buf->b_fname.
-    fn nvim_buf_set_b_fname(buf: *mut c_void, val: *mut c_char);
     /// Call mf_fullname(buf->b_ml.ml_mfp).
     fn nvim_buf_mf_fullname(buf: *mut c_void);
     /// Get dirname from current working directory.
@@ -1080,8 +1056,6 @@ extern "C" {
     fn nvim_set_redraw_tabline(val: c_int);
     /// Get firstbuf pointer.
     fn nvim_get_firstbuf() -> *mut c_void;
-    /// Get buf->b_next.
-    fn nvim_buf_get_b_next(buf: *mut c_void) -> *mut c_void;
 }
 
 /// Shorten a single buffer's filename relative to the current directory.
@@ -1096,7 +1070,7 @@ pub unsafe extern "C" fn rs_shorten_buf_fname(
     dirname: *const c_char,
     force: c_int,
 ) {
-    let b_fname = unsafe { nvim_buf_get_b_fname(buf) };
+    let b_fname = unsafe { bref_void(buf as *const c_void).b_fname };
     if b_fname.is_null() {
         return;
     }
@@ -1106,8 +1080,8 @@ pub unsafe extern "C" fn rs_shorten_buf_fname(
     if unsafe { path_with_url(b_fname) } != 0 {
         return;
     }
-    let b_sfname = unsafe { nvim_buf_get_b_sfname(buf) };
-    let b_ffname = unsafe { nvim_buf_get_b_ffname(buf) };
+    let b_sfname = unsafe { bref_void(buf as *const c_void).b_sfname };
+    let b_ffname = unsafe { bref_void(buf as *const c_void).b_ffname };
     let should_shorten = force != 0 || b_sfname.is_null() || unsafe { path_is_absolute(b_sfname) };
     if !should_shorten {
         return;
@@ -1116,16 +1090,16 @@ pub unsafe extern "C" fn rs_shorten_buf_fname(
     // Free b_sfname if it's not aliased to b_ffname.
     if b_sfname != b_ffname {
         unsafe { xfree(b_sfname as *mut c_void) };
-        unsafe { nvim_buf_set_b_sfname(buf, std::ptr::null_mut()) };
+        unsafe { buf_mut_void(buf).b_sfname = std::ptr::null() };
     }
 
     let p = unsafe { path_shorten_fname(b_ffname, dirname) };
     if !p.is_null() {
         let new_sfname = unsafe { xstrdup(p) };
-        unsafe { nvim_buf_set_b_sfname(buf, new_sfname) };
-        unsafe { nvim_buf_set_b_fname(buf, new_sfname) };
+        unsafe { buf_mut_void(buf).b_sfname = new_sfname };
+        unsafe { buf_mut_void(buf).b_fname = new_sfname };
     } else {
-        unsafe { nvim_buf_set_b_fname(buf, b_ffname as *mut c_char) };
+        unsafe { buf_mut_void(buf).b_fname = b_ffname };
     }
 }
 
@@ -1144,7 +1118,7 @@ pub unsafe extern "C" fn rs_shorten_fnames(force: c_int) {
     while !buf.is_null() {
         unsafe { rs_shorten_buf_fname(buf, dirname.as_ptr() as *const c_char, force) };
         unsafe { nvim_buf_mf_fullname(buf) };
-        buf = unsafe { nvim_buf_get_b_next(buf) };
+        buf = unsafe { bref_void(buf as *const c_void).b_next };
     }
 
     unsafe { status_redraw_all() };

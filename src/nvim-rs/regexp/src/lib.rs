@@ -18,6 +18,14 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use std::ffi::c_long;
 
+use nvim_buffer::buf_struct::BufStruct;
+
+/// Access `BufStruct` fields from a raw `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
 /// Returns non-zero if `c` is a space or tab.
 #[inline]
 const fn ascii_iswhite(c: c_int) -> c_int {
@@ -60,7 +68,6 @@ extern "C" {
     // skip_regexp_err accessor
 
     // reg_prev_class accessors
-    fn nvim_buf_get_chartab(buf: *mut c_void) -> *mut u64;
     fn mb_get_class_tab(p: *const c_char, chartab: *const u64) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
@@ -1537,7 +1544,7 @@ pub unsafe extern "C" fn rs_reg_prev_class() -> c_int {
         let base = line as *const c_char;
         let head = utf_head_off(base, p);
         let start = p.sub(head as usize);
-        mb_get_class_tab(start, nvim_buf_get_chartab(REX.reg_buf))
+        mb_get_class_tab(start, bref_raw(REX.reg_buf).b_chartab.as_ptr())
     } else {
         -1
     }
@@ -6110,7 +6117,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } else {
                             let this_class = mb_get_class_tab(
                                 REX.input.cast::<c_char>(),
-                                nvim_buf_get_chartab(REX.reg_buf),
+                                bref_raw(REX.reg_buf).b_chartab.as_ptr(),
                             );
                             if this_class <= 1 {
                                 status = RA_NOMATCH;
@@ -6125,7 +6132,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } else {
                             let this_class = mb_get_class_tab(
                                 REX.input.cast::<c_char>(),
-                                nvim_buf_get_chartab(REX.reg_buf),
+                                bref_raw(REX.reg_buf).b_chartab.as_ptr(),
                             );
                             let prev_class = rs_reg_prev_class();
                             if this_class == prev_class || prev_class == 0 || prev_class == 1 {
@@ -13180,7 +13187,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     } else {
                         let this_class = mb_get_class_tab(
                             REX.input.cast::<c_char>(),
-                            nvim_buf_get_chartab(REX.reg_buf),
+                            bref_raw(REX.reg_buf).b_chartab.as_ptr(),
                         );
                         if this_class <= 1 {
                             result = 0;
@@ -13204,7 +13211,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     } else {
                         let this_class = mb_get_class_tab(
                             REX.input.cast::<c_char>(),
-                            nvim_buf_get_chartab(REX.reg_buf),
+                            bref_raw(REX.reg_buf).b_chartab.as_ptr(),
                         );
                         let prev_class = rs_reg_prev_class();
                         if this_class == prev_class || prev_class == 0 || prev_class == 1 {

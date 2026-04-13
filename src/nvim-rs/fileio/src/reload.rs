@@ -3,6 +3,7 @@
 //! Provides `rs_buf_reload` (replaces the C `buf_reload` function) and
 //! the internal `move_lines` helper.
 
+use crate::{bref_void, buf_mut_void};
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -58,14 +59,12 @@ extern "C" {
     fn nvim_ml_get_buf(buf: *mut c_void, lnum: c_int) -> *mut c_char;
     fn nvim_ml_append_curbuf(lnum: c_int, line: *const c_char) -> c_int;
     fn nvim_ml_delete_in_buf(buf: *mut c_void, lnum: c_int) -> c_int;
-    fn nvim_buf_get_b_ml_line_count(buf: *const c_void) -> c_int;
     fn nvim_get_curbuf_ml_line_count() -> c_int;
 
     // --- buffer flags ---
     fn nvim_curbuf_set_b_flags_or(flags: c_int);
     fn nvim_curbuf_set_b_keep_filetype(val: c_int);
     fn nvim_curbuf_set_b_mod_set(val: c_int);
-    fn nvim_buf_set_b_p_ro_or(buf: *mut c_void, val: c_int);
 
     // --- readfile ---
     fn nvim_readfile_reload(
@@ -111,10 +110,6 @@ extern "C" {
     fn nvim_semsg_reload_fail(fname: *const c_char);
     fn nvim_semsg_prep_reload_fail(fname: *const c_char);
 
-    // --- buffer field accessors ---
-    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
-    fn nvim_buf_get_b_p_ro(buf: *const c_void) -> c_int;
-
     // --- constants ---
     fn nvim_BF_CHECK_RO() -> c_int;
 
@@ -143,7 +138,7 @@ const FAIL: c_int = 0;
 unsafe fn move_lines(frombuf: *mut c_void, tobuf: *mut c_void) -> c_int {
     let original_curbuf = nvim_get_curbuf();
     let mut retval = OK;
-    let line_count = nvim_buf_get_b_ml_line_count(frombuf);
+    let line_count = bref_void(frombuf as *const c_void).ml_line_count;
 
     // Copy lines from frombuf to tobuf.
     nvim_set_curbuf(tobuf);
@@ -191,7 +186,7 @@ unsafe fn move_lines(frombuf: *mut c_void, tobuf: *mut c_void) -> c_int {
 /// `buf` must be a valid non-null buffer pointer.
 #[export_name = "buf_reload"]
 pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int) {
-    let old_ro = nvim_buf_get_b_p_ro(buf);
+    let old_ro = bref_void(buf as *const c_void).b_p_ro;
 
     // Set curwin/curbuf for "buf" and save some things.
     let aco = nvim_aucmd_prepbuf_alloc(buf);
@@ -212,7 +207,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     let old_topline = nvim_curwin_get_topline();
 
     let curbuf = nvim_get_curbuf();
-    let ml_line_count = nvim_buf_get_b_ml_line_count(curbuf);
+    let ml_line_count = bref_void(curbuf as *const c_void).ml_line_count;
 
     let mut flags = READ_NEW;
     let mut saved = OK;
@@ -251,7 +246,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
         }
 
         if savebuf.is_null() || saved == FAIL || buf != curbuf || move_lines(buf, savebuf) == FAIL {
-            let b_fname = nvim_buf_get_b_fname(buf);
+            let b_fname = bref_void(buf as *const c_void).b_fname;
             nvim_semsg_prep_reload_fail(b_fname);
             saved = FAIL;
         }
@@ -268,7 +263,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
 
         if readfile_ok != OK {
             if nvim_aborting() == 0 {
-                let b_fname = nvim_buf_get_b_fname(buf);
+                let b_fname = bref_void(buf as *const c_void).b_fname;
                 nvim_semsg_reload_fail(b_fname);
             }
             if !savebuf.is_null() && nvim_bufref_valid(bufref_ptr) != 0 && buf == curbuf {
@@ -331,7 +326,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
 
     // If mode didn't change and 'readonly' was set, keep old value.
     if orig_mode == nvim_curbuf_get_b_orig_mode() {
-        nvim_buf_set_b_p_ro_or(curbuf, old_ro);
+        buf_mut_void(curbuf).b_p_ro |= old_ro;
     }
 
     // Modelines must override settings done by autocommands.

@@ -6,7 +6,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::display::{BufHandle, WinHandle};
+use crate::display::{buf_mut_raw, BufHandle, WinHandle};
 use crate::PUM_STATE;
 
 /// Opaque handle to a `tabpage_T`.
@@ -68,9 +68,6 @@ extern "C" {
     fn rs_win_setheight(height: c_int);
     fn nvim_win_get_w_height(wp: *mut WinHandle) -> c_int;
 
-    // Buffer state
-    fn nvim_buf_set_b_changed(buf: *mut BufHandle, val: bool);
-    fn nvim_buf_set_b_p_ma(buf: *mut BufHandle, val: c_int);
     fn nvim_win_buf_line_count(wp: *mut WinHandle) -> c_int;
 
     // Cursor/topline (via existing nvim_win_* accessors from win_struct.rs)
@@ -279,8 +276,8 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         }
                     }
 
-                    nvim_buf_set_b_changed(curbuf, false);
-                    nvim_buf_set_b_p_ma(curbuf, 0);
+                    buf_mut_raw(curbuf).b_changed = 0;
+                    buf_mut_raw(curbuf).b_p_ma = 0;
 
                     if pum_selected == prev_selected {
                         let topline = nvim_win_get_topline(curwin);

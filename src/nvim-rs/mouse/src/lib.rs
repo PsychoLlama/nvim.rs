@@ -14,6 +14,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_normal::types::{CmdargT, OpargT};
 use nvim_window::win_struct::WinStruct;
 use std::ffi::{c_char, c_int};
@@ -22,6 +23,12 @@ use std::ffi::{c_char, c_int};
 #[inline]
 unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
     nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
+/// Access `BufStruct` fields from a raw `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw(buf: *mut std::ffi::c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
 }
 
 /// Convert raw `WinHandle` pointer to `&mut WinStruct`.
@@ -1491,9 +1498,6 @@ extern "C" {
     /// Get `w_buffer` for curwin (the current buffer handle).
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
 
-    /// Get the line count of a buffer.
-    fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> linenr_T;
-
     /// Clear valid bits: `w_valid &= ~bits`.
     fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
 
@@ -2399,7 +2403,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
         } else if row >= view_height {
             let mut count: c_int = 0;
             let mut first = true;
-            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+            let line_count = bref_raw(nvim_get_curbuf()).ml_line_count;
             let mut tline = topline;
             let mut tfill = topfill;
             while tline < line_count {
@@ -2444,7 +2448,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
             // far as it goes, moving the mouse in the top line should scroll
             // the text down (done later when recomputing w_topline).
             let cursor_lnum = win_ref(curwin).w_cursor.lnum;
-            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+            let line_count = bref_raw(nvim_get_curbuf()).ml_line_count;
             if rs_get_mouse_dragging() > 0 && cursor_lnum == line_count && cursor_lnum == topline {
                 nvim_win_clear_valid_bits(curwin, VALID_TOPLINE);
             }

@@ -11,6 +11,7 @@
 
 #![allow(unsafe_code)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int, CStr};
 
 pub mod backup;
@@ -47,6 +48,24 @@ pub struct FileInfoHandle {
 #[repr(C)]
 pub struct BufferHandle {
     _opaque: [u8; 0],
+}
+
+/// Access `BufStruct` fields from a raw `*const c_void` buf_T pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref_void(buf: *const std::ffi::c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Mutably access `BufStruct` fields from a raw `*mut c_void` buf_T pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn buf_mut_void(buf: *mut std::ffi::c_void) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
 }
 
 /// Opaque handle to a C `context_sha256_T` struct.

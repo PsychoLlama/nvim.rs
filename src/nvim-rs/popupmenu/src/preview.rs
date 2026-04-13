@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::display::{BufHandle, WinHandle};
+use crate::display::{bref_raw, buf_mut_raw, BufHandle, WinHandle};
 use crate::PUM_STATE;
 
 // ---- Minimal API types for nvim_buf_set_lines ----
@@ -112,10 +112,6 @@ extern "C" {
     fn arena_finish(arena: *mut Arena) -> *mut c_void;
     /// Free arena memory block.
     fn arena_mem_free(mem: *mut c_void);
-    /// Set buffer `b_p_ma` field.
-    fn nvim_buf_set_b_p_ma(buf: *mut BufHandle, val: c_int);
-    /// Get buffer handle (`b_fnum` field as integer).
-    fn nvim_buf_get_handle(buf: *mut BufHandle) -> c_int;
     /// Emit an error message.
     fn emsg(s: *const c_char);
     /// Clear an error.
@@ -228,7 +224,7 @@ pub unsafe extern "C" fn rs_pum_preview_set_text(
     let mut arena = Arena::empty();
     let mut replacement = NvimArray::empty();
 
-    nvim_buf_set_b_p_ma(buf, 1);
+    buf_mut_raw(buf).b_p_ma = 1;
 
     // First pass: count lines so we can allocate the array.
     let mut line_count: usize = 0;
@@ -297,7 +293,7 @@ pub unsafe extern "C" fn rs_pum_preview_set_text(
     if textlock > 0 {
         textlock = 0;
     }
-    let buf_handle = nvim_buf_get_handle(buf);
+    let buf_handle = bref_raw(buf).handle;
     nvim_buf_set_lines(
         0,
         buf_handle,
@@ -318,7 +314,7 @@ pub unsafe extern "C" fn rs_pum_preview_set_text(
     arena_mem_free(mem);
     api_free_array(replacement);
 
-    nvim_buf_set_b_p_ma(buf, 0);
+    buf_mut_raw(buf).b_p_ma = 0;
 }
 
 /// Thin C wrapper for `strchr` to avoid `libc` dependency.

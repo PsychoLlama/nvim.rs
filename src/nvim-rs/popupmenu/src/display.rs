@@ -3,6 +3,7 @@
 //! This module provides helper functions for showing, hiding, and managing
 //! the popup menu display state.
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::PUM_STATE;
@@ -510,6 +511,22 @@ struct PumDisplayGeometry {
 #[repr(C)]
 pub struct BufHandle {
     _private: [u8; 0],
+}
+
+/// Access `BufStruct` fields from a `*mut BufHandle` pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+pub(crate) unsafe fn bref_raw(buf: *mut BufHandle) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Mutably access `BufStruct` fields from a `*mut BufHandle` pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+pub(crate) unsafe fn buf_mut_raw(buf: *mut BufHandle) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
 }
 
 /// Opaque handle to a `win_T`.

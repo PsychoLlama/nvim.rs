@@ -97,21 +97,16 @@ int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_fre
 int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
 const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
 const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
-const char *nvim_buf_get_b_sfname(buf_T *buf) { return buf->b_sfname; }
 int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
-const char *nvim_buf_get_b_p_ft(buf_T *buf) { return buf->b_p_ft; }
 int nvim_buf_get_b_p_ma(buf_T *buf) { return buf->b_p_ma; }
 void nvim_buf_set_b_p_ml(buf_T *buf, int val) { if (buf) { buf->b_p_ml = val != 0; } }
 void nvim_buf_set_b_p_iminsert(buf_T *buf, int val) { if (buf) { buf->b_p_iminsert = val; } }
 void nvim_buf_set_b_p_imsearch(buf_T *buf, int val) { if (buf) { buf->b_p_imsearch = val; } }
 int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 uint64_t *nvim_buf_get_chartab(buf_T *buf) { return buf->b_chartab; }
-OptInt nvim_buf_get_p_ts(buf_T *buf) { return buf->b_p_ts; }
-int *nvim_buf_get_p_vts_array(buf_T *buf) { return buf->b_p_vts_array; }
 OptInt nvim_buf_get_p_sw(buf_T *buf) { return buf->b_p_sw; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
 int nvim_buf_get_locked(buf_T *buf) { return buf->b_locked; }
-int nvim_buf_get_b_p_bl(buf_T *buf) { return buf->b_p_bl; }
 const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
 int nvim_curbuf_get_handle(void) { return curbuf->handle; }
 int nvim_curbuf_has_ffname(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
@@ -550,24 +545,13 @@ void nvim_set_fileencoding_local(const char *fenc) {
 }
 
 // Phase 3: shorten_buf_fname / shorten_fnames accessors
-void nvim_buf_set_b_sfname(buf_T *buf, char *val) { buf->b_sfname = val; }
-void nvim_buf_set_b_fname(buf_T *buf, char *val) { buf->b_fname = val; }
 void nvim_buf_mf_fullname(buf_T *buf) { mf_fullname(buf->b_ml.ml_mfp); }
 void nvim_set_redraw_tabline(int val) { redraw_tabline = (bool)val; }
 int nvim_bt_nofilename(buf_T *buf) { return bt_nofilename(buf) ? 1 : 0; }
 
 // Phase 5: buf_check_timestamp accessors
-// --- buf field getters ---
-int64_t nvim_buf_get_b_mtime(const buf_T *buf) { return buf->b_mtime; }
-int64_t nvim_buf_get_b_mtime_ns(const buf_T *buf) { return buf->b_mtime_ns; }
-uint64_t nvim_buf_get_b_orig_size(const buf_T *buf) { return buf->b_orig_size; }
 int nvim_buf_get_b_orig_mode(const buf_T *buf) { return buf->b_orig_mode; }
-int nvim_buf_get_b_saving(const buf_T *buf) { return (int)buf->b_saving; }
-int nvim_buf_get_b_p_ar(const buf_T *buf) { return (int)buf->b_p_ar; }
-int nvim_buf_get_b_p_udf(const buf_T *buf) { return (int)buf->b_p_udf; }
 int64_t nvim_get_p_ar(void) { return p_ar; }
-// --- b_mtime/b_orig manipulation for buf_check_timestamp ---
-void nvim_buf_set_b_mtime_minus1(buf_T *buf) { buf->b_mtime = -1; buf->b_orig_size = 0; buf->b_orig_mode = 0; }
 void nvim_buf_copy_mtime_to_mtime_read(buf_T *buf) { buf->b_mtime_read = buf->b_mtime; buf->b_mtime_read_ns = buf->b_mtime_ns; }
 // --- bt_normal wrapper ---
 int nvim_bt_normal(const buf_T *buf) { return bt_normal(buf) ? 1 : 0; }
@@ -651,7 +635,6 @@ void nvim_curbuf_set_b_flags_or(int flags) { curbuf->b_flags |= flags; }
 void nvim_curbuf_set_b_keep_filetype(int val) { curbuf->b_keep_filetype = (bool)val; }
 void nvim_curbuf_set_b_mod_set(int val) { curbuf->b_mod_set = (bool)val; }
 int nvim_curbuf_get_b_orig_mode(void) { return curbuf->b_orig_mode; }
-void nvim_buf_set_b_p_ro_or(buf_T *buf, int val) { buf->b_p_ro |= (bool)val; }
 // Note: nvim_curwin_get_topline is defined in window_shim.c
 void nvim_curwin_set_topline_clamped(linenr_T topline) {
   linenr_T max_line = curbuf->b_ml.ml_line_count;

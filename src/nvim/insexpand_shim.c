@@ -391,7 +391,6 @@ void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx)
   if (*p == 'F') { const char *q = p + 1; if (*q != ',' && *q != NUL) { return curbuf->b_p_cpt_cb[idx].type != kCallbackNone ? &curbuf->b_p_cpt_cb[idx] : NULL; } else { return &curbuf->b_cfu_cb; } }
   return NULL;
 }
-buf_T *nvim_buf_get_b_next(buf_T *buf) { return buf->b_next; }
 int nvim_buf_get_b_scanned(buf_T *buf) { return buf->b_scanned; }
 int nvim_buf_get_b_p_inf_void(void *buf) { return ((buf_T *)buf)->b_p_inf ? 1 : 0; }
 win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }

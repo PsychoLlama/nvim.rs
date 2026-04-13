@@ -5,6 +5,7 @@ edition = "2021"
 description = "File I/O utilities for Neovim"
 
 [dependencies]
+nvim-buffer = { path = "../buffer" }
 bitflags = "2"
 libc = "0.2"
 

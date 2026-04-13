@@ -18,6 +18,7 @@
 #![allow(clippy::cast_lossless)]
 #![allow(dead_code)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::c_int;
 use std::ffi::c_void;
 
@@ -268,10 +269,6 @@ extern "C" {
 
     // Buffer handle for decoration
 
-    // Buffer accessor functions (for line_putchar)
-    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
-    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *mut c_int;
-
     // UTF-8 functions from mbyte
     fn utf_ptr2cells(p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -479,6 +476,12 @@ extern "C" {
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BufHandle(*mut c_void);
+
+/// Access `BufStruct` fields from a `BufHandle`.
+#[inline]
+unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    &*(buf.0.cast::<BufStruct>())
+}
 
 use std::ffi::c_char;
 
@@ -1089,8 +1092,8 @@ unsafe fn line_putchar_impl(
     }
 
     if *p == TAB {
-        let ts = nvim_buf_get_p_ts(buf);
-        let vts = nvim_buf_get_p_vts_array(buf);
+        let ts = bref(buf).b_p_ts;
+        let vts = bref(buf).b_p_vts_array;
         cells = rs_tabstop_padding(vcol, ts, vts);
         if cells > maxcells {
             cells = maxcells;
@@ -1674,8 +1677,8 @@ unsafe fn draw_virt_text_item_impl(
         while skip_cells > 0 && *virt_str != NUL {
             let c_len = utfc_ptr2len(virt_str);
             let cells = if *virt_str == TAB {
-                let ts = nvim_buf_get_p_ts(buf);
-                let vts = nvim_buf_get_p_vts_array(buf);
+                let ts = bref(buf).b_p_ts;
+                let vts = bref(buf).b_p_vts_array;
                 rs_tabstop_padding(vcol, ts, vts)
             } else {
                 utf_ptr2cells(virt_str)
@@ -3251,9 +3254,6 @@ extern "C" {
     // Visual mode state
     static mut VIsual_active: bool;
 
-    // Buffer state
-    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
-
     // Window comparison
 
     // Syntax state
@@ -3284,7 +3284,7 @@ pub unsafe extern "C" fn rs_should_apply_visual(wp: WinHandle) -> c_int {
 /// Returns 1 if lnum equals buf's line count.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_last_line(buf: BufHandle, lnum: LinenrT) -> c_int {
-    let line_count = nvim_buf_get_line_count(buf);
+    let line_count = bref(buf).ml_line_count;
     c_int::from(lnum == line_count)
 }
 
@@ -3336,7 +3336,7 @@ pub unsafe extern "C" fn rs_tab_cells(wp: WinHandle, vcol: c_int) -> c_int {
     let buf = BufHandle(win_ref(wp).w_buffer);
     // b_p_ts is OptInt (i64); clamp to c_int range (tabstop won't exceed that in practice).
     #[allow(clippy::cast_possible_truncation)]
-    let tabstop = nvim_buf_get_p_ts(buf).min(i64::from(c_int::MAX)) as c_int;
+    let tabstop = bref(buf).b_p_ts.min(i64::from(c_int::MAX)) as c_int;
     if tabstop == 0 {
         return 1;
     }
@@ -3894,7 +3894,6 @@ extern "C" {
     fn nvim_cursor_is_block_during_visual(exclusive: c_int) -> c_int;
     fn nvim_gchar_pos_lnum_col(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
     fn nvim_get_cmdwin_win() -> WinHandle;
-    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
     // rs_diff_check_with_linestatus, rs_diff_find_change, rs_diff_change_parse
     // are already exported by the diff crate; call them via extern.
     fn rs_diff_check_with_linestatus(wp: WinHandle, lnum: LinenrT, linestatus: *mut c_int)
@@ -4040,7 +4039,7 @@ pub unsafe extern "C" fn rs_win_line_init(
 
     // draw_text: !concealed && lnum != buf->b_ml.ml_line_count + 1
     let buf = BufHandle(win_ref(wp).w_buffer);
-    let line_count = nvim_buf_get_line_count(buf);
+    let line_count = bref(buf).ml_line_count;
     state.draw_text = !concealed && (lnum != line_count + 1);
 
     // color_cols (set on wlv): buf->terminal ? NULL : wp->w_p_cc_cols
@@ -4073,7 +4072,7 @@ pub unsafe extern "C" fn rs_win_line_init(
         state.check_decor_providers = true;
 
         // color_cols setup
-        if nvim_buf_get_terminal(buf) == 0 {
+        if bref(buf).terminal.is_null() {
             (*wlv).color_cols = nvim_win_get_p_cc_cols(wp);
         } else {
             (*wlv).color_cols = std::ptr::null_mut();
@@ -4685,7 +4684,7 @@ pub unsafe extern "C" fn rs_win_line_eol_fill(
     }
 
     let buf = win_ref(wp).w_buffer;
-    let terminal = nvim_buf_get_terminal(BufHandle(buf));
+    let terminal = c_int::from(!bref(BufHandle(buf)).terminal.is_null());
     let lnum = (*wlv).lnum;
     let cursor_lnum = win_ref(wp).w_cursor.lnum;
     let virtcol = win_ref(wp).w_virtcol;
@@ -6758,8 +6757,8 @@ pub unsafe extern "C" fn rs_win_line_process_char(
 
             if mb_c == c_int::from(b'\t') && (*wlv).n_extra + (*wlv).col > view_width {
                 let buf = BufHandle(win_ref(wp).w_buffer);
-                let ts = nvim_buf_get_p_ts(buf);
-                let vts = nvim_buf_get_p_vts_array(buf);
+                let ts = bref(buf).b_p_ts;
+                let vts = bref(buf).b_p_vts_array;
                 (*wlv).n_extra = rs_tabstop_padding((*wlv).vcol, ts, vts) - 1;
             }
             (*wlv).sc_extra = rs_schar_from_ascii(if mb_off > 0 {
@@ -6886,8 +6885,8 @@ pub unsafe extern "C" fn rs_win_line_process_char(
             }
 
             let buf = BufHandle(win_ref(wp).w_buffer);
-            let ts = nvim_buf_get_p_ts(buf);
-            let vts = nvim_buf_get_p_vts_array(buf);
+            let ts = bref(buf).b_p_ts;
+            let vts = bref(buf).b_p_vts_array;
             tab_len = rs_tabstop_padding(vcol_adjusted, ts, vts) - 1;
 
             if nvim_win_get_p_lbr(wp) == 0 || win_ref(wp).w_p_list() == 0 {

@@ -5,6 +5,7 @@
 //! - Change reason classification
 //! - Reload decision logic
 
+use crate::{bref_void, buf_mut_void};
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -439,14 +440,6 @@ extern "C" {
     fn nvim_fileinfo_get_size(fi: *const c_void) -> u64;
     /// Get file mode from a FileInfo struct.
     fn nvim_fileinfo_get_mode(fi: *const c_void) -> i32;
-    /// Set buf->b_mtime (in memline_shim.c).
-    fn nvim_buf_set_b_mtime(buf: *mut c_void, val: i64);
-    /// Set buf->b_mtime_ns (in memline_shim.c).
-    fn nvim_buf_set_b_mtime_ns(buf: *mut c_void, val: i64);
-    /// Set buf->b_orig_size (in memline_shim.c, takes int64_t).
-    fn nvim_buf_set_b_orig_size(buf: *mut c_void, val: i64);
-    /// Set buf->b_orig_mode (in buffer_shim.c).
-    fn nvim_buf_set_b_orig_mode(buf: *mut c_void, val: i32);
 }
 
 /// Store file metadata from a FileInfo struct into a buffer.
@@ -463,10 +456,11 @@ pub unsafe extern "C" fn rs_buf_store_file_info(buf: *mut c_void, file_info: *co
     let size = unsafe { nvim_fileinfo_get_size(file_info) };
     let mode = unsafe { nvim_fileinfo_get_mode(file_info) };
 
-    unsafe { nvim_buf_set_b_mtime(buf, mtime) };
-    unsafe { nvim_buf_set_b_mtime_ns(buf, mtime_ns) };
-    unsafe { nvim_buf_set_b_orig_size(buf, size as i64) };
-    unsafe { nvim_buf_set_b_orig_mode(buf, mode) };
+    let b = unsafe { buf_mut_void(buf) };
+    b.b_mtime = mtime;
+    b.b_mtime_ns = mtime_ns;
+    b.b_orig_size = size;
+    b.b_orig_mode = mode;
 }
 
 // =============================================================================
@@ -510,10 +504,6 @@ extern "C" {
     fn nvim_get_need_wait_return() -> bool;
     /// Returns the first buffer (firstbuf).
     fn nvim_get_firstbuf() -> *mut c_void;
-    /// Returns `buf->b_next`.
-    fn nvim_buf_get_b_next(buf: *mut c_void) -> *mut c_void;
-    /// Returns `buf->b_nwindows`.
-    fn nvim_buf_get_nwindows(buf: *mut c_void) -> c_int;
     /// Initializes a bufref_T (opaque) to point to buf.
     fn nvim_set_bufref(br: *mut c_void, buf: *mut c_void);
     /// Returns non-zero if the bufref still points to a valid buffer.
@@ -574,7 +564,7 @@ pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
         let mut buf = nvim_get_firstbuf();
         while !buf.is_null() {
             // Only check buffers in a window.
-            if nvim_buf_get_nwindows(buf) > 0 {
+            if unsafe { bref_void(buf as *const c_void).b_nwindows } > 0 {
                 nvim_set_bufref(bufref_ptr, buf);
                 let n = rs_buf_check_timestamp(buf);
                 if n > didit {
@@ -586,7 +576,7 @@ pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
                     continue;
                 }
             }
-            buf = nvim_buf_get_b_next(buf);
+            buf = unsafe { bref_void(buf as *const c_void).b_next };
         }
 
         nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
@@ -636,38 +626,10 @@ const BF_NOTEDITED: c_int = 0x08;
 const UNDO_HASH_SIZE: usize = 32;
 
 extern "C" {
-    /// Returns non-zero if buf->terminal is set.
-    fn nvim_buf_get_terminal(buf: *const c_void) -> c_int;
-    /// Returns buf->b_ffname.
-    fn nvim_buf_get_b_ffname(buf: *const c_void) -> *const c_char;
-    /// Returns non-null if buf->b_ml.ml_mfp is set.
-    fn nvim_buf_get_ml_mfp(buf: *const c_void) -> *mut c_void;
     /// Returns non-zero if buf has type 'normal'.
     fn nvim_bt_normal(buf: *const c_void) -> c_int;
-    /// Returns buf->b_saving.
-    fn nvim_buf_get_b_saving(buf: *const c_void) -> c_int;
-    /// Returns buf->b_flags.
-    fn nvim_buf_get_b_flags(buf: *const c_void) -> c_int;
-    /// Sets buf->b_flags.
-    fn nvim_buf_set_b_flags(buf: *mut c_void, val: c_int);
-    /// Returns buf->b_mtime.
-    fn nvim_buf_get_b_mtime(buf: *const c_void) -> i64;
-    /// Returns buf->b_mtime_ns.
-    fn nvim_buf_get_b_mtime_ns(buf: *const c_void) -> i64;
-    /// Returns buf->b_orig_size.
-    fn nvim_buf_get_b_orig_size(buf: *const c_void) -> u64;
-    /// Returns buf->b_orig_mode.
-    fn nvim_buf_get_b_orig_mode(buf: *const c_void) -> c_int;
-    /// Returns buf->b_p_ar (autoread: -1 = inherit global, 0 = off, 1 = on).
-    fn nvim_buf_get_b_p_ar(buf: *const c_void) -> c_int;
-    /// Returns buf->b_p_udf (undofile option).
-    fn nvim_buf_get_b_p_udf(buf: *const c_void) -> c_int;
     /// Returns global p_ar (autoread option).
     fn nvim_get_p_ar() -> i64;
-    /// Returns buf->b_fname.
-    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
-    /// Sets buf->b_mtime = -1, b_orig_size = 0, b_orig_mode = 0.
-    fn nvim_buf_set_b_mtime_minus1(buf: *mut c_void);
     // Note: rs_buf_store_file_info is defined in this file, not an extern.
     /// os_fileinfo wrapper: fills metadata, returns 1 on success.
     fn nvim_os_fileinfo(
@@ -801,11 +763,12 @@ pub unsafe extern "C" fn rs_buf_check_timestamp(buf: *mut c_void) -> c_int {
 
 unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
     // If terminal, no filename, not loaded, not normal buftype, saving, or re-entrant: skip.
-    if nvim_buf_get_terminal(buf) != 0
-        || nvim_buf_get_b_ffname(buf).is_null()
-        || nvim_buf_get_ml_mfp(buf).is_null()
+    let br = bref_void(buf as *const c_void);
+    if !br.terminal.is_null()
+        || br.b_ffname.is_null()
+        || br.ml_mfp.is_null()
         || nvim_bt_normal(buf) == 0
-        || nvim_buf_get_b_saving(buf) != 0
+        || br.b_saving != 0
     {
         return 0;
     }
@@ -817,19 +780,20 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
     let mut can_reload = false;
     let mut reload: c_int = RELOAD_NONE;
 
-    let orig_size = nvim_buf_get_b_orig_size(buf);
-    let orig_mode = nvim_buf_get_b_orig_mode(buf);
-    let b_flags = nvim_buf_get_b_flags(buf);
+    let br = bref_void(buf as *const c_void);
+    let orig_size = br.b_orig_size;
+    let orig_mode = br.b_orig_mode;
+    let b_flags = br.b_flags;
 
     // Set up a bufref to detect if buf gets deleted by autocmds
     let mut bufref: [u64; 2] = [0; 2];
     let bufref_ptr = bufref.as_mut_ptr() as *mut c_void;
     nvim_set_bufref(bufref_ptr, buf);
 
-    let ffname = nvim_buf_get_b_ffname(buf);
+    let ffname = br.b_ffname;
 
-    let b_mtime = nvim_buf_get_b_mtime(buf);
-    let b_mtime_ns = nvim_buf_get_b_mtime_ns(buf);
+    let b_mtime = br.b_mtime;
+    let b_mtime_ns = br.b_mtime_ns;
 
     // Check if timestamp changed (file modified since we read it)
     if (b_flags & BF_NOTEDITED) == 0 && b_mtime != 0 {
@@ -866,23 +830,25 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
             // Update stored metadata immediately to stop further warnings
             // (e.g., when firing FileChangedShell autocmd)
             if !file_info_ok {
-                nvim_buf_set_b_mtime_minus1(buf);
+                let bm = buf_mut_void(buf);
+                bm.b_mtime = -1;
+                bm.b_orig_size = 0;
+                bm.b_orig_mode = 0;
             } else {
-                // Use the individual setters to update buffer metadata.
-                // (We can't use rs_buf_store_file_info here since nvim_os_fileinfo
-                // already extracted the values without returning the raw C FileInfo ptr.)
-                nvim_buf_set_b_mtime(buf, fi_mtime_sec);
-                nvim_buf_set_b_mtime_ns(buf, fi_mtime_ns);
-                nvim_buf_set_b_orig_size(buf, fi_size as i64);
-                nvim_buf_set_b_orig_mode(buf, fi_mode);
+                let bm = buf_mut_void(buf);
+                bm.b_mtime = fi_mtime_sec;
+                bm.b_mtime_ns = fi_mtime_ns;
+                bm.b_orig_size = fi_size;
+                bm.b_orig_mode = fi_mode;
             }
 
-            let b_fname = nvim_buf_get_b_fname(buf);
+            let b_fname = bref_void(buf as *const c_void).b_fname;
 
             if nvim_os_isdir2(b_fname) != 0 {
                 // Don't do anything for a directory.
-            } else if (nvim_buf_get_b_p_ar(buf) >= 0 && nvim_buf_get_b_p_ar(buf) != 0
-                || nvim_buf_get_b_p_ar(buf) < 0 && nvim_get_p_ar() != 0)
+            } else if (bref_void(buf as *const c_void).b_p_ar >= 0
+                && bref_void(buf as *const c_void).b_p_ar != 0
+                || bref_void(buf as *const c_void).b_p_ar < 0 && nvim_get_p_ar() != 0)
                 && nvim_buf_is_changed(buf) == 0
                 && file_info_ok
             {
@@ -894,11 +860,11 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                     c"deleted".as_ptr()
                 } else if nvim_buf_is_changed(buf) != 0 {
                     c"conflict".as_ptr()
-                } else if orig_size != nvim_buf_get_b_orig_size(buf)
+                } else if orig_size != bref_void(buf as *const c_void).b_orig_size
                     || nvim_buf_contents_changed(buf) != 0
                 {
                     c"changed".as_ptr()
-                } else if orig_mode != nvim_buf_get_b_orig_mode(buf) {
+                } else if orig_mode != bref_void(buf as *const c_void).b_orig_mode {
                     c"mode".as_ptr()
                 } else {
                     c"time".as_ptr()
@@ -974,12 +940,12 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
     } else if (b_flags & BF_NEW) != 0 && (b_flags & BF_NEW_W) == 0 && nvim_os_path_exists(ffname) {
         retval = 1;
         mesg = c"W13: Warning: File \"%s\" has been created after editing started".as_ptr();
-        nvim_buf_set_b_flags(buf, b_flags | BF_NEW_W);
+        buf_mut_void(buf).b_flags = b_flags | BF_NEW_W;
         can_reload = true;
     }
 
     if !mesg.is_null() {
-        let b_fname = nvim_buf_get_b_fname(buf);
+        let b_fname = bref_void(buf as *const c_void).b_fname;
         let path = nvim_home_replace_save(buf, b_fname);
 
         if !helpmesg {
@@ -1048,7 +1014,8 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
     if reload != RELOAD_NONE {
         let reload_options = if reload == RELOAD_DETECT { 1 } else { 0 };
         nvim_buf_reload(buf, orig_mode, reload_options);
-        if nvim_buf_get_b_p_udf(buf) != 0 && !nvim_buf_get_b_ffname(buf).is_null() {
+        let bsync = bref_void(buf as *const c_void);
+        if bsync.b_p_udf != 0 && !bsync.b_ffname.is_null() {
             let mut hash: [u8; UNDO_HASH_SIZE] = [0; UNDO_HASH_SIZE];
             nvim_u_compute_hash(buf, hash.as_mut_ptr());
             nvim_u_write_undo(std::ptr::null(), 0, buf, hash.as_mut_ptr());
@@ -1057,7 +1024,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
 
     // Trigger FileChangedShellPost when the file was changed in any way.
     if nvim_bufref_valid(bufref_ptr) != 0 && retval != 0 {
-        let b_fname = nvim_buf_get_b_fname(buf);
+        let b_fname = bref_void(buf as *const c_void).b_fname;
         apply_autocmds(EVENT_FILECHANGEDSHELLPOST, b_fname, b_fname, false, buf);
     }
 
