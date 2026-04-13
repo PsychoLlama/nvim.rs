@@ -79,8 +79,6 @@ extern "C" {
 
     // nvim_set_compl_startpos_to_cursor: deleted (Phase 22), inlined below
     // helpers for inlined nvim_set_compl_startpos_to_cursor (Phase 22)
-    fn nvim_curwin_cursor_col() -> c_int;
-    fn nvim_curwin_cursor_coladd() -> c_int;
     // (nvim_set_compl_startpos_col_to_compl_col: inlined in vars.rs)
     // nvim_restore_did_ai: deleted (Phase 1), use nvim_set_did_ai directly
     // nvim_set_edit_submode_ctrl_x_local_or_mode: deleted (Phase 22), inlined below
@@ -238,10 +236,12 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             crate::vars::nvim_get_compl_cont_status() | CONT_N_ADDS,
         );
         // Inlined nvim_set_compl_startpos_to_cursor (Phase 22)
+        let cw_ptr = nvim_get_curwin().cast::<c_void>();
+        let cw = nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(cw_ptr));
         crate::vars::compl_startpos = crate::vars::PosT {
             lnum: nvim_get_curwin_cursor_lnum(),
-            col: nvim_curwin_cursor_col(),
-            coladd: nvim_curwin_cursor_coladd(),
+            col: cw.w_cursor.col,
+            coladd: cw.w_cursor.coladd,
         };
         crate::vars::nvim_set_compl_col(0);
         curs_col

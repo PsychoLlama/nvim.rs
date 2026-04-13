@@ -1749,7 +1749,6 @@ extern "C" {
     fn nvim_ecmd_curbuf_get_kmap_state() -> c_int;
     fn check_arg_idx(win: *mut c_void);
     fn nvim_get_entered_free_all_mem() -> c_int;
-    fn nvim_curwin_cursor_lnum() -> c_int;
     fn nvim_win_get_b_p_spl(win: *const c_void) -> *const c_char;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
@@ -1888,7 +1887,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     // and possibly cursor col.
     let curwin = nvim_get_curwin(); // re-acquire after autocommands
     let curbuf = nvim_get_curbuf();
-    if nvim_curwin_cursor_lnum() == 1 && inindent(0) != 0 {
+    if win_ref_raw(curwin).w_cursor.lnum == 1 && inindent(0) != 0 {
         buflist_getfpos();
     }
 

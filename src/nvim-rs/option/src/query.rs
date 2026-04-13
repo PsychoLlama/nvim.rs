@@ -395,7 +395,6 @@ pub unsafe extern "C" fn rs_string_to_key(arg: *mut c_char) -> c_int {
 
 extern "C" {
     // check_blending
-    fn nvim_win_get_p_winbl(wp: WinHandle) -> c_int;
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_shadow(wp: WinHandle) -> bool;
     fn nvim_win_set_grid_blending(wp: WinHandle, val: bool);
@@ -428,7 +427,7 @@ const DIP_ALL: c_int = 0x01;
 /// Translation of C `check_blending`.
 #[export_name = "check_blending"]
 pub unsafe extern "C" fn rs_check_blending(wp: WinHandle) {
-    let winbl = nvim_win_get_p_winbl(wp);
+    let winbl = crate::win_ref(wp).w_p_winbl();
     let floating = nvim_win_get_floating(wp) != 0;
     let shadow = nvim_win_get_config_shadow(wp);
     let blending = winbl > 0 || (floating && shadow);

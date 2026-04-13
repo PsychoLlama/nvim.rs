@@ -12,7 +12,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{TabpageHandle, WinHandle};
+use crate::{win_struct::win_ref, TabpageHandle, WinHandle};
 
 // =============================================================================
 // Types
@@ -136,7 +136,6 @@ extern "C" {
 
     // window vars / tabpage vars (window_shim.c)
     fn nvim_win_get_llist_ref(wp: WinHandle) -> *mut c_void;
-    fn nvim_win_get_vars(wp: WinHandle) -> DictPtr;
     fn nvim_tabpage_get_vars(tp: TabpageHandle) -> DictPtr;
 
     // buffer accessors
@@ -795,7 +794,7 @@ unsafe fn get_win_info_impl(wp: WinHandle, tpnr: i16, winnr: i16) -> DictPtr {
             dict,
             c"variables".as_ptr(),
             c"variables".to_bytes().len(),
-            nvim_win_get_vars(wp),
+            win_ref(wp).w_vars,
         );
 
         dict

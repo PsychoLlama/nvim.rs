@@ -1037,13 +1037,6 @@ extern "C" {
     fn do_sub_msg(count_only: bool) -> bool;
     fn nvim_spell_emsg_e752();
     fn nvim_spell_semsg_e753(word: *const c_char);
-    // Cursor access for spellrepall
-    fn nvim_curwin_save_pos(lnum: *mut i32, col: *mut i32);
-    fn nvim_curwin_restore_pos(lnum: i32, col: i32);
-    fn nvim_curwin_set_lnum(lnum: i32);
-    fn nvim_curwin_col_add(n: i32);
-    fn nvim_curwin_get_lnum() -> i32;
-    fn nvim_curwin_get_col() -> i32;
     fn nvim_win_get_buf_ptr_void(wp: *const c_void) -> *mut c_void;
     fn nvim_get_p_ws() -> c_int;
     fn nvim_set_p_ws(val: c_int);
@@ -1151,6 +1144,7 @@ pub unsafe extern "C" fn rs_check_need_cap(wp: *mut c_void, lnum: i32, col: i32)
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_sign_loss)]
 #[allow(clippy::borrow_as_ptr)]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
     let repl_from = repl_from_ext;
     let repl_to = repl_to_ext;
@@ -1194,15 +1188,12 @@ pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
     nvim_sub_nlines_reset();
 
     // Save cursor position
-    let mut saved_lnum: i32 = 0;
-    let mut saved_col: i32 = 0;
-    nvim_curwin_save_pos(
-        std::ptr::addr_of_mut!(saved_lnum),
-        std::ptr::addr_of_mut!(saved_col),
-    );
+    let cw_handle = nvim_window::WinHandle::from_ptr(curwin_global);
+    let saved_lnum: i32 = nvim_window::win_struct::win_ref(cw_handle).w_cursor.lnum;
+    let saved_col: i32 = nvim_window::win_struct::win_ref(cw_handle).w_cursor.col;
 
     // Start from line 0 (beginning of buffer)
-    nvim_curwin_set_lnum(0);
+    nvim_window::win_struct::win_mut(cw_handle).w_cursor.lnum = 0;
 
     let mut prev_lnum: i32 = 0;
 
@@ -1218,7 +1209,7 @@ pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
         // Only replace when the right word isn't there yet
         let cur_line = nvim_get_cursor_line_ptr();
         #[allow(clippy::cast_sign_loss)]
-        let cur_col = nvim_curwin_get_col() as usize;
+        let cur_col = nvim_window::win_struct::win_ref(cw_handle).w_cursor.col as usize;
         #[allow(clippy::cast_sign_loss)]
         let cur_line_len = nvim_get_cursor_line_len() as usize;
 
@@ -1251,7 +1242,7 @@ pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
             );
             *new_line.add(cur_col + repl_to_len + suffix_len) = 0;
 
-            let cur_lnum = nvim_curwin_get_lnum();
+            let cur_lnum = nvim_window::win_struct::win_ref(cw_handle).w_cursor.lnum;
             ml_replace(cur_lnum, new_line.cast::<c_char>(), false);
             inserted_bytes(
                 cur_lnum,
@@ -1267,11 +1258,16 @@ pub unsafe extern "C" fn rs_ex_spellrepall(_eap: *mut c_void) {
             nvim_sub_nsubs_inc();
         }
 
-        nvim_curwin_col_add(repl_to_len as i32);
+        nvim_window::win_struct::win_mut(cw_handle).w_cursor.col += repl_to_len as i32;
     }
 
     nvim_set_p_ws(save_ws);
-    nvim_curwin_restore_pos(saved_lnum, saved_col);
+    {
+        let cw_mut = nvim_window::win_struct::win_mut(cw_handle);
+        cw_mut.w_cursor.lnum = saved_lnum;
+        cw_mut.w_cursor.col = saved_col;
+        cw_mut.w_cursor.coladd = 0;
+    }
     xfree_p2(frompat.cast::<c_void>());
 
     if nvim_sub_nsubs_get() == 0 {

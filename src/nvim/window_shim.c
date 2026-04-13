@@ -62,7 +62,6 @@ extern int rs_tabpage_index(tabpage_T *ftp);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
 
-int nvim_win_get_p_winbl(win_T *wp) { return (int)wp->w_p_winbl; }
 ScreenGrid *nvim_get_curwin_grid_alloc(void) { return curwin ? &curwin->w_grid_alloc : NULL; }
 void nvim_get_curwin_cursor_pos(void *pos) { int32_t *p = (int32_t *)pos; p[0] = (int32_t)curwin->w_cursor.lnum; p[1] = (int32_t)curwin->w_cursor.col; p[2] = (int32_t)curwin->w_cursor.coladd; }
 void nvim_save_viewstate(void *vs) { int32_t *p = (int32_t *)vs; p[0] = (int32_t)curwin->w_curswant; p[1] = (int32_t)curwin->w_leftcol; p[2] = (int32_t)curwin->w_skipcol; p[3] = (int32_t)curwin->w_topline; p[4] = (int32_t)curwin->w_topfill; p[5] = (int32_t)curwin->w_botline; p[6] = (int32_t)curwin->w_empty_rows; }
@@ -408,7 +407,6 @@ typval_T *nvim_eval_tv_idx(typval_T *argvars, int i) { return &argvars[i]; }
 void nvim_eval_tv_set_number(typval_T *tv, int64_t n) { tv->v_type = VAR_NUMBER; tv->vval.v_number = (varnumber_T)n; }
 void nvim_eval_tv_set_string(typval_T *tv, char *s) { tv->vval.v_string = s; }
 void nvim_eval_tv_set_type(typval_T *tv, int t) { tv->v_type = (VarType)t; }
-dict_T *nvim_win_get_vars(win_T *wp) { return wp->w_vars; }
 int nvim_stcp_get_width(statuscol_T *stcp) { return stcp->width; }
 void nvim_stcp_set_width(statuscol_T *stcp, int val) { stcp->width = val; }
 stl_hlrec_t *nvim_stcp_get_hlrec(statuscol_T *stcp) { return stcp->hlrec; }
@@ -443,9 +441,6 @@ const char *nvim_get_p_sel(void) { return p_sel; }
 linenr_T nvim_get_spell_redraw_lnum(void) { return spell_redraw_lnum; }
 void nvim_set_spell_redraw_lnum(linenr_T val) { spell_redraw_lnum = val; }
 int nvim_get_dy_flags(void) { return dy_flags; }
-linenr_T nvim_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
-colnr_T nvim_curwin_cursor_col(void) { return curwin->w_cursor.col; }
-colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
 int nvim_curwin_cursor_line_is_nul(void) { return *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL ? 1 : 0; }
 void nvim_get_VIsual_pos_fields(int32_t *lnum, int32_t *col, int32_t *coladd) { *lnum = (int32_t)VIsual.lnum; *col = (int32_t)VIsual.col; *coladd = (int32_t)VIsual.coladd; }
@@ -634,45 +629,6 @@ int nvim_spell_do_search(char *frompat, size_t frompatlen)
   return do_search(NULL, '/', '/', frompat, frompatlen, 1, SEARCH_KEEP, NULL);
 }
 
-/// Save curwin->w_cursor position.
-void nvim_curwin_save_pos(int32_t *lnum, int32_t *col)
-{
-  *lnum = (int32_t)curwin->w_cursor.lnum;
-  *col = (int32_t)curwin->w_cursor.col;
-}
-
-/// Restore curwin->w_cursor position.
-void nvim_curwin_restore_pos(int32_t lnum, int32_t col)
-{
-  curwin->w_cursor.lnum = (linenr_T)lnum;
-  curwin->w_cursor.col = (colnr_T)col;
-  curwin->w_cursor.coladd = 0;
-}
-
-/// Set curwin->w_cursor.lnum.
-void nvim_curwin_set_lnum(int32_t lnum)
-{
-  curwin->w_cursor.lnum = (linenr_T)lnum;
-}
-
-/// Add n to curwin->w_cursor.col.
-void nvim_curwin_col_add(int32_t n)
-{
-  curwin->w_cursor.col += (colnr_T)n;
-}
-
-/// Get curwin->w_cursor.lnum.
-int32_t nvim_curwin_get_lnum(void)
-{
-  return (int32_t)curwin->w_cursor.lnum;
-}
-
-/// Get curwin->w_cursor.col.
-int32_t nvim_curwin_get_col(void)
-{
-  return (int32_t)curwin->w_cursor.col;
-}
-
 /// Get the window's buffer pointer for spell check_need_cap use.
 void *nvim_win_get_buf_ptr_void(const win_T *wp)
 {
@@ -786,7 +742,6 @@ int nvim_win_get_config_border_side_char(win_T *wp, int i) { return (wp && i >= 
 // win_T width/height setters
 // win_T border_adj setter
 // win_T redr_status setter (w_redr_status = w_status_height)
-void nvim_win_set_redr_status_from_status_height(win_T *wp) { if (wp) { wp->w_redr_status = wp->w_status_height; } }
 // win_T w_pos_changed = true
 // already have nvim_win_set_pos_changed
 // Screen size globals

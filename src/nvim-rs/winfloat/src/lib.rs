@@ -529,7 +529,6 @@ extern "C" {
     fn nvim_win_get_config_border_flag(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_external_flag(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_border_side_char(wp: WinHandle, i: c_int) -> c_int;
-    fn nvim_win_set_redr_status_from_status_height(wp: WinHandle);
     static mouse_row: c_int;
     static mouse_col: c_int;
     static mouse_grid: c_int;
@@ -1227,7 +1226,7 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
     let upd_valid = nvim_get_upd_valid();
     let upd_not_valid = nvim_get_upd_not_valid();
     nvim_set_must_redraw(upd_valid);
-    nvim_win_set_redr_status_from_status_height(wp);
+    win_mut(wp).w_redr_status = win_ref(wp).w_status_height != 0;
     win_mut(wp).w_pos_changed = (1) != 0;
     if change_external || change_border {
         win_mut(wp).w_hl_needs_update = 1;
