@@ -171,8 +171,6 @@ extern "C" {
         ex_lua: bool,
         fnum: c_int,
     );
-    fn nvim_rt_ga_init_strptrs(ga: *mut c_void);
-    fn nvim_rt_ga_append_str(ga: *mut c_void, s: *mut c_char);
     fn nvim_rt_ml_get(lnum: c_int) -> *const c_char;
     fn nvim_rt_exarg_get_line1(eap: *mut c_void) -> c_int;
     fn nvim_rt_exarg_get_line2(eap: *mut c_void) -> LinenrT;
@@ -248,14 +246,14 @@ unsafe fn do_source_buffer_init(
     };
 
     let ga = nvim_rt_cookie_get_buflines_ga(cookie);
-    nvim_rt_ga_init_strptrs(ga);
+    globals::ga_init_strptrs(ga);
 
     let line1 = nvim_rt_exarg_get_line1(eap.cast_mut());
     let line2 = nvim_rt_exarg_get_line2(eap.cast_mut());
     let mut curr_lnum = line1;
     while curr_lnum <= line2 {
         let line = nvim_rt_ml_get(curr_lnum);
-        nvim_rt_ga_append_str(ga, xstrdup(line));
+        globals::ga_append_strptr(ga, xstrdup(line));
         curr_lnum += 1;
     }
 
@@ -269,14 +267,14 @@ unsafe fn do_source_buffer_init(
 /// Initialize cookie for sourcing from a string.
 unsafe fn do_source_str_init(cookie: *mut c_void, str_ptr: *const c_char) {
     let ga = nvim_rt_cookie_get_buflines_ga(cookie);
-    nvim_rt_ga_init_strptrs(ga);
+    globals::ga_init_strptrs(ga);
 
     let mut s = str_ptr;
     while !s.is_null() && *s != 0 {
         let eol = nvim_rt_skip_to_newline(s);
         let len = eol.offset_from(s) as usize;
         let line = nvim_rt_xmemdupz(s, len);
-        nvim_rt_ga_append_str(ga, line);
+        globals::ga_append_strptr(ga, line);
         let at_eol = *eol;
         s = if at_eol != 0 { eol.add(1) } else { eol };
     }

@@ -196,6 +196,9 @@ extern "C" {
     /// `ga_grow` for growing a garray.
     fn ga_grow(gap: *mut GarrayT, n: c_int);
 
+    /// `ga_init` for initializing a garray.
+    fn ga_init(gap: *mut GarrayT, itemsize: c_int, growsize: c_int);
+
     /// `xcalloc` for allocating zeroed memory.
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 }
@@ -398,6 +401,44 @@ pub unsafe fn script_item_get_valid(sid: c_int) -> *mut ScriptitemT {
 #[inline]
 pub unsafe fn xcalloc_scriptitem() -> *mut ScriptitemT {
     xcalloc(1, size_of::<ScriptitemT>()).cast::<ScriptitemT>()
+}
+
+// =============================================================================
+// garray_T strptr helpers (replaces nvim_rt_ga_init_strptrs / nvim_rt_ga_append_str)
+// =============================================================================
+
+/// Initialize a `*mut c_void` garray for storing `*mut c_char` (string pointers).
+///
+/// Equivalent to `ga_init(ga, sizeof(char *), 100)`.
+///
+/// # Safety
+/// `ga_ptr` must point to a valid, writable `GarrayT`-compatible memory region.
+#[inline]
+pub unsafe fn ga_init_strptrs(ga_ptr: *mut c_void) {
+    ga_init(
+        ga_ptr.cast::<GarrayT>(),
+        size_of::<*mut c_char>() as c_int,
+        100,
+    );
+}
+
+/// Append a `*mut c_char` to a strptrs garray (GA_APPEND equivalent).
+///
+/// Equivalent to `GA_APPEND(char *, ga, str)`.
+///
+/// # Safety
+/// `ga_ptr` must point to a valid `GarrayT` previously initialized with `ga_init_strptrs`.
+/// `str_ptr` ownership is transferred to the garray.
+#[inline]
+pub unsafe fn ga_append_strptr(ga_ptr: *mut c_void, str_ptr: *mut c_char) {
+    let gap = ga_ptr.cast::<GarrayT>();
+    ga_grow(gap, 1);
+    let slot = (*gap)
+        .ga_data
+        .cast::<*mut c_char>()
+        .add((*gap).ga_len as usize);
+    slot.write(str_ptr);
+    (*gap).ga_len += 1;
 }
 
 // =============================================================================

@@ -811,12 +811,6 @@ void nvim_rt_snprintf_source_buffer_name(char *buf, int size, bool ex_lua, int f
   }
 }
 
-/// ga_init wrapper for buflines.
-void nvim_rt_ga_init_strptrs(void *ga) { ga_init((garray_T *)ga, (int)sizeof(char *), 100); }
-
-/// ga_append for buflines.
-void nvim_rt_ga_append_str(void *ga, char *str) { GA_APPEND(char *, (garray_T *)ga, str); }
-
 /// skip_to_newline wrapper.
 const char *nvim_rt_skip_to_newline(const char *str) { return skip_to_newline(str); }
 
@@ -921,54 +915,6 @@ const char *nvim_rt_get_p_cpo(void) { return p_cpo; }
 
 /// skipwhite wrapper.
 char *nvim_rt_skipwhite(const char *p) { return skipwhite(p); }
-
-/// ga_init wrapper (for growarray).
-void nvim_rt_ga_init(void *ga, int itemsize, int growsize)
-{
-  ga_init((garray_T *)ga, itemsize, growsize);
-}
-
-/// ga_grow wrapper.
-void nvim_rt_ga_grow(void *ga, int n)
-{
-  ga_grow((garray_T *)ga, n);
-}
-
-/// ga_concat wrapper.
-void nvim_rt_ga_concat(void *ga, const char *s)
-{
-  ga_concat((garray_T *)ga, s);
-}
-
-/// ga_concat_len wrapper.
-void nvim_rt_ga_concat_len(void *ga, const char *s, size_t len)
-{
-  ga_concat_len((garray_T *)ga, s, len);
-}
-
-/// ga_append wrapper (appends a single byte).
-void nvim_rt_ga_append_byte(void *ga, char byte)
-{
-  ga_append((garray_T *)ga, byte);
-}
-
-/// ga_set_growsize wrapper.
-void nvim_rt_ga_set_growsize(void *ga, int size)
-{
-  ga_set_growsize((garray_T *)ga, size);
-}
-
-/// ga_get_len wrapper.
-int nvim_rt_ga_get_len(const void *ga) { return ((garray_T *)ga)->ga_len; }
-
-/// ga_get_data wrapper.
-void *nvim_rt_ga_get_data(const void *ga) { return ((garray_T *)ga)->ga_data; }
-
-/// ga_get_maxlen wrapper.
-int nvim_rt_ga_get_maxlen(const void *ga) { return ((garray_T *)ga)->ga_maxlen; }
-
-/// Set ga_len.
-void nvim_rt_ga_set_len(void *ga, int len) { ((garray_T *)ga)->ga_len = len; }
 
 /// dbg_breakpoint wrapper.
 void nvim_rt_dbg_breakpoint(const char *fname, int lnum)
