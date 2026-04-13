@@ -189,53 +189,6 @@ void nvim_screen_resize_clamp_cmdheight(void)
   p_columns = Columns;
 }
 
-/// Handle post-resize redraw. Called from rs_drawscreen_screen_resize() in Rust.
-/// @param state  Current editor state (State global value at call time).
-void nvim_screen_resize_post(int state)
-{
-  if (starting == NO_SCREEN) {
-    return;
-  }
-
-  maketitle();
-  changed_line_abv_curs();
-  invalidate_botline(curwin);
-
-  if (state == MODE_ASKMORE || state == MODE_EXTERNCMD || exmode_active
-      || ((state & MODE_CMDLINE) && get_cmdline_info()->one_key)) {
-    if (state & MODE_CMDLINE) {
-      update_screen();
-    }
-    if (msg_grid.chars) {
-      msg_grid_validate();
-    }
-    ui_comp_set_screen_valid(true);
-    repeat_message();
-  } else {
-    if (curwin->w_p_scb) {
-      do_check_scrollbind(true);
-    }
-    if (state & MODE_CMDLINE) {
-      redraw_popupmenu = false;
-      update_screen();
-      redrawcmdline();
-      if (pum_drawn()) {
-        cmdline_pum_display(false);
-      }
-    } else {
-      update_topline(curwin);
-      if (pum_drawn()) {
-        redraw_popupmenu = false;
-        rs_ins_compl_show_pum();
-      }
-      update_screen();
-      if (redrawing()) {
-        setcursor();
-      }
-    }
-  }
-  ui_flush();
-}
 
 /// Perform the grid_alloc + click_defs + field setup for default_grid.
 /// Relocated from drawscreen.c (Phase 3).

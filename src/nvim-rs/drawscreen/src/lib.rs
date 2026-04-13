@@ -2523,10 +2523,22 @@ extern "C" {
 
     /// Clamp cmdheight for all tabs; set p_lines/p_columns.
     fn nvim_screen_resize_clamp_cmdheight();
-    /// Handle post-resize redraw for starting != NO_SCREEN.
-    fn nvim_screen_resize_post(state: c_int);
     /// Return true if msg_grid.chars is non-NULL.
     fn nvim_msg_grid_has_chars() -> bool;
+    /// Flush the UI.
+    fn ui_flush();
+    /// Check scrollbind for all windows.
+    fn do_check_scrollbind(check: bool);
+    /// Redraw the command line.
+    fn redrawcmdline();
+    /// Display the popup menu for cmdline completion.
+    fn cmdline_pum_display(set_match: bool);
+    /// Update topline for window.
+    fn update_topline(wp: WinHandle);
+    /// Show ins-completion popup menu (Rust function via FFI).
+    fn rs_ins_compl_show_pum();
+    /// Get ccline.one_key (returns non-zero if set).
+    fn nvim_get_ccline_one_key() -> c_int;
 }
 
 /// EVENT_VIMRESIZED autocmd event number (from auevents_enum.generated.h).
@@ -2647,10 +2659,66 @@ pub unsafe extern "C" fn rs_drawscreen_screen_resize(width: c_int, height: c_int
         rs_screenclear();
     }
 
-    // Post-resize redraw (struct-heavy, C helper).
-    nvim_screen_resize_post(State);
+    // Post-resize redraw (pure Rust implementation).
+    screen_resize_post_impl(State);
 
     resizing_screen = false;
+}
+
+/// Handle post-resize redraw. Rust equivalent of `nvim_screen_resize_post()`.
+///
+/// Called from `rs_drawscreen_screen_resize()` with the State value at call time.
+///
+/// # Safety
+/// Must be called from within screen_resize, after grid alloc and autocmds.
+unsafe fn screen_resize_post_impl(state: c_int) {
+    if starting == NO_SCREEN {
+        return;
+    }
+
+    maketitle();
+    changed_line_abv_curs();
+    let curwin = nvim_get_curwin();
+    invalidate_botline(curwin);
+
+    let one_key = nvim_get_ccline_one_key() != 0;
+    if state == MODE_ASKMORE
+        || state == MODE_EXTERNCMD
+        || exmode_active != 0
+        || ((state & MODE_CMDLINE) != 0 && one_key)
+    {
+        if (state & MODE_CMDLINE) != 0 {
+            rs_update_screen();
+        }
+        if nvim_msg_grid_has_chars() {
+            msg_grid_validate();
+        }
+        ui_comp_set_screen_valid(true);
+        repeat_message();
+    } else {
+        if win_ref(curwin).w_p_scb() != 0 {
+            do_check_scrollbind(true);
+        }
+        if (state & MODE_CMDLINE) != 0 {
+            redraw_popupmenu = false;
+            rs_update_screen();
+            redrawcmdline();
+            if pum_drawn() {
+                cmdline_pum_display(false);
+            }
+        } else {
+            update_topline(curwin);
+            if pum_drawn() {
+                redraw_popupmenu = false;
+                rs_ins_compl_show_pum();
+            }
+            rs_update_screen();
+            if redrawing_impl() {
+                rs_setcursor();
+            }
+        }
+    }
+    ui_flush();
 }
 
 // =============================================================================
