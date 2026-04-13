@@ -13,6 +13,7 @@ crate-type = ["rlib"]
 libc = "0.2"
 nvim-buffer = { path = "../buffer" }
 nvim-cmdexpand = { path = "../cmdexpand" }
+nvim-window = { path = "../window" }
 
 [lints]
 workspace = true

@@ -61,7 +61,7 @@ unsafe extern "C" {
     // Window/tabpage accessors (added to window_shim.c Phase 3+4)
     fn nvim_firstwin_next_null_or_floating() -> c_int;
     fn nvim_set_curwin_to_firstwin();
-    fn nvim_curtab_get_tp_next_null() -> c_int;
+    fn nvim_get_curtab() -> nvim_window::TabpageHandle;
     fn nvim_advance_curwin_to_next();
     fn nvim_set_curbuf_from_curwin();
     fn nvim_curbuf_get_ml_mfp_null() -> c_int;
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn rs_create_windows(parmp: *mut MparmT) {
                     nvim_set_curwin_to_firstwin();
                 }
             } else if p.window_layout == WIN_TABS {
-                if nvim_curtab_get_tp_next_null() != 0 {
+                if nvim_get_curtab().as_tabpage_ref().tp_next.is_null() {
                     break;
                 }
                 goto_tabpage(0);
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn rs_edit_buffers(parmp: *mut MparmT, cwd: *mut c_char) {
 
         if advance {
             if p.window_layout == WIN_TABS {
-                if nvim_curtab_get_tp_next_null() != 0 {
+                if nvim_get_curtab().as_tabpage_ref().tp_next.is_null() {
                     // just checking
                     break;
                 }

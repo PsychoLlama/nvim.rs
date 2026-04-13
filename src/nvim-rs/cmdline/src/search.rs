@@ -433,10 +433,7 @@ const MAGIC_ALL: c_int = 4;
 // External C functions for accessing global state
 extern "C" {
     fn nvim_get_curwin_handle() -> c_int;
-    fn nvim_get_curwin_cursor_pos(pos: *mut PosT);
-    fn nvim_set_curwin_cursor_pos(pos: *const PosT);
-    fn nvim_save_viewstate(vs: *mut ViewStateT);
-    fn nvim_restore_viewstate(vs: *const ViewStateT);
+    fn nvim_get_curwin() -> nvim_window::WinHandle;
 
     // parse_pattern_and_range: still in C, called from do_incsearch_highlighting
     fn parse_pattern_and_range(
@@ -465,7 +462,7 @@ extern "C" {
     fn nvim_redraw_all_later(upd_type: c_int);
     fn nvim_update_screen();
     fn setpcmark();
-    fn nvim_equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int;
+    // nvim_equalpos replaced with direct field comparison (see equalpos() below)
 
     // For may_add_char_to_search (Rust exports from search crate)
     fn save_last_search_pattern();
@@ -487,6 +484,66 @@ extern "C" {
 
 // Update type constants (from nvim/drawscreen.h)
 const UPD_SOME_VALID: c_int = 35;
+
+// =============================================================================
+// Cursor/viewstate helpers (direct WinStruct field access)
+// =============================================================================
+
+/// Copy curwin->w_cursor into *pos.
+#[inline]
+unsafe fn get_cursor_pos(pos: *mut PosT) {
+    let cur = nvim_window::win_struct::win_ref(nvim_get_curwin());
+    (*pos).lnum = cur.w_cursor.lnum;
+    (*pos).col = cur.w_cursor.col;
+    (*pos).coladd = cur.w_cursor.coladd;
+}
+
+/// Set curwin->w_cursor from *pos.
+#[inline]
+unsafe fn set_cursor_pos(pos: *const PosT) {
+    let cur = nvim_window::win_struct::win_mut(nvim_get_curwin());
+    cur.w_cursor.lnum = (*pos).lnum;
+    cur.w_cursor.col = (*pos).col;
+    cur.w_cursor.coladd = (*pos).coladd;
+}
+
+/// Save curwin viewstate fields into *vs.
+#[inline]
+unsafe fn save_viewstate(vs: *mut ViewStateT) {
+    let cur = nvim_window::win_struct::win_ref(nvim_get_curwin());
+    *vs = ViewStateT {
+        vs_curswant: cur.w_curswant,
+        vs_leftcol: cur.w_leftcol,
+        vs_skipcol: cur.w_skipcol,
+        vs_topline: cur.w_topline,
+        vs_topfill: cur.w_topfill,
+        vs_botline: cur.w_botline,
+        vs_empty_rows: cur.w_empty_rows,
+    };
+}
+
+/// Restore curwin viewstate fields from *vs.
+#[inline]
+unsafe fn restore_viewstate(vs: *const ViewStateT) {
+    let cur = nvim_window::win_struct::win_mut(nvim_get_curwin());
+    cur.w_curswant = (*vs).vs_curswant;
+    cur.w_leftcol = (*vs).vs_leftcol;
+    cur.w_skipcol = (*vs).vs_skipcol;
+    cur.w_topline = (*vs).vs_topline;
+    cur.w_topfill = (*vs).vs_topfill;
+    cur.w_botline = (*vs).vs_botline;
+    cur.w_empty_rows = (*vs).vs_empty_rows;
+}
+
+/// Compare two positions by value.
+#[inline]
+unsafe fn equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int {
+    c_int::from(
+        (*pos1).lnum == (*pos2).lnum
+            && (*pos1).col == (*pos2).col
+            && (*pos1).coladd == (*pos2).coladd,
+    )
+}
 
 // MAXLNUM constant
 const MAXLNUM: i32 = 0x7fff_ffff;
@@ -510,7 +567,7 @@ pub unsafe extern "C" fn rs_init_incsearch_state(state: *mut IncsearchStateT) {
     s.winid = nvim_get_curwin_handle();
 
     // Get current cursor position
-    nvim_get_curwin_cursor_pos(std::ptr::addr_of_mut!(s.match_start));
+    get_cursor_pos(std::ptr::addr_of_mut!(s.match_start));
 
     // Reset flags
     s.did_incsearch = false;
@@ -527,8 +584,8 @@ pub unsafe extern "C" fn rs_init_incsearch_state(state: *mut IncsearchStateT) {
     s.search_start = s.match_start;
 
     // Save view state
-    nvim_save_viewstate(std::ptr::addr_of_mut!(s.init_viewstate));
-    nvim_save_viewstate(std::ptr::addr_of_mut!(s.old_viewstate));
+    save_viewstate(std::ptr::addr_of_mut!(s.init_viewstate));
+    save_viewstate(std::ptr::addr_of_mut!(s.old_viewstate));
 }
 
 /// Finish incsearch highlighting (FFI).
@@ -558,23 +615,23 @@ pub unsafe extern "C" fn rs_finish_incsearch_highlighting(
 
     if gotesc != 0 {
         // Restore cursor to saved position on escape
-        nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.save_cursor));
+        set_cursor_pos(std::ptr::addr_of!(s.save_cursor));
     } else {
         // Check if we need to set the mark
-        if nvim_equalpos(
+        if equalpos(
             std::ptr::addr_of!(s.save_cursor),
             std::ptr::addr_of!(s.search_start),
         ) == 0
         {
             // Put the '" mark at the original position
-            nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.save_cursor));
+            set_cursor_pos(std::ptr::addr_of!(s.save_cursor));
             setpcmark();
         }
-        nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.search_start));
+        set_cursor_pos(std::ptr::addr_of!(s.search_start));
     }
 
     // Restore view state
-    nvim_restore_viewstate(std::ptr::addr_of!(s.old_viewstate));
+    restore_viewstate(std::ptr::addr_of!(s.old_viewstate));
 
     // Turn off highlight match
     nvim_set_highlight_match(0);
@@ -914,7 +971,7 @@ pub unsafe extern "C" fn may_add_char_to_search_rs(
     let s = &mut *is_state;
     if s.did_incsearch {
         // Move cursor to match end
-        nvim_set_curwin_cursor_pos(&raw const s.match_end);
+        set_cursor_pos(&raw const s.match_end);
         *c = nvim_gchar_cursor();
         if *c != NUL {
             // If 'ignorecase' and 'smartcase' are set and pattern has no uppercase,
@@ -1087,7 +1144,7 @@ unsafe extern "C" {
     fn nvim_get_no_hlsearch() -> c_int;
     fn nvim_get_p_hls() -> c_int;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
-    fn nvim_get_curwin() -> *mut c_void;
+    // nvim_get_curwin declared at top of file with WinHandle return type
     fn nvim_get_curbuf() -> *mut c_void;
     fn nvim_win_get_status_height(wp: *mut ()) -> c_int;
     fn nvim_win_set_redr_status(wp: *mut c_void, val: c_int);
@@ -1179,25 +1236,25 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
     }
 
     let search_first_line = nvim_get_search_first_line();
-    let curwin = nvim_get_curwin();
+    let curwin = nvim_get_curwin().as_ptr();
 
     if search_first_line == 0 {
         // start at the original cursor position
-        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).search_start));
+        set_cursor_pos(std::ptr::addr_of!((*s).search_start));
     } else if search_first_line > nvim_curbuf_get_ml_line_count() {
         // start after the last line
         let mut pos = PosT::default();
-        nvim_get_curwin_cursor_pos(&raw mut pos);
+        get_cursor_pos(&raw mut pos);
         pos.lnum = nvim_curbuf_get_ml_line_count();
         pos.col = MAXCOL as c_int;
-        nvim_set_curwin_cursor_pos(&raw const pos);
+        set_cursor_pos(&raw const pos);
     } else {
         // start at the first line in the range
         let mut pos = PosT::default();
-        nvim_get_curwin_cursor_pos(&raw mut pos);
+        get_cursor_pos(&raw mut pos);
         pos.lnum = search_first_line;
         pos.col = 0;
-        nvim_set_curwin_cursor_pos(&raw const pos);
+        set_cursor_pos(&raw const pos);
     }
 
     let mut found: c_int = 0;
@@ -1238,11 +1295,11 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
 
         let search_last_line = nvim_get_search_last_line();
         let mut cur_pos = PosT::default();
-        nvim_get_curwin_cursor_pos(&raw mut cur_pos);
+        get_cursor_pos(&raw mut cur_pos);
         if cur_pos.lnum < search_first_line || cur_pos.lnum > search_last_line {
             // match outside of address range
             found = 0;
-            nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).search_start));
+            set_cursor_pos(std::ptr::addr_of!((*s).search_start));
         }
 
         // if interrupted while searching, behave like it failed
@@ -1271,15 +1328,15 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
     update_topline(curwin);
 
     let mut end_pos = PosT::default();
-    nvim_get_curwin_cursor_pos(&raw mut end_pos);
+    get_cursor_pos(&raw mut end_pos);
     if found != 0 {
-        nvim_get_curwin_cursor_pos(&raw mut (*s).match_start);
+        get_cursor_pos(&raw mut (*s).match_start);
         nvim_set_search_match(&raw mut (*s).match_start);
         // Actually: set_search_match moves cursor to end, then call validate_cursor
         // Re-fetch cursor as match_end
         validate_cursor(curwin);
-        nvim_get_curwin_cursor_pos(&raw mut (*s).match_end);
-        nvim_set_curwin_cursor_pos(&raw const end_pos);
+        get_cursor_pos(&raw mut (*s).match_end);
+        set_cursor_pos(&raw const end_pos);
         end_pos = (*s).match_end;
     }
 
@@ -1313,9 +1370,9 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
     // Leave cursor at end to make CTRL-R CTRL-W work. But not when beyond
     // end of pattern, e.g. for ":s/pat/".
     if *cmdbuff.add(next_char_idx as usize) != 0 {
-        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).search_start));
+        set_cursor_pos(std::ptr::addr_of!((*s).search_start));
     } else if found != 0 {
-        nvim_set_curwin_cursor_pos(&raw const end_pos);
+        set_cursor_pos(&raw const end_pos);
         nvim_win_set_valid_cursor(curwin, end_pos.lnum, end_pos.col, end_pos.coladd);
     }
 
@@ -1408,7 +1465,7 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
     nvim_inc_emsg_off();
     let save_char = *pat.add(patlen as usize);
     *pat.add(patlen as usize) = 0;
-    let curwin = nvim_get_curwin();
+    let curwin = nvim_get_curwin().as_ptr();
     let curbuf = nvim_get_curbuf();
     let found = searchit(
         curwin,
@@ -1453,7 +1510,7 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
         }
 
         nvim_set_search_match(&raw mut (*s).match_end);
-        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).match_start));
+        set_cursor_pos(std::ptr::addr_of!((*s).match_start));
         changed_cline_bef_curs(curwin);
         update_topline(curwin);
         validate_cursor(curwin);
@@ -1463,9 +1520,9 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
         nvim_update_screen();
         nvim_set_highlight_match(0);
         crate::screen::rs_redrawcmdline();
-        nvim_get_curwin_cursor_pos(&raw mut (*s).match_end);
+        get_cursor_pos(&raw mut (*s).match_end);
         // Actually: curwin->w_cursor = s->match_end
-        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).match_end));
+        set_cursor_pos(std::ptr::addr_of!((*s).match_end));
     } else {
         vim_beep(K_OPT_BO_FLAG_ERROR);
     }

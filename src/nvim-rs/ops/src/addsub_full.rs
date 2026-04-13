@@ -52,7 +52,7 @@ struct NumArithParams {
 }
 
 extern "C" {
-    fn nvim_get_curwin_cursor_pos(pos: *mut [i32; 3]);
+    fn nvim_get_curwin() -> nvim_window::WinHandle;
     fn nvim_curbuf_nf_has(c: c_int) -> c_int;
     fn nvim_cmdmod_has_lockmarks() -> c_int;
     fn nvim_curbuf_set_op_start_to_cursor_col(col: c_int);
@@ -105,7 +105,10 @@ extern "C" {
 /// Must be called only from the Neovim main thread.
 #[unsafe(export_name = "nvim_addsub_save_cursor")]
 pub unsafe extern "C" fn rs_addsub_save_cursor() {
-    nvim_get_curwin_cursor_pos(&raw mut ADDSUB_SAVED_CURSOR);
+    let cur = nvim_window::win_struct::win_ref(nvim_get_curwin());
+    ADDSUB_SAVED_CURSOR[0] = cur.w_cursor.lnum;
+    ADDSUB_SAVED_CURSOR[1] = cur.w_cursor.col;
+    ADDSUB_SAVED_CURSOR[2] = cur.w_cursor.coladd;
 }
 
 /// Restore the window cursor from the addsub static (replaces C `nvim_addsub_restore_cursor`).

@@ -48,9 +48,8 @@ extern "C" {
     fn nvim_set_search_first_line(value: i32);
     fn nvim_set_search_last_line(value: i32);
 
-    // Cursor position save/restore (window_shim.c)
-    fn nvim_get_curwin_cursor_pos(pos: *mut PosT);
-    fn nvim_set_curwin_cursor_pos(pos: *const PosT);
+    // Cursor position save/restore via direct WinStruct access
+    fn nvim_get_curwin() -> nvim_window::WinHandle;
 
     // magic_overruled global (in C globals.h, via search)
     static mut magic_overruled: c_int;
@@ -63,6 +62,24 @@ pub struct PosT {
     lnum: i32,
     col: i32,
     coladd: i32,
+}
+
+/// Copy curwin->w_cursor into *pos.
+#[inline]
+unsafe fn get_cursor_pos(pos: *mut PosT) {
+    let cur = nvim_window::win_struct::win_ref(nvim_get_curwin());
+    (*pos).lnum = cur.w_cursor.lnum;
+    (*pos).col = cur.w_cursor.col;
+    (*pos).coladd = cur.w_cursor.coladd;
+}
+
+/// Set curwin->w_cursor from *pos.
+#[inline]
+unsafe fn set_cursor_pos(pos: *const PosT) {
+    let cur = nvim_window::win_struct::win_mut(nvim_get_curwin());
+    cur.w_cursor.lnum = (*pos).lnum;
+    cur.w_cursor.col = (*pos).col;
+    cur.w_cursor.coladd = (*pos).coladd;
 }
 
 // Constants
@@ -233,8 +250,8 @@ pub unsafe extern "C" fn rs_parse_pattern_and_range(
 
     // Parse the address range (cursor at incsearch_start)
     let mut save_cursor = PosT::default();
-    nvim_get_curwin_cursor_pos(&raw mut save_cursor);
-    nvim_set_curwin_cursor_pos(incsearch_start);
+    get_cursor_pos(&raw mut save_cursor);
+    set_cursor_pos(incsearch_start);
 
     parse_cmd_address(&raw mut ea, &raw mut dummy_errormsg, true);
 
@@ -252,7 +269,7 @@ pub unsafe extern "C" fn rs_parse_pattern_and_range(
         nvim_set_search_last_line(lnum);
     }
 
-    nvim_set_curwin_cursor_pos(&raw const save_cursor);
+    set_cursor_pos(&raw const save_cursor);
 
     true
 }

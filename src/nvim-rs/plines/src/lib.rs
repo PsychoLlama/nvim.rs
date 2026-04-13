@@ -100,7 +100,7 @@ extern "C" {
     // Tabline-related accessors
     fn nvim_ui_has_tabline() -> c_int;
     fn nvim_get_p_stal() -> i64;
-    fn nvim_first_tabpage_has_next() -> c_int;
+    fn nvim_get_first_tabpage() -> nvim_window::TabpageHandle;
 
     // CharsizeArg accessor functions
     fn nvim_csarg_get_win(csarg: CharsizeArgHandle) -> WinHandle;
@@ -669,7 +669,10 @@ fn tabline_height_impl() -> c_int {
             0 => 0,
             1 => {
                 // Show tabline only if more than one tab
-                c_int::from(nvim_first_tabpage_has_next() != 0)
+                c_int::from({
+                    let ft = nvim_get_first_tabpage();
+                    !ft.is_null() && !ft.as_tabpage_ref().tp_next.is_null()
+                })
             }
             _ => 1, // Always show tabline (p_stal == 2)
         }

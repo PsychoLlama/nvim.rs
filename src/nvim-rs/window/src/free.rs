@@ -302,9 +302,6 @@ extern "C" {
     /// tabpage_close(true) -- close a tab during EXITFREE.
     fn nvim_tabpage_close_once();
 
-    /// Returns 1 if first_tabpage->tp_next != NULL.
-    fn nvim_first_tabpage_has_next() -> c_int;
-
     /// lastwin pointer (0 = NULL).
     fn nvim_get_lastwin() -> WinHandle;
 
@@ -343,7 +340,10 @@ unsafe fn win_free_all_impl() {
     // Avoid an error for switching tabpage with the cmdline window open.
     nvim_clear_cmdwin_state();
 
-    while nvim_first_tabpage_has_next() != 0 {
+    while {
+        let ft = nvim_get_first_tabpage();
+        !ft.is_null() && !ft.as_tabpage_ref().tp_next.is_null()
+    } {
         nvim_tabpage_close_once();
     }
 

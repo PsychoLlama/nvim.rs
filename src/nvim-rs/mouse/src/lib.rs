@@ -259,8 +259,7 @@ extern "C" {
     /// Get the first tabpage.
     fn nvim_get_first_tabpage() -> TabpageHandle;
 
-    /// Check if there is more than one tabpage.
-    fn nvim_first_tabpage_has_next() -> c_int;
+    // nvim_first_tabpage_has_next replaced by nvim_get_first_tabpage + direct tp_next check
 
     /// Move current tab to position nr.
     #[link_name = "tabpage_move"]
@@ -742,7 +741,12 @@ pub unsafe extern "C" fn rs_mouse_tab_close(c1: c_int) {
 
     let curtab = nvim_get_curtab();
     if tp == curtab {
-        if nvim_first_tabpage_has_next() != 0 {
+        let ft = nvim_get_first_tabpage();
+        let has_next_tab = !ft.is_null()
+            && !(*(ft as *const nvim_window::tabpage_struct::TabpageStruct))
+                .tp_next
+                .is_null();
+        if has_next_tab {
             tabpage_close(0); // false
         }
     } else if !tp.is_null() {

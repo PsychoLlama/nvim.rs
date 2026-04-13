@@ -63,11 +63,6 @@ extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
 
 ScreenGrid *nvim_get_curwin_grid_alloc(void) { return curwin ? &curwin->w_grid_alloc : NULL; }
-void nvim_get_curwin_cursor_pos(void *pos) { int32_t *p = (int32_t *)pos; p[0] = (int32_t)curwin->w_cursor.lnum; p[1] = (int32_t)curwin->w_cursor.col; p[2] = (int32_t)curwin->w_cursor.coladd; }
-void nvim_save_viewstate(void *vs) { int32_t *p = (int32_t *)vs; p[0] = (int32_t)curwin->w_curswant; p[1] = (int32_t)curwin->w_leftcol; p[2] = (int32_t)curwin->w_skipcol; p[3] = (int32_t)curwin->w_topline; p[4] = (int32_t)curwin->w_topfill; p[5] = (int32_t)curwin->w_botline; p[6] = (int32_t)curwin->w_empty_rows; }
-void nvim_restore_viewstate(const void *vs) { const int32_t *p = (const int32_t *)vs; curwin->w_curswant = (colnr_T)p[0]; curwin->w_leftcol = (colnr_T)p[1]; curwin->w_skipcol = (colnr_T)p[2]; curwin->w_topline = (linenr_T)p[3]; curwin->w_topfill = (int)p[4]; curwin->w_botline = (linenr_T)p[5]; curwin->w_empty_rows = (int)p[6]; }
-void nvim_set_curwin_cursor_pos(const void *pos) { const int32_t *p = (const int32_t *)pos; curwin->w_cursor.lnum = (linenr_T)p[0]; curwin->w_cursor.col = (colnr_T)p[1]; curwin->w_cursor.coladd = (colnr_T)p[2]; }
-int nvim_equalpos(const void *pos1, const void *pos2) { const int32_t *p1 = (const int32_t *)pos1; const int32_t *p2 = (const int32_t *)pos2; return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2]; }
 char nvim_win_get_fdm_char(win_T *wp, int idx) { return wp->w_p_fdm[idx]; }
 int nvim_win_buf_has_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL; }
 int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
@@ -81,7 +76,6 @@ char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
 int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
-int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
 ScreenGrid *nvim_win_get_w_grid_alloc(win_T *wp) { return wp ? &wp->w_grid_alloc : NULL; }
@@ -566,7 +560,6 @@ int nvim_get_curwin_p_rlc_has_s(void)
 int nvim_firstwin_next_null_or_floating(void)
 { return firstwin->w_next == NULL || firstwin->w_next->w_floating ? 1 : 0; }
 void nvim_set_curwin_to_firstwin(void) { curwin = firstwin; curbuf = firstwin->w_buffer; }
-int nvim_curtab_get_tp_next_null(void) { return curtab->tp_next == NULL ? 1 : 0; }
 void nvim_advance_curwin_to_next(void) { curwin = curwin->w_next; }
 // nvim_set_curbuf_from_curwin is exported from Rust (nvim-window crate)
 int nvim_curbuf_get_ml_mfp_null(void) { return curbuf->b_ml.ml_mfp == NULL ? 1 : 0; }

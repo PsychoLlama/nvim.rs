@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 nvim-normal = { path = "../normal" }
+nvim-window = { path = "../window" }
 
 [lints]
 workspace = true

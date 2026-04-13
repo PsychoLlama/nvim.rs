@@ -15,3 +15,4 @@ workspace = true
 [dependencies]
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 libc = "0.2"
+nvim-window = { path = "../window" }

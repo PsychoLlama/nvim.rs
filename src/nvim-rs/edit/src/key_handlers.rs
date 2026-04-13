@@ -79,7 +79,7 @@ extern "C" {
     // Scrolling / tab pages
     fn nvim_pagescroll_backward() -> c_int;
     fn nvim_pagescroll_forward() -> c_int;
-    fn nvim_first_tabpage_has_next() -> c_int;
+    fn nvim_get_first_tabpage() -> nvim_window::TabpageHandle;
     fn goto_tabpage(n: c_int);
 
     // Up/Down with Insstart column
@@ -499,7 +499,8 @@ unsafe fn ins_pageup_impl() {
 
     if nvim_has_mod_mask_ctrl() != 0 {
         // <C-PageUp>: tab page back
-        if nvim_first_tabpage_has_next() != 0 {
+        let ft = nvim_get_first_tabpage();
+        if !ft.is_null() && !ft.as_tabpage_ref().tp_next.is_null() {
             nvim_start_arrow_curpos();
             goto_tabpage(-1);
         }
@@ -530,7 +531,8 @@ unsafe fn ins_pagedown_impl() {
 
     if nvim_has_mod_mask_ctrl() != 0 {
         // <C-PageDown>: tab page forward
-        if nvim_first_tabpage_has_next() != 0 {
+        let ft = nvim_get_first_tabpage();
+        if !ft.is_null() && !ft.as_tabpage_ref().tp_next.is_null() {
             nvim_start_arrow_curpos();
             goto_tabpage(0);
         }
