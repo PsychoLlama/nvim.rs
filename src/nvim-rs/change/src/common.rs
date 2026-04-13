@@ -6,7 +6,7 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::{BufHandle, ColnrT, LinenrT, WinHandle};
+use crate::{win_mut, win_ref, BufHandle, ColnrT, LinenrT, WinHandle};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -23,9 +23,6 @@ extern "C" {
     fn nvim_diff_internal() -> c_int;
     #[link_name = "rs_diff_update_line"]
     fn nvim_diff_update_line(lnum: LinenrT);
-
-    // Window p_diff accessor
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
 
     // curtab iteration (current tab windows only)
     fn nvim_curtab_first_win() -> WinHandle;
@@ -46,22 +43,6 @@ extern "C" {
 
     // Global state
     fn nvim_get_redraw_not_allowed() -> bool;
-
-    // Window accessors (exported from Rust window crate via win_struct.rs)
-    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_type(wp: WinHandle, val: c_int);
-    fn nvim_win_get_redraw_top(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-    fn nvim_win_set_skipcol(wp: WinHandle, val: c_int);
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_cline_folded(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_folded(wp: WinHandle, val: c_int);
-    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_cursor_lnum_rnu(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_last_cursor_lnum_rnu(wp: WinHandle, val: LinenrT);
-    fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_cursorline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_last_cursorline(wp: WinHandle, val: LinenrT);
 
     // linetabsize_eol / sms_marker_overlap / set_topline wrappers
     fn nvim_change_linetabsize_eol(wp: WinHandle, lnum: LinenrT) -> c_int;
@@ -145,7 +126,7 @@ pub fn changed_common_impl(
         let mut win = nvim_curtab_first_win();
         while !win.is_null() {
             if nvim_win_get_buffer(win) == buf
-                && nvim_win_get_p_diff(win) != 0
+                && win_ref(win).w_p_diff() != 0
                 && nvim_diff_internal() != 0
             {
                 nvim_curtab_set_diff_update(true);
@@ -175,14 +156,14 @@ pub fn changed_common_impl(
 
             if nvim_win_get_buffer(wp) == buf {
                 // Mark this window to be redrawn later.
-                if !nvim_get_redraw_not_allowed() && nvim_win_get_redr_type(wp) < UPD_VALID {
-                    nvim_win_set_redr_type(wp, UPD_VALID);
+                if !nvim_get_redraw_not_allowed() && win_ref(wp).w_redr_type < UPD_VALID {
+                    win_mut(wp).w_redr_type = UPD_VALID;
                 }
 
                 // When inserting/deleting lines and the window has specific lines
                 // to be redrawn, w_redraw_top and w_redraw_bot may now be invalid,
                 // so just redraw everything.
-                if xtra != 0 && nvim_win_get_redraw_top(wp) != 0 {
+                if xtra != 0 && win_ref(wp).w_redraw_top != 0 {
                     nvim_redraw_later(wp, UPD_NOT_VALID);
                 }
 
@@ -190,16 +171,16 @@ pub fn changed_common_impl(
 
                 // Reset "w_skipcol" if the topline length has become smaller to
                 // such a degree that nothing will be visible anymore.
-                let skipcol = nvim_win_get_skipcol(wp);
+                let skipcol = win_ref(wp).w_skipcol;
                 if skipcol > 0 {
-                    let topline = nvim_win_get_topline(wp);
+                    let topline = win_ref(wp).w_topline;
                     let should_reset = last < topline
                         || (topline >= lnum
                             && topline < lnume
                             && nvim_change_linetabsize_eol(wp, topline)
                                 <= skipcol + nvim_change_sms_marker_overlap(wp, -1));
                     if should_reset {
-                        nvim_win_set_skipcol(wp, 0);
+                        win_mut(wp).w_skipcol = 0;
                     }
                 }
 
@@ -216,13 +197,9 @@ pub fn changed_common_impl(
                     false,
                     std::ptr::null_mut(),
                 );
-                let cursor_lnum = {
-                    // Use nvim_win_get_cursor_lnum if available; approximate via win struct.
-                    // We use the existing nvim_win_get_cursor_lnum accessor.
-                    nvim_win_get_cursor_lnum_impl(wp)
-                };
+                let cursor_lnum = win_ref(wp).w_cursor.lnum;
                 if cursor_lnum == fold_lnum {
-                    nvim_win_set_cline_folded(wp, if folded_first { 1 } else { 0 });
+                    win_mut(wp).w_cline_folded = folded_first;
                 }
 
                 // hasFoldingWin for last: update last and w_cline_folded.
@@ -236,7 +213,7 @@ pub fn changed_common_impl(
                     std::ptr::null_mut(),
                 );
                 if cursor_lnum == fold_last {
-                    nvim_win_set_cline_folded(wp, if folded_last { 1 } else { 0 });
+                    win_mut(wp).w_cline_folded = folded_last;
                 }
 
                 // Invalidate w_valid flags and w_lines[] entries.
@@ -246,24 +223,24 @@ pub fn changed_common_impl(
 
                 // Take care of side effects for setting w_topline when folds changed.
                 if nvim_has_any_folding(wp) != 0 {
-                    nvim_change_set_topline(wp, nvim_win_get_topline(wp));
+                    nvim_change_set_topline(wp, win_ref(wp).w_topline);
                 }
 
                 // Relative numbering always requires update if lines added/removed.
-                if nvim_win_get_p_rnu(wp) != 0 && xtra != 0 {
-                    nvim_win_set_last_cursor_lnum_rnu(wp, 0);
+                if win_ref(wp).w_p_rnu() != 0 && xtra != 0 {
+                    win_mut(wp).w_last_cursor_lnum_rnu = 0;
                 }
 
                 // Update cursorline tracking.
-                if nvim_win_get_p_cul(wp) != 0 {
-                    let last_cursorline = nvim_win_get_last_cursorline(wp);
+                if win_ref(wp).w_p_cul() != 0 {
+                    let last_cursorline = win_ref(wp).w_last_cursorline;
                     if last_cursorline >= lnum {
                         if last_cursorline < lnume {
                             // cursorline was inside the change: already invalidated.
-                            nvim_win_set_last_cursorline(wp, 0);
+                            win_mut(wp).w_last_cursorline = 0;
                         } else {
                             // cursorline was below the change: adjust.
-                            nvim_win_set_last_cursorline(wp, last_cursorline + xtra);
+                            win_mut(wp).w_last_cursorline = last_cursorline + xtra;
                         }
                     }
                 }
@@ -285,14 +262,4 @@ pub fn changed_common_impl(
         // When the cursor line is changed, always trigger CursorMoved.
         nvim_change_last_cursormoved_reset_check(buf, lnum, lnume, xtra);
     }
-}
-
-/// Helper to get cursor lnum from a window handle.
-///
-/// Uses the existing nvim_win_get_cursor_lnum accessor.
-unsafe fn nvim_win_get_cursor_lnum_impl(wp: WinHandle) -> LinenrT {
-    extern "C" {
-        fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    }
-    nvim_win_get_cursor_lnum(wp)
 }

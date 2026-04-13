@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{ColnrT, LinenrT, WinHandle, FAIL};
+use crate::{win_mut, win_ref, ColnrT, LinenrT, WinHandle, FAIL};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -15,10 +15,6 @@ use crate::{ColnrT, LinenrT, WinHandle, FAIL};
 extern "C" {
     // Window/cursor accessors
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_col(win: WinHandle) -> ColnrT;
-    fn nvim_win_set_cursor_col(win: WinHandle, col: ColnrT);
-    fn nvim_win_set_cursor_lnum(win: WinHandle, lnum: LinenrT);
 
     // Line access
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
@@ -67,8 +63,8 @@ fn truncate_line_impl(fixpos: c_int) {
     // SAFETY: All operations are safe FFI calls
     unsafe {
         let curwin = nvim_get_curwin();
-        let lnum = nvim_win_get_cursor_lnum(curwin);
-        let col = nvim_win_get_cursor_col(curwin);
+        let lnum = win_ref(curwin).w_cursor.lnum;
+        let col = win_ref(curwin).w_cursor.col;
         let old_line = nvim_ml_get(lnum);
         let deleted = nvim_ml_get_len(lnum) - col;
 
@@ -86,7 +82,7 @@ fn truncate_line_impl(fixpos: c_int) {
 
         // If "fixpos" is true we don't want to end up positioned at the NUL.
         if fixpos != 0 && col > 0 {
-            nvim_win_set_cursor_col(curwin, col - 1);
+            win_mut(curwin).w_cursor.col = col - 1;
         }
     }
 }
@@ -112,7 +108,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
         }
 
         let curwin = nvim_get_curwin();
-        let first = nvim_win_get_cursor_lnum(curwin);
+        let first = win_ref(curwin).w_cursor.lnum;
 
         // save the deleted lines for undo
         if undo && u_savedel(first, nlines) == FAIL {
@@ -137,7 +133,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
 
         // Correct the cursor position before calling deleted_lines_mark(), it may
         // trigger a callback to display the cursor.
-        nvim_win_set_cursor_col(curwin, 0);
+        win_mut(curwin).w_cursor.col = 0;
         check_cursor_lnum(curwin);
 
         // adjust marks, mark the buffer as changed and prepare for displaying

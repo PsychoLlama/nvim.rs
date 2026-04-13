@@ -9,7 +9,7 @@
 
 use std::ffi::c_int;
 
-use crate::buffer::{BufHandle, TabpageHandle, WinHandle, DB_COUNT};
+use crate::buffer::{win_mut, win_ref, BufHandle, TabpageHandle, WinHandle, DB_COUNT};
 
 // =============================================================================
 // C FFI declarations for Phase 4 (diff_redraw migration)
@@ -21,12 +21,7 @@ extern "C" {
     fn nvim_win_next(wp: WinHandle) -> WinHandle;
 
     // Window field accessors
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
-    fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
 
     // Validity checks
     fn buf_valid(buf: BufHandle) -> bool;
@@ -401,7 +396,7 @@ pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
         let buf = nvim_win_get_w_buffer(wp);
 
         // Skip windows where w_p_diff is not set or buffer is invalid
-        if nvim_win_get_p_diff(wp) == 0 || !buf_valid(buf) {
+        if win_ref(wp).w_p_diff() == 0 || !buf_valid(buf) {
             wp = nvim_win_next(wp);
             continue;
         }
@@ -417,18 +412,18 @@ pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
         }
 
         // Check if filler lines need updating
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         let n = rs_diff_check_fill(wp, topline);
-        let topfill = nvim_win_get_topfill(wp);
+        let topfill = win_ref(wp).w_topfill;
 
         let should_update = (wp != curwin && topfill > 0) || n > 0;
         if should_update {
             if topfill > n {
                 // Reduce topfill to available (but not below 0)
-                nvim_win_set_topfill(wp, n.max(0));
+                win_mut(wp).w_topfill = n.max(0);
             } else if n > 0 && n > topfill {
                 // Increase topfill to fill available lines
-                nvim_win_set_topfill(wp, n);
+                win_mut(wp).w_topfill = n;
                 if wp == curwin {
                     used_max_fill_curwin = true;
                 } else if !wp_other.is_null() {
@@ -442,7 +437,7 @@ pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
     }
 
     // Handle scroll binding after updating all windows
-    if !wp_other.is_null() && nvim_win_get_p_scb(curwin) {
+    if !wp_other.is_null() && win_ref(curwin).w_p_scb() != 0 {
         if used_max_fill_curwin {
             // Current window used max filler lines, may need to reduce them
             rs_diff_set_topline(wp_other, curwin);

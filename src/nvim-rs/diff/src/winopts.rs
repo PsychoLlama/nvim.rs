@@ -11,7 +11,7 @@ use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_char;
 use std::os::raw::c_int;
 
-use crate::buffer::{BufHandle, TabpageHandle, WinHandle};
+use crate::buffer::{win_mut, win_ref, BufHandle, TabpageHandle, WinHandle};
 
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
@@ -42,23 +42,14 @@ extern "C" {
     // Window boolean option get/set
     fn nvim_win_get_w_p_diff_saved(wp: WinHandle) -> bool;
     fn nvim_win_set_w_p_diff_saved(wp: WinHandle, val: bool);
-    fn nvim_win_get_w_p_scb(wp: WinHandle) -> bool;
-    fn nvim_win_set_w_p_scb(wp: WinHandle, val: bool);
     fn nvim_win_get_w_p_scb_save(wp: WinHandle) -> bool;
     fn nvim_win_set_w_p_scb_save(wp: WinHandle, val: bool);
-    fn nvim_win_get_w_p_crb(wp: WinHandle) -> bool;
-    fn nvim_win_set_w_p_crb(wp: WinHandle, val: bool);
     fn nvim_win_get_w_p_crb_save(wp: WinHandle) -> bool;
     fn nvim_win_set_w_p_crb_save(wp: WinHandle, val: bool);
-    fn nvim_win_get_w_p_wrap(wp: WinHandle) -> bool;
-    fn nvim_win_set_w_p_wrap(wp: WinHandle, val: bool);
     fn nvim_win_get_w_p_wrap_save(wp: WinHandle) -> bool;
     fn nvim_win_set_w_p_wrap_save(wp: WinHandle, val: bool);
-    fn nvim_win_get_w_p_fen(wp: WinHandle) -> bool;
-    fn nvim_win_set_w_p_fen(wp: WinHandle, val: bool);
     fn nvim_win_get_w_p_fen_save(wp: WinHandle) -> bool;
     fn nvim_win_set_w_p_fen_save(wp: WinHandle, val: bool);
-    fn nvim_win_get_w_p_diff(wp: WinHandle) -> bool;
 
     // Window integer option get/set
     fn nvim_win_get_w_p_fdl(wp: WinHandle) -> LinenrT;
@@ -79,11 +70,6 @@ extern "C" {
     // String option getters (returns pointer to current string)
     fn nvim_win_get_w_p_fdm(wp: WinHandle) -> *const c_char;
     fn nvim_win_get_w_p_fdc(wp: WinHandle) -> *const c_char; // defined in window_shim.c
-
-    // Window misc setters (using existing window_shim.c names)
-    fn nvim_win_set_skipcol(wp: WinHandle, val: LinenrT); // defined in window_shim.c
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int); // defined in window_shim.c
-    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int); // defined in window_shim.c
 
     // Diff-mode compound operations
     fn nvim_diff_get_foldcolumn() -> c_int;
@@ -113,7 +99,6 @@ extern "C" {
     fn rs_set_diff_option(wp: WinHandle, value: bool);
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
 
     // Exarg handle (opaque pointer, only used to pass through)
     fn nvim_eap_forceit(eap: *const std::ffi::c_void) -> bool;
@@ -162,28 +147,28 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
     // We call a compound accessor that does this atomically.
     nvim_diff_changed_window_foldlevel_reset(wp);
 
-    let not_yet_in_diff = !nvim_win_get_w_p_diff(wp);
+    let not_yet_in_diff = !win_ref(wp).w_p_diff() != 0;
 
     // scrollbind
     if not_yet_in_diff {
-        nvim_win_set_w_p_scb_save(wp, nvim_win_get_w_p_scb(wp));
+        nvim_win_set_w_p_scb_save(wp, win_ref(wp).w_p_scb() != 0);
     }
-    nvim_win_set_w_p_scb(wp, true);
+    win_mut(wp).set_w_p_scb(c_int::from(true));
 
     // cursorbind
     if not_yet_in_diff {
-        nvim_win_set_w_p_crb_save(wp, nvim_win_get_w_p_crb(wp));
+        nvim_win_set_w_p_crb_save(wp, win_ref(wp).w_p_crb() != 0);
     }
-    nvim_win_set_w_p_crb(wp, true);
+    win_mut(wp).set_w_p_crb(c_int::from(true));
 
     // wrap (only when not DIFF_FOLLOWWRAP)
     let diff_flags = nvim_get_diff_flags();
     if diff_flags & DIFF_FOLLOWWRAP == 0 {
         if not_yet_in_diff {
-            nvim_win_set_w_p_wrap_save(wp, nvim_win_get_w_p_wrap(wp));
+            nvim_win_set_w_p_wrap_save(wp, win_ref(wp).w_p_wrap() != 0);
         }
-        nvim_win_set_w_p_wrap(wp, false);
-        nvim_win_set_skipcol(wp, 0);
+        win_mut(wp).set_w_p_wrap(c_int::from(false));
+        win_mut(wp).w_skipcol = 0;
     }
 
     // foldmethod save + set to "diff"
@@ -195,7 +180,7 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
 
     // fen_save, fdl_save, fdc_save
     if not_yet_in_diff {
-        nvim_win_set_w_p_fen_save(wp, nvim_win_get_w_p_fen(wp));
+        nvim_win_set_w_p_fen_save(wp, win_ref(wp).w_p_fen() != 0);
         nvim_win_set_w_p_fdl_save(wp, nvim_win_get_w_p_fdl(wp));
         // free existing fdc_save if already saved, then save current fdc
         nvim_win_free_and_set_fdc_save(wp, nvim_win_get_w_p_fdc(wp));
@@ -206,7 +191,7 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
     set_fdc_to_foldcolumn(wp, fc);
 
     // fen = true, fdl = 0
-    nvim_win_set_w_p_fen(wp, true);
+    win_mut(wp).set_w_p_fen(c_int::from(true));
     nvim_win_set_w_p_fdl(wp, 0);
     rs_foldUpdateAll(wp);
 
@@ -250,7 +235,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const ExArg) {
     while !wp.is_null() {
         let is_curwin = nvim_diff_is_curwin(wp);
         if if forceit {
-            nvim_win_get_p_diff(wp) != 0
+            win_ref(wp).w_p_diff() != 0
         } else {
             is_curwin
         } {
@@ -259,21 +244,21 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const ExArg) {
 
             if nvim_win_get_w_p_diff_saved(wp) {
                 // Restore scrollbind
-                if nvim_win_get_w_p_scb(wp) {
-                    nvim_win_set_w_p_scb(wp, nvim_win_get_w_p_scb_save(wp));
+                if win_ref(wp).w_p_scb() != 0 {
+                    win_mut(wp).set_w_p_scb(c_int::from(nvim_win_get_w_p_scb_save(wp)));
                 }
                 // Restore cursorbind
-                if nvim_win_get_w_p_crb(wp) {
-                    nvim_win_set_w_p_crb(wp, nvim_win_get_w_p_crb_save(wp));
+                if win_ref(wp).w_p_crb() != 0 {
+                    win_mut(wp).set_w_p_crb(c_int::from(nvim_win_get_w_p_crb_save(wp)));
                 }
                 // Restore wrap
                 let diff_flags = nvim_get_diff_flags();
                 if diff_flags & DIFF_FOLLOWWRAP == 0
-                    && !nvim_win_get_w_p_wrap(wp)
+                    && !win_ref(wp).w_p_wrap() != 0
                     && nvim_win_get_w_p_wrap_save(wp)
                 {
-                    nvim_win_set_w_p_wrap(wp, true);
-                    nvim_win_set_leftcol(wp, 0);
+                    win_mut(wp).set_w_p_wrap(c_int::from(true));
+                    win_mut(wp).w_leftcol = 0;
                 }
                 // Restore fdm: use fdm_save if non-empty, else "manual"
                 if nvim_win_get_fdm_save_empty(wp) {
@@ -294,19 +279,19 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const ExArg) {
                     nvim_win_set_w_p_fdl(wp, nvim_win_get_w_p_fdl_save(wp));
                 }
                 // Restore fen (only when foldmethod is not "manual")
-                if nvim_win_get_w_p_fen(wp) {
+                if win_ref(wp).w_p_fen() != 0 {
                     let fen_val = if rs_foldmethodIsManual(wp) != 0 {
                         false
                     } else {
                         nvim_win_get_w_p_fen_save(wp)
                     };
-                    nvim_win_set_w_p_fen(wp, fen_val);
+                    win_mut(wp).set_w_p_fen(c_int::from(fen_val));
                 }
                 rs_foldUpdateAll(wp);
             }
 
             // Remove filler lines
-            nvim_win_set_topfill(wp, 0);
+            win_mut(wp).w_topfill = 0;
 
             // make sure topline is not halfway a fold and cursor is invalidated
             changed_window_setting(wp);
@@ -314,7 +299,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const ExArg) {
             // Note: 'sbo' is not restored, it's a global option.
             rs_diff_buf_adjust(wp);
         }
-        diffwin |= nvim_win_get_p_diff(wp) != 0;
+        diffwin |= win_ref(wp).w_p_diff() != 0;
         wp = nvim_win_next(wp);
     }
 
@@ -387,10 +372,10 @@ pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut ExArg) {
 
         if nvim_diff_bufref_valid(old_curbuf_ref) {
             // Move the cursor position to that of the old window.
-            let old_lnum = nvim_win_get_cursor_lnum(old_curwin);
+            let old_lnum = win_ref(old_curwin).w_cursor.lnum;
             let old_buf = nvim_diff_bufref_get_buf(old_curbuf_ref);
             let new_lnum = rs_diff_get_corresponding_line(old_buf, old_lnum);
-            nvim_win_set_cursor_lnum(curwin, new_lnum);
+            win_mut(curwin).w_cursor.lnum = new_lnum;
         }
     }
 
@@ -430,6 +415,4 @@ extern "C" {
     fn rs_scroll_to_fraction(wp: WinHandle, prev_height: c_int); // in window Rust crate
     fn rs_diff_get_corresponding_line(buf: BufHandle, lnum: LinenrT) -> LinenrT;
     fn rs_win_valid(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT; // in window_shim.c
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT); // in window_shim.c
 }

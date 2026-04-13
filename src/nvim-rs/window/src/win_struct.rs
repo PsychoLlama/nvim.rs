@@ -532,6 +532,15 @@ impl WinStruct {
         unsafe { read_int_at(self, 972) }
     }
 
+    /// Set `w_p_pvw` (preview window) - at absolute offset 972
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_pvw(&mut self, val: c_int) {
+        write_int_at(self, 972, val);
+    }
+
     /// `w_p_wfh` (winfixheight) - at absolute offset 964
     #[must_use]
     #[inline]
@@ -583,6 +592,15 @@ impl WinStruct {
     #[inline]
     pub const fn w_p_fen(&self) -> c_int {
         unsafe { read_int_at(self, 832) }
+    }
+
+    /// Set `w_p_fen` (foldenable) - at absolute offset 832
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_fen(&mut self, val: c_int) {
+        write_int_at(self, 832, val);
     }
 
     /// `w_p_rnu` (relativenumber) - at absolute offset 932
@@ -677,6 +695,15 @@ impl WinStruct {
         unsafe { read_int_at(self, 1084) }
     }
 
+    /// Set `w_p_wrap` - at absolute offset 1084
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_wrap(&mut self, val: c_int) {
+        write_int_at(self, 1084, val);
+    }
+
     /// `w_p_spell` (spell) - at absolute offset 1012
     #[must_use]
     #[inline]
@@ -744,6 +771,15 @@ impl WinStruct {
     #[inline]
     pub const fn w_p_scb(&self) -> c_int {
         unsafe { read_int_at(self, 1072) }
+    }
+
+    /// Set `w_p_scb` (scrollbind) - at absolute offset 1072
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_scb(&mut self, val: c_int) {
+        write_int_at(self, 1072, val);
     }
 
     /// `w_p_sms` (smoothscroll) - at absolute offset 1008

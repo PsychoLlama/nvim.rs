@@ -9,7 +9,7 @@ use nvim_ex_cmds_types::ExArg;
 use std::ffi::c_void;
 use std::os::raw::c_int;
 
-use crate::buffer::{BufHandle, DiffBlockHandle, WinHandle, DB_COUNT};
+use crate::buffer::{win_ref, BufHandle, DiffBlockHandle, WinHandle, DB_COUNT};
 
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
@@ -100,10 +100,8 @@ extern "C" {
     fn nvim_diff_get_need_update() -> bool;
     fn nvim_diff_set_need_update(val: bool);
     fn nvim_get_curtab() -> TabpageHandle;
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
     fn nvim_tabpage_first_win(tp: TabpageHandle) -> WinHandle;
     fn nvim_win_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_w_p_fen(wp: WinHandle) -> bool;
     fn rs_foldUpdateAll(wp: WinHandle);
     #[link_name = "diff_redraw"]
     fn rs_diff_redraw(dofold: bool);
@@ -825,9 +823,9 @@ unsafe fn diffgetput_cleanup() {
         let tp = nvim_get_curtab();
         let mut wp = nvim_tabpage_first_win(tp);
         while !wp.is_null() {
-            if nvim_win_get_p_diff(wp) != 0
+            if win_ref(wp).w_p_diff() != 0
                 && nvim_diff_win_get_w_p_fdm_starts_d(wp)
-                && nvim_win_get_w_p_fen(wp)
+                && win_ref(wp).w_p_fen() != 0
             {
                 rs_foldUpdateAll(wp);
             }

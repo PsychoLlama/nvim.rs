@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{ColnrT, LinenrT, WinHandle, FAIL, OK};
+use crate::{win_mut, win_ref, ColnrT, LinenrT, WinHandle, FAIL, OK};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -15,11 +15,6 @@ use crate::{ColnrT, LinenrT, WinHandle, FAIL, OK};
 extern "C" {
     // Window/cursor accessors
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_col(win: WinHandle) -> ColnrT;
-    fn nvim_win_set_cursor_col(win: WinHandle, col: ColnrT);
-    fn nvim_win_get_cursor_coladd(win: WinHandle) -> ColnrT;
-    fn nvim_win_set_cursor_coladd(win: WinHandle, coladd: ColnrT);
 
     // Line access
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
@@ -78,8 +73,6 @@ extern "C" {
         end: *mut ColnrT,
     );
     fn nvim_win_chartabsize(win: WinHandle, ptr: *const c_char, vcol: ColnrT) -> ColnrT;
-    fn nvim_win_get_p_list(win: WinHandle) -> c_int;
-    fn nvim_win_set_p_list(win: WinHandle, val: c_int);
     fn nvim_vim_strchr_cpo_listwm() -> bool;
 
     // Delcombine option
@@ -193,12 +186,12 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
         let curwin = nvim_get_curwin();
 
         // Break tabs if needed.
-        if nvim_change_virtual_active(curwin) && nvim_win_get_cursor_coladd(curwin) > 0 {
+        if nvim_change_virtual_active(curwin) && win_ref(curwin).w_cursor.coladd > 0 {
             nvim_coladvance_force(nvim_getviscol());
         }
 
-        let col = nvim_win_get_cursor_col(curwin) as usize;
-        let lnum = nvim_win_get_cursor_lnum(curwin);
+        let col = win_ref(curwin).w_cursor.col as usize;
+        let lnum = win_ref(curwin).w_cursor.lnum;
         let oldp = nvim_ml_get(lnum);
         let linelen = nvim_ml_get_len(lnum) as usize + 1; // length including NUL
 
@@ -210,9 +203,9 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
         if (state & REPLACE_FLAG) != 0 {
             if (state & VREPLACE_FLAG) != 0 {
                 // VREPLACE mode - complex handling
-                let old_list = nvim_win_get_p_list(curwin);
+                let old_list = win_ref(curwin).w_p_list();
                 if old_list != 0 && !nvim_vim_strchr_cpo_listwm() {
-                    nvim_win_set_p_list(curwin, 0);
+                    win_mut(curwin).set_w_p_list(0);
                 }
 
                 let mut vcol: ColnrT = 0;
@@ -235,7 +228,7 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
                         newlen += (vcol - new_vcol) as usize;
                     }
                 }
-                nvim_win_set_p_list(curwin, old_list);
+                win_mut(curwin).set_w_p_list(old_list);
             } else if *oldp.add(col) != NUL {
                 // normal replace
                 oldlen = nvim_utfc_ptr2len(oldp.add(col)) as usize;
@@ -288,7 +281,7 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
 
         if !nvim_p_ri() || (state & REPLACE_FLAG) != 0 {
             // Normal insert: move cursor right
-            nvim_win_set_cursor_col(curwin, nvim_win_get_cursor_col(curwin) + charlen as ColnrT);
+            win_mut(curwin).w_cursor.col += charlen as ColnrT;
         }
     }
 }
@@ -307,13 +300,13 @@ fn ins_str_impl(s: *const c_char, slen: usize) {
     // SAFETY: All operations are safe FFI calls
     unsafe {
         let curwin = nvim_get_curwin();
-        let lnum = nvim_win_get_cursor_lnum(curwin);
+        let lnum = win_ref(curwin).w_cursor.lnum;
 
-        if nvim_change_virtual_active(curwin) && nvim_win_get_cursor_coladd(curwin) > 0 {
+        if nvim_change_virtual_active(curwin) && win_ref(curwin).w_cursor.coladd > 0 {
             nvim_coladvance_force(nvim_getviscol());
         }
 
-        let col = nvim_win_get_cursor_col(curwin) as usize;
+        let col = win_ref(curwin).w_cursor.col as usize;
         let oldp = nvim_ml_get(lnum);
         let oldlen = nvim_ml_get_len(lnum) as usize;
 
@@ -327,7 +320,7 @@ fn ins_str_impl(s: *const c_char, slen: usize) {
 
         nvim_ml_replace(lnum, newp, false);
         rs_inserted_bytes(lnum, col as ColnrT, 0, slen as c_int);
-        nvim_win_set_cursor_col(curwin, nvim_win_get_cursor_col(curwin) + slen as ColnrT);
+        win_mut(curwin).w_cursor.col += slen as ColnrT;
     }
 }
 
@@ -399,8 +392,8 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
     // SAFETY: All operations are safe FFI calls
     unsafe {
         let curwin = nvim_get_curwin();
-        let lnum = nvim_win_get_cursor_lnum(curwin);
-        let mut col = nvim_win_get_cursor_col(curwin);
+        let lnum = win_ref(curwin).w_cursor.lnum;
+        let mut col = win_ref(curwin).w_cursor.col;
         let mut fixpos = fixpos_arg;
         let oldp = nvim_ml_get(lnum);
         let oldlen = nvim_ml_get_len(lnum);
@@ -457,10 +450,10 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
                 && restart_edit == 0
                 && (nvim_change_get_ve_flags(curwin) & K_OPT_VE_FLAG_ONEMORE) == 0
             {
-                let mut cur_col = nvim_win_get_cursor_col(curwin) - 1;
-                nvim_win_set_cursor_coladd(curwin, 0);
+                let mut cur_col = win_ref(curwin).w_cursor.col - 1;
+                win_mut(curwin).w_cursor.coladd = 0;
                 cur_col -= nvim_utf_head_off(oldp, oldp.add(cur_col as usize));
-                nvim_win_set_cursor_col(curwin, cur_col);
+                win_mut(curwin).w_cursor.col = cur_col;
             }
             count = oldlen - col;
             movelen = 1;

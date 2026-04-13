@@ -21,6 +21,20 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_window::win_struct::WinStruct;
+
+/// Convert a local WinHandle to nvim_window::WinHandle for WinStruct access.
+#[inline]
+unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
+    nvim_window::win_struct::win_ref(std::mem::transmute::<WinHandle, nvim_window::WinHandle>(wp))
+}
+
+/// Convert a local WinHandle to nvim_window::WinHandle for mutable WinStruct access.
+#[inline]
+unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
+    nvim_window::win_struct::win_mut(std::mem::transmute::<WinHandle, nvim_window::WinHandle>(wp))
+}
+
 pub mod comment;
 pub mod common;
 pub mod editing;
@@ -229,9 +243,6 @@ extern "C" {
 
     // Window accessors
     fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_col(win: WinHandle) -> ColnrT;
-    fn nvim_win_set_cursor_col(win: WinHandle, col: ColnrT);
 
     // Memory allocation
     fn nvim_xfree(ptr: *mut c_void);

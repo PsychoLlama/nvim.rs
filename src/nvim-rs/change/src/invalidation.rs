@@ -5,7 +5,7 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::{BufHandle, ColnrT, LinenrT, WinHandle};
+use crate::{win_ref, BufHandle, ColnrT, LinenrT, WinHandle};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -15,10 +15,6 @@ use crate::{BufHandle, ColnrT, LinenrT, WinHandle};
 extern "C" {
     // Window accessors
     fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_col(win: WinHandle) -> ColnrT;
-    fn nvim_win_get_botline(win: WinHandle) -> LinenrT;
-    fn nvim_win_get_p_wrap(win: WinHandle) -> c_int;
 
     // w_lines[] accessors
     fn nvim_win_get_lines_valid(win: WinHandle) -> c_int;
@@ -69,8 +65,8 @@ pub(crate) fn changed_lines_invalidate_win_impl(
 ) {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-        let cursor_col = nvim_win_get_cursor_col(wp);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
+        let cursor_col = win_ref(wp).w_cursor.col;
         let buf = nvim_win_get_buffer(wp);
 
         // If the changed line is in a range of previously folded lines,
@@ -91,7 +87,7 @@ pub(crate) fn changed_lines_invalidate_win_impl(
             changed_cline_bef_curs(wp);
         }
 
-        let botline = nvim_win_get_botline(wp);
+        let botline = win_ref(wp).w_botline;
         if botline >= lnum {
             // Assume that botline doesn't change (inserted lines make
             // other lines scroll down below botline).
@@ -101,7 +97,7 @@ pub(crate) fn changed_lines_invalidate_win_impl(
         // Adjust lnume for virtual lines and inline text
         let mut lnume_adj = lnume;
         if (xtra < 0
-            && nvim_win_get_p_wrap(wp) != 0
+            && win_ref(wp).w_p_wrap() != 0
             && nvim_buf_meta_total(buf, KMT_META_INLINE) != 0)
             || (xtra != 0 && nvim_buf_meta_total(buf, KMT_META_LINES) != 0)
         {

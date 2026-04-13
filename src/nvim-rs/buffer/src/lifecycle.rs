@@ -11,7 +11,7 @@
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::{errors, BufHandle};
+use crate::{errors, win_mut_raw, win_ref_raw, BufHandle};
 
 // =============================================================================
 // External C Statics
@@ -1141,9 +1141,6 @@ extern "C" {
     static mut need_fileinfo: bool;
 
     fn nvim_ses_get_firstwin() -> *mut c_void;
-    // nvim_win_get_next and nvim_win_get_floating are exported from the Rust window crate
-    fn nvim_win_get_next(wp: *mut c_void) -> *mut c_void;
-    fn nvim_win_get_floating(wp: *mut c_void) -> c_int;
     fn nvim_win_get_buffer(wp: *mut c_void) -> BufHandle;
 
     // close_windows(buf, keep_curwin) -- implemented in Rust window crate
@@ -1207,19 +1204,19 @@ pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action
 
     if close_others {
         let curwin = nvim_get_curwin();
-        let can_close_all_others = if nvim_win_get_floating(curwin) != 0 {
+        let can_close_all_others = if win_ref_raw(curwin).w_floating {
             // Check if there is any non-floating window with a different buffer.
             let mut found = false;
             let mut wp = nvim_ses_get_firstwin();
             while !wp.is_null() {
-                if nvim_win_get_floating(wp) != 0 {
+                if win_ref_raw(wp).w_floating {
                     break;
                 }
                 if nvim_win_get_buffer(wp) != buf {
                     found = true;
                     break;
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref_raw(wp).w_next.as_ptr();
             }
             found
         } else {
@@ -1750,9 +1747,6 @@ extern "C" {
     fn rs_diff_buf_add(buf: BufHandle);
     fn nvim_ecmd_curwin_set_ws_to_buf(buf: BufHandle);
     fn nvim_set_topline(wp: *mut c_void, lnum: c_int);
-    fn nvim_win_set_topfill(wp: *mut c_void, val: c_int);
-    fn nvim_win_set_topline_was_set(wp: *mut c_void, val: c_int);
-    fn nvim_win_set_valid(wp: *mut c_void, val: c_int);
     fn nvim_ecmd_curwin_set_coladd_curswant();
     fn nvim_excmds_buf_ft_is_empty(buf: BufHandle) -> c_int;
     fn shortmess(x: c_int) -> bool;
@@ -1760,13 +1754,10 @@ extern "C" {
     fn open_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> c_int;
     static msg_silent: c_int;
     fn buf_check_timestamp(buf: BufHandle);
-    fn nvim_win_get_topline(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_topline_was_set(wp: *mut c_void) -> c_int;
     fn inindent(extra: c_int) -> c_int;
     fn maketitle();
     fn scroll_cursor_halfway(win: *mut c_void, atend: bool, prefer_above: bool);
     fn nvim_ecmd_curbuf_set_last_used();
-    fn nvim_win_get_p_spell(wp: *const c_void) -> c_int;
     fn parse_spelllang(win: *mut c_void) -> *mut c_char;
     fn redraw_later(win: *mut c_void, upd: c_int);
     fn nvim_get_p_sol() -> c_int;
@@ -1780,7 +1771,6 @@ extern "C" {
     fn nvim_ecmd_curbuf_get_kmap_state() -> c_int;
     fn check_arg_idx(win: *mut c_void);
     fn nvim_get_entered_free_all_mem() -> c_int;
-    fn nvim_win_get_p_diff(wp: *const c_void) -> c_int;
     fn nvim_curwin_cursor_lnum() -> c_int;
     fn nvim_win_get_b_p_spl(win: *const c_void) -> *const c_char;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
@@ -1866,7 +1856,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     }
     rs_foldUpdateAll(curwin); // update folds (later).
 
-    if nvim_win_get_p_diff(curwin) != 0 {
+    if win_ref_raw(curwin).w_p_diff() != 0 {
         rs_diff_buf_add(buf);
     }
 
@@ -1875,10 +1865,10 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     // Cursor on first line by default.
     nvim_curwin_set_cursor(1, 0);
     nvim_ecmd_curwin_set_coladd_curswant();
-    nvim_win_set_topline_was_set(curwin, 0);
+    win_mut_raw(curwin).w_topline_was_set = 0;
 
     // mark cursor position as being invalid
-    nvim_win_set_valid(curwin, 0);
+    win_mut_raw(curwin).w_valid = 0;
 
     // Make sure the buffer is loaded.
     if nvim_buf_get_ml_mfp_null(buf) != 0 {
@@ -1899,7 +1889,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
         buf_check_timestamp(buf);
 
         nvim_set_topline(curwin, 1);
-        nvim_win_set_topfill(curwin, 0);
+        win_mut_raw(curwin).w_topfill = 0;
         apply_autocmds(
             EVENT_BUFENTER,
             std::ptr::null(),
@@ -1927,7 +1917,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     check_arg_idx(curwin); // check for valid arg_idx
     maketitle();
     // when autocmds didn't change it
-    if nvim_win_get_topline(curwin) == 1 && nvim_win_get_topline_was_set(curwin) == 0 {
+    if win_ref_raw(curwin).w_topline == 1 && win_ref_raw(curwin).w_topline_was_set == 0 {
         scroll_cursor_halfway(curwin, false, false); // redisplay at correct position
     }
 
@@ -1942,7 +1932,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     // May need to set the spell language -- only if !b_help, w_p_spell, and spl is non-empty.
     let spl = nvim_win_get_b_p_spl(curwin);
     if nvim_buf_get_help(curbuf) == 0
-        && nvim_win_get_p_spell(curwin) != 0
+        && win_ref_raw(curwin).w_p_spell() != 0
         && !spl.is_null()
         && *spl != 0
     {
@@ -1974,11 +1964,6 @@ extern "C" {
     fn rs_reset_VIsual_and_resel();
 
     // window list traversal and properties (win_struct.rs)
-    fn nvim_win_get_w_height(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_w_width(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_prev(wp: *mut c_void) -> *mut c_void;
-    fn nvim_win_get_hsep_height(wp: *mut c_void) -> c_int;
-    fn nvim_win_get_status_height(wp: *mut c_void) -> c_int;
 
     // globals (arglist shim)
     fn nvim_al_ONE_WINDOW() -> c_int;
@@ -2066,23 +2051,23 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
         // Try to close floating windows first.
         let lastwin = nvim_get_lastwin();
         let firstwin = nvim_get_firstwin();
-        let mut wp = if nvim_win_get_floating(lastwin) != 0 {
+        let mut wp = if win_ref_raw(lastwin).w_floating {
             lastwin
         } else {
             firstwin
         };
         while !wp.is_null() {
             // Compute wpnext
-            let wpnext = if nvim_win_get_floating(wp) != 0 {
-                let prev = nvim_win_get_prev(wp);
-                if !prev.is_null() && nvim_win_get_floating(prev) != 0 {
+            let wpnext = if win_ref_raw(wp).w_floating {
+                let prev = win_ref_raw(wp).w_prev.as_ptr();
+                if !prev.is_null() && win_ref_raw(prev).w_floating {
                     prev
                 } else {
                     nvim_get_firstwin()
                 }
             } else {
-                let next = nvim_win_get_next(wp);
-                if next.is_null() || nvim_win_get_floating(next) != 0 {
+                let next = win_ref_raw(wp).w_next.as_ptr();
+                if next.is_null() || win_ref_raw(next).w_floating {
                     std::ptr::null_mut()
                 } else {
                     next
@@ -2093,16 +2078,16 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             let cmod_split = cmdmod.cmod_split;
             let rows_avail = nvim_get_rows_avail();
             let height_too_small = if (cmod_split & WSP_VERT) != 0 {
-                nvim_win_get_w_height(wp)
-                    + nvim_win_get_hsep_height(wp)
-                    + nvim_win_get_status_height(wp)
+                win_ref_raw(wp).w_height
+                    + win_ref_raw(wp).w_hsep_height
+                    + win_ref_raw(wp).w_status_height
                     < rows_avail
             } else {
-                nvim_win_get_w_width(wp) != nvim_al_get_Columns()
+                win_ref_raw(wp).w_width != nvim_al_get_Columns()
             };
 
             let should_close = (nvim_buf_get_nwindows(wp_buf) > 1
-                || nvim_win_get_floating(wp) != 0
+                || win_ref_raw(wp).w_floating
                 || height_too_small
                 || (had_tab > 0 && wp != nvim_get_firstwin()))
                 && nvim_al_ONE_WINDOW() == 0
@@ -2116,7 +2101,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
                 }
                 // Autocommand may change windows: start all over.
                 let lastwin2 = nvim_get_lastwin();
-                wp = if nvim_win_get_floating(lastwin2) != 0 {
+                wp = if win_ref_raw(lastwin2).w_floating {
                     lastwin2
                 } else {
                     nvim_get_firstwin()
@@ -2167,11 +2152,11 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             let mut found: *mut c_void = std::ptr::null_mut();
             let mut w = nvim_get_firstwin();
             while !w.is_null() {
-                if nvim_win_get_floating(w) == 0 && nvim_win_get_buffer(w) == buf {
+                if !win_ref_raw(w).w_floating && nvim_win_get_buffer(w) == buf {
                     found = w;
                     break;
                 }
-                w = nvim_win_get_next(w);
+                w = win_ref_raw(w).w_next.as_ptr();
             }
             // If the buffer already has a window, move it.
             if !found.is_null() {
@@ -2262,7 +2247,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             open_wins -= 1;
             wp = nvim_get_lastwin();
         } else {
-            wp = nvim_win_get_prev(wp);
+            wp = win_ref_raw(wp).w_prev.as_ptr();
             if wp.is_null() {
                 break;
             }

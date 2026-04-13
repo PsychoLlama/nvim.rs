@@ -5,11 +5,27 @@
 
 #![allow(clippy::must_use_candidate)]
 
+use nvim_window::win_struct::WinStruct;
 use std::ffi::c_void;
 use std::os::raw::c_int;
 
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
+
+/// Convert local `WinHandle` to `&WinStruct` via zero-cost pointer cast.
+///
+/// Both `WinHandle` (repr transparent, `*mut c_void`) and `nvim_window::WinHandle`
+/// have the same ABI layout, so the transmute is safe.
+#[inline]
+pub(crate) unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
+    nvim_window::win_struct::win_ref(std::mem::transmute::<WinHandle, nvim_window::WinHandle>(wp))
+}
+
+/// Convert local `WinHandle` to `&mut WinStruct` via zero-cost pointer cast.
+#[inline]
+pub(crate) unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
+    nvim_window::win_struct::win_mut(std::mem::transmute::<WinHandle, nvim_window::WinHandle>(wp))
+}
 
 /// Result constants matching Neovim's OK/FAIL.
 #[allow(dead_code)]
@@ -173,7 +189,6 @@ extern "C" {
     // Window/tab iteration accessors
     fn nvim_tabpage_first_win(tp: TabpageHandle) -> WinHandle;
     fn nvim_win_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_get_curwin() -> WinHandle;
 
@@ -1001,7 +1016,7 @@ pub unsafe extern "C" fn rs_diff_buf_adjust(win: WinHandle) {
         return;
     }
 
-    if nvim_win_get_p_diff(win) == 0 {
+    if win_ref(win).w_p_diff() == 0 {
         // Window no longer in diff mode - check if any other window still shows
         // this buffer in diff mode
         let buf = nvim_win_get_w_buffer(win);
@@ -1010,7 +1025,7 @@ pub unsafe extern "C" fn rs_diff_buf_adjust(win: WinHandle) {
 
         let mut wp = nvim_tabpage_first_win(curtab);
         while !wp.is_null() {
-            if nvim_win_get_w_buffer(wp) == buf && nvim_win_get_p_diff(wp) != 0 {
+            if nvim_win_get_w_buffer(wp) == buf && win_ref(wp).w_p_diff() != 0 {
                 found_win = true;
                 break;
             }
@@ -1842,16 +1857,6 @@ extern "C" {
 // Phase 4 C accessors: window fields (from window.c), diff_context, external calls
 #[allow(dead_code)]
 extern "C" {
-    // Window field accessors (defined in window.c)
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_topline(wp: WinHandle, lnum: LinenrT);
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_set_topfill(wp: WinHandle, fill: c_int);
-    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_botfill(wp: WinHandle, val: c_int);
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
     // Diff-specific accessors (defined in diff.c)
     fn nvim_diff_get_context() -> c_int;
     fn hasFolding(wp: WinHandle, lnum: LinenrT, firstp: *mut LinenrT, lastp: *mut LinenrT) -> bool;
@@ -2560,7 +2565,7 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
     }
 
     let first_diff = nvim_tabpage_get_first_diff(tp);
-    if first_diff.is_null() || nvim_win_get_p_diff(wp) == 0 {
+    if first_diff.is_null() || win_ref(wp).w_p_diff() == 0 {
         return 0;
     }
 
@@ -2595,8 +2600,8 @@ pub unsafe extern "C" fn rs_diff_check_with_linestatus(
     }
 
     // Run linematch if on-screen and not yet matched
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
     if lnum >= topline
         && lnum < botline
         && !nvim_diffblock_is_linematched(dp)
@@ -2702,8 +2707,8 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
         rs_diff_ex_diffupdate(ExargHandle(std::ptr::null()));
     }
 
-    let lnum = nvim_win_get_topline(fromwin);
-    nvim_win_set_topfill(towin, 0);
+    let lnum = win_ref(fromwin).w_topline;
+    win_mut(towin).w_topfill = 0;
 
     // Find diff block that includes lnum
     let mut dp = nvim_tabpage_get_first_diff(tp);
@@ -2719,7 +2724,7 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
         let to_buf = nvim_win_get_w_buffer(towin);
         let to_line_count = nvim_buf_get_ml_line_count(to_buf);
         let from_line_count = nvim_buf_get_ml_line_count(frombuf);
-        nvim_win_set_topline(towin, to_line_count - (from_line_count - lnum));
+        win_mut(towin).w_topline = to_line_count - (from_line_count - lnum);
     } else {
         let tobuf = nvim_win_get_w_buffer(towin);
         let toidx = rs_diff_buf_idx_tp(tobuf, tp);
@@ -2728,49 +2733,49 @@ pub unsafe extern "C" fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandl
         }
         let new_topline =
             lnum + (nvim_diffblock_get_lnum(dp, toidx) - nvim_diffblock_get_lnum(dp, fromidx));
-        nvim_win_set_topline(towin, new_topline);
+        win_mut(towin).w_topline = new_topline;
 
         if lnum >= nvim_diffblock_get_lnum(dp, fromidx) {
-            let from_topfill = nvim_win_get_topfill(fromwin);
+            let from_topfill = win_ref(fromwin).w_topfill;
             let (topfill, topline) =
                 calculate_topfill_and_topline(fromidx, toidx, lnum, from_topfill);
-            nvim_win_set_topfill(towin, topfill);
-            nvim_win_set_topline(towin, topline);
+            win_mut(towin).w_topfill = topfill;
+            win_mut(towin).w_topline = topline;
         }
     }
 
     // Safety checks
-    nvim_win_set_botfill(towin, 0);
+    win_mut(towin).w_botfill = false;
     let to_buf = nvim_win_get_w_buffer(towin);
     let to_line_count = nvim_buf_get_ml_line_count(to_buf);
 
-    if nvim_win_get_topline(towin) > to_line_count {
-        nvim_win_set_topline(towin, to_line_count);
-        nvim_win_set_botfill(towin, 1);
+    if win_ref(towin).w_topline > to_line_count {
+        win_mut(towin).w_topline = to_line_count;
+        win_mut(towin).w_botfill = (1) != 0;
     }
-    if nvim_win_get_topline(towin) < 1 {
-        nvim_win_set_topline(towin, 1);
-        nvim_win_set_topfill(towin, 0);
+    if win_ref(towin).w_topline < 1 {
+        win_mut(towin).w_topline = 1;
+        win_mut(towin).w_topfill = 0;
     }
 
     invalidate_botline(towin);
     changed_line_abv_curs_win(towin);
     nvim_check_topfill(towin, 0);
 
-    let mut new_topline = nvim_win_get_topline(towin);
+    let mut new_topline = win_ref(towin).w_topline;
     hasFolding(
         towin,
         new_topline,
         &raw mut new_topline,
         std::ptr::null_mut(),
     );
-    nvim_win_set_topline(towin, new_topline);
+    win_mut(towin).w_topline = new_topline;
 }
 
 /// Check if line should be folded in diff mode.
 #[no_mangle]
 pub unsafe extern "C" fn rs_diff_infold(wp: WinHandle, lnum: LinenrT) -> bool {
-    if nvim_win_get_p_diff(wp) == 0 {
+    if win_ref(wp).w_p_diff() == 0 {
         return false;
     }
 
@@ -2821,7 +2826,7 @@ pub unsafe extern "C" fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int {
     let tp = nvim_get_curtab();
     let curwin = nvim_get_curwin();
     let curbuf = nvim_get_curbuf();
-    let mut lnum = nvim_win_get_cursor_lnum(curwin);
+    let mut lnum = win_ref(curwin).w_cursor.lnum;
     let idx = rs_diff_buf_idx_tp(curbuf, tp);
 
     if idx == DB_COUNT || nvim_tabpage_get_first_diff(tp).is_null() {
@@ -2869,13 +2874,13 @@ pub unsafe extern "C" fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int {
         lnum = line_count;
     }
 
-    if lnum == nvim_win_get_cursor_lnum(curwin) {
+    if lnum == win_ref(curwin).w_cursor.lnum {
         return FAIL;
     }
 
     setpcmark();
-    nvim_win_set_cursor_lnum(curwin, lnum);
-    nvim_win_set_cursor_col(curwin, 0);
+    win_mut(curwin).w_cursor.lnum = lnum;
+    win_mut(curwin).w_cursor.col = 0;
 
     OK
 }
@@ -2925,10 +2930,10 @@ pub unsafe extern "C" fn rs_diff_get_corresponding_line_int(
         }
         if dp_lnum1 == lnum1
             && dp_count1 == 0
-            && dp_lnum2 <= nvim_win_get_cursor_lnum(curwin)
-            && dp_lnum2 + dp_count2 > nvim_win_get_cursor_lnum(curwin)
+            && dp_lnum2 <= win_ref(curwin).w_cursor.lnum
+            && dp_lnum2 + dp_count2 > win_ref(curwin).w_cursor.lnum
         {
-            return nvim_win_get_cursor_lnum(curwin);
+            return win_ref(curwin).w_cursor.lnum;
         }
         baseline = (dp_lnum1 + dp_count1) - (dp_lnum2 + dp_count2);
 
@@ -3496,7 +3501,6 @@ extern "C" {
     fn nvim_diff_emsg_invrange();
     fn nvim_diff_semsg_too_many_anchors(max: c_int);
     fn nvim_diff_get_firstwin() -> WinHandle;
-    fn nvim_win_get_w_p_diff(wp: WinHandle) -> bool;
     fn emsg(msg: *const c_char) -> bool;
 }
 
@@ -3554,7 +3558,7 @@ pub unsafe extern "C" fn rs_parse_diffanchors(
         let mut w = nvim_diff_get_firstwin();
         let mut found = WinHandle::null();
         while !w.is_null() {
-            if nvim_win_get_w_buffer(w) == buf && nvim_win_get_w_p_diff(w) {
+            if nvim_win_get_w_buffer(w) == buf && win_ref(w).w_p_diff() != 0 {
                 found = w;
                 break;
             }

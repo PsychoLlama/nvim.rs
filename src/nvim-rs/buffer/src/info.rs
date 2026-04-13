@@ -13,7 +13,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{messages, BufHandle, WinHandle};
+use crate::{messages, win_ref, BufHandle, WinHandle};
 
 extern "C" {
     static p_icon: c_int;
@@ -66,8 +66,6 @@ extern "C" {
 
     fn shortmess(x: c_int) -> bool;
 
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
     #[link_name = "validate_virtcol"]
     fn nvim_validate_virtcol(wp: WinHandle);
@@ -552,7 +550,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
         pos = append_cstr(&mut buffer, pos, messages::no_lines_msg());
     } else if unsafe { p_ru } != 0 {
         // Ruler already on screen — just show "N line(s) --P%--"
-        let lnum = nvim_win_get_cursor_lnum(curwin);
+        let lnum = win_ref(curwin).w_cursor.lnum;
         let pct = rs_calc_percentage(i64::from(lnum), i64::from(ml_line_count));
         let fmt = messages::ngettext_line_count(i64::from(ml_line_count));
         let remaining = IOSIZE - pos;
@@ -568,7 +566,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
         }
     } else {
         // Full: "line N of M --P%-- col C"
-        let lnum = nvim_win_get_cursor_lnum(curwin);
+        let lnum = win_ref(curwin).w_cursor.lnum;
         let pct = rs_calc_percentage(i64::from(lnum), i64::from(ml_line_count));
         let fmt = messages::fileinfo_line_fmt();
         let remaining = IOSIZE - pos;
@@ -586,7 +584,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
 
         // validate_virtcol updates w_virtcol
         nvim_validate_virtcol(curwin);
-        let col = nvim_win_get_cursor_col(curwin) + 1;
+        let col = win_ref(curwin).w_cursor.col + 1;
         let vcol = nvim_win_get_virtcol(curwin) + 1;
         let n = rs_col_print(buffer[pos..].as_mut_ptr(), IOSIZE - pos, col, vcol);
         if n > 0 {
