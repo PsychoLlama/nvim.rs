@@ -81,7 +81,6 @@ extern "C" {
     fn nvim_buf_updates_unload(buf: *mut c_void);
 
     // --- cursor & view ---
-    fn nvim_curwin_get_topline() -> c_int;
     fn nvim_curwin_set_topline_clamped(topline: c_int);
     fn nvim_curwin_get_cursor(lnum: *mut c_int, col: *mut c_int);
     fn nvim_curwin_set_cursor(lnum: c_int, col: c_int);
@@ -204,7 +203,9 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     let mut old_cursor_lnum: c_int = 0;
     let mut old_cursor_col: c_int = 0;
     nvim_curwin_get_cursor(&mut old_cursor_lnum, &mut old_cursor_col);
-    let old_topline = nvim_curwin_get_topline();
+    let old_topline =
+        nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(nvim_get_curwin()))
+            .w_topline;
 
     let curbuf = nvim_get_curbuf();
     let ml_line_count = bref_void(curbuf as *const c_void).ml_line_count;

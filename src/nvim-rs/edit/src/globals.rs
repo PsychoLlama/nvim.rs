@@ -305,7 +305,6 @@ static mut SAVED_TOPLINE: LinenrT = 0;
 static mut SAVED_TOPFILL: c_int = 0;
 
 extern "C" {
-    fn nvim_curwin_get_topline() -> LinenrT;
     fn nvim_get_curwin() -> nvim_window::WinHandle;
 }
 
@@ -313,15 +312,16 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn nvim_edit_save_topline() {
     let curwin = nvim_get_curwin();
-    SAVED_TOPLINE = nvim_curwin_get_topline();
-    SAVED_TOPFILL = nvim_window::win_struct::win_ref(curwin).w_topfill;
+    let cw = nvim_window::win_struct::win_ref(curwin);
+    SAVED_TOPLINE = cw.w_topline;
+    SAVED_TOPFILL = cw.w_topfill;
 }
 
 /// Return 1 if topline/topfill changed since last save, 0 otherwise.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_edit_topline_changed() -> c_int {
     let curwin = nvim_get_curwin();
-    let changed = SAVED_TOPLINE != nvim_curwin_get_topline()
-        || SAVED_TOPFILL != nvim_window::win_struct::win_ref(curwin).w_topfill;
+    let cw = nvim_window::win_struct::win_ref(curwin);
+    let changed = SAVED_TOPLINE != cw.w_topline || SAVED_TOPFILL != cw.w_topfill;
     c_int::from(changed)
 }

@@ -446,8 +446,6 @@ int nvim_curwin_cursor_line_is_nul(void) { return *ml_get_buf(curwin->w_buffer, 
 void nvim_get_VIsual_pos_fields(int32_t *lnum, int32_t *col, int32_t *coladd) { *lnum = (int32_t)VIsual.lnum; *col = (int32_t)VIsual.col; *coladd = (int32_t)VIsual.coladd; }
 char *nvim_get_empty_string_option(void) { return empty_string_option; }
 int nvim_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp) { return hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) ? 1 : 0; }
-linenr_T nvim_curwin_get_topline(void) { return curwin->w_topline; }
-void nvim_curwin_cursor_lnum_add(linenr_T delta) { curwin->w_cursor.lnum += delta; }
 void nvim_set_Insstart_from_cursor(void) { Insstart = curwin->w_cursor; }
 void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
 {

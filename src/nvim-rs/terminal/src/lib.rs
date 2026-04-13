@@ -5043,7 +5043,6 @@ pub unsafe extern "C" fn rs_terminal_open(
 extern "C" {
     fn nvim_terminal_init_timer();
     fn nvim_terminal_teardown_timer();
-    fn nvim_curwin_get_topline() -> c_int;
     fn nvim_set_topline_curwin(lnum: c_int);
     fn nvim_curbuf_ml_line_count() -> c_int;
     fn nvim_curwin_get_view_height() -> c_int;
@@ -5087,7 +5086,7 @@ pub unsafe extern "C" fn rs_terminal_check_cursor() {
     unsafe { nvim_curwin_set_cursor_lnum(lnum) };
     let view_height = unsafe { nvim_curwin_get_view_height() };
     let topline = (ml_line_count - view_height + 1).max(1);
-    if topline != unsafe { nvim_curwin_get_topline() } {
+    if topline != unsafe { win_ref_raw(nvim_curwin_ptr()).w_topline } {
         unsafe { nvim_set_topline_curwin(topline) };
     }
     let state = unsafe { nvim_get_state() };
