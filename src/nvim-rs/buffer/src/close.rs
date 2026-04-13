@@ -134,7 +134,6 @@ extern "C" {
     fn nvim_buf_wipe_free(buf: BufHandle);
     fn nvim_buf_free_stuff_del(buf: BufHandle);
     fn set_last_cursor(win: *mut c_void);
-    fn nvim_buf_b_ffname_is_null(buf: BufHandle) -> c_int;
     fn can_unload_buffer(buf: BufHandle) -> bool;
 
     fn rs_buf_effective_action(buf: BufHandle, action: c_int) -> c_int;
@@ -404,11 +403,7 @@ pub unsafe extern "C" fn rs_close_buffer(
     nvim_terminal_close_buf(buf);
 
     // Always remove the buffer when there is no file name.
-    let del_buf = if nvim_buf_b_ffname_is_null(buf) != 0 {
-        true
-    } else {
-        del_buf
-    };
+    let del_buf = del_buf || unsafe { buf_ref(buf).b_ffname.is_null() };
 
     // Free all things allocated for this buffer.
     let is_curbuf = buf == nvim_get_curbuf();

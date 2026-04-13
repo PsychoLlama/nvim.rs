@@ -518,7 +518,6 @@ void nvim_buf_wipe_free(buf_T *buf)
 }
 void nvim_buf_free_stuff_del(buf_T *buf)
 { free_buffer_stuff(buf, kBffClearWinInfo | kBffInitChangedtick); }
-int nvim_buf_b_ffname_is_null(buf_T *buf) { return buf->b_ffname == NULL ? 1 : 0; }
 
 // Phase 1: buf_store_file_info / prep_exarg / set_forced_fenc accessors
 
