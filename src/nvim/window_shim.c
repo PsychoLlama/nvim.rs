@@ -198,9 +198,7 @@ void nvim_win_clear_click_defs_all(win_T *wp) { stl_clear_click_defs(wp->w_statu
 void nvim_win_clear_config_virttext(win_T *wp) { clear_virttext(&wp->w_config.title_chunks); clear_virttext(&wp->w_config.footer_chunks); }
 void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
-int nvim_win_get_width_request(win_T *wp) { return wp ? wp->w_width_request : 0; }
-int nvim_win_get_height_request(win_T *wp) { return wp ? wp->w_height_request : 0; }
-int nvim_win_get_prev_fraction_row(win_T *wp) { return wp ? wp->w_prev_fraction_row : 0; }
+
 int nvim_win_get_p_spk_char(void) { return (int)(unsigned char)*p_spk; }
 void nvim_terminal_check_size_win(win_T *wp) { if (wp && wp->w_buffer->terminal) { terminal_check_size(wp->w_buffer->terminal); } }
 int nvim_win_border_height_wrapper(win_T *wp) { return wp ? win_border_height(wp) : 0; }
@@ -215,8 +213,7 @@ int nvim_ga_get_len(garray_T *gap) { return gap ? gap->ga_len : 0; }
 int nvim_ga_get_int(garray_T *gap, int idx) { return (gap && gap->ga_data && idx >= 0 && idx < gap->ga_len) ? ((int *)gap->ga_data)[idx] : 0; }
 void nvim_ga_set_int(garray_T *gap, int idx, int val) { if (gap && gap->ga_data && idx >= 0) { ((int *)gap->ga_data)[idx] = val; } }
 void nvim_win_stl_clear_click_defs(win_T *wp) { if (!wp) { return; } stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size); xfree(wp->w_status_click_defs); wp->w_status_click_defs_size = 0; wp->w_status_click_defs = NULL; }
-int nvim_win_get_prev_height(win_T *wp) { return wp ? wp->w_prev_height : 0; }
-int nvim_win_get_fraction(win_T *wp) { return wp ? wp->w_fraction : 0; }
+
 void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
 void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }
 void nvim_merge_win_config_init(win_T *wp) { if (wp) { merge_win_config(&wp->w_config, WIN_CONFIG_INIT); CLEAR_FIELD(wp->w_border_adj); } }

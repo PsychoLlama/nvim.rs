@@ -7,7 +7,7 @@
 
 use std::ffi::c_int;
 
-use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF};
+use crate::{win_struct::win_ref, Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF};
 
 // =============================================================================
 // Constants
@@ -28,7 +28,6 @@ extern "C" {
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_prev_height(wp: WinHandle) -> c_int;
     fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
     fn nvim_comp_col();
     fn nvim_win_stl_clear_click_defs(wp: WinHandle);
@@ -215,7 +214,7 @@ fn last_status_rec_impl(fr: *mut Frame, statusline: bool, is_stl_global: bool) {
                 }
                 // Set prev_height when difference is due to 'laststatus'.
                 let h = nvim_win_get_w_height(wp);
-                let prev_h = nvim_win_get_prev_height(wp);
+                let prev_h = win_ref(wp).w_prev_height;
                 if (h - prev_h).abs() == 1 {
                     nvim_win_set_prev_height(wp, h);
                 }

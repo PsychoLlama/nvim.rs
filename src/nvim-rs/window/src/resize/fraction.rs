@@ -6,7 +6,7 @@
 use std::ffi::{c_int, c_long, c_longlong};
 use std::ptr;
 
-use crate::WinHandle;
+use crate::{win_struct::win_ref, WinHandle};
 
 // =============================================================================
 // Constants
@@ -47,7 +47,6 @@ extern "C" {
     fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_fraction(wp: WinHandle) -> c_int;
     fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
     fn nvim_win_get_skipcol(wp: WinHandle) -> ColnrT;
     fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
@@ -154,7 +153,7 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
             // can happen when starting up
             let mut lnum: LinenrT = cursor_lnum.max(1);
 
-            let fraction = nvim_win_get_fraction(wp);
+            let fraction = win_ref(wp).w_fraction;
             let wrow = (fraction * height - 1) / FRACTION_MULT;
             nvim_win_set_wrow(wp, wrow);
 

@@ -10,7 +10,7 @@
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::WinHandle;
+use crate::{win_struct::win_ref, WinHandle};
 
 // =============================================================================
 // Constants
@@ -68,9 +68,6 @@ extern "C" {
 
     /// Get wp->w_height.
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-
-    /// Get wp->w_prev_height.
-    fn nvim_win_get_prev_height(wp: WinHandle) -> c_int;
 
     /// Set wp->w_prev_height.
     fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
@@ -217,7 +214,7 @@ fn win_fix_scroll_impl(resize: bool) {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             let height = nvim_win_get_w_height(wp);
-            let prev_height = nvim_win_get_prev_height(wp);
+            let prev_height = win_ref(wp).w_prev_height;
             let floating = nvim_win_get_floating(wp);
 
             // Skip when window height has not changed or when floating.
@@ -365,7 +362,7 @@ fn win_fix_cursor_impl(normal: bool) {
             // Scroll to make cursor valid.
             let fraction = if nlnum == bot { FRACTION_MULT } else { 0 };
             nvim_win_set_fraction(wp, fraction);
-            let prev_height = nvim_win_get_prev_height(wp);
+            let prev_height = win_ref(wp).w_prev_height;
             rs_scroll_to_fraction(wp, prev_height);
             nvim_validate_botline(wp);
         }

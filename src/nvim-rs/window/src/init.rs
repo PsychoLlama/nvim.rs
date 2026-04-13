@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use crate::WinHandle;
+use crate::{win_struct::win_ref, WinHandle};
 
 // WSP_NEWLOC flag: don't copy the location list.
 const WSP_NEWLOC: c_int = 0x100;
@@ -70,14 +70,8 @@ extern "C" {
     /// Set w_wrow.
     fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
 
-    /// Get w_fraction.
-    fn nvim_win_get_fraction(wp: WinHandle) -> c_int;
-
     /// Set w_fraction.
     fn nvim_win_set_fraction(wp: WinHandle, val: c_int);
-
-    /// Get w_prev_fraction_row.
-    fn nvim_win_get_prev_fraction_row(wp: WinHandle) -> c_int;
 
     /// Set w_prev_fraction_row.
     fn nvim_win_set_prev_fraction_row(wp: WinHandle, val: c_int);
@@ -159,8 +153,8 @@ fn win_init_impl(newp: WinHandle, oldp: WinHandle, flags: c_int) {
 
         // Copy w_wrow, w_fraction, w_prev_fraction_row
         nvim_win_set_wrow(newp, nvim_win_get_wrow(oldp));
-        nvim_win_set_fraction(newp, nvim_win_get_fraction(oldp));
-        nvim_win_set_prev_fraction_row(newp, nvim_win_get_prev_fraction_row(oldp));
+        nvim_win_set_fraction(newp, win_ref(oldp).w_fraction);
+        nvim_win_set_prev_fraction_row(newp, win_ref(oldp).w_prev_fraction_row);
 
         // Handle splitkeep fields
         let p_spk = nvim_win_get_p_spk_char();

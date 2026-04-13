@@ -11,7 +11,7 @@
 
 use std::ffi::c_int;
 
-use crate::{Frame, WinHandle, FR_COL, FR_ROW};
+use crate::{win_struct::win_ref, Frame, WinHandle, FR_COL, FR_ROW};
 
 // =============================================================================
 // External C Functions
@@ -391,13 +391,10 @@ pub extern "C" fn rs_resize_curwin_total_width() -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_get_width_request(wp: WinHandle) -> c_int;
-    fn nvim_win_get_height_request(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_prev_fraction_row(wp: WinHandle) -> c_int;
     fn nvim_win_set_view_height(wp: WinHandle, val: c_int);
     fn nvim_win_set_view_width(wp: WinHandle, val: c_int);
     fn nvim_win_set_height_outer(wp: WinHandle, val: c_int);
@@ -461,7 +458,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
     }
 
     unsafe {
-        let width_request = nvim_win_get_width_request(wp);
+        let width_request = win_ref(wp).w_width_request;
         let width = if width_request == 0 {
             nvim_win_get_w_width(wp)
         } else {
@@ -469,7 +466,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
         };
 
         let prev_height = nvim_win_get_view_height(wp);
-        let height_request = nvim_win_get_height_request(wp);
+        let height_request = win_ref(wp).w_height_request;
         let height = if height_request == 0 {
             0_i32.max(nvim_win_get_w_height(wp) - nvim_win_get_winbar_height(wp))
         } else {
@@ -488,7 +485,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
                 if nvim_win_get_view_height(wp) != prev_height {
                     return;
                 }
-                if nvim_win_get_wrow(wp) != nvim_win_get_prev_fraction_row(wp) {
+                if nvim_win_get_wrow(wp) != win_ref(wp).w_prev_fraction_row {
                     crate::resize::rs_set_fraction(wp);
                 }
             }

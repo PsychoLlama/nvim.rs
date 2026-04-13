@@ -19,7 +19,7 @@ use crate::frame::constants::{
     STATUS_HEIGHT, WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HELP, WSP_NOENTER, WSP_ROOM, WSP_TOP,
     WSP_VERT,
 };
-use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
+use crate::{win_struct::win_ref, Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
 
 // =============================================================================
 // FFI constants
@@ -78,7 +78,6 @@ extern "C" {
     fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
     fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_fraction(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_scr(wp: WinHandle) -> i64;
     fn nvim_win_get_config_external_int(wp: WinHandle) -> c_int;
 
@@ -269,7 +268,7 @@ unsafe fn win_split_ins_impl(
     if !did_set_fraction {
         rs_set_fraction(oldwin);
     }
-    let old_fraction = nvim_win_get_fraction(oldwin);
+    let old_fraction = win_ref(oldwin).w_fraction;
     nvim_win_set_fraction(wp, old_fraction);
 
     // --- Assign dimensions ---
