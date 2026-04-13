@@ -38,7 +38,6 @@ extern "C" {
     // Window display properties
     #[link_name = "rs_win_fdccol_count"]
     fn nvim_win_fdccol_count(wp: WinHandle) -> c_int;
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
 
     // Window options
     fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
@@ -195,7 +194,7 @@ fn compute_foldcolumn_impl(wp: WinHandle, col: c_int) -> c_int {
 
     unsafe {
         let fdc = nvim_win_fdccol_count(wp);
-        let is_curwin = nvim_win_is_curwin(wp) != 0;
+        let is_curwin = nvim_get_curwin() == wp;
         let p_wmw = nvim_get_p_wmw() as c_int;
 
         let wmw = if is_curwin && p_wmw == 0 { 1 } else { p_wmw };
@@ -560,7 +559,7 @@ fn win_cursorline_standout_impl(wp: WinHandle) -> bool {
 
     unsafe {
         let cul = win_ref(wp).w_p_cul() != 0;
-        let is_curwin = nvim_win_is_curwin(wp) != 0;
+        let is_curwin = nvim_get_curwin() == wp;
         let cole = win_ref(wp).w_p_cole();
         let conceal_cursor = rs_conceal_cursor_line(wp);
 

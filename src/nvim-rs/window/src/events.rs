@@ -543,7 +543,7 @@ struct WinViewportSnapshot {
 }
 
 extern "C" {
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_topline(wp: WinHandle) -> i32;
     fn nvim_win_get_botline(wp: WinHandle) -> i32;
     fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
@@ -591,7 +591,7 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
     // NOTE: The win_viewport command is delayed until the next flush when there
     // are pending updates. This ensures that the updates and the viewport are
     // sent together.
-    if nvim_win_is_curwin(wp) == 0 && nvim_get_ui_ext(K_UI_MULTIGRID) == 0 {
+    if nvim_get_curwin() != wp && nvim_get_ui_ext(K_UI_MULTIGRID) == 0 {
         return;
     }
     if !win_ref(wp).w_viewport_invalid {

@@ -22,7 +22,6 @@ const VALID_TOPLINE: c_int = 0x80;
 extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     fn nvim_get_first_tabpage() -> TabpageHandle;
     fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
     fn nvim_get_curtab() -> TabpageHandle;
@@ -79,7 +78,7 @@ fn check_lnums_both_impl(do_curwin: bool, nested: bool) {
         while !tp.is_null() {
             let mut wp = tabpage_first_win(tp);
             while !wp.is_null() {
-                if (do_curwin || nvim_win_is_curwin(wp) == 0) && nvim_win_buf_is_curbuf(wp) != 0 {
+                if (do_curwin || nvim_get_curwin() != wp) && nvim_win_buf_is_curbuf(wp) != 0 {
                     if !nested {
                         // Save the original cursor position and topline.
                         nvim_win_save_cursor_to_save(wp);

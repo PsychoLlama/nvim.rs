@@ -103,9 +103,6 @@ extern "C" {
     /// Set w_prev_winrow.
     fn nvim_win_set_prev_winrow(wp: WinHandle, val: c_int);
 
-    /// Get w_changelistidx.
-    fn nvim_win_get_changelistidx(wp: WinHandle) -> c_int;
-
     /// Set w_changelistidx.
     fn nvim_win_set_changelistidx(wp: WinHandle, val: c_int);
 
@@ -170,7 +167,7 @@ fn win_init_impl(newp: WinHandle, oldp: WinHandle, flags: c_int) {
         }
 
         // Copy changelist position
-        nvim_win_set_changelistidx(newp, nvim_win_get_changelistidx(oldp));
+        nvim_win_set_changelistidx(newp, win_ref(oldp).w_changelistidx);
 
         // Copy winbar height
         nvim_win_set_winbar_height(newp, nvim_win_get_winbar_height(oldp));

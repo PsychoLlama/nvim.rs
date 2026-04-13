@@ -14,7 +14,7 @@ use crate::ruler::{render_ruler, RulerContext, RulerOptions};
 // C accessor functions for draw operations
 extern "C" {
     // Window accessors
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
@@ -156,7 +156,7 @@ pub fn is_global_statusline() -> bool {
 /// `wp` must be a valid window handle.
 #[no_mangle]
 pub extern "C" fn rs_draw_statusline_hl(wp: WinHandle) -> c_int {
-    let is_curwin = unsafe { nvim_win_is_curwin(wp) != 0 };
+    let is_curwin = unsafe { nvim_get_curwin() == wp };
     get_statusline_hl(is_curwin)
 }
 
@@ -169,7 +169,7 @@ pub extern "C" fn rs_draw_statusline_hl(wp: WinHandle) -> c_int {
 /// `wp` must be a valid window handle.
 #[no_mangle]
 pub extern "C" fn rs_draw_winbar_hl(wp: WinHandle) -> c_int {
-    let is_curwin = unsafe { nvim_win_is_curwin(wp) != 0 };
+    let is_curwin = unsafe { nvim_get_curwin() == wp };
     get_winbar_hl(is_curwin)
 }
 

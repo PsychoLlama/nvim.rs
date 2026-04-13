@@ -73,7 +73,6 @@ char nvim_win_get_fdm_char(win_T *wp, int idx) { return wp->w_p_fdm[idx]; }
 int nvim_win_buf_has_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL; }
 int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
 const char *nvim_win_get_w_p_fdc(win_T *wp) { return wp->w_p_fdc; }
-int nvim_win_is_curwin(win_T *wp) { return wp == curwin; }
 char *nvim_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 char *nvim_win_get_p_cocu(win_T *wp) { return wp->w_p_cocu; }
 linenr_T nvim_win_buf_line_count(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
@@ -88,7 +87,6 @@ int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_ta
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
 ScreenGrid *nvim_win_get_w_grid_alloc(win_T *wp) { return wp ? &wp->w_grid_alloc : NULL; }
-bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }
 int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 void nvim_win_set_p_wfb(win_T *wp, int val) { wp->w_p_wfb = val != 0; }
@@ -327,7 +325,6 @@ int nvim_get_starting(void) { return starting; }
 void nvim_set_lastused_tabpage_from_rust(tabpage_T *tp) { lastused_tabpage = tp; }
 void nvim_set_skip_win_fix_scroll(int val) { skip_win_fix_scroll = (val != 0); }
 void nvim_set_cmdheight_for_tabpage(int64_t new_ch) { command_frame_height = false; set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0); command_frame_height = true; }
-int nvim_win_get_changelistidx(win_T *wp) { return wp ? wp->w_changelistidx : 0; }
 void nvim_win_init_copy_compound(win_T *dst, win_T *src, int flags)
 {
   if (!dst || !src) { return; }

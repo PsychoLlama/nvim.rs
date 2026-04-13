@@ -9,7 +9,7 @@ use nvim_window::WinHandle;
 
 // C grid functions
 extern "C" {
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_get_curwin() -> WinHandle;
 }
 
 /// Grid cell representation for statusline drawing.
@@ -228,7 +228,7 @@ pub fn is_current_window(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    unsafe { nvim_win_is_curwin(wp) != 0 }
+    unsafe { nvim_get_curwin() == wp }
 }
 
 /// Calculate display row for a window's statusline.

@@ -421,7 +421,6 @@ extern "C" {
     fn nvim_ui_has_multigrid() -> c_int;
     fn nvim_ui_call_win_viewport_margins_wrapper(wp: WinHandle);
     fn nvim_redraw_later_wrapper(wp: WinHandle, update_type: c_int);
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -476,7 +475,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
         if height != prev_height {
             if height > 0 && valid_cursor {
                 let spk_char = nvim_win_get_p_spk_char();
-                let is_curwin = nvim_win_is_curwin(wp) != 0;
+                let is_curwin = nvim_get_curwin() == wp;
                 let is_floating = nvim_win_get_floating(wp) != 0;
                 if is_curwin && (spk_char == CH_C || is_floating) {
                     nvim_validate_cursor_win(wp);
@@ -510,7 +509,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
                 nvim_changed_line_abv_curs_win(wp);
                 nvim_invalidate_botline(wp);
                 let spk_char = nvim_win_get_p_spk_char();
-                let is_curwin = nvim_win_is_curwin(wp) != 0;
+                let is_curwin = nvim_get_curwin() == wp;
                 let is_floating = nvim_win_get_floating(wp) != 0;
                 if is_curwin && (spk_char == CH_C || is_floating) {
                     nvim_curs_columns_win(wp);

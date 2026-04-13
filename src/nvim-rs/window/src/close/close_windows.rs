@@ -37,9 +37,6 @@ extern "C" {
     /// Check if wp->w_buffer == buf.
     fn nvim_win_buffer_eq(wp: WinHandle, buf: BufHandle) -> c_int;
 
-    /// Check if window is current window.
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
-
     /// Check if window is locked (rs_win_locked).
     fn rs_win_locked(wp: WinHandle) -> c_int;
 
@@ -98,7 +95,7 @@ unsafe fn close_windows_impl(buf: BufHandle, keep_curwin: c_int) {
         }
 
         if nvim_win_buffer_eq(wp, buf) != 0
-            && (keep_curwin == 0 || nvim_win_is_curwin(wp) == 0)
+            && (keep_curwin == 0 || nvim_get_curwin() != wp)
             && rs_win_locked(wp) == 0
             && nvim_win_buf_b_locked(wp) == 0
         {

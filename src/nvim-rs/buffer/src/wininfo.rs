@@ -11,7 +11,7 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::{BufHandle, WinHandle};
+use crate::{win_ref, BufHandle, WinHandle};
 
 // =============================================================================
 // Opaque handle for WinInfo
@@ -67,7 +67,6 @@ extern "C" {
     fn didset_window_options(wp: WinHandle, valid_cursor: bool);
     fn win_set_minimal_style(wp: WinHandle);
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_get_changelistidx(wp: WinHandle) -> c_int;
     fn nvim_wininfo_set_changelistidx(wip: WinInfoHandle, val: c_int);
     fn nvim_wininfo_set_optset(wip: WinInfoHandle, val: bool);
     fn nvim_wininfo_set_fold_manual(wip: WinInfoHandle, val: bool);
@@ -175,8 +174,7 @@ pub unsafe extern "C" fn rs_buflist_setfpos(
         nvim_wininfo_set_mark(wip, lnum_mut, col, win);
     }
     if !win.0.is_null() {
-        let changelistidx = nvim_win_get_changelistidx(win);
-        nvim_wininfo_set_changelistidx(wip, changelistidx);
+        nvim_wininfo_set_changelistidx(wip, win_ref(win).w_changelistidx);
     }
     if copy_options && !win.0.is_null() {
         nvim_wininfo_copy_from_win(wip, win);

@@ -2,10 +2,9 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::{rs_indent_size_no_ts, rs_indent_size_ts, WinHandle};
 use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 use nvim_memory::xfree;
-
-use crate::{rs_indent_size_no_ts, rs_indent_size_ts, WinHandle};
 
 #[inline]
 unsafe fn nvim_strcmp(s1: *const c_char, s2: *const c_char) -> c_int {
@@ -23,7 +22,6 @@ extern "C" {
     fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_tab1(wp: WinHandle) -> u32;
-    fn nvim_win_get_briopt_sbr(wp: WinHandle) -> bool;
     fn nvim_win_get_briopt_list(wp: WinHandle) -> c_int;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     #[link_name = "win_col_off"]
@@ -187,7 +185,7 @@ pub unsafe extern "C" fn rs_get_breakindent_win(wp: WinHandle, line: *const c_ch
     }
 
     // Indent minus the length of the showbreak string
-    if nvim_win_get_briopt_sbr(wp) {
+    if nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp)).w_briopt_sbr {
         bri -= vim_strsize(nvim_indent_get_showbreak_value(wp));
     }
 

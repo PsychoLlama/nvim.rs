@@ -37,7 +37,6 @@ extern "C" {
     fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
     fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
     fn nvim_win_set_locked(wp: WinHandle, val: c_int);
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
     fn nvim_redraw_all_later(type_: c_int);
 
@@ -230,7 +229,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
 
     let mut other_buffer = false;
 
-    if nvim_win_is_curwin(win) != 0 {
+    if nvim_get_curwin() == win {
         crate::focus::rs_leaving_window(win);
 
         // Find the alternate window.

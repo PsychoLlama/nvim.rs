@@ -15,3 +15,4 @@ nvim-buffer = { path = "../buffer" }
 nvim-normal = { path = "../normal" }
 nvim-charset = { path = "../charset" }
 nvim-memory = { path = "../memory" }
+nvim-window = { path = "../window" }

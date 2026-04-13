@@ -469,7 +469,6 @@ extern "C" {
     fn ml_get_buf(buf: *mut c_void, lnum: LinenrT) -> *const c_char;
 
     fn nvim_get_state() -> c_int;
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -3276,7 +3275,7 @@ pub unsafe extern "C" fn rs_should_apply_visual(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    nvim_win_is_curwin(wp)
+    c_int::from(nvim_get_curwin() == wp)
 }
 
 /// Check if a line is the last line in the buffer.
@@ -3960,7 +3959,7 @@ pub unsafe extern "C" fn rs_win_line_init(
     state.view_height = view_height;
 
     // in_curline: wp == curwin && lnum == curwin->w_cursor.lnum
-    let is_curwin = nvim_win_is_curwin(wp) != 0;
+    let is_curwin = nvim_get_curwin() == wp;
     let cursor_lnum = win_ref(wp).w_cursor.lnum;
     state.in_curline = is_curwin && lnum == cursor_lnum;
 

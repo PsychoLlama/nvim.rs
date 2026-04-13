@@ -42,7 +42,7 @@ extern "C" {
 
     // Accessors used by scroll_to_fraction
     fn nvim_win_get_p_scb(wp: WinHandle) -> c_int;
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
     fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
@@ -136,7 +136,7 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
     unsafe {
         let height = nvim_win_get_view_height(wp);
         let p_scb = nvim_win_get_p_scb(wp) != 0;
-        let is_curwin = nvim_win_is_curwin(wp) != 0;
+        let is_curwin = nvim_get_curwin() == wp;
         let line_count = nvim_win_buf_line_count(wp);
         let topline = nvim_win_get_topline(wp);
 

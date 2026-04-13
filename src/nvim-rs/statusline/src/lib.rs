@@ -213,7 +213,7 @@ type LinenrT = i32;
 
 // C accessor functions
 extern "C" {
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
     fn nvim_win_get_fcs_stl(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_stlnc(wp: WinHandle) -> ScharT;
@@ -346,7 +346,7 @@ fn stl_connected_impl(wp: WinHandle) -> bool {
 /// This is the Rust equivalent of `fillchar_status()` in statusline.c.
 fn fillchar_status_impl(wp: WinHandle) -> (ScharT, c_int) {
     unsafe {
-        if nvim_win_is_curwin(wp) != 0 {
+        if nvim_get_curwin() == wp {
             (nvim_win_get_fcs_stl(wp), HLF_S)
         } else {
             (nvim_win_get_fcs_stlnc(wp), HLF_SNC)
@@ -2390,7 +2390,7 @@ pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
     BUSY.with(|b| b.set(true));
     win_mut(wp).w_redr_status = false;
 
-    if win_ref(wp).w_status_height == 0 && !(is_stl_global && nvim_win_is_curwin(wp) != 0) {
+    if win_ref(wp).w_status_height == 0 && !(is_stl_global && nvim_get_curwin() == wp) {
         // no status line, either global statusline is enabled or the window is a last window
         nvim_set_redraw_cmdline(true);
     } else if nvim_redrawing() == 0 {
@@ -2402,7 +2402,7 @@ pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
         let has_custom_stl = !w_p_stl.is_null() && *w_p_stl != 0;
         let has_global_stl = !p_stl.is_null() && *p_stl != 0;
         let is_floating = c_int::from(win_ref(wp).w_floating) != 0;
-        let is_curwin = nvim_win_is_curwin(wp) != 0;
+        let is_curwin = nvim_get_curwin() == wp;
 
         if has_custom_stl || (has_global_stl && (!is_floating || (is_stl_global && is_curwin))) {
             // redraw custom status line

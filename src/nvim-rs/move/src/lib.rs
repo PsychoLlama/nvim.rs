@@ -70,7 +70,6 @@ extern "C" {
     // Viewport state
 
     // Concealment checking
-    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     #[link_name = "conceal_cursor_line"]
     fn rs_conceal_cursor_line(wp: WinHandle) -> bool;
     fn nvim_decor_conceal_line(wp: WinHandle, lnum: LinenrT, check_toggle: c_int) -> c_int;
@@ -134,7 +133,7 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
         nvim_win_clear_valid_bits(wp, VALID_LINE_CHANGE);
 
         // Check for concealed line visibility toggle
-        let is_curwin = nvim_win_is_curwin(wp) != 0;
+        let is_curwin = nvim_get_curwin() == wp;
         let p_cole = win_ref(wp).w_p_cole();
         let conceal_cursor = rs_conceal_cursor_line(wp);
 
@@ -912,7 +911,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
 
     // If the cursor moves horizontally when 'concealcursor' is active, then the
     // current line needs to be redrawn to calculate the correct cursor position.
-    let is_curwin = nvim_win_is_curwin(wp) != 0;
+    let is_curwin = nvim_get_curwin() == wp;
     let p_cole = win_ref(wp).w_p_cole();
     if is_curwin && p_cole > 0 && rs_conceal_cursor_line(wp) {
         let cursor_lnum = win_ref(wp).w_cursor.lnum;
