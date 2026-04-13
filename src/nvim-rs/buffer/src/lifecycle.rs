@@ -2238,7 +2238,6 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_open_buffer_ml_init(old_tw: i64) -> c_int;
     fn nvim_curbuf_mf_set_nosync();
     fn nvim_curbuf_mf_unset_nosync();
     fn nvim_open_buffer_setup_bufref(old_curbuf: *mut crate::misc::BufRef);
@@ -2261,10 +2260,82 @@ extern "C" {
     fn rs_bt_nofileread(buf: BufHandle) -> bool;
     fn rs_foldUpdateAll_curwin();
     fn nvim_curbuf_has_ffname() -> c_int;
+    /// Open memfile for buffer. Returns FAIL (0) on failure, OK (1) on success.
+    fn ml_open(buf: BufHandle) -> c_int;
+    /// Exit with the given exit value.
+    fn getout(exitval: c_int) -> !;
+}
+
+extern "C" {
+    /// readonlymode: open file as read-only.
+    static mut readonlymode: bool;
+    /// `v_dying`: non-zero while exiting.
+    static mut v_dying: c_int;
 }
 
 // READ_NOFILE flag: do not read a file, do trigger BufReadCmd
 const READ_NOFILE: c_int = 0x100;
+
+/// `BF_NEVERLOADED` constant for the `ml_open` init path (mirrors `buf_flags::BF_NEVERLOADED`).
+const BF_NEVERLOADED_ML: c_int = 0x04;
+
+/// Open memfile for the current buffer, handling the fallback path on failure.
+///
+/// Rust equivalent of `nvim_open_buffer_ml_init()` in `buffer_shim.c`.
+///
+/// Returns 1 if `ml_open` succeeded (proceed normally), 0 if it failed
+/// (FAIL should be returned by `open_buffer`).
+///
+/// # Safety
+/// Must be called from `open_buffer` with valid global state.
+unsafe fn open_buffer_ml_init_impl(old_tw: i64) -> c_int {
+    let curbuf = nvim_get_curbuf();
+
+    // Set readonly flag when BF_NEVERLOADED is being reset.
+    if readonlymode
+        && !buf_ref(curbuf).b_ffname.is_null()
+        && (buf_ref(curbuf).b_flags & BF_NEVERLOADED_ML) != 0
+    {
+        buf_mut(curbuf).b_p_ro = 1;
+    }
+
+    // ml_open returns FAIL (0) on failure, OK (1) on success.
+    if ml_open(curbuf) != 0 {
+        return 1; // success
+    }
+
+    // There MUST be a memfile, otherwise we can't do anything.
+    // If we can't create one for the current buffer, take another buffer.
+    close_buffer(std::ptr::null_mut(), curbuf, 0, false, false);
+
+    // Set curbuf to NULL and search for a buffer that has a memfile.
+    nvim_set_curbuf_ptr(BufHandle::from_ptr(std::ptr::null_mut()));
+
+    let mut found = BufHandle::from_ptr(std::ptr::null_mut());
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        if !buf_ref(buf).ml_mfp_is_null() {
+            found = buf;
+            break;
+        }
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
+    }
+
+    if found.is_null() {
+        errors::emsg_e82_no_buffer_exiting();
+        v_dying = 2;
+        getout(2);
+    }
+
+    nvim_set_curbuf_ptr(found);
+    let curbuf = found;
+    errors::emsg_e83_using_other_buffer();
+    enter_buffer(curbuf);
+    if old_tw != buf_ref(curbuf).b_p_tw {
+        check_colorcolumn(std::ptr::null(), nvim_get_curwin());
+    }
+    0 // failure: caller should return FAIL
+}
 
 /// Open current buffer: open the memfile and read the file into memory.
 ///
@@ -2296,7 +2367,7 @@ pub unsafe extern "C" fn rs_open_buffer(
     let old_tw = nvim_curbuf_get_p_tw();
 
     // Handle readonlymode + try ml_open. Returns 0 (FAIL) if we should bail.
-    if nvim_open_buffer_ml_init(old_tw) == 0 {
+    if open_buffer_ml_init_impl(old_tw) == 0 {
         return FAIL;
     }
 

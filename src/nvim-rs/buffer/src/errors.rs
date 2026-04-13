@@ -27,6 +27,12 @@ extern "C" {
 // Error string constants (copied exactly from buffer_shim.c / errors.h).
 // ---------------------------------------------------------------------------
 
+/// "E82: Cannot allocate any buffer, exiting..."
+const E82: &std::ffi::CStr = c"E82: Cannot allocate any buffer, exiting...";
+
+/// "E83: Cannot allocate buffer, using other one..."
+const E83: &std::ffi::CStr = c"E83: Cannot allocate buffer, using other one...";
+
 /// "E84: No modified buffer found"
 const E84: &std::ffi::CStr = c"E84: No modified buffer found";
 
@@ -100,6 +106,16 @@ pub unsafe fn blfp_errmsg_e93(pattern: *const c_char) {
 /// Emit E94 "No matching buffer for %s" with pattern.
 pub unsafe fn blfp_errmsg_e94(pattern: *const c_char) {
     semsg(gt(E94.as_ptr()), pattern);
+}
+
+/// Emit E82 "Cannot allocate any buffer, exiting...".
+pub unsafe fn emsg_e82_no_buffer_exiting() {
+    emsg(gt(E82.as_ptr()));
+}
+
+/// Emit E83 "Cannot allocate buffer, using other one...".
+pub unsafe fn emsg_e83_using_other_buffer() {
+    emsg(gt(E83.as_ptr()));
 }
 
 /// Emit E95 "Buffer with this name already exists".

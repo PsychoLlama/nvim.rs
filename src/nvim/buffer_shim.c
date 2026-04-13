@@ -691,50 +691,6 @@ int nvim_BF_CHECK_RO(void) { return BF_CHECK_RO; }
 // open_buffer compound accessors (Phase N: migrate open_buffer to Rust)
 // =============================================================================
 
-/// Check readonlymode and set b_p_ro if needed. Returns 1 if ml_open succeeds,
-/// 0 if it fails. On failure, sets curbuf to the first buffer with a memfile,
-/// or exits if none found. Also calls enter_buffer and check_colorcolumn on
-/// failure path if needed.
-/// Returns:
-///   1  = ml_open succeeded, proceed normally
-///   0  = ml_open failed, FAIL should be returned by open_buffer
-int nvim_open_buffer_ml_init(OptInt old_tw)
-{
-  // The 'readonly' flag is only set when BF_NEVERLOADED is being reset.
-  if (readonlymode && curbuf->b_ffname != NULL
-      && (curbuf->b_flags & BF_NEVERLOADED)) {
-    curbuf->b_p_ro = true;
-  }
-
-  if (ml_open(curbuf) != FAIL) {
-    return 1;
-  }
-
-  // There MUST be a memfile, otherwise we can't do anything.
-  // If we can't create one for the current buffer, take another buffer.
-  close_buffer(NULL, curbuf, 0, false, false);
-
-  curbuf = NULL;
-  FOR_ALL_BUFFERS(buf) {
-    if (buf->b_ml.ml_mfp != NULL) {
-      curbuf = buf;
-      break;
-    }
-  }
-
-  if (curbuf == NULL) {
-    emsg(_("E82: Cannot allocate any buffer, exiting..."));
-    v_dying = 2;
-    getout(2);
-  }
-
-  emsg(_("E83: Cannot allocate buffer, using other one..."));
-  enter_buffer(curbuf);
-  if (old_tw != curbuf->b_p_tw) {
-    check_colorcolumn(NULL, curwin);
-  }
-  return 0;
-}
 
 /// Set mf_dirty to MF_DIRTY_YES_NOSYNC if memfile exists.
 void nvim_curbuf_mf_set_nosync(void)
