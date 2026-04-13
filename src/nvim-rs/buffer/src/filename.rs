@@ -10,7 +10,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{errors, BufHandle};
+use crate::{buf_struct::buf_mut, errors, BufHandle};
 
 // FileID size: sizeof(FileID) <= 16, asserted in buffer_shim.c
 const FILE_ID_SIZE: usize = 16;
@@ -32,7 +32,6 @@ extern "C" {
     fn nvim_buf_set_name_body(buf: BufHandle, name: *mut c_char);
 
     // buf_name_changed helpers
-    fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
     fn nvim_ml_setname(buf: BufHandle);
     fn nvim_check_arg_idx_if_curbuf(buf: BufHandle);
     fn nvim_maketitle();
@@ -45,8 +44,6 @@ extern "C" {
     fn rs_fname_expand(buf: BufHandle, ffname_ptr: *mut *mut c_char, sfname_ptr: *mut *mut c_char);
     #[link_name = "os_fileid"]
     fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
-    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut std::ffi::c_void;
     fn buflist_findname_file_id(
         ffname: *const c_char,
         file_id: *const u8,
@@ -58,7 +55,6 @@ extern "C" {
     fn nvim_close_buffer_wipe(obuf: *mut std::ffi::c_void);
     fn nvim_buf_remove_fnames(buf: BufHandle);
     fn nvim_buf_set_fnames(buf: BufHandle, ffname: *mut c_char, sfname: *mut c_char);
-    fn nvim_buf_set_file_id_data(buf: BufHandle, file_id: *const u8, valid: bool);
     fn buf_name_changed(buf: BufHandle);
 }
 
@@ -88,7 +84,7 @@ pub unsafe extern "C" fn rs_setfname(
     if ffname_arg.is_null() || *ffname_arg == 0 {
         // Removing the name.
         nvim_buf_remove_fnames(buf);
-        nvim_buf_set_file_id_data(buf, std::ptr::null(), false);
+        buf_mut(buf).set_file_id_data(std::ptr::null(), false);
         buf_name_changed(buf);
         return OK;
     }
@@ -106,7 +102,7 @@ pub unsafe extern "C" fn rs_setfname(
     let mut file_id = [0u8; FILE_ID_SIZE];
     let file_id_valid = nvim_os_fileid(ffname, file_id.as_mut_ptr());
 
-    let obuf = if (nvim_buf_get_flags(buf) & BF_DUMMY) == 0 {
+    let obuf = if (crate::buf_struct::buf_ref(buf).b_flags & BF_DUMMY) == 0 {
         buflist_findname_file_id(ffname, file_id.as_ptr(), file_id_valid)
     } else {
         BufHandle(std::ptr::null_mut())
@@ -114,7 +110,8 @@ pub unsafe extern "C" fn rs_setfname(
 
     if !obuf.is_null() && obuf != buf {
         // Is obuf loaded or used in a window?
-        let in_use = !nvim_buf_get_ml_mfp(obuf).is_null() || nvim_buf_is_in_any_window(obuf);
+        let in_use =
+            !crate::buf_struct::buf_ref(obuf).ml_mfp_is_null() || nvim_buf_is_in_any_window(obuf);
         if in_use {
             if message {
                 errors::emsg_e95_buffer_exists();
@@ -128,7 +125,7 @@ pub unsafe extern "C" fn rs_setfname(
 
     // Set the new names (frees old names, dups sfname, applies path_fix_case).
     nvim_buf_set_fnames(buf, ffname, sfname);
-    nvim_buf_set_file_id_data(buf, file_id.as_ptr(), file_id_valid);
+    buf_mut(buf).set_file_id_data(file_id.as_ptr(), file_id_valid);
 
     buf_name_changed(buf);
     OK
@@ -169,7 +166,7 @@ pub unsafe extern "C" fn rs_buf_set_name(fnum: c_int, name: *mut c_char) {
 #[unsafe(export_name = "buf_name_changed")]
 pub unsafe extern "C" fn rs_buf_name_changed(buf: BufHandle) {
     // If the file name changed, also change the name of the swapfile
-    if nvim_buf_get_ml_mfp_null(buf) == 0 {
+    if !crate::buf_struct::buf_ref(buf).ml_mfp_is_null() {
         nvim_ml_setname(buf);
     }
 

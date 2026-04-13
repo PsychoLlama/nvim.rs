@@ -11,7 +11,7 @@
 use std::ffi::{c_char, c_int, c_ulong, c_void};
 use std::ptr::addr_of_mut;
 
-use crate::BufHandle;
+use crate::{buf_struct::buf_ref, BufHandle};
 
 // =============================================================================
 // External C Functions
@@ -26,7 +26,6 @@ extern "C" {
 
     // Buffer accessors
     fn nvim_buf_channel_job_running(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
 
     // Option accessors
     fn nvim_get_p_acd() -> c_int;
@@ -278,7 +277,7 @@ pub unsafe extern "C" fn set_bufref(bufref: *mut BufRef, buf: BufHandle) {
     br.br_fnum = if buf.is_null() {
         0
     } else {
-        nvim_buf_get_fnum(buf)
+        buf_ref(buf).handle
     };
     br.br_buf_free_count = crate::state::get_buf_free_count();
 }
@@ -328,7 +327,7 @@ pub unsafe extern "C" fn do_bufdel(
             os_breakcheck();
 
             let curbuf = nvim_get_curbuf();
-            if bnr == nvim_buf_get_fnum(curbuf) {
+            if bnr == buf_ref(curbuf).handle {
                 do_current = bnr;
             } else if do_buffer_ext(command, DOBUF_FIRST, FORWARD, bnr, forceit_flag) == OK {
                 deleted += 1;
@@ -421,8 +420,6 @@ extern "C" {
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
     fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
     fn nvim_buf_get_no_eol_lnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_bin(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_p_fixeol(buf: BufHandle) -> bool;
     fn nvim_buf_get_b_p_eol(buf: BufHandle) -> bool;
     fn nvim_sb_push_byte(sb: *mut c_void, byte: c_char);
@@ -453,9 +450,9 @@ pub unsafe extern "C" fn rs_read_buffer_into(
         return;
     }
 
-    let ml_line_count = nvim_buf_get_ml_line_count(buf);
+    let ml_line_count = buf_ref(buf).ml_line_count;
     let no_eol_lnum = nvim_buf_get_no_eol_lnum(buf);
-    let bin = nvim_buf_get_bin(buf) != 0;
+    let bin = buf_ref(buf).b_p_bin != 0;
     let fixeol = nvim_buf_get_b_p_fixeol(buf);
     let eol = nvim_buf_get_b_p_eol(buf);
 
@@ -564,7 +561,7 @@ pub unsafe extern "C" fn rs_buf_contents_changed(buf: BufHandle) -> bool {
 
     if nvim_ml_open_curbuf() == OK && nvim_readfile_for_buf(buf, ea) == OK {
         // Compare the two files line by line.
-        let buf_lines = nvim_buf_get_ml_line_count(buf);
+        let buf_lines = buf_ref(buf).ml_line_count;
         let curbuf_lines = nvim_curbuf_ml_line_count();
         if buf_lines == curbuf_lines {
             differ = false;

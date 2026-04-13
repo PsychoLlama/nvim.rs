@@ -13,7 +13,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{messages, win_ref, BufHandle, WinHandle};
+use crate::{buf_struct::buf_ref, messages, win_ref, BufHandle, WinHandle};
 
 extern "C" {
     static p_icon: c_int;
@@ -50,12 +50,6 @@ const SHM_RO: c_int = b'r' as c_int; // 'readonly' flag
 extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> WinHandle;
-
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_flags(buf: BufHandle) -> c_int;
 
     fn nvim_curbuf_get_ffname() -> *const c_char;
     fn nvim_curbuf_get_fname() -> *const c_char;
@@ -109,7 +103,6 @@ extern "C" {
         tabtab: *mut c_void,
         stcp: *mut c_void,
     ) -> c_int;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
     fn nvim_trans_characters(buf: *mut c_char, bufsize: usize);
     fn nvim_ui_call_set_title(s: *const c_char);
     fn nvim_ui_call_set_icon(s: *const c_char);
@@ -367,7 +360,7 @@ pub unsafe fn maketitle_impl() {
             let curbuf = nvim_get_curbuf();
             let mut name = rs_buf_spname(curbuf).cast_const();
             if name.is_null() {
-                name = path_tail(nvim_buf_get_b_ffname(curbuf));
+                name = path_tail(buf_ref(curbuf).b_ffname);
             }
             // Truncate to last 100 bytes (with UTF-8 boundary adjustment)
             let namelen = cstr_len(name) as isize;
@@ -448,7 +441,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
 
     // If fullname > 1: prepend "buf N: "
     if fullname > 1 {
-        let fnum = nvim_buf_get_fnum(curbuf);
+        let fnum = buf_ref(curbuf).handle;
         pos = append_str(&mut buffer, pos, &format!("buf {fnum}: "));
     }
 
@@ -487,10 +480,11 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
     }
 
     // Status flags: closing quote, modified, not-edited, new, read-errors, readonly, trailing space
-    let flags = nvim_buf_get_flags(curbuf);
+    let curbuf_b = buf_ref(curbuf);
+    let flags = curbuf_b.b_flags;
     let dontwrite = rs_bt_dontwrite(curbuf);
     let is_changed = nvim_curbufIsChanged() != 0;
-    let is_ro = nvim_buf_get_b_p_ro(curbuf) != 0;
+    let is_ro = curbuf_b.b_p_ro != 0;
 
     // Closing quote
     if pos < IOSIZE - 1 {
@@ -542,8 +536,8 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
     }
 
     // Line count section
-    let ml_line_count = nvim_buf_get_ml_line_count(curbuf);
-    let ml_flags = nvim_buf_get_ml_flags(curbuf);
+    let ml_line_count = buf_ref(curbuf).ml_line_count;
+    let ml_flags = buf_ref(curbuf).ml_flags;
 
     if (ml_flags & ML_EMPTY) != 0 {
         // "--No lines in buffer--"

@@ -10,7 +10,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::BufHandle;
+use crate::{buf_struct::buf_ref, BufHandle};
 
 // =============================================================================
 // Constants (from buffer.h / buffer_defs.h)
@@ -82,19 +82,14 @@ extern "C" {
     fn nvim_buf_lock(buf: BufHandle);
     fn nvim_buf_unlock(buf: BufHandle);
     fn nvim_buf_set_nwindows(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
     fn nvim_buf_flags_and(buf: BufHandle, mask: c_int);
     fn nvim_buf_set_ml_line_count(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut c_void;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
 
     fn set_bufref(bufref: *mut BufRef, buf: BufHandle);
     #[link_name = "rs_bufref_valid"]
     fn nvim_bufref_valid(bufref: *const BufRef) -> c_int;
 
     fn buf_updates_unload(buf: BufHandle, can_reload: bool);
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     fn apply_autocmds(
         event: c_int,
         fname: *const c_char,
@@ -141,8 +136,6 @@ extern "C" {
     fn nvim_buf_free_stuff_del(buf: BufHandle);
     fn set_last_cursor(win: *mut c_void);
     fn nvim_buf_b_ffname_is_null(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_p_bl(buf: BufHandle, val: c_int);
     fn nvim_buf_set_b_p_initialized(buf: BufHandle, val: c_int);
     fn can_unload_buffer(buf: BufHandle) -> bool;
 
@@ -188,11 +181,11 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
         return;
     }
 
-    if !nvim_buf_get_ml_mfp(buf).is_null()
+    if !buf_ref(buf).ml_mfp_is_null()
         && apply_autocmds(
             EVENT_BUFUNLOAD,
-            nvim_buf_get_b_fname(buf),
-            nvim_buf_get_b_fname(buf),
+            buf_ref(buf).b_fname,
+            buf_ref(buf).b_fname,
             false,
             buf,
         )
@@ -203,11 +196,11 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     }
 
     if (flags & BFA_DEL) != 0
-        && nvim_buf_get_b_p_bl(buf) != 0
+        && buf_ref(buf).b_p_bl != 0
         && apply_autocmds(
             EVENT_BUFDELETE,
-            nvim_buf_get_b_fname(buf),
-            nvim_buf_get_b_fname(buf),
+            buf_ref(buf).b_fname,
+            buf_ref(buf).b_fname,
             false,
             buf,
         )
@@ -220,8 +213,8 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     if (flags & BFA_WIPE) != 0
         && apply_autocmds(
             EVENT_BUFWIPEOUT,
-            nvim_buf_get_b_fname(buf),
-            nvim_buf_get_b_fname(buf),
+            buf_ref(buf).b_fname,
+            buf_ref(buf).b_fname,
             false,
             buf,
         )
@@ -322,7 +315,7 @@ pub unsafe extern "C" fn rs_close_buffer(
     // Check no autocommands closed the window
     if !win.is_null() && rs_win_valid_any_tab(win) != 0 {
         // Set b_last_cursor when closing the last window for the buffer.
-        if nvim_buf_get_nwindows(buf) == 1 {
+        if buf_ref(buf).b_nwindows == 1 {
             set_last_cursor(win);
         }
         nvim_buflist_setfpos_win(buf, win);
@@ -332,13 +325,13 @@ pub unsafe extern "C" fn rs_close_buffer(
     set_bufref(&raw mut bufref, buf);
 
     // When the buffer is no longer in a window, trigger BufWinLeave
-    if nvim_buf_get_nwindows(buf) == 1 {
+    if buf_ref(buf).b_nwindows == 1 {
         nvim_buf_b_locked_inc(buf);
         nvim_buf_b_locked_split_inc(buf);
         if apply_autocmds(
             EVENT_BUFWINLEAVE,
-            nvim_buf_get_b_fname(buf),
-            nvim_buf_get_b_fname(buf),
+            buf_ref(buf).b_fname,
+            buf_ref(buf).b_fname,
             false,
             buf,
         ) && nvim_bufref_valid(&raw const bufref) == 0
@@ -361,8 +354,8 @@ pub unsafe extern "C" fn rs_close_buffer(
             nvim_buf_b_locked_split_inc(buf);
             if apply_autocmds(
                 EVENT_BUFHIDDEN,
-                nvim_buf_get_b_fname(buf),
-                nvim_buf_get_b_fname(buf),
+                buf_ref(buf).b_fname,
+                buf_ref(buf).b_fname,
                 false,
                 buf,
             ) && nvim_bufref_valid(&raw const bufref) == 0
@@ -396,17 +389,17 @@ pub unsafe extern "C" fn rs_close_buffer(
         nvim_unblock_autocmds();
     }
 
-    let nwindows = nvim_buf_get_nwindows(buf);
+    let nwindows = buf_ref(buf).b_nwindows;
 
     // Decrease the link count from windows (unless not in any window)
     nvim_buf_b_nwindows_dec_safe(buf);
 
-    if rs_diffopt_hiddenoff() != 0 && !unload_buf && nvim_buf_get_nwindows(buf) == 0 {
+    if rs_diffopt_hiddenoff() != 0 && !unload_buf && buf_ref(buf).b_nwindows == 0 {
         rs_diff_buf_delete(buf); // Clear 'diff' for hidden buffer.
     }
 
     // Return when a window is displaying the buffer or when it's not unloaded.
-    if nvim_buf_get_nwindows(buf) > 0 || !unload_buf {
+    if buf_ref(buf).b_nwindows > 0 || !unload_buf {
         return true;
     }
 
@@ -463,10 +456,10 @@ pub unsafe extern "C" fn rs_close_buffer(
             nvim_win_set_buffer_null(win);
         }
         // Do not wipe out the buffer if it is used in a window.
-        if nvim_buf_get_nwindows(buf) > 0 {
+        if buf_ref(buf).b_nwindows > 0 {
             return true;
         }
-        nvim_mark_forget_file_all_tabs(nvim_buf_get_fnum(buf));
+        nvim_mark_forget_file_all_tabs(buf_ref(buf).handle);
         nvim_buf_wipe_free(buf);
     } else {
         if del_buf {
@@ -485,7 +478,7 @@ pub unsafe extern "C" fn rs_close_buffer(
             nvim_win_set_buffer_null(win);
         }
         if del_buf {
-            nvim_buf_set_b_p_bl(buf, 0);
+            crate::buf_struct::buf_mut(buf).b_p_bl = 0;
         }
     }
     // NOTE: at this point "curbuf" may be invalid!

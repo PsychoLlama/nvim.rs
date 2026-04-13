@@ -15,7 +15,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::BufHandle;
+use crate::{buf_struct::buf_ref, BufHandle};
 
 // Return values matching C OK/FAIL
 const OK: c_int = 0;
@@ -37,10 +37,6 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_firstbuf() -> BufHandle;
     fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_last_used(buf: BufHandle) -> i64;
-    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
     fn rs_diff_mode_buf(buf: BufHandle) -> bool;
 
     /// Check if pattern should use fuzzy matching.
@@ -160,8 +156,8 @@ pub(crate) unsafe fn buflist_regex_match(
     if handle.is_null() {
         return std::ptr::null();
     }
-    let sfname = nvim_buf_get_b_sfname(buf);
-    let m = fname_match_rs(handle, sfname, ignore_case);
+    let b = buf_ref(buf);
+    let m = fname_match_rs(handle, b.b_sfname, ignore_case);
     if !m.is_null() {
         return m;
     }
@@ -169,8 +165,7 @@ pub(crate) unsafe fn buflist_regex_match(
     if !nvim_regmatch_has_regprog(handle) {
         return std::ptr::null();
     }
-    let ffname = nvim_buf_get_b_ffname(buf);
-    fname_match_rs(handle, ffname, ignore_case)
+    fname_match_rs(handle, b.b_ffname, ignore_case)
 }
 
 // =============================================================================
@@ -239,7 +234,7 @@ pub unsafe fn expand_bufnames_impl(
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
         // Skip unlisted buffers
-        if nvim_buf_get_b_p_bl(buf) == 0 {
+        if buf_ref(buf).b_p_bl == 0 {
             buf = nvim_buf_get_next(buf);
             continue;
         }
@@ -252,7 +247,8 @@ pub unsafe fn expand_bufnames_impl(
 
         let matched_name: *const c_char = if fuzzy {
             // Try short name first, then full name
-            let sfname = nvim_buf_get_b_sfname(buf);
+            let b = buf_ref(buf);
+            let sfname = b.b_sfname;
             let score = if sfname.is_null() {
                 FUZZY_SCORE_NONE
             } else {
@@ -273,7 +269,7 @@ pub unsafe fn expand_bufnames_impl(
                 buf = nvim_buf_get_next(buf);
                 continue;
             }
-            let ffname = nvim_buf_get_b_ffname(buf);
+            let ffname = b.b_ffname;
             let score = if ffname.is_null() {
                 FUZZY_SCORE_NONE
             } else {
@@ -317,7 +313,7 @@ pub unsafe fn expand_bufnames_impl(
         };
 
         if want_lastused {
-            str_with_buf.push((nvim_buf_get_last_used(buf), buf, p));
+            str_with_buf.push((buf_ref(buf).b_last_used, buf, p));
         } else {
             str_matches.push(p);
         }

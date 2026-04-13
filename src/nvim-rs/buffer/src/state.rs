@@ -13,7 +13,7 @@
 use std::ffi::{c_char, c_int};
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use crate::BufHandle;
+use crate::{buf_struct::buf_ref, BufHandle};
 
 // =============================================================================
 // Global counters (migrated from C static variables in buffer.c)
@@ -116,8 +116,6 @@ pub extern "C" fn nvim_reset_top_file_num() {
 
 extern "C" {
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
 
     // Phase 1 accessors: buffer ml and file state fields
@@ -253,9 +251,9 @@ pub unsafe fn get_buf_state(buf: BufHandle) -> BufState {
     }
 
     BufState {
-        fnum: nvim_buf_get_fnum(buf),
+        fnum: buf_ref(buf).handle,
         changedtick: nvim_buf_get_changedtick(buf),
-        line_count: nvim_buf_get_ml_line_count(buf),
+        line_count: buf_ref(buf).ml_line_count,
     }
 }
 
@@ -292,7 +290,7 @@ impl ChangedTickRef {
         }
         Self {
             tick: nvim_buf_get_changedtick(buf),
-            fnum: nvim_buf_get_fnum(buf),
+            fnum: buf_ref(buf).handle,
         }
     }
 
@@ -307,7 +305,7 @@ impl ChangedTickRef {
             return true; // Buffer is gone, consider changed
         }
 
-        let buf_fnum = nvim_buf_get_fnum(buf);
+        let buf_fnum = buf_ref(buf).handle;
         if buf_fnum != self.fnum {
             return true; // Different buffer
         }
@@ -326,7 +324,7 @@ impl ChangedTickRef {
             *self = Self::default();
         } else {
             self.tick = nvim_buf_get_changedtick(buf);
-            self.fnum = nvim_buf_get_fnum(buf);
+            self.fnum = buf_ref(buf).handle;
         }
     }
 }
@@ -414,7 +412,7 @@ pub unsafe extern "C" fn rs_buf_get_line_count(buf: BufHandle) -> c_int {
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_get_ml_line_count(buf)
+    buf_ref(buf).ml_line_count
 }
 
 /// Check if buffer is empty (line count == 1 and first line is empty).
@@ -429,7 +427,7 @@ pub unsafe fn buf_is_empty(buf: BufHandle) -> bool {
     if buf.is_null() {
         return true;
     }
-    nvim_buf_get_ml_line_count(buf) == 1 && *ml_get_buf(buf, 1) == 0
+    buf_ref(buf).ml_line_count == 1 && *ml_get_buf(buf, 1) == 0
 }
 
 /// FFI wrapper for `buf_is_empty`.

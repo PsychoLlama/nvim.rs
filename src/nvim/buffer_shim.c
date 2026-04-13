@@ -90,7 +90,6 @@ char nvim_buf_get_buftype_2(buf_T *buf) { return buf->b_p_bt[2]; }
 int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
 int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
 char nvim_buf_get_fileformat(buf_T *buf) { return buf->b_p_ff[0]; }
-int nvim_buf_get_bin(buf_T *buf) { return buf->b_p_bin; }
 buf_T *nvim_get_lastbuf(void) { return lastbuf; }
 buf_T *nvim_buf_get_prev(buf_T *buf) { return buf->b_prev; }
 buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
@@ -99,7 +98,6 @@ uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total
 int nvim_bufref_get_fnum(bufref_T *bufref) { return bufref->br_fnum; }
 int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_free_count; }
 int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
-char nvim_buf_get_bufhidden(buf_T *buf) { return buf->b_p_bh[0]; }
 const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
 const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
 const char *nvim_buf_get_b_sfname(buf_T *buf) { return buf->b_sfname; }
@@ -118,9 +116,6 @@ int *nvim_buf_get_p_vts_array(buf_T *buf) { return buf->b_p_vts_array; }
 OptInt nvim_buf_get_p_sw(buf_T *buf) { return buf->b_p_sw; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
 int nvim_buf_get_locked(buf_T *buf) { return buf->b_locked; }
-int nvim_buf_get_locked_split(buf_T *buf) { return buf->b_locked_split; }
-int nvim_buf_get_flags(buf_T *buf) { return buf->b_flags; }
-int nvim_buf_get_changed(buf_T *buf) { return buf->b_changed; }
 int nvim_buf_get_b_p_bl(buf_T *buf) { return buf->b_p_bl; }
 const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
 int nvim_curbuf_get_handle(void) { return curbuf->handle; }
@@ -134,8 +129,6 @@ const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w
 int nvim_buf_get_ml_mfp_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
 int nvim_buf_file_id_valid(buf_T *buf) { return buf->file_id_valid; }
 void nvim_buf_get_file_id(buf_T *buf, void *out) { *(FileID *)out = buf->file_id; }
-void nvim_buf_set_file_id_data(buf_T *buf, const void *file_id, bool valid)
-{ if (valid) { buf->file_id = *(const FileID *)file_id; } buf->file_id_valid = valid; }
 
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
@@ -164,8 +157,6 @@ void nvim_buf_set_p_bomb(buf_T *buf, int val) { buf->b_p_bomb = val; }
 void nvim_buf_set_start_bomb(buf_T *buf, int val) { buf->b_start_bomb = val; }
 int nvim_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 buf_T *nvim_handle_get_buffer(handle_T handle) { return handle_get_buffer(handle); }
-void nvim_buf_set_b_p_bl(buf_T *buf, int val) { buf->b_p_bl = val; }
-int64_t nvim_buf_get_last_used(buf_T *buf) { return buf ? (int64_t)buf->b_last_used : 0; }
 int nvim_buf_terminal_running(buf_T *buf)
 { return (buf && buf->terminal && terminal_running(buf->terminal)) ? 1 : 0; }
 int nvim_buf_channel_job_running(buf_T *buf)

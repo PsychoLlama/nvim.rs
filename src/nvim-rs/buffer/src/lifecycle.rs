@@ -6,12 +6,13 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(dead_code)]
 
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::{errors, win_mut_raw, win_ref_raw, BufHandle};
+use crate::{buf_struct::buf_ref, errors, win_mut_raw, win_ref_raw, BufHandle};
 
 // =============================================================================
 // External C Statics
@@ -33,19 +34,6 @@ extern "C" {
     fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_locked_split(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_changed(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut c_void;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
-    fn nvim_buf_has_memfile(buf: BufHandle) -> c_int;
 
     // Jump list accessors (implemented in mark.c)
     fn nvim_mark_win_get_jumplistlen(win: *mut c_void) -> c_int;
@@ -246,18 +234,16 @@ pub unsafe fn get_lifecycle_state(buf: BufHandle) -> LifecycleState {
         return LifecycleState::NeverLoaded;
     }
 
-    let flags = nvim_buf_get_flags(buf);
-    if (flags & buf_flags::BF_NEVERLOADED) != 0 {
+    let b = buf_ref(buf);
+    if (b.b_flags & buf_flags::BF_NEVERLOADED) != 0 {
         return LifecycleState::NeverLoaded;
     }
 
-    let ml_mfp = nvim_buf_get_ml_mfp(buf);
-    if ml_mfp.is_null() {
+    if b.ml_mfp_is_null() {
         return LifecycleState::NotLoaded;
     }
 
-    let nwindows = nvim_buf_get_nwindows(buf);
-    if nwindows == 0 {
+    if b.b_nwindows == 0 {
         LifecycleState::Hidden
     } else {
         LifecycleState::Normal
@@ -295,10 +281,11 @@ pub unsafe fn check_can_unload(buf: BufHandle) -> UnloadCheck {
         return UnloadCheck::default();
     }
 
-    let is_locked = nvim_buf_get_locked(buf) > 0;
-    let is_locked_split = nvim_buf_get_locked_split(buf) > 0;
-    let has_terminal = nvim_buf_get_terminal(buf) != 0;
-    let nwindows = nvim_buf_get_nwindows(buf);
+    let b = buf_ref(buf);
+    let is_locked = b.b_locked > 0;
+    let is_locked_split = b.b_locked_split > 0;
+    let has_terminal = !b.terminal.is_null();
+    let nwindows = b.b_nwindows;
 
     // Buffer can be unloaded if not locked
     let can_unload = !is_locked;
@@ -324,14 +311,14 @@ pub unsafe fn effective_close_action(buf: BufHandle, requested: BufferAction) ->
     }
 
     // Terminal buffers can only be wiped
-    if nvim_buf_get_terminal(buf) != 0
+    if !buf_ref(buf).terminal.is_null()
         && (requested.unloads() || requested.deletes() || requested.wipes())
     {
         return BufferAction::Wipe;
     }
 
     // Check bufhidden option
-    let bh = nvim_buf_get_bufhidden(buf) as u8;
+    let bh = buf_ref(buf).bufhidden_char0();
     match bh {
         b'd' => {
             // bufhidden=delete
@@ -367,7 +354,7 @@ pub unsafe fn has_filename(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    !nvim_buf_get_b_ffname(buf).is_null()
+    !buf_ref(buf).b_ffname.is_null()
 }
 
 /// Check if buffer is modified.
@@ -380,7 +367,7 @@ pub unsafe fn is_modified(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    nvim_buf_get_changed(buf) != 0
+    buf_ref(buf).b_changed != 0
 }
 
 /// Check if buffer is a dummy buffer.
@@ -393,7 +380,7 @@ pub unsafe fn is_dummy(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    (nvim_buf_get_flags(buf) & buf_flags::BF_DUMMY) != 0
+    (buf_ref(buf).b_flags & buf_flags::BF_DUMMY) != 0
 }
 
 /// Check if buffer was never loaded.
@@ -406,7 +393,7 @@ pub unsafe fn is_never_loaded(buf: BufHandle) -> bool {
     if buf.is_null() {
         return true;
     }
-    (nvim_buf_get_flags(buf) & buf_flags::BF_NEVERLOADED) != 0
+    (buf_ref(buf).b_flags & buf_flags::BF_NEVERLOADED) != 0
 }
 
 /// Check if buffer is last in window (nwindows == 1).
@@ -419,7 +406,7 @@ pub unsafe fn is_last_in_window(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    nvim_buf_get_nwindows(buf) == 1
+    buf_ref(buf).b_nwindows == 1
 }
 
 /// Check if this is the current buffer.
@@ -470,10 +457,11 @@ pub unsafe fn get_lifecycle_position(buf: BufHandle) -> LifecyclePosition {
         return LifecyclePosition::default();
     }
 
+    let b = buf_ref(buf);
     LifecyclePosition {
-        fnum: nvim_buf_get_fnum(buf),
+        fnum: b.handle,
         state: get_lifecycle_state(buf),
-        nwindows: nvim_buf_get_nwindows(buf),
+        nwindows: b.b_nwindows,
         has_filename: has_filename(buf),
         is_modified: is_modified(buf),
         is_current: is_curbuf(buf),
@@ -558,11 +546,11 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
                 if !candidate.is_null() {
                     // Skip curbuf, unlisted, and quickfix buffers.
                     if candidate == curbuf
-                        || nvim_buf_get_b_p_bl(candidate) == 0
+                        || buf_ref(candidate).b_p_bl == 0
                         || rs_bt_quickfix(candidate)
                     {
                         // Not suitable
-                    } else if nvim_buf_has_memfile(candidate) == 0 {
+                    } else if buf_ref(candidate).ml_mfp_is_null() {
                         // Unloaded: remember as fallback
                         if bp.is_null() {
                             bp = candidate;
@@ -613,11 +601,11 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
                 continue;
             }
             // Prefer same help-buffer type, listed, non-quickfix
-            if nvim_buf_get_help(buf) == nvim_buf_get_help(curbuf)
-                && nvim_buf_get_b_p_bl(buf) != 0
+            if buf_ref(buf).b_help == buf_ref(curbuf).b_help
+                && buf_ref(buf).b_p_bl != 0
                 && !rs_bt_quickfix(buf)
             {
-                if nvim_buf_has_memfile(buf) != 0 {
+                if !buf_ref(buf).ml_mfp_is_null() {
                     result = buf;
                     break;
                 }
@@ -642,7 +630,7 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
     if result.is_null() {
         let mut buf = nvim_get_firstbuf();
         while !buf.is_null() {
-            if nvim_buf_get_b_p_bl(buf) != 0 && buf != curbuf && !rs_bt_quickfix(buf) {
+            if buf_ref(buf).b_p_bl != 0 && buf != curbuf && !rs_bt_quickfix(buf) {
                 result = buf;
                 break;
             }
@@ -734,24 +722,24 @@ unsafe fn find_and_validate_buffer(
                 } else {
                     next
                 };
-                if buf == curbuf || nvim_buf_get_changed(buf) != 0 {
+                if buf == curbuf || buf_ref(buf).b_changed != 0 {
                     break;
                 }
             }
             remaining -= 1;
         }
-        if nvim_buf_get_changed(buf) == 0 {
+        if buf_ref(buf).b_changed == 0 {
             errors::emsg_e84();
             return null;
         }
     } else if start == DOBUF_FIRST && count != 0 {
         // Find buffer by number.
-        while !buf.is_null() && nvim_buf_get_fnum(buf) != count {
+        while !buf.is_null() && buf_ref(buf).handle != count {
             buf = nvim_buf_get_b_next(buf);
         }
     } else {
         // Navigate count steps forward/backward through listed buffers.
-        let help_only = (flags & DOBUF_SKIPHELP) != 0 && nvim_buf_get_help(buf) != 0;
+        let help_only = (flags & DOBUF_SKIPHELP) != 0 && buf_ref(buf).b_help != 0;
         let mut bp = null;
         let mut remaining = count;
         // Mirrors the C while-loop in do_buffer_ext.
@@ -759,9 +747,9 @@ unsafe fn find_and_validate_buffer(
             || (bp != buf
                 && !unload
                 && !(if help_only {
-                    nvim_buf_get_help(buf) != 0
+                    buf_ref(buf).b_help != 0
                 } else {
-                    nvim_buf_get_b_p_bl(buf) != 0
+                    buf_ref(buf).b_p_bl != 0
                 }))
         {
             if bp.is_null() {
@@ -770,10 +758,10 @@ unsafe fn find_and_validate_buffer(
             buf = nav_step(buf, dir);
             if unload
                 || (if help_only {
-                    nvim_buf_get_help(buf) != 0
+                    buf_ref(buf).b_help != 0
                 } else {
-                    nvim_buf_get_b_p_bl(buf) != 0
-                        && ((flags & DOBUF_SKIPHELP) == 0 || nvim_buf_get_help(buf) == 0)
+                    buf_ref(buf).b_p_bl != 0
+                        && ((flags & DOBUF_SKIPHELP) == 0 || buf_ref(buf).b_help == 0)
                 })
             {
                 remaining -= 1;
@@ -806,14 +794,14 @@ unsafe fn find_and_validate_buffer(
         if !check_can_set_curbuf_forceit(forceit) {
             return null;
         }
-        if nvim_buf_get_locked_split(buf) != 0 {
+        if buf_ref(buf).b_locked_split != 0 {
             nvim_ecmd_emsg_closing_buffer();
             return null;
         }
     }
 
     if (action == DOBUF_GOTO || action == DOBUF_SPLIT)
-        && (nvim_buf_get_flags(buf) & buf_flags::BF_DUMMY) != 0
+        && (buf_ref(buf).b_flags & buf_flags::BF_DUMMY) != 0
     {
         errors::semsg_e_nobufnr(i64::from(count));
         return null;
@@ -886,7 +874,7 @@ pub unsafe extern "C" fn rs_buf_nwindows(buf: BufHandle) -> c_int {
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_get_nwindows(buf)
+    buf_ref(buf).b_nwindows
 }
 
 /// Find the best buffer to switch to when deleting the current buffer.
@@ -1241,7 +1229,7 @@ pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action
     // do_ecmd() may create a new buffer; delete the old one if still valid
     // and no longer in any window.
     let curbuf_after = nvim_get_curbuf();
-    if buf != curbuf_after && bufref_valid(&raw mut bufref) && nvim_buf_get_nwindows(buf) == 0 {
+    if buf != curbuf_after && bufref_valid(&raw mut bufref) && buf_ref(buf).b_nwindows == 0 {
         close_buffer(std::ptr::null_mut(), buf, action, false, false);
     }
 
@@ -1267,7 +1255,7 @@ pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action
 #[must_use]
 #[unsafe(export_name = "can_unload_buffer")]
 pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
-    if nvim_buf_get_locked(buf) != 0 {
+    if buf_ref(buf).b_locked != 0 {
         errors::emsg_e937_buf_in_use(buf);
         return false;
     }
@@ -1302,7 +1290,7 @@ pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
 #[must_use]
 #[unsafe(export_name = "buf_ensure_loaded")]
 pub unsafe extern "C" fn rs_buf_ensure_loaded(buf: BufHandle) -> bool {
-    if !nvim_buf_get_ml_mfp(buf).is_null() {
+    if !buf_ref(buf).ml_mfp_is_null() {
         return true; // already loaded
     }
     nvim_buf_aucmd_open_buffer(buf) != 0
@@ -1420,7 +1408,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     }
 
     if (nvim_get_cmdmod_cmod_flags() & CMOD_KEEPALT) == 0 {
-        nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(nvim_get_curbuf()));
+        nvim_excmds_set_curwin_alt_fnum(buf_ref(nvim_get_curbuf()).handle);
     }
     crate::rs_buflist_altfpos(crate::WinHandle(nvim_get_curwin()));
 
@@ -1455,12 +1443,9 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
             reset_synblock(nvim_get_curwin());
         }
         // Close windows if unloading or if alt-bufhidden triggers it.
-        let bh = nvim_buf_get_bufhidden(prevbuf);
+        let bh = buf_ref(prevbuf).bufhidden_char0();
         let new_lastwinid = rs_get_last_winid();
-        if unload
-            || (new_lastwinid != last_winid
-                && (bh == b'w' as c_char || bh == b'd' as c_char || bh == b'u' as c_char))
-        {
+        if unload || (new_lastwinid != last_winid && (bh == b'w' || bh == b'd' || bh == b'u')) {
             close_windows(prevbuf, 0);
         }
         if bufref_valid(&raw mut prevbufref) && aborting() == 0 {
@@ -1469,7 +1454,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
             // Do not sync when in Insert mode and buffer is open in another window.
             if prevbuf == nvim_get_curbuf()
                 && ((nvim_get_state_mode() & MODE_INSERT) == 0
-                    || nvim_buf_get_nwindows(nvim_get_curbuf()) <= 1)
+                    || buf_ref(nvim_get_curbuf()).b_nwindows <= 1)
             {
                 nvim_u_sync(false);
             }
@@ -1527,10 +1512,8 @@ extern "C" {
     fn is_aucmd_win(wp: *mut c_void) -> c_int;
     fn rs_win_locked(wp: *mut c_void) -> c_int;
     fn rs_last_window(win: *mut c_void) -> c_int;
-    fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
     fn nvim_buf_terminal_running(buf: BufHandle) -> c_int;
     fn nvim_get_lastwin() -> *mut c_void;
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     fn end_visual_mode();
     fn semsg(fmt: *const c_char, ...);
 }
@@ -1575,10 +1558,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
 
         // When unloading or deleting a buffer that's already unloaded and
         // unlisted: fail silently.
-        if action != DOBUF_WIPE
-            && nvim_buf_get_ml_mfp_null(buf) != 0
-            && nvim_buf_get_b_p_bl(buf) == 0
-        {
+        if action != DOBUF_WIPE && buf_ref(buf).ml_mfp_is_null() && buf_ref(buf).b_p_bl == 0 {
             return FAIL;
         }
 
@@ -1598,7 +1578,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
                 // "E89: No write since last change for buffer %ld (add ! to override)"
                 semsg(
                     c"E89: No write since last change for buffer %ld (add ! to override)".as_ptr(),
-                    i64::from(nvim_buf_get_fnum(buf)),
+                    i64::from(buf_ref(buf).handle),
                 );
                 return FAIL;
             }
@@ -1614,13 +1594,13 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
             } else {
                 semsg(
                     c"E89: %s will be killed (add ! to override)".as_ptr(),
-                    nvim_buf_get_b_fname(buf),
+                    buf_ref(buf).b_fname,
                 );
                 return FAIL;
             }
         }
 
-        let buf_fnum = nvim_buf_get_fnum(buf);
+        let buf_fnum = buf_ref(buf).handle;
 
         // When closing the current buffer stop Visual mode.
         if buf == nvim_get_curbuf() && nvim_get_VIsual_active() != 0 {
@@ -1631,7 +1611,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
         let mut bp: BufHandle = BufHandle(std::ptr::null_mut());
         let mut iter = nvim_get_firstbuf();
         while !iter.is_null() {
-            if nvim_buf_get_b_p_bl(iter) != 0 && iter != buf {
+            if buf_ref(iter).b_p_bl != 0 && iter != buf {
                 bp = iter;
                 break;
             }
@@ -1646,7 +1626,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
         let mut curwin = nvim_get_curwin();
         while buf == nvim_get_curbuf()
             && rs_win_locked(curwin) == 0
-            && nvim_buf_get_locked(nvim_get_curbuf()) == 0
+            && buf_ref(nvim_get_curbuf()).b_locked == 0
             && (is_aucmd_win(nvim_get_lastwin()) != 0 || rs_last_window(curwin) == 0)
         {
             if win_close(curwin, false, false) == FAIL {
@@ -1663,7 +1643,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
             close_windows(buf, 0);
             if buf != nvim_get_curbuf()
                 && bufref_valid(&raw mut bufref)
-                && nvim_buf_get_nwindows(buf) <= 0
+                && buf_ref(buf).b_nwindows <= 0
             {
                 close_buffer(std::ptr::null_mut(), buf, action, false, false);
             }
@@ -1843,12 +1823,12 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     // Get the buffer in the current window.
     nvim_curwin_set_buffer2(buf);
     nvim_set_curbuf_ptr(buf);
-    let nwindows = nvim_buf_get_nwindows(buf);
+    let nwindows = buf_ref(buf).b_nwindows;
     nvim_buf_set_nwindows(buf, nwindows + 1);
 
     // Copy buffer and window local option values.  Not for a help buffer.
     buf_copy_options(buf, BCO_ENTER | BCO_NOHELP);
-    if nvim_buf_get_help(buf) == 0 {
+    if buf_ref(buf).b_help == 0 {
         get_winopts(buf);
     } else {
         // Remove all folds in the window.
@@ -1871,7 +1851,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     win_mut_raw(curwin).w_valid = 0;
 
     // Make sure the buffer is loaded.
-    if nvim_buf_get_ml_mfp_null(buf) != 0 {
+    if buf_ref(buf).ml_mfp_is_null() {
         // need to load the file
         // If there is no filetype, allow for detecting one.  Esp. useful for
         // ":ball" used in an autocommand.  If there already is a filetype we
@@ -1931,7 +1911,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     // has been properly setup.
     // May need to set the spell language -- only if !b_help, w_p_spell, and spl is non-empty.
     let spl = nvim_win_get_b_p_spl(curwin);
-    if nvim_buf_get_help(curbuf) == 0
+    if buf_ref(curbuf).b_help == 0
         && win_ref_raw(curwin).w_p_spell() != 0
         && !spl.is_null()
         && *spl != 0
@@ -1940,7 +1920,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     }
     nvim_ecmd_curbuf_set_last_used();
 
-    if nvim_buf_get_terminal(curbuf) != 0 {
+    if !buf_ref(curbuf).terminal.is_null() {
         nvim_buf_terminal_check_size(curbuf);
     }
 
@@ -2086,13 +2066,13 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
                 win_ref_raw(wp).w_width != nvim_al_get_Columns()
             };
 
-            let should_close = (nvim_buf_get_nwindows(wp_buf) > 1
+            let should_close = (buf_ref(wp_buf).b_nwindows > 1
                 || win_ref_raw(wp).w_floating
                 || height_too_small
                 || (had_tab > 0 && wp != nvim_get_firstwin()))
                 && nvim_al_ONE_WINDOW() == 0
                 && rs_win_locked(nvim_get_curwin()) == 0
-                && nvim_buf_get_locked(wp_buf) == 0
+                && buf_ref(wp_buf).b_locked == 0
                 && nvim_al_is_aucmd_win(wp) == 0;
 
             if should_close {
@@ -2134,7 +2114,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() && open_wins < count {
         // Check if this buffer needs a window.
-        if (!all && nvim_buf_get_ml_mfp(buf).is_null()) || nvim_buf_get_b_p_bl(buf) == 0 {
+        if (!all && buf_ref(buf).ml_mfp_is_null()) || buf_ref(buf).b_p_bl == 0 {
             buf = nvim_buf_get_b_next(buf);
             continue;
         }
@@ -2142,7 +2122,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
         // Find or skip existing window for this buffer.
         let wp: *mut c_void = if had_tab != 0 {
             // With ":tab" modifier don't move the window.
-            if nvim_buf_get_nwindows(buf) > 0 {
+            if buf_ref(buf).b_nwindows > 0 {
                 nvim_get_lastwin() // buffer has a window, skip it
             } else {
                 std::ptr::null_mut()

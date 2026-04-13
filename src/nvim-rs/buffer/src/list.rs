@@ -15,7 +15,7 @@
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::{errors, messages, BufHandle};
+use crate::{buf_struct::buf_ref, errors, messages, BufHandle};
 
 // =============================================================================
 // Constants
@@ -35,20 +35,15 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
 
     // Phase 2 accessors
     fn nvim_curwin_get_alt_fnum() -> c_int;
     fn nvim_handle_get_buffer(handle: c_int) -> BufHandle;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     #[link_name = "home_replace_save"]
     fn nvim_home_replace_save(buf: BufHandle, src: *const c_char) -> *mut c_char;
     #[link_name = "FullName_save"]
     fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
-    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
     #[link_name = "os_fileid"]
     fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
     #[link_name = "rs_otherfile_buf_4"]
@@ -271,7 +266,7 @@ where
 pub unsafe fn find_buf_by_fnum(fnum: c_int) -> BufHandle {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
-        if nvim_buf_get_fnum(buf) == fnum {
+        if buf_ref(buf).handle == fnum {
             return buf;
         }
         buf = nvim_buf_get_next(buf);
@@ -547,11 +542,8 @@ pub unsafe extern "C" fn rs_buflist_nr2name(
     if buf.is_null() {
         return std::ptr::null_mut();
     }
-    let src = if fullname != 0 {
-        nvim_buf_get_b_ffname(buf)
-    } else {
-        nvim_buf_get_b_fname(buf)
-    };
+    let b = buf_ref(buf);
+    let src = if fullname != 0 { b.b_ffname } else { b.b_fname };
     let help_buf = if helptail != 0 {
         buf
     } else {
@@ -570,8 +562,9 @@ unsafe fn buflist_findname_file_id_impl(
 ) -> BufHandle {
     let mut buf = nvim_get_lastbuf();
     while !buf.is_null() {
-        let flags = nvim_buf_get_flags(buf);
-        if (flags & BF_DUMMY) == 0 && !nvim_otherfile_buf(buf, ffname, file_id, file_id_valid) {
+        if (buf_ref(buf).b_flags & BF_DUMMY) == 0
+            && !nvim_otherfile_buf(buf, ffname, file_id, file_id_valid)
+        {
             return buf;
         }
         buf = nvim_buf_get_prev(buf);
@@ -633,18 +626,11 @@ pub unsafe extern "C" fn rs_buflist_findname_exp(fname: *mut c_char) -> BufHandl
 // Additional accessors for buflist_list (not already declared above).
 extern "C" {
     fn nvim_win_get_cursor_lnum(wp: crate::WinHandle) -> c_int;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
     fn msg_ext_set_kind(kind: *const c_char);
     fn nvim_eap_get_forceit(eap: *const ExArg) -> bool;
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
     fn nvim_buf_terminal_running(buf: BufHandle) -> c_int;
     fn nvim_buf_channel_job_running(buf: BufHandle) -> c_int;
     fn nvim_buf_is_changed(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_last_used(buf: BufHandle) -> i64;
     fn rs_buf_spname(buf: BufHandle) -> *mut c_char;
     #[link_name = "home_replace"]
     fn nvim_home_replace(
@@ -706,8 +692,8 @@ pub unsafe fn buflist_list_impl(eap: *const ExArg) {
     // Optionally sort by last used time
     if sort_by_time {
         bufs.sort_by(|a, b| {
-            let ta = nvim_buf_get_last_used(*a);
-            let tb = nvim_buf_get_last_used(*b);
+            let ta = buf_ref(*a).b_last_used;
+            let tb = buf_ref(*b).b_last_used;
             // Same ordering as buf_time_compare: sort ascending by time
             ta.cmp(&tb)
         });
@@ -719,16 +705,17 @@ pub unsafe fn buflist_list_impl(eap: *const ExArg) {
             break;
         }
 
-        let is_terminal = nvim_buf_get_terminal(buf) != 0;
+        let b = buf_ref(buf);
+        let is_terminal = !b.terminal.is_null();
         let job_running = nvim_buf_terminal_running(buf) != 0;
-        let bl = nvim_buf_get_b_p_bl(buf) != 0;
-        let flags = nvim_buf_get_flags(buf);
-        let ml_mfp_null = nvim_buf_get_ml_mfp_null(buf) != 0;
-        let nwindows = nvim_buf_get_nwindows(buf);
+        let bl = b.b_p_bl != 0;
+        let flags = b.b_flags;
+        let ml_mfp_null = buf_ref(buf).ml_mfp_is_null();
+        let nwindows = b.b_nwindows;
         let is_changed = nvim_buf_is_changed(buf) != 0;
-        let is_ro = nvim_buf_get_b_p_ro(buf) != 0;
-        let is_ma = nvim_buf_get_b_p_ma(buf) != 0;
-        let fnum = nvim_buf_get_fnum(buf);
+        let is_ro = b.b_p_ro != 0;
+        let is_ma = b.b_p_ma != 0;
+        let fnum = b.handle;
 
         // Check filter flags
         let arg_bytes: &[u8] = if eap_arg.is_null() {
@@ -759,10 +746,9 @@ pub unsafe fn buflist_list_impl(eap: *const ExArg) {
         let mut name_buf = [0u8; MAXPATHL];
         let spname = rs_buf_spname(buf);
         if spname.is_null() {
-            let b_fname = nvim_buf_get_b_fname(buf);
             nvim_home_replace(
                 buf,
-                b_fname,
+                buf_ref(buf).b_fname,
                 name_buf.as_mut_ptr().cast::<c_char>(),
                 MAXPATHL,
                 true,
@@ -848,17 +834,13 @@ pub unsafe fn buflist_list_impl(eap: *const ExArg) {
         }
 
         // Append time or line number
-        if has_arg(b't') && nvim_buf_get_last_used(buf) != 0 {
-            undo_fmt_time(
-                iobuff.add(len),
-                IOSIZE_LIST - len,
-                nvim_buf_get_last_used(buf),
-            );
+        if has_arg(b't') && buf_ref(buf).b_last_used != 0 {
+            undo_fmt_time(iobuff.add(len), IOSIZE_LIST - len, buf_ref(buf).b_last_used);
         } else {
             let lnum: i64 = if buf == curbuf {
                 i64::from(nvim_win_get_cursor_lnum(crate::WinHandle(curwin)))
             } else {
-                i64::from(nvim_buf_get_ml_line_count(buf))
+                i64::from(buf_ref(buf).ml_line_count)
             };
             let fmt = messages::buflist_line_fmt();
             libc::snprintf(iobuff.add(len), IOSIZE_LIST - len, fmt, lnum);
@@ -943,7 +925,7 @@ pub unsafe fn buflist_findpat_impl(
         let ch = *pattern as u8;
         if ch == b'%' || ch == b'#' {
             let found_fnum = if ch == b'%' {
-                nvim_buf_get_fnum(nvim_get_curbuf())
+                buf_ref(nvim_get_curbuf()).handle
             } else {
                 nvim_curwin_get_alt_fnum()
             };
@@ -1017,7 +999,7 @@ pub unsafe fn buflist_findpat_impl(
                     return -1;
                 }
 
-                let bl = nvim_buf_get_b_p_bl(buf) != 0;
+                let bl = buf_ref(buf).b_p_bl != 0;
                 if bl == find_listed
                     && (!diffmode || rs_diff_mode_buf(buf))
                     && !crate::expand::buflist_regex_match(regex_handle, buf, false).is_null()
@@ -1029,7 +1011,7 @@ pub unsafe fn buflist_findpat_impl(
                         buf = nvim_buf_get_prev(buf);
                         continue;
                     }
-                    match_fnum = nvim_buf_get_fnum(buf);
+                    match_fnum = buf_ref(buf).handle;
                 }
 
                 buf = nvim_buf_get_prev(buf);
@@ -1093,7 +1075,7 @@ pub unsafe extern "C" fn rs_setaltfname(
 ) -> BufHandle {
     let buf = nvim_buflist_new(ffname, sfname, lnum, 0);
     if !buf.is_null() && nvim_excmds_cmdmod_has_keepalt() == 0 {
-        nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(buf));
+        nvim_excmds_set_curwin_alt_fnum(buf_ref(buf).handle);
     }
     buf
 }
@@ -1187,7 +1169,7 @@ pub unsafe extern "C" fn rs_buflist_getfile(
     }
 
     nvim_inc_RedrawingDisabled();
-    let fnum = nvim_buf_get_fnum(buf);
+    let fnum = buf_ref(buf).handle;
     // GETFILE_SUCCESS(x) is (x) <= 0
     if getfile(
         fnum,

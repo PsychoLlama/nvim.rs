@@ -6,47 +6,20 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(dead_code)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::c_int;
 
-use crate::BufHandle;
+use crate::{buf_struct::buf_ref, BufHandle};
 
 // =============================================================================
 // External C Functions
 // =============================================================================
 
 extern "C" {
-    // Name accessors
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
-
-    // State accessors
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
+    // State accessors (complex - not pure field reads)
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_changed(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
-
-    // Options
-    fn nvim_buf_get_buftype(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_buftype_2(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_fileformat(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_bin(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
-
-    // Locking
-    fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_locked_split(buf: BufHandle) -> c_int;
-
-    // Memory/line structure
-    fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut c_void;
 }
 
 // =============================================================================
@@ -138,16 +111,17 @@ pub unsafe fn get_buffer_type(buf: BufHandle) -> BufferType {
     }
 
     // Check help buffer first
-    if nvim_buf_get_help(buf) != 0 {
+    let b = buf_ref(buf);
+    if b.b_help != 0 {
         return BufferType::Help;
     }
 
     // Check terminal
-    if nvim_buf_get_terminal(buf) != 0 {
+    if !b.terminal.is_null() {
         return BufferType::Terminal;
     }
 
-    let bt0 = nvim_buf_get_buftype(buf) as u8;
+    let bt0 = b.buftype_char0();
     match bt0 {
         b'q' => BufferType::Quickfix,
         b't' => BufferType::Terminal,
@@ -155,7 +129,7 @@ pub unsafe fn get_buffer_type(buf: BufHandle) -> BufferType {
         b'a' => BufferType::Acwrite,
         b'n' => {
             // Check second char for nofile vs nowrite
-            let bt2 = nvim_buf_get_buftype_2(buf) as u8;
+            let bt2 = b.buftype_char2();
             if bt2 == b'f' {
                 BufferType::Nofile
             } else {
@@ -218,7 +192,7 @@ pub unsafe fn get_hidden_action(buf: BufHandle) -> HiddenAction {
         return HiddenAction::Default;
     }
 
-    let bh = nvim_buf_get_bufhidden(buf) as u8;
+    let bh = buf_ref(buf).bufhidden_char0();
     match bh {
         b'h' => HiddenAction::Hide,
         b'u' => HiddenAction::Unload,
@@ -285,11 +259,12 @@ pub unsafe fn get_file_format(buf: BufHandle) -> FileFormat {
     }
 
     // Binary mode always uses Unix
-    if nvim_buf_get_bin(buf) != 0 {
+    let b = buf_ref(buf);
+    if b.b_p_bin != 0 {
         return FileFormat::Unix;
     }
 
-    let ff = nvim_buf_get_fileformat(buf) as u8;
+    let ff = b.fileformat_char0();
     match ff {
         b'd' => FileFormat::Dos,
         b'm' => FileFormat::Mac,
@@ -352,24 +327,25 @@ pub unsafe fn get_buffer_properties(buf: BufHandle) -> BufferProperties {
         return BufferProperties::default();
     }
 
+    let b = buf_ref(buf);
     BufferProperties {
-        fnum: nvim_buf_get_fnum(buf),
+        fnum: b.handle,
         changedtick: nvim_buf_get_changedtick(buf),
-        line_count: nvim_buf_get_ml_line_count(buf),
-        nwindows: nvim_buf_get_nwindows(buf),
+        line_count: b.ml_line_count,
+        nwindows: b.b_nwindows,
         buftype: get_buffer_type(buf),
         bufhidden: get_hidden_action(buf),
         fileformat: get_file_format(buf),
-        has_filename: !nvim_buf_get_b_ffname(buf).is_null(),
-        is_modified: nvim_buf_get_changed(buf) != 0,
-        is_readonly: nvim_buf_get_b_p_ro(buf) != 0,
-        is_modifiable: nvim_buf_get_b_p_ma(buf) != 0,
-        is_listed: nvim_buf_get_b_p_bl(buf) != 0,
-        is_help: nvim_buf_get_help(buf) != 0,
-        is_terminal: nvim_buf_get_terminal(buf) != 0,
-        is_binary: nvim_buf_get_bin(buf) != 0,
-        is_locked: nvim_buf_get_locked(buf) > 0,
-        is_loaded: !nvim_buf_get_ml_mfp(buf).is_null(),
+        has_filename: !b.b_ffname.is_null(),
+        is_modified: b.b_changed != 0,
+        is_readonly: b.b_p_ro != 0,
+        is_modifiable: b.b_p_ma != 0,
+        is_listed: b.b_p_bl != 0,
+        is_help: b.b_help != 0,
+        is_terminal: !b.terminal.is_null(),
+        is_binary: b.b_p_bin != 0,
+        is_locked: b.b_locked > 0,
+        is_loaded: !b.ml_mfp_is_null(),
     }
 }
 
@@ -387,7 +363,7 @@ pub unsafe fn get_fnum(buf: BufHandle) -> c_int {
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_get_fnum(buf)
+    buf_ref(buf).handle
 }
 
 /// Get buffer changedtick.
@@ -413,7 +389,7 @@ pub unsafe fn get_line_count(buf: BufHandle) -> c_int {
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_get_ml_line_count(buf)
+    buf_ref(buf).ml_line_count
 }
 
 /// Check if buffer is readonly.
@@ -426,7 +402,7 @@ pub unsafe fn is_readonly(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    nvim_buf_get_b_p_ro(buf) != 0
+    buf_ref(buf).b_p_ro != 0
 }
 
 /// Check if buffer is modifiable.
@@ -439,7 +415,7 @@ pub unsafe fn is_modifiable(buf: BufHandle) -> bool {
     if buf.is_null() {
         return true; // Default is modifiable
     }
-    nvim_buf_get_b_p_ma(buf) != 0
+    buf_ref(buf).b_p_ma != 0
 }
 
 /// Check if buffer is listed.
@@ -452,7 +428,7 @@ pub unsafe fn is_listed(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    nvim_buf_get_b_p_bl(buf) != 0
+    buf_ref(buf).b_p_bl != 0
 }
 
 /// Check if buffer is in binary mode.
@@ -465,7 +441,7 @@ pub unsafe fn is_binary(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    nvim_buf_get_bin(buf) != 0
+    buf_ref(buf).b_p_bin != 0
 }
 
 /// Check if buffer memory is loaded.
@@ -478,7 +454,7 @@ pub unsafe fn is_loaded(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    !nvim_buf_get_ml_mfp(buf).is_null()
+    !buf_ref(buf).ml_mfp_is_null()
 }
 
 // =============================================================================

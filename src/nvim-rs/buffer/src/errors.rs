@@ -14,14 +14,13 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::buf_struct::buf_ref;
 use crate::messages::gt;
 use crate::BufHandle;
 
 extern "C" {
     fn emsg(s: *const c_char) -> bool;
     fn semsg(fmt: *const c_char, ...);
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,16 +116,13 @@ pub unsafe fn emsg_noalt() {
 ///
 /// Prefers `buf->b_fname`, falls back to `buf->b_ffname`, then "[No Name]".
 pub unsafe fn emsg_e937_buf_in_use(buf: BufHandle) {
-    let b_fname = nvim_buf_get_b_fname(buf);
-    let display = if b_fname.is_null() {
-        let b_ffname = nvim_buf_get_b_ffname(buf);
-        if b_ffname.is_null() {
-            c"[No Name]".as_ptr()
-        } else {
-            b_ffname
-        }
+    let b = buf_ref(buf);
+    let display = if !b.b_fname.is_null() {
+        b.b_fname
+    } else if !b.b_ffname.is_null() {
+        b.b_ffname
     } else {
-        b_fname
+        c"[No Name]".as_ptr()
     };
     semsg(gt(E937.as_ptr()), display);
 }

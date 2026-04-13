@@ -13,6 +13,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::used_underscore_binding)]
 #![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::cast_sign_loss)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -579,6 +580,87 @@ impl BufStruct {
     #[must_use]
     pub fn ml_mfp_is_null(&self) -> bool {
         self.ml_mfp.is_null()
+    }
+
+    /// Get the first character of `b_p_bt` (buftype option).
+    ///
+    /// Returns 0 if the pointer is null.
+    ///
+    /// # Safety
+    /// `b_p_bt` must be a valid C string pointer.
+    #[inline]
+    #[must_use]
+    pub unsafe fn buftype_char0(&self) -> u8 {
+        if self.b_p_bt.is_null() {
+            0
+        } else {
+            *self.b_p_bt as u8
+        }
+    }
+
+    /// Get the third character (index 2) of `b_p_bt` (buftype option).
+    ///
+    /// Used to distinguish "nofile" (n,o,f) from "nowrite" (n,o,w).
+    ///
+    /// # Safety
+    /// `b_p_bt` must be a valid C string pointer of at least 3 chars.
+    #[inline]
+    #[must_use]
+    pub unsafe fn buftype_char2(&self) -> u8 {
+        if self.b_p_bt.is_null() {
+            0
+        } else {
+            *self.b_p_bt.add(2) as u8
+        }
+    }
+
+    /// Get the first character of `b_p_bh` (bufhidden option).
+    ///
+    /// # Safety
+    /// `b_p_bh` must be a valid C string pointer.
+    #[inline]
+    #[must_use]
+    pub unsafe fn bufhidden_char0(&self) -> u8 {
+        if self.b_p_bh.is_null() {
+            0
+        } else {
+            *self.b_p_bh as u8
+        }
+    }
+
+    /// Get the first character of `b_p_ff` (fileformat option).
+    ///
+    /// # Safety
+    /// `b_p_ff` must be a valid C string pointer.
+    #[inline]
+    #[must_use]
+    pub unsafe fn fileformat_char0(&self) -> u8 {
+        if self.b_p_ff.is_null() {
+            0
+        } else {
+            *self.b_p_ff as u8
+        }
+    }
+
+    /// Copy the `file_id` bytes into `out`.
+    ///
+    /// # Safety
+    /// `out` must point to at least 16 bytes of writable memory.
+    #[inline]
+    pub unsafe fn copy_file_id(&self, out: *mut u8) {
+        std::ptr::copy_nonoverlapping(self.file_id.as_ptr(), out, 16);
+    }
+
+    /// Set the `file_id` and `file_id_valid` fields.
+    ///
+    /// # Safety
+    /// If `valid` is true, `file_id` must point to at least 16 bytes of readable memory.
+    #[inline]
+    pub unsafe fn set_file_id_data(&mut self, file_id: *const u8, valid: bool) {
+        if valid {
+            std::ptr::copy_nonoverlapping(file_id, self.file_id.as_mut_ptr(), 16);
+        }
+        self.file_id_valid = c_int::from(valid);
     }
 }
 

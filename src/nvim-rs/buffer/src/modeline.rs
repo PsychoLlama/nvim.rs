@@ -11,7 +11,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::BufHandle;
+use crate::{buf_struct::buf_ref, BufHandle};
 
 // Return values matching C OK/FAIL
 const OK: c_int = 0;
@@ -32,7 +32,6 @@ const ETYPE_MODELINE: c_int = 4;
 extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_curbuf_get_b_p_ml() -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
     static p_mls: i64;
 
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
@@ -312,7 +311,7 @@ pub unsafe fn do_modelines_impl(flags: c_int) {
     ENTERED.store(1, std::sync::atomic::Ordering::Relaxed);
 
     let curbuf = nvim_get_curbuf();
-    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    let line_count = buf_ref(curbuf).ml_line_count;
 
     // Check first nmlines lines
     let mut lnum = 1;
@@ -324,7 +323,7 @@ pub unsafe fn do_modelines_impl(flags: c_int) {
     }
 
     // Check last nmlines lines
-    let line_count2 = nvim_buf_get_ml_line_count(curbuf);
+    let line_count2 = buf_ref(curbuf).ml_line_count;
     let mut lnum = line_count2;
     while nvim_curbuf_get_b_p_ml() != 0
         && lnum > 0

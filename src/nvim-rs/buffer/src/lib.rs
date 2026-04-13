@@ -7,6 +7,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_possible_wrap)] // Byte literals in ASCII range are safe
+#![allow(clippy::missing_const_for_fn)]
 
 pub mod buf_struct;
 pub mod close;
@@ -98,32 +99,8 @@ const EVENT_BUFDELETE: c_int = 2;
 // C accessor functions for buffer fields.
 // These are defined in buffer.c and provide safe access to buf_T fields.
 extern "C" {
-    /// Get the `b_p_bt` (buftype option) field - returns first char.
-    fn nvim_buf_get_buftype(buf: BufHandle) -> c_char;
-
-    /// Get the `b_p_bt[2]` character (for checking "nofile" vs "nowrite").
-    fn nvim_buf_get_buftype_2(buf: BufHandle) -> c_char;
-
-    /// Get the `b_help` field from a buffer.
-    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
-
-    /// Check if buffer has a terminal attached (`buf->terminal != NULL`).
-    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
-
-    /// Get the first character of the `b_p_ff` (fileformat option) field.
-    fn nvim_buf_get_fileformat(buf: BufHandle) -> c_char;
-
-    /// Get the `b_p_bin` (binary mode) field from a buffer.
-    fn nvim_buf_get_bin(buf: BufHandle) -> c_int;
-
     /// Get the last buffer in the buffer list (`lastbuf` global).
     fn nvim_get_lastbuf() -> BufHandle;
-
-    /// Get the `b_prev` field from a buffer.
-    fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
-
-    /// Get the first character of the `b_p_bh` (bufhidden option) field.
-    fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
 
     /// Global `p_hid` option (hidden buffers).
     static p_hid: c_int;
@@ -140,29 +117,11 @@ extern "C" {
     /// Get the `br_buf_free_count` field from a bufref.
     fn nvim_bufref_get_buf_free_count(bufref: *const std::ffi::c_void) -> c_int;
 
-    /// Get the `b_fnum` field from a buffer.
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-
-    /// Get the `curbuf->b_ml.ml_flags` field.
-    fn nvim_curbuf_get_ml_flags() -> c_int;
-
-    /// Get the `b_fname` field from a buffer (short filename).
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-
-    /// Get the `b_ffname` field from a buffer (full filename).
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-
     /// Emit an error message.
     fn nvim_emsg(msg: *const c_char);
 
     /// Get the current buffer.
     fn nvim_get_curbuf() -> BufHandle;
-
-    /// Get the `b_nwindows` field from a buffer.
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
-
-    /// Check if memfile pointer is NULL for a buffer.
-    fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
 
     /// Check if current buffer is changed.
     fn curbufIsChanged() -> bool;
@@ -178,15 +137,6 @@ extern "C" {
     /// Compare two file identities.
     #[link_name = "os_fileid_equal"]
     fn nvim_os_fileid_equal(a: *const u8, b: *const u8) -> bool;
-
-    /// Check if buffer has a valid cached `file_id`.
-    fn nvim_buf_file_id_valid(buf: BufHandle) -> c_int;
-
-    /// Copy buffer's cached `file_id` into output buffer.
-    fn nvim_buf_get_file_id(buf: BufHandle, out: *mut u8);
-
-    /// Set buffer's `file_id` data and validity flag.
-    fn nvim_buf_set_file_id_data(buf: BufHandle, file_id: *const u8, valid: bool);
 
     /// Find a buffer by its number.
     #[link_name = "rs_buflist_findnr"]
@@ -210,9 +160,6 @@ extern "C" {
     /// Get the buffer associated with a window.
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
-    /// Get `b_ml.ml_line_count` from a buffer.
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-
     /// Calculate percentage (from math crate).
     fn rs_calc_percentage(part: i64, whole: i64) -> c_int;
 }
@@ -223,12 +170,6 @@ extern "C" {
     /// Get the current window.
     fn nvim_get_curwin() -> WinHandle;
 
-    /// Get `b_p_bl` (buflisted) from a buffer.
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
-
-    /// Set `b_p_bl` (buflisted) on a buffer.
-    fn nvim_buf_set_b_p_bl(buf: BufHandle, val: c_int);
-
     /// `apply_autocmds` fires autocommands for the given event.
     fn apply_autocmds(
         event: c_int,
@@ -238,6 +179,9 @@ extern "C" {
         buf: BufHandle,
     ) -> bool;
 }
+
+// Import BufStruct helpers for direct field access.
+use buf_struct::{buf_mut, buf_ref};
 
 /// Check if "buf" is a pointer to an existing buffer.
 ///
@@ -250,13 +194,14 @@ fn buf_valid_impl(buf: BufHandle) -> bool {
     }
 
     // Iterate backwards through the buffer list
-    // SAFETY: nvim_get_lastbuf and nvim_buf_get_prev are safe accessors
+    // SAFETY: nvim_get_lastbuf returns a valid buf_T* (or null).
     let mut bp = unsafe { nvim_get_lastbuf() };
     while !bp.is_null() {
         if bp == buf {
             return true;
         }
-        bp = unsafe { nvim_buf_get_prev(bp) };
+        // SAFETY: bp is a valid non-null buf_T*.
+        bp = unsafe { BufHandle::from_ptr(buf_ref(bp).b_prev) };
     }
     false
 }
@@ -301,7 +246,8 @@ fn bufref_valid_impl(bufref: *const std::ffi::c_void) -> bool {
 
         // Also verify the buffer's fnum still matches
         let ref_fnum = nvim_bufref_get_fnum(bufref);
-        let buf_fnum = nvim_buf_get_fnum(buf);
+        // SAFETY: buf is a valid non-null buf_T* (verified by buf_valid_impl above).
+        let buf_fnum = buf_ref(buf).handle;
         ref_fnum == buf_fnum
     }
 }
@@ -320,8 +266,8 @@ fn bt_prompt_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above, and the accessor handles the pointer safely.
-    unsafe { nvim_buf_get_buftype(buf) == b'p' as c_char }
+    // SAFETY: buf is non-null (checked above); b_p_bt is a valid C string.
+    unsafe { buf_ref(buf).buftype_char0() == b'p' }
 }
 
 /// FFI wrapper for `bt_prompt`.
@@ -336,8 +282,8 @@ fn bt_normal_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
-    unsafe { nvim_buf_get_buftype(buf) == 0 }
+    // SAFETY: buf is non-null (checked above); b_p_bt is a valid C string.
+    unsafe { buf_ref(buf).buftype_char0() == 0 }
 }
 
 /// FFI wrapper for `bt_normal`.
@@ -352,8 +298,8 @@ fn bt_quickfix_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
-    unsafe { nvim_buf_get_buftype(buf) == b'q' as c_char }
+    // SAFETY: buf is non-null (checked above); b_p_bt is a valid C string.
+    unsafe { buf_ref(buf).buftype_char0() == b'q' }
 }
 
 /// FFI wrapper for `bt_quickfix`.
@@ -368,8 +314,8 @@ fn bt_terminal_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
-    unsafe { nvim_buf_get_buftype(buf) == b't' as c_char }
+    // SAFETY: buf is non-null (checked above); b_p_bt is a valid C string.
+    unsafe { buf_ref(buf).buftype_char0() == b't' }
 }
 
 /// FFI wrapper for `bt_terminal`.
@@ -386,10 +332,8 @@ fn bt_nofile_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
-    unsafe {
-        nvim_buf_get_buftype(buf) == b'n' as c_char && nvim_buf_get_buftype_2(buf) == b'f' as c_char
-    }
+    // SAFETY: buf is non-null; b_p_bt is a valid C string of at least 3 chars when non-empty.
+    unsafe { buf_ref(buf).buftype_char0() == b'n' && buf_ref(buf).buftype_char2() == b'f' }
 }
 
 /// FFI wrapper for `bt_nofile`.
@@ -404,8 +348,8 @@ fn bt_help_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
-    unsafe { nvim_buf_get_help(buf) != 0 }
+    // SAFETY: buf is non-null (checked above).
+    unsafe { buf_ref(buf).b_help != 0 }
 }
 
 /// FFI wrapper for `bt_help`.
@@ -423,17 +367,18 @@ fn bt_nofilename_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
+    // SAFETY: buf is non-null; b_p_bt is a valid C string.
     unsafe {
-        let bt0 = nvim_buf_get_buftype(buf);
+        let b = buf_ref(buf);
+        let bt0 = b.buftype_char0();
         // "nofile": b_p_bt[0]=='n' && b_p_bt[2]=='f'
         // "acwrite": b_p_bt[0]=='a'
         // terminal: buf->terminal != NULL
         // "prompt": b_p_bt[0]=='p'
-        (bt0 == b'n' as c_char && nvim_buf_get_buftype_2(buf) == b'f' as c_char)
-            || bt0 == b'a' as c_char
-            || nvim_buf_get_terminal(buf) != 0
-            || bt0 == b'p' as c_char
+        (bt0 == b'n' && b.buftype_char2() == b'f')
+            || bt0 == b'a'
+            || !b.terminal.is_null()
+            || bt0 == b'p'
     }
 }
 
@@ -451,13 +396,14 @@ fn bt_dontwrite_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
+    // SAFETY: buf is non-null; b_p_bt is a valid C string.
     unsafe {
-        let bt0 = nvim_buf_get_buftype(buf);
+        let b = buf_ref(buf);
+        let bt0 = b.buftype_char0();
         // "nowrite" or "nofile": b_p_bt[0]=='n'
         // terminal: buf->terminal != NULL
         // "prompt": b_p_bt[0]=='p'
-        bt0 == b'n' as c_char || nvim_buf_get_terminal(buf) != 0 || bt0 == b'p' as c_char
+        bt0 == b'n' || !b.terminal.is_null() || bt0 == b'p'
     }
 }
 
@@ -476,17 +422,15 @@ fn bt_nofileread_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
+    // SAFETY: buf is non-null; b_p_bt is a valid C string.
     unsafe {
-        let bt0 = nvim_buf_get_buftype(buf);
+        let b = buf_ref(buf);
+        let bt0 = b.buftype_char0();
         // "nofile": b_p_bt[0]=='n' && b_p_bt[2]=='f'
         // terminal: b_p_bt[0]=='t'
         // quickfix: b_p_bt[0]=='q'
         // "prompt": b_p_bt[0]=='p'
-        (bt0 == b'n' as c_char && nvim_buf_get_buftype_2(buf) == b'f' as c_char)
-            || bt0 == b't' as c_char
-            || bt0 == b'q' as c_char
-            || bt0 == b'p' as c_char
+        (bt0 == b'n' && b.buftype_char2() == b'f') || bt0 == b't' || bt0 == b'q' || bt0 == b'p'
     }
 }
 
@@ -510,12 +454,12 @@ fn get_fileformat_impl(buf: BufHandle) -> c_int {
     if buf.is_null() {
         return EOL_UNIX;
     }
-    // SAFETY: We check for null above.
+    // SAFETY: buf is non-null; b_p_ff is a valid C string.
     unsafe {
+        let b = buf_ref(buf);
         // If binary mode or first char is 'u' (unix), return EOL_UNIX
-        #[allow(clippy::cast_sign_loss)]
-        let ff = nvim_buf_get_fileformat(buf) as u8;
-        if nvim_buf_get_bin(buf) != 0 || ff == b'u' {
+        let ff = b.fileformat_char0();
+        if b.b_p_bin != 0 || ff == b'u' {
             return EOL_UNIX;
         }
         // If first char is 'm' (mac), return EOL_MAC
@@ -564,11 +508,10 @@ fn buf_hide_impl(buf: BufHandle) -> bool {
         return false;
     }
 
-    // SAFETY: We check for null above, and the accessors handle the pointer safely.
+    // SAFETY: buf is non-null; b_p_bh is a valid C string.
     unsafe {
         // 'bufhidden' overrules 'hidden' and ":hide", check it first
-        #[allow(clippy::cast_sign_loss)]
-        let bh = nvim_buf_get_bufhidden(buf) as u8;
+        let bh = buf_ref(buf).bufhidden_char0();
         match bh {
             // "unload", "wipe", "delete" -> don't hide
             b'u' | b'w' | b'd' => false,
@@ -594,7 +537,8 @@ unsafe fn buf_get_fname_impl(buf: BufHandle) -> *const c_char {
     if buf.is_null() {
         return messages::no_name_msg();
     }
-    let fname = nvim_buf_get_b_fname(buf);
+    // SAFETY: buf is non-null (checked above); b_fname is a valid C string or null.
+    let fname = buf_ref(buf).b_fname;
     if fname.is_null() {
         messages::no_name_msg()
     } else {
@@ -643,9 +587,11 @@ unsafe fn curbuf_reusable_impl() -> bool {
     if curbuf.is_null() {
         return false;
     }
-    nvim_buf_get_b_ffname(curbuf).is_null()
-        && nvim_buf_get_nwindows(curbuf) <= 1
-        && (nvim_buf_get_ml_mfp_null(curbuf) != 0 || state::buf_is_empty(curbuf))
+    // SAFETY: curbuf is a valid buf_T*.
+    let b = buf_ref(curbuf);
+    b.b_ffname.is_null()
+        && b.b_nwindows <= 1
+        && (b.ml_mfp_is_null() || state::buf_is_empty(curbuf))
         && !bt_quickfix_impl(curbuf)
         && !curbufIsChanged()
 }
@@ -677,7 +623,7 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
 
     // Quickfix/location list
     if bt_quickfix_impl(buf) {
-        let fnum = nvim_buf_get_fnum(buf);
+        let fnum = buf_ref(buf).handle;
         if fnum == qf_stack_get_bufnr() {
             return messages::msg_qflist().cast_mut();
         }
@@ -686,7 +632,7 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
 
     // Buffer types with no file name
     if bt_nofilename_impl(buf) {
-        let fname = nvim_buf_get_b_fname(buf);
+        let fname = buf_ref(buf).b_fname;
         if !fname.is_null() {
             return fname.cast_mut();
         }
@@ -700,7 +646,7 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
     }
 
     // Buffer with no fname gets "[No Name]"
-    if nvim_buf_get_b_fname(buf).is_null() {
+    if buf_ref(buf).b_fname.is_null() {
         return buf_get_fname_impl(buf).cast_mut();
     }
 
@@ -803,7 +749,7 @@ pub unsafe extern "C" fn rs_get_rel_pos(wp: WinHandle, buf: *mut c_char, buflen:
 
     // Number of lines below window
     let win_buf = nvim_win_get_buffer(wp);
-    let line_count = nvim_buf_get_ml_line_count(win_buf);
+    let line_count = buf_ref(win_buf).ml_line_count;
     let below: i64 = i64::from(line_count) - i64::from(botline) + 1;
 
     // buflen >= 3 guaranteed by guard above, so unsigned_abs() is safe
@@ -854,25 +800,25 @@ type FileIdBuf = [u8; FILE_ID_SIZE];
 /// Check if buffer's cached `file_id` matches the given `file_id`.
 #[inline]
 unsafe fn buf_same_file_id(buf: BufHandle, file_id: &FileIdBuf) -> bool {
-    if nvim_buf_file_id_valid(buf) == 0 {
+    if buf_ref(buf).file_id_valid == 0 {
         return false;
     }
     let mut buf_fid: FileIdBuf = [0u8; FILE_ID_SIZE];
-    nvim_buf_get_file_id(buf, buf_fid.as_mut_ptr());
+    buf_ref(buf).copy_file_id(buf_fid.as_mut_ptr());
     nvim_os_fileid_equal(buf_fid.as_ptr(), file_id.as_ptr())
 }
 
 /// Cache a file's `FileID` into the buffer struct.
 #[inline]
 unsafe fn buf_set_file_id_impl(buf: BufHandle) {
-    let fname = nvim_buf_get_b_fname(buf);
+    let fname = buf_ref(buf).b_fname;
     if fname.is_null() {
-        nvim_buf_set_file_id_data(buf, std::ptr::null(), false);
+        buf_mut(buf).set_file_id_data(std::ptr::null(), false);
         return;
     }
     let mut file_id: FileIdBuf = [0u8; FILE_ID_SIZE];
     let valid = nvim_os_fileid(fname, file_id.as_mut_ptr());
-    nvim_buf_set_file_id_data(buf, file_id.as_ptr(), valid);
+    buf_mut(buf).set_file_id_data(file_id.as_ptr(), valid);
 }
 
 /// FFI wrapper for `buf_set_file_id`.
@@ -891,11 +837,11 @@ pub unsafe extern "C" fn rs_buf_set_file_id(buf: BufHandle) {
 #[inline]
 unsafe fn otherfile_buf_impl(buf: BufHandle, ffname: *const c_char) -> bool {
     // no name is different
-    if ffname.is_null() || *ffname == 0 || nvim_buf_get_b_ffname(buf).is_null() {
+    if ffname.is_null() || *ffname == 0 || buf_ref(buf).b_ffname.is_null() {
         return true;
     }
     // fast path: string comparison
-    if nvim_path_fnamecmp(ffname, nvim_buf_get_b_ffname(buf)) == 0 {
+    if nvim_path_fnamecmp(ffname, buf_ref(buf).b_ffname) == 0 {
         return false;
     }
     // slow path: file identity comparison
@@ -958,11 +904,11 @@ pub unsafe extern "C" fn rs_otherfile_buf_4(
     file_id_valid: bool,
 ) -> bool {
     // no name is different
-    if ffname.is_null() || *ffname == 0 || nvim_buf_get_b_ffname(buf).is_null() {
+    if ffname.is_null() || *ffname == 0 || buf_ref(buf).b_ffname.is_null() {
         return true;
     }
     // fast path: string comparison
-    if nvim_path_fnamecmp(ffname, nvim_buf_get_b_ffname(buf)) == 0 {
+    if nvim_path_fnamecmp(ffname, buf_ref(buf).b_ffname) == 0 {
         return false;
     }
     // If no file_id provided, compute it
@@ -1025,7 +971,7 @@ pub unsafe extern "C" fn rs_buflist_add(fname: *mut c_char, flags: c_int) -> c_i
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_get_fnum(buf)
+    buf_ref(buf).handle
 }
 
 /// Get file name and line number for file 'fnum'.
@@ -1045,7 +991,7 @@ pub unsafe extern "C" fn rs_buflist_name_nr(
     if buf.is_null() {
         return 1; // FAIL
     }
-    let b_fname = nvim_buf_get_b_fname(buf);
+    let b_fname = buf_ref(buf).b_fname;
     if b_fname.is_null() {
         return 1; // FAIL
     }
@@ -1063,7 +1009,7 @@ pub unsafe extern "C" fn rs_buflist_name_nr(
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_line_alloced() -> c_int {
     const ML_LINE_DIRTY: c_int = 0x02;
-    nvim_curbuf_get_ml_flags() & ML_LINE_DIRTY
+    buf_ref(nvim_get_curbuf()).ml_flags & ML_LINE_DIRTY
 }
 
 // =============================================================================
@@ -1107,10 +1053,10 @@ pub unsafe extern "C" fn rs_buflist_findlnum(buf: BufHandle) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_set_buflisted(on: c_int) {
     let buf = nvim_get_curbuf();
-    if on == nvim_buf_get_b_p_bl(buf) {
+    if on == buf_ref(buf).b_p_bl {
         return;
     }
-    nvim_buf_set_b_p_bl(buf, on);
+    buf_mut(buf).b_p_bl = on;
     if on != 0 {
         apply_autocmds(EVENT_BUFADD, std::ptr::null(), std::ptr::null(), false, buf);
     } else {
