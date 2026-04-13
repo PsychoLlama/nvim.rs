@@ -85,12 +85,7 @@ int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
 void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
 int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
-int nvim_win_get_wrap_flags(win_T *wp) { return wp->w_p_wrap_flags; }
-int nvim_win_get_p_culopt_flags(win_T *wp) { return wp->w_p_culopt_flags; }
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
-colnr_T nvim_win_get_valid_leftcol(win_T *wp) { return wp->w_valid_leftcol; }
-colnr_T nvim_win_get_valid_skipcol(win_T *wp) { return wp->w_valid_skipcol; }
-int nvim_win_get_viewport_invalid(win_T *wp) { return wp->w_viewport_invalid ? 1 : 0; }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
 ScreenGrid *nvim_win_get_w_grid_alloc(win_T *wp) { return wp ? &wp->w_grid_alloc : NULL; }
 bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }

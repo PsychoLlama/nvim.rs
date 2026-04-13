@@ -11,6 +11,7 @@
 use std::ffi::{c_double, c_int, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::WinHandle;
 
 /// Opaque handle to C's ScreenGrid (local definition for this module).
@@ -550,8 +551,6 @@ extern "C" {
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> i32;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
-    fn nvim_win_get_viewport_invalid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
     fn nvim_win_get_viewport_snapshot(wp: WinHandle, out: *mut WinViewportSnapshot);
     fn nvim_win_set_viewport_snapshot(wp: WinHandle, s: *const WinViewportSnapshot);
     fn nvim_ui_call_win_viewport_wrapper(
@@ -595,7 +594,7 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
     if nvim_win_is_curwin(wp) == 0 && nvim_get_ui_ext(K_UI_MULTIGRID) == 0 {
         return;
     }
-    if nvim_win_get_viewport_invalid(wp) == 0 {
+    if !win_ref(wp).w_viewport_invalid {
         return;
     }
     if nvim_win_get_redr_type(wp) != 0 {
@@ -688,7 +687,7 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
         delta,
     );
 
-    nvim_win_set_viewport_invalid(wp, 0);
+    win_mut(wp).w_viewport_invalid = false;
     let new_vsnap = WinViewportSnapshot {
         topline: nvim_win_get_topline(wp),
         botline: nvim_win_get_botline(wp),

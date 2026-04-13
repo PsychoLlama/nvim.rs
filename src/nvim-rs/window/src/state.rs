@@ -8,6 +8,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::WinHandle;
 
 // Type aliases matching C types
@@ -71,7 +72,6 @@ extern "C" {
     fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
     fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_get_viewport_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
 
     // Redraw range accessors
@@ -96,9 +96,7 @@ extern "C" {
     fn nvim_win_set_valid_cursor(wp: WinHandle, lnum: LineNr, col: ColNr, coladd: ColNr);
     fn nvim_win_set_valid_cursor_col(wp: WinHandle, col: ColNr);
     fn nvim_win_set_valid_cursor_coladd(wp: WinHandle, coladd: ColNr);
-    fn nvim_win_get_valid_leftcol(wp: WinHandle) -> ColNr;
     fn nvim_win_set_valid_leftcol(wp: WinHandle, val: ColNr);
-    fn nvim_win_get_valid_skipcol(wp: WinHandle) -> ColNr;
     fn nvim_win_set_valid_skipcol(wp: WinHandle, val: ColNr);
 
     // Window display info
@@ -117,7 +115,6 @@ extern "C" {
     fn nvim_win_get_p_bri(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_cuc(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_culopt_flags(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_nu(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
@@ -127,7 +124,6 @@ extern "C" {
 
     // Misc window state
     fn nvim_win_get_virtcol(wp: WinHandle) -> ColNr;
-    fn nvim_win_get_wrap_flags(wp: WinHandle) -> c_int;
     fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
     fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
@@ -476,7 +472,7 @@ pub unsafe extern "C" fn rs_win_get_viewport_invalid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_viewport_invalid(wp)
+    c_int::from(win_ref(wp).w_viewport_invalid)
 }
 
 /// Set viewport_invalid flag.
@@ -625,11 +621,11 @@ pub unsafe extern "C" fn rs_win_set_valid_cursor_coladd(wp: WinHandle, coladd: C
 
 /// Get valid leftcol.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_win_get_valid_leftcol(wp: WinHandle) -> ColNr {
+pub const unsafe extern "C" fn rs_win_get_valid_leftcol(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_valid_leftcol(wp)
+    win_ref(wp).w_valid_leftcol
 }
 
 /// Set valid leftcol.
@@ -642,11 +638,11 @@ pub unsafe extern "C" fn rs_win_set_valid_leftcol(wp: WinHandle, val: ColNr) {
 
 /// Get valid skipcol.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_win_get_valid_skipcol(wp: WinHandle) -> ColNr {
+pub const unsafe extern "C" fn rs_win_get_valid_skipcol(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_valid_skipcol(wp)
+    win_ref(wp).w_valid_skipcol
 }
 
 /// Set valid skipcol.
@@ -785,7 +781,7 @@ pub unsafe extern "C" fn rs_win_get_p_culopt_flags(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_culopt_flags(wp)
+    c_int::from(win_ref(wp).w_p_culopt_flags)
 }
 
 /// Get 'number' option.
@@ -857,11 +853,11 @@ pub unsafe extern "C" fn rs_win_get_virtcol(wp: WinHandle) -> ColNr {
 
 /// Get wrap flags.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_win_get_wrap_flags(wp: WinHandle) -> c_int {
+pub const unsafe extern "C" fn rs_win_get_wrap_flags(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_wrap_flags(wp)
+    win_ref(wp).w_p_wrap_flags()
 }
 
 /// Get argument index.
